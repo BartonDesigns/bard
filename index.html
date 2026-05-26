@@ -4356,9 +4356,13 @@ window._isLandscape = function() {
 window.playNote = function(noteId) {
   // noteId here is the keyboard letter (q, w, e, ...) stored in data-note.
   // Find the corresponding pad element to read its degree, then route to
-  // the synth — through ARP if ARP is active, direct otherwise. The ARP
-  // routing is what was MISSING — previously this shim called playLead()
-  // directly, so the ARP toggle had no effect on touch keys.
+  // the synth — through ARP if ARP is active, direct otherwise.
+  //
+  // Touch input was previously skipping LOOP RECORDING entirely. The
+  // legacy pointer path uses withQuantize(playFn, recordFn) which both
+  // arms the sequencer on first hit AND records the note-on into the
+  // loop buffer. We mirror that here so touch keys feed the recorder
+  // just like keyboard and pointer input do.
   if (!window.audioReady && typeof initAudio === 'function') {
     try { initAudio(); } catch(e) {}
   }
@@ -4370,12 +4374,27 @@ window.playNote = function(noteId) {
   // Don't double-trigger if this voice is already playing
   if (typeof activeVoices !== 'undefined' && activeVoices[voiceId]) return;
   // ARP routing: when ARP is on, feed the degree to the arpeggiator so it
-  // joins the held-note pool that the arp cycles through. When ARP is off,
-  // play the note directly.
+  // joins the held-note pool that the arp cycles through. ARP path bypasses
+  // withQuantize because the arp itself emits notes that are individually
+  // recorded by the arp scheduler via the 'arp:' voice prefix.
   if (typeof midiArpMode !== 'undefined' && midiArpMode !== 'off') {
     try { arpNoteOn(degree, voiceId); } catch(e) {}
   } else {
-    try { playLead(voiceId, degree); } catch(e) {}
+    // Normal path: route through withQuantize so first-hit arming and
+    // loop recording both work on touch input.
+    if (typeof withQuantize === 'function') {
+      try {
+        withQuantize(
+          () => { playLead(voiceId, degree); },
+          (recStep) => recordLeadNoteOn(voiceId, degree, recStep)
+        );
+      } catch(e) {
+        // Defensive fallback if withQuantize isn't available yet
+        try { playLead(voiceId, degree); } catch(_) {}
+      }
+    } else {
+      try { playLead(voiceId, degree); } catch(e) {}
+    }
   }
 };
 
