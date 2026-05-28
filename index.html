@@ -1008,12 +1008,19 @@ button, .pad, .ctrl-btn, .capsule-btn, .tab-btn, .selector, label,
 .pad.lead-pad .pad-label { display: none; }
 .pad.lead-pad .pad-key { font-size: 22px; }
 /* Lead pad row — zero gap so keys touch like a real keyboard */
-#lead-pads.pad-row {
+#lead-pads.pad-row,
+#lead2-pads.pad-row {
   gap: 0;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
+/* Lead-2 pads match lead-1 key WIDTH exactly: lead-1 fits 13 keys across the
+   row, so each lead-2 key is fixed at 1/13 of the row width (it has 9 keys, so
+   the row is left-filled with empty space on the right) — identical shape/size
+   to lead-1 instead of 9 keys stretching wider. */
+#lead2-pads.pad-row { justify-content: flex-start; }
+#lead2-pads .pad.lead-pad { flex: 0 0 calc(100% / 13); }
 /* Lead pads - sage green — taller than square, slightly wider feel */
 .pad.lead-pad {
   aspect-ratio: 0.72;
@@ -1433,6 +1440,7 @@ button, .pad, .ctrl-btn, .capsule-btn, .tab-btn, .selector, label,
   /* Lead pads: 10 keys at this width can get squeezed — let key stay larger */
   .pad.lead-pad .pad-key { font-size: 14px; }
   #lead-pads.pad-row { gap: 0; }
+  #lead2-pads.pad-row { gap: 0; }
   /* Title shrinks more */
   #title-name { font-size: 14px; }
   #bpm-display { font-size: 18px; }
@@ -2619,6 +2627,15 @@ body:has(#cockpit-overlay.docked) {
         <select id="type-select"></select>
       </div>
       <div class="selector">
+        <label>TYPE 2</label>
+        <select id="type-select-2"></select>
+      </div>
+      <div id="oct-pill-2" class="row1-pill">
+        <button id="oct-down-2">−</button>
+        <span id="oct-display-2">0</span>
+        <button id="oct-up-2">+</button>
+      </div>
+      <div class="selector">
         <label>BEAT</label>
         <select id="beat-select"></select>
       </div>
@@ -2719,23 +2736,49 @@ body:has(#cockpit-overlay.docked) {
           <button class="ctrl-btn" id="btn-midi-learn" style="font-size:8px;padding:2px 6px;">LEARN</button>
         </div>
       </div>
+      <!-- ── LEAD 2 (BANK 2) INDEPENDENT FX ──────────────────────────────── -->
+      <div class="sliders-row" style="border-top:1px solid var(--btn-text);margin-top:4px;padding-top:4px;">
+        <div class="slider-group" style="flex:0 0 auto;"><label style="font-size:7px;opacity:0.7;">LEAD 2 FX</label></div>
+      </div>
+      <div class="sliders-row">
+        <div class="slider-group"><label>LPF2</label><input type="range" id="sl-lpf-2" min="20" max="20000" step="1" value="20000"></div>
+        <div class="slider-group"><label>DRIVE2</label><input type="range" id="sl-grit-2" min="0" max="1" step="0.01" value="0"></div>
+        <div class="slider-group"><label>CRUNCH2</label><input type="range" id="sl-crunch-2" min="0" max="1" step="0.01" value="0"></div>
+      </div>
+      <div class="sliders-row">
+        <div class="slider-group"><label>DELAY2</label><input type="range" id="sl-delay-2" min="0" max="1" step="0.01" value="0"></div>
+        <div class="slider-group"><label>SPACE2</label><input type="range" id="sl-space-2" min="0" max="1" step="0.01" value="0.2"></div>
+      </div>
+      <!-- ── DRUM FX (independent of lead FX; off by default = dry drums) ──── -->
+      <div class="sliders-row" style="border-top:1px solid var(--btn-text);margin-top:4px;padding-top:4px;">
+        <div class="slider-group" style="flex:0 0 auto;"><label style="font-size:7px;opacity:0.7;">DRUM FX</label></div>
+      </div>
+      <div class="sliders-row">
+        <div class="slider-group"><label>DRUM DLY</label><input type="range" id="sl-drum-delay" min="0" max="1" step="0.01" value="0"></div>
+        <div class="slider-group"><label>DRUM SPC</label><input type="range" id="sl-drum-space" min="0" max="1" step="0.01" value="0"></div>
+      </div>
     </div>
 
     <div id="step-indicators"></div>
   </div>
 
   <div class="pad-section">
-    <div class="pad-section-label">LEAD SYNTH (Q-P)</div>
+    <div class="pad-section-label">LEAD 1 (Q-P)</div>
     <div class="pad-row" id="lead-pads"></div>
   </div>
 
   <div class="pad-section">
-    <div class="pad-section-label">PERCUSSION (A-')</div>
+    <div class="pad-section-label">LEAD 2 (A-L + ;'​,.)</div>
+    <div class="pad-row" id="lead2-pads"></div>
+  </div>
+
+  <div class="pad-section" id="drum-pad-section">
+    <div class="pad-section-label">PERCUSSION (Z-M) — SHIFT for FX</div>
     <div class="pad-row" id="drum-pads"></div>
   </div>
 
-  <div class="pad-section">
-    <div class="pad-section-label">PRODUCTION FX (Z-/)</div>
+  <div class="pad-section" id="fx-pad-section" style="display:none;">
+    <div class="pad-section-label">PRODUCTION FX (Z-M) — SHIFT for drums</div>
     <div class="pad-row" id="fx-pads"></div>
   </div>
 
@@ -2747,6 +2790,10 @@ body:has(#cockpit-overlay.docked) {
     <div class="capsule-wrap">
       <button type="button" class="capsule-btn" id="btn-select"></button>
       <span class="capsule-label">SELECT</span>
+    </div>
+    <div class="capsule-wrap">
+      <button type="button" class="capsule-btn" id="btn-shift-toggle" title="Toggle bottom row: drums ↔ production FX" style="font:bold 11px 'Press Start 2P',monospace;">FX</button>
+      <span class="capsule-label">SHIFT</span>
     </div>
   </div>
 
@@ -2769,12 +2816,22 @@ window.__PRESS_START_2P_B64__ = 'd09GMgABAAAAADDgABAAAAAAo5QAADB/AAEAAAAAAAAAAAA
 
 // ===== CONSTANTS =====
 const ROOT_FREQ = 130.81;
-// 13 lead keys: 10 in the row (Q→P), then [ ] \ extend into the octave above.
-// -/= shift the entire keyboard down/up by an octave (handled in keydown listener).
-const LEAD_KEYS = ['q','w','e','r','t','y','u','i','o','p','[',']','\\'];
+// ── KEYBOARD LAYOUT (two independent lead rows + toggleable bottom row) ──
+// Row 1 (QWERTY...): LEAD BANK 1 — 13 keys, Q→P then [ ] \ into the next octave.
+// Row 2 (ASDF...):   LEAD BANK 2 — 9 keys, independent instrument/octave/FX.
+// Row 3 (ZXCV...):   DRUMS by default; SHIFT toggles to production FX.
+// -/= shift the whole keyboard down/up by an octave (handled in keydown listener).
+const LEAD_KEYS  = ['q','w','e','r','t','y','u','i','o','p','[',']','\\'];
+const LEAD2_KEYS = ['a','s','d','f','g','h','j','k','l',';',"'",',','.'];
 let _kbOctaveShift = 0;  // mutable: each press of - subtracts 1, each press of = adds 1
-const DRUM_KEYS = ['a','s','d','f','g','h','j','k','l',';',"'"];
-const FX_KEYS = ['z','x','c','v','b','n','m',',','.','/'];
+// Physical bottom row — 7 keys. Maps to the first 7 drum names, or (in FX mode)
+// the first 7 fx names. The full name arrays below keep their original length so
+// pad rendering / sequencer references that index beyond 7 still resolve.
+const BOTTOM_ROW_KEYS = ['z','x','c','v','b','n','m'];
+// Legacy aliases retained so existing references (pad rendering, sequencer,
+// touch grid) keep working. DRUM_KEYS/FX_KEYS now point at the bottom row.
+const DRUM_KEYS = BOTTOM_ROW_KEYS;
+const FX_KEYS = BOTTOM_ROW_KEYS;
 const DRUM_NAMES = ['kick','snare','hihat','cowbell','clap','cymbal','hitom','lotom','shaker','rim','jump'];
 const FX_NAMES = ['riser','fall','impact','bridge','sweep','glitch','vibe','laser','shimmer','noise'];
 // Display labels & icon glyphs for the percussion pads
@@ -3196,6 +3253,13 @@ let currentBeat = 0;
 let bpm = 120;
 let octaveOffset = 0;
 let rootOffset = 0;
+// ── SECOND LEAD (BANK 2) STATE ──────────────────────────────────────────
+// Bank 1 = top QWERTY row, uses currentType / octaveOffset (existing).
+// Bank 2 = the ASDF row, fully independent instrument + octave + FX bus.
+let currentType2 = 1;     // bank-2 instrument index (defaults to 2nd type so it differs from bank 1)
+let octaveOffset2 = 0;    // bank-2 octave shift, independent of bank 1
+// SHIFT toggles the bottom (ZXCV) row between drums and production FX.
+let bottomRowMode = 'drums';   // 'drums' | 'fx'
 let chordsOn = false;
 // Chord mode beyond simple on/off: 'off' / 'hint' / 'full'
 //   'off'  — no chord tones added
@@ -3268,6 +3332,18 @@ let pendingLeadNotes = {};
 // ===== AUDIO CONTEXT =====
 let ctx = null;
 let masterGain, driveNode, crunchNode, masterFilter, vortexFilter, pannerNode, delayNode, delayFeedback, delaySend, reverbNode, reverbSend, limiter, analyser;
+// ── BANK-2 (second lead) FX BUS ──────────────────────────────────────────
+// Parallel master chain for lead 2: its own gain, drive, crunch, filter, pan,
+// and its own delay/reverb SEND levels into the SHARED delayNode/reverbNode
+// (sharing the actual reverb convolver + delay line keeps mobile CPU sane).
+let masterGain2, driveNode2, crunchNode2, masterFilter2, pannerNode2, delaySend2, reverbSend2;
+// ── DRUM BUS ─────────────────────────────────────────────────────────────
+// Percussion routes here instead of masterGain so drums DON'T inherit the
+// lead's delay/reverb (which made busy patterns muddy). The drum bus goes
+// straight to the shared outputGain, dry by default. It has its OWN optional
+// delay/reverb sends (off by default) so the user can intentionally add FX
+// to drums via the drum-FX sliders.
+let drumBus, drumDelaySend, drumReverbSend;
 let reverbBuffer = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4014,6 +4090,30 @@ window.initPerformanceAudio = async function(audioContext) {
     }
     window._workletLoaded = true;
     window._workletNode = synthNode;
+    // ── BANK-2 WORKLET NODE ──────────────────────────────────────────────
+    // Second instance of the SAME registered processor, routed to the bank-2
+    // FX bus (masterGain2). Lead-2 notes dispatch here so they get their own
+    // filter/drive/crunch/sends. Accepts the extra audio-thread cost.
+    try {
+      const synthNode2 = new AudioWorkletNode(audioContext, 'live-performance-synth', {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [2]
+      });
+      if (typeof masterGain2 !== 'undefined' && masterGain2) {
+        synthNode2.connect(masterGain2);
+      } else if (typeof masterGain !== 'undefined' && masterGain) {
+        synthNode2.connect(masterGain);  // fallback: shared bus if bus2 missing
+      }
+      synthNode2.port.postMessage({
+        cmd: 'config',
+        wobbleRate: (typeof bpm !== 'undefined' ? bpm : 120) / 30
+      });
+      window._workletNode2 = synthNode2;
+    } catch(e2) {
+      // If bank-2 node fails, lead 2 falls back to the shared node/bus.
+      window._workletNode2 = null;
+    }
     // Push initial WOBBLE LFO rate
     try {
       synthNode.port.postMessage({
@@ -4034,9 +4134,10 @@ window.initPerformanceAudio = async function(audioContext) {
 // in _workletMigratedFaces. They post messages to the worklet which creates
 // or releases voices on the audio thread. Voice IDs match between threads
 // so stop messages find the right voice.
-window._workletPlayLead = function(voiceId, degree, voiceTypeName, freq, atkSec, relSec, voiceGain, glideFromFreq, glideMs) {
-  if (!window._workletNode) return false;
-  window._workletNode.port.postMessage({
+window._workletPlayLead = function(voiceId, degree, voiceTypeName, freq, atkSec, relSec, voiceGain, glideFromFreq, glideMs, bank) {
+  const node = (bank === 2 && window._workletNode2) ? window._workletNode2 : window._workletNode;
+  if (!node) return false;
+  node.port.postMessage({
     cmd: 'noteOn',
     id: voiceId,
     type: voiceTypeName,
@@ -4049,9 +4150,10 @@ window._workletPlayLead = function(voiceId, degree, voiceTypeName, freq, atkSec,
   });
   return true;
 };
-window._workletStopLead = function(voiceId, relSec) {
-  if (!window._workletNode) return false;
-  window._workletNode.port.postMessage({
+window._workletStopLead = function(voiceId, relSec, bank) {
+  const node = (bank === 2 && window._workletNode2) ? window._workletNode2 : window._workletNode;
+  if (!node) return false;
+  node.port.postMessage({
     cmd: 'noteOff',
     id: voiceId,
     relSec: relSec
@@ -4242,6 +4344,58 @@ function initAudio() {
   pannerNode.connect(reverbSend);
   reverbSend.connect(reverbNode);
   reverbNode.connect(limiter);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // BANK-2 FX BUS — parallel chain for the second lead. Independent drive,
+  // crunch, filter, pan, and independent delay/reverb SEND amounts. The delay
+  // line and reverb convolver themselves are SHARED (bank 2 sends into the
+  // same delayNode/reverbNode) so we don't pay for a second convolver on
+  // mobile. outputGain + limiter are shared (final mix bus).
+  // ═══════════════════════════════════════════════════════════════════════
+  masterGain2 = ctx.createGain();
+  masterGain2.gain.value = 0.85;
+  driveNode2 = ctx.createWaveShaper();
+  driveNode2.curve = makeDistortionCurve(0);
+  crunchNode2 = ctx.createWaveShaper();
+  crunchNode2.curve = makeCrunchCurve(0);
+  crunchNode2.oversample = '4x';
+  masterFilter2 = ctx.createBiquadFilter();
+  masterFilter2.type = 'lowpass';
+  masterFilter2.frequency.value = 20000;
+  masterFilter2.Q.value = 1;
+  pannerNode2 = ctx.createStereoPanner();
+  pannerNode2.pan.value = 0;
+  delaySend2 = ctx.createGain();
+  delaySend2.gain.value = 0;
+  reverbSend2 = ctx.createGain();
+  reverbSend2.gain.value = 0.2;
+  // Chain: masterGain2 → drive2 → crunch2 → filter2 → pan2 → outputGain(shared)
+  masterGain2.connect(driveNode2);
+  driveNode2.connect(crunchNode2);
+  crunchNode2.connect(masterFilter2);
+  masterFilter2.connect(pannerNode2);
+  pannerNode2.connect(outputGain);
+  // Bank-2 sends into the SHARED delay + reverb
+  pannerNode2.connect(delaySend2);
+  delaySend2.connect(delayNode);
+  pannerNode2.connect(reverbSend2);
+  reverbSend2.connect(reverbNode);
+
+  // ── DRUM BUS ─────────────────────────────────────────────────────────────
+  // Drums route here → outputGain DIRECTLY, bypassing the lead delay/reverb
+  // sends (which hang off pannerNode). Dry by default. Optional drum-only
+  // delay/reverb sends start at 0 so the user can dial them in deliberately.
+  drumBus = ctx.createGain();
+  drumBus.gain.value = 1.0;
+  drumBus.connect(outputGain);
+  drumDelaySend = ctx.createGain();
+  drumDelaySend.gain.value = 0;
+  drumReverbSend = ctx.createGain();
+  drumReverbSend.gain.value = 0;
+  drumBus.connect(drumDelaySend);
+  drumDelaySend.connect(delayNode);
+  drumBus.connect(drumReverbSend);
+  drumReverbSend.connect(reverbNode);
 
   // ═══════════════════════════════════════════════════════════════════════
   // PRODUCTIONREADY.MD §4 — MASTER FX SAFETY BUS
@@ -4441,7 +4595,7 @@ function createReverbIR(duration, decay) {
 }
 
 // ===== LEAD SYNTH =====
-function getFreq(degree) {
+function getFreq(degree, bank) {
   const faceScales = FACE_SCALES[currentFace] || SCALES; const scale = faceScales[currentScale] || Object.values(faceScales)[0];
   // ── DEGREE-TO-SEMITONE MAPPING ────────────────────────────────────────
   // The SCALE_INTERVALS arrays are 10 entries long — one full octave plus
@@ -4465,7 +4619,9 @@ function getFreq(degree) {
   }
   const wraps = Math.floor(degree / baseLen);
   const idxInOctave = degree % baseLen;
-  const semitones = scale[idxInOctave] + rootOffset + (octaveOffset * 12) + (wraps * 12);
+  // Bank 2 uses its own octave offset; bank 1 (default) uses the global.
+  const oct = (bank === 2) ? octaveOffset2 : octaveOffset;
+  const semitones = scale[idxInOctave] + rootOffset + (oct * 12) + (wraps * 12);
   return ROOT_FREQ * Math.pow(2, semitones / 12);
 }
 
@@ -4495,62 +4651,62 @@ window._isLandscape = function() {
 
 window.playNote = function(noteId) {
   // noteId here is the keyboard letter (q, w, e, ...) stored in data-note.
-  // Find the corresponding pad element to read its degree, then route to
-  // the synth — through ARP if ARP is active, direct otherwise.
-  //
-  // Touch input was previously skipping LOOP RECORDING entirely. The
-  // legacy pointer path uses withQuantize(playFn, recordFn) which both
-  // arms the sequencer on first hit AND records the note-on into the
-  // loop buffer. We mirror that here so touch keys feed the recorder
-  // just like keyboard and pointer input do.
+  // Lead-2 pads use a '2:' prefix (e.g. '2:a') so we can route them to bank 2.
   if (!window.audioReady && typeof initAudio === 'function') {
     try { initAudio(); } catch(e) {}
   }
-  // CSS.escape() — required because some lead keys are CSS-meaningful
-  // characters. The backslash key in particular: a raw interpolation
-  // produced the selector `[data-note="\"]` which CSS parses as an
-  // escaped quote, leaving an unclosed string and a silently-failing
-  // querySelector. Brackets `[` and `]` aren't as bad in attribute-value
-  // contexts but escaping them all is the safe path. Result: `\` key
-  // now actually finds its pad and plays the note.
-  const escaped = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(noteId) : noteId;
-  const pad = document.querySelector(`.lead-pad[data-note="${escaped}"]`);
+  let bank = 1;
+  let lookup = noteId;
+  if (typeof noteId === 'string' && noteId.startsWith('2:')) {
+    bank = 2;
+    lookup = noteId.slice(2);
+  }
+  // Pad lookup. For bank 2 we match by data-key (the raw key char) scoped to
+  // the lead2 class — none of the bank-2 keys (a-l ; ' , .) contain a quote or
+  // backslash, so a plain quoted selector is safe and avoids CSS.escape's
+  // identifier-mode over-escaping (which broke the prefixed data-note match).
+  // Bank 1 keeps its original data-note path (its keys include backslash, so
+  // CSS.escape on the bare value inside the selector is the tested behavior).
+  let pad;
+  if (bank === 2) {
+    pad = Array.from(document.querySelectorAll('.lead2-pad'))
+      .find(p => p.dataset.key === lookup) || null;
+  } else {
+    const escaped = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(lookup) : lookup;
+    pad = document.querySelector(`.lead-pad[data-note="${escaped}"]`);
+  }
   if (!pad) return;
   const degree = parseInt(pad.dataset.degree, 10);
   if (isNaN(degree)) return;
-  const voiceId = 'touch:' + noteId;
+  const voiceId = (bank === 2 ? 'touch2:' : 'touch:') + lookup;
   // Don't double-trigger if this voice is already playing
   if (typeof activeVoices !== 'undefined' && activeVoices[voiceId]) return;
-  // ARP routing: when ARP is on, feed the degree to the arpeggiator so it
-  // joins the held-note pool that the arp cycles through. ARP path bypasses
-  // withQuantize because the arp itself emits notes that are individually
-  // recorded by the arp scheduler via the 'arp:' voice prefix.
   if (typeof midiArpMode !== 'undefined' && midiArpMode !== 'off') {
-    try { arpNoteOn(degree, voiceId); } catch(e) {}
+    try { arpNoteOn(degree, voiceId, bank); } catch(e) {}
   } else {
-    // Normal path: route through withQuantize so first-hit arming and
-    // loop recording both work on touch input.
     if (typeof withQuantize === 'function') {
       try {
         withQuantize(
-          () => { playLead(voiceId, degree); },
-          (recStep) => recordLeadNoteOn(voiceId, degree, recStep)
+          () => { playLead(voiceId, degree, bank); },
+          (recStep) => recordLeadNoteOn(voiceId, degree, recStep, bank)
         );
       } catch(e) {
-        // Defensive fallback if withQuantize isn't available yet
-        try { playLead(voiceId, degree); } catch(_) {}
+        try { playLead(voiceId, degree, bank); } catch(_) {}
       }
     } else {
-      try { playLead(voiceId, degree); } catch(e) {}
+      try { playLead(voiceId, degree, bank); } catch(e) {}
     }
   }
 };
 
 window.stopNote = function(noteId) {
-  const voiceId = 'touch:' + noteId;
-  // Mirror the ARP routing — if a note was added to the arp pool via
-  // arpNoteOn, it must be removed via arpNoteOff. Calling stopLead alone
-  // would orphan the note in the arp pool (it'd keep cycling forever).
+  let bank = 1;
+  let lookup = noteId;
+  if (typeof noteId === 'string' && noteId.startsWith('2:')) {
+    bank = 2;
+    lookup = noteId.slice(2);
+  }
+  const voiceId = (bank === 2 ? 'touch2:' : 'touch:') + lookup;
   if (typeof midiArpMode !== 'undefined' && midiArpMode !== 'off') {
     try { arpNoteOff(voiceId); } catch(e) {}
   } else {
@@ -4741,11 +4897,16 @@ class TouchGridEvaluator {
 // Initialize after DOM is fully built (pads are appended in the LEAD_KEYS loop
 // later; we delay-instantiate at window load + after a microtask so they exist).
 window._touchGridEvaluator = null;
+window._touchGridEvaluator2 = null;
 function _initTouchGrid() {
-  if (window._touchGridEvaluator) return;
-  if (!document.getElementById('lead-pads')) return;
-  // Suppress double-init by setting up after pads have been appended
-  window._touchGridEvaluator = new TouchGridEvaluator('#lead-pads');
+  if (!window._touchGridEvaluator && document.getElementById('lead-pads')) {
+    window._touchGridEvaluator = new TouchGridEvaluator('#lead-pads');
+  }
+  // Second evaluator for the LEAD 2 row (bank 2). Its pads carry data-note
+  // '2:<key>' so the shared playNote/stopNote route them to bank 2.
+  if (!window._touchGridEvaluator2 && document.getElementById('lead2-pads')) {
+    window._touchGridEvaluator2 = new TouchGridEvaluator('#lead2-pads');
+  }
 }
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
   setTimeout(_initTouchGrid, 0);
@@ -4753,13 +4914,16 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
   window.addEventListener('DOMContentLoaded', () => setTimeout(_initTouchGrid, 0));
 }
 
-function playLead(voiceId, degree) {
+function playLead(voiceId, degree, bank) {
   initAudio();
-  const freq = getFreq(degree);
+  bank = (bank === 2) ? 2 : 1;
+  const freq = getFreq(degree, bank);
   const atk = parseFloat(document.getElementById('sl-atk').value);
   const gld = parseFloat(document.getElementById('sl-gld').value);
   const face = currentFace;
-  const type = FACEPLATES[face].types[currentType];
+  // Bank 2 uses its own instrument index; bank 1 uses the global currentType.
+  const typeIdx = (bank === 2) ? currentType2 : currentType;
+  const type = FACEPLATES[face].types[typeIdx];
 
   // Capture glide-source pitch BEFORE retriggering, so a single-voice slide still glides.
   // Priority: this voiceId's prior freq (retrigger = slide on same voice), else any other
@@ -4796,18 +4960,24 @@ function playLead(voiceId, degree) {
   // oscillators (e.g., hint sines, glide-source nodes from prior voices).
   // ═══════════════════════════════════════════════════════════════════════
   let workletDispatched = false;
+  const bankNode = (bank === 2) ? window._workletNode2 : window._workletNode;
   if (window._workletMigratedFaces &&
       window._workletMigratedFaces.has(face) &&
-      window._workletNode &&
+      bankNode &&
       window._workletPlayLead) {
     const rel = parseFloat(document.getElementById('sl-rel').value);
-    window._workletPlayLead(
+    const ok = window._workletPlayLead(
       voiceId, degree, type, freq,
       atk, rel, voiceGain,
       glideFromFreq || 0,
-      glideFromFreq ? (gld * 1000) : 0   // glide ms
+      glideFromFreq ? (gld * 1000) : 0,   // glide ms
+      bank
     );
-    workletDispatched = true;
+    // Only treat as worklet-handled if the dispatch actually targeted a node.
+    // Otherwise fall through to the main-thread path so the note still sounds
+    // (and routes to the correct per-bank bus). This was the bank-2 silence
+    // bug: workletDispatched was set true even when _workletNode2 was null.
+    workletDispatched = !!ok;
   }
   // Lazy-init worklet on first migrated-face note if not loaded yet — so
   // the first played note may be silent, but subsequent notes work. We
@@ -4818,6 +4988,19 @@ function playLead(voiceId, degree) {
       window.initPerformanceAudio) {
     window.initPerformanceAudio(ctx).catch(() => {});
     // Fall through to main-thread path for THIS note so it isn't silent
+  }
+  // Bank-2 node lazy-retry: if the module already loaded (node 1 exists) but
+  // node 2 is missing, build it now so bank 2 uses its own worklet output.
+  if (bank === 2 && window._workletNode && !window._workletNode2 &&
+      typeof masterGain2 !== 'undefined' && masterGain2) {
+    try {
+      const n2 = new AudioWorkletNode(ctx, 'live-performance-synth', {
+        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2]
+      });
+      n2.connect(masterGain2);
+      n2.port.postMessage({ cmd: 'config', wobbleRate: (typeof bpm !== 'undefined' ? bpm : 120) / 30 });
+      window._workletNode2 = n2;
+    } catch(e) { /* stay on main-thread fallback */ }
   }
 
   const now = ctx.currentTime;
@@ -4844,7 +5027,8 @@ function playLead(voiceId, degree) {
   // dispatch check — they're shared between paths.)
   gainNode.gain.setValueAtTime(0, now);
   gainNode.gain.linearRampToValueAtTime(voiceGain, now + atk);
-  gainNode.connect(masterGain);
+  // Bank 2's main-thread fallback voices route to the bank-2 FX bus.
+  gainNode.connect((bank === 2 && typeof masterGain2 !== 'undefined' && masterGain2) ? masterGain2 : masterGain);
 
   // Create oscillators based on type. Skipped entirely if the worklet
   // dispatched this voice — the worklet thread is doing the synthesis.
@@ -5532,8 +5716,8 @@ function playLead(voiceId, degree) {
         // collide with the next normal key press
         const id3 = String(voiceId) + ':c3';
         const id5 = String(voiceId) + ':c5';
-        playLead(id3, deg3);
-        playLead(id5, deg5);
+        playLead(id3, deg3, bank);
+        playLead(id5, deg5, bank);
         chordVoiceIds.push(id3, id5);
         // Store on the parent voice record (set below) so stopLead can release
         // them. Use a deferred attachment since activeVoices[voiceId] hasn't
@@ -5571,7 +5755,8 @@ function playLead(voiceId, degree) {
     nodes,
     gainNode,
     targetFreq: freq,
-    workletVoice: workletDispatched   // sentinel for stopLead routing
+    workletVoice: workletDispatched,   // sentinel for stopLead routing
+    bank: bank                          // 1 or 2 — routes note-off to the right worklet node
   };
   // If this voice expanded into chord-tone children, remember their IDs so
   // releasing the parent also releases them. Cleared after consumption so
@@ -5609,7 +5794,7 @@ function stopLead(voiceId) {
   // gainNode so it doesn't accumulate uncollected.
   if (voice.workletVoice) {
     if (window._workletStopLead) {
-      window._workletStopLead(voiceId, rel);
+      window._workletStopLead(voiceId, rel, voice.bank);
     }
     // Tear down any auxiliary nodes (chord-hint sine oscillators were
     // pushed into voice.nodes during the chord-injection block).
@@ -5657,6 +5842,93 @@ function stopLead(voiceId) {
 // Dispatch happens inside playDrum() based on currentFace. Unknown drum names fall back
 // to the generic kit so faceplates only need to override what makes them distinctive.
 
+// ── SHARED REALISTIC PERCUSSION HELPERS ─────────────────────────────────
+// Real metallic percussion (cowbell, cymbal, hi-hat, ride) gets its character
+// from INHARMONIC partials — frequencies at non-integer ratios that beat
+// against each other. Plain white noise sounds like "shh"; harmonic sines
+// sound like a flute. The classic Roland TR-808 metal sound uses SIX square
+// oscillators at fixed inharmonic ratios fed through a bandpass. These helpers
+// let every kit produce believable metal while keeping its own base frequency,
+// decay, and level (so genre character is preserved).
+
+// The 808's six metal oscillator ratios (relative to a base frequency).
+const _METAL_RATIOS = [1.0, 1.342, 1.2312, 1.6532, 1.9523, 2.1523];
+
+// Play a metallic hit: 6 square oscillators at inharmonic ratios → bandpass
+// (or highpass) → gain envelope. Used for cowbell, cymbal, ride, metal hats.
+//   opts: { base, decay, level, bpFreq, bpQ, hpFreq, type }
+function _metalHit(opts) {
+  const now = ctx.currentTime;
+  const base   = opts.base   || 800;
+  const decay  = opts.decay  || 0.4;
+  const level  = opts.level  != null ? opts.level : 0.4;
+  const type   = opts.type   || 'square';
+  // Bandpass focuses the "voice" of the metal; highpass (optional) trims lows.
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = opts.bpFreq || (base * 3.2);
+  bp.Q.value = opts.bpQ != null ? opts.bpQ : 1.2;
+  let chainIn = bp;
+  let chainOut = bp;
+  if (opts.hpFreq) {
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = opts.hpFreq;
+    bp.connect(hp);
+    chainOut = hp;
+  }
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(level, now);
+  g.gain.exponentialRampToValueAtTime(0.0008, now + decay);
+  chainOut.connect(g);
+  g.connect(drumBus);
+  const oscs = [];
+  for (let i = 0; i < _METAL_RATIOS.length; i++) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = base * _METAL_RATIOS[i];
+    o.connect(chainIn);
+    o.start(now);
+    o.stop(now + decay + 0.05);
+    oscs.push(o);
+  }
+  return { gain: g, oscs };
+}
+
+// Play a filtered noise burst with an optional amplitude curve baked into the
+// buffer. Used for snares, claps, snare noise layers. `shape`='decay' bakes a
+// linear fade into the noise so the tail isn't a flat wall.
+//   opts: { dur, filterType, freq, q, level, attack, shape }
+function _noiseBurst(opts) {
+  const now = ctx.currentTime;
+  const dur = opts.dur || 0.2;
+  const bufSize = Math.max(1, Math.floor(ctx.sampleRate * dur));
+  const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  if (opts.shape === 'decay') {
+    for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+  } else {
+    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const flt = ctx.createBiquadFilter();
+  flt.type = opts.filterType || 'highpass';
+  flt.frequency.value = opts.freq || 8000;
+  if (opts.q != null) flt.Q.value = opts.q;
+  const g = ctx.createGain();
+  const level = opts.level != null ? opts.level : 0.5;
+  const atk = opts.attack || 0.001;
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(level, now + atk);
+  g.gain.exponentialRampToValueAtTime(0.0008, now + dur);
+  src.connect(flt);
+  flt.connect(g);
+  g.connect(drumBus);
+  src.start(now);
+  return { src, gain: g };
+}
+
 function playDrum(name) {
   initAudio();
   const face = currentFace;
@@ -5685,7 +5957,7 @@ function playDrumSynthwave(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(1.1, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-    osc.connect(g); g.connect(masterGain);
+    osc.connect(g); g.connect(drumBus);
     osc.start(now); osc.stop(now + 0.75);
     // Click attack for definition
     const click = ctx.createOscillator();
@@ -5694,7 +5966,7 @@ function playDrumSynthwave(name) {
     const cg = ctx.createGain();
     cg.gain.setValueAtTime(0.25, now);
     cg.gain.exponentialRampToValueAtTime(0.001, now + 0.015);
-    click.connect(cg); cg.connect(masterGain);
+    click.connect(cg); cg.connect(drumBus);
     click.start(now); click.stop(now + 0.02);
     return true;
   }
@@ -5707,7 +5979,7 @@ function playDrumSynthwave(name) {
     const tg = ctx.createGain();
     tg.gain.setValueAtTime(0.6, now);
     tg.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-    tone.connect(tg); tg.connect(masterGain);
+    tone.connect(tg); tg.connect(drumBus);
     tone.start(now); tone.stop(now + 0.2);
     // Noise body with bandpass for the "snap"
     const bufSize = ctx.sampleRate * 0.5;
@@ -5725,7 +5997,7 @@ function playDrumSynthwave(name) {
     g.gain.linearRampToValueAtTime(0.5, now + 0.15);
     g.gain.linearRampToValueAtTime(0.45, now + 0.28);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.32);  // abrupt gate close
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     return true;
   }
@@ -5742,7 +6014,7 @@ function playDrumSynthwave(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.45, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     return true;
   }
@@ -5762,7 +6034,7 @@ function playDrumSynthwave(name) {
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.55 - i * 0.08, now + delay);
       g.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.04);
-      src.connect(flt); flt.connect(g); g.connect(masterGain);
+      src.connect(flt); flt.connect(g); g.connect(drumBus);
       src.start(now + delay);
     });
     return true;
@@ -5776,7 +6048,7 @@ function playDrumSynthwave(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.45, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    o1.connect(flt); o2.connect(flt); flt.connect(g); g.connect(masterGain);
+    o1.connect(flt); o2.connect(flt); flt.connect(g); g.connect(drumBus);
     o1.start(now); o2.start(now);
     o1.stop(now + 0.3); o2.stop(now + 0.3);
     return true;
@@ -5797,7 +6069,7 @@ function playDrumDnB(name) {
     const cg = ctx.createGain();
     cg.gain.setValueAtTime(0.55, now);
     cg.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-    click.connect(cg); cg.connect(masterGain);
+    click.connect(cg); cg.connect(drumBus);
     click.start(now); click.stop(now + 0.05);
     // Sub body
     const sub = ctx.createOscillator();
@@ -5807,7 +6079,7 @@ function playDrumDnB(name) {
     const sg = ctx.createGain();
     sg.gain.setValueAtTime(1.0, now);
     sg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-    sub.connect(sg); sg.connect(masterGain);
+    sub.connect(sg); sg.connect(drumBus);
     sub.start(now); sub.stop(now + 0.4);
     return true;
   }
@@ -5825,7 +6097,7 @@ function playDrumDnB(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(1.1, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     // Tone underneath for body
     const tone = ctx.createOscillator();
@@ -5833,7 +6105,7 @@ function playDrumDnB(name) {
     const tg = ctx.createGain();
     tg.gain.setValueAtTime(0.35, now);
     tg.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-    tone.connect(tg); tg.connect(masterGain);
+    tone.connect(tg); tg.connect(drumBus);
     tone.start(now); tone.stop(now + 0.07);
     return true;
   }
@@ -5849,24 +6121,14 @@ function playDrumDnB(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.55, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     return true;
   }
   if (name === 'cymbal') {
-    // Splash with metallic edge — short ride bell crash
-    const bufSize = ctx.sampleRate * 0.8;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    const flt = ctx.createBiquadFilter();
-    flt.type = 'highpass'; flt.frequency.value = 7000;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.7, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
-    src.start(now);
+    // Splash with metallic edge — noise + inharmonic metal ring (was pure noise)
+    _noiseBurst({ dur: 0.8, filterType: 'highpass', freq: 7000, level: 0.65, shape: 'decay' });
+    _metalHit({ base: 1200, decay: 0.7, level: 0.13, bpFreq: 8500, bpQ: 0.9, hpFreq: 6000, type: 'square' });
     return true;
   }
   if (name === 'rim') {
@@ -5876,7 +6138,7 @@ function playDrumDnB(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.5, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.015);
-    o.connect(g); g.connect(masterGain);
+    o.connect(g); g.connect(drumBus);
     o.start(now); o.stop(now + 0.02);
     return true;
   }
@@ -5896,22 +6158,15 @@ function playDrumSparkle(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.7, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-    o.connect(g); g.connect(masterGain);
+    o.connect(g); g.connect(drumBus);
     o.start(now); o.stop(now + 0.5);
     return true;
   }
   if (name === 'snare') {
-    // Sparkle "snare" = a quick wash of bell-like FM tones
-    [880, 1320, 1980].forEach((freq, i) => {
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = freq;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.3 - i * 0.06, now);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      o.connect(g); g.connect(masterGain);
-      o.start(now); o.stop(now + 0.45);
-    });
+    // Struck-glass "snare" — inharmonic bell bank + a short noise snap so it
+    // still functions rhythmically as a backbeat, not just a pretty tone.
+    _metalHit({ base: 900, decay: 0.35, level: 0.22, bpFreq: 3200, bpQ: 1.6, type: 'triangle' });
+    _noiseBurst({ dur: 0.12, filterType: 'highpass', freq: 6000, level: 0.18, shape: 'decay' });
     return true;
   }
   if (name === 'hihat') {
@@ -5926,44 +6181,38 @@ function playDrumSparkle(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.3, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     // Tiny bell harmonic
     const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 4400;
     const og = ctx.createGain();
     og.gain.setValueAtTime(0.12, now);
     og.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-    o.connect(og); og.connect(masterGain);
+    o.connect(og); og.connect(drumBus);
     o.start(now); o.stop(now + 0.16);
     return true;
   }
   if (name === 'cowbell') {
-    // Music-box ping — high pitched bell
-    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 2200;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.4, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    o.connect(g); g.connect(masterGain);
-    o.start(now); o.stop(now + 0.65);
-    // Harmonic
-    const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 3300;
-    const g2 = ctx.createGain();
-    g2.gain.setValueAtTime(0.15, now);
-    g2.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-    o2.connect(g2); g2.connect(masterGain);
-    o2.start(now); o2.stop(now + 0.45);
+    // Music-box / glass bell — inharmonic partials give true bell character
+    // (pure sines at a harmonic ratio sounded like a whistle before). Bright
+    // base for the celestial SPARKLE feel, focused bandpass, short musical
+    // decay so it pings rather than lingers.
+    _metalHit({ base: 1050, decay: 0.5, level: 0.32, bpFreq: 4200, bpQ: 2.2, type: 'triangle' });
+    // Fast bright transient "ting" on top for the music-box attack
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 5400;
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.18, now);
+    og.gain.exponentialRampToValueAtTime(0.0008, now + 0.08);
+    o.connect(og); og.connect(drumBus);
+    o.start(now); o.stop(now + 0.1);
     return true;
   }
   if (name === 'cymbal') {
-    // Bell wash — soft and shimmery
-    [1760, 2640, 3520].forEach((freq, i) => {
-      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.25 - i * 0.05, now);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-      o.connect(g); g.connect(masterGain);
-      o.start(now); o.stop(now + 1.25);
-    });
+    // Glassy shimmer wash — inharmonic metal bank (was harmonic sines that
+    // rang like an organ chord). Long bright tail for the celestial feel.
+    _metalHit({ base: 1600, decay: 1.3, level: 0.16, bpFreq: 7000, bpQ: 0.8, hpFreq: 3000, type: 'triangle' });
+    // Airy high noise layer for "shimmer dust"
+    _noiseBurst({ dur: 1.1, filterType: 'highpass', freq: 11000, level: 0.12, shape: 'decay' });
     return true;
   }
   return false;
@@ -5982,14 +6231,14 @@ function playDrumSoul(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(1.0, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
-    o.connect(g); g.connect(masterGain);
+    o.connect(g); g.connect(drumBus);
     o.start(now); o.stop(now + 0.55);
     // Slight body around 200Hz for warmth
     const body = ctx.createOscillator(); body.type = 'sine'; body.frequency.value = 200;
     const bg = ctx.createGain();
     bg.gain.setValueAtTime(0.2, now);
     bg.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-    body.connect(bg); bg.connect(masterGain);
+    body.connect(bg); bg.connect(drumBus);
     body.start(now); body.stop(now + 0.09);
     return true;
   }
@@ -6005,7 +6254,7 @@ function playDrumSoul(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.55, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     return true;
   }
@@ -6021,7 +6270,7 @@ function playDrumSoul(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.35, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     return true;
   }
@@ -6037,7 +6286,7 @@ function playDrumSoul(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.65, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     return true;
   }
@@ -6047,7 +6296,7 @@ function playDrumSoul(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.6, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
-    o.connect(g); g.connect(masterGain);
+    o.connect(g); g.connect(drumBus);
     o.start(now); o.stop(now + 0.035);
     return true;
   }
@@ -6075,7 +6324,7 @@ function playDrumGas(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(1.3, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-    o.connect(shaper); shaper.connect(g); g.connect(masterGain);
+    o.connect(shaper); shaper.connect(g); g.connect(drumBus);
     o.start(now); o.stop(now + 0.45);
     return true;
   }
@@ -6091,7 +6340,7 @@ function playDrumGas(name) {
     const g1 = ctx.createGain();
     g1.gain.setValueAtTime(0.9, now);
     g1.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-    s1.connect(f1); f1.connect(g1); g1.connect(masterGain);
+    s1.connect(f1); f1.connect(g1); g1.connect(drumBus);
     s1.start(now);
     // Body layer
     const s2 = ctx.createBufferSource(); s2.buffer = buf;
@@ -6099,7 +6348,7 @@ function playDrumGas(name) {
     const g2 = ctx.createGain();
     g2.gain.setValueAtTime(0.55, now);
     g2.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-    s2.connect(f2); f2.connect(g2); g2.connect(masterGain);
+    s2.connect(f2); f2.connect(g2); g2.connect(drumBus);
     s2.start(now);
     return true;
   }
@@ -6115,45 +6364,26 @@ function playDrumGas(name) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.5, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
+    src.connect(flt); flt.connect(g); g.connect(drumBus);
     src.start(now);
     // Add a small metallic ping
     const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 7800;
     const og = ctx.createGain();
     og.gain.setValueAtTime(0.08, now);
     og.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
-    o.connect(og); og.connect(masterGain);
+    o.connect(og); og.connect(drumBus);
     o.start(now); o.stop(now + 0.03);
     return true;
   }
   if (name === 'cowbell') {
-    // Metal pipe ting — harsh squared bandpass
-    const o1 = ctx.createOscillator(); o1.type = 'square'; o1.frequency.value = 480;
-    const o2 = ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 720;
-    const flt = ctx.createBiquadFilter();
-    flt.type = 'bandpass'; flt.frequency.value = 2200; flt.Q.value = 6;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.5, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-    o1.connect(flt); o2.connect(flt); flt.connect(g); g.connect(masterGain);
-    o1.start(now); o2.start(now);
-    o1.stop(now + 0.15); o2.stop(now + 0.15);
+    // Harsh metal-pipe ting — inharmonic bank (was harmonic squares = whistle).
+    _metalHit({ base: 520, decay: 0.16, level: 0.46, bpFreq: 2400, bpQ: 6, type: 'square' });
     return true;
   }
   if (name === 'cymbal') {
-    // Harsh crash — wide noise + distorted shimmer
-    const bufSize = ctx.sampleRate * 1.0;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) d[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource(); src.buffer = buf;
-    const flt = ctx.createBiquadFilter();
-    flt.type = 'highpass'; flt.frequency.value = 6500;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.7, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-    src.connect(flt); flt.connect(g); g.connect(masterGain);
-    src.start(now);
+    // Harsh crash — wide noise + aggressive inharmonic metal shimmer
+    _noiseBurst({ dur: 1.0, filterType: 'highpass', freq: 6500, level: 0.62, shape: 'flat' });
+    _metalHit({ base: 1400, decay: 0.9, level: 0.16, bpFreq: 8000, bpQ: 0.8, hpFreq: 5500, type: 'square' });
     return true;
   }
   return false;
@@ -6176,7 +6406,7 @@ function playDrumGeneric(name) {
     g.gain.setValueAtTime(1.2, now);
     g.gain.linearRampToValueAtTime(0.9, now + 0.02);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-    osc.connect(g); g.connect(masterGain);
+    osc.connect(g); g.connect(drumBus);
     osc.start(now); osc.stop(now + 0.5);
     // Click transient — very short square wave burst for attack definition
     const click = ctx.createOscillator();
@@ -6186,7 +6416,7 @@ function playDrumGeneric(name) {
     const cg = ctx.createGain();
     cg.gain.setValueAtTime(0.35, now);
     cg.gain.exponentialRampToValueAtTime(0.001, now + 0.012);
-    click.connect(cg); cg.connect(masterGain);
+    click.connect(cg); cg.connect(drumBus);
     click.start(now); click.stop(now + 0.015);
     // Sub layer — pure low sine for weight
     const sub = ctx.createOscillator();
@@ -6195,42 +6425,25 @@ function playDrumGeneric(name) {
     const sg = ctx.createGain();
     sg.gain.setValueAtTime(0.6, now);
     sg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-    sub.connect(sg); sg.connect(masterGain);
+    sub.connect(sg); sg.connect(drumBus);
     sub.start(now); sub.stop(now + 0.4);
   } else if (name === 'snare') {
-    const bufSize = ctx.sampleRate * 0.2;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const flt = ctx.createBiquadFilter();
-    flt.type = 'bandpass';
-    flt.frequency.value = 1800;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.8, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-    src.connect(flt);
-    flt.connect(g);
-    g.connect(masterGain);
-    src.start(now);
+    // Noise crack with a focused band + a tonal body underneath for realism
+    // (pure filtered noise alone reads as "shh", not a drum). Body ~190Hz.
+    _noiseBurst({ dur: 0.2, filterType: 'bandpass', freq: 1900, q: 1.2, level: 0.7, shape: 'decay' });
+    const tone = ctx.createOscillator();
+    tone.type = 'triangle';
+    tone.frequency.setValueAtTime(210, now);
+    tone.frequency.exponentialRampToValueAtTime(170, now + 0.07);
+    const tg = ctx.createGain();
+    tg.gain.setValueAtTime(0.35, now);
+    tg.gain.exponentialRampToValueAtTime(0.0008, now + 0.1);
+    tone.connect(tg); tg.connect(drumBus);
+    tone.start(now); tone.stop(now + 0.11);
   } else if (name === 'hihat') {
-    const bufSize = ctx.sampleRate * 0.05;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const flt = ctx.createBiquadFilter();
-    flt.type = 'highpass';
-    flt.frequency.value = 10000;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.5, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-    src.connect(flt);
-    flt.connect(g);
-    g.connect(masterGain);
-    src.start(now);
+    // Noise + a quiet metallic ring for realism (plain HP noise = soft "tss").
+    _noiseBurst({ dur: 0.05, filterType: 'highpass', freq: 9000, level: 0.5, shape: 'decay' });
+    _metalHit({ base: 800, decay: 0.045, level: 0.10, bpFreq: 9000, bpQ: 1.0, hpFreq: 7000, type: 'square' });
   } else if (name === 'clap') {
     const bufSize = ctx.sampleRate * 0.15;
     const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
@@ -6251,46 +6464,15 @@ function playDrumGeneric(name) {
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
     src.connect(flt);
     flt.connect(g);
-    g.connect(masterGain);
+    g.connect(drumBus);
     src.start(now);
   } else if (name === 'cowbell') {
-    const osc1 = ctx.createOscillator();
-    osc1.type = 'square';
-    osc1.frequency.value = 560;
-    const osc2 = ctx.createOscillator();
-    osc2.type = 'square';
-    osc2.frequency.value = 840;
-    const flt = ctx.createBiquadFilter();
-    flt.type = 'bandpass';
-    flt.frequency.value = 1200;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.5, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-    osc1.connect(flt);
-    osc2.connect(flt);
-    flt.connect(g);
-    g.connect(masterGain);
-    osc1.start(now);
-    osc2.start(now);
-    osc1.stop(now + 0.4);
-    osc2.stop(now + 0.4);
+    // Realistic inharmonic cowbell (was two harmonic squares = whistle-ish).
+    _metalHit({ base: 560, decay: 0.35, level: 0.42, bpFreq: 1800, bpQ: 3.5, type: 'square' });
   } else if (name === 'cymbal') {
-    const bufSize = ctx.sampleRate * 1.5;
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const flt = ctx.createBiquadFilter();
-    flt.type = 'highpass';
-    flt.frequency.value = 8000;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.5, now);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
-    src.connect(flt);
-    flt.connect(g);
-    g.connect(masterGain);
-    src.start(now);
+    // Noise wash + inharmonic metal shimmer for a real crash (was pure noise).
+    _noiseBurst({ dur: 1.5, filterType: 'highpass', freq: 8000, level: 0.45, shape: 'decay' });
+    _metalHit({ base: 1050, decay: 1.4, level: 0.14, bpFreq: 8000, bpQ: 0.7, hpFreq: 5000, type: 'square' });
   } else if (name === 'hitom') {
     const osc = ctx.createOscillator();
     osc.type = 'triangle';
@@ -6300,7 +6482,7 @@ function playDrumGeneric(name) {
     g.gain.setValueAtTime(0.8, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
     osc.connect(g);
-    g.connect(masterGain);
+    g.connect(drumBus);
     osc.start(now);
     osc.stop(now + 0.3);
   } else if (name === 'lotom') {
@@ -6312,7 +6494,7 @@ function playDrumGeneric(name) {
     g.gain.setValueAtTime(0.8, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
     osc.connect(g);
-    g.connect(masterGain);
+    g.connect(drumBus);
     osc.start(now);
     osc.stop(now + 0.3);
   } else if (name === 'shaker') {
@@ -6330,7 +6512,7 @@ function playDrumGeneric(name) {
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
     src.connect(flt);
     flt.connect(g);
-    g.connect(masterGain);
+    g.connect(drumBus);
     src.start(now);
   } else if (name === 'rim') {
     const osc = ctx.createOscillator();
@@ -6340,7 +6522,7 @@ function playDrumGeneric(name) {
     g.gain.setValueAtTime(0.6, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
     osc.connect(g);
-    g.connect(masterGain);
+    g.connect(drumBus);
     osc.start(now);
     osc.stop(now + 0.02);
   } else if (name === 'jump') {
@@ -6352,7 +6534,7 @@ function playDrumGeneric(name) {
     g.gain.setValueAtTime(0.5, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
     osc.connect(g);
-    g.connect(masterGain);
+    g.connect(drumBus);
     osc.start(now);
     osc.stop(now + 0.3);
   }
@@ -7620,7 +7802,7 @@ function startSequencer() {
       recordedLeadEvents.forEach((evt, evtIdx) => {
         if (evt.startStep !== currentStep) return;
         const seqVoiceId = 'seq:lead:' + evtIdx + ':' + currentStep;
-        playLead(seqVoiceId, evt.degree);
+        playLead(seqVoiceId, evt.degree, (evt.bank === 2) ? 2 : 1);
         const holdMs = Math.max(40, evt.lengthSteps * stepTime() - 10);
         setTimeout(() => stopLead(seqVoiceId), holdMs);
       });
@@ -7698,7 +7880,7 @@ function recordDrumHit(drumName, stepIdx) {
 // Record the START of a held lead note. We don't know the length yet; that gets filled
 // in when the corresponding release fires. The voiceKey (e.g. 'kbd:q', 'ptr') uniquely
 // identifies this note so a later release can find and finalize it.
-function recordLeadNoteOn(voiceKey, degree, stepIdx) {
+function recordLeadNoteOn(voiceKey, degree, stepIdx, bank) {
   if (!loopRecording || !sequencerRunning) return;
   const step = (stepIdx === undefined) ? currentStep : stepIdx;
   // If this voice was already mid-note (e.g. retrigger without release), close out the old
@@ -7710,7 +7892,8 @@ function recordLeadNoteOn(voiceKey, degree, stepIdx) {
   pendingLeadNotes[voiceKey] = {
     degree,
     startStep: step,
-    startedAt: Date.now()
+    startedAt: Date.now(),
+    bank: (bank === 2) ? 2 : 1
   };
 }
 
@@ -7743,7 +7926,8 @@ function finalizePendingLeadNote(voiceKey) {
     degree: note.degree,
     startStep: note.startStep,
     lengthSteps: lengthSteps,
-    voiceKey: voiceKey
+    voiceKey: voiceKey,
+    bank: note.bank || 1
   });
   delete pendingLeadNotes[voiceKey];
 }
@@ -8092,6 +8276,9 @@ function buildUI() {
     leadRow.appendChild(pad);
   });
 
+  // Build the LEAD 2 pad row (bank-2 visual + mouse play)
+  if (typeof renderLead2Pads === 'function') renderLead2Pads();
+
   // Drum pads — drums are one-shot, no sustain needed. Each pointer triggers the drum
   // it lands on; multiple fingers can hit different drums in the same audio frame.
   const drumRow = document.getElementById('drum-pads');
@@ -8211,12 +8398,61 @@ function buildUI() {
   // Populate type select
   updateTypeSelect();
 
+  // ── PER-FACEPLATE DEFAULT SETTINGS ──────────────────────────────────────
+  // Each faceplate represents a genre with its own sonic character, so each
+  // gets its own default slider values applied when you switch to it. Values
+  // respect the slider ranges:
+  //   crunch 0-1, delay 0-1, grit 0-1, lpf 20-20000, space(reverb) 0-1,
+  //   atk 0.001-0.5, rel 0.05-2, gld 0-0.5, swing 0-1
+  // Only fields present in a face's entry are applied — omitted sliders keep
+  // whatever the user last set. These are STARTING points, fully overridable.
+  const FACE_DEFAULTS = {
+    // Lush fantasy lead — long release the user specifically wanted, open filter.
+    BARD:      { lpf: 20000, atk: 0.01,  rel: 1.2,  space: 0.25, delay: 0.10, crunch: 0,    grit: 0,    gld: 0,     swing: 0 },
+    // Analog retro — warm filter roll-off, slow-ish attack, generous delay + space.
+    SYNTHWAVE: { lpf: 6500,  atk: 0.04,  rel: 0.9,  space: 0.35, delay: 0.30, crunch: 0.10, grit: 0.05, gld: 0.02,  swing: 0 },
+    // Drum & bass — tight, fast, percussive. Snappy attack, short release, bright.
+    DNB:       { lpf: 14000, atk: 0.002, rel: 0.18, space: 0.12, delay: 0.15, crunch: 0.20, grit: 0.10, gld: 0,     swing: 0 },
+    // Bright bells/plucks — fast attack, short-ish release so notes sparkle, open top.
+    SPARKLE:   { lpf: 18000, atk: 0.003, rel: 0.45, space: 0.40, delay: 0.22, crunch: 0,    grit: 0,    gld: 0,     swing: 0 },
+    // Soul — warm, rounded. Soft attack, medium release, lush reverb, gentle filter.
+    SOUL:      { lpf: 5500,  atk: 0.06,  rel: 1.0,  space: 0.45, delay: 0.12, crunch: 0.05, grit: 0,    gld: 0.03,  swing: 0.08 },
+    // Ambient gas-giant pads — very slow attack, very long release, drenched in space.
+    GAS:       { lpf: 4000,  atk: 0.30,  rel: 2.0,  space: 0.70, delay: 0.40, crunch: 0,    grit: 0,    gld: 0.10,  swing: 0 },
+    // Hyphy — punchy, aggressive, club-ready. Fast attack, tight release, some grit.
+    HYPHY:     { lpf: 12000, atk: 0.002, rel: 0.30, space: 0.10, delay: 0.08, crunch: 0.25, grit: 0.20, gld: 0,     swing: 0 },
+    // Dancehall — mid release, light delay, slight swing for the riddim bounce.
+    DANCEHALL: { lpf: 10000, atk: 0.008, rel: 0.55, space: 0.20, delay: 0.18, crunch: 0.10, grit: 0.05, gld: 0,     swing: 0.12 }
+  };
+  // Map each default field to its slider element id.
+  const FACE_DEFAULT_SLIDER_IDS = {
+    lpf: 'sl-lpf', atk: 'sl-atk', rel: 'sl-rel', space: 'sl-space',
+    delay: 'sl-delay', crunch: 'sl-crunch', grit: 'sl-grit', gld: 'sl-gld', swing: 'sl-swing'
+  };
+  function applyFaceDefaults(faceName) {
+    const def = FACE_DEFAULTS[faceName];
+    if (!def) return;
+    Object.keys(def).forEach(key => {
+      const id = FACE_DEFAULT_SLIDER_IDS[key];
+      if (!id) return;
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.value = def[key];
+      // Fire input so the synth engine's existing listeners pick up the value
+      // (filter cutoff, envelope times, fx amounts all hang off 'input').
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  // Expose so other call sites (e.g. cockpit faceplate cycling) can reuse it.
+  window.applyFaceDefaults = applyFaceDefaults;
+
   // Faceplate tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const newFace = btn.dataset.face;
       const faceChanged = (newFace !== currentFace);
       currentFace = newFace;
+      if (faceChanged) applyFaceDefaults(newFace);
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       updateTheme();
@@ -8321,6 +8557,11 @@ function buildUI() {
   // Octave
   document.getElementById('oct-up').addEventListener('click', () => { octaveOffset = Math.min(3, octaveOffset + 1); document.getElementById('oct-display').textContent = octaveOffset; });
   document.getElementById('oct-down').addEventListener('click', () => { octaveOffset = Math.max(-3, octaveOffset - 1); document.getElementById('oct-display').textContent = octaveOffset; });
+  // Bank-2 octave controls
+  const oUp2 = document.getElementById('oct-up-2');
+  const oDn2 = document.getElementById('oct-down-2');
+  if (oUp2) oUp2.addEventListener('click', () => { octaveOffset2 = Math.min(3, octaveOffset2 + 1); const d = document.getElementById('oct-display-2'); if (d) d.textContent = octaveOffset2; });
+  if (oDn2) oDn2.addEventListener('click', () => { octaveOffset2 = Math.max(-3, octaveOffset2 - 1); const d = document.getElementById('oct-display-2'); if (d) d.textContent = octaveOffset2; });
 
   // CHORDS — tri-state cycle: off → hint → full → off.
   //   hint: original behavior — quiet sine 3rd+5th under the lead (subtle harmony)
@@ -8491,11 +8732,18 @@ function buildUI() {
     const faces = Object.keys(FACEPLATES);
     const idx = (faces.indexOf(currentFace) + 1) % faces.length;
     currentFace = faces[idx];
+    if (typeof applyFaceDefaults === 'function') applyFaceDefaults(currentFace);
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.face === currentFace));
     updateTheme();
     updateTypeSelect();
     if (window.__populateBeatSelect) window.__populateBeatSelect();
     if (typeof populateMapSelect === 'function') populateMapSelect();
+  });
+  // On-screen SHIFT toggle (drums ↔ FX) for mobile + desktop.
+  const shiftToggleBtn = document.getElementById('btn-shift-toggle');
+  if (shiftToggleBtn) shiftToggleBtn.addEventListener('click', () => {
+    bottomRowMode = (bottomRowMode === 'drums') ? 'fx' : 'drums';
+    if (typeof renderBottomRow === 'function') renderBottomRow();
   });
 
   // Both REC controls do the same thing now: toggle loop recording + audio capture together.
@@ -8526,9 +8774,88 @@ function buildUI() {
   document.getElementById('sl-space').addEventListener('input', e => {
     if (reverbSend) reverbSend.gain.value = parseFloat(e.target.value);
   });
+  // ── BANK 2 FX slider listeners ──────────────────────────────────────────
+  const sl_lpf2 = document.getElementById('sl-lpf-2');
+  if (sl_lpf2) sl_lpf2.addEventListener('input', e => { if (masterFilter2) masterFilter2.frequency.value = parseFloat(e.target.value); });
+  const sl_grit2 = document.getElementById('sl-grit-2');
+  if (sl_grit2) sl_grit2.addEventListener('input', e => { if (driveNode2) driveNode2.curve = makeDistortionCurve(parseFloat(e.target.value)); });
+  const sl_crunch2 = document.getElementById('sl-crunch-2');
+  if (sl_crunch2) sl_crunch2.addEventListener('input', e => { if (crunchNode2) crunchNode2.curve = makeCrunchCurve(parseFloat(e.target.value)); });
+  const sl_delay2 = document.getElementById('sl-delay-2');
+  if (sl_delay2) sl_delay2.addEventListener('input', e => { if (delaySend2) delaySend2.gain.value = parseFloat(e.target.value); });
+  const sl_space2 = document.getElementById('sl-space-2');
+  if (sl_space2) sl_space2.addEventListener('input', e => { if (reverbSend2) reverbSend2.gain.value = parseFloat(e.target.value); });
+  // ── DRUM FX slider listeners (drum bus delay/reverb sends) ──────────────
+  const sl_drumDelay = document.getElementById('sl-drum-delay');
+  if (sl_drumDelay) sl_drumDelay.addEventListener('input', e => { if (drumDelaySend) drumDelaySend.gain.value = parseFloat(e.target.value); });
+  const sl_drumSpace = document.getElementById('sl-drum-space');
+  if (sl_drumSpace) sl_drumSpace.addEventListener('input', e => { if (drumReverbSend) drumReverbSend.gain.value = parseFloat(e.target.value); });
 
   updateTheme();
+  // Apply the starting faceplate's full default settings so load state matches
+  // the FACE_DEFAULTS table (static HTML only sets a subset). Guarded so a
+  // missing table entry is a no-op.
+  if (typeof applyFaceDefaults === 'function') applyFaceDefaults(currentFace);
+  // Set initial bottom-row visibility (drums by default).
+  if (typeof renderBottomRow === 'function') renderBottomRow();
 }
+
+// Show the drum OR fx pad section depending on bottomRowMode (SHIFT toggles).
+function renderBottomRow() {
+  const drumSec = document.getElementById('drum-pad-section');
+  const fxSec = document.getElementById('fx-pad-section');
+  if (drumSec) drumSec.style.display = (bottomRowMode === 'drums') ? '' : 'none';
+  if (fxSec) fxSec.style.display = (bottomRowMode === 'fx') ? '' : 'none';
+  // Update the on-screen SHIFT toggle button: in drum mode it shows "FX"
+  // (tap to go to FX); in FX mode it shows a drum glyph (tap to go to drums).
+  const shiftBtn = document.getElementById('btn-shift-toggle');
+  if (shiftBtn) {
+    shiftBtn.textContent = (bottomRowMode === 'drums') ? 'FX' : '🥁';
+    shiftBtn.title = (bottomRowMode === 'drums')
+      ? 'Switch bottom row to production FX'
+      : 'Switch bottom row back to drums';
+  }
+}
+window.renderBottomRow = renderBottomRow;
+
+// Populate the LEAD 2 pad row. Mirrors the LEAD 1 pad markup exactly so the
+// pads are identical in size/shape. data-note carries a '2:' prefix so the
+// touch grid + playNote route these to bank 2.
+function renderLead2Pads() {
+  const row = document.getElementById('lead2-pads');
+  if (!row) return;
+  row.innerHTML = '';
+  LEAD2_KEYS.forEach((key, i) => {
+    const pad = document.createElement('div');
+    pad.className = 'pad lead-pad lead2-pad';
+    pad.dataset.index = i;
+    pad.dataset.key = key;
+    pad.dataset.note = '2:' + key;       // '2:' prefix → bank 2 in playNote/stopNote
+    pad.dataset.degree = String(i);
+    pad.innerHTML = `<span class="pad-key">${key.toUpperCase()}</span><span class="pad-label">${i}</span>`;
+    pad.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      // Touch is handled by the bank-2 TouchGridEvaluator; skip here to avoid
+      // double-trigger (mirrors the lead-1 pad behavior exactly).
+      if (e.pointerType === 'touch') return;
+      try { pad.setPointerCapture(e.pointerId); } catch(_) {}
+      try { pad.releasePointerCapture(e.pointerId); } catch(_) {}
+      playLead('pad2:' + key, i, 2);
+      pad.classList.add('pressed');
+    });
+    const release = () => { stopLead('pad2:' + key); pad.classList.remove('pressed'); };
+    pad.addEventListener('pointerup', e => { if (e.pointerType === 'touch') return; release(); });
+    pad.addEventListener('pointerleave', e => { if (e.pointerType === 'touch') return; if (e.buttons) release(); });
+    row.appendChild(pad);
+  });
+  // Ensure the bank-2 touch evaluator exists and re-reads the freshly built
+  // pad geometry (pads may be created after the evaluator's first init).
+  if (typeof _initTouchGrid === 'function') _initTouchGrid();
+  if (window._touchGridEvaluator2 && typeof window._touchGridEvaluator2.cacheKeyGeometries === 'function') {
+    window._touchGridEvaluator2.cacheKeyGeometries();
+  }
+}
+window.renderLead2Pads = renderLead2Pads;
 
 function updateTypeSelect() {
   const typeSelect = document.getElementById('type-select');
@@ -8541,7 +8868,28 @@ function updateTypeSelect() {
   });
   typeSelect.value = currentType < FACEPLATES[currentFace].types.length ? currentType : 0;
   currentType = parseInt(typeSelect.value);
-  typeSelect.addEventListener('change', () => { currentType = parseInt(typeSelect.value); });
+  if (!typeSelect._bound) {
+    typeSelect.addEventListener('change', () => { currentType = parseInt(typeSelect.value); });
+    typeSelect._bound = true;
+  }
+  // ── BANK 2 instrument selector ──────────────────────────────────────────
+  const typeSelect2 = document.getElementById('type-select-2');
+  if (typeSelect2) {
+    typeSelect2.innerHTML = '';
+    FACEPLATES[currentFace].types.forEach((t, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = t;
+      typeSelect2.appendChild(opt);
+    });
+    if (currentType2 >= FACEPLATES[currentFace].types.length) currentType2 = 0;
+    typeSelect2.value = currentType2;
+    currentType2 = parseInt(typeSelect2.value);
+    if (!typeSelect2._bound) {
+      typeSelect2.addEventListener('change', () => { currentType2 = parseInt(typeSelect2.value); });
+      typeSelect2._bound = true;
+    }
+  }
 }
 
 function updateBPM() {
@@ -8685,6 +9033,17 @@ function _dismissAudioUnlockOverlay() {
 });
 
 document.addEventListener('keydown', e => {
+  // SHIFT toggles the bottom (ZXCV) row between drums and production FX.
+  // Handled before the e.repeat guard, but we gate on a flag so the OS key-
+  // repeat doesn't flip it many times while held.
+  if (e.key === 'Shift') {
+    if (!window._shiftHeld) {
+      window._shiftHeld = true;
+      bottomRowMode = (bottomRowMode === 'drums') ? 'fx' : 'drums';
+      if (typeof renderBottomRow === 'function') renderBottomRow();
+    }
+    return;
+  }
   if (e.repeat) return;
   const key = e.key.toLowerCase();
 
@@ -8737,20 +9096,50 @@ document.addEventListener('keydown', e => {
     const pad = document.querySelector(`.lead-pad[data-key="${(typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(key) : key}"]`);
     withQuantize(
       () => {
-        playLead('kbd:' + key, leadIdx);
+        playLead('kbd:' + key, leadIdx, 1);
         leadOwner = 'keyboard';
         if (pad) pad.classList.add('pressed');
       },
-      (recStep) => recordLeadNoteOn('kbd:' + key, leadIdx, recStep)
+      (recStep) => recordLeadNoteOn('kbd:' + key, leadIdx, recStep, 1)
     );
     return;
   }
 
-  const drumIdx = DRUM_KEYS.indexOf(key);
-  if (drumIdx >= 0) {
-    const drumName = DRUM_NAMES[drumIdx];
+  // ── LEAD BANK 2 (ASDF row) ──────────────────────────────────────────────
+  const lead2Idx = LEAD2_KEYS.indexOf(key);
+  if (lead2Idx >= 0) {
+    if (typeof midiArpMode !== 'undefined' && midiArpMode !== 'off') {
+      const pad = document.querySelector(`.lead2-pad[data-key="${(typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(key) : key}"]`);
+      if (pad) pad.classList.add('pressed');
+      arpNoteOn(lead2Idx, 'kbd2:' + key, 2);
+      return;
+    }
+    const pad = document.querySelector(`.lead2-pad[data-key="${(typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(key) : key}"]`);
+    withQuantize(
+      () => {
+        playLead('kbd2:' + key, lead2Idx, 2);
+        leadOwner = 'keyboard';
+        if (pad) pad.classList.add('pressed');
+      },
+      (recStep) => recordLeadNoteOn('kbd2:' + key, lead2Idx, recStep, 2)
+    );
+    return;
+  }
+
+  // ── BOTTOM ROW (ZXCV) — drums OR production FX per bottomRowMode ─────────
+  const bottomIdx = BOTTOM_ROW_KEYS.indexOf(key);
+  if (bottomIdx >= 0) {
+    if (bottomRowMode === 'fx') {
+      const pad = document.querySelector(`.fx-pad[data-key="${key}"]`);
+      withQuantize(() => {
+        playFX(FX_NAMES[bottomIdx]);
+        if (pad) pad.classList.add('pressed');
+      });
+      return;
+    }
+    // drums
+    const drumName = DRUM_NAMES[bottomIdx];
     const pad = document.querySelector(`.drum-pad[data-key="${key}"]`);
-    // Build mode is structural — bypass quantize so layering feels instant
     if (beatLoopBuildMode) {
       playDrum(drumName);
       if (pad) pad.classList.add('pressed');
@@ -8768,19 +9157,10 @@ document.addEventListener('keydown', e => {
     );
     return;
   }
-
-  const fxIdx = FX_KEYS.indexOf(key);
-  if (fxIdx >= 0) {
-    const pad = document.querySelector(`.fx-pad[data-key="${key}"]`);
-    withQuantize(() => {
-      playFX(FX_NAMES[fxIdx]);
-      if (pad) pad.classList.add('pressed');
-    });
-    return;
-  }
 });
 
 document.addEventListener('keyup', e => {
+  if (e.key === 'Shift') { window._shiftHeld = false; return; }
   const key = e.key.toLowerCase();
   pressedKeys.delete(key);
 
@@ -8796,24 +9176,37 @@ document.addEventListener('keyup', e => {
     // Stop just this key's voice — other held keys keep ringing (polyphonic)
     stopLead('kbd:' + key);
     // If no keyboard lead voices remain, drop the owner flag
-    const stillHeld = LEAD_KEYS.some(k => pressedKeys.has(k));
+    const stillHeld = LEAD_KEYS.some(k => pressedKeys.has(k)) || LEAD2_KEYS.some(k => pressedKeys.has(k));
     if (!stillHeld) leadOwner = (leadOwner === 'keyboard') ? null : leadOwner;
     const pad = document.querySelector(`.lead-pad[data-key="${(typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(key) : key}"]`);
     if (pad) pad.classList.remove('pressed');
     return;
   }
 
-  const drumIdx = DRUM_KEYS.indexOf(key);
-  if (drumIdx >= 0) {
-    const pad = document.querySelector(`.drum-pad[data-key="${key}"]`);
+  // ── LEAD BANK 2 release ─────────────────────────────────────────────────
+  const lead2Idx = LEAD2_KEYS.indexOf(key);
+  if (lead2Idx >= 0) {
+    if (typeof midiArpMode !== 'undefined' && midiArpMode !== 'off') {
+      arpNoteOff('kbd2:' + key);
+      const pad = document.querySelector(`.lead2-pad[data-key="${(typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(key) : key}"]`);
+      if (pad) pad.classList.remove('pressed');
+      return;
+    }
+    stopLead('kbd2:' + key);
+    const stillHeld = LEAD_KEYS.some(k => pressedKeys.has(k)) || LEAD2_KEYS.some(k => pressedKeys.has(k));
+    if (!stillHeld) leadOwner = (leadOwner === 'keyboard') ? null : leadOwner;
+    const pad = document.querySelector(`.lead2-pad[data-key="${(typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(key) : key}"]`);
     if (pad) pad.classList.remove('pressed');
     return;
   }
 
-  const fxIdx = FX_KEYS.indexOf(key);
-  if (fxIdx >= 0) {
-    const pad = document.querySelector(`.fx-pad[data-key="${key}"]`);
-    if (pad) pad.classList.remove('pressed');
+  // ── BOTTOM ROW release (drum or fx pad) ─────────────────────────────────
+  const bottomIdx = BOTTOM_ROW_KEYS.indexOf(key);
+  if (bottomIdx >= 0) {
+    const dpad = document.querySelector(`.drum-pad[data-key="${key}"]`);
+    if (dpad) dpad.classList.remove('pressed');
+    const fpad = document.querySelector(`.fx-pad[data-key="${key}"]`);
+    if (fpad) fpad.classList.remove('pressed');
     return;
   }
 });
@@ -9792,9 +10185,9 @@ function midiNoteToDegree(note) {
 }
 
 // ─── VELOCITY WRAPPERS ──────────────────────────────────────────────────
-function playLeadWithVelocity(voiceId, degree, velocity) {
+function playLeadWithVelocity(voiceId, degree, velocity, bank) {
   if (typeof playLead !== 'function') return;
-  playLead(voiceId, degree);
+  playLead(voiceId, degree, bank);
   const voice = (typeof activeVoices !== 'undefined') ? activeVoices[voiceId] : null;
   if (voice && voice.gainNode && typeof ctx !== 'undefined' && ctx) {
     const now = ctx.currentTime;
@@ -10162,12 +10555,12 @@ function getArpRate() {
   const bpmVal = (typeof bpm !== 'undefined') ? bpm : 120;
   return (60 / bpmVal) / 4 * 1000;
 }
-function arpNoteOn(degree, source) {
+function arpNoteOn(degree, source, bank) {
   if (midiArpMode === 'off') return;
   const alreadyHeld = !!arpHeldDegrees.find(e => e.source === source);
   if (alreadyHeld) return;   // re-trigger no-op
   const wasEmpty = (arpHeldDegrees.length === 0);
-  arpHeldDegrees.push({ degree, source });
+  arpHeldDegrees.push({ degree, source, bank: (bank === 2) ? 2 : 1 });
 
   if (wasEmpty) {
     // Cold start — pool was empty, this is the first note. Standard
@@ -10311,8 +10704,8 @@ function _arpStepBody() {
       workingPool = [];
       pool.forEach(entry => {
         workingPool.push(entry);
-        workingPool.push({ degree: entry.degree + 2, source: entry.source + ':c3' });
-        workingPool.push({ degree: entry.degree + 4, source: entry.source + ':c5' });
+        workingPool.push({ degree: entry.degree + 2, source: entry.source + ':c3', bank: entry.bank });
+        workingPool.push({ degree: entry.degree + 4, source: entry.source + ':c5', bank: entry.bank });
       });
     } else {
       workingPool = pool;
@@ -10382,7 +10775,7 @@ function _arpStepBody() {
       const wasExpanding = window._chordExpanding;
       if (chordMode === 'full') window._chordExpanding = true;
       try {
-        playLead(voiceId, noteDegree);
+        playLead(voiceId, noteDegree, (entry && entry.bank === 2) ? 2 : 1);
       } finally {
         window._chordExpanding = wasExpanding;
       }
@@ -10395,7 +10788,8 @@ function _arpStepBody() {
           degree:      noteDegree,
           startStep:   currentStep,
           lengthSteps: lenSteps,
-          voiceKey:    voiceId
+          voiceKey:    voiceId,
+          bank:        (entry && entry.bank === 2) ? 2 : 1
         });
       }
 
