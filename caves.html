@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>MYCELIUM DEEP - 014 one motion</title>
+<title>caves</title>
 <style>
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
@@ -76,6 +76,16 @@
         position: fixed; inset: 0; z-index: 30; background: #000;
         opacity: 0; pointer-events: none; transition: opacity 0.24s ease;
     }
+    #sqVeil {
+        position: fixed; inset: 0; z-index: 28; pointer-events: none; opacity: 0;
+        background-color: #0a0b0c;
+        background-repeat: repeat;
+        background-size: 380px 380px;
+        -webkit-mask-image: radial-gradient(ellipse at center,
+            transparent 26%, rgba(0, 0, 0, 0.75) 55%, #000 78%);
+        mask-image: radial-gradient(ellipse at center,
+            transparent 26%, rgba(0, 0, 0, 0.75) 55%, #000 78%);
+    }
     #tpAsk {
         position: fixed; z-index: 24; display: none;
         left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
@@ -131,11 +141,9 @@
         color: #cfe8e0; text-align: center; padding: 24px;
     }
     #overlay h1 {
-        font-size: 30px; font-weight: 300; letter-spacing: 0.34em; margin: 0 0 6px 0;
-        color: #eafff8;
+        font-size: 30px; font-weight: 300; letter-spacing: 0.34em; margin: 0 0 30px 0;
+        color: #01a982; text-transform: lowercase;
     }
-    #overlay h1 span { color: #01a982; font-weight: 600; }
-    #overlay .sub { font-size: 12px; letter-spacing: 0.22em; color: rgba(255,255,255,0.45); margin-bottom: 30px; }
     #overlay .how {
         font-size: 13px; line-height: 1.9; color: rgba(255,255,255,0.6); max-width: 320px;
     }
@@ -169,7 +177,7 @@
     });
 })();
 </script>
-<div class="hud" id="topbar"><span class="t">MYCELIUM DEEP</span> &nbsp;014</div>
+<div class="hud" id="topbar"><span class="t">caves</span></div>
 <div class="hud" id="depth">DEPTH 0 m</div>
 <div class="hud" id="hint"></div>
 <div class="btn" id="btnUp">&#9650;</div>
@@ -179,6 +187,7 @@
 <div class="btn" id="btnAudio">TURN ON SOUND</div>
 <div class="btn" id="btnRec" style="display:none;">REC</div>
 <div id="veil"></div>
+<div id="sqVeil"></div>
 <div id="tpAsk">
     <div id="tpName"></div>
     <div class="tpBtns">
@@ -198,8 +207,7 @@
 <div id="stick"><div id="knob"></div></div>
 
 <div id="overlay">
-    <h1>MYCELIUM <span>DEEP</span></h1>
-    <div class="sub">AN ENDLESS CAVE, GROWN AS YOU GO</div>
+    <h1>caves</h1>
     <div class="how">
         <b>left thumb</b> drifts you forward, back and sideways<br>
         <b>right thumb</b> turns your gaze<br>
@@ -2062,7 +2070,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             vertexColors: !!opts.vertexColors,
             color: opts.color !== undefined ? opts.color : 0xffffff,
             roughness: 0.94,
-            metalness: 0.0
+            metalness: 0.0,
+            side: T.DoubleSide
         });
         mat.onBeforeCompile = function (sh) {
             sh.uniforms.uAlb = { value: albTex };
@@ -2135,6 +2144,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     '           + texture2D(uAlb, rmUz * 3.7).a * rmBl.z;\n' +
                     'float rmMv = 0.62 + rmMac.r * 0.82;\n' +
                     'diffuseColor.rgb *= rmAlb.rgb * (0.72 + 0.72 * rmHF) * rmMv * 1.5;\n' +
+                    /* inside faces read as solid dark stone, never a window */
+                    'if (!gl_FrontFacing) diffuseColor.rgb *= 0.05;\n' +
                     /* past 21 the stone itself runs with slow waves of light */
                     'diffuseColor.rgb *= 1.0 + uWild * 0.22 * sin(dot(vRWp, vec3(0.21, 0.17, 0.19)) + uTripT * 1.7);')
                 .replace('#include <roughnessmap_fragment>',
@@ -3284,14 +3295,18 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (CC.density(x, y, z - r) > e) return true;
         return false;
     }
-    var BODY_R = 0.30, CRAWL_R = 0.12;
-    var CRAWL_EPS = 0.035;   /* push through membranes you can see through */
+    var BODY_R = 0.30, CRAWL_R = 0.17;
+    var SUBSTEP = 0.08;   /* no single move may exceed this: speed cannot tunnel */
+    var SQUEEZE_LEN = 0.95;   /* only pinches thinner than this admit a squeeze */
+    var sqDepthFrame = 0;   /* how deep in the pinch this frame, 0..1 */
     var squeezing = false;
     var bodyOffY = 0;   /* walk mode drops the body below the eye */
     var collideWalk = false;
     function setCollideWalk(v) { collideWalk = v; }
-    /* one axis step: full body first, then crawl body at reduced speed */
-    function axisStep(p, axis, d) {
+    /* one axis step, in substeps: full body first, then crawl body at
+       reduced speed through genuinely open gaps. Solid is solid: there is
+       stone under the stone, and no speed or pressure passes through it. */
+    function axisMicro(p, axis, d) {
         var nx = p.x + (axis === 0 ? d : 0);
         var ny = p.y + (axis === 1 ? d : 0);
         var nz = p.z + (axis === 2 ? d : 0);
@@ -3310,12 +3325,42 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         nx = p.x + (axis === 0 ? d * 0.55 : 0);
         ny = p.y + (axis === 1 ? d * 0.55 : 0);
         nz = p.z + (axis === 2 ? d * 0.55 : 0);
-        if (!blockedR(nx, ny + bodyOffY, nz, CRAWL_R, CRAWL_EPS)) {
+        if (!blockedR(nx, ny + bodyOffY, nz, CRAWL_R)) {
             p.x = nx; p.y = ny; p.z = nz;
             squeezing = true;
             return true;
         }
+        /* the squeeze: a thin horizontal pinch admits you if open space lies
+           just beyond it. You shimmy through slowly, eyes pressed shut; the
+           probe means a thick wall never yields, only true pinches. */
+        if (axis !== 1) {
+            var sgn2 = d < 0 ? -1 : 1;
+            var open = false;
+            for (var pr = 0.2; pr <= SQUEEZE_LEN; pr += 0.15) {
+                var qx = p.x + (axis === 0 ? sgn2 * pr : 0);
+                var qz = p.z + (axis === 2 ? sgn2 * pr : 0);
+                if (!blockedR(qx, p.y + bodyOffY, qz, CRAWL_R)) { open = true; break; }
+            }
+            if (open) {
+                p.x += (axis === 0 ? d * 0.3 : 0);
+                p.z += (axis === 2 ? d * 0.3 : 0);
+                squeezing = true;
+                sqDepthFrame = Math.max(sqDepthFrame,
+                    CC.density(p.x, p.y + bodyOffY, p.z) > 0 ? 1.0 : 0.4);
+                return true;
+            }
+        }
         return false;
+    }
+    function axisStep(p, axis, d) {
+        var left = Math.abs(d), sgn = d < 0 ? -1 : 1, moved = false;
+        while (left > 0.000001) {
+            var st = Math.min(SUBSTEP, left);
+            if (!axisMicro(p, axis, sgn * st)) return moved;
+            moved = true;
+            left -= st;
+        }
+        return moved;
     }
     /*__COLLIDE_END__*/
     var squeezeShown = false;
@@ -3392,6 +3437,26 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var cityCheckT = 1.5;
     var tripFovDirty = false;
     var flowT = 0, breathPh = 0, oneCrossed = false, camRoll = 0;
+    var squeezeGlow = 0;
+    var sqVeil = document.getElementById('sqVeil');
+    (function paintSqueezeRock() {
+        /* the wall against your face: the same stone, seen at a centimeter */
+        try {
+            var td2 = CC.rockTexData(256);
+            var cv = document.createElement('canvas');
+            cv.width = 256; cv.height = 256;
+            var c2 = cv.getContext('2d');
+            var img = c2.createImageData(256, 256);
+            for (var pi = 0; pi < 256 * 256; pi++) {
+                img.data[pi * 4] = td2.albedo[pi * 4] * 0.42;
+                img.data[pi * 4 + 1] = td2.albedo[pi * 4 + 1] * 0.42;
+                img.data[pi * 4 + 2] = td2.albedo[pi * 4 + 2] * 0.44;
+                img.data[pi * 4 + 3] = 255;
+            }
+            c2.putImageData(img, 0, 0);
+            sqVeil.style.backgroundImage = 'url(' + cv.toDataURL() + ')';
+        } catch (e) { /* the plain shadow remains a fine fallback */ }
+    })();
 
     /* -------- the golden spiral: a phyllotaxis mandala that blooms
        point by point along the Fibonacci numbers as the trip deepens -------- */
@@ -3410,7 +3475,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         mandalaGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
         var mm = new THREE.PointsMaterial({
-            color: 0x7df0cf, size: 0.32, sizeAttenuation: true,
+            color: 0x7df0cf, size: 0.55, sizeAttenuation: true,
+            map: glowTex, alphaTest: 0.01,
             transparent: true, opacity: 0.0,
             blending: THREE.AdditiveBlending, depthWrite: false
         });
@@ -3690,6 +3756,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         last = now;
         var t = now / 1000;
 
+        sqDepthFrame = 0;
         var kf = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
         var ks = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
         var ku = (keys['KeyR'] || keys['Space'] ? 1 : 0) - (keys['KeyF'] || keys['ShiftLeft'] ? 1 : 0);
@@ -3934,17 +4001,31 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var rollTarget = window._CAVE_TRIP ? trW * 0.035 * Math.sin(t * 0.19) + trN * 0.008 * Math.sin(t * 0.11) : 0;
         camRoll += (rollTarget - camRoll) * Math.min(1, dt * 2);
 
+        /* the pinch presses your eyes shut, then lets the light back in */
+        squeezeGlow += (sqDepthFrame * 0.92 - squeezeGlow) * Math.min(1, dt * 9);
+        if (squeezeGlow < 0.005) squeezeGlow = 0;
+        sqVeil.style.opacity = squeezeGlow.toFixed(3);
+        if (squeezeGlow > 0) {
+            sqVeil.style.backgroundPosition =
+                (-yaw * 520 - camera.position.x * 90 - camera.position.z * 90).toFixed(1) + 'px ' +
+                (camera.position.y * 130).toFixed(1) + 'px';
+        }
+
         /* the trip breathes, gently */
         if (window._CAVE_TRIP && tripS > 0.02) {
             var vLvl = 5 * (1 - Math.exp(-tripS / 8));
             var vWild = Math.max(0, Math.min(1, (tripS - 21) / 9));
             scene.fog.color.offsetHSL(Math.sin(t * (0.21 + vWild * 0.6)) * (0.016 * vLvl + 0.06 * vWild), 0.012 * vLvl + 0.05 * vWild, 0.0);
             scene.background.copy(scene.fog.color);
-            camera.fov = 75 + Math.sin(t * (0.47 + vWild * 0.5)) * (0.85 * vLvl + 2.5 * vWild);
+            camera.fov = 72 + Math.sin(t * (0.47 + vWild * 0.5)) * (0.85 * vLvl + 2.5 * vWild) - squeezeGlow * 3.5;
+            camera.updateProjectionMatrix();
+            tripFovDirty = true;
+        } else if (squeezeGlow > 0) {
+            camera.fov = 72 - squeezeGlow * 3.5;
             camera.updateProjectionMatrix();
             tripFovDirty = true;
         } else if (tripFovDirty) {
-            camera.fov = 75;
+            camera.fov = 72;
             camera.updateProjectionMatrix();
             tripFovDirty = false;
         }
@@ -3952,7 +4033,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         renderer.render(scene, camera);
     }
 
-    console.log('[MYCELIUM DEEP 014] seed ' + CC.SEED +
+    console.log('[CAVES 017] seed ' + CC.SEED +
         ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP | _CAVE.trip(n) freshStart()');
 })();
 </script>
