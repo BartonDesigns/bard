@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>caves</title>
+<title>caves 029</title>
 <style>
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
@@ -108,6 +108,18 @@
         backdrop-filter: blur(6px);
     }
     #eatRow { display: flex; align-items: center; gap: 8px; }
+    #stuckAsk {
+        position: fixed; z-index: 25; display: none;
+        left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 158px);
+        transform: translateX(-50%);
+        flex-direction: column; align-items: center; gap: 10px;
+        background: rgba(20, 10, 8, 0.94);
+        border: 1px solid rgba(255, 158, 90, 0.6);
+        border-radius: 14px; padding: 14px 18px;
+        backdrop-filter: blur(6px);
+    }
+    #stuckLbl { color: #ffd8b8; font: 600 12px monospace; letter-spacing: 0.1em; }
+    #stuckGo { border-color: #ff9e5a; color: #ffcf9e; position: static; width: auto; height: 34px; border-radius: 17px; padding: 0 16px; font-size: 11px; display: flex; align-items: center; justify-content: center; }
     #eatDot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
     #eatLbl { color: #d8efe8; font: 600 12px monospace; letter-spacing: 0.1em; }
     #eatGo { border-color: #01a982; color: #7df0cf; position: static; width: auto; height: 34px; border-radius: 17px; padding: 0 16px; font-size: 11px; display: flex; align-items: center; justify-content: center; }
@@ -144,6 +156,26 @@
         font-size: 30px; font-weight: 300; letter-spacing: 0.34em; margin: 0 0 30px 0;
         color: #01a982; text-transform: lowercase;
     }
+    #shroomWarn {
+        position: relative; max-width: 320px; margin: 22px 0 6px 0;
+        border: 1px solid rgba(216, 178, 108, 0.55);
+        border-radius: 12px; padding: 16px 18px;
+        background: rgba(24, 18, 8, 0.6);
+        overflow: hidden;
+    }
+    #shroomWarn svg {
+        position: absolute; left: 50%; top: 50%;
+        width: 96px; height: 80px;
+        transform: translate(-50%, -50%);
+        opacity: 0.15; pointer-events: none;
+    }
+    #shroomWarn p {
+        position: relative; z-index: 1; margin: 0;
+        font-size: 12px; line-height: 1.75;
+        color: rgba(255, 233, 200, 0.85);
+        letter-spacing: 0.04em;
+    }
+    #shroomWarn b { color: #ffd27a; letter-spacing: 0.08em; }
     #overlay .how {
         font-size: 13px; line-height: 1.9; color: rgba(255,255,255,0.6); max-width: 320px;
     }
@@ -177,33 +209,39 @@
     });
 })();
 </script>
-<div class="hud" id="topbar"><span class="t">caves</span></div>
+<div class="hud" id="topbar"><span class="t">caves 029</span></div>
 <div class="hud" id="depth">DEPTH 0 m</div>
 <div class="hud" id="hint"></div>
 <div class="btn" id="btnUp">&#9650;</div>
 <div class="btn" id="btnDown">&#9660;</div>
-<div class="btn" id="btnTorch">PLACE TORCH</div>
+<div class="btn" id="btnTorch">place torch</div>
 <div class="btn" id="btnMode">MODE: FLY</div>
-<div class="btn" id="btnAudio">TURN ON SOUND</div>
-<div class="btn" id="btnRec" style="display:none;">REC</div>
+<div class="btn" id="btnAudio">turn on sound</div>
+<div class="btn" id="btnRec" style="display:none;">rec</div>
 <div id="veil"></div>
 <div id="sqVeil"></div>
 <div id="tpAsk">
     <div id="tpName"></div>
     <div class="tpBtns">
-        <div class="btn" id="tpGo">TELEPORT</div>
-        <div class="btn" id="tpNo">NOT NOW</div>
+        <div class="btn" id="tpGo">teleport</div>
+        <div class="btn" id="tpNo">not now</div>
+    </div>
+</div>
+<div id="stuckAsk">
+    <div id="stuckLbl">the stone has you wedged</div>
+    <div class="tpBtns">
+        <div class="btn" id="stuckGo">unstick me</div>
     </div>
 </div>
 <div id="eatAsk">
     <div id="eatRow"><span id="eatDot"></span><span id="eatLbl">a glowing mushroom</span></div>
     <div class="tpBtns">
-        <div class="btn" id="eatGo">CONSUME</div>
-        <div class="btn" id="eatNo">LEAVE IT</div>
+        <div class="btn" id="eatGo">consume</div>
+        <div class="btn" id="eatNo">leave it</div>
     </div>
 </div>
 <div id="recTime" style="display:none;"></div>
-<a class="btn" id="recSave" style="display:none;">SAVE .MP3</a>
+<a class="btn" id="recSave" style="display:none;">save .mp3</a>
 <div id="stick"><div id="knob"></div></div>
 
 <div id="overlay">
@@ -215,7 +253,34 @@
         <b>tap a torch</b> to carry its fire with you<br>
         <span style="opacity:0.55">keys work too: WASD, R/F, drag to look</span>
     </div>
-    <button id="go">DESCEND</button>
+    <div id="shroomWarn">
+        <svg viewBox="0 0 120 100" aria-hidden="true">
+            <g fill="none" stroke="#d8c9a8" stroke-width="6" stroke-linecap="round">
+                <line x1="18" y1="30" x2="102" y2="76" />
+                <line x1="102" y1="30" x2="18" y2="76" />
+            </g>
+            <g fill="#d8c9a8">
+                <circle cx="18" cy="30" r="5.5" /><circle cx="24" cy="24" r="5.5" />
+                <circle cx="102" cy="30" r="5.5" /><circle cx="96" cy="24" r="5.5" />
+                <circle cx="18" cy="76" r="5.5" /><circle cx="24" cy="82" r="5.5" />
+                <circle cx="102" cy="76" r="5.5" /><circle cx="96" cy="82" r="5.5" />
+            </g>
+            <g>
+                <path fill="#e6dcc2" d="M60 12 C41 12 30 26 30 42 C30 52 35 59 41 63 L41 74 C41 77 43 79 46 79 L74 79 C77 79 79 77 79 74 L79 63 C85 59 90 52 90 42 C90 26 79 12 60 12 Z" />
+                <ellipse fill="#141210" cx="48" cy="43" rx="8" ry="9.5" />
+                <ellipse fill="#141210" cx="72" cy="43" rx="8" ry="9.5" />
+                <path fill="#141210" d="M60 52 L54 63 L66 63 Z" />
+                <rect fill="#141210" x="50" y="79" width="4.5" height="8" rx="2" />
+                <rect fill="#141210" x="58" y="79" width="4.5" height="8" rx="2" />
+                <rect fill="#141210" x="66" y="79" width="4.5" height="8" rx="2" />
+            </g>
+        </svg>
+        <p><b>warning: do not do this in the real world.</b><br>
+        the glowing mushrooms in this cave are pretend.
+        real wild mushrooms can be deadly poisonous, and eating one
+        can result in death. never eat a mushroom you find outside.</p>
+    </div>
+    <button id="go">descend</button>
     <div id="loadline"></div>
 </div>
 
@@ -563,7 +628,293 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     C.CELL = 3.0;          /* metres per lattice cell */
     C.CELLS = 10;          /* cells per chunk edge */
     C.CHUNK = C.CELL * C.CELLS;
-    C.WATER_Y = -10.0;     /* the still water table */
+    C.WATER_Y = -10.0;     /* the first water table near the surface */
+    /* regional water: 200m cells, many carry a lake whose surface sits at
+       a depth chosen per cell, so water lives at every depth of the descent */
+    var WCELL = 200;
+    function lakesFor(wx2, wz2) {
+        /* up to four stacked lakes per wet cell, spread down the descent */
+        var out = [];
+        for (var k = 0; k < 4; k++) {
+            var h = hash3(wx2 * 5 + 2 + k * 17, 551 + k, wz2 * 5 + 7 + k * 13);
+            if (h > 0.62) continue;
+            var dep = hash3(wx2 + k, 552, wz2 - k);
+            var ly = -12 - dep * dep * 5200 - k * 45;
+            out.push({ y: ly, seed: h });
+        }
+        return out;
+    }
+    C.waterLevelAt = function (lx, y, lz) {
+        /* the nearest water surface governing this position, or null.
+           The global table always exists near the surface. */
+        var x = lx + OX, z = lz + OZ;
+        var best = null;
+        if (y < C.WATER_Y + 6 && y > C.WATER_Y - 60) best = C.WATER_Y;
+        var wx2 = Math.floor(x / WCELL), wz2 = Math.floor(z / WCELL);
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                var lks = lakesFor(wx2 + i, wz2 + j);
+                var cx2 = (wx2 + i + 0.5) * WCELL, cz2 = (wz2 + j + 0.5) * WCELL;
+                var dx2 = x - cx2, dz2 = z - cz2;
+                if (dx2 * dx2 + dz2 * dz2 > 150 * 150) continue;
+                for (var q = 0; q < lks.length; q++) {
+                    var lk = lks[q];
+                    if (y > lk.y + 6 || y < lk.y - 80) continue;
+                    if (best === null || Math.abs(y - lk.y) < Math.abs(y - best)) best = lk.y;
+                }
+            }
+        }
+        var rvw = C.riverLevelAt(lx, y, lz);
+        if (rvw && (best === null || Math.abs(y - rvw.y) < Math.abs(y - best))) best = rvw.y;
+        return best;
+    };
+    function riverFor(wx2, wz2, li) {
+        var lks = lakesFor(wx2, wz2);
+        if (li >= lks.length) return null;
+        var src = lks[li];
+        if (hash3(wx2 * 3 + li, 661, wz2 * 3 - li) > 0.7) return null;
+        var sx2 = (wx2 + 0.5) * WCELL, sz2 = (wz2 + 0.5) * WCELL;
+        var best = null, bd2 = 1e9;
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                if (i === 0 && j === 0) continue;
+                var nl = lakesFor(wx2 + i, wz2 + j);
+                for (var q = 0; q < nl.length; q++) {
+                    if (nl[q].y > src.y - 6) continue;
+                    var tx2 = (wx2 + i + 0.5) * WCELL, tz2 = (wz2 + j + 0.5) * WCELL;
+                    var dd = (tx2 - sx2) * (tx2 - sx2) + (tz2 - sz2) * (tz2 - sz2) + (src.y - nl[q].y) * 40;
+                    if (dd < bd2) { bd2 = dd; best = { x: tx2, z: tz2, y: nl[q].y }; }
+                }
+            }
+        }
+        var ang = hash3(wx2 + li, 662, wz2 - li) * 6.2831853;
+        if (!best) {
+            best = {
+                x: sx2 + Math.cos(ang) * 150,
+                z: sz2 + Math.sin(ang) * 150,
+                y: src.y - 24 - hash3(wx2, 663 + li, wz2) * 30
+            };
+        }
+        var n = 12;
+        var pts = [], drops = [];
+        var dxT = best.x - sx2, dzT = best.z - sz2;
+        var plen = Math.sqrt(dxT * dxT + dzT * dzT) || 1;
+        var s0x = sx2 + (dxT / plen) * 60, s0z = sz2 + (dzT / plen) * 60;
+        var f1 = 0.3 + hash3(wx2, 664, wz2 + li) * 0.2;
+        var f2 = 0.62 + hash3(wz2, 665, wx2 - li) * 0.2;
+        var totalDrop = src.y - best.y;
+        var d1 = totalDrop * (0.3 + hash3(li, 666, wx2) * 0.25);
+        var d2 = totalDrop * (0.25 + hash3(li, 667, wz2) * 0.2);
+        for (var p2 = 0; p2 <= n; p2++) {
+            var t2 = p2 / n;
+            var px2 = s0x + (best.x - s0x) * t2;
+            var pz2 = s0z + (best.z - s0z) * t2;
+            var mw = Math.sin(t2 * 9.4 + ang) * 14 * Math.sin(t2 * 3.14);
+            px2 += (-dzT / plen) * mw;
+            pz2 += (dxT / plen) * mw;
+            var py2 = src.y;
+            if (t2 >= f1) py2 -= d1;
+            if (t2 >= f2) py2 -= d2;
+            if (t2 >= 0.999) py2 = best.y;
+            pts.push([px2, py2, pz2]);
+        }
+        for (p2 = 1; p2 <= n; p2++) {
+            if (pts[p2][1] < pts[p2 - 1][1] - 3) drops.push(p2);
+        }
+        var bx0 = 1e9, bx1 = -1e9, bz0 = 1e9, bz1 = -1e9, by0 = 1e9, by1 = -1e9;
+        for (p2 = 0; p2 < pts.length; p2++) {
+            bx0 = Math.min(bx0, pts[p2][0]); bx1 = Math.max(bx1, pts[p2][0]);
+            bz0 = Math.min(bz0, pts[p2][2]); bz1 = Math.max(bz1, pts[p2][2]);
+            by0 = Math.min(by0, pts[p2][1]); by1 = Math.max(by1, pts[p2][1]);
+        }
+        return { pts: pts, drops: drops, w: 2.0 + hash3(li, 668, wx2 + wz2) * 1.2,
+            bx0: bx0 - 8, bx1: bx1 + 8, bz0: bz0 - 8, bz1: bz1 + 8, by0: by0 - 10, by1: by1 + 6 };
+    }
+    var riverMemo = {};
+    var riverCellMemo = {};
+    function riverForM(wx2, wz2, li) {
+        var k = wx2 + ',' + wz2 + ',' + li;
+        if (k in riverMemo) return riverMemo[k];
+        var rv = riverFor(wx2, wz2, li);
+        riverMemo[k] = rv;
+        return rv;
+    }
+    function riversNearWorld(x, z) {
+        var wx2 = Math.floor(x / WCELL), wz2 = Math.floor(z / WCELL);
+        var ck = wx2 + ',' + wz2;
+        var hit = riverCellMemo[ck];
+        if (hit) return hit;
+        var out = [];
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                for (var li = 0; li < 4; li++) {
+                    var rv = riverForM(wx2 + i, wz2 + j, li);
+                    if (rv) out.push(rv);
+                }
+            }
+        }
+        riverCellMemo[ck] = out;
+        return out;
+    }
+    function segDist2(px2, py2, pz2, a, b) {
+        var abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
+        var apx = px2 - a[0], apy = py2 - a[1], apz = pz2 - a[2];
+        var tt = (apx * abx + apy * aby + apz * abz) / ((abx * abx + aby * aby + abz * abz) || 1);
+        tt = Math.max(0, Math.min(1, tt));
+        var qx = a[0] + abx * tt - px2, qy = a[1] + aby * tt - py2, qz = a[2] + abz * tt - pz2;
+        return qx * qx + qy * qy + qz * qz;
+    }
+    function riverCarve(x, y, z, d) {
+        var rl = riversNearWorld(x, z);
+        for (var r2 = 0; r2 < rl.length; r2++) {
+            var rv = rl[r2];
+            if (x < rv.bx0 || x > rv.bx1 || z < rv.bz0 || z > rv.bz1 || y < rv.by0 || y > rv.by1) continue;
+            for (var p2 = 1; p2 < rv.pts.length; p2++) {
+                var a = rv.pts[p2 - 1], b = rv.pts[p2];
+                var dd2 = segDist2(x, y + rv.w * 0.4, z, a, b);
+                var cd = Math.sqrt(dd2) - rv.w;
+                d = Math.min(d, cd * 0.55);
+                if (rv.drops.indexOf(p2) >= 0) {
+                    var sd = Math.sqrt((x - b[0]) * (x - b[0]) + (z - b[2]) * (z - b[2]));
+                    if (y < a[1] + 3 && y > b[1] - 3) {
+                        d = Math.min(d, (sd - rv.w * 1.1) * 0.55);
+                    }
+                }
+            }
+        }
+        return d;
+    }
+    /* depth vaults: every 10,000m down, a guaranteed monolith chamber
+       in every 400m cell, so the milestone finds you wherever you fell */
+    var VAULT_STEP = 10000, VCELL = 400;
+    function vaultFor(vx, vz, k) {
+        var cx2 = (vx + 0.5) * VCELL + (hash3(vx, 700 + k, vz) - 0.5) * 120;
+        var cz2 = (vz + 0.5) * VCELL + (hash3(vz, 701 + k, vx) - 0.5) * 120;
+        return { x: cx2, y: -k * VAULT_STEP, z: cz2, k: k, r: 13 + hash3(vx + k, 702, vz) * 4 };
+    }
+    function vaultCarve(x, y, z, d) {
+        var k = Math.round(-y / VAULT_STEP);
+        if (k < 1) return d;
+        var vy = -k * VAULT_STEP;
+        if (Math.abs(y - vy) > 24) return d;
+        var vx = Math.floor(x / VCELL), vz = Math.floor(z / VCELL);
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                var v = vaultFor(vx + i, vz + j, k);
+                var dx = x - v.x, dy = (y - v.y) * 1.35, dz = z - v.z;
+                var vd = Math.sqrt(dx * dx + dy * dy + dz * dz) - v.r;
+                d = Math.min(d, vd * 0.55);
+            }
+        }
+        return d;
+    }
+    C.vaultsNearChunk = function (lx, lz, ly) {
+        var x = lx + OX, z = lz + OZ;
+        var k = Math.round(-ly / VAULT_STEP);
+        if (k < 1) return [];
+        var vx = Math.floor(x / VCELL), vz = Math.floor(z / VCELL);
+        var out = [];
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                var v = vaultFor(vx + i, vz + j, k);
+                out.push({ x: v.x - OX, y: v.y, z: v.z - OZ, k: v.k, r: v.r });
+            }
+        }
+        return out;
+    };
+    /* living stone: session seals the cave closes behind the walker */
+    var seals = [];
+    C.addSeal = function (lx, y, lz, r) { seals.push([lx + OX, y + OY, lz + OZ, r]); };
+    C.clearSeals = function () { seals.length = 0; };
+    function sealSolid(x, y, z, d) {
+        for (var i = 0; i < seals.length; i++) {
+            var sl = seals[i];
+            var dx = x - sl[0], dy = y - sl[1], dz = z - sl[2];
+            var sd = (sl[3] - Math.sqrt(dx * dx + dy * dy + dz * dz)) * 0.55;
+            if (sd > d) d = sd;
+        }
+        return d;
+    }
+    /* breather points: lattice-seeded spots where the stone stirs once */
+    C.eventsNearChunk = function (lx, lz) {
+        var x = lx + OX, z = lz + OZ;
+        var ex = Math.floor(x / 700), ez = Math.floor(z / 700);
+        var out = [];
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                if (hash3(ex + i, 710, ez + j) > 0.25) continue;
+                out.push({
+                    x: (ex + i + 0.5) * 700 + (hash3(ex + i, 711, ez + j) - 0.5) * 300 - OX,
+                    z: (ez + j + 0.5) * 700 + (hash3(ez + j, 712, ex + i) - 0.5) * 300 - OZ,
+                    id: (ex + i) + ',' + (ez + j)
+                });
+            }
+        }
+        return out;
+    };
+    /* song shards: sparse resonance stones, 500m lattice */
+    C.shardsNearChunk = function (lx, lz) {
+        var x = lx + OX, z = lz + OZ;
+        var sx = Math.floor(x / 500), sz = Math.floor(z / 500);
+        var out = [];
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                if (hash3(sx + i, 720, sz + j) > 0.4) continue;
+                out.push({
+                    x: (sx + i + 0.5) * 500 + (hash3(sx + i, 721, sz + j) - 0.5) * 340 - OX,
+                    z: (sz + j + 0.5) * 500 + (hash3(sz + j, 722, sx + i) - 0.5) * 340 - OZ,
+                    id: 'sh' + (sx + i) + ',' + (sz + j)
+                });
+            }
+        }
+        return out;
+    };
+    C.riversNearChunk = function (lx, lz) {
+        var rl = riversNearWorld(lx + OX, lz + OZ);
+        var out = [];
+        for (var i = 0; i < rl.length; i++) {
+            var rv = rl[i];
+            var pts = [];
+            for (var p2 = 0; p2 < rv.pts.length; p2++) {
+                pts.push([rv.pts[p2][0] - OX, rv.pts[p2][1], rv.pts[p2][2] - OZ]);
+            }
+            out.push({ pts: pts, drops: rv.drops, w: rv.w });
+        }
+        return out;
+    };
+    C.riverLevelAt = function (lx, y, lz) {
+        var x = lx + OX, z = lz + OZ;
+        var rl = riversNearWorld(x, z);
+        for (var r2 = 0; r2 < rl.length; r2++) {
+            var rv = rl[r2];
+            if (x < rv.bx0 || x > rv.bx1 || z < rv.bz0 || z > rv.bz1) continue;
+            for (var p2 = 1; p2 < rv.pts.length; p2++) {
+                var a = rv.pts[p2 - 1], b = rv.pts[p2];
+                var dd2 = segDist2(x, a[1], z, [a[0], a[1], a[2]], [b[0], a[1], b[2]]);
+                if (dd2 < rv.w * rv.w && y > a[1] - 3.5 && y < a[1] + 2.5) {
+                    var fl = Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[2] - a[2]) * (b[2] - a[2])) || 1;
+                    return { y: Math.min(a[1], b[1]), fx: (b[0] - a[0]) / fl, fz: (b[2] - a[2]) / fl };
+                }
+            }
+        }
+        return null;
+    };
+    C.lakesNearChunk = function (lx, lz) {
+        /* lake surfaces whose 130m disc reaches this position */
+        var x = lx + OX, z = lz + OZ;
+        var wx2 = Math.floor(x / WCELL), wz2 = Math.floor(z / WCELL);
+        var out = [];
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                var lks = lakesFor(wx2 + i, wz2 + j);
+                var cx2 = (wx2 + i + 0.5) * WCELL, cz2 = (wz2 + j + 0.5) * WCELL;
+                for (var q = 0; q < lks.length; q++) {
+                    out.push({ y: lks[q].y, cx: cx2 - OX, cz: cz2 - OZ, r: 150, seed: lks[q].seed });
+                }
+            }
+        }
+        return out;
+    };
 
     /* -------- seeded value noise -------- */
     function hash3(x, y, z) {
@@ -639,7 +990,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var h = hash3(gx * 3 + 11, 77, gz * 3 + 29);
         /* the first city is guaranteed: one cell east of spawn, never a ruin */
         if (gx === 1 && gz === 0) h = 0.12;
-        else if (h > 0.30) return null;
+        else if (h > 0.48) return null;
         var cx = (gx + 0.18 + hash3(gx, 1, gz) * 0.64) * SET_CELL;
         var cz = (gz + 0.18 + hash3(gx, 2, gz) * 0.64) * SET_CELL;
         /* keep the spawn area natural */
@@ -762,26 +1113,175 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var cav = CAV_T - vnoise(x * CAV_S + 7.3, y * CAV_S * CAV_SQ + 3.1, z * CAV_S + 91.4);
         var d = Math.min(tun, cav);
         d += (vnoise(x * DET_S, y * DET_S, z * DET_S) - 0.5) * DET_A;
+        /* the dream warp: while the trip holds, other tunnels remember
+           themselves into being. TW 0 leaves the world EXACTLY as it was. */
+        if (TW > 0) {
+            var dw = wormAt(x * 1.06 + 413.7, y * 1.21 - 991.3, z * 1.06 - 2716.9) - TUN_T * (0.9 + 0.5 * TW);
+            d = Math.min(d, dw + (1.0 - TW) * 0.4);
+        }
         /* spawn bubble, blended so its wall is rock like any other */
         var dy = ly - 2.0;
         var bub = Math.sqrt(lx * lx + dy * dy + lz * lz) / 9.0 - 1.0;
         d = Math.min(d, bub * 0.5);
         d = settlementCarve(x, y, z, d);
+        d = shantyCarve(x, y, z, d);
+        if (RIVERS_ON) d = riverCarve(x, y - OY, z, d);
+        d = vaultCarve(x, y - OY, z, d);
+        d = sealSolid(x, y, z, d);
         return d;
     }
+    var RIVERS_ON = true;
+    C.setRivers = function (v) { RIVERS_ON = !!v; };
+    /* shanty complexes: rare carved homes of the old cave dwellers.
+       A hidden door, then rooms stepping down into the rock, each one
+       hand-dug: rounded-box chambers joined by sloped stair corridors. */
+    var SHANTY_CELL = 340;
+    function rbox(px, py, pz, cx2, cy2, cz2, hx, hy, hz, rr) {
+        var qx = Math.abs(px - cx2) - hx, qy = Math.abs(py - cy2) - hy, qz = Math.abs(pz - cz2) - hz;
+        var ax = Math.max(qx, 0), ay = Math.max(qy, 0), az = Math.max(qz, 0);
+        return Math.sqrt(ax * ax + ay * ay + az * az) + Math.min(Math.max(qx, Math.max(qy, qz)), 0) - rr;
+    }
+    function shantyFor(gx, gz) {
+        var h = hash3(gx * 7 + 3, 401, gz * 7 + 5);
+        if (h > 0.30) return null;
+        var cx = (gx + 0.2 + hash3(gx, 402, gz) * 0.6) * SHANTY_CELL;
+        var cz = (gz + 0.2 + hash3(gx, 403, gz) * 0.6) * SHANTY_CELL;
+        if (cx * cx + cz * cz < 200 * 200) return null;
+        var ey = -14 - hash3(gx, 404, gz) * 300;
+        var entA = hash3(gx, 405, gz) * 6.2831853;
+        var rooms = [];
+        var nR = 3 + Math.floor(hash3(gx, 406, gz) * 4);
+        var rx = cx, ry = ey, rz = cz;
+        var walkA = entA + 3.1416;
+        for (var r = 0; r < nR; r++) {
+            var w2 = 2.2 + hash3(gx, 410 + r, gz) * 1.4;
+            var d2 = 2.2 + hash3(gx, 420 + r, gz) * 1.6;
+            var hh = 1.35 + hash3(gx, 430 + r, gz) * 0.35;
+            rooms.push({ x: rx, y: ry, z: rz, hw: w2, hd: d2, hh: hh, floorY: ry - hh });
+            walkA += (hash3(gx, 440 + r, gz) - 0.5) * 1.9;
+            rx += Math.cos(walkA) * (w2 + 4.5 + hash3(gx, 450 + r, gz) * 3);
+            rz += Math.sin(walkA) * (d2 + 4.5 + hash3(gx, 460 + r, gz) * 3);
+            ry -= 2.4 + hash3(gx, 470 + r, gz) * 1.6;
+        }
+        return {
+            seed: h, x: cx, y: ey, z: cz, entA: entA, rooms: rooms,
+            gx: gx, gz: gz
+        };
+    }
+    function shantyNear(x, z) {
+        var gx = Math.floor(x / SHANTY_CELL), gz = Math.floor(z / SHANTY_CELL);
+        var best = null, bd = 1e9;
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                var st = shantyFor(gx + i, gz + j);
+                if (!st) continue;
+                var dx = st.x - x, dz = st.z - z;
+                var d2 = dx * dx + dz * dz;
+                if (d2 < bd) { bd = d2; best = st; }
+            }
+        }
+        return best;
+    }
+    C.shantyNear = function (lx, lz) { return shantyNear(lx + OX, lz + OZ); };
+    C.shantiesWithin = function (lx, lz, radius) {
+        var x = lx + OX, z = lz + OZ;
+        var cells = Math.ceil(radius / SHANTY_CELL) + 1;
+        var gx = Math.floor(x / SHANTY_CELL), gz = Math.floor(z / SHANTY_CELL);
+        var out = [];
+        for (var i = -cells; i <= cells; i++) {
+            for (var j = -cells; j <= cells; j++) {
+                var st = shantyFor(gx + i, gz + j);
+                if (!st) continue;
+                var dx = st.x - x, dz = st.z - z;
+                var d = Math.sqrt(dx * dx + dz * dz);
+                if (d <= radius) out.push({ site: st, dist: d });
+            }
+        }
+        out.sort(function (a, b) { return a.dist - b.dist; });
+        return out;
+    };
+    function shantyCarve(x, y, z, d) {
+        var st = shantyNear(x, z);
+        if (!st) return d;
+        var dx0 = x - st.x, dz0 = z - st.z;
+        if (dx0 * dx0 + dz0 * dz0 > 90 * 90) return d;
+        var rooms = st.rooms;
+        var r;
+        /* rooms and their solid floors first */
+        for (r = 0; r < rooms.length; r++) {
+            var rm = rooms[r];
+            d = Math.min(d, rbox(x, y, z, rm.x, rm.y, rm.z, rm.hw, rm.hh, rm.hd, 0.4) * 0.55);
+            if (y < rm.floorY) {
+                var inX = Math.abs(x - rm.x) < rm.hw + 0.5, inZ = Math.abs(z - rm.z) < rm.hd + 0.5;
+                if (inX && inZ) d = Math.max(d, Math.min((rm.floorY - y) * 0.8, 1.6));
+            }
+        }
+        /* stair corridors carve LAST so no floor refill can seal a passage */
+        for (r = 0; r + 1 < rooms.length; r++) {
+            var ra = rooms[r], rb = rooms[r + 1];
+            d = Math.min(d, capsule(x, y, z, ra.x, ra.y - ra.hh * 0.25, ra.z, rb.x, rb.y - rb.hh * 0.25, rb.z, 1.35) * 0.55);
+        }
+        /* the entry: a tight hidden tunnel from room 1 out into the caves,
+           opening through a carved porch you can spot from a distance */
+        var ex = st.x + Math.cos(st.entA) * 42, ez = st.z + Math.sin(st.entA) * 42;
+        d = Math.min(d, capsule(x, y, z, st.x + Math.cos(st.entA) * st.rooms[0].hw * 0.8, st.y - 0.35, st.z + Math.sin(st.entA) * st.rooms[0].hw * 0.8, ex, st.y - 3.5, ez, 1.15) * 0.55);
+        var pdx = x - ex, pdy = y - (st.y - 3.2), pdz = z - ez;
+        d = Math.min(d, (Math.sqrt(pdx * pdx + pdy * pdy * 1.6 + pdz * pdz) - 2.6) * 0.55);
+        return d;
+    }
+    var TW = 0;
+    C.setTripWarp = function (w) { TW = Math.max(0, Math.min(1, w || 0)); };
+    C.getTripWarp = function () { return TW; };
     C.density = density;
     C.rockColor = rockColor;
     C.grad = grad;
 
-    /* depth bands: every major depth milestone shifts the world.
-       Returns a continuous 0..4, blending over 40 m at each edge */
+    /* depth bands: the first five strata are hand-named; below 1500 the
+       epochs continue procedurally, evolving forever, until the CORE at a
+       depth of 1,000,000. bandAt stays continuous for all legacy blending. */
     C.BAND_YS = [-248, -498, -998, -1498];
+    C.CORE_D = 1000000;
     C.bandAt = function (y) {
         var b = 0, i;
         for (i = 0; i < 4; i++) {
             b += Math.max(0, Math.min(1, (C.BAND_YS[i] - y) / 40.0));
         }
+        var d = -y;
+        if (d > 1500) b += Math.min(320, (d - 1500) / 3000);
         return b;
+    };
+    var EPOCH_ADJ = ['SILENT', 'BURIED', 'HOLLOW', 'MOLTEN', 'SUNKEN', 'BREATHING', 'FORGOTTEN', 'GLASS', 'IRON', 'VELVET', 'HUNGRY', 'PATIENT', 'SHIMMERING', 'BLIND', 'ANCIENT', 'HUMMING'];
+    var EPOCH_NOUN = ['REACHES', 'THROATS', 'GALLERIES', 'FATHOMS', 'CHANCELS', 'MARROW', 'VAULTS', 'GARDENS', 'CHASMS', 'CRADLES', 'LUNGS', 'COURTS', 'VEINS', 'CISTERNS', 'FOLDS', 'CHOIRS'];
+    C.epochAt = function (y) {
+        /* everything the world needs to evolve forever, from one depth */
+        var d = Math.max(0, -y);
+        if (d >= C.CORE_D) {
+            return { idx: 999999, name: 'THE CORE', hue: 0.04, warm: 1.0, deep01: 1.0, fire: 0 };
+        }
+        var deep01 = Math.min(1, d / C.CORE_D);
+        var warm = Math.pow(deep01, 1.6);
+        if (d <= 1500) {
+            return { idx: Math.floor(C.bandAt(y)), name: '', hue: -1, warm: warm, deep01: deep01, fire: 0 };
+        }
+        var idx = 5 + Math.floor((d - 1500) / 3000);
+        var h1 = hash3(idx * 7 + 1, 771, idx * 3 + 5);
+        var h2 = hash3(idx * 11 + 3, 772, idx * 5 + 9);
+        var name = 'THE ' + EPOCH_ADJ[Math.floor(h1 * EPOCH_ADJ.length)] + ' ' + EPOCH_NOUN[Math.floor(h2 * EPOCH_NOUN.length)];
+        return { idx: idx, name: name, hue: h1, warm: warm, deep01: deep01, fire: 0 };
+    };
+    /* the trial layers: every 5000m a band of fire, plasma or gravity,
+       60m thick, that must be traveled through */
+    C.trialAt = function (y) {
+        var d = -y;
+        if (d < 4800 || d >= C.CORE_D) return null;
+        var k = Math.round(d / 5000);
+        if (k < 1) return null;
+        var center = k * 5000;
+        var away = Math.abs(d - center);
+        if (away > 90) return null;
+        var inside = Math.max(0, Math.min(1, (60 - away) / 45));
+        var kind = (k + 2) % 3;   /* fire first, then plasma, then gravity */
+        return { kind: ['fire', 'plasma', 'gravity'][kind], t: inside, k: k };
     };
     C.solid = function (x, y, z) { return density(x, y, z) > 0.0; };
 
@@ -1184,6 +1684,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var noiseBuf = null;
         var dripT = 2.5, crackleT = 0.2, stepDist = 0, gustT = 3;
         var fallGain = null, lapGain = null, windGain = null, scrapeGain = null, humGain = null, humOsc = null;
+        var roarGain = null, roarFilt = null, shimGain = null;
+        var shardGain = null, shardN = 0;
         var chorusGain = null, glowLevel = 0;
         var chorusVoices = [];
         var dly = null, dlySend = null, compRef = null;
@@ -1211,7 +1713,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             { n: 'ENIGMA', s: [0, 1, 4, 6, 8, 10, 11], bands: [4], tempo: [48, 60], arp: 0.5, rhythm: 0.15, brew: 0.10 }
         ];
         A.SCALES = A.MOODS;   /* kept for the harness contract */
-        A.stats = { chords: 0, leads: 0, kicks: 0, modulations: 0, arps: 0, songs: 0, brews: 0, tripTones: 0 };
+        A.stats = { chords: 0, leads: 0, kicks: 0, modulations: 0, arps: 0, songs: 0, brews: 0, tripTones: 0, rims: 0 };
         var M = {
             root: Math.floor(Math.random() * 12),
             scale: null, mood: null, deg: 0,
@@ -1235,12 +1737,22 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             return fit[Math.floor(Math.random() * fit.length)];
         }
         function newSong(band) {
+            /* below the named strata the epochs choose: the same 12 moods,
+               recombined by depth hash, slower and heavier toward the core */
+            var deepBand = Math.min(4, band);
+            var epochIdx = band > 5 ? Math.floor(band) : 0;
             var prev = M.mood ? M.mood.n : null;
             var tries = 0;
-            do { M.mood = pickMood(band); tries++; } while (M.mood.n === prev && tries < 4);
+            do { M.mood = pickMood(deepBand); tries++; } while (M.mood.n === prev && tries < 4);
+            if (epochIdx > 0) {
+                /* the epoch overrides by its own hash, so each stratum sings its own way */
+                var eh = Math.abs(Math.sin(epochIdx * 127.31)) ;
+                M.mood = A.MOODS[Math.floor(eh * A.MOODS.length)];
+            }
             M.scale = M.mood;
             M.root = Math.floor(Math.random() * 12);
-            M.tempo = M.mood.tempo[0] + Math.random() * (M.mood.tempo[1] - M.mood.tempo[0]);
+            var deepSlow = Math.min(0.35, band > 5 ? (band - 5) * 0.004 : 0);
+            M.tempo = (M.mood.tempo[0] + Math.random() * (M.mood.tempo[1] - M.mood.tempo[0])) * (1 - deepSlow);
             /* 2-4 minutes, with the occasional 8-minute arrangement */
             M.songT = Math.random() < 0.18 ? 440 + Math.random() * 80 : 120 + Math.random() * 120;
             M.sections = 0;
@@ -1310,7 +1822,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 M.root = (M.root + steps[Math.floor(Math.random() * steps.length)]) % 12;
             }
             M.deg = 0;
-            M.rhythmOn = M.sections > 0 && Math.random() < M.mood.rhythm;
+            M.rhythmOn = M.sections > 0 && Math.random() < Math.min(0.95, M.mood.rhythm * 1.5 + 0.15);
             /* the first section always arpeggiates: hook the ear early */
             M.arpOn = M.sections === 0 || Math.random() < M.mood.arp;
             var pats = ['up', 'down', 'updown', 'random'];
@@ -1338,7 +1850,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (pick === M.lastLead && pool.length > 1) pick = pool[(pool.indexOf(pick) + 1) % pool.length];
             M.lastLead = pick;
             var oct = Math.random() < 0.7 ? 1 : 2;
-            blip(hz(pick, oct), hz(pick, oct) * (Math.random() < 0.5 ? 1.0 : 1.012), 0.035 + Math.random() * 0.02, 0.06, 1.4 + Math.random() * 0.8, true);
+            var lf = hz(pick, oct);
+            var lg = 0.024 + Math.random() * 0.014;
+            var ld = 1.4 + Math.random() * 0.8;
+            wideBlip(lf, lf * (Math.random() < 0.5 ? 1.0 : 1.012), lg, 0.06, ld, true);
             A.stats.leads++;
         }
         /* retro arp voice: detuned saws through a snapping resonant filter,
@@ -1363,16 +1878,25 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             A.stats.arps++;
         }
         function bassPulse() {
-            var f = hz(0, -2);
+            /* the bass follows the chord now, and carries a sub underneath */
+            var root = chordTones(M.deg)[0];
+            var f = hz(root, -2);
             var o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f;
             var lp = ctx.createBiquadFilter();
-            lp.type = 'lowpass'; lp.frequency.value = 240; lp.Q.value = 0.7;
+            lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 0.7;
             var g = ctx.createGain();
             g.gain.setValueAtTime(0.0001, now());
-            g.gain.exponentialRampToValueAtTime(0.045, now() + 0.008);
-            g.gain.exponentialRampToValueAtTime(0.0001, now() + 0.22);
+            g.gain.exponentialRampToValueAtTime(0.058, now() + 0.008);
+            g.gain.exponentialRampToValueAtTime(0.0001, now() + 0.26);
             o.connect(lp); lp.connect(g); g.connect(master);
-            o.start(); o.stop(now() + 0.3);
+            o.start(); o.stop(now() + 0.34);
+            var so = ctx.createOscillator(); so.type = 'sine'; so.frequency.value = f * 0.5;
+            var sg = ctx.createGain();
+            sg.gain.setValueAtTime(0.0001, now());
+            sg.gain.exponentialRampToValueAtTime(0.055, now() + 0.012);
+            sg.gain.exponentialRampToValueAtTime(0.0001, now() + 0.4);
+            so.connect(sg); sg.connect(master);
+            so.start(); so.stop(now() + 0.5);
         }
         /* BREW stab: rootless jazz voicing, quick bell attack, tape echo */
         function brewStab() {
@@ -1388,11 +1912,20 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
         }
         function kick() {
-            blip(100, 40, 0.09, 0.004, 0.26, false);
+            blip(95, 34, 0.12, 0.004, 0.3, false);
             A.stats.kicks++;
         }
         function brush() {
             burst(2600 + Math.random() * 900, 1.4, 0.010, 0.09, (Math.random() - 0.5) * 0.3, true);
+        }
+        function rim() {
+            /* a woody answer with a long tail into the cave */
+            burst(1750 + Math.random() * 250, 4.0, 0.022, 0.05, (Math.random() - 0.5) * 0.8, true);
+            blip(620, 590, 0.012, 0.002, 0.06, true);
+            A.stats.rims++;
+        }
+        function hat() {
+            burst(6800, 2.2, 0.007, 0.03, M.beat % 2 ? 0.5 : -0.5, true);
         }
         function musicUpdate(dt, band) {
             /* between songs the cave holds its breath */
@@ -1459,10 +1992,13 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 if (M.beatT <= 0) {
                     M.beatT = 60 / M.tempo;
                     M.beat = (M.beat + 1) % M.barLen;
-                    if (M.beat === 0) kick();
-                    else if (M.beat === 2 && Math.random() < 0.30) kick();
-                    if (Math.random() < 0.35) brush();
-                    if (Math.random() < 0.55) bassPulse();
+                    /* steady: the kick anchors 1 and 3, the rim answers 2 and 4,
+                       hats whisper between, everything trailing into the reverb */
+                    if (M.beat === 0 || M.beat === 2) kick();
+                    else rim();
+                    if (Math.random() < 0.6) hat();
+                    if (Math.random() < 0.3) brush();
+                    if (M.beat === 0 || M.beat === 2 || Math.random() < 0.35) bassPulse();
                 }
             }
             /* arpeggiator: chord tones spread two octaves, band picks the wave */
@@ -1519,6 +2055,26 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (toVerb) g.connect(verb);
             src.start(now(), Math.random() * 1.5, dur + 0.1);
             src.stop(now() + dur + 0.15);
+        }
+        function wideBlip(fq, glideTo, gain, attack, decay, toVerb) {
+            /* one voice, two ears: detuned pair panned apart for width */
+            if (!ctx.createStereoPanner) { blip(fq, glideTo, gain * 1.4, attack, decay, toVerb); return; }
+            var side = Math.random() < 0.5 ? 1 : -1;
+            for (var wi = 0; wi < 2; wi++) {
+                var o = ctx.createOscillator(); o.type = 'sine';
+                var det = wi === 0 ? 0.9965 : 1.0035;
+                o.frequency.setValueAtTime(fq * det, now());
+                o.frequency.exponentialRampToValueAtTime(glideTo * det, now() + attack + decay);
+                var g = ctx.createGain();
+                g.gain.setValueAtTime(0.0001, now());
+                g.gain.exponentialRampToValueAtTime(gain, now() + attack + (wi === 1 ? 0.009 : 0));
+                g.gain.exponentialRampToValueAtTime(0.0001, now() + attack + decay);
+                var pn = ctx.createStereoPanner();
+                pn.pan.value = (wi === 0 ? -0.55 : 0.55) * side;
+                o.connect(g); g.connect(pn); pn.connect(master);
+                if (toVerb) { var wv = ctx.createGain(); wv.gain.value = 0.8; pn.connect(wv); wv.connect(verb); }
+                o.start(); o.stop(now() + attack + decay + 0.1);
+            }
         }
         function blip(fq, glideTo, gain, attack, decay, toVerb, toDly) {
             var o = ctx.createOscillator();
@@ -1667,6 +2223,15 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             lapGain = layer(420, 'lowpass', 0.9);       /* still water lap */
             windGain = layer(190, 'lowpass', 0.5);      /* cave breath */
             scrapeGain = layer(260, 'bandpass', 3.0);   /* squeezing */
+            shimGain = layer(2400, 'bandpass', 2.4);    /* river shimmer */
+            shardGain = layer(1800, 'bandpass', 2.0);   /* the gathered song */
+            /* the trial roar: one noise voice whose filter changes
+               character with the kind of trial */
+            var roarSrc = mkNoiseSrc();
+            roarFilt = ctx.createBiquadFilter();
+            roarFilt.type = 'lowpass'; roarFilt.frequency.value = 150; roarFilt.Q.value = 0.8;
+            roarGain = ctx.createGain(); roarGain.gain.value = 0.0;
+            roarSrc.connect(roarFilt); roarFilt.connect(roarGain); roarGain.connect(master);
             });
             stage = 'trip';
             sub('trip', function () {
@@ -1867,6 +2432,18 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             blip(f0 * 0.5, f0, 0.05, 0.5, 1.6, true, true);
             blip(hz(4, 1), hz(4, 1) * 1.004, 0.028, 0.9, 1.8, true, true);
         };
+        A.tripPop = function (kind) {
+            if (!A.ready || A.muted) return;
+            if (kind === 0) {
+                burst(1400, 2.2, 0.05, 0.12, (Math.random() - 0.5) * 1.6, true);
+                blip(hz(0, 2), hz(0, 2) * 0.5, 0.03, 0.18, 0.4, true, true);
+            } else if (kind === 1) {
+                blip(hz(4, 3), hz(4, 3) * 1.01, 0.04, 0.09, 0.5, true, true);
+                burst(3200, 3.5, 0.03, 0.06, 0, true);
+            } else {
+                blip(hz(0, 0) * 0.5, hz(0, 0), 0.045, 0.5, 1.1, true, true);
+            }
+        };
         A.oneBloom = function () {
             if (!A.ready || A.muted) return;
             var r0 = hz(0, 0);
@@ -1923,6 +2500,21 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             burst(300, 1.0, 0.07 * k + 0.02, 0.15, 0, true);
             burst(800, 1.6, 0.03 * k, 0.1, 0.1, false);
             burst(650, 1.6, 0.03 * k, 0.12, -0.1, false);
+        };
+        A.setShards = function (n) { shardN = n || 0; };
+        A.rumble = function () {
+            /* the stone stirs: a deep body-shaking groan */
+            if (!A.ready || A.muted) return;
+            var src = mkNoiseSrc();
+            var f = ctx.createBiquadFilter();
+            f.type = 'lowpass'; f.frequency.value = 95; f.Q.value = 1.1;
+            var g = ctx.createGain();
+            var t0 = ctx.currentTime;
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.09);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.5);
+            src.connect(f); f.connect(g); g.connect(master); g.connect(verb);
+            src.start(t0); src.stop(t0 + 1.6);
         };
         A.splash = function (k) {
             if (!A.ready || A.muted) return;
@@ -1992,14 +2584,26 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (gustT <= 0) gustT = 4 + Math.random() * 7;
             var gust = gustT < 2.2 ? (1 - Math.abs(gustT - 1.1) / 1.1) : 0;
             windGain.gain.setTargetAtTime(0.012 + gust * 0.02 + Math.min(0.04, st.speed / 220), t2, 0.6);
+            var trT = st.trialT || 0;
+            if (roarGain) {
+                if (trT > 0.01) {
+                    var trK = st.trialK || 0;
+                    if (trK === 0) { roarFilt.type = 'lowpass'; roarFilt.frequency.setTargetAtTime(150 + trT * 90, t2, 0.4); roarFilt.Q.value = 0.8; }
+                    else if (trK === 1) { roarFilt.type = 'bandpass'; roarFilt.frequency.setTargetAtTime(880, t2, 0.4); roarFilt.Q.value = 6.0; }
+                    else { roarFilt.type = 'lowpass'; roarFilt.frequency.setTargetAtTime(55, t2, 0.4); roarFilt.Q.value = 1.2; }
+                }
+                roarGain.gain.setTargetAtTime(Math.min(0.2, trT * 0.18), t2, 0.6);
+            }
+            if (shimGain) shimGain.gain.setTargetAtTime((st.riverRide || 0) * 0.045, t2, 0.8);
+            if (shardGain) shardGain.gain.setTargetAtTime(Math.min(0.05, shardN * 0.011), t2, 1.2);
             /* the trip: gains follow the dose, sparse tones drift by */
             tripLvl = st.trip || 0;
             /* the dose saturates so a 30 stack deepens rather than deafens */
             var alv = 5 * (1 - Math.exp(-tripLvl / 8));
             var wld = Math.max(0, Math.min(1, (tripLvl - 21) / 9));
             if (tripBeatG) {
-                tripBeatG.gain.setTargetAtTime(0.0038 * alv, t2, 0.8);
-                tripBreathG.gain.setTargetAtTime(0.0032 * alv, t2, 1.2);
+                tripBeatG.gain.setTargetAtTime(0.0064 * alv, t2, 0.8);
+                tripBreathG.gain.setTargetAtTime(0.0054 * alv, t2, 1.2);
                 if (tripOscA && tripLvl > 0.05) {
                     var tf = hz(0, 1);
                     var wob = wld * 5 * Math.sin(t2 * 0.7);
@@ -2015,7 +2619,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     var sc2 = M.scale ? M.scale.s : [0, 2, 4, 7, 9];
                     var tone = sc2[Math.floor(Math.random() * sc2.length)];
                     var tfq = hz(tone, 2 + (Math.random() < 0.3 + wld * 0.4 ? 1 : 0));
-                    blip(tfq, tfq * (0.998 + Math.random() * 0.004), 0.013 * Math.min(1, alv / 2), 0.5, 2.4 + wld * 1.4, true, true);
+                    blip(tfq, tfq * (0.998 + Math.random() * 0.004), 0.02 * Math.min(1, alv / 2), 0.5, 2.4 + wld * 1.4, true, true);
                     A.stats.tripTones++;
                 }
             }
@@ -2083,22 +2687,29 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             sh.uniforms.uTripT = { value: 0.0 };
             sh.uniforms.uWild = { value: 0.0 };
             sh.uniforms.uCamPos = { value: new T.Vector3() };
+            sh.uniforms.uWarm = { value: 0.0 };
+            sh.uniforms.uEpochHue = { value: -1.0 };
+            sh.uniforms.uTrial = { value: 0.0 };
+            sh.uniforms.uTrialKind = { value: 0.0 };
             sh.uniforms.uFlowT = { value: 0.0 };
             sh.uniforms.uBreathPh = { value: 0.0 };
             mat.userData.sh = sh;
             sh.vertexShader = sh.vertexShader
                 .replace('#include <common>',
                     '#include <common>\nvarying vec3 vRWp;\nvarying vec3 vRWn;\nuniform float uTripN;\nuniform float uTripT;\nuniform float uWild;\nuniform vec3 uCamPos;\nuniform float uFlowT;\nuniform float uBreathPh;')
+                .replace('#include <emissivemap_fragment>',
+                    '#include <emissivemap_fragment>\n' +
+                    'totalEmissiveRadiance += gFcol * gFili * uTripN * (0.12 + 0.5 * uWild);')
                 .replace('#include <begin_vertex>',
                     '#include <begin_vertex>\n' +
                     /* the stone breathes in phase with the music's breath */
-                    'transformed += objectNormal * sin(dot(position, vec3(0.31, 0.27, 0.29)) + uBreathPh) * (0.06 * uTripN + 0.10 * uWild);\n' +
+                    'transformed += objectNormal * sin(dot(position, vec3(0.31, 0.27, 0.29)) + uBreathPh) * (0.16 * uTripN + 0.28 * uWild);\n' +
                     /* the cave twists around you and flows when you move: near geometry
                        stays put so your hands still agree with your eyes */
                     '#ifndef USE_INSTANCING\n' +
                     'vec3 twRel = (modelMatrix * vec4(transformed, 1.0)).xyz - uCamPos;\n' +
                     'float twR = length(twRel.xz);\n' +
-                    'float twF = smoothstep(2.5, 15.0, twR) * (0.10 * uTripN + 0.45 * uWild);\n' +
+                    'float twF = smoothstep(2.5, 15.0, twR) * (0.30 * uTripN + 1.1 * uWild);\n' +
                     'float twS = sin(twRel.y * 0.10 + uTripT * 0.55 + uFlowT) + 0.6 * sin(uTripT * 0.23 + twRel.x * 0.03 + uFlowT * 0.7);\n' +
                     'vec2 twT = twR > 0.001 ? vec2(-twRel.z, twRel.x) / twR : vec2(0.0);\n' +
                     'transformed.xz += twT * twS * twF;\n' +
@@ -2121,6 +2732,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     'uniform sampler2D uAlb;\nuniform sampler2D uNrm;\n' +
                     'uniform float uTexScale;\nuniform float uBump;\nuniform float uWaterY;\n' +
                     'uniform float uTripN;\nuniform float uTripT;\nuniform float uWild;\n' +
+                    'uniform float uWarm;\nuniform float uEpochHue;\nuniform float uTrial;\nuniform float uTrialKind;\n' +
+                    'float gFili = 0.0;\nvec3 gFcol = vec3(0.0);\n' +
                     'varying vec3 vRWp;\nvarying vec3 vRWn;')
                 .replace('#include <map_fragment>',
                     '#include <map_fragment>\n' +
@@ -2130,8 +2743,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     'vec3 rmMac = texture2D(uAlb, vRWp.xz * 0.045 + vRWp.y * 0.028).rgb;\n' +
                     'vec2 rmJit = rmMac.gb * 1.31;\n' +
                     /* the crawl: the texture domain drifts and sways with the dose */
-                    'rmJit += vec2(sin(uTripT * 0.23 + vRWp.y * 0.11), cos(uTripT * 0.19 + vRWp.x * 0.13)) * (0.20 * uTripN + 0.55 * uWild);\n' +
-                    'vec2 rmCr = vec2(sin(vRWp.y * 0.33 + uTripT * 0.41) + sin(vRWp.z * 0.21 + uTripT * 0.27), cos(vRWp.x * 0.29 + uTripT * 0.35) + cos(vRWp.y * 0.24 + uTripT * 0.31)) * (0.05 * uTripN + 0.18 * uWild);\n' +
+                    'rmJit += vec2(sin(uTripT * 0.23 + vRWp.y * 0.11), cos(uTripT * 0.19 + vRWp.x * 0.13)) * (0.36 * uTripN + 0.75 * uWild);\n' +
+                    'vec2 rmCr = vec2(sin(vRWp.y * 0.33 + uTripT * 0.41) + sin(vRWp.z * 0.21 + uTripT * 0.27), cos(vRWp.x * 0.29 + uTripT * 0.35) + cos(vRWp.y * 0.24 + uTripT * 0.31)) * (0.10 * uTripN + 0.26 * uWild);\n' +
                     'vec2 rmUx = vRWp.zy * uTexScale + rmJit + rmCr;\n' +
                     'vec2 rmUy = vRWp.xz * uTexScale + rmJit + rmCr.yx;\n' +
                     'vec2 rmUz = vRWp.xy * uTexScale + rmJit + rmCr;\n' +
@@ -2143,9 +2756,52 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     '           + texture2D(uAlb, rmUy * 3.7).a * rmBl.y\n' +
                     '           + texture2D(uAlb, rmUz * 3.7).a * rmBl.z;\n' +
                     'float rmMv = 0.62 + rmMac.r * 0.82;\n' +
-                    'diffuseColor.rgb *= rmAlb.rgb * (0.72 + 0.72 * rmHF) * rmMv * 1.5;\n' +
+                    /* half the world is hard gray stone, half is earth: the macro
+                       field decides in multi-meter strata */
+                    'float rmRq = sin(vRWp.x * 0.11) + sin(vRWp.y * 0.13 + 1.7) + sin(vRWp.z * 0.09 + 4.2);\n' +
+                    'float rmRocky = smoothstep(-0.3, 0.3, rmRq + (rmMac.r - 0.5) * 1.2);\n' +
+                    'vec3 rmEarth = rmAlb.rgb;\n' +
+                    'vec3 rmGray = mix(rmAlb.rgb, vec3(dot(rmAlb.rgb, vec3(0.3333))) * vec3(0.88, 0.95, 1.08), 0.85);\n' +
+                    'vec3 rmSurf = mix(rmEarth, rmGray * (0.9 + 0.5 * rmHF), rmRocky);\n' +
+                    'if (uEpochHue >= 0.0) {\n' +
+                    '    vec3 rmEpC = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + uEpochHue));\n' +
+                    '    rmSurf = mix(rmSurf, rmSurf * (0.55 + 0.9 * rmEpC), 0.4);\n' +
+                    '}\n' +
+                    'diffuseColor.rgb *= rmSurf * (0.72 + 0.72 * rmHF) * rmMv * 1.5;\n' +
+                    'if (uWarm > 0.002) {\n' +
+                    '    float rmVein = pow(clamp(1.0 - rmHF * 2.2, 0.0, 1.0), 2.0);\n' +
+                    '    vec3 rmLava = mix(vec3(1.0, 0.28, 0.04), vec3(1.0, 0.75, 0.25), rmVein);\n' +
+                    '    float rmGlow = rmVein * min(1.0, uWarm * 2.4) * (0.75 + 0.25 * sin(uTripT * 1.3 + vRWp.y * 0.5));\n' +
+                    '    diffuseColor.rgb += rmLava * rmGlow * 1.6;\n' +
+                    '}\n' +
+                    'if (uTrial > 0.01) {\n' +
+                    '    vec3 rmTc = uTrialKind < 0.5 ? vec3(1.0, 0.42, 0.08) : (uTrialKind < 1.5 ? vec3(0.5, 0.35, 1.0) : vec3(0.75, 0.9, 1.0));\n' +
+                    '    float rmTw = 0.5 + 0.5 * sin(vRWp.x * 0.4 + vRWp.y * 0.6 + uTripT * (uTrialKind > 1.5 ? 0.9 : 5.0));\n' +
+                    '    diffuseColor.rgb += rmTc * rmTw * uTrial * 0.55;\n' +
+                    '}\n' +
+                    /* stone within arm's reach shows its macro grain: the close-up
+                       lives on the rock itself, never floating over open air */
+                    'float rmCamD = length(vRWp - cameraPosition);\n' +
+                    'float rmMac2 = smoothstep(0.62, 0.16, rmCamD);\n' +
+                    'diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.5 + 1.9 * rmHF), rmMac2);\n' +
                     /* inside faces read as solid dark stone, never a window */
                     'if (!gl_FrontFacing) diffuseColor.rgb *= 0.05;\n' +
+                    /* the trip emerges from inside the stone: kaleidoscopic fractal
+                       filigree folded from world position, breathing with the dose */
+                    'if (uTripN > 0.004) {\n' +
+                    '    vec2 fp = vRWp.xz * 0.14 + vec2(vRWp.y * 0.09, -vRWp.y * 0.07);\n' +
+                    '    fp += vec2(sin(uTripT * 0.05), cos(uTripT * 0.04));\n' +
+                    '    float ftrap = 1e9;\n' +
+                    '    for (int fi = 0; fi < 5; fi++) {\n' +
+                    '        fp = abs(fp) / max(dot(fp, fp), 0.35) - vec2(0.96, 0.82);\n' +
+                    '        ftrap = min(ftrap, abs(dot(fp, fp) - 0.35));\n' +
+                    '    }\n' +
+                    '    float fili = pow(clamp(1.0 - ftrap * 2.4, 0.0, 1.0), 3.0);\n' +
+                    '    float fhue = uTripT * (0.06 + 0.22 * uWild) + vRWp.y * 0.02;\n' +
+                    '    vec3 fcol = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + fhue));\n' +
+                    '    gFili = fili; gFcol = fcol;\n' +
+                    '    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb + fcol * fili * 1.6, uTripN * (0.35 + 0.65 * uWild));\n' +
+                    '}\n' +
                     /* past 21 the stone itself runs with slow waves of light */
                     'diffuseColor.rgb *= 1.0 + uWild * 0.22 * sin(dot(vRWp, vec3(0.21, 0.17, 0.19)) + uTripT * 1.7);')
                 .replace('#include <roughnessmap_fragment>',
@@ -2198,11 +2854,215 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     })(spikeGeo);
     var stemGeo = new THREE.CylinderGeometry(0.05, 0.09, 1, 5);
     stemGeo.translate(0, 0.5, 0);
-    var capGeo = new THREE.SphereGeometry(1, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55);
+    /* cave flora: fern fronds and shrub clumps painted once, crossed planes */
+    function paintFlora(kind) {
+        var cv = document.createElement('canvas');
+        cv.width = 128; cv.height = 128;
+        var c2 = cv.getContext('2d');
+        c2.clearRect(0, 0, 128, 128);
+        if (kind === 'fern') {
+            for (var fi = 0; fi < 5; fi++) {
+                var baseA = -1.5708 + (fi - 2) * 0.42;
+                c2.strokeStyle = 'rgba(52,110,84,0.95)';
+                c2.lineWidth = 2.2;
+                c2.beginPath();
+                c2.moveTo(64, 126);
+                var tipx = 64 + Math.cos(baseA) * 58, tipy = 126 + Math.sin(baseA) * 100;
+                c2.quadraticCurveTo(64 + Math.cos(baseA) * 20, 126 + Math.sin(baseA) * 60, tipx, tipy);
+                c2.stroke();
+                for (var li = 1; li < 9; li++) {
+                    var t2 = li / 9;
+                    var lx3 = 64 + Math.cos(baseA) * 44 * t2;
+                    var ly3 = 126 + Math.sin(baseA) * 88 * t2;
+                    var ll = 13 * (1 - t2 * 0.75);
+                    c2.strokeStyle = 'rgba(64,138,100,0.9)';
+                    c2.lineWidth = 3.2 * (1 - t2 * 0.5);
+                    c2.beginPath();
+                    c2.moveTo(lx3 - ll, ly3);
+                    c2.lineTo(lx3 + ll, ly3 - 3);
+                    c2.stroke();
+                }
+            }
+        } else {
+            for (var bi2 = 0; bi2 < 44; bi2++) {
+                var bx = 24 + Math.random() * 80, by = 40 + Math.random() * 78;
+                var br = 5 + Math.random() * 9;
+                var gsh = 70 + Math.floor(Math.random() * 60);
+                c2.fillStyle = 'rgba(' + Math.floor(gsh * 0.45) + ',' + gsh + ',' + Math.floor(gsh * 0.72) + ',0.92)';
+                c2.beginPath();
+                c2.ellipse(bx, by, br, br * 0.72, Math.random() * 3, 0, 6.2832);
+                c2.fill();
+            }
+        }
+        var t3 = new THREE.CanvasTexture(cv);
+        return t3;
+    }
+    var floraGeo = new THREE.PlaneGeometry(1, 1);
+    floraGeo.translate(0, 0.5, 0);
+    /* moss and algae paint once, glow forever */
+    var mossTex = (function () {
+        var cv = document.createElement('canvas');
+        cv.width = 64; cv.height = 64;
+        var c2 = cv.getContext('2d');
+        c2.clearRect(0, 0, 64, 64);
+        for (var i = 0; i < 90; i++) {
+            var gg = 90 + Math.floor(Math.random() * 90);
+            c2.fillStyle = 'rgba(' + Math.floor(gg * 0.35) + ',' + gg + ',' + Math.floor(gg * 0.55) + ',0.8)';
+            c2.beginPath();
+            var rr2 = 2 + Math.random() * 5;
+            c2.arc(8 + Math.random() * 48, 8 + Math.random() * 48, rr2, 0, 6.3);
+            c2.fill();
+        }
+        return new THREE.CanvasTexture(cv);
+    })();
+    var algaeTex = (function () {
+        var cv = document.createElement('canvas');
+        cv.width = 64; cv.height = 64;
+        var c2 = cv.getContext('2d');
+        c2.clearRect(0, 0, 64, 64);
+        for (var i = 0; i < 46; i++) {
+            var bb2 = 150 + Math.floor(Math.random() * 100);
+            c2.fillStyle = 'rgba(' + Math.floor(bb2 * 0.3) + ',' + bb2 + ',' + Math.floor(bb2 * 0.9) + ',0.9)';
+            c2.beginPath();
+            c2.arc(4 + Math.random() * 56, 4 + Math.random() * 56, 0.8 + Math.random() * 2.2, 0, 6.3);
+            c2.fill();
+        }
+        return new THREE.CanvasTexture(cv);
+    })();
+    var mossMat = new THREE.MeshStandardMaterial({
+        map: mossTex, transparent: true, opacity: 0.92, depthWrite: false,
+        emissive: 0x3fae6a, emissiveIntensity: 0.28, emissiveMap: mossTex, roughness: 1
+    });
+    var algaeMat = new THREE.MeshBasicMaterial({
+        map: algaeTex, transparent: true, opacity: 0.85,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    var mossGeo = new THREE.PlaneGeometry(1, 1);
+    mossGeo.rotateX(-Math.PI / 2);
+    var wormMat = new THREE.MeshStandardMaterial({ color: 0xbfffd8, emissive: 0x7fe8a8, emissiveIntensity: 1.2, roughness: 0.5 });
+    var floraMats = [];
+    (function () {
+        var fern = paintFlora('fern'), shrub = paintFlora('shrub');
+        var tints = [0xbfffe0, 0x9fd8ff, 0xffd8a8];
+        for (var ti = 0; ti < 3; ti++) {
+            floraMats.push(new THREE.MeshStandardMaterial({
+                map: fern, transparent: false, alphaTest: 0.4, side: THREE.DoubleSide,
+                color: tints[ti], roughness: 0.9,
+                emissive: tints[ti], emissiveIntensity: 0.06, emissiveMap: fern
+            }));
+            floraMats.push(new THREE.MeshStandardMaterial({
+                map: shrub, transparent: false, alphaTest: 0.4, side: THREE.DoubleSide,
+                color: tints[ti], roughness: 0.95,
+                emissive: tints[ti], emissiveIntensity: 0.05, emissiveMap: shrub
+            }));
+        }
+    })();
+    function makeBugSwarm(px, py, pz, bseed) {
+        var n = 10;
+        var g = new THREE.BufferGeometry();
+        var pos = new Float32Array(n * 3);
+        for (var i = 0; i < n; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * 2.4;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 1.4;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 2.4;
+        }
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        var m = new THREE.PointsMaterial({
+            color: 0xcfffb0, size: 0.09, sizeAttenuation: true, map: glowTex,
+            transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        var pts = new THREE.Points(g, m);
+        pts.position.set(px, py, pz);
+        return { pts: pts, ph: CC.hash3(bseed, 5, 9) * 20, base: pos.slice(0) };
+    }
+    function makeFish(px, py, pz, fseed, riverRef) {
+        /* a small school of glowfish: lakes hold them in a slow orbit,
+           rivers carry them downstream forever */
+        var n = 12;
+        var g = new THREE.BufferGeometry();
+        var pos = new Float32Array(n * 3);
+        var offs = new Float32Array(n * 3);
+        for (var i = 0; i < n; i++) {
+            offs[i * 3] = (CC.hash3(fseed, i, 1) - 0.5) * 3.0;
+            offs[i * 3 + 1] = (CC.hash3(fseed, i, 2) - 0.5) * 0.8;
+            offs[i * 3 + 2] = (CC.hash3(fseed, i, 3) - 0.5) * 3.0;
+        }
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        var m = new THREE.PointsMaterial({
+            color: riverRef ? 0xaef2e0 : 0x7fd8ff, size: 0.13, sizeAttenuation: true, map: glowTex,
+            transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        var pts = new THREE.Points(g, m);
+        return { pts: pts, ax: px, ay: py, az: pz, offs: offs,
+            ph: CC.hash3(fseed, 6, 7) * 20, river: riverRef || null, rt: 0.5, scare: 0 };
+    }
+    function makeWorm(px, py, pz, wseed) {
+        var g = new THREE.Group();
+        g.position.set(px, py + 0.06, pz);
+        var segs = [];
+        for (var i = 0; i < 4; i++) {
+            var seg = new THREE.Mesh(orbGeo, wormMat);
+            seg.scale.setScalar(0.5 - i * 0.08);
+            g.add(seg);
+            segs.push(seg);
+        }
+        return { g: g, segs: segs, ph: CC.hash3(wseed, 7, 3) * 20, a: CC.hash3(wseed, 9, 1) * 6.28 };
+    }
+    function addFlora(rec, px, py, pz, fseed) {
+        var fm = floraMats[Math.floor(CC.hash3(fseed, 3, 11) * floraMats.length)];
+        var sc = 0.6 + CC.hash3(fseed, 5, 13) * 1.0;
+        var g = new THREE.Group();
+        g.position.set(px, py - 0.04, pz);
+        for (var ci3 = 0; ci3 < 3; ci3++) {
+            var pl = new THREE.Mesh(floraGeo, fm);
+            pl.scale.set(sc, sc * (0.8 + CC.hash3(ci3, fseed, 7) * 0.4), sc);
+            pl.rotation.y = ci3 * 1.047 + CC.hash3(fseed, ci3, 9) * 0.6;
+            g.add(pl);
+        }
+        rec.group.add(g);
+    }
+    /* a true umbrella: closed dome, curled rim, no see-through underside */
+    var capProfile = [
+        new THREE.Vector2(0.10, 0.04),
+        new THREE.Vector2(0.62, 0.05),
+        new THREE.Vector2(0.96, 0.09),
+        new THREE.Vector2(1.00, 0.20),
+        new THREE.Vector2(0.86, 0.42),
+        new THREE.Vector2(0.55, 0.68),
+        new THREE.Vector2(0.22, 0.82),
+        new THREE.Vector2(0.0, 0.86)
+    ];
+    var capGeo = new THREE.LatheGeometry(capProfile, 10);
+    /* the gills: spore lines radiating from the stem to the rim */
+    var gillTex = (function () {
+        var cv = document.createElement('canvas');
+        cv.width = 128; cv.height = 128;
+        var c2 = cv.getContext('2d');
+        c2.fillStyle = '#cfc4a6';
+        c2.fillRect(0, 0, 128, 128);
+        c2.strokeStyle = '#8f8468';
+        c2.lineWidth = 1.6;
+        for (var gi = 0; gi < 56; gi++) {
+            var ga2 = (gi / 56) * 6.2831853;
+            c2.beginPath();
+            c2.moveTo(64 + Math.cos(ga2) * 9, 64 + Math.sin(ga2) * 9);
+            c2.lineTo(64 + Math.cos(ga2) * 66, 64 + Math.sin(ga2) * 66);
+            c2.stroke();
+        }
+        c2.strokeStyle = '#7a7058';
+        c2.lineWidth = 2.4;
+        c2.beginPath(); c2.arc(64, 64, 10, 0, 6.2832); c2.stroke();
+        var t = new THREE.CanvasTexture(cv);
+        return t;
+    })();
+    var gillGeo = new THREE.CircleGeometry(0.97, 20);
+    gillGeo.rotateX(-Math.PI / 2);
+    gillGeo.translate(0, 0.055, 0);
 
     var waterMat = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
+        side: THREE.DoubleSide,
         uniforms: {
             uTime: { value: 0.0 },
             uFogColor: { value: new THREE.Color(0x04070c) },
@@ -2227,10 +3087,69 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             '    float r2 = sin(vW.x * 2.3 - uTime * 1.1 + vW.z * 1.7);',
             '    float rip = 0.5 + 0.5 * (r1 * 0.6 + r2 * 0.4);',
             '    vec3 col = mix(vec3(0.01, 0.10, 0.12), vec3(0.05, 0.45, 0.42), rip * rip);',
+            '    float alpha = 0.62;',
+            '    if (!gl_FrontFacing) {',
+            /* seen from below: the ceiling of light. brighter, mirrorlike,
+               with slow silver streaks where the surface bends the world */
+            '        float mir = pow(rip, 3.0);',
+            '        vec3 up = mix(vec3(0.04, 0.22, 0.24), vec3(0.55, 0.95, 0.9), mir);',
+            '        float streak = pow(0.5 + 0.5 * sin(vW.x * 0.55 + vW.z * 0.4 + uTime * 0.9 + rip * 4.0), 8.0);',
+            '        up += vec3(0.5, 0.8, 0.75) * streak * 0.55;',
+            '        float grz = 1.0 - abs(normalize(cameraPosition - vW).y);',
+            '        up += vec3(0.25, 0.5, 0.48) * grz * grz * 0.6;',
+            '        col = up;',
+            '        alpha = 0.82;',
+            '    }',
             '    float dist = length(vW - cameraPosition);',
             '    float f = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);',
             '    col = mix(col, uFogColor, clamp(f, 0.0, 1.0));',
-            '    gl_FragColor = vec4(col, 0.62);',
+            '    gl_FragColor = vec4(col, alpha);',
+            '}'
+        ].join('\n')
+    });
+
+    var riverMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        uniforms: {
+            uTime: { value: 0.0 },
+            uFogColor: { value: new THREE.Color(0x04070c) },
+            uFogDensity: { value: 0.028 }
+        },
+        vertexShader: [
+            'varying vec3 vW;',
+            'varying vec2 vUv;',
+            'void main() {',
+            '    vUv = uv;',
+            '    vec4 wp = modelMatrix * vec4(position, 1.0);',
+            '    vW = wp.xyz;',
+            '    gl_Position = projectionMatrix * viewMatrix * wp;',
+            '}'
+        ].join('\n'),
+        fragmentShader: [
+            'precision mediump float;',
+            'varying vec3 vW;',
+            'varying vec2 vUv;',
+            'uniform float uTime;',
+            'uniform vec3 uFogColor;',
+            'uniform float uFogDensity;',
+            'void main() {',
+            /* the current: everything slides downstream along v */
+            '    float dn = vUv.y * 14.0 - uTime * 2.6;',
+            '    float r1 = sin(dn + sin(vUv.x * 9.0 + uTime * 0.8) * 0.8);',
+            '    float r2 = sin(dn * 2.7 + vUv.x * 5.0);',
+            '    float rip = 0.5 + 0.5 * (r1 * 0.62 + r2 * 0.38);',
+            '    vec3 col = mix(vec3(0.02, 0.12, 0.13), vec3(0.10, 0.55, 0.5), rip * rip);',
+            /* white water threads near the banks */
+            '    float bank = pow(abs(vUv.x - 0.5) * 2.0, 3.0);',
+            '    float foam = pow(0.5 + 0.5 * sin(dn * 3.1 + vUv.x * 20.0), 6.0) * bank;',
+            '    col += vec3(0.7, 0.9, 0.9) * foam * 0.5;',
+            '    float alpha = 0.66;',
+            '    float dist = length(vW - cameraPosition);',
+            '    float f = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);',
+            '    col = mix(col, uFogColor, clamp(f, 0.0, 1.0));',
+            '    gl_FragColor = vec4(col, alpha);',
             '}'
         ].join('\n')
     });
@@ -2275,6 +3194,25 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     /* -------- chunk manager -------- */
     var CH = CC.CHUNK;
     var chunks = {};
+    var shardHave = {};
+    try {
+        if (typeof localStorage !== 'undefined') {
+            var _shj = localStorage.getItem('mycd_shards_v1');
+            if (_shj) shardHave = JSON.parse(_shj) || {};
+        }
+    } catch (eSh) {}
+    var VAULT_LORE = [
+        'below, the stone forgets the sun',
+        'the dark here has a different weight',
+        'you are deeper than any root has reached',
+        'the water above is a rumor now',
+        'the cave dreams slower at this depth',
+        'few lights have ever burned this far down',
+        'the pressure sings in a lower key',
+        'here the stone keeps its oldest thoughts',
+        'the surface is a story you tell yourself',
+        'the core is listening for your steps'
+    ];
     var queue = [];
     var queued = {};
     var chunkCount = 0;
@@ -2294,7 +3232,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     function makeChunk(cx, cy, cz) {
         var data = CC.buildChunk(cx, cy, cz);
         var group = new THREE.Group();
-        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [] };
+        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [] };
 
         if (data.indices.length > 0) {
             var geo = new THREE.BufferGeometry();
@@ -2317,12 +3255,60 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
         /* buried cities */
         if (window._CAVE_CITIES) addCity(rec, cx, cy, cz);
+        if (window._CAVE_SHANTY === undefined) window._CAVE_SHANTY = true;
+        if (window._CAVE_SHANTY) addShanty(rec, cx, cy, cz);
 
         /* signposts */
         if (window._CAVE_SIGNS) addSigns(rec, data, cx, cy, cz);
 
         /* glowing mushroom clusters */
         if (window._CAVE_SHROOMS) addShrooms(rec, data.floorPts, cx, cy, cz);
+        /* ferns and shrubberies gather at the shores and in rock crevices,
+           and never grow underwater */
+        (function () {
+            var fn = Math.floor(data.floorPts.length / 3);
+            if (fn === 0) return;
+            var planted = 0, budget = 6;
+            var tries = Math.min(fn, 22);
+            for (var fi2 = 0; fi2 < tries && planted < budget; fi2++) {
+                var pick = Math.floor(CC.hash3(cx * 3 + fi2, cz * 5, cy + fi2 * 7) * fn);
+                var qx2 = data.floorPts[pick * 3], qy2 = data.floorPts[pick * 3 + 1], qz2 = data.floorPts[pick * 3 + 2];
+                var qWL = CC.waterLevelAt(qx2, qy2, qz2);
+                if (qWL !== null && qy2 < qWL + 0.05) continue;   /* never underwater */
+                var score = 0.14;
+                if (qWL !== null && qy2 < qWL + 3.5) score += 0.62;   /* the shore */
+                var solids = 0;   /* crevices: stone pressing in from the sides */
+                if (CC.density(qx2 + 0.85, qy2 + 0.55, qz2) > 0) solids++;
+                if (CC.density(qx2 - 0.85, qy2 + 0.55, qz2) > 0) solids++;
+                if (CC.density(qx2, qy2 + 0.55, qz2 + 0.85) > 0) solids++;
+                if (CC.density(qx2, qy2 + 0.55, qz2 - 0.85) > 0) solids++;
+                if (solids >= 2) score += 0.55;
+                if (CC.hash3(fi2 * 3 + 1, cx + cz, cy * 5 + fi2) > score) continue;
+                if (qWL !== null && qy2 < qWL + 3.5 && CC.hash3(fi2, cz + 3, cx) < 0.45) {
+                    /* a moss carpet takes the shore instead */
+                    var moss = new THREE.Mesh(mossGeo, mossMat);
+                    var msc2 = 1.2 + CC.hash3(cx, fi2, cz) * 2.2;
+                    moss.scale.set(msc2, 1, msc2);
+                    moss.position.set(qx2, qy2 + 0.03, qz2);
+                    moss.rotation.y = CC.hash3(fi2, cx, cz) * 3.14;
+                    rec.group.add(moss);
+                } else {
+                    addFlora(rec, qx2, qy2, qz2, cx * 131 + cz * 17 + fi2);
+                }
+                /* the living air: a swarm of drifting glow bugs, sometimes worms */
+                if (CC.hash3(cx + fi2, 91, cz - fi2) < 0.3) {
+                    var swarm = makeBugSwarm(qx2, qy2 + 1.6, qz2, cx * 7 + fi2);
+                    rec.group.add(swarm.pts);
+                    rec.bugSwarms.push(swarm);
+                }
+                if (CC.hash3(cx - fi2, 92, cz + fi2) < 0.14) {
+                    var worm = makeWorm(qx2, qy2, qz2, cz * 5 + fi2);
+                    rec.group.add(worm.g);
+                    rec.worms.push(worm);
+                }
+                planted++;
+            }
+        })();
 
         /* torches: roughly one every 30 m of tunnel, on walls */
         if (window._CAVE_TORCHES && data.wallPts.length >= 6 && h(3) < 0.6) {
@@ -2331,6 +3317,107 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
         /* still water where the chunk crosses the table */
         var y0 = cy * CH, y1 = y0 + CH;
+        if (window._CAVE_VAULTS !== false) {
+            var vls = CC.vaultsNearChunk(cx * CH + CH / 2, cz * CH + CH / 2, cy * CH + CH / 2);
+            for (var vqi = 0; vqi < vls.length; vqi++) {
+                var vq = vls[vqi];
+                if (vq.x < cx * CH || vq.x >= cx * CH + CH || vq.z < cz * CH || vq.z >= cz * CH + CH) continue;
+                if (vq.y < y0 - 4 || vq.y > y1 + 4) continue;
+                var vfy = vq.y - vq.r / 1.35 + 0.4;
+                var vgeo = new THREE.BoxGeometry(1.7, 7.2, 1.15);
+                var vmat = new THREE.MeshStandardMaterial({
+                    color: 0x2b3038, roughness: 0.6, metalness: 0.15,
+                    emissive: 0x86b8ff, emissiveIntensity: 0.10
+                });
+                var vm = new THREE.Mesh(vgeo, vmat);
+                vm.position.set(vq.x, vfy + 3.6, vq.z);
+                vm.rotation.y = CC.hash3(vq.k, 44, vqi) * 6.28;
+                rec.group.add(vm);
+                rec.disposables.push(vgeo, vmat);
+                var vspr = new THREE.Sprite(new THREE.SpriteMaterial({
+                    map: glowTex, color: 0x9fc6ff, transparent: true, opacity: 0.28,
+                    blending: THREE.AdditiveBlending, depthWrite: false
+                }));
+                vspr.scale.set(9, 9, 1);
+                vspr.position.set(vq.x, vfy + 4.2, vq.z);
+                rec.group.add(vspr);
+                rec.disposables.push(vspr.material);
+                rec.emitters.push({ x: vq.x, y: vfy + 4, z: vq.z, color: new THREE.Color(0x9fc6ff), intensity: 1.1, dist: 26, type: 'crystal' });
+                rec.vaultStones.push({ x: vq.x, y: vfy + 2, z: vq.z, k: vq.k });
+            }
+        }
+        if (window._CAVE_SHARDS !== false) {
+            var shl = CC.shardsNearChunk(cx * CH + CH / 2, cz * CH + CH / 2);
+            for (var sqi = 0; sqi < shl.length; sqi++) {
+                var sq = shl[sqi];
+                if (shardHave[sq.id]) continue;
+                if (sq.x < cx * CH || sq.x >= cx * CH + CH || sq.z < cz * CH || sq.z >= cz * CH + CH) continue;
+                var sfy = null;
+                for (var syq = y1 - 3; syq > y0 + 2; syq -= 2) {
+                    if (CC.density(sq.x, syq, sq.z) < -0.2 && CC.density(sq.x, syq - 2, sq.z) > 0.1) { sfy = syq - 1.0; break; }
+                }
+                if (sfy === null) continue;
+                var sgeo = new THREE.OctahedronGeometry(0.42);
+                var smat = new THREE.MeshStandardMaterial({
+                    color: 0x0c2030, roughness: 0.25, metalness: 0.3,
+                    emissive: 0x5fe8d8, emissiveIntensity: 1.5
+                });
+                var sm = new THREE.Mesh(sgeo, smat);
+                sm.position.set(sq.x, sfy + 0.9, sq.z);
+                rec.group.add(sm);
+                rec.disposables.push(sgeo, smat);
+                var sspr = new THREE.Sprite(new THREE.SpriteMaterial({
+                    map: glowTex, color: 0x5fe8d8, transparent: true, opacity: 0.4,
+                    blending: THREE.AdditiveBlending, depthWrite: false
+                }));
+                sspr.scale.set(3.4, 3.4, 1);
+                sspr.position.copy(sm.position);
+                rec.group.add(sspr);
+                rec.disposables.push(sspr.material);
+                rec.emitters.push({ x: sq.x, y: sfy + 1.2, z: sq.z, color: new THREE.Color(0x5fe8d8), intensity: 0.9, dist: 16, type: 'crystal' });
+                rec.shards.push({ mesh: sm, spr: sspr, x: sq.x, y: sfy + 0.9, z: sq.z, id: sq.id });
+            }
+        }
+        if (window._CAVE_WATER && window._CAVE_RIVERS !== false) {
+            var rvs = CC.riversNearChunk(cx * CH + CH / 2, cz * CH + CH / 2);
+            for (var rvi = 0; rvi < rvs.length; rvi++) {
+                addRiverRibbon(rec, rvs[rvi], cx, cy, cz, y0, y1);
+            }
+        }
+        if (window._CAVE_WATER) {
+            var lakeLv = CC.lakesNearChunk(cx * CH + CH / 2, cz * CH + CH / 2);
+            for (var lqi = 0; lqi < lakeLv.length; lqi++) {
+                var lv = lakeLv[lqi];
+                var ccx2 = cx * CH + CH / 2, ccz2 = cz * CH + CH / 2;
+                var ldx = ccx2 - lv.cx, ldz = ccz2 - lv.cz;
+                if (ldx * ldx + ldz * ldz > lv.r * lv.r) continue;
+                if (y0 <= lv.y && y1 > lv.y && chunkAirAt(cx, cy, cz, lv.y)) {
+                    var lgeo = new THREE.PlaneGeometry(CH, CH);
+                    lgeo.rotateX(-Math.PI / 2);
+                    var lmesh = new THREE.Mesh(lgeo, waterMat);
+                    lmesh.position.set(cx * CH + CH / 2, lv.y, cz * CH + CH / 2);
+                    rec.group.add(lmesh);
+                    rec.disposables.push(lgeo);
+                    if (window._CAVE_FISH !== false) {
+                        var fsx = cx * CH + CC.hash3(cx, lqi, 41) * CH;
+                        var fsz = cz * CH + CC.hash3(cz, lqi, 42) * CH;
+                        var fsh = makeFish(fsx, lv.y - 0.9, fsz, cx * 5 + lqi, null);
+                        rec.group.add(fsh.pts);
+                        rec.fish.push(fsh);
+                        rec.disposables.push(fsh.pts.geometry, fsh.pts.material);
+                    }
+                    /* bioluminescent algae drifts on the surface */
+                    var nAl = 1 + Math.floor(CC.hash3(cx, lqi, cz) * 3);
+                    for (var ai2 = 0; ai2 < nAl; ai2++) {
+                        var mat2 = new THREE.Mesh(mossGeo, algaeMat);
+                        var asc = 2 + CC.hash3(ai2, cx, cz) * 4;
+                        mat2.scale.set(asc, 1, asc);
+                        mat2.position.set(cx * CH + CC.hash3(cx, ai2, lqi) * CH, lv.y + 0.05, cz * CH + CC.hash3(cz, ai2, lqi) * CH);
+                        rec.group.add(mat2);
+                    }
+                }
+            }
+        }
         if (window._CAVE_WATER && y0 <= CC.WATER_Y && y1 > CC.WATER_Y && chunkAirAt(cx, cy, cz, CC.WATER_Y)) {
             var wgeo = new THREE.PlaneGeometry(CH, CH);
             var wmesh = new THREE.Mesh(wgeo, waterMat);
@@ -2507,12 +3594,33 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 var cm = capMat.clone();
                 cm.emissive = col;
                 cm.emissiveIntensity = 0.85;
+                var gm = new THREE.MeshStandardMaterial({
+                    map: gillTex, color: 0xffffff, roughness: 0.85,
+                    emissive: col, emissiveIntensity: 0.22, emissiveMap: gillTex
+                });
+                rec.disposables.push(gm);
                 var cap = new THREE.Mesh(capGeo, cm);
                 cap.scale.setScalar(0.16 * hgt + 0.10);
                 cap.position.set(ox, hgt, oz);
-                cap.userData.shroom = { hex: colHex };
+                var vRoll = CC.hash3(Math.round(ox * 91) + cx * 3, 730, Math.round(oz * 91) + cz * 7);
+                var variety = vRoll < 0.70 ? 0 : vRoll < 0.80 ? 1 : vRoll < 0.90 ? 2 : 3;
+                if (variety > 0) {
+                    var vHex = variety === 1 ? 0xffb347 : variety === 2 ? 0x57c8ff : 0xff5757;
+                    colHex = vHex;
+                    col = new THREE.Color(vHex);
+                    cm.emissive = col;
+                    gm.emissive = col;
+                }
+                cap.userData.shroom = { hex: colHex, variety: variety };
                 rec.shroomCaps.push(cap);
                 cluster.add(cap);
+                var gill = new THREE.Mesh(gillGeo, gm);
+                gill.scale.copy(cap.scale);
+                gill.position.copy(cap.position);
+                gill.userData.shroom = cap.userData.shroom;
+                gill.userData.shroomCap = cap;
+                rec.shroomCaps.push(gill);
+                cluster.add(gill);
                 rec.disposables.push(cm);
             }
             var spr = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -2541,6 +3649,612 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var skinMat = new THREE.MeshLambertMaterial({ color: 0xcbb397 });
     var houseGeo = new THREE.BoxGeometry(1, 1, 1);
     var roofGeo = new THREE.ConeGeometry(0.85, 0.55, 4);
+    /* painted micro-textures so nothing reads flat */
+    function canvasTex(w, h, painter, rx, ry) {
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        painter(cv.getContext('2d'), w, h);
+        var t = new THREE.CanvasTexture(cv);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        if (rx) t.repeat.set(rx, ry || rx);
+        t.r0 = t.repeat.x;
+        t.r1 = t.repeat.y;
+        return t;
+    }
+    function h2r(seedv) { var x = Math.sin(seedv * 127.1) * 43758.5; return x - Math.floor(x); }
+    var woodTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#8a7458'; c.fillRect(0, 0, w, h);
+        for (var b = 0; b < 5; b++) {
+            var bx = b * 25.6;
+            c.fillStyle = 'rgba(0,0,0,' + (0.10 + h2r(b) * 0.12) + ')';
+            c.fillRect(bx, 0, 2.2, h);
+            for (var g2 = 0; g2 < 7; g2++) {
+                c.strokeStyle = 'rgba(58,42,26,' + (0.18 + h2r(b * 9 + g2) * 0.2) + ')';
+                c.lineWidth = 1;
+                c.beginPath();
+                var gy = h2r(b * 31 + g2) * h;
+                c.moveTo(bx + 3, gy);
+                c.bezierCurveTo(bx + 9, gy + 14, bx + 16, gy - 10, bx + 24, gy + 6);
+                c.stroke();
+            }
+            c.fillStyle = 'rgba(20,14,8,0.7)';
+            c.beginPath(); c.arc(bx + 12, 14 + h2r(b * 3) * 20, 1.6, 0, 6.3); c.fill();
+            c.beginPath(); c.arc(bx + 12, h - 16 - h2r(b * 7) * 20, 1.6, 0, 6.3); c.fill();
+        }
+    }, 1.2, 1.2);
+    var brickTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#6a6258'; c.fillRect(0, 0, w, h);
+        var rows = 8, bw = 32;
+        for (var r2 = 0; r2 < rows; r2++) {
+            var y0 = r2 * 16, off = (r2 % 2) * 16;
+            for (var b2 = -1; b2 < 5; b2++) {
+                var x0 = b2 * bw + off;
+                var sh2 = 0.82 + h2r(r2 * 13 + b2) * 0.36;
+                c.fillStyle = 'rgb(' + Math.floor(122 * sh2) + ',' + Math.floor(74 * sh2) + ',' + Math.floor(58 * sh2) + ')';
+                c.fillRect(x0 + 1.5, y0 + 1.5, bw - 3, 13);
+            }
+        }
+    }, 1.6, 1.6);
+    var tinTexC = canvasTex(64, 64, function (c, w, h) {
+        for (var x2 = 0; x2 < w; x2++) {
+            var ridge = 0.5 + 0.5 * Math.sin(x2 * 0.785);
+            var v = Math.floor(96 + ridge * 64);
+            c.fillStyle = 'rgb(' + v + ',' + (v + 4) + ',' + (v + 7) + ')';
+            c.fillRect(x2, 0, 1, h);
+        }
+        for (var st2 = 0; st2 < 9; st2++) {
+            c.fillStyle = 'rgba(96,60,34,' + (0.1 + h2r(st2) * 0.25) + ')';
+            var sx2 = h2r(st2 * 3) * w, sy2 = h2r(st2 * 7) * h;
+            c.fillRect(sx2, sy2, 3 + h2r(st2 * 11) * 8, 2 + h2r(st2 * 5) * 10);
+        }
+    }, 1.4, 1.4);
+    var ashlarTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#7e7a70'; c.fillRect(0, 0, w, h);
+        for (var r3 = 0; r3 < 4; r3++) {
+            var y3 = r3 * 32, off3 = (r3 % 2) * 21;
+            for (var b3 = -1; b3 < 4; b3++) {
+                var x3 = b3 * 42 + off3;
+                var sh3 = 0.86 + h2r(r3 * 17 + b3) * 0.3;
+                c.fillStyle = 'rgb(' + Math.floor(134 * sh3) + ',' + Math.floor(128 * sh3) + ',' + Math.floor(116 * sh3) + ')';
+                c.fillRect(x3 + 2, y3 + 2, 38, 28);
+                c.fillStyle = 'rgba(255,255,255,0.05)';
+                c.fillRect(x3 + 2, y3 + 2, 38, 4);
+            }
+        }
+    }, 1.3, 1.3);
+    var breathingTex = [];
+    var thatchTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#6b5a38'; c.fillRect(0, 0, w, h);
+        for (var t4 = 0; t4 < 260; t4++) {
+            c.strokeStyle = 'rgba(' + Math.floor(70 + h2r(t4) * 90) + ',' + Math.floor(58 + h2r(t4 * 3) * 60) + ',30,0.5)';
+            c.lineWidth = 1;
+            var tx = h2r(t4 * 7) * w, ty = h2r(t4 * 11) * h;
+            c.beginPath(); c.moveTo(tx, ty); c.lineTo(tx + 3 + h2r(t4 * 13) * 10, ty + 1.5); c.stroke();
+        }
+    }, 1.5, 1.5);
+    breathingTex.push(woodTexC, brickTexC, tinTexC, ashlarTexC, thatchTexC);
+    var timberMat = new THREE.MeshStandardMaterial({ color: 0x6a5138, roughness: 0.92, map: woodTexC });
+    var ghostMat = new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x6fa8dd, emissiveIntensity: 1.4, roughness: 0.4 });
+    var pathMat = new THREE.MeshStandardMaterial({ color: 0x8c8a85, roughness: 0.97, map: ashlarTexC });
+    var thatchMat = new THREE.MeshStandardMaterial({ color: 0xa89868, roughness: 0.98, map: thatchTexC });
+    var soilMat = new THREE.MeshStandardMaterial({ color: 0x241d16, roughness: 1.0 });
+    var clothMat = new THREE.MeshStandardMaterial({ color: 0x7a4038, roughness: 0.9, side: THREE.DoubleSide });
+    var doorMat = new THREE.MeshStandardMaterial({ color: 0x120d08, roughness: 1.0 });
+    var cylGeo = new THREE.CylinderGeometry(1, 1, 1, 9);
+    /* the visual floor sits above floorY by the refill ramp: probe it */
+    function floorSurfY(x2, z2, guessY) {
+        var yy;
+        for (yy = guessY + 2.4; yy > guessY - 1.2; yy -= 0.12) {
+            if (CC.density(x2, yy, z2) > 0) return yy + 0.12;
+        }
+        return guessY;
+    }
+    function makeDwelling(rec, x, y, z, ry, w, h, d, ruin, dseed, rv) {
+        var g = new THREE.Group();
+        g.position.set(x, y, z); g.rotation.y = ry;
+        function hs(k) { return CC.hash3(dseed, k, dseed * 3 + 7); }
+        var found = new THREE.Mesh(houseGeo, pathMat);
+        found.scale.set(w + 0.5, 0.28, d + 0.5); found.position.y = 0.14;
+        g.add(found);
+        if (ruin) {
+            /* broken walls at ragged heights, a fallen roof slab, rubble */
+            for (var wi = 0; wi < 4; wi++) {
+                if (hs(20 + wi) < 0.25) continue;
+                var wh = h * (0.2 + hs(30 + wi) * 0.55);
+                var wall = new THREE.Mesh(houseGeo, stoneMat);
+                if (wi < 2) { wall.scale.set(w, wh, 0.3); wall.position.set(0, wh * 0.5 + 0.2, (wi === 0 ? -1 : 1) * d * 0.5); }
+                else { wall.scale.set(0.3, wh, d); wall.position.set((wi === 2 ? -1 : 1) * w * 0.5, wh * 0.5 + 0.2, 0); }
+                wall.rotation.z = (hs(40 + wi) - 0.5) * 0.06;
+                g.add(wall);
+            }
+            if (hs(5) < 0.5) {
+                var slab2 = new THREE.Mesh(houseGeo, timberMat);
+                slab2.scale.set(w * 0.9, 0.12, d * 0.8);
+                slab2.position.set((hs(6) - 0.5) * w * 0.6, 0.55, (hs(7) - 0.5) * d * 0.6);
+                slab2.rotation.set(0.5 + hs(8) * 0.5, hs(9), 0.2);
+                g.add(slab2);
+            }
+            for (var ri = 0; ri < 3; ri++) {
+                var rub = new THREE.Mesh(orbGeo, stoneMat);
+                rub.scale.set(1.6 + hs(50 + ri) * 2, 1.1 + hs(60 + ri), 1.6 + hs(70 + ri) * 2);
+                rub.position.set((hs(80 + ri) - 0.5) * w, 0.25, (hs(90 + ri) - 0.5) * d);
+                g.add(rub);
+            }
+            rec.group.add(g);
+            return;
+        }
+        var wallMat = stoneMat.clone();
+        wallMat.map = ashlarTexC;
+        var tint = 0.86 + hs(2) * 0.26;
+        wallMat.color = wallMat.color.clone().multiplyScalar(tint);
+        rec.disposables.push(wallMat);
+        var walls = new THREE.Mesh(houseGeo, wallMat);
+        walls.scale.set(w, h, d); walls.position.y = h * 0.5 + 0.24;
+        g.add(walls);
+        /* stepped stone gables close the roof ends */
+        var g1 = new THREE.Mesh(houseGeo, wallMat);
+        g1.scale.set(w * 0.72, 0.55, d * 0.94); g1.position.y = h + 0.5;
+        g.add(g1);
+        var g2 = new THREE.Mesh(houseGeo, wallMat);
+        g2.scale.set(w * 0.4, 0.5, d * 0.9); g2.position.y = h + 0.95;
+        g.add(g2);
+        /* timber corner posts + top plate beam */
+        for (var ci = 0; ci < 4; ci++) {
+            var post = new THREE.Mesh(houseGeo, timberMat);
+            post.scale.set(0.16, h + 0.1, 0.16);
+            post.position.set((ci % 2 ? 1 : -1) * w * 0.5, h * 0.5 + 0.24, (ci < 2 ? 1 : -1) * d * 0.5);
+            g.add(post);
+        }
+        var plate = new THREE.Mesh(houseGeo, timberMat);
+        plate.scale.set(w + 0.24, 0.14, d + 0.24); plate.position.y = h + 0.28;
+        g.add(plate);
+        /* inset door with a lintel, facing the plaza */
+        var dv = new THREE.Mesh(houseGeo, doorMat);
+        dv.scale.set(0.66, 1.35, 0.14);
+        dv.position.set(0, 0.95, d * 0.5 + 0.02);
+        g.add(dv);
+        var lin = new THREE.Mesh(houseGeo, timberMat);
+        lin.scale.set(0.9, 0.12, 0.2); lin.position.set(0, 1.68, d * 0.5 + 0.04);
+        g.add(lin);
+        /* a warm window or two, deep set in timber frames */
+        var nw = 1 + (rv < 0.5 ? 1 : 0);
+        for (var vi = 0; vi < nw; vi++) {
+            var side = vi === 0 ? 1 : -1;
+            var frame = new THREE.Mesh(houseGeo, timberMat);
+            frame.scale.set(0.14, 0.62, 0.56);
+            frame.position.set(side * (w * 0.5 + 0.02), h * 0.55 + 0.24, (hs(100 + vi) - 0.5) * d * 0.4);
+            g.add(frame);
+            var glow = new THREE.Mesh(houseGeo, windowMat);
+            glow.scale.set(0.06, 0.46, 0.4);
+            glow.position.copy(frame.position); glow.position.x += side * 0.05;
+            g.add(glow);
+        }
+        /* the gable roof: two pitched slabs meeting at a ridge beam, with overhang */
+        var pitch = 0.62 + rv * 0.18;
+        var slopeW = (w * 0.62) / Math.cos(pitch);
+        var rl = new THREE.Mesh(houseGeo, thatchMat);
+        rl.scale.set(slopeW, 0.12, d + 0.7);
+        rl.rotation.z = pitch;
+        rl.position.set(-w * 0.27, h + 0.34 + Math.sin(pitch) * slopeW * 0.5 - 0.06, 0);
+        g.add(rl);
+        var rr = rl.clone();
+        rr.rotation.z = -pitch;
+        rr.position.x = w * 0.27;
+        g.add(rr);
+        var ridge = new THREE.Mesh(cylGeo, timberMat);
+        ridge.scale.set(0.1, d + 0.8, 0.1);
+        ridge.rotation.x = 1.5708;
+        ridge.position.set(0, h + 0.34 + Math.sin(pitch) * slopeW - 0.02, 0);
+        g.add(ridge);
+        /* chimney with a breath of ember light */
+        if (rv < 0.55) {
+            var ch2 = new THREE.Mesh(houseGeo, stoneMat);
+            ch2.scale.set(0.42, 1.0, 0.42);
+            ch2.position.set(w * 0.3, h + 0.8, -d * 0.22);
+            g.add(ch2);
+            var wp3 = new THREE.Vector3(w * 0.3, h + 1.35, -d * 0.22).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
+            rec.emitters.push({ x: x + wp3.x, y: y + wp3.y, z: z + wp3.z, color: new THREE.Color(0xff9a55), intensity: 0.5, dist: 10, type: 'torch', flicker: true });
+        }
+        /* barrels and crates against the wall: someone lives here */
+        var nb = Math.floor(hs(12) * 3);
+        for (var bi = 0; bi < nb; bi++) {
+            var barrel = hs(13 + bi) < 0.5;
+            var prop = new THREE.Mesh(barrel ? cylGeo : houseGeo, timberMat);
+            if (barrel) prop.scale.set(0.3, 0.52, 0.3); else prop.scale.set(0.5, 0.44, 0.5);
+            prop.position.set((hs(140 + bi) - 0.5) * w * 1.5, 0.5, d * 0.5 + 0.55);
+            prop.rotation.y = hs(150 + bi) * 3;
+            g.add(prop);
+        }
+        rec.group.add(g);
+    }
+    function makeWell(rec, x, y, z, ruin, wseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z);
+        var ring = new THREE.Mesh(cylGeo, stoneMat);
+        ring.scale.set(1.1, 0.7, 1.1); ring.position.y = 0.35;
+        g.add(ring);
+        var bore = new THREE.Mesh(cylGeo, doorMat);
+        bore.scale.set(0.85, 0.72, 0.85); bore.position.y = 0.37;
+        g.add(bore);
+        if (!ruin) {
+            for (var pi3 = 0; pi3 < 2; pi3++) {
+                var leg = new THREE.Mesh(houseGeo, timberMat);
+                leg.scale.set(0.12, 1.7, 0.12);
+                leg.position.set(pi3 ? 1.0 : -1.0, 0.85, 0);
+                g.add(leg);
+            }
+            var cross = new THREE.Mesh(cylGeo, timberMat);
+            cross.scale.set(0.07, 2.3, 0.07); cross.rotation.z = 1.5708;
+            cross.position.y = 1.62;
+            g.add(cross);
+            var bucket = new THREE.Mesh(cylGeo, timberMat);
+            bucket.scale.set(0.16, 0.2, 0.16); bucket.position.y = 1.05;
+            g.add(bucket);
+        } else {
+            ring.rotation.z = 0.09;
+        }
+        rec.group.add(g);
+    }
+    function makeFarmPlot(rec, x, y, z, rv, ruin, fseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z);
+        g.rotation.y = rv * 6.28;
+        var bed = new THREE.Mesh(houseGeo, soilMat);
+        bed.scale.set(3.4, 0.22, 2.0); bed.position.y = 0.11;
+        g.add(bed);
+        var edge = new THREE.Mesh(houseGeo, timberMat);
+        edge.scale.set(3.6, 0.14, 0.12); edge.position.set(0, 0.14, 1.05); g.add(edge);
+        var edge2 = edge.clone(); edge2.position.z = -1.05; g.add(edge2);
+        var nsh = ruin ? 2 : 5 + Math.floor(CC.hash3(fseed, 1, 3) * 5);
+        for (var si = 0; si < nsh; si++) {
+            var mx3 = (CC.hash3(fseed, si, 7) - 0.5) * 3.0;
+            var mz3 = (CC.hash3(si, fseed, 9) - 0.5) * 1.6;
+            var mc = new THREE.Mesh(capGeo, farmShroomMat);
+            var msc = 0.1 + CC.hash3(fseed, si, 11) * 0.08;
+            mc.scale.setScalar(msc);
+            mc.position.set(mx3, 0.2, mz3);
+            g.add(mc);
+        }
+        if (!ruin) {
+            var wpos = new THREE.Vector3(x, y + 0.6, z);
+            rec.emitters.push({ x: wpos.x, y: wpos.y, z: wpos.z, color: new THREE.Color(0x9fe8c8), intensity: 0.6, dist: 9, type: 'shroom' });
+        }
+        rec.group.add(g);
+    }
+    function makeShrine(rec, x, y, z, ruin, sseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z);
+        for (var ri2 = 0; ri2 < 5; ri2++) {
+            var ra = (ri2 / 5) * 6.2831853;
+            var stn = new THREE.Mesh(houseGeo, stoneMat);
+            stn.scale.set(0.34, 0.8 + CC.hash3(sseed, ri2, 2) * 0.5, 0.3);
+            stn.position.set(Math.cos(ra) * 1.5, stn.scale.y * 0.5, Math.sin(ra) * 1.5);
+            stn.rotation.y = ra;
+            if (ruin && CC.hash3(ri2, sseed, 5) < 0.4) { stn.rotation.z = 1.2; stn.position.y = 0.2; }
+            g.add(stn);
+        }
+        var plinth = new THREE.Mesh(cylGeo, stoneMat);
+        plinth.scale.set(0.55, 0.5, 0.55); plinth.position.y = 0.25;
+        g.add(plinth);
+        var shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.45, 0), shrineMat);
+        shard.position.y = 1.05; shard.rotation.y = 0.6;
+        shard.scale.y = 1.7;
+        g.add(shard);
+        rec.emitters.push({ x: x, y: y + 1.1, z: z, color: new THREE.Color(ruin ? 0x9fd0ff : 0x9a7bff), intensity: 1.2, dist: 16, type: 'crystal' });
+        rec.group.add(g);
+    }
+    function makeLeanTo(rec, x, y, z, ra, lseed, ruin) {
+        /* an open-front dweller shack: you can see the life inside */
+        var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ra;
+        function lh(k) { return CC.hash3(lseed, k, lseed * 5 + 3); }
+        var pmA = plankMats[Math.floor(lh(1) * plankMats.length)];
+        var pmB = plankMats[(Math.floor(lh(1) * plankMats.length) + 2) % plankMats.length];
+        var back = new THREE.Mesh(houseGeo, pmA);
+        back.scale.set(3.2, 2.2, 0.1); back.position.set(0, 1.1, -1.2);
+        back.rotation.z = ruin ? (lh(2) - 0.5) * 0.12 : 0;
+        g.add(back);
+        var sideL = new THREE.Mesh(houseGeo, pmB);
+        sideL.scale.set(0.1, 2.0, 2.3); sideL.position.set(-1.6, 1.0, 0);
+        g.add(sideL);
+        if (!ruin || lh(3) < 0.5) {
+            var sideR = new THREE.Mesh(houseGeo, pmB);
+            sideR.scale.set(0.1, 1.6, 2.0); sideR.position.set(1.6, 0.8, -0.1);
+            g.add(sideR);
+        }
+        var roof2 = new THREE.Mesh(houseGeo, tinMat);
+        roof2.scale.set(3.7, 0.07, 2.9);
+        roof2.position.set(0, 2.28, 0.1);
+        roof2.rotation.x = 0.14 + (ruin ? (lh(4) - 0.5) * 0.3 : 0);
+        g.add(roof2);
+        for (var pi6 = 0; pi6 < 2; pi6++) {
+            var lpost = new THREE.Mesh(houseGeo, timberMat);
+            lpost.scale.set(0.12, 2.35, 0.12);
+            lpost.position.set(pi6 ? 1.55 : -1.55, 1.17, 1.15);
+            g.add(lpost);
+        }
+        /* the life inside: cot or still or stores, a lantern, the blue pipe */
+        var what = lh(5);
+        if (what < 0.34) {
+            var cot2 = new THREE.Mesh(houseGeo, pmB);
+            cot2.scale.set(1.8, 0.2, 0.8); cot2.position.set(-0.4, 0.28, -0.55);
+            g.add(cot2);
+            var pil2 = new THREE.Mesh(houseGeo, clothMat);
+            pil2.scale.set(0.38, 0.13, 0.46); pil2.position.set(-1.1, 0.44, -0.55);
+            g.add(pil2);
+        } else if (what < 0.67) {
+            var ket2 = new THREE.Mesh(cylGeo, copperMat);
+            ket2.scale.set(0.4, 0.6, 0.4); ket2.position.set(0.55, 0.3, -0.6);
+            g.add(ket2);
+            var coil2 = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.04, 6, 12), copperMat);
+            coil2.position.set(-0.05, 0.62, -0.6); coil2.rotation.y = 1.5708;
+            g.add(coil2);
+            rec.disposables.push(coil2.geometry);
+            var jar2 = new THREE.Mesh(cylGeo, jarMat);
+            jar2.scale.set(0.09, 0.15, 0.09); jar2.position.set(-0.6, 0.42, -0.75);
+            g.add(jar2);
+        } else {
+            for (var bi4 = 0; bi4 < 3; bi4++) {
+                var bx2 = new THREE.Mesh(bi4 === 1 ? cylGeo : houseGeo, timberMat);
+                bx2.scale.set(0.34, 0.4 + lh(20 + bi4) * 0.25, 0.34);
+                bx2.position.set(-0.9 + bi4 * 0.8, bx2.scale.y * 0.5, -0.5 + (lh(30 + bi4) - 0.5) * 0.5);
+                bx2.rotation.y = lh(40 + bi4) * 2;
+                g.add(bx2);
+            }
+            var tarp2 = new THREE.Mesh(houseGeo, clothMat);
+            tarp2.scale.set(1.2, 0.05, 0.9);
+            tarp2.position.set(0.2, 0.62, -0.4);
+            tarp2.rotation.set((lh(6) - 0.5) * 0.4, lh(7) * 2, (lh(8) - 0.5) * 0.3);
+            g.add(tarp2);
+        }
+        var rope2 = new THREE.Mesh(cylGeo, timberMat);
+        rope2.scale.set(0.02, 0.5, 0.02); rope2.position.set(0.5, 2.0, 0.2);
+        g.add(rope2);
+        var lant2 = new THREE.Mesh(houseGeo, tinMat);
+        lant2.scale.set(0.2, 0.26, 0.2); lant2.position.set(0.5, 1.68, 0.2);
+        g.add(lant2);
+        if (!ruin) {
+            rec.emitters.push({ x: x + Math.cos(ra) * 0.5, y: y + 1.68, z: z + Math.sin(ra) * 0.5, color: new THREE.Color(0xffc06a), intensity: 1.0, dist: 11, type: 'torch', flicker: true });
+        }
+        var pipe2 = new THREE.Mesh(cylGeo, pipeMat);
+        pipe2.scale.set(0.045, 2.8, 0.045); pipe2.rotation.z = 1.5708;
+        pipe2.position.set(0, 1.9, -1.14);
+        g.add(pipe2);
+        rec.group.add(g);
+    }
+    function makeStall(rec, x, y, z, ra, mseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ra;
+        for (var pi4 = 0; pi4 < 4; pi4++) {
+            var sp = new THREE.Mesh(houseGeo, timberMat);
+            sp.scale.set(0.1, 2.0, 0.1);
+            sp.position.set((pi4 % 2 ? 1 : -1) * 1.1, 1.0, (pi4 < 2 ? 1 : -1) * 0.8);
+            g.add(sp);
+        }
+        var counter = new THREE.Mesh(houseGeo, timberMat);
+        counter.scale.set(2.3, 0.1, 1.0); counter.position.y = 0.95;
+        g.add(counter);
+        var awn = new THREE.Mesh(houseGeo, clothMat);
+        awn.scale.set(2.6, 0.05, 2.0); awn.position.y = 2.1; awn.rotation.x = 0.24;
+        g.add(awn);
+        for (var ci2 = 0; ci2 < 3; ci2++) {
+            var crate = new THREE.Mesh(houseGeo, timberMat);
+            crate.scale.setScalar(0.34 + CC.hash3(mseed, ci2, 4) * 0.16);
+            crate.position.set((CC.hash3(ci2, mseed, 6) - 0.5) * 1.8, 1.05 + crate.scale.y * 0.5 - 0.05, (CC.hash3(mseed, ci2, 8) - 0.5) * 0.6);
+            crate.rotation.y = CC.hash3(ci2, 4, mseed);
+            g.add(crate);
+        }
+        rec.group.add(g);
+    }
+    var farmShroomMat = new THREE.MeshStandardMaterial({ color: 0x8fe0c0, emissive: 0x2a9070, emissiveIntensity: 0.9, roughness: 0.6 });
+    /* the dweller palette: weathered painted planks, brick, tin, copper */
+    var plankMats = [
+        new THREE.MeshStandardMaterial({ color: 0x4fb8ae, roughness: 0.94, map: woodTexC }),
+        new THREE.MeshStandardMaterial({ color: 0xc2685a, roughness: 0.94, map: woodTexC }),
+        new THREE.MeshStandardMaterial({ color: 0xcbb35c, roughness: 0.94, map: woodTexC }),
+        new THREE.MeshStandardMaterial({ color: 0x8a86c2, roughness: 0.94, map: woodTexC })
+    ];
+    var brickMat = new THREE.MeshStandardMaterial({ color: 0xbfa89a, roughness: 0.98, map: brickTexC });
+    var tinMat = new THREE.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.5, metalness: 0.55, map: tinTexC });
+    var copperMat = new THREE.MeshStandardMaterial({ color: 0x9a5c34, roughness: 0.35, metalness: 0.8 });
+    var pipeMat = new THREE.MeshStandardMaterial({ color: 0x3c6f9a, roughness: 0.55, metalness: 0.4 });
+    var jarMat = new THREE.MeshStandardMaterial({ color: 0xbfe8c0, emissive: 0x6fbf70, emissiveIntensity: 1.0, roughness: 0.2, transparent: true, opacity: 0.85 });
+    function shantyHash(st, k) { return CC.hash3(st.gx * 13 + k, 907, st.gz * 13 + k * 3); }
+    function addShanty(rec, cx, cy, cz) {
+        var ccx = (cx + 0.5) * CH, ccz = (cz + 0.5) * CH;
+        var st = CC.shantyNear(ccx, ccz);
+        if (!st) return;
+        var L = CC.toLocal(st.x, st.y, st.z);
+        var offX = L[0] - st.x, offY = L[1] - st.y, offZ = L[2] - st.z;
+        var dxc = L[0] - ccx, dzc = L[2] - ccz;
+        if (dxc * dxc + dzc * dzc > (95 + CH) * (95 + CH)) return;
+        var pm = plankMats[Math.floor(shantyHash(st, 1) * plankMats.length)];
+        var pm2 = plankMats[(Math.floor(shantyHash(st, 1) * plankMats.length) + 1 + Math.floor(shantyHash(st, 2) * 2)) % plankMats.length];
+        for (var r = 0; r < st.rooms.length; r++) {
+            var rm = st.rooms[r];
+            var rx = rm.x + offX, ry = rm.y + offY, rz = rm.z + offZ;
+            var fy = rm.floorY + offY;
+            if (!ownedBy(rx, ry, rz, cx, cy, cz)) continue;
+            var g = new THREE.Group();
+            g.position.set(rx, fy, rz);
+            var rs = st.seed * 1000 + r * 17;
+            function rh(k) { return CC.hash3(st.gx * 7 + r, k, st.gz * 7 + r * 5); }
+            /* brick pillars holding the ceiling, like the old mineworks */
+            var np = 2 + Math.floor(rh(3) * 2);
+            for (var pi5 = 0; pi5 < np; pi5++) {
+                var pxx = (rh(10 + pi5) - 0.5) * rm.hw * 1.3;
+                var pzz = (rh(20 + pi5) - 0.5) * rm.hd * 1.3;
+                var ph2 = rm.hh * 2 + 0.5;
+                for (var bi3 = 0; bi3 < Math.ceil(ph2 / 0.34); bi3++) {
+                    var brick = new THREE.Mesh(houseGeo, brickMat);
+                    brick.scale.set(0.42 + (bi3 % 2) * 0.04, 0.32, 0.42 + ((bi3 + 1) % 2) * 0.04);
+                    brick.position.set(pxx + (rh(30 + bi3) - 0.5) * 0.05, 0.16 + bi3 * 0.33, pzz + (rh(40 + bi3) - 0.5) * 0.05);
+                    brick.rotation.y = (rh(50 + bi3) - 0.5) * 0.12;
+                    g.add(brick);
+                }
+            }
+            /* plank half-walls and wainscoting against the rock */
+            var nwl = 1 + Math.floor(rh(4) * 3);
+            for (var wi2 = 0; wi2 < nwl; wi2++) {
+                var wa2 = rh(60 + wi2) * 6.2832;
+                var wall2 = new THREE.Mesh(houseGeo, wi2 % 2 ? pm : pm2);
+                wall2.scale.set(1.6 + rh(70 + wi2) * 1.4, 0.9 + rh(80 + wi2) * 0.6, 0.08);
+                wall2.position.set(Math.cos(wa2) * rm.hw * 0.72, wall2.scale.y * 0.5, Math.sin(wa2) * rm.hd * 0.72);
+                wall2.rotation.y = wa2 + 1.5708;
+                wall2.rotation.z = (rh(90 + wi2) - 0.5) * 0.05;
+                g.add(wall2);
+            }
+            /* a hanging lantern on a sagging rope */
+            var lx4 = (rh(5) - 0.5) * rm.hw;
+            var lz4 = (rh(6) - 0.5) * rm.hd;
+            var rope = new THREE.Mesh(cylGeo, timberMat);
+            rope.scale.set(0.02, 0.7, 0.02);
+            rope.position.set(lx4, rm.hh * 2 - 0.35, lz4);
+            g.add(rope);
+            var lant = new THREE.Mesh(houseGeo, tinMat);
+            lant.scale.set(0.22, 0.3, 0.22);
+            lant.position.set(lx4, rm.hh * 2 - 0.78, lz4);
+            g.add(lant);
+            var lglow = new THREE.Mesh(orbGeo, windowMat);
+            lglow.scale.setScalar(0.6);
+            lglow.position.copy(lant.position);
+            g.add(lglow);
+            rec.emitters.push({ x: rx + lx4, y: fy + rm.hh * 2 - 0.78, z: rz + lz4, color: new THREE.Color(0xffc06a), intensity: 1.1, dist: 12, type: 'torch', flicker: true });
+            /* the blue pipe, running wall to wall with an elbow */
+            var py2 = 0.5 + rh(7) * (rm.hh * 1.2);
+            var pipe = new THREE.Mesh(cylGeo, pipeMat);
+            pipe.scale.set(0.05, rm.hw * 1.7, 0.05);
+            pipe.rotation.z = 1.5708;
+            pipe.position.set(0, py2, -rm.hd * 0.86);
+            g.add(pipe);
+            var elbow = new THREE.Mesh(cylGeo, pipeMat);
+            elbow.scale.set(0.05, py2, 0.05);
+            elbow.position.set(rm.hw * 0.85, py2 * 0.5, -rm.hd * 0.86);
+            g.add(elbow);
+            /* room dressing by role: kitchen, sleeping, storage, and the still at the bottom */
+            var role = r === 0 ? 'hearth' : (r === st.rooms.length - 1 ? 'still' : (rh(8) < 0.5 ? 'sleep' : 'store'));
+            if (role === 'hearth') {
+                var stove = new THREE.Mesh(houseGeo, tinMat);
+                stove.scale.set(0.7, 0.8, 0.55);
+                stove.position.set(rm.hw * 0.6, 0.4, rm.hd * 0.55);
+                g.add(stove);
+                var flue = new THREE.Mesh(cylGeo, tinMat);
+                flue.scale.set(0.09, rm.hh * 2 - 0.8, 0.09);
+                flue.position.set(rm.hw * 0.6, 0.8 + (rm.hh * 2 - 0.8) * 0.5, rm.hd * 0.55);
+                g.add(flue);
+                rec.emitters.push({ x: rx + rm.hw * 0.6, y: fy + 0.55, z: rz + rm.hd * 0.55, color: new THREE.Color(0xff8a3c), intensity: 0.9, dist: 9, type: 'torch', flicker: true });
+                var table = new THREE.Mesh(houseGeo, pm);
+                table.scale.set(1.0, 0.08, 0.7); table.position.set(-rm.hw * 0.4, 0.72, rm.hd * 0.3);
+                g.add(table);
+                for (var li2 = 0; li2 < 4; li2++) {
+                    var leg2 = new THREE.Mesh(houseGeo, timberMat);
+                    leg2.scale.set(0.07, 0.72, 0.07);
+                    leg2.position.set(-rm.hw * 0.4 + (li2 % 2 ? 0.42 : -0.42), 0.36, rm.hd * 0.3 + (li2 < 2 ? 0.28 : -0.28));
+                    g.add(leg2);
+                }
+            } else if (role === 'sleep') {
+                var cot = new THREE.Mesh(houseGeo, pm2);
+                cot.scale.set(1.9, 0.22, 0.85);
+                cot.position.set(-rm.hw * 0.45, 0.3, -rm.hd * 0.4);
+                cot.rotation.y = rh(9) * 0.4;
+                g.add(cot);
+                var pillow = new THREE.Mesh(houseGeo, clothMat);
+                pillow.scale.set(0.4, 0.14, 0.5);
+                pillow.position.set(-rm.hw * 0.45 - 0.65, 0.48, -rm.hd * 0.4);
+                g.add(pillow);
+                var moss2 = new THREE.Mesh(floraGeo, floraMats[1]);
+                moss2.scale.set(0.9, 0.9, 0.9);
+                moss2.position.set(rm.hw * 0.5, 0, rm.hd * 0.45);
+                g.add(moss2);
+            } else if (role === 'store') {
+                for (var ci4 = 0; ci4 < 4; ci4++) {
+                    var box2 = new THREE.Mesh(rh(100 + ci4) < 0.5 ? cylGeo : houseGeo, timberMat);
+                    box2.scale.set(0.3 + rh(110 + ci4) * 0.2, 0.4 + rh(120 + ci4) * 0.3, 0.3 + rh(110 + ci4) * 0.2);
+                    box2.position.set((rh(130 + ci4) - 0.5) * rm.hw * 1.2, box2.scale.y * 0.5, (rh(140 + ci4) - 0.5) * rm.hd * 1.2);
+                    box2.rotation.y = rh(150 + ci4) * 3;
+                    g.add(box2);
+                }
+                var tarp = new THREE.Mesh(houseGeo, clothMat);
+                tarp.scale.set(1.4, 0.06, 1.1);
+                tarp.position.set((rh(11) - 0.5) * rm.hw, 0.55, (rh(12) - 0.5) * rm.hd);
+                tarp.rotation.set((rh(13) - 0.5) * 0.4, rh(14) * 3, (rh(15) - 0.5) * 0.3);
+                g.add(tarp);
+            } else {
+                /* the still: copper kettle, coil, and a shelf of glowing jars */
+                var kettle = new THREE.Mesh(cylGeo, copperMat);
+                kettle.scale.set(0.45, 0.7, 0.45);
+                kettle.position.set(rm.hw * 0.5, 0.35, -rm.hd * 0.45);
+                g.add(kettle);
+                var neck = new THREE.Mesh(cylGeo, copperMat);
+                neck.scale.set(0.08, 0.6, 0.08);
+                neck.rotation.z = 0.7;
+                neck.position.set(rm.hw * 0.5 - 0.35, 0.9, -rm.hd * 0.45);
+                g.add(neck);
+                var coil = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.045, 6, 12), copperMat);
+                coil.position.set(rm.hw * 0.5 - 0.75, 0.75, -rm.hd * 0.45);
+                coil.rotation.y = 1.5708;
+                g.add(coil);
+                rec.disposables.push(coil.geometry);
+                var shelf = new THREE.Mesh(houseGeo, pm);
+                shelf.scale.set(1.5, 0.06, 0.4);
+                shelf.position.set(-rm.hw * 0.55, 1.15, rm.hd * 0.5);
+                g.add(shelf);
+                for (var ji = 0; ji < 4; ji++) {
+                    var jar = new THREE.Mesh(cylGeo, jarMat);
+                    jar.scale.set(0.09, 0.16, 0.09);
+                    jar.position.set(-rm.hw * 0.55 - 0.55 + ji * 0.36, 1.28, rm.hd * 0.5);
+                    g.add(jar);
+                }
+                rec.emitters.push({ x: rx - rm.hw * 0.55, y: fy + 1.3, z: rz + rm.hd * 0.5, color: new THREE.Color(0x8fe8a0), intensity: 0.8, dist: 10, type: 'shroom' });
+            }
+            rec.group.add(g);
+            /* stairs down the corridor to the next room */
+            if (r + 1 < st.rooms.length) {
+                var nrm = st.rooms[r + 1];
+                var nrx = nrm.x + offX, nry = nrm.floorY + offY, nrz = nrm.z + offZ;
+                var steps = 7;
+                for (var si2 = 1; si2 < steps; si2++) {
+                    var tS = si2 / steps;
+                    var sxp = rx + (nrx - rx) * tS;
+                    var syp = fy + (nry - fy) * tS;
+                    var szp = rz + (nrz - rz) * tS;
+                    if (!ownedBy(sxp, syp, szp, cx, cy, cz)) continue;
+                    var step2 = new THREE.Mesh(houseGeo, pathMat);
+                    step2.scale.set(1.5, 0.22, 0.9);
+                    step2.rotation.y = Math.atan2(nrx - rx, nrz - rz);
+                    step2.position.set(sxp, syp + 0.11, szp);
+                    rec.group.add(step2);
+                }
+            }
+        }
+        /* the hidden door at the entry mouth: a mundane little door in the rock */
+        var e1x = st.x + Math.cos(st.entA) * 42 + offX;
+        var e1z = st.z + Math.sin(st.entA) * 42 + offZ;
+        var e1y = st.y - 3.5 + offY;
+        if (ownedBy(e1x, e1y, e1z, cx, cy, cz)) {
+            var dg = new THREE.Group();
+            dg.position.set(e1x, e1y - 1.0, e1z);
+            dg.rotation.y = st.entA + 1.5708;
+            var frame2 = new THREE.Mesh(houseGeo, timberMat);
+            frame2.scale.set(1.1, 1.9, 0.16); frame2.position.y = 0.95;
+            dg.add(frame2);
+            var door2 = new THREE.Mesh(houseGeo, plankMats[Math.floor(shantyHash(st, 3) * plankMats.length)]);
+            door2.scale.set(0.82, 1.62, 0.08);
+            door2.position.set(0.28, 0.85, 0.3);
+            door2.rotation.y = 0.85;
+            dg.add(door2);
+            var latch = new THREE.Mesh(orbGeo, tinMat);
+            latch.scale.setScalar(0.28);
+            latch.position.set(0.02, 0.9, 0.34);
+            dg.add(latch);
+            rec.group.add(dg);
+            rec.emitters.push({ x: e1x, y: e1y + 0.9, z: e1z, color: new THREE.Color(0xffb864), intensity: 1.3, dist: 18, type: 'torch', flicker: true });
+            var lant3 = new THREE.Mesh(houseGeo, tinMat);
+            lant3.scale.set(0.2, 0.26, 0.2);
+            lant3.position.set(e1x + Math.cos(st.entA + 1.5708) * 0.9, e1y + 1.5, e1z + Math.sin(st.entA + 1.5708) * 0.9);
+            rec.group.add(lant3);
+            var lg3 = new THREE.Mesh(orbGeo, windowMat);
+            lg3.scale.setScalar(0.7);
+            lg3.position.copy(lant3.position);
+            rec.group.add(lg3);
+        }
+    }
+    var shrineMat = new THREE.MeshStandardMaterial({ color: 0x7a5bff, emissive: 0x5a3bdf, emissiveIntensity: 1.1, roughness: 0.3 });
     var postGeo = new THREE.CylinderGeometry(0.06, 0.08, 1, 5);
     var orbGeo = new THREE.SphereGeometry(0.16, 8, 6);
     var robeGeo = new THREE.ConeGeometry(0.34, 1.25, 7);
@@ -2555,37 +4269,85 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (!st) return;
         var L = CC.toLocal(st.x, st.y, st.z);
         var sx = L[0], sz = L[2];
-        var fy = st.floorY - st.y + L[1];
+        var fy = floorSurfY(sx, sz, st.floorY - st.y + L[1]);
         var dxc = sx - ccx, dzc = sz - ccz;
         if (dxc * dxc + dzc * dzc > (st.domeR * 2.2 + CH) * (st.domeR * 2.2 + CH)) return;
         var seed = st.seed;
         function sh(k) { return CC.hash3(Math.floor(st.x), k, Math.floor(st.z)); }
-        var n = 5 + Math.floor(sh(1) * 7);
+        var n = 6 + Math.floor(sh(1) * 6);
         var i;
+        /* stone paths radiate from the plaza to each dwelling */
         for (i = 0; i < n; i++) {
             var a = (i / n) * 6.2831853 + sh(10 + i) * 0.5;
             var rad = st.domeR * (0.5 + sh(20 + i) * 0.26);
             var hx = sx + Math.cos(a) * rad, hz = sz + Math.sin(a) * rad;
             if (!ownedBy(hx, fy, hz, cx, cy, cz)) continue;
-            var hw = 2.2 + sh(30 + i) * 1.3, hh2 = 2.1 + sh(40 + i) * 1.5, hd = 2.0 + sh(50 + i) * 1.2;
-            if (st.ruin) hh2 *= 0.35 + sh(60 + i) * 0.4;
-            var house = new THREE.Mesh(houseGeo, stoneMat);
-            house.scale.set(hw, hh2, hd);
-            house.position.set(hx, fy + hh2 * 0.5, hz);
-            house.rotation.y = a + 1.5708;
-            rec.group.add(house);
-            if (!st.ruin) {
-                var roof = new THREE.Mesh(roofGeo, roofMat);
-                roof.scale.set(hw * 1.15, hw * 0.6, hd * 1.15);
-                roof.position.set(hx, fy + hh2 + hw * 0.28, hz);
-                roof.rotation.y = a + 0.7854;
-                rec.group.add(roof);
-                var win = new THREE.Mesh(houseGeo, windowMat);
-                win.scale.set(0.42, 0.5, 0.06);
-                var wa = a + 3.1416;
-                win.position.set(hx + Math.cos(wa) * (hd * 0.5 + 0.04), fy + hh2 * 0.55, hz + Math.sin(wa) * (hd * 0.5 + 0.04));
-                win.rotation.y = wa + 1.5708;
-                rec.group.add(win);
+            var hw = 2.4 + sh(30 + i) * 1.4, hh2 = 2.2 + sh(40 + i) * 1.2, hd = 2.2 + sh(50 + i) * 1.4;
+            makeDwelling(rec, hx, fy, hz, a + 1.5708, hw, hh2, hd, st.ruin, seed * 31 + i, sh(60 + i));
+            var np2 = Math.floor(rad / 1.6);
+            for (var pi2 = 2; pi2 < np2 - 1; pi2++) {
+                var ppx = sx + Math.cos(a) * pi2 * 1.6 + (CC.hash3(i, pi2, seed) - 0.5) * 0.5;
+                var ppz = sz + Math.sin(a) * pi2 * 1.6 + (CC.hash3(pi2, i, seed) - 0.5) * 0.5;
+                if (!ownedBy(ppx, fy, ppz, cx, cy, cz)) continue;
+                var slab = new THREE.Mesh(houseGeo, pathMat);
+                slab.scale.set(0.9 + CC.hash3(pi2, seed, i) * 0.5, 0.09, 0.7 + CC.hash3(seed, pi2, i) * 0.4);
+                slab.position.set(ppx, fy + 0.045, ppz);
+                slab.rotation.y = CC.hash3(i, seed, pi2) * 3.14;
+                rec.group.add(slab);
+            }
+        }
+        /* the plaza: a well at the heart of a living town, a cracked basin in a ruin */
+        if (ownedBy(sx, fy, sz, cx, cy, cz)) {
+            makeWell(rec, sx, fy, sz, st.ruin, seed);
+        }
+        /* mushroom farm plots: this is what they live on down here */
+        var nf = st.ruin ? 1 : 2 + Math.floor(sh(6) * 2);
+        for (i = 0; i < nf; i++) {
+            var fa = sh(100 + i) * 6.2831853;
+            var fr = st.domeR * (0.62 + sh(110 + i) * 0.2);
+            var fx = sx + Math.cos(fa) * fr, fz = sz + Math.sin(fa) * fr;
+            if (!ownedBy(fx, fy, fz, cx, cy, cz)) continue;
+            makeFarmPlot(rec, fx, fy, fz, sh(120 + i), st.ruin, seed * 7 + i);
+        }
+        /* a shrine to whatever they pray to in the dark */
+        if (sh(7) < 0.6) {
+            var sa2 = sh(8) * 6.2831853;
+            var shx = sx + Math.cos(sa2) * st.domeR * 0.44, shz = sz + Math.sin(sa2) * st.domeR * 0.44;
+            if (ownedBy(shx, fy, shz, cx, cy, cz)) makeShrine(rec, shx, fy, shz, st.ruin, seed);
+        }
+        /* dweller lean-tos: the bayou shacks living among the stone houses */
+        var nlt = st.ruin ? 1 : 1 + (sh(13) < 0.5 ? 1 : 0);
+        for (i = 0; i < nlt; i++) {
+            var la2 = sh(200 + i) * 6.2831853;
+            var lr2 = st.domeR * (0.56 + sh(210 + i) * 0.2);
+            var lx5 = sx + Math.cos(la2) * lr2, lz5 = sz + Math.sin(la2) * lr2;
+            if (!ownedBy(lx5, fy, lz5, cx, cy, cz)) continue;
+            makeLeanTo(rec, lx5, fy, lz5, la2 + 3.1416, seed * 91 + i, st.ruin);
+        }
+        /* market stalls near the plaza in living towns */
+        if (!st.ruin && sh(9) < 0.7) {
+            var ma2 = sh(11) * 6.2831853;
+            var mx2 = sx + Math.cos(ma2) * st.domeR * 0.30, mz2 = sz + Math.sin(ma2) * st.domeR * 0.30;
+            if (ownedBy(mx2, fy, mz2, cx, cy, cz)) makeStall(rec, mx2, fy, mz2, ma2, seed);
+        }
+        /* ruins raise standing stones and rubble instead */
+        if (st.ruin) {
+            for (i = 0; i < 4; i++) {
+                if (sh(130 + i) < 0.4) continue;
+                var ga = (i / 4) * 6.2831853 + sh(140 + i);
+                var gx = sx + Math.cos(ga) * st.domeR * 0.5, gz = sz + Math.sin(ga) * st.domeR * 0.5;
+                if (!ownedBy(gx, fy, gz, cx, cy, cz)) continue;
+                var mono = new THREE.Mesh(houseGeo, stoneMat);
+                mono.scale.set(0.5 + sh(150 + i) * 0.3, 2.6 + sh(160 + i) * 1.8, 0.35);
+                mono.position.set(gx, fy + mono.scale.y * 0.5, gz);
+                mono.rotation.set((sh(170 + i) - 0.5) * 0.22, ga, (sh(180 + i) - 0.5) * 0.14);
+                rec.group.add(mono);
+                var rune = new THREE.Mesh(houseGeo, ghostMat);
+                rune.scale.set(0.07, mono.scale.y * 0.6, 0.05);
+                rune.position.set(gx + Math.cos(ga + 1.57) * 0.2, fy + mono.scale.y * 0.55, gz + Math.sin(ga + 1.57) * 0.2);
+                rune.rotation.y = ga;
+                rec.group.add(rune);
+                rec.emitters.push({ x: gx, y: fy + mono.scale.y * 0.6, z: gz, color: new THREE.Color(0x9fd0ff), intensity: 0.5, dist: 12, type: 'shroom' });
             }
         }
         /* tower on the plaza edge */
@@ -2702,7 +4464,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (b.entrance) {
                 board.userData.sign = {
                     name: b.name, ruin: b.ruin, dist: b.dist,
-                    x: b.entrance[0], y: b.entrance[1], z: b.entrance[2]
+                    x: b.entrance[0], y: b.entrance[1], z: b.entrance[2],
+                    cx: b.cx, cz: b.cz
                 };
                 if (rec) rec.signBoards.push(board);
             }
@@ -2741,9 +4504,9 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var st = CC.siteNear(ccx, ccz);
         if (st) {
             var L = CC.toLocal(st.x, st.y, st.z);
-            var fy = st.floorY - st.y + L[1];
             var spx = L[0] + Math.cos(st.tunnelA) * (st.domeR * 0.55);
             var spz = L[2] + Math.sin(st.tunnelA) * (st.domeR * 0.55);
+            var fy = floorSurfY(spx, spz, st.floorY - st.y + L[1]);
             if (ownedBy(spx, fy, spz, cx, cy, cz)) {
                 var near = CC.sitesWithin(L[0], L[2], 800);
                 var boards = [];
@@ -2758,11 +4521,28 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                         dist: o.dist,
                         dx: oL[0] - spx, dz: oL[2] - spz,
                         vert: ofy - fy,
+                        cx: oL[0], cz: oL[2],
                         entrance: [
-                            oL[0] + Math.cos(o.site.tunnelA) * o.site.domeR * 0.85,
+                            oL[0] + Math.cos(o.site.tunnelA) * o.site.domeR * 0.72,
                             ofy + 2.2,
-                            oL[2] + Math.sin(o.site.tunnelA) * o.site.domeR * 0.85
+                            oL[2] + Math.sin(o.site.tunnelA) * o.site.domeR * 0.72
                         ]
+                    });
+                }
+                var shList = CC.shantiesWithin(spx, spz, 800);
+                if (shList.length > 0) {
+                    var shSt = shList[0].site;
+                    var shL2 = CC.toLocal(shSt.x, shSt.y, shSt.z);
+                    var shEx = shL2[0] + Math.cos(shSt.entA) * 42;
+                    var shEz = shL2[2] + Math.sin(shSt.entA) * 42;
+                    boards.push({
+                        name: "the dweller's door",
+                        ruin: true,
+                        dist: shList[0].dist,
+                        dx: shEx - spx, dz: shEz - spz,
+                        vert: (shL2[1] - 3.5) - fy,
+                        cx: shL2[0], cz: shL2[2],
+                        entrance: [shEx, shL2[1] - 3.5 + 1.2, shEz]
                     });
                 }
                 if (boards.length > 0) rec.group.add(makeSignpost(spx, fy, spz, boards, rec));
@@ -2786,10 +4566,11 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                         dist: Math.sqrt((oL2[0] - wx) * (oL2[0] - wx) + (oL2[2] - wz) * (oL2[2] - wz)),
                         dx: oL2[0] - wx, dz: oL2[2] - wz,
                         vert: ofy2 - wy,
+                        cx: oL2[0], cz: oL2[2],
                         entrance: [
-                            oL2[0] + Math.cos(o2.site.tunnelA) * o2.site.domeR * 0.85,
+                            oL2[0] + Math.cos(o2.site.tunnelA) * o2.site.domeR * 0.72,
                             ofy2 + 2.2,
-                            oL2[2] + Math.sin(o2.site.tunnelA) * o2.site.domeR * 0.85
+                            oL2[2] + Math.sin(o2.site.tunnelA) * o2.site.domeR * 0.72
                         ]
                     });
                 }
@@ -2868,6 +4649,76 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         rec.disposables.push(hit.geometry, hit.material);
     }
 
+    function addRiverRibbon(rec, rv, cx, cy, cz, y0, y1) {
+        /* the running water: a quad strip along the polyline at surface
+           height, plus a falls plane and mist at every drop */
+        var x0c = cx * CH, x1c = x0c + CH, z0c = cz * CH, z1c = z0c + CH;
+        var verts = [], uvs = [], idx = [];
+        var vn = 0, started = false;
+        for (var p2 = 1; p2 < rv.pts.length; p2++) {
+            var a = rv.pts[p2 - 1], b = rv.pts[p2];
+            var inChunk = (a[0] > x0c - 12 && a[0] < x1c + 12 && a[2] > z0c - 12 && a[2] < z1c + 12) ||
+                (b[0] > x0c - 12 && b[0] < x1c + 12 && b[2] > z0c - 12 && b[2] < z1c + 12);
+            var levY = Math.min(a[1], b[1]) - 0.35;
+            var inY = levY > y0 - 8 && levY < y1 + 8;
+            if (!inChunk || !inY) { started = false; continue; }
+            var dxq = b[0] - a[0], dzq = b[2] - a[2];
+            var ql = Math.sqrt(dxq * dxq + dzq * dzq) || 1;
+            var nx = -dzq / ql * rv.w * 0.55, nz = dxq / ql * rv.w * 0.55;
+            if (!started) {
+                verts.push(a[0] - nx, levY, a[2] - nz, a[0] + nx, levY, a[2] + nz);
+                uvs.push(0, p2 - 1, 1, p2 - 1);
+                vn += 2;
+                started = true;
+            }
+            verts.push(b[0] - nx, levY, b[2] - nz, b[0] + nx, levY, b[2] + nz);
+            uvs.push(0, p2, 1, p2);
+            vn += 2;
+            idx.push(vn - 4, vn - 3, vn - 2, vn - 3, vn - 1, vn - 2);
+            /* the waterfall where the river steps down */
+            if (rv.drops.indexOf(p2) >= 0 && b[0] > x0c && b[0] < x1c && b[2] > z0c && b[2] < z1c) {
+                var topY = a[1] - 0.3, botY = b[1] - 0.3;
+                var dropH = topY - botY;
+                if (dropH > 2.5) {
+                    var fgeo = new THREE.PlaneGeometry(rv.w * 1.5, dropH);
+                    var fmesh = new THREE.Mesh(fgeo, fallsMat);
+                    fmesh.position.set(b[0], botY + dropH / 2, b[2]);
+                    fmesh.rotation.y = Math.atan2(dxq, dzq);
+                    fmesh.renderOrder = 3;
+                    rec.group.add(fmesh);
+                    rec.disposables.push(fgeo);
+                    var fmist = new THREE.Sprite(new THREE.SpriteMaterial({
+                        map: glowTex, color: 0x9fd8e8, transparent: true, opacity: 0.24,
+                        blending: THREE.AdditiveBlending, depthWrite: false
+                    }));
+                    fmist.scale.set(rv.w * 2.4, 3.0, 1);
+                    fmist.position.set(b[0], botY + 0.9, b[2]);
+                    rec.group.add(fmist);
+                    rec.disposables.push(fmist.material);
+                    rec.emitters.push({ x: b[0], y: botY + 2.0, z: b[2], color: new THREE.Color(0x9fd8e8), intensity: 0.8, dist: 18, type: 'fall' });
+                }
+            }
+        }
+        if (idx.length === 0) return;
+        if (window._CAVE_FISH !== false && rv.pts.length > 3) {
+            var fmid = rv.pts[Math.floor(rv.pts.length / 2)];
+            if (fmid[0] > x0c && fmid[0] < x1c && fmid[2] > z0c && fmid[2] < z1c) {
+                var rfsh = makeFish(fmid[0], fmid[1] - 0.8, fmid[2], cx * 11 + cz, rv);
+                rec.group.add(rfsh.pts);
+                rec.fish.push(rfsh);
+                rec.disposables.push(rfsh.pts.geometry, rfsh.pts.material);
+            }
+        }
+        var g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+        g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+        g.setIndex(idx);
+        var mesh = new THREE.Mesh(g, riverMat);
+        mesh.renderOrder = 2;
+        mesh.frustumCulled = false;
+        rec.group.add(mesh);
+        rec.disposables.push(g);
+    }
     function addFall(rec, ceilPts, hh) {
         var n = Math.floor(ceilPts.length / 3);
         var pick = Math.floor(hh * n) % n;
@@ -3026,7 +4877,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         /* mushrooms only within arm's reach */
         if (window._CAVE_TRIP) {
-            raycaster.far = 3.6;
+            raycaster.far = 7.0;
             var caps = [];
             for (k in chunks) {
                 var sc = chunks[k].shroomCaps;
@@ -3068,6 +4919,28 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             e.preventDefault();
             if (eatTarget && eatTarget.visible) {
                 eatTarget.visible = false;
+                var vv = (eatTarget.userData.shroom && eatTarget.userData.shroom.variety) || 0;
+                if (vv === 1) {
+                    slowFallT = 75;
+                    CaveAudio.consumeBloom();
+                    showHint('the amber cap. the world lets you down gently.');
+                    closeEatAsk();
+                    return;
+                }
+                if (vv === 2) {
+                    sightT = 75;
+                    CaveAudio.consumeBloom();
+                    showHint('the azure cap. the dark thins and the water shines far.');
+                    closeEatAsk();
+                    return;
+                }
+                if (vv === 3) {
+                    strideT = 75;
+                    CaveAudio.consumeBloom();
+                    showHint('the crimson cap. your legs remember the river.');
+                    closeEatAsk();
+                    return;
+                }
                 tripE = Math.min(30, tripE + 1);
                 CaveAudio.consumeBloom();
                 var _th = TRIP_HINTS[0];
@@ -3145,11 +5018,32 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         tpAsk.style.display = 'flex';
     }
     function closeTpAsk() { tpAsk.style.display = 'none'; tpDest = null; }
+    function safeArrival(x, y, z, tx, tz) {
+        /* pull the landing point toward the village heart until it is open air */
+        var best = [x, y, z];
+        for (var st2 = 0; st2 <= 8; st2++) {
+            var f2 = st2 / 8;
+            var qx = x + (tx - x) * f2, qz = z + (tz - z) * f2;
+            var qy = floorSurfY(qx, qz, y - 2.2) + 1.7;
+            if (CC.density(qx, qy, qz) < -0.08 && !blockedR(qx, qy, qz, 0.35)) {
+                best = [qx, qy, qz];
+                break;
+            }
+        }
+        return best;
+    }
     function doSignTeleport(dest) {
         veil.style.opacity = '1';
         CaveAudio.warp();
         setTimeout(function () {
-            W.tp(dest.x, dest.y, dest.z);
+            var land = [dest.x, dest.y, dest.z];
+            var faceX = dest.cx !== undefined ? dest.cx : dest.x;
+            var faceZ = dest.cz !== undefined ? dest.cz : dest.z;
+            if (dest.cx !== undefined) land = safeArrival(dest.x, dest.y, dest.z, dest.cx, dest.cz);
+            W.tp(land[0], land[1], land[2]);
+            /* arrive facing the heart of the place */
+            yaw = Math.atan2(-(faceX - land[0]), -(faceZ - land[2]));
+            pitch = 0;
             vel.set(0, 0, 0);
             grounded = false;
             setTimeout(function () {
@@ -3170,9 +5064,21 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         tpNo.addEventListener('touchstart', noTap, { passive: false });
         tpNo.addEventListener('click', noTap);
     }
+    W.nearestShanty = function () {
+        var list2 = CC.shantiesWithin(camera.position.x, camera.position.z, 1400);
+        if (!list2.length) return null;
+        var sh2 = list2[0].site;
+        var L2 = CC.toLocal(sh2.x, sh2.y, sh2.z);
+        return { x: L2[0], y: L2[1], z: L2[2], rooms: sh2.rooms.length, dist: list2[0].dist };
+    };
+    W.tpToShanty = function () {
+        var n2 = W.nearestShanty();
+        if (n2) doSignTeleport({ x: n2.x, y: n2.y + 0.6, z: n2.z, cx: n2.x, cz: n2.z, name: 'the dweller\'s door', dist: 0 });
+        return n2;
+    };
     W.tpToCity = function () {
         var nc = W.nearestCity();
-        if (nc) doSignTeleport({ x: nc.x, y: nc.y, z: nc.z, name: nc.name, dist: 0 });
+        if (nc) doSignTeleport({ x: nc.x, y: nc.y, z: nc.z, cx: nc.x, cz: nc.z, name: nc.name, dist: 0 });
         return nc;
     };
 
@@ -3310,7 +5216,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var nx = p.x + (axis === 0 ? d : 0);
         var ny = p.y + (axis === 1 ? d : 0);
         var nz = p.z + (axis === 2 ? d : 0);
-        if (!window._CAVE_COLLIDE) { p.x = nx; p.y = ny; p.z = nz; return true; }
+        if (!window._CAVE_COLLIDE || phasing) { p.x = nx; p.y = ny; p.z = nz; return true; }
         if (!blockedR(nx, ny + bodyOffY, nz, BODY_R)) { p.x = nx; p.y = ny; p.z = nz; return true; }
         /* step-up assist: walking into a knee-high lip lifts you over it */
         if (collideWalk && axis !== 1) {
@@ -3351,6 +5257,56 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
         }
         return false;
+    }
+    /* phasing: after an unstick, the body slips loose of the stone and
+       drifts freely through the dark until it finds true open cave */
+    var phasing = false;
+    function setPhasing(v) { phasing = !!v; }
+    function isPhasing() { return phasing; }
+    /* the smoothed eye may never enter stone: walk it back toward the
+       physics eye (which collision guarantees is clear) until it fits */
+    function eyeSafeY(x, targetY, physY, z) {
+        var EYE_R = 0.15;
+        function eyeClear(yy) {
+            return !blockedR(x, yy, z, EYE_R);
+        }
+        if (eyeClear(targetY)) return targetY;
+        var lo = targetY, hi = physY;
+        for (var i = 0; i < 9; i++) {
+            var mid = (lo + hi) * 0.5;
+            if (eyeClear(mid)) hi = mid; else lo = mid;
+        }
+        return eyeClear(hi) ? hi : physY;
+    }
+    /* stuck = every cardinal direction is blocked even for the crawl body */
+    function stuckProbe(p) {
+        var dirs = [[0.45, 0, 0], [-0.45, 0, 0], [0, 0.45, 0], [0, -0.45, 0], [0, 0, 0.45], [0, 0, -0.45]];
+        var blockedN = 0;
+        for (var i = 0; i < 6; i++) {
+            if (blockedR(p.x + dirs[i][0], p.y + bodyOffY + dirs[i][1], p.z + dirs[i][2], CRAWL_R)) blockedN++;
+        }
+        return blockedN >= 6;
+    }
+    /* nearest breathable air with clearance, searching outward in shells */
+    function findFreeAir(px, py, pz) {
+        var shells = [3, 5, 8, 12, 17, 23, 30, 44, 60];
+        var GA = 2.3999632297;
+        for (var si = 0; si < shells.length; si++) {
+            var r = shells[si];
+            for (var i = 0; i < 16; i++) {
+                var yy = 1 - (i / 15) * 2;
+                var rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+                var th = i * GA;
+                var qx = px + Math.cos(th) * rr * r;
+                var qy = py + yy * r * 0.6;
+                var qz = pz + Math.sin(th) * rr * r;
+                if (CC.density(qx, qy, qz) < -0.12 &&
+                    !blockedR(qx, qy, qz, BODY_R + 0.05)) {
+                    return [qx, qy, qz];
+                }
+            }
+        }
+        return null;
     }
     function axisStep(p, axis, d) {
         var left = Math.abs(d), sgn = d < 0 ? -1 : 1, moved = false;
@@ -3394,7 +5350,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (tnow - lastAudioTap < 450) return;   /* touchstart+click double-fire guard */
             lastAudioTap = tnow;
             var muted = CaveAudio.toggleMute();
-            audioBtn.textContent = muted ? 'TURN ON SOUND' : 'SOUND ON';
+            audioBtn.textContent = muted ? 'turn on sound' : 'sound on';
             var rb = document.getElementById('btnRec');
             var rt = document.getElementById('recTime');
             if (rb) rb.style.display = muted ? 'none' : 'flex';
@@ -3426,7 +5382,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 showHint('recording everything you hear');
             } else {
                 recBtn.classList.remove('rec');
-                recBtn.textContent = 'REC';
+                recBtn.textContent = 'rec';
                 recTime.textContent = 'encoding...';
             }
         };
@@ -3435,8 +5391,137 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     }
     var recLabelT = 0;
     var cityCheckT = 1.5;
+    var shantyFound = {};
     var tripFovDirty = false;
     var flowT = 0, breathPh = 0, oneCrossed = false, camRoll = 0;
+    var lastEpochIdx = -1, trialAnnounced = false;
+    var riverRideShown = false, plungeShown = false, prevWL = null, epochFlare = 0;
+    var rideT = 0, rideLean = 0, giftT = 0, giftShown = false, updraftShown = false;
+    var riverDropsCache = [], riverDropsKey = '';
+    var slowFallT = 0, sightT = 0, strideT = 0, shardsApplied = false;
+    var eventDone = {}, eventJudder = 0, poiT = 0, vaultSeen = {};
+    var mothPts = null, mothGeo = null, mothTarget = null, mothStill = 0, mothMove = 0, mothsShown = false;
+    var gDt = 0.016, gInWater = false;
+    var trailN = 900, trailHead = 0, trailCount = 0, trailT = 0, trailFadeT = 0;
+    var lastTx = 1e9, lastTy = 0, lastTz = 0;
+    var trailPos = new Float32Array(trailN * 3), trailCol = new Float32Array(trailN * 3);
+    var trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+    trailGeo.setAttribute('color', new THREE.BufferAttribute(trailCol, 3));
+    trailGeo.setDrawRange(0, 0);
+    var trailPts = new THREE.Points(trailGeo, new THREE.PointsMaterial({
+        size: 0.15, sizeAttenuation: true, vertexColors: true, map: glowTex,
+        transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    trailPts.frustumCulled = false;
+    scene.add(trailPts);
+    /* the eye glides over steps the body takes instantly */
+    var eyeY = null, phyY = null;
+    /* the rescue: only offered when input is held and every direction is stone */
+    var stuckT = 0, stuckShown = false, lastPos = new THREE.Vector3();
+    var stuckAsk = document.getElementById('stuckAsk');
+    var stuckGo = document.getElementById('stuckGo');
+    var phaseClearT = 0;
+    function doUnstick() {
+        stuckAsk.style.display = 'none';
+        stuckShown = false; stuckT = 0;
+        setPhasing(true);
+        phaseClearT = 0;
+        vel.set(0, 0, 0);
+        CaveAudio.warp();
+        showHint('you slip loose of the stone... drift until you find the open dark');
+        return true;
+    }
+    function tickPhasing(dt2) {
+        if (!isPhasing()) return;
+        /* re-solidify only after floating in genuinely open cave for a moment */
+        var clearNow = CC.density(camera.position.x, camera.position.y + bodyOffY, camera.position.z) < -0.15 &&
+            !blockedR(camera.position.x, camera.position.y + bodyOffY, camera.position.z, BODY_R + 0.1);
+        phaseClearT = clearNow ? phaseClearT + dt2 : 0;
+        if (phaseClearT > 0.12) {
+            setPhasing(false);
+            /* set down on the floor below so walk mode never free-falls */
+            var gy = camera.position.y;
+            for (var gs = 0; gs < 260; gs++) {
+                if (CC.density(camera.position.x, gy + bodyOffY - 0.3, camera.position.z) > 0) break;
+                gy -= 0.3;
+            }
+            if (gy < camera.position.y - 0.2 && camera.position.y - gy < 78) {
+                camera.position.y = gy + 0.15;
+                phyY = camera.position.y; eyeY = camera.position.y;
+                grounded = true;
+            }
+            vel.set(0, 0, 0);
+            CaveAudio.warp();
+            showHint('the cave takes you back');
+        }
+    }
+    if (stuckGo) {
+        var stTap = function (e) { e.preventDefault(); doUnstick(); };
+        stuckGo.addEventListener('touchstart', stTap, { passive: false });
+        stuckGo.addEventListener('click', stTap);
+    }
+    W.unstick = doUnstick;
+    /* dream warp: geometry itself changes while the trip holds */
+    var warpCur = 0, warpQueue = [], warpRetryT = 0;
+    var whipA = 0, whipAge = 9, whipRoll = 0, fovJolt = 0, eventT = 8;
+    function warpTierFor(lvl) {
+        if (lvl >= 21) return 1.0;
+        if (lvl >= 16) return 0.85;
+        if (lvl >= 11) return 0.6;
+        if (lvl >= 6) return 0.35;
+        return 0;
+    }
+    function applyWarp(w) {
+        CC.setTripWarp(w);
+        warpCur = w;
+        /* every loaded chunk re-dreams itself, nearest first, a few per frame */
+        warpQueue.length = 0;
+        for (var k2 in chunks) {
+            var parts = k2.split(',');
+            var wx2 = (parseInt(parts[0], 10) + 0.5) * CH - camera.position.x;
+            var wy2 = (parseInt(parts[1], 10) + 0.5) * CH - camera.position.y;
+            var wz2 = (parseInt(parts[2], 10) + 0.5) * CH - camera.position.z;
+            warpQueue.push({ k: k2, d: wx2 * wx2 + wy2 * wy2 + wz2 * wz2 });
+        }
+        warpQueue.sort(function (a2, b2) { return a2.d - b2.d; });
+    }
+    function tickWarp(dt2) {
+        if (!window._CAVE_TRIP) return;
+        var target = warpTierFor(tripS);
+        /* hysteresis so the world does not flicker at a boundary */
+        if (target < warpCur && warpTierFor(tripS + 1.5) >= warpCur) target = warpCur;
+        if (target !== warpCur) {
+            if (target < warpCur) {
+                /* closing routes: never seal the traveler inside the dream */
+                warpRetryT -= dt2;
+                if (warpRetryT > 0) return;
+                warpRetryT = 2.0;
+                CC.setTripWarp(target);
+                var solidHere = CC.density(camera.position.x, camera.position.y + bodyOffY, camera.position.z) > -0.06;
+                CC.setTripWarp(warpCur);
+                if (solidHere) return;
+            }
+            applyWarp(target);
+            CaveAudio.warp();
+            showHint(target > warpCur || target > 0 ?
+                'the stone remembers other shapes... a way opens' :
+                'the dream recedes, the stone forgets');
+            whipA = 0.4; whipAge = 0;
+        }
+        /* rebuild a few dreamed chunks each frame */
+        var nb2 = 0;
+        while (warpQueue.length > 0 && nb2 < 3) {
+            var item = warpQueue.shift();
+            var rec2 = chunks[item.k];
+            if (rec2) disposeChunk(item.k);
+            nb2++;
+        }
+    }
+    W.dreamWarp = function (w) {
+        if (w !== undefined) applyWarp(Math.max(0, Math.min(1, w)));
+        return warpCur;
+    };
     var squeezeGlow = 0;
     var sqVeil = document.getElementById('sqVeil');
     (function paintSqueezeRock() {
@@ -3458,46 +5543,53 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         } catch (e) { /* the plain shadow remains a fine fallback */ }
     })();
 
-    /* -------- the golden spiral: a phyllotaxis mandala that blooms
-       point by point along the Fibonacci numbers as the trip deepens -------- */
-    var GOLDEN = 2.3999632297;
-    var FIB_STEPS = [[1, 1], [2, 2], [3, 3], [5, 5], [8, 8], [13, 13], [21, 34], [25, 89], [29, 233]];
-    var mandala = null, mandala2 = null, mandalaGeo = null;
-    (function buildMandala() {
-        mandalaGeo = new THREE.BufferGeometry();
-        var pts = new Float32Array(233 * 3);
-        for (var mi = 0; mi < 233; mi++) {
-            var mr = 0.55 * Math.sqrt(mi + 1);
-            var ma = (mi + 1) * GOLDEN;
-            pts[mi * 3] = Math.cos(ma) * mr;
-            pts[mi * 3 + 1] = Math.sin(ma) * mr;
-            pts[mi * 3 + 2] = Math.sin(mi * 0.618) * 0.4;
+    /* the golden spiral now lives inside the stone itself (022) */
+    /* trial embers: sparks streaming past the traveler, like driving a fire */
+    var emberPts = null, emberVel = null;
+    (function buildEmbers() {
+        var n = 90;
+        var g = new THREE.BufferGeometry();
+        var pos = new Float32Array(n * 3);
+        emberVel = new Float32Array(n * 3);
+        for (var i = 0; i < n; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * 24;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 14;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 24;
+            emberVel[i * 3] = (Math.random() - 0.5) * 16;
+            emberVel[i * 3 + 1] = 2 + Math.random() * 6;
+            emberVel[i * 3 + 2] = (Math.random() - 0.5) * 16;
         }
-        mandalaGeo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
-        var mm = new THREE.PointsMaterial({
-            color: 0x7df0cf, size: 0.55, sizeAttenuation: true,
-            map: glowTex, alphaTest: 0.01,
-            transparent: true, opacity: 0.0,
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        var m = new THREE.PointsMaterial({
+            color: 0xffa040, size: 0.16, sizeAttenuation: true,
+            map: glowTex, transparent: true, opacity: 0.0,
             blending: THREE.AdditiveBlending, depthWrite: false
         });
-        mandala = new THREE.Points(mandalaGeo, mm);
-        mandala.geometry.setDrawRange(0, 0);
-        mandala.frustumCulled = false;
-        mandala.visible = false;
-        scene.add(mandala);
-        var mm2 = mm.clone();
-        mandala2 = new THREE.Points(mandalaGeo, mm2);
-        mandala2.frustumCulled = false;
-        mandala2.visible = false;
-        mandala2.scale.setScalar(1.45);
-        scene.add(mandala2);
+        emberPts = new THREE.Points(g, m);
+        emberPts.frustumCulled = false;
+        emberPts.visible = false;
+        scene.add(emberPts);
     })();
-    function fibCountFor(lvl) {
-        var c = 0;
-        for (var fi = 0; fi < FIB_STEPS.length; fi++) {
-            if (lvl >= FIB_STEPS[fi][0]) c = FIB_STEPS[fi][1];
+    function tickEmbers(dt2, trialT2, trialK2) {
+        if (!emberPts) return;
+        emberPts.visible = trialT2 > 0.02;
+        if (!emberPts.visible) return;
+        emberPts.material.opacity = Math.min(0.9, trialT2 * 1.1);
+        emberPts.material.color.setHex(trialK2 === 0 ? 0xffa040 : trialK2 === 1 ? 0x9a6aff : 0xbfe8ff);
+        var pos = emberPts.geometry.attributes.position.array;
+        var speedM = trialK2 === 2 ? 0.35 : 1.0;
+        for (var i = 0; i < pos.length; i += 3) {
+            pos[i] += emberVel[i] * dt2 * speedM;
+            pos[i + 1] += emberVel[i + 1] * dt2 * speedM;
+            pos[i + 2] += emberVel[i + 2] * dt2 * speedM;
+            var ddx = pos[i] - camera.position.x, ddy = pos[i + 1] - camera.position.y, ddz = pos[i + 2] - camera.position.z;
+            if (ddx * ddx + ddy * ddy + ddz * ddz > 26 * 26) {
+                pos[i] = camera.position.x + (Math.random() - 0.5) * 20;
+                pos[i + 1] = camera.position.y - 7 + Math.random() * 4;
+                pos[i + 2] = camera.position.z + (Math.random() - 0.5) * 20;
+            }
         }
-        return c;
+        emberPts.geometry.attributes.position.needsUpdate = true;
     }
     var cityScentT = 8;
     var visitedCities = {};
@@ -3659,13 +5751,69 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 sp.scale.set(0.85 * f, 1.15 * f, 1);
             }
         }
-        /* folk sway where they stand */
+        /* folk sway where they stand; bugs drift, worms crawl */
         for (var kf in chunks) {
             var fl = chunks[kf].folk;
-            if (!fl) continue;
-            for (var f2 = 0; f2 < fl.length; f2++) {
-                fl[f2].g.rotation.z = Math.sin(t * 0.6 + fl[f2].ph) * 0.045;
-                fl[f2].g.rotation.y += Math.sin(t * 0.13 + fl[f2].ph) * 0.0006;
+            if (fl) {
+                for (var f2 = 0; f2 < fl.length; f2++) {
+                    fl[f2].g.rotation.z = Math.sin(t * 0.6 + fl[f2].ph) * 0.045;
+                    fl[f2].g.rotation.y += Math.sin(t * 0.13 + fl[f2].ph) * 0.0006;
+                }
+            }
+            var fhl = chunks[kf].fish;
+            if (fhl) {
+                for (var fqi = 0; fqi < fhl.length; fqi++) {
+                    var fh = fhl[fqi];
+                    if (fh.scare > 0) fh.scare -= gDt;
+                    if (fh.river) {
+                        fh.rt += gDt * 0.045;
+                        if (fh.rt >= 0.999) fh.rt = 0;
+                        var segF = fh.rt * (fh.river.pts.length - 1);
+                        var si0 = Math.floor(segF), sfF = segF - si0;
+                        var paF = fh.river.pts[si0], pbF = fh.river.pts[si0 + 1];
+                        fh.ax = paF[0] + (pbF[0] - paF[0]) * sfF;
+                        fh.ay = Math.min(paF[1], pbF[1]) - 0.8;
+                        fh.az = paF[2] + (pbF[2] - paF[2]) * sfF;
+                    }
+                    var scF2 = 1 + fh.scare * 2.2;
+                    var fpp = fh.pts.geometry.attributes.position.array;
+                    for (var fj = 0; fj < fpp.length; fj += 3) {
+                        fpp[fj] = fh.ax + fh.offs[fj] * scF2 + Math.sin(t * 1.3 + fh.ph + fj) * 0.5;
+                        fpp[fj + 1] = fh.ay + fh.offs[fj + 1] * scF2 + Math.sin(t * 1.7 + fh.ph + fj * 2.3) * 0.2;
+                        fpp[fj + 2] = fh.az + fh.offs[fj + 2] * scF2 + Math.cos(t * 1.1 + fh.ph + fj * 1.4) * 0.5;
+                    }
+                    fh.pts.geometry.attributes.position.needsUpdate = true;
+                    var fdxF = camera.position.x - fh.ax, fdzF = camera.position.z - fh.az;
+                    if (gInWater && fdxF * fdxF + fdzF * fdzF < 49 && fh.scare <= 0) fh.scare = 2.0;
+                }
+            }
+            var bs = chunks[kf].bugSwarms;
+            if (bs) {
+                for (var bsi = 0; bsi < bs.length; bsi++) {
+                    var sw = bs[bsi];
+                    var bp = sw.pts.geometry.attributes.position.array;
+                    for (var bj = 0; bj < bp.length; bj += 3) {
+                        bp[bj] = sw.base[bj] + Math.sin(t * 0.7 + sw.ph + bj) * 0.7;
+                        bp[bj + 1] = sw.base[bj + 1] + Math.sin(t * 1.1 + sw.ph * 1.3 + bj * 2.1) * 0.45;
+                        bp[bj + 2] = sw.base[bj + 2] + Math.cos(t * 0.6 + sw.ph + bj * 1.7) * 0.7;
+                    }
+                    sw.pts.geometry.attributes.position.needsUpdate = true;
+                }
+            }
+            var wl2 = chunks[kf].worms;
+            if (wl2) {
+                for (var wli = 0; wli < wl2.length; wli++) {
+                    var wm = wl2[wli];
+                    var wt = t * 0.5 + wm.ph;
+                    for (var ws = 0; ws < wm.segs.length; ws++) {
+                        var lag = ws * 0.45;
+                        wm.segs[ws].position.set(
+                            Math.cos(wm.a) * Math.sin(wt - lag) * 0.9 + Math.cos(wt * 0.23 - lag) * 0.4,
+                            0.04 + Math.abs(Math.sin(wt * 2.2 - lag)) * 0.05,
+                            Math.sin(wm.a) * Math.sin(wt - lag) * 0.9 + Math.sin(wt * 0.19 - lag) * 0.4
+                        );
+                    }
+                }
             }
         }
         /* mist drifts */
@@ -3717,6 +5865,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     }
     W.freshStart = function () {
         if (LS) { try { LS.removeItem('mycd_pos_v1'); } catch (e) {} }
+        if (CC.clearSeals) CC.clearSeals();
+        eventDone = {};
         showHint('the next descent will begin at the beginning');
     };
     function descend(e) {
@@ -3724,7 +5874,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (running) return;
         running = true;
         var returned = restorePlace();
-        loadline.textContent = returned ? 'FINDING WHERE YOU LEFT OFF...' : 'GROWING THE FIRST CAVERN...';
+        loadline.textContent = returned ? 'finding where you left off...' : 'growing the first cavern...';
         setTimeout(function () {
             try {
                 var guard = 0;
@@ -3739,7 +5889,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 tick();
             } catch (err) {
                 running = false;
-                loadline.textContent = 'BOOT FAILED, TAP AGAIN';
+                loadline.textContent = 'boot failed, TAP AGAIN';
                 showErr('boot: ' + (err.message || err));
             }
         }, 30);
@@ -3756,13 +5906,37 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         last = now;
         var t = now / 1000;
 
+        if (phyY !== null) camera.position.y = phyY;
         sqDepthFrame = 0;
         var kf = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
         var ks = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
         var ku = (keys['KeyR'] || keys['Space'] ? 1 : 0) - (keys['KeyF'] || keys['ShiftLeft'] ? 1 : 0);
         var f = move.f + kf, s = move.s + ks, u = move.u + ku;
 
-        euler.set(pitch, yaw, camRoll);
+        /* stuck watch: held input, no travel, and stone on every side */
+        var inputHeld = Math.abs(f) > 0.2 || Math.abs(s) > 0.2 || Math.abs(u) > 0.2;
+        var traveled = camera.position.distanceTo(lastPos);
+        lastPos.copy(camera.position);
+        if (inputHeld && traveled < 0.012 && window._CAVE_COLLIDE && !isPhasing()) {
+            stuckT += dt;
+            if (stuckT > 2.2 && !stuckShown) {
+                if (stuckProbe(camera.position)) {
+                    stuckShown = true;
+                    stuckAsk.style.display = 'flex';
+                } else {
+                    stuckT = 0.8; /* grinding a wall, still free elsewhere */
+                }
+            }
+        } else {
+            stuckT = 0;
+            if (stuckShown && traveled > 0.05) {
+                stuckShown = false;
+                stuckAsk.style.display = 'none';
+            }
+        }
+
+        var whipOff = whipA * Math.exp(-whipAge * 3.2) * Math.sin(whipAge * 8.5);
+        euler.set(pitch, yaw + whipOff, camRoll + rideLean + whipOff * 0.4);
         camera.quaternion.setFromEuler(euler);
 
         var fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -3770,7 +5944,231 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var wish = new THREE.Vector3();
         var p = camera.position;
         var anyWater = window._CAVE_WATER && audioProx.waterD < 500;
-        var inWater = anyWater && (p.y + bodyOffY) < CC.WATER_Y + 0.15;
+        var localWL = window._CAVE_WATER ? CC.waterLevelAt(p.x, p.y + bodyOffY, p.z) : null;
+        var inWater = localWL !== null && (p.y + bodyOffY) < localWL + 0.15;
+        /* rivers are alive: the current pushes, and riding it is the
+           fastest way down through the dark */
+        var riverFlow = (inWater && window._CAVE_RIVERS !== false) ? CC.riverLevelAt(p.x, p.y + bodyOffY, p.z) : null;
+        if (riverFlow) {
+            var downDot = vel.x * riverFlow.fx + vel.z * riverFlow.fz;
+            var rideBoost = downDot > 0.3 ? 2.1 : 1.25;
+            vel.x += riverFlow.fx * rideBoost * dt * 2.2;
+            vel.z += riverFlow.fz * rideBoost * dt * 2.2;
+            if (!riverRideShown) {
+                riverRideShown = true;
+                showHint('the current takes you. ride it down.');
+            }
+            if (downDot > 0.8) {
+                /* flow state: the view opens and the body leans into the bends */
+                rideT = Math.min(1, rideT + dt * 0.8);
+                var leanTgt = Math.max(-0.055, Math.min(0.055, (vel.x * riverFlow.fz - vel.z * riverFlow.fx) * 0.010));
+                rideLean += (leanTgt - rideLean) * Math.min(1, dt * 2.5);
+            }
+        } else {
+            if (rideT > 0.5 && !inWater && giftT <= 0) {
+                /* you rode it and stepped out: the river's gift, speed that
+                   lingers in the legs for a few strides */
+                giftT = 4.0;
+                if (!giftShown) { giftShown = true; showHint('the river\'s gift. carry its speed.'); }
+            }
+            rideT = Math.max(0, rideT - dt * 1.6);
+            rideLean += (0 - rideLean) * Math.min(1, dt * 3);
+        }
+        if (giftT > 0) giftT -= dt;
+        if (slowFallT > 0) slowFallT -= dt;
+        if (sightT > 0) sightT -= dt;
+        if (strideT > 0) strideT -= dt;
+        if (eventJudder > 0) {
+            eventJudder -= dt;
+            camRoll += (Math.random() - 0.5) * 0.05 * Math.max(0, eventJudder);
+        }
+        if (!shardsApplied && CaveAudio.ready && CaveAudio.setShards) {
+            CaveAudio.setShards(Object.keys(shardHave).length);
+            shardsApplied = true;
+        }
+        gDt = dt;
+        gInWater = inWater;
+        /* mist updraft at the base of every river fall: stand in it and
+           it will carry you back up the drop */
+        if (window._CAVE_RIVERS !== false && window._CAVE_WATER) {
+            var dkU = Math.floor(p.x / 40) + ',' + Math.floor(p.z / 40);
+            if (dkU !== riverDropsKey) {
+                riverDropsKey = dkU;
+                riverDropsCache = [];
+                var rvsU = CC.riversNearChunk(p.x, p.z);
+                for (var iU = 0; iU < rvsU.length; iU++) {
+                    var rvU = rvsU[iU];
+                    for (var jU = 0; jU < rvU.drops.length; jU++) {
+                        var bU = rvU.pts[rvU.drops[jU]];
+                        var aU = rvU.pts[rvU.drops[jU] - 1];
+                        riverDropsCache.push({ x: bU[0], z: bU[2], y0: bU[1] - 1, y1: aU[1] - 1, r2: rvU.w * rvU.w * 3.2 });
+                    }
+                }
+            }
+            for (var iD = 0; iD < riverDropsCache.length; iD++) {
+                var drU = riverDropsCache[iD];
+                var dxU = p.x - drU.x, dzU = p.z - drU.z;
+                if (dxU * dxU + dzU * dzU < drU.r2 && p.y > drU.y0 && p.y < drU.y1) {
+                    vel.y += 3.0 * dt;
+                    if (!updraftShown) { updraftShown = true; showHint('the mist rises. let it carry you.'); }
+                }
+            }
+        }
+        /* going over a fall while swimming: the plunge */
+        if (inWater && prevWL !== null && localWL !== null && prevWL - localWL > 2.5) {
+            fovJolt = Math.min(1.4, fovJolt + 0.65);
+            camRoll += (Math.random() - 0.5) * 0.14;
+            CaveAudio.splash && CaveAudio.splash(1.0);
+            if (!plungeShown) {
+                plungeShown = true;
+                showHint('over the edge. the river knows the way down.');
+            }
+        }
+        prevWL = inWater ? localWL : null;
+        if (window._CAVE_TRAIL !== false) {
+            /* the stone remembers: faint spark-moss marks the walked path */
+            trailT -= dt;
+            if (trailT <= 0) {
+                trailT = 0.7;
+                var tdx = p.x - lastTx, tdy = p.y - lastTy, tdz = p.z - lastTz;
+                if (tdx * tdx + tdy * tdy + tdz * tdz > 1.44) {
+                    lastTx = p.x; lastTy = p.y; lastTz = p.z;
+                    var hI = trailHead * 3;
+                    trailPos[hI] = p.x; trailPos[hI + 1] = p.y - 1.25; trailPos[hI + 2] = p.z;
+                    trailCol[hI] = 0.14; trailCol[hI + 1] = 0.8; trailCol[hI + 2] = 0.7;
+                    trailHead = (trailHead + 1) % trailN;
+                    trailCount = Math.min(trailN, trailCount + 1);
+                    trailGeo.setDrawRange(0, trailCount);
+                    trailGeo.attributes.position.needsUpdate = true;
+                    trailGeo.attributes.color.needsUpdate = true;
+                }
+            }
+            trailFadeT -= dt;
+            if (trailFadeT <= 0) {
+                trailFadeT = 1.0;
+                for (var tf = 0; tf < trailCount * 3; tf++) trailCol[tf] *= 0.988;
+                trailGeo.attributes.color.needsUpdate = true;
+            }
+        }
+        if (window._CAVE_MOTHS !== false) {
+            /* be still, and the moths show the way */
+            var spdM = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+            if (spdM < 0.3 && !mothPts) mothStill += dt;
+            else if (spdM > 1.0) mothStill = 0;
+            if (!mothPts && mothStill > 2.5) {
+                mothStill = 0;
+                mothTarget = null;
+                var bdM = 1e9;
+                var consM = function (mx, mz, my) {
+                    if (!isFinite(mx) || !isFinite(mz)) return;
+                    var ddx = mx - p.x, ddz = mz - p.z;
+                    var dd2 = ddx * ddx + ddz * ddz;
+                    if (dd2 > 36 && dd2 < bdM) { bdM = dd2; mothTarget = { x: mx, z: mz, y: my === undefined ? p.y : my }; }
+                };
+                var ncM = W.nearestCity(); if (ncM) consM(ncM.x, ncM.z, ncM.y);
+                var nsM = W.nearestShanty(); if (nsM) consM(nsM.x, nsM.z, nsM.y);
+                for (var kqM in chunks) {
+                    var shqM = chunks[kqM].shards;
+                    if (shqM) for (var q3M = 0; q3M < shqM.length; q3M++) {
+                        if (shqM[q3M].mesh.visible) consM(shqM[q3M].x, shqM[q3M].z, shqM[q3M].y);
+                    }
+                }
+                var rvqM = CC.riversNearChunk(p.x, p.z);
+                if (rvqM.length) consM(rvqM[0].pts[6][0], rvqM[0].pts[6][2], rvqM[0].pts[6][1]);
+                if (mothTarget) {
+                    mothGeo = new THREE.BufferGeometry();
+                    var mpArr = new Float32Array(6 * 3);
+                    for (var mi0 = 0; mi0 < 6; mi0++) {
+                        mpArr[mi0 * 3] = p.x + (Math.random() - 0.5) * 1.5;
+                        mpArr[mi0 * 3 + 1] = p.y + 0.4 + Math.random() * 0.6;
+                        mpArr[mi0 * 3 + 2] = p.z + (Math.random() - 0.5) * 1.5;
+                    }
+                    mothGeo.setAttribute('position', new THREE.BufferAttribute(mpArr, 3));
+                    mothPts = new THREE.Points(mothGeo, new THREE.PointsMaterial({
+                        color: 0xfff2b0, size: 0.14, sizeAttenuation: true, map: glowTex,
+                        transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false
+                    }));
+                    mothPts.frustumCulled = false;
+                    scene.add(mothPts);
+                    mothMove = 0;
+                    if (!mothsShown) { mothsShown = true; showHint('be still, and the moths show the way.'); }
+                }
+            }
+            if (mothPts) {
+                var mpU = mothGeo.attributes.position.array;
+                var mdxU = mothTarget.x - mpU[0], mdyU = mothTarget.y - mpU[1], mdzU = mothTarget.z - mpU[2];
+                var mlU = Math.sqrt(mdxU * mdxU + mdyU * mdyU + mdzU * mdzU) || 1;
+                for (var miU = 0; miU < mpU.length; miU += 3) {
+                    mpU[miU] += (mdxU / mlU) * 2.2 * dt + Math.sin(t * 3.1 + miU) * 0.02;
+                    mpU[miU + 1] += (mdyU / mlU) * 2.2 * dt + Math.sin(t * 5.3 + miU * 2.1) * 0.015;
+                    mpU[miU + 2] += (mdzU / mlU) * 2.2 * dt + Math.cos(t * 2.7 + miU) * 0.02;
+                }
+                mothGeo.attributes.position.needsUpdate = true;
+                mothMove += 2.2 * dt;
+                var pdxU = mpU[0] - p.x, pdzU = mpU[2] - p.z;
+                if (mothMove > 70 || pdxU * pdxU + pdzU * pdzU > 3600 || mlU < 4) {
+                    scene.remove(mothPts);
+                    mothPts.geometry.dispose();
+                    mothPts.material.dispose();
+                    mothPts = null;
+                }
+            }
+        }
+        poiT -= dt;
+        if (poiT <= 0) {
+            poiT = 0.4;
+            for (var kvP in chunks) {
+                var vslP = chunks[kvP].vaultStones;
+                if (vslP) for (var v3P = 0; v3P < vslP.length; v3P++) {
+                    var vs3 = vslP[v3P];
+                    var vId = vs3.k + '_' + Math.round(vs3.x);
+                    if (vaultSeen[vId]) continue;
+                    var vd3 = (vs3.x - p.x) * (vs3.x - p.x) + (vs3.y - p.y) * (vs3.y - p.y) + (vs3.z - p.z) * (vs3.z - p.z);
+                    if (vd3 < 196) {
+                        vaultSeen[vId] = 1;
+                        showHint('the ' + (vs3.k * 10) + ' thousand mark. ' + VAULT_LORE[vs3.k % VAULT_LORE.length]);
+                        if (CaveAudio.oneBloom) CaveAudio.oneBloom();
+                    }
+                }
+                var shcP = chunks[kvP].shards;
+                if (shcP) for (var s3P = 0; s3P < shcP.length; s3P++) {
+                    var sh3 = shcP[s3P];
+                    if (!sh3.mesh.visible) continue;
+                    var sd3 = (sh3.x - p.x) * (sh3.x - p.x) + (sh3.y - p.y) * (sh3.y - p.y) + (sh3.z - p.z) * (sh3.z - p.z);
+                    if (sd3 < 5.3) {
+                        sh3.mesh.visible = false;
+                        sh3.spr.visible = false;
+                        shardHave[sh3.id] = 1;
+                        try { if (typeof localStorage !== 'undefined') localStorage.setItem('mycd_shards_v1', JSON.stringify(shardHave)); } catch (eS3) {}
+                        var shn = Object.keys(shardHave).length;
+                        if (CaveAudio.setShards) CaveAudio.setShards(shn);
+                        if (CaveAudio.oneBloom) CaveAudio.oneBloom();
+                        showHint('a song shard. the music grows. (' + shn + ')');
+                    }
+                }
+            }
+            if (window._CAVE_EVENTS !== false) {
+                var evlP = CC.eventsNearChunk(p.x, p.z);
+                for (var e3P = 0; e3P < evlP.length; e3P++) {
+                    var ev3 = evlP[e3P];
+                    if (eventDone[ev3.id]) continue;
+                    var edx = ev3.x - p.x, edz = ev3.z - p.z;
+                    if (edx * edx + edz * edz < 81) {
+                        eventDone[ev3.id] = 1;
+                        CC.addSeal(p.x - fwd.x * 7, p.y + 0.5, p.z - fwd.z * 7, 3.4);
+                        if (CaveAudio.rumble) CaveAudio.rumble();
+                        fovJolt = Math.min(1.4, fovJolt + 0.5);
+                        eventJudder = 1.5;
+                        showHint('the stone stirs. the way behind you closes.');
+                        var scx = Math.floor((p.x - fwd.x * 7) / CH), scy = Math.floor((p.y + 0.5) / CH), scz = Math.floor((p.z - fwd.z * 7) / CH);
+                        for (var rxE = -1; rxE <= 1; rxE++) for (var ryE = -1; ryE <= 1; ryE++) for (var rzE = -1; rzE <= 1; rzE++) {
+                            var rkE = (scx + rxE) + ',' + (scy + ryE) + ',' + (scz + rzE);
+                            if (chunks[rkE]) warpQueue.push({ k: rkE, d: 0 });
+                        }
+                    }
+                }
+            }
+        }
         if (walkMode && inWater) {
             /* swimming flies: identical controls to fly mode, you swim
                where you look, UP and DOWN work, just a touch of drag */
@@ -3781,7 +6179,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             wish.multiplyScalar(window._CAVE_SPEED);
             vel.lerp(wish, 1 - Math.pow(0.0015, dt));
             /* breach hop from just under the surface */
-            if (u > 0 && prevJump === 0 && (p.y + bodyOffY) > CC.WATER_Y - 0.9 && vel.y > 0.5) {
+            if (u > 0 && prevJump === 0 && localWL !== null && (p.y + bodyOffY) > localWL - 0.9 && vel.y > 0.5) {
                 vel.y = 3.6;
                 CaveAudio.splash(0.4);
             }
@@ -3794,11 +6192,13 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             wish.addScaledVector(fwd, f);
             wish.addScaledVector(right, s);
             if (wish.lengthSq() > 1) wish.normalize();
-            wish.multiplyScalar(window._CAVE_SPEED * 1.55);
-            var kmix = 1 - Math.pow(0.0003, dt);
+            wish.multiplyScalar(window._CAVE_SPEED * 1.55 * (giftT > 0 || strideT > 0 ? 1.35 : 1.0));
+            /* parkour glide: ease into speed, coast out of it */
+            var accel = wish.lengthSq() > 0.01 ? 0.03 : 0.10;
+            var kmix = 1 - Math.pow(accel, dt);
             vel.x += (wish.x - vel.x) * kmix;
             vel.z += (wish.z - vel.z) * kmix;
-            vel.y -= GRAV * dt;
+            vel.y -= GRAV * (slowFallT > 0 ? 0.35 : 1.0) * dt;
             if (vel.y < -TERMINAL) vel.y = -TERMINAL;
             if (u > 0 && prevJump === 0 && grounded) { vel.y = JUMP_V; grounded = false; CaveAudio.jump(); }
             prevJump = u > 0 ? 1 : 0;
@@ -3838,7 +6238,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (!axisStep(p, 2, vel.z * hd)) { if (walkMode) vel.z *= 0.72; else vel.z = 0; }
         }
         if (walkMode && !wasGrounded && grounded && fallV < -3.0) CaveAudio.land(-fallV);
-        if (window._CAVE_WATER && prevY + bodyOffY > CC.WATER_Y && p.y + bodyOffY <= CC.WATER_Y && fallV < -1.0 && audioProx.waterD < 40) {
+        if (localWL !== null && prevY + bodyOffY > localWL && p.y + bodyOffY <= localWL && fallV < -1.0) {
             CaveAudio.splash(Math.min(1, -fallV / 10));
         }
         if (squeezing && !squeezeShown) {
@@ -3851,17 +6251,25 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         updateChunks(vel.lengthSq() > 0.01 ? 2 : 3);
         assignLights(t, dt);
         CaveAudio.gentleResume();
+        var trial = window._CAVE_TRIAL === false ? null : CC.trialAt(camera.position.y);
+        var trialT = trial ? trial.t : 0;
+        var trialK = trial ? (trial.kind === 'fire' ? 0 : trial.kind === 'plasma' ? 1 : 2) : 0;
         CaveAudio.update(dt, {
             waterD: audioProx.waterD, fallD: audioProx.fallD,
             torchD: held ? 0 : audioProx.torchD, crystalD: audioProx.crystalD,
             walkMode: walkMode, grounded: grounded, squeezing: squeezing,
             trip: window._CAVE_TRIP ? tripS : 0,
-            underwater: anyWater && p.y < CC.WATER_Y,
+            underwater: localWL !== null && p.y < localWL,
             speed: Math.sqrt(vel.x * vel.x + vel.z * vel.z),
-            depthBand: CC.bandAt(p.y)
+            depthBand: CC.bandAt(p.y),
+            trialT: trialT, trialK: trialK, riverRide: rideT
         });
+        var sightK = sightT > 0 ? 0.012 : 0.028;
+        waterMat.uniforms.uFogDensity.value += (sightK - waterMat.uniforms.uFogDensity.value) * Math.min(1, dt * 3);
+        riverMat.uniforms.uFogDensity.value = waterMat.uniforms.uFogDensity.value;
         waterMat.uniforms.uTime.value = t;
         fallsMat.uniforms.uTime.value = t;
+        riverMat.uniforms.uTime.value = t;
 
         /* the trip ebbs like a tide; the bloom arrives over seconds */
         tripE *= Math.pow(0.5, dt / 110);
@@ -3914,6 +6322,24 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
         }
         cityCheckT -= dt;
+        if (cityCheckT <= 0.75 && window._CAVE_SHANTY) {
+            var shn = CC.shantyNear(camera.position.x, camera.position.z);
+            if (shn) {
+                var shL = CC.toLocal(shn.x, shn.y, shn.z);
+                var shdx = camera.position.x - shL[0], shdy = camera.position.y - shL[1], shdz = camera.position.z - shL[2];
+                var shKey = shn.gx + ',' + shn.gz;
+                var shd2 = shdx * shdx + shdy * shdy + shdz * shdz;
+                if (!shantyFound[shKey] && shd2 < 14 * 14) {
+                    shantyFound[shKey] = true;
+                    showHint('someone carved a home into this stone, long ago');
+                } else if (!shantyFound[shKey] && shd2 < 200 * 200 && CC.hash3(Math.floor(t * 0.02), shn.gx, shn.gz) < 0.45) {
+                    var sdir = Math.abs(shdx) > Math.abs(shdz)
+                        ? (shdx > 0 ? 'west' : 'east')
+                        : (shdz > 0 ? 'north' : 'south');
+                    showHint('a small lantern burns somewhere to the ' + sdir + (shdy > 3 ? ', below you' : ''));
+                }
+            }
+        }
         if (cityCheckT <= 0) {
             cityCheckT = 0.7;
             var stc = CC.siteNear(p.x, p.z);
@@ -3951,36 +6377,74 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var bnd = CC.bandAt(p.y);
         var b0 = Math.min(3, Math.floor(bnd)), bf2 = bnd - b0;
         fogCol.copy(FOG_BANDS[b0]).lerp(FOG_BANDS[b0 + 1], bf2);
-        scene.fog.color.copy(fogCol);
-        scene.background.copy(fogCol);
+        phyY = camera.position.y;
+        if (eyeY === null) eyeY = phyY;
+        if (!walkMode || Math.abs(phyY - eyeY) > 0.9) {
+            /* flying and swimming need a truthful eye; big jumps snap */
+            eyeY = phyY;
+        } else {
+            eyeY += (phyY - eyeY) * Math.min(1, dt * 8.5);
+            /* never render from inside the stone, whatever the smoothing wants */
+            eyeY = eyeSafeY(camera.position.x, eyeY, phyY, camera.position.z);
+        }
+        camera.position.y = eyeY;
 
-        /* the golden spiral hangs in the air ahead */
-        if (window._CAVE_TRIP && mandala) {
-            var mOn = tripS > 0.6;
-            mandala.visible = mOn;
-            var wild = Math.max(0, Math.min(1, (tripS - 21) / 9));
-            mandala2.visible = mOn && wild > 0.02;
-            if (mOn) {
-                var mFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                mandala.position.copy(camera.position).addScaledVector(mFwd, 10.5);
-                mandala.quaternion.copy(camera.quaternion);
-                mandala.rotateZ(t * (0.05 + 0.28 * wild));
-                mandala.geometry.setDrawRange(0, fibCountFor(tripE));
-                mandala.material.opacity = Math.min(0.5, tripS * 0.05) * (0.8 + 0.2 * Math.sin(t * 0.9));
-                mandala.material.color.setHSL(0.42 + Math.sin(t * (0.05 + 0.3 * wild)) * (0.06 + 0.3 * wild), 0.85, 0.62);
-                if (mandala2.visible) {
-                    mandala2.position.copy(mandala.position);
-                    mandala2.quaternion.copy(camera.quaternion);
-                    mandala2.rotateZ(-t * 0.31);
-                    mandala2.material.opacity = wild * 0.34 * (0.8 + 0.2 * Math.sin(t * 1.3 + 1.0));
-                    mandala2.material.color.setHSL((0.75 + t * 0.02 * wild) % 1.0, 0.9, 0.6);
+        var epoch = CC.epochAt(camera.position.y);
+        if (epoch.idx !== lastEpochIdx) {
+            var wasFirst = lastEpochIdx === -1;
+            lastEpochIdx = epoch.idx;
+            if (epoch.name && !wasFirst) {
+                showHint(epoch.idx === 999999 ? 'THE CORE. you have arrived.' : 'you descend into ' + epoch.name.toLowerCase());
+                epochFlare = 1.0;
+                if (CaveAudio.oneBloom) CaveAudio.oneBloom();
+            }
+        }
+        if (epochFlare > 0.002) {
+            epochFlare *= Math.pow(0.25, dt);
+            if (epochFlare <= 0.002) epochFlare = 0;
+            for (var kF in chunks) {
+                var scF = chunks[kF].shroomCaps;
+                if (scF) for (var iF = 0; iF < scF.length; iF++) {
+                    var mF = scF[iF].material;
+                    if (mF && mF.emissiveIntensity !== undefined) {
+                        if (mF.userData.base0 === undefined) mF.userData.base0 = mF.emissiveIntensity;
+                        mF.emissiveIntensity = mF.userData.base0 * (1.0 + epochFlare * 2.4);
+                    }
                 }
             }
         }
+        if (trial && !trialAnnounced) {
+            trialAnnounced = true;
+            showHint(trial.kind === 'fire' ? 'a burning layer. push through it.' :
+                trial.kind === 'plasma' ? 'a plasma sheath. hold your line.' :
+                'gravity folds here. keep moving.');
+            CaveAudio.warp();
+        } else if (!trial && trialAnnounced) {
+            trialAnnounced = false;
+            showHint('you are through. the dark is calm again.');
+        }
+        if (epoch.warm > 0.01) {
+            fogCol.lerp(new THREE.Color(0.28, 0.08, 0.02), Math.min(0.55, epoch.warm * 0.9));
+        }
+        if (trialT > 0.01) {
+            var trialCol = trialK === 0 ? new THREE.Color(0.55, 0.16, 0.03) :
+                trialK === 1 ? new THREE.Color(0.22, 0.10, 0.5) : new THREE.Color(0.16, 0.2, 0.3);
+            fogCol.lerp(trialCol, trialT * 0.85);
+            scene.fog.density = 0.028 + trialT * 0.03;
+            camRoll += (Math.random() - 0.5) * 0.012 * trialT * (trialK === 2 ? 2.2 : 1.0);
+            if (trialK === 2) {
+                /* gravity folds: the pull itself wavers */
+                vel.y += Math.sin(t * 0.9) * 6.5 * trialT * dt;
+            }
+        } else {
+            scene.fog.density = 0.028;
+        }
+        scene.fog.color.copy(fogCol);
+        scene.background.copy(fogCol);
 
         /* one motion: your movement drives the world's flow, the music's
            breath drives the walls, and everything shares the same clock */
-        var trN = window._CAVE_TRIP ? Math.min(1, tripS / 21) : 0;
+        var trN = window._CAVE_TRIP ? Math.min(1, tripS / 12) : 0;
         var trW = window._CAVE_TRIP ? Math.max(0, Math.min(1, (tripS - 21) / 9)) : 0;
         var spdNow = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
         flowT += spdNow * dt * 0.28;
@@ -3996,32 +6460,74 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             ush.uCamPos.value.copy(camera.position);
             ush.uFlowT.value = flowT;
             ush.uBreathPh.value = breathPh;
+            ush.uWarm.value = epoch.warm;
+            ush.uEpochHue.value = epoch.hue;
+            ush.uTrial.value = trialT;
+            ush.uTrialKind.value = trialK;
         }
         /* a gentle physical twist of the view itself, past the threshold */
-        var rollTarget = window._CAVE_TRIP ? trW * 0.035 * Math.sin(t * 0.19) + trN * 0.008 * Math.sin(t * 0.11) : 0;
+        var rollTarget = window._CAVE_TRIP ? trW * 0.035 * Math.sin(t * 0.19) + trN * 0.016 * Math.sin(t * 0.11) : 0;
         camRoll += (rollTarget - camRoll) * Math.min(1, dt * 2);
 
-        /* the pinch presses your eyes shut, then lets the light back in */
+        /* whips, pops, aberrations: the deep trip stutters reality */
+        if (window._CAVE_TRIP && tripS > 8) {
+            eventT -= dt;
+            if (eventT <= 0) {
+                eventT = 5 + Math.random() * (14 - Math.min(9, tripS * 0.3));
+                var kind = Math.random();
+                if (kind < 0.45) {
+                    whipA = 0.22 + Math.random() * 0.3 * Math.min(1, tripS / 21);
+                    if (Math.random() < 0.5) whipA = -whipA;
+                    whipAge = 0;
+                    CaveAudio.tripPop(0);
+                } else if (kind < 0.8) {
+                    veil.style.background = 'hsl(' + Math.floor(Math.random() * 360) + ', 60%, 60%)';
+                    veil.style.opacity = '0.14';
+                    setTimeout(function () {
+                        veil.style.opacity = '0';
+                        setTimeout(function () { veil.style.background = '#000'; }, 300);
+                    }, 70);
+                    CaveAudio.tripPop(1);
+                } else {
+                    fovJolt = 5 + Math.random() * 4;
+                    CaveAudio.tripPop(2);
+                }
+            }
+        }
+        whipAge += dt;
+        fovJolt *= Math.pow(0.02, dt);
+        tickWarp(dt);
+        tickPhasing(dt);
+        tickEmbers(dt, trialT, trialK);
+        if (CC.setRivers) CC.setRivers(window._CAVE_RIVERS !== false);
+
+
+        /* every built surface breathes with the music while tripping */
+        if (trN > 0.01) {
+            var bo = Math.sin(breathPh) * 0.014 * trN;
+            var bo2 = Math.cos(breathPh * 0.62) * 0.010 * trN;
+            var bsc = 1.0 + Math.sin(breathPh * 0.5) * 0.05 * trN;
+            for (var bti = 0; bti < breathingTex.length; bti++) {
+                breathingTex[bti].offset.set(bo2, bo);
+                breathingTex[bti].repeat.set(breathingTex[bti].r0 * bsc, breathingTex[bti].r1 * bsc);
+            }
+        }
         squeezeGlow += (sqDepthFrame * 0.92 - squeezeGlow) * Math.min(1, dt * 9);
         if (squeezeGlow < 0.005) squeezeGlow = 0;
-        sqVeil.style.opacity = squeezeGlow.toFixed(3);
-        if (squeezeGlow > 0) {
-            sqVeil.style.backgroundPosition =
-                (-yaw * 520 - camera.position.x * 90 - camera.position.z * 90).toFixed(1) + 'px ' +
-                (camera.position.y * 130).toFixed(1) + 'px';
-        }
+        /* the old screen veil is gone: close stone shows its own macro grain
+           in the shader, clipped to the rock by construction */
 
         /* the trip breathes, gently */
         if (window._CAVE_TRIP && tripS > 0.02) {
             var vLvl = 5 * (1 - Math.exp(-tripS / 8));
             var vWild = Math.max(0, Math.min(1, (tripS - 21) / 9));
-            scene.fog.color.offsetHSL(Math.sin(t * (0.21 + vWild * 0.6)) * (0.016 * vLvl + 0.06 * vWild), 0.012 * vLvl + 0.05 * vWild, 0.0);
+            scene.fog.color.offsetHSL(Math.sin(t * (0.21 + vWild * 0.6)) * (0.026 * vLvl + 0.08 * vWild), 0.02 * vLvl + 0.07 * vWild, 0.0);
             scene.background.copy(scene.fog.color);
-            camera.fov = 72 + Math.sin(t * (0.47 + vWild * 0.5)) * (0.85 * vLvl + 2.5 * vWild) - squeezeGlow * 3.5;
+            camera.fov = 72 + Math.sin(t * (0.47 + vWild * 0.5)) * (1.5 * vLvl + 3.5 * vWild) - squeezeGlow * 3.5 + fovJolt + rideT * 5.0;
             camera.updateProjectionMatrix();
             tripFovDirty = true;
         } else if (squeezeGlow > 0) {
-            camera.fov = 72 - squeezeGlow * 3.5;
+            camera.fov = 72 - squeezeGlow * 3.5 + fovJolt + rideT * 5.0;
             camera.updateProjectionMatrix();
             tripFovDirty = true;
         } else if (tripFovDirty) {
@@ -4033,8 +6539,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         renderer.render(scene, camera);
     }
 
-    console.log('[CAVES 017] seed ' + CC.SEED +
-        ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP | _CAVE.trip(n) freshStart()');
+    console.log('[CAVES 029] seed ' + CC.SEED +
+        ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP _CAVE_SHANTY _CAVE_TRIAL | _CAVE.trip(n) freshStart()');
 })();
 </script>
 </body>
