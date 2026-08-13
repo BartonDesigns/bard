@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>caves 029</title>
+<title>caves 031</title>
 <style>
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
@@ -23,6 +23,12 @@
         font-size: 11px; letter-spacing: 0.14em;
     }
     #topbar .t { color: #01a982; font-weight: 600; }
+#soulAsk { display: none; position: fixed; left: 50%; top: 42%; transform: translate(-50%,-50%);
+    background: rgba(6,10,16,0.9); border: 1px solid rgba(180,140,255,0.4); border-radius: 12px;
+    padding: 14px 18px; z-index: 40; flex-direction: column; align-items: center; gap: 10px; }
+#soulLbl { color: #d9c6ff; font-size: 13px; letter-spacing: 0.02em; }
+#soulBtn, #soulBack { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+    z-index: 30; border-color: rgba(180,140,255,0.5); color: #d9c6ff; }
     #depth {
         top: calc(env(safe-area-inset-top, 0px) + 10px); right: 14px;
         font-size: 11px; letter-spacing: 0.1em; text-align: right;
@@ -209,7 +215,7 @@
     });
 })();
 </script>
-<div class="hud" id="topbar"><span class="t">caves 029</span></div>
+<div class="hud" id="topbar"><span class="t">caves 031</span></div>
 <div class="hud" id="depth">DEPTH 0 m</div>
 <div class="hud" id="hint"></div>
 <div class="btn" id="btnUp">&#9650;</div>
@@ -240,6 +246,15 @@
         <div class="btn" id="eatNo">leave it</div>
     </div>
 </div>
+<div id="soulAsk">
+    <div id="soulLbl">thirty caps. the body has become a suggestion.</div>
+    <div class="tpBtns">
+        <div class="btn" id="soulGo">leave the body</div>
+        <div class="btn" id="soulNo">stay</div>
+    </div>
+</div>
+<div class="btn" id="soulBtn" style="display:none;">leave the body</div>
+<div class="btn" id="soulBack" style="display:none;">return to the body</div>
 <div id="recTime" style="display:none;"></div>
 <a class="btn" id="recSave" style="display:none;">save .mp3</a>
 <div id="stick"><div id="knob"></div></div>
@@ -664,6 +679,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 }
             }
         }
+        if (C.inCore(y)) return null;
         var rvw = C.riverLevelAt(lx, y, lz);
         if (rvw && (best === null || Math.abs(y - rvw.y) < Math.abs(y - best))) best = rvw.y;
         return best;
@@ -792,6 +808,89 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var cz2 = (vz + 0.5) * VCELL + (hash3(vz, 701 + k, vx) - 0.5) * 120;
         return { x: cx2, y: -k * VAULT_STEP, z: cz2, k: k, r: 13 + hash3(vx + k, 702, vz) * 4 };
     }
+    function coreCarve(x, y, z, d) {
+        /* the heart of the world: a hollow that runs on forever, floored
+           with slow iron swells and roofed far overhead */
+        var dd = -y;
+        if (dd < C.CORE_D - C.CORE_CEIL - 90) return d;
+        var floorD = C.CORE_D
+            + Math.sin(x * 0.0042) * 9 + Math.cos(z * 0.0037) * 9
+            + Math.sin((x + z) * 0.0009) * 22;
+        if (dd >= floorD) return Math.max(d, (dd - floorD) * 0.5 + 0.6);
+        var ceilD = C.CORE_D - C.CORE_CEIL
+            + Math.sin(x * 0.0026 + 1.7) * 40 + Math.cos(z * 0.0031 - 0.6) * 40;
+        if (dd <= ceilD) return d;
+        /* inside the hollow: open air, save for the iron columns that
+           carry the weight of every mile above */
+        var open = -1.2;
+        /* the mound each heart rests on, and the moat of clear air around it */
+        var hx2 = Math.floor(x / 1400), hz3 = Math.floor(z / 1400);
+        var nearHeart = 1e9;
+        for (var hi = -1; hi <= 1; hi++) {
+            for (var hj = -1; hj <= 1; hj++) {
+                var ex = (hx2 + hi + 0.5) * 1400 + (hash3(hx2 + hi, 780, hz3 + hj) - 0.5) * 500;
+                var ez = (hz3 + hj + 0.5) * 1400 + (hash3(hz3 + hj, 781, hx2 + hi) - 0.5) * 500;
+                var hd = Math.sqrt((x - ex) * (x - ex) + (z - ez) * (z - ez));
+                if (hd < nearHeart) nearHeart = hd;
+            }
+        }
+        if (nearHeart < 150) {
+            var mound = Math.max(0, (150 - nearHeart) / 150);
+            var mTop = floorD - mound * mound * 34;
+            if (dd > mTop) return Math.max(d, (dd - mTop) * 0.5 + 0.6);
+        }
+        var px = x - Math.round(x / 260) * 260, pz = z - Math.round(z / 260) * 260;
+        var pr = Math.sqrt(px * px + pz * pz);
+        var ph = hash3(Math.round(x / 260), 760, Math.round(z / 260));
+        if (ph < 0.55 && nearHeart > 170) {
+            var rad = 9 + ph * 22;
+            if (pr < rad + 3) open = Math.max(open, (rad - pr) * 0.5);
+        }
+        return Math.min(Math.max(d, -6), open);
+    }
+    var HEART_CELL = 1400;
+    C.heartsNearChunk = function (lx, lz) {
+        /* the molten hearts: one per cell, the thing you came down to see */
+        var x = lx + OX, z = lz + OZ;
+        var hx = Math.floor(x / HEART_CELL), hz2 = Math.floor(z / HEART_CELL);
+        var out = [];
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                var cx2 = (hx + i + 0.5) * HEART_CELL + (hash3(hx + i, 780, hz2 + j) - 0.5) * 500;
+                var cz2 = (hz2 + j + 0.5) * HEART_CELL + (hash3(hz2 + j, 781, hx + i) - 0.5) * 500;
+                out.push({
+                    x: cx2 - OX, z: cz2 - OZ,
+                    r: 46 + hash3(hx + i, 782, hz2 + j) * 30,
+                    id: 'h' + (hx + i) + ',' + (hz2 + j)
+                });
+            }
+        }
+        return out;
+    };
+    C.nearestHeart = function (lx, lz) {
+        var l = C.heartsNearChunk(lx, lz), best = null, bd = 1e9;
+        for (var i = 0; i < l.length; i++) {
+            var dx = l[i].x - lx, dz = l[i].z - lz;
+            var d2 = dx * dx + dz * dz;
+            if (d2 < bd) { bd = d2; best = l[i]; }
+        }
+        if (best) best.dist = Math.sqrt(bd);
+        return best;
+    };
+    C.coreFloorAt = function (lx, lz) {
+        /* the carve reads LOCAL y (like every lattice here), so no OY */
+        var x = lx + OX, z = lz + OZ;
+        var floorD = C.CORE_D
+            + Math.sin(x * 0.0042) * 9 + Math.cos(z * 0.0037) * 9
+            + Math.sin((x + z) * 0.0009) * 22;
+        var h = C.nearestHeart(lx, lz);
+        if (h && h.dist < 150) {
+            var mound = (150 - h.dist) / 150;
+            floorD -= mound * mound * 34;
+        }
+        return -floorD;
+    };
+    C.inCore = function (y) { return -y > C.CORE_D - C.CORE_CEIL; };
     function vaultCarve(x, y, z, d) {
         var k = Math.round(-y / VAULT_STEP);
         if (k < 1) return d;
@@ -883,6 +982,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         return out;
     };
     C.riverLevelAt = function (lx, y, lz) {
+        if (C.inCore(y)) return null;
         var x = lx + OX, z = lz + OZ;
         var rl = riversNearWorld(x, z);
         for (var r2 = 0; r2 < rl.length; r2++) {
@@ -1127,6 +1227,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         d = shantyCarve(x, y, z, d);
         if (RIVERS_ON) d = riverCarve(x, y - OY, z, d);
         d = vaultCarve(x, y - OY, z, d);
+        d = coreCarve(x, y - OY, z, d);
         d = sealSolid(x, y, z, d);
         return d;
     }
@@ -1237,10 +1338,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     C.grad = grad;
 
     /* depth bands: the first five strata are hand-named; below 1500 the
-       epochs continue procedurally, evolving forever, until the CORE at a
-       depth of 1,000,000. bandAt stays continuous for all legacy blending. */
+       epochs continue procedurally, evolving forever, until the CORE at the
+       true center of the earth. bandAt stays continuous for legacy blending. */
     C.BAND_YS = [-248, -498, -998, -1498];
-    C.CORE_D = 1000000;
+    /* the real distance to the center of the earth, in meters */
+    C.CORE_D = 6371000;
+    C.CORE_CEIL = 620;      /* how tall the core hollow stands */
     C.bandAt = function (y) {
         var b = 0, i;
         for (i = 0; i < 4; i++) {
@@ -1255,7 +1358,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     C.epochAt = function (y) {
         /* everything the world needs to evolve forever, from one depth */
         var d = Math.max(0, -y);
-        if (d >= C.CORE_D) {
+        if (d >= C.CORE_D - C.CORE_CEIL) {
             return { idx: 999999, name: 'THE CORE', hue: 0.04, warm: 1.0, deep01: 1.0, fire: 0 };
         }
         var deep01 = Math.min(1, d / C.CORE_D);
@@ -1273,7 +1376,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
        60m thick, that must be traveled through */
     C.trialAt = function (y) {
         var d = -y;
-        if (d < 4800 || d >= C.CORE_D) return null;
+        if (d < 4800 || d >= C.CORE_D - C.CORE_CEIL - 200) return null;
         var k = Math.round(d / 5000);
         if (k < 1) return null;
         var center = k * 5000;
@@ -1322,6 +1425,17 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             r *= (1.0 - 0.45 * wet);
             g *= (1.0 - 0.20 * wet);
             b *= (1.0 - 0.25 * wet);
+        }
+        if (C.inCore(y)) {
+            /* iron, not cave stone: dark and warm, brightening at the hearts */
+            var ir = 0.20 + s * 0.10, ig = 0.105 + s * 0.05, ib = 0.075 + s * 0.03;
+            var hN = C.nearestHeart(x, z);
+            if (hN) {
+                var heat = Math.max(0, Math.min(1, 1 - (hN.dist - hN.r) / 190));
+                heat = heat * heat;
+                ir += heat * 0.55; ig += heat * 0.17; ib += heat * 0.02;
+            }
+            r = ir; g = ig; b = ib;
         }
         out[0] = r; out[1] = g; out[2] = b;
     }
@@ -1617,6 +1731,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     if (window._CAVE_SHROOMS === undefined) window._CAVE_SHROOMS = true;
     if (window._CAVE_TORCHES === undefined) window._CAVE_TORCHES = true;
     if (window._CAVE_CRYSTALS === undefined) window._CAVE_CRYSTALS = true;
+    if (window._CAVE_ELVES === undefined) window._CAVE_ELVES = true;
+    if (window._CAVE_HEARTS === undefined) window._CAVE_HEARTS = true;
     if (window._CAVE_MIST === undefined) window._CAVE_MIST = true;
     if (window._CAVE_CITIES === undefined) window._CAVE_CITIES = true;
     if (window._CAVE_SIGNS === undefined) window._CAVE_SIGNS = true;
@@ -1686,6 +1802,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var fallGain = null, lapGain = null, windGain = null, scrapeGain = null, humGain = null, humOsc = null;
         var roarGain = null, roarFilt = null, shimGain = null;
         var shardGain = null, shardN = 0;
+        var soulGain = null, soulFilt = null, soulOsc = null, soulOscG = null, soulK = 0;
+        var baskGain = null, baskOscs = [], baskK2 = 0;
         var chorusGain = null, glowLevel = 0;
         var chorusVoices = [];
         var dly = null, dlySend = null, compRef = null;
@@ -2225,6 +2343,32 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             scrapeGain = layer(260, 'bandpass', 3.0);   /* squeezing */
             shimGain = layer(2400, 'bandpass', 2.4);    /* river shimmer */
             shardGain = layer(1800, 'bandpass', 2.0);   /* the gathered song */
+            /* the soul fall: a rising wall of air and a deepening tone */
+            var soulSrc = mkNoiseSrc();
+            soulFilt = ctx.createBiquadFilter();
+            soulFilt.type = 'bandpass'; soulFilt.frequency.value = 300; soulFilt.Q.value = 0.7;
+            soulGain = ctx.createGain(); soulGain.gain.value = 0;
+            soulSrc.connect(soulFilt); soulFilt.connect(soulGain); soulGain.connect(master);
+            soulOsc = ctx.createOscillator();
+            soulOsc.type = 'sine'; soulOsc.frequency.value = 44;
+            soulOscG = ctx.createGain(); soulOscG.gain.value = 0;
+            soulOsc.connect(soulOscG); soulOscG.connect(master);
+            soulOsc.start();
+            /* basking: a warm chord that lives under everything */
+            baskGain = ctx.createGain();
+            baskGain.gain.value = 0;
+            baskGain.connect(master); baskGain.connect(verb);
+            var baskRatios = [1, 1.5, 2, 3];
+            for (var bi = 0; bi < baskRatios.length; bi++) {
+                var bo = ctx.createOscillator();
+                bo.type = 'sine';
+                bo.frequency.value = 55 * baskRatios[bi];
+                var bg = ctx.createGain();
+                bg.gain.value = 1 / (bi + 1.6);
+                bo.connect(bg); bg.connect(baskGain);
+                bo.start();
+                baskOscs.push(bo);
+            }
             /* the trial roar: one noise voice whose filter changes
                character with the kind of trial */
             var roarSrc = mkNoiseSrc();
@@ -2502,6 +2646,22 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             burst(650, 1.6, 0.03 * k, 0.12, -0.1, false);
         };
         A.setShards = function (n) { shardN = n || 0; };
+        A.setSoul = function (k) { soulK = Math.max(0, Math.min(1, k || 0)); };
+        A.setBask = function (k) { baskK2 = Math.max(0, Math.min(1, k || 0)); };
+        A.elfChirp = function () {
+            /* their speech: fast bright intervals that do not resolve */
+            if (!A.ready || A.muted) return;
+            var steps = [0, 4, 7, 11, 14];
+            for (var i = 0; i < 5; i++) {
+                var st2 = steps[Math.floor(Math.random() * steps.length)];
+                var f = hz(st2 % 7, 3 + (i % 2));
+                setTimeout(function (ff) {
+                    return function () {
+                        blip(ff, ff * 1.007, 0.016, 0.05, 0.22, true, true);
+                    };
+                }(f), i * 55);
+            }
+        };
         A.rumble = function () {
             /* the stone stirs: a deep body-shaking groan */
             if (!A.ready || A.muted) return;
@@ -2596,6 +2756,19 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
             if (shimGain) shimGain.gain.setTargetAtTime((st.riverRide || 0) * 0.045, t2, 0.8);
             if (shardGain) shardGain.gain.setTargetAtTime(Math.min(0.05, shardN * 0.011), t2, 1.2);
+            if (baskGain) {
+                baskGain.gain.setTargetAtTime(baskK2 * 0.075, t2, 1.5);
+                for (var bq = 0; bq < baskOscs.length; bq++) {
+                    baskOscs[bq].frequency.setTargetAtTime(
+                        55 * [1, 1.5, 2, 3][bq] * (1 + baskK2 * 0.005), t2, 2.0);
+                }
+            }
+            if (soulGain) {
+                soulGain.gain.setTargetAtTime(soulK * 0.16, t2, 0.5);
+                soulFilt.frequency.setTargetAtTime(300 + soulK * 1500, t2, 0.5);
+                soulOscG.gain.setTargetAtTime(soulK * 0.1, t2, 0.5);
+                soulOsc.frequency.setTargetAtTime(44 - soulK * 20, t2, 0.8);
+            }
             /* the trip: gains follow the dose, sparse tones drift by */
             tripLvl = st.trip || 0;
             /* the dose saturates so a 30 stack deepens rather than deafens */
@@ -3195,6 +3368,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var CH = CC.CHUNK;
     var chunks = {};
     var shardHave = {};
+    var capsEaten = 0, SOUL_CAPS = 30;
+    try {
+        if (typeof localStorage !== 'undefined') {
+            capsEaten = parseInt(localStorage.getItem('mycd_caps_v1') || '0', 10) || 0;
+        }
+    } catch (eCe) {}
     try {
         if (typeof localStorage !== 'undefined') {
             var _shj = localStorage.getItem('mycd_shards_v1');
@@ -3232,7 +3411,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     function makeChunk(cx, cy, cz) {
         var data = CC.buildChunk(cx, cy, cz);
         var group = new THREE.Group();
-        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [] };
+        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [], hearts: [] };
 
         if (data.indices.length > 0) {
             var geo = new THREE.BufferGeometry();
@@ -3317,6 +3496,53 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
         /* still water where the chunk crosses the table */
         var y0 = cy * CH, y1 = y0 + CH;
+        if (CC.inCore(cy * CH + CH / 2) && window._CAVE_HEARTS !== false) {
+            var hrt = CC.heartsNearChunk(cx * CH + CH / 2, cz * CH + CH / 2);
+            for (var hqi = 0; hqi < hrt.length; hqi++) {
+                var hq = hrt[hqi];
+                if (hq.x < cx * CH || hq.x >= cx * CH + CH || hq.z < cz * CH || hq.z >= cz * CH + CH) continue;
+                var hfy = CC.coreFloorAt(hq.x, hq.z);
+                if (hfy < y0 - CH || hfy > y1 + CH * 2) continue;
+                /* the heart: a slow molten sphere, half sunk in its mound */
+                var hgeo = new THREE.SphereGeometry(hq.r, 26, 18);
+                var hmat = new THREE.MeshStandardMaterial({
+                    color: 0x1a0602, roughness: 0.72, metalness: 0.2,
+                    emissive: 0xff4d0a, emissiveIntensity: 0.95
+                });
+                var hm = new THREE.Mesh(hgeo, hmat);
+                hm.position.set(hq.x, hfy + hq.r * 0.42, hq.z);
+                rec.group.add(hm);
+                rec.disposables.push(hgeo, hmat);
+                var hspr = new THREE.Sprite(new THREE.SpriteMaterial({
+                    map: glowTex, color: 0xffb066, transparent: true, opacity: 0.5,
+                    blending: THREE.AdditiveBlending, depthWrite: false
+                }));
+                hspr.scale.set(hq.r * 7, hq.r * 7, 1);
+                hspr.position.copy(hm.position);
+                rec.group.add(hspr);
+                rec.disposables.push(hspr.material);
+                rec.emitters.push({ x: hq.x, y: hfy + hq.r * 0.6, z: hq.z, color: new THREE.Color(0xff9a4a), intensity: 2.6, dist: 400, type: 'crystal' });
+                /* embers lifting off the heat */
+                var egeo = new THREE.BufferGeometry();
+                var ep = new Float32Array(70 * 3);
+                for (var ei = 0; ei < 70; ei++) {
+                    var ea = CC.hash3(ei, hqi, 3) * 6.2831853;
+                    var er = hq.r * (1.05 + CC.hash3(ei, hqi, 4) * 0.7);
+                    ep[ei * 3] = hq.x + Math.cos(ea) * er;
+                    ep[ei * 3 + 1] = hfy + CC.hash3(ei, hqi, 5) * hq.r * 2.2;
+                    ep[ei * 3 + 2] = hq.z + Math.sin(ea) * er;
+                }
+                egeo.setAttribute('position', new THREE.BufferAttribute(ep, 3));
+                var epts = new THREE.Points(egeo, new THREE.PointsMaterial({
+                    color: 0xffc07a, size: 1.5, sizeAttenuation: true, map: glowTex,
+                    transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false
+                }));
+                epts.frustumCulled = false;
+                rec.group.add(epts);
+                rec.disposables.push(egeo, epts.material);
+                rec.hearts.push({ mesh: hm, spr: hspr, emb: epts, base: ep.slice(0), y0: hfy, x: hq.x, z: hq.z, r: hq.r, id: hq.id });
+            }
+        }
         if (window._CAVE_VAULTS !== false) {
             var vls = CC.vaultsNearChunk(cx * CH + CH / 2, cz * CH + CH / 2, cy * CH + CH / 2);
             for (var vqi = 0; vqi < vls.length; vqi++) {
@@ -4892,6 +5118,120 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
     /* -------- the trip: stacking doses that ebb like a tide -------- */
     var tripE = 0, tripS = 0;
+    var baskK = 0, baskT = 0, baskShown = false, baskDeep = false, baskHeart = null;
+    var elves = [], elfT = 0, elfShown = false, elfWant = 0;
+    var ELF_WORDS = [
+        'they were already here, waiting for you to slow down',
+        'they hand you objects that are also sentences',
+        'they are delighted that you finally looked',
+        'the geometry is not a picture, it is a language',
+        'they make a thing out of nothing and give it to you',
+        'they say: you cannot bring this back, only remember it',
+        'they laugh, and the laughter has corners',
+        'they are building something out of your attention'
+    ];
+    function makeElf(seed) {
+        /* a self transforming machine elf: nested spinning solids that
+           will not hold still long enough to be described */
+        var g = new THREE.Group();
+        var cols = [0x59ffd0, 0xff5fd2, 0xffe45f, 0x7d6bff];
+        for (var i = 0; i < 3; i++) {
+            var geo = i === 0 ? new THREE.IcosahedronGeometry(0.85, 0)
+                : i === 1 ? new THREE.OctahedronGeometry(0.55, 0)
+                : new THREE.TetrahedronGeometry(0.34, 0);
+            var m = new THREE.Mesh(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({
+                color: cols[(seed + i) % cols.length], transparent: true, opacity: 0.9,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            var lines = new THREE.LineSegments(m.geometry, m.material);
+            lines.userData.spin = 0.5 + i * 0.9;
+            g.add(lines);
+            geo.dispose();
+        }
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: cols[seed % cols.length], transparent: true, opacity: 0.55,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        spr.scale.set(3.2, 3.2, 1);
+        g.add(spr);
+        scene.add(g);
+        return { g: g, ph: CC.hash3(seed, 9, 4) * 20, orbit: CC.hash3(seed, 3, 8) * 6.2831853,
+            rad: 5 + CC.hash3(seed, 5, 2) * 7, hgt: 0.2 + CC.hash3(seed, 7, 1) * 2.4,
+            jit: 0, life: 0 };
+    }
+    function clearElves() {
+        for (var i = 0; i < elves.length; i++) {
+            scene.remove(elves[i].g);
+            elves[i].g.traverse(function (o) {
+                if (o.geometry) o.geometry.dispose();
+                if (o.material) o.material.dispose();
+            });
+        }
+        elves.length = 0;
+    }
+    function tickElves(dt2, t2, p2) {
+        if (window._CAVE_ELVES === false) { if (elves.length) clearElves(); return; }
+        /* they arrive for a heavy dose, or for anyone basking at the heart */
+        var want = 0;
+        if (tripS >= 12) want = 3 + Math.round(Math.min(3, (tripS - 12) / 4));
+        if (baskK > 0.45) want = Math.max(want, 3 + Math.round(baskK * 3));
+        elfWant = want;
+        while (elves.length < want) elves.push(makeElf(elves.length + Math.floor(t2)));
+        while (elves.length > want) {
+            var e2 = elves.pop();
+            scene.remove(e2.g);
+            e2.g.traverse(function (o) {
+                if (o.geometry) o.geometry.dispose();
+                if (o.material) o.material.dispose();
+            });
+        }
+        if (!elves.length) return;
+        if (!elfShown) {
+            elfShown = true;
+            showHint('something folds itself into the room with you');
+            if (CaveAudio.elfChirp) CaveAudio.elfChirp();
+        }
+        elfT -= dt2;
+        if (elfT <= 0) {
+            elfT = 7 + Math.random() * 9;
+            showHint(ELF_WORDS[Math.floor(Math.random() * ELF_WORDS.length)]);
+            if (CaveAudio.elfChirp) CaveAudio.elfChirp();
+        }
+        for (var i2 = 0; i2 < elves.length; i2++) {
+            var el = elves[i2];
+            el.life += dt2;
+            el.orbit += dt2 * (0.35 + i2 * 0.06);
+            el.jit -= dt2;
+            if (el.jit <= 0) {
+                /* they do not travel between places, they simply are elsewhere */
+                el.jit = 0.25 + Math.random() * 0.7;
+                el.orbit += (Math.random() - 0.5) * 1.4;
+                el.rad = 4.5 + Math.random() * 7.5;
+                el.hgt = 0.1 + Math.random() * 2.6;
+            }
+            var tx2 = p2.x + Math.cos(el.orbit) * el.rad;
+            var tz2 = p2.z + Math.sin(el.orbit) * el.rad;
+            var ty2 = p2.y + el.hgt - 0.6 + Math.sin(t2 * 1.7 + el.ph) * 0.5;
+            el.g.position.x += (tx2 - el.g.position.x) * Math.min(1, dt2 * 7);
+            el.g.position.y += (ty2 - el.g.position.y) * Math.min(1, dt2 * 7);
+            el.g.position.z += (tz2 - el.g.position.z) * Math.min(1, dt2 * 7);
+            var sc = 0.7 + Math.sin(t2 * 5.1 + el.ph) * 0.22 + baskK * 0.5;
+            el.g.scale.setScalar(sc);
+            for (var ci = 0; ci < el.g.children.length; ci++) {
+                var ch = el.g.children[ci];
+                if (ch.userData.spin) {
+                    ch.rotation.x += dt2 * ch.userData.spin * 2.4;
+                    ch.rotation.y += dt2 * ch.userData.spin * 3.1;
+                    ch.rotation.z += dt2 * ch.userData.spin * 1.3;
+                    ch.material.opacity = 0.55 + Math.sin(t2 * 7 + ci * 2 + el.ph) * 0.4;
+                }
+            }
+        }
+    }
+    W.elves = function (n) {
+        if (n !== undefined) { tripS = Math.max(tripS, 12 + n); tripE = Math.max(tripE, 13); }
+        return elves.length;
+    };
     var eatAsk = document.getElementById('eatAsk');
     var eatDot = document.getElementById('eatDot');
     var eatGo = document.getElementById('eatGo');
@@ -4919,6 +5259,9 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             e.preventDefault();
             if (eatTarget && eatTarget.visible) {
                 eatTarget.visible = false;
+                capsEaten++;
+                try { if (typeof localStorage !== 'undefined') localStorage.setItem('mycd_caps_v1', String(capsEaten)); } catch (eC2) {}
+                offerSoul();
                 var vv = (eatTarget.userData.shroom && eatTarget.userData.shroom.variety) || 0;
                 if (vv === 1) {
                     slowFallT = 75;
@@ -5011,6 +5354,176 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var tpGo = document.getElementById('tpGo');
     var tpNo = document.getElementById('tpNo');
     var veil = document.getElementById('veil');
+    /* -------- the soul: at thirty caps the body becomes optional -------- */
+    var soulState = 0;           /* 0 embodied, 1 falling, 2 in the core */
+    var soulV = 0, soulY = 0, soulShown = false, soulStreak = null, soulSGeo = null;
+    var bodyPos = null, bodyYaw = 0, bodyWalk = false, soulLoreI = -1;
+    var SOUL_A = 3000;           /* the pull of the whole world beneath you */
+    var soulAsk = document.getElementById('soulAsk');
+    var soulBtn = document.getElementById('soulBtn');
+    var soulBack = document.getElementById('soulBack');
+    var SOUL_LORE = [
+        'the crust lets go of you',
+        'the last root passes',
+        'nothing here has ever been seen',
+        'the stone runs like water at this speed',
+        'heat arrives before light does',
+        'the mantle turns over slowly, and you fall through its turning',
+        'iron begins to sing',
+        'the weight of everything above becomes a sound',
+        'the center pulls, and you were always going to answer'
+    ];
+    function offerSoul() {
+        if (soulState !== 0 || capsEaten < SOUL_CAPS) return;
+        if (soulBtn) soulBtn.style.display = 'block';
+        if (soulShown) return;
+        soulShown = true;
+        if (soulAsk) soulAsk.style.display = 'flex';
+    }
+    function closeSoulAsk() { if (soulAsk) soulAsk.style.display = 'none'; }
+    function detach() {
+        if (soulState !== 0) return;
+        closeSoulAsk();
+        if (soulBtn) soulBtn.style.display = 'none';
+        bodyPos = camera.position.clone();
+        bodyYaw = yaw;
+        bodyWalk = walkMode;
+        if (walkMode) setWalkMode(false);
+        setPhasing(true);
+        soulState = 1;
+        soulV = 0;
+        soulY = camera.position.y;
+        soulLoreI = -1;
+        vel.set(0, 0, 0);
+        phyY = null; eyeY = null;
+        /* the rush of stone passing through you */
+        soulSGeo = new THREE.BufferGeometry();
+        var sp = new Float32Array(260 * 3);
+        for (var i = 0; i < 260; i++) {
+            sp[i * 3] = (Math.random() - 0.5) * 26;
+            sp[i * 3 + 1] = (Math.random() - 0.5) * 44;
+            sp[i * 3 + 2] = (Math.random() - 0.5) * 26;
+        }
+        soulSGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+        soulStreak = new THREE.Points(soulSGeo, new THREE.PointsMaterial({
+            color: 0xffc98a, size: 0.5, sizeAttenuation: true, map: glowTex,
+            transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        soulStreak.frustumCulled = false;
+        scene.add(soulStreak);
+        if (CaveAudio.rumble) CaveAudio.rumble();
+        CaveAudio.warp();
+        showHint('you slip out of yourself. the ground is only an opinion.');
+    }
+    function arriveCore() {
+        soulState = 2;
+        setPhasing(false);
+        if (soulStreak) {
+            scene.remove(soulStreak);
+            soulStreak.geometry.dispose();
+            soulStreak.material.dispose();
+            soulStreak = null; soulSGeo = null;
+        }
+        /* land within sight of a heart, so the core is never just dark */
+        var hA = CC.nearestHeart(camera.position.x, camera.position.z);
+        if (hA) {
+            var ang = Math.atan2(camera.position.z - hA.z, camera.position.x - hA.x);
+            camera.position.x = hA.x + Math.cos(ang) * (hA.r + 120);
+            camera.position.z = hA.z + Math.sin(ang) * (hA.r + 120);
+            yaw = Math.atan2(-(hA.x - camera.position.x), -(hA.z - camera.position.z));
+        }
+        var fy = CC.coreFloorAt(camera.position.x, camera.position.z);
+        camera.position.y = fy + 1.7;
+        vel.set(0, 0, 0);
+        updateChunks(200);
+        setWalkMode(true);
+        grounded = true;
+        phyY = camera.position.y; eyeY = camera.position.y;
+        if (soulBack) soulBack.style.display = 'block';
+        if (CaveAudio.oneBloom) CaveAudio.oneBloom();
+        if (CaveAudio.setSoul) CaveAudio.setSoul(0);
+        showHint('THE CORE. 6,371 kilometers down. the heart is burning ahead of you.');
+    }
+    function reattach() {
+        if (soulState !== 2 || !bodyPos) return;
+        soulState = 0;
+        if (soulBack) soulBack.style.display = 'none';
+        setPhasing(false);
+        W.tp(bodyPos.x, bodyPos.y, bodyPos.z);
+        yaw = bodyYaw;
+        vel.set(0, 0, 0);
+        setWalkMode(bodyWalk);
+        phyY = null; eyeY = null;
+        CaveAudio.warp();
+        if (soulBtn) soulBtn.style.display = 'block';
+        showHint('the body was patient. you are back inside it.');
+    }
+    function tickSoul(dt2) {
+        if (soulState !== 1) return;
+        var floorY = CC.coreFloorAt(camera.position.x, camera.position.z);
+        var remain = camera.position.y - (floorY + 1.7);
+        if (remain <= 0) { arriveCore(); return; }
+        soulV += SOUL_A * dt2;
+        /* the world slows you before it lets you land */
+        var vCap = Math.sqrt(Math.max(0, 2 * SOUL_A * Math.max(0, remain - 40))) + 55;
+        /* the last stretch is walked, not fallen */
+        if (remain < 500) vCap = Math.min(vCap, 22 + remain * 0.35);
+        if (soulV > vCap) soulV = vCap;
+        soulY = camera.position.y - Math.min(remain, soulV * dt2);
+        camera.position.y = soulY;
+        vel.set(0, 0, 0);
+        phyY = null; eyeY = null;
+        /* the streaks tear upward faster the deeper you go */
+        if (soulSGeo) {
+            var k2 = Math.min(1, soulV / 90000);
+            soulStreak.material.opacity = 0.25 + k2 * 0.5;
+            soulStreak.material.size = 0.4 + k2 * 2.6;
+            soulStreak.position.set(camera.position.x, camera.position.y, camera.position.z);
+            var sp2 = soulSGeo.attributes.position.array;
+            for (var i2 = 0; i2 < sp2.length; i2 += 3) {
+                sp2[i2 + 1] += (14 + k2 * 46) * dt2 * 8;
+                if (sp2[i2 + 1] > 22) {
+                    sp2[i2 + 1] -= 44;
+                    sp2[i2] = (Math.random() - 0.5) * 26;
+                    sp2[i2 + 2] = (Math.random() - 0.5) * 26;
+                }
+            }
+            soulSGeo.attributes.position.needsUpdate = true;
+        }
+        if (CaveAudio.setSoul) CaveAudio.setSoul(Math.min(1, soulV / 120000));
+        /* lore marks the passage of the earth's layers */
+        var prog = 1 - remain / CC.CORE_D;
+        var li = Math.floor(prog * SOUL_LORE.length);
+        if (li > soulLoreI && li < SOUL_LORE.length) {
+            soulLoreI = li;
+            showHint(SOUL_LORE[li]);
+        }
+    }
+    W.detach = function () { capsEaten = Math.max(capsEaten, SOUL_CAPS); detach(); return 'falling'; };
+    W.reattach = function () { reattach(); return 'embodied'; };
+    W.capsEaten = function () { return capsEaten; };
+    if (soulBtn) {
+        var soulBtnTap = function (e) { e.preventDefault(); detach(); };
+        soulBtn.addEventListener('touchstart', soulBtnTap, { passive: false });
+        soulBtn.addEventListener('click', soulBtnTap);
+    }
+    if (soulBack) {
+        var soulBackTap = function (e) { e.preventDefault(); reattach(); };
+        soulBack.addEventListener('touchstart', soulBackTap, { passive: false });
+        soulBack.addEventListener('click', soulBackTap);
+    }
+    if (document.getElementById('soulGo')) {
+        var sgTap = function (e) { e.preventDefault(); detach(); };
+        var snTap = function (e) {
+            e.preventDefault();
+            closeSoulAsk();
+            if (soulBtn) soulBtn.style.display = 'block';
+        };
+        document.getElementById('soulGo').addEventListener('touchstart', sgTap, { passive: false });
+        document.getElementById('soulGo').addEventListener('click', sgTap);
+        document.getElementById('soulNo').addEventListener('touchstart', snTap, { passive: false });
+        document.getElementById('soulNo').addEventListener('click', snTap);
+    }
     var tpDest = null;
     function offerTeleport(sign) {
         tpDest = sign;
@@ -5018,19 +5531,55 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         tpAsk.style.display = 'flex';
     }
     function closeTpAsk() { tpAsk.style.display = 'none'; tpDest = null; }
-    function safeArrival(x, y, z, tx, tz) {
-        /* pull the landing point toward the village heart until it is open air */
-        var best = [x, y, z];
-        for (var st2 = 0; st2 <= 8; st2++) {
-            var f2 = st2 / 8;
-            var qx = x + (tx - x) * f2, qz = z + (tz - z) * f2;
-            var qy = floorSurfY(qx, qz, y - 2.2) + 1.7;
-            if (CC.density(qx, qy, qz) < -0.08 && !blockedR(qx, qy, qz, 0.35)) {
-                best = [qx, qy, qz];
-                break;
+    function standingY(x2, z2, guessY) {
+        /* the top of a real floor near guessY: scan a wide band for a
+           solid surface with a body's worth of clear air above it. the old
+           narrow probe missed village floors and dropped you inside stone. */
+        var step = 0.35, best = null, bestD = 1e9;
+        var prevAir = CC.density(x2, guessY + 34, z2) < 0;
+        for (var yy = guessY + 34 - step; yy > guessY - 46; yy -= step) {
+            var solid = CC.density(x2, yy, z2) > 0;
+            if (solid && prevAir) {
+                var clear = true;
+                for (var h2 = 0.6; h2 <= 2.4; h2 += 0.45) {
+                    if (CC.density(x2, yy + h2, z2) > -0.02) { clear = false; break; }
+                }
+                if (clear) {
+                    var dd2 = Math.abs(yy - guessY);
+                    if (dd2 < bestD) { bestD = dd2; best = yy; }
+                }
             }
+            prevAir = !solid;
         }
         return best;
+    }
+    function safeArrival(x, y, z, tx, tz) {
+        /* land in the heart of the place, standing on its floor. try the
+           center first, then rings outward, and only ever return a point
+           with stone under it and air around it. */
+        var cands = [[tx, tz]];
+        var rings = [3, 6, 10, 15, 21];
+        for (var ri = 0; ri < rings.length; ri++) {
+            for (var ai = 0; ai < 8; ai++) {
+                var an = (ai / 8) * 6.2831853 + ri * 0.4;
+                cands.push([tx + Math.cos(an) * rings[ri], tz + Math.sin(an) * rings[ri]]);
+            }
+        }
+        cands.push([x, z]);
+        for (var ci = 0; ci < cands.length; ci++) {
+            var qx = cands[ci][0], qz = cands[ci][1];
+            var top = standingY(qx, qz, y);
+            if (top === null) continue;
+            var qy = top + 1.7;
+            if (CC.density(qx, qy, qz) < -0.08 && !blockedR(qx, qy, qz, 0.35)) {
+                return [qx, qy, qz, top];
+            }
+        }
+        /* nothing stood up to inspection: rise into open air rather than
+           materialize inside the stone */
+        var fa = findFreeAir(new THREE.Vector3(tx, y + 2, tz));
+        if (fa) return [fa.x, fa.y, fa.z, null];
+        return [tx, y + 2.5, tz, null];
     }
     function doSignTeleport(dest) {
         veil.style.opacity = '1';
@@ -5045,7 +5594,14 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             yaw = Math.atan2(-(faceX - land[0]), -(faceZ - land[2]));
             pitch = 0;
             vel.set(0, 0, 0);
-            grounded = false;
+            /* stand on the floor we found, so walk mode does not free fall */
+            if (land[3] !== null && land[3] !== undefined) {
+                camera.position.y = land[3] + 1.7;
+                phyY = camera.position.y;
+                grounded = true;
+            } else {
+                grounded = false;
+            }
             setTimeout(function () {
                 veil.style.opacity = '0';
                 showHint('the sign knew the way');
@@ -5434,6 +5990,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     }
     function tickPhasing(dt2) {
         if (!isPhasing()) return;
+        if (soulState === 1) return;
         /* re-solidify only after floating in genuinely open cave for a moment */
         var clearNow = CC.density(camera.position.x, camera.position.y + bodyOffY, camera.position.z) < -0.15 &&
             !blockedR(camera.position.x, camera.position.y + bodyOffY, camera.position.z, BODY_R + 0.1);
@@ -5652,7 +6209,23 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         hintTimer = setTimeout(function () { hintEl.style.opacity = 0; }, 3200);
     }
     W.showHint = showHint;
-    W.tp = function (x, y, z) { camera.position.set(x, y, z); updateChunks(200); };
+    W.tp = function (x, y, z) {
+        camera.position.set(x, y, z);
+        /* the smoothed eye holds the OLD height: without clearing it, the
+           next frame drags you back to the altitude you left, which is how
+           village arrivals kept starting inside the floor */
+        phyY = null; eyeY = null;
+        updateChunks(200);
+    };
+    W.where = function () {
+        return { x: camera.position.x, y: camera.position.y, z: camera.position.z,
+            depth: Math.round(-camera.position.y), soul: soulState, walk: walkMode,
+            bask: baskK, elves: elves.length, core: CC.inCore(camera.position.y) };
+    };
+    W.bask = function () {
+        return { k: baskK, t: baskT, heart: baskHeart, elves: elves.length,
+            spd: Math.sqrt(vel.x * vel.x + vel.z * vel.z), core: CC.inCore(camera.position.y) };
+    };
     W.nearestCity = function () {
         var st = CC.siteNear(camera.position.x, camera.position.z);
         if (!st) return null;
@@ -5674,6 +6247,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         new THREE.Color(0x0e0e13)
     ];
     var fogCol = new THREE.Color(0x04070c);
+    var CORE_FOG = new THREE.Color(0x2a0d05);
     var audioProx = { fallD: 999, torchD: 999, crystalD: 999, waterD: 999 };
 
     /* -------- light pool assignment, with fades so lights never pop -------- */
@@ -5758,6 +6332,24 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 for (var f2 = 0; f2 < fl.length; f2++) {
                     fl[f2].g.rotation.z = Math.sin(t * 0.6 + fl[f2].ph) * 0.045;
                     fl[f2].g.rotation.y += Math.sin(t * 0.13 + fl[f2].ph) * 0.0006;
+                }
+            }
+            var hrl = chunks[kf].hearts;
+            if (hrl) {
+                for (var hri = 0; hri < hrl.length; hri++) {
+                    var hh = hrl[hri];
+                    var pulse = 1.7 + Math.sin(t * 0.45 + hh.r) * 0.45 + Math.sin(t * 1.31) * 0.12;
+                    hh.mesh.material.emissiveIntensity = (pulse - 0.85) + baskK * 0.7;
+                    hh.spr.material.opacity = 0.42 + Math.sin(t * 0.45 + hh.r) * 0.1 + baskK * 0.25;
+                    hh.mesh.rotation.y += gDt * 0.02;
+                    var eb = hh.emb.geometry.attributes.position.array;
+                    for (var ej = 0; ej < eb.length; ej += 3) {
+                        eb[ej + 1] += gDt * (2.2 + (ej % 7) * 0.35);
+                        if (eb[ej + 1] > hh.y0 + hh.r * 2.6) eb[ej + 1] = hh.y0;
+                        eb[ej] = hh.base[ej] + Math.sin(t * 0.6 + ej) * 1.6;
+                        eb[ej + 2] = hh.base[ej + 2] + Math.cos(t * 0.5 + ej) * 1.6;
+                    }
+                    hh.emb.geometry.attributes.position.needsUpdate = true;
                 }
             }
             var fhl = chunks[kf].fish;
@@ -5884,6 +6476,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     if (guard > 8) break;
                 }
                 overlay.style.display = 'none';
+                if (capsEaten >= SOUL_CAPS && soulBtn) soulBtn.style.display = 'block';
                 showHint(returned ? 'you return to the place you left' : 'drift slowly, the caves keep growing ahead of you');
                 last = performance.now();
                 tick();
@@ -5902,7 +6495,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     function tick() {
         requestAnimationFrame(tick);
         var now = performance.now();
-        var dt = Math.min(0.05, (now - last) / 1000);
+        var dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
         last = now;
         var t = now / 1000;
 
@@ -6050,7 +6643,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 trailGeo.attributes.color.needsUpdate = true;
             }
         }
-        if (window._CAVE_MOTHS !== false) {
+        if (window._CAVE_MOTHS !== false && soulState !== 1) {
             /* be still, and the moths show the way */
             var spdM = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
             if (spdM < 0.3 && !mothPts) mothStill += dt;
@@ -6114,8 +6707,35 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 }
             }
         }
+        if (CC.inCore(p.y) && soulState !== 1) {
+            baskHeart = CC.nearestHeart(p.x, p.z);
+            var spdB = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+            var atHeart = baskHeart && baskHeart.dist < baskHeart.r + 130;
+            if (atHeart && spdB < 1.2) {
+                baskT += dt;
+                if (baskT > 2.0) baskK = Math.min(1, baskK + dt * 0.06);
+            } else {
+                baskT = 0;
+                baskK = Math.max(0, baskK - dt * 0.12);
+            }
+            if (baskK > 0.02 && !baskShown) {
+                baskShown = true;
+                showHint('the heat finds you. stay, and let it read you.');
+            }
+            if (baskK > 0.75 && !baskDeep) {
+                baskDeep = true;
+                showHint('you are basking in the middle of the world. nothing above you knows.');
+                if (CaveAudio.oneBloom) CaveAudio.oneBloom();
+            }
+            if (baskK <= 0.02) baskDeep = false;
+        } else if (baskK > 0) {
+            baskK = Math.max(0, baskK - dt * 0.3);
+            baskT = 0;
+        }
+        if (CaveAudio.setBask) CaveAudio.setBask(baskK);
+        tickElves(dt, t, p);
         poiT -= dt;
-        if (poiT <= 0) {
+        if (poiT <= 0 && soulState !== 1) {
             poiT = 0.4;
             for (var kvP in chunks) {
                 var vslP = chunks[kvP].vaultStones;
@@ -6248,10 +6868,17 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (!squeezing) squeezeShown = false;
 
         updateDust(dt, t);
-        updateChunks(vel.lengthSq() > 0.01 ? 2 : 3);
+        tickSoul(dt);
+        if (soulState === 1) {
+            /* mid-fall: no world is built until the heart is close */
+            var remC = camera.position.y - CC.coreFloorAt(camera.position.x, camera.position.z);
+            if (remC < 1800) updateChunks(6);
+        } else {
+            updateChunks(vel.lengthSq() > 0.01 ? 2 : 3);
+        }
         assignLights(t, dt);
         CaveAudio.gentleResume();
-        var trial = window._CAVE_TRIAL === false ? null : CC.trialAt(camera.position.y);
+        var trial = (window._CAVE_TRIAL === false || soulState === 1) ? null : CC.trialAt(camera.position.y);
         var trialT = trial ? trial.t : 0;
         var trialK = trial ? (trial.kind === 'fire' ? 0 : trial.kind === 'plasma' ? 1 : 2) : 0;
         CaveAudio.update(dt, {
@@ -6377,6 +7004,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var bnd = CC.bandAt(p.y);
         var b0 = Math.min(3, Math.floor(bnd)), bf2 = bnd - b0;
         fogCol.copy(FOG_BANDS[b0]).lerp(FOG_BANDS[b0 + 1], bf2);
+        if (CC.inCore(p.y)) {
+            /* the air at the center of the world is lit by what it holds */
+            fogCol.lerp(CORE_FOG, 0.72 + baskK * 0.2);
+            hemi.intensity = 0.3 + 0.5 * baskK;
+            hemi.color.setHex(0x6a2a10);
+        }
         phyY = camera.position.y;
         if (eyeY === null) eyeY = phyY;
         if (!walkMode || Math.abs(phyY - eyeY) > 0.9) {
@@ -6390,7 +7023,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         camera.position.y = eyeY;
 
         var epoch = CC.epochAt(camera.position.y);
-        if (epoch.idx !== lastEpochIdx) {
+        if (soulState === 1) lastEpochIdx = epoch.idx;
+        else if (epoch.idx !== lastEpochIdx) {
             var wasFirst = lastEpochIdx === -1;
             lastEpochIdx = epoch.idx;
             if (epoch.name && !wasFirst) {
@@ -6523,11 +7157,11 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             var vWild = Math.max(0, Math.min(1, (tripS - 21) / 9));
             scene.fog.color.offsetHSL(Math.sin(t * (0.21 + vWild * 0.6)) * (0.026 * vLvl + 0.08 * vWild), 0.02 * vLvl + 0.07 * vWild, 0.0);
             scene.background.copy(scene.fog.color);
-            camera.fov = 72 + Math.sin(t * (0.47 + vWild * 0.5)) * (1.5 * vLvl + 3.5 * vWild) - squeezeGlow * 3.5 + fovJolt + rideT * 5.0;
+            camera.fov = 72 + Math.sin(t * (0.47 + vWild * 0.5)) * (1.5 * vLvl + 3.5 * vWild) - squeezeGlow * 3.5 + fovJolt + rideT * 5.0 + baskK * 4.0;
             camera.updateProjectionMatrix();
             tripFovDirty = true;
         } else if (squeezeGlow > 0) {
-            camera.fov = 72 - squeezeGlow * 3.5 + fovJolt + rideT * 5.0;
+            camera.fov = 72 - squeezeGlow * 3.5 + fovJolt + rideT * 5.0 + baskK * 4.0;
             camera.updateProjectionMatrix();
             tripFovDirty = true;
         } else if (tripFovDirty) {
@@ -6539,7 +7173,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         renderer.render(scene, camera);
     }
 
-    console.log('[CAVES 029] seed ' + CC.SEED +
+    console.log('[CAVES 031] seed ' + CC.SEED +
         ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP _CAVE_SHANTY _CAVE_TRIAL | _CAVE.trip(n) freshStart()');
 })();
 </script>
