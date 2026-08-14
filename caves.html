@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>caves 031</title>
+<title>caves 042</title>
 <style>
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
@@ -29,6 +29,20 @@
 #soulLbl { color: #d9c6ff; font-size: 13px; letter-spacing: 0.02em; }
 #soulBtn, #soulBack { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
     z-index: 30; border-color: rgba(180,140,255,0.5); color: #d9c6ff; }
+#btnSong { position: fixed; right: 84px; top: 18px; z-index: 30; width: 40px; text-align: center;
+    border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.55); font-size: 17px;
+    padding: 6px 0; letter-spacing: 1px; }
+#songPanel { display: none; position: fixed; right: 18px; top: 68px; z-index: 31;
+    background: rgba(6,10,16,0.92); border: 1px solid rgba(1,169,130,0.4); border-radius: 12px;
+    padding: 10px 12px; min-width: 168px; }
+#songPanel.on { display: block; }
+.songRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; }
+.songLbl { color: rgba(255,255,255,0.5); font-size: 12px; letter-spacing: 0.04em; }
+.songVal { color: #7fe8c8; font-size: 13px; font-weight: 600; padding: 4px 10px;
+    border: 1px solid rgba(1,169,130,0.35); border-radius: 8px; min-width: 74px; text-align: center; }
+.songWide { width: 100%; color: rgba(255,255,255,0.6); border-color: rgba(255,255,255,0.18); font-weight: 400; }
+.songSub { color: rgba(255,255,255,0.42); font-size: 11px; text-align: right; margin: -2px 0 4px 0;
+    letter-spacing: 0.02em; }
     #depth {
         top: calc(env(safe-area-inset-top, 0px) + 10px); right: 14px;
         font-size: 11px; letter-spacing: 0.1em; text-align: right;
@@ -215,7 +229,7 @@
     });
 })();
 </script>
-<div class="hud" id="topbar"><span class="t">caves 031</span></div>
+<div class="hud" id="topbar"><span class="t">caves 042</span></div>
 <div class="hud" id="depth">DEPTH 0 m</div>
 <div class="hud" id="hint"></div>
 <div class="btn" id="btnUp">&#9650;</div>
@@ -252,6 +266,16 @@
         <div class="btn" id="soulGo">leave the body</div>
         <div class="btn" id="soulNo">stay</div>
     </div>
+</div>
+<div class="btn" id="btnSong">&#8943;</div>
+<div id="songPanel">
+    <div class="songRow"><span class="songLbl">key</span><span class="songVal" id="songKey">auto</span></div>
+    <div class="songRow"><span class="songLbl">scale</span><span class="songVal" id="songScale">auto</span></div>
+    <div class="songSub" id="songScaleSub">&nbsp;</div>
+    <div class="songRow"><span class="songLbl">pace</span><span class="songVal" id="songPace">auto</span></div>
+    <div class="songRow"><span class="songLbl">bpm</span><span class="songVal" id="songTap">tap</span></div>
+    <div class="songSub" id="songBpmSub">&nbsp;</div>
+    <div class="songRow"><span class="songVal songWide" id="songAuto">let the cave choose</span></div>
 </div>
 <div class="btn" id="soulBtn" style="display:none;">leave the body</div>
 <div class="btn" id="soulBack" style="display:none;">return to the body</div>
@@ -659,12 +683,23 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         return out;
     }
+    function openUpTo(lx, y, lz, surfY) {
+        /* is there unbroken water between here and that surface? */
+        if (y > surfY) return false;
+        var span = surfY - y;
+        if (span > 80) return false;
+        var steps = Math.min(28, Math.ceil(span / 2.5));
+        for (var i = 1; i <= steps; i++) {
+            if (density(lx, y + (span * i) / steps - 0.25, lz) > 0) return false;
+        }
+        return true;
+    }
     C.waterLevelAt = function (lx, y, lz) {
         /* the nearest water surface governing this position, or null.
            The global table always exists near the surface. */
         var x = lx + OX, z = lz + OZ;
         var best = null;
-        if (y < C.WATER_Y + 6 && y > C.WATER_Y - 60) best = C.WATER_Y;
+        if (y < C.WATER_Y + 0.2 && y > C.WATER_Y - 60 && openUpTo(lx, y, lz, C.WATER_Y)) best = C.WATER_Y;
         var wx2 = Math.floor(x / WCELL), wz2 = Math.floor(z / WCELL);
         for (var i = -1; i <= 1; i++) {
             for (var j = -1; j <= 1; j++) {
@@ -674,7 +709,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 if (dx2 * dx2 + dz2 * dz2 > 150 * 150) continue;
                 for (var q = 0; q < lks.length; q++) {
                     var lk = lks[q];
-                    if (y > lk.y + 6 || y < lk.y - 80) continue;
+                    /* you are only IN a lake if you are under its surface and
+                       nothing solid stands between you and it. the old test
+                       drowned anyone within 150m and 80m below, which made dry
+                       village floors behave like water: no gravity, no jump. */
+                    if (y > lk.y + 0.2 || y < lk.y - 80) continue;
+                    if (!openUpTo(lx, y, lz, lk.y)) continue;
                     if (best === null || Math.abs(y - lk.y) < Math.abs(y - best)) best = lk.y;
                 }
             }
@@ -684,67 +724,122 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (rvw && (best === null || Math.abs(y - rvw.y) < Math.abs(y - best))) best = rvw.y;
         return best;
     };
+    /* -------- rivers that actually run --------
+       real streams do not join two points with a ruler: they follow the
+       land downhill, wander where it flattens, and cut their own bed. so
+       a river here walks a smooth hydraulic HEAD field, always descending,
+       and carves the canyon it needs, which is why it can never end in a
+       wall and why you can ride one for the better part of a kilometre. */
+    function headAt(x, z) {
+        /* the lie of the land: smooth, multi-scale, never repeating */
+        return vnoise(x * 0.0016 + 41.7, 12.3, z * 0.0016 - 18.4) * 1.0
+            + vnoise(x * 0.0051 - 7.1, 63.9, z * 0.0051 + 22.8) * 0.42
+            + vnoise(x * 0.0129 + 91.2, 5.5, z * 0.0129 - 3.3) * 0.16;
+    }
+    function headGrad(x, z, h) {
+        var e = 26;
+        return [(headAt(x + e, z) - headAt(x - e, z)) / (2 * e),
+            (headAt(x, z + e) - headAt(x, z - e)) / (2 * e)];
+    }
+    var RIVER_STEP = 17, RIVER_MAX = 52;     /* up to ~880m of continuous run */
     function riverFor(wx2, wz2, li) {
         var lks = lakesFor(wx2, wz2);
         if (li >= lks.length) return null;
         var src = lks[li];
-        if (hash3(wx2 * 3 + li, 661, wz2 * 3 - li) > 0.7) return null;
+        if (hash3(wx2 * 3 + li, 661, wz2 * 3 - li) > 0.62) return null;
         var sx2 = (wx2 + 0.5) * WCELL, sz2 = (wz2 + 0.5) * WCELL;
-        var best = null, bd2 = 1e9;
-        for (var i = -1; i <= 1; i++) {
-            for (var j = -1; j <= 1; j++) {
-                if (i === 0 && j === 0) continue;
-                var nl = lakesFor(wx2 + i, wz2 + j);
-                for (var q = 0; q < nl.length; q++) {
-                    if (nl[q].y > src.y - 6) continue;
-                    var tx2 = (wx2 + i + 0.5) * WCELL, tz2 = (wz2 + j + 0.5) * WCELL;
-                    var dd = (tx2 - sx2) * (tx2 - sx2) + (tz2 - sz2) * (tz2 - sz2) + (src.y - nl[q].y) * 40;
-                    if (dd < bd2) { bd2 = dd; best = { x: tx2, z: tz2, y: nl[q].y }; }
+        var seedA = hash3(wx2 + li, 662, wz2 - li);
+        /* leave the lake heading downhill, not in a random direction */
+        var g0 = headGrad(sx2, sz2);
+        var gl0 = Math.sqrt(g0[0] * g0[0] + g0[1] * g0[1]) || 1;
+        var dx = -g0[0] / gl0, dz = -g0[1] / gl0;
+        if (gl0 < 1e-6) { dx = Math.cos(seedA * 6.2831853); dz = Math.sin(seedA * 6.2831853); }
+        var px = sx2 + dx * 46, pz = sz2 + dz * 46;
+        var py = src.y - 0.6;
+        var pts = [[px, py, pz]], drops = [], widths = [2.1];
+        var nextDrop = 5 + Math.floor(hash3(wx2, 669, wz2 + li) * 7);
+        /* water that reaches a basin does not circle it forever: it sumps.
+           without this, a river caught in a local low coils into a knot
+           (measured: 884m of course inside a 16m span) */
+        var visited = {};
+        visited[Math.round(px / 20) + ',' + Math.round(pz / 20)] = 0;
+        for (var st2 = 1; st2 <= RIVER_MAX; st2++) {
+            var g = headGrad(px, pz);
+            var gl = Math.sqrt(g[0] * g[0] + g[1] * g[1]);
+            var ddx = gl > 1e-9 ? -g[0] / gl : dx;
+            var ddz = gl > 1e-9 ? -g[1] / gl : dz;
+            /* a stream keeps its momentum, leans downhill, and wanders where
+               the ground flattens: that is what makes a meander */
+            var t3 = st2 / RIVER_MAX;
+            var mw = Math.sin(st2 * 0.44 + seedA * 6.28) * (0.10 + (1 - Math.min(1, gl * 900)) * 0.18);
+            var nx2 = dx * 2.10 + ddx * 0.62 + (-dz) * mw;
+            var nz2 = dz * 2.10 + ddz * 0.62 + (dx) * mw;
+            /* and it is pulled toward any lower water nearby, so rivers meet
+               lakes and chain onward instead of stopping in the dark */
+            var lc = Math.floor(px / WCELL), lcz = Math.floor(pz / WCELL);
+            var pullX = 0, pullZ = 0, pullD = 1e9;
+            for (var oi = -1; oi <= 1; oi++) {
+                for (var oj = -1; oj <= 1; oj++) {
+                    var nl2 = lakesFor(lc + oi, lcz + oj);
+                    for (var q2 = 0; q2 < nl2.length; q2++) {
+                        if (nl2[q2].y > py - 4) continue;
+                        var tx3 = (lc + oi + 0.5) * WCELL, tz3 = (lcz + oj + 0.5) * WCELL;
+                        var dd3 = (tx3 - px) * (tx3 - px) + (tz3 - pz) * (tz3 - pz);
+                        if (dd3 < pullD && dd3 > 1) { pullD = dd3; pullX = tx3 - px; pullZ = tz3 - pz; }
+                    }
+                }
+            }
+            if (pullD < 420 * 420) {
+                var pl = Math.sqrt(pullD);
+                var pw2 = 0.40 * (1 - pl / 420);
+                nx2 += (pullX / pl) * pw2;
+                nz2 += (pullZ / pl) * pw2;
+            }
+            var nl3 = Math.sqrt(nx2 * nx2 + nz2 * nz2) || 1;
+            dx = nx2 / nl3; dz = nz2 / nl3;
+            px += dx * RIVER_STEP;
+            pz += dz * RIVER_STEP;
+            /* descent: gentle over flats, faster where the head falls away,
+               with a knickpoint every so often that becomes a waterfall */
+            var fall = 0.5 + Math.min(3.2, gl * 1400) + hash3(st2, 670, wx2 + li) * 0.5;
+            var isDrop = st2 >= nextDrop;
+            if (isDrop) {
+                fall += 3.0 + hash3(st2, 671, wz2 + li) * 6.5;
+                nextDrop = st2 + 5 + Math.floor(hash3(st2, 672, wx2) * 8);
+            }
+            var vk = Math.round(px / 20) + ',' + Math.round(pz / 20);
+            /* only a return to ground it left LONG ago counts as a loop:
+               consecutive steps share a cell and must not end the river */
+            if (visited[vk] !== undefined && st2 - visited[vk] > 5) break;
+            if (visited[vk] === undefined) visited[vk] = st2;
+            py -= fall;
+            pts.push([px, py, pz]);
+            widths.push(2.1 + t3 * 2.6 + hash3(st2, 673, li) * 0.5);
+            if (isDrop) drops.push(pts.length - 1);
+        }
+        var bx0 = 1e9, bx1 = -1e9, bz0 = 1e9, bz1 = -1e9, by0 = 1e9, by1 = -1e9;
+        for (var p3 = 0; p3 < pts.length; p3++) {
+            bx0 = Math.min(bx0, pts[p3][0]); bx1 = Math.max(bx1, pts[p3][0]);
+            bz0 = Math.min(bz0, pts[p3][2]); bz1 = Math.max(bz1, pts[p3][2]);
+            by0 = Math.min(by0, pts[p3][1]); by1 = Math.max(by1, pts[p3][1]);
+        }
+        /* segments bucketed by 100m cell: a river is now long enough that
+           testing all 52 segments per density sample would be ruinous */
+        var buckets = {};
+        for (var si2 = 1; si2 < pts.length; si2++) {
+            var a2 = pts[si2 - 1], b2 = pts[si2];
+            var c0x = Math.floor(Math.min(a2[0], b2[0]) / 100), c1x = Math.floor(Math.max(a2[0], b2[0]) / 100);
+            var c0z = Math.floor(Math.min(a2[2], b2[2]) / 100), c1z = Math.floor(Math.max(a2[2], b2[2]) / 100);
+            for (var bx = c0x - 1; bx <= c1x + 1; bx++) {
+                for (var bz = c0z - 1; bz <= c1z + 1; bz++) {
+                    var bk = bx + ',' + bz;
+                    if (!buckets[bk]) buckets[bk] = [];
+                    buckets[bk].push(si2);
                 }
             }
         }
-        var ang = hash3(wx2 + li, 662, wz2 - li) * 6.2831853;
-        if (!best) {
-            best = {
-                x: sx2 + Math.cos(ang) * 150,
-                z: sz2 + Math.sin(ang) * 150,
-                y: src.y - 24 - hash3(wx2, 663 + li, wz2) * 30
-            };
-        }
-        var n = 12;
-        var pts = [], drops = [];
-        var dxT = best.x - sx2, dzT = best.z - sz2;
-        var plen = Math.sqrt(dxT * dxT + dzT * dzT) || 1;
-        var s0x = sx2 + (dxT / plen) * 60, s0z = sz2 + (dzT / plen) * 60;
-        var f1 = 0.3 + hash3(wx2, 664, wz2 + li) * 0.2;
-        var f2 = 0.62 + hash3(wz2, 665, wx2 - li) * 0.2;
-        var totalDrop = src.y - best.y;
-        var d1 = totalDrop * (0.3 + hash3(li, 666, wx2) * 0.25);
-        var d2 = totalDrop * (0.25 + hash3(li, 667, wz2) * 0.2);
-        for (var p2 = 0; p2 <= n; p2++) {
-            var t2 = p2 / n;
-            var px2 = s0x + (best.x - s0x) * t2;
-            var pz2 = s0z + (best.z - s0z) * t2;
-            var mw = Math.sin(t2 * 9.4 + ang) * 14 * Math.sin(t2 * 3.14);
-            px2 += (-dzT / plen) * mw;
-            pz2 += (dxT / plen) * mw;
-            var py2 = src.y;
-            if (t2 >= f1) py2 -= d1;
-            if (t2 >= f2) py2 -= d2;
-            if (t2 >= 0.999) py2 = best.y;
-            pts.push([px2, py2, pz2]);
-        }
-        for (p2 = 1; p2 <= n; p2++) {
-            if (pts[p2][1] < pts[p2 - 1][1] - 3) drops.push(p2);
-        }
-        var bx0 = 1e9, bx1 = -1e9, bz0 = 1e9, bz1 = -1e9, by0 = 1e9, by1 = -1e9;
-        for (p2 = 0; p2 < pts.length; p2++) {
-            bx0 = Math.min(bx0, pts[p2][0]); bx1 = Math.max(bx1, pts[p2][0]);
-            bz0 = Math.min(bz0, pts[p2][2]); bz1 = Math.max(bz1, pts[p2][2]);
-            by0 = Math.min(by0, pts[p2][1]); by1 = Math.max(by1, pts[p2][1]);
-        }
-        return { pts: pts, drops: drops, w: 2.0 + hash3(li, 668, wx2 + wz2) * 1.2,
-            bx0: bx0 - 8, bx1: bx1 + 8, bz0: bz0 - 8, bz1: bz1 + 8, by0: by0 - 10, by1: by1 + 6 };
+        return { pts: pts, drops: drops, widths: widths, w: 2.6, buckets: buckets,
+            bx0: bx0 - 10, bx1: bx1 + 10, bz0: bz0 - 10, bz1: bz1 + 10, by0: by0 - 12, by1: by1 + 8 };
     }
     var riverMemo = {};
     var riverCellMemo = {};
@@ -756,16 +851,24 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         return rv;
     }
     function riversNearWorld(x, z) {
+        /* rivers run far now, so a point can be crossed by one born several
+           cells away: gather a wide neighbourhood once per cell and cache */
         var wx2 = Math.floor(x / WCELL), wz2 = Math.floor(z / WCELL);
         var ck = wx2 + ',' + wz2;
         var hit = riverCellMemo[ck];
         if (hit) return hit;
         var out = [];
-        for (var i = -1; i <= 1; i++) {
-            for (var j = -1; j <= 1; j++) {
+        var reach = Math.ceil((RIVER_STEP * RIVER_MAX) / WCELL) + 1;
+        for (var i = -reach; i <= reach; i++) {
+            for (var j = -reach; j <= reach; j++) {
                 for (var li = 0; li < 4; li++) {
                     var rv = riverForM(wx2 + i, wz2 + j, li);
-                    if (rv) out.push(rv);
+                    if (!rv) continue;
+                    /* only keep the ones whose course can reach this cell */
+                    var cx0 = wx2 * WCELL, cz0 = wz2 * WCELL;
+                    if (rv.bx1 < cx0 - 4 || rv.bx0 > cx0 + WCELL + 4) continue;
+                    if (rv.bz1 < cz0 - 4 || rv.bz0 > cz0 + WCELL + 4) continue;
+                    out.push(rv);
                 }
             }
         }
@@ -782,18 +885,31 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     }
     function riverCarve(x, y, z, d) {
         var rl = riversNearWorld(x, z);
+        var bk = Math.floor(x / 100) + ',' + Math.floor(z / 100);
         for (var r2 = 0; r2 < rl.length; r2++) {
             var rv = rl[r2];
             if (x < rv.bx0 || x > rv.bx1 || z < rv.bz0 || z > rv.bz1 || y < rv.by0 || y > rv.by1) continue;
-            for (var p2 = 1; p2 < rv.pts.length; p2++) {
+            var segs = rv.buckets[bk];
+            if (!segs) continue;
+            for (var si = 0; si < segs.length; si++) {
+                var p2 = segs[si];
                 var a = rv.pts[p2 - 1], b = rv.pts[p2];
-                var dd2 = segDist2(x, y + rv.w * 0.4, z, a, b);
-                var cd = Math.sqrt(dd2) - rv.w;
+                var w = rv.widths[p2];
+                /* the bed itself */
+                var dd2 = segDist2(x, y + w * 0.4, z, a, b);
+                var cd = Math.sqrt(dd2) - w;
                 d = Math.min(d, cd * 0.55);
+                /* THE CANYON: a river you can travel needs air over it. cut a
+                   slot above the water the whole way, or the course is a
+                   flooded tube that dead-ends at the first low ceiling. */
+                var hd2 = segDist2(x, y - 2.6, z, a, b);
+                var hcd = Math.sqrt(hd2) - w * 0.92;
+                d = Math.min(d, hcd * 0.55);
+                /* the plunge shaft at each fall */
                 if (rv.drops.indexOf(p2) >= 0) {
                     var sd = Math.sqrt((x - b[0]) * (x - b[0]) + (z - b[2]) * (z - b[2]));
-                    if (y < a[1] + 3 && y > b[1] - 3) {
-                        d = Math.min(d, (sd - rv.w * 1.1) * 0.55);
+                    if (y < a[1] + 4 && y > b[1] - 4) {
+                        d = Math.min(d, (sd - w * 1.15) * 0.55);
                     }
                 }
             }
@@ -866,6 +982,24 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
         }
         return out;
+    };
+    C.heartAt = function (lx, ly, lz) {
+        /* the molten body you are inside of, if any: r, depth and the pull
+           toward its surface. the heart used to be scenery; now it is water */
+        var l = C.heartsNearChunk(lx, lz);
+        for (var i = 0; i < l.length; i++) {
+            var h = l[i];
+            var hy = C.coreFloorAt(h.x, h.z) + h.r * 0.42;
+            var dx = lx - h.x, dy = ly - hy, dz = lz - h.z;
+            var d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 < h.r * h.r) {
+                var d = Math.sqrt(d2) || 0.0001;
+                return { x: h.x, y: hy, z: h.z, r: h.r, dist: d,
+                    depth: (h.r - d) / h.r, surfY: hy + Math.sqrt(Math.max(0, h.r * h.r - dx * dx - dz * dz)),
+                    nx: dx / d, ny: dy / d, nz: dz / d, id: h.id };
+            }
+        }
+        return null;
     };
     C.nearestHeart = function (lx, lz) {
         var l = C.heartsNearChunk(lx, lz), best = null, bd = 1e9;
@@ -977,7 +1111,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             for (var p2 = 0; p2 < rv.pts.length; p2++) {
                 pts.push([rv.pts[p2][0] - OX, rv.pts[p2][1], rv.pts[p2][2] - OZ]);
             }
-            out.push({ pts: pts, drops: rv.drops, w: rv.w });
+            out.push({ pts: pts, drops: rv.drops, w: rv.w, widths: rv.widths });
         }
         return out;
     };
@@ -985,15 +1119,29 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (C.inCore(y)) return null;
         var x = lx + OX, z = lz + OZ;
         var rl = riversNearWorld(x, z);
+        var bk = Math.floor(x / 100) + ',' + Math.floor(z / 100);
         for (var r2 = 0; r2 < rl.length; r2++) {
             var rv = rl[r2];
             if (x < rv.bx0 || x > rv.bx1 || z < rv.bz0 || z > rv.bz1) continue;
-            for (var p2 = 1; p2 < rv.pts.length; p2++) {
+            var segs = rv.buckets[bk];
+            if (!segs) continue;
+            for (var si = 0; si < segs.length; si++) {
+                var p2 = segs[si];
                 var a = rv.pts[p2 - 1], b = rv.pts[p2];
-                var dd2 = segDist2(x, a[1], z, [a[0], a[1], a[2]], [b[0], a[1], b[2]]);
-                if (dd2 < rv.w * rv.w && y > a[1] - 3.5 && y < a[1] + 2.5) {
-                    var fl = Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[2] - a[2]) * (b[2] - a[2])) || 1;
-                    return { y: Math.min(a[1], b[1]), fx: (b[0] - a[0]) / fl, fz: (b[2] - a[2]) / fl };
+                var w = rv.widths[p2];
+                /* how far along this segment we are, so the surface FALLS
+                   with the course instead of sitting at the segment start */
+                var abx = b[0] - a[0], abz = b[2] - a[2];
+                var seg2 = abx * abx + abz * abz || 1;
+                var tt = ((x - a[0]) * abx + (z - a[2]) * abz) / seg2;
+                tt = Math.max(0, Math.min(1, tt));
+                var cxp = a[0] + abx * tt, czp = a[2] + abz * tt;
+                var dxp = x - cxp, dzp = z - czp;
+                if (dxp * dxp + dzp * dzp > w * w) continue;
+                var surf = a[1] + (b[1] - a[1]) * tt;
+                if (y > surf - 3.5 && y < surf + 2.5) {
+                    var fl = Math.sqrt(seg2);
+                    return { y: surf, fx: abx / fl, fz: abz / fl };
                 }
             }
         }
@@ -1085,18 +1233,20 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     /* -------- settlements: carved halls and buried cities --------
        Sites live on a coarse lattice; each carves a dome hall with a
        flat floor, side chambers, and an access tunnel out into the worms */
-    var SET_CELL = 260;
+    var SET_CELL = 250;
     function siteFor(gx, gz) {
         var h = hash3(gx * 3 + 11, 77, gz * 3 + 29);
         /* the first city is guaranteed: one cell east of spawn, never a ruin */
         if (gx === 1 && gz === 0) h = 0.12;
-        else if (h > 0.48) return null;
+        else if (h > 0.62) return null;
         var cx = (gx + 0.18 + hash3(gx, 1, gz) * 0.64) * SET_CELL;
         var cz = (gz + 0.18 + hash3(gx, 2, gz) * 0.64) * SET_CELL;
         /* keep the spawn area natural */
         if (cx * cx + cz * cz < 150 * 150) return null;
-        var cy = -20 - hash3(gx, 3, gz) * 320;
-        var domeR = 20 + hash3(gx, 4, gz) * 14;
+        /* spread them down the whole early descent, not just the first 340m */
+        var cy = -20 - hash3(gx, 3, gz) * hash3(gz, 31, gx) * 2600;
+        /* a real town needs a cavern to stand in: 3x the old span */
+        var domeR = 52 + hash3(gx, 4, gz) * 46;
         var floorY = cy - domeR * 0.42;
         if (floorY < C.WATER_Y + 4 && hash3(gx, 5, gz) > 0.25) {
             cy = C.WATER_Y + 6 + domeR * 0.42;
@@ -1236,7 +1386,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     /* shanty complexes: rare carved homes of the old cave dwellers.
        A hidden door, then rooms stepping down into the rock, each one
        hand-dug: rounded-box chambers joined by sloped stair corridors. */
-    var SHANTY_CELL = 340;
+    var SHANTY_CELL = 210;
     function rbox(px, py, pz, cx2, cy2, cz2, hx, hy, hz, rr) {
         var qx = Math.abs(px - cx2) - hx, qy = Math.abs(py - cy2) - hy, qz = Math.abs(pz - cz2) - hz;
         var ax = Math.max(qx, 0), ay = Math.max(qy, 0), az = Math.max(qz, 0);
@@ -1335,6 +1485,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     C.getTripWarp = function () { return TW; };
     C.density = density;
     C.rockColor = rockColor;
+    C.rockColorLocal = function (lx, ly, lz, out) { rockColor(lx + OX, ly, lz + OZ, out); };
     C.grad = grad;
 
     /* depth bands: the first five strata are hand-named; below 1500 the
@@ -1804,6 +1955,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var shardGain = null, shardN = 0;
         var soulGain = null, soulFilt = null, soulOsc = null, soulOscG = null, soulK = 0;
         var baskGain = null, baskOscs = [], baskK2 = 0;
+        var lavaGain = null, lavaFilt = null, lavaK2 = 0;
         var chorusGain = null, glowLevel = 0;
         var chorusVoices = [];
         var dly = null, dlySend = null, compRef = null;
@@ -1836,7 +1988,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             root: Math.floor(Math.random() * 12),
             scale: null, mood: null, deg: 0,
             chordT: 2.0, sectionT: 25 + Math.random() * 20,
-            songT: 0, breathT: 0,
+            songT: 0, breathT: 0, rootLock: null, scaleLock: null, paceMult: null,
             phraseNotes: 0, leadT: 6 + Math.random() * 6,
             rhythmOn: false, beatT: 0, beat: 0, barLen: 4,
             tempo: 62 + Math.random() * 12,
@@ -1869,8 +2021,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
             M.scale = M.mood;
             M.root = Math.floor(Math.random() * 12);
+            /* the player's choices outrank the cave's */
+            if (M.scaleLock) { M.scale = M.scaleLock; M.mood = M.scaleLock; }
+            if (M.rootLock !== null && M.rootLock !== undefined) M.root = M.rootLock;
             var deepSlow = Math.min(0.35, band > 5 ? (band - 5) * 0.004 : 0);
             M.tempo = (M.mood.tempo[0] + Math.random() * (M.mood.tempo[1] - M.mood.tempo[0])) * (1 - deepSlow);
+            if (M.paceMult) M.tempo *= M.paceMult;
             /* 2-4 minutes, with the occasional 8-minute arrangement */
             M.songT = Math.random() < 0.18 ? 440 + Math.random() * 80 : 120 + Math.random() * 120;
             M.sections = 0;
@@ -1938,6 +2094,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (M.sections > 0 && Math.random() < 0.25) {
                 var steps = [7, 5];
                 M.root = (M.root + steps[Math.floor(Math.random() * steps.length)]) % 12;
+                if (M.rootLock !== null && M.rootLock !== undefined) M.root = M.rootLock;
             }
             M.deg = 0;
             M.rhythmOn = M.sections > 0 && Math.random() < Math.min(0.95, M.mood.rhythm * 1.5 + 0.15);
@@ -2343,6 +2500,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             scrapeGain = layer(260, 'bandpass', 3.0);   /* squeezing */
             shimGain = layer(2400, 'bandpass', 2.4);    /* river shimmer */
             shardGain = layer(1800, 'bandpass', 2.0);   /* the gathered song */
+            /* submerged in the melt: everything heard through molten rock */
+            var lavaSrc = mkNoiseSrc();
+            lavaFilt = ctx.createBiquadFilter();
+            lavaFilt.type = 'lowpass'; lavaFilt.frequency.value = 190; lavaFilt.Q.value = 1.3;
+            lavaGain = ctx.createGain(); lavaGain.gain.value = 0;
+            lavaSrc.connect(lavaFilt); lavaFilt.connect(lavaGain); lavaGain.connect(master);
             /* the soul fall: a rising wall of air and a deepening tone */
             var soulSrc = mkNoiseSrc();
             soulFilt = ctx.createBiquadFilter();
@@ -2645,9 +2808,221 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             burst(800, 1.6, 0.03 * k, 0.1, 0.1, false);
             burst(650, 1.6, 0.03 * k, 0.12, -0.1, false);
         };
+        /* -------- the bard's faceplate: chiptune leads, always in key -------- */
+        function scaleSteps() { return (M.scale && M.scale.s) || [0, 2, 3, 5, 7, 9, 10]; }
+        function degHz(deg) {
+            var sc = scaleSteps(), L = sc.length;
+            var oct = Math.floor(deg / L);
+            return hz(sc[((deg % L) + L) % L], oct);
+        }
+        A.scaleLen = function () { return scaleSteps().length; };
+        A.lead = function (deg, opts) {
+            /* one chiptune lead note, in the song's key, with a short glide in */
+            if (!A.ready || A.muted) return 0;
+            opts = opts || {};
+            var t0 = now();
+            var dur = opts.dur || 0.55;
+            var f = degHz(deg);
+            var from = opts.glide ? f * Math.pow(2, -(opts.glide) / 12) : f;
+            var o = ctx.createOscillator();
+            o.type = opts.wave || 'square';
+            var o2 = ctx.createOscillator();
+            o2.type = 'triangle';
+            var lp = ctx.createBiquadFilter();
+            lp.type = 'lowpass';
+            lp.frequency.setValueAtTime(1500 + f * 3.5, t0);
+            lp.frequency.exponentialRampToValueAtTime(900 + f * 1.2, t0 + dur);
+            lp.Q.value = 0.9;
+            var g = ctx.createGain();
+            o.frequency.setValueAtTime(from, t0);
+            o2.frequency.setValueAtTime(from * 0.5, t0);
+            if (opts.glide) {
+                o.frequency.exponentialRampToValueAtTime(f, t0 + 0.085);
+                o2.frequency.exponentialRampToValueAtTime(f * 0.5, t0 + 0.085);
+            }
+            var pk = opts.gain || 0.11;
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(pk, t0 + 0.014);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+            o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(master);
+            var vg = ctx.createGain();
+            vg.gain.value = opts.verb === undefined ? 0.6 : opts.verb;
+            g.connect(vg); vg.connect(verb);
+            o.start(t0); o2.start(t0);
+            o.stop(t0 + dur + 0.06); o2.stop(t0 + dur + 0.06);
+            A.stats.leads = (A.stats.leads || 0) + 1;
+            return f;
+        };
+        A.gliss = function (startDeg, steps, opts) {
+            /* a stepped run up or down the scale: the chiptune glissando */
+            if (!A.ready || A.muted) return;
+            opts = opts || {};
+            var n = Math.max(1, Math.abs(steps));
+            var dir = steps < 0 ? -1 : 1;
+            var stepT = opts.stepT || 0.042;
+            var t0 = now();
+            var o = ctx.createOscillator();
+            o.type = opts.wave || 'square';
+            var lp = ctx.createBiquadFilter();
+            lp.type = 'lowpass'; lp.frequency.value = 4200; lp.Q.value = 1.1;
+            var g = ctx.createGain();
+            for (var i = 0; i <= n; i++) {
+                o.frequency.setValueAtTime(degHz(startDeg + dir * i), t0 + i * stepT);
+            }
+            var tail = opts.tail === undefined ? 0.75 : opts.tail;
+            var end = t0 + n * stepT + tail;
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(opts.gain || 0.085, t0 + 0.02);
+            g.gain.setValueAtTime(opts.gain || 0.085, t0 + n * stepT);
+            g.gain.exponentialRampToValueAtTime(0.0001, end);
+            o.connect(lp); lp.connect(g); g.connect(master);
+            var vg = ctx.createGain();
+            /* glissandi ride heavy on the plate reverb */
+            vg.gain.value = opts.verb === undefined ? 0.85 : opts.verb;
+            g.connect(vg); vg.connect(verb);
+            o.start(t0); o.stop(end + 0.05);
+            A.stats.leads = (A.stats.leads || 0) + 1;
+        };
+        /* -------- the player's hand on the song: key, scale, pace -------- */
+        A.KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        /* the actual mode behind each mood name, matched on interval sets */
+        var SCALE_NAMES = [
+            { s: [0, 2, 4, 5, 7, 9, 11], n: 'major (ionian)' },
+            { s: [0, 2, 3, 5, 7, 9, 10], n: 'dorian' },
+            { s: [0, 1, 3, 5, 7, 8, 10], n: 'phrygian' },
+            { s: [0, 2, 4, 6, 7, 9, 11], n: 'lydian' },
+            { s: [0, 2, 4, 5, 7, 9, 10], n: 'mixolydian' },
+            { s: [0, 2, 3, 5, 7, 8, 10], n: 'natural minor (aeolian)' },
+            { s: [0, 1, 3, 5, 6, 8, 10], n: 'locrian' },
+            { s: [0, 2, 3, 5, 7, 8, 11], n: 'harmonic minor' },
+            { s: [0, 2, 3, 5, 7, 9, 11], n: 'melodic minor' },
+            { s: [0, 3, 5, 7, 10], n: 'minor pentatonic' },
+            { s: [0, 2, 4, 7, 9], n: 'major pentatonic' },
+            { s: [0, 3, 5, 6, 7, 10], n: 'blues' },
+            { s: [0, 1, 4, 5, 7, 8, 10], n: 'phrygian dominant' },
+            { s: [0, 2, 4, 6, 8, 10], n: 'whole tone' },
+            { s: [0, 2, 3, 6, 7, 8, 11], n: 'hungarian minor' },
+            { s: [0, 1, 4, 6, 8, 10, 11], n: 'enigmatic' }
+        ];
+        A.scaleTheoryName = function (steps) {
+            if (!steps) return '';
+            for (var i = 0; i < SCALE_NAMES.length; i++) {
+                var c = SCALE_NAMES[i].s;
+                if (c.length !== steps.length) continue;
+                var same = true;
+                for (var j = 0; j < c.length; j++) if (c[j] !== steps[j]) { same = false; break; }
+                if (same) return SCALE_NAMES[i].n;
+            }
+            return steps.join('-');           /* an interval set with no common name */
+        };
+        A.moodTheory = function (name) {
+            for (var i = 0; i < A.MOODS.length; i++) {
+                if (A.MOODS[i].n === name) return A.scaleTheoryName(A.MOODS[i].s);
+            }
+            return '';
+        };
+        A.currentTheory = function () { return A.scaleTheoryName(M.scale ? M.scale.s : null); };
+        A.setBPM = function (bpm) {
+            /* tap tempo speaks in real BPM, not a multiplier */
+            if (!bpm) { M.paceMult = null; return null; }
+            var base = M.mood ? (M.mood.tempo[0] + M.mood.tempo[1]) / 2 : 72;
+            M.paceMult = Math.max(0.4, Math.min(2.2, bpm / base));
+            if (M.tempo) M.tempo = bpm;
+            return Math.round(bpm);
+        };
+        A.getBPM = function () { return Math.round(M.tempo || 0); };
+        A.setKey = function (semi) {
+            if (semi === null) { M.rootLock = null; return 'auto'; }
+            M.rootLock = ((semi % 12) + 12) % 12;
+            M.root = M.rootLock;
+            return A.KEYS[M.rootLock];
+        };
+        A.getKey = function () { return M.rootLock === null || M.rootLock === undefined ? 'auto' : A.KEYS[M.root]; };
+        A.setScaleName = function (name) {
+            if (!name) { M.scaleLock = null; return 'auto'; }
+            for (var i = 0; i < A.MOODS.length; i++) {
+                if (A.MOODS[i].n === name) {
+                    M.scaleLock = A.MOODS[i];
+                    M.scale = A.MOODS[i];
+                    return name;
+                }
+            }
+            return A.getScaleName();
+        };
+        A.getScaleName = function () { return M.scaleLock ? M.scaleLock.n : (M.scale ? M.scale.n : 'auto'); };
+        A.setPace = function (mult) {
+            var prev = M.paceMult || 1;
+            M.paceMult = mult === null ? null : Math.max(0.4, Math.min(2.2, mult));
+            /* take effect on the song that is playing, not just the next one */
+            if (M.tempo) M.tempo = M.tempo / prev * (M.paceMult || 1);
+            return M.paceMult;
+        };
+        A.getPace = function () { return M.paceMult === null || M.paceMult === undefined ? 1 : M.paceMult; };
+        A.holdNote = function (deg, opts) {
+            /* a sustained lead you keep alive while a finger stays down, with
+               a brass voice that only speaks when you rub the stone */
+            if (!A.ready || A.muted) return null;
+            opts = opts || {};
+            var t0 = now();
+            var f = degHz(deg);
+            var o = ctx.createOscillator();
+            o.type = opts.wave || 'square';
+            o.frequency.setValueAtTime(f, t0);
+            var o2 = ctx.createOscillator();
+            o2.type = 'triangle';
+            o2.frequency.setValueAtTime(f * 0.5, t0);
+            var lp = ctx.createBiquadFilter();
+            lp.type = 'lowpass';
+            lp.frequency.setValueAtTime(1400 + f * 3.2, t0);
+            lp.Q.value = 0.8;
+            var brass = ctx.createOscillator();
+            brass.type = 'sawtooth';
+            brass.frequency.setValueAtTime(f, t0);
+            var brF = ctx.createBiquadFilter();
+            brF.type = 'bandpass';
+            brF.frequency.setValueAtTime(f * 1.7, t0);
+            brF.Q.value = 1.5;
+            var brG = ctx.createGain();
+            brG.gain.setValueAtTime(0.0001, t0);
+            var g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(opts.gain || 0.10, t0 + 0.035);
+            o.connect(lp); o2.connect(lp); lp.connect(g);
+            brass.connect(brF); brF.connect(brG); brG.connect(g);
+            g.connect(master);
+            var vg = ctx.createGain();
+            vg.gain.value = opts.verb === undefined ? 0.55 : opts.verb;
+            g.connect(vg); vg.connect(verb);
+            o.start(t0); o2.start(t0); brass.start(t0);
+            var dead = false;
+            A.stats.leads = (A.stats.leads || 0) + 1;
+            return {
+                f: f,
+                setBrass: function (k) {
+                    if (dead) return;
+                    var kk = Math.max(0, Math.min(1, k || 0));
+                    var tn = now();
+                    /* the brass eases in as you rub and fades as you stop */
+                    brG.gain.setTargetAtTime(kk * kk * 0.075, tn, 0.18);
+                    brF.frequency.setTargetAtTime(f * (1.6 + kk * 2.6), tn, 0.2);
+                    lp.frequency.setTargetAtTime(1400 + f * 3.2 + kk * 2600, tn, 0.2);
+                },
+                stop: function () {
+                    if (dead) return;
+                    dead = true;
+                    var te = now();
+                    g.gain.cancelScheduledValues(te);
+                    g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), te);
+                    g.gain.setTargetAtTime(0.0001, te, 0.14);
+                    brG.gain.setTargetAtTime(0.0001, te, 0.1);
+                    o.stop(te + 1.1); o2.stop(te + 1.1); brass.stop(te + 1.1);
+                }
+            };
+        };
         A.setShards = function (n) { shardN = n || 0; };
         A.setSoul = function (k) { soulK = Math.max(0, Math.min(1, k || 0)); };
         A.setBask = function (k) { baskK2 = Math.max(0, Math.min(1, k || 0)); };
+        A.setLava = function (k) { lavaK2 = Math.max(0, Math.min(1, k || 0)); };
         A.elfChirp = function () {
             /* their speech: fast bright intervals that do not resolve */
             if (!A.ready || A.muted) return;
@@ -2665,7 +3040,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         A.rumble = function () {
             /* the stone stirs: a deep body-shaking groan */
             if (!A.ready || A.muted) return;
-            var src = mkNoiseSrc();
+            /* NEVER mkNoiseSrc() here: that factory already calls start(),
+               and starting a BufferSource twice throws InvalidStateError and
+               kills whatever was calling it (this crashed detach()) */
+            var src = ctx.createBufferSource();
+            src.buffer = noiseBuf;
+            src.loop = true;
             var f = ctx.createBiquadFilter();
             f.type = 'lowpass'; f.frequency.value = 95; f.Q.value = 1.1;
             var g = ctx.createGain();
@@ -2756,6 +3136,17 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
             if (shimGain) shimGain.gain.setTargetAtTime((st.riverRide || 0) * 0.045, t2, 0.8);
             if (shardGain) shardGain.gain.setTargetAtTime(Math.min(0.05, shardN * 0.011), t2, 1.2);
+            if (lavaGain) {
+                lavaGain.gain.setTargetAtTime(lavaK2 * 0.11, t2, 0.4);
+                lavaFilt.frequency.setTargetAtTime(190 + lavaK2 * 120, t2, 0.5);
+                /* the whole song muffles as the melt closes over you: this
+                   rides the SAME master filter the underwater mix uses, so
+                   whichever is thicker wins (lp here was a local in another
+                   function and would have thrown every audio frame) */
+                if (lavaK2 > 0.02 && uwFilter) {
+                    uwFilter.frequency.setTargetAtTime(19000 - lavaK2 * 18200, t2, 0.4);
+                }
+            }
             if (baskGain) {
                 baskGain.gain.setTargetAtTime(baskK2 * 0.075, t2, 1.5);
                 for (var bq = 0; bq < baskOscs.length; bq++) {
@@ -3072,44 +3463,68 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     }
     var floraGeo = new THREE.PlaneGeometry(1, 1);
     floraGeo.translate(0, 0.5, 0);
+    var breathingTex = [];
     /* moss and algae paint once, glow forever */
-    var mossTex = (function () {
-        var cv = document.createElement('canvas');
-        cv.width = 64; cv.height = 64;
-        var c2 = cv.getContext('2d');
-        c2.clearRect(0, 0, 64, 64);
-        for (var i = 0; i < 90; i++) {
-            var gg = 90 + Math.floor(Math.random() * 90);
-            c2.fillStyle = 'rgba(' + Math.floor(gg * 0.35) + ',' + gg + ',' + Math.floor(gg * 0.55) + ',0.8)';
-            c2.beginPath();
-            var rr2 = 2 + Math.random() * 5;
-            c2.arc(8 + Math.random() * 48, 8 + Math.random() * 48, rr2, 0, 6.3);
-            c2.fill();
+    function mossPaint(c2, w, h, opt) {
+        /* moss is a mat of thousands of tiny shoots, not a field of dots:
+           dark bed, clumped cushions, fibres reaching up, lit tips, spores */
+        c2.clearRect(0, 0, w, h);
+        var rnd = function (n) { var x = Math.sin(n * 127.1 + opt.seed) * 43758.5; return x - Math.floor(x); };
+        /* the damp bed underneath, in irregular cushions */
+        for (var b = 0; b < 46; b++) {
+            var bx = rnd(b * 1.7) * w, by = rnd(b * 3.3 + 9) * h;
+            var br = w * (0.06 + rnd(b * 5.1) * 0.14);
+            var gr = c2.createRadialGradient(bx, by, 0, bx, by, br);
+            var dv = 34 + Math.floor(rnd(b * 7.7) * 26);
+            gr.addColorStop(0, 'rgba(' + Math.floor(dv * 0.5) + ',' + dv + ',' + Math.floor(dv * 0.62) + ',0.95)');
+            gr.addColorStop(0.7, 'rgba(' + Math.floor(dv * 0.4) + ',' + Math.floor(dv * 0.8) + ',' + Math.floor(dv * 0.5) + ',0.6)');
+            gr.addColorStop(1, 'rgba(20,32,22,0)');
+            c2.fillStyle = gr;
+            c2.beginPath(); c2.arc(bx, by, br, 0, 6.2832); c2.fill();
         }
-        return new THREE.CanvasTexture(cv);
-    })();
-    var algaeTex = (function () {
-        var cv = document.createElement('canvas');
-        cv.width = 64; cv.height = 64;
-        var c2 = cv.getContext('2d');
-        c2.clearRect(0, 0, 64, 64);
-        for (var i = 0; i < 46; i++) {
-            var bb2 = 150 + Math.floor(Math.random() * 100);
-            c2.fillStyle = 'rgba(' + Math.floor(bb2 * 0.3) + ',' + bb2 + ',' + Math.floor(bb2 * 0.9) + ',0.9)';
+        /* the shoots: short strokes fanning out of each cushion */
+        var nF = opt.fibres || 2200;
+        for (var f = 0; f < nF; f++) {
+            var fx = rnd(f * 2.3) * w, fy = rnd(f * 4.7 + 3) * h;
+            var ang = rnd(f * 6.1) * 6.2832;
+            var len = 2 + rnd(f * 8.9) * (opt.len || 6);
+            var lift = rnd(f * 11.3);
+            var g2 = Math.floor((opt.base || 96) + lift * (opt.range || 96));
+            c2.strokeStyle = 'rgba(' + Math.floor(g2 * (opt.rMul || 0.34)) + ',' + g2 + ',' +
+                Math.floor(g2 * (opt.bMul || 0.5)) + ',' + (0.35 + lift * 0.5) + ')';
+            c2.lineWidth = 0.6 + rnd(f * 13.7) * 1.1;
             c2.beginPath();
-            c2.arc(4 + Math.random() * 56, 4 + Math.random() * 56, 0.8 + Math.random() * 2.2, 0, 6.3);
-            c2.fill();
+            c2.moveTo(fx, fy);
+            c2.lineTo(fx + Math.cos(ang) * len * 0.4, fy + Math.sin(ang) * len - len * 0.5);
+            c2.stroke();
         }
-        return new THREE.CanvasTexture(cv);
-    })();
-    var mossMat = new THREE.MeshStandardMaterial({
-        map: mossTex, transparent: true, opacity: 0.92, depthWrite: false,
-        emissive: 0x3fae6a, emissiveIntensity: 0.28, emissiveMap: mossTex, roughness: 1
-    });
-    var algaeMat = new THREE.MeshBasicMaterial({
-        map: algaeTex, transparent: true, opacity: 0.85,
-        blending: THREE.AdditiveBlending, depthWrite: false
-    });
+        /* spore heads catching what little light there is */
+        for (var sp = 0; sp < 130; sp++) {
+            var sx = rnd(sp * 17.3) * w, sy = rnd(sp * 19.7 + 5) * h;
+            c2.fillStyle = 'rgba(' + Math.floor((opt.base || 96) * 0.9) + ',' +
+                Math.floor((opt.base || 96) + (opt.range || 96) * 0.85) + ',' +
+                Math.floor((opt.base || 96) * 0.75) + ',0.85)';
+            c2.beginPath(); c2.arc(sx, sy, 0.7 + rnd(sp * 3.1) * 1.1, 0, 6.2832); c2.fill();
+        }
+    }
+    var mossTex = canvasTex(256, 256, function (c2, w, h) {
+        mossPaint(c2, w, h, { seed: 3.7, base: 88, range: 104, len: 7, fibres: 2600 });
+    }, 1, 1);
+    /* the floating mat: the same growth, wetter and bluer, drifting on water */
+    var algaeTex = canvasTex(256, 256, function (c2, w, h) {
+        mossPaint(c2, w, h, { seed: 11.4, base: 120, range: 118, len: 4.5,
+            fibres: 1900, rMul: 0.26, bMul: 0.86 });
+    }, 1, 1);
+    var mossMat = surfaced(new THREE.MeshStandardMaterial({
+        map: mossTex, transparent: true, opacity: 0.95, depthWrite: false,
+        emissive: 0x3fae6a, emissiveIntensity: 0.26, emissiveMap: mossTex, roughness: 1
+    }), mossTex, 3.0, 1.4);
+    /* the floating mat lights itself, so it keeps a standard material and
+       gets its relief from the same derived normals */
+    var algaeMat = surfaced(new THREE.MeshStandardMaterial({
+        map: algaeTex, transparent: true, opacity: 0.9, depthWrite: false,
+        emissive: 0x2fd8b4, emissiveIntensity: 0.7, emissiveMap: algaeTex, roughness: 0.85
+    }), algaeTex, 2.4, 1.1);
     var mossGeo = new THREE.PlaneGeometry(1, 1);
     mossGeo.rotateX(-Math.PI / 2);
     var wormMat = new THREE.MeshStandardMaterial({ color: 0xbfffd8, emissive: 0x7fe8a8, emissiveIntensity: 1.2, roughness: 0.5 });
@@ -3130,6 +3545,180 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }));
         }
     })();
+    var boulderGeos = null, screeGeo = null;
+    var boulderMat = makeRockMaterial(THREE, CC, { vertexColors: true });
+    function roundStone(detail, seed, lumps, rough) {
+        /* a rounded, weathered stone: subdivide a sphere-ish solid, push the
+           vertices around with layered noise, then smooth the normals so it
+           reads as worn rock instead of a cut gem */
+        var g = new THREE.IcosahedronGeometry(1, detail);
+        var p = g.attributes.position;
+        var v = new THREE.Vector3();
+        for (var i = 0; i < p.count; i++) {
+            v.set(p.getX(i), p.getY(i), p.getZ(i));
+            var n = v.clone().normalize();
+            var d = 1.0;
+            /* broad lumps, then a finer weathering pass */
+            d += Math.sin(n.x * 2.1 + seed) * Math.cos(n.y * 1.7 - seed * 1.3) * lumps;
+            d += Math.sin(n.y * 3.9 - seed * 2.1) * Math.cos(n.z * 4.3 + seed) * lumps * 0.45;
+            d += Math.sin(n.x * 7.7 + n.z * 6.1 + seed * 3.7) * rough;
+            /* stones sit heavier than they stand: squash the vertical a touch */
+            v.copy(n).multiplyScalar(Math.max(0.45, d));
+            v.y *= 0.82;
+            p.setXYZ(i, v.x, v.y, v.z);
+        }
+        p.needsUpdate = true;
+        g.computeVertexNormals();     /* smooth shading: no hard facets */
+        return g;
+    }
+    function rockGeos() {
+        if (!boulderGeos) {
+            boulderGeos = [
+                roundStone(3, 1.7, 0.16, 0.035),
+                roundStone(3, 4.2, 0.21, 0.028),
+                roundStone(2, 9.1, 0.13, 0.05),
+                roundStone(3, 12.6, 0.19, 0.032),
+                roundStone(2, 21.3, 0.24, 0.045),
+                roundStone(2, 33.8, 0.11, 0.055)
+            ];
+            /* scree keeps a little more edge, it broke off recently */
+            screeGeo = roundStone(1, 5.5, 0.3, 0.12);
+        }
+        return boulderGeos;
+    }
+    function tintGeo(geo, col, dark) {
+        /* every stone carries the band colour of the rock it fell from, in a
+           vertex colour, because the terrain shader reads its base tint there */
+        var g = geo.clone();
+        var n = g.attributes.position.count;
+        var c = new Float32Array(n * 3);
+        for (var i = 0; i < n; i++) {
+            c[i * 3] = col[0] * dark;
+            c[i * 3 + 1] = col[1] * dark;
+            c[i * 3 + 2] = col[2] * dark;
+        }
+        g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+        return g;
+    }
+    function addRockField(rec, data, cx, cy, cz) {
+        /* boulders, scree and gravel: the floor of a real cave is covered in
+           what fell off the ceiling, and nothing here had that until now */
+        var fn = Math.floor(data.floorPts.length / 3);
+        if (fn === 0) return;
+        var geos = rockGeos();
+        var h = function (k) { return CC.hash3(cx * 7 + k, 810 + k, cz * 11 - k * 3); };
+        var rough = 0.35 + h(1) * 0.5;              /* some galleries are strewn, some swept */
+        /* stones come in clusters now: a scatter you can walk up to and play
+           like a row of keys, not one lonely boulder every few metres */
+        var nBig = 9 + Math.round(rough * 22);
+        var col = [0, 0, 0];
+        var mats = [];
+        var lastQx = null, lastQy = 0, lastQz = 0;
+        for (var bi = 0; bi < nBig; bi++) {
+            /* every third stone joins the previous one's group, so they land
+               in playable clusters instead of an even sprinkle */
+            var grouped = (bi % 3) !== 0 && lastQx !== null;
+            var pick = Math.floor(CC.hash3(cx * 5 + bi, cy * 3 + 21, cz * 9 + bi * 13) * fn);
+            var qx = data.floorPts[pick * 3], qy = data.floorPts[pick * 3 + 1], qz = data.floorPts[pick * 3 + 2];
+            if (grouped) {
+                var ga = CC.hash3(bi, 71, cx) * 6.2831853;
+                var gr = 1.3 + CC.hash3(bi, 72, cz) * 2.4;
+                var nqx = lastQx + Math.cos(ga) * gr, nqz = lastQz + Math.sin(ga) * gr;
+                var nqy = null;
+                for (var gy2 = lastQy + 2.5; gy2 > lastQy - 3.5; gy2 -= 0.3) {
+                    if (CC.density(nqx, gy2, nqz) > 0 && CC.density(nqx, gy2 + 1.2, nqz) < -0.05) { nqy = gy2; break; }
+                }
+                if (nqy !== null) { qx = nqx; qy = nqy; qz = nqz; }
+            }
+            var wl = CC.waterLevelAt(qx, qy, qz);
+            var sub = wl !== null && qy < wl - 0.2;
+            var sc = 0.35 + CC.hash3(bi, cx + cz, cy) * 2.2;
+            if (CC.density(qx, qy + sc * 1.4, qz) > 0) continue;    /* no room to sit */
+            CC.rockColorLocal(qx, qy, qz, col);
+            /* the SAME material the cave walls use: triplanar stone albedo and
+               normals by world position, the trip warp, and the breathing
+               displacement all come along for free */
+            var g = tintGeo(geos[bi % geos.length], col, sub ? 0.70 : 0.88);
+            var mesh = new THREE.Mesh(g, boulderMat);
+            rec.disposables.push(g);
+            /* lean the stone onto the floor it is resting on */
+            var gn = CC.grad(qx, qy + 0.3, qz, 0.7);
+            var gl = Math.sqrt(gn[0] * gn[0] + gn[1] * gn[1] + gn[2] * gn[2]) || 1;
+            mesh.rotation.x += Math.max(-0.42, Math.min(0.42, (gn[2] / gl) * 0.9));
+            mesh.rotation.z += Math.max(-0.42, Math.min(0.42, -(gn[0] / gl) * 0.9));
+            /* a boulder is half buried, not balanced on the surface: sink it
+               so the silhouette meets the ground instead of touching it */
+            mesh.position.set(qx, qy + sc * 0.26, qz);
+            mesh.scale.set(sc * (0.8 + CC.hash3(bi, 3, cx) * 0.6), sc * (0.55 + CC.hash3(bi, 4, cz) * 0.5), sc * (0.8 + CC.hash3(bi, 5, cy) * 0.6));
+            mesh.rotation.set(CC.hash3(bi, 6, cx) * 3.14, CC.hash3(bi, 7, cz) * 6.28, CC.hash3(bi, 8, cy) * 3.14);
+            rec.group.add(mesh);
+            mats.push({ m: mesh, base: mesh.position.y, ph: CC.hash3(bi, 9, cx) * 20 });
+            lastQx = qx; lastQy = qy; lastQz = qz;
+            /* moss and spilled dirt collect where stone meets floor, which is
+               what actually sells the contact */
+            if (!sub) {
+                var skirt = new THREE.Mesh(mossGeo, mossMat);
+                var ssz = sc * (2.0 + CC.hash3(bi, 61, cz) * 0.9);
+                skirt.scale.set(ssz, 1, ssz);
+                skirt.position.set(qx + (CC.hash3(bi, 62, cx) - 0.5) * sc * 0.3,
+                    qy + 0.035, qz + (CC.hash3(bi, 63, cz) - 0.5) * sc * 0.3);
+                skirt.rotation.y = CC.hash3(bi, 64, cy) * 6.2832;
+                rec.group.add(skirt);
+            }
+            /* a low collar of grit banked against the stone */
+            var nC = 5 + Math.floor(CC.hash3(bi, 65, cx) * 5);
+            for (var ki = 0; ki < nC; ki++) {
+                var ka = (ki / nC) * 6.2831853 + CC.hash3(bi, 66 + ki, cz) * 0.7;
+                var kr = sc * (0.72 + CC.hash3(ki, 67, bi) * 0.3);
+                var ksc = sc * (0.10 + CC.hash3(ki, 68, bi) * 0.16);
+                var km = new THREE.Mesh(tintGeo(screeGeo, col, sub ? 0.66 : 0.8), boulderMat);
+                km.position.set(qx + Math.cos(ka) * kr, qy + ksc * 0.25, qz + Math.sin(ka) * kr);
+                km.scale.set(ksc * 1.5, ksc * 0.55, ksc * 1.5);
+                km.rotation.set(CC.hash3(ki, 69, bi) * 0.5, CC.hash3(ki, 70, bi) * 6.28, 0);
+                rec.group.add(km);
+                rec.disposables.push(km.geometry);
+            }
+            /* every boulder sheds a skirt of scree */
+            var nS = 2 + Math.floor(CC.hash3(bi, 10, cz) * 4);
+            for (var si = 0; si < nS; si++) {
+                var sa = CC.hash3(bi * 3 + si, 11, cx) * 6.2831853;
+                var sr = sc * (1.1 + CC.hash3(si, 12, cz) * 1.3);
+                var ssc = 0.09 + CC.hash3(si, 13, bi) * 0.22;
+                var sm = new THREE.Mesh(tintGeo(screeGeo, col, sub ? 0.7 : 0.98), boulderMat);
+                rec.disposables.push(sm.geometry);
+                sm.position.set(qx + Math.cos(sa) * sr, qy + ssc * 0.16, qz + Math.sin(sa) * sr);
+                sm.scale.set(ssc * 1.25, ssc * 0.6, ssc * 1.25);
+                sm.rotation.set(CC.hash3(si, 14, bi) * 3.14, CC.hash3(si, 15, bi) * 6.28, 0);
+                rec.group.add(sm);
+            }
+        }
+        /* gravel: a dusting of grains that catch the lamp */
+        var gN = 140;
+        var gp = new Float32Array(gN * 3);
+        var used = 0;
+        for (var gi = 0; gi < gN; gi++) {
+            var gpick = Math.floor(CC.hash3(cx * 11 + gi, cy * 7 + 5, cz * 13 + gi * 3) * fn);
+            var ax = data.floorPts[gpick * 3], ay = data.floorPts[gpick * 3 + 1], az = data.floorPts[gpick * 3 + 2];
+            gp[used * 3] = ax + (CC.hash3(gi, 16, cx) - 0.5) * 2.4;
+            gp[used * 3 + 1] = ay + 0.06;
+            gp[used * 3 + 2] = az + (CC.hash3(gi, 17, cz) - 0.5) * 2.4;
+            used++;
+        }
+        if (used > 0) {
+            var ggeo = new THREE.BufferGeometry();
+            ggeo.setAttribute('position', new THREE.BufferAttribute(gp.subarray(0, used * 3), 3));
+            CC.rockColorLocal(cx * CH, cy * CH, cz * CH, col);
+            var gmat = new THREE.PointsMaterial({
+                color: new THREE.Color(col[0] * 1.9, col[1] * 1.85, col[2] * 1.8),
+                size: 0.09, sizeAttenuation: true, transparent: true, opacity: 0.9, depthWrite: false
+            });
+            var gpts = new THREE.Points(ggeo, gmat);
+            gpts.frustumCulled = false;
+            rec.group.add(gpts);
+            rec.disposables.push(ggeo, gmat);
+        }
+        rec.boulders = mats;
+    }
     function makeBugSwarm(px, py, pz, bseed) {
         var n = 10;
         var g = new THREE.BufferGeometry();
@@ -3411,7 +4000,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     function makeChunk(cx, cy, cz) {
         var data = CC.buildChunk(cx, cy, cz);
         var group = new THREE.Group();
-        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [], hearts: [] };
+        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [], hearts: [], boulders: [], formations: null };
 
         if (data.indices.length > 0) {
             var geo = new THREE.BufferGeometry();
@@ -3441,6 +4030,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (window._CAVE_SIGNS) addSigns(rec, data, cx, cy, cz);
 
         /* glowing mushroom clusters */
+        if (window._CAVE_ROCKS !== false) addRockField(rec, data, cx, cy, cz);
         if (window._CAVE_SHROOMS) addShrooms(rec, data.floorPts, cx, cy, cz);
         /* ferns and shrubberies gather at the shores and in rock crevices,
            and never grow underwater */
@@ -3674,6 +4264,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var floorN = Math.floor(data.floorPts.length / 3);
         if (n === 0 && floorN === 0) return;
         var inst = new THREE.InstancedMesh(spikeGeo, spikeMat, 26);
+        rec.formations = inst;
         var m4 = new THREE.Matrix4();
         var q = new THREE.Quaternion();
         var flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
@@ -3885,7 +4476,82 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (rx) t.repeat.set(rx, ry || rx);
         t.r0 = t.repeat.x;
         t.r1 = t.repeat.y;
+        t.srcCanvas = cv;
+        t.anisotropy = 4;
         return t;
+    }
+    /* derive a normal map and a roughness map from a painted texture, so
+       painted surfaces catch light like real ones instead of reading flat */
+    function derivedMaps(tex, strength) {
+        var out = { normalMap: null, roughnessMap: null };
+        try {
+            var cv = tex.srcCanvas;
+            if (!cv) return out;
+            var w = cv.width, h = cv.height;
+            var ctx = cv.getContext('2d');
+            if (!ctx.getImageData) return out;
+            var src = ctx.getImageData(0, 0, w, h).data;
+            var lum = new Float32Array(w * h);
+            for (var i = 0; i < w * h; i++) {
+                lum[i] = (src[i * 4] * 0.299 + src[i * 4 + 1] * 0.587 + src[i * 4 + 2] * 0.114) / 255;
+            }
+            var ncv = document.createElement('canvas');
+            ncv.width = w; ncv.height = h;
+            var nctx = ncv.getContext('2d');
+            var nimg = nctx.createImageData(w, h);
+            var rcv = document.createElement('canvas');
+            rcv.width = w; rcv.height = h;
+            var rctx = rcv.getContext('2d');
+            var rimg = rctx.createImageData(w, h);
+            var st = strength || 2.4;
+            for (var y = 0; y < h; y++) {
+                for (var x = 0; x < w; x++) {
+                    var i0 = y * w + x;
+                    var xm = lum[y * w + ((x - 1 + w) % w)], xp = lum[y * w + ((x + 1) % w)];
+                    var ym = lum[((y - 1 + h) % h) * w + x], yp = lum[((y + 1) % h) * w + x];
+                    var nx = (xm - xp) * st, ny = (ym - yp) * st, nz = 1.0;
+                    var il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+                    nimg.data[i0 * 4] = Math.floor((nx * il * 0.5 + 0.5) * 255);
+                    nimg.data[i0 * 4 + 1] = Math.floor((ny * il * 0.5 + 0.5) * 255);
+                    nimg.data[i0 * 4 + 2] = Math.floor((nz * il * 0.5 + 0.5) * 255);
+                    nimg.data[i0 * 4 + 3] = 255;
+                    /* darker, rougher: mortar and grime scatter, faces glint */
+                    var rv = Math.floor(255 * (0.72 + (1 - lum[i0]) * 0.28));
+                    rimg.data[i0 * 4] = rv; rimg.data[i0 * 4 + 1] = rv;
+                    rimg.data[i0 * 4 + 2] = rv; rimg.data[i0 * 4 + 3] = 255;
+                }
+            }
+            nctx.putImageData(nimg, 0, 0);
+            rctx.putImageData(rimg, 0, 0);
+            var nt = new THREE.CanvasTexture(ncv);
+            nt.wrapS = nt.wrapT = THREE.RepeatWrapping;
+            nt.repeat.copy(tex.repeat);
+            var rt = new THREE.CanvasTexture(rcv);
+            rt.wrapS = rt.wrapT = THREE.RepeatWrapping;
+            rt.repeat.copy(tex.repeat);
+            out.normalMap = nt;
+            out.roughnessMap = rt;
+        } catch (e) {}
+        return out;
+    }
+    function surfaced(mat, tex, strength, nScale) {
+        /* attach the derived maps to a material and keep them breathing */
+        var dm = derivedMaps(tex, strength);
+        if (dm.normalMap) {
+            mat.normalMap = dm.normalMap;
+            mat.normalScale = new THREE.Vector2(nScale || 1.0, nScale || 1.0);
+            dm.normalMap.r0 = dm.normalMap.repeat.x;
+            dm.normalMap.r1 = dm.normalMap.repeat.y;
+            breathingTex.push(dm.normalMap);
+        }
+        if (dm.roughnessMap) {
+            mat.roughnessMap = dm.roughnessMap;
+            dm.roughnessMap.r0 = dm.roughnessMap.repeat.x;
+            dm.roughnessMap.r1 = dm.roughnessMap.repeat.y;
+            breathingTex.push(dm.roughnessMap);
+        }
+        mat.needsUpdate = true;
+        return mat;
     }
     function h2r(seedv) { var x = Math.sin(seedv * 127.1) * 43758.5; return x - Math.floor(x); }
     var woodTexC = canvasTex(128, 128, function (c, w, h) {
@@ -3908,19 +4574,53 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             c.beginPath(); c.arc(bx + 12, h - 16 - h2r(b * 7) * 20, 1.6, 0, 6.3); c.fill();
         }
     }, 1.2, 1.2);
-    var brickTexC = canvasTex(128, 128, function (c, w, h) {
-        c.fillStyle = '#6a6258'; c.fillRect(0, 0, w, h);
-        var rows = 8, bw = 32;
+    var brickTexC = canvasTex(256, 256, function (c, w, h) {
+        /* mortar bed: uneven, grimy, never one flat colour */
+        c.fillStyle = '#585047'; c.fillRect(0, 0, w, h);
+        for (var m2 = 0; m2 < 2600; m2++) {
+            var mx = h2r(m2 * 1.7) * w, my = h2r(m2 * 3.1 + 5) * h;
+            var mv = 62 + Math.floor(h2r(m2 * 5.3) * 34);
+            c.fillStyle = 'rgba(' + mv + ',' + (mv - 6) + ',' + (mv - 12) + ',0.5)';
+            c.fillRect(mx, my, 2, 2);
+        }
+        var rows = 16, bw = 32, bh = 16;
         for (var r2 = 0; r2 < rows; r2++) {
-            var y0 = r2 * 16, off = (r2 % 2) * 16;
-            for (var b2 = -1; b2 < 5; b2++) {
+            var y0 = r2 * bh, off = (r2 % 2) * (bw / 2);
+            for (var b2 = -1; b2 < 9; b2++) {
                 var x0 = b2 * bw + off;
-                var sh2 = 0.82 + h2r(r2 * 13 + b2) * 0.36;
-                c.fillStyle = 'rgb(' + Math.floor(122 * sh2) + ',' + Math.floor(74 * sh2) + ',' + Math.floor(58 * sh2) + ')';
-                c.fillRect(x0 + 1.5, y0 + 1.5, bw - 3, 13);
+                var sd = h2r(r2 * 13 + b2 * 7);
+                var sh2 = 0.78 + sd * 0.44;
+                var rr = Math.floor(126 * sh2), gg = Math.floor(76 * sh2), bb2 = Math.floor(60 * sh2);
+                /* the face, inset from the mortar */
+                c.fillStyle = 'rgb(' + rr + ',' + gg + ',' + bb2 + ')';
+                c.fillRect(x0 + 2, y0 + 2, bw - 4, bh - 4);
+                /* grain and pitting across the face */
+                for (var g2 = 0; g2 < 26; g2++) {
+                    var gx = x0 + 2 + h2r(r2 * 31 + b2 * 17 + g2) * (bw - 5);
+                    var gy = y0 + 2 + h2r(r2 * 47 + b2 * 23 + g2 * 3) * (bh - 5);
+                    var gv = h2r(g2 * 9 + b2) > 0.5 ? 1.16 : 0.84;
+                    c.fillStyle = 'rgba(' + Math.floor(rr * gv) + ',' + Math.floor(gg * gv) + ',' + Math.floor(bb2 * gv) + ',0.55)';
+                    c.fillRect(gx, gy, 1 + h2r(g2 * 2.3) * 2, 1);
+                }
+                /* worn top edge catches light, bottom edge holds dirt */
+                c.fillStyle = 'rgba(255,225,200,0.10)';
+                c.fillRect(x0 + 2, y0 + 2, bw - 4, 1);
+                c.fillStyle = 'rgba(0,0,0,0.22)';
+                c.fillRect(x0 + 2, y0 + bh - 3, bw - 4, 1);
+                /* a chipped corner here and there */
+                if (sd > 0.86) {
+                    c.fillStyle = 'rgba(70,62,54,0.9)';
+                    c.fillRect(x0 + 2, y0 + 2, 3 + sd * 3, 3);
+                }
             }
         }
-    }, 1.6, 1.6);
+        /* damp streaks running down the whole wall */
+        for (var s2 = 0; s2 < 9; s2++) {
+            var sx = h2r(s2 * 11.3) * w;
+            c.fillStyle = 'rgba(28,26,22,' + (0.05 + h2r(s2 * 3.7) * 0.09) + ')';
+            c.fillRect(sx, 0, 3 + h2r(s2 * 5.1) * 9, h);
+        }
+    }, 3.4, 3.4);
     var tinTexC = canvasTex(64, 64, function (c, w, h) {
         for (var x2 = 0; x2 < w; x2++) {
             var ridge = 0.5 + 0.5 * Math.sin(x2 * 0.785);
@@ -3948,7 +4648,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
         }
     }, 1.3, 1.3);
-    var breathingTex = [];
+    /* declared up with the moss so early materials can register to breathe */
     var thatchTexC = canvasTex(128, 128, function (c, w, h) {
         c.fillStyle = '#6b5a38'; c.fillRect(0, 0, w, h);
         for (var t4 = 0; t4 < 260; t4++) {
@@ -3959,10 +4659,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
     }, 1.5, 1.5);
     breathingTex.push(woodTexC, brickTexC, tinTexC, ashlarTexC, thatchTexC);
-    var timberMat = new THREE.MeshStandardMaterial({ color: 0x6a5138, roughness: 0.92, map: woodTexC });
+    var timberMat = surfaced(new THREE.MeshStandardMaterial({ color: 0x2b1f14, roughness: 0.95, map: woodTexC }), woodTexC, 2.8, 1.1);
     var ghostMat = new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x6fa8dd, emissiveIntensity: 1.4, roughness: 0.4 });
-    var pathMat = new THREE.MeshStandardMaterial({ color: 0x8c8a85, roughness: 0.97, map: ashlarTexC });
-    var thatchMat = new THREE.MeshStandardMaterial({ color: 0xa89868, roughness: 0.98, map: thatchTexC });
+    var pathMat = surfaced(new THREE.MeshStandardMaterial({ color: 0x8c8a85, roughness: 0.97, map: ashlarTexC }), ashlarTexC, 2.2, 0.8);
+    var thatchMat = surfaced(new THREE.MeshStandardMaterial({ color: 0xa89868, roughness: 0.98, map: thatchTexC }), thatchTexC, 3.0, 1.1);
     var soilMat = new THREE.MeshStandardMaterial({ color: 0x241d16, roughness: 1.0 });
     var clothMat = new THREE.MeshStandardMaterial({ color: 0x7a4038, roughness: 0.9, side: THREE.DoubleSide });
     var doorMat = new THREE.MeshStandardMaterial({ color: 0x120d08, roughness: 1.0 });
@@ -4269,18 +4969,283 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     }
     var farmShroomMat = new THREE.MeshStandardMaterial({ color: 0x8fe0c0, emissive: 0x2a9070, emissiveIntensity: 0.9, roughness: 0.6 });
     /* the dweller palette: weathered painted planks, brick, tin, copper */
+    /* a hung bulb glows without bleaching everything around it */
+    var lanternMat = new THREE.MeshStandardMaterial({
+        color: 0x2a1c0c, emissive: 0xffb257, emissiveIntensity: 0.85
+    });
+    /* corrugated iron: ribs, rust blooms, nail heads, torn edges */
+    var rustTexC = canvasTex(256, 256, function (c, w, h) {
+        for (var x2 = 0; x2 < w; x2++) {
+            var ridge = 0.5 + 0.5 * Math.sin(x2 * 0.393);
+            var v = Math.floor(78 + ridge * 74);
+            c.fillStyle = 'rgb(' + v + ',' + (v + 4) + ',' + (v + 9) + ')';
+            c.fillRect(x2, 0, 1, h);
+        }
+        /* rust blooms creep from the seams */
+        for (var r3 = 0; r3 < 46; r3++) {
+            var bx = h2r(r3 * 2.3) * w, by = h2r(r3 * 5.7) * h;
+            var br = 5 + h2r(r3 * 3.1) * 26;
+            var grd = c.createRadialGradient(bx, by, 0, bx, by, br);
+            var ro = 0.16 + h2r(r3 * 7.9) * 0.36;
+            grd.addColorStop(0, 'rgba(126,58,26,' + ro + ')');
+            grd.addColorStop(0.55, 'rgba(96,46,22,' + (ro * 0.55) + ')');
+            grd.addColorStop(1, 'rgba(96,46,22,0)');
+            c.fillStyle = grd;
+            c.beginPath(); c.arc(bx, by, br, 0, 6.2832); c.fill();
+        }
+        /* streaks weeping down from the rust */
+        for (var s3 = 0; s3 < 22; s3++) {
+            var sx = h2r(s3 * 11.7) * w, sy = h2r(s3 * 4.3) * h;
+            c.fillStyle = 'rgba(88,42,18,' + (0.10 + h2r(s3 * 2.1) * 0.16) + ')';
+            c.fillRect(sx, sy, 2 + h2r(s3) * 3, 20 + h2r(s3 * 6.3) * 90);
+        }
+        /* nail heads along the ribs */
+        for (var n3 = 0; n3 < 30; n3++) {
+            var nx = Math.floor(h2r(n3 * 3.7) * 16) * 16 + 8;
+            var ny = h2r(n3 * 8.1) * h;
+            c.fillStyle = 'rgba(30,26,22,0.85)';
+            c.beginPath(); c.arc(nx, ny, 1.7, 0, 6.2832); c.fill();
+            c.fillStyle = 'rgba(210,200,190,0.25)';
+            c.beginPath(); c.arc(nx - 0.6, ny - 0.6, 0.8, 0, 6.2832); c.fill();
+        }
+    }, 2.2, 2.2);
+    var rustMat = surfaced(new THREE.MeshStandardMaterial({
+        color: 0x6e6a63, roughness: 0.78, metalness: 0.4, map: rustTexC
+    }), rustTexC, 3.2, 1.3);
+    /* weathered siding: split boards, knots, daylight gaps, damp at the foot */
+    var sidingTexC = canvasTex(256, 256, function (c, w, h) {
+        c.fillStyle = '#3b2f20'; c.fillRect(0, 0, w, h);
+        var nb = 8, bw2 = w / nb;
+        for (var b3 = 0; b3 < nb; b3++) {
+            var bx2 = b3 * bw2;
+            var sh3 = 0.74 + h2r(b3 * 13.3) * 0.5;
+            c.fillStyle = 'rgb(' + Math.floor(92 * sh3) + ',' + Math.floor(68 * sh3) + ',' + Math.floor(44 * sh3) + ')';
+            c.fillRect(bx2 + 1.5, 0, bw2 - 3, h);
+            /* grain */
+            for (var g3 = 0; g3 < 16; g3++) {
+                c.strokeStyle = 'rgba(56,40,24,' + (0.10 + h2r(b3 * 9 + g3) * 0.24) + ')';
+                c.lineWidth = 0.8 + h2r(g3) * 1.2;
+                c.beginPath();
+                var gy2 = h2r(b3 * 31 + g3 * 3) * h;
+                c.moveTo(bx2 + 2, gy2);
+                c.bezierCurveTo(bx2 + bw2 * 0.4, gy2 + 22, bx2 + bw2 * 0.6, gy2 - 18, bx2 + bw2 - 2, gy2 + 9);
+                c.stroke();
+            }
+            /* a knot or two */
+            if (h2r(b3 * 5.1) > 0.45) {
+                var ky = h2r(b3 * 7.3) * h;
+                c.fillStyle = 'rgba(38,26,14,0.85)';
+                c.beginPath(); c.ellipse(bx2 + bw2 * 0.5, ky, 2.6, 3.6, 0, 0, 6.2832); c.fill();
+                c.strokeStyle = 'rgba(52,36,20,0.5)'; c.lineWidth = 1;
+                c.beginPath(); c.ellipse(bx2 + bw2 * 0.5, ky, 5.5, 7.5, 0, 0, 6.2832); c.stroke();
+            }
+            /* the gap between boards, where the dark shows through */
+            c.fillStyle = 'rgba(10,8,6,0.9)';
+            c.fillRect(bx2, 0, 1.5, h);
+        }
+        /* soot and tar in blotches: nobody paints a shanty, they seal it */
+        for (var tb = 0; tb < 40; tb++) {
+            var tx = h2r(tb * 4.7) * w, ty = h2r(tb * 8.3) * h;
+            var tr = 6 + h2r(tb * 2.9) * 26;
+            var tg = c.createRadialGradient(tx, ty, 0, tx, ty, tr);
+            tg.addColorStop(0, 'rgba(18,14,10,' + (0.18 + h2r(tb * 6.1) * 0.3) + ')');
+            tg.addColorStop(1, 'rgba(18,14,10,0)');
+            c.fillStyle = tg;
+            c.beginPath(); c.arc(tx, ty, tr, 0, 6.2832); c.fill();
+        }
+        /* damp rot rising from the ground */
+        var dg = c.createLinearGradient(0, h, 0, h * 0.62);
+        dg.addColorStop(0, 'rgba(24,26,20,0.55)');
+        dg.addColorStop(1, 'rgba(24,26,20,0)');
+        c.fillStyle = dg; c.fillRect(0, h * 0.62, w, h * 0.38);
+    }, 2.0, 2.0);
+    var sidingMat = surfaced(new THREE.MeshStandardMaterial({
+        color: 0x40301f, roughness: 0.96, map: sidingTexC
+    }), sidingTexC, 3.0, 1.3);
+
+    /* dark tarred and weathered boards: the old paint is nearly gone, only a
+       hint of colour survives under the grime */
     var plankMats = [
-        new THREE.MeshStandardMaterial({ color: 0x4fb8ae, roughness: 0.94, map: woodTexC }),
-        new THREE.MeshStandardMaterial({ color: 0xc2685a, roughness: 0.94, map: woodTexC }),
-        new THREE.MeshStandardMaterial({ color: 0xcbb35c, roughness: 0.94, map: woodTexC }),
-        new THREE.MeshStandardMaterial({ color: 0x8a86c2, roughness: 0.94, map: woodTexC })
+        surfaced(new THREE.MeshStandardMaterial({ color: 0x3a2f26, roughness: 0.96, map: sidingTexC }), sidingTexC, 3.0, 1.2),
+        surfaced(new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 0.96, map: sidingTexC }), sidingTexC, 3.0, 1.2),
+        surfaced(new THREE.MeshStandardMaterial({ color: 0x33291f, roughness: 0.97, map: sidingTexC }), sidingTexC, 3.0, 1.2),
+        surfaced(new THREE.MeshStandardMaterial({ color: 0x413024, roughness: 0.96, map: sidingTexC }), sidingTexC, 3.0, 1.2)
     ];
-    var brickMat = new THREE.MeshStandardMaterial({ color: 0xbfa89a, roughness: 0.98, map: brickTexC });
-    var tinMat = new THREE.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.5, metalness: 0.55, map: tinTexC });
+    var brickMat = surfaced(new THREE.MeshStandardMaterial({ color: 0xc9b3a4, roughness: 0.95, map: brickTexC }), brickTexC, 3.2, 1.25);
+    var tinMat = surfaced(new THREE.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.5, metalness: 0.55, map: tinTexC }), tinTexC, 3.4, 1.0);
     var copperMat = new THREE.MeshStandardMaterial({ color: 0x9a5c34, roughness: 0.35, metalness: 0.8 });
     var pipeMat = new THREE.MeshStandardMaterial({ color: 0x3c6f9a, roughness: 0.55, metalness: 0.4 });
     var jarMat = new THREE.MeshStandardMaterial({ color: 0xbfe8c0, emissive: 0x6fbf70, emissiveIntensity: 1.0, roughness: 0.2, transparent: true, opacity: 0.85 });
     function shantyHash(st, k) { return CC.hash3(st.gx * 13 + k, 907, st.gz * 13 + k * 3); }
+    function shantyFloorY(x2, z2, guessY) {
+        for (var yy = guessY + 6; yy > guessY - 14; yy -= 0.3) {
+            if (CC.density(x2, yy, z2) > 0 && CC.density(x2, yy + 1.9, z2) < -0.05) return yy;
+        }
+        return null;
+    }
+    function addShantyFacade(rec, st, offX, offY, offZ, cx, cy, cz) {
+        /* the porch: a built front on the cave mouth, so a shanty reads as a
+           PLACE from across the cavern instead of a plank box */
+        var ex = st.x + Math.cos(st.entA) * 42 + offX;
+        var ez = st.z + Math.sin(st.entA) * 42 + offZ;
+        var ey = st.y - 3.2 + offY;
+        if (!ownedBy(ex, ey, ez, cx, cy, cz)) return;
+        var fy = shantyFloorY(ex, ez, ey - 1.5);
+        if (fy === null) fy = ey - 2.2;
+        var hh = function (k) { return CC.hash3(st.gx * 13 + k, 840 + k, st.gz * 7 - k); };
+        /* a Y rotation sends local +z to (sin, cos), and the front must look
+           back down the tunnel the way a visitor arrives */
+        var g = new THREE.Group();
+        g.position.set(ex, fy + 0.12, ez);
+        g.rotation.y = Math.atan2(Math.cos(st.entA), Math.sin(st.entA));
+        /* the deck, on posts, with a sagging plank floor */
+        var deckW = 4.6 + hh(1) * 1.8, deckD = 3.2 + hh(2) * 1.2;
+        var nPl = 9;
+        for (var pi = 0; pi < nPl; pi++) {
+            var pl = new THREE.Mesh(houseGeo, sidingMat);
+            pl.scale.set(deckW / nPl - 0.03, 0.09, deckD);
+            pl.position.set(-deckW / 2 + (pi + 0.5) * (deckW / nPl), 0.06 - hh(10 + pi) * 0.04, 0);
+            pl.rotation.x = (hh(20 + pi) - 0.5) * 0.02;
+            g.add(pl);
+        }
+        for (var ci = 0; ci < 4; ci++) {
+            var pxl = (ci % 2 ? 1 : -1) * (deckW / 2 - 0.3);
+            var pzl = (ci < 2 ? 1 : -1) * (deckD / 2 - 0.3);
+            /* measure each post down to the real ground under that corner */
+            var wx = ex + pxl * Math.cos(g.rotation.y) + pzl * Math.sin(g.rotation.y);
+            var wz = ez - pxl * Math.sin(g.rotation.y) + pzl * Math.cos(g.rotation.y);
+            var gy = shantyFloorY(wx, wz, fy - 1.0);
+            var plen = Math.max(0.5, (fy + 0.12) - (gy === null ? fy - 1.6 : gy));
+            var post = new THREE.Mesh(cylGeo, timberMat);
+            post.scale.set(0.11, plen, 0.11);
+            post.position.set(pxl, -plen * 0.5, pzl);
+            g.add(post);
+        }
+        /* two uprights and a lintel: the doorway you walk through */
+        for (var si = 0; si < 2; si++) {
+            var up = new THREE.Mesh(houseGeo, timberMat);
+            up.scale.set(0.16, 2.5, 0.16);
+            up.position.set((si ? 1 : -1) * 1.15, 1.25, deckD * 0.32);
+            g.add(up);
+        }
+        var lintel = new THREE.Mesh(houseGeo, timberMat);
+        lintel.scale.set(2.9, 0.22, 0.2);
+        lintel.position.set(0, 2.6, deckD * 0.32);
+        g.add(lintel);
+        /* siding either side of the door, gappy and leaning */
+        for (var wi = 0; wi < 2; wi++) {
+            var wl = new THREE.Mesh(houseGeo, sidingMat);
+            wl.scale.set(1.5 + hh(30 + wi) * 0.5, 2.4, 0.1);
+            wl.position.set((wi ? 1 : -1) * (2.0 + hh(32 + wi) * 0.3), 1.2, deckD * 0.32);
+            wl.rotation.z = (hh(34 + wi) - 0.5) * 0.05;
+            g.add(wl);
+        }
+        /* corrugated roof: overlapping sheets, each one slightly askew */
+        var nSh = 4;
+        for (var ri = 0; ri < nSh; ri++) {
+            var sheet = new THREE.Mesh(houseGeo, rustMat);
+            sheet.scale.set(deckW / nSh + 0.35, 0.06, deckD + 1.5);
+            sheet.position.set(-deckW / 2 + (ri + 0.5) * (deckW / nSh), 2.85 + hh(40 + ri) * 0.12, 0.2);
+            sheet.rotation.x = -0.16 + (hh(44 + ri) - 0.5) * 0.05;
+            sheet.rotation.z = (hh(46 + ri) - 0.5) * 0.04;
+            g.add(sheet);
+        }
+        /* chimney and its smoke */
+        var chim = new THREE.Mesh(cylGeo, rustMat);
+        chim.scale.set(0.14, 1.5, 0.14);
+        chim.position.set(deckW * 0.28, 3.5, -0.4);
+        g.add(chim);
+        for (var mi = 0; mi < 4; mi++) {
+            var puff = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: glowTex, color: 0x6a6258, transparent: true, opacity: 0.16 - mi * 0.03,
+                depthWrite: false
+            }));
+            puff.scale.set(1.2 + mi * 0.7, 1.2 + mi * 0.7, 1);
+            puff.position.set(deckW * 0.28 + mi * 0.25, 4.4 + mi * 0.9, -0.4);
+            g.add(puff);
+            rec.disposables.push(puff.material);
+        }
+        /* the lantern string: THIS is the landmark you spot from across the
+           cavern, so the porch stops being invisible */
+        var nl = 5;
+        for (var li = 0; li < nl; li++) {
+            var f2 = li / (nl - 1);
+            var lxp = -deckW / 2 + f2 * deckW;
+            var lyp = 3.15 - Math.sin(f2 * Math.PI) * 0.45;
+            var cord = new THREE.Mesh(cylGeo, timberMat);
+            cord.scale.set(0.015, 0.28, 0.015);
+            cord.position.set(lxp, lyp + 0.16, deckD * 0.5);
+            g.add(cord);
+            var bulb = new THREE.Mesh(orbGeo, lanternMat);
+            bulb.scale.setScalar(0.5);
+            bulb.position.set(lxp, lyp, deckD * 0.5);
+            g.add(bulb);
+            var hal = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: glowTex, color: 0xffc06a, transparent: true, opacity: 0.26,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            hal.scale.set(1.5, 1.5, 1);
+            hal.position.copy(bulb.position);
+            g.add(hal);
+            rec.disposables.push(hal.material);
+        }
+        /* the beacon: a lamp on a pole above the roofline. the string lights
+           are for atmosphere up close; THIS is what you see from 100m out */
+        var mast = new THREE.Mesh(cylGeo, timberMat);
+        mast.scale.set(0.07, 3.0, 0.07);
+        mast.position.set(-deckW * 0.34, 4.3, 0.1);
+        g.add(mast);
+        var beaconHousing = new THREE.Mesh(houseGeo, rustMat);
+        beaconHousing.scale.set(0.42, 0.5, 0.42);
+        beaconHousing.position.set(-deckW * 0.34, 5.85, 0.1);
+        g.add(beaconHousing);
+        var beacon = new THREE.Mesh(orbGeo, lanternMat);
+        beacon.scale.setScalar(1.5);
+        beacon.position.set(-deckW * 0.34, 5.8, 0.1);
+        g.add(beacon);
+        var bhalo = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: 0xffb257, transparent: true, opacity: 0.62,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        bhalo.scale.set(7.5, 7.5, 1);
+        bhalo.position.copy(beacon.position);
+        g.add(bhalo);
+        rec.disposables.push(bhalo.material);
+        var bhalo2 = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: 0xff9a3c, transparent: true, opacity: 0.3,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        bhalo2.scale.set(18, 18, 1);
+        bhalo2.position.copy(beacon.position);
+        g.add(bhalo2);
+        rec.disposables.push(bhalo2.material);
+        rec.emitters.push({ x: ex, y: fy + 5.9, z: ez, color: new THREE.Color(0xffb257),
+            intensity: 0.85, dist: 165, type: 'torch', flicker: true });
+        /* one big warm emitter carrying far enough to be seen and walked to */
+        rec.emitters.push({ x: ex, y: fy + 3.1, z: ez, color: new THREE.Color(0xffb066),
+            intensity: 0.55, dist: 48, type: 'torch', flicker: true });
+        /* the clutter of somebody living here */
+        for (var bi = 0; bi < 3; bi++) {
+            var crate = new THREE.Mesh(houseGeo, bi === 1 ? timberMat : sidingMat);
+            var csc = 0.4 + hh(50 + bi) * 0.35;
+            crate.scale.set(csc, csc * 0.85, csc);
+            crate.position.set(-deckW / 2 + 0.5 + hh(52 + bi) * (deckW - 1), csc * 0.42 + 0.1,
+                -deckD * 0.3 + hh(54 + bi) * deckD * 0.5);
+            crate.rotation.y = hh(56 + bi) * 3.14;
+            g.add(crate);
+        }
+        var barrel = new THREE.Mesh(cylGeo, rustMat);
+        barrel.scale.set(0.34, 0.8, 0.34);
+        barrel.position.set(deckW / 2 - 0.5, 0.45, -deckD * 0.28);
+        g.add(barrel);
+        /* a lean-to awning off the side, patched from offcuts */
+        var awn = new THREE.Mesh(houseGeo, rustMat);
+        awn.scale.set(2.0, 0.05, 1.6);
+        awn.position.set(-deckW / 2 - 0.7, 2.1, -0.3);
+        awn.rotation.z = 0.28;
+        g.add(awn);
+        rec.group.add(g);
+    }
     function addShanty(rec, cx, cy, cz) {
         var ccx = (cx + 0.5) * CH, ccz = (cz + 0.5) * CH;
         var st = CC.shantyNear(ccx, ccz);
@@ -4289,6 +5254,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var offX = L[0] - st.x, offY = L[1] - st.y, offZ = L[2] - st.z;
         var dxc = L[0] - ccx, dzc = L[2] - ccz;
         if (dxc * dxc + dzc * dzc > (95 + CH) * (95 + CH)) return;
+        addShantyFacade(rec, st, offX, offY, offZ, cx, cy, cz);
         var pm = plankMats[Math.floor(shantyHash(st, 1) * plankMats.length)];
         var pm2 = plankMats[(Math.floor(shantyHash(st, 1) * plankMats.length) + 1 + Math.floor(shantyHash(st, 2) * 2)) % plankMats.length];
         for (var r = 0; r < st.rooms.length; r++) {
@@ -4489,6 +5455,187 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     function ownedBy(px, py, pz, cx, cy, cz) {
         return Math.floor(px / CH) === cx && Math.floor(py / CH) === cy && Math.floor(pz / CH) === cz;
     }
+    function makeTower(rec, x, y, z, ry, seed, ruin) {
+        /* a stacked tower: each storey a little smaller than the one below */
+        var g = new THREE.Group();
+        g.position.set(x, y, z); g.rotation.y = ry;
+        var hs = function (k) { return CC.hash3(seed, k, seed * 3 + 5); };
+        var nS = 3 + Math.floor(hs(1) * 3);
+        var w = 2.6 + hs(2) * 1.4;
+        for (var i = 0; i < nS; i++) {
+            var sw = w * (1 - i * 0.12);
+            var body = new THREE.Mesh(houseGeo, i % 2 ? brickMat : sidingMat);
+            body.scale.set(sw, 2.5, sw);
+            body.position.y = 1.25 + i * 2.5;
+            body.rotation.y = (hs(10 + i) - 0.5) * 0.25;
+            g.add(body);
+            if (!ruin && hs(20 + i) > 0.35) {
+                var win = new THREE.Mesh(houseGeo, windowMat);
+                win.scale.set(0.5, 0.7, 0.06);
+                win.position.set(0, 1.4 + i * 2.5, sw * 0.5 + 0.03);
+                g.add(win);
+                rec.emitters.push({ x: x, y: y + 1.4 + i * 2.5, z: z, color: new THREE.Color(0xffc06a), intensity: 0.5, dist: 16, type: 'torch', flicker: true });
+            }
+        }
+        var cap = new THREE.Mesh(houseGeo, rustMat);
+        cap.scale.set(w * 1.25, 0.16, w * 1.25);
+        cap.position.y = nS * 2.5 + 0.1;
+        g.add(cap);
+        rec.group.add(g);
+    }
+    function makeSilo(rec, x, y, z, seed) {
+        var g = new THREE.Group();
+        g.position.set(x, y, z);
+        var hs = function (k) { return CC.hash3(seed, k, seed + 3); };
+        var r = 1.5 + hs(1) * 1.1, h = 4 + hs(2) * 3;
+        var body = new THREE.Mesh(cylGeo, brickMat);
+        body.scale.set(r, h, r);
+        body.position.y = h * 0.5;
+        g.add(body);
+        var roof = new THREE.Mesh(cylGeo, rustMat);
+        roof.scale.set(r * 1.2, 0.5, r * 1.2);
+        roof.position.y = h + 0.25;
+        g.add(roof);
+        for (var b = 0; b < 3; b++) {
+            var band = new THREE.Mesh(cylGeo, timberMat);
+            band.scale.set(r * 1.04, 0.12, r * 1.04);
+            band.position.y = h * (0.25 + b * 0.28);
+            g.add(band);
+        }
+        rec.group.add(g);
+    }
+    function makeStall(rec, x, y, z, ry, seed) {
+        /* market stall: four posts and a sagging canopy */
+        var g = new THREE.Group();
+        g.position.set(x, y, z); g.rotation.y = ry;
+        var hs = function (k) { return CC.hash3(seed, k, seed * 7 + 1); };
+        var w = 1.8 + hs(1) * 1.2, d = 1.4 + hs(2) * 0.8;
+        for (var p = 0; p < 4; p++) {
+            var post = new THREE.Mesh(cylGeo, timberMat);
+            post.scale.set(0.07, 2.0, 0.07);
+            post.position.set((p % 2 ? 1 : -1) * w * 0.5, 1.0, (p < 2 ? 1 : -1) * d * 0.5);
+            g.add(post);
+        }
+        var can = new THREE.Mesh(houseGeo, plankMats[Math.floor(hs(3) * plankMats.length)]);
+        can.scale.set(w * 1.2, 0.07, d * 1.3);
+        can.position.y = 2.05;
+        can.rotation.z = (hs(4) - 0.5) * 0.12;
+        g.add(can);
+        var table = new THREE.Mesh(houseGeo, sidingMat);
+        table.scale.set(w, 0.1, d * 0.6);
+        table.position.y = 0.85;
+        g.add(table);
+        for (var c = 0; c < 3; c++) {
+            var crate = new THREE.Mesh(houseGeo, timberMat);
+            var csc = 0.3 + hs(10 + c) * 0.25;
+            crate.scale.set(csc, csc, csc);
+            crate.position.set((hs(20 + c) - 0.5) * w, csc * 0.5, (hs(30 + c) - 0.5) * d);
+            crate.rotation.y = hs(40 + c) * 3.14;
+            g.add(crate);
+        }
+        rec.group.add(g);
+    }
+    function wallRadiusAt(sx, sz, y, ang, startR, maxR) {
+        /* march out until the cavern wall answers, and demand it be a WALL:
+           a stray spur mid-cavern would leave a house hanging in the air */
+        for (var r = startR; r < maxR; r += 0.8) {
+            var px = sx + Math.cos(ang) * r, pz = sz + Math.sin(ang) * r;
+            if (CC.density(px, y, pz) > 0) {
+                /* it must keep being stone for several metres behind the face */
+                var solid = 0;
+                for (var b = 1; b <= 5; b++) {
+                    if (CC.density(sx + Math.cos(ang) * (r + b), y, sz + Math.sin(ang) * (r + b)) > 0) solid++;
+                }
+                if (solid >= 4) return r;
+            }
+        }
+        return null;
+    }
+    function makeWallHouse(rec, sx, sz, fy, ang, hgt, seed, ruin, st, cx, cy, cz) {
+        /* a dwelling cut INTO the cavern wall, with a balcony over the drop
+           and a ladder running down the rock */
+        var y = fy + hgt;
+        var wr = wallRadiusAt(sx, sz, y, ang, st.domeR * 0.62, st.domeR * 1.25);
+        if (wr === null) return false;
+        /* the house is CUT INTO the rock: most of its body sits inside the
+           wall and only the front and its balcony overhang the drop */
+        /* the back wall bites into the rock, the rest of the house stands
+           proud of it: pushed fully inside it simply disappears */
+        var hx = sx + Math.cos(ang) * (wr - 0.7);
+        var hz = sz + Math.sin(ang) * (wr - 0.7);
+        if (!ownedBy(hx, y, hz, cx, cy, cz)) return false;
+        var hs = function (k) { return CC.hash3(seed, k, seed * 5 + 2); };
+        var g = new THREE.Group();
+        g.position.set(hx, y, hz);
+        /* face the plaza */
+        g.rotation.y = Math.atan2(Math.cos(ang + Math.PI), Math.sin(ang + Math.PI));
+        /* refuse a perch that is not a real face: air behind it means the
+           house hangs in the middle of the cavern on its ladder */
+        var backX = sx + Math.cos(ang) * (wr + 2.2), backZ = sz + Math.sin(ang) * (wr + 2.2);
+        if (CC.density(backX, y, backZ) <= 0) return false;
+        if (CC.density(hx, y + 1.2, hz) > 0) return false;      /* no headroom */
+        var w = 4.2 + hs(1) * 2.6, h = 3.2 + hs(2) * 1.6, d = 3.4 + hs(3) * 1.8;
+        var body = new THREE.Mesh(houseGeo, hs(4) > 0.5 ? brickMat : sidingMat);
+        body.scale.set(w, h, d);
+        body.position.y = h * 0.5;
+        g.add(body);
+        /* the balcony, propped on struts that lean back into the rock */
+        var deck = new THREE.Mesh(houseGeo, sidingMat);
+        deck.scale.set(w * 1.35, 0.14, 2.1);
+        deck.position.set(0, 0.06, d * 0.5 + 0.75);
+        g.add(deck);
+        for (var ri = 0; ri < 4; ri++) {
+            var rail = new THREE.Mesh(cylGeo, timberMat);
+            rail.scale.set(0.05, 0.8, 0.05);
+            rail.position.set(-w * 0.5 + (ri / 3) * w, 0.4, d * 0.5 + 1.45);
+            g.add(rail);
+        }
+        var top = new THREE.Mesh(houseGeo, timberMat);
+        top.scale.set(w * 1.1, 0.07, 0.07);
+        top.position.set(0, 0.82, d * 0.5 + 1.45);
+        g.add(top);
+        for (var si = 0; si < 2; si++) {
+            var strut = new THREE.Mesh(cylGeo, timberMat);
+            strut.scale.set(0.07, 2.0, 0.07);
+            strut.position.set((si ? 1 : -1) * w * 0.45, -0.9, d * 0.5 + 0.5);
+            strut.rotation.x = -0.5;
+            g.add(strut);
+        }
+        /* roof */
+        var roof = new THREE.Mesh(houseGeo, hs(5) > 0.5 ? rustMat : thatchMat);
+        roof.scale.set(w * 1.18, 0.14, d * 1.18);
+        roof.position.y = h + 0.07;
+        roof.rotation.z = (hs(6) - 0.5) * 0.08;
+        g.add(roof);
+        /* a stair switchbacking down the rock face, not a lollipop stick:
+           the old single thin ladder made every cliff house read as a box
+           floating on a pole from any distance */
+        var steps = Math.max(3, Math.floor(hgt / 0.85));
+        for (var sti = 0; sti < steps; sti++) {
+            var leg = Math.floor(sti / 4) % 2 ? -1 : 1;
+            var acrossS = ((sti % 4) - 1.5) * 0.75 * leg;
+            var tread = new THREE.Mesh(houseGeo, timberMat);
+            tread.scale.set(1.15, 0.12, 0.75);
+            tread.position.set(acrossS, -0.5 - sti * 0.85, d * 0.5 + 0.85);
+            g.add(tread);
+            if (sti % 2 === 0) {
+                var prop = new THREE.Mesh(cylGeo, timberMat);
+                prop.scale.set(0.06, 0.9, 0.06);
+                prop.position.set(acrossS, -0.95 - sti * 0.85, d * 0.5 + 1.15);
+                g.add(prop);
+            }
+        }
+        if (!ruin) {
+            var win2 = new THREE.Mesh(houseGeo, windowMat);
+            win2.scale.set(0.6, 0.6, 0.06);
+            win2.position.set(0, h * 0.55, d * 0.5 + 0.04);
+            g.add(win2);
+            rec.emitters.push({ x: hx, y: y + h * 0.55, z: hz, color: new THREE.Color(0xffc06a),
+                intensity: 0.7, dist: 22, type: 'torch', flicker: true });
+        }
+        rec.group.add(g);
+        return true;
+    }
     function addCity(rec, cx, cy, cz) {
         var ccx = (cx + 0.5) * CH, ccz = (cz + 0.5) * CH;
         var st = CC.siteNear(ccx, ccz);
@@ -4500,6 +5647,129 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (dxc * dxc + dzc * dzc > (st.domeR * 2.2 + CH) * (st.domeR * 2.2 + CH)) return;
         var seed = st.seed;
         function sh(k) { return CC.hash3(Math.floor(st.x), k, Math.floor(st.z)); }
+        /* -------- the town proper: districts in rings, then the cliff --------
+           this used to be a single ring of 6-12 huts. a town is streets deep,
+           and the wall above the streets is lived in too. */
+        /* -------- neighbourhoods, not a sprinkle --------
+           blocks of terraced houses sharing party walls, packed along a
+           street front, with alleys cut between them and a lane running
+           back to the plaza. this replaces four even rings of lone huts. */
+        var built = 0;
+        var nBlocks = 7 + Math.floor(sh(2) * 5);
+        for (var nb = 0; nb < nBlocks; nb++) {
+            var ba = (nb / nBlocks) * 6.2831853 + sh(70 + nb) * 0.5;
+            var brad = st.domeR * (0.30 + CC.hash3(nb, 71, seed) * 0.54);
+            var bcx = sx + Math.cos(ba) * brad, bcz = sz + Math.sin(ba) * brad;
+            /* the block fronts onto the lane that comes from the plaza */
+            var front = ba + 3.1416 + (CC.hash3(nb, 72, seed) - 0.5) * 0.5;
+            var cf = Math.cos(front), sf = Math.sin(front);
+            /* along the street front, and back into the block */
+            var ax = -sf, az = cf;                 /* street direction */
+            var rows = 1 + Math.floor(CC.hash3(nb, 73, seed) * 2.4);
+            for (var row = 0; row < rows; row++) {
+                var units = 4 + Math.floor(CC.hash3(nb * 7 + row, 74, seed) * 5);
+                /* walk the terrace, laying each house flush against the last */
+                var runLen = 0;
+                var widths = [];
+                for (var ui = 0; ui < units; ui++) {
+                    var uw = 4.4 + CC.hash3(nb * 31 + row * 5 + ui, 75, seed) * 3.6;
+                    widths.push(uw);
+                    runLen += uw;
+                }
+                /* an alley splits the terrace at one joint */
+                var alleyAt = 1 + Math.floor(CC.hash3(nb, 76 + row, seed) * (units - 1));
+                var cursor = -runLen * 0.5;
+                var rowOff = row * (5.5 + CC.hash3(nb, 77, seed) * 1.6);
+                for (var ui2 = 0; ui2 < units; ui2++) {
+                    var w2 = widths[ui2];
+                    if (ui2 === alleyAt) cursor += 1.6 + CC.hash3(nb, 78, seed) * 1.1;   /* the alley */
+                    var along = cursor + w2 * 0.5;
+                    cursor += w2;
+                    var ux = bcx + ax * along - cf * rowOff;
+                    var uz = bcz + az * along - sf * rowOff;
+                    if (!ownedBy(ux, fy, uz, cx, cy, cz)) continue;
+                    var ufy = floorSurfY(ux, uz, fy);
+                    var useed = seed * 977 + nb * 61 + row * 13 + ui2;
+                    var pick = CC.hash3(nb * 3 + ui2, 79 + row, seed);
+                    /* corners of a terrace carry the taller buildings */
+                    var isEnd = ui2 === 0 || ui2 === units - 1;
+                    if (isEnd && pick > 0.68) {
+                        makeTower(rec, ux, ufy, uz, front, useed, st.ruin);
+                    } else if (pick > 0.93) {
+                        makeSilo(rec, ux, ufy, uz, useed);
+                    } else {
+                        /* depth varies but the WIDTH fills its slot, so the
+                           neighbours meet wall to wall */
+                        makeDwelling(rec, ux, ufy, uz, front, w2,
+                            3.6 + CC.hash3(useed, 80, seed) * 3.4,
+                            4.4 + CC.hash3(useed, 81, seed) * 2.6,
+                            st.ruin, useed, CC.hash3(useed, 82, seed));
+                        /* the party wall standing proud of both roofs */
+                        if (ui2 !== alleyAt - 1 && ui2 < units - 1) {
+                            var pw = new THREE.Mesh(houseGeo, brickMat);
+                            pw.scale.set(0.3, 5.2 + CC.hash3(useed, 83, seed) * 1.8, 5.0);
+                            pw.position.set(ux + ax * (w2 * 0.5), ufy + 2.6, uz + az * (w2 * 0.5));
+                            pw.rotation.y = front;
+                            rec.group.add(pw);
+                        }
+                    }
+                    built++;
+                }
+                /* a lantern hung in the alley mouth */
+                if (!st.ruin && CC.hash3(nb, 84 + row, seed) > 0.45) {
+                    var lax = bcx + ax * (-runLen * 0.5 + alleyAt * 3.4) - cf * (rowOff - 1.6);
+                    var laz = bcz + az * (-runLen * 0.5 + alleyAt * 3.4) - sf * (rowOff - 1.6);
+                    if (ownedBy(lax, fy, laz, cx, cy, cz)) {
+                        var lfy = floorSurfY(lax, laz, fy);
+                        var pole = new THREE.Mesh(cylGeo, timberMat);
+                        pole.scale.set(0.06, 2.6, 0.06);
+                        pole.position.set(lax, lfy + 1.3, laz);
+                        rec.group.add(pole);
+                        var lamp2 = new THREE.Mesh(orbGeo, lanternMat);
+                        lamp2.scale.setScalar(0.7);
+                        lamp2.position.set(lax, lfy + 2.5, laz);
+                        rec.group.add(lamp2);
+                        rec.emitters.push({ x: lax, y: lfy + 2.5, z: laz,
+                            color: new THREE.Color(0xffb066), intensity: 0.6, dist: 20,
+                            type: 'torch', flicker: true });
+                    }
+                }
+            }
+            /* the lane from the plaza to this block's front door */
+            var laneN = Math.floor(brad / 2.2);
+            for (var li3 = 2; li3 < laneN; li3++) {
+                var lx3 = sx + Math.cos(ba) * li3 * 2.2 + (CC.hash3(nb, li3, seed) - 0.5) * 0.7;
+                var lz3 = sz + Math.sin(ba) * li3 * 2.2 + (CC.hash3(li3, nb, seed) - 0.5) * 0.7;
+                if (!ownedBy(lx3, fy, lz3, cx, cy, cz)) continue;
+                var slab2 = new THREE.Mesh(houseGeo, pathMat);
+                slab2.scale.set(1.5 + CC.hash3(li3, seed, nb) * 0.7, 0.08, 1.1 + CC.hash3(seed, li3, nb) * 0.5);
+                slab2.position.set(lx3, floorSurfY(lx3, lz3, fy) + 0.04, lz3);
+                slab2.rotation.y = ba + (CC.hash3(nb, li3, 5) - 0.5) * 0.3;
+                rec.group.add(slab2);
+            }
+        }
+        /* market stalls crowd the plaza itself */
+        if (!st.ruin) {
+            var nSt = 5 + Math.floor(sh(3) * 5);
+            for (var si4 = 0; si4 < nSt; si4++) {
+                var sa4 = (si4 / nSt) * 6.2831853 + sh(85) * 1.2;
+                var sr4 = st.domeR * (0.10 + CC.hash3(si4, 86, seed) * 0.12);
+                var stx = sx + Math.cos(sa4) * sr4, stz = sz + Math.sin(sa4) * sr4;
+                if (!ownedBy(stx, fy, stz, cx, cy, cz)) continue;
+                makeStall(rec, stx, floorSurfY(stx, stz, fy), stz, sa4 + 3.1416, seed * 17 + si4);
+                built++;
+            }
+        }
+        /* homes cut into the cavern wall, in tiers up the rock */
+        var wallTiers = [4.5, 9.0, 14.0, 19.5];
+        for (var ti = 0; ti < wallTiers.length; ti++) {
+            var perTier = 14 - ti * 2;
+            for (var wi3 = 0; wi3 < perTier; wi3++) {
+                var wa = (wi3 / perTier) * 6.2831853 + sh(100 + ti) * 2.0 + ti * 0.35;
+                if (makeWallHouse(rec, sx, sz, fy, wa, wallTiers[ti] + CC.hash3(wi3, 110 + ti, seed) * 2.5,
+                    seed * 977 + ti * 53 + wi3, st.ruin, st, cx, cy, cz)) built++;
+            }
+        }
         var n = 6 + Math.floor(sh(1) * 6);
         var i;
         /* stone paths radiate from the plaza to each dwelling */
@@ -4888,9 +6158,24 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             var levY = Math.min(a[1], b[1]) - 0.35;
             var inY = levY > y0 - 8 && levY < y1 + 8;
             if (!inChunk || !inY) { started = false; continue; }
+            /* where a lake already holds water, the lake's own surface is the
+               water: drawing the ribbon too put a moving RECTANGLE inside the
+               pool, which is exactly what it looked like */
+            var mx = (a[0] + b[0]) * 0.5, mz = (a[2] + b[2]) * 0.5;
+            var lakeHere = null;
+            var lkl = CC.lakesNearChunk(mx, mz);
+            for (var lq = 0; lq < lkl.length; lq++) {
+                var dxl = lkl[lq].cx - mx, dzl = lkl[lq].cz - mz;
+                if (dxl * dxl + dzl * dzl < lkl[lq].r * lkl[lq].r && lkl[lq].y > levY - 0.6) {
+                    lakeHere = lkl[lq];
+                    break;
+                }
+            }
+            if (lakeHere) { started = false; continue; }
+            var segW = (rv.widths && rv.widths[p2]) || rv.w;
             var dxq = b[0] - a[0], dzq = b[2] - a[2];
             var ql = Math.sqrt(dxq * dxq + dzq * dzq) || 1;
-            var nx = -dzq / ql * rv.w * 0.55, nz = dxq / ql * rv.w * 0.55;
+            var nx = -dzq / ql * segW * 0.55, nz = dxq / ql * segW * 0.55;
             if (!started) {
                 verts.push(a[0] - nx, levY, a[2] - nz, a[0] + nx, levY, a[2] + nz);
                 uvs.push(0, p2 - 1, 1, p2 - 1);
@@ -4906,7 +6191,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 var topY = a[1] - 0.3, botY = b[1] - 0.3;
                 var dropH = topY - botY;
                 if (dropH > 2.5) {
-                    var fgeo = new THREE.PlaneGeometry(rv.w * 1.5, dropH);
+                    var fgeo = new THREE.PlaneGeometry(segW * 1.5, dropH);
                     var fmesh = new THREE.Mesh(fgeo, fallsMat);
                     fmesh.position.set(b[0], botY + dropH / 2, b[2]);
                     fmesh.rotation.y = Math.atan2(dxq, dzq);
@@ -4917,7 +6202,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                         map: glowTex, color: 0x9fd8e8, transparent: true, opacity: 0.24,
                         blending: THREE.AdditiveBlending, depthWrite: false
                     }));
-                    fmist.scale.set(rv.w * 2.4, 3.0, 1);
+                    fmist.scale.set(segW * 2.4, 3.0, 1);
                     fmist.position.set(b[0], botY + 0.9, b[2]);
                     rec.group.add(fmist);
                     rec.disposables.push(fmist.material);
@@ -5075,6 +6360,72 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     btnTorch.addEventListener('click', placeTorch);
 
     var raycaster = new THREE.Raycaster();
+    var heldVoices = [];
+    function musicHitAt(ndcX, ndcY) {
+        /* everything in the cave you can play: spires, boulders, caps */
+        raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+        raycaster.far = 11.0;
+        var objs = [], k, i;
+        for (k in chunks) {
+            if (chunks[k].formations) objs.push(chunks[k].formations);
+            var bl = chunks[k].boulders;
+            if (bl) for (i = 0; i < bl.length; i++) objs.push(bl[i].m);
+            var sc = chunks[k].shroomCaps;
+            if (sc) for (i = 0; i < sc.length; i++) if (sc[i].visible) objs.push(sc[i]);
+        }
+        if (!objs.length) return null;
+        var res = raycaster.intersectObjects(objs, false);
+        if (res.length) return res[0];
+        /* test hook: harnesses cannot raycast (their stub renders throw, so
+           world matrices never update) but the ROUTING must still be tested */
+        if (window._CAVE_FORCE_MUSIC_HIT) {
+            return { point: camera.position.clone().add(new THREE.Vector3(0, -1.2, 0)), object: { userData: {} } };
+        }
+        return null;
+    }
+    function startHeldNote(hit, ndcX) {
+        var deg = tapDegree(ndcX);
+        /* struck above the eye a stone rings lower, as before */
+        if (hit.point.y > camera.position.y - 0.6) deg -= 7;
+        var isCap = !!(hit.object.userData && hit.object.userData.shroom);
+        var voice = CaveAudio.holdNote ? CaveAudio.holdNote(deg, {
+            gain: isCap ? 0.085 : 0.105,
+            wave: isCap ? 'triangle' : 'square',
+            verb: isCap ? 0.85 : 0.6
+        }) : null;
+        var rec2 = { voice: voice, deg: deg, rub: 0, rubTarget: 0, lastMove: performance.now(), cap: isCap, obj: hit.object };
+        /* the touch belongs to the music whether or not sound is running:
+           with audio off it must still not grab the camera */
+        heldVoices.push(rec2);
+        return rec2;
+    }
+    function tickHeldNotes(dt2) {
+        var nowMs = performance.now();
+        for (var i = 0; i < heldVoices.length; i++) {
+            var h = heldVoices[i];
+            /* the rub decays the moment the finger stops travelling */
+            if (nowMs - h.lastMove > 130) h.rubTarget *= Math.pow(0.02, dt2);
+            var rate = h.rubTarget > h.rub ? 2.6 : 1.8;
+            h.rub += (h.rubTarget - h.rub) * Math.min(1, dt2 * rate);
+            if (h.voice) h.voice.setBrass(h.rub);
+        }
+    }
+    function endHeldNote(rec2) {
+        if (!rec2) return;
+        if (rec2.voice) rec2.voice.stop();
+        var ix = heldVoices.indexOf(rec2);
+        if (ix >= 0) heldVoices.splice(ix, 1);
+    }
+    function tapDegree(ndcX) {
+        /* the right of the screen sings high, the left sings low, and where
+           you stand in the world decides where that run begins */
+        var side = Math.round(ndcX * 4.4);
+        var L = (CaveAudio.scaleLen && CaveAudio.scaleLen()) || 7;
+        var p2 = camera.position;
+        var place = Math.round(p2.x / 26) + Math.round(p2.z / 26) * 2 + Math.round(-p2.y / 55);
+        var base = ((place % L) + L) % L;
+        return base + side;
+    }
     function tryPickup(ndcX, ndcY) {
         if (held) return;
         raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
@@ -5111,14 +6462,38 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
             var cres = raycaster.intersectObjects(caps, false);
             if (cres.length > 0 && cres[0].object.userData.shroom) {
+                /* touching a cap: a rising run on the plate reverb */
+                lastTapDeg = tapDegree(ndcX);
+                CaveAudio.gliss(lastTapDeg, 5, { stepT: 0.038, gain: 0.075, verb: 0.9 });
                 offerConsume(cres[0].object);
+                return;
+            }
+        }
+        /* the stone itself plays: every spire is a note, and where you touch
+           it on the screen picks the degree */
+        raycaster.far = 9.0;
+        var spires = [];
+        for (k in chunks) {
+            if (chunks[k].formations) spires.push(chunks[k].formations);
+        }
+        if (spires.length) {
+            var fres = raycaster.intersectObjects(spires, false);
+            if (fres.length > 0) {
+                var deg = tapDegree(ndcX);
+                /* the taller the spire you strike, the lower it rings */
+                var lowByHeight = fres[0].point.y < camera.position.y - 0.6 ? 0 : -7;
+                CaveAudio.lead(deg + lowByHeight, { glide: 2, dur: 0.7, gain: 0.115, verb: 0.7 });
+                spireRing = 0.5;
+                return;
             }
         }
     }
+    var lastTapDeg = 0, spireRing = 0;
 
     /* -------- the trip: stacking doses that ebb like a tide -------- */
     var tripE = 0, tripS = 0;
     var baskK = 0, baskT = 0, baskShown = false, baskDeep = false, baskHeart = null;
+    var lavaIn = false, lavaK = 0, lavaSwim = 0, lavaShown = false;
     var elves = [], elfT = 0, elfShown = false, elfWant = 0;
     var ELF_WORDS = [
         'they were already here, waiting for you to slow down',
@@ -5259,6 +6634,9 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             e.preventDefault();
             if (eatTarget && eatTarget.visible) {
                 eatTarget.visible = false;
+                /* the cap answers as it goes: the run resolves an octave up */
+                CaveAudio.gliss(lastTapDeg + (CaveAudio.scaleLen ? CaveAudio.scaleLen() : 7), 6,
+                    { stepT: 0.05, gain: 0.09, verb: 1.0, tail: 1.4 });
                 capsEaten++;
                 try { if (typeof localStorage !== 'undefined') localStorage.setItem('mycd_caps_v1', String(capsEaten)); } catch (eC2) {}
                 offerSoul();
@@ -5397,17 +6775,27 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         vel.set(0, 0, 0);
         phyY = null; eyeY = null;
         /* the rush of stone passing through you */
+        /* streaks of passing stone, drawn as LINES so speed reads as motion.
+           the old version was 260 fat additive sprites centred ON the eye,
+           which stacked into a solid white screen at depth. */
         soulSGeo = new THREE.BufferGeometry();
-        var sp = new Float32Array(260 * 3);
-        for (var i = 0; i < 260; i++) {
-            sp[i * 3] = (Math.random() - 0.5) * 26;
-            sp[i * 3 + 1] = (Math.random() - 0.5) * 44;
-            sp[i * 3 + 2] = (Math.random() - 0.5) * 26;
+        var sp = new Float32Array(180 * 2 * 3);
+        for (var i = 0; i < 180; i++) {
+            /* ring them AROUND the eye, never within arm's reach of it */
+            var sa = Math.random() * 6.2831853;
+            var sr = 2.6 + Math.random() * 16;
+            var sy = (Math.random() - 0.5) * 46;
+            sp[i * 6] = Math.cos(sa) * sr;
+            sp[i * 6 + 1] = sy;
+            sp[i * 6 + 2] = Math.sin(sa) * sr;
+            sp[i * 6 + 3] = Math.cos(sa) * sr;
+            sp[i * 6 + 4] = sy + 1.2;
+            sp[i * 6 + 5] = Math.sin(sa) * sr;
         }
         soulSGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-        soulStreak = new THREE.Points(soulSGeo, new THREE.PointsMaterial({
-            color: 0xffc98a, size: 0.5, sizeAttenuation: true, map: glowTex,
-            transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false
+        soulStreak = new THREE.LineSegments(soulSGeo, new THREE.LineBasicMaterial({
+            color: 0xffc98a, transparent: true, opacity: 0.0,
+            blending: THREE.AdditiveBlending, depthWrite: false
         }));
         soulStreak.frustumCulled = false;
         scene.add(soulStreak);
@@ -5476,16 +6864,21 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         /* the streaks tear upward faster the deeper you go */
         if (soulSGeo) {
             var k2 = Math.min(1, soulV / 90000);
-            soulStreak.material.opacity = 0.25 + k2 * 0.5;
-            soulStreak.material.size = 0.4 + k2 * 2.6;
+            /* opacity is capped low: this is a veil of motion, not a wall */
+            soulStreak.material.opacity = 0.12 + k2 * 0.26;
             soulStreak.position.set(camera.position.x, camera.position.y, camera.position.z);
             var sp2 = soulSGeo.attributes.position.array;
-            for (var i2 = 0; i2 < sp2.length; i2 += 3) {
-                sp2[i2 + 1] += (14 + k2 * 46) * dt2 * 8;
-                if (sp2[i2 + 1] > 22) {
-                    sp2[i2 + 1] -= 44;
-                    sp2[i2] = (Math.random() - 0.5) * 26;
-                    sp2[i2 + 2] = (Math.random() - 0.5) * 26;
+            var rise = (16 + k2 * 40) * dt2 * 8;
+            var stretch = 1.2 + k2 * 9;
+            for (var i2 = 0; i2 < sp2.length; i2 += 6) {
+                sp2[i2 + 1] += rise;
+                sp2[i2 + 4] = sp2[i2 + 1] + stretch;
+                if (sp2[i2 + 1] > 24) {
+                    var na = Math.random() * 6.2831853;
+                    var nr = 2.6 + Math.random() * 16;
+                    var ny = -24 + Math.random() * 4;
+                    sp2[i2] = Math.cos(na) * nr; sp2[i2 + 1] = ny; sp2[i2 + 2] = Math.sin(na) * nr;
+                    sp2[i2 + 3] = sp2[i2]; sp2[i2 + 4] = ny + stretch; sp2[i2 + 5] = sp2[i2 + 2];
                 }
             }
             soulSGeo.attributes.position.needsUpdate = true;
@@ -5524,6 +6917,99 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         document.getElementById('soulNo').addEventListener('touchstart', snTap, { passive: false });
         document.getElementById('soulNo').addEventListener('click', snTap);
     }
+    /* -------- the song panel: your hand on key, scale and pace -------- */
+    var songPanel = document.getElementById('songPanel');
+    var songKeyEl = document.getElementById('songKey');
+    var songScaleEl = document.getElementById('songScale');
+    var songPaceEl = document.getElementById('songPace');
+    var PACES = [['auto', null], ['slow', 0.65], ['steady', 0.85], ['brisk', 1.15], ['driving', 1.5]];
+    var keyI = -1, scaleI = -1, paceI = 0;
+    var songScaleSub = document.getElementById('songScaleSub');
+    var songBpmSub = document.getElementById('songBpmSub');
+    var songTapEl = document.getElementById('songTap');
+    var tapTimes = [];
+    function songSync() {
+        songKeyEl.textContent = CaveAudio.getKey ? CaveAudio.getKey() : 'auto';
+        var scName = CaveAudio.getScaleName ? CaveAudio.getScaleName() : 'auto';
+        songScaleEl.textContent = scName.toLowerCase();
+        /* the fun name is the mood; under it, what it actually IS */
+        if (songScaleSub) {
+            var theory = CaveAudio.currentTheory ? CaveAudio.currentTheory() : '';
+            songScaleSub.textContent = theory || '\u00a0';
+        }
+        songPaceEl.textContent = PACES[paceI][0];
+        if (songBpmSub) {
+            var bpm = CaveAudio.getBPM ? CaveAudio.getBPM() : 0;
+            songBpmSub.textContent = bpm ? bpm + ' bpm' : '\u00a0';
+        }
+    }
+    function tapBind(el, fn) {
+        if (!el) return;
+        var h = function (e) { e.preventDefault(); e.stopPropagation(); fn(); };
+        el.addEventListener('touchstart', h, { passive: false });
+        el.addEventListener('click', h);
+    }
+    tapBind(document.getElementById('btnSong'), function () {
+        songPanel.classList.toggle('on');
+        songSync();
+    });
+    tapBind(songKeyEl, function () {
+        keyI++;
+        if (keyI >= 12) keyI = -1;
+        CaveAudio.setKey(keyI < 0 ? null : keyI);
+        songSync();
+        CaveAudio.lead(0, { glide: 2, dur: 0.5 });
+    });
+    tapBind(songScaleEl, function () {
+        scaleI++;
+        var names = CaveAudio.MOODS ? CaveAudio.MOODS.map(function (m) { return m.n; }) : [];
+        if (scaleI >= names.length) scaleI = -1;
+        CaveAudio.setScaleName(scaleI < 0 ? null : names[scaleI]);
+        songSync();
+        CaveAudio.gliss(0, 4, { stepT: 0.05 });
+    });
+    tapBind(songPaceEl, function () {
+        paceI = (paceI + 1) % PACES.length;
+        CaveAudio.setPace(PACES[paceI][1]);
+        songSync();
+    });
+    tapBind(songTapEl, function () {
+        /* tap tempo: four taps in time and the cave takes your pulse */
+        var nowMs = performance.now();
+        if (tapTimes.length && nowMs - tapTimes[tapTimes.length - 1] > 2400) tapTimes.length = 0;
+        tapTimes.push(nowMs);
+        if (tapTimes.length > 5) tapTimes.shift();
+        CaveAudio.lead(0, { dur: 0.18, gain: 0.07, verb: 0.3 });
+        if (tapTimes.length >= 3) {
+            var sum = 0;
+            for (var ti = 1; ti < tapTimes.length; ti++) sum += tapTimes[ti] - tapTimes[ti - 1];
+            var avg = sum / (tapTimes.length - 1);
+            var bpm2 = Math.max(40, Math.min(200, 60000 / avg));
+            if (CaveAudio.setBPM) CaveAudio.setBPM(bpm2);
+            paceI = 0;
+            songTapEl.textContent = Math.round(bpm2);
+        } else {
+            songTapEl.textContent = 'tap ' + tapTimes.length;
+        }
+        songSync();
+    });
+    tapBind(document.getElementById('songAuto'), function () {
+        keyI = -1; scaleI = -1; paceI = 0;
+        tapTimes.length = 0;
+        if (songTapEl) songTapEl.textContent = 'tap';
+        CaveAudio.setKey(null);
+        CaveAudio.setScaleName(null);
+        CaveAudio.setPace(null);
+        songSync();
+        showHint('the cave chooses again');
+    });
+    W.song = function (k, sc, pace) {
+        if (k !== undefined) CaveAudio.setKey(k);
+        if (sc !== undefined) CaveAudio.setScaleName(sc);
+        if (pace !== undefined) CaveAudio.setPace(pace);
+        songSync();
+        return { key: CaveAudio.getKey(), scale: CaveAudio.getScaleName(), pace: CaveAudio.getPace() };
+    };
     var tpDest = null;
     function offerTeleport(sign) {
         tpDest = sign;
@@ -5654,6 +7140,20 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         for (var i = 0; i < e.changedTouches.length; i++) {
             var t = e.changedTouches[i];
             if (t.target.classList && t.target.classList.contains('btn')) continue;
+            /* ask the world FIRST: if this touch landed on something playable
+               it belongs to the music, not to the stick or the look control,
+               wherever on the screen it happens to be */
+            var mNdcX = (t.clientX / window.innerWidth) * 2 - 1;
+            var mNdcY = -(t.clientY / window.innerHeight) * 2 + 1;
+            var mHit = musicHitAt(mNdcX, mNdcY);
+            if (mHit) {
+                touches[t.identifier] = {
+                    music: startHeldNote(mHit, mNdcX), x0: t.clientX, y0: t.clientY,
+                    x: t.clientX, y: t.clientY, t0: performance.now(), moved: false,
+                    hitObj: mHit.object
+                };
+                continue;
+            }
             var left = t.clientX < window.innerWidth * 0.45;
             touches[t.identifier] = {
                 left: left, x0: t.clientX, y0: t.clientY,
@@ -5674,6 +7174,14 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             if (!rec) continue;
             var dx = t.clientX - rec.x, dy = t.clientY - rec.y;
             if (Math.abs(t.clientX - rec.x0) + Math.abs(t.clientY - rec.y0) > 10) rec.moved = true;
+            if (rec.music) {
+                /* rubbing the stone up and down bows a brass layer into it */
+                var vAmt = Math.abs(dy) / 26;
+                rec.music.rubTarget = Math.min(1, rec.music.rubTarget * 0.72 + vAmt);
+                rec.music.lastMove = performance.now();
+                rec.x = t.clientX; rec.y = t.clientY;
+                continue;
+            }
             if (rec.left) {
                 var ox = t.clientX - rec.x0, oy = t.clientY - rec.y0;
                 var mag = Math.sqrt(ox * ox + oy * oy);
@@ -5691,11 +7199,29 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         e.preventDefault();
     }
+    function releaseAllNotes() {
+        while (heldVoices.length) endHeldNote(heldVoices[0]);
+        for (var tk in touches) { if (touches[tk] && touches[tk].music) touches[tk].music = null; }
+    }
+    window.addEventListener('blur', releaseAllNotes);
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) releaseAllNotes();
+    });
     function onTouchEnd(e) {
         for (var i = 0; i < e.changedTouches.length; i++) {
             var t = e.changedTouches[i];
             var rec = touches[t.identifier];
             if (!rec) continue;
+            if (rec.music) {
+                endHeldNote(rec.music);
+                /* a quick tap on a cap still offers it to you */
+                if (!rec.moved && performance.now() - rec.t0 < 320 &&
+                    rec.hitObj && rec.hitObj.userData && rec.hitObj.userData.shroom) {
+                    offerConsume(rec.hitObj);
+                }
+                delete touches[t.identifier];
+                continue;
+            }
             if (rec.left) {
                 move.f = 0; move.s = 0;
                 stickEl.style.display = 'none';
@@ -5746,6 +7272,22 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
        Two body sizes: normal, and a tight crawl body so holes and squeezes
        that render open are actually passable, just slower */
     /*__COLLIDE__*/
+    function blockedRise(x, y, z, r, eps) {
+        /* the same body test WITHOUT the sample under the feet. standing on
+           solid ground, that bottom sample is always inside the floor, so a
+           plain blockedR refuses every upward step: the jump fired, the step
+           was denied, vel.y was zeroed, and the player never left the ground.
+           rising is blocked by what is ABOVE and BESIDE you, never by what
+           you are standing on. */
+        var e = eps || 0.0;
+        if (CC.density(x, y, z) > e) return true;
+        if (CC.density(x + r, y, z) > e) return true;
+        if (CC.density(x - r, y, z) > e) return true;
+        if (CC.density(x, y + r, z) > e) return true;
+        if (CC.density(x, y, z + r) > e) return true;
+        if (CC.density(x, y, z - r) > e) return true;
+        return false;
+    }
     function blockedR(x, y, z, r, eps) {
         var e = eps || 0.0;
         if (CC.density(x, y, z) > e) return true;
@@ -5773,7 +7315,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var ny = p.y + (axis === 1 ? d : 0);
         var nz = p.z + (axis === 2 ? d : 0);
         if (!window._CAVE_COLLIDE || phasing) { p.x = nx; p.y = ny; p.z = nz; return true; }
-        if (!blockedR(nx, ny + bodyOffY, nz, BODY_R)) { p.x = nx; p.y = ny; p.z = nz; return true; }
+        var rising = axis === 1 && d > 0;
+        var hit = rising ? blockedRise(nx, ny + bodyOffY, nz, BODY_R)
+            : blockedR(nx, ny + bodyOffY, nz, BODY_R);
+        if (!hit) { p.x = nx; p.y = ny; p.z = nz; return true; }
         /* step-up assist: walking into a knee-high lip lifts you over it */
         if (collideWalk && axis !== 1) {
             var lift;
@@ -5866,6 +7411,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     }
     function axisStep(p, axis, d) {
         var left = Math.abs(d), sgn = d < 0 ? -1 : 1, moved = false;
+        /* a step of zero length is not a collision. the callers read a false
+           return as BLOCKED and zero the velocity, so on any frame with a
+           vanishing dt the jump was set and instantly erased. */
+        if (left <= 0.000001) return true;
         while (left > 0.000001) {
             var st = Math.min(SUBSTEP, left);
             if (!axisMicro(p, axis, sgn * st)) return moved;
@@ -5880,7 +7429,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     /* -------- walk mode: earth gravity, jump, slope slides -------- */
     var walkMode = false;
     var grounded = false;
-    var prevJump = 0;
+    var prevJump = 0, jumpsFired = 0, jumpLook = null;
     var GRAV = 9.81, TERMINAL = 55.0, JUMP_V = 6.2;
     function setWalkMode(on) {
         walkMode = on;
@@ -6209,6 +7758,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         hintTimer = setTimeout(function () { hintEl.style.opacity = 0; }, 3200);
     }
     W.showHint = showHint;
+    W.setWalk = function (on) { setWalkMode(!!on); return walkMode; };
     W.tp = function (x, y, z) {
         camera.position.set(x, y, z);
         /* the smoothed eye holds the OLD height: without clearing it, the
@@ -6217,11 +7767,40 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         phyY = null; eyeY = null;
         updateChunks(200);
     };
+    W.jumpDebug = function () { return { fired: jumpsFired, look: jumpLook }; };
+    W.upProbe = function () {
+        var p2 = camera.position;
+        var out = { bodyOffY: bodyOffY, walk: walkMode, grounded: grounded, vy: vel.y, u: move.u, prevJump: prevJump };
+        out.atBody = blockedR(p2.x, p2.y + bodyOffY, p2.z, 0.30);
+        out.up05 = blockedR(p2.x, p2.y + bodyOffY + 0.05, p2.z, 0.30);
+        out.rise05 = blockedRise(p2.x, p2.y + bodyOffY + 0.05, p2.z, 0.30);
+        out.sideX = CC.density(p2.x + 0.30, p2.y + bodyOffY + 0.05, p2.z) > 0;
+        out.sideZ = CC.density(p2.x, p2.y + bodyOffY + 0.05, p2.z + 0.30) > 0;
+        out.top = CC.density(p2.x, p2.y + bodyOffY + 0.35, p2.z) > 0;
+        out.up50 = blockedR(p2.x, p2.y + bodyOffY + 0.5, p2.z, 0.30);
+        out.dBody = CC.density(p2.x, p2.y + bodyOffY, p2.z);
+        out.dUp = CC.density(p2.x, p2.y + bodyOffY + 0.5, p2.z);
+        return out;
+    };
+    W.musicProbe = function (ndcX, ndcY) { return !!musicHitAt(ndcX, ndcY); };
+    W.playableCount = function () {
+        var n = 0, b = 0, sp = 0, cp = 0;
+        for (var k in chunks) {
+            if (chunks[k].formations) sp++;
+            var bl = chunks[k].boulders; if (bl) b += bl.length;
+            var sc = chunks[k].shroomCaps; if (sc) cp += sc.length;
+        }
+        return { chunks: Object.keys(chunks).length, spireMeshes: sp, boulders: b, caps: cp };
+    };
+    W.stickVisible = function () { return stickEl.style.display === 'block'; };
+    W.heldNotes = function () { return heldVoices.length; };
     W.where = function () {
         return { x: camera.position.x, y: camera.position.y, z: camera.position.z,
             depth: Math.round(-camera.position.y), soul: soulState, walk: walkMode,
+            grounded: grounded, u: move.u, vy: vel.y,
             bask: baskK, elves: elves.length, core: CC.inCore(camera.position.y) };
     };
+    W.lava = function () { return { inside: lavaIn, k: lavaK }; };
     W.bask = function () {
         return { k: baskK, t: baskT, heart: baskHeart, elves: elves.length,
             spd: Math.sqrt(vel.x * vel.x + vel.z * vel.z), core: CC.inCore(camera.position.y) };
@@ -6248,6 +7827,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     ];
     var fogCol = new THREE.Color(0x04070c);
     var CORE_FOG = new THREE.Color(0x2a0d05);
+    var LAVA_FOG = new THREE.Color(0xff5a12);
     var audioProx = { fallD: 999, torchD: 999, crystalD: 999, waterD: 999 };
 
     /* -------- light pool assignment, with fades so lights never pop -------- */
@@ -6332,6 +7912,15 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 for (var f2 = 0; f2 < fl.length; f2++) {
                     fl[f2].g.rotation.z = Math.sin(t * 0.6 + fl[f2].ph) * 0.045;
                     fl[f2].g.rotation.y += Math.sin(t * 0.13 + fl[f2].ph) * 0.0006;
+                }
+            }
+            var bld = chunks[kf].boulders;
+            if (bld) {
+                for (var bqi = 0; bqi < bld.length; bqi++) {
+                    var bb = bld[bqi];
+                    /* the floor breathes: boulders settle and lift with the room */
+                    bb.m.position.y = bb.base + Math.sin(t * 0.5 + bb.ph) * 0.045;
+                    bb.m.rotation.y += gDt * 0.03;
                 }
             }
             var hrl = chunks[kf].hearts;
@@ -6707,6 +8296,41 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 }
             }
         }
+        /* THE LAVA: the heart is enterable. it is thick, it lifts you, it
+           lights you, and it answers every stroke with a note */
+        var lava = (CC.inCore(p.y) && soulState !== 1 && window._CAVE_HEARTS !== false)
+            ? CC.heartAt(p.x, p.y, p.z) : null;
+        if (lava) {
+            if (!lavaIn) {
+                lavaIn = true;
+                fovJolt = Math.min(1.4, fovJolt + 0.5);
+                CaveAudio.splash && CaveAudio.splash(1.0);
+                if (CaveAudio.setLava) CaveAudio.setLava(0.001);
+                if (!lavaShown) { lavaShown = true; showHint('you sink into the heart. it is thicker than water, and it is singing.'); }
+            }
+            /* molten rock is heavy: it holds you up and slows every move */
+            vel.x *= Math.pow(0.06, dt);
+            vel.z *= Math.pow(0.06, dt);
+            vel.y += (2.6 - vel.y) * Math.min(1, dt * 1.6);
+            /* buoyancy toward the skin, stronger the deeper you are */
+            vel.y += lava.depth * 3.4 * dt;
+            lavaK = Math.min(1, lavaK + dt * 1.2);
+            /* every stroke you swim rings the heart: the note is your depth */
+            lavaSwim += Math.sqrt(vel.x * vel.x + vel.z * vel.z + Math.max(0, vel.y) * 0.4) * dt;
+            if (lavaSwim > 1.15) {
+                lavaSwim = 0;
+                var L2 = CaveAudio.scaleLen ? CaveAudio.scaleLen() : 7;
+                var lDeg = Math.round((1 - lava.depth) * L2 * 2);
+                CaveAudio.lead && CaveAudio.lead(lDeg, { glide: 3, dur: 1.1, gain: 0.075, verb: 0.95, wave: 'triangle' });
+            }
+        } else if (lavaIn) {
+            lavaIn = false;
+            lavaSwim = 0;
+            CaveAudio.gliss && CaveAudio.gliss(0, 6, { stepT: 0.055, gain: 0.07, verb: 1.0, tail: 1.6 });
+            showHint('the heart lets you go. you are carrying its light.');
+        }
+        if (!lava && lavaK > 0) lavaK = Math.max(0, lavaK - dt * 0.35);
+        if (CaveAudio.setLava) CaveAudio.setLava(lavaK);
         if (CC.inCore(p.y) && soulState !== 1) {
             baskHeart = CC.nearestHeart(p.x, p.z);
             var spdB = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
@@ -6803,7 +8427,6 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 vel.y = 3.6;
                 CaveAudio.splash(0.4);
             }
-            prevJump = u > 0 ? 1 : 0;
             grounded = false;
         } else if (walkMode) {
             /* horizontal intent only; gravity owns the vertical */
@@ -6820,8 +8443,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             vel.z += (wish.z - vel.z) * kmix;
             vel.y -= GRAV * (slowFallT > 0 ? 0.35 : 1.0) * dt;
             if (vel.y < -TERMINAL) vel.y = -TERMINAL;
-            if (u > 0 && prevJump === 0 && grounded) { vel.y = JUMP_V; grounded = false; CaveAudio.jump(); }
-            prevJump = u > 0 ? 1 : 0;
+            jumpLook = { u: u, prevJump: prevJump, grounded: grounded, inWater: inWater };
+            if (u > 0 && prevJump === 0 && grounded) { vel.y = JUMP_V; grounded = false; jumpsFired++; CaveAudio.jump(); }
             if (grounded) {
                 /* slide down steep ground like scree */
                 var gg = CC.grad(p.x, p.y + bodyOffY - 0.3, p.z, 0.6);
@@ -6840,6 +8463,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             wish.multiplyScalar(window._CAVE_SPEED);
             vel.lerp(wish, 1 - Math.pow(0.0015, dt));
         }
+        /* the jump edge is tracked EVERY frame, in every mode. it used to be
+           updated only inside the walk and swim branches, so flying with UP
+           held froze it at 1 and swallowed the first jump after you landed. */
+        prevJump = u > 0 ? 1 : 0;
 
         squeezing = false;
         var wasGrounded = grounded;
@@ -6868,6 +8495,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (!squeezing) squeezeShown = false;
 
         updateDust(dt, t);
+        tickHeldNotes(dt);
         tickSoul(dt);
         if (soulState === 1) {
             /* mid-fall: no world is built until the heart is close */
@@ -7010,6 +8638,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             hemi.intensity = 0.3 + 0.5 * baskK;
             hemi.color.setHex(0x6a2a10);
         }
+        if (lavaK > 0.01) {
+            /* inside the melt: the world becomes light with no distance */
+            fogCol.lerp(LAVA_FOG, Math.min(0.96, lavaK));
+            hemi.intensity = 0.3 + 2.2 * lavaK;
+            hemi.color.setHex(0xff6a1e);
+        }
         phyY = camera.position.y;
         if (eyeY === null) eyeY = phyY;
         if (!walkMode || Math.abs(phyY - eyeY) > 0.9) {
@@ -7084,7 +8718,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         flowT += spdNow * dt * 0.28;
         var aLvlV = 5 * (1 - Math.exp(-tripS / 8));
         breathPh += (0.055 + aLvlV * 0.035 + trW * 0.22) * 6.2831853 * dt;
-        var shs = [rockMat.userData.sh, spikeMat.userData.sh];
+        /* the boulder stone is the same shader family: if it is not in this
+           list it never breathes, never warps on the trip, and drifts out of
+           step with the walls it fell from */
+        var shs = [rockMat.userData.sh, spikeMat.userData.sh, boulderMat.userData.sh];
         for (var shi = 0; shi < shs.length; shi++) {
             if (!shs[shi]) continue;
             var ush = shs[shi].uniforms;
@@ -7137,10 +8774,13 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
 
         /* every built surface breathes with the music while tripping */
-        if (trN > 0.01) {
-            var bo = Math.sin(breathPh) * 0.014 * trN;
-            var bo2 = Math.cos(breathPh * 0.62) * 0.010 * trN;
-            var bsc = 1.0 + Math.sin(breathPh * 0.5) * 0.05 * trN;
+        {
+            /* the stone is alive whether or not you are dosed: a slow base
+               breath, and much more of it while tripping */
+            var brK = 0.34 + trN * 0.66;
+            var bo = Math.sin(breathPh) * 0.014 * brK;
+            var bo2 = Math.cos(breathPh * 0.62) * 0.010 * brK;
+            var bsc = 1.0 + Math.sin(breathPh * 0.5) * 0.05 * brK;
             for (var bti = 0; bti < breathingTex.length; bti++) {
                 breathingTex[bti].offset.set(bo2, bo);
                 breathingTex[bti].repeat.set(breathingTex[bti].r0 * bsc, breathingTex[bti].r1 * bsc);
@@ -7157,11 +8797,11 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             var vWild = Math.max(0, Math.min(1, (tripS - 21) / 9));
             scene.fog.color.offsetHSL(Math.sin(t * (0.21 + vWild * 0.6)) * (0.026 * vLvl + 0.08 * vWild), 0.02 * vLvl + 0.07 * vWild, 0.0);
             scene.background.copy(scene.fog.color);
-            camera.fov = 72 + Math.sin(t * (0.47 + vWild * 0.5)) * (1.5 * vLvl + 3.5 * vWild) - squeezeGlow * 3.5 + fovJolt + rideT * 5.0 + baskK * 4.0;
+            camera.fov = 72 + Math.sin(t * (0.47 + vWild * 0.5)) * (1.5 * vLvl + 3.5 * vWild) - squeezeGlow * 3.5 + fovJolt + rideT * 5.0 + baskK * 4.0 + lavaK * 6.0;
             camera.updateProjectionMatrix();
             tripFovDirty = true;
         } else if (squeezeGlow > 0) {
-            camera.fov = 72 - squeezeGlow * 3.5 + fovJolt + rideT * 5.0 + baskK * 4.0;
+            camera.fov = 72 - squeezeGlow * 3.5 + fovJolt + rideT * 5.0 + baskK * 4.0 + lavaK * 6.0;
             camera.updateProjectionMatrix();
             tripFovDirty = true;
         } else if (tripFovDirty) {
@@ -7173,7 +8813,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         renderer.render(scene, camera);
     }
 
-    console.log('[CAVES 031] seed ' + CC.SEED +
+    console.log('[CAVES 042] seed ' + CC.SEED +
         ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP _CAVE_SHANTY _CAVE_TRIAL | _CAVE.trip(n) freshStart()');
 })();
 </script>
