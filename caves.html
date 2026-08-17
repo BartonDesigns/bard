@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>caves 042</title>
+<title>caves 054</title>
 <style>
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
@@ -27,11 +27,21 @@
     background: rgba(6,10,16,0.9); border: 1px solid rgba(180,140,255,0.4); border-radius: 12px;
     padding: 14px 18px; z-index: 40; flex-direction: column; align-items: center; gap: 10px; }
 #soulLbl { color: #d9c6ff; font-size: 13px; letter-spacing: 0.02em; }
+#dwellerAsk { display: none; position: fixed; left: 50%; bottom: 168px; transform: translateX(-50%);
+    z-index: 32; max-width: 78vw; background: rgba(6,10,16,0.88);
+    border-left: 2px solid rgba(1,169,130,0.6); border-radius: 6px; padding: 10px 14px;
+    flex-direction: column; gap: 4px; }
+#dwellerWho { color: rgba(255,255,255,0.45); font-size: 11px; letter-spacing: 0.06em; }
+#dwellerLine { color: #dfe8e4; font-size: 14px; line-height: 1.45; }
+#soulCatch { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%);
+    z-index: 30; color: #9fe8ff; border: none; background: none; box-shadow: none;
+    border-radius: 0; padding: 8px 10px; letter-spacing: 0.04em; }
 #soulBtn, #soulBack { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
-    z-index: 30; border-color: rgba(180,140,255,0.5); color: #d9c6ff; }
-#btnSong { position: fixed; right: 84px; top: 18px; z-index: 30; width: 40px; text-align: center;
-    border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.55); font-size: 17px;
-    padding: 6px 0; letter-spacing: 1px; }
+    z-index: 30; color: #d9c6ff; border: none; background: none; box-shadow: none;
+    border-radius: 0; padding: 8px 10px; letter-spacing: 0.04em; }
+#btnSong { position: fixed; right: 86px; top: 18px; z-index: 30; width: 34px; text-align: center;
+    border: none; background: none; box-shadow: none;
+    color: rgba(255,255,255,0.5); font-size: 20px; padding: 8px 0; letter-spacing: 2px; }
 #songPanel { display: none; position: fixed; right: 18px; top: 68px; z-index: 31;
     background: rgba(6,10,16,0.92); border: 1px solid rgba(1,169,130,0.4); border-radius: 12px;
     padding: 10px 12px; min-width: 168px; }
@@ -229,7 +239,7 @@
     });
 })();
 </script>
-<div class="hud" id="topbar"><span class="t">caves 042</span></div>
+<div class="hud" id="topbar"><span class="t">caves 054</span></div>
 <div class="hud" id="depth">DEPTH 0 m</div>
 <div class="hud" id="hint"></div>
 <div class="btn" id="btnUp">&#9650;</div>
@@ -279,6 +289,11 @@
 </div>
 <div class="btn" id="soulBtn" style="display:none;">leave the body</div>
 <div class="btn" id="soulBack" style="display:none;">return to the body</div>
+<div class="btn" id="soulCatch" style="display:none;">step into the cave</div>
+<div id="dwellerAsk">
+    <div id="dwellerWho"></div>
+    <div id="dwellerLine"></div>
+</div>
 <div id="recTime" style="display:none;"></div>
 <a class="btn" id="recSave" style="display:none;">save .mp3</a>
 <div id="stick"><div id="knob"></div></div>
@@ -983,6 +998,46 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         return out;
     };
+    var GEO_CELL = 900;
+    C.geodeAt = function (lx, ly, lz) {
+        /* a hollow crystal the size of a cathedral, one per 900m cell and
+           only in the deeper half of the descent */
+        var x = lx + OX, y = ly, z = lz + OZ;
+        var gx = Math.floor(x / GEO_CELL), gz = Math.floor(z / GEO_CELL);
+        for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+                var cx2 = gx + i, cz2 = gz + j;
+                if (hash3(cx2, 900, cz2) > 0.34) continue;
+                var ox = (cx2 + 0.5) * GEO_CELL + (hash3(cx2, 901, cz2) - 0.5) * 500;
+                var oz = (cz2 + 0.5) * GEO_CELL + (hash3(cz2, 902, cx2) - 0.5) * 500;
+                var oy = -260 - hash3(cx2, 903, cz2) * 2400;
+                var r = 34 + hash3(cx2, 904, cz2) * 20;
+                var dx = x - ox, dy = y - oy, dz = z - oz;
+                var d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (d > r + 34) continue;
+                return { x: ox - OX, y: oy, z: oz - OZ, r: r, dist: d,
+                    inside: d < r - 1.5, id: 'g' + cx2 + ',' + cz2 };
+            }
+        }
+        return null;
+    };
+    C.geodesNearChunk = function (lx, ly, lz) {
+        var g = C.geodeAt(lx, ly, lz);
+        return g ? [g] : [];
+    };
+    function geodeCarve(x, y, z, d) {
+        var g = C.geodeAt(x - OX, y, z - OZ);
+        if (!g) return d;
+        var dx = x - (g.x + OX), dy = y - g.y, dz = z - (g.z + OZ);
+        var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < g.r) {
+            /* hollow, with a knobbly crystal lining rather than a smooth ball */
+            var lining = 2.2 + Math.sin(dx * 0.22) * Math.cos(dz * 0.19) * 1.3 + Math.sin(dy * 0.26) * 1.1;
+            return Math.min(d, (dist - (g.r - lining)) * 0.5 - 0.6);
+        }
+        if (dist < g.r + 5.5) return Math.max(d, (g.r + 5.5 - dist) * 0.5);   /* the shell */
+        return d;
+    }
     C.heartAt = function (lx, ly, lz) {
         /* the molten body you are inside of, if any: r, depth and the pull
            toward its surface. the heart used to be scenery; now it is water */
@@ -1377,6 +1432,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         d = shantyCarve(x, y, z, d);
         if (RIVERS_ON) d = riverCarve(x, y - OY, z, d);
         d = vaultCarve(x, y - OY, z, d);
+        d = geodeCarve(x, y - OY, z, d);
         d = coreCarve(x, y - OY, z, d);
         d = sealSolid(x, y, z, d);
         return d;
@@ -1576,6 +1632,15 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             r *= (1.0 - 0.45 * wet);
             g *= (1.0 - 0.20 * wet);
             b *= (1.0 - 0.25 * wet);
+        }
+        var gq = C.geodeAt(x - OX, y, z - OZ);
+        if (gq) {
+            /* the shell of a geode is not cave stone: it is the outside of a
+               gem, dark and violet, brightening toward the lining */
+            var t2g = Math.max(0, Math.min(1, 1 - Math.abs(gq.dist - gq.r) / 14));
+            r = r * (1 - t2g) + (0.16 + s * 0.16) * t2g;
+            g = g * (1 - t2g) + (0.07 + s * 0.07) * t2g;
+            b = b * (1 - t2g) + (0.26 + s * 0.22) * t2g;
         }
         if (C.inCore(y)) {
             /* iron, not cave stone: dark and warm, brightening at the hearts */
@@ -1883,6 +1948,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     if (window._CAVE_TORCHES === undefined) window._CAVE_TORCHES = true;
     if (window._CAVE_CRYSTALS === undefined) window._CAVE_CRYSTALS = true;
     if (window._CAVE_ELVES === undefined) window._CAVE_ELVES = true;
+    if (window._CAVE_GEODES === undefined) window._CAVE_GEODES = true;
     if (window._CAVE_HEARTS === undefined) window._CAVE_HEARTS = true;
     if (window._CAVE_MIST === undefined) window._CAVE_MIST = true;
     if (window._CAVE_CITIES === undefined) window._CAVE_CITIES = true;
@@ -2816,8 +2882,22 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             return hz(sc[((deg % L) + L) % L], oct);
         }
         A.scaleLen = function () { return scaleSteps().length; };
+        /* every note played announces its scale degree, so the world can
+           answer: crystals of that degree light when the song touches them */
+        A.flashes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        function markDegree(deg) {
+            var L = scaleSteps().length;
+            var d = ((deg % L) + L) % L;
+            A.flashes[d] = 1;
+        }
+        A.decayFlashes = function (dt) {
+            for (var i = 0; i < A.flashes.length; i++) {
+                A.flashes[i] = Math.max(0, A.flashes[i] - dt * 1.8);
+            }
+        };
         A.lead = function (deg, opts) {
             /* one chiptune lead note, in the song's key, with a short glide in */
+            markDegree(deg);
             if (!A.ready || A.muted) return 0;
             opts = opts || {};
             var t0 = now();
@@ -2869,6 +2949,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             for (var i = 0; i <= n; i++) {
                 o.frequency.setValueAtTime(degHz(startDeg + dir * i), t0 + i * stepT);
             }
+            markDegree(startDeg + dir * n);
             var tail = opts.tail === undefined ? 0.75 : opts.tail;
             var end = t0 + n * stepT + tail;
             g.gain.setValueAtTime(0.0001, t0);
@@ -2959,6 +3040,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         };
         A.getPace = function () { return M.paceMult === null || M.paceMult === undefined ? 1 : M.paceMult; };
         A.holdNote = function (deg, opts) {
+            markDegree(deg);
             /* a sustained lead you keep alive while a finger stays down, with
                a brass voice that only speaks when you rub the stone */
             if (!A.ready || A.muted) return null;
@@ -3600,6 +3682,234 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         g.setAttribute('color', new THREE.BufferAttribute(c, 3));
         return g;
     }
+    var facetGeo = null, facetMats = null;
+    var GEODE_HUES = [0xb46bff, 0x5fd0ff, 0xff5fc8, 0x7dffa8, 0xffc857, 0xff7a5f, 0x6b7dff];
+    function makeFacetMaterial(hex) {
+        /* a crystal is not a painted cone: it is deep, it edge-lights, it
+           carries a core that burns, and it RINGS when its note is played */
+        var c = new THREE.Color(hex);
+        return new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: true,
+            uniforms: {
+                uTime: { value: 0 },
+                uRing: { value: 0 },
+                uHue: { value: new THREE.Vector3(c.r, c.g, c.b) },
+                uFog: { value: new THREE.Color(0x0a0714) },
+                uFogD: { value: 0.011 }
+            },
+            vertexShader: [
+                'varying vec3 vN;',
+                'varying vec3 vW;',
+                'varying vec3 vL;',
+                'uniform float uRing;',
+                'void main() {',
+                '    vL = position;',
+                /* a struck crystal swells along its length */
+                '    vec3 p = position * vec3(1.0 + uRing * 0.10, 1.0 + uRing * 0.16, 1.0 + uRing * 0.10);',
+                '    vN = normalize(normalMatrix * normal);',
+                '    vec4 wp = modelMatrix * vec4(p, 1.0);',
+                '    vW = wp.xyz;',
+                '    gl_Position = projectionMatrix * viewMatrix * wp;',
+                '}'
+            ].join('\n'),
+            fragmentShader: [
+                'varying vec3 vN;',
+                'varying vec3 vW;',
+                'varying vec3 vL;',
+                'uniform float uTime;',
+                'uniform float uRing;',
+                'uniform vec3 uHue;',
+                'uniform vec3 uFog;',
+                'uniform float uFogD;',
+                'void main() {',
+                '    vec3 N = normalize(vN);',
+                '    vec3 V = normalize(cameraPosition - vW);',
+                '    float fres = pow(1.0 - max(dot(N, V), 0.0), 2.0);',
+                /* the body: dark and saturated, brightening toward the tip */
+                '    float up = clamp(vL.y * 0.5 + 0.5, 0.0, 1.0);',
+                '    vec3 col = uHue * (0.07 + up * 0.22);',
+                /* internal flaws catching light, so it reads as a solid gem */
+                '    float veins = sin(vL.y * 26.0 + vL.x * 9.0) * sin(vL.z * 11.0 - uTime * 0.4);',
+                '    col += uHue * smoothstep(0.55, 1.0, veins) * 0.45;',
+                /* the cold edge light every faceted stone has */
+                '    col += mix(uHue, vec3(1.0), 0.42) * fres * (0.45 + uRing * 0.55);',
+                /* and the ring: the whole crystal fills with its own note */
+                '    col += uHue * uRing * (0.55 + up * 0.75);',
+                '    col += vec3(1.0) * uRing * fres * 0.22;',
+                '    float alpha = clamp(0.62 + fres * 0.4 + uRing * 0.3, 0.0, 1.0);',
+                '    float dist = length(vW - cameraPosition);',
+                '    float f = 1.0 - exp(-uFogD * uFogD * dist * dist);',
+                '    col = mix(col, uFog, clamp(f, 0.0, 1.0));',
+                '    gl_FragColor = vec4(col, alpha);',
+                '}'
+            ].join('\n')
+        });
+    }
+    var sparkleMat = null;
+    function makeSparkleMaterial() {
+        /* the druzy: the whole inner shell of a geode is carpeted in tiny
+           crystal tips, and they never sit still. every grain twinkles on
+           its own clock and answers the note its degree belongs to. */
+        return new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            uniforms: {
+                uTime: { value: 0 },
+                uRings: { value: [0, 0, 0, 0, 0, 0, 0] },
+                uFog: { value: new THREE.Color(0x0a0714) },
+                uFogD: { value: 0.011 }
+            },
+            vertexShader: [
+                'attribute float aPhase;',
+                'attribute float aDeg;',
+                'attribute float aSize;',
+                'attribute vec3 aHue;',
+                'varying vec3 vHue;',
+                'varying float vBright;',
+                'uniform float uTime;',
+                'uniform float uRings[7];',
+                'void main() {',
+                '    float ring = 0.0;',
+                '    for (int k = 0; k < 7; k++) {',
+                '        if (abs(aDeg - float(k)) < 0.5) ring = uRings[k];',
+                '    }',
+                /* a sharp twinkle: mostly dark, briefly brilliant */
+                '    float tw = sin(uTime * (1.7 + aPhase * 2.3) + aPhase * 31.0) * 0.5 + 0.5;',
+                /* a softer curve: everything shimmers a little all the time,
+                   with bright catches on top, instead of mostly-off grains */
+                '    tw = pow(tw, 2.6);',
+                '    vBright = 0.13 + tw * 0.55 + ring * 0.9;',
+                '    vHue = aHue;',
+                '    vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+                '    float att = 170.0 / max(1.0, -mv.z);',
+                '    gl_PointSize = aSize * (0.55 + tw * 0.75 + ring * 0.9) * att;',
+                '    gl_Position = projectionMatrix * mv;',
+                '}'
+            ].join('\n'),
+            fragmentShader: [
+                'varying vec3 vHue;',
+                'varying float vBright;',
+                'void main() {',
+                '    vec2 d = gl_PointCoord - vec2(0.5);',
+                '    float r = length(d);',
+                '    if (r > 0.5) discard;',
+                /* a hot centre with a soft halo, and a faint cross flare */
+                '    float core = smoothstep(0.5, 0.0, r);',
+                '    float flare = max(0.0, 1.0 - abs(d.x) * 14.0) + max(0.0, 1.0 - abs(d.y) * 14.0);',
+                '    float a = core * core * 0.9 + flare * 0.10;',
+                '    vec3 col = mix(vHue, vec3(1.0), core * 0.30) * vBright;',
+                '    gl_FragColor = vec4(col, a * clamp(vBright, 0.0, 1.4));',
+                '}'
+            ].join('\n')
+        });
+    }
+    function addGeodeSparkle(rec, g, cx, cy, cz) {
+        /* a geode's inner shell is CARPETED. at r~39 that is ~19,000 square
+           metres of surface, so anything under tens of thousands of grains
+           reads as scattered dots rather than druzy */
+        var N = 34000;
+        var pos = new Float32Array(N * 3);
+        var pha = new Float32Array(N);
+        var deg = new Float32Array(N);
+        var siz = new Float32Array(N);
+        var hue = new Float32Array(N * 3);
+        var GA = 2.3999632297;
+        var used = 0;
+        var c = new THREE.Color();
+        for (var i = 0; i < N; i++) {
+            var yy = 1 - (i / (N - 1)) * 2;
+            var rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+            var th = i * GA;
+            /* jitter the DIRECTION as well as the radius: a plain fibonacci
+               sphere shows its lattice as diagonal rows of grains */
+            var ux = Math.cos(th) * rr + (CC.hash3(i, 934, 5) - 0.5) * 0.10;
+            var uy = yy + (CC.hash3(i, 935, 6) - 0.5) * 0.10;
+            var uz = Math.sin(th) * rr + (CC.hash3(i, 936, 7) - 0.5) * 0.10;
+            var ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
+            ux /= ul; uy /= ul; uz /= ul;
+            /* they must CLING to the lining: scattered metres off it they
+               read as a nebula floating in the room, not as a coating */
+            var rad = g.r - 0.25 - CC.hash3(i, 930, 1) * 1.15;
+            var px = g.x + ux * rad, py = g.y + uy * rad, pz = g.z + uz * rad;
+            if (!ownedBy(px, py, pz, cx, cy, cz)) continue;
+            pos[used * 3] = px; pos[used * 3 + 1] = py; pos[used * 3 + 2] = pz;
+            pha[used] = CC.hash3(i, 931, 2);
+            /* degree runs in broad bands around the shell, so a played note
+               lights a REGION of the carpet, not confetti */
+            deg[used] = Math.floor(((uy * 0.5 + 0.5) * 7 + CC.hash3(i, 932, 3) * 0.9)) % 7;
+            /* grains, not stars: most are tiny, a few catch properly */
+            var sh4 = CC.hash3(i, 933, 4);
+            siz[used] = 0.20 + sh4 * sh4 * 0.95;
+            c.setHex(GEODE_HUES[deg[used]]);
+            hue[used * 3] = c.r; hue[used * 3 + 1] = c.g; hue[used * 3 + 2] = c.b;
+            used++;
+        }
+        if (!used) return;
+        var geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, used * 3), 3));
+        geo.setAttribute('aPhase', new THREE.BufferAttribute(pha.subarray(0, used), 1));
+        geo.setAttribute('aDeg', new THREE.BufferAttribute(deg.subarray(0, used), 1));
+        geo.setAttribute('aSize', new THREE.BufferAttribute(siz.subarray(0, used), 1));
+        geo.setAttribute('aHue', new THREE.BufferAttribute(hue.subarray(0, used * 3), 3));
+        if (!sparkleMat) sparkleMat = makeSparkleMaterial();
+        var pts = new THREE.Points(geo, sparkleMat);
+        pts.frustumCulled = false;
+        rec.group.add(pts);
+        rec.disposables.push(geo);
+        rec.sparkle = sparkleMat;
+    }
+    function addGeode(rec, cx, cy, cz) {
+        var ccx = (cx + 0.5) * CH, ccy = (cy + 0.5) * CH, ccz = (cz + 0.5) * CH;
+        var g = CC.geodeAt(ccx, ccy, ccz);
+        if (!g) return;
+        if (!facetGeo) {
+            facetGeo = new THREE.ConeGeometry(1, 3.2, 6);
+            facetMats = [];
+            for (var m = 0; m < GEODE_HUES.length; m++) facetMats.push(makeFacetMaterial(GEODE_HUES[m]));
+        }
+        /* the lining: clusters of prisms standing off the shell, each cluster
+           one note of the scale, so the chamber is a keyboard you walk on */
+        var GA = 2.3999632297;
+        var n = 132;
+        for (var i = 0; i < n; i++) {
+            var yy = 1 - (i / (n - 1)) * 2;
+            var rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+            var th = i * GA;
+            var ux = Math.cos(th) * rr, uy = yy, uz = Math.sin(th) * rr;
+            var px = g.x + ux * (g.r - 1.4), py = g.y + uy * (g.r - 1.4), pz = g.z + uz * (g.r - 1.4);
+            if (!ownedBy(px, py, pz, cx, cy, cz)) continue;
+            var deg = i % 7;
+            var mat = facetMats[deg];
+            /* three to five prisms leaning off one another, like real druzy */
+            var nC = 3 + Math.floor(CC.hash3(i, 915, 2) * 3);
+            for (var c2 = 0; c2 < nC; c2++) {
+                var crys = new THREE.Mesh(facetGeo, mat);
+                var len = 1.7 + CC.hash3(i * 7 + c2, 910, g.r) * 3.4;
+                var wid = 0.55 + CC.hash3(i * 7 + c2, 911, 3) * 1.05;
+                crys.scale.set(wid, len, wid);
+                var jx = (CC.hash3(i + c2, 916, 1) - 0.5) * 3.2;
+                var jy = (CC.hash3(i + c2, 917, 2) - 0.5) * 3.2;
+                var jz = (CC.hash3(i + c2, 918, 3) - 0.5) * 3.2;
+                crys.position.set(px + jx, py + jy, pz + jz);
+                crys.lookAt(g.x, g.y, g.z);
+                crys.rotateX(Math.PI / 2);
+                crys.rotateY(CC.hash3(i + c2, 919, 4) * 3.1416);
+                crys.userData.facet = { deg: deg, id: g.id + ':' + i + ':' + c2 };
+                rec.group.add(crys);
+                rec.facets.push({ m: crys, base: len, deg: deg, ph: CC.hash3(i, 913, 7) * 20, lit: 0 });
+            }
+            /* every cluster throws its own colour onto the shell */
+            if (i % 4 === 0) {
+                rec.emitters.push({ x: px, y: py, z: pz,
+                    color: new THREE.Color(GEODE_HUES[deg]),
+                    intensity: 1.15, dist: 34, type: 'crystal' });
+            }
+        }
+        rec.facetMats = facetMats;
+        addGeodeSparkle(rec, g, cx, cy, cz);
+    }
     function addRockField(rec, data, cx, cy, cz) {
         /* boulders, scree and gravel: the floor of a real cave is covered in
            what fell off the ceiling, and nothing here had that until now */
@@ -4000,7 +4310,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     function makeChunk(cx, cy, cz) {
         var data = CC.buildChunk(cx, cy, cz);
         var group = new THREE.Group();
-        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [], hearts: [], boulders: [], formations: null };
+        var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [], hearts: [], boulders: [], formations: null, dwellers: [], facets: [] };
 
         if (data.indices.length > 0) {
             var geo = new THREE.BufferGeometry();
@@ -4030,6 +4340,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (window._CAVE_SIGNS) addSigns(rec, data, cx, cy, cz);
 
         /* glowing mushroom clusters */
+        if (window._CAVE_GEODES !== false) addGeode(rec, cx, cy, cz);
         if (window._CAVE_ROCKS !== false) addRockField(rec, data, cx, cy, cz);
         if (window._CAVE_SHROOMS) addShrooms(rec, data.floorPts, cx, cy, cz);
         /* ferns and shrubberies gather at the shores and in rock crevices,
@@ -4463,7 +4774,17 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         new THREE.MeshLambertMaterial({ color: 0x4a3556 }),
         new THREE.MeshLambertMaterial({ color: 0x5a4a2e })
     ];
-    var skinMat = new THREE.MeshLambertMaterial({ color: 0xcbb397 });
+    var skinMat = null, skinMats = null, clothMats2 = null, furMat = null;
+    var leatherMat = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 0.92 });
+    var eyeMat = new THREE.MeshStandardMaterial({ color: 0x140f0c, roughness: 0.35 });
+    var eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d8, roughness: 0.4 });
+    var browMat = new THREE.MeshStandardMaterial({ color: 0x2b1d14, roughness: 0.95 });
+    var mouthMat = new THREE.MeshStandardMaterial({ color: 0x5a2f2a, roughness: 0.8 });
+    var hairMats = [
+        new THREE.MeshStandardMaterial({ color: 0x2b1d14, roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: 0x4a3323, roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: 0x6b6560, roughness: 0.95 })
+    ];
     var houseGeo = new THREE.BoxGeometry(1, 1, 1);
     var roofGeo = new THREE.ConeGeometry(0.85, 0.55, 4);
     /* painted micro-textures so nothing reads flat */
@@ -5063,6 +5384,686 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         color: 0x40301f, roughness: 0.96, map: sidingTexC
     }), sidingTexC, 3.0, 1.3);
 
+    /* -------- people, not porcelain --------
+       the old villagers were pale lambert plastic in pastel smocks. real cave
+       dwellers are weathered, in woven and hide wraps, in earth colours. */
+    var clothMats = [
+        new THREE.MeshLambertMaterial({ color: 0x2e5f56 }),
+        new THREE.MeshLambertMaterial({ color: 0x4a3556 }),
+        new THREE.MeshLambertMaterial({ color: 0x5a4a2e })
+    ];
+    var skinMat = null, skinMats = null, clothMats2 = null, furMat = null;
+    var leatherMat = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 0.92 });
+    var eyeMat = new THREE.MeshStandardMaterial({ color: 0x140f0c, roughness: 0.35 });
+    var eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d8, roughness: 0.4 });
+    var browMat = new THREE.MeshStandardMaterial({ color: 0x2b1d14, roughness: 0.95 });
+    var mouthMat = new THREE.MeshStandardMaterial({ color: 0x5a2f2a, roughness: 0.8 });
+    var hairMats = [
+        new THREE.MeshStandardMaterial({ color: 0x2b1d14, roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: 0x4a3323, roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: 0x6b6560, roughness: 0.95 })
+    ];
+    var houseGeo = new THREE.BoxGeometry(1, 1, 1);
+    var roofGeo = new THREE.ConeGeometry(0.85, 0.55, 4);
+    /* painted micro-textures so nothing reads flat */
+    function canvasTex(w, h, painter, rx, ry) {
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        painter(cv.getContext('2d'), w, h);
+        var t = new THREE.CanvasTexture(cv);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        if (rx) t.repeat.set(rx, ry || rx);
+        t.r0 = t.repeat.x;
+        t.r1 = t.repeat.y;
+        t.srcCanvas = cv;
+        t.anisotropy = 4;
+        return t;
+    }
+    /* derive a normal map and a roughness map from a painted texture, so
+       painted surfaces catch light like real ones instead of reading flat */
+    function derivedMaps(tex, strength) {
+        var out = { normalMap: null, roughnessMap: null };
+        try {
+            var cv = tex.srcCanvas;
+            if (!cv) return out;
+            var w = cv.width, h = cv.height;
+            var ctx = cv.getContext('2d');
+            if (!ctx.getImageData) return out;
+            var src = ctx.getImageData(0, 0, w, h).data;
+            var lum = new Float32Array(w * h);
+            for (var i = 0; i < w * h; i++) {
+                lum[i] = (src[i * 4] * 0.299 + src[i * 4 + 1] * 0.587 + src[i * 4 + 2] * 0.114) / 255;
+            }
+            var ncv = document.createElement('canvas');
+            ncv.width = w; ncv.height = h;
+            var nctx = ncv.getContext('2d');
+            var nimg = nctx.createImageData(w, h);
+            var rcv = document.createElement('canvas');
+            rcv.width = w; rcv.height = h;
+            var rctx = rcv.getContext('2d');
+            var rimg = rctx.createImageData(w, h);
+            var st = strength || 2.4;
+            for (var y = 0; y < h; y++) {
+                for (var x = 0; x < w; x++) {
+                    var i0 = y * w + x;
+                    var xm = lum[y * w + ((x - 1 + w) % w)], xp = lum[y * w + ((x + 1) % w)];
+                    var ym = lum[((y - 1 + h) % h) * w + x], yp = lum[((y + 1) % h) * w + x];
+                    var nx = (xm - xp) * st, ny = (ym - yp) * st, nz = 1.0;
+                    var il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+                    nimg.data[i0 * 4] = Math.floor((nx * il * 0.5 + 0.5) * 255);
+                    nimg.data[i0 * 4 + 1] = Math.floor((ny * il * 0.5 + 0.5) * 255);
+                    nimg.data[i0 * 4 + 2] = Math.floor((nz * il * 0.5 + 0.5) * 255);
+                    nimg.data[i0 * 4 + 3] = 255;
+                    /* darker, rougher: mortar and grime scatter, faces glint */
+                    var rv = Math.floor(255 * (0.72 + (1 - lum[i0]) * 0.28));
+                    rimg.data[i0 * 4] = rv; rimg.data[i0 * 4 + 1] = rv;
+                    rimg.data[i0 * 4 + 2] = rv; rimg.data[i0 * 4 + 3] = 255;
+                }
+            }
+            nctx.putImageData(nimg, 0, 0);
+            rctx.putImageData(rimg, 0, 0);
+            var nt = new THREE.CanvasTexture(ncv);
+            nt.wrapS = nt.wrapT = THREE.RepeatWrapping;
+            nt.repeat.copy(tex.repeat);
+            var rt = new THREE.CanvasTexture(rcv);
+            rt.wrapS = rt.wrapT = THREE.RepeatWrapping;
+            rt.repeat.copy(tex.repeat);
+            out.normalMap = nt;
+            out.roughnessMap = rt;
+        } catch (e) {}
+        return out;
+    }
+    function surfaced(mat, tex, strength, nScale) {
+        /* attach the derived maps to a material and keep them breathing */
+        var dm = derivedMaps(tex, strength);
+        if (dm.normalMap) {
+            mat.normalMap = dm.normalMap;
+            mat.normalScale = new THREE.Vector2(nScale || 1.0, nScale || 1.0);
+            dm.normalMap.r0 = dm.normalMap.repeat.x;
+            dm.normalMap.r1 = dm.normalMap.repeat.y;
+            breathingTex.push(dm.normalMap);
+        }
+        if (dm.roughnessMap) {
+            mat.roughnessMap = dm.roughnessMap;
+            dm.roughnessMap.r0 = dm.roughnessMap.repeat.x;
+            dm.roughnessMap.r1 = dm.roughnessMap.repeat.y;
+            breathingTex.push(dm.roughnessMap);
+        }
+        mat.needsUpdate = true;
+        return mat;
+    }
+    function h2r(seedv) { var x = Math.sin(seedv * 127.1) * 43758.5; return x - Math.floor(x); }
+    var woodTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#8a7458'; c.fillRect(0, 0, w, h);
+        for (var b = 0; b < 5; b++) {
+            var bx = b * 25.6;
+            c.fillStyle = 'rgba(0,0,0,' + (0.10 + h2r(b) * 0.12) + ')';
+            c.fillRect(bx, 0, 2.2, h);
+            for (var g2 = 0; g2 < 7; g2++) {
+                c.strokeStyle = 'rgba(58,42,26,' + (0.18 + h2r(b * 9 + g2) * 0.2) + ')';
+                c.lineWidth = 1;
+                c.beginPath();
+                var gy = h2r(b * 31 + g2) * h;
+                c.moveTo(bx + 3, gy);
+                c.bezierCurveTo(bx + 9, gy + 14, bx + 16, gy - 10, bx + 24, gy + 6);
+                c.stroke();
+            }
+            c.fillStyle = 'rgba(20,14,8,0.7)';
+            c.beginPath(); c.arc(bx + 12, 14 + h2r(b * 3) * 20, 1.6, 0, 6.3); c.fill();
+            c.beginPath(); c.arc(bx + 12, h - 16 - h2r(b * 7) * 20, 1.6, 0, 6.3); c.fill();
+        }
+    }, 1.2, 1.2);
+    var brickTexC = canvasTex(256, 256, function (c, w, h) {
+        /* mortar bed: uneven, grimy, never one flat colour */
+        c.fillStyle = '#585047'; c.fillRect(0, 0, w, h);
+        for (var m2 = 0; m2 < 2600; m2++) {
+            var mx = h2r(m2 * 1.7) * w, my = h2r(m2 * 3.1 + 5) * h;
+            var mv = 62 + Math.floor(h2r(m2 * 5.3) * 34);
+            c.fillStyle = 'rgba(' + mv + ',' + (mv - 6) + ',' + (mv - 12) + ',0.5)';
+            c.fillRect(mx, my, 2, 2);
+        }
+        var rows = 16, bw = 32, bh = 16;
+        for (var r2 = 0; r2 < rows; r2++) {
+            var y0 = r2 * bh, off = (r2 % 2) * (bw / 2);
+            for (var b2 = -1; b2 < 9; b2++) {
+                var x0 = b2 * bw + off;
+                var sd = h2r(r2 * 13 + b2 * 7);
+                var sh2 = 0.78 + sd * 0.44;
+                var rr = Math.floor(126 * sh2), gg = Math.floor(76 * sh2), bb2 = Math.floor(60 * sh2);
+                /* the face, inset from the mortar */
+                c.fillStyle = 'rgb(' + rr + ',' + gg + ',' + bb2 + ')';
+                c.fillRect(x0 + 2, y0 + 2, bw - 4, bh - 4);
+                /* grain and pitting across the face */
+                for (var g2 = 0; g2 < 26; g2++) {
+                    var gx = x0 + 2 + h2r(r2 * 31 + b2 * 17 + g2) * (bw - 5);
+                    var gy = y0 + 2 + h2r(r2 * 47 + b2 * 23 + g2 * 3) * (bh - 5);
+                    var gv = h2r(g2 * 9 + b2) > 0.5 ? 1.16 : 0.84;
+                    c.fillStyle = 'rgba(' + Math.floor(rr * gv) + ',' + Math.floor(gg * gv) + ',' + Math.floor(bb2 * gv) + ',0.55)';
+                    c.fillRect(gx, gy, 1 + h2r(g2 * 2.3) * 2, 1);
+                }
+                /* worn top edge catches light, bottom edge holds dirt */
+                c.fillStyle = 'rgba(255,225,200,0.10)';
+                c.fillRect(x0 + 2, y0 + 2, bw - 4, 1);
+                c.fillStyle = 'rgba(0,0,0,0.22)';
+                c.fillRect(x0 + 2, y0 + bh - 3, bw - 4, 1);
+                /* a chipped corner here and there */
+                if (sd > 0.86) {
+                    c.fillStyle = 'rgba(70,62,54,0.9)';
+                    c.fillRect(x0 + 2, y0 + 2, 3 + sd * 3, 3);
+                }
+            }
+        }
+        /* damp streaks running down the whole wall */
+        for (var s2 = 0; s2 < 9; s2++) {
+            var sx = h2r(s2 * 11.3) * w;
+            c.fillStyle = 'rgba(28,26,22,' + (0.05 + h2r(s2 * 3.7) * 0.09) + ')';
+            c.fillRect(sx, 0, 3 + h2r(s2 * 5.1) * 9, h);
+        }
+    }, 3.4, 3.4);
+    var tinTexC = canvasTex(64, 64, function (c, w, h) {
+        for (var x2 = 0; x2 < w; x2++) {
+            var ridge = 0.5 + 0.5 * Math.sin(x2 * 0.785);
+            var v = Math.floor(96 + ridge * 64);
+            c.fillStyle = 'rgb(' + v + ',' + (v + 4) + ',' + (v + 7) + ')';
+            c.fillRect(x2, 0, 1, h);
+        }
+        for (var st2 = 0; st2 < 9; st2++) {
+            c.fillStyle = 'rgba(96,60,34,' + (0.1 + h2r(st2) * 0.25) + ')';
+            var sx2 = h2r(st2 * 3) * w, sy2 = h2r(st2 * 7) * h;
+            c.fillRect(sx2, sy2, 3 + h2r(st2 * 11) * 8, 2 + h2r(st2 * 5) * 10);
+        }
+    }, 1.4, 1.4);
+    var ashlarTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#7e7a70'; c.fillRect(0, 0, w, h);
+        for (var r3 = 0; r3 < 4; r3++) {
+            var y3 = r3 * 32, off3 = (r3 % 2) * 21;
+            for (var b3 = -1; b3 < 4; b3++) {
+                var x3 = b3 * 42 + off3;
+                var sh3 = 0.86 + h2r(r3 * 17 + b3) * 0.3;
+                c.fillStyle = 'rgb(' + Math.floor(134 * sh3) + ',' + Math.floor(128 * sh3) + ',' + Math.floor(116 * sh3) + ')';
+                c.fillRect(x3 + 2, y3 + 2, 38, 28);
+                c.fillStyle = 'rgba(255,255,255,0.05)';
+                c.fillRect(x3 + 2, y3 + 2, 38, 4);
+            }
+        }
+    }, 1.3, 1.3);
+    /* declared up with the moss so early materials can register to breathe */
+    var thatchTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#6b5a38'; c.fillRect(0, 0, w, h);
+        for (var t4 = 0; t4 < 260; t4++) {
+            c.strokeStyle = 'rgba(' + Math.floor(70 + h2r(t4) * 90) + ',' + Math.floor(58 + h2r(t4 * 3) * 60) + ',30,0.5)';
+            c.lineWidth = 1;
+            var tx = h2r(t4 * 7) * w, ty = h2r(t4 * 11) * h;
+            c.beginPath(); c.moveTo(tx, ty); c.lineTo(tx + 3 + h2r(t4 * 13) * 10, ty + 1.5); c.stroke();
+        }
+    }, 1.5, 1.5);
+    breathingTex.push(woodTexC, brickTexC, tinTexC, ashlarTexC, thatchTexC);
+    var timberMat = surfaced(new THREE.MeshStandardMaterial({ color: 0x2b1f14, roughness: 0.95, map: woodTexC }), woodTexC, 2.8, 1.1);
+    var ghostMat = new THREE.MeshStandardMaterial({ color: 0x9fd0ff, emissive: 0x6fa8dd, emissiveIntensity: 1.4, roughness: 0.4 });
+    var pathMat = surfaced(new THREE.MeshStandardMaterial({ color: 0x8c8a85, roughness: 0.97, map: ashlarTexC }), ashlarTexC, 2.2, 0.8);
+    var thatchMat = surfaced(new THREE.MeshStandardMaterial({ color: 0xa89868, roughness: 0.98, map: thatchTexC }), thatchTexC, 3.0, 1.1);
+    var soilMat = new THREE.MeshStandardMaterial({ color: 0x241d16, roughness: 1.0 });
+    var clothMat = new THREE.MeshStandardMaterial({ color: 0x7a4038, roughness: 0.9, side: THREE.DoubleSide });
+    var doorMat = new THREE.MeshStandardMaterial({ color: 0x120d08, roughness: 1.0 });
+    var cylGeo = new THREE.CylinderGeometry(1, 1, 1, 9);
+    /* the visual floor sits above floorY by the refill ramp: probe it */
+    function floorSurfY(x2, z2, guessY) {
+        var yy;
+        for (yy = guessY + 2.4; yy > guessY - 1.2; yy -= 0.12) {
+            if (CC.density(x2, yy, z2) > 0) return yy + 0.12;
+        }
+        return guessY;
+    }
+    function makeDwelling(rec, x, y, z, ry, w, h, d, ruin, dseed, rv) {
+        var g = new THREE.Group();
+        g.position.set(x, y, z); g.rotation.y = ry;
+        function hs(k) { return CC.hash3(dseed, k, dseed * 3 + 7); }
+        var found = new THREE.Mesh(houseGeo, pathMat);
+        found.scale.set(w + 0.5, 0.28, d + 0.5); found.position.y = 0.14;
+        g.add(found);
+        if (ruin) {
+            /* broken walls at ragged heights, a fallen roof slab, rubble */
+            for (var wi = 0; wi < 4; wi++) {
+                if (hs(20 + wi) < 0.25) continue;
+                var wh = h * (0.2 + hs(30 + wi) * 0.55);
+                var wall = new THREE.Mesh(houseGeo, stoneMat);
+                if (wi < 2) { wall.scale.set(w, wh, 0.3); wall.position.set(0, wh * 0.5 + 0.2, (wi === 0 ? -1 : 1) * d * 0.5); }
+                else { wall.scale.set(0.3, wh, d); wall.position.set((wi === 2 ? -1 : 1) * w * 0.5, wh * 0.5 + 0.2, 0); }
+                wall.rotation.z = (hs(40 + wi) - 0.5) * 0.06;
+                g.add(wall);
+            }
+            if (hs(5) < 0.5) {
+                var slab2 = new THREE.Mesh(houseGeo, timberMat);
+                slab2.scale.set(w * 0.9, 0.12, d * 0.8);
+                slab2.position.set((hs(6) - 0.5) * w * 0.6, 0.55, (hs(7) - 0.5) * d * 0.6);
+                slab2.rotation.set(0.5 + hs(8) * 0.5, hs(9), 0.2);
+                g.add(slab2);
+            }
+            for (var ri = 0; ri < 3; ri++) {
+                var rub = new THREE.Mesh(orbGeo, stoneMat);
+                rub.scale.set(1.6 + hs(50 + ri) * 2, 1.1 + hs(60 + ri), 1.6 + hs(70 + ri) * 2);
+                rub.position.set((hs(80 + ri) - 0.5) * w, 0.25, (hs(90 + ri) - 0.5) * d);
+                g.add(rub);
+            }
+            rec.group.add(g);
+            return;
+        }
+        var wallMat = stoneMat.clone();
+        wallMat.map = ashlarTexC;
+        var tint = 0.86 + hs(2) * 0.26;
+        wallMat.color = wallMat.color.clone().multiplyScalar(tint);
+        rec.disposables.push(wallMat);
+        var walls = new THREE.Mesh(houseGeo, wallMat);
+        walls.scale.set(w, h, d); walls.position.y = h * 0.5 + 0.24;
+        g.add(walls);
+        /* stepped stone gables close the roof ends */
+        var g1 = new THREE.Mesh(houseGeo, wallMat);
+        g1.scale.set(w * 0.72, 0.55, d * 0.94); g1.position.y = h + 0.5;
+        g.add(g1);
+        var g2 = new THREE.Mesh(houseGeo, wallMat);
+        g2.scale.set(w * 0.4, 0.5, d * 0.9); g2.position.y = h + 0.95;
+        g.add(g2);
+        /* timber corner posts + top plate beam */
+        for (var ci = 0; ci < 4; ci++) {
+            var post = new THREE.Mesh(houseGeo, timberMat);
+            post.scale.set(0.16, h + 0.1, 0.16);
+            post.position.set((ci % 2 ? 1 : -1) * w * 0.5, h * 0.5 + 0.24, (ci < 2 ? 1 : -1) * d * 0.5);
+            g.add(post);
+        }
+        var plate = new THREE.Mesh(houseGeo, timberMat);
+        plate.scale.set(w + 0.24, 0.14, d + 0.24); plate.position.y = h + 0.28;
+        g.add(plate);
+        /* inset door with a lintel, facing the plaza */
+        var dv = new THREE.Mesh(houseGeo, doorMat);
+        dv.scale.set(0.66, 1.35, 0.14);
+        dv.position.set(0, 0.95, d * 0.5 + 0.02);
+        g.add(dv);
+        var lin = new THREE.Mesh(houseGeo, timberMat);
+        lin.scale.set(0.9, 0.12, 0.2); lin.position.set(0, 1.68, d * 0.5 + 0.04);
+        g.add(lin);
+        /* a warm window or two, deep set in timber frames */
+        var nw = 1 + (rv < 0.5 ? 1 : 0);
+        for (var vi = 0; vi < nw; vi++) {
+            var side = vi === 0 ? 1 : -1;
+            var frame = new THREE.Mesh(houseGeo, timberMat);
+            frame.scale.set(0.14, 0.62, 0.56);
+            frame.position.set(side * (w * 0.5 + 0.02), h * 0.55 + 0.24, (hs(100 + vi) - 0.5) * d * 0.4);
+            g.add(frame);
+            var glow = new THREE.Mesh(houseGeo, windowMat);
+            glow.scale.set(0.06, 0.46, 0.4);
+            glow.position.copy(frame.position); glow.position.x += side * 0.05;
+            g.add(glow);
+        }
+        /* the gable roof: two pitched slabs meeting at a ridge beam, with overhang */
+        var pitch = 0.62 + rv * 0.18;
+        var slopeW = (w * 0.62) / Math.cos(pitch);
+        var rl = new THREE.Mesh(houseGeo, thatchMat);
+        rl.scale.set(slopeW, 0.12, d + 0.7);
+        rl.rotation.z = pitch;
+        rl.position.set(-w * 0.27, h + 0.34 + Math.sin(pitch) * slopeW * 0.5 - 0.06, 0);
+        g.add(rl);
+        var rr = rl.clone();
+        rr.rotation.z = -pitch;
+        rr.position.x = w * 0.27;
+        g.add(rr);
+        var ridge = new THREE.Mesh(cylGeo, timberMat);
+        ridge.scale.set(0.1, d + 0.8, 0.1);
+        ridge.rotation.x = 1.5708;
+        ridge.position.set(0, h + 0.34 + Math.sin(pitch) * slopeW - 0.02, 0);
+        g.add(ridge);
+        /* chimney with a breath of ember light */
+        if (rv < 0.55) {
+            var ch2 = new THREE.Mesh(houseGeo, stoneMat);
+            ch2.scale.set(0.42, 1.0, 0.42);
+            ch2.position.set(w * 0.3, h + 0.8, -d * 0.22);
+            g.add(ch2);
+            var wp3 = new THREE.Vector3(w * 0.3, h + 1.35, -d * 0.22).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
+            rec.emitters.push({ x: x + wp3.x, y: y + wp3.y, z: z + wp3.z, color: new THREE.Color(0xff9a55), intensity: 0.5, dist: 10, type: 'torch', flicker: true });
+        }
+        /* barrels and crates against the wall: someone lives here */
+        var nb = Math.floor(hs(12) * 3);
+        for (var bi = 0; bi < nb; bi++) {
+            var barrel = hs(13 + bi) < 0.5;
+            var prop = new THREE.Mesh(barrel ? cylGeo : houseGeo, timberMat);
+            if (barrel) prop.scale.set(0.3, 0.52, 0.3); else prop.scale.set(0.5, 0.44, 0.5);
+            prop.position.set((hs(140 + bi) - 0.5) * w * 1.5, 0.5, d * 0.5 + 0.55);
+            prop.rotation.y = hs(150 + bi) * 3;
+            g.add(prop);
+        }
+        rec.group.add(g);
+    }
+    function makeWell(rec, x, y, z, ruin, wseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z);
+        var ring = new THREE.Mesh(cylGeo, stoneMat);
+        ring.scale.set(1.1, 0.7, 1.1); ring.position.y = 0.35;
+        g.add(ring);
+        var bore = new THREE.Mesh(cylGeo, doorMat);
+        bore.scale.set(0.85, 0.72, 0.85); bore.position.y = 0.37;
+        g.add(bore);
+        if (!ruin) {
+            for (var pi3 = 0; pi3 < 2; pi3++) {
+                var leg = new THREE.Mesh(houseGeo, timberMat);
+                leg.scale.set(0.12, 1.7, 0.12);
+                leg.position.set(pi3 ? 1.0 : -1.0, 0.85, 0);
+                g.add(leg);
+            }
+            var cross = new THREE.Mesh(cylGeo, timberMat);
+            cross.scale.set(0.07, 2.3, 0.07); cross.rotation.z = 1.5708;
+            cross.position.y = 1.62;
+            g.add(cross);
+            var bucket = new THREE.Mesh(cylGeo, timberMat);
+            bucket.scale.set(0.16, 0.2, 0.16); bucket.position.y = 1.05;
+            g.add(bucket);
+        } else {
+            ring.rotation.z = 0.09;
+        }
+        rec.group.add(g);
+    }
+    function makeFarmPlot(rec, x, y, z, rv, ruin, fseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z);
+        g.rotation.y = rv * 6.28;
+        var bed = new THREE.Mesh(houseGeo, soilMat);
+        bed.scale.set(3.4, 0.22, 2.0); bed.position.y = 0.11;
+        g.add(bed);
+        var edge = new THREE.Mesh(houseGeo, timberMat);
+        edge.scale.set(3.6, 0.14, 0.12); edge.position.set(0, 0.14, 1.05); g.add(edge);
+        var edge2 = edge.clone(); edge2.position.z = -1.05; g.add(edge2);
+        var nsh = ruin ? 2 : 5 + Math.floor(CC.hash3(fseed, 1, 3) * 5);
+        for (var si = 0; si < nsh; si++) {
+            var mx3 = (CC.hash3(fseed, si, 7) - 0.5) * 3.0;
+            var mz3 = (CC.hash3(si, fseed, 9) - 0.5) * 1.6;
+            var mc = new THREE.Mesh(capGeo, farmShroomMat);
+            var msc = 0.1 + CC.hash3(fseed, si, 11) * 0.08;
+            mc.scale.setScalar(msc);
+            mc.position.set(mx3, 0.2, mz3);
+            g.add(mc);
+        }
+        if (!ruin) {
+            var wpos = new THREE.Vector3(x, y + 0.6, z);
+            rec.emitters.push({ x: wpos.x, y: wpos.y, z: wpos.z, color: new THREE.Color(0x9fe8c8), intensity: 0.6, dist: 9, type: 'shroom' });
+        }
+        rec.group.add(g);
+    }
+    function makeShrine(rec, x, y, z, ruin, sseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z);
+        for (var ri2 = 0; ri2 < 5; ri2++) {
+            var ra = (ri2 / 5) * 6.2831853;
+            var stn = new THREE.Mesh(houseGeo, stoneMat);
+            stn.scale.set(0.34, 0.8 + CC.hash3(sseed, ri2, 2) * 0.5, 0.3);
+            stn.position.set(Math.cos(ra) * 1.5, stn.scale.y * 0.5, Math.sin(ra) * 1.5);
+            stn.rotation.y = ra;
+            if (ruin && CC.hash3(ri2, sseed, 5) < 0.4) { stn.rotation.z = 1.2; stn.position.y = 0.2; }
+            g.add(stn);
+        }
+        var plinth = new THREE.Mesh(cylGeo, stoneMat);
+        plinth.scale.set(0.55, 0.5, 0.55); plinth.position.y = 0.25;
+        g.add(plinth);
+        var shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.45, 0), shrineMat);
+        shard.position.y = 1.05; shard.rotation.y = 0.6;
+        shard.scale.y = 1.7;
+        g.add(shard);
+        rec.emitters.push({ x: x, y: y + 1.1, z: z, color: new THREE.Color(ruin ? 0x9fd0ff : 0x9a7bff), intensity: 1.2, dist: 16, type: 'crystal' });
+        rec.group.add(g);
+    }
+    function makeLeanTo(rec, x, y, z, ra, lseed, ruin) {
+        /* an open-front dweller shack: you can see the life inside */
+        var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ra;
+        function lh(k) { return CC.hash3(lseed, k, lseed * 5 + 3); }
+        var pmA = plankMats[Math.floor(lh(1) * plankMats.length)];
+        var pmB = plankMats[(Math.floor(lh(1) * plankMats.length) + 2) % plankMats.length];
+        var back = new THREE.Mesh(houseGeo, pmA);
+        back.scale.set(3.2, 2.2, 0.1); back.position.set(0, 1.1, -1.2);
+        back.rotation.z = ruin ? (lh(2) - 0.5) * 0.12 : 0;
+        g.add(back);
+        var sideL = new THREE.Mesh(houseGeo, pmB);
+        sideL.scale.set(0.1, 2.0, 2.3); sideL.position.set(-1.6, 1.0, 0);
+        g.add(sideL);
+        if (!ruin || lh(3) < 0.5) {
+            var sideR = new THREE.Mesh(houseGeo, pmB);
+            sideR.scale.set(0.1, 1.6, 2.0); sideR.position.set(1.6, 0.8, -0.1);
+            g.add(sideR);
+        }
+        var roof2 = new THREE.Mesh(houseGeo, tinMat);
+        roof2.scale.set(3.7, 0.07, 2.9);
+        roof2.position.set(0, 2.28, 0.1);
+        roof2.rotation.x = 0.14 + (ruin ? (lh(4) - 0.5) * 0.3 : 0);
+        g.add(roof2);
+        for (var pi6 = 0; pi6 < 2; pi6++) {
+            var lpost = new THREE.Mesh(houseGeo, timberMat);
+            lpost.scale.set(0.12, 2.35, 0.12);
+            lpost.position.set(pi6 ? 1.55 : -1.55, 1.17, 1.15);
+            g.add(lpost);
+        }
+        /* the life inside: cot or still or stores, a lantern, the blue pipe */
+        var what = lh(5);
+        if (what < 0.34) {
+            var cot2 = new THREE.Mesh(houseGeo, pmB);
+            cot2.scale.set(1.8, 0.2, 0.8); cot2.position.set(-0.4, 0.28, -0.55);
+            g.add(cot2);
+            var pil2 = new THREE.Mesh(houseGeo, clothMat);
+            pil2.scale.set(0.38, 0.13, 0.46); pil2.position.set(-1.1, 0.44, -0.55);
+            g.add(pil2);
+        } else if (what < 0.67) {
+            var ket2 = new THREE.Mesh(cylGeo, copperMat);
+            ket2.scale.set(0.4, 0.6, 0.4); ket2.position.set(0.55, 0.3, -0.6);
+            g.add(ket2);
+            var coil2 = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.04, 6, 12), copperMat);
+            coil2.position.set(-0.05, 0.62, -0.6); coil2.rotation.y = 1.5708;
+            g.add(coil2);
+            rec.disposables.push(coil2.geometry);
+            var jar2 = new THREE.Mesh(cylGeo, jarMat);
+            jar2.scale.set(0.09, 0.15, 0.09); jar2.position.set(-0.6, 0.42, -0.75);
+            g.add(jar2);
+        } else {
+            for (var bi4 = 0; bi4 < 3; bi4++) {
+                var bx2 = new THREE.Mesh(bi4 === 1 ? cylGeo : houseGeo, timberMat);
+                bx2.scale.set(0.34, 0.4 + lh(20 + bi4) * 0.25, 0.34);
+                bx2.position.set(-0.9 + bi4 * 0.8, bx2.scale.y * 0.5, -0.5 + (lh(30 + bi4) - 0.5) * 0.5);
+                bx2.rotation.y = lh(40 + bi4) * 2;
+                g.add(bx2);
+            }
+            var tarp2 = new THREE.Mesh(houseGeo, clothMat);
+            tarp2.scale.set(1.2, 0.05, 0.9);
+            tarp2.position.set(0.2, 0.62, -0.4);
+            tarp2.rotation.set((lh(6) - 0.5) * 0.4, lh(7) * 2, (lh(8) - 0.5) * 0.3);
+            g.add(tarp2);
+        }
+        var rope2 = new THREE.Mesh(cylGeo, timberMat);
+        rope2.scale.set(0.02, 0.5, 0.02); rope2.position.set(0.5, 2.0, 0.2);
+        g.add(rope2);
+        var lant2 = new THREE.Mesh(houseGeo, tinMat);
+        lant2.scale.set(0.2, 0.26, 0.2); lant2.position.set(0.5, 1.68, 0.2);
+        g.add(lant2);
+        if (!ruin) {
+            rec.emitters.push({ x: x + Math.cos(ra) * 0.5, y: y + 1.68, z: z + Math.sin(ra) * 0.5, color: new THREE.Color(0xffc06a), intensity: 1.0, dist: 11, type: 'torch', flicker: true });
+        }
+        var pipe2 = new THREE.Mesh(cylGeo, pipeMat);
+        pipe2.scale.set(0.045, 2.8, 0.045); pipe2.rotation.z = 1.5708;
+        pipe2.position.set(0, 1.9, -1.14);
+        g.add(pipe2);
+        rec.group.add(g);
+    }
+    function makeStall(rec, x, y, z, ra, mseed) {
+        var g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ra;
+        for (var pi4 = 0; pi4 < 4; pi4++) {
+            var sp = new THREE.Mesh(houseGeo, timberMat);
+            sp.scale.set(0.1, 2.0, 0.1);
+            sp.position.set((pi4 % 2 ? 1 : -1) * 1.1, 1.0, (pi4 < 2 ? 1 : -1) * 0.8);
+            g.add(sp);
+        }
+        var counter = new THREE.Mesh(houseGeo, timberMat);
+        counter.scale.set(2.3, 0.1, 1.0); counter.position.y = 0.95;
+        g.add(counter);
+        var awn = new THREE.Mesh(houseGeo, clothMat);
+        awn.scale.set(2.6, 0.05, 2.0); awn.position.y = 2.1; awn.rotation.x = 0.24;
+        g.add(awn);
+        for (var ci2 = 0; ci2 < 3; ci2++) {
+            var crate = new THREE.Mesh(houseGeo, timberMat);
+            crate.scale.setScalar(0.34 + CC.hash3(mseed, ci2, 4) * 0.16);
+            crate.position.set((CC.hash3(ci2, mseed, 6) - 0.5) * 1.8, 1.05 + crate.scale.y * 0.5 - 0.05, (CC.hash3(mseed, ci2, 8) - 0.5) * 0.6);
+            crate.rotation.y = CC.hash3(ci2, 4, mseed);
+            g.add(crate);
+        }
+        rec.group.add(g);
+    }
+    var farmShroomMat = new THREE.MeshStandardMaterial({ color: 0x8fe0c0, emissive: 0x2a9070, emissiveIntensity: 0.9, roughness: 0.6 });
+    /* the dweller palette: weathered painted planks, brick, tin, copper */
+    /* a hung bulb glows without bleaching everything around it */
+    var lanternMat = new THREE.MeshStandardMaterial({
+        color: 0x2a1c0c, emissive: 0xffb257, emissiveIntensity: 0.85
+    });
+    /* corrugated iron: ribs, rust blooms, nail heads, torn edges */
+    var rustTexC = canvasTex(256, 256, function (c, w, h) {
+        for (var x2 = 0; x2 < w; x2++) {
+            var ridge = 0.5 + 0.5 * Math.sin(x2 * 0.393);
+            var v = Math.floor(78 + ridge * 74);
+            c.fillStyle = 'rgb(' + v + ',' + (v + 4) + ',' + (v + 9) + ')';
+            c.fillRect(x2, 0, 1, h);
+        }
+        /* rust blooms creep from the seams */
+        for (var r3 = 0; r3 < 46; r3++) {
+            var bx = h2r(r3 * 2.3) * w, by = h2r(r3 * 5.7) * h;
+            var br = 5 + h2r(r3 * 3.1) * 26;
+            var grd = c.createRadialGradient(bx, by, 0, bx, by, br);
+            var ro = 0.16 + h2r(r3 * 7.9) * 0.36;
+            grd.addColorStop(0, 'rgba(126,58,26,' + ro + ')');
+            grd.addColorStop(0.55, 'rgba(96,46,22,' + (ro * 0.55) + ')');
+            grd.addColorStop(1, 'rgba(96,46,22,0)');
+            c.fillStyle = grd;
+            c.beginPath(); c.arc(bx, by, br, 0, 6.2832); c.fill();
+        }
+        /* streaks weeping down from the rust */
+        for (var s3 = 0; s3 < 22; s3++) {
+            var sx = h2r(s3 * 11.7) * w, sy = h2r(s3 * 4.3) * h;
+            c.fillStyle = 'rgba(88,42,18,' + (0.10 + h2r(s3 * 2.1) * 0.16) + ')';
+            c.fillRect(sx, sy, 2 + h2r(s3) * 3, 20 + h2r(s3 * 6.3) * 90);
+        }
+        /* nail heads along the ribs */
+        for (var n3 = 0; n3 < 30; n3++) {
+            var nx = Math.floor(h2r(n3 * 3.7) * 16) * 16 + 8;
+            var ny = h2r(n3 * 8.1) * h;
+            c.fillStyle = 'rgba(30,26,22,0.85)';
+            c.beginPath(); c.arc(nx, ny, 1.7, 0, 6.2832); c.fill();
+            c.fillStyle = 'rgba(210,200,190,0.25)';
+            c.beginPath(); c.arc(nx - 0.6, ny - 0.6, 0.8, 0, 6.2832); c.fill();
+        }
+    }, 2.2, 2.2);
+    var rustMat = surfaced(new THREE.MeshStandardMaterial({
+        color: 0x6e6a63, roughness: 0.78, metalness: 0.4, map: rustTexC
+    }), rustTexC, 3.2, 1.3);
+    /* weathered siding: split boards, knots, daylight gaps, damp at the foot */
+    var sidingTexC = canvasTex(256, 256, function (c, w, h) {
+        c.fillStyle = '#3b2f20'; c.fillRect(0, 0, w, h);
+        var nb = 8, bw2 = w / nb;
+        for (var b3 = 0; b3 < nb; b3++) {
+            var bx2 = b3 * bw2;
+            var sh3 = 0.74 + h2r(b3 * 13.3) * 0.5;
+            c.fillStyle = 'rgb(' + Math.floor(92 * sh3) + ',' + Math.floor(68 * sh3) + ',' + Math.floor(44 * sh3) + ')';
+            c.fillRect(bx2 + 1.5, 0, bw2 - 3, h);
+            /* grain */
+            for (var g3 = 0; g3 < 16; g3++) {
+                c.strokeStyle = 'rgba(56,40,24,' + (0.10 + h2r(b3 * 9 + g3) * 0.24) + ')';
+                c.lineWidth = 0.8 + h2r(g3) * 1.2;
+                c.beginPath();
+                var gy2 = h2r(b3 * 31 + g3 * 3) * h;
+                c.moveTo(bx2 + 2, gy2);
+                c.bezierCurveTo(bx2 + bw2 * 0.4, gy2 + 22, bx2 + bw2 * 0.6, gy2 - 18, bx2 + bw2 - 2, gy2 + 9);
+                c.stroke();
+            }
+            /* a knot or two */
+            if (h2r(b3 * 5.1) > 0.45) {
+                var ky = h2r(b3 * 7.3) * h;
+                c.fillStyle = 'rgba(38,26,14,0.85)';
+                c.beginPath(); c.ellipse(bx2 + bw2 * 0.5, ky, 2.6, 3.6, 0, 0, 6.2832); c.fill();
+                c.strokeStyle = 'rgba(52,36,20,0.5)'; c.lineWidth = 1;
+                c.beginPath(); c.ellipse(bx2 + bw2 * 0.5, ky, 5.5, 7.5, 0, 0, 6.2832); c.stroke();
+            }
+            /* the gap between boards, where the dark shows through */
+            c.fillStyle = 'rgba(10,8,6,0.9)';
+            c.fillRect(bx2, 0, 1.5, h);
+        }
+        /* soot and tar in blotches: nobody paints a shanty, they seal it */
+        for (var tb = 0; tb < 40; tb++) {
+            var tx = h2r(tb * 4.7) * w, ty = h2r(tb * 8.3) * h;
+            var tr = 6 + h2r(tb * 2.9) * 26;
+            var tg = c.createRadialGradient(tx, ty, 0, tx, ty, tr);
+            tg.addColorStop(0, 'rgba(18,14,10,' + (0.18 + h2r(tb * 6.1) * 0.3) + ')');
+            tg.addColorStop(1, 'rgba(18,14,10,0)');
+            c.fillStyle = tg;
+            c.beginPath(); c.arc(tx, ty, tr, 0, 6.2832); c.fill();
+        }
+        /* damp rot rising from the ground */
+        var dg = c.createLinearGradient(0, h, 0, h * 0.62);
+        dg.addColorStop(0, 'rgba(24,26,20,0.55)');
+        dg.addColorStop(1, 'rgba(24,26,20,0)');
+        c.fillStyle = dg; c.fillRect(0, h * 0.62, w, h * 0.38);
+    }, 2.0, 2.0);
+    var sidingMat = surfaced(new THREE.MeshStandardMaterial({
+        color: 0x40301f, roughness: 0.96, map: sidingTexC
+    }), sidingTexC, 3.0, 1.3);
+
+    /* -------- people, not porcelain --------
+       the old villagers were pale lambert plastic in pastel smocks. real cave
+       dwellers are weathered, in woven and hide wraps, in earth colours. */
+    var skinTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#a9764f'; c.fillRect(0, 0, w, h);
+        /* pores and blotches, so skin is not a flat fill */
+        for (var i = 0; i < 2600; i++) {
+            var x = h2r(i * 1.7) * w, y = h2r(i * 3.1 + 4) * h;
+            var v = h2r(i * 5.9);
+            c.fillStyle = 'rgba(' + Math.floor(60 + v * 60) + ',' + Math.floor(35 + v * 45) + ',' +
+                Math.floor(22 + v * 30) + ',' + (0.05 + v * 0.16) + ')';
+            c.fillRect(x, y, 1 + v, 1 + v);
+        }
+        for (var b = 0; b < 40; b++) {
+            var bx = h2r(b * 7.3) * w, by = h2r(b * 11.1) * h, br = 3 + h2r(b * 2.7) * 12;
+            var gr = c.createRadialGradient(bx, by, 0, bx, by, br);
+            gr.addColorStop(0, 'rgba(120,74,44,0.18)');
+            gr.addColorStop(1, 'rgba(120,74,44,0)');
+            c.fillStyle = gr;
+            c.beginPath(); c.arc(bx, by, br, 0, 6.2832); c.fill();
+        }
+    }, 1, 1);
+    var SKIN_TONES = [0x8d5a3b, 0xa9764f, 0x6f4530, 0xc0916a, 0x54331f, 0x94643f];
+    var skinMats = [];
+    for (var sk = 0; sk < SKIN_TONES.length; sk++) {
+        skinMats.push(surfaced(new THREE.MeshStandardMaterial({
+            color: SKIN_TONES[sk], roughness: 0.86, map: skinTexC
+        }), skinTexC, 1.6, 0.5));
+    }
+    var skinMat = skinMats[1];
+    /* woven cloth: a real weave, slubs, and dirt at the hem */
+    var weaveTexC = canvasTex(128, 128, function (c, w, h) {
+        c.fillStyle = '#6b5236'; c.fillRect(0, 0, w, h);
+        for (var y = 0; y < h; y += 3) {
+            c.fillStyle = 'rgba(0,0,0,' + (0.10 + h2r(y) * 0.10) + ')';
+            c.fillRect(0, y, w, 1);
+        }
+        for (var x = 0; x < w; x += 3) {
+            c.fillStyle = 'rgba(255,240,220,' + (0.05 + h2r(x * 1.3) * 0.07) + ')';
+            c.fillRect(x, 0, 1, h);
+        }
+        for (var s2 = 0; s2 < 90; s2++) {
+            var sx = h2r(s2 * 4.1) * w, sy = h2r(s2 * 6.7) * h;
+            c.fillStyle = 'rgba(40,30,20,0.22)';
+            c.fillRect(sx, sy, 2 + h2r(s2) * 7, 2);
+        }
+        var dg = c.createLinearGradient(0, h, 0, h * 0.55);
+        dg.addColorStop(0, 'rgba(28,22,16,0.5)');
+        dg.addColorStop(1, 'rgba(28,22,16,0)');
+        c.fillStyle = dg; c.fillRect(0, h * 0.55, w, h * 0.45);
+    }, 2.2, 2.2);
+    var CLOTH_TONES = [0x6b5236, 0x7a4632, 0x4c4a3a, 0x8a6b3f, 0x53412c, 0x6a3f38];
+    clothMats2 = [];
+    for (var cm = 0; cm < CLOTH_TONES.length; cm++) {
+        clothMats2.push(surfaced(new THREE.MeshStandardMaterial({
+            color: CLOTH_TONES[cm], roughness: 0.97, map: weaveTexC
+        }), weaveTexC, 2.6, 0.9));
+    }
+    furMat = surfaced(new THREE.MeshStandardMaterial({
+        color: 0x4a3a2a, roughness: 1.0, map: weaveTexC
+    }), weaveTexC, 5.0, 1.6);
+
     /* dark tarred and weathered boards: the old paint is nearly gone, only a
        hint of colour survives under the grime */
     var plankMats = [
@@ -5449,6 +6450,394 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var shrineMat = new THREE.MeshStandardMaterial({ color: 0x7a5bff, emissive: 0x5a3bdf, emissiveIntensity: 1.1, roughness: 0.3 });
     var postGeo = new THREE.CylinderGeometry(0.06, 0.08, 1, 5);
     var orbGeo = new THREE.SphereGeometry(0.16, 8, 6);
+    /* -------- the villagers --------
+       a cone with a ball on top is fine at 40m and embarrassing at 4m. these
+       are jointed figures: pelvis, chest, shoulders, upper and lower arms,
+       hands, thighs, shins, feet, a neck and a head with a face, dressed in
+       a tunic and belt. every joint is a real Object3D so they can be posed
+       and can breathe, shift their weight and look around. */
+    var limbGeo = null;
+    function limbParts() {
+        if (!limbGeo) {
+            limbGeo = {
+                bone: new THREE.CylinderGeometry(0.5, 0.42, 1, 7),
+                joint: new THREE.SphereGeometry(0.5, 7, 5),
+                chest: new THREE.SphereGeometry(0.5, 10, 8),
+                head: new THREE.SphereGeometry(0.5, 12, 10),
+                box: new THREE.BoxGeometry(1, 1, 1)
+            };
+            limbGeo.bone.translate(0, -0.5, 0);      /* hangs from its joint */
+        }
+        return limbGeo;
+    }
+    function makeLimb(parent, len, wid, mat, G) {
+        var seg = new THREE.Object3D();
+        var m = new THREE.Mesh(G.bone, mat);
+        m.scale.set(wid, len, wid * 0.86);
+        seg.add(m);
+        var kn = new THREE.Mesh(G.joint, mat);
+        kn.scale.setScalar(wid * 1.02);
+        kn.position.y = -len;
+        seg.add(kn);
+        parent.add(seg);
+        return seg;
+    }
+    function makeHumanoid(kind, seed) {
+        /* built to real proportions for a 1.75m adult: hips at 0.95, shoulders
+           at 1.42, eyes at 1.63, head 23cm tall. the first pass sized every
+           part by eye and produced bell-skirted dolls with heads a quarter of
+           their height. */
+        var G = limbParts();
+        var h = function (k) { return CC.hash3(seed, k, seed * 3 + 7); };
+        var child = kind === 'child';
+        var scale = child ? 0.66 : 0.96 + h(1) * 0.10;
+        /* every villager gets their own skin tone and their own dyed cloth */
+        var skin = (skinMats && skinMats.length)
+            ? skinMats[Math.floor(h(40) * skinMats.length)] : skinMat;
+        var pal = (clothMats2 && clothMats2.length) ? clothMats2 : clothMats;
+        var cloth = pal[Math.floor(h(2) * pal.length)];
+        var cloth2 = pal[Math.floor(h(3) * pal.length)];
+        var wrapMat = (furMat && h(41) > 0.45) ? furMat : cloth2;
+        var g = new THREE.Group();
+        var body = new THREE.Object3D();
+        g.add(body);
+        var HIP = 0.95, CHEST = 1.22, SHOULDER = 1.40, NECK = 1.48, EYES = 1.63;
+        /* pelvis and ribcage, tapered */
+        var hips = new THREE.Mesh(G.chest, cloth);
+        hips.scale.set(0.30, 0.23, 0.21);
+        hips.position.y = HIP;
+        body.add(hips);
+        var chest = new THREE.Mesh(G.chest, cloth);
+        chest.scale.set(0.35, 0.31, 0.23);
+        chest.position.y = CHEST;
+        body.add(chest);
+        var shoulders = new THREE.Mesh(G.chest, cloth);
+        shoulders.scale.set(0.41, 0.17, 0.21);
+        shoulders.position.y = SHOULDER - 0.03;
+        body.add(shoulders);
+        /* -------- the outfit --------
+           six garments, so a street is not five copies of one tunic: a short
+           tunic, a long robe, a poncho over bare shoulders, a worker's vest,
+           a hooded cloak, a wrapped skirt with a bound chest. */
+        var outfit = kind === 'elder' ? 4 : kind === 'trader' ? (h(50) > 0.5 ? 0 : 3)
+            : Math.floor(h(50) * 6);
+        var hemLow = outfit === 1 || outfit === 4;
+        if (outfit === 0 || outfit === 3 || outfit === 5) {
+            var tunic = new THREE.Mesh(new THREE.CylinderGeometry(0.165, 0.215, 0.52, 10), cloth2);
+            tunic.position.y = HIP - 0.06;
+            body.add(tunic);
+        }
+        if (outfit === 1 || outfit === 4) {
+            /* a robe to the ankle, wider at the hem so it hangs */
+            var robe = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.30, 0.92, 12), cloth2);
+            robe.position.y = HIP - 0.30;
+            body.add(robe);
+        }
+        if (outfit === 2) {
+            /* a poncho: one sheet of cloth with a hole for the head */
+            var pon = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.34, 0.58, 4, 1, true), cloth2);
+            pon.position.y = CHEST - 0.10;
+            pon.rotation.y = 0.78;
+            body.add(pon);
+            var kilt = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.20, 0.30, 9), wrapMat);
+            kilt.position.y = HIP - 0.10;
+            body.add(kilt);
+        }
+        if (outfit === 3) {
+            /* a worker's vest, open, over bare arms */
+            var vest = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.20, 0.44, 10, 1, true), wrapMat);
+            vest.position.y = CHEST - 0.06;
+            body.add(vest);
+        }
+        if (outfit === 5) {
+            /* a chest wrap and a shoulder strap */
+            var wrapT = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.185, 0.20, 10), cloth);
+            wrapT.position.y = CHEST + 0.02;
+            body.add(wrapT);
+        }
+        if (outfit !== 2) {
+            var belt = new THREE.Mesh(new THREE.CylinderGeometry(0.168, 0.168, 0.055, 10), leatherMat);
+            belt.position.y = HIP + 0.10;
+            body.add(belt);
+        }
+        var neck = new THREE.Mesh(G.bone, skin);
+        neck.scale.set(0.11, 0.10, 0.11);
+        neck.position.y = NECK + 0.06;
+        body.add(neck);
+        /* the head: 23cm tall, which is a quarter of what the first pass gave */
+        var headPivot = new THREE.Object3D();
+        headPivot.position.y = NECK;
+        body.add(headPivot);
+        var head = new THREE.Mesh(G.head, skin);
+        head.scale.set(0.19, 0.23, 0.20);
+        head.position.y = 0.145;
+        headPivot.add(head);
+        var jaw = new THREE.Mesh(G.head, skin);
+        jaw.scale.set(0.145, 0.115, 0.155);
+        jaw.position.set(0, 0.092, 0.016);
+        headPivot.add(jaw);
+        /* -------- the face --------
+           an eyeball with a pupil that tracks you, a lid that can close or
+           go wide, a brow that raises and knits, and a mouth that can smile,
+           frown or fall open. these are what a person's mood is MADE of. */
+        var face = { eyes: [], pupils: [], lids: [], brows: [] };
+        for (var e = 0; e < 2; e++) {
+            var sx3 = (e ? 1 : -1) * 0.037;
+            var ball = new THREE.Mesh(G.joint, eyeWhiteMat);
+            ball.scale.setScalar(0.033);
+            ball.position.set(sx3, 0.152, 0.080);
+            headPivot.add(ball);
+            face.eyes.push(ball);
+            var pup = new THREE.Mesh(G.joint, eyeMat);
+            pup.scale.set(0.019, 0.019, 0.012);
+            pup.position.set(sx3, 0.152, 0.094);
+            headPivot.add(pup);
+            face.pupils.push(pup);
+            /* the lid rides just above the eye and drops to close it */
+            var lid = new THREE.Mesh(G.joint, skin);
+            lid.scale.set(0.042, 0.030, 0.040);
+            lid.position.set(sx3, 0.176, 0.086);
+            headPivot.add(lid);
+            face.lids.push(lid);
+            var brow = new THREE.Mesh(G.box, browMat);
+            brow.scale.set(0.040, 0.008, 0.012);
+            brow.position.set(sx3, 0.186, 0.094);
+            headPivot.add(brow);
+            face.brows.push(brow);
+        }
+        /* the mouth: a shallow box that bends into a smile or a frown */
+        var mouth = new THREE.Mesh(G.box, mouthMat);
+        mouth.scale.set(0.046, 0.008, 0.010);
+        mouth.position.set(0, 0.098, 0.094);
+        headPivot.add(mouth);
+        face.mouth = mouth;
+        var lipL = new THREE.Mesh(G.box, mouthMat);
+        lipL.scale.set(0.012, 0.008, 0.010);
+        lipL.position.set(-0.026, 0.098, 0.092);
+        headPivot.add(lipL);
+        var lipR = new THREE.Mesh(G.box, mouthMat);
+        lipR.scale.set(0.012, 0.008, 0.010);
+        lipR.position.set(0.026, 0.098, 0.092);
+        headPivot.add(lipR);
+        face.corners = [lipL, lipR];
+        var nose = new THREE.Mesh(G.joint, skin);
+        nose.scale.set(0.030, 0.042, 0.046);
+        nose.position.set(0, 0.132, 0.096);
+        headPivot.add(nose);
+        if (kind === 'elder' || (kind !== 'child' && h(43) > 0.6)) {
+            /* a beard, which is most of what makes a face look weathered */
+            var beard = new THREE.Mesh(G.head, hairMats[kind === 'elder' ? 2 : Math.floor(h(44) * 2)]);
+            beard.scale.set(0.145, kind === 'elder' ? 0.19 : 0.13, 0.135);
+            beard.position.set(0, kind === 'elder' ? 0.055 : 0.068, 0.012);
+            headPivot.add(beard);
+        }
+        /* -------- hair --------
+           seven heads: shaved, cropped, loose to the shoulders, a topknot,
+           side braids, a matted mane, or bound under a scarf. plus beards of
+           three lengths, so nobody is anybody else. */
+        var hairCol = hairMats[kind === 'elder' ? 2 : Math.floor(h(4) * (hairMats.length - (h(46) > 0.82 ? 0 : 1)))];
+        var style = kind === 'elder' ? (h(47) > 0.5 ? 6 : 2) : Math.floor(h(47) * 7);
+        if (style !== 0) {
+            var cap = new THREE.Mesh(G.head, hairCol);
+            cap.scale.set(0.205, style === 5 ? 0.215 : 0.185, 0.215);
+            cap.position.y = 0.168 + (style === 5 ? 0.012 : 0);
+            headPivot.add(cap);
+        }
+        if (style === 2 || style === 5) {
+            /* hair falling past the jaw, at the back and the sides */
+            var fall = new THREE.Mesh(G.head, hairCol);
+            fall.scale.set(0.20, 0.20, 0.16);
+            fall.position.set(0, 0.095, -0.035);
+            headPivot.add(fall);
+            for (var sd = 0; sd < 2; sd++) {
+                var side = new THREE.Mesh(G.box, hairCol);
+                side.scale.set(0.035, style === 5 ? 0.22 : 0.15, 0.10);
+                side.position.set((sd ? 1 : -1) * 0.088, 0.085, -0.01);
+                headPivot.add(side);
+            }
+        }
+        if (style === 3) {
+            /* a topknot */
+            var knot = new THREE.Mesh(G.joint, hairCol);
+            knot.scale.setScalar(0.085);
+            knot.position.set(0, 0.265, -0.02);
+            headPivot.add(knot);
+        }
+        if (style === 4) {
+            /* two braids down the front */
+            for (var br2 = 0; br2 < 2; br2++) {
+                var braid = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.014, 0.26, 6), hairCol);
+                braid.position.set((br2 ? 1 : -1) * 0.085, 0.055, 0.045);
+                braid.rotation.z = (br2 ? -1 : 1) * 0.12;
+                headPivot.add(braid);
+            }
+        }
+        if (style === 6 || h(45) > 0.62) {
+            /* bound under a scarf, with the tail hanging behind */
+            var scarf = new THREE.Mesh(G.head, cloth);
+            scarf.scale.set(0.215, 0.16, 0.225);
+            scarf.position.y = 0.185;
+            headPivot.add(scarf);
+            var tail = new THREE.Mesh(G.box, cloth);
+            tail.scale.set(0.06, 0.16, 0.03);
+            tail.position.set(0, 0.14, -0.11);
+            headPivot.add(tail);
+        }
+        var beardLen = kind === 'child' ? 0 : (kind === 'elder' ? 2 : Math.floor(h(43) * 3));
+        if (beardLen > 0) {
+            var beard = new THREE.Mesh(G.head, hairCol);
+            beard.scale.set(0.145, beardLen === 2 ? 0.20 : 0.125, 0.135);
+            beard.position.set(0, beardLen === 2 ? 0.050 : 0.070, 0.012);
+            headPivot.add(beard);
+            if (beardLen === 2) {
+                var chin = new THREE.Mesh(G.box, hairCol);
+                chin.scale.set(0.07, 0.12, 0.06);
+                chin.position.set(0, -0.02, 0.05);
+                headPivot.add(chin);
+            }
+        }
+        /* arms hang from the shoulders and stay close to the body */
+        var arms = [];
+        for (var a = 0; a < 2; a++) {
+            var sgn = a ? 1 : -1;
+            var shoulder = new THREE.Object3D();
+            shoulder.position.set(sgn * 0.175, SHOULDER, 0);
+            body.add(shoulder);
+            var bare = outfit === 3 || outfit === 5;
+            var upper = makeLimb(shoulder, 0.29, 0.105, bare ? skin : cloth, G);
+            var elbow = new THREE.Object3D();
+            elbow.position.y = -0.29;
+            upper.add(elbow);
+            var fore = makeLimb(elbow, 0.26, 0.088, (outfit === 1 || outfit === 4) ? cloth : skin, G);
+            var hand = new THREE.Mesh(G.box, skin);
+            hand.scale.set(0.055, 0.085, 0.035);
+            hand.position.y = -0.30;
+            fore.add(hand);
+            /* bindings wrapped up the forearm */
+            var bind = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.048, 0.16, 8), cloth2);
+            bind.position.y = -0.10;
+            fore.add(bind);
+            shoulder.rotation.z = sgn * (0.05 + h(10 + a) * 0.06);
+            elbow.rotation.x = -0.16 - h(12 + a) * 0.22;
+            arms.push({ shoulder: shoulder, elbow: elbow, sgn: sgn });
+        }
+        /* legs under the hips, not splayed */
+        var legs = [];
+        for (var l = 0; l < 2; l++) {
+            var sgn2 = l ? 1 : -1;
+            var hip = new THREE.Object3D();
+            hip.position.set(sgn2 * 0.078, HIP - 0.06, 0);
+            body.add(hip);
+            var thigh = makeLimb(hip, 0.44, 0.135, cloth2, G);
+            var knee = new THREE.Object3D();
+            knee.position.y = -0.44;
+            thigh.add(knee);
+            var shin = makeLimb(knee, 0.42, 0.105, cloth2, G);
+            if (!hemLow) {
+                var wrapS = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.052, 0.20, 8), wrapMat);
+                wrapS.position.y = -0.20;
+                shin.add(wrapS);
+            }
+            var foot = new THREE.Mesh(G.box, leatherMat);
+            foot.scale.set(0.075, 0.05, 0.185);
+            foot.position.set(0, -0.44, 0.045);
+            shin.add(foot);
+            hip.rotation.x = (h(20 + l) - 0.5) * 0.10;
+            legs.push({ hip: hip, knee: knee, sgn: sgn2 });
+        }
+        /* build varies: some broad, some slight */
+        var broad = 0.90 + h(52) * 0.24;
+        g.scale.set(scale * broad, scale, scale * broad);
+        return { g: g, body: body, head: headPivot, chest: chest, arms: arms, legs: legs,
+            face: face, scale: scale, ph: h(30) * 20, kind: kind,
+            /* the live mood: every value eases toward its situation target */
+            mood: { brow: 0, knit: 0, lid: 0.12, smile: 0.1, open: 0, look: 0 },
+            blinkT: 1 + h(31) * 4, talkT: 0 };
+    }
+    /* -------- expressions --------
+       mood is six numbers: brow raise, brow knit, lid close, smile, mouth
+       open, and how much they are looking at you. the situation sets the
+       targets, everything eases, and the face is rebuilt from them. */
+    function applyFace(fig, dt2, t2, ctx) {
+        var f = fig.face, m = fig.mood;
+        if (!f) return;
+        var tgt = { brow: 0.08, knit: 0, lid: 0.12, smile: 0.10, open: 0, look: 0 };
+        var kind = fig.kind;
+        if (kind === 'elder') { tgt.knit = 0.25; tgt.lid = 0.30; tgt.smile = 0.05; }
+        if (kind === 'child') { tgt.brow = 0.30; tgt.smile = 0.45; }
+        if (kind === 'trader') { tgt.smile = 0.35; tgt.brow = 0.15; }
+        /* they notice you coming */
+        if (ctx.near < 9) {
+            var closeK = 1 - ctx.near / 9;
+            tgt.look = closeK;
+            tgt.brow += 0.35 * closeK;
+            tgt.smile += (kind === 'child' ? 0.6 : kind === 'elder' ? 0.25 : 0.40) * closeK;
+        }
+        /* a stranger burning bright and moving fast is unnerving */
+        if (ctx.trip > 14 && ctx.near < 7) {
+            tgt.knit += 0.7; tgt.smile -= 0.55; tgt.lid += 0.18; tgt.brow -= 0.2;
+        }
+        /* the stone stirring frightens the whole town at once */
+        if (ctx.alarm > 0.02) {
+            tgt.brow += 0.9 * ctx.alarm;
+            tgt.lid -= 0.45 * ctx.alarm;
+            tgt.open += 0.7 * ctx.alarm;
+            tgt.smile -= 0.8 * ctx.alarm;
+            tgt.knit += 0.3 * ctx.alarm;
+        }
+        /* music in the room lifts everyone a little */
+        if (ctx.music > 0.05) {
+            tgt.smile += 0.35 * ctx.music;
+            tgt.brow += 0.2 * ctx.music;
+        }
+        /* and being spoken to: they talk back */
+        fig.talkT = Math.max(0, fig.talkT - dt2);
+        if (fig.talkT > 0) {
+            tgt.smile += 0.3;
+            tgt.open = 0.35 + Math.abs(Math.sin(t2 * 9.5 + fig.ph)) * 0.5;
+            tgt.look = 1;
+        }
+        /* blinking, because a face that never blinks is a mask */
+        fig.blinkT -= dt2;
+        var blink = 0;
+        if (fig.blinkT < 0.14) blink = 1 - Math.abs(fig.blinkT / 0.07 - 1);
+        if (fig.blinkT <= 0) fig.blinkT = 2.2 + Math.random() * 5;
+        var ease = function (a, b, k) { return a + (b - a) * Math.min(1, dt2 * k); };
+        m.brow = ease(m.brow, tgt.brow, 5);
+        m.knit = ease(m.knit, tgt.knit, 5);
+        m.lid = ease(m.lid, tgt.lid, 7);
+        m.smile = ease(m.smile, tgt.smile, 4.5);
+        m.open = ease(m.open, tgt.open, 9);
+        m.look = ease(m.look, tgt.look, 3.5);
+        /* -------- rebuild the face from the mood -------- */
+        var lidClose = Math.max(m.lid, blink);
+        for (var i = 0; i < 2; i++) {
+            var sgn = i ? 1 : -1;
+            var brow = f.brows[i];
+            brow.position.y = 0.186 + m.brow * 0.030;
+            brow.position.x = sgn * (0.037 + m.knit * -0.004);
+            brow.rotation.z = sgn * (m.knit * 0.95 - m.brow * 0.30);
+            var lid = f.lids[i];
+            /* the lid slides down over the eye and squashes as it closes */
+            lid.position.y = 0.178 - lidClose * 0.034;
+            lid.scale.y = 0.030 + lidClose * 0.028;
+            var pup = f.pupils[i];
+            pup.position.x = sgn * 0.037 + ctx.lookX * 0.010 * m.look;
+            pup.position.y = 0.152 + ctx.lookY * 0.008 * m.look;
+            pup.visible = lidClose < 0.85;
+            f.eyes[i].visible = lidClose < 0.9;
+        }
+        /* the mouth: corners up for a smile, down for a frown, and it opens */
+        f.mouth.scale.y = 0.008 + m.open * 0.070;
+        f.mouth.position.y = 0.098 - m.open * 0.018;
+        f.mouth.scale.x = 0.046 + m.smile * 0.012;
+        for (var c = 0; c < 2; c++) {
+            var corner = f.corners[c];
+            corner.position.y = 0.098 + m.smile * 0.028 - m.open * 0.014;
+            corner.position.x = (c ? 1 : -1) * (0.026 + m.smile * 0.006);
+            corner.rotation.z = (c ? -1 : 1) * m.smile * 1.15;
+        }
+    }
     var robeGeo = new THREE.ConeGeometry(0.34, 1.25, 7);
     var headGeo = new THREE.SphereGeometry(0.16, 8, 6);
     function cityName(seed, ruin) { return CC.cityName(seed, ruin); }
@@ -5735,17 +7124,76 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     }
                 }
             }
-            /* the lane from the plaza to this block's front door */
-            var laneN = Math.floor(brad / 2.2);
-            for (var li3 = 2; li3 < laneN; li3++) {
-                var lx3 = sx + Math.cos(ba) * li3 * 2.2 + (CC.hash3(nb, li3, seed) - 0.5) * 0.7;
-                var lz3 = sz + Math.sin(ba) * li3 * 2.2 + (CC.hash3(li3, nb, seed) - 0.5) * 0.7;
-                if (!ownedBy(lx3, fy, lz3, cx, cy, cz)) continue;
-                var slab2 = new THREE.Mesh(houseGeo, pathMat);
-                slab2.scale.set(1.5 + CC.hash3(li3, seed, nb) * 0.7, 0.08, 1.1 + CC.hash3(seed, li3, nb) * 0.5);
-                slab2.position.set(lx3, floorSurfY(lx3, lz3, fy) + 0.04, lz3);
-                slab2.rotation.y = ba + (CC.hash3(nb, li3, 5) - 0.5) * 0.3;
-                rec.group.add(slab2);
+            /* -------- the walkway --------
+               these towns are not laid out in streets: the parts are joined
+               by raised plank ways on trestles, with rails and a lamp at the
+               joints, so the ground stays cave and the town lives above it */
+            var wkN = Math.floor(brad / 3.0);
+            var deckY = 1.4 + CC.hash3(nb, 200, seed) * 1.3;
+            var prevWX = null, prevWZ = null, prevWY = null;
+            for (var wi4 = 2; wi4 <= wkN; wi4++) {
+                var t4 = wi4 / wkN;
+                var wobble = Math.sin(wi4 * 0.8 + nb) * 1.6;
+                var wx4 = sx + Math.cos(ba) * wi4 * 3.0 - Math.sin(ba) * wobble;
+                var wz4 = sz + Math.sin(ba) * wi4 * 3.0 + Math.cos(ba) * wobble;
+                if (!ownedBy(wx4, fy, wz4, cx, cy, cz)) { prevWX = null; continue; }
+                var gY = floorSurfY(wx4, wz4, fy);
+                var wy4 = gY + deckY * (0.35 + t4 * 0.65);
+                /* the deck plank */
+                var plank2 = new THREE.Mesh(houseGeo, sidingMat);
+                plank2.scale.set(2.3, 0.14, 3.3);
+                plank2.position.set(wx4, wy4, wz4);
+                plank2.rotation.y = ba;
+                plank2.rotation.z = Math.sin(wi4 * 1.7) * 0.02;
+                rec.group.add(plank2);
+                /* trestle legs down to whatever floor is under it */
+                for (var lg = 0; lg < 2; lg++) {
+                    var lgx = wx4 + Math.cos(ba + 1.5708) * (lg ? 1.0 : -1.0);
+                    var lgz = wz4 + Math.sin(ba + 1.5708) * (lg ? 1.0 : -1.0);
+                    var lgY = floorSurfY(lgx, lgz, fy);
+                    var lgLen = Math.max(0.4, wy4 - lgY);
+                    var leg2 = new THREE.Mesh(cylGeo, timberMat);
+                    leg2.scale.set(0.085, lgLen, 0.085);
+                    leg2.position.set(lgx, wy4 - lgLen * 0.5, lgz);
+                    rec.group.add(leg2);
+                }
+                /* handrail along the outer edge */
+                for (var rl = 0; rl < 2; rl++) {
+                    var rpx = wx4 + Math.cos(ba + 1.5708) * (rl ? 1.12 : -1.12);
+                    var rpz = wz4 + Math.sin(ba + 1.5708) * (rl ? 1.12 : -1.12);
+                    var post2 = new THREE.Mesh(cylGeo, timberMat);
+                    post2.scale.set(0.05, 0.95, 0.05);
+                    post2.position.set(rpx, wy4 + 0.48, rpz);
+                    rec.group.add(post2);
+                    var rail2 = new THREE.Mesh(houseGeo, timberMat);
+                    rail2.scale.set(0.06, 0.06, 3.3);
+                    rail2.position.set(rpx, wy4 + 0.92, rpz);
+                    rail2.rotation.y = ba;
+                    rec.group.add(rail2);
+                }
+                /* a lamp every few spans, because a walkway in the dark is a trap */
+                if (!st.ruin && wi4 % 4 === 0) {
+                    var wl = new THREE.Mesh(orbGeo, lanternMat);
+                    wl.scale.setScalar(0.8);
+                    wl.position.set(wx4 + Math.cos(ba + 1.5708) * 1.12, wy4 + 1.25, wz4 + Math.sin(ba + 1.5708) * 1.12);
+                    rec.group.add(wl);
+                    rec.emitters.push({ x: wl.position.x, y: wl.position.y, z: wl.position.z,
+                        color: new THREE.Color(0xffb066), intensity: 0.65, dist: 22,
+                        type: 'torch', flicker: true });
+                }
+                /* the steps up onto the walkway where it leaves the ground */
+                if (wi4 === 2) {
+                    for (var sp2 = 0; sp2 < 4; sp2++) {
+                        var stp = new THREE.Mesh(houseGeo, sidingMat);
+                        stp.scale.set(1.6, 0.12, 0.6);
+                        stp.position.set(wx4 - Math.cos(ba) * (0.7 + sp2 * 0.6),
+                            gY + 0.12 + sp2 * ((wy4 - gY) / 4),
+                            wz4 - Math.sin(ba) * (0.7 + sp2 * 0.6));
+                        stp.rotation.y = ba;
+                        rec.group.add(stp);
+                    }
+                }
+                prevWX = wx4; prevWZ = wz4; prevWY = wy4;
             }
         }
         /* market stalls crowd the plaza itself */
@@ -5887,6 +7335,68 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 orb.position.set(lx2, fy + 2.3, lz2);
                 rec.group.add(orb);
                 rec.emitters.push({ x: lx2, y: fy + 2.3, z: lz2, color: new THREE.Color(0xffd9a0), intensity: 1.0, dist: 20, type: 'torch', flicker: true });
+            }
+        }
+        /* -------- the townspeople --------
+           a town is people, not buildings. families keep to their doorways,
+           traders hold the stalls, and the old ones carry what the town
+           remembers. tap any of them and they will tell you. */
+        if (!st.ruin) {
+            var kinds = ['elder', 'trader', 'parent', 'parent', 'child', 'child', 'worker'];
+            var nP = 14 + Math.floor(sh(7) * 10);
+            for (var pi3 = 0; pi3 < nP; pi3++) {
+                var kind = kinds[pi3 % kinds.length];
+                /* families cluster at a doorway, traders sit near the middle,
+                   elders keep to the quiet edge */
+                var ringF = kind === 'trader' ? 0.14 : kind === 'elder' ? 0.72 : 0.30 + CC.hash3(pi3, 150, seed) * 0.4;
+                var clan = Math.floor(pi3 / 3);
+                var pa3 = (clan / Math.max(1, Math.ceil(nP / 3))) * 6.2831853 + sh(151) * 2.0
+                    + (kind === 'child' ? 0.06 : 0) + CC.hash3(pi3, 152, seed) * 0.10;
+                var pxp = sx + Math.cos(pa3) * st.domeR * ringF;
+                var pzp = sz + Math.sin(pa3) * st.domeR * ringF;
+                if (!ownedBy(pxp, fy, pzp, cx, cy, cz)) continue;
+                var pfy = floorSurfY(pxp, pzp, fy);
+                var fig = makeHumanoid(kind, Math.floor(CC.hash3(pi3, 157, seed) * 100000));
+                var person = fig.g;
+                if (kind === 'elder') {
+                    /* a staff with a lit head: you can see who to ask */
+                    var staff = new THREE.Mesh(cylGeo, timberMat);
+                    staff.scale.set(0.045, 1.7, 0.045);
+                    staff.position.set(0.34, 0.85, 0.05);
+                    person.add(staff);
+                    var knob = new THREE.Mesh(orbGeo, lanternMat);
+                    knob.scale.setScalar(1.1);
+                    knob.position.set(0.34, 1.72, 0.05);
+                    person.add(knob);
+                    /* and a hand raised to hold it */
+                    fig.arms[1].shoulder.rotation.z = 0.30;
+                    fig.arms[1].elbow.rotation.x = -1.15;
+                    rec.emitters.push({ x: pxp + 0.34, y: pfy + 1.72, z: pzp,
+                        color: new THREE.Color(0xffc06a), intensity: 0.5, dist: 14,
+                        type: 'torch', flicker: true });
+                }
+                if (kind === 'trader') {
+                    var tray = new THREE.Mesh(houseGeo, sidingMat);
+                    tray.scale.set(0.6, 0.08, 0.36);
+                    tray.position.set(0, 0.98, 0.32);
+                    person.add(tray);
+                    /* both arms forward over the tray */
+                    fig.arms[0].shoulder.rotation.x = -1.0;
+                    fig.arms[1].shoulder.rotation.x = -1.0;
+                    fig.arms[0].elbow.rotation.x = -0.5;
+                    fig.arms[1].elbow.rotation.x = -0.5;
+                }
+                person.position.set(pxp, pfy, pzp);
+                person.rotation.y = kind === 'trader' ? pa3 + 3.1416 : CC.hash3(pi3, 154, seed) * 6.2831853;
+                person.userData.dweller = {
+                    kind: kind, seed: Math.floor(CC.hash3(pi3, 155, seed) * 10000),
+                    town: cityName(st.seed, st.ruin)
+                };
+                rec.group.add(person);
+                rec.folk.push({ g: person, ph: CC.hash3(pi3, 156, seed) * 20,
+                    home: [pxp, pfy, pzp], kind: kind, fig: fig,
+                    wander: kind === 'child' ? 2.2 : kind === 'worker' ? 1.4 : 0 });
+                rec.dwellers.push(person);
             }
         }
         /* folk, gently swaying near the plaza */
@@ -6361,6 +7871,20 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
     var raycaster = new THREE.Raycaster();
     var heldVoices = [];
+    /* -------- the thumb zones --------
+       BOTH bottom corners belong to your thumbs: the left one walks, the
+       right one looks, and neither ever plays a note. the music lives in
+       the upper screen where the cave is. the split follows the shape of
+       the phone, because in landscape your thumbs reach the corners and
+       the bottom half is most of the picture. */
+    function zonesNow() {
+        var w = window.innerWidth || 1, h = window.innerHeight || 1;
+        var land = w >= h;
+        return land
+            ? { moveX: 0.30, lookX: 0.70, y: 0.42 }
+            : { moveX: 0.46, lookX: 0.54, y: 0.52 };
+    }
+    var MOVE_ZONE_X = 0.46, MOVE_ZONE_Y = 0.52;
     function musicHitAt(ndcX, ndcY) {
         /* everything in the cave you can play: spires, boulders, caps */
         raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
@@ -6469,6 +7993,44 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 return;
             }
         }
+        /* a crystal answers with its own note and lights as it rings */
+        raycaster.far = 12.0;
+        var facets = [];
+        for (k in chunks) {
+            var fl2 = chunks[k].facets;
+            if (fl2) for (i = 0; i < fl2.length; i++) facets.push(fl2[i].m);
+        }
+        if (facets.length) {
+            var fres2 = raycaster.intersectObjects(facets, false);
+            if (fres2.length && fres2[0].object.userData.facet) {
+                var fd = fres2[0].object.userData.facet;
+                /* lead() marks the degree, so every crystal of that note in
+                   the chamber answers with this one */
+                CaveAudio.lead && CaveAudio.lead(fd.deg, { glide: 1, dur: 1.8, gain: 0.11, verb: 1.0, wave: 'triangle' });
+                for (k in chunks) {
+                    var fl3 = chunks[k].facets;
+                    if (fl3) for (i = 0; i < fl3.length; i++) {
+                        if (fl3[i].m === fres2[0].object) fl3[i].lit = 1;
+                    }
+                }
+                return;
+            }
+        }
+        /* the people answer before the stone does */
+        raycaster.far = 9.0;
+        var folks = [];
+        for (k in chunks) {
+            var dl2 = chunks[k].dwellers;
+            if (dl2) for (i = 0; i < dl2.length; i++) folks.push(dl2[i]);
+        }
+        if (folks.length) {
+            var pres = raycaster.intersectObjects(folks, true);
+            if (pres.length) {
+                var obj = pres[0].object;
+                while (obj && !obj.userData.dweller) obj = obj.parent;
+                if (obj && speakTo(obj)) return;
+            }
+        }
         /* the stone itself plays: every spire is a note, and where you touch
            it on the screen picks the degree */
         raycaster.far = 9.0;
@@ -6494,6 +8056,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var tripE = 0, tripS = 0;
     var baskK = 0, baskT = 0, baskShown = false, baskDeep = false, baskHeart = null;
     var lavaIn = false, lavaK = 0, lavaSwim = 0, lavaShown = false;
+    var geodeIn = false, geodeK = 0, geodeRing = 0;
     var elves = [], elfT = 0, elfShown = false, elfWant = 0;
     var ELF_WORDS = [
         'they were already here, waiting for you to slow down',
@@ -6505,34 +8068,229 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         'they laugh, and the laughter has corners',
         'they are building something out of your attention'
     ];
-    function makeElf(seed) {
-        /* a self transforming machine elf: nested spinning solids that
-           will not hold still long enough to be described */
-        var g = new THREE.Group();
-        var cols = [0x59ffd0, 0xff5fd2, 0xffe45f, 0x7d6bff];
-        for (var i = 0; i < 3; i++) {
-            var geo = i === 0 ? new THREE.IcosahedronGeometry(0.85, 0)
-                : i === 1 ? new THREE.OctahedronGeometry(0.55, 0)
-                : new THREE.TetrahedronGeometry(0.34, 0);
-            var m = new THREE.Mesh(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({
-                color: cols[(seed + i) % cols.length], transparent: true, opacity: 0.9,
-                blending: THREE.AdditiveBlending, depthWrite: false
-            }));
-            var lines = new THREE.LineSegments(m.geometry, m.material);
-            lines.userData.spin = 0.5 + i * 0.9;
-            g.add(lines);
-            geo.dispose();
+    /* -------- the machine elves --------
+       built from what people actually report, not from guesswork: vividly
+       coloured, shaped like Faberge eggs or jewelled basketballs that
+       VIBRATE, "self dribbling on the rebound", constructed and self
+       assembling, and made of syntax-driving light: a language you SEE.
+       so: an egg that never holds its shape, enamelled and gold-filigreed,
+       with glyph-light crawling over it and a fractal core burning inside. */
+    var elfGeo = null;
+    /* -------- the two bodies --------
+       the tykes are ELVES as much as eggs: small, childlike, busy. so the
+       same mesh carries a second set of positions shaped like a little
+       creature and the shader melts between them. each egg vertex walks its
+       OWN ray out from the belly until it meets a body built from capsules,
+       which keeps both forms sharing one topology so the morph is smooth. */
+    function sdCapsule(px, py, pz, ax, ay, az, bx, by, bz, r) {
+        var abx = bx - ax, aby = by - ay, abz = bz - az;
+        var apx = px - ax, apy = py - ay, apz = pz - az;
+        var t = (apx * abx + apy * aby + apz * abz) / (abx * abx + aby * aby + abz * abz || 1);
+        t = Math.max(0, Math.min(1, t));
+        var dx = apx - abx * t, dy = apy - aby * t, dz = apz - abz * t;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz) - r;
+    }
+    function elfBodySDF(x, y, z) {
+        var d = sdCapsule(x, y, z, 0, 0.30, 0, 0, 0.42, 0, 0.235);
+        d = Math.min(d, sdCapsule(x, y, z, 0, 0.52, 0, 0.02, 0.72, 0.02, 0.075));
+        d = Math.min(d, sdCapsule(x, y, z, 0, -0.10, 0, 0, 0.24, 0, 0.215));
+        d = Math.min(d, sdCapsule(x, y, z, 0.14, 0.20, 0, 0.40, 0.02, 0.06, 0.072));
+        d = Math.min(d, sdCapsule(x, y, z, -0.14, 0.20, 0, -0.40, 0.02, 0.06, 0.072));
+        d = Math.min(d, sdCapsule(x, y, z, 0.09, -0.12, 0, 0.13, -0.52, 0.04, 0.082));
+        d = Math.min(d, sdCapsule(x, y, z, -0.09, -0.12, 0, -0.13, -0.52, 0.04, 0.082));
+        d = Math.min(d, sdCapsule(x, y, z, 0.13, -0.54, 0.02, 0.15, -0.56, 0.13, 0.070));
+        d = Math.min(d, sdCapsule(x, y, z, -0.13, -0.54, 0.02, -0.15, -0.56, 0.13, 0.070));
+        d = Math.min(d, sdCapsule(x, y, z, 0.20, 0.40, 0, 0.34, 0.56, -0.04, 0.030));
+        d = Math.min(d, sdCapsule(x, y, z, -0.20, 0.40, 0, -0.34, 0.56, -0.04, 0.030));
+        return d;
+    }
+    function elfEggGeo() {
+        if (!elfGeo) {
+            elfGeo = new THREE.SphereGeometry(0.6, 48, 36);
+            var p = elfGeo.attributes.position;
+            var body = new Float32Array(p.count * 3);
+            for (var i = 0; i < p.count; i++) {
+                var x0 = p.getX(i), y0 = p.getY(i), z0 = p.getZ(i);
+                var taper = 1.0 - 0.24 * (y0 / 0.6) - 0.10 * Math.pow(y0 / 0.6, 2);
+                p.setXYZ(i, x0 * taper, y0 * 1.34, z0 * taper);
+                var l0 = Math.sqrt(x0 * x0 + y0 * y0 + z0 * z0) || 1;
+                var dx = x0 / l0, dy = y0 / l0, dz = z0 / l0;
+                /* march the WHOLE ray and keep the LAST point still inside the
+                   body: sphere-tracing from the belly stops instantly because
+                   the start is already inside the torso, which collapsed every
+                   creature into a small ball with no limbs */
+                var oy = 0.06, hit = 0.12, found = false;
+                for (var m = 1; m <= 78; m++) {
+                    var tRay = m * 0.014;
+                    if (elfBodySDF(dx * tRay, oy + dy * tRay, dz * tRay) <= 0) {
+                        hit = tRay;
+                        found = true;
+                    }
+                }
+                if (!found) hit = 0.12;
+                body[i * 3] = dx * hit;
+                body[i * 3 + 1] = oy + dy * hit;
+                body[i * 3 + 2] = dz * hit;
+            }
+            p.needsUpdate = true;
+            elfGeo.setAttribute('aElf', new THREE.BufferAttribute(body, 3));
+            elfGeo.computeVertexNormals();
         }
-        var spr = new THREE.Sprite(new THREE.SpriteMaterial({
-            map: glowTex, color: cols[seed % cols.length], transparent: true, opacity: 0.55,
+        return elfGeo;
+    }
+    function makeElfMaterial(seed) {
+        return new THREE.ShaderMaterial({
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+            blending: THREE.NormalBlending,
+            uniforms: {
+                uTime: { value: 0 },
+                uSeed: { value: seed * 1.7 },
+                uFold: { value: 0.0 },
+                uMorph: { value: 1.0 },
+                uSpeak: { value: 0.0 },
+                uFog: { value: new THREE.Color(0x04070c) },
+                uFogD: { value: 0.028 }
+            },
+            vertexShader: [
+                'varying vec3 vN;',
+                'varying vec3 vW;',
+                'varying vec3 vL;',
+                'varying vec2 vUv;',
+                'uniform float uTime;',
+                'uniform float uSeed;',
+                'uniform float uFold;',
+                'uniform float uMorph;',
+                'attribute vec3 aElf;',
+                /* the self transforming part: the body folds through itself,
+                   several frequencies at once, so the silhouette is never
+                   the same shape twice and never quite settles */
+                'vec3 fold(vec3 p, float t) {',
+                '    float a = sin(p.y * 5.1 + t * 2.3 + uSeed) * 0.10;',
+                '    float b = sin(p.x * 7.3 - t * 3.1 + uSeed * 2.0) * 0.07;',
+                '    float c = sin(p.z * 6.2 + t * 4.7) * 0.05;',
+                '    float d = sin((p.x + p.y + p.z) * 11.0 - t * 6.0) * 0.028;',
+                '    return p + normalize(p + 0.0001) * (a + b + c + d) * (0.55 + uFold) * (0.28 + uMorph * 0.72);',
+                '}',
+                'void main() {',
+                '    vUv = uv;',
+                /* 1 = the jewelled egg, 0 = the little creature */
+                '    vec3 base = mix(aElf, position, uMorph);',
+                '    vec3 p = fold(base, uTime * (0.35 + uMorph * 0.65));',
+                '    vL = p;',
+                /* rebuild the normal from two folded neighbours so the light
+                   follows the transformation instead of the original egg */
+                '    vec3 t1 = normalize(cross(normal, vec3(0.0, 1.0, 0.0)) + 0.0001);',
+                '    vec3 t2 = normalize(cross(normal, t1));',
+                '    vec3 pa = fold(base + t1 * 0.03, uTime * (0.35 + uMorph * 0.65));',
+                '    vec3 pb = fold(base + t2 * 0.03, uTime * (0.35 + uMorph * 0.65));',
+                '    vec3 nn = normalize(cross(pa - p, pb - p));',
+                '    if (dot(nn, normal) < 0.0) nn = -nn;',
+                '    vN = normalize(normalMatrix * nn);',
+                '    vec4 wp = modelMatrix * vec4(p, 1.0);',
+                '    vW = wp.xyz;',
+                '    gl_Position = projectionMatrix * viewMatrix * wp;',
+                '}'
+            ].join('\n'),
+            fragmentShader: [
+                'precision highp float;',
+                'varying vec3 vN;',
+                'varying vec3 vW;',
+                'varying vec3 vL;',
+                'varying vec2 vUv;',
+                'uniform float uTime;',
+                'uniform float uSeed;',
+                'uniform float uSpeak;',
+                'uniform vec3 uFog;',
+                'uniform float uFogD;',
+                'float h11(float n) { return fract(sin(n * 127.1 + uSeed) * 43758.5453); }',
+                /* the visible language: rows of glyph cells that rewrite
+                   themselves, because they speak in a syntax you SEE */
+                'float glyph(vec2 uv) {',
+                '    vec2 cell = vec2(26.0, 16.0);',
+                '    vec2 id = floor(uv * cell);',
+                '    vec2 f = fract(uv * cell);',
+                '    float word = floor(uTime * 5.0) + id.y * 7.0;',
+                '    float on = step(0.42, h11(id.x + id.y * 31.0 + word * 3.7));',
+                '    float bar = step(0.16, f.x) * step(f.x, 0.84);',
+                '    float row = step(h11(id.x * 3.1 + word), f.y) * step(f.y, 0.86);',
+                '    float stroke = bar * row;',
+                '    float tick = step(0.62, f.y) * step(0.3, f.x) * step(f.x, 0.7);',
+                '    return on * max(stroke, tick);',
+                '}',
+                /* jewelled enamel: iridescent, deep, and lit from within */
+                'vec3 enamel(float k) {',
+                '    return 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + k));',
+                '}',
+                'void main() {',
+                '    vec3 N = normalize(vN);',
+                '    vec3 V = normalize(cameraPosition - vW);',
+                '    float fres = pow(1.0 - max(dot(N, V), 0.0), 2.4);',
+                /* the shell: hue runs around the body and shifts as it turns */
+                '    float band = atan(vL.z, vL.x) / 6.28318 + 0.5;',
+                '    float lat = vL.y * 1.6;',
+                                /* each one is enamelled its OWN colour and shimmers around it:
+                   a full spectrum on every body reads as a rainbow shader,
+                   not as a jewelled thing */
+                '    float k = uSeed * 0.37 + uTime * 0.05 + band * 0.16 + lat * 0.10;',
+                '    vec3 col = enamel(k) * 0.16;',
+                /* a jewel is DEEP: the shell must stay dark enough that the
+                   gold and the glyph-light read as detail rather than glare */
+                '    col *= 0.35 + 0.65 * pow(max(dot(N, V), 0.0), 1.5);',
+                /* gold filigree: the cloisons of a Faberge egg, laid in rings
+                   and ribs, catching the light where the body folds */
+                '    float rib = abs(fract(band * 12.0 + sin(lat * 3.0) * 0.2) - 0.5);',
+                '    float ring = abs(fract(lat * 5.0 + 0.5) - 0.5);',
+                '    float wire = smoothstep(0.06, 0.0, rib) + smoothstep(0.05, 0.0, ring);',
+                '    col += vec3(1.0, 0.72, 0.24) * wire * (0.85 + fres * 0.5);',
+                /* the fractal core: a lattice burning inside the shell */
+                '    vec3 q = vL * 6.0;',
+                '    float core = 0.0;',
+                '    for (int i = 0; i < 4; i++) {',
+                '        q = abs(q) / dot(q, q) - 0.72;',
+                '        core += exp(-4.5 * length(q));',
+                '    }',
+                '    col += enamel(k + 0.35) * min(core, 1.2) * 0.16;',
+                /* the language, crawling over the shell and flaring as they speak */
+                '    float gl = glyph(vec2(band * 2.0, lat * 0.5 + uTime * 0.04));',
+                '    col += vec3(0.62, 1.0, 0.86) * gl * (0.22 + uSpeak * 0.9);',
+                /* the rim: they are made of light, so the edge burns brightest */
+                '    col += enamel(k + 0.5) * fres * 0.85;',
+                '    float alpha = clamp(0.34 + fres * 0.7 + wire * 0.55 + gl * 0.45 + min(core, 1.2) * 0.12, 0.0, 1.0);',
+                '    float dist = length(vW - cameraPosition);',
+                '    float fg = 1.0 - exp(-uFogD * uFogD * dist * dist);',
+                '    col = mix(col, uFog, clamp(fg, 0.0, 1.0));',
+                '    gl_FragColor = vec4(col, alpha);',
+                '}'
+            ].join('\n')
+        });
+    }
+    function makeElf(seed) {
+        var g = new THREE.Group();
+        var mat = makeElfMaterial(seed);
+        var body = new THREE.Mesh(elfEggGeo(), mat);
+        g.add(body);
+        /* the jewelled armature they assemble around themselves */
+        var cageGeo = new THREE.IcosahedronGeometry(0.92, 0);
+        var cage = new THREE.LineSegments(new THREE.EdgesGeometry(cageGeo), new THREE.LineBasicMaterial({
+            color: 0xffe0a0, transparent: true, opacity: 0.55,
             blending: THREE.AdditiveBlending, depthWrite: false
         }));
-        spr.scale.set(3.2, 3.2, 1);
+        cageGeo.dispose();
+        g.add(cage);
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: 0x9fffe8, transparent: true, opacity: 0.35,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        spr.scale.set(3.0, 3.0, 1);
         g.add(spr);
         scene.add(g);
-        return { g: g, ph: CC.hash3(seed, 9, 4) * 20, orbit: CC.hash3(seed, 3, 8) * 6.2831853,
+        return { g: g, mat: mat, cage: cage, ph: CC.hash3(seed, 9, 4) * 20,
+            orbit: CC.hash3(seed, 3, 8) * 6.2831853,
             rad: 5 + CC.hash3(seed, 5, 2) * 7, hgt: 0.2 + CC.hash3(seed, 7, 1) * 2.4,
-            jit: 0, life: 0 };
+            jit: 0, life: 0, bounce: CC.hash3(seed, 11, 3) * 6.2831853, speak: 0,
+            morph: 1, morphT: 1.5 + CC.hash3(seed, 13, 2) * 3.5, morphTo: 0 };
     }
     function clearElves() {
         for (var i = 0; i < elves.length; i++) {
@@ -6571,6 +8329,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             elfT = 7 + Math.random() * 9;
             showHint(ELF_WORDS[Math.floor(Math.random() * ELF_WORDS.length)]);
             if (CaveAudio.elfChirp) CaveAudio.elfChirp();
+            /* the syntax-light on every shell flares as the sentence lands */
+            for (var sp = 0; sp < elves.length; sp++) elves[sp].speak = 1.0;
         }
         for (var i2 = 0; i2 < elves.length; i2++) {
             var el = elves[i2];
@@ -6590,16 +8350,44 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             el.g.position.x += (tx2 - el.g.position.x) * Math.min(1, dt2 * 7);
             el.g.position.y += (ty2 - el.g.position.y) * Math.min(1, dt2 * 7);
             el.g.position.z += (tz2 - el.g.position.z) * Math.min(1, dt2 * 7);
-            var sc = 0.7 + Math.sin(t2 * 5.1 + el.ph) * 0.22 + baskK * 0.5;
-            el.g.scale.setScalar(sc);
-            for (var ci = 0; ci < el.g.children.length; ci++) {
-                var ch = el.g.children[ci];
-                if (ch.userData.spin) {
-                    ch.rotation.x += dt2 * ch.userData.spin * 2.4;
-                    ch.rotation.y += dt2 * ch.userData.spin * 3.1;
-                    ch.rotation.z += dt2 * ch.userData.spin * 1.3;
-                    ch.material.opacity = 0.55 + Math.sin(t2 * 7 + ci * 2 + el.ph) * 0.4;
-                }
+            /* self dribbling on the rebound: they bounce, and the body
+               squashes and stretches with every landing */
+            el.bounce += dt2 * (5.2 + (i2 % 3) * 0.7);
+            var hop = Math.abs(Math.sin(el.bounce));
+            var squash = 1.0 + (1.0 - hop) * 0.16 - hop * 0.10;
+            el.g.position.y += hop * 0.55;
+            var sc = 0.72 + Math.sin(t2 * 5.1 + el.ph) * 0.06 + baskK * 0.4;
+            /* a creature is taller than it is wide; an egg is not */
+            var tall = 1.0 + (1.0 - el.morph) * 0.35;
+            el.g.scale.set(sc / squash, sc * squash * tall, sc / squash);
+            /* the vibration McKenna kept describing: a fast tremble on top
+               of everything else, never still enough to be pinned down */
+            el.g.rotation.y += dt2 * (1.1 + (i2 % 4) * 0.35);
+            el.g.rotation.x = Math.sin(t2 * 9.3 + el.ph) * 0.06;
+            el.g.rotation.z = Math.cos(t2 * 11.1 + el.ph) * 0.05;
+            el.speak = Math.max(0, el.speak - dt2 * 1.4);
+            /* self TRANSFORMING: they hold a shape for a few seconds, then
+               melt into the other one. mid-melt is the interesting part, so
+               the crossing is quick but never instant */
+            el.morphT -= dt2;
+            if (el.morphT <= 0) {
+                el.morphTo = el.morphTo > 0.5 ? 0 : 1;
+                el.morphT = 2.0 + Math.random() * 4.0;
+                el.speak = Math.max(el.speak, 0.6);
+            }
+            el.morph += (el.morphTo - el.morph) * Math.min(1, dt2 * 2.2);
+            if (el.mat) {
+                el.mat.uniforms.uTime.value = t2;
+                el.mat.uniforms.uFold.value = 0.35 + hop * 0.5 + baskK * 0.4;
+                el.mat.uniforms.uMorph.value = el.morph;
+                el.mat.uniforms.uSpeak.value = el.speak;
+                el.mat.uniforms.uFog.value.copy(fogCol);
+                el.mat.uniforms.uFogD.value = scene.fog ? scene.fog.density : 0.028;
+            }
+            if (el.cage) {
+                el.cage.rotation.x -= dt2 * 1.7;
+                el.cage.rotation.z += dt2 * 1.1;
+                el.cage.material.opacity = 0.30 + Math.sin(t2 * 6.0 + el.ph) * 0.22 + el.speak * 0.4;
             }
         }
     }
@@ -6736,10 +8524,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var soulState = 0;           /* 0 embodied, 1 falling, 2 in the core */
     var soulV = 0, soulY = 0, soulShown = false, soulStreak = null, soulSGeo = null;
     var bodyPos = null, bodyYaw = 0, bodyWalk = false, soulLoreI = -1;
+    var soulScanT = 0, soulNearOpen = false;
     var SOUL_A = 3000;           /* the pull of the whole world beneath you */
     var soulAsk = document.getElementById('soulAsk');
     var soulBtn = document.getElementById('soulBtn');
     var soulBack = document.getElementById('soulBack');
+    var soulCatchBtn = document.getElementById('soulCatch');
     var SOUL_LORE = [
         'the crust lets go of you',
         'the last root passes',
@@ -6770,6 +8560,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         setPhasing(true);
         soulState = 1;
         soulV = 0;
+        if (soulCatchBtn) soulCatchBtn.style.display = 'block';
         soulY = camera.position.y;
         soulLoreI = -1;
         vel.set(0, 0, 0);
@@ -6803,8 +8594,50 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         CaveAudio.warp();
         showHint('you slip out of yourself. the ground is only an opinion.');
     }
+    function soulCatch(auto) {
+        /* stop falling and materialise INSIDE the cave: the soul passes
+           through rock, so landing must always resolve to open air rather
+           than leaving you embedded in the wall you fell through */
+        if (soulState !== 1) return false;
+        var p2 = camera.position;
+        var spot = nearestOpening(p2.x, p2.y, p2.z, 260);
+        if (!spot) {
+            if (auto) return false;
+            showHint('solid rock in every direction. keep falling.');
+            return false;
+        }
+        soulState = 0;
+        soulV = 0;
+        if (soulStreak) {
+            scene.remove(soulStreak);
+            soulStreak.geometry.dispose();
+            soulStreak.material.dispose();
+            soulStreak = null; soulSGeo = null;
+        }
+        if (CaveAudio.setSoul) CaveAudio.setSoul(0);
+        setPhasing(false);
+        W.tp(spot[0], spot[1], spot[2]);
+        vel.set(0, 0, 0);
+        phyY = null; eyeY = null;
+        /* you stepped INTO the cave: arrive standing in it, whatever mode
+           the body was in when the soul left it */
+        setWalkMode(true);
+        grounded = true;
+        updateChunks(200);
+        /* and settle onto whatever floor is under that opening */
+        rescueTo = null;
+        phaseClearT = 0;
+        if (soulBack) soulBack.style.display = 'block';
+        if (soulCatchBtn) soulCatchBtn.style.display = 'none';
+        CaveAudio.warp();
+        showHint(auto ? 'the cave catches you. you are inside the world again.'
+            : 'you step out of the fall and into the open dark.');
+        return true;
+    }
+    W.catchFall = function () { return soulCatch(false); };
     function arriveCore() {
         soulState = 2;
+        if (soulCatchBtn) soulCatchBtn.style.display = 'none';
         setPhasing(false);
         if (soulStreak) {
             scene.remove(soulStreak);
@@ -6836,8 +8669,16 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (soulState !== 2 || !bodyPos) return;
         soulState = 0;
         if (soulBack) soulBack.style.display = 'none';
+        if (soulCatchBtn) soulCatchBtn.style.display = 'none';
         setPhasing(false);
-        W.tp(bodyPos.x, bodyPos.y, bodyPos.z);
+        var back = [bodyPos.x, bodyPos.y, bodyPos.z];
+        if (blockedR(back[0], back[1] + bodyOffY, back[2], BODY_R + 0.1)) {
+            /* the world may have changed under the body: never rematerialise
+               inside stone */
+            var safe = nearestOpening(back[0], back[1], back[2], 90);
+            if (safe) back = safe;
+        }
+        W.tp(back[0], back[1], back[2]);
         yaw = bodyYaw;
         vel.set(0, 0, 0);
         setWalkMode(bodyWalk);
@@ -6884,6 +8725,19 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             soulSGeo.attributes.position.needsUpdate = true;
         }
         if (CaveAudio.setSoul) CaveAudio.setSoul(Math.min(1, soulV / 120000));
+        /* a chamber going past is an invitation: slow enough to take it and
+           the cave will catch you rather than let you clip on through */
+        soulScanT -= dt2;
+        if (soulScanT <= 0) {
+            soulScanT = 0.25;
+            var open = soulV < 260 && CC.density(camera.position.x, camera.position.y, camera.position.z) < -0.3;
+            if (open && !soulNearOpen) {
+                soulNearOpen = true;
+                showHint('a chamber opens around you. step into the cave to stay.');
+            } else if (!open) {
+                soulNearOpen = false;
+            }
+        }
         /* lore marks the passage of the earth's layers */
         var prog = 1 - remain / CC.CORE_D;
         var li = Math.floor(prog * SOUL_LORE.length);
@@ -6899,6 +8753,11 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var soulBtnTap = function (e) { e.preventDefault(); detach(); };
         soulBtn.addEventListener('touchstart', soulBtnTap, { passive: false });
         soulBtn.addEventListener('click', soulBtnTap);
+    }
+    if (soulCatchBtn) {
+        var catchTap = function (e) { e.preventDefault(); soulCatch(false); };
+        soulCatchBtn.addEventListener('touchstart', catchTap, { passive: false });
+        soulCatchBtn.addEventListener('click', catchTap);
     }
     if (soulBack) {
         var soulBackTap = function (e) { e.preventDefault(); reattach(); };
@@ -7009,6 +8868,104 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         if (pace !== undefined) CaveAudio.setPace(pace);
         songSync();
         return { key: CaveAudio.getKey(), scale: CaveAudio.getScaleName(), pace: CaveAudio.getPace() };
+    };
+    /* -------- what the townspeople know --------
+       elders carry the lore of the deep, traders talk shop, parents talk
+       about the family, workers about the work, children say what children
+       say. every line is drawn by the dweller's own seed, so the same person
+       always tells you the same thing and the town stays consistent. */
+    var LORE = {
+        elder: [
+            'the water remembers every room it has passed through. that is why it sings.',
+            'we do not dig down. down is already there. we only stop refusing it.',
+            'my grandmother walked to the third fall and came back with a stone that hummed.',
+            'the mushrooms are older than the town. we are guests of the light.',
+            'when the stone stirs and closes a way, it is not malice. it is breathing.',
+            'there were lamps in the deep places before there were hands to hang them.',
+            'if you meet the small folk that fold themselves, do not follow. listen, then leave.',
+            'every epoch below has its own weather. learn its name and it will let you pass.',
+            'the river is a road that was here before the road.',
+            'we bury nobody. we give them to the current and it takes them home.'
+        ],
+        trader: [
+            'torches, rope, dried cap, and quiet. the quiet costs the most.',
+            'a shard for a lamp is fair. a shard for two lamps is a friendship.',
+            'the last caravan came up from the ninth fall with nothing but salt and stories.',
+            'buy the rope. everyone who did not buy the rope came back needing rope.',
+            'i do not take coin. coin is for people who can leave.'
+        ],
+        parent: [
+            'keep to the lantern line after the third bell. the alleys are not safe when the stone moves.',
+            'my eldest went down to the shanty road and sends word by the water.',
+            'we built this wall with the family next door. one wall, two homes, no argument since.',
+            'the little one asks where the light comes from. i have stopped pretending i know.',
+            'when the fog comes up warm, we bring everyone inside and we sing until it passes.'
+        ],
+        worker: [
+            'the beam over the fourth walkway is soft. i have told them twice.',
+            'we quarry only what the wall offers. take more and the ceiling remembers.',
+            'the lamps want trimming every third day or they smoke the whole terrace.',
+            'i have laid plank in nine towns and this rock is the strangest yet.'
+        ],
+        child: [
+            'i can hear the rocks sing! can you hear them?',
+            'my sister says there are people made of light. i think she is lying.',
+            'do not tell anyone, but i have been down the ladder twice.',
+            'if you jump in the river it takes you all the way to the loud part.'
+        ]
+    };
+    var dwellerAsk = document.getElementById('dwellerAsk');
+    var dwellerLine = document.getElementById('dwellerLine');
+    var dwellerWho = document.getElementById('dwellerWho');
+    var lastSpoke = {};
+    function speakTo(person) {
+        var d = person.userData.dweller;
+        if (!d) return false;
+        var pool = LORE[d.kind] || LORE.worker;
+        /* their own line, plus the next one each time you ask again */
+        var turn = lastSpoke[d.seed] === undefined ? 0 : lastSpoke[d.seed] + 1;
+        lastSpoke[d.seed] = turn;
+        var line = pool[(d.seed + turn) % pool.length];
+        var who = d.kind === 'elder' ? 'an elder of ' + d.town
+            : d.kind === 'trader' ? 'a trader of ' + d.town
+            : d.kind === 'child' ? 'a child of ' + d.town
+            : d.kind === 'worker' ? 'a builder of ' + d.town
+            : 'a dweller of ' + d.town;
+        if (dwellerAsk && dwellerLine && dwellerWho) {
+            dwellerWho.textContent = who;
+            dwellerLine.textContent = line;
+            dwellerAsk.style.display = 'flex';
+            clearTimeout(dwellerAsk._t);
+            dwellerAsk._t = setTimeout(function () { dwellerAsk.style.display = 'none'; }, 7000);
+        } else {
+            showHint(line);
+        }
+        /* the one you asked starts talking, and their face shows it */
+        for (var kt in chunks) {
+            var flk = chunks[kt].folk;
+            if (flk) for (var fi3 = 0; fi3 < flk.length; fi3++) {
+                if (flk[fi3].g === person && flk[fi3].fig) flk[fi3].fig.talkT = 4.5;
+            }
+        }
+        if (CaveAudio.lead) {
+            CaveAudio.lead(d.kind === 'child' ? 9 : d.kind === 'elder' ? -3 : 2,
+                { glide: 2, dur: 0.7, gain: 0.06, verb: 0.7, wave: 'triangle' });
+        }
+        return true;
+    }
+    W.speakNearest = function () {
+        var best = null, bd = 1e9;
+        for (var k in chunks) {
+            var dl = chunks[k].dwellers;
+            if (!dl) continue;
+            for (var i = 0; i < dl.length; i++) {
+                var dp = dl[i].position;
+                var dd = dp.distanceToSquared(camera.position);
+                if (dd < bd) { bd = dd; best = dl[i]; }
+            }
+        }
+        if (best && bd < 900) return speakTo(best);
+        return false;
     };
     var tpDest = null;
     function offerTeleport(sign) {
@@ -7140,12 +9097,18 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         for (var i = 0; i < e.changedTouches.length; i++) {
             var t = e.changedTouches[i];
             if (t.target.classList && t.target.classList.contains('btn')) continue;
-            /* ask the world FIRST: if this touch landed on something playable
-               it belongs to the music, not to the stick or the look control,
-               wherever on the screen it happens to be */
+            /* THE THUMB ZONE: the lower left corner is movement and nothing
+               else. it is checked BEFORE the music, so a stone standing in
+               front of you can never steal the stick out from under your
+               walking thumb. everywhere else, the music gets first refusal. */
+            var Z = zonesNow();
+            var lowHalf = t.clientY > window.innerHeight * Z.y;
+            var inThumb = lowHalf && t.clientX < window.innerWidth * Z.moveX;
+            var inLookZone = lowHalf && t.clientX > window.innerWidth * Z.lookX;
             var mNdcX = (t.clientX / window.innerWidth) * 2 - 1;
             var mNdcY = -(t.clientY / window.innerHeight) * 2 + 1;
-            var mHit = musicHitAt(mNdcX, mNdcY);
+            /* neither thumb corner ever hands its touch to the music */
+            var mHit = (inThumb || inLookZone) ? null : musicHitAt(mNdcX, mNdcY);
             if (mHit) {
                 touches[t.identifier] = {
                     music: startHeldNote(mHit, mNdcX), x0: t.clientX, y0: t.clientY,
@@ -7154,7 +9117,9 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 };
                 continue;
             }
-            var left = t.clientX < window.innerWidth * 0.45;
+            /* only the thumb zone drives the stick now: a touch high on the
+               left turns the view, it does not walk you */
+            var left = inThumb;
             touches[t.identifier] = {
                 left: left, x0: t.clientX, y0: t.clientY,
                 x: t.clientX, y: t.clientY, t0: performance.now(), moved: false
@@ -7409,6 +9374,35 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         return null;
     }
+    function nearestOpening(px, py, pz, maxR) {
+        /* not just any gap: somewhere you could actually stand or float,
+           with room around it and above it, nearest first */
+        var GA = 2.3999632297;
+        var lim = maxR || 90;
+        var best = null, bestD = 1e9;
+        for (var r = 3; r <= lim; r += 3) {
+            for (var i = 0; i < 24; i++) {
+                var yy = 1 - (i / 23) * 2;
+                var rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+                var th = i * GA + r;
+                var qx = px + Math.cos(th) * rr * r;
+                var qy = py + yy * r * 0.75;
+                var qz = pz + Math.sin(th) * rr * r;
+                /* open cave in this field only reaches about -0.15, so a
+                   -0.25 bar rejected real passages and the rescue found
+                   nothing: air is anything below zero, and the body checks
+                   below decide whether it is somewhere you can BE */
+                if (CC.density(qx, qy, qz) > -0.04) continue;
+                if (blockedR(qx, qy + bodyOffY, qz, BODY_R + 0.25)) continue;
+                /* demand real air overhead so we do not surface into a seam */
+                if (CC.density(qx, qy + 1.6, qz) > -0.01) continue;
+                var dd = (qx - px) * (qx - px) + (qy - py) * (qy - py) + (qz - pz) * (qz - pz);
+                if (dd < bestD) { bestD = dd; best = [qx, qy, qz]; }
+            }
+            if (best) return best;      /* nearest shell that answered wins */
+        }
+        return best;
+    }
     function axisStep(p, axis, d) {
         var left = Math.abs(d), sgn = d < 0 ? -1 : 1, moved = false;
         /* a step of zero length is not a collision. the callers read a false
@@ -7527,6 +9521,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var stuckAsk = document.getElementById('stuckAsk');
     var stuckGo = document.getElementById('stuckGo');
     var phaseClearT = 0;
+    var rescueTo = null, rescueT = 0;
     function doUnstick() {
         stuckAsk.style.display = 'none';
         stuckShown = false; stuckT = 0;
@@ -7534,8 +9529,35 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         phaseClearT = 0;
         vel.set(0, 0, 0);
         CaveAudio.warp();
-        showHint('you slip loose of the stone... drift until you find the open dark');
+        /* do not make them paddle out of the rock by hand: find the nearest
+           real opening and carry them to it */
+        rescueTo = nearestOpening(camera.position.x, camera.position.y, camera.position.z, 120);
+        if (rescueTo) {
+            rescueT = 0;
+            showHint('you slip loose of the stone. the open dark pulls you in.');
+        } else {
+            showHint('you slip loose of the stone... drift until you find the open dark');
+        }
         return true;
+    }
+    function tickRescue(dt2) {
+        if (!rescueTo) return;
+        var p2 = camera.position;
+        var dx = rescueTo[0] - p2.x, dy = rescueTo[1] - p2.y, dz = rescueTo[2] - p2.z;
+        var d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        rescueT += dt2;
+        if (d < 0.6 || rescueT > 6) {
+            rescueTo = null;
+            vel.set(0, 0, 0);
+            phaseClearT = 0.2;          /* let tickPhasing set us down */
+            return;
+        }
+        /* ease out so the arrival is a landing, not a jolt */
+        var sp = Math.min(11, 3.5 + d * 1.4);
+        var k = Math.min(1, (sp * dt2) / d);
+        p2.x += dx * k; p2.y += dy * k; p2.z += dz * k;
+        phyY = null; eyeY = null;
+        vel.set(0, 0, 0);
     }
     function tickPhasing(dt2) {
         if (!isPhasing()) return;
@@ -7782,6 +9804,31 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         out.dUp = CC.density(p2.x, p2.y + bodyOffY + 0.5, p2.z);
         return out;
     };
+    W.geode = function () {
+        var g = CC.geodeAt(camera.position.x, camera.position.y, camera.position.z);
+        return { near: !!g, inside: !!(g && g.inside), k: geodeK, g: g };
+    };
+    W.faceProbe = function (ctx) {
+        /* run one villager's mood to convergence under a given situation and
+           report it, so expressions can be tested without a camera */
+        var fig = makeHumanoid('parent', 4242);
+        for (var i = 0; i < 260; i++) applyFace(fig, 0.05, 2.0, ctx);
+        var m = fig.mood;
+        return { brow: m.brow, knit: m.knit, lid: m.lid, smile: m.smile, open: m.open, look: m.look };
+    };
+    W.moveZone = function () {
+        var Z = zonesNow();
+        return { x: Z.moveX, y: Z.y, lookX: Z.lookX,
+            landscape: (window.innerWidth || 1) >= (window.innerHeight || 1) };
+    };
+    W.zoneAt = function (px, py) {
+        /* what a touch at this screen point would DO: walk, look, or play */
+        var Z = zonesNow();
+        var w = window.innerWidth || 1, h = window.innerHeight || 1;
+        if (py > h * Z.y && px < w * Z.moveX) return 'walk';
+        if (py > h * Z.y && px > w * Z.lookX) return 'look';
+        return 'world';
+    };
     W.musicProbe = function (ndcX, ndcY) { return !!musicHitAt(ndcX, ndcY); };
     W.playableCount = function () {
         var n = 0, b = 0, sp = 0, cp = 0;
@@ -7910,8 +9957,56 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             var fl = chunks[kf].folk;
             if (fl) {
                 for (var f2 = 0; f2 < fl.length; f2++) {
-                    fl[f2].g.rotation.z = Math.sin(t * 0.6 + fl[f2].ph) * 0.045;
-                    fl[f2].g.rotation.y += Math.sin(t * 0.13 + fl[f2].ph) * 0.0006;
+                    var fk = fl[f2];
+                    fk.g.rotation.z = Math.sin(t * 0.6 + fk.ph) * 0.02;
+                    fk.g.rotation.y += Math.sin(t * 0.13 + fk.ph) * 0.0006;
+                    var fig2 = fk.fig;
+                    if (!fig2) continue;
+                    /* breath, a slow shift of weight, and a head that looks
+                       about: standing still is not the same as being frozen */
+                    var br = Math.sin(t * 1.05 + fk.ph);
+                    fig2.chest.scale.y = 0.31 * (1 + br * 0.04);
+                    fig2.chest.scale.z = 0.23 * (1 + br * 0.05);
+                    fig2.body.position.y = fig2.body.userData.y0 === undefined
+                        ? (fig2.body.userData.y0 = fig2.body.position.y)
+                        : fig2.body.userData.y0 + Math.sin(t * 0.52 + fk.ph) * 0.012;
+                    /* where the player is, from this villager's own shoulders */
+                    var wp = fk.home;
+                    var ddx = camera.position.x - wp[0], ddz = camera.position.z - wp[2];
+                    var nearD = Math.sqrt(ddx * ddx + ddz * ddz);
+                    var faceCtx = {
+                        near: nearD,
+                        trip: window._CAVE_TRIP ? tripS : 0,
+                        alarm: Math.max(0, Math.min(1, eventJudder)),
+                        music: CaveAudio.flashes ? Math.max.apply(null, CaveAudio.flashes) : 0,
+                        lookX: 0, lookY: 0
+                    };
+                    if (nearD < 14) {
+                        /* turn to you, and let the eyes lead the head */
+                        var want = Math.atan2(-ddx, -ddz) - fig2.g.rotation.y;
+                        while (want > 3.1416) want -= 6.2832;
+                        while (want < -3.1416) want += 6.2832;
+                        var clamped = Math.max(-1.2, Math.min(1.2, want));
+                        fig2.head.rotation.y += (clamped - fig2.head.rotation.y) * Math.min(1, gDt * 2.4);
+                        faceCtx.lookX = Math.max(-1, Math.min(1, want));
+                        faceCtx.lookY = Math.max(-1, Math.min(1, (camera.position.y - (wp[1] + 1.6)) / 3));
+                    } else {
+                        fig2.head.rotation.y = Math.sin(t * 0.31 + fk.ph * 1.7) * 0.45;
+                    }
+                    fig2.head.rotation.x = Math.sin(t * 0.23 + fk.ph) * 0.12 - faceCtx.lookY * 0.15;
+                    applyFace(fig2, gDt, t, faceCtx);
+                    if (fk.kind !== 'trader' && fk.kind !== 'elder') {
+                        for (var ai = 0; ai < fig2.arms.length; ai++) {
+                            var arm = fig2.arms[ai];
+                            arm.shoulder.rotation.x = Math.sin(t * 0.62 + fk.ph + ai * 2.1) * 0.10;
+                        }
+                    }
+                    /* children never stand still */
+                    if (fk.kind === 'child') {
+                        fig2.g.position.y = fk.home[1] + Math.max(0, Math.sin(t * 2.4 + fk.ph)) * 0.09;
+                        fig2.legs[0].hip.rotation.x = Math.sin(t * 2.4 + fk.ph) * 0.35;
+                        fig2.legs[1].hip.rotation.x = -Math.sin(t * 2.4 + fk.ph) * 0.35;
+                    }
                 }
             }
             var bld = chunks[kf].boulders;
@@ -7921,6 +10016,40 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     /* the floor breathes: boulders settle and lift with the room */
                     bb.m.position.y = bb.base + Math.sin(t * 0.5 + bb.ph) * 0.045;
                     bb.m.rotation.y += gDt * 0.03;
+                }
+            }
+            var spk = chunks[kf].sparkle;
+            if (spk) {
+                spk.uniforms.uTime.value = t;
+                var fl4 = CaveAudio.flashes;
+                for (var sq = 0; sq < 7; sq++) {
+                    var wantS = fl4 ? fl4[sq] || 0 : 0;
+                    var cur = spk.uniforms.uRings.value[sq];
+                    spk.uniforms.uRings.value[sq] = cur + (wantS - cur) * Math.min(1, gDt * (wantS > cur ? 12 : 3));
+                }
+            }
+            var fmats = chunks[kf].facetMats;
+            if (fmats) {
+                /* the crystals of a degree light TOGETHER when the song plays
+                   that degree: the chamber answers the music in colour */
+                var flashes = CaveAudio.flashes;
+                for (var fmi = 0; fmi < fmats.length; fmi++) {
+                    var u = fmats[fmi].uniforms;
+                    u.uTime.value = t;
+                    var want = flashes ? flashes[fmi] || 0 : 0;
+                    u.uRing.value += (want - u.uRing.value) * Math.min(1, gDt * (want > u.uRing.value ? 14 : 3.5));
+                    u.uFog.value.copy(fogCol);
+                    u.uFogD.value = scene.fog ? scene.fog.density : 0.011;
+                }
+            }
+            var fcl = chunks[kf].facets;
+            if (fcl) {
+                for (var fci = 0; fci < fcl.length; fci++) {
+                    var fc = fcl[fci];
+                    if (fc.lit > 0) {
+                        fc.lit = Math.max(0, fc.lit - gDt * 1.6);
+                        fc.m.scale.y = fc.base * (1 + fc.lit * 0.14);
+                    }
                 }
             }
             var hrl = chunks[kf].hearts;
@@ -8296,6 +10425,41 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 }
             }
         }
+        /* THE GEODE: inside the crystal, down points at the SHELL, so you
+           walk the inside of a jewel and the horizon curves up around you */
+        var geo2 = (window._CAVE_GEODES !== false && soulState !== 1)
+            ? CC.geodeAt(p.x, p.y, p.z) : null;
+        if (geo2 && geo2.inside) {
+            if (!geodeIn) {
+                geodeIn = true;
+                showHint('the floor is the wall here. walk the inside of the jewel.');
+                if (CaveAudio.gliss) CaveAudio.gliss(0, 7, { stepT: 0.06, gain: 0.07, verb: 1.0 });
+            }
+            geodeK = Math.min(1, geodeK + dt * 1.5);
+            var ox2 = p.x - geo2.x, oy2 = p.y - geo2.y, oz2 = p.z - geo2.z;
+            var ol = Math.sqrt(ox2 * ox2 + oy2 * oy2 + oz2 * oz2) || 1;
+            /* pull outward toward the shell instead of down the world's y */
+            var pull = 9.0 * (0.35 + 0.65 * (ol / geo2.r));
+            vel.x += (ox2 / ol) * pull * dt;
+            vel.y += (oy2 / ol) * pull * dt + GRAV * dt;   /* cancel the world's gravity */
+            vel.z += (oz2 / ol) * pull * dt;
+            /* the chamber answers where you are: your position on the shell
+               picks the note, so crossing it plays it */
+            geodeRing -= dt;
+            if (geodeRing <= 0 && ol > geo2.r * 0.55) {
+                geodeRing = 0.42;
+                var spd2 = Math.sqrt(vel.x * vel.x + vel.z * vel.z + vel.y * vel.y);
+                if (spd2 > 1.2 && CaveAudio.lead) {
+                    var L3 = CaveAudio.scaleLen ? CaveAudio.scaleLen() : 7;
+                    var degG = Math.round(((oy2 / ol) * 0.5 + 0.5) * L3 * 2);
+                    CaveAudio.lead(degG, { glide: 2, dur: 1.4, gain: 0.05, verb: 1.0, wave: 'triangle' });
+                }
+            }
+        } else if (geodeIn) {
+            geodeIn = false;
+            geodeK = 0;
+        }
+        if (!geo2 && geodeK > 0) geodeK = Math.max(0, geodeK - dt * 0.8);
         /* THE LAVA: the heart is enterable. it is thick, it lifts you, it
            lights you, and it answers every stroke with a note */
         var lava = (CC.inCore(p.y) && soulState !== 1 && window._CAVE_HEARTS !== false)
@@ -8331,6 +10495,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         if (!lava && lavaK > 0) lavaK = Math.max(0, lavaK - dt * 0.35);
         if (CaveAudio.setLava) CaveAudio.setLava(lavaK);
+        if (CaveAudio.decayFlashes) CaveAudio.decayFlashes(dt);
         if (CC.inCore(p.y) && soulState !== 1) {
             baskHeart = CC.nearestHeart(p.x, p.z);
             var spdB = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
@@ -8496,6 +10661,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
         updateDust(dt, t);
         tickHeldNotes(dt);
+        tickRescue(dt);
         tickSoul(dt);
         if (soulState === 1) {
             /* mid-fall: no world is built until the heart is close */
@@ -8813,7 +10979,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         renderer.render(scene, camera);
     }
 
-    console.log('[CAVES 042] seed ' + CC.SEED +
+    console.log('[CAVES 054] seed ' + CC.SEED +
         ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP _CAVE_SHANTY _CAVE_TRIAL | _CAVE.trip(n) freshStart()');
 })();
 </script>
