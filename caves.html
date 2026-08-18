@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>caves 054</title>
+<title>caves 056</title>
 <style>
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
@@ -27,6 +27,32 @@
     background: rgba(6,10,16,0.9); border: 1px solid rgba(180,140,255,0.4); border-radius: 12px;
     padding: 14px 18px; z-index: 40; flex-direction: column; align-items: center; gap: 10px; }
 #soulLbl { color: #d9c6ff; font-size: 13px; letter-spacing: 0.02em; }
+/* the finger glow: it must be visible in a screen recording, and subtle
+   enough that it never fights the cave */
+#glowLayer { position: fixed; inset: 0; pointer-events: none; z-index: 45; overflow: hidden; }
+.fingerGlow { position: fixed; left: 0; top: 0; width: 132px; height: 132px;
+    margin: -66px 0 0 -66px; border-radius: 50%; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle,
+        rgba(255,255,255,0.50) 0%, rgba(140,255,225,0.34) 22%,
+        rgba(90,220,255,0.16) 48%, rgba(90,220,255,0) 72%);
+    mix-blend-mode: screen; will-change: transform, opacity; }
+.fingerRing { position: fixed; left: 0; top: 0; width: 44px; height: 44px;
+    margin: -22px 0 0 -22px; border-radius: 50%; pointer-events: none; opacity: 0;
+    border: 1.5px solid rgba(190,255,240,0.75); mix-blend-mode: screen;
+    will-change: transform, opacity; }
+/* the one-time card showing where the thumbs live */
+#zoneHint { display: none; position: fixed; inset: 0; z-index: 44; pointer-events: none;
+    flex-direction: column; }
+#zoneHint.on { display: flex; }
+#zoneHint .zh { display: flex; align-items: center; justify-content: center;
+    border: 1px dashed rgba(255,255,255,0.22); color: rgba(255,255,255,0.62);
+    font-size: 13px; letter-spacing: 0.06em; }
+#zoneHint .zhPlay { background: rgba(1,169,130,0.07); }
+#zoneHint .zhRow { display: flex; }
+#zoneHint .zhMove { background: rgba(120,180,255,0.09); }
+#zoneHint .zhLook { background: rgba(255,190,120,0.09); }
+#zhTip { position: absolute; left: 50%; transform: translateX(-50%); bottom: 14px;
+    color: rgba(255,255,255,0.5); font-size: 11px; letter-spacing: 0.04em; }
 #dwellerAsk { display: none; position: fixed; left: 50%; bottom: 168px; transform: translateX(-50%);
     z-index: 32; max-width: 78vw; background: rgba(6,10,16,0.88);
     border-left: 2px solid rgba(1,169,130,0.6); border-radius: 6px; padding: 10px 14px;
@@ -239,7 +265,7 @@
     });
 })();
 </script>
-<div class="hud" id="topbar"><span class="t">caves 054</span></div>
+<div class="hud" id="topbar"><span class="t">caves 056</span></div>
 <div class="hud" id="depth">DEPTH 0 m</div>
 <div class="hud" id="hint"></div>
 <div class="btn" id="btnUp">&#9650;</div>
@@ -284,12 +310,25 @@
     <div class="songSub" id="songScaleSub">&nbsp;</div>
     <div class="songRow"><span class="songLbl">pace</span><span class="songVal" id="songPace">auto</span></div>
     <div class="songRow"><span class="songLbl">bpm</span><span class="songVal" id="songTap">tap</span></div>
+    <div class="songRow"><span class="songLbl">controls</span><span class="songVal" id="zoneDown">lower</span><span class="songVal" id="zoneUp">raise</span></div>
+    <div class="songRow"><span class="songLbl">travel</span><span class="songVal" id="goUp">ascend</span><span class="songVal" id="goDown">descend</span></div>
+    <div class="songRow"><span class="songVal songWide" id="goWay">no places found yet</span></div>
+    <div class="songSub" id="zoneSub">&nbsp;</div>
     <div class="songSub" id="songBpmSub">&nbsp;</div>
     <div class="songRow"><span class="songVal songWide" id="songAuto">let the cave choose</span></div>
 </div>
 <div class="btn" id="soulBtn" style="display:none;">leave the body</div>
 <div class="btn" id="soulBack" style="display:none;">return to the body</div>
 <div class="btn" id="soulCatch" style="display:none;">step into the cave</div>
+<div id="glowLayer"></div>
+<div id="zoneHint">
+    <div class="zh zhPlay"><span>tap the cave to play it</span></div>
+    <div class="zhRow">
+        <div class="zh zhMove"><span>move</span></div>
+        <div class="zh zhLook"><span>look</span></div>
+    </div>
+    <div id="zhTip">adjust this line in the &#8943; menu</div>
+</div>
 <div id="dwellerAsk">
     <div id="dwellerWho"></div>
     <div id="dwellerLine"></div>
@@ -2022,6 +2061,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var soulGain = null, soulFilt = null, soulOsc = null, soulOscG = null, soulK = 0;
         var baskGain = null, baskOscs = [], baskK2 = 0;
         var lavaGain = null, lavaFilt = null, lavaK2 = 0;
+        var elfK = 0, elfDetune = null, elfRing = null;
         var chorusGain = null, glowLevel = 0;
         var chorusVoices = [];
         var dly = null, dlySend = null, compRef = null;
@@ -2566,6 +2606,24 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             scrapeGain = layer(260, 'bandpass', 3.0);   /* squeezing */
             shimGain = layer(2400, 'bandpass', 2.4);    /* river shimmer */
             shardGain = layer(1800, 'bandpass', 2.0);   /* the gathered song */
+            /* the elves in the room: a ringing shimmer above the song and a
+               slow detune underneath it, so you HEAR them arrive */
+            elfRing = ctx.createGain();
+            elfRing.gain.value = 0;
+            elfRing.connect(master);
+            var elfOsc = ctx.createOscillator();
+            elfOsc.type = 'sine';
+            elfOsc.frequency.value = 2050;
+            var elfLfo = ctx.createOscillator();
+            elfLfo.type = 'sine';
+            elfLfo.frequency.value = 0.23;
+            elfDetune = ctx.createGain();
+            elfDetune.gain.value = 70;
+            elfLfo.connect(elfDetune);
+            elfDetune.connect(elfOsc.frequency);
+            elfOsc.connect(elfRing);
+            elfOsc.start();
+            elfLfo.start();
             /* submerged in the melt: everything heard through molten rock */
             var lavaSrc = mkNoiseSrc();
             lavaFilt = ctx.createBiquadFilter();
@@ -3105,6 +3163,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         A.setSoul = function (k) { soulK = Math.max(0, Math.min(1, k || 0)); };
         A.setBask = function (k) { baskK2 = Math.max(0, Math.min(1, k || 0)); };
         A.setLava = function (k) { lavaK2 = Math.max(0, Math.min(1, k || 0)); };
+        A.setElves = function (k) { elfK = Math.max(0, Math.min(1, k || 0)); };
         A.elfChirp = function () {
             /* their speech: fast bright intervals that do not resolve */
             if (!A.ready || A.muted) return;
@@ -3218,6 +3277,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             }
             if (shimGain) shimGain.gain.setTargetAtTime((st.riverRide || 0) * 0.045, t2, 0.8);
             if (shardGain) shardGain.gain.setTargetAtTime(Math.min(0.05, shardN * 0.011), t2, 1.2);
+            if (elfRing) {
+                elfRing.gain.setTargetAtTime(elfK * 0.022, t2, 1.6);
+                if (verbGain) verbGain.gain.setTargetAtTime(0.30 + elfK * 0.35, t2, 2.0);
+            }
             if (lavaGain) {
                 lavaGain.gain.setTargetAtTime(lavaK2 * 0.11, t2, 0.4);
                 lavaFilt.frequency.setTargetAtTime(190 + lavaK2 * 120, t2, 0.5);
@@ -4313,12 +4376,27 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         var rec = { group: group, emitters: [], torches: [], sprites: [], disposables: [] , mists: [] , folk: [], signBoards: [], shroomCaps: [], bugSwarms: [], worms: [], fish: [], shards: [], vaultStones: [], hearts: [], boulders: [], formations: null, dwellers: [], facets: [] };
 
         if (data.indices.length > 0) {
+            /* -------- floating origin --------
+               vertex positions are float32. at the core, 6,371,000m from the
+               origin, consecutive float32 values are about half a metre apart,
+               so the ground visibly SHOOK with the camera. rebase every vertex
+               to its own chunk and carry the offset on the mesh, where three
+               does the maths in doubles. */
+            var oxC = cx * CH, oyC = cy * CH, ozC = cz * CH;
+            var src = data.positions;
+            var rebased = new Float32Array(src.length);
+            for (var vi = 0; vi < src.length; vi += 3) {
+                rebased[vi] = src[vi] - oxC;
+                rebased[vi + 1] = src[vi + 1] - oyC;
+                rebased[vi + 2] = src[vi + 2] - ozC;
+            }
             var geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+            geo.setAttribute('position', new THREE.BufferAttribute(rebased, 3));
             geo.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
             geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
             geo.setIndex(data.indices);
             var mesh = new THREE.Mesh(geo, rockMat);
+            mesh.position.set(oxC, oyC, ozC);
             group.add(mesh);
             rec.disposables.push(geo);
         }
@@ -4434,11 +4512,19 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     ep[ei * 3 + 2] = hq.z + Math.sin(ea) * er;
                 }
                 egeo.setAttribute('position', new THREE.BufferAttribute(ep, 3));
+                /* the embers are at core depth too: rebase them and carry the
+                   offset on the Points object, or they jitter with the ground */
+                var ebase = egeo.attributes.position.array;
+                for (var eb = 0; eb < ebase.length; eb += 3) {
+                    ebase[eb] -= hq.x; ebase[eb + 1] -= hfy; ebase[eb + 2] -= hq.z;
+                }
+                egeo.attributes.position.needsUpdate = true;
                 var epts = new THREE.Points(egeo, new THREE.PointsMaterial({
                     color: 0xffc07a, size: 1.5, sizeAttenuation: true, map: glowTex,
                     transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false
                 }));
                 epts.frustumCulled = false;
+                epts.position.set(hq.x, hfy, hq.z);
                 rec.group.add(epts);
                 rec.disposables.push(egeo, epts.material);
                 rec.hearts.push({ mesh: hm, spr: hspr, emb: epts, base: ep.slice(0), y0: hfy, x: hq.x, z: hq.z, r: hq.r, id: hq.id });
@@ -7871,18 +7957,100 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
 
     var raycaster = new THREE.Raycaster();
     var heldVoices = [];
+    var glowLayer = document.getElementById('glowLayer');
+    var glowPool = [];
+    function takeGlow() {
+        for (var i = 0; i < glowPool.length; i++) if (!glowPool[i].busy) return glowPool[i];
+        var dot = document.createElement('div');
+        dot.className = 'fingerGlow';
+        var ring = document.createElement('div');
+        ring.className = 'fingerRing';
+        if (glowLayer) { glowLayer.appendChild(dot); glowLayer.appendChild(ring); }
+        var g = { dot: dot, ring: ring, busy: false, x: 0, y: 0, k: 0, rub: 0 };
+        glowPool.push(g);
+        return g;
+    }
+    function glowOn(rec2, x, y) {
+        var g = takeGlow();
+        g.busy = true; g.x = x; g.y = y; g.k = 1; g.rub = 0;
+        rec2.glow = g;
+        paintGlow(g);
+    }
+    function paintGlow(g) {
+        /* the dot follows the finger exactly; the ring pulses with the rub,
+           so a fast up-and-down rub reads as a vibrating point of light */
+        var puls = 1 + g.rub * 0.55 + Math.sin(performance.now() * 0.02) * 0.06 * g.rub;
+        g.dot.style.transform = 'translate(' + g.x + 'px,' + g.y + 'px) scale(' + (0.75 + g.k * 0.35 + g.rub * 0.30) + ')';
+        g.dot.style.opacity = (0.16 + g.k * 0.30 + g.rub * 0.30).toFixed(3);
+        g.ring.style.transform = 'translate(' + g.x + 'px,' + g.y + 'px) scale(' + puls + ')';
+        g.ring.style.opacity = (0.10 + g.k * 0.35 + g.rub * 0.45).toFixed(3);
+    }
+    function glowOff(rec2) {
+        if (!rec2 || !rec2.glow) return;
+        var g = rec2.glow;
+        g.k = 0; g.rub = 0;
+        g.dot.style.opacity = '0';
+        g.ring.style.opacity = '0';
+        g.busy = false;
+        rec2.glow = null;
+    }
     /* -------- the thumb zones --------
        BOTH bottom corners belong to your thumbs: the left one walks, the
        right one looks, and neither ever plays a note. the music lives in
        the upper screen where the cave is. the split follows the shape of
        the phone, because in landscape your thumbs reach the corners and
        the bottom half is most of the picture. */
+    /* the line where the thumbs take over from the instrument. it sits 15%
+       lower than it used to, so the top two thirds are yours to play, and
+       the player can move it: never above 15% and never below 75%. */
+    var ZONE_MIN = 0.15, ZONE_MAX = 0.75;
+    var zoneYPort = 0.67, zoneYLand = 0.57;
+    try {
+        if (typeof localStorage !== 'undefined') {
+            var zp = parseFloat(localStorage.getItem('mycd_zoney_v1'));
+            var zl = parseFloat(localStorage.getItem('mycd_zoneyl_v1'));
+            if (zp >= ZONE_MIN && zp <= ZONE_MAX) zoneYPort = zp;
+            if (zl >= ZONE_MIN && zl <= ZONE_MAX) zoneYLand = zl;
+        }
+    } catch (eZ) {}
+    function isLandscape() { return (window.innerWidth || 1) >= (window.innerHeight || 1); }
     function zonesNow() {
-        var w = window.innerWidth || 1, h = window.innerHeight || 1;
-        var land = w >= h;
+        var land = isLandscape();
         return land
-            ? { moveX: 0.30, lookX: 0.70, y: 0.42 }
-            : { moveX: 0.46, lookX: 0.54, y: 0.52 };
+            ? { moveX: 0.30, lookX: 0.70, y: zoneYLand }
+            : { moveX: 0.46, lookX: 0.54, y: zoneYPort };
+    }
+    function setZoneY(v) {
+        var y = Math.max(ZONE_MIN, Math.min(ZONE_MAX, v));
+        if (isLandscape()) zoneYLand = y; else zoneYPort = y;
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(isLandscape() ? 'mycd_zoneyl_v1' : 'mycd_zoney_v1', String(y));
+            }
+        } catch (eZ2) {}
+        layoutZoneHint();
+        return y;
+    }
+    function layoutZoneHint() {
+        var el = document.getElementById('zoneHint');
+        if (!el || typeof el.querySelector !== 'function') return;
+        var Z = zonesNow();
+        var play = el.querySelector('.zhPlay');
+        var row = el.querySelector('.zhRow');
+        var mv = el.querySelector('.zhMove');
+        var lk = el.querySelector('.zhLook');
+        if (play) play.style.height = (Z.y * 100) + '%';
+        if (row) row.style.height = ((1 - Z.y) * 100) + '%';
+        if (mv) mv.style.width = (Z.moveX * 100) + '%';
+        if (lk) { lk.style.width = ((1 - Z.lookX) * 100) + '%'; lk.style.marginLeft = 'auto'; }
+    }
+    var zoneHintT = 0;
+    function showZoneHint(secs) {
+        var el = document.getElementById('zoneHint');
+        if (!el) return;
+        layoutZoneHint();
+        if (el.classList && el.classList.add) el.classList.add('on');
+        zoneHintT = secs || 5;
     }
     var MOVE_ZONE_X = 0.46, MOVE_ZONE_Y = 0.52;
     function musicHitAt(ndcX, ndcY) {
@@ -7932,6 +8100,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             var rate = h.rubTarget > h.rub ? 2.6 : 1.8;
             h.rub += (h.rubTarget - h.rub) * Math.min(1, dt2 * rate);
             if (h.voice) h.voice.setBrass(h.rub);
+            if (h.glow) { h.glow.rub = h.rub; h.glow.k = 1; paintGlow(h.glow); }
         }
     }
     function endHeldNote(rec2) {
@@ -8305,10 +8474,15 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     function tickElves(dt2, t2, p2) {
         if (window._CAVE_ELVES === false) { if (elves.length) clearElves(); return; }
         /* they arrive for a heavy dose, or for anyone basking at the heart */
+        /* they were a swarm at a dozen caps and it was exhausting. now they
+           are rarer, fewer, and they arrive late */
         var want = 0;
-        if (tripS >= 12) want = 3 + Math.round(Math.min(3, (tripS - 12) / 4));
-        if (baskK > 0.45) want = Math.max(want, 3 + Math.round(baskK * 3));
+        if (tripS >= 20) want = 1 + Math.round(Math.min(2, (tripS - 20) / 6));
+        if (baskK > 0.7) want = Math.max(want, 1 + Math.round(baskK * 1.5));
         elfWant = want;
+        /* they are made of sound as much as light: while they are present the
+           song bends around them, and it lifts when they go */
+        if (CaveAudio.setElves) CaveAudio.setElves(Math.min(1, want / 4));
         while (elves.length < want) elves.push(makeElf(elves.length + Math.floor(t2)));
         while (elves.length > want) {
             var e2 = elves.pop();
@@ -8326,7 +8500,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         }
         elfT -= dt2;
         if (elfT <= 0) {
-            elfT = 7 + Math.random() * 9;
+            elfT = 16 + Math.random() * 18;
             showHint(ELF_WORDS[Math.floor(Math.random() * ELF_WORDS.length)]);
             if (CaveAudio.elfChirp) CaveAudio.elfChirp();
             /* the syntax-light on every shell flares as the sentence lands */
@@ -8335,24 +8509,25 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         for (var i2 = 0; i2 < elves.length; i2++) {
             var el = elves[i2];
             el.life += dt2;
-            el.orbit += dt2 * (0.35 + i2 * 0.06);
+            el.orbit += dt2 * (0.13 + i2 * 0.02);
             el.jit -= dt2;
             if (el.jit <= 0) {
-                /* they do not travel between places, they simply are elsewhere */
-                el.jit = 0.25 + Math.random() * 0.7;
-                el.orbit += (Math.random() - 0.5) * 1.4;
-                el.rad = 4.5 + Math.random() * 7.5;
-                el.hgt = 0.1 + Math.random() * 2.6;
+                /* they still step rather than travel, but they take their
+                   time about it and keep their distance */
+                el.jit = 1.6 + Math.random() * 2.6;
+                el.orbit += (Math.random() - 0.5) * 0.7;
+                el.rad = 7.0 + Math.random() * 8.0;
+                el.hgt = 0.2 + Math.random() * 2.2;
             }
             var tx2 = p2.x + Math.cos(el.orbit) * el.rad;
             var tz2 = p2.z + Math.sin(el.orbit) * el.rad;
             var ty2 = p2.y + el.hgt - 0.6 + Math.sin(t2 * 1.7 + el.ph) * 0.5;
-            el.g.position.x += (tx2 - el.g.position.x) * Math.min(1, dt2 * 7);
-            el.g.position.y += (ty2 - el.g.position.y) * Math.min(1, dt2 * 7);
-            el.g.position.z += (tz2 - el.g.position.z) * Math.min(1, dt2 * 7);
+            el.g.position.x += (tx2 - el.g.position.x) * Math.min(1, dt2 * 2.2);
+            el.g.position.y += (ty2 - el.g.position.y) * Math.min(1, dt2 * 2.2);
+            el.g.position.z += (tz2 - el.g.position.z) * Math.min(1, dt2 * 2.2);
             /* self dribbling on the rebound: they bounce, and the body
                squashes and stretches with every landing */
-            el.bounce += dt2 * (5.2 + (i2 % 3) * 0.7);
+            el.bounce += dt2 * (2.1 + (i2 % 3) * 0.35);
             var hop = Math.abs(Math.sin(el.bounce));
             var squash = 1.0 + (1.0 - hop) * 0.16 - hop * 0.10;
             el.g.position.y += hop * 0.55;
@@ -8362,9 +8537,9 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             el.g.scale.set(sc / squash, sc * squash * tall, sc / squash);
             /* the vibration McKenna kept describing: a fast tremble on top
                of everything else, never still enough to be pinned down */
-            el.g.rotation.y += dt2 * (1.1 + (i2 % 4) * 0.35);
-            el.g.rotation.x = Math.sin(t2 * 9.3 + el.ph) * 0.06;
-            el.g.rotation.z = Math.cos(t2 * 11.1 + el.ph) * 0.05;
+            el.g.rotation.y += dt2 * (0.4 + (i2 % 4) * 0.12);
+            el.g.rotation.x = Math.sin(t2 * 3.1 + el.ph) * 0.035;
+            el.g.rotation.z = Math.cos(t2 * 3.7 + el.ph) * 0.03;
             el.speak = Math.max(0, el.speak - dt2 * 1.4);
             /* self TRANSFORMING: they hold a shape for a few seconds, then
                melt into the other one. mid-melt is the interesting part, so
@@ -8372,12 +8547,12 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             el.morphT -= dt2;
             if (el.morphT <= 0) {
                 el.morphTo = el.morphTo > 0.5 ? 0 : 1;
-                el.morphT = 2.0 + Math.random() * 4.0;
+                el.morphT = 5.0 + Math.random() * 7.0;
                 el.speak = Math.max(el.speak, 0.6);
             }
             el.morph += (el.morphTo - el.morph) * Math.min(1, dt2 * 2.2);
             if (el.mat) {
-                el.mat.uniforms.uTime.value = t2;
+                el.mat.uniforms.uTime.value = t2 * 0.45;
                 el.mat.uniforms.uFold.value = 0.35 + hop * 0.5 + baskK * 0.4;
                 el.mat.uniforms.uMorph.value = el.morph;
                 el.mat.uniforms.uSpeak.value = el.speak;
@@ -8788,6 +8963,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
     var songTapEl = document.getElementById('songTap');
     var tapTimes = [];
     function songSync() {
+        zoneSync();
+        waySync();
         songKeyEl.textContent = CaveAudio.getKey ? CaveAudio.getKey() : 'auto';
         var scName = CaveAudio.getScaleName ? CaveAudio.getScaleName() : 'auto';
         songScaleEl.textContent = scName.toLowerCase();
@@ -8851,6 +9028,39 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             songTapEl.textContent = 'tap ' + tapTimes.length;
         }
         songSync();
+    });
+    var zoneSub = document.getElementById('zoneSub');
+    function zoneSync() {
+        if (!zoneSub) return;
+        var Z = zonesNow();
+        zoneSub.textContent = 'play above ' + Math.round(Z.y * 100) + '% of the screen';
+    }
+    var wayIdx = 0;
+    var goWayEl = document.getElementById('goWay');
+    function waySync() {
+        if (!goWayEl) return;
+        var names = Object.keys(W.waypoints());
+        goWayEl.textContent = names.length ? ('go to ' + names[wayIdx % names.length]) : 'no places found yet';
+    }
+    tapBind(document.getElementById('goUp'), function () { W.ascend(); });
+    tapBind(document.getElementById('goDown'), function () { W.descend(); });
+    tapBind(goWayEl, function () {
+        var names = Object.keys(W.waypoints());
+        if (!names.length) { showHint('find a town first and it will be remembered'); return; }
+        W.travelTo(names[wayIdx % names.length]);
+        wayIdx++;
+        waySync();
+    });
+    tapBind(document.getElementById('zoneUp'), function () {
+        /* raise the line: MORE thumb room, less instrument */
+        setZoneY(zonesNow().y - 0.05);
+        zoneSync();
+        showZoneHint(2.5);
+    });
+    tapBind(document.getElementById('zoneDown'), function () {
+        setZoneY(zonesNow().y + 0.05);
+        zoneSync();
+        showZoneHint(2.5);
     });
     tapBind(document.getElementById('songAuto'), function () {
         keyI = -1; scaleI = -1; paceI = 0;
@@ -9110,8 +9320,10 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             /* neither thumb corner ever hands its touch to the music */
             var mHit = (inThumb || inLookZone) ? null : musicHitAt(mNdcX, mNdcY);
             if (mHit) {
+                var mrec = startHeldNote(mHit, mNdcX);
+                glowOn(mrec, t.clientX, t.clientY);
                 touches[t.identifier] = {
-                    music: startHeldNote(mHit, mNdcX), x0: t.clientX, y0: t.clientY,
+                    music: mrec, x0: t.clientX, y0: t.clientY,
                     x: t.clientX, y: t.clientY, t0: performance.now(), moved: false,
                     hitObj: mHit.object
                 };
@@ -9145,6 +9357,11 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                 rec.music.rubTarget = Math.min(1, rec.music.rubTarget * 0.72 + vAmt);
                 rec.music.lastMove = performance.now();
                 rec.x = t.clientX; rec.y = t.clientY;
+                if (rec.music.glow) {
+                    rec.music.glow.x = t.clientX;
+                    rec.music.glow.y = t.clientY;
+                    paintGlow(rec.music.glow);
+                }
                 continue;
             }
             if (rec.left) {
@@ -9178,6 +9395,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
             var rec = touches[t.identifier];
             if (!rec) continue;
             if (rec.music) {
+                glowOff(rec.music);
                 endHeldNote(rec.music);
                 /* a quick tap on a cap still offers it to you */
                 if (!rec.moved && performance.now() - rec.t0 < 320 &&
@@ -9821,6 +10039,79 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         return { x: Z.moveX, y: Z.y, lookX: Z.lookX,
             landscape: (window.innerWidth || 1) >= (window.innerHeight || 1) };
     };
+    /* -------- getting about --------
+       falling to the core used to be one way: flying back took days and the
+       core's own shell stopped you. now the menu can lift you to the nearest
+       open cave above or below, and remembers the towns you have found. */
+    var wayPoints = {};
+    try {
+        if (typeof localStorage !== 'undefined') {
+            var wj = localStorage.getItem('mycd_ways_v1');
+            if (wj) wayPoints = JSON.parse(wj) || {};
+        }
+    } catch (eW) {}
+    function rememberPlace(name, x, y, z) {
+        if (!name || wayPoints[name]) return false;
+        wayPoints[name] = [Math.round(x), Math.round(y), Math.round(z)];
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem('mycd_ways_v1', JSON.stringify(wayPoints));
+            }
+        } catch (eW2) {}
+        return true;
+    }
+    function travelVert(dir) {
+        /* step to the nearest real chamber above or below, hopping in
+           increasing strides so one press always gets you somewhere */
+        var p2 = camera.position;
+        for (var step = 60; step <= 4000; step *= 1.7) {
+            var ty = p2.y + dir * step;
+            var spot = nearestOpening(p2.x, ty, p2.z, 260);
+            if (spot && Math.abs(spot[1] - p2.y) > 25) {
+                if (soulState === 1) soulCatch(true);
+                setPhasing(false);
+                W.tp(spot[0], spot[1], spot[2]);
+                vel.set(0, 0, 0);
+                phyY = null; eyeY = null;
+                grounded = false;
+                updateChunks(200);
+                CaveAudio.warp();
+                showHint(dir > 0
+                    ? 'you rise into the cave above. depth ' + Math.round(-spot[1]) + 'm'
+                    : 'you sink into the cave below. depth ' + Math.round(-spot[1]) + 'm');
+                return true;
+            }
+        }
+        showHint(dir > 0 ? 'nothing but stone above' : 'nothing but stone below');
+        return false;
+    }
+    W.ascend = function () { return travelVert(1); };
+    W.descend = function () { return travelVert(-1); };
+    W.waypoints = function () { return wayPoints; };
+    W.travelTo = function (name) {
+        var w = wayPoints[name];
+        if (!w) return false;
+        if (soulState === 1) soulCatch(true);
+        setPhasing(false);
+        var spot = nearestOpening(w[0], w[1], w[2], 200) || w;
+        W.tp(spot[0], spot[1], spot[2]);
+        vel.set(0, 0, 0);
+        phyY = null; eyeY = null;
+        updateChunks(200);
+        CaveAudio.warp();
+        showHint('you return to ' + name);
+        return true;
+    };
+    W.glowState = function () {
+        var n = 0, gx = 0, gy = 0, rub = 0;
+        for (var i = 0; i < glowPool.length; i++) {
+            if (glowPool[i].busy) { n++; gx = glowPool[i].x; gy = glowPool[i].y; rub = glowPool[i].rub; }
+        }
+        return { active: n, x: gx, y: gy, rub: rub };
+    };
+    W.setZoneY = function (v) { var y = setZoneY(v); zoneSync(); return y; };
+    W.zoneBounds = function () { return { min: ZONE_MIN, max: ZONE_MAX, y: zonesNow().y }; };
+    W.showZones = function (secs) { showZoneHint(secs || 5); return true; };
     W.zoneAt = function (px, py) {
         /* what a touch at this screen point would DO: walk, look, or play */
         var Z = zonesNow();
@@ -10060,12 +10351,15 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     hh.mesh.material.emissiveIntensity = (pulse - 0.85) + baskK * 0.7;
                     hh.spr.material.opacity = 0.42 + Math.sin(t * 0.45 + hh.r) * 0.1 + baskK * 0.25;
                     hh.mesh.rotation.y += gDt * 0.02;
+                    /* the ember buffer is now RELATIVE to the heart, so the
+                       animation works in that frame too (it used to write
+                       absolute values back and undo the rebase) */
                     var eb = hh.emb.geometry.attributes.position.array;
                     for (var ej = 0; ej < eb.length; ej += 3) {
                         eb[ej + 1] += gDt * (2.2 + (ej % 7) * 0.35);
-                        if (eb[ej + 1] > hh.y0 + hh.r * 2.6) eb[ej + 1] = hh.y0;
-                        eb[ej] = hh.base[ej] + Math.sin(t * 0.6 + ej) * 1.6;
-                        eb[ej + 2] = hh.base[ej + 2] + Math.cos(t * 0.5 + ej) * 1.6;
+                        if (eb[ej + 1] > hh.r * 2.6) eb[ej + 1] = 0;
+                        eb[ej] = (hh.base[ej] - hh.x) + Math.sin(t * 0.6 + ej) * 1.6;
+                        eb[ej + 2] = (hh.base[ej + 2] - hh.z) + Math.cos(t * 0.5 + ej) * 1.6;
                     }
                     hh.emb.geometry.attributes.position.needsUpdate = true;
                 }
@@ -10194,6 +10488,8 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
                     if (guard > 8) break;
                 }
                 overlay.style.display = 'none';
+                /* show once, briefly, where the thumbs live */
+                showZoneHint(6);
                 if (capsEaten >= SOUL_CAPS && soulBtn) soulBtn.style.display = 'block';
                 showHint(returned ? 'you return to the place you left' : 'drift slowly, the caves keep growing ahead of you');
                 last = performance.now();
@@ -10525,6 +10821,22 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         tickElves(dt, t, p);
         poiT -= dt;
         if (poiT <= 0 && soulState !== 1) {
+            /* standing in a town remembers it, so you can come back from
+               anywhere including the bottom of the world */
+            var townHere = CC.siteNear(p.x, p.z);
+            if (townHere) {
+                var tl = CC.toLocal(townHere.x, townHere.y, townHere.z);
+                var tdx = tl[0] - p.x, tdz = tl[2] - p.z;
+                var tfy = townHere.floorY - townHere.y + tl[1];
+                if (tdx * tdx + tdz * tdz < townHere.domeR * townHere.domeR &&
+                    Math.abs(p.y - tfy) < 60) {
+                    var tname = CC.cityName(townHere.seed, townHere.ruin);
+                    if (rememberPlace(tname, tl[0], tfy + 1.7, tl[2])) {
+                        showHint('you will be able to find ' + tname + ' again');
+                        if (typeof waySync === 'function') waySync();
+                    }
+                }
+            }
             poiT = 0.4;
             for (var kvP in chunks) {
                 var vslP = chunks[kvP].vaultStones;
@@ -10662,6 +10974,13 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         updateDust(dt, t);
         tickHeldNotes(dt);
         tickRescue(dt);
+        if (zoneHintT > 0) {
+            zoneHintT -= dt;
+            if (zoneHintT <= 0) {
+                var zhEl = document.getElementById('zoneHint');
+                if (zhEl && zhEl.classList && zhEl.classList.remove) zhEl.classList.remove('on');
+            }
+        }
         tickSoul(dt);
         if (soulState === 1) {
             /* mid-fall: no world is built until the heart is close */
@@ -10979,7 +11298,7 @@ a.length>D&&(D=a.length,p=0|1.25*D+7200,r=new Int8Array(p));a=u.lame_encode_buff
         renderer.render(scene, camera);
     }
 
-    console.log('[CAVES 054] seed ' + CC.SEED +
+    console.log('[CAVES 056] seed ' + CC.SEED +
         ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP _CAVE_SHANTY _CAVE_TRIAL | _CAVE.trip(n) freshStart()');
 })();
 </script>
