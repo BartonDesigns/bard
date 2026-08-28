@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>LvL 99 Bard - DIMENSIONALaligment: 078 lead-three-joins-the-arp</title>
+<title>LvL 99 Bard - DIMENSIONALaligment: 095 one-menu-glyph</title>
 <script>
 /* vox344: BOOT SPLASH. The file is a single ~9MB document, and on a phone that
    download used to be a blank white wait with no feedback. This runs as the
@@ -15,7 +15,7 @@
    window.__l99P(byteOffset) as the parser reaches it, so the megabytes shown
    are actual document bytes received, not a fake animation. */
 (function () {
-  var TOTAL = 000000002828064;
+  var TOTAL = 000000002841491;
   var d = document, wrap = d.createElement('div');
   wrap.id = 'l99-boot';
   wrap.setAttribute('style',
@@ -248,7 +248,7 @@ window._SHADOWS_ON = false;
     })();
   }, true);
 })();
-</script><script>window.__l99P&&window.__l99P(0008565637);</script>
+</script><script>window.__l99P&&window.__l99P(0008478285);</script>
 
 <style>
 /* ===== PRESS START 2P FONT (embedded base64 woff2) =====
@@ -2214,7 +2214,7 @@ body:has(#cockpit-overlay.docked) {
   letter-spacing: 2px;
   white-space: nowrap;
 }
-#hud-readout-top    { top: 36px; }
+#hud-readout-top    { top: 58px; left: 12px; right: 182px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #hud-readout-bottom { bottom: 36px; }
 .hud-label { opacity: 0.55; font-size: 9px; }
 .hud-sep   { opacity: 0.4; margin: 0 6px; }
@@ -5220,8 +5220,7 @@ window._showLogsPanel = function () {
     try {
         var old = document.getElementById('l99-logs-panel');
         if (old) { old.remove(); return; }
-        var api = window.__AI_AGENT__;
-        var logs = (api && api.getLogs) ? api.getLogs() : [];
+        var logs = (window._l99Logs || []).slice();
         var lines = [];
         for (var i = 0; i < logs.length; i++) {
             var l = logs[i] || {};
@@ -5636,23 +5635,8 @@ let reverbSend3;   // vox115: SPACE3 -- Lead 3's own send into the shared reverb
 // vox104: in-scope handles for the AI Agent Bridge. ctx/masterGain/analyser are
 // top-level `let`s -- invisible on window -- so live getters bridge the gap
 // (getter bodies resolve at call time; TDZ is long past by then).
-window._agentAudio = {
-    get ctx() { return ctx; },
-    get master() { return (typeof limiter !== 'undefined' && limiter) ? limiter : masterGain; },
-    get analyser() { return (typeof analyser !== 'undefined') ? analyser : null; }
-};
-window._agentSynthState = function () {
-    return {
-        face: (typeof currentFace !== 'undefined') ? currentFace : null,
-        type1: (typeof currentType !== 'undefined') ? currentType : null,
-        type2: (typeof currentType2 !== 'undefined') ? currentType2 : null,
-        lead3Type: (window._LEAD3_TYPE != null) ? window._LEAD3_TYPE : null,
-        lead3Oct: window._LEAD3_OCT || 0,
-        humanize: (window._DH_HUMANIZE != null) ? window._DH_HUMANIZE : null,
-        bpm: (function () { try { return parseInt(document.getElementById('bpm-display').textContent, 10); } catch (e) { return null; } })(),
-        moon: (window._moonInfo ? window._moonInfo() : null)
-    };
-};
+// da082: agent audio handles removed with the agent bridge.
+// da082: agent synth-state handle removed with the agent bridge.
 // ── DRUM BUS ─────────────────────────────────────────────────────────────
 // Percussion routes here instead of masterGain so drums DON'T inherit the
 // lead's delay/reverb (which made busy patterns muddy). The drum bus goes
@@ -9177,6 +9161,407 @@ function _drumHumAmt() {
 }
 function _drumHum(v, amt) { return v * (1 + (Math.random() * 2 - 1) * amt * _drumHumAmt()); }
 
+// ===== da081: THE REAL KITS =====================================================
+// AAA per-faceplate drum engine. Every faceplate gets a COMPLETE 14-sound kit,
+// genre-tuned in one parameter table over a shared pro toolkit. Quality moves:
+// hats/cymbals are OSCILLATOR-BANK METAL (six squares at the 808 inharmonic
+// ratios), never bare filtered white noise; snares are transient + tuned skin
+// pair + parallel-bandpass wires (+ gated tail where the genre demands it);
+// kicks are pitch-enveloped body + click transient + optional sub layer +
+// tanh drive; claps are multi-burst with a diffused tail. BARD keeps its
+// chiptune kit untouched (that one is right). Kill: window._PRO_DRUMS=false.
+function _dpH(v, pct) {
+  // da082: no two taps identical. Every voice drifts a hair in pitch and
+  // level per hit, which is the "contextual" life the sampled kits have.
+  return v * (1 + (Math.random() * 2 - 1) * pct);
+}
+function _dpShape(k) {
+  const ws = ctx.createWaveShaper(); const c = new Float32Array(256);
+  for (let i = 0; i < 256; i++) { const x = (i / 255) * 2 - 1; c[i] = Math.tanh(x * k); }
+  ws.curve = c; ws.oversample = '2x'; return ws;
+}
+function _dpCrush(bits) {
+  const ws = ctx.createWaveShaper(); const L = Math.pow(2, bits); const c = new Float32Array(1024);
+  for (let i = 0; i < 1024; i++) { const x = (i / 1023) * 2 - 1; c[i] = Math.round(x * (L / 2)) / (L / 2); }
+  ws.curve = c; ws.oversample = 'none'; return ws;
+}
+function _dpNoise(dur) {
+  const src = ctx.createBufferSource();
+  const b = ctx.createBuffer(1, Math.max(32, (ctx.sampleRate * dur) | 0), ctx.sampleRate);
+  const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  src.buffer = b; return src;
+}
+function _dpOut(node, drive, crush) {
+  let tail = node;
+  if (drive) { const s = _dpShape(drive); tail.connect(s); tail = s; }
+  if (crush) { const q = _dpCrush(crush); tail.connect(q); tail = q; }
+  tail.connect(drumBus); }
+function _dpKick(p) {
+  const now = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(_dpH(p.f0, 0.02), now);
+  o.frequency.exponentialRampToValueAtTime(p.f1, now + (p.pt || 0.06));
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(_dpH(p.amp || 1.1, 0.09), now + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.001, now + p.dur);
+  o.connect(g); _dpOut(g, p.drive, p.crush);
+  o.start(now); o.stop(now + p.dur + 0.05);
+  if (p.sub) {
+    const s = ctx.createOscillator(); s.type = 'sine'; s.frequency.value = p.sub;
+    const sg = ctx.createGain(); sg.gain.setValueAtTime(p.subAmp || 0.5, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + p.dur * 1.4);
+    s.connect(sg); sg.connect(drumBus); s.start(now); s.stop(now + p.dur * 1.4 + 0.05);
+  }
+  if (p.click !== false) {
+    const nb = _dpNoise(0.004);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = p.clickHz || 1500;
+    const cg = ctx.createGain(); cg.gain.setValueAtTime(p.clickAmp || 0.45, now);
+    cg.gain.exponentialRampToValueAtTime(0.001, now + 0.015);
+    nb.connect(hp); hp.connect(cg); cg.connect(drumBus); nb.start(now); nb.stop(now + 0.02);
+  }
+}
+function _dpSnare(p) {
+  const now = ctx.currentTime;
+  // two detuned skin tones: fundamental + a slightly sharp partner (real heads beat)
+  [p.bf, p.bf * 1.62].forEach((f, i) => {
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(_dpH(f, 0.02), now);
+    o.frequency.exponentialRampToValueAtTime(f * 0.72, now + 0.05);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(_dpH((p.bAmp || 0.5) * (i ? 0.4 : 1), 0.09), now + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.001, now + (p.bDur || 0.12));
+    o.connect(g); _dpOut(g, p.drive, p.crush); o.start(now); o.stop(now + (p.bDur || 0.12) + 0.03);
+  });
+  // the wires: parallel bandpasses (a formant pair reads as fabric, one BP reads as hiss)
+  const nDur = p.nDur || 0.12;
+  const nb = _dpNoise(nDur + 0.1);
+  const b1 = ctx.createBiquadFilter(); b1.type = 'bandpass'; b1.frequency.value = p.nHz; b1.Q.value = p.nQ || 0.9;
+  const b2 = ctx.createBiquadFilter(); b2.type = 'bandpass'; b2.frequency.value = (p.nHz2 || p.nHz * 1.9); b2.Q.value = 1.4;
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(0.0001, now);
+  ng.gain.linearRampToValueAtTime(_dpH(p.nAmp || 0.45, 0.08), now + 0.0015);
+  if (p.gate) {   // the 80s move: hold, then the reverb door SLAMS
+    ng.gain.setValueAtTime(p.nAmp || 0.5, now + nDur * 0.7);
+    ng.gain.linearRampToValueAtTime(0.0001, now + nDur * 0.78);
+  } else {
+    ng.gain.exponentialRampToValueAtTime(0.001, now + nDur);
+  }
+  nb.connect(b1); nb.connect(b2); b1.connect(ng); b2.connect(ng);
+  _dpOut(ng, 0, p.crush); nb.start(now); nb.stop(now + nDur + 0.12);
+}
+function _dpMetal(p) {
+  // six squares at the 808 inharmonic ratios -> bandpass -> highpass: METAL,
+  // the difference between a cymbal and a hiss.
+  const now = ctx.currentTime;
+  const R = [2, 3, 4.16, 5.43, 6.79, 8.21];
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = p.bp || 10000; bp.Q.value = p.bq || 0.9;
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = p.hp || 7000;
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(_dpH(p.amp || 0.24, 0.09), now + 0.0015);
+  g.gain.exponentialRampToValueAtTime(0.001, now + p.dur);
+  bp.connect(hp); hp.connect(g); _dpOut(g, 0, p.crush);
+  const _hf = _dpH(p.f0 || 40, 0.015);
+  R.forEach(r => {
+    const o = ctx.createOscillator(); o.type = 'square';
+    o.frequency.value = _hf * r * (1 + (Math.random() * 2 - 1) * (p.det || 0));
+    o.connect(bp); o.start(now); o.stop(now + p.dur + 0.05);
+  });
+  if (p.shimmer) {  // crash/ride wash: a long airy noise bed under the metal
+    const nb = _dpNoise(p.dur);
+    const sh = ctx.createBiquadFilter(); sh.type = 'highpass'; sh.frequency.value = 5200;
+    const sg = ctx.createGain(); sg.gain.setValueAtTime(p.shimmer, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + p.dur);
+    nb.connect(sh); sh.connect(sg); sg.connect(drumBus); nb.start(now); nb.stop(now + p.dur + 0.05);
+  }
+}
+function _dpTom(p) {
+  const now = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = p.wave || 'sine';
+  o.frequency.setValueAtTime(_dpH(p.f0, 0.02), now);
+  o.frequency.exponentialRampToValueAtTime(p.f0 * (p.fall || 0.55), now + p.dur * 0.8);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(_dpH(p.amp || 0.75, 0.09), now + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.001, now + p.dur);
+  o.connect(g); _dpOut(g, p.drive, p.crush); o.start(now); o.stop(now + p.dur + 0.05);
+  if (p.skin) {
+    const nb = _dpNoise(0.03);
+    const bpF = ctx.createBiquadFilter(); bpF.type = 'bandpass'; bpF.frequency.value = p.f0 * 6; bpF.Q.value = 1;
+    const sg = ctx.createGain(); sg.gain.setValueAtTime(p.skin, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+    nb.connect(bpF); bpF.connect(sg); sg.connect(drumBus); nb.start(now); nb.stop(now + 0.04);
+  }
+}
+function _dpClap(p) {
+  const now = ctx.currentTime;
+  const offs = p.offs || [0, 0.010, 0.021, 0.033];
+  offs.forEach((off, k) => {
+    const last = k === offs.length - 1;
+    const nb = _dpNoise(last ? (p.tail || 0.16) : 0.035);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = p.hz || 1500; bp.Q.value = p.q || 1.6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now + off);
+    g.gain.linearRampToValueAtTime(last ? (p.amp || 0.55) : (p.amp || 0.55) * 0.6, now + off + 0.0015);
+    g.gain.exponentialRampToValueAtTime(0.001, now + off + (last ? (p.tail || 0.16) : 0.03));
+    nb.connect(bp); bp.connect(g); _dpOut(g, 0, p.crush);
+    nb.start(now + off); nb.stop(now + off + 0.2);
+  });
+}
+function _dpCow(p) {
+  const now = ctx.currentTime;
+  [p.f0 || 540, p.f1 || 800].forEach(f => {
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = (p.f0 || 540) * 1.6; bp.Q.value = 1.2;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(_dpH(p.amp || 0.4, 0.08), now + 0.0015);
+    g.gain.exponentialRampToValueAtTime(0.001, now + (p.dur || 0.22));
+    o.connect(bp); bp.connect(g); _dpOut(g, p.drive, p.crush); o.start(now); o.stop(now + (p.dur || 0.22) + 0.04);
+  });
+}
+function _dpRim(p) {
+  const now = ctx.currentTime;
+  const nb = _dpNoise(0.02);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = p.hz || 1700; bp.Q.value = 3.5;
+  const g = ctx.createGain(); g.gain.setValueAtTime(_dpH(p.amp || 0.6, 0.1), now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+  nb.connect(bp); bp.connect(g); _dpOut(g, 0, p.crush); nb.start(now); nb.stop(now + 0.05);
+  const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = p.body || 420;
+  const og = ctx.createGain(); og.gain.setValueAtTime((p.amp || 0.6) * 0.45, now);
+  og.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  o.connect(og); og.connect(drumBus); o.start(now); o.stop(now + 0.07);
+}
+function _dpShakerV(p) {
+  const now = ctx.currentTime;
+  const nb = _dpNoise(p.dur || 0.09);
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = p.hz || 5200; bp.Q.value = 1.1;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.001, now);
+  g.gain.linearRampToValueAtTime(p.amp || 0.3, now + (p.atk || 0.015));   // beads gather...
+  g.gain.exponentialRampToValueAtTime(0.001, now + (p.dur || 0.09));       // ...then release
+  nb.connect(bp); bp.connect(g); _dpOut(g, 0, p.crush); nb.start(now); nb.stop(now + (p.dur || 0.09) + 0.03);
+}
+function _dpZap(p) {
+  const now = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = p.wave || 'sawtooth';
+  o.frequency.setValueAtTime(p.f0 || 180, now);
+  o.frequency.exponentialRampToValueAtTime(p.f1 || 900, now + (p.dur || 0.16) * 0.9);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(_dpH(p.amp || 0.35, 0.08), now + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.001, now + (p.dur || 0.16));
+  o.connect(g); _dpOut(g, p.drive, p.crush); o.start(now); o.stop(now + (p.dur || 0.16) + 0.04);
+}
+// THE KIT TABLE: face -> name -> [helper, params]. Genre knowledge lives HERE.
+const _DP_KITS = {
+  SYNTHWAVE: { // LinnDrum lineage: gated snare, swept discs for toms, tight metal
+    kick:[_dpKick,{f0:150,f1:45,dur:0.32,drive:1.6,sub:44,subAmp:0.35}],
+    snare:[_dpSnare,{bf:185,bDur:0.10,nHz:2100,nHz2:5200,nDur:0.24,nAmp:0.55,gate:true}],
+    hihat:[_dpMetal,{f0:42,dur:0.05,bp:10500,hp:7600,amp:0.22}], openhat:[_dpMetal,{f0:42,dur:0.32,bp:10000,hp:7000,amp:0.2}],
+    cymbal:[_dpMetal,{f0:34,dur:1.5,bp:8600,hp:5200,amp:0.3,shimmer:0.16,det:0.02}], ride:[_dpMetal,{f0:52,dur:0.6,bp:9600,hp:6400,amp:0.17,shimmer:0.05}],
+    lotom:[_dpTom,{f0:170,dur:0.34,fall:0.5,drive:1.4}], hitom:[_dpTom,{f0:300,dur:0.26,fall:0.5,drive:1.4}],
+    clap:[_dpClap,{hz:1400,q:1.4,tail:0.22,amp:0.6}], rim:[_dpRim,{hz:1900,body:480}],
+    shaker:[_dpShakerV,{hz:6200,dur:0.08}], cowbell:[_dpCow,{f0:560,f1:845,dur:0.18}],
+    perc:[_dpTom,{f0:430,dur:0.14,fall:0.6,wave:'triangle'}], jump:[_dpZap,{f0:160,f1:1400,dur:0.22,wave:'square'}] },
+  DNB: {   // breaks: everything tight, crack forward, air on top
+    kick:[_dpKick,{f0:185,f1:50,pt:0.035,dur:0.18,drive:2.2,clickHz:2400,clickAmp:0.6}],
+    snare:[_dpSnare,{bf:225,bDur:0.08,nHz:3300,nHz2:6800,nDur:0.11,nAmp:0.62,bAmp:0.42}],
+    hihat:[_dpMetal,{f0:46,dur:0.035,bp:11500,hp:8200,amp:0.24}], openhat:[_dpMetal,{f0:46,dur:0.18,bp:11000,hp:7800,amp:0.2}],
+    cymbal:[_dpMetal,{f0:36,dur:1.1,bp:9000,hp:5600,amp:0.26,shimmer:0.12,det:0.02}], ride:[_dpMetal,{f0:56,dur:0.22,bp:10200,hp:7200,amp:0.16}],
+    lotom:[_dpTom,{f0:150,dur:0.2,skin:0.2,drive:1.6}], hitom:[_dpTom,{f0:260,dur:0.16,skin:0.2,drive:1.6}],
+    clap:[_dpClap,{hz:1700,offs:[0,0.008,0.016],tail:0.1,amp:0.5}], rim:[_dpRim,{hz:2100,body:440}],
+    shaker:[_dpShakerV,{hz:5600,dur:0.06,atk:0.008}], cowbell:[_dpCow,{f0:540,f1:800,dur:0.12}],
+    perc:[_dpZap,{f0:700,f1:240,dur:0.09,wave:'triangle',amp:0.3}], jump:[_dpZap,{f0:200,f1:1800,dur:0.16}] },
+  SPARKLE: { // glass and air: pitched high, long light tails
+    kick:[_dpKick,{f0:140,f1:52,dur:0.26,drive:1.2,clickHz:3200,clickAmp:0.3}],
+    snare:[_dpSnare,{bf:240,bDur:0.09,nHz:3800,nHz2:8200,nDur:0.16,nAmp:0.42}],
+    hihat:[_dpMetal,{f0:55,dur:0.05,bp:12200,hp:9000,amp:0.2}], openhat:[_dpMetal,{f0:55,dur:0.3,bp:11800,hp:8600,amp:0.16}],
+    cymbal:[_dpMetal,{f0:40,dur:1.8,bp:9400,hp:6000,amp:0.24,shimmer:0.2,det:0.03}], ride:[_dpMetal,{f0:60,dur:0.7,bp:10400,hp:7200,amp:0.15,shimmer:0.06}],
+    lotom:[_dpTom,{f0:230,dur:0.24,wave:'triangle'}], hitom:[_dpTom,{f0:380,dur:0.2,wave:'triangle'}],
+    clap:[_dpClap,{hz:2100,q:2,tail:0.2,amp:0.45}], rim:[_dpRim,{hz:2600,body:600}],
+    shaker:[_dpShakerV,{hz:7200,dur:0.09}], cowbell:[_dpCow,{f0:720,f1:1120,dur:0.3,amp:0.3}],
+    perc:[_dpZap,{f0:900,f1:2400,dur:0.12,wave:'sine',amp:0.28}], jump:[_dpZap,{f0:300,f1:2600,dur:0.2,wave:'sine'}] },
+  SOUL: {  // warm room: round low end, fabric snare, dark soft metal, sidestick
+    kick:[_dpKick,{f0:110,f1:46,dur:0.4,drive:1.15,clickAmp:0.2,clickHz:1100}],
+    snare:[_dpSnare,{bf:162,bDur:0.16,nHz:1750,nHz2:3300,nDur:0.2,nAmp:0.4,bAmp:0.55}],
+    hihat:[_dpMetal,{f0:38,dur:0.06,bp:8400,hp:5600,amp:0.15}], openhat:[_dpMetal,{f0:38,dur:0.28,bp:8200,hp:5400,amp:0.13}],
+    cymbal:[_dpMetal,{f0:32,dur:1.6,bp:7800,hp:4600,amp:0.2,shimmer:0.1,det:0.02}], ride:[_dpMetal,{f0:44,dur:0.9,bp:8600,hp:5200,amp:0.14,shimmer:0.05}],
+    lotom:[_dpTom,{f0:130,dur:0.32,skin:0.16}], hitom:[_dpTom,{f0:210,dur:0.26,skin:0.16}],
+    clap:[_dpClap,{hz:1250,q:1.2,tail:0.18,amp:0.42}], rim:[_dpRim,{hz:1600,body:380,amp:0.55}],
+    shaker:[_dpShakerV,{hz:4600,dur:0.11,atk:0.02,amp:0.24}], cowbell:[_dpCow,{f0:500,f1:760,dur:0.2,amp:0.3}],
+    perc:[_dpTom,{f0:520,dur:0.1,wave:'sine',amp:0.35}], jump:[_dpZap,{f0:220,f1:660,dur:0.18,wave:'triangle',amp:0.25}] },
+  GAS: {   // trap: 808 floor, tick hats, layered clap
+    kick:[_dpKick,{f0:92,f1:38,pt:0.05,dur:0.6,drive:2.4,sub:36,subAmp:0.6}],
+    snare:[_dpSnare,{bf:205,bDur:0.09,nHz:3000,nHz2:6200,nDur:0.13,nAmp:0.58}],
+    hihat:[_dpMetal,{f0:48,dur:0.028,bp:11800,hp:8600,amp:0.26}], openhat:[_dpMetal,{f0:48,dur:0.22,bp:11200,hp:8000,amp:0.2}],
+    cymbal:[_dpMetal,{f0:35,dur:1.3,bp:8800,hp:5400,amp:0.26,shimmer:0.12,det:0.02}], ride:[_dpMetal,{f0:54,dur:0.3,bp:10000,hp:7000,amp:0.15}],
+    lotom:[_dpTom,{f0:120,dur:0.4,fall:0.45,drive:1.8}], hitom:[_dpTom,{f0:200,dur:0.3,fall:0.45,drive:1.8}],
+    clap:[_dpClap,{hz:1600,q:1.8,tail:0.24,amp:0.6}], rim:[_dpRim,{hz:2200,body:460}],
+    shaker:[_dpShakerV,{hz:6000,dur:0.05,atk:0.006}], cowbell:[_dpCow,{f0:560,f1:840,dur:0.14}],
+    perc:[_dpZap,{f0:1200,f1:300,dur:0.08,wave:'square',amp:0.26}], jump:[_dpZap,{f0:140,f1:2200,dur:0.28}] },
+  HYPHY: { // the slap, completed: knock, mob clap, dusty crush, PROUD cowbell
+    kick:[_dpKick,{f0:120,f1:50,pt:0.05,dur:0.3,drive:2.6,clickHz:1200,clickAmp:0.5}],
+    snare:[_dpSnare,{bf:190,bDur:0.12,nHz:2600,nHz2:5400,nDur:0.1,nAmp:0.5}],
+    hihat:[_dpMetal,{f0:44,dur:0.035,bp:10200,hp:6500,amp:0.24,crush:6}], openhat:[_dpMetal,{f0:44,dur:0.14,bp:9800,hp:6200,amp:0.19,crush:6}],
+    cymbal:[_dpMetal,{f0:34,dur:1.2,bp:8400,hp:5000,amp:0.26,shimmer:0.1,crush:8,det:0.02}], ride:[_dpMetal,{f0:50,dur:0.28,bp:9400,hp:6400,amp:0.15,crush:7}],
+    lotom:[_dpTom,{f0:135,dur:0.26,drive:2.2,skin:0.2}], hitom:[_dpTom,{f0:225,dur:0.2,drive:2.2,skin:0.2}],
+    clap:[_dpClap,{hz:1800,q:1.2,offs:[0,0.009,0.018,0.03],tail:0.2,amp:0.6}], rim:[_dpRim,{hz:1900,body:420}],
+    shaker:[_dpShakerV,{hz:5200,dur:0.07,crush:7}], cowbell:[_dpCow,{f0:540,f1:800,dur:0.26,amp:0.5,drive:1.8}],
+    perc:[_dpTom,{f0:340,dur:0.12,drive:2.4,wave:'triangle',amp:0.4}], jump:[_dpZap,{f0:180,f1:1500,dur:0.2,drive:1.6}] },
+  DANCEHALL: { // dembow: woody, timbale toms, clave rim, steel and beads
+    kick:[_dpKick,{f0:115,f1:52,dur:0.28,drive:1.7,clickHz:900,clickAmp:0.3}],
+    snare:[_dpSnare,{bf:230,bDur:0.1,nHz:2400,nHz2:4300,nDur:0.09,nAmp:0.45,bAmp:0.6}],
+    hihat:[_dpMetal,{f0:40,dur:0.045,bp:9600,hp:6200,amp:0.18}], openhat:[_dpMetal,{f0:40,dur:0.2,bp:9200,hp:5800,amp:0.15}],
+    cymbal:[_dpMetal,{f0:33,dur:1.2,bp:8200,hp:4800,amp:0.24,shimmer:0.1,det:0.02}], ride:[_dpMetal,{f0:48,dur:0.4,bp:9000,hp:5800,amp:0.15}],
+    lotom:[_dpTom,{f0:220,dur:0.22,fall:0.7,skin:0.3,wave:'triangle'}], hitom:[_dpTom,{f0:330,dur:0.18,fall:0.7,skin:0.3,wave:'triangle'}],
+    clap:[_dpClap,{hz:1500,offs:[0,0.011,0.024],tail:0.14,amp:0.5}], rim:[_dpRim,{hz:2450,body:520,amp:0.65}],
+    shaker:[_dpShakerV,{hz:5400,dur:0.1,atk:0.018,amp:0.3}], cowbell:[_dpCow,{f0:585,f1:870,dur:0.2,amp:0.42}],
+    perc:[_dpCow,{f0:900,f1:1350,dur:0.1,amp:0.3}], jump:[_dpZap,{f0:260,f1:1000,dur:0.18,wave:'triangle'}] },
+  GLITCHPOP: { // designed digital: the crunch is INTENTIONAL here, and clean underneath
+    kick:[_dpKick,{f0:160,f1:44,dur:0.22,drive:2,crush:8}],
+    snare:[_dpSnare,{bf:210,bDur:0.08,nHz:3400,nHz2:7000,nDur:0.1,nAmp:0.55,crush:7}],
+    hihat:[_dpMetal,{f0:50,dur:0.03,bp:11600,hp:8400,amp:0.24,crush:5}], openhat:[_dpMetal,{f0:50,dur:0.16,bp:11200,hp:8000,amp:0.18,crush:5}],
+    cymbal:[_dpMetal,{f0:37,dur:0.9,bp:9200,hp:5800,amp:0.24,shimmer:0.1,crush:6,det:0.03}], ride:[_dpMetal,{f0:58,dur:0.2,bp:10400,hp:7400,amp:0.15,crush:6}],
+    lotom:[_dpZap,{f0:300,f1:90,dur:0.14,wave:'square',amp:0.5,crush:7}], hitom:[_dpZap,{f0:520,f1:160,dur:0.12,wave:'square',amp:0.45,crush:7}],
+    clap:[_dpClap,{hz:1900,q:2.2,tail:0.12,amp:0.5,crush:6}], rim:[_dpRim,{hz:2300,body:500,crush:6}],
+    shaker:[_dpShakerV,{hz:6600,dur:0.05,crush:5}], cowbell:[_dpCow,{f0:620,f1:930,dur:0.12,crush:6}],
+    perc:[_dpZap,{f0:2000,f1:200,dur:0.07,amp:0.3,crush:5}], jump:[_dpZap,{f0:120,f1:3200,dur:0.22,crush:6}] },
+  KAWAII: { // bright pop: bouncy pitched toms, sparkle tails, cute clap
+    kick:[_dpKick,{f0:135,f1:55,dur:0.24,drive:1.1,clickHz:2600,clickAmp:0.3}],
+    snare:[_dpSnare,{bf:250,bDur:0.09,nHz:3600,nHz2:7600,nDur:0.14,nAmp:0.45}],
+    hihat:[_dpMetal,{f0:56,dur:0.04,bp:12400,hp:9200,amp:0.2}], openhat:[_dpMetal,{f0:56,dur:0.24,bp:12000,hp:8800,amp:0.15}],
+    cymbal:[_dpMetal,{f0:42,dur:1.4,bp:9800,hp:6600,amp:0.22,shimmer:0.16,det:0.03}], ride:[_dpMetal,{f0:62,dur:0.5,bp:10800,hp:7600,amp:0.14,shimmer:0.05}],
+    lotom:[_dpTom,{f0:290,dur:0.2,fall:0.65,wave:'triangle',amp:0.6}], hitom:[_dpTom,{f0:440,dur:0.16,fall:0.65,wave:'triangle',amp:0.55}],
+    clap:[_dpClap,{hz:2300,q:2,offs:[0,0.009,0.019],tail:0.12,amp:0.5}], rim:[_dpRim,{hz:2800,body:640}],
+    shaker:[_dpShakerV,{hz:7600,dur:0.08,amp:0.24}], cowbell:[_dpCow,{f0:760,f1:1180,dur:0.16,amp:0.32}],
+    perc:[_dpZap,{f0:800,f1:1900,dur:0.1,wave:'sine',amp:0.3}], jump:[_dpZap,{f0:400,f1:2800,dur:0.18,wave:'sine'}] },
+  BREW: {  // the jazz kit: brushes, a ride that leads, a woodblock, soft skins
+    kick:[_dpKick,{f0:95,f1:44,dur:0.3,drive:1.05,clickAmp:0.12,clickHz:800,amp:0.8}],
+    snare:[_dpSnare,{bf:150,bDur:0.2,nHz:1500,nHz2:2900,nDur:0.26,nAmp:0.34,bAmp:0.3}],
+    hihat:[_dpMetal,{f0:36,dur:0.07,bp:8000,hp:5200,amp:0.12}], openhat:[_dpMetal,{f0:36,dur:0.34,bp:7800,hp:5000,amp:0.1}],
+    cymbal:[_dpMetal,{f0:30,dur:2,bp:7400,hp:4200,amp:0.18,shimmer:0.12,det:0.02}], ride:[_dpMetal,{f0:42,dur:1.1,bp:8200,hp:4800,amp:0.16,shimmer:0.07}],
+    lotom:[_dpTom,{f0:120,dur:0.3,skin:0.12,amp:0.55}], hitom:[_dpTom,{f0:195,dur:0.24,skin:0.12,amp:0.5}],
+    clap:[_dpClap,{hz:1150,q:1,offs:[0,0.013,0.028],tail:0.2,amp:0.34}], rim:[_dpRim,{hz:1450,body:360,amp:0.5}],
+    shaker:[_dpShakerV,{hz:4200,dur:0.13,atk:0.025,amp:0.2}], cowbell:[_dpCow,{f0:1150,f1:1520,dur:0.07,amp:0.35}],
+    perc:[_dpTom,{f0:480,dur:0.08,wave:'sine',amp:0.3}], jump:[_dpZap,{f0:240,f1:520,dur:0.16,wave:'triangle',amp:0.2}] }
+};
+function playDrumPro(face, name) {
+  if (window._PRO_DRUMS === false) return false;
+  const kit = _DP_KITS[face];
+  if (!kit) return false;
+  const v = kit[name === '808' || name === 'sub' ? 'kick' : name === 'crash' ? 'cymbal' : name];
+  if (!v) return false;
+  v[0](v[1]);
+  return true;
+}
+// ===== end da081 ================================================================
+// ===== da082: HOLD THE DRUM =====================================================
+// Tap = one shot, exactly as before. Hold past 340ms and the faceplate takes
+// the drum over: the KICK becomes a sustained beaming sub until you let go;
+// every other drum plays its face's signature figure for that voice, locked
+// to the song's BPM and SWING. A hyphy snare and a brew snare do not hold
+// the same way. Kill: window._DRUM_HOLD = false.
+const _DH_PAT = {
+  BARD:      { default: [1,0,.7,0,1,0,.7,0,1,0,.7,0,1,0,.7,0] },
+  SYNTHWAVE: { snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,.4],
+               hihat: [.9,0,.6,0,.9,0,.6,0,.9,0,.6,0,.9,0,.6,0],
+               default: [1,0,0,0,.8,0,0,0,1,0,0,0,.8,0,0,0] },
+  DNB:       { snare: [0,0,0,0,1,0,0,.5,0,0,.6,0,1,0,.45,0],
+               hihat: [.85,.4,.6,.4,.85,.4,.6,.5,.85,.4,.6,.4,.85,.5,.6,.5],
+               default: [1,0,.5,0,1,0,.5,.4,1,0,.5,0,1,.4,.5,0] },
+  SPARKLE:   { hihat: [.8,.35,.55,.35,.8,.35,.55,.35,.8,.35,.55,.35,.8,.35,.55,.6],
+               default: [.9,0,0,.5,0,0,.9,0,0,.5,0,0,.9,0,.5,0] },
+  SOUL:      { snare: [0,.22,0,.18,1,0,.25,0,0,.22,0,.18,1,0,.25,.3],
+               hihat: [.7,0,0,.4,.7,0,0,.4,.7,0,0,.4,.7,0,.3,.4],
+               default: [.8,0,0,.4,.8,0,0,.4,.8,0,0,.4,.8,0,0,.4] },
+  GAS:       { hihat: [1,.45,.7,.45,1,.45,.7,.9,1,.4,.6,.4,1,.8,.9,1],
+               snare: [0,0,0,0,1,0,0,0,0,0,0,.35,1,0,0,0],
+               default: [1,0,0,.5,0,0,1,0,0,.5,0,0,1,0,.5,.7] },
+  HYPHY:     { snare: [0,0,0,0,1,0,0,0,0,0,.5,0,1,0,.6,0],
+               clap:  [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,.5],
+               cowbell: [1,0,0,.6,0,0,1,0,0,.6,0,0,1,0,.6,0],
+               default: [1,0,0,0,.7,0,1,0,0,0,.7,0,1,0,.7,0] },
+  DANCEHALL: { default: [1,0,0,.8,0,0,1,0,1,0,0,.8,0,0,1,0] },
+  GLITCHPOP: { default: [1,0,.6,0,0,.8,0,.4,.9,0,0,.7,.3,0,.8,0] },
+  KAWAII:    { hihat: [0,.9,0,.9,0,.9,0,.9,0,.9,0,.9,0,.9,.5,.9],
+               default: [.9,0,.6,0,.9,0,.6,0,.9,0,.6,0,.9,.5,.6,0] },
+  BREW:      { ride:  [1,0,0,0,1,0,.7,0,1,0,0,0,1,0,.7,0],
+               snare: [.3,.2,.25,.18,.35,.2,.25,.18,.3,.2,.25,.18,.35,.22,.25,.3],
+               hihat: [0,0,0,0,.5,0,0,0,0,0,0,0,.5,0,0,0],
+               default: [.7,0,0,0,.5,0,.4,0,.7,0,0,0,.5,0,.4,0] }
+};
+function _dhPattern(face, name) {
+  const f = _DH_PAT[face] || _DH_PAT.BARD;
+  return f[name] || f.default || _DH_PAT.BARD.default;
+}
+let _dhActive = {};   // drum name -> { timer } or { kick voice handles }
+function _dhStepDur(step) {
+  const b = (typeof bpm !== 'undefined') ? bpm : 120;
+  const base = (60 / b) / 4 * 1000;
+  const sw = (typeof swingAmount !== 'undefined') ? swingAmount : 0;
+  // swing: the first 16th of each pair breathes long, the second comes late
+  return base * (step % 2 === 0 ? 1 + sw * 0.5 : 1 - sw * 0.5);
+}
+function _dhStartKick(face) {
+  // the beaming bassy kick: the face's own kick fundamental held as a living
+  // sub (slow 0.9Hz breath on the gain), driven through the same saturation.
+  const kp = (typeof _DP_KITS !== 'undefined' && _DP_KITS[face] && _DP_KITS[face].kick && _DP_KITS[face].kick[1]) || { f1: 48, drive: 1.6 };
+  const now = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(kp.f1 * 2.2, now);
+  o.frequency.exponentialRampToValueAtTime(kp.f1, now + 0.09);   // the boom finds its floor
+  const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = Math.max(24, kp.f1 * 0.5);
+  const sg = ctx.createGain(); sg.gain.value = 0.4;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.linearRampToValueAtTime(0.95, now + 0.05);
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.9;
+  const lg = ctx.createGain(); lg.gain.value = 0.06;
+  lfo.connect(lg); lg.connect(g.gain);
+  const drive = _dpShape((kp.drive || 1.6) + 0.8);
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+  o.connect(g); sub.connect(sg); sg.connect(g);
+  g.connect(drive); drive.connect(lp); lp.connect(drumBus);
+  o.start(now); sub.start(now); lfo.start(now);
+  return { stop: function () {
+    const t = ctx.currentTime;
+    g.gain.cancelScheduledValues(t);
+    g.gain.setValueAtTime(g.gain.value || 0.9, t);
+    g.gain.linearRampToValueAtTime(0.0001, t + 0.18);   // fades out, never chops
+    o.stop(t + 0.22); sub.stop(t + 0.22); lfo.stop(t + 0.22);
+    setTimeout(function () { try { lp.disconnect(); } catch (e) {} }, 400);
+  } };
+}
+function startDrumHold(name, vel) {
+  if (window._DRUM_HOLD === false) return;
+  if (_dhActive[name]) return;
+  const face = (typeof currentFace !== 'undefined') ? currentFace : 'BARD';
+  const v = (typeof vel === 'number') ? vel : 1;
+  if (name === 'kick' || name === '808' || name === 'sub') {
+    _dhActive[name] = { kick: _dhStartKick(face) };
+    return;
+  }
+  const st = { step: 0, timer: null };
+  _dhActive[name] = st;
+  const tick = function () {
+    if (_dhActive[name] !== st) return;
+    const pat = _dhPattern((typeof currentFace !== 'undefined') ? currentFace : face, name);
+    const slot = pat[st.step % pat.length];
+    if (slot > 0 && typeof playDrum === 'function') playDrum(name, slot * v);
+    const dur = _dhStepDur(st.step);
+    st.step++;
+    st.timer = setTimeout(tick, dur);
+  };
+  tick();
+}
+function stopDrumHold(name) {
+  const st = _dhActive[name];
+  if (!st) return;
+  delete _dhActive[name];
+  if (st.timer) clearTimeout(st.timer);
+  if (st.kick) st.kick.stop();
+}
+window._dhHoldState = function () { return Object.keys(_dhActive); };
+// ===== end da082 hold ===========================================================
+
+
 function playDrum(name, velocity) {
   initAudio();
   const face = currentFace;
@@ -9204,6 +9589,8 @@ function playDrum(name, velocity) {
     try {
       // Dispatch per faceplate. Each handler returns true if it played the sound; if false,
       // we fall through to the generic kit below as a backup.
+      // da081: the pro kits answer first for every face but BARD (chiptune is right as-is)
+      if (face !== 'BARD' && typeof playDrumPro === 'function' && playDrumPro(face, name)) return;
       if (face === 'SYNTHWAVE' && playDrumSynthwave(name)) return;
       if (face === 'DNB'       && playDrumDnB(name))       return;
       if (face === 'SPARKLE'   && playDrumSparkle(name))   return;
@@ -12514,7 +12901,16 @@ function buildUI() {
     pad.innerHTML = `<span class="pad-key">${displayKey}</span><span class="pad-icon">${DRUM_ICONS[i] || '●'}</span><span class="pad-label">${DRUM_LABELS[i] || dname.toUpperCase()}</span>`;
     pad.addEventListener('pointerdown', e => {
       e.preventDefault();
-      handleDrumPress(dname, pad, padVelocity(pad, e));
+      const v = padVelocity(pad, e);
+      handleDrumPress(dname, pad, v);
+      // da082: press and HOLD and the faceplate takes the drum over
+      if (pad._dhT) clearTimeout(pad._dhT);
+      pad._dhT = setTimeout(() => { startDrumHold(dname, v); pad.classList.add('pressed'); }, 340);
+      const _dhEnd = () => {
+        clearTimeout(pad._dhT); stopDrumHold(dname); pad.classList.remove('pressed');
+        pad.removeEventListener('pointerup', _dhEnd); pad.removeEventListener('pointercancel', _dhEnd); pad.removeEventListener('pointerleave', _dhEnd);
+      };
+      pad.addEventListener('pointerup', _dhEnd); pad.addEventListener('pointercancel', _dhEnd); pad.addEventListener('pointerleave', _dhEnd);
     });
     // First DRUM_KEYS.length pads → primary row; the rest → the expand row.
     if (i < DRUM_KEYS.length) drumRow.appendChild(pad);
@@ -13251,7 +13647,7 @@ function buildUI() {
       } else {
         _startToast(window.__COCKPIT_ALIVE
           ? 'cockpit module ran but startCockpit is missing (export removed?)'
-          : 'cockpit module did NOT finish executing -- run __AI_AGENT__.getLogs() and look for the first error');
+          : 'cockpit module did NOT finish executing -- open LOGS and look for the first error');
       }
     } catch (err) { _startToast('startCockpit threw: ' + (err && err.message || err)); }
   });
@@ -13756,14 +14152,28 @@ function renderBottomRow() {
   const l1 = document.getElementById('lead-section') || document.querySelector('#lead-pads') && document.querySelector('#lead-pads').closest('.pad-section');
   const l2 = document.getElementById('lead2-section');
   const l3 = document.getElementById('lead3-section');
-  if (l1) l1.style.display = _leads ? '' : 'none';
-  if (l2) l2.style.display = _leads ? '' : 'none';
-  if (l3) l3.style.display = _leads ? '' : 'none';
+  /* da080: THE LEADS NEVER LEAVE. Drums/FX take the control region above
+     the waveform instead (TYPE row + controls-row); the KEY/LOOP/MAP/BEAT
+     top row stays; all three lead rows stay playable under your fingers. */
+  if (l1) l1.style.display = '';
+  if (l2) l2.style.display = '';
+  if (l3) l3.style.display = '';
+  const selRow2 = document.getElementById('selectors-row-2');
+  const ctrlRow = document.getElementById('controls-row');
+  if (selRow2) selRow2.style.display = _leads ? '' : 'none';
+  if (ctrlRow) ctrlRow.style.display = _leads ? '' : 'none';
   // vox44: the 38-pad grid replaces the old single-row drum/fx sections entirely.
   if (drumSec) drumSec.style.display = 'none';
   if (fxSec) fxSec.style.display = 'none';
   const tk = document.getElementById('takeover-section');
-  if (tk) tk.style.display = _leads ? 'none' : '';
+  if (tk) {
+    /* da080: the grid lives WHERE THE CONTROLS WERE -- reparent once, in
+       front of controls-row, so pads sit above the waveform visualizer */
+    if (!_leads && ctrlRow && tk.parentNode !== ctrlRow.parentNode) {
+      ctrlRow.parentNode.insertBefore(tk, ctrlRow);
+    }
+    tk.style.display = _leads ? 'none' : '';
+  }
   if (!_leads && typeof renderTakeoverGrid === 'function') renderTakeoverGrid();
   // Preserve the expand state across drum/FX switches: if the second row was
   // open, keep it open in the mode we just switched to.
@@ -13889,7 +14299,24 @@ function renderTakeoverGrid() {
   const labels = isFx ? FX_LABELS : DRUM_LABELS;
   const icons = isFx ? FX_ICONS : DRUM_ICONS;
   const lbl = document.getElementById('takeover-label');
-  if (lbl) lbl.textContent = isFx ? 'PRODUCTION FX — FULL GRID (SELECT for leads)' : 'DRUMS — FULL GRID (SELECT for FX)';
+  if (lbl) {
+    lbl.textContent = isFx ? 'PRODUCTION FX — FULL GRID (SELECT for leads)' : 'DRUMS — FULL GRID (SELECT for FX)';
+    /* da080: easy close -- one tap returns the control region */
+    let xb = document.getElementById('takeover-close');
+    if (!xb) {
+      xb = document.createElement('button');
+      xb.id = 'takeover-close';
+      xb.textContent = '\u2715 CLOSE';
+      xb.style.cssText = 'float:right;margin-left:8px;padding:2px 10px;border-radius:8px;' +
+        'background:rgba(0,0,0,0.35);border:1px solid currentColor;color:inherit;' +
+        'font:inherit;font-size:11px;cursor:pointer;';
+      xb.addEventListener('click', function () {
+        rowMode = 'leads';
+        if (typeof renderBottomRow === 'function') renderBottomRow();
+      });
+      lbl.appendChild(xb);
+    } else if (xb.parentNode !== lbl) { lbl.appendChild(xb); }
+  }
   rows.forEach(r => {
     if (!r.el) return;
     r.el.innerHTML = '';
@@ -14578,6 +15005,12 @@ document.addEventListener('keydown', e => {
       },
       (recStep) => recordDrumHit(drumName, recStep)
     );
+    // da082: a held KEY holds the drum too
+    if (!e.repeat && typeof startDrumHold === 'function') {
+      window._dhKeyT = window._dhKeyT || {};
+      clearTimeout(window._dhKeyT[drumName]);
+      window._dhKeyT[drumName] = setTimeout(() => startDrumHold(drumName, 1), 340);
+    }
     return;
   }
 });
@@ -14636,6 +15069,12 @@ document.addEventListener('keyup', e => {
   if (bottomIdx >= 0) {
     const dpad = document.querySelector(`.drum-pad[data-key="${key}"]`);
     if (dpad) dpad.classList.remove('pressed');
+    // da082: releasing the key releases the hold
+    const _dhName = (typeof DRUM_NAMES !== 'undefined') ? DRUM_NAMES[bottomIdx] : null;
+    if (_dhName) {
+      if (window._dhKeyT && window._dhKeyT[_dhName]) clearTimeout(window._dhKeyT[_dhName]);
+      if (typeof stopDrumHold === 'function') stopDrumHold(_dhName);
+    }
     const fpad = document.querySelector(`.fx-pad[data-key="${key}"]`);
     if (fpad) fpad.classList.remove('pressed');
     return;
@@ -15566,7 +16005,7 @@ document.addEventListener('visibilitychange', () => {
     try { if (typeof gatherFullState === 'function') localStorage.setItem(SAVESTATE_KEY, JSON.stringify(gatherFullState())); } catch(e) {}
   }
 });
-</script><script>window.__l99P&&window.__l99P(0009311390);</script>
+</script><script>window.__l99P&&window.__l99P(0009252202);</script>
 
 
 <!-- Fullscreen cockpit visualizer overlay — Tron/space-cockpit galactic flythrough.
@@ -15936,15 +16375,12 @@ function playLeadWithVelocity(voiceId, degree, velocity, bank) {
 }
 
 function playDrumWithVelocity(drumName, velocity) {
+  // da082: the old version DIPPED THE MASTER for 20ms per hit, so fast taps
+  // chopped each other's tails, and a second call could read the dipped value
+  // as "original" and ratchet the whole mix down. playDrum has carried a
+  // correct per-hit velocity gain since vox92: use it and touch nothing else.
   if (typeof playDrum !== 'function') return;
-  const orig = (typeof masterGain !== 'undefined' && masterGain) ? masterGain.gain.value : 0.85;
-  if (typeof masterGain !== 'undefined' && masterGain && typeof ctx !== 'undefined' && ctx) {
-    masterGain.gain.setValueAtTime(orig * velocity, ctx.currentTime);
-  }
-  playDrum(drumName);
-  if (typeof masterGain !== 'undefined' && masterGain && typeof ctx !== 'undefined' && ctx) {
-    masterGain.gain.setValueAtTime(orig, ctx.currentTime + 0.02);
-  }
+  playDrum(drumName, (typeof velocity === 'number') ? velocity : 1);
 }
 
 // ─── MIDI MESSAGE HANDLER ──────────────────────────────────────────────
@@ -17807,7 +18243,7 @@ try {
   if (document.readyState === 'complete' || document.readyState === 'interactive') setupMIDI();
   else document.addEventListener('DOMContentLoaded', () => { try { setupMIDI(); } catch(e){} });
 } catch(e){}
-</script><script>window.__l99P&&window.__l99P(0009425968);</script>
+</script><script>window.__l99P&&window.__l99P(0009366707);</script>
 
 
 
@@ -21897,324 +22333,32 @@ window.bardHaptic = (function(){
 })();
 </script>
 
-<script id="ai-agent-bridge">
-// vox104: AI AGENT BRIDGE -- a stable programmatic API for autonomous agents
-// (Playwright, Replit Agent, Computer Use) to drive and read this instrument
-// without DOM-scraping. Adapted for THIS file: raw WebAudio (no Tone.js),
-// 0..1 drum velocities (MIDI 127 normalized), capped log buffer, and honest
-// canvas-snapshot caveats (no preserveDrawingBuffer on the WebGL context).
+<script id="l99-logs">
+// da082: THE AGENT IS GONE. The vox104 AI Agent Bridge (programmatic control
+// API, [AGENT] HUD, synth-state handles) did nothing for the instrument and
+// threw errors; it is removed whole. The ONE thing worth keeping is the
+// console ring buffer, because the on-device LOGS panel and its COPY ERRORS
+// button are how bugs travel from the phone into the chat. It lives here now.
 (function () {
-    var agentLogs = [];
-    var LOG_CAP = 500;
-    function record(type, args) {
-        try {
-            var flat = Array.prototype.map.call(args, function (a) {
-                try { return (typeof a === 'string') ? a : JSON.stringify(a); } catch (e) { return String(a); }
-            }).join(' ');
-            agentLogs.push({ type: type, time: Date.now(), msg: flat.slice(0, 300) });
-            if (agentLogs.length > LOG_CAP) agentLogs.shift();
-        } catch (e) {}
+    var LOG_CAP = 400;
+    var logs = window._l99Logs = [];
+    function push(type, msg) {
+        logs.push({ type: type, time: Date.now(), msg: String(msg).slice(0, 300) });
+        if (logs.length > LOG_CAP) logs.shift();
     }
-    var _log = console.log, _err = console.error, _warn = console.warn;
-    console.log = function () { record('log', arguments); _log.apply(console, arguments); };
-    console.error = function () { record('error', arguments); _err.apply(console, arguments); };
-    console.warn = function () { record('warn', arguments); _warn.apply(console, arguments); };
-
-    var hud = document.createElement('div');
-    hud.id = 'agent-status-hud';
-    hud.style.cssText = 'position:fixed;bottom:10px;right:10px;background:rgba(0,0,0,0.85);color:#7CFC00;font-family:monospace;font-size:10px;padding:5px 8px;z-index:9999;border:1px solid #7CFC00;display:none;pointer-events:none;';
-    hud.textContent = '[AGENT] IDLE';
-    document.body.appendChild(hud);
-
-    window.__AI_AGENT__ = {
-        getLogs: function () { return agentLogs.slice(); },
-        clearLogs: function () { agentLogs.length = 0; },
-
-        getSynthState: function () {
-            var s = (window._agentSynthState ? window._agentSynthState() : {});
-            s.build = document.title;
-            s.game = {
-                moon: window._MOON || null,
-                playerStats: window._pstats || null,
-                fossils: (function () { try { return JSON.parse(localStorage.getItem('l99_fossils') || '[]').length; } catch (e) { return null; } })(),
-                relics: (function () { try { return parseInt(localStorage.getItem('l99_relics') || '0', 10); } catch (e) { return null; } })()
-            };
-            return s;
-        },
-
-        clickUI: function (selector) {
-            var el = document.querySelector(selector);
-            if (el) { el.click(); return 'Clicked ' + selector; }
-            return 'Error: Could not find ' + selector;
-        },
-
-        triggerDrum: function (drumName, velocity) {
-            if (typeof window.playDrum !== 'function') return 'Error: playDrum not found on window.';
-            var v = (typeof velocity === 'number') ? velocity : 1;
-            if (v > 1) v = v / 127;
-            window.playDrum(drumName, Math.max(0, Math.min(1, v)));
-            return 'Played ' + drumName + ' at vel ' + v.toFixed(2);
-        },
-
-        triggerLead: function (degree, bank, velocity, voiceId) {
-            if (typeof window.playLead !== 'function') return 'Error: playLead not found on window.';
-            var v = (typeof velocity === 'number') ? velocity : 1;
-            if (v > 1) v = v / 127;
-            window.playLead(voiceId || ('agent-' + degree + '-' + Date.now()), degree, bank || 1, false, v);
-            return 'Played degree ' + degree + ' bank ' + (bank || 1);
-        },
-
-        getCanvasSnapshot: function () {
-            // vox107: multiple canvases exist (visualizers etc.) -- snapshot the
-            // LARGEST one, which is the game's WebGL canvas.
-            var all = document.querySelectorAll('canvas');
-            var canvas = null;
-            for (var ci = 0; ci < all.length; ci++) {
-                if (!canvas || (all[ci].width * all[ci].height) > (canvas.width * canvas.height)) canvas = all[ci];
-            }
-            if (!canvas) return { error: 'No canvas found' };
+    ['log', 'warn', 'error'].forEach(function (type) {
+        var orig = console[type].bind(console);
+        console[type] = function () {
             try {
-                var data = canvas.toDataURL('image/png');
-                return {
-                    data: data,
-                    note: (data.length < 8000)
-                        ? 'Snapshot is suspiciously small -- likely a black frame: the WebGL context does not set preserveDrawingBuffer, so toDataURL is only valid immediately after a render.'
-                        : 'ok'
-                };
-            } catch (e) { return { error: String(e) }; }
-        },
-
-        getAudioAnalyzerData: function () {
-            try {
-                var A = window._agentAudio;
-                if (!A || !A.ctx) return { error: 'Audio not initialized yet (play a note first).' };
-                if (!window.__agentAnalyser) {
-                    window.__agentAnalyser = A.analyser;
-                    if (!window.__agentAnalyser && A.master) {
-                        window.__agentAnalyser = A.ctx.createAnalyser();
-                        A.master.connect(window.__agentAnalyser);
-                    }
-                }
-                if (!window.__agentAnalyser) return { error: 'No analyser tap available.' };
-                var arr = new Uint8Array(window.__agentAnalyser.frequencyBinCount);
-                window.__agentAnalyser.getByteFrequencyData(arr);
-                var sum = 0;
-                for (var i = 0; i < arr.length; i++) sum += arr[i];
-                return { isPlaying: sum > 0, level: sum / arr.length };
-            } catch (e) { return { error: String(e) }; }
-        },
-
-        setStatus: function (msg) {
-            hud.style.display = 'block';
-            hud.textContent = '[AGENT] ' + msg;
-        },
-
-        // vox106: BUILT-IN AUTO-TESTER. One call runs the full health sweep --
-        // DOM integrity, audio init, real signal per drum/lead bank (via a
-        // dedicated tap on the FINAL master node, where all three bank buses
-        // converge -- the pre-existing analyser may only see bank 1), bank-3
-        // routing proof, FX toggle round-trip, state doc, log capture, and
-        // persistence. Returns structured JSON; renders a results panel.
-        // Auto-runs when the URL contains 'selftest'.
-        runSelfTest: async function () {
-            var API = window.__AI_AGENT__;
-            var results = [];
-            var panel = document.getElementById('agent-test-panel');
-            if (panel) { try { panel.remove(); } catch (e) {} }
-            panel = document.createElement('div');
-            panel.id = 'agent-test-panel';
-            panel.style.cssText = 'position:fixed;top:10px;left:10px;max-width:340px;max-height:70vh;overflow:auto;background:rgba(0,0,0,0.92);color:#ddd;font-family:monospace;font-size:10px;padding:8px 10px;z-index:9999;border:1px solid #7CFC00;border-radius:6px;';
-            document.body.appendChild(panel);
-            panel.innerHTML = '<div style="color:#7CFC00;font-weight:bold;">[AGENT] SELF-TEST RUNNING...</div>';
-            function line(ok, name, detail, ms) {
-                var d = document.createElement('div');
-                d.style.color = ok ? '#7CFC00' : '#ff5544';
-                d.textContent = (ok ? '\u2713 ' : '\u2717 ') + name + (ms != null ? ' (' + ms + 'ms)' : '') + (detail ? ' -- ' + detail : '');
-                panel.appendChild(d);
-            }
-            function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-            function masterLevel() {
-                var A = window._agentAudio;
-                if (!A || !A.ctx || !A.master) return { error: 'no master' };
-                if (!window.__agentTestAnalyser) {
-                    window.__agentTestAnalyser = A.ctx.createAnalyser();
-                    A.master.connect(window.__agentTestAnalyser);
-                }
-                var arr = new Uint8Array(window.__agentTestAnalyser.frequencyBinCount);
-                window.__agentTestAnalyser.getByteFrequencyData(arr);
-                var sum = 0;
-                for (var i = 0; i < arr.length; i++) sum += arr[i];
-                return { level: sum / arr.length };
-            }
-            async function test(name, fn) {
-                var t0 = performance.now();
-                try {
-                    var detail = await fn();
-                    var ms = Math.round(performance.now() - t0);
-                    results.push({ name: name, ok: true, detail: detail || '', ms: ms });
-                    line(true, name, detail, ms);
-                } catch (e) {
-                    var ms2 = Math.round(performance.now() - t0);
-                    var msg = String((e && e.message) || e);
-                    results.push({ name: name, ok: false, detail: msg, ms: ms2 });
-                    line(false, name, msg, ms2);
-                }
-            }
-            API.setStatus('SELF-TEST');
-
-            await test('dom-core', async function () {
-                var ids = ['bpm-display', 'btn-fx-toggle', 'type-select-3', 'sl-space', 'sl-drum-humanize'];
-                var missing = ids.filter(function (id) { return !document.getElementById(id); });
-                if (missing.length) throw new Error('missing: ' + missing.join(','));
-                return ids.length + ' elements';
-            });
-
-            await test('audio-init', async function () {
-                if (typeof window.initAudio === 'function') window.initAudio();
-                var A = window._agentAudio;
-                if (!A || !A.ctx) throw new Error('ctx missing after initAudio');
-                if (A.ctx.state !== 'running') { try { await A.ctx.resume(); } catch (e) {} }
-                return 'ctx ' + A.ctx.state;
-            });
-
-            await test('drum-signal', async function () {
-                API.triggerDrum('kick', 1);
-                await wait(140);
-                var a = masterLevel();
-                if (a.error) throw new Error(a.error);
-                if (a.level < 0.5) throw new Error('no signal (level ' + a.level.toFixed(2) + ')');
-                return 'level ' + a.level.toFixed(1);
-            });
-
-            await test('lead-bank1-signal', async function () {
-                var id = 'agent-selftest-b1';
-                API.triggerLead(5, 1, 0.8, id);
-                await wait(160);
-                var a = masterLevel();
-                try { if (typeof window.stopLead === 'function') window.stopLead(id, true); } catch (e) {}
-                if (a.error) throw new Error(a.error);
-                if (a.level < 0.5) throw new Error('no signal');
-                return 'level ' + a.level.toFixed(1);
-            });
-
-            await test('lead3-bank3-routing', async function () {
-                var id = 'agent-selftest-l3';
-                API.triggerLead(15, 2, 0.8, id);
-                await wait(160);
-                var a = masterLevel();
-                try { if (typeof window.stopLead === 'function') window.stopLead(id, true); } catch (e) {}
-                var n3 = !!window._workletNode3;
-                if (a.error) throw new Error(a.error);
-                if (a.level < 0.5) throw new Error('no signal');
-                return (n3 ? 'bank-3 node ACTIVE' : 'fallback routing (node3 missing)') + ', level ' + a.level.toFixed(1);
-            });
-
-            await test('fx-panel-toggle', async function () {
-                var p = document.getElementById('fx-panel');
-                if (!p) throw new Error('fx-panel missing');
-                var was = p.hidden;
-                API.clickUI('#btn-fx-toggle');
-                await wait(60);
-                var flipped = (p.hidden !== was);
-                API.clickUI('#btn-fx-toggle');
-                await wait(30);
-                if (!flipped) throw new Error('panel did not toggle');
-                return 'toggled + restored';
-            });
-
-            await test('state-doc', async function () {
-                var s = API.getSynthState();
-                if (!s || s.face == null) throw new Error('face missing');
-                if (typeof s.bpm !== 'number' || !(s.bpm > 20)) throw new Error('bpm unreadable');
-                if (!s.moon || typeof s.moon.illum !== 'number') throw new Error('moon missing');
-                return 'face ' + s.face + ', bpm ' + s.bpm + ', moon ' + Math.round(s.moon.illum * 100) + '%';
-            });
-
-            await test('log-capture', async function () {
-                var marker = 'agent-selftest-marker-' + Date.now();
-                console.log(marker);
-                var found = API.getLogs().some(function (l) { return l.msg && l.msg.indexOf(marker) !== -1; });
-                if (!found) throw new Error('marker not captured');
-                return 'captured';
-            });
-
-            await test('persistence', async function () {
-                var k = 'l99_agent_selftest';
-                localStorage.setItem(k, 'ok');
-                var v = localStorage.getItem(k);
-                localStorage.removeItem(k);
-                if (v !== 'ok') throw new Error('localStorage round-trip failed');
-                return 'round-trip ok';
-            });
-
-            // ── vox107: COCKPIT (game) suite ──
-            function bigCanvas() {
-                var cs = document.querySelectorAll('canvas');
-                var best = null;
-                for (var i = 0; i < cs.length; i++) {
-                    if (!best || (cs[i].width * cs[i].height) > (best.width * best.height)) best = cs[i];
-                }
-                return best;
-            }
-
-            await test('cockpit-three', async function () {
-                if (!window.THREE || !window.THREE.REVISION) throw new Error('THREE not on window');
-                return 'THREE r' + window.THREE.REVISION;
-            });
-
-            await test('cockpit-canvas', async function () {
-                var cv = bigCanvas();
-                if (!cv) throw new Error('no canvas');
-                if (!(cv.width > 0 && cv.height > 0)) throw new Error('canvas zero-sized');
-                var gl = cv.getContext('webgl2') || cv.getContext('webgl');
-                if (!gl) throw new Error('no WebGL context');
-                if (gl.isContextLost && gl.isContextLost()) throw new Error('WebGL context LOST');
-                return cv.width + 'x' + cv.height;
-            });
-
-            await test('cockpit-heartbeat', async function () {
-                var frames = 0;
-                var stop = false;
-                (function tick() { if (stop) return; frames++; requestAnimationFrame(tick); })();
-                await wait(500);
-                stop = true;
-                if (frames < 10) throw new Error('page frozen (' + frames + ' frames in 500ms)');
-                return '~' + Math.round(frames * 2) + ' fps main thread';
-            });
-
-            await test('cockpit-systems', async function () {
-                var required = ['_planetfallVeil', '_fadeInObj', '__AI_COCKPIT__'];   // vox108
-                var missing = required.filter(function (k) { return window[k] == null; });
-                if (missing.length) throw new Error('missing: ' + missing.join(','));
-                var soft = ['_MOON', '_codexQuest', '_fossilSites'].filter(function (k) { return window[k] != null; });
-                return 'core ok' + (soft.length ? ' (live: ' + soft.join(', ') + ')' : ' (no surface systems live yet -- fly somewhere)');
-            });
-
-            await test('cockpit-snapshot', async function () {
-                var snap = API.getCanvasSnapshot();
-                if (snap.error) throw new Error(snap.error);
-                return (snap.note === 'ok') ? (Math.round(snap.data.length / 1024) + 'KB frame') : 'black-frame caveat (no preserveDrawingBuffer)';
-            });
-
-            var passed = results.filter(function (r) { return r.ok; }).length;
-            var failed = results.length - passed;
-            var foot = document.createElement('div');
-            foot.style.cssText = 'margin-top:6px;font-weight:bold;color:' + (failed ? '#ff5544' : '#7CFC00');
-            foot.textContent = failed ? ('[AGENT] ' + failed + ' FAILED / ' + results.length) : ('[AGENT] ALL ' + passed + ' PASSED');
-            panel.appendChild(foot);
-            var close = document.createElement('div');
-            close.style.cssText = 'margin-top:4px;color:#888;cursor:pointer;';
-            close.textContent = '[tap to dismiss]';
-            close.onclick = function () { try { panel.remove(); } catch (e) {} };
-            panel.appendChild(close);
-            API.setStatus(failed ? 'TEST: ' + failed + ' FAIL' : 'TEST: ALL PASS');
-            return { passed: passed, failed: failed, results: results };
-        }
-    };
-    console.log('[AGENT] bridge initialized');
-    if (location.search.indexOf('selftest') !== -1 || location.hash.indexOf('selftest') !== -1) {
-        setTimeout(function () { try { window.__AI_AGENT__.runSelfTest(); } catch (e) {} }, 1600);
-    }
+                push(type, Array.prototype.map.call(arguments, function (a) {
+                    try { return (typeof a === 'string') ? a : JSON.stringify(a); } catch (e) { return String(a); }
+                }).join(' '));
+            } catch (e) {}
+            orig.apply(null, arguments);
+        };
+    });
+    window.addEventListener('error', function (e) { push('error', e.message || e); });
+    window.addEventListener('unhandledrejection', function (e) { push('error', 'rejection: ' + (e.reason && e.reason.message || e.reason)); });
 })();
 </script>
 
@@ -22443,6 +22587,20 @@ window._handoffCopy = function () {
             try { window.open('flight.html', 'l99flight'); } catch (e) {}
         });
         host.parentNode.insertBefore(fb, host.nextSibling);
+        var cb = document.createElement('button');
+        cb.id = 'caves-btn';
+        /* da085: the icon alone. 'CAVES' spelled out crowded the pill row and
+           overlapped its neighbour on a phone. Same glyph, same placement, in
+           index and in flight, so one symbol always means the same door. */
+        cb.textContent = '\u26f0';
+        cb.title = 'caves';
+        cb.setAttribute('aria-label', 'caves');
+        cb.style.cssText = 'margin-left:6px;font-size:15px;line-height:1;padding-left:10px;padding-right:10px;min-width:0;flex:0 0 auto;';
+        cb.className = host.className;
+        cb.addEventListener('click', function () {
+            try { window.open('caves.html', 'l99caves'); } catch (e) {}
+        });
+        host.parentNode.insertBefore(cb, fb.nextSibling);
     }
     /* the cockpit no longer lives in this file: the in-page popout door would
        decode nothing, so the press itself opens flight.html -- captured
