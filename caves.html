@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>caves 080</title>
+<title>caves 081</title>
 <style>
     html, body {
         margin: 0; padding: 0; width: 100%; height: 100%;
@@ -288,7 +288,7 @@ body.brightbg .songIn { color: #0b4a3c !important; border-color: rgba(0,0,0,0.3)
     });
 })();
 </script>
-<div class="hud" id="topbar"><span class="t">caves 080</span></div>
+<div class="hud" id="topbar"><span class="t">caves 081</span></div>
 <div class="hud" id="depth">DEPTH 0 m</div>
 <div class="hud" id="hint"></div>
 <div class="btn" id="btnUp">&#9650;</div>
@@ -1484,7 +1484,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
     /* -------- the doors: rare openings in the deep that give onto a whole
        daylit world. one door per 1,500m cell at most, 120 to 2,700m down,
        each with its own world id and an arrival kind. LOCAL coords out. -------- */
-    var PORTAL_CELL = 1500;
+    var PORTAL_CELL = 620;
     var PORTAL_KINDS = ['mountain', 'ocean', 'forest', 'shore'];
     var portalCache = {};
     C.PORTAL_CELL = PORTAL_CELL;
@@ -1521,7 +1521,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         var k = cx2 + ',' + cz2;
         var c = portalCache[k];
         if (c !== undefined) return c;
-        if (hash3(cx2, 1500, cz2) > 0.30) { portalCache[k] = null; return null; }
+        if (hash3(cx2, 1500, cz2) > 0.72) { portalCache[k] = null; return null; }
         var ox = (cx2 + 0.5) * PORTAL_CELL + (hash3(cx2, 1501, cz2) - 0.5) * 900;
         var oz = (cz2 + 0.5) * PORTAL_CELL + (hash3(cz2, 1502, cx2) - 0.5) * 900;
         /* a third of the doors are shallow, so a world is never far away */
@@ -2360,7 +2360,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         var noiseBuf = null;
         var dripT = 2.5, crackleT = 0.2, stepDist = 0, gustT = 3;
         var fallGain = null, lapGain = null, windGain = null, scrapeGain = null, humGain = null, humOsc = null;
-        var roarGain = null, roarFilt = null, shimGain = null;
+        var roarGain = null, roarFilt = null, shimGain = null, washGain = null;
         var shardGain = null, shardN = 0;
         var soulGain = null, soulFilt = null, soulOsc = null, soulOscG = null, soulK = 0;
         var baskGain = null, baskOscs = [], baskK2 = 0;
@@ -2908,7 +2908,8 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             lapGain = layer(420, 'lowpass', 0.9);       /* still water lap */
             windGain = layer(190, 'lowpass', 0.5);      /* cave breath */
             scrapeGain = layer(260, 'bandpass', 3.0);   /* squeezing */
-            shimGain = layer(2400, 'bandpass', 2.4);    /* river shimmer */
+            shimGain = layer(2400, 'bandpass', 2.4);
+            washGain = layer(340, 'lowpass', 0.7);      /* sea wash breathing with the swell */    /* river shimmer */
             shardGain = layer(1800, 'bandpass', 2.0);   /* the gathered song */
             /* the elves in the room: a ringing shimmer above the song and a
                slow detune underneath it, so you HEAR them arrive */
@@ -3562,6 +3563,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             t2 = now();
             fallGain.gain.setTargetAtTime(Math.pow(Math.max(0, 1 - st.fallD / 45), 2) * 0.30, t2, 0.3);
             lapGain.gain.setTargetAtTime(Math.max(0, 1 - st.waterD / 14) * 0.07, t2, 0.5);
+            if (washGain) washGain.gain.setTargetAtTime(Math.max(0, 1 - (st.shoreD === undefined ? 999 : st.shoreD) / 60) * (0.35 + 0.65 * (st.surfPh || 0)) * 0.09, t2, 0.4);
             scrapeGain.gain.setTargetAtTime(st.squeezing ? 0.06 : 0.0, t2, 0.08);
             humGain.gain.setTargetAtTime(Math.max(0, 1 - st.crystalD / 13) * 0.035, t2, 0.4);
             /* cave breath: slow gusts, plus speed whoosh */
@@ -8457,7 +8459,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             greetPerson(who);
             return { voice: null, deg: 0, rub: 0, rubTarget: 0, lastMove: performance.now(), cap: false, obj: hit.object };
         }
-        /* 080: a board in the sand or loose on the water takes you surfing */
+        /* 081: a board in the sand or loose on the water takes you surfing */
         var bHit = hit.object && hit.object.userData &&
             (hit.object.userData.psurfSpot || hit.object.userData.psurfBoard);
         if (bHit && window.__mountSurf && window.__mountSurf(hit.object)) {
@@ -9843,6 +9845,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             } else {
                 yaw -= dx * 0.0042;
                 pitch -= dy * 0.0038;
+                lastLookT = performance.now();
                 pitch = Math.max(-1.45, Math.min(1.45, pitch));
             }
             rec.x = t.clientX; rec.y = t.clientY;
@@ -9897,6 +9900,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         if (Math.abs(dx) + Math.abs(dy) > 3) mouseMoved = true;
         yaw -= dx * 0.0042;
         pitch = Math.max(-1.45, Math.min(1.45, pitch - dy * 0.0038));
+        lastLookT = performance.now();
         mx = e.clientX; my = e.clientY;
     });
     window.addEventListener('mouseup', function (e) {
@@ -9951,6 +9955,74 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         return false;
     }
     var BODY_R = 0.30, CRAWL_R = 0.17;
+    /*__ASSIST__ v082: SEAMLESS EYES.
+       the right thumb is for curiosity, not correction. */
+    var lastLookT = 0;
+    var CAM_PAD = 0.32;   /* ~ a foot of air around the eye */
+    var assistTargetP = null, assistFrame = 0;
+    function camPad() {
+        /* the viewer can never see through the wall: six probes at pad
+           distance; any that find stone push the eye away, up to three
+           gentle resolve steps, and never into stone itself. */
+        if (window._CAVE_CAMPAD === false) return;
+        if (typeof over !== 'undefined' && over) return;   /* caves only */
+        if (typeof isPhasing === 'function' && isPhasing()) return;
+        if (!window._CAVE_COLLIDE) return;   /* free-phase flight is a choice */
+        var p = camera.position;
+        for (var it = 0; it < 3; it++) {
+            var mx = 0, my = 0, mz = 0, hit = false;
+            for (var d = 0; d < 6; d++) {
+                var dx = d === 0 ? CAM_PAD : d === 1 ? -CAM_PAD : 0;
+                var dy = d === 2 ? CAM_PAD : d === 3 ? -CAM_PAD : 0;
+                var dz = d === 4 ? CAM_PAD : d === 5 ? -CAM_PAD : 0;
+                if (CC.density(p.x + dx, p.y + dy, p.z + dz) > -0.02) {
+                    mx -= dx * 0.5; my -= dy * 0.5; mz -= dz * 0.5; hit = true;
+                }
+            }
+            if (!hit) return;
+            if (CC.density(p.x + mx, p.y + my, p.z + mz) < -0.02) {
+                p.x += mx; p.y += my; p.z += mz;
+            } else return;   /* pushing would enter stone: stay */
+        }
+    }
+    function caveAssist(dt) {
+        /* pitch follows the passage. a shaft ahead reads as air below the
+           eye line, so the gaze drifts down it; a climb lifts it. sampled
+           every 3rd frame at 2.5/4.5/6.5m ahead, 7 heights each. */
+        if (window._CAVE_LOOKASSIST === false) return;
+        if (typeof over !== 'undefined' && over) return;
+        var kf = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
+        if ((move.f + kf) < 0.25) return;                   /* forward only */
+        if (performance.now() - lastLookT < 700) return;    /* thumb wins */
+        assistFrame++;
+        if (assistFrame % 3 === 1 || assistTargetP === null) {
+            var fv = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            fv.y = 0;
+            if (fv.lengthSq() < 0.001) return;
+            fv.normalize();
+            var sumA = 0, sumW = 0;
+            for (var di = 0; di < 3; di++) {
+                var dist = 2.5 + di * 2.0;
+                var bx = camera.position.x + fv.x * dist;
+                var bz = camera.position.z + fv.z * dist;
+                var cy = 0, w = 0;
+                for (var oy = -3; oy <= 3; oy++) {
+                    if (CC.density(bx, camera.position.y + oy * 0.55, bz) < -0.03) {
+                        cy += oy * 0.55; w++;
+                    }
+                }
+                if (w > 0) { sumA += Math.atan2(cy / w, dist); sumW++; }
+            }
+            assistTargetP = sumW > 0 ? Math.max(-0.85, Math.min(0.85, sumA / sumW)) : null;
+        }
+        if (assistTargetP === null) return;
+        var dp = assistTargetP - pitch;
+        if (Math.abs(dp) < 0.05) return;                    /* no fidgeting */
+        pitch += dp * Math.min(1, dt * 1.4);                /* ease, never snap */
+        pitch = Math.max(-1.45, Math.min(1.45, pitch));
+    }
+    /*__ASSIST_END__*/
+
     var SUBSTEP = 0.08;   /* no single move may exceed this: speed cannot tunnel */
     var SQUEEZE_LEN = 0.95;   /* only pinches thinner than this admit a squeeze */
     var sqDepthFrame = 0;   /* how deep in the pinch this frame, 0..1 */
@@ -10685,7 +10757,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
     var epochTintNext = new THREE.Color(0x04070c);
     var CORE_FOG = new THREE.Color(0x2a0d05);
     var LAVA_FOG = new THREE.Color(0xff5a12);
-    var audioProx = { fallD: 999, torchD: 999, crystalD: 999, waterD: 999 };
+    var audioProx = { fallD: 999, torchD: 999, crystalD: 999, waterD: 999, shoreD: 999, surfPh: 0 };
 
     /* -------- light pool assignment, with fades so lights never pop -------- */
     var flickerT = 0;
@@ -12720,7 +12792,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         if (window._CAVE_MOUTHS === false) return;
         ensureMouthAssets();
         var many = CC.hash3(tx * 5 + 3, over.wid % 907, tz * 7 - 1);
-        var n = many < 0.34 ? 2 : (many < 0.72 ? 1 : 0);
+        var n = many < 0.34 ? 4 : (many < 0.70 ? 3 : 2);   /* v083: every tile has ways down */
         for (var k = 0; k < n; k++) {
             var hx = CC.hash3(tx * 11 + k, over.wid % 883 + 5, tz * 3 - k);
             var hz = CC.hash3(tz * 13 - k, over.wid % 877 + 9, tx * 7 + k);
@@ -12730,7 +12802,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             /* they belong on a slope: a mouth in flat ground is a hole, not a cave */
             var gx = overHeightAt(x + 4, z) - h, gz = overHeightAt(x, z + 4) - h;
             var slope = Math.sqrt(gx * gx + gz * gz);
-            if (slope < 1.1) continue;
+            if (slope < 0.55) continue;
             var into = Math.atan2(gx, gz);
             var grp = makeMouth(x, h - 1.1, z, into);
             overGroup.add(grp);
@@ -13698,6 +13770,11 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         towns.push({ x: cx, z: cz, houses: made, angle: A, span: span });
         rec.towns = rec.towns || [];
         rec.towns.push(towns[towns.length - 1]);
+        var tk = tx + ',' + tz + ',' + over.wid;
+        if (!plantedTowns[tk]) {
+            plantedTowns[tk] = true;
+            plantBoardsNear(cx, cz, overGroup, 2);
+        }
         refreshHousesNear(true);
         return true;
     }
@@ -15014,6 +15091,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
     };
     var overClock = 0, surfPop = null, surfWipes = 0, lastWipe = null;
     function tickPeople(dt2, t2) {
+        updateWash();
         if (!peopleGroup || !people.length) return;
         overClock = t2;
         peopleT += dt2;
@@ -15160,6 +15238,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
                 }
             }
             if (p.animate) p.mixer.update(dt2 + (dCam < 22 ? 0 : 0.008));
+            if (p.animate && p.aqua === 'surf' && p.surfPhase === 'ride') bendSpine(p, 0.42, 0);
         }
     }
     var WAVE_DIR = [-0.92926, -0.36949];        /* train 1 travels this way */
@@ -15332,10 +15411,57 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             : 'paddling. push forward on the stick, and rise with the swell to pop up.');
         return true;
     }
+    function bendSpine(person, bx, bz) {
+        /* post mixer additive lean: the mixer writes bone quaternions,
+           three syncs .rotation from them, so += here stacks on the pose.
+           spine takes 60 percent of the bend, chest 40, for a curve */
+        if (!person.bones2) {
+            person.bones2 = {};
+            person.group.traverse(function (o) {
+                if (o.isSkinnedMesh && o.skeleton) {
+                    for (var i2 = 0; i2 < o.skeleton.bones.length; i2++) {
+                        var b2 = o.skeleton.bones[i2];
+                        if (b2.name === 'spine' || b2.name === 'chest') person.bones2[b2.name] = b2;
+                    }
+                }
+            });
+        }
+        if (person.bones2.spine) {
+            person.bones2.spine.rotation.x += bx * 0.6;
+            person.bones2.spine.rotation.z += bz * 0.6;
+        }
+        if (person.bones2.chest) {
+            person.bones2.chest.rotation.x += bx * 0.4;
+            person.bones2.chest.rotation.z += bz * 0.4;
+        }
+    }
+    var washC = { t: -9, shoreD: 999, ph: 0 };
+    function updateWash() {
+        /* how far is the waterline, and is a crest passing: feeds the
+           wave wash audio layer through audioProx. cached at 0.35s */
+        if (!over) return;
+        if (overClock - washC.t < 0.35 && overClock >= washC.t) return;
+        washC.t = overClock;
+        var cx3 = camera.position.x, cz3 = camera.position.z, best = 999;
+        if (over.sea - overHeightAt(cx3, cz3) > 0.05) best = 0;
+        for (var a3 = 0; a3 < 6.28 && best > 0; a3 += 0.785) {
+            for (var r3 = 6; r3 <= 60; r3 += (r3 < 26 ? 8 : 16)) {
+                if (r3 >= best) break;
+                if (over.sea - overHeightAt(cx3 + Math.cos(a3) * r3, cz3 + Math.sin(a3) * r3) > 0.05) {
+                    best = r3; break;
+                }
+            }
+        }
+        washC.shoreD = best;
+        washC.ph = (waveFaceAt(cx3, cz3, overClock) + 1) / 2;
+        audioProx.shoreD = best;
+        audioProx.surfPh = washC.ph;
+    }
     function psurfEnd(silent) {
         if (!psurf.on && !psurf.avatar) return;
         psurf.on = false;
         psurf.phase = null;
+        audioProx.shoreD = 999; audioProx.surfPh = 0; washC.t = -9;
         if (psurf.avatar) psurf.avatar.group.visible = false;
         if (!silent) showHint('off the board.');
     }
@@ -15413,9 +15539,15 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
                 /* you pop up facing the beach: the wave is going there */
                 var sdp = shorewardDir(psurf.x, psurf.z);
                 psurf.head = Math.atan2(sdp[0], sdp[1]);
-                /* the drop-in cut: the camera whips with the pop */
+                /* the drop-in cut: the camera whips with the pop. position cuts
+                   too: a 180 flip would otherwise drag the lens through the rider */
                 yaw = psurf.head + Math.PI;
                 pitch = -0.16;
+                var cb = 5.6 + psurf.spd * 0.22;
+                camera.position.set(psurf.x - Math.sin(psurf.head) * cb,
+                    Math.max(psurf.y, surfY) + 1.9 + psurf.spd * 0.04,
+                    psurf.z - Math.cos(psurf.head) * cb);
+                vel.set(0, 0, 0);
                 psurf.spd = Math.max(psurf.spd, 4.2);
                 spraySpawn(psurf.x, surfY, psurf.z, 6, 0, 0, 1.6);
                 showHint('up. pump the stick forward on the face for speed. up button at the lip to fly.');
@@ -15508,6 +15640,12 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         }
         fadeTo(av, psurf.phase === 'paddle' ? 'Walking_B' : 'Idle', dt);
         av.mixer.update(dt);
+        /* SPINE LEAN, after the mixer so it stacks on the clip: forward
+           with speed on the ride, tucked in the air, soft on the paddle */
+        var lgoal = psurf.phase === 'ride' ? Math.min(0.72, 0.32 + psurf.spd * 0.034)
+            : psurf.phase === 'air' ? 0.46 : psurf.phase === 'paddle' ? 0.05 : 0;
+        psurf.lean = (psurf.lean || 0) + (lgoal - (psurf.lean || 0)) * Math.min(1, dt * 6);
+        bendSpine(av, psurf.lean, -psurf.carve * 0.16);
         /* THE CHASE CAMERA: low behind the line, easing after the heading
            while the look thumb stays free, view widening with speed */
         var back = 5.6 + psurf.spd * 0.22;
@@ -15523,13 +15661,13 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         fovJolt = Math.max(fovJolt, (psurf.spd - 8) * 0.028);
     }
     psurf.tick = psurfTick;
-    function makeBeachBoards() {
-        /* boards planted in the sand near the arrival, waiting */
-        psurf.beach = [];
-        if (window._CAVE_PSURF === false) return;
-        var cx = camera.position.x, cz = camera.position.z, made = 0;
-        for (var a = 0; a < 6.28 && made < 2; a += 0.35) {
-            for (var r = 8; r <= 90 && made < 2; r += 7) {
+    function plantBoardsNear(cx, cz, grp, maxN) {
+        /* boards lying in the sand wherever the ground meets the water,
+           within 90m of the given point. returns the meshes planted */
+        var made = [], colors = [0xffc447, 0x51c8e8, 0xff8a5c];
+        if (window._CAVE_PSURF === false) return made;
+        for (var a = 0; a < 6.28 && made.length < maxN; a += 0.35) {
+            for (var r = 8; r <= 90 && made.length < maxN; r += 7) {
                 var qx = cx + Math.cos(a) * r, qz = cz + Math.sin(a) * r;
                 var d = over.sea - overHeightAt(qx, qz);
                 if (d > -0.25 && d < 0.1) {
@@ -15537,19 +15675,24 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
                     if (!wt) continue;
                     var bg2 = new THREE.BoxGeometry(0.78, 0.15, 2.7);
                     var bm2 = new THREE.Mesh(bg2, new THREE.MeshLambertMaterial({
-                        color: made ? 0x51c8e8 : 0xffc447 }));
+                        color: colors[made.length % 3] }));
                     bm2.position.set(qx, overHeightAt(qx, qz) + 1.1, qz);
                     bm2.rotation.z = 0.42;
                     bm2.rotation.y = a + 1.3;
                     bm2.userData.playable = true;
                     bm2.userData.psurfSpot = { x: wt[0], z: wt[1] };
-                    overGroup.add(bm2);
-                    psurf.beach.push(bm2);
-                    made++;
+                    grp.add(bm2);
+                    made.push(bm2);
                     break;
                 }
             }
         }
+        return made;
+    }
+    var plantedTowns = {};
+    function makeBeachBoards() {
+        /* boards planted in the sand near the arrival, waiting */
+        psurf.beach = plantBoardsNear(camera.position.x, camera.position.z, overGroup, 2);
     }
     var freeBoards = [];
     function boardFreeOf(p) {
@@ -15788,6 +15931,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         return { on: true, phase: psurf.phase, spd: +psurf.spd.toFixed(2),
             x: Math.round(psurf.x), z: Math.round(psurf.z),
             y: +psurf.y.toFixed(2), face: +waveFaceAt(psurf.x, psurf.z, overClock).toFixed(2),
+            lean: +(psurf.lean || 0).toFixed(2),
             energy: +psurf.energy.toFixed(2), camD: +Math.sqrt(
                 Math.pow(camera.position.x - psurf.x, 2) + Math.pow(camera.position.z - psurf.z, 2)).toFixed(1),
             lookDot: (function () {
@@ -15795,6 +15939,14 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
                 var l = Math.sqrt(dx * dx + dz * dz) || 1;
                 return +((-Math.sin(yaw)) * dx / l + (-Math.cos(yaw)) * dz / l).toFixed(2);
             })() };
+    };
+    W.washState = function () {
+        return { shoreD: washC.shoreD, surfPh: +washC.ph.toFixed(2),
+            gain: +(Math.max(0, 1 - washC.shoreD / 60) * (0.35 + 0.65 * washC.ph) * 0.09).toFixed(4) };
+    };
+    W.plantBoards = function (x, z) {
+        return plantBoardsNear(x === undefined ? camera.position.x : x,
+            z === undefined ? camera.position.z : z, overGroup, 2).length;
     };
     W.surfDebug = function () { return { pop: surfPop, wipes: surfWipes, lastWipe: lastWipe,
         boardsFree: freeBoards.length, wave: over ? { dir: WAVE_DIR, speed: +WAVE_SPEED.toFixed(2) } : null }; };
@@ -15928,6 +16080,8 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             }
         }
 
+        caveAssist(dt);   /* v082: the gaze follows the passage */
+        camPad();          /* v082: a foot of air around the eye, always */
         var whipOff = whipA * Math.exp(-whipAge * 3.2) * Math.sin(whipAge * 8.5);
         euler.set(pitch, yaw + whipOff, camRoll + rideLean + whipOff * 0.4);
         camera.quaternion.setFromEuler(euler);
@@ -16277,7 +16431,7 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
             }
         }
         if (window.__psurf && window.__psurf.on) {
-            /* 080: the board owns the frame: the surf sim steers vel so the
+            /* 081: the board owns the frame: the surf sim steers vel so the
                camera chases the ride through the same integrator as always */
             window.__psurf.tick(dt, t, f, s, u, prevJump);
             grounded = false;
@@ -16707,9 +16861,60 @@ window.__KAY="S0FZMSkABHJvb3T/AAAAAAAAAAAAAAAAAAAAAP7//zMAAAAAAACAPwAAgD8AAIA/AA
         renderer.render(scene, camera);
     }
 
-    console.log('[CAVES 080] seed ' + CC.SEED +
+    console.log('[CAVES 083] seed ' + CC.SEED +
         ' | dials: _CAVE_SPEED _CAVE_RADIUS | kills: _CAVE_COLLIDE _CAVE_WATER _CAVE_FALLS _CAVE_SHROOMS _CAVE_TORCHES _CAVE_CRYSTALS _CAVE_MIST _CAVE_AUDIO _CAVE_CITIES _CAVE_SIGNS _CAVE_TRIP _CAVE_SHANTY _CAVE_TRIAL _CAVE_DOORS _CAVE_FLORA _CAVE_GRASS _CAVE_FORMS _CAVE_FAR _CAVE_BIRDS _CAVE_PEOPLE _CAVE_MOUTHS _CAVE_HOUSES _CAVE_GUIDES _CAVE_TOWNS _CAVE_DOCKS _CAVE_BREAK _CAVE_SWIM _CAVE_SPRAY _CAVE_PSURF | _CAVE.trip(n) freshStart() enterWorldAt(wid,kind) leaveWorld() overState() overForms() people() greet(n) socialState() houses() towns() tpToTown() docks() tpToDock() camps() inside() tpInside() playable() askGuide() guideState() tpToHouse() mouths() tpToMouth() tpToPerson() shatter() shatterState() unbreak() sendToWater() swimState() seaAt() sprayState() surfDebug() wipeNow() surf() dismount() surfWipe() surfPush() surfState() tpToDoor()');
 })();
 </script>
+
+<script>
+/* ══ L99 CAVES: third door of level99bard.com. The cave keeps its own voice
+   (CaveAudio is a full instrument) but takes the main faceplate tab's PULSE:
+   the beat channel re-keys cave tempo, so faceplate, caves and flight all
+   breathe in one time. Doors both ways. ══ */
+(function () {
+    try {
+        var chan = new BroadcastChannel('l99-audio');
+        window.__l99CaveSub = chan;
+        chan.onmessage = function (ev) {
+            var m = ev && ev.data;
+            if (!m || m.kind !== 'l99-beat') return;
+            try { if (window.CaveAudio && window.CaveAudio.setBPM) window.CaveAudio.setBPM(m.bpm); } catch (e) {}
+            window.__l99LinkAlive = Date.now();
+        };
+    } catch (e) {}
+    function doors() {
+        if (document.getElementById('l99-cave-doors')) return;
+        var wrap = document.createElement('div');
+        wrap.id = 'l99-cave-doors';
+        /* SITE v9.1: bottom-right, not top-right -- the caves' own SONG button
+   lives at right:86/top:18 and its panel opens at top:68, so top-right
+   was a collision (caught in the layout reconstruction). Bottom-right is
+   empty: TORCH is centred, the stick follows the left thumb. */
+        wrap.style.cssText = 'position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom, 0px) + 26px);z-index:99999;display:flex;gap:8px;';
+        /* SITE v9: icons only, so nothing collides with the caves' own HUD. */
+        /* SITE v10: inside the caves' OWN menu. The ... button already opens
+           #songPanel; the doors are its first rows now (Josh's screenshot
+           showed them sitting on the native thrust pads bottom-right --
+           the "empty corner" audit claim was wrong; said so, fixed so). */
+        var panel = document.getElementById('songPanel');
+        [['\ud83d\ude80', 'flight.html', 'SHIP'], ['\ud83c\udfb9', 'index.html', 'FACEPLATE']].forEach(function (d) {
+            var b = document.createElement('button');
+            b.textContent = d[0] + '  ' + d[2];
+            b.setAttribute('aria-label', d[2].toLowerCase());
+            b.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;margin:0 0 8px;' +
+                'background:rgba(10,14,22,0.85);color:#9fe8d0;border:1px solid #01a982;' +
+                'border-radius:10px;padding:9px 11px;font:12px ui-monospace,Menlo,monospace;' +
+                'letter-spacing:1px;text-align:left;white-space:nowrap;cursor:pointer;';
+            b.addEventListener('click', function () { try { location.href = d[1]; } catch (e) {} });
+            if (panel) panel.insertBefore(b, panel.firstChild);
+            else wrap.appendChild(b);   /* no panel in this build: corner fallback */
+        });
+        if (!panel) document.body.appendChild(wrap);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', doors);
+    else doors();
+})();
+</script>
+
 </body>
 </html>
