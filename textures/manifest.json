@@ -1,0 +1,264 @@
+{
+  "version": 138,
+  "materials": {
+    "file": "materials-f924d3f2d2.webp",
+    "tile": 256,
+    "columns": 4,
+    "entries": {
+      "skin": {
+        "size": 256,
+        "mean": 172.936,
+        "rgb": [
+          204.82,
+          166.18,
+          145.96
+        ],
+        "tile": 0,
+        "data": ""
+      },
+      "linen": {
+        "size": 256,
+        "mean": 176.291,
+        "rgb": [
+          188.97,
+          174.31,
+          158.61
+        ],
+        "tile": 1,
+        "data": ""
+      },
+      "leather": {
+        "size": 256,
+        "mean": 116.891,
+        "rgb": [
+          131.29,
+          114.13,
+          101.81
+        ],
+        "tile": 2,
+        "data": ""
+      },
+      "fur": {
+        "size": 256,
+        "mean": 120.953,
+        "rgb": [
+          134.11,
+          118.61,
+          105.47
+        ],
+        "tile": 3,
+        "data": ""
+      },
+      "denim": {
+        "size": 256,
+        "mean": 77.796,
+        "rgb": [
+          68.9,
+          78.99,
+          92.14
+        ],
+        "tile": 4,
+        "data": ""
+      },
+      "wool": {
+        "size": 256,
+        "mean": 65.644,
+        "rgb": [
+          68.17,
+          65.03,
+          64.26
+        ],
+        "tile": 5,
+        "data": ""
+      },
+      "scales": {
+        "size": 256,
+        "mean": 92.813,
+        "rgb": [
+          101.26,
+          91.22,
+          83.75
+        ],
+        "tile": 6,
+        "data": ""
+      },
+      "feathers": {
+        "size": 256,
+        "mean": 134.506,
+        "rgb": [
+          141.43,
+          133.19,
+          127.12
+        ],
+        "tile": 7,
+        "data": ""
+      },
+      "oak": {
+        "size": 256,
+        "mean": 93.782,
+        "rgb": [
+          99.54,
+          93.21,
+          82.5
+        ],
+        "tile": 8,
+        "data": ""
+      },
+      "birch": {
+        "size": 256,
+        "mean": 166.565,
+        "rgb": [
+          169.54,
+          166.06,
+          162.78
+        ],
+        "tile": 9,
+        "data": ""
+      },
+      "leaf": {
+        "size": 256,
+        "mean": 91.899,
+        "rgb": [
+          68.56,
+          104.36,
+          37.2
+        ],
+        "tile": 10,
+        "data": ""
+      },
+      "needles": {
+        "size": 256,
+        "mean": 66.89,
+        "rgb": [
+          52.82,
+          73.44,
+          43.49
+        ],
+        "tile": 11,
+        "data": ""
+      },
+      "moss": {
+        "size": 256,
+        "mean": 87.534,
+        "rgb": [
+          86.99,
+          93.43,
+          30.69
+        ],
+        "tile": 12,
+        "data": ""
+      },
+      "lichen": {
+        "size": 256,
+        "mean": 131.214,
+        "rgb": [
+          138.3,
+          130.82,
+          114.29
+        ],
+        "tile": 13,
+        "data": ""
+      },
+      "fungus": {
+        "size": 256,
+        "mean": 174.938,
+        "rgb": [
+          192.71,
+          172.46,
+          147.18
+        ],
+        "tile": 14,
+        "data": ""
+      },
+      "reed": {
+        "size": 256,
+        "mean": 144.565,
+        "rgb": [
+          161.41,
+          144.68,
+          93.84
+        ],
+        "tile": 15,
+        "data": ""
+      },
+      "banded-fur": {
+        "size": 256,
+        "mean": 72.763,
+        "rgb": [
+          98.89,
+          67.83,
+          44.72
+        ],
+        "tile": 16,
+        "data": ""
+      },
+      "spotted-fur": {
+        "size": 256,
+        "mean": 86.56,
+        "rgb": [
+          111.18,
+          81.94,
+          59.81
+        ],
+        "tile": 17,
+        "data": ""
+      },
+      "teal-feathers": {
+        "size": 256,
+        "mean": 61.778,
+        "rgb": [
+          28.28,
+          69.55,
+          83.44
+        ],
+        "tile": 18,
+        "data": ""
+      },
+      "suede": {
+        "size": 256,
+        "mean": 54.106,
+        "rgb": [
+          93.83,
+          44.65,
+          30.79
+        ],
+        "tile": 19,
+        "data": ""
+      }
+    }
+  },
+  "eyes": {
+    "file": "eyes-577fe3096f.webp",
+    "tile": 128,
+    "columns": 4,
+    "entries": {
+      "wolf": 0,
+      "deer": 1,
+      "goat": 2,
+      "lynx": 3,
+      "gecko": 4,
+      "crocodilian": 5,
+      "owl": 6,
+      "raven": 7
+    }
+  },
+  "characters145": {
+    "mesh": "human-base-dd84ad3d07.json.gz",
+    "images": {
+      "young_caucasian_female": "human-young_caucasian_female-dd2fc42c44.webp",
+      "young_caucasian_male": "human-young_caucasian_male-e1639aeae1.webp",
+      "old_caucasian_female": "human-old_caucasian_female-5c8b8cd784.webp",
+      "old_caucasian_male": "human-old_caucasian_male-4126648f8f.webp",
+      "young_african_female": "human-young_african_female-2c0f99940e.webp",
+      "young_african_male": "human-young_african_male-8b9e87bf3a.webp",
+      "short01": "human-hair-short01-a0ac470402.webp",
+      "short02": "human-hair-short02-880498da47.webp",
+      "ponytail01": "human-hair-ponytail01-0958cf0101.webp",
+      "male_casualsuit01_diffuse": "human-clothing-diffuse-351b3b1c19.webp",
+      "male_casualsuit01_normal": "human-clothing-normal-6b8358df24.webp",
+      "male_casualsuit01_ao": "human-clothing-ao-67a546a7f5.webp"
+    },
+    "license": "CC0",
+    "source": "MakeHuman Community graphical assets"
+  }
+}
