@@ -15,7 +15,7 @@
    window.__l99P(byteOffset) as the parser reaches it, so the megabytes shown
    are actual document bytes received, not a fake animation. */
 (function () {
-  var TOTAL = 000000006472211;
+  var TOTAL = 000000006474637;
   var d = document, wrap = d.createElement('div');
   wrap.id = 'l99-boot';
   wrap.setAttribute('style',
@@ -4890,10 +4890,10 @@ root.L99Personality147={createStore,store,bind,update,pose,authored,clearAuthore
 if(root.addEventListener){root.addEventListener('pagehide',()=>store.flush(true));if(root.document)root.document.addEventListener('visibilitychange',()=>{if(root.document.hidden)store.flush(true);});}
 })(window);
 
-/* HUMAN_PROPORTIONS_147: adult 25/50/25 art direction, independent of temperament and skin tone. */
+/* HUMAN_PROPORTIONS_148 / HUMAN_PROPORTIONS_147: adult 25/50/25 art direction, independent of temperament and skin tone. */
 (function(root){'use strict';const ga=(x,c,w)=>Math.exp(-(((x-c)/w)**2)),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function recipe(seed){const r=root.L99FaunaGenome131.random((seed^0x7b41e93d)>>>0),roll=r(),style=roll<.25?'idealized':roll>=.75?'irregular':'natural';return{style,roll,side:r()<.5?-1:1,cheek:r(),jaw:r(),nose:r(),chin:r(),asymmetry:r(),ears:r(),build:r()};}
-function sculpt(p,d){const a=d.proportions147;if(!a||a.style==='natural'||d.age<16)return p;const ideal=a.style==='idealized',masc=d.sex;
+function previousSculpt(p,d){const a=d.proportions147;if(!a||a.style==='natural'||d.age<16)return p;const ideal=a.style==='idealized',masc=d.sex;
  for(let i=0;i<p.length;i+=3){const x=p[i],y=p[i+1],z=p[i+2],ax=Math.abs(x),side=Math.sign(x),face=ga(y,1.605,.118),front=clamp((z-.045)/.08,0,1),nose=ga(x,0,.023)*ga(y,1.602,.052)*clamp((z-.107)/.036,0,1),jaw=ga(y,1.51,.041)*front,cheek=ga(ax,.048,.028)*ga(y,1.59,.035)*front;
   if(ideal){
    // A defined mandibular border, supported cheek plane and restrained nasal projection.
@@ -4923,16 +4923,52 @@ function sculpt(p,d){const a=d.proportions147;if(!a||a.style==='natural'||d.age<
  }
  return p;
 }
-root.L99HumanShape147={recipe,sculpt};
+
+function maleIdeal(d){return d.age>=16&&d.sex>.5&&d.proportions147&&d.proportions147.style==='idealized';}
+// Authored muscle targets carry connected pectoral, deltoid and limb anatomy.
+// DNA identity is unchanged; this is an explicit art-direction layer.
+function condition(d){if(!maleIdeal(d))return{muscle:d.muscle,weight:d.weight};const a=d.proportions147;
+ return{muscle:(.78+.13*a.build)*(1-.18*clamp((d.age-55)/30,0,1)),weight:.025+d.weight*.28};}
+function sculpt(p,d){
+ if(!maleIdeal(d))return previousSculpt(p,d);
+ const a=d.proportions147,D=root.L99HumanData145;
+ let top=0;for(let i=1;i<p.length;i+=3)top=Math.max(top,p[i]);const unit=top/1.78;
+ const center=ids=>{const v=[0,0,0];for(const id of ids)for(let k=0;k<3;k++)v[k]+=p[id*3+k]/(ids.length*unit);return v;};
+ const eye=center([...D.eyes.L,...D.eyes.R]);
+ const bone=name=>center(D.bones.find(b=>b.name===name).ids);
+ const shoulderY=(bone('upperarm01.L')[1]+bone('upperarm01.R')[1])*.5,waistY=bone('spine04')[1];
+ // Face masks follow the eye landmarks, in normalized metres, across age and body blends.
+ // Positive-Z is the face; the smooth wrap includes the mandibular side plane.
+ for(let i=0;i<p.length;i+=3){
+  const x=p[i]/unit,y=p[i+1]/unit,z=p[i+2]/unit,ax=Math.abs(x),side=Math.sign(x);
+  const wrap=clamp((z-eye[2]+.125)/.075,0,1),front=clamp((z-eye[2]+.025)/.045,0,1);
+  const jaw=ga(y,eye[1]-.099,.033)*ga(ax,.053,.036)*wrap;
+  const chin=ga(y,eye[1]-.126,.026)*ga(x,0,.034)*front;
+  const cheek=ga(y,eye[1]-.026,.022)*ga(ax,.051,.022)*wrap;
+  const hollow=ga(y,eye[1]-.064,.024)*ga(ax,.054,.022)*front;
+  let dx=side*(jaw*(.0075+.0025*a.jaw)+cheek*(.003+.0015*a.cheek)-hollow*.0018);
+  let dz=chin*(.007+.003*a.chin)+cheek*.0028-hollow*.0032;
+  // Broad chin, straight jaw border and supported cheekbones, without scaling the eye globes.
+  dx+=side*chin*ga(ax,.023,.019)*.003;
+  dz+=ga(y,eye[1]+.018,.018)*ga(ax,.028,.025)*front*.0015;
+  // A readable athletic silhouette, fitted into the same garment and skeleton.
+  const torso=clamp((.38-ax)/.16,0,1),shoulder=ga(y,shoulderY-.020,.102),waist=ga(y,waistY+.012,.112);
+  dx+=x*torso*(shoulder*(.060+.020*a.build)-waist*(.075+.025*a.build));
+  dz+=(z+.015)*torso*(shoulder*.035-waist*.065);
+  p[i]+=(dx*unit);p[i+2]+=(dz*unit);
+ }
+ return p;
+}
+root.L99HumanShape147={recipe,sculpt,condition};
 })(window);
 
-/* EXPRESSIVE_CITIZENS_147 / ANATOMICAL_CITIZENS_145: seeded continuous CC0 base, real skin UVs and shared animation. */
+/* DISTINCT_MALE_CITIZENS_148 / EXPRESSIVE_CITIZENS_147 / ANATOMICAL_CITIZENS_145: seeded continuous CC0 base, real skin UVs and shared animation. */
 (function(root){'use strict';const factories=new WeakMap(),clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x)),ga=(x,c,w)=>Math.exp(-(((x-c)/w)**2));
 function decode(s,type){const a=Uint8Array.from(atob(s),c=>c.charCodeAt(0));return new type(a.buffer);}
 function create(T){if(factories.has(T))return factories.get(T);const D=root.L99HumanData145;if(!D)throw Error('Anatomical assets must be ready before entering a world');const base=decode(D.position,Int16Array),uv=decode(D.uv,Uint16Array),ids=decode(D.indices,Uint8Array),weights=decode(D.weights,Uint16Array),bodyFaces=decode(D.body,Uint16Array),cageFaces=decode(D.cage,Uint16Array),targets={},materialCache=new Map(),skinCache=new Map(),figures=new Set(),rigs=new WeakMap(),life=root.L99Life133,textile=root.L99Materials133.create(T);for(const [n,s] of Object.entries(D.targets))targets[n]=decode(s,Int16Array);
 function dna(seed){const r=root.L99FaunaGenome131.random((seed^0x541caa)>>>0),sex=r(),ancestry=[r()**2,r()**2,r()**2],total=ancestry.reduce((a,b)=>a+b,0);return{seed,sex,proportions147:root.L99HumanShape147.recipe(seed),ancestry:ancestry.map(v=>v/total),age:22+Math.pow(r(),1.55)*60,muscle:r()*.52,weight:r()*.48,faceWidth:.95+r()*.10,nose:.93+r()*.14,hairStyle:Math.floor(r()*5),hairSeed:r()*1e6|0,cloth:Math.floor(r()*6),hue:r(),tone:.88+r()*.16};}
 function positions(d){const p=Float32Array.from(base,x=>x*D.unit);for(let a=0;a<3;a++)for(const [s,w] of [['female',1-d.sex],['male',d.sex]])for(const [age,wage] of [['young',d.age<16?0:1-clamp((d.age-25)/65)],['old',d.age<16?0:clamp((d.age-25)/65)],['child',d.age<16?1:0]]){if(!wage)continue;const target=targets[['african','asian','caucasian'][a]+'-'+s+'-'+age],amount=d.ancestry[a]*w*wage*D.unit;for(let i=0;i<p.length;i++)p[i]+=target[i]*amount;}
-for(const [s,w] of [['female',1-d.sex],['male',d.sex]])for(const [name,amount] of [['maxmuscle-averageweight',d.muscle],['averagemuscle-maxweight',d.weight]]){const t=targets['universal-'+s+'-young-'+name];for(let i=0;i<p.length;i++)p[i]+=t[i]*amount*w*D.unit;}
+const condition148=root.L99HumanShape147.condition(d);for(const [s,w] of [['female',1-d.sex],['male',d.sex]])for(const [name,amount] of [['maxmuscle-averageweight',condition148.muscle],['averagemuscle-maxweight',condition148.weight]]){const t=targets['universal-'+s+'-young-'+name];for(let i=0;i<p.length;i++)p[i]+=t[i]*amount*w*D.unit;}
 let min=Infinity;for(let i=1;i<p.length;i+=3)min=Math.min(min,p[i]);for(let i=0;i<p.length;i+=3){const y=p[i+1]-min;p[i+1]=y;const face=ga(y,1.59,.12);p[i]*=1+(d.faceWidth-1)*face;if(p[i+2]>.14)p[i+2]+=(d.nose-1)*.015*face;}root.L99HumanShape147.sculpt(p,d);let top=0;for(let i=1;i<p.length;i+=3)top=Math.max(top,p[i]);for(let i=0;i<p.length;i++)p[i]*=1.78/top;d.normalize145=1.78/top;return p;}
 function linear(hex){const c=new T.Color(hex);if(new T.Color(0x808080).r>.4)c.convertSRGBToLinear();return c;}
 function texture(data,size){const t=new T.DataTexture(data,size,size,T.RGBAFormat);t.wrapS=t.wrapT=T.RepeatWrapping;t.minFilter=T.LinearMipmapLinearFilter;t.magFilter=T.LinearFilter;t.generateMipmaps=true;t.anisotropy=4;t.needsUpdate=true;return t;}
@@ -17647,7 +17683,7 @@ document.addEventListener('visibilitychange', () => {
     try { if (typeof gatherFullState === 'function') localStorage.setItem(SAVESTATE_KEY, JSON.stringify(gatherFullState())); } catch(e) {}
   }
 });
-</script><script>window.__l99P&&window.__l99P(0005277275);</script>
+</script><script>window.__l99P&&window.__l99P(0005279701);</script>
 
 
 <!-- Fullscreen cockpit visualizer overlay — Tron/space-cockpit galactic flythrough.
@@ -19886,7 +19922,7 @@ try {
   if (document.readyState === 'complete' || document.readyState === 'interactive') setupMIDI();
   else document.addEventListener('DOMContentLoaded', () => { try { setupMIDI(); } catch(e){} });
 } catch(e){}
-</script><script>window.__l99P&&window.__l99P(0005391859);</script>
+</script><script>window.__l99P&&window.__l99P(0005394285);</script>
 
 
 
@@ -24455,7 +24491,7 @@ window._handoffCopy = function () {
 
 
 
-<script>window.__l99Stage&&window.__l99Stage('packing the caverns 3/3');window.__l99P&&window.__l99P(0006465856);</script>
+<script>window.__l99Stage&&window.__l99Stage('packing the caverns 3/3');window.__l99P&&window.__l99P(0006468282);</script>
 <script>window.__l99Stage&&window.__l99Stage('tuning the instruments');</script>
 
 <script>
