@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta name="l99-build" content="176">
+<meta name="l99-build" content="179">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,6 +27,87 @@ window.__PLANET_TEX = {
 };
 </script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <script>
 /* BOOT_176: download and prepare only the requested world. */
 (function(root){'use strict';
@@ -45,14 +126,14 @@ function status(message,failed){if(!wantsStatus)return;const p=panel();p.style.d
 function show(message,again){wantsStatus=true;retry=again;status(message);}
 function hide(){wantsStatus=false;if(box)box.style.display='none';}
 function execute(code){const s=document.createElement('script');s.textContent=code;let error=null;const caught=e=>{error=e.error||Error(e.message);};root.addEventListener('error',caught);try{document.head.appendChild(s);}finally{s.remove();root.removeEventListener('error',caught);}if(error)throw error;}
-function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-176.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();execute(blocks[coreAt]);}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
+function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();execute(blocks[coreAt]);}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
 function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;
  })().catch(e=>{worldReady=null;throw e;});return worldReady;}
 function rewrite(code,resolved){return code.replace(/(\bfrom\s+|\bimport\s+)['"]([^'"]+)['"]/g,(m,lead,spec)=>resolved[spec]?lead+JSON.stringify(resolved[spec]):m);}
 async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(flightReady)return flightReady;root.__cockpitLoadError170=null;
- flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-176.js.gz'),ensureWorld()]);const resolved={},urls=[];
+ flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-179.js.gz'),ensureWorld()]);const resolved={},urls=[];
   try{for(const [spec,code]of files[0]){const url=URL.createObjectURL(new Blob([rewrite(code,resolved)],{type:'text/javascript'}));resolved[spec]=url;urls.push(url);}
    await frame();const url=URL.createObjectURL(new Blob([rewrite(files[1],resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
@@ -3818,6 +3899,75 @@ html.mobile-world176,body.mobile-world176{overflow:hidden!important;overscroll-b
 }
 
 </style>
+<style id="peak-style177">
+#peak-meter177{display:flex;align-items:center;gap:10px;min-height:26px;padding:3px 10px;box-sizing:border-box;font:10px/1.3 ui-monospace,monospace;color:var(--btn-text,#d2e7da);pointer-events:none;}
+#peak-meter177 [data-readout]{flex:0 0 auto;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.peak-track177{display:block;position:relative;flex:1;height:8px;min-width:42px;background:#7773;border-radius:4px;}
+#peak-meter177 [data-level]{position:absolute;inset:0 auto 0 0;width:0;background:currentColor;opacity:.65;border-radius:4px;}
+#peak-meter177 [data-ceiling]{position:absolute;top:-4px;bottom:-4px;left:93.75%;width:2px;background:#ff424f;box-shadow:0 0 5px #ff424f88;}
+</style>
+<script id="peak-code177">
+/* PEAK_177: stereo-linked lookahead protection runs on the audio thread. */
+(function(root){'use strict';
+function processor177(){
+ class PeakGuard177 extends AudioWorkletProcessor {
+  constructor(){super();this.delay=Math.ceil(sampleRate*.004);this.cap=1;while(this.cap<this.delay+3)this.cap*=2;this.mask=this.cap-1;this.ring=[new Float32Array(this.cap),new Float32Array(this.cap)];this.qv=new Float64Array(this.cap);this.qi=new Float64Array(this.cap);this.head=0;this.tail=0;this.n=0;this.gain=1;this.ceiling=Math.pow(10,-3/20);this.attack=Math.exp(-1/(sampleRate*.0005));this.release=Math.exp(-1/(sampleRate*.25));this.ceilingAttack=Math.exp(-1/(sampleRate*.002));this.ceilingRelease=Math.exp(-1/(sampleRate*.6));this.meter=0;this.peak=0;this.outPeak=0;this.minGain=1;}
+  process(inputs,outputs){const input=inputs[0]||[],out=outputs[0];if(!out?.length)return true;
+   for(let i=0;i<out[0].length;i++,this.n++){
+    let peak=0;for(let c=0;c<2;c++){const raw=input[c]?.[i]??input[0]?.[i]??0;const v=Number.isFinite(raw)?raw:0;this.ring[c][this.n&this.mask]=v;peak=Math.max(peak,Math.abs(v));}
+    while(this.tail>this.head&&this.qi[this.head&this.mask]<this.n-this.delay)this.head++;
+    while(this.tail>this.head&&this.qv[(this.tail-1)&this.mask]<=peak)this.tail--;
+    this.qv[this.tail&this.mask]=peak;this.qi[this.tail&this.mask]=this.n;this.tail++;
+    const ahead=this.qv[this.head&this.mask],extra=Math.min(3,Math.max(0,20*Math.log10(Math.max(1e-12,ahead))+3)*.15),desiredCeiling=Math.pow(10,(-3-extra)/20);
+    const ck=desiredCeiling<this.ceiling?this.ceilingAttack:this.ceilingRelease;this.ceiling=desiredCeiling+(this.ceiling-desiredCeiling)*ck;
+    const target=Math.min(1,this.ceiling/Math.max(1e-12,ahead)),k=target<this.gain?this.attack:this.release;this.gain=target+(this.gain-target)*k;
+    const at=(this.n-this.delay)&this.mask,l=this.n>=this.delay?this.ring[0][at]:0,r=this.n>=this.delay?this.ring[1][at]:0;
+    // Catch the remaining attack error using linked gain, never per-channel clipping.
+    this.gain=Math.min(this.gain,this.ceiling/Math.max(1e-12,Math.abs(l),Math.abs(r)));
+    out[0][i]=l*this.gain;if(out[1])out[1][i]=r*this.gain;
+    this.peak=Math.max(this.peak,peak);this.outPeak=Math.max(this.outPeak,Math.abs(out[0][i]),Math.abs(out[1]?.[i]||0));this.minGain=Math.min(this.minGain,this.gain);
+    if(++this.meter>=sampleRate/25){this.port.postMessage({input:this.peak,output:this.outPeak,ceiling:this.ceiling,reduction:20*Math.log10(Math.max(1e-12,this.minGain)),mode:'lookahead'});this.meter=0;this.peak=this.outPeak=0;this.minGain=1;}
+   }return true;
+  }
+ }
+ registerProcessor('peak-guard177',PeakGuard177);
+}
+let state={input:0,output:0,ceiling:Math.pow(10,-3/20),reduction:0,mode:'ready'},installed=null;
+function paint(){const meter=document.getElementById('peak-meter177');if(!meter)return;const db=x=>Math.max(-48,20*Math.log10(Math.max(1e-12,x))),pos=x=>Math.max(0,Math.min(100,(db(x)+48)/48*100));meter.querySelector('[data-level]').style.width=pos(state.output)+'%';meter.querySelector('[data-ceiling]').style.left=pos(state.ceiling)+'%';meter.querySelector('[data-readout]').textContent='PEAK GUARD '+db(state.ceiling).toFixed(1)+' dB'+(state.reduction<-.2?' · −'+Math.abs(state.reduction).toFixed(1)+' dB':'');meter.title='Red line: automatic output ceiling. The line lowers under heavy peaks; protection follows notes and every control change.';}
+function install(ctx,input,analyser){
+ const output=ctx.createGain();root._masterClip=output;root._peakInput177=input;root._masterClipOn=true;root._recBus=ctx.createGain();analyser.connect(output);output.connect(ctx.destination);output.connect(root._recBus);
+ root._setMasterClip=()=>{root._masterClipOn=true;return true;};
+ const fallback=ctx.createWaveShaper(),curve=new Float32Array(65537),ceiling=Math.pow(10,-3/20);for(let i=0;i<curve.length;i++)curve[i]=Math.max(-ceiling,Math.min(ceiling,i*2/(curve.length-1)-1));fallback.curve=curve;fallback.oversample='none';
+ const fallbackGain=ctx.createGain();root._safetyLimiter.connect(fallback);fallback.connect(fallbackGain);fallbackGain.connect(analyser);
+ state={input:0,output:0,ceiling,reduction:0,mode:'fallback'};installed={ctx,input,analyser,output};paint();
+ if(!ctx.audioWorklet||typeof AudioWorkletNode==='undefined')return;
+ const url=URL.createObjectURL(new Blob(['('+processor177.toString()+')();'],{type:'text/javascript'}));
+ ctx.audioWorklet.addModule(url).then(()=>{
+  if(ctx.state==='closed'||installed?.ctx!==ctx)return;
+  const guard=new AudioWorkletNode(ctx,'peak-guard177',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:'explicit'}),wet=ctx.createGain();wet.gain.value=0;guard.port.onmessage=e=>{if(installed?.ctx===ctx){state=e.data;paint();}};
+  input.connect(guard);guard.connect(wet);wet.connect(analyser);installed.guard=guard;
+  guard.onprocessorerror=()=>{const t=ctx.currentTime;wet.gain.cancelScheduledValues(t);wet.gain.setValueAtTime(0,t);fallbackGain.gain.cancelScheduledValues(t);fallbackGain.gain.setValueAtTime(1,t);state={...state,ceiling,reduction:0,mode:'fallback'};paint();};
+  // Let the lookahead fill before fading from the always-protected fallback.
+  const t=ctx.currentTime+.015;wet.gain.setValueAtTime(0,t);wet.gain.linearRampToValueAtTime(1,t+.02);fallbackGain.gain.setValueAtTime(1,t);fallbackGain.gain.linearRampToValueAtTime(0,t+.02);
+ }).catch(()=>{state.mode='fallback';paint();}).finally(()=>URL.revokeObjectURL(url));
+}
+root.L99Peak177={install,state:()=>({...state}),refresh:paint};
+document.addEventListener('input',paint,{passive:true});document.addEventListener('DOMContentLoaded',paint);
+})(window);
+
+</script>
+<style id="context-style178">
+#cockpit-overlay #cockpit-scan-readout{position:fixed!important;inset:auto!important;top:66px!important;left:50%!important;right:auto!important;bottom:auto!important;transform:translateX(-50%)!important;width:min(320px,calc(100vw - 32px))!important;min-width:0!important;max-width:calc(100vw - 32px)!important;height:auto!important;min-height:64px!important;max-height:140px!important;box-sizing:border-box!important;padding:10px 14px!important;pointer-events:auto!important;touch-action:manipulation;cursor:pointer;z-index:100110!important;overflow:hidden;}
+#cockpit-scan-readout span{pointer-events:none;overflow-wrap:anywhere;}
+#cockpit-overlay #l99-scan-bar{inset:auto!important;top:210px!important;left:50%!important;bottom:auto!important;transform:translateX(-50%)!important;width:max-content!important;max-width:calc(100vw - 32px)!important;height:auto!important;flex-wrap:wrap;justify-content:center;gap:6px!important;z-index:100109!important;}
+#cockpit-overlay #l99-scan-bar button{min-height:44px!important;max-width:160px!important;font-size:12px!important;letter-spacing:0!important;touch-action:manipulation;}
+#human-talk150,#npc-talk{display:none!important;}
+#contact-open154[hidden],#fishing170[hidden],[data-dig172][hidden]{display:none!important;}
+body.mobile-world176 #world-actions176>[data-mobile-slot="context"]{pointer-events:auto!important;}
+body.mobile-tool-active176 #world-actions176>[data-mobile-slot="context"]{display:none!important;}
+body.mobile-world176 #world-actions176 button{min-height:44px!important;}
+#fishing170 [data-status][data-bite="true"]{color:#ffe5a0;font-weight:bold;text-shadow:0 0 8px #ffc954;}
+</style>
 </head>
 <body>
 <div id="synth">
@@ -3913,6 +4063,10 @@ html.mobile-world176,body.mobile-world176{overflow:hidden!important;overscroll-b
     </div>
 
     <canvas id="visualizer"></canvas>
+    <div id="peak-meter177" aria-label="Automatic peak protection">
+      <span data-readout>PEAK GUARD −3.0 dB</span>
+      <span class="peak-track177"><i data-level></i><i data-ceiling></i></span>
+    </div>
 
     <!-- XY Filter Pad with hit indicator grid behind waveform -->
     <div id="xy-pad-container">
@@ -7118,7 +7272,8 @@ function initAudio() {
   //      is purely a hardware safeguard against transient spikes that slip
   //      past the first stage.
   // The previous `limiter → analyser → destination` chain becomes:
-  //   limiter → dcFilter → safetyLimiter → analyser → destination
+  //   limiter → dcFilter → adaptive lookahead guard → analyser → output
+  //   The compressor/clip branch is retained only as a protected fallback.
   // ═══════════════════════════════════════════════════════════════════════
   window._dcFilter = ctx.createBiquadFilter();
   window._dcFilter.type = 'highpass';
@@ -7133,33 +7288,7 @@ function initAudio() {
 
   limiter.connect(window._dcFilter);
   window._dcFilter.connect(window._safetyLimiter);
-  window._safetyLimiter.connect(analyser);
-  window._recBus = window._recBus || ctx.createGain();
-  // fix685: recording is tapped AFTER the master clip (below) so exported WAV matches playback.
-  // fix396: reserve soft clipping for true peak emergencies. The old curve began
-  // saturating around -4 dBFS, audibly sanding the softness off orchestral layers.
-  // The safety limiter already catches spikes, so this final curve stays nearly
-  // transparent until roughly -1.7 dBFS and only rounds the last bit of headroom.
-  window._masterClip = window._masterClip || (function () {
-    var ws = ctx.createWaveShaper(), N = 2048, c = new Float32Array(N), t = 0.86;
-    for (var i = 0; i < N; i++) { var x = (i / (N - 1)) * 2 - 1, ax = Math.abs(x);
-      var y = ax <= t ? ax : t + (1 - t) * Math.tanh((ax - t) / (1 - t));
-      c[i] = (x < 0 ? -1 : 1) * y * 0.985; }
-    ws.curve = c; ws.oversample = "4x"; return ws;
-  })();
-  window._masterClipOn = true;
-  window._masterClip.connect(ctx.destination);
-  window._masterClip.connect(window._recBus);   // fix685: recorder fed POST-clip
-  analyser.connect(window._masterClip);
-  window._setMasterClip = function (on) {
-    var rb = window._recBus, mc = window._masterClip, c2 = ctx;
-    if (!rb || !mc || !c2) return;
-    try { rb.disconnect(mc); } catch (e) {}
-    try { rb.disconnect(c2.destination); } catch (e) {}
-    try { mc.disconnect(c2.destination); } catch (e) {}
-    if (on) { rb.connect(mc); mc.connect(c2.destination); } else { rb.connect(c2.destination); }
-    window._masterClipOn = on;
-  };
+  window.L99Peak177.install(ctx,window._dcFilter,analyser);
 
   // fix397: browser-visible audition telemetry. The score director reads this
   // at a low cadence to shed optional counterpoint before the glue compressor
@@ -7181,10 +7310,12 @@ function initAudio() {
     var busReduction = 0, safetyReduction = 0;
     try { busReduction = Number(limiter && limiter.reduction) || 0; } catch(e) {}
     try { safetyReduction = Number(window._safetyLimiter && window._safetyLimiter.reduction) || 0; } catch(e) {}
-    var clipActive = peak >= 0.86;
+    var protected177=window.L99Peak177?.state();
+    if(protected177?.mode==='lookahead')safetyReduction=protected177.reduction;
+    var clipActive = protected177?.mode==='lookahead' ? protected177.reduction < -.2 : peak >= 0.86;
     window._autoAudioStats = window._autoAudioStats || { maxPeak:0, minBusReduction:0, minSafetyReduction:0, clipSamples:0, samples:0 };
     var S = window._autoAudioStats; S.samples++; S.maxPeak = Math.max(S.maxPeak, peak); S.minBusReduction = Math.min(S.minBusReduction, busReduction); S.minSafetyReduction = Math.min(S.minSafetyReduction, safetyReduction); if (clipActive) S.clipSamples++;
-    return { peak:peak, rms:rms, busReduction:busReduction, safetyReduction:safetyReduction, clipActive:clipActive, activeVoices:Object.keys(activeVoices || {}).length, outputGain:outputGain.gain.value, clipThreshold:0.86, history:S };
+    return { peak:peak, rms:rms, busReduction:busReduction, safetyReduction:safetyReduction, clipActive:clipActive, activeVoices:Object.keys(activeVoices || {}).length, outputGain:outputGain.gain.value, clipThreshold:protected177?.ceiling||0.86, history:S };
   };
 
   // External-audio analyser — fed only by the mic when passthrough is on. NEVER
@@ -7307,10 +7438,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function makeDistortionCurve(amount) {
+  if (!(amount > 0)) return null; // True bypass: stacked notes retain floating-point headroom.
   const n = 256;
   const curve = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    const x = (i * 2) / n - 1;
+    const x = (i * 2) / (n - 1) - 1;
     if (amount === 0) { curve[i] = x; }
     else { curve[i] = Math.tanh(x * (1 + amount * 10)); }
   }
@@ -7318,11 +7450,12 @@ function makeDistortionCurve(amount) {
 }
 
 function makeCrunchCurve(amount) {
+  if (!(amount > 0)) return null; // A zero-effect WaveShaper curve still clips above unity.
   const n = 256;
   const curve = new Float32Array(n);
   const steps = Math.max(2, Math.round(256 * (1 - amount * 0.9)));
   for (let i = 0; i < n; i++) {
-    const x = (i * 2) / n - 1;
+    const x = (i * 2) / (n - 1) - 1;
     curve[i] = Math.round(x * steps) / steps;
   }
   return curve;
@@ -13808,12 +13941,12 @@ function buildUI() {
     // click/distortion-prone params to professional headroom. Range-relative
     // so it's correct whatever units each slider uses:
     //   attack/release floored at 4% of range (kills note-on/off clicks),
-    //   crunch/grit capped at 50% (drive stays color, not clipping),
+    //   crunch/grit reset to zero (true bypass for clean polyphonic chords),
     //   delay/space sends capped at 45% (wet never swamps the bus).
     (function _proSafeFx(){
       const floors = ['sl-atk', 'sl-rel'];
-      const caps   = { 'sl-crunch': 0.5, 'sl-grit': 0.5, 'sl-crunch-2': 0.5, 'sl-grit-2': 0.5,
-                       'sl-crunch-3': 0.5, 'sl-grit-3': 0.5,
+      const caps   = { 'sl-crunch': 0, 'sl-grit': 0, 'sl-crunch-2': 0, 'sl-grit-2': 0,
+                       'sl-crunch-3': 0, 'sl-grit-3': 0,
                        'sl-delay': 0.45, 'sl-space': 0.45, 'sl-delay-2': 0.45, 'sl-space-2': 0.45,
                        'sl-delay-3': 0.45, 'sl-space-3': 0.45,
                        'sl-drum-delay': 0.45, 'sl-drum-space': 0.45 };
@@ -16267,10 +16400,11 @@ document.addEventListener('visibilitychange', () => {
     <button id="cockpit-orbit-btn" class="cp-action-btn cp-orbit" type="button" title="Orbit the scanned planet" style="display:none;">↻ ORBIT</button>
     <button id="cockpit-ride-btn" class="cp-action-btn cp-ride" type="button" title="Ride the alien space snake" style="display:none;">🐍 RIDE</button>
     <!-- Scan readout: shows the targeted planet's name + quick stats -->
-    <div id="cockpit-scan-readout" style="display:none;">
-      <div id="cockpit-scan-name">—</div>
-      <div id="cockpit-scan-stats">—</div>
-    </div>
+    <button type="button" id="cockpit-scan-readout" style="display:none;" aria-label="Approach scanned planet">
+      <span style="display:block;font-size:11px">APPROACH</span>
+      <span id="cockpit-scan-name" style="display:block">—</span>
+      <span id="cockpit-scan-stats" style="display:block">—</span>
+    </button>
     <!-- Codex traversal quest: shown on a planet surface when a fragment is
          locked far away. AUTO-WALK toggles hands-free travel to it. -->
     <div id="cockpit-codex-quest" style="display:none;">
@@ -19017,11 +19151,11 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
     try { djMaster.disconnect(); } catch (e) {}
     if (djScope) { try { djMaster.connect(djScope); } catch (e) {} }
     if (dryRoute) {
-      try { djMaster.connect(window._recBus || c.destination); } catch (e) {}
+      try { djMaster.connect(window._peakInput177 || window._dcFilter || masterGain); } catch (e) {}
       if (window._reactiveAnalyser) { try { djMaster.connect(window._reactiveAnalyser); } catch (e) {} }
     } else if (typeof masterGain !== 'undefined' && masterGain) {
-      try { djMaster.connect(masterGain); } catch (e) { djMaster.connect(window._recBus || c.destination); }
-    } else { djMaster.connect(window._recBus || c.destination); }
+      try { djMaster.connect(masterGain); } catch (e) { djMaster.connect(window._peakInput177 || window._dcFilter || masterGain); }
+    } else { djMaster.connect(window._peakInput177 || window._dcFilter || masterGain); }
   }
 
   function ensureGraph() {
@@ -20026,9 +20160,11 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
     routeBtn.addEventListener('click', function () { dryRoute = !dryRoute; routeBtn.textContent = dryRoute ? 'DRY' : 'FX: WET'; routeBtn.classList.toggle('dry', dryRoute); ensureGraph(); applyRoute(); });
     meterFill = master.querySelector('#dj-meterfill'); clipLed = master.querySelector('#dj-clip');
     var guardBtn = master.querySelector('#dj-guard');
+    guardBtn.title = 'Peak protection stays on for playback and recording';
+    guardBtn.setAttribute('aria-pressed','true');
     if (typeof window._setMasterClip !== 'function') { guardBtn.disabled = true; guardBtn.title = 'Master clip guard unavailable (older build)'; }
     guardBtn.addEventListener('click', function () {
-      var turnOn = guardBtn.classList.contains('off');
+      var turnOn = true; // Output protection remains on for every route.
       if (window._setMasterClip) window._setMasterClip(turnOn);
       guardBtn.classList.toggle('off', !turnOn);
       guardBtn.textContent = 'GUARD: ' + (turnOn ? 'ON' : 'OFF');
@@ -23091,7 +23227,7 @@ window._handoffCopy = function () {
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-176.html.gz');};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz');};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
@@ -24175,12 +24311,13 @@ function tick(){const next=root.L99Keyboard149?.world(),full=coarse()&&['flight'
  document.documentElement.classList.toggle('mobile-world176',full);document.body.classList.toggle('mobile-world176',full);if(!full){if(ui){ui.tools.hidden=ui.actions.hidden=true;setOpen(false);}if(homes.size)restore();realm='';return;}
  make();size();ui.tools.hidden=ui.actions.hidden=false;if(next!==realm){restore();realm=next;setOpen(false);}document.body.dataset.mobileRealm=realm;
  const fish=root.L99Fishing170?.state(),fishing=!!fish&&fish.realm===realm,digging=!!root.L99Dig172?.equipped(realm);document.body.classList.toggle('mobile-tool-active176',fishing||digging);
- for(const id of ['field-journal175','contact-open154','l99-msg-tab','l99-surf-hud'])dock(document.getElementById(id),ui.body,'tool');
- for(const el of document.querySelectorAll('[data-dig172]'))if(el.dataset.dig172===realm)dock(el,digging?ui.actions:ui.body,digging?'active-tool':'tool');
- const fishingUI=document.getElementById('fishing170');dock(fishingUI,fishing?ui.actions:ui.body,fishing?'active-tool':'tool');
+ for(const id of ['field-journal175','l99-msg-tab','l99-surf-hud','cockpit-build-btn','cockpit-looklock-btn'])dock(document.getElementById(id),ui.body,'tool');
+ dock(document.getElementById('contact-open154'),ui.actions,'context');
+ for(const el of document.querySelectorAll('[data-dig172]'))if(el.dataset.dig172===realm)dock(el,ui.actions,digging?'active-tool':'context');
+ const fishingUI=document.getElementById('fishing170');dock(fishingUI,ui.actions,fishing?'active-tool':'context');
  if(fishing&&!fishWas||digging&&!digWas)setOpen(false);fishWas=fishing;digWas=digging;
  if(realm==='caves')for(const id of ['btnMode','btnAudio','btnRec','btnTorch','btnSong'])dock(document.getElementById(id),ui.body,'tool');
- if(realm==='flight')for(const id of ['cockpit-land-btn','cockpit-fly-btn','cockpit-orbit-btn','cockpit-ride-btn'])dock(document.getElementById(id),ui.actions,'action');
+ if(realm==='flight')for(const id of ['cockpit-land-btn','cockpit-fly-btn','cockpit-orbit-btn','cockpit-ride-btn'])dock(document.getElementById(id),root.L99TouchWorld154?.walking?.()?ui.body:ui.actions,'action');
  for(const el of document.querySelectorAll('.journey-controls170'))if(el.dataset.journeyRealm===realm)dock(el,ui.actions,'journey');
 }
 root.visualViewport?.addEventListener('resize',size);root.addEventListener('orientationchange',()=>requestAnimationFrame(size));root.addEventListener('resize',size);setInterval(tick,250);root.L99Mobile176={tick,size,dock,restore};
