@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta name="l99-build" content="181">
+<meta name="l99-build" content="183">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,6 +27,83 @@ window.__PLANET_TEX = {
 };
 </script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3986,6 +4063,7 @@ function hit(ctx,bus,name,time,vel=1,settings={}){const r=resources(ctx),t=Math.
  const tone=(f0,f1,dur,level,wave='sine')=>{const o=node(ctx.createOscillator()),g=node(ctx.createGain());o.type=wave;o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur*.7);g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(env);sources.push(o);};
  const noise=(freq,dur,level,type='highpass')=>{const n=node(ctx.createBufferSource()),f=node(ctx.createBiquadFilter()),g=node(ctx.createGain());n.buffer=r.noise;f.type=type;f.frequency.value=Math.min(ctx.sampleRate*.42,freq);f.Q.value=.7;g.gain.setValueAtTime(level,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);n.connect(f);f.connect(g);g.connect(env);sources.push(n);};
  if(name==='kick'){duration=.32;tone(145,46,.3,.85);tone(700,150,.02,.10);noise(4500,.012,.09);}
+ else if(name==='rollsnare'){duration=.085;tone(205,165,.055,.20,'triangle');noise(2300,.065,.4);noise(6000,.025,.06);}
  else if(name==='snare'||name==='clap'){duration=.21;tone(205,155,.11,.35,'triangle');tone(335,270,.075,.12);noise(1700,.18,.65);noise(6200,.045,.2);}
  else if(name==='hihat'||name==='openhat'){duration=name==='openhat'?.23:.065;noise(7200,duration,.35);tone(6500,5800,.018,.025,'square');}
  else{duration=.12;tone(520,190,.11,.3,'triangle');noise(3000,.045,.15);}
@@ -4019,7 +4097,7 @@ function scheduleStep(c,bassBus,drumBus,i,t,config,freqFn){const s=config.patter
 }
 function stop(){startToken++;starting=false;playing=false;clearInterval(timer);for(const v of scheduled)v.stop?.();scheduled.clear();if(ui){ui.play.textContent='PLAY';ui.play.setAttribute('aria-pressed','false');}status('Stopped');}
 function pump(){if(!playing)return;const c=api.context();if(document.hidden||api.face()!==face||api.world()!=='bard'||c.state!=='running'){stop();return;}if(next<c.currentTime-.05)next=c.currentTime+.02;const config=settings();while(next<c.currentTime+.10){for(const v of scheduleStep(c,api.bass(),api.drums(),step,next,config,d=>api.frequency(d)))scheduled.add(v);step=(step+1)%32;next+=60/config.bpm/4;}for(const v of scheduled)if(v.end<c.currentTime)scheduled.delete(v);}
-async function play(){if(playing||starting){stop();return;}starting=true;const token=++startToken;try{const c=ensure();if(c.state!=='running')await c.resume();if(token!==startToken)return;if(c.state!=='running')throw Error('Tap PLAY again to enable audio.');api.prepare();api.select(state.sound);lastPitch.delete(c);playing=true;step=0;next=c.currentTime+.06;origin=next;ui.play.textContent='STOP';ui.play.setAttribute('aria-pressed','true');status('Playing · '+api.bpm()+' BPM · current faceplate key and scale');timer=setInterval(pump,25);pump();}catch(e){stop();status(e.message);}finally{if(token===startToken)starting=false;}}
+async function play(){if(playing||starting){stop();return;}starting=true;const token=++startToken;try{const c=ensure();if(c.state!=='running')await c.resume();if(token!==startToken)return;if(c.state!=='running')throw Error('Tap PLAY again to enable audio.');root.L99Hyphy182?.stop();api.prepare();api.select(state.sound);lastPitch.delete(c);playing=true;step=0;next=c.currentTime+.06;origin=next;ui.play.textContent='STOP';ui.play.setAttribute('aria-pressed','true');status('Playing · '+api.bpm()+' BPM · current faceplate key and scale');timer=setInterval(pump,25);pump();}catch(e){stop();status(e.message);}finally{if(token===startToken)starting=false;}}
 
 function selectSound(type){state.sound=type;api.select(type);save();}
 function syncFace(){if(!api||api.face()===face)return;stop();face=api.face();let stored;try{stored=JSON.parse(localStorage.getItem('l99-studio181:'+face)||'null');}catch(e){}state=valid(stored,face);page=selected=0;undo.length=redo.length=0;render();status(face+' production · follows your key, scale and tempo');}
@@ -4048,6 +4126,54 @@ function mount(){const button=document.createElement('button');button.className=
  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});root.addEventListener('pagehide',stop);syncFace();requestAnimationFrame(visual);
 }
 root.L99Studio181={register:a=>{api=a;mount();},settings:()=>state?settings():{},stop,pattern,valid,midi,renderStep:scheduleStep,voice:(c,type,f,out,t,from)=>Sound.voice(c,type,f,out,t,settings(),from)};
+})(window);
+
+</script>
+
+
+<style id="hyphy182-style">
+#special-panel .yee182{padding:14px;background:radial-gradient(ellipse at top right,#2464b34d,transparent 70%),#090f1c;color:#f5edb3;font:12px/1.4 ui-monospace,monospace;text-shadow:none}#special-panel .yee182 button{font:inherit;color:inherit;border:1px solid #6488b8;background:#132543;border-radius:10px;min-height:48px;padding:9px;touch-action:manipulation;cursor:pointer}#special-panel .yee-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}#special-panel .yee-modes button{min-width:0;font-size:10px}#special-panel .yee-modes [aria-pressed=true]{background:#264e90;border-color:#ffe06c}#special-panel .yee-modes .queued{border-style:dashed;border-color:#ffe06c}#special-panel .yee-transport{width:100%;margin:12px 0;background:#e8cd60;color:#0e182d;font-weight:bold}#special-panel .yee-pads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#special-panel .yee-pads button{display:flex;flex-direction:column;justify-content:center;gap:8px;min-height:112px;touch-action:none;user-select:none;-webkit-user-select:none}#special-panel .yee-pads strong{font-size:clamp(17px,4vw,28px);font-weight:900;letter-spacing:-.04em}#special-panel .yee-pads small{font-size:9px;opacity:.8}#special-panel .yee-pads [data-action=yeee]{background:#eace66;color:#151e31}#special-panel .yee-pads [aria-pressed=true]{background:#3373be;box-shadow:inset 0 0 0 2px #ffe06c;color:white}#special-panel .yee-macros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}#special-panel .yee-macros label{position:relative;min-width:0;font-size:11px}#special-panel .yee-macros output{float:right}#special-panel .yee-macros input{display:block;width:100%;height:40px;margin:0;accent-color:#ffe06c}#special-panel .yee-meter{display:grid;grid-template-columns:repeat(16,1fr);gap:4px;margin:0 0 12px}#special-panel .yee-meter i{height:5px;background:#314367;border-radius:2px}#special-panel .yee-meter .lit{background:#ffe06c}#special-panel .yee182 button:focus-visible{outline:2px solid white;outline-offset:2px}#special-panel .yee182 p{min-height:32px;margin:12px 0 0;color:#b2c4dd;font-size:11px}
+
+</style>
+<script id="hyphy182-code">
+/* HYPHY 182: sample-accurate performance instrument. No samples or network requests. */
+(function(root){'use strict';
+const sound=root.L99Sound181;let current=null;
+function groove(mode){const motifs=[[0,0,7,0,4,0,6,0],[0,7,0,4,0,0,6,4],[0,0,4,0,7,6,0,4]],slots=[[0,3,6,10,14,16,19,22,27,30],[0,6,9,14,16,22,25,30],[0,2,7,10,14,16,18,23,26,31]],kicks=[[0,6,10,16,22,27],[0,7,10,16,23,26],[0,6,9,16,22,25,30]];return Array.from({length:32},(_,i)=>({on:slots[mode].includes(i),degree:motifs[mode][Math.floor(i/2)%8],gate:i%8===0?.85:.4,velocity:i%4===0?.95:.74,ratchet:1,color:.35,kick:kicks[mode].includes(i)?1:0,snare:i%16===4||i%16===12?.95:0,hat:i%2===0?.48:([7,15,23,31].includes(i)?.22:0)}));}
+function mount(panel,onClose){if(current)current.dispose();let running=false,starting=false,disposed=false,timer=0,token=0,next=0,step=0,mode=0,queuedMode=null,roll=false,ghost=false,drop=false,ctxRef,config,bank,events=new Set(),rollEvents=new Set(),timeline=[],pointers=new Map(),keys=new Set();
+ panel.innerHTML='<div class="sp-head"><span class="sp-title">YEEE MACHINE</span><span class="sp-sub">BAY AREA / LIVE</span><button type="button" class="sp-close">CLOSE</button></div><div class="yee182"><div class="yee-meter" aria-hidden="true">'+Array.from({length:16},(_,i)=>'<i data-led="'+i+'"></i>').join('')+'</div><div class="yee-modes"><button data-mode="0" aria-pressed="true">TOWN BUSINESS</button><button data-mode="1" aria-pressed="false">GHOST RIDE</button><button data-mode="2" aria-pressed="false">SIDESHOW</button></div><button class="yee-transport" data-run>START THE FUNCTION</button><div class="yee-pads"><button data-action="yeee"><strong>YEEE!</strong><small>TAP · FORMANT SHOUT</small></button><button data-action="roll"><strong>GO DUMB</strong><small>HOLD · TIGHT ROLL</small></button><button data-action="ghost"><strong>GHOST IT</strong><small>HOLD · STRIP THE BEAT</small></button><button data-action="drop"><strong>BRING IT BACK</strong><small>TAP · NEXT-BEAT DROP</small></button></div><div class="yee-macros" data-audio-effect><label>KNOCK <output data-knock-value>65%</output><input data-knock aria-label="Knock" type="range" min="0" max="100" value="65"></label><label>SWING <output data-swing-value>35%</output><input data-swing aria-label="Swing" type="range" min="0" max="100" value="35"></label></div><p data-status role="status">Pick a pocket. Tap YEEE. Hold GO DUMB, then bring it back.</p></div>';
+ const el=q=>panel.querySelector(q),run=el('[data-run]'),status=el('[data-status]'),knock=el('[data-knock]'),swing=el('[data-swing]');
+ function say(s){status.textContent=s;}
+ function allowed(){return !disposed&&!document.hidden&&currentFace==='HYPHY'&&(!root.L99Keyboard149||root.L99Keyboard149.world()==='bard');}
+ function collect(v){events.add(v);return v;}
+ function oneShot(kind,t){const c=ctxRef,bus=bank;const owned=[],sources=[],node=n=>(owned.push(n),n),amp=node(c.createGain());amp.connect(bus);const duration=kind==='yeee'?.64:kind==='whistle'?.22:.12,level=kind==='yeee'?.17:kind==='whistle'?.08:.10;
+ amp.gain.setValueAtTime(0,t);amp.gain.linearRampToValueAtTime(level,t+.008);amp.gain.exponentialRampToValueAtTime(.0001,t+duration);
+ const base=getFreq(kind==='whistle'?7:0,1,false)*(kind==='yeee'?.5:1);
+ if(kind==='yeee'){const o=node(c.createOscillator());o.type='sawtooth';o.frequency.setValueAtTime(Math.max(65,base*.75),t);o.frequency.exponentialRampToValueAtTime(Math.max(85,base*1.5),t+.12);o.frequency.exponentialRampToValueAtTime(Math.max(70,base),t+.6);for(const [from,to,gain] of [[650,310,.65],[1200,2400,.38],[2600,3200,.12]]){const f=node(c.createBiquadFilter()),g=node(c.createGain());f.type='bandpass';f.Q.value=6;f.frequency.setValueAtTime(from,t);f.frequency.exponentialRampToValueAtTime(to,t+.16);g.gain.value=gain;o.connect(f);f.connect(g);g.connect(amp);}sources.push(o);
+ }else{for(const f of kind==='bell'?[540,800]:[Math.min(3000,base*2)]){const o=node(c.createOscillator());o.type=kind==='bell'?'square':'sine';o.frequency.setValueAtTime(f,t);if(kind==='whistle')o.frequency.exponentialRampToValueAtTime(f*.89,t+duration);o.connect(amp);sources.push(o);}}
+ let left=sources.length;const v={end:t+duration+.03,stop(){amp.gain.cancelScheduledValues(c.currentTime);amp.gain.setTargetAtTime(0,c.currentTime,.005);sources.forEach(n=>{try{n.stop(c.currentTime+.03)}catch(e){}});}};sources.forEach(n=>{n.onended=()=>{if(!--left){owned.forEach(x=>x.disconnect());events.delete(v);}};n.start(t);n.stop(v.end);});return collect(v);}
+ function releaseRoll(){roll=false;rollEvents.forEach(v=>v.stop?.());rollEvents.clear();}
+ function stop(){releaseRoll();token++;starting=false;running=false;clearInterval(timer);events.forEach(v=>v.stop?.());events.clear();timeline=[];roll=ghost=drop=false;pointers.clear();keys.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));panel.querySelectorAll('[data-led]').forEach(b=>b.classList.remove('lit'));run.textContent='START THE FUNCTION';run.setAttribute('aria-pressed','false');if(bank){bank.disconnect();bank=null;}root._specialDrumsActive=false;say('Stopped.');}
+ async function ready(){const ticket=token;initAudio();const c=ctx;if(c.state!=='running')await c.resume();if(c.state!=='running')throw Error('Tap again to enable audio.');if(ticket!==token||!allowed())throw Error('Playback cancelled.');ctxRef=c;if(!bank){bank=c.createGain();bank.gain.value=.8;bank.connect(masterGain);}return c;}
+ async function start(){if(running||starting){stop();return false;}starting=true;const ticket=++token;try{await ready();if(ticket!==token||!allowed())return false;root.L99Studio181?.stop();if(sequencerRunning)stopSequencer();config={...root.L99Studio181.valid(null,'HYPHY'),sound:'SUB-PRESSURE',pattern:groove(mode),bpm,glide:.65,sub:.9,color:.42,drive:.35,mix:.8,automation:false,duck:.55};running=true;step=0;next=ctxRef.currentTime+.04;root._specialDrumsActive=true;run.textContent='STOP THE FUNCTION';run.setAttribute('aria-pressed','true');timer=setInterval(pump,25);say('Live · '+bpm+' BPM · current key and scale');pump();return true;}catch(e){if(ticket===token){stop();say(e.message);}return false;}finally{if(ticket===token)starting=false;}}
+ function pump(){if(!running)return;if(!allowed()||ctxRef.state!=='running'){stop();return;}const c=ctxRef;if(next<c.currentTime-.04)next=c.currentTime+.025;while(next<c.currentTime+.075){const i=step%32,dt=60/bpm/4,beat=i%4===0;if(queuedMode!==null&&i===0){mode=queuedMode;queuedMode=null;config.pattern=groove(mode);markModes();say('Pocket switched on the downbeat.');}config.bpm=bpm;config.punch=+knock.value/100;config.drive=.15+config.punch*.4;config.mix=.58+config.punch*.25;const t=next+(i%2?dt*(+swing.value/100)*.42:0),s={...config.pattern[i]};
+ if(ghost){s.on=false;s.kick=s.snare=0;s.hat=i%4===0?.25:0;}
+ if(roll&&!ghost){s.snare=s.hat=0;const velocity=[.52,.18,.30,.18][i%4]*config.mix;const h=sound.hit(c,drumBus,'rollsnare',next,velocity,{...config,punch:.35});h.end=next+.12;rollEvents.add(h);collect(h);}
+ if(drop&&beat){releaseRoll();drop=false;ghost=false;s.on=true;s.degree=0;s.kick=1;s.velocity=1;oneShot('yeee',t);say('YEEE!');}
+ const pattern=config.pattern.slice();pattern[i]=s;root.L99Studio181.renderStep(c,bank,drumBus,i,t,{...config,pattern},d=>getFreq(d,1,false)).forEach(collect);
+ if(!ghost&&!roll){if([3,11,19,27].includes(i))oneShot('bell',t);if(mode!==1&&[14,30].includes(i))oneShot('whistle',t);}
+ timeline.push({time:t,step:i});step++;next+=dt;}
+ while(timeline.length&&timeline[0].time<=c.currentTime){const p=timeline.shift();panel.querySelectorAll('[data-led]').forEach((b,i)=>b.classList.toggle('lit',i===p.step%16));}for(const v of events)if(v.end<c.currentTime){events.delete(v);rollEvents.delete(v);}
+ }
+ function markModes(){panel.querySelectorAll('[data-mode]').forEach(b=>{b.setAttribute('aria-pressed',String(+b.dataset.mode===mode));b.classList.toggle('queued',+b.dataset.mode===queuedMode);});}
+ let lastYeee=-1;async function action(name,down){if(!down){if(name==='roll')releaseRoll();if(name==='ghost')ghost=false;return;}if(name==='yeee'){const ticket=token;try{await ready();if(ticket!==token||!allowed())return;if(ctxRef.currentTime-lastYeee<.14)return;lastYeee=ctxRef.currentTime;oneShot('yeee',ctxRef.currentTime+.006);say('YEEE!');}catch(e){say(e.message);}return;}if(!running){if(starting)return;const ok=await start();if(!ok)return;}if(!allowed())return;if(name==='roll')roll=[...pointers.values(),...keys].includes('roll');if(name==='ghost'){releaseRoll();ghost=[...pointers.values(),...keys].includes('ghost');}if(name==='drop'){drop=true;say('Drop armed · next beat');}}
+ panel.querySelectorAll('[data-action]').forEach(b=>{b.type='button';b.setAttribute('aria-pressed','false');b.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();b.setPointerCapture(e.pointerId);pointers.set(e.pointerId,b.dataset.action);b.setAttribute('aria-pressed','true');action(b.dataset.action,true);};const release=e=>{const name=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(name&&!([...pointers.values(),...keys].includes(name))){action(name,false);b.setAttribute('aria-pressed','false');}};b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;b.onkeydown=e=>{if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();keys.add(b.dataset.action);b.setAttribute('aria-pressed','true');action(b.dataset.action,true);}};b.onkeyup=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();keys.delete(b.dataset.action);if(![...pointers.values()].includes(b.dataset.action))action(b.dataset.action,false);b.setAttribute('aria-pressed','false');}};b.onblur=()=>{keys.delete(b.dataset.action);if(![...pointers.values()].includes(b.dataset.action))action(b.dataset.action,false);b.setAttribute('aria-pressed','false');};b.onclick=e=>{if(e.detail===0&&!keys.size)action(b.dataset.action,true).then(()=>action(b.dataset.action,false));};});
+ panel.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{if(running){queuedMode=+b.dataset.mode;say('Pocket queued · next two-bar downbeat');}else{mode=+b.dataset.mode;queuedMode=null;}markModes();});run.onclick=start;el('.sp-close').onclick=onClose;
+ for(const k of ['knock','swing'])el('[data-'+k+']').oninput=e=>el('[data-'+k+'-value]').textContent=e.target.value+'%';
+ const visibility=()=>{if(document.hidden)stop();},blur=()=>{releaseRoll();ghost=false;keys.clear();pointers.clear();panel.querySelectorAll('[data-action]').forEach(b=>b.setAttribute('aria-pressed','false'));};document.addEventListener('visibilitychange',visibility);root.addEventListener('blur',blur);root.addEventListener('pagehide',stop);
+ current={stop,dispose(){if(disposed)return;stop();disposed=true;document.removeEventListener('visibilitychange',visibility);root.removeEventListener('blur',blur);root.removeEventListener('pagehide',stop);if(current===this)current=null;}};root.L99PeakSliders180?.refresh();
+}
+root.L99Hyphy182={mount,groove,stop:()=>current?.stop(),dispose:()=>current?.dispose()};
 })(window);
 
 </script>
@@ -12143,6 +12269,7 @@ window.playEnvFX = function(kind, opts) {
 // ===== SEQUENCER =====
 function startSequencer() {
   window.L99Studio181?.stop();
+  window.L99Hyphy182?.stop();
   if (sequencerRunning) return;
   sequencerRunning = true;
   currentStep = 0;
@@ -21564,7 +21691,7 @@ window.bardHaptic = (function(){
   // Which faces have a SPECIAL tool, and the label/config for each.
   var TOOLS = {
     BREW: { name: 'MODAL VAMP', builder: buildBrewTool },
-    HYPHY: { name: 'SLAP LAB', builder: buildHyphyTool },
+    HYPHY: { name: 'YEEE MACHINE', builder: buildHyphyTool },
     DNB: { name: 'BREAK CHOP', builder: buildDnbTool },
     GLITCHPOP: { name: 'STUTTER LAB', builder: buildGlitchTool }
   };
@@ -21655,6 +21782,7 @@ window.bardHaptic = (function(){
   }
 
   function close(){
+    window.L99Hyphy182?.dispose();
     S.open = false;
     S.gridTickFn = null;
     window._specialDrumsActive = false;   // fix732
@@ -21851,284 +21979,7 @@ window.bardHaptic = (function(){
   }
 
 
-  // ═══ HYPHY: SLAP LAB (fix725 — tactile XY redesign) ════════════════════════
-  // Reworked to feel physical like the waveform XY pad. The centerpiece is a
-  // BOUNCE PAD: drag anywhere on it to ride the slap groove in real time —
-  // X = swing/bounce (laid-back ↔ pushed), Y = slap drive + brightness. A glowing
-  // thumb follows your finger and the pocket morphs live. Slap bass + knock drums
-  // remain the foundation; AUTO-BUILD seeds the pattern, the pad performs it.
-  var H = {
-    grid: null,          // {kick:[],clap:[],hat:[],slap:[],eight:[]}
-    bassDegs: null,
-    swing: 0.58,         // X axis 0..1 — start slightly laid-back (behind the beat)
-    drive: 0.55,         // Y axis 0..1 (slap intensity/brightness)
-    use808: false,
-    voiceBass: 'SLAP-BASS',
-    padActive: false,
-    breakdown: false,      // fix735: when true, strip to thin percussion (hook breath)
-    riserUntilStep: -1,     // step index until which a return-riser plays
-  };
-
-  function hEmptyGrid(){
-    return { kick:Array(16).fill(0), clap:Array(16).fill(0), hat:Array(16).fill(0),
-             slap:Array(16).fill(0), eight:Array(16).fill(0) };
-  }
-  function hReroll(){
-    var g = hEmptyGrid();
-    var degs = Array(16).fill(null);
-    // Kick: anchor the 1, then one or two syncopated hits — leave space.
-    g.kick[0] = 1;
-    if (Math.random() < 0.8) g.kick[6] = 1;       // the classic 'and of 2' bounce
-    if (Math.random() < 0.5) g.kick[10] = 1;
-    if (Math.random() < 0.3) g.kick[11] = 1;
-    // Clap on the backbeat (2 & 4).
-    g.clap[4] = 1; g.clap[12] = 1;
-    // Hats: lighter, mostly straight 8ths with a few 16th ghosts (not a wall).
-    for (var i=0;i<16;i++){ g.hat[i] = (i%4===0 || (i%2===0 && Math.random()<0.5) || Math.random()<0.18) ? 1 : 0; }
-    // ── Laid-back hyphy slap bassline ─────────────────────────────────────────
-    // Hyphy bass grooves with SPACE: mostly the root, a bouncy octave pop, and a
-    // little bluesy movement (b7 / 5th from minor-pentatonic), riding syncopated
-    // off-beats rather than doubling every kick. We pick ONE repeating motif so the
-    // line reads as an intentional hook, then place it on a sparse, swung rhythm.
-    // Degrees here are scale degrees; 0=root, 4=fifth, 6=b7-ish, 7=octave.
-    var MOTIFS = [
-      [0, null, 7, null, 0, null, 6, null],   // root · octave pop · root · b7 tag
-      [0, null, null, 0, null, 7, null, null], // root, root, octave — spacious
-      [0, null, 0, null, 4, null, null, 0],    // root, root, fifth, root
-      [0, null, 7, 0, null, null, 6, null]     // root, octave, root, b7
-    ];
-    var motif = MOTIFS[Math.floor(Math.random()*MOTIFS.length)];
-    // Rhythm slots: lock the first hit to the downbeat, then ride mostly off-beats
-    // (the '&' of each beat) for that bounce. Leave gaps — that's the laid-back part.
-    // 16 steps -> 8 eighth-note slots; we place the motif across those slots.
-    for (var slot=0; slot<8; slot++){
-      var deg = motif[slot];
-      if (deg === null) continue;                 // rest = space
-      var step = slot * 2;                         // eighth-note grid
-      // nudge some hits to the off-16th for a pushed/dragged bounce (syncopation)
-      if (slot % 2 === 1 && Math.random() < 0.5) step += 1;
-      g.slap[step] = 1;
-      degs[step] = deg;
-    }
-    // 808 layer (optional) sits ONLY on the root hits, sparse, for weight.
-    for (var i=0;i<16;i++){ g.eight[i] = (g.slap[i] && degs[i]===0 && Math.random()<0.7) ? 1 : 0; }
-    H.grid = g; H.bassDegs = degs;
-  }
-
-  // Swing: delay odd-16th hits by a fraction of a step derived from H.swing.
-  function hSwingDelayMs(step){
-    if (step % 2 === 0) return 0;
-    var stepMs = (60000 / readBPM()) / 4;
-    // swing 0.5 = straight; up to ~0.66 pushes the off-16th later
-    var amt = (H.swing - 0.5);                 // -0.5..+0.5, we use 0..+
-    return Math.max(0, amt) * stepMs * 0.9;
-  }
-
-  function hTick(step){
-    var g = H.grid; if (!g) return;
-    var s = step % 16;
-    var sw = hSwingDelayMs(s);
-    var drive = H.drive;
-    function hit(fn){
-      var g = function(){ window._spAuto = true; try { fn(); } finally { window._spAuto = false; } };   // da100: swung hits stay automatic
-      if (sw>0) setTimeout(g, sw); else g();
-    }
-
-    // ── BREAKDOWN (fix735): strip the beat to a thin percussion thread so a vocal
-    //    hook can breathe — the Mac Dre / Dru Down hook drop-out. Kill bass, 808,
-    //    kick and clap; keep only a quiet hat/rim tick ticking the time.
-    if (H.breakdown){
-      // a soft closed-hat on every beat + a rim on the backbeat = the thin thread
-      if (s % 4 === 0) hit(function(){ try { window.playDrum('hihat', 0.28); } catch(e){} });
-      if (s === 4 || s === 12) hit(function(){ try { window.playDrum('rim', 0.22); } catch(e){} });
-      return;
-    }
-
-    // ── RETURN RISER (fix735): a quick build leading back into the full beat. While
-    //    riserUntilStep is in the future, play accelerating hats that swell in.
-    if (H.riserUntilStep >= 0){
-      var riseVel = 0.3 + 0.5 * (s % 4) / 3;   // swells across the beat
-      hit(function(){ try { window.playDrum('hihat', riseVel); } catch(e){} });
-      if (s % 2 === 0) hit(function(){ try { window.playDrum('shaker', 0.3); } catch(e){} });
-      if (step >= H.riserUntilStep) { H.riserUntilStep = -1; }  // riser done -> full beat next tick
-      return;
-    }
-
-    if (g.kick[s])  hit(function(){ try { window.playDrum('kick', 0.85 + drive*0.15); } catch(e){} });
-    if (g.clap[s])  hit(function(){ try { window.playDrum('clap', 0.75 + drive*0.2); } catch(e){} });
-    if (g.hat[s])   hit(function(){ try { window.playDrum('hihat', (s%2? 0.4:0.6) + drive*0.15); } catch(e){} });
-    if (g.slap[s]){
-      var deg = (H.bassDegs && H.bassDegs[s]!=null) ? H.bassDegs[s] : 0;
-      var bounce = (deg === 0 && Math.random() < drive*0.18) ? 7 : 0;
-      var bvel = 0.5 + drive*0.4;
-      hit(function(){ try { if(!window._specialPlayVoice(H.voiceBass, deg + bounce, bvel)) { window.playLead('spf:bass', deg + bounce, 1, false, bvel); setTimeout(function(){ try { window.stopLead('spf:bass'); } catch(e2){} }, 280); } } catch(e){} });
-    }
-    if (H.use808 && g.eight[s]){
-      var d8 = (H.bassDegs && H.bassDegs[s]!=null) ? H.bassDegs[s] : 0;
-      hit(function(){ try { if(!window._specialPlayVoice('DISTORT-808', d8, 0.8)) { window.playLead('spf:808', d8, 1, false, 0.8); setTimeout(function(){ try { window.stopLead('spf:808'); } catch(e2){} }, 280); } } catch(e){} });
-    }
-  }
-
-  function buildHyphyTool(panel){
-    if (!H.grid) hReroll();
-    H.use808 = false;
-    H.breakdown = false; H.riserUntilStep = -1;   // fix735: start in full-beat state
-
-    panel.innerHTML = ''
-      + '<div class="sp-head"><span class="sp-title">✦ SLAP LAB</span>'
-      +   '<span class="sp-sub">drag the pad to ride the pocket</span>'
-      +   '<button class="sp-close" type="button" aria-label="Close special tool">✕</button></div>'
-      + '<div class="sp-body">'
-      +   '<div class="sp-sec"><div class="sp-lbl">BOUNCE PAD <span class="sp-hint">X: swing · Y: slap drive</span></div>'
-      +     '<div class="xpad" id="hy-pad" role="slider" aria-label="Bounce pad: drag to control swing and slap drive" tabindex="0">'
-      +       '<div class="xpad-grid"></div>'
-      +       '<div class="xpad-glowx"></div><div class="xpad-glowy"></div>'
-      +       '<div class="xpad-thumb" id="hy-thumb"></div>'
-      +       '<span class="xpad-rd xpad-rd-bl">LAID BACK</span><span class="xpad-rd xpad-rd-br">PUSHED</span>'
-      +       '<span class="xpad-rd xpad-rd-tl">HARD</span><span class="xpad-rd xpad-rd-tr2">SOFT</span>'
-      +     '</div>'
-      +     '<div class="xpad-readout"><span id="hy-ro-swing">SWING 50%</span><span id="hy-ro-drive">DRIVE 60%</span></div>'
-      +   '</div>'
-      +   '<div class="sp-sec"><div class="sp-rowbtns">'
-      +       '<button class="sp-b" id="hy-reroll" type="button">⟳ AUTO-BUILD</button>'
-      +       '<button class="sp-b sp-toggle" id="hy-808" type="button" aria-pressed="false">808: OFF</button>'
-      +   '</div></div>'
-      +   '<div class="sp-sec"><div class="sp-lbl">HOOK <span class="sp-hint">strip to thin perc for a hook, tap again to slam back</span></div>'
-      +     '<div class="sp-rowbtns">'
-      +       '<button class="sp-b hy-breakdown" id="hy-breakdown" type="button" aria-pressed="false">BREAKDOWN</button>'
-      +     '</div>'
-      +   '</div>'
-      +   '<div class="sp-sec"><div class="sp-lbl">BASS</div>'
-      +     '<div class="sp-rowbtns" id="hy-bass-modes">'
-      +       '<button class="sp-b sp-seg active" data-bass="SLAP-BASS" type="button">SLAP</button>'
-      +       '<button class="sp-b sp-seg" data-bass="SQUELCH-BASS" type="button">SQUELCH</button>'
-      +       '<button class="sp-b sp-seg" data-bass="DISTORT-808" type="button">808</button>'
-      +     '</div>'
-      +   '</div>'
-      +   '<div class="sp-sec"><div class="sp-lbl">HYPE <span class="sp-hint">tap stabs</span></div>'
-      +     '<div class="sp-keys" id="hy-hype"></div>'
-      +   '</div>'
-      +   '<div class="sp-transport">'
-      +     '<button class="sp-play" id="hy-play" type="button">▶ RUN BEAT</button>'
-      +   '</div>'
-      + '</div>';
-
-    var pad = panel.querySelector('#hy-pad');
-    var thumb = panel.querySelector('#hy-thumb');
-    var roSw = panel.querySelector('#hy-ro-swing');
-    var roDr = panel.querySelector('#hy-ro-drive');
-
-    function placeThumb(){
-      // X = swing (0..1 left→right), Y = drive (0..1 bottom→top)
-      thumb.style.left = (H.swing*100) + '%';
-      thumb.style.top = ((1 - H.drive)*100) + '%';
-      roSw.textContent = 'SWING ' + Math.round(H.swing*100) + '%';
-      roDr.textContent = 'DRIVE ' + Math.round(H.drive*100) + '%';
-      // hotter glow with drive + glow follows the thumb position
-      pad.style.setProperty('--xpad-heat', H.drive.toFixed(2));
-      pad.style.setProperty('--xpad-x', (H.swing*100) + '%');
-      pad.style.setProperty('--xpad-y', ((1 - H.drive)*100) + '%');
-    }
-    placeThumb();
-
-    function setFromEvent(clientX, clientY){
-      var r = pad.getBoundingClientRect();
-      var x = (clientX - r.left) / r.width;
-      var y = (clientY - r.top) / r.height;
-      H.swing = Math.max(0, Math.min(1, x));
-      H.drive = Math.max(0, Math.min(1, 1 - y));
-      placeThumb();
-    }
-
-    var padId = null;
-    pad.addEventListener('pointerdown', function(e){
-      padId = e.pointerId; pad.setPointerCapture(padId);
-      pad.classList.add('is-active'); H.padActive = true;
-      setFromEvent(e.clientX, e.clientY);
-      e.preventDefault();
-    });
-    pad.addEventListener('pointermove', function(e){
-      if (padId === null || e.pointerId !== padId) return;
-      setFromEvent(e.clientX, e.clientY);
-    });
-    function endPad(e){
-      if (padId !== null && e.pointerId === padId){
-        try { pad.releasePointerCapture(padId); } catch(err){}
-        padId = null; pad.classList.remove('is-active'); H.padActive = false;
-      }
-    }
-    pad.addEventListener('pointerup', endPad);
-    pad.addEventListener('pointercancel', endPad);
-    // keyboard accessibility: arrows nudge swing/drive
-    pad.addEventListener('keydown', function(e){
-      var d = 0.05;
-      if (e.key==='ArrowLeft'){ H.swing=Math.max(0,H.swing-d); }
-      else if (e.key==='ArrowRight'){ H.swing=Math.min(1,H.swing+d); }
-      else if (e.key==='ArrowUp'){ H.drive=Math.min(1,H.drive+d); }
-      else if (e.key==='ArrowDown'){ H.drive=Math.max(0,H.drive-d); }
-      else return;
-      e.preventDefault(); placeThumb();
-    });
-
-    panel.querySelector('.sp-close').onclick = close;
-    panel.querySelector('#hy-reroll').onclick = function(){
-      hReroll();
-      flash(this);
-      // If the beat isn't running yet, start it so AUTO-BUILD is immediately audible
-      // (the redesign replaced the visible grid, so silence read as "nothing happened").
-      if (!S.clock){
-        S.gridTickFn = hTick; startClock();
-        var pb = panel.querySelector('#hy-play');
-        if (pb){ pb.textContent = '■ STOP'; pb.classList.add('playing'); }
-      }
-    };
-    var b808 = panel.querySelector('#hy-808');
-    b808.onclick = function(){
-      H.use808 = !H.use808;
-      this.setAttribute('aria-pressed', H.use808?'true':'false');
-      this.classList.toggle('active', H.use808);
-      this.textContent = '808: ' + (H.use808?'ON':'OFF');
-    };
-    // fix735: BREAKDOWN — toggle the hook drop-out. Tap to strip to thin percussion;
-    // tap again to fire a 1-beat riser and slam the full beat back on the next bar.
-    var bd = panel.querySelector('#hy-breakdown');
-    bd.onclick = function(){
-      // make sure the beat is running so the breakdown is audible
-      if (!S.clock){ S.gridTickFn = hTick; startClock();
-        var pb0 = panel.querySelector('#hy-play'); if (pb0){ pb0.textContent='■ STOP'; pb0.classList.add('playing'); } }
-      if (!H.breakdown){
-        // enter breakdown (strip down)
-        H.breakdown = true; H.riserUntilStep = -1;
-        this.classList.add('active'); this.setAttribute('aria-pressed','true');
-        this.textContent = 'DROP IT BACK';
-      } else {
-        // exit: end the strip, run a ~1-beat (4-step) riser, then full beat resumes
-        H.breakdown = false;
-        H.riserUntilStep = S.stepIdx + 4;
-        this.classList.remove('active'); this.setAttribute('aria-pressed','false');
-        this.textContent = 'BREAKDOWN';
-      }
-    };
-    panel.querySelectorAll('#hy-bass-modes .sp-seg').forEach(function(seg){
-      seg.onclick = function(){
-        H.voiceBass = seg.getAttribute('data-bass');
-        panel.querySelectorAll('#hy-bass-modes .sp-seg').forEach(function(s){ s.classList.toggle('active', s===seg); });
-      };
-    });
-    var hypeWrap = panel.querySelector('#hy-hype');
-    [ {v:'THIZZ-TOY',t:'THIZZ'}, {v:'OAK-BLARE',t:'BLARE'}, {v:'HYPHY-WHISTLE',t:'WHISTLE'}, {v:'TALKBOX',t:'TALK'} ].forEach(function(stb){
-      var k = document.createElement('button');
-      k.type='button'; k.className='sp-key sp-key-tp'; k.textContent = stb.t;
-      k.onclick = function(){ var deg=[0,2,4,5][Math.floor(Math.random()*4)]; try{ if(!window._specialPlayVoice(stb.v,deg,0.85)) window.playLead(stb.v,deg,1,false,0.8); }catch(e){} flash(k); };
-      hypeWrap.appendChild(k);
-    });
-
-    var playBtn = panel.querySelector('#hy-play');
-    playBtn.onclick = function(){
-      if (S.clock){ stopClock(); this.textContent='▶ RUN BEAT'; this.classList.remove('playing'); }
-      else { S.gridTickFn = hTick; startClock(); this.textContent='■ STOP'; this.classList.add('playing'); }
-    };
-  }
+  function buildHyphyTool(panel){ window.L99Hyphy182.mount(panel,close); }
 
   // ═══ DNB: BREAK CHOPPER (fix716) ════════════════════════════════════════════
   // Drum & bass breakbeat lab. Centerpiece: a 16-slice break sequencer where each
@@ -22476,15 +22327,15 @@ window.bardHaptic = (function(){
       ],
     },
     HYPHY: {
-      title: 'SLAP LAB',
-      blurb: 'Ride a hyphy slap-and-knock pocket with a tactile pad.',
+      title: 'YEEE MACHINE',
+      blurb: 'Three Bay Area pockets. Sliding sub, knock drums and a playable formant shout.',
       items: [
-        ['BOUNCE PAD', 'Drag anywhere to perform the groove. X = swing (laid-back ↔ pushed), Y = slap drive (soft ↔ hard).'],
-        ['AUTO-BUILD', 'Generates a fresh slap-bass + knock pattern to ride.'],
-        ['808', 'Layers a distorted 808 under the slap bass.'],
-        ['BASS', 'Swaps the bass character: SLAP · SQUELCH · 808.'],
-        ['HYPE', 'Tap stabs (Thizz, Blare, Whistle, Talk) to throw over the beat.'],
-        ['RUN BEAT', 'Starts/stops the pocket. Drag the pad live while it runs.'],
+        ['POCKETS', 'Town Business, Ghost Ride and Sideshow follow your key and tempo. Changes land at the next two-bar downbeat.'],
+        ['YEEE!', 'Tap a synthesized shout. Works with or without the beat.'],
+        ['GO DUMB', 'Hold for a tight, accented sixteenth-note roll over the bass and kick. Release cuts the roll immediately.'],
+        ['GHOST IT', 'Hold to strip the bass and drums down to a light hat pulse.'],
+        ['BRING IT BACK', 'Queue a bass-and-kick drop with a shout on the next beat.'],
+        ['KNOCK / SWING', 'Shape punch and the offbeat pocket. Peak Guard stays active.'],
       ],
     },
     DNB: {
