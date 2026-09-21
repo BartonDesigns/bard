@@ -1,0 +1,202 @@
+{
+  "ASSET_NOTES191.md": {
+    "bytes": 6286,
+    "sha256": "644b7952e4a125c77f3da53fc113d0385efc675a45a6e4095bd95c6395c7ede6"
+  },
+  "ASSET_NOTES193.md": {
+    "bytes": 3660,
+    "sha256": "9d898297736f292886309c43e49609685c23ce9dd746970e85448ddac121e76e"
+  },
+  "UPLOAD.txt": {
+    "bytes": 572,
+    "sha256": "6e36fca43cf3bbc5e0afec35941bd3f457b3ec6a1353826f8c09b693c900d422"
+  },
+  "assets/galaxies/blue-compact.webp": {
+    "bytes": 7768,
+    "sha256": "ea7326500d226b6eeefedcf91581c0aca68fe291cbf51310aa1cbb2c6b092657"
+  },
+  "assets/galaxies/catalog.json": {
+    "bytes": 3960,
+    "sha256": "e8fc2464d0bfe3198c6357501d85947e797c05f7be59abeacf39ca0e00c1b402"
+  },
+  "assets/galaxies/flocculent.webp": {
+    "bytes": 11576,
+    "sha256": "a33ee65ae72e522b115742806fd4539927404098b84fa69ba29d648d1a0c7dde"
+  },
+  "assets/galaxies/grand-design.webp": {
+    "bytes": 9770,
+    "sha256": "93cedac14b5ed2acec67b271711ce11bb564c18d290588b2185dc3c071179f23"
+  },
+  "assets/galaxies/interacting-pair.webp": {
+    "bytes": 7828,
+    "sha256": "1f9ca105f666ff8f8e11535801937220e8f661ef158ab77bfc86b4a121aa3351"
+  },
+  "assets/galaxies/polar-ring.webp": {
+    "bytes": 10060,
+    "sha256": "7db17f0510901dccf79f81d83c477c5a19e1cd3490851ef169f4b38c5e788ab2"
+  },
+  "assets/galaxies/shell-elliptical.webp": {
+    "bytes": 10910,
+    "sha256": "485606140e1d0f9639096f3b8cb8a52a03242dbbb435fe21eb5bbefa65b20f06"
+  },
+  "assets/galaxies/tidal-stream.webp": {
+    "bytes": 7024,
+    "sha256": "a682cacea6feaafd2128b0281ccc1a7b0ee77e5429f30086fd9697cef108b741"
+  },
+  "assets/galaxies/warped-disk.webp": {
+    "bytes": 10092,
+    "sha256": "f953966071506f8b45c580a089acc7792b99e36cb65509cb2dce9939f13bbc79"
+  },
+  "assets/planets/arid.jpg": {
+    "bytes": 46194,
+    "sha256": "342a4757beb7f05fb87f7bff3609b9d71db26e2f5c21e8cd8c90b9cb8e4e6c96"
+  },
+  "assets/planets/gas.jpg": {
+    "bytes": 61244,
+    "sha256": "65eef785eb4c20c99e01273e60caa436b1d6cb3ed5f0b93ebcd09190e184b481"
+  },
+  "assets/planets/ice.jpg": {
+    "bytes": 35599,
+    "sha256": "1b2309f645e0a838f27be1a574fd5423c154ef4f23b402e48015800c2f4c56d3"
+  },
+  "assets/planets/magma.jpg": {
+    "bytes": 55315,
+    "sha256": "73dff901b9034e9a0c5ada61c7b7315a77412d45be5b061e8b84fc9745f0c191"
+  },
+  "assets/planets/mystical.jpg": {
+    "bytes": 29624,
+    "sha256": "d9eded29e37137ffc42373d37a980f42c02ea661576fb8ac7fa6d20e803991d6"
+  },
+  "assets/planets/ocean.jpg": {
+    "bytes": 30112,
+    "sha256": "e5a6bf15e16ae5211b0783b819b6e141af44a7851f7b7f463c1a0ba07e0b5049"
+  },
+  "assets/planets/terran.jpg": {
+    "bytes": 40079,
+    "sha256": "7e8ae8d8b42268df758b228ec19bded2dd403e96a03477d15622eb42b0a11f6e"
+  },
+  "assets/planets/toxic.jpg": {
+    "bytes": 23793,
+    "sha256": "ff5ad7c6c282b4fc7b3f6093b41548cb7a4f2be607980197a5bb1eaf9ffe4018"
+  },
+  "assets/ui/faceplate-grain.svg": {
+    "bytes": 317,
+    "sha256": "3e2add927dded057dbd8a01b2443e2d82dd5f7607f03b8392ec67347f4c8dcb3"
+  },
+  "assets/ui/night-grain.svg": {
+    "bytes": 309,
+    "sha256": "31df61950a55ec559f3135204ae438213eb4e7974a7ae0fe9da21d08852b8f01"
+  },
+  "galaxy-gallery.html": {
+    "bytes": 3297,
+    "sha256": "65eebef2a1dc1057a443d3f00fb7ad95a7a76d19e8edaa8c57c1fb665696c8e0"
+  },
+  "index.html": {
+    "bytes": 5319693,
+    "sha256": "ade151dea2768859058bc6421df245a9ee30c7e666e9c602877433e7c86071f5"
+  },
+  "runtime/caves-179.html.gz": {
+    "bytes": 512275,
+    "sha256": "1be9d9cd8ee29686a4d22a3f56ef3edc2d674943455dea13be30662c75122021"
+  },
+  "runtime/characters-kay-176.b64.gz": {
+    "bytes": 606649,
+    "sha256": "78c2d9105f087e8de1d9ff8fa1295404ad184efa9871e774a7e85aba2d113eb9"
+  },
+  "runtime/flight-179.js.gz": {
+    "bytes": 1334821,
+    "sha256": "54ce7ff638d9bd35fe0033d6d06a2bee715d93f86892dea13c2893e78ccb2014"
+  },
+  "runtime/flight-vendors-176.json.gz": {
+    "bytes": 203705,
+    "sha256": "bf3829efeca13bdd36906875b60898e465ea455294ac6474e4583c2b849e0a6b"
+  },
+  "runtime/world-core-179.json.gz": {
+    "bytes": 435006,
+    "sha256": "cfd9a9f1ae7010f41b06ffa127c5a358953dec67e62e84c5f7f051b736e9609d"
+  },
+  "textures/eyes-577fe3096f.webp": {
+    "bytes": 60622,
+    "sha256": "577fe3096f6753a2cb5b4d96fae3a473acdee0b6b830b26a9c5e82c92e9bc425"
+  },
+  "textures/human-base-dd84ad3d07.json.gz": {
+    "bytes": 2940145,
+    "sha256": "dd84ad3d07bb63679759fe73d5933c60212bd513f2bba31d0615268f300e5944"
+  },
+  "textures/human-clothing-ao-67a546a7f5.webp": {
+    "bytes": 21604,
+    "sha256": "67a546a7f55ed039e470df3780692c661316a1043b5b0a1043ac9722a8117b62"
+  },
+  "textures/human-clothing-diffuse-351b3b1c19.webp": {
+    "bytes": 72218,
+    "sha256": "351b3b1c195853a2ea498338de0baee94fa7cf547f1c4f5f5fa665186b9148ba"
+  },
+  "textures/human-clothing-normal-6b8358df24.webp": {
+    "bytes": 66044,
+    "sha256": "6b8358df24737e54223f7e76ef90b753b60eed0a5512e56b46ae791219d65e50"
+  },
+  "textures/human-hair-ponytail01-0958cf0101.webp": {
+    "bytes": 307752,
+    "sha256": "0958cf01011f29578da056ceb1a1848a233da78571c8c982582c2a6b54b5c643"
+  },
+  "textures/human-hair-short01-a0ac470402.webp": {
+    "bytes": 368024,
+    "sha256": "a0ac470402dc491c3b1c1a5e10e0ba8ae007bdd6c93850bdc1d374cf2460c455"
+  },
+  "textures/human-hair-short02-880498da47.webp": {
+    "bytes": 160930,
+    "sha256": "880498da47c8e72b0f6915f359d6b68a09d8aad6be0ac7294ebf6a42afce4f34"
+  },
+  "textures/human-old_caucasian_female-5c8b8cd784.webp": {
+    "bytes": 97592,
+    "sha256": "5c8b8cd784c3b6627f498fc1247d50964be9a7c6cba6b9483775462b80ebbef0"
+  },
+  "textures/human-old_caucasian_male-4126648f8f.webp": {
+    "bytes": 127772,
+    "sha256": "4126648f8f8f27e2effe223ad8829f4748f859902ef72e6a082c528fff59925f"
+  },
+  "textures/human-young_african_female-2c0f99940e.webp": {
+    "bytes": 47390,
+    "sha256": "2c0f99940e60e12d281a3f555178f769608303341dccf8e9f3c59a953a048e62"
+  },
+  "textures/human-young_african_male-8b9e87bf3a.webp": {
+    "bytes": 48996,
+    "sha256": "8b9e87bf3a9271016522c73f769a1383bfcdd8ab896d7bf156fb02054dc1e3d5"
+  },
+  "textures/human-young_caucasian_female-dd2fc42c44.webp": {
+    "bytes": 81260,
+    "sha256": "dd2fc42c44e4884fdc349b4d4a32da9c1f33c068f6e230a5a8b32f406e270cd2"
+  },
+  "textures/human-young_caucasian_male-e1639aeae1.webp": {
+    "bytes": 74970,
+    "sha256": "e1639aeae1cebf0e592101dbf2dda74973627b601618fda070201bbb6b40d977"
+  },
+  "textures/materials-f924d3f2d2.webp": {
+    "bytes": 512112,
+    "sha256": "f924d3f2d2d4cb0e0d4735ff1c18c127026fd7046fd602b61a0696f1158b77f8"
+  },
+  "textures/people193/detail.webp": {
+    "bytes": 363918,
+    "sha256": "4dd81f76919387e35e637dd52e500c4506f0c94a9a443e0de2d2c8b40224df75"
+  },
+  "textures/people193/fibers.webp": {
+    "bytes": 341192,
+    "sha256": "c0efac89f1213c50a7050f38e669ed1d985355703d4f467f3da65dd070d2e66f"
+  },
+  "textures/realism191/architecture.webp": {
+    "bytes": 373120,
+    "sha256": "9471c24902658bff026514feffd40fdf51a6b026a8e2ac007c65fca57a961a1e"
+  },
+  "textures/realism191/geology.webp": {
+    "bytes": 487144,
+    "sha256": "12d5a25704392fddb800cbb24ff6c174c7b63e69173035b600cfc2a26b5bdc04"
+  },
+  "textures/realism191/ground.webp": {
+    "bytes": 519692,
+    "sha256": "2508e4ee7ce7e523d49eaea394fc7e3ff3205b5ad9d50db4207698cd2efc974c"
+  },
+  "textures/realism191/instrument.webp": {
+    "bytes": 126098,
+    "sha256": "cdd9662af05701447177aa90fb7a47e391afd4aa7ba400009b6419626903440d"
+  }
+}
