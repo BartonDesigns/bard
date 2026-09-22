@@ -1,0 +1,22 @@
+{
+  "name": "Bard Character 222",
+  "compiler": "2.88.0",
+  "compilerPackage": "@grame/faustwasm@0.18.4",
+  "packageSource": "https://registry.npmjs.org/@grame/faustwasm/-/faustwasm-0.18.4.tgz",
+  "documentation": "https://github.com/grame-cncm/faustwasm",
+  "options": "-ftz 2",
+  "sourceSHA256": "24a33b8334c59f56ef1d17296e9042c337ceeba7b2001e693164830fb133aae8",
+  "wasmSHA256": "5e0622ea4b857703adfcb7c68e9a89892cc069ff4049c6f1b0923da1272bdb07",
+  "generatedBytes": 10290,
+  "compilerShipped": false,
+  "packageSHA256": "ce005588a6051d0e17f2c7234111b3d95cabf48d6800ffcdb446196c4f8bf266",
+  "libraries": {
+    "maths.lib": "76de0cdb88f5e47563db87dc1905b18030be7856e5b4c0751c60d7fc6aa57ec6",
+    "oscillators.lib": "e7dfd0758bc7e43f399f47bcf6e55faf5394e874ab369c3ba5ded0e76aff523b",
+    "delays.lib": "7993d1e6d41b113bc3a9ae71de0ee73522c33f730921e4c66779dab543e71e1d",
+    "filters.lib": "4b4fcba46cd950738338b4361fa6cb2fbd43f7bfc45ea41581b856e66e8a65f6",
+    "signals.lib": "0c56b23b43cebd808f3f607c4870ecff5430390c0f6a50628edd2f401345d86a",
+    "stdfaust.lib": "dc0b5d2fa3b3b9726658b220c6e825e333c1999a07fe59f55d778037c9f8daa0",
+    "basics.lib": "eeeedec2e17d54cfdff94c7a66878fa100e2196f64fa5e015f7739f0fe4f9075"
+  }
+}
