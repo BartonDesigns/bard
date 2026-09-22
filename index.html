@@ -7004,6 +7004,10 @@ html.mobile-world176,body.mobile-world176{overflow:hidden!important;overscroll-b
 .peak-track177{display:block;position:relative;flex:1;height:8px;min-width:42px;background:#7773;border-radius:4px;}
 #peak-meter177 [data-level]{position:absolute;inset:0 auto 0 0;width:0;background:currentColor;opacity:.65;border-radius:4px;}
 #peak-meter177 [data-ceiling]{position:absolute;top:-4px;bottom:-4px;left:93.75%;width:2px;background:#ff424f;box-shadow:0 0 5px #ff424f88;}
+/* layout227: sit between FX (order 99) and the hide eye (order 999), filling the gap */
+#controls-row > #peak-meter177{order:998;flex:1 1 150px;min-width:120px;min-height:0;padding:0 8px;flex-direction:column;align-items:stretch;justify-content:center;gap:5px;}
+#controls-row > #peak-meter177 [data-readout]{font-size:9px;letter-spacing:.6px;overflow:hidden;text-overflow:ellipsis;}
+#controls-row > #peak-meter177 .peak-track177{flex:0 0 8px;}
 </style>
 <script id="stereo-code223">
 /* Measured polarity repairs for nine acoustic recordings with negative
@@ -7110,7 +7114,7 @@ function mount(){
  if(document.getElementById('master223'))return;const meter=document.getElementById('peak-meter177');if(!meter)return;
  const el=document.createElement('details');el.id='master223';el.setAttribute('data-audio-effect','');
  el.innerHTML='<summary><span data-summary>MASTER · ON</span></summary><div class="master-controls223"><div class="master-actions223"><button type="button" data-power aria-pressed="true">MASTER: ON</button><button type="button" data-mono aria-pressed="false">MONO OUTPUT</button><button type="button" data-reset>RESET MIX</button></div><span data-profile></span><label>WIDTH <output data-value-width></output><input data-width aria-label="Master stereo width" type="range" min="0" max="140" step="1"></label><label>ROOM <output data-value-room></output><input data-room aria-label="Instrument room depth" type="range" min="0" max="100" step="1"></label><label>OUTPUT <output data-value-trim></output><input data-trim aria-label="Master output trim" type="range" min="-12" max="3" step="0.5"></label><p>Shape the full mix. Low bass stays centered. Full-mix recordings include these settings.</p></div>';
- meter.after(el);
+ (document.getElementById('visualizer')||meter).after(el);
  el.querySelector('[data-power]').onclick=()=>enable(!prefs.enabled);
  el.querySelector('[data-mono]').onclick=()=>configure({mono:!mono});
  el.querySelector('[data-reset]').onclick=()=>{delete prefs.faces[face];mono=false;live?.setFace(face,current());save();};
@@ -8157,13 +8161,14 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
       <button class="ctrl-btn" id="btn-arrange" aria-label="Compose / Arranger">COMPOSE</button><button class="ctrl-btn" id="lead-hold-btn" onclick="window._latchToggle && window._latchToggle()" aria-label="Hold — latch lead notes so chords bigger than five fingers ring until released" title="HOLD — latch leads: press to stack unlimited notes, tap a sounding key to release it">∞ HOLD</button>
       <button class="ctrl-btn" id="btn-face-loops" type="button" aria-pressed="false" title="LOOPS: import and launch your Ableton / Novation / beat-mixer loops, synced to the project tempo">&#10227; LOOPS</button>
       <button class="ctrl-btn" id="btn-fx-toggle" aria-label="Toggle FX & envelope panel" aria-expanded="false" onclick="try{window._fxValsInit&&window._fxValsInit()}catch(e){}">FX ▾</button>
-    </div>
-
-    <canvas id="visualizer"></canvas>
+      <!-- layout227: peak meter lives in the controls row, between FX and the hide eye -->
     <div id="peak-meter177" aria-label="Automatic peak protection">
       <span data-readout>PEAK GUARD −3.0 dB</span>
       <span class="peak-track177"><i data-level></i><i data-ceiling></i></span>
     </div>
+    </div>
+
+    <canvas id="visualizer"></canvas>
 
     <!-- XY Filter Pad with hit indicator grid behind waveform -->
     <div id="xy-pad-container">
@@ -30187,13 +30192,17 @@ root.L99Synth222={version:222,handles,voice,silence,patches:()=>Object.fromEntri
     if (!title) return;
     if (!document.getElementById('faceaudio222-style')) {
       const style = document.createElement('style'); style.id = 'faceaudio222-style';
-      style.textContent = '#faceaudio222{display:flex;align-items:center;justify-content:center;margin:3px 8px 7px;font:10px/1.35 inherit;color:inherit}#faceaudio222[hidden]{display:none}#faceaudio222 button{font:inherit;color:inherit;border:1px solid currentColor;border-radius:5px;background:transparent;padding:5px 8px;min-height:44px;cursor:pointer}#faceaudio222 button:focus-visible{outline:2px solid currentColor;outline-offset:3px}';
+      style.textContent = '#faceaudio222{position:relative;display:flex;align-items:center;justify-content:center;flex:0 1 auto;min-width:0;margin:0 12px}#faceaudio222[hidden]{display:none}#faceaudio222 [data-sound-mode]{min-height:36px;padding:8px 14px}#faceaudio222 [data-register226]{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;font:9px/1.2 \'Courier New\',monospace;letter-spacing:.4px;white-space:nowrap;opacity:.75;pointer-events:none}#faceaudio222 [data-register226][hidden]{display:none}#faceaudio222 button:focus-visible{outline:2px solid currentColor;outline-offset:3px}@media (max-width:600px){#title-row{flex-wrap:wrap;row-gap:8px}#faceaudio222{order:3;flex:1 0 100%;justify-content:flex-start;margin:0}#faceaudio222 [data-register226]{position:static;transform:none;margin:0 0 0 8px}}';
       document.head.appendChild(style);
     }
     const el = document.createElement('div'); el.id = 'faceaudio222'; el.hidden = true;
-    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.dataset.soundMode = '';
+    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'ctrl-btn'; toggle.dataset.soundMode = '';
     toggle.addEventListener('click', () => setEnabled(!mode));
-    el.append(toggle); title.after(el); paint();
+    el.append(toggle);
+    // layout227: sit inline between the faceplate title and the BPM/TAP cluster.
+    const bpm = document.getElementById('bpm-controls');
+    if (bpm && bpm.parentNode === title) title.insertBefore(el, bpm); else title.after(el);
+    paint();
   }
   function theme(face) {
     selectedFace = faceName(face || document.querySelector('.tab-btn.active')?.dataset.face || selectedFace);
