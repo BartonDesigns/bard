@@ -27666,6 +27666,99 @@ window._handoffCopy = function () {
     };
 })();
 </script>
+<script id="cave-rail227">
+/* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
+   steering up the stone ramp by hand while the surface loaded, and the frame
+   hitches made that miserable. Once you start up an exit ramp you are now
+   carried on a fixed path: up the ramp, through the surface load, and out of
+   the mouth into daylight. Movement input is ignored; look stays free.
+   Kill: window._CAVE_RAIL = false. */
+(function(root){'use strict';
+const HELPER=`
+    /* RAIL_227 */
+    var rail227=null,railScan227=0,RAIL_V227=5,RAIL_TOP227=31,RAIL_OUT227=6;
+    /* the light at the end: a warm bloom that grows up the ramp, holds pure
+       white while the surface is built, then lets the day in */
+    var glow227=null;
+    function railGlow227(bloom,white){
+        if(!glow227){
+            if(!(bloom>0||white>0))return;
+            glow227=document.createElement('div');glow227.setAttribute('aria-hidden','true');
+            glow227.style.cssText='position:fixed;inset:0;z-index:100002;pointer-events:none;opacity:0;transition:none';
+            glow227.innerHTML='<i style="position:absolute;inset:-25%;display:block;background:radial-gradient(circle at 50% 46%,#fffdf6 0,#fff4d8 9%,rgba(255,236,196,.72) 22%,rgba(255,226,170,.28) 40%,rgba(255,220,160,0) 62%);transform-origin:50% 46%"></i><b style="position:absolute;inset:0;display:block;background:#fffaf0;opacity:0"></b>';
+            document.body.appendChild(glow227);
+            setInterval(function(){if(glow227&&window.__CAVE_PAUSED){glow227.style.opacity='0';}},400);
+        }
+        var b=Math.max(0,Math.min(1,bloom)),w=Math.max(0,Math.min(1,white));
+        glow227.style.opacity=String(Math.max(b,w));
+        glow227.firstChild.style.transform='scale('+(0.35+b*1.25).toFixed(3)+')';
+        glow227.lastChild.style.opacity=String(b>0?w/Math.max(b,w):1);
+    }
+    function sm227(a,b,v){var t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);}
+    function railStep227(p,dt){
+        var O=window.L99CaveOpenings171;
+        if(window._CAVE_RAIL===false||!O){rail227=null;railGlow227(0,0);return null;}
+        if(!rail227){
+            railGlow227(0,0);
+            if(over||surfaceLoading165||overCool>0||soulState!==0||window._CAVE_DOORS===false||window._CAVE_LIVE_PASSAGES===false)return null;
+            railScan227-=dt;if(railScan227>0)return null;railScan227=0.1;
+            var dp=CC.portalAt(p.x,p.y+bodyOffY,p.z);if(!dp)return null;
+            var s=CC.passageSpec179(dp),q=O.local(s,p.x,p.z),eye=p.y-O.floor(s,q.a),up=vel.x*s.ux+vel.z*s.uz;
+            /* only when you are walking UP into the ramp, so arriving back
+               from the surface (facing down the ramp) never throws you out */
+            if(q.a<-1||q.a>RAIL_TOP227-2||Math.abs(q.l)>2.8||eye<0.2||eye>5||up<0.8)return null;
+            rail227={phase:'in',dp:dp,a:q.a,v:Math.min(RAIL_V227,up),fx:p.x,fy:p.y,fz:p.z,t:0};
+            showHint('carried toward daylight · drag to look around');
+        }
+        var r=rail227;
+        if(r.phase==='in'&&over)r.phase='wait';
+        if(r.phase==='wait'){
+            if(surfaceLoading165)return null;
+            var m=over&&over.passage171;
+            if(!m||!m.open171){rail227=null;return null;}
+            railGlow227(1,1);
+            r.phase='out';r.s=m.open171;r.a=Math.min(16,O.local(r.s,p.x,p.z).a);r.v=RAIL_V227*0.5;r.last=0;r.fx=p.x;r.fy=p.y;r.fz=p.z;r.t=0;
+        }
+        if(r.phase==='out'&&!over){rail227=null;return null;}
+        /* wall-clock pacing: the ride keeps its length on a hitching device
+           instead of crawling at the loop's clamped frame step */
+        var now227=performance.now(),rdt=r.last?Math.min(0.25,(now227-r.last)/1000):dt;r.last=now227;dt=rdt;
+        r.t+=dt;r.v=Math.min(RAIL_V227,r.v+6*dt);
+        var tg;
+        if(r.phase==='in'){
+            r.a=Math.min(RAIL_TOP227,r.a+r.v*dt);tg=CC.passagePoint179(r.dp,r.a,1.85);
+            railGlow227(sm227(0,RAIL_TOP227-4,r.a),sm227(RAIL_TOP227-14,RAIL_TOP227-0.5,r.a));
+            if(r.a>=RAIL_TOP227){r.phase='wait';railGlow227(1,1);if(!enterWorld(r.dp,true))rail227=null;}
+        }else{
+            r.a-=r.v*dt;
+            var s2=r.s,ac=Math.max(0,r.a),f=O.floor(s2,ac),head=Math.min(1.85*s2.unit,(O.roof(s2,ac,0)-f)*0.46);
+            tg=O.point(s2,r.a,0,f+head);
+            if(r.a<0){var gy=Math.max(overHeightAt(tg[0],tg[2]),over.sea)+1.8,k=Math.min(1,-r.a/RAIL_OUT227);tg[1]+=(gy-tg[1])*k*k*(3-2*k);}
+            /* eyes adjusting: hold the white a breath, then let the day in */
+            var fade=1-sm227(0.35,3.2,r.t);railGlow227(fade,fade);
+            if(r.a<=-RAIL_OUT227){rail227=null;railGlow227(0,0);}
+        }
+        /* ease onto the path from wherever you stepped in */
+        var e=Math.min(1,r.t/0.6);e=e*e*(3-2*e);
+        return [r.fx+(tg[0]-r.fx)*e,r.fy+(tg[1]-r.fy)*e,r.fz+(tg[2]-r.fz)*e];
+    }
+    function tickDoors(dt2) {`;
+const EDITS=[
+ ['    function tickDoors(dt2) {',HELPER.replace(/^\n/,'')],
+ ['        squeezing = false;\n        var wasGrounded = grounded;','        var rail227p=railStep227(p,dt);if(rail227p)vel.set(0,0,0);\n        squeezing = false;\n        var wasGrounded = grounded;'],
+ ['        if (walkMode && !wasGrounded && grounded && fallV < -3.0) CaveAudio.land(-fallV);','        if(rail227p){p.set(rail227p[0],rail227p[1],rail227p[2]);vel.set(0,0,0);phyY=p.y;eyeY=p.y;grounded=true;wasGrounded=true;}\n        if (walkMode && !wasGrounded && grounded && fallV < -3.0) CaveAudio.land(-fallV);']
+];
+function patch(code){
+ try{
+  if(typeof code!=='string'||code.includes('/* RAIL_227 */'))return code;
+  for(const [a] of EDITS)if(code.split(a).length!==2){console.warn('RAIL_227: anchor not found, exits stay manual');return code;}
+  for(const [a,b] of EDITS)code=code.replace(a,()=>b);
+  return code;
+ }catch(e){console.warn('RAIL_227',e);return code;}
+}
+root.L99CaveRail227={patch};
+})(window);
+</script>
 <script>
 
 /* ══ L99 SHELL v12: ONE FILE ═══════════════════════════════════════════════
@@ -27690,7 +27783,7 @@ window._handoffCopy = function () {
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(window.L99CavesMaterials191.patchCaves);};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(window.L99CavesMaterials191.patchCaves).then(function(c){return window.L99CaveRail227?window.L99CaveRail227.patch(c):c;});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
