@@ -7004,6 +7004,10 @@ html.mobile-world176,body.mobile-world176{overflow:hidden!important;overscroll-b
 .peak-track177{display:block;position:relative;flex:1;height:8px;min-width:42px;background:#7773;border-radius:4px;}
 #peak-meter177 [data-level]{position:absolute;inset:0 auto 0 0;width:0;background:currentColor;opacity:.65;border-radius:4px;}
 #peak-meter177 [data-ceiling]{position:absolute;top:-4px;bottom:-4px;left:93.75%;width:2px;background:#ff424f;box-shadow:0 0 5px #ff424f88;}
+/* layout227: sit between FX (order 99) and the hide eye (order 999), filling the gap */
+#controls-row > #peak-meter177{order:998;flex:1 1 150px;min-width:120px;min-height:0;padding:0 8px;flex-direction:column;align-items:stretch;justify-content:center;gap:5px;}
+#controls-row > #peak-meter177 [data-readout]{font-size:9px;letter-spacing:.6px;overflow:hidden;text-overflow:ellipsis;}
+#controls-row > #peak-meter177 .peak-track177{flex:0 0 8px;}
 </style>
 <script id="stereo-code223">
 /* Measured polarity repairs for nine acoustic recordings with negative
@@ -7110,7 +7114,7 @@ function mount(){
  if(document.getElementById('master223'))return;const meter=document.getElementById('peak-meter177');if(!meter)return;
  const el=document.createElement('details');el.id='master223';el.setAttribute('data-audio-effect','');
  el.innerHTML='<summary><span data-summary>MASTER · ON</span></summary><div class="master-controls223"><div class="master-actions223"><button type="button" data-power aria-pressed="true">MASTER: ON</button><button type="button" data-mono aria-pressed="false">MONO OUTPUT</button><button type="button" data-reset>RESET MIX</button></div><span data-profile></span><label>WIDTH <output data-value-width></output><input data-width aria-label="Master stereo width" type="range" min="0" max="140" step="1"></label><label>ROOM <output data-value-room></output><input data-room aria-label="Instrument room depth" type="range" min="0" max="100" step="1"></label><label>OUTPUT <output data-value-trim></output><input data-trim aria-label="Master output trim" type="range" min="-12" max="3" step="0.5"></label><p>Shape the full mix. Low bass stays centered. Full-mix recordings include these settings.</p></div>';
- meter.after(el);
+ (document.getElementById('visualizer')||meter).after(el);
  el.querySelector('[data-power]').onclick=()=>enable(!prefs.enabled);
  el.querySelector('[data-mono]').onclick=()=>configure({mono:!mono});
  el.querySelector('[data-reset]').onclick=()=>{delete prefs.faces[face];mono=false;live?.setFace(face,current());save();};
@@ -8157,13 +8161,14 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
       <button class="ctrl-btn" id="btn-arrange" aria-label="Compose / Arranger">COMPOSE</button><button class="ctrl-btn" id="lead-hold-btn" onclick="window._latchToggle && window._latchToggle()" aria-label="Hold — latch lead notes so chords bigger than five fingers ring until released" title="HOLD — latch leads: press to stack unlimited notes, tap a sounding key to release it">∞ HOLD</button>
       <button class="ctrl-btn" id="btn-face-loops" type="button" aria-pressed="false" title="LOOPS: import and launch your Ableton / Novation / beat-mixer loops, synced to the project tempo">&#10227; LOOPS</button>
       <button class="ctrl-btn" id="btn-fx-toggle" aria-label="Toggle FX & envelope panel" aria-expanded="false" onclick="try{window._fxValsInit&&window._fxValsInit()}catch(e){}">FX ▾</button>
-    </div>
-
-    <canvas id="visualizer"></canvas>
+      <!-- layout227: peak meter lives in the controls row, between FX and the hide eye -->
     <div id="peak-meter177" aria-label="Automatic peak protection">
       <span data-readout>PEAK GUARD −3.0 dB</span>
       <span class="peak-track177"><i data-level></i><i data-ceiling></i></span>
     </div>
+    </div>
+
+    <canvas id="visualizer"></canvas>
 
     <!-- XY Filter Pad with hit indicator grid behind waveform -->
     <div id="xy-pad-container">
@@ -27661,6 +27666,99 @@ window._handoffCopy = function () {
     };
 })();
 </script>
+<script id="cave-rail227">
+/* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
+   steering up the stone ramp by hand while the surface loaded, and the frame
+   hitches made that miserable. Once you start up an exit ramp you are now
+   carried on a fixed path: up the ramp, through the surface load, and out of
+   the mouth into daylight. Movement input is ignored; look stays free.
+   Kill: window._CAVE_RAIL = false. */
+(function(root){'use strict';
+const HELPER=`
+    /* RAIL_227 */
+    var rail227=null,railScan227=0,RAIL_V227=5,RAIL_TOP227=31,RAIL_OUT227=6;
+    /* the light at the end: a warm bloom that grows up the ramp, holds pure
+       white while the surface is built, then lets the day in */
+    var glow227=null;
+    function railGlow227(bloom,white){
+        if(!glow227){
+            if(!(bloom>0||white>0))return;
+            glow227=document.createElement('div');glow227.setAttribute('aria-hidden','true');
+            glow227.style.cssText='position:fixed;inset:0;z-index:100002;pointer-events:none;opacity:0;transition:none';
+            glow227.innerHTML='<i style="position:absolute;inset:-25%;display:block;background:radial-gradient(circle at 50% 46%,#fffdf6 0,#fff4d8 9%,rgba(255,236,196,.72) 22%,rgba(255,226,170,.28) 40%,rgba(255,220,160,0) 62%);transform-origin:50% 46%"></i><b style="position:absolute;inset:0;display:block;background:#fffaf0;opacity:0"></b>';
+            document.body.appendChild(glow227);
+            setInterval(function(){if(glow227&&window.__CAVE_PAUSED){glow227.style.opacity='0';}},400);
+        }
+        var b=Math.max(0,Math.min(1,bloom)),w=Math.max(0,Math.min(1,white));
+        glow227.style.opacity=String(Math.max(b,w));
+        glow227.firstChild.style.transform='scale('+(0.35+b*1.25).toFixed(3)+')';
+        glow227.lastChild.style.opacity=String(b>0?w/Math.max(b,w):1);
+    }
+    function sm227(a,b,v){var t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);}
+    function railStep227(p,dt){
+        var O=window.L99CaveOpenings171;
+        if(window._CAVE_RAIL===false||!O){rail227=null;railGlow227(0,0);return null;}
+        if(!rail227){
+            railGlow227(0,0);
+            if(over||surfaceLoading165||overCool>0||soulState!==0||window._CAVE_DOORS===false||window._CAVE_LIVE_PASSAGES===false)return null;
+            railScan227-=dt;if(railScan227>0)return null;railScan227=0.1;
+            var dp=CC.portalAt(p.x,p.y+bodyOffY,p.z);if(!dp)return null;
+            var s=CC.passageSpec179(dp),q=O.local(s,p.x,p.z),eye=p.y-O.floor(s,q.a),up=vel.x*s.ux+vel.z*s.uz;
+            /* only when you are walking UP into the ramp, so arriving back
+               from the surface (facing down the ramp) never throws you out */
+            if(q.a<-1||q.a>RAIL_TOP227-2||Math.abs(q.l)>2.8||eye<0.2||eye>5||up<0.8)return null;
+            rail227={phase:'in',dp:dp,a:q.a,v:Math.min(RAIL_V227,up),fx:p.x,fy:p.y,fz:p.z,t:0};
+            showHint('carried toward daylight · drag to look around');
+        }
+        var r=rail227;
+        if(r.phase==='in'&&over)r.phase='wait';
+        if(r.phase==='wait'){
+            if(surfaceLoading165)return null;
+            var m=over&&over.passage171;
+            if(!m||!m.open171){rail227=null;return null;}
+            railGlow227(1,1);
+            r.phase='out';r.s=m.open171;r.a=Math.min(16,O.local(r.s,p.x,p.z).a);r.v=RAIL_V227*0.5;r.last=0;r.fx=p.x;r.fy=p.y;r.fz=p.z;r.t=0;
+        }
+        if(r.phase==='out'&&!over){rail227=null;return null;}
+        /* wall-clock pacing: the ride keeps its length on a hitching device
+           instead of crawling at the loop's clamped frame step */
+        var now227=performance.now(),rdt=r.last?Math.min(0.25,(now227-r.last)/1000):dt;r.last=now227;dt=rdt;
+        r.t+=dt;r.v=Math.min(RAIL_V227,r.v+6*dt);
+        var tg;
+        if(r.phase==='in'){
+            r.a=Math.min(RAIL_TOP227,r.a+r.v*dt);tg=CC.passagePoint179(r.dp,r.a,1.85);
+            railGlow227(sm227(0,RAIL_TOP227-4,r.a),sm227(RAIL_TOP227-14,RAIL_TOP227-0.5,r.a));
+            if(r.a>=RAIL_TOP227){r.phase='wait';railGlow227(1,1);if(!enterWorld(r.dp,true))rail227=null;}
+        }else{
+            r.a-=r.v*dt;
+            var s2=r.s,ac=Math.max(0,r.a),f=O.floor(s2,ac),head=Math.min(1.85*s2.unit,(O.roof(s2,ac,0)-f)*0.46);
+            tg=O.point(s2,r.a,0,f+head);
+            if(r.a<0){var gy=Math.max(overHeightAt(tg[0],tg[2]),over.sea)+1.8,k=Math.min(1,-r.a/RAIL_OUT227);tg[1]+=(gy-tg[1])*k*k*(3-2*k);}
+            /* eyes adjusting: hold the white a breath, then let the day in */
+            var fade=1-sm227(0.35,3.2,r.t);railGlow227(fade,fade);
+            if(r.a<=-RAIL_OUT227){rail227=null;railGlow227(0,0);}
+        }
+        /* ease onto the path from wherever you stepped in */
+        var e=Math.min(1,r.t/0.6);e=e*e*(3-2*e);
+        return [r.fx+(tg[0]-r.fx)*e,r.fy+(tg[1]-r.fy)*e,r.fz+(tg[2]-r.fz)*e];
+    }
+    function tickDoors(dt2) {`;
+const EDITS=[
+ ['    function tickDoors(dt2) {',HELPER.replace(/^\n/,'')],
+ ['        squeezing = false;\n        var wasGrounded = grounded;','        var rail227p=railStep227(p,dt);if(rail227p)vel.set(0,0,0);\n        squeezing = false;\n        var wasGrounded = grounded;'],
+ ['        if (walkMode && !wasGrounded && grounded && fallV < -3.0) CaveAudio.land(-fallV);','        if(rail227p){p.set(rail227p[0],rail227p[1],rail227p[2]);vel.set(0,0,0);phyY=p.y;eyeY=p.y;grounded=true;wasGrounded=true;}\n        if (walkMode && !wasGrounded && grounded && fallV < -3.0) CaveAudio.land(-fallV);']
+];
+function patch(code){
+ try{
+  if(typeof code!=='string'||code.includes('/* RAIL_227 */'))return code;
+  for(const [a] of EDITS)if(code.split(a).length!==2){console.warn('RAIL_227: anchor not found, exits stay manual');return code;}
+  for(const [a,b] of EDITS)code=code.replace(a,()=>b);
+  return code;
+ }catch(e){console.warn('RAIL_227',e);return code;}
+}
+root.L99CaveRail227={patch};
+})(window);
+</script>
 <script>
 
 /* ══ L99 SHELL v12: ONE FILE ═══════════════════════════════════════════════
@@ -27685,7 +27783,7 @@ window._handoffCopy = function () {
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(window.L99CavesMaterials191.patchCaves);};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(window.L99CavesMaterials191.patchCaves).then(function(c){return window.L99CaveRail227?window.L99CaveRail227.patch(c):c;});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
@@ -30187,13 +30285,17 @@ root.L99Synth222={version:222,handles,voice,silence,patches:()=>Object.fromEntri
     if (!title) return;
     if (!document.getElementById('faceaudio222-style')) {
       const style = document.createElement('style'); style.id = 'faceaudio222-style';
-      style.textContent = '#faceaudio222{display:flex;align-items:center;justify-content:center;margin:3px 8px 7px;font:10px/1.35 inherit;color:inherit}#faceaudio222[hidden]{display:none}#faceaudio222 button{font:inherit;color:inherit;border:1px solid currentColor;border-radius:5px;background:transparent;padding:5px 8px;min-height:44px;cursor:pointer}#faceaudio222 button:focus-visible{outline:2px solid currentColor;outline-offset:3px}';
+      style.textContent = '#faceaudio222{position:relative;display:flex;align-items:center;justify-content:center;flex:0 1 auto;min-width:0;margin:0 12px}#faceaudio222[hidden]{display:none}#faceaudio222 [data-sound-mode]{min-height:36px;padding:8px 14px}#faceaudio222 [data-register226]{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;font:9px/1.2 \'Courier New\',monospace;letter-spacing:.4px;white-space:nowrap;opacity:.75;pointer-events:none}#faceaudio222 [data-register226][hidden]{display:none}#faceaudio222 button:focus-visible{outline:2px solid currentColor;outline-offset:3px}@media (max-width:600px){#title-row{flex-wrap:wrap;row-gap:8px}#faceaudio222{order:3;flex:1 0 100%;justify-content:flex-start;margin:0}#faceaudio222 [data-register226]{position:static;transform:none;margin:0 0 0 8px}}';
       document.head.appendChild(style);
     }
     const el = document.createElement('div'); el.id = 'faceaudio222'; el.hidden = true;
-    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.dataset.soundMode = '';
+    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'ctrl-btn'; toggle.dataset.soundMode = '';
     toggle.addEventListener('click', () => setEnabled(!mode));
-    el.append(toggle); title.after(el); paint();
+    el.append(toggle);
+    // layout227: sit inline between the faceplate title and the BPM/TAP cluster.
+    const bpm = document.getElementById('bpm-controls');
+    if (bpm && bpm.parentNode === title) title.insertBefore(el, bpm); else title.after(el);
+    paint();
   }
   function theme(face) {
     selectedFace = faceName(face || document.querySelector('.tab-btn.active')?.dataset.face || selectedFace);
