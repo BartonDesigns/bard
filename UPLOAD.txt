@@ -1,0 +1,17 @@
+BARD BUILD 226
+
+UPGRADE FROM BUILD 222, 223, 224 OR 225: replace index.html only. Keep runtime,
+assets and textures. Build 226 changes no runtime asset; every support file is
+byte-identical to Build 225.
+
+FULL INSTALLATION: upload the CONTENTS of server-upload into the publishing
+folder, preserving assets/, textures/ and runtime/. Do not upload the
+server-upload wrapper itself as an extra directory.
+
+Serve over HTTPS or localhost. Audio worklets and the sound packs do not load
+from a file:// preview; the app falls back quietly when they do not.
+
+ROLLBACK: restore the previous index.html and nothing else.
+
+Research and the knowledge-transfer document are outside this bundle. Read
+BUILD-226-KNOWLEDGE-TRANSFER.md in the handoff.
