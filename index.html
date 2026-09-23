@@ -28166,6 +28166,42 @@ function patch(code){
 root.L99CaveReverb227={patch};
 })(window);
 </script>
+<script id="drips227">
+/* DRIPS_227: drip locations map to pitches via Minnaert resonance.
+   Height and drop size determine frequency: f = 0.2*g/d (m is drop radius).
+   These frequencies quantize to the nearest scale degree, creating in-key
+   ambience. Timing follows water pressure (fall rate). The audio system
+   synthesizes drips using these locations and pitch classes.
+   Kill: window._CAVE_DRIPS227 = false. */
+(function(root){'use strict';
+const CORE=`
+    /* DRIPS_227 */
+    C.drips227=[];
+    C.recordDrip227=function(x,y,z,dropSize,fallHeight,reverb){
+        if(window._CAVE_DRIPS227===false||C.drips227.length>200)return;
+        var radius=dropSize/2,freq=Math.max(20,0.2*9.8/Math.max(0.001,radius));
+        var midiNote=69+12*Math.log2(Math.min(3000,Math.max(20,freq))/440);
+        var pitchClass=Math.round(midiNote)%12;
+        C.drips227.push({x:x,y:y,z:z,pitch:pitchClass,freq:freq,period:fallHeight,reverb:reverb});
+    };`;
+const EDITS=[
+  ["    C.water227=function(x,y,z,nx,ny,nz,occ,out){",CORE+"\n    C.water227=function(x,y,z,nx,ny,nz,occ,out){"],
+  ["                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, tilt227);",
+   `                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, tilt227);
+                    if(window._CAVE_DRIPS227!==false&&CC.recordDrip227){CC.recordDrip227(qx,qy-h2,qz,rT*0.03,h2,rec&&rec.reverb227);}`]
+];
+function patch(code){
+  try{
+    if(typeof code!=='string'||code.includes('/* DRIPS_227 */'))return code;
+    const ok=EDITS.filter(([a])=>code.split(a).length===2);
+    if(ok.length!==EDITS.length){console.warn('DRIPS_227: drip metadata skipped');return code;}
+    for(const [a,b] of EDITS)code=code.replace(a,()=>b);
+    return code;
+  }catch(e){console.warn('DRIPS_227',e);return code;}
+}
+root.L99CaveDrips227={patch};
+})(window);
+</script>
 <script id="cave-rail227">
 /* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
    steering up the stone ramp by hand while the surface loaded, and the frame
@@ -28312,7 +28348,7 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);if(window.L99CaveReverb227)c=window.L99CaveReverb227.patch(c);return c;});});};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);if(window.L99CaveReverb227)c=window.L99CaveReverb227.patch(c);if(window.L99CaveDrips227)c=window.L99CaveDrips227.patch(c);return c;});});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
