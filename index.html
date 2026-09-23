@@ -26,6 +26,12 @@ window.__PLANET_TEX = {
   mystical: "assets/planets/mystical.jpg"
 };
 </script>
+<script>
+/* TESTFLAGS_227: turn off today's cave layers from the address bar, e.g.
+   index.html?nowater&noforms. nowater: wet rock and stains. noforms: rock
+   species and angled formations. norail: exit ride. noriver: river shader fix. */
+(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]noriver\b/.test(q))window._RIVER_FIX227=false;})(location.search);
+</script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
 
 
@@ -3232,7 +3238,7 @@ function status(message,failed){if(!wantsStatus)return;const p=panel();p.style.d
 function show(message,again){wantsStatus=true;retry=again;status(message);}
 function hide(){wantsStatus=false;if(box)box.style.display='none';}
 function execute(code){const s=document.createElement('script');s.textContent=code;let error=null;const caught=e=>{error=e.error||Error(e.message);};root.addEventListener('error',caught);try{document.head.appendChild(s);}finally{s.remove();root.removeEventListener('error',caught);}if(error)throw error;}
-function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore(blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}'))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
+function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227===false?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
 function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;
