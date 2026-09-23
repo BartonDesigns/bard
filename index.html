@@ -27998,6 +27998,141 @@ function finish(reveal){const d=dive;if(!d)return;dive=null;cancelAnimationFrame
 root.L99Dive227={patch,start,climb,landed,finish,get active(){return !!dive;}};
 })(window);
 </script>
+<script id="caveworld227">
+/* WATER_227: the cave as a water system. Real caves are decorated by where
+   water goes: drips on ceiling cracks build stalactites with stalagmites
+   below, films on walls stain them (iron orange, manganese black, calcite
+   cream), wet rock goes dark and glossy, dry chambers stay bare. One slow
+   wet/dry field plus two crack sets drive all of it, baked once per chunk
+   at mesh time, so it costs nothing per frame.
+   Kill: window._CAVE_WATER227 = false (before entering the caves). */
+(function(root){'use strict';
+const CORE=`
+    /* WATER_227 */
+    function sm227c(e0,e1,v){var t=Math.max(0,Math.min(1,(v-e0)/(e1-e0)));return t*t*(3-2*t);}
+    /* wet and dry chambers: about half the cave is actively dripping */
+    C.wetZone227=function(x,y,z){return sm227c(0.40,0.66,vnoise(x*0.012+41.3,y*0.025+7.1,z*0.012+13.7));};
+    /* two joint (crack) sets whose strike slowly rotates across the map; water
+       enters the cave along them, so 1 on a crack line, ~0 a metre or two off */
+    C.joint227=function(x,z){var a=vnoise(x*0.004+5.0,0.5,z*0.004+9.0)*6.2832,ca=Math.cos(a),sa=Math.sin(a);
+        var u=(x*ca+z*sa)/7.0,v=(-x*sa+z*ca)/11.0;var d1=Math.abs(u-Math.floor(u)-0.5)*7.0,d2=Math.abs(v-Math.floor(v)-0.5)*11.0;
+        var d=Math.min(d1,d2);return Math.exp(-d*d/0.9);};
+    C.water227=function(x,y,z,nx,ny,nz,occ,out){
+        if(window._CAVE_WATER227===false||C.inCore(y))return 0;
+        var zone=C.wetZone227(x,y,z);if(zone<=0.002)return 0;
+        var j=C.joint227(x,z);
+        var streak=sm227c(0.50,0.78,vnoise(x*1.3+17.0,y*0.09,z*1.3+3.0));   /* long vertical runnels */
+        var wet;
+        if(ny<-0.3)wet=zone*(0.25+0.75*j);          /* ceilings: seeps along cracks */
+        else if(ny>0.55)wet=zone*(0.2+0.8*occ);     /* floors: water collects in hollows */
+        else wet=zone*Math.max(streak,0.5*j);       /* walls: runnels */
+        wet=Math.min(1,wet);
+        var fe=sm227c(0.55,0.75,vnoise(x*0.006+300.0,y*0.01,z*0.006+77.0));
+        var mn=sm227c(0.60,0.80,vnoise(x*0.007+11.0,y*0.012+500.0,z*0.007+5.0));
+        var path=(ny<=0.55)?Math.max(streak,j):0.4*occ,s=zone*path;
+        var r=out[0],g=out[1],b=out[2],L=(r+g+b)/3;
+        var kf=s*fe*0.6;r+=(L*1.9-r)*kf;g+=(L*0.95-g)*kf;b+=(L*0.45-b)*kf;          /* iron: orange-red */
+        var km=s*mn*0.5*(ny>0.55?1:0.6);r*=1-km*0.75;g*=1-km*0.75;b*=1-km*0.7;     /* manganese: black */
+        var kc=zone*j*(ny<0.3?0.35:0.15);r+=(0.62-r)*kc;g+=(0.57-g)*kc;b+=(0.48-b)*kc; /* calcite films */
+        var dk=1-0.38*wet;out[0]=r*dk;out[1]=g*dk;out[2]=b*dk;                     /* wet rock darkens */
+        return wet;
+    };
+    C.buildChunk = function (cx, cy, cz) {`;
+const FORM_ACCEPT=`            /* WATER_227: formations follow the water. Dense along wet ceiling
+               cracks, none in dry chambers. */
+            var z227=CC.wetZone227?CC.wetZone227(px,py,pz):1,j227=CC.joint227?CC.joint227(px,pz):1;
+            if (window._CAVE_WATER227===false ? hh > 0.40 : hh > 0.62 * z227 * (0.15 + 0.85 * j227)) continue;`;
+const EDITS=[
+ ["    C.buildChunk = function (cx, cy, cz) {",CORE],
+ ["        var positions = [], normals = [], colors = [], indices = [];","        var positions = [], normals = [], colors = [], indices = [], wets227 = [];"],
+ ["            occ = Math.min(1.0, occ / 4 * 1.6);","            occ = Math.min(1.0, occ / 4 * 1.6);\n            wets227.push(C.water227 ? C.water227(px, py, pz, nx, ny, nz, occ, col) : 0);"],
+ ["            colors: new Float32Array(colors),\n            indices: indices,","            colors: new Float32Array(colors),\n            wet227: new Float32Array(wets227),\n            indices: indices,"],
+ ["            geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));","            geo.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));\n            if (data.wet227 && data.wet227.length === data.colors.length / 3) geo.setAttribute('wet227', new THREE.BufferAttribute(data.wet227, 1));"],
+ ["    var rockMat = makeRockMaterial(THREE, CC, { vertexColors: true });",`    var rockMat = makeRockMaterial(THREE, CC, { vertexColors: true });
+    /* WATER_227: wet rock is glossy. A per-vertex wetness lowers roughness so
+       wet runnels and seeps catch the headlamp; dry rock stays matte. */
+    (function () {
+        var prev = rockMat.onBeforeCompile;
+        rockMat.onBeforeCompile = function (sh, r) {
+            if (prev) prev.call(this, sh, r);
+            sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\\nattribute float wet227;\\nvarying float vWet227;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\\nvWet227 = wet227;');
+            sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\\nvarying float vWet227;')
+                .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\\nroughnessFactor = mix(roughnessFactor, 0.2, clamp(vWet227, 0.0, 1.0) * 0.85);');
+        };
+        var prevKey = rockMat.customProgramCacheKey ? rockMat.customProgramCacheKey.bind(rockMat) : null;
+        rockMat.customProgramCacheKey = function () { return (prevKey ? prevKey() : '') + '|wet227'; };
+    })();`],
+ ["            if (hh > 0.40) continue;",FORM_ACCEPT],
+ ["                if (hit && hh < 0.30) {",`                if (hit && gap > 0.8) {   /* WATER_227: every drip that lands builds its mound */
+                    /* a long fall splashes: tall chambers grow broad, flat-topped stalagmites */
+                    var fall227 = Math.max(0, Math.min(1, (gap - 4) / 10));
+                    rT *= 1 + fall227 * 0.9;`],
+ ["            if (h2 > 0.16) continue;","            if (h2 > 0.16 * (CC.wetZone227 && window._CAVE_WATER227 !== false ? CC.wetZone227(qx, qy, qz) : 1)) continue;   /* WATER_227: dry floors stay bare */"],
+ ["        inst.count = used;\n        if (used > 0) rec.group.add(inst);",`        /* WATER_227: soda straws, thin hollow tubes the width of a drop, crowd
+           the wettest stretch of each ceiling crack */
+        if (window._CAVE_WATER227 !== false && CC.joint227) {
+            for (i = 0; i < n && used < 26; i++) {
+                var sx = pts[i * 3], sy = pts[i * 3 + 1], sz = pts[i * 3 + 2];
+                var sj = CC.joint227(sx, sz) * CC.wetZone227(sx, sy, sz);
+                var sh227 = CC.hash3(Math.floor(sx * 7) + 3, Math.floor(sy * 7), Math.floor(sz * 7) + 11);
+                if (sj < 0.55 || sh227 > 0.5) continue;
+                for (var k227 = 0; k227 < 3 && used < 26; k227++) {
+                    var o1 = CC.hash3(i, k227, 5) - 0.5, o2 = CC.hash3(k227, i, 9) - 0.5, o3 = CC.hash3(i + k227, 3, 1);
+                    put(sx + o1 * 0.9, sy + 0.05, sz + o2 * 0.9, 0.035 + o3 * 0.03, 0.35 + o3 * 1.1, true, o3 * 0.02);
+                }
+            }
+        }
+        inst.count = used;
+        if (used > 0) rec.group.add(inst);`],
+]
+function patch(code){
+ try{
+  if(typeof code!=='string'||code.includes('/* WATER_227 */'))return code;
+  const ok=EDITS.filter(([a])=>code.split(a).length===2);
+  if(ok.length!==EDITS.length){console.warn('WATER_227: '+(EDITS.length-ok.length)+' anchors missing, cave water layer skipped');return code;}
+  for(const [a,b] of EDITS)code=code.replace(a,()=>b);
+  return code;
+ }catch(e){console.warn('WATER_227',e);return code;}
+}
+root.L99CaveWorld227={patch};
+})(window);
+</script>
+<script id="formations227">
+/* FORMATIONS_227: rock species shapes formations differently, and water flow
+   angles them. Iron oxide areas grow chunky crystalline formations, manganese
+   areas stay delicate and thin, calcite areas build regular columns. Joint
+   lines guide the tilt, so formations lean along the cracks where water enters.
+   Stalactites, stalagmites, soda straws all respond to their local geology.
+   Kill: window._CAVE_FORMATIONS227 = false. */
+(function(root){'use strict';
+const CORE=`
+    /* FORMATIONS_227 */
+    C.mineralsAt227=function(x,y,z){
+        var fe=C.sm227c?C.sm227c(0.55,0.75,vnoise(x*0.006+300.0,y*0.01,z*0.006+77.0)):0.5;
+        var mn=C.sm227c?C.sm227c(0.60,0.80,vnoise(x*0.007+11.0,y*0.012+500.0,z*0.007+5.0)):0.5;
+        var ca=C.sm227c?C.sm227c(0.62,0.82,vnoise(x*0.008+71.0,y*0.015+200.0,z*0.008+44.0)):0.5;
+        return {fe:fe,mn:mn,ca:ca};
+    };`;
+const EDITS=[
+  ["                    rT *= 1 + fall227 * 0.9;","                    rT *= 1 + fall227 * 0.9;\n                    /* FORMATIONS_227: chunky iron oxides, thin manganese */\n                    if(window._CAVE_FORMATIONS227!==false&&typeof sm227c==='function'){var fe227=sm227c(0.55,0.75,vnoise(px*0.006+300,py*0.01,pz*0.006+77)),mn227=sm227c(0.60,0.80,vnoise(px*0.007+11,py*0.012+500,pz*0.007+5));if(fe227>0.6){rT*=1.3;rH*=1.2;}else if(mn227>0.6){rT*=0.7;rH*=0.8;}}"],
+  ["                if (hit && gap > 0.8) {","                if (hit && gap > 0.8) { /* mineral-shaped base */\n                    if(window._CAVE_FORMATIONS227!==false&&typeof sm227c==='function'){var fe227s=sm227c(0.55,0.75,vnoise(qx*0.006+300,qy*0.01,qz*0.006+77)),mn227s=sm227c(0.60,0.80,vnoise(qx*0.007+11,qy*0.012+500,qz*0.007+5));if(fe227s>0.6)rT*=1.25;else if(mn227s>0.6)rT*=0.85;}"],
+  ["                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, a227);","                    var tilt227=a227;if(window._CAVE_FORMATIONS227!==false&&CC.joint227){var j227=CC.joint227(qx,qz),flow227=vnoise(qx*0.003+120,qy*0.01,qz*0.003+45)*6.28318;tilt227=a227+j227*0.6*Math.cos(flow227);}\n                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, tilt227);"],
+  ["                    put(sx + o1 * 0.9, sy + 0.05, sz + o2 * 0.9, 0.035 + o3 * 0.03, 0.35 + o3 * 1.1, true, o3 * 0.02);","                    var stilt227=o3*0.02;if(window._CAVE_FORMATIONS227!==false&&CC.joint227){var sj227=CC.joint227(sx,sz);stilt227=o3*0.02+sj227*0.3*(CC.hash3(i,k227,7)-0.5);}\n                    put(sx + o1 * 0.9, sy + 0.05, sz + o2 * 0.9, 0.035 + o3 * 0.03, 0.35 + o3 * 1.1, true, stilt227);"]
+];
+function patch(code){
+  try{
+    if(typeof code!=='string'||code.includes('/* FORMATIONS_227 */'))return code;
+    for(const [a,b] of EDITS){
+      if(code.split(a).length!==2){console.warn('FORMATIONS_227: anchor missing: '+a.slice(0,50));continue;}
+      code=code.replace(a,b);
+    }
+    return code;
+  }catch(e){console.warn('FORMATIONS_227',e);return code;}
+}
+root.L99CaveFormations227={patch};
+})(window);
+</script>
 <script id="cave-rail227">
 /* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
    steering up the stone ramp by hand while the surface loaded, and the frame
@@ -28144,7 +28279,7 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);return window.L99CaveRail227?window.L99CaveRail227.patch(c):c;});});};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);return c;});});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
