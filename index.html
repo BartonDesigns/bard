@@ -28099,107 +28099,118 @@ root.L99CaveWorld227={patch};
 })(window);
 </script>
 <script id="formations227">
-/* FORMATIONS_227: rock species shapes formations differently, and water flow
-   angles them. Iron oxide areas grow chunky crystalline formations, manganese
-   areas stay delicate and thin, calcite areas build regular columns. Joint
-   lines guide the tilt, so formations lean along the cracks where water enters.
-   Stalactites, stalagmites, soda straws all respond to their local geology.
-   Kill: window._CAVE_FORMATIONS227 = false. */
+/* FORMATIONS_227: every formation has a rock species and a lean. Species come
+   from the same iron and manganese fields that stain the walls, so an orange
+   seep grows rusty stalactites and a black manganese band grows dark ones;
+   clean calcite is cream and pure aragonite needles are near white. Angles
+   come from the cave: stalagmites grow up off the local floor slope, drafty
+   passages bend dripstone downwind, and helictites twist out of the walls at
+   any angle. Kill: window._CAVE_FORMATIONS227 = false (before entering). */
 (function(root){'use strict';
 const CORE=`
     /* FORMATIONS_227 */
-    C.mineralsAt227=function(x,y,z){
-        var fe=C.sm227c?C.sm227c(0.55,0.75,vnoise(x*0.006+300.0,y*0.01,z*0.006+77.0)):0.5;
-        var mn=C.sm227c?C.sm227c(0.60,0.80,vnoise(x*0.007+11.0,y*0.012+500.0,z*0.007+5.0)):0.5;
-        var ca=C.sm227c?C.sm227c(0.62,0.82,vnoise(x*0.008+71.0,y*0.015+200.0,z*0.008+44.0)):0.5;
-        return {fe:fe,mn:mn,ca:ca};
-    };`;
+    var SPECIES227=[[1.22,1.14,0.98],[1.38,0.84,0.52],[0.46,0.43,0.44],[1.62,1.60,1.54],[1.05,1.00,0.96]];
+    C.species227=function(x,y,z){
+        var fe=sm227c(0.55,0.75,vnoise(x*0.006+300.0,y*0.01,z*0.006+77.0));
+        var mn=sm227c(0.60,0.80,vnoise(x*0.007+11.0,y*0.012+500.0,z*0.007+5.0));
+        var pure=vnoise(x*0.02+610.0,y*0.03,z*0.02+95.0);
+        if(mn>0.7)return 2;if(fe>0.3)return 1;if(pure>0.68)return 3;if(pure<0.3)return 4;return 0;
+    };
+    C.speciesColor227=function(k){return SPECIES227[k]||SPECIES227[0];};
+    C.draft227=function(x,y,z){return {s:sm227c(0.52,0.74,vnoise(x*0.01+900.0,y*0.02,z*0.01+300.0)),yaw:vnoise(x*0.003+50.0,0.5,z*0.003+70.0)*12.566};};
+`;
+const PUT_OLD=`        function put(x, y, z, r, len, down, tilt) {
+            if (used >= 26) return;
+            if (down) q.copy(flip); else q.identity();
+            if (tilt > 0.001) {
+                tiltAx.set(Math.sin(tilt * 91), 0, Math.cos(tilt * 91)).normalize();
+                var tq = new THREE.Quaternion().setFromAxisAngle(tiltAx, tilt);
+                q.premultiply(tq);
+            }
+            m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(r, len, r));
+            inst.setMatrixAt(used, m4);
+            used++;
+        }`;
+const PUT_NEW=`        /* FORMATIONS_227: put() takes a lean direction and colours each
+           instance by its rock species; species also sets the build */
+        var on227 = window._CAVE_FORMATIONS227 !== false && !!CC.species227;
+        var col227 = new THREE.Color(), UP227 = new THREE.Vector3(0, 1, 0);
+        function floorLean227(x, y, z) {
+            var e = 0.4, d = CC.density;
+            var gx = d(x + e, y, z) - d(x - e, y, z), gy = d(x, y + e, z) - d(x, y - e, z), gz = d(x, y, z + e) - d(x, y, z - e);
+            var l = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1, ny = -gy / l;
+            return { tilt: Math.min(0.45, Math.acos(Math.max(-1, Math.min(1, ny))) * 0.55), lean: Math.atan2(-gz, -gx) };
+        }
+        function put(x, y, z, r, len, down, tilt, lean, keepLen) {
+            if (used >= (on227 ? 40 : 26)) return;
+            var k = 0;
+            if (on227) {
+                k = CC.species227(x, y, z);
+                if (k === 1) { r *= 1.3; if (!keepLen) len *= 0.85; }
+                else if (k === 2) { r *= 0.72; }
+                else if (k === 3) { r *= 0.6; if (!keepLen) len *= 1.2; }
+            }
+            if (down) q.copy(flip); else q.identity();
+            if (tilt > 0.001) {
+                if (lean === undefined) tiltAx.set(Math.sin(tilt * 91), 0, Math.cos(tilt * 91)).normalize();
+                else { if (down) lean += Math.PI; tiltAx.set(Math.sin(lean), 0, -Math.cos(lean)); }
+                var tq = new THREE.Quaternion().setFromAxisAngle(tiltAx, tilt);
+                q.premultiply(tq);
+            }
+            m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(r, len, r));
+            inst.setMatrixAt(used, m4);
+            if (on227) {
+                var c = CC.speciesColor227(k), j = 0.9 + CC.hash3(Math.floor(x * 13), Math.floor(y * 13), Math.floor(z * 13)) * 0.2;
+                inst.setColorAt(used, col227.setRGB(c[0] * j, c[1] * j, c[2] * j));
+            }
+            used++;
+        }
+        /* drafty passages bend dripstone downwind (0.12 to 0.4 rad) */
+        function draft227(x, y, z) { var d = on227 ? CC.draft227(x, y, z) : null; return d && d.s > 0.02 ? d : null; }`;
 const EDITS=[
-  ["                    rT *= 1 + fall227 * 0.9;","                    rT *= 1 + fall227 * 0.9;\n                    /* FORMATIONS_227: chunky iron oxides, thin manganese */\n                    if(window._CAVE_FORMATIONS227!==false&&typeof sm227c==='function'){var fe227=sm227c(0.55,0.75,vnoise(px*0.006+300,py*0.01,pz*0.006+77)),mn227=sm227c(0.60,0.80,vnoise(px*0.007+11,py*0.012+500,pz*0.007+5));if(fe227>0.6){rT*=1.3;rH*=1.2;}else if(mn227>0.6){rT*=0.7;rH*=0.8;}}"],
-  ["                if (hit && gap > 0.8) {","                if (hit && gap > 0.8) { /* mineral-shaped base */\n                    if(window._CAVE_FORMATIONS227!==false&&typeof sm227c==='function'){var fe227s=sm227c(0.55,0.75,vnoise(qx*0.006+300,qy*0.01,qz*0.006+77)),mn227s=sm227c(0.60,0.80,vnoise(qx*0.007+11,qy*0.012+500,qz*0.007+5));if(fe227s>0.6)rT*=1.25;else if(mn227s>0.6)rT*=0.85;}"],
-  ["                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, a227);","                    var tilt227=a227;if(window._CAVE_FORMATIONS227!==false&&CC.joint227){var j227=CC.joint227(qx,qz),flow227=vnoise(qx*0.003+120,qy*0.01,qz*0.003+45)*6.28318;tilt227=a227+j227*0.6*Math.cos(flow227);}\n                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, tilt227);"],
-  ["                    put(sx + o1 * 0.9, sy + 0.05, sz + o2 * 0.9, 0.035 + o3 * 0.03, 0.35 + o3 * 1.1, true, o3 * 0.02);","                    var stilt227=o3*0.02;if(window._CAVE_FORMATIONS227!==false&&CC.joint227){var sj227=CC.joint227(sx,sz);stilt227=o3*0.02+sj227*0.3*(CC.hash3(i,k227,7)-0.5);}\n                    put(sx + o1 * 0.9, sy + 0.05, sz + o2 * 0.9, 0.035 + o3 * 0.03, 0.35 + o3 * 1.1, true, stilt227);"]
+ ["    C.water227=function(x,y,z,nx,ny,nz,occ,out){",CORE+"    C.water227=function(x,y,z,nx,ny,nz,occ,out){"],
+ ["        var inst = new THREE.InstancedMesh(spikeGeo, spikeMat, 26);","        var inst = new THREE.InstancedMesh(spikeGeo, spikeMat, window._CAVE_FORMATIONS227 !== false && CC.species227 ? 40 : 26);"],
+ [PUT_OLD,PUT_NEW],
+ ["                put(px, py, pz, rT * 1.35, gap + 0.3, true, hh * 0.03);",
+  "                var dc227 = draft227(px, py, pz);\n                put(px, py, pz, rT * 1.35, gap + 0.3, true, dc227 ? dc227.s * 0.08 : hh * 0.03, dc227 ? dc227.yaw : undefined, true);"],
+ ["                put(px, py, pz, rT, lenT, true, hh * 0.05);",
+  "                var dt227 = draft227(px, py, pz);\n                put(px, py, pz, rT, lenT, true, dt227 ? 0.12 + dt227.s * 0.28 : hh * 0.06, dt227 ? dt227.yaw : undefined);"],
+ ["                    put(px, fy + 0.15, pz, rT * 1.9, lenM, false, hh * 0.04);",
+  "                    var fl227 = on227 ? floorLean227(px, fy + 0.15, pz) : null;\n                    put(px, fy + 0.15, pz, rT * 1.9, lenM, false, fl227 ? fl227.tilt : hh * 0.04, fl227 ? fl227.lean : undefined);"],
+ ["            put(qx, qy, qz, 0.22 + h2 * 1.0, 0.8 + h2 * 2.6, false, h2 * 0.05);",
+  "            var fq227 = on227 ? floorLean227(qx, qy, qz) : null, dq227 = draft227(qx, qy, qz);\n            put(qx, qy, qz, 0.22 + h2 * 1.0, 0.8 + h2 * 2.6, false, fq227 ? fq227.tilt + (dq227 ? dq227.s * 0.2 : 0) : h2 * 0.05, fq227 ? (dq227 ? dq227.yaw : fq227.lean) : undefined);"],
+ ["        inst.count = used;\n        if (used > 0) rec.group.add(inst);",
+  `        /* FORMATIONS_227: helictites, small calcite spurs that ignore gravity
+           and twist out of damp walls at any angle */
+        if (on227) {
+            var wp = data.wallPts, wn = Math.floor(wp.length / 6);
+            for (i = 0; i < wn && used < 40; i += 3) {
+                var hx = wp[i * 6], hy = wp[i * 6 + 1], hz = wp[i * 6 + 2];
+                var hk = CC.hash3(Math.floor(hx * 9) + 21, Math.floor(hy * 9), Math.floor(hz * 9) + 4);
+                if (hk > 0.10 * (CC.wetZone227 ? 0.4 + CC.wetZone227(hx, hy, hz) : 1)) continue;
+                var nlean = Math.atan2(wp[i * 6 + 5], wp[i * 6 + 3]);
+                for (var c227 = 0; c227 < 3 && used < 40; c227++) {
+                    var hr = CC.hash3(i, c227, 31), hs = CC.hash3(c227, i, 47);
+                    put(hx + (hr - 0.5) * 0.3, hy + (hs - 0.5) * 0.4, hz + (hr - hs) * 0.3, 0.03 + hr * 0.035, 0.18 + hs * 0.45,
+                        hs > 0.7, 0.7 + hr * 1.5, nlean + (hs - 0.5) * 1.6);
+                }
+            }
+        }
+        inst.count = used;
+        if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+        if (used > 0) rec.group.add(inst);`],
 ];
 function patch(code){
-  try{
-    if(typeof code!=='string'||code.includes('/* FORMATIONS_227 */'))return code;
-    for(const [a,b] of EDITS){
-      if(code.split(a).length!==2){console.warn('FORMATIONS_227: anchor missing: '+a.slice(0,50));continue;}
-      code=code.replace(a,b);
-    }
-    return code;
-  }catch(e){console.warn('FORMATIONS_227',e);return code;}
+ try{
+  if(typeof code!=='string'||code.includes('/* FORMATIONS_227 */'))return code;
+  if(!code.includes('/* WATER_227 */')){console.warn('FORMATIONS_227: needs WATER_227, skipped');return code;}
+  const miss=EDITS.filter(([a])=>code.split(a).length!==2);
+  if(miss.length){console.warn('FORMATIONS_227: '+miss.length+' anchors missing, formation variety skipped');return code;}
+  for(const [a,b] of EDITS)code=code.replace(a,()=>b);
+  return code;
+ }catch(e){console.warn('FORMATIONS_227',e);return code;}
 }
 root.L99CaveFormations227={patch};
-})(window);
-</script>
-<script id="reverb227">
-/* REVERB_227: chamber acoustics respond to size. Each buildChunk computes
-   reverb time from the local density field: tight confines (0.1-0.3s),
-   open chambers (1.5-3s). Drip sounds query chunk metrics to adjust
-   their wet/dry mix and modal decay. Four delayed taps at 1:1.6:2.3:3.2
-   modal ratios provide the reverb. Kill: window._CAVE_REVERB227 = false. */
-(function(root){'use strict';
-const EDITS=[
-  /* Compute and return chamber metrics from the density field */
-  ["        return {positions, normals, colors, indices, floorPts, ceilPts, wallPts, wet227};",
-   `        /* REVERB_227: chamber metrics from local density variations */
-        var rev227={rt60:0.4,wet:0.25,mfp:8};
-        if(window._CAVE_REVERB227!==false&&data.positions.length>0){
-            var cx=data.positions[0],cy=data.positions[1],cz=data.positions[2];
-            var d1=Math.abs(CC.density(cx,cy+0.5,cz)),d2=Math.abs(CC.density(cx,cy+2,cz)),d3=Math.abs(CC.density(cx+3,cy,cz));
-            var avg=(d1+d2+d3)/3,openness=Math.max(0.001,avg/5);
-            rev227.mfp=2+8*Math.min(1,openness/6);rev227.rt60=0.08*rev227.mfp*0.161/openness;
-            rev227.rt60=Math.max(0.1,Math.min(3,rev227.rt60));rev227.wet=Math.pow(Math.min(1,rev227.rt60/3),0.5)*0.4;
-        }
-        return {positions, normals, colors, indices, floorPts, ceilPts, wallPts, wet227, reverb227:rev227};`]
-];
-function patch(code){
-  try{
-    if(typeof code!=='string'||code.includes('/* REVERB_227 */'))return code;
-    const ok=EDITS.filter(([a])=>code.split(a).length===2);
-    if(ok.length!==EDITS.length){console.warn('REVERB_227: chamber metrics skipped');return code;}
-    for(const [a,b] of EDITS)code=code.replace(a,()=>b);
-    return code;
-  }catch(e){console.warn('REVERB_227',e);return code;}
-}
-root.L99CaveReverb227={patch};
-})(window);
-</script>
-<script id="drips227">
-/* DRIPS_227: drip locations map to pitches via Minnaert resonance.
-   Height and drop size determine frequency: f = 0.2*g/d (m is drop radius).
-   These frequencies quantize to the nearest scale degree, creating in-key
-   ambience. Timing follows water pressure (fall rate). The audio system
-   synthesizes drips using these locations and pitch classes.
-   Kill: window._CAVE_DRIPS227 = false. */
-(function(root){'use strict';
-const CORE=`
-    /* DRIPS_227 */
-    C.drips227=[];
-    C.recordDrip227=function(x,y,z,dropSize,fallHeight,reverb){
-        if(window._CAVE_DRIPS227===false||C.drips227.length>200)return;
-        var radius=dropSize/2,freq=Math.max(20,0.2*9.8/Math.max(0.001,radius));
-        var midiNote=69+12*Math.log2(Math.min(3000,Math.max(20,freq))/440);
-        var pitchClass=Math.round(midiNote)%12;
-        C.drips227.push({x:x,y:y,z:z,pitch:pitchClass,freq:freq,period:fallHeight,reverb:reverb});
-    };`;
-const EDITS=[
-  ["    C.water227=function(x,y,z,nx,ny,nz,occ,out){",CORE+"\n    C.water227=function(x,y,z,nx,ny,nz,occ,out){"],
-  ["                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, tilt227);",
-   `                    put(qx + o * 1.2, qy - h2, qz + u * 1.2, rT, rH, false, tilt227);
-                    if(window._CAVE_DRIPS227!==false&&CC.recordDrip227){CC.recordDrip227(qx,qy-h2,qz,rT*0.03,h2,rec&&rec.reverb227);}`]
-];
-function patch(code){
-  try{
-    if(typeof code!=='string'||code.includes('/* DRIPS_227 */'))return code;
-    const ok=EDITS.filter(([a])=>code.split(a).length===2);
-    if(ok.length!==EDITS.length){console.warn('DRIPS_227: drip metadata skipped');return code;}
-    for(const [a,b] of EDITS)code=code.replace(a,()=>b);
-    return code;
-  }catch(e){console.warn('DRIPS_227',e);return code;}
-}
-root.L99CaveDrips227={patch};
 })(window);
 </script>
 <script id="cave-rail227">
@@ -28348,7 +28359,7 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);if(window.L99CaveReverb227)c=window.L99CaveReverb227.patch(c);if(window.L99CaveDrips227)c=window.L99CaveDrips227.patch(c);return c;});});};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);return c;});});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
