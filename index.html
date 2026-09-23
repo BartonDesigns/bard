@@ -7039,6 +7039,12 @@ html.mobile-world176,body.mobile-world176{overflow:hidden!important;overscroll-b
 #peak-meter177 [data-level]{position:absolute;inset:0 auto 0 0;width:0;background:currentColor;opacity:.65;border-radius:4px;}
 #peak-meter177 [data-ceiling]{position:absolute;top:-4px;bottom:-4px;left:93.75%;width:2px;background:#ff424f;box-shadow:0 0 5px #ff424f88;}
 /* layout227: sit between FX (order 99) and the hide eye (order 999), filling the gap */
+#controls-row > #perf-tail227{order:998;flex:1 1 76px;min-width:76px;display:flex;align-items:center;gap:6px;margin-left:auto;}
+#perf-tail227 > #peak-meter177{flex:1 1 auto;min-width:36px;min-height:0;padding:0 4px;flex-direction:column;align-items:stretch;justify-content:center;gap:5px;}
+#perf-tail227 > #peak-meter177 [data-readout]{font-size:9px;letter-spacing:.6px;overflow:hidden;text-overflow:ellipsis;}
+#perf-tail227 > #peak-meter177 .peak-track177{flex:0 0 8px;}
+#perf-tail227 > #face-hide-btn{margin-left:0!important;flex:0 0 auto;order:0;}
+@media (max-width:600px){#perf-tail227 > #peak-meter177 [data-readout]{display:none;}}
 #controls-row > #peak-meter177{order:998;flex:1 1 150px;min-width:120px;min-height:0;padding:0 8px;flex-direction:column;align-items:stretch;justify-content:center;gap:5px;}
 #controls-row > #peak-meter177 [data-readout]{font-size:9px;letter-spacing:.6px;overflow:hidden;text-overflow:ellipsis;}
 #controls-row > #peak-meter177 .peak-track177{flex:0 0 8px;}
@@ -8107,16 +8113,17 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
 <div id="synth">
   <div id="faceplate-tabs">
     <button class="tab-btn active" data-face="BARD">BARD</button>
-    <button class="tab-btn" data-face="SYNTHWAVE">SYNTHWAVE</button>
+    <button class="tab-btn" data-face="MAESTRO">MAESTRO</button>
     <button class="tab-btn" data-face="DNB">DNB</button>
+    <button class="tab-btn" data-face="SYNTHWAVE">SYNTHWAVE</button>
     <button class="tab-btn" data-face="SPARKLE">SPARKLE</button>
     <button class="tab-btn" data-face="SOUL">SOUL</button>
     <button class="tab-btn" data-face="GAS">GAS</button>
     <button class="tab-btn" data-face="HYPHY">HYPHY</button>
     <button class="tab-btn" data-face="DANCEHALL">DANCEHALL</button>
-    <button class="tab-btn" data-face="GLITCHPOP">GLITCHPOP</button><button class="tab-btn" data-face="KAWAII">KAWAII</button>
-      <button class="tab-btn" data-face="BREW">BREW</button>
-    <button class="tab-btn" data-face="MAESTRO">MAESTRO</button>
+    <button class="tab-btn" data-face="GLITCHPOP">GLITCHPOP</button>
+    <button class="tab-btn" data-face="KAWAII">KAWAII</button>
+    <button class="tab-btn" data-face="BREW">BREW</button>
   </div>
 
   <div id="main-panel">
@@ -8342,13 +8349,13 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
         </div>
       </div>
       <div class="sliders-row">
-        <div class="slider-group"><label for="sl-crunch">CRUNCH </label><input type="range" aria-label="CRUNCH" id="sl-crunch" min="0" max="1" step="0.01" value="0"></div>
-        <div class="slider-group"><label for="sl-delay">DELAY </label><input type="range" aria-label="DELAY" id="sl-delay" min="0" max="1" step="0.01" value="0"></div>
-        <div class="slider-group"><label for="sl-grit">DRIVE </label><input type="range" aria-label="DRIVE" id="sl-grit" min="0" max="1" step="0.01" value="0"></div>
-        <div class="slider-group"><label for="sl-lpf">LOW-PASS FILTER </label><input type="range" aria-label="LOW-PASS FILTER" id="sl-lpf" min="20" max="20000" step="1" value="20000"></div>
+        <div class="slider-group"><label for="sl-crunch">LEAD 1 CRUNCH </label><input type="range" aria-label="LEAD 1 CRUNCH" id="sl-crunch" min="0" max="1" step="0.01" value="0"></div>
+        <div class="slider-group"><label for="sl-delay">LEAD 1 DELAY </label><input type="range" aria-label="LEAD 1 DELAY" id="sl-delay" min="0" max="1" step="0.01" value="0"></div>
+        <div class="slider-group"><label for="sl-grit">LEAD 1 DRIVE </label><input type="range" aria-label="LEAD 1 DRIVE" id="sl-grit" min="0" max="1" step="0.01" value="0"></div>
+        <div class="slider-group"><label for="sl-lpf">LEAD 1 LOW-PASS FILTER </label><input type="range" aria-label="LEAD 1 LOW-PASS FILTER" id="sl-lpf" min="20" max="20000" step="1" value="20000"></div>
       </div>
       <div class="sliders-row">
-        <div class="slider-group"><label for="sl-space">REVERB </label><input type="range" aria-label="REVERB" id="sl-space" min="0" max="1" step="0.01" value="0.2"></div>
+        <div class="slider-group"><label for="sl-space">LEAD 1 REVERB </label><input type="range" aria-label="LEAD 1 REVERB" id="sl-space" min="0" max="1" step="0.01" value="0.2"></div>
         <div class="slider-group"><label for="sl-atk">ATTACK </label><input type="range" aria-label="ATTACK" id="sl-atk" min="0.001" max="0.5" step="0.001" value="0.01"></div>
         <div class="slider-group"><label for="sl-rel">RELEASE </label><input type="range" aria-label="RELEASE" id="sl-rel" min="0.05" max="2" step="0.01" value="1.2"></div>
         <div class="slider-group"><label for="sl-gld">GLIDE </label><input type="range" aria-label="GLIDE" id="sl-gld" min="0" max="0.5" step="0.001" value="0"></div>
@@ -9130,46 +9137,57 @@ function lfoEffectiveHz() {
 
 // (Re)connect the LFO to the selected destination with the right scaling, and
 // push pitch-LFO config to the worklet. Safe to call repeatedly.
+window._lfoSync227 = function (node) {
+  if (!node || !window._lfoMsg227 || node._lfoStamp227 === window._lfoStamp227) return;
+  try { node.port.postMessage(window._lfoMsg227); node._lfoStamp227 = window._lfoStamp227; } catch (e) {}
+};
 function routeLFO() {
   if (!ctx || !_lfoOsc || !_lfoGain) return;
   // Update rate + waveform.
   try { _lfoOsc.frequency.setTargetAtTime(lfoEffectiveHz(), ctx.currentTime, 0.02); } catch(e) {}
   try { _lfoOsc.type = lfoWave; } catch(e) {}
-  // Disconnect from any previously-connected param.
+  // Disconnect from any previously-connected params (fx227: one per lead).
   if (_lfoConnectedParam) {
-    try { _lfoGain.disconnect(_lfoConnectedParam); } catch(e) {}
+    [].concat(_lfoConnectedParam).forEach(function (prm) { try { _lfoGain.disconnect(prm); } catch(e) {} });
     _lfoConnectedParam = null;
   }
-  // Pitch LFO lives on the audio thread (per-voice). Tell the worklet whether
-  // it's active; clear it when pitch isn't the destination.
+  // Pitch LFO lives on the audio thread (per-voice). Tell every lead's worklet
+  // whether it's active. fx227: leads 2/3 create their worklets later, so the
+  // setting is stamped and re-sent to any worklet that missed it (_lfoSync227).
   const pitchActive = (lfoDest === 'pitch');
-  [window._workletNode, window._workletNode2, window._workletNode3].forEach(n => {
-    if (n) { try { n.port.postMessage({ cmd: 'globalLfo',
+  window._lfoStamp227 = (window._lfoStamp227 || 0) + 1;
+  window._lfoMsg227 = { cmd: 'globalLfo',
       active: pitchActive,
       cents: pitchActive ? (lfoDepth * 100) : 0,   // up to ±100 cents (1 semitone) vibrato
       rate: lfoEffectiveHz(),
-      wave: lfoWave }); } catch(e) {}
-    }
-  });
+      wave: lfoWave };
+  [window._workletNode, window._workletNode2, window._workletNode3].forEach(n => { if (n) window._lfoSync227(n); });
   if (lfoDest === 'off' || lfoDest === 'pitch') {
     _lfoGain.gain.value = 0;   // node-routed destinations silent (pitch handled in worklet)
     return;
   }
   // Scale depth per destination, then connect to its AudioParam.
   let param = null, scale = 0;
-  if (lfoDest === 'filter' && masterFilter) {
-    param = masterFilter.frequency;
-    scale = lfoDepth * 4000;            // ±4kHz sweep at full depth
-  } else if (lfoDest === 'pan' && pannerNode) {
-    param = pannerNode.pan;
+  // fx227: every lead, not just lead 1. Filter sweeps each lead's own LPF
+  // around its slider; pan and volume ride the shared lead stage.
+  // fx227: the filter LFO used to swing each lead's LPF around its slider,
+  // which defaults wide open at 20 kHz, so ±4 kHz up there was near silent on
+  // every lead. It now wobbles a dedicated shared filter centred at 1.8 kHz.
+  const LF = window.lfoFilter227;
+  if (LF) { try { const on = lfoDest === 'filter'; LF.frequency.setTargetAtTime(on ? 1800 : 20000, ctx.currentTime, 0.03); LF.Q.setTargetAtTime(on ? 3.5 : 1, ctx.currentTime, 0.03); } catch (eLF) {} }
+  if (lfoDest === 'filter' && (LF || masterFilter)) {
+    param = LF ? LF.frequency : masterFilter.frequency;
+    scale = LF ? lfoDepth * 1600 : lfoDepth * 4000;   // ±1.6 kHz wah around 1.8 kHz
+  } else if (lfoDest === 'pan' && (window.leadPan227 || pannerNode)) {
+    param = window.leadPan227 ? window.leadPan227.pan : pannerNode.pan;
     scale = lfoDepth * 1.0;             // ±1 full auto-pan
-  } else if (lfoDest === 'volume' && masterGain) {
-    param = masterGain.gain;
+  } else if (lfoDest === 'volume' && (window.leadBus227 || masterGain)) {
+    param = window.leadBus227 ? window.leadBus227.gain : masterGain.gain;
     scale = lfoDepth * 0.35;            // ±0.35 tremolo (keeps level sane)
   }
   if (param) {
     _lfoGain.gain.value = scale;
-    try { _lfoGain.connect(param); _lfoConnectedParam = param; } catch(e) {}
+    try { [].concat(param).forEach(prm => _lfoGain.connect(prm)); _lfoConnectedParam = param; } catch(e) {}
   } else {
     _lfoGain.gain.value = 0;
   }
@@ -11266,10 +11284,24 @@ function initAudio() {
   masterFilter.connect(xyLowpassGain);
   xyHighpassFilter.connect(xyHighpassGain);
   // Sum the two filter paths into the vortex stage
-  xyLowpassGain.connect(vortexFilter);
-  xyHighpassGain.connect(vortexFilter);
-  vortexFilter.connect(pannerNode);
-  pannerNode.connect(outputGain);
+  xyLowpassGain.connect(pannerNode);
+  xyHighpassGain.connect(pannerNode);
+  // fx227: SHARED LEAD STAGE. VORTEX, the LFO's pan/volume and the compose
+  // FX-row sweeps used to sit inside lead 1's chain only, so leads 2 and 3
+  // never heard them. All three leads now sum here first:
+  //   pan1/pan2/pan3 -> leadBus227 -> sweep227 -> vortexFilter -> leadPan227 -> outputGain
+  // Neutral by default (unity gain, filters wide open, centred), so nothing
+  // changes until an effect is engaged. Delay/reverb sends stay per lead.
+  window.leadBus227 = ctx.createGain(); window.leadBus227.gain.value = 1;
+  window.sweep227 = ctx.createBiquadFilter(); window.sweep227.type = 'lowpass'; window.sweep227.frequency.value = 20000; window.sweep227.Q.value = 1;
+  window.leadPan227 = ctx.createStereoPanner(); window.leadPan227.pan.value = 0;
+  window.lfoFilter227 = ctx.createBiquadFilter(); window.lfoFilter227.type = 'lowpass'; window.lfoFilter227.frequency.value = 20000; window.lfoFilter227.Q.value = 1;
+  window.leadBus227.connect(window.sweep227);
+  window.sweep227.connect(window.lfoFilter227);
+  window.lfoFilter227.connect(vortexFilter);
+  vortexFilter.connect(window.leadPan227);
+  window.leadPan227.connect(outputGain);
+  pannerNode.connect(window.leadBus227);
   outputGain.connect(limiter);
 
   // Delay send (parallel, taken from the post-pan signal)
@@ -11313,7 +11345,7 @@ function initAudio() {
   driveNode2.connect(crunchNode2);
   crunchNode2.connect(masterFilter2);
   masterFilter2.connect(pannerNode2);
-  pannerNode2.connect(outputGain);
+  pannerNode2.connect(window.leadBus227);   // fx227: shared lead stage
   // vox291: LEAD 3 EARNS ITS FX SECTION -- full chain, exact mirror of Lead 2:
   // masterGain3 -> drive3 -> crunch3 -> filter3 -> pan3 -> outputGain, with
   // delay + reverb sends off pan3. All neutral by default (drive 0, crunch 0,
@@ -11339,7 +11371,8 @@ function initAudio() {
   window.driveNode3.connect(window.crunchNode3);
   window.crunchNode3.connect(window.masterFilter3);
   window.masterFilter3.connect(window.pannerNode3);
-  window.pannerNode3.connect(outputGain);
+  window.pannerNode3.connect(window.leadBus227);   // fx227: shared lead stage
+  try { routeLFO(); } catch (eLfo227) {}   // fx227: re-route now that every lead's nodes exist
   window.pannerNode3.connect(window.delaySend3);
   if (delayNode) window.delaySend3.connect(delayNode);
   window.pannerNode3.connect(reverbSend3);
@@ -12267,6 +12300,7 @@ function playLead(voiceId, degree, bank, chromatic, velocity) {
   let _balanced226 = null;  // vox226: the L99Balance223 trim node, re-aimed if the register guard declines
   const bankNode = (_isL3 && window._workletNode3) ? window._workletNode3
                  : (bank === 2) ? window._workletNode2 : window._workletNode;
+  if (bankNode && window._lfoSync227) window._lfoSync227(bankNode);   // fx227: late worklets get the LFO too
   if (!enhanced222 && !window.L99FaceAudio222?.fallbackType(face,type) && !(face==='SYNTHWAVE'&&type==='FM-PIANO') && !window.L99Sound181?.handles(type) && window._workletMigratedFaces &&
       window._workletMigratedFaces.has(face) &&
       bankNode &&
@@ -13182,8 +13216,13 @@ function playLead(voiceId, degree, bank, chromatic, velocity) {
   if (activeMode !== 'off' && !skipChordForThisVoice) {
     const faceScales = FACE_SCALES[currentFace] || SCALES;
     const scale = faceScales[currentScale] || Object.values(faceScales)[0];
-    const deg3 = (degree + 2) % scale.length;
-    const deg5 = (degree + 4) % scale.length;
+    // fx227: Lead 3 notes carry a +13 marker (degree > 12 on bank 2). The chord
+    // tones wrapped it away, so Lead 3's 3rd and 5th played as LEAD 2 (its
+    // instrument, octave and level). Keep the marker on Lead 3's chord tones.
+    const _l3Chord227 = (bank === 2 && typeof degree === 'number' && degree > 12);
+    const _degBase227 = _l3Chord227 ? degree - 13 : degree;
+    const deg3 = (_degBase227 + 2) % scale.length + (_l3Chord227 ? 13 : 0);
+    const deg5 = (_degBase227 + 4) % scale.length + (_l3Chord227 ? 13 : 0);
 
     // da058: the 'hint' pad (quiet sines) is removed.
     // da059: FIRST-CHORD -- an empty set means no bank owns the chords yet,
@@ -13224,6 +13263,20 @@ function playLead(voiceId, degree, bank, chromatic, velocity) {
     }
   }
 
+  // fx227: PITCH LFO FOR EVERY VOICE. The vibrato lived only in the audio
+  // worklet, so voices built on the main thread (several leads on 2 and 3)
+  // never wobbled. Those now take the same global LFO on their detune.
+  if (!workletDispatched && typeof lfoDest !== 'undefined' && lfoDest === 'pitch' && typeof _lfoOsc !== 'undefined' && _lfoOsc && lfoDepth > 0) {
+    try {
+      const vib227 = ctx.createGain(); vib227.gain.value = lfoDepth * 100; _lfoOsc.connect(vib227);
+      let wired227 = 0;
+      nodes.forEach(o => {
+        if (!o || !o.detune || (o.frequency && o.frequency.value <= 30)) return;
+        try { vib227.connect(o.detune); wired227++; o.addEventListener('ended', () => { try { _lfoOsc.disconnect(vib227); vib227.disconnect(); } catch (eV) {} }, { once: true }); } catch (eC) {}
+      });
+      if (!wired227) { try { _lfoOsc.disconnect(vib227); } catch (eV2) {} }
+    } catch (eVib227) {}
+  }
   // Apply glide (portamento) to every oscillator if there was a prior voice and GLD > 0.
   // Each osc preserves its frequency ratio relative to the base freq — so a saw set to
   // freq*1.005 still detunes by 1.005 around the glided pitch.
@@ -21745,9 +21798,11 @@ window._kbdVel = _kbdVel;
     return { c: ceil, f: floor };
   }
   function _lgFxSet(f, q) {
-    if (typeof masterFilter === 'undefined' || !masterFilter || typeof ctx === 'undefined' || !ctx) return;
-    try { masterFilter.frequency.setTargetAtTime(Math.max(60, Math.min(20000, f)), ctx.currentTime, 0.03); } catch (eF1) {}
-    if (q !== undefined && masterFilter.Q) { try { masterFilter.Q.setTargetAtTime(q, ctx.currentTime, 0.05); } catch (eF2) {} }
+    // fx227: the FX row sweeps the shared lead stage, so every lead moves with it
+    var F = window.sweep227 || (typeof masterFilter !== 'undefined' ? masterFilter : null);
+    if (!F || typeof ctx === 'undefined' || !ctx) return;
+    try { F.frequency.setTargetAtTime(Math.max(60, Math.min(20000, f)), ctx.currentTime, 0.03); } catch (eF1) {}
+    if (q !== undefined && F.Q) { try { F.Q.setTargetAtTime(q, ctx.currentTime, 0.05); } catch (eF2) {} }
   }
   function _lgFxTick(stepInBar, barSteps) {
     var c = _lgFxActive();
@@ -21767,7 +21822,12 @@ window._kbdVel = _kbdVel;
   }
   function _lgFxRelease() {
     window._lgFxHold = false;
-    if (typeof masterFilter === 'undefined' || !masterFilter || typeof ctx === 'undefined' || !ctx) return;
+    if (typeof ctx === 'undefined' || !ctx) return;
+    if (window.sweep227) {   // fx227: the shared stage opens fully; each lead's own slider is untouched
+      try { window.sweep227.frequency.setTargetAtTime(20000, ctx.currentTime, 0.08); window.sweep227.Q.setTargetAtTime(1, ctx.currentTime, 0.08); } catch (eFs) {}
+      return;
+    }
+    if (typeof masterFilter === 'undefined' || !masterFilter) return;
     try { masterFilter.frequency.setTargetAtTime(_lgSliderHz(), ctx.currentTime, 0.08); } catch (eFr) {}
     if (masterFilter.Q) { try { masterFilter.Q.setTargetAtTime(1, ctx.currentTime, 0.08); } catch (eFq) {} }
   }
@@ -27146,7 +27206,14 @@ window.bardHaptic = (function(){
     b.setAttribute('aria-label', 'Hide the controls section');
     b.setAttribute('title', 'Hide controls');
     b.onclick = hideSection;
-    row.appendChild(b);   // margin-left:auto in CSS pushes it right
+    // layout227: the eye and the peak meter travel as ONE compact block, so the
+    // eye can never wrap onto a line of its own on a phone.
+    var tail = document.getElementById('perf-tail227');
+    if (!tail) { tail = document.createElement('div'); tail.id = 'perf-tail227'; }
+    var meter = document.getElementById('peak-meter177');
+    if (meter) tail.appendChild(meter);
+    tail.appendChild(b);
+    row.appendChild(tail);
   }
 
   function ensureShowButton(){
@@ -27192,7 +27259,7 @@ window.bardHaptic = (function(){
       if (!r) return;
       relocateRoll(r);
       // ensure HIDE stays last (so margin-left:auto keeps it far right)
-      var hide = document.getElementById('face-hide-btn');
+      var hide = document.getElementById('perf-tail227') || document.getElementById('face-hide-btn');
       if (hide && r.lastElementChild !== hide) r.appendChild(hide);
     }, 1000);
   }
