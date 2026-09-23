@@ -7172,7 +7172,7 @@ function lead(face,type,worklet=false){
  // A missing pack or Classic sound uses a different source than the measured
  // Enhanced sample/synth, so don't apply its larger trim to that fallback.
  if(entry.engine==='face-samples'&&!root.L99FaceAudio222?.ready(face,type))return 1;
- if(entry.engine==='synth222'&&(!root.L99FaceAudio222?.enabled()||!root.L99Synth222?.handles(face,type)))return 1;
+ if(entry.engine==='synth222'&&(!root.L99FaceAudio222?.enhancedFor?.(face,type)||!root.L99Synth222?.handles(face,type)))return 1;
  if(entry.engine==='maestro-samples'&&!root.L99Samples220?.ready(type))return 1;
  if(worklet&&(entry.engine==='face-samples'||entry.engine==='synth222'))return 1;
  return entry.gain;
@@ -12227,7 +12227,7 @@ function playLead(voiceId, degree, bank, chromatic, velocity) {
   // `nodes` array tracking is still used for any per-note auxiliary
   // oscillators (e.g., glide-source nodes from prior voices).
   // ═══════════════════════════════════════════════════════════════════════
-  const enhanced222=!!window.L99FaceAudio222?.enabled()&&['BARD','SYNTHWAVE','DNB','DANCEHALL','BREW'].includes(face);
+  const enhanced222=!!window.L99FaceAudio222?.enhancedFor?.(face,type); // sound227: Enhanced only where listed
   let workletDispatched = false;
   let _release226 = 0;      // vox226: recorded-instrument note-off release floor
   let _balanced226 = null;  // vox226: the L99Balance223 trim node, re-aimed if the register guard declines
@@ -23830,6 +23830,7 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
       recSink = c.createGain(); recSink.gain.value = 0;
       recTapNode.connect(recProc); recProc.connect(recSink); recSink.connect(c.destination);
       recording = true; recT0 = performance.now(); acquireWake();
+      var _shelf227 = document.getElementById('dj-savetoast'); if (_shelf227 && !_shelf227._collapsed221) { _shelf227._collapsed221 = true; paintSaveShelf221(_shelf227); }
       paintRec(); paintFmt(); paintTimer(); recTimer = setInterval(paintTimer,250);
       recordingNotice221('Recording full mix. Press REC again to finish. Maximum 15 minutes.');
     } catch (e) {
@@ -23898,7 +23899,7 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
     var shelf = document.getElementById('dj-savetoast');
     if (!shelf) {
       shelf = document.createElement('div'); shelf.id = 'dj-savetoast'; shelf.setAttribute('role','region'); shelf.setAttribute('aria-label','Recordings ready to save');
-      shelf.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px;background:#071510;color:#dffff3;border:1px solid #448777;border-radius:12px;display:flex;flex-direction:column;align-items:stretch;width:min(560px,calc(100vw - 28px));max-height:40vh;overflow:auto;box-sizing:border-box;z-index:10050';
+      shelf.style.cssText = 'position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top,0px));transform:translateX(-50%);padding:10px;background:#071510;color:#dffff3;border:1px solid #448777;border-radius:12px;display:flex;flex-direction:column;align-items:stretch;width:min(560px,calc(100vw - 28px));max-height:40vh;overflow:auto;box-sizing:border-box;z-index:10050';
       var toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'dj-save-toggle221'; toggle.setAttribute('aria-expanded','true'); toggle.textContent = 'HIDE SAVES'; toggle.style.cssText = 'min-height:40px;flex-shrink:0;align-self:flex-end;position:sticky;top:0;z-index:1;background:#142b27';
       toggle.addEventListener('click',function(){shelf._collapsed221=!shelf._collapsed221;paintSaveShelf221(shelf);}); shelf.appendChild(toggle);
       document.body.appendChild(shelf);
@@ -23916,7 +23917,12 @@ window._addPopOut = window._addPopOut || function (target, title, opts) {
     if(!shelf)return;var items=shelf.querySelectorAll('.dj-saveitem221'),collapsed=!!shelf._collapsed221,toggle=shelf.querySelector('.dj-save-toggle221');
     items.forEach(function(row){row.hidden=collapsed;row.style.display=collapsed?'none':'flex';});
     if(toggle){toggle.textContent=(collapsed?'SHOW SAVES':'HIDE SAVES')+' ('+items.length+')';toggle.setAttribute('aria-expanded',String(!collapsed));toggle.setAttribute('aria-label',(collapsed?'Show':'Hide')+' '+items.length+' recordings ready to save');}
-    shelf.style.maxHeight=collapsed?'72px':'40vh';
+    // save227: collapsed is a small pill in the top-right corner, not a bar
+    // parked over the record button.
+    shelf.style.bottom='auto';shelf.style.minWidth=collapsed?'0':'';
+    if(collapsed){shelf.style.left='auto';shelf.style.right='calc(10px + env(safe-area-inset-right,0px))';shelf.style.transform='none';shelf.style.width='auto';shelf.style.padding='4px';shelf.style.maxHeight='none';shelf.style.overflow='visible';shelf.style.opacity='.92';}
+    else{shelf.style.left='50%';shelf.style.right='auto';shelf.style.transform='translateX(-50%)';shelf.style.width='min(560px,calc(100vw - 28px))';shelf.style.padding='10px';shelf.style.maxHeight='40vh';shelf.style.overflow='auto';shelf.style.opacity='1';}
+    if(toggle){toggle.textContent=collapsed?'\u2B07 SAVES ('+items.length+')':'HIDE SAVES ('+items.length+')';toggle.style.alignSelf=collapsed?'center':'flex-end';toggle.style.minHeight=collapsed?'36px':'40px';}
   }
   function removeSaveRow221(row) {
     var shelf = row.parentNode; row.remove(); if(shelf){if(!shelf.querySelector('.dj-saveitem221'))shelf.remove();else paintSaveShelf221(shelf);}
@@ -29929,8 +29935,12 @@ root.L99Synth222={version:222,handles,voice,silence,patches:()=>Object.fromEntri
   let selectedFace = '';
   let serial = 0;
   let lastSelection = null;
-  let mode = true;
-  try { mode = root.localStorage.getItem(PREF) !== 'classic'; } catch (_) {}
+  // sound227: Enhanced is no longer a user mode. The recorded packs and drum
+  // kits stay off (Classic everywhere), and only the leads listed in
+  // ENHANCED227 keep their Enhanced voice. The button is gone.
+  let mode = false;
+  const ENHANCED227 = Object.freeze({ SYNTHWAVE: ['POLY-WAVE'] });
+  function enhancedFor(face, type) { return !!(ENHANCED227[faceName(face)] || []).includes(type); }
 
   function faceName(face) {
     const s = String(face || '').trim().toUpperCase();
@@ -30280,6 +30290,7 @@ root.L99Synth222={version:222,handles,voice,silence,patches:()=>Object.fromEntri
     if (hint.textContent !== text) hint.textContent = text;
   }
   function mount() {
+    return; // sound227: no SOUND toggle
     if (document.getElementById('faceaudio222')) { paint(); return; }
     const title = document.getElementById('title-row');
     if (!title) return;
@@ -30331,7 +30342,7 @@ root.L99Synth222={version:222,handles,voice,silence,patches:()=>Object.fromEntri
         ts.map(t => [f + ':' + t, register(f, t)]).filter(([, r]) => r))) };
   }
   root.addEventListener('online', () => { if (mode && supports(selectedFace)) prepare(selectedFace, {retry:true}); });
-  root.L99FaceAudio222 = { enabled, setEnabled, has, ready, prepare, voice, drum, fallbackType, silence, mount, theme, snapshot, inventory, setEngineStatus,
+  root.L99FaceAudio222 = { enabled, enhancedFor, setEnabled, has, ready, prepare, voice, drum, fallbackType, silence, mount, theme, snapshot, inventory, setEngineStatus,
     register, releaseFor, fallbackTrim, noteName: noteName226, registerHint: registerHint226 };
 })(window);
 </script>
