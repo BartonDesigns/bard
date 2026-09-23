@@ -3255,7 +3255,7 @@ function rewrite(code,resolved){return code.replace(/(\bfrom\s+|\bimport\s+)['"]
 async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(flightReady)return flightReady;root.__cockpitLoadError170=null;
  flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-179.js.gz'),ensureWorld()]);const resolved={},urls=[];
   try{for(const [spec,code]of files[0]){const url=URL.createObjectURL(new Blob([rewrite(code,resolved)],{type:'text/javascript'}));resolved[spec]=url;urls.push(url);}
-   await frame();const patched=await cachedPatch('flight',files[1],src=>root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(src)))));const url=URL.createObjectURL(new Blob([rewrite(patched,resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
+   await frame();const patched=await cachedPatch('flight',files[1],src=>{const out=root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(src))));return root.L99Dive227?root.L99Dive227.patch(out):out;});const url=URL.createObjectURL(new Blob([rewrite(patched,resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
  })().catch(e=>{flightReady=null;root.__cockpitLoadError170=e.message||String(e);throw e;});return flightReady;}
 function openFlight(){const intent=++flightIntent;show('Loading flight…',openFlight);const room=root.L99Room227?.open('space',{status:'charting the stars…',onBack:()=>{box?.button?.click();}});flight().then(()=>{if(intent!==flightIntent){room?.close(false);return;}hide();document.getElementById('popout-btn')?.click();room?.close(true);}).catch(e=>{room?.close(false);if(intent!==flightIntent)return;status('Flight could not load. '+(e.name==='AbortError'?'The connection timed out.':'Please try again.'),true);});}
@@ -27770,9 +27770,9 @@ void main(){vec3 rd=rayDir();float up=rd.y;
  vec3 sunD=normalize(vec3(.3,.45,-1.));sky+=vec3(1.,.9,.75)*pow(max(dot(rd,sunD),0.),60.)*1.5;
  vec3 col=sky;
  if(up<-.02){float t=-420./up;vec3 g=uPos+rd*t;vec2 w=g.xz*.0016;
-  float s0=fbm(vec3(w*3.,uTime*.01));float sw=s0+.5*fbm(vec3(w*9.+s0,1.));vec3 land=mix(uA,uB,smoothstep(.55,.95,sw));
+  vec2 wq=w*3.+vec2(fbm(vec3(w*2.,uTime*.02)),fbm(vec3(w*2.+5.,uTime*.02)))*1.6;float s0=fbm(vec3(wq,uTime*.01));float sw=s0+.5*fbm(vec3(wq*3.+s0,1.));vec3 land=mix(uA,uB,smoothstep(.45,.95,sw))*(.8+.4*s0);
   land=mix(land,vec3(.92),smoothstep(.8,.95,fbm(vec3(w*5.,3.))));
-  col=mix(land,sky,1.-exp(-t*.0012));}
+  col=mix(land,sky,1.-exp(-t*.00045));}
  float acc=0.;vec3 cc=vec3(0.);float wash=0.;
  for(int i=0;i<3;i++){float fi=float(i);float fr=fract(-uPos.y*.012+fi/3.);float lay=-1.-(1.-fr)*22.;float wgt=sin(fr*3.14159);
   wash=max(wash,smoothstep(.9,1.,fr));
@@ -27781,7 +27781,7 @@ void main(){vec3 rd=rayDir();float up=rd.y;
   float a=dens*(1.-acc)*exp(-t*.01);cc+=mix(vec3(1.),uC,.25)*a;acc+=a;}
  col=mix(col,cc/max(acc,.001),min(acc,1.));col=mix(col,vec3(.95),wash*.55);
  float streak=pow(fbm(vec3(rd.xz*vec2(40.,4.),uTime*3.)),6.)*uHeat;
- col+=vec3(1.,.55,.25)*uHeat*.35*(1.-smoothstep(0.,.9,length(gl_FragCoord.xy/uRes-.5)*1.4))+vec3(1.,.7,.4)*streak*2.;
+ col+=vec3(1.,.55,.25)*uHeat*.35*(1.-smoothstep(0.,.9,length(gl_FragCoord.xy/uRes-.5)*1.4))+vec3(1.,.7,.4)*streak*1.1;
  col=col/(1.+col*.6);vec2 v=gl_FragCoord.xy/uRes-.5;col*=1.-dot(v,v)*.8;
  gl_FragColor=vec4(col*uFade+(1.-uFade)*vec3(1.),1.);}
 `;
@@ -27799,8 +27799,8 @@ function open(kind,opts){
  wrap.style.cssText='position:fixed;inset:0;z-index:100205;background:#000;touch-action:none;user-select:none;-webkit-user-select:none;opacity:0;transition:opacity .45s ease';
  cv.style.cssText='position:absolute;inset:0;width:100%;height:100%;display:block';
  const cap=document.createElement('div');cap.style.cssText='position:absolute;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;font:12px/1.4 ui-monospace,Menlo,monospace;letter-spacing:1.5px;color:#e8f4ef;text-shadow:0 1px 6px #000';
- const label=document.createElement('div');label.textContent=opts.status||'';
- const hint=document.createElement('div');hint.style.cssText='opacity:.6;font-size:10px';
+ const label=document.createElement('div');label.textContent=opts.status||'';label.style.cssText='padding:5px 12px;border-radius:999px;background:#0007;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)';
+ const hint=document.createElement('div');hint.style.cssText='opacity:.75;font-size:10px;padding:3px 10px;border-radius:999px;background:#0006';
  hint.textContent=kind==='cave'?'drag to look · WASD / left thumb to walk':'drag to look · WASD / left thumb to steer';
  const back=document.createElement('button');back.type='button';back.textContent='BACK';
  back.style.cssText='position:absolute;top:calc(14px + env(safe-area-inset-top,0px));left:14px;min-height:40px;padding:8px 14px;border-radius:10px;border:1px solid #ffffff44;background:#0008;color:#e8f4ef;font:12px ui-monospace,monospace;letter-spacing:1px;cursor:pointer';
@@ -27849,7 +27849,8 @@ function open(kind,opts){
    st.x+=st.vx*dt;st.y+=st.vy*dt;st.z+=st.vz*dt;
   }
   st.heat=kind==='sky'?Math.max(.15,st.heat-dt*.12):0;
-  fade=closing?Math.max(0,fade-dt/.5):Math.min(1,fade+dt/.6);
+  const rdt=Math.min(.25,(now-(room._fadeT||now))/1000);room._fadeT=now;
+  fade=closing?Math.max(0,fade-rdt/.5):Math.min(1,fade+rdt/.6);
   gl.uniform2f(U.uRes,w,h);gl.uniform1f(U.uTime,(now-t0)/1000);gl.uniform3f(U.uPos,st.x,st.y,st.z);
   gl.uniform3fv(U.uFwd,fwd);gl.uniform3fv(U.uRight,right);gl.uniform3fv(U.uUp,upv);gl.uniform1f(U.uFade,fade);gl.uniform1f(U.uHeat,st.heat);
   gl.drawArrays(gl.TRIANGLES,0,3);
@@ -27863,6 +27864,53 @@ function open(kind,opts){
  raf=requestAnimationFrame(frame);active=room;return room;
 }
 root.L99Room227={open,get active(){return active;}};
+})(window);
+</script>
+<script id="dive227-code">
+/* DIVE_227: planetfall is flown through the sky, not waited out. Entry used to
+   be a fixed 2.75 s cinematic while the surface built underneath, then a snap
+   or a stutter. Now the moment entry begins you are in a light sky dive tinted
+   with that world's own palette, steering freely at full frame rate. It holds
+   until the surface exists AND the frame rate has settled, then breaks through
+   the cloud deck into the real world. Capped so it can never trap you.
+   Kill: window._ENTRY_DIVE = false. */
+(function(root){'use strict';
+const EDITS=[
+ ["let surfaceMode     = 'space';","let surfaceMode     = 'space';\nwindow.__surfaceMode227=function(){return surfaceMode;};"],
+ ["surfaceMode     = 'entering';\n    window._entryFrame190=performance.now();","surfaceMode     = 'entering';\n    try{window.L99Dive227&&window.L99Dive227.start(planet);}catch(eD227){}\n    window._entryFrame190=performance.now();"],
+ ["if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';","if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';\n      try{window.L99Dive227&&window.L99Dive227.landed();}catch(eL227){}"]
+];
+function patch(code){
+ if(typeof code!=='string'||code.includes('window.__surfaceMode227'))return code;
+ for(const [a] of EDITS)if(code.split(a).length!==2){console.warn('DIVE_227: anchor missing, entry stays cinematic');return code;}
+ for(const [a,b] of EDITS)code=code.replace(a,()=>b);return code;
+}
+const EARTH=[[.19,.34,.19],[.22,.36,.62],[.60,.76,.98]];
+function palette(planet){
+ const u=planet&&planet.userData||{};
+ if(u.solName==='Earth'||u.isEarthReplica||u.planetType==='BAYAREA')return EARTH;
+ const P=u.palette||{},ok=c=>Array.isArray(c)&&c.length>=3&&c.every(Number.isFinite);
+ const a=ok(P.a)?P.a.slice(0,3):null,b=ok(P.b)?P.b.slice(0,3):null;if(!a&&!b)return EARTH;
+ const A=a||b,B=b||a,sky=[0,1,2].map(i=>Math.min(1,A[i]*.45+B[i]*.2+[.35,.45,.6][i]*.55));
+ return [A,B,sky];
+}
+let dive=null;
+function start(planet){
+ if(root._ENTRY_DIVE===false||!root.L99Room227)return;
+ finish(false);
+ const room=root.L99Room227.open('sky',{status:'entering the atmosphere…',palette:palette(planet)});if(!room)return;
+ const d=dive={room,t0:performance.now(),landedAt:0,stable:0,last:performance.now(),raf:0};
+ const tick=now=>{if(dive!==d)return;d.raf=requestAnimationFrame(tick);const dt=now-d.last;d.last=now;
+  d.stable=dt<34?d.stable+1:0;
+  const mode=root.__surfaceMode227?.();
+  if(mode==='space'||mode==='leaving'){finish(false);return;}
+  if(now-d.t0>20000){finish(true);return;}
+  if(d.landedAt&&now-d.landedAt>700&&now-d.t0>2600&&d.stable>=40)finish(true);};
+ d.raf=requestAnimationFrame(tick);
+}
+function landed(){if(dive&&!dive.landedAt){dive.landedAt=performance.now();dive.room.status('breaking through the clouds…');}}
+function finish(reveal){const d=dive;if(!d)return;dive=null;cancelAnimationFrame(d.raf);d.room.close(reveal!==false);}
+root.L99Dive227={patch,start,landed,finish,get active(){return !!dive;}};
 })(window);
 </script>
 <script id="cave-rail227">
