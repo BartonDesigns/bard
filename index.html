@@ -3237,17 +3237,31 @@ function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;
  })().catch(e=>{worldReady=null;throw e;});return worldReady;}
+/* PATCHCACHE_227: patching the 5 MB flight engine (and the cave bundle) with
+   this build's fixes costs seconds of main-thread time on every load. The
+   patched text is cached on the device, keyed by a fingerprint of every inline
+   script in this page plus the raw runtime, so any code change is a clean miss.
+   Kill: window._PATCH_CACHE = false. */
+function fnv227(t,h){h=h>>>0||2166136261;for(let i=0;i<t.length;i++)h=Math.imul(h^t.charCodeAt(i),16777619);return h>>>0;}
+const build227=new Promise(done=>{const run=()=>{let h=2166136261;for(const el of document.querySelectorAll('script:not([src])')){if(el.type==='text/markdown')continue;h=fnv227(el.textContent,h);h=Math.imul(h^el.textContent.length,16777619);}done((h>>>0).toString(36));};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();});
+async function cachedPatch(name,raw,patch){
+ let cache=null,key='';
+ if(root._PATCH_CACHE!==false&&root.caches&&root.isSecureContext){try{cache=await caches.open('l99-patched227');key=new URL('__patched227/'+name+'/'+(await build227)+'-'+fnv227(raw).toString(36)+'-'+raw.length,base).href;const hit=await cache.match(key);if(hit)return await hit.text();}catch(_){cache=null;}}
+ const out=patch(raw);
+ if(cache){try{await cache.put(key,new Response(out,{headers:{'content-type':'text/plain;charset=utf-8'}}));for(const r of await cache.keys())if(r.url.includes('/__patched227/'+name+'/')&&r.url!==key)cache.delete(r);}catch(_){}}
+ return out;
+}
 function rewrite(code,resolved){return code.replace(/(\bfrom\s+|\bimport\s+)['"]([^'"]+)['"]/g,(m,lead,spec)=>resolved[spec]?lead+JSON.stringify(resolved[spec]):m);}
 async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(flightReady)return flightReady;root.__cockpitLoadError170=null;
  flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-179.js.gz'),ensureWorld()]);const resolved={},urls=[];
   try{for(const [spec,code]of files[0]){const url=URL.createObjectURL(new Blob([rewrite(code,resolved)],{type:'text/javascript'}));resolved[spec]=url;urls.push(url);}
-   await frame();const url=URL.createObjectURL(new Blob([rewrite(root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(files[1])))),resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
+   await frame();const patched=await cachedPatch('flight',files[1],src=>root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(src)))));const url=URL.createObjectURL(new Blob([rewrite(patched,resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
  })().catch(e=>{flightReady=null;root.__cockpitLoadError170=e.message||String(e);throw e;});return flightReady;}
 function openFlight(){const intent=++flightIntent;show('Loading flight…',openFlight);flight().then(()=>{if(intent!==flightIntent)return;hide();document.getElementById('popout-btn')?.click();}).catch(e=>{if(intent!==flightIntent)return;status('Flight could not load. '+(e.name==='AbortError'?'The connection timed out.':'Please try again.'),true);});}
 root._loadCockpitNow=flight;
 document.addEventListener('click',e=>{if(!e.target?.closest?.('#popout-btn')||root.__COCKPIT_ALIVE&&flightPrepared)return;e.preventDefault();e.stopImmediatePropagation();openFlight();},true);
-root.L99Boot176={packed,ensureWorld,show,hide,status,frame,flight,openFlight,get showing(){return wantsStatus;}};
+root.L99Boot176={packed,cachedPatch,ensureWorld,show,hide,status,frame,flight,openFlight,get showing(){return wantsStatus;}};
 /* PREFETCH_227: warm the HTTP cache with the world runtimes while the page is
    idle, so pressing caves or flight later skips the download. Bytes only: the
    response is dropped, nothing is decompressed, parsed or kept in memory, and
@@ -27809,7 +27823,7 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(window.L99CavesMaterials191.patchCaves).then(function(c){return window.L99CaveRail227?window.L99CaveRail227.patch(c):c;});};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);return window.L99CaveRail227?window.L99CaveRail227.patch(c):c;});});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
