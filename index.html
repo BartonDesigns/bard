@@ -3248,6 +3248,26 @@ function openFlight(){const intent=++flightIntent;show('Loading flight…',openF
 root._loadCockpitNow=flight;
 document.addEventListener('click',e=>{if(!e.target?.closest?.('#popout-btn')||root.__COCKPIT_ALIVE&&flightPrepared)return;e.preventDefault();e.stopImmediatePropagation();openFlight();},true);
 root.L99Boot176={packed,ensureWorld,show,hide,status,frame,flight,openFlight,get showing(){return wantsStatus;}};
+/* PREFETCH_227: warm the HTTP cache with the world runtimes while the page is
+   idle, so pressing caves or flight later skips the download. Bytes only: the
+   response is dropped, nothing is decompressed, parsed or kept in memory, and
+   packed() later reads it back from cache. Skipped on data-saver and 2G.
+   Kill: window._PREFETCH_WORLDS = false. */
+(function(){
+ const files=['caves-179.html.gz','world-core-179.json.gz','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-179.js.gz'];
+ const net=navigator.connection||{};
+ if(net.saveData||/(^|-)2g$/.test(net.effectiveType||''))return;
+ const idle=cb=>root.requestIdleCallback?root.requestIdleCallback(cb,{timeout:4000}):setTimeout(cb,1500);
+ async function run(){
+  for(const f of files){
+   if(root._PREFETCH_WORLDS===false||pending.has(f))continue;
+   try{const r=await fetch(new URL(f,base),{cache:'default',priority:'low'});if(r.ok)await r.arrayBuffer();}catch(_){return;}
+   await new Promise(r=>idle(r));
+  }
+ }
+ const start=()=>setTimeout(()=>idle(run),6000);
+ if(document.readyState==='complete')start();else root.addEventListener('load',start,{once:true});
+})();
 })(window);
 
 </script>
