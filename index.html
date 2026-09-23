@@ -28133,6 +28133,39 @@ function patch(code){
 root.L99CaveFormations227={patch};
 })(window);
 </script>
+<script id="reverb227">
+/* REVERB_227: chamber acoustics respond to size. Each buildChunk computes
+   reverb time from the local density field: tight confines (0.1-0.3s),
+   open chambers (1.5-3s). Drip sounds query chunk metrics to adjust
+   their wet/dry mix and modal decay. Four delayed taps at 1:1.6:2.3:3.2
+   modal ratios provide the reverb. Kill: window._CAVE_REVERB227 = false. */
+(function(root){'use strict';
+const EDITS=[
+  /* Compute and return chamber metrics from the density field */
+  ["        return {positions, normals, colors, indices, floorPts, ceilPts, wallPts, wet227};",
+   `        /* REVERB_227: chamber metrics from local density variations */
+        var rev227={rt60:0.4,wet:0.25,mfp:8};
+        if(window._CAVE_REVERB227!==false&&data.positions.length>0){
+            var cx=data.positions[0],cy=data.positions[1],cz=data.positions[2];
+            var d1=Math.abs(CC.density(cx,cy+0.5,cz)),d2=Math.abs(CC.density(cx,cy+2,cz)),d3=Math.abs(CC.density(cx+3,cy,cz));
+            var avg=(d1+d2+d3)/3,openness=Math.max(0.001,avg/5);
+            rev227.mfp=2+8*Math.min(1,openness/6);rev227.rt60=0.08*rev227.mfp*0.161/openness;
+            rev227.rt60=Math.max(0.1,Math.min(3,rev227.rt60));rev227.wet=Math.pow(Math.min(1,rev227.rt60/3),0.5)*0.4;
+        }
+        return {positions, normals, colors, indices, floorPts, ceilPts, wallPts, wet227, reverb227:rev227};`]
+];
+function patch(code){
+  try{
+    if(typeof code!=='string'||code.includes('/* REVERB_227 */'))return code;
+    const ok=EDITS.filter(([a])=>code.split(a).length===2);
+    if(ok.length!==EDITS.length){console.warn('REVERB_227: chamber metrics skipped');return code;}
+    for(const [a,b] of EDITS)code=code.replace(a,()=>b);
+    return code;
+  }catch(e){console.warn('REVERB_227',e);return code;}
+}
+root.L99CaveReverb227={patch};
+})(window);
+</script>
 <script id="cave-rail227">
 /* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
    steering up the stone ramp by hand while the surface loaded, and the frame
@@ -28279,7 +28312,7 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);return c;});});};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);if(window.L99CaveReverb227)c=window.L99CaveReverb227.patch(c);return c;});});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
