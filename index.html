@@ -3258,7 +3258,7 @@ async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(f
    await frame();const patched=await cachedPatch('flight',files[1],src=>root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(src)))));const url=URL.createObjectURL(new Blob([rewrite(patched,resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
  })().catch(e=>{flightReady=null;root.__cockpitLoadError170=e.message||String(e);throw e;});return flightReady;}
-function openFlight(){const intent=++flightIntent;show('Loading flight…',openFlight);flight().then(()=>{if(intent!==flightIntent)return;hide();document.getElementById('popout-btn')?.click();}).catch(e=>{if(intent!==flightIntent)return;status('Flight could not load. '+(e.name==='AbortError'?'The connection timed out.':'Please try again.'),true);});}
+function openFlight(){const intent=++flightIntent;show('Loading flight…',openFlight);const room=root.L99Room227?.open('space',{status:'charting the stars…',onBack:()=>{box?.button?.click();}});flight().then(()=>{if(intent!==flightIntent){room?.close(false);return;}hide();document.getElementById('popout-btn')?.click();room?.close(true);}).catch(e=>{room?.close(false);if(intent!==flightIntent)return;status('Flight could not load. '+(e.name==='AbortError'?'The connection timed out.':'Please try again.'),true);});}
 root._loadCockpitNow=flight;
 document.addEventListener('click',e=>{if(!e.target?.closest?.('#popout-btn')||root.__COCKPIT_ALIVE&&flightPrepared)return;e.preventDefault();e.stopImmediatePropagation();openFlight();},true);
 root.L99Boot176={packed,cachedPatch,ensureWorld,show,hide,status,frame,flight,openFlight,get showing(){return wantsStatus;}};
@@ -27706,6 +27706,165 @@ window._handoffCopy = function () {
     };
 })();
 </script>
+<style id="room227-style">.l99-room-open227 #world-load176{visibility:hidden!important}</style>
+<script id="room227-code">
+/* ROOM_227: playable loading rooms. While a world loads, you are already in a
+   light version of it: a rough rock tunnel for the caves, open space for
+   flight, a sky dive for planetfall. One full-screen shader, no engine, no
+   downloads, drawn at reduced resolution so it holds 60 fps on a phone while
+   the real world builds underneath. You walk or steer and look freely; when
+   the real world is ready the room dissolves into it.
+   API: L99Room227.open(kind,{status,palette,onBack}) -> room
+        room.status(text), room.close(reveal) ; kinds: 'cave' | 'space' | 'sky'
+   Kill: window._LOAD_ROOMS = false. */
+(function(root){'use strict';
+const VERT='attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+const COMMON=`precision highp float;
+uniform vec2 uRes;uniform float uTime;uniform vec3 uPos;uniform vec3 uFwd;uniform vec3 uRight;uniform vec3 uUp;
+uniform vec3 uA;uniform vec3 uB;uniform vec3 uC;uniform float uFade;uniform float uHeat;
+float h3(vec3 p){p=fract(p*.3183099+vec3(.71,.113,.419));p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float n3(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+ return mix(mix(mix(h3(i),h3(i+vec3(1,0,0)),f.x),mix(h3(i+vec3(0,1,0)),h3(i+vec3(1,1,0)),f.x),f.y),
+            mix(mix(h3(i+vec3(0,0,1)),h3(i+vec3(1,0,1)),f.x),mix(h3(i+vec3(0,1,1)),h3(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float fbm(vec3 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*n3(p);p=p*2.03+vec3(1.7,9.2,3.1);a*=.5;}return s;}
+vec3 rayDir(){vec2 q=(gl_FragCoord.xy*2.-uRes)/uRes.y;return normalize(uFwd*1.35+uRight*q.x+uUp*q.y);}
+`;
+const CAVE=COMMON+`
+vec2 path(float z){return vec2(sin(z*.11)*3.2+sin(z*.037)*5.,cos(z*.08)*1.6);}
+float map(vec3 p){vec2 c=path(p.z);vec2 o=p.xy-c;float a=atan(o.y,o.x);
+ float r=3.4+1.1*sin(p.z*.21)+.7*sin(a*3.+p.z*.3);
+ float d=r-length(o*vec2(1.,1.25));
+ d=min(d,p.y-(c.y-1.9));
+ return d+(fbm(p*.75)-.5)*1.5;}
+vec3 nrm(vec3 p){vec2 e=vec2(.06,0.);return normalize(vec3(map(p+e.xyy)-map(p-e.xyy),map(p+e.yxy)-map(p-e.yxy),map(p+e.yyx)-map(p-e.yyx)));}
+void main(){vec3 ro=uPos,rd=rayDir();float t=.05,d;bool hit=false;
+ for(int i=0;i<72;i++){d=map(ro+rd*t);if(d<.012*t)break;t+=d*.8;if(t>40.)break;}
+ hit=t<40.;
+ vec3 fog=uC*.16+vec3(.02);vec3 col=fog;
+ if(hit){vec3 p=ro+rd*t,n=nrm(p);vec3 l=normalize(ro+uUp*.3-p);
+  float dif=max(dot(n,l),0.)/(1.+t*t*.018);
+  float grain=fbm(p*3.1);vec3 rock=mix(uA,uB,smoothstep(.35,.7,grain))*(.55+.45*grain);
+  col=rock*(dif*3.2+.10)*vec3(1.05,.95,.82)+uC*.05;
+  float moss=smoothstep(.6,.85,fbm(p*1.3+vec3(0,4,0)))*smoothstep(-.2,.6,n.y);col=mix(col,col*vec3(.5,.9,.6),moss*.6);
+  float glow=smoothstep(.83,.9,n3(p*2.4))*smoothstep(.55,.7,fbm(p*.5));col+=uC*glow*(1.4+.6*sin(uTime*2.+p.z));
+  col=mix(col,fog,1.-exp(-t*.045));}
+ col+=uC*.05*pow(max(0.,1.-length((gl_FragCoord.xy*2.-uRes)/uRes.y)*.7),2.);
+ col=col/(1.+col);col=pow(col,vec3(.85));
+ vec2 v=gl_FragCoord.xy/uRes-.5;col*=1.-dot(v,v)*1.1;
+ gl_FragColor=vec4(col*uFade,1.);}
+`;
+const SPACE=COMMON+`
+void main(){vec3 rd=rayDir();vec3 col=vec3(.004,.006,.014);
+ for(int L=0;L<3;L++){float s=float(L);vec3 q=rd*(90.+s*60.)+uPos*(.06+s*.03);vec3 c=floor(q),f=fract(q)-.5;
+  float h=h3(c+s*7.1);if(h>.86){vec3 o=vec3(h3(c+1.),h3(c+2.),h3(c+3.))-.5;float d=length(f-o*.6);
+   col+=mix(vec3(.8,.87,1.),uB,h3(c+4.)*.5)*(smoothstep(.16,.0,d)*1.6+smoothstep(.32,.0,d)*.25)*(1.5-s*.35);}}
+ vec3 np=rd*2.2+vec3(0.,0.,uTime*.01)+uPos*.0015;float neb=fbm(np)*fbm(np*1.9+3.);
+ col+=mix(uA,uB,fbm(np*.7+1.))*pow(neb,2.2)*2.4;
+ col+=uC*pow(max(dot(rd,normalize(vec3(.4,.2,-1.))),0.),24.)*.9;
+ col=col/(1.+col);vec2 v=gl_FragCoord.xy/uRes-.5;col*=1.-dot(v,v)*.9;
+ gl_FragColor=vec4(col*uFade,1.);}
+`;
+const SKY=COMMON+`
+void main(){vec3 rd=rayDir();float up=rd.y;
+ vec3 sky=mix(uC*.9,mix(vec3(.55,.72,.95),uC,.35),smoothstep(-.1,.6,up));
+ vec3 sunD=normalize(vec3(.3,.45,-1.));sky+=vec3(1.,.9,.75)*pow(max(dot(rd,sunD),0.),60.)*1.5;
+ vec3 col=sky;
+ if(up<-.02){float t=-420./up;vec3 g=uPos+rd*t;vec2 w=g.xz*.0016;
+  float s0=fbm(vec3(w*3.,uTime*.01));float sw=s0+.5*fbm(vec3(w*9.+s0,1.));vec3 land=mix(uA,uB,smoothstep(.55,.95,sw));
+  land=mix(land,vec3(.92),smoothstep(.8,.95,fbm(vec3(w*5.,3.))));
+  col=mix(land,sky,1.-exp(-t*.0012));}
+ float acc=0.;vec3 cc=vec3(0.);float wash=0.;
+ for(int i=0;i<3;i++){float fi=float(i);float fr=fract(-uPos.y*.012+fi/3.);float lay=-1.-(1.-fr)*22.;float wgt=sin(fr*3.14159);
+  wash=max(wash,smoothstep(.9,1.,fr));
+  if(up>-.001)continue;float t=lay/up;vec3 q=uPos+rd*t;
+  float dens=smoothstep(.42,.72,fbm(vec3(q.xz*.035+vec2(0.,uTime*.03*(1.+fi)),fi*3.)))*wgt;
+  float a=dens*(1.-acc)*exp(-t*.01);cc+=mix(vec3(1.),uC,.25)*a;acc+=a;}
+ col=mix(col,cc/max(acc,.001),min(acc,1.));col=mix(col,vec3(.95),wash*.55);
+ float streak=pow(fbm(vec3(rd.xz*vec2(40.,4.),uTime*3.)),6.)*uHeat;
+ col+=vec3(1.,.55,.25)*uHeat*.35*(1.-smoothstep(0.,.9,length(gl_FragCoord.xy/uRes-.5)*1.4))+vec3(1.,.7,.4)*streak*2.;
+ col=col/(1.+col*.6);vec2 v=gl_FragCoord.xy/uRes-.5;col*=1.-dot(v,v)*.8;
+ gl_FragColor=vec4(col*uFade+(1.-uFade)*vec3(1.),1.);}
+`;
+const KINDS={cave:CAVE,space:SPACE,sky:SKY};
+const PAL={cave:[[.34,.31,.27],[.46,.40,.33],[.20,.85,.66]],space:[[.25,.20,.55],[.15,.55,.75],[.9,.8,1.]],sky:[[.20,.42,.28],[.30,.45,.70],[.62,.78,.98]]};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let active=null;
+function cavePath(z){return [Math.sin(z*.11)*3.2+Math.sin(z*.037)*5,Math.cos(z*.08)*1.6];}
+function open(kind,opts){
+ opts=opts||{};if(root._LOAD_ROOMS===false||!KINDS[kind])return null;
+ if(active)active.close(false);
+ const cv=document.createElement('canvas');cv.setAttribute('aria-hidden','true');
+ const gl=cv.getContext('webgl',{antialias:false,alpha:false,powerPreference:'high-performance'});if(!gl)return null;
+ const wrap=document.createElement('div');wrap.className='l99-room227';wrap.setAttribute('role','status');
+ wrap.style.cssText='position:fixed;inset:0;z-index:100205;background:#000;touch-action:none;user-select:none;-webkit-user-select:none;opacity:0;transition:opacity .45s ease';
+ cv.style.cssText='position:absolute;inset:0;width:100%;height:100%;display:block';
+ const cap=document.createElement('div');cap.style.cssText='position:absolute;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;font:12px/1.4 ui-monospace,Menlo,monospace;letter-spacing:1.5px;color:#e8f4ef;text-shadow:0 1px 6px #000';
+ const label=document.createElement('div');label.textContent=opts.status||'';
+ const hint=document.createElement('div');hint.style.cssText='opacity:.6;font-size:10px';
+ hint.textContent=kind==='cave'?'drag to look · WASD / left thumb to walk':'drag to look · WASD / left thumb to steer';
+ const back=document.createElement('button');back.type='button';back.textContent='BACK';
+ back.style.cssText='position:absolute;top:calc(14px + env(safe-area-inset-top,0px));left:14px;min-height:40px;padding:8px 14px;border-radius:10px;border:1px solid #ffffff44;background:#0008;color:#e8f4ef;font:12px ui-monospace,monospace;letter-spacing:1px;cursor:pointer';
+ cap.append(label,hint);wrap.append(cv,cap);document.documentElement.classList.add('l99-room-open227');if(opts.onBack)wrap.append(back);document.body.appendChild(wrap);
+ requestAnimationFrame(()=>{wrap.style.opacity='1';});
+ function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+ let prog;try{prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VERT));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,KINDS[kind]));gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));}
+ catch(e){console.warn('ROOM_227',e);wrap.remove();return null;}
+ gl.useProgram(prog);const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+ const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+ const U={};for(const n of ['uRes','uTime','uPos','uFwd','uRight','uUp','uA','uB','uC','uFade','uHeat'])U[n]=gl.getUniformLocation(prog,n);
+ const pal=(opts.palette||PAL[kind]).map(c=>c.slice(0,3));while(pal.length<3)pal.push(PAL[kind][pal.length]);
+ gl.uniform3fv(U.uA,pal[0]);gl.uniform3fv(U.uB,pal[1]);gl.uniform3fv(U.uC,pal[2]);
+ /* player */
+ const st={yaw:0,pitch:kind==='sky'?-.35:0,x:cavePath(0)[0],y:cavePath(0)[1]-.25,z:0,vx:0,vy:0,vz:kind==='cave'?0:-6,heat:kind==='sky'?1:0};
+ const keys=new Set();let look=null,stick=null;
+ const kd=e=>{if(!active||active.wrap!==wrap)return;const k=e.code;if(/^(Key[WASDQE]|Arrow|Space|Shift)/.test(k)){keys.add(k);e.preventDefault();e.stopPropagation();}};
+ const ku=e=>{keys.delete(e.code);};
+ root.addEventListener('keydown',kd,true);root.addEventListener('keyup',ku,true);
+ wrap.addEventListener('pointerdown',e=>{if(e.target===back)return;wrap.setPointerCapture?.(e.pointerId);
+  const left=e.pointerType==='touch'&&e.clientX<innerWidth*.45;const o={id:e.pointerId,x:e.clientX,y:e.clientY,x0:e.clientX,y0:e.clientY};if(left)stick=o;else look=o;});
+ wrap.addEventListener('pointermove',e=>{if(look&&look.id===e.pointerId){st.yaw-=(e.clientX-look.x)*.0045;st.pitch=clamp(st.pitch-(e.clientY-look.y)*.0045,-1.2,1.2);look.x=e.clientX;look.y=e.clientY;}
+  if(stick&&stick.id===e.pointerId){stick.x=e.clientX;stick.y=e.clientY;}});
+ const up=e=>{if(look&&look.id===e.pointerId)look=null;if(stick&&stick.id===e.pointerId)stick=null;};
+ wrap.addEventListener('pointerup',up);wrap.addEventListener('pointercancel',up);
+ back.addEventListener('click',()=>{try{opts.onBack&&opts.onBack();}finally{room.close(false);}});
+ let fade=0,closing=false,raf=0,last=performance.now(),t0=last,scale=Math.min(1,640/Math.max(innerWidth,1));
+ function frame(now){raf=requestAnimationFrame(frame);const dt=Math.min(.05,(now-last)/1000);last=now;
+  /* adaptive resolution: hold the frame budget whatever the device */
+  if(dt>.024)scale=Math.max(.3,scale*.97);else if(dt<.018)scale=Math.min(Math.min(1,720/Math.max(innerWidth,1)),scale*1.01);
+  const w=Math.max(160,Math.round(innerWidth*scale)),h=Math.max(100,Math.round(innerHeight*scale));if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;gl.viewport(0,0,w,h);}
+  let f=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0),s=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
+  if(stick){f-=clamp((stick.y-stick.y0)/60,-1,1);s+=clamp((stick.x-stick.x0)/60,-1,1);}
+  if(kind!=='cave')st.yaw-=s*dt*1.1;
+  const cy=Math.cos(st.yaw),sy=Math.sin(st.yaw),cp=Math.cos(st.pitch),sp=Math.sin(st.pitch);
+  const fwd=[-sy*cp,sp,-cy*cp],right=[cy,0,-sy],upv=[right[1]*fwd[2]-right[2]*fwd[1],right[2]*fwd[0]-right[0]*fwd[2],right[0]*fwd[1]-right[1]*fwd[0]];
+  if(kind==='cave'){
+   const sp2=3.2,tx=(-sy*f+cy*s)*sp2,tz=(-cy*f-sy*s)*sp2;st.vx+=(tx-st.vx)*Math.min(1,dt*8);st.vz+=(tz-st.vz)*Math.min(1,dt*8);
+   st.x+=st.vx*dt;st.z+=st.vz*dt;const c=cavePath(st.z),r=Math.max(1.2,2.1+1.1*Math.sin(st.z*.21)*.5);
+   const ox=st.x-c[0];if(Math.abs(ox)>r)st.x=c[0]+Math.sign(ox)*r;
+   const eye=c[1]-1.9+1.65+Math.sin(now*.009)*Math.hypot(st.vx,st.vz)*.012;st.y+=(eye-st.y)*Math.min(1,dt*10);
+  }else{
+   const speed=kind==='sky'?38:14,thrust=kind==='sky'?1:(.4+.6*Math.max(0,f));
+   st.vx+=(fwd[0]*speed*thrust-st.vx)*Math.min(1,dt*2);st.vy+=(fwd[1]*speed*thrust-st.vy)*Math.min(1,dt*2);st.vz+=(fwd[2]*speed*thrust-st.vz)*Math.min(1,dt*2);
+   if(kind==='sky'){st.pitch=clamp(st.pitch+f*dt*.8,-1.1,.25);st.vy=Math.min(st.vy,-4);}
+   st.x+=st.vx*dt;st.y+=st.vy*dt;st.z+=st.vz*dt;
+  }
+  st.heat=kind==='sky'?Math.max(.15,st.heat-dt*.12):0;
+  fade=closing?Math.max(0,fade-dt/.5):Math.min(1,fade+dt/.6);
+  gl.uniform2f(U.uRes,w,h);gl.uniform1f(U.uTime,(now-t0)/1000);gl.uniform3f(U.uPos,st.x,st.y,st.z);
+  gl.uniform3fv(U.uFwd,fwd);gl.uniform3fv(U.uRight,right);gl.uniform3fv(U.uUp,upv);gl.uniform1f(U.uFade,fade);gl.uniform1f(U.uHeat,st.heat);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  if(closing&&fade<=0)dispose();
+ }
+ function dispose(){cancelAnimationFrame(raf);document.documentElement.classList.remove('l99-room-open227');root.removeEventListener('keydown',kd,true);root.removeEventListener('keyup',ku,true);
+  wrap.style.opacity='0';setTimeout(()=>{try{gl.getExtension('WEBGL_lose_context')?.loseContext();}catch(_){}wrap.remove();},460);if(active===room)active=null;}
+ const room={kind,wrap,status(t){if(label.textContent!==t)label.textContent=t;},
+  close(reveal){if(closing)return;closing=true;cap.style.opacity='0';back.remove();if(reveal===false){fade=0;dispose();}},
+  get open(){return !closing;},state:st};
+ raf=requestAnimationFrame(frame);active=room;return room;
+}
+root.L99Room227={open,get active(){return active;}};
+})(window);
+</script>
 <script id="cave-rail227">
 /* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
    steering up the stone ramp by hand while the surface loaded, and the frame
@@ -27961,7 +28120,9 @@ root.L99CaveRail227={patch};
     S.enterCaves = function () {
         if(S.loaded){S.show();return Promise.resolve(true);}
         window.L99Boot176.show('Loading caves…',S.enterCaves);
-        return S.prepare170().then(function(){if(!window.L99Boot176.showing)return false;window.L99Boot176.hide();S.show();return true;}).catch(function(e){S.err=e;window.L99Boot176.status('Caves could not load. Please try again.',true);return false;});
+        /* ROOM_227: walk a light cave while the real one loads */
+        var room=window.L99Room227&&window.L99Room227.open('cave',{status:'the caverns are forming…',onBack:function(){var b=document.querySelector('#world-load176 button');if(b)b.click();else window.L99Boot176.hide();}});
+        return S.prepare170().then(function(){if(!window.L99Boot176.showing){if(room)room.close(false);return false;}window.L99Boot176.hide();S.show();if(room)room.close(true);return true;}).catch(function(e){if(room)room.close(false);S.err=e;window.L99Boot176.status('Caves could not load. Please try again.',true);return false;});
     };
     S.show = function () {
         if (S.mount) S.mount.style.display = 'block';
