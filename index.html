@@ -30716,5 +30716,50 @@ L99FaceAudio222.mount();L99FaceAudio222.theme(currentFace);updateTypeSelect();
 })();
 </script>
 <script>window.L99Master223.setFace(currentFace);window.L99Master223.mount();</script>
+<script id="multitouch227">
+/* MULTITOUCH_227: ten fingers, every control. Browsers only turn a tap into a
+   click when it is the ONLY finger on the glass, so while you held a key the
+   buttons (LOOP, CHORDS, VORTEX, tabs, BPM...) ignored a second finger; only
+   controls wired to raw touch events (keys, pads, BEAT LOOP) responded. This
+   layer watches every touch: a quick tap on a control that happened while
+   any other finger was down is delivered as a press. Controls that handle
+   touch themselves (they cancel the touch) are left alone, single-finger taps
+   keep the native click, and a late native click is deduplicated.
+   Kill: window._MULTITOUCH = false. */
+(function(root){'use strict';
+const ACT='button,[role="button"],a[href],summary,label,input[type="checkbox"],input[type="radio"],select,.tab-btn,.ctrl-btn';
+const SKIP='input[type="range"],textarea,input[type="text"],input[type="number"],canvas,.l99-room227';
+const live=new Map();   // touch id -> {el,x,y,t,multi,self}
+function target(t){const el=document.elementFromPoint(t.clientX,t.clientY)||t.target;if(!el||!el.closest||el.closest(SKIP))return null;const a=el.closest(ACT);return a&&!a.disabled?a:null;}
+function markMulti(){for(const v of live.values())v.multi=true;}
+document.addEventListener('touchstart',e=>{
+ if(root._MULTITOUCH===false)return;
+ const multi=e.touches.length>1;
+ for(const t of e.changedTouches){const el=target(t);live.set(t.identifier,{el,x:t.clientX,y:t.clientY,t:performance.now(),multi,self:false});}
+ if(multi)markMulti();
+},{capture:true,passive:true});
+// bubble phase: runs after the control's own handlers, so a control that
+// cancelled the touch (it drives itself from touch events) is recorded.
+document.addEventListener('touchstart',e=>{for(const t of e.changedTouches){const v=live.get(t.identifier);if(v&&e.defaultPrevented)v.self=true;}},{passive:true});
+document.addEventListener('touchmove',e=>{for(const t of e.changedTouches){const v=live.get(t.identifier);if(v&&Math.hypot(t.clientX-v.x,t.clientY-v.y)>14)v.el=null;}if(e.touches.length>1)markMulti();},{capture:true,passive:true});
+function end(e){
+ const others=e.touches.length>0;
+ for(const t of e.changedTouches){const v=live.get(t.identifier);live.delete(t.identifier);
+  if(!v||!v.el||v.self||e.type==='touchcancel'&&!v.multi)continue;
+  if(!(v.multi||others))continue;               // lone finger: the native click handles it
+  if(performance.now()-v.t>700)continue;        // a hold, not a tap
+  const el=v.el;if(!el.isConnected||el.disabled)continue;
+  el._mt227=performance.now();
+  if(el.tagName==='SELECT'){try{el.focus();if(el.showPicker)el.showPicker();}catch(_){}continue;}
+  try{el.click();}catch(_){}
+ }
+}
+document.addEventListener('touchend',end,{passive:true});
+document.addEventListener('touchcancel',end,{passive:true});
+// the browser may still send its own click later for the same tap: drop it
+document.addEventListener('click',e=>{if(!e.isTrusted)return;const el=e.target&&e.target.closest&&e.target.closest(ACT);if(el&&el._mt227&&performance.now()-el._mt227<700){el._mt227=0;e.preventDefault();e.stopImmediatePropagation();}},true);
+root.L99MultiTouch227={active:()=>live.size};
+})(window);
+</script>
 </body>
 </html>
