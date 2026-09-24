@@ -40,10 +40,18 @@ function tube(b, path, radii, sides, color, swayOf) {
 	const along = [0];
 	for (let k = 1; k < path.length; k++) along.push(along[k - 1] + path[k].distanceTo(path[k - 1]));
 	const total = along[along.length - 1] || 1;
+	// the ring frame is carried along the tube (parallel transport): it never flips when
+	// a leaning trunk crosses some angle, so the rings don't twist into a pinch
+	let side = null;
 	for (let k = 0; k < path.length; k++) {
 		const p = path[k], next = path[Math.min(path.length - 1, k + 1)], prev = path[Math.max(0, k - 1)];
 		const dir = next.clone().sub(prev).normalize();
-		const side = Math.abs(dir.y) > 0.95 ? V(1, 0, 0) : dir.clone().cross(UP).normalize();
+		if (!side) side = Math.abs(dir.y) > 0.95 ? V(1, 0, 0) : dir.clone().cross(UP).normalize();
+		else {
+			side = side.clone().sub(dir.clone().multiplyScalar(side.dot(dir)));
+			if (side.lengthSq() < 1e-6) side = Math.abs(dir.y) > 0.95 ? V(1, 0, 0) : dir.clone().cross(UP);
+			side.normalize();
+		}
 		const up2 = side.clone().cross(dir).normalize();
 		const ring = [];
 		for (let s = 0; s <= sides; s++) {
@@ -194,19 +202,45 @@ function hardwood(seed, far) {
 }
 
 function banana(seed) {
+	// a banana grows as a clump: a swollen corm at the ground, the main stem, a few
+	// suckers coming up around it, and old leaves hanging brown down the stems
 	const r = mulberry32(seed), stem = new Builder(), leaves = new Builder();
 	const H = 1.5 + r() * 0.8;
-	tube(stem, [V(0, -0.15, 0), V(0, 0.06, 0), V(0, H * 0.5, 0), V(0, H, 0)], [0.19, 0.15, 0.12, 0.09], 7, new THREE.Color(1, 1, 1), (t) => t * 0.3);
-	const nL = 6 + Math.floor(r() * 3);
-	for (let l = 0; l < nL; l++) {
-		const a = l / nL * 6.28 + r() * 0.5, L = 1.7 + r() * 0.8, rise = 0.9 + r() * 0.5;
-		const dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
-		for (let k = 0; k <= 6; k++) {
-			const s = k / 6, d = L * s;
-			pts.push(V(0, H, 0).add(dir.clone().multiplyScalar(d * 0.9)).add(V(0, Math.sin(s * 2.2) * rise * 0.6 - s * s * 0.9, 0)));
-			widths.push(0.62 * Math.sin(Math.min(1, s + 0.12) * Math.PI) + 0.05);
+	const W = new THREE.Color(1, 1, 1);
+	const plant = (x, z, h, k, lean) => {
+		const lx = Math.cos(lean) * h * 0.08, lz = Math.sin(lean) * h * 0.08;
+		tube(stem, [V(x, -0.2, z), V(x, 0.02, z), V(x + lx * 0.2, 0.18 * k, z + lz * 0.2), V(x + lx * 0.6, h * 0.55, z + lz * 0.6), V(x + lx * 0.95, h * 0.94, z + lz * 0.95), V(x + lx * 1.03, h + 0.1 * k, z + lz * 1.03)],
+			[0.25 * k, 0.24 * k, 0.17 * k, 0.13 * k, 0.1 * k, 0.03], 8, W, (t) => t * 0.3);
+		const top = V(x + lx, h, z + lz);
+		const nL = Math.round((5 + Math.floor(r() * 3)) * (0.5 + 0.5 * k));
+		for (let l = 0; l < nL; l++) {
+			const a = l / nL * 6.28 + r() * 0.5, L = (1.7 + r() * 0.8) * (0.45 + 0.55 * k), rise = 0.9 + r() * 0.5;
+			const dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
+			for (let q = 0; q <= 6; q++) {
+				const s2 = q / 6, d = L * s2;
+				pts.push(top.clone().add(dir.clone().multiplyScalar(d * 0.9)).add(V(0, (Math.sin(s2 * 2.2) * rise * 0.6 - s2 * s2 * 0.9) * (0.5 + 0.5 * k), 0)));
+				widths.push(0.62 * (0.5 + 0.5 * k) * Math.sin(Math.min(1, s2 + 0.12) * Math.PI) + 0.05);
+			}
+			strip(leaves, pts, widths, 0.25, { r: 0.55, g: 0.72, b: 0.32 }, { r: 0.62, g: 0.78, b: 0.36 }, 0.3, 1.0, 0.8);
 		}
-		strip(leaves, pts, widths, 0.25, { r: 0.55, g: 0.72, b: 0.32 }, { r: 0.62, g: 0.78, b: 0.36 }, 0.3, 1.0, 0.8);
+		// dead leaves: brown, torn, hanging down the stem from partway up
+		const nD = k > 0.7 ? 3 + Math.floor(r() * 2) : 1;
+		for (let d = 0; d < nD; d++) {
+			const a = r() * 6.28, y0 = h * (0.45 + r() * 0.35), L = 0.6 + r() * 0.5;
+			const dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
+			for (let q = 0; q <= 4; q++) {
+				const s2 = q / 4;
+				pts.push(V(x, y0, z).add(dir.clone().multiplyScalar(0.12 * k + 0.12 * s2)).add(V(0, -L * s2, 0)));
+				widths.push(0.3 * (1 - s2 * 0.6));
+			}
+			strip(leaves, pts, widths, 0.15, { r: 0.62, g: 0.46, b: 0.26 }, { r: 0.52, g: 0.38, b: 0.22 }, 0.05, 0.12, 0.6);
+		}
+	};
+	plant(0, 0, H, 1, r() * 6.28);
+	const nS = 2 + Math.floor(r() * 2);
+	for (let i = 0; i < nS; i++) {
+		const a = r() * 6.28, d = 0.35 + r() * 0.35, k = 0.35 + r() * 0.35;
+		plant(Math.cos(a) * d, Math.sin(a) * d, H * k * (0.8 + r() * 0.3), k, a);
 	}
 	return { parts: [stem.geometry(), leaves.geometry()], height: H + 1 };
 }
@@ -226,22 +260,45 @@ function fern(seed) {
 	return { parts: [b.geometry()], height: 0.9 };
 }
 
-// a flowering shrub: full-colour cards, a little taller and looser than the plain shrub
-function bloom(seed) {
-	const r = mulberry32(seed), b = new Builder(), c0 = V(0, 0.8, 0);
-	for (let i = 0; i < 20; i++) {
-		const th = r() * 6.28, ph = Math.acos(r() * 0.9), k = 0.45 + r() * 0.55;
-		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.2 * k, Math.cos(ph) * 0.95 * k - 0.1, Math.sin(ph) * Math.sin(th) * 1.2 * k)), 1.25, r, { r: 1, g: 1, b: 1 }, 0.6, V(0, 0, 0));
+// several woody stems rising out of one root crown and fanning into the canopy
+function bushStems(b, r, n, top, spread) {
+	const out = [];
+	for (let i = 0; i < n; i++) {
+		const a = i / n * 6.283 + r() * 0.6, base = 0.04 + r() * 0.12, reach = spread * (0.45 + r() * 0.5), up = top * (0.6 + r() * 0.45);
+		const pts = [V(Math.cos(a) * base, -0.12, Math.sin(a) * base)];
+		for (let q = 1; q <= 4; q++) {
+			const t = q / 4, d = base + reach * Math.pow(t, 1.4);
+			pts.push(V(Math.cos(a + t * 0.3) * d, up * t, Math.sin(a + t * 0.3) * d));
+		}
+		tube(b, pts, [0.05, 0.042, 0.032, 0.022, 0.012], 5, new THREE.Color(0.55, 0.47, 0.38), (t) => t * 0.7);
+		out.push(pts[pts.length - 1], pts[2]);
 	}
-	return { parts: [b.geometry()], height: 1.8 };
+	return out;
+}
+// a flowering shrub: full-colour cards around woody stems, foliage coming right down
+// into the grass instead of a ball hovering over it
+function bloom(seed) {
+	const r = mulberry32(seed), wood = new Builder(), b = new Builder(), c0 = V(0, 0.75, 0);
+	const tips = bushStems(wood, r, 6 + Math.floor(r() * 3), 1.3, 1.0);
+	for (let i = 0; i < 16; i++) {
+		const th = r() * 6.28, ph = Math.acos(r() * 1.6 - 0.6), k = 0.45 + r() * 0.55;
+		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.15 * k, Math.cos(ph) * 0.85 * k, Math.sin(ph) * Math.sin(th) * 1.15 * k)), 1.2, r, { r: 1, g: 1, b: 1 }, 0.6, V(0, 0, 0));
+	}
+	for (const t of tips) card(b, t.clone().add(V((r() - 0.5) * 0.3, 0.05, (r() - 0.5) * 0.3)), 0.9, r, { r: 1, g: 1, b: 1 }, 0.7, V(0, 0, 0));
+	// a low skirt of leaves where it meets the grass
+	for (let i = 0; i < 6; i++) { const a = r() * 6.28, d = 0.45 + r() * 0.4; card(b, V(Math.cos(a) * d, 0.22 + r() * 0.15, Math.sin(a) * d), 0.8, r, { r: 0.9, g: 0.95, b: 0.9 }, 0.4, V(0, -0.5, 0)); }
+	return { parts: [wood.geometry(), b.geometry()], height: 1.8 };
 }
 function shrub(seed) {
-	const r = mulberry32(seed), b = new Builder(), c0 = V(0, 0.55, 0);
-	for (let i = 0; i < 22; i++) {
-		const th = r() * 6.28, ph = Math.acos(r()), k = 0.5 + r() * 0.5;
-		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.1 * k, Math.cos(ph) * 0.7 * k, Math.sin(ph) * Math.sin(th) * 1.1 * k)), 1.1, r, { r: 0.32, g: 0.46, b: 0.2 }, 0.6, V(0, 0, 0));
+	const r = mulberry32(seed), wood = new Builder(), b = new Builder(), c0 = V(0, 0.5, 0);
+	const tips = bushStems(wood, r, 5 + Math.floor(r() * 3), 0.95, 0.9);
+	for (let i = 0; i < 18; i++) {
+		const th = r() * 6.28, ph = Math.acos(r() * 1.6 - 0.6), k = 0.5 + r() * 0.5;
+		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.1 * k, Math.cos(ph) * 0.6 * k, Math.sin(ph) * Math.sin(th) * 1.1 * k)), 1.05, r, { r: 0.32, g: 0.46, b: 0.2 }, 0.6, V(0, 0, 0));
 	}
-	return { parts: [b.geometry()], height: 1.3 };
+	for (const t of tips) card(b, t.clone().add(V((r() - 0.5) * 0.3, 0.05, (r() - 0.5) * 0.3)), 0.8, r, { r: 0.34, g: 0.48, b: 0.21 }, 0.7, V(0, 0, 0));
+	for (let i = 0; i < 5; i++) { const a = r() * 6.28, d = 0.4 + r() * 0.35; card(b, V(Math.cos(a) * d, 0.18 + r() * 0.12, Math.sin(a) * d), 0.75, r, { r: 0.3, g: 0.44, b: 0.19 }, 0.4, V(0, -0.5, 0)); }
+	return { parts: [wood.geometry(), b.geometry()], height: 1.3 };
 }
 
 function boulder(seed) {
@@ -374,11 +431,11 @@ export function createVegetation(island, shared, scene) {
 			accept: (x, z, h, sl, m) => h > 2.2 && h < 60 && sl < 0.45 && m.path < 0.2 && m.wild > 0.25 && nz.fbm(x * 0.02 + 4, z * 0.02, 3) > 0.54 },
 		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v)), mats: ['fern'], spacing: 3.4, near: 50, max: 700, kind: 'soft', noShadow: true,
 			accept: (x, z, h, sl, m) => h > 2.6 && sl < 0.6 && m.path < 0.15 && m.wild > 0.35 && nz.fbm(x * 0.05, z * 0.05 + 2, 2) > 0.52 },
-		{ key: 'hibiscus', variants: [0, 1].map((v) => bloom(island.seed * 41 + v)), mats: ['hibiscus'], spacing: 7, near: 110, max: 260, kind: 'soft',
+		{ key: 'hibiscus', variants: [0, 1].map((v) => bloom(island.seed * 41 + v)), mats: ['bark', 'hibiscus'], spacing: 7, near: 110, max: 260, kind: 'soft',
 			accept: (x, z, h, sl, m) => h > 1.8 && h < 40 && sl < 0.4 && m.path < 0.25 && (m.village > 0.25 || (m.path > 0.02 && m.wild > 0.1)) && nz.fbm(x * 0.05 + 3, z * 0.05, 2) > 0.5 },
-		{ key: 'bougainvillea', variants: [0, 1].map((v) => bloom(island.seed * 43 + v)), mats: ['bougainvillea'], spacing: 8, near: 110, max: 220, kind: 'soft',
+		{ key: 'bougainvillea', variants: [0, 1].map((v) => bloom(island.seed * 43 + v)), mats: ['bark', 'bougainvillea'], spacing: 8, near: 110, max: 220, kind: 'soft',
 			accept: (x, z, h, sl, m) => h > 1.6 && h < 30 && sl < 0.45 && m.path < 0.25 && m.wild > 0.08 && m.wild < 0.6 && nz.fbm(x * 0.04 - 6, z * 0.04, 2) > 0.56 },
-		{ key: 'shrub', variants: [0].map((v) => shrub(island.seed * 19 + v)), mats: ['leaf'], spacing: 6, near: 120, max: 500, kind: 'soft',
+		{ key: 'shrub', variants: [0, 1].map((v) => shrub(island.seed * 19 + v)), mats: ['bark', 'leaf'], spacing: 6, near: 120, max: 500, kind: 'soft',
 			accept: (x, z, h, sl, m) => h > 1.8 && sl < 0.55 && m.path < 0.2 && m.wild > 0.15 && nz.fbm(x * 0.03 + 7, z * 0.03, 2) > 0.5 },
 		{ key: 'nuts', derived: true, variants: [0, 1, 2].map((v) => coconuts(island.seed * 29 + v)), mats: ['stem'], near: 60, max: 300, kind: 'wood', noShadow: true },
 		{ key: 'deadfrond', derived: true, variants: [0, 1].map((v) => deadFrond(island.seed * 31 + v)), mats: ['frond'], near: 80, max: 400, kind: 'soft', noShadow: true },
@@ -466,7 +523,9 @@ export function createVegetation(island, shared, scene) {
 	// ground occupancy: where anything stands, the soil under it is shaded, bare and
 	// damp, and the grass thins toward the stem. A small map around the player that
 	// the terrain and grass shaders both read, redrawn as the player moves.
-	const CONTACT = { palm: [2.4, 0.75], hardwood: [3.8, 0.85], banana: [1.6, 0.7], shrub: [1.7, 0.6], hibiscus: [1.8, 0.6], bougainvillea: [1.9, 0.6], boulder: [2.0, 0.7], fern: [1.0, 0.45], driftwood: [1.6, 0.5], nuts: [0.7, 0.4] };
+	// [radius, bare shade, mound/hug]: trees and rocks shade bare earth; small plants
+	// sit on a little mound the grass crowds into
+	const CONTACT = { palm: [2.4, 0.75, 0.5], hardwood: [3.8, 0.85, 0.55], banana: [1.7, 0.2, 1.0], shrub: [1.8, 0.15, 1.0], hibiscus: [1.9, 0.15, 1.0], bougainvillea: [2.0, 0.15, 1.0], boulder: [2.0, 0.7, 0.4], fern: [1.1, 0.1, 0.8], driftwood: [1.6, 0.5, 0.2], nuts: [0.7, 0.4, 0.0] };
 	const OCC = shared.occ, OS = OCC.image.width, OSPAN = shared.uOccO.value.z, occData = OCC.image.data;
 	const contacts = [];
 
@@ -490,7 +549,7 @@ export function createVegetation(island, shared, scene) {
 					const d = Math.hypot(it.x - cx, it.z - cz);
 					const lod = d < SHADOW_R ? 'close' : d < sp.near ? 'near' : (sp.far && d < R ? 'far' : null);
 					if (!lod) continue;
-					if (cs && d < OSPAN * 0.72) contacts.push(it.x, it.z, cs[0] * (sp.key === 'boulder' ? it.scale : it.scale * 0.9 + 0.1), cs[1]);
+					if (cs && d < OSPAN * 0.72) contacts.push(it.x, it.z, cs[0] * (sp.key === 'boulder' ? it.scale : it.scale * 0.9 + 0.1), cs[1], cs[2]);
 					q.setFromAxisAngle(UP, it.rot);
 					sc.setScalar(it.scale);
 					pos.set(it.x, it.y, it.z);
@@ -509,15 +568,18 @@ export function createVegetation(island, shared, scene) {
 		// rasterise the soft discs into the occupancy map, centred on the player
 		const ox = Math.round(cx / 4) * 4 - OSPAN / 2, oz = Math.round(cz / 4) * 4 - OSPAN / 2, px = OS / OSPAN;
 		occData.fill(0);
-		for (let k = 0; k < contacts.length; k += 4) {
-			const x = (contacts[k] - ox) * px, z = (contacts[k + 1] - oz) * px, R = contacts[k + 2] * px, str = contacts[k + 3];
+		for (let k = 0; k < contacts.length; k += 5) {
+			const x = (contacts[k] - ox) * px, z = (contacts[k + 1] - oz) * px, R = contacts[k + 2] * px, str = contacts[k + 3], hug = contacts[k + 4];
 			const i0 = Math.max(0, Math.floor(x - R)), i1 = Math.min(OS - 1, Math.ceil(x + R)), j0 = Math.max(0, Math.floor(z - R)), j1 = Math.min(OS - 1, Math.ceil(z + R));
 			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
 				const d = Math.hypot(i + 0.5 - x, j + 0.5 - z) / R;
 				if (d >= 1) continue;
 				// broad soft shade plus a dark, damp core right at the foot
-				const v = Math.min(1, Math.pow(1 - d * d, 1.5) * str + Math.pow(Math.max(0, 1 - d * 2.6), 2) * 0.5) * 255, o = j * OS + i;
+				const v = Math.min(1, Math.pow(1 - d * d, 1.5) * str + Math.pow(Math.max(0, 1 - d * 2.6), 2) * 0.5 * str) * 255, o = (j * OS + i) * 2;
 				if (v > occData[o]) occData[o] = v;
+				// the mound: a smooth dome, highest at the stem
+				const m = Math.pow(Math.max(0, 1 - d * 1.15), 2) * hug * 255;
+				if (m > occData[o + 1]) occData[o + 1] = m;
 			}
 		}
 		OCC.needsUpdate = true;

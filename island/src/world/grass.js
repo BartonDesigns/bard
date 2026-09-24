@@ -9,7 +9,7 @@
 // reaching one, so the ground close by reads as turf, not as a few cards.
 
 import * as THREE from 'three';
-import { HEIGHT_GLSL, NOISE_GLSL } from './terrain.js';
+import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL } from './terrain.js';
 import { grassStrip } from './textures.js';
 import { mulberry32 } from '../noise.js';
 
@@ -59,7 +59,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		sh.vertexShader = `
 			${HEIGHT_GLSL}
 			${NOISE_GLSL}
-			uniform sampler2D uMasks, uOcc; uniform vec3 uOccO; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
+			${OCC_GLSL}
+			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW;
 			float gTall;
@@ -73,13 +74,16 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float dCam = length(w - uCam) / (uSpan * 0.5);
 				// Natural grass varies slowly over the ground, not tuft by tuft. Density,
 				// height and colour are smooth fields; each tuft only nudges them a little.
-				vec2 ouv = (w - uOccO.xy) / uOccO.z;
-				float occ = texture2D(uOcc, ouv).r * step(abs(ouv.x - 0.5), 0.49) * step(abs(ouv.y - 0.5), 0.49);
+				vec2 oc = occAt(w);
+				float occ = oc.r, hug = oc.g * (1.0 - oc.r);
+				h += moundAt(w);
 				float canopy = smoothstep(0.55, 0.9, mk.a) * smoothstep(5.0, 9.0, h);
 				float n1g = fbm3(w * 0.06);
 				float meadow = smoothstep(0.3, 0.8, smoothstep(1.4 + n1g * 0.5, 2.3 + n1g * 0.6, h)) * smoothstep(1.3, 2.0, h);
 				float density = meadow * smoothstep(0.05, 0.3, mk.a) * (1.0 - smoothstep(0.2, 0.5, mk.r)) * (1.0 - canopy * 0.65) * (1.0 - occ * 0.85);
 				density *= 0.85 + 0.15 * vn(w * 0.4 + 5.0);
+				// around shrubs, bananas and flowers the grass crowds in and grows up the stems
+				density = min(1.0, density + hug * 0.6 * meadow);
 				// a tuft exists where its random falls under the local density: thinning is
 				// even and gradual, so edges feather out instead of breaking into bald spots
 				float grow = step(aRand.y, density) * (1.0 - smoothstep(0.7, 1.0, dCam));
@@ -89,6 +93,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float tall = mix(0.28, 0.46, vn(w * 0.13 + 2.0)) + smoothstep(0.62, 0.86, patchN) * 0.22;
 				tall *= 0.9 + 0.2 * aRand.x;
 				tall *= 1.0 - occ * 0.6;
+				tall *= 1.0 + hug * 0.9;
 				tall *= mix(0.4, 1.0, smoothstep(0.8, 2.6, length(w - uCam)));
 				tall *= mix(1.0, 0.45, mk.g) * uTallK * grow;
 				gTall = tall;

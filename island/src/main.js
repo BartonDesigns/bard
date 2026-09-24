@@ -91,7 +91,8 @@ export function createIslandWorld() {
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
 	// ground occupancy around the player (filled by vegetation, read by terrain and grass)
-	shared.occ = new THREE.DataTexture(new Uint8Array(256 * 256), 256, 256, THREE.RedFormat, THREE.UnsignedByteType);
+	// r: bare, shaded earth (trees, palms, rocks); g: a soil mound that grass hugs (every plant)
+	shared.occ = new THREE.DataTexture(new Uint8Array(256 * 256 * 2), 256, 256, THREE.RGFormat, THREE.UnsignedByteType);
 	shared.occ.magFilter = shared.occ.minFilter = THREE.LinearFilter;
 	shared.occ.needsUpdate = true;
 	shared.uOcc = { value: shared.occ };

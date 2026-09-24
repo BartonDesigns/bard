@@ -5,7 +5,7 @@
 // shadowed like everything else, so it sits in the dirt instead of on it.
 
 import * as THREE from 'three';
-import { HEIGHT_GLSL, NOISE_GLSL } from './terrain.js';
+import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL } from './terrain.js';
 import { mulberry32, makeNoise } from '../noise.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -88,6 +88,7 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span },
+		uOcc: shared.uOcc, uOccO: shared.uOccO,
 	};
 	const mat = new THREE.MeshStandardMaterial({ roughness: rough, metalness: 0, map: map || null, alphaTest: map ? 0.5 : 0, alphaToCoverage: !!map, side: map ? THREE.DoubleSide : THREE.FrontSide });
 	mat.onBeforeCompile = (sh) => {
@@ -95,6 +96,7 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 		sh.vertexShader = `
 			${HEIGHT_GLSL}
 			${NOISE_GLSL}
+			${OCC_GLSL}
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan;
 			attribute vec2 aOff; attribute vec2 aRand;
 			varying vec3 vLTint;
@@ -104,7 +106,7 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 				vec2 o = uCam - uSpan * 0.5;
 				vec2 w = o + mod(aOff - o, uSpan);
 				vec4 mk = texture2D(uMasks, (w + uHalf) / (uHalf * 2.0));
-				float h = heightAt(w);
+				float h = heightAt(w) + moundAt(w);
 				float e = 0.6;
 				vec3 tn = normalize(vec3(heightAt(w - vec2(e, 0.0)) - heightAt(w + vec2(e, 0.0)), 2.0 * e, heightAt(w - vec2(0.0, e)) - heightAt(w + vec2(0.0, e))));
 				float slope = 1.0 - tn.y;

@@ -42,6 +42,15 @@ float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
 float fbm3(vec2 p){ return vn(p) * 0.55 + vn(p * 2.03 + 7.1) * 0.3 + vn(p * 4.1 - 3.7) * 0.15; }`;
 
+// ground occupancy near the player: r = bare shaded earth, g = soil mound around a stem
+export const OCC_GLSL = /* glsl */`
+uniform sampler2D uOcc; uniform vec3 uOccO;
+vec2 occAt(vec2 w){
+	vec2 u = (w - uOccO.xy) / uOccO.z;
+	return texture2D(uOcc, u).rg * (1.0 - smoothstep(0.4, 0.49, max(abs(u.x - 0.5), abs(u.y - 0.5))));
+}
+float moundAt(vec2 w){ vec2 o = occAt(w); return o.g * 0.24 + o.r * 0.06; }`;
+
 export function makeHeightTexture(island) {
 	const tex = new THREE.DataTexture(island.height, island.N, island.N, THREE.RedFormat, THREE.FloatType);
 	tex.magFilter = tex.minFilter = THREE.NearestFilter;
@@ -76,7 +85,7 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uOcc; uniform vec3 uOccO; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\nfloat gDetailH;\n' + NOISE_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
@@ -138,11 +147,13 @@ export function createTerrain(island, shared) {
 				float cB = 1.0 - abs(vn(vW.xz * 0.7 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
 				col += vec3(0.5, 0.6, 0.55) * pow(min(cA, cB), 6.0) * smoothstep(0.0, -0.8, h) * (1.0 - smoothstep(-2.0, -14.0, h)) * 1.6;
 				// rooted: the earth under trees and shrubs is shaded, bare, damp and warm
-				vec2 ouv = (vW.xz - uOccO.xy) / uOccO.z;
-				float occ = texture2D(uOcc, ouv).r * (1.0 - smoothstep(0.38, 0.5, max(abs(ouv.x - 0.5), abs(ouv.y - 0.5))));
+				vec2 oc = occAt(vW.xz);
+				float occ = oc.r;
 				vec3 humus = mix(vec3(0.36, 0.28, 0.18), vec3(0.46, 0.38, 0.26), dd.b) * mix(1.0, 1.35, 1.0 - grassW);
 				col = mix(col, humus, occ * 0.55 * step(0.4, h));
 				col *= 1.0 - occ * 0.36;
+				// damp, darker soil where a plant's roots hold it
+				col *= 1.0 - oc.g * 0.1 * grassW;
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				float rough = mix(0.97, 0.42, wet * (1.0 - grassW));`)
 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rough;')
@@ -156,6 +167,14 @@ export function createTerrain(island, shared) {
 					vec2 dH = vec2(dFdx(gDetailH), dFdy(gDetailH));
 					vec3 vGrad = sign(fDet) * (dH.x * R1 + dH.y * R2);
 					normal = normalize(abs(fDet) * normal - vGrad);
+				}
+				// the soil swells into a low mound around every stem: shade it as one
+				{
+					float e = 0.35;
+					float mx = moundAt(vW.xz + vec2(e, 0.0)) - moundAt(vW.xz - vec2(e, 0.0));
+					float mz = moundAt(vW.xz + vec2(0.0, e)) - moundAt(vW.xz - vec2(0.0, e));
+					vec3 tilt = vec3(-mx, 0.0, -mz) / (2.0 * e);
+					normal = normalize(normal + (viewMatrix * vec4(tilt, 0.0)).xyz);
 				}`);
 	};
 	mat.customProgramCacheKey = () => 'island-terrain';
