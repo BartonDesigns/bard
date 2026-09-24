@@ -18,9 +18,10 @@ let stripTex = null;
 export function createGrass(island, shared, count = 20000, span = 84, opts = {}) {
 	const width = opts.width ?? 0.42, heightK = opts.height ?? 1, seed = opts.seed ?? 99;
 	const blade = new THREE.BufferGeometry();
-	// two crossed quads, base at y=0, bent a little so they are not flat cards
+	// three quads at 60 degrees, base at y=0: a tuft looks full from any direction,
+	// never like a flat comb
 	const P = [], UV = [], T = [];
-	for (const a of [0, Math.PI / 2]) {
+	for (const a of [0, Math.PI / 3, Math.PI * 2 / 3]) {
 		const cx = Math.cos(a) * 0.5, cz = Math.sin(a) * 0.5;
 		P.push(-cx, 0, -cz, cx, 0, cz, cx, 1, cz, -cx, 1, -cz);
 		UV.push(0, 0, 1, 0, 1, 1, 0, 1);
@@ -30,7 +31,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 	blade.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
 	blade.setAttribute('aTip', new THREE.Float32BufferAttribute(T, 1));
 	blade.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(P.length).fill(0).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
-	blade.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
+	blade.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11]);
 	const geo = new THREE.InstancedBufferGeometry().copy(blade);
 	geo.instanceCount = count;
 	const off = new Float32Array(count * 2), rnd = new Float32Array(count * 2), r = mulberry32(seed);
@@ -70,50 +71,54 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vec4 mk = texture2D(uMasks, (w + uHalf) / (uHalf * 2.0));
 				float h = heightAt(w);
 				float dCam = length(w - uCam) / (uSpan * 0.5);
-				// thinner under the forest canopy, where ferns and leaf litter take over
-				float canopy = smoothstep(0.55, 0.9, mk.a) * smoothstep(5.0, 9.0, heightAt(w));
-				float grow = (1.0 - canopy * step(0.35, aRand.y)) * smoothstep(0.08, 0.35, mk.a + aRand.x * 0.25) * (1.0 - smoothstep(0.15, 0.55, mk.r + (aRand.y - 0.5) * 0.2)) * smoothstep(1.3, 2.0, h);
-				float n1g = fbm3(w * 0.06);
-				grow *= smoothstep(0.3, 0.8, smoothstep(1.4 + n1g * 0.5, 2.3 + n1g * 0.6, h));
-				grow *= 1.0 - smoothstep(0.7, 1.0, dCam);
-				// mostly ankle-to-shin turf; long grass in drifts; cropped short in the village
-				float patchN = vn(w * 0.06 + 11.0);
-				float tall = (0.22 + aRand.x * 0.3) + smoothstep(0.62, 0.88, patchN) * (0.18 + aRand.y * 0.22);
-				// thinner and shorter toward trunks and stems, where the shade and roots are
+				// Natural grass varies slowly over the ground, not tuft by tuft. Density,
+				// height and colour are smooth fields; each tuft only nudges them a little.
 				vec2 ouv = (w - uOccO.xy) / uOccO.z;
 				float occ = texture2D(uOcc, ouv).r * step(abs(ouv.x - 0.5), 0.49) * step(abs(ouv.y - 0.5), 0.49);
-				tall *= 1.0 - occ * 0.75;
-				tall *= mix(0.35, 1.0, smoothstep(0.8, 2.6, length(w - uCam)));
-				grow *= step(occ * 0.9, aRand.y + 0.25);
+				float canopy = smoothstep(0.55, 0.9, mk.a) * smoothstep(5.0, 9.0, h);
+				float n1g = fbm3(w * 0.06);
+				float meadow = smoothstep(0.3, 0.8, smoothstep(1.4 + n1g * 0.5, 2.3 + n1g * 0.6, h)) * smoothstep(1.3, 2.0, h);
+				float density = meadow * smoothstep(0.05, 0.3, mk.a) * (1.0 - smoothstep(0.2, 0.5, mk.r)) * (1.0 - canopy * 0.65) * (1.0 - occ * 0.85);
+				density *= 0.85 + 0.15 * vn(w * 0.4 + 5.0);
+				// a tuft exists where its random falls under the local density: thinning is
+				// even and gradual, so edges feather out instead of breaking into bald spots
+				float grow = step(aRand.y, density) * (1.0 - smoothstep(0.7, 1.0, dCam));
+				// height: a gentle field, longer drifts in hollows, cropped in the village,
+				// shorter at stems and right under your eye
+				float patchN = vn(w * 0.05 + 11.0);
+				float tall = mix(0.28, 0.46, vn(w * 0.13 + 2.0)) + smoothstep(0.62, 0.86, patchN) * 0.22;
+				tall *= 0.9 + 0.2 * aRand.x;
+				tall *= 1.0 - occ * 0.6;
+				tall *= mix(0.4, 1.0, smoothstep(0.8, 2.6, length(w - uCam)));
 				tall *= mix(1.0, 0.45, mk.g) * uTallK * grow;
 				gTall = tall;
 				float ang = aRand.y * 6.2831;
 				vGUv = uv; vTip = aTip;
-				// colour: a few greens, sun-dried straw in places, bluer in the shade of growth
-				float hue = vn(w * 0.23 + 3.0), dry = smoothstep(0.55, 0.8, vn(w * 0.035 - 7.0) + aRand.x * 0.15) * (1.0 - mk.a * 0.8);
-				// the same greens as the meadow ground, so tufts melt into it
-				vec3 g1 = vec3(0.34, 0.50, 0.12), g2 = vec3(0.44, 0.56, 0.14), g3 = vec3(0.30, 0.47, 0.14);
-				vec3 tint = mix(mix(g1, g2, hue), g3, mk.a * 0.5 * aRand.y);
+				// colour: broad drifts of green and sun-dried straw, barely any tuft speckle
+				float hue = vn(w * 0.035 + 3.0), dry = smoothstep(0.58, 0.82, vn(w * 0.02 - 7.0)) * (1.0 - mk.a * 0.8);
+				vec3 g1 = vec3(0.34, 0.50, 0.12), g2 = vec3(0.42, 0.55, 0.14);
+				vec3 tint = mix(g1, g2, hue);
 				tint = mix(tint, vec3(0.55, 0.52, 0.30), dry * 0.35);
-				tint *= 0.92 + 0.14 * aRand.x;
-				tint *= 1.0 - occ * 0.3;
+				tint *= 0.97 + 0.06 * aRand.x;
+				tint *= 1.0 - occ * 0.25;
 				vTint = tint * tint;   // authored in display space
 				vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
 			.replace('#include <begin_vertex>', `
 				vec3 p = position;
-				p.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz * uWidth * (0.75 + aRand.x * 0.5);
+				p.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz * uWidth * (0.9 + aRand.x * 0.2);
 				p.y *= tall;
 				// wind: a travelling wave plus the music's low end; stiffer when short
 				float wave = vn(w * 0.08 + vec2(uTime * 0.35, uTime * 0.12));
 				// lean the blade over (rotate, keeping its length) rather than dragging the tip
 				// sideways: long grass bows, it never smears into a streak
-				float lean = clamp((0.14 + uWind * 0.3 + uBass * 0.4) * (0.4 + wave) + sin(uTime * 2.3 + aRand.x * 20.0) * 0.05, -0.2, 0.62);
+				float lean = clamp((0.12 + uWind * 0.26 + uBass * 0.35) * (0.4 + wave) + sin(uTime * 2.3 + aRand.x * 20.0) * 0.03, -0.1, 0.55);
 				lean *= mix(1.0, 0.6, smoothstep(0.4, 1.0, tall));
 				float ly = p.y;
 				p.x += sin(lean) * ly * 0.93;
 				p.z += sin(lean) * ly * 0.35;
 				p.y = cos(lean) * ly;
-				vec3 transformed = vec3(w.x, h - 0.02, w.y) + p;
+				// the tuft's foot sits a little in the soil, so there is no hard base line
+				vec3 transformed = vec3(w.x, h - 0.05 - 0.04 * aRand.x, w.y) + p;
 				vGW = transformed;`)
 			.replace('#include <project_vertex>', `#include <project_vertex>
 				if (gTall < 0.04) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`);

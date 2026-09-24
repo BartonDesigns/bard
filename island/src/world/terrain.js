@@ -112,7 +112,7 @@ export function createTerrain(island, shared) {
 				// earth under the meadow: soil and litter show between the blades
 				vec3 soil = mix(vec3(0.24, 0.19, 0.12), vec3(0.36, 0.30, 0.19), dd.b);
 				vec3 meadowGround = mix(soil, grass, smoothstep(0.25, 0.7, mk.a * 0.4 + n1 * 0.6 + dd.b * 0.2) * 0.75 + 0.1);
-				grass = mix(grass, meadowGround, near * 0.8);
+				grass = mix(grass, meadowGround, near * 0.3);
 				// paths: packed earth with gravel that catches the light
 				dirt *= 0.88 + 0.22 * dd.g;
 				dirt = mix(dirt, vec3(0.58, 0.54, 0.47), smoothstep(0.7, 0.95, dd.g) * 0.18);

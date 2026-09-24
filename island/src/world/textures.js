@@ -18,6 +18,21 @@ function finish(c, repeat) {
 }
 const rgb = (r, g, b, a = 1) => `rgba(${r | 0},${g | 0},${b | 0},${a})`;
 
+// make a canvas tile seamlessly top-to-bottom: lay a copy shifted by half its height
+// over the top and bottom quarters, fading to nothing in the middle
+function tileV(c) {
+	const W = c.width, H = c.height, t = document.createElement('canvas');
+	t.width = W; t.height = H;
+	const g = t.getContext('2d');
+	g.drawImage(c, 0, H / 2); g.drawImage(c, 0, -H / 2);
+	g.globalCompositeOperation = 'destination-in';
+	const m = g.createLinearGradient(0, 0, 0, H);
+	m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(0.3, 'rgba(0,0,0,0)'); m.addColorStop(0.7, 'rgba(0,0,0,0)'); m.addColorStop(1, 'rgba(0,0,0,1)');
+	g.fillStyle = m; g.fillRect(0, 0, W, H);
+	c.getContext('2d').drawImage(t, 0, 0);
+	return c;
+}
+
 // a cluster of broad tropical leaves on a twig, for tree canopies
 export function leafCluster() {
 	const S = 256, [c, g] = canvas(S, S), r = mulberry32(71);
@@ -115,8 +130,8 @@ export function grassStrip() {
 	// crisp at close range: 256 px, each blade a tapered, slightly curved leaf with a
 	// midrib, so grass right in front of you reads as blades, not streaks
 	const W = 256, H = 256, [c, g] = canvas(W, H), r = mulberry32(8);
-	for (let i = 0; i < 15; i++) {
-		const x = 10 + r() * (W - 20), top = r() * H * 0.3, l = 170 + r() * 80, lean = (r() - 0.5) * 60, w = 5 + r() * 3.5;
+	for (let i = 0; i < 18; i++) {
+		const x = 12 + r() * (W - 24), top = H * (0.02 + r() * 0.42), l = 190 + r() * 45, lean = (r() - 0.5) * 30, w = 4.5 + r() * 3;
 		const gr = g.createLinearGradient(0, H, 0, top);
 		gr.addColorStop(0, rgb(l * 0.62, l * 0.72, l * 0.42)); gr.addColorStop(1, rgb(l * 0.95, l, l * 0.7));
 		g.fillStyle = gr;
@@ -282,7 +297,7 @@ export function woodBark() {
 	}
 	for (let i = 0; i < 400; i++) { const l = 160 + r() * 70; g.fillStyle = rgb(l, l * 0.95, l * 0.85, 0.3); g.fillRect(r() * W, r() * H, 2 + r() * 5, 6 + r() * 16); }
 	for (let i = 0; i < 14; i++) { g.fillStyle = rgb(150 + r() * 40, 170 + r() * 30, 120, 0.25); g.beginPath(); g.arc(r() * W, r() * H, 6 + r() * 16, 0, 7); g.fill(); }
-	return finish(c, true);
+	return finish(tileV(c), true);
 }
 
 // a flowering tropical shrub: glossy leaves with blossoms, painted in full colour

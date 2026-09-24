@@ -122,8 +122,8 @@ export function createIslandWorld() {
 		const terrain = createTerrain(island, shared);
 		const ocean = createOcean(island, shared);
 		// turf underfoot plus a longer-reaching layer
-		const grass = createGrass(island, shared, isPhone ? 9000 : 16000, isPhone ? 64 : 84, { width: 0.5, seed: 99 });
-		const turf = createGrass(island, shared, isPhone ? 7000 : 12000, 20, { width: 0.3, height: 0.8, seed: 7 });
+		const grass = createGrass(island, shared, isPhone ? 7000 : 12000, isPhone ? 64 : 84, { width: 0.5, seed: 99 });
+		const turf = createGrass(island, shared, isPhone ? 7500 : 12000, 20, { width: 0.34, height: 0.8, seed: 7 });
 		scene.add(terrain, ocean, grass, turf);
 		const litter = createLitter(island, shared, scene, isPhone ? 0.6 : 1);
 		const vegetation = createVegetation(island, shared, scene);

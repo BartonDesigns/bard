@@ -35,6 +35,11 @@ const UP = V(0, 1, 0);
 
 function tube(b, path, radii, sides, color, swayOf) {
 	const rings = [];
+	// texture runs by length along the tube, so unevenly spaced rings (the flare at a
+	// trunk's foot) don't squash the bark into a band
+	const along = [0];
+	for (let k = 1; k < path.length; k++) along.push(along[k - 1] + path[k].distanceTo(path[k - 1]));
+	const total = along[along.length - 1] || 1;
 	for (let k = 0; k < path.length; k++) {
 		const p = path[k], next = path[Math.min(path.length - 1, k + 1)], prev = path[Math.max(0, k - 1)];
 		const dir = next.clone().sub(prev).normalize();
@@ -43,8 +48,8 @@ function tube(b, path, radii, sides, color, swayOf) {
 		const ring = [];
 		for (let s = 0; s <= sides; s++) {
 			const a = s / sides * Math.PI * 2, n = side.clone().multiplyScalar(Math.cos(a)).add(up2.clone().multiplyScalar(Math.sin(a)));
-			const band = 0.86 + 0.14 * Math.sin(k * 2.7);
-			ring.push(b.vert(p.clone().add(n.clone().multiplyScalar(radii[k])), n, [s / sides, k / (path.length - 1)], { r: color.r * band, g: color.g * band, b: color.b * band }, swayOf(k / (path.length - 1))));
+			const band = 0.93 + 0.07 * Math.sin(along[k] * 1.9);
+			ring.push(b.vert(p.clone().add(n.clone().multiplyScalar(radii[k])), n, [s / sides, along[k] / total], { r: color.r * band, g: color.g * band, b: color.b * band }, swayOf(k / (path.length - 1))));
 		}
 		rings.push(ring);
 	}
