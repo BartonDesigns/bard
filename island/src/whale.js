@@ -1,6 +1,6 @@
 // A humpback that lives in the bay off the village. It cruises a slow loop
 // out past the reef, surfaces to blow every minute or so (you hear it through
-// the faceplate's own voice, low and soft), rolls its back and shows its
+// its own breathy voice, mixed into the faceplate), rolls its back and shows its
 // flukes as it sounds. A strong bass hit from the Bard can bring it up in a
 // full breach.
 
@@ -90,13 +90,62 @@ export function createWhale(island, shared, scene) {
 			k++;
 		}
 	}
-	function voice(degree, vel, dur) {
-		const I = window.L99CaveInstrument;
-		try { if (I && I.ready()) I.strike(degree, vel, dur, true); } catch (e) { /* the sea keeps quiet */ }
+	// its own voice, not the faceplate lead (an oboe an octave down is a ship's horn):
+	// a breathy blow of filtered noise and a soft, sliding song, played into the
+	// Bard's lead bus so the faceplate's volume and limiter still own the mix
+	let noise = null;
+	function bus() {
+		const b = window.leadBus227, ctx = b && b.context;
+		if (!ctx || ctx.state !== 'running') return null;
+		if (!noise || noise.sampleRate !== ctx.sampleRate) {
+			noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+			const d = noise.getChannelData(0);
+			for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+		}
+		return { ctx, out: b };
+	}
+	function near(camPos) { return camPos ? 1 / (1 + whale.position.distanceTo(camPos) / 90) : 0.5; }
+	function blow(level) {
+		const a = bus(); if (!a || level < 0.05) return;
+		const { ctx, out } = a, t = ctx.currentTime;
+		const src = ctx.createBufferSource(); src.buffer = noise;
+		const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.7;
+		bp.frequency.setValueAtTime(1400, t); bp.frequency.exponentialRampToValueAtTime(420, t + 1.6);
+		const g = ctx.createGain();
+		g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16 * level, t + 0.12); g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+		src.connect(bp).connect(g).connect(out);
+		src.start(t); src.stop(t + 1.9);
+	}
+	function song(level) {
+		const a = bus(); if (!a || level < 0.05) return;
+		const { ctx, out } = a, t = ctx.currentTime, f0 = 170 + Math.random() * 90, dur = 2.6 + Math.random() * 1.4;
+		const o = ctx.createOscillator(); o.type = 'sine';
+		o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 1.45, t + dur * 0.45); o.frequency.exponentialRampToValueAtTime(f0 * 0.8, t + dur);
+		const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = 4.5; vg.gain.value = f0 * 0.012;
+		vib.connect(vg).connect(o.frequency);
+		// air around the tone makes it a whisper rather than a note
+		const air = ctx.createBufferSource(); air.buffer = noise; air.loop = true;
+		const af = ctx.createBiquadFilter(); af.type = 'bandpass'; af.Q.value = 6; af.frequency.setValueAtTime(f0 * 2, t); af.frequency.exponentialRampToValueAtTime(f0 * 2.9, t + dur * 0.45);
+		const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+		const g = ctx.createGain(), ga = ctx.createGain();
+		g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.045 * level, t + dur * 0.35); g.gain.linearRampToValueAtTime(0, t + dur);
+		ga.gain.setValueAtTime(0, t); ga.gain.linearRampToValueAtTime(0.07 * level, t + dur * 0.35); ga.gain.linearRampToValueAtTime(0, t + dur);
+		o.connect(lp).connect(g).connect(out);
+		air.connect(af).connect(ga).connect(out);
+		for (const n of [o, vib, air]) { n.start(t); n.stop(t + dur + 0.05); }
+	}
+	function splash(level) {
+		const a = bus(); if (!a || level < 0.05) return;
+		const { ctx, out } = a, t = ctx.currentTime;
+		const src = ctx.createBufferSource(); src.buffer = noise;
+		const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(2200, t); lp.frequency.exponentialRampToValueAtTime(300, t + 1.3);
+		const g = ctx.createGain(); g.gain.setValueAtTime(0.22 * level, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+		src.connect(lp).connect(g).connect(out); src.start(t); src.stop(t + 1.6);
 	}
 
 	const s = { a: Math.random() * 6.28, depth: -9, phase: 'cruise', t: 0, next: 25 + Math.random() * 20, breach: 0, cool: 30, lastBass: 0, beat: 0 };
-	function update(dt, t, bass) {
+	function update(dt, t, bass, camPos) {
+		const lvl = near(camPos);
 		const wave = shared.uWave.value;
 		s.t += dt; s.cool -= dt;
 		// a hard low hit from the Bard may bring it up
@@ -110,7 +159,8 @@ export function createWhale(island, shared, scene) {
 			if (s.t > 2.5 && Math.floor((s.t - 2.5) / 5) !== Math.floor((s.t - 2.5 - dt) / 5) && s.t < 17) {
 				const [hx, hz] = [Math.sin(s.heading) * -4, Math.cos(s.heading) * -4];
 				puff(whale.position.x + hx, 1.2, whale.position.z + hz, 36, 9, 1.4);
-				voice(-12 + Math.floor(Math.random() * 3), 0.3, 0.9);
+				blow(lvl);
+				if (Math.random() < 0.4) setTimeout(() => song(near(camPos)), 900);
 			}
 			// sounding: the back arches, the head goes down and the flukes lift clear
 			if (s.t > 17) { const k = Math.min(1, (s.t - 17) / 3); target = -1.2 - k * 2.2; pitchUp = -0.55 * k; }
@@ -123,7 +173,7 @@ export function createWhale(island, shared, scene) {
 			target = k < 0.5 ? -12 + Math.sin(k * Math.PI) * 26 : Math.sin(k * Math.PI) * 14 - 2;
 			pitchUp = k < 0.55 ? 1.25 * Math.sin(Math.min(1, k * 2.2) * Math.PI * 0.5) : 1.25 - (k - 0.55) * 3.2;
 			roll = k * 2.6;
-			if (k > 0.72 && !s.splashed) { s.splashed = true; puff(whale.position.x, 0.5, whale.position.z, 70, 11, 7); voice(-14, 0.45, 0.8); }
+			if (k > 0.72 && !s.splashed) { s.splashed = true; puff(whale.position.x, 0.5, whale.position.z, 70, 11, 7); splash(lvl); }
 			if (k >= 1) { s.phase = 'cruise'; s.t = 0; s.splashed = false; s.next = 35 + Math.random() * 30; }
 		}
 		s.depth += (target - s.depth) * Math.min(1, dt * (s.phase === 'breach' ? 6 : 0.6));

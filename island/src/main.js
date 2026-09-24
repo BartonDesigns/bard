@@ -209,7 +209,7 @@ export function createIslandWorld() {
 		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
 		W.music.update(dt);
-		W.whale.update(dt, time, shared.uBass.value);
+		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
 		const under = camera.position.y < waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value) - 0.05;
 		shared.uUnder.value = under ? 1 : 0;

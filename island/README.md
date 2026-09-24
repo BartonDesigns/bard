@@ -38,5 +38,5 @@ Open `dev.html` from a local server to run the island on its own
 - `window.L99Island` — `open({seed})`, `close()`, `active()`, `link()`
 - Registers realm `island` with `L99TouchMusic175` and `L99Journey170`
 - `L99Keyboard149.world()` reports `island` while it is open
-- Reads `L99Continuity.bands` for music reactivity (the whale also answers a strong bass hit, and blows through `L99CaveInstrument`)
+- Reads `L99Continuity.bands` for music reactivity (the whale also answers a strong bass hit; its blow and song are its own synthesized voice, played into the faceplate lead bus `leadBus227`)
 - When space flight landed you here (`packet.planet.origin`), `⇪ To the ship` asks Journey to hand the view back to flight above the same planet
