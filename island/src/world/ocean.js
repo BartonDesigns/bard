@@ -116,8 +116,10 @@ uniforms.uUnder = shared.uUnder;
 				float sunUp = clamp(uSunDir.y * 3.0, 0.0, 1.0);
 				bottom *= (0.55 + caust * sunUp) ;
 				vec3 trans = exp(-vec3(0.34, 0.075, 0.052) * vDepth);
-				vec3 deep = vec3(0.004, 0.055, 0.14);
+				vec3 deep = vec3(0.0, 0.06, 0.19);
 				vec3 body = bottom * trans + deep * (1.0 - trans);
+				// light scattering in shallow tropical water: turquoise over sand, fading with depth
+				body += vec3(0.02, 0.42, 0.40) * (1.0 - exp(-0.55 * vDepth)) * exp(-0.09 * vDepth) * (1.0 - reef * 0.6);
 				vec3 light = uAmbient + uSunColor * max(0.0, uSunDir.y) * 0.9;
 				body *= light;
 				// reflection of the sky and the sun

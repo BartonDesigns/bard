@@ -15,7 +15,7 @@ const PAL = {
 export function createSky(scene, shared, renderer) {
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
-		uTime: shared.uTime, uNight: { value: 0 }, uCloud: { value: 0.45 }, uHigh: shared.uHigh,
+		uTime: shared.uTime, uNight: { value: 0 }, uCloud: { value: 0.62 }, uHigh: shared.uHigh,
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
 		uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
@@ -44,11 +44,15 @@ export function createSky(scene, shared, renderer) {
 				if (d.y > 0.01){
 					vec2 cp = d.xz / (d.y + 0.08) * 1.6 + vec2(uTime * 0.012, uTime * 0.004);
 					float base = fbm5(cp * 0.9);
-					float cover = mix(0.72, 0.42, uCloud);
-					float dens = smoothstep(cover, cover + 0.16, base) * smoothstep(0.01, 0.2, d.y);
+					// heaped cumulus: a broad field of cloud heaps, the fine detail riding on them
+					float heap = fbm5(cp * 0.32 + 11.0);
+					base = base * 0.6 + heap * 0.55;
+					float cover = mix(0.78, 0.46, uCloud);
+					float dens = smoothstep(cover, cover + 0.12, base) * smoothstep(0.01, 0.2, d.y);
 					float toward = fbm5(cp * 0.9 + uSunDir.xz * 0.12);
 					float lit = clamp(0.62 + (base - toward) * 4.0, 0.0, 1.2);
-					vec3 shade = mix(vec3(0.42, 0.47, 0.58), vec3(1.0), lit);
+					// bright sunlit tops, cool grey-blue bases: a cloud with volume, not a smear
+					vec3 shade = mix(vec3(0.46, 0.52, 0.64), vec3(1.08), smoothstep(0.1, 1.0, lit)) * (0.85 + 0.25 * smoothstep(cover, cover + 0.35, base));
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.9) + uSkyHor * 0.12;
 					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight);
 					col = mix(col, cloud, dens * 0.95);

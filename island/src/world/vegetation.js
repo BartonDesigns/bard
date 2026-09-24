@@ -357,6 +357,27 @@ function shrub(seed) {
 	return { parts: [wood.geometry(), b.geometry()], height: 1.3 };
 }
 
+function tideRock(seed) {
+	// a layered outcrop: flattened, stepped strata, a broad foot that sits in the water
+	const r = mulberry32(seed), g = new THREE.IcosahedronGeometry(1, 3), p = g.attributes.position;
+	const nz = makeNoise(seed + 9), tilt = (r() - 0.5) * 0.6;
+	for (let i = 0; i < p.count; i++) {
+		const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+		let k = 0.8 + nz.fbm(x * 1.6 + 3, z * 1.6 + y * 0.5, 4) * 0.55;
+		const ly = y + x * tilt;
+		const step = Math.round(ly * 4) / 4;
+		const yy = ly + (step - ly) * 0.55;                        // terraces of bedding
+		k *= 1 - 0.06 * Math.abs(Math.sin(ly * 12.6));
+		p.setXYZ(i, x * k * 1.5, (yy - x * tilt) * 0.8 * (y < 0 ? 0.5 : 1), z * k * 1.2);
+	}
+	g.computeVertexNormals();
+	const col = [];
+	for (let i = 0; i < p.count; i++) { const t = 0.82 + r() * 0.2; col.push(0.42 * t, 0.39 * t, 0.35 * t); }
+	g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+	g.setAttribute('aSway', new THREE.Float32BufferAttribute(new Float32Array(p.count), 1));
+	g.computeBoundingBox();
+	return { parts: [g], height: 1.2 };
+}
 function boulder(seed) {
 	const r = mulberry32(seed), g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position;
 	const nz = makeNoise(seed);
@@ -433,6 +454,11 @@ function driftwood(seed) {
 }
 
 // ---------- materials ----------
+const NOISE_ROCK = `
+float rh(vec2 p){ p = mod(p, 512.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float rvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rh(i), rh(i + vec2(1, 0)), f.x), mix(rh(i + vec2(0, 1)), rh(i + vec2(1, 1)), f.x), f.y); }
+float rfbm(vec2 p){ return rvn(p) * 0.5 + rvn(p * 2.1 + 3.1) * 0.3 + rvn(p * 4.3 - 1.7) * 0.2; }
+`;
 function swayMaterial(params, shared, stiff) {
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
 	const hook = (sh) => {
@@ -488,7 +514,43 @@ export function createVegetation(island, shared, scene) {
 		leaf: swayMaterial({ map: tex.leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8),
 		banana: swayMaterial({ map: tex.banana, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }, shared, 1.2),
 		fern: swayMaterial({ map: tex.fern, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }, shared, 1.2),
-		stone: { material: (() => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: false }); m.onBeforeCompile = addPulse; m.customProgramCacheKey = () => 'stone228'; return m; })(), depth: null },
+		stone: { material: (() => {
+			const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: false });
+			m.onBeforeCompile = (sh) => {
+				addPulse(sh);
+				sh.vertexShader = 'varying vec3 vRW;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n{ vec4 rw = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\nrw = instanceMatrix * rw;\n#endif\nvRW = (modelMatrix * rw).xyz; }');
+				sh.fragmentShader = 'varying vec3 vRW; float rRough = 0.9;\n' + NOISE_ROCK + sh.fragmentShader
+					.replace('#include <color_fragment>', `#include <color_fragment>
+						// grain and pitting, strata lines, then the sea's marks: algae below the
+						// tide line, a dark wet band just above it, dry and pale higher up
+						float rn = rfbm(vRW.xz * 1.7 + vRW.y * 1.1), rp = rfbm(vRW.xz * 9.0 + vRW.y * 7.0);
+						diffuseColor.rgb *= vec3(0.66, 0.6, 0.53) * (0.5 + 0.8 * rn);
+						diffuseColor.rgb *= 1.0 - 0.4 * smoothstep(0.58, 0.8, rp);                     // pits
+						float strata = abs(sin(vRW.y * 9.0 + rn * 5.0));
+						diffuseColor.rgb *= 0.78 + 0.22 * smoothstep(0.05, 0.3, strata);               // bedding lines
+						// lichen patches on the dry tops, pale salt crust near the tide
+						diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.7, 0.5), smoothstep(0.66, 0.78, rfbm(vRW.xz * 0.9 + 4.0)) * 0.35 * smoothstep(0.6, 1.5, vRW.y));
+						float tide = vRW.y + 0.15 * sin(vRW.x * 0.3 + vRW.z * 0.2);
+						float algae = 1.0 - smoothstep(-0.25, 0.1, tide);
+						float wetR = 1.0 - smoothstep(0.1, 0.9 + 0.3 * rn, tide);
+						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.62, wetR);
+						diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.2, 0.08) * (0.7 + 0.6 * rp), algae * 0.75);
+						rRough = mix(0.92, 0.35, wetR * (1.0 - algae * 0.5));`)
+					.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rRough;')
+					.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+						{
+							// relief from the same noise: grain, pits and strata as real bumps
+							float hR = rfbm(vRW.xz * 3.0 + vRW.y * 2.0) * 0.05 + rfbm(vRW.xz * 11.0 + vRW.y * 9.0) * 0.012 + abs(sin(vRW.y * 9.0)) * 0.012;
+							vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
+							vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
+							float fDet = dot(vSx, R1) * faceDirection;
+							vec2 dH = vec2(dFdx(hR), dFdy(hR));
+							normal = normalize(abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2));
+						}`);
+			};
+			m.customProgramCacheKey = () => 'stone229';
+			return m;
+		})(), depth: null },
 	};
 	const nz = makeNoise(island.seed + 101);
 	const species = [
@@ -512,6 +574,8 @@ export function createVegetation(island, shared, scene) {
 		{ key: 'deadfrond', derived: true, variants: [0, 1].map((v) => deadFrond(island.seed * 31 + v)), mats: ['frond'], near: 80, max: 400, kind: 'soft', noShadow: true },
 		{ key: 'driftwood', variants: [0, 1, 2].map((v) => driftwood(island.seed * 37 + v)), mats: ['bark'], spacing: 9, near: 110, max: 200, kind: 'wood',
 			density: (e) => e.h > 0.35 && e.h < 1.3 && e.village < 0.2 && e.path < 0.2 ? 0.12 * e.clump(0.03, 0.5, 0.7) : 0 },
+		{ key: 'tiderock', variants: [0, 1, 2].map((v) => tideRock(island.seed * 53 + v)), mats: ['stone'], spacing: 7, near: 360, max: 300, kind: 'stone', wet: true,
+			density: (e) => e.h > 2.8 || e.h < -2.2 ? 0 : e.headland * 0.75 * (0.4 + 0.6 * e.clump(0.05, 0.3, 0.6)) },
 		{ key: 'boulder', variants: [0, 1].map((v) => boulder(island.seed * 23 + v)), mats: ['stone'], spacing: 10, near: 320, max: 400, kind: 'stone',
 			density: (e) => e.path > 0.3 || e.h < 0.2 ? 0 : smoothstep(0.3, 0.55, e.sl) * 0.35 * e.clump(0.03, 0.4, 0.7) + e.summit * 0.08 + e.headland * 0.1 },
 	];
@@ -530,7 +594,7 @@ export function createVegetation(island, shared, scene) {
 	for (const f of FIELDS) grid[f] = new Float32Array(EN * EN);
 	for (let j = 0; j < EN; j++) for (let i = 0; i < EN; i++) {
 		const x = -ER + i * EG, z = -ER + j * EG, h = island.heightAt(x, z), k = j * EN + i;
-		if (h < 0.1) continue;
+		if (h < -2.5) continue;
 		const cd = island.coastAt(x, z), sl = 1 - island.normalAt(x, z).y;   // metres to the water
 		let ring = 0;
 		for (let q = 0; q < 8; q++) { const a = q * 0.785; ring += island.heightAt(x + Math.cos(a) * 60, z + Math.sin(a) * 60); }
@@ -561,7 +625,15 @@ export function createVegetation(island, shared, scene) {
 		grid.strand[k] = smoothstep(5, 12, cd) * (1 - smoothstep(45, 80, cd)) * (1 - smoothstep(0.25, 0.45, sl));
 		grid.garden[k] = smoothstep(130, 90, dv) * smoothstep(35, 60, dv);
 		grid.summit[k] = smoothstep(0.85, 0.95, alt);
-		grid.headland[k] = smoothstep(30, 5, cd) * smoothstep(0.25, 0.45, sl);
+		// rocky shore: the two points of the bay's headland arms, and patches along
+		// the outer coast where the land meets the sea over rock instead of sand
+		let point = 0;
+		if (V2.bay) {
+			const bx = x - V2.bay.x, bz = z - V2.bay.z, br = Math.hypot(bx, bz), ba = bx * V2.seaDir.x + bz * V2.seaDir.z;
+			point = smoothstep(V2.bay.r * 0.35, V2.bay.r * 0.8, ba) * smoothstep(V2.bay.r + 150, V2.bay.r + 20, br) * smoothstep(V2.bay.r - 25, V2.bay.r + 5, br);
+		}
+		const rockyShore = smoothstep(0.62, 0.75, ecoNoise.fbm(x * 0.004 - 20, z * 0.004 + 31, 3)) * (1 - smoothstep(160, 90, dv));
+		grid.headland[k] = Math.max(point, rockyShore) * smoothstep(34, 4, cd);
 	}
 	const gAt = (f, x, z) => {
 		const fx = clamp((x + ER) / EG, 0, EN - 1.001), fz = clamp((z + ER) / EG, 0, EN - 1.001), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * EN + i, a = grid[f];
@@ -612,7 +684,7 @@ export function createVegetation(island, shared, scene) {
 		for (let z = -reach; z < reach; z += s) for (let x = -reach; x < reach; x += s) {
 			const px = x + rnd() * s, pz = z + rnd() * s;
 			const h = island.heightAt(px, pz);
-			if (h < 0.2) continue;
+			if (h < (sp.wet ? -2.2 : 0.2)) continue;
 			const n = island.normalAt(px, pz), sl = 1 - n.y;
 			const m = { path: island.maskAt(px, pz, 0), village: island.maskAt(px, pz, 1), wild: island.maskAt(px, pz, 3) };
 			if (rnd() >= sp.density(eco(px, pz, h, sl, m))) continue;
@@ -620,7 +692,7 @@ export function createVegetation(island, shared, scene) {
 			let c = cells.get(key);
 			if (!c) cells.set(key, c = { x: Math.floor(px / CELL), z: Math.floor(pz / CELL), items: {} });
 			(c.items[sp.key] || (c.items[sp.key] = [])).push({
-				x: px, y: h - (sp.key === 'boulder' ? 0.35 : 0.05), z: pz, rot: rnd() * 6.283, scale: sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : 0.8 + rnd() * 0.45,
+				x: px, y: h - (sp.key === 'boulder' ? 0.35 : sp.key === 'tiderock' ? 0.5 : 0.05), z: pz, rot: rnd() * 6.283, scale: sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : sp.key === 'tiderock' ? 1.2 + rnd() * 2.8 : 0.8 + rnd() * 0.45,
 				v: Math.floor(rnd() * sp.variants.length), tint: 0.85 + rnd() * 0.3,
 			});
 			// coconut palms lean out over the beach, toward the light and the sea
@@ -678,7 +750,7 @@ export function createVegetation(island, shared, scene) {
 	// the terrain and grass shaders both read, redrawn as the player moves.
 	// [radius, bare shade, mound/hug]: trees and rocks shade bare earth; small plants
 	// sit on a little mound the grass crowds into
-	const CONTACT = { palm: [2.4, 0.75, 0.5], hardwood: [3.8, 0.85, 0.55], banana: [1.7, 0.2, 1.0], shrub: [1.8, 0.15, 1.0], hibiscus: [1.9, 0.15, 1.0], bougainvillea: [2.0, 0.15, 1.0], boulder: [2.0, 0.7, 0.4], fern: [1.1, 0.1, 0.8], driftwood: [1.6, 0.5, 0.2], nuts: [0.7, 0.4, 0.0] };
+	const CONTACT = { palm: [2.4, 0.75, 0.5], hardwood: [3.8, 0.85, 0.55], banana: [1.7, 0.2, 1.0], shrub: [1.8, 0.15, 1.0], hibiscus: [1.9, 0.15, 1.0], bougainvillea: [2.0, 0.15, 1.0], boulder: [2.0, 0.7, 0.4], tiderock: [3.0, 0.5, 0.0], fern: [1.1, 0.1, 0.8], driftwood: [1.6, 0.5, 0.2], nuts: [0.7, 0.4, 0.0] };
 	const OCC = shared.occ, OS = OCC.image.width, OSPAN = shared.uOccO.value.z, occData = OCC.image.data;
 	const contacts = [], extra = [];
 
@@ -752,8 +824,8 @@ export function createVegetation(island, shared, scene) {
 		for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) {
 			const c = cells.get(i + ',' + j);
 			if (!c) continue;
-			for (const k of ['palm', 'hardwood', 'boulder']) for (const it of c.items[k] || []) {
-				const rad = k === 'boulder' ? it.scale * 1.0 : 0.35 * it.scale;
+			for (const k of ['palm', 'hardwood', 'boulder', 'tiderock']) for (const it of c.items[k] || []) {
+				const rad = k === 'boulder' ? it.scale * 1.0 : k === 'tiderock' ? it.scale * 1.3 : 0.35 * it.scale;
 				if (Math.hypot(it.x - x, it.z - z) < r + rad + 1) out.push({ x: it.x, z: it.z, r: rad });
 			}
 		}
