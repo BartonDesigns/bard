@@ -28985,6 +28985,15 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
         return h >>> 0;
     }
+    /* the flight record of this planet, so the island can hand the view back to the ship */
+    function originOf(u) {
+        try {
+            var m = u.surfaceMat && u.surfaceMat.uniforms;
+            if (!m || !m.uSeed) return null;
+            return { id: u.travelId170 || u.id || ('planet:' + u.planetType + ':' + m.uSeed.value), seed: m.uSeed.value, type: u.planetType,
+                name: u.solName || u.name || 'this world', colorA: m.uColorA.value.toArray(), colorB: m.uColorB.value.toArray() };
+        } catch (e) { return null; }
+    }
     function land(planet) {
         var u = planet && planet.userData;
         if (busy || window._ISLAND === false || window._ISLAND_LANDING === false || !tropical(u) || !window.L99IslandDoor) return;
@@ -28995,7 +29004,7 @@ root.L99CaveRail227={patch};
             var J = window.L99Journey170;
             if (!J) throw Error('Journey is not ready');
             return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0,
-                planet: { id: u.id || u.name || ('planet:' + seed), seed: seed, type: 'tropical', palette: u.palette || null } });
+                planet: { id: u.id || u.name || ('planet:' + seed), seed: seed, type: 'tropical', palette: u.palette || null, origin: originOf(u) } });
         }).catch(function (e) { console.warn('[island landing]', e); }).then(function () { busy = false; });
     }
     function wrap() {

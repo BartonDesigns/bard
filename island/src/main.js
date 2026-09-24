@@ -9,11 +9,15 @@ import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createVegetation } from './world/vegetation.js';
 import { createGrass } from './world/grass.js';
+import { createLitter } from './world/litter.js';
 import { createVillage } from './world/village.js';
 import { createDistant } from './world/distant.js';
 import { createPlayer } from './player.js';
 import { createMusic } from './music.js';
 import { createFauna } from './fauna.js';
+import { createBoat } from './boat.js';
+import { createWhale } from './whale.js';
+import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -36,13 +40,16 @@ function buildDom() {
 	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));');
 	const jump = button('⤒', 'Jump', 'right:calc(18px + env(safe-area-inset-right));bottom:calc(28px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;font-size:22px;');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
+	const act = button('', '', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(36px + env(safe-area-inset-bottom));display:none;');
+	const launch = button('⇪ To the ship', 'Take off and return to your ship', 'left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));display:none;');
+	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
 	const hint = css(document.createElement('div'), 'position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;max-width:80vw;');
 	const loading = css(document.createElement('div'), 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
 	loading.textContent = 'Raising the island…';
 	const panel = css(document.createElement('div'), 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(300px,78vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);');
-	mount.append(canvas, joy, back, gear, jump, hint, panel, loading);
+	mount.append(canvas, veil, joy, back, gear, jump, act, launch, hint, panel, loading);
 	document.body.appendChild(mount);
-	return { mount, canvas, joy, knob, back, jump, gear, hint, loading, panel };
+	return { mount, canvas, joy, knob, back, jump, gear, act, launch, veil, hint, loading, panel };
 }
 
 function slider(panel, label, min, max, step, get, set, fmt) {
@@ -77,7 +84,7 @@ export function createIslandWorld() {
 		uTime: { value: 0 }, uWind: { value: 0.5 }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
 		uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.4) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
-		uWave: { value: 1 }, startHours: 10.5,
+		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
 
 	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'auto';
@@ -104,24 +111,30 @@ export function createIslandWorld() {
 		const sky = createSky(scene, shared, renderer);
 		const terrain = createTerrain(island, shared);
 		const ocean = createOcean(island, shared);
-		const grass = createGrass(island, shared, isPhone ? 14000 : 22000, isPhone ? 64 : 84);
-		scene.add(terrain, ocean, grass);
+		// turf underfoot plus a longer-reaching layer
+		const grass = createGrass(island, shared, isPhone ? 9000 : 16000, isPhone ? 64 : 84, { width: 0.5, seed: 99 });
+		const turf = createGrass(island, shared, isPhone ? 7000 : 12000, 20, { width: 0.3, height: 0.8, seed: 7 });
+		scene.add(terrain, ocean, grass, turf);
+		const litter = createLitter(island, shared, scene, isPhone ? 0.6 : 1);
 		const vegetation = createVegetation(island, shared, scene);
 		const village = createVillage(island, shared, scene);
 		const distant = createDistant(island, shared, scene);
 		const fauna = createFauna(island, shared, scene);
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
+		const boat = createBoat(island, village, player, camera, shared, scene);
+		const whale = createWhale(island, shared, scene);
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, vegetation, village, distant, fauna, player, music };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
 		sky.update(0, camera.position);
 		vegetation.stream(camera, true);
-		for (const o of [terrain, ocean, grass]) o.userData.update?.(camera);
+		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
+		litter.update(camera);
 		renderer.compile(scene, camera);
 		dom.loading.style.display = 'none';
 		buildPanel();
@@ -193,9 +206,21 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		const W = world;
 		W.player.update(dt, time);
+		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
 		W.music.update(dt);
-		for (const o of [W.terrain, W.ocean, W.grass]) o.userData.update(camera);
+		W.whale.update(dt, time, shared.uBass.value);
+		// below the surface: the sea closes in, blue-green and dim
+		const under = camera.position.y < waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value) - 0.05;
+		shared.uUnder.value = under ? 1 : 0;
+		if (under) {
+			scene.fog.color.setRGB(0.03, 0.2, 0.24).multiplyScalar(0.25 + 0.75 * sk.dayK);
+			scene.fog.density = 0.04;
+		} else scene.fog.density = 0.00022;
+		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
+		actions();
+		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
+		W.litter.update(camera);
 		W.vegetation.stream(camera, false);
 		W.village.update(time, sk.night);
 		W.distant.update(time, sk.night);
@@ -208,6 +233,31 @@ export function createIslandWorld() {
 			else if (frameAvg < 14.5 && pixelRatio < maxRatio) { pixelRatio = Math.min(maxRatio, pixelRatio + 0.05); renderer.setPixelRatio(pixelRatio); resize(); }
 		}
 	}
+
+	// the context button: board or leave the boat; the jump button dives in the sea
+	let actState = '';
+	function actions() {
+		const W = world, B = W.boat, P = W.player.state;
+		const want = B.boarded() ? 'leave' : B.near() ? 'board' : '';
+		if (want !== actState) {
+			actState = want;
+			dom.act.style.display = want ? 'block' : 'none';
+			dom.act.textContent = want === 'board' ? '⛵ Board' : '⛵ Leave boat';
+			dom.act.title = want === 'board' ? 'Take the boat out' : 'Step off the boat';
+			dom.act.setAttribute('aria-label', dom.act.title);
+			if (want === 'board') hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
+		}
+		const j = B.boarded() ? '' : P.swimming ? (P.diving ? '⇡' : '⤓') : '⤒';
+		if (dom.jump.textContent !== j) {
+			dom.jump.textContent = j;
+			dom.jump.style.display = j ? 'block' : 'none';
+			const t = P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
+			dom.jump.title = t; dom.jump.setAttribute('aria-label', t);
+		}
+		const L = origin && !window.L99Journey170?.busy?.() ? 'block' : 'none';
+		if (dom.launch.style.display !== L) dom.launch.style.display = L;
+	}
+	let origin = null;   // the planet flight landed us from, if any
 
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
 	function show() {
@@ -226,13 +276,37 @@ export function createIslandWorld() {
 	}
 
 	dom.back.onclick = (e) => { e.stopPropagation(); api.close(); };
-	dom.jump.addEventListener('pointerdown', (e) => { e.stopPropagation(); world?.player.jump(); });
+	dom.jump.addEventListener('pointerdown', (e) => {
+		e.stopPropagation();
+		const P = world?.player.state;
+		if (P?.diving) { P.vel.y = 2.4; P.diving = P.pos.y < (P.surface ?? 0) - 0.4; return; }
+		world?.player.jump();
+	});
+	dom.act.addEventListener('click', (e) => {
+		e.stopPropagation();
+		const B = world?.boat;
+		if (!B) return;
+		if (B.boarded()) B.leave(); else if (B.near()) B.board();
+	});
+	// back to the ship: the island hands the view to space flight above the same planet
+	dom.launch.addEventListener('click', async (e) => {
+		e.stopPropagation();
+		const J = window.L99Journey170;
+		if (!origin || !J || J.busy()) return;
+		if (world?.boat.boarded()) world.boat.leave();
+		dom.launch.disabled = true;
+		try {
+			const ok = await J.request(REALM, 'flight', { kind: 'atmosphere', planet: origin, altitude: 420, piloting: true, yaw: world.player.state.yaw, pitch: 0.25, velocity: [0, 0, 0], fov: 72 });
+			if (!ok) hint('The ship is not ready yet. Try again in a moment.');
+		} finally { dom.launch.disabled = false; }
+	});
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
-	for (const el of [dom.back, dom.jump, dom.gear, dom.panel]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
+	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
 	const api = {
 		T: THREE, REALM,
 		async open(params = {}) {
+			origin = params.origin || null;
 			show();
 			await build(params);
 			api.link();
@@ -263,6 +337,7 @@ export function createIslandWorld() {
 		boot: async () => { start(); },
 		prepare: async (packet, check) => {
 			const planet = packet.planet || {};
+			origin = planet.origin || null;
 			await build({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical' });
 			check?.();
 			for (let i = 0; i < 6; i++) { world.player.update(0.016, time); world.sky.update(0.016, camera.position); world.vegetation.stream(camera, true); renderer.render(scene, camera); await new Promise((r) => requestAnimationFrame(r)); check?.(); }
@@ -273,7 +348,7 @@ export function createIslandWorld() {
 		resize,
 		activate: () => show(),
 		park: () => hide(),
-		arrived: () => hint('You come down on a tropical shore.'),
+		arrived: () => hint(origin ? 'You come down on a tropical shore. ⇪ returns you to your ship.' : 'You come down on a tropical shore.'),
 	});
 	};
 	api.link();

@@ -117,6 +117,11 @@ export function createVillage(island, shared, scene) {
 
 	// the pier: from the beach out over the reef on posts
 	const pier = { x: v.coast.x - v.seaDir.x * 6, z: v.coast.z - v.seaDir.z * 6, len: 48 + r() * 14, w: 2.6 };
+	// run it out past the reef shelf, so a boat can lie alongside in real water
+	for (let L = pier.len; L < 150; L += 2) {
+		pier.len = L;
+		if (island.heightAt(pier.x + v.seaDir.x * (L - 6), pier.z + v.seaDir.z * (L - 6)) < -2.4) break;
+	}
 	const deckY = 1.6;
 	const pierM = new THREE.Matrix4().makeRotationY(seaAng).setPosition(pier.x, 0, pier.z);
 	const pierParts = [];
@@ -164,6 +169,16 @@ export function createVillage(island, shared, scene) {
 	stripe.position.set(0, 1.35, -0.8); boat.add(stripe);
 	const cabin = new THREE.Mesh(box(2.2, 1.6, 2.2), new THREE.MeshStandardMaterial({ color: 0xf5f5f2, roughness: 0.6 }));
 	cabin.position.set(0, 2.3, -0.9); boat.add(cabin);
+	// wheelhouse glass all round, a roof with an overhang, and a doorway aft
+	const pane = (w, h, x, y, z, ry) => { const m = new THREE.Mesh(box(w, h, 0.06), mats.glass); m.position.set(x, y, z); m.rotation.y = ry; boat.add(m); };
+	pane(1.8, 0.62, 0, 2.62, -2.02, 0); pane(0.7, 0.62, -0.5, 2.62, 0.22, 0);
+	pane(1.5, 0.55, 1.12, 2.62, -0.9, Math.PI / 2); pane(1.5, 0.55, -1.12, 2.62, -0.9, Math.PI / 2);
+	const door = new THREE.Mesh(box(0.7, 1.3, 0.06), new THREE.MeshStandardMaterial({ color: 0x4d6f86, roughness: 0.6 }));
+	door.position.set(0.55, 2.1, 0.22); boat.add(door);
+	const roof = new THREE.Mesh(box(2.6, 0.12, 2.8), new THREE.MeshStandardMaterial({ color: 0x3e6a84, roughness: 0.55 }));
+	roof.position.set(0, 3.16, -0.9); boat.add(roof);
+	// a rail round the deck
+	for (const sx of [-1, 1]) { const rail = new THREE.Mesh(box(0.06, 0.06, 6.2), mats.wood); rail.position.set(sx * 1.45, 2.0, -0.4); boat.add(rail); }
 	const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 4.5, 6), mats.wood);
 	mast.position.set(0, 4, -0.9); boat.add(mast);
 	boat.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.userData.material175 = 'wood'; pickables.push(o); } });
@@ -175,9 +190,7 @@ export function createVillage(island, shared, scene) {
 	scene.add(group);
 	function update(t, night) {
 		mats.glass.emissiveIntensity = night * 2.2;
-		boat.position.y = Math.sin(t * 0.9) * 0.12 - 0.2;
-		boat.rotation.z = Math.sin(t * 0.7) * 0.04;
-		boat.rotation.x = Math.sin(t * 0.55 + 1) * 0.03;
+		// the boat rides the swell in boat.js
 	}
 	return { group, footprints, pickables, pier, boat, update, placed };
 }

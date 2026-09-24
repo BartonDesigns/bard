@@ -13,7 +13,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	const s = {
 		pos: new THREE.Vector3(island.spawn.x, 0, island.spawn.z),
 		vel: new THREE.Vector3(), yaw: island.spawn.yaw, pitch: -0.04,
-		grounded: false, swimming: false, run: false,
+		grounded: false, swimming: false, diving: false, run: false, locked: false,
 	};
 	s.pos.y = island.heightAt(s.pos.x, s.pos.z) + EYE;
 	const keys = new Set();
@@ -113,7 +113,16 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	}
 
 	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3();
+	function input() {
+		let mx = joy.x, mz = joy.y;
+		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
+		if (keys.has('s') || keys.has('arrowdown')) mz += 1;
+		if (keys.has('a') || keys.has('arrowleft')) mx -= 1;
+		if (keys.has('d') || keys.has('arrowright')) mx += 1;
+		return { mx: Math.max(-1, Math.min(1, mx)), mz: Math.max(-1, Math.min(1, mz)) };
+	}
 	function update(dt, t) {
+		if (s.locked) return;
 		let mx = joy.x, mz = joy.y;
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
 		if (keys.has('s') || keys.has('arrowdown')) mz += 1;
@@ -136,12 +145,23 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		pushOut(s.pos);
 		const ground = floorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		const surface = waveHeight(island, s.pos.x, s.pos.z, t, shared.uWave?.value ?? 1);
-		s.swimming = ground < surface - 1.35;
-		if (s.swimming) {
+		s.swimming = ground < surface - 1.35 || (s.diving && ground < surface - 0.6);
+		s.surface = surface;
+		if (s.swimming && s.diving) {
+			// under water: swim where you look; the sea slowly lifts you when you stop
+			const climb = -mz * Math.sin(s.pitch) * speed + (keys.has(' ') ? 2.2 : 0);
+			s.vel.y += ((Math.abs(mz) > 0.05 || keys.has(' ') ? climb : 0.45) - s.vel.y) * Math.min(1, dt * 3);
+			s.pos.y += s.vel.y * dt;
+			if (s.pos.y < ground + 0.5) { s.pos.y = ground + 0.5; s.vel.y = Math.max(0, s.vel.y); }
+			if (s.pos.y > surface + 0.2) s.diving = false;
+			s.grounded = false;
+		} else if (s.swimming) {
+			s.diving = false;
 			const target = surface + 0.35;
 			s.pos.y += (target - s.pos.y) * Math.min(1, dt * 4);
 			s.vel.y = 0; s.grounded = false;
 		} else {
+			s.diving = false;
 			if ((keys.has(' ') || s.jumpQueued) && s.grounded) { s.vel.y = 5.2; s.grounded = false; }
 			s.jumpQueued = false;
 			s.vel.y -= 18 * dt;
@@ -153,6 +173,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		const moving = Math.hypot(s.vel.x, s.vel.z);
 		s.bob = (s.bob || 0) + moving * dt * 2.2;
 		const bob = s.grounded ? Math.sin(s.bob) * 0.035 * Math.min(1, moving / 4) : 0;
+		if (s.locked) return;   // the boat has the camera
 		camera.position.set(s.pos.x, s.pos.y + bob, s.pos.z);
 		camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');
 	}
@@ -160,5 +181,11 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);
 		removeEventListener('pointermove', pMove); removeEventListener('pointerup', pUp); removeEventListener('pointercancel', pUp);
 	}
-	return { state: s, update, dispose, jump: () => { s.jumpQueued = true; }, clearInput: () => { keys.clear(); joy.x = joy.y = 0; } };
+	// the jump button dives when you are swimming at the surface
+	function jump() {
+		if (s.swimming && !s.diving) { s.diving = true; s.vel.y = -2.4; return 'dive'; }
+		s.jumpQueued = true;
+		return 'jump';
+	}
+	return { state: s, update, input, dispose, jump, floorAt, clearInput: () => { keys.clear(); joy.x = joy.y = 0; } };
 }

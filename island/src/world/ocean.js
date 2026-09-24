@@ -14,6 +14,7 @@ export function createOcean(island, shared) {
 		uCenter: { value: new THREE.Vector2() },
 		uWave: { value: 1 },
 	}]);
+uniforms.uUnder = shared.uUnder;
 	// shared, live objects (not copies)
 	Object.assign(uniforms, {
 		uTime: shared.uTime, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor,
@@ -35,15 +36,16 @@ export function createOcean(island, shared) {
 	}`;
 
 	const mat = new THREE.ShaderMaterial({
-		uniforms, fog: true,
+		uniforms, fog: true, transparent: true, side: THREE.DoubleSide,
 		vertexShader: /* glsl */`
 			${HEIGHT_GLSL}
 			${WAVES}
-			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll;
+			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
 			#include <fog_pars_vertex>
 			void main(){
 				vec2 p = position.xz + uCenter;
-				float depth = max(0.0, -heightAt(p));
+				float ground = heightAt(p);
+				float depth = max(0.0, -ground);
 				float open = smoothstep(0.4, 7.0, depth);
 				vec3 disp = vec3(0.0), dx = vec3(1.0, 0.0, 0.0), dz = vec3(0.0, 0.0, 1.0);
 				// open-water swell from two directions; near the island it turns into
@@ -59,7 +61,7 @@ export function createOcean(island, shared) {
 				train(p, normalize(vec2(0.82, 0.57)), 5.3, 0.1 * uWave, 0.5, 1.0, disp, dx, dz);
 				train(p, normalize(vec2(-0.43, 0.9)), 3.1, 0.05 * uWave, 0.5, 1.0, disp, dx, dz);
 				vec3 w = vec3(p.x, 0.0, p.y) + disp;
-				vW = w; vDepth = depth; vCrest = disp.y / max(0.05, amp + swellA + 0.15);
+				vW = w; vDepth = depth; vFilm = w.y - ground; vCrest = disp.y / max(0.05, amp + swellA + 0.15);
 				float k = 6.28318 / 16.0; vRoll = k * (dot(inward, p) - sqrt(9.8 / k) * uTime);
 				vN = normalize(cross(dz, dx));
 				vec4 mvPosition = viewMatrix * vec4(w, 1.0);
@@ -68,8 +70,8 @@ export function createOcean(island, shared) {
 			}`,
 		fragmentShader: /* glsl */`
 			uniform sampler2D uMasks; uniform float uHalf, uTime, uMid, uHigh;
-			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient;
-			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll;
+			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
+			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
 			${NOISE_GLSL}
 			#include <fog_pars_fragment>
 			void main(){
@@ -79,7 +81,22 @@ export function createOcean(island, shared) {
 				float near = 1.0 - smoothstep(60.0, 900.0, dist);
 				vec2 q = vW.xz * 0.35 + vec2(uTime * 0.21, -uTime * 0.13);
 				float r0 = fbm3(q), rx = fbm3(q + vec2(0.07, 0.0)), rz = fbm3(q + vec2(0.0, 0.07));
-				vec3 N = normalize(vN + vec3(r0 - rx, 0.0, r0 - rz) * 2.0 * near);
+				// wind streaks: long calm slicks lying along the wind, where the ripples lie down
+				vec2 sw = mat2(0.82, 0.57, -0.57, 0.82) * vW.xz;
+				float slick = smoothstep(0.58, 0.78, vn(vec2(sw.x * 0.006, sw.y * 0.045) + vec2(uTime * 0.004, 0.0)));
+				vec3 N = normalize(vN + vec3(r0 - rx, 0.0, r0 - rz) * 2.0 * near * (1.0 - 0.75 * slick));
+				if (!gl_FrontFacing) {
+					// from below: a bright window of sky overhead, the rest mirrors the deep
+					float cosI = abs(dot(N, V));
+					float window = smoothstep(0.62, 0.72, cosI);
+					vec3 deepU = vec3(0.02, 0.16, 0.2) * (uAmbient * 2.0 + uSunColor * max(0.0, uSunDir.y));
+					vec3 skyU = mix(uSkyHor, uSkyZen, 0.5) * 1.1 + uSunColor * pow(max(0.0, dot(-V, uSunDir)), 40.0) * 2.0;
+					gl_FragColor = vec4(mix(deepU, skyU, window), 1.0);
+					#include <tonemapping_fragment>
+					#include <colorspace_fragment>
+					#include <fog_fragment>
+					return;
+				}
 				float ndv = max(0.0, dot(N, V));
 				float F = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
 				// the bottom you see through the water: sand, reef, caustics
@@ -100,7 +117,7 @@ export function createOcean(island, shared) {
 				body *= light;
 				// reflection of the sky and the sun
 				vec3 R = reflect(-V, N);
-				vec3 sky = mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)) * 0.82;
+				vec3 sky = mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)) * (0.82 + 0.12 * slick * near);
 				float spec = pow(max(dot(R, uSunDir), 0.0), 500.0) * 14.0 * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), 60.0) * 0.8;
 				vec3 col = mix(body, sky, F * 0.7) + uSunColor * spec * (0.8 + uHigh * 0.6);
 				// foam: breakers where it shallows, wash on the sand, caps on the crests
@@ -112,7 +129,9 @@ export function createOcean(island, shared) {
 				float cap = smoothstep(0.85, 1.1, vCrest) * smoothstep(0.55, 0.75, lace) * smoothstep(6.0, 20.0, vDepth) * near * 0.5;
 				float foam = clamp(breaker + wash + cap * 0.7, 0.0, 1.0);
 				col = mix(col, vec3(0.92, 0.95, 0.96) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), foam);
-				gl_FragColor = vec4(col, 1.0);
+				// the edge of the sea is a film, not a wall: it thins to nothing on the sand
+				float film = smoothstep(0.0, 0.28, vFilm);
+				gl_FragColor = vec4(col, max(film, foam * smoothstep(0.0, 0.06, vFilm)));
 				#include <tonemapping_fragment>
 				#include <colorspace_fragment>
 				#include <fog_fragment>

@@ -166,3 +166,112 @@ export function glow() {
 	g.fillStyle = gr; g.fillRect(0, 0, S, S);
 	return finish(c);
 }
+
+// Ground micro-relief, one tileable height field per channel, drawn per pixel:
+// r sand (grain and wind ripples), g dirt (packed earth and gravel),
+// b soil under the meadow (clods, litter, roots), a rock (grain and cracks).
+// Linear data, not colour: the terrain uses it for both shade and bumps.
+export function groundDetail() {
+	const S = 512, data = new Uint8Array(S * S * 4), r = mulberry32(606);
+	const lat = (P, salt) => {
+		const t = new Float32Array(P * P);
+		for (let i = 0; i < t.length; i++) t[i] = mulberry32(salt * 7919 + i)();
+		return t;
+	};
+	const L = {};
+	const noise = (x, y, P, salt) => {
+		// periodic value noise on a P x P lattice across the tile
+		const t = L[P + ':' + salt] || (L[P + ':' + salt] = lat(P, salt));
+		const fx = x * P, fy = y * P, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
+		const a = t[(j % P) * P + (i % P)], b = t[(j % P) * P + ((i + 1) % P)];
+		const c = t[((j + 1) % P) * P + (i % P)], d = t[((j + 1) % P) * P + ((i + 1) % P)];
+		const su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+		return (a + (b - a) * su) * (1 - sv) + (c + (d - c) * su) * sv;
+	};
+	const fbm = (x, y, P, salt, oct) => { let s = 0, a = 0.5, n = 0; for (let o = 0; o < oct; o++) { s += a * noise(x, y, P << o, salt + o); n += a; a *= 0.5; } return s / n; };
+	// periodic Worley cells for stones, pebbles and clods
+	const cellsOf = (G, salt) => {
+		const rr = mulberry32(salt), pts = [];
+		for (let i = 0; i < G * G; i++) pts.push([rr(), rr(), 0.35 + rr() * 0.6, rr()]);
+		return { G, pts };
+	};
+	const stone = (x, y, C) => {
+		const G = C.G, fx = x * G, fy = y * G, ci = Math.floor(fx), cj = Math.floor(fy);
+		let best = 0, id = 0;
+		for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+			const ii = (ci + di + G) % G, jj = (cj + dj + G) % G, p = C.pts[jj * G + ii];
+			const dx = fx - (ci + di + p[0]), dy = fy - (cj + dj + p[1]);
+			const d = Math.hypot(dx * 1.15, dy) / (p[2] * 0.5);
+			if (d < 1) { const hgt = Math.sqrt(1 - d * d) * (0.6 + 0.4 * p[3]); if (hgt > best) { best = hgt; id = p[3]; } }
+		}
+		return [best, id];
+	};
+	const gravel = cellsOf(22, 11), grit = cellsOf(58, 12), clods = cellsOf(16, 13), chips = cellsOf(30, 14);
+	void r;
+	for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+		const u = x / S, v = y / S, k = (y * S + x) * 4;
+		// sand: fine grain over soft ripples that wander
+		const warp = fbm(u, v, 4, 1, 3) * 2.5;
+		const rip = Math.pow(0.5 + 0.5 * Math.sin((v * 18 + warp + fbm(u, v, 8, 2, 2) * 0.6) * Math.PI * 2), 1.6);
+		const sand = 0.45 * rip + 0.35 * noise(u, v, 256, 3) + 0.2 * fbm(u, v, 32, 4, 3);
+		// dirt: packed earth, scattered gravel and grit
+		const [gv, gid] = stone(u, v, gravel), [gr] = stone(u, v, grit);
+		const dirt = Math.max(0.34 * fbm(u, v, 16, 5, 4) + 0.2 * noise(u, v, 128, 6), gv * (gid > 0.7 ? 0.8 : 0), gr * (gid < 0.25 ? 0.5 : 0.22));
+		// soil: clods and fibrous litter
+		const [cv] = stone(u, v, clods);
+		const fibre = Math.pow(Math.abs(Math.sin((u * 3 + v * 7 + fbm(u, v, 16, 7, 2)) * 40)), 18) * 0.35;
+		const soil = Math.max(0.35 * fbm(u, v, 32, 8, 3) + fibre, cv * 0.7);
+		// rock: crystalline grain, chips and dark cracks
+		const [chv] = stone(u, v, chips);
+		const crack = Math.abs(fbm(u, v, 8, 9, 4) - 0.5) < 0.012 ? 0 : 1;
+		const rock = (0.4 * fbm(u, v, 16, 10, 4) + 0.3 * noise(u, v, 256, 15) + 0.3 * chv) * (0.35 + 0.65 * crack);
+		data[k] = Math.min(255, sand * 255); data[k + 1] = Math.min(255, dirt * 255);
+		data[k + 2] = Math.min(255, soil * 255); data[k + 3] = Math.min(255, rock * 255);
+	}
+	const t = new THREE.DataTexture(data, S, S, THREE.RGBAFormat, THREE.UnsignedByteType);
+	t.wrapS = t.wrapT = THREE.RepeatWrapping;
+	t.magFilter = THREE.LinearFilter;
+	t.minFilter = THREE.LinearMipmapLinearFilter;
+	t.generateMipmaps = true;
+	t.anisotropy = 8;
+	t.needsUpdate = true;
+	return t;
+}
+
+// coconut-palm trunk: stacked leaf-scar rings, fibrous between them
+export function palmBark() {
+	const W = 128, H = 256, [c, g] = canvas(W, H), r = mulberry32(44);
+	g.fillStyle = rgb(170, 158, 140); g.fillRect(0, 0, W, H);
+	for (let i = 0; i < 700; i++) { const l = 120 + r() * 90; g.fillStyle = rgb(l, l * 0.92, l * 0.8, 0.35); g.fillRect(r() * W, r() * H, 1 + r() * 2, 3 + r() * 10); }
+	const rings = 12;
+	for (let k = 0; k < rings; k++) {
+		const y = (k + 0.5) / rings * H, wob = 2 + r() * 2;
+		g.strokeStyle = rgb(70, 60, 50, 0.75); g.lineWidth = 2 + r() * 2;
+		g.beginPath();
+		for (let x = 0; x <= W; x += 8) g.lineTo(x, y + Math.sin(x / W * Math.PI * 2 * 2 + k) * wob);
+		g.stroke();
+		g.strokeStyle = rgb(215, 205, 185, 0.45); g.lineWidth = 1.5;
+		g.beginPath();
+		for (let x = 0; x <= W; x += 8) g.lineTo(x, y + 3 + Math.sin(x / W * Math.PI * 2 * 2 + k) * wob);
+		g.stroke();
+	}
+	return finish(c, true);
+}
+
+// hardwood bark: vertical furrows and plates, lichen patches
+export function woodBark() {
+	const W = 256, H = 256, [c, g] = canvas(W, H), r = mulberry32(45);
+	g.fillStyle = rgb(150, 138, 122); g.fillRect(0, 0, W, H);
+	for (let i = 0; i < 70; i++) {
+		const x = r() * W, w = 3 + r() * 6, l = 60 + r() * 40;
+		g.strokeStyle = rgb(l, l * 0.9, l * 0.8, 0.8); g.lineWidth = w * 0.5;
+		g.beginPath(); let xx = x;
+		for (let y = -10; y <= H + 10; y += 16) { xx += (r() - 0.5) * 6; g.lineTo(xx, y); }
+		g.stroke();
+		// wrap copies so the seam is clean
+		g.save(); g.translate(x > W / 2 ? -W : W, 0); g.stroke(); g.restore();
+	}
+	for (let i = 0; i < 400; i++) { const l = 160 + r() * 70; g.fillStyle = rgb(l, l * 0.95, l * 0.85, 0.3); g.fillRect(r() * W, r() * H, 2 + r() * 5, 6 + r() * 16); }
+	for (let i = 0; i < 14; i++) { g.fillStyle = rgb(150 + r() * 40, 170 + r() * 30, 120, 0.25); g.beginPath(); g.arc(r() * W, r() * H, 6 + r() * 16, 0, 7); g.fill(); }
+	return finish(c, true);
+}

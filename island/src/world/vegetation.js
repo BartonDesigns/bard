@@ -89,7 +89,7 @@ function card(b, center, size, rnd, color, sway, outwardFrom) {
 }
 
 // ---------- species ----------
-const BARK = new THREE.Color(0.36, 0.30, 0.24), PALM_BARK = new THREE.Color(0.66, 0.54, 0.40);
+const BARK = new THREE.Color(0.62, 0.55, 0.47), PALM_BARK = new THREE.Color(0.86, 0.78, 0.66);
 
 function palm(seed, far) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
@@ -209,6 +209,52 @@ function boulder(seed) {
 	return { parts: [g], height: 1 };
 }
 
+// ---------- ground debris ----------
+function blob(b, c, r, sy, color) {
+	// a low-poly ellipsoid
+	const rows = 5, cols = 8, ids = [];
+	for (let j = 0; j <= rows; j++) {
+		const ph = j / rows * Math.PI, row = [];
+		for (let i = 0; i <= cols; i++) {
+			const th = i / cols * Math.PI * 2, n = V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
+			row.push(b.vert(c.clone().add(V(n.x * r, n.y * r * sy, n.z * r)), n, [i / cols, j / rows], color, 0));
+		}
+		ids.push(row);
+	}
+	for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { b.tri(ids[j][i], ids[j + 1][i], ids[j][i + 1]); b.tri(ids[j][i + 1], ids[j + 1][i], ids[j + 1][i + 1]); }
+}
+function coconuts(seed) {
+	const r = mulberry32(seed), b = new Builder(), n = 2 + Math.floor(r() * 3);
+	for (let i = 0; i < n; i++) {
+		const a = r() * 6.28, d = 0.2 + r() * 0.5, ripe = r();
+		const col = ripe < 0.4 ? { r: 0.42, g: 0.30, b: 0.18 } : ripe < 0.75 ? { r: 0.55, g: 0.42, b: 0.24 } : { r: 0.46, g: 0.52, b: 0.22 };
+		blob(b, V(Math.cos(a) * d, 0.14, Math.sin(a) * d), 0.14 + r() * 0.03, 0.88, col);
+	}
+	return { parts: [b.geometry()], height: 0.3 };
+}
+function deadFrond(seed) {
+	const r = mulberry32(seed), b = new Builder();
+	const a = r() * 6.28, L = 3.2 + r() * 1.2, dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
+	for (let k = 0; k <= 5; k++) {
+		const s = k / 5;
+		pts.push(dir.clone().multiplyScalar(L * s).add(V(0, 0.06 + Math.sin(s * 3.1) * 0.12, 0)));
+		widths.push(1.1 * Math.sin(Math.min(1, s * 1.2 + 0.08) * Math.PI) + 0.08);
+	}
+	strip(b, pts, widths, -0.35, { r: 0.60, g: 0.47, b: 0.30 }, { r: 0.72, g: 0.60, b: 0.40 }, 0, 0.05, 0.9);
+	// lying face up: flip the winding so the lit side is the top
+	for (let i = 0; i < b.i.length; i += 3) { const t = b.i[i + 1]; b.i[i + 1] = b.i[i + 2]; b.i[i + 2] = t; }
+	return { parts: [b.geometry()], height: 0.3 };
+}
+function driftwood(seed) {
+	const r = mulberry32(seed), b = new Builder(), L = 2.5 + r() * 3, bend = (r() - 0.5) * 0.8;
+	const path = [], radii = [];
+	for (let k = 0; k <= 6; k++) { const t = k / 6; path.push(V(L * (t - 0.5), 0.12 + Math.sin(t * 3.1) * 0.05, Math.sin(t * 3.1) * bend)); radii.push((0.16 - 0.07 * t) * (0.8 + r() * 0.3)); }
+	tube(b, path, radii, 6, new THREE.Color(0.78, 0.74, 0.68), () => 0);
+	const s0 = path[2];
+	tube(b, [s0, s0.clone().add(V(0.3, 0.25, 0.4)), s0.clone().add(V(0.5, 0.45, 0.9))], [0.07, 0.05, 0.03], 5, new THREE.Color(0.8, 0.76, 0.7), () => 0);
+	return { parts: [b.geometry()], height: 0.4 };
+}
+
 // ---------- materials ----------
 function swayMaterial(params, shared, stiff) {
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0 }, params));
@@ -230,7 +276,7 @@ function swayMaterial(params, shared, stiff) {
 	m.onBeforeCompile = hook;
 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '');
 	let depth = null;
-	if (params.map) {
+	if (params.alphaTest) {
 		depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: params.map, alphaTest: params.alphaTest });
 		depth.onBeforeCompile = hook;
 		depth.customProgramCacheKey = () => 'swaydepth' + stiff;
@@ -242,9 +288,13 @@ function swayMaterial(params, shared, stiff) {
 const CELL = 64;
 
 export function createVegetation(island, shared, scene) {
-	const tex = { leaf: TX.leafCluster(), frond: TX.palmFrond(), banana: TX.bananaLeaf(), fern: TX.fernFrond() };
+	const tex = { leaf: TX.leafCluster(), frond: TX.palmFrond(), banana: TX.bananaLeaf(), fern: TX.fernFrond(), palmBark: TX.palmBark(), woodBark: TX.woodBark() };
+	tex.palmBark.repeat.set(1, 7);
+	tex.woodBark.repeat.set(2, 3);
 	const mats = {
-		bark: swayMaterial({ roughness: 0.95 }, shared, 1),
+		bark: swayMaterial({ map: tex.woodBark, roughness: 0.95 }, shared, 1),
+		palmbark: swayMaterial({ map: tex.palmBark, roughness: 0.9 }, shared, 1),
+		stem: swayMaterial({ roughness: 0.8 }, shared, 1),
 		frond: swayMaterial({ map: tex.frond, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75 }, shared, 1),
 		leaf: swayMaterial({ map: tex.leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8),
 		banana: swayMaterial({ map: tex.banana, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }, shared, 1.2),
@@ -253,16 +303,20 @@ export function createVegetation(island, shared, scene) {
 	};
 	const nz = makeNoise(island.seed + 101);
 	const species = [
-		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true)), mats: ['bark', 'frond'], spacing: 10, near: 140, farR: 460, max: 700, kind: 'wood',
+		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true)), mats: ['palmbark', 'frond'], spacing: 10, near: 140, farR: 460, max: 700, kind: 'wood',
 			accept: (x, z, h, sl, m) => h > 0.7 && h < 12 && sl < 0.45 && m.path < 0.2 && (island.shapeAt(x, z) > 0.84 || m.village > 0.3) && nz.fbm(x * 0.012, z * 0.012, 3) > 0.47 },
-		{ key: 'hardwood', variants: [0, 1].map((v) => hardwood(island.seed * 11 + v, false)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 9, near: 130, farR: 1050, max: 1800, kind: 'wood',
+		{ key: 'hardwood', variants: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 9, near: 130, farR: 1050, max: 1800, kind: 'wood',
 			accept: (x, z, h, sl, m) => h > 4 && h < island.peak.h * 0.85 && sl < 0.62 && m.path < 0.15 && m.village < 0.2 && m.wild > 0.3 && island.shapeAt(x, z) < 0.86 && nz.fbm(x * 0.006 + 9, z * 0.006, 3) > 0.4 },
-		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['bark', 'banana'], spacing: 5.5, near: 90, max: 500, kind: 'soft',
+		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['stem', 'banana'], spacing: 5.5, near: 90, max: 500, kind: 'soft',
 			accept: (x, z, h, sl, m) => h > 2.2 && h < 60 && sl < 0.45 && m.path < 0.2 && m.wild > 0.25 && nz.fbm(x * 0.02 + 4, z * 0.02, 3) > 0.54 },
 		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v)), mats: ['fern'], spacing: 3.4, near: 50, max: 700, kind: 'soft', noShadow: true,
 			accept: (x, z, h, sl, m) => h > 2.6 && sl < 0.6 && m.path < 0.15 && m.wild > 0.35 && nz.fbm(x * 0.05, z * 0.05 + 2, 2) > 0.52 },
 		{ key: 'shrub', variants: [0].map((v) => shrub(island.seed * 19 + v)), mats: ['leaf'], spacing: 6, near: 120, max: 500, kind: 'soft',
 			accept: (x, z, h, sl, m) => h > 1.8 && sl < 0.55 && m.path < 0.2 && m.wild > 0.15 && nz.fbm(x * 0.03 + 7, z * 0.03, 2) > 0.5 },
+		{ key: 'nuts', derived: true, variants: [0, 1, 2].map((v) => coconuts(island.seed * 29 + v)), mats: ['stem'], near: 60, max: 300, kind: 'wood', noShadow: true },
+		{ key: 'deadfrond', derived: true, variants: [0, 1].map((v) => deadFrond(island.seed * 31 + v)), mats: ['frond'], near: 80, max: 400, kind: 'soft', noShadow: true },
+		{ key: 'driftwood', variants: [0, 1, 2].map((v) => driftwood(island.seed * 37 + v)), mats: ['bark'], spacing: 9, near: 110, max: 200, kind: 'wood',
+			accept: (x, z, h, sl, m) => h > 0.35 && h < 1.3 && m.village < 0.2 && m.path < 0.2 && nz.fbm(x * 0.03 + 5, z * 0.03, 2) > 0.62 },
 		{ key: 'boulder', variants: [0, 1].map((v) => boulder(island.seed * 23 + v)), mats: ['stone'], spacing: 12, near: 320, max: 400, kind: 'stone',
 			accept: (x, z, h, sl, m) => h > 0.2 && sl > 0.28 && m.path < 0.3 && nz.fbm(x * 0.02 + 1, z * 0.02, 2) > 0.45 },
 	];
@@ -272,7 +326,16 @@ export function createVegetation(island, shared, scene) {
 	const cells = new Map();
 	const rnd = mulberry32(island.seed ^ 0xabc);
 	const reach = island.R * 1.2;
+	const derived = (key, px, pz, off) => {
+		const sp = species.find((q) => q.key === key), h = island.heightAt(px, pz);
+		if (h < 0.3 || island.maskAt(px, pz, 0) > 0.3) return;
+		const ck = Math.floor(px / CELL) + ',' + Math.floor(pz / CELL);
+		let c = cells.get(ck);
+		if (!c) cells.set(ck, c = { x: Math.floor(px / CELL), z: Math.floor(pz / CELL), items: {} });
+		(c.items[key] || (c.items[key] = [])).push({ x: px, y: h - off, z: pz, rot: rnd() * 6.283, scale: 0.85 + rnd() * 0.3, v: Math.floor(rnd() * sp.variants.length), tint: 0.8 + rnd() * 0.35 });
+	};
 	for (const sp of species) {
+		if (sp.derived) continue;
 		const s = sp.spacing;
 		for (let z = -reach; z < reach; z += s) for (let x = -reach; x < reach; x += s) {
 			const px = x + (rnd() - 0.5) * s * 0.9, pz = z + (rnd() - 0.5) * s * 0.9;
@@ -288,6 +351,11 @@ export function createVegetation(island, shared, scene) {
 				x: px, y: h - (sp.key === 'boulder' ? 0.35 : 0.05), z: pz, rot: rnd() * 6.283, scale: sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : 0.8 + rnd() * 0.45,
 				v: Math.floor(rnd() * sp.variants.length), tint: 0.85 + rnd() * 0.3,
 			});
+			// palms drop their nuts and old fronds around the base
+			if (sp.key === 'palm') {
+				if (rnd() < 0.55) derived('nuts', px + (rnd() - 0.5) * 2.5, pz + (rnd() - 0.5) * 2.5, 0.04);
+				if (rnd() < 0.6) derived('deadfrond', px + (rnd() - 0.5) * 3, pz + (rnd() - 0.5) * 3, 0.02);
+			}
 		}
 	}
 
@@ -346,8 +414,9 @@ export function createVegetation(island, shared, scene) {
 					pos.set(it.x, it.y, it.z);
 					m4.compose(pos, q, sc);
 					col.setScalar(it.tint);
+					const vi = lod === 'far' ? it.v % sp.far.length : it.v;
 					for (const m of sp.meshes) {
-						if (m.lod !== lod || m.vi !== it.v || m.im.count >= m.im.userData.cap) continue;
+						if (m.lod !== lod || m.vi !== vi || m.im.count >= m.im.userData.cap) continue;
 						m.im.setMatrixAt(m.im.count, m4);
 						m.im.setColorAt(m.im.count, col);
 						m.im.count++;

@@ -3,6 +3,7 @@
 // by what it is: dry and wet sand, meadow, rock, worn dirt paths.
 
 import * as THREE from 'three';
+import { groundDetail } from './textures.js';
 
 export function radialGrid(segments, radius, power) {
 	// a square grid whose spacing grows with distance from the centre
@@ -61,6 +62,7 @@ export function createTerrain(island, shared) {
 		uHeight: { value: shared.heightTex }, uMasks: { value: shared.maskTex },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCenter: { value: new THREE.Vector2() }, uTime: shared.uTime, uWet: { value: 0 },
+		uDetail: { value: groundDetail() },
 	};
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
@@ -74,7 +76,7 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\n' + NOISE_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\nfloat gDetailH;\n' + NOISE_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
@@ -96,18 +98,53 @@ export function createTerrain(island, shared) {
 				vec3 rock = mix(vec3(0.36, 0.34, 0.31), vec3(0.52, 0.49, 0.44), n2) * (0.85 + 0.25 * n3);
 				vec3 dirt = mix(vec3(0.46, 0.35, 0.23), vec3(0.60, 0.48, 0.33), n2) * (0.88 + 0.2 * n3);
 				float grassW = smoothstep(1.2 + n1 * 1.6, 2.6 + n1 * 1.8, h);
+				// close-up relief: two scales of the painted detail so it never reads as a tile
+				float camD = length(cameraPosition - vW);
+				float near = 1.0 - smoothstep(18.0, 70.0, camD);
+				vec4 d1 = texture2D(uDetail, vW.xz * 0.42);
+				vec4 d2 = texture2D(uDetail, vW.xz * 0.11 + 0.37);
+				vec4 dd = mix(d2, d1 * 0.65 + d2 * 0.35, near);
+				// sand and rock take the relief as grain; wet sand is smoothed by the wash
+				sand *= 0.86 + 0.26 * dd.r * (1.0 - wet * 0.7);
+				rock *= 0.62 + 0.62 * dd.a;
+				// earth under the meadow: soil and litter show between the blades
+				vec3 soil = mix(vec3(0.24, 0.19, 0.12), vec3(0.36, 0.30, 0.19), dd.b);
+				vec3 meadowGround = mix(soil, grass, smoothstep(0.25, 0.7, mk.a * 0.4 + n1 * 0.6 + dd.b * 0.2) * 0.75 + 0.1);
+				grass = mix(grass, meadowGround, near * 0.8);
+				// paths: packed earth with gravel that catches the light
+				dirt *= 0.72 + 0.5 * dd.g;
+				dirt = mix(dirt, vec3(0.62, 0.58, 0.52), smoothstep(0.62, 0.9, dd.g) * 0.45);
 				vec3 col = mix(sand, grass, grassW);
-				col = mix(col, rock, smoothstep(0.42, 0.62, slope + (n1 - 0.5) * 0.2) * step(0.9, h));
-				col = mix(col, dirt, smoothstep(0.25, 0.75, mk.r) * step(0.5, h));
+				float rockW = smoothstep(0.42, 0.62, slope + (n1 - 0.5) * 0.2) * step(0.9, h);
+				col = mix(col, rock, rockW);
+				float pathW = smoothstep(0.25, 0.75, mk.r + (dd.g - 0.5) * 0.25) * step(0.5, h);
+				col = mix(col, dirt, pathW);
+				// the height the bump reads, per ground type, in metres
+				float gs = 1.0 - grassW;
+				gDetailH = (dd.r * 0.012 * gs * (1.0 - wet * 0.8) + dd.b * 0.03 * grassW) * (1.0 - rockW) * (1.0 - pathW)
+					+ dd.a * 0.05 * rockW + dd.g * 0.028 * pathW;
+				gDetailH *= near;
 				// under the sea: bleached sand going blue-green with depth
 				col = mix(col, vec3(0.78, 0.74, 0.60), smoothstep(0.0, -1.0, h));
 				col = mix(col, col * vec3(0.55, 0.62, 0.55), mk.b);
+				// sunlight focused by the swell dances on the seabed
+				float cA = 1.0 - abs(vn(vW.xz * 0.55 + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
+				float cB = 1.0 - abs(vn(vW.xz * 0.7 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
+				col += vec3(0.5, 0.6, 0.55) * pow(min(cA, cB), 6.0) * smoothstep(0.0, -0.8, h) * (1.0 - smoothstep(-2.0, -14.0, h)) * 1.6;
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				float rough = mix(0.97, 0.42, wet * (1.0 - grassW));`)
 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rough;')
 			.replace('#include <normal_fragment_maps>', `
-				// fine relief so the ground has give: tufts on the meadow, grain in the sand
-				normal = normalize(normal + (vec3(n3 - 0.5, 0.0, n2 - 0.5)) * (0.18 * grassW + 0.08));`);
+				// screen-space bump from the detail height (Mikkelsen)
+				{
+					vec3 sp = -vViewPosition;
+					vec3 vSx = dFdx(sp), vSy = dFdy(sp);
+					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
+					float fDet = dot(vSx, R1) * faceDirection;
+					vec2 dH = vec2(dFdx(gDetailH), dFdy(gDetailH));
+					vec3 vGrad = sign(fDet) * (dH.x * R1 + dH.y * R2);
+					normal = normalize(abs(fDet) * normal - vGrad);
+				}`);
 	};
 	mat.customProgramCacheKey = () => 'island-terrain';
 	const mesh = new THREE.Mesh(geo, mat);
