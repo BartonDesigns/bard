@@ -42,6 +42,7 @@ export function createBoat(island, village, player, camera, shared, scene) {
 		s.boarded = true;
 		player.state.locked = true;
 		player.state.diving = false;
+		player.state.flying = false;
 		player.state.yaw = s.heading;
 		player.state.pitch = -0.08;
 		player.clearInput();

@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
 import * as TX from './textures.js';
 import { HEIGHT_GLSL } from './terrain.js';
+import { addPulse } from '../pulse.js';
 
 // ---------- geometry helpers ----------
 class Builder {
@@ -455,6 +456,7 @@ function swayMaterial(params, shared, stiff) {
 	// a leaf does, instead of flipping the back face dark
 	m.onBeforeCompile = (sh) => {
 		hook(sh);
+		addPulse(sh);
 		sh.fragmentShader = 'varying float vGroundAO;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n\tdiffuseColor.rgb *= vGroundAO;');
 		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
 	};
@@ -486,7 +488,7 @@ export function createVegetation(island, shared, scene) {
 		leaf: swayMaterial({ map: tex.leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8),
 		banana: swayMaterial({ map: tex.banana, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }, shared, 1.2),
 		fern: swayMaterial({ map: tex.fern, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }, shared, 1.2),
-		stone: { material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: false }), depth: null },
+		stone: { material: (() => { const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: false }); m.onBeforeCompile = addPulse; m.customProgramCacheKey = () => 'stone228'; return m; })(), depth: null },
 	};
 	const nz = makeNoise(island.seed + 101);
 	const species = [

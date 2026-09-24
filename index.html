@@ -3256,6 +3256,49 @@ function patch(block){
 }
 root.L99Waters227={patch};
 })(window);
+
+/* TOUCHPLAY_228: play surfaces behave like the faceplate keys. The note comes from
+   where you touch the screen (low on the left, high on the right, in the faceplate's
+   key and scale), it sounds for as long as you hold and then releases through the
+   faceplate's own envelope, and holding Right Shift sustains and blends every note
+   until you let go. Worlds can listen for strikes to draw their own response.
+   Kill: window._TOUCHPLAY228 = false. */
+(function(root){'use strict';
+const SPAN=15;                         // two octaves of a seven-note scale across the screen
+let serial=0,sustain=false;const live=new Map(),held=new Set(),listeners=new Set();
+function degree(fallback){const x=root.__tmX228;return Number.isFinite(x)?Math.max(0,Math.min(SPAN-1,Math.floor(x*SPAN))):fallback;}
+function release(id){if(!live.has(id))return;const v=live.get(id);clearTimeout(v.timer);live.delete(id);held.delete(id);try{stopLead(id);}catch(_){}}
+function play(d,velocity,_duration,realm,hit){
+ if(typeof playLead!=='function')return null;
+ while(live.size>=16){const first=live.keys().next().value;release(first);}
+ const id='touch228:'+(++serial);
+ try{playLead(id,Math.round(d||0),1,false,velocity===undefined?.7:velocity);}catch(e){return null;}
+ const v={timer:setTimeout(()=>release(id),20000)};live.set(id,v);
+ for(const f of listeners){try{f({realm,hit,degree:d,velocity});}catch(_){}}
+ return{setBrass(){},stop(){if(sustain){held.add(id);return;}release(id);}};
+}
+function world(){const w=root.L99Keyboard149?.world?.();return w&&w!=='bard';}
+root.addEventListener('keydown',e=>{if(e.code==='ShiftRight'&&!e.repeat&&world())sustain=true;},true);
+root.addEventListener('keyup',e=>{if(e.code!=='ShiftRight')return;sustain=false;for(const id of [...held])release(id);},true);
+root.addEventListener('blur',()=>{sustain=false;for(const id of [...held])release(id);});
+const EDITS=[
+ ["function hitAt(w,e){const r=w.canvas().getBoundingClientRect();","function hitAt(w,e){const r=w.canvas().getBoundingClientRect();root.__tmX228=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));"],
+ ["const d=contact(w.T,hit),kind=material(hit)","const d=root.L99TouchPlay228?root.L99TouchPlay228.degree(contact(w.T,hit)):contact(w.T,hit),kind=material(hit)"],
+ ["const voice=root.L99CaveInstrument?.strike(d,velocity,duration);","const voice=root.L99TouchPlay228?root.L99TouchPlay228.play(d,velocity,duration,realm,hit):root.L99CaveInstrument?.strike(d,velocity,duration);"],
+ ["const degree=contact(s.w.T,hit);","const degree=root.L99TouchPlay228?root.L99TouchPlay228.degree(contact(s.w.T,hit)):contact(s.w.T,hit);"],
+ ["if(e.type!=='pointerup')s.voice?.stop();","s.voice?.stop();"],
+];
+function patch(block){
+ try{
+  if(root._TOUCHPLAY228===false||typeof block!=='string'||!block.includes('TOUCH_MUSIC_175')||block.includes('TOUCHPLAY_228'))return block;
+  const miss=EDITS.filter(([a])=>block.split(a).length!==2);
+  if(miss.length){console.warn('TOUCHPLAY_228: '+miss.length+' anchors missing, play surfaces unchanged');return block;}
+  for(const [a,b] of EDITS)block=block.replace(a,()=>b);
+  return block.replace('/* TOUCH_MUSIC_175:','/* TOUCHPLAY_228 */ /* TOUCH_MUSIC_175:');
+ }catch(e){console.warn('TOUCHPLAY_228',e);return block;}
+}
+root.L99TouchPlay228={patch,play,degree,release,on:f=>{listeners.add(f);return()=>listeners.delete(f);},get sustain(){return sustain;},voices:()=>live.size};
+})(window);
 </script>
 <script id="leaves227">
 /* LEAVES_227: canopies of textured leaf clusters instead of modelled blades.
@@ -3336,7 +3379,7 @@ function status(message,failed){if(!wantsStatus)return;const p=panel();p.style.d
 function show(message,again){wantsStatus=true;retry=again;status(message);}
 function hide(){wantsStatus=false;if(box)box.style.display='none';}
 function execute(code){const s=document.createElement('script');s.textContent=code;let error=null;const caught=e=>{error=e.error||Error(e.message);};root.addEventListener('error',caught);try{document.head.appendChild(s);}finally{s.remove();root.removeEventListener('error',caught);}if(error)throw error;}
-function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();if(root.L99Leaves227)blocks[coreAt]=root.L99Leaves227.patch(blocks[coreAt]);if(root.L99Waters227)blocks[coreAt]=root.L99Waters227.patch(blocks[coreAt]);execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227===false?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
+function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();if(root.L99Leaves227)blocks[coreAt]=root.L99Leaves227.patch(blocks[coreAt]);if(root.L99Waters227)blocks[coreAt]=root.L99Waters227.patch(blocks[coreAt]);if(root.L99TouchPlay228)blocks[coreAt]=root.L99TouchPlay228.patch(blocks[coreAt]);execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227===false?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
 function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;

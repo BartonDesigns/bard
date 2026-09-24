@@ -127,7 +127,9 @@ uniforms.uUnder = shared.uUnder;
 				// at night the moon (opposite the sun) lays a glittering path across the water
 				float nightK = smoothstep(0.02, -0.15, uSunDir.y);
 				vec3 moonDir = normalize(-uSunDir + vec3(0.0, 0.35, 0.0));
-				float glade = (pow(max(dot(R, moonDir), 0.0), 220.0) * 6.0 + pow(max(dot(R, moonDir), 0.0), 18.0) * 0.25) * nightK;
+				float glade = (pow(max(dot(R, moonDir), 0.0), 160.0) * 9.0 + pow(max(dot(R, moonDir), 0.0), 14.0) * 0.35) * nightK;
+				// ripples scatter the path into glitter
+				glade *= 0.35 + 1.3 * smoothstep(0.55, 0.8, r0);
 				col += vec3(0.75, 0.82, 1.0) * glade;
 				float dayS = smoothstep(-0.05, 0.1, uSunDir.y);
 				vec3 col = mix(body, sky, F * 0.7) + uSunColor * spec * (0.8 + uHigh * 0.6) * dayS;

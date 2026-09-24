@@ -121,7 +121,7 @@ export function createSky(scene, shared, renderer) {
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		scene.fog.color.copy(tmpB).lerp(tmpA, 0.12);
-		renderer.toneMappingExposure = 1.15 + night * 0.5;
+		renderer.toneMappingExposure = 1.15 + night * 0.15;
 		dome.position.copy(focus);
 		return { night, dayK, setK };
 	}

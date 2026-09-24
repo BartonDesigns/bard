@@ -178,7 +178,7 @@ export function createTerrain(island, shared) {
 				// sunlight focused by the swell dances on the seabed
 				float cA = 1.0 - abs(vn(vW.xz * 0.55 + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
 				float cB = 1.0 - abs(vn(vW.xz * 0.7 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
-				col += vec3(0.5, 0.6, 0.55) * pow(min(cA, cB), 6.0) * smoothstep(0.0, -0.8, h) * (1.0 - smoothstep(-2.0, -14.0, h)) * 1.6;
+				col += vec3(0.5, 0.6, 0.55) * pow(min(cA, cB), 6.0) * smoothstep(0.0, -0.8, h) * (1.0 - smoothstep(-2.0, -14.0, h)) * 1.6 * smoothstep(-0.02, 0.25, uSunDir2.y);
 				// rooted: the earth under trees and shrubs is shaded, bare, damp and warm
 				vec2 oc = occAt(vW.xz);
 				float occ = oc.r;

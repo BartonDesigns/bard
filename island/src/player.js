@@ -13,7 +13,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	const s = {
 		pos: new THREE.Vector3(island.spawn.x, 0, island.spawn.z),
 		vel: new THREE.Vector3(), yaw: island.spawn.yaw, pitch: -0.04,
-		grounded: false, swimming: false, diving: false, run: false, locked: false,
+		grounded: false, swimming: false, diving: false, flying: false, run: false, locked: false,
 	};
 	s.pos.y = island.heightAt(s.pos.x, s.pos.z) + EYE;
 	const keys = new Set();
@@ -25,7 +25,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function keyDown(e) {
 		if (!s.active || window._KEYS_PLAY_ON || e.target.closest?.('input,textarea,[contenteditable]')) return;
 		const k = e.key.toLowerCase();
-		if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { keys.add(k); e.preventDefault(); }
+		if (k === 'f' && !e.repeat) { s.flying = !s.flying; s.vel.y = 0; s.onFly?.(s.flying); e.preventDefault(); return; }
+		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { keys.add(k); e.preventDefault(); }
 	}
 	function keyUp(e) { keys.delete(e.key.toLowerCase()); }
 	let mouse = null;
@@ -133,6 +134,23 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		right.set(Math.cos(s.yaw), 0, -Math.sin(s.yaw));
 		wish.set(0, 0, 0).addScaledVector(fwd, -mz).addScaledVector(right, mx);
 		if (wish.lengthSq() > 1) wish.normalize();
+		if (s.flying) {
+			// free flight: move where you look, climb with Space (or the ⇡ button), sink with C
+			const fs = run ? 38 : 16, cp = Math.cos(s.pitch);
+			const fx = -Math.sin(s.yaw) * cp, fy = Math.sin(s.pitch), fz = -Math.cos(s.yaw) * cp;
+			const up = (keys.has(' ') || s.flyUp ? 1 : 0) - (keys.has('c') || s.flyDown ? 1 : 0);
+			const tx = (fx * -mz + right.x * mx) * fs, ty = fy * -mz * fs + up * fs * 0.6, tz = (fz * -mz + right.z * mx) * fs;
+			const k = Math.min(1, dt * 3);
+			s.vel.x += (tx - s.vel.x) * k; s.vel.y += (ty - s.vel.y) * k; s.vel.z += (tz - s.vel.z) * k;
+			s.pos.addScaledVector(s.vel, dt);
+			const floor = Math.max(floorAt(s.pos.x, s.pos.z, s.pos.y) , 0) + 1.2;
+			if (s.pos.y < floor) { s.pos.y = floor; s.vel.y = Math.max(0, s.vel.y); }
+			s.pos.y = Math.min(s.pos.y, 900);
+			s.grounded = false; s.swimming = false;
+			camera.position.copy(s.pos);
+			camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');
+			return;
+		}
 		const speed = s.swimming ? 2.2 : run ? 7.5 : 3.9;
 		const accel = s.grounded || s.swimming ? 10 : 2.5;
 		s.vel.x += (wish.x * speed - s.vel.x) * Math.min(1, accel * dt);

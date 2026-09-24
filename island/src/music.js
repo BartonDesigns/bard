@@ -4,7 +4,7 @@
 // crystal, soft by material) and each note ripples out from where it lands.
 
 import * as THREE from 'three';
-import { glow } from './world/textures.js';
+import { strikePulse, PULSE } from './pulse.js';
 
 export function createMusic(shared, scene, camera, canvas, pickables, active) {
 	const bands = { bass: 0, mid: 0, high: 0 };
@@ -19,16 +19,22 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 		return hits.length ? hits[0] : null;
 	}
 
-	// ripples where notes land
-	const rippleTex = glow();
-	const ripples = [];
-	function ripple(point, kind) {
-		const col = { wood: 0xffd29a, stone: 0xbfd8ff, crystal: 0xb9fff0, soft: 0xc8ffb0 }[kind] || 0xffffff;
-		const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: rippleTex, color: col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-		sp.position.copy(point);
-		sp.scale.setScalar(0.4);
-		scene.add(sp);
-		ripples.push({ sp, t: 0 });
+	// where a note lands, the struck object rings: a pulse radiates from the contact
+	// across that object (see pulse.js), tinted by what it is made of
+	const box = new THREE.Box3(), m4 = new THREE.Matrix4(), origin = new THREE.Vector3();
+	function ripple(hit, kind) {
+		const col = { wood: 0xffc98a, stone: 0xa8c8ff, crystal: 0x9ffff0, soft: 0xbfff9a }[kind] || 0xffffff;
+		let reach = 6, org = null;
+		const o = hit.object;
+		if (o && o.isInstancedMesh && hit.instanceId !== undefined) {
+			o.getMatrixAt(hit.instanceId, m4);
+			org = origin.setFromMatrixPosition(m4).applyMatrix4(o.matrixWorld);
+			if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+			box.copy(o.geometry.boundingBox);
+			const sc = Math.cbrt(Math.abs(m4.determinant()));
+			reach = Math.max(1.5, box.getSize(origin.clone()).length() * sc);
+		} else reach = 7;
+		strikePulse(hit.point, org, reach, col, shared.uTime.value);
 		shared.uPulse.value = Math.min(1.5, shared.uPulse.value + 0.6);
 	}
 
@@ -46,7 +52,7 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 			EX.__island = true;
 			const prev = EX.struck ? EX.struck.bind(EX) : null;
 			EX.struck = function (realm, hit, d) {
-				if (realm === 'island' && hit) ripple(hit.point, window.L99TouchMusic175?.material(hit));
+				if (realm === 'island' && hit) ripple(hit, window.L99TouchMusic175?.material(hit));
 				return prev ? prev(realm, hit, d) : undefined;
 			};
 		}
@@ -63,13 +69,7 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 		shared.uMid.value = bands.mid;
 		shared.uHigh.value = bands.high;
 		shared.uPulse.value *= Math.exp(-dt * 2.5);
-		for (let i = ripples.length - 1; i >= 0; i--) {
-			const r = ripples[i];
-			r.t += dt;
-			r.sp.scale.setScalar(0.4 + r.t * 9);
-			r.sp.material.opacity = Math.max(0, 1 - r.t / 0.9);
-			if (r.t > 0.9) { scene.remove(r.sp); r.sp.material.dispose(); ripples.splice(i, 1); }
-		}
+		PULSE.uPulseNow.value = shared.uTime.value;
 	}
 	return { bands, update, register, hitAt, ripple };
 }
