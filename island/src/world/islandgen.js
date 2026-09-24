@@ -98,6 +98,47 @@ export function generateIsland(params = {}) {
 	}
 	if (!village) village = { x: 0, z: 0, th: 0, coast: { x: R, z: 0 }, seaDir: { x: 1, z: 0 } };
 
+	// The bay: the village sits at the back of a sheltered inlet. Scoop the coast out
+	// in a round cove and raise a wooded headland on each side, so from the beach the
+	// jungle wraps round you and the open sea is framed between the points.
+	{
+		const d = village.seaDir, sd = { x: -d.z, z: d.x };
+		const Rb = 165 + rand() * 30;
+		// the cove bites into the land: its back beach lies well inland of the old shore,
+		// and the village moves back with it
+		const B = { x: village.coast.x + d.x * Rb * 0.2, z: village.coast.z + d.z * Rb * 0.2 };
+		village.coast = { x: B.x - d.x * (Rb - 6), z: B.z - d.z * (Rb - 6) };
+		village.x = village.coast.x - d.x * 60; village.z = village.coast.z - d.z * 60;
+		const hl = [22 + rand() * 12, 18 + rand() * 12];            // headland heights, left and right
+		village.bay = { x: B.x, z: B.z, r: Rb };
+		for (let j = 0; j < N; j++) {
+			const z = -half + j * cell;
+			for (let i = 0; i < N; i++) {
+				const x = -half + i * cell, k = j * N + i;
+				const px = x - B.x, pz = z - B.z, r = Math.hypot(px, pz);
+				if (r > Rb + 190) continue;
+				const along = px * d.x + pz * d.z, side = px * sd.x + pz * sd.z;
+				let h = height[k];
+				// the cove: a sandy beach at the back, shelving to clear water in the middle
+				const t = r / Rb;
+				const cove = t < 1 ? lerp(-6.5, -0.4, smoothstep(0.35, 1.0, t)) : lerp(-0.4, 2.2, smoothstep(1.0, 1.22, t));
+				const reach = 1 - smoothstep(Rb * 0.95, Rb * 1.35, r);
+				if (h > cove) h = lerp(h, cove, reach);
+				// the headlands: two arms of high ground reaching out round the cove
+				const arm = smoothstep(Rb + 4, Rb + 40, r) * smoothstep(Rb + 170, Rb + 90, r);
+				const out = smoothstep(Rb * 1.0, Rb * 0.3, along);            // tapering to the points
+				const H = side > 0 ? hl[0] : hl[1];
+				const rough = 0.75 + 0.5 * nz.fbm(x * 0.02 + 3, z * 0.02 - 5, 3);
+				const head = H * arm * out * rough * (0.55 + 0.45 * smoothstep(Rb * 0.9, -Rb * 0.3, along));
+				// rocky ends where the arms meet the sea
+				const tip = smoothstep(Rb * 0.5, Rb * 1.0, along) * arm;
+				const land = head > 0.5 ? Math.max(head, 1.2) - tip * 2.5 : head;
+				if (land > h) h = lerp(h, land, smoothstep(0.0, 0.5, arm * out));
+				height[k] = h;
+			}
+		}
+	}
+
 	// Level the village terrace: rises gently inland from the beach.
 	const vr = 115;
 	for (let j = 0; j < N; j++) {
@@ -190,6 +231,24 @@ export function generateIsland(params = {}) {
 		masks[k * 4 + 3] = Math.round(g * 255);
 	}
 
+	// distance to water, in metres (chamfer transform over the final height map)
+	const coastDist = new Float32Array(N * N);
+	for (let k = 0; k < N * N; k++) coastDist[k] = height[k] < 0 ? 0 : 1e6;
+	const dd = cell, dg = cell * Math.SQRT2;
+	for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+		const k = j * N + i; let v = coastDist[k];
+		if (i > 0) v = Math.min(v, coastDist[k - 1] + dd);
+		if (j > 0) { v = Math.min(v, coastDist[k - N] + dd); if (i > 0) v = Math.min(v, coastDist[k - N - 1] + dg); if (i < N - 1) v = Math.min(v, coastDist[k - N + 1] + dg); }
+		coastDist[k] = v;
+	}
+	for (let j = N - 1; j >= 0; j--) for (let i = N - 1; i >= 0; i--) {
+		const k = j * N + i; let v = coastDist[k];
+		if (i < N - 1) v = Math.min(v, coastDist[k + 1] + dd);
+		if (j < N - 1) { v = Math.min(v, coastDist[k + N] + dd); if (i < N - 1) v = Math.min(v, coastDist[k + N + 1] + dg); if (i > 0) v = Math.min(v, coastDist[k + N - 1] + dg); }
+		coastDist[k] = v;
+	}
+	const coastAt = (x, z) => sample(coastDist, x, z);
+
 	function normalAt(x, z) {
 		const e = cell;
 		const hx0 = heightAt(x - e, z), hx1 = heightAt(x + e, z), hz0 = heightAt(x, z - e), hz1 = heightAt(x, z + e);
@@ -207,7 +266,7 @@ export function generateIsland(params = {}) {
 
 	return {
 		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn,
-		height, masks, heightAt, normalAt, maskAt, shapeAt: shape, distToPath,
+		height, masks, heightAt, normalAt, maskAt, shapeAt: shape, coastAt, distToPath,
 		biome: params.biome || 'tropical',
 	};
 }

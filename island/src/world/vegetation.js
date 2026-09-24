@@ -165,7 +165,7 @@ function palm(seed, far) {
 			// grows straight out of the crown: just the rib at first, leaflets widening out of it
 			widths.push(0.12 + 1.25 * Math.sin(Math.min(1, s2 * 1.1 + 0.02) * Math.PI) * Math.min(1, s2 * 4));
 		}
-		const green = { r: 0.40 + age * 0.06, g: 0.60 - age * 0.04, b: 0.22 }, tip = { r: 0.66 + age * 0.08, g: 0.72, b: 0.34 };
+		const green = { r: 0.26 + age * 0.05, g: 0.42 - age * 0.03, b: 0.15 }, tip = { r: 0.44 + age * 0.08, g: 0.52, b: 0.22 };
 		strip(crown, pts, widths, 0.55, green, tip, 0.45, 1.0, 0.7);
 	}
 	if (!far) {
@@ -230,10 +230,12 @@ function hardwood(seed, far) {
 	for (let i = 0; i < nC; i++) {
 		const th = r() * 6.28, ph = Math.acos(2 * r() - 1), k = 0.45 + r() * 0.55;
 		const c = crownC.clone().add(V(Math.sin(ph) * Math.cos(th) * RX * k, Math.cos(ph) * RY * k, Math.sin(ph) * Math.sin(th) * RX * k));
-		card(crown, c, size * (0.8 + r() * 0.5), r, { r: 0.34, g: 0.50, b: 0.20 }, 0.7 + 0.3 * k, crownC);
+		// inner leaves sit in the crown's own shade
+		const io = 0.45 + 0.55 * Math.pow(k, 1.5) * (0.6 + 0.4 * Math.max(0, Math.cos(ph)));
+		card(crown, c, size * (0.8 + r() * 0.5), r, { r: 0.24 * io, g: 0.38 * io, b: 0.14 * io }, 0.7 + 0.3 * k, crownC);
 	}
 	for (const e of ends) for (let i = 0; i < 7; i++) {
-		card(crown, e.clone().add(V((r() - 0.5) * 2.4, (r() - 0.2) * 1.4, (r() - 0.5) * 2.4)), size * 0.9, r, { r: 0.36, g: 0.52, b: 0.21 }, 0.95, crownC);
+		card(crown, e.clone().add(V((r() - 0.5) * 2.4, (r() - 0.2) * 1.4, (r() - 0.5) * 2.4)), size * 0.9, r, { r: 0.26, g: 0.4, b: 0.15 }, 0.95, crownC);
 	}
 	return { parts: [trunk.geometry(), crown.geometry()], height: H };
 }
@@ -260,7 +262,7 @@ function banana(seed) {
 				const lb = Math.max(0, (s2 - 0.14) / 0.86);
 				widths.push(lb > 0 ? 0.62 * (0.5 + 0.5 * k) * Math.sin(Math.min(1, lb + 0.1) * Math.PI) + 0.05 : 0.05);
 			}
-			strip(leaves, pts, widths, 0.25, { r: 0.55, g: 0.72, b: 0.32 }, { r: 0.62, g: 0.78, b: 0.36 }, 0.3, 1.0, 0.8);
+			strip(leaves, pts, widths, 0.25, { r: 0.30, g: 0.46, b: 0.17 }, { r: 0.38, g: 0.54, b: 0.2 }, 0.3, 1.0, 0.8);
 		}
 		// dead leaves: brown, torn, hanging down the stem from partway up
 		const nD = k > 0.7 ? 3 + Math.floor(r() * 2) : 1;
@@ -294,7 +296,7 @@ function fern(seed) {
 			pts.push(dir.clone().multiplyScalar(d).add(V(0, Math.sin(s * 2.4) * L * 0.55, 0)));
 			widths.push(0.36 * (1 - s * 0.7));
 		}
-		strip(b, pts, widths, 0.1, { r: 0.42, g: 0.60, b: 0.24 }, { r: 0.5, g: 0.66, b: 0.28 }, 0.2, 1.0, 0.8);
+		strip(b, pts, widths, 0.1, { r: 0.2, g: 0.33, b: 0.12 }, { r: 0.3, g: 0.44, b: 0.16 }, 0.2, 1.0, 0.8);
 	}
 	return { parts: [b.geometry()], height: 0.9 };
 }
@@ -321,11 +323,11 @@ function bloom(seed) {
 	const tips = bushStems(wood, r, 6 + Math.floor(r() * 3), 1.3, 1.0);
 	for (let i = 0; i < 16; i++) {
 		const th = r() * 6.28, ph = Math.acos(r() * 1.6 - 0.6), k = 0.45 + r() * 0.55;
-		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.15 * k, Math.cos(ph) * 0.85 * k, Math.sin(ph) * Math.sin(th) * 1.15 * k)), 1.2, r, { r: 1, g: 1, b: 1 }, 0.6, V(0, 0, 0));
+		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.15 * k, Math.cos(ph) * 0.85 * k, Math.sin(ph) * Math.sin(th) * 1.15 * k)), 1.2, r, { r: 0.55 + 0.4 * k, g: 0.55 + 0.4 * k, b: 0.55 + 0.4 * k }, 0.6, V(0, 0, 0));
 	}
 	for (const t of tips) card(b, t.clone().add(V((r() - 0.5) * 0.3, 0.05, (r() - 0.5) * 0.3)), 0.9, r, { r: 1, g: 1, b: 1 }, 0.7, V(0, 0, 0));
 	// a low skirt of leaves where it meets the grass
-	for (let i = 0; i < 6; i++) { const a = r() * 6.28, d = 0.45 + r() * 0.4; card(b, V(Math.cos(a) * d, 0.22 + r() * 0.15, Math.sin(a) * d), 0.8, r, { r: 0.9, g: 0.95, b: 0.9 }, 0.4, V(0, -0.5, 0)); }
+	for (let i = 0; i < 6; i++) { const a = r() * 6.28, d = 0.45 + r() * 0.4; card(b, V(Math.cos(a) * d, 0.22 + r() * 0.15, Math.sin(a) * d), 0.8, r, { r: 0.5, g: 0.55, b: 0.5 }, 0.4, V(0, -0.5, 0)); }
 	return { parts: [wood.geometry(), b.geometry()], height: 1.8 };
 }
 function shrub(seed) {
@@ -333,10 +335,10 @@ function shrub(seed) {
 	const tips = bushStems(wood, r, 5 + Math.floor(r() * 3), 0.95, 0.9);
 	for (let i = 0; i < 18; i++) {
 		const th = r() * 6.28, ph = Math.acos(r() * 1.6 - 0.6), k = 0.5 + r() * 0.5;
-		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.1 * k, Math.cos(ph) * 0.6 * k, Math.sin(ph) * Math.sin(th) * 1.1 * k)), 1.05, r, { r: 0.32, g: 0.46, b: 0.2 }, 0.6, V(0, 0, 0));
+		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.1 * k, Math.cos(ph) * 0.6 * k, Math.sin(ph) * Math.sin(th) * 1.1 * k)), 1.05, r, { r: 0.22 * (0.55 + 0.45 * k), g: 0.34 * (0.55 + 0.45 * k), b: 0.13 * (0.55 + 0.45 * k) }, 0.6, V(0, 0, 0));
 	}
-	for (const t of tips) card(b, t.clone().add(V((r() - 0.5) * 0.3, 0.05, (r() - 0.5) * 0.3)), 0.8, r, { r: 0.34, g: 0.48, b: 0.21 }, 0.7, V(0, 0, 0));
-	for (let i = 0; i < 5; i++) { const a = r() * 6.28, d = 0.4 + r() * 0.35; card(b, V(Math.cos(a) * d, 0.18 + r() * 0.12, Math.sin(a) * d), 0.75, r, { r: 0.3, g: 0.44, b: 0.19 }, 0.4, V(0, -0.5, 0)); }
+	for (const t of tips) card(b, t.clone().add(V((r() - 0.5) * 0.3, 0.05, (r() - 0.5) * 0.3)), 0.8, r, { r: 0.25, g: 0.37, b: 0.14 }, 0.7, V(0, 0, 0));
+	for (let i = 0; i < 5; i++) { const a = r() * 6.28, d = 0.4 + r() * 0.35; card(b, V(Math.cos(a) * d, 0.18 + r() * 0.12, Math.sin(a) * d), 0.75, r, { r: 0.17, g: 0.27, b: 0.1 }, 0.4, V(0, -0.5, 0)); }
 	return { parts: [wood.geometry(), b.geometry()], height: 1.3 };
 }
 
@@ -485,9 +487,9 @@ export function createVegetation(island, shared, scene) {
 		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v)), mats: ['fern'], spacing: 3, near: 50, max: 700, kind: 'soft', noShadow: true,
 			density: (e) => e.path > 0.15 || e.sl > 0.6 ? 0 : e.forest * 0.22 * (0.5 + e.moist) + e.gully * 0.2 },
 		{ key: 'hibiscus', variants: [0, 1].map((v) => bloom(island.seed * 41 + v)), mats: ['bark', 'hibiscus'], spacing: 5, near: 110, max: 260, kind: 'soft',
-			density: (e) => e.path > 0.25 || e.sl > 0.4 ? 0 : e.yard * 0.22 + e.edge * 0.012 },
+			density: (e) => e.path > 0.25 || e.sl > 0.4 || e.h < 1.8 ? 0 : e.yard * 0.22 + e.edge * 0.012 },
 		{ key: 'bougainvillea', variants: [0, 1].map((v) => bloom(island.seed * 43 + v)), mats: ['bark', 'bougainvillea'], spacing: 6, near: 110, max: 220, kind: 'soft',
-			density: (e) => e.path > 0.25 || e.sl > 0.45 ? 0 : e.yard * 0.08 + e.edge * 0.03 * e.clump(0.03, 0.55, 0.7) },
+			density: (e) => e.path > 0.25 || e.sl > 0.45 || e.h < 1.8 ? 0 : e.yard * 0.08 + e.edge * 0.03 * e.clump(0.03, 0.55, 0.7) },
 		{ key: 'shrub', variants: [0, 1].map((v) => shrub(island.seed * 19 + v)), mats: ['bark', 'leaf'], spacing: 4, near: 120, max: 500, kind: 'soft',
 			density: (e) => e.path > 0.2 || e.sl > 0.55 || e.h < 1.8 ? 0 : e.edge * 0.3 + e.forest * 0.05 + e.meadow * 0.006 },
 		{ key: 'nuts', derived: true, variants: [0, 1, 2].map((v) => coconuts(island.seed * 29 + v)), mats: ['stem'], near: 60, max: 300, kind: 'wood', noShadow: true },
@@ -513,17 +515,24 @@ export function createVegetation(island, shared, scene) {
 	for (let j = 0; j < EN; j++) for (let i = 0; i < EN; i++) {
 		const x = -ER + i * EG, z = -ER + j * EG, h = island.heightAt(x, z), k = j * EN + i;
 		if (h < 0.1) continue;
-		const coast = island.shapeAt(x, z), sl = 1 - island.normalAt(x, z).y;
+		const cd = island.coastAt(x, z), sl = 1 - island.normalAt(x, z).y;   // metres to the water
 		let ring = 0;
 		for (let q = 0; q < 8; q++) { const a = q * 0.785; ring += island.heightAt(x + Math.cos(a) * 60, z + Math.sin(a) * 60); }
 		const conc = clamp((ring / 8 - h) / 8, -1, 1);                     // + hollow, - ridge
 		const dv = Math.hypot(x - V2.x, z - V2.z);
-		const clearing = smoothstep(70, 150, dv);                          // the village keeps its fields open
+		// the headland arms round the cove: jungle right down to the rocks
+		let armK = 0;
+		if (V2.bay) {
+			const bx = x - V2.bay.x, bz = z - V2.bay.z, br = Math.hypot(bx, bz), ba = bx * V2.seaDir.x + bz * V2.seaDir.z;
+			armK = smoothstep(V2.bay.r + 2, V2.bay.r + 30, br) * smoothstep(V2.bay.r + 200, V2.bay.r + 110, br) * smoothstep(V2.bay.r * 1.05, V2.bay.r * 0.5, ba);
+		}
+		// the village keeps its fields open behind it, not on the arms of the bay
+		const clearing = Math.max(smoothstep(60, 130, dv), armK);
 		const alt = h / island.peak.h;
 		const patch = smoothstep(0.3, 0.7, ecoNoise.fbm(x * 0.0028 + 7, z * 0.0028 - 3, 3)); // stands and glades
-		let f = patch + Math.max(0, conc) * 0.6 - Math.max(0, -conc) * 0.3 + smoothstep(0.06, 0.3, sl) * 0.4 + smoothstep(0.15, 0.5, alt) * 0.15;
+		let f = patch + armK * 0.8 + Math.max(0, conc) * 0.6 - Math.max(0, -conc) * 0.3 + smoothstep(0.06, 0.3, sl) * 0.4 + smoothstep(0.15, 0.5, alt) * 0.15;
 		f -= smoothstep(0.8, 0.95, alt) * 0.8;                            // a bare summit
-		f -= smoothstep(0.78, 0.9, coast) * 0.7;                           // salt and sand at the coast
+		f -= smoothstep(40, 10, cd) * smoothstep(0.35, 0.1, sl) * 0.7;      // salt and sand on the low shore
 		const ground = clearing * smoothstep(2.5, 5, h);
 		const forest = smoothstep(0.47, 0.59, f) * ground, wide = smoothstep(0.36, 0.59, f) * ground;
 		grid.forest[k] = forest;
@@ -531,10 +540,10 @@ export function createVegetation(island, shared, scene) {
 		grid.meadow[k] = (1 - wide) * smoothstep(2, 4, h);
 		grid.moist[k] = Math.max(0, conc);
 		grid.gully[k] = smoothstep(0.25, 0.6, conc) * smoothstep(2, 5, h) * (1 - smoothstep(0.5, 0.8, alt));
-		grid.strand[k] = smoothstep(0.8, 0.86, coast) * (1 - smoothstep(0.95, 0.99, coast));
+		grid.strand[k] = smoothstep(5, 12, cd) * (1 - smoothstep(45, 80, cd)) * (1 - smoothstep(0.25, 0.45, sl));
 		grid.garden[k] = smoothstep(130, 90, dv) * smoothstep(35, 60, dv);
 		grid.summit[k] = smoothstep(0.85, 0.95, alt);
-		grid.headland[k] = smoothstep(0.84, 0.9, coast) * smoothstep(0.25, 0.45, sl);
+		grid.headland[k] = smoothstep(30, 5, cd) * smoothstep(0.25, 0.45, sl);
 	}
 	const gAt = (f, x, z) => {
 		const fx = clamp((x + ER) / EG, 0, EN - 1.001), fz = clamp((z + ER) / EG, 0, EN - 1.001), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * EN + i, a = grid[f];
