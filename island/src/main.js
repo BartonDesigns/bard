@@ -17,6 +17,7 @@ import { createMusic } from './music.js';
 import { createFauna } from './fauna.js';
 import { createBoat } from './boat.js';
 import { createWhale } from './whale.js';
+import { createShells } from './shells.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -44,6 +45,9 @@ function buildDom() {
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
 	const fly = button('✈', 'Fly (F)', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:44px;font-size:18px;');
 	const down = button('⇣', 'Descend', 'right:calc(18px + env(safe-area-inset-right));bottom:calc(98px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;font-size:22px;display:none;');
+	const shell = button('🐚', 'Pick up the shell (E)', 'left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
+	const toss = button('Throw', 'Throw it (T)', 'left:calc(50% - 96px);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
+	const place = button('Put down', 'Put it down (E)', 'left:calc(50% + 12px);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
 	const act = button('', '', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(36px + env(safe-area-inset-bottom));display:none;');
 	const launch = button('⇪ To the ship', 'Take off and return to your ship', 'left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));display:none;');
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
@@ -51,9 +55,9 @@ function buildDom() {
 	const loading = css(document.createElement('div'), 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
 	loading.textContent = 'Raising the island…';
 	const panel = css(document.createElement('div'), 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));width:min(300px,78vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);');
-	mount.append(canvas, veil, joy, back, gear, fly, jump, down, act, launch, hint, panel, loading);
+	mount.append(canvas, veil, joy, back, gear, fly, jump, down, act, shell, toss, place, launch, hint, panel, loading);
 	document.body.appendChild(mount);
-	return { mount, canvas, joy, knob, back, jump, gear, fly, down, act, launch, veil, hint, loading, panel };
+	return { mount, canvas, joy, knob, back, jump, gear, fly, down, act, shell, toss, place, launch, veil, hint, loading, panel };
 }
 
 function slider(panel, label, min, max, step, get, set, fmt) {
@@ -184,10 +188,11 @@ export function createIslandWorld() {
 		player.state.active = true;
 		const boat = createBoat(island, village, player, camera, shared, scene);
 		const whale = createWhale(island, shared, scene);
+		const shells = createShells(island, shared, camera, scene, player, dom, hint);
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -204,6 +209,7 @@ export function createIslandWorld() {
 	function teardown() {
 		if (!world) return;
 		world.player.dispose();
+		world.shells?.dispose();
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		while (scene.children.length) scene.remove(scene.children[0]);
 		world = null;
@@ -279,6 +285,9 @@ export function createIslandWorld() {
 			scene.fog.density = 0.04;
 		} else scene.fog.density = 0.00026;
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
+		const sh = W.shells.update(dt, time);
+		const show = (el, on) => { const d = on ? 'block' : 'none'; if (el.style.display !== d) el.style.display = d; };
+		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
 		actions();
 		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
 		W.litter.update(camera);
@@ -348,6 +357,9 @@ export function createIslandWorld() {
 		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast. F to land.') : 'Landing.', 3500);
 	}
 	dom.fly.addEventListener('click', (e) => { e.stopPropagation(); toggleFly(); });
+	dom.shell.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.pick(); });
+	dom.toss.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.throwIt(); });
+	dom.place.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.putDown(); });
 	const hold = (el, key) => {
 		el.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (world?.player.state.flying) world.player.state[key] = true; });
 		for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => { if (world) world.player.state[key] = false; });
@@ -379,7 +391,7 @@ export function createIslandWorld() {
 		} finally { dom.launch.disabled = false; }
 	});
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
-	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.down]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
+	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
 	const api = {
 		T: THREE, REALM,
