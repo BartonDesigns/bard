@@ -48,14 +48,15 @@ export function leafCluster() {
 // a coconut-palm frond: a rachis with long drooping leaflets either side
 export function palmFrond() {
 	const W = 512, H = 128, [c, g] = canvas(W, H), r = mulberry32(12);
+	g.filter = 'blur(1px)';
 	g.strokeStyle = rgb(170, 160, 110); g.lineWidth = 4;
 	g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
-	for (let i = 6; i < W - 6; i += 5) {
+	for (let i = 6; i < W - 6; i += 9) {
 		const t = i / W, len = H * 0.5 * Math.sin(Math.min(1, t * 1.15) * Math.PI) * (0.85 + r() * 0.2);
 		for (const s of [-1, 1]) {
 			const l = 150 + r() * 90;
 			g.strokeStyle = rgb(l * 0.78, l, l * 0.55);
-			g.lineWidth = 2.6 * (1 - t * 0.5);
+			g.lineWidth = 5.2 * (1 - t * 0.45);
 			g.beginPath(); g.moveTo(i, H / 2);
 			g.quadraticCurveTo(i + len * 0.35, H / 2 + s * len * 0.6, i + len * 0.55, H / 2 + s * len * 0.98);
 			g.stroke();
@@ -112,12 +113,13 @@ export function fernFrond() {
 // grass: a strip of tapering blades
 export function grassStrip() {
 	const W = 128, H = 128, [c, g] = canvas(W, H), r = mulberry32(8);
-	for (let i = 0; i < 26; i++) {
-		const x = 4 + r() * (W - 8), top = r() * H * 0.35, l = 160 + r() * 90, lean = (r() - 0.5) * 20;
+	g.filter = 'blur(0.6px)';
+	for (let i = 0; i < 17; i++) {
+		const x = 5 + r() * (W - 10), top = r() * H * 0.35, l = 160 + r() * 90, lean = (r() - 0.5) * 20;
 		const gr = g.createLinearGradient(0, H, 0, top);
 		gr.addColorStop(0, rgb(l * 0.45, l * 0.6, l * 0.3)); gr.addColorStop(1, rgb(l * 0.9, l, l * 0.6));
 		g.fillStyle = gr;
-		g.beginPath(); g.moveTo(x - 2.5, H); g.quadraticCurveTo(x + lean * 0.4, (H + top) / 2, x + lean, top); g.lineTo(x + 2.5, H); g.fill();
+		g.beginPath(); g.moveTo(x - 3.2, H); g.quadraticCurveTo(x + lean * 0.4, (H + top) / 2, x + lean, top); g.lineTo(x + 3.2, H); g.fill();
 	}
 	return finish(c);
 }
@@ -128,7 +130,7 @@ export function siding() {
 	for (let y = 0; y < S; y += 16) {
 		const l = 225 + r() * 25;
 		g.fillStyle = rgb(l, l, l); g.fillRect(0, y, S, 16);
-		g.fillStyle = rgb(150, 150, 150, 0.55); g.fillRect(0, y + 14, S, 2);
+		g.fillStyle = rgb(170, 170, 170, 0.3); g.fillRect(0, y + 13, S, 3);
 		g.fillStyle = rgb(255, 255, 255, 0.35); g.fillRect(0, y, S, 1);
 	}
 	for (let i = 0; i < 400; i++) { g.fillStyle = rgb(0, 0, 0, 0.04); g.fillRect(r() * S, r() * S, 2 + r() * 10, 1); }

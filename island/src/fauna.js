@@ -40,7 +40,7 @@ export function createFauna(island, shared, scene) {
 	const flies = new THREE.Points(pg, fireMat);
 	flies.frustumCulled = false;
 	scene.add(flies);
-	const butterMat = new THREE.PointsMaterial({ map: glow(), color: 0xffe28a, size: 0.22, transparent: true, depthWrite: false, opacity: 0 });
+	const butterMat = new THREE.PointsMaterial({ map: glow(), color: 0xf2d479, size: 0.09, transparent: true, depthWrite: false, opacity: 0 });
 	const butter = new THREE.Points(pg, butterMat);
 	butter.frustumCulled = false;
 	scene.add(butter);
@@ -63,13 +63,17 @@ export function createFauna(island, shared, scene) {
 			const s = seeds[i];
 			const x = focus.x + ((s.x + Math.sin(t * s.sp + s.ph) * 3 - focus.x * 0) % 60);
 			const z = focus.z + ((s.z + Math.cos(t * s.sp * 0.8 + s.ph) * 3) % 60);
-			const ground = island.heightAt(x, z);
-			pos[i * 3] = x; pos[i * 3 + 1] = Math.max(ground, 0.2) + s.y + Math.sin(t * 2.3 + s.ph) * 0.25; pos[i * 3 + 2] = z;
+			// keep them out of your face: never closer than a couple of paces
+			let px = x, pz = z;
+			const dx = px - focus.x, dz = pz - focus.z, d = Math.hypot(dx, dz);
+			if (d < 2.5) { const k = 2.5 / Math.max(d, 0.01); px = focus.x + dx * k; pz = focus.z + dz * k; }
+			const ground = island.heightAt(px, pz);
+			pos[i * 3] = px; pos[i * 3 + 1] = Math.max(ground, 0.2) + s.y + Math.sin(t * 2.3 + s.ph) * 0.25; pos[i * 3 + 2] = pz;
 		}
 		pg.attributes.position.needsUpdate = true;
 		fireMat.opacity = night * Math.min(1, pulse);
 		fireMat.size = 0.3 + shared.uHigh.value * 0.35;
-		butterMat.opacity = (1 - night) * 0.85;
+		butterMat.opacity = (1 - night) * 0.6;
 	}
 	return { update };
 }

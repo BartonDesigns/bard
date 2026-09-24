@@ -52,7 +52,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor,
 	};
 
-	const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
+	const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, alphaToCoverage: true });
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
 		sh.vertexShader = `
@@ -83,10 +83,11 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vGUv = uv; vTip = aTip;
 				// colour: a few greens, sun-dried straw in places, bluer in the shade of growth
 				float hue = vn(w * 0.23 + 3.0), dry = smoothstep(0.55, 0.8, vn(w * 0.035 - 7.0) + aRand.x * 0.15) * (1.0 - mk.a * 0.8);
-				vec3 g1 = vec3(0.30, 0.44, 0.14), g2 = vec3(0.40, 0.50, 0.17), g3 = vec3(0.24, 0.38, 0.16);
+				// the same greens as the meadow ground, so tufts melt into it
+				vec3 g1 = vec3(0.30, 0.45, 0.13), g2 = vec3(0.37, 0.50, 0.15), g3 = vec3(0.27, 0.42, 0.15);
 				vec3 tint = mix(mix(g1, g2, hue), g3, mk.a * 0.5 * aRand.y);
-				tint = mix(tint, vec3(0.62, 0.56, 0.30), dry * 0.55);
-				tint *= 0.8 + 0.35 * aRand.x;
+				tint = mix(tint, vec3(0.55, 0.52, 0.30), dry * 0.35);
+				tint *= 0.92 + 0.14 * aRand.x;
 				vTint = tint * tint;   // authored in display space
 				vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
 			.replace('#include <begin_vertex>', `
@@ -103,24 +104,27 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vGW = transformed;`)
 			.replace('#include <project_vertex>', `#include <project_vertex>
 				if (gTall < 0.04) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`);
+		// both faces of a blade are lit as the meadow is (up), never as their dark underside
 		sh.fragmentShader = `
 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW;
 			` + sh.fragmentShader
+			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
 			.replace('#include <map_fragment>', `
 				// the strip gives only the blade shapes; colour comes from the tuft, so
 				// filtered edges never bleed dark
 				vec4 gt = texture2D(uMap, vGUv);
-				// keep blade coverage steady with distance (mipmaps would thin the alpha away)
-				float cov = (gt.a - 0.5) / max(fwidth(gt.a), 1e-4) + 0.5;
-				if (cov < 0.5) discard;
+				// soft coverage: MSAA turns the edge into a fade, and the blades never thin to nothing
+				float cov = clamp((gt.a - 0.35) / max(fwidth(gt.a) * 1.5, 1e-3) + 0.5, 0.0, 1.0);
+				if (cov < 0.02) discard;
+				diffuseColor.a = cov;
 				// darker at the root where blades crowd and shade each other, paler at the tips
 				float rootK = smoothstep(0.0, 0.6, vGUv.y);
-				diffuseColor.rgb = vTint * mix(0.72, 1.08, rootK) * (0.92 + 0.16 * gt.g);`)
+				diffuseColor.rgb = vTint * mix(0.86, 1.04, rootK);`)
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				// blades glow when the sun is behind them; the highs make the field shimmer
 				float back = pow(max(0.0, dot(normalize(vGW - cameraPosition), uSunDir)), 4.0) * max(0.0, uSunDir.y + 0.1);
-				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.8 * vTip;
+				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.45 * vTip;
 				totalEmissiveRadiance += diffuseColor.rgb * uHigh * 0.3 * vTip * (0.5 + 0.5 * sin(uTime * 6.0 + vGW.x * 0.7 + vGW.z * 0.5));`);
 	};
 	mat.customProgramCacheKey = () => 'island-grass';

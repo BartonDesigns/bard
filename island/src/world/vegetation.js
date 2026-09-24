@@ -257,7 +257,7 @@ function driftwood(seed) {
 
 // ---------- materials ----------
 function swayMaterial(params, shared, stiff) {
-	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0 }, params));
+	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
 	const hook = (sh) => {
 		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass;
 		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
@@ -273,7 +273,12 @@ function swayMaterial(params, shared, stiff) {
 			transformed.x += (sin(uTime * 1.25 + ph) * push + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * 0.05) * sw;
 			transformed.z += (cos(uTime * 1.05 + ph) * push * 0.7 + cos(uTime * 4.3 + position.x * 1.3) * 0.04) * sw;`);
 	};
-	m.onBeforeCompile = hook;
+	// leaves are thin: light both faces from the outward normal, as sunlight through
+	// a leaf does, instead of flipping the back face dark
+	m.onBeforeCompile = (sh) => {
+		hook(sh);
+		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
+	};
 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '');
 	let depth = null;
 	if (params.alphaTest) {

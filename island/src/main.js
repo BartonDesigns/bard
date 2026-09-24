@@ -69,8 +69,12 @@ function slider(panel, label, min, max, step, get, set, fmt) {
 
 export function createIslandWorld() {
 	const dom = buildDom();
-	const renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: !isPhone, powerPreference: 'high-performance' });
-	renderer.toneMapping = THREE.ACESFilmicToneMapping;
+	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
+	// lets leaves and grass edges fade (alpha to coverage) instead of stair-stepping
+	const renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: true, powerPreference: 'high-performance' });
+	// AgX: a film-like curve that rolls highlights off gently and keeps greens from going
+	// neon; ACES crushed the shade and pushed saturation, which read as harsh
+	renderer.toneMapping = THREE.AgXToneMapping;
 	renderer.outputColorSpace = THREE.SRGBColorSpace;
 	renderer.shadowMap.enabled = true;
 	renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -216,7 +220,7 @@ export function createIslandWorld() {
 		if (under) {
 			scene.fog.color.setRGB(0.03, 0.2, 0.24).multiplyScalar(0.25 + 0.75 * sk.dayK);
 			scene.fog.density = 0.04;
-		} else scene.fog.density = 0.00022;
+		} else scene.fog.density = 0.00026;
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 		actions();
 		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);

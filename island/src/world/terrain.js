@@ -85,12 +85,12 @@ export function createTerrain(island, shared) {
 				float slope = 1.0 - clamp(wn.y, 0.0, 1.0);
 				float h = vW.y;
 				// sand: pale and dry above the tide line, darker and glossy at the wash
-				vec3 sandDry = mix(vec3(0.83, 0.74, 0.57), vec3(0.90, 0.82, 0.66), n2) * (0.93 + 0.1 * n3);
+				vec3 sandDry = mix(vec3(0.86, 0.75, 0.55), vec3(0.93, 0.83, 0.64), n2) * (0.95 + 0.07 * n3);
 				vec3 sandWet = vec3(0.58, 0.50, 0.38) * (0.9 + 0.12 * n2);
 				float wet = 1.0 - smoothstep(0.15, 0.9 + 0.3 * n1, h);
 				vec3 sand = mix(sandDry, sandWet, wet);
 				// meadow: several greens, sun-bleached patches, darker under growth
-				vec3 g1 = vec3(0.20, 0.34, 0.09), g2 = vec3(0.34, 0.44, 0.13), g3 = vec3(0.47, 0.46, 0.20);
+				vec3 g1 = vec3(0.22, 0.38, 0.09), g2 = vec3(0.36, 0.48, 0.13), g3 = vec3(0.48, 0.48, 0.20);
 				vec3 grass = mix(g1, g2, smoothstep(0.35, 0.7, n1));
 				grass = mix(grass, g3, smoothstep(0.62, 0.8, fbm3(vW.xz * 0.013 + 3.0)) * 0.7);
 				grass *= 0.82 + 0.3 * n3;
@@ -106,14 +106,14 @@ export function createTerrain(island, shared) {
 				vec4 dd = mix(d2, d1 * 0.65 + d2 * 0.35, near);
 				// sand and rock take the relief as grain; wet sand is smoothed by the wash
 				sand *= 0.86 + 0.26 * dd.r * (1.0 - wet * 0.7);
-				rock *= 0.62 + 0.62 * dd.a;
+				rock *= 0.78 + 0.36 * dd.a;
 				// earth under the meadow: soil and litter show between the blades
 				vec3 soil = mix(vec3(0.24, 0.19, 0.12), vec3(0.36, 0.30, 0.19), dd.b);
 				vec3 meadowGround = mix(soil, grass, smoothstep(0.25, 0.7, mk.a * 0.4 + n1 * 0.6 + dd.b * 0.2) * 0.75 + 0.1);
 				grass = mix(grass, meadowGround, near * 0.8);
 				// paths: packed earth with gravel that catches the light
-				dirt *= 0.72 + 0.5 * dd.g;
-				dirt = mix(dirt, vec3(0.62, 0.58, 0.52), smoothstep(0.62, 0.9, dd.g) * 0.45);
+				dirt *= 0.88 + 0.22 * dd.g;
+				dirt = mix(dirt, vec3(0.58, 0.54, 0.47), smoothstep(0.7, 0.95, dd.g) * 0.18);
 				vec3 col = mix(sand, grass, grassW);
 				float rockW = smoothstep(0.42, 0.62, slope + (n1 - 0.5) * 0.2) * step(0.9, h);
 				col = mix(col, rock, rockW);
@@ -123,7 +123,7 @@ export function createTerrain(island, shared) {
 				// ripples belong to open sand only, not to the meadow's edge
 				float gs = 1.0 - smoothstep(0.0, 0.3, grassW);
 				gDetailH = (dd.r * 0.012 * gs * (1.0 - wet * 0.8) + dd.b * 0.03 * grassW) * (1.0 - rockW) * (1.0 - pathW)
-					+ dd.a * 0.05 * rockW + dd.g * 0.028 * pathW;
+					+ dd.a * 0.035 * rockW + dd.g * 0.012 * pathW;
 				gDetailH *= near;
 				// under the sea: bleached sand going blue-green with depth
 				col = mix(col, vec3(0.78, 0.74, 0.60), smoothstep(0.0, -1.0, h));

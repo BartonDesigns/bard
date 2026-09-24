@@ -6,7 +6,7 @@ import { NOISE_GLSL } from './terrain.js';
 
 const C = (r, g, b) => new THREE.Color(r, g, b);
 const PAL = {
-	dayZen: C(0.07, 0.24, 0.68), dayHor: C(0.52, 0.70, 0.92),
+	dayZen: C(0.04, 0.20, 0.74), dayHor: C(0.46, 0.68, 0.95),
 	setZen: C(0.20, 0.24, 0.50), setHor: C(1.00, 0.52, 0.26),
 	nightZen: C(0.004, 0.009, 0.028), nightHor: C(0.018, 0.03, 0.065),
 	sunDay: C(1.0, 0.95, 0.86), sunSet: C(1.0, 0.52, 0.22), moon: C(0.45, 0.55, 0.8),
@@ -70,10 +70,13 @@ export function createSky(scene, shared, renderer) {
 	sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 1; sc.far = 400;
 	sun.shadow.bias = -0.0004;
 	sun.shadow.normalBias = 0.04;
+	// soft-edged, and never black: skylight still reaches into shade
+	sun.shadow.radius = 4;
+	sun.shadow.intensity = 0.78;
 	scene.add(sun, sun.target);
 	const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x5a5230, 0.9);
 	scene.add(hemi);
-	scene.fog = new THREE.FogExp2(0xa9c4dc, 0.00022);
+	scene.fog = new THREE.FogExp2(0xa9c4dc, 0.00026);
 
 	const state = { hours: shared.startHours ?? 10.5, speed: 1 };
 	const tmpA = new THREE.Color(), tmpB = new THREE.Color();
@@ -117,7 +120,7 @@ export function createSky(scene, shared, renderer) {
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		scene.fog.color.copy(tmpB).lerp(tmpA, 0.12);
-		renderer.toneMappingExposure = 0.95 + night * 0.5;
+		renderer.toneMappingExposure = 1.15 + night * 0.5;
 		dome.position.copy(focus);
 		return { night, dayK, setK };
 	}

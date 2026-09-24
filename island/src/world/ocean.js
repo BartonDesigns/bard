@@ -120,6 +120,9 @@ uniforms.uUnder = shared.uUnder;
 				vec3 sky = mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)) * (0.82 + 0.12 * slick * near);
 				float spec = pow(max(dot(R, uSunDir), 0.0), 500.0) * 14.0 * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), 60.0) * 0.8;
 				vec3 col = mix(body, sky, F * 0.7) + uSunColor * spec * (0.8 + uHigh * 0.6);
+				// AgX is calm and a little grey; give the sea back its turquoise
+				float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+				col = max(vec3(0.0), mix(vec3(lum), col, 1.35));
 				// foam: breakers where it shallows, wash on the sand, caps on the crests
 				float surf = smoothstep(0.25, 0.6, vDepth) * (1.0 - smoothstep(1.2, 2.2, vDepth));
 				float roll = smoothstep(0.62, 0.97, sin(vRoll + 0.6));

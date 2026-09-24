@@ -89,7 +89,7 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span },
 	};
-	const mat = new THREE.MeshStandardMaterial({ roughness: rough, metalness: 0, map: map || null, alphaTest: map ? 0.5 : 0, side: map ? THREE.DoubleSide : THREE.FrontSide });
+	const mat = new THREE.MeshStandardMaterial({ roughness: rough, metalness: 0, map: map || null, alphaTest: map ? 0.5 : 0, alphaToCoverage: !!map, side: map ? THREE.DoubleSide : THREE.FrontSide });
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
 		sh.vertexShader = `
@@ -126,6 +126,7 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 			.replace('#include <project_vertex>', `#include <project_vertex>
 				if (lS < 0.005) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`);
 		sh.fragmentShader = 'varying vec3 vLTint;\n' + sh.fragmentShader
+			.replace('#include <normal_fragment_begin>', map ? '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);' : '#include <normal_fragment_begin>')
 			.replace('#include <color_fragment>', '#include <color_fragment>\n\t\t\tdiffuseColor.rgb *= vLTint;');
 	};
 	mat.customProgramCacheKey = () => 'island-litter-' + name;
@@ -149,9 +150,9 @@ export function createLitter(island, shared, scene, scale = 1) {
 				float beach = smoothstep(0.5, 0.9, h) * (1.0 - smoothstep(1.6, 2.4, h)) * step(0.72, vn(w * 0.09));
 				float scree = smoothstep(0.3, 0.5, slope) * step(0.9, h);
 				float meadow = step(0.965, rr.x) * step(1.5, h);
-				float want = max(max(edge * 0.9, beach), max(scree, meadow));
+				float want = max(max(edge * 0.55, beach), max(scree, meadow));
 				s = step(1.0 - want * 0.7, rr.x) * (0.03 + pow(fract(rr.x * 13.7), 3.0) * 0.16);
-				float g = 0.36 + 0.2 * fract(rr.y * 7.3);
+				float g = 0.3 + 0.16 * fract(rr.y * 7.3);
 				tint = vec3(g * 1.04, g, g * 0.92) + vec3(0.1, 0.05, 0.0) * step(0.55, fract(rr.x * 3.1));
 				tint *= mix(1.0, 1.3, beach);`,
 		}),
