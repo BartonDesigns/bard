@@ -4,7 +4,7 @@
 // lit sand with caustics and the deep goes navy. Sky and sun reflect.
 
 import * as THREE from 'three';
-import { radialGrid, HEIGHT_GLSL, NOISE_GLSL } from './terrain.js';
+import { radialGrid, HEIGHT_GLSL, NOISE_GLSL, SWASH_GLSL } from './terrain.js';
 
 export function createOcean(island, shared) {
 	const geo = radialGrid(255, 9000, 3.0);
@@ -40,6 +40,8 @@ uniforms.uUnder = shared.uUnder;
 		vertexShader: /* glsl */`
 			${HEIGHT_GLSL}
 			${WAVES}
+			${NOISE_GLSL}
+			${SWASH_GLSL}
 			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
 			#include <fog_pars_vertex>
 			void main(){
@@ -61,6 +63,9 @@ uniforms.uUnder = shared.uUnder;
 				train(p, normalize(vec2(0.82, 0.57)), 5.3, 0.1 * uWave, 0.5, 1.0, disp, dx, dz);
 				train(p, normalize(vec2(-0.43, 0.9)), 3.1, 0.05 * uWave, 0.5, 1.0, disp, dx, dz);
 				vec3 w = vec3(p.x, 0.0, p.y) + disp;
+				// on the beach the sea is the swash: a sheet that thins to nothing as it runs up
+				float swl = swashLevel(p, uTime, uWave);
+				if (ground > -0.5) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground));
 				vW = w; vDepth = depth; vFilm = w.y - ground; vCrest = disp.y / max(0.05, amp + swellA + 0.15);
 				float k = 6.28318 / 16.0; vRoll = k * (dot(inward, p) - sqrt(9.8 / k) * uTime);
 				vN = normalize(cross(dz, dx));
@@ -119,7 +124,13 @@ uniforms.uUnder = shared.uUnder;
 				vec3 R = reflect(-V, N);
 				vec3 sky = mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)) * (0.82 + 0.12 * slick * near);
 				float spec = pow(max(dot(R, uSunDir), 0.0), 500.0) * 14.0 * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), 60.0) * 0.8;
-				vec3 col = mix(body, sky, F * 0.7) + uSunColor * spec * (0.8 + uHigh * 0.6);
+				// at night the moon (opposite the sun) lays a glittering path across the water
+				float nightK = smoothstep(0.02, -0.15, uSunDir.y);
+				vec3 moonDir = normalize(-uSunDir + vec3(0.0, 0.35, 0.0));
+				float glade = (pow(max(dot(R, moonDir), 0.0), 220.0) * 6.0 + pow(max(dot(R, moonDir), 0.0), 18.0) * 0.25) * nightK;
+				col += vec3(0.75, 0.82, 1.0) * glade;
+				float dayS = smoothstep(-0.05, 0.1, uSunDir.y);
+				vec3 col = mix(body, sky, F * 0.7) + uSunColor * spec * (0.8 + uHigh * 0.6) * dayS;
 				// AgX is calm and a little grey; give the sea back its turquoise
 				float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
 				col = max(vec3(0.0), mix(vec3(lum), col, 1.35));
@@ -133,8 +144,13 @@ uniforms.uUnder = shared.uUnder;
 				float foam = clamp(breaker + wash + cap * 0.7, 0.0, 1.0);
 				col = mix(col, vec3(0.92, 0.95, 0.96) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), foam);
 				// the edge of the sea is a film, not a wall: it thins to nothing on the sand
-				float film = smoothstep(0.0, 0.28, vFilm);
-				gl_FragColor = vec4(col, max(film, foam * smoothstep(0.0, 0.06, vFilm)));
+				// the swash front: a lace of foam where the sheet runs out, then clear thin water
+				float front = smoothstep(0.0, 0.012, vFilm) * (1.0 - smoothstep(0.015, 0.07, vFilm));
+				float laceF = smoothstep(0.35, 0.7, fbm3(vW.xz * 1.6 + vec2(uTime * 0.3, 0.0)));
+				col = mix(col, vec3(0.93, 0.96, 0.97) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), front * laceF * 0.9);
+				// thin sheets are nearly clear: you see the wet sand through them, and a sheen
+				float film = smoothstep(0.0, 0.28, vFilm) * mix(0.35, 0.92, smoothstep(0.02, 0.25, vFilm)) + F * 0.35 * (1.0 - smoothstep(0.0, 0.25, vFilm));
+				gl_FragColor = vec4(col, max(film, max(foam, front * laceF) * smoothstep(0.0, 0.01, vFilm)));
 				#include <tonemapping_fragment>
 				#include <colorspace_fragment>
 				#include <fog_fragment>

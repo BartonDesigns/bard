@@ -104,7 +104,7 @@ export function createSky(scene, shared, renderer) {
 			sun.position.copy(sd).multiplyScalar(200).add(focus);
 		} else {
 			sun.color.copy(PAL.moon);
-			sun.intensity = 0.28 * night;
+			sun.intensity = 0.5 * night;
 			sun.position.copy(sd).multiplyScalar(-200).add(focus);
 		}
 		sun.target.position.copy(focus);

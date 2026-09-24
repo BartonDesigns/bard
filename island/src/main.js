@@ -97,6 +97,48 @@ export function createIslandWorld() {
 	shared.occ.needsUpdate = true;
 	shared.uOcc = { value: shared.occ };
 	shared.uOccO = { value: new THREE.Vector3(0, 0, 160) };
+	// footprints: a 64 m patch of soft ground round the player that each step presses into
+	const PR = 256, PSPAN = 64, prints = new Uint8Array(PR * PR);
+	shared.prints = new THREE.DataTexture(prints, PR, PR, THREE.RedFormat, THREE.UnsignedByteType);
+	shared.prints.magFilter = shared.prints.minFilter = THREE.LinearFilter;
+	shared.prints.needsUpdate = true;
+	shared.uPrints = { value: shared.prints };
+	shared.uPrintsO = { value: new THREE.Vector3(-1e5, -1e5, PSPAN) };
+	const step = { dist: 0, side: 1, x: 0, z: 0, init: false };
+	function stampPrints(P) {
+		const O = shared.uPrintsO.value, px = PR / PSPAN;
+		if (!step.init || Math.abs(P.pos.x - (O.x + PSPAN / 2)) > 16 || Math.abs(P.pos.z - (O.y + PSPAN / 2)) > 16) {
+			// recentre on the player, carrying the prints already made across
+			const nx = Math.round((P.pos.x - PSPAN / 2) / (PSPAN / PR)) * (PSPAN / PR), nz = Math.round((P.pos.z - PSPAN / 2) / (PSPAN / PR)) * (PSPAN / PR);
+			const di = Math.round((nx - O.x) * px), dj = Math.round((nz - O.y) * px), old = prints.slice();
+			prints.fill(0);
+			if (step.init) for (let j = 0; j < PR; j++) for (let i = 0; i < PR; i++) {
+				const si = i + di, sj = j + dj;
+				if (si >= 0 && sj >= 0 && si < PR && sj < PR) prints[j * PR + i] = old[sj * PR + si];
+			}
+			O.set(nx, nz, PSPAN); step.init = true; step.x = P.pos.x; step.z = P.pos.z;
+			shared.prints.needsUpdate = true;
+		}
+		const d = Math.min(1.5, Math.hypot(P.pos.x - step.x, P.pos.z - step.z));
+		step.x = P.pos.x; step.z = P.pos.z;
+		if (!P.grounded || P.swimming || P.locked) return;
+		step.dist += d;
+		if (step.dist < 0.72) return;
+		step.dist = 0; step.side = -step.side;
+		const hx = -Math.sin(P.yaw), hz = -Math.cos(P.yaw), sx = -hz * step.side * 0.14, sz = hx * step.side * 0.14;
+		const cx = (P.pos.x + sx - O.x) * px, cz = (P.pos.z + sz - O.y) * px;
+		// an oval heel-to-toe along the heading
+		for (let j = -6; j <= 6; j++) for (let i = -6; i <= 6; i++) {
+			const x = Math.round(cx + i), z = Math.round(cz + j);
+			if (x < 0 || z < 0 || x >= PR || z >= PR) continue;
+			const wx = i / px, wz = j / px, a = wx * hx + wz * hz, b = wx * -hz + wz * hx;
+			const e = (a / 0.15) * (a / 0.15) + (b / 0.065) * (b / 0.065);
+			if (e >= 1) continue;
+			const v = Math.round(255 * Math.pow(1 - e, 0.6)), k = z * PR + x;
+			if (v > prints[k]) prints[k] = v;
+		}
+		shared.prints.needsUpdate = true;
+	}
 
 	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'auto';
 	let panelClock = null;
@@ -218,6 +260,7 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		const W = world;
 		W.player.update(dt, time);
+		stampPrints(W.player.state);
 		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
 		W.music.update(dt);
