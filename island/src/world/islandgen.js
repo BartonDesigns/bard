@@ -156,7 +156,9 @@ export function generateIsland(params = {}) {
 	}
 
 	// Level the village terrace: rises gently inland from the beach.
-	const vr = 115;
+	// the village ground: an amphitheatre rising from the back beach of the cove,
+	// about one metre in fifteen, so the houses step up the slope and all look out
+	const vr = 150, bay = village.bay;
 	for (let j = 0; j < N; j++) {
 		const z = -half + j * cell;
 		for (let i = 0; i < N; i++) {
@@ -164,9 +166,9 @@ export function generateIsland(params = {}) {
 			const d = Math.hypot(x - village.x, z - village.z);
 			if (d > vr) continue;
 			const w = smoothstep(vr, vr * 0.55, d);
-			const along = (x - village.coast.x) * -village.seaDir.x + (z - village.coast.z) * -village.seaDir.z;
+			const along = bay ? Math.hypot(x - bay.x, z - bay.z) - bay.r : (x - village.coast.x) * -village.seaDir.x + (z - village.coast.z) * -village.seaDir.z;
 			if (height[k] < -0.6) continue;
-			const target = Math.max(0.35, 1.3 + along * 0.028);
+			const target = Math.max(0.35, 0.9 + Math.max(0, along) * 0.065 + (nz.fbm(x * 0.02, z * 0.02 + 9, 2) - 0.5) * 0.8);
 			height[k] = lerp(height[k], target, w * smoothstep(-0.6, 0.6, height[k]));
 			masks[k * 4 + 1] = Math.max(masks[k * 4 + 1], Math.round(w * 255));
 		}
@@ -177,7 +179,14 @@ export function generateIsland(params = {}) {
 	const paths = [];
 	const side = { x: -village.seaDir.z, z: village.seaDir.x };
 	const lane = [];
-	for (let s = -9; s <= 9; s++) {
+	if (village.bay) {
+		// the lane follows the curve of the cove, a little above the beach
+		const b = village.bay, inl = Math.atan2(-village.seaDir.z, -village.seaDir.x);
+		for (let s = -9; s <= 9; s++) {
+			const a = inl + s * 0.06, rr = b.r + 34 + Math.sin(s * 0.7 + seed) * 2.5;
+			lane.push({ x: b.x + Math.cos(a) * rr, z: b.z + Math.sin(a) * rr });
+		}
+	} else for (let s = -9; s <= 9; s++) {
 		const t = s * 11;
 		const wob = Math.sin(s * 0.7 + seed) * 4;
 		lane.push({ x: village.x + side.x * t + village.seaDir.x * (18 + wob), z: village.z + side.z * t + village.seaDir.z * (18 + wob) });

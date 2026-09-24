@@ -46,7 +46,7 @@ const place = (g, x, y, z, ry = 0, rz = 0, rx = 0) => {
 export function createVillage(island, shared, scene) {
 	const r = mulberry32(island.seed ^ 0x5eed);
 	const v = island.village, seaAng = Math.atan2(v.seaDir.x, v.seaDir.z);
-	const parts = { wall: [], roof: [], wood: [], glass: [] };
+	const parts = { wall: [], roof: [], wood: [], glass: [], stone: [] };
 	const footprints = [];
 	const lane = island.paths[0].points;
 	const side = { x: -v.seaDir.z, z: v.seaDir.x };
@@ -62,7 +62,10 @@ export function createVillage(island, shared, scene) {
 			hi = Math.max(hi, h); lo = Math.min(lo, h);
 		}
 		if (hi - lo > 3.5 || lo < 0.4) return false;
-		const floor = hi + 0.45;
+		// on firm, fairly level ground a house sits on a low stone foundation bedded into
+		// the sand; where the ground falls away it stands up on stilts instead
+		const onStone = hi - lo < 1.1;
+		const floor = hi + (onStone ? 0.55 : 0.45);
 		const local = [];
 		const add = (bucket, g, color) => local.push([bucket, paint(g, color)]);
 		add('wall', place(box(w, wallH, d), 0, wallH / 2, 0), colorW);
@@ -87,10 +90,29 @@ export function createVillage(island, shared, scene) {
 			add('glass', place(box(0.06, 1.1, 0.9), -w / 2 - 0.04, y, -d * 0.15), [1, 1, 1]);
 			add('wood', place(box(1.1, 0.12, 0.12), w * 0.22, y - 0.62, d / 2 + 0.08), TRIM);
 		}
-		// stilts down to the ground
 		const stiltH = floor - lo + 0.3;
-		for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0]]) {
-			add('wood', place(box(0.22, stiltH, 0.22), sx * (w / 2 - 0.2), -stiltH / 2, sz * (d / 2 - 0.2)), [0.40, 0.33, 0.26]);
+		if (onStone) {
+			// the foundation: rough stone, a touch wider than the walls, sunk 0.4 m into the ground
+			const fh = floor - lo + 0.4;
+			add('stone', place(box(w + 0.3, fh, d + 0.3, 1.0), 0, -fh / 2 - 0.02, 0), [0.66, 0.62, 0.55]);
+			// the porch still stands on posts
+			for (const sx of [-1, 1]) add('wood', place(box(0.2, stiltH, 0.2), sx * (w / 2 + 0.1), -stiltH / 2, d / 2 + 2.0), [0.40, 0.33, 0.26]);
+		} else {
+			for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0], [1, 0]]) {
+				add('wood', place(box(0.22, stiltH, 0.22), sx * (w / 2 - 0.2), -stiltH / 2, sz * (d / 2 - 0.2)), [0.40, 0.33, 0.26]);
+			}
+		}
+		// a picket fence round some of the yards, with a gate gap toward the water
+		if (r() < 0.55) {
+			const fx = w / 2 + 3 + r() * 2, fzB = -d / 2 - 3 - r() * 2, fzF = d / 2 + 6 + r() * 2, fc = r() < 0.6 ? TRIM : [0.62, 0.52, 0.40];
+			const rail = (x0, z0, x1, z1) => {
+				const L = Math.hypot(x1 - x0, z1 - z0), a = Math.atan2(x1 - x0, z1 - z0), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+				for (const y of [0.35, 0.8]) add('wood', place(box(0.05, 0.07, L), mx, y - floor + lo, mz, a), fc);
+				for (let t = 0; t <= L; t += 1.6) add('wood', place(box(0.08, 1.0, 0.08), x0 + (x1 - x0) * t / L, 0.5 - floor + lo, z0 + (z1 - z0) * t / L), fc);
+			};
+			rail(-fx, fzB, fx, fzB); rail(-fx, fzB, -fx, fzF); rail(fx, fzB, fx, fzF);
+			rail(-fx, fzF, -1.2, fzF); rail(1.2, fzF, fx, fzF);
+			footprints.push({ fence: true, x: cx, z: cz, face, fx, fzB, fzF });
 		}
 		// steps down from the porch
 		for (let k = 0; k < 3; k++) add('wood', place(box(1.2, 0.12, 0.35), 0, -0.25 - k * 0.2, d / 2 + pd + 0.2 + k * 0.32), [0.6, 0.52, 0.42]);
@@ -100,9 +122,24 @@ export function createVillage(island, shared, scene) {
 		return true;
 	}
 
-	// cottages either side of the shore lane, facing the water
+	// cottages in tiers up the slope behind the cove, each with its own yard, all
+	// turned to look out across the water
 	let placed = 0;
-	for (let i = 1; i < lane.length - 1 && placed < 22; i++) {
+	if (v.bay) {
+		const b = v.bay, inl = Math.atan2(-v.seaDir.z, -v.seaDir.x);
+		for (const [ring, span] of [[20, 0.36], [52, 0.34], [80, 0.3]]) {
+			const rr = b.r + ring;
+			for (let a = -span; a <= span && placed < 20; a += 17 / rr) {
+				if (r() < 0.22) continue;
+				const aa = inl + a + (r() - 0.5) * 0.02, rj = rr + (r() - 0.5) * 6;
+				const cx = b.x + Math.cos(aa) * rj, cz = b.z + Math.sin(aa) * rj;
+				if (footprints.some((f) => !f.fence && Math.hypot(f.x - cx, f.z - cz) < 15)) continue;
+				if (lane.some((q) => Math.hypot(q.x - cx, q.z - cz) < 7)) continue;
+				const face = Math.atan2(b.x - cx, b.z - cz) + (r() - 0.5) * 0.15;
+				if (house(cx, cz, face, WALLS[Math.floor(r() * WALLS.length)], ROOFS[Math.floor(r() * ROOFS.length)])) placed++;
+			}
+		}
+	} else for (let i = 1; i < lane.length - 1 && placed < 22; i++) {
 		const p = lane[i];
 		for (const s of [1, -1]) {
 			if (r() < 0.2) continue;
@@ -136,11 +173,12 @@ export function createVillage(island, shared, scene) {
 	for (const g of pierParts) { if (!g.attributes.uv) continue; parts.wood.push(g.applyMatrix4(pierM)); }
 	footprints.push({ pier: true, x: pier.x, z: pier.z, face: seaAng, len: pier.len + 4, w: pier.w, y: deckY + 0.1 });
 
-	const tex = { siding: TX.siding(), roof: TX.roofing(), plank: TX.planks() };
+	const tex = { siding: TX.siding(), roof: TX.roofing(), plank: TX.planks(), stone: TX.stoneBlocks() };
 	const mats = {
 		wall: new THREE.MeshStandardMaterial({ map: tex.siding, vertexColors: true, roughness: 0.85 }),
 		roof: new THREE.MeshStandardMaterial({ map: tex.roof, vertexColors: true, roughness: 0.55, metalness: 0.25 }),
 		wood: new THREE.MeshStandardMaterial({ map: tex.plank, vertexColors: true, roughness: 0.9 }),
+		stone: new THREE.MeshStandardMaterial({ map: tex.stone, vertexColors: true, roughness: 0.95 }),
 		glass: new THREE.MeshStandardMaterial({ color: 0x1c2630, roughness: 0.15, metalness: 0.2, emissive: 0xffc47a, emissiveIntensity: 0 }),
 	};
 	const group = new THREE.Group();

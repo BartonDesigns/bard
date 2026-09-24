@@ -70,7 +70,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	addEventListener('blur', () => { keys.clear(); mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; });
 
 	// ---------- ground and walls ----------
-	const foot = village.footprints;
+	const foot = village.footprints.filter((f) => !f.fence);
 	// footprints are placed with rotationY(face): world = (lx cos + lz sin, -lx sin + lz cos)
 	const toLocal = (f, x, z) => {
 		const c = Math.cos(f.face), sn = Math.sin(f.face), dx = x - f.x, dz = z - f.z;

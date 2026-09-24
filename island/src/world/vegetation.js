@@ -538,10 +538,12 @@ export function createVegetation(island, shared, scene) {
 		let armK = 0;
 		if (V2.bay) {
 			const bx = x - V2.bay.x, bz = z - V2.bay.z, br = Math.hypot(bx, bz), ba = bx * V2.seaDir.x + bz * V2.seaDir.z;
-			armK = smoothstep(V2.bay.r + 2, V2.bay.r + 30, br) * smoothstep(V2.bay.r + 200, V2.bay.r + 110, br) * smoothstep(V2.bay.r * 1.05, V2.bay.r * 0.5, ba);
+			const bs = Math.abs(-bx * V2.seaDir.z + bz * V2.seaDir.x);
+			// only the two arms either side of the cove, not the slope behind the village
+			armK = smoothstep(V2.bay.r + 2, V2.bay.r + 30, br) * smoothstep(V2.bay.r + 200, V2.bay.r + 110, br) * smoothstep(V2.bay.r * 1.05, V2.bay.r * 0.5, ba) * smoothstep(V2.bay.r * 0.55, V2.bay.r * 0.9, bs);
 		}
 		// the village keeps its fields open behind it, not on the arms of the bay
-		const clearing = Math.max(smoothstep(60, 130, dv), armK);
+		const clearing = Math.max(smoothstep(80, 160, dv), armK);
 		const alt = h / island.peak.h;
 		const patch = smoothstep(0.3, 0.7, ecoNoise.fbm(x * 0.0028 + 7, z * 0.0028 - 3, 3)); // stands and glades
 		let f = patch + armK * 0.8 + Math.max(0, conc) * 0.6 - Math.max(0, -conc) * 0.3 + smoothstep(0.06, 0.3, sl) * 0.4 + smoothstep(0.15, 0.5, alt) * 0.15;
@@ -666,7 +668,7 @@ export function createVegetation(island, shared, scene) {
 	// sit on a little mound the grass crowds into
 	const CONTACT = { palm: [2.4, 0.75, 0.5], hardwood: [3.8, 0.85, 0.55], banana: [1.7, 0.2, 1.0], shrub: [1.8, 0.15, 1.0], hibiscus: [1.9, 0.15, 1.0], bougainvillea: [2.0, 0.15, 1.0], boulder: [2.0, 0.7, 0.4], fern: [1.1, 0.1, 0.8], driftwood: [1.6, 0.5, 0.2], nuts: [0.7, 0.4, 0.0] };
 	const OCC = shared.occ, OS = OCC.image.width, OSPAN = shared.uOccO.value.z, occData = OCC.image.data;
-	const contacts = [];
+	const contacts = [], extra = [];
 
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3(), col = new THREE.Color();
 	let lastX = 1e9, lastZ = 1e9;
@@ -704,6 +706,8 @@ export function createVegetation(island, shared, scene) {
 				}
 			}
 		}
+		// houses: trodden, shaded ground round every foundation
+		for (const f of extra) if (Math.hypot(f.x - cx, f.z - cz) < OSPAN * 0.72) contacts.push(f.x, f.z, Math.max(f.w, f.d) * 0.85, 0.6, 0);
 		// rasterise the soft discs into the occupancy map, centred on the player
 		const ox = Math.round(cx / 4) * 4 - OSPAN / 2, oz = Math.round(cz / 4) * 4 - OSPAN / 2, px = OS / OSPAN;
 		occData.fill(0);
@@ -743,5 +747,28 @@ export function createVegetation(island, shared, scene) {
 		}
 		return out;
 	}
-	return { group, stream, pickables, obstacles, species, cells, eco };
+	// buildings: shade the ground round them and clear any plant standing where they stand
+	const addContacts = (list) => {
+		for (const f of list) {
+			if (f.fence) continue;
+			const rad = f.pier ? 0 : Math.max(f.w, f.d) * 0.62 + 0.8;
+			if (!f.pier) extra.push(f);
+			const ci = Math.floor(f.x / CELL), cj = Math.floor(f.z / CELL);
+			for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) {
+				const c = cells.get(i + ',' + j);
+				if (!c) continue;
+				for (const k in c.items) c.items[k] = c.items[k].filter((it) => {
+					if (f.pier) {
+						// keep the pier and its landing clear
+						const dx = it.x - f.x, dz = it.z - f.z, c0 = Math.cos(f.face), s0 = Math.sin(f.face);
+						const lx = dx * c0 - dz * s0, lz = dx * s0 + dz * c0;
+						return !(Math.abs(lx) < f.w / 2 + 2 && lz > -6 && lz < f.len);
+					}
+					return Math.hypot(it.x - f.x, it.z - f.z) > rad;
+				});
+			}
+		}
+		if (lastX < 1e8) stream({ position: { x: lastX, z: lastZ } }, true);
+	};
+	return { group, stream, pickables, obstacles, species, cells, eco, addContacts };
 }

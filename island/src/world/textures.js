@@ -360,3 +360,18 @@ export function bananaStem() {
 	for (let k = 0; k < 4; k++) { const x = (k + r() * 0.5) * W / 4; g.fillStyle = rgb(80, 100, 45, 0.6); g.fillRect(x, 0, 2, H); }
 	return finish(c, true);
 }
+
+// rough coral-limestone blocks for foundations
+export function stoneBlocks() {
+	const S = 256, [c, g] = canvas(S, S), r = mulberry32(61);
+	g.fillStyle = rgb(170, 165, 150); g.fillRect(0, 0, S, S);
+	for (let y = 0; y < S; y += 32) {
+		const off = (y / 32) % 2 ? 24 : 0;
+		for (let x = -48 + off; x < S; x += 48 + r() * 10) {
+			const l = 150 + r() * 60;
+			g.fillStyle = rgb(l, l * 0.97, l * 0.88); g.fillRect(x + 2, y + 2, 44 + r() * 6, 28);
+			for (let k = 0; k < 20; k++) { g.fillStyle = rgb(90, 85, 75, 0.25); g.fillRect(x + r() * 44, y + r() * 28, 2, 2); }
+		}
+	}
+	return finish(c, true);
+}

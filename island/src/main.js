@@ -129,6 +129,7 @@ export function createIslandWorld() {
 		const litter = createLitter(island, shared, scene, isPhone ? 0.6 : 1);
 		const vegetation = createVegetation(island, shared, scene);
 		const village = createVillage(island, shared, scene);
+		vegetation.addContacts(village.footprints);
 		const distant = createDistant(island, shared, scene);
 		const fauna = createFauna(island, shared, scene);
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
