@@ -97,7 +97,9 @@ export function createTerrain(island, shared) {
 				grass = mix(grass, grass * 0.72, mk.a * 0.45);
 				vec3 rock = mix(vec3(0.36, 0.34, 0.31), vec3(0.52, 0.49, 0.44), n2) * (0.85 + 0.25 * n3);
 				vec3 dirt = mix(vec3(0.46, 0.35, 0.23), vec3(0.60, 0.48, 0.33), n2) * (0.88 + 0.2 * n3);
-				float grassW = smoothstep(1.2 + n1 * 1.6, 2.6 + n1 * 1.8, h);
+				// the beach keeps its width, but its edge only wanders a little, so sand never
+				// breaks out in patches up inside the meadow
+				float grassW = smoothstep(1.4 + n1 * 0.5, 2.3 + n1 * 0.6, h);
 				// close-up relief: two scales of the painted detail so it never reads as a tile
 				float camD = length(cameraPosition - vW);
 				float near = 1.0 - smoothstep(18.0, 70.0, camD);
@@ -114,7 +116,10 @@ export function createTerrain(island, shared) {
 				// paths: packed earth with gravel that catches the light
 				dirt *= 0.88 + 0.22 * dd.g;
 				dirt = mix(dirt, vec3(0.58, 0.54, 0.47), smoothstep(0.7, 0.95, dd.g) * 0.18);
-				vec3 col = mix(sand, grass, grassW);
+				// sand -> sandy soil -> meadow, never a bright beige patch inside the grass
+				vec3 sandySoil = mix(sandDry * vec3(0.78, 0.74, 0.62), meadowGround * 1.1, 0.35);
+				vec3 col = mix(sand, sandySoil, smoothstep(0.0, 0.45, grassW));
+				col = mix(col, grass, smoothstep(0.35, 1.0, grassW));
 				float rockW = smoothstep(0.42, 0.62, slope + (n1 - 0.5) * 0.2) * step(0.9, h);
 				col = mix(col, rock, rockW);
 				float pathW = smoothstep(0.25, 0.75, mk.r + (dd.g - 0.5) * 0.25) * step(0.5, h);
@@ -137,7 +142,7 @@ export function createTerrain(island, shared) {
 				float occ = texture2D(uOcc, ouv).r * (1.0 - smoothstep(0.38, 0.5, max(abs(ouv.x - 0.5), abs(ouv.y - 0.5))));
 				vec3 humus = mix(vec3(0.36, 0.28, 0.18), vec3(0.46, 0.38, 0.26), dd.b) * mix(1.0, 1.35, 1.0 - grassW);
 				col = mix(col, humus, occ * 0.55 * step(0.4, h));
-				col *= 1.0 - occ * 0.28;
+				col *= 1.0 - occ * 0.36;
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				float rough = mix(0.97, 0.42, wet * (1.0 - grassW));`)
 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rough;')

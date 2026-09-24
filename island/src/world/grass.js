@@ -72,9 +72,9 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float dCam = length(w - uCam) / (uSpan * 0.5);
 				// thinner under the forest canopy, where ferns and leaf litter take over
 				float canopy = smoothstep(0.55, 0.9, mk.a) * smoothstep(5.0, 9.0, heightAt(w));
-				float grow = (1.0 - canopy * step(0.35, aRand.y)) * smoothstep(0.08, 0.35, mk.a + aRand.x * 0.25) * (1.0 - smoothstep(0.15, 0.55, mk.r + (aRand.y - 0.5) * 0.2)) * smoothstep(1.3, 2.4, h);
+				float grow = (1.0 - canopy * step(0.35, aRand.y)) * smoothstep(0.08, 0.35, mk.a + aRand.x * 0.25) * (1.0 - smoothstep(0.15, 0.55, mk.r + (aRand.y - 0.5) * 0.2)) * smoothstep(1.3, 2.0, h);
 				float n1g = fbm3(w * 0.06);
-				grow *= smoothstep(0.25, 0.75, smoothstep(1.2 + n1g * 1.6, 2.6 + n1g * 1.8, h));
+				grow *= smoothstep(0.3, 0.8, smoothstep(1.4 + n1g * 0.5, 2.3 + n1g * 0.6, h));
 				grow *= 1.0 - smoothstep(0.7, 1.0, dCam);
 				// mostly ankle-to-shin turf; long grass in drifts; cropped short in the village
 				float patchN = vn(w * 0.06 + 11.0);
@@ -83,6 +83,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vec2 ouv = (w - uOccO.xy) / uOccO.z;
 				float occ = texture2D(uOcc, ouv).r * step(abs(ouv.x - 0.5), 0.49) * step(abs(ouv.y - 0.5), 0.49);
 				tall *= 1.0 - occ * 0.75;
+				tall *= mix(0.35, 1.0, smoothstep(0.8, 2.6, length(w - uCam)));
 				grow *= step(occ * 0.9, aRand.y + 0.25);
 				tall *= mix(1.0, 0.45, mk.g) * uTallK * grow;
 				gTall = tall;
@@ -104,10 +105,14 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				p.y *= tall;
 				// wind: a travelling wave plus the music's low end; stiffer when short
 				float wave = vn(w * 0.08 + vec2(uTime * 0.35, uTime * 0.12));
-				float bend = aTip * (0.12 + uWind * 0.3 + uBass * 0.45) * (0.4 + wave) * (0.4 + tall);
-				p.x += bend * 0.8 + sin(uTime * 2.3 + aRand.x * 20.0) * 0.04 * aTip * tall;
-				p.z += bend * 0.3;
-				p.y -= bend * bend * 0.3;
+				// lean the blade over (rotate, keeping its length) rather than dragging the tip
+				// sideways: long grass bows, it never smears into a streak
+				float lean = clamp((0.14 + uWind * 0.3 + uBass * 0.4) * (0.4 + wave) + sin(uTime * 2.3 + aRand.x * 20.0) * 0.05, -0.2, 0.62);
+				lean *= mix(1.0, 0.6, smoothstep(0.4, 1.0, tall));
+				float ly = p.y;
+				p.x += sin(lean) * ly * 0.93;
+				p.z += sin(lean) * ly * 0.35;
+				p.y = cos(lean) * ly;
 				vec3 transformed = vec3(w.x, h - 0.02, w.y) + p;
 				vGW = transformed;`)
 			.replace('#include <project_vertex>', `#include <project_vertex>

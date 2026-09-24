@@ -145,15 +145,24 @@ function hardwood(seed, far) {
 		// buttress and surface roots: they leave the trunk high and run out and down into the soil
 		const nR = 6 + Math.floor(r() * 3);
 		for (let i = 0; i < nR; i++) {
-			const a = i / nR * 6.283 + r() * 0.5, L = 0.6 + r() * 0.8, hi = 0.3 + r() * 0.22, wig = (r() - 0.5) * 0.5;
-			// leaves the flare low, drops fast to the surface, then runs out just under it
+			const a = i / nR * 6.283 + r() * 0.5, L = 1.0 + r() * 1.1, hi = 0.3 + r() * 0.22, wig = (r() - 0.5) * 0.7;
+			// born inside the flare, drops to the surface, snakes out along it and dives
+			// under at a fine point, so there is never a blunt end in view
 			const pts = [], rad = [];
-			for (let k = 0; k <= 6; k++) {
-				const t = k / 6, d = 0.28 + (L + 0.3) * t, y = hi * Math.pow(1 - t, 2.4) - 0.07 * t;
-				pts.push(V(Math.cos(a + wig * t) * d, y, Math.sin(a + wig * t) * d));
-				rad.push(0.13 * Math.pow(1 - t, 1.4) + 0.01);
+			for (let k = 0; k <= 9; k++) {
+				const t = k / 9, d = 0.12 + (L + 0.3) * t;
+				const y = hi * Math.pow(1 - Math.min(1, t * 1.25), 2.2) - 0.22 * Math.pow(t, 3) + Math.sin(t * 9 + i) * 0.015;
+				const aa = a + wig * t + Math.sin(t * 5 + i) * 0.08;
+				pts.push(V(Math.cos(aa) * d, y, Math.sin(aa) * d));
+				rad.push(0.14 * Math.pow(1 - t, 1.7) + 0.004);
 			}
 			tube(trunk, pts, rad, 5, BARK, () => 0);
+			// a rootlet or two branching off along the way
+			for (let b = 0; b < 2; b++) {
+				const k0 = 3 + Math.floor(r() * 4), o = pts[k0], ba2 = a + (r() < 0.5 ? -1 : 1) * (0.6 + r() * 0.5), bl = 0.35 + r() * 0.35;
+				const e1 = V(o.x + Math.cos(ba2) * bl * 0.5, o.y * 0.3, o.z + Math.sin(ba2) * bl * 0.5), e2 = V(o.x + Math.cos(ba2) * bl, -0.1, o.z + Math.sin(ba2) * bl);
+				tube(trunk, [o.clone().setY(o.y + 0.01), e1, e2], [rad[k0] * 0.55, rad[k0] * 0.3, 0.003], 4, BARK, () => 0);
+			}
 		}
 	}
 	const fork = path[path.length - 1], crownC = fork.clone().add(V(0, H * 0.22, 0));
@@ -298,8 +307,10 @@ function swayMaterial(params, shared, stiff) {
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
 	const hook = (sh) => {
 		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass;
-		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
+		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
 			#include <begin_vertex>
+			// darker where it meets the ground: roots, the trunk foot, the base of a shrub
+			vGroundAO = mix(0.42, 1.0, smoothstep(-0.1, 1.3, position.y));
 			#ifdef USE_INSTANCING
 			vec3 ip = vec3(instanceMatrix[3]);
 			#else
@@ -315,6 +326,7 @@ function swayMaterial(params, shared, stiff) {
 	// a leaf does, instead of flipping the back face dark
 	m.onBeforeCompile = (sh) => {
 		hook(sh);
+		sh.fragmentShader = 'varying float vGroundAO;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n\tdiffuseColor.rgb *= vGroundAO;');
 		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
 	};
 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '');
@@ -498,7 +510,8 @@ export function createVegetation(island, shared, scene) {
 			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
 				const d = Math.hypot(i + 0.5 - x, j + 0.5 - z) / R;
 				if (d >= 1) continue;
-				const v = Math.pow(1 - d * d, 1.5) * str * 255, o = j * OS + i;
+				// broad soft shade plus a dark, damp core right at the foot
+				const v = Math.min(1, Math.pow(1 - d * d, 1.5) * str + Math.pow(Math.max(0, 1 - d * 2.6), 2) * 0.5) * 255, o = j * OS + i;
 				if (v > occData[o]) occData[o] = v;
 			}
 		}
