@@ -62,7 +62,7 @@ export function createTerrain(island, shared) {
 		uHeight: { value: shared.heightTex }, uMasks: { value: shared.maskTex },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCenter: { value: new THREE.Vector2() }, uTime: shared.uTime, uWet: { value: 0 },
-		uDetail: { value: groundDetail() },
+		uDetail: { value: groundDetail() }, uOcc: shared.uOcc, uOccO: shared.uOccO,
 	};
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
@@ -76,7 +76,7 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\nfloat gDetailH;\n' + NOISE_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uOcc; uniform vec3 uOccO; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\nfloat gDetailH;\n' + NOISE_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
@@ -90,7 +90,7 @@ export function createTerrain(island, shared) {
 				float wet = 1.0 - smoothstep(0.15, 0.9 + 0.3 * n1, h);
 				vec3 sand = mix(sandDry, sandWet, wet);
 				// meadow: several greens, sun-bleached patches, darker under growth
-				vec3 g1 = vec3(0.22, 0.38, 0.09), g2 = vec3(0.36, 0.48, 0.13), g3 = vec3(0.48, 0.48, 0.20);
+				vec3 g1 = vec3(0.26, 0.42, 0.08), g2 = vec3(0.42, 0.54, 0.12), g3 = vec3(0.56, 0.52, 0.20);
 				vec3 grass = mix(g1, g2, smoothstep(0.35, 0.7, n1));
 				grass = mix(grass, g3, smoothstep(0.62, 0.8, fbm3(vW.xz * 0.013 + 3.0)) * 0.7);
 				grass *= 0.82 + 0.3 * n3;
@@ -132,6 +132,12 @@ export function createTerrain(island, shared) {
 				float cA = 1.0 - abs(vn(vW.xz * 0.55 + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
 				float cB = 1.0 - abs(vn(vW.xz * 0.7 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
 				col += vec3(0.5, 0.6, 0.55) * pow(min(cA, cB), 6.0) * smoothstep(0.0, -0.8, h) * (1.0 - smoothstep(-2.0, -14.0, h)) * 1.6;
+				// rooted: the earth under trees and shrubs is shaded, bare, damp and warm
+				vec2 ouv = (vW.xz - uOccO.xy) / uOccO.z;
+				float occ = texture2D(uOcc, ouv).r * (1.0 - smoothstep(0.38, 0.5, max(abs(ouv.x - 0.5), abs(ouv.y - 0.5))));
+				vec3 humus = mix(vec3(0.36, 0.28, 0.18), vec3(0.46, 0.38, 0.26), dd.b) * mix(1.0, 1.35, 1.0 - grassW);
+				col = mix(col, humus, occ * 0.55 * step(0.4, h));
+				col *= 1.0 - occ * 0.28;
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				float rough = mix(0.97, 0.42, wet * (1.0 - grassW));`)
 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rough;')

@@ -276,3 +276,69 @@ export function woodBark() {
 	for (let i = 0; i < 14; i++) { g.fillStyle = rgb(150 + r() * 40, 170 + r() * 30, 120, 0.25); g.beginPath(); g.arc(r() * W, r() * H, 6 + r() * 16, 0, 7); g.fill(); }
 	return finish(c, true);
 }
+
+// a flowering tropical shrub: glossy leaves with blossoms, painted in full colour
+// (instance tint only varies brightness). kind: 'hibiscus' | 'bougainvillea'
+export function bloomCluster(kind) {
+	const S = 256, [c, g] = canvas(S, S), r = mulberry32(kind === 'hibiscus' ? 81 : 82);
+	const leaf = (x, y, len, ang, l) => {
+		const w = len * 0.45;
+		g.save(); g.translate(x, y); g.rotate(ang);
+		const gr = g.createLinearGradient(-w, 0, w, 0);
+		gr.addColorStop(0, rgb(46 * l, 92 * l, 34 * l)); gr.addColorStop(1, rgb(30 * l, 70 * l, 26 * l));
+		g.fillStyle = gr;
+		g.beginPath(); g.moveTo(0, -len); g.quadraticCurveTo(w, -len * 0.1, 0, len); g.quadraticCurveTo(-w, -len * 0.1, 0, -len); g.fill();
+		g.strokeStyle = rgb(80 * l, 130 * l, 60 * l, 0.6); g.lineWidth = 1; g.beginPath(); g.moveTo(0, -len * 0.9); g.lineTo(0, len * 0.9); g.stroke();
+		g.restore();
+	};
+	for (let i = 0; i < 34; i++) {
+		const a = r() * 6.283, d = r() * S * 0.36;
+		leaf(S / 2 + Math.cos(a) * d, S / 2 + Math.sin(a) * d, S * (0.07 + r() * 0.04), r() * 6.283, 0.9 + r() * 0.5);
+	}
+	if (kind === 'hibiscus') {
+		// a few big five-petalled red flowers with a pale throat and a long stamen
+		for (let i = 0; i < 6; i++) {
+			const x = S * (0.22 + r() * 0.56), y = S * (0.22 + r() * 0.56), R = S * (0.07 + r() * 0.025), rot = r() * 6.283;
+			const hue = r() < 0.7 ? [214, 38, 52] : [245, 120, 60];
+			for (let p = 0; p < 5; p++) {
+				const a = rot + p / 5 * 6.283;
+				const gr = g.createRadialGradient(x, y, 0, x, y, R * 1.1);
+				gr.addColorStop(0, rgb(120, 10, 30)); gr.addColorStop(0.3, rgb(...hue)); gr.addColorStop(1, rgb(hue[0] * 1.05, hue[1] * 1.2, hue[2] * 1.1));
+				g.fillStyle = gr;
+				g.beginPath(); g.ellipse(x + Math.cos(a) * R * 0.55, y + Math.sin(a) * R * 0.55, R * 0.62, R * 0.45, a, 0, 6.283); g.fill();
+			}
+			g.strokeStyle = rgb(250, 220, 120); g.lineWidth = 2;
+			g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(rot) * R * 0.9, y + Math.sin(rot) * R * 0.9); g.stroke();
+		}
+	} else {
+		// dense clusters of papery magenta bracts
+		for (let i = 0; i < 26; i++) {
+			const x = S * (0.15 + r() * 0.7), y = S * (0.15 + r() * 0.7);
+			for (let k = 0; k < 6; k++) {
+				const bx = x + (r() - 0.5) * 22, by = y + (r() - 0.5) * 22, R = 5 + r() * 5, l = 0.8 + r() * 0.35;
+				g.fillStyle = rgb(210 * l, 40 * l, 150 * l);
+				g.beginPath(); g.ellipse(bx, by, R, R * 0.75, r() * 3, 0, 6.283); g.fill();
+				g.fillStyle = rgb(250, 240, 220); g.fillRect(bx - 0.8, by - 0.8, 1.6, 1.6);
+			}
+		}
+	}
+	// fade the square edge so cards never show a border
+	g.globalCompositeOperation = 'destination-in';
+	const m = g.createRadialGradient(S / 2, S / 2, S * 0.3, S / 2, S / 2, S * 0.5);
+	m.addColorStop(0, 'rgba(0,0,0,1)'); m.addColorStop(1, 'rgba(0,0,0,0)');
+	g.fillStyle = m; g.fillRect(0, 0, S, S);
+	return finish(c);
+}
+
+// banana pseudostem: overlapping green sheaths streaked with brown and a dusty bloom
+export function bananaStem() {
+	const W = 128, H = 256, [c, g] = canvas(W, H), r = mulberry32(91);
+	const gr = g.createLinearGradient(0, 0, W, 0);
+	gr.addColorStop(0, rgb(120, 150, 70)); gr.addColorStop(0.5, rgb(150, 175, 90)); gr.addColorStop(1, rgb(115, 145, 68));
+	g.fillStyle = gr; g.fillRect(0, 0, W, H);
+	for (let i = 0; i < 90; i++) { const x = r() * W, l = r(); g.fillStyle = l < 0.5 ? rgb(95, 120, 55, 0.35) : rgb(175, 190, 120, 0.3); g.fillRect(x, r() * H, 1 + r() * 2, 20 + r() * 80); }
+	for (let i = 0; i < 16; i++) { g.fillStyle = rgb(110 + r() * 30, 80 + r() * 20, 50, 0.5); g.fillRect(r() * W, r() * H, 3 + r() * 8, 30 + r() * 90); }
+	// sheath edges
+	for (let k = 0; k < 4; k++) { const x = (k + r() * 0.5) * W / 4; g.fillStyle = rgb(80, 100, 45, 0.6); g.fillRect(x, 0, 2, H); }
+	return finish(c, true);
+}

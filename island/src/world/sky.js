@@ -6,10 +6,10 @@ import { NOISE_GLSL } from './terrain.js';
 
 const C = (r, g, b) => new THREE.Color(r, g, b);
 const PAL = {
-	dayZen: C(0.04, 0.20, 0.74), dayHor: C(0.46, 0.68, 0.95),
+	dayZen: C(0.03, 0.24, 0.72), dayHor: C(0.50, 0.72, 0.92),
 	setZen: C(0.20, 0.24, 0.50), setHor: C(1.00, 0.52, 0.26),
 	nightZen: C(0.004, 0.009, 0.028), nightHor: C(0.018, 0.03, 0.065),
-	sunDay: C(1.0, 0.95, 0.86), sunSet: C(1.0, 0.52, 0.22), moon: C(0.45, 0.55, 0.8),
+	sunDay: C(1.0, 0.90, 0.74), sunSet: C(1.0, 0.52, 0.22), moon: C(0.45, 0.55, 0.8),
 };
 
 export function createSky(scene, shared, renderer) {
@@ -115,7 +115,8 @@ export function createSky(scene, shared, renderer) {
 		sun.position.x += sun.target.position.x - focus.x;
 		sun.position.z += sun.target.position.z - focus.z;
 		hemi.color.copy(tmpB).lerp(tmpA, 0.5).multiplyScalar(1.0);
-		hemi.groundColor.setRGB(0.32, 0.28, 0.17).multiplyScalar(0.3 + 0.7 * dayK);
+		// light bounced off warm sand and sunlit leaves fills the shade with gold, not grey
+		hemi.groundColor.setRGB(0.46, 0.36, 0.18).multiplyScalar(0.3 + 0.7 * dayK);
 		hemi.intensity = 0.25 + 0.9 * dayK;
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers

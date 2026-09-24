@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
 import * as TX from './textures.js';
+import { HEIGHT_GLSL } from './terrain.js';
 
 // ---------- geometry helpers ----------
 class Builder {
@@ -97,10 +98,23 @@ function palm(seed, far) {
 	const path = [], radii = [];
 	for (let k = 0; k <= 10; k++) {
 		const t = k / 10;
-		path.push(V(Math.cos(la) * lean * t * t, H * t, Math.sin(la) * lean * t * t));
-		radii.push(0.24 - 0.09 * t + (k === 0 ? 0.08 : 0));
+		// starts below the ground and swells into a bulb where it meets the sand
+		path.push(V(Math.cos(la) * lean * t * t, H * t - (k === 0 ? 0.35 : 0), Math.sin(la) * lean * t * t));
+		radii.push(0.24 - 0.09 * t + 0.16 * Math.exp(-t * 22));
 	}
-	tube(trunk, far ? path.filter((_, k) => k % 2 === 0) : path, far ? radii.filter((_, k) => k % 2 === 0) : radii, far ? 4 : 6, PALM_BARK, (t) => t * t * 0.35);
+	tube(trunk, far ? path.filter((_, k) => k % 2 === 0) : path, far ? radii.filter((_, k) => k % 2 === 0) : radii, far ? 4 : 7, PALM_BARK, (t) => t * t * 0.35);
+	if (!far) {
+		// the root mass: a skirt of short, dark roots pushing into the ground
+		const ROOT = new THREE.Color(0.46, 0.38, 0.30);
+		// a dense mat of thin roots, in two tiers, splaying out and down into the sand
+		const nR = 22 + Math.floor(r() * 8);
+		for (let i = 0; i < nR; i++) {
+			const a = i / nR * 6.283 + r() * 0.35, out = 0.16 + r() * 0.26, hi = 0.06 + r() * 0.2, rr = 0.022 + r() * 0.018;
+			const d0 = 0.25 + r() * 0.05;
+			tube(trunk, [V(Math.cos(a) * d0, hi, Math.sin(a) * d0), V(Math.cos(a) * (d0 + out * 0.5), hi * 0.3, Math.sin(a) * (d0 + out * 0.5)), V(Math.cos(a) * (d0 + out), -0.06, Math.sin(a) * (d0 + out))],
+				[rr, rr * 0.9, rr * 0.6], 3, ROOT, () => 0);
+		}
+	}
 	const top = path[10];
 	const nF = (far ? 8 : 10) + Math.floor(r() * 3);
 	for (let f = 0; f < nF; f++) {
@@ -121,13 +135,28 @@ function hardwood(seed, far) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
 	const H = 8 + r() * 5, bend = r() * 1.5, ba = r() * 6.28;
 	const path = [], radii = [];
-	for (let k = 0; k <= 6; k++) {
-		const t = k / 6;
-		path.push(V(Math.cos(ba) * bend * t * t, H * 0.62 * t, Math.sin(ba) * bend * t * t));
-		radii.push(0.34 - 0.14 * t + (k === 0 ? 0.12 : 0));
+	// fine steps near the ground so the trunk can flare out into its roots
+	for (const t of [0, 0.02, 0.06, 0.12, 0.22, 0.4, 0.6, 0.8, 1]) {
+		path.push(V(Math.cos(ba) * bend * t * t, H * 0.62 * t - (t === 0 ? 0.3 : 0), Math.sin(ba) * bend * t * t));
+		radii.push(0.32 - 0.13 * t + 0.3 * Math.exp(-t * 20));
 	}
-	tube(trunk, path, radii, far ? 5 : 7, BARK, (t) => t * 0.15);
-	const fork = path[6], crownC = fork.clone().add(V(0, H * 0.22, 0));
+	tube(trunk, path, radii, far ? 5 : 8, BARK, (t) => t * 0.15);
+	if (!far) {
+		// buttress and surface roots: they leave the trunk high and run out and down into the soil
+		const nR = 6 + Math.floor(r() * 3);
+		for (let i = 0; i < nR; i++) {
+			const a = i / nR * 6.283 + r() * 0.5, L = 0.6 + r() * 0.8, hi = 0.3 + r() * 0.22, wig = (r() - 0.5) * 0.5;
+			// leaves the flare low, drops fast to the surface, then runs out just under it
+			const pts = [], rad = [];
+			for (let k = 0; k <= 6; k++) {
+				const t = k / 6, d = 0.28 + (L + 0.3) * t, y = hi * Math.pow(1 - t, 2.4) - 0.07 * t;
+				pts.push(V(Math.cos(a + wig * t) * d, y, Math.sin(a + wig * t) * d));
+				rad.push(0.13 * Math.pow(1 - t, 1.4) + 0.01);
+			}
+			tube(trunk, pts, rad, 5, BARK, () => 0);
+		}
+	}
+	const fork = path[path.length - 1], crownC = fork.clone().add(V(0, H * 0.22, 0));
 	const ends = [];
 	const nB = far ? 0 : 3 + Math.floor(r() * 3);
 	for (let i = 0; i < nB; i++) {
@@ -153,7 +182,7 @@ function hardwood(seed, far) {
 function banana(seed) {
 	const r = mulberry32(seed), stem = new Builder(), leaves = new Builder();
 	const H = 1.5 + r() * 0.8;
-	tube(stem, [V(0, 0, 0), V(0, H * 0.5, 0), V(0, H, 0)], [0.14, 0.12, 0.09], 6, new THREE.Color(0.42, 0.50, 0.26), (t) => t * 0.3);
+	tube(stem, [V(0, -0.15, 0), V(0, 0.06, 0), V(0, H * 0.5, 0), V(0, H, 0)], [0.19, 0.15, 0.12, 0.09], 7, new THREE.Color(1, 1, 1), (t) => t * 0.3);
 	const nL = 6 + Math.floor(r() * 3);
 	for (let l = 0; l < nL; l++) {
 		const a = l / nL * 6.28 + r() * 0.5, L = 1.7 + r() * 0.8, rise = 0.9 + r() * 0.5;
@@ -183,6 +212,15 @@ function fern(seed) {
 	return { parts: [b.geometry()], height: 0.9 };
 }
 
+// a flowering shrub: full-colour cards, a little taller and looser than the plain shrub
+function bloom(seed) {
+	const r = mulberry32(seed), b = new Builder(), c0 = V(0, 0.8, 0);
+	for (let i = 0; i < 20; i++) {
+		const th = r() * 6.28, ph = Math.acos(r() * 0.9), k = 0.45 + r() * 0.55;
+		card(b, c0.clone().add(V(Math.sin(ph) * Math.cos(th) * 1.2 * k, Math.cos(ph) * 0.95 * k - 0.1, Math.sin(ph) * Math.sin(th) * 1.2 * k)), 1.25, r, { r: 1, g: 1, b: 1 }, 0.6, V(0, 0, 0));
+	}
+	return { parts: [b.geometry()], height: 1.8 };
+}
 function shrub(seed) {
 	const r = mulberry32(seed), b = new Builder(), c0 = V(0, 0.55, 0);
 	for (let i = 0; i < 22; i++) {
@@ -300,6 +338,9 @@ export function createVegetation(island, shared, scene) {
 		bark: swayMaterial({ map: tex.woodBark, roughness: 0.95 }, shared, 1),
 		palmbark: swayMaterial({ map: tex.palmBark, roughness: 0.9 }, shared, 1),
 		stem: swayMaterial({ roughness: 0.8 }, shared, 1),
+		bstem: swayMaterial({ map: TX.bananaStem(), roughness: 0.7 }, shared, 1),
+		hibiscus: swayMaterial({ map: TX.bloomCluster('hibiscus'), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.55 }, shared, 0.8),
+		bougainvillea: swayMaterial({ map: TX.bloomCluster('bougainvillea'), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.7 }, shared, 0.8),
 		frond: swayMaterial({ map: tex.frond, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75 }, shared, 1),
 		leaf: swayMaterial({ map: tex.leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8),
 		banana: swayMaterial({ map: tex.banana, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }, shared, 1.2),
@@ -312,10 +353,14 @@ export function createVegetation(island, shared, scene) {
 			accept: (x, z, h, sl, m) => h > 0.7 && h < 12 && sl < 0.45 && m.path < 0.2 && (island.shapeAt(x, z) > 0.84 || m.village > 0.3) && nz.fbm(x * 0.012, z * 0.012, 3) > 0.47 },
 		{ key: 'hardwood', variants: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 9, near: 130, farR: 1050, max: 1800, kind: 'wood',
 			accept: (x, z, h, sl, m) => h > 4 && h < island.peak.h * 0.85 && sl < 0.62 && m.path < 0.15 && m.village < 0.2 && m.wild > 0.3 && island.shapeAt(x, z) < 0.86 && nz.fbm(x * 0.006 + 9, z * 0.006, 3) > 0.4 },
-		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['stem', 'banana'], spacing: 5.5, near: 90, max: 500, kind: 'soft',
+		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['bstem', 'banana'], spacing: 5.5, near: 90, max: 500, kind: 'soft',
 			accept: (x, z, h, sl, m) => h > 2.2 && h < 60 && sl < 0.45 && m.path < 0.2 && m.wild > 0.25 && nz.fbm(x * 0.02 + 4, z * 0.02, 3) > 0.54 },
 		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v)), mats: ['fern'], spacing: 3.4, near: 50, max: 700, kind: 'soft', noShadow: true,
 			accept: (x, z, h, sl, m) => h > 2.6 && sl < 0.6 && m.path < 0.15 && m.wild > 0.35 && nz.fbm(x * 0.05, z * 0.05 + 2, 2) > 0.52 },
+		{ key: 'hibiscus', variants: [0, 1].map((v) => bloom(island.seed * 41 + v)), mats: ['hibiscus'], spacing: 7, near: 110, max: 260, kind: 'soft',
+			accept: (x, z, h, sl, m) => h > 1.8 && h < 40 && sl < 0.4 && m.path < 0.25 && (m.village > 0.25 || (m.path > 0.02 && m.wild > 0.1)) && nz.fbm(x * 0.05 + 3, z * 0.05, 2) > 0.5 },
+		{ key: 'bougainvillea', variants: [0, 1].map((v) => bloom(island.seed * 43 + v)), mats: ['bougainvillea'], spacing: 8, near: 110, max: 220, kind: 'soft',
+			accept: (x, z, h, sl, m) => h > 1.6 && h < 30 && sl < 0.45 && m.path < 0.25 && m.wild > 0.08 && m.wild < 0.6 && nz.fbm(x * 0.04 - 6, z * 0.04, 2) > 0.56 },
 		{ key: 'shrub', variants: [0].map((v) => shrub(island.seed * 19 + v)), mats: ['leaf'], spacing: 6, near: 120, max: 500, kind: 'soft',
 			accept: (x, z, h, sl, m) => h > 1.8 && sl < 0.55 && m.path < 0.2 && m.wild > 0.15 && nz.fbm(x * 0.03 + 7, z * 0.03, 2) > 0.5 },
 		{ key: 'nuts', derived: true, variants: [0, 1, 2].map((v) => coconuts(island.seed * 29 + v)), mats: ['stem'], near: 60, max: 300, kind: 'wood', noShadow: true },
@@ -356,6 +401,11 @@ export function createVegetation(island, shared, scene) {
 				x: px, y: h - (sp.key === 'boulder' ? 0.35 : 0.05), z: pz, rot: rnd() * 6.283, scale: sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : 0.8 + rnd() * 0.45,
 				v: Math.floor(rnd() * sp.variants.length), tint: 0.85 + rnd() * 0.3,
 			});
+			// ferns gather in the damp shade at the foot of the big trees
+			if (sp.key === 'hardwood') {
+				const n = rnd() < 0.7 ? 1 + Math.floor(rnd() * 3) : 0;
+				for (let k = 0; k < n; k++) { const a = rnd() * 6.283, d = 1.1 + rnd() * 1.6; derived('fern', px + Math.cos(a) * d, pz + Math.sin(a) * d, 0.02); }
+			}
 			// palms drop their nuts and old fronds around the base
 			if (sp.key === 'palm') {
 				if (rnd() < 0.55) derived('nuts', px + (rnd() - 0.5) * 2.5, pz + (rnd() - 0.5) * 2.5, 0.04);
@@ -396,6 +446,13 @@ export function createVegetation(island, shared, scene) {
 	}
 	scene.add(group);
 
+	// ground occupancy: where anything stands, the soil under it is shaded, bare and
+	// damp, and the grass thins toward the stem. A small map around the player that
+	// the terrain and grass shaders both read, redrawn as the player moves.
+	const CONTACT = { palm: [2.4, 0.75], hardwood: [3.8, 0.85], banana: [1.6, 0.7], shrub: [1.7, 0.6], hibiscus: [1.8, 0.6], bougainvillea: [1.9, 0.6], boulder: [2.0, 0.7], fern: [1.0, 0.45], driftwood: [1.6, 0.5], nuts: [0.7, 0.4] };
+	const OCC = shared.occ, OS = OCC.image.width, OSPAN = shared.uOccO.value.z, occData = OCC.image.data;
+	const contacts = [];
+
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3(), col = new THREE.Color();
 	let lastX = 1e9, lastZ = 1e9;
 	function stream(cam, force) {
@@ -403,7 +460,9 @@ export function createVegetation(island, shared, scene) {
 		if (!force && Math.hypot(cx - lastX, cz - lastZ) < 6) return;
 		lastX = cx; lastZ = cz;
 		for (const sp of species) for (const m of sp.meshes) m.im.count = 0;
+		contacts.length = 0;
 		for (const sp of species) {
+			const cs = CONTACT[sp.key];
 			const R = sp.farR || sp.near, cr = Math.ceil(R / CELL);
 			const ci = Math.floor(cx / CELL), cj = Math.floor(cz / CELL);
 			const lim = sp.max;
@@ -414,6 +473,7 @@ export function createVegetation(island, shared, scene) {
 					const d = Math.hypot(it.x - cx, it.z - cz);
 					const lod = d < SHADOW_R ? 'close' : d < sp.near ? 'near' : (sp.far && d < R ? 'far' : null);
 					if (!lod) continue;
+					if (cs && d < OSPAN * 0.72) contacts.push(it.x, it.z, cs[0] * (sp.key === 'boulder' ? it.scale : it.scale * 0.9 + 0.1), cs[1]);
 					q.setFromAxisAngle(UP, it.rot);
 					sc.setScalar(it.scale);
 					pos.set(it.x, it.y, it.z);
@@ -429,6 +489,21 @@ export function createVegetation(island, shared, scene) {
 				}
 			}
 		}
+		// rasterise the soft discs into the occupancy map, centred on the player
+		const ox = Math.round(cx / 4) * 4 - OSPAN / 2, oz = Math.round(cz / 4) * 4 - OSPAN / 2, px = OS / OSPAN;
+		occData.fill(0);
+		for (let k = 0; k < contacts.length; k += 4) {
+			const x = (contacts[k] - ox) * px, z = (contacts[k + 1] - oz) * px, R = contacts[k + 2] * px, str = contacts[k + 3];
+			const i0 = Math.max(0, Math.floor(x - R)), i1 = Math.min(OS - 1, Math.ceil(x + R)), j0 = Math.max(0, Math.floor(z - R)), j1 = Math.min(OS - 1, Math.ceil(z + R));
+			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+				const d = Math.hypot(i + 0.5 - x, j + 0.5 - z) / R;
+				if (d >= 1) continue;
+				const v = Math.pow(1 - d * d, 1.5) * str * 255, o = j * OS + i;
+				if (v > occData[o]) occData[o] = v;
+			}
+		}
+		OCC.needsUpdate = true;
+		shared.uOccO.value.set(ox, oz, OSPAN);
 		for (const sp of species) for (const m of sp.meshes) {
 			m.im.instanceMatrix.needsUpdate = true;
 			if (m.im.instanceColor) m.im.instanceColor.needsUpdate = true;

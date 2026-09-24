@@ -90,6 +90,12 @@ export function createIslandWorld() {
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
+	// ground occupancy around the player (filled by vegetation, read by terrain and grass)
+	shared.occ = new THREE.DataTexture(new Uint8Array(256 * 256), 256, 256, THREE.RedFormat, THREE.UnsignedByteType);
+	shared.occ.magFilter = shared.occ.minFilter = THREE.LinearFilter;
+	shared.occ.needsUpdate = true;
+	shared.uOcc = { value: shared.occ };
+	shared.uOccO = { value: new THREE.Vector3(0, 0, 160) };
 
 	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'auto';
 	let panelClock = null;

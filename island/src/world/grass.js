@@ -49,7 +49,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span }, uWidth: { value: width }, uTallK: { value: heightK },
 		uTime: shared.uTime, uWind: shared.uWind, uHigh: shared.uHigh, uBass: shared.uBass,
-		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor,
+		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uOcc: shared.uOcc, uOccO: shared.uOccO,
 	};
 
 	const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, alphaToCoverage: true });
@@ -58,7 +58,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		sh.vertexShader = `
 			${HEIGHT_GLSL}
 			${NOISE_GLSL}
-			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
+			uniform sampler2D uMasks, uOcc; uniform vec3 uOccO; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW;
 			float gTall;
@@ -73,10 +73,17 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// thinner under the forest canopy, where ferns and leaf litter take over
 				float canopy = smoothstep(0.55, 0.9, mk.a) * smoothstep(5.0, 9.0, heightAt(w));
 				float grow = (1.0 - canopy * step(0.35, aRand.y)) * smoothstep(0.08, 0.35, mk.a + aRand.x * 0.25) * (1.0 - smoothstep(0.15, 0.55, mk.r + (aRand.y - 0.5) * 0.2)) * smoothstep(1.3, 2.4, h);
+				float n1g = fbm3(w * 0.06);
+				grow *= smoothstep(0.25, 0.75, smoothstep(1.2 + n1g * 1.6, 2.6 + n1g * 1.8, h));
 				grow *= 1.0 - smoothstep(0.7, 1.0, dCam);
 				// mostly ankle-to-shin turf; long grass in drifts; cropped short in the village
 				float patchN = vn(w * 0.06 + 11.0);
-				float tall = (0.22 + aRand.x * 0.3) + smoothstep(0.58, 0.85, patchN) * (0.35 + aRand.y * 0.35);
+				float tall = (0.22 + aRand.x * 0.3) + smoothstep(0.62, 0.88, patchN) * (0.18 + aRand.y * 0.22);
+				// thinner and shorter toward trunks and stems, where the shade and roots are
+				vec2 ouv = (w - uOccO.xy) / uOccO.z;
+				float occ = texture2D(uOcc, ouv).r * step(abs(ouv.x - 0.5), 0.49) * step(abs(ouv.y - 0.5), 0.49);
+				tall *= 1.0 - occ * 0.75;
+				grow *= step(occ * 0.9, aRand.y + 0.25);
 				tall *= mix(1.0, 0.45, mk.g) * uTallK * grow;
 				gTall = tall;
 				float ang = aRand.y * 6.2831;
@@ -84,10 +91,11 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// colour: a few greens, sun-dried straw in places, bluer in the shade of growth
 				float hue = vn(w * 0.23 + 3.0), dry = smoothstep(0.55, 0.8, vn(w * 0.035 - 7.0) + aRand.x * 0.15) * (1.0 - mk.a * 0.8);
 				// the same greens as the meadow ground, so tufts melt into it
-				vec3 g1 = vec3(0.30, 0.45, 0.13), g2 = vec3(0.37, 0.50, 0.15), g3 = vec3(0.27, 0.42, 0.15);
+				vec3 g1 = vec3(0.34, 0.50, 0.12), g2 = vec3(0.44, 0.56, 0.14), g3 = vec3(0.30, 0.47, 0.14);
 				vec3 tint = mix(mix(g1, g2, hue), g3, mk.a * 0.5 * aRand.y);
 				tint = mix(tint, vec3(0.55, 0.52, 0.30), dry * 0.35);
 				tint *= 0.92 + 0.14 * aRand.x;
+				tint *= 1.0 - occ * 0.3;
 				vTint = tint * tint;   // authored in display space
 				vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
 			.replace('#include <begin_vertex>', `
