@@ -33,7 +33,7 @@ class Builder {
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
 
-function tube(b, path, radii, sides, color, swayOf) {
+function tube(b, path, radii, sides, color, swayOf, uvAt) {
 	const rings = [];
 	// texture runs by length along the tube, so unevenly spaced rings (the flare at a
 	// trunk's foot) don't squash the bark into a band
@@ -57,7 +57,7 @@ function tube(b, path, radii, sides, color, swayOf) {
 		for (let s = 0; s <= sides; s++) {
 			const a = s / sides * Math.PI * 2, n = side.clone().multiplyScalar(Math.cos(a)).add(up2.clone().multiplyScalar(Math.sin(a)));
 			const band = 0.93 + 0.07 * Math.sin(along[k] * 1.9);
-			ring.push(b.vert(p.clone().add(n.clone().multiplyScalar(radii[k])), n, [s / sides, along[k] / total], { r: color.r * band, g: color.g * band, b: color.b * band }, swayOf(k / (path.length - 1))));
+			ring.push(b.vert(p.clone().add(n.clone().multiplyScalar(radii[k])), n, uvAt || [s / sides, along[k] / total], { r: color.r * band, g: color.g * band, b: color.b * band }, swayOf(k / (path.length - 1))));
 		}
 		rings.push(ring);
 	}
@@ -129,17 +129,54 @@ function palm(seed, far) {
 		}
 	}
 	const top = path[10];
-	const nF = (far ? 8 : 10) + Math.floor(r() * 3);
-	for (let f = 0; f < nF; f++) {
-		const a = f / nF * Math.PI * 2 + r() * 0.3, L = 3.8 + r() * 1.2, elev = 0.25 + r() * 0.55, droop = 0.2 + r() * 0.12;
-		const dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
-		const segs = far ? 3 : 5;
-		for (let k = 0; k <= segs; k++) {
-			const s = k / segs, d = L * s;
-			pts.push(top.clone().add(dir.clone().multiplyScalar(d * Math.cos(elev * 0.5))).add(V(0, Math.sin(elev) * d - droop * d * d, 0)));
-			widths.push(1.25 * Math.sin(Math.min(1, s * 1.2 + 0.08) * Math.PI) + 0.08);
+	// the crown: overlapping leaf bases swell out of the trunk top and close into the
+	// spear of the next unopened frond
+	const up = path[10].clone().sub(path[9]).normalize();
+	const at = (d) => top.clone().add(up.clone().multiplyScalar(d));
+	const BOOT = new THREE.Color(0.8, 0.78, 0.5);
+	tube(trunk, [at(-0.4), at(0.0), at(0.35), at(0.75), at(1.1), at(1.6)], [0.16, 0.26, 0.3, 0.26, 0.13, 0.03], far ? 5 : 8, BOOT, (t) => 0.35 + t * 0.2);
+	if (!far) {
+		// coconuts bunched under the crown
+		const rn = mulberry32(seed + 7), nN = 5 + Math.floor(rn() * 5);
+		for (let i = 0; i < nN; i++) {
+			const a = rn() * 6.283, d = 0.28 + rn() * 0.12, ripe = rn();
+			const col = ripe < 0.5 ? { r: 0.78, g: 0.82, b: 0.38 } : ripe < 0.8 ? { r: 0.9, g: 0.7, b: 0.36 } : { r: 0.62, g: 0.46, b: 0.3 };
+			nut(trunk, at(0.15 + rn() * 0.25).add(V(Math.cos(a) * d, 0, Math.sin(a) * d)), 0.15 + rn() * 0.03, col);
 		}
-		strip(crown, pts, widths, 0.55, { r: 0.42, g: 0.62, b: 0.24 }, { r: 0.72, g: 0.74, b: 0.36 }, 0.45, 1.0, 0.7);
+	}
+	// fronds in a spiral round the crown: the young stand up, the old arch out and droop;
+	// each has a bare stalk before its leaflets start
+	const nF = far ? 10 : 15 + Math.floor(r() * 4);
+	const golden = 2.39996;
+	for (let f = 0; f < nF; f++) {
+		const age = f / (nF - 1);                          // 0 = youngest (top), 1 = oldest (bottom)
+		const a = f * golden + r() * 0.2;
+		const hy = 1.0 - age * 0.9;
+		const base = at(hy).add(V(Math.cos(a) * 0.08, 0, Math.sin(a) * 0.08));
+		const elev = 1.15 - age * 1.35 + (r() - 0.5) * 0.15;
+		const L = (3.4 + r() * 1.3) * (0.75 + 0.25 * Math.min(1, age * 2));
+		const dir = V(Math.cos(a), 0, Math.sin(a));
+		const segs = far ? 4 : 8, pts = [], widths = [];
+		for (let k = 0; k <= segs; k++) {
+			const s2 = k / segs, d = L * s2;
+			// the rachis leaves at its angle and bends down more toward the tip
+			const droop = (0.12 + age * 0.22) * d * d;
+			pts.push(base.clone().add(dir.clone().multiplyScalar(Math.cos(elev) * d)).add(V(0, Math.sin(elev) * d - droop, 0)));
+			// grows straight out of the crown: just the rib at first, leaflets widening out of it
+			widths.push(0.12 + 1.25 * Math.sin(Math.min(1, s2 * 1.1 + 0.02) * Math.PI) * Math.min(1, s2 * 4));
+		}
+		const green = { r: 0.40 + age * 0.06, g: 0.60 - age * 0.04, b: 0.22 }, tip = { r: 0.66 + age * 0.08, g: 0.72, b: 0.34 };
+		strip(crown, pts, widths, 0.55, green, tip, 0.45, 1.0, 0.7);
+	}
+	if (!far) {
+		// one or two dead fronds hanging brown against the trunk
+		const nD = 1 + Math.floor(r() * 2);
+		for (let i = 0; i < nD; i++) {
+			const a = r() * 6.283, dir = V(Math.cos(a), 0, Math.sin(a)), base = at(0.0).add(dir.clone().multiplyScalar(0.2));
+			const pts = [], widths = [];
+			for (let k = 0; k <= 5; k++) { const s2 = k / 5; pts.push(base.clone().add(dir.clone().multiplyScalar(0.25 + 0.5 * s2)).add(V(0, -2.6 * s2, 0))); widths.push(s2 < 0.15 ? 0 : 0.9 * (1 - s2 * 0.5)); }
+			strip(crown, pts, widths, 0.4, { r: 0.62, g: 0.48, b: 0.3 }, { r: 0.55, g: 0.42, b: 0.26 }, 0.3, 0.5, 0.6);
+		}
 	}
 	return { parts: [trunk.geometry(), crown.geometry()], height: H };
 }
@@ -219,7 +256,9 @@ function banana(seed) {
 			for (let q = 0; q <= 6; q++) {
 				const s2 = q / 6, d = L * s2;
 				pts.push(top.clone().add(dir.clone().multiplyScalar(d * 0.9)).add(V(0, (Math.sin(s2 * 2.2) * rise * 0.6 - s2 * s2 * 0.9) * (0.5 + 0.5 * k), 0)));
-				widths.push(0.62 * (0.5 + 0.5 * k) * Math.sin(Math.min(1, s2 + 0.12) * Math.PI) + 0.05);
+				// a petiole first, then the blade widening out of it
+				const lb = Math.max(0, (s2 - 0.14) / 0.86);
+				widths.push(lb > 0 ? 0.62 * (0.5 + 0.5 * k) * Math.sin(Math.min(1, lb + 0.1) * Math.PI) + 0.05 : 0.05);
 			}
 			strip(leaves, pts, widths, 0.25, { r: 0.55, g: 0.72, b: 0.32 }, { r: 0.62, g: 0.78, b: 0.36 }, 0.3, 1.0, 0.8);
 		}
@@ -327,6 +366,18 @@ function blob(b, c, r, sy, color) {
 		for (let i = 0; i <= cols; i++) {
 			const th = i / cols * Math.PI * 2, n = V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
 			row.push(b.vert(c.clone().add(V(n.x * r, n.y * r * sy, n.z * r)), n, [i / cols, j / rows], color, 0));
+		}
+		ids.push(row);
+	}
+	for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { b.tri(ids[j][i], ids[j + 1][i], ids[j][i + 1]); b.tri(ids[j][i + 1], ids[j + 1][i], ids[j + 1][i + 1]); }
+}
+function nut(b, c, rad, color) {
+	const rows = 4, cols = 7, ids = [];
+	for (let j = 0; j <= rows; j++) {
+		const ph = j / rows * Math.PI, row = [];
+		for (let i = 0; i <= cols; i++) {
+			const th = i / cols * Math.PI * 2, n = V(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
+			row.push(b.vert(c.clone().add(V(n.x * rad, n.y * rad * 0.9, n.z * rad)), n, [0.3, 0.0], color, 0.5));
 		}
 		ids.push(row);
 	}
