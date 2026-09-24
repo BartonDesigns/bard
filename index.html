@@ -35,7 +35,7 @@ window.__PLANET_TEX = {
    and house interior up front, as before. nolook: surface light, sea and
    grade as they were. */
 
-(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]river\b/.test(q))window._RIVER_FIX227=true;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]nolook\b/.test(q))window._LOOK227=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
+(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]river\b/.test(q))window._RIVER_FIX227=true;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]nolook\b/.test(q))window._LOOK227=false;if(/[?&]oldtrees\b/.test(q))window._LEAVES227=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
 </script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
 
@@ -3225,6 +3225,67 @@ C.patchCaves=function(s){return apply(caves(s),[["if (run.site !== key || now - 
 F.patchFlight=function(s){return apply(flight(s),[["return ray.intersectObjects(meshes,false)[0]||null;", "for(const o of window.L99Explore175?.meshes('flight')||[])if(!meshes.includes(o))meshes.push(o);for(const o of meshes)o.updateWorldMatrix(true,false);const hit=ray.intersectObjects(meshes,false)[0]||null;return window.L99Quests217.assist(THREE,cockpitCamera,cockpitRenderer.domElement,x,y,meshes,hit,window.L99Life133.units('flight'));", "flight choir labels and touch assist"], ["  targetGroup.add(tInst); targetGroup.add(cInst);", "  tInst.userData.material175='wood';cInst.userData.material175='wood';targetGroup.add(tInst); targetGroup.add(cInst);", "flight tree material identity"]]);};
 root.L99QuestPatches217={checks};
 })(window);</script>
+<script id="leaves227">
+/* LEAVES_227: canopies of textured leaf clusters instead of modelled blades.
+   Every leaf used to be a 20-triangle curved blade, 420 per tree, all one
+   opaque colour, so a crown read as a faceted blob and cost ~8k triangles.
+   Now a crown is ~110 alpha-cut cards, each carrying a painted cluster of
+   leaves, lit with normals that point out from the crown so it shades as a
+   soft volume. Lacier silhouettes, about a tenth of the triangles.
+   Kill: window._LEAVES227 = false. */
+(function(root){'use strict';
+function leafTexture(THREE){
+ if(root.__leafTex227)return root.__leafTex227;
+ const S=256,cv=document.createElement('canvas');cv.width=cv.height=S;const g=cv.getContext('2d');
+ let seed=2279;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+ g.fillStyle='#fff';g.fillRect(S-10,0,10,10);                       // opaque white texel for bark (uv .98,.98)
+ const twigs=[];for(let i=0;i<7;i++){const a=-Math.PI/2+(rnd()-.5)*2.2,r=S*(.18+rnd()*.24);twigs.push([S/2+Math.cos(a)*r,S*.62+Math.sin(a)*r*.9]);}
+ g.strokeStyle='rgba(120,100,70,1)';g.lineWidth=2;for(const [x,y] of twigs){g.beginPath();g.moveTo(S/2,S*.92);g.quadraticCurveTo(S/2,(y+S*.92)/2,x,y);g.stroke();}
+ for(let i=0;i<46;i++){
+  const t=twigs[i%twigs.length],x=t[0]+(rnd()-.5)*S*.34,y=t[1]+(rnd()-.5)*S*.34;
+  const dx=x-S/2,dy=y-S*.5;if(dx*dx/(S*S*.2)+dy*dy/(S*S*.2)>1)continue;
+  const len=S*(.07+rnd()*.06),w=len*(.34+rnd()*.14),ang=rnd()*Math.PI*2,l=Math.round(150+rnd()*105);
+  g.save();g.translate(x,y);g.rotate(ang);
+  const gr=g.createLinearGradient(-w,0,w,0);gr.addColorStop(0,`rgb(${l*.86|0},${l|0},${l*.78|0})`);gr.addColorStop(1,`rgb(${l*.7|0},${l*.84|0},${l*.62|0})`);
+  g.fillStyle=gr;g.beginPath();g.moveTo(0,-len);g.quadraticCurveTo(w,-len*.2,0,len);g.quadraticCurveTo(-w,-len*.2,0,-len);g.fill();
+  g.strokeStyle=`rgba(${l*.5|0},${l*.62|0},${l*.42|0},.7)`;g.lineWidth=1;g.beginPath();g.moveTo(0,-len*.9);g.lineTo(0,len*.9);g.stroke();
+  g.restore();
+ }
+ const tx=new THREE.CanvasTexture(cv);tx.anisotropy=4;
+ if('colorSpace' in tx)tx.colorSpace=THREE.SRGBColorSpace;else tx.encoding=THREE.sRGBEncoding;
+ return root.__leafTex227=tx;
+}
+const GEO=`function geometry(type,variant=0,lod='near'){
+ lod=lod==='far'?'far':'near';const key=type+':'+(variant&1)+':'+lod;if(cache[key])return cache[key];if(!presets[type])throw Error('Unknown tree habitat');
+ const settings={...root.ForgeRecipe.defaults,...presets[type],seed:127+types.indexOf(type)*391+(variant&1)*719};
+ const data=root.ForgeRecipe.tree(settings),positions=[],colors=[],leaves=[],heights=[],uvs=[];
+ const green=type==='cavern'?[.3,.56,.52]:type==='scrub'?[.4,.46,.22]:type==='alpine'?[.16,.34,.24]:[.27,.5,.19];
+ function tri(a,b,c,color,leaf,ua,ub,uc){const U=[ua||[.98,.98],ub||[.98,.98],uc||[.98,.98]];let k=0;for(const v of [a,b,c]){positions.push(...v);colors.push(...color);leaves.push(leaf);heights.push(v[1]/settings.height);uvs.push(...U[k++]);}}
+ for(const s of data.segments){const a=new THREE.Vector3(...s.a),b=new THREE.Vector3(...s.b),dir=b.clone().sub(a).normalize(),q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dir);const sides=lod==='far'?5:7;for(let i=0;i<sides;i++){const t=i/sides*Math.PI*2,u=(i+1)/sides*Math.PI*2;function point(v,r,angle){return new THREE.Vector3(Math.cos(angle)*r,0,Math.sin(angle)*r).applyQuaternion(q).add(v).toArray();}const p0=point(a,s.ra,t),p1=point(a,s.ra,u),p2=point(b,s.rb,t),p3=point(b,s.rb,u);tri(p0,p2,p3,[.24,.19,.13],0);tri(p0,p3,p1,[.27,.22,.16],0);}}
+ const cards=lod==='far'?44:118,step=Math.max(1,Math.floor(data.leaves.length/cards)),first=positions.length/3;
+ for(let i=0;i<data.leaves.length;i+=step){const l=data.leaves[i],sz=l.size*(lod==='far'?5.2:4.1)*(type==='alpine'?.8:1),m=new THREE.Matrix4().compose(new THREE.Vector3(...l.p),new THREE.Quaternion().setFromEuler(new THREE.Euler(...l.rotation)),new THREE.Vector3(sz,sz,sz)),col=green.map(v=>v*(.78+l.tone*.46));
+  const P=[[-.5,-.5,0],[.5,-.5,0],[.5,.5,0],[-.5,.5,0]].map(p=>new THREE.Vector3(...p).applyMatrix4(m).toArray());
+  tri(P[0],P[1],P[2],col,1,[0,0],[.94,0],[.94,.94]);tri(P[0],P[2],P[3],col,1,[0,0],[.94,.94],[0,.94]);}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setAttribute('aLeaf127',new THREE.Float32BufferAttribute(leaves,1));g.setAttribute('aHeight127',new THREE.Float32BufferAttribute(heights,1));g.computeVertexNormals();
+ /* crown normals: out from the canopy's centre and a little up, so the
+    whole crown shades like one soft volume instead of a hundred cards */
+ const pa=g.attributes.position,na=g.attributes.normal,n=pa.count;let cx=0,cy=0,cz=0,cn=0;for(let i=first;i<n;i++){cx+=pa.getX(i);cy+=pa.getY(i);cz+=pa.getZ(i);cn++;}
+ if(cn){cx/=cn;cy/=cn;cz/=cn;const v=new THREE.Vector3();for(let i=first;i<n;i++){v.set(pa.getX(i)-cx,(pa.getY(i)-cy)*.8,pa.getZ(i)-cz).normalize().multiplyScalar(.78);v.y+=.42;v.normalize();na.setXYZ(i,v.x,v.y,v.z);}na.needsUpdate=true;}
+ g.computeBoundingBox();g.computeBoundingSphere();g.boundingSphere.radius+=.6;g.userData.forgeTree127=true;cache[key]=g;return g;
+}`;
+function patch(block){
+ try{
+  if(root._LEAVES227===false||typeof block!=='string'||!block.includes('// Curved leaf lamina')||block.includes('LEAVES_227'))return block;
+  const a=block.indexOf("function geometry(type,variant=0,lod='near'){"),b=block.indexOf('\nfunction decorate(mesh){',a);
+  const m="const mat=new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.85});";
+  if(a<0||b<0||block.split(m).length!==2){console.warn('LEAVES_227: anchors missing, trees unchanged');return block;}
+  block=block.slice(0,a)+'/* LEAVES_227 */'+GEO+block.slice(b);
+  return block.replace(m,m+"mat.map=root.L99Leaves227.texture(THREE);mat.alphaTest=.46;mat.roughness=.9;");
+ }catch(e){console.warn('LEAVES_227',e);return block;}
+}
+root.L99Leaves227={patch,texture:leafTexture};
+})(window);
+</script>
 <script>
 /* BOOT_176: download and prepare only the requested world. */
 (function(root){'use strict';
@@ -3243,7 +3304,7 @@ function status(message,failed){if(!wantsStatus)return;const p=panel();p.style.d
 function show(message,again){wantsStatus=true;retry=again;status(message);}
 function hide(){wantsStatus=false;if(box)box.style.display='none';}
 function execute(code){const s=document.createElement('script');s.textContent=code;let error=null;const caught=e=>{error=e.error||Error(e.message);};root.addEventListener('error',caught);try{document.head.appendChild(s);}finally{s.remove();root.removeEventListener('error',caught);}if(error)throw error;}
-function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227!==true?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
+function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();if(root.L99Leaves227)blocks[coreAt]=root.L99Leaves227.patch(blocks[coreAt]);execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227!==true?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
 function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;
@@ -28400,6 +28461,75 @@ const EDITS=[
   "        '    float cfs = sfbm(cp + uSun.xz * 0.11);',\n        '    float lit = clamp(0.62 + (cf - cfs) * 3.4 + dot(normalize(vec3(d.x, max(d.y, 0.05), d.z)), uSun) * 0.32, 0.22, 1.5);',"],
  ["        '    vec3 cloudCol = mix(vec3(0.42, 0.45, 0.50), vec3(1.0, 0.98, 0.95), lit) * (1.0 - uNight * 0.86);',",
   "        '    vec3 cloudCol = mix(vec3(0.46, 0.51, 0.62), vec3(1.0, 0.985, 0.96), clamp(lit, 0.0, 1.0)) * (1.0 + max(lit - 1.0, 0.0) * 0.35) * (1.0 - uNight * 0.86);',"],
+ /* longer days: the clock slows while the sun is high, so sunsets and nights
+    still come round but most of the time is daylight */
+ ["        overTime += dt2;\n        over.arrived += dt2;",
+  "        overTime += dt2 * (window._LOOK227 !== false && overSunV.y > 0.25 ? 0.4 : 1);\n        over.arrived += dt2;"],
+ /* long grass */
+ ["                uMaxH: { value: 0.86 },","                uMaxH: { value: window._LOOK227 !== false ? 1.22 : 0.86 },"],
+ ["                uBladeWidth: { value: 0.135 },","                uBladeWidth: { value: window._LOOK227 !== false ? 0.15 : 0.135 },"],
+ /* soft contact shadows: one instanced disc per tree, under its crown and
+    pushed a little away from the sun; no shadow-map pass */
+ ["                overGroup.add(im);\n                rec.extra.push(im);\n            }\n            yield 'Planting the ground cover';",
+  `                overGroup.add(im);
+                rec.extra.push(im);
+                if (window._LOOK227 !== false) {
+                    if (!treeShadow227) {
+                        var sc227 = document.createElement('canvas'); sc227.width = sc227.height = 64; var sg227 = sc227.getContext('2d');
+                        var gr227 = sg227.createRadialGradient(32, 32, 2, 32, 32, 31); gr227.addColorStop(0, 'rgba(0,0,0,0.62)'); gr227.addColorStop(0.55, 'rgba(0,0,0,0.38)'); gr227.addColorStop(1, 'rgba(0,0,0,0)');
+                        sg227.fillStyle = gr227; sg227.fillRect(0, 0, 64, 64);
+                        var sgeo227 = new THREE.PlaneGeometry(1, 1); sgeo227.rotateX(-Math.PI / 2);
+                        treeShadow227 = { geo: sgeo227, mat: new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc227), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, fog: false }) };
+                        treeShadow227.geo.userData.foliageShared126 = true;
+                    }
+                    var bb227 = treeSpecies[bl[i]].geo.boundingBox, cr227 = bb227 ? Math.max(bb227.max.x - bb227.min.x, bb227.max.z - bb227.min.z) * 0.62 : 3;
+                    var sim227 = new THREE.InstancedMesh(treeShadow227.geo, treeShadow227.mat, mats.length), sm227 = new THREE.Matrix4(), e227;
+                    for (var k2 = 0; k2 < mats.length; k2++) {
+                        e227 = mats[k2].elements; var s227 = Math.hypot(e227[0], e227[1], e227[2]) * cr227;
+                        sm227.makeScale(s227, 1, s227 * 0.92); sm227.setPosition(e227[12] + s227 * 0.12, e227[13] + 0.24, e227[14] + s227 * 0.08);
+                        sim227.setMatrixAt(k2, sm227);
+                    }
+                    sim227.instanceMatrix.needsUpdate = true; sim227.position.set(cxT, 0, czT); sim227.renderOrder = 1;
+                    sim227.userData.foliageShared126 = true;
+                    overGroup.add(sim227); rec.extra.push(sim227);
+                }
+            }
+            yield 'Planting the ground cover';`],
+ ["    var treeSpecies = null, boulderGeo = null,","    var treeShadow227 = null;\n    var treeSpecies = null, boulderGeo = null,"],
+ /* town trees: leaf-card crowns in place of faceted icosahedron blobs */
+ ["            g.dispose();\n        }\n        var out = new THREE.BufferGeometry();\n        out.setAttribute('position', new THREE.BufferAttribute(pos, 3));\n        out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));\n        out.setAttribute('color', new THREE.BufferAttribute(col, 3));\n        out.setIndex(new THREE.BufferAttribute(idx, 1));",
+  "            g.dispose();\n        }\n        var out = new THREE.BufferGeometry();\n        out.setAttribute('position', new THREE.BufferAttribute(pos, 3));\n        out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));\n        out.setAttribute('color', new THREE.BufferAttribute(col, 3));\n        if (uvs227) out.setAttribute('uv', new THREE.BufferAttribute(uvs227, 2));\n        out.setIndex(new THREE.BufferAttribute(idx, 1));"],
+ ["        var pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), col = new Float32Array(total * 3);\n        var idx = new Uint32Array(itotal), vb = 0, ib = 0;",
+  "        var pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), col = new Float32Array(total * 3);\n        var uvs227 = geos.every(function (g0) { return g0.attributes.uv; }) ? new Float32Array(total * 2) : null;\n        var idx = new Uint32Array(itotal), vb = 0, ib = 0;"],
+ ["            col.set(g.attributes.color.array, vb * 3);\n            for (var k = 0; k < g.index.count; k++)",
+  "            col.set(g.attributes.color.array, vb * 3);\n            if (uvs227) uvs227.set(g.attributes.uv.array, vb * 2);\n            for (var k = 0; k < g.index.count; k++)"],
+ ["    function* buildDistrict169(){",
+  `    /* LOOK_227: a crown of alpha-cut leaf cards on an ellipsoid, normals out */
+    function crown227(T, rx, ry, rz, n, seed) {
+        var P = [], N = [], U = [], v = new T.Vector3(), q = new T.Quaternion(), e = new T.Euler(), s = seed || 1;
+        function r() { s = (s * 16807) % 2147483647; return s / 2147483647; }
+        var cs = Math.cbrt(rx * ry * rz) * 1.5;
+        for (var i = 0; i < n; i++) {
+            var th = r() * 6.2832, ph = Math.acos(2 * r() - 1), k = 0.5 + r() * 0.5;
+            var cx = Math.sin(ph) * Math.cos(th) * rx * k, cy = Math.cos(ph) * ry * k, cz = Math.sin(ph) * Math.sin(th) * rz * k;
+            q.setFromEuler(e.set(r() * 3.1, r() * 6.2, r() * 3.1)); var sz = cs * (0.75 + r() * 0.5);
+            var corners = [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]], uv = [[0, 0], [.94, 0], [.94, .94], [0, .94]], vs = [];
+            for (var c = 0; c < 4; c++) { v.set(corners[c][0] * sz, corners[c][1] * sz, 0).applyQuaternion(q); vs.push([cx + v.x, cy + v.y, cz + v.z]); }
+            [[0, 1, 2], [0, 2, 3]].forEach(function (t) { t.forEach(function (j) {
+                var p = vs[j]; P.push(p[0], p[1], p[2]); U.push(uv[j][0], uv[j][1]);
+                v.set(p[0] / rx, p[1] / ry * 0.8, p[2] / rz).normalize().multiplyScalar(0.78); v.y += 0.42; v.normalize(); N.push(v.x, v.y, v.z); }); });
+        }
+        var g = new T.BufferGeometry();
+        g.setAttribute('position', new T.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(U, 2));
+        return g;
+    }
+    function* buildDistrict169(){`],
+ ["for(var j=0;j<3;j++){var leaf=new T.IcosahedronGeometry(1,1);leaf.scale(2.9,2.1,2.7);",
+  "for(var j=0;j<3;j++){var leaf=window._LOOK227!==false&&window.L99Leaves227?crown227(T,2.9,2.1,2.7,64,Math.floor(p[0]*13+p[1]*7+j*101)|1):new T.IcosahedronGeometry(1,1);if(window._LOOK227===false||!window.L99Leaves227)leaf.scale(2.9,2.1,2.7);"],
+ ["var bush=new T.IcosahedronGeometry(.8,0);part(bush,i%3?'leaf':'flower',u,H+.4,v);",
+  "var bush=i%3&&window._LOOK227!==false&&window.L99Leaves227?crown227(T,1.0,.8,1.0,20,i*977+5):new T.IcosahedronGeometry(.8,0);part(bush,i%3?'leaf':'flower',u,H+.4,v);"],
+ ["mat('leaf',0x608f50);mat('paleLeaf',0x9fbc77);",
+  "mat('leaf',0x608f50);mat('paleLeaf',0x9fbc77);if(window._LOOK227!==false&&window.L99Leaves227)['leaf','paleLeaf'].forEach(function(k){mats[k].map=window.L99Leaves227.texture(T);mats[k].alphaTest=.46;mats[k].side=T.DoubleSide;mats[k].roughness=.9;});"],
  /* the grade rides on the canvas while you are on the surface */
  ["        signStream227();",
   "        signStream227();\n        var grade227 = over && window._LOOK227 !== false ? '"+GRADE+"' : '';\n        if (renderer.domElement.__grade227 !== grade227) { renderer.domElement.__grade227 = grade227; renderer.domElement.style.filter = grade227; }"],
