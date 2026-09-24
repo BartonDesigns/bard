@@ -37,6 +37,9 @@ float heightAt(vec2 w){
 }`;
 
 export const NOISE_GLSL = /* glsl */`
+// a fine-grain hash that stays random at island-scale coordinates: wrap the cell index
+// first so float precision never runs out, then scramble
+float gh(vec2 c){ c = mod(c, 1024.0); vec3 p3 = fract(vec3(c.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
@@ -106,7 +109,7 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; uniform float uHalf, uTime, uWet, uWave;\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; uniform float uHalf, uTime, uWet, uWave;\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
@@ -146,8 +149,22 @@ export function createTerrain(island, shared) {
 				vec4 d1 = texture2D(uDetail, vW.xz * 0.42);
 				vec4 d2 = texture2D(uDetail, vW.xz * 0.11 + 0.37);
 				vec4 dd = mix(d2, d1 * 0.65 + d2 * 0.35, near);
+				// sand ripples: wide and soft on the dry beach, tightening as the sand goes
+				// under water (the waves pack them closer), with a gentle wander in spacing
+				float under = smoothstep(0.2, -2.5, h);
+				vec2 rq = vW.xz + vec2(vn(vW.xz * 0.05) * 3.0, 0.0);
+				float rA = texture2D(uDetail, rq * 0.19).r, rB = texture2D(uDetail, rq * 0.42 + 0.21).r;
+				dd.r = mix(rA, rB, under) * (0.8 + 0.4 * vn(vW.xz * 0.08 + 13.0));
 				// sand and rock take the relief as grain; wet sand is smoothed by the wash
-				sand *= 0.86 + 0.26 * dd.r * (1.0 - wet * 0.7);
+				sand *= 0.9 + 0.18 * dd.r * (1.0 - wet * 0.7);
+				// grains: a fine speckle of darker mineral and pale shell fragments, only up close
+				// round, soft grains about 8 mm across, fading out before they could alias
+				vec2 gq = vW.xz * 120.0, gi = floor(gq), gf = fract(gq) - 0.5;
+				float gA = gh(gi), gB = gh(gi + 17.0), gDot = 1.0 - smoothstep(0.18, 0.42, length(gf));
+				float grainNear = 1.0 - smoothstep(1.5, 6.0, camD);
+				sand *= 1.0 - step(0.955, gA) * gDot * 0.22 * grainNear;
+				sand = mix(sand, vec3(0.98, 0.93, 0.88), step(0.985, gB) * gDot * 0.45 * grainNear);
+				sand *= 0.96 + 0.08 * vn(vW.xz * 22.0);
 				rock *= 0.78 + 0.36 * dd.a;
 				// earth under the meadow: soil and litter show between the blades
 				vec3 soil = mix(vec3(0.24, 0.19, 0.12), vec3(0.36, 0.30, 0.19), dd.b);
@@ -167,7 +184,7 @@ export function createTerrain(island, shared) {
 				// the height the bump reads, per ground type, in metres
 				// ripples belong to open sand only, not to the meadow's edge
 				float gs = 1.0 - smoothstep(0.0, 0.3, grassW);
-				gDetailH = (dd.r * 0.012 * gs * (1.0 - wet * 0.8) + dd.b * 0.03 * grassW) * (1.0 - rockW) * (1.0 - pathW)
+				gDetailH = (dd.r * mix(0.016, 0.01, under) * gs * (1.0 - wet * 0.6) + dd.b * 0.03 * grassW) * (1.0 - rockW) * (1.0 - pathW)
 					+ dd.a * 0.035 * rockW + dd.g * 0.012 * pathW;
 				gDetailH *= near;
 				// each footprint is a shallow dish in the sand
@@ -192,13 +209,22 @@ export function createTerrain(island, shared) {
 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
 				diffuseColor.rgb *= 1.0 - print * 0.12;
 				// moonlight catching the wet sand
-				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);`)
+				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);
+				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 70.0) + 3.0));`)
 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rough;')
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				{
 					vec3 Vv = normalize(cameraPosition - vW), md = normalize(-uSunDir2 + vec3(0.0, 0.35, 0.0));
 					vec3 Rr = reflect(-Vv, normalize(vWN + vec3(0.0, 0.0, 0.0)));
 					totalEmissiveRadiance += vec3(0.7, 0.78, 1.0) * gMoonGlint * (pow(max(dot(Rr, md), 0.0), 60.0) * 1.6 + pow(max(dot(Rr, md), 0.0), 8.0) * 0.08);
+					// quartz grains glint: each grain a tiny mirror at its own angle
+					vec2 gc = floor(vW.xz * 70.0);
+					vec3 gn = normalize(vec3(gh(gc) - 0.5, 0.55, gh(gc + 7.0) - 0.5));
+					vec3 gr = reflect(-Vv, gn);
+					float sunG = pow(max(dot(gr, uSunDir2), 0.0), 700.0) * smoothstep(0.0, 0.15, uSunDir2.y);
+					float moonG = pow(max(dot(gr, md), 0.0), 500.0) * smoothstep(0.02, -0.15, uSunDir2.y) * 0.5;
+					totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * (sunG + moonG) * gSparkle * 14.0;
+				
 				}`)
 			.replace('#include <normal_fragment_maps>', `
 				// screen-space bump from the detail height (Mikkelsen)

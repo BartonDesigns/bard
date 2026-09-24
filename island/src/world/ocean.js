@@ -141,17 +141,21 @@ uniforms.uUnder = shared.uUnder;
 				float roll = smoothstep(0.62, 0.97, sin(vRoll + 0.6));
 				float lace = fbm3(vW.xz * 0.6 + vec2(uTime * 0.4, 0.0));
 				float breaker = roll * surf * smoothstep(0.35, 0.65, lace + 0.15);
-				float wash = (1.0 - smoothstep(0.04, 0.3, vDepth)) * smoothstep(0.4, 0.75, lace + 0.25 * sin(uTime * 1.3 + vW.x * 0.2));
+				float wash = 0.0;   // the swash below draws the beach edge
 				float cap = smoothstep(0.85, 1.1, vCrest) * smoothstep(0.55, 0.75, lace) * smoothstep(6.0, 20.0, vDepth) * near * 0.5;
 				float foam = clamp(breaker + wash + cap * 0.7, 0.0, 1.0);
 				col = mix(col, vec3(0.92, 0.95, 0.96) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), foam);
 				// the edge of the sea is a film, not a wall: it thins to nothing on the sand
 				// the swash front: a lace of foam where the sheet runs out, then clear thin water
 				float front = smoothstep(0.0, 0.012, vFilm) * (1.0 - smoothstep(0.015, 0.07, vFilm));
-				float laceF = smoothstep(0.35, 0.7, fbm3(vW.xz * 1.6 + vec2(uTime * 0.3, 0.0)));
-				col = mix(col, vec3(0.93, 0.96, 0.97) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), front * laceF * 0.9);
+				// bubbly lace: small cells of foam with holes, thinning as the sheet slows
+				vec2 fq = vW.xz * 4.5 + vec2(uTime * 0.25, 0.0);
+				float cells = vn(fq) * 0.6 + vn(fq * 2.3 + 5.1) * 0.4;
+				float laceF = smoothstep(0.52, 0.72, cells) * (0.55 + 0.45 * vn(vW.xz * 0.4 + uTime * 0.1));
+				col = mix(col, vec3(0.93, 0.96, 0.97) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), front * laceF * 0.6);
 				// thin sheets are nearly clear: you see the wet sand through them, and a sheen
-				float film = smoothstep(0.0, 0.28, vFilm) * mix(0.35, 0.92, smoothstep(0.02, 0.25, vFilm)) + F * 0.35 * (1.0 - smoothstep(0.0, 0.25, vFilm));
+				// thin water is clear: the sand shows through it, with a sheen of sky at an angle
+				float film = smoothstep(0.0, 0.35, vFilm) * mix(0.08, 0.9, smoothstep(0.03, 0.35, vFilm)) + F * 0.25 * (1.0 - smoothstep(0.0, 0.3, vFilm));
 				gl_FragColor = vec4(col, max(film, max(foam, front * laceF) * smoothstep(0.0, 0.01, vFilm)));
 				#include <tonemapping_fragment>
 				#include <colorspace_fragment>
