@@ -125,16 +125,32 @@ export function generateIsland(params = {}) {
 				const reach = 1 - smoothstep(Rb * 0.95, Rb * 1.35, r);
 				if (h > cove) h = lerp(h, cove, reach);
 				// the headlands: two arms of high ground reaching out round the cove
-				const arm = smoothstep(Rb + 4, Rb + 40, r) * smoothstep(Rb + 170, Rb + 90, r);
+				const arm = smoothstep(Rb + 2, Rb + 85, r) * smoothstep(Rb + 230, Rb + 110, r);
 				const out = smoothstep(Rb * 1.0, Rb * 0.3, along);            // tapering to the points
 				const H = side > 0 ? hl[0] : hl[1];
-				const rough = 0.75 + 0.5 * nz.fbm(x * 0.02 + 3, z * 0.02 - 5, 3);
+				const rough = 0.7 + 0.6 * nz.fbm(x * 0.012 + 3, z * 0.012 - 5, 4);
 				const head = H * arm * out * rough * (0.55 + 0.45 * smoothstep(Rb * 0.9, -Rb * 0.3, along));
 				// rocky ends where the arms meet the sea
 				const tip = smoothstep(Rb * 0.5, Rb * 1.0, along) * arm;
 				const land = head > 0.5 ? Math.max(head, 1.2) - tip * 2.5 : head;
 				if (land > h) h = lerp(h, land, smoothstep(0.0, 0.5, arm * out));
 				height[k] = h;
+			}
+		}
+		// weather the carved land: a few gentle smoothing passes round the bay, so the
+		// cove and headlands have no creases, then the natural fine relief back on top
+		const R2 = Rb + 260, tmp = new Float32Array(height.length);
+		for (let pass = 0; pass < 3; pass++) {
+			tmp.set(height);
+			for (let j = 1; j < N - 1; j++) {
+				const z = -half + j * cell;
+				for (let i = 1; i < N - 1; i++) {
+					const x = -half + i * cell, rr = Math.hypot(x - B.x, z - B.z);
+					if (rr > R2) continue;
+					const k = j * N + i;
+					const avg = (tmp[k - 1] + tmp[k + 1] + tmp[k - N] + tmp[k + N]) * 0.15 + (tmp[k - N - 1] + tmp[k - N + 1] + tmp[k + N - 1] + tmp[k + N + 1]) * 0.1 + tmp[k] * 0.0;
+					height[k] = lerp(tmp[k], avg, smoothstep(R2, R2 - 60, rr));
+				}
 			}
 		}
 	}

@@ -65,7 +65,7 @@ export function makeMaskTexture(island) {
 }
 
 export function createTerrain(island, shared) {
-	const geo = radialGrid(255, 2200, 2.3);
+	const geo = radialGrid(320, 2200, 2.3);
 	const mat = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
 	const uniforms = {
 		uHeight: { value: shared.heightTex }, uMasks: { value: shared.maskTex },
@@ -75,22 +75,24 @@ export function createTerrain(island, shared) {
 	};
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\n' + HEIGHT_GLSL + '\n' + sh.vertexShader
+		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
 				vec2 wxz = position.xz + uCenter;
 				float e = uCell;
 				float hL = heightAt(wxz - vec2(e, 0.0)), hR = heightAt(wxz + vec2(e, 0.0));
 				float hD = heightAt(wxz - vec2(0.0, e)), hU = heightAt(wxz + vec2(0.0, e));
-				vec3 objectNormal = normalize(vec3(hL - hR, 2.0 * e, hD - hU));`)
+				vec3 objectNormal = normalize(vec3(hL - hR, 2.0 * e, hD - hU));
+				vWN = objectNormal;`)
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail; uniform float uHalf, uTime, uWet;\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
 				float n1 = fbm3(vW.xz * 0.06), n2 = vn(vW.xz * 0.9), n3 = vn(vW.xz * 7.0);
-				vec3 wn = normalize(cross(dFdx(vW), dFdy(vW)));
+				// the slope from the smooth, interpolated normal (not each triangle's own facet)
+				vec3 wn = normalize(vWN);
 				float slope = 1.0 - clamp(wn.y, 0.0, 1.0);
 				float h = vW.y;
 				// sand: pale and dry above the tide line, darker and glossy at the wash
