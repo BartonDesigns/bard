@@ -206,7 +206,7 @@ export function groundDetail() {
 		}
 		return [best, id];
 	};
-	const gravel = cellsOf(22, 11), grit = cellsOf(58, 12), clods = cellsOf(16, 13), chips = cellsOf(30, 14);
+	const gravel = cellsOf(22, 11), grit = cellsOf(58, 12), clods = cellsOf(16, 13), chips = cellsOf(30, 14), crumbs = cellsOf(44, 16);
 	void r;
 	for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
 		const u = x / S, v = y / S, k = (y * S + x) * 4;
@@ -218,9 +218,8 @@ export function groundDetail() {
 		const [gv, gid] = stone(u, v, gravel), [gr] = stone(u, v, grit);
 		const dirt = Math.max(0.34 * fbm(u, v, 16, 5, 4) + 0.2 * noise(u, v, 128, 6), gv * (gid > 0.7 ? 0.8 : 0), gr * (gid < 0.25 ? 0.5 : 0.22));
 		// soil: clods and fibrous litter
-		const [cv] = stone(u, v, clods);
-		const fibre = Math.pow(Math.abs(Math.sin((u * 3 + v * 7 + fbm(u, v, 16, 7, 2)) * 40)), 18) * 0.35;
-		const soil = Math.max(0.35 * fbm(u, v, 32, 8, 3) + fibre, cv * 0.7);
+		const [cv] = stone(u, v, clods), [cr] = stone(u, v, crumbs);
+		const soil = Math.max(0.3 * fbm(u, v, 32, 8, 3) + 0.15 * noise(u, v, 128, 7), cv * 0.65, cr * 0.4);
 		// rock: crystalline grain, chips and dark cracks
 		const [chv] = stone(u, v, chips);
 		const crack = Math.abs(fbm(u, v, 8, 9, 4) - 0.5) < 0.012 ? 0 : 1;

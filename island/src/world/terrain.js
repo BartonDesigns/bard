@@ -120,7 +120,8 @@ export function createTerrain(island, shared) {
 				float pathW = smoothstep(0.25, 0.75, mk.r + (dd.g - 0.5) * 0.25) * step(0.5, h);
 				col = mix(col, dirt, pathW);
 				// the height the bump reads, per ground type, in metres
-				float gs = 1.0 - grassW;
+				// ripples belong to open sand only, not to the meadow's edge
+				float gs = 1.0 - smoothstep(0.0, 0.3, grassW);
 				gDetailH = (dd.r * 0.012 * gs * (1.0 - wet * 0.8) + dd.b * 0.03 * grassW) * (1.0 - rockW) * (1.0 - pathW)
 					+ dd.a * 0.05 * rockW + dd.g * 0.028 * pathW;
 				gDetailH *= near;

@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { HEIGHT_GLSL, NOISE_GLSL } from './terrain.js';
 import { mulberry32, makeNoise } from '../noise.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 function pebbleGeometry(seed) {
 	const g = new THREE.IcosahedronGeometry(1, 0), p = g.attributes.position, nz = makeNoise(seed);
@@ -15,8 +16,10 @@ function pebbleGeometry(seed) {
 		const k = 0.8 + nz.fbm(x * 1.6 + 2, z * 1.6 - y, 2) * 0.4;
 		p.setXYZ(i, x * k * 1.2, Math.max(-0.3, y) * k * 0.7, z * k);
 	}
-	g.computeVertexNormals();
-	return g;
+	// shared corners, smooth normals: a worn stone, not a cut gem
+	const m = mergeVertices(g.deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
+	m.computeVertexNormals();
+	return m;
 }
 function leafGeometry() {
 	// a leaf lying on the ground, curled up at the edges
