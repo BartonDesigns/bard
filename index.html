@@ -30,8 +30,10 @@ window.__PLANET_TEX = {
 /* TESTFLAGS_227: turn off today's cave layers from the address bar, e.g.
    index.html?nowater&noforms. nowater: wet rock and stains. noforms: rock
    species and angled formations. norail: exit ride. river: opt in to the
-   compiling river shader, which breaks cave exits on iPhone, so off by default. */
-(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]river\b/.test(q))window._RIVER_FIX227=true;})(location.search);
+   compiling river shader, which breaks cave exits on iPhone, so off by default.
+   ramps: old ramp cave mouths. fullsigns / fullrooms: build every sign label
+   and house interior up front, as before. */
+(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]river\b/.test(q))window._RIVER_FIX227=true;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
 </script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
 
@@ -28220,6 +28222,155 @@ function patch(code){
 root.L99CaveFormations227={patch};
 })(window);
 </script>
+<script id="lighter227">
+/* LIGHTER_227: the surface builds less until you are near it.
+   - House interiors (rooms, furniture, hearth fire) are built when you come
+     within a few metres of the house and released again when you walk away.
+   - Sign labels are painted only for signs within about 28 m; farther boards
+     stay plain wood. Every label was its own 1024x128 texture before.
+   - Cave entrances on the surface are a plain hole ringed with stones instead
+     of a long ramp cut into the hillside. Step into it to go down; coming up,
+     you stand beside it.
+   Kill: window._CAVE_LAZY_INTERIORS / _CAVE_LAZY_SIGNS / _CAVE_HOLES = false. */
+(function(root){'use strict';
+const SIGN_HELPERS=`
+    /* LIGHTER_227 signs */
+    var signFaces227 = [], signRef227 = {}, signBlankMat227 = null, signT227 = 0, signTmp227 = new THREE.Vector3();
+    function signBlank227() { return signBlankMat227 || (signBlankMat227 = new THREE.MeshBasicMaterial({ color: 0x3c2c1c })); }
+    function signRelease227(e) {
+        e.f.material = signBlank227(); if (e.f2) e.f2.material = e.f.material;
+        e.mat.dispose(); e.mat = null;
+        if (--signRef227[e.key] <= 0) { delete signRef227[e.key]; if (signTexCache[e.key]) { signTexCache[e.key].dispose(); delete signTexCache[e.key]; } }
+    }
+    function signStream227() {
+        if (!signFaces227.length) return;
+        var now = performance.now(); if (now - signT227 < 400) return; signT227 = now;
+        var p = camera.position;
+        for (var i = signFaces227.length - 1; i >= 0; i--) {
+            var e = signFaces227[i], top = e.f; while (top.parent) top = top.parent;
+            if (top !== scene) { if (e.mat) signRelease227(e); signFaces227.splice(i, 1); continue; }
+            e.f.getWorldPosition(signTmp227); var d = signTmp227.distanceTo(p);
+            if (!e.mat && d < 28) {
+                e.key = (e.ruin ? 'r:' : 'n:') + e.label;
+                e.mat = new THREE.MeshBasicMaterial({ map: signTex(e.label, e.ruin), transparent: true });
+                signRef227[e.key] = (signRef227[e.key] || 0) + 1;
+                e.f.material = e.mat; if (e.f2) e.f2.material = e.mat;
+            } else if (e.mat && d > 45) signRelease227(e);
+        }
+    }
+    function makeSignpost(px, py, pz, boards, rec) {`;
+const ROOM_HELPERS=`
+    /* LIGHTER_227 rooms: built on approach, released on leaving */
+    function interiorLoad227(hs) { if (hs.int227 || !hs.mesh3 || !hs.mesh3.parent) return; hs.build227 = 1; addInterior(hs.rec227, hs); hs.build227 = 0; }
+    function interiorUnload227(hs) {
+        var a = hs.int227; if (!a) return; var ex = hs.rec227 && hs.rec227.extra;
+        for (var i = 0; i < a.length; i++) { var o = a[i]; overGroup.remove(o);
+            if (ex) { var k = ex.indexOf(o); if (k >= 0) ex.splice(k, 1); }
+            if (o.isSprite) o.material.dispose(); else if (o.geometry) o.geometry.dispose(); }
+        hs.int227 = null; hs.fire = null; hs.firePos = null;
+    }
+    function interiorStream227() {
+        if (window._CAVE_LAZY_INTERIORS === false) return;
+        var p = camera.position;
+        for (var i = 0; i < housesNear.length; i++) { var hs = housesNear[i]; if (!hs.lazy227) continue;
+            var r = Math.max(hs.w, hs.d), d = Math.hypot(hs.x - p.x, hs.z - p.z);
+            if (!hs.int227 && d < r + 12) interiorLoad227(hs); else if (hs.int227 && d > r + 30) interiorUnload227(hs); }
+    }
+    function tickInteriors(dt2, t2) {
+        interiorStream227();`;
+const HOLE_HELPERS=`
+    /* LIGHTER_227 holes: a stone-ringed pit instead of a ramp in the hill */
+    var holeAssets227 = null;
+    function holeNear227(m, x, z, r) { if (m.hole227) return Math.hypot(x - m.x, z - m.z) < r + 3; return !!m.open171 && window.L99CaveOpenings171.near(m.open171, x, z, r); }
+    function holeMesh227(m) {
+        if (!holeAssets227) {
+            var R = 1.35, pit = new THREE.CircleGeometry(R, 24), pc = [], pp = pit.attributes.position;
+            for (var i = 0; i < pp.count; i++) { var k = Math.min(1, Math.hypot(pp.getX(i), pp.getY(i)) / R); k = Math.pow(k, 7); pc.push(0.008 + k * 0.10, 0.007 + k * 0.075, 0.006 + k * 0.05); }
+            pit.setAttribute('color', new THREE.Float32BufferAttribute(pc, 3)); pit.rotateX(-Math.PI / 2);
+            var stones = [], cols = [];
+            for (i = 0; i < 11; i++) { var a = i / 11 * 6.2832, s = 0.26 + CC.hash3(i, 7, 3) * 0.16, st = new THREE.DodecahedronGeometry(s, 0);
+                st.scale(1.25, 0.6, 1); st.rotateY(a * 1.7); st.translate(Math.cos(a) * (R + 0.18), s * 0.2, Math.sin(a) * (R + 0.18));
+                stones.push(st); var g = 0.8 + CC.hash3(i, 2, 9) * 0.25; cols.push(new THREE.Color(0.46 * g, 0.43 * g, 0.39 * g)); }
+            holeAssets227 = { pit: pit, pitMat: new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+                ring: mergeGeos(stones, cols), ringMat: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), R: R };
+        }
+        var y = overHeightAt(m.x, m.z), e = 0.8;
+        var gx = overHeightAt(m.x + e, m.z) - overHeightAt(m.x - e, m.z), gz = overHeightAt(m.x, m.z + e) - overHeightAt(m.x, m.z - e);
+        var n = new THREE.Vector3(-gx / (2 * e), 1, -gz / (2 * e)).normalize();
+        var g = new THREE.Group(); g.position.set(m.x, y + 0.03, m.z); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+        var pitM = new THREE.Mesh(holeAssets227.pit, holeAssets227.pitMat), ringM = new THREE.Mesh(holeAssets227.ring, holeAssets227.ringMat);
+        pitM.userData.shared227 = 1; ringM.userData.shared227 = 1; g.add(pitM); g.add(ringM);
+        m.hole227 = { x: m.x, y: y, z: m.z, r: holeAssets227.R };
+        return g;
+    }
+    function buildTunnel(rec,m) {
+        if (window._CAVE_HOLES !== false) { var hg227 = holeMesh227(m); overGroup.add(hg227); rec.extra.push(hg227); m.tunnel = hg227; return; }`;
+const EDITS=[
+ /* signs */
+ ["    function makeSignpost(px, py, pz, boards, rec) {",SIGN_HELPERS],
+ ["            var tx = signTex(label, b.ruin), boardWidth169=tx.userData.boardWidth169;",
+  "            var lazy227 = window._CAVE_LAZY_SIGNS !== false;\n            var tx = lazy227 ? null : signTex(label, b.ruin), boardWidth169 = lazy227 ? Math.min(5.6, Math.max(1.8, label.length * .105)) : tx.userData.boardWidth169;"],
+ ["            var f1 = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({ map: tx, transparent: true }));",
+  "            var f1 = new THREE.Mesh(faceGeo, lazy227 ? signBlank227() : new THREE.MeshBasicMaterial({ map: tx, transparent: true }));\n            if (lazy227) signFaces227.push({ f: f1, label: label, ruin: b.ruin });"],
+ ["            f1.material.userData.sign169=true;","            if (!lazy227) f1.material.userData.sign169=true;"],
+ ["            var f2 = f1.clone();","            var f2 = f1.clone();\n            if (lazy227) signFaces227[signFaces227.length - 1].f2 = f2;"],
+ ["        tickDoors(dt);\n        if(surfaceLoading165)return;","        tickDoors(dt);\n        signStream227();\n        if(surfaceLoading165)return;"],
+ /* rooms */
+ ["    function addInterior(rec, hs) {\n        var ms = interiorMeshes(hs);",
+  "    function addInterior(rec, hs) {\n        if (window._CAVE_LAZY_INTERIORS !== false && !hs.build227) { hs.rec227 = rec; hs.lazy227 = 1; return; }\n        var ms = interiorMeshes(hs);"],
+ ["        hs.firePos = [flames[0].position.x, flames[0].position.y, flames[0].position.z];\n    }",
+  "        hs.firePos = [flames[0].position.x, flames[0].position.y, flames[0].position.z];\n        hs.int227 = ms.concat(flames);\n    }"],
+ ["    function tickInteriors(dt2, t2) {",ROOM_HELPERS],
+ /* holes */
+ ["    function buildTunnel(rec,m) {",HOLE_HELPERS],
+ ["m.open171&&window.L99CaveOpenings171.near(m.open171,",null],
+ ["            var m = overMouths[i];\n            if (Math.abs(p.x - m.x) > TUN_LEN + 6 || Math.abs(p.z - m.z) > TUN_LEN + 6) continue;\n            var L = tunnelLocal(m, p.x, p.y, p.z);\n            if (Math.abs(L[1]) > TUN_R",
+  `            var m = overMouths[i];
+            if (m.hole227) {
+                var hx227 = p.x - m.hole227.x, hz227 = p.z - m.hole227.z, hd227 = Math.sqrt(hx227 * hx227 + hz227 * hz227), hr227 = m.hole227.r;
+                if (hd227 < hr227 * 2.2 && p.y < m.hole227.y + 3.2) deepest = Math.max(deepest, 0.5 * (1 - hd227 / (hr227 * 2.2)));
+                if (hd227 < hr227 * 0.7 && p.y < m.hole227.y + 2.6) {
+                    if (window._CAVE_LIVE_PASSAGES !== false && m.dest.passage) {
+                        m.dest.into = m.into;
+                        passageLinks120[m.dest.passage.id] = { x: m.x, y: m.y, z: m.z, into: m.into };
+                        var linkKeys227 = Object.keys(passageLinks120);
+                        if (linkKeys227.length > 128) delete passageLinks120[linkKeys227[0]];
+                    }
+                    leaveWorldAt(m.dest);
+                    return true;
+                }
+                continue;
+            }
+            if (Math.abs(p.x - m.x) > TUN_LEN + 6 || Math.abs(p.z - m.z) > TUN_LEN + 6) continue;
+            var L = tunnelLocal(m, p.x, p.y, p.z);
+            if (Math.abs(L[1]) > TUN_R`],
+ ["        if (passageEntry) {\n            var spec171=over.homeMouth.open171,",
+  `        if (passageEntry && over.homeMouth.hole227) {
+            /* LIGHTER_227: up out of the hole, standing beside it facing downhill */
+            var hm227 = over.homeMouth, ux227 = Math.sin(hm227.into), uz227 = Math.cos(hm227.into);
+            camera.position.x = hm227.x - ux227 * 2.8; camera.position.z = hm227.z - uz227 * 2.8;
+            camera.position.y = Math.max(overHeightAt(camera.position.x, camera.position.z), over.sea) + 1.8;
+            yaw = hm227.into; pitch = 0; euler.set(pitch, yaw, camRoll); camera.quaternion.setFromEuler(euler);
+            vel.set(0, 0, 0); tunnelDark = 0;
+            hm227.dest.passage = p; hm227.dest.into = face;
+            showHint('you climb up out of the hole into daylight');
+        } else if (passageEntry) {
+            var spec171=over.homeMouth.open171,`],
+ ["        for(var at179 of [16,0,-18]){var pt179=O179.point(over.homeMouth.open171,","        for(var at179 of (over.homeMouth.open171?[16,0,-18]:[])){var pt179=O179.point(over.homeMouth.open171,"],
+ ["        if(passageEntry){camera.position.set(point171[0],point171[1],point171[2]);","        if(passageEntry){if(point171)camera.position.set(point171[0],point171[1],point171[2]);"],
+];
+function patch(code){
+ try{
+  if(typeof code!=='string'||code.includes('/* LIGHTER_227 */'))return code;
+  const miss=EDITS.filter(([a,b])=>b===null?code.split(a).length<2:code.split(a).length!==2);
+  if(miss.length){console.warn('LIGHTER_227: '+miss.length+' anchors missing, skipped: '+miss.map(m=>m[0].slice(0,40)).join(' | '));return code;}
+  for(const [a,b] of EDITS)code=b===null?code.split(a).join('holeNear227(m,'):code.replace(a,()=>b);
+  return code.replace('    /* LIGHTER_227 signs */','    /* LIGHTER_227 */\n    /* LIGHTER_227 signs */');
+ }catch(e){console.warn('LIGHTER_227',e);return code;}
+}
+root.L99CaveLighter227={patch};
+})(window);
+</script>
 <script id="cave-rail227">
 /* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
    steering up the stone ramp by hand while the surface loaded, and the frame
@@ -28239,14 +28390,17 @@ const HELPER=`
             if(!(bloom>0||white>0))return;
             glow227=document.createElement('div');glow227.setAttribute('aria-hidden','true');
             glow227.style.cssText='position:fixed;inset:0;z-index:100002;pointer-events:none;opacity:0;transition:none';
-            glow227.innerHTML='<i style="position:absolute;inset:-25%;display:block;background:radial-gradient(circle at 50% 46%,#fffdf6 0,#fff4d8 9%,rgba(255,236,196,.72) 22%,rgba(255,226,170,.28) 40%,rgba(255,220,160,0) 62%);transform-origin:50% 46%"></i><b style="position:absolute;inset:0;display:block;background:#fffaf0;opacity:0"></b>';
+            glow227.innerHTML='<i style="position:absolute;inset:0;display:block;background:radial-gradient(circle at 50% 46%,#fffdf6 0,#fff4d8 12%,rgba(255,236,196,.72) 30%,rgba(255,226,170,.28) 55%,rgba(255,220,160,0) 85%)"></i><b style="position:absolute;inset:0;display:block;background:#fffaf0;opacity:0"></b>';
             document.body.appendChild(glow227);
             setInterval(function(){if(glow227&&window.__CAVE_PAUSED){glow227.style.opacity='0';}},400);
         }
         var b=Math.max(0,Math.min(1,bloom)),w=Math.max(0,Math.min(1,white));
-        glow227.style.opacity=String(Math.max(b,w));
-        glow227.firstChild.style.transform='scale('+(0.35+b*1.25).toFixed(3)+')';
-        glow227.lastChild.style.opacity=String(b>0?w/Math.max(b,w):1);
+        /* opacity only, no scaled or oversized layer: iOS keeps a texture per
+           composited layer, and this runs while the surface peaks memory */
+        var m=Math.max(b,w);glow227.style.display=m>0?'block':'none';
+        glow227.style.opacity=String(m);
+        glow227.firstChild.style.opacity=String(0.35+b*0.65);
+        glow227.lastChild.style.opacity=String(b>0?w/m:1);
     }
     /* into the dark: the entry rail's counterpart, black instead of light */
     var dark227=null;
@@ -28254,7 +28408,7 @@ const HELPER=`
         if(!dark227){if(!(v>0))return;dark227=document.createElement('div');dark227.setAttribute('aria-hidden','true');
             dark227.style.cssText='position:fixed;inset:0;z-index:100002;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 46%,rgba(0,0,0,.82) 0,#000 58%)';document.body.appendChild(dark227);
             setInterval(function(){if(dark227&&window.__CAVE_PAUSED)dark227.style.opacity='0';},400);}
-        dark227.style.opacity=String(Math.max(0,Math.min(1,v)));
+        var dv=Math.max(0,Math.min(1,v));dark227.style.display=dv>0?'block':'none';dark227.style.opacity=String(dv);
     }
     function railDown227(p){
         var O=window.L99CaveOpenings171;
@@ -28366,7 +28520,7 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);return c;});});};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);if(window.L99CaveLighter227)c=window.L99CaveLighter227.patch(c);return c;});});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
