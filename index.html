@@ -29,13 +29,14 @@ window.__PLANET_TEX = {
 <script>
 /* TESTFLAGS_227: turn off today's cave layers from the address bar, e.g.
    index.html?nowater&noforms. nowater: wet rock and stains. noforms: rock
-   species and angled formations. norail: exit ride. river: opt in to the
-   compiling river shader, which breaks cave exits on iPhone, so off by default.
+   species and angled formations. norail: exit ride. noriver: lakes and
+   rivers without the shader fix (invisible). oldwater: the glen's falls and
+   canal, and rivers that stop at inland lakes.
    ramps: old ramp cave mouths. fullsigns / fullrooms: build every sign label
    and house interior up front, as before. nolook: surface light, sea and
    grade as they were. */
 
-(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]river\b/.test(q))window._RIVER_FIX227=true;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]nolook\b/.test(q))window._LOOK227=false;if(/[?&]oldtrees\b/.test(q))window._LEAVES227=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
+(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]noriver\b/.test(q))window._RIVER_FIX227=false;if(/[?&]oldwater\b/.test(q))window._WATERS227=false;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]nolook\b/.test(q))window._LOOK227=false;if(/[?&]oldtrees\b/.test(q))window._LEAVES227=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
 </script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
 
@@ -3225,6 +3226,37 @@ C.patchCaves=function(s){return apply(caves(s),[["if (run.site !== key || now - 
 F.patchFlight=function(s){return apply(flight(s),[["return ray.intersectObjects(meshes,false)[0]||null;", "for(const o of window.L99Explore175?.meshes('flight')||[])if(!meshes.includes(o))meshes.push(o);for(const o of meshes)o.updateWorldMatrix(true,false);const hit=ray.intersectObjects(meshes,false)[0]||null;return window.L99Quests217.assist(THREE,cockpitCamera,cockpitRenderer.domElement,x,y,meshes,hit,window.L99Life133.units('flight'));", "flight choir labels and touch assist"], ["  targetGroup.add(tInst); targetGroup.add(cInst);", "  tInst.userData.material175='wood';cInst.userData.material175='wood';targetGroup.add(tInst); targetGroup.add(cInst);", "flight tree material identity"]]);};
 root.L99QuestPatches217={checks};
 })(window);</script>
+<script id="waters227">
+/* WATERS_227: water that goes somewhere. A lake whose neighbours are all
+   higher used to be a dead end; now it drains to the nearest coast, taking
+   the route that climbs least, and its river runs out into the sea. The
+   lake/river surface shader is lighter (two noise octaves, not three).
+   Kill: window._WATERS227 = false. */
+(function(root){'use strict';
+const EDITS=[
+ ["if(b.river!==undefined)return b.river;const next=","if(b.river!==undefined)return b.river;let next="],
+ ["if(!next){b.river=null;return null;}",
+  "if(!next&&root._WATERS227!==false&&Number.isFinite(opts.sea)){let best=null;"+
+  "for(let k=0;k<16;k++){const a=k/16*Math.PI*2,ca=Math.cos(a),sa=Math.sin(a);let rise=0;"+
+  "for(let d=b.r+24;d<=760;d+=24){const x=b.x+ca*d,z=b.z+sa*d,h=opts.terrain(x,z);if(!Number.isFinite(h))break;rise=Math.max(rise,h-b.y);"+
+  "if(h<opts.sea-.6){const score=d+rise*14;if(!best||score<best.score)best={x:x+ca*28,z:z+sa*28,score};break;}}}"+
+  "if(best)next={x:best.x,z:best.z,y:opts.sea-.35,r:0,sea227:true};}"+
+  "if(!next){b.river=null;return null;}"],
+ ["float height178(vec2 q){return noise178(q)*.6+noise178(q*2.03+7.0)*.28+noise178(q*4.11)*.12;}",
+  "float height178(vec2 q){return noise178(q)*.72+noise178(q*2.03+7.0)*.28;}"],
+];
+function patch(block){
+ try{
+  if(root._WATERS227===false||typeof block!=='string'||!block.includes('WATERS_170')||block.includes('WATERS_227'))return block;
+  const miss=EDITS.filter(([a])=>block.split(a).length!==2);
+  if(miss.length){console.warn('WATERS_227: '+miss.length+' anchors missing, water unchanged');return block;}
+  for(const [a,b] of EDITS)block=block.replace(a,()=>b);
+  return block.replace('/* WATERS_170:','/* WATERS_227 */ /* WATERS_170:');
+ }catch(e){console.warn('WATERS_227',e);return block;}
+}
+root.L99Waters227={patch};
+})(window);
+</script>
 <script id="leaves227">
 /* LEAVES_227: canopies of textured leaf clusters instead of modelled blades.
    Every leaf used to be a 20-triangle curved blade, 420 per tree, all one
@@ -3304,7 +3336,7 @@ function status(message,failed){if(!wantsStatus)return;const p=panel();p.style.d
 function show(message,again){wantsStatus=true;retry=again;status(message);}
 function hide(){wantsStatus=false;if(box)box.style.display='none';}
 function execute(code){const s=document.createElement('script');s.textContent=code;let error=null;const caught=e=>{error=e.error||Error(e.message);};root.addEventListener('error',caught);try{document.head.appendChild(s);}finally{s.remove();root.removeEventListener('error',caught);}if(error)throw error;}
-function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();if(root.L99Leaves227)blocks[coreAt]=root.L99Leaves227.patch(blocks[coreAt]);execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227!==true?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
+function core(){if(coreReady)return coreReady;coreReady=(async()=>{const blocks=JSON.parse(await packed('world-core-179.json.gz'));for(;coreAt<blocks.length;coreAt++){await frame();if(root.L99Leaves227)blocks[coreAt]=root.L99Leaves227.patch(blocks[coreAt]);if(root.L99Waters227)blocks[coreAt]=root.L99Waters227.patch(blocks[coreAt]);execute(root.L99Groom203.patchCore(root.L99Hair203.patchCore(root.L99Hair202.patchCore(root.L99Hair199.patchCore(root.L99Hair197.patchCore(root.L99Details196.patchCore(root.L99Wardrobe195.patchCore(root.L99Hair195.patchCore(root.L99Details194.patchCore(root.L99People193.patchCore(root.L99HairFix192.patchCore(root.L99MaterialsFlight191.patchCore((root._RIVER_FIX227===false?blocks[coreAt]:blocks[coreAt].split('hash178(i+vec2(1,1)),f.x);}').join('hash178(i+vec2(1,1)),f.x),f.y);}')))))))))))))));}return true;})().catch(e=>{coreReady=null;throw e;});return coreReady;}
 function ensureWorld(){if(worldReady)return worldReady;worldReady=(async()=>{
  const assembled=core().then(()=>root.L99Textures138.load()),kay=packed('characters-kay-176.b64.gz').then(text=>{root.__KAY=text;root.__kayUnpack=()=>root.__KAY;});
  await Promise.all([assembled,kay,root.L99HumanAssets145.load()]);return true;
@@ -28530,6 +28562,17 @@ const EDITS=[
   "var bush=i%3&&window._LOOK227!==false&&window.L99Leaves227?crown227(T,1.0,.8,1.0,20,i*977+5):new T.IcosahedronGeometry(.8,0);part(bush,i%3?'leaf':'flower',u,H+.4,v);"],
  ["mat('leaf',0x608f50);mat('paleLeaf',0x9fbc77);",
   "mat('leaf',0x608f50);mat('paleLeaf',0x9fbc77);if(window._LOOK227!==false&&window.L99Leaves227)['leaf','paleLeaf'].forEach(function(k){mats[k].map=window.L99Leaves227.texture(T);mats[k].alphaTest=.46;mats[k].side=T.DoubleSide;mats[k].roughness=.9;});"],
+ /* the glen keeps its valley but loses the stand-alone falls and canal:
+    water on the surface belongs to the lakes, rivers and sea */
+ ["        if(d.glen){\n            /* A green valley terminating in a stepped rock wall and three cascades. */",
+  "        if(d.glen&&window._WATERS227===false){\n            /* A green valley terminating in a stepped rock wall and three cascades. */"],
+ ["function districtVisualHeight169(x,z,h){var d=over&&over.district169;if(!d||!d.glen)return h;",
+  "function districtVisualHeight169(x,z,h){var d=over&&over.district169;if(!d||!d.glen||window._WATERS227!==false)return h;"],
+ ["        if(d.glen){\n            yield 'Bridging the river and shaping the falls';",
+  "        if(d.glen&&window._WATERS227===false){\n            yield 'Bridging the river and shaping the falls';"],
+ ["if(d&&d.glen&&q&&Math.abs(q[0]-7)<3.25","if(d&&d.glen&&window._WATERS227===false&&q&&Math.abs(q[0]-7)<3.25"],
+ ["label:d.glen?'Falls Overlook':'Garden Overlook'","label:d.glen?(window._WATERS227===false?'Falls Overlook':'Glen Overlook'):'Garden Overlook'"],
+ ["label:d.glen?'Glen Falls':'Town Gardens'","label:d.glen?(window._WATERS227===false?'Glen Falls':'Glen Gardens'):'Town Gardens'"],
  /* the grade rides on the canvas while you are on the surface */
  ["        signStream227();",
   "        signStream227();\n        var grade227 = over && window._LOOK227 !== false ? '"+GRADE+"' : '';\n        if (renderer.domElement.__grade227 !== grade227) { renderer.domElement.__grade227 = grade227; renderer.domElement.style.filter = grade227; }"],
