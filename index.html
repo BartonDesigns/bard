@@ -3365,7 +3365,7 @@ async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(f
 function openFlight(){const intent=++flightIntent;show('Loading flight…',openFlight);const room=root.L99Room227?.open('space',{status:'charting the stars…',onBack:()=>{box?.button?.click();}});flight().then(()=>{if(intent!==flightIntent){room?.close(false);return;}hide();document.getElementById('popout-btn')?.click();room?.close(true);}).catch(e=>{room?.close(false);if(intent!==flightIntent)return;status('Flight could not load. '+(e.name==='AbortError'?'The connection timed out.':'Please try again.'),true);});}
 root._loadCockpitNow=flight;
 document.addEventListener('click',e=>{if(!e.target?.closest?.('#popout-btn')||root.__COCKPIT_ALIVE&&flightPrepared)return;e.preventDefault();e.stopImmediatePropagation();openFlight();},true);
-root.L99Boot176={packed,cachedPatch,ensureWorld,show,hide,status,frame,flight,openFlight,get showing(){return wantsStatus;}};
+root.L99Boot176={packed,cachedPatch,ensureWorld,core,show,hide,status,frame,flight,openFlight,get showing(){return wantsStatus;}};
 /* PREFETCH_227: warm the HTTP cache with the world runtimes while the page is
    idle, so pressing caves or flight later skips the download. Bytes only: the
    response is dropped, nothing is decompressed, parsed or kept in memory, and
@@ -3791,7 +3791,7 @@ button, .pad, .ctrl-btn, .capsule-btn, .tab-btn, .selector, label,
   letter-spacing: 1px;
   margin-left: 2px;
 }
-#expand-btn, #popout-btn, #caves-btn {
+#expand-btn, #popout-btn, #caves-btn, #island-btn {
   margin-left: 6px;
   width: 28px;
   height: 28px;
@@ -27583,6 +27583,7 @@ window._handoffCopy = function () {
   }
   function world() {
     if(window.L99Journey170&&window.L99Journey170.owner())return window.L99Journey170.owner();
+    if (window.L99Island && window.L99Island.active()) return 'island';
     var shell = window.L99Shell, mount = shell && shell.mount;
     if (shell && shell.active && mount && !mount.hidden && mount.style.display !== 'none') return 'caves';
     var overlay = document.getElementById('cockpit-overlay');
@@ -28962,6 +28963,100 @@ root.L99CaveRail227={patch};
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addDoor);
     else addDoor();
+})();
+</script>
+<script id="island-landing227">
+/* ISLAND_LANDING_227: planetfall on a tropical world (TERRAN or OCEAN, not the
+   Earth replica) comes down on an island raised from that planet's own seed:
+   the same planet always gives the same island. Journey carries the view from
+   the sky dive into the island; other worlds land as before.
+   Kill: window._ISLAND_LANDING = false. */
+(function () {
+    'use strict';
+    var busy = false;
+    function tropical(u) {
+        if (!u || u.solName === 'Earth' || u.isEarthReplica || u.planetType === 'BAYAREA') return false;
+        return u.planetType === 'TERRAN' || u.planetType === 'OCEAN';
+    }
+    function seedOf(u) {
+        var s = u.seed;
+        if (Number.isFinite(+s)) return (+s) >>> 0;
+        var t = String(s || u.id || u.name || 'island'), h = 2166136261;
+        for (var i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
+        return h >>> 0;
+    }
+    function land(planet) {
+        var u = planet && planet.userData;
+        if (busy || window._ISLAND === false || window._ISLAND_LANDING === false || !tropical(u) || !window.L99IslandDoor) return;
+        busy = true;
+        var seed = seedOf(u);
+        try { localStorage.setItem('l99-island-seed', String(seed)); } catch (e) {}
+        window.L99IslandDoor.engine().then(function () {
+            var J = window.L99Journey170;
+            if (!J) throw Error('Journey is not ready');
+            return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0,
+                planet: { id: u.id || u.name || ('planet:' + seed), seed: seed, type: 'tropical', palette: u.palette || null } });
+        }).catch(function (e) { console.warn('[island landing]', e); }).then(function () { busy = false; });
+    }
+    function wrap() {
+        var D = window.L99Dive227;
+        if (!D || D.__island227) return !!D;
+        var start = D.start;
+        D.start = function (planet) { var r = start ? start.apply(this, arguments) : undefined; land(planet); return r; };
+        D.__island227 = true;
+        return true;
+    }
+    window.L99IslandLanding = { land: land, tropical: tropical };
+    if (!wrap()) { var n = 0, t = setInterval(function () { if (wrap() || ++n > 120) clearInterval(t); }, 500); }
+})();
+</script>
+<script id="island-door227">
+/* ISLAND_227: the sea door. Stage 1 of the new engine: a tropical island in
+   its own module (island/dist/island.js), loaded only when first opened. It
+   shares the faceplate's music, keyboard and play surfaces, and Journey lets
+   space flight land on it. Kill: window._ISLAND = false. */
+(function () {
+    'use strict';
+    var loading = null;
+    function engine() {
+        if (window.L99Island) return Promise.resolve(window.L99Island);
+        /* the shared world core carries play surfaces, discoveries and Journey */
+        var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
+        if (!loading) loading = Promise.all([import('./island/dist/island.js'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+            .catch(function (e) { loading = null; throw e; });
+        return loading;
+    }
+    function seed() {
+        var q = new URLSearchParams(location.search).get('island');
+        if (q && /^\d+$/.test(q)) return +q;
+        try { return +(localStorage.getItem('l99-island-seed') || 1337); } catch (e) { return 1337; }
+    }
+    function open(params) {
+        if (window._ISLAND === false) return;
+        if (window.L99Shell && window.L99Shell.active) window.L99Shell.toggleCaves();
+        return engine().then(function (w) { return w.open(params || { seed: seed() }); })
+            .catch(function (e) { console.error('[island]', e); alert('The island could not load: ' + e.message); });
+    }
+    window.L99IslandDoor = { open: open, engine: engine, closed: function () {} };
+    function addDoor() {
+        if (window._ISLAND === false || document.getElementById('island-btn')) return;
+        var host = document.getElementById('caves-btn');
+        var b = document.createElement('button');
+        b.type = 'button'; b.id = 'island-btn'; b.textContent = '≋';
+        b.title = 'island'; b.setAttribute('aria-label', 'Explore the island');
+        if (host && host.parentNode) {
+            b.className = host.className;
+            b.style.cssText = 'margin-left:6px;font-size:15px;line-height:1;padding-left:10px;padding-right:10px;min-width:0;flex:0 0 auto;';
+            host.parentNode.insertBefore(b, host.nextSibling);
+        } else {
+            b.style.cssText = 'position:fixed;top:calc(env(safe-area-inset-top, 0px) + 10px);right:60px;z-index:99999;background:rgba(10,14,22,0.85);color:#9fe8d0;border:1px solid #01a982;border-radius:10px;padding:8px 12px;font-size:15px;line-height:1;';
+            document.body.appendChild(b);
+        }
+        b.addEventListener('click', function () { open(); });
+        if (/[?&]island=/.test(location.search)) open();
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(addDoor, 0); });
+    else setTimeout(addDoor, 0);
 })();
 </script>
 
@@ -30426,6 +30521,7 @@ function start181(){
 #synth[data-art-face] #main-panel .ctrl-btn:not(.active):not(.build-mode):not(.loops-live),
 #synth[data-art-face] #tap-btn,
 #synth[data-art-face] #caves-btn,
+#synth[data-art-face] #island-btn,
 #synth[data-art-face] #popout-btn {
   box-shadow: inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.34),0 1px 2px rgba(0,0,0,.17);
 }

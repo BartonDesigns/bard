@@ -1,0 +1,17 @@
+{
+  "name": "l99-island",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Stage 1 engine: the tropical island world for Level 99 Bard",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
