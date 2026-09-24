@@ -32,8 +32,10 @@ window.__PLANET_TEX = {
    species and angled formations. norail: exit ride. river: opt in to the
    compiling river shader, which breaks cave exits on iPhone, so off by default.
    ramps: old ramp cave mouths. fullsigns / fullrooms: build every sign label
-   and house interior up front, as before. */
-(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]river\b/.test(q))window._RIVER_FIX227=true;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
+   and house interior up front, as before. nolook: surface light, sea and
+   grade as they were. */
+
+(function(q){if(/[?&]nowater\b/.test(q))window._CAVE_WATER227=false;if(/[?&]noforms\b/.test(q))window._CAVE_FORMATIONS227=false;if(/[?&]norail\b/.test(q))window._CAVE_RAIL=false;if(/[?&]river\b/.test(q))window._RIVER_FIX227=true;if(/[?&]ramps\b/.test(q))window._CAVE_HOLES=false;if(/[?&]nolook\b/.test(q))window._LOOK227=false;if(/[?&]fullsigns\b/.test(q))window._CAVE_LAZY_SIGNS=false;if(/[?&]fullrooms\b/.test(q))window._CAVE_LAZY_INTERIORS=false;})(location.search);
 </script>
 <script>window.__kayUnpack=function(){return window.__KAY||null;};</script>
 
@@ -8117,6 +8119,7 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
 
 </style>
 <style id="ux213-style">#fx-guide213{margin:4px 0 14px;padding:10px;border:1px solid var(--btn-text);border-radius:9px;font:12px/1.6 system-ui}#fx-guide213 summary{min-height:44px;display:list-item;align-content:center;cursor:pointer}#fx-guide213 dt{font-weight:700;margin-top:10px}#fx-guide213 dd{margin:2px 0 10px}#fx-guide213 summary:focus-visible{outline:2px solid currentColor;outline-offset:3px}#fx-panel label{flex-wrap:wrap;row-gap:4px}#fx-panel select{min-height:44px}#studio181 .studio-export213 p{font-size:12px}</style>
+<style id="zonehint227">/* the thumb-zone card is outlines only: its tints washed out the view */#zoneHint .zh{background:transparent!important}</style>
 </head>
 <body>
 <div id="synth">
@@ -28371,6 +28374,48 @@ function patch(code){
 root.L99CaveLighter227={patch};
 })(window);
 </script>
+<script id="look227">
+/* LOOK_227: the surface in real daylight. A stronger sun against less flat
+   fill so hills model; turquoise shallows over sand with dark reef patches;
+   clouds that shade their own undersides; and a gentle grade (contrast and
+   saturation) on the surface only, so the sRGB-authored palette stops
+   reading as milk. All shader/uniform tweaks: no new geometry or passes
+   beyond the canvas grade. Kill: window._LOOK227 = false (?nolook). */
+(function(root){'use strict';
+const GRADE="contrast(1.12) saturate(1.32) brightness(0.96)";
+const EDITS=[
+ /* sun against fill: the light that models, not the light that flattens */
+ ["        if (overSun) overSun.intensity = 0.9 - 0.75 * nightK;\n        if (overHemi) overHemi.intensity = 0.45 - 0.30 * nightK;",
+  "        var look227 = window._LOOK227 !== false;\n        if (overSun) overSun.intensity = (look227 ? 1.22 : 0.9) - (look227 ? 1.0 : 0.75) * nightK;\n        if (overHemi) overHemi.intensity = (look227 ? 0.34 : 0.45) - (look227 ? 0.22 : 0.30) * nightK;"],
+ ["        if (u.uHor) u.uHor.value.copy(OVER_HOR);",
+  "        if (u.uHor) u.uHor.value.copy(OVER_HOR);\n        if (window._LOOK227 !== false) { if (u.uSunCol) u.uSunCol.value.multiplyScalar(1.28); if (u.uSkyAmb) u.uSkyAmb.value.multiplyScalar(0.74); }"],
+ /* the sea: shallows run further out, lit sand under a hand's depth of
+    water, and reefs as dark blots in the turquoise */
+ ["                '  vec3 absorb = exp(-vec3(0.28, 0.115, 0.075) * min(dep, 60.0));',",
+  "                '  vec3 absorb = exp(-vec3(0.17, 0.058, 0.042) * min(dep, 60.0));',"],
+ ["                '  vec3 body = mix(uDeep, uShallow, absorb);',",
+  "                '  vec3 shal227 = uShallow * 1.5 + vec3(0.02, 0.09, 0.07);',\n                '  vec3 body = mix(uDeep, shal227, absorb);',\n                '  float reef227 = smoothstep(0.54, 0.72, fbm2(vWP.xz * 0.032 + 7.0)) * smoothstep(1.4, 3.6, dep) * (1.0 - smoothstep(9.0, 17.0, dep));',\n                '  body = mix(body, body * vec3(0.30, 0.42, 0.46), reef227 * 0.85);',\n                '  body = mix(body, vec3(0.66, 0.74, 0.62), (1.0 - smoothstep(0.0, 1.5, dep)) * 0.32);',"],
+ /* clouds: self-shadowed, so they read as volumes and not as stickers */
+ ["        '    float lit = clamp(dot(normalize(vec3(d.x, max(d.y, 0.05), d.z)), uSun) * 0.5 + 0.6, 0.0, 1.4);',",
+  "        '    float cfs = sfbm(cp + uSun.xz * 0.11);',\n        '    float lit = clamp(0.62 + (cf - cfs) * 3.4 + dot(normalize(vec3(d.x, max(d.y, 0.05), d.z)), uSun) * 0.32, 0.22, 1.5);',"],
+ ["        '    vec3 cloudCol = mix(vec3(0.42, 0.45, 0.50), vec3(1.0, 0.98, 0.95), lit) * (1.0 - uNight * 0.86);',",
+  "        '    vec3 cloudCol = mix(vec3(0.46, 0.51, 0.62), vec3(1.0, 0.985, 0.96), clamp(lit, 0.0, 1.0)) * (1.0 + max(lit - 1.0, 0.0) * 0.35) * (1.0 - uNight * 0.86);',"],
+ /* the grade rides on the canvas while you are on the surface */
+ ["        signStream227();",
+  "        signStream227();\n        var grade227 = over && window._LOOK227 !== false ? '"+GRADE+"' : '';\n        if (renderer.domElement.__grade227 !== grade227) { renderer.domElement.__grade227 = grade227; renderer.domElement.style.filter = grade227; }"],
+];
+function patch(code){
+ try{
+  if(typeof code!=='string'||code.includes('var look227 = window._LOOK227'))return code;
+  const miss=EDITS.filter(([a])=>code.split(a).length!==2);
+  if(miss.length){console.warn('LOOK_227: '+miss.length+' anchors missing, skipped: '+miss.map(m=>m[0].trim().slice(0,40)).join(' | '));return code;}
+  for(const [a,b] of EDITS)code=code.replace(a,()=>b);
+  return code;
+ }catch(e){console.warn('LOOK_227',e);return code;}
+}
+root.L99CaveLook227={patch};
+})(window);
+</script>
 <script id="cave-rail227">
 /* RAIL_227: cave exits are a ride, not a climb. Surfacing used to mean
    steering up the stone ramp by hand while the surface loaded, and the frame
@@ -28520,7 +28565,7 @@ root.L99CaveRail227={patch};
         for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
         return u;
     }
-    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);if(window.L99CaveLighter227)c=window.L99CaveLighter227.patch(c);return c;});});};
+    S.source = function(){return window.L99Boot176.packed('caves-179.html.gz').then(function(raw){return window.L99Boot176.cachedPatch('caves',raw,function(c){c=window.L99CavesMaterials191.patchCaves(c);if(window.L99CaveRail227)c=window.L99CaveRail227.patch(c);if(window.L99CaveWorld227)c=window.L99CaveWorld227.patch(c);if(window.L99CaveFormations227)c=window.L99CaveFormations227.patch(c);if(window.L99CaveLighter227)c=window.L99CaveLighter227.patch(c);if(window.L99CaveLook227)c=window.L99CaveLook227.patch(c);return c;});});};
     S.parse = function (html2) {
         var blocks = [], re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi, m;
         while ((m = re.exec(html2))) { if (m[2] && m[2].trim()) blocks.push(m[2]); }
