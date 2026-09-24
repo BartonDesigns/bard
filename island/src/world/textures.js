@@ -35,26 +35,21 @@ function tileV(c) {
 
 // a cluster of broad tropical leaves on a twig, for tree canopies
 export function leafCluster() {
+	// a rounded clump of broad leaves: dense in the middle, broken at the edge
 	const S = 256, [c, g] = canvas(S, S), r = mulberry32(71);
-	g.strokeStyle = rgb(95, 80, 55); g.lineWidth = 3;
-	const tips = [];
-	for (let i = 0; i < 6; i++) {
-		const a = -Math.PI / 2 + (r() - 0.5) * 2.4, len = S * (0.2 + r() * 0.2);
-		const x = S / 2 + Math.cos(a) * len, y = S * 0.62 + Math.sin(a) * len;
-		tips.push([x, y]);
-		g.beginPath(); g.moveTo(S / 2, S * 0.95); g.quadraticCurveTo(S / 2, (y + S * 0.95) / 2, x, y); g.stroke();
-	}
-	for (let i = 0; i < 38; i++) {
-		const t = tips[i % tips.length], x = t[0] + (r() - 0.5) * 70, y = t[1] + (r() - 0.5) * 70;
-		if (Math.hypot(x - S / 2, y - S / 2) > S * 0.46) continue;
-		const len = S * (0.09 + r() * 0.06), w = len * (0.42 + r() * 0.12), ang = r() * Math.PI * 2, l = 150 + r() * 105;
-		g.save(); g.translate(x, y); g.rotate(ang);
+	for (let i = 0; i < 95; i++) {
+		const a = r() * Math.PI * 2, d = Math.pow(r(), 0.7) * S * 0.4;
+		const x = S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d;
+		const len = S * (0.075 + r() * 0.04), w = len * (0.5 + r() * 0.12), ang = a + (r() - 0.5) * 1.6;
+		// deeper leaves darker: they are behind and under the outer ones
+		const l = (150 + r() * 105) * (0.65 + 0.35 * (d / (S * 0.4)));
+		g.save(); g.translate(x, y); g.rotate(ang + Math.PI / 2);
 		const gr = g.createLinearGradient(-w, 0, w, 0);
-		gr.addColorStop(0, rgb(l * 0.82, l, l * 0.7)); gr.addColorStop(1, rgb(l * 0.62, l * 0.8, l * 0.55));
+		gr.addColorStop(0, rgb(l * 0.82, l, l * 0.7)); gr.addColorStop(1, rgb(l * 0.6, l * 0.78, l * 0.52));
 		g.fillStyle = gr;
-		g.beginPath(); g.moveTo(0, -len); g.quadraticCurveTo(w, -len * 0.15, 0, len); g.quadraticCurveTo(-w, -len * 0.15, 0, -len); g.fill();
-		g.strokeStyle = rgb(l * 0.45, l * 0.58, l * 0.4, 0.8); g.lineWidth = 1.2;
-		g.beginPath(); g.moveTo(0, -len * 0.9); g.lineTo(0, len * 0.9); g.stroke();
+		g.beginPath(); g.moveTo(0, -len); g.quadraticCurveTo(w, -len * 0.1, 0, len); g.quadraticCurveTo(-w, -len * 0.1, 0, -len); g.fill();
+		g.strokeStyle = rgb(l * 0.5, l * 0.62, l * 0.42, 0.7); g.lineWidth = 1;
+		g.beginPath(); g.moveTo(0, -len * 0.85); g.lineTo(0, len * 0.85); g.stroke();
 		g.restore();
 	}
 	return finish(c);

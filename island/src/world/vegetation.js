@@ -92,9 +92,9 @@ function strip(b, pts, widths, fold, color, tipColor, swayBase, swayTip, normalU
 		b.tri(a, d, c); b.tri(c, d, e);
 	}
 }
-function card(b, center, size, rnd, color, sway, outwardFrom) {
+function card(b, center, size, rnd, color, sway, outwardFrom, normal) {
 	const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 3.1, rnd() * 6.3, rnd() * 3.1));
-	const n = center.clone().sub(outwardFrom).normalize().multiplyScalar(0.75).add(V(0, 0.45, 0)).normalize();
+	const n = normal || center.clone().sub(outwardFrom).normalize().multiplyScalar(0.75).add(V(0, 0.45, 0)).normalize();
 	const c = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].map(([x, y]) => V(x * size, y * size, 0).applyQuaternion(q).add(center));
 	const tone = 0.82 + rnd() * 0.36, col = { r: color.r * tone, g: color.g * tone, b: color.b * tone };
 	const uvs = [[0, 0], [0.96, 0], [0.96, 0.96], [0, 0.96]];
@@ -181,7 +181,7 @@ function palm(seed, far) {
 	return { parts: [trunk.geometry(), crown.geometry()], height: H, lean: la };
 }
 
-function hardwood(seed, far) {
+function hardwood(seed, far, mid) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
 	const H = 8 + r() * 5, bend = r() * 1.5, ba = r() * 6.28;
 	const path = [], radii = [];
@@ -190,8 +190,8 @@ function hardwood(seed, far) {
 		path.push(V(Math.cos(ba) * bend * t * t, H * 0.62 * t - (t === 0 ? 0.3 : 0), Math.sin(ba) * bend * t * t));
 		radii.push(0.32 - 0.13 * t + 0.3 * Math.exp(-t * 20));
 	}
-	tube(trunk, far ? [path[0], path[4], path[path.length - 1]] : path, far ? [radii[0] * 0.8, radii[4], radii[radii.length - 1]] : radii, far ? 4 : 8, BARK, (t) => t * 0.15);
-	if (!far) {
+	tube(trunk, far ? [path[0], path[4], path[path.length - 1]] : path, far ? [radii[0] * 0.8, radii[4], radii[radii.length - 1]] : radii, far ? 4 : mid ? 5 : 8, BARK, (t) => t * 0.15);
+	if (!far && !mid) {
 		// buttress and surface roots: they leave the trunk high and run out and down into the soil
 		const nR = 6 + Math.floor(r() * 3);
 		for (let i = 0; i < nR; i++) {
@@ -225,18 +225,32 @@ function hardwood(seed, far) {
 		tube(trunk, [fork.clone(), mid, e], [0.16, 0.1, 0.05], 5, BARK, (t) => 0.2 + t * 0.4);
 		ends.push(e);
 	}
+	// the crown is a cluster of leaf clumps, each a dense rounded mass on a branch
+	// end: lumpy silhouette, shade deep inside, light on the sunny tops of the clumps
 	const RX = 3.6 + r() * 1.6, RY = 2.4 + r() * 0.9;
-	const nC = far ? 12 : 62, size = far ? 4.6 : 2.6;
-	for (let i = 0; i < nC; i++) {
-		const th = r() * 6.28, ph = Math.acos(2 * r() - 1), k = 0.45 + r() * 0.55;
-		const c = crownC.clone().add(V(Math.sin(ph) * Math.cos(th) * RX * k, Math.cos(ph) * RY * k, Math.sin(ph) * Math.sin(th) * RX * k));
-		// inner leaves sit in the crown's own shade
-		const io = 0.45 + 0.55 * Math.pow(k, 1.5) * (0.6 + 0.4 * Math.max(0, Math.cos(ph)));
-		card(crown, c, size * (0.8 + r() * 0.5), r, { r: 0.24 * io, g: 0.38 * io, b: 0.14 * io }, 0.7 + 0.3 * k, crownC);
+	const clumps = [];
+	for (const e of ends) clumps.push({ c: e.clone().add(V(0, 0.6, 0)), rad: 1.5 + r() * 0.6 });
+	const nExtra = far ? 5 : 7 + Math.floor(r() * 4);
+	for (let i = 0; i < nExtra; i++) {
+		const th = r() * 6.28, ph = Math.acos(r() * 1.6 - 0.6), k = 0.55 + r() * 0.45;
+		clumps.push({ c: crownC.clone().add(V(Math.sin(ph) * Math.cos(th) * RX * k, Math.cos(ph) * RY * k, Math.sin(ph) * Math.sin(th) * RX * k)), rad: 1.3 + r() * 0.8 });
 	}
-	for (const e of ends) for (let i = 0; i < 7; i++) {
-		card(crown, e.clone().add(V((r() - 0.5) * 2.4, (r() - 0.2) * 1.4, (r() - 0.5) * 2.4)), size * 0.9, r, { r: 0.26, g: 0.4, b: 0.15 }, 0.95, crownC);
+	const per = far ? 2 : mid ? 4 : 9, size = far ? 3.6 : mid ? 2.5 : 1.7;
+	for (const cl of clumps) {
+		const out = cl.c.clone().sub(crownC).normalize();
+		for (let i = 0; i < per; i++) {
+			// leaves sit on the clump's skin, more on its outer, sunlit side
+			const dir = V(r() * 2 - 1, r() * 2 - 1, r() * 2 - 1).normalize().add(out.clone().multiplyScalar(0.6)).add(V(0, 0.3, 0)).normalize();
+			const p = cl.c.clone().add(dir.clone().multiplyScalar(cl.rad * (0.45 + r() * 0.5)));
+			const n = dir.clone().multiplyScalar(0.65).add(p.clone().sub(crownC).normalize().multiplyScalar(0.35)).normalize();
+			// shade: darker toward the crown's heart and on the clump's underside
+			const depth = Math.min(1, p.distanceTo(crownC) / Math.max(RX, RY));
+			const sh = (0.4 + 0.6 * depth) * (0.62 + 0.38 * (dir.y * 0.5 + 0.5));
+			card(crown, p, size * (0.8 + r() * 0.45), r, { r: 0.24 * sh, g: 0.38 * sh, b: 0.14 * sh }, 0.75 + 0.25 * depth, crownC, n);
+		}
 	}
+	// a few dark leaves deep in the crown so you never see straight through it
+	for (let i = 0; i < (far ? 1 : mid ? 3 : 6); i++) card(crown, crownC.clone().add(V((r() - 0.5) * RX, (r() - 0.3) * RY, (r() - 0.5) * RX)), size * 1.4, r, { r: 0.08, g: 0.13, b: 0.05 }, 0.7, crownC);
 	return { parts: [trunk.geometry(), crown.geometry()], height: H };
 }
 
@@ -478,9 +492,9 @@ export function createVegetation(island, shared, scene) {
 	const species = [
 		// densities are the chance a sample at `spacing` holds a plant: random within a
 		// patch, but the patches follow the land (see eco below), so plants clump
-		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true)), mats: ['palmbark', 'frond'], spacing: 5, near: 140, farR: 600, max: 700, farMax: 1800, kind: 'wood',
+		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true)), mats: ['palmbark', 'frond'], midIsFar: true, spacing: 5, near: 140, farR: 600, max: 700, farMax: 1800, kind: 'wood',
 			density: (e) => e.path > 0.2 || e.h < 0.7 || e.sl > 0.45 ? 0 : e.strand * e.clump(0.02, 0.45, 0.7) * 0.55 + e.yard * 0.05 + e.gully * 0.04 },
-		{ key: 'hardwood', variants: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 6, near: 130, farR: 900, max: 1800, farMax: 6000, kind: 'wood',
+		{ key: 'hardwood', variants: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false)), mid: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false, true)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 6, near: 110, farR: 800, max: 1500, farMax: 4200, kind: 'wood',
 			density: (e) => e.path > 0.12 || e.sl > 0.62 || e.h < 3 ? 0 : e.forest * 0.85 * (0.8 + 0.2 * e.clump(0.05, 0.3, 0.8)) + e.meadow * 0.004 },
 		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['bstem', 'banana'], spacing: 4, near: 90, max: 500, kind: 'soft',
 			density: (e) => e.path > 0.2 || e.sl > 0.45 || e.h < 2 ? 0 : (e.gully * 0.5 * e.clump(0.04, 0.5, 0.7) + e.garden * 0.3 * e.clump(0.06, 0.55, 0.7)) },
@@ -619,7 +633,7 @@ export function createVegetation(island, shared, scene) {
 	const pickables = [];
 	for (const sp of species) {
 		sp.meshes = [];
-		const lods = [['close', sp.variants], ['near', sp.variants]];
+		const lods = [['close', sp.variants], ['near', sp.mid || (sp.midIsFar ? sp.far : sp.variants)]];
 		if (sp.far) lods.push(['far', sp.far]);
 		for (const [lod, variants] of lods) {
 			variants.forEach((vdef, vi) => {
@@ -680,7 +694,7 @@ export function createVegetation(island, shared, scene) {
 					pos.set(it.x, it.y, it.z);
 					m4.compose(pos, q, sc);
 					col.setScalar(it.tint);
-					const vi = lod === 'far' ? it.v % sp.far.length : it.v;
+					const vi = lod === 'far' ? it.v % sp.far.length : lod === 'near' && sp.midIsFar ? it.v % sp.far.length : it.v;
 					for (const m of sp.meshes) {
 						if (m.lod !== lod || m.vi !== vi || m.im.count >= m.im.userData.cap) continue;
 						m.im.setMatrixAt(m.im.count, m4);
