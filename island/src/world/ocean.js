@@ -130,9 +130,9 @@ uniforms.uUnder = shared.uUnder;
 				float glade = (pow(max(dot(R, moonDir), 0.0), 160.0) * 9.0 + pow(max(dot(R, moonDir), 0.0), 14.0) * 0.35) * nightK;
 				// ripples scatter the path into glitter
 				glade *= 0.35 + 1.3 * smoothstep(0.55, 0.8, r0);
-				col += vec3(0.75, 0.82, 1.0) * glade;
 				float dayS = smoothstep(-0.05, 0.1, uSunDir.y);
 				vec3 col = mix(body, sky, F * 0.7) + uSunColor * spec * (0.8 + uHigh * 0.6) * dayS;
+				col += vec3(0.75, 0.82, 1.0) * glade;
 				// AgX is calm and a little grey; give the sea back its turquoise
 				float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
 				col = max(vec3(0.0), mix(vec3(lum), col, 1.35));

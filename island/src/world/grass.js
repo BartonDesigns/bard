@@ -62,7 +62,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			${OCC_GLSL}
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228;
 			float gTall;
 			` + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
@@ -89,13 +89,15 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float grow = step(aRand.y, density) * (1.0 - smoothstep(0.7, 1.0, dCam));
 				// height: a gentle field, longer drifts in hollows, cropped in the village,
 				// shorter at stems and right under your eye
-				float patchN = vn(w * 0.05 + 11.0);
-				float tall = mix(0.28, 0.46, vn(w * 0.13 + 2.0)) + smoothstep(0.62, 0.86, patchN) * 0.22;
+				// the land decides: tall bunch grass where the ecology says meadow and damp,
+				// short turf on ridges, paths and round the houses
+				float tallMap = mk.b;
+				float tall = mix(0.24, 0.4, vn(w * 0.13 + 2.0)) + tallMap * (0.55 + 0.35 * vn(w * 0.4 + 7.0));
 				tall *= 0.9 + 0.2 * aRand.x;
 				tall *= 1.0 - occ * 0.6;
 				tall *= 1.0 + hug * 0.9;
 				tall *= mix(0.4, 1.0, smoothstep(0.8, 2.6, length(w - uCam)));
-				tall *= mix(1.0, 0.45, mk.g) * uTallK * grow;
+				tall *= mix(1.0, 0.5, mk.g) * uTallK * grow;
 				gTall = tall;
 				float ang = aRand.y * 6.2831;
 				vGUv = uv; vTip = aTip;
@@ -105,6 +107,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vec3 tint = mix(g1, g2, hue);
 				tint = mix(tint, vec3(0.55, 0.52, 0.30), dry * 0.35);
 				tint *= 0.97 + 0.06 * aRand.x;
+				vTall228 = tallMap;
 				tint *= 1.0 - occ * 0.25;
 				vTint = tint * tint;   // authored in display space
 				vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
@@ -130,7 +133,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		// both faces of a blade are lit as the meadow is (up), never as their dark underside
 		sh.fragmentShader = `
 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228;
 			` + sh.fragmentShader
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
 			.replace('#include <map_fragment>', `
@@ -143,7 +146,9 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				diffuseColor.a = cov;
 				// darker at the root where blades crowd and shade each other, paler at the tips
 				float rootK = smoothstep(0.0, 0.6, vGUv.y);
-				diffuseColor.rgb = vTint * mix(0.86, 1.04, rootK);`)
+				diffuseColor.rgb = vTint * mix(0.86, 1.04, rootK);
+				// tall grass goes to seed: pale straw tips
+				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.36) * vec3(0.62, 0.58, 0.36), smoothstep(0.7, 1.0, vGUv.y) * smoothstep(0.3, 0.8, vTall228) * 0.7);`)
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				// blades glow when the sun is behind them; the highs make the field shimmer
 				float back = pow(max(0.0, dot(normalize(vGW - cameraPosition), uSunDir)), 4.0) * max(0.0, uSunDir.y + 0.1);

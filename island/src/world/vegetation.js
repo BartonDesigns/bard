@@ -580,6 +580,16 @@ export function createVegetation(island, shared, scene) {
 		for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
 			const x = -island.half + i * island.cell, z = -island.half + j * island.cell;
 			M[(j * N + i) * 4 + 3] = Math.round(Math.min(1, gAt('forest', x, z) + gAt('edge', x, z) * 0.35) * 255);
+			// on land the blue channel carries how tall the grass grows: bunch grass in the
+			// open meadows and damp hollows, in drifts; short on ridges, by paths and houses
+			const h = island.height[j * N + i];
+			if (h > 0.3) {
+				const meadow = gAt('meadow', x, z), moist = gAt('moist', x, z);
+				const drift = smoothstep(0.35, 0.7, ecoNoise.fbm(x * 0.011 + 40, z * 0.011 - 12, 3));
+				const k = M[(j * N + i) * 4 + 1] / 255, path = M[(j * N + i) * 4] / 255;
+				const tall = meadow * (0.25 + 0.5 * drift + 0.6 * moist) * (1 - k * 0.9) * (1 - path) * (1 - gAt('summit', x, z));
+				M[(j * N + i) * 4 + 2] = Math.round(clamp(tall, 0, 1) * 255);
+			}
 		}
 		if (shared.maskTex) shared.maskTex.needsUpdate = true;
 	}

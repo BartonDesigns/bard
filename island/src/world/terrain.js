@@ -191,7 +191,7 @@ export function createTerrain(island, shared) {
 				gDetailH -= print * 0.05 * (1.0 - grassW);
 				// under the sea: bleached sand going blue-green with depth
 				col = mix(col, vec3(0.78, 0.74, 0.60), smoothstep(0.0, -1.0, h));
-				col = mix(col, col * vec3(0.55, 0.62, 0.55), mk.b);
+				col = mix(col, col * vec3(0.55, 0.62, 0.55), mk.b * step(h, 0.3));   // reef, under water only (on land b is grass height)
 				// sunlight focused by the swell dances on the seabed
 				float cA = 1.0 - abs(vn(vW.xz * 0.55 + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
 				float cB = 1.0 - abs(vn(vW.xz * 0.7 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
