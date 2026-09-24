@@ -103,7 +103,8 @@ export function createTerrain(island, shared) {
 				vec3 grass = mix(g1, g2, smoothstep(0.35, 0.7, n1));
 				grass = mix(grass, g3, smoothstep(0.62, 0.8, fbm3(vW.xz * 0.013 + 3.0)) * 0.7);
 				grass *= 0.82 + 0.3 * n3;
-				grass = mix(grass, grass * 0.72, mk.a * 0.45);
+				// forest floor: shaded, leaf-littered, a deep moss-brown under the canopy
+				grass = mix(grass, vec3(0.20, 0.24, 0.10) * (0.85 + 0.3 * n2), smoothstep(0.2, 0.8, mk.a) * 0.8);
 				vec3 rock = mix(vec3(0.36, 0.34, 0.31), vec3(0.52, 0.49, 0.44), n2) * (0.85 + 0.25 * n3);
 				vec3 dirt = mix(vec3(0.46, 0.35, 0.23), vec3(0.60, 0.48, 0.33), n2) * (0.88 + 0.2 * n3);
 				// the beach keeps its width, but its edge only wanders a little, so sand never

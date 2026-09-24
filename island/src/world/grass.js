@@ -77,10 +77,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vec2 oc = occAt(w);
 				float occ = oc.r, hug = oc.g * (1.0 - oc.r);
 				h += moundAt(w);
-				float canopy = smoothstep(0.55, 0.9, mk.a) * smoothstep(5.0, 9.0, h);
+				float canopy = smoothstep(0.35, 0.8, mk.a);
 				float n1g = fbm3(w * 0.06);
 				float meadow = smoothstep(0.3, 0.8, smoothstep(1.4 + n1g * 0.5, 2.3 + n1g * 0.6, h)) * smoothstep(1.3, 2.0, h);
-				float density = meadow * smoothstep(0.05, 0.3, mk.a) * (1.0 - smoothstep(0.2, 0.5, mk.r)) * (1.0 - canopy * 0.65) * (1.0 - occ * 0.85);
+				float density = meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)) * (1.0 - canopy * 0.65) * (1.0 - occ * 0.85);
 				density *= 0.85 + 0.15 * vn(w * 0.4 + 5.0);
 				// around shrubs, bananas and flowers the grass crowds in and grows up the stems
 				density = min(1.0, density + hug * 0.6 * meadow);

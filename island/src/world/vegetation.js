@@ -178,7 +178,7 @@ function palm(seed, far) {
 			strip(crown, pts, widths, 0.4, { r: 0.62, g: 0.48, b: 0.3 }, { r: 0.55, g: 0.42, b: 0.26 }, 0.3, 0.5, 0.6);
 		}
 	}
-	return { parts: [trunk.geometry(), crown.geometry()], height: H };
+	return { parts: [trunk.geometry(), crown.geometry()], height: H, lean: la };
 }
 
 function hardwood(seed, far) {
@@ -190,7 +190,7 @@ function hardwood(seed, far) {
 		path.push(V(Math.cos(ba) * bend * t * t, H * 0.62 * t - (t === 0 ? 0.3 : 0), Math.sin(ba) * bend * t * t));
 		radii.push(0.32 - 0.13 * t + 0.3 * Math.exp(-t * 20));
 	}
-	tube(trunk, path, radii, far ? 5 : 8, BARK, (t) => t * 0.15);
+	tube(trunk, far ? [path[0], path[4], path[path.length - 1]] : path, far ? [radii[0] * 0.8, radii[4], radii[radii.length - 1]] : radii, far ? 4 : 8, BARK, (t) => t * 0.15);
 	if (!far) {
 		// buttress and surface roots: they leave the trunk high and run out and down into the soil
 		const nR = 6 + Math.floor(r() * 3);
@@ -226,7 +226,7 @@ function hardwood(seed, far) {
 		ends.push(e);
 	}
 	const RX = 3.6 + r() * 1.6, RY = 2.4 + r() * 0.9;
-	const nC = far ? 22 : 62, size = far ? 3.6 : 2.6;
+	const nC = far ? 12 : 62, size = far ? 4.6 : 2.6;
 	for (let i = 0; i < nC; i++) {
 		const th = r() * 6.28, ph = Math.acos(2 * r() - 1), k = 0.45 + r() * 0.55;
 		const c = crownC.clone().add(V(Math.sin(ph) * Math.cos(th) * RX * k, Math.cos(ph) * RY * k, Math.sin(ph) * Math.sin(th) * RX * k));
@@ -474,28 +474,88 @@ export function createVegetation(island, shared, scene) {
 	};
 	const nz = makeNoise(island.seed + 101);
 	const species = [
-		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true)), mats: ['palmbark', 'frond'], spacing: 10, near: 140, farR: 460, max: 700, kind: 'wood',
-			accept: (x, z, h, sl, m) => h > 0.7 && h < 12 && sl < 0.45 && m.path < 0.2 && (island.shapeAt(x, z) > 0.84 || m.village > 0.3) && nz.fbm(x * 0.012, z * 0.012, 3) > 0.47 },
-		{ key: 'hardwood', variants: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 9, near: 130, farR: 1050, max: 1800, kind: 'wood',
-			accept: (x, z, h, sl, m) => h > 4 && h < island.peak.h * 0.85 && sl < 0.62 && m.path < 0.15 && m.village < 0.2 && m.wild > 0.3 && island.shapeAt(x, z) < 0.86 && nz.fbm(x * 0.006 + 9, z * 0.006, 3) > 0.4 },
-		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['bstem', 'banana'], spacing: 5.5, near: 90, max: 500, kind: 'soft',
-			accept: (x, z, h, sl, m) => h > 2.2 && h < 60 && sl < 0.45 && m.path < 0.2 && m.wild > 0.25 && nz.fbm(x * 0.02 + 4, z * 0.02, 3) > 0.54 },
-		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v)), mats: ['fern'], spacing: 3.4, near: 50, max: 700, kind: 'soft', noShadow: true,
-			accept: (x, z, h, sl, m) => h > 2.6 && sl < 0.6 && m.path < 0.15 && m.wild > 0.35 && nz.fbm(x * 0.05, z * 0.05 + 2, 2) > 0.52 },
-		{ key: 'hibiscus', variants: [0, 1].map((v) => bloom(island.seed * 41 + v)), mats: ['bark', 'hibiscus'], spacing: 7, near: 110, max: 260, kind: 'soft',
-			accept: (x, z, h, sl, m) => h > 1.8 && h < 40 && sl < 0.4 && m.path < 0.25 && (m.village > 0.25 || (m.path > 0.02 && m.wild > 0.1)) && nz.fbm(x * 0.05 + 3, z * 0.05, 2) > 0.5 },
-		{ key: 'bougainvillea', variants: [0, 1].map((v) => bloom(island.seed * 43 + v)), mats: ['bark', 'bougainvillea'], spacing: 8, near: 110, max: 220, kind: 'soft',
-			accept: (x, z, h, sl, m) => h > 1.6 && h < 30 && sl < 0.45 && m.path < 0.25 && m.wild > 0.08 && m.wild < 0.6 && nz.fbm(x * 0.04 - 6, z * 0.04, 2) > 0.56 },
-		{ key: 'shrub', variants: [0, 1].map((v) => shrub(island.seed * 19 + v)), mats: ['bark', 'leaf'], spacing: 6, near: 120, max: 500, kind: 'soft',
-			accept: (x, z, h, sl, m) => h > 1.8 && sl < 0.55 && m.path < 0.2 && m.wild > 0.15 && nz.fbm(x * 0.03 + 7, z * 0.03, 2) > 0.5 },
+		// densities are the chance a sample at `spacing` holds a plant: random within a
+		// patch, but the patches follow the land (see eco below), so plants clump
+		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true)), mats: ['palmbark', 'frond'], spacing: 5, near: 140, farR: 600, max: 700, farMax: 1800, kind: 'wood',
+			density: (e) => e.path > 0.2 || e.h < 0.7 || e.sl > 0.45 ? 0 : e.strand * e.clump(0.02, 0.45, 0.7) * 0.55 + e.yard * 0.05 + e.gully * 0.04 },
+		{ key: 'hardwood', variants: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 6, near: 130, farR: 900, max: 1800, farMax: 6000, kind: 'wood',
+			density: (e) => e.path > 0.12 || e.sl > 0.62 || e.h < 3 ? 0 : e.forest * 0.85 * (0.8 + 0.2 * e.clump(0.05, 0.3, 0.8)) + e.meadow * 0.004 },
+		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['bstem', 'banana'], spacing: 4, near: 90, max: 500, kind: 'soft',
+			density: (e) => e.path > 0.2 || e.sl > 0.45 || e.h < 2 ? 0 : (e.gully * 0.5 * e.clump(0.04, 0.5, 0.7) + e.garden * 0.3 * e.clump(0.06, 0.55, 0.7)) },
+		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v)), mats: ['fern'], spacing: 3, near: 50, max: 700, kind: 'soft', noShadow: true,
+			density: (e) => e.path > 0.15 || e.sl > 0.6 ? 0 : e.forest * 0.22 * (0.5 + e.moist) + e.gully * 0.2 },
+		{ key: 'hibiscus', variants: [0, 1].map((v) => bloom(island.seed * 41 + v)), mats: ['bark', 'hibiscus'], spacing: 5, near: 110, max: 260, kind: 'soft',
+			density: (e) => e.path > 0.25 || e.sl > 0.4 ? 0 : e.yard * 0.22 + e.edge * 0.012 },
+		{ key: 'bougainvillea', variants: [0, 1].map((v) => bloom(island.seed * 43 + v)), mats: ['bark', 'bougainvillea'], spacing: 6, near: 110, max: 220, kind: 'soft',
+			density: (e) => e.path > 0.25 || e.sl > 0.45 ? 0 : e.yard * 0.08 + e.edge * 0.03 * e.clump(0.03, 0.55, 0.7) },
+		{ key: 'shrub', variants: [0, 1].map((v) => shrub(island.seed * 19 + v)), mats: ['bark', 'leaf'], spacing: 4, near: 120, max: 500, kind: 'soft',
+			density: (e) => e.path > 0.2 || e.sl > 0.55 || e.h < 1.8 ? 0 : e.edge * 0.3 + e.forest * 0.05 + e.meadow * 0.006 },
 		{ key: 'nuts', derived: true, variants: [0, 1, 2].map((v) => coconuts(island.seed * 29 + v)), mats: ['stem'], near: 60, max: 300, kind: 'wood', noShadow: true },
 		{ key: 'deadfrond', derived: true, variants: [0, 1].map((v) => deadFrond(island.seed * 31 + v)), mats: ['frond'], near: 80, max: 400, kind: 'soft', noShadow: true },
 		{ key: 'driftwood', variants: [0, 1, 2].map((v) => driftwood(island.seed * 37 + v)), mats: ['bark'], spacing: 9, near: 110, max: 200, kind: 'wood',
-			accept: (x, z, h, sl, m) => h > 0.35 && h < 1.3 && m.village < 0.2 && m.path < 0.2 && nz.fbm(x * 0.03 + 5, z * 0.03, 2) > 0.62 },
-		{ key: 'boulder', variants: [0, 1].map((v) => boulder(island.seed * 23 + v)), mats: ['stone'], spacing: 12, near: 320, max: 400, kind: 'stone',
-			accept: (x, z, h, sl, m) => h > 0.2 && sl > 0.28 && m.path < 0.3 && nz.fbm(x * 0.02 + 1, z * 0.02, 2) > 0.45 },
+			density: (e) => e.h > 0.35 && e.h < 1.3 && e.village < 0.2 && e.path < 0.2 ? 0.12 * e.clump(0.03, 0.5, 0.7) : 0 },
+		{ key: 'boulder', variants: [0, 1].map((v) => boulder(island.seed * 23 + v)), mats: ['stone'], spacing: 10, near: 320, max: 400, kind: 'stone',
+			density: (e) => e.path > 0.3 || e.h < 0.2 ? 0 : smoothstep(0.3, 0.55, e.sl) * 0.35 * e.clump(0.03, 0.4, 0.7) + e.summit * 0.08 + e.headland * 0.1 },
 	];
 	const SHADOW_R = 55;
+
+	// ---------- ecology: where things grow, from the shape of the land ----------
+	// forest stands on slopes and in hollows, open meadow on the gentle ground around the
+	// village and on windswept ridges, a coconut belt on the strand, gardens and yards at
+	// the houses, scrub along every forest edge, bananas in the damp gullies.
+	// Baked once onto a 5 m grid; plants and the ground shaders read it.
+	const V2 = island.village;
+	const ecoNoise = makeNoise(island.seed + 505);
+	const EG = 5, ER = island.R * 1.25, EN = Math.ceil(ER * 2 / EG) + 1;
+	const FIELDS = ['forest', 'edge', 'meadow', 'moist', 'gully', 'strand', 'garden', 'summit', 'headland'];
+	const grid = {};
+	for (const f of FIELDS) grid[f] = new Float32Array(EN * EN);
+	for (let j = 0; j < EN; j++) for (let i = 0; i < EN; i++) {
+		const x = -ER + i * EG, z = -ER + j * EG, h = island.heightAt(x, z), k = j * EN + i;
+		if (h < 0.1) continue;
+		const coast = island.shapeAt(x, z), sl = 1 - island.normalAt(x, z).y;
+		let ring = 0;
+		for (let q = 0; q < 8; q++) { const a = q * 0.785; ring += island.heightAt(x + Math.cos(a) * 60, z + Math.sin(a) * 60); }
+		const conc = clamp((ring / 8 - h) / 8, -1, 1);                     // + hollow, - ridge
+		const dv = Math.hypot(x - V2.x, z - V2.z);
+		const clearing = smoothstep(70, 150, dv);                          // the village keeps its fields open
+		const alt = h / island.peak.h;
+		const patch = smoothstep(0.3, 0.7, ecoNoise.fbm(x * 0.0028 + 7, z * 0.0028 - 3, 3)); // stands and glades
+		let f = patch + Math.max(0, conc) * 0.6 - Math.max(0, -conc) * 0.3 + smoothstep(0.06, 0.3, sl) * 0.4 + smoothstep(0.15, 0.5, alt) * 0.15;
+		f -= smoothstep(0.8, 0.95, alt) * 0.8;                            // a bare summit
+		f -= smoothstep(0.78, 0.9, coast) * 0.7;                           // salt and sand at the coast
+		const ground = clearing * smoothstep(2.5, 5, h);
+		const forest = smoothstep(0.47, 0.59, f) * ground, wide = smoothstep(0.36, 0.59, f) * ground;
+		grid.forest[k] = forest;
+		grid.edge[k] = Math.min(1, Math.max(0, wide - forest) * 1.6);
+		grid.meadow[k] = (1 - wide) * smoothstep(2, 4, h);
+		grid.moist[k] = Math.max(0, conc);
+		grid.gully[k] = smoothstep(0.25, 0.6, conc) * smoothstep(2, 5, h) * (1 - smoothstep(0.5, 0.8, alt));
+		grid.strand[k] = smoothstep(0.8, 0.86, coast) * (1 - smoothstep(0.95, 0.99, coast));
+		grid.garden[k] = smoothstep(130, 90, dv) * smoothstep(35, 60, dv);
+		grid.summit[k] = smoothstep(0.85, 0.95, alt);
+		grid.headland[k] = smoothstep(0.84, 0.9, coast) * smoothstep(0.25, 0.45, sl);
+	}
+	const gAt = (f, x, z) => {
+		const fx = clamp((x + ER) / EG, 0, EN - 1.001), fz = clamp((z + ER) / EG, 0, EN - 1.001), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * EN + i, a = grid[f];
+		return (a[k] * (1 - u) + a[k + 1] * u) * (1 - v) + (a[k + EN] * (1 - u) + a[k + EN + 1] * u) * v;
+	};
+	function eco(x, z, h, sl, m) {
+		const e = { h, sl, path: m.path, village: m.village, yard: smoothstep(0.15, 0.5, m.village),
+			clump: (sc, lo, hi) => smoothstep(lo, hi, ecoNoise.fbm(x * sc + sc * 91, z * sc - sc * 37, 2)) };
+		for (const f of FIELDS) e[f] = gAt(f, x, z);
+		return e;
+	}
+	// the ground knows where the forest is: the wild-growth mask becomes the canopy map,
+	// so forest floor, grass and leaf litter all follow the trees
+	{
+		const M = island.masks, N = island.N;
+		for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+			const x = -island.half + i * island.cell, z = -island.half + j * island.cell;
+			M[(j * N + i) * 4 + 3] = Math.round(Math.min(1, gAt('forest', x, z) + gAt('edge', x, z) * 0.35) * 255);
+		}
+		if (shared.maskTex) shared.maskTex.needsUpdate = true;
+	}
 
 	// scatter once into cells
 	const cells = new Map();
@@ -513,12 +573,12 @@ export function createVegetation(island, shared, scene) {
 		if (sp.derived) continue;
 		const s = sp.spacing;
 		for (let z = -reach; z < reach; z += s) for (let x = -reach; x < reach; x += s) {
-			const px = x + (rnd() - 0.5) * s * 0.9, pz = z + (rnd() - 0.5) * s * 0.9;
+			const px = x + rnd() * s, pz = z + rnd() * s;
 			const h = island.heightAt(px, pz);
 			if (h < 0.2) continue;
 			const n = island.normalAt(px, pz), sl = 1 - n.y;
 			const m = { path: island.maskAt(px, pz, 0), village: island.maskAt(px, pz, 1), wild: island.maskAt(px, pz, 3) };
-			if (!sp.accept(px, pz, h, sl, m)) continue;
+			if (rnd() >= sp.density(eco(px, pz, h, sl, m))) continue;
 			const key = Math.floor(px / CELL) + ',' + Math.floor(pz / CELL);
 			let c = cells.get(key);
 			if (!c) cells.set(key, c = { x: Math.floor(px / CELL), z: Math.floor(pz / CELL), items: {} });
@@ -526,6 +586,11 @@ export function createVegetation(island, shared, scene) {
 				x: px, y: h - (sp.key === 'boulder' ? 0.35 : 0.05), z: pz, rot: rnd() * 6.283, scale: sp.key === 'boulder' ? 0.6 + rnd() * 1.6 : 0.8 + rnd() * 0.45,
 				v: Math.floor(rnd() * sp.variants.length), tint: 0.85 + rnd() * 0.3,
 			});
+			// coconut palms lean out over the beach, toward the light and the sea
+			if (sp.key === 'palm') {
+				const it = c.items.palm[c.items.palm.length - 1];
+				it.rot = sp.variants[it.v].lean - Math.atan2(pz, px) + (rnd() - 0.5) * 0.9;
+			}
 			// ferns gather in the damp shade at the foot of the big trees
 			if (sp.key === 'hardwood') {
 				const n = rnd() < 0.7 ? 1 + Math.floor(rnd() * 3) : 0;
@@ -551,7 +616,7 @@ export function createVegetation(island, shared, scene) {
 			variants.forEach((vdef, vi) => {
 				vdef.parts.forEach((geo, pi) => {
 					const mm = mats[sp.mats[pi]];
-					const cap = lod === 'close' ? Math.min(sp.max, 160) : sp.max;
+					const cap = lod === 'close' ? Math.min(sp.max, 160) : lod === 'far' ? (sp.farMax || sp.max) : sp.max;
 					const im = new THREE.InstancedMesh(geo, mm.material, cap);
 					im.count = 0;
 					im.castShadow = lod === 'close' && !sp.noShadow;
@@ -655,5 +720,5 @@ export function createVegetation(island, shared, scene) {
 		}
 		return out;
 	}
-	return { group, stream, pickables, obstacles, species, cells };
+	return { group, stream, pickables, obstacles, species, cells, eco };
 }
