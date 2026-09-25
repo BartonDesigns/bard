@@ -122,22 +122,20 @@ export function fernFrond() {
 
 // grass: a strip of tapering blades
 export function grassStrip() {
-	// crisp at close range: 256 px, each blade a tapered, slightly curved leaf with a
-	// midrib, so grass right in front of you reads as blades, not streaks
-	const W = 256, H = 256, [c, g] = canvas(W, H), r = mulberry32(8);
-	for (let i = 0; i < 18; i++) {
-		const x = 12 + r() * (W - 24), top = H * (0.02 + r() * 0.42), l = 190 + r() * 45, lean = (r() - 0.5) * 30, w = 4.5 + r() * 3;
+	// fine blades about 2 mm wide (the card is ~0.4 m across, 512 px), four times as
+	// many as before, each a slightly curved sliver tapering to a point
+	const W = 512, H = 512, [c, g] = canvas(W, H), r = mulberry32(8);
+	for (let i = 0; i < 72; i++) {
+		const x = 10 + r() * (W - 20), top = H * (0.02 + r() * 0.45), l = 120 + r() * 135, lean = (r() - 0.5) * 60, w = 1.6 + r() * 1.2;
 		const gr = g.createLinearGradient(0, H, 0, top);
 		gr.addColorStop(0, rgb(l * 0.62, l * 0.72, l * 0.42)); gr.addColorStop(1, rgb(l * 0.95, l, l * 0.7));
 		g.fillStyle = gr;
 		const mx = x + lean * 0.45, my = (H + top) / 2;
 		g.beginPath();
 		g.moveTo(x - w, H);
-		g.quadraticCurveTo(mx - w * 0.6, my, x + lean, top);
-		g.quadraticCurveTo(mx + w * 0.6, my, x + w, H);
+		g.quadraticCurveTo(mx - w * 0.5, my, x + lean, top);
+		g.quadraticCurveTo(mx + w * 0.5, my, x + w, H);
 		g.closePath(); g.fill();
-		g.strokeStyle = rgb(l * 0.7, l * 0.8, l * 0.5, 0.5); g.lineWidth = 1;
-		g.beginPath(); g.moveTo(x, H); g.quadraticCurveTo(mx, my, x + lean, top + 4); g.stroke();
 	}
 	return finish(c);
 }

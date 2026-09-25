@@ -141,12 +141,17 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// filtered edges never bleed dark
 				vec4 gt = texture2D(uMap, vGUv);
 				// soft coverage: MSAA turns the edge into a fade, and the blades never thin to nothing
-				float cov = clamp((gt.a - 0.35) / max(fwidth(gt.a) * 1.5, 1e-3) + 0.5, 0.0, 1.0);
+				// fine blades fall below a pixel with distance: widen their coverage as the
+				// texture minifies, so the meadow keeps its fill instead of thinning out
+				float mip = max(0.0, log2(max(fwidth(vGUv.x) * 512.0, 1e-3)));
+				float thr = max(0.04, 0.3 - mip * 0.09);
+				float cov = clamp((gt.a - thr) / max(fwidth(gt.a) * 1.2, 1e-3) + 0.5, 0.0, 1.0);
 				if (cov < 0.02) discard;
 				diffuseColor.a = cov;
 				// darker at the root where blades crowd and shade each other, paler at the tips
 				float rootK = smoothstep(0.0, 0.6, vGUv.y);
-				diffuseColor.rgb = vTint * mix(0.86, 1.04, rootK);
+				// each blade keeps its own tone, so the fine blades read one by one
+				diffuseColor.rgb = vTint * mix(0.86, 1.04, rootK) * (0.62 + 0.55 * gt.g);
 				// tall grass goes to seed: pale straw tips
 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.36) * vec3(0.62, 0.58, 0.36), smoothstep(0.7, 1.0, vGUv.y) * smoothstep(0.3, 0.8, vTall228) * 0.7);`)
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
