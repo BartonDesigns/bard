@@ -167,6 +167,31 @@ export function generateIsland(params = {}) {
 		}
 	}
 
+	// The seabed has relief: past the shallows it is broken into ridges, spurs and
+	// valleys (reef spurs and grooves near the shelf, canyons on the deeper slope),
+	// so swimming out you rise over crests and drop into gullies instead of drifting
+	// over a smooth ramp. The beach and the first metre or two of water stay smooth.
+	for (let j = 0; j < N; j++) {
+		const z = -half + j * cell;
+		for (let i = 0; i < N; i++) {
+			const k = j * N + i, h = height[k];
+			if (h > -1.5) continue;
+			const x = -half + i * cell;
+			const deep = smoothstep(-1.5, -5, h), abyss = smoothstep(-20, -45, h);
+			// spurs and grooves run down the slope: stretch the noise along the radial
+			// (across is arc length round the island; blended over the angle's seam)
+			const along = Math.hypot(x, z), th = Math.atan2(z, x);
+			const gA = nz.ridged(along * 0.012 + 3, th * 800 * 0.05 - 8, 4);
+			const gB = nz.ridged(along * 0.012 + 3, (th < 0 ? th + Math.PI * 2 : th) * 800 * 0.05 + 40, 4);
+			const groove = lerp(gA, gB, smoothstep(0.6, 0.9, Math.abs(th) / Math.PI));
+			const valleys = nz.ridged(x * 0.009 - 21, z * 0.009 + 5, 5);
+			const bumps = nz.fbm(x * 0.06 + 4, z * 0.06 - 9, 3);
+			const lift = deep * ((groove - 0.45) * 9 + (valleys - 0.5) * 12 * (0.5 + abyss) + (bumps - 0.5) * 3.5);
+			// crests may climb toward the light, but never out of the water
+			height[k] = Math.min(h + lift, Math.max(h, -1.8));
+		}
+	}
+
 	// Level the village terrace: rises gently inland from the beach.
 	// the village ground: an amphitheatre rising from the back beach of the cove,
 	// about one metre in fifteen, so the houses step up the slope and all look out
