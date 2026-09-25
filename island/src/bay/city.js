@@ -197,7 +197,7 @@ export function createCity(shared, scene, bay) {
 				const parkBlock = hash(i * 3 + 7, j * 5 + 1) > 0.975 && U.d < 0.2;              // a park or a playground
 				const ground = bay.heightAt(wx, wz);
 				if (ground < 0.8) continue;
-				const X0 = i * BX + ST, Z0 = j * BZ + ST, IX = BX - ST, IZ = BZ - ST;          // the block inside its streets
+				const X0 = i * BX + ST + 2.5, Z0 = j * BZ + ST + 2.5, IX = BX - ST - 5, IZ = BZ - ST - 5;   // the block inside its pavements
 				const r0 = hash(i * 17 + 3, j * 29 + 1);
 				if (parkBlock) {
 					if (minH > 0) continue;
@@ -264,7 +264,7 @@ export function createCity(shared, scene, bay) {
 						// bay windows stacked up the front
 						if (style === STYLE.sf && r > 0.35 && dist !== 'nobhill' && dist !== 'chinatown') lot(list, a, style, X0 + k * L + L / 2, side ? Z0 + IZ + 0.5 : Z0 - 0.5, Math.min(3.6, L * 0.47), 1.4, h - 3.2, KIND.row, col.map((c) => Math.min(1, c * 1.05)), null);
 						// a street tree now and then (more in the Sunset and the Mission)
-						if (hash(k * 3 + side, i * 5 + j) < (dist === 'sunset' || dist === 'mission' ? 0.2 : 0.1)) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 3.5 : Z0 - 3.5, 6 + r * 3, false, r);
+						if (hash(k * 3 + side, i * 5 + j) < (dist === 'sunset' || dist === 'mission' ? 0.2 : 0.1)) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 2.0 : Z0 - 2.0, 6 + r * 3, false, r);
 					}
 					// the short ends of the block are built up too, houses facing the cross streets
 					for (let k = 0; deep + (k + 1) * L < IZ - deep + 0.1; k++) for (const side of [0, 1]) {
@@ -284,7 +284,7 @@ export function createCity(shared, scene, bay) {
 						const gz = side ? Z0 + IZ - 6 - d / 2 : Z0 + 6 + d / 2;
 						lot(list, a, style, X0 + k * L + L / 2, gz, w, d, h, KIND.house, col, { hip: r > 0.8, rot: r < 0.3, h: Math.min(w, d) * 0.42, col: rc });
 						// old neighbourhoods are leafy: street trees and big backyard trees
-						if (k % 2 === 0) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 2.5 : Z0 - 2.5, 9 + r * 6, false, r);
+						if (k % 2 === 0) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 1.9 : Z0 - 1.9, 9 + r * 6, false, r);
 						if (r > 0.4) tree(X0 + k * L + L / 2 + 3, side ? Z0 + IZ - 30 : Z0 + 30, 10 + r * 8, r > 0.85, r * 1.7 % 1);
 					}
 				} else if (style === STYLE.suburb) {

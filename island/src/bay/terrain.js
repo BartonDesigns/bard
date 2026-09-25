@@ -161,13 +161,19 @@ export function createBayArea(shared, scene, island, BU) {
 
 	// ---------- the ground ----------
 	const uUrban = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, uUR = { value: new THREE.Vector4(0, 0, 1, 0) };
+	// cos and sin of each street angle byte, computed here in double precision: GPU sin() and
+	// cos() are only good to a few parts in a million, and times 80 km of coordinate that is metres
+	const rotLUT = new Float32Array(256 * 4);
+	for (let i = 0; i < 256; i++) { const a = i / 255 * Math.PI / 2; rotLUT[i * 4] = Math.cos(a); rotLUT[i * 4 + 1] = Math.sin(a); }
+	const uRot = { value: new THREE.DataTexture(rotLUT, 256, 1, THREE.RGBAFormat, THREE.FloatType) };
+	uRot.value.needsUpdate = true;
 	uUrban.value.needsUpdate = true;
 	const uNightB = { value: 0 };
 	function groundMaterial(hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, { uUrban, uUR, uNightB, uTime: shared.uTime });
+			Object.assign(sh.uniforms, BU, U2, { uUrban, uUR, uRot, uNightB, uTime: shared.uTime });
 			sh.vertexShader = 'uniform vec2 uC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\n' + BAY_GLSL + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -176,7 +182,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0);\n' + NOISE_GLSL + '\n' + WARP_GLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0);\n' + NOISE_GLSL + '\n' + WARP_GLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -209,13 +215,14 @@ export function createBayArea(shared, scene, island, BU) {
 					float dist = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
 					if (urban > 0.02){
 						vec4 TX = texelFetch(uUrban, ivec2(clamp(uu, vec2(0.0), US - 1.0)), 0);
-						float a = TX.g * 1.5708, sty = floor(TX.a * 255.0 / 40.0 + 0.5);
-						vec2 g = mat2(cos(a), -sin(a), sin(a), cos(a)) * vBW + streetWarp(vBW, sty);
+						float sty = floor(TX.a * 255.0 / 40.0 + 0.5);
+						vec2 cs = texelFetch(uRot, ivec2(int(TX.g * 255.0 + 0.5), 0), 0).xy;
+						vec2 g = vec2(cs.x * vBW.x + cs.y * vBW.y, cs.x * vBW.y - cs.y * vBW.x) + streetWarp(vBW, sty);
 						vec3 BK = blockOf(sty);
 						vec2 B = BK.xy, f = fract(g / B), cid = floor(g / B);
 						vec2 fw = f * B;
 						float street = 1.0 - step(BK.z, fw.x) * step(BK.z, fw.y);
-						float sidewalk = (1.0 - street) * (1.0 - step(BK.z + 2.5, fw.x) * step(BK.z + 2.5, fw.y));
+						float sidewalk = (1.0 - street) * (1.0 - step(BK.z + 2.5, fw.x) * step(BK.z + 2.5, fw.y) * step(fw.x, B.x - 2.5) * step(fw.y, B.y - 2.5));
 						float lh = h21(floor(g / 17.0) + cid * 7.0);
 						vec3 cityC;
 						float down = T.b;

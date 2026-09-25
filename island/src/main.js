@@ -32,10 +32,13 @@ import { createBayArea, bayUniforms } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
+import { createStreetLife } from './bay/streetlife.js';
+import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
 import { createGuide } from './guide/guide.js';
+import { createPeople } from './people/people.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -216,6 +219,8 @@ export function createIslandWorld() {
 	}
 	// the Guide: talk, ask, be taken places (a model on this device, or the built-in guide)
 	const guide = createGuide(dom.mount, { world: () => world, camera, shared, hint });
+	// people: real bodies about the village and the city streets
+	const people = createPeople(scene, () => world);
 
 	async function build(params) {
 		const seed = (params.seed >>> 0) || 1337;
@@ -281,6 +286,7 @@ export function createIslandWorld() {
 			world.bayArea = bayArea;
 			world.labels = createLabels(dom.mount, bayArea, null);
 			world.city = createCity(shared, scene, bayArea);
+			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z));
 			const own = island.heightAt;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.heightAt(x, z);
 			bayArea.ready.then(() => {
@@ -429,8 +435,11 @@ export function createIslandWorld() {
 		W.bayArea?.update(camera, sk.night);
 		W.bridge?.update(time, sk.night);
 		W.city?.update(camera, sk.night);
+		W.street?.update(dt, time, camera, sk.night);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);
+		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		people.demo(dt, time, camera.position);
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly
@@ -550,7 +559,7 @@ export function createIslandWorld() {
 		},
 		active: () => visible && running,
 		world: () => world,
-		guide,
+		guide, people,
 		renderer: () => renderer, camera: () => camera, scene: () => scene, dom, shared,
 	};
 
@@ -642,6 +651,8 @@ if (typeof window !== 'undefined') {
 		world: () => window.L99Island?.world?.(),
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
+		people: () => window.L99Island?.people,
+		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },
 		clearHome: () => { localStorage.removeItem('crysis-home'); return 'Home cleared.'; },
 		goHome: () => {

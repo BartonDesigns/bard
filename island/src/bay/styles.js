@@ -115,7 +115,10 @@ export function warp(x, z, style) {
 export const WARP_GLSL = /* glsl */`
 vec2 streetWarp(vec2 w, float style){
 	if (abs(style - 3.0) > 0.5) return vec2(0.0);
-	return 60.0 * vec2(sin(w.y * 0.0063 + 1.7) + 0.6 * sin(w.x * 0.0041 + 0.4), sin(w.x * 0.0059 + 2.9) + 0.6 * sin(w.y * 0.0037 + 5.1));
+	// each argument wrapped to one period first: GPU sin() loses precision far from zero
+	const float TWO_PI = 6.283185307;
+	#define WS(v, k, ph) sin(mod(v, TWO_PI / k) * k + ph)
+	return 60.0 * vec2(WS(w.y, 0.0063, 1.7) + 0.6 * WS(w.x, 0.0041, 0.4), WS(w.x, 0.0059, 2.9) + 0.6 * WS(w.y, 0.0037, 5.1));
 }
 vec3 blockOf(float style){
 	if (style < 0.5) return vec3(125.0, 84.0, 14.0);
@@ -136,7 +139,8 @@ export function toGrid(x, z, a, style) {
 export function fromGrid(gx, gz, a, style) {
 	const c = Math.cos(a), s = Math.sin(a);
 	let x = c * gx - s * gz, z = s * gx + c * gz;
-	for (let i = 0; i < 4; i++) {
+	if (style !== STYLE.suburb) return [x, z];
+	for (let i = 0; i < 16; i++) {
 		const [wx, wz] = warp(x, z, style), ux = gx - wx, uz = gz - wz;
 		x = c * ux - s * uz; z = s * ux + c * uz;
 	}

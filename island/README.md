@@ -38,6 +38,9 @@ Open `dev.html` from a local server to run the island on its own
 - `src/crysis/inverts.js` — sea stars, sea cucumbers, giant clams, feather dusters and garden eels that duck, moon jellies
 - `src/reef.js` — coral heads grown from the ecology's coral species, placed by depth, exposure and community
 - `src/caverns.js`, `src/magma.js`, `src/underwater.js`, `src/sealife.js` — sea caves and arches, the vent and lava tube, basalt and kelp, the vent swarm
+- `src/people/body.js` — people built from the CC0 MakeHuman base mesh (from the caves build): Bay Area ancestry mix, sex, age, height, build, clothing fitted from the body cage, fitted hair, eyes, face morphs, a 64-bone skeleton with fingers
+- `src/people/motion.js` — the motion rig: critically damped springs on every drive value, a continuous gait phase, planted feet that stay put while the body passes over, two-bone leg IK, heel strike and toe roll, pelvis bob/roll/sway, arm counter-swing with lagging elbows, head and eye gaze, blinking and talking
+- `src/people/people.js` — the population: walkers on the block pavements (crossing at corners), joggers, pairs chatting, people waiting; more downtown and by day
 - `src/main.js` — renderer, loop, HUD, settings, Journey adapter
 
 ## Earth: the Bay Area
@@ -59,6 +62,7 @@ true scale:
 - `src/bay/city.js` — buildings on the street grids by style (roofs, bay windows, garages, towers), the skylines, SF's tallest landmarks, the Bay Bridge
 - `src/bay/landmarks.js` — landmarks across SF, the East Bay, the Peninsula, the South Bay and San Ramon, the port cranes, the other bridges
 - `src/bay/roads.js` — the freeways (I-680, I-580, SR-24, I-80, I-880, US-101, I-280) and the Iron Horse Trail, with lamps and traffic at night
+- `src/bay/streetlife.js` — the street at eye level: parked cars at the kerbs, moving traffic, street lamps that glow at night, signals, hydrants, meters, bins, benches, bus shelters
 - `src/bay/labels.js` — the notation as you enter each city, water or landmark
 - `src/world/starcat.js` — 6317 real stars (HYG v4.1, CC BY-SA 4.0) for the night sky
 
