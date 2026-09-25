@@ -31,20 +31,24 @@ function magmaRock(shared, vent, heatRange) {
 			q = instanceMatrix * q;
 			#endif
 			vM = (modelMatrix * q).xyz; }`);
-		sh.fragmentShader = 'varying float vHeat; varying vec3 vM; uniform float uTime, uBass, uHeatR; uniform vec3 uVent;\n' + NOISE + sh.fragmentShader
+		sh.fragmentShader = 'vec3 glow231 = vec3(0.0);\nvarying float vHeat; varying vec3 vM; uniform float uTime, uBass, uHeatR; uniform vec3 uVent;\n' + NOISE + sh.fragmentShader
 			.replace('#include <color_fragment>', `#include <color_fragment>
 				diffuseColor.rgb *= 0.55 + 0.7 * mf(vM.xz * 1.3 + vM.y * 0.9);
-				diffuseColor.rgb *= 1.0 - 0.35 * step(0.82, mh(floor(vM.xz * 7.0 + vM.y * 5.0)));   // vesicles`)
+				diffuseColor.rgb *= 1.0 - 0.35 * step(0.82, mh(floor(vM.xz * 7.0 + vM.y * 5.0)));   // vesicles
+				diffuseColor.rgb *= 0.55;                                                          // near-black basalt`)
+			.replace('#include <fog_fragment>', `#include <fog_fragment>
+				gl_FragColor.rgb += glow231 * exp(-length(vM - cameraPosition) * 0.025);`)
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				{
 					// heat: vertex colour red channel marks how hot this part is (1 = molten edge),
 					// then distance to the vent and height above the floor fade it
-					float heat = vHeat * (1.0 - smoothstep(uHeatR * 0.3, uHeatR, distance(vM.xz, uVent.xz)));
+					float heat = vHeat * vHeat * (1.0 - smoothstep(uHeatR * 0.3, uHeatR, distance(vM.xz, uVent.xz)));
 					float s = seams(vM.xz * 2.1 + vM.y * 1.4) + seams(vM.yz * 2.6 + vM.x * 0.9) * 0.6;
 					float pulse = 0.75 + 0.25 * sin(uTime * 1.3 + mf(vM.xz) * 8.0) + uBass * 0.5;
 					// saturated reds and oranges, kept below the tone curve's white shoulder
-					totalEmissiveRadiance += vec3(0.95, 0.2, 0.015) * s * heat * pulse * 0.95
-						+ vec3(0.35, 0.06, 0.005) * heat * heat * 0.3 * pulse;          // the underside lit from the melt
+					// kept out of the tone curve and the fog, so it stays molten orange
+					glow231 = vec3(1.0, 0.3, 0.03) * s * heat * pulse * 1.1
+						+ vec3(0.55, 0.1, 0.01) * heat * heat * 0.35 * pulse;          // the underside lit from the melt
 				}`);
 	};
 	m.customProgramCacheKey = () => 'magmarock231';
@@ -67,12 +71,10 @@ function lavaFlow(shared) {
 				float edge = smoothstep(0.0, 0.22, vU.x) * smoothstep(1.0, 0.78, vU.x);
 				float pulse = 0.8 + 0.2 * sin(uTime * 1.7 + vU.y * 3.0) + uBass * 0.4;
 				vec3 hot = mix(vec3(0.85, 0.12, 0.0), vec3(1.0, 0.45, 0.04), clamp(crack, 0.0, 1.0));
-				vec3 col = mix(vec3(0.04, 0.03, 0.025), hot * 1.25 * pulse, clamp(crack * 1.2, 0.0, 1.0) * edge);
+				vec3 col = mix(vec3(0.03, 0.02, 0.015), hot * 1.0 * pulse, clamp(crack * 1.2, 0.0, 1.0) * edge);
 				// the centre of the stream stays molten, the banks crust over
 				col += vec3(0.9, 0.22, 0.01) * smoothstep(0.35, 0.5, 1.0 - abs(vU.x - 0.5) * 2.0) * 0.45 * pulse * edge;
 				gl_FragColor = vec4(col, edge);
-				#include <tonemapping_fragment>
-				#include <colorspace_fragment>
 			}`,
 	});
 }
@@ -146,7 +148,7 @@ export function createMagma(island, shared, scene, camera) {
 		for (let i = 0; i < p.count; i++) {
 			const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = 0.7 + nz.fbm(x * 1.8 - 2, z * 1.8 + y, 3) * 0.6;
 			p.setXYZ(i, x * k * 1.2, y * k * 0.7, z * k);
-			c.push(0.55 + 0.45 * Math.max(0, -y), 0, 0);
+			c.push(Math.max(0, -y * 1.3 - 0.1), 0, 0);   // only the undersides, where they sit in the melt
 		}
 		g.setAttribute('aHeat', new THREE.Float32BufferAttribute(c.filter((_, i) => i % 3 === 0), 1));
 		g.computeVertexNormals();
@@ -239,36 +241,135 @@ export function createMagma(island, shared, scene, camera) {
 	const streamPts = tube.map((p, k) => ({ x: p.x, z: p.z, y: Math.max(island.heightAt(p.x, p.z), p.y - 0.3) + 0.12, w: k > tube.length - 4 ? 1.6 + (k - tube.length + 4) * 0.8 : 1 }));
 	group.add(new THREE.Mesh(ribbon(island, streamPts, 2.2, 0.0), flowMat));
 
+	// ---------- the gorge: rock walls rising either side of the tube's outer run ----------
+	const wallGeo = (() => {
+		const P = [], H = [], I = [], ROWS = 16;
+		const from = Math.floor(tube.length * 0.3);
+		for (const side of [-1, 1]) {
+			const base = P.length / 3;
+			let cols = 0;
+			for (let k = from; k < tube.length; k++, cols++) {
+				const a = tube[Math.max(0, k - 1)], b = tube[Math.min(tube.length - 1, k + 1)];
+				const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1, nx = -dz / l, nzv = dx / l;
+				const off = 7.5 + nz.fbm(k * 0.2, side * 5, 3) * 5;
+				const top = 5 + nz.fbm(k * 0.15 + 9, side * 3, 3) * 8;
+				for (let j = 0; j <= ROWS; j++) {
+					const v = j / ROWS;
+					// a solid ridge: a steep broken face toward the gorge, a rounded crest, and
+					// a long back slope down to the crater floor
+					let out, up;
+					if (v < 0.55) { const f = v / 0.55, ledge = Math.round(f * 4) / 4, ff = f + (ledge - f) * 0.45; out = Math.sin(ff * 1.4) * 1.6; up = ff; }
+					else if (v < 0.7) { const f = (v - 0.55) / 0.15; out = 1.6 + f * 2.2; up = 1 + Math.sin(f * 3.1) * 0.12; }
+					else { const f = (v - 0.7) / 0.3; out = 3.8 + f * 9; up = 1 - f * f * 1.1; }
+					const rough = (nz.fbm(k * 0.5 + j * 0.7, side * 7 + j * 0.3, 3) - 0.5) * 2.4;
+					const x = tube[k].x + nx * side * (off + out + rough * 0.6), z = tube[k].z + nzv * side * (off + out + rough * 0.6);
+					P.push(x, island.heightAt(x, z) - 1 + up * top + rough * 0.5, z);
+					H.push(v < 0.5 ? Math.max(0, 0.5 - v) * 1.4 : 0);
+				}
+			}
+			for (let c = 0; c < cols - 1; c++) for (let j = 0; j < ROWS; j++) {
+				const a = base + c * (ROWS + 1) + j, b = a + 1, cc = a + ROWS + 1, d = cc + 1;
+				if (side > 0) I.push(a, cc, b, b, cc, d); else I.push(a, b, cc, b, d, cc);
+			}
+		}
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+		g.setAttribute('aHeat', new THREE.Float32BufferAttribute(H, 1));
+		g.setIndex(I);
+		g.computeVertexNormals();
+		return g;
+	})();
+	const wallMat = magmaRock(shared, vent, 70);
+	wallMat.side = THREE.DoubleSide;
+	const walls = new THREE.Mesh(wallGeo, wallMat);
+	walls.userData.material175 = 'stone';
+	group.add(walls);
+
+	// ---------- rubble: a jumble of broken lava blocks, glowing through the gaps ----------
+	const rubble = [];
+	const addRubble = (x, z, n, spread, big) => {
+		for (let i = 0; i < n; i++) {
+			const a = r() * 6.283, d = Math.pow(r(), 0.7) * spread, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+			rubble.push({ x: px, z: pz, y: island.heightAt(px, pz), s: 0.18 + Math.pow(r(), 2.2) * big });
+		}
+	};
+	addRubble(cx, cz, 170, 14, 1.8);
+	for (let i = rubble.length - 1; i >= 0; i--) if (tube.some((q) => Math.hypot(q.x - rubble[i].x, q.z - rubble[i].z) < 3.4)) rubble.splice(i, 1);
+	for (const pts of rivulets) for (let k = 2; k < pts.length; k += 2) addRubble(pts[k].x, pts[k].z, 4, 2.2, 0.9);
+	// along the tube's outside only (the inside stays swimmable)
+	for (let k = 0; k < tube.length; k += 2) for (const sd of [-1, 1]) { const a = tube[Math.max(0, k - 1)], b = tube[Math.min(tube.length - 1, k + 1)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1; addRubble(tube[k].x - (b.z - a.z) / l * sd * 5.5, tube[k].z + (b.x - a.x) / l * sd * 5.5, 3, 1.6, 1.4); }
+	const rubbleIM = new THREE.InstancedMesh(blockGeo, rockMat, rubble.length);
+	{
+		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
+		rubble.forEach((o, i) => { e.set(r() * 1.2, r() * 6.28, r() * 1.2); q.setFromEuler(e); s.set(o.s * (0.8 + r() * 0.5), o.s * (0.6 + r() * 0.6), o.s); p.set(o.x, o.y + o.s * 0.2, o.z); rubbleIM.setMatrixAt(i, m4.compose(p, q, s)); });
+	}
+	group.add(rubbleIM);
+
+	// ---------- glow: halos over the hottest places, the water itself lit orange ----------
+	const haloTex = glow();
+	const halos = [];
+	const halo = (x, y, z, size, k) => {
+		const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, color: 0xff3a08, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 * k, toneMapped: false, fog: false }));
+		m.position.set(x, y, z); m.scale.set(size, size * 0.6, 1); m.userData.k = k; m.userData.ph = r() * 6.28;
+		m.renderOrder = 9; group.add(m); halos.push(m);
+	};
+	halo(cx, summit + 1.8, cz, 14, 1.2);
+	for (const pts of rivulets) for (let k = 4; k < pts.length; k += 6) halo(pts[k].x, island.heightAt(pts[k].x, pts[k].z) + 0.6, pts[k].z, 4.5, 0.7);
+	for (let k = 3; k < tube.length; k += 5) halo(tube[k].x, tube[k].y + 0.8, tube[k].z, 6, 0.6);
+	{ const e = tube[tube.length - 1]; halo(e.x, e.y + 1, e.z, 12, 1); }
+
 	// ---------- lights: the vent, and inside the tunnel ----------
-	const ventLight = new THREE.PointLight(0xff5a18, 0, 34, 1.5);
+	const ventLight = new THREE.PointLight(0xff5a18, 0, 48, 1.3);
 	ventLight.position.set(cx, summit + 3.5, cz);
 	const mid = tube[Math.floor(tube.length * 0.55)];
 	const tubeLight = new THREE.PointLight(0xff4a10, 0, 22, 1.6);
 	tubeLight.position.set(mid.x, mid.y + 1.2, mid.z);
 	group.add(ventLight, tubeLight);
+	// the fountain: a bright molten column spurting from the throat
+	const jetMat = new THREE.ShaderMaterial({
+		uniforms: { uTime: shared.uTime, uBass: shared.uBass },
+		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
+		vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+		fragmentShader: `uniform float uTime, uBass; varying vec2 vU;
+			${NOISE}
+			void main(){
+				float n = mf(vec2(vU.x * 6.0, vU.y * 3.0 - uTime * 2.2));
+				float core = 1.0 - smoothstep(0.0, 0.5, abs(vU.x - 0.5) * 2.0 * (0.6 + vU.y));
+				float a = core * smoothstep(1.0, 0.2, vU.y) * smoothstep(0.35, 0.65, n + (1.0 - vU.y) * 0.3) * (0.8 + uBass * 0.6);
+				vec3 c = mix(vec3(1.0, 0.85, 0.4), vec3(1.0, 0.3, 0.02), smoothstep(0.0, 0.6, vU.y));
+				gl_FragColor = vec4(c * a * 2.4, 1.0);
+			}`,
+	});
+	for (let i = 0; i < 3; i++) {
+		const jet = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1, 1, 1).translate(0, 0.5, 0), jetMat);
+		jet.userData.jet = true;
+		jet.position.set(cx, summit + 0.4, cz); jet.rotation.y = i * Math.PI / 3;
+		group.add(jet);
+	}
 	// the throat glows up into the water
-	const throat = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color: 0xff4a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 }));
-	throat.position.set(cx, summit + 1.5, cz); throat.scale.set(9, 7, 1);
+	const throat = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color: 0xff4a10, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9, toneMapped: false, fog: false }));
+	throat.position.set(cx, summit + 3, cz); throat.scale.set(18, 14, 1);
 	group.add(throat);
 
 	// ---------- embers: a fountain of glowing sparks, slowed by the water ----------
-	const E = 700, ePos = new Float32Array(E * 3), eLife = new Float32Array(E), embers = [];
+	const E = 1400, ePos = new Float32Array(E * 3), eLife = new Float32Array(E), embers = [];
 	for (let i = 0; i < E; i++) embers.push({ p: new THREE.Vector3(0, -999, 0), v: new THREE.Vector3(), life: 99, max: 1 });
 	const eGeo = new THREE.BufferGeometry();
 	eGeo.setAttribute('position', new THREE.BufferAttribute(ePos, 3));
 	eGeo.setAttribute('aLife', new THREE.BufferAttribute(eLife, 1));
 	const eMat = new THREE.ShaderMaterial({
 		uniforms: { uMap: { value: glow() }, uScale: { value: 900 } },
-		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
 		vertexShader: `attribute float aLife; varying float vL; uniform float uScale;
 			void main(){ vL = aLife; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
-			gl_PointSize = max(2.0, (0.07 + 0.12 * (1.0 - aLife)) * uScale / max(0.5, -mv.z)); }`,
+			gl_PointSize = max(2.5, (0.12 + 0.18 * (1.0 - aLife)) * uScale / max(0.5, -mv.z)); }`,
 		fragmentShader: `uniform sampler2D uMap; varying float vL;
 			void main(){ vec4 t = texture2D(uMap, gl_PointCoord);
-				vec3 c = mix(vec3(1.0, 0.85, 0.45), vec3(0.9, 0.18, 0.02), smoothstep(0.0, 0.7, vL));
-				gl_FragColor = vec4(c * 1.3 * t.a * (1.0 - smoothstep(0.6, 1.0, vL)), 1.0); }`,
+				vec3 c = mix(vec3(1.0, 0.62, 0.18), vec3(0.95, 0.16, 0.01), smoothstep(0.0, 0.5, vL));
+				gl_FragColor = vec4(c * 2.2 * t.a * (1.0 - smoothstep(0.7, 1.0, vL)), 1.0); }`,
 	});
 	const emberPts = new THREE.Points(eGeo, eMat);
+	emberPts.renderOrder = 10;
 	emberPts.frustumCulled = false;
 	group.add(emberPts);
 
@@ -284,9 +385,9 @@ export function createMagma(island, shared, scene, camera) {
 		const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 	})();
 	const puffs = [];
-	for (let i = 0; i < 34; i++) {
+	for (let i = 0; i < 44; i++) {
 		const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: plumeTex, color: 0x1a1512, transparent: true, depthWrite: false, opacity: 0 }));
-		m.userData = { age: i / 34 * 9, drift: new THREE.Vector2(r() - 0.5, r() - 0.5), spin: (r() - 0.5) * 0.4 };
+		m.userData = { age: i / 44 * 9, drift: new THREE.Vector2(r() - 0.5, r() - 0.5), spin: (r() - 0.5) * 0.4 };
 		group.add(m);
 		puffs.push(m);
 	}
@@ -312,26 +413,30 @@ export function createMagma(island, shared, scene, camera) {
 	let spawn = 0;
 	function update(dt, t, under, surface) {
 		const cam = camera.position, near = cam.distanceTo(vent), active = near < 140;
+		for (const c of group.children) if (c.userData.jet) c.scale.y = Math.max(1, (surface - summit) * 0.6);
 		group.visible = active;
 		const bass = shared.uBass.value;
 		// light only when close (the light count never changes, so no shader rebuild)
-		ventLight.intensity = active ? 55 + Math.sin(t * 1.1) * 12 + bass * 40 : 0;
+		ventLight.intensity = active ? 90 + Math.sin(t * 1.1) * 18 + bass * 60 : 0;
+		for (const h of halos) h.material.opacity = 0.45 * h.userData.k * (0.8 + 0.2 * Math.sin(t * 1.3 + h.userData.ph) + bass * 0.5);
 		tubeLight.intensity = active ? 26 + Math.sin(t * 1.6 + 1) * 6 + bass * 16 : 0;
 		rumbleAt(under && active ? Math.max(0, 1 - near / 60) * 0.16 : 0);
 		if (!active) return;
 		dt = Math.min(dt, 0.05);
 		// the fountain: bursts, stronger with the bass
-		spawn += dt * (140 + bass * 420 + (Math.sin(t * 0.7) > 0.8 ? 300 : 0));
+		spawn += dt * (320 + bass * 700 + (Math.sin(t * 0.7) > 0.7 ? 700 : 0));
 		for (let i = 0; i < E && spawn >= 1; i++) {
 			const e = embers[i];
 			if (e.life < e.max) continue;
 			spawn -= 1;
 			e.p.set(cx + (Math.random() - 0.5) * 1.6, summit + 0.8, cz + (Math.random() - 0.5) * 1.6);
 			const a = Math.random() * 6.283, s = Math.random() * 2.2;
-			e.v.set(Math.cos(a) * s, 6 + Math.random() * 7, Math.sin(a) * s);
+			// the fountain reaches most of the way to the surface, never through it
+			const reach = Math.max(2, (surface - summit) * 0.85);
+			e.v.set(Math.cos(a) * s * 1.6, Math.sqrt(2 * 1.4 * reach) * (0.7 + Math.random() * 0.5) + reach * 0.35, Math.sin(a) * s * 1.6);
 			e.life = 0; e.max = 1.4 + Math.random() * 2.2;
 		}
-		spawn = Math.min(spawn, 40);
+		spawn = Math.min(spawn, 80);
 		for (let i = 0; i < E; i++) {
 			const e = embers[i];
 			if (e.life >= e.max) { ePos[i * 3 + 1] = -999; continue; }
@@ -340,7 +445,7 @@ export function createMagma(island, shared, scene, camera) {
 			e.v.multiplyScalar(Math.exp(-dt * 1.6));
 			e.v.y -= 1.4 * dt;
 			e.p.addScaledVector(e.v, dt);
-			if (e.p.y > surface - 0.3) e.life = e.max;
+			if (e.p.y > surface - 0.8) e.life = e.max;
 			ePos[i * 3] = e.p.x; ePos[i * 3 + 1] = e.p.y; ePos[i * 3 + 2] = e.p.z;
 			eLife[i] = e.life / e.max;
 		}
@@ -354,7 +459,7 @@ export function createMagma(island, shared, scene, camera) {
 			const life = 9, k = (u.age % life) / life;
 			const h = summit + 1 + k * Math.max(4, top - summit - 1);
 			m.position.set(cx + u.drift.x * k * 10 + Math.sin(t * 0.3 + u.spin * 9) * k * 1.5, h, cz + u.drift.y * k * 10);
-			const sz = 2.5 + k * 11;
+			const sz = 3.5 + k * 16;
 			m.scale.set(sz, sz, 1);
 			m.material.rotation += u.spin * dt;
 			m.material.opacity = Math.min(1, k * 6) * (1 - k) * 0.9;

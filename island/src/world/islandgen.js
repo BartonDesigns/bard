@@ -127,8 +127,10 @@ export function generateIsland(params = {}) {
 				if (t < 0.62) {
 					const rough = (nz.fbm(x * 0.05 + 7, z * 0.05 - 3, 3) - 0.5) * 1.6;
 					const rim = Math.exp(-Math.pow((t - 0.5) / 0.07, 2)) * 5.5;                 // the lip, about 1-3 m down
-					const bowl = lerp(-17, -6.5, smoothstep(0.08, 0.5, t));                     // the crater
-					const cone = Math.exp(-Math.pow(t / 0.09, 2)) * 7.5;                         // the vent cone
+					// the crater: a bowl broken by lava ridges, hummocks and gullies, not a dish
+					const rid = nz.ridged(x * 0.045 + 13, z * 0.045 - 7, 4), hum = nz.fbm(x * 0.12 - 3, z * 0.12 + 5, 3);
+					const bowl = lerp(-17, -6.5, smoothstep(0.08, 0.5, t)) + (rid - 0.45) * 5.5 + (hum - 0.5) * 2.2;
+					const cone = Math.exp(-Math.pow(t / 0.09, 2)) * 7.5 * (0.8 + 0.4 * nz.fbm(x * 0.2, z * 0.2, 2));   // the vent cone, lumpy
 					cove = Math.min(cove, bowl + cone + rim + rough) ;
 					cove = lerp(cove, Math.max(cove, -2.2 + rough * 0.6), Math.exp(-Math.pow((t - 0.5) / 0.05, 2)));
 				}

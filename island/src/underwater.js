@@ -194,6 +194,7 @@ export function createUnderwater(island, shared, scene, camera, player, keepClea
 			}`,
 	});
 	const shafts = new THREE.Mesh(new THREE.PlaneGeometry(40, 30, 1, 1), shaftMat);
+	shafts.renderOrder = -1;
 	shafts.frustumCulled = false;
 	shafts.visible = false;
 	scene.add(shafts);

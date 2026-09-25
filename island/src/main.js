@@ -321,6 +321,8 @@ export function createIslandWorld() {
 		// below the surface: the sea closes in, blue-green and dim
 		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
 		const under = camera.position.y < surf - 0.05;
+		// seen from below the sea is a ceiling: it must not hide what glows beneath it
+		W.ocean.material.depthWrite = !under;
 		W.underwater.update(dt, time, under, surf);
 		W.magma.update(dt, time, under, surf);
 		// the reef and its fish only run when you are in or over the bay
@@ -328,8 +330,12 @@ export function createIslandWorld() {
 		W.sealife.update(dt, time, !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40);
 		shared.uUnder.value = under ? 1 : 0;
 		if (under) {
-			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 16));
-			scene.fog.color.setRGB(0.03 - depthK * 0.02, 0.22 - depthK * 0.12, 0.26 - depthK * 0.08).multiplyScalar(0.25 + 0.75 * sk.dayK);
+			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 14));
+			// daylight fades fast with depth: down in the crater the lava is the light
+			const dim = 1 - depthK * 0.82;
+			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
+			shared.uAmbient.value.multiplyScalar(dim);
+			scene.fog.color.setRGB(0.03 - depthK * 0.025, 0.2 - depthK * 0.15, 0.25 - depthK * 0.16).multiplyScalar(0.25 + 0.75 * sk.dayK);
 			scene.fog.density = -(0.035 + depthK * 0.02);   // negative: per-channel absorption
 		} else scene.fog.density = 0.00026;
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
