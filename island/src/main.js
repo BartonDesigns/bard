@@ -18,6 +18,7 @@ import { createFauna } from './fauna.js';
 import { createBoat } from './boat.js';
 import { createWhale } from './whale.js';
 import { createShells } from './shells.js';
+import { createUnderwater } from './underwater.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -189,10 +190,11 @@ export function createIslandWorld() {
 		const boat = createBoat(island, village, player, camera, shared, scene);
 		const whale = createWhale(island, shared, scene);
 		const shells = createShells(island, shared, camera, scene, player, dom, hint);
+		const underwater = createUnderwater(island, shared, scene, camera, player);
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -278,11 +280,14 @@ export function createIslandWorld() {
 		W.music.update(dt);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
-		const under = camera.position.y < waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value) - 0.05;
+		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
+		const under = camera.position.y < surf - 0.05;
+		W.underwater.update(dt, time, under, surf);
 		shared.uUnder.value = under ? 1 : 0;
 		if (under) {
-			scene.fog.color.setRGB(0.03, 0.2, 0.24).multiplyScalar(0.25 + 0.75 * sk.dayK);
-			scene.fog.density = 0.04;
+			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 16));
+			scene.fog.color.setRGB(0.03 - depthK * 0.02, 0.22 - depthK * 0.12, 0.26 - depthK * 0.08).multiplyScalar(0.25 + 0.75 * sk.dayK);
+			scene.fog.density = 0.035 + depthK * 0.02;
 		} else scene.fog.density = 0.00026;
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 		const sh = W.shells.update(dt, time);

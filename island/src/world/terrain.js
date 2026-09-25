@@ -94,6 +94,7 @@ export function createTerrain(island, shared) {
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCenter: { value: new THREE.Vector2() }, uTime: shared.uTime, uWet: { value: 0 }, uWave: shared.uWave,
 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
+		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
 		uDetail: { value: groundDetail() }, uOcc: shared.uOcc, uOccO: shared.uOccO,
 	};
 	mat.onBeforeCompile = (sh) => {
@@ -109,7 +110,7 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; uniform float uHalf, uTime, uWet, uWave;\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
@@ -191,6 +192,19 @@ export function createTerrain(island, shared) {
 				gDetailH -= print * 0.05 * (1.0 - grassW);
 				// under the sea: bleached sand going blue-green with depth
 				col = mix(col, vec3(0.78, 0.74, 0.60), smoothstep(0.0, -1.0, h));
+				// inside the drowned crater the sand gives way to dark volcanic rock and ash,
+				// ridged and scoured, greener with growth on the gentler floor
+				{
+					vec2 bq = vW.xz - uBay.xy;
+					float bt = length(bq) / max(uBay.z, 1.0);
+					float basalt = (1.0 - smoothstep(0.52, 0.6, bt)) * smoothstep(-2.0, -5.0, h) * step(1.0, uBay.z);
+					float ash = vn(vW.xz * 0.35) * 0.6 + vn(vW.xz * 1.7) * 0.4;
+					vec3 lavaRock = mix(vec3(0.12, 0.11, 0.1), vec3(0.26, 0.24, 0.21), ash) * (0.8 + 0.3 * dd.a);
+					lavaRock = mix(lavaRock, vec3(0.14, 0.18, 0.09), smoothstep(0.55, 0.8, vn(vW.xz * 0.12 + 5.0)) * (1.0 - slope * 2.0) * 0.8);
+					col = mix(col, lavaRock, basalt);
+					gDetailB = basalt;
+					gDetailH += basalt * (dd.a * 0.09 + vn(vW.xz * 0.6) * 0.18);
+				}
 				col = mix(col, col * vec3(0.55, 0.62, 0.55), mk.b * step(h, 0.3));   // reef, under water only (on land b is grass height)
 				// sunlight focused by the swell dances on the seabed
 				float cA = 1.0 - abs(vn(vW.xz * 0.55 + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);

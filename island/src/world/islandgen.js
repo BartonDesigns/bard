@@ -110,7 +110,7 @@ export function generateIsland(params = {}) {
 		village.coast = { x: B.x - d.x * (Rb - 6), z: B.z - d.z * (Rb - 6) };
 		village.x = village.coast.x - d.x * 60; village.z = village.coast.z - d.z * 60;
 		const hl = [22 + rand() * 12, 18 + rand() * 12];            // headland heights, left and right
-		village.bay = { x: B.x, z: B.z, r: Rb };
+		village.bay = { x: B.x, z: B.z, r: Rb, caldera: true };
 		for (let j = 0; j < N; j++) {
 			const z = -half + j * cell;
 			for (let i = 0; i < N; i++) {
@@ -121,7 +121,17 @@ export function generateIsland(params = {}) {
 				let h = height[k];
 				// the cove: a sandy beach at the back, shelving to clear water in the middle
 				const t = r / Rb;
-				const cove = t < 1 ? lerp(-6.5, -0.4, smoothstep(0.35, 1.0, t)) : lerp(-0.4, 2.2, smoothstep(1.0, 1.22, t));
+				// the cove is the drowned mouth of an old volcano: sandy shallows at the beach,
+				// a submerged crater rim, a deep bowl inside it and a vent cone at its heart
+				let cove = t < 1 ? lerp(-6.5, -0.4, smoothstep(0.35, 1.0, t)) : lerp(-0.4, 2.2, smoothstep(1.0, 1.22, t));
+				if (t < 0.62) {
+					const rough = (nz.fbm(x * 0.05 + 7, z * 0.05 - 3, 3) - 0.5) * 1.6;
+					const rim = Math.exp(-Math.pow((t - 0.5) / 0.07, 2)) * 5.5;                 // the lip, about 1-3 m down
+					const bowl = lerp(-17, -6.5, smoothstep(0.08, 0.5, t));                     // the crater
+					const cone = Math.exp(-Math.pow(t / 0.09, 2)) * 7.5;                         // the vent cone
+					cove = Math.min(cove, bowl + cone + rim + rough) ;
+					cove = lerp(cove, Math.max(cove, -2.2 + rough * 0.6), Math.exp(-Math.pow((t - 0.5) / 0.05, 2)));
+				}
 				const reach = 1 - smoothstep(Rb * 0.95, Rb * 1.35, r);
 				if (h > cove) h = lerp(h, cove, reach);
 				// the headlands: two arms of high ground reaching out round the cove
