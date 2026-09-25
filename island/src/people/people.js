@@ -28,6 +28,17 @@ export function createPeople(scene, world) {
 		try { A = await loadPeopleAssets(); } catch (e) { failed = true; console.warn('[people]', e); }
 	}
 
+	// what someone does with their hands while they wait: the young look at their phones,
+	// the guarded fold their arms, the old clasp their hands behind them
+	function idlePoseFor(d, r) {
+		const T = d.temper || { outgoing: 0.5, confident: 0.5, warmth: 0.5 }, x = r();
+		if (d.age < 35 && x < 0.45) return 'phone';
+		if (d.age > 62 && x < 0.5) return 'behind';
+		if (T.warmth < 0.35 && x < 0.6) return 'crossed';
+		if (T.confident > 0.7 && x < 0.35) return 'hip';
+		return x < 0.7 ? 'pockets' : 'rest';
+	}
+
 	// ---------- routes ----------
 	// the sidewalk round a city block: its four corners, 8 m in from the street centre
 	function blockLoop(x, z) {
@@ -111,6 +122,9 @@ export function createPeople(scene, world) {
 		p.talking = false; p.partner = null; p.timer = 5 + r() * 20;
 		const M = p.M;
 		M.S.talk = 0; M.S.look.target = null;
+		p.engaged = false; p.persona = null;
+		p.idlePose = idlePoseFor(p.P.dna, r);
+		M.setPose(p.role === 'wait' ? p.idlePose : r() < 0.08 ? 'phone' : r() < 0.06 ? 'pockets' : 'rest');
 		// somewhere near but not in your face, and ideally out of sight
 		for (let k = 0; k < 20; k++) {
 			const a = r() * Math.PI * 2, d = 18 + r() * (NEAR - 25);
@@ -151,6 +165,20 @@ export function createPeople(scene, world) {
 		const M = p.M, S = M.S, R = p.route;
 		p.timer -= dt;
 		const pace = p.P.dna.gait.pace;
+		if (p.engaged) {
+			// talking with you: stop, turn to face you, listen; speak while there is speech
+			const dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
+			M.want.heading = Math.atan2(dx, dz);
+			M.want.speed = d > 2.4 ? 0.8 : 0;
+			S.look.target = cam;
+			const speaking = performance.now() < (p.speakUntil || 0);
+			S.talk = speaking ? 1 : 0;
+			M.setPose(speaking ? 'rest' : 'listen');
+			// while you are talking to them, they nod along now and then
+			p.nodT = (p.nodT || 0) - dt;
+			if (!speaking && p.nodT < 0) { p.nodT = 3 + Math.random() * 5; if (Math.random() < 0.5) M.gesture('nod'); }
+			return;
+		}
 		if (p.role === 'chat') {
 			// find someone close to talk to, or wait for them to come
 			if (!p.partner) {
@@ -163,12 +191,21 @@ export function createPeople(scene, world) {
 				S.look.target = new THREE.Vector3(o.x, o.y + p.partner.P.height * 0.93, o.z);
 				// take turns talking
 				S.talk = d < 1.6 && Math.sin(performance.now() / 1000 * 0.35 + p.P.dna.seed) > 0 ? 1 : 0;
+				// the speaker talks with their hands; the listener nods, laughs, shrugs
+				p.gT = (p.gT || 0) - dt;
+				if (d < 1.8 && p.gT < 0) {
+					const T = p.P.dna.temper || { outgoing: 0.5 };
+					p.gT = 1.5 + Math.random() * (5 - T.outgoing * 3);
+					const bank = S.talk ? ['explain', 'explain', 'open', 'emphatic', 'shrug', 'point', 'think'] : ['nod', 'nod', 'laugh', 'shrug', 'think'];
+					if (Math.random() < 0.4 + T.outgoing * 0.5) M.gesture(bank[Math.floor(Math.random() * bank.length)]);
+				}
+				M.setPose(S.talk ? 'rest' : 'listen');
 				if (p.timer < 0) { p.role = 'walk'; p.partner.role = 'walk'; p.partner.partner = null; p.partner = null; S.talk = 0; S.look.target = null; }
 				return;
 			}
 			if (p.timer < 0) p.role = 'walk';
 		}
-		if (p.role === 'wait') { M.want.speed = 0; if (p.timer < 0) p.role = 'walk'; return; }
+		if (p.role === 'wait') { M.want.speed = 0; M.setPose(p.idlePose || 'rest'); if (p.timer < 0) { p.role = 'walk'; M.setPose('rest'); } return; }
 		const run = p.role === 'jog';
 		M.want.run = run ? 1 : 0;
 		const speed = run ? 2.6 + (p.P.dna.seed % 7) * 0.08 : pace;
@@ -266,7 +303,7 @@ export function createPeople(scene, world) {
 			const S = p.M.S;
 			if (p.active && p.demo === undefined) {
 				const d = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z);
-				if (d > NEAR * 1.25 || active >= need.n) { p.active = false; p.P.root.visible = false; if (p.partner) { p.partner.partner = null; p.partner = null; } continue; }
+				if (!p.engaged && (d > NEAR * 1.25 || active >= need.n)) { p.active = false; p.P.root.visible = false; if (p.partner) { p.partner.partner = null; p.partner = null; } continue; }
 				active++;
 				steer(p, dt, cam);
 				p.M.update(dt, t, cam);
@@ -308,5 +345,22 @@ export function createPeople(scene, world) {
 		for (let k = 0; k < 4; k++) { const a = L.pts[k], b = L.pts[(k + 1) % 4]; for (let t = 0; t <= 1; t += 0.05) { const px = a.x + (b.x - a.x) * t, pz = a.z + (b.z - a.z) * t, d = Math.hypot(px - x, pz - z); if (d < bd) { bd = d; best = [px, pz, Math.atan2(b.x - a.x, b.z - a.z)]; } } }
 		return best;
 	}
-	return { update, lineup, demo, pool, group, sidewalk, steps, ready: () => !!A };
+	// the person just ahead of you, close enough to talk to
+	function facing(cam, yaw, maxD = 3.4) {
+		let best = null, bs = 1e9;
+		const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+		for (const p of pool) {
+			if (!p.active || p.demo !== undefined) continue;
+			const S = p.M.S, dx = S.pos.x - cam.x, dz = S.pos.z - cam.z, d = Math.hypot(dx, dz);
+			if (d > maxD || Math.abs(S.pos.y + 1.6 - cam.y) > 2.5) continue;
+			const ahead = (dx * fx + dz * fz) / (d || 1);
+			if (ahead < 0.55) continue;
+			const sc = d * (1.6 - ahead);
+			if (sc < bs) { bs = sc; best = p; }
+		}
+		return best;
+	}
+	function engage(p) { p.engaged = true; p.role = 'wait'; if (p.partner) { p.partner.partner = null; p.partner = null; } p.M.S.gestures.length = 0; }
+	function release(p) { if (!p) return; p.engaged = false; p.speakUntil = 0; p.M.S.talk = 0; p.M.S.look.target = null; p.timer = 1 + Math.random() * 2; }
+	return { update, lineup, demo, pool, group, sidewalk, steps, facing, engage, release, ready: () => !!A };
 }

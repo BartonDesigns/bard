@@ -230,12 +230,34 @@ export function createIslandWorld() {
 		hint.t = setTimeout(() => { dom.hint.style.opacity = '0'; }, ms);
 	}
 	// the Guide: talk, ask, be taken places (a model on this device, or the built-in guide)
-	const guide = createGuide(dom.mount, { world: () => world, camera, shared, hint });
+	// people is filled in just below; the guide reaches it through this api object
+	const guideApi = { world: () => world, camera, shared, hint, people: null };
+	const guide = createGuide(dom.mount, guideApi);
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
 	HOOKS.drive = drive;
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world);
+	guideApi.people = people;
+	// walk up to someone and talk: a button with their name, or Enter
+	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom));display:none;');
+	dom.mount.appendChild(talkBtn);
+	let talkTarget = null, talkT = 0;
+	const talkNow = () => { if (talkTarget) guide.talkTo(talkTarget); };
+	talkBtn.addEventListener('click', (e) => { e.stopPropagation(); talkNow(); });
+	for (const ev of ['pointerdown', 'touchstart']) talkBtn.addEventListener(ev, (e) => e.stopPropagation());
+	addEventListener('keydown', (e) => { if (e.key === 'Enter' && talkTarget && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); talkNow(); } });
+	function watchTalk(dt) {
+		talkT += dt;
+		if (talkT < 0.25) return;
+		talkT = 0;
+		const P = world?.player.state, cur = guide.partner();
+		// walked away from someone you were talking with: the conversation ends
+		if (cur && P && cur.p.M.S.pos.distanceTo(camera.position) > 7) { guide.endTalk(); hint(`${cur.persona.first} goes back to what they were doing.`, 2500); }
+		talkTarget = P && !P.flying && !cur ? people.facing(camera.position, P.yaw) : null;
+		talkBtn.style.display = talkTarget ? '' : 'none';
+		if (talkTarget) talkBtn.textContent = isPhone ? '💬 Talk' : '💬 Talk (Enter)';
+	}
 
 	async function build(params) {
 		const seed = (params.seed >>> 0) || 1337;
@@ -474,6 +496,7 @@ export function createIslandWorld() {
 		W.street?.update(dt, time, camera, sk.night);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);
+		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		people.demo(dt, time, camera.position);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half });

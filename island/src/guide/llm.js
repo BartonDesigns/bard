@@ -55,7 +55,14 @@ export function createLLM() {
 	}
 	function useNone() { kind = 'none'; status.ready = true; status.progress = 1; status.text = 'Guide only (no model)'; emit(); }
 
-	async function chat(messages, onToken, signal) {
+	// one conversation at a time on the one engine: later calls wait their turn
+	let queue = Promise.resolve();
+	function chat(messages, onToken, signal) {
+		const run = queue.then(() => chatNow(messages, onToken, signal));
+		queue = run.catch(() => null);
+		return run;
+	}
+	async function chatNow(messages, onToken, signal) {
 		if (kind === 'webllm') {
 			if (loading) await loading;
 			if (!engine) throw Error('The model is not loaded.');

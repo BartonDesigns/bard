@@ -40,6 +40,8 @@ Open `dev.html` from a local server to run the island on its own
 - `src/caverns.js`, `src/magma.js`, `src/underwater.js`, `src/sealife.js` — sea caves and arches, the vent and lava tube, basalt and kelp, the vent swarm
 - `src/people/body.js` — people built from the CC0 MakeHuman base mesh (from the caves build): Bay Area ancestry mix, sex, age, height, build, clothing fitted from the body cage, fitted hair, eyes, face morphs, a 64-bone skeleton with fingers
 - `src/people/motion.js` — the motion rig: critically damped springs on every drive value, a continuous gait phase, planted feet that stay put while the body passes over, two-bone leg IK, heel strike and toe roll, pelvis bob/roll/sway, arm counter-swing with lagging elbows, head and eye gaze, blinking and talking
+- `src/people/persona.js` — who someone is when you stop to talk: name, age, job, neighbourhood and temperament from their seed and where you met; the prompt the conversational model plays them from; simple in-character replies without a model; and their body language read from what they say (mood and gesture tags, or the words: yes/no, jokes, directions, doubt, questions, emphasis)
+- `src/world/lodfade.js` — detail levels dissolve into each other (and out at the draw distance) instead of popping; used by the island's plants and the city's trees, whose far crowns take the size and average colour of the near trees
 - `src/people/people.js` — the population: walkers on the block pavements (crossing at corners), joggers, pairs chatting, people waiting; more downtown and by day
 - `src/drive.js` — Drive (🚗 or V): snap onto the road, street or trail you are on and it carries you at the road's own pace (25 mph on a residential street, 65 on a freeway, hiking pace on a trail); ← / → choose the next turn, ↑ straight on, ↓ turn round, Shift to hurry. Follows the real road graph where the map is real (looking through the short links of a junction to the road beyond), and the town street grids everywhere else
 - `src/main.js` — renderer, loop, HUD, settings, Journey adapter
@@ -118,6 +120,16 @@ the ship in orbit round Earth. The old flight build's Bay Area surface is gone.
 
 Home: `Crysis.setHome(lat, lon)` marks your home (kept only in that browser's storage, never
 published); `Crysis.goHome()` takes you there.
+
+## People you can talk to
+
+Walk up to someone and press Enter (or 💬): they stop, turn to you and listen. The
+on-device model plays them from their persona; their gestures and face follow their words
+as they stream. They can send you somewhere nearby, which goes into the journal as a quest
+and completes when you get there. The model loads by itself on first launch where the
+browser has WebGPU (Llama 3.2 1B on desktop, Qwen 2.5 0.5B on phones; ⚙ in the Guide
+changes it or turns it off); without one, everyone answers with simple built-in replies.
+New places you reach get a one-line field note in the journal.
 
 ## The Guide (✦, or G)
 

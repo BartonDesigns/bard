@@ -9,6 +9,7 @@
 import { createLLM, WEBLLM_MODELS, hasWebGPU } from './llm.js';
 import { PLACES, ZONES } from '../bay/places.js';
 import { toWorld } from '../bay/geo.js';
+import { personaFor, personaPrompt, personaOffline, bodyFor, TAG_RE } from '../people/persona.js';
 
 // facts the Guide can rely on (a small model should not have to remember them)
 const LANDMARKS = [
@@ -118,13 +119,44 @@ export function createGuide(mount, api) {
 			time: `${Math.floor(hours)}:${String(Math.floor((hours % 1) * 60)).padStart(2, '0')}`, night: hours < 6 || hours > 19.5, wind: +(api.shared.uWind.value).toFixed(2),
 			facing: dirTo(-Math.sin(P.yaw), -Math.cos(P.yaw)),
 			near: near.map((t) => ({ name: t.name, dist: fmtDist(t.d), dir: dirTo(t.x - cam.x, t.z - cam.z), fact: t.fact })),
-			done: QUESTS.filter((q) => journal[q[0]]).map((q) => q[1]), todo: QUESTS.filter((q) => !journal[q[0]] && (q[0] !== 'home' || store.get('crysis-home', null))).map((q) => q[1]),
+			done: QUESTS.filter((q) => journal[q[0]]).map((q) => q[1]), todo: [...quests.filter((q) => !q.done).map((q) => q.title), ...QUESTS.filter((q) => !journal[q[0]] && (q[0] !== 'home' || store.get('crysis-home', null))).map((q) => q[1])],
 			land: W.land?.profile?.thesis, sea: W.eco?.profile?.thesis,
 		};
 	}
 
+	// ---------- quests people give you, and the places you discover ----------
+	const quests = store.get('crysis-quests', []);
+	const found = store.get('crysis-places', {});
+	const QUEST_RE = /\[\[\s*quest\s*:\s*([^\]]+)\]\]/gi;
+	function giveQuest(placeName, from) {
+		const t = find(placeName);
+		if (!t || quests.some((q) => !q.done && q.place === t.name)) return null;
+		const q = { place: t.name, from, x: t.x, z: t.z, title: `Visit ${t.name}${from ? ` (${from}'s tip)` : ''}`, at: Date.now() };
+		quests.push(q); while (quests.length > 30) quests.shift();
+		store.set('crysis-quests', quests);
+		api.hint('Journal: ' + q.title, 3500);
+		return q;
+	}
+	let noteBusy = false, lastNote = 0;
+	async function discover(name, sub) {
+		if (!name || found[name]) return;
+		found[name] = Date.now(); store.set('crysis-places', found);
+		const t = find(name), now = performance.now();
+		let note = t?.fact ? `${name}: ${t.fact}.` : null;
+		// a field note in the guide's own words, when the model is free
+		if (llm.kind() !== 'none' && llm.status.ready && !noteBusy && !busy && now - lastNote > 45000) {
+			noteBusy = true; lastNote = now;
+			try {
+				const r = await llm.chat([{ role: 'system', content: 'You write one-sentence field notes for an explorer\'s journal: vivid, specific, calm, under 25 words. Use only the facts given; if there are none, describe the setting plainly.' }, { role: 'user', content: `Place: ${name} (${sub}). Facts: ${t?.fact || 'none'}. Time: ${snapshot()?.time}.` }], () => {}, null);
+				if (r) note = r.replace(/^["\s]+|["\s]+$/g, '');
+			} catch (e) { /* the plain fact will do */ }
+			noteBusy = false;
+		}
+		if (note) { say('📍 ' + note, 'note'); api.hint('📍 ' + note, 5000); }
+	}
+
 	// ---------- the journal: noticed as you play ----------
-	let tick = 0;
+	let tick = 0, lastPlace = '';
 	function watch(dt) {
 		tick += dt;
 		if (tick < 1) return;
@@ -149,6 +181,16 @@ export function createGuide(mount, api) {
 		if (near(37.8816, -121.9142, 150) && cam.y - g < 8) hit('diablo');
 		const home = store.get('crysis-home', null);
 		if (home && near(home.lat, home.lon, 40) && cam.y - g < 10) hit('home');
+		// people's tips: done when you get there
+		for (const q of quests) {
+			if (q.done || Math.hypot(cam.x - q.x, cam.z - q.z) > 140 || cam.y - Math.max(g, 0) > 80) continue;
+			q.done = Date.now(); store.set('crysis-quests', quests);
+			api.hint(`Journal: ${q.title} ✓`, 3500); say(`${q.title}: done.`, 'note');
+		}
+		// a place you have not been before
+		const onIsland = Math.max(Math.abs(cam.x), Math.abs(cam.z)) < W.island.half;
+		const w = W.labels?.where(cam.x, cam.z, cam.y, onIsland);
+		if (w && w.name !== lastPlace) { lastPlace = w.name; discover(w.name, w.sub); }
 	}
 
 	// ---------- acting in the world ----------
@@ -203,12 +245,94 @@ export function createGuide(mount, api) {
 You can act in the world by writing a command in double brackets at the end of your reply:
 [[go: PLACE]] takes the player there (any town, landmark, area, or: the vent, the lava tube, sea cave 1, the reef, the village, the island peak, the whale, home).
 [[time: HOUR]] sets the hour (0-24). [[fly: on]] or [[fly: off]]. [[face: PLACE]] turns the player toward a place. [[wind: 0-1.5]].
-Only use a command when the player asks for it or clearly agrees. Suggest things to do from the player's journal.
+Only use a command when the player asks for it or clearly agrees. Suggest things to do from the player's journal. To add something to the player's journal, write [[quest: PLACE]].
 THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	let busy = null;
+	// ---------- talking with the people you meet ----------
+	// partner: { p (the person), persona, history } while you are talking with someone
+	let partner = null;
+	const people = new WeakMap();
+	function whereKind() {
+		const W = api.world(), cam = api.camera.position;
+		if (Math.max(Math.abs(cam.x), Math.abs(cam.z)) < W.island.half) return { kind: 'island', name: 'the village' };
+		const w = W.labels?.where(cam.x, cam.z, cam.y, false), U = W.bayArea?.urbanAt(cam.x, cam.z), L = W.real?.landAt?.(cam.x, cam.z);
+		const kind = L && (L.lu === 0 || L.lu >= 11) && (!U || U.u < 0.3) ? 'nature' : U && (U.s === 0 || U.d > 0.2) ? 'city' : 'suburb';
+		return { kind, name: w?.name || 'the Bay Area' };
+	}
+	function talkTo(p) {
+		if (!p) return;
+		if (partner && partner.p !== p) endTalk();
+		let rec = people.get(p);
+		if (!rec) { rec = { persona: personaFor(p.P, whereKind()), history: [] }; people.set(p, rec); }
+		partner = { p, ...rec };
+		api.people?.engage(p);
+		title.textContent = partner.persona.name.toUpperCase();
+		input.placeholder = `Say something to ${partner.persona.first}`;
+		show(true);
+		if (!rec.met) { rec.met = true; perform(personaOffline(partner.persona, 'hi', snapshot()), true); }
+		else say(`${partner.persona.first} turns back to you.`, 'note');
+	}
+	function endTalk() {
+		if (!partner) return;
+		api.people?.release(partner.p);
+		partner = null;
+		title.textContent = 'THE GUIDE';
+		input.placeholder = 'Ask anything, or "take me to Alcatraz"';
+	}
+	// a person's reply, shown and acted: each finished sentence moves them
+	function bodySync(p, text, from) {
+		const done = text.slice(from), parts = done.split(/(?<=[.!?])\s+/);
+		if (parts.length < 2 && !/[.!?]$/.test(done)) return from;
+		let used = from;
+		const whole = /[.!?]$/.test(done) ? parts : parts.slice(0, -1);
+		for (const sentence of whole) {
+			const b = bodyFor(sentence, p.P.dna.temper);
+			for (const g of b.gestures) p.M.gesture(g);
+			if (b.feel) p.M.feel(b.feel[0], b.feel[1]);
+			used += sentence.length + 1;
+		}
+		// they speak for about as long as the words take to say
+		p.speakUntil = Math.max(p.speakUntil || 0, performance.now() + 400 + (text.length - from) * 55);
+		return Math.min(used, text.length);
+	}
+	function perform(reply, speakIt) {
+		const p = partner.p, clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
+		say(clean, 'guide');
+		bodySync(p, reply + (/[.!?]$/.test(reply) ? '' : '.'), 0);
+		if (speakIt && voiceOut) speak(clean);
+	}
+	async function askPerson(text) {
+		const P2 = partner, p = P2.p;
+		say(text, 'me');
+		const bubble = say('…', 'guide');
+		const ctrl = new AbortController(); busy = ctrl;
+		let reply = null, from = 0;
+		const world = snapshot();
+		try {
+			if (llm.kind() !== 'none' && llm.status.ready) {
+				P2.history.push({ role: 'user', content: text });
+				while (P2.history.length > 10) P2.history.shift();
+				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { place: world?.place, time: world?.time, near: world?.near?.slice(0, 4) }) }, ...P2.history], (t) => {
+					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim(); scroll();
+					from = bodySync(p, t, from);
+				}, ctrl.signal);
+				if (reply) P2.history.push({ role: 'assistant', content: reply });
+			}
+		} catch (e) { reply = null; }
+		if (!reply) { reply = personaOffline(P2.persona, text, world); from = 0; }
+		bodySync(p, reply + (/[.!?]$/.test(reply.trim()) ? '' : '.'), from);
+		reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
+		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
+		bubble.textContent = clean || '…';
+		if (voiceOut) speak(clean, P2.persona);
+		if (busy === ctrl) busy = null;
+		scroll();
+		if (/\b(bye|goodbye|take care|see you)\b/i.test(text)) setTimeout(() => { if (partner === P2) { endTalk(); show(false); } }, 1800);
+	}
 	async function ask(text) {
 		if (!text.trim()) return;
+		if (partner) return askPerson(text);
 		say(text, 'me');
 		const bubble = say('…', 'guide');
 		if (busy) busy.abort();
@@ -225,7 +349,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!reply) reply = offline(text);
 		const acts = [];
 		reply.replace(ACTION_RE, (_, c, a) => { acts.push([c, a.trim()]); return ''; });
-		const clean = reply.replace(ACTION_RE, '').trim();
+		reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), null); return ''; });
+		const clean = reply.replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		bubble.textContent = clean || '…';
 		for (const [c, a] of acts) { const r = act(c, a); if (r) say(r, 'note'); }
 		if (voiceOut) speak(clean);
@@ -235,12 +360,21 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 	// ---------- voice ----------
 	let voiceOut = store.get('crysis-guide-voice', false);
-	function speak(t) {
+	function speak(t, who) {
 		if (!('speechSynthesis' in window) || !t) return;
 		speechSynthesis.cancel();
 		const u = new SpeechSynthesisUtterance(t);
 		u.rate = 1.02; u.pitch = 1;
-		const v = speechSynthesis.getVoices().find((x) => /en[-_](US|GB)/.test(x.lang) && /natural|samantha|google|premium/i.test(x.name)) || speechSynthesis.getVoices().find((x) => /^en/.test(x.lang));
+		const all = speechSynthesis.getVoices().filter((x) => /^en/.test(x.lang));
+		let v = all.find((x) => /en[-_](US|GB)/.test(x.lang) && /natural|samantha|google|premium/i.test(x.name)) || all[0];
+		// a person gets a voice of their own: picked from their seed, pitched by age and build
+		if (who && all.length) {
+			const d = partner?.p?.P?.dna, fem = all.filter((x) => /female|samantha|victoria|karen|moira|tessa|zira|susan|fiona|allison|ava|serena/i.test(x.name)), mal = all.filter((x) => /male|daniel|alex|fred|david|mark|tom|oliver|aaron|rishi/i.test(x.name) && !/female/i.test(x.name));
+			const pool = d && !d.male ? (fem.length ? fem : all) : (mal.length ? mal : all);
+			v = pool[(d?.seed ?? 0) % pool.length];
+			u.pitch = d ? (d.male ? 0.9 : 1.1) - (d.age - 40) * 0.004 : 1;
+			u.rate = 0.95 + (who.temper?.outgoing ?? 0.5) * 0.15;
+		}
 		if (v) u.voice = v;
 		speechSynthesis.speak(u);
 	}
@@ -300,15 +434,21 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (llm.kind() === 'none') say('Running without a model. ⚙ loads one on this device for real conversation.', 'note');
 	}
 	open.onclick = () => show(true);
-	closeB.onclick = () => show(false);
+	closeB.onclick = () => { endTalk(); show(false); };
 	send.onclick = () => { const t = input.value; input.value = ''; ask(t); };
-	input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { send.onclick(); } if (e.key === 'Escape') show(false); });
+	input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { send.onclick(); } if (e.key === 'Escape') { endTalk(); show(false); } });
 	mic.onclick = listen;
 	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; if (!voiceOut && 'speechSynthesis' in window) speechSynthesis.cancel(); };
 	addEventListener('keydown', (e) => { if ((e.key === 'g' || e.key === 'G') && !window._KEYS_PLAY_ON && !e.metaKey && !e.ctrlKey && document.activeElement?.tagName !== 'INPUT' && mount.style.display !== 'none') { e.preventDefault(); show(panel.style.display === 'none'); } });
 
 	// settings: which model
-	const choice = store.get('crysis-guide-model', { kind: 'none', id: WEBLLM_MODELS[0].id, url: 'http://localhost:11434', name: 'llama3.2' });
+	// the model is part of the game: where the browser can run one (WebGPU), a small one
+	// loads by itself in the background on first launch and is cached from then on; phones
+	// get the smallest. Choosing "Built-in guide" in ⚙ turns it off for good.
+	const phone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+	const autoId = phone ? 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' : 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+	const saved = store.get('crysis-guide-model', null);
+	const choice = saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
 	function drawSettings() {
 		settings.innerHTML = '';
 		const row = (label, node) => { const r = el('label', 'display:flex;align-items:center;gap:8px;margin:6px 0;'); r.append(el('span', 'width:74px;color:rgba(255,255,255,.6);', label), node); settings.append(r); return r; };
@@ -335,7 +475,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		sel.onchange = () => { choice.kind = sel.value; drawSettings(); };
 	}
 	async function connect(user) {
-		store.set('crysis-guide-model', choice);
+		if (user) { delete choice.auto; store.set('crysis-guide-model', choice); }
 		try {
 			if (choice.kind === 'webllm') await llm.useWebLLM(choice.id);
 			else if (choice.kind === 'ollama') await llm.useOllama(choice.url, choice.name);
@@ -348,8 +488,17 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// a model chosen before comes back by itself when it was downloaded already (Ollama
 	// always); a first download only ever starts from the button
 	if (choice.kind === 'ollama') connect(false);
-	else if (choice.kind === 'webllm' && store.get('crysis-guide-loaded', false)) connect(false);
+	else if (choice.kind === 'webllm') setTimeout(() => connect(false), store.get('crysis-guide-loaded', false) ? 1500 : 9000);   // after the world is up
+	// a quiet progress pill while the model downloads the first time
+	const pill = el('div', 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(124px + env(safe-area-inset-top));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px system-ui;pointer-events:none;display:none;');
+	mount.append(pill);
+	llm.onStatus((st) => {
+		if (llm.kind() !== 'webllm') { pill.style.display = 'none'; return; }
+		if (/could not load|no WebGPU/i.test(st.text)) { pill.textContent = '✦ people will use simple replies'; pill.style.display = ''; setTimeout(() => { pill.style.display = 'none'; }, 4000); llm.useNone(); return; }
+		if (!st.ready && st.progress < 1) { pill.style.display = ''; pill.textContent = `✦ voices loading ${Math.round((st.progress || 0) * 100)}%`; }
+		else if (st.ready) { pill.textContent = '✦ people can talk now'; setTimeout(() => { pill.style.display = 'none'; }, 3500); }
+	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, llm, journal: () => ({ ...journal }), find };
+	return { update: watch, ask, act, snapshot, show, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
 }

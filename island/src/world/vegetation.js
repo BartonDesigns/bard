@@ -8,6 +8,7 @@ import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
 import * as TX from './textures.js';
 import { HEIGHT_GLSL } from './terrain.js';
 import { addPulse } from '../pulse.js';
+import { addLodFade, fadeRange } from './lodfade.js';
 
 // ---------- geometry helpers ----------
 class Builder {
@@ -871,7 +872,10 @@ export function createVegetation(island, shared, scene, flora = null) {
 				vdef.parts.forEach((geo, pi) => {
 					const mm = mats[sp.mats[pi]];
 					const cap = lod === 'close' ? Math.min(sp.max, 160) : lod === 'far' ? (sp.farMax || sp.max) : sp.max;
-					const im = new THREE.InstancedMesh(geo, mm.material, cap);
+					// its own copy of the shape, to carry each plant's share of the dissolve
+					const g2 = geo.clone();
+					g2.setAttribute('aFade', new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2));
+					const im = new THREE.InstancedMesh(g2, mm.material, cap);
 					im.count = 0;
 					im.castShadow = lod === 'close' && !sp.noShadow;
 					im.receiveShadow = lod !== 'far';
@@ -889,6 +893,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 		}
 	}
 	scene.add(group);
+	for (const k in mats) addLodFade(mats[k].material, 'attribute');
 
 	// ground occupancy: where anything stands, the soil under it is shaded, bare and
 	// damp, and the grass thins toward the stem. A small map around the player that
@@ -900,6 +905,15 @@ export function createVegetation(island, shared, scene, flora = null) {
 	const contacts = [], extra = [];
 
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3(), col = new THREE.Color();
+	// a species' detail tiers and their hand-over bands [a0, a1] in and [b0, b1] out
+	function tiersOf(sp, R) {
+		if (sp.tiers) return sp.tiers;
+		const W1 = 10, W2 = Math.max(18, sp.near * 0.15), end = [R * 0.84, R];
+		const t = [{ lod: 'close', a0: -2, a1: -1, b0: SHADOW_R - W1, b1: SHADOW_R }];
+		t.push({ lod: 'near', a0: SHADOW_R - W1, a1: SHADOW_R, b0: sp.far ? sp.near - W2 : sp.near * 0.84, b1: sp.far ? sp.near : sp.near });
+		if (sp.far) t.push({ lod: 'far', a0: sp.near - W2, a1: sp.near, b0: end[0], b1: end[1] });
+		return (sp.tiers = t);
+	}
 	let lastX = 1e9, lastZ = 1e9;
 	function stream(cam, force) {
 		const cx = cam.position.x, cz = cam.position.z;
@@ -917,20 +931,27 @@ export function createVegetation(island, shared, scene, flora = null) {
 				if (!c || !c.items[sp.key]) continue;
 				for (const it of c.items[sp.key]) {
 					const d = Math.hypot(it.x - cx, it.z - cz);
-					const lod = d < SHADOW_R ? 'close' : d < sp.near ? 'near' : (sp.far && d < R ? 'far' : null);
-					if (!lod) continue;
+					if (d > R) continue;
 					if (cs && d < OSPAN * 0.72) contacts.push(it.x, it.z, cs[0] * (sp.key === 'boulder' ? it.scale : it.scale * 0.9 + 0.1), cs[1], cs[2]);
 					q.setFromAxisAngle(UP, it.rot);
 					sc.setScalar(it.scale);
 					pos.set(it.x, it.y, it.z);
 					m4.compose(pos, q, sc);
 					col.setScalar(it.tint);
-					const vi = lod === 'far' ? it.v % sp.far.length : lod === 'near' && sp.midIsFar ? it.v % sp.far.length : it.v;
-					for (const m of sp.meshes) {
-						if (m.lod !== lod || m.vi !== vi || m.im.count >= m.im.userData.cap) continue;
-						m.im.setMatrixAt(m.im.count, m4);
-						m.im.setColorAt(m.im.count, col);
-						m.im.count++;
+					// the tiers this plant is in: across each hand-over band, both, sharing its pixels
+					for (const T of tiersOf(sp, R)) {
+						if (d < T.a0 - 7 || d > T.b1 + 7) continue;
+						const lod = T.lod, [f0, f1] = fadeRange(d, T.a0, T.a1, T.b0, T.b1);
+						if (f1 <= f0) continue;
+						const vi = lod === 'far' ? it.v % sp.far.length : lod === 'near' && sp.midIsFar ? it.v % sp.far.length : it.v;
+						for (const m of sp.meshes) {
+							if (m.lod !== lod || m.vi !== vi || m.im.count >= m.im.userData.cap) continue;
+							m.im.setMatrixAt(m.im.count, m4);
+							m.im.setColorAt(m.im.count, col);
+							const fa = m.im.geometry.attributes.aFade;
+							fa.array[m.im.count * 2] = f0; fa.array[m.im.count * 2 + 1] = f1;
+							m.im.count++;
+						}
 					}
 				}
 			}
@@ -957,7 +978,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 		OCC.needsUpdate = true;
 		shared.uOccO.value.set(ox, oz, OSPAN);
 		for (const sp of species) for (const m of sp.meshes) {
-			m.im.instanceMatrix.needsUpdate = true;
+			m.im.instanceMatrix.needsUpdate = true; m.im.geometry.attributes.aFade.needsUpdate = true;
 			if (m.im.instanceColor) m.im.instanceColor.needsUpdate = true;
 			m.im.computeBoundingSphere();
 		}

@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, shrub, swayMaterial } from '../world/vegetation.js';
+import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
 
@@ -269,33 +270,61 @@ export function createCity(shared, scene, bay, real = null) {
 		return g;
 	})();
 	const coneGeo = (() => { let g = new THREE.ConeGeometry(1, 1, 14, 3).translate(0, 0.5, 0); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g); g.computeVertexNormals(); return g; })();
-	const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.95 });
-	const trunks = mk(trunkGeo, new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 0.95 }), TCAP, false);
+	const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
+	const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 0.95 });
+	const trunks = mk(trunkGeo, trunkMat, TCAP, false);
 	trunks.instanceColor = null;
 	const crowns = mk(crownGeo, leafMat, TCAP, false), cones = mk(coneGeo, leafMat, TCAP, false);
-	const leafM = swayMaterial({ map: TX.leafCluster(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8);
+	const leafTex = TX.leafCluster();
 	const barkT = TX.woodBark(); barkT.repeat.set(2, 3);
-	const barkM = swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1);
 	const SPECIES = [
 		{ height: 11, crown: 'round', bark: [1.12, 1.08, 1.0], leaf: [1.1, 1.05, 0.85] },      // plane, sycamore, elm
 		{ height: 9, crown: 'umbrella', bark: [0.75, 0.72, 0.7], leaf: [0.78, 0.86, 0.72] },  // coast live oak
 		{ height: 16, crown: 'columnar', bark: [0.95, 0.66, 0.52], leaf: [0.55, 0.72, 0.6] }, // redwood, cypress
 	];
 	const LEAF_REF = [0.25, 0.35, 0.15];
-	const tierMesh = (parts, cap, shadow) => parts.map((geo, n) => {
-		const S = n === 0 ? barkM : leafM;
-		const im = new THREE.InstancedMesh(geo, S.material, cap);
-		im.count = 0; im.frustumCulled = false; im.castShadow = shadow; im.receiveShadow = true;
-		if (S.depth) im.customDepthMaterial = S.depth;
-		if (n === 1) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-		group.add(im);
-		return im;
-	});
+	// the detail levels and where they hand over (metres): each dissolves into the next
+	// across a band rather than popping; the far masses dissolve out at the edge
+	const LOD = { near: [NONE_IN[0], NONE_IN[1], 130, 150], mid: [130, 150, 415, 440], far: [415, 440, 1020, 1180], shrub: [NONE_IN[0], NONE_IN[1], 215, 255] };
+	const MARGIN = 45;                                        // the trees are re-placed every 40 m of travel
+	addLodFade(leafMat, 'uniform', LOD.far); addLodFade(trunkMat, 'uniform', LOD.far);
+	const tierMesh = (parts, cap, shadow, band) => {
+		// each tier its own materials, so each can carry its own band
+		const mats = [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
+		for (const M of mats) addLodFade(M.material, 'uniform', band);
+		return parts.map((geo, n) => {
+			const S = mats[n];
+			const im = new THREE.InstancedMesh(geo, S.material, cap);
+			im.count = 0; im.frustumCulled = false; im.castShadow = shadow; im.receiveShadow = true;
+			if (S.depth) im.customDepthMaterial = S.depth;
+			if (n === 1) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+			group.add(im);
+			return im;
+		});
+	};
+	// the leaf texture's average colour (where it is solid), in linear light
+	const texAvg = (() => {
+		const img = leafTex.image, cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+		const g = cv.getContext('2d'); g.drawImage(img, 0, 0, 64, 64);
+		const d = g.getImageData(0, 0, 64, 64).data, a = [0, 0, 0]; let n = 0;
+		const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+		for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 115) { a[0] += lin(d[i]); a[1] += lin(d[i + 1]); a[2] += lin(d[i + 2]); n++; }
+		return a.map((v) => v / Math.max(1, n));
+	})();
 	const treeTiers = SPECIES.map((g, k) => {
 		const nearT = hardwood(9101 + k * 17, false, false, g), midT = hardwood(9101 + k * 17, false, true, g);
-		return { near: tierMesh(nearT.parts, 700, true), mid: tierMesh(midT.parts, 4000, true), H: nearT.height, Hm: midT.height };
+		// what a far mass must match: the crown's size and place, and its average colour
+		// (the leaf texture times the leaves' own colours)
+		const leafGeo = midT.parts[1], bb = new THREE.Box3().setFromBufferAttribute(leafGeo.attributes.position), cA = leafGeo.attributes.color, avg = [0, 0, 0];
+		for (let i = 0; i < cA.count; i++) { avg[0] += cA.getX(i); avg[1] += cA.getY(i); avg[2] += cA.getZ(i); }
+		const far = {
+			col: avg.map((v, c) => v / cA.count * texAvg[c]),
+			cy: (bb.min.y + bb.max.y) / 2 / midT.height, ry: (bb.max.y - bb.min.y) / 2 / midT.height,
+			rx: Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2 / midT.height * 0.82, base: bb.min.y / midT.height,
+		};
+		return { near: tierMesh(nearT.parts, 1500, true, LOD.near), mid: tierMesh(midT.parts, 6000, true, LOD.mid), H: nearT.height, Hm: midT.height, far };
 	});
-	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, 3000, true);
+	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, 3000, true, LOD.shrub);
 
 	// one lot's building (and roof) in grid space: centre (gx, gz), size along grid x/z.
 	// opt.face turns the box so its front (local +z) faces a street: 's' +gz, 'n' -gz,
@@ -599,32 +628,34 @@ export function createCity(shared, scene, bay, real = null) {
 			q.setFromAxisAngle(Y, yaw);
 			const tint = [0, 1, 2].map((c) => Math.min(1.35, Math.max(0.65, t.col[c] / LEAF_REF[c])));
 			if (t.shrub) {
-				if (d > 260) continue;
+				if (d > LOD.shrub[3] + MARGIN) continue;
 				const k = next(shrubs[0]); if (k < 0) continue; next(shrubs[1]);
 				const s2 = t.h / 1.3;
 				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2 * 0.9, s2));
 				shrubs[0].setMatrixAt(k, m4); shrubs[1].setMatrixAt(k, m4); shrubs[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 				continue;
 			}
-			if (d < 440) {
-				const sp = t.sp ?? (t.cone ? 2 : hash(t.x * 0.7, t.z * 1.3) < 0.3 ? 1 : 0), T = treeTiers[sp];
-				const tier = d < 150 ? T.near : T.mid, H = d < 150 ? T.H : T.Hm;
+			const sp = t.sp ?? (t.cone ? 2 : hash(t.x * 0.7, t.z * 1.3) < 0.3 ? 1 : 0), T = treeTiers[sp];
+			// a tree in a hand-over band sits in both tiers; the shader shares its pixels out
+			for (const [tier, H, lo, hi] of [[T.near, T.H, -1, LOD.near[3] + MARGIN], [T.mid, T.Hm, LOD.mid[0] - MARGIN, LOD.mid[3] + MARGIN]]) {
+				if (d < lo || d > hi) continue;
 				const k = next(tier[0]);
-				if (k >= 0) {
-					next(tier[1]);
-					const s2 = t.h / H;
-					m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(s2, s2, s2));
-					tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
-					continue;
-				}
+				if (k < 0) continue;
+				next(tier[1]);
+				const s2 = t.h / H;
+				m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(s2, s2, s2));
+				tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 			}
+			if (d < LOD.far[0] - MARGIN) continue;
+			// far: a trunk and one mass the size, shape and average colour of the real crown
 			const nt = next(trunks); if (nt < 0) continue;
+			const F = T.far, h = t.h;
 			q.identity();
-			trunks.setMatrixAt(nt, m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.h * 0.05 + 0.15, t.h * 0.45, t.h * 0.05 + 0.15)));
-			const im = t.cone ? cones : crowns, k = next(im); if (k < 0) continue;
-			if (t.cone) im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.2, t.z), q, sc.set(t.h * 0.28, t.h * 0.85, t.h * 0.28)));
-			else im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.62, t.z), q, sc.set(t.h * 0.36, t.h * 0.3, t.h * 0.36)));
-			im.setColorAt(k, col.setRGB(t.col[0], t.col[1], t.col[2]));
+			trunks.setMatrixAt(nt, m4.compose(p.set(t.x, t.y, t.z), q, sc.set(h * 0.05 + 0.15, Math.max(h * 0.2, F.base * h + 0.5), h * 0.05 + 0.15)));
+			const k = next(crowns); if (k < 0) continue;
+			q.setFromAxisAngle(Y, yaw);
+			crowns.setMatrixAt(k, m4.compose(p.set(t.x, t.y + 0.2 + F.cy * h, t.z), q, sc.set(F.rx * h, F.ry * h, F.rx * h)));
+			crowns.setColorAt(k, col.setRGB(F.col[0] * tint[0], F.col[1] * tint[1], F.col[2] * tint[2]));
 		}
 		const all = [trunks, crowns, cones, ...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])];
 		for (const im of all) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
@@ -808,7 +839,7 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
-		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }
+		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
 		lastX = x; lastZ = z;
 		const list = [];
 		fillBlocks(x, z, 1200, list);

@@ -98,6 +98,9 @@ export function personDNA(seed, opts = {}) {
 		hairColour: age > 62 ? (r() < 0.6 ? HAIR_COLOURS[7 + (r() < 0.5 ? 1 : 0)] : HAIR_COLOURS[2]) : anc[0] + anc[1] > 0.6 ? HAIR_COLOURS[r() < 0.8 ? 0 : 1] : HAIR_COLOURS[Math.floor(r() * 7)],
 		outfit: pickOutfit(r, male, age, opts),
 		gait: { stride: 0.95 + r() * 0.12, bounce: 0.8 + r() * 0.5, armSwing: 0.7 + r() * 0.6, posture: (r() - 0.5) * 0.08 + (age > 65 ? 0.08 : 0), pace: 1.18 + r() * 0.3 - (age > 65 ? 0.3 : 0) },
+		// temperament: how outgoing (bigger, more frequent gestures, head up, arms swinging),
+		// how sure of themselves (chest up or a slump), and their usual mood
+		temper: { outgoing: r(), confident: r(), warmth: r(), fidget: r() },
 	};
 	return d;
 }
