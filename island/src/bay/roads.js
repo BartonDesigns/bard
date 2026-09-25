@@ -6,6 +6,11 @@
 
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
+import { REAL_EXTENTS } from './realcity.js';
+
+// where the real map takes over, its own freeways and trails are drawn instead
+const REAL_W = REAL_EXTENTS.map(([w, s, e, n]) => { const a = toWorld(n, w), b = toWorld(s, e); return [a.x + 70, a.z + 70, b.x - 70, b.z - 70]; });
+const inRealW = (p) => REAL_W.some(([x0, z0, x1, z1]) => p.x > x0 && p.z > z0 && p.x < x1 && p.z < z1);
 
 // [lat, lon] waypoints, following the real alignments
 export const ROUTES = {
@@ -66,7 +71,12 @@ export function createRoads(shared, scene, bay) {
 
 	const lampPos = [], carPos = [], carDir = [], carCol = [];
 	const build = (latlon, width, trail) => {
-		const pts = resample(latlon.map(([a, b]) => toWorld(a, b)), 25);
+		// the stretches outside the mapped regions
+		const all = resample(latlon.map(([a, b]) => toWorld(a, b)), 25), runs = [[]];
+		for (const p of all) { if (inRealW(p)) { if (runs[runs.length - 1].length) runs.push([]); } else runs[runs.length - 1].push(p); }
+		for (const run of runs) if (run.length > 1) strip(run, width, trail);
+	};
+	const strip = (pts, width, trail) => {
 		// grade: follow the ground, smoothed hard so the road cuts through bumps and bridges dips
 		let y = pts.map((p) => Math.max(bay.heightAt(p.x, p.z), 1.5));
 		for (let pass = 0; pass < 6; pass++) y = y.map((v, i) => (y[Math.max(0, i - 2)] + y[Math.max(0, i - 1)] + v + y[Math.min(y.length - 1, i + 1)] + y[Math.min(y.length - 1, i + 2)]) / 5);

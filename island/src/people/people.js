@@ -58,6 +58,45 @@ export function createPeople(scene, world) {
 		return { n: Math.round(MAX * busy * (1 - night * 0.75)), island: false };
 	}
 
+	// the real city's sidewalks: a point beside a street, on one side, at distance s along it
+	function roadLen(r) { if (r.len) return r.len; let L = 0; for (let i = 2; i < r.pts.length; i += 2) L += Math.hypot(r.pts[i] - r.pts[i - 2], r.pts[i + 1] - r.pts[i - 1]); return (r.len = L); }
+	function curbPoint(r, s, side) {
+		const p = r.pts;
+		let acc = 0;
+		for (let i = 2; i < p.length; i += 2) {
+			const ax = p[i - 2], az = p[i - 1], bx = p[i], bz = p[i + 1], L = Math.hypot(bx - ax, bz - az);
+			if (acc + L >= s || i === p.length - 2) {
+				const t = L ? Math.min(1, Math.max(0, (s - acc) / L)) : 0, off = (r.w / 2 + 0.9) * side;
+				const nx = L ? -(bz - az) / L : 0, nz = L ? (bx - ax) / L : 0;
+				return new THREE.Vector3(ax + (bx - ax) * t + nx * off, 0, az + (bz - az) * t + nz * off);
+			}
+			acc += L;
+		}
+		return new THREE.Vector3(p[0], 0, p[1]);
+	}
+	function streetRoute(x, z, r) {
+		const real = world().real;
+		if (!real?.loaded() || !real.inside(x, z)) return null;
+		const roads = real.near('roads', x, z, 60).filter((q) => q.walked && !q.bridge);
+		if (!roads.length) return null;
+		// the streets that really pass close to the chosen spot (the index hands back whole cells)
+		const close = [];
+		for (const road of roads) {
+			let best = 0, bd = 1e9, acc = 0;
+			const P = road.pts;
+			for (let i = 2; i < P.length; i += 2) {
+				const ax = P[i - 2], az = P[i - 1], dx = P[i] - ax, dz = P[i + 1] - az, l2 = dx * dx + dz * dz || 1;
+				const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = Math.hypot(ax + dx * t - x, az + dz * t - z);
+				if (d < bd) { bd = d; best = acc + t * Math.sqrt(l2); }
+				acc += Math.sqrt(l2);
+			}
+			if (bd < 40 && acc > 20) close.push([road, best, acc]);
+		}
+		if (!close.length) return null;
+		const [road, best, L] = close[Math.floor(r() * close.length)];
+		return { kind: 'street', road, side: r() < 0.5 ? 1 : -1, s: Math.max(0, Math.min(L, best + (r() - 0.5) * 20)), dir: r() < 0.5 ? 1 : -1 };
+	}
+
 	function cast(p, cam, island) {
 		const r = rng(seedN * 7919 + 13);
 		const W = world();
@@ -78,6 +117,15 @@ export function createPeople(scene, world) {
 				M.place(q.x, ground(q.x, q.z), q.z, r() * 6.28);
 				return true;
 			}
+			const st = streetRoute(x, z, r);
+			if (st) {
+				const q = curbPoint(st.road, st.s, st.side), q2 = curbPoint(st.road, st.s + st.dir, st.side);
+				if (ground(q.x, q.z) < 0.6) continue;
+				p.route = st;
+				M.place(q.x, ground(q.x, q.z), q.z, Math.atan2(q2.x - q.x, q2.z - q.z));
+				return true;
+			}
+			if (world().real?.inside(x, z)) continue;
 			const loop = blockLoop(x, z);
 			if (!loop) continue;
 			const side = Math.floor(r() * 4), t = r();
@@ -122,6 +170,32 @@ export function createPeople(scene, world) {
 			if (d < 1.5) { const W = world(), pts = (W.island.paths || []).flatMap((q) => q.points); const q = pts.length ? pts[Math.floor(Math.random() * pts.length)] : { x: R.home.x + (Math.random() - 0.5) * 60, z: R.home.z + (Math.random() - 0.5) * 60 }; R.goal.set(q.x, 0, q.z); if (Math.random() < 0.3) { p.role = 'wait'; p.timer = 3 + Math.random() * 6; } }
 			M.want.heading = Math.atan2(R.goal.x - S.pos.x, R.goal.z - S.pos.z);
 			M.want.speed = speed * 0.85;
+			return;
+		}
+		if (R.kind === 'street') {
+			// along the sidewalk; at the end of the street, on into the one that joins it, or back
+			let tgt = curbPoint(R.road, R.s, R.side);
+			if (Math.hypot(tgt.x - S.pos.x, tgt.z - S.pos.z) < 2.2) {
+				R.s += R.dir * 2.5;
+				const L = roadLen(R.road);
+				if (R.s < 0 || R.s > L) {
+					const ex = R.road.pts[R.s < 0 ? 0 : R.road.pts.length - 2], ez = R.road.pts[R.s < 0 ? 1 : R.road.pts.length - 1];
+					const next = world().real.near('roads', ex, ez, 30).filter((q) => q !== R.road && q.walked && !q.bridge && (Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16 || Math.hypot(q.pts[q.pts.length - 2] - ex, q.pts[q.pts.length - 1] - ez) < 16));
+					if (next.length && Math.random() < 0.85) {
+						const q = next[Math.floor(Math.random() * next.length)], atStart = Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16;
+						R.road = q; R.dir = atStart ? 1 : -1; R.s = atStart ? 1 : roadLen(q) - 1;
+						// keep to the same hand of the street as we turn
+						R.side = Math.random() < 0.8 ? R.side : -R.side;
+					} else { R.dir = -R.dir; R.s = Math.min(L, Math.max(0, R.s)); }
+				}
+				if (Math.random() < 0.02) { p.role = 'wait'; p.timer = 2 + Math.random() * 5; }
+				tgt = curbPoint(R.road, R.s, R.side);
+			}
+			M.want.heading = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z);
+			let v = speed;
+			const dc = Math.hypot(cam.x - S.pos.x, cam.z - S.pos.z);
+			if (dc < 1.5) { v *= 0.3; M.want.heading += 0.6; }
+			M.want.speed = v;
 			return;
 		}
 		// round the block; at a corner, sometimes cross to the next block
@@ -220,6 +294,8 @@ export function createPeople(scene, world) {
 	}
 	// the nearest pavement to a point: [x, z, heading along it]
 	function sidewalk(x, z) {
+		const real = world().real;
+		if (real?.loaded() && real.inside(x, z)) return real.sidewalk(x, z);
 		const L = blockLoop(x, z); if (!L) return null;
 		let best = null, bd = 1e9;
 		for (let k = 0; k < 4; k++) { const a = L.pts[k], b = L.pts[(k + 1) % 4]; for (let t = 0; t <= 1; t += 0.05) { const px = a.x + (b.x - a.x) * t, pz = a.z + (b.z - a.z) * t, d = Math.hypot(px - x, pz - z); if (d < bd) { bd = d; best = [px, pz, Math.atan2(b.x - a.x, b.z - a.z)]; } } }

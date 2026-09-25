@@ -34,6 +34,7 @@ import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createCitySound } from './bay/citysound.js';
+import { createRealCity } from './bay/realcity.js';
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads } from './bay/roads.js';
@@ -286,8 +287,9 @@ export function createIslandWorld() {
 			const bayArea = createBayArea(shared, scene, island, shared.bayU);
 			world.bayArea = bayArea;
 			world.labels = createLabels(dom.mount, bayArea, null);
-			world.city = createCity(shared, scene, bayArea);
-			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z));
+			world.real = createRealCity(renderer);
+			world.city = createCity(shared, scene, bayArea, world.real);
+			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			const own = island.heightAt;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.heightAt(x, z);
@@ -339,6 +341,10 @@ export function createIslandWorld() {
 			q.appendChild(b);
 		}
 		p.appendChild(q);
+		// the map data's credit (OpenStreetMap's licence asks for it where the data is shown)
+		const credit = css(document.createElement('div'), 'margin-top:8px;font:11px system-ui;opacity:.6;line-height:1.35;');
+		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets and buildings: Overture Maps Foundation, © OpenStreetMap contributors (ODbL), Microsoft and Google footprints.';
+		p.appendChild(credit);
 		const TM = window.L99TouchMusic175;
 		if (TM) {
 			const b = css(document.createElement('button'), 'margin-top:10px;width:100%;min-height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (TM.enabled ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
@@ -436,6 +442,7 @@ export function createIslandWorld() {
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bayArea?.update(camera, sk.night);
 		W.bridge?.update(time, sk.night);
+		W.real?.update(camera);
 		W.city?.update(camera, sk.night);
 		W.street?.update(dt, time, camera, sk.night);
 		W.roads?.update(time, sk.night);

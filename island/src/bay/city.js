@@ -18,7 +18,9 @@ import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styl
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
 // house (1.0-1.4), which side the garage is on a row house (0, 0.1, 0.2)
-const KIND = { row: 0, house: 1, tower: 2, office: 3, paved: 4, industry: 5, retail: 6, plain: 7, garage: 8, shop: 9, bay: 10 };
+const KIND = { row: 0, house: 1, tower: 2, office: 3, paved: 4, industry: 5, retail: 6, plain: 7, garage: 8, shop: 9, bay: 10, houseGarageL: 11, houseGarageR: 12, pool: 13 };
+// a house's front door, from 0 (left) to 1 (right); a bare 1.0 is a wing with no door
+const doorKind = (base, door) => base + 0.01 + door * 0.38;
 
 const PAL = {
 	sf: [[0.96, 0.9, 0.74], [0.98, 0.86, 0.5], [0.72, 0.86, 0.72], [0.66, 0.8, 0.92], [0.95, 0.7, 0.6], [0.97, 0.96, 0.92], [0.74, 0.74, 0.72], [0.82, 0.72, 0.88], [0.6, 0.72, 0.56], [0.94, 0.8, 0.5], [0.5, 0.62, 0.76], [0.8, 0.5, 0.44], [0.97, 0.96, 0.92], [0.92, 0.9, 0.84], [0.45, 0.55, 0.5], [0.9, 0.62, 0.7]],
@@ -74,14 +76,25 @@ function buildingMaterial(shared, night) {
 				float fx = (vLP.x + 0.5) * vCS.x, gy = vLY - 1.2;
 				float ih = bh(floor(vIP * 0.5) + 0.17);
 				float shopGlow = 0.0;
-				if (vKind > 7.5) {
+				// a house with its garage built in (11 left, 12 right) is a house with garage doors
+				float K = vKind, garSide = 0.0;
+				if (K > 10.5 && K < 12.5) { garSide = K < 11.5 ? -1.0 : 1.0; K -= K < 11.5 ? 10.0 : 11.0; }
+				if (K > 12.5) {
+					// a pool: water in a white coping
+					float top = step(0.7, vCN.y);
+					vec2 pl = vLP.xz * vCS.xz;
+					float inner = top * step(abs(pl.x), vCS.x * 0.5 - 0.35) * step(abs(pl.y), vCS.z * 0.5 - 0.35);
+					float rip = 0.5 + 0.5 * sin(dot(vCW.xz, vec2(3.1, 2.3)) + sin(vCW.x * 1.7) * 2.0);
+					diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.05, 0.36, 0.5), vec3(0.14, 0.55, 0.66), rip), inner);
+					glassK = inner;
+				} else if (K > 7.5) {
 					// the shopping streets: flats above, a shopfront and sign below; garages; bay windows
-					if (vKind > 9.5) {
+					if (K > 9.5) {
 						// a bay window: glazed all round, a panel between floors
 						cell = vec2(u / 1.15, vLY / 3.3); vec2 f = fract(cell);
 						win = step(0.12, f.x) * step(f.x, 0.88) * step(0.22, f.y) * step(f.y, 0.82);
 						glass = vec3(0.24, 0.27, 0.3);
-					} else if (vKind > 8.5) {
+					} else if (K > 8.5) {
 						// flats over a shop: sash windows above, the shopfront and its sign below
 						cell = vec2((front > 0.5 ? fx : u) / 2.54, gy / 3.3); vec2 f = fract(cell);
 						win = step(0.3, f.x) * step(f.x, 0.7) * step(0.25, f.y) * step(f.y, 0.8) * step(4.4, gy);
@@ -107,7 +120,7 @@ function buildingMaterial(shared, night) {
 						diffuseColor.rgb = mix(diffuseColor.rgb, dc, doorG);
 						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5, front * step(gy, 2.3) * step(2.2, gy) * step(0.3, bx) * step(bx, bw - 0.3));
 					}
-				} else if (vKind < 0.5) {
+				} else if (K < 0.5) {
 					// San Francisco: tall sash windows in threes, white trim, a cornice at the top;
 					// often a garage door and the front door and stairs at street level
 					cell = vec2((front > 0.5 ? fx : u) / 2.54, gy / 3.3); vec2 f = fract(cell);
@@ -127,20 +140,29 @@ function buildingMaterial(shared, night) {
 					float steps = ground * garage * step(dx0 - 0.2, fx) * step(fx, dx0 + 1.2) * step(gy, 0.9);
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.7, 0.69, 0.66) * (0.85 + 0.15 * step(0.5, fract(gy / 0.3))), steps);
 					glass = vec3(0.24, 0.27, 0.3);
-				} else if (vKind < 1.5) {
+				} else if (K < 1.5) {
 					// houses: windows with white frames a floor, the front door on the street side
 					cell = vec2((front > 0.5 ? fx : u) / 3.4, gy / 2.9); vec2 f = fract(cell);
 					float wOn = step(0.3, bh(floor(cell) + floor(vIP) + 1.3));
 					float frame = step(0.26, f.x) * step(f.x, 0.74) * step(0.26, f.y) * step(f.y, 0.82) * wOn;
 					win = step(0.3, f.x) * step(f.x, 0.7) * step(0.3, f.y) * step(f.y, 0.78) * wOn;
-					float doorX = 1.25 + fract(vKind - 1.0) * 2.5 * (vCS.x - 2.5);
-					float door = front * step(abs(fx - doorX), 0.5) * step(gy, 2.1);
-					float doorF = front * step(abs(fx - doorX), 0.62) * step(gy, 2.22);
-					win *= 1.0 - front * step(abs(fx - doorX), 1.3) * step(gy, 2.4);
-					frame *= 1.0 - front * step(abs(fx - doorX), 1.3) * step(gy, 2.4);
+					float hasDoor = step(0.005, fract(K - 1.0));
+					float doorX = 1.25 + clamp((fract(K - 1.0) - 0.01) / 0.38, 0.0, 1.0) * (vCS.x - 2.5);
+					float door = hasDoor * front * step(abs(fx - doorX), 0.5) * step(gy, 2.1);
+					float doorF = hasDoor * front * step(abs(fx - doorX), 0.62) * step(gy, 2.22);
+					win *= 1.0 - hasDoor * front * step(abs(fx - doorX), 1.3) * step(gy, 2.4);
+					frame *= 1.0 - hasDoor * front * step(abs(fx - doorX), 1.3) * step(gy, 2.4);
+					// a built-in garage: two sectional doors at one end of the front
+					float gx0 = garSide < 0.0 ? 0.35 : vCS.x - 5.75;
+					float gzone = step(0.5, abs(garSide)) * front * step(gx0 - 0.3, fx) * step(fx, gx0 + 5.7) * step(gy, 2.6);
+					win *= 1.0 - gzone; frame *= 1.0 - gzone;
+					float gb = fract((fx - gx0) / 2.7) * 2.7;
+					float gdoor = gzone * step(0.12, gb) * step(gb, 2.58) * step(gy, 2.15);
+					vec3 gdc = ih > 0.5 ? vec3(0.92, 0.91, 0.87) : diffuseColor.rgb * 1.06;
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.94, 0.9), max(frame * (1.0 - win), doorF * (1.0 - door)));
 					vec3 dcol = ih > 0.75 ? vec3(0.45, 0.1, 0.08) : ih > 0.5 ? vec3(0.1, 0.16, 0.26) : ih > 0.25 ? vec3(0.38, 0.24, 0.14) : vec3(0.9, 0.9, 0.86);
 					diffuseColor.rgb = mix(diffuseColor.rgb, dcol, door);
+					diffuseColor.rgb = mix(diffuseColor.rgb, gdc * (0.9 + 0.1 * step(0.08, fract(gy / 0.54))), gdoor);
 					// a darker skirt of foundation at the ground
 					diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.62, (1.0 - roof) * step(gy, 0.3));
 					glass = vec3(0.18, 0.2, 0.22);
@@ -188,7 +210,7 @@ function buildingMaterial(shared, night) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding3';
+	m.customProgramCacheKey = () => 'baybuilding4';
 	return m;
 }
 
@@ -205,7 +227,7 @@ function roofGeometry(hip) {
 	return n;
 }
 
-export function createCity(shared, scene, bay) {
+export function createCity(shared, scene, bay, real = null) {
 	const group = new THREE.Group();
 	group.name = 'bay-city';
 	scene.add(group);
@@ -302,6 +324,7 @@ export function createCity(shared, scene, bay) {
 				if (Math.hypot(wx - cx, wz - cz) > R) continue;
 				const U = bay.urbanAt(wx, wz);
 				if (U.u < 0.15 || U.s !== style || Math.abs(U.a - a) > 0.01) continue;
+				if (real?.inside(wx, wz)) continue;                                              // mapped for real
 				const parkBlock = hash(i * 3 + 7, j * 5 + 1) > 0.975 && U.d < 0.2;              // a park or a playground
 				const ground = bay.heightAt(wx, wz);
 				if (ground < 0.8) continue;
@@ -434,7 +457,7 @@ export function createCity(shared, scene, bay) {
 						const cx = lotX + L / 2 - gs * (L - w - 3) / 2;             // the house to one side, the driveway down the other
 						const hf = 6;                                                 // house front, back from the pavement
 						const door = 0.25 + ((r * 3.3) % 1) * 0.5;
-						lot(list, a, style, cx, at(hf + d / 2), w, d, h, KIND.house + door * 0.4, col, { hip: r > 0.8, rot: r < 0.3, h: Math.min(w, d) * 0.42, col: rc }, false, { face });
+						lot(list, a, style, cx, at(hf + d / 2), w, d, h, doorKind(KIND.house, door), col, { hip: r > 0.8, rot: r < 0.3, h: Math.min(w, d) * 0.42, col: rc }, false, { face });
 						const dx = cx + (side ? 1 : -1) * (door - 0.5) * (w - 2.5);
 						if (detail) {
 							// the porch: a roof on posts across much of the front, steps to a path
@@ -483,7 +506,7 @@ export function createCity(shared, scene, bay) {
 						const gx = gs > 0 ? lotX + L - SY - gw / 2 : lotX + SY + gw / 2;
 						const roofH = era === ERA.eichler ? 0.9 : Math.min(w, d) * (modern ? 0.3 : era === ERA.ranch ? 0.2 : 0.26);
 						const door = modern ? (gs > 0 ? 0.28 : 0.72) : 0.35 + ((r * 3.3) % 1) * 0.3;
-						lot(list, a, style, hx, at(hf + d / 2), w, d, h, KIND.house + door * 0.4, col, { hip: modern || (era === ERA.ranch && r > 0.4), h: roofH, col: rc }, false, { face });
+						lot(list, a, style, hx, at(hf + d / 2), w, d, h, doorKind(KIND.house, door), col, { hip: modern || (era === ERA.ranch && r > 0.4), h: roofH, col: rc }, false, { face });
 						// the garage, its doors to the street
 						lot(list, a, style, gx, at(setback + 3.5), gw, 7, 3.1, KIND.garage, col, { hip: modern, h: era === ERA.eichler ? 0.5 : 1.6, col: rc }, false, { face });
 						// the driveway
@@ -687,7 +710,52 @@ export function createCity(shared, scene, bay) {
 		for (const m of [m1, m2]) { m.castShadow = true; m.receiveShadow = true; group.add(m); }
 	}
 
-	let lastX = 1e9, lastZ = 1e9, started = false;
+	// the real city's buildings, pools and yard trees round (cx, cz)
+	// San Ramon's roofs from the air: mostly grey and charcoal concrete tile and composition
+	// shingle, some brown, a share of terracotta
+	const REAL_ROOF = [[0.3, 0.31, 0.33], [0.24, 0.25, 0.27], [0.36, 0.36, 0.37], [0.4, 0.39, 0.38], [0.33, 0.3, 0.28], [0.42, 0.33, 0.27], [0.5, 0.3, 0.22], [0.46, 0.27, 0.2], [0.28, 0.29, 0.32], [0.38, 0.35, 0.33]];
+	function realBuildings(cx, cz, R, list) {
+		if (!real?.loaded()) return;
+		const trees = list.trees || (list.trees = []);
+		for (const b of real.near('boxes', cx, cz, R)) {
+			const dx = b.x - cx, dz = b.z - cz;
+			if (dx * dx + dz * dz > R * R) continue;
+			const g = bay.heightAt(b.x, b.z);
+			if (g < 0.5) continue;
+			// on a slope the walls go down to the lowest corner
+			const ca = Math.cos(b.a), sa = Math.sin(b.a);
+			let gmin = g;
+			for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) gmin = Math.min(gmin, bay.heightAt(b.x + ca * sx * b.w / 2 - sa * sz * b.d / 2, b.z + sa * sx * b.w / 2 + ca * sz * b.d / 2));
+			const y = Math.min(g - 1.2, gmin - 0.3);
+			// one colour per house (its wings and garage share it)
+			const r = hash(Math.round(b.x / 9) * 3.7, Math.round(b.z / 9) * 1.9);
+			const r2 = hash(Math.round(b.x / 9) * 5.3 + 1, Math.round(b.z / 9) * 2.3 + 7);
+			let col = jit(pick(r < 0.5 ? PAL.suburb : r < 0.75 ? PAL.ranch : PAL.seventies, r2), r);
+			let kind, roof = null;
+			const rc = pick(REAL_ROOF, hash(Math.round(b.x / 9) + 11, Math.round(b.z / 9) + 5));
+			if (b.kind === 0 || b.kind === 8) kind = doorKind(KIND.house, b.door);
+			else if (b.kind === 1) kind = doorKind(KIND.houseGarageL, b.door);
+			else if (b.kind === 2) kind = doorKind(KIND.houseGarageR, b.door);
+			else if (b.kind === 3) kind = KIND.garage;
+			else if (b.kind === 4 || b.kind === 10) kind = KIND.house;
+			else if (b.kind === 5) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
+			else if (b.kind === 6) { kind = KIND.retail; col = jit(pick(PAL.retail, r2), r); }
+			else if (b.kind === 7) { kind = KIND.office; col = jit([0.86, 0.8, 0.68], r); }
+			else { kind = KIND.industry; col = jit(pick(PAL.industry, r2), r); }
+			if (b.roofH > 0.1) roof = { hip: !!b.hip, h: b.roofH, col: rc };
+			list.push({ x: b.x, y, z: b.z, w: b.w, d: b.d, h: g + b.wallH - y, a: b.a, col, kind, roof });
+		}
+		for (const p of real.near('pools', cx, cz, Math.min(R, 900))) {
+			const g = bay.heightAt(p.x, p.z);
+			if (g > 0.5) list.push({ x: p.x, y: g - 0.9, z: p.z, w: p.w, d: p.d, h: 0.99, a: p.a, col: [0.9, 0.89, 0.85], kind: KIND.pool, roof: null });
+		}
+		for (const t of real.near('trees', cx, cz, Math.min(R, 1400))) {
+			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
+			if (g > 0.5) trees.push({ x: t.x, y: g - 0.3, z: t.z, h: t.h, cone: !!t.cone, col: t.cone ? jit([0.13, 0.21, 0.11], r) : jit(pick(PAL.crown, r), r) });
+		}
+	}
+
+	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false;
 	function update(cam, nightK) {
 		if (!bay.loaded()) return;
 		night.value = nightK;
@@ -696,10 +764,12 @@ export function createCity(shared, scene, bay) {
 		const high = cam.position.y > 4000;
 		near.visible = hips.visible = gables.visible = trunks.visible = crowns.visible = cones.visible = !high;
 		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
+		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }
 		lastX = x; lastZ = z;
 		const list = [];
 		fillBlocks(x, z, 1200, list);
+		realBuildings(x, z, 2000, list);
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; }

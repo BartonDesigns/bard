@@ -65,6 +65,8 @@ true scale:
 - `src/bay/cars.js` — cars with real proportions (sedan, hatchback, SUV, pickup, minivan): smooth lofted bodies, glass cabins, cut wheel arches with tyres and alloys, lamps, clear-coat paint that reflects the sky
 - `src/bay/streetlife.js` — the street at eye level: parked cars at the kerbs, moving traffic, street lamps that glow at night, signals, hydrants, meters, bins, benches, bus shelters
 - `src/bay/citysound.js` — the sound of the streets: the city bed, passing cars (panned, Doppler), your footsteps and the people's, voices where people talk, birds by day and crickets at night
+- `src/bay/realcity.js` — the real city, where it is mapped street by street (San Ramon, with the edges of Danville and Dublin): real roads with sidewalks, kerbs, cul-de-sacs, driveways and lane lines painted into the ground from a road map rendered round you; real building footprints raised as houses with hip roofs, doors and garages facing their street; yard, street and park trees; pools; street life and walkers on the real streets. Data: Overture Maps (© OpenStreetMap contributors, ODbL; Microsoft and Google footprints), fetched with `python3 tools/overture-fetch.py <release> <W> <S> <E> <N> <dir>` and baked with `python3 tools/bake-realcity.py <dir> <name>` into `assets/bayarea/real/`
+- `assets/bayarea/h3.png` — 10 m terrain over San Ramon (`node tools/bake-bayarea.mjs h3`)
 - `src/bay/labels.js` — the notation as you enter each city, water or landmark
 - `src/world/starcat.js` — 6317 real stars (HYG v4.1, CC BY-SA 4.0) for the night sky
 

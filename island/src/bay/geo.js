@@ -9,11 +9,12 @@ export const toWorld = (lat, lon) => ({ x: (lon - LON0) * KX, z: -(lat - LAT0) *
 export const toLatLon = (x, z) => ({ lat: LAT0 - z / KZ, lon: LON0 + x / KX });
 
 // the baked height levels: coarse over all nine counties, finer over the core bay,
-// finest round the Golden Gate (see tools/bake-bayarea.cjs)
+// finest round the Golden Gate and over San Ramon (see tools/bake-bayarea.mjs)
 export const LEVELS = [
 	{ name: 'h0', lat: [36.93, 38.87], lon: [-123.6, -121.45], step: 120, zoom: 10 },
 	{ name: 'h1', lat: [37.2, 38.12], lon: [-122.62, -121.75], step: 60, zoom: 11 },
 	{ name: 'h2', lat: [37.7, 37.93], lon: [-122.56, -122.36], step: 15, zoom: 13 },
+	{ name: 'h3', lat: [37.715, 37.83], lon: [-122.02, -121.87], step: 10, zoom: 14 },         // San Ramon, mapped street by street
 ];
 // height encoding in the PNGs: v = (h + 1000) * 20 in R (high byte) and G (low byte)
 export const H_OFF = 1000, H_SCALE = 20;

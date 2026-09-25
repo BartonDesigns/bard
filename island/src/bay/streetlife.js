@@ -14,7 +14,7 @@ const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.
 // car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
 const PAINT = [[0.92, 0.92, 0.91], [0.92, 0.92, 0.91], [0.05, 0.05, 0.06], [0.05, 0.05, 0.06], [0.35, 0.36, 0.38], [0.35, 0.36, 0.38], [0.66, 0.67, 0.69], [0.66, 0.67, 0.69], [0.1, 0.2, 0.45], [0.55, 0.06, 0.06], [0.2, 0.3, 0.26], [0.45, 0.38, 0.3], [0.8, 0.8, 0.82], [0.25, 0.08, 0.1]];
 
-export function createStreetLife(shared, scene, bay, groundAt) {
+export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const group = new THREE.Group();
 	group.name = 'street-life';
 	scene.add(group);
@@ -57,6 +57,75 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 	// ---------- building the street furniture round a point ----------
 	let lastX = 1e9, lastZ = 1e9;
 	const signalList = [], lanes = [];
+	// a lane is a polyline with its running length; cars ride it by distance
+	function laneOf(pts, half, style, oneway) {
+		const cum = [0];
+		for (let i = 2; i < pts.length; i += 2) cum.push(cum[cum.length - 1] + Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]));
+		return { pts, cum, L: cum[cum.length - 1] || 1, half, style, oneway, x0: pts[0], z0: pts[1], x1: pts[pts.length - 2], z1: pts[pts.length - 1] };
+	}
+	function laneAt(l, s) {
+		// position and direction at distance s along the lane
+		let i = 1;
+		while (i < l.cum.length - 1 && l.cum[i] < s) i++;
+		const t = (s - l.cum[i - 1]) / ((l.cum[i] - l.cum[i - 1]) || 1);
+		const ax = l.pts[i * 2 - 2], az = l.pts[i * 2 - 1], bx = l.pts[i * 2], bz = l.pts[i * 2 + 1], L = Math.hypot(bx - ax, bz - az) || 1;
+		return [ax + (bx - ax) * t, az + (bz - az) * t, (bx - ax) / L, (bz - az) / L];
+	}
+	// the real streets: cars at the kerbs clear of the driveways, street lights, hydrants,
+	// signals where the collectors cross, and lanes for the traffic
+	const RANK = { motorway: 6, trunk: 5, primary: 4, secondary: 3, tertiary: 2, residential: 1, unclassified: 1, living_street: 1 };
+	function realStreets(cx, cz, R, n, lampPos, setNl, getNl) {
+		const roads = real.near('roads', cx, cz, R).filter((r) => r.drive && r.cls !== 'service');
+		const drives = real.near('paths', cx, cz, R + 40);
+		const clearOfDrive = (x, z) => { for (const d of drives) if (Math.abs(d.bx - x) < 9 && Math.abs(d.bz - z) < 9 && Math.hypot(d.bx - x, d.bz - z) < 6.5 + d.w / 2) return false; return true; };
+		const ends = new Map();
+		for (const r of roads) {
+			const p = r.pts, hw = r.w / 2, rank = RANK[r.cls] || 0;
+			for (const k of [0, p.length - 2]) { const key = Math.round(p[k] / 2) + ',' + Math.round(p[k + 1] / 2); const e = ends.get(key) || { x: p[k], z: p[k + 1], n: 0, rank: 0, hw: 0 }; e.n++; e.rank = Math.max(e.rank, rank); e.hw = Math.max(e.hw, hw); ends.set(key, e); }
+			lanes.push(laneOf(Array.from(p), hw, r.cls === 'residential' || r.cls === 'living_street' || r.cls === 'unclassified' ? STYLE.suburb : STYLE.office, r.divided || r.cls === 'motorway' || r.link));
+			// walk the street every 2.2 m, both sides
+			let run = 0;
+			for (let i = 0; i + 3 < p.length; i += 2) {
+				const ax = p[i], az = p[i + 1], bx = p[i + 2], bz = p[i + 3], L = Math.hypot(bx - ax, bz - az);
+				if (L < 0.5) continue;
+				const dx = (bx - ax) / L, dz = (bz - az) / L, nx = -dz, nz = dx, yaw = Math.atan2(dx, dz);
+				for (let s = 0; s < L; s += 2.2, run += 2.2) {
+					const x = ax + dx * s, z = az + dz * s;
+					if (Math.hypot(x - cx, z - cz) > R) continue;
+					const k = Math.floor(run / 2.2), side = k % 2 ? 1 : -1;
+					// parked cars on the residential streets, clear of driveways and corners
+					if (rank <= 1 && !r.divided && k % 3 === 0 && run > 12) for (const sd of [-1, 1]) {
+						const h1 = hash(x * 3.1 + sd, z * 1.7);
+						if (h1 > 0.22) continue;
+						const px = x + nx * (hw - 1.15) * sd, pz = z + nz * (hw - 1.15) * sd;
+						if (!clearOfDrive(px, pz)) continue;
+						const g = groundAt(px, pz);
+						const kind = KINDS[Math.floor(hash(h1 * 1000, k) * KINDS.length)], im = parked[kind], c = n(im);
+						if (c < 0) continue;
+						put(im, c, px, g, pz, yaw + (sd > 0 ? Math.PI : 0) + (h1 - 0.1) * 0.3);
+						const pc = PAINT[Math.floor(hash(k, h1 * 777) * PAINT.length)];
+						im.setColorAt(c, col.setRGB(pc[0], pc[1], pc[2]));
+					}
+					// the kerb furniture
+					const kx = x + nx * (hw + 0.45) * side, kz = z + nz * (hw + 0.45) * side, kg = groundAt(kx, kz);
+					if (k % 19 === 9 && rank >= 1 && !r.bridge) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz)); const nl = getNl(); if (nl < 900) { lampPos.set([x + nx * (hw - 1.2) * side, kg + 8.2, z + nz * (hw - 1.2) * side], nl * 3); setNl(nl + 1); } } }
+					if (k % 47 === 20 && rank >= 1) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
+					if (rank >= 2 && k % 97 === 50) { const c = n(benches); if (c >= 0) put(benches, c, x + nx * (hw + 1.4) * side, kg, z + nz * (hw + 1.4) * side, Math.atan2(-side * nx, -side * nz)); }
+				}
+			}
+		}
+		// signals where the collectors cross
+		for (const e of ends.values()) {
+			if (e.n < 3 || e.rank < 2 || Math.hypot(e.x - cx, e.z - cz) > R) continue;
+			for (const [ox, oz] of [[1, 1], [-1, -1]]) {
+				const d = e.hw + 2.2, x = e.x + ox * d * 0.707, z = e.z + oz * d * 0.707, g = groundAt(x, z), c = n(signals);
+				if (c < 0) continue;
+				const yaw = Math.atan2(e.x - x, e.z - z) - Math.PI / 4;
+				put(signals, c, x, g, z, yaw);
+				signalList.push({ x: x + Math.sin(yaw) * 3.4, y: g + 5.1, z: z + Math.cos(yaw) * 3.4, ph: hash(e.x, e.z) * 60 });
+			}
+		}
+	}
 	function build(cx, cz) {
 		const R = 380;
 		const counts = new Map(), n = (im) => { const c = counts.get(im) || 0; counts.set(im, c + 1); return c < im.instanceMatrix.count ? c : -1; };
@@ -75,6 +144,7 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 				if (Math.hypot(wx - cx, wz - cz) > R) continue;
 				const U = bay.urbanAt(wx, wz);
 				if (U.u < 0.3 || U.s !== style || Math.abs(U.a - a) > 0.01) continue;
+				if (real?.inside(wx, wz)) continue;                                              // the real streets are furnished below
 				const city = style === STYLE.sf || style === STYLE.sunset || U.d > 0.15, busy = city || style === STYLE.retail || style === STYLE.office;
 				// the two streets on this block's low edges: along grid x at gz = j*BZ + ST/2, along grid z at gx = i*BX + ST/2
 				for (const along of [0, 1]) {
@@ -111,7 +181,7 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 					}
 					// the traffic lanes on this street, for moving cars
 					const [x0, z0] = W(...(along ? [i * BX + ST / 2, j * BZ] : [i * BX, j * BZ + ST / 2])), [x1, z1] = W(...(along ? [i * BX + ST / 2, (j + 1) * BZ] : [(i + 1) * BX, j * BZ + ST / 2]));
-					lanes.push({ x0, z0, x1, z1, half: ST / 2, style });
+					lanes.push(laneOf([x0, z0, x1, z1], ST / 2, style, false));
 				}
 				// signals at the busy corners
 				if (busy && hash(i * 3, j * 5) < 0.4) {
@@ -125,6 +195,7 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 				}
 			}
 		}
+		if (real?.loaded()) realStreets(cx, cz, R, n, lampPos, (v) => { nl = v; }, () => nl);
 		for (const im of [...Object.values(parked), lamps, signals, hydrants, benches, shelters, bins, meters]) {
 			im.count = Math.min(counts.get(im) || 0, im.instanceMatrix.count);
 			im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
@@ -138,11 +209,11 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 		cars.length = 0;
 		const near = lanes.map((l) => ({ l, d: Math.hypot((l.x0 + l.x1) / 2 - cx, (l.z0 + l.z1) / 2 - cz) })).sort((a, b) => a.d - b.d).slice(0, 90);
 		for (const { l } of near) {
-			const nC = l.style === STYLE.sf || l.style === STYLE.retail ? 2 : 1;
+			const nC = l.style === STYLE.sf || l.style === STYLE.retail ? 2 : Math.max(1, Math.min(4, Math.round(l.L / 160)));
 			for (let k = 0; k < nC; k++) {
 				const r = Math.random();
-				if (r > 0.75) continue;
-				cars.push({ l, u: Math.random(), dir: Math.random() < 0.5 ? 1 : -1, v: 0, vmax: 8 + Math.random() * 5, kind: kinds[Math.floor(Math.random() * kinds.length)], col: PAINT[Math.floor(Math.random() * PAINT.length)], wait: 0 });
+				if (r > (l.style === STYLE.suburb ? 0.45 : 0.75)) continue;
+				cars.push({ l, u: Math.random(), dir: l.oneway || Math.random() < 0.5 ? 1 : -1, v: 0, vmax: (l.style === STYLE.suburb ? 8 : 12) + Math.random() * 5, kind: kinds[Math.floor(Math.random() * kinds.length)], col: PAINT[Math.floor(Math.random() * PAINT.length)], wait: 0, lane: l.oneway ? (Math.random() < 0.5 ? -0.5 : 0.5) : 0 });
 			}
 		}
 	}
@@ -165,14 +236,19 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 		// traffic: along the lane, easing to a stop near the far end, then a new lane
 		const counts = Object.fromEntries(kinds.map((k) => [k, 0]));
 		for (const c of cars) {
-			const l = c.l, L = Math.hypot(l.x1 - l.x0, l.z1 - l.z0) || 1;
+			const l = c.l, L = l.L;
 			const toEnd = c.dir > 0 ? (1 - c.u) * L : c.u * L;
 			const target = toEnd < 12 ? Math.max(0, (toEnd - 3) * 0.8) : c.vmax;
 			c.v += (target - c.v) * Math.min(1, dt * 1.2);
-			if (toEnd < 3.5) { c.wait += dt; if (c.wait > 1.5 + Math.random()) { c.wait = 0; c.dir = -c.dir; c.u = c.dir > 0 ? 0.02 : 0.98; } }
+			if (toEnd < 3.5) {
+				c.wait += dt;
+				// a one-way carriageway starts again at its beginning; a street turns round
+				if (c.wait > 1.5 + Math.random()) { c.wait = 0; if (l.oneway) c.u = 0.02; else { c.dir = -c.dir; c.u = c.dir > 0 ? 0.02 : 0.98; } }
+			}
 			c.u = Math.min(1, Math.max(0, c.u + c.dir * c.v * dt / L));
-			const dx = (l.x1 - l.x0) / L, dz = (l.z1 - l.z0) / L, off = c.dir > 0 ? -1.8 : 1.8;
-			const px = l.x0 + (l.x1 - l.x0) * c.u + dz * off, pz = l.z0 + (l.z1 - l.z0) * c.u - dx * off;
+			const [lx, lz, dx, dz] = laneAt(l, c.u * L);
+			const off = l.oneway ? c.lane * l.half : (c.dir > 0 ? -1 : 1) * Math.min(1.8, l.half * 0.4);
+			const px = lx + dz * off, pz = lz - dx * off;
 			c.px = px; c.pz = pz; c.vx = dx * c.dir * c.v; c.vz = dz * c.dir * c.v;      // for the street sound
 			const im = moving[c.kind], k = counts[c.kind]++;
 			if (k >= im.instanceMatrix.count) continue;

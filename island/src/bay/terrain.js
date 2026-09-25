@@ -12,10 +12,11 @@ import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
 import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
 import { PLACES } from './places.js';
 import { bearingFor, styleFor, localOverride, WARP_GLSL, STYLE, sfDistrict } from './styles.js';
+import { REAL_U, REAL_GLSL } from './realcity.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
-uniform highp sampler2D uB0, uB1, uB2; uniform vec4 uR0, uR1, uR2; uniform float uBayOn;
+uniform highp sampler2D uB0, uB1, uB2, uB3; uniform vec4 uR0, uR1, uR2, uR3; uniform float uBayOn;
 float bLevel(highp sampler2D t, vec4 r, vec2 w){
 	vec2 S = vec2(textureSize(t, 0));
 	vec2 f = clamp((w - r.xy) / r.z, vec2(0.0), S - 1.001);
@@ -33,14 +34,38 @@ float bayHeight(vec2 w){
 	float h = mix(-400.0, bLevel(uB0, uR0, w), bIn(uB0, uR0, w, 3000.0));
 	float k1 = bIn(uB1, uR1, w, 1500.0); if (k1 > 0.0) h = mix(h, bLevel(uB1, uR1, w), k1);
 	float k2 = bIn(uB2, uR2, w, 500.0); if (k2 > 0.0) h = mix(h, bLevel(uB2, uR2, w), k2);
+	float k3 = bIn(uB3, uR3, w, 400.0); if (k3 > 0.0) h = mix(h, bLevel(uB3, uR3, w), k3);
 	return h;
 }
 `;
 
+// the colour of each kind of real land use (0: leave the natural ground)
+const REAL_LAND = /* glsl */`
+vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
+	vec3 lawn = mix(vec3(0.2, 0.34, 0.1), vec3(0.3, 0.41, 0.15), gn);
+	vec3 dry = mix(vec3(0.5, 0.45, 0.28), vec3(0.6, 0.53, 0.34), gn);
+	if (lu < 0.5 || lu > 10.5) return nat;
+	if (lu < 1.5) {
+		// yards: lawns (a few browned off), planting beds, shade
+		vec3 y = mix(lawn, dry, smoothstep(0.55, 0.8, gf) * 0.6);
+		return mix(y, vec3(0.3, 0.24, 0.16), smoothstep(0.62, 0.72, vn(w * 0.35)) * 0.5);
+	}
+	if (lu < 2.5) return mix(lawn, dry, smoothstep(0.6, 0.85, gf) * 0.4);
+	if (lu < 3.5) return mix(vec3(0.24, 0.42, 0.13), vec3(0.3, 0.47, 0.16), step(0.5, fract(dot(w, vec2(0.6, 0.8)) / 14.0)));
+	if (lu < 4.5) return mix(vec3(0.26, 0.47, 0.15), vec3(0.3, 0.52, 0.18), step(0.5, fract(w.x / 5.0)));
+	if (lu < 5.5) return mix(vec3(0.52, 0.4, 0.28), vec3(0.62, 0.5, 0.36), gn);
+	if (lu < 6.5) return mix(lawn, vec3(0.3, 0.3, 0.31), step(0.7, gf));
+	// commercial and retail: parking with landscaped islands and borders
+	if (lu < 7.5) return mix(mix(vec3(0.25, 0.25, 0.26), vec3(0.31, 0.31, 0.32), gn), lawn * 0.9, smoothstep(0.58, 0.64, vn(w * 0.05) * 0.7 + gf * 0.3));
+	if (lu < 8.5) return mix(vec3(0.45, 0.44, 0.42), vec3(0.55, 0.54, 0.5), gn);
+	if (lu < 9.5) return vec3(0.84, 0.79, 0.64);
+	return vec3(0.1, 0.2, 0.22);
+}
+`;
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);
 export function bayUniforms() {
 	const blank = () => { const t = new THREE.DataTexture(new Uint16Array([0, 0, 0, 0]), 2, 2, THREE.RedFormat, THREE.HalfFloatType); t.needsUpdate = true; return t; };
-	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uBayOn: { value: 0 } };
+	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uBayOn: { value: 0 } };
 }
 
 // the towns: how far each one's streets reach, their street-grid angle, and the
@@ -133,6 +158,7 @@ export function createBayArea(shared, scene, island, BU) {
 		let h = -400 + (levelH(levels[0], x, z) + 400) * levelIn(levels[0], x, z, 3000);
 		if (levels[1]) { const k = levelIn(levels[1], x, z, 1500); if (k > 0) h += (levelH(levels[1], x, z) - h) * k; }
 		if (levels[2]) { const k = levelIn(levels[2], x, z, 500); if (k > 0) h += (levelH(levels[2], x, z) - h) * k; }
+		if (levels[3]) { const k = levelIn(levels[3], x, z, 400); if (k > 0) h += (levelH(levels[3], x, z) - h) * k; }
 		return h;
 	}
 
@@ -173,7 +199,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, { uUrban, uUR, uRot, uNightB, uTime: shared.uTime });
+			Object.assign(sh.uniforms, BU, U2, REAL_U, { uUrban, uUR, uRot, uNightB, uTime: shared.uTime });
 			sh.vertexShader = 'uniform vec2 uC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\n' + BAY_GLSL + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -182,7 +208,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0);\n' + NOISE_GLSL + '\n' + WARP_GLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + REAL_LAND + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -213,6 +239,60 @@ export function createBayArea(shared, scene, island, BU) {
 					vec4 T = texture2D(uUrban, uu / US);
 					float urban = T.r * (1.0 - smoothstep(0.25, 0.4, slope)) * smoothstep(0.4, 1.5, h);
 					float dist = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
+					if (inReal(vBW)) {
+						// the real city: land use, then streets and roofs from the maps
+						urban = 0.0;
+						vec2 mu = (vBW - uRealR.xy) / uRealR.z;
+						vec2 MS = vec2(textureSize(uRealMap, 0));
+						vec4 M = texture2D(uRealMap, (mu + 0.5) / MS);
+						float gn = vn(vBW * 0.09), gf = fbm3(vBW * 0.03);
+						float flatten = 1.0 - smoothstep(0.25, 0.45, slope);
+						// land use, blended across the four nearest 8 m cells so its edges are soft
+						vec2 mf = mu - 0.5, mi = floor(mf), mw = mf - mi;
+						vec3 luC = vec3(0.0); float luW = 0.0;
+						for (int k = 0; k < 4; k++) {
+							vec2 o = vec2(float(k & 1), float(k >> 1));
+							float lu = floor(texelFetch(uRealMap, ivec2(clamp(mi + o, vec2(0.0), MS - 1.0)), 0).g * 255.0 / 16.0 + 0.5);
+							float wk = smoothstep(0.0, 1.0, (o.x > 0.5 ? mw.x : 1.0 - mw.x) * (o.y > 0.5 ? mw.y : 1.0 - mw.y));
+							luC += realLand(lu, c, gn, gf, vBW) * wk; luW += wk;
+						}
+						c = mix(c, luC / max(luW, 1e-4), flatten);
+						// far away: roofs and streets from the 8 m map (up close the buildings stand here)
+						float farK = smoothstep(1500.0, 2200.0, dist);
+						c = mix(c, mix(vec3(0.5, 0.42, 0.38), vec3(0.42, 0.42, 0.44), gn), M.b * farK * 0.9);
+						// the streets: sharp from the fine road map round you, the coarser one beyond,
+						// the 8 m map beyond that
+						vec2 ru = (vBW - uRoadR.xy) / uRoadR.z, ru2 = (vBW - uRoadR2.xy) / uRoadR2.z;
+						float e1 = uRoadR.w * smoothstep(0.0, 0.08, min(min(ru.x, ru.y), min(1.0 - ru.x, 1.0 - ru.y)));
+						float e2 = uRoadR2.w * smoothstep(0.0, 0.05, min(min(ru2.x, ru2.y), min(1.0 - ru2.x, 1.0 - ru2.y)));
+						vec4 RM1 = texture2D(uRoadMap, clamp(ru, 0.0, 1.0)), RM2 = texture2D(uRoadMap2, clamp(ru2, 0.0, 1.0));
+						// sharpen the bilinear coverage into a crisp, anti-aliased edge
+						vec4 RM1r = RM1, fw1 = max(fwidth(RM1), vec4(0.02));
+						RM1 = smoothstep(0.5 - fw1, 0.5 + fw1, RM1) * vec4(1.0, 1.0, 0.0, 1.0) + vec4(0.0, 0.0, RM1.b, 0.0);
+						vec4 RM = mix(RM2 * e2, RM1, e1);
+						float edge = max(e1, e2);
+						float asph = mix(M.r * 0.85, RM.r, edge), conc = RM.g * edge, dirt = RM.a * edge;
+						float paint = RM.b * edge;
+						vec3 asphC = mix(vec3(0.16, 0.16, 0.17), vec3(0.24, 0.24, 0.25), vn(vBW * 0.7)) * (0.9 + 0.2 * gf);
+						asphC = mix(asphC, vec3(0.1), step(0.985, vn(vBW * 3.1)) * 0.5);                      // patched cracks
+						vec3 concC = mix(vec3(0.6, 0.59, 0.55), vec3(0.7, 0.69, 0.65), vn(vBW * 1.3));
+						c = mix(c, vec3(0.5, 0.43, 0.32) * (0.85 + 0.3 * gn), dirt);
+						c = mix(c, concC, conc);
+						c = mix(c, asphC, asph);
+						// the kerb where concrete meets asphalt: a pale lip and a dark gutter
+						float kerb = smoothstep(0.08, 0.4, RM1r.r) * smoothstep(0.08, 0.4, RM1r.g) * e1;
+						c = mix(c, vec3(0.74, 0.73, 0.7), kerb * 0.8);
+						float white = smoothstep(0.2, 0.3, paint) * (1.0 - smoothstep(0.45, 0.55, paint));
+						float yellow = smoothstep(0.55, 0.62, paint);
+						c = mix(c, vec3(0.86, 0.86, 0.82), white * 0.9);
+						c = mix(c, vec3(0.85, 0.68, 0.18), yellow * 0.9);
+						flatK = max(max(asph, conc), dirt * 0.6);
+						// night: windows and lamps as sparks far off
+						float cellL = max(18.0, dist * 0.004);
+						vec2 lc = floor(vBW / cellL);
+						float spark = step(0.8, h21(lc)) * smoothstep(0.35, 0.05, length(fract(vBW / cellL) - 0.5)) * max(M.b, M.r);
+						cityGlow = vec3(1.0, 0.72, 0.4) * spark * smoothstep(600.0, 3000.0, dist) * uNightB * 2.4;
+					}
 					if (urban > 0.02){
 						vec4 TX = texelFetch(uUrban, ivec2(clamp(uu, vec2(0.0), US - 1.0)), 0);
 						float sty = floor(TX.a * 255.0 / 40.0 + 0.5);
@@ -290,7 +370,7 @@ export function createBayArea(shared, scene, island, BU) {
 				{
 					// fine relief the survey cannot see: gullies, knolls and grain, as a bump
 					float dist2 = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
-					float bh = (fbm3(vBW * 0.045) * 2.2 + fbm3(vBW * 0.22) * 0.5 + vn(vBW * 1.3) * 0.08) * (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
+					float bh = (fbm3(vBW * 0.045) * 2.2 + fbm3(vBW * 0.22) * 0.5 + vn(vBW * 1.3) * 0.08) * (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH) * (1.0 - flatK * 0.9);
 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
 					float fDet = dot(vSx, R1);
@@ -299,7 +379,7 @@ export function createBayArea(shared, scene, island, BU) {
 				}`)
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += cityGlow;');
 		};
-		m.customProgramCacheKey = () => 'bayground' + (hole ? 'far' : 'near');
+		m.customProgramCacheKey = () => 'bayground2' + (hole ? 'far' : 'near');
 		m.userData.U2 = U2;
 		return m;
 	}

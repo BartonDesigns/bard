@@ -30,7 +30,9 @@ async function tile(z, x, y) {
 	return h;
 }
 
+const only = process.argv[2];             // bake just one level: node tools/bake-bayarea.mjs h3
 for (const L of LEVELS) {
+	if (only && L.name !== only) continue;
 	const z = L.zoom;
 	const x0 = (L.lon[0] - LON0) * KX, x1 = (L.lon[1] - LON0) * KX;
 	const zN = -(L.lat[1] - LAT0) * KZ, zS = -(L.lat[0] - LAT0) * KZ;
