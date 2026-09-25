@@ -797,7 +797,7 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 	}
 
-	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false;
+	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0;
 	function update(cam, nightK) {
 		if (!bay.loaded()) return;
 		night.value = nightK;
@@ -807,6 +807,7 @@ export function createCity(shared, scene, bay, real = null) {
 		near.visible = hips.visible = gables.visible = trunks.visible = crowns.visible = cones.visible = !high;
 		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
+		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
 		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }
 		lastX = x; lastZ = z;
 		const list = [];

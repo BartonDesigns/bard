@@ -61,7 +61,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	};
 
 	// ---------- building the street furniture round a point ----------
-	let lastX = 1e9, lastZ = 1e9;
+	let lastX = 1e9, lastZ = 1e9, realV = 0;
 	const signalList = [], lanes = [];
 	// a lane is a polyline with its running length; cars ride it by distance
 	function laneOf(pts, half, style, oneway) {
@@ -234,6 +234,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		group.visible = !high;
 		if (high) return;
 		const x = cam.position.x, z = cam.position.z;
+		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
 		lampLights.material.opacity = nightK;
 		// signals cycle green, amber, red

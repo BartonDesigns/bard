@@ -35,6 +35,7 @@ import { createCity } from './bay/city.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createCitySound } from './bay/citysound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
+import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
 import { createDrive } from './drive.js';
 
@@ -301,6 +302,8 @@ export function createIslandWorld() {
 			world.bayArea = bayArea;
 			world.labels = createLabels(dom.mount, bayArea, null);
 			world.real = createRealCity(renderer);
+			// Crysis: the towns beyond the survey, grown street by street as you near them
+			world.civ = createCivilization({ real: world.real, bay: bayArea });
 			world.city = createCity(shared, scene, bayArea, world.real);
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
@@ -464,6 +467,7 @@ export function createIslandWorld() {
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bayArea?.update(camera, sk.night);
 		W.bridge?.update(time, sk.night);
+		W.civ?.update(camera);
 		W.real?.update(camera);
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);

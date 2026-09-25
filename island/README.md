@@ -74,6 +74,45 @@ true scale:
 - `src/bay/labels.js` — the notation as you enter each city, water or landmark
 - `src/world/starcat.js` — 6317 real stars (HYG v4.1, CC BY-SA 4.0) for the night sky
 
+### The civilization engine: towns beyond the survey
+
+Past the surveyed land the terrain goes on and seeds towns of its own (`terrain.js`
+`towns`). From afar they are the ground shader's street grid; come within a couple of
+kilometres of one and the Crysis civilization engine grows it street by street, from
+what the real Bay Area taught it:
+
+- `tools/learn-civ.py` reads the baked regions (`eastbay`, `tam`, `missionpeak`, plus the
+  raw East Bay land use and the San Ramon heights) and writes `src/crysis/civstats.json`
+  (about 5 KB): the road-class mix and widths; residential street segment lengths,
+  curvature, junction degrees, cul-de-sac frequency and depth; arterial and collector
+  spacing; block sizes; building sizes and heights by kind; setbacks, lot frontage,
+  driveways, pools; trees per hectare by land use; land-use shares and adjacency; how
+  big schools, parks and shopping centres are and how many per thousand houses; how far
+  commercial land sits from an arterial; how steep built land gets; street-name suffixes
+  by street type and the common name words. Rerun it after rebaking a region.
+- `src/crysis/civgen.js` grows a town from those numbers: an arterial grid at the learned
+  spacing (1.75 km), turned to the town's angle and bending round steep ground and water;
+  a collector across each superblock; shopping centres on the corners of the central
+  crossings, schools beside collectors, parks; residential streets grown from the
+  collectors, each wandering with a learned curvature, steering off slopes, joining the
+  street ahead or stopping short as a court, with side streets branching off and a gap
+  filler sending a street into any open ground left; then lots down both sides at the
+  learned frontage and setback, a house on each facing its street with its garage,
+  driveway, front walk, sometimes a pool, yard and street trees; and an 8–10 m land-use
+  map. Deterministic from the seed; the output has exactly the shape of a baked real
+  region. `generateTownSteps` yields between pieces so it can run a few ms a frame.
+  `node tools/civ-preview.mjs [radius] [seed] [suburb|older] [out.png]` grows one on
+  made-up hills, times it, compares its network with the learned numbers and draws it.
+- `src/crysis/civ.js` grows the nearest town as you approach (6 ms a frame; a 1.5 km
+  town takes about 0.4 s of work, the biggest about 1.8 s), hands it to
+  `realcity.js addRegion()` and drops it with `removeRegion()` when you leave (the last two
+  are cached). While one is registered it is in the real city's spatial index, so the
+  buildings, street furniture, parked and moving cars, drive mode and the walkers all use
+  it, the road maps paint its streets, and its land-use map stands in for the main
+  region's in the ground shader (which paints its lawns, parks, schools and parking and
+  keeps the procedural grid off the town). `Crysis.world().civ.flush()` finishes the one
+  being grown at once.
+
 Earth in the Sol system is Crysis Earth: diving to Earth lands here, and ⇪ from here puts
 the ship in orbit round Earth. The old flight build's Bay Area surface is gone.
 
