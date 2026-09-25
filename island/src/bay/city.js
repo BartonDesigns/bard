@@ -1,47 +1,101 @@
-// The cities standing up out of their street grids. Around you, every block fills
-// with buildings on the same grid the ground is painted with: low houses and flats in
-// the neighbourhoods, taller as the downtowns come near. The downtowns' towers are kept
-// for tens of kilometres so the skylines of San Francisco, Oakland and San Jose rise
-// on the horizon. San Francisco's landmarks are modelled at their real heights: the
-// Salesforce Tower, the Transamerica Pyramid, Coit Tower on Telegraph Hill and Sutro
-// Tower on its hill; and the Bay Bridge runs from Rincon Hill across Yerba Buena Island
-// to Oakland. At night the windows light up.
+// The cities standing up out of their street grids, each built the way it really is:
+// San Francisco's attached, pastel Victorians and Edwardians with their bay windows;
+// the Sunset's rows of white stucco; the older towns (Oakland, Berkeley, Marin, the
+// Peninsula) with detached wood houses under dark pitched roofs; the valley suburbs
+// (San Ramon, Danville, Dublin...) with stucco houses under clay-tile hip roofs along
+// curving streets; business parks of low office blocks in parking lots; and downtown
+// towers in blue, green and bronze glass, white concrete and granite. Around you every
+// lot is filled; the downtown towers are kept for tens of kilometres so the skylines
+// rise on the horizon. At night the windows light up.
 
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { STYLE, BLOCKS, toGrid, fromGrid } from './styles.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const KIND = { row: 0, house: 1, tower: 2, office: 3 };
 
+const PAL = {
+	sf: [[0.96, 0.9, 0.74], [0.98, 0.86, 0.5], [0.72, 0.86, 0.72], [0.66, 0.8, 0.92], [0.95, 0.7, 0.6], [0.97, 0.96, 0.92], [0.74, 0.74, 0.72], [0.82, 0.72, 0.88], [0.6, 0.72, 0.56], [0.94, 0.8, 0.5], [0.5, 0.62, 0.76], [0.8, 0.5, 0.44], [0.97, 0.96, 0.92], [0.92, 0.9, 0.84], [0.45, 0.55, 0.5], [0.9, 0.62, 0.7]],
+	sunset: [[0.95, 0.94, 0.9], [0.93, 0.9, 0.82], [0.88, 0.9, 0.86], [0.9, 0.86, 0.78], [0.82, 0.86, 0.9], [0.94, 0.88, 0.8], [0.86, 0.84, 0.8], [0.9, 0.8, 0.78]],
+	older: [[0.93, 0.92, 0.88], [0.86, 0.82, 0.7], [0.62, 0.66, 0.55], [0.55, 0.62, 0.68], [0.5, 0.38, 0.28], [0.9, 0.82, 0.55], [0.66, 0.64, 0.6], [0.35, 0.42, 0.34], [0.6, 0.32, 0.26], [0.8, 0.74, 0.62]],
+	olderRoof: [[0.3, 0.3, 0.31], [0.38, 0.34, 0.3], [0.25, 0.24, 0.25], [0.45, 0.4, 0.36]],
+	suburb: [[0.91, 0.86, 0.77], [0.85, 0.78, 0.65], [0.94, 0.91, 0.85], [0.79, 0.76, 0.68], [0.8, 0.73, 0.6], [0.72, 0.7, 0.6], [0.89, 0.83, 0.72], [0.84, 0.76, 0.64], [0.94, 0.93, 0.88], [0.84, 0.71, 0.6], [0.7, 0.72, 0.7]],
+	tile: [[0.62, 0.32, 0.22], [0.7, 0.4, 0.27], [0.55, 0.3, 0.24], [0.66, 0.46, 0.34], [0.42, 0.4, 0.38], [0.5, 0.46, 0.42], [0.35, 0.33, 0.32]],
+	tower: [[0.45, 0.58, 0.7], [0.48, 0.62, 0.6], [0.55, 0.45, 0.35], [0.88, 0.86, 0.82], [0.78, 0.68, 0.62], [0.3, 0.32, 0.35], [0.8, 0.74, 0.62], [0.62, 0.7, 0.78]],
+	office: [[0.86, 0.84, 0.8], [0.75, 0.72, 0.66], [0.62, 0.68, 0.72], [0.9, 0.88, 0.82], [0.7, 0.62, 0.52]],
+};
+const pick = (list, r) => list[Math.floor(r * 9973) % list.length];
+const jit = (c, r) => [c[0] * (0.95 + r * 0.1), c[1] * (0.95 + ((r * 7.3) % 1) * 0.1), c[2] * (0.95 + ((r * 3.1) % 1) * 0.1)];
+
+// facades by kind: SF bay windows and cornices, house windows, curtain wall, ribbon glazing
 function buildingMaterial(shared, night) {
-	const m = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
+	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uNightC = night;
-		sh.vertexShader = 'varying vec3 vCW; varying vec3 vCN; varying vec3 vCS;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.vertexShader = 'attribute float aKind; varying float vKind; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+			vKind = aKind;
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));`);
-		sh.fragmentShader = 'uniform float uNightC; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS;\nvec3 winGlow = vec3(0.0);\nfloat bh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform float uNightC; varying float vKind; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader
 			.replace('#include <color_fragment>', `#include <color_fragment>
 			{
-				// facades: floors of windows; roofs plain
 				float roof = step(0.7, vCN.y);
 				vec2 t = normalize(vec2(-vCN.z, vCN.x) + 1e-5);
 				float u = dot(vCW.xz, t), v = vCW.y;
-				vec2 cell = vec2(u / 3.2, v / 3.4);
-				vec2 f = fract(cell);
-				float win = step(0.18, f.x) * step(f.x, 0.82) * step(0.25, f.y) * step(f.y, 0.8) * (1.0 - roof);
-				float tall = smoothstep(25.0, 60.0, vCS.y);
-				vec3 glass = mix(vec3(0.22, 0.27, 0.32), vec3(0.42, 0.5, 0.58), tall) * (0.8 + 0.3 * bh(floor(cell)));
-				diffuseColor.rgb = mix(diffuseColor.rgb, glass, win * (0.55 + 0.35 * tall));
-				diffuseColor.rgb *= mix(1.0, 0.82, roof);
-				float lit = step(0.55, bh(floor(cell) + floor(vCW.xz * 0.013)));
-				winGlow = vec3(1.0, 0.78, 0.5) * win * lit * uNightC * 1.6;
+				float win = 0.0; vec2 cell = vec2(0.0);
+				vec3 glass = vec3(0.2, 0.24, 0.28);
+				if (vKind < 0.5) {
+					// San Francisco: tall sash windows in threes, white trim, a cornice at the top
+					cell = vec2(u / 2.54, v / 3.3); vec2 f = fract(cell);
+					win = step(0.3, f.x) * step(f.x, 0.7) * step(0.25, f.y) * step(f.y, 0.8);
+					float trim = (1.0 - win) * (step(f.x, 0.3) * step(0.14, f.x) + step(0.7, f.x) * step(f.x, 0.86)) * step(0.15, f.y) * step(f.y, 0.87);
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.96, 0.95, 0.92), trim * 0.8);
+					glass = vec3(0.24, 0.27, 0.3);
+				} else if (vKind < 1.5) {
+					// houses: a few windows a floor, a garage door low on one side
+					cell = vec2(u / 4.2, v / 2.9); vec2 f = fract(cell);
+					win = step(0.3, f.x) * step(f.x, 0.7) * step(0.3, f.y) * step(f.y, 0.78) * step(0.3, bh(floor(cell) + 1.3));
+					glass = vec3(0.18, 0.2, 0.22);
+				} else if (vKind < 2.5) {
+					// towers: curtain wall with mullions and spandrels
+					cell = vec2(u / 1.6, v / 3.9); vec2 f = fract(cell);
+					win = step(0.07, f.x) * step(f.y, 0.78);
+					glass = mix(diffuseColor.rgb * 0.55, vec3(0.5, 0.6, 0.7), 0.35) * (0.85 + 0.25 * bh(floor(cell / 3.0)));
+					glassK = win;
+				} else {
+					// offices: ribbon windows along each floor
+					cell = vec2(u / 3.0, v / 4.1); vec2 f = fract(cell);
+					win = step(0.35, f.y) * step(f.y, 0.85) * step(0.04, fract(u / 1.5));
+					glass = vec3(0.28, 0.36, 0.42);
+					glassK = win * 0.7;
+				}
+				win *= (1.0 - roof) * step(0.8, v - (vCW.y - v));
+				diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
+				diffuseColor.rgb *= mix(1.0, 0.8, roof);
+				float lit = step(vKind > 1.5 ? 0.5 : 0.62, bh(floor(cell) + floor(vCW.xz * 0.013)));
+				winGlow = mix(vec3(1.0, 0.74, 0.45), vec3(0.9, 0.92, 1.0), step(1.5, vKind) * 0.5) * win * lit * uNightC * 1.5;
 			}`)
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding';
+	m.customProgramCacheKey = () => 'baybuilding2';
 	return m;
+}
+
+// hip and gable roofs: a unit block with a ridge; scaled per house
+function roofGeometry(hip) {
+	const r = hip ? 0.28 : 0.0;
+	const P = [-0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0, 0.5, -0.5, 0, 0.5, -0.5 + r, 1, 0, 0.5 - r, 1, 0];
+	const I = [0, 4, 5, 0, 5, 1, 2, 5, 4, 2, 4, 3, 1, 5, 2, 3, 4, 0];
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+	g.setIndex(I);
+	const n = g.toNonIndexed();
+	n.computeVertexNormals();
+	return n;
 }
 
 export function createCity(shared, scene, bay) {
@@ -50,80 +104,150 @@ export function createCity(shared, scene, bay) {
 	scene.add(group);
 	const night = { value: 0 };
 	const mat = buildingMaterial(shared, night);
-	const CAP = 14000;
-	const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-	const near = new THREE.InstancedMesh(box, mat, CAP);
-	near.count = 0; near.frustumCulled = false; near.castShadow = true; near.receiveShadow = true;
-	const PALETTE = [[0.86, 0.84, 0.8], [0.93, 0.9, 0.84], [0.8, 0.76, 0.7], [0.72, 0.7, 0.68], [0.9, 0.82, 0.72], [0.7, 0.74, 0.78], [0.85, 0.78, 0.66], [0.62, 0.6, 0.58]];
-	near.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3);
-	group.add(near);
+	const roofMat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide });
+	const CAP = 22000;
+	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
+	const mk = (geo, material, cap, kinds) => {
+		if (kinds) geo.setAttribute('aKind', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
+		const im = new THREE.InstancedMesh(geo, material, cap);
+		im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
+		im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+		group.add(im);
+		return im;
+	};
+	const near = mk(boxGeo(), mat, CAP, true);
+	const hipG = roofGeometry(true), gableG = roofGeometry(false);
+	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
 
-	// the blocks of one town's grid near a point: buildings on its lots
-	const B = [110, 135], ST = 14;
+	// one lot's building (and roof) in grid space: centre (gx, gz), size along grid x/z
+	function lot(list, a, style, gx, gz, w, d, h, kind, col, roof) {
+		const [x, z] = fromGrid(gx, gz, a, style);
+		const g = bay.heightAt(x, z);
+		if (g < 0.8) return;
+		// the local heading of the (possibly warped) grid
+		const [x2, z2] = fromGrid(gx + 5, gz, a, style);
+		const ang = Math.atan2(z2 - z, x2 - x);
+		list.push({ x, y: g - 1.2, z, w, d, h: h + 1.2, a: ang, col, kind, roof });
+	}
+
 	function fillBlocks(cx, cz, R, list, minH = 0) {
-		// the grid angles present round here
-		const angles = new Set();
-		for (let dz = -R; dz <= R; dz += R / 3) for (let dx = -R; dx <= R; dx += R / 3) { const u = bay.urbanAt(cx + dx, cz + dz); if (u.u > 0.05) angles.add(Math.round(u.a / (Math.PI / 2) * 255)); }
-		for (const aq of angles) {
-			const a = aq / 255 * Math.PI / 2, c = Math.cos(a), s = Math.sin(a);
-			// grid space g = R(a) * world (the ground shader's mat2 is column-major)
-			const gx0 = c * cx + s * cz, gz0 = -s * cx + c * cz;
-			const i0 = Math.floor((gx0 - R) / B[0]), i1 = Math.floor((gx0 + R) / B[0]), j0 = Math.floor((gz0 - R) / B[1]), j1 = Math.floor((gz0 + R) / B[1]);
+		// the (angle, style) grids present round here
+		const grids = new Map();
+		for (let dz = -R; dz <= R; dz += R / 4) for (let dx = -R; dx <= R; dx += R / 4) {
+			const u = bay.urbanAt(cx + dx, cz + dz);
+			if (u.u > 0.05) grids.set(Math.round(u.a / (Math.PI / 2) * 255) + ':' + u.s, [Math.round(u.a / (Math.PI / 2) * 255) / 255 * Math.PI / 2, u.s]);
+		}
+		for (const [a, style] of grids.values()) {
+			const [BX, BZ, ST] = BLOCKS[style];
+			const [gcx, gcz] = toGrid(cx, cz, a, style);
+			const i0 = Math.floor((gcx - R) / BX), i1 = Math.floor((gcx + R) / BX), j0 = Math.floor((gcz - R) / BZ), j1 = Math.floor((gcz + R) / BZ);
 			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-				const bgx = (i + 0.5) * B[0], bgz = (j + 0.5) * B[1];
-				const wx = c * bgx - s * bgz, wz = s * bgx + c * bgz;
+				const [wx, wz] = fromGrid((i + 0.5) * BX, (j + 0.5) * BZ, a, style);
 				if (Math.hypot(wx - cx, wz - cz) > R) continue;
 				const U = bay.urbanAt(wx, wz);
-				if (U.u < 0.3 || Math.abs(U.a - a) > 0.01) continue;
-				if (hash(i * 3 + 7, j * 5 + 1) > 0.92 && U.d < 0.2) continue;                 // a park or a school yard
+				if (U.u < 0.15 || U.s !== style || Math.abs(U.a - a) > 0.01) continue;
+				if (hash(i * 3 + 7, j * 5 + 1) > 0.95 && U.d < 0.2) continue;                 // a park, a school yard
 				const ground = bay.heightAt(wx, wz);
 				if (ground < 0.8) continue;
-				// lots round the block's edge, fronting the streets
-				const inner = [B[0] - ST, B[1] - ST], lot = U.d > 0.3 ? 28 : 14;
-				for (let q = 0; q < 2; q++) for (let k = 0; k * lot < inner[q]; k++) for (const side of [0, 1]) {
-					const r = hash(i * 131 + k * 7 + q * 3 + side, j * 17 + k);
-					if (r < 0.1) continue;
-					const along = ST + k * lot + lot / 2, across = side ? B[1 - q] - (lot * 0.55) : ST + lot * 0.55;
-					let lx = q ? across : along, lz = q ? along : across;
-					if (lx > B[0] || lz > B[1]) continue;
-					const gx = i * B[0] + lx, gz = j * B[1] + lz;
-					const x = c * gx - s * gz, z = s * gx + c * gz;
-					const g = bay.heightAt(x, z);
-					if (g < 0.8 || Math.abs(g - ground) > 12) continue;
-					// height: two or three storeys in the neighbourhoods; downtown, towers
-					const d = U.d;
-					let h = 6 + r * 7 + U.u * 4;
-					if (d > 0.08) h += Math.pow(hash(i + k * 11, j + q * 13), 2.2) * d * d * 260 + d * 30;
-					if (h < minH) continue;
-					const w = lot * (0.8 + r * 0.15), dep = lot * 0.9 + (d > 0.3 ? 8 : 4);
-					list.push({ x, y: g - 1.5, z, w, d: dep, h, a, col: PALETTE[Math.floor(r * 97) % PALETTE.length] });
+				const X0 = i * BX + ST, Z0 = j * BZ + ST, IX = BX - ST, IZ = BZ - ST;          // the block inside its streets
+				const r0 = hash(i * 17 + 3, j * 29 + 1);
+				if (U.d > 0.22) {
+					// downtown: towers on bigger lots, some with a setback crown
+					const L = 26;
+					for (let k = 0; k * L < IX; k++) for (const side of [0, 1]) {
+						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
+						let h = 12 + Math.pow(r, 2.4) * U.d * U.d * 300 + U.d * 40;
+						if (h < minH) continue;
+						const col = jit(pick(PAL.tower, hash(i * 7 + k, j * 3 + side)), r);
+						const gx = X0 + k * L + L / 2, gz = side ? Z0 + IZ - L * 0.55 : Z0 + L * 0.55;
+						lot(list, a, style, gx, gz, L * 0.9, L * 1.05, h, KIND.tower, col, null);
+						if (h > 90 && r > 0.4) lot(list, a, style, gx, gz, L * 0.62, L * 0.7, h + 8 + r * 20, KIND.tower, col, null);
+					}
+					continue;
+				}
+				if (minH > 0) continue;
+				if (style === STYLE.sf || style === STYLE.sunset) {
+					// attached row houses fronting the long sides, 25 ft lots, no gaps
+					const L = 7.62, deep = style === STYLE.sf ? 19 : 21;
+					for (let k = 0; k * L < IX - 0.1; k++) for (const side of [0, 1]) {
+						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
+						if (r < 0.03) continue;
+						const h = style === STYLE.sf ? 8.5 + Math.floor(r * 3) * 2.8 + (r > 0.93 ? 6 : 0) : 7 + r * 1.5;
+						const col = jit(pick(style === STYLE.sf ? PAL.sf : PAL.sunset, hash(i + k * 13, j * 7 + side)), r);
+						lot(list, a, style, X0 + k * L + L / 2, side ? Z0 + IZ - deep / 2 : Z0 + deep / 2, L + 0.02, deep, h, KIND.row, col, null);
+						// the bay window, stacked up the front on most San Francisco houses
+						if (style === STYLE.sf && r > 0.35) lot(list, a, style, X0 + k * L + L / 2, side ? Z0 + IZ + 0.5 : Z0 - 0.5, 3.6, 1.4, h - 3.2, KIND.row, col.map((c) => Math.min(1, c * 1.05)), null);
+					}
+				} else if (style === STYLE.older) {
+					const L = 12;
+					for (let k = 0; k * L < IX - 2; k++) for (const side of [0, 1]) {
+						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
+						if (r < 0.08) continue;
+						const w = 8 + r * 2.5, d = 10 + ((r * 7.7) % 1) * 4, h = r > 0.55 ? 6.4 : 3.6;
+						const col = jit(pick(PAL.older, hash(i + k * 13, j * 7 + side)), r);
+						const rc = pick(PAL.olderRoof, hash(i * 3 + k, j + side * 5));
+						lot(list, a, style, X0 + k * L + L / 2, side ? Z0 + IZ - 6 - d / 2 : Z0 + 6 + d / 2, w, d, h, KIND.house, col, { hip: r > 0.8, h: Math.min(w, d) * 0.42, col: rc });
+					}
+				} else if (style === STYLE.suburb) {
+					const L = 18;
+					for (let k = 0; k * L < IX - 4; k++) for (const side of [0, 1]) {
+						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
+						if (r < 0.06) continue;
+						const two = r > 0.45, w = 13 + r * 4, d = 11 + ((r * 5.3) % 1) * 4, h = two ? 6.6 : 3.4;
+						const col = jit(pick(PAL.suburb, hash(i + k * 13, j * 7 + side)), r);
+						const tile = pick(PAL.tile, hash(i * 5 + k, j + side * 3) * (r0 > 0.5 ? 0.57 : 1));
+						const gz = side ? Z0 + IZ - 7 - d / 2 : Z0 + 7 + d / 2;
+						lot(list, a, style, X0 + k * L + L / 2, gz, w, d, h, KIND.house, col, { hip: true, h: Math.min(w, d) * 0.3, col: tile });
+						// the attached garage, one storey, to one side
+						lot(list, a, style, X0 + k * L + L / 2 + (w / 2 + 3) * (r > 0.5 ? 1 : -1) * 0.55, gz + (side ? 1.5 : -1.5), 6.2, 7, 3, KIND.house, col, { hip: true, h: 1.8, col: tile });
+					}
+				} else {
+					// business park: one or two office blocks per superblock
+					const n = r0 > 0.5 ? 2 : 1;
+					for (let k = 0; k < n; k++) {
+						const r = hash(i * 31 + k, j * 11 + k);
+						const w = n === 2 ? IX * 0.36 : IX * 0.55, d = IZ * (0.45 + r * 0.15), h = 12 + Math.floor(r * 3) * 4.1;
+						lot(list, a, style, X0 + IX * (n === 2 ? 0.27 + k * 0.46 : 0.5), Z0 + IZ * 0.5, w, d, h, KIND.office, jit(pick(PAL.office, r), r), null);
+					}
 				}
 			}
 		}
 	}
 
-	// the skylines, found once: every downtown cell's tall buildings, kept for far views
-	const skyline = [];
-	const skyMesh = new THREE.InstancedMesh(box, mat, 6000);
-	skyMesh.count = 0; skyMesh.frustumCulled = false; skyMesh.castShadow = true;
-	skyMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(6000 * 3), 3);
-	group.add(skyMesh);
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color(), Y = new THREE.Vector3(0, 1, 0);
-	const put = (im, k, o) => { q.setFromAxisAngle(Y, -o.a); sc.set(o.w, o.h + 1.5, o.d); p.set(o.x, o.y, o.z); im.setMatrixAt(k, m4.compose(p, q, sc)); im.setColorAt(k, col.setRGB(o.col[0], o.col[1], o.col[2])); };
+	function upload(list, body, roofs) {
+		let n = 0, nh = 0, ng = 0;
+		const kinds = body.geometry.attributes.aKind;
+		for (const o of list) {
+			if (n >= body.instanceMatrix.count) break;
+			q.setFromAxisAngle(Y, -o.a); sc.set(o.w, o.h, o.d); p.set(o.x, o.y, o.z);
+			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2])); kinds.array[n] = o.kind; n++;
+			if (o.roof && roofs) {
+				const im = o.roof.hip ? roofs[0] : roofs[1], k = o.roof.hip ? nh++ : ng++;
+				if (k >= im.instanceMatrix.count) continue;
+				sc.set(o.w + 0.8, o.roof.h, o.d + 0.8); p.set(o.x, o.y + o.h, o.z);
+				im.setMatrixAt(k, m4.compose(p, q, sc)); im.setColorAt(k, col.setRGB(o.roof.col[0], o.roof.col[1], o.roof.col[2]));
+			}
+		}
+		body.count = n; kinds.needsUpdate = true;
+		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
+		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); }
+	}
+
+	// the skylines, found once: every downtown's tall buildings, kept for far views
+	const skyline = [];
+	const skyMesh = mk(boxGeo(), mat, 6000, true);
 	function findSkylines() {
 		const seen = new Set();
 		for (let z = -100000; z < 100000; z += 1000) for (let x = -20000; x < 120000; x += 1000) {
 			const U = bay.urbanAt(x, z);
-			if (U.d < 0.15) continue;
+			if (U.d < 0.22) continue;
 			const key = Math.floor(x / 3000) + ',' + Math.floor(z / 3000);
 			if (seen.has(key)) continue;
 			seen.add(key);
 			fillBlocks(Math.floor(x / 3000) * 3000 + 1500, Math.floor(z / 3000) * 3000 + 1500, 2200, skyline, 38);
 		}
-		skyline.forEach((o, k) => { if (k < 6000) put(skyMesh, k, o); });
-		skyMesh.count = Math.min(6000, skyline.length);
-		skyMesh.instanceMatrix.needsUpdate = true; skyMesh.instanceColor.needsUpdate = true;
-		skyMesh.computeBoundingSphere();
+		upload(skyline, skyMesh, null);
 	}
 
 	// ---------- landmarks ----------
@@ -203,15 +327,12 @@ export function createCity(shared, scene, bay) {
 		if (!started) { started = true; findSkylines(); landmarks(); bayBridge(); }
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
-		near.visible = !high;
+		near.visible = hips.visible = gables.visible = !high;
 		if (Math.hypot(x - lastX, z - lastZ) < 300) return;
 		lastX = x; lastZ = z;
 		const list = [];
-		fillBlocks(x, z, 1700, list);
-		near.count = Math.min(CAP, list.length);
-		for (let k = 0; k < near.count; k++) put(near, k, list[k]);
-		near.instanceMatrix.needsUpdate = true; near.instanceColor.needsUpdate = true;
-		near.computeBoundingSphere();
+		fillBlocks(x, z, 1200, list);
+		upload(list, near, [hips, gables]);
 	}
 	return { update, group };
 }

@@ -28096,6 +28096,8 @@ root.L99Room227={open,get active(){return active;}};
 (function(root){'use strict';
 const EDITS=[
  ["let surfaceMode     = 'space';","let surfaceMode     = 'space';\nwindow.__surfaceMode227=function(){return surfaceMode;};"],
+ /* leaving Crysis Earth: the ship comes out in orbit round Earth in the Sol system */
+ ["prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');","prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');\n if(r&&r.earth){surfaceMode='space';if(surfaceObjects)surfaceObjects.visible=false;if(surfaceSkyMesh)surfaceSkyMesh.visible=false;if(cockpitPlanets){cockpitPlanets.visible=true;cockpitPlanets.children.forEach(p=>{p.visible=true;});}for(const g of [cockpitObstacles,cockpitWeapons,starsNear,starsFar])if(g)g.visible=true;window._OBSERVER_FLIGHT170=false;walkMode=false;window._starSurface=false;startAtEarth207();cockpitCamera.fov=packet.fov||72;cockpitCamera.updateProjectionMatrix();for(let k=0;k<4;k++){check();cockpitRenderer.render(cockpitScene,cockpitCamera);await window.L99Journey170.frame();}return;}"],
  ["surfaceMode     = 'entering';\n    window._entryFrame190=performance.now();","surfaceMode     = 'entering';\n    try{window.L99Dive227&&window.L99Dive227.start(planet);}catch(eD227){}\n    window._entryFrame190=performance.now();"],
  ["if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';","if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';\n      try{window.L99Dive227&&window.L99Dive227.landed();}catch(eL227){}"]
 ];
@@ -29017,13 +29019,12 @@ root.L99CaveRail227={patch};
 (function () {
     'use strict';
     var busy = false;
-    /* Earth is Crysis now: the island off the Golden Gate with the real Bay Area round it.
-       The old flight build's Bay Area surface is retired as "Old Earth": set
-       window._OLD_EARTH = true to land there instead. */
-    function isEarth(u) { return !!u && (u.solName === 'Earth' || u.solName === 'Old Earth' || u.isEarthReplica || u.planetType === 'BAYAREA'); }
+    /* Earth is Crysis: the island off the Golden Gate with the real Bay Area round it.
+       The old flight build's Bay Area surface is gone; every Earth landing comes here. */
+    function isEarth(u) { return !!u && (u.solName === 'Earth' || u.isEarthReplica || u.planetType === 'BAYAREA'); }
     function tropical(u) {
         if (!u) return false;
-        if (isEarth(u)) return window._OLD_EARTH !== true;
+        if (isEarth(u)) return true;
         return u.planetType === 'TERRAN' || u.planetType === 'OCEAN';
     }
     function seedOf(u) {

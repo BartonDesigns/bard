@@ -20,6 +20,11 @@ for (const c of C) {
 }
 // waters and landmarks: [name, lat, lon, subtitle, radius m]
 const ZONES = [
+	['Dougherty Valley', 37.7650, -121.9120, 'San Ramon · California', 2300],
+	['Bishop Ranch', 37.7700, -121.9650, 'San Ramon · California', 800],
+	['Iron Horse Trail', 37.7687, -121.9640, 'San Ramon · California', 60],
+	['Las Trampas Ridge', 37.8150, -122.0300, 'Regional Wilderness · Contra Costa County', 2500],
+	['San Ramon Central Park', 37.7650, -121.9522, 'San Ramon · California', 260],
 	['Pacific Ocean', 37.72, -122.9, 'Gulf of the Farallones', 0],
 	['Golden Gate', 37.8166, -122.4845, 'The strait between San Francisco and the Marin Headlands', 1500],
 	['San Francisco Bay', 37.78, -122.35, 'Central Bay', 9000],

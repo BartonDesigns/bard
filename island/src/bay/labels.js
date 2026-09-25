@@ -20,8 +20,15 @@ export function createLabels(mount, bay, bridge) {
 	const WATER = new Set(['Pacific Ocean', 'Golden Gate', 'San Francisco Bay', 'Richardson Bay', 'Raccoon Strait', 'San Pablo Bay', 'Carquinez Strait', 'Suisun Bay', 'South Bay']);
 	const gate = zones.find((z) => z.name === 'Golden Gate');
 
+	// home: kept only on this device (localStorage), never in the published world
+	const home = () => { try { const h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); return h && Number.isFinite(h.lat) ? { ...toWorld(h.lat, h.lon), name: h.name || 'Home' } : null; } catch (e) { return null; } };
 	function where(x, z, y, onIsland) {
 		if (onIsland) return null;
+		const H = home();
+		if (H && Math.hypot(x - H.x, z - H.z) < 70) {
+			const near = places.filter((p) => !p.hood).sort((a, b) => Math.hypot(x - a.x, z - a.z) - Math.hypot(x - b.x, z - b.z))[0];
+			return { name: H.name, sub: near ? `${near.name} · California` : 'California' };
+		}
 		const g = bay.heightAt(x, z), water = g < 0;
 		if (bridge && bridge.deckFloor(x, z, y) > -Infinity) return { name: 'Golden Gate Bridge', sub: 'San Francisco · Marin County' };
 		// landmarks and waters that contain you, the smallest first

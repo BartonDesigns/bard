@@ -32,6 +32,9 @@ import { createBayArea, bayUniforms } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
+import { createLandmarks } from './bay/landmarks.js';
+import { createRoads } from './bay/roads.js';
+import { toWorld } from './bay/geo.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -281,6 +284,8 @@ export function createIslandWorld() {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
 				world.bridge = bridge;
+				world.landmarks = createLandmarks(scene, bayArea);
+				world.roads = createRoads(shared, scene, bayArea);
 				world.labels = createLabels(dom.mount, bayArea, bridge);
 				// walk and drive across the deck
 				island.extraFloor = (x, z, y) => bridge.deckFloor(x, z, y);
@@ -421,6 +426,7 @@ export function createIslandWorld() {
 		W.bayArea?.update(camera, sk.night);
 		W.bridge?.update(time, sk.night);
 		W.city?.update(camera, sk.night);
+		W.roads?.update(time, sk.night);
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly
@@ -459,6 +465,8 @@ export function createIslandWorld() {
 		if (dom.launch.style.display !== L) dom.launch.style.display = L;
 	}
 	let origin = null;   // the planet flight landed us from, if any
+	// Earth, where it sits in the Sol system: flight puts the ship in orbit round it
+	const EARTH_ORIGIN = { id: 'earth', seed: 1337, type: 'TERRAN', name: 'Earth', earth: true, colorA: [0.2, 0.45, 0.85], colorB: [0.25, 0.65, 0.4] };
 
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
 	function show() {
@@ -524,7 +532,8 @@ export function createIslandWorld() {
 	const api = {
 		T: THREE, REALM,
 		async open(params = {}) {
-			origin = params.origin || null;
+			// on Earth the ship waits in orbit: ⇪ always has somewhere to go
+			origin = params.origin || (params.earth !== false ? EARTH_ORIGIN : null);
 			show();
 			await build(params);
 			api.link();
@@ -556,6 +565,7 @@ export function createIslandWorld() {
 		prepare: async (packet, check) => {
 			const planet = packet.planet || {};
 			origin = planet.origin || null;
+			if (planet.earth) origin = EARTH_ORIGIN;
 			await build({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 			check?.();
 			for (let i = 0; i < 6; i++) { world.player.update(0.016, time); world.sky.update(0.016, camera.position); world.vegetation.stream(camera, true); renderer.render(scene, camera); await new Promise((r) => requestAnimationFrame(r)); check?.(); }
@@ -625,6 +635,17 @@ if (typeof window !== 'undefined') {
 	window.Crysis = {
 		version: 1,
 		world: () => window.L99Island?.world?.(),
+		// your home on Earth: stored only in this browser, never published
+		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },
+		clearHome: () => { localStorage.removeItem('crysis-home'); return 'Home cleared.'; },
+		goHome: () => {
+			let h = null; try { h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); } catch (e) { /* no home stored */ }
+			const w = window.L99Island?.world?.();
+			if (!h || !w?.bayArea?.loaded()) return h ? 'The Bay Area is still loading.' : 'Set it first: Crysis.setHome(lat, lon)';
+			const p = toWorld(h.lat, h.lon), P = w.player.state;
+			P.flying = true; P.diving = false; P.pos.set(p.x - 40, w.island.heightAt(p.x, p.z) + 60, p.z + 40); P.yaw = Math.atan2(-40, 40); P.pitch = -0.5;
+			return 'Home.';
+		},
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};
 }

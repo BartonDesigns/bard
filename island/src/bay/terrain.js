@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
 import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
 import { PLACES } from './places.js';
+import { bearingFor, styleFor, localOverride, WARP_GLSL, STYLE } from './styles.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
@@ -45,8 +46,9 @@ export function bayUniforms() {
 // the towns: how far each one's streets reach, their street-grid angle, and the
 // downtowns where buildings stand tall
 const CBD = [[37.7925, -122.399, 1, 1300], [37.7785, -122.395, 0.55, 900], [37.8044, -122.2712, 0.6, 800], [37.3337, -121.8907, 0.5, 900], [37.87, -122.268, 0.25, 500], [37.901, -122.061, 0.25, 500], [37.8313, -122.2852, 0.3, 450], [37.5630, -122.3255, 0.15, 500], [37.4443, -122.1598, 0.15, 400], [38.4404, -122.7141, 0.2, 500], [37.978, -122.031, 0.2, 500], [37.3861, -122.0839, 0.15, 500], [37.3688, -122.0363, 0.15, 500], [37.4852, -122.2364, 0.15, 400]];
-// open land inside San Francisco: parks, the Presidio, the hills
-const PARKS = [[37.7690, -122.4830, 2600, 450, 0], [37.7989, -122.4662, 1500, 1100, 0.3], [37.7544, -122.4477, 700, 700, 0], [37.7580, -122.4570, 600, 600, 0], [37.7200, -122.4950, 800, 900, 0], [37.7180, -122.4200, 700, 500, 0.5], [37.7850, -122.5050, 500, 400, 0]];
+// open land inside the towns: Alcatraz, Angel Island and Yerba Buena Island, San Ramon's Central Park and the Crow Canyon golf course,
+// Lake Merritt, and in San Francisco the parks, the Presidio, the hills
+const PARKS = [[37.8267, -122.4230, 420, 320, 0], [37.8609, -122.4326, 1500, 1500, 0], [37.8103, -122.3636, 650, 550, 0], [37.7650, -121.9522, 260, 200, 0], [37.7880, -121.9720, 500, 350, 0.15], [37.8290, -122.2600, 600, 450, 0], [37.7690, -122.4830, 2600, 450, 0], [37.7989, -122.4662, 1500, 1100, 0.3], [37.7544, -122.4477, 700, 700, 0], [37.7580, -122.4570, 600, 600, 0], [37.7200, -122.4950, 800, 900, 0], [37.7180, -122.4200, 700, 500, 0.5], [37.7850, -122.5050, 500, 400, 0]];
 const hashStr = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
 
 export function createBayArea(shared, scene, island, BU) {
@@ -55,9 +57,12 @@ export function createBayArea(shared, scene, island, BU) {
 	group.name = 'bayarea';
 	scene.add(group);
 
-	// ---------- the urban map (250 m cells): R density, G street angle, B downtown ----------
+	// ---------- the urban map (250 m cells): R density, G street angle, B downtown, A style ----------
 	const U = { x0: 0, zN: 0, cell: 250, W: 0, H: 0, data: null, tex: null };
-	const cityPts = PLACES.filter((p) => p[4] > 0).map((p) => { const w = toWorld(p[1], p[2]); return { ...w, r: 380 * Math.pow(p[4], 0.45), ang: p[0] === 'San Francisco' ? 0 : hashStr(p[0]) * Math.PI / 2, name: p[0] }; });
+	const cityPts = PLACES.filter((p) => p[4] > 0).map((p) => { const w = toWorld(p[1], p[2]); return { ...w, r: 380 * Math.pow(p[4], 0.45), ang: bearingFor(p[0], hashStr(p[0])), style: styleFor(p[0], p[3]), name: p[0] }; });
+	// the neighbourhoods a town's single point misses: San Ramon's Dougherty Valley, Windemere
+	// and Gale Ranch, built out across the valley to the east of the old town
+	for (const [lat, lon, r] of [[37.7650, -121.9150, 2300], [37.7520, -121.9120, 1500], [37.7760, -121.9050, 1400], [37.7650, -121.9600, 1900]]) cityPts.push({ ...toWorld(lat, lon), r, ang: bearingFor('San Ramon', 0), style: STYLE.suburb, name: 'San Ramon' });
 	const cbds = CBD.map((c) => ({ ...toWorld(c[0], c[1]), s: c[2], r: c[3] }));
 	const parks = PARKS.map((c) => ({ ...toWorld(c[0], c[1]), rx: c[2], rz: c[3], keep: c[4] }));
 
@@ -65,16 +70,16 @@ export function createBayArea(shared, scene, island, BU) {
 		const L = levels[0];
 		U.x0 = L.x0; U.zN = L.zN;
 		U.W = Math.ceil((L.W - 1) * L.step / U.cell); U.H = Math.ceil((L.H - 1) * L.step / U.cell);
-		const dens = new Float32Array(U.W * U.H), best = new Float32Array(U.W * U.H), ang = new Float32Array(U.W * U.H);
+		const dens = new Float32Array(U.W * U.H), best = new Float32Array(U.W * U.H), ang = new Float32Array(U.W * U.H), sty = new Uint8Array(U.W * U.H).fill(STYLE.suburb);
 		for (const c of cityPts) {
 			const R = c.r * 1.8, i0 = Math.max(0, Math.floor((c.x - R - U.x0) / U.cell)), i1 = Math.min(U.W - 1, Math.ceil((c.x + R - U.x0) / U.cell));
 			const j0 = Math.max(0, Math.floor((c.z - R - U.zN) / U.cell)), j1 = Math.min(U.H - 1, Math.ceil((c.z + R - U.zN) / U.cell));
 			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
 				const x = U.x0 + (i + 0.5) * U.cell, z = U.zN + (j + 0.5) * U.cell;
-				const d = Math.hypot(x - c.x, z - c.z) / c.r, v = Math.exp(-d * d * 1.2);
+				const d = Math.hypot(x - c.x, z - c.z) / c.r, v = Math.exp(-d * d * d * 1.1);          // towns fill out to an edge, not a haze
 				const k = j * U.W + i;
 				dens[k] = Math.max(dens[k], v) + v * 0.15;
-				if (v > best[k]) { best[k] = v; ang[k] = c.ang; }
+				if (v > best[k]) { best[k] = v; ang[k] = c.ang; sty[k] = c.style; }
 			}
 		}
 		const data = new Uint8Array(U.W * U.H * 4);
@@ -87,7 +92,8 @@ export function createBayArea(shared, scene, island, BU) {
 			for (const p of parks) { const dx = (x - p.x) / p.rx, dz = (z - p.z) / p.rz; if (dx * dx + dz * dz < 1) u *= p.keep; }
 			let down = 0;
 			for (const c of cbds) { const d = Math.hypot(x - c.x, z - c.z) / c.r; down = Math.max(down, c.s * Math.exp(-d * d)); }
-			data[k * 4] = Math.round(u * 255); data[k * 4 + 1] = Math.round(ang[k] / (Math.PI / 2) * 255); data[k * 4 + 2] = Math.round(Math.min(1, down) * 255 * (u > 0.1 ? 1 : 0)); data[k * 4 + 3] = 255;
+			const lo = localOverride(x, z, sty[k], ang[k]);
+			data[k * 4] = Math.round(u * 255); data[k * 4 + 1] = Math.round(lo.angle / (Math.PI / 2) * 255) % 256; data[k * 4 + 2] = Math.round(Math.min(1, down) * 255 * (u > 0.1 ? 1 : 0)); data[k * 4 + 3] = lo.style * 40;
 		}
 		U.data = data;
 		U.tex = new THREE.DataTexture(data, U.W, U.H, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -98,11 +104,11 @@ export function createBayArea(shared, scene, island, BU) {
 	}
 	const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 	function urbanAt(x, z) {
-		if (!U.data) return { u: 0, a: 0, d: 0 };
+		if (!U.data) return { u: 0, a: 0, d: 0, s: STYLE.suburb };
 		const i = Math.floor((x - U.x0) / U.cell), j = Math.floor((z - U.zN) / U.cell);
-		if (i < 0 || j < 0 || i >= U.W || j >= U.H) return { u: 0, a: 0, d: 0 };
+		if (i < 0 || j < 0 || i >= U.W || j >= U.H) return { u: 0, a: 0, d: 0, s: STYLE.suburb };
 		const k = (j * U.W + i) * 4;
-		return { u: U.data[k] / 255, a: U.data[k + 1] / 255 * Math.PI / 2, d: U.data[k + 2] / 255 };
+		return { u: U.data[k] / 255, a: U.data[k + 1] / 255 * Math.PI / 2, d: U.data[k + 2] / 255, s: Math.round(U.data[k + 3] / 40) };
 	}
 
 	// ---------- heights on the CPU ----------
@@ -166,7 +172,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0);\n' + NOISE_GLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0);\n' + NOISE_GLSL + '\n' + WARP_GLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -198,17 +204,48 @@ export function createBayArea(shared, scene, island, BU) {
 					float urban = T.r * (1.0 - smoothstep(0.25, 0.4, slope)) * smoothstep(0.4, 1.5, h);
 					float dist = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
 					if (urban > 0.02){
-						float a = texelFetch(uUrban, ivec2(clamp(uu, vec2(0.0), US - 1.0)), 0).g * 1.5708;
-						vec2 g = mat2(cos(a), -sin(a), sin(a), cos(a)) * vBW;
-						vec2 B = vec2(110.0, 135.0), f = fract(g / B), cid = floor(g / B);
-						float st = 14.0 / B.x;
-						float street = 1.0 - step(st, f.x) * step(st * B.x / B.y, f.y);
+						vec4 TX = texelFetch(uUrban, ivec2(clamp(uu, vec2(0.0), US - 1.0)), 0);
+						float a = TX.g * 1.5708, sty = floor(TX.a * 255.0 / 40.0 + 0.5);
+						vec2 g = mat2(cos(a), -sin(a), sin(a), cos(a)) * vBW + streetWarp(vBW, sty);
+						vec3 BK = blockOf(sty);
+						vec2 B = BK.xy, f = fract(g / B), cid = floor(g / B);
+						vec2 fw = f * B;
+						float street = 1.0 - step(BK.z, fw.x) * step(BK.z, fw.y);
+						float sidewalk = (1.0 - street) * (1.0 - step(BK.z + 2.5, fw.x) * step(BK.z + 2.5, fw.y));
 						float lh = h21(floor(g / 17.0) + cid * 7.0);
-						vec3 roof = mix(vec3(0.55, 0.54, 0.52), vec3(0.74, 0.69, 0.61), lh);
-						roof = mix(roof, vec3(0.58, 0.33, 0.24), step(0.82, lh) * 0.9);
-						float park = step(0.94, h21(cid + 3.1)) * (1.0 - T.b);
-						float tree = step(0.72, h21(floor(g / 6.0) + 11.0)) * (1.0 - street) * (1.0 - T.b) * 0.8;
-						vec3 cityC = mix(roof, vec3(0.16, 0.24, 0.1), max(park, tree));
+						vec3 cityC;
+						float down = T.b;
+						if (sty < 1.5) {
+							// San Francisco: pavement and flat roofs, the odd back garden
+							vec3 roofF = mix(vec3(0.62, 0.61, 0.58), vec3(0.78, 0.76, 0.72), lh);
+							// back gardens down the middle of each block
+							float yard = step(abs(fw.y / B.y - 0.5), 0.12) * step(0.45, h21(floor(g / 8.0)));
+							cityC = mix(roofF, vec3(0.22, 0.3, 0.14), yard * (sty > 0.5 ? 0.5 : 0.8));
+						} else if (sty < 2.5) {
+							// older towns: dark shingle roofs under a heavy canopy of street trees
+							vec3 roofO = mix(vec3(0.33, 0.31, 0.3), vec3(0.5, 0.42, 0.36), lh);
+							float canopy = smoothstep(0.45, 0.75, fbm3(g * 0.08) + h21(floor(g / 7.0)) * 0.3);
+							cityC = mix(mix(vec3(0.28, 0.36, 0.18), roofO, step(0.55, h21(floor(g / 14.0)))), vec3(0.12, 0.2, 0.09), canopy * 0.8);
+						} else if (sty < 3.5) {
+							// the suburbs: green lawns, pale driveways, terracotta and grey roofs
+							float lot = floor(fw.x / 18.0), row = step(0.5, fw.y / B.y);
+							float roofMask = smoothstep(900.0, 1400.0, dist) * step(0.3, fract(fw.x / 18.0)) * step(fract(fw.x / 18.0), 0.9) * step(0.22, abs(fw.y / B.y - 0.5)) * step(abs(fw.y / B.y - 0.5), 0.42);
+							vec3 roofS = h21(vec2(lot, row) + cid * 3.0) > 0.45 ? mix(vec3(0.62, 0.34, 0.24), vec3(0.72, 0.44, 0.3), lh) : mix(vec3(0.4, 0.38, 0.36), vec3(0.52, 0.49, 0.45), lh);
+							vec3 lawn = mix(vec3(0.3, 0.42, 0.16), vec3(0.42, 0.46, 0.2), vn(g * 0.1));
+							cityC = mix(lawn, roofS, roofMask);
+							cityC = mix(cityC, vec3(0.13, 0.2, 0.09), step(0.8, h21(floor(g / 6.0) + 11.0)) * (1.0 - roofMask) * 0.8);
+						} else {
+							// business park: big roofs in wide parking lots, with lines of trees
+							float bld = step(0.25, f.x) * step(f.x, 0.62) * step(0.2, f.y) * step(f.y, 0.7);
+							float lotL = step(0.9, fract(fw.x / 2.7)) * (1.0 - bld);
+							cityC = mix(vec3(0.24, 0.24, 0.25) + lotL * 0.4, vec3(0.66, 0.65, 0.62), bld);
+							cityC = mix(cityC, vec3(0.14, 0.22, 0.1), step(0.85, h21(floor(g / 9.0))) * (1.0 - bld));
+						}
+						// downtown: the ground between the towers is roofs and plazas
+						cityC = mix(cityC, mix(vec3(0.55, 0.54, 0.52), vec3(0.72, 0.69, 0.64), lh), smoothstep(0.2, 0.6, down));
+						float park = step(0.96, h21(cid + 3.1)) * (1.0 - down);
+						cityC = mix(cityC, vec3(0.2, 0.32, 0.13), park);
+						cityC = mix(cityC, vec3(0.62, 0.61, 0.58), sidewalk * 0.7);
 						cityC = mix(cityC, vec3(0.2, 0.2, 0.21), street);
 						// far off the grid melts into the town's average colour
 						cityC = mix(cityC, vec3(0.45, 0.44, 0.42), smoothstep(1500.0, 6000.0, dist));
