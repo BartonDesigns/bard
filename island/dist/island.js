@@ -4674,7 +4674,7 @@ vRW = (modelMatrix * rw).xyz; }`),J.fragmentShader=`varying vec3 vRW; float rRou
 			${nc}
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust;
 			float gTall;
 			`+M.vertexShader.replace("#include <beginnormal_vertex>",`
 				// wrap the tuft into the square centred on the camera
@@ -4707,7 +4707,6 @@ vRW = (modelMatrix * rw).xyz; }`),J.fragmentShader=`varying vec3 vRW; float rRou
 				tall *= 0.9 + 0.2 * aRand.x;
 				tall *= 1.0 - occ * 0.6;
 				tall *= 1.0 + hug * 0.9;
-				tall *= mix(0.4, 1.0, smoothstep(0.8, 2.6, length(w - uCam)));
 				tall *= mix(1.0, 0.5, mk.g) * uTallK * grow;
 				gTall = tall;
 				float ang = aRand.y * 6.2831;
@@ -4716,7 +4715,10 @@ vRW = (modelMatrix * rw).xyz; }`),J.fragmentShader=`varying vec3 vRW; float rRou
 				float hue = vn(w * 0.035 + 3.0), dry = smoothstep(0.58, 0.82, vn(w * 0.02 - 7.0)) * (1.0 - mk.a * 0.8);
 				vec3 g1 = vec3(0.34, 0.50, 0.12), g2 = vec3(0.42, 0.55, 0.14);
 				vec3 tint = mix(g1, g2, hue);
-				tint = mix(tint, vec3(0.55, 0.52, 0.30), dry * 0.35);
+				// fresh green where it is damp and deep, straw-gold on the dry open slopes
+				float damp = smoothstep(0.3, 0.8, tallMap);
+				tint = mix(tint, vec3(0.28, 0.5, 0.14), damp * 0.35);
+				tint = mix(tint, vec3(0.62, 0.56, 0.28), max(dry * 0.45, (1.0 - damp) * smoothstep(0.55, 0.75, vn(w * 0.012 + 9.0)) * 0.4));
 				tint *= 0.97 + 0.06 * aRand.x;
 				vTall228 = tallMap;
 				tint *= 1.0 - occ * 0.25;
@@ -4729,18 +4731,30 @@ vRW = (modelMatrix * rw).xyz; }`),J.fragmentShader=`varying vec3 vRW; float rRou
 				float wave = vn(w * 0.08 + vec2(uTime * 0.35, uTime * 0.12));
 				// lean the blade over (rotate, keeping its length) rather than dragging the tip
 				// sideways: long grass bows, it never smears into a streak
-				float lean = clamp((0.12 + uWind * 0.26 + uBass * 0.35) * (0.4 + wave) + sin(uTime * 2.3 + aRand.x * 20.0) * 0.03, -0.1, 0.55);
+				// gusts: bands of wind rolling across the meadow, broken up so they read as
+				// cat's-paws, stronger with the wind setting and the music's highs
+				vec2 wd = normalize(vec2(0.93, 0.35));
+				float gb = dot(w, wd) * 0.045 - uTime * (0.55 + uWind * 0.5);
+				float gust = pow(max(0.0, sin(gb * 6.2831)), 3.0) * smoothstep(0.3, 0.7, vn(w * 0.02 + vec2(uTime * 0.05, 0.0)));
+				gust *= 0.6 + uWind * 0.8 + uHigh * 0.8;
+				vGust = gust;
+				float lean = clamp((0.12 + uWind * 0.26 + uBass * 0.35) * (0.4 + wave) + gust * 0.55 + sin(uTime * 2.3 + aRand.x * 20.0) * 0.03, -0.1, 0.85);
 				lean *= mix(1.0, 0.6, smoothstep(0.4, 1.0, tall));
 				float ly = p.y;
-				p.x += sin(lean) * ly * 0.93;
-				p.z += sin(lean) * ly * 0.35;
+				p.x += sin(lean) * ly * 0.93 * wd.x + sin(lean) * ly * 0.35 * -wd.y;
+				p.z += sin(lean) * ly * 0.93 * wd.y + sin(lean) * ly * 0.35 * wd.x;
 				p.y = cos(lean) * ly;
+				// you part the grass: blades near your feet bend away from you
+				vec2 away = w - uCam; float ad = length(away);
+				float push = (1.0 - smoothstep(0.25, 1.1, ad)) * aTip;
+				p.xz += away / max(ad, 0.05) * push * ly * 0.8;
+				p.y -= push * ly * 0.45;
 				// the tuft's foot sits a little in the soil, so there is no hard base line
 				vec3 transformed = vec3(w.x, h - 0.05 - 0.04 * aRand.x, w.y) + p;
 				vGW = transformed;`).replace("#include <project_vertex>",`#include <project_vertex>
 				if (gTall < 0.04) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`),M.fragmentShader=`
 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust;
 			`+M.fragmentShader.replace("#include <normal_fragment_begin>",`#include <normal_fragment_begin>
 				normal = normalize(vNormal);`).replace("#include <map_fragment>",`
 				// the strip gives only the blade shapes; colour comes from the tuft, so
@@ -4757,12 +4771,19 @@ vRW = (modelMatrix * rw).xyz; }`),J.fragmentShader=`varying vec3 vRW; float rRou
 				// darker at the root where blades crowd and shade each other, paler at the tips
 				float rootK = smoothstep(0.0, 0.6, vGUv.y);
 				// each blade keeps its own tone, so the fine blades read one by one
-				diffuseColor.rgb = vTint * mix(0.86, 1.04, rootK) * (0.62 + 0.55 * gt.g);
+				diffuseColor.rgb = vTint * mix(0.62, 1.08, rootK) * (0.62 + 0.55 * gt.g);
+				// a gust flips the blades to show their paler undersides
+				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.35 + vec3(0.03, 0.03, 0.0), vGust * 0.5 * vTip);
 				// tall grass goes to seed: pale straw tips
 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.36) * vec3(0.62, 0.58, 0.36), smoothstep(0.7, 1.0, vGUv.y) * smoothstep(0.3, 0.8, vTall228) * 0.7);`).replace("#include <emissivemap_fragment>",`#include <emissivemap_fragment>
 				// blades glow when the sun is behind them; the highs make the field shimmer
 				float back = pow(max(0.0, dot(normalize(vGW - cameraPosition), uSunDir)), 4.0) * max(0.0, uSunDir.y + 0.1);
 				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.45 * vTip;
+				// sheen: blades are glossy along their length; looking toward the sun the field
+				// silvers, the tips lighting up yellow-green where light comes through
+				vec3 Vg = normalize(cameraPosition - vGW);
+				float toward = pow(max(0.0, dot(-Vg, uSunDir) * 0.5 + 0.5), 6.0) * smoothstep(0.0, 0.2, uSunDir.y);
+				totalEmissiveRadiance += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor;
 				totalEmissiveRadiance += diffuseColor.rgb * uHigh * 0.3 * vTip * (0.5 + 0.5 * sin(uTime * 6.0 + vGW.x * 0.7 + vGW.z * 0.5));`)},S.customProgramCacheKey=()=>"island-grass";let _=new Qt(h,S);return _.frustumCulled=!1,_.receiveShadow=!0,_.name="grass",_.userData.update=M=>v.uCam.value.set(M.position.x,M.position.z),_}function Ig(s,t=!1){let e=s[0].index!==null,n=new Set(Object.keys(s[0].attributes)),i=new Set(Object.keys(s[0].morphAttributes)),r={},o={},a=s[0].morphTargetsRelative,l=new Bt,c=0;for(let u=0;u<s.length;++u){let d=s[u],h=0;if(e!==(d.index!==null))return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index "+u+". All geometries must have compatible attributes; make sure index attribute exists among all geometries, or in none of them."),null;for(let f in d.attributes){if(!n.has(f))return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index "+u+'. All geometries must have compatible attributes; make sure "'+f+'" attribute exists among all geometries, or in none of them.'),null;r[f]===void 0&&(r[f]=[]),r[f].push(d.attributes[f]),h++}if(h!==n.size)return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index "+u+". Make sure all geometries have the same number of attributes."),null;if(a!==d.morphTargetsRelative)return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index "+u+". .morphTargetsRelative must be consistent throughout all geometries."),null;for(let f in d.morphAttributes){if(!i.has(f))return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index "+u+".  .morphAttributes must be consistent throughout all geometries."),null;o[f]===void 0&&(o[f]=[]),o[f].push(d.morphAttributes[f])}if(t){let f;if(e)f=d.index.count;else if(d.attributes.position!==void 0)f=d.attributes.position.count;else return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed with geometry at index "+u+". The geometry must have either an index or a position attribute"),null;l.addGroup(c,f,u),c+=f}}if(e){let u=0,d=[];for(let h=0;h<s.length;++h){let f=s[h].index;for(let m=0;m<f.count;++m)d.push(f.getX(m)+u);u+=s[h].attributes.position.count}l.setIndex(d)}for(let u in r){let d=Pg(r[u]);if(!d)return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the "+u+" attribute."),null;l.setAttribute(u,d)}for(let u in o){let d=o[u][0].length;if(d!==0){l.morphAttributes=l.morphAttributes||{},l.morphAttributes[u]=[];for(let h=0;h<d;++h){let f=[];for(let x=0;x<o[u].length;++x)f.push(o[u][x][h]);let m=Pg(f);if(!m)return console.error("THREE.BufferGeometryUtils: .mergeGeometries() failed while trying to merge the "+u+" morphAttribute."),null;l.morphAttributes[u].push(m)}}}return l}function Pg(s){let t,e,n,i=-1,r=0;for(let c=0;c<s.length;++c){let u=s[c];if(t===void 0&&(t=u.array.constructor),t!==u.array.constructor)return console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.array must be of consistent array types across matching attributes."),null;if(e===void 0&&(e=u.itemSize),e!==u.itemSize)return console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.itemSize must be consistent across matching attributes."),null;if(n===void 0&&(n=u.normalized),n!==u.normalized)return console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.normalized must be consistent across matching attributes."),null;if(i===-1&&(i=u.gpuType),i!==u.gpuType)return console.error("THREE.BufferGeometryUtils: .mergeAttributes() failed. BufferAttribute.gpuType must be consistent across matching attributes."),null;r+=u.count*e}let o=new t(r),a=new se(o,e,n),l=0;for(let c=0;c<s.length;++c){let u=s[c];if(u.isInterleavedBufferAttribute){let d=l/e;for(let h=0,f=u.count;h<f;h++)for(let m=0;m<e;m++){let x=u.getComponent(h,m);a.setComponent(h+d,m,x)}}else o.set(u.array,l);l+=u.count*e}return i!==void 0&&(a.gpuType=i),a}function Uu(s,t=1e-4){t=Math.max(t,Number.EPSILON);let e={},n=s.getIndex(),i=s.getAttribute("position"),r=n?n.count:i.count,o=0,a=Object.keys(s.attributes),l={},c={},u=[],d=["getX","getY","getZ","getW"],h=["setX","setY","setZ","setW"];for(let v=0,S=a.length;v<S;v++){let _=a[v],M=s.attributes[_];l[_]=new M.constructor(new M.array.constructor(M.count*M.itemSize),M.itemSize,M.normalized);let b=s.morphAttributes[_];b&&(c[_]||(c[_]=[]),b.forEach((T,y)=>{let E=new T.array.constructor(T.count*T.itemSize);c[_][y]=new T.constructor(E,T.itemSize,T.normalized)}))}let f=t*.5,m=Math.log10(1/t),x=Math.pow(10,m),g=f*x;for(let v=0;v<r;v++){let S=n?n.getX(v):v,_="";for(let M=0,b=a.length;M<b;M++){let T=a[M],y=s.getAttribute(T),E=y.itemSize;for(let C=0;C<E;C++)_+=`${Math.trunc(y[d[C]](S)*x+g)},`}if(_ in e)u.push(e[_]);else{for(let M=0,b=a.length;M<b;M++){let T=a[M],y=s.getAttribute(T),E=s.morphAttributes[T],C=y.itemSize,D=l[T],O=c[T];for(let P=0;P<C;P++){let I=d[P],z=h[P];if(D[z](o,y[I](S)),E)for(let B=0,W=E.length;B<W;B++)O[B][z](o,E[B][I](S))}}e[_]=o,u.push(o),o++}}let p=s.clone();for(let v in s.attributes){let S=l[v];if(p.setAttribute(v,new S.constructor(S.array.slice(0,o*S.itemSize),S.itemSize,S.normalized)),v in c)for(let _=0;_<c[v].length;_++){let M=c[v][_];p.morphAttributes[v][_]=new M.constructor(M.array.slice(0,o*M.itemSize),M.itemSize,M.normalized)}}return p.setIndex(u),p}function Qb(s){let t=new $n(1,0),e=t.attributes.position,n=Vn(s);for(let r=0;r<e.count;r++){let o=e.getX(r),a=e.getY(r),l=e.getZ(r),c=.8+n.fbm(o*1.6+2,l*1.6-a,2)*.4;e.setXYZ(r,o*c*1.2,Math.max(-.3,a)*c*.7,l*c)}let i=Uu(t.deleteAttribute("normal").deleteAttribute("uv"),1e-4);return i.computeVertexNormals(),i}function t1(){let s=new Bt,t=[],e=[],n=[],i=[],r=3,o=2;for(let a=0;a<=o;a++)for(let l=0;l<=r;l++){let c=l/r,u=a/o,d=c-.5,h=(u-.5)*.55;t.push(d,.03+Math.pow(Math.abs(u-.5)*2,2)*.12+Math.sin(c*3.14)*.03,h),e.push(0,1,0),n.push(c,u)}for(let a=0;a<o;a++)for(let l=0;l<r;l++){let c=a*(r+1)+l,u=c+1,d=c+r+1,h=d+1;i.push(c,d,u,u,d,h)}return s.setAttribute("position",new Mt(t,3)),s.setAttribute("normal",new Mt(e,3)),s.setAttribute("uv",new Mt(n,2)),s.setIndex(i),s}function e1(){let s=new On(1,8,3,0,Math.PI*2,0,Math.PI/2),t=s.attributes.position;for(let e=0;e<t.count;e++){let n=t.getX(e),i=t.getY(e),r=t.getZ(e),o=Math.atan2(r,n),a=1+.06*Math.cos(o*9);t.setXYZ(e,n*a,i*.45,r*a*.85)}return s.computeVertexNormals(),s}function n1(){let t=document.createElement("canvas");t.width=t.height=128;let e=t.getContext("2d"),n=ie(17);e.translate(128/2,128/2),e.beginPath(),e.moveTo(-128*.48,0),e.bezierCurveTo(-128*.2,-128*.42,128*.25,-128*.36,128*.48,0),e.bezierCurveTo(128*.25,128*.36,-128*.2,128*.42,-128*.48,0),e.closePath(),e.fillStyle="#d8d2c0",e.fill(),e.save(),e.clip();for(let r=0;r<90;r++)e.fillStyle=`rgba(${90+n()*60},${70+n()*40},${40+n()*30},0.18)`,e.beginPath(),e.arc((n()-.5)*128,(n()-.5)*128,2+n()*9,0,7),e.fill();e.strokeStyle="rgba(80,60,40,0.55)",e.lineWidth=2,e.beginPath(),e.moveTo(-128*.5,0),e.lineTo(128*.48,0),e.stroke(),e.lineWidth=1;for(let r=-128*.35;r<128*.4;r+=11)e.beginPath(),e.moveTo(r,0),e.lineTo(r+14,-128*.26),e.moveTo(r,0),e.lineTo(r+14,128*.26),e.stroke();e.restore();let i=new wi(t);return i.colorSpace=Ie,i}function Qf(s,t,{geo:e,count:n,span:i,seed:r,place:o,map:a,rough:l=.9,lie:c=1,sink:u=0,name:d,material175:h}){let f=new Qi().copy(e);f.instanceCount=n;let m=new Float32Array(n*2),x=new Float32Array(n*2),g=ie(r);for(let _=0;_<n;_++)m[_*2]=g()*i,m[_*2+1]=g()*i,x[_*2]=g(),x[_*2+1]=g();f.setAttribute("aOff",new $e(m,2)),f.setAttribute("aRand",new $e(x,2)),f.boundingSphere=new Re(new N,1e7);let p={uMasks:{value:t.maskTex},uHeight:{value:t.heightTex},uHalf:{value:s.half},uCell:{value:s.cell},uN:{value:s.N},uCam:{value:new vt},uSpan:{value:i},uOcc:t.uOcc,uOccO:t.uOccO},v=new me({roughness:l,metalness:0,map:a||null,alphaTest:a?.5:0,alphaToCoverage:!!a,side:a?de:di});v.onBeforeCompile=_=>{Object.assign(_.uniforms,p),_.vertexShader=`
 			${yr}
 			${Ii}

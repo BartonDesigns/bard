@@ -62,7 +62,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			${OCC_GLSL}
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust;
 			float gTall;
 			` + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
@@ -96,7 +96,6 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				tall *= 0.9 + 0.2 * aRand.x;
 				tall *= 1.0 - occ * 0.6;
 				tall *= 1.0 + hug * 0.9;
-				tall *= mix(0.4, 1.0, smoothstep(0.8, 2.6, length(w - uCam)));
 				tall *= mix(1.0, 0.5, mk.g) * uTallK * grow;
 				gTall = tall;
 				float ang = aRand.y * 6.2831;
@@ -105,7 +104,10 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float hue = vn(w * 0.035 + 3.0), dry = smoothstep(0.58, 0.82, vn(w * 0.02 - 7.0)) * (1.0 - mk.a * 0.8);
 				vec3 g1 = vec3(0.34, 0.50, 0.12), g2 = vec3(0.42, 0.55, 0.14);
 				vec3 tint = mix(g1, g2, hue);
-				tint = mix(tint, vec3(0.55, 0.52, 0.30), dry * 0.35);
+				// fresh green where it is damp and deep, straw-gold on the dry open slopes
+				float damp = smoothstep(0.3, 0.8, tallMap);
+				tint = mix(tint, vec3(0.28, 0.5, 0.14), damp * 0.35);
+				tint = mix(tint, vec3(0.62, 0.56, 0.28), max(dry * 0.45, (1.0 - damp) * smoothstep(0.55, 0.75, vn(w * 0.012 + 9.0)) * 0.4));
 				tint *= 0.97 + 0.06 * aRand.x;
 				vTall228 = tallMap;
 				tint *= 1.0 - occ * 0.25;
@@ -119,12 +121,24 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float wave = vn(w * 0.08 + vec2(uTime * 0.35, uTime * 0.12));
 				// lean the blade over (rotate, keeping its length) rather than dragging the tip
 				// sideways: long grass bows, it never smears into a streak
-				float lean = clamp((0.12 + uWind * 0.26 + uBass * 0.35) * (0.4 + wave) + sin(uTime * 2.3 + aRand.x * 20.0) * 0.03, -0.1, 0.55);
+				// gusts: bands of wind rolling across the meadow, broken up so they read as
+				// cat's-paws, stronger with the wind setting and the music's highs
+				vec2 wd = normalize(vec2(0.93, 0.35));
+				float gb = dot(w, wd) * 0.045 - uTime * (0.55 + uWind * 0.5);
+				float gust = pow(max(0.0, sin(gb * 6.2831)), 3.0) * smoothstep(0.3, 0.7, vn(w * 0.02 + vec2(uTime * 0.05, 0.0)));
+				gust *= 0.6 + uWind * 0.8 + uHigh * 0.8;
+				vGust = gust;
+				float lean = clamp((0.12 + uWind * 0.26 + uBass * 0.35) * (0.4 + wave) + gust * 0.55 + sin(uTime * 2.3 + aRand.x * 20.0) * 0.03, -0.1, 0.85);
 				lean *= mix(1.0, 0.6, smoothstep(0.4, 1.0, tall));
 				float ly = p.y;
-				p.x += sin(lean) * ly * 0.93;
-				p.z += sin(lean) * ly * 0.35;
+				p.x += sin(lean) * ly * 0.93 * wd.x + sin(lean) * ly * 0.35 * -wd.y;
+				p.z += sin(lean) * ly * 0.93 * wd.y + sin(lean) * ly * 0.35 * wd.x;
 				p.y = cos(lean) * ly;
+				// you part the grass: blades near your feet bend away from you
+				vec2 away = w - uCam; float ad = length(away);
+				float push = (1.0 - smoothstep(0.25, 1.1, ad)) * aTip;
+				p.xz += away / max(ad, 0.05) * push * ly * 0.8;
+				p.y -= push * ly * 0.45;
 				// the tuft's foot sits a little in the soil, so there is no hard base line
 				vec3 transformed = vec3(w.x, h - 0.05 - 0.04 * aRand.x, w.y) + p;
 				vGW = transformed;`)
@@ -133,7 +147,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		// both faces of a blade are lit as the meadow is (up), never as their dark underside
 		sh.fragmentShader = `
 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust;
 			` + sh.fragmentShader
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
 			.replace('#include <map_fragment>', `
@@ -151,13 +165,20 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// darker at the root where blades crowd and shade each other, paler at the tips
 				float rootK = smoothstep(0.0, 0.6, vGUv.y);
 				// each blade keeps its own tone, so the fine blades read one by one
-				diffuseColor.rgb = vTint * mix(0.86, 1.04, rootK) * (0.62 + 0.55 * gt.g);
+				diffuseColor.rgb = vTint * mix(0.62, 1.08, rootK) * (0.62 + 0.55 * gt.g);
+				// a gust flips the blades to show their paler undersides
+				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.35 + vec3(0.03, 0.03, 0.0), vGust * 0.5 * vTip);
 				// tall grass goes to seed: pale straw tips
 				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.36) * vec3(0.62, 0.58, 0.36), smoothstep(0.7, 1.0, vGUv.y) * smoothstep(0.3, 0.8, vTall228) * 0.7);`)
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				// blades glow when the sun is behind them; the highs make the field shimmer
 				float back = pow(max(0.0, dot(normalize(vGW - cameraPosition), uSunDir)), 4.0) * max(0.0, uSunDir.y + 0.1);
 				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.45 * vTip;
+				// sheen: blades are glossy along their length; looking toward the sun the field
+				// silvers, the tips lighting up yellow-green where light comes through
+				vec3 Vg = normalize(cameraPosition - vGW);
+				float toward = pow(max(0.0, dot(-Vg, uSunDir) * 0.5 + 0.5), 6.0) * smoothstep(0.0, 0.2, uSunDir.y);
+				totalEmissiveRadiance += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor;
 				totalEmissiveRadiance += diffuseColor.rgb * uHigh * 0.3 * vTip * (0.5 + 0.5 * sin(uTime * 6.0 + vGW.x * 0.7 + vGW.z * 0.5));`);
 	};
 	mat.customProgramCacheKey = () => 'island-grass';
