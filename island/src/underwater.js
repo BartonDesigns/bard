@@ -9,7 +9,8 @@ import { mulberry32, makeNoise } from './noise.js';
 import { glow } from './world/textures.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-export function createUnderwater(island, shared, scene, camera, player) {
+export function createUnderwater(island, shared, scene, camera, player, keepClear = []) {
+	const clear = (x, z, pad) => keepClear.some((q) => Math.hypot(q.x - x, q.z - z) < pad);
 	const bay = island.village.bay;
 	const group = new THREE.Group();
 	group.name = 'underwater';
@@ -45,7 +46,7 @@ export function createUnderwater(island, shared, scene, camera, player) {
 	for (let i = 0; i < 520; i++) {
 		const a = r() * Math.PI * 2, t = Math.pow(r(), 0.8) * 0.62;
 		const x = bay.x + Math.cos(a) * t * bay.r, z = bay.z + Math.sin(a) * t * bay.r, h = island.heightAt(x, z);
-		if (h > -1.2 || t < 0.07) continue;   // keep the vent on the summit clear
+		if (h > -1.2 || t < 0.07 || clear(x, z, 5)) continue;   // keep the vent and the lava tube clear
 		// thickest on the rim and the walls, scattered on the floor
 		const wall = Math.exp(-Math.pow((t - 0.47) / 0.1, 2)) + Math.exp(-Math.pow(t / 0.12, 2)) * 0.8 + 0.15;
 		if (r() > wall) continue;
@@ -93,7 +94,7 @@ export function createUnderwater(island, shared, scene, camera, player) {
 	let kn = 0;
 	for (let i = 0; i < 4000 && kn < K; i++) {
 		const src = rocks[Math.floor(r() * rocks.length)];
-		if (!src || src.y > -2.5) continue;
+		if (!src || src.y > -2.5 || clear(src.x, src.z, 5)) continue;
 		const a = r() * 6.28, x = src.x + Math.cos(a) * src.s * 0.8, z = src.z + Math.sin(a) * src.s * 0.8, h = island.heightAt(x, z);
 		const len = Math.max(2.5, (-h - 0.4) * (0.7 + r() * 0.3));
 		e.set(0, r() * 6.28, 0); q.setFromEuler(e); sc.set(0.5 + r() * 0.7, len, 1); p3.set(x, h - 0.1, z);
@@ -152,9 +153,7 @@ export function createUnderwater(island, shared, scene, camera, player) {
 	lava.position.set(cx, 0, cz);
 	lavaGeo.computeBoundingSphere();
 	group.add(lava);
-	const lavaLight = new THREE.PointLight(0xff5a18, 40, 40, 1.6);
-	lavaLight.position.set(cx, island.heightAt(cx, cz) + 3, cz);
-	group.add(lavaLight);
+	// the vent's light lives in magma.js
 	const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color: 0xff6a22, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55 }));
 	halo.position.set(cx, island.heightAt(cx, cz) + 1.2, cz);
 	halo.scale.set(11, 5, 1);
@@ -208,7 +207,6 @@ export function createUnderwater(island, shared, scene, camera, player) {
 			const n = Math.random() < rate * dt % 1 ? Math.ceil(rate * dt) : Math.floor(rate * dt);
 			for (let k = 0; k < n; k++) emit(v.x, v.y + (v.lava ? 0.5 : 1.3), v.z, v.lava ? 2.5 : 0.3, v.lava ? 1.4 : 1.1);
 		}
-		lavaLight.intensity = 36 + Math.sin(t * 0.9) * 8 + shared.uBass.value * 20;
 		// you: a burst when you swim hard, a trickle from your breath
 		const sp = camera.position.distanceTo(last) / Math.max(dt, 1e-3);
 		last.copy(camera.position);

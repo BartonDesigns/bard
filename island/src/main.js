@@ -20,6 +20,7 @@ import { createWhale } from './whale.js';
 import { createShells } from './shells.js';
 import { createUnderwater } from './underwater.js';
 import { createSealife } from './sealife.js';
+import { createMagma } from './magma.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -226,12 +227,13 @@ export function createIslandWorld() {
 		const boat = createBoat(island, village, player, camera, shared, scene);
 		const whale = createWhale(island, shared, scene);
 		const shells = createShells(island, shared, camera, scene, player, dom, hint);
-		const underwater = createUnderwater(island, shared, scene, camera, player);
+		const magma = createMagma(island, shared, scene, camera);
+		const underwater = createUnderwater(island, shared, scene, camera, player, magma.tube);
 		const sealife = createSealife(island, shared, scene, camera);
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -320,6 +322,7 @@ export function createIslandWorld() {
 		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
 		const under = camera.position.y < surf - 0.05;
 		W.underwater.update(dt, time, under, surf);
+		W.magma.update(dt, time, under, surf);
 		// the reef and its fish only run when you are in or over the bay
 		const bay = W.island.village.bay;
 		W.sealife.update(dt, time, !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40);
