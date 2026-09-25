@@ -15,18 +15,23 @@ import * as THREE from 'three';
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
 export const REAL_U = {
 	uRoadMap: { value: blank() }, uRoadR: { value: new THREE.Vector4(0, 0, 1, 0) },
-	uRoadMap2: { value: blank() }, uRoadR2: { value: new THREE.Vector4(0, 0, 1, 0) },
+	uRoadMap2: { value: blank() }, uRoadR2: { value: new THREE.Vector4(0, 0, 1, 0) }, uPaintMap: { value: blank() },
 	uSeason: { value: 1 },                      // 0 spring green .. 1 summer gold
 	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
+	uRealB2: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB3: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB; uniform float uSeason;
-bool inReal(vec2 w){ return uRealR.w > 0.5 && w.x > uRealB.x && w.y > uRealB.y && w.x < uRealB.z && w.y < uRealB.w; }
+uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3; uniform float uSeason;
+bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
+// the main region (its land use map), and any mapped region (real streets, no grid)
+bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }
+bool inRealAny(vec2 w){ return inReal(w) || inBox(w, uRealB2) || inBox(w, uRealB3); }
 `;
 
-const REGIONS = ['eastbay'];
+// the first region's coarse map colours the ground; the others are streets, buildings and trails
+const REGIONS = ['eastbay', 'tam', 'missionpeak'];
 // the regions' extents [west, south, east, north], known before their data loads
-export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95]];           // San Ramon, Danville, Mt Diablo, Clayton
+export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95], [-122.66, 37.87, -122.53, 37.96], [-121.95, 37.48, -121.84, 37.55]];   // Tri-Valley and Mt Diablo; Mt Tam and Mill Valley; Mission Peak
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
 
@@ -36,7 +41,7 @@ async function gunzip(res) {
 }
 
 export function createRealCity(renderer) {
-	const R = { loaded: false, roads: [], boxes: [], paths: [], pools: [], trees: [], bounds: null, names: [] };
+	const R = { regions: [], loaded: false, roads: [], boxes: [], paths: [], pools: [], trees: [], bounds: null, names: [] };
 	const CELL = 250;
 	const grid = new Map();
 	const put = (kind, x, z, i) => { const k = Math.floor(x / CELL) + ',' + Math.floor(z / CELL); let g = grid.get(k); if (!g) grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] }); g[kind].push(i); };
@@ -87,29 +92,31 @@ export function createRealCity(renderer) {
 			const t = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, h: dv.getInt16(o + 4, true) / 20, cone: dv.getInt16(o + 6, true) };
 			put('trees', t.x, t.z, R.trees.push(t) - 1);
 		}
-		R.names = H.names;
 		const [bx0, bz0, bx1, bz1] = H.bounds;
-		R.bounds = [bx0, bz0, bx1, bz1];
 		// a CPU copy of the coarse map, for what grows where
-		{
-			const img = map.image, cv = document.createElement('canvas');
-			cv.width = img.width; cv.height = img.height;
-			const cx2 = cv.getContext('2d', { willReadFrequently: true });
-			cx2.drawImage(img, 0, 0);
-			R.map = { px: cx2.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height, x0: H.bounds[0], z0: H.bounds[1], step: H.map.step };
-		}
-		map.flipY = false; map.minFilter = THREE.LinearFilter; map.magFilter = THREE.LinearFilter; map.generateMipmaps = false; map.colorSpace = THREE.NoColorSpace;
-		map.needsUpdate = true;
-		REAL_U.uRealMap.value = map;
-		REAL_U.uRealR.value.set(bx0, bz0, H.map.step, 1);
+		const img = map.image, cv = document.createElement('canvas');
+		cv.width = img.width; cv.height = img.height;
+		const cx2 = cv.getContext('2d', { willReadFrequently: true });
+		cx2.drawImage(img, 0, 0);
+		const reg = { name, bounds: [bx0, bz0, bx1, bz1], map: { px: cx2.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height, x0: bx0, z0: bz0, step: H.map.step } };
+		R.regions.push(reg);
 		// the region, pulled in a little so its edge meets the procedural towns cleanly
-		REAL_U.uRealB.value.set(bx0 + 60, bz0 + 60, bx1 - 60, bz1 - 60);
+		const inset = [bx0 + 60, bz0 + 60, bx1 - 60, bz1 - 60];
+		if (name === REGIONS[0]) {
+			// the main region's coarse map colours the ground (land use, far roads and roofs)
+			map.flipY = false; map.minFilter = THREE.LinearFilter; map.magFilter = THREE.LinearFilter; map.generateMipmaps = false; map.colorSpace = THREE.NoColorSpace;
+			map.needsUpdate = true;
+			REAL_U.uRealMap.value = map;
+			REAL_U.uRealR.value.set(bx0, bz0, H.map.step, 1);
+			REAL_U.uRealB.value.set(...inset);
+		} else REAL_U[REGIONS.indexOf(name) === 1 ? 'uRealB2' : 'uRealB3'].value.set(...inset);
 		R.attribution = H.attribution;
 		R.loaded = true;
 	}
 	const ready = Promise.all(REGIONS.map((n) => load(n).catch((e) => console.warn('real city', n, e))));
 
-	const inside = (x, z) => !!R.bounds && x > R.bounds[0] + 60 && z > R.bounds[1] + 60 && x < R.bounds[2] - 60 && z < R.bounds[3] - 60;
+	const regionAt = (x, z, m = 60) => R.regions.find(({ bounds: b }) => x > b[0] + m && z > b[1] + m && x < b[2] - m && z < b[3] - m);
+	const inside = (x, z) => !!regionAt(x, z);
 	function near(kind, x, z, rad) {
 		const out = [], seen = kind === 'roads' ? new Set() : null;
 		for (let gx = Math.floor((x - rad) / CELL); gx <= Math.floor((x + rad) / CELL); gx++) for (let gz = Math.floor((z - rad) / CELL); gz <= Math.floor((z + rad) / CELL); gz++) {
@@ -124,26 +131,48 @@ export function createRealCity(renderer) {
 	}
 
 	// ---------- the road maps round you: a fine one close by, a coarser one further out ----------
-	const mkRT = (res) => { const t = new THREE.WebGLRenderTarget(res, res, { samples: 4, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false }); t.texture.colorSpace = THREE.NoColorSpace; return t; };
+	// Each layer is drawn as distance, not coverage: 1 well inside, 0.5 exactly on the edge,
+	// falling to 0 a ramp's width outside, blended by maximum so crossings union cleanly. The
+	// ground shader cuts that at 0.5, so edges come out straight and sharp at any distance,
+	// with no stair-steps from the texels. A second map carries the yellow lines.
+	const mkRT = (res, fmt = THREE.RGBAFormat) => { const t = new THREE.WebGLRenderTarget(res, res, { format: fmt, samples: 4, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false }); t.texture.colorSpace = THREE.NoColorSpace; return t; };
 	const MAPS = [
-		{ rt: mkRT(2048), size: 512, move: 110, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap, REAL_U.uRoadR] },
-		{ rt: mkRT(1024), size: 1536, move: 380, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap2, REAL_U.uRoadR2] },
+		{ rt: mkRT(2048), paint: mkRT(2048, THREE.RGFormat), size: 512, ramp: 0.5, move: 110, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap, REAL_U.uRoadR, REAL_U.uPaintMap] },
+		{ rt: mkRT(1024), paint: null, size: 1536, ramp: 3, move: 380, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap2, REAL_U.uRoadR2] },
 	];
 	const rt = MAPS[0].rt;
 	const cam = new THREE.OrthographicCamera(0, 1, 1, 0, -10, 10);
 	cam.position.z = 1;
 	const scene2 = new THREE.Scene();
-	const layerMat = new THREE.MeshBasicMaterial({ vertexColors: true, blending: THREE.NoBlending, depthTest: false, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+	const layerMat = new THREE.MeshBasicMaterial({ vertexColors: true, blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, depthTest: false, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
 
 	// flat shapes in the road map's own space (x east, y south, in metres from its corner)
-	function builder() {
+	function builder(R0) {
 		const P = [], C = [];
-		const tri = (ax, ay, bx, by, cx, cy, col) => { P.push(ax, ay, 0, bx, by, 0, cx, cy, 0); for (let i = 0; i < 3; i++) C.push(...col); };
-		const disc = (x, y, r, col) => { const n = r > 6 ? 20 : 10; for (let i = 0; i < n; i++) { const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2; tri(x, y, x + Math.cos(a0) * r, y + Math.sin(a0) * r, x + Math.cos(a1) * r, y + Math.sin(a1) * r, col); } };
-		const quad = (ax, ay, bx, by, hw, col, o0 = -hw, o1 = hw) => {
-			const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
-			const p = [ax + nx * o0, ay + ny * o0, bx + nx * o0, by + ny * o0, bx + nx * o1, by + ny * o1, ax + nx * o1, ay + ny * o1];
-			tri(p[0], p[1], p[2], p[3], p[4], p[5], col); tri(p[0], p[1], p[4], p[5], p[6], p[7], col);
+		const v = (x, y, col, k) => { P.push(x, y, 0); C.push(col[0] * k, col[1] * k, col[2] * k, col[3] * k); };
+		// the value at distance d from the centre of a band of half-width hw
+		const at = (hw, d) => Math.min(1, Math.max(0, 0.5 + (hw - d) / (2 * R0)));
+		// a round blob: a fan to the inner radius, then the ramp ring out to the outer one
+		const disc = (x, y, hw, col) => {
+			const inner = Math.max(0, hw - R0), outer = hw + R0, vc = at(hw, inner), n = outer > 6 ? 24 : 12;
+			for (let i = 0; i < n; i++) {
+				const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2, c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+				if (inner > 0) { v(x, y, col, vc); v(x + c0 * inner, y + s0 * inner, col, vc); v(x + c1 * inner, y + s1 * inner, col, vc); }
+				v(x + c0 * inner, y + s0 * inner, col, vc); v(x + c0 * outer, y + s0 * outer, col, 0); v(x + c1 * outer, y + s1 * outer, col, 0);
+				v(x + c0 * inner, y + s0 * inner, col, vc); v(x + c1 * outer, y + s1 * outer, col, 0); v(x + c1 * inner, y + s1 * inner, col, vc);
+			}
+		};
+		// a straight band: its flat middle and a ramp either side
+		const band = (ax, ay, bx, by, hw, col) => {
+			const L = Math.hypot(bx - ax, by - ay) || 1, nx = -(by - ay) / L, ny = (bx - ax) / L;
+			const inner = Math.max(0, hw - R0), outer = hw + R0, vc = at(hw, inner);
+			const strip = (o0, k0, o1, k1) => {
+				v(ax + nx * o0, ay + ny * o0, col, k0); v(bx + nx * o0, by + ny * o0, col, k0); v(bx + nx * o1, by + ny * o1, col, k1);
+				v(ax + nx * o0, ay + ny * o0, col, k0); v(bx + nx * o1, by + ny * o1, col, k1); v(ax + nx * o1, ay + ny * o1, col, k1);
+			};
+			if (inner > 0) strip(-inner, vc, inner, vc);
+			else strip(0, vc, 0, vc);
+			strip(inner, vc, outer, 0); strip(-inner, vc, -outer, 0);
 		};
 		// a line along a polyline, round at the joins, or dashed (dash, gap), offset sideways
 		const line = (pts, hw, col, round = true, off = 0, dash = 0, gap = 0) => {
@@ -153,67 +182,79 @@ export function createRealCity(renderer) {
 				const L = Math.hypot(bx - ax, by - ay);
 				if (L < 0.01) continue;
 				const nx = -(by - ay) / L, ny = (bx - ax) / L;
-				if (!dash) quad(ax + nx * off, ay + ny * off, bx + nx * off, by + ny * off, hw, col);
+				if (!dash) band(ax + nx * off, ay + ny * off, bx + nx * off, by + ny * off, hw, col);
 				else for (let s = 0; s < L;) {
 					const ph = run % (dash + gap), on = ph < dash, step = Math.min(L - s, on ? dash - ph : dash + gap - ph);
-					if (on) { const t0 = s / L, t1 = (s + step) / L; quad(ax + (bx - ax) * t0 + nx * off, ay + (by - ay) * t0 + ny * off, ax + (bx - ax) * t1 + nx * off, ay + (by - ay) * t1 + ny * off, hw, col); }
+					if (on) { const t0 = s / L, t1 = (s + step) / L; band(ax + (bx - ax) * t0 + nx * off, ay + (by - ay) * t0 + ny * off, ax + (bx - ax) * t1 + nx * off, ay + (by - ay) * t1 + ny * off, hw, col); }
 					s += step; run += step;
 				}
 				if (round && !dash && i + 1 < pts.length - 1) disc(bx + nx * off, by + ny * off, hw, col);
 			}
 		};
-		const mesh = (order) => {
+		const mesh = () => {
 			const g = new THREE.BufferGeometry();
 			g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
 			g.setAttribute('color', new THREE.Float32BufferAttribute(C, 4));
-			const m = new THREE.Mesh(g, layerMat); m.renderOrder = order; m.frustumCulled = false;
+			const m = new THREE.Mesh(g, layerMat); m.frustumCulled = false;
 			return m;
 		};
-		return { tri, disc, quad, line, mesh };
+		return { disc, line, mesh };
 	}
-	// colours are coverage: R asphalt, G concrete, B lane paint (0.33 white, 0.66 yellow), A dirt
-	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 0, 1], WHITE = [1, 0, 0.33, 0], YELLOW = [1, 0, 0.66, 0];
+	// channels: R asphalt, G concrete, B dirt, A white lines; the paint map's R: yellow lines
+	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 1, 0], WHITE = [0, 0, 0, 1], YELLOW = [1, 0, 0, 0];
+	function render(target, meshes, SIZE) {
+		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
+		for (const m of meshes) scene2.add(m);
+		cam.left = 0; cam.right = SIZE; cam.bottom = 0; cam.top = SIZE; cam.updateProjectionMatrix();
+		renderer.setRenderTarget(target); renderer.setClearColor(0x000000, 0); renderer.clear(true, false, false);
+		renderer.render(scene2, cam);
+	}
+	// a street has sidewalks where it runs through town, not out on the mountain
+	function built(r) {
+		if (r.built === undefined) {
+			const k = Math.floor(r.pts.length / 4) * 2, L = landAt(r.pts[k], r.pts[k + 1]);
+			r.built = !!L && L.lu > 0 && L.lu < 11;
+		}
+		return r.built;
+	}
 	function drawRoadMap(M, cx, cz) {
 		M.x = cx; M.z = cz;
-		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2, px = SIZE / M.rt.width;
-		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
-		const L0 = builder(), L1 = builder(), L2 = builder(), L3 = builder(), L4 = builder();
+		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
+		const B = builder(M.ramp), Y = builder(M.ramp), fine = !!M.paint;
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
-		// paint lines are kept at least a pixel wide, so they never break up
-		const pw = (w) => Math.max(w, px * 0.6);
 		for (const r of near('roads', cx, cz, SIZE * 0.72)) {
 			const p = loc(r.pts), hw = r.w / 2;
-			if (r.cls === 'path' || r.cls === 'track') { L0.line(p, hw, DIRT); continue; }
-			if (r.cls === 'footway' || r.cls === 'steps' || r.cls === 'pedestrian') { L1.line(p, hw, CONC); continue; }
-			if (r.walked && !r.bridge) {
+			if (r.cls === 'path' || r.cls === 'track') { B.line(p, hw, DIRT); continue; }
+			if (r.cls === 'footway' || r.cls === 'steps' || r.cls === 'pedestrian') { B.line(p, hw, CONC); continue; }
+			if (r.walked && !r.bridge && built(r)) {
 				// the sidewalk and kerb both sides, the concrete rounding the corners
-				L1.line(p, hw + 1.7, CONC);
-				for (const q of [p[0], p[p.length - 1]]) L1.disc(q[0], q[1], hw + 1.7, CONC);
+				B.line(p, hw + 1.7, CONC);
+				for (const q of [p[0], p[p.length - 1]]) B.disc(q[0], q[1], hw + 1.7, CONC);
 			}
-			L3.line(p, hw, ASPH);
-			for (const q of [p[0], p[p.length - 1]]) L3.disc(q[0], q[1], hw, ASPH);
+			B.line(p, hw, ASPH);
+			for (const q of [p[0], p[p.length - 1]]) B.disc(q[0], q[1], hw, ASPH);
 			// a cul-de-sac's turning circle, sidewalk round it
-			for (const [end, q] of [[r.end0, p[0]], [r.end1, p[p.length - 1]]]) if (end) { L1.disc(q[0], q[1], 14.2, CONC); L3.disc(q[0], q[1], 12.5, ASPH); }
+			for (const [end, q] of [[r.end0, p[0]], [r.end1, p[p.length - 1]]]) if (end) { B.disc(q[0], q[1], 14.2, CONC); B.disc(q[0], q[1], 12.5, ASPH); }
+			if (!fine) continue;
 			// lane lines: a double yellow centre line on the collectors, lanes on divided roads
-			if ((r.cls === 'secondary' || r.cls === 'tertiary' || r.cls === 'primary') && !r.divided && !r.link) { L4.line(p, pw(0.08), YELLOW, false, 0.16); L4.line(p, pw(0.08), YELLOW, false, -0.16); }
-			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { L4.line(p, pw(0.07), WHITE, false, hw / 3, 3, 9); L4.line(p, pw(0.07), WHITE, false, -hw / 3, 3, 9); L4.line(p, pw(0.07), WHITE, false, hw - 0.6); L4.line(p, pw(0.07), YELLOW, false, -hw + 0.6); }
+			if ((r.cls === 'secondary' || r.cls === 'tertiary' || r.cls === 'primary' || r.cls === 'unclassified') && !r.divided && !r.link && r.w >= 9) Y.line(p, 0.17, YELLOW, true);                                   // reads as the double yellow
+			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
 		// driveways and front walks
-		for (const q of near('paths', cx, cz, SIZE * 0.72)) L2.line([[q.ax - x0, q.az - z0], [q.bx - x0, q.bz - z0]], q.w / 2, CONC, false);
-		scene2.add(L0.mesh(0), L1.mesh(1), L2.mesh(2), L3.mesh(3), L4.mesh(4));
-		cam.left = 0; cam.right = SIZE; cam.bottom = 0; cam.top = SIZE; cam.updateProjectionMatrix();
+		for (const q of near('paths', cx, cz, SIZE * 0.72)) B.line([[q.ax - x0, q.az - z0], [q.bx - x0, q.bz - z0]], q.w / 2, CONC, false);
 		const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
-		renderer.setRenderTarget(M.rt); renderer.setClearColor(0x000000, 0); renderer.clear(true, false, false);
-		renderer.render(scene2, cam);
+		render(M.rt, [B.mesh()], SIZE);
+		if (M.paint) render(M.paint, [Y.mesh()], SIZE);
 		renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
 		M.u[0].value = M.rt.texture;
 		M.u[1].value.set(x0, z0, SIZE, 1);
+		if (M.paint) M.u[2].value = M.paint.texture;
 	}
 
 	function update(camera) {
 		if (!R.loaded) return;
 		const x = camera.position.x, z = camera.position.z;
-		const on = x > R.bounds[0] - 800 && z > R.bounds[1] - 800 && x < R.bounds[2] + 800 && z < R.bounds[3] + 800 && camera.position.y < 3000;
+		const on = !!regionAt(x, z, -800) && camera.position.y < 3000;
 		for (const M of MAPS) {
 			if (!on) { M.u[1].value.w = 0; M.x = 1e9; continue; }
 			if (Math.hypot(x - M.x, z - M.z) > M.move) { drawRoadMap(M, x, z); break; }      // one map a frame
@@ -222,7 +263,7 @@ export function createRealCity(renderer) {
 
 	// the coarse map at a point: land use (0 wild), roads and roofs coverage
 	function landAt(x, z) {
-		const M = R.map;
+		const M = regionAt(x, z, 0)?.map;
 		if (!M) return null;
 		const i = Math.floor((x - M.x0) / M.step), j = Math.floor((z - M.z0) / M.step);
 		if (i < 0 || j < 0 || i >= M.w || j >= M.h) return null;

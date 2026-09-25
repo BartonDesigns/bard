@@ -52,7 +52,13 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	sigLights.frustumCulled = false; group.add(sigLights);
 
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), col = new THREE.Color(), Y = new THREE.Vector3(0, 1, 0);
-	const put = (im, k, x, y, z, yaw, s = 1) => { q.setFromAxisAngle(Y, yaw); sc.setScalar(s); p.set(x, y, z); im.setMatrixAt(k, m4.compose(p, q, sc)); };
+	const eul = new THREE.Euler(0, 0, 0, 'YXZ');
+	const put = (im, k, x, y, z, yaw, s = 1, pitch = 0) => { eul.set(pitch, yaw, 0); q.setFromEuler(eul); sc.setScalar(s); p.set(x, y, z); im.setMatrixAt(k, m4.compose(p, q, sc)); };
+	// a car sits on the slope: the ground under its front and back wheels sets its pitch and height
+	const putCar = (im, k, x, z, yaw) => {
+		const fx = Math.sin(yaw) * 1.4, fz = Math.cos(yaw) * 1.4, gf = groundAt(x + fx, z + fz), gb = groundAt(x - fx, z - fz);
+		put(im, k, x, (gf + gb) / 2, z, yaw, 1, -Math.atan2(gf - gb, 2.8));
+	};
 
 	// ---------- building the street furniture round a point ----------
 	let lastX = 1e9, lastZ = 1e9;
@@ -99,10 +105,11 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 						if (h1 > 0.22) continue;
 						const px = x + nx * (hw - 1.15) * sd, pz = z + nz * (hw - 1.15) * sd;
 						if (!clearOfDrive(px, pz)) continue;
-						const g = groundAt(px, pz);
+						const land = real.landAt?.(px, pz);
+						if (!land || land.lu === 0 || land.lu === 11 || land.lu === 12) continue;       // no parking out in the wild
 						const kind = KINDS[Math.floor(hash(h1 * 1000, k) * KINDS.length)], im = parked[kind], c = n(im);
 						if (c < 0) continue;
-						put(im, c, px, g, pz, yaw + (sd > 0 ? Math.PI : 0) + (h1 - 0.1) * 0.3);
+						putCar(im, c, px, pz, yaw + (sd > 0 ? Math.PI : 0) + (h1 - 0.1) * 0.3);
 						const pc = PAINT[Math.floor(hash(k, h1 * 777) * PAINT.length)];
 						im.setColorAt(c, col.setRGB(pc[0], pc[1], pc[2]));
 					}
@@ -252,7 +259,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			c.px = px; c.pz = pz; c.vx = dx * c.dir * c.v; c.vz = dz * c.dir * c.v;      // for the street sound
 			const im = moving[c.kind], k = counts[c.kind]++;
 			if (k >= im.instanceMatrix.count) continue;
-			put(im, k, px, groundAt(px, pz), pz, Math.atan2(dx * c.dir, dz * c.dir));
+			putCar(im, k, px, pz, Math.atan2(dx * c.dir, dz * c.dir));
 			im.setColorAt(k, col.setRGB(c.col[0], c.col[1], c.col[2]));
 		}
 		for (const k of kinds) { const im = moving[k]; im.count = counts[k]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }

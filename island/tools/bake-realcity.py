@@ -56,7 +56,10 @@ for nm, rs in byname.items():
 		for o in rs:
 			if o is r: continue
 			Lo = LineString(o['p'])
-			if Lo.distance(m) < 40:
+			# side by side, not end to end: the midpoint must project inside the other
+			# carriageway, some metres across from it
+			t = Lo.project(m)
+			if 6 < Lo.distance(m) < 40 and 3 < t < Lo.length - 3:
 				d1 = np.subtract(o['p'][-1], o['p'][0]); d1 = d1 / (np.linalg.norm(d1) + 1e-9)
 				if abs(np.dot(d0, d1)) > 0.8: r['div'] = True; break
 names = sorted({r['n'] for r in roads if r['n']})

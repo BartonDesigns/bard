@@ -36,6 +36,7 @@ import { createStreetLife } from './bay/streetlife.js';
 import { createCitySound } from './bay/citysound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createDiablo } from './bay/diablo.js';
+import { createDrive } from './drive.js';
 
 // the hills by the calendar: green from the winter rains into spring, gold by summer
 REAL_U.uSeason.value = [0, 0, 0, 0.05, 0.3, 0.6, 0.85, 1, 1, 1, 0.85, 0.35][new Date().getMonth()];
@@ -83,6 +84,8 @@ function underwaterAudio(target, dt) {
 	muffle.lp.frequency.setTargetAtTime(20000 * Math.pow(420 / 20000, k), ctx.currentTime, 0.05);
 	muffle.lp.Q.setTargetAtTime(0.9 + k * 2.5, ctx.currentTime, 0.05);
 }
+// things made inside the engine that the Crysis console handle reaches
+const HOOKS = {};
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 function css(el, s) { el.style.cssText = s; return el; }
@@ -139,6 +142,8 @@ function slider(panel, label, min, max, step, get, set, fmt) {
 
 export function createIslandWorld() {
 	const dom = buildDom();
+	// declared here, made once the hint and camera exist (see below)
+	let drive = { update: () => false, stop() {}, active: () => false };
 	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
 	// lets leaves and grass edges fade (alpha to coverage) instead of stair-stepping
 	const renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: true, powerPreference: 'high-performance' });
@@ -225,6 +230,9 @@ export function createIslandWorld() {
 	}
 	// the Guide: talk, ask, be taken places (a model on this device, or the built-in guide)
 	const guide = createGuide(dom.mount, { world: () => world, camera, shared, hint });
+	// drive the roads, streets and trails: snap on, choose the turns
+	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
+	HOOKS.drive = drive;
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world);
 
@@ -320,6 +328,7 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		drive.stop();
 		world.player.dispose();
 		world.shells?.dispose();
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
@@ -389,7 +398,8 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		stepWind(dt, shared);
 		const W = world;
-		W.player.update(dt, time);
+		// driving a road carries you; otherwise you walk, swim or fly
+		if (!drive.update(dt)) W.player.update(dt, time);
 		stampPrints(W.player.state);
 		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
@@ -672,6 +682,8 @@ if (typeof window !== 'undefined') {
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
+		// drive the roads: Crysis.drive.start(), .stop(), .state
+		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },
 		// the hills' season: 0 spring green .. 1 summer gold
 		season: (v) => { if (v !== undefined) REAL_U.uSeason.value = Math.max(0, Math.min(1, +v)); return REAL_U.uSeason.value; },
 		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },

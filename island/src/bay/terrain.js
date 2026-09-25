@@ -16,7 +16,7 @@ import { REAL_U, REAL_GLSL } from './realcity.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
-uniform highp sampler2D uB0, uB1, uB2, uB3, uB4; uniform vec4 uR0, uR1, uR2, uR3, uR4; uniform float uBayOn;
+uniform highp sampler2D uB0, uB1, uB2, uB3, uB4, uB5, uB6; uniform vec4 uR0, uR1, uR2, uR3, uR4, uR5, uR6; uniform float uBayOn;
 float bLevel(highp sampler2D t, vec4 r, vec2 w){
 	vec2 S = vec2(textureSize(t, 0));
 	vec2 f = clamp((w - r.xy) / r.z, vec2(0.0), S - 1.001);
@@ -36,6 +36,8 @@ float bayHeight(vec2 w){
 	float k2 = bIn(uB2, uR2, w, 500.0); if (k2 > 0.0) h = mix(h, bLevel(uB2, uR2, w), k2);
 	float k3 = bIn(uB3, uR3, w, 400.0); if (k3 > 0.0) h = mix(h, bLevel(uB3, uR3, w), k3);
 	float k4 = bIn(uB4, uR4, w, 400.0); if (k4 > 0.0) h = mix(h, bLevel(uB4, uR4, w), k4);
+	float k5 = bIn(uB5, uR5, w, 400.0); if (k5 > 0.0) h = mix(h, bLevel(uB5, uR5, w), k5);
+	float k6 = bIn(uB6, uR6, w, 400.0); if (k6 > 0.0) h = mix(h, bLevel(uB6, uR6, w), k6);
 	return h;
 }
 `;
@@ -66,7 +68,7 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);
 export function bayUniforms() {
 	const blank = () => { const t = new THREE.DataTexture(new Uint16Array([0, 0, 0, 0]), 2, 2, THREE.RedFormat, THREE.HalfFloatType); t.needsUpdate = true; return t; };
-	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uB4: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uR4: { value: OFF.clone() }, uBayOn: { value: 0 } };
+	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uB4: { value: blank() }, uB5: { value: blank() }, uB6: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uR4: { value: OFF.clone() }, uR5: { value: OFF.clone() }, uR6: { value: OFF.clone() }, uBayOn: { value: 0 } };
 }
 
 // the towns: how far each one's streets reach, their street-grid angle, and the
@@ -159,8 +161,7 @@ export function createBayArea(shared, scene, island, BU) {
 		let h = -400 + (levelH(levels[0], x, z) + 400) * levelIn(levels[0], x, z, 3000);
 		if (levels[1]) { const k = levelIn(levels[1], x, z, 1500); if (k > 0) h += (levelH(levels[1], x, z) - h) * k; }
 		if (levels[2]) { const k = levelIn(levels[2], x, z, 500); if (k > 0) h += (levelH(levels[2], x, z) - h) * k; }
-		if (levels[3]) { const k = levelIn(levels[3], x, z, 400); if (k > 0) h += (levelH(levels[3], x, z) - h) * k; }
-		if (levels[4]) { const k = levelIn(levels[4], x, z, 400); if (k > 0) h += (levelH(levels[4], x, z) - h) * k; }
+		for (let i = 3; i < levels.length; i++) if (levels[i]) { const k = levelIn(levels[i], x, z, 400); if (k > 0) h += (levelH(levels[i], x, z) - h) * k; }
 		return h;
 	}
 
@@ -244,12 +245,13 @@ export function createBayArea(shared, scene, island, BU) {
 					vec4 T = texture2D(uUrban, uu / US);
 					float urban = T.r * (1.0 - smoothstep(0.25, 0.4, slope)) * smoothstep(0.4, 1.5, h);
 					float dist = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
-					if (inReal(vBW)) {
+					if (inRealAny(vBW)) {
 						// the real city: land use, then streets and roofs from the maps
 						urban = 0.0;
+						bool mainR = inReal(vBW);
 						vec2 mu = (vBW - uRealR.xy) / uRealR.z;
 						vec2 MS = vec2(textureSize(uRealMap, 0));
-						vec4 M = texture2D(uRealMap, (mu + 0.5) / MS);
+						vec4 M = mainR ? texture2D(uRealMap, (mu + 0.5) / MS) : vec4(0.0);
 						float gn = vn(vBW * 0.09), gf = fbm3(vBW * 0.03);
 						float flatten = 1.0 - smoothstep(0.25, 0.45, slope);
 						// land use, blended across the four nearest 8 m cells so its edges are soft
@@ -261,36 +263,42 @@ export function createBayArea(shared, scene, island, BU) {
 							float wk = smoothstep(0.0, 1.0, (o.x > 0.5 ? mw.x : 1.0 - mw.x) * (o.y > 0.5 ? mw.y : 1.0 - mw.y));
 							luC += realLand(lu, c, gn, gf, vBW) * wk; luW += wk;
 						}
-						c = mix(c, luC / max(luW, 1e-4), flatten);
+						if (mainR) c = mix(c, luC / max(luW, 1e-4), flatten);
 						// far away: roofs and streets from the 8 m map (up close the buildings stand here)
 						float farK = smoothstep(1500.0, 2200.0, dist);
 						c = mix(c, mix(vec3(0.5, 0.42, 0.38), vec3(0.42, 0.42, 0.44), gn), M.b * farK * 0.9);
-						// the streets: sharp from the fine road map round you, the coarser one beyond,
-						// the 8 m map beyond that
+						// the streets: from the fine road map round you, the coarser one beyond it, the
+						// 8 m map beyond that. The road maps hold distance to each edge (0.5 on it),
+						// so a cut at 0.5 gives crisp, straight edges at any range.
 						vec2 ru = (vBW - uRoadR.xy) / uRoadR.z, ru2 = (vBW - uRoadR2.xy) / uRoadR2.z;
 						float e1 = uRoadR.w * smoothstep(0.0, 0.08, min(min(ru.x, ru.y), min(1.0 - ru.x, 1.0 - ru.y)));
 						float e2 = uRoadR2.w * smoothstep(0.0, 0.05, min(min(ru2.x, ru2.y), min(1.0 - ru2.x, 1.0 - ru2.y)));
-						vec4 RM1 = texture2D(uRoadMap, clamp(ru, 0.0, 1.0)), RM2 = texture2D(uRoadMap2, clamp(ru2, 0.0, 1.0));
-						// sharpen the bilinear coverage into a crisp, anti-aliased edge
-						vec4 RM1r = RM1, fw1 = max(fwidth(RM1), vec4(0.02));
-						RM1 = smoothstep(0.5 - fw1, 0.5 + fw1, RM1) * vec4(1.0, 1.0, 0.0, 1.0) + vec4(0.0, 0.0, RM1.b, 0.0);
-						vec4 RM = mix(RM2 * e2, RM1, e1);
+						vec4 D1 = texture2D(uRoadMap, clamp(ru, 0.0, 1.0)), D2 = texture2D(uRoadMap2, clamp(ru2, 0.0, 1.0));
+						float Y1 = texture2D(uPaintMap, clamp(ru, 0.0, 1.0)).r;
+						vec4 f1 = max(fwidth(D1) * 0.75, vec4(0.004)), f2 = max(fwidth(D2) * 0.75, vec4(0.004));
+						vec4 C1 = smoothstep(0.5 - f1, 0.5 + f1, D1), C2 = smoothstep(0.5 - f2, 0.5 + f2, D2);
+						float fy = max(fwidth(Y1) * 0.75, 0.004), yellow = smoothstep(0.5 - fy, 0.5 + fy, Y1) * e1;
+						vec4 RM = mix(C2 * e2, C1, e1);
 						float edge = max(e1, e2);
-						float asph = mix(M.r * 0.85, RM.r, edge), conc = RM.g * edge, dirt = RM.a * edge;
-						float paint = RM.b * edge;
+						float asph = mix(M.r * 0.85, RM.r, edge), conc = RM.g * edge, dirt = RM.b * edge;
+						float white = C1.a * e1;
 						vec3 asphC = mix(vec3(0.16, 0.16, 0.17), vec3(0.24, 0.24, 0.25), vn(vBW * 0.7)) * (0.9 + 0.2 * gf);
 						asphC = mix(asphC, vec3(0.1), step(0.985, vn(vBW * 3.1)) * 0.5);                      // patched cracks
 						vec3 concC = mix(vec3(0.6, 0.59, 0.55), vec3(0.7, 0.69, 0.65), vn(vBW * 1.3));
-						c = mix(c, vec3(0.5, 0.43, 0.32) * (0.85 + 0.3 * gn), dirt);
+						vec3 dirtC = mix(vec3(0.56, 0.42, 0.3), vec3(0.66, 0.52, 0.38), vn(vBW * 0.8)) * (0.85 + 0.3 * gn);
+						dirtC = mix(dirtC, dirtC * 0.8, step(0.7, vn(vBW * 6.0)) * 0.5);                       // stones and ruts
+						c = mix(c, dirtC, dirt);
 						c = mix(c, concC, conc);
+						// the gutter: a darker band just inside the asphalt edge; the kerb: a pale lip
+						// just outside it (the fine map's distance, 0.5 m ramp: d = (0.5 - v) metres)
+						float dK = 0.5 - D1.r;
+						float kerb = smoothstep(-0.02, 0.02, dK) * (1.0 - smoothstep(0.14, 0.18, dK)) * step(0.5, D1.g) * e1;
+						float gutter = smoothstep(-0.45, -0.3, dK) * (1.0 - smoothstep(-0.02, 0.0, dK)) * step(0.5, D1.g) * e1;
 						c = mix(c, asphC, asph);
-						// the kerb where concrete meets asphalt: a pale lip and a dark gutter
-						float kerb = smoothstep(0.08, 0.4, RM1r.r) * smoothstep(0.08, 0.4, RM1r.g) * e1;
-						c = mix(c, vec3(0.74, 0.73, 0.7), kerb * 0.8);
-						float white = smoothstep(0.2, 0.3, paint) * (1.0 - smoothstep(0.45, 0.55, paint));
-						float yellow = smoothstep(0.55, 0.62, paint);
-						c = mix(c, vec3(0.86, 0.86, 0.82), white * 0.9);
-						c = mix(c, vec3(0.85, 0.68, 0.18), yellow * 0.9);
+						c = mix(c, c * 0.7, gutter);
+						c = mix(c, vec3(0.76, 0.75, 0.72), kerb);
+						c = mix(c, vec3(0.88, 0.88, 0.84), white * 0.92);
+						c = mix(c, vec3(0.86, 0.68, 0.16), yellow * 0.92);
 						flatK = max(max(asph, conc), dirt * 0.6);
 						// night: windows and lamps as sparks far off
 						float cellL = max(18.0, dist * 0.004);
@@ -375,11 +383,13 @@ export function createBayArea(shared, scene, island, BU) {
 				{
 					// fine relief the survey cannot see: gullies, knolls and grain, as a bump
 					float dist2 = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
-					float bh = (fbm3(vBW * 0.045) * 2.2 + fbm3(vBW * 0.22) * 0.5 + vn(vBW * 1.3) * 0.08) * (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH) * (1.0 - flatK * 0.9);
+					float bh = (fbm3(vBW * 0.045) * 2.2 + fbm3(vBW * 0.22) * 0.5 + vn(vBW * 1.3) * 0.08) * (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
 					float fDet = dot(vSx, R1);
-					vec2 dH = vec2(dFdx(bh), dFdy(bh));
+					// paving is smooth: the relief fades under it (scaling the slope, not the height,
+					// so the paving's edge draws no line of its own)
+					vec2 dH = vec2(dFdx(bh), dFdy(bh)) * (1.0 - flatK * 0.9);
 					normal = normalize(abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2));
 				}`)
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += cityGlow;');
