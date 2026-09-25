@@ -22,8 +22,14 @@ W_, S_, E_, N_ = map(float, sys.argv[3:7])
 def world(lon, lat): return ((lon - LON0) * KX, -(lat - LAT0) * KZ)
 x0, zN = world(W_, N_); x1, zS = world(E_, S_)
 OX, OZ = round((x0 + x1) / 2), round((zN + zS) / 2)
-Q = 4                                   # quarter-metre units
-def q(v): return max(-32767, min(32767, int(round(v * Q))))
+# coordinates are int16 offsets from the region's centre: pick the finest unit that still
+# reaches its corners (quarter metres for a small region, half or whole for a big one)
+# (set from the data's real extent just before writing; roads can run past the box)
+Q = 4
+def q(v):
+	n = int(round(v * Q))
+	assert -32767 <= n <= 32767, 'coordinate out of range for int16 at this unit'
+	return n
 rnd = random.Random(7)
 
 # ---------- roads ----------
@@ -256,6 +262,9 @@ A = Image.new('L', (MW, MH), 255)
 Image.merge('RGBA', (R, G, B, A)).save(f'assets/bayarea/real/{name}.png', optimize=True)
 
 # ---------- the binary ----------
+HALF = max([abs(v) for r in roads for p in r['p'] for v in (p[0] - OX, p[1] - OZ)] + [abs(b[0] - OX) for b in BOX] + [abs(b[1] - OZ) for b in BOX] + [max(x1 - x0, zS - zN) / 2]) + 100
+Q = 4 if HALF * 4 < 32000 else 2 if HALF * 2 < 32000 else 1 if HALF < 32000 else 0.5
+print('extent', round(HALF), 'm, unit', 1 / Q, 'm')
 out = bytearray()
 def i16(*v): return struct.pack('<' + 'h' * len(v), *v)
 def u16(*v): return struct.pack('<' + 'H' * len(v), *v)
