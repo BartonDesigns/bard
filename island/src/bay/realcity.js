@@ -130,7 +130,68 @@ export function createRealCity(renderer) {
 				out.push(R[kind][i]);
 			}
 		}
+		for (const G of gens) nearGen(G, kind, x, z, rad, out);
 		return out;
+	}
+
+	// ---------- Crysis: generated regions (see crysis/civgen.js and crysis/civ.js) ----------
+	// A town grown by the civilization engine arrives in the same shape as a baked region
+	// and joins it here: its own spatial grid (so it can be dropped again without touching
+	// the real ones), its land-use map for landAt(), and while it is the active one, its map
+	// stands in for the main region's in the ground shader (uRealMap/uRealR/uRealB), which
+	// paints its land use and streets and keeps the procedural grid off it. Only one generated
+	// town is active at a time; the real main region is far off whenever it is.
+	const gens = [];
+	let version = 0, saved = null;
+	function nearGen(G, kind, x, z, rad, out) {
+		const seen = kind === 'roads' ? new Set() : null;
+		for (let gx = Math.floor((x - rad) / CELL); gx <= Math.floor((x + rad) / CELL); gx++) for (let gz = Math.floor((z - rad) / CELL); gz <= Math.floor((z + rad) / CELL); gz++) {
+			const g = G.grid.get(gx + ',' + gz);
+			if (!g) continue;
+			for (const o of g[kind]) { if (seen) { if (seen.has(o)) continue; seen.add(o); } out.push(o); }
+		}
+	}
+	function swapIn(G) {
+		if (REAL_U.uRealMap.value === G.tex) return;
+		saved = { map: REAL_U.uRealMap.value, r: REAL_U.uRealR.value.clone(), b: REAL_U.uRealB.value.clone() };
+		REAL_U.uRealMap.value = G.tex;
+		REAL_U.uRealR.value.set(G.map.x0, G.map.z0, G.map.step, 1);
+		REAL_U.uRealB.value.set(G.bounds[0] + 60, G.bounds[1] + 60, G.bounds[2] - 60, G.bounds[3] - 60);
+	}
+	function addRegion(D) {
+		const G = { name: D.name, gen: true, bounds: D.bounds, map: D.map, grid: new Map(), data: D };
+		const cell = (x, z) => { const k = Math.floor(x / CELL) + ',' + Math.floor(z / CELL); let g = G.grid.get(k); if (!g) G.grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] }); return g; };
+		for (const r of D.roads) {
+			const p = r.pts;
+			let mnx = 1e9, mnz = 1e9, mxx = -1e9, mxz = -1e9;
+			for (let i = 0; i < p.length; i += 2) { mnx = Math.min(mnx, p[i]); mxx = Math.max(mxx, p[i]); mnz = Math.min(mnz, p[i + 1]); mxz = Math.max(mxz, p[i + 1]); }
+			r.box = [mnx, mnz, mxx, mxz]; r.drive = DRIVE.has(r.cls); r.walked = WALKED.has(r.cls);
+			for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) cell(gx * CELL + 1, gz * CELL + 1).roads.push(r);
+		}
+		for (const b of D.boxes) cell(b.x, b.z).boxes.push(b);
+		for (const p of D.paths) cell(p.ax, p.az).paths.push(p);
+		for (const p of D.pools) cell(p.x, p.z).pools.push(p);
+		for (const t of D.trees) cell(t.x, t.z).trees.push(t);
+		const M = D.map;
+		G.tex = new THREE.DataTexture(M.px, M.w, M.h, THREE.RGBAFormat, THREE.UnsignedByteType);
+		G.tex.minFilter = G.tex.magFilter = THREE.LinearFilter; G.tex.colorSpace = THREE.NoColorSpace; G.tex.needsUpdate = true;
+		gens.push(G);
+		R.regions.unshift(G);                       // found first where it overlaps nothing real anyway
+		swapIn(G);
+		R.loaded = true;
+		version++;
+		for (const M2 of MAPS) M2.x = 1e9;          // repaint the road maps
+		return G;
+	}
+	function removeRegion(G) {
+		const i = gens.indexOf(G);
+		if (i < 0) return;
+		gens.splice(i, 1);
+		R.regions.splice(R.regions.indexOf(G), 1);
+		if (REAL_U.uRealMap.value === G.tex && saved) { REAL_U.uRealMap.value = saved.map; REAL_U.uRealR.value.copy(saved.r); REAL_U.uRealB.value.copy(saved.b); saved = null; }
+		G.tex.dispose();
+		version++;
+		for (const M2 of MAPS) M2.x = 1e9;
 	}
 
 	// ---------- the road maps round you: a fine one close by, a coarser one further out ----------
@@ -256,6 +317,7 @@ export function createRealCity(renderer) {
 
 	function update(camera) {
 		if (!R.loaded) return;
+		if (gens.length) swapIn(gens[gens.length - 1]);      // (a real region loading late would take the map back)
 		const x = camera.position.x, z = camera.position.z;
 		const on = !!regionAt(x, z, -800) && camera.position.y < 3000;
 		for (const M of MAPS) {
@@ -292,5 +354,5 @@ export function createRealCity(renderer) {
 		return best;
 	}
 
-	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded };
+	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, version: () => version };
 }
