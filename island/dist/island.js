@@ -4382,18 +4382,19 @@ float gDetailH;
 				diffuseColor.rgb *= 1.0 - print * 0.12;
 				// moonlight catching the wet sand
 				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);
-				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 70.0) + 3.0));`).replace("#include <roughnessmap_fragment>","float roughnessFactor = rough;").replace("#include <emissivemap_fragment>",`#include <emissivemap_fragment>
+				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 240.0) + 3.0)) * (1.0 - smoothstep(2.0, 7.0, camD));`).replace("#include <roughnessmap_fragment>","float roughnessFactor = rough;").replace("#include <emissivemap_fragment>",`#include <emissivemap_fragment>
 				{
 					vec3 Vv = normalize(cameraPosition - vW), md = normalize(-uSunDir2 + vec3(0.0, 0.35, 0.0));
 					vec3 Rr = reflect(-Vv, normalize(vWN + vec3(0.0, 0.0, 0.0)));
 					totalEmissiveRadiance += vec3(0.7, 0.78, 1.0) * gMoonGlint * (pow(max(dot(Rr, md), 0.0), 60.0) * 1.6 + pow(max(dot(Rr, md), 0.0), 8.0) * 0.08);
 					// quartz grains glint: each grain a tiny mirror at its own angle
-					vec2 gc = floor(vW.xz * 70.0);
+					// grains about 4 mm: each glint a pin-point, not a flake
+					vec2 gc = floor(vW.xz * 240.0);
 					vec3 gn = normalize(vec3(gh(gc) - 0.5, 0.55, gh(gc + 7.0) - 0.5));
 					vec3 gr = reflect(-Vv, gn);
-					float sunG = pow(max(dot(gr, uSunDir2), 0.0), 700.0) * smoothstep(0.0, 0.15, uSunDir2.y);
+					float sunG = pow(max(dot(gr, uSunDir2), 0.0), 900.0) * smoothstep(0.0, 0.15, uSunDir2.y);
 					float moonG = pow(max(dot(gr, md), 0.0), 500.0) * smoothstep(0.02, -0.15, uSunDir2.y) * 0.5;
-					totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * (sunG + moonG) * gSparkle * 14.0;
+					totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * (sunG + moonG) * gSparkle * 10.0;
 				
 				}`).replace("#include <normal_fragment_maps>",`
 				// screen-space bump from the detail height (Mikkelsen)
