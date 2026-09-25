@@ -113,7 +113,7 @@ export function createMotion(P, groundAt) {
 			const target = new THREE.Vector3();
 			let lift = 0, pitch = 0;
 			if (u < stanceF || rate === 0) {
-				if (leg.inSwing) { leg.inSwing = false; leg.planted = true; nominal(leg, rate === 0 ? stanceF * 0.5 : 0, stride, stanceF, leg.lock); }
+				if (leg.inSwing) { leg.inSwing = false; leg.planted = true; nominal(leg, rate === 0 ? stanceF * 0.5 : 0, stride, stanceF, leg.lock); S.onStep?.(leg.lock, S.speed.v); }
 				target.copy(leg.lock);
 				const su = u / stanceF;
 				// roll over the foot: heel strike, flat, heel lifting before toe-off

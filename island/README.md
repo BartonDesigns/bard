@@ -59,10 +59,11 @@ true scale:
   street grids, city lights), and the shared height function
 - `src/bay/bridge.js` — the Golden Gate Bridge at its real dimensions (walkable deck)
 - `src/bay/styles.js` — how each area is built (land-use zoning: industry, retail, campuses; tract eras; SF districts): real street-grid bearings, block sizes, house styles (SF rows, the Sunset, older towns, valley suburbs with curving streets, business parks)
-- `src/bay/city.js` — buildings on the street grids by style (roofs, bay windows, garages, towers), the skylines, SF's tallest landmarks, the Bay Bridge
+- `src/bay/city.js` — buildings on the street grids by style, the skylines, SF's tallest landmarks, the Bay Bridge. Up close every lot is lived in: tract houses with side yards, garage doors, porches, front doors, walks, foundation shrubs and back fences; older towns with deep porches and a driveway to a garage out back; SF rows with garages and front stairs at street level, bay windows from the first floor, and shopping streets with shopfronts, signs and awnings
 - `src/bay/landmarks.js` — landmarks across SF, the East Bay, the Peninsula, the South Bay and San Ramon, the port cranes, the other bridges
 - `src/bay/roads.js` — the freeways (I-680, I-580, SR-24, I-80, I-880, US-101, I-280) and the Iron Horse Trail, with lamps and traffic at night
 - `src/bay/streetlife.js` — the street at eye level: parked cars at the kerbs, moving traffic, street lamps that glow at night, signals, hydrants, meters, bins, benches, bus shelters
+- `src/bay/citysound.js` — the sound of the streets: the city bed, passing cars (panned, Doppler), your footsteps and the people's, voices where people talk, birds by day and crickets at night
 - `src/bay/labels.js` — the notation as you enter each city, water or landmark
 - `src/world/starcat.js` — 6317 real stars (HYG v4.1, CC BY-SA 4.0) for the night sky
 

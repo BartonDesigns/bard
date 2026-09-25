@@ -226,6 +226,7 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 			c.u = Math.min(1, Math.max(0, c.u + c.dir * c.v * dt / L));
 			const dx = (l.x1 - l.x0) / L, dz = (l.z1 - l.z0) / L, off = c.dir > 0 ? -1.8 : 1.8;
 			const px = l.x0 + (l.x1 - l.x0) * c.u + dz * off, pz = l.z0 + (l.z1 - l.z0) * c.u - dx * off;
+			c.px = px; c.pz = pz; c.vx = dx * c.dir * c.v; c.vz = dz * c.dir * c.v;      // for the street sound
 			const im = moving[c.kind], k = counts[c.kind]++;
 			if (k >= im.instanceMatrix.count) continue;
 			put(im, k, px, groundAt(px, pz), pz, Math.atan2(dx * c.dir, dz * c.dir));
@@ -233,5 +234,5 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 		}
 		for (const k of kinds) { const im = moving[k]; im.count = counts[k]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 	}
-	return { update, group };
+	return { update, group, cars };
 }

@@ -33,6 +33,7 @@ import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
 import { createStreetLife } from './bay/streetlife.js';
+import { createCitySound } from './bay/citysound.js';
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads } from './bay/roads.js';
@@ -287,6 +288,7 @@ export function createIslandWorld() {
 			world.labels = createLabels(dom.mount, bayArea, null);
 			world.city = createCity(shared, scene, bayArea);
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z));
+			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			const own = island.heightAt;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.heightAt(x, z);
 			bayArea.ready.then(() => {
@@ -440,6 +442,7 @@ export function createIslandWorld() {
 		guide.update(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		people.demo(dt, time, camera.position);
+		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half });
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly

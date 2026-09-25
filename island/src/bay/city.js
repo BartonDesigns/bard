@@ -14,7 +14,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-const KIND = { row: 0, house: 1, tower: 2, office: 3, paved: 4, industry: 5, retail: 6, plain: 7 };
+// a kind's fraction carries a detail for the facade shader: where the front door is on a
+// house (1.0-1.4), which side the garage is on a row house (0, 0.1, 0.2)
+const KIND = { row: 0, house: 1, tower: 2, office: 3, paved: 4, industry: 5, retail: 6, plain: 7, garage: 8, shop: 9, bay: 10 };
 
 const PAL = {
 	sf: [[0.96, 0.9, 0.74], [0.98, 0.86, 0.5], [0.72, 0.86, 0.72], [0.66, 0.8, 0.92], [0.95, 0.7, 0.6], [0.97, 0.96, 0.92], [0.74, 0.74, 0.72], [0.82, 0.72, 0.88], [0.6, 0.72, 0.56], [0.94, 0.8, 0.5], [0.5, 0.62, 0.76], [0.8, 0.5, 0.44], [0.97, 0.96, 0.92], [0.92, 0.9, 0.84], [0.45, 0.55, 0.5], [0.9, 0.62, 0.7]],
@@ -50,13 +52,14 @@ function buildingMaterial(shared, night) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uNightC = night;
-		sh.vertexShader = 'attribute float aKind; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.vertexShader = 'attribute float aKind; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
 			vKind = aKind;
 			vLY = transformed.y * length(instanceMatrix[1].xyz);
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
-			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));`);
-		sh.fragmentShader = 'uniform float uNightC; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader
+			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
+		sh.fragmentShader = 'uniform float uNightC; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader
 			.replace('#include <color_fragment>', `#include <color_fragment>
 			{
 				float roof = step(0.7, vCN.y);
@@ -64,17 +67,80 @@ function buildingMaterial(shared, night) {
 				float u = dot(vCW.xz, t), v = vCW.y;
 				float win = 0.0; vec2 cell = vec2(0.0);
 				vec3 glass = vec3(0.2, 0.24, 0.28);
-				if (vKind < 0.5) {
-					// San Francisco: tall sash windows in threes, white trim, a cornice at the top
-					cell = vec2(u / 2.54, v / 3.3); vec2 f = fract(cell);
-					win = step(0.3, f.x) * step(f.x, 0.7) * step(0.25, f.y) * step(f.y, 0.8);
-					float trim = (1.0 - roof) * (1.0 - win) * (step(f.x, 0.3) * step(0.14, f.x) + step(0.7, f.x) * step(f.x, 0.86)) * step(0.15, f.y) * step(f.y, 0.87);
+				// the street front (local +z), metres across it from the left edge and up from the ground
+				float front = step(0.5, vLN.z) * (1.0 - roof);
+				float fx = (vLP.x + 0.5) * vCS.x, gy = vLY - 1.2;
+				float ih = bh(floor(vIP * 0.5) + 0.17);
+				float shopGlow = 0.0;
+				if (vKind > 7.5) {
+					// the shopping streets: flats above, a shopfront and sign below; garages; bay windows
+					if (vKind > 9.5) {
+						// a bay window: glazed all round, a panel between floors
+						cell = vec2(u / 1.15, vLY / 3.3); vec2 f = fract(cell);
+						win = step(0.12, f.x) * step(f.x, 0.88) * step(0.22, f.y) * step(f.y, 0.82);
+						glass = vec3(0.24, 0.27, 0.3);
+					} else if (vKind > 8.5) {
+						// flats over a shop: sash windows above, the shopfront and its sign below
+						cell = vec2((front > 0.5 ? fx : u) / 2.54, gy / 3.3); vec2 f = fract(cell);
+						win = step(0.3, f.x) * step(f.x, 0.7) * step(0.25, f.y) * step(f.y, 0.8) * step(4.4, gy);
+						float sf = front * step(gy, 4.2);
+						float glassF = sf * step(0.45, gy) * step(gy, 3.3) * step(0.1, fract(fx / 2.6)) * step(abs(fx - vCS.x * 0.5), vCS.x * 0.5 - 0.25);
+						float signB = sf * step(3.45, gy) * step(gy, 4.15) * step(0.3, fx) * step(fx, vCS.x - 0.3);
+						vec3 scol = ih > 0.8 ? vec3(0.62, 0.1, 0.08) : ih > 0.6 ? vec3(0.08, 0.2, 0.14) : ih > 0.4 ? vec3(0.1, 0.12, 0.2) : ih > 0.2 ? vec3(0.9, 0.86, 0.72) : vec3(0.12, 0.12, 0.12);
+						diffuseColor.rgb = mix(diffuseColor.rgb, scol, signB);
+						// lettering on the sign
+						float letters = signB * step(0.55, bh(floor(vec2(fx / 0.34, 1.0)) + ih)) * step(abs(gy - 3.8), 0.16) * step(abs(fx - vCS.x * 0.5), vCS.x * 0.3);
+						diffuseColor.rgb = mix(diffuseColor.rgb, ih > 0.2 && ih < 0.4 ? vec3(0.1) : vec3(0.95, 0.9, 0.75), letters);
+						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.55, sf * step(gy, 0.45));
+						glass = mix(glass, vec3(0.34, 0.33, 0.3), glassF);
+						win = max(win, glassF); glassK = glassF * 0.7;
+						shopGlow = glassF;
+					} else {
+						// a garage: sectional doors, one per bay, with their panel lines
+						float bays = clamp(floor(vCS.x / 2.9), 1.0, 3.0), bw = vCS.x / bays;
+						float bx = fract(fx / bw) * bw;
+						float doorG = front * step(0.3, bx) * step(bx, bw - 0.3) * step(gy, 2.2);
+						vec3 dc = ih > 0.6 ? vec3(0.92, 0.91, 0.87) : ih > 0.3 ? diffuseColor.rgb * 1.08 : vec3(0.55, 0.42, 0.3);
+						dc *= 0.9 + 0.1 * step(0.08, fract(gy / 0.54));
+						diffuseColor.rgb = mix(diffuseColor.rgb, dc, doorG);
+						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5, front * step(gy, 2.3) * step(2.2, gy) * step(0.3, bx) * step(bx, bw - 0.3));
+					}
+				} else if (vKind < 0.5) {
+					// San Francisco: tall sash windows in threes, white trim, a cornice at the top;
+					// often a garage door and the front door and stairs at street level
+					cell = vec2((front > 0.5 ? fx : u) / 2.54, gy / 3.3); vec2 f = fract(cell);
+					float garage = step(0.05, vKind);
+					float ground = front * step(gy, 3.0);
+					win = step(0.3, f.x) * step(f.x, 0.7) * step(0.25, f.y) * step(f.y, 0.8) * (1.0 - ground * garage);
+					float trim = (1.0 - roof) * (1.0 - win) * (step(f.x, 0.3) * step(0.14, f.x) + step(0.7, f.x) * step(f.x, 0.86)) * step(0.15, f.y) * step(f.y, 0.87) * (1.0 - ground * garage);
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.96, 0.95, 0.92), trim * 0.8);
+					// the garage door on one side, the front door up a few steps on the other
+					float left = step(vKind, 0.15);
+					float gx0 = left > 0.5 ? 0.5 : vCS.x - 3.1;
+					float gdoor = ground * garage * step(gx0, fx) * step(fx, gx0 + 2.6) * step(gy, 2.3);
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.85, 0.8) * (0.9 + 0.1 * step(0.1, fract(gy / 0.46))), gdoor);
+					float dx0 = left > 0.5 ? vCS.x - 1.6 : 0.6;
+					float fdoor = ground * garage * step(dx0, fx) * step(fx, dx0 + 1.0) * step(0.9, gy) * step(gy, 3.0);
+					diffuseColor.rgb = mix(diffuseColor.rgb, ih > 0.5 ? vec3(0.35, 0.2, 0.12) : vec3(0.14, 0.18, 0.24), fdoor);
+					float steps = ground * garage * step(dx0 - 0.2, fx) * step(fx, dx0 + 1.2) * step(gy, 0.9);
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.7, 0.69, 0.66) * (0.85 + 0.15 * step(0.5, fract(gy / 0.3))), steps);
 					glass = vec3(0.24, 0.27, 0.3);
 				} else if (vKind < 1.5) {
-					// houses: a few windows a floor, a garage door low on one side
-					cell = vec2(u / 4.2, v / 2.9); vec2 f = fract(cell);
-					win = step(0.3, f.x) * step(f.x, 0.7) * step(0.3, f.y) * step(f.y, 0.78) * step(0.3, bh(floor(cell) + 1.3));
+					// houses: windows with white frames a floor, the front door on the street side
+					cell = vec2((front > 0.5 ? fx : u) / 3.4, gy / 2.9); vec2 f = fract(cell);
+					float wOn = step(0.3, bh(floor(cell) + floor(vIP) + 1.3));
+					float frame = step(0.26, f.x) * step(f.x, 0.74) * step(0.26, f.y) * step(f.y, 0.82) * wOn;
+					win = step(0.3, f.x) * step(f.x, 0.7) * step(0.3, f.y) * step(f.y, 0.78) * wOn;
+					float doorX = 1.25 + fract(vKind - 1.0) * 2.5 * (vCS.x - 2.5);
+					float door = front * step(abs(fx - doorX), 0.5) * step(gy, 2.1);
+					float doorF = front * step(abs(fx - doorX), 0.62) * step(gy, 2.22);
+					win *= 1.0 - front * step(abs(fx - doorX), 1.3) * step(gy, 2.4);
+					frame *= 1.0 - front * step(abs(fx - doorX), 1.3) * step(gy, 2.4);
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.94, 0.9), max(frame * (1.0 - win), doorF * (1.0 - door)));
+					vec3 dcol = ih > 0.75 ? vec3(0.45, 0.1, 0.08) : ih > 0.5 ? vec3(0.1, 0.16, 0.26) : ih > 0.25 ? vec3(0.38, 0.24, 0.14) : vec3(0.9, 0.9, 0.86);
+					diffuseColor.rgb = mix(diffuseColor.rgb, dcol, door);
+					// a darker skirt of foundation at the ground
+					diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.62, (1.0 - roof) * step(gy, 0.3));
 					glass = vec3(0.18, 0.2, 0.22);
 				} else if (vKind < 2.5) {
 					// towers: curtain wall with mullions and spandrels
@@ -114,13 +180,13 @@ function buildingMaterial(shared, night) {
 				win *= (1.0 - roof) * step(0.8, vLY);
 				diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
 				diffuseColor.rgb *= mix(1.0, 0.8, roof);
-				float lit = step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013)));
+				float lit = max(step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), shopGlow * step(0.25, ih));
 				winGlow = mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6) * win * lit * uNightC * (0.6 + 0.4 * bh(floor(cell) + 3.3)) * 1.1;
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding2';
+	m.customProgramCacheKey = () => 'baybuilding3';
 	return m;
 }
 
@@ -167,15 +233,21 @@ export function createCity(shared, scene, bay) {
 	trunks.instanceColor = null;
 	const crowns = mk(crownGeo, leafMat, TCAP, false), cones = mk(coneGeo, leafMat, TCAP, false);
 
-	// one lot's building (and roof) in grid space: centre (gx, gz), size along grid x/z
-	function lot(list, a, style, gx, gz, w, d, h, kind, col, roof, flat) {
+	// one lot's building (and roof) in grid space: centre (gx, gz), size along grid x/z.
+	// opt.face turns the box so its front (local +z) faces a street: 's' +gz, 'n' -gz,
+	// 'e' +gx, 'w' -gx; opt.lift raises it off the ground (awnings, porch roofs)
+	function lot(list, a, style, gx, gz, w, d, h, kind, col, roof, flat, opt) {
 		const [x, z] = fromGrid(gx, gz, a, style);
 		const g = bay.heightAt(x, z);
 		if (g < 0.8) return;
 		// the local heading of the (possibly warped) grid
 		const [x2, z2] = fromGrid(gx + 5, gz, a, style);
-		const ang = Math.atan2(z2 - z, x2 - x);
-		list.push(flat ? { x, y: g - 0.9, z, w, d, h: 1.15, a: ang, col, kind, roof: null } : { x, y: g - 1.2, z, w, d, h: h + 1.2, a: ang, col, kind, roof });
+		let ang = Math.atan2(z2 - z, x2 - x);
+		const face = opt?.face;
+		if (face === 'n') ang += Math.PI;
+		else if (face === 'e' || face === 'w') { ang += face === 'e' ? -Math.PI / 2 : Math.PI / 2; const t = w; w = d; d = t; }
+		if (opt?.lift) list.push({ x, y: g + opt.lift, z, w, d, h, a: ang, col, kind, roof: null });
+		else list.push(flat ? { x, y: g - 0.9, z, w, d, h: 0.98, a: ang, col, kind, roof: null } : { x, y: g - 1.2, z, w, d, h: h + 1.2, a: ang, col, kind, roof });
 	}
 
 	function fillBlocks(cx, cz, R, list, minH = 0) {
@@ -226,6 +298,25 @@ export function createCity(shared, scene, bay) {
 				const tree = (gx, gz, h, cone, r) => { const [x, z] = fromGrid(gx, gz, a, style), g = bay.heightAt(x, z); if (g > 0.8) trees.push({ x, y: g - 0.3, z, h, cone, col: cone ? jit([0.13, 0.21, 0.11], r) : jit(pick(PAL.crown, r), r) }); };
 				// paved ground: parking lots, yards, plazas
 				const pave = (gx, gz, w, d, kind = KIND.paved, col = [0.25, 0.25, 0.26]) => lot(list, a, style, gx, gz, w, d, 0.25 - 1.2 + 1.35, kind, col, null, 0.9);
+				// close in, each house gets its porch, walk, shrubs and back fences
+				const detail = Math.hypot(wx - cx, wz - cz) < 480;
+				// the back fences of a lot from x0 to x1: its left side line (the neighbour has the
+				// right), and the back line on one side of the block; at(m) is depth into the block
+				const fences = (x0, x1, at, m0, m1, side, r) => {
+					if (m1 - m0 < 2) return;
+					const fc = jit([0.46, 0.38, 0.3], r);
+					lot(list, a, style, x0, at((m0 + m1) / 2), 0.12, m1 - m0, 1.8, KIND.plain, fc, null);
+					if (!side) lot(list, a, style, (x0 + x1) / 2, at(m1), x1 - x0, 0.12, 1.8, KIND.plain, fc, null);
+				};
+				// foundation shrubs across a house front, leaving the door clear
+				const shrubs = (hx, gz, w, dx, r) => {
+					for (let n = 0; n < 4; n++) {
+						const sx = hx + (n / 3 - 0.5) * (w - 1.5);
+						if (Math.abs(sx - dx) < 1.4 || hash(n * 7 + r * 100, i + j) < 0.3) continue;
+						const [x, z] = fromGrid(sx, gz, a, style), g = bay.heightAt(x, z);
+						if (g > 0.8) trees.push({ x, y: g - 0.1, z, h: 1.1 + hash(n, r * 50) * 0.9, shrub: true, col: jit(pick(PAL.crown, hash(n, r)), r) });
+					}
+				};
 				const arterial = (style === STYLE.suburb || style === STYLE.older) && (((i % 7) + 7) % 7 === 0);
 				const civic = hash(i * 11 + 5, j * 13 + 7);
 				if ((style === STYLE.suburb || style === STYLE.older) && civic < 0.035) {
@@ -249,6 +340,11 @@ export function createCity(shared, scene, bay) {
 					const wide = dist === 'nobhill' || dist === 'pacheights';
 					const L = wide ? 15.24 : 7.62, deep = style === STYLE.sf ? (wide ? 24 : 19) : 21;
 					const pal = { chinatown: PAL.chinatown, northbeach: PAL.northbeach, nobhill: PAL.nobhill, mission: PAL.mission, pacheights: PAL.pale, marina: PAL.sf, victorian: PAL.sf, sunset: PAL.sunset }[dist] || PAL.sf;
+					// the shopping streets: every few streets a commercial corridor (Valencia, 24th,
+					// Clement, Irving...), shops on the ground floor, flats above, awnings out front
+					const share = { chinatown: 0.85, northbeach: 0.6, mission: 0.3, sunset: 0.14 }[dist] ?? 0.2;
+					const comm = (jj) => hash(jj * 7 + 13, Math.round(a * 1000) + style * 5) < share;
+					const nK = Math.ceil((IX - 0.1) / L);
 					for (let k = 0; k * L < IX - 0.1; k++) for (const side of [0, 1]) {
 						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
 						if (r < 0.03) continue;
@@ -259,10 +355,23 @@ export function createCity(shared, scene, bay) {
 						else if (dist === 'marina' && r > 0.55) roof = { hip: true, h: 2, col: pick(PAL.tile, r) };
 						else if (dist === 'pacheights' && r > 0.5) roof = { hip: true, h: 4, col: [0.3, 0.32, 0.35] };
 						else if (dist === 'chinatown' && r > 0.78) roof = { hip: true, h: 2.6, col: r > 0.9 ? [0.18, 0.42, 0.3] : [0.62, 0.16, 0.12] };
-						const gz = side ? Z0 + IZ - deep / 2 : Z0 + deep / 2;
-						lot(list, a, style, X0 + k * L + L / 2, gz, L + 0.02, deep, h, KIND.row, col, roof);
-						// bay windows stacked up the front
-						if (style === STYLE.sf && r > 0.35 && dist !== 'nobhill' && dist !== 'chinatown') lot(list, a, style, X0 + k * L + L / 2, side ? Z0 + IZ + 0.5 : Z0 - 0.5, Math.min(3.6, L * 0.47), 1.4, h - 3.2, KIND.row, col.map((c) => Math.min(1, c * 1.05)), null);
+						const gz = side ? Z0 + IZ - deep / 2 : Z0 + deep / 2, face = side ? 's' : 'n', front = side ? Z0 + IZ : Z0;
+						const out = (m) => side ? front + m : front - m;
+						const corner = (k === 0 || k === nK - 1) && r > 0.55;
+						const shop = comm(side ? j + 1 : j) || corner;
+						// a garage under the house (the Sunset nearly always, older SF often), left or right
+						const r2 = hash(i * 37 + k * 11 + side, j * 43 + k);
+						const garageP = { sunset: 0.85, nobhill: 0.08, chinatown: 0.04, northbeach: 0.15, pacheights: 0.4 }[dist] ?? 0.55;
+						const kind = shop ? KIND.shop : KIND.row + (r2 < garageP ? (r2 < garageP / 2 ? 0.1 : 0.2) : 0);
+						lot(list, a, style, X0 + k * L + L / 2, gz, L + 0.02, deep, h, kind, col, roof, false, { face });
+						// bay windows stacked up the front, from the first floor up
+						if (style === STYLE.sf && r > 0.35 && dist !== 'nobhill' && dist !== 'chinatown' && h > 7) lot(list, a, style, X0 + k * L + L / 2, out(0.5), Math.min(3.6, L * 0.47), 1.4, h - 4.4, KIND.bay, col.map((c) => Math.min(1, c * 1.05)), null, false, { face, lift: 3.4 });
+						// an awning over the shopfront
+						if (shop && hash(k * 5 + side, i * 3 + j) < 0.75) {
+							const aw = hash(i + k, j * 9 + side);
+							const ac = aw < 0.25 ? [0.55, 0.12, 0.1] : aw < 0.45 ? [0.1, 0.3, 0.2] : aw < 0.6 ? [0.12, 0.18, 0.36] : aw < 0.75 ? [0.2, 0.2, 0.2] : aw < 0.88 ? [0.86, 0.6, 0.18] : [0.9, 0.88, 0.82];
+							lot(list, a, style, X0 + k * L + L / 2, out(0.8), L * 0.86, 1.6, 0.18, KIND.plain, ac, null, false, { face, lift: 3.0 });
+						}
 						// a street tree now and then (more in the Sunset and the Mission)
 						if (hash(k * 3 + side, i * 5 + j) < (dist === 'sunset' || dist === 'mission' ? 0.2 : 0.1)) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 2.0 : Z0 - 2.0, 6 + r * 3, false, r);
 					}
@@ -271,18 +380,39 @@ export function createCity(shared, scene, bay) {
 						const r = hash(i * 71 + k * 5 + side, j * 23 + k + 9);
 						const h = { chinatown: 11 + r * 7, northbeach: 9 + r * 5, nobhill: 16 + Math.pow(r, 1.5) * 26, pacheights: 11 + r * 4, marina: 8 + r * 3, sunset: 7 + r * 1.5 }[dist] ?? 8.5 + Math.floor(r * 3) * 2.8;
 						const col = jit(pick(pal, hash(i * 3 + k * 11, j * 5 + side)), r);
-						lot(list, a, style, side ? X0 + IX - deep / 2 : X0 + deep / 2, Z0 + deep + k * L + L / 2, deep, L + 0.02, h, KIND.row, col, null);
+						const r2 = hash(i * 29 + k * 13 + side, j * 31 + k);
+						lot(list, a, style, side ? X0 + IX - deep / 2 : X0 + deep / 2, Z0 + deep + k * L + L / 2, deep, L + 0.02, h, r2 < 0.2 ? KIND.shop : KIND.row + (r2 < 0.55 ? 0.1 : 0), col, null, false, { face: side ? 'e' : 'w' });
 					}
 				} else if (style === STYLE.older) {
+					// older towns: detached wood houses with deep front porches, a driveway down
+					// the side to a garage out back, leafy yards
 					const L = 12;
 					for (let k = 0; k * L < IX - 2; k++) for (const side of [0, 1]) {
 						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
 						if (r < 0.08) continue;
-						const w = 8 + r * 2.5, d = 10 + ((r * 7.7) % 1) * 4, h = r > 0.55 ? 6.4 : 3.6;
+						const w = 7.6 + r * 2, d = 10 + ((r * 7.7) % 1) * 4, h = r > 0.55 ? 6.4 : 3.6;
 						const col = jit(pick(PAL.older, hash(i + k * 13, j * 7 + side)), r);
 						const rc = pick(PAL.olderRoof, hash(i * 3 + k, j + side * 5));
-						const gz = side ? Z0 + IZ - 6 - d / 2 : Z0 + 6 + d / 2;
-						lot(list, a, style, X0 + k * L + L / 2, gz, w, d, h, KIND.house, col, { hip: r > 0.8, rot: r < 0.3, h: Math.min(w, d) * 0.42, col: rc });
+						const fz = side ? Z0 + IZ : Z0, inw = side ? -1 : 1, face = side ? 's' : 'n', at = (m) => fz + inw * m;
+						const lotX = X0 + k * L, gs = r > 0.5 ? 1 : -1;
+						const cx = lotX + L / 2 - gs * (L - w - 3) / 2;             // the house to one side, the driveway down the other
+						const hf = 6;                                                 // house front, back from the pavement
+						const door = 0.25 + ((r * 3.3) % 1) * 0.5;
+						lot(list, a, style, cx, at(hf + d / 2), w, d, h, KIND.house + door * 0.4, col, { hip: r > 0.8, rot: r < 0.3, h: Math.min(w, d) * 0.42, col: rc }, false, { face });
+						const dx = cx + (side ? 1 : -1) * (door - 0.5) * (w - 2.5);
+						if (detail) {
+							// the porch: a roof on posts across much of the front, steps to a path
+							const pw = w * (0.5 + r * 0.3);
+							lot(list, a, style, dx, at(hf - 1.2), pw, 2.6, 0.25, KIND.plain, rc, null, false, { face, lift: 2.7 });
+							for (const e of [-1, 1]) lot(list, a, style, dx + e * (pw / 2 - 0.2), at(hf - 2.3), 0.22, 0.22, 2.7, KIND.plain, [0.9, 0.89, 0.85], null, false, { face });
+							pave(dx, at(hf / 2 - 1), 1.2, hf - 2.2, KIND.plain, [0.68, 0.66, 0.62]);
+							// the driveway to a small garage at the back of the lot
+							const gx = lotX + L / 2 + gs * (L / 2 - 1.9);
+							pave(gx, at(12), 2.8, 24, KIND.plain, [0.56, 0.55, 0.52]);
+							if (r > 0.3) lot(list, a, style, gx - gs * 0.6, at(hf + d + 6), 3.6, 6, 2.8, KIND.garage, jit(col, r * 3.1 % 1), { hip: false, h: 1.3, col: rc }, false, { face });
+							fences(lotX, lotX + L, at, hf + d * 0.6, IZ / 2, side, r);
+							shrubs(cx, at(hf - 0.8), w, dx, r);
+						}
 						// old neighbourhoods are leafy: street trees and big backyard trees
 						if (k % 2 === 0) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 1.9 : Z0 - 1.9, 9 + r * 6, false, r);
 						if (r > 0.4) tree(X0 + k * L + L / 2 + 3, side ? Z0 + IZ - 30 : Z0 + 30, 10 + r * 8, r > 0.85, r * 1.7 % 1);
@@ -294,28 +424,48 @@ export function createCity(shared, scene, bay) {
 					const wallsAll = [PAL.ranch, PAL.seventies, PAL.suburb, PAL.eichler][era], roofsAll = [PAL.ranchRoof, PAL.shake, PAL.tile, PAL.flat][era];
 					const walls = [0, 1, 2, 3].map((n) => pick(wallsAll, hash(ti + n * 17, tj + n * 31)));
 					const roofs = [0, 1].map((n) => pick(roofsAll, hash(ti * 3 + n, tj * 5 + n)));
-					const L = era === ERA.modern ? 15.5 : era === ERA.eichler ? 19 : 20;
-					const setback = era === ERA.modern ? 6 : 8;
+					const modern = era === ERA.modern;
+					const L = modern ? 16 : era === ERA.eichler ? 19 : 20;
+					const setback = modern ? 6 : 8, SY = 1.5;                      // front and side setbacks
 					const treeK = [0.9, 0.7, 0.3, 0.9][era], treeH = [11, 9, 5, 10][era];
 					for (let k = 0; k * L < IX - 4; k++) for (const side of [0, 1]) {
 						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
 						if (r < 0.04) continue;
-						const two = era === ERA.modern ? r > 0.12 : era === ERA.seventies ? r > 0.5 : era === ERA.ranch ? r > 0.9 : false;
-						const w = era === ERA.modern ? 11 + r * 2.5 : 14 + r * 3.5, d = era === ERA.modern ? 13 + ((r * 5.3) % 1) * 3 : 10 + ((r * 5.3) % 1) * 3;
+						const fz = side ? Z0 + IZ : Z0, inw = side ? -1 : 1, face = side ? 's' : 'n', at = (m) => fz + inw * m;
+						const two = modern ? r > 0.12 : era === ERA.seventies ? r > 0.5 : era === ERA.ranch ? r > 0.9 : false;
 						const h = two ? 6.4 : 3.3;
 						const col = jit(walls[Math.floor(r * 4)], r), rc = roofs[r > 0.8 ? 1 : 0];
-						const roofH = era === ERA.eichler ? 0.9 : Math.min(w, d) * (era === ERA.modern ? 0.3 : era === ERA.ranch ? 0.2 : 0.26);
-						const gz = side ? Z0 + IZ - setback - d / 2 : Z0 + setback + d / 2;
-						const cx = X0 + k * L + L / 2 + (r - 0.5) * 1.5;
-						lot(list, a, style, cx, gz, w, d, h, KIND.house, col, { hip: era === ERA.modern || (era === ERA.ranch && r > 0.4), h: roofH, col: rc });
-						// the garage: two bays on older tracts, three on new ones, facing the street
-						const gw = era === ERA.modern && r > 0.5 ? 9.5 : 6.4, gs = r > 0.5 ? 1 : -1;
-						lot(list, a, style, cx + (w / 2 + gw / 2 - 1) * gs * 0.85, gz + (side ? 2 : -2), gw, 7, 3.1, KIND.house, col, { hip: era === ERA.modern, h: era === ERA.eichler ? 0.5 : 1.6, col: rc });
+						const lotX = X0 + k * L, gs = r > 0.5 ? 1 : -1;
+						const gw = modern && r > 0.7 ? 8.8 : 6.2;
+						const avail = L - 2 * SY;
+						// new tracts: a two-storey house across the lot with the garage stepped out in
+						// front; older tracts: a long low house with the garage at one end
+						const w = modern ? avail - ((r * 2.9) % 1) * 1.5 : avail - gw - ((r * 2.9) % 1) * 1.8;
+						const d = modern ? 12 + ((r * 5.3) % 1) * 3 : 10 + ((r * 5.3) % 1) * 3;
+						const hf = modern ? setback + 3 : setback + 1.5;              // house front
+						const hx = modern ? lotX + L / 2 : lotX + SY + (gs > 0 ? w / 2 : gw + w / 2);
+						const gx = gs > 0 ? lotX + L - SY - gw / 2 : lotX + SY + gw / 2;
+						const roofH = era === ERA.eichler ? 0.9 : Math.min(w, d) * (modern ? 0.3 : era === ERA.ranch ? 0.2 : 0.26);
+						const door = modern ? (gs > 0 ? 0.28 : 0.72) : 0.35 + ((r * 3.3) % 1) * 0.3;
+						lot(list, a, style, hx, at(hf + d / 2), w, d, h, KIND.house + door * 0.4, col, { hip: modern || (era === ERA.ranch && r > 0.4), h: roofH, col: rc }, false, { face });
+						// the garage, its doors to the street
+						lot(list, a, style, gx, at(setback + 3.5), gw, 7, 3.1, KIND.garage, col, { hip: modern, h: era === ERA.eichler ? 0.5 : 1.6, col: rc }, false, { face });
 						// the driveway
-						pave(cx + (w / 2 + gw / 2 - 1) * gs * 0.85, side ? Z0 + IZ - setback / 2 + 1 : Z0 + setback / 2 - 1, gw - 1, setback, KIND.plain, [0.62, 0.61, 0.58]);
+						pave(gx, at(setback / 2), gw - 0.6, setback, KIND.plain, [0.62, 0.61, 0.58]);
+						const dx = hx + (side ? 1 : -1) * (door - 0.5) * (w - 2.5);
+						if (detail) {
+							// the front walk, a porch over the door, shrubs along the front, fences round the back
+							pave(dx, at(hf / 2), 1.1, hf, KIND.plain, [0.7, 0.69, 0.65]);
+							if (era !== ERA.eichler) {
+								lot(list, a, style, dx, at(hf - 0.8), 2.6, 1.8, 0.22, KIND.plain, rc, null, false, { face, lift: 2.6 });
+								if (modern || r > 0.5) for (const e of [-1, 1]) lot(list, a, style, dx + e * 1.15, at(hf - 1.55), 0.2, 0.2, 2.6, KIND.plain, [0.92, 0.91, 0.88], null, false, { face });
+							}
+							fences(lotX, lotX + L, at, hf + d * 0.55, IZ / 2, side, r);
+							shrubs(hx, at(hf - 0.9), w, dx, r);
+						}
 						// yard trees: a front tree and one out back, bigger in older tracts
-						if (hash(k + 1, side + i * 3) < treeK * 0.6) tree(cx - gs * (w * 0.35), side ? Z0 + IZ - 2.5 : Z0 + 2.5, treeH * (0.7 + r * 0.6), false, r * 3.1 % 1);
-						if (hash(k + 5, side + j * 7) < treeK) tree(cx + (r - 0.5) * 6, side ? Z0 + IZ - setback - d - 8 : Z0 + setback + d + 8, treeH * (0.8 + r * 0.7), r > 0.82, r * 5.7 % 1);
+						if (hash(k + 1, side + i * 3) < treeK * 0.6) tree(hx - gs * (w * 0.3), at(2.5), treeH * (0.7 + r * 0.6), false, r * 3.1 % 1);
+						if (hash(k + 5, side + j * 7) < treeK) tree(hx + (r - 0.5) * 6, at(hf + d + 7), treeH * (0.8 + r * 0.7), r > 0.82, r * 5.7 % 1);
 					}
 				} else if (style === STYLE.industry) {
 					// warehouses and plants in concrete yards, trailers at the docks
@@ -375,8 +525,14 @@ export function createCity(shared, scene, bay) {
 			for (const t of list.trees) {
 				if (nt >= trunks.instanceMatrix.count) break;
 				q.identity();
-				trunks.setMatrixAt(nt++, m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.h * 0.05 + 0.15, t.h * 0.45, t.h * 0.05 + 0.15)));
 				const im = t.cone ? cones : crowns, k = t.cone ? nc++ : nr++;
+				if (t.shrub) {
+					// a shrub: no trunk, a low mound of leaves sitting on the ground
+					im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.3, t.z), q, sc.set(t.h * 0.62, t.h * 0.5, t.h * 0.62)));
+					im.setColorAt(k, col.setRGB(t.col[0], t.col[1], t.col[2]));
+					continue;
+				}
+				trunks.setMatrixAt(nt++, m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.h * 0.05 + 0.15, t.h * 0.45, t.h * 0.05 + 0.15)));
 				if (t.cone) im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.2, t.z), q, sc.set(t.h * 0.28, t.h * 0.85, t.h * 0.28)));
 				else im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.62, t.z), q, sc.set(t.h * 0.36, t.h * 0.3, t.h * 0.36)));
 				im.setColorAt(k, col.setRGB(t.col[0], t.col[1], t.col[2]));

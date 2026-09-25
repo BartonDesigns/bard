@@ -10,7 +10,8 @@ import { loadPeopleAssets, buildPerson, personDNA, rng } from './body.js';
 import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
 
-const MAX = 18, NEAR = 70;
+const MAX = 26, NEAR = 70;
+const steps = [];
 
 export function createPeople(scene, world) {
 	const group = new THREE.Group();
@@ -164,6 +165,8 @@ export function createPeople(scene, world) {
 			const P = buildPerson(A, d);
 			const M = createMotion(P, ground);
 			const p = { P, M, active: false, role: 'walk' };
+			// each footfall, for the street sound
+			M.S.onStep = (at, sp) => { if (p.active && steps.length < 64) steps.push({ x: at.x, z: at.z, k: Math.min(1.5, 0.5 + sp * 0.5) }); };
 			pool.push(p);
 			group.add(P.root);
 			P.root.visible = false;
@@ -222,5 +225,5 @@ export function createPeople(scene, world) {
 		for (let k = 0; k < 4; k++) { const a = L.pts[k], b = L.pts[(k + 1) % 4]; for (let t = 0; t <= 1; t += 0.05) { const px = a.x + (b.x - a.x) * t, pz = a.z + (b.z - a.z) * t, d = Math.hypot(px - x, pz - z); if (d < bd) { bd = d; best = [px, pz, Math.atan2(b.x - a.x, b.z - a.z)]; } } }
 		return best;
 	}
-	return { update, lineup, demo, pool, group, sidewalk, ready: () => !!A };
+	return { update, lineup, demo, pool, group, sidewalk, steps, ready: () => !!A };
 }
