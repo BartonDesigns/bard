@@ -140,7 +140,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (wish.lengthSq() > 1) wish.normalize();
 		if (s.flying) {
 			// free flight: move where you look, climb with Space (or the ⇡ button), sink with C
-			const fs = run ? 38 : 16, cp = Math.cos(s.pitch);
+			// higher up, faster: from a few hundred metres the coast is a couple of minutes away
+			const agl = Math.max(0, s.pos.y - Math.max(0, island.heightAt(s.pos.x, s.pos.z)));
+			const fs = (run ? 38 : 16) * (1 + Math.max(0, agl - 40) / 120), cp = Math.cos(s.pitch);
 			const fx = -Math.sin(s.yaw) * cp, fy = Math.sin(s.pitch), fz = -Math.cos(s.yaw) * cp;
 			const up = (keys.has(' ') || s.flyUp ? 1 : 0) - (keys.has('c') || s.flyDown ? 1 : 0);
 			const tx = (fx * -mz + right.x * mx) * fs, ty = fy * -mz * fs + up * fs * 0.6, tz = (fz * -mz + right.z * mx) * fs;

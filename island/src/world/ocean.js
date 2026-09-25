@@ -28,8 +28,31 @@ uniforms.uUnder = shared.uUnder;
 	uniforms.uHeight.value = shared.heightTex;
 	uniforms.uMasks.value = shared.maskTex;
 
+	// The sea's shape is a spectrum of waves spread round the wind: long swell, then shorter
+	// and shorter wind waves, each about as steep as the last. The mesh carries only the
+	// waves long enough for its vertices to follow (its spacing grows with distance); every
+	// pixel then shades the whole spectrum, each wave faded out where it would be finer than
+	// the pixel. So nothing aliases: no smearing, no crawling as you move, no stretched or
+	// pinched patches, and no visible tiling (the wavelengths share no common repeat).
 	const WAVES = /* glsl */`
 	uniform float uTime, uWave; uniform vec2 uCenter;
+	const int NW = 14;
+	// angle from the wind (rad), wavelength (m), height ratio, steepness
+	const vec4 SPEC[NW] = vec4[NW](
+		vec4(-0.18, 38.0, 1.0, 0.35), vec4(0.42, 26.0, 0.95, 0.4), vec4(-0.63, 18.5, 0.9, 0.45),
+		vec4(0.21, 13.1, 0.85, 0.5), vec4(0.95, 9.7, 0.8, 0.5), vec4(-0.4, 7.3, 0.75, 0.55),
+		vec4(0.62, 5.4, 0.7, 0.55), vec4(-0.9, 4.1, 0.66, 0.55), vec4(0.08, 3.05, 0.62, 0.6),
+		vec4(1.2, 2.3, 0.58, 0.6), vec4(-0.55, 1.7, 0.54, 0.6), vec4(0.35, 1.25, 0.5, 0.6),
+		vec4(-1.15, 0.92, 0.46, 0.6), vec4(0.8, 0.66, 0.42, 0.6));
+	const float WIND = 0.61;
+	// the crests bend and break: every wave is read at a slowly wandering position
+	float wh1(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+	float wn1(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(wh1(i), wh1(i + vec2(1, 0)), f.x), mix(wh1(i + vec2(0, 1)), wh1(i + vec2(1, 1)), f.x), f.y); }
+	vec2 bend(vec2 p){ vec2 q = p * 0.018 + uTime * 0.01; return p + (vec2(wn1(q), wn1(q + 17.3)) - 0.5) * 7.0 + (vec2(wn1(q * 3.1 + 5.0), wn1(q * 3.1 - 9.0)) - 0.5) * 1.6; }
+	vec2 wdir(int i){ float a = WIND + SPEC[i].x; return vec2(cos(a), sin(a)); }
+	float wamp(int i){ return SPEC[i].y * 0.0115 * SPEC[i].z; }
+	// wave groups: each train swells and fades in patches a few wavelengths across
+	float group(int i, vec2 p){ float L = SPEC[i].y; return 0.35 + 1.3 * wn1(p / (L * 5.0) + vec2(float(i) * 13.1, float(i) * 7.7) + uTime * 0.02); }
 	// one Gerstner train: direction d, wavelength L, amplitude A, steepness Q
 	void train(vec2 p, vec2 d, float L, float A, float Q, float speed, inout vec3 disp, inout vec3 dx, inout vec3 dz){
 		float k = 6.28318 / L, c = sqrt(9.8 / k) * speed, f = k * (dot(d, p) - c * uTime);
@@ -37,6 +60,20 @@ uniforms.uUnder = shared.uUnder;
 		disp += vec3(Q * A * d.x * co, A * s, Q * A * d.y * co);
 		dx += vec3(-Q * d.x * d.x * wa * s, d.x * wa * co, -Q * d.x * d.y * wa * s);
 		dz += vec3(-Q * d.x * d.y * wa * s, d.y * wa * co, -Q * d.y * d.y * wa * s);
+	}
+	// how much of a wave of length L survives a sampling step h (vertex spacing or pixel size)
+	float keep(float L, float h){ return 1.0 - smoothstep(L * 0.12, L * 0.3, h); }
+	// the slope of the spectrum at p, each wave filtered for the step h, scaled by a
+	vec2 slopes(vec2 p, float h, float a){
+		vec2 g = vec2(0.0), pb = bend(p);
+		for (int i = 0; i < NW; i++) {
+			float L = SPEC[i].y, w = keep(L, h);
+			if (w <= 0.0) continue;
+			vec2 d = wdir(i); float k = 6.28318 / L;
+			float f = k * (dot(d, pb) - sqrt(9.8 / k) * uTime);
+			g += d * (k * wamp(i) * group(i, p) * cos(f) * w);
+		}
+		return g * a;
 	}`;
 
 	const mat = new THREE.ShaderMaterial({
@@ -50,6 +87,7 @@ uniforms.uUnder = shared.uUnder;
 			${NOISE_GLSL}
 			${SWASH_GLSL}
 			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
+			varying vec2 vInward; varying vec2 vAmp; varying float vHv;
 			#include <fog_pars_vertex>
 			void main(){
 				vec2 p = position.xz + uCenter;
@@ -66,19 +104,23 @@ uniforms.uUnder = shared.uUnder;
 					if (length(gr) > 0.05) inward = normalize(mix(inward, normalize(gr), smoothstep(3000.0, 6000.0, r)));
 				}
 				float nearShore = 1.0 - smoothstep(4.0, 16.0, depth);
-				float swellA = uWave * 0.42 * open;
-				train(p, normalize(vec2(0.86, 0.51)), 22.0, swellA, 0.45, 1.0, disp, dx, dz);
-				train(p, normalize(vec2(0.31, 0.95)), 14.0, swellA * 0.55, 0.5, 1.0, disp, dx, dz);
+				// the mesh's own vertex spacing here (see radialGrid): the waves it can carry
+				float m = max(abs(position.x), abs(position.z)) + 0.5;
+				float hv = 3.3 * 70000.0 * pow(m / 70000.0, 2.3 / 3.3) * 2.0 / 300.0;
+				float swellA = uWave * open;
+				vec2 pb = bend(p);
+				for (int i = 0; i < NW; i++) {
+					float kv = keep(SPEC[i].y, hv);
+					if (kv > 0.0) train(pb, wdir(i), SPEC[i].y, wamp(i) * swellA * kv * group(i, p), SPEC[i].w, 1.0, disp, dx, dz);
+				}
 				float amp = uWave * mix(0.16, 0.5, open) * nearShore;
-				train(p, inward, 16.0, amp, mix(1.1, 0.6, open), 1.0, disp, dx, dz);
-				// wind chop
-				train(p, normalize(vec2(0.82, 0.57)), 5.3, 0.1 * uWave, 0.5, 1.0, disp, dx, dz);
-				train(p, normalize(vec2(-0.43, 0.9)), 3.1, 0.05 * uWave, 0.5, 1.0, disp, dx, dz);
+				train(p, inward, 16.0, amp * keep(16.0, hv), mix(1.1, 0.6, open), 1.0, disp, dx, dz);
+				vInward = inward; vAmp = vec2(swellA, amp); vHv = hv;
 				vec3 w = vec3(p.x, 0.0, p.y) + disp;
 				// on the beach the sea is the swash: a sheet that thins to nothing as it runs up
 				float swl = swashLevel(p, uTime, uWave);
 				if (ground > -0.5) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground));
-				vW = w; vDepth = depth; vFilm = w.y - ground; vCrest = disp.y / max(0.05, amp + swellA + 0.15);
+				vW = w; vDepth = depth; vFilm = w.y - ground; vCrest = disp.y / max(0.05, amp + swellA * 0.45 + 0.15);
 				float k = 6.28318 / 16.0; vRoll = k * (dot(inward, p) - sqrt(9.8 / k) * uTime);
 				vN = normalize(cross(dz, dx));
 				vec4 mvPosition = viewMatrix * vec4(w, 1.0);
@@ -86,22 +128,34 @@ uniforms.uUnder = shared.uUnder;
 				#include <fog_vertex>
 			}`,
 		fragmentShader: /* glsl */`
-			uniform sampler2D uMasks; uniform float uHalf, uTime, uMid, uHigh;
+			uniform sampler2D uMasks; uniform float uHalf, uMid, uHigh;
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
 			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
+			varying vec2 vInward; varying vec2 vAmp; varying float vHv;
 			${NOISE_GLSL}
+			${WAVES}
 			#include <fog_pars_fragment>
 			void main(){
 				vec3 V = normalize(cameraPosition - vW);
 				// ripples on top of the swell, fading with distance so the far sea stays calm
 				float dist = length(cameraPosition - vW);
 				float near = 1.0 - smoothstep(60.0, 900.0, dist);
-				vec2 q = vW.xz * 0.35 + vec2(uTime * 0.21, -uTime * 0.13);
-				float r0 = fbm3(q), rx = fbm3(q + vec2(0.07, 0.0)), rz = fbm3(q + vec2(0.0, 0.07));
+				// the pixel's footprint on the water: waves finer than it are left out
+				float hp = max(length(fwidth(vW.xz)), 0.002);
 				// wind streaks: long calm slicks lying along the wind, where the ripples lie down
 				vec2 sw = mat2(0.82, 0.57, -0.57, 0.82) * vW.xz;
 				float slick = smoothstep(0.58, 0.78, vn(vec2(sw.x * 0.006, sw.y * 0.045) + vec2(uTime * 0.004, 0.0)));
-				vec3 N = normalize(vN + vec3(r0 - rx, 0.0, r0 - rz) * 2.0 * near * (1.0 - 0.75 * slick));
+				// the whole spectrum per pixel; the short wind waves lie down in the slicks and
+				// gusty patches roughen, so the sea is never one even texture
+				float gust = 0.75 + 0.5 * vn(vW.xz * 0.004 + uTime * 0.01);
+				vec2 gL = slopes(vW.xz, hp, vAmp.x * gust);
+				// the rollers toward the shore
+				float kr = 6.28318 / 16.0;
+				gL += vInward * (kr * vAmp.y * cos(kr * (dot(vInward, vW.xz) - sqrt(9.8 / kr) * uTime)) * keep(16.0, hp));
+				// what the fine waves cannot show becomes roughness: a wider, softer sun glint
+				float rough = smoothstep(0.3, 6.0, hp) * (1.0 - 0.5 * slick);
+				vec3 N = normalize(vec3(-gL.x, 1.0, -gL.y) * vec3(1.0 - 0.5 * slick, 1.0, 1.0 - 0.5 * slick));
+				float r0 = 0.5 + 0.5 * clamp((gL.x + gL.y) * 3.0, -1.0, 1.0);
 				if (!gl_FrontFacing) {
 					// from below: a bright window of sky overhead, the rest mirrors the deep
 					float cosI = abs(dot(N, V));
@@ -138,10 +192,14 @@ uniforms.uUnder = shared.uUnder;
 				body += mix(vec3(0.02, 0.42, 0.40), vec3(0.03, 0.12, 0.1), cold) * (1.0 - exp(-0.55 * vDepth)) * exp(-0.09 * vDepth) * (1.0 - reef * 0.6);
 				vec3 light = uAmbient + uSunColor * max(0.0, uSunDir.y) * 0.9;
 				body *= light;
+				// light through the wave faces: slopes tilted toward the sun glow, those turned away
+				// darken, so you see the waves even looking straight down into the water
+				vec2 sunH = normalize(uSunDir.xz + 1e-4);
+				body *= 1.0 + clamp(dot(-gL, sunH) * 2.2, -0.35, 0.45) * (1.0 - rough);
 				// reflection of the sky and the sun
 				vec3 R = reflect(-V, N);
 				vec3 sky = mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)) * (0.82 + 0.12 * slick * near);
-				float spec = pow(max(dot(R, uSunDir), 0.0), 500.0) * 14.0 * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), 60.0) * 0.8;
+				float spec = pow(max(dot(R, uSunDir), 0.0), mix(500.0, 60.0, rough)) * mix(14.0, 2.0, rough) * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), mix(60.0, 12.0, rough)) * 0.8;
 				// at night the moon (opposite the sun) lays a glittering path across the water
 				float nightK = smoothstep(0.02, -0.15, uSunDir.y);
 				vec3 moonDir = normalize(-uSunDir + vec3(0.0, 0.35, 0.0));
@@ -192,12 +250,19 @@ uniforms.uUnder = shared.uUnder;
 	return mesh;
 }
 
-// CPU mirror of the swell height so swimmers and boats ride the same sea.
+// CPU mirror of the sea's height so swimmers and boats ride the same sea as the shader
+// (the spectrum's vertical part, and the rollers toward the shore)
+const SPEC = [[-0.18, 38, 1], [0.42, 26, 0.95], [-0.63, 18.5, 0.9], [0.21, 13.1, 0.85], [0.95, 9.7, 0.8], [-0.4, 7.3, 0.75], [0.62, 5.4, 0.7], [-0.9, 4.1, 0.66], [0.08, 3.05, 0.62]];
 export function waveHeight(island, x, z, t, wave = 1) {
 	const depth = Math.max(0, -island.heightAt(x, z));
-	const open = Math.min(1, Math.max(0, (depth - 0.4) / 6.6));
+	const open = Math.min(1, Math.max(0, (depth - 0.4) / 6.6)), sm = open * open * (3 - 2 * open);
+	let h = 0;
+	for (const [da, L, ra] of SPEC) {
+		const a = 0.61 + da, k = 6.28318 / L;
+		h += L * 0.0115 * ra * wave * sm * Math.sin(k * (Math.cos(a) * x + Math.sin(a) * z - Math.sqrt(9.8 / k) * t));
+	}
 	const r = Math.hypot(x, z) + 1e-3, ix = -x / r, iz = -z / r;
-	const amp = wave * (0.18 + (0.62 - 0.18) * open);
-	const k = 6.28318 / 16, c = Math.sqrt(9.8 / k);
-	return amp * Math.sin(k * ((ix * x + iz * z) - c * t)) + 0.11 * wave * Math.sin(6.28318 / 5.3 * ((0.82 * x + 0.57 * z) - Math.sqrt(9.8 / (6.28318 / 5.3)) * t));
+	const d = Math.min(1, Math.max(0, (depth - 4) / 12)), nearShore = 1 - d * d * (3 - 2 * d);
+	const amp = wave * (0.16 + (0.5 - 0.16) * sm) * nearShore, k = 6.28318 / 16;
+	return h + amp * Math.sin(k * ((ix * x + iz * z) - Math.sqrt(9.8 / k) * t));
 }

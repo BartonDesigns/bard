@@ -254,7 +254,8 @@ export function createIslandWorld() {
 		shared.bayU = bayUniforms();
 		const ocean = createOcean(island, shared);
 		// turf underfoot plus a longer-reaching layer
-		const grass = createGrass(island, shared, isPhone ? 10500 : 18000, isPhone ? 64 : 84, { width: 0.5, seed: 99 });
+		// the reaching layer: out to about 55 m (40 on phones) before it melts into the ground
+		const grass = createGrass(island, shared, isPhone ? 15000 : 30000, isPhone ? 90 : 124, { width: 0.5, seed: 99 });
 		const turf = createGrass(island, shared, isPhone ? 11000 : 18000, 20, { width: 0.34, height: 0.8, seed: 7 });
 		scene.add(terrain, ocean, grass, turf);
 		const litter = createLitter(island, shared, scene, isPhone ? 0.6 : 1);
@@ -434,7 +435,8 @@ export function createIslandWorld() {
 		} else {
 			// out in the Bay Area the air opens up: tens of kilometres of view, layered haze
 			const dI = Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z));
-			const openK = W.bayArea?.loaded() ? THREE.MathUtils.smoothstep(dI, 2500, 9000) : 0;
+			// on Earth the coast is always in view from the island: only a light sea haze close in
+			const openK = W.bayArea?.loaded() ? Math.max(0.9, THREE.MathUtils.smoothstep(dI, 2500, 9000)) : 0;
 			scene.fog.density = THREE.MathUtils.lerp(0.00026, 0.000024 + Math.max(0, 0.00001 * (1 - camera.position.y / 600)), openK);
 			const far = THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
@@ -455,7 +457,9 @@ export function createIslandWorld() {
 		W.litter.update(camera);
 		W.vegetation.stream(camera, false);
 		W.village.update(time, sk.night);
-		W.distant.update(time, sk.night);
+		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
+		W.distant.group.visible = !W.bayArea;
+		if (!W.bayArea) W.distant.update(time, sk.night);
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bayArea?.update(camera, sk.night);

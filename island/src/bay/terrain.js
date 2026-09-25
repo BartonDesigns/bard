@@ -186,7 +186,12 @@ export function createBayArea(shared, scene, island, BU) {
 		BU['uR' + i].value.set(x0, zN, L.step, 0);
 		if (i === 0) { BU.uBayOn.value = 1; buildUrban(); }
 	}
-	const ready = (async () => { for (let i = 0; i < LEVELS.length; i++) { try { await loadLevel(i); } catch (e) { console.warn('bay level', i, e); } } })();
+	// the whole Bay Area coarse first, then the finer levels nearest the island first
+	const order = [0, ...LEVELS.map((L, i) => i).slice(1).sort((a, b) => {
+		const d = (L) => { const c = toWorld((L.lat[0] + L.lat[1]) / 2, (L.lon[0] + L.lon[1]) / 2); return Math.hypot(c.x, c.z); };
+		return d(LEVELS[a]) - d(LEVELS[b]);
+	})];
+	const ready = (async () => { for (const i of order) { try { await loadLevel(i); } catch (e) { console.warn('bay level', i, e); } } })();
 
 	// ---------- the ground ----------
 	const uUrban = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, uUR = { value: new THREE.Vector4(0, 0, 1, 0) };

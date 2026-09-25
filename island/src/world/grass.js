@@ -62,7 +62,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			${OCC_GLSL}
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge;
 			float gTall;
 			` + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
@@ -86,7 +86,14 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				density = min(1.0, density + hug * 0.6 * meadow);
 				// a tuft exists where its random falls under the local density: thinning is
 				// even and gradual, so edges feather out instead of breaking into bald spots
-				float grow = step(aRand.y, density) * (1.0 - smoothstep(0.7, 1.0, dCam));
+				// toward the edge of the carpet each tuft grows in on its own: its own distance to
+				// start from, then an eased rise, so as you walk the grass rises up out of the
+				// ground ahead of you instead of popping in at a line
+				float edgeAt = 0.66 + 0.26 * aRand.x;
+				float rise = 1.0 - smoothstep(edgeAt - 0.2, edgeAt, dCam);
+				rise = rise * rise * (3.0 - 2.0 * rise);
+				float grow = step(aRand.y, density) * rise;
+				vEdge = smoothstep(0.35, 0.9, dCam);
 				// height: a gentle field, longer drifts in hollows, cropped in the village,
 				// shorter at stems and right under your eye
 				// the land decides: tall bunch grass where the ecology says meadow and damp,
@@ -111,7 +118,14 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				tint *= 0.97 + 0.06 * aRand.x;
 				vTall228 = tallMap;
 				tint *= 1.0 - occ * 0.25;
-				vTint = tint * tint;   // authored in display space
+				// toward the edge the tufts take the ground's own meadow colour (the same formula
+				// the terrain paints), so where the grass ends nothing changes colour
+				vec3 tg1 = vec3(0.26, 0.42, 0.08), tg2 = vec3(0.42, 0.54, 0.12), tg3 = vec3(0.56, 0.52, 0.20);
+				vec3 groundC = mix(tg1, tg2, smoothstep(0.35, 0.7, n1g));
+				groundC = mix(groundC, tg3, smoothstep(0.62, 0.8, fbm3(w * 0.013 + 3.0)) * 0.7);
+				groundC *= 0.82 + 0.3 * vn(w * 7.0);
+				groundC = mix(groundC, vec3(0.20, 0.24, 0.10), smoothstep(0.2, 0.8, mk.a) * 0.8);
+				vTint = mix(tint * tint * (1.0 - canopy * 0.55), groundC, max(0.35, smoothstep(0.3, 0.95, dCam)));   // tint is authored in display space
 				vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
 			.replace('#include <begin_vertex>', `
 				vec3 p = position;
@@ -147,11 +161,11 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vec3 transformed = vec3(w.x, h - 0.05 - 0.04 * aRand.x, w.y) + p;
 				vGW = transformed;`)
 			.replace('#include <project_vertex>', `#include <project_vertex>
-				if (gTall < 0.04) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`);
+				if (gTall < 0.005) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);`);
 		// both faces of a blade are lit as the meadow is (up), never as their dark underside
 		sh.fragmentShader = `
 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge;
 			` + sh.fragmentShader
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
 			.replace('#include <map_fragment>', `
@@ -169,7 +183,9 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// darker at the root where blades crowd and shade each other, paler at the tips
 				float rootK = smoothstep(0.0, 0.6, vGUv.y);
 				// each blade keeps its own tone, so the fine blades read one by one
-				diffuseColor.rgb = vTint * mix(0.62, 1.08, rootK) * (0.62 + 0.55 * gt.g);
+				// the blade's own shading (dark roots, bright tips) evens out toward the edge, where
+				// the tufts blend into the painted ground
+				diffuseColor.rgb = vTint * mix(mix(0.62, 1.08, rootK) * (0.62 + 0.55 * gt.g), 1.0, vEdge * 0.85);
 				// a gust flips the blades to show their paler undersides
 				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.35 + vec3(0.03, 0.03, 0.0), vGust * 0.5 * vTip);
 				// tall grass goes to seed: pale straw tips
@@ -177,15 +193,15 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				// blades glow when the sun is behind them; the highs make the field shimmer
 				float back = pow(max(0.0, dot(normalize(vGW - cameraPosition), uSunDir)), 4.0) * max(0.0, uSunDir.y + 0.1);
-				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.45 * vTip;
+				totalEmissiveRadiance += diffuseColor.rgb * uSunColor * back * 0.45 * vTip * (1.0 - vEdge * 0.8);
 				// sheen: blades are glossy along their length; looking toward the sun the field
 				// silvers, the tips lighting up yellow-green where light comes through
 				vec3 Vg = normalize(cameraPosition - vGW);
 				float toward = pow(max(0.0, dot(-Vg, uSunDir) * 0.5 + 0.5), 6.0) * smoothstep(0.0, 0.2, uSunDir.y);
-				totalEmissiveRadiance += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor;
+				totalEmissiveRadiance += (vec3(0.75, 0.8, 0.7) * 0.1 + vec3(0.4, 0.5, 0.1) * 0.25 * vTip * vTip) * toward * uSunColor * (1.0 - vEdge * 0.8);
 				totalEmissiveRadiance += diffuseColor.rgb * uHigh * 0.3 * vTip * (0.5 + 0.5 * sin(uTime * 6.0 + vGW.x * 0.7 + vGW.z * 0.5));`);
 	};
-	mat.customProgramCacheKey = () => 'island-grass';
+	mat.customProgramCacheKey = () => 'island-grass2';
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.frustumCulled = false;
 	mesh.receiveShadow = true;

@@ -10,6 +10,7 @@
 //   real streets, and people walk the real sidewalks.
 
 import * as THREE from 'three';
+import { toWorld } from './geo.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -113,7 +114,9 @@ export function createRealCity(renderer) {
 		R.attribution = H.attribution;
 		R.loaded = true;
 	}
-	const ready = Promise.all(REGIONS.map((n) => load(n).catch((e) => console.warn('real city', n, e))));
+	// one at a time, the nearest to the island first
+	const byDist = REGIONS.map((n, i) => { const [w, so, e, no] = REAL_EXTENTS[i], c = toWorld((so + no) / 2, (w + e) / 2); return [n, Math.hypot(c.x, c.z)]; }).sort((a, b) => a[1] - b[1]).map((r) => r[0]);
+	const ready = (async () => { for (const n of byDist) await load(n).catch((e) => console.warn('real city', n, e)); })();
 
 	const regionAt = (x, z, m = 60) => R.regions.find(({ bounds: b }) => x > b[0] + m && z > b[1] + m && x < b[2] - m && z < b[3] - m);
 	const inside = (x, z) => !!regionAt(x, z);
