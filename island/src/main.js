@@ -34,7 +34,11 @@ import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createCitySound } from './bay/citysound.js';
-import { createRealCity } from './bay/realcity.js';
+import { createRealCity, REAL_U } from './bay/realcity.js';
+import { createDiablo } from './bay/diablo.js';
+
+// the hills by the calendar: green from the winter rains into spring, gold by summer
+REAL_U.uSeason.value = [0, 0, 0, 0.05, 0.3, 0.6, 0.85, 1, 1, 1, 0.85, 0.35][new Date().getMonth()];
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads } from './bay/roads.js';
@@ -299,9 +303,12 @@ export function createIslandWorld() {
 				world.bridge = bridge;
 				world.landmarks = createLandmarks(scene, bayArea);
 				world.roads = createRoads(shared, scene, bayArea);
+				world.diablo = createDiablo(scene, bayArea);
 				world.labels = createLabels(dom.mount, bayArea, bridge);
-				// walk and drive across the deck
-				island.extraFloor = (x, z, y) => bridge.deckFloor(x, z, y);
+				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
+				const diablo = world.diablo;
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y));
+				island.extraPush = (p, footY) => diablo.push(p, footY);
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -333,6 +340,7 @@ export function createIslandWorld() {
 		slider(p, 'Cloud cover', 0, 1, 0.01, () => world.sky.uniforms.uCloud.value, (v) => { world.sky.uniforms.uCloud.value = v; }, (v) => Math.round(v * 100) + '%');
 		slider(p, 'Waves', 0, 2, 0.05, () => shared.uWave.value, (v) => { shared.uWave.value = v; world.ocean.userData.uniforms.uWave.value = v; }, (v) => v.toFixed(2));
 		slider(p, 'Wind', 0, 1.5, 0.05, () => shared.uWind.value, (v) => { shared.uWind.value = v; }, (v) => v.toFixed(2));
+		slider(p, 'Season', 0, 1, 0.01, () => REAL_U.uSeason.value, (v) => { REAL_U.uSeason.value = v; }, (v) => v < 0.2 ? 'spring green' : v < 0.55 ? 'late spring' : v < 0.85 ? 'early summer' : 'summer gold');
 		const q = css(document.createElement('div'), 'display:flex;gap:6px;margin-top:6px;');
 		for (const mode of ['auto', 'high', 'low']) {
 			const b = css(document.createElement('button'), 'flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
@@ -443,6 +451,7 @@ export function createIslandWorld() {
 		W.bayArea?.update(camera, sk.night);
 		W.bridge?.update(time, sk.night);
 		W.real?.update(camera);
+		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);
 		W.street?.update(dt, time, camera, sk.night);
 		W.roads?.update(time, sk.night);
@@ -663,6 +672,8 @@ if (typeof window !== 'undefined') {
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
+		// the hills' season: 0 spring green .. 1 summer gold
+		season: (v) => { if (v !== undefined) REAL_U.uSeason.value = Math.max(0, Math.min(1, +v)); return REAL_U.uSeason.value; },
 		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },
 		clearHome: () => { localStorage.removeItem('crysis-home'); return 'Home cleared.'; },
 		goHome: () => {

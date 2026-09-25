@@ -6,7 +6,7 @@
 # rectangle, and if its sides run square, cut into the fewest rectangles (the house, its
 # garage wing, an L or a T), each carrying the height Overture gives and a hip roof; the
 # front faces the nearest street, where the door, garage doors, driveway and walk go.
-#   python3 tools/bake-realcity.py <overture dir> <name>
+#   python3 tools/bake-realcity.py <overture dir> <name> <west> <south> <east> <north> [map step]
 import sys, os, json, math, struct, random
 import numpy as np
 from shapely.geometry import Polygon, LineString, Point, box
@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw
 src, name = sys.argv[1], sys.argv[2]
 LAT0, LON0 = 37.76, -122.78
 KX, KZ = 111320 * math.cos(LAT0 * math.pi / 180), 110996
-W_, S_, E_, N_ = -122.02, 37.715, -121.87, 37.83
+W_, S_, E_, N_ = map(float, sys.argv[3:7])
 def world(lon, lat): return ((lon - LON0) * KX, -(lat - LAT0) * KZ)
 x0, zN = world(W_, N_); x1, zS = world(E_, S_)
 OX, OZ = round((x0 + x1) / 2), round((zN + zS) / 2)
@@ -200,7 +200,7 @@ lus.sort(key=lambda t: ORDER.index(t[0]))
 
 # ---------- trees: yard trees, street trees, park trees ----------
 res = [Polygon(p).buffer(0) for c, p in lus if c == 1]
-parks = [Polygon(p).buffer(0) for c, p in lus if c in (2, 3, 6, 12)]
+parks = [Polygon(p).buffer(0) for c, p in lus if c in (2, 3, 6)]            # wild land is grown at run time from the terrain
 blocked = unary_union([p.buffer(2.5) for p in bpolys] + [LineString(r['p']).buffer(WIDTH[r['c']] / 2 + (2.2 if r['c'] in DRIVE else 0.6)) for r in roads] + [Polygon([(a, b) for a, b in [(p[0] - p[2] / 2, p[1] - p[3] / 2), (p[0] + p[2] / 2, p[1] - p[3] / 2), (p[0] + p[2] / 2, p[1] + p[3] / 2), (p[0] - p[2] / 2, p[1] + p[3] / 2)]]).buffer(1.5) for p in POOLS])
 blocked_idx = blocked
 TREES = []
@@ -238,8 +238,8 @@ for r in roads:
 			s += rnd.uniform(11, 19)
 print('trees', len(TREES))
 
-# ---------- the 8 m map ----------
-PX = 8
+# ---------- the coarse map ----------
+PX = float(sys.argv[7]) if len(sys.argv) > 7 else 8
 MW, MH = int((x1 - x0) / PX) + 1, int((zS - zN) / PX) + 1
 def pix(p): return ((p[0] - x0) / PX, (p[1] - zN) / PX)
 R = Image.new('L', (MW, MH), 0); G = Image.new('L', (MW, MH), 0); B = Image.new('L', (MW, MH), 0)

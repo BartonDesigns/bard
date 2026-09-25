@@ -15,6 +15,7 @@ export const LEVELS = [
 	{ name: 'h1', lat: [37.2, 38.12], lon: [-122.62, -121.75], step: 60, zoom: 11 },
 	{ name: 'h2', lat: [37.7, 37.93], lon: [-122.56, -122.36], step: 15, zoom: 13 },
 	{ name: 'h3', lat: [37.715, 37.83], lon: [-122.02, -121.87], step: 10, zoom: 14 },         // San Ramon, mapped street by street
+	{ name: 'h4', lat: [37.82, 37.95], lon: [-122.02, -121.84], step: 12, zoom: 14 },          // Mt Diablo
 ];
 // height encoding in the PNGs: v = (h + 1000) * 20 in R (high byte) and G (low byte)
 export const H_OFF = 1000, H_SCALE = 20;

@@ -49,6 +49,12 @@ const PAL = {
 	crown: [[0.2, 0.28, 0.12], [0.32, 0.4, 0.18], [0.18, 0.26, 0.14], [0.14, 0.22, 0.12], [0.38, 0.46, 0.22], [0.35, 0.22, 0.24], [0.26, 0.34, 0.16]],
 };
 const pick = (list, r) => list[Math.floor(r * 9973) % list.length];
+// smooth value noise, 0..1
+const vnoise = (x, z) => {
+	const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+	const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
+	return (a * (1 - su) + b * su) * (1 - sv) + (c * (1 - su) + d * su) * sv;
+};
 const jit = (c, r) => [c[0] * (0.95 + r * 0.1), c[1] * (0.95 + ((r * 7.3) % 1) * 0.1), c[2] * (0.95 + ((r * 3.1) % 1) * 0.1)];
 
 // facades by kind: SF bay windows and cornices, house windows, curtain wall, ribbon glazing
@@ -601,7 +607,7 @@ export function createCity(shared, scene, bay, real = null) {
 				continue;
 			}
 			if (d < 440) {
-				const sp = t.cone ? 2 : hash(t.x * 0.7, t.z * 1.3) < 0.3 ? 1 : 0, T = treeTiers[sp];
+				const sp = t.sp ?? (t.cone ? 2 : hash(t.x * 0.7, t.z * 1.3) < 0.3 ? 1 : 0), T = treeTiers[sp];
 				const tier = d < 150 ? T.near : T.mid, H = d < 150 ? T.H : T.Hm;
 				const k = next(tier[0]);
 				if (k >= 0) {
@@ -749,9 +755,45 @@ export function createCity(shared, scene, bay, real = null) {
 			const g = bay.heightAt(p.x, p.z);
 			if (g > 0.5) list.push({ x: p.x, y: g - 0.9, z: p.z, w: p.w, d: p.d, h: 0.99, a: p.a, col: [0.9, 0.89, 0.85], kind: KIND.pool, roof: null });
 		}
+		wildLand(cx, cz, Math.min(R, 1100), trees);
 		for (const t of real.near('trees', cx, cz, Math.min(R, 1400))) {
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
 			if (g > 0.5) trees.push({ x: t.x, y: g - 0.3, z: t.z, h: t.h, cone: !!t.cone, col: t.cone ? jit([0.13, 0.21, 0.11], r) : jit(pick(PAL.crown, r), r) });
+		}
+	}
+
+	// the wild land round the towns and up Mt Diablo, grown from the ground itself:
+	// oak woodland on the cool north slopes and down the canyons (live oak, bay, buckeye),
+	// chaparral on the hot south-facing ridges, gray and Coulter pines scattered high,
+	// open grassland with the odd blue oak on the gentle slopes
+	function wildLand(cx, cz, R, trees) {
+		if (!real?.landAt) return;
+		const C = 13, H = (x, z) => bay.heightAt(x, z);
+		for (let gz = Math.floor((cz - R) / C); gz <= Math.floor((cz + R) / C); gz++) for (let gx = Math.floor((cx - R) / C); gx <= Math.floor((cx + R) / C); gx++) {
+			const r = hash(gx * 1.7 + 11, gz * 2.3 + 5);
+			if (r > 0.62) continue;                                                  // most cells are open ground
+			const x = (gx + hash(gx, gz * 3) * 1.6 - 0.3) * C, z = (gz + hash(gx * 5, gz) * 1.6 - 0.3) * C;
+			if ((x - cx) * (x - cx) + (z - cz) * (z - cz) > R * R || !real.inside(x, z)) continue;
+			const L = real.landAt(x, z);
+			if (!L || (L.lu !== 0 && L.lu !== 11 && L.lu !== 12) || L.road > 0.2 || L.roof > 0.2) continue;
+			const h = H(x, z);
+			if (h < 3) continue;
+			const e = 18, hxp = H(x + e, z), hxm = H(x - e, z), hzp = H(x, z + e), hzm = H(x, z - e);
+			const slope = Math.hypot(hxp - hxm, hzp - hzm) / (2 * e);
+			if (slope > 1.1) continue;                                                 // bare rock
+			const north = Math.max(-1, Math.min(1, (hzp - hzm) / (2 * e) * 4));      // ground rising southward faces north
+			const gully = Math.max(0, Math.min(1, (hxp + hxm + hzp + hzm - 4 * h) / 6));
+			const high = Math.min(1, Math.max(0, (h - 350) / 600));
+			// groves: woodland gathers in patches rather than evenly
+			const grove = vnoise(x / 140, z / 140) * 0.7 + vnoise(x / 45 + 9, z / 45 + 3) * 0.3;
+			const wood = Math.min(1, Math.max(0, (0.08 + north * 0.55 + gully * 0.7 + slope * 0.2 - high * 0.15) * (0.25 + grove * 1.5)));
+			const chap = Math.min(1, Math.max(0, -north * 0.5 + slope * 0.9 + high * 0.6 - 0.35 - gully * 0.5));
+			const r2 = hash(gx * 3.1 + 7, gz * 1.3 + 3), g = h - 0.3;
+			const tint = (base) => jit(base, r2);
+			if (r2 < wood * 0.8) trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: r2 < wood * 0.35 ? 0 : 1, col: tint(r2 < 0.3 ? [0.16, 0.24, 0.1] : [0.22, 0.28, 0.13]) });
+			else if (r2 < wood * 0.8 + chap * 0.75) trees.push({ x, y: g, z, h: 1.4 + r2 * 1.8, shrub: true, col: tint([0.2, 0.25, 0.13]) });
+			else if (r2 > 0.965 - high * 0.05) trees.push({ x, y: g, z, h: 11 + r2 * 9, cone: true, sp: 2, col: tint([0.3, 0.36, 0.26]) });   // gray pine
+			else if (r2 > 0.92 && slope < 0.35) trees.push({ x, y: g, z, h: 7 + r2 * 5, sp: 1, col: tint([0.3, 0.33, 0.2]) });          // blue oak in the grass
 		}
 	}
 

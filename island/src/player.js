@@ -109,6 +109,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 				[p.x, p.z] = toWorld(f, lx, lz);
 			}
 		}
+		// the world's own solid things (Mt Diablo's sandstone)
+		if (island.extraPush) island.extraPush(p, p.y - EYE);
 		for (const o of vegetation.obstacles(p.x, p.z, 0.35)) {
 			const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = o.r + 0.35;
 			if (d < min && d > 1e-4) { p.x = o.x + dx / d * min; p.z = o.z + dz / d * min; }
@@ -147,7 +149,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			s.pos.addScaledVector(s.vel, dt);
 			const floor = Math.max(floorAt(s.pos.x, s.pos.z, s.pos.y) , 0) + 1.2;
 			if (s.pos.y < floor) { s.pos.y = floor; s.vel.y = Math.max(0, s.vel.y); }
-			s.pos.y = Math.min(s.pos.y, 900);
+			s.pos.y = Math.min(s.pos.y, Math.max(900, floor + 900));                     // a ceiling above the land, so Mt Diablo can be flown over
 			s.grounded = false; s.swimming = false;
 			camera.position.copy(s.pos);
 			camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');

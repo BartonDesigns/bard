@@ -1,4 +1,5 @@
-// The real city: where the Bay Area is mapped street by street (San Ramon first), the
+// The real city: where the Bay Area is mapped street by street (San Ramon, Danville,
+// Mt Diablo and Clayton), the
 // roads, buildings, driveways, pools and trees come from Overture Maps (OpenStreetMap,
 // Microsoft and Google footprints), baked by tools/bake-realcity.py. Inside the region
 // the procedural street grid gives way to this:
@@ -15,16 +16,17 @@ const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); 
 export const REAL_U = {
 	uRoadMap: { value: blank() }, uRoadR: { value: new THREE.Vector4(0, 0, 1, 0) },
 	uRoadMap2: { value: blank() }, uRoadR2: { value: new THREE.Vector4(0, 0, 1, 0) },
+	uSeason: { value: 1 },                      // 0 spring green .. 1 summer gold
 	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB;
+uniform sampler2D uRoadMap, uRoadMap2, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB; uniform float uSeason;
 bool inReal(vec2 w){ return uRealR.w > 0.5 && w.x > uRealB.x && w.y > uRealB.y && w.x < uRealB.z && w.y < uRealB.w; }
 `;
 
-const REGIONS = ['sanramon'];
+const REGIONS = ['eastbay'];
 // the regions' extents [west, south, east, north], known before their data loads
-export const REAL_EXTENTS = [[-122.02, 37.715, -121.87, 37.83]];
+export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95]];           // San Ramon, Danville, Mt Diablo, Clayton
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
 
@@ -88,6 +90,14 @@ export function createRealCity(renderer) {
 		R.names = H.names;
 		const [bx0, bz0, bx1, bz1] = H.bounds;
 		R.bounds = [bx0, bz0, bx1, bz1];
+		// a CPU copy of the coarse map, for what grows where
+		{
+			const img = map.image, cv = document.createElement('canvas');
+			cv.width = img.width; cv.height = img.height;
+			const cx2 = cv.getContext('2d', { willReadFrequently: true });
+			cx2.drawImage(img, 0, 0);
+			R.map = { px: cx2.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height, x0: H.bounds[0], z0: H.bounds[1], step: H.map.step };
+		}
 		map.flipY = false; map.minFilter = THREE.LinearFilter; map.magFilter = THREE.LinearFilter; map.generateMipmaps = false; map.colorSpace = THREE.NoColorSpace;
 		map.needsUpdate = true;
 		REAL_U.uRealMap.value = map;
@@ -210,6 +220,16 @@ export function createRealCity(renderer) {
 		}
 	}
 
+	// the coarse map at a point: land use (0 wild), roads and roofs coverage
+	function landAt(x, z) {
+		const M = R.map;
+		if (!M) return null;
+		const i = Math.floor((x - M.x0) / M.step), j = Math.floor((z - M.z0) / M.step);
+		if (i < 0 || j < 0 || i >= M.w || j >= M.h) return null;
+		const k = (j * M.w + i) * 4;
+		return { lu: Math.round(M.px[k + 1] / 16), road: M.px[k] / 255, roof: M.px[k + 2] / 255 };
+	}
+
 	// the nearest point on a sidewalk: [x, z, heading along the street]
 	function sidewalk(x, z) {
 		let best = null, bd = 1e9;
@@ -228,5 +248,5 @@ export function createRealCity(renderer) {
 		return best;
 	}
 
-	return { ready, R, inside, near, update, sidewalk, rt, loaded: () => R.loaded };
+	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded };
 }

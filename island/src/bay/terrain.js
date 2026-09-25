@@ -16,7 +16,7 @@ import { REAL_U, REAL_GLSL } from './realcity.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
-uniform highp sampler2D uB0, uB1, uB2, uB3; uniform vec4 uR0, uR1, uR2, uR3; uniform float uBayOn;
+uniform highp sampler2D uB0, uB1, uB2, uB3, uB4; uniform vec4 uR0, uR1, uR2, uR3, uR4; uniform float uBayOn;
 float bLevel(highp sampler2D t, vec4 r, vec2 w){
 	vec2 S = vec2(textureSize(t, 0));
 	vec2 f = clamp((w - r.xy) / r.z, vec2(0.0), S - 1.001);
@@ -35,6 +35,7 @@ float bayHeight(vec2 w){
 	float k1 = bIn(uB1, uR1, w, 1500.0); if (k1 > 0.0) h = mix(h, bLevel(uB1, uR1, w), k1);
 	float k2 = bIn(uB2, uR2, w, 500.0); if (k2 > 0.0) h = mix(h, bLevel(uB2, uR2, w), k2);
 	float k3 = bIn(uB3, uR3, w, 400.0); if (k3 > 0.0) h = mix(h, bLevel(uB3, uR3, w), k3);
+	float k4 = bIn(uB4, uR4, w, 400.0); if (k4 > 0.0) h = mix(h, bLevel(uB4, uR4, w), k4);
 	return h;
 }
 `;
@@ -43,7 +44,7 @@ float bayHeight(vec2 w){
 const REAL_LAND = /* glsl */`
 vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	vec3 lawn = mix(vec3(0.2, 0.34, 0.1), vec3(0.3, 0.41, 0.15), gn);
-	vec3 dry = mix(vec3(0.5, 0.45, 0.28), vec3(0.6, 0.53, 0.34), gn);
+	vec3 dry = mix(lawn, mix(vec3(0.5, 0.45, 0.28), vec3(0.6, 0.53, 0.34), gn), uSeason);
 	if (lu < 0.5 || lu > 10.5) return nat;
 	if (lu < 1.5) {
 		// yards: lawns (a few browned off), planting beds, shade
@@ -65,7 +66,7 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);
 export function bayUniforms() {
 	const blank = () => { const t = new THREE.DataTexture(new Uint16Array([0, 0, 0, 0]), 2, 2, THREE.RedFormat, THREE.HalfFloatType); t.needsUpdate = true; return t; };
-	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uBayOn: { value: 0 } };
+	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uB4: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uR4: { value: OFF.clone() }, uBayOn: { value: 0 } };
 }
 
 // the towns: how far each one's streets reach, their street-grid angle, and the
@@ -159,6 +160,7 @@ export function createBayArea(shared, scene, island, BU) {
 		if (levels[1]) { const k = levelIn(levels[1], x, z, 1500); if (k > 0) h += (levelH(levels[1], x, z) - h) * k; }
 		if (levels[2]) { const k = levelIn(levels[2], x, z, 500); if (k > 0) h += (levelH(levels[2], x, z) - h) * k; }
 		if (levels[3]) { const k = levelIn(levels[3], x, z, 400); if (k > 0) h += (levelH(levels[3], x, z) - h) * k; }
+		if (levels[4]) { const k = levelIn(levels[4], x, z, 400); if (k > 0) h += (levelH(levels[4], x, z) - h) * k; }
 		return h;
 	}
 
@@ -220,7 +222,10 @@ export function createBayArea(shared, scene, island, BU) {
 					float fogbelt = 1.0 - smoothstep(22000.0, 58000.0, vBW.x);
 					float north = clamp(-n.z * 2.2, 0.0, 1.0) * smoothstep(0.04, 0.25, slope);
 					float south = clamp(n.z * 2.2, 0.0, 1.0) * smoothstep(0.08, 0.3, slope);
+					// the grass: green in the rainy season, gold by summer (uSeason 0..1)
 					vec3 gold = mix(vec3(0.6, 0.48, 0.27), vec3(0.75, 0.63, 0.37), n2);
+					vec3 spring = mix(vec3(0.2, 0.36, 0.07), vec3(0.33, 0.47, 0.1), n2);
+					gold = mix(spring, gold, clamp(uSeason + (n1 - 0.5) * 0.3 + slope * 0.4 * uSeason, 0.0, 1.0));
 					vec3 c = gold;
 					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4);
 					c = mix(c, mix(vec3(0.27, 0.28, 0.18), vec3(0.35, 0.34, 0.22), n3), chap * 0.85);

@@ -12,6 +12,7 @@ import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
 
 const MAX = 26, NEAR = 70;
 const steps = [];
+const TRAIL = new Set(['path', 'track', 'footway']);                 // hiked, down the middle
 
 export function createPeople(scene, world) {
 	const group = new THREE.Group();
@@ -53,6 +54,12 @@ export function createPeople(scene, world) {
 			return { n: d < 260 ? Math.round(8 * (1 - night * 0.7)) : 0, island: true };
 		}
 		const U = W.bayArea?.urbanAt(cam.x, cam.z);
+		// out on the trails: a few hikers by day
+		const real = W.real;
+		if (real?.loaded() && real.inside(cam.x, cam.z) && (!U || U.u < 0.2) && cam.y - ground(cam.x, cam.z) < 90) {
+			const trails = real.near('roads', cam.x, cam.z, 120).some((q) => TRAIL.has(q.cls));
+			return { n: trails ? Math.round(5 * (1 - night * 0.95)) : 0, island: false };
+		}
 		if (!U || U.u < 0.2 || cam.y - ground(cam.x, cam.z) > 90) return { n: 0 };
 		const busy = U.s === STYLE.sf || U.d > 0.2 ? 1 : U.s === STYLE.retail ? 0.8 : U.s === STYLE.older ? 0.55 : U.s === STYLE.office ? 0.45 : 0.35;
 		return { n: Math.round(MAX * busy * (1 - night * 0.75)), island: false };
@@ -66,7 +73,7 @@ export function createPeople(scene, world) {
 		for (let i = 2; i < p.length; i += 2) {
 			const ax = p[i - 2], az = p[i - 1], bx = p[i], bz = p[i + 1], L = Math.hypot(bx - ax, bz - az);
 			if (acc + L >= s || i === p.length - 2) {
-				const t = L ? Math.min(1, Math.max(0, (s - acc) / L)) : 0, off = (r.w / 2 + 0.9) * side;
+				const t = L ? Math.min(1, Math.max(0, (s - acc) / L)) : 0, off = TRAIL.has(r.cls) ? 0.35 * side : (r.w / 2 + 0.9) * side;
 				const nx = L ? -(bz - az) / L : 0, nz = L ? (bx - ax) / L : 0;
 				return new THREE.Vector3(ax + (bx - ax) * t + nx * off, 0, az + (bz - az) * t + nz * off);
 			}
@@ -77,7 +84,7 @@ export function createPeople(scene, world) {
 	function streetRoute(x, z, r) {
 		const real = world().real;
 		if (!real?.loaded() || !real.inside(x, z)) return null;
-		const roads = real.near('roads', x, z, 60).filter((q) => q.walked && !q.bridge);
+		const roads = real.near('roads', x, z, 60).filter((q) => (q.walked || TRAIL.has(q.cls)) && !q.bridge);
 		if (!roads.length) return null;
 		// the streets that really pass close to the chosen spot (the index hands back whole cells)
 		const close = [];
@@ -180,7 +187,7 @@ export function createPeople(scene, world) {
 				const L = roadLen(R.road);
 				if (R.s < 0 || R.s > L) {
 					const ex = R.road.pts[R.s < 0 ? 0 : R.road.pts.length - 2], ez = R.road.pts[R.s < 0 ? 1 : R.road.pts.length - 1];
-					const next = world().real.near('roads', ex, ez, 30).filter((q) => q !== R.road && q.walked && !q.bridge && (Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16 || Math.hypot(q.pts[q.pts.length - 2] - ex, q.pts[q.pts.length - 1] - ez) < 16));
+					const next = world().real.near('roads', ex, ez, 30).filter((q) => q !== R.road && (q.walked || TRAIL.has(q.cls)) && !q.bridge && (Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16 || Math.hypot(q.pts[q.pts.length - 2] - ex, q.pts[q.pts.length - 1] - ez) < 16));
 					if (next.length && Math.random() < 0.85) {
 						const q = next[Math.floor(Math.random() * next.length)], atStart = Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16;
 						R.road = q; R.dir = atStart ? 1 : -1; R.s = atStart ? 1 : roadLen(q) - 1;
