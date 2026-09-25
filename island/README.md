@@ -1,4 +1,4 @@
-# Island engine (stage 1)
+# Crysis (the island engine, stage 1)
 
 The tropical island world for Level 99 Bard. It is a separate ES-module
 project bundled into `dist/island.js`, which the faceplate (`../index.html`)
@@ -31,11 +31,24 @@ Open `dev.html` from a local server to run the island on its own
 - `src/boat.js` — the village boat: board, throttle and steer, rides the swell, leaves a wake
 - `src/whale.js` — a humpback in the bay: blows, sounds with flukes up, breaches on a hard bass hit
 - `src/music.js` — faceplate bands, play surfaces, ripples
+- `src/crysis/ecology.js` — Crysis ecology: seed → marine profile → food web → species genomes (corals, fish, small life), community field, `describe()`
+- `src/crysis/fish.js` — fish grown from genomes (lofted body, fins, tail, painted pattern) and niche behaviour (clouds over heads, grazing groups, pairs, bait balls, patrolling predators, rays)
+- `src/crysis/inverts.js` — sea stars, sea cucumbers, giant clams, feather dusters and garden eels that duck, moon jellies
+- `src/reef.js` — coral heads grown from the ecology's coral species, placed by depth, exposure and community
+- `src/caverns.js`, `src/magma.js`, `src/underwater.js`, `src/sealife.js` — sea caves and arches, the vent and lava tube, basalt and kelp, the vent swarm
 - `src/main.js` — renderer, loop, HUD, settings, Journey adapter
+
+## Crysis
+
+The engine grows its world from the seed. The ocean is the first realm on the Crysis
+ecology; the land (flora communities, fauna), terrain types and the caves and flight
+systems of the older builds move onto it next. `Crysis.ecology()` in the console prints
+the open island's food web.
 
 ## Faceplate contract
 
 - `window.L99Island` — `open({seed})`, `close()`, `active()`, `link()`
+- `window.Crysis` — `world()`, `ecology()`
 - Registers realm `island` with `L99TouchMusic175` and `L99Journey170`
 - `L99Keyboard149.world()` reports `island` while it is open
 - Reads `L99Continuity.bands` for music reactivity (the whale also answers a strong bass hit; its blow and song are its own synthesized voice, played into the faceplate lead bus `leadBus227`)

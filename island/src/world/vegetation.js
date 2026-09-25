@@ -462,8 +462,8 @@ float rfbm(vec2 p){ return rvn(p) * 0.5 + rvn(p * 2.1 + 3.1) * 0.3 + rvn(p * 4.3
 function swayMaterial(params, shared, stiff) {
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
 	const hook = (sh) => {
-		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass;
-		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
+		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT;
+		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
 			#include <begin_vertex>
 			// darker where it meets the ground: roots, the trunk foot, the base of a shrub
 			vGroundAO = mix(0.42, 1.0, smoothstep(-0.1, 1.3, position.y));
@@ -474,9 +474,13 @@ function swayMaterial(params, shared, stiff) {
 			#endif
 			float ph = ip.x * 0.21 + ip.z * 0.17;
 			float sw = aSway * aSway * ${stiff.toFixed(2)};
-			float push = 0.10 + uWind * 0.22 + uBass * 0.45;
-			transformed.x += (sin(uTime * 1.25 + ph) * push + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * 0.05) * sw;
-			transformed.z += (cos(uTime * 1.05 + ph) * push * 0.7 + cos(uTime * 4.3 + position.x * 1.3) * 0.04) * sw;`);
+			// sway on the wind's own clock; a gust leans the whole plant downwind and
+			// sets the leaves fluttering; at no wind it barely stirs
+			float push = 0.02 + uWind * 0.2 + uGust * 0.35 + uBass * 0.3;
+			float flutter = 0.006 + uWind * 0.035 + uGust * 0.06;
+			float wt = uWindT * 2.2;
+			transformed.x += (sin(wt * 1.25 + ph) * push + uGust * 0.25 + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * flutter) * sw;
+			transformed.z += (cos(wt * 1.05 + ph * 1.3) * push * 0.7 + uGust * 0.1 + cos(uTime * 4.3 + position.x * 1.3) * flutter * 0.8) * sw;`);
 	};
 	// leaves are thin: light both faces from the outward normal, as sunlight through
 	// a leaf does, instead of flipping the back face dark

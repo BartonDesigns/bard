@@ -35,21 +35,11 @@ export function createSealife(island, shared, scene, camera, bommies = []) {
 	scene.add(group);
 
 	// ---------- fish ----------
+	// the reef and open-water fish are grown by Crysis (crysis/fish.js); this keeps the
+	// swarm that lives over the vent
 	const SPECIES = [
-		{ n: 110, size: 0.16, a: [1.0, 0.82, 0.18], b: [0.2, 0.35, 0.8] },    // yellow tang / blue
-		{ n: 90, size: 0.12, a: [0.95, 0.5, 0.15], b: [1.0, 1.0, 0.95] },     // clownish orange and white
-		{ n: 120, size: 0.1, a: [0.72, 0.84, 0.92], b: [0.35, 0.5, 0.62] },   // silver baitfish
 		{ n: 260, size: 0.09, a: [0.62, 0.72, 0.8], b: [0.3, 0.38, 0.45], vent: true },   // a swarm over the vent
 	];
-	// small reef fish that keep to the coral heads, hopping from one to the next
-	if (bommies.length) SPECIES.push(
-		{ n: 40, size: 0.07, a: [0.25, 0.55, 0.95], b: [0.1, 0.25, 0.6], reef: true },      // blue damsels
-		{ n: 30, size: 0.08, a: [1.0, 0.85, 0.2], b: [0.95, 0.7, 0.1], reef: true },        // yellow
-		{ n: 45, size: 0.06, a: [0.45, 0.9, 0.75], b: [0.2, 0.6, 0.55], reef: true },       // green chromis
-		{ n: 25, size: 0.09, a: [0.95, 0.45, 0.3], b: [0.98, 0.9, 0.85], reef: true },      // orange and white
-		{ n: 35, size: 0.07, a: [0.55, 0.35, 0.85], b: [0.95, 0.8, 0.2], reef: true },      // purple and gold
-		{ n: 40, size: 0.07, a: [0.25, 0.55, 0.95], b: [0.1, 0.25, 0.6], reef: true },
-	);
 	const overHead = (bm) => new THREE.Vector3(bm.x + (Math.random() - 0.5) * 3, Math.min(-1.6, bm.h + 2 + Math.random() * 1.8), bm.z + (Math.random() - 0.5) * 3);
 	const N = SPECIES.reduce((s, x) => s + x.n, 0);
 	const fishMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.25 });

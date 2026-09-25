@@ -49,7 +49,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		uMasks: { value: shared.maskTex }, uHeight: { value: shared.heightTex }, uMap: { value: stripTex || (stripTex = grassStrip()) },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span }, uWidth: { value: width }, uTallK: { value: heightK },
-		uTime: shared.uTime, uWind: shared.uWind, uHigh: shared.uHigh, uBass: shared.uBass,
+		uTime: shared.uTime, uWind: shared.uWind, uGust: shared.uGust, uWindT: shared.uWindT, uWindDir: shared.uWindDir, uHigh: shared.uHigh, uBass: shared.uBass,
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uOcc: shared.uOcc, uOccO: shared.uOccO,
 	};
 
@@ -60,7 +60,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			${HEIGHT_GLSL}
 			${NOISE_GLSL}
 			${OCC_GLSL}
-			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass;
+			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust;
 			float gTall;
@@ -117,18 +117,22 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vec3 p = position;
 				p.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz * uWidth * (0.9 + aRand.x * 0.2);
 				p.y *= tall;
-				// wind: a travelling wave plus the music's low end; stiffer when short
-				float wave = vn(w * 0.08 + vec2(uTime * 0.35, uTime * 0.12));
+				// wind: a slow swell advected by the wind's own clock (so lulls slow it and
+				// gusts hurry it), plus the music's low end; stiffer when short
+				vec2 wd = normalize(uWindDir);
+				float wave = vn(w * 0.08 - wd * uWindT * 1.4 + vec2(0.0, uWindT * 0.3));
 				// lean the blade over (rotate, keeping its length) rather than dragging the tip
 				// sideways: long grass bows, it never smears into a streak
 				// gusts: bands of wind rolling across the meadow, broken up so they read as
 				// cat's-paws, stronger with the wind setting and the music's highs
-				vec2 wd = normalize(vec2(0.93, 0.35));
-				float gb = dot(w, wd) * 0.045 - uTime * (0.55 + uWind * 0.5);
-				float gust = pow(max(0.0, sin(gb * 6.2831)), 3.0) * smoothstep(0.3, 0.7, vn(w * 0.02 + vec2(uTime * 0.05, 0.0)));
-				gust *= 0.6 + uWind * 0.8 + uHigh * 0.8;
+				// cat's-paws: irregular patches of stronger air of every size, carried along
+				// the wind; how hard they press follows the gust now blowing (random in time)
+				vec2 gp = w - wd * uWindT * 9.0;
+				float patchA = smoothstep(0.42, 0.85, vn(gp * 0.018 + 3.1));
+				float patchB = smoothstep(0.5, 0.9, vn(gp * 0.047 - 7.3 + vec2(uWindT * 0.4, 0.0)));
+				float gust = max(patchA, patchB * 0.7) * (uGust * 1.6 + uHigh * 0.25);
 				vGust = gust;
-				float lean = clamp((0.12 + uWind * 0.26 + uBass * 0.35) * (0.4 + wave) + gust * 0.55 + sin(uTime * 2.3 + aRand.x * 20.0) * 0.03, -0.1, 0.85);
+				float lean = clamp((0.015 + uWind * 0.24 + uBass * 0.25) * (0.3 + wave) + gust * 0.55 + sin(uTime * (1.6 + aRand.y * 1.8) + aRand.x * 20.0) * (0.004 + uWind * 0.02 + uGust * 0.04), -0.1, 0.85);
 				lean *= mix(1.0, 0.6, smoothstep(0.4, 1.0, tall));
 				float ly = p.y;
 				p.x += sin(lean) * ly * 0.93 * wd.x + sin(lean) * ly * 0.35 * -wd.y;

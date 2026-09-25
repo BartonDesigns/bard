@@ -23,6 +23,9 @@ import { createSealife } from './sealife.js';
 import { createMagma } from './magma.js';
 import { createCaverns } from './caverns.js';
 import { createReef } from './reef.js';
+import { buildEcology, describe } from './crysis/ecology.js';
+import { createFish } from './crysis/fish.js';
+import { createInverts } from './crysis/inverts.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -133,7 +136,7 @@ export function createIslandWorld() {
 	const scene = new THREE.Scene();
 
 	const shared = {
-		uTime: { value: 0 }, uWind: { value: 0.5 }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
+		uTime: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
 		uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.4) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
@@ -232,12 +235,16 @@ export function createIslandWorld() {
 		const magma = createMagma(island, shared, scene, camera);
 		const caverns = createCaverns(island, shared, scene, camera, magma.tube);
 		const underwater = createUnderwater(island, shared, scene, camera, player, [...magma.tube, ...caverns.tunnels.flat(), ...caverns.arches.flat()]);
-		const reef = createReef(island, shared, scene, [...magma.tube, ...caverns.tunnels.flat(), ...caverns.arches.flat()]);
+		// Crysis: the sea's food web and species, grown from the seed
+		const eco = buildEcology(island.seed, { volcanism: 0.8 });
+		const reef = createReef(island, shared, scene, [...magma.tube, ...caverns.tunnels.flat(), ...caverns.arches.flat()], eco);
 		const sealife = createSealife(island, shared, scene, camera, reef.bommies);
+		const fish = createFish(eco, island, shared, scene, camera, reef.bommies);
+		const inverts = createInverts(eco, island, shared, scene, camera, reef.bommies);
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -315,6 +322,7 @@ export function createIslandWorld() {
 		if (!visible || !world || document.hidden) return;
 		time += dt;
 		shared.uTime.value = time;
+		stepWind(dt, shared);
 		const W = world;
 		W.player.update(dt, time);
 		stampPrints(W.player.state);
@@ -337,6 +345,8 @@ export function createIslandWorld() {
 		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40;
 		W.sealife.update(dt, time, inBay);
 		W.reef.update(inBay, camera.position);
+		W.fish.update(dt, time, inBay);
+		W.inverts.update(dt, time, inBay);
 		shared.uUnder.value = under ? 1 : 0;
 		if (under) {
 			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 14));
@@ -510,6 +520,44 @@ export function createIslandWorld() {
 	return api;
 }
 
+// Wind that behaves like wind: gusts come at random, each with its own strength, rise,
+// hold and fall; between them the air eddies on a few slow incommensurate beats. The
+// Wind slider sets how often gusts come and how hard: at nothing the grass barely
+// stirs and gusts are rare; turned up, they come harder and more often. The field's
+// clock (uWindT) runs at the wind's speed, so a lull slows everything, a gust hurries
+// it, and the direction veers slowly.
+const wind = { gusts: [], next: 3, veer: 0.36, t: 0 };
+function stepWind(dt, shared) {
+	dt = Math.min(dt, 0.1);
+	const W = shared.uWind.value;
+	wind.t += dt;
+	wind.next -= dt;
+	if (wind.next <= 0) {
+		// mean wait between gusts: ~25 s when calm, ~2.5 s at full wind
+		const rate = 0.02 + Math.pow(Math.min(1.5, W), 1.4) * 0.35;
+		wind.next = -Math.log(1 - Math.random()) / rate;
+		const k = Math.random();
+		wind.gusts.push({ age: 0, peak: (0.25 + k * k * 0.75) * (0.15 + W * 0.9), rise: 0.6 + Math.random() * 1.6, hold: 0.5 + Math.random() * 3.5, fall: 1.5 + Math.random() * 4 });
+	}
+	let g = 0;
+	for (let i = wind.gusts.length - 1; i >= 0; i--) {
+		const q = wind.gusts[i];
+		q.age += dt;
+		const a = q.age;
+		const env = a < q.rise ? Math.sin(a / q.rise * Math.PI / 2) : a < q.rise + q.hold ? 1 - 0.15 * Math.sin((a - q.rise) * 3.1) : Math.max(0, 1 - (a - q.rise - q.hold) / q.fall);
+		if (a > q.rise + q.hold + q.fall) { wind.gusts.splice(i, 1); continue; }
+		g = Math.max(g, q.peak * env);
+	}
+	// eddies between gusts, a little livelier as the wind rises
+	const t = wind.t, eddy = (Math.sin(t * 0.31) * Math.sin(t * 0.137 + 1.7) + Math.sin(t * 0.53 + 0.4) * 0.5) * 0.5 + 0.5;
+	g += eddy * W * 0.12;
+	shared.uGust.value += (g - shared.uGust.value) * Math.min(1, dt * 3);
+	// the field moves at the wind's own speed
+	shared.uWindT.value += dt * (0.15 + W * 0.7 + shared.uGust.value * 1.2);
+	wind.veer += (Math.sin(t * 0.021) * 0.25 + Math.sin(t * 0.0057 + 2) * 0.3 - (wind.veer - 0.36)) * dt * 0.02;
+	shared.uWindDir.value.set(Math.cos(wind.veer), Math.sin(wind.veer));
+}
+
 function hashString(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
 
 // one world per page
@@ -519,4 +567,11 @@ export function island() {
 }
 if (typeof window !== 'undefined') {
 	window.L99IslandModule = { island };
+	// Crysis: the engine's name. L99Island stays the faceplate contract; this is the
+	// handle for the generated world (Crysis.ecology() prints this place's food web)
+	window.Crysis = {
+		version: 1,
+		world: () => window.L99Island?.world?.(),
+		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describe(w.eco) : 'no world open'; },
+	};
 }
