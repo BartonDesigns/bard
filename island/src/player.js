@@ -83,6 +83,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	};
 	function floorAt(x, z, y) {
 		let g = island.heightAt(x, z);
+		// other walkable surfaces the world adds (the Golden Gate Bridge's deck)
+		if (island.extraFloor) g = Math.max(g, island.extraFloor(x, z, y));
 		for (const f of foot) {
 			const [lx, lz] = toLocal(f, x, z);
 			if (f.pier) {

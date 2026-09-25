@@ -29017,8 +29017,13 @@ root.L99CaveRail227={patch};
 (function () {
     'use strict';
     var busy = false;
+    /* Earth is Crysis now: the island off the Golden Gate with the real Bay Area round it.
+       The old flight build's Bay Area surface is retired as "Old Earth": set
+       window._OLD_EARTH = true to land there instead. */
+    function isEarth(u) { return !!u && (u.solName === 'Earth' || u.solName === 'Old Earth' || u.isEarthReplica || u.planetType === 'BAYAREA'); }
     function tropical(u) {
-        if (!u || u.solName === 'Earth' || u.isEarthReplica || u.planetType === 'BAYAREA') return false;
+        if (!u) return false;
+        if (isEarth(u)) return window._OLD_EARTH !== true;
         return u.planetType === 'TERRAN' || u.planetType === 'OCEAN';
     }
     function seedOf(u) {
@@ -29041,13 +29046,13 @@ root.L99CaveRail227={patch};
         var u = planet && planet.userData;
         if (busy || window._ISLAND === false || window._ISLAND_LANDING === false || !tropical(u) || !window.L99IslandDoor) return;
         busy = true;
-        var seed = seedOf(u);
-        try { localStorage.setItem('l99-island-seed', String(seed)); } catch (e) {}
+        var earth = isEarth(u), seed = earth ? 1337 : seedOf(u);
+        if (!earth) try { localStorage.setItem('l99-island-seed', String(seed)); } catch (e) {}
         window.L99IslandDoor.engine().then(function () {
             var J = window.L99Journey170;
             if (!J) throw Error('Journey is not ready');
             return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0,
-                planet: { id: u.id || u.name || ('planet:' + seed), seed: seed, type: 'tropical', palette: u.palette || null, origin: originOf(u) } });
+                planet: { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: 'tropical', earth: earth, palette: u.palette || null, origin: originOf(u) } });
         }).catch(function (e) { console.warn('[island landing]', e); }).then(function () { busy = false; });
     }
     function wrap() {
@@ -29086,7 +29091,9 @@ root.L99CaveRail227={patch};
     function open(params) {
         if (window._ISLAND === false) return;
         if (window.L99Shell && window.L99Shell.active) window.L99Shell.toggleCaves();
-        return engine().then(function (w) { return w.open(params || { seed: seed() }); })
+        /* the sea door opens on Earth (the Bay Area island) unless ?island=<seed> asks for another world */
+        var q = new URLSearchParams(location.search).get('island');
+        return engine().then(function (w) { return w.open(params || (q && /^\d+$/.test(q) ? { seed: +q, earth: false } : { seed: 1337, earth: true })); })
             .catch(function (e) { console.error('[island]', e); alert('The island could not load: ' + e.message); });
     }
     window.L99IslandDoor = { open: open, engine: engine, closed: function () {} };

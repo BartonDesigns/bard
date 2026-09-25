@@ -28,6 +28,10 @@ import { createFish } from './crysis/fish.js';
 import { createInverts } from './crysis/inverts.js';
 import { buildLandEcology, describeLand } from './crysis/land.js';
 import { createLandFauna } from './crysis/landfauna.js';
+import { createBayArea, bayUniforms } from './bay/terrain.js';
+import { createGoldenGate } from './bay/bridge.js';
+import { createLabels } from './bay/labels.js';
+import { createCity } from './bay/city.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -209,7 +213,10 @@ export function createIslandWorld() {
 
 	async function build(params) {
 		const seed = (params.seed >>> 0) || 1337;
-		if (world && state.seed === seed) return world;
+		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
+		// Other worlds flight lands on are their own islands, alone in their seas.
+		const earth = params.earth !== false;
+		if (world && state.seed === seed && state.earth === earth) return world;
 		if (world) teardown();
 		dom.loading.style.display = 'flex';
 		await new Promise((r) => requestAnimationFrame(r));
@@ -218,6 +225,8 @@ export function createIslandWorld() {
 		shared.maskTex = makeMaskTexture(island);
 		const sky = createSky(scene, shared, renderer);
 		const terrain = createTerrain(island, shared);
+		// the real Bay Area round the island: its heights are shared with the sea
+		shared.bayU = bayUniforms();
 		const ocean = createOcean(island, shared);
 		// turf underfoot plus a longer-reaching layer
 		const grass = createGrass(island, shared, isPhone ? 10500 : 18000, isPhone ? 64 : 84, { width: 0.5, seed: 99 });
@@ -249,8 +258,9 @@ export function createIslandWorld() {
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
 		state.seed = seed;
+		state.earth = earth;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
 		sky.update(0, camera.position);
@@ -258,6 +268,26 @@ export function createIslandWorld() {
 		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
 		litter.update(camera);
 		renderer.compile(scene, camera);
+		// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
+		// for everything: the island's own map on the island, the real land beyond it
+		if (earth) {
+			const bayArea = createBayArea(shared, scene, island, shared.bayU);
+			world.bayArea = bayArea;
+			world.labels = createLabels(dom.mount, bayArea, null);
+			world.city = createCity(shared, scene, bayArea);
+			const own = island.heightAt;
+			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.heightAt(x, z);
+			bayArea.ready.then(() => {
+				if (world !== w0) return;
+				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
+				world.bridge = bridge;
+				world.labels = createLabels(dom.mount, bayArea, bridge);
+				// walk and drive across the deck
+				island.extraFloor = (x, z, y) => bridge.deckFloor(x, z, y);
+				renderer.compile(scene, camera);
+			});
+			const w0 = world;
+		}
 		dom.loading.style.display = 'none';
 		buildPanel();
 		return world;
@@ -361,7 +391,20 @@ export function createIslandWorld() {
 			shared.uAmbient.value.multiplyScalar(dim);
 			scene.fog.color.setRGB(0.03 - depthK * 0.025, 0.2 - depthK * 0.15, 0.25 - depthK * 0.16).multiplyScalar(0.25 + 0.75 * sk.dayK);
 			scene.fog.density = -(0.035 + depthK * 0.02);   // negative: per-channel absorption
-		} else scene.fog.density = 0.00026;
+		} else {
+			// out in the Bay Area the air opens up: tens of kilometres of view, layered haze
+			const dI = Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z));
+			const openK = W.bayArea?.loaded() ? THREE.MathUtils.smoothstep(dI, 2500, 9000) : 0;
+			scene.fog.density = THREE.MathUtils.lerp(0.00026, 0.000024 + Math.max(0, 0.00001 * (1 - camera.position.y / 600)), openK);
+			const far = THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
+		}
+		// the cities' glow washes out the faint stars
+		if (W.bayArea?.loaded()) {
+			let glow = 0;
+			for (const [dx, dz] of [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0], [-15000, 0], [0, 15000], [0, -15000]]) glow += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+			shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
+		}
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
 		if (under || muffle.k > 0.01) underwaterAudio(under ? Math.min(1, 0.75 + (surf - camera.position.y) * 0.03) : 0, dt);
 		const sh = W.shells.update(dt, time);
@@ -375,6 +418,10 @@ export function createIslandWorld() {
 		W.distant.update(time, sk.night);
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
+		W.bayArea?.update(camera, sk.night);
+		W.bridge?.update(time, sk.night);
+		W.city?.update(camera, sk.night);
+		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
@@ -509,7 +556,7 @@ export function createIslandWorld() {
 		prepare: async (packet, check) => {
 			const planet = packet.planet || {};
 			origin = planet.origin || null;
-			await build({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical' });
+			await build({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 			check?.();
 			for (let i = 0; i < 6; i++) { world.player.update(0.016, time); world.sky.update(0.016, camera.position); world.vegetation.stream(camera, true); renderer.render(scene, camera); await new Promise((r) => requestAnimationFrame(r)); check?.(); }
 		},
@@ -519,7 +566,7 @@ export function createIslandWorld() {
 		resize,
 		activate: () => show(),
 		park: () => hide(),
-		arrived: () => hint(origin ? 'You come down on a tropical shore. ⇪ returns you to your ship.' : 'You come down on a tropical shore.'),
+		arrived: () => hint(state.earth ? 'Earth. An island off the Golden Gate: fly or sail east to reach San Francisco.' + (origin ? ' ⇪ returns you to your ship.' : '') : origin ? 'You come down on a tropical shore. ⇪ returns you to your ship.' : 'You come down on a tropical shore.', 6000),
 	});
 	};
 	api.link();

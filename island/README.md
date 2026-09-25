@@ -40,6 +40,28 @@ Open `dev.html` from a local server to run the island on its own
 - `src/caverns.js`, `src/magma.js`, `src/underwater.js`, `src/sealife.js` — sea caves and arches, the vent and lava tube, basalt and kelp, the vent swarm
 - `src/main.js` — renderer, loop, HUD, settings, Journey adapter
 
+## Earth: the Bay Area
+
+On Earth (the sea door, and landing on Earth from flight) the island sits in the Gulf
+of the Farallones, 25 km west of the Golden Gate, and the real Bay Area surrounds it at
+true scale:
+
+- `src/bay/geo.js` — the lat/lon ↔ world mapping, the baked height levels
+- `assets/bayarea/h0–h2.png` — real terrain and bathymetry (AWS Terrain Tiles: USGS 3DEP,
+  NOAA, ETOPO1), 120 m over the nine counties, 60 m over the core bay, 15 m round the
+  Golden Gate; rebuilt with `node tools/bake-bayarea.mjs`
+- `src/bay/places.js` — every GeoNames place in the nine counties plus waters and
+  landmarks; rebuilt with `node tools/places-bayarea.cjs <cities.json dir>`
+- `src/bay/terrain.js` — the streamed ground (California grass, oak, redwood, chaparral,
+  street grids, city lights), and the shared height function
+- `src/bay/bridge.js` — the Golden Gate Bridge at its real dimensions (walkable deck)
+- `src/bay/city.js` — buildings on the street grids, the skylines, SF landmarks, the Bay Bridge
+- `src/bay/labels.js` — the notation as you enter each city, water or landmark
+- `src/world/starcat.js` — 6317 real stars (HYG v4.1, CC BY-SA 4.0) for the night sky
+
+The old flight build's Bay Area surface is retired as "Old Earth"
+(`window._OLD_EARTH = true` to land there instead).
+
 ## Crysis
 
 The engine grows its world from the seed. The ocean and the land (flora communities, fauna)

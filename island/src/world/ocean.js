@@ -5,15 +5,19 @@
 
 import * as THREE from 'three';
 import { radialGrid, HEIGHT_GLSL, NOISE_GLSL, SWASH_GLSL } from './terrain.js';
+import { BAY_GLSL } from '../bay/terrain.js';
 
 export function createOcean(island, shared) {
-	const geo = radialGrid(255, 9000, 3.0);
+	// out to the Bay Area's horizons: dense underfoot, sparse tens of kilometres out
+	const geo = radialGrid(300, 70000, 3.3);
 	const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
 		uHeight: { value: shared.heightTex }, uMasks: { value: shared.maskTex },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCenter: { value: new THREE.Vector2() },
 		uWave: { value: 1 },
 	}]);
+	// the real Bay Area's depths beyond the island (live objects, filled as they load)
+	if (shared.bayU) Object.assign(uniforms, shared.bayU);
 uniforms.uUnder = shared.uUnder;
 	// shared, live objects (not copies)
 	Object.assign(uniforms, {
@@ -39,6 +43,9 @@ uniforms.uUnder = shared.uUnder;
 		uniforms, fog: true, transparent: true, side: THREE.DoubleSide,
 		vertexShader: /* glsl */`
 			${HEIGHT_GLSL}
+			${BAY_GLSL}
+			// the island's own sea bed inside its map, the real one outside
+			float groundAt(vec2 p){ return max(abs(p.x), abs(p.y)) < uHalf - 20.0 ? heightAt(p) : bayHeight(p); }
 			${WAVES}
 			${NOISE_GLSL}
 			${SWASH_GLSL}
@@ -46,13 +53,18 @@ uniforms.uUnder = shared.uUnder;
 			#include <fog_pars_vertex>
 			void main(){
 				vec2 p = position.xz + uCenter;
-				float ground = heightAt(p);
+				float ground = groundAt(p);
 				float depth = max(0.0, -ground);
 				float open = smoothstep(0.4, 7.0, depth);
 				vec3 disp = vec3(0.0), dx = vec3(1.0, 0.0, 0.0), dz = vec3(0.0, 0.0, 1.0);
 				// open-water swell from two directions; near the island it turns into
 				// rollers that run in toward the beach (so no rings show offshore)
 				float r = length(p) + 1e-3; vec2 inward = -p / r;
+				// off the island the rollers turn toward the nearest real shore (uphill)
+				if (r > 3000.0 && uBayOn > 0.5){
+					vec2 gr = vec2(groundAt(p + vec2(90.0, 0.0)) - groundAt(p - vec2(90.0, 0.0)), groundAt(p + vec2(0.0, 90.0)) - groundAt(p - vec2(0.0, 90.0)));
+					if (length(gr) > 0.05) inward = normalize(mix(inward, normalize(gr), smoothstep(3000.0, 6000.0, r)));
+				}
 				float nearShore = 1.0 - smoothstep(4.0, 16.0, depth);
 				float swellA = uWave * 0.42 * open;
 				train(p, normalize(vec2(0.86, 0.51)), 22.0, swellA, 0.45, 1.0, disp, dx, dz);
@@ -109,17 +121,21 @@ uniforms.uUnder = shared.uUnder;
 				float reef = texture2D(uMasks, muv).b;
 				vec3 sand = vec3(0.86, 0.80, 0.64);
 				vec3 bottom = mix(sand, vec3(0.20, 0.24, 0.16), reef * 0.85);
+				// off the island this is the cold North Pacific and the bay: grey-green, murky
+				float cold = smoothstep(2500.0, 9000.0, max(abs(vW.x), abs(vW.z)));
+				reef *= 1.0 - cold;
+				bottom = mix(bottom, vec3(0.42, 0.4, 0.33), cold);
 				vec2 cq = vW.xz * 0.55;
 				float c1 = 1.0 - abs(vn(cq + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
 				float c2 = 1.0 - abs(vn(cq * 1.3 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
-				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth));
+				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth)) * (1.0 - 0.7 * smoothstep(2500.0, 9000.0, max(abs(vW.x), abs(vW.z))));
 				float sunUp = clamp(uSunDir.y * 3.0, 0.0, 1.0);
 				bottom *= (0.55 + caust * sunUp) ;
-				vec3 trans = exp(-vec3(0.34, 0.075, 0.052) * vDepth);
-				vec3 deep = vec3(0.0, 0.06, 0.19);
+				vec3 trans = exp(-mix(vec3(0.34, 0.075, 0.052), vec3(0.5, 0.2, 0.19), cold) * vDepth);
+				vec3 deep = mix(vec3(0.0, 0.06, 0.19), vec3(0.008, 0.06, 0.085), cold);
 				vec3 body = bottom * trans + deep * (1.0 - trans);
 				// light scattering in shallow tropical water: turquoise over sand, fading with depth
-				body += vec3(0.02, 0.42, 0.40) * (1.0 - exp(-0.55 * vDepth)) * exp(-0.09 * vDepth) * (1.0 - reef * 0.6);
+				body += mix(vec3(0.02, 0.42, 0.40), vec3(0.03, 0.12, 0.1), cold) * (1.0 - exp(-0.55 * vDepth)) * exp(-0.09 * vDepth) * (1.0 - reef * 0.6);
 				vec3 light = uAmbient + uSunColor * max(0.0, uSunDir.y) * 0.9;
 				body *= light;
 				// reflection of the sky and the sun
@@ -137,7 +153,7 @@ uniforms.uUnder = shared.uUnder;
 				col += vec3(0.75, 0.82, 1.0) * glade;
 				// AgX is calm and a little grey; give the sea back its turquoise
 				float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-				col = max(vec3(0.0), mix(vec3(lum), col, 1.35));
+				col = max(vec3(0.0), mix(vec3(lum), col, mix(1.35, 1.08, cold)));
 				// foam: breakers where it shallows, wash on the sand, caps on the crests
 				float surf = smoothstep(0.25, 0.6, vDepth) * (1.0 - smoothstep(1.2, 2.2, vDepth));
 				float roll = smoothstep(0.62, 0.97, sin(vRoll + 0.6));
