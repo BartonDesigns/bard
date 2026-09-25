@@ -26,6 +26,8 @@ import { createReef } from './reef.js';
 import { buildEcology, describe } from './crysis/ecology.js';
 import { createFish } from './crysis/fish.js';
 import { createInverts } from './crysis/inverts.js';
+import { buildLandEcology, describeLand } from './crysis/land.js';
+import { createLandFauna } from './crysis/landfauna.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -222,11 +224,14 @@ export function createIslandWorld() {
 		const turf = createGrass(island, shared, isPhone ? 11000 : 18000, 20, { width: 0.34, height: 0.8, seed: 7 });
 		scene.add(terrain, ocean, grass, turf);
 		const litter = createLitter(island, shared, scene, isPhone ? 0.6 : 1);
-		const vegetation = createVegetation(island, shared, scene);
+		// Crysis: the land's plants and animals, grown from the seed
+		const land = buildLandEcology(island.seed);
+		const vegetation = createVegetation(island, shared, scene, land);
 		const village = createVillage(island, shared, scene);
 		vegetation.addContacts(village.footprints);
 		const distant = createDistant(island, shared, scene);
 		const fauna = createFauna(island, shared, scene);
+		const landFauna = createLandFauna(land, island, shared, scene, camera, vegetation);
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
 		const boat = createBoat(island, village, player, camera, shared, scene);
@@ -244,7 +249,7 @@ export function createIslandWorld() {
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -369,6 +374,7 @@ export function createIslandWorld() {
 		W.village.update(time, sk.night);
 		W.distant.update(time, sk.night);
 		W.fauna.update(time, sk.night, camera.position);
+		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
@@ -572,6 +578,6 @@ if (typeof window !== 'undefined') {
 	window.Crysis = {
 		version: 1,
 		world: () => window.L99Island?.world?.(),
-		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describe(w.eco) : 'no world open'; },
+		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};
 }

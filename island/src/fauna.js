@@ -1,5 +1,6 @@
-// Life that reads at a glance: gulls wheeling over the bay, butterflies in
-// the meadow by day, fireflies after dark that pulse with the music.
+// Life that reads at a glance: gulls wheeling over the bay and fireflies after
+// dark that pulse with the music. (Butterflies, birds, crabs and lizards are grown
+// by Crysis in crysis/landfauna.js.)
 
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
@@ -73,7 +74,7 @@ export function createFauna(island, shared, scene) {
 		pg.attributes.position.needsUpdate = true;
 		fireMat.opacity = night * Math.min(1, pulse);
 		fireMat.size = 0.3 + shared.uHigh.value * 0.35;
-		butterMat.opacity = (1 - night) * 0.6;
+		butterMat.opacity = 0;          // butterflies are Crysis animals now (crysis/landfauna.js)
 	}
 	return { update };
 }

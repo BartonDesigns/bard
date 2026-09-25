@@ -106,9 +106,10 @@ function card(b, center, size, rnd, color, sway, outwardFrom, normal) {
 // ---------- species ----------
 const BARK = new THREE.Color(0.62, 0.55, 0.47), PALM_BARK = new THREE.Color(0.86, 0.78, 0.66);
 
-function palm(seed, far) {
+function palm(seed, far, g = null) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
-	const H = 7.5 + r() * 3.5, lean = 1.2 + r() * 2.2, la = r() * Math.PI * 2;
+	const H = g ? g.height * (0.85 + r() * 0.35) : 7.5 + r() * 3.5, lean = (g ? g.lean : 1.2) + r() * 2.2, la = r() * Math.PI * 2;
+	const FT = g ? g.frondTint : [1, 1, 1];
 	const path = [], radii = [];
 	for (let k = 0; k <= 10; k++) {
 		const t = k / 10;
@@ -147,7 +148,7 @@ function palm(seed, far) {
 	}
 	// fronds in a spiral round the crown: the young stand up, the old arch out and droop;
 	// each has a bare stalk before its leaflets start
-	const nF = far ? 10 : 15 + Math.floor(r() * 4);
+	const nF = far ? 10 : (g ? g.fronds : 15) + Math.floor(r() * 4);
 	const golden = 2.39996;
 	for (let f = 0; f < nF; f++) {
 		const age = f / (nF - 1);                          // 0 = youngest (top), 1 = oldest (bottom)
@@ -166,7 +167,7 @@ function palm(seed, far) {
 			// grows straight out of the crown: just the rib at first, leaflets widening out of it
 			widths.push(0.12 + 1.25 * Math.sin(Math.min(1, s2 * 1.1 + 0.02) * Math.PI) * Math.min(1, s2 * 4));
 		}
-		const green = { r: 0.26 + age * 0.05, g: 0.42 - age * 0.03, b: 0.15 }, tip = { r: 0.44 + age * 0.08, g: 0.52, b: 0.22 };
+		const green = { r: (0.26 + age * 0.05) * FT[0], g: (0.42 - age * 0.03) * FT[1], b: 0.15 * FT[2] }, tip = { r: (0.44 + age * 0.08) * FT[0], g: 0.52 * FT[1], b: 0.22 * FT[2] };
 		strip(crown, pts, widths, 0.55, green, tip, 0.45, 1.0, 0.7);
 	}
 	if (!far) {
@@ -182,16 +183,28 @@ function palm(seed, far) {
 	return { parts: [trunk.geometry(), crown.geometry()], height: H, lean: la };
 }
 
-function hardwood(seed, far, mid) {
+// crown architecture per growth form (Crysis tree genomes): how much of the height is
+// bare trunk, how wide and tall the crown, how the limbs run
+const CROWN = {
+	round: { trunk: 0.62, rx: 1, ry: 1, len: 1, rise: 1, lift: 0.22 },
+	umbrella: { trunk: 0.72, rx: 1.55, ry: 0.45, len: 1.6, rise: 0.45, lift: 0.1 },
+	columnar: { trunk: 0.38, rx: 0.55, ry: 1.9, len: 0.45, rise: 1.5, lift: 0.5 },
+	layered: { trunk: 0.5, rx: 1.2, ry: 1.05, len: 1.25, rise: 0.6, lift: 0.3 },
+	weeping: { trunk: 0.55, rx: 1.2, ry: 1.1, len: 1.2, rise: 0.8, lift: 0.22 },
+};
+function hardwood(seed, far, mid, g = null) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
-	const H = 8 + r() * 5, bend = r() * 1.5, ba = r() * 6.28;
+	const C = CROWN[g?.crown || 'round'];
+	const H = g ? g.height * (0.85 + r() * 0.3) : 8 + r() * 5, bend = r() * 1.5, ba = r() * 6.28;
+	const BK = g ? new THREE.Color(BARK.r * g.bark[0], BARK.g * g.bark[1], BARK.b * g.bark[2]) : BARK;
+	const LT = g ? g.leaf : [1, 1, 1];
 	const path = [], radii = [];
 	// fine steps near the ground so the trunk can flare out into its roots
 	for (const t of [0, 0.02, 0.06, 0.12, 0.22, 0.4, 0.6, 0.8, 1]) {
-		path.push(V(Math.cos(ba) * bend * t * t, H * 0.62 * t - (t === 0 ? 0.3 : 0), Math.sin(ba) * bend * t * t));
+		path.push(V(Math.cos(ba) * bend * t * t, H * C.trunk * t - (t === 0 ? 0.3 : 0), Math.sin(ba) * bend * t * t));
 		radii.push(0.32 - 0.13 * t + 0.3 * Math.exp(-t * 20));
 	}
-	tube(trunk, far ? [path[0], path[4], path[path.length - 1]] : path, far ? [radii[0] * 0.8, radii[4], radii[radii.length - 1]] : radii, far ? 4 : mid ? 5 : 8, BARK, (t) => t * 0.15);
+	tube(trunk, far ? [path[0], path[4], path[path.length - 1]] : path, far ? [radii[0] * 0.8, radii[4], radii[radii.length - 1]] : radii, far ? 4 : mid ? 5 : 8, BK, (t) => t * 0.15);
 	if (!far && !mid) {
 		// buttress and surface roots: they leave the trunk high and run out and down into the soil
 		const nR = 6 + Math.floor(r() * 3);
@@ -207,35 +220,41 @@ function hardwood(seed, far, mid) {
 				pts.push(V(Math.cos(aa) * d, y, Math.sin(aa) * d));
 				rad.push(0.14 * Math.pow(1 - t, 1.7) + 0.004);
 			}
-			tube(trunk, pts, rad, 5, BARK, () => 0);
+			tube(trunk, pts, rad, 5, BK, () => 0);
 			// a rootlet or two branching off along the way
 			for (let b = 0; b < 2; b++) {
 				const k0 = 3 + Math.floor(r() * 4), o = pts[k0], ba2 = a + (r() < 0.5 ? -1 : 1) * (0.6 + r() * 0.5), bl = 0.35 + r() * 0.35;
 				const e1 = V(o.x + Math.cos(ba2) * bl * 0.5, o.y * 0.3, o.z + Math.sin(ba2) * bl * 0.5), e2 = V(o.x + Math.cos(ba2) * bl, -0.1, o.z + Math.sin(ba2) * bl);
-				tube(trunk, [o.clone().setY(o.y + 0.01), e1, e2], [rad[k0] * 0.55, rad[k0] * 0.3, 0.003], 4, BARK, () => 0);
+				tube(trunk, [o.clone().setY(o.y + 0.01), e1, e2], [rad[k0] * 0.55, rad[k0] * 0.3, 0.003], 4, BK, () => 0);
 			}
 		}
 	}
-	const fork = path[path.length - 1], crownC = fork.clone().add(V(0, H * 0.22, 0));
+	const fork = path[path.length - 1], crownC = fork.clone().add(V(0, H * C.lift, 0));
 	const ends = [];
 	const nB = far ? 0 : 3 + Math.floor(r() * 3);
 	for (let i = 0; i < nB; i++) {
-		const a = i / nB * 6.28 + r() * 0.8, len = 2.5 + r() * 2.2, rise = 1.6 + r() * 2.2;
+		const a = i / nB * 6.28 + r() * 0.8, len = (2.5 + r() * 2.2) * C.len, rise = (1.6 + r() * 2.2) * C.rise;
 		const e = fork.clone().add(V(Math.cos(a) * len, rise, Math.sin(a) * len));
 		const mid = fork.clone().lerp(e, 0.5).add(V(0, 0.5, 0));
-		tube(trunk, [fork.clone(), mid, e], [0.16, 0.1, 0.05], 5, BARK, (t) => 0.2 + t * 0.4);
+		tube(trunk, [fork.clone(), mid, e], [0.16, 0.1, 0.05], 5, BK, (t) => 0.2 + t * 0.4);
 		ends.push(e);
 	}
 	// the crown is a cluster of leaf clumps, each a dense rounded mass on a branch
 	// end: lumpy silhouette, shade deep inside, light on the sunny tops of the clumps
-	const RX = 3.6 + r() * 1.6, RY = 2.4 + r() * 0.9;
+	const RX = (3.6 + r() * 1.6) * C.rx, RY = (2.4 + r() * 0.9) * C.ry;
 	const clumps = [];
 	for (const e of ends) clumps.push({ c: e.clone().add(V(0, 0.6, 0)), rad: 1.5 + r() * 0.6 });
 	const nExtra = far ? 5 : 7 + Math.floor(r() * 4);
 	for (let i = 0; i < nExtra; i++) {
 		const th = r() * 6.28, ph = Math.acos(r() * 1.6 - 0.6), k = 0.55 + r() * 0.45;
-		clumps.push({ c: crownC.clone().add(V(Math.sin(ph) * Math.cos(th) * RX * k, Math.cos(ph) * RY * k, Math.sin(ph) * Math.sin(th) * RX * k)), rad: 1.3 + r() * 0.8 });
+		if (g?.crown === 'layered') {
+			// flat tiers of foliage, narrowing upward, with air between them
+			const tier = i % 3, tr = RX * (1 - tier * 0.28) * (0.4 + k * 0.6);
+			clumps.push({ c: crownC.clone().add(V(Math.cos(th) * tr, (tier - 1) * RY * 0.75 + (r() - 0.5) * 0.3, Math.sin(th) * tr)), rad: 1.2 + r() * 0.5, flat: true });
+		} else clumps.push({ c: crownC.clone().add(V(Math.sin(ph) * Math.cos(th) * RX * k, Math.cos(ph) * RY * k, Math.sin(ph) * Math.sin(th) * RX * k)), rad: (1.3 + r() * 0.8) * Math.min(1, 0.6 + C.rx * 0.4) });
 	}
+	// a weeping crown lets curtains of leaves hang from its rim
+	if (g?.crown === 'weeping') for (let i = 0; i < (far ? 3 : 7); i++) { const th = i / 7 * 6.28 + r() * 0.5; clumps.push({ c: crownC.clone().add(V(Math.cos(th) * RX * 0.95, -RY * 0.85, Math.sin(th) * RX * 0.95)), rad: 1.1 + r() * 0.4, hang: true }); }
 	const per = far ? 2 : mid ? 4 : 9, size = far ? 3.6 : mid ? 2.5 : 1.7;
 	for (const cl of clumps) {
 		const out = cl.c.clone().sub(crownC).normalize();
@@ -247,7 +266,7 @@ function hardwood(seed, far, mid) {
 			// shade: darker toward the crown's heart and on the clump's underside
 			const depth = Math.min(1, p.distanceTo(crownC) / Math.max(RX, RY));
 			const sh = (0.4 + 0.6 * depth) * (0.62 + 0.38 * (dir.y * 0.5 + 0.5));
-			card(crown, p, size * (0.8 + r() * 0.45), r, { r: 0.24 * sh, g: 0.38 * sh, b: 0.14 * sh }, 0.75 + 0.25 * depth, crownC, n);
+			card(crown, cl.flat ? p.setY(cl.c.y + (p.y - cl.c.y) * 0.4) : cl.hang ? p.setY(p.y - r() * 0.8) : p, size * (0.8 + r() * 0.45), r, { r: 0.24 * sh * LT[0], g: 0.38 * sh * LT[1], b: 0.14 * sh * LT[2] }, cl.hang ? 1.2 : 0.75 + 0.25 * depth, crownC, n);
 		}
 	}
 	// a few dark leaves deep in the crown so you never see straight through it
@@ -301,17 +320,17 @@ function banana(seed) {
 	return { parts: [stem.geometry(), leaves.geometry()], height: H + 1 };
 }
 
-function fern(seed) {
-	const r = mulberry32(seed), b = new Builder();
+function fern(seed, g = null) {
+	const r = mulberry32(seed), b = new Builder(), FT = g ? g.tint : [1, 1, 1], FS = g ? g.size : 1;
 	const nF = 8 + Math.floor(r() * 4);
 	for (let f = 0; f < nF; f++) {
-		const a = f / nF * 6.28 + r() * 0.4, L = 0.8 + r() * 0.5, dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
+		const a = f / nF * 6.28 + r() * 0.4, L = (0.8 + r() * 0.5) * FS, dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
 		for (let k = 0; k <= 4; k++) {
 			const s = k / 4, d = L * s;
 			pts.push(dir.clone().multiplyScalar(d).add(V(0, Math.sin(s * 2.4) * L * 0.55, 0)));
 			widths.push(0.36 * (1 - s * 0.7));
 		}
-		strip(b, pts, widths, 0.1, { r: 0.2, g: 0.33, b: 0.12 }, { r: 0.3, g: 0.44, b: 0.16 }, 0.2, 1.0, 0.8);
+		strip(b, pts, widths, 0.1, { r: 0.2 * FT[0], g: 0.33 * FT[1], b: 0.12 * FT[2] }, { r: 0.3 * FT[0], g: 0.44 * FT[1], b: 0.16 * FT[2] }, 0.2, 1.0, 0.8);
 	}
 	return { parts: [b.geometry()], height: 0.9 };
 }
@@ -355,6 +374,96 @@ function shrub(seed) {
 	for (const t of tips) card(b, t.clone().add(V((r() - 0.5) * 0.3, 0.05, (r() - 0.5) * 0.3)), 0.8, r, { r: 0.25, g: 0.37, b: 0.14 }, 0.7, V(0, 0, 0));
 	for (let i = 0; i < 5; i++) { const a = r() * 6.28, d = 0.4 + r() * 0.35; card(b, V(Math.cos(a) * d, 0.18 + r() * 0.12, Math.sin(a) * d), 0.75, r, { r: 0.17, g: 0.27, b: 0.1 }, 0.4, V(0, -0.5, 0)); }
 	return { parts: [wood.geometry(), b.geometry()], height: 1.3 };
+}
+
+// ---------- Crysis-generated plants ----------
+// tree fern: a shaggy dark trunk under a crown of long arching fronds
+function treefern(seed, g) {
+	const r = mulberry32(seed), trunk = new Builder(), b = new Builder();
+	const H = g.height * (0.8 + r() * 0.4), la = r() * 6.28, lean = r() * 0.4;
+	const path = [], radii = [];
+	for (let k = 0; k <= 6; k++) { const t = k / 6; path.push(V(Math.cos(la) * lean * t, H * t - (k === 0 ? 0.2 : 0), Math.sin(la) * lean * t)); radii.push(0.16 + 0.06 * Math.exp(-t * 8) + 0.03 * Math.sin(t * 17)); }
+	tube(trunk, path, radii, 7, new THREE.Color(0.42, 0.32, 0.24), (t) => t * t * 0.3);
+	const top = path[6];
+	for (let f = 0; f < g.fronds; f++) {
+		const a = f * 2.39996 + r() * 0.3, L = 1.6 + r() * 0.9, elev = 0.9 - (f / g.fronds) * 0.8, dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
+		for (let k = 0; k <= 7; k++) {
+			const t = k / 7, d = L * t;
+			pts.push(top.clone().add(dir.clone().multiplyScalar(Math.cos(elev) * d)).add(V(0, Math.sin(elev) * d - 0.5 * d * d / L, 0)));
+			widths.push(0.08 + 0.55 * Math.sin(Math.min(1, t * 1.05) * Math.PI) * Math.min(1, t * 3));
+		}
+		strip(b, pts, widths, 0.15, { r: 0.2 * g.tint[0], g: 0.34 * g.tint[1], b: 0.12 * g.tint[2] }, { r: 0.32 * g.tint[0], g: 0.46 * g.tint[1], b: 0.16 * g.tint[2] }, 0.4, 1.1, 0.8);
+	}
+	// the curled fiddleheads of new fronds at the very top
+	for (let i = 0; i < 3; i++) { const a = r() * 6.28; nut(b, top.clone().add(V(Math.cos(a) * 0.12, 0.15, Math.sin(a) * 0.12)), 0.07, { r: 0.4, g: 0.36, b: 0.2 }); }
+	return { parts: [trunk.geometry(), b.geometry()], height: H + 1 };
+}
+// elephant ear: big heart-shaped leaves on long stalks, rising from one crown
+function taro(seed, g) {
+	const r = mulberry32(seed), stalks = new Builder(), b = new Builder();
+	const n = 4 + Math.floor(r() * 4), S = g.size;
+	for (let i = 0; i < n; i++) {
+		const a = i / n * 6.28 + r() * 0.5, h = (0.5 + r() * 0.5) * S, out = (0.15 + r() * 0.25) * S;
+		const tip = V(Math.cos(a) * out, h, Math.sin(a) * out);
+		tube(stalks, [V(0, -0.05, 0), V(Math.cos(a) * out * 0.3, h * 0.6, Math.sin(a) * out * 0.3), tip], [0.035 * S, 0.028 * S, 0.02 * S], 4, new THREE.Color(0.45 * g.tint[0], 0.55 * g.tint[1], 0.3 * g.tint[2]), (t) => t * 0.6);
+		// the blade hangs from the stalk tip: widest near its base (the heart), to a point
+		const L = (0.55 + r() * 0.3) * S, dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
+		for (let k = 0; k <= 6; k++) {
+			const t = k / 6;
+			pts.push(tip.clone().add(dir.clone().multiplyScalar(L * t * 0.85)).add(V(0, 0.08 * S - t * t * L * 0.55, 0)));
+			widths.push((t < 0.12 ? 0.55 + t * 2 : Math.sin(Math.PI * (0.5 + 0.5 * (t - 0.12) / 0.88)) * 0.78) * L);
+		}
+		strip(b, pts, widths, 0.18, { r: 0.18 * g.tint[0], g: 0.33 * g.tint[1], b: 0.12 * g.tint[2] }, { r: 0.24 * g.tint[0], g: 0.4 * g.tint[1], b: 0.14 * g.tint[2] }, 0.5, 1.0, 0.85);
+	}
+	return { parts: [stalks.geometry(), b.geometry()], height: S };
+}
+// screw pine: a leaning trunk propped on stilt roots, tufts of long strap leaves
+function pandanus(seed, g) {
+	const r = mulberry32(seed), wood = new Builder(), b = new Builder();
+	const H = g.height * (0.8 + r() * 0.4), la = r() * 6.28, lean = 0.6 + r() * 0.8;
+	const W = new THREE.Color(0.62, 0.55, 0.45);
+	const base = V(0, 0.9, 0), top = V(Math.cos(la) * lean, H, Math.sin(la) * lean);
+	tube(wood, [base, base.clone().lerp(top, 0.5), top], [0.13, 0.11, 0.08], 6, W, (t) => t * 0.3);
+	// the stilts: from the trunk's foot, splaying down into the sand
+	for (let i = 0; i < g.stilts; i++) {
+		const a = i / g.stilts * 6.28 + r() * 0.4, d = 0.5 + r() * 0.5, y0 = 0.9 + r() * 0.6;
+		tube(wood, [V(Math.cos(la) * lean * y0 / H, y0, Math.sin(la) * lean * y0 / H), V(Math.cos(a) * d * 0.55, y0 * 0.45, Math.sin(a) * d * 0.55), V(Math.cos(a) * d, -0.15, Math.sin(a) * d)], [0.05, 0.045, 0.04], 4, W, () => 0);
+	}
+	// branches, each ending in a spiral tuft of drooping strap leaves
+	const heads = [top];
+	for (let i = 0; i < 2 + Math.floor(r() * 2); i++) {
+		const a = r() * 6.28, e = top.clone().add(V(Math.cos(a) * (0.8 + r() * 0.6), 0.3 + r() * 0.7, Math.sin(a) * (0.8 + r() * 0.6)));
+		tube(wood, [top.clone().add(V(0, -0.4, 0)), e], [0.07, 0.05], 5, W, (t) => 0.3 + t * 0.3);
+		heads.push(e);
+	}
+	for (const h of heads) for (let f = 0; f < 20; f++) {
+		const a = f * 2.39996, L = 1.1 + r() * 0.6, elev = 0.9 - (f / 20) * 1.2, dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
+		for (let k = 0; k <= 5; k++) { const t = k / 5, d = L * t; pts.push(h.clone().add(dir.clone().multiplyScalar(Math.cos(elev) * d)).add(V(0, Math.sin(elev) * d - 0.4 * d * d, 0))); widths.push(0.15 * (1 - t * 0.75)); }
+		strip(b, pts, widths, 0.35, { r: 0.16 * g.tint[0], g: 0.27 * g.tint[1], b: 0.1 * g.tint[2] }, { r: 0.26 * g.tint[0], g: 0.36 * g.tint[1], b: 0.14 * g.tint[2] }, 0.4, 1.0, 0.6);
+	}
+	return { parts: [wood.geometry(), b.geometry()], height: H + 1 };
+}
+// wildflowers: a clump of thin stems, each with a head of petals round a bright eye
+function wildflower(seed, g) {
+	const r = mulberry32(seed), b = new Builder();
+	const STEM = new THREE.Color(0.3, 0.45, 0.18), col = { r: g.colour[0], g: g.colour[1], b: g.colour[2] };
+	const n = g.heads + 2 + Math.floor(r() * 3);
+	for (let i = 0; i < n; i++) {
+		const a = r() * 6.28, d = r() * 0.18, h = g.height * (0.6 + r() * 0.6), lean = (r() - 0.5) * 0.2;
+		const tip = V(Math.cos(a) * (d + lean), h, Math.sin(a) * (d + lean));
+		tube(b, [V(Math.cos(a) * d, -0.03, Math.sin(a) * d), V(Math.cos(a) * d, h * 0.5, Math.sin(a) * d), tip], [0.008, 0.006, 0.005], 3, STEM, (t) => t * 1.2);
+		// a leaf or two low on the stem
+		const la = r() * 6.28, lp = V(Math.cos(a) * d, h * 0.25, Math.sin(a) * d);
+		strip(b, [lp, lp.clone().add(V(Math.cos(la) * 0.08, 0.04, Math.sin(la) * 0.08)), lp.clone().add(V(Math.cos(la) * 0.15, 0.02, Math.sin(la) * 0.15))], [0.01, 0.04, 0.005], 0.1, { r: 0.25, g: 0.4, b: 0.15 }, { r: 0.3, g: 0.45, b: 0.18 }, 0.4, 0.8, 0.8);
+		// the head: petals as small leaves radiating from the tip, tilted to the sky
+		const pr = 0.06 + r() * 0.035;
+		for (let k = 0; k < g.petals; k++) {
+			const pa = k / g.petals * 6.28 + r() * 0.2, dir = V(Math.cos(pa), 0.35, Math.sin(pa)).normalize();
+			strip(b, [tip.clone(), tip.clone().add(dir.clone().multiplyScalar(pr * 0.6)), tip.clone().add(dir.clone().multiplyScalar(pr * 1.3))], [0.005, pr * 0.9, pr * 0.3], 0.1, col, { r: Math.min(1, col.r * 1.1 + 0.05), g: Math.min(1, col.g * 1.1 + 0.05), b: Math.min(1, col.b * 1.1 + 0.05) }, 1.2, 1.3, 0.95);
+		}
+		nut(b, tip.clone().add(V(0, 0.008, 0)), pr * 0.35, { r: 0.95, g: 0.8, b: 0.2 });
+	}
+	return { parts: [b.geometry()], height: g.height };
 }
 
 function tideRock(seed) {
@@ -503,7 +612,7 @@ function swayMaterial(params, shared, stiff) {
 // ---------- placement and streaming ----------
 const CELL = 64;
 
-export function createVegetation(island, shared, scene) {
+export function createVegetation(island, shared, scene, flora = null) {
 	const tex = { leaf: TX.leafCluster(), frond: TX.palmFrond(), banana: TX.bananaLeaf(), fern: TX.fernFrond(), palmBark: TX.palmBark(), woodBark: TX.woodBark() };
 	tex.palmBark.repeat.set(1, 7);
 	tex.woodBark.repeat.set(2, 3);
@@ -511,6 +620,7 @@ export function createVegetation(island, shared, scene) {
 		bark: swayMaterial({ map: tex.woodBark, roughness: 0.95 }, shared, 1),
 		palmbark: swayMaterial({ map: tex.palmBark, roughness: 0.9 }, shared, 1),
 		stem: swayMaterial({ roughness: 0.8 }, shared, 1),
+		plainleaf: swayMaterial({ roughness: 0.7, side: THREE.DoubleSide }, shared, 1.1),
 		bstem: swayMaterial({ map: TX.bananaStem(), roughness: 0.7 }, shared, 1),
 		hibiscus: swayMaterial({ map: TX.bloomCluster('hibiscus'), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.55 }, shared, 0.8),
 		bougainvillea: swayMaterial({ map: TX.bloomCluster('bougainvillea'), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.7 }, shared, 0.8),
@@ -560,13 +670,17 @@ export function createVegetation(island, shared, scene) {
 	const species = [
 		// densities are the chance a sample at `spacing` holds a plant: random within a
 		// patch, but the patches follow the land (see eco below), so plants clump
-		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true)), mats: ['palmbark', 'frond'], midIsFar: true, spacing: 5, near: 140, farR: 600, max: 700, farMax: 1800, kind: 'wood',
+		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false, flora?.palm)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true, flora?.palm)), mats: ['palmbark', 'frond'], midIsFar: true, spacing: 5, near: 140, farR: 600, max: 700, farMax: 1800, kind: 'wood',
 			density: (e) => e.path > 0.2 || e.h < 0.7 || e.sl > 0.45 ? 0 : e.strand * e.clump(0.02, 0.45, 0.7) * 0.55 + e.yard * 0.05 + e.gully * 0.04 },
-		{ key: 'hardwood', variants: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false)), mid: [0, 1, 2].map((v) => hardwood(island.seed * 11 + v, false, true)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v, true)), mats: ['bark', 'leaf'], spacing: 6, near: 110, farR: 800, max: 1500, farMax: 4200, kind: 'wood',
-			density: (e) => e.path > 0.12 || e.sl > 0.62 || e.h < 3 ? 0 : e.forest * 0.85 * (0.8 + 0.2 * e.clump(0.05, 0.3, 0.8)) + e.meadow * 0.004 },
+		// the canopy: one entry per Crysis tree species; the community field decides
+		// which species holds each stand (see standShare below)
+		...(flora ? flora.trees : [null]).map((g, ti, all) => ({ key: g ? g.key : 'hardwood', tree: true, genome: g,
+			variants: [0, 1].map((v) => hardwood(island.seed * 11 + v + ti * 101, false, false, g)), mid: [0, 1].map((v) => hardwood(island.seed * 11 + v + ti * 101, false, true, g)), far: [0, 1].map((v) => hardwood(island.seed * 11 + v + ti * 101, true, false, g)),
+			mats: ['bark', 'leaf'], spacing: 6, near: 110, farR: 800, max: Math.ceil(1500 * 1.6 / all.length), farMax: Math.ceil(4200 * 1.6 / all.length), kind: 'wood',
+			density: (e) => e.path > 0.12 || e.sl > 0.62 || e.h < 3 ? 0 : (e.forest * 0.85 * (0.8 + 0.2 * e.clump(0.05, 0.3, 0.8)) + e.meadow * 0.004) * standShare(ti, e) })),
 		{ key: 'banana', variants: [0, 1].map((v) => banana(island.seed * 13 + v)), mats: ['bstem', 'banana'], spacing: 4, near: 90, max: 500, kind: 'soft',
 			density: (e) => e.path > 0.2 || e.sl > 0.45 || e.h < 2 ? 0 : (e.gully * 0.5 * e.clump(0.04, 0.5, 0.7) + e.garden * 0.3 * e.clump(0.06, 0.55, 0.7)) },
-		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v)), mats: ['fern'], spacing: 3, near: 50, max: 700, kind: 'soft', noShadow: true,
+		{ key: 'fern', variants: [0, 1].map((v) => fern(island.seed * 17 + v, flora?.understory[0])), mats: ['fern'], spacing: 3, near: 50, max: 700, kind: 'soft', noShadow: true,
 			density: (e) => e.path > 0.15 || e.sl > 0.6 ? 0 : e.forest * 0.22 * (0.5 + e.moist) + e.gully * 0.2 },
 		{ key: 'hibiscus', variants: [0, 1].map((v) => bloom(island.seed * 41 + v)), mats: ['bark', 'hibiscus'], spacing: 5, near: 110, max: 260, kind: 'soft',
 			density: (e) => e.path > 0.25 || e.sl > 0.4 || e.h < 1.8 ? 0 : e.yard * 0.22 + e.edge * 0.012 },
@@ -574,6 +688,16 @@ export function createVegetation(island, shared, scene) {
 			density: (e) => e.path > 0.25 || e.sl > 0.45 || e.h < 1.8 ? 0 : e.yard * 0.08 + e.edge * 0.03 * e.clump(0.03, 0.55, 0.7) },
 		{ key: 'shrub', variants: [0, 1].map((v) => shrub(island.seed * 19 + v)), mats: ['bark', 'leaf'], spacing: 4, near: 120, max: 500, kind: 'soft',
 			density: (e) => e.path > 0.2 || e.sl > 0.55 || e.h < 1.8 ? 0 : e.edge * 0.3 + e.forest * 0.05 + e.meadow * 0.006 },
+		...(flora ? [
+			{ key: 'treefern', variants: [0, 1].map((v) => treefern(island.seed * 59 + v, flora.understory[1])), mats: ['stem', 'fern'], spacing: 5, near: 110, max: 300, kind: 'soft',
+				density: (e) => e.path > 0.2 || e.sl > 0.55 || e.h < 3 ? 0 : (e.gully * 0.3 * e.clump(0.04, 0.4, 0.7) + e.forest * e.moist * 0.08) * (0.6 + flora.profile.rain * 0.6) },
+			{ key: 'taro', variants: [0, 1].map((v) => taro(island.seed * 61 + v, flora.understory[2])), mats: ['stem', 'plainleaf'], spacing: 3, near: 70, max: 400, kind: 'soft', noShadow: true,
+				density: (e) => e.path > 0.2 || e.sl > 0.5 || e.h < 1.5 ? 0 : (e.gully * 0.28 + e.moist * e.forest * 0.12) * e.clump(0.06, 0.45, 0.7) * (0.5 + flora.profile.rain) },
+			{ key: 'pandanus', variants: [0, 1].map((v) => pandanus(island.seed * 67 + v, flora.understory[3])), mats: ['bark', 'plainleaf'], spacing: 6, near: 160, max: 250, kind: 'wood',
+				density: (e) => e.path > 0.2 || e.h < 0.9 || e.sl > 0.4 ? 0 : (e.strand * 0.12 + e.headland * 0.08) * e.clump(0.03, 0.45, 0.75) },
+			...flora.flowers.map((g, fi) => ({ key: g.key, variants: [0, 1].map((v) => wildflower(island.seed * 71 + v + fi * 13, g)), mats: ['plainleaf'], spacing: 2.2, near: 60, max: 900, kind: 'soft', noShadow: true,
+				density: (e) => e.path > 0.2 || e.sl > 0.45 || e.h < 1.2 ? 0 : (g.habit === 'meadow' ? e.meadow * 0.16 : e.edge * 0.14 + e.yard * 0.06) * e.clump(0.045, 0.5 + fi * 0.03, 0.75) * (0.5 + flora.profile.bloom) })),
+		] : []),
 		{ key: 'nuts', derived: true, variants: [0, 1, 2].map((v) => coconuts(island.seed * 29 + v)), mats: ['stem'], near: 60, max: 300, kind: 'wood', noShadow: true },
 		{ key: 'deadfrond', derived: true, variants: [0, 1].map((v) => deadFrond(island.seed * 31 + v)), mats: ['frond'], near: 80, max: 400, kind: 'soft', noShadow: true },
 		{ key: 'driftwood', variants: [0, 1, 2].map((v) => driftwood(island.seed * 37 + v)), mats: ['bark'], spacing: 9, near: 110, max: 200, kind: 'wood',
@@ -584,6 +708,23 @@ export function createVegetation(island, shared, scene) {
 			density: (e) => e.path > 0.3 || e.h < 0.2 ? 0 : smoothstep(0.3, 0.55, e.sl) * 0.35 * e.clump(0.03, 0.4, 0.7) + e.summit * 0.08 + e.headland * 0.1 },
 	];
 	const SHADOW_R = 55;
+	// stands: each tree species holds a centre in the community field's range and
+	// prefers its habitat; the shares sum to one, so the forest is as dense as before
+	// but a stretch of it belongs to one or two species
+	function standShare(ti, e) {
+		if (!flora) return 1;
+		const T = flora.trees, n = T.length, c = flora.community(e.x, e.z);
+		let sum = 0, mine = 0;
+		for (let i = 0; i < n; i++) {
+			const centre = 0.3 + 0.4 * (i + 0.5) / n, w0 = 0.42 / n;
+			const L = T[i].likes;
+			let w = Math.exp(-Math.pow((c.primary - centre) / w0, 2)) + 0.04;
+			w *= 0.4 + L.core * e.forest + L.edge * e.edge * 1.5 + L.gully * e.gully * 1.5 + L.ridge * Math.max(0, -e.moist + 0.2);
+			if (c.secondary > 0.72 && i === Math.floor(c.secondary * 97) % n) w += 0.3;        // an accent tree
+			sum += w; if (i === ti) mine = w;
+		}
+		return sum > 0 ? mine / sum : 1 / n;
+	}
 
 	// ---------- ecology: where things grow, from the shape of the land ----------
 	// forest stands on slopes and in hollows, open meadow on the gentle ground around the
@@ -644,7 +785,7 @@ export function createVegetation(island, shared, scene) {
 		return (a[k] * (1 - u) + a[k + 1] * u) * (1 - v) + (a[k + EN] * (1 - u) + a[k + EN + 1] * u) * v;
 	};
 	function eco(x, z, h, sl, m) {
-		const e = { h, sl, path: m.path, village: m.village, yard: smoothstep(0.15, 0.5, m.village),
+		const e = { x, z, h, sl, path: m.path, village: m.village, yard: smoothstep(0.15, 0.5, m.village),
 			clump: (sc, lo, hi) => smoothstep(lo, hi, ecoNoise.fbm(x * sc + sc * 91, z * sc - sc * 37, 2)) };
 		for (const f of FIELDS) e[f] = gAt(f, x, z);
 		return e;
@@ -705,7 +846,7 @@ export function createVegetation(island, shared, scene) {
 				it.rot = sp.variants[it.v].lean - Math.atan2(pz, px) + (rnd() - 0.5) * 0.9;
 			}
 			// ferns gather in the damp shade at the foot of the big trees
-			if (sp.key === 'hardwood') {
+			if (sp.tree) {
 				const n = rnd() < 0.7 ? 1 + Math.floor(rnd() * 3) : 0;
 				for (let k = 0; k < n; k++) { const a = rnd() * 6.283, d = 1.1 + rnd() * 1.6; derived('fern', px + Math.cos(a) * d, pz + Math.sin(a) * d, 0.02); }
 			}
@@ -754,7 +895,7 @@ export function createVegetation(island, shared, scene) {
 	// the terrain and grass shaders both read, redrawn as the player moves.
 	// [radius, bare shade, mound/hug]: trees and rocks shade bare earth; small plants
 	// sit on a little mound the grass crowds into
-	const CONTACT = { palm: [2.4, 0.75, 0.5], hardwood: [3.8, 0.85, 0.55], banana: [1.7, 0.2, 1.0], shrub: [1.8, 0.15, 1.0], hibiscus: [1.9, 0.15, 1.0], bougainvillea: [2.0, 0.15, 1.0], boulder: [2.0, 0.7, 0.4], tiderock: [3.0, 0.5, 0.0], fern: [1.1, 0.1, 0.8], driftwood: [1.6, 0.5, 0.2], nuts: [0.7, 0.4, 0.0] };
+	const CONTACT = { palm: [2.4, 0.75, 0.5], hardwood: [3.8, 0.85, 0.55], treefern: [1.5, 0.35, 0.6], taro: [1.0, 0.12, 0.9], pandanus: [2.2, 0.5, 0.4], banana: [1.7, 0.2, 1.0], shrub: [1.8, 0.15, 1.0], hibiscus: [1.9, 0.15, 1.0], bougainvillea: [2.0, 0.15, 1.0], boulder: [2.0, 0.7, 0.4], tiderock: [3.0, 0.5, 0.0], fern: [1.1, 0.1, 0.8], driftwood: [1.6, 0.5, 0.2], nuts: [0.7, 0.4, 0.0] };
 	const OCC = shared.occ, OS = OCC.image.width, OSPAN = shared.uOccO.value.z, occData = OCC.image.data;
 	const contacts = [], extra = [];
 
@@ -767,7 +908,7 @@ export function createVegetation(island, shared, scene) {
 		for (const sp of species) for (const m of sp.meshes) m.im.count = 0;
 		contacts.length = 0;
 		for (const sp of species) {
-			const cs = CONTACT[sp.key];
+			const cs = sp.tree ? CONTACT.hardwood : CONTACT[sp.key];
 			const R = sp.farR || sp.near, cr = Math.ceil(R / CELL);
 			const ci = Math.floor(cx / CELL), cj = Math.floor(cz / CELL);
 			const lim = sp.max;
@@ -822,13 +963,14 @@ export function createVegetation(island, shared, scene) {
 		}
 	}
 	// solid trunks and boulders the walker bumps into
+	const solidKeys = ['palm', 'boulder', 'tiderock', 'pandanus', 'treefern', ...species.filter((q) => q.tree).map((q) => q.key)];
 	function obstacles(x, z, r) {
 		const out = [];
 		const ci = Math.floor(x / CELL), cj = Math.floor(z / CELL);
 		for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) {
 			const c = cells.get(i + ',' + j);
 			if (!c) continue;
-			for (const k of ['palm', 'hardwood', 'boulder', 'tiderock']) for (const it of c.items[k] || []) {
+			for (const k of solidKeys) for (const it of c.items[k] || []) {
 				const rad = k === 'boulder' ? it.scale * 1.0 : k === 'tiderock' ? it.scale * 1.3 : 0.35 * it.scale;
 				if (Math.hypot(it.x - x, it.z - z) < r + rad + 1) out.push({ x: it.x, z: it.z, r: rad });
 			}

@@ -31,6 +31,8 @@ Open `dev.html` from a local server to run the island on its own
 - `src/boat.js` — the village boat: board, throttle and steer, rides the swell, leaves a wake
 - `src/whale.js` — a humpback in the bay: blows, sounds with flukes up, breaches on a hard bass hit
 - `src/music.js` — faceplate bands, play surfaces, ripples
+- `src/crysis/land.js` — Crysis land ecology: land profile → canopy tree species (crown architecture, tints, habitats), palm, tree fern, elephant ear, screw pine, wildflowers, and the animals' genomes; community field for stands
+- `src/crysis/landfauna.js` — butterflies, songbirds, a lorikeet flock, sandpipers, ghost crabs and lizards, pooled round the player
 - `src/crysis/ecology.js` — Crysis ecology: seed → marine profile → food web → species genomes (corals, fish, small life), community field, `describe()`
 - `src/crysis/fish.js` — fish grown from genomes (lofted body, fins, tail, painted pattern) and niche behaviour (clouds over heads, grazing groups, pairs, bait balls, patrolling predators, rays)
 - `src/crysis/inverts.js` — sea stars, sea cucumbers, giant clams, feather dusters and garden eels that duck, moon jellies
@@ -40,8 +42,8 @@ Open `dev.html` from a local server to run the island on its own
 
 ## Crysis
 
-The engine grows its world from the seed. The ocean is the first realm on the Crysis
-ecology; the land (flora communities, fauna), terrain types and the caves and flight
+The engine grows its world from the seed. The ocean and the land (flora communities, fauna)
+are on the Crysis ecology; terrain types and the caves and flight
 systems of the older builds move onto it next. `Crysis.ecology()` in the console prints
 the open island's food web.
 
