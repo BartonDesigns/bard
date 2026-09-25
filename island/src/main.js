@@ -19,9 +19,45 @@ import { createBoat } from './boat.js';
 import { createWhale } from './whale.js';
 import { createShells } from './shells.js';
 import { createUnderwater } from './underwater.js';
+import { createSealife } from './sealife.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
+
+// Under water, light is absorbed red first, then green: near things keep their colour,
+// far things go blue-green. The fog chunk does this per channel when the fog density is
+// negative (the flag costs nothing: the density is squared). Above water it is unchanged.
+THREE.ShaderChunk.fog_fragment = `
+#ifdef USE_FOG
+	#ifdef FOG_EXP2
+		float fogD2 = fogDensity * fogDensity * vFogDepth * vFogDepth;
+		vec3 fogFactor3 = fogDensity < 0.0 ? 1.0 - exp(-fogD2 * vec3(2.6, 1.0, 0.7)) : vec3(1.0 - exp(-fogD2));
+	#else
+		vec3 fogFactor3 = vec3(smoothstep(fogNear, fogFar, vFogDepth));
+	#endif
+	gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor3);
+#endif
+`;
+
+// Muffle the whole Bard under water: a low-pass between the faceplate's master output
+// and the speakers, eased in as you go under and out as you surface.
+const muffle = { lp: null, ctx: null, k: 0 };
+function underwaterAudio(target, dt) {
+	const out = window._masterClip, ctx = out && out.context;
+	if (!ctx || ctx.state !== 'running') return;
+	if (!muffle.lp || muffle.ctx !== ctx) {
+		try {
+			const lp = ctx.createBiquadFilter();
+			lp.type = 'lowpass'; lp.frequency.value = 20000; lp.Q.value = 0.9;
+			out.disconnect(ctx.destination);
+			out.connect(lp); lp.connect(ctx.destination);
+			muffle.lp = lp; muffle.ctx = ctx;
+		} catch (e) { return; }
+	}
+	const k = muffle.k += (target - muffle.k) * Math.min(1, dt * 3);
+	muffle.lp.frequency.setTargetAtTime(20000 * Math.pow(420 / 20000, k), ctx.currentTime, 0.05);
+	muffle.lp.Q.setTargetAtTime(0.9 + k * 2.5, ctx.currentTime, 0.05);
+}
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 function css(el, s) { el.style.cssText = s; return el; }
@@ -191,10 +227,11 @@ export function createIslandWorld() {
 		const whale = createWhale(island, shared, scene);
 		const shells = createShells(island, shared, camera, scene, player, dom, hint);
 		const underwater = createUnderwater(island, shared, scene, camera, player);
+		const sealife = createSealife(island, shared, scene, camera);
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -283,13 +320,17 @@ export function createIslandWorld() {
 		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
 		const under = camera.position.y < surf - 0.05;
 		W.underwater.update(dt, time, under, surf);
+		// the reef and its fish only run when you are in or over the bay
+		const bay = W.island.village.bay;
+		W.sealife.update(dt, time, !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40);
 		shared.uUnder.value = under ? 1 : 0;
 		if (under) {
 			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 16));
 			scene.fog.color.setRGB(0.03 - depthK * 0.02, 0.22 - depthK * 0.12, 0.26 - depthK * 0.08).multiplyScalar(0.25 + 0.75 * sk.dayK);
-			scene.fog.density = 0.035 + depthK * 0.02;
+			scene.fog.density = -(0.035 + depthK * 0.02);   // negative: per-channel absorption
 		} else scene.fog.density = 0.00026;
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
+		if (under || muffle.k > 0.01) underwaterAudio(under ? Math.min(1, 0.75 + (surf - camera.position.y) * 0.03) : 0, dt);
 		const sh = W.shells.update(dt, time);
 		const show = (el, on) => { const d = on ? 'block' : 'none'; if (el.style.display !== d) el.style.display = d; };
 		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
@@ -348,6 +389,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		if (muffle.lp) { muffle.k = 0; muffle.lp.frequency.value = 20000; muffle.lp.Q.value = 0.9; }
 		dom.mount.style.display = 'none';
 		world?.player.clearInput();
 		window.L99TouchMusic175?.cancel?.();
