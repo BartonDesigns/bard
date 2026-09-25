@@ -25,7 +25,7 @@ function fishGeometry() {
 	return g;
 }
 
-export function createSealife(island, shared, scene, camera) {
+export function createSealife(island, shared, scene, camera, bommies = []) {
 	const bay = island.village.bay;
 	if (!bay) return { update() {} };
 	const r = mulberry32(island.seed ^ 0xf15a);
@@ -41,6 +41,16 @@ export function createSealife(island, shared, scene, camera) {
 		{ n: 120, size: 0.1, a: [0.72, 0.84, 0.92], b: [0.35, 0.5, 0.62] },   // silver baitfish
 		{ n: 260, size: 0.09, a: [0.62, 0.72, 0.8], b: [0.3, 0.38, 0.45], vent: true },   // a swarm over the vent
 	];
+	// small reef fish that keep to the coral heads, hopping from one to the next
+	if (bommies.length) SPECIES.push(
+		{ n: 40, size: 0.07, a: [0.25, 0.55, 0.95], b: [0.1, 0.25, 0.6], reef: true },      // blue damsels
+		{ n: 30, size: 0.08, a: [1.0, 0.85, 0.2], b: [0.95, 0.7, 0.1], reef: true },        // yellow
+		{ n: 45, size: 0.06, a: [0.45, 0.9, 0.75], b: [0.2, 0.6, 0.55], reef: true },       // green chromis
+		{ n: 25, size: 0.09, a: [0.95, 0.45, 0.3], b: [0.98, 0.9, 0.85], reef: true },      // orange and white
+		{ n: 35, size: 0.07, a: [0.55, 0.35, 0.85], b: [0.95, 0.8, 0.2], reef: true },      // purple and gold
+		{ n: 40, size: 0.07, a: [0.25, 0.55, 0.95], b: [0.1, 0.25, 0.6], reef: true },
+	);
+	const overHead = (bm) => new THREE.Vector3(bm.x + (Math.random() - 0.5) * 3, Math.min(-1.6, bm.h + 2 + Math.random() * 1.8), bm.z + (Math.random() - 0.5) * 3);
 	const N = SPECIES.reduce((s, x) => s + x.n, 0);
 	const fishMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.25 });
 	const uni = { uTime: shared.uTime };
@@ -65,6 +75,7 @@ export function createSealife(island, shared, scene, camera) {
 		const a = r() * 6.28, t = sp.vent ? 0.04 : 0.25 + r() * 0.3;
 		const home = new THREE.Vector3(bay.x + Math.cos(a) * t * bay.r, 0, bay.z + Math.sin(a) * t * bay.r);
 		home.y = Math.min(-2, island.heightAt(home.x, home.z) * 0.5);
+		if (sp.reef) home.copy(overHead(bommies[Math.floor(r() * bommies.length)]));
 		const school = { home, goal: home.clone(), timer: 0, center: new THREE.Vector3(), vel: new THREE.Vector3(), sp };
 		schools.push(school);
 		for (let i = 0; i < sp.n; i++, k++) {
@@ -167,10 +178,17 @@ export function createSealife(island, shared, scene, camera) {
 			if (s.timer <= 0) {
 				// wander to a new spot in the crater, at a depth between floor and surface
 				s.timer = 8 + Math.random() * 10;
-				const a = Math.random() * 6.28, rr = (s.sp.vent ? 0.14 + Math.random() * 0.08 : 0.15 + Math.random() * 0.45) * bay.r;
-				s.goal.set(bay.x + Math.cos(a) * rr, 0, bay.z + Math.sin(a) * rr);
-				const fl = island.heightAt(s.goal.x, s.goal.z);
-				s.goal.y = s.sp.vent ? Math.min(-2, fl + 5 + Math.random() * 3) : fl + 1.2 + Math.random() * Math.max(0.5, -fl - 2.2);
+				if (s.sp.reef) {
+					// on to a nearby head
+					let best = null, bd = 1e9;
+					for (let j = 0; j < 6; j++) { const bm = bommies[Math.floor(Math.random() * bommies.length)], d = Math.hypot(bm.x - s.center.x, bm.z - s.center.z); if (d < bd && d > 2) { bd = d; best = bm; } }
+					if (best) s.goal.copy(overHead(best));
+				} else {
+					const a = Math.random() * 6.28, rr = (s.sp.vent ? 0.14 + Math.random() * 0.08 : 0.15 + Math.random() * 0.45) * bay.r;
+					s.goal.set(bay.x + Math.cos(a) * rr, 0, bay.z + Math.sin(a) * rr);
+					const fl = island.heightAt(s.goal.x, s.goal.z);
+					s.goal.y = s.sp.vent ? Math.min(-2, fl + 5 + Math.random() * 3) : fl + 1.2 + Math.random() * Math.max(0.5, -fl - 2.2);
+				}
 			}
 			s.center.set(0, 0, 0); s.vel.set(0, 0, 0);
 		}

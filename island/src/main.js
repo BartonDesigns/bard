@@ -22,6 +22,7 @@ import { createUnderwater } from './underwater.js';
 import { createSealife } from './sealife.js';
 import { createMagma } from './magma.js';
 import { createCaverns } from './caverns.js';
+import { createReef } from './reef.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -231,11 +232,12 @@ export function createIslandWorld() {
 		const magma = createMagma(island, shared, scene, camera);
 		const caverns = createCaverns(island, shared, scene, camera, magma.tube);
 		const underwater = createUnderwater(island, shared, scene, camera, player, [...magma.tube, ...caverns.tunnels.flat(), ...caverns.arches.flat()]);
-		const sealife = createSealife(island, shared, scene, camera);
+		const reef = createReef(island, shared, scene, [...magma.tube, ...caverns.tunnels.flat(), ...caverns.arches.flat()]);
+		const sealife = createSealife(island, shared, scene, camera, reef.bommies);
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns };
+		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef };
 		state.seed = seed;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -332,7 +334,9 @@ export function createIslandWorld() {
 		W.caverns.update(dt, time, under);
 		// the reef and its fish only run when you are in or over the bay
 		const bay = W.island.village.bay;
-		W.sealife.update(dt, time, !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40);
+		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40;
+		W.sealife.update(dt, time, inBay);
+		W.reef.update(inBay, camera.position);
 		shared.uUnder.value = under ? 1 : 0;
 		if (under) {
 			const depthK = Math.min(1, Math.max(0, (surf - camera.position.y) / 14));
