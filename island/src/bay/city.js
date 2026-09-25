@@ -10,7 +10,9 @@
 
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { hardwood, shrub, swayMaterial } from '../world/vegetation.js';
+import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -223,15 +225,49 @@ export function createCity(shared, scene, bay) {
 	const near = mk(boxGeo(), mat, CAP, true);
 	const hipG = roofGeometry(true), gableG = roofGeometry(false);
 	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
-	// trees: trunks, round crowns (oaks, sycamores, street trees), cones (pines, redwoods)
+	// trees. Up close and in the middle distance, the island's own leaf-card trees in the
+	// Bay Area's street species: London plane and sycamore (round), coast live oak (low
+	// and spreading), redwood and cypress (columnar), and yard shrubs. Far off, where a
+	// crown is a few pixels, a smooth lumpy mass stands in.
 	const TCAP = 24000;
-	const trunkGeo = new THREE.CylinderGeometry(0.6, 1, 1, 5).translate(0, 0.5, 0);
-	const crownGeo = (() => { const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const k = 0.85 + 0.3 * Math.abs(Math.sin(p.getX(i) * 5.1 + p.getZ(i) * 3.7 + p.getY(i) * 2.3)); p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k); } g.computeVertexNormals(); return g; })();
-	const coneGeo = new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0);
-	const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
+	const trunkGeo = new THREE.CylinderGeometry(0.6, 1, 1, 7).translate(0, 0.5, 0);
+	const crownGeo = (() => {
+		let g = new THREE.IcosahedronGeometry(1, 3);
+		g.deleteAttribute('normal'); g.deleteAttribute('uv');
+		g = mergeVertices(g);
+		const p = g.attributes.position;
+		for (let i = 0; i < p.count; i++) { const k = 0.88 + 0.12 * Math.sin(p.getX(i) * 5.1 + p.getZ(i) * 3.7 + p.getY(i) * 2.3) * Math.sin(p.getY(i) * 4.3 - p.getX(i) * 2.9); p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k); }
+		g.computeVertexNormals();
+		return g;
+	})();
+	const coneGeo = (() => { let g = new THREE.ConeGeometry(1, 1, 14, 3).translate(0, 0.5, 0); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g); g.computeVertexNormals(); return g; })();
+	const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.95 });
 	const trunks = mk(trunkGeo, new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 0.95 }), TCAP, false);
 	trunks.instanceColor = null;
 	const crowns = mk(crownGeo, leafMat, TCAP, false), cones = mk(coneGeo, leafMat, TCAP, false);
+	const leafM = swayMaterial({ map: TX.leafCluster(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8);
+	const barkT = TX.woodBark(); barkT.repeat.set(2, 3);
+	const barkM = swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1);
+	const SPECIES = [
+		{ height: 11, crown: 'round', bark: [1.12, 1.08, 1.0], leaf: [1.1, 1.05, 0.85] },      // plane, sycamore, elm
+		{ height: 9, crown: 'umbrella', bark: [0.75, 0.72, 0.7], leaf: [0.78, 0.86, 0.72] },  // coast live oak
+		{ height: 16, crown: 'columnar', bark: [0.95, 0.66, 0.52], leaf: [0.55, 0.72, 0.6] }, // redwood, cypress
+	];
+	const LEAF_REF = [0.25, 0.35, 0.15];
+	const tierMesh = (parts, cap, shadow) => parts.map((geo, n) => {
+		const S = n === 0 ? barkM : leafM;
+		const im = new THREE.InstancedMesh(geo, S.material, cap);
+		im.count = 0; im.frustumCulled = false; im.castShadow = shadow; im.receiveShadow = true;
+		if (S.depth) im.customDepthMaterial = S.depth;
+		if (n === 1) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+		group.add(im);
+		return im;
+	});
+	const treeTiers = SPECIES.map((g, k) => {
+		const nearT = hardwood(9101 + k * 17, false, false, g), midT = hardwood(9101 + k * 17, false, true, g);
+		return { near: tierMesh(nearT.parts, 700, true), mid: tierMesh(midT.parts, 4000, true), H: nearT.height, Hm: midT.height };
+	});
+	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, 3000, true);
 
 	// one lot's building (and roof) in grid space: centre (gx, gz), size along grid x/z.
 	// opt.face turns the box so its front (local +z) faces a street: 's' +gz, 'n' -gz,
@@ -519,27 +555,50 @@ export function createCity(shared, scene, bay) {
 		body.count = n; kinds.needsUpdate = true;
 		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); }
-		if (roofs && list.trees) {
-			// trees: a trunk and a round or conical crown each
-			let nt = 0, nr = 0, nc = 0;
-			for (const t of list.trees) {
-				if (nt >= trunks.instanceMatrix.count) break;
-				q.identity();
-				const im = t.cone ? cones : crowns, k = t.cone ? nc++ : nr++;
-				if (t.shrub) {
-					// a shrub: no trunk, a low mound of leaves sitting on the ground
-					im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.3, t.z), q, sc.set(t.h * 0.62, t.h * 0.5, t.h * 0.62)));
-					im.setColorAt(k, col.setRGB(t.col[0], t.col[1], t.col[2]));
+		if (roofs) treeList = list.trees || [];
+	}
+
+	// the trees by distance from you, re-sorted as you walk: leaf-card trees close by,
+	// simpler leaf-card trees further out, smooth masses far away
+	let treeList = [], treeX = 1e9, treeZ = 1e9;
+	function placeTrees(x, z) {
+		treeX = x; treeZ = z;
+		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
+		for (const t of treeList) {
+			const d = Math.hypot(t.x - x, t.z - z);
+			const yaw = hash(t.x * 3.1, t.z * 1.7) * 6.283;
+			q.setFromAxisAngle(Y, yaw);
+			const tint = [0, 1, 2].map((c) => Math.min(1.35, Math.max(0.65, t.col[c] / LEAF_REF[c])));
+			if (t.shrub) {
+				if (d > 260) continue;
+				const k = next(shrubs[0]); if (k < 0) continue; next(shrubs[1]);
+				const s2 = t.h / 1.3;
+				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2 * 0.9, s2));
+				shrubs[0].setMatrixAt(k, m4); shrubs[1].setMatrixAt(k, m4); shrubs[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
+				continue;
+			}
+			if (d < 440) {
+				const sp = t.cone ? 2 : hash(t.x * 0.7, t.z * 1.3) < 0.3 ? 1 : 0, T = treeTiers[sp];
+				const tier = d < 150 ? T.near : T.mid, H = d < 150 ? T.H : T.Hm;
+				const k = next(tier[0]);
+				if (k >= 0) {
+					next(tier[1]);
+					const s2 = t.h / H;
+					m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(s2, s2, s2));
+					tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 					continue;
 				}
-				trunks.setMatrixAt(nt++, m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.h * 0.05 + 0.15, t.h * 0.45, t.h * 0.05 + 0.15)));
-				if (t.cone) im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.2, t.z), q, sc.set(t.h * 0.28, t.h * 0.85, t.h * 0.28)));
-				else im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.62, t.z), q, sc.set(t.h * 0.36, t.h * 0.3, t.h * 0.36)));
-				im.setColorAt(k, col.setRGB(t.col[0], t.col[1], t.col[2]));
 			}
-			trunks.count = nt; crowns.count = nr; cones.count = nc;
-			for (const im of [trunks, crowns, cones]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
+			const nt = next(trunks); if (nt < 0) continue;
+			q.identity();
+			trunks.setMatrixAt(nt, m4.compose(p.set(t.x, t.y, t.z), q, sc.set(t.h * 0.05 + 0.15, t.h * 0.45, t.h * 0.05 + 0.15)));
+			const im = t.cone ? cones : crowns, k = next(im); if (k < 0) continue;
+			if (t.cone) im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.2, t.z), q, sc.set(t.h * 0.28, t.h * 0.85, t.h * 0.28)));
+			else im.setMatrixAt(k, m4.compose(p.set(t.x, t.y + t.h * 0.62, t.z), q, sc.set(t.h * 0.36, t.h * 0.3, t.h * 0.36)));
+			im.setColorAt(k, col.setRGB(t.col[0], t.col[1], t.col[2]));
 		}
+		const all = [trunks, crowns, cones, ...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])];
+		for (const im of all) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 	}
 
 	// the skylines, found once: every downtown's tall buildings, kept for far views
@@ -636,7 +695,8 @@ export function createCity(shared, scene, bay) {
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
 		near.visible = hips.visible = gables.visible = trunks.visible = crowns.visible = cones.visible = !high;
-		if (Math.hypot(x - lastX, z - lastZ) < 300) return;
+		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
+		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }
 		lastX = x; lastZ = z;
 		const list = [];
 		fillBlocks(x, z, 1200, list);
@@ -645,6 +705,7 @@ export function createCity(shared, scene, bay) {
 		if (list.length > CAP) { const t = list.trees; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
 		upload(list, near, [hips, gables]);
+		placeTrees(x, z);
 	}
 	return { update, group, fill: fillBlocks };
 }

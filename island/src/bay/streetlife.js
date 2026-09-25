@@ -8,65 +8,11 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from './styles.js';
+import { carGeometry, carMaterial } from './cars.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
 const PAINT = [[0.92, 0.92, 0.91], [0.92, 0.92, 0.91], [0.05, 0.05, 0.06], [0.05, 0.05, 0.06], [0.35, 0.36, 0.38], [0.35, 0.36, 0.38], [0.66, 0.67, 0.69], [0.66, 0.67, 0.69], [0.1, 0.2, 0.45], [0.55, 0.06, 0.06], [0.2, 0.3, 0.26], [0.45, 0.38, 0.3], [0.8, 0.8, 0.82], [0.25, 0.08, 0.1]];
-
-// a car from its side profile, extruded to its width; parts coded for the shader
-// (0 paint, 1 glass, 2 tyres and trim, 3 lights)
-function carGeometry(kind) {
-	const prof = {
-		sedan: [[-2.35, 0.3], [-2.35, 0.75], [-2.0, 0.85], [-1.2, 0.9], [-0.8, 1.38], [0.7, 1.42], [1.35, 0.95], [2.3, 0.85], [2.38, 0.55], [2.35, 0.3]],
-		hatch: [[-1.95, 0.3], [-1.98, 0.8], [-1.8, 1.35], [0.3, 1.45], [1.05, 0.95], [1.95, 0.82], [2.0, 0.55], [1.97, 0.3]],
-		suv: [[-2.35, 0.4], [-2.38, 1.05], [-2.2, 1.7], [0.9, 1.75], [1.5, 1.1], [2.3, 1.0], [2.38, 0.65], [2.35, 0.4]],
-		pickup: [[-2.7, 0.45], [-2.72, 1.05], [-0.6, 1.05], [-0.55, 1.78], [0.9, 1.78], [1.35, 1.12], [2.65, 1.02], [2.72, 0.65], [2.7, 0.45]],
-		van: [[-2.45, 0.4], [-2.48, 2.0], [1.3, 2.02], [1.95, 1.2], [2.4, 1.02], [2.45, 0.55], [2.45, 0.4]],
-	}[kind];
-	const W = kind === 'hatch' ? 1.75 : kind === 'sedan' ? 1.82 : 1.95;
-	const shape = new THREE.Shape(prof.map(([x, y]) => new THREE.Vector2(x, y)));
-	const body = new THREE.ExtrudeGeometry(shape, { depth: W, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 2, steps: 1 });
-	body.translate(0, 0, -W / 2);
-	// profile x is along the car; the car faces +z in the world, so turn it
-	body.rotateY(-Math.PI / 2);
-	body.deleteAttribute('uv');
-	// the glass: everything above the belt line
-	const belt = kind === 'van' ? 1.25 : kind === 'suv' ? 1.12 : kind === 'pickup' ? 1.1 : 0.95;
-	const P = body.attributes.position, part = new Float32Array(P.count);
-	for (let i = 0; i < P.count; i++) {
-		const y = P.getY(i), z = P.getZ(i), len = kind === 'pickup' ? 2.7 : kind === 'hatch' ? 1.95 : 2.4;
-		part[i] = y > belt + 0.05 ? 1 : Math.abs(z) > len - 0.12 && y > 0.6 && y < belt - 0.02 && Math.abs(P.getX(i)) > W * 0.28 ? 3 : 0;
-	}
-	body.setAttribute('aPart', new THREE.BufferAttribute(part, 1));
-	const parts = [body.toNonIndexed()];
-	const wheelZ = kind === 'hatch' ? [1.25, -1.25] : kind === 'pickup' ? [1.75, -1.75] : [1.45, -1.45];
-	for (const z of wheelZ) for (const x of [-W / 2 + 0.05, W / 2 - 0.05]) {
-		const w = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14).rotateZ(Math.PI / 2).translate(x, 0.34, z).toNonIndexed();
-		w.deleteAttribute('uv');
-		w.setAttribute('aPart', new THREE.BufferAttribute(new Float32Array(w.attributes.position.count).fill(2), 1));
-		parts.push(w);
-	}
-	const g = mergeGeometries(parts);
-	g.computeVertexNormals();
-	return g;
-}
-
-function carMaterial(night) {
-	const m = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.5 });
-	m.onBeforeCompile = (sh) => {
-		sh.uniforms.uNightS = night;
-		sh.vertexShader = 'attribute float aPart; varying float vPart; varying float vFront;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvPart = aPart; vFront = position.z;');
-		sh.fragmentShader = 'uniform float uNightS; varying float vPart; varying float vFront;\nvec3 carGlow = vec3(0.0); float carRough = -1.0;\n' + sh.fragmentShader
-			.replace('#include <color_fragment>', `#include <color_fragment>
-				if (vPart > 0.5 && vPart < 1.5) { diffuseColor.rgb = vec3(0.04, 0.05, 0.06); carRough = 0.05; }
-				else if (vPart > 1.5 && vPart < 2.5) { diffuseColor.rgb = vec3(0.03); carRough = 0.9; }
-				else if (vPart > 2.5) { bool front = vFront > 0.0; diffuseColor.rgb = front ? vec3(0.9, 0.9, 0.85) : vec3(0.6, 0.04, 0.03); carGlow = (front ? vec3(1.0, 0.92, 0.75) * 2.5 : vec3(1.0, 0.05, 0.02) * 1.6) * uNightS; }`)
-			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nif (carRough >= 0.0) roughnessFactor = carRough;')
-			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += carGlow;');
-	};
-	m.customProgramCacheKey = () => 'baycar';
-	return m;
-}
 
 export function createStreetLife(shared, scene, bay, groundAt) {
 	const group = new THREE.Group();
@@ -205,6 +151,7 @@ export function createStreetLife(shared, scene, bay, groundAt) {
 	function update(dt, t, cam, nightK) {
 		if (!bay.loaded()) return;
 		night.value = nightK;
+		carMat.envMapIntensity = 0.9 * (1 - nightK * 0.9);
 		const high = cam.position.y - groundAt(cam.position.x, cam.position.z) > 450;
 		group.visible = !high;
 		if (high) return;

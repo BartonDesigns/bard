@@ -192,7 +192,7 @@ const CROWN = {
 	layered: { trunk: 0.5, rx: 1.2, ry: 1.05, len: 1.25, rise: 0.6, lift: 0.3 },
 	weeping: { trunk: 0.55, rx: 1.2, ry: 1.1, len: 1.2, rise: 0.8, lift: 0.22 },
 };
-function hardwood(seed, far, mid, g = null) {
+export function hardwood(seed, far, mid, g = null) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
 	const C = CROWN[g?.crown || 'round'];
 	const H = g ? g.height * (0.85 + r() * 0.3) : 8 + r() * 5, bend = r() * 1.5, ba = r() * 6.28;
@@ -364,7 +364,7 @@ function bloom(seed) {
 	for (let i = 0; i < 6; i++) { const a = r() * 6.28, d = 0.45 + r() * 0.4; card(b, V(Math.cos(a) * d, 0.22 + r() * 0.15, Math.sin(a) * d), 0.8, r, { r: 0.5, g: 0.55, b: 0.5 }, 0.4, V(0, -0.5, 0)); }
 	return { parts: [wood.geometry(), b.geometry()], height: 1.8 };
 }
-function shrub(seed) {
+export function shrub(seed) {
 	const r = mulberry32(seed), wood = new Builder(), b = new Builder(), c0 = V(0, 0.5, 0);
 	const tips = bushStems(wood, r, 5 + Math.floor(r() * 3), 0.95, 0.9);
 	for (let i = 0; i < 18; i++) {
@@ -568,7 +568,7 @@ float rh(vec2 p){ p = mod(p, 512.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 +
 float rvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rh(i), rh(i + vec2(1, 0)), f.x), mix(rh(i + vec2(0, 1)), rh(i + vec2(1, 1)), f.x), f.y); }
 float rfbm(vec2 p){ return rvn(p) * 0.5 + rvn(p * 2.1 + 3.1) * 0.3 + rvn(p * 4.3 - 1.7) * 0.2; }
 `;
-function swayMaterial(params, shared, stiff) {
+export function swayMaterial(params, shared, stiff) {
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
 	const hook = (sh) => {
 		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT;
