@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
 import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
 import { PLACES } from './places.js';
-import { bearingFor, styleFor, localOverride, WARP_GLSL, STYLE } from './styles.js';
+import { bearingFor, styleFor, localOverride, WARP_GLSL, STYLE, sfDistrict } from './styles.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
@@ -93,6 +93,10 @@ export function createBayArea(shared, scene, island, BU) {
 			let down = 0;
 			for (const c of cbds) { const d = Math.hypot(x - c.x, z - c.z) / c.r; down = Math.max(down, c.s * Math.exp(-d * d)); }
 			const lo = localOverride(x, z, sty[k], ang[k]);
+			// Chinatown and North Beach stay low beside the towers; Nob Hill is mid-rise
+			if (lo.style === STYLE.sf) { const dd = sfDistrict(x, z); if (dd === 'chinatown' || dd === 'northbeach') down = 0; else if (dd === 'nobhill') down *= 0.3; }
+			// the zoned districts are built up even where no town centre is near
+			if (lo.style >= STYLE.office && h > 0.6 && slope < 0.15) u = Math.max(u, 0.85);
 			data[k * 4] = Math.round(u * 255); data[k * 4 + 1] = Math.round(lo.angle / (Math.PI / 2) * 255) % 256; data[k * 4 + 2] = Math.round(Math.min(1, down) * 255 * (u > 0.1 ? 1 : 0)); data[k * 4 + 3] = lo.style * 40;
 		}
 		U.data = data;
@@ -234,6 +238,16 @@ export function createBayArea(shared, scene, island, BU) {
 							vec3 lawn = mix(vec3(0.3, 0.42, 0.16), vec3(0.42, 0.46, 0.2), vn(g * 0.1));
 							cityC = mix(lawn, roofS, roofMask);
 							cityC = mix(cityC, vec3(0.13, 0.2, 0.09), step(0.8, h21(floor(g / 6.0) + 11.0)) * (1.0 - roofMask) * 0.8);
+						} else if (sty > 4.5 && sty < 5.5) {
+							// industry: long pale warehouse roofs, concrete yards, truck lanes
+							float bld = step(0.12, f.x) * step(f.x, 0.55) * step(0.15, f.y) * step(f.y, 0.62) + step(0.62, f.x) * step(f.x, 0.9) * step(0.3, f.y) * step(f.y, 0.85);
+							vec3 yard = mix(vec3(0.46, 0.45, 0.42), vec3(0.36, 0.35, 0.34), vn(g * 0.05));
+							cityC = mix(yard, mix(vec3(0.72, 0.72, 0.7), vec3(0.58, 0.6, 0.62), lh), clamp(bld, 0.0, 1.0));
+						} else if (sty > 5.5) {
+							// retail: a big box at the back, a sea of parking in front
+							float bld = step(0.15, f.x) * step(f.x, 0.85) * step(0.55, f.y) * step(f.y, 0.9);
+							float lotL = step(0.9, fract(fw.x / 2.7)) * (1.0 - bld) * step(0.1, f.y);
+							cityC = mix(vec3(0.22, 0.22, 0.23) + lotL * 0.45, vec3(0.7, 0.68, 0.64), bld);
 						} else {
 							// business park: big roofs in wide parking lots, with lines of trees
 							float bld = step(0.25, f.x) * step(f.x, 0.62) * step(0.2, f.y) * step(f.y, 0.7);

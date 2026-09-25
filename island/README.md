@@ -55,7 +55,7 @@ true scale:
 - `src/bay/terrain.js` — the streamed ground (California grass, oak, redwood, chaparral,
   street grids, city lights), and the shared height function
 - `src/bay/bridge.js` — the Golden Gate Bridge at its real dimensions (walkable deck)
-- `src/bay/styles.js` — how each area is built: real street-grid bearings, block sizes, house styles (SF rows, the Sunset, older towns, valley suburbs with curving streets, business parks)
+- `src/bay/styles.js` — how each area is built (land-use zoning: industry, retail, campuses; tract eras; SF districts): real street-grid bearings, block sizes, house styles (SF rows, the Sunset, older towns, valley suburbs with curving streets, business parks)
 - `src/bay/city.js` — buildings on the street grids by style (roofs, bay windows, garages, towers), the skylines, SF's tallest landmarks, the Bay Bridge
 - `src/bay/landmarks.js` — landmarks across SF, the East Bay, the Peninsula, the South Bay and San Ramon, the port cranes, the other bridges
 - `src/bay/roads.js` — the freeways (I-680, I-580, SR-24, I-80, I-880, US-101, I-280) and the Iron Horse Trail, with lamps and traffic at night
@@ -67,6 +67,19 @@ the ship in orbit round Earth. The old flight build's Bay Area surface is gone.
 
 Home: `Crysis.setHome(lat, lon)` marks your home (kept only in that browser's storage, never
 published); `Crysis.goHome()` takes you there.
+
+## The Guide (✦, or G)
+
+A companion you talk to by text or voice. It knows where you are and what is around you,
+keeps a journal of things to find, answers questions about the places, and can act (take
+you somewhere, change the hour, fly). Its voice is a model on your own device:
+
+- **On this device (WebGPU)** — WebLLM runs Qwen 2.5 or Llama 3.2 in the browser; downloads
+  once (0.9–2.3 GB), then works offline. Nothing leaves the device.
+- **Ollama** — a local Ollama server (`OLLAMA_ORIGINS=https://level99bard.com ollama serve`).
+- **Built-in** — with no model it still answers from the world itself.
+
+`src/guide/llm.js` (backends) and `src/guide/guide.js` (world snapshot, journal, actions, panel).
 
 ## Crysis
 

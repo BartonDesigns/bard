@@ -35,6 +35,7 @@ import { createCity } from './bay/city.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
+import { createGuide } from './guide/guide.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -213,6 +214,8 @@ export function createIslandWorld() {
 		clearTimeout(hint.t);
 		hint.t = setTimeout(() => { dom.hint.style.opacity = '0'; }, ms);
 	}
+	// the Guide: talk, ask, be taken places (a model on this device, or the built-in guide)
+	const guide = createGuide(dom.mount, { world: () => world, camera, shared, hint });
 
 	async function build(params) {
 		const seed = (params.seed >>> 0) || 1337;
@@ -427,6 +430,7 @@ export function createIslandWorld() {
 		W.bridge?.update(time, sk.night);
 		W.city?.update(camera, sk.night);
 		W.roads?.update(time, sk.night);
+		guide.update(dt);
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly
@@ -546,6 +550,7 @@ export function createIslandWorld() {
 		},
 		active: () => visible && running,
 		world: () => world,
+		guide,
 		renderer: () => renderer, camera: () => camera, scene: () => scene, dom, shared,
 	};
 
@@ -636,6 +641,7 @@ if (typeof window !== 'undefined') {
 		version: 1,
 		world: () => window.L99Island?.world?.(),
 		// your home on Earth: stored only in this browser, never published
+		guide: () => window.L99Island?.guide,
 		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },
 		clearHome: () => { localStorage.removeItem('crysis-home'); return 'Home cleared.'; },
 		goHome: () => {

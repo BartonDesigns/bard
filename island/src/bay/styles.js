@@ -10,15 +10,18 @@
 //              shingle browns, sage, cream, big street trees
 //   3 suburb   the valleys and the newer towns (San Ramon, Danville, Dublin...):
 //              one- and two-storey stucco, clay-tile hip roofs, lawns, curving streets
-//   4 office   business parks (Bishop Ranch...): low office blocks in parking lots
+//   4 office   business parks and tech campuses (Bishop Ranch, Silicon Valley...): office
+//              blocks in parking lots
+//   5 industry warehouses, docks, yards: the port, the flats along the bay, the refineries
+//   6 retail   malls and big-box centres in their parking lots
 // Downtown towers come from the urban map's downtown channel on top of any style.
 
 import { toLatLon } from './geo.js';
 
-export const STYLE = { sf: 0, sunset: 1, older: 2, suburb: 3, office: 4 };
+export const STYLE = { sf: 0, sunset: 1, older: 2, suburb: 3, office: 4, industry: 5, retail: 6 };
 
 // block sizes [along the grid x, along the grid z] and street width, per style
-export const BLOCKS = [[125, 84, 14], [180, 72, 13], [120, 90, 13], [150, 84, 12], [220, 160, 16]];
+export const BLOCKS = [[125, 84, 14], [180, 72, 13], [120, 90, 13], [150, 84, 12], [220, 160, 16], [260, 180, 18], [240, 170, 16]];
 
 const OLDER = new Set(['Oakland', 'Berkeley', 'Alameda', 'Albany', 'Emeryville', 'Piedmont', 'El Cerrito', 'Richmond', 'San Leandro', 'Kensington', 'Sausalito', 'Mill Valley', 'San Rafael', 'San Anselmo', 'Fairfax', 'Larkspur', 'Ross', 'Palo Alto', 'Burlingame', 'San Mateo', 'Vallejo', 'Benicia', 'Napa', 'Petaluma', 'Sonoma', 'Martinez', 'Los Gatos', 'Alameda', 'Belvedere', 'Tiburon', 'Crockett', 'Menlo Park', 'Saint Helena', 'Healdsburg', 'Sebastopol', 'Calistoga']);
 
@@ -50,7 +53,56 @@ export function localOverride(x, z, style, angle) {
 	}
 	// Bishop Ranch, San Ramon's business park, along the freeway
 	if (lat > 37.758 && lat < 37.782 && lon > -121.975 && lon < -121.955) return { style: STYLE.office, angle: rad(70) };
+	// land use: the industrial flats, the tech campuses and business parks, the malls
+	for (const [zl, zo, r, st, b] of ZONING) {
+		const dx = (lon - zo) * 88000, dz = (lat - zl) * 111000;
+		if (dx * dx + dz * dz < r * r) return { style: st, angle: b === undefined ? angle : rad(b) };
+	}
 	return { style, angle };
+}
+
+// [lat, lon, radius m, style, grid bearing?]: where the land is used for work and shopping
+const I = STYLE.industry, O = STYLE.office, R = STYLE.retail;
+export const ZONING = [
+	// malls and shopping centres (checked first: they sit inside everything else)
+	[37.6955, -121.9280, 480, R, 0], [37.8950, -122.0580, 330, R], [37.9650, -122.0600, 430, R], [37.7800, -121.9790, 300, R, 70], [37.7035, -121.8880, 550, R, 0],
+	[37.3250, -121.9460, 430, R], [37.4430, -122.1710, 380, R, 50], [37.5380, -122.3000, 380, R], [37.6720, -122.4690, 380, R], [37.6560, -122.1030, 430, R],
+	[37.6970, -122.1270, 330, R], [37.9900, -122.3310, 430, R], [37.4160, -121.8970, 480, R], [37.2530, -121.8620, 430, R], [37.6380, -122.4160, 380, R],
+	// industry: the port and the flats along the bay, refineries up the strait
+	[37.8060, -122.3000, 1400, I, 20.8], [37.7350, -122.2000, 1500, I], [37.7050, -122.1800, 1300, I], [37.6350, -122.1300, 2200, I], [37.4950, -121.9600, 2200, I],
+	[37.7350, -122.3850, 1100, I, 0], [37.7580, -122.3890, 600, I, 0], [37.6550, -122.3900, 1500, I], [37.6850, -122.3950, 800, I], [37.9250, -122.3650, 1800, I],
+	[37.8450, -122.2930, 800, I, 0], [37.6900, -121.8000, 1500, I], [38.0200, -122.1100, 1200, I], [38.0300, -121.8800, 1500, I], [37.5050, -122.2350, 700, I],
+	// tech campuses and business parks
+	[37.4200, -122.0830, 1200, O], [37.4050, -122.0200, 1300, O], [37.3950, -121.9750, 1500, O], [37.4050, -121.9300, 1800, O], [37.4850, -122.1480, 600, O],
+	[37.7000, -121.8900, 1200, O, 0], [37.5250, -122.2500, 700, O], [37.3900, -122.0400, 600, O],
+];
+
+// when a suburban tract was built, and so what it looks like; one builder, one look
+export const ERA = { ranch: 0, seventies: 1, modern: 2, eichler: 3 };
+export function eraFor(x, z, r) {
+	const { lat, lon } = toLatLon(x, z);
+	// Dougherty Valley, east Dublin, the far east bay: built out 1995-2015
+	if ((lat > 37.73 && lat < 37.79 && lon > -121.935 && lon < -121.86) || (lat > 37.69 && lat < 37.73 && lon > -121.9 && lon < -121.83) || lon > -121.8) return r < 0.85 ? ERA.modern : ERA.seventies;
+	// west San Ramon and Danville: the 1970s-80s valley, with newer tracts
+	if (lat > 37.74 && lat < 37.86 && lon > -122.03 && lon < -121.935) return r < 0.5 ? ERA.seventies : r < 0.8 ? ERA.modern : ERA.ranch;
+	// the Peninsula and the South Bay: postwar ranch houses, and Eichler tracts
+	if (lat < 37.5 && lon < -121.9) return r < 0.28 ? ERA.eichler : r < 0.8 ? ERA.ranch : ERA.seventies;
+	if (lat > 37.87 && lat < 37.93 && lon > -122.1 && lon < -122.03) return r < 0.2 ? ERA.eichler : r < 0.6 ? ERA.ranch : ERA.seventies;
+	return r < 0.45 ? ERA.ranch : r < 0.75 ? ERA.seventies : ERA.modern;
+}
+
+// San Francisco's districts: each with its own buildings
+export function sfDistrict(x, z) {
+	const { lat, lon } = toLatLon(x, z);
+	const d = (a, b) => Math.hypot((lon - b) * 88000, (lat - a) * 111000);
+	if (d(37.7941, -122.4078) < 330) return 'chinatown';
+	if (d(37.8006, -122.4103) < 380) return 'northbeach';
+	if (d(37.7905, -122.4150) < 700) return 'nobhill';
+	if (d(37.8020, -122.4370) < 620) return 'marina';
+	if (d(37.7925, -122.4382) < 650) return 'pacheights';
+	if (d(37.7599, -122.4148) < 900) return 'mission';
+	if (d(37.7700, -122.4460) < 900 || d(37.7609, -122.4350) < 600 || d(37.7765, -122.4330) < 450 || d(37.7510, -122.4330) < 600) return 'victorian';
+	return 'sf';
 }
 
 // curving suburban streets: the grid is warped by a slow, smooth field; the same
@@ -70,7 +122,9 @@ vec3 blockOf(float style){
 	if (style < 1.5) return vec3(180.0, 72.0, 13.0);
 	if (style < 2.5) return vec3(120.0, 90.0, 13.0);
 	if (style < 3.5) return vec3(150.0, 84.0, 12.0);
-	return vec3(220.0, 160.0, 16.0);
+	if (style < 4.5) return vec3(220.0, 160.0, 16.0);
+	if (style < 5.5) return vec3(260.0, 180.0, 18.0);
+	return vec3(240.0, 170.0, 16.0);
 }
 `;
 // world -> grid coordinates (the GLSL mat2(c, -s, s, c) * w, plus the warp)
