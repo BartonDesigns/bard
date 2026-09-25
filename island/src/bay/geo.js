@@ -2,7 +2,11 @@
 // Farallones, 25 km west of the Golden Gate; the Bay Area is laid out around it at true
 // scale in metres (equirectangular about the island: +x east, -z north).
 
-export const LAT0 = 37.76, LON0 = -122.78;
+// the island sits about 5 km off Ocean Beach, the Golden Gate some 9 km east of it
+export const LAT0 = 37.76, LON0 = -122.57;
+// where the origin was when the real-map regions were first baked (their files record
+// their own origin from then on; see realcity.js)
+export const LON0_LEGACY = -122.78;
 export const KX = 111320 * Math.cos(LAT0 * Math.PI / 180);   // metres per degree of longitude here
 export const KZ = 110996;                                     // metres per degree of latitude
 export const toWorld = (lat, lon) => ({ x: (lon - LON0) * KX, z: -(lat - LAT0) * KZ });

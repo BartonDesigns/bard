@@ -16,7 +16,7 @@ from shapely import affinity
 from PIL import Image, ImageDraw
 
 src, name = sys.argv[1], sys.argv[2]
-LAT0, LON0 = 37.76, -122.78
+LAT0, LON0 = 37.76, -122.57                 # must match src/bay/geo.js
 KX, KZ = 111320 * math.cos(LAT0 * math.pi / 180), 110996
 W_, S_, E_, N_ = map(float, sys.argv[3:7])
 def world(lon, lat): return ((lon - LON0) * KX, -(lat - LAT0) * KZ)
@@ -282,7 +282,7 @@ start = len(out)
 for (tx, tz, h, con) in TREES: out += i16(q(tx - OX), q(tz - OZ), int(round(h * 20)), con)
 secs['trees'] = [start, len(TREES)]
 open(f'assets/bayarea/real/{name}.bin', 'wb').write(out)
-json.dump({ 'name': name, 'origin': [OX, OZ], 'unit': 1 / Q, 'bounds': [x0, zN, x1, zS], 'map': { 'step': PX, 'w': MW, 'h': MH },
+json.dump({ 'name': name, 'geo': [LAT0, LON0], 'origin': [OX, OZ], 'unit': 1 / Q, 'bounds': [x0, zN, x1, zS], 'map': { 'step': PX, 'w': MW, 'h': MH },
 	'classes': CLS, 'widths': [WIDTH[c] for c in CLS], 'sections': secs, 'names': names,
 	'attribution': 'Map data: Overture Maps Foundation (CC BY 4.0 / ODbL), incl. © OpenStreetMap contributors, Microsoft and Google building footprints' },
 	open(f'assets/bayarea/real/{name}.json', 'w'))

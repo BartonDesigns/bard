@@ -10,7 +10,7 @@
 //   real streets, and people walk the real sidewalks.
 
 import * as THREE from 'three';
-import { toWorld } from './geo.js';
+import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -55,6 +55,9 @@ export function createRealCity(renderer) {
 			new Promise((ok, no) => new THREE.TextureLoader().load(base + '.png', ok, undefined, no)),
 		]);
 		const dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
+		// a region baked round another origin: shift it (the mapping is a pure translation in x)
+		const shiftX = ((H.geo ? H.geo[1] : LON0_LEGACY) - LON0) * KX;
+		H.origin[0] += shiftX; H.bounds[0] += shiftX; H.bounds[2] += shiftX;
 		const [OX, OZ] = H.origin, U = H.unit, S = H.sections;
 		// roads: class, flags, name, points
 		let o = S.roads[0];

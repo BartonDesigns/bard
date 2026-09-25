@@ -29,9 +29,28 @@ float bIn(highp sampler2D t, vec4 r, vec2 w, float m){
 	vec2 S = vec2(textureSize(t, 0)); vec2 f = (w - r.xy) / r.z; vec2 d = min(f, S - 1.0 - f) * r.z;
 	return smoothstep(0.0, 1.0, clamp(min(d.x, d.y) / m, 0.0, 1.0));
 }
+// beyond the surveyed land, the land goes on: the edge's own height carried outward,
+// turning into valleys and ranges of the generator's own (the sea just deepens). The
+// same integer hash runs on the CPU (see beyondH), so walking matches what is drawn.
+uint bHash(ivec2 p){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u); h = (h ^ (h >> 13u)) * 1274126177u; return h ^ (h >> 16u); }
+float bH01(ivec2 p){ return float(bHash(p) >> 8u) / 16777216.0; }
+float bVn(vec2 p){ vec2 i = floor(p), f = p - i; f = f * f * (3.0 - 2.0 * f); ivec2 k = ivec2(i);
+	return mix(mix(bH01(k), bH01(k + ivec2(1, 0)), f.x), mix(bH01(k + ivec2(0, 1)), bH01(k + ivec2(1, 1)), f.x), f.y); }
+float beyondH(vec2 w, float he, float d){
+	if (he <= 0.0) return max(-400.0, he - d * 0.03);
+	float t = smoothstep(0.0, 22000.0, d);
+	float n = bVn(w / 9000.0) * 0.6 + bVn(w / 3700.0 + 17.0) * 0.3 + bVn(w / 1500.0 - 9.0) * 0.1;
+	float ridge = 1.0 - abs(2.0 * bVn(w / 5200.0 + 3.0) - 1.0);
+	float ranges = smoothstep(0.45, 0.8, bVn(w / 32000.0 + 7.0));
+	float gen = 30.0 + n * 170.0 + ridge * ridge * 950.0 * ranges;
+	return mix(he, gen, t);
+}
 float bayHeight(vec2 w){
 	if (uBayOn < 0.5) return -60.0;
-	float h = mix(-400.0, bLevel(uB0, uR0, w), bIn(uB0, uR0, w, 3000.0));
+	vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (w - uR0.xy) / uR0.z;
+	float dOut = length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z;
+	float edge0 = bLevel(uB0, uR0, w);
+	float h = mix(beyondH(w, edge0, dOut), edge0, bIn(uB0, uR0, w, 3000.0));
 	float k1 = bIn(uB1, uR1, w, 1500.0); if (k1 > 0.0) h = mix(h, bLevel(uB1, uR1, w), k1);
 	float k2 = bIn(uB2, uR2, w, 500.0); if (k2 > 0.0) h = mix(h, bLevel(uB2, uR2, w), k2);
 	float k3 = bIn(uB3, uR3, w, 400.0); if (k3 > 0.0) h = mix(h, bLevel(uB3, uR3, w), k3);
@@ -79,6 +98,24 @@ const CBD = [[37.7925, -122.399, 1, 1300], [37.7785, -122.395, 0.55, 900], [37.8
 const PARKS = [[37.8267, -122.4230, 420, 320, 0], [37.8609, -122.4326, 1500, 1500, 0], [37.8103, -122.3636, 650, 550, 0], [37.7650, -121.9522, 260, 200, 0], [37.7880, -121.9720, 500, 350, 0.15], [37.8290, -122.2600, 600, 450, 0], [37.7690, -122.4830, 2600, 450, 0], [37.7989, -122.4662, 1500, 1100, 0.3], [37.7544, -122.4477, 700, 700, 0], [37.7580, -122.4570, 600, 600, 0], [37.7200, -122.4950, 800, 900, 0], [37.7180, -122.4200, 700, 500, 0.5], [37.7850, -122.5050, 500, 400, 0]];
 const hashStr = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
 
+// the CPU twin of the GLSL above
+function bHash(x, y) { let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; }
+const bH01 = (x, y) => (bHash(x, y) >>> 8) / 16777216;
+function bVn(x, y) {
+	const i = Math.floor(x), j = Math.floor(y); let u = x - i, v = y - j; u = u * u * (3 - 2 * u); v = v * v * (3 - 2 * v);
+	const a = bH01(i, j), b = bH01(i + 1, j), c = bH01(i, j + 1), d = bH01(i + 1, j + 1);
+	return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
+}
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+export function beyondH(x, z, he, d) {
+	if (he <= 0) return Math.max(-400, he - d * 0.03);
+	const t = sstep(0, 22000, d);
+	const n = bVn(x / 9000, z / 9000) * 0.6 + bVn(x / 3700 + 17, z / 3700 + 17) * 0.3 + bVn(x / 1500 - 9, z / 1500 - 9) * 0.1;
+	const r = 1 - Math.abs(2 * bVn(x / 5200 + 3, z / 5200 + 3) - 1);
+	const ranges = sstep(0.45, 0.8, bVn(x / 32000 + 7, z / 32000 + 7));
+	return he + (30 + n * 170 + r * r * 950 * ranges - he) * t;
+}
+
 export function createBayArea(shared, scene, island, BU) {
 	const levels = [];                       // CPU copies: { x0, zN, step, W, H, v: Uint16Array }
 	const group = new THREE.Group();
@@ -94,10 +131,37 @@ export function createBayArea(shared, scene, island, BU) {
 	const cbds = CBD.map((c) => ({ ...toWorld(c[0], c[1]), s: c[2], r: c[3] }));
 	const parks = PARKS.map((c) => ({ ...toWorld(c[0], c[1]), rx: c[2], rz: c[3], keep: c[4] }));
 
+	// ---------- the towns beyond the survey: seeded, named, on the generated land ----------
+	const SYL = [['San', 'Santa', 'Los', 'El', 'Port', 'Mount', 'North', 'West', 'Lake', 'Fort', '', '', '', '', '', ''], ['Ro', 'Ma', 'Vale', 'Cor', 'Al', 'Bel', 'Ter', 'Ash', 'Mer', 'Wil', 'Or', 'Sil', 'Ced', 'Lin', 'Mon', 'Pal', 'Riv', 'Hol', 'Kes', 'Bran'], ['ena', 'ton', 'dale', 'wood', 'ville', 'ita', 'mont', 'ford', 'ero', 'ridge', 'burg', 'ada', 'field', 'oro', 'side', 'crest', 'ino', 'brook', 'lan', 'dos']];
+	const towns = [];
+	function makeTowns(L, M) {
+		const G = 7000;
+		for (let z = L.zN - M; z < L.zN + (L.H - 1) * L.step + M; z += G) for (let x = L.x0 - M; x < L.x0 + (L.W - 1) * L.step + M; x += G) {
+			const gx = Math.round(x / G), gz = Math.round(z / G), r0 = bH01(gx * 7 + 3, gz * 13 + 1);
+			if (r0 > 0.26) continue;                                                   // open country between the towns
+			const tx = x + (bH01(gx, gz * 5) - 0.5) * G * 0.8, tz = z + (bH01(gx * 3, gz) - 0.5) * G * 0.8;
+			// only out beyond the surveyed land
+			const qx = (tx - L.x0) / L.step, qz = (tz - L.zN) / L.step;
+			const dOut = Math.hypot(Math.max(0, -qx, qx - (L.W - 1)), Math.max(0, -qz, qz - (L.H - 1))) * L.step;
+			if (dOut < 4000) continue;
+			const h = heightAt(tx, tz), sl = Math.abs(heightAt(tx + 400, tz) - heightAt(tx - 400, tz)) + Math.abs(heightAt(tx, tz + 400) - heightAt(tx, tz - 400));
+			if (h < 3 || h > 420 || sl > 90) continue;
+			const r1 = bH01(gx * 11, gz * 17 + 5), r2 = bH01(gx + 91, gz - 37);
+			const name = (SYL[0][Math.floor(r1 * 16)] + ' ' + SYL[1][Math.floor(r2 * 20)] + SYL[2][Math.floor(bH01(gx - 5, gz + 9) * 20)]).trim();
+			const big = r0 < 0.05, r = big ? 2600 + r1 * 1800 : 700 + r1 * r1 * 1800;
+			const t = { x: tx, z: tz, r, ang: r2 * Math.PI / 2, style: r2 < 0.62 ? STYLE.suburb : STYLE.older, name, pop: Math.round(r * r / 180), big };
+			towns.push(t);
+			cityPts.push(t);
+			if (big) cbds.push({ x: tx, z: tz, s: 0.18 + r2 * 0.2, r: 500 + r1 * 300 });
+		}
+	}
 	function buildUrban() {
 		const L = levels[0];
-		U.x0 = L.x0; U.zN = L.zN;
-		U.W = Math.ceil((L.W - 1) * L.step / U.cell); U.H = Math.ceil((L.H - 1) * L.step / U.cell);
+		// the town map reaches past the survey, for the generated towns out there
+		const M = 50000;
+		if (!towns.length) makeTowns(L, M);
+		U.x0 = L.x0 - M; U.zN = L.zN - M;
+		U.W = Math.ceil(((L.W - 1) * L.step + 2 * M) / U.cell); U.H = Math.ceil(((L.H - 1) * L.step + 2 * M) / U.cell);
 		const dens = new Float32Array(U.W * U.H), best = new Float32Array(U.W * U.H), ang = new Float32Array(U.W * U.H), sty = new Uint8Array(U.W * U.H).fill(STYLE.suburb);
 		for (const c of cityPts) {
 			const R = c.r * 1.8, i0 = Math.max(0, Math.floor((c.x - R - U.x0) / U.cell)), i1 = Math.min(U.W - 1, Math.ceil((c.x + R - U.x0) / U.cell));
@@ -113,6 +177,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const data = new Uint8Array(U.W * U.H * 4);
 		for (let j = 0; j < U.H; j++) for (let i = 0; i < U.W; i++) {
 			const x = U.x0 + (i + 0.5) * U.cell, z = U.zN + (j + 0.5) * U.cell, k = j * U.W + i;
+			if (dens[k] < 0.004) { data[k * 4 + 3] = STYLE.suburb * 40; continue; }                    // open country
 			const h = heightAt(x, z), hx = heightAt(x + 120, z), hz = heightAt(x, z + 120);
 			const slope = Math.hypot(hx - h, hz - h) / 120;
 			// towns climb gentle ground, not the mountains, cliffs or the water
@@ -158,7 +223,10 @@ export function createBayArea(shared, scene, island, BU) {
 	}
 	function heightAt(x, z) {
 		if (!levels[0]) return -60;
-		let h = -400 + (levelH(levels[0], x, z) + 400) * levelIn(levels[0], x, z, 3000);
+		const L0 = levels[0], e0 = levelH(L0, x, z);
+		const qx = (x - L0.x0) / L0.step, qz = (z - L0.zN) / L0.step;
+		const dOut = Math.hypot(Math.max(0, -qx, qx - (L0.W - 1)), Math.max(0, -qz, qz - (L0.H - 1))) * L0.step;
+		let h = beyondH(x, z, e0, dOut) + (e0 - beyondH(x, z, e0, dOut)) * levelIn(L0, x, z, 3000);
 		if (levels[1]) { const k = levelIn(levels[1], x, z, 1500); if (k > 0) h += (levelH(levels[1], x, z) - h) * k; }
 		if (levels[2]) { const k = levelIn(levels[2], x, z, 500); if (k > 0) h += (levelH(levels[2], x, z) - h) * k; }
 		for (let i = 3; i < levels.length; i++) if (levels[i]) { const k = levelIn(levels[i], x, z, 400); if (k > 0) h += (levelH(levels[i], x, z) - h) * k; }
@@ -418,5 +486,5 @@ export function createBayArea(shared, scene, island, BU) {
 		near.position.set(nx, 0, nz); nearMat.userData.U2.uC.value.set(nx, nz);
 		far.position.set(fx, 0, fz); farMat.userData.U2.uC.value.set(fx, fz); farMat.userData.U2.uHoleC.value.set(nx, nz);
 	}
-	return { group, update, heightAt, urbanAt, ready, loaded: () => BU.uBayOn.value > 0.5, levels };
+	return { group, update, heightAt, urbanAt, ready, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
 }

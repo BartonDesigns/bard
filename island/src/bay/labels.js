@@ -22,8 +22,11 @@ export function createLabels(mount, bay, bridge) {
 
 	// home: kept only on this device (localStorage), never in the published world
 	const home = () => { try { const h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); return h && Number.isFinite(h.lat) ? { ...toWorld(h.lat, h.lon), name: h.name || 'Home' } : null; } catch (e) { return null; } };
+	let merged = 0;
 	function where(x, z, y, onIsland) {
 		if (onIsland) return null;
+		// the generated towns beyond the survey join the list once they exist
+		if (bay.towns && bay.towns.length > merged) { for (const t of bay.towns.slice(merged)) places.push({ name: t.name, x: t.x, z: t.z, county: 'Beyond the Bay', pop: t.pop, hood: 0, r: t.r }); merged = bay.towns.length; }
 		const H = home();
 		if (H && Math.hypot(x - H.x, z - H.z) < 70) {
 			const near = places.filter((p) => !p.hood).sort((a, b) => Math.hypot(x - a.x, z - a.z) - Math.hypot(x - b.x, z - b.z))[0];
