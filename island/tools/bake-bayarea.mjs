@@ -52,7 +52,7 @@ for (const L of LEVELS) {
 		const lon = LON0 + (x0 + i * L.step) / KX, lat = LAT0 - (zN + j * L.step) / KZ;
 		const fx = tileX(lon, z) * 256 - 0.5, fy = tileY(lat, z) * 256 - 0.5;
 		const ix = Math.floor(fx), iy = Math.floor(fy), u = fx - ix, v = fy - iy;
-		out[j * W + i] = (px(ix, iy) * (1 - u) + px(ix + 1, iy) * u) * (1 - v) + (px(ix, iy + 1) * (1 - u) + px(ix + 1, iy + 1) * u) * v;
+		out[j * W + i] = Math.max(L.floor ?? -600, (px(ix, iy) * (1 - u) + px(ix + 1, iy) * u) * (1 - v) + (px(ix, iy + 1) * (1 - u) + px(ix + 1, iy + 1) * u) * v);
 	}
 	// below-sea-level ground that the sea cannot reach (behind levees) stays land
 	const sea = new Uint8Array(W * Hh), q = [];

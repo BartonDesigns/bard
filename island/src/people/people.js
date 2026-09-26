@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA, rng } from './body.js';
 import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
+import { crowd, zoneOf, ZONE } from './flow.js';
 
 const MAX = 26, NEAR = 70;
 const steps = [];
@@ -59,6 +60,7 @@ export function createPeople(scene, world) {
 	function demand(cam, night) {
 		const W = world();
 		if (!W) return { n: 0 };
+		const hours = W.sky?.state?.hours ?? (night > 0.5 ? 23 : 12);
 		const onIsland = Math.max(Math.abs(cam.x), Math.abs(cam.z)) < W.island.half;
 		if (onIsland) {
 			const v = W.island.village, d = Math.hypot(cam.x - v.x, cam.z - v.z);
@@ -69,11 +71,14 @@ export function createPeople(scene, world) {
 		const real = W.real;
 		if (real?.loaded() && real.inside(cam.x, cam.z) && (!U || U.u < 0.2) && cam.y - ground(cam.x, cam.z) < 90) {
 			const trails = real.near('roads', cam.x, cam.z, 120).some((q) => TRAIL.has(q.cls));
-			return { n: trails ? Math.round(5 * (1 - night * 0.95)) : 0, island: false };
+			const C = crowd(ZONE.trail, hours);
+			return { n: trails ? Math.round(6 * C.k) : 0, island: false, C };
 		}
 		if (!U || U.u < 0.2 || cam.y - ground(cam.x, cam.z) > 90) return { n: 0 };
-		const busy = U.s === STYLE.sf || U.d > 0.2 ? 1 : U.s === STYLE.retail ? 0.8 : U.s === STYLE.older ? 0.55 : U.s === STYLE.office ? 0.45 : 0.35;
-		return { n: Math.round(MAX * busy * (1 - night * 0.75)), island: false };
+		// how busy, by what kind of place and the hour (flow.js)
+		const zone = zoneOf(U), C = crowd(zone, hours);
+		const busy = zone === ZONE.downtown ? 1 : zone === ZONE.retail || zone === ZONE.dining ? 0.8 : zone === ZONE.office ? 0.7 : zone === ZONE.industrial ? 0.4 : 0.35;
+		return { n: Math.round(MAX * busy * C.k), island: false, C };
 	}
 
 	// the real city's sidewalks: a point beside a street, on one side, at distance s along it
@@ -115,10 +120,12 @@ export function createPeople(scene, world) {
 		return { kind: 'street', road, side: r() < 0.5 ? 1 : -1, s: Math.max(0, Math.min(L, best + (r() - 0.5) * 20)), dir: r() < 0.5 ? 1 : -1 };
 	}
 
-	function cast(p, cam, island) {
+	function cast(p, cam, island, mood = null) {
 		const r = rng(seedN * 7919 + 13);
 		const W = world();
-		p.role = r() < 0.12 && !island ? 'jog' : r() < 0.25 ? 'chat' : r() < 0.35 ? 'wait' : 'walk';
+		const C = mood || { jog: 0.12, chat: 0.14, wait: 0.12 };
+		const x = r();
+		p.role = island ? (x < 0.25 ? 'chat' : x < 0.35 ? 'wait' : 'walk') : x < C.jog ? 'jog' : x < C.jog + C.chat ? 'chat' : x < C.jog + C.chat + C.wait ? 'wait' : 'walk';
 		p.talking = false; p.partner = null; p.timer = 5 + r() * 20;
 		const M = p.M;
 		M.S.talk = 0; M.S.look.target = null;
@@ -274,7 +281,7 @@ export function createPeople(scene, world) {
 
 	// ---------- the loop ----------
 	let building = false;
-	async function grow(cam, island) {
+	async function grow() {
 		if (building || !A || pool.length >= MAX) return;
 		building = true;
 		try {
@@ -297,7 +304,7 @@ export function createPeople(scene, world) {
 		if (!enabled) return;
 		const need = demand(cam, night);
 		if (need.n > 0 && !A && !failed) ensure();
-		if (need.n > pool.filter((p) => p.active).length && pool.length < Math.min(MAX, need.n + 2)) grow(cam, need.island);
+		if (need.n > pool.filter((p) => p.active).length && pool.length < Math.min(MAX, need.n + 2)) grow();
 		let active = 0;
 		for (const p of pool) {
 			const S = p.M.S;
@@ -314,7 +321,7 @@ export function createPeople(scene, world) {
 		if (active < need.n && acc > 0.15) {
 			acc = 0;
 			const idle = pool.find((p) => !p.active && p.demo === undefined);
-			if (idle) { seedN++; if (cast(idle, cam, need.island)) { idle.active = true; idle.P.root.visible = true; } }
+			if (idle) { seedN++; if (cast(idle, cam, need.island, need.C)) { idle.active = true; idle.P.root.visible = true; } }
 		}
 	}
 

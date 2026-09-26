@@ -18,7 +18,7 @@ import { REAL_U, REAL_GLSL } from './realcity.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
-uniform highp sampler2D uB0, uB1, uB2, uB3, uB4, uB5, uB6, uB7, uB8; uniform vec4 uR0, uR1, uR2, uR3, uR4, uR5, uR6, uR7, uR8; uniform float uBayOn;
+uniform highp sampler2D uB0, uB1, uB2, uB3, uB4, uB5, uB6, uB7, uB8, uB9; uniform vec4 uR0, uR1, uR2, uR3, uR4, uR5, uR6, uR7, uR8, uR9; uniform float uBayOn;
 float bLevel(highp sampler2D t, vec4 r, vec2 w){
 	vec2 S = vec2(textureSize(t, 0));
 	vec2 f = clamp((w - r.xy) / r.z, vec2(0.0), S - 1.001);
@@ -61,6 +61,7 @@ float bayHeight(vec2 w){
 	float k6 = bIn(uB6, uR6, w, 400.0); if (k6 > 0.0) h = mix(h, bLevel(uB6, uR6, w), k6);
 	float k7 = bIn(uB7, uR7, w, 400.0); if (k7 > 0.0) h = mix(h, bLevel(uB7, uR7, w), k7);
 	float k8 = bIn(uB8, uR8, w, 400.0); if (k8 > 0.0) h = mix(h, bLevel(uB8, uR8, w), k8);
+	float k9 = bIn(uB9, uR9, w, 500.0); if (k9 > 0.0) h = mix(h, bLevel(uB9, uR9, w), k9);
 	return h;
 }
 `;
@@ -131,7 +132,7 @@ float sparks(vec2 w, float dist, float thr, float seed){
 
 export function bayUniforms() {
 	const blank = () => { const t = new THREE.DataTexture(new Uint16Array([0, 0, 0, 0]), 2, 2, THREE.RedFormat, THREE.HalfFloatType); t.needsUpdate = true; return t; };
-	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uB4: { value: blank() }, uB5: { value: blank() }, uB6: { value: blank() }, uB7: { value: blank() }, uB8: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uR4: { value: OFF.clone() }, uR5: { value: OFF.clone() }, uR6: { value: OFF.clone() }, uR7: { value: OFF.clone() }, uR8: { value: OFF.clone() }, uBayOn: { value: 0 } };
+	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uB4: { value: blank() }, uB5: { value: blank() }, uB6: { value: blank() }, uB7: { value: blank() }, uB8: { value: blank() }, uB9: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uR4: { value: OFF.clone() }, uR5: { value: OFF.clone() }, uR6: { value: OFF.clone() }, uR7: { value: OFF.clone() }, uR8: { value: OFF.clone() }, uR9: { value: OFF.clone() }, uBayOn: { value: 0 } };
 }
 
 // the towns: how far each one's streets reach, their street-grid angle, and the

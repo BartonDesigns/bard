@@ -234,6 +234,7 @@ export function createSurprises({ scene, camera, getWorld, hint, say, isPhone = 
 
 	// ---------- a welcome home ----------
 	let home = null, welcomed = false;
+	let neared = false;
 	try { const h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); if (h) home = { ...toWorld(h.lat, h.lon), name: h.name || 'Home' }; } catch { home = null; }
 
 	// ---------- keys ----------
@@ -311,6 +312,15 @@ export function createSurprises({ scene, camera, getWorld, hint, say, isPhone = 
 			hornT -= dt;
 			if (hornT <= 0) { hornT = 28 + Math.random() * 6; foghorn(0.32 * Math.pow(1 - dg / 7000, 1.5) + 0.02); }
 		} else hornT = Math.min(hornT, 6);
+		// coming up your own street: the journal notices first
+		if (home && !neared && W.bayArea?.loaded() && Math.hypot(cam.x - home.x, cam.z - home.z) < 350 && cam.y - W.island.heightAt(cam.x, cam.z) < 40) {
+			neared = true;
+			const wet = (weather?.rainHere || 0) > 0.1, h = hours;
+			const air = wet ? 'wet pavement and eucalyptus after the rain' : h < 10 ? 'coffee somewhere, and sprinklers on cut lawns' : h < 17 ? 'warm dry grass off the hills and sun on the oaks' : h < 21 ? 'someone\'s barbecue down the street, and the hills cooling' : 'night jasmine over a fence, and the valley gone quiet';
+			const line = `The air smells familiar: ${air}. Almost home.`;
+			hint(`Journal: ${line}`, 6000);
+			say(line, 'note');
+		}
 		// your own front door
 		if (home && !welcomed && W.bayArea?.loaded() && Math.hypot(cam.x - home.x, cam.z - home.z) < 25 && cam.y - W.island.heightAt(cam.x, cam.z) < 5) {
 			welcomed = true;

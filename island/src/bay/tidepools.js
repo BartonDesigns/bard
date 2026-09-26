@@ -13,13 +13,13 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorld } from './geo.js';
 
 const SITES = [
-	{ name: 'Fitzgerald Marine Reserve', lat: 37.5212, lon: -122.5183, R: 260, strike: 2.45, seals: 6 },
-	{ name: 'Pillar Point reef', lat: 37.4922, lon: -122.4992, R: 240, strike: 2.1, seals: 0 },
-	{ name: 'Duxbury Reef', lat: 37.8912, lon: -122.6995, R: 380, strike: 2.3, seals: 3 },
+	{ name: 'Fitzgerald Marine Reserve', lat: 37.5212, lon: -122.5183, R: 260, strike: 2.45, long: 1, wide: 0.6, seals: 6 },
+	{ name: 'Pillar Point reef', lat: 37.4922, lon: -122.4992, R: 240, strike: 2.1, long: 1, wide: 0.55, seals: 0 },
+	{ name: 'Duxbury Reef', lat: 37.8915, lon: -122.6990, R: 420, strike: 2.25, long: 1, wide: 0.42, seals: 3 },
 ].map((s) => ({ ...s, ...toWorld(s.lat, s.lon) }));
 export const TIDEPOOLS = SITES;
 
-const CELL = 2, TOP = 0.55, POOL = 0.32;
+const TOP = 0.55, POOL = 0.32;
 const hh = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
 const vn = (x, z) => {
 	const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
@@ -31,10 +31,13 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 // the shelf's height at (x, z) (and how much of it is pool, how far out it is), from the
 // ground: where the real ground is near sea level the rock stands up out of it
 function shelfAt(S, g, x, z) {
-	const dx = x - S.x, dz = z - S.z, d = Math.hypot(dx, dz) / S.R;
-	if (d > 1) return null;
+	const dx = x - S.x, dz = z - S.z;
+	if (Math.hypot(dx, dz) > S.R) return null;
 	const ca = Math.cos(S.strike), sa = Math.sin(S.strike);
 	const along = dx * ca + dz * sa, across = -dx * sa + dz * ca;
+	// the reef's own ragged outline: long along the strata, narrow across them
+	const d = Math.hypot(along / (S.R * S.long), across / (S.R * S.wide)) / (0.72 + 0.5 * fbm(x / 60 + 2, z / 60 - 5));
+	if (d > 1) return null;
 	// the strata: ribs a few metres apart, bent by the noise, their edges sharp on one side
 	const w = across / 3.2 + fbm(x / 22, z / 22) * 3.2, rib = w - Math.floor(w);
 	const ribs = (rib < 0.72 ? rib / 0.72 : (1 - rib) / 0.28) * 0.34;
@@ -43,10 +46,10 @@ function shelfAt(S, g, x, z) {
 	const pool = smooth(0.52, 0.66, fbm(x / 9 + 11, z / 9 - 4));
 	// out from the shore the rock goes down into the sea; inland it is under the beach
 	const out = smooth(-0.5, -5.5 - fbm(x / 40, z / 40) * 4, g);
-	let h = TOP + ribs - pool * 0.55 - chan * 1.3 + (fbm(x / 3, z / 3) - 0.5) * 0.18;
+	let h = TOP + ribs - pool * 0.55 - chan * 1.3 + (fbm(x / 3, z / 3) - 0.5) * 0.22 + (hh(Math.floor(x / 1.3), Math.floor(z / 1.3)) - 0.5) * 0.12;
 	h = h * (1 - out) + (g + 0.3) * out;
 	// and it fades into the ground round the edge of the site
-	const edge = smooth(0.75, 1, d);
+	const edge = smooth(0.8, 1, d);
 	h = h * (1 - edge) + (g - 0.6) * edge;
 	return { h, pool: pool * (1 - out) * (1 - edge), out, chan, rib: ribs };
 }
@@ -54,10 +57,11 @@ function shelfAt(S, g, x, z) {
 export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 	const root = new THREE.Group();
 	root.name = 'tidepools';
+	const CELL = isPhone ? 2.6 : 1.6;            // (the rock's grid)
 	scene.add(root);
 	const built = new Map();
-	const rockM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0 });
-	const poolM = new THREE.MeshStandardMaterial({ color: 0x2c5a5a, roughness: 0.04, metalness: 0.1, transparent: true, opacity: 0.55, depthWrite: false });
+	const rockM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0, flatShading: true });
+	const poolM = new THREE.MeshStandardMaterial({ color: 0x163a3c, roughness: 0.03, metalness: 0.2, transparent: true, opacity: 0.42, depthWrite: false });
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler(), col = new THREE.Color();
 
 	// the creatures, each one geometry drawn many times
@@ -121,15 +125,16 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 			// dry grey-brown on the tops, dark and wet low down, sea lettuce and pink
 			// coralline in the pools, black mussel beds out on the edge
 			const n1 = fbm(x / 5, z / 5), wet = 1 - smooth(TOP - 0.1, TOP + 0.3, h);
-			let r = 0.4 + n1 * 0.12, gg = 0.36 + n1 * 0.1, b = 0.29 + n1 * 0.08;
-			r *= 1 - wet * 0.55; gg *= 1 - wet * 0.5; b *= 1 - wet * 0.45;
+			// (picked in sRGB, stored linear)
+			let r = 0.5 + n1 * 0.14, gg = 0.45 + n1 * 0.12, b = 0.38 + n1 * 0.1;
+			r *= 1 - wet * 0.55; gg *= 1 - wet * 0.52; b *= 1 - wet * 0.48;
 			const lettuce = smooth(0.4, 0.7, fbm(x / 4 + 9, z / 4)) * smooth(0.5, 0.1, h) * (1 - sh.out);
-			r += (0.1 - r) * lettuce; gg += (0.3 - gg) * lettuce; b += (0.07 - b) * lettuce;
+			r += (0.24 - r) * lettuce; gg += (0.42 - gg) * lettuce; b += (0.14 - b) * lettuce;
 			const pink = sh.pool * smooth(0.45, 0.7, fbm(x / 2.5, z / 2.5 + 7));
-			r += (0.6 - r) * pink; gg += (0.33 - gg) * pink; b += (0.38 - b) * pink;
+			r += (0.72 - r) * pink; gg += (0.47 - gg) * pink; b += (0.52 - b) * pink;
 			const mussel = smooth(0.15, 0.5, sh.out) * (1 - smooth(0.6, 0.95, sh.out)) * smooth(0.35, 0.6, n1 + 0.2);
-			r += (0.05 - r) * mussel; gg += (0.06 - gg) * mussel; b += (0.09 - b) * mussel;
-			C.push(r, gg, b);
+			r += (0.08 - r) * mussel; gg += (0.09 - gg) * mussel; b += (0.12 - b) * mussel;
+			C.push(r ** 2.2, gg ** 2.2, b ** 2.2);
 			// the pool water over the hollows (not over the open sea)
 			if (h < POOL && sh.out < 0.35 && h > -0.4) { widx[k] = W.length / 3; W.push(x, POOL, z); }
 		}

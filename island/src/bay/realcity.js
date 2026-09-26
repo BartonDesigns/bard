@@ -24,19 +24,20 @@ export const REAL_U = {
 	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB2: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB3: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB4: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB5: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
+	uRealB6: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB7: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB8: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB9: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5; uniform float uSeason;
+uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason;
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
 // the main region (its land use map), and any mapped region (real streets, no grid)
 bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }
-bool inRealAny(vec2 w){ return inReal(w) || inBox(w, uRealB2) || inBox(w, uRealB3) || inBox(w, uRealB4) || inBox(w, uRealB5); }
+bool inRealAny(vec2 w){ return inReal(w) || inBox(w, uRealB2) || inBox(w, uRealB3) || inBox(w, uRealB4) || inBox(w, uRealB5) || inBox(w, uRealB6) || inBox(w, uRealB7) || inBox(w, uRealB8) || inBox(w, uRealB9); }
 `;
 
 // the first region's coarse map colours the ground; the others are streets, buildings and trails
-const REGIONS = ['eastbay', 'tam', 'missionpeak', 'coast', 'bolinas'];
+const REGIONS = ['eastbay', 'tam', 'missionpeak', 'coast', 'bolinas', 'sausalito', 'cupertino', 'sanjose', 'southcoast'];
 // the regions' extents [west, south, east, north], known before their data loads
-export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95], [-122.66, 37.87, -122.53, 37.96], [-121.95, 37.48, -121.84, 37.55], [-122.53, 37.455, -122.425, 37.665], [-122.735, 37.875, -122.66, 37.93]];   // Tri-Valley and Mt Diablo; Mt Tam and Mill Valley; Mission Peak; the San Mateo coast (Pacifica to Half Moon Bay, Highway 1); Bolinas
+export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95], [-122.66, 37.87, -122.53, 37.96], [-121.95, 37.48, -121.84, 37.55], [-122.53, 37.455, -122.425, 37.665], [-122.735, 37.875, -122.66, 37.93], [-122.505, 37.825, -122.47, 37.872], [-122.035, 37.315, -121.995, 37.345], [-121.91, 37.318, -121.87, 37.345], [-122.43, 37.10, -122.29, 37.455]];   // Tri-Valley and Mt Diablo; Mt Tam and Mill Valley; Mission Peak; the San Mateo coast (Pacifica to Half Moon Bay, Highway 1); Bolinas; Sausalito and Fort Baker (the Bay Area Discovery Museum); Cupertino and Apple Park; downtown San Jose; the coast south of Half Moon Bay to Año Nuevo
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
 
@@ -141,7 +142,7 @@ export function createRealCity(renderer) {
 	// one at a time, the nearest to the island first
 	const byDist = REGIONS.map((n, i) => { const [w, so, e, no] = REAL_EXTENTS[i], c = toWorld((so + no) / 2, (w + e) / 2); return [n, Math.hypot(c.x, c.z)]; }).sort((a, b) => a[1] - b[1]).map((r) => r[0]);
 	// (the far-flung coast regions wait until you come within a few miles of them)
-	const LAZY = new Set(['coast', 'bolinas']), lazy = new Map();
+	const LAZY = new Set(['coast', 'bolinas', 'sausalito', 'cupertino', 'sanjose', 'southcoast']), lazy = new Map();
 	const ready = (async () => { for (const n of byDist) if (!LAZY.has(n)) await load(n).catch((e) => console.warn('real city', n, e)); })();
 	function wake(x, z) {
 		REGIONS.forEach((n, i) => {
