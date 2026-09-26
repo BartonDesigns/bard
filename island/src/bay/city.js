@@ -337,7 +337,7 @@ export function createCity(shared, scene, bay, real = null) {
 	const barkT = TX.woodBark(); barkT.repeat.set(2, 3);
 	const SPECIES = [
 		{ height: 11, crown: 'round', bark: [1.12, 1.08, 1.0], leaf: [1.1, 1.05, 0.85] },      // plane, sycamore, elm
-		{ height: 9, crown: 'umbrella', bark: [0.75, 0.72, 0.7], leaf: [0.78, 0.86, 0.72] },  // coast live oak
+		{ height: 9, crown: 'oak', bark: [0.75, 0.72, 0.7], leaf: [0.6, 0.72, 0.58] },  // coast live oak: a dark, dense dome
 		{ height: 16, crown: 'columnar', bark: [0.95, 0.66, 0.52], leaf: [0.55, 0.72, 0.6] }, // redwood, cypress
 	];
 	const LEAF_REF = [0.25, 0.35, 0.15];

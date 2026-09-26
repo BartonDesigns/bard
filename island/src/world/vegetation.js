@@ -190,6 +190,8 @@ function palm(seed, far, g = null) {
 const CROWN = {
 	round: { trunk: 0.62, rx: 1, ry: 1, len: 1, rise: 1, lift: 0.22 },
 	umbrella: { trunk: 0.72, rx: 1.55, ry: 0.45, len: 1.6, rise: 0.45, lift: 0.1 },
+	// coast live oak: a short trunk, a broad dense dome (not an acacia's flat plate)
+	oak: { trunk: 0.42, rx: 1.4, ry: 0.85, len: 1.35, rise: 0.75, lift: 0.18 },
 	columnar: { trunk: 0.38, rx: 0.55, ry: 1.9, len: 0.45, rise: 1.5, lift: 0.5 },
 	layered: { trunk: 0.5, rx: 1.2, ry: 1.05, len: 1.25, rise: 0.6, lift: 0.3 },
 	weeping: { trunk: 0.55, rx: 1.2, ry: 1.1, len: 1.2, rise: 0.8, lift: 0.22 },
