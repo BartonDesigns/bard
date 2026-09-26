@@ -163,7 +163,10 @@ export function createFreeways(scene, bay, real, { isPhone = false } = {}) {
 			if (!r.link) {
 				// the median barrier on the left of the direction of travel
 				const bp = path.map((p) => { const x = p.x + p.nx * (hw + 0.45), z = p.z + p.nz * (hw + 0.45); return { x, z, y: H(x, z) - 0.06, nx: p.nx, nz: p.nz }; });
-				G.sweep(bp, [[-0.3, -0.2], [-0.3, 0.08], [-0.1, 0.33], [-0.075, 0.84], [0.075, 0.84], [0.1, 0.33], [0.3, 0.08], [0.3, -0.2]], CON);
+				// (weathered: darker at the foot where the road grime splashes it)
+				G.sweep(bp, [[-0.3, -0.2], [-0.3, 0.08], [-0.1, 0.33]], [0.36, 0.35, 0.33]);
+				G.sweep(bp, [[-0.1, 0.33], [-0.075, 0.84], [0.075, 0.84], [0.1, 0.33]], (i) => tint([0.56, 0.54, 0.5], i, 0.04));
+				G.sweep(bp, [[0.1, 0.33], [0.3, 0.08], [0.3, -0.2]], [0.36, 0.35, 0.33]);
 			}
 			// sound walls on the right where houses back onto the freeway, broken at ramps and
 			// cross streets

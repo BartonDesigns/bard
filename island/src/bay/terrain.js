@@ -388,7 +388,8 @@ export function createBayArea(shared, scene, island, BU) {
 						float e1 = uRoadR.w * smoothstep(0.0, 0.08, min(min(ru.x, ru.y), min(1.0 - ru.x, 1.0 - ru.y)));
 						float e2 = uRoadR2.w * smoothstep(0.0, 0.05, min(min(ru2.x, ru2.y), min(1.0 - ru2.x, 1.0 - ru2.y)));
 						vec4 D1 = texture2D(uRoadMap, clamp(ru, 0.0, 1.0)), D2 = texture2D(uRoadMap2, clamp(ru2, 0.0, 1.0));
-						float Y1 = texture2D(uPaintMap, clamp(ru, 0.0, 1.0)).r;
+						vec4 PM = texture2D(uPaintMap, clamp(ru, 0.0, 1.0));
+						float Y1 = PM.r;
 						vec4 f1 = max(fwidth(D1) * 0.75, vec4(0.004)), f2 = max(fwidth(D2) * 0.75, vec4(0.004));
 						vec4 C1 = smoothstep(0.5 - f1, 0.5 + f1, D1), C2 = smoothstep(0.5 - f2, 0.5 + f2, D2);
 						float fy = max(fwidth(Y1) * 0.75, 0.004), yellow = smoothstep(0.5 - fy, 0.5 + fy, Y1) * e1;
@@ -408,6 +409,8 @@ export function createBayArea(shared, scene, island, BU) {
 							dirtC = mix(dirtC, ph * vec3(1.08, 1.0, 0.92), (1.0 - smoothstep(45.0, 90.0, dist)) * 0.85);
 						}
 						c = mix(c, dirtC, dirt);
+						// a freeway's concrete: the wheel paths worn dark, the slab joints
+						concC *= 1.0 - 0.22 * smoothstep(0.3, 0.7, PM.g) * e1;
 						c = mix(c, concC, conc);
 						// the gutter: a darker band just inside the asphalt edge; the kerb: a pale lip
 						// just outside it (the fine map's distance, 0.5 m ramp: d = (0.5 - v) metres)

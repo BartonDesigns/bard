@@ -279,7 +279,7 @@ export function createRealCity(renderer) {
 		return { disc, line, mesh };
 	}
 	// channels: R asphalt, G concrete, B dirt, A white lines; the paint map's R: yellow lines
-	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 1, 0], WHITE = [0, 0, 0, 1], YELLOW = [1, 0, 0, 0];
+	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 1, 0], WHITE = [0, 0, 0, 1], YELLOW = [1, 0, 0, 0], WEAR = [0, 1, 0, 0], JOINT = [0, 1, 0, 0];       // (the paint map holds two channels: both in green)
 	function render(target, meshes, SIZE) {
 		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
 		for (const m of meshes) scene2.add(m);
@@ -320,6 +320,13 @@ export function createRealCity(renderer) {
 			if (!fine) continue;
 			// lane lines: a double yellow centre line on the collectors, lanes on divided roads
 			if ((r.cls === 'secondary' || r.cls === 'tertiary' || r.cls === 'primary' || r.cls === 'unclassified') && !r.divided && !r.link && r.w >= 9) Y.line(p, 0.17, YELLOW, true);                                   // reads as the double yellow
+			// the freeway's concrete: dark tyre-worn bands down each lane's wheel paths and the
+			// slabs' transverse joints (the paint map's green)
+			if (r.cls === 'motorway' && !r.link) {
+				const nL = Math.max(2, Math.round(r.w / 3.7)), lw = r.w / nL;
+				for (let k = 0; k < nL; k++) for (const e of [-0.85, 0.85]) Y.line(p, 0.42, WEAR, false, -hw + lw * (k + 0.5) + e);
+				Y.line(p, hw - 0.3, JOINT, false, 0, 0.16, 4.4);
+			}
 			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
 		// driveways and front walks
