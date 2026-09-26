@@ -37,6 +37,7 @@ import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
 import { createLake } from './bay/lake.js';
+import { createFishing } from './fishing.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
@@ -252,6 +253,9 @@ export function createIslandWorld() {
 	const surprises = createSurprises({ scene, camera, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide.say(t, w), isPhone });
 	guideApi.secret = (t) => surprises.secret(t);
 	HOOKS.surprises = surprises;
+	// fishing, wherever there is water
+	const fishing = createFishing({ scene, camera, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount });
+	HOOKS.fishing = fishing;
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
 	HOOKS.drive = drive;
@@ -421,7 +425,7 @@ export function createIslandWorld() {
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
-			world.lake = createLake(scene, bayArea, shared, { hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
+			world.lake = createLake(scene, bayArea, shared, { isPhone });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
@@ -652,7 +656,8 @@ export function createIslandWorld() {
 		W.street?.update(dt, time, camera, sk.night);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
-		W.lake?.update(dt, time, camera, sk.night, !W.player.state.flying && !drive.active());
+		W.lake?.update(dt, time, camera, sk.night);
+		fishing.update(dt, time, !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);
 		watchTalk(dt);
@@ -896,6 +901,7 @@ if (typeof window !== 'undefined') {
 		fireworks: () => { HOOKS.surprises?.fireworks(); return '✦'; },
 		verses: () => HOOKS.surprises?.verses(),
 		get surprises() { return HOOKS.surprises; },
+		get fishing() { return HOOKS.fishing; },
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};

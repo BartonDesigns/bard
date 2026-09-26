@@ -4,9 +4,8 @@
 // trees round it; a concrete edge with a walk along it, rock riprap and reeds, oaks and
 // redwoods close round. Mallards and Canada geese paddle about, an egret stalks the
 // shallows, turtles sun on the rocks, and now and then a fish jumps.
-// Stand at the edge and fish (the button, or F): cast, wait for the bobber to dip, and
-// strike. Bluegill, largemouth bass, redear sunfish, channel catfish and carp, as the lake
-// holds; every catch goes in the log.
+// Fish it from the edge (fishing.js): bluegill, largemouth bass, redear sunfish, channel
+// catfish and carp, as the lake holds.
 
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
@@ -108,7 +107,7 @@ const WATER_FRAG = /* glsl */`
 		#include <fog_fragment>
 	}`;
 
-export function createLake(scene, bay, shared, { hint, mount, isPhone = false } = {}) {
+export function createLake(scene, bay, shared, { isPhone = false } = {}) {
 	const group = new THREE.Group();
 	group.name = 'lake-annabel';
 	scene.add(group);
@@ -118,7 +117,6 @@ export function createLake(scene, bay, shared, { hint, mount, isPhone = false } 
 	const ring = (x, z, k = 1) => { const R = rings.reduce((a, b) => (b.w < a.w ? b : a)); R.set(x, z, 0.2, k); };
 
 	const birds = [];
-	let bobber = null, line = null;
 
 	function build() {
 		built = true;
@@ -238,66 +236,10 @@ export function createLake(scene, bay, shared, { hint, mount, isPhone = false } 
 			t.scale.set(1.2, 0.55, 1); t.position.set(rk[0], level - rk[2] * 0.35 + rk[2] * 0.7 * 0.95, rk[1]); t.rotation.y = k * 1.7;
 			group.add(t);
 		}
-		// the fishing tackle
-		bobber = new THREE.Group();
-		const bt = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0xd8261c, roughness: 0.4 })); bt.position.y = 0.03; bobber.add(bt);
-		const bw = new THREE.Mesh(new THREE.SphereGeometry(0.061, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.4 })); bw.position.y = 0.03; bobber.add(bw);
-		bobber.visible = false;
-		group.add(bobber);
-		line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xdfe6e8, transparent: true, opacity: 0.6 }));
-		line.visible = false; line.frustumCulled = false;
-		group.add(line);
 	}
-
-	// ---------- fishing ----------
-	const FISH = [['bluegill', 0.38, 0.1, 0.6], ['largemouth bass', 0.24, 0.6, 5.5], ['redear sunfish', 0.14, 0.2, 1.1], ['channel catfish', 0.12, 1, 7], ['common carp', 0.12, 2, 12]];
-	let log = [];
-	try { log = JSON.parse(localStorage.getItem('crysis-fish-log') || '[]') || []; } catch { log = []; }
-	const btn = document.createElement('button');
-	btn.textContent = '🎣 Fish';
-	btn.style.cssText = 'position:absolute;left:50%;bottom:calc(74px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:22px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.72);color:#eafaf6;font:600 14px system-ui;display:none;z-index:4;cursor:pointer;';
-	for (const ev of ['pointerdown', 'touchstart']) btn.addEventListener(ev, (e) => e.stopPropagation());
-	mount?.appendChild(btn);
-	const F = { state: 'idle', t: 0, at: new THREE.Vector3(), bite: 0 };
-	function press(cam) {
-		if (F.state === 'idle') {
-			// cast out ahead, 8-14 m, onto the water
-			const d = new THREE.Vector3(); cam.getWorldDirection(d); d.y = 0; d.normalize();
-			let x = 0, z = 0;
-			for (let r = 14; r >= 3; r -= 1) { x = cam.position.x + d.x * r; z = cam.position.z + d.z * r; if (inLake(x, z)) break; }
-			if (!inLake(x, z)) {
-				// not facing it: cast toward the nearest water, a few metres past the edge
-				const e = edge(cam.position.x, cam.position.z), ex = e.x - cam.position.x, ez = e.z - cam.position.z, l = Math.hypot(ex, ez) || 1;
-				x = e.x + ex / l * 6; z = e.z + ez / l * 6;
-				if (!inLake(x, z)) { hint?.('Face the water to cast.', 2500); return; }
-			}
-			F.at.set(x, level, z); F.state = 'wait'; F.t = 0; F.bite = 2.5 + Math.random() * 6;
-			bobber.visible = line.visible = true; bobber.position.copy(F.at); ring(x, z, 0.8);
-			btn.textContent = '🎣 Reel in';
-		} else if (F.state === 'bite') {
-			// hooked
-			let u = Math.random(), sp = FISH[0];
-			for (const f of FISH) { if (u < f[1]) { sp = f; break; } u -= f[1]; }
-			const lb = +(sp[2] + Math.pow(Math.random(), 2.2) * (sp[3] - sp[2])).toFixed(1);
-			log.push({ fish: sp[0], lb, t: Date.now() });
-			try { localStorage.setItem('crysis-fish-log', JSON.stringify(log.slice(-200))); } catch { /* private mode */ }
-			const best = log.filter((c) => c.fish === sp[0]).reduce((m, c) => Math.max(m, c.lb), 0);
-			hint?.(`You caught a ${lb} lb ${sp[0]}!${lb >= best && log.filter((c) => c.fish === sp[0]).length > 1 ? ' Your biggest yet.' : ''}\nCatches at Lake Annabel: ${log.length}`, 6000);
-			ring(F.at.x, F.at.z, 1.4);
-			reset();
-		} else {
-			hint?.(F.state === 'wait' ? 'Reeled in: nothing yet.' : 'Too slow: it got away.', 2500);
-			reset();
-		}
-	}
-	function reset() { F.state = 'idle'; bobber.visible = line.visible = false; btn.textContent = '🎣 Fish'; }
-	btn.onclick = (e) => { e.stopPropagation(); press(lastCam); };
-	addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && btn.style.display !== 'none' && document.activeElement?.tagName !== 'INPUT') press(lastCam); });
-	let lastCam = null;
 
 	let jumpT = 3;
-	function update(dt, t, cam, night, walking) {
-		lastCam = cam;
+	function update(dt, t, cam, night) {
 		const x = cam.position.x, z = cam.position.z, far = Math.hypot(x - LAKE[12].x, z - LAKE[12].z);
 		if (!built) { if (far < 3000 && bay.loaded()) build(); return; }
 		group.visible = far < 4000 && cam.position.y < 2500;
@@ -330,21 +272,6 @@ export function createLake(scene, bay, shared, { hint, mount, isPhone = false } 
 			jumpT = 4 + Math.random() * 10;
 			for (let k = 0; k < 20; k++) { const jx = x + (Math.random() - 0.5) * 160, jz = z + (Math.random() - 0.5) * 160; if (inLake(jx, jz) && edge(jx, jz).d > 3) { ring(jx, jz, 1); break; } }
 		}
-		// fishing: near the edge, on foot
-		const e2 = edge(x, z), near = walking && !inLake(x, z) && e2.d < 6;
-		const show = near || F.state !== 'idle';
-		if ((btn.style.display !== 'none') !== show) btn.style.display = show ? 'block' : 'none';
-		if (!near && F.state !== 'idle') reset();
-		if (F.state !== 'idle') {
-			F.t += dt;
-			let dip = 0;
-			if (F.state === 'wait' && F.t > F.bite) { F.state = 'bite'; F.t = 0; ring(F.at.x, F.at.z, 0.6); hint?.('A bite! Strike now!', 1500); btn.textContent = '🎣 Strike!'; }
-			if (F.state === 'bite') { dip = 0.08 + Math.sin(F.t * 20) * 0.04; if (F.t > 1.6) { hint?.('It got away.', 2000); reset(); } }
-			bobber.position.set(F.at.x, level - dip + Math.sin(t * 2.3) * 0.01, F.at.z);
-			const tip = new THREE.Vector3(); cam.getWorldDirection(tip);
-			tip.multiplyScalar(1.6).add(cam.position); tip.y += 0.6;
-			const P = line.geometry.attributes.position; P.setXYZ(0, tip.x, tip.y, tip.z); P.setXYZ(1, bobber.position.x, bobber.position.y + 0.06, bobber.position.z); P.needsUpdate = true;
-		}
 	}
 	// the lake is water: you walk round it, not over it
 	function push(p, footY, flying) {
@@ -352,7 +279,7 @@ export function createLake(scene, bay, shared, { hint, mount, isPhone = false } 
 		const e = edge(p.x, p.z), dx = e.x - p.x, dz = e.z - p.z, l = Math.hypot(dx, dz) || 1;
 		p.x = e.x + dx / l * 0.4; p.z = e.z + dz / l * 0.4;
 	}
-	return { group, update, push, inLake, level: () => level, log: () => log.slice() };
+	return { group, update, push, inLake, level: () => level };
 }
 
 // the reed blades merged into one geometry (a small local version, to keep this module
