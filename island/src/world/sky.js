@@ -439,8 +439,11 @@ export function createSky(scene, shared, renderer) {
 		const setK = 1 - THREE.MathUtils.smoothstep(Math.abs(elev), 0.02, 0.3);
 		const night = 1 - THREE.MathUtils.smoothstep(elev, -0.18, 0.02);
 		uniforms.uNight.value = night;
-		tmpA.copy(PAL.dayZen).lerp(PAL.setZen, setK * setK * 0.8).lerp(PAL.nightZen, night);
-		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, setK * setK * 0.85).lerp(PAL.nightHor, night);
+		// (the sky's own sunset colours come only in the last few degrees; before that the
+		// sky stays blue and the gold is the light toward the sun, in the dome's shader)
+		const skySet = 1 - THREE.MathUtils.smoothstep(Math.abs(elev), 0.0, 0.1);
+		tmpA.copy(PAL.dayZen).lerp(PAL.setZen, skySet * 0.8).lerp(PAL.nightZen, night);
+		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, skySet * 0.85).lerp(PAL.nightHor, night);
 		// overcast and rain: a greyer, lower-contrast sky
 		const W = weather?.state, gl = W?.gloom || 0;
 		if (gl > 0) {
