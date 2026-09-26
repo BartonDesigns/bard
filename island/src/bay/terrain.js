@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
+import { photoUniform } from '../world/photomats.js';
 import { LEVELS, LAT0, LON0, KX, KZ, H_OFF, H_SCALE, toWorld } from './geo.js';
 import { PLACES } from './places.js';
 import { bearingFor, styleFor, localOverride, WARP_GLSL, STYLE, sfDistrict } from './styles.js';
@@ -85,6 +86,12 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 }
 `;
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);
+// the photographed trail surfaces (build 191), for the dirt roads and paths close by
+const LOAM = photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 }), GRAVEL = photoUniform('riverbed', { colour: true, mean: 0.52, contrast: 1.0 });
+// the texture of the open ground close by: the generated hill grasses when they exist
+// (ASSET_PROMPTS_HOUSES.md, hills.webp), else the loam's grain as a grey detail
+const GROUND_D = photoUniform('loam', { mean: 0.9, contrast: 0.9 }), DRYGRASS = photoUniform('dryGrass', { mean: 0.9, contrast: 1 }), SPRINGGRASS = photoUniform('springGrass', { mean: 0.9, contrast: 1 });
+
 // Points of city light far off. The old sparks sat in cells whose size followed the
 // camera's distance, so every step re-dealt them (static on a dead channel), and at a
 // kilometre or more they were smaller than a pixel and flickered. Now the cells are
@@ -298,7 +305,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, { uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 } });
+			Object.assign(sh.uniforms, BU, U2, REAL_U, { uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
 			sh.vertexShader = 'uniform vec2 uC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\n' + BAY_GLSL + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -307,7 +314,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + REAL_LAND + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + REAL_LAND + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -383,6 +390,12 @@ export function createBayArea(shared, scene, island, BU) {
 						vec3 concC = mix(vec3(0.6, 0.59, 0.55), vec3(0.7, 0.69, 0.65), vn(vBW * 1.3));
 						vec3 dirtC = mix(vec3(0.56, 0.42, 0.3), vec3(0.66, 0.52, 0.38), vn(vBW * 0.8)) * (0.85 + 0.3 * gn);
 						dirtC = mix(dirtC, dirtC * 0.8, step(0.7, vn(vBW * 6.0)) * 0.5);                       // stones and ruts
+						// close by, the trail is real ground: packed loam, and gravel where it washes
+						if (dirt > 0.01 && uTrailK > 0.5 && dist < 90.0) {
+							vec3 lo = texture2D(uLoam, vBW * 0.45).rgb, gr = texture2D(uGravel, vBW * 0.6 + 0.37).rgb;
+							vec3 ph = mix(lo, gr, smoothstep(0.45, 0.75, vn(vBW * 0.07)) * 0.8);
+							dirtC = mix(dirtC, ph * vec3(1.08, 1.0, 0.92), (1.0 - smoothstep(45.0, 90.0, dist)) * 0.85);
+						}
 						c = mix(c, dirtC, dirt);
 						c = mix(c, concC, conc);
 						// the gutter: a darker band just inside the asphalt edge; the kerb: a pale lip
@@ -477,6 +490,14 @@ export function createBayArea(shared, scene, island, BU) {
 						cityGlow = mix(vec3(1.0, 0.62, 0.28), vec3(0.95, 0.9, 0.8), h21(floor(vBW / 18.0) + 3.0) * 0.5) * (nearL + farL) * smoothstep(0.08, 0.35, urban) * uNightB * 2.2;
 					}
 					// after rain the ground is darker (and glossier, below)
+					// close by, the open ground has a real grain: the hill grasses (by season) when
+					// they are there, the soil's otherwise; not on the pavement
+					if (dist < 120.0 && uGroundK > 0.5) {
+						float gk = (1.0 - smoothstep(50.0, 120.0, dist)) * (1.0 - flatK);
+						float dL = texture2D(uGroundD, vBW * 0.35).r;
+						if (uGrassK > 0.5) dL = mix(texture2D(uSprG, vBW * 0.5).r, texture2D(uDryG, vBW * 0.5).r, uSeason);
+						c *= mix(1.0, dL / 0.79, gk * 0.55);
+					}
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);
 				}`)
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>

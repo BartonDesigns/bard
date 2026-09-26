@@ -647,7 +647,9 @@ export function drawItem(g, it, rnd, H) {
 			if (it.kind === 'fan') { g.cyl('metal', 0, y - 0.3, 0, 0.1, 0.3, lin([0.3, 0.25, 0.2]), 10); for (let i = 0; i < 4; i++) { g.at(it.x, it.y, it.z, i); g.box('grain', 0.1, y - 0.3, -0.07, 0.68, y - 0.28, 0.07, wd); } g.at(it.x, it.y, it.z, 0); g.cyl('lamp', 0, y - 0.42, 0, 0.12, 0.12, lin([0.95, 0.93, 0.88]), 12); }
 			else if (it.kind === 'chandelier' || it.kind === 'pendant' || it.kind === 'pendants') {
 				const n = it.kind === 'pendants' ? 3 : 1;
-				for (let i = 0; i < n; i++) { const x = n === 1 ? 0 : (i - 1) * 0.6; g.cyl('metal', x, y - 0.7, 0, 0.006, 0.7, BLACK, 4, 'y', false); g.cyl('lamp', x, y - 0.95, 0, it.kind === 'chandelier' ? 0.3 : 0.14, 0.25, lin([0.95, 0.9, 0.8]), 12, 'y', true, it.kind === 'chandelier' ? 0.2 : 0.06); }
+				// (over a table or an island they hang low; where you walk, above your head)
+				const drop = it.kind === 'pendant' ? 0.3 : 0.7;
+				for (let i = 0; i < n; i++) { const x = n === 1 ? 0 : (i - 1) * 0.6; g.cyl('metal', x, y - drop, 0, 0.006, drop, BLACK, 4, 'y', false); g.cyl('lamp', x, y - drop - 0.25, 0, it.kind === 'chandelier' ? 0.3 : 0.14, 0.25, lin([0.95, 0.9, 0.8]), 12, 'y', true, it.kind === 'chandelier' ? 0.2 : 0.06); }
 			} else if (it.kind === 'tube') g.box('lamp', -0.6, y - 0.08, -0.08, 0.6, y, 0.08, lin([0.98, 0.98, 0.98]));
 			else g.cyl('lamp', 0, y - 0.07, 0, 0.18, 0.07, lin([0.97, 0.96, 0.94]), 14, 'y', true, 0.14);
 			break;

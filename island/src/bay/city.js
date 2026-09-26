@@ -16,6 +16,7 @@ import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
 import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
+import { usePhoto } from '../world/photomats.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -304,6 +305,8 @@ export function createCity(shared, scene, bay, real = null) {
 		// each tier its own materials, so each can carry its own band
 		const mats = [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
 		for (const M of mats) addLodFade(M.material, 'uniform', band);
+		// photographed bark (with its relief) once it loads; lichen on the oaks' trunks
+		usePhoto(mats[0].material, [['bark', [2, 3], { mean: 0.8, contrast: 1.2, normal: 3 }, 0.9]]);
 		return parts.map((geo, n) => {
 			const S = mats[n];
 			const im = new THREE.InstancedMesh(geo, S.material, cap);

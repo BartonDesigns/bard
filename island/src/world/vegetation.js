@@ -4,6 +4,7 @@
 // the wind and with the music's low end.
 
 import * as THREE from 'three';
+import { usePhoto } from './photomats.js';
 import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
 import * as TX from './textures.js';
 import { HEIGHT_GLSL } from './terrain.js';
@@ -618,7 +619,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 	tex.palmBark.repeat.set(1, 7);
 	tex.woodBark.repeat.set(2, 3);
 	const mats = {
-		bark: swayMaterial({ map: tex.woodBark, roughness: 0.95 }, shared, 1),
+		bark: (() => { const b = swayMaterial({ map: tex.woodBark, roughness: 0.95 }, shared, 1); usePhoto(b.material, [['bark', [2, 3], { mean: 0.8, contrast: 1.2, normal: 3 }, 0.9]]); return b; })(),
 		palmbark: swayMaterial({ map: tex.palmBark, roughness: 0.9 }, shared, 1),
 		stem: swayMaterial({ roughness: 0.8 }, shared, 1),
 		plainleaf: swayMaterial({ roughness: 0.7, side: THREE.DoubleSide }, shared, 1.1),

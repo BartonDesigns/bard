@@ -174,6 +174,9 @@ export function createRealCity(renderer) {
 			r.box = [mnx, mnz, mxx, mxz]; r.drive = DRIVE.has(r.cls); r.walked = WALKED.has(r.cls);
 			for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) cell(gx * CELL + 1, gz * CELL + 1).roads.push(r);
 		}
+		// the generated town's houses are gathered like the real ones, so they are built
+		// whole and can be walked into (houses.js)
+		groupBoxes(D.boxes);
 		for (const b of D.boxes) cell(b.x, b.z).boxes.push(b);
 		for (const p of D.paths) cell(p.ax, p.az).paths.push(p);
 		for (const p of D.pools) cell(p.x, p.z).pools.push(p);

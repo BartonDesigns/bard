@@ -122,15 +122,32 @@ export async function usePhoto(mat, choices) {
 	for (const [name, metres, opt = {}, normalScale = 0.6] of choices) {
 		let t;
 		try { t = await photo(name, opt); } catch { continue; }
-		// (clones share the image, so one upload serves every scale)
+		// (clones share the image, so one upload serves every scale; metres may be [u, v]
+		// tiles for surfaces whose uvs are not in metres, like trunks)
 		const map = t.map.clone(), normalMap = t.normalMap?.clone() || null;
-		const rep = 1 / metres;
-		map.repeat.set(rep, rep);
+		const [ru, rv] = Array.isArray(metres) ? metres : [1 / metres, 1 / metres];
+		map.repeat.set(ru, rv);
 		const hadMap = !!mat.map, hadN = !!mat.normalMap;
 		mat.map = map;
-		if (normalMap) { normalMap.repeat.set(rep, rep); mat.normalMap = normalMap; mat.normalScale.set(normalScale, normalScale); }
+		if (normalMap) { normalMap.repeat.set(ru, rv); mat.normalMap = normalMap; mat.normalScale.set(normalScale, normalScale); }
 		if (!hadMap || (normalMap && !hadN)) mat.needsUpdate = true;
 		return name;
 	}
 	return null;
 }
+
+// for shaders of their own: a uniform holding a swatch once it loads (a grey pixel till
+// then) and a 0-1 flag to fade it in by
+const grey = (() => { let t = null; return () => { if (!t) { t = new THREE.DataTexture(new Uint8Array([200, 200, 200, 255]), 1, 1); t.needsUpdate = true; } return t; }; })();
+export function photoUniform(name, opt = {}) {
+	const u = { value: grey() }, k = { value: 0 };
+	photo(name, opt).then((t) => { u.value = t.map; k.value = 1; }).catch(() => {});
+	return [u, k];
+}
+// sampled from world position on the three planes, blended by the surface's facing
+export const TRI_GLSL = /* glsl */`
+vec3 triPhoto(sampler2D t, vec3 p, vec3 n, float s){
+	vec3 w = pow(abs(n), vec3(4.0)); w /= w.x + w.y + w.z;
+	return texture2D(t, p.zy * s).rgb * w.x + texture2D(t, p.xz * s).rgb * w.y + texture2D(t, p.xy * s).rgb * w.z;
+}
+`;

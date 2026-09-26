@@ -9,6 +9,7 @@
 // caves are open to walk in.
 
 import * as THREE from 'three';
+import { photoUniform, TRI_GLSL } from '../world/photomats.js';
 import { MarchingCubes } from 'three/examples/jsm/objects/MarchingCubes.js';
 import { toWorld } from './geo.js';
 
@@ -85,9 +86,12 @@ function sdfOf(spec, ground = () => 0) {
 
 function rockMaterial() {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
+	// the photographed sandstone (build 191) laid over the painted bedding, at hand's reach
+	const [uStone, uStoneK] = photoUniform('sandstone', { mean: 0.9, contrast: 0.9 });
 	m.onBeforeCompile = (sh) => {
+		sh.uniforms.uStone = uStone; sh.uniforms.uStoneK = uStoneK;
 		sh.vertexShader = 'varying vec3 vRW; varying vec3 vRN;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRW = (modelMatrix * vec4(transformed, 1.0)).xyz; vRN = normalize(mat3(modelMatrix) * objectNormal);');
-		sh.fragmentShader = 'varying vec3 vRW; varying vec3 vRN;\n' + `
+		sh.fragmentShader = 'varying vec3 vRW; varying vec3 vRN; uniform sampler2D uStone; uniform float uStoneK;\n' + TRI_GLSL + `
 float rh(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float rn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(mix(rh(i), rh(i + vec3(1,0,0)), f.x), mix(rh(i + vec3(0,1,0)), rh(i + vec3(1,1,0)), f.x), f.y), mix(mix(rh(i + vec3(0,0,1)), rh(i + vec3(1,0,1)), f.x), mix(rh(i + vec3(0,1,1)), rh(i + vec3(1,1,1)), f.x), f.y), f.z); }
@@ -123,6 +127,13 @@ float rockH = 0.0;
 				c *= 1.0 - smoothstep(0.6, 0.9, rn(vec3(vRW.x * 0.6, vRW.y * 0.08, vRW.z * 0.6))) * wall * 0.35;
 				// soot and shade deep in the hollows (faces looking down)
 				c *= mix(1.0, 0.7, smoothstep(0.0, -0.8, up));
+				// the grain, layering and weathering of real sandstone, strongest close by
+				float pk = uStoneK * (1.0 - smoothstep(60.0, 160.0, length(cameraPosition - vRW)));
+				// (two scales: its bedding a few metres across, its grain up close)
+				float phL = dot(triPhoto(uStone, vRW, n, 0.13), vec3(0.3, 0.59, 0.11)) * 0.65 + dot(triPhoto(uStone, vRW + 3.7, n, 0.6), vec3(0.3, 0.59, 0.11)) * 0.35;
+				float pkF = pk * (1.0 - smoothstep(8.0, 30.0, length(cameraPosition - vRW)) * 0.5);
+				c = mix(c, c * mix(1.0, phL / 0.79, 0.6), pkF);
+				rockH += (phL - 0.79) * 0.035 * pkF;
 				diffuseColor.rgb = c * (0.9 + 0.2 * fine);
 			}`)
 			.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -134,7 +145,7 @@ float rockH = 0.0;
 				normal = normalize(abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2));
 			}`);
 	};
-	m.customProgramCacheKey = () => 'sandstone3';
+	m.customProgramCacheKey = () => 'sandstone4';
 	return m;
 }
 
@@ -195,9 +206,11 @@ export function createDiablo(scene, bay) {
 	summit.name = 'diablo-summit';
 	group.add(summit);
 	const stone = new THREE.MeshStandardMaterial({ color: 0x9c8466, roughness: 0.95 });
+	const [uBlock, uBlockK] = photoUniform('sandstone', { mean: 0.9, contrast: 1.1 });
 	stone.onBeforeCompile = (sh) => {
-		sh.vertexShader = 'varying vec3 vSW;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-		sh.fragmentShader = 'varying vec3 vSW;\nfloat sh1(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+		sh.uniforms.uBlock = uBlock; sh.uniforms.uBlockK = uBlockK;
+		sh.vertexShader = 'varying vec3 vSW; varying vec3 vSN;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSW = (modelMatrix * vec4(transformed, 1.0)).xyz; vSN = normalize(mat3(modelMatrix) * objectNormal);');
+		sh.fragmentShader = 'varying vec3 vSW; varying vec3 vSN; uniform sampler2D uBlock; uniform float uBlockK;\n' + TRI_GLSL + 'float sh1(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 			{
 				// coursed sandstone blocks with dark mortar
 				vec2 q = vec2(vSW.x + vSW.z, vSW.y) / vec2(0.9, 0.42);
@@ -205,9 +218,11 @@ export function createDiablo(scene, bay) {
 				vec2 f = fract(q), id = floor(q);
 				float mortar = step(f.x, 0.05) + step(f.y, 0.08);
 				diffuseColor.rgb *= (0.8 + 0.4 * sh1(id)) * mix(1.0, 0.45, clamp(mortar, 0.0, 1.0));
+				// each block cut from real sandstone
+				diffuseColor.rgb *= mix(1.0, dot(triPhoto(uBlock, vSW + vec3(id.x * 0.37, 0.0, id.y * 0.61), vSN, 0.9), vec3(0.3, 0.59, 0.11)) / 0.79, uBlockK);
 			}`);
 	};
-	stone.customProgramCacheKey = () => 'summitstone';
+	stone.customProgramCacheKey = () => 'summitstone2';
 	const glassM = new THREE.MeshStandardMaterial({ color: 0x1c252c, roughness: 0.1, metalness: 0.3 });
 	const box = (w, h, d, x, y, z, m = stone) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y + h / 2, z); b.castShadow = b.receiveShadow = true; summit.add(b); return b; };
 	box(16, 6.5, 11, 0, -1.5, 0);

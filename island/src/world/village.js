@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../noise.js';
 import * as TX from './textures.js';
 import { addPulse } from '../pulse.js';
+import { usePhoto } from './photomats.js';
 
 const WALLS = [[0.93, 0.93, 0.90], [0.58, 0.72, 0.86], [0.52, 0.75, 0.68], [0.95, 0.86, 0.56], [0.88, 0.58, 0.50], [0.93, 0.93, 0.90]];
 const ROOFS = [[0.70, 0.20, 0.17], [0.22, 0.48, 0.52], [0.52, 0.55, 0.58], [0.45, 0.22, 0.18]];
@@ -183,6 +184,9 @@ export function createVillage(island, shared, scene) {
 		glass: new THREE.MeshStandardMaterial({ color: 0x1c2630, roughness: 0.15, metalness: 0.2, emissive: 0xffc47a, emissiveIntensity: 0 }),
 	};
 	for (const k in mats) { mats[k].onBeforeCompile = addPulse; mats[k].customProgramCacheKey = () => 'village228' + k; }
+	// weathered cedar for the boards and piers, laid limestone for the walls and steps, as they load
+	usePhoto(mats.wood, [['cedar', [tex.plank.repeat.x, tex.plank.repeat.y], { mean: 0.82, contrast: 1.1, normal: 2 }, 0.5]]);
+	usePhoto(mats.stone, [['masonry', [tex.stone.repeat.x, tex.stone.repeat.y], { mean: 0.85, contrast: 1.1, normal: 3 }, 0.8]]);
 	const group = new THREE.Group();
 	group.name = 'village';
 	const pickables = [];
