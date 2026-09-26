@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, shrub, swayMaterial } from '../world/vegetation.js';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
@@ -284,6 +284,68 @@ function roofGeometry(hip) {
 	return n;
 }
 
+// The far trees as impostors: each species' own middle-distance tree, its leaf cards and
+// trunk projected side-on onto a small canvas (their colours, back to front, a leafy
+// fringe), once. Far off a tree is a single point drawn as that picture: no triangles.
+const IMP = 128;
+function treeImpostor(parts, texAvg) {
+	const cv = document.createElement('canvas');
+	cv.width = cv.height = IMP;
+	const g = cv.getContext('2d');
+	const [trunkG, crownG] = parts;
+	const bb = new THREE.Box3().setFromBufferAttribute(crownG.attributes.position).union(new THREE.Box3().setFromBufferAttribute(trunkG.attributes.position));
+	const H = bb.max.y - Math.max(0, bb.min.y), W = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
+	const k = IMP / Math.max(H, W) * 0.98, px = (x) => IMP / 2 + x * k, py = (y) => IMP - 1 - y * k;
+	const toS = (v) => Math.round(Math.min(255, Math.pow(Math.max(0, v), 1 / 2.2) * 255));
+	const draw = (geo, colour, alpha) => {
+		const P = geo.attributes.position, C = geo.attributes.color, I = geo.index.array, tris = [];
+		for (let i = 0; i < I.length; i += 3) { let z = 0; for (let j = 0; j < 3; j++) z += P.getZ(I[i + j]); tris.push([i, z]); }
+		tris.sort((a, b) => a[1] - b[1]);                     // back to front (the camera looks along -z)
+		for (const [i] of tris) {
+			const a = I[i], b = I[i + 1], c = I[i + 2], col = colour(C, a);
+			g.fillStyle = `rgba(${toS(col[0])},${toS(col[1])},${toS(col[2])},${alpha})`;
+			g.beginPath(); g.moveTo(px(P.getX(a)), py(P.getY(a))); g.lineTo(px(P.getX(b)), py(P.getY(b))); g.lineTo(px(P.getX(c)), py(P.getY(c))); g.closePath(); g.fill();
+		}
+	};
+	draw(trunkG, () => [0.12, 0.09, 0.07], 1);
+	draw(crownG, (C, a) => [C.getX(a) * texAvg[0], C.getY(a) * texAvg[1], C.getZ(a) * texAvg[2]], 0.7);
+	// a leafy fringe: the crown's edge nibbled away in small bites
+	g.globalCompositeOperation = 'destination-out';
+	let s = 7;
+	const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+	for (let n = 0; n < 700; n++) { const x = rnd() * IMP, y = rnd() * IMP * 0.8; g.fillStyle = `rgba(0,0,0,${0.25 + rnd() * 0.35})`; g.beginPath(); g.arc(x, y, 0.6 + rnd() * 1.4, 0, 6.283); g.fill(); }
+	return cv;
+}
+const IMPOSTOR_VERT = /* glsl */`
+	attribute float aSize; attribute float aSp; attribute vec3 aTint;
+	uniform float uScale; varying float vSp; varying vec3 vTint; varying float vD;
+	#include <fog_pars_vertex>
+	void main(){
+		vec4 mvPosition = modelViewMatrix * vec4(position + vec3(0.0, aSize * 0.5, 0.0), 1.0);
+		gl_Position = projectionMatrix * mvPosition;
+		gl_PointSize = aSize * uScale / -mvPosition.z;
+		vSp = aSp; vTint = aTint; vD = length(mvPosition.xyz);
+		#include <fog_vertex>
+	}`;
+const IMPOSTOR_FRAG = /* glsl */`
+	uniform sampler2D uAtlas; uniform vec3 uSunC, uAmb, uSunD; uniform vec4 uBand;
+	varying float vSp; varying vec3 vTint; varying float vD;
+	#include <fog_pars_fragment>
+	void main(){
+		vec2 uv = vec2((gl_PointCoord.x + floor(vSp + 0.5)) / 3.0, 1.0 - gl_PointCoord.y);
+		vec4 t = texture2D(uAtlas, uv);
+		// dissolve in and out across the hand-over bands, as the other tiers do
+		float fade = smoothstep(uBand.x, uBand.y, vD) * (1.0 - smoothstep(uBand.z, uBand.w, vD));
+		float h = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
+		if (t.a < 0.45 || fade < h) discard;
+		// lit from above: the sun on the upper crown, the sky everywhere
+		vec3 light = uAmb * 1.6 + uSunC * smoothstep(-0.05, 0.3, uSunD.y) * (0.45 + 0.55 * (1.0 - gl_PointCoord.y)) * 0.95;
+		gl_FragColor = vec4(t.rgb * vTint * light, 1.0);
+		#include <tonemapping_fragment>
+		#include <colorspace_fragment>
+		#include <fog_fragment>
+	}`;
+
 const OCEAN_X = toWorld(37.76, -122.49).x;
 const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));       // west of here the sea is the Pacific
 
@@ -315,25 +377,6 @@ export function createCity(shared, scene, bay, real = null) {
 	// and spreading), redwood and cypress (columnar), and yard shrubs. Far off, where a
 	// crown is a few pixels, a smooth lumpy mass stands in.
 	const TCAP = PHONE ? 26000 : 40000;
-	const trunkGeo = new THREE.CylinderGeometry(0.6, 1, 1, 7).translate(0, 0.5, 0);
-	const crownGeo = (() => {
-		let g = new THREE.IcosahedronGeometry(1, 1);          // (far off: a few pixels; 80 triangles, lumpy enough)
-		g.deleteAttribute('normal'); g.deleteAttribute('uv');
-		g = mergeVertices(g);
-		const p = g.attributes.position;
-		for (let i = 0; i < p.count; i++) { const k = 0.88 + 0.12 * Math.sin(p.getX(i) * 5.1 + p.getZ(i) * 3.7 + p.getY(i) * 2.3) * Math.sin(p.getY(i) * 4.3 - p.getX(i) * 2.9); p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k); }
-		g.computeVertexNormals();
-		return g;
-	})();
-	const coneGeo = (() => { let g = new THREE.ConeGeometry(1, 1, 14, 3).translate(0, 0.5, 0); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g); g.computeVertexNormals(); return g; })();
-	const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
-	const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 0.95 });
-	const trunks = mk(trunkGeo, trunkMat, TCAP, false);
-	trunks.instanceColor = null;
-	const crowns = mk(crownGeo, leafMat, TCAP, false), cones = mk(coneGeo, leafMat, TCAP, false);
-	// the far masses lie far outside the shadow's reach: drawing them into it cost as much
-	// as drawing them
-	for (const im of [trunks, crowns, cones]) im.castShadow = false;
 	const leafTex = TX.leafCluster();
 	const barkT = TX.woodBark(); barkT.repeat.set(2, 3);
 	const SPECIES = [
@@ -350,7 +393,6 @@ export function createCity(shared, scene, bay, real = null) {
 	const LOD = PHONE ? { near: [NONE_IN[0], NONE_IN[1], 150, 175], mid: [150, 175, 430, 470], far: [430, 470, 2000, 2400], shrub: [NONE_IN[0], NONE_IN[1], 215, 255] }
 		: { near: [NONE_IN[0], NONE_IN[1], 185, 215], mid: [185, 215, 560, 610], far: [560, 610, 2400, 2800], shrub: [NONE_IN[0], NONE_IN[1], 240, 285] };
 	const MARGIN = 45;                                        // the trees are re-placed every 40 m of travel
-	addLodFade(leafMat, 'uniform', LOD.far); addLodFade(trunkMat, 'uniform', LOD.far);
 	const tierMesh = (parts, cap, shadow, band) => {
 		// each tier its own materials, so each can carry its own band
 		const mats = [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
@@ -378,19 +420,40 @@ export function createCity(shared, scene, bay, real = null) {
 	})();
 	const treeTiers = SPECIES.map((g, k) => {
 		const nearT = hardwood(9101 + k * 17, false, false, g), midT = hardwood(9101 + k * 17, false, true, g);
-		// what a far mass must match: the crown's size and place, and its average colour
-		// (the leaf texture times the leaves' own colours)
-		const leafGeo = midT.parts[1], bb = new THREE.Box3().setFromBufferAttribute(leafGeo.attributes.position), cA = leafGeo.attributes.color, avg = [0, 0, 0];
-		for (let i = 0; i < cA.count; i++) { avg[0] += cA.getX(i); avg[1] += cA.getY(i); avg[2] += cA.getZ(i); }
-		const far = {
-			col: avg.map((v, c) => v / cA.count * texAvg[c]),
-			// (never flatter than two-thirds as tall as wide: a flatter mass reads as a plate far off)
-			cy: (bb.min.y + bb.max.y) / 2 / midT.height, ry: Math.max((bb.max.y - bb.min.y) / 2, Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2 * 0.82 * 0.66) / midT.height,
-			rx: Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2 / midT.height * 0.82, base: bb.min.y / midT.height,
-		};
-		return { near: tierMesh(nearT.parts, 2600, true, LOD.near), mid: tierMesh(midT.parts, 12000, false, LOD.mid), H: nearT.height, Hm: midT.height, far };
+		const leafGeo = midT.parts[1];
+		// (the impostor's square spans the tree's height or its width, whichever is more)
+		const bbAll = new THREE.Box3().setFromBufferAttribute(leafGeo.attributes.position).union(new THREE.Box3().setFromBufferAttribute(midT.parts[0].attributes.position));
+		const sizeK = Math.max(bbAll.max.y - Math.max(0, bbAll.min.y), bbAll.max.x - bbAll.min.x, bbAll.max.z - bbAll.min.z) / 0.98 / midT.height;
+		return { sizeK, near: tierMesh(nearT.parts, 2600, true, LOD.near), mid: tierMesh(midT.parts, 12000, false, LOD.mid), H: nearT.height, Hm: midT.height };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, 3000, true, LOD.shrub);
+	// the far tier: one point per tree, drawn as its species' impostor
+	const atlasCv = document.createElement('canvas');
+	atlasCv.width = IMP * 3; atlasCv.height = IMP;
+	SPECIES.forEach((g, k) => atlasCv.getContext('2d').drawImage(treeImpostor(hardwood(9101 + k * 17, false, true, g).parts, texAvg), k * IMP, 0));
+	const atlas = new THREE.CanvasTexture(atlasCv);
+	atlas.colorSpace = THREE.SRGBColorSpace; atlas.generateMipmaps = true; atlas.minFilter = THREE.LinearMipmapLinearFilter;
+	const fp = { pos: new Float32Array(TCAP * 3), size: new Float32Array(TCAP), sp: new Float32Array(TCAP), tint: new Float32Array(TCAP * 3) };
+	const farGeo = new THREE.BufferGeometry();
+	farGeo.setAttribute('position', new THREE.BufferAttribute(fp.pos, 3));
+	farGeo.setAttribute('aSize', new THREE.BufferAttribute(fp.size, 1));
+	farGeo.setAttribute('aSp', new THREE.BufferAttribute(fp.sp, 1));
+	farGeo.setAttribute('aTint', new THREE.BufferAttribute(fp.tint, 3));
+	farGeo.setDrawRange(0, 0);
+	const farMat = new THREE.ShaderMaterial({
+		uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uAtlas: { value: atlas }, uScale: { value: 400 }, uSunC: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() }, uSunD: { value: new THREE.Vector3() }, uBand: { value: new THREE.Vector4(...LOD.far) } }]),
+		vertexShader: IMPOSTOR_VERT, fragmentShader: IMPOSTOR_FRAG, fog: true,
+	});
+	farMat.uniforms.uAtlas.value = atlas;
+	const farPts = new THREE.Points(farGeo, farMat);
+	farPts.frustumCulled = false;
+	farPts.onBeforeRender = (r, sc2, cam) => {
+		// point size in pixels for a tree a metre tall at a metre away
+		farMat.uniforms.uScale.value = r.getSize(tmpV2).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360));
+		farMat.uniforms.uSunC.value.copy(shared.uSunColor.value); farMat.uniforms.uAmb.value.copy(shared.uAmbient.value); farMat.uniforms.uSunD.value.copy(shared.uSunDir.value);
+	};
+	const tmpV2 = new THREE.Vector2();
+	group.add(farPts);
 
 	// one lot's building (and roof) in grid space: centre (gx, gz), size along grid x/z.
 	// opt.face turns the box so its front (local +z) faces a street: 's' +gz, 'n' -gz,
@@ -736,6 +799,7 @@ export function createCity(shared, scene, bay, real = null) {
 	function placeTrees(x, z) {
 		treeX = x; treeZ = z;
 		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
+		let nf = 0;
 		for (const t of treeList) {
 			const d = Math.hypot(t.x - x, t.z - z);
 			const yaw = hash(t.x * 3.1, t.z * 1.7) * 6.283;
@@ -761,17 +825,16 @@ export function createCity(shared, scene, bay, real = null) {
 				tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 			}
 			if (d < LOD.far[0] - MARGIN) continue;
-			// far: a trunk and one mass the size, shape and average colour of the real crown
-			const nt = next(trunks); if (nt < 0) continue;
-			const F = T.far, h = t.h;
-			q.identity();
-			trunks.setMatrixAt(nt, m4.compose(p.set(t.x, t.y, t.z), q, sc.set(h * 0.05 + 0.15, Math.max(h * 0.2, F.base * h + 0.5), h * 0.05 + 0.15)));
-			const k = next(crowns); if (k < 0) continue;
-			q.setFromAxisAngle(Y, yaw);
-			crowns.setMatrixAt(k, m4.compose(p.set(t.x, t.y + 0.2 + F.cy * h, t.z), q, sc.set(F.rx * h, F.ry * h, F.rx * h)));
-			crowns.setColorAt(k, col.setRGB(F.col[0] * tint[0], F.col[1] * tint[1], F.col[2] * tint[2]));
+			// far: one point, drawn as its species' picture, tinted like the tree
+			if (nf >= TCAP) continue;
+			fp.pos[nf * 3] = t.x; fp.pos[nf * 3 + 1] = t.y + 0.2; fp.pos[nf * 3 + 2] = t.z;
+			fp.size[nf] = t.h * T.sizeK; fp.sp[nf] = sp;
+			fp.tint[nf * 3] = tint[0]; fp.tint[nf * 3 + 1] = tint[1]; fp.tint[nf * 3 + 2] = tint[2];
+			nf++;
 		}
-		const all = [trunks, crowns, cones, ...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])];
+		farGeo.setDrawRange(0, nf);
+		for (const a of ['position', 'aSize', 'aSp', 'aTint']) farGeo.attributes[a].needsUpdate = true;
+		const all = [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])];
 		for (const im of all) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 	}
 
@@ -977,7 +1040,7 @@ export function createCity(shared, scene, bay, real = null) {
 		if (!started) { started = true; findSkylines(); landmarks(); bayBridge(); }
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
-		near.visible = hips.visible = gables.visible = trunks.visible = crowns.visible = cones.visible = !high;
+		near.visible = hips.visible = gables.visible = farPts.visible = !high;
 		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
