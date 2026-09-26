@@ -92,7 +92,7 @@ export function createTerrain(island, shared) {
 	const uniforms = {
 		uHeight: { value: shared.heightTex }, uMasks: { value: shared.maskTex },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
-		uCenter: { value: new THREE.Vector2() }, uTime: shared.uTime, uWet: { value: 0 }, uWave: shared.uWave,
+		uCenter: { value: new THREE.Vector2() }, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uWave: shared.uWave,
 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
 		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
 		uDetail: { value: groundDetail() }, uOcc: shared.uOcc, uOccO: shared.uOccO,
@@ -225,7 +225,7 @@ export function createTerrain(island, shared) {
 				// moonlight catching the wet sand
 				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);
 				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 240.0) + 3.0)) * (1.0 - smoothstep(2.0, 7.0, camD));`)
-			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = rough;')
+			.replace('#include <roughnessmap_fragment>', '// after rain: darker, glossier ground\nfloat roughnessFactor = mix(rough, rough * 0.4, uWet * 0.8);\ndiffuseColor.rgb *= 1.0 - uWet * 0.28;')
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				{
 					vec3 Vv = normalize(cameraPosition - vW), md = normalize(-uSunDir2 + vec3(0.0, 0.35, 0.0));

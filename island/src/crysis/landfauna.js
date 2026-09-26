@@ -232,6 +232,9 @@ export function createLandFauna(land, island, shared, scene, camera, vegetation)
 					}
 					const d = leader.goal.clone().sub(leader.p).setLength(9 * dt);
 					leader.p.add(d);
+					// the flock is carried a little downwind
+					const wv = shared.uWind.value * 2.5 * dt;
+					leader.p.x += shared.uWindDir.value.x * wv; leader.p.z += shared.uWindDir.value.y * wv;
 				}
 				const target = leader.p.clone().add(a.off).add(V(Math.sin(t * 1.3 + i) * 1.5, Math.sin(t * 2.1 + i * 2) * 0.8, Math.cos(t * 1.1 + i) * 1.5));
 				a.v.lerp(target.sub(a.p).multiplyScalar(1.6), Math.min(1, dt * 2));

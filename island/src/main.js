@@ -7,6 +7,7 @@ import { generateIsland } from './world/islandgen.js';
 import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terrain.js';
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
+import { createWeather } from './world/weather.js';
 import { createVegetation } from './world/vegetation.js';
 import { createGrass } from './world/grass.js';
 import { createLitter } from './world/litter.js';
@@ -165,7 +166,7 @@ export function createIslandWorld() {
 	const scene = new THREE.Scene();
 
 	const shared = {
-		uTime: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
+		uTime: { value: 0 }, uWet: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
 		uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.4) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
@@ -296,6 +297,9 @@ export function createIslandWorld() {
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
 		const sky = createSky(scene, shared, renderer);
+		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
+		const weather = createWeather(scene, shared, { isPhone });
+		sky.attach(weather);
 		const terrain = createTerrain(island, shared);
 		// the real Bay Area round the island: its heights are shared with the sea
 		shared.bayU = bayUniforms();
@@ -331,7 +335,7 @@ export function createIslandWorld() {
 		const pick = [...vegetation.pickables, ...village.pickables];
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
-		world = { island, sky, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
 		state.seed = seed;
 		state.earth = earth;
 		// warm every shader once, behind the loading card, so turning your head never stalls
@@ -399,9 +403,21 @@ export function createIslandWorld() {
 		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 		const t = slider(p, 'Time of day', 0, 23.99, 0.05, () => S.hours, (v) => { S.hours = v; }, fmtH);
 		slider(p, 'Time speed', 0, 4, 0.1, () => S.speed, (v) => { S.speed = v; }, (v) => v === 0 ? 'paused' : v.toFixed(1) + '×');
-		slider(p, 'Cloud cover', 0, 1, 0.01, () => world.sky.uniforms.uCloud.value, (v) => { world.sky.uniforms.uCloud.value = v; }, (v) => Math.round(v * 100) + '%');
+		// the weather: follow the clock, or hold it; moving a slider holds that one thing
+		const WX = world.weather;
+		const wrow = css(document.createElement('div'), 'display:flex;gap:4px;margin:4px 0 8px;');
+		for (const mode of ['auto', 'clear', 'fair', 'showers', 'storm']) {
+			const b = css(document.createElement('button'), 'flex:1;min-height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (WX.state.mode === mode ? '#01a982' : 'transparent') + ';color:#fff;font:11px system-ui;padding:0 2px;');
+			b.textContent = mode[0].toUpperCase() + mode.slice(1);
+			b.onclick = () => { WX.set(mode); buildPanel(); };
+			wrow.appendChild(b);
+		}
+		const wl = css(document.createElement('div'), 'opacity:.9;margin-top:4px;'); wl.textContent = 'Weather';
+		p.append(wl, wrow);
+		slider(p, 'Rain', 0, 1, 0.01, () => WX.state.pin.rain ?? WX.state.rainHere, (v) => { WX.pin('rain', v); }, (v) => v < 0.02 ? 'dry' : v < 0.3 ? 'drizzle' : v < 0.7 ? 'shower' : 'downpour');
+		slider(p, 'Cloud cover', 0, 1, 0.01, () => world.sky.uniforms.uCloud.value, (v) => { WX.pin('cover', v); world.sky.uniforms.uCloud.value = v; }, (v) => Math.round(v * 100) + '%');
 		slider(p, 'Waves', 0, 2, 0.05, () => shared.uWave.value, (v) => { shared.uWave.value = v; world.ocean.userData.uniforms.uWave.value = v; }, (v) => v.toFixed(2));
-		slider(p, 'Wind', 0, 1.5, 0.05, () => shared.uWind.value, (v) => { shared.uWind.value = v; }, (v) => v.toFixed(2));
+		slider(p, 'Wind', 0, 1.5, 0.05, () => shared.uWind.value, (v) => { WX.pin('wind', v); shared.uWind.value = v; }, (v) => v.toFixed(2));
 		slider(p, 'Season', 0, 1, 0.01, () => REAL_U.uSeason.value, (v) => { REAL_U.uSeason.value = v; }, (v) => v < 0.2 ? 'spring green' : v < 0.55 ? 'late spring' : v < 0.85 ? 'early summer' : 'summer gold');
 		const q = css(document.createElement('div'), 'display:flex;gap:6px;margin-top:6px;');
 		for (const mode of ['auto', 'high', 'low']) {
@@ -456,6 +472,9 @@ export function createIslandWorld() {
 		stampPrints(W.player.state);
 		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
+		// the weather: frames running slow shed rain streaks; indoors the rain stays out
+		W.weather.state.sheltered = !!W.houses?.inside(camera.position);
+		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
 		W.music.update(dt);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
@@ -490,6 +509,8 @@ export function createIslandWorld() {
 			// on Earth the coast is always in view from the island: only a light sea haze close in
 			const openK = W.bayArea?.loaded() ? Math.max(0.9, THREE.MathUtils.smoothstep(dI, 2500, 9000)) : 0;
 			scene.fog.density = THREE.MathUtils.lerp(0.00026, 0.000024 + Math.max(0, 0.00001 * (1 - camera.position.y / 600)), openK);
+			// rain closes the distance in
+			scene.fog.density *= 1 + wx.rainHere * 12 + wx.gloom * 1.5;
 			const far = THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 		}

@@ -20,20 +20,59 @@ const PAL = {
 	sunDay: C(1.0, 0.90, 0.74), sunSet: C(1.0, 0.52, 0.22), moon: C(0.45, 0.55, 0.8),
 };
 
+// the cloud field, shared by the dome and the stars it hides: fair-weather cumulus on a
+// plane about 1.5 km up that drifts with the wind (uCloudOff, summed by weather.js) and
+// slowly changes shape, heaped up dark over the showers
+const CLOUD_GLSL = /* glsl */`
+uniform vec2 uCloudOff; uniform vec4 uShowers[4];
+float fbm5(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * vn(p); p = p * 2.02 + 3.1; a *= 0.5; } return s; }
+// the showers' hold on a point of the cloud plane (xz metres from you)
+float showerAt(vec2 xz){
+	float sh = 0.0;
+	for (int i = 0; i < 4; i++) { vec4 S = uShowers[i]; sh = max(sh, S.w * (1.0 - smoothstep(S.z * 0.7, S.z * 1.7, length(xz - S.xy)))); }
+	return sh;
+}
+// density (0-1) and the lumpy field under it, for a direction d
+float cumulus(vec3 d, float cloud, float time, out float base, out float sh){
+	base = 0.0; sh = 0.0;
+	if (d.y <= 0.01) return 0.0;
+	vec2 cp = d.xz / (d.y + 0.08) * 1.6 + uCloudOff;
+	// the shapes boil slowly: the field is warped by a slower field that drifts on its own
+	vec2 warp = vec2(fbm5(cp * 0.35 + time * 0.004), fbm5(cp * 0.35 + 7.3 - time * 0.0035)) - 0.5;
+	cp += warp * 0.7;
+	base = fbm5(cp * 0.9) * 0.6 + fbm5(cp * 0.32 + 11.0) * 0.55;
+	sh = showerAt(d.xz / max(d.y, 0.02) * 1500.0);
+	base += sh * 0.55;
+	float cover = mix(0.8, 0.3, cloud);
+	return smoothstep(cover, cover + 0.12, base) * smoothstep(0.01, 0.2, d.y);
+}
+`;
+
 export function createSky(scene, shared, renderer) {
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
 		uTime: shared.uTime, uNight: { value: 0 }, uCloud: { value: 0.62 }, uHigh: shared.uHigh,
 		uW2E: { value: new THREE.Matrix3() }, uE2G: { value: new THREE.Matrix3().set(...EQ2GAL) }, uGlow: shared.uSkyGlow || (shared.uSkyGlow = { value: 0 }),
+		// the weather's (weather.js hands its own in with attach())
+		uCloudOff: { value: new THREE.Vector2() }, uCirrusOff: { value: new THREE.Vector2() }, uCirrus: { value: 0.25 }, uWindDir: shared.uWindDir,
+		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
+		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
+		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
 		uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
+			uniform vec2 uCirrusOff, uWindDir; uniform float uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
-			float fbm5(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * vn(p); p = p * 2.02 + 3.1; a *= 0.5; } return s; }
+			${CLOUD_GLSL}
+			// the rainbow table (rainbow.js): angle from the antisolar point, 25 to 60 degrees
+			vec3 bowAt(float ang){
+				vec3 b = texture2D(uBow, vec2(clamp((ang - 25.0) / 35.0, 0.0, 1.0), uBowDrop)).rgb;
+				return b * b * uBowScale * smoothstep(64.0, 60.0, ang) * smoothstep(8.0, 25.0, ang);
+			}
 			void main(){
 				vec3 d = normalize(vDir);
 				float h = max(d.y, 0.0);
@@ -91,24 +130,89 @@ export function createSky(scene, shared, renderer) {
 					float md = max(dot(d, -uSunDir), 0.0);
 					col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.9994, 0.9997, md) * 2.5 + pow(md, 60.0) * 0.08) * uNight;
 				}
-				// cumulus on a plane above the island, lit from the sun's side
-				if (d.y > 0.01){
-					vec2 cp = d.xz / (d.y + 0.08) * 1.6 + vec2(uTime * 0.012, uTime * 0.004);
-					float base = fbm5(cp * 0.9);
-					// heaped cumulus: a broad field of cloud heaps, the fine detail riding on them
-					float heap = fbm5(cp * 0.32 + 11.0);
-					base = base * 0.6 + heap * 0.55;
-					float cover = mix(0.78, 0.46, uCloud);
-					float dens = smoothstep(cover, cover + 0.12, base) * smoothstep(0.01, 0.2, d.y);
-					float toward = fbm5(cp * 0.9 + uSunDir.xz * 0.12);
+				// cirrus: thin, fibrous, far above, combed out along the wind; it catches the
+				// colour of a low sun and keeps it after sunset
+				if (d.y > 0.0 && uCirrus > 0.01){
+					vec2 cc = d.xz / (d.y + 0.03) * 0.55 + uCirrusOff;
+					vec2 wd = normalize(uWindDir + vec2(1e-4));
+					vec2 q = vec2(dot(cc, wd) * 0.16, dot(cc, vec2(-wd.y, wd.x)));
+					float f = fbm5(q * 3.0) * 0.7 + fbm5(q * vec2(2.0, 11.0) + 3.0) * 0.35;
+					float ci = smoothstep(0.55, 0.85, f) * uCirrus * smoothstep(0.0, 0.18, d.y) * (1.0 - uGloom * 0.7);
+					vec3 cirCol = mix(vec3(1.02), uSunColor * 1.35, 0.35 + 0.4 * (1.0 - smoothstep(0.1, 0.5, uSunDir.y))) * (1.0 - uNight * 0.93);
+					col = mix(col, cirCol + uSkyHor * 0.15, ci * 0.55);
+				}
+				// cumulus on a plane above you, lit from the sun's side; dark and heaped over showers
+				float base, sh;
+				float dens = cumulus(d, uCloud, uTime, base, sh);
+				if (dens > 0.0){
+					// lit from the sun's side: denser toward the sun means this side is in shade
+					float toward, sh2;
+					cumulus(normalize(d + vec3(uSunDir.x, 0.0, uSunDir.z) * 0.035), uCloud, uTime, toward, sh2);
 					float lit = clamp(0.62 + (base - toward) * 4.0, 0.0, 1.2);
+					float cover = mix(0.8, 0.3, uCloud);
 					// bright sunlit tops, cool grey-blue bases: a cloud with volume, not a smear
 					vec3 shade = mix(vec3(0.46, 0.52, 0.64), vec3(1.08), smoothstep(0.1, 1.0, lit)) * (0.85 + 0.25 * smoothstep(cover, cover + 0.35, base));
+					// rain clouds: slate grey and heavy
+					shade *= mix(1.0, 0.3, clamp(sh * 1.5, 0.0, 1.0)) * (1.0 - uGloom * 0.45);
 					// at night the clouds are dark shapes against the stars, rimmed faintly by moonlight
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
-					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight);
+					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh);
+					// lightning lights the cloud from inside
+					cloud += vec3(0.75, 0.8, 1.0) * uFlash * (0.5 + sh * 1.5);
 					col = mix(col, cloud, dens * 0.95);
 				}
+				// showers far off: curtains of rain hanging under their clouds; the rain the
+				// rainbow needs (how much of it lies along this line of sight)
+				float rainLine = uRainHere * 2.0;
+				vec2 hd = d.xz / max(length(d.xz), 1e-4);
+				float tanE = d.y / max(length(d.xz), 1e-4);
+				for (int i = 0; i < 4; i++){
+					vec4 S = uShowers[i];
+					if (S.w < 0.01) continue;
+					float tc = dot(S.xy, hd), pd = length(S.xy - hd * tc);
+					if (pd >= S.z || tc + S.z < 0.0) continue;
+					float half_ = sqrt(S.z * S.z - pd * pd), tin = max(tc - half_, 30.0), tout = tc + half_;
+					if (tout < 30.0) continue;
+					float top = 1500.0 / tin;                                      // the cloud base, seen from here
+					float below = smoothstep(top * 1.08, top * 0.8, tanE) * smoothstep(-0.03, 0.0, tanE);
+					float thick = clamp((tout - tin) / 2500.0, 0.0, 1.0) * S.w;
+					float streak = 0.7 + 0.3 * vn(vec2(atan(hd.y, hd.x) * 700.0, tanE * 30.0 + uTime * 1.5));
+					float veil = thick * below * streak * smoothstep(40000.0, 8000.0, tin);
+					// slate grey under the cloud, a little lighter where the sun gets under the edge
+					vec3 veilC = mix(vec3(0.17, 0.19, 0.23), uSkyHor * 0.6, 0.2) * (1.0 - uNight * 0.95) * (0.8 + 0.4 * streak);
+					col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.3, 0.0, 0.88));
+					rainLine += thick * below * 2.2;
+				}
+				// the rainbow: round the antisolar point, where sunlit rain lies along the line
+				// of sight; added as light. By the full moon (opposite the sun here), a moonbow,
+				// too faint for the eye's colour vision: nearly white
+				float bowRain = 1.0 - exp(-rainLine);
+				if (bowRain > 0.003 && d.y > -0.02){
+					if (uBowK > 0.001) {
+						float ang = degrees(acos(clamp(dot(d, -uSunDir), -1.0, 1.0)));
+						col += bowAt(ang) * uSunColor * uBowK * bowRain * 0.3 * (1.0 - uNight);
+					}
+					if (uMoonBowK > 0.001) {
+						float angM = degrees(acos(clamp(dot(d, uSunDir), -1.0, 1.0)));
+						vec3 mb = bowAt(angM);
+						col += mix(mb, vec3(dot(mb, vec3(0.3, 0.55, 0.15))), 0.75) * vec3(0.8, 0.88, 1.0) * uMoonBowK * bowRain * 0.035 * uNight;
+					}
+				}
+				// the lightning bolt, down from the cloud base toward its cell
+				if (uBolt.w < 0.9){
+					float az = atan(d.z, d.x), daz = mod(az - uBolt.x + 3.14159, 6.28318) - 3.14159;
+					float el = atan(d.y, length(d.xz)), top = atan(1500.0, uBolt.y);
+					if (el > -0.01 && el < top){
+						float t = el / top, sc = 1.0 / max(uBolt.y, 400.0);
+						float off = ((vn(vec2(t * 9.0, uBolt.z)) - 0.5) * 380.0 + (vn(vec2(t * 37.0, uBolt.z + 3.0)) - 0.5) * 110.0) * sc;
+						float w = 4.0 * sc + 0.0008;
+						float life = exp(-uBolt.w * 12.0) + 0.7 * exp(-pow((uBolt.w - 0.18) * 30.0, 2.0)) + 0.4 * exp(-pow((uBolt.w - 0.4) * 30.0, 2.0));
+						col += vec3(0.85, 0.9, 1.0) * (smoothstep(w, 0.0, abs(daz - off)) * 5.0 + smoothstep(w * 8.0, 0.0, abs(daz - off)) * 0.4) * life;
+					}
+				}
+				// the whole sky a shade lighter in a flash; greyer in rain close by
+				col += vec3(0.5, 0.55, 0.7) * uFlash * 0.25;
+				col = mix(col, mix(uSkyHor, vec3(0.5, 0.53, 0.57), 0.5) * (1.0 - uNight * 0.9), uRainHere * 0.45 * smoothstep(-0.1, 0.4, d.y));
 				col = mix(col, uSkyHor, smoothstep(0.02, -0.12, d.y));
 				gl_FragColor = vec4(col, 1.0);
 				#include <tonemapping_fragment>
@@ -140,10 +244,10 @@ export function createSky(scene, shared, renderer) {
 		g.setAttribute('aMag', new THREE.BufferAttribute(mag, 1));
 		g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
 		const m = new THREE.ShaderMaterial({
-			uniforms: { uNight: uniforms.uNight, uTime: shared.uTime, uPx: { value: renderer.getPixelRatio() }, uGlow: uniforms.uGlow, uCloud: uniforms.uCloud },
+			uniforms: { uNight: uniforms.uNight, uTime: shared.uTime, uPx: { value: renderer.getPixelRatio() }, uGlow: uniforms.uGlow, uCloud: uniforms.uCloud, uCloudOff: uniforms.uCloudOff, uShowers: uniforms.uShowers },
 			vertexShader: `attribute float aMag; attribute vec3 aCol; uniform float uNight, uTime, uPx, uGlow, uCloud; varying vec3 vCol; varying float vA;
 				${NOISE_GLSL}
-				float fbm5(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a * vn(p); p = p * 2.02 + 3.1; a *= 0.5; } return s; }
+				${CLOUD_GLSL}
 				void main(){
 					vec3 w = normalize(mat3(modelMatrix) * position);
 					vec4 p = viewMatrix * vec4(cameraPosition + w * 11000.0, 1.0);
@@ -155,13 +259,8 @@ export function createSky(scene, shared, renderer) {
 					float ext = smoothstep(-0.02, 0.2, alt);
 					float tw = 1.0 + (0.25 + 0.5 * (1.0 - smoothstep(0.0, 0.5, alt))) * sin(uTime * (7.0 + fract(aMag * 13.1) * 9.0) + aMag * 40.0);
 					// hidden behind the clouds (the dome's own cloud field)
-					float cover = 0.0;
-					if (w.y > 0.01){
-						vec2 cp = w.xz / (w.y + 0.08) * 1.6 + vec2(uTime * 0.012, uTime * 0.004);
-						float base = fbm5(cp * 0.9) * 0.6 + fbm5(cp * 0.32 + 11.0) * 0.55;
-						float cv = mix(0.78, 0.46, uCloud);
-						cover = smoothstep(cv - 0.02, cv + 0.08, base) * smoothstep(0.01, 0.2, w.y);
-					}
+					float cb, csh;
+					float cover = clamp(cumulus(w, uCloud, uTime, cb, csh) * 1.3, 0.0, 1.0);
 					vA = clamp(sqrt(flux) * 0.55 + 0.25, 0.0, 1.0) * smoothstep(limit, limit - 1.2, aMag) * ext * uNight * tw * (1.0 - cover);
 					gl_PointSize = clamp(1.3 + sqrt(flux) * 2.2, 1.2, 7.0) * uPx;
 					vCol = aCol;
@@ -177,6 +276,81 @@ export function createSky(scene, shared, renderer) {
 		scene.add(pts);
 		return pts;
 	})();
+
+	// ---------- the planets, where they really are tonight ----------
+	// Keplerian elements (JPL, J2000 and their rates per century) for today's date. The
+	// sky here keeps the sun at one place among the stars (a midsummer night), so each
+	// planet is set at its real angle from the real sun: Venus stays an evening or morning
+	// star, the outer planets where they truly are relative to the sun.
+	const planets = (() => {
+		const EL = {
+			mercury: [0.38709927, 0.20563593, 7.00497902, 252.2503235, 77.45779628, 48.33076593, 3.7e-7, 1.906e-5, -0.00594749, 149472.67411175, 0.16047689, -0.12534081],
+			venus: [0.72333566, 0.00677672, 3.39467605, 181.9790995, 131.60246718, 76.67984255, 3.9e-6, -4.107e-5, -0.0007889, 58517.81538729, 0.00268329, -0.27769418],
+			earth: [1.00000261, 0.01671123, -1.531e-5, 100.46457166, 102.93768193, 0, 5.62e-6, -4.392e-5, -0.01294668, 35999.37244981, 0.32327364, 0],
+			mars: [1.52371034, 0.0933941, 1.84969142, -4.55343205, -23.94362959, 49.55953891, 1.847e-5, 7.882e-5, -0.00813131, 19140.30268499, 0.44441088, -0.29257343],
+			jupiter: [5.202887, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909, -1.1607e-4, -1.3253e-4, -0.00183714, 3034.74612775, 0.21252668, 0.20469106],
+			saturn: [9.53667594, 0.05386179, 2.48599187, 49.95424423, 92.59887831, 113.66242448, -0.0012506, -5.0991e-4, 0.00193609, 1222.49362201, -0.41897216, -0.28867794],
+		};
+		const T = (Date.now() / 86400000 + 2440587.5 - 2451545) / 36525, R = Math.PI / 180;
+		const helio = (k) => {
+			const e0 = EL[k], [a, e, I, L, wb, O] = e0.slice(0, 6).map((v, i) => v + e0[i + 6] * T);
+			const w = (wb - O) * R, M = ((L - wb) % 360) * R;
+			let E = M;
+			for (let i = 0; i < 8; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+			const xp = a * (Math.cos(E) - e), yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
+			const cw = Math.cos(w), sw = Math.sin(w), cO = Math.cos(O * R), sO = Math.sin(O * R), cI = Math.cos(I * R), sI = Math.sin(I * R);
+			return [(cw * cO - sw * sO * cI) * xp + (-sw * cO - cw * sO * cI) * yp, (cw * sO + sw * cO * cI) * xp + (-sw * sO + cw * cO * cI) * yp, sw * sI * xp + cw * sI * yp];
+		};
+		const eps = 23.4393 * R, earth = helio('earth');
+		const radec = (v) => { const x = v[0], y = v[1] * Math.cos(eps) - v[2] * Math.sin(eps), z = v[1] * Math.sin(eps) + v[2] * Math.cos(eps); const r = Math.hypot(x, y, z); return [Math.atan2(y, x), Math.asin(z / r)]; };
+		const sunRA = radec(earth.map((v) => -v))[0];
+		const LIST = [['mercury', -0.2, [1, 0.92, 0.85]], ['venus', -4.3, [1, 1, 0.94]], ['mars', 0.6, [1, 0.62, 0.42]], ['jupiter', -2.3, [1, 0.95, 0.85]], ['saturn', 0.6, [1, 0.93, 0.72]]];
+		const pos = new Float32Array(LIST.length * 3), mag = new Float32Array(LIST.length), col = new Float32Array(LIST.length * 3);
+		LIST.forEach(([k, m2, c], i) => {
+			const h = helio(k), [ra, dec] = radec([h[0] - earth[0], h[1] - earth[1], h[2] - earth[2]]);
+			const ra2 = ra - sunRA + SUN_RA / 12 * Math.PI;
+			pos.set([Math.cos(dec) * Math.cos(ra2), Math.cos(dec) * Math.sin(ra2), Math.sin(dec)], i * 3);
+			mag[i] = m2; col.set(c, i * 3);
+		});
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+		g.setAttribute('aMag', new THREE.BufferAttribute(mag, 1));
+		g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
+		const p = new THREE.Points(g, stars.material);
+		p.frustumCulled = false; p.renderOrder = -9; p.matrixAutoUpdate = false;
+		scene.add(p);
+		return p;
+	})();
+
+	// ---------- satellites: sunlit specks crossing the sky in the hours after dusk ----------
+	const sats = (() => {
+		const K = 7, pos = new Float32Array(K * 3), mag = new Float32Array(K).fill(20), col = new Float32Array(K * 3).fill(1);
+		const orb = [...Array(K)].map((_, i) => {
+			const n = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.4, Math.random() - 0.5).normalize();
+			const u = new THREE.Vector3().crossVectors(n, new THREE.Vector3(0, 1, 0)).normalize(), v = new THREE.Vector3().crossVectors(n, u);
+			return { u, v, ph: Math.random() * 6.28, w: (0.012 + Math.random() * 0.01) * (Math.random() < 0.5 ? 1 : -1), m: i === 0 ? -1.5 : 2.2 + Math.random() * 1.5 };
+		});
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+		g.setAttribute('aMag', new THREE.BufferAttribute(mag, 1));
+		g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
+		const p = new THREE.Points(g, stars.material);
+		p.frustumCulled = false; p.renderOrder = -9;
+		scene.add(p);
+		const d = new THREE.Vector3();
+		p.userData.step = (dt, sunY) => {
+			// high up they are still in sunlight an hour or two after sunset (and before dawn)
+			const lit = THREE.MathUtils.smoothstep(sunY, -0.5, -0.3) * (1 - THREE.MathUtils.smoothstep(sunY, -0.12, -0.05));
+			orb.forEach((o, i) => {
+				o.ph += o.w * dt;
+				d.copy(o.u).multiplyScalar(Math.cos(o.ph)).addScaledVector(o.v, Math.sin(o.ph));
+				pos.set([d.x, d.y, d.z], i * 3);
+				mag[i] = lit > 0.05 && d.y > 0.05 ? o.m + (1 - lit) * 3 : 20;
+			});
+			g.attributes.position.needsUpdate = true; g.attributes.aMag.needsUpdate = true;
+		};
+		return p;
+	})();
 	const eqM = new THREE.Matrix4(), rz = new THREE.Matrix4(), w2e = new THREE.Matrix3();
 	// the celestial sphere turns with the clock: local sidereal time from solar time
 	function orientSky() {
@@ -185,6 +359,7 @@ export function createSky(scene, shared, renderer) {
 		rz.set(Math.cos(lst), Math.sin(lst), 0, 0, -Math.sin(lst), Math.cos(lst), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 		eqM.set(0, 1, 0, 0, cf, 0, sf, 0, sf, 0, -cf, 0, 0, 0, 0, 1).multiply(rz);
 		stars.matrix.copy(eqM); stars.matrixWorld.copy(eqM);
+		planets.matrix.copy(eqM); planets.matrixWorld.copy(eqM);
 		w2e.setFromMatrix4(eqM).transpose();
 		uniforms.uW2E.value.copy(w2e);
 	}
@@ -205,7 +380,15 @@ export function createSky(scene, shared, renderer) {
 	scene.fog = new THREE.FogExp2(0xa9c4dc, 0.00026);
 
 	const state = { hours: shared.startHours ?? 10.5, speed: 1 };
-	const tmpA = new THREE.Color(), tmpB = new THREE.Color();
+	const tmpA = new THREE.Color(), tmpB = new THREE.Color(), tmpC = new THREE.Color();
+	// the weather drives the clouds, rain, bows and lightning in the sky (weather.js)
+	let weather = null;
+	function attach(w) {
+		weather = w;
+		// (the dome and the stars read the weather's own uniforms, by name)
+		for (const k of ['uCloudOff', 'uCirrusOff', 'uCirrus', 'uShowers', 'uRainHere', 'uGloom', 'uFlash', 'uBolt', 'uBow', 'uBowK', 'uBowDrop', 'uMoonBowK']) uniforms[k] = w.uniforms[k];
+		stars.material.uniforms.uCloudOff = w.uniforms.uCloudOff; stars.material.uniforms.uShowers = w.uniforms.uShowers;
+	}
 
 	function update(dt, focus) {
 		// daylight hours pass slowly (~9 real minutes), night quickly (~2.5)
@@ -220,13 +403,23 @@ export function createSky(scene, shared, renderer) {
 		uniforms.uNight.value = night;
 		tmpA.copy(PAL.dayZen).lerp(PAL.setZen, setK * 0.8).lerp(PAL.nightZen, night);
 		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, setK * 0.85).lerp(PAL.nightHor, night);
+		// overcast and rain: a greyer, lower-contrast sky
+		const W = weather?.state, gl = W?.gloom || 0;
+		if (gl > 0) {
+			const lz = (tmpA.r + tmpA.g + tmpA.b) / 3, lh = (tmpB.r + tmpB.g + tmpB.b) / 3;
+			tmpA.lerp(tmpC.setRGB(lz * 0.95, lz, lz * 1.05).multiplyScalar(0.8 + 0.4 * (1 - night)), gl * 0.75);
+			tmpB.lerp(tmpC.setRGB(lh * 0.97, lh, lh * 1.02).multiplyScalar(0.85), gl * 0.65);
+		}
 		shared.uSkyZen.value.copy(tmpA);
 		shared.uSkyHor.value.copy(tmpB);
 		const sunCol = shared.uSunColor.value.copy(PAL.sunDay).lerp(PAL.sunSet, setK);
 		// light: the sun by day, the moon by night
+		// cloud over the sun (a shower's, or overcast) takes the direct light and softens the shadows
+		const sunVis = W ? W.sunVis : 1;
+		sun.shadow.intensity = 0.78 * (0.35 + 0.65 * sunVis);
 		if (night < 0.5) {
 			sun.color.copy(sunCol);
-			sun.intensity = 3.4 * dayK + 0.4 * setK;
+			sun.intensity = (3.4 * dayK + 0.4 * setK) * (0.25 + 0.75 * sunVis);
 			sun.position.copy(sd).multiplyScalar(200).add(focus);
 		} else {
 			sun.color.copy(PAL.moon);
@@ -243,14 +436,16 @@ export function createSky(scene, shared, renderer) {
 		hemi.color.copy(tmpB).lerp(tmpA, 0.5).multiplyScalar(1.0);
 		// light bounced off warm sand and sunlit leaves fills the shade with gold, not grey
 		hemi.groundColor.setRGB(0.46, 0.36, 0.18).multiplyScalar(0.3 + 0.7 * dayK);
-		hemi.intensity = 0.25 + 0.9 * dayK;
+		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) + (W?.flash || 0) * 2.5;
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		scene.fog.color.copy(tmpB).lerp(tmpA, 0.12);
 		renderer.toneMappingExposure = 1.15 + night * 0.15;
 		dome.position.copy(focus);
+		sats.position.copy(focus);
+		sats.userData.step(dt, elev);
 		orientSky();
 		return { night, dayK, setK };
 	}
-	return { dome, sun, hemi, state, update, uniforms };
+	return { dome, sun, hemi, state, update, uniforms, attach };
 }
