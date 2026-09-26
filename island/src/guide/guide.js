@@ -7,6 +7,7 @@
 // its voice; with no model it still answers from the world itself.
 
 import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
+import { pruneModels } from '../storage.js';
 import { PLACES, ZONES } from '../bay/places.js';
 import { toWorld } from '../bay/geo.js';
 import { personaFor, personaPrompt, personaOffline, bodyFor, TAG_RE } from '../people/persona.js';
@@ -454,6 +455,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// a phone that had the larger model by default moves to the small one
 	if (saved?.kind === 'webllm' && phone && saved.id === 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' && saved.auto !== false) saved.id = autoId;
 	const choice = saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
+	// the phone keeps only the voice it uses (after the world has loaded)
+	if (phone) setTimeout(() => { pruneModels(choice.id).then((b) => { if (b > 5e7) say(`Freed ${(b / 1e9).toFixed(2)} GB on this device: removed a voice model no longer in use.`, 'note'); }).catch(() => {}); }, 20000);
 	function drawSettings() {
 		settings.innerHTML = '';
 		const row = (label, node) => { const r = el('label', 'display:flex;align-items:center;gap:8px;margin:6px 0;'); r.append(el('span', 'width:74px;color:rgba(255,255,255,.6);', label), node); settings.append(r); return r; };

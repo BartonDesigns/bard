@@ -27,6 +27,19 @@ async function modelFiles() {
 	return out;
 }
 
+// on a phone, where space is short and one voice is used at a time: remove every
+// downloaded model but the one in use (a model left behind by a switch is hundreds of MB)
+export async function pruneModels(keepId) {
+	const keep = keepId.replace(/-MLC$/, '');
+	let freed = 0;
+	for (const g of (await modelFiles()).values()) {
+		if (g.id === 'runtime' || keep.startsWith(g.id)) continue;
+		for (const [name, req] of g.items) { try { await (await caches.open(name)).delete(req); } catch { /* gone already */ } }
+		freed += g.size;
+	}
+	return freed;
+}
+
 export function storagePanel(host, { activeModel, onModelRemoved } = {}) {
 	const box = document.createElement('div');
 	box.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.15);font:12px system-ui;line-height:1.4;';
