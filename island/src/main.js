@@ -38,6 +38,8 @@ import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
 import { createLake } from './bay/lake.js';
 import { createTidepools } from './bay/tidepools.js';
+import { createBeaches } from './bay/beaches.js';
+import { createCommercial } from './bay/commercial.js';
 import { createFishing } from './fishing.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
@@ -279,6 +281,7 @@ export function createIslandWorld() {
 		['San Ramon', 37.7700, -121.9380, 0], ['Lake Annabel, Bishop Ranch', 37.7646, -121.9660, -2.2], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
 		['Mt Tamalpais, East Peak', 37.9293, -122.5780, 2.2], ['Mission Peak', 37.5125, -121.8806, 1.5], ['Berkeley Hills', 37.8812, -122.2425, 1.9],
 		['Tide pools, Moss Beach', 37.5214, -122.5166, 1.75], ['Devil\'s Slide, Highway 1', 37.5738, -122.5148, 3.1], ['Half Moon Bay, Highway 1', 37.4640, -122.4330, 0], ['Duxbury Reef, Bolinas', 37.8936, -122.6972, 2.3],
+		['Bay Area Discovery Museum, Fort Baker', 37.8345, -122.4782, 3.3], ['Apple Park, Cupertino', 37.3310, -122.0040, 0.6], ['Downtown San Jose', 37.3330, -121.8890, 0], ['Pescadero State Beach, Highway 1', 37.2680, -122.4105, 1.7], ['Pigeon Point Light Station', 37.1845, -122.3925, 2.3],
 		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
 	];
 	const tpBtn = button('', 'Teleport to a place', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
@@ -425,6 +428,8 @@ export function createIslandWorld() {
 			world.city = createCity(shared, scene, bayArea, world.real);
 			// the real houses close by, built whole with their rooms
 			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
+			// ...and the shops, cafés, restaurants, offices and places to play, walked into
+			world.commercial = createCommercial(scene, bayArea, world.real, world.city, { isPhone });
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
@@ -432,6 +437,8 @@ export function createIslandWorld() {
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real });
 			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
 			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
+			// the beaches down Highway 1: lots, restrooms, camps and fires, surf, the lighthouse
+			world.beaches = createBeaches(scene, bayArea, world.real, shared, { isPhone });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
@@ -449,8 +456,8 @@ export function createIslandWorld() {
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y));
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -640,8 +647,11 @@ export function createIslandWorld() {
 			// on Earth the coast is always in view from the island: only a light sea haze close in
 			const openK = W.bayArea?.loaded() ? Math.max(0.9, THREE.MathUtils.smoothstep(dI, 2500, 9000)) : 0;
 			scene.fog.density = THREE.MathUtils.lerp(0.00026, 0.000024 + Math.max(0, 0.00001 * (1 - camera.position.y / 600)), openK);
-			// rain closes the distance in
-			scene.fog.density *= 1 + wx.rainHere * 12 + wx.gloom * 1.5;
+			// rain closes the distance in; the coast south of Half Moon Bay is kept crystal
+			// clear, the air over the bluffs washed clean by the wind off the sea
+			const lat = 37.76 - camera.position.z / 110996, lon = camera.position.x / (111320 * Math.cos(37.76 * Math.PI / 180)) - 122.57;
+			const clearK = THREE.MathUtils.smoothstep(lat, 37.5, 37.44) * THREE.MathUtils.smoothstep(lat, 37.02, 37.1) * THREE.MathUtils.smoothstep(lon, -122.2, -122.3);
+			scene.fog.density *= (1 + (wx.rainHere * 12 + wx.gloom * 1.5) * (1 - clearK * 0.8)) * (1 - clearK * 0.55);
 			const far = THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 		}
@@ -674,6 +684,17 @@ export function createIslandWorld() {
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);
 		W.houses?.update(camera, dt, sk.night);
+		if (W.commercial) {
+			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
+			// stepping into a place: what it is, and how busy at this hour
+			const inB = W.commercial.inside(camera.position);
+			if (inB && inB !== W.bizSeen) {
+				const NAME = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', office: 'Office lobby', arcade: 'Arcade', bowling: 'Bowling alley', cinema: 'Cinema' };
+				const n = inB.figures.children.reduce((a, m) => a + (m.count || 0), 0) / 2;
+				hint(`${NAME[inB.type]}${n < 1 ? ' · quiet at this hour' : n > inB.seats.length * 0.35 ? ' · busy' : ''}`, 3000);
+			}
+			W.bizSeen = inB;
+		}
 		// indoors by day the eye opens up to the light from the windows
 		indoorK += ((W.houses?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
 		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
@@ -690,6 +711,12 @@ export function createIslandWorld() {
 			const tp = camera.position.y < 60 ? W.tidepools.siteAt(camera.position.x, camera.position.z) : null;
 			if (tp && tp !== W.tpSeen) hint(`${tp.name}\nLow tide: look in the pools for ochre sea stars, green anemones and purple urchins${tp.seals ? '. Harbor seals haul out on the outer rocks.' : '.'}`, 7000);
 			if (tp) W.tpSeen = tp;
+		}
+		if (W.beaches) {
+			W.beaches.update(dt, time, camera, sk.night);
+			const bc = camera.position.y < 150 ? W.beaches.beachAt(camera.position.x, camera.position.z) : null;
+			if (bc && bc !== W.beachSeen && !W.tidepools?.siteAt(camera.position.x, camera.position.z)) hint(`${bc.name}${bc.quiet ? '\nA quiet stretch: few people, the sound of the surf.' : bc.big ? '\nMavericks breaks half a mile out, in winter the biggest waves on the coast.' : bc.surf ? '\nSurf zone between the checkered flags.' : bc.tents ? '\nCampsites along the back of the beach.' : ''}`, 6000);
+			if (bc) W.beachSeen = bc;
 		}
 		fishing.update(dt, time, !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);

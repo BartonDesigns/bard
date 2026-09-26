@@ -467,7 +467,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			const seen = new Set();
 			cands = [];
 			for (const b of real.near('boxes', x, z, BUILD_R + 25)) {
-				if (!b.grp || seen.has(b.grp)) continue;
+				if (!b.grp || b.grp.biz || seen.has(b.grp)) continue;
 				seen.add(b.grp);
 				const Mb = mainOf(b.grp);
 				if (!Mb) continue;

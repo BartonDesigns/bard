@@ -894,7 +894,13 @@ export function groupBoxes(boxes) {
 		return Math.abs(ca * dx + sa * dz) <= (c.w + b.w) / 2 + 0.35 && Math.abs(-sa * dx + ca * dz) <= (c.d + b.d) / 2 + 0.35;
 	};
 	for (const b of boxes) {
-		if (!isHome(b)) { cur = null; continue; }
+		if (!isHome(b)) {
+			cur = null;
+			// a shop, café, restaurant or office block of a walkable size: its own group, so it
+			// can be built inside when you come near (commercial.js)
+			if ((b.kind === 5 || b.kind === 6) && b.w * b.d > 60 && b.w * b.d < 6000 && Math.min(b.w, b.d) > 6) { b.grp = [b]; b.grp.biz = true; }
+			continue;
+		}
 		if (cur && Math.abs(b.a - cur[0].a) < 2e-3 && cur.length < 12 && cur.some((c) => touch(c, b))) cur.push(b);
 		else cur = [b];
 		b.grp = cur;

@@ -16,6 +16,8 @@ import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+// piers you can walk out on (floor())
+const PIERS = [];
 const M = (color, rough = 0.7, metal = 0) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
 
 export function createLandmarks(scene, bay) {
@@ -211,6 +213,68 @@ export function createLandmarks(scene, bay) {
 		box(L, mats.tan, 45, 8, 35);
 	}
 
+	// ---------------- Cupertino: Apple Park ----------------
+	{ // the ring: four storeys of curved glass under white canopies at every floor, the solar
+		// roof, and the orchard and meadow inside (the mapped footprint is left out for this)
+		const F = at(37.33478, -122.00899, 0), R0 = 182, R1 = 231, H = 21, seg = 160;
+		const ring = (mat, r, h, y, open = true) => put(F, mat, new THREE.CylinderGeometry(r, r, h, seg, 1, open).translate(0, y + h / 2, 0));
+		ring(mats.glass, R1, H - 1, 0); ring(mats.glass, R0, H - 1, 0);
+		for (let k = 1; k <= 4; k++) {
+			const y = k * 4.8;
+			put(F, mats.white, new THREE.RingGeometry(R1 - 0.2, R1 + 2.6, seg).rotateX(-Math.PI / 2).translate(0, y, 0));
+			put(F, mats.white, new THREE.RingGeometry(R0 - 2.6, R0 + 0.2, seg).rotateX(-Math.PI / 2).translate(0, y, 0));
+		}
+		// the roof: dark solar panels, a white edge
+		put(F, mats.dark, new THREE.RingGeometry(R0 - 3, R1 + 3, seg).rotateX(-Math.PI / 2).translate(0, H, 0));
+		ring(mats.white, R1 + 3, 0.8, H - 0.4, false); ring(mats.white, R0 - 3, 0.8, H - 0.4, false);
+		// the courtyard: a meadow, a pond, and groves of fruit trees
+		put(F, mats.green, new THREE.CircleGeometry(R0 - 3, 96).rotateX(-Math.PI / 2).translate(0, 0.25, 0));
+		put(F, mats.glass, new THREE.CircleGeometry(24, 40).rotateX(-Math.PI / 2).scale(1.6, 1, 1).translate(-40, 0.32, 30));
+		for (let i = 0; i < 260; i++) {
+			const a = i * 2.39996, r = 30 + Math.sqrt(i / 260) * (R0 - 45), x = Math.cos(a) * r, z = Math.sin(a) * r;
+			if (Math.hypot(x + 40, z - 30) < 45) continue;
+			cyl(F, mats.wood, 0.18, 0.14, 1.6, x, 0, z, 5);
+			put(F, mats.green, new THREE.IcosahedronGeometry(2.1 + (i % 5) * 0.25, 0).scale(1, 0.8, 1).translate(x, 3.1, z));
+		}
+		// a trees on the outside berm, all round
+		for (let i = 0; i < 180; i++) { const a = i / 180 * Math.PI * 2 + (i % 3) * 0.01, r = R1 + 25 + (i % 4) * 11; put(F, mats.green, new THREE.IcosahedronGeometry(4 + (i % 3), 0).scale(1, 1.3, 1).translate(Math.cos(a) * r, 6, Math.sin(a) * r)); cyl(F, mats.wood, 0.3, 0.25, 3, Math.cos(a) * r, 0, Math.sin(a) * r, 5); }
+	}
+	{ // the Steve Jobs Theater: a glass drum under a thin white carbon-fibre roof, on its hill
+		const F = at(37.33065, -122.00715, 0);
+		cyl(F, mats.glass, 20.5, 20.5, 6.6, 0, 0, 0, 64);
+		put(F, mats.white, new THREE.CylinderGeometry(23, 23, 0.7, 64).translate(0, 7, 0));
+		put(F, mats.pavement, new THREE.CylinderGeometry(27, 28, 0.4, 48).translate(0, 0.2, 0));
+	}
+	{ // the Visitor Center: glass walls, a floating white roof, olive trees on the terrace
+		const F = at(37.3325, -122.0053, 90);
+		box(F, mats.glass, 44, 9, 100);
+		box(F, mats.white, 54, 0.8, 110, 0, 9, 0);
+		for (let i = 0; i < 12; i++) put(F, mats.green, new THREE.IcosahedronGeometry(2.3, 0).translate(-30 + (i % 2) * 60, 3, -48 + Math.floor(i / 2) * 19));
+	}
+
+	// ---------------- Fort Baker: the Bay Area Discovery Museum ----------------
+	{ // Lookout Cove, the museum's outdoor playground: a little Golden Gate Bridge to climb, a
+		// shipwreck, tide pools and a cave (the museum's own old army buildings are mapped)
+		const F = at(37.83395, -122.47655, 150);
+		const orange = mats.orange;
+		for (const z of [-11, 11]) { box(F, orange, 0.8, 7, 0.8, -1.4, 0, z); box(F, orange, 0.8, 7, 0.8, 1.4, 0, z); box(F, orange, 3.6, 0.5, 0.8, 0, 3.5, z); box(F, orange, 3.6, 0.5, 0.8, 0, 6.6, z); }
+		box(F, orange, 2.6, 0.35, 34, 0, 2.2, 0);
+		for (const x of [-1.4, 1.4]) for (let k = 0; k < 16; k++) { const z = -16 + k * 2.13, y = 2.4 + 4.4 * ((Math.abs(z) - 11) / 11) ** 2 * (Math.abs(z) < 11 ? 1 : 0.4); box(F, orange, 0.08, Math.max(0.2, y - 2.4), 0.08, x, 2.4, z); }
+		// the wreck, half buried in the sand
+		box(F, mats.wood, 4, 1.4, 11, 9, -0.3, 4, 0.3); box(F, mats.wood, 0.3, 5, 0.3, 9, 0, 4);
+		put(F, mats.tan, new THREE.CircleGeometry(15, 28).rotateX(-Math.PI / 2).translate(5, 0.15, 0));
+		// the sign by the lawn
+		box(F, mats.white, 6, 1.4, 0.3, -14, 0.9, -14); box(F, mats.dark, 0.2, 0.9, 0.2, -16.5, 0, -14); box(F, mats.dark, 0.2, 0.9, 0.2, -11.5, 0, -14);
+	}
+	{ // the Fort Baker fishing pier out into Horseshoe Bay, the bridge towering overhead
+		const A = toWorld(37.83285, -122.47535), B = toWorld(37.83175, -122.47515);
+		const L = Math.hypot(B.x - A.x, B.z - A.z), ang = Math.atan2(B.x - A.x, B.z - A.z);
+		const g = new THREE.BoxGeometry(4.2, 0.5, L).translate(0, 3, L / 2).rotateY(ang).translate(A.x, 0, A.z);
+		add(mats.concrete, g.toNonIndexed());
+		for (let k = 0; k <= Math.floor(L / 8); k++) { const t = k * 8; for (const s2 of [-1.7, 1.7]) { const pg = new THREE.CylinderGeometry(0.3, 0.3, 9, 8).translate(s2, -1.5, t).rotateY(ang).translate(A.x, 0, A.z); add(mats.concrete, pg.toNonIndexed()); const rg = new THREE.BoxGeometry(0.1, 1.1, 8).translate(s2 * 1.2, 3.8, t + 4).rotateY(ang).translate(A.x, 0, A.z); add(mats.steel, rg.toNonIndexed()); } }
+		PIERS.push({ ax: A.x, az: A.z, bx: B.x, bz: B.z, y: 3.25, hw: 2.1 });
+	}
+
 	// ---------------- the other bridges ----------------
 	const bridge = (a, b, deck, span, hump = null, pierMat = mats.concrete, deckMat = mats.concrete, towers = null) => {
 		const A = toWorld(a[0], a[1]), B = toWorld(b[0], b[1]), L = Math.hypot(B.x - A.x, B.z - A.z), n = Math.ceil(L / span);
@@ -242,5 +306,14 @@ export function createLandmarks(scene, bay) {
 		m.castShadow = true; m.receiveShadow = true;
 		group.add(m);
 	}
-	return { group };
+	// standing on a pier
+	function floor(x, z, y) {
+		for (const P of PIERS) {
+			const dx = P.bx - P.ax, dz = P.bz - P.az, l2 = dx * dx + dz * dz, t = ((x - P.ax) * dx + (z - P.az) * dz) / l2;
+			if (t < 0 || t > 1) continue;
+			if (Math.abs((x - P.ax) * dz - (z - P.az) * dx) / Math.sqrt(l2) < P.hw && y > P.y - 1.5) return P.y;
+		}
+		return -1e9;
+	}
+	return { group, floor };
 }
