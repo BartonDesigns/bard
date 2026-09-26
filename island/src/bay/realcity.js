@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
 import { groupBoxes } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
+import { lakeFeatures } from './lake.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -45,6 +46,7 @@ async function gunzip(res) {
 
 export function createRealCity(renderer) {
 	const R = { regions: [], loaded: false, roads: [], boxes: [], paths: [], pools: [], trees: [], bounds: null, names: [] };
+	const LF = lakeFeatures();
 	const CELL = 250;
 	const grid = new Map();
 	const put = (kind, x, z, i) => { const k = Math.floor(x / CELL) + ',' + Math.floor(z / CELL); let g = grid.get(k); if (!g) grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] }); g[kind].push(i); };
@@ -84,7 +86,7 @@ export function createRealCity(renderer) {
 		for (let n = 0; n < S.boxes[1]; n++, o += 18) {
 			const kh = dv.getInt16(o + 14, true);
 			const b = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000, wallH: dv.getInt16(o + 10, true) / 20, roofH: dv.getInt16(o + 12, true) / 20, kind: kh & 255, hip: kh >> 8, door: dv.getInt16(o + 16, true) / 1000 };
-			if (Math.hypot(b.x - sm.x, b.z - sm.z) < 90) continue;
+			if (Math.hypot(b.x - sm.x, b.z - sm.z) < 90 || LF.skip(b.x, b.z)) continue;
 			put('boxes', b.x, b.z, R.boxes.push(b) - 1);
 		}
 		// a building's blocks, gathered into the house they make (houses.js builds them)
@@ -102,7 +104,17 @@ export function createRealCity(renderer) {
 		o = S.trees[0];
 		for (let n = 0; n < S.trees[1]; n++, o += 8) {
 			const t = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, h: dv.getInt16(o + 4, true) / 20, cone: dv.getInt16(o + 6, true) };
+			if (LF.skip(t.x, t.z)) continue;
 			put('trees', t.x, t.z, R.trees.push(t) - 1);
+		}
+		// Lake Annabel's trees and its walk (lake.js), where this region holds it
+		const [lx0, lz0, lx1, lz1] = LF.bounds;
+		if (H.bounds[0] < lx0 && H.bounds[1] < lz0 && H.bounds[2] > lx1 && H.bounds[3] > lz1) {
+			// (not on the roads and parking aisles)
+			const onRoad = (x, z) => near('roads', x, z, 30).some((q) => { const p = q.pts; for (let i = 0; i + 3 < p.length; i += 2) { const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2)); if (Math.hypot(x - p[i] - dx * t, z - p[i + 1] - dz * t) < q.w / 2 + 2.5) return true; } return false; });
+			const onBox = (x, z) => near('boxes', x, z, 60).some((b) => Math.hypot(x - b.x, z - b.z) < Math.max(b.w, b.d) / 2 + 3);
+			for (const t of LF.trees) if (!onRoad(t.x, t.z) && !onBox(t.x, t.z)) put('trees', t.x, t.z, R.trees.push(t) - 1);
+			for (const q of LF.paths) put('paths', q.ax, q.az, R.paths.push(q) - 1);
 		}
 		const [bx0, bz0, bx1, bz1] = H.bounds;
 		// a CPU copy of the coarse map, for what grows where

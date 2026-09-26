@@ -1,0 +1,374 @@
+// Lake Annabel, at Bishop Ranch in San Ramon: the office park's lake, and a favourite
+// family fishing spot. Its true outline (Overture Maps / OpenStreetMap), with the
+// Roundhouse on its peninsula; the water deep green and still, mirroring the sky and the
+// trees round it; a concrete edge with a walk along it, rock riprap and reeds, oaks and
+// redwoods close round. Mallards and Canada geese paddle about, an egret stalks the
+// shallows, turtles sun on the rocks, and now and then a fish jumps.
+// Stand at the edge and fish (the button, or F): cast, wait for the bobber to dip, and
+// strike. Bluegill, largemouth bass, redear sunfish, channel catfish and carp, as the lake
+// holds; every catch goes in the log.
+
+import * as THREE from 'three';
+import { toWorld } from './geo.js';
+
+const RING = [[37.7653550, -121.9665241], [37.7652032, -121.9669164], [37.7650471, -121.9670750], [37.7648865, -121.9671251], [37.7646555, -121.9670361], [37.7644905, -121.9668274], [37.7644421, -121.9666242], [37.7645037, -121.9662820], [37.7645939, -121.9657783], [37.7645873, -121.9653248], [37.7644949, -121.9648378], [37.7643651, -121.9645679], [37.7640594, -121.9641755], [37.7635886, -121.9636413], [37.7635336, -121.9634298], [37.7635380, -121.9632100], [37.7636018, -121.9629957], [37.7636898, -121.9628510], [37.7638328, -121.9627647], [37.7640132, -121.9627286], [37.7641737, -121.9627536], [37.7649305, -121.9632684], [37.7647765, -121.9636246], [37.7647391, -121.9637915], [37.7647479, -121.9639529], [37.7647963, -121.9641199], [37.7648755, -121.9642507], [37.7649591, -121.9643341], [37.7651108, -121.9644009], [37.7652560, -121.9644148], [37.7653858, -121.9643731], [37.7654936, -121.9642868], [37.7657554, -121.9636802], [37.7659599, -121.9638082], [37.7649393, -121.9663182], [37.7649613, -121.9663766], [37.7650031, -121.9663849], [37.7650383, -121.9663376]];
+export const LAKE = RING.map(([a, b]) => toWorld(a, b));
+export const ROUNDHOUSE = { ...toWorld(37.7651393, -121.9638533), r: 43, h: 9.9 };
+
+// inside the water?
+export function inLake(x, z) {
+	let inside = false;
+	for (let i = 0, j = LAKE.length - 1; i < LAKE.length; j = i++) {
+		const a = LAKE[i], b = LAKE[j];
+		if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+	}
+	return inside;
+}
+// distance to the shoreline, and the nearest point on it
+function edge(x, z) {
+	let best = 1e9, bx = 0, bz = 0;
+	for (let i = 0, j = LAKE.length - 1; i < LAKE.length; j = i++) {
+		const a = LAKE[j], b = LAKE[i], dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+		const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / l2)), px = a.x + dx * t, pz = a.z + dz * t, d = Math.hypot(x - px, z - pz);
+		if (d < best) { best = d; bx = px; bz = pz; }
+	}
+	return { d: best, x: bx, z: bz };
+}
+const h01 = (n) => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
+
+// what the lake adds to the mapped city (realcity.js asks at load): trees round it, a walk
+// along its edge; and what it takes away: anything mapped standing in the water, and the
+// Roundhouse's box (it is modelled here)
+export function lakeFeatures() {
+	const trees = [], paths = [];
+	let s = 0;
+	for (let i = 0, j = LAKE.length - 1; i < LAKE.length; j = i++) {
+		const a = LAKE[j], b = LAKE[i], L = Math.hypot(b.x - a.x, b.z - a.z);
+		if (L < 4) continue;
+		const nx = -(b.z - a.z) / L, nz = (b.x - a.x) / L;
+		// the walk, 3 m out from the edge (on whichever side is land)
+		const out = inLake(a.x + (b.x - a.x) / 2 + nx * 3, a.z + (b.z - a.z) / 2 + nz * 3) ? -1 : 1;
+		paths.push({ ax: a.x + nx * 3.2 * out, az: a.z + nz * 3.2 * out, bx: b.x + nx * 3.2 * out, bz: b.z + nz * 3.2 * out, w: 2.6 });
+		// trees in a loose band behind the walk: oaks mostly, redwoods in groves
+		for (let t = 0; t < L; t += 7) {
+			s++;
+			if (h01(s) < 0.25) continue;
+			const f = t / L, off = 7 + h01(s * 3.1) * 22, x = a.x + (b.x - a.x) * f + nx * off * out, z = a.z + (b.z - a.z) * f + nz * off * out;
+			if (inLake(x, z) || Math.hypot(x - ROUNDHOUSE.x, z - ROUNDHOUSE.z) < ROUNDHOUSE.r + 4) continue;
+			const grove = Math.sin(x * 0.02) * Math.cos(z * 0.025) > 0.35;
+			trees.push({ x, z, h: grove ? 18 + h01(s * 5.7) * 10 : 9 + h01(s * 7.3) * 6, cone: grove ? 1 : 0 });
+		}
+	}
+	const skip = (x, z) => inLake(x, z) || Math.hypot(x - ROUNDHOUSE.x, z - ROUNDHOUSE.z) < ROUNDHOUSE.r - 4;
+	return { trees, paths, skip, bounds: [Math.min(...LAKE.map((p) => p.x)) - 60, Math.min(...LAKE.map((p) => p.z)) - 60, Math.max(...LAKE.map((p) => p.x)) + 60, Math.max(...LAKE.map((p) => p.z)) + 60] };
+}
+
+const WATER_VERT = /* glsl */`
+	varying vec3 vW;
+	#include <fog_pars_vertex>
+	void main(){
+		vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz;
+		vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
+		#include <fog_vertex>
+	}`;
+const WATER_FRAG = /* glsl */`
+	uniform float uTime; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uNight;
+	uniform vec4 uRings[6];
+	varying vec3 vW;
+	#include <fog_pars_fragment>
+	float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+	float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hh(i), hh(i + vec2(1, 0)), f.x), mix(hh(i + vec2(0, 1)), hh(i + vec2(1, 1)), f.x), f.y); }
+	float wave(vec2 p){
+		float h = vn(p * 0.35 + uTime * vec2(0.05, 0.03)) * 0.6 + vn(p * 1.1 - uTime * vec2(0.04, 0.07)) * 0.3 + vn(p * 3.3 + uTime * vec2(0.11, -0.05)) * 0.1;
+		// rings spreading from a jumping fish, a duck, the bobber
+		for (int i = 0; i < 6; i++) {
+			vec4 R = uRings[i];
+			if (R.w <= 0.0) continue;
+			float d = length(p - R.xy), r = R.z;
+			h += sin((d - r) * 6.0) * exp(-abs(d - r) * 1.6) * R.w * 0.5;
+		}
+		return h;
+	}
+	void main(){
+		vec2 p = vW.xz; float e = 0.15;
+		vec3 n = normalize(vec3(wave(p - vec2(e, 0.0)) - wave(p + vec2(e, 0.0)), 2.0 * e / 0.12, wave(p - vec2(0.0, e)) - wave(p + vec2(0.0, e))));
+		vec3 v = normalize(cameraPosition - vW);
+		vec3 r = reflect(-v, n);
+		float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+		// the sky in it, and low down the dark line of the trees round the shore
+		vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5));
+		sky = mix(vec3(0.03, 0.06, 0.03) * (1.0 - uNight * 0.8), sky, smoothstep(0.06, 0.32, r.y + (vn(p * 0.05) - 0.5) * 0.12));
+		vec3 deep = vec3(0.01, 0.05, 0.032) * (1.0 - uNight * 0.85);
+		// (a green lake: what it mirrors comes back through green water)
+		vec3 col = mix(deep, sky * vec3(0.62, 0.86, 0.7), fres);
+		col += uSunColor * pow(max(dot(r, uSunDir), 0.0), 600.0) * 6.0 * (1.0 - uNight) + uSunColor * pow(max(dot(r, uSunDir), 0.0), 40.0) * 0.12 * (1.0 - uNight);
+		gl_FragColor = vec4(col, 1.0);
+		#include <tonemapping_fragment>
+		#include <colorspace_fragment>
+		#include <fog_fragment>
+	}`;
+
+export function createLake(scene, bay, shared, { hint, mount, isPhone = false } = {}) {
+	const group = new THREE.Group();
+	group.name = 'lake-annabel';
+	scene.add(group);
+	let built = false, level = 0;
+	const rings = [...Array(6)].map(() => new THREE.Vector4(0, 0, 0, 0));
+	const U = { uTime: { value: 0 }, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uNight: { value: 0 }, uRings: { value: rings } };
+	const ring = (x, z, k = 1) => { const R = rings.reduce((a, b) => (b.w < a.w ? b : a)); R.set(x, z, 0.2, k); };
+
+	const birds = [];
+	let bobber = null, line = null;
+
+	function build() {
+		built = true;
+		// the water's level: just over the ground inside (the mapped ground is the lake's
+		// surface, flattened), the edge a concrete lip standing over it
+		let hi = -1e9, lo = 1e9;
+		const minX = Math.min(...LAKE.map((p) => p.x)), maxX = Math.max(...LAKE.map((p) => p.x)), minZ = Math.min(...LAKE.map((p) => p.z)), maxZ = Math.max(...LAKE.map((p) => p.z));
+		for (let x = minX; x < maxX; x += 8) for (let z = minZ; z < maxZ; z += 8) if (inLake(x, z)) hi = Math.max(hi, bay.heightAt(x, z));
+		for (const p of LAKE) lo = Math.min(lo, bay.heightAt(p.x, p.z));
+		level = hi + 0.06;
+		// the water
+		const shape = new THREE.Shape(LAKE.map((p) => new THREE.Vector2(p.x, -p.z)));
+		const wg = new THREE.ShapeGeometry(shape, 8);
+		wg.rotateX(-Math.PI / 2);
+		const water = new THREE.Mesh(wg, new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]), vertexShader: WATER_VERT, fragmentShader: WATER_FRAG, fog: true }));
+		Object.assign(water.material.uniforms, U);
+		water.position.y = level;
+		water.receiveShadow = true;
+		group.add(water);
+		// the concrete lip all round, and rocks and reeds along parts of the shore
+		const lip = [], rocks = [], reeds = [];
+		for (let i = 0, j = LAKE.length - 1; i < LAKE.length; j = i++) {
+			const a = LAKE[j], b = LAKE[i], L = Math.hypot(b.x - a.x, b.z - a.z);
+			if (L < 0.5) continue;
+			const nx = -(b.z - a.z) / L, nz = (b.x - a.x) / L, out = inLake((a.x + b.x) / 2 + nx * 1.5, (a.z + b.z) / 2 + nz * 1.5) ? -1 : 1;
+			lip.push({ a, b, L, nx: nx * out, nz: nz * out });
+			for (let t = 0.8; t < L; t += 1.3) {
+				const f = t / L, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f, k = h01(x * 0.37 + z * 1.13);
+				if (Math.sin(x * 0.045 + z * 0.03) > 0.1) rocks.push([x - nx * out * (0.4 + k * 1.2), z - nz * out * (0.4 + k * 1.2), 0.35 + k * 0.5, k]);
+				else if (k > 0.45) reeds.push([x - nx * out * (0.3 + k * 0.6), z - nz * out * (0.3 + k * 0.6), 0.7 + k * 0.9, k]);
+			}
+		}
+		const conc = new THREE.MeshStandardMaterial({ color: 0xb9b4a9, roughness: 0.85 });
+		const lipG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+		const lips = new THREE.InstancedMesh(lipG, conc, lip.length);
+		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+		lip.forEach((e, k) => {
+			const g = Math.min(bay.heightAt(e.a.x, e.a.z), bay.heightAt(e.b.x, e.b.z)), y0 = Math.min(g, level) - 0.8, top = Math.max(level + 0.3, g + 0.12);
+			q.setFromAxisAngle(Y, -Math.atan2(e.b.z - e.a.z, e.b.x - e.a.x));
+			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 + e.nx * 0.3, y0, (e.a.z + e.b.z) / 2 + e.nz * 0.3), q, s.set(e.L + 0.6, top - y0, 0.6)));
+		});
+		lips.castShadow = lips.receiveShadow = true;
+		group.add(lips);
+		const rockG = new THREE.DodecahedronGeometry(1, 0);
+		const rockM = new THREE.InstancedMesh(rockG, new THREE.MeshStandardMaterial({ color: 0x8d8579, roughness: 0.95, flatShading: true }), rocks.length);
+		const col = new THREE.Color();
+		rocks.forEach(([x, z, r, k], i) => {
+			q.setFromEuler(new THREE.Euler(k * 3, k * 7, k * 5));
+			rockM.setMatrixAt(i, m4.compose(p.set(x, level - r * 0.35, z), q, s.set(r * 1.2, r * 0.7, r)));
+			rockM.setColorAt(i, col.setRGB(0.55 + k * 0.25, 0.52 + k * 0.22, 0.47 + k * 0.2));
+		});
+		rockM.castShadow = rockM.receiveShadow = true;
+		group.add(rockM);
+		// reeds and ornamental grasses: a fan of thin blades
+		const blades = [];
+		for (let b2 = 0; b2 < 9; b2++) { const a = b2 / 9 * Math.PI * 2, g = new THREE.ConeGeometry(0.035, 1, 3).translate(0, 0.5, 0); g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.cos(a) * 0.35, 0, Math.sin(a) * 0.35))); blades.push(g); }
+		const reedG = mergeBlades(blades);
+		const reedM = new THREE.InstancedMesh(reedG, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }), reeds.length);
+		reeds.forEach(([x, z, h, k], i) => {
+			q.setFromAxisAngle(Y, k * 6.28);
+			reedM.setMatrixAt(i, m4.compose(p.set(x, level - 0.1, z), q, s.set(h * 0.9, h, h * 0.9)));
+			reedM.setColorAt(i, col.setRGB(0.25 + k * 0.25, 0.36 + k * 0.1, 0.12 + k * 0.05));
+		});
+		group.add(reedM);
+		// the Roundhouse: a drum of glass under a broad dark roof ring, a lighter drum on top
+		const rh = new THREE.Group(), g0 = bay.heightAt(ROUNDHOUSE.x, ROUNDHOUSE.z);
+		rh.position.set(ROUNDHOUSE.x, Math.max(g0, level + 0.3), ROUNDHOUSE.z);
+		const R = ROUNDHOUSE.r;
+		const mk = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.castShadow = m.receiveShadow = true; rh.add(m); return m; };
+		const white = new THREE.MeshStandardMaterial({ color: 0xe7e3da, roughness: 0.7 });
+		const glassM = new THREE.MeshStandardMaterial({ color: 0x33403f, roughness: 0.08, metalness: 0.6, emissive: 0xffd9a0, emissiveIntensity: 0 });
+		mk(new THREE.CylinderGeometry(R + 3, R + 3.5, 0.9, 64), white, 0.45);                       // the terrace
+		mk(new THREE.CylinderGeometry(R - 5, R - 5, 4.6, 64, 1, true), glassM, 3.2);                 // glass all round
+		mk(new THREE.CylinderGeometry(R + 1.5, R - 4, 1.4, 64), new THREE.MeshStandardMaterial({ color: 0x2a2826, roughness: 0.6 }), 6.2);   // the dark roof ring
+		mk(new THREE.CylinderGeometry(R * 0.5, R * 0.52, 2.6, 48), white, 8.1);                      // the drum on top
+		mk(new THREE.SphereGeometry(R * 0.35, 32, 10, 0, Math.PI * 2, 0, 0.45), white, 8.8);        // its shallow dome
+		// planted terraces stepping down to the water
+		mk(new THREE.CylinderGeometry(R + 6, R + 7, 0.5, 64), new THREE.MeshStandardMaterial({ color: 0x4d6b2f, roughness: 0.95 }), 0.1);
+		group.add(rh);
+		group.userData.glass = glassM;
+		// wildlife
+		const duckMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
+		const mkBird = (kind) => {
+			const b = new THREE.Group();
+			const goose = kind === 'goose', sc = goose ? 1.5 : 1;
+			const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), duckMat(goose ? 0x6b5d4d : 0x7a6a55)); body.scale.set(1.5, 0.75, 0.9); b.add(body);
+			const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, goose ? 0.4 : 0.18, 6), duckMat(goose ? 0x111111 : 0x1f5a34)); neck.position.set(0.24, goose ? 0.28 : 0.16, 0); neck.rotation.z = -0.35; b.add(neck);
+			const head = new THREE.Mesh(new THREE.SphereGeometry(goose ? 0.075 : 0.085, 10, 8), duckMat(goose ? 0x111111 : 0x1f5a34)); head.position.set(goose ? 0.34 : 0.3, goose ? 0.5 : 0.27, 0); b.add(head);
+			if (goose) { const chin = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), duckMat(0xf2f0ea)); chin.position.set(0.35, 0.47, 0); chin.scale.set(1, 0.8, 1.3); b.add(chin); }
+			const bill = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 6), duckMat(goose ? 0x111111 : 0xd9a321)); bill.rotation.z = -Math.PI / 2; bill.position.set(goose ? 0.43 : 0.39, goose ? 0.49 : 0.26, 0); b.add(bill);
+			b.scale.setScalar(sc);
+			b.traverse((o) => { o.castShadow = true; });
+			return b;
+		};
+		const spots = () => { for (let k = 0; k < 40; k++) { const x = minX + h01(birds.length * 13 + k) * (maxX - minX), z = minZ + h01(birds.length * 7 + k * 3 + 1) * (maxZ - minZ); if (inLake(x, z) && edge(x, z).d > 6) return [x, z]; } return [LAKE[0].x, LAKE[0].z]; };
+		for (let k = 0; k < (isPhone ? 8 : 14); k++) {
+			const kind = k % 3 === 0 ? 'goose' : 'duck', b = mkBird(kind), [x, z] = spots();
+			b.position.set(x, level, z);
+			group.add(b);
+			birds.push({ b, x, z, h: h01(k) * 6.28, v: 0.25 + h01(k * 3) * 0.3, turn: 0, ph: h01(k * 5) * 10, kind });
+		}
+		// an egret in the shallows, turtles on the rocks
+		const egret = new THREE.Group(), wm = duckMat(0xf5f5f0), ym = duckMat(0xd8b52a), km = duckMat(0x222222);
+		const eb = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), wm); eb.scale.set(1.6, 0.9, 0.8); eb.position.y = 0.75; egret.add(eb);
+		const en = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.55, 6), wm); en.position.set(0.22, 1.02, 0); en.rotation.z = -0.5; egret.add(en);
+		const eh = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), wm); eh.position.set(0.36, 1.26, 0); egret.add(eh);
+		const ebill = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.2, 5), ym); ebill.rotation.z = -Math.PI / 2; ebill.position.set(0.48, 1.25, 0); egret.add(ebill);
+		for (const dz of [-0.06, 0.06]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.65, 4), km); leg.position.set(0, 0.33, dz); egret.add(leg); }
+		const es = rocks.length ? rocks[Math.floor(rocks.length * 0.37)] : [LAKE[3].x, LAKE[3].z];
+		egret.position.set(es[0], level - 0.2, es[1]);
+		group.add(egret);
+		group.userData.egret = egret;
+		const turtleM = duckMat(0x3f4a2c);
+		for (let k = 0; k < Math.min(4, rocks.length); k++) {
+			const rk = rocks[Math.floor(rocks.length * (0.1 + k * 0.23))];
+			const t = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), turtleM);
+			t.scale.set(1.2, 0.55, 1); t.position.set(rk[0], level - rk[2] * 0.35 + rk[2] * 0.7 * 0.95, rk[1]); t.rotation.y = k * 1.7;
+			group.add(t);
+		}
+		// the fishing tackle
+		bobber = new THREE.Group();
+		const bt = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0xd8261c, roughness: 0.4 })); bt.position.y = 0.03; bobber.add(bt);
+		const bw = new THREE.Mesh(new THREE.SphereGeometry(0.061, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.4 })); bw.position.y = 0.03; bobber.add(bw);
+		bobber.visible = false;
+		group.add(bobber);
+		line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xdfe6e8, transparent: true, opacity: 0.6 }));
+		line.visible = false; line.frustumCulled = false;
+		group.add(line);
+	}
+
+	// ---------- fishing ----------
+	const FISH = [['bluegill', 0.38, 0.1, 0.6], ['largemouth bass', 0.24, 0.6, 5.5], ['redear sunfish', 0.14, 0.2, 1.1], ['channel catfish', 0.12, 1, 7], ['common carp', 0.12, 2, 12]];
+	let log = [];
+	try { log = JSON.parse(localStorage.getItem('crysis-fish-log') || '[]') || []; } catch { log = []; }
+	const btn = document.createElement('button');
+	btn.textContent = '🎣 Fish';
+	btn.style.cssText = 'position:absolute;left:50%;bottom:calc(74px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:22px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.72);color:#eafaf6;font:600 14px system-ui;display:none;z-index:4;cursor:pointer;';
+	for (const ev of ['pointerdown', 'touchstart']) btn.addEventListener(ev, (e) => e.stopPropagation());
+	mount?.appendChild(btn);
+	const F = { state: 'idle', t: 0, at: new THREE.Vector3(), bite: 0 };
+	function press(cam) {
+		if (F.state === 'idle') {
+			// cast out ahead, 8-14 m, onto the water
+			const d = new THREE.Vector3(); cam.getWorldDirection(d); d.y = 0; d.normalize();
+			let x = 0, z = 0;
+			for (let r = 14; r >= 3; r -= 1) { x = cam.position.x + d.x * r; z = cam.position.z + d.z * r; if (inLake(x, z)) break; }
+			if (!inLake(x, z)) {
+				// not facing it: cast toward the nearest water, a few metres past the edge
+				const e = edge(cam.position.x, cam.position.z), ex = e.x - cam.position.x, ez = e.z - cam.position.z, l = Math.hypot(ex, ez) || 1;
+				x = e.x + ex / l * 6; z = e.z + ez / l * 6;
+				if (!inLake(x, z)) { hint?.('Face the water to cast.', 2500); return; }
+			}
+			F.at.set(x, level, z); F.state = 'wait'; F.t = 0; F.bite = 2.5 + Math.random() * 6;
+			bobber.visible = line.visible = true; bobber.position.copy(F.at); ring(x, z, 0.8);
+			btn.textContent = '🎣 Reel in';
+		} else if (F.state === 'bite') {
+			// hooked
+			let u = Math.random(), sp = FISH[0];
+			for (const f of FISH) { if (u < f[1]) { sp = f; break; } u -= f[1]; }
+			const lb = +(sp[2] + Math.pow(Math.random(), 2.2) * (sp[3] - sp[2])).toFixed(1);
+			log.push({ fish: sp[0], lb, t: Date.now() });
+			try { localStorage.setItem('crysis-fish-log', JSON.stringify(log.slice(-200))); } catch { /* private mode */ }
+			const best = log.filter((c) => c.fish === sp[0]).reduce((m, c) => Math.max(m, c.lb), 0);
+			hint?.(`You caught a ${lb} lb ${sp[0]}!${lb >= best && log.filter((c) => c.fish === sp[0]).length > 1 ? ' Your biggest yet.' : ''}\nCatches at Lake Annabel: ${log.length}`, 6000);
+			ring(F.at.x, F.at.z, 1.4);
+			reset();
+		} else {
+			hint?.(F.state === 'wait' ? 'Reeled in: nothing yet.' : 'Too slow: it got away.', 2500);
+			reset();
+		}
+	}
+	function reset() { F.state = 'idle'; bobber.visible = line.visible = false; btn.textContent = '🎣 Fish'; }
+	btn.onclick = (e) => { e.stopPropagation(); press(lastCam); };
+	addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && btn.style.display !== 'none' && document.activeElement?.tagName !== 'INPUT') press(lastCam); });
+	let lastCam = null;
+
+	let jumpT = 3;
+	function update(dt, t, cam, night, walking) {
+		lastCam = cam;
+		const x = cam.position.x, z = cam.position.z, far = Math.hypot(x - LAKE[12].x, z - LAKE[12].z);
+		if (!built) { if (far < 3000 && bay.loaded()) build(); return; }
+		group.visible = far < 4000 && cam.position.y < 2500;
+		if (!group.visible) return;
+		U.uTime.value = t; U.uNight.value = night;
+		group.userData.glass.emissiveIntensity = night * 1.3;
+		for (const R of rings) if (R.w > 0) { R.z += dt * 1.4; R.w -= dt * 0.35; }
+		// the birds paddle about, steering off the shore, now and then dabbling
+		for (const B of birds) {
+			B.ph += dt;
+			if (Math.random() < dt * 0.15) B.turn = (Math.random() - 0.5) * 0.8;
+			const ax = B.x + Math.cos(B.h) * 4, az = B.z + Math.sin(B.h) * 4;
+			if (!inLake(ax, az) || edge(ax, az).d < 2.5) B.h += dt * 1.5;
+			else B.h += B.turn * dt;
+			B.x += Math.cos(B.h) * B.v * dt; B.z += Math.sin(B.h) * B.v * dt;
+			// (and keep clear of the bobber and of you)
+			const dc = Math.hypot(B.x - x, B.z - z);
+			if (dc < 5) { B.h = Math.atan2(B.z - z, B.x - x); B.v = 0.9; } else B.v += (0.35 - B.v) * dt * 0.3;
+			const dab = Math.max(0, Math.sin(B.ph * 0.4) - 0.93) * 12;
+			B.b.position.set(B.x, level + Math.sin(B.ph * 2) * 0.012, B.z);
+			B.b.rotation.set(0, -B.h, dab * 1.2);
+			if (dab > 0.5 && Math.random() < dt * 2) ring(B.x, B.z, 0.3);
+		}
+		// the egret: still, then a step, then a strike
+		const eg = group.userData.egret;
+		eg.rotation.y = Math.sin(t * 0.05) * 1.5;
+		// a fish jumps
+		jumpT -= dt;
+		if (jumpT < 0) {
+			jumpT = 4 + Math.random() * 10;
+			for (let k = 0; k < 20; k++) { const jx = x + (Math.random() - 0.5) * 160, jz = z + (Math.random() - 0.5) * 160; if (inLake(jx, jz) && edge(jx, jz).d > 3) { ring(jx, jz, 1); break; } }
+		}
+		// fishing: near the edge, on foot
+		const e2 = edge(x, z), near = walking && !inLake(x, z) && e2.d < 6;
+		const show = near || F.state !== 'idle';
+		if ((btn.style.display !== 'none') !== show) btn.style.display = show ? 'block' : 'none';
+		if (!near && F.state !== 'idle') reset();
+		if (F.state !== 'idle') {
+			F.t += dt;
+			let dip = 0;
+			if (F.state === 'wait' && F.t > F.bite) { F.state = 'bite'; F.t = 0; ring(F.at.x, F.at.z, 0.6); hint?.('A bite! Strike now!', 1500); btn.textContent = '🎣 Strike!'; }
+			if (F.state === 'bite') { dip = 0.08 + Math.sin(F.t * 20) * 0.04; if (F.t > 1.6) { hint?.('It got away.', 2000); reset(); } }
+			bobber.position.set(F.at.x, level - dip + Math.sin(t * 2.3) * 0.01, F.at.z);
+			const tip = new THREE.Vector3(); cam.getWorldDirection(tip);
+			tip.multiplyScalar(1.6).add(cam.position); tip.y += 0.6;
+			const P = line.geometry.attributes.position; P.setXYZ(0, tip.x, tip.y, tip.z); P.setXYZ(1, bobber.position.x, bobber.position.y + 0.06, bobber.position.z); P.needsUpdate = true;
+		}
+	}
+	// the lake is water: you walk round it, not over it
+	function push(p, footY, flying) {
+		if (!built || flying || !inLake(p.x, p.z) || footY > level + 3) return;
+		const e = edge(p.x, p.z), dx = e.x - p.x, dz = e.z - p.z, l = Math.hypot(dx, dz) || 1;
+		p.x = e.x + dx / l * 0.4; p.z = e.z + dz / l * 0.4;
+	}
+	return { group, update, push, inLake, level: () => level, log: () => log.slice() };
+}
+
+// the reed blades merged into one geometry (a small local version, to keep this module
+// standalone)
+function mergeBlades(geos) {
+	const pos = [], idx = [];
+	let off = 0;
+	for (const g of geos) {
+		const n = g.toNonIndexed(), p = n.attributes.position.array;
+		for (let i = 0; i < p.length; i++) pos.push(p[i]);
+		for (let i = 0; i < p.length / 3; i++) idx.push(off + i);
+		off += p.length / 3;
+	}
+	const out = new THREE.BufferGeometry();
+	out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	out.setIndex(idx);
+	out.computeVertexNormals();
+	return out;
+}

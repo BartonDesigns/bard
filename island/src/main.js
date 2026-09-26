@@ -36,6 +36,7 @@ import { createCity } from './bay/city.js';
 import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
+import { createLake } from './bay/lake.js';
 import { createCitySound } from './bay/citysound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
@@ -267,7 +268,7 @@ export function createIslandWorld() {
 	// teleport while flying: a line pin button under the boost, and a list of places to land
 	const PLACES_TP = [
 		['Golden Gate Bridge, Vista Point', 37.8326, -122.4814, 2.6], ['Downtown San Francisco', 37.7936, -122.3965, 0.9], ['Twin Peaks', 37.7544, -122.4477, 0.2],
-		['San Ramon', 37.7700, -121.9380, 0], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
+		['San Ramon', 37.7700, -121.9380, 0], ['Lake Annabel, Bishop Ranch', 37.7646, -121.9660, -2.2], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
 		['Mt Tamalpais, East Peak', 37.9293, -122.5780, 2.2], ['Mission Peak', 37.5125, -121.8806, 1.5], ['Berkeley Hills', 37.8812, -122.2425, 1.9],
 		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
 	];
@@ -418,6 +419,8 @@ export function createIslandWorld() {
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
+			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
+			world.lake = createLake(scene, bayArea, shared, { hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			const own = island.heightAt;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.heightAt(x, z);
@@ -433,7 +436,7 @@ export function createIslandWorld() {
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways;
 				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); };
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -644,6 +647,7 @@ export function createIslandWorld() {
 		watchTeleport();
 		W.street?.update(dt, time, camera, sk.night);
 		W.freeways?.update(camera);
+		W.lake?.update(dt, time, camera, sk.night, !W.player.state.flying && !drive.active());
 		W.roads?.update(time, sk.night);
 		guide.update(dt);
 		watchTalk(dt);
