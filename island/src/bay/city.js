@@ -253,13 +253,16 @@ function buildingMaterial(shared, night, nearBand) {
 				win *= (1.0 - roof) * step(0.8, vLY);
 				diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
 				diffuseColor.rgb *= mix(1.0, 0.8, roof);
+				// contact shade: the wall darkens where it meets the ground (the sky it sees is
+				// half hidden there), so the building sits in the ground instead of on it
+				diffuseColor.rgb *= mix(1.0, mix(0.58, 1.0, smoothstep(0.9, 3.4, vLY)), (1.0 - roof) * step(vKind, 6.5));
 				float lit = max(mix(0.36, step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
 				winGlow = mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6) * win * lit * uNightC * (0.6 + 0.4 * bh(floor(cell) + 3.3)) * 1.1;
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding8';
+	m.customProgramCacheKey = () => 'baybuilding9';
 	return m;
 }
 
