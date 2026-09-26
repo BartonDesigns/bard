@@ -340,7 +340,7 @@ const IMPOSTOR_FRAG = /* glsl */`
 		if (t.a < 0.45 || fade < h) discard;
 		// lit from above: the sun on the upper crown, the sky everywhere
 		vec3 light = uAmb * 1.6 + uSunC * smoothstep(-0.05, 0.3, uSunD.y) * (0.45 + 0.55 * (1.0 - gl_PointCoord.y)) * 0.95;
-		gl_FragColor = vec4(t.rgb * vTint * light, 1.0);
+		gl_FragColor = vec4(t.rgb * vTint * light * vec3(0.8, 0.78, 0.8), 1.0);      // (matched to the leafy tier beside it)
 		#include <tonemapping_fragment>
 		#include <colorspace_fragment>
 		#include <fog_fragment>
