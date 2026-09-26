@@ -87,14 +87,15 @@ export function createSky(scene, shared, renderer) {
 				float lowK = (1.0 - smoothstep(0.04, 0.4, uSunDir.y)) * step(-0.02, uSunDir.y) * (1.0 - uNight);
 				vec2 sh2d = normalize(uSunDir.xz + 1e-5), dh2d = normalize(d.xz + 1e-5);
 				float toward = pow(max(dot(sh2d, dh2d), 0.0), 5.0);
-				vec3 gold = mix(uSunColor, vec3(1.0, 0.72, 0.32), 0.45);
-				col += gold * (pow(sd, 6.0) * 0.5 + pow(sd, 40.0) * 0.6 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.45) * lowK * (1.0 - uCloud * 0.35);
+				// (golden hour is yellow-gold toward the sun under a sky still blue overhead)
+				vec3 gold = mix(uSunColor, vec3(1.0, 0.8, 0.42), 0.6);
+				col += gold * (pow(sd, 6.0) * 0.8 + pow(sd, 40.0) * 0.8 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.9) * lowK * (1.0 - uCloud * 0.35);
 				{
 					vec3 t1 = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0))), t2 = cross(t1, uSunDir);
 					vec2 q = vec2(dot(d, t1), dot(d, t2));
 					float r = length(q), a = atan(q.y, q.x);
 					float rays = pow(abs(cos(a * 3.0)), 60.0) + 0.6 * pow(abs(cos(a * 4.0 + 0.5)), 90.0) + 0.3 * pow(abs(cos(a * 9.0 + 1.3)), 30.0);
-					col += uSunColor * rays * exp(-r * 22.0) * step(0.0, dot(d, uSunDir)) * (0.5 + lowK * 1.2) * (1.0 - uNight) * (1.0 - uCloud * 0.6);
+					col += mix(uSunColor, vec3(1.0, 0.9, 0.6), 0.5) * rays * exp(-r * 9.0) * step(0.0, dot(d, uSunDir)) * (0.6 + lowK * 1.6) * (1.0 - uNight) * (1.0 - uCloud * 0.6);
 				}
 				// the Milky Way: the galaxy's disc seen edge-on, from its real place in the sky.
 				// Galactic longitude l, latitude b: a band along b = 0, the bulge swelling toward
@@ -438,8 +439,8 @@ export function createSky(scene, shared, renderer) {
 		const setK = 1 - THREE.MathUtils.smoothstep(Math.abs(elev), 0.02, 0.3);
 		const night = 1 - THREE.MathUtils.smoothstep(elev, -0.18, 0.02);
 		uniforms.uNight.value = night;
-		tmpA.copy(PAL.dayZen).lerp(PAL.setZen, setK * 0.8).lerp(PAL.nightZen, night);
-		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, setK * 0.85).lerp(PAL.nightHor, night);
+		tmpA.copy(PAL.dayZen).lerp(PAL.setZen, setK * setK * 0.8).lerp(PAL.nightZen, night);
+		tmpB.copy(PAL.dayHor).lerp(PAL.setHor, setK * setK * 0.85).lerp(PAL.nightHor, night);
 		// overcast and rain: a greyer, lower-contrast sky
 		const W = weather?.state, gl = W?.gloom || 0;
 		if (gl > 0) {
