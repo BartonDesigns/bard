@@ -258,7 +258,12 @@ export function createSky(scene, shared, renderer) {
 			}`,
 	}));
 	dome.frustumCulled = false;
-	dome.renderOrder = -10;
+	// drawn after the land, the city and everything else solid: it sits at the far plane
+	// and writes no depth, so the depth test then leaves its clouds (dozens of noise lookups
+	// a pixel) uncomputed wherever the ground or a building already covers the sky; drawn
+	// first, every pixel of the screen paid for them. It still comes before anything
+	// see-through (the sea, the stars, rain), which is drawn over it as before.
+	dome.renderOrder = 1000;
 	scene.add(dome);
 
 	// ---------- the stars: every naked-eye star in its real place ----------
