@@ -309,8 +309,12 @@ export function createRealCity(renderer) {
 				B.line(p, hw + 1.7, CONC);
 				for (const q of [p[0], p[p.length - 1]]) B.disc(q[0], q[1], hw + 1.7, CONC);
 			}
-			B.line(p, hw, ASPH);
-			for (const q of [p[0], p[p.length - 1]]) B.disc(q[0], q[1], hw, ASPH);
+			// (a bridge is its own deck, freeways.js: not painted on the ground it crosses)
+			if (r.bridge && r.drive) continue;
+			// the freeways are pale concrete, as Caltrans pours them
+			const surf = r.cls === 'motorway' && !r.link ? CONC : ASPH;
+			B.line(p, hw, surf);
+			for (const q of [p[0], p[p.length - 1]]) B.disc(q[0], q[1], hw, surf);
 			// a cul-de-sac's turning circle, sidewalk round it
 			for (const [end, q] of [[r.end0, p[0]], [r.end1, p[p.length - 1]]]) if (end) { B.disc(q[0], q[1], 14.2, CONC); B.disc(q[0], q[1], 12.5, ASPH); }
 			if (!fine) continue;

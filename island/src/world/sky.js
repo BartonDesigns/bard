@@ -82,6 +82,19 @@ export function createSky(scene, shared, renderer) {
 				float sd = max(dot(d, uSunDir), 0.0);
 				col += uSunColor * (pow(sd, 12.0) * 0.18 + pow(sd, 3.0) * 0.06) * (1.0 - uNight);
 				col += uSunColor * smoothstep(0.9993, 0.9997, sd) * 18.0 * (1.0 - uNight);
+				// a low sun: the air toward it fills with warm, bright haze (forward scattering),
+				// strongest along the horizon under it, and the eye sees a starburst round it
+				float lowK = (1.0 - smoothstep(0.04, 0.4, uSunDir.y)) * step(-0.02, uSunDir.y) * (1.0 - uNight);
+				vec2 sh2d = normalize(uSunDir.xz + 1e-5), dh2d = normalize(d.xz + 1e-5);
+				float toward = pow(max(dot(sh2d, dh2d), 0.0), 5.0);
+				col += uSunColor * (pow(sd, 6.0) * 0.32 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.28) * lowK;
+				{
+					vec3 t1 = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0))), t2 = cross(t1, uSunDir);
+					vec2 q = vec2(dot(d, t1), dot(d, t2));
+					float r = length(q), a = atan(q.y, q.x);
+					float rays = pow(abs(cos(a * 3.0)), 60.0) + 0.6 * pow(abs(cos(a * 4.0 + 0.5)), 90.0) + 0.3 * pow(abs(cos(a * 9.0 + 1.3)), 30.0);
+					col += uSunColor * rays * exp(-r * 22.0) * step(0.0, dot(d, uSunDir)) * (0.5 + lowK * 1.2) * (1.0 - uNight) * (1.0 - uCloud * 0.6);
+				}
 				// the Milky Way: the galaxy's disc seen edge-on, from its real place in the sky.
 				// Galactic longitude l, latitude b: a band along b = 0, the bulge swelling toward
 				// Sagittarius (l = 0), bright star clouds, and the Great Rift's dark dust splitting

@@ -35,6 +35,7 @@ import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
 import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
+import { createFreeways } from './bay/freeways.js';
 import { createCitySound } from './bay/citysound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
@@ -415,6 +416,8 @@ export function createIslandWorld() {
 			// the real houses close by, built whole with their rooms
 			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
+			// the freeways' barriers, sound walls and overpasses (their decks are floors)
+			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			const own = island.heightAt;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.heightAt(x, z);
@@ -428,8 +431,8 @@ export function createIslandWorld() {
 				world.labels = createLabels(dom.mount, bayArea, bridge);
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
-				const diablo = world.diablo, houses = world.houses;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y));
+				const diablo = world.diablo, houses = world.houses, fwy = world.freeways;
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y));
 				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); };
 				renderer.compile(scene, camera);
 			});
@@ -516,6 +519,34 @@ export function createIslandWorld() {
 	}
 	addEventListener('resize', () => { if (visible) resize(); });
 
+	// looking into a low sun the eye (and a windscreen) floods with warm light: a glare
+	// over everything round where the sun is, unless the land stands between
+	const glare = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;');
+	dom.mount.insertBefore(glare, dom.veil);
+	let glareK = 0;
+	const gv = new THREE.Vector3(), gf = new THREE.Vector3();
+	function sunGlare(dt) {
+		const W = world, sd = shared.uSunDir.value;
+		let want = 0, sx = 50, sy = 50;
+		if (W && sd.y > -0.02 && sd.y < 0.45 && !W.houses?.inside(camera.position) && camera.position.y > -0.5) {
+			camera.getWorldDirection(gf);
+			const facing = gf.dot(sd);
+			if (facing > 0.35) {
+				gv.copy(camera.position).addScaledVector(sd, 1000).project(camera);
+				sx = (gv.x * 0.5 + 0.5) * 100; sy = (-gv.y * 0.5 + 0.5) * 100;
+				// hills or mountains in the way?
+				let seen = 1;
+				for (const t of [30, 90, 250, 600, 1500, 3500, 8000]) { const x = camera.position.x + sd.x * t, z = camera.position.z + sd.z * t; if (W.island.heightAt(x, z) > camera.position.y + sd.y * t) { seen = 0; break; } }
+				want = seen * THREE.MathUtils.smoothstep(facing, 0.35, 0.95) * (1 - THREE.MathUtils.smoothstep(sd.y, 0.12, 0.45)) * (1 - (W.weather?.state?.cover ?? 0) * 0.5);
+			}
+		}
+		glareK += (want - glareK) * Math.min(1, dt * 3);
+		if (glareK < 0.01) { if (glare.style.opacity !== '0') glare.style.opacity = '0'; return; }
+		glare.style.opacity = glareK.toFixed(3);
+		// the bloom round the sun, a wide warm wash, and a ghost or two across the frame
+		const gx = 100 - sx, gy = 100 - sy;
+		glare.style.background = `radial-gradient(circle at ${sx}% ${sy}%, rgba(255,236,190,.85) 0, rgba(255,200,110,.45) 6%, rgba(255,170,70,.18) 22%, rgba(255,150,60,0) 55%), radial-gradient(circle at ${(sx + gx) / 2}% ${(sy + gy) / 2}%, rgba(255,210,140,.10) 0, rgba(255,210,140,0) 4%), radial-gradient(circle at ${gx}% ${gy}%, rgba(170,255,210,.10) 0, rgba(170,255,210,.05) 2.5%, rgba(170,255,210,0) 5%)`;
+	}
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
@@ -609,8 +640,10 @@ export function createIslandWorld() {
 		indoorK += ((W.houses?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
 		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
 		watchDoor(dt);
+		sunGlare(dt);
 		watchTeleport();
 		W.street?.update(dt, time, camera, sk.night);
+		W.freeways?.update(camera);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);
 		watchTalk(dt);
