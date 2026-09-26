@@ -410,7 +410,9 @@ export function createBayArea(shared, scene, island, BU) {
 						}
 						c = mix(c, dirtC, dirt);
 						// a freeway's concrete: the wheel paths worn dark, the slab joints
-						concC *= 1.0 - 0.22 * smoothstep(0.3, 0.7, PM.g) * e1;
+						float fwyK = smoothstep(0.08, 0.14, PM.g) * e1;
+						concC *= mix(1.0, 0.8, fwyK) * (1.0 - 0.2 * smoothstep(0.45, 0.8, PM.g) * e1);
+						concC = mix(concC, concC * vec3(1.02, 1.0, 0.95), fwyK);
 						c = mix(c, concC, conc);
 						// the gutter: a darker band just inside the asphalt edge; the kerb: a pale lip
 						// just outside it (the fine map's distance, 0.5 m ramp: d = (0.5 - v) metres)

@@ -262,7 +262,7 @@ export function createRealCity(renderer) {
 				const nx = -(by - ay) / L, ny = (bx - ax) / L;
 				if (!dash) band(ax + nx * off, ay + ny * off, bx + nx * off, by + ny * off, hw, col);
 				else for (let s = 0; s < L;) {
-					const ph = run % (dash + gap), on = ph < dash, step = Math.min(L - s, on ? dash - ph : dash + gap - ph);
+					const ph = run % (dash + gap), on = ph < dash, step = Math.max(1e-3, Math.min(L - s, on ? dash - ph : dash + gap - ph));      // (never a zero step)
 					if (on) { const t0 = s / L, t1 = (s + step) / L; band(ax + (bx - ax) * t0 + nx * off, ay + (by - ay) * t0 + ny * off, ax + (bx - ax) * t1 + nx * off, ay + (by - ay) * t1 + ny * off, hw, col); }
 					s += step; run += step;
 				}
@@ -279,7 +279,7 @@ export function createRealCity(renderer) {
 		return { disc, line, mesh };
 	}
 	// channels: R asphalt, G concrete, B dirt, A white lines; the paint map's R: yellow lines
-	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 1, 0], WHITE = [0, 0, 0, 1], YELLOW = [1, 0, 0, 0], WEAR = [0, 1, 0, 0], JOINT = [0, 1, 0, 0];       // (the paint map holds two channels: both in green)
+	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 1, 0], WHITE = [0, 0, 0, 1], YELLOW = [1, 0, 0, 0], WEAR = [0, 1, 0, 0], JOINT = [0, 1, 0, 0], FWY = [0, 0.35, 0, 0];       // (the paint map holds two channels: both in green)
 	function render(target, meshes, SIZE) {
 		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
 		for (const m of meshes) scene2.add(m);
@@ -323,9 +323,10 @@ export function createRealCity(renderer) {
 			// the freeway's concrete: dark tyre-worn bands down each lane's wheel paths and the
 			// slabs' transverse joints (the paint map's green)
 			if (r.cls === 'motorway' && !r.link) {
+				Y.line(p, hw, FWY, true);                   // (the whole carriageway, faintly: it marks the concrete as a freeway's)
 				const nL = Math.max(2, Math.round(r.w / 3.7)), lw = r.w / nL;
 				for (let k = 0; k < nL; k++) for (const e of [-0.85, 0.85]) Y.line(p, 0.42, WEAR, false, -hw + lw * (k + 0.5) + e);
-				Y.line(p, hw - 0.3, JOINT, false, 0, 0.16, 4.4);
+				Y.line(p, hw - 0.3, JOINT, false, 0, 0.25, 4.3);
 			}
 			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
