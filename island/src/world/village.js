@@ -8,6 +8,7 @@ import { mulberry32 } from '../noise.js';
 import * as TX from './textures.js';
 import { addPulse } from '../pulse.js';
 import { usePhoto } from './photomats.js';
+import { buildBoat } from './boatmodel.js';
 
 const WALLS = [[0.93, 0.93, 0.90], [0.58, 0.72, 0.86], [0.52, 0.75, 0.68], [0.95, 0.86, 0.56], [0.88, 0.58, 0.50], [0.93, 0.93, 0.90]];
 const ROOFS = [[0.70, 0.20, 0.17], [0.22, 0.48, 0.52], [0.52, 0.55, 0.58], [0.45, 0.22, 0.18]];
@@ -207,28 +208,7 @@ export function createVillage(island, shared, scene) {
 	}
 
 	// a fishing boat on its mooring off the pier head
-	const boat = new THREE.Group();
-	const hullShape = new THREE.Shape();
-	hullShape.moveTo(-1.4, -3.2); hullShape.lineTo(1.4, -3.2); hullShape.lineTo(1.5, 1.6); hullShape.quadraticCurveTo(0, 4.6, -1.5, 1.6); hullShape.closePath();
-	const hull = new THREE.ExtrudeGeometry(hullShape, { depth: 1.5, bevelEnabled: true, bevelSize: 0.15, bevelThickness: 0.15, bevelSegments: 2 });
-	hull.rotateX(-Math.PI / 2);
-	boat.add(new THREE.Mesh(hull, new THREE.MeshStandardMaterial({ color: 0xf2f0ea, roughness: 0.5 })));
-	const stripe = new THREE.Mesh(box(3.1, 0.25, 6.6), new THREE.MeshStandardMaterial({ color: 0x8e2a22, roughness: 0.6 }));
-	stripe.position.set(0, 1.35, -0.8); boat.add(stripe);
-	const cabin = new THREE.Mesh(box(2.2, 1.6, 2.2), new THREE.MeshStandardMaterial({ color: 0xf5f5f2, roughness: 0.6 }));
-	cabin.position.set(0, 2.3, -0.9); boat.add(cabin);
-	// wheelhouse glass all round, a roof with an overhang, and a doorway aft
-	const pane = (w, h, x, y, z, ry) => { const m = new THREE.Mesh(box(w, h, 0.06), mats.glass); m.position.set(x, y, z); m.rotation.y = ry; boat.add(m); };
-	pane(1.8, 0.62, 0, 2.62, -2.02, 0); pane(0.7, 0.62, -0.5, 2.62, 0.22, 0);
-	pane(1.5, 0.55, 1.12, 2.62, -0.9, Math.PI / 2); pane(1.5, 0.55, -1.12, 2.62, -0.9, Math.PI / 2);
-	const door = new THREE.Mesh(box(0.7, 1.3, 0.06), new THREE.MeshStandardMaterial({ color: 0x4d6f86, roughness: 0.6 }));
-	door.position.set(0.55, 2.1, 0.22); boat.add(door);
-	const roof = new THREE.Mesh(box(2.6, 0.12, 2.8), new THREE.MeshStandardMaterial({ color: 0x3e6a84, roughness: 0.55 }));
-	roof.position.set(0, 3.16, -0.9); boat.add(roof);
-	// a rail round the deck
-	for (const sx of [-1, 1]) { const rail = new THREE.Mesh(box(0.06, 0.06, 6.2), mats.wood); rail.position.set(sx * 1.45, 2.0, -0.4); boat.add(rail); }
-	const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 4.5, 6), mats.wood);
-	mast.position.set(0, 4, -0.9); boat.add(mast);
+	const boat = buildBoat(mats.glass, mats.wood);
 	boat.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.userData.material175 = 'wood'; pickables.push(o); } });
 	const bx = pier.x + v.seaDir.x * (pier.len - 6) + side.x * 5.5, bz = pier.z + v.seaDir.z * (pier.len - 6) + side.z * 5.5;
 	boat.position.set(bx, 0, bz);

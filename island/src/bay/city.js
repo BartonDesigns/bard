@@ -390,8 +390,8 @@ export function createCity(shared, scene, bay, real = null) {
 	// (pushed well out, so the hand-overs happen where a tree is small on screen, and the far
 	// masses carry the woodland out to where the ground's own painted woods take over)
 	// (a phone keeps the leafy middle tier nearer: the far masses take over sooner, and cheaply)
-	const LOD = PHONE ? { near: [NONE_IN[0], NONE_IN[1], 150, 175], mid: [150, 175, 430, 470], far: [430, 470, 2000, 2400], shrub: [NONE_IN[0], NONE_IN[1], 215, 255] }
-		: { near: [NONE_IN[0], NONE_IN[1], 185, 215], mid: [185, 215, 560, 610], far: [560, 610, 2400, 2800], shrub: [NONE_IN[0], NONE_IN[1], 240, 285] };
+	const LOD = PHONE ? { near: [NONE_IN[0], NONE_IN[1], 150, 175], mid: [150, 175, 430, 470], far: [430, 470, 2000, 2400], shrub: [NONE_IN[0], NONE_IN[1], 260, 300] }
+		: { near: [NONE_IN[0], NONE_IN[1], 185, 215], mid: [185, 215, 560, 610], far: [560, 610, 2400, 2800], shrub: [NONE_IN[0], NONE_IN[1], 360, 410] };
 	const MARGIN = 45;                                        // the trees are re-placed every 40 m of travel
 	const tierMesh = (parts, cap, shadow, band) => {
 		// each tier its own materials, so each can carry its own band
@@ -426,7 +426,7 @@ export function createCity(shared, scene, bay, real = null) {
 		const sizeK = Math.max(bbAll.max.y - Math.max(0, bbAll.min.y), bbAll.max.x - bbAll.min.x, bbAll.max.z - bbAll.min.z) / 0.98 / midT.height;
 		return { sizeK, near: tierMesh(nearT.parts, 2600, true, LOD.near), mid: tierMesh(midT.parts, 12000, false, LOD.mid), H: nearT.height, Hm: midT.height };
 	});
-	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, 3000, true, LOD.shrub);
+	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
 	// the far tier: one point per tree, drawn as its species' impostor
 	const atlasCv = document.createElement('canvas');
 	atlasCv.width = IMP * 3; atlasCv.height = IMP;
@@ -999,6 +999,9 @@ export function createCity(shared, scene, bay, real = null) {
 	// oak woodland on the cool north slopes and down the canyons (live oak, bay, buckeye),
 	// chaparral on the hot south-facing ridges, gray and Coulter pines scattered high,
 	// open grassland with the odd blue oak on the gentle slopes
+	// how much brush a spot of open grassland carries: drifts on a 60 m and a 20 m scale,
+	// more on north faces and in gullies
+	const brushK = (x, z, north, gully) => Math.max(0, vnoise(x / 60 + 31, z / 60 - 7) * 0.7 + vnoise(x / 20 - 5, z / 20 + 11) * 0.3 - 0.35) * (0.8 + Math.max(0, north) * 0.6 + gully * 0.8);
 	function wildLand(cx, cz, R, trees, C = 13, rIn = 0) {
 		if (!real?.landAt) return;
 		const H = (x, z) => bay.heightAt(x, z), far = rIn > 0;
@@ -1007,9 +1010,12 @@ export function createCity(shared, scene, bay, real = null) {
 			if (r > 0.62) continue;                                                  // most cells are open ground
 			const x = (gx + hash(gx, gz * 3) * 1.6 - 0.3) * C, z = (gz + hash(gx * 5, gz) * 1.6 - 0.3) * C;
 			const dd = (x - cx) * (x - cx) + (z - cz) * (z - cz);
-			if (dd > R * R || dd < rIn * rIn || !real.inside(x, z)) continue;
-			const L = real.landAt(x, z);
-			if (!L || (L.lu !== 0 && L.lu !== 11 && L.lu !== 12) || L.road > 0.2 || L.roof > 0.2) continue;
+			if (dd > R * R || dd < rIn * rIn) continue;
+			// open country: the mapped wild land, or anywhere beyond the maps the towns don't reach
+			if (real.inside(x, z)) {
+				const L = real.landAt(x, z);
+				if (!L || (L.lu !== 0 && L.lu !== 11 && L.lu !== 12) || L.road > 0.2 || L.roof > 0.2) continue;
+			} else if (bay.urbanAt(x, z).u > 0.06) continue;
 			const h = H(x, z);
 			if (h < 3) continue;
 			const e = 18, hxp = H(x + e, z), hxm = H(x - e, z), hzp = H(x, z + e), hzm = H(x, z - e);
@@ -1028,6 +1034,16 @@ export function createCity(shared, scene, bay, real = null) {
 			else if (r2 < wood * 0.8 + chap * 0.75) { if (!far) trees.push({ x, y: g, z, h: 1.4 + r2 * 1.8, shrub: true, col: tint([0.2, 0.25, 0.13]) }); }
 			else if (r2 > 0.965 - high * 0.05) trees.push({ x, y: g, z, h: 11 + r2 * 9, cone: true, sp: 2, col: tint([0.3, 0.36, 0.26]) });   // gray pine
 			else if (r2 > 0.92 && slope < 0.35) trees.push({ x, y: g, z, h: 7 + r2 * 5, sp: 1, col: tint([0.3, 0.33, 0.2]) });          // blue oak in the grass
+			// the open grassland's own brush: coyote brush and sage in loose drifts, thicker on the
+			// shady side and in the draws, a few poison-oak thickets gone red in the dry season
+			// (drawn on their own, in clumps of two to four)
+			if (!far && slope < 0.8 && hash(gx * 9.7 + 1, gz * 4.1 + 2) < brushK(x, z, north, gully) * 1.1) {
+				const kind = hash(gx * 5.3, gz * 2.9), c = kind < 0.55 ? [0.2, 0.27, 0.12] : kind < 0.85 ? [0.36, 0.4, 0.3] : [0.42, 0.22, 0.1];
+				for (let k = 0, n = 2 + Math.floor(hash(gx * 1.3, gz * 8.1) * 3); k < n; k++) {
+					const bx = x + (hash(gx * 3 + k, gz) - 0.5) * 9, bz = z + (hash(gx, gz * 3 + k) - 0.5) * 9;
+					trees.push({ x: bx, y: H(bx, bz) - 0.3, z: bz, h: 0.7 + hash(gx + k, gz * 7.1) * 1.2, shrub: true, col: tint(c) });
+				}
+			}
 		}
 	}
 
