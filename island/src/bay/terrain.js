@@ -443,8 +443,10 @@ export function createBayArea(shared, scene, island, BU) {
 						vec3 BK = blockOf(sty);
 						vec2 B = BK.xy, f = fract(g / B), cid = floor(g / B);
 						vec2 fw = f * B;
-						float street = 1.0 - step(BK.z, fw.x) * step(BK.z, fw.y);
-						float sidewalk = (1.0 - street) * (1.0 - step(BK.z + 2.5, fw.x) * step(BK.z + 2.5, fw.y) * step(fw.x, B.x - 2.5) * step(fw.y, B.y - 2.5));
+						// (no streets painted at the ragged fringe where no blocks are built: on a hillside
+						// at a grazing angle they read as rows of dots)
+						float street = (1.0 - step(BK.z, fw.x) * step(BK.z, fw.y)) * smoothstep(0.14, 0.3, urban);
+						float sidewalk = (1.0 - street) * (1.0 - step(BK.z + 2.5, fw.x) * step(BK.z + 2.5, fw.y) * step(fw.x, B.x - 2.5) * step(fw.y, B.y - 2.5)) * smoothstep(0.14, 0.3, urban);
 						float lh = h21(floor(g / 17.0) + cid * 7.0);
 						vec3 cityC;
 						float down = T.b;
