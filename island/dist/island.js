@@ -4815,10 +4815,14 @@ vec3 cityGlow = vec3(0.0); float flatK = 0.0;
 					// close by, the open ground has a real grain: the hill grasses (by season) when
 					// they are there, the soil's otherwise; not on the pavement
 					if (dist < 120.0 && uGroundK > 0.5) {
-						float gk = (1.0 - smoothstep(50.0, 120.0, dist)) * (1.0 - flatK);
+						// (faded by how small its grain is on screen, not by distance alone: at a grazing
+						// angle a 2 m tile shimmers into rows of dots well inside 120 m; and divided by its
+						// own mean, 0.9, so it adds grain without lightening the ground near you)
+						float grain = length(fwidth(vBW * 0.5));
+						float gk = (1.0 - smoothstep(50.0, 120.0, dist)) * (1.0 - smoothstep(0.12, 0.35, grain)) * (1.0 - flatK);
 						float dL = texture2D(uGroundD, vBW * 0.35).r;
 						if (uGrassK > 0.5) dL = mix(texture2D(uSprG, vBW * 0.5).r, texture2D(uDryG, vBW * 0.5).r, uSeason);
-						c *= mix(1.0, dL / 0.79, gk * 0.55);
+						c *= mix(1.0, dL / 0.9, gk * 0.55);
 					}
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);
 				}`).replace("#include <normal_fragment_maps>",`#include <normal_fragment_maps>
