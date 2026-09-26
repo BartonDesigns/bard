@@ -94,7 +94,8 @@ export function createGoldenGate(shared, scene, heightAt) {
 		};
 		const top = new THREE.BufferGeometry(), pts = [];
 		for (let s = S0; s <= S1 + 0.1; s += STEP) pts.push(ring(s));
-		for (const [a, b2] of pts) { P.push(a.x, a.y + 0.6, a.z, b2.x, b2.y + 0.6, b2.z); N.push(0, 1, 0, 0, 1, 0); }
+		const UVr = [];
+		pts.forEach(([a, b2], k) => { P.push(a.x, a.y + 0.6, a.z, b2.x, b2.y + 0.6, b2.z); N.push(0, 1, 0, 0, 1, 0); UVr.push(0, k * STEP / 12, 1, k * STEP / 12); });
 		for (let k = 0; k < pts.length - 1; k++) { const a = k * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
 		// wound to face up (seen from the wrong side a double-sided face turns its normal
 		// away, and the roadway went black)
@@ -103,7 +104,23 @@ export function createGoldenGate(shared, scene, heightAt) {
 			const nrm = new THREE.Vector3().crossVectors(v(I[1]).sub(v(I[0])), v(I[2]).sub(v(I[0])));
 			if (nrm.y < 0) for (let i = 0; i < I.length; i += 3) { const t = I[i + 1]; I[i + 1] = I[i + 2]; I[i + 2] = t; }
 		}
-		top.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); top.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); top.setIndex(I);
+		top.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); top.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); top.setAttribute('uv', new THREE.Float32BufferAttribute(UVr, 2)); top.setIndex(I);
+		// the roadway painted: sidewalks either side, six lanes with dashed lines, the
+		// movable median barrier's line down the middle (one tile across, 12 m along)
+		{
+			const c = document.createElement('canvas'); c.width = 512; c.height = 64;
+			const g = c.getContext('2d'), sw = (HALF_W - 10.5) / (2 * HALF_W) * 512;
+			g.fillStyle = '#3c3c3e'; g.fillRect(0, 0, 512, 64);
+			for (let i = 0; i < 400; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},0.05)`; g.fillRect(Math.random() * 512, Math.random() * 64, 3, 2); }
+			g.fillStyle = '#8a8883'; g.fillRect(0, 0, sw, 64); g.fillRect(512 - sw, 0, sw, 64);
+			g.fillStyle = '#d8d6cc';
+			const lane = (512 - 2 * sw) / 6;
+			for (const k of [1, 2, 4, 5]) g.fillRect(sw + lane * k - 1.5, 0, 3, 16);
+			g.fillStyle = '#e9c040'; g.fillRect(256 - 3, 0, 6, 64);
+			g.fillStyle = '#d8d6cc'; g.fillRect(sw + 2, 0, 3, 64); g.fillRect(512 - sw - 5, 0, 3, 64);
+			const tx = new THREE.CanvasTexture(c); tx.wrapT = THREE.RepeatWrapping; tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8;
+			road.map = tx; road.color.set(0xffffff); road.needsUpdate = true;
+		}
 		const roadMesh = new THREE.Mesh(top, road);
 		roadMesh.receiveShadow = true;
 		group.add(roadMesh);
@@ -124,7 +141,22 @@ export function createGoldenGate(shared, scene, heightAt) {
 			const tm = new THREE.Mesh(gg, trussMat); tm.castShadow = true; group.add(tm);
 		}
 		// the underside and the rails
-		for (const [t, y, w, h] of [[0, -7.6, HALF_W * 2, 0.8], [-HALF_W + 0.4, 1.4, 0.3, 1.3], [HALF_W - 0.4, 1.4, 0.3, 1.3], [-10.5, 0.9, 0.5, 0.6], [10.5, 0.9, 0.5, 0.6]]) {
+		// the railing: open balusters under a top rail (a solid slab read as a wall)
+		{
+			const bc = document.createElement('canvas'); bc.width = 64; bc.height = 64;
+			const bg = bc.getContext('2d'); bg.fillStyle = '#fff'; for (let i = 0; i < 4; i++) bg.fillRect(i * 16 + 5, 0, 6, 64); bg.fillRect(0, 0, 64, 7); bg.fillRect(0, 57, 64, 7);
+			const bt = new THREE.CanvasTexture(bc); bt.wrapS = THREE.RepeatWrapping; bt.colorSpace = THREE.SRGBColorSpace;
+			const balMat = new THREE.MeshStandardMaterial({ color: ORANGE, map: bt, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.55, metalness: 0.2 });
+			for (const sd of [-1, 1]) {
+				const P3 = [], U3 = [], I3 = [];
+				pts.forEach(([a, b2], k) => { const e = sd < 0 ? a : b2, ix = e.x + (sd < 0 ? b2.x - a.x : a.x - b2.x) / (2 * HALF_W) * 0.4, iz = e.z + (sd < 0 ? b2.z - a.z : a.z - b2.z) / (2 * HALF_W) * 0.4; P3.push(ix, e.y + 0.75, iz, ix, e.y + 2.0, iz); U3.push(k * STEP / 0.65, 0, k * STEP / 0.65, 1); });
+				for (let k = 0; k < pts.length - 1; k++) { const a = k * 2; I3.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+				const bgm = new THREE.BufferGeometry();
+				bgm.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); bgm.setAttribute('uv', new THREE.Float32BufferAttribute(U3, 2)); bgm.setIndex(I3); bgm.computeVertexNormals();
+				group.add(new THREE.Mesh(bgm, balMat));
+			}
+		}
+		for (const [t, y, w, h] of [[0, -7.6, HALF_W * 2, 0.8], [-HALF_W + 0.4, 2.02, 0.3, 0.14], [HALF_W - 0.4, 2.02, 0.3, 0.14], [-10.5, 0.9, 0.5, 0.6], [10.5, 0.9, 0.5, 0.6]]) {
 			for (let k = 0; k < pts.length - 1; k++) {
 				const s = S0 + (k + 0.5) * STEP, y0 = deckY(Math.max(-END, Math.min(END, s)));
 				if (t === 0 && Math.abs(s) > END) continue;
@@ -156,7 +188,12 @@ export function createGoldenGate(shared, scene, heightAt) {
 
 	// ---------- night: floodlit towers, deck lamps, red lights on top ----------
 	const lampPos = [], redPos = [];
-	for (let s = -END; s <= END; s += 30.5) for (const sd of [-1, 1]) { const p = W(s, sd * (HALF_W - 0.5), deckY(s) + 9); lampPos.push(p.x, p.y, p.z); }
+	for (let s = -END; s <= END; s += 30.5) for (const sd of [-1, 1]) {
+		const p = W(s, sd * (HALF_W - 0.5), deckY(s) + 9); lampPos.push(p.x, p.y, p.z);
+		// the light standards themselves, orange like the rest
+		box(s, sd * (HALF_W - 0.5), deckY(s) + 0.6 + 4.2, 0.22, 0.22, 8.4, steel);
+		box(s, sd * (HALF_W - 1.1), deckY(s) + 8.75, 0.3, 1.3, 0.2, steel);
+	}
 	for (const s0 of [-MAIN / 2, MAIN / 2]) for (const sd of [-1, 1]) { const p = W(s0, sd * LEG_T, TOWER_H + 3); redPos.push(p.x, p.y, p.z); }
 	const glowTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
 	const pointsOf = (arr, color, size) => {
