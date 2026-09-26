@@ -55,6 +55,8 @@ import { createPeople } from './people/people.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
+// where the sky's glow is sampled: the cities round you wash out the faint stars
+const GLOW_AT = [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0], [-15000, 0], [0, 15000], [0, -15000]];
 
 // Under water, light is absorbed red first, then green: near things keep their colour,
 // far things go blue-green. The fog chunk does this per channel when the fog density is
@@ -451,6 +453,7 @@ export function createIslandWorld() {
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		while (scene.children.length) scene.remove(scene.children[0]);
 		world = null;
+		islandReach.band = undefined;
 	}
 
 	function buildPanel() {
@@ -547,6 +550,25 @@ export function createIslandWorld() {
 		const gx = 100 - sx, gy = 100 - sy;
 		glare.style.background = `radial-gradient(circle at ${sx}% ${sy}%, rgba(255,236,190,.85) 0, rgba(255,200,110,.45) 6%, rgba(255,170,70,.18) 22%, rgba(255,150,60,0) 55%), radial-gradient(circle at ${(sx + gx) / 2}% ${(sy + gy) / 2}%, rgba(255,210,140,.10) 0, rgba(255,210,140,0) 4%), radial-gradient(circle at ${gx}% ${gy}%, rgba(170,255,210,.10) 0, rgba(170,255,210,.05) 2.5%, rgba(170,255,210,0) 5%)`;
 	}
+	// Out over the Bay Area the island's close-up layers have nothing to show, yet each would
+	// still cost its full vertex work every frame: the grass, turf, pebbles and island ground
+	// are carpets centred on the camera, whose heights and masks clamp to open sea past the
+	// island's edge, and the village, caves and kelp are below a pixel kilometres off. Each is
+	// left out once the camera is past its reach. (Only meshes are switched: taking a light
+	// out of the scene would recompile every lit shader, and the village boat may be out
+	// sailing with you.)
+	function islandReach(W) {
+		const off = Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) - W.island.half;
+		// the carpets reach under 100 m; the ground's grid 2.2 km each way (3.1 to its corners)
+		const band = off < 150 ? 0 : off < 3300 ? 1 : off < 6000 ? 2 : 3;
+		if (band === islandReach.band) return;
+		islandReach.band = band;
+		for (const o of [W.grass, W.turf, ...W.litter.meshes]) o.visible = band < 1;
+		W.terrain.visible = band < 2;
+		if (W.underwater.group) W.underwater.group.visible = band < 3;
+		for (const o of W.caverns.group.children) if (!o.isLight) o.visible = band < 3;
+		for (const o of W.village.group.children) if (o !== W.village.boat) o.visible = band < 3;
+	}
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
@@ -611,7 +633,7 @@ export function createIslandWorld() {
 		// the cities' glow washes out the faint stars
 		if (W.bayArea?.loaded()) {
 			let glow = 0;
-			for (const [dx, dz] of [[0, 0], [6000, 0], [-6000, 0], [0, 6000], [0, -6000], [15000, 0], [-15000, 0], [0, 15000], [0, -15000]]) glow += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
+			for (const [dx, dz] of GLOW_AT) glow += W.bayArea.urbanAt(camera.position.x + dx, camera.position.z + dz).u;
 			shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
 		}
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
@@ -622,6 +644,7 @@ export function createIslandWorld() {
 		actions();
 		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
 		W.litter.update(camera);
+		islandReach(W);
 		W.vegetation.stream(camera, false);
 		W.village.update(time, sk.night);
 		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
