@@ -259,7 +259,8 @@ export function hardwood(seed, far, mid, g = null) {
 	}
 	// a weeping crown lets curtains of leaves hang from its rim
 	if (g?.crown === 'weeping') for (let i = 0; i < (far ? 3 : 7); i++) { const th = i / 7 * 6.28 + r() * 0.5; clumps.push({ c: crownC.clone().add(V(Math.cos(th) * RX * 0.95, -RY * 0.85, Math.sin(th) * RX * 0.95)), rad: 1.1 + r() * 0.4, hang: true }); }
-	const per = far ? 2 : mid ? 4 : 9, size = far ? 3.6 : mid ? 2.5 : 1.7;
+	// (the middle distance needs enough cards that a crown reads as a mass, not stacked plates)
+	const per = far ? 2 : mid ? 5 : 9, size = far ? 3.6 : mid ? 2.3 : 1.7;
 	for (const cl of clumps) {
 		const out = cl.c.clone().sub(crownC).normalize();
 		for (let i = 0; i < per; i++) {
@@ -274,7 +275,7 @@ export function hardwood(seed, far, mid, g = null) {
 		}
 	}
 	// a few dark leaves deep in the crown so you never see straight through it
-	for (let i = 0; i < (far ? 1 : mid ? 3 : 6); i++) card(crown, crownC.clone().add(V((r() - 0.5) * RX, (r() - 0.3) * RY, (r() - 0.5) * RX)), size * 1.4, r, { r: 0.08, g: 0.13, b: 0.05 }, 0.7, crownC);
+	for (let i = 0; i < (far ? 1 : mid ? 5 : 6); i++) card(crown, crownC.clone().add(V((r() - 0.5) * RX, (r() - 0.3) * RY, (r() - 0.5) * RX)), size * 1.4, r, { r: 0.08, g: 0.13, b: 0.05 }, 0.7, crownC);
 	return { parts: [trunk.geometry(), crown.geometry()], height: H };
 }
 
