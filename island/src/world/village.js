@@ -91,6 +91,10 @@ export function createVillage(island, shared, scene) {
 			add('glass', place(box(0.06, 1.1, 0.9), w / 2 + 0.04, y, 0), [1, 1, 1]);
 			add('glass', place(box(0.06, 1.1, 0.9), -w / 2 - 0.04, y, -d * 0.15), [1, 1, 1]);
 			add('wood', place(box(1.1, 0.12, 0.12), w * 0.22, y - 0.62, d / 2 + 0.08), TRIM);
+			// the window bars: a cross over each front pane, a frame round it
+			add('wood', place(box(0.07, 1.1, 0.05), w * 0.22, y, d / 2 + 0.08), TRIM);
+			add('wood', place(box(0.9, 0.07, 0.05), w * 0.22, y + 0.05, d / 2 + 0.08), TRIM);
+			for (const e of [-1, 1]) { add('wood', place(box(0.08, 1.24, 0.07), w * 0.22 + e * 0.49, y, d / 2 + 0.07), TRIM); add('wood', place(box(1.06, 0.08, 0.07), w * 0.22, y + e * 0.59, d / 2 + 0.07), TRIM); }
 		}
 		const stiltH = floor - lo + 0.3;
 		if (onStone) {
@@ -232,8 +236,12 @@ export function createVillage(island, shared, scene) {
 	group.add(boat);
 
 	scene.add(group);
+	const DAY_GLASS = new THREE.Color(0.26, 0.34, 0.42), LAMP_GLASS = new THREE.Color(0xffc47a);
 	function update(t, night) {
-		mats.glass.emissiveIntensity = night * 2.2;
+		// by day the panes show the sky they face (no black holes in the walls); by night the
+		// lamps inside
+		mats.glass.emissive.copy(DAY_GLASS).lerp(LAMP_GLASS, night);
+		mats.glass.emissiveIntensity = 0.55 * (1 - night) + night * 2.2;
 		// the boat rides the swell in boat.js
 	}
 	return { group, footprints, pickables, pier, boat, update, placed };

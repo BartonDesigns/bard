@@ -476,7 +476,8 @@ export function createCity(shared, scene, bay, real = null) {
 					}
 					for (let k = 0; k * L < IX; k++) for (const side of [0, 1]) {
 						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
-						let h = 12 + Math.pow(r, 2.4) * U.d * U.d * 300 + U.d * 40;
+						// (steeply down from the core: a few towers at the centre, mid-rise round them)
+						let h = 10 + Math.pow(r, 3) * U.d * U.d * U.d * 300 + U.d * U.d * 48;
 						if (h < minH) continue;
 						const col = jit(pick(PAL.tower, hash(i * 7 + k, j * 3 + side)), r);
 						const gx = X0 + k * L + L / 2, gz = side ? Z0 + IZ - L * 0.55 : Z0 + L * 0.55;
