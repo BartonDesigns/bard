@@ -252,6 +252,52 @@ export function createIslandWorld() {
 	talkBtn.addEventListener('click', (e) => { e.stopPropagation(); talkNow(); });
 	for (const ev of ['pointerdown', 'touchstart']) talkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if (e.key === 'Enter' && talkTarget && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); talkNow(); } });
+	// teleport while flying: a line pin button under the boost, and a list of places to land
+	const PLACES_TP = [
+		['Golden Gate Bridge, Vista Point', 37.8326, -122.4814, 2.6], ['Downtown San Francisco', 37.7936, -122.3965, 0.9], ['Twin Peaks', 37.7544, -122.4477, 0.2],
+		['San Ramon', 37.7700, -121.9380, 0], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
+		['Mt Tamalpais, East Peak', 37.9293, -122.5780, 2.2], ['Mission Peak', 37.5125, -121.8806, 1.5], ['Berkeley Hills', 37.8812, -122.2425, 1.9],
+		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
+	];
+	const tpBtn = button('', 'Teleport to a place', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
+	tpBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
+	dom.mount.appendChild(tpBtn);
+	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));max-height:60vh;overflow:auto;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5;');
+	dom.mount.appendChild(tpMenu);
+	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
+	function teleport([name, lat, lon, yaw]) {
+		const W = world, P = W?.player.state;
+		if (!P) return;
+		let x, z;
+		if (lat === null) { x = W.island.village.coast.x; z = W.island.village.coast.z; }
+		else if (lat === 'town') {
+			const towns = (W.bayArea?.towns || []).filter((t) => W.bayArea.heightAt(t.x, t.z) > 5 && !W.real?.inside(t.x, t.z));
+			const t = towns[Math.floor(Math.random() * towns.length)];
+			if (!t) return;
+			x = t.x; z = t.z; name = t.name;
+		} else { const p = toWorld(lat, lon); x = p.x; z = p.z; }
+		drive.stop();
+		// land on the ground, facing the view
+		P.flying = false; P.boost = false; P.diving = false; P.vel.set(0, 0, 0);
+		P.pos.set(x, W.island.heightAt(x, z) + 1.7, z);
+		P.yaw = yaw; P.pitch = 0.02;
+		camera.position.copy(P.pos);
+		tpMenu.style.display = 'none';
+		hint(name, 2500);
+	}
+	for (const pl of PLACES_TP) {
+		const b = css(document.createElement('button'), 'text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;');
+		b.textContent = pl[0];
+		b.onclick = (e) => { e.stopPropagation(); teleport(pl); };
+		tpMenu.appendChild(b);
+	}
+	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); tpMenu.style.display = tpMenu.style.display === 'none' ? 'flex' : 'none'; });
+	function watchTeleport() {
+		const P = world?.player.state, on = !!P?.flying && !!world?.bayArea;
+		const d = on ? 'flex' : 'none';
+		if (tpBtn.style.display !== d) tpBtn.style.display = d;
+		if (!on && tpMenu.style.display !== 'none') tpMenu.style.display = 'none';
+	}
 	// doors within reach: a button, or E
 	const doorBtn = button('🚪 Open', 'Open the door (E)', 'left:50%;transform:translateX(-50%);bottom:calc(200px + env(safe-area-inset-bottom));display:none;');
 	dom.mount.appendChild(doorBtn);
@@ -463,6 +509,9 @@ export function createIslandWorld() {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
 		if (!visible || !world || document.hidden) return;
+		// on a phone the world holds still while someone thinks of a reply: the model and
+		// the world share the GPU and the page's memory
+		if (isPhone && guide.llm?.busy?.()) return;
 		time += dt;
 		shared.uTime.value = time;
 		stepWind(dt, shared);
@@ -546,6 +595,7 @@ export function createIslandWorld() {
 		indoorK += ((W.houses?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
 		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
 		watchDoor(dt);
+		watchTeleport();
 		W.street?.update(dt, time, camera, sk.night);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);

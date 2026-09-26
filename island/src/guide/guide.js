@@ -6,7 +6,7 @@
 // the hour, put you in the air. A conversational model on your own device gives it
 // its voice; with no model it still answers from the world itself.
 
-import { createLLM, WEBLLM_MODELS, hasWebGPU } from './llm.js';
+import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
 import { PLACES, ZONES } from '../bay/places.js';
 import { toWorld } from '../bay/geo.js';
 import { personaFor, personaPrompt, personaOffline, bodyFor, TAG_RE } from '../people/persona.js';
@@ -446,8 +446,13 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// loads by itself in the background on first launch and is cached from then on; phones
 	// get the smallest. Choosing "Built-in guide" in ⚙ turns it off for good.
 	const phone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
-	const autoId = phone ? 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' : 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
-	const saved = store.get('crysis-guide-model', null);
+	const autoId = phone ? 'SmolLM2-360M-Instruct-q4f16_1-MLC' : 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+	let saved = store.get('crysis-guide-model', null);
+	// the page died while the model was working last time: people use the simple replies
+	// until you turn the model back on (⚙)
+	if (crashedBefore()) { saved = { kind: 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2' }; store.set('crysis-guide-model', saved); setTimeout(() => say('The on-device voices stopped last time (the device ran short of memory), so people are using simple replies. You can turn the model back on in ⚙.', 'note'), 4000); }
+	// a phone that had the larger model by default moves to the small one
+	if (saved?.kind === 'webllm' && phone && saved.id === 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' && saved.auto !== false) saved.id = autoId;
 	const choice = saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
 	function drawSettings() {
 		settings.innerHTML = '';

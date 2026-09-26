@@ -23,7 +23,11 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const KINDS = ['sedan', 'sedan', 'sedan', 'hatch', 'suv', 'suv', 'suv', 'pickup', 'van'];
 	const kinds = ['sedan', 'hatch', 'suv', 'pickup', 'van'];
 	const mk = (geo, mat, cap, colors = true) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true; if (colors) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); group.add(im); return im; };
-	const parked = Object.fromEntries(kinds.map((k) => [k, mk(carGeometry(k), carMat, 1200)]));
+	// (a phone keeps a nearer ring of street and fewer, simpler parked cars: they were
+	// most of a San Francisco frame's triangles)
+	const phone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+	const parked = Object.fromEntries(kinds.map((k) => [k, mk(carGeometry(k, phone ? 18 : 28), carMat, phone ? 300 : 900)]));
+	if (phone) for (const im of Object.values(parked)) im.castShadow = false;
 	const moving = Object.fromEntries(kinds.map((k) => [k, mk(carGeometry(k), carMat, 60)]));
 
 	// street furniture
@@ -134,7 +138,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		}
 	}
 	function build(cx, cz) {
-		const R = 380;
+		const R = phone ? 240 : 380;
 		const counts = new Map(), n = (im) => { const c = counts.get(im) || 0; counts.set(im, c + 1); return c < im.instanceMatrix.count ? c : -1; };
 		const lampPos = lampLightGeo.attributes.position.array; let nl = 0;
 		signalList.length = 0; lanes.length = 0;

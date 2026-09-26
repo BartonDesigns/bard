@@ -271,10 +271,14 @@ export function createCity(shared, scene, bay, real = null) {
 	// Bay Area's street species: London plane and sycamore (round), coast live oak (low
 	// and spreading), redwood and cypress (columnar), and yard shrubs. Far off, where a
 	// crown is a few pixels, a smooth lumpy mass stands in.
-	const TCAP = 24000;
-	const trunkGeo = new THREE.CylinderGeometry(0.6, 1, 1, 7).translate(0, 0.5, 0);
+	// (phones draw fewer trees: a frame's triangles, and the memory, are what crash them)
+	const phone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+	const TCAP = phone ? 11000 : 24000;
+	const trunkGeo = new THREE.CylinderGeometry(0.6, 1, 1, 5).translate(0, 0.5, 0);
+	// far crowns are a few pixels across: 80 faces are plenty (they were 320, and there
+	// are tens of thousands of them)
 	const crownGeo = (() => {
-		let g = new THREE.IcosahedronGeometry(1, 3);
+		let g = new THREE.IcosahedronGeometry(1, 1);
 		g.deleteAttribute('normal'); g.deleteAttribute('uv');
 		g = mergeVertices(g);
 		const p = g.attributes.position;
@@ -282,12 +286,15 @@ export function createCity(shared, scene, bay, real = null) {
 		g.computeVertexNormals();
 		return g;
 	})();
-	const coneGeo = (() => { let g = new THREE.ConeGeometry(1, 1, 14, 3).translate(0, 0.5, 0); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g); g.computeVertexNormals(); return g; })();
+	const coneGeo = (() => { let g = new THREE.ConeGeometry(1, 1, 8, 2).translate(0, 0.5, 0); g.deleteAttribute('normal'); g.deleteAttribute('uv'); g = mergeVertices(g); g.computeVertexNormals(); return g; })();
 	const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
 	const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 0.95 });
 	const trunks = mk(trunkGeo, trunkMat, TCAP, false);
 	trunks.instanceColor = null;
 	const crowns = mk(crownGeo, leafMat, TCAP, false), cones = mk(coneGeo, leafMat, TCAP, false);
+	// the far masses lie far outside the shadow's reach: drawing them into it cost as much
+	// as drawing them
+	for (const im of [trunks, crowns, cones]) im.castShadow = false;
 	const leafTex = TX.leafCluster();
 	const barkT = TX.woodBark(); barkT.repeat.set(2, 3);
 	const SPECIES = [
@@ -337,7 +344,7 @@ export function createCity(shared, scene, bay, real = null) {
 			cy: (bb.min.y + bb.max.y) / 2 / midT.height, ry: (bb.max.y - bb.min.y) / 2 / midT.height,
 			rx: Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) / 2 / midT.height * 0.82, base: bb.min.y / midT.height,
 		};
-		return { near: tierMesh(nearT.parts, 1500, true, LOD.near), mid: tierMesh(midT.parts, 6000, true, LOD.mid), H: nearT.height, Hm: midT.height, far };
+		return { near: tierMesh(nearT.parts, phone ? 800 : 1500, true, LOD.near), mid: tierMesh(midT.parts, phone ? 3000 : 6000, false, LOD.mid), H: nearT.height, Hm: midT.height, far };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, 3000, true, LOD.shrub);
 

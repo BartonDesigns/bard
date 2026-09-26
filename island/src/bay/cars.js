@@ -20,8 +20,9 @@ const SPEC = {
 };
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-export function carGeometry(kind) {
-	const S = SPEC[kind], L2 = S.L / 2, NS = 48;
+// NS: sections along the body (the parked rows use fewer; they are many)
+export function carGeometry(kind, NS = 48) {
+	const S = SPEC[kind], L2 = S.L / 2;
 	const bottom = (s) => 0.3 + 0.1 * sm(L2 - 0.55, L2, Math.abs(s));
 	// the belt line: the hood falls to the nose, the deck is level
 	const belt = (s) => S.belt - (s > S.ws ? S.nose * Math.pow(sm(S.ws, L2, s), 1.3) : 0) - (s < S.rb ? 0.04 * sm(S.rb, -L2, s) : 0);
