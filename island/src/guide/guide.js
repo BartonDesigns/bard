@@ -458,14 +458,16 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	if (crashedBefore()) { saved = { kind: 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2' }; store.set('crysis-guide-model', saved); setTimeout(() => say('The on-device voices stopped last time (the device ran short of memory), so people are using simple replies. You can turn the model back on in ⚙.', 'note'), 4000); }
 	// a phone that had the larger model by default moves to the small one
 	if (saved?.kind === 'webllm' && phone && saved.id === 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' && saved.auto !== false) saved.id = autoId;
-	const choice = saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
+	// phones never load a model: it shares the GPU and the page's memory with the world, and
+	// crashed the page; people there use the built-in replies
+	const choice = phone ? { kind: 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2' } : saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
 	// the phone keeps only the voice it uses (after the world has loaded)
-	if (phone) setTimeout(() => { pruneModels(choice.id).then((b) => { if (b > 5e7) say(`Freed ${(b / 1e9).toFixed(2)} GB on this device: removed a voice model no longer in use.`, 'note'); }).catch(() => {}); }, 20000);
+	if (phone) setTimeout(() => { pruneModels('(none)').then((b) => { if (b > 5e7) say(`Freed ${(b / 1e9).toFixed(2)} GB on this device: removed a voice model no longer in use.`, 'note'); }).catch(() => {}); }, 20000);
 	function drawSettings() {
 		settings.innerHTML = '';
 		const row = (label, node) => { const r = el('label', 'display:flex;align-items:center;gap:8px;margin:6px 0;'); r.append(el('span', 'width:74px;color:rgba(255,255,255,.6);', label), node); settings.append(r); return r; };
 		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
-		for (const [v, t] of [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']]) { const o = el('option', null, t); o.value = v; sel.append(o); }
+		for (const [v, t] of phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']]) { const o = el('option', null, t); o.value = v; sel.append(o); }
 		sel.value = choice.kind;
 		row('Voice', sel);
 		if (choice.kind === 'webllm') {
