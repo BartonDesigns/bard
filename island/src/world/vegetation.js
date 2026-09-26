@@ -918,7 +918,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 		if (sp.far) t.push({ lod: 'far', a0: sp.near - W2, a1: sp.near, b0: end[0], b1: end[1] });
 		return (sp.tiers = t);
 	}
-	let lastX = 1e9, lastZ = 1e9;
+	let lastX = 1e9, lastZ = 1e9, occUsed = true;
 	function stream(cam, force) {
 		const cx = cam.position.x, cz = cam.position.z;
 		if (!force && Math.hypot(cx - lastX, cz - lastZ) < 6) return;
@@ -963,8 +963,11 @@ export function createVegetation(island, shared, scene, flora = null) {
 		// houses: trodden, shaded ground round every foundation
 		for (const f of extra) if (Math.hypot(f.x - cx, f.z - cz) < OSPAN * 0.72) contacts.push(f.x, f.z, Math.max(f.w, f.d) * 0.85, 0.6, 0);
 		// rasterise the soft discs into the occupancy map, centred on the player
+		// (away from the island there is nothing to draw: an empty map stays as it is)
 		const ox = Math.round(cx / 4) * 4 - OSPAN / 2, oz = Math.round(cz / 4) * 4 - OSPAN / 2, px = OS / OSPAN;
-		occData.fill(0);
+		const occWas = occUsed;
+		occUsed = contacts.length > 0;
+		if (occUsed || occWas) occData.fill(0);
 		for (let k = 0; k < contacts.length; k += 5) {
 			const x = (contacts[k] - ox) * px, z = (contacts[k + 1] - oz) * px, R = contacts[k + 2] * px, str = contacts[k + 3], hug = contacts[k + 4];
 			const i0 = Math.max(0, Math.floor(x - R)), i1 = Math.min(OS - 1, Math.ceil(x + R)), j0 = Math.max(0, Math.floor(z - R)), j1 = Math.min(OS - 1, Math.ceil(z + R));
@@ -979,12 +982,21 @@ export function createVegetation(island, shared, scene, flora = null) {
 				if (m > occData[o + 1]) occData[o + 1] = m;
 			}
 		}
-		OCC.needsUpdate = true;
+		if (occUsed || occWas) OCC.needsUpdate = true;
 		shared.uOccO.value.set(ox, oz, OSPAN);
+		// Only the instances in use are uploaded (the buffers are sized for the densest
+		// forest), and a set with none is left out of the frame altogether: away from the
+		// island that is every one of them, and each would still cost a draw's setup.
 		for (const sp of species) for (const m of sp.meshes) {
-			m.im.instanceMatrix.needsUpdate = true; m.im.geometry.attributes.aFade.needsUpdate = true;
-			if (m.im.instanceColor) m.im.instanceColor.needsUpdate = true;
-			m.im.computeBoundingSphere();
+			const im = m.im, n = im.count;
+			im.visible = n > 0;
+			if (!n && !m.had) continue;
+			m.had = n > 0;
+			for (const a of [im.instanceMatrix, im.geometry.attributes.aFade, im.instanceColor]) {
+				if (!a) continue;
+				a.clearUpdateRanges(); a.addUpdateRange(0, Math.max(1, n) * a.itemSize); a.needsUpdate = true;
+			}
+			im.computeBoundingSphere();
 		}
 	}
 	// solid trunks and boulders the walker bumps into
