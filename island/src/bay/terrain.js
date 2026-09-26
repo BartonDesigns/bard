@@ -509,8 +509,8 @@ export function createBayArea(shared, scene, island, BU) {
 						// average glow (as a mipmap would), so distant blocks do not crawl
 						float mpp = length(fwidth(vBW));
 						float lodW = smoothstep(4.5, 2.0, mpp);
-						wins = mix(0.035 * (0.5 + T.b) * (1.0 - street), wins, lodW);           // (a dim average: the lights far off are the sparks)
-						lamps = mix(street * 0.05, lamps, smoothstep(8.0, 3.5, mpp));
+						wins = mix(0.012 * (0.5 + T.b) * (1.0 - street), wins, lodW);           // (a dim average: the lights far off are the sparks)
+						lamps = mix(street * 0.02, lamps, smoothstep(8.0, 3.5, mpp));
 						// (close by the real buildings carry their own lit windows: the ground's
 						// stand-in windows only begin beyond them)
 						float nearL = lamps * 1.2 * (1.0 - smoothstep(900.0, 3500.0, dist)) + wins * smoothstep(1100.0, 2000.0, dist) * (1.0 - smoothstep(2500.0, 5000.0, dist));

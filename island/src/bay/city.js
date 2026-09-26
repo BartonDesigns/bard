@@ -964,6 +964,8 @@ export function createCity(shared, scene, bay, real = null) {
 	function update(cam, nightK) {
 		if (!bay.loaded()) return;
 		night.value = nightK;
+		// the landmark towers' glass: lit floors behind it after dark, not a black slab
+		glassM.emissive.setRGB(0.9, 0.78, 0.6).multiplyScalar(0.22 * nightK);
 		if (!started) { started = true; findSkylines(); landmarks(); bayBridge(); }
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
