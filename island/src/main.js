@@ -111,13 +111,15 @@ function buildDom() {
 	const jump = button('⤒', 'Jump', 'right:calc(18px + env(safe-area-inset-right));bottom:calc(28px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;font-size:22px;');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
 	const fly = button('✈', 'Fly (F)', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:44px;font-size:18px;');
-	const boost = button('×3', 'Fly three times faster (B)', 'right:calc(12px + env(safe-area-inset-right));top:calc(220px + env(safe-area-inset-top));width:44px;font-size:13px;display:none;');
+	const boost = button('×3', 'Fly three times faster (B)', 'right:calc(12px + env(safe-area-inset-right));top:calc(272px + env(safe-area-inset-top));width:44px;font-size:13px;display:none;');
 	const down = button('⇣', 'Descend', 'right:calc(18px + env(safe-area-inset-right));bottom:calc(98px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;font-size:22px;display:none;');
 	const shell = button('🐚', 'Pick up the shell (E)', 'left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
 	const toss = button('Throw', 'Throw it (T)', 'left:calc(50% - 96px);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
 	const place = button('Put down', 'Put it down (E)', 'left:calc(50% + 12px);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
 	const act = button('', '', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(36px + env(safe-area-inset-bottom));display:none;');
-	const launch = button('⇪ To the ship', 'Take off and return to your ship', 'left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));display:none;');
+	// under the road button: a line rocket, back to the ship
+	const launch = button('', 'Take off and return to your ship', 'right:calc(12px + env(safe-area-inset-right));top:calc(220px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
+	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
 	const hint = css(document.createElement('div'), 'position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;max-width:80vw;');
 	const loading = css(document.createElement('div'), 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
@@ -569,7 +571,7 @@ export function createIslandWorld() {
 		if (dom.boost.style.display !== bd) dom.boost.style.display = bd;
 		if (dom.boost.style.background !== bb) dom.boost.style.background = bb;
 		if (!W.player.state.flying) W.player.state.boost = false;
-		const L = origin && !window.L99Journey170?.busy?.() ? 'block' : 'none';
+		const L = origin && !window.L99Journey170?.busy?.() ? 'flex' : 'none';
 		if (dom.launch.style.display !== L) dom.launch.style.display = L;
 	}
 	let origin = null;   // the planet flight landed us from, if any

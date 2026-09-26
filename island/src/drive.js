@@ -3,7 +3,7 @@
 // fire road at a hiking or biking pace); you only choose where to go at the next
 // junction: ← left, → right, ↑ straight on, ↓ turn round now. Works on the real streets,
 // country roads and trails (San Ramon, Mt Diablo, Mt Tam, Mission Peak) and on the town
-// street grids everywhere else. V or the 🚗 button to start and stop.
+// street grids everywhere else. V or the road button to start and stop.
 
 import { BLOCKS, toGrid, fromGrid } from './bay/styles.js';
 
@@ -153,7 +153,9 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		mount.appendChild(b);
 		return b;
 	};
-	const toggleBtn = btn('🚗', 'Drive the road (V)', 'right:calc(12px + env(safe-area-inset-right));top:calc(168px + env(safe-area-inset-top));width:44px;');
+	const toggleBtn = btn('', 'Drive the road (V)', 'right:calc(12px + env(safe-area-inset-right));top:calc(168px + env(safe-area-inset-top));width:44px;display:flex;align-items:center;justify-content:center;');
+	// a line icon: a road running away to the horizon
+	toggleBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 3 5 21M15 3l4 18"/><path d="M12 4v2.5M12 10v3M12 17v3.5"/></svg>';
 	const pad = document.createElement('div');
 	pad.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));width:170px;height:120px;display:none;';
 	mount.appendChild(pad);
@@ -181,11 +183,11 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		if (!W || D.active) return;
 		const P = W.player.state;
 		if (W.boat?.boarded?.()) return;
-		if (!snap()) { hint('No road or trail here to follow. Walk or fly to one, then press 🚗.', 3000); return; }
+		if (!snap()) { hint('No road or trail here to follow. Walk or fly to one, then press the road button.', 3000); return; }
 		D.active = true; P.locked = true; P.flying = false; P.vel.set(0, 0, 0);
 		pad.style.display = isPhone ? 'block' : 'none'; hud.style.display = 'block';
 		toggleBtn.style.background = '#01a982';
-		hint(isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. 🚗 to stop.' : 'Driving: ← → pick the next turn, ↑ straight on, ↓ turn round, Shift to hurry. V to stop.', 4500);
+		hint(isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'Driving: ← → pick the next turn, ↑ straight on, ↓ turn round, Shift to hurry. V to stop.', 4500);
 	}
 	function stop() {
 		if (!D.active) return;
