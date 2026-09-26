@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { planHouse, houseFloor, mainOf, HT, TW } from './houseplan.js';
 import { Builder, houseMaterials, drawItem, lin } from './housekit.js';
+import { occasions } from '../calendar.js';
 import { carGeometry, carMaterial } from './cars.js';
 import { NONE_IN } from '../world/lodfade.js';
 
@@ -370,12 +371,27 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				stoop.push([x0 + 0.1, z0, x1 - 0.1, z0 + 0.3, y]);
 			}
 		}
+		// Halloween: jack-o'-lanterns on the stoop, faces to the street
+		const OCC = occasions();
+		if (OCC.halloween && rnd() < 0.7) {
+			for (let k = 0, n = 1 + Math.floor(rnd() * 3); k < n; k++) {
+				const px = D0.x + (k % 2 ? 0.72 : -0.72) - (k > 1 ? 0.3 : 0), pz = D0.z + 0.45 + (k > 1 ? 0.45 : 0), rr = 0.15 + rnd() * 0.08;
+				g.sphere('matte', px, rr * 0.85, pz, rr, rr * 0.82, rr, lin([0.86, 0.38, 0.06]), 12);
+				g.cyl('matte', px, rr * 1.6, pz, 0.018, 0.06, lin([0.25, 0.3, 0.12]), 6);
+				const fz = pz + rr * 0.97, glow = lin([1.0, 0.62, 0.15]);
+				for (const ex of [-1, 1]) g.box('bulb', px + ex * rr * 0.36 - 0.03, rr * 1.0, fz - 0.01, px + ex * rr * 0.36 + 0.03, rr * 1.12, fz + 0.012, glow);
+				g.box('bulb', px - rr * 0.45, rr * 0.55, fz - 0.03, px + rr * 0.45, rr * 0.66, fz + 0.005, glow);
+			}
+		}
 		if (plan.garage) {
 			const G = plan.garage;
 			g.box('concrete', G.x0, base, G.front, G.x1, 0, G.front + 0.6, lin([0.66, 0.65, 0.62]));
 			stoop.push([G.x0, G.front, G.x1, G.front + 0.6, 0]);
 		}
 
+		// through the holidays most houses string lights along their eaves: all colours, or
+		// all warm white
+		const eaveLights = OCC.holidays && rnd() < 0.6 ? (rnd() < 0.55 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : [[1, 0.85, 0.55]]) : null;
 		// gutters and fascia along the eaves that face the outside, a downspout at a corner
 		for (const r of plan.rects) {
 			const y = r.top;
@@ -391,6 +407,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				bx('trim', e0, e1, q0, q1, y - 0.16, y - 0.01, TRIM);
 				// the soffit under the overhang
 				bx('stucco', s0, s1, pos, o0, y - 0.03, y - 0.01, FOAM);
+				if (eaveLights) for (let u = e0 + 0.15, n = 0; u < e1 - 0.1; u += 0.32, n++) bx('bulb', u - 0.03, u + 0.03, o1 + sgn * 0.01, o1 + sgn * 0.05, y - 0.27, y - 0.21, lin(eaveLights[n % eaveLights.length]));
 				const dp = s0 + 0.12;
 				if (ax === 'z') g.box('trim', dp, base + 0.2, Math.min(pos + sgn * 0.02, pos + sgn * 0.1), dp + 0.07, y - 0.12, Math.max(pos + sgn * 0.02, pos + sgn * 0.1), TRIM);
 			}

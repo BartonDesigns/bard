@@ -336,6 +336,9 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (partner) return askPerson(text);
 		say(text, 'me');
 		const bubble = say('…', 'guide');
+		// the world's secrets answer for themselves (surprises.js)
+		const secret = api.secret?.(text);
+		if (secret) { bubble.textContent = secret; scroll(); return; }
 		if (busy) busy.abort();
 		const ctrl = new AbortController(); busy = ctrl;
 		let reply = null;
@@ -424,6 +427,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function say(text, who) {
 		const b = el('div', who === 'me' ? 'align-self:flex-end;max-width:85%;padding:8px 11px;border-radius:12px 12px 4px 12px;background:rgba(1,169,130,.22);border:1px solid rgba(1,169,130,.35);'
 			: who === 'note' ? 'align-self:center;font:12px system-ui;color:rgba(255,255,255,.55);' : 'align-self:flex-start;max-width:90%;padding:8px 11px;border-radius:12px 12px 12px 4px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);', text);
+		b.style.whiteSpace = 'pre-line';
 		log.append(b); scroll();
 		return b;
 	}
@@ -508,5 +512,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
+	return { update: watch, ask, act, snapshot, show, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
 }

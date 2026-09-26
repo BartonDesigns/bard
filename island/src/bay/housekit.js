@@ -294,6 +294,9 @@ export function houseMaterials(band, night) {
 		frost: new THREE.MeshStandardMaterial({ color: 0xe8eeef, roughness: 0.6, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
 		// lamp shades and fixtures, lit at night
 		lamp: std({ roughness: 0.7, emissive: 0xffd7a0, emissiveIntensity: 0 }),
+		// little coloured lights (the holidays' strings, a jack-o'-lantern's face): their own
+		// colour, dim by day, bright after dark
+		bulb: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
 	};
 	M.lamp.userData.night = true;
 	for (const m of Object.values(M)) addLodFade(m, 'uniform', band || [NONE_IN[0], NONE_IN[1], 36, 46]);
@@ -301,6 +304,7 @@ export function houseMaterials(band, night) {
 	// (seen from outside, with no lamps of its own to light it, a lit room glows brighter)
 	M.setNight = (k, indoors = false) => {
 		M.lamp.emissiveIntensity = k * 1.6;
+		M.bulb.color.setScalar(0.3 + 1.6 * k);
 		M.ceiling.emissiveIntensity = M.paint.emissiveIntensity = 1 - k * 0.6;
 		M.paintLit.emissiveIntensity = 0.13 * (1 - k) + (indoors ? 0.16 : 0.42) * k; M.ceilingLit.emissiveIntensity = 0.26 * (1 - k) + (indoors ? 0.24 : 0.55) * k;
 	};

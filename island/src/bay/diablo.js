@@ -232,6 +232,7 @@ export function createDiablo(scene, bay) {
 	box(4.2, 2.4, 4.2, -4.5, 9.5, -1.5, glassM);                                             // the observation lantern
 	box(5, 0.4, 5, -4.5, 11.9, -1.5);
 	const beaconPos = new THREE.Vector3(-4.5, 13.2, -1.5);
+	let beaconDay = 0;
 	const glow = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,230,190,0.6)'); gr.addColorStop(1, 'rgba(255,200,150,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
 	const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffe2b0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
 	beacon.position.copy(beaconPos); beacon.scale.setScalar(30);
@@ -255,8 +256,9 @@ export function createDiablo(scene, bay) {
 		const bw = beaconPos.clone().applyMatrix4(summit.matrixWorld), a = t * 1.9;
 		const to = new THREE.Vector2(cam.position.x - bw.x, cam.position.z - bw.z).normalize();
 		const flash = Math.pow(Math.max(0, Math.cos(a) * to.x + Math.sin(a) * to.y), 24);
-		beacon.material.opacity = nightK * (0.25 + 0.9 * flash);
-		beacon.scale.setScalar(20 + 60 * flash);
+		// (on Pearl Harbor Day it is lit in earnest, as it has been every 7 December since 1964)
+		beacon.material.opacity = nightK * (0.25 + 0.9 * flash) * (1 + beaconDay * 0.6);
+		beacon.scale.setScalar((20 + 60 * flash) * (1 + beaconDay * 1.5));
 	}
 
 	// ---------- the rock is solid ----------
@@ -285,5 +287,5 @@ export function createDiablo(scene, bay) {
 		}
 		return best;
 	}
-	return { update, push, floor, group, rocks };
+	return { update, push, floor, group, rocks, setBeaconDay: (on) => { beaconDay = on ? 1 : 0; } };
 }

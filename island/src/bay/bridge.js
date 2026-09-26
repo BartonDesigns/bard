@@ -178,6 +178,8 @@ export function createGoldenGate(shared, scene, heightAt) {
 		lamps.opacity = night;
 		reds.opacity = night * (0.6 + 0.4 * (Math.sin(t * 3) > 0 ? 1 : 0.2));
 		steel.emissive.copy(ORANGE).multiplyScalar(0.18 * night);
+		// the anchorages catch the floodlights and the deck lamps' spill (unlit, they read as black holes)
+		concrete.emissive.setRGB(0.16, 0.14, 0.11).multiplyScalar(night);
 	}
 	return { group, update, deckFloor, centre: c, axis: ax, length: S1 - S0 };
 }

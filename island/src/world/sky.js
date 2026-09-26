@@ -58,6 +58,7 @@ export function createSky(scene, shared, renderer) {
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uFogCol: { value: new THREE.Color() },
+		uMeteor: { value: 0 },           // 1 on the nights of the great showers
 		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
@@ -65,7 +66,7 @@ export function createSky(scene, shared, renderer) {
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform float uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -114,9 +115,10 @@ export function createSky(scene, shared, renderer) {
 						float e2 = qr.x * qr.x / 0.0009 + qr.y * qr.y / 0.00008;
 						col += vec3(0.85, 0.82, 0.78) * (exp(-e2) * 0.025 + exp(-e2 * 30.0) * 0.05) * uNight * horizon * (1.0 - uGlow);
 					}
-					// now and then a meteor
-					float mt = floor(uTime / 7.0), mf = fract(uTime / 7.0);
-					if (h21(vec2(mt, 3.0)) > 0.55 && mf < 0.12){
+					// now and then a meteor (every couple of seconds on the nights of the showers)
+					float mper = mix(7.0, 2.3, uMeteor);
+					float mt = floor(uTime / mper), mf = fract(uTime / mper) * mper / 7.0;
+					if (h21(vec2(mt, 3.0)) > mix(0.55, 0.1, uMeteor) && mf < 0.12){
 						vec3 m0 = normalize(vec3(h21(vec2(mt, 1.0)) - 0.5, 0.55 + h21(vec2(mt, 2.0)) * 0.4, h21(vec2(mt, 4.0)) - 0.5));
 						vec3 mdir = normalize(cross(m0, vec3(0.3, 1.0, 0.2)));
 						vec3 head = normalize(m0 + mdir * mf * 1.6);

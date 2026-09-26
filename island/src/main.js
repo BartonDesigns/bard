@@ -49,6 +49,7 @@ import { createRoads } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
 import { createGuide } from './guide/guide.js';
 import { storagePanel } from './storage.js';
+import { createSurprises } from './surprises.js';
 import { createPeople } from './people/people.js';
 import { waveHeight } from './world/ocean.js';
 
@@ -123,7 +124,7 @@ function buildDom() {
 	const launch = button('', 'Take off and return to your ship', 'right:calc(12px + env(safe-area-inset-right));top:calc(220px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
-	const hint = css(document.createElement('div'), 'position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;max-width:80vw;');
+	const hint = css(document.createElement('div'), 'position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;max-width:80vw;white-space:pre-line;');
 	const loading = css(document.createElement('div'), 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
 	loading.textContent = 'Raising the island…';
 	const panel = css(document.createElement('div'), 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));width:min(300px,78vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100dvh - 140px - env(safe-area-inset-top));overflow-y:auto;overscroll-behavior:contain;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);');
@@ -229,7 +230,12 @@ export function createIslandWorld() {
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
 	const state = { seed: null };
 
-	function hint(text, ms = 4000) {
+	// (a hint with priority holds the line for its time: a place name passing by can't
+	// clear a found verse)
+	function hint(text, ms = 4000, pri = 0) {
+		const now = performance.now();
+		if (pri < (hint.pri || 0) && now < (hint.until || 0)) return;
+		hint.pri = pri; hint.until = now + ms;
 		dom.hint.textContent = text;
 		dom.hint.style.opacity = '1';
 		clearTimeout(hint.t);
@@ -239,6 +245,10 @@ export function createIslandWorld() {
 	// people is filled in just below; the guide reaches it through this api object
 	const guideApi = { world: () => world, camera, shared, hint, people: null };
 	const guide = createGuide(dom.mount, guideApi);
+	// secrets and surprises: the Bard's lost verses, fireworks, the foghorns, the calendar
+	const surprises = createSurprises({ scene, camera, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide.say(t, w), isPhone });
+	guideApi.secret = (t) => surprises.secret(t);
+	HOOKS.surprises = surprises;
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
 	HOOKS.drive = drive;
@@ -527,6 +537,7 @@ export function createIslandWorld() {
 		// the weather: frames running slow shed rain streaks; indoors the rain stays out
 		W.weather.state.sheltered = !!W.houses?.inside(camera.position);
 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
+		surprises.update(dt, sk, wx);
 		W.music.update(dt);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
@@ -839,6 +850,11 @@ if (typeof window !== 'undefined') {
 			P.flying = true; P.diving = false; P.pos.set(p.x - 40, w.island.heightAt(p.x, p.z) + 60, p.z + 40); P.yaw = Math.atan2(-40, 40); P.pitch = -0.5;
 			return 'Home.';
 		},
+		// a secret or two: Crysis.fireworks(), Crysis.verses()
+		fireworks: () => { HOOKS.surprises?.fireworks(); return '✦'; },
+		verses: () => HOOKS.surprises?.verses(),
+		get surprises() { return HOOKS.surprises; },
+		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};
 }

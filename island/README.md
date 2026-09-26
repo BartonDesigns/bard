@@ -156,6 +156,16 @@ are on the Crysis ecology; terrain types and the caves and flight
 systems of the older builds move onto it next. `Crysis.ecology()` in the console prints
 the open island's food web.
 
+## Secrets (spoilers)
+
+`src/surprises.js`, with the real calendar in `src/calendar.js` (`?date=2026-07-04` tries another day):
+
+- **The Bard's lost verses**: five glinting scrolls hidden across the Bay, at Fort Point, the Sutro Baths, Rock City, the pole on Mission Peak and Mt Tam's East Peak. Walk up to one to read its line. Find all five and the sky celebrates. Ask the guide about "the Bard's verses" for a riddle to the next one. Progress is kept in `crysis-verses`.
+- **Fireworks** after dark on the Fourth of July and New Year's Eve, when you find the last verse, when you ask the guide for them, or when you type ↑↑↓↓←→←→BA (`Crysis.fireworks()` from the console).
+- **The Golden Gate's foghorns**, two-toned, near the bridge in grey weather or on an early morning.
+- **The calendar**: jack-o'-lanterns on the porches the last week of October, lights along the eaves from December to Twelfth Night, the Mt Diablo beacon lit in earnest on 7 December, meteors every few seconds on the Perseids and Geminids nights.
+- **A welcome home** at your own front door (`Crysis.setHome`).
+
 ## Faceplate contract
 
 - `window.L99Island` — `open({seed})`, `close()`, `active()`, `link()`
