@@ -87,7 +87,8 @@ export function createSky(scene, shared, renderer) {
 				float lowK = (1.0 - smoothstep(0.04, 0.4, uSunDir.y)) * step(-0.02, uSunDir.y) * (1.0 - uNight);
 				vec2 sh2d = normalize(uSunDir.xz + 1e-5), dh2d = normalize(d.xz + 1e-5);
 				float toward = pow(max(dot(sh2d, dh2d), 0.0), 5.0);
-				col += uSunColor * (pow(sd, 6.0) * 0.32 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.28) * lowK;
+				vec3 gold = mix(uSunColor, vec3(1.0, 0.72, 0.32), 0.45);
+				col += gold * (pow(sd, 6.0) * 0.5 + pow(sd, 40.0) * 0.6 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.45) * lowK * (1.0 - uCloud * 0.35);
 				{
 					vec3 t1 = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0))), t2 = cross(t1, uSunDir);
 					vec2 q = vec2(dot(d, t1), dot(d, t2));
