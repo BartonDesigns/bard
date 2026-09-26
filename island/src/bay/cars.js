@@ -20,8 +20,9 @@ const SPEC = {
 };
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-// NS: sections along the body (the parked rows use fewer; they are many)
-export function carGeometry(kind, NS = 48) {
+// NS: sections along the body, WS: sides round each tyre (cars in the distance use fewer
+// of both; they are many)
+export function carGeometry(kind, NS = 48, WS = 20) {
 	const S = SPEC[kind], L2 = S.L / 2;
 	const bottom = (s) => 0.3 + 0.1 * sm(L2 - 0.55, L2, Math.abs(s));
 	// the belt line: the hood falls to the nose, the deck is level
@@ -77,8 +78,8 @@ export function carGeometry(kind, NS = 48) {
 	// wheels: a tyre with a rounded shoulder and an alloy rim set into it
 	for (const z of [S.wz, -S.wz]) for (const sx of [-1, 1]) {
 		const x = sx * (S.W / 2 - 0.105);
-		const tyre = new THREE.CylinderGeometry(0.34, 0.34, 0.23, 20, 1, false).rotateZ(Math.PI / 2).translate(x, 0.34, z);
-		const rim = new THREE.CylinderGeometry(0.21, 0.23, 0.03, 18).rotateZ(Math.PI / 2).translate(x + sx * 0.108, 0.34, z);
+		const tyre = new THREE.CylinderGeometry(0.34, 0.34, 0.23, WS, 1, false).rotateZ(Math.PI / 2).translate(x, 0.34, z);
+		const rim = new THREE.CylinderGeometry(0.21, 0.23, 0.03, WS - 2).rotateZ(Math.PI / 2).translate(x + sx * 0.108, 0.34, z);
 		for (const [w, pt] of [[tyre, 2], [rim, 5]]) {
 			const g = w.toNonIndexed(); g.deleteAttribute('uv');
 			const e = new Float32Array(g.attributes.position.count * 4);

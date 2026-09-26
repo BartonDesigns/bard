@@ -545,7 +545,9 @@ export function createBayArea(shared, scene, island, BU) {
 				{
 					// fine relief the survey cannot see: gullies, knolls and grain, as a bump
 					float dist2 = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
-					float bh = (fbm3(vBW * 0.045) * 2.2 + fbm3(vBW * 0.22) * 0.5 + vn(vBW * 1.3) * 0.08) * (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
+					// (past 6 km it has faded out entirely: its noise is not computed there)
+					float bh = 0.0;
+					if (dist2 < 6000.0) bh = (fbm3(vBW * 0.045) * 2.2 + fbm3(vBW * 0.22) * 0.5 + vn(vBW * 1.3) * 0.08) * (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
 					float fDet = dot(vSx, R1);

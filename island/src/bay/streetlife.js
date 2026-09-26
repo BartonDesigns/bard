@@ -22,9 +22,60 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const carMat = carMaterial(night);
 	const KINDS = ['sedan', 'sedan', 'sedan', 'hatch', 'suv', 'suv', 'suv', 'pickup', 'van'];
 	const kinds = ['sedan', 'hatch', 'suv', 'pickup', 'van'];
-	const mk = (geo, mat, cap, colors = true) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true; if (colors) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); group.add(im); return im; };
-	const parked = Object.fromEntries(kinds.map((k) => [k, mk(carGeometry(k), carMat, 1200)]));
-	const moving = Object.fromEntries(kinds.map((k) => [k, mk(carGeometry(k), carMat, 60)]));
+	// (each set keeps its bounds up to date as it is filled, so a set wholly out of view, or
+	// out of the sun's shadow box, is skipped)
+	const mk = (geo, mat, cap, colors = true) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.count = 0; im.castShadow = true; im.receiveShadow = true; if (colors) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); group.add(im); return im; };
+	// upload only the instances in use (the buffers are sized for the busiest streets), and
+	// leave an empty set out of the frame
+	const mark = (im) => {
+		im.visible = im.count > 0;
+		for (const a of [im.instanceMatrix, im.instanceColor]) {
+			if (!a) continue;
+			a.clearUpdateRanges(); a.addUpdateRange(0, Math.max(1, im.count) * a.itemSize); a.needsUpdate = true;
+		}
+		im.computeBoundingSphere();
+	};
+	// Cars are the street's heaviest meshes (a lofted body and four wheels, some 2,700
+	// triangles), and from a rooftop or the air there are thousands in view, each drawn
+	// twice (once more into the sun's shadow map). Past 70 m a car is a few dozen pixels
+	// long and past 180 m barely a dozen, so there it is drawn from a coarser loft with
+	// plainer wheels: the same car at that size, at a third and then a fifth of the triangles.
+	const TIERS = [[70, 48, 20], [180, 16, 10], [Infinity, 8, 6]].map(([d, ns, ws]) => ({ d2: d * d, geo: Object.fromEntries(kinds.map((k) => [k, carGeometry(k, ns, ws)])) }));
+	const tierOf = (d2) => { let w = 0; while (d2 >= TIERS[w].d2) w++; return w; };
+	// The parked cars are placed into a plain store, then shared out between the tiers as you
+	// move, and within each tier cast into the sun's shadow map only where the shadow box
+	// (sky.js, it follows you) can reach while you are near here; the rest, most of them from
+	// a rooftop and all of them from the air, are left out of the shadow pass.
+	const store = (cap) => ({ m: new Float32Array(cap * 16), c: new Float32Array(cap * 3), n: 0, instanceMatrix: { count: cap }, setMatrixAt(i, m) { m.toArray(this.m, i * 16); }, setColorAt(i, c) { c.toArray(this.c, i * 3); } });
+	const parked = Object.fromEntries(kinds.map((k) => [k, store(1200)]));
+	// per kind: [tier 0 casting, tier 0 not, tier 1 casting, ...]
+	const parkedSets = Object.fromEntries(kinds.map((k) => [k, TIERS.flatMap((T) => [mk(T.geo[k], carMat, 1200), mk(T.geo[k], carMat, 1200)])]));
+	for (const sets of Object.values(parkedSets)) sets.forEach((im, i) => { im.castShadow = i % 2 === 0; });
+	const moving = Object.fromEntries(kinds.map((k) => [k, TIERS.map((T) => mk(T.geo[k], carMat, 60))]));
+	// (re-shared every SPLIT_M of travel or SPLIT_S seconds, so the reach test allows for that
+	// much movement, the sun's drift, and a car's own size)
+	const SPLIT_M = 6, SPLIT_S = 3, BOX = shared.shadowBox || { half: 1e5, reach: 1e5 }, SLACK = SPLIT_M + 6;
+	const LAT = BOX.half * Math.SQRT2 + SLACK, DEPTH = BOX.reach + SLACK;
+	let splitX = 1e9, splitY = 1e9, splitZ = 1e9, splitT = 0;
+	const shareN = new Array(TIERS.length * 2).fill(0);
+	function split(x, y, z, t) {
+		splitX = x; splitY = y; splitZ = z; splitT = t;
+		const sd = shared.uSunDir.value;
+		for (const k of kinds) {
+			const S = parked[k], sets = parkedSets[k];
+			shareN.fill(0);
+			for (let i = 0; i < S.n; i++) {
+				const dx = S.m[i * 16 + 12] - x, dy = S.m[i * 16 + 13] - y, dz = S.m[i * 16 + 14] - z;
+				// along the light, and across it (the box's square taken as its circle)
+				const a = dx * sd.x + dy * sd.y + dz * sd.z, across = dx * dx + dy * dy + dz * dz - a * a;
+				const w = tierOf(dx * dx + dz * dz) * 2 + (Math.abs(a) < DEPTH && across < LAT * LAT ? 0 : 1);
+				const j = shareN[w]++, im = sets[w];
+				im.instanceMatrix.array.set(S.m.subarray(i * 16, i * 16 + 16), j * 16);
+				im.instanceColor.array.set(S.c.subarray(i * 3, i * 3 + 3), j * 3);
+			}
+			sets.forEach((im, w) => { im.count = shareN[w]; mark(im); });
+		}
+	}
 
 	// street furniture
 	const metal = new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: 0.5, metalness: 0.6 });
@@ -203,11 +254,12 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			}
 		}
 		if (real?.loaded()) realStreets(cx, cz, R, n, lampPos, (v) => { nl = v; }, () => nl);
-		for (const im of [...Object.values(parked), lamps, signals, hydrants, benches, shelters, bins, meters]) {
+		for (const im of [lamps, signals, hydrants, benches, shelters, bins, meters]) {
 			im.count = Math.min(counts.get(im) || 0, im.instanceMatrix.count);
-			im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
-			im.computeBoundingSphere();
+			mark(im);
 		}
+		for (const S of Object.values(parked)) S.n = Math.min(counts.get(S) || 0, S.instanceMatrix.count);
+		splitX = 1e9;
 		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true;
 		sigGeo.setDrawRange(0, Math.min(300, signalList.length));
 		signalList.slice(0, 300).forEach((s, k) => sigGeo.attributes.position.array.set([s.x, s.y, s.z], k * 3));
@@ -236,13 +288,17 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		const x = cam.position.x, z = cam.position.z;
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
+		if (Math.hypot(x - splitX, cam.position.y - splitY, z - splitZ) > SPLIT_M || t - splitT > SPLIT_S || t < splitT) split(x, cam.position.y, z, t);
 		lampLights.material.opacity = nightK;
 		// signals cycle green, amber, red
-		const sc2 = sigGeo.attributes.color.array;
-		signalList.slice(0, 300).forEach((s, k) => { const c = ((t + s.ph) % 60) / 60; const [r, g, b] = c < 0.45 ? [0.1, 1, 0.4] : c < 0.52 ? [1, 0.7, 0.05] : [1, 0.08, 0.05]; sc2.set([r, g, b], k * 3); });
+		const sc2 = sigGeo.attributes.color.array, ns = Math.min(300, signalList.length);
+		for (let k = 0; k < ns; k++) {
+			const c = ((t + signalList[k].ph) % 60) / 60, o = k * 3;
+			if (c < 0.45) { sc2[o] = 0.1; sc2[o + 1] = 1; sc2[o + 2] = 0.4; } else if (c < 0.52) { sc2[o] = 1; sc2[o + 1] = 0.7; sc2[o + 2] = 0.05; } else { sc2[o] = 1; sc2[o + 1] = 0.08; sc2[o + 2] = 0.05; }
+		}
 		sigGeo.attributes.color.needsUpdate = true;
 		// traffic: along the lane, easing to a stop near the far end, then a new lane
-		const counts = Object.fromEntries(kinds.map((k) => [k, 0]));
+		for (const k of kinds) for (const im of moving[k]) im.count = 0;
 		for (const c of cars) {
 			const l = c.l, L = l.L;
 			const toEnd = c.dir > 0 ? (1 - c.u) * L : c.u * L;
@@ -258,12 +314,13 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			const off = l.oneway ? c.lane * l.half : (c.dir > 0 ? -1 : 1) * Math.min(1.8, l.half * 0.4);
 			const px = lx + dz * off, pz = lz - dx * off;
 			c.px = px; c.pz = pz; c.vx = dx * c.dir * c.v; c.vz = dz * c.dir * c.v;      // for the street sound
-			const im = moving[c.kind], k = counts[c.kind]++;
+			const im = moving[c.kind][tierOf((px - x) * (px - x) + (pz - z) * (pz - z))], k = im.count;
 			if (k >= im.instanceMatrix.count) continue;
 			putCar(im, k, px, pz, Math.atan2(dx * c.dir, dz * c.dir));
 			im.setColorAt(k, col.setRGB(c.col[0], c.col[1], c.col[2]));
+			im.count++;
 		}
-		for (const k of kinds) { const im = moving[k]; im.count = counts[k]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
+		for (const k of kinds) for (const im of moving[k]) mark(im);
 	}
 	return { update, group, cars };
 }
