@@ -4941,7 +4941,15 @@ roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);`)},
 			${Ma}
 			${g1}
 			// the island's own sea bed inside its map, the real one outside
-			float groundAt(vec2 p){ return max(abs(p.x), abs(p.y)) < uHalf - 20.0 ? heightAt(p) : bayHeight(p); }
+			// the island's own sea floor eased into the real one across a wide, wavy band
+			// (switching at the island map's edge drew a square in the water's colour)
+			float groundAt(vec2 p){
+				float e = max(abs(p.x), abs(p.y)) + (sin(p.x * 0.0021 + 1.3) * sin(p.y * 0.0017 + 0.4) + sin((p.x + p.y) * 0.0009)) * 180.0;
+				float k = smoothstep(uHalf - 1400.0, uHalf - 60.0, e);
+				if (k <= 0.0) return heightAt(p);
+				float b = bayHeight(p);
+				return k >= 1.0 || max(abs(p.x), abs(p.y)) >= uHalf - 20.0 ? b : mix(heightAt(p), b, k);
+			}
 			${i}
 			${yo}
 			${n1}
@@ -5030,17 +5038,22 @@ roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);`)},
 				float F = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
 				// the bottom you see through the water: sand, reef, caustics
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
-				float reef = texture2D(uMasks, muv).b;
+				// how far into the cold open sea: round, not the island map's square, its edge
+				// wandering with broad noise, and the island's own reef and sand fading out
+				// before the map ends
+				float warmR = length(vW.xz) + (vn(vW.xz * 0.00045) - 0.5) * 3200.0 + (vn(vW.xz * 0.0017 + 7.0) - 0.5) * 900.0;
+				float cold = smoothstep(2600.0, 7600.0, warmR);
+				float inMap = 1.0 - smoothstep(0.86, 0.98, max(abs(muv.x - 0.5), abs(muv.y - 0.5)) * 2.0);
+				float reef = texture2D(uMasks, clamp(muv, 0.0, 1.0)).b * inMap;
 				vec3 sand = vec3(0.86, 0.80, 0.64);
 				vec3 bottom = mix(sand, vec3(0.20, 0.24, 0.16), reef * 0.85);
 				// off the island this is the cold North Pacific and the bay: grey-green, murky
-				float cold = smoothstep(2500.0, 9000.0, max(abs(vW.x), abs(vW.z)));
 				reef *= 1.0 - cold;
 				bottom = mix(bottom, vec3(0.42, 0.4, 0.33), cold);
 				vec2 cq = vW.xz * 0.55;
 				float c1 = 1.0 - abs(vn(cq + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
 				float c2 = 1.0 - abs(vn(cq * 1.3 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
-				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth)) * (1.0 - 0.7 * smoothstep(2500.0, 9000.0, max(abs(vW.x), abs(vW.z))));
+				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth)) * (1.0 - 0.7 * cold);
 				float sunUp = clamp(uSunDir.y * 3.0, 0.0, 1.0);
 				bottom *= (0.55 + caust * sunUp) ;
 				vec3 trans = exp(-mix(vec3(0.34, 0.075, 0.052), vec3(0.5, 0.2, 0.19), cold) * vDepth);
