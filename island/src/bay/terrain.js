@@ -66,7 +66,7 @@ float bayHeight(vec2 w){
 const REAL_LAND = /* glsl */`
 vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	vec3 lawn = mix(vec3(0.2, 0.34, 0.1), vec3(0.3, 0.41, 0.15), gn);
-	vec3 dry = mix(lawn, mix(vec3(0.5, 0.45, 0.28), vec3(0.6, 0.53, 0.34), gn), uSeason);
+	vec3 dry = mix(lawn, mix(vec3(0.32, 0.22, 0.09), vec3(0.46, 0.33, 0.14), gn), uSeason);
 	if (lu < 0.5 || (lu > 10.5 && lu < 12.5) || lu > 13.5) return nat;
 	if (lu < 1.5) {
 		// yards: lawns (a few browned off), planting beds, shade
@@ -136,7 +136,7 @@ export function bayUniforms() {
 const CBD = [[37.7925, -122.399, 1, 1300], [37.7785, -122.395, 0.55, 900], [37.8044, -122.2712, 0.6, 800], [37.3337, -121.8907, 0.5, 900], [37.87, -122.268, 0.25, 500], [37.901, -122.061, 0.25, 500], [37.8313, -122.2852, 0.3, 450], [37.5630, -122.3255, 0.15, 500], [37.4443, -122.1598, 0.15, 400], [38.4404, -122.7141, 0.2, 500], [37.978, -122.031, 0.2, 500], [37.3861, -122.0839, 0.15, 500], [37.3688, -122.0363, 0.15, 500], [37.4852, -122.2364, 0.15, 400]];
 // open land inside the towns: Alcatraz, Angel Island and Yerba Buena Island, San Ramon's Central Park and the Crow Canyon golf course,
 // Lake Merritt, and in San Francisco the parks, the Presidio, the hills
-const PARKS = [[37.8267, -122.4230, 420, 320, 0], [37.8609, -122.4326, 1500, 1500, 0], [37.8103, -122.3636, 650, 550, 0], [37.7650, -121.9522, 260, 200, 0], [37.7880, -121.9720, 500, 350, 0.15], [37.8290, -122.2600, 600, 450, 0], [37.7690, -122.4830, 2600, 450, 0], [37.7989, -122.4662, 1500, 1100, 0.3], [37.7544, -122.4477, 700, 700, 0], [37.7580, -122.4570, 600, 600, 0], [37.7200, -122.4950, 800, 900, 0], [37.7180, -122.4200, 700, 500, 0.5], [37.7850, -122.5050, 500, 400, 0]];
+const PARKS = [[37.8267, -122.4230, 420, 320, 0], [37.8609, -122.4326, 1500, 1500, 0], [37.8103, -122.3636, 650, 550, 0], [37.7650, -121.9522, 260, 200, 0], [37.7880, -121.9720, 500, 350, 0.15], [37.8290, -122.2600, 600, 450, 0], [37.7690, -122.4830, 2600, 450, 0], [37.7989, -122.4662, 1500, 1100, 0.06], [37.7544, -122.4477, 700, 700, 0], [37.7580, -122.4570, 600, 600, 0], [37.7200, -122.4950, 800, 900, 0], [37.7180, -122.4200, 700, 500, 0.5], [37.7850, -122.5050, 500, 400, 0], [37.8320, -122.5050, 2700, 1500, 0], [37.7560, -122.5095, 260, 3200, 0]];      // ... the Marin Headlands, Ocean Beach's sand
 const hashStr = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
 
 // the CPU twin of the GLSL above
@@ -338,17 +338,23 @@ export function createBayArea(shared, scene, island, BU) {
 					float north = clamp(-n.z * 2.2, 0.0, 1.0) * smoothstep(0.04, 0.25, slope);
 					float south = clamp(n.z * 2.2, 0.0, 1.0) * smoothstep(0.08, 0.3, slope);
 					// the grass: green in the rainy season, gold by summer (uSeason 0..1)
-					vec3 gold = mix(vec3(0.6, 0.48, 0.27), vec3(0.75, 0.63, 0.37), n2);
+					// (in linear light: tawny gold, not the pale beige that tone mapping turns to sand)
+					vec3 gold = mix(vec3(0.3, 0.19, 0.075), vec3(0.47, 0.31, 0.12), n2) * (0.84 + 0.32 * fbm3(vBW * 0.0011 + 7.3));
+					// broad patches: grazed short and browner, ungrazed taller and paler, olive where
+					// there is a little more water
+					gold = mix(gold, vec3(0.26, 0.22, 0.09), smoothstep(0.52, 0.72, fbm3(vBW * 0.0045 + 3.1)) * 0.55);
+					gold = mix(gold, gold * vec3(1.12, 1.05, 0.9), smoothstep(0.55, 0.75, fbm3(vBW * 0.013 + 9.7)) * 0.6);
+					gold *= 0.9 + 0.2 * n3;
 					vec3 spring = mix(vec3(0.2, 0.36, 0.07), vec3(0.33, 0.47, 0.1), n2);
 					gold = mix(spring, gold, clamp(uSeason + (n1 - 0.5) * 0.3 + slope * 0.4 * uSeason, 0.0, 1.0));
 					vec3 c = gold;
 					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4);
-					c = mix(c, mix(vec3(0.27, 0.28, 0.18), vec3(0.35, 0.34, 0.22), n3), chap * 0.85);
+					c = mix(c, mix(vec3(0.085, 0.1, 0.045), vec3(0.14, 0.15, 0.075), n3), chap * 0.85);          // chaparral: dark olive scrub
 					float oak = smoothstep(0.42, 0.68, n1 + north * 0.4 + fogbelt * 0.12 - south * 0.15 + (n2 - 0.5) * 0.3);
 					c = mix(c, mix(vec3(0.12, 0.16, 0.07), vec3(0.19, 0.23, 0.11), n3), oak * 0.88);
 					float forest = smoothstep(0.55, 0.78, n1 * 0.55 + north * 0.45 + fogbelt * 0.45) * smoothstep(40.0, 180.0, h);
 					c = mix(c, mix(vec3(0.05, 0.1, 0.05), vec3(0.08, 0.14, 0.07), n3), forest * 0.92);
-					c = mix(c, mix(vec3(0.4, 0.38, 0.34), vec3(0.52, 0.49, 0.44), n2), smoothstep(0.55, 0.85, slope));
+					c = mix(c, mix(vec3(0.27, 0.24, 0.19), vec3(0.4, 0.36, 0.29), n2), smoothstep(0.5, 0.85, slope));
 					// sand at the water's edge, mud and sand under water
 					float beach = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
@@ -503,7 +509,7 @@ export function createBayArea(shared, scene, island, BU) {
 						// average glow (as a mipmap would), so distant blocks do not crawl
 						float mpp = length(fwidth(vBW));
 						float lodW = smoothstep(4.5, 2.0, mpp);
-						wins = mix(0.14 * (0.5 + T.b) * (1.0 - street), wins, lodW);
+						wins = mix(0.035 * (0.5 + T.b) * (1.0 - street), wins, lodW);           // (a dim average: the lights far off are the sparks)
 						lamps = mix(street * 0.05, lamps, smoothstep(8.0, 3.5, mpp));
 						// (close by the real buildings carry their own lit windows: the ground's
 						// stand-in windows only begin beyond them)

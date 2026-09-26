@@ -21,7 +21,8 @@ const CAR_PAINT = [[0.92, 0.92, 0.9], [0.08, 0.08, 0.09], [0.45, 0.46, 0.48], [0
 
 export function createHouses(scene, bay, real, city, { isPhone = false, night = { value: 0 } } = {}) {
 	// the hand-over band: the near house fills in as the far block thins out
-	const band = isPhone ? [NONE_IN[0], NONE_IN[1], 24, 32] : [NONE_IN[0], NONE_IN[1], 36, 46];
+	// (a narrow band: anything parked inside it stays half dissolved, so keep it to a couple of metres)
+	const band = isPhone ? [NONE_IN[0], NONE_IN[1], 27, 29.5] : [NONE_IN[0], NONE_IN[1], 40, 42.5];
 	const BUILD_R = band[3] + 10, DROP_R = BUILD_R + 25, MAX = isPhone ? 6 : 12;
 	const M = houseMaterials(band);
 	city?.setNearBand?.(band[2], band[3]);

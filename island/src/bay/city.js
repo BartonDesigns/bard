@@ -249,20 +249,25 @@ function buildingMaterial(shared, night, nearBand) {
 				// far off, where a window is smaller than a pixel or two, it is only its average
 				// (as a mipmap would be): no crawling speckle on distant facades at night
 				float aaW = smoothstep(0.75, 0.3, length(fwidth(cell)));
-				win = mix(0.3, win, aaW);
+				win = mix(0.24, win, aaW);
 				win *= (1.0 - roof) * step(0.8, vLY);
 				diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
 				diffuseColor.rgb *= mix(1.0, 0.8, roof);
 				// contact shade: the wall darkens where it meets the ground (the sky it sees is
 				// half hidden there), so the building sits in the ground instead of on it
 				diffuseColor.rgb *= mix(1.0, mix(0.58, 1.0, smoothstep(0.9, 3.4, vLY)), (1.0 - roof) * step(vKind, 6.5));
-				float lit = max(mix(0.36, step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
-				winGlow = mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6) * win * lit * uNightC * (0.6 + 0.4 * bh(floor(cell) + 3.3)) * 1.1;
+				float lit = max(mix(0.18, step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
+				// each lit window its own: warm lamps or cool office tubes, brighter up by the
+				// ceiling light, some with the blinds half down (close up; far off, the average)
+				vec2 fc = fract(cell), cid = floor(cell);
+				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
+				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
+				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding9';
+	m.customProgramCacheKey = () => 'baybuilding11';
 	return m;
 }
 
@@ -278,6 +283,8 @@ function roofGeometry(hip) {
 	n.computeVertexNormals();
 	return n;
 }
+
+const OCEAN_X = toWorld(37.76, -122.49).x;       // west of here the sea is the Pacific
 
 export function createCity(shared, scene, bay, real = null) {
 	const group = new THREE.Group();
@@ -445,6 +452,9 @@ export function createCity(shared, scene, bay, real = null) {
 				const parkBlock = hash(i * 3 + 7, j * 5 + 1) > 0.975 && U.d < 0.2;              // a park or a playground
 				const ground = bay.heightAt(wx, wz);
 				if (ground < 0.8) continue;
+				// not on the ocean beach: low ground with the Pacific a block away is sand and dune
+				// (the bay shore keeps its waterfront)
+				if (ground < 5 && wx < OCEAN_X && Math.min(bay.heightAt(wx - 120, wz), bay.heightAt(wx + 120, wz), bay.heightAt(wx, wz - 120), bay.heightAt(wx, wz + 120)) < 0.2) continue;
 				const X0 = i * BX + ST + 2.5, Z0 = j * BZ + ST + 2.5, IX = BX - ST - 5, IZ = BZ - ST - 5;   // the block inside its pavements
 				const r0 = hash(i * 17 + 3, j * 29 + 1);
 				if (parkBlock) {

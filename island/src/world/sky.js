@@ -456,8 +456,11 @@ export function createSky(scene, shared, renderer) {
 		const sunCol = shared.uSunColor.value.copy(PAL.sunDay).lerp(PAL.sunSet, setK);
 		// light: the sun by day, the moon by night
 		// cloud over the sun (a shower's, or overcast) takes the direct light and softens the shadows
-		const sunVis = W ? W.sunVis : 1;
-		sun.shadow.intensity = 0.78 * (0.35 + 0.65 * sunVis);
+		// (and a sky closing over, whatever is over the sun just now: under a full overcast
+		// there is no direct sun at all, only the grey light from everywhere)
+		const overcast = W ? THREE.MathUtils.smoothstep(W.cover ?? 0, 0.6, 0.95) : 0;
+		const sunVis = Math.min(W ? W.sunVis : 1, 1 - overcast * 0.85);
+		sun.shadow.intensity = 0.78 * (0.12 + 0.88 * sunVis);
 		if (night < 0.5) {
 			sun.color.copy(sunCol);
 			sun.intensity = (3.4 * dayK + 0.4 * setK) * (0.25 + 0.75 * sunVis);
@@ -477,7 +480,7 @@ export function createSky(scene, shared, renderer) {
 		hemi.color.copy(tmpB).lerp(tmpA, 0.5).multiplyScalar(1.0);
 		// light bounced off warm sand and sunlit leaves fills the shade with gold, not grey
 		hemi.groundColor.setRGB(0.46, 0.36, 0.18).multiplyScalar(0.3 + 0.7 * dayK);
-		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) + (W?.flash || 0) * 2.5;
+		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) + (W?.flash || 0) * 2.5;
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		scene.fog.color.copy(tmpB).lerp(tmpA, 0.12);

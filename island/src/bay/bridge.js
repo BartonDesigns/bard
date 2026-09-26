@@ -37,7 +37,7 @@ export function createGoldenGate(shared, scene, heightAt) {
 
 	const steel = new THREE.MeshStandardMaterial({ color: ORANGE, roughness: 0.55, metalness: 0.25 });
 	const concrete = new THREE.MeshStandardMaterial({ color: 0x9a968e, roughness: 0.9 });
-	const road = new THREE.MeshStandardMaterial({ color: 0x3a3a3c, roughness: 0.85, side: THREE.DoubleSide });
+	const road = new THREE.MeshStandardMaterial({ color: 0x4a4a4c, roughness: 0.85 });
 	// every box goes into one merged mesh per material (a few draws for the whole bridge)
 	const parts = new Map();
 	const heading = Math.atan2(ax.x, ax.y);
@@ -96,6 +96,13 @@ export function createGoldenGate(shared, scene, heightAt) {
 		for (let s = S0; s <= S1 + 0.1; s += STEP) pts.push(ring(s));
 		for (const [a, b2] of pts) { P.push(a.x, a.y + 0.6, a.z, b2.x, b2.y + 0.6, b2.z); N.push(0, 1, 0, 0, 1, 0); }
 		for (let k = 0; k < pts.length - 1; k++) { const a = k * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+		// wound to face up (seen from the wrong side a double-sided face turns its normal
+		// away, and the roadway went black)
+		{
+			const v = (i) => new THREE.Vector3(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
+			const nrm = new THREE.Vector3().crossVectors(v(I[1]).sub(v(I[0])), v(I[2]).sub(v(I[0])));
+			if (nrm.y < 0) for (let i = 0; i < I.length; i += 3) { const t = I[i + 1]; I[i + 1] = I[i + 2]; I[i + 2] = t; }
+		}
 		top.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); top.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); top.setIndex(I);
 		const roadMesh = new THREE.Mesh(top, road);
 		roadMesh.receiveShadow = true;
