@@ -37,6 +37,7 @@ import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
 import { createLake } from './bay/lake.js';
+import { createTidepools } from './bay/tidepools.js';
 import { createFishing } from './fishing.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
@@ -275,6 +276,7 @@ export function createIslandWorld() {
 		['Golden Gate Bridge, Vista Point', 37.8326, -122.4814, 2.6], ['Downtown San Francisco', 37.7936, -122.3965, 0.9], ['Twin Peaks', 37.7544, -122.4477, 0.2],
 		['San Ramon', 37.7700, -121.9380, 0], ['Lake Annabel, Bishop Ranch', 37.7646, -121.9660, -2.2], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
 		['Mt Tamalpais, East Peak', 37.9293, -122.5780, 2.2], ['Mission Peak', 37.5125, -121.8806, 1.5], ['Berkeley Hills', 37.8812, -122.2425, 1.9],
+		['Tide pools, Moss Beach', 37.5214, -122.5166, 1.75], ['Devil\'s Slide, Highway 1', 37.5738, -122.5148, 3.1], ['Half Moon Bay, Highway 1', 37.4640, -122.4330, 0], ['Duxbury Reef, Bolinas', 37.8936, -122.6972, 2.3],
 		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
 	];
 	const tpBtn = button('', 'Teleport to a place', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
@@ -425,7 +427,9 @@ export function createIslandWorld() {
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
-			world.lake = createLake(scene, bayArea, shared, { isPhone });
+			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real });
+			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
+			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
@@ -442,8 +446,8 @@ export function createIslandWorld() {
 				world.labels = createLabels(dom.mount, bayArea, bridge);
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
-				const diablo = world.diablo, houses = world.houses, fwy = world.freeways;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y));
+				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y));
 				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
 				renderer.compile(scene, camera);
 			});
@@ -657,6 +661,13 @@ export function createIslandWorld() {
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		W.lake?.update(dt, time, camera, sk.night);
+		if (W.tidepools) {
+			W.tidepools.update(dt, time, camera);
+			// arriving on a reef: what to look for
+			const tp = camera.position.y < 60 ? W.tidepools.siteAt(camera.position.x, camera.position.z) : null;
+			if (tp && tp !== W.tpSeen) hint(`${tp.name}\nLow tide: look in the pools for ochre sea stars, green anemones and purple urchins${tp.seals ? '. Harbor seals haul out on the outer rocks.' : '.'}`, 7000);
+			if (tp) W.tpSeen = tp;
+		}
 		fishing.update(dt, time, !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);

@@ -991,7 +991,7 @@ export function createCity(shared, scene, bay, real = null) {
 		wildLand(cx, cz, 2700, trees, 22, 1100);          // beyond: a coarser, cheaper scatter for the far masses
 		for (const t of real.near('trees', cx, cz, 2700)) {
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
-			if (g > 0.5) trees.push({ x: t.x, y: g - 0.3, z: t.z, h: t.h, cone: !!t.cone, col: t.cone ? jit([0.13, 0.21, 0.11], r) : jit(pick(PAL.crown, r), r) });
+			if (g > 0.5) trees.push({ x: t.x, y: g - 0.3, z: t.z, h: t.h, cone: !!t.cone, col: t.cone ? jit([0.13, 0.21, 0.11], r) : t.flower ? jit([0.62, 0.2, 0.34], r) : jit(pick(PAL.crown, r), r) });   // (crape myrtles in bloom)
 		}
 	}
 

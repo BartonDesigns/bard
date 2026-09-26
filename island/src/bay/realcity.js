@@ -23,19 +23,20 @@ export const REAL_U = {
 	uSeason: { value: 1 },                      // 0 spring green .. 1 summer gold
 	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB2: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB3: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
+	uRealB4: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB5: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3; uniform float uSeason;
+uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5; uniform float uSeason;
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
 // the main region (its land use map), and any mapped region (real streets, no grid)
 bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }
-bool inRealAny(vec2 w){ return inReal(w) || inBox(w, uRealB2) || inBox(w, uRealB3); }
+bool inRealAny(vec2 w){ return inReal(w) || inBox(w, uRealB2) || inBox(w, uRealB3) || inBox(w, uRealB4) || inBox(w, uRealB5); }
 `;
 
 // the first region's coarse map colours the ground; the others are streets, buildings and trails
-const REGIONS = ['eastbay', 'tam', 'missionpeak'];
+const REGIONS = ['eastbay', 'tam', 'missionpeak', 'coast', 'bolinas'];
 // the regions' extents [west, south, east, north], known before their data loads
-export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95], [-122.66, 37.87, -122.53, 37.96], [-121.95, 37.48, -121.84, 37.55]];   // Tri-Valley and Mt Diablo; Mt Tam and Mill Valley; Mission Peak
+export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95], [-122.66, 37.87, -122.53, 37.96], [-121.95, 37.48, -121.84, 37.55], [-122.53, 37.455, -122.425, 37.665], [-122.735, 37.875, -122.66, 37.93]];   // Tri-Valley and Mt Diablo; Mt Tam and Mill Valley; Mission Peak; the San Mateo coast (Pacifica to Half Moon Bay, Highway 1); Bolinas
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
 
@@ -133,13 +134,22 @@ export function createRealCity(renderer) {
 			REAL_U.uRealMap.value = map;
 			REAL_U.uRealR.value.set(bx0, bz0, H.map.step, 1);
 			REAL_U.uRealB.value.set(...inset);
-		} else REAL_U[REGIONS.indexOf(name) === 1 ? 'uRealB2' : 'uRealB3'].value.set(...inset);
+		} else REAL_U['uRealB' + (REGIONS.indexOf(name) + 1)].value.set(...inset);
 		R.attribution = H.attribution;
 		R.loaded = true;
 	}
 	// one at a time, the nearest to the island first
 	const byDist = REGIONS.map((n, i) => { const [w, so, e, no] = REAL_EXTENTS[i], c = toWorld((so + no) / 2, (w + e) / 2); return [n, Math.hypot(c.x, c.z)]; }).sort((a, b) => a[1] - b[1]).map((r) => r[0]);
-	const ready = (async () => { for (const n of byDist) await load(n).catch((e) => console.warn('real city', n, e)); })();
+	// (the far-flung coast regions wait until you come within a few miles of them)
+	const LAZY = new Set(['coast', 'bolinas']), lazy = new Map();
+	const ready = (async () => { for (const n of byDist) if (!LAZY.has(n)) await load(n).catch((e) => console.warn('real city', n, e)); })();
+	function wake(x, z) {
+		REGIONS.forEach((n, i) => {
+			if (!LAZY.has(n) || lazy.has(n)) return;
+			const [w, so, e, no] = REAL_EXTENTS[i], a = toWorld(no, w), b = toWorld(so, e);
+			if (Math.hypot(Math.max(0, a.x - x, x - b.x), Math.max(0, a.z - z, z - b.z)) < 12000) lazy.set(n, ready.then(() => load(n)).then(() => { version++; }).catch((err) => console.warn('real city', n, err)));
+		});
+	}
 
 	const regionAt = (x, z, m = 60) => R.regions.find(({ bounds: b }) => x > b[0] + m && z > b[1] + m && x < b[2] - m && z < b[3] - m);
 	const inside = (x, z) => !!regionAt(x, z);
@@ -354,6 +364,7 @@ export function createRealCity(renderer) {
 	}
 
 	function update(camera) {
+		if (camera.position.y < 6000) wake(camera.position.x, camera.position.z);
 		if (!R.loaded) return;
 		if (gens.length) swapIn(gens[gens.length - 1]);      // (a real region loading late would take the map back)
 		const x = camera.position.x, z = camera.position.z;
@@ -392,5 +403,5 @@ export function createRealCity(renderer) {
 		return best;
 	}
 
-	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, version: () => version };
+	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, version: () => version, ponds: () => gens.flatMap((G) => G.data.ponds || []) };
 }

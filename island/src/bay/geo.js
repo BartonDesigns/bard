@@ -22,6 +22,8 @@ export const LEVELS = [
 	{ name: 'h4', lat: [37.82, 37.95], lon: [-122.02, -121.84], step: 12, zoom: 14 },          // Mt Diablo
 	{ name: 'h5', lat: [37.87, 37.96], lon: [-122.66, -122.53], step: 10, zoom: 14 },          // Mt Tamalpais
 	{ name: 'h6', lat: [37.48, 37.55], lon: [-121.95, -121.84], step: 10, zoom: 14 },          // Mission Peak
+	{ name: 'h7', lat: [37.43, 37.71], lon: [-122.53, -122.42], step: 12, zoom: 14 },          // the San Mateo coast: Pacifica, Devil's Slide, Moss Beach, Half Moon Bay
+	{ name: 'h8', lat: [37.87, 37.93], lon: [-122.735, -122.64], step: 10, zoom: 14 },         // Bolinas and Duxbury Reef
 ];
 // height encoding in the PNGs: v = (h + 1000) * 20 in R (high byte) and G (low byte)
 export const H_OFF = 1000, H_SCALE = 20;

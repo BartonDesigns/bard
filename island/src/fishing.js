@@ -94,7 +94,8 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		const lake = W.lake;
 		for (let r = 1.5; r <= 12; r += 1.5) for (let k = 0; k < 12; k++) {
 			const a = k / 12 * Math.PI * 2, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
-			if (lake?.inLake(px, pz)) return { kind: 'lake', level: lake.level(), x: px, z: pz };
+			const lv = lake?.waterAt(px, pz);
+			if (lv !== null && lv !== undefined) return { kind: 'lake', level: lv, x: px, z: pz };
 			if (W.island.heightAt(px, pz) < -0.4) {
 				const isl = Math.max(Math.abs(px), Math.abs(pz)) < W.island.half;
 				return { kind: isl ? 'island' : px < -16000 || (pz > -2000 && px < -9000) ? 'ocean' : 'bay', level: 0, x: px, z: pz };
@@ -102,7 +103,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		}
 		return null;
 	}
-	const isWater = (W, x, z) => (F.water === 'lake' ? W.lake?.inLake(x, z) : W.island.heightAt(x, z) < -0.3);
+	const isWater = (W, x, z) => (F.water === 'lake' ? W.lake?.waterAt(x, z) != null : W.island.heightAt(x, z) < -0.3);
 
 	function cast(W) {
 		const d = new THREE.Vector3(); camera.getWorldDirection(d); d.y = 0; d.normalize();

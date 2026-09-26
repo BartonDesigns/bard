@@ -643,7 +643,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 
 	// ---------- 4. lots, houses, driveways, pools, trees ----------
-	const boxes = [], paths = [], pools = [], trees = [];
+	const boxes = [], paths = [], pools = [], trees = [], ponds = [];
 	const HO = 4, ON = Math.ceil(2 * Rbox / HO) + 2, occ = new Uint8Array(ON * ON);    // 4 m occupancy of the buildings and yards claimed
 	const OI = Math.floor((cx - Rbox) / HO), OJ = Math.floor((cz - Rbox) / HO);
 	const okey = (i, j) => { const a = i - OI, b = j - OJ; return a < 0 || b < 0 || a >= ON || b >= ON ? -1 : b * ON + a; };
@@ -793,7 +793,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 					if (ld > 8) { const [lx, lz] = at((a0 + a1) / 2, side > 0 ? b1 - ld / 2 - 2 : b0 + ld / 2 + 2); boxes.push({ x: lx, z: lz, w: lw, d: ld, a: Math.atan2(sa, ca), wallH: 5 + r() * 2, roofH: 0, kind: K.retail, hip: 0, door: 0.5 }); }
 				}
 				// street trees in their grates along the block's edges
-				for (let t = a0 + 6; t < a1 - 4; t += 11) for (const bb of [b0 + 1.5, b1 - 1.5]) { const [qx, qz] = at(t, bb); trees.push({ x: qx, z: qz, h: treeH() * 0.75, cone: 0 }); }
+				for (let t = a0 + 6; t < a1 - 4; t += 11) for (const bb of [b0 + 1.5, b1 - 1.5]) { const [qx, qz] = at(t, bb); trees.push({ x: qx, z: qz, h: treeH() * 0.75, cone: 0, flower: (t | 0) % 3 === 0 ? 1 : 0 }); }
 				for (let t = b0 + 12; t < b1 - 10; t += 11) for (const aa of [a0 + 1.5, a1 - 1.5]) { const [qx, qz] = at(aa, t); trees.push({ x: qx, z: qz, h: treeH() * 0.75, cone: 0 }); }
 			}
 		} else if (s.kind === 'shop') {
@@ -821,7 +821,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				boxes.push({ x: ox, z: oz, w: ow, d: od, a: face, wallH: 10 + r() * 22, roofH: 0, kind: K.office, hip: 0, door: 0.5 });
 			}
 			// lot trees on the islands
-			for (let a = -hw + 8; a < hw - 8; a += 18) for (let b = -hd + 8; b < hd - 8; b += 26) if (r() < 0.4) { const [tx, tz] = at(a, b); trees.push({ x: tx, z: tz, h: treeH() * 0.8, cone: 0 }); }
+			for (let a = -hw + 8; a < hw - 8; a += 18) for (let b = -hd + 8; b < hd - 8; b += 26) if (r() < 0.4) { const [tx, tz] = at(a, b); trees.push({ x: tx, z: tz, h: treeH() * 0.65, cone: 0, flower: r() < 0.6 ? 1 : 0 }); }
 		} else if (s.kind === 'school') {
 			// classroom wings nearer the road, a gym, the playing field behind
 			const f = (s.fx * -uz + s.fz * ux) > 0 ? 1 : -1;    // the side (along b) the road lies on
@@ -842,8 +842,30 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			const loop = [];
 			for (let n = 0; n <= 24; n++) { const a = n / 24 * Math.PI * 2, [px, pz] = at(Math.cos(a) * (hw - 8), Math.sin(a) * (hd - 8)); loop.push(px, pz); }
 			roads.push({ cls: 'footway', w: 1.8, name: '', pts: new Float32Array(loop), end0: false, end1: false, bridge: false, link: false, divided: false });
+			// a big, level park gets a pond in it, like Lake Annabel: an uneven oval off to one
+			// side, a grove of redwoods and oaks round its bank (bay/lake.js fills and stocks it)
+			let pond = null;
+			if (hw * hd * 4 > 9000) {
+				let lo = 1e9, hi = -1e9;
+				for (let n = 0; n < 12; n++) { const a = n / 12 * Math.PI * 2, [qx, qz] = at(Math.cos(a) * hw * 0.6, Math.sin(a) * hd * 0.6), h = H(qx, qz); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+				if (hi - lo < 1.6 && r() < 0.85) {
+					const pa = -hw * 0.2, pr = Math.min(hw * 0.62, hd) * (0.32 + r() * 0.08), ph = r() * 6, pts = [];
+					for (let n = 0; n < 28; n++) {
+						const a = n / 28 * Math.PI * 2, k = 1 + 0.16 * Math.sin(a * 2 + ph) + 0.1 * Math.sin(a * 3 + ph * 1.7) + 0.05 * Math.sin(a * 5 + ph * 2.3);
+						const [qx, qz] = at(pa + Math.cos(a) * pr * 1.35 * k, Math.sin(a) * pr * k);
+						pts.push({ x: qx, z: qz });
+					}
+					pond = s.pond = { pa, pr };
+					ponds.push(pts);
+					for (let n = 0; n < 22; n++) { const a = r() * Math.PI * 2, e = 1.25 + r() * 0.45, [tx, tz] = at(pa + Math.cos(a) * pr * 1.35 * e, Math.sin(a) * pr * e); trees.push({ x: tx, z: tz, h: treeH() * (n % 3 ? 1.1 : 1.6), cone: n % 3 ? 0 : 1 }); }
+				}
+			}
 			const nT = hw * hd * 4 / 1e4 * S.treesPerHa.park;
-			for (let n = 0; n < nT; n++) { const a = (r() - 0.5) * 2 * (hw - 4), b = (r() - 0.5) * 2 * (hd - 4); if (Math.hypot(a / hw, b / hd) > 0.55) { const [tx, tz] = at(a, b); trees.push({ x: tx, z: tz, h: treeH() * 1.1, cone: r() < 0.2 ? 1 : 0 }); } }
+			for (let n = 0; n < nT; n++) {
+				const a = (r() - 0.5) * 2 * (hw - 4), b = (r() - 0.5) * 2 * (hd - 4);
+				if (pond && Math.hypot((a - pond.pa) / (pond.pr * 1.35), b / pond.pr) < 1.4) continue;
+				if (Math.hypot(a / hw, b / hd) > 0.55) { const [tx, tz] = at(a, b); trees.push({ x: tx, z: tz, h: treeH() * 1.1, cone: r() < 0.2 ? 1 : 0 }); }
+			}
 		}
 	}
 	yield 'sites';
@@ -878,7 +900,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		} else {
 			rect(s, 1, LU.park * 16, 2);
 			if (s.hw * s.hd * 4 > 12000) rect(sub(s.hw * 0.4, 0, s.hw * 0.3, s.hd * 0.35), 1, LU.pitch * 16);
-			rect(sub(-s.hw * 0.5, 0, 12, 12), 1, LU.playground * 16);
+			rect(sub(-s.hw * 0.5, s.pond ? s.hd * 0.7 : 0, 12, 12), 1, LU.playground * 16);
 		}
 	}
 	// the streets (for the far view) and the roofs
@@ -897,7 +919,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const b of boxes) rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255);
 	return {
 		name, gen: true, seed, style, bounds: [x0, z0, x0 + MW * step, z0 + MH * step],
-		roads, boxes, paths, pools, trees,
+		roads, boxes, paths, pools, trees, ponds,
 		map: { px, w: MW, h: MH, x0, z0, step },
 		info: { freeway: FWY.on ? { name: FWY.name, crossings: FWY.cross.length, interchanges: FWY.cross.filter((c) => c.ic).length } : null, houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },
 	};
