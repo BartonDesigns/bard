@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
 import { groupBoxes } from './houseplan.js';
+import { SUMMIT } from './diablo.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -77,13 +78,17 @@ export function createRealCity(renderer) {
 			for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) put('roads', gx * CELL + 1, gz * CELL + 1, id);
 		}
 		o = S.boxes[0];
+		// Mt Diablo's summit building is modelled (diablo.js): its footprint here would stand
+		// a second, ordinary building in the middle of it
+		const sm = toWorld(SUMMIT.lat, SUMMIT.lon), first = R.boxes.length;
 		for (let n = 0; n < S.boxes[1]; n++, o += 18) {
 			const kh = dv.getInt16(o + 14, true);
 			const b = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000, wallH: dv.getInt16(o + 10, true) / 20, roofH: dv.getInt16(o + 12, true) / 20, kind: kh & 255, hip: kh >> 8, door: dv.getInt16(o + 16, true) / 1000 };
+			if (Math.hypot(b.x - sm.x, b.z - sm.z) < 90) continue;
 			put('boxes', b.x, b.z, R.boxes.push(b) - 1);
 		}
 		// a building's blocks, gathered into the house they make (houses.js builds them)
-		groupBoxes(R.boxes.slice(R.boxes.length - S.boxes[1]));
+		groupBoxes(R.boxes.slice(first));
 		o = S.paths[0];
 		for (let n = 0; n < S.paths[1]; n++, o += 10) {
 			const p = { ax: dv.getInt16(o, true) * U + OX, az: dv.getInt16(o + 2, true) * U + OZ, bx: dv.getInt16(o + 4, true) * U + OX, bz: dv.getInt16(o + 6, true) * U + OZ, w: dv.getInt16(o + 8, true) / 20 };

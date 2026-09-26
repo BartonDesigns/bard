@@ -43,7 +43,7 @@ const ROCKS = [
 	{ lat: 37.8930, lon: -121.9904, size: 18, blobs: 3, caves: 0, seed: 22, tall: 1.9 },
 	{ lat: 37.8951, lon: -121.9899, size: 15, blobs: 3, caves: 1, seed: 23, tall: 1.4 },
 ];
-const SUMMIT = { lat: 37.88175, lon: -121.91415 };
+export const SUMMIT = { lat: 37.88175, lon: -121.91415 };
 
 // ground(x, z): the land's height in the rock's own frame, so the masses sit on it and the
 // caves open at its level on the downhill side

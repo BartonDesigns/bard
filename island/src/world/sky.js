@@ -57,6 +57,7 @@ export function createSky(scene, shared, renderer) {
 		uCloudOff: { value: new THREE.Vector2() }, uCirrusOff: { value: new THREE.Vector2() }, uCirrus: { value: 0.25 }, uWindDir: shared.uWindDir,
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
+		uFogCol: { value: new THREE.Color() },
 		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
@@ -64,7 +65,7 @@ export function createSky(scene, shared, renderer) {
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform float uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform float uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -176,11 +177,25 @@ export function createSky(scene, shared, renderer) {
 					float top = 1500.0 / tin;                                      // the cloud base, seen from here
 					float below = smoothstep(top * 1.08, top * 0.8, tanE) * smoothstep(-0.03, 0.0, tanE);
 					float thick = clamp((tout - tin) / 2500.0, 0.0, 1.0) * S.w;
-					float streak = 0.7 + 0.3 * vn(vec2(atan(hd.y, hd.x) * 700.0, tanE * 30.0 + uTime * 1.5));
-					float veil = thick * below * streak * smoothstep(40000.0, 8000.0, tin);
-					// slate grey under the cloud, a little lighter where the sun gets under the edge
-					vec3 veilC = mix(vec3(0.17, 0.19, 0.23), uSkyHor * 0.6, 0.2) * (1.0 - uNight * 0.95) * (0.8 + 0.4 * streak);
-					col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.3, 0.0, 0.88));
+					// standing in it, the rain round you is the streaks and the grey (below); the
+					// curtain is for showers seen from outside
+					bool inside = tc - half_ < 0.0;
+					if (!inside) {
+						float az = atan(hd.y, hd.x);
+						// no box: the shafts thicken and thin across it, it frays at its sides, and its
+						// top is the ragged underside of the cloud
+						float shafts = 0.55 + 0.45 * vn(vec2(az * 55.0 + S.x * 0.001, 3.0)) * (0.7 + 0.3 * vn(vec2(az * 190.0, 7.0)));
+						float side = 1.0 - smoothstep(0.55, 1.0, pd / S.z);
+						float ragged = top * (0.8 + 0.3 * vn(vec2(az * 90.0, 11.0)));
+						float fall = smoothstep(ragged * 1.05, ragged * 0.55, tanE) * smoothstep(-0.03, 0.0, tanE);
+						float streak = 0.7 + 0.3 * vn(vec2(az * 700.0, tanE * 30.0 + uTime * 1.5));
+						float veil = thick * fall * shafts * side * streak * smoothstep(40000.0, 8000.0, tin);
+						// slate grey under the cloud, a little lighter where the sun gets under the edge;
+						// low down it fades into the haze the far land stands in
+						vec3 veilC = mix(vec3(0.17, 0.19, 0.23), uSkyHor * 0.6, 0.2) * (1.0 - uNight * 0.95) * (0.8 + 0.4 * streak);
+						veilC = mix(veilC, uFogCol, (1.0 - smoothstep(0.0, 0.06, tanE)) * 0.7);
+						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.3, 0.0, 0.85));
+					}
 					rainLine += thick * below * 2.2;
 				}
 				// the rainbow: round the antisolar point, where sunlit rain lies along the line
@@ -213,6 +228,9 @@ export function createSky(scene, shared, renderer) {
 				// the whole sky a shade lighter in a flash; greyer in rain close by
 				col += vec3(0.5, 0.55, 0.7) * uFlash * 0.25;
 				col = mix(col, mix(uSkyHor, vec3(0.5, 0.53, 0.57), 0.5) * (1.0 - uNight * 0.9), uRainHere * 0.45 * smoothstep(-0.1, 0.4, d.y));
+				// in weather the sky meets the land in the same haze the land is fogged with, so
+				// there is no line where the one ends and the other begins
+				col = mix(col, uFogCol, (1.0 - smoothstep(0.0, 0.14, d.y)) * clamp(uGloom * 1.5 + uRainHere, 0.0, 1.0) * 0.85);
 				col = mix(col, uSkyHor, smoothstep(0.02, -0.12, d.y));
 				gl_FragColor = vec4(col, 1.0);
 				#include <tonemapping_fragment>
@@ -440,6 +458,8 @@ export function createSky(scene, shared, renderer) {
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		scene.fog.color.copy(tmpB).lerp(tmpA, 0.12);
+		if (W) scene.fog.color.lerp(tmpC.setRGB(0.5, 0.53, 0.57).multiplyScalar(1 - night * 0.9), Math.min(1, W.rainHere * 0.6 + gl * 0.3));
+		uniforms.uFogCol.value.copy(scene.fog.color);
 		renderer.toneMappingExposure = 1.15 + night * 0.15;
 		dome.position.copy(focus);
 		sats.position.copy(focus);
