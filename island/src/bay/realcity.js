@@ -291,7 +291,7 @@ export function createRealCity(renderer) {
 	function built(r) {
 		if (r.built === undefined) {
 			const k = Math.floor(r.pts.length / 4) * 2, L = landAt(r.pts[k], r.pts[k + 1]);
-			r.built = !!L && L.lu > 0 && L.lu < 11;
+			r.built = !!L && L.lu > 0 && (L.lu < 11 || L.lu === 13);
 		}
 		return r.built;
 	}

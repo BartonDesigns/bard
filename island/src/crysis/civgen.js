@@ -42,10 +42,11 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const pickW = (tbl, u) => { let acc = 0; const tot = Object.values(tbl).reduce((a, b) => a + b, 0); for (const [k, v] of Object.entries(tbl)) { acc += v / tot; if (u <= acc) return k; } return Object.keys(tbl)[0]; };
 
 // land-use classes of the real map (see bake-realcity.py)
-export const LU = { wild: 0, residential: 1, park: 2, golf: 3, pitch: 4, playground: 5, school: 6, commercial: 7, industrial: 8 };
+export const LU = { wild: 0, residential: 1, park: 2, golf: 3, pitch: 4, playground: 5, school: 6, commercial: 7, industrial: 8, plaza: 13 };       // (9-12 are the real maps' bunker, water hazard, farm, reserve)
 // building kinds of the real boxes: 0 house, 1/2 house with its garage left/right of the
-// front, 3 garage wing, 4 wing, 5 office, 6 retail, 7 school, 8 apartments, 9 industrial, 10 shed
-const K = { house: 0, garageL: 1, garageR: 2, garage: 3, wing: 4, office: 5, retail: 6, school: 7, apartments: 8, shed: 10 };
+// front, 3 garage wing, 4 wing, 5 office, 6 retail, 7 school, 8 apartments, 9 industrial, 10 shed,
+// 11 downtown tower (generated towns only)
+const K = { house: 0, garageL: 1, garageR: 2, garage: 3, wing: 4, office: 5, retail: 6, school: 7, apartments: 8, shed: 10, tower: 11 };
 
 // ---------- street names: learned words and suffixes ----------
 const TAILS = ['wood', 'brook', 'ridge', 'field', 'view', 'crest', 'dale', 'haven', 'glen', 'stone', 'hurst', 'mont'];
@@ -248,6 +249,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const SP = older ? clamp(radius * 0.7, 600, 1200) : clamp(radius * 0.8, 700, S.arterialSpacing);
 	const nL = Math.floor(Rdev / SP);
 	const artName = new Map();
+	const DTR = W.primary / 2 + 5 + 2 * clamp(radius * 0.055, 110, 200) + 20;     // the downtown's reach from the crossing (below)
 	// a line of the grid, meandering between crossings (it passes the lattice points exactly,
 	// so the crossings stay where the superblocks expect them) and easing round steep ground
 	function traceLine(axis, k, v0, v1, cls) {
@@ -255,7 +257,9 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		const ph = r() * 6.28, fr = 1 + Math.floor(r() * 2);
 		let drift = 0;
 		for (let v = v0; v <= v1 + 0.01; v += step) {
-			const env = Math.sin(Math.PI * ((((v / SP) % 1) + 1) % 1));
+			// (the main roads run straight through a big town's downtown, its grid square to them)
+			const calm = k === 0 && radius > 2000 ? clamp((Math.abs(v) - DTR) / 300, 0, 1) : 1;
+			const env = Math.sin(Math.PI * ((((v / SP) % 1) + 1) % 1)) * calm * calm * (3 - 2 * calm);
 			// look sideways for gentler ground, within the envelope
 			const base = k * SP + env * amp * Math.sin(v / SP * Math.PI * fr + ph);
 			let best = drift, bs = 1e9;
@@ -316,6 +320,27 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (!dry(x, z) || slope(x, z) > 0.1 || inSite(x, z, Math.max(w, d) / 2)) return;
 		sites.push({ kind: 'shop', x, z, ux: ca, uz: sa, hw: w / 2, hd: d / 2, qu, qv, big });
 	}
+	// a big town's downtown: the four corners of its main crossing laid out in short blocks
+	// on a street grid of their own, towers on plazas, trees along the pavements (claimed
+	// before the shops and the houses, which grow round it)
+	const DT_NAMES = ['Main Street', 'First Street', 'Second Street', 'Market Street', 'Center Street', 'Broadway', 'Civic Way', 'Plaza Way'];
+	let dtName = Math.floor(r() * 3);
+	if (radius > 2000) {
+		const hw = clamp(radius * 0.055, 110, 200), off = W.primary / 2 + 5, nIn = hw > 150 ? 2 : 1;
+		for (const [qu, qv] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+			const uc = qu * (off + hw), vc = qv * (off + hw), [x, z] = toW(uc, vc);
+			if (!dry(x, z) || slope(x, z) > 0.12 || dens(x, z) < 0.5) continue;
+			// the inner streets, across the corner from arterial to its far side
+			const cuts = [];
+			for (let k = 1; k <= nIn; k++) cuts.push(-hw + 2 * hw * k / (nIn + 1));
+			for (const c of cuts) for (const ax of [0, 1]) {
+				const pts = [];
+				for (let t = 0; t <= off + 2 * hw + 14.01; t += 20) { const [px2, pz2] = ax ? toW(qu * t, vc + c) : toW(uc + c, qv * t); pts.push(px2, pz2); }
+				G.addNoded(pts, { cls: 'tertiary', name: DT_NAMES[dtName++ % DT_NAMES.length] });
+			}
+			sites.push({ kind: 'downtown', x, z, ux: ca, uz: sa, hw, hd: hw, cuts });
+		}
+	}
 	for (let i = -nL; i <= nL; i++) for (let j = -nL; j <= nL; j++) {
 		const [x, z] = toW(i * SP, j * SP), d = dens(x, z);
 		if (d < 0.55) continue;
@@ -370,7 +395,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	// the sites' entrances: a service drive from the nearest arterial or collector
 	for (const s of sites) {
-		if (s.kind === 'park') continue;
+		if (s.kind === 'park' || s.kind === 'downtown') continue;
 		const hit = G.nearest(s.x, s.z, Math.max(s.hw, s.hd) + 40, (id, e) => e.cls === 'service');
 		if (!hit) continue;
 		const dx = s.x - hit.x, dz = s.z - hit.z, L = Math.hypot(dx, dz) || 1, len = Math.min(L, s.kind === 'shop' ? 70 : 45);
@@ -636,7 +661,33 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		// a point in the site's own frame: a along ux, b along (-uz, ux)
 		const at = (a, b) => [x + ux * a - uz * b, z + uz * a + ux * b];
 		claim(x, z, ux, uz, hw, hd);
-		if (s.kind === 'shop') {
+		if (s.kind === 'downtown') {
+			// the blocks between the inner streets: a tower or two on each, set back behind a
+			// plaza, lower shops beside; taller toward the crossing; trees along the pavements
+			const edges = [-hw, ...s.cuts, hw], hs = W.tertiary / 2 + 4;
+			for (let ia = 0; ia < edges.length - 1; ia++) for (let ib = 0; ib < edges.length - 1; ib++) {
+				const a0 = edges[ia] + (ia ? hs : 6), a1 = edges[ia + 1] - (ia < edges.length - 2 ? hs : 4);
+				const b0 = edges[ib] + (ib ? hs : 6), b1 = edges[ib + 1] - (ib < edges.length - 2 ? hs : 4);
+				const bw = a1 - a0, bd = b1 - b0;
+				if (bw < 30 || bd < 30) continue;
+				const [bx, bz] = at((a0 + a1) / 2, (b0 + b1) / 2);
+				const near = clamp(1 - (Math.hypot(bx - cx, bz - cz) - 60) / (hw * 2.4), 0.2, 1);
+				const tw = clamp(bw * (0.42 + r() * 0.18), 22, 50), td = clamp(bd * (0.42 + r() * 0.18), 20, 46);
+				const sx = (r() - 0.5) * (bw - tw - 16), sz2 = (r() - 0.5) * (bd - td - 16);
+				const [tx, tz] = at((a0 + a1) / 2 + sx, (b0 + b1) / 2 + sz2);
+				if (G.nearest(tx, tz, Math.hypot(tw, td) / 2 + 2)) continue;           // (never on a road)
+				const tall = older ? 12 + r() * 16 : 16 + Math.pow(r(), 1.5) * 100 * near;
+				boxes.push({ x: tx, z: tz, w: tw, d: td, a: Math.atan2(sa, ca), wallH: tall, roofH: 0, kind: tall > 22 ? K.tower : K.office, hip: 0, door: 0.5 });
+				// a low block of shops along one side of the block
+				if (r() < 0.7) {
+					const side = r() < 0.5 ? -1 : 1, lw = bw * 0.8, ld = Math.min(14, (bd - td) / 2 - 6);
+					if (ld > 8) { const [lx, lz] = at((a0 + a1) / 2, side > 0 ? b1 - ld / 2 - 2 : b0 + ld / 2 + 2); boxes.push({ x: lx, z: lz, w: lw, d: ld, a: Math.atan2(sa, ca), wallH: 5 + r() * 2, roofH: 0, kind: K.retail, hip: 0, door: 0.5 }); }
+				}
+				// street trees in their grates along the block's edges
+				for (let t = a0 + 6; t < a1 - 4; t += 11) for (const bb of [b0 + 1.5, b1 - 1.5]) { const [qx, qz] = at(t, bb); trees.push({ x: qx, z: qz, h: treeH() * 0.75, cone: 0 }); }
+				for (let t = b0 + 12; t < b1 - 10; t += 11) for (const aa of [a0 + 1.5, a1 - 1.5]) { const [qx, qz] = at(aa, t); trees.push({ x: qx, z: qz, h: treeH() * 0.75, cone: 0 }); }
+			}
+		} else if (s.kind === 'shop') {
 			// the anchor store in the far corner facing the crossing, a strip of shops along the
 			// back beside it, pads out by the arterials; the rest is parking
 			const A = s.qu, Bk = s.qv;    // away from the arterials, along a and b
@@ -709,6 +760,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const s of sites) {
 		const sub = (a, b, hw, hd) => ({ x: s.x + s.ux * a - s.uz * b, z: s.z + s.uz * a + s.ux * b, ux: s.ux, uz: s.uz, hw, hd });
 		if (s.kind === 'shop') rect(s, 1, LU.commercial * 16, 4);
+		else if (s.kind === 'downtown') rect(s, 1, LU.plaza * 16, 4);
 		else if (s.kind === 'school') {
 			const f = (s.fx * -s.uz + s.fz * s.ux) > 0 ? 1 : -1;
 			rect(s, 1, LU.school * 16, 2);

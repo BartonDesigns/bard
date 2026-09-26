@@ -67,7 +67,7 @@ const REAL_LAND = /* glsl */`
 vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	vec3 lawn = mix(vec3(0.2, 0.34, 0.1), vec3(0.3, 0.41, 0.15), gn);
 	vec3 dry = mix(lawn, mix(vec3(0.5, 0.45, 0.28), vec3(0.6, 0.53, 0.34), gn), uSeason);
-	if (lu < 0.5 || lu > 10.5) return nat;
+	if (lu < 0.5 || (lu > 10.5 && lu < 12.5) || lu > 13.5) return nat;
 	if (lu < 1.5) {
 		// yards: lawns (a few browned off), planting beds, shade
 		vec3 y = mix(lawn, dry, smoothstep(0.55, 0.8, gf) * 0.6);
@@ -82,7 +82,18 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	if (lu < 7.5) return mix(mix(vec3(0.25, 0.25, 0.26), vec3(0.31, 0.31, 0.32), gn), lawn * 0.9, smoothstep(0.58, 0.64, vn(w * 0.05) * 0.7 + gf * 0.3));
 	if (lu < 8.5) return mix(vec3(0.45, 0.44, 0.42), vec3(0.55, 0.54, 0.5), gn);
 	if (lu < 9.5) return vec3(0.84, 0.79, 0.64);
-	return vec3(0.1, 0.2, 0.22);
+	if (lu < 10.5) return vec3(0.1, 0.2, 0.22);
+	// a downtown plaza: pale pavers in a running bond, a darker band now and then
+	vec2 pj = fract(vec2(w.x / 1.2, w.y / 0.6 + 0.5 * step(0.5, fract(w.x / 2.4))));
+	vec3 pv = mix(vec3(0.5, 0.48, 0.45), vec3(0.58, 0.56, 0.52), gn) * (0.94 + 0.08 * step(0.5, fract(floor(w.x / 1.2) * 0.37 + floor(w.y / 0.6) * 0.61)));
+	pv = mix(pv, pv * 0.82, step(0.9, fract(w.x / 9.6)) * 0.7);
+	float jk = (1.0 - smoothstep(0.02, 0.06, length(fwidth(w)) / 1.2)) * step(0.93, max(pj.x, pj.y));
+	pv = mix(pv, pv * 0.72, jk);
+	// lawns and planting beds set into it, with a stone edge
+	float bed = vn(w * 0.035) * 0.75 + vn(w * 0.11 + 7.0) * 0.25;
+	vec3 green = mix(lawn, vec3(0.16, 0.24, 0.1), smoothstep(0.5, 0.7, vn(w * 0.4)) * 0.6);
+	pv = mix(pv, vec3(0.62, 0.6, 0.56), smoothstep(0.585, 0.6, bed) * (1.0 - smoothstep(0.6, 0.615, bed)));
+	return mix(pv, green, smoothstep(0.605, 0.615, bed));
 }
 `;
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);

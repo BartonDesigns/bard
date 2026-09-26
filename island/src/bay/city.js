@@ -207,6 +207,14 @@ function buildingMaterial(shared, night, nearBand) {
 					win = step(0.07, f.x) * step(f.y, 0.78);
 					glass = mix(diffuseColor.rgb * 0.55, vec3(0.5, 0.6, 0.7), 0.35) * (0.85 + 0.25 * bh(floor(cell / 3.0)));
 					glassK = win;
+					// at the street: a tall glazed lobby in wide bays above a dark stone plinth
+					if (vLY < 6.2) {
+						cell = vec2(u / 3.2, 0.0);
+						win = step(0.06, fract(cell.x)) * step(2.1, vLY) * step(vLY, 5.6);
+						glass = vec3(0.14, 0.16, 0.18); glassK = win * 0.8;
+						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, step(5.6, vLY));
+					}
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.27, 0.26, 0.25), step(vLY, 2.0) * (1.0 - roof));
 				} else if (vKind > 3.5 && vKind < 4.5) {
 					// parking: asphalt striped into bays
 					float bay = step(0.93, fract(u / 2.7)) * step(0.3, fract(dot(vCW.xz, vec2(-t.y, t.x)) / 11.0));
@@ -235,6 +243,8 @@ function buildingMaterial(shared, night, nearBand) {
 					win = step(0.35, f.y) * step(f.y, 0.85) * step(0.04, fract(u / 1.5));
 					glass = vec3(0.28, 0.36, 0.42);
 					glassK = win * 0.7;
+					// a dark stone plinth at the ground
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.29, 0.28), step(vLY, 1.9) * (1.0 - roof));
 				}
 				// far off, where a window is smaller than a pixel or two, it is only its average
 				// (as a mipmap would be): no crawling speckle on distant facades at night
@@ -249,7 +259,7 @@ function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding7';
+	m.customProgramCacheKey = () => 'baybuilding8';
 	return m;
 }
 
@@ -381,6 +391,35 @@ export function createCity(shared, scene, bay, real = null) {
 		else if (face === 'e' || face === 'w') { ang += face === 'e' ? -Math.PI / 2 : Math.PI / 2; const t = w; w = d; d = t; }
 		if (opt?.lift) list.push({ x, y: g + opt.lift, z, w, d, h, a: ang, col, kind, roof: null });
 		else list.push(flat ? { x, y: g - 0.9, z, w, d, h: 0.98, a: ang, col, kind, roof: null } : { x, y: g - 1.2, z, w, d, h: h + 1.2, a: ang, col, kind, roof });
+		if (!flat && !opt?.lift && !list.noGrounds && (kind === KIND.office || kind === KIND.retail || kind === KIND.industry)) grounds(list, list.trees || (list.trees = []), x, z, w, d, ang, g, g - 1.2, kind, gx * 0.31 + gz * 0.17);
+	}
+	// what grounds a building that isn't a house: a paved apron round it with a kerb, a
+	// dark stone plinth (in the shader), planters at the entrance with shrubs, and trees
+	// along its sides (more round a tower, fewer round a shed). The same for the mapped,
+	// the generated and the gridded buildings, so none stands bare on a lawn.
+	function grounds(list, trees, x, z, w, d, a, g, y0, kind, seed) {
+		const big = kind === KIND.tower, pad = big ? 5 : kind === KIND.office ? 3.2 : 2;
+		const ca = Math.cos(a), sa = Math.sin(a);
+		const P = (lx, lz) => [x + ca * lx - sa * lz, z + sa * lx + ca * lz];
+		const h1 = hash(seed, 3.7), h2 = hash(seed + 1.3, 9.1);
+		// the apron, a hand's breadth above the ground, and its kerb
+		list.push({ x, y: y0, z, w: w + 2 * pad, d: d + 2 * pad, h: g + 0.13 + h1 * 0.05 - y0, a, col: jit([0.66, 0.64, 0.6], h1), kind: KIND.plain, roof: null });
+		list.push({ x, y: y0, z, w: w + 2 * pad + 0.5, d: d + 2 * pad + 0.5, h: g + 0.1 - y0, a, col: [0.5, 0.49, 0.47], kind: KIND.plain, roof: null });
+		if (kind === KIND.industry) return;
+		// planters either side of the entrance (the +d face), shrubs in them
+		for (const s of [-1, 1]) {
+			const [px, pz] = P(s * Math.min(w / 2 - 1.5, 4 + w * 0.15), d / 2 + pad * 0.55);
+			list.push({ x: px, y: g - 0.2, z: pz, w: big ? 4.2 : 2.8, d: 1.3, h: 0.75, a, col: jit([0.55, 0.52, 0.48], h2), kind: KIND.plain, roof: null });
+			for (const o of [-0.8, 0, 0.8]) { const [sx, sz] = P(s * Math.min(w / 2 - 1.5, 4 + w * 0.15) + o * (big ? 1.4 : 0.9), d / 2 + pad * 0.55); trees.push({ x: sx, y: g + 0.5, z: sz, h: 0.9 + hash(sx, sz) * 0.5, shrub: true, col: jit(pick(PAL.crown, hash(sz, sx)), h1) }); }
+		}
+		// trees along the sides, at the apron's edge
+		const every = big ? 9 : 12, sides = big ? [[w, d, 1], [w, d, -1], [d, w, 2], [d, w, -2]] : kind === KIND.office ? [[w, d, 1], [w, d, -1]] : [[w, d, 1]];
+		for (const [len, dep, sd] of sides) for (let t = -len / 2 + 3; t <= len / 2 - 3; t += every) {
+			if (Math.abs(sd) === 1 && sd > 0 && Math.abs(t) < Math.min(w / 2 - 1.5, 4 + w * 0.15) + 3) continue;     // the entrance kept clear
+			const off = dep / 2 + pad - 1.2, [tx, tz] = Math.abs(sd) === 1 ? P(t, Math.sign(sd) * off) : P(Math.sign(sd) * off, t);
+			const r = hash(tx * 0.7, tz * 1.3);
+			trees.push({ x: tx, y: g - 0.3, z: tz, h: 7 + r * 4, cone: false, col: jit(pick(PAL.crown, r), r) });
+		}
 	}
 
 	function fillBlocks(cx, cz, R, list, minH = 0) {
@@ -417,6 +456,11 @@ export function createCity(shared, scene, bay, real = null) {
 					const L = 26;
 					// the block paved between the towers: plazas and service yards, not lawn
 					lot(list, a, style, X0 + IX / 2, Z0 + IZ / 2, IX, IZ, 0.4, KIND.paved, jit([0.47, 0.46, 0.44], hash(i * 5 + 1, j * 7 + 2)), null, 0.9);
+					// street trees in grates along the block's pavements
+					if (!list.noGrounds) {
+						const TT = list.trees || (list.trees = []);
+						for (let t = 5; t < IX - 3; t += 10) for (const e of [1.6, IZ - 1.6]) { const [x, z] = fromGrid(X0 + t, Z0 + e, a, style), g = bay.heightAt(x, z), rr = hash(x, z); if (g > 0.8) TT.push({ x, y: g - 0.3, z, h: 7 + rr * 3, cone: false, col: jit(pick(PAL.crown, rr), rr) }); }
+					}
 					for (let k = 0; k * L < IX; k++) for (const side of [0, 1]) {
 						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
 						let h = 12 + Math.pow(r, 2.4) * U.d * U.d * 300 + U.d * 40;
@@ -713,6 +757,7 @@ export function createCity(shared, scene, bay, real = null) {
 
 	// the skylines, found once: every downtown's tall buildings, kept for far views
 	const skyline = [];
+	skyline.noGrounds = true;          // (far off: the towers alone)
 	const skyMesh = mk(boxGeo(), mat, 6000, true);
 	function findSkylines() {
 		const seen = new Set();
@@ -849,9 +894,11 @@ export function createCity(shared, scene, bay, real = null) {
 			else if (b.kind === 5) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
 			else if (b.kind === 6) { kind = KIND.retail; col = jit(pick(PAL.retail, r2), r); }
 			else if (b.kind === 7) { kind = KIND.office; col = jit([0.86, 0.8, 0.68], r); }
+			else if (b.kind === 11) { kind = KIND.tower; col = jit(pick(PAL.tower, r2), r); }
 			else { kind = KIND.industry; col = jit(pick(PAL.industry, r2), r); }
 			if (b.roofH > 0.1) roof = { hip: !!b.hip, h: b.roofH, col: rc };
 			list.push({ x: b.x, y, z: b.z, w: b.w, d: b.d, h: top - y, a: b.a, col, kind, roof, src: b });
+			if (b.kind >= 5 && b.kind !== 10) grounds(list, trees, b.x, b.z, b.w, b.d, b.a, g, y, kind, b.x * 0.37 + b.z * 0.11);
 		}
 		for (const p of real.near('pools', cx, cz, Math.min(R, 900))) {
 			const g = bay.heightAt(p.x, p.z);
@@ -909,7 +956,7 @@ export function createCity(shared, scene, bay, real = null) {
 		near.visible = hips.visible = gables.visible = trunks.visible = crowns.visible = cones.visible = !high;
 		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
-		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
+		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
 		if (riseT0 >= 0) {
 			// the ring runs out at 700 m a second; no shadows from the buildings still underground
 			const front = (performance.now() - riseT0) / 1000 * 700;
