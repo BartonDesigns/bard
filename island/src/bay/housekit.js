@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
+import { usePhoto } from '../world/photomats.js';
 
 const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 export { lin };
@@ -304,6 +305,25 @@ export function houseMaterials(band, night) {
 		M.paintLit.emissiveIntensity = 0.13 * (1 - k) + (indoors ? 0.16 : 0.42) * k; M.ceilingLit.emissiveIntensity = 0.26 * (1 - k) + (indoors ? 0.24 : 0.55) * k;
 	};
 	M.setNight(night || 0);
+	// the photographic materials, as they arrive: for each material the swatches to try in
+	// turn, [name, metres a tile covers, detail options, relief]; the house atlases first
+	// when they exist (ASSET_PROMPTS_HOUSES.md), then the build 191/193 ones
+	const plaster = (mean, contrast, normal, ns) => ['plaster', 1.6, { mean, contrast, normal }, ns];
+	const wall = [['drywall', 1.2, { mean: 0.96, contrast: 0.6, normal: 2 }, 0.3], plaster(0.96, 0.12, 1.5, 0.25)];
+	for (const [k, choices] of [
+		['stucco', [['stucco', 1.5, { mean: 0.92, contrast: 1, normal: 3 }, 0.8], ['plaster', 1.4, { mean: 0.92, contrast: 0.9, normal: 3 }, 0.8]]],
+		['paint', wall], ['paintLit', wall], ['ceiling', wall], ['ceilingLit', wall],
+		['wood', [['oak', 1.0, { mean: 0.85, contrast: 1, normal: 2 }, 0.35], ['cedar', 1.2, { mean: 0.85, contrast: 1.1, normal: 2 }, 0.4]]],
+		['grain', [['walnut', 0.5, { mean: 0.78, contrast: 1.3, normal: 1.5 }, 0.3]]],
+		['fabric', [['linen', 0.35, { mean: 0.9, contrast: 1, normal: 4 }, 0.5]]],
+		['carpet', [['carpet', 1.0, { mean: 0.88, contrast: 1, normal: 3 }, 0.6], ['suede', 0.6, { mean: 0.88, contrast: 1.2, normal: 3 }, 0.6]]],
+		['tile', [['floorTile', 1.0, { mean: 0.9, contrast: 1, normal: 2 }, 0.4]]],
+		['subway', [['subway', 1.0, { mean: 0.93, contrast: 1, normal: 2 }, 0.4]]],
+		['stone', [['quartz', 0.8, { mean: 0.88, contrast: 1, normal: 1 }, 0.15], ['granite', 0.7, { mean: 0.8, contrast: 1.2, normal: 1 }, 0.2]]],
+		['metal', [['aluminium', 0.8, { mean: 0.85, contrast: 0.8 }, 0]]],
+		['gloss', [['enamel', 0.6, { mean: 0.95, contrast: 0.35 }, 0]]],
+		['concrete', [['slab', 1.2, { mean: 0.82, contrast: 1, normal: 2 }, 0.4], ['limestone', 2.0, { mean: 0.8, contrast: 0.7, normal: 2 }, 0.4]]],
+	]) usePhoto(M[k], choices);
 	return M;
 }
 

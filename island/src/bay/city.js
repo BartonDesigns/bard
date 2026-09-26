@@ -215,16 +215,20 @@ function buildingMaterial(shared, night, nearBand) {
 					glass = vec3(0.28, 0.36, 0.42);
 					glassK = win * 0.7;
 				}
+				// far off, where a window is smaller than a pixel or two, it is only its average
+				// (as a mipmap would be): no crawling speckle on distant facades at night
+				float aaW = smoothstep(0.75, 0.3, length(fwidth(cell)));
+				win = mix(0.3, win, aaW);
 				win *= (1.0 - roof) * step(0.8, vLY);
 				diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
 				diffuseColor.rgb *= mix(1.0, 0.8, roof);
-				float lit = max(step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), shopGlow * step(0.25, ih));
+				float lit = max(mix(0.36, step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
 				winGlow = mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6) * win * lit * uNightC * (0.6 + 0.4 * bh(floor(cell) + 3.3)) * 1.1;
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding5';
+	m.customProgramCacheKey = () => 'baybuilding6';
 	return m;
 }
 

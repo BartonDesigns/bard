@@ -85,6 +85,29 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 }
 `;
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);
+// Points of city light far off. The old sparks sat in cells whose size followed the
+// camera's distance, so every step re-dealt them (static on a dead channel), and at a
+// kilometre or more they were smaller than a pixel and flickered. Now the cells are
+// fixed to the ground in sizes that double with distance (18 m, 36 m, ...), cross-faded
+// between neighbouring sizes, and each light is a soft dot at least about a pixel wide
+// whose brightness is spread rather than lost.
+const SPARKS_GLSL = /* glsl */`
+float sparks(vec2 w, float dist, float thr, float seed){
+	float L = log2(max(dist * 0.004, 18.0) / 18.0), l0 = floor(L), t = L - l0;
+	float mpp = max(1e-3, length(fwidth(w)));
+	float s = 0.0;
+	for (int k = 0; k < 2; k++) {
+		float cl = 18.0 * exp2(l0 + float(k));
+		vec2 p = w / cl;
+		float d = length(fract(p) - 0.5);
+		float r = max(0.18, 0.9 * mpp / cl);
+		float v = step(thr, h21(floor(p) + seed + l0 + float(k))) * (1.0 - smoothstep(r * 0.4, r, d)) * min(1.0, (0.18 * 0.18) / (r * r));
+		s += v * (k == 0 ? 1.0 - t : t);
+	}
+	return s;
+}
+`;
+
 export function bayUniforms() {
 	const blank = () => { const t = new THREE.DataTexture(new Uint16Array([0, 0, 0, 0]), 2, 2, THREE.RedFormat, THREE.HalfFloatType); t.needsUpdate = true; return t; };
 	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uB4: { value: blank() }, uB5: { value: blank() }, uB6: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uR4: { value: OFF.clone() }, uR5: { value: OFF.clone() }, uR6: { value: OFF.clone() }, uBayOn: { value: 0 } };
@@ -284,7 +307,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + REAL_LAND + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + REAL_LAND + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -374,9 +397,7 @@ export function createBayArea(shared, scene, island, BU) {
 						c = mix(c, vec3(0.86, 0.68, 0.16), yellow * 0.92);
 						flatK = max(max(asph, conc), dirt * 0.6);
 						// night: windows and lamps as sparks far off
-						float cellL = max(18.0, dist * 0.004);
-						vec2 lc = floor(vBW / cellL);
-						float spark = step(0.8, h21(lc)) * smoothstep(0.35, 0.05, length(fract(vBW / cellL) - 0.5)) * max(M.b, M.r);
+						float spark = sparks(vBW, dist, 0.8, 0.0) * max(M.b, M.r);
 						cityGlow = vec3(1.0, 0.72, 0.4) * spark * smoothstep(600.0, 3000.0, dist) * uNightB * 2.4;
 					}
 					if (urban > 0.02){
@@ -441,14 +462,19 @@ export function createBayArea(shared, scene, island, BU) {
 						// the town is a carpet of light
 						float lamps = street * step(0.55, fract((g.x + g.y) / 32.0)) * step(0.9, h21(floor(g / 16.0)));
 						float wins = (1.0 - street) * step(0.86, h21(floor(g / 9.0) + 5.0)) * (0.5 + T.b);
-						float nearL = (lamps * 1.6 + wins) * (1.0 - smoothstep(900.0, 3500.0, dist));
+						// once a window block is smaller than a couple of pixels it is only its
+						// average glow (as a mipmap would), so distant blocks do not crawl
+						float mpp = length(fwidth(vBW));
+						float lodW = smoothstep(4.5, 2.0, mpp);
+						wins = mix(0.14 * (0.5 + T.b) * (1.0 - street), wins, lodW);
+						lamps = mix(street * 0.05, lamps, smoothstep(8.0, 3.5, mpp));
+						// (close by the real buildings carry their own lit windows: the ground's
+						// stand-in windows only begin beyond them)
+						float nearL = lamps * 1.2 * (1.0 - smoothstep(900.0, 3500.0, dist)) + wins * smoothstep(1100.0, 2000.0, dist) * (1.0 - smoothstep(2500.0, 5000.0, dist));
 						// far off, points of light: streetlights and windows as a scatter of sparks,
-						// thicker downtown, sized to stay about a pixel at any distance
-						float cellL = max(18.0, dist * 0.004);
-						vec2 lc = floor(vBW / cellL);
-						float spark = step(0.86 - T.b * 0.2, h21(lc)) * smoothstep(0.35, 0.05, length(fract(vBW / cellL) - 0.5));
-						float farL = spark * (1.2 + T.b) * smoothstep(600.0, 3500.0, dist);
-						cityGlow = mix(vec3(1.0, 0.62, 0.28), vec3(0.95, 0.9, 0.8), h21(lc + 3.0) * 0.5) * (nearL + farL) * smoothstep(0.08, 0.35, urban) * uNightB * 2.2;
+						// thicker downtown, fixed to the ground and never smaller than a pixel
+						float farL = sparks(vBW, dist, 0.86 - T.b * 0.2, 0.0) * (1.2 + T.b) * smoothstep(600.0, 3500.0, dist);
+						cityGlow = mix(vec3(1.0, 0.62, 0.28), vec3(0.95, 0.9, 0.8), h21(floor(vBW / 18.0) + 3.0) * 0.5) * (nearL + farL) * smoothstep(0.08, 0.35, urban) * uNightB * 2.2;
 					}
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3);
 				}`)
