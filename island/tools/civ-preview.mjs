@@ -48,5 +48,18 @@ for (let j = 0; j < M.h * S; j++) for (let i = 0; i < M.w * S; i++) {
 	if (M.px[k]) c = [40, 40, 45];
 	png.data.set([c[0], c[1], c[2], 255], o);
 }
+// the freeway (orange), its ramps (yellow) and the overpasses (light blue), drawn over
+for (const q of R.roads) {
+	const c = q.bridge ? [120, 200, 255] : q.cls === 'motorway' ? (q.link ? [240, 220, 60] : [240, 140, 40]) : null;
+	if (!c) continue;
+	for (let i = 0; i + 3 < q.pts.length; i += 2) {
+		const L = Math.hypot(q.pts[i + 2] - q.pts[i], q.pts[i + 3] - q.pts[i + 1]), n = Math.ceil(L / 2);
+		for (let k = 0; k <= n; k++) {
+			const x = q.pts[i] + (q.pts[i + 2] - q.pts[i]) * k / n, z = q.pts[i + 1] + (q.pts[i + 3] - q.pts[i + 1]) * k / n;
+			const pi = Math.floor((x - M.x0) / M.step * S), pj = Math.floor((z - M.z0) / M.step * S);
+			for (let dj = 0; dj < 2; dj++) for (let di = 0; di < 2; di++) { const a = pi + di, b = pj + dj; if (a >= 0 && b >= 0 && a < M.w * S && b < M.h * S) png.data.set([c[0], c[1], c[2], 255], (b * M.w * S + a) * 4); }
+		}
+	}
+}
 fs.writeFileSync(out, PNG.sync.write(png));
 console.log('wrote', out);

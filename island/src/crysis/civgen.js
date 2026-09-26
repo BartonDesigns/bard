@@ -295,6 +295,53 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	yield 'arterials';
 
+	// ---------- 1b. the freeway ----------
+	// A bigger town has a freeway through it, as the valley towns here have 680 and 580:
+	// two concrete carriageways with a median, straight through between two arterial
+	// lines and on out of town, in a corridor the houses and streets keep out of (they meet
+	// it with sound walls, freeways.js). The arterials it meets cross over it: each
+	// crossing becomes an overpass (a bridge the deck is built for), and at the busier ones
+	// a diamond interchange: an off-ramp before and an on-ramp after, each side, meeting
+	// the arterial where it is back down at grade. Nothing in the street graph is noded to
+	// it: the crossings are grade-separated.
+	const FWY = { on: false, ramps: [], cross: [] };
+	if (radius > 1600) {
+		const vF = (r() < 0.5 ? 0.5 : -0.5) * SP, tilt = (r() - 0.5) * 0.14;
+		const dx = Math.cos(ang + tilt), dz = Math.sin(ang + tilt), nx = dz, nz = -dx;         // (n: the left of +d)
+		const [c0x, c0z] = toW(0, vF), L = Rbox * 1.25;
+		const CW = W.motorway || 14, MED = 3;                                               // a carriageway; half the median
+		// only where the ground takes it: dry, and not up a mountainside
+		let ok = 0, tot = 0;
+		for (let t = -L; t <= L; t += 60) { tot++; const x = c0x + dx * t, z = c0z + dz * t; if (dry(x, z) && slope(x, z) < 0.12) ok++; }
+		if (ok > tot * 0.65) {
+			Object.assign(FWY, { on: true, x: c0x, z: c0z, dx, dz, nx, nz, L, off: MED + CW / 2, cw: CW });
+			const num = [205, 238, 305, 505, 605, 705, 780, 905][Math.floor(r() * 8)];
+			FWY.name = 'Interstate ' + num;
+			sites.push({ kind: 'freeway', x: c0x, z: c0z, ux: dx, uz: dz, hw: L, hd: MED + CW + 16 });
+			// where the arterials cross it
+			for (const e of G.E) {
+				if (!e.alive || (e.cls !== 'primary' && e.cls !== 'secondary')) continue;
+				const p = e.p;
+				for (let i = 0; i + 3 < p.length; i += 2) {
+					const bA = (p[i] - c0x) * nx + (p[i + 1] - c0z) * nz, bB = (p[i + 2] - c0x) * nx + (p[i + 3] - c0z) * nz;
+					if ((bA > 0) === (bB > 0)) continue;
+					const f = bA / (bA - bB), x = p[i] + (p[i + 2] - p[i]) * f, z = p[i + 1] + (p[i + 3] - p[i + 1]) * f;
+					const a = (x - c0x) * dx + (z - c0z) * dz;
+					if (Math.abs(a) > L - 200) continue;
+					let tx = p[i + 2] - p[i], tz = p[i + 3] - p[i + 1]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+					FWY.cross.push({ x, z, a, tx, tz, cls: e.cls });
+				}
+			}
+			// an interchange at the main road and at every other crossing, room kept round it
+			FWY.cross.sort((p2, q2) => p2.a - q2.a);
+			FWY.cross.forEach((c, k) => {
+				c.ic = c.cls === 'primary' || k % 2 === 0;
+				sites.push({ kind: 'approach', x: c.x, z: c.z, ux: c.tx, uz: c.tz, hw: 150, hd: 26 });
+				if (c.ic) sites.push({ kind: 'interchange', x: c.x, z: c.z, ux: dx, uz: dz, hw: 470, hd: 155 });
+			});
+		}
+	}
+
 	// ---------- 2. superblocks: collectors, shopping, schools, parks ----------
 	const blocks = [];
 	for (let i = -nL - 1; i <= nL; i++) for (let j = -nL - 1; j <= nL; j++) {
@@ -395,7 +442,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	// the sites' entrances: a service drive from the nearest arterial or collector
 	for (const s of sites) {
-		if (s.kind === 'park' || s.kind === 'downtown') continue;
+		if (s.kind === 'park' || s.kind === 'downtown' || s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
 		const hit = G.nearest(s.x, s.z, Math.max(s.hw, s.hd) + 40, (id, e) => e.cls === 'service');
 		if (!hit) continue;
 		const dx = s.x - hit.x, dz = s.z - hit.z, L = Math.hypot(dx, dz) || 1, len = Math.min(L, s.kind === 'shop' ? 70 : 45);
@@ -533,10 +580,66 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const live = G.E.filter((e) => e.alive && e.p.length >= 4);
 	for (const e of live) { deg[e.a]++; deg[e.b]++; }
 	const roads = [];
+	// (a road over the freeway: its stretch within SPAN of the freeway's centre line is the
+	// overpass, rising at 6% to clear the lanes, freeways.js)
+	const SPAN = FWY.on ? FWY.off + FWY.cw / 2 + 4 + 7 / 0.06 : 0;
+	const bOf = (x, z) => (x - FWY.x) * FWY.nx + (z - FWY.z) * FWY.nz, aOf = (x, z) => (x - FWY.x) * FWY.dx + (z - FWY.z) * FWY.dz;
 	for (const e of live) {
 		const res = e.cls === 'residential';
-		const pts = new Float32Array(e.p);
-		roads.push({ cls: e.cls, w: W[e.cls] || 6, name: e.name || '', pts, end0: res && deg[e.a] === 1, end1: res && deg[e.b] === 1, bridge: false, link: false, divided: false });
+		const base = { cls: e.cls, w: W[e.cls] || 6, name: e.name || '', end0: res && deg[e.a] === 1, end1: res && deg[e.b] === 1, bridge: false, link: false, divided: false };
+		// (only a road that crosses the freeway goes over it)
+		let crosses = false;
+		if (FWY.on) for (let i = 0; i + 3 < e.p.length && !crosses; i += 2) crosses = (bOf(e.p[i], e.p[i + 1]) > 0) !== (bOf(e.p[i + 2], e.p[i + 3]) > 0) && Math.abs(aOf(e.p[i], e.p[i + 1])) < FWY.L;
+		if (!crosses) { roads.push({ ...base, pts: new Float32Array(e.p) }); continue; }
+		// cut it where it enters and leaves the span, resampled every 6 m so the cut is clean
+		const q = [];
+		for (let i = 0; i + 3 < e.p.length; i += 2) { const L2 = Math.hypot(e.p[i + 2] - e.p[i], e.p[i + 3] - e.p[i + 1]), n = Math.max(1, Math.ceil(L2 / 6)); for (let k = 0; k < n; k++) q.push(e.p[i] + (e.p[i + 2] - e.p[i]) * k / n, e.p[i + 1] + (e.p[i + 3] - e.p[i + 1]) * k / n); }
+		q.push(e.p[e.p.length - 2], e.p[e.p.length - 1]);
+		let cur = [], inB = null;
+		const flush = () => { if (cur.length >= 4) roads.push({ ...base, pts: new Float32Array(cur), bridge: !!inB, end0: false, end1: false }); };
+		for (let i = 0; i < q.length; i += 2) {
+			const b2 = Math.abs(bOf(q[i], q[i + 1])) < SPAN && Math.abs(aOf(q[i], q[i + 1])) < FWY.L;
+			if (inB !== null && b2 !== inB) { cur.push(q[i], q[i + 1]); flush(); cur = [q[i - 2], q[i - 1]]; }
+			inB = b2;
+			cur.push(q[i], q[i + 1]);
+		}
+		flush();
+	}
+	if (FWY.on) {
+		const { x: fx, z: fz, dx, dz, nx, nz, L, off } = FWY;
+		const P = (a, b) => [fx + dx * a + nx * b, fz + dz * a + nz * b];
+		// the carriageways: +d on the right of the centre line (its right is -n), -d on the other
+		for (const sd of [1, -1]) {
+			const pts = [];
+			for (let a = -L; a <= L + 0.1; a += 30) { const [x, z] = P(sd > 0 ? a : -a, -sd * off); pts.push(x, z); }
+			roads.push({ cls: 'motorway', w: FWY.cw, name: FWY.name, dest: 'Downtown ' + name, pts: new Float32Array(pts), end0: false, end1: false, bridge: false, link: false, divided: true });
+		}
+		// the ramps of each interchange: off before the crossing, on after, both sides; each
+		// leaves the carriageway's right edge, runs beside it, and swings out to meet the
+		// arterial where it is back at grade
+		for (const c of FWY.cross) {
+			if (!c.ic) continue;
+			const sgn = Math.sign(c.tx * nx + c.tz * nz) || 1;                               // the arterial's +t side is +n (sgn 1)
+			const J = (side) => [c.x + c.tx * sgn * side * (SPAN + 12), c.z + c.tz * sgn * side * (SPAN + 12)];   // where it meets the arterial on side (+1: +n)
+			for (const sd of [1, -1]) {
+				const edgeB = -sd * (off + FWY.cw / 2 + 1.5), side = -sd;                  // this carriageway's right shoulder; its side of the freeway
+				for (const kind of ['off', 'on']) {
+					const a0 = c.a - sd * (kind === 'off' ? 480 : -480), a1 = c.a - sd * (kind === 'off' ? 170 : -170);
+					const pts = [];
+					// along the shoulder, easing out 6 m, then curving to the junction
+					for (let t = 0; t <= 1.001; t += 0.1) { const [x, z] = P(a0 + (a1 - a0) * t, edgeB + side * 6 * t * t); pts.push(x, z); }
+					const [jx, jz] = J(side), [ex, ez] = P(a1, edgeB + side * 6);
+					for (let t = 0.15; t <= 1.001; t += 0.15) {
+						// a quadratic bend: from the ramp's end, toward the crossing, into the junction
+						const [mx, mz] = P(c.a - sd * (kind === 'off' ? 60 : -60), edgeB + side * 30);
+						const u = t, x = (1 - u) * (1 - u) * ex + 2 * (1 - u) * u * mx + u * u * jx, z = (1 - u) * (1 - u) * ez + 2 * (1 - u) * u * mz + u * u * jz;
+						pts.push(x, z);
+					}
+					if (kind === 'on') { const rev = []; for (let i = pts.length - 2; i >= 0; i -= 2) rev.push(pts[i], pts[i + 1]); pts.length = 0; pts.push(...rev); }
+					roads.push({ cls: 'motorway', w: 6.5, name: FWY.name, pts: new Float32Array(pts), end0: false, end1: false, bridge: false, link: true, divided: false });
+				}
+			}
+		}
 	}
 
 	// ---------- 4. lots, houses, driveways, pools, trees ----------
@@ -657,7 +760,13 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 
 	// ---------- the sites: shopping centres, schools, parks ----------
 	for (const s of sites) {
+		if (s.kind === 'freeway' || s.kind === 'approach') continue;
 		const { x, z, ux, uz, hw, hd } = s;
+		if (s.kind === 'interchange') {
+			// landscaped: oaks and pines scattered on the dry grass inside the ramps
+			for (let n = 0; n < 26; n++) { const a = (r() - 0.5) * 2 * (hw - 60), b = (r() < 0.5 ? -1 : 1) * (40 + r() * (hd - 50)); const tx = x + ux * a - uz * b, tz = z + uz * a + ux * b; trees.push({ x: tx, z: tz, h: treeH() * (0.8 + r() * 0.4), cone: r() < 0.35 ? 1 : 0 }); }
+			continue;
+		}
 		// a point in the site's own frame: a along ux, b along (-uz, ux)
 		const at = (a, b) => [x + ux * a - uz * b, z + uz * a + ux * b];
 		claim(x, z, ux, uz, hw, hd);
@@ -759,6 +868,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const q of roads) if (q.cls === 'residential') for (let i = 0; i < q.pts.length; i += 2) disc(q.pts[i], q.pts[i + 1], q.w / 2 + 12, 1, LU.residential * 16);
 	for (const s of sites) {
 		const sub = (a, b, hw, hd) => ({ x: s.x + s.ux * a - s.uz * b, z: s.z + s.uz * a + s.ux * b, ux: s.ux, uz: s.uz, hw, hd });
+		if (s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
 		if (s.kind === 'shop') rect(s, 1, LU.commercial * 16, 4);
 		else if (s.kind === 'downtown') rect(s, 1, LU.plaza * 16, 4);
 		else if (s.kind === 'school') {
@@ -789,6 +899,6 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		name, gen: true, seed, style, bounds: [x0, z0, x0 + MW * step, z0 + MH * step],
 		roads, boxes, paths, pools, trees,
 		map: { px, w: MW, h: MH, x0, z0, step },
-		info: { houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },
+		info: { freeway: FWY.on ? { name: FWY.name, crossings: FWY.cross.length, interchanges: FWY.cross.filter((c) => c.ic).length } : null, houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },
 	};
 }

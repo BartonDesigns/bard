@@ -257,7 +257,7 @@ export function createFreeways(scene, bay, real, { isPhone = false } = {}) {
 				for (let k = 0; k + 3 < qp.length; k += 2) { const d = Math.hypot((qp[k] + qp[k + 2]) / 2 - deck[i].x, (qp[k + 1] + qp[k + 3]) / 2 - deck[i].z); if (d < bd) { bd = d; best = k; } }
 				let tx = qp[best + 2] - qp[best], tz = qp[best + 3] - qp[best + 1]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
 				const dir = Math.abs(tx) > Math.abs(tz) ? (tx > 0 ? 'E' : 'W') : (tz < 0 ? 'N' : 'S');
-				const dest = DEST[+num]?.[dir] || q.name || 'Freeway';
+				const dest = q.dest || DEST[+num]?.[dir] || q.name || 'Freeway';
 				// the deck's face toward oncoming traffic: the side the traffic comes from
 				const sd = Math.sign(deck[i].nx * -tx + deck[i].nz * -tz) || 1;
 				const fx = deck[i].x + deck[i].nx * sd * (W / 2 + 0.45), fz = deck[i].z + deck[i].nz * sd * (W / 2 + 0.45);
