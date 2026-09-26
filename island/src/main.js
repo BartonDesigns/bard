@@ -32,6 +32,7 @@ import { createBayArea, bayUniforms } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
+import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createCitySound } from './bay/citysound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
@@ -248,6 +249,26 @@ export function createIslandWorld() {
 	talkBtn.addEventListener('click', (e) => { e.stopPropagation(); talkNow(); });
 	for (const ev of ['pointerdown', 'touchstart']) talkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if (e.key === 'Enter' && talkTarget && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); talkNow(); } });
+	// doors within reach: a button, or E
+	const doorBtn = button('🚪 Open', 'Open the door (E)', 'left:50%;transform:translateX(-50%);bottom:calc(200px + env(safe-area-inset-bottom));display:none;');
+	dom.mount.appendChild(doorBtn);
+	let doorHere = null, doorT = 0, indoorK = 0;
+	const useDoor = () => { if (doorHere) { doorHere.toggle(); doorT = 1; } };
+	doorBtn.addEventListener('click', (e) => { e.stopPropagation(); useDoor(); });
+	for (const ev of ['pointerdown', 'touchstart']) doorBtn.addEventListener(ev, (e) => e.stopPropagation());
+	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && doorHere && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); useDoor(); } });
+	function watchDoor(dt) {
+		doorT += dt;
+		if (doorT < 0.15) return;
+		doorT = 0;
+		const P = world?.player.state;
+		doorHere = P && !P.flying && world.houses ? world.houses.doorNear(camera) : null;
+		doorBtn.style.display = doorHere ? '' : 'none';
+		if (doorHere) {
+			const what = doorHere.kind === 'garage' ? 'garage door' : doorHere.kind === 'slider' ? 'slider' : 'door';
+			doorBtn.textContent = `🚪 ${doorHere.open ? 'Close' : 'Open'} ${what}${isPhone ? '' : ' (E)'}`;
+		}
+	}
 	function watchTalk(dt) {
 		talkT += dt;
 		if (talkT < 0.25) return;
@@ -328,6 +349,8 @@ export function createIslandWorld() {
 			// Crysis: the towns beyond the survey, grown street by street as you near them
 			world.civ = createCivilization({ real: world.real, bay: bayArea });
 			world.city = createCity(shared, scene, bayArea, world.real);
+			// the real houses close by, built whole with their rooms
+			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			const own = island.heightAt;
@@ -341,9 +364,10 @@ export function createIslandWorld() {
 				world.diablo = createDiablo(scene, bayArea);
 				world.labels = createLabels(dom.mount, bayArea, bridge);
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
-				const diablo = world.diablo;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y));
-				island.extraPush = (p, footY) => diablo.push(p, footY);
+				// ...and in and out of the houses, up their stairs
+				const diablo = world.diablo, houses = world.houses;
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y));
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); };
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -494,6 +518,11 @@ export function createIslandWorld() {
 		W.real?.update(camera);
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);
+		W.houses?.update(camera, dt, sk.night);
+		// indoors by day the eye opens up to the light from the windows
+		indoorK += ((W.houses?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
+		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
+		watchDoor(dt);
 		W.street?.update(dt, time, camera, sk.night);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);

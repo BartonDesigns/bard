@@ -15,6 +15,7 @@ import { hardwood, shrub, swayMaterial } from '../world/vegetation.js';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
+import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -59,18 +60,24 @@ const vnoise = (x, z) => {
 const jit = (c, r) => [c[0] * (0.95 + r * 0.1), c[1] * (0.95 + ((r * 7.3) % 1) * 0.1), c[2] * (0.95 + ((r * 3.1) % 1) * 0.1)];
 
 // facades by kind: SF bay windows and cornices, house windows, curtain wall, ribbon glazing
-function buildingMaterial(shared, night) {
+// a house built for real close by (houses.js) takes over from its block: aNear holds the
+// house's centre and a flag, and the block gives up its pixels as the house takes them
+function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uNightC = night;
-		sh.vertexShader = 'attribute float aKind; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.uniforms.uNearBand = nearBand;
+		sh.vertexShader = 'attribute float aKind; attribute vec3 aNear; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+			vNearK = aNear.z > 0.5 ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, length(aNear.xy - cameraPosition.xz)) : 0.0;
 			vKind = aKind;
 			vLY = transformed.y * length(instanceMatrix[1].xyz);
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'uniform float uNightC; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform float uNightC; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' + sh.fragmentShader
+			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;`)
 			.replace('#include <color_fragment>', `#include <color_fragment>
 			{
 				float roof = step(0.7, vCN.y);
@@ -217,7 +224,7 @@ function buildingMaterial(shared, night) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding4';
+	m.customProgramCacheKey = () => 'baybuilding5';
 	return m;
 }
 
@@ -239,12 +246,13 @@ export function createCity(shared, scene, bay, real = null) {
 	group.name = 'bay-city';
 	scene.add(group);
 	const night = { value: 0 };
-	const mat = buildingMaterial(shared, night);
+	const nearBand = { value: new THREE.Vector2(36, 46) };
+	const mat = buildingMaterial(shared, night, nearBand);
 	const roofMat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide });
 	const CAP = 32000;
 	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
 	const mk = (geo, material, cap, kinds) => {
-		if (kinds) geo.setAttribute('aKind', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
+		if (kinds) { geo.setAttribute('aKind', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1)); geo.setAttribute('aNear', new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3)); }
 		const im = new THREE.InstancedMesh(geo, material, cap);
 		im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
 		im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
@@ -595,13 +603,19 @@ export function createCity(shared, scene, bay, real = null) {
 	}
 
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color(), Y = new THREE.Vector3(0, 1, 0);
+	let slotOf = new Map();
 	function upload(list, body, roofs) {
 		let n = 0, nh = 0, ng = 0;
-		const kinds = body.geometry.attributes.aKind;
+		const kinds = body.geometry.attributes.aKind, nearA = body.geometry.attributes.aNear;
+		if (roofs) slotOf = new Map();
 		for (const o of list) {
 			if (n >= body.instanceMatrix.count) break;
 			q.setFromAxisAngle(Y, -o.a); sc.set(o.w, o.h, o.d); p.set(o.x, o.y, o.z);
-			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2])); kinds.array[n] = o.kind; n++;
+			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2])); kinds.array[n] = o.kind;
+			const nc = o.src?.grp?.near;
+			nearA.array[n * 3] = nc ? nc[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : 0; nearA.array[n * 3 + 2] = nc ? 1 : 0;
+			if (roofs && o.src?.grp) { let l = slotOf.get(o.src.grp); if (!l) slotOf.set(o.src.grp, l = []); l.push(n); }
+			n++;
 			if (o.roof && roofs) {
 				const im = o.roof.hip ? roofs[0] : roofs[1], k = o.roof.hip ? nh++ : ng++;
 				if (k >= im.instanceMatrix.count) continue;
@@ -610,7 +624,7 @@ export function createCity(shared, scene, bay, real = null) {
 				im.setMatrixAt(k, m4.compose(p, q, sc)); im.setColorAt(k, col.setRGB(o.roof.col[0], o.roof.col[1], o.roof.col[2]));
 			}
 		}
-		body.count = n; kinds.needsUpdate = true;
+		body.count = n; kinds.needsUpdate = true; nearA.needsUpdate = true;
 		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); }
 		if (roofs) treeList = list.trees || [];
@@ -750,10 +764,25 @@ export function createCity(shared, scene, bay, real = null) {
 	// the real city's buildings, pools and yard trees round (cx, cz)
 	// San Ramon's roofs from the air: mostly grey and charcoal concrete tile and composition
 	// shingle, some brown, a share of terracotta
+	// a house's colours, from where it stands
+	function houseLook(b) {
+		const r = hash(Math.round(b.x / 9) * 3.7, Math.round(b.z / 9) * 1.9);
+		const r2 = hash(Math.round(b.x / 9) * 5.3 + 1, Math.round(b.z / 9) * 2.3 + 7);
+		return { r, r2, wall: jit(pick(r < 0.5 ? PAL.suburb : r < 0.75 ? PAL.ranch : PAL.seventies, r2), r), roof: pick(REAL_ROOF, hash(Math.round(b.x / 9) + 11, Math.round(b.z / 9) + 5)), garage: hash(Math.round(b.x / 9) * 7.7, 3) > 0.5 ? [0.93, 0.92, 0.88] : null };
+	}
+	// a house built for real (at c) or given back (null): its blocks hand over, or come back
+	function setNear(grp, c) {
+		grp.near = c;
+		const l = slotOf.get(grp), nearA = near.geometry.attributes.aNear;
+		if (!l) return;
+		for (const n of l) { nearA.array[n * 3] = c ? c[0] : 0; nearA.array[n * 3 + 1] = c ? c[1] : 0; nearA.array[n * 3 + 2] = c ? 1 : 0; }
+		nearA.needsUpdate = true;
+	}
 	const REAL_ROOF = [[0.3, 0.31, 0.33], [0.24, 0.25, 0.27], [0.36, 0.36, 0.37], [0.4, 0.39, 0.38], [0.33, 0.3, 0.28], [0.42, 0.33, 0.27], [0.5, 0.3, 0.22], [0.46, 0.27, 0.2], [0.28, 0.29, 0.32], [0.38, 0.35, 0.33]];
 	function realBuildings(cx, cz, R, list) {
 		if (!real?.loaded()) return;
 		const trees = list.trees || (list.trees = []);
+		const floors = new Map();
 		for (const b of real.near('boxes', cx, cz, R)) {
 			const dx = b.x - cx, dz = b.z - cz;
 			if (dx * dx + dz * dz > R * R) continue;
@@ -763,13 +792,19 @@ export function createCity(shared, scene, bay, real = null) {
 			const ca = Math.cos(b.a), sa = Math.sin(b.a);
 			let gmin = g;
 			for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) gmin = Math.min(gmin, bay.heightAt(b.x + ca * sx * b.w / 2 - sa * sz * b.d / 2, b.z + sa * sx * b.w / 2 + ca * sz * b.d / 2));
-			const y = Math.min(g - 1.2, gmin - 0.3);
+			let y = Math.min(g - 1.2, gmin - 0.3), top = g + b.wallH;
+			// a house stands on one floor, level through all its blocks (as houses.js builds it)
+			const home = b.grp && isHome(b) && mainOf(b.grp);
+			if (home) {
+				let f = floors.get(b.grp);
+				if (f === undefined) floors.set(b.grp, f = houseFloor(b.grp, bay.heightAt));
+				top = f + wallTop(b); y = Math.min(y, f - 0.3);
+			}
 			// one colour per house (its wings and garage share it)
-			const r = hash(Math.round(b.x / 9) * 3.7, Math.round(b.z / 9) * 1.9);
-			const r2 = hash(Math.round(b.x / 9) * 5.3 + 1, Math.round(b.z / 9) * 2.3 + 7);
-			let col = jit(pick(r < 0.5 ? PAL.suburb : r < 0.75 ? PAL.ranch : PAL.seventies, r2), r);
+			const look = houseLook(home || b);
+			let col = look.wall;
 			let kind, roof = null;
-			const rc = pick(REAL_ROOF, hash(Math.round(b.x / 9) + 11, Math.round(b.z / 9) + 5));
+			const rc = look.roof, r = look.r, r2 = look.r2;
 			if (b.kind === 0 || b.kind === 8) kind = doorKind(KIND.house, b.door);
 			else if (b.kind === 1) kind = doorKind(KIND.houseGarageL, b.door);
 			else if (b.kind === 2) kind = doorKind(KIND.houseGarageR, b.door);
@@ -780,7 +815,7 @@ export function createCity(shared, scene, bay, real = null) {
 			else if (b.kind === 7) { kind = KIND.office; col = jit([0.86, 0.8, 0.68], r); }
 			else { kind = KIND.industry; col = jit(pick(PAL.industry, r2), r); }
 			if (b.roofH > 0.1) roof = { hip: !!b.hip, h: b.roofH, col: rc };
-			list.push({ x: b.x, y, z: b.z, w: b.w, d: b.d, h: g + b.wallH - y, a: b.a, col, kind, roof });
+			list.push({ x: b.x, y, z: b.z, w: b.w, d: b.d, h: top - y, a: b.a, col, kind, roof, src: b });
 		}
 		for (const p of real.near('pools', cx, cz, Math.min(R, 900))) {
 			const g = bay.heightAt(p.x, p.z);
@@ -851,5 +886,5 @@ export function createCity(shared, scene, bay, real = null) {
 		upload(list, near, [hips, gables]);
 		placeTrees(x, z);
 	}
-	return { update, group, fill: fillBlocks };
+	return { update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b) };
 }
