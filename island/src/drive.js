@@ -250,16 +250,18 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		const off = trail || E.oneway || E.w < 7 ? 0 : E.w * 0.22;
 		const hx = dx * D.dir, hz = dz * D.dir;
 		const x = x0 - hz * off, z = z0 + hx * off;
-		// the ground under you, bridges included
-		const floorY = Math.max(W.island.heightAt(x, z), W.island.extraFloor ? W.island.extraFloor(x, z, (D.y ?? W.island.heightAt(x, z)) - 1) : -1e9);
+		// the road under you: its own smoothed profile (graded like a real road, never steeper
+		// than 25%, level across), bridges included
+		const road = profileAt(E, D.s);
+		// (never under the ground where the profile cuts through a hump more than a metre)
+		const floorY = Math.max(road, W.island.heightAt(x, z) - 1.0, W.island.extraFloor ? W.island.extraFloor(x, z, (D.y ?? road) - 1) : -1e9);
 		const eye = trail ? 1.65 : 1.45;                                      // a driver's eye, a walker's on a trail
 		D.y = D.y === null ? floorY + eye : D.y + (floorY + eye - D.y) * Math.min(1, dt * 8);
 		// face along the road, turning smoothly, and tilt with its grade
 		const want = Math.atan2(-hx, -hz);
 		let dyaw = want - D.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
 		D.yaw += dyaw * Math.min(1, dt * 4);
-		const ahead = at(E.pts, Math.min(E.L, Math.max(0, D.s + D.dir * 8)));
-		const grade = (W.island.heightAt(ahead[0], ahead[1]) - W.island.heightAt(x0, z0)) / 8;
+		const grade = Math.max(-0.25, Math.min(0.25, (profileAt(E, D.s + D.dir * 8) - road) / 8));
 		P.pos.set(x, D.y, z); P.yaw = D.yaw;
 		camera.position.copy(P.pos);
 		camera.rotation.set(P.pitch + Math.atan(grade) * 0.5, D.yaw, 0, 'YXZ');
@@ -267,6 +269,25 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		hud.textContent = `${trail ? '🥾' : '🚗'} ${E.name || (E.cls === 'grid' ? 'Street' : E.cls.replace('_', ' '))} · ${arrow} · ${fmtSpeed(D.v)}`;
 		for (const [k, b] of Object.entries(arrows)) b.style.background = k === D.queue ? '#01a982' : 'rgba(8,20,26,.55)';
 		return true;
+	}
+	// a road's height along it: the ground on its centre line every 5 m, smoothed over about
+	// 40 m (cut through the bumps, filled over the dips), then limited to a 25% grade both
+	// ways; kept on the road once worked out
+	const STEP = 5, MAXG = 0.25;
+	function profileAt(E, s) {
+		if (!E.prof) {
+			const n = Math.max(2, Math.ceil(E.L / STEP) + 1), h = new Float32Array(n);
+			for (let i = 0; i < n; i++) { const [px, pz] = at(E.pts, Math.min(E.L, i * STEP)); h[i] = world().island.heightAt(px, pz); }
+			for (let pass = 0; pass < 3; pass++) {
+				const c = h.slice();
+				for (let i = 0; i < n; i++) { let a = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += c[j]; k++; } h[i] = a / k; }
+			}
+			for (let i = 1; i < n; i++) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
+			for (let i = n - 2; i >= 0; i--) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
+			E.prof = h;
+		}
+		const h = E.prof, f = Math.max(0, Math.min(h.length - 1, s / STEP)), i = Math.min(h.length - 2, Math.floor(f)), t = f - i;
+		return h[i] * (1 - t) + h[i + 1] * t;
 	}
 	// for tests: the choices at the end of the road you are on
 	const debugOptions = () => { const E = D.edge, [, , hx, hz] = at(E.pts, D.dir > 0 ? E.L : 0); return options(E, D.dir).map((o) => ({ name: o.e.name || o.e.cls, then: o.then ? (o.then.e.name || o.then.e.cls) : '', L: Math.round(o.e.L), turn: +(Math.atan2(hx * D.dir * o.dz - hz * D.dir * o.dx, hx * D.dir * o.dx + hz * D.dir * o.dz) * 57.3).toFixed(0) })); };

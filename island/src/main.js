@@ -37,6 +37,7 @@ import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
 import { createLake } from './bay/lake.js';
+import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
@@ -422,8 +423,11 @@ export function createIslandWorld() {
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
-			const own = island.heightAt;
-			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.heightAt(x, z);
+			// roads graded like real ones, with berms: the ground walked and driven on is the
+			// ground as drawn
+			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
+			const own = island.heightAt, berms = world.berms;
+			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : berms.apply(x, z, bayArea.heightAt(x, z));
 			bayArea.ready.then(() => {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
@@ -646,6 +650,7 @@ export function createIslandWorld() {
 		sunGlare(dt);
 		watchTeleport();
 		W.street?.update(dt, time, camera, sk.night);
+		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		W.lake?.update(dt, time, camera, sk.night, !W.player.state.flying && !drive.active());
 		W.roads?.update(time, sk.night);
