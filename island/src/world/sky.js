@@ -407,6 +407,11 @@ export function createSky(scene, shared, renderer) {
 	sun.shadow.mapSize.set(2048, 2048);
 	const sc = sun.shadow.camera;
 	sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 1; sc.far = 400;
+	// the box the shadows are drawn in, for whoever wants to leave out what cannot be in it:
+	// half its width, and how far it reaches either side of you along the light (the light
+	// stands SUN_D back from you, and the box runs 400 m from it)
+	const SUN_D = 200;
+	shared.shadowBox = { half: sc.right, reach: SUN_D };
 	sun.shadow.bias = -0.0004;
 	sun.shadow.normalBias = 0.04;
 	// soft-edged, and never black: skylight still reaches into shade
@@ -464,11 +469,11 @@ export function createSky(scene, shared, renderer) {
 		if (night < 0.5) {
 			sun.color.copy(sunCol);
 			sun.intensity = (3.4 * dayK + 0.4 * setK) * (0.25 + 0.75 * sunVis);
-			sun.position.copy(sd).multiplyScalar(200).add(focus);
+			sun.position.copy(sd).multiplyScalar(SUN_D).add(focus);
 		} else {
 			sun.color.copy(PAL.moon);
 			sun.intensity = 0.5 * night;
-			sun.position.copy(sd).multiplyScalar(-200).add(focus);
+			sun.position.copy(sd).multiplyScalar(-SUN_D).add(focus);
 		}
 		sun.target.position.copy(focus);
 		// the shadow box follows the player in whole texels so edges do not crawl
