@@ -48,6 +48,7 @@ import { createLandmarks } from './bay/landmarks.js';
 import { createRoads } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
 import { createGuide } from './guide/guide.js';
+import { storagePanel } from './storage.js';
 import { createPeople } from './people/people.js';
 import { waveHeight } from './world/ocean.js';
 
@@ -125,7 +126,7 @@ function buildDom() {
 	const hint = css(document.createElement('div'), 'position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;max-width:80vw;');
 	const loading = css(document.createElement('div'), 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
 	loading.textContent = 'Raising the island…';
-	const panel = css(document.createElement('div'), 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));width:min(300px,78vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);');
+	const panel = css(document.createElement('div'), 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));width:min(300px,78vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100dvh - 140px - env(safe-area-inset-top));overflow-y:auto;overscroll-behavior:contain;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);');
 	mount.append(canvas, veil, joy, back, gear, fly, boost, jump, down, act, shell, toss, place, launch, hint, panel, loading);
 	document.body.appendChild(mount);
 	return { mount, canvas, joy, knob, back, jump, gear, fly, boost, down, act, shell, toss, place, launch, veil, hint, loading, panel };
@@ -477,6 +478,8 @@ export function createIslandWorld() {
 		const credit = css(document.createElement('div'), 'margin-top:8px;font:11px system-ui;opacity:.6;line-height:1.35;');
 		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets and buildings: Overture Maps Foundation, © OpenStreetMap contributors (ODbL), Microsoft and Google footprints.';
 		p.appendChild(credit);
+		// what the site keeps on this device, by kind, each removable
+		storagePanel(p, { activeModel: () => (guide.llm.kind() === 'webllm' ? guide.llm.model() : ''), onModelRemoved: () => guide.llm.useNone() });
 		const TM = window.L99TouchMusic175;
 		if (TM) {
 			const b = css(document.createElement('button'), 'margin-top:10px;width:100%;min-height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (TM.enabled ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
