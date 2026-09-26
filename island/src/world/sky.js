@@ -231,7 +231,10 @@ export function createSky(scene, shared, renderer) {
 				// in weather the sky meets the land in the same haze the land is fogged with, so
 				// there is no line where the one ends and the other begins
 				col = mix(col, uFogCol, (1.0 - smoothstep(0.0, 0.14, d.y)) * clamp(uGloom * 1.5 + uRainHere, 0.0, 1.0) * 0.85);
-				col = mix(col, uSkyHor, smoothstep(0.02, -0.12, d.y));
+				// below the horizon (seen past the land's far edge from high up) the sky is the same
+				// haze the land fades into, so no bright line runs along where the land ends
+				col = mix(col, mix(uSkyHor, uFogCol, 0.7), smoothstep(0.02, -0.12, d.y));
+				col = mix(col, uFogCol, smoothstep(0.012, -0.03, d.y) * 0.9);
 				gl_FragColor = vec4(col, 1.0);
 				#include <tonemapping_fragment>
 				#include <colorspace_fragment>

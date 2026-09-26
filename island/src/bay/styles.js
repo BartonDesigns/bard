@@ -106,19 +106,26 @@ export function sfDistrict(x, z) {
 }
 
 // curving suburban streets: the grid is warped by a slow, smooth field; the same
-// formula runs in GLSL (see WARP_GLSL) so ground and buildings agree
+// formula runs in GLSL (see WARP_GLSL) so ground and buildings agree. Three waves at
+// unrelated angles and lengths, their strength drifting from one neighbourhood to the
+// next (nearly straight here, winding there), so neighbouring districts don't bend in
+// step. (Its slope stays under 0.6, so fromGrid's fixed-point inversion converges.)
+const TP = Math.PI * 2, wr = (v, k) => (((v % (TP / k)) + TP / k) % (TP / k)) * k;
 export function warp(x, z, style) {
 	if (style !== STYLE.suburb) return [0, 0];
-	const S = 60;
-	return [S * (Math.sin(z * 0.0063 + 1.7) + 0.6 * Math.sin(x * 0.0041 + 0.4)), S * (Math.sin(x * 0.0059 + 2.9) + 0.6 * Math.sin(z * 0.0037 + 5.1))];
+	const m = 55 * (0.4 + 0.6 * (0.5 + 0.5 * Math.sin(wr(x, 0.00093) + wr(z, 0.00061) + 0.8)));
+	return [m * (Math.sin(wr(z, 0.0063) + 1.7) + 0.6 * Math.sin(wr(x, 0.0041) + 0.4) + 0.35 * Math.sin(wr(x, 0.0047) + wr(z, 0.0031) + 2.2)),
+		m * (Math.sin(wr(x, 0.0059) + 2.9) + 0.6 * Math.sin(wr(z, 0.0037) + 5.1) + 0.35 * Math.sin(wr(x, 0.0028) - wr(z, 0.0052) + 4.0))];
 }
 export const WARP_GLSL = /* glsl */`
 vec2 streetWarp(vec2 w, float style){
 	if (abs(style - 3.0) > 0.5) return vec2(0.0);
 	// each argument wrapped to one period first: GPU sin() loses precision far from zero
 	const float TWO_PI = 6.283185307;
-	#define WS(v, k, ph) sin(mod(v, TWO_PI / k) * k + ph)
-	return 60.0 * vec2(WS(w.y, 0.0063, 1.7) + 0.6 * WS(w.x, 0.0041, 0.4), WS(w.x, 0.0059, 2.9) + 0.6 * WS(w.y, 0.0037, 5.1));
+	#define WR(v, k) (mod(v, TWO_PI / k) * k)
+	float m = 55.0 * (0.4 + 0.6 * (0.5 + 0.5 * sin(WR(w.x, 0.00093) + WR(w.y, 0.00061) + 0.8)));
+	return m * vec2(sin(WR(w.y, 0.0063) + 1.7) + 0.6 * sin(WR(w.x, 0.0041) + 0.4) + 0.35 * sin(WR(w.x, 0.0047) + WR(w.y, 0.0031) + 2.2),
+		sin(WR(w.x, 0.0059) + 2.9) + 0.6 * sin(WR(w.y, 0.0037) + 5.1) + 0.35 * sin(WR(w.x, 0.0028) - WR(w.y, 0.0052) + 4.0));
 }
 vec3 blockOf(float style){
 	if (style < 0.5) return vec3(125.0, 84.0, 14.0);

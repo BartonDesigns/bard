@@ -467,9 +467,17 @@ export function createBayArea(shared, scene, island, BU) {
 						float park = step(0.96, h21(cid + 3.1)) * (1.0 - down);
 						cityC = mix(cityC, vec3(0.2, 0.32, 0.13), park);
 						cityC = mix(cityC, vec3(0.62, 0.61, 0.58), sidewalk * 0.7);
-						cityC = mix(cityC, vec3(0.2, 0.2, 0.21), street);
-						// far off the grid melts into the town's average colour
-						cityC = mix(cityC, vec3(0.45, 0.44, 0.42), smoothstep(1500.0, 6000.0, dist));
+						// the streets fade with distance, as they do in an aerial photograph (lines a
+						// pixel wide all bending together read as a pattern, not a town)
+						cityC = mix(cityC, vec3(0.2, 0.2, 0.21), street * (1.0 - 0.55 * smoothstep(1200.0, 3200.0, dist)));
+						// mature trees in clumps over lawns and streets alike, thicker in some
+						// neighbourhoods than others
+						float canopyF = smoothstep(0.52, 0.8, fbm3(vBW * 0.011) + 0.25 * vn(vBW * 0.05)) * (sty > 1.5 && sty < 3.5 ? 0.6 : 0.0) * (1.0 - down);
+						cityC = mix(cityC, mix(vec3(0.13, 0.2, 0.09), vec3(0.2, 0.26, 0.12), vn(vBW * 0.08)), canopyF);
+						// far off the grid melts into the town's own average colour, mottled
+						vec3 avgC = sty < 1.5 ? vec3(0.6, 0.59, 0.56) : sty < 2.5 ? vec3(0.27, 0.31, 0.21) : sty < 3.5 ? vec3(0.38, 0.39, 0.26) : (sty > 4.5 && sty < 5.5) ? vec3(0.55, 0.55, 0.53) : vec3(0.4, 0.4, 0.39);
+						avgC = mix(avgC, vec3(0.6, 0.58, 0.55), smoothstep(0.2, 0.6, down)) * (0.86 + 0.28 * fbm3(vBW * 0.0035));
+						cityC = mix(cityC, avgC, smoothstep(1500.0, 6000.0, dist));
 						c = mix(c, cityC, smoothstep(0.08, 0.35, urban));
 						// night: street lamps along the grid, windows in the blocks; far away,
 						// the town is a carpet of light

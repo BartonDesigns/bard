@@ -63,6 +63,26 @@ const jit = (c, r) => [c[0] * (0.95 + r * 0.1), c[1] * (0.95 + ((r * 7.3) % 1) *
 // facades by kind: SF bay windows and cornices, house windows, curtain wall, ribbon glazing
 // a house built for real close by (houses.js) takes over from its block: aNear holds the
 // house's centre and a flag, and the block gives up its pixels as the house takes them
+// a town that arrives (a generated one grown, or dropped for another) rises out of the
+// ground in a ring spreading from where you stand, instead of appearing all at once:
+// uRise = (centre x, z, the ring's radius, on)
+const RISE_GLSL = `
+	if (uRise.w > 0.5) {
+		vec2 ip = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+		float rk = smoothstep(0.0, 1.0, clamp((uRise.z - length(ip - uRise.xy)) / 160.0, 0.0, 1.0));
+		transformed.y -= (1.0 - rk) * 34.0 / max(1e-3, length(instanceMatrix[1].xyz));
+	}`;
+function withRise(m, rise, key) {
+	const prev = m.onBeforeCompile;
+	m.onBeforeCompile = (sh, r) => {
+		prev?.call(m, sh, r);
+		sh.uniforms.uRise = rise;
+		sh.vertexShader = 'uniform vec4 uRise;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>' + RISE_GLSL);
+	};
+	const k0 = m.customProgramCacheKey?.bind(m);
+	m.customProgramCacheKey = () => (k0 ? k0() : '') + key;
+	return m;
+}
 function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
@@ -252,8 +272,10 @@ export function createCity(shared, scene, bay, real = null) {
 	scene.add(group);
 	const night = { value: 0 };
 	const nearBand = { value: new THREE.Vector2(36, 46) };
-	const mat = buildingMaterial(shared, night, nearBand);
-	const roofMat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide });
+	const rise = { value: new THREE.Vector4(0, 0, 0, 0) };
+	let riseT0 = -1;
+	const mat = withRise(buildingMaterial(shared, night, nearBand), rise, 'rise1');
+	const roofMat = withRise(new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide }), rise, 'roofrise1');
 	const CAP = 32000;
 	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
 	const mk = (geo, material, cap, kinds) => {
@@ -393,6 +415,8 @@ export function createCity(shared, scene, bay, real = null) {
 				if (U.d > 0.22) {
 					// downtown: towers on bigger lots, some with a setback crown
 					const L = 26;
+					// the block paved between the towers: plazas and service yards, not lawn
+					lot(list, a, style, X0 + IX / 2, Z0 + IZ / 2, IX, IZ, 0.4, KIND.paved, jit([0.47, 0.46, 0.44], hash(i * 5 + 1, j * 7 + 2)), null, 0.9);
 					for (let k = 0; k * L < IX; k++) for (const side of [0, 1]) {
 						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
 						let h = 12 + Math.pow(r, 2.4) * U.d * U.d * 300 + U.d * 40;
@@ -546,7 +570,9 @@ export function createCity(shared, scene, bay, real = null) {
 						const fz = side ? Z0 + IZ : Z0, inw = side ? -1 : 1, face = side ? 's' : 'n', at = (m) => fz + inw * m;
 						const two = modern ? r > 0.12 : era === ERA.seventies ? r > 0.5 : era === ERA.ranch ? r > 0.9 : false;
 						const h = two ? 6.4 : 3.3;
-						const col = jit(walls[Math.floor(r * 4)], r), rc = roofs[r > 0.8 ? 1 : 0];
+						const col = jit(walls[Math.floor(r * 4)], r);
+						// the tract's roofs, each weathered its own way, and now and then one re-roofed since
+						const rr = hash(i * 53 + k * 19 + side, j * 61 + k), rc = jit(rr < 0.1 ? pick(roofsAll, rr * 10) : roofs[r > 0.8 ? 1 : 0], rr).map((c) => c * (0.9 + ((rr * 13.7) % 1) * 0.16));
 						const lotX = X0 + k * L, gs = r > 0.5 ? 1 : -1;
 						const gw = modern && r > 0.7 ? 8.8 : 6.2;
 						const avail = L - 2 * SY;
@@ -883,7 +909,15 @@ export function createCity(shared, scene, bay, real = null) {
 		near.visible = hips.visible = gables.visible = trunks.visible = crowns.visible = cones.visible = !high;
 		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
-		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }   // a generated town came or went
+		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
+		if (riseT0 >= 0) {
+			// the ring runs out at 700 m a second; no shadows from the buildings still underground
+			const front = (performance.now() - riseT0) / 1000 * 700;
+			rise.value.z = front;
+			const on = front < 2600;
+			if (!on) { riseT0 = -1; rise.value.w = 0; }
+			near.castShadow = hips.castShadow = gables.castShadow = !on;
+		}
 		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
 		lastX = x; lastZ = z;
 		const list = [];
