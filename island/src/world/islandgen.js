@@ -257,6 +257,35 @@ export function generateIsland(params = {}) {
 		}
 	}
 
+	// Another world's land is carved harder (spires, mesas, crater rims), but the ground
+	// itself never breaks into a sawtooth: rock that stands steeper than a cliff can hold
+	// slumps down onto its neighbours (a few rounds of talus settling), then the surface
+	// is eased once, so ridges stay sharp to the eye without jagged ribs on their faces.
+	// (Sharp, angular forms on these worlds belong to their builders, not to the ground.)
+	if (kind !== 'island') {
+		const maxStep = cell * 1.35, h2 = new Float32Array(N * N);
+		for (let pass = 0; pass < 40; pass++) {
+			let moved = 0;
+			for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+				const k = j * N + i, h = height[k];
+				if (h < 1) continue;
+				for (const n of [k - 1, k + 1, k - N, k + N]) {
+					const d = h - height[n] - maxStep;
+					if (d > 0) { const m = d * 0.3; height[k] -= m; height[n] += m; moved++; }
+				}
+			}
+			if (!moved) break;
+		}
+		h2.set(height);
+		for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+			const k = j * N + i;
+			if (height[k] < 3) continue;
+			const avg = (height[k - 1] + height[k + 1] + height[k - N] + height[k + N]) * 0.25;
+			h2[k] = height[k] * 0.5 + avg * 0.5;
+		}
+		height.set(h2);
+	}
+
 	// Level the village terrace: rises gently inland from the beach.
 	// the village ground: an amphitheatre rising from the back beach of the cove,
 	// about one metre in fifteen, so the houses step up the slope and all look out

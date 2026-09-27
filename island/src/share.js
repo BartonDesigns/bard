@@ -277,6 +277,8 @@ export function createShare(ctx) {
 			// the tower's floor, if it went while you were being put there
 			const tb = s.bld?.k === 'tower' && s.bld.key ? s.bld : null;
 			if (tb && w.towers?.key() === tb.key && w.towers.here(P.pos)?.i !== tb.i) { w.towers.raise(tb.i); put(yOf(), !!s.fly); }
+			// and keep it there while the tower settles in around you
+			keep = tb ? { key: tb.key, i: tb.i, y: yOf(), t: 20 } : null;
 			w.underworld?.settle?.();
 			if (time && Number.isFinite(s.hours) && w.sky?.state) w.sky.state.hours = s.hours;
 			const d = describe(s);
@@ -404,7 +406,7 @@ export function createShare(ctx) {
 	homeBtn.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));min-height:36px;padding:6px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(8,20,26,.5);color:#eafaf6;font:600 12px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;display:none;opacity:.9;';
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) homeBtn.addEventListener(ev, (e) => e.stopPropagation());
 	mount.appendChild(homeBtn);
-	let here = null, mine = null, watchT = 0;
+	let here = null, mine = null, watchT = 0, keep = null;
 	homeBtn.addEventListener('click', (e) => {
 		e.stopPropagation(); homeBtn.blur();
 		if (mine) { ctx.openMenu?.(); return; }
@@ -453,6 +455,9 @@ export function createShare(ctx) {
 		if (watchT < 0.3) return;
 		watchT = 0;
 		const w = W(), P = w?.player.state;
+		if (keep && P && (keep.t -= 0.3) > 0 && Math.abs(P.pos.y - keep.y) < 1.5) {
+			if (w.towers?.key() === keep.key && w.towers.here(P.pos)?.i !== keep.i) w.towers.raise(keep.i);
+		} else keep = null;
 		syncMarkers();
 		for (const m of markers.list) {
 			const d = Math.hypot(camera.position.x - m.x, camera.position.z - m.z);
