@@ -384,8 +384,10 @@ export function createPeople(scene, world) {
 		// grown-ups, and (where families go) children with them
 		const nk = Math.min(KIDS, Math.round(need.n * (need.kids || 0))), na = need.n - nk;
 		const kidPool = pool.filter((p) => p.P.dna.child), adultPool = pool.filter((p) => !p.P.dna.child && p.demo === undefined);
-		if (na > adultPool.filter((p) => p.active).length && adultPool.length < Math.min(MAX, na + 2)) grow(false);
-		else if (nk > kidPool.filter((p) => p.active).length && kidPool.length < Math.min(KIDS, nk + 1)) grow(true);
+		// build the families together: a child's body whenever the children lag the grown-ups
+		const wantA = na > 0 && adultPool.length < Math.min(MAX, na + 2) && adultPool.filter((p) => p.active).length < na;
+		const wantK = nk > 0 && kidPool.length < Math.min(KIDS, nk + 1) && kidPool.length / nk < Math.max(0.3, adultPool.length / Math.max(1, na));
+		if (wantK && adultPool.length) grow(true); else if (wantA) grow(false);
 		let active = 0, kids = 0;
 		const drop = (p) => { p.active = false; p.P.root.visible = false; if (p.partner) { p.partner.partner = null; p.partner = null; } if (p.route?.kind === 'follow' && p.route.parent) p.route.parent.kids = Math.max(0, (p.route.parent.kids || 1) - 1); };
 		for (const p of pool) {

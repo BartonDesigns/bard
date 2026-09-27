@@ -63,6 +63,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 	};
 	let built = null;
 	const g = (x, z) => bay.heightAt(x, z);
+	const inFrame = (F, lx, lz) => { const ca = Math.cos(F.a), sa = Math.sin(F.a); return { x: F.x + ca * lx - sa * lz, z: F.z + sa * lx + ca * lz }; };
 
 	function build() {
 		const B = { group: new THREE.Group(), col: [], floors: [], fronts: [] };
@@ -143,7 +144,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 				boxIn(F, M('#d85c8a', 0.9), 2, 0.3, 1.2, ix1 - 1.6, 0, iz1 - 1.2);
 				// the front desk by the middle door
 				boxIn(F, mat.counter, 2.6, 1.05, 0.7, 0, 0, iz1 - 1.2, true);
-				B.main = { F, ix0, ix1, iz0, iz1 };
+				B.main = { F, ix0, ix1, iz0, iz1, pond: [tx, tz, Math.min(iw / 7, (iz1 - iz0) / 2.4) * 1.45] };
 			}
 			if (cafe) {
 				boxIn(F, mat.counter, iw * 0.6, 1.05, 0.7, 0, 0, iz0 + 1.2, true);
@@ -154,8 +155,10 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		});
 		// the sign at the courtyard gate, and stroller parking beside it
 		{
-			const a = boxes[0] ? boxes[0].a : 0, sx = CAMPUS.x - Math.sin(a) * 0 + Math.cos(a) * 0, sz = CAMPUS.z;
-			const F = frameAt(sx - 20, sz + 18, a + 0.4, g(sx - 20, sz + 18));
+			// on the walk up to the main hall's porch, facing the way you come
+			const M0 = B.main || B.fronts[0], mf = B.fronts[0];
+			const at = M0 ? inFrame(M0.F, -mf.w * 0.25, mf.z + 7) : { x: CAMPUS.x, z: CAMPUS.z }, a = M0 ? M0.F.a : 0;
+			const F = frameAt(at.x, at.z, a, g(at.x, at.z));
 			B.sign = { F };
 			boxIn(F, mat.trim, 0.2, 2.6, 0.2, -2.1, 0, 0); boxIn(F, mat.trim, 0.2, 2.6, 0.2, 2.1, 0, 0);
 			const sg = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.4, 0.12), [mat.trim, mat.trim, mat.trim, mat.trim, mat.signFace, mat.trim]); sg.applyMatrix4(F.m); sg.position.y += 1.9; B.group.add(sg);
@@ -200,12 +203,12 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		const morning = Math.exp(-(((h - 10.5) / 1.4) ** 2)), after = Math.exp(-(((h - 14) / 1.6) ** 2)) * 0.6;
 		return Math.min(1, (morning + after) * (day === 0 || day === 6 ? 1.1 : 0.9));
 	}
-	const inFrame = (F, lx, lz) => { const ca = Math.cos(F.a), sa = Math.sin(F.a); return { x: F.x + ca * lx - sa * lz, z: F.z + sa * lx + ca * lz }; };
 	function venue(cam, hours) {
 		if (!built || Math.hypot(cam.x - CAMPUS.x, cam.z - CAMPUS.z) > CAMPUS.r + 110) return null;
 		const k = busy(hours, new Date().getDay());
 		if (k <= 0) return { n: 0, kids: 0.5, areas: [] };
-		const B = built, room = (R) => (r) => inFrame(R.F, R.ix0 + 1 + r() * (R.ix1 - R.ix0 - 2), R.iz0 + 1.5 + r() * (R.iz1 - R.iz0 - 3));
+		// anywhere on a room's floor, round the Tot Wetlands pond rather than through it
+		const B = built, room = (R) => (r) => { let lx = 0, lz = 0; for (let k = 0; k < 6; k++) { lx = R.ix0 + 1 + r() * (R.ix1 - R.ix0 - 2); lz = R.iz0 + 1.5 + r() * (R.iz1 - R.iz0 - 3); if (!R.pond || Math.hypot(lx - R.pond[0], lz - R.pond[1]) > R.pond[2]) break; } return inFrame(R.F, lx, lz); };
 		const areas = [];
 		if (B.main) areas.push({ w: 0.34, pick: room(B.main) });
 		if (B.cafe) areas.push({ w: 0.12, pick: room(B.cafe) });
