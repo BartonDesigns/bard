@@ -121,7 +121,7 @@ function cage(K, room, w, z0, z1, h) {
 }
 
 // an outdoor game's backdrop: a painted dome (sky, a far horizon) and a ground disc
-export function buildBackdrop(K, { kind = 'meadow', r = 60, night = false }) {
+export function buildBackdrop(K, { kind = 'meadow', r = 60, night = false, hole = 0 }) {
 	const { THREE } = K;
 	const sky = K.canvas(16, 512, (g) => {
 		const gr = g.createLinearGradient(0, 0, 0, 512);
@@ -136,7 +136,8 @@ export function buildBackdrop(K, { kind = 'meadow', r = 60, night = false }) {
 	set.userData.venue = true;
 	// (it writes depth like any wall: whatever stands beyond it is hidden)
 	K.mesh(new THREE.SphereGeometry(r, 32, 16), new THREE.MeshBasicMaterial({ map: sky, side: THREE.BackSide, fog: false }), 0, 0, 0, set);
-	const ground = K.mesh(new THREE.CircleGeometry(r * 0.99, 48), K.mat(kind === 'sea' ? '#d9c7a0' : '#557a3e', { rough: 1, glow: 0.15 }), 0, -0.02, 0, set);
+	// (a ring, where the game is sunk into the ground, like a rock pool)
+	const ground = K.mesh(hole ? new THREE.RingGeometry(hole, r * 0.99, 48, 1) : new THREE.CircleGeometry(r * 0.99, 48), K.mat(kind === 'sea' ? '#d9c7a0' : '#557a3e', { rough: 1, glow: 0.15 }), 0, -0.03, 0, set);
 	ground.rotation.x = -Math.PI / 2;
 	return set;
 }

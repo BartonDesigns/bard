@@ -19,6 +19,8 @@ const TYPES = [['Fastball', 33, 0, 0], ['Fastball', 31, 0, 0], ['Change-up', 24,
 export const GAME = {
 	id: 'batting',
 	title: 'Batting Practice',
+	// played in a closed room the kit builds (the host may hide the city while it runs)
+	indoor: true,
 	blurb: 'Ten pitches from the machine: time the swing, square it up, clear the fence.',
 	where: { kind: 'anywhere' },
 	create(ctx) {

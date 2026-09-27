@@ -27,6 +27,8 @@ function pocketFor(x, u) {
 export const GAME = {
 	id: 'skeeball',
 	title: 'Skee-Ball',
+	// played in a closed room the kit builds (the host may hide the city while it runs)
+	indoor: true,
 	blurb: 'Nine wooden balls up the alley: land them in the 50, or the 100 corners.',
 	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Santa Cruz Beach Boardwalk arcade', lat: 36.9643, lon: -122.0177, r: 80 }] },
 	create(ctx) {

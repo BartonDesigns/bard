@@ -14,6 +14,8 @@ const TW = 1.0, TL = 2.0, H = 0.8, PR = 0.04, MR = 0.055, GOAL = 0.34, TO = 5;
 export const GAME = {
 	id: 'airhockey',
 	title: 'Air Hockey',
+	// played in a closed room the kit builds (the host may hide the city while it runs)
+	indoor: true,
 	blurb: 'First to five against the house player: slide your mallet, bank it off the rails.',
 	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }] },
 	create(ctx) {

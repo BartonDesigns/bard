@@ -19,6 +19,8 @@ const the = (p) => (/^Karl/.test(p.name) ? p.name : 'the ' + p.name);
 export const GAME = {
 	id: 'claw',
 	title: 'Claw Machine',
+	// played in a closed room the kit builds (the host may hide the city while it runs)
+	indoor: true,
 	blurb: 'Five credits at the Musée Mécanique claw: sea lions, crabs, and the bridge nobody wins.',
 	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }] },
 	create(ctx) {

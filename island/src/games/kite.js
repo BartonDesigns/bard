@@ -109,7 +109,8 @@ export const GAME = {
 			pos.needsUpdate = true;
 			ring.rotation.z += dt * 0.8;
 			K.hud(`${Math.max(0, Math.ceil(S.time))} s · ${Math.round(S.score)} pts · wind ${S.gust > 1.2 ? 'gusting' : S.gust < 0.9 ? 'light' : 'steady'}${S.steer ? S.steer < 0 ? ' · ◀ left' : ' · right ▶' : ''}`);
-			K.cam(0, 1.8, 4.5, kp.x * 0.35, 6 + kp.y * 0.4, -L * 0.6, 2);
+			// from high behind the flyer, over the fences and the parked cars, looking up at the sky
+			K.cam(0, 5, 9, kp.x * 0.35, 6 + kp.y * 0.45, -L * 0.6, 2);
 		}
 		return K.wrap({ build, reset, update, press });
 	},

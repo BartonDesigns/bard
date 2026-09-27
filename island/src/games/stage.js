@@ -9,8 +9,9 @@
 //   on land (a lawn game does not go in the bay);
 //   flat enough (the spread of ground heights under it).
 // Water games search the other way: for a footprint that is mostly water, and set the
-// stage at the water's level. With no world to ask (or nothing suitable), the stage goes
-// down in front of the player as it always did, and the caller is told it isn't clear.
+// stage at the water's level. With nothing clear anywhere, the stage goes where the least of
+// its footprint is blocked (the street direction with the most room), and the caller is told
+// it isn't clear; with no world to ask, in front of the player as it always did.
 
 // the water's surface at a world point, or null for land: Lake Annabel's level, or the sea
 export function waterLevel(ctx, x, z) {
@@ -38,7 +39,7 @@ const segDist = (x, z, p, i) => {
 	return Math.hypot(x - p[i] - dx * t, z - p[i + 1] - dz * t);
 };
 
-// how a footprint fares at one spot: blocked, and how rough the ground is (height spread)
+// how a footprint fares at one spot: how much of it is blocked, how rough the ground is
 function judge(ctx, W, x, z, yaw, span, want) {
 	const pts = footprint(x, z, yaw, span, want.water ? 0 : 1.5);
 	const rad = Math.hypot(span[0] / 2, Math.max(span[1], span[2] ?? 1)) + 3;
@@ -49,7 +50,10 @@ function judge(ctx, W, x, z, yaw, span, want) {
 		trees = real?.near?.('trees', x, z, rad + 5) || [];
 		roads = real?.near?.('roads', x, z, rad + 20) || [];
 	} catch { /* a city still loading: judge on the ground alone */ }
-	let lo = Infinity, hi = -Infinity, wet = 0;
+	// the houses built near you (their plans, with a margin)
+	const built = [];
+	try { for (const h of W?.houses?.houses?.values?.() || []) if (h && Math.hypot(h.cx - x, h.cz - z) < rad + h.r) built.push(h); } catch { /* none */ }
+	let lo = Infinity, hi = -Infinity, wet = 0, blocked = 0;
 	for (const [px, pz] of pts) {
 		const lv = waterLevel(ctx, px, pz);
 		if (lv !== null) wet++;
@@ -57,19 +61,17 @@ function judge(ctx, W, x, z, yaw, span, want) {
 			const h = ctx.groundAt?.(px, pz);
 			if (Number.isFinite(h)) { lo = Math.min(lo, h); hi = Math.max(hi, h); }
 		}
-		if (boxes.some((b) => Math.hypot(px - b.x, pz - b.z) < Math.max(b.w, b.d) / 2 + 1)) return null;
-		if (!want.water && trees.some((t) => Math.hypot(px - t.x, pz - t.z) < 2.5)) return null;
-		if (!want.water && roads.some((r) => { if (!r.drive && !r.walked) return false; const p = r.pts; for (let i = 0; i + 3 < p.length; i += 2) if (segDist(px, pz, p, i) < (r.w || 6) / 2 + 1) return true; return false; })) return null;
+		if (boxes.some((b) => Math.hypot(px - b.x, pz - b.z) < Math.max(b.w, b.d) / 2 + 1) || built.some((h) => Math.hypot(px - h.cx, pz - h.cz) < h.r)) { blocked++; continue; }
+		if (want.water) continue;
+		if (lv !== null || trees.some((t) => Math.hypot(px - t.x, pz - t.z) < 2.5)) { blocked++; continue; }
+		if (roads.some((r) => { if (!r.drive && !r.walked) return false; const p = r.pts; for (let i = 0; i + 3 < p.length; i += 2) if (segDist(px, pz, p, i) < (r.w || 6) / 2 + 1) return true; return false; })) blocked++;
 	}
-	if (want.water) return wet >= pts.length * 0.75 ? { rough: 0, wet: true } : null;
-	if (wet) return null;
 	// the city's own trees (street trees, yard trees): counted in cells over the footprint
-	if (city?.treesNear) {
+	if (!want.water && city?.treesNear) {
 		const cells = footprint(x, z, yaw, span, 0.5);
-		for (let k = 0; k < cells.length; k += 2) if (city.treesNear(cells[k][0], cells[k][1], 3).length) return null;
+		for (let k = 0; k < cells.length; k += 2) if (city.treesNear(cells[k][0], cells[k][1], 3).length) blocked += 2;
 	}
-	const rough = hi > lo ? hi - lo : 0;
-	return rough <= want.flat ? { rough } : null;
+	return { blocked: blocked / pts.length, wet: wet / pts.length, rough: hi > lo ? hi - lo : 0 };
 }
 
 // find the spot: mode 'clear' (land) or 'water'; returns { x, z, yaw, clear, water }
@@ -85,16 +87,22 @@ export function findSpot(ctx, { mode = 'clear', dist = 4, span = [4, 4, 1], flat
 		const cx = p.x - Math.sin(a) * r, cz = p.z - Math.cos(a) * r;
 		cand.push([cx, cz, a, r]);
 	}
-	let best = null, bestRing = Infinity;
+	let best = null, bestRing = Infinity, least = null;
 	for (const [cx, cz, cy, r] of cand) {
-		if (r > bestRing) break;
 		let j = null;
 		try { j = judge(ctx, W, cx, cz, cy, span, want); } catch { j = null; }
 		if (!j) continue;
-		const score = j.rough * 4 + r * 0.05;
-		if (!best || score < best.score) { best = { x: cx, z: cz, yaw: cy, clear: true, water: !!j.wet, score }; bestRing = r; }
+		const ok = want.water ? j.wet >= 0.75 && j.blocked === 0 : j.blocked === 0 && j.rough <= want.flat;
+		if (ok && r <= bestRing) {
+			const score = j.rough * 4 + r * 0.05;
+			if (!best || score < best.score) { best = { x: cx, z: cz, yaw: cy, clear: true, water: want.water, score }; bestRing = r; }
+		}
+		// nothing clear anywhere: remember the spot with the most room (least of it blocked)
+		const room = j.blocked * 10 + (want.water ? (1 - j.wet) * 10 : Math.min(j.rough, 6) * 0.5) + r * 0.01;
+		if (!least || room < least.room) least = { x: cx, z: cz, yaw: cy, clear: false, water: false, room };
 	}
+	if (best) return best;
 	// no water to be had: a water game falls back to a clear spot on land (it builds its own)
-	if (!best && want.water) return findSpot(ctx, { mode: 'clear', dist, span, flat: 1.5 });
-	return best || front;
+	if (want.water) return findSpot(ctx, { mode: 'clear', dist, span, flat: 1.5 });
+	return least || front;
 }

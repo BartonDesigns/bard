@@ -27,6 +27,8 @@ function scoreAt(x, y) {
 export const GAME = {
 	id: 'darts',
 	title: 'Darts',
+	// played in a closed room the kit builds (the host may hide the city while it runs)
+	indoor: true,
 	blurb: 'Nine darts at a regulation board: aim, settle your hand, and go for the treble twenty.',
 	where: { kind: 'anywhere' },
 	create(ctx) {

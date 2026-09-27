@@ -32,6 +32,8 @@ function frameScores(rolls) {
 export const GAME = {
 	id: 'bowling',
 	title: 'Bowling',
+	// played in a closed room the kit builds (the host may hide the city while it runs)
+	indoor: true,
 	blurb: 'Five frames on a real 60-foot lane: swipe to roll, curl it for hook.',
 	where: { kind: 'site', sites: [{ name: 'Presidio Bowling Center', lat: 37.7989, lon: -122.4583, r: 80 }, { name: 'Mission Bowling Club', lat: 37.7634, lon: -122.4157, r: 60 }] },
 	create(ctx) {

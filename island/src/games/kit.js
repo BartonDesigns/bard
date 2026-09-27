@@ -28,12 +28,12 @@ function writeStore(s) {
 const PANEL = 'background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px system-ui,sans-serif;';
 const stopEv = (el) => { for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) el.addEventListener(ev, (e) => e.stopPropagation()); };
 
-export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], place = 'clear', flat = 1.2, room = null, backdrop = null, dome = 60 } = {}) {
+export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], place = 'clear', flat = 1.2, room = null, backdrop = null, dome = 60, hole = 0, lift = 0 } = {}) {
 	const { THREE, scene, camera } = ctx;
 	const K = { on: false, time: 0, last: null, cardOpen: false, accent, THREE };
 	let layer = null, hudText = null, card = null, api = null, g = null;
 	const saved = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: 50 };
-	const camWant = { pos: new THREE.Vector3(), look: new THREE.Vector3(), k: 0, snap: true };
+	const camWant = { pos: new THREE.Vector3(), look: new THREE.Vector3(), k: 0, snap: true, ready: false };
 	// the camera's own eased pose (world): kept here, not read back from the camera, so that
 	// nothing else moving the camera between frames can drag the shot back to the player
 	const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
@@ -59,7 +59,8 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 			if (Number.isFinite(h)) gy = Math.max(gy, h);
 		}
 		K.root = new THREE.Group();
-		K.root.position.set(x, Number.isFinite(gy) ? gy : p.y - 1.7, z);
+		// (lift: a game sunk into the ground, like a rock pool, is raised to clear it)
+		K.root.position.set(x, (Number.isFinite(gy) ? gy : p.y - 1.7) + lift, z);
 		K.root.rotation.y = yaw;
 		K.yaw = yaw;
 		scene.add(K.root);
@@ -69,10 +70,12 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		if (room) buildRoom(K, room);
 		else if (backdrop && (place === 'water' ? !spot.water : !spot.clear)) {
 			const hr = ctx.getWorld?.()?.sky?.state?.hours ?? 12;
-			buildBackdrop(K, { kind: backdrop, r: dome, night: hr < 6.5 || hr > 19.5 });
+			buildBackdrop(K, { kind: backdrop, r: dome, hole, night: hr < 6.5 || hr > 19.5 });
 		}
 		saved.pos.copy(camera.position); saved.quat.copy(camera.quaternion); saved.fov = camera.fov;
-		camWant.snap = true;
+		// the first shot a game asks for is cut to, not eased into (until then the camera stays
+		// where it was: easing from the stage's origin would start the shot inside the floor)
+		camWant.snap = true; camWant.ready = false;
 		layer = document.createElement('div');
 		layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:8;user-select:none;-webkit-user-select:none;';
 		const top = document.createElement('div');
@@ -165,7 +168,7 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 	K.waterY = (x, z) => { K.world(tv.set(x, 0, z), tv); const lv = waterLevel(ctx, tv.x, tv.z); return lv === null ? null : lv - K.root.position.y; };
 
 	// ---- the camera: where it wants to be (stage coordinates), eased there each frame ----
-	K.cam = (px, py, pz, lx, ly, lz, k = 4) => { camWant.pos.set(px, py, pz); camWant.look.set(lx, ly, lz); camWant.k = k; };
+	K.cam = (px, py, pz, lx, ly, lz, k = 4) => { camWant.pos.set(px, py, pz); camWant.look.set(lx, ly, lz); camWant.k = k; camWant.ready = true; };
 	// a framed shot: a subject (centre, apparent width and height in metres) seen from the
 	// direction (dx, dy, dz), backed off until it fills `fill` of the screen whichever way the
 	// phone is held (portrait squeezes the width, so it's the width that usually decides)
@@ -178,7 +181,7 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 	};
 	K.fov = (f) => { if (camera.fov !== f) { camera.fov = f; camera.updateProjectionMatrix(); } };
 	function camTick(dt) {
-		if (!K.root) return;
+		if (!K.root || !camWant.ready) return;
 		const p = K.world(camWant.pos, tv);
 		if (camWant.snap) camPos.copy(p); else camPos.lerp(p, 1 - Math.exp(-dt * camWant.k));
 		const l = K.world(camWant.look);
@@ -334,7 +337,7 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 	K.wrap = (game) => {
 		g = game;
 		api = {
-			start() { if (K.on) return; begin(); g.build(); g.reset(); camTick(1); },
+			start() { if (K.on) return; begin(); g.build(); g.reset(); g.update(0.001, 0); camTick(1); },
 			stop() { if (!K.on) return; g.end?.(); end(); },
 			update(dt, t) { if (!K.on) return; K.time += dt; g.update(dt, t); if (K.on) camTick(dt); },
 			press(down, x, y) { if (!K.on || K.cardOpen) return; track(down, x, y); g.press?.(down, x, y); },
