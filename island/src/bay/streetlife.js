@@ -300,7 +300,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
 		if (Math.hypot(x - splitX, cam.position.y - splitY, z - splitZ) > SPLIT_M || t - splitT > SPLIT_S || t < splitT) split(x, cam.position.y, z, t);
 		lampLights.material.opacity = nightK;
-		poolMat.opacity = nightK * 0.3;
+		poolMat.opacity = nightK * 0.5;
 		// signals cycle green, amber, red
 		const sc2 = sigGeo.attributes.color.array, ns = Math.min(300, signalList.length);
 		for (let k = 0; k < ns; k++) {
