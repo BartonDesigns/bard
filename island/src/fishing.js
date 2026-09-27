@@ -55,6 +55,61 @@ function fishPicture(name, back, belly) {
 	return c.toDataURL();
 }
 
+// the fish itself, in 3D, for holding up when you land it: a body shaded from its back to
+// its belly, a tail and fins that move, an eye; a ray flat with a whip tail, a shark long
+// and slim, a halibut flat and deep, a crab with its legs and claws. Length from weight
+// (a fish's weight goes roughly as the cube of its length). Returns { group, tail, len }.
+function fishModel(name, back, belly, lb) {
+	const len = Math.max(0.14, Math.min(1.3, 0.24 * Math.cbrt(Math.max(0.1, lb)) * (/shark/.test(name) ? 1.5 : /ray/.test(name) ? 0.9 : 1)));
+	const cB = new THREE.Color(back), cL = new THREE.Color(belly), tmpC = new THREE.Color();
+	const shade = (geo, y0, y1) => {
+		const pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
+		for (let i = 0; i < pos.count; i++) { const k = THREE.MathUtils.smoothstep(pos.getY(i), y0, y1); tmpC.copy(cL).lerp(cB, k); col.set([tmpC.r, tmpC.g, tmpC.b], i * 3); }
+		geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+		return geo;
+	};
+	// wet: glossy, a little sheen
+	const skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.15 });
+	const fin = new THREE.MeshStandardMaterial({ color: cB.clone().multiplyScalar(0.85), roughness: 0.5, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+	const group = new THREE.Group(), tail = new THREE.Group();
+	const eye = (x, y, z, r) => { const e = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), new THREE.MeshStandardMaterial({ color: 0x0b0b0b, roughness: 0.1, metalness: 0.3 })); e.position.set(x, y, z); const w = new THREE.Mesh(new THREE.SphereGeometry(r * 1.35, 10, 8), new THREE.MeshStandardMaterial({ color: 0xe8e2c8, roughness: 0.3 })); w.position.set(x - r * 0.25, y, z - Math.sign(z) * r * 0.25); group.add(w, e); };
+	const tri = (pts) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) sh.lineTo(p[0], p[1]); return new THREE.ShapeGeometry(sh); };
+	if (/crab/.test(name)) {
+		const w = len * 0.9;
+		group.add(new THREE.Mesh(shade(new THREE.SphereGeometry(1, 20, 12).scale(w * 0.5, w * 0.17, w * 0.36), -w * 0.1, w * 0.12), skin));
+		const leg = new THREE.MeshStandardMaterial({ color: cB, roughness: 0.4 });
+		for (const sd of [-1, 1]) for (let k = 0; k < 4; k++) { const L = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.025, w * 0.02, w * 0.5, 6).translate(0, -w * 0.25, 0), leg); L.position.set(-w * 0.2 + k * w * 0.13, 0, sd * w * 0.3); L.rotation.set(sd * 1.9, 0, 0.3); tail.add(L); }
+		for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.SphereGeometry(w * 0.11, 10, 8).scale(1.6, 0.8, 1), leg); c.position.set(w * 0.5, 0, sd * w * 0.22); group.add(c); }
+		group.add(tail);
+		return { group, tail, len: w };
+	}
+	if (/ray/.test(name)) {
+		group.add(new THREE.Mesh(shade(new THREE.SphereGeometry(1, 24, 12).scale(len * 0.45, len * 0.06, len * 0.55), -len * 0.03, len * 0.03), skin));
+		const t = new THREE.Mesh(new THREE.CylinderGeometry(len * 0.005, len * 0.02, len * 0.9, 6).rotateZ(Math.PI / 2).translate(-len * 0.45, 0, 0), fin);
+		tail.position.x = -len * 0.35; t.position.x = -len * 0.1; tail.add(t); group.add(tail);
+		eye(len * 0.25, len * 0.05, len * 0.12, len * 0.018); eye(len * 0.25, len * 0.05, -len * 0.12, len * 0.018);
+		return { group, tail, len };
+	}
+	const shark = /shark/.test(name), flat = /halibut/.test(name), deep = /bluegill|redear|sunfish|crappie|perch|parrot/.test(name);
+	const H = len * (shark ? 0.09 : flat ? 0.2 : deep ? 0.22 : 0.13), W = len * (flat ? 0.04 : shark ? 0.08 : 0.07);
+	const body = shade(new THREE.SphereGeometry(1, 28, 16).scale(len * 0.5, H, W), -H * 0.35, H * 0.45);
+	// taper the back half toward the tail, and blunt the head
+	{ const p = body.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i) / (len * 0.5); const k = x < 0 ? 1 - Math.pow(-x, 1.6) * 0.72 : 1 - Math.pow(x, 3) * 0.15; p.setY(i, p.getY(i) * k); p.setZ(i, p.getZ(i) * k); } body.computeVertexNormals(); }
+	group.add(new THREE.Mesh(body, skin));
+	// markings: dark bars on a bass or a perch, spots on a leopard shark
+	if (/bass|perch|rockfish|snapper/.test(name) || /leopard/.test(name)) {
+		const mk = new THREE.MeshStandardMaterial({ color: 0x1a1a14, roughness: 0.4, transparent: true, opacity: 0.35 });
+		for (let k = -3; k <= 2; k++) for (const sd of [-1, 1]) { const m = new THREE.Mesh(/leopard/.test(name) ? new THREE.CircleGeometry(H * 0.18, 8) : new THREE.PlaneGeometry(len * 0.025, H * 0.9), mk); m.position.set(k * len * 0.07, H * 0.15, sd * W * 0.92); if (sd < 0) m.rotation.y = Math.PI; group.add(m); }
+	}
+	const tf = new THREE.Mesh(tri(shark ? [[0, 0], [-len * 0.2, H * 2.2], [-len * 0.12, 0], [-len * 0.16, -H * 1.1]] : [[0, 0], [-len * 0.16, H * 1.3], [-len * 0.11, 0], [-len * 0.16, -H * 1.3]]), fin);
+	tail.position.x = -len * 0.46; tail.add(tf); group.add(tail);
+	const df = new THREE.Mesh(tri(shark ? [[len * 0.08, H * 0.8], [-len * 0.02, H * 2.4], [-len * 0.1, H * 0.8]] : [[len * 0.15, H * 0.85], [len * 0.05, H * 1.6], [-len * 0.25, H * 1.2], [-len * 0.3, H * 0.6]]), fin);
+	group.add(df);
+	for (const sd of [-1, 1]) { const pf = new THREE.Mesh(tri([[0, 0], [-len * 0.09, -H * 0.5], [-len * 0.03, -H * 0.1]]), fin); pf.position.set(len * 0.25, -H * 0.2, sd * W * 0.9); pf.rotation.y = sd * 0.5; group.add(pf); }
+	eye(len * 0.38, H * 0.25, W * 0.72, Math.max(0.006, H * 0.13)); eye(len * 0.38, H * 0.25, -W * 0.72, Math.max(0.006, H * 0.13));
+	return { group, tail, len };
+}
+
 // San Francisco Bay, San Pablo Bay and the South Bay inside the Golden Gate (roughly): the
 // water outside it is the open Pacific (Ocean Beach, Pacifica, the San Mateo coast)
 const BAY = [[37.8105, -122.477], [37.83, -122.479], [37.87, -122.5], [37.95, -122.5], [38.1, -122.5], [38.12, -122.25], [38.06, -122.0], [38.05, -121.85], [37.9, -122.3], [37.8, -122.27], [37.45, -121.93], [37.45, -122.12], [37.6, -122.38], [37.71, -122.39], [37.806, -122.46]]
@@ -94,7 +149,19 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	scene.add(line);
 	const splash = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.28, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
 	splash.rotation.x = -Math.PI / 2; scene.add(splash);
-
+	// your other hand, and the catch in it (hung from its jaw, before your eyes)
+	const hand = new THREE.Group();
+	{
+		const sk = new THREE.MeshStandardMaterial({ color: 0xc99a7a, roughness: 0.6 });
+		hand.add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.03, 0.095).translate(0, 0, 0.02), sk));
+		for (let k = 0; k < 4; k++) { const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.05, 3, 6).rotateX(Math.PI / 2).translate(0, 0, -0.03), sk); f.position.set(-0.03 + k * 0.02, -0.012, -0.03); f.rotation.x = 1.2; hand.add(f); }
+		const th = new THREE.Mesh(new THREE.CapsuleGeometry(0.011, 0.04, 3, 6).rotateX(Math.PI / 2), sk); th.position.set(0.05, -0.01, 0.0); th.rotation.set(0.9, 0.7, 0); hand.add(th);
+		const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.04, 0.4, 10).rotateX(Math.PI / 2).translate(0, 0, 0.25), new THREE.MeshStandardMaterial({ color: 0x3a4a5a, roughness: 0.9 }));
+		hand.add(arm);
+	}
+	hand.visible = false;
+	camera.add(hand);
+	const H = { fish: null, t: 0, energy: 0, flop: 0, toss: null };
 	// ---- the UI ----
 	const btn = document.createElement('button');
 	btn.style.cssText = 'position:absolute;left:50%;bottom:calc(74px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 22px;border-radius:24px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.78);color:#eafaf6;font:600 15px system-ui;display:none;z-index:4;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;';
@@ -163,6 +230,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		card.innerHTML = `<img src="${fishPicture(sp[0], sp[4], sp[5])}" style="width:100%;max-width:260px;display:block;margin:0 auto 6px"><div style="font:700 17px system-ui">${sp[0][0].toUpperCase() + sp[0].slice(1)}</div><div style="margin:4px 0 8px;opacity:.85">${lb} lb${lb >= best && mine.length > 1 ? ' · your biggest yet!' : mine.length === 1 ? ' · your first!' : ` · best ${best} lb`}</div>${F.where ? `<div style="opacity:.75;font-size:12px;margin-bottom:4px">${F.where.name}${LIMITS[sp[0]] ? ' · posted limit: ' + LIMITS[sp[0]] : ''}</div>` : ''}${/pier/i.test(F.where?.name || '') ? '<div style="opacity:.75;font-size:12px;margin-bottom:4px">No fishing licence needed on a public pier</div>' : ''}<div style="opacity:.6;font-size:12px">${log.length} fish caught in all · tap to close</div>`;
 		card.style.display = 'block';
 		setTimeout(() => { card.style.display = 'none'; }, 7000);
+		hold(sp, lb);
 		stop('landed');
 	}
 	let lastWhy = '';
@@ -186,8 +254,67 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	addEventListener('keydown', (e) => { if ((e.key === 'r' || e.key === 'R') && !e.repeat && btn.style.display !== 'none' && document.activeElement?.tagName !== 'INPUT') press(true); });
 	addEventListener('keyup', (e) => { if (e.key === 'r' || e.key === 'R') { if (F.state === 'fight') F.hold = false; } });
 
+	// ---- the catch in your hand: it flops, thrashes now and then, tires; then you let it go
+	// (thrown back in a low arc to the water, a splash, and it is gone)
+	function hold(sp, lb) {
+		letGo(true);
+		const m = fishModel(sp[0], sp[4], sp[5], lb);
+		// hung from the jaw: head up at the hand, the body hanging below it
+		m.group.rotation.z = Math.PI / 2;
+		m.group.position.set(0, -m.len * 0.42, 0);
+		const pivot = new THREE.Group(); pivot.add(m.group);
+		hand.add(pivot);
+		hand.position.set(-0.1, -0.02 + Math.min(0.16, m.len * 0.3), -0.42 - m.len * 0.35);
+		hand.rotation.set(0.25, 0.35, 0.1);
+		hand.visible = true;
+		H.fish = { ...m, pivot }; H.t = 0; H.energy = 1; H.flop = 0.6;
+	}
+	function letGo(now = false) {
+		if (!H.fish) return;
+		const f = H.fish; H.fish = null;
+		hand.remove(f.pivot);
+		if (now) { hand.visible = false; return; }
+		// back to the water it came from
+		f.pivot.updateMatrixWorld();
+		const at = new THREE.Vector3(); f.group.getWorldPosition(at);
+		const q = new THREE.Quaternion(); f.group.getWorldQuaternion(q);
+		f.group.position.copy(at); f.group.quaternion.copy(q); scene.add(f.group);
+		const to = F.at.lengthSq() ? F.at.clone() : at.clone().add(new THREE.Vector3(0, -1, -3));
+		to.x += (Math.random() - 0.5) * 2; to.z += (Math.random() - 0.5) * 2; to.y = F.level;
+		H.toss = { g: f.group, tail: f.tail, from: at, to, t: 0 };
+		hand.visible = false;
+	}
+	card.addEventListener('click', () => letGo());
+	function animateCatch(dt, t) {
+		if (H.fish) {
+			H.t += dt;
+			// tiring: big thrashes early, then now and then a burst
+			H.energy = Math.max(0.25, H.energy - dt * 0.12);
+			H.flop -= dt;
+			if (H.flop < 0) { H.flop = 0.8 + Math.random() * 2.2; H.burst = 0.5 + Math.random() * 0.4; }
+			H.burst = Math.max(0, (H.burst || 0) - dt);
+			const e = H.energy * (H.burst > 0 ? 1.6 : 0.5);
+			const f = H.fish;
+			f.pivot.rotation.x = Math.sin(t * 11) * 0.35 * e;
+			f.pivot.rotation.z = Math.sin(t * 7.3) * 0.18 * e + (H.burst > 0 ? Math.sin(t * 23) * 0.25 : 0);
+			f.tail.rotation.y = Math.sin(t * 19) * 0.7 * e;
+			f.group.rotation.x = Math.sin(t * 5.1) * 0.12 * e;
+			// the hand steadies itself against it
+			hand.position.x = -0.1 + Math.sin(t * 7.3) * 0.01 * e;
+			if (H.t > 7.5) letGo();
+		}
+		if (H.toss) {
+			const T = H.toss; T.t += dt;
+			const k = Math.min(1, T.t / 0.9);
+			T.g.position.lerpVectors(T.from, T.to, k); T.g.position.y += Math.sin(k * Math.PI) * 1.6;
+			T.g.rotation.x += dt * 9; T.tail.rotation.y = Math.sin(t * 25) * 0.8;
+			if (k >= 1) { splashAt(T.to, 0.7); scene.remove(T.g); T.g.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); }); H.toss = null; }
+		}
+	}
+
 	const tmp = new THREE.Vector3(), tip = new THREE.Vector3();
 	function update(dt, t, onFoot) {
+		animateCatch(dt, t);
 		const W = getWorld();
 		if (!W) return;
 		// near water, on foot: the rod comes out
@@ -254,5 +381,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		if (splash.material.opacity > 0) { splash.material.opacity -= dt * 0.8; splash.scale.multiplyScalar(1 + dt * 2.5); }
 	}
 	function splashAt(p, k) { splash.position.set(p.x, F.level + 0.02, p.z); splash.scale.setScalar(k); splash.material.opacity = 0.8; }
-	return { update, log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy };
+	// (for a look at a catch: Crysis.fishing.showCatch('bay', 1), no fight)
+	const showCatch = (water = 'lake', i = 1, lb) => { const sp = SPECIES[water][i]; hold(sp, lb ?? (sp[2] + sp[3]) / 3); };
+	return { update, showCatch, log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy };
 }

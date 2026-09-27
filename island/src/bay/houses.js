@@ -13,6 +13,9 @@ import { Builder, houseMaterials, drawItem, lin } from './housekit.js';
 import { occasions } from '../calendar.js';
 import { carGeometry, carMaterial } from './cars.js';
 import { NONE_IN } from '../world/lodfade.js';
+
+// the rooms that sometimes have a raised (tray) ceiling
+const RAISE = new Set(['living', 'family', 'dining', 'master']);
 import { inCampus } from './discovery.js';
 
 const FLOOR = { living: 'wood', dining: 'wood', family: 'wood', office: 'wood', entry: 'tile', hall: 'wood', loft: 'carpet', kitchen: 'tile', bath: 'tile', mbath: 'tile', powder: 'tile', laundry: 'tile', bed: 'carpet', master: 'carpet', closet: 'carpet', garage: 'concrete' };
@@ -316,7 +319,32 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				const room = rooms[r.k], fk = L === 1 && room.type === 'hall' ? 'carpet' : FLOOR[room.type] || 'wood';
 				g.quad(fk, [r.x0, y, r.z0], [r.x1, y, r.z0], [r.x1, y, r.z1], [r.x0, y, r.z1], [0, 1, 0], FT[fk], [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]]);
 			}
-			for (const r of cellRects(L, (c) => (lab[c] >= 0 && !(L === 0 && inWell(c) && upOver(c)) ? (lit[lab[c]] ? 2 : 1) : null))) g.quad(r.k === 2 ? 'ceilingLit' : 'ceiling', [r.x0, yc, r.z0], [r.x1, yc, r.z0], [r.x1, yc, r.z1], [r.x0, yc, r.z1], [0, -1, 0], lin([0.95, 0.95, 0.93]), [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]]);
+			// raised (tray) ceilings in some living rooms, family rooms, dining rooms and main
+			// bedrooms with nothing over them: a soffit round the edge at the usual height, and the
+			// middle stepped up into the roof space, its step lit like a cove
+			const raised = new Map();
+			for (const rm of rooms) {
+				if (rm.level !== L || !RAISE.has(rm.type) || (rm.id * 7 + Math.floor(Math.abs(X[0]) * 13 + Math.abs(Z[0]) * 7)) % 10 >= 5) continue;
+				let i0 = 1e9, i1 = -1, j0 = 1e9, j1 = -1, n = 0, clear = true;
+				for (let c = 0; c < nx * nz; c++) if (lab[c] === rm.id) { const i = c % nx, j = Math.floor(c / nx); i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); n++; if ((L === 0 && upOver(c)) || inWell(c)) clear = false; }
+				if (!clear || !n || n !== (i1 - i0 + 1) * (j1 - j0 + 1)) continue;
+				const x0 = X[i0], x1 = X[i1 + 1], z0 = Z[j0], z1 = Z[j1 + 1];
+				if ((x1 - x0) * (z1 - z0) < 11 || Math.min(x1 - x0, z1 - z0) < 2.8) continue;
+				raised.set(rm.id, { x0, x1, z0, z1 });
+				(plan.trays || (plan.trays = [])).push({ level: L, type: rm.type, x0, x1, z0, z1 });
+			}
+			for (const [id, q] of raised) {
+				const e = Math.min(0.55, (q.x1 - q.x0) * 0.18, (q.z1 - q.z0) * 0.18), top = yc + 0.45, lk = lit[id] ? 'ceilingLit' : 'ceiling', C = lin([0.95, 0.95, 0.93]);
+				const flat = (x0, z0, x1, z1, y) => g.quad(lk, [x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, -1, 0], C, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
+				flat(q.x0, q.z0, q.x1, q.z0 + e, yc); flat(q.x0, q.z1 - e, q.x1, q.z1, yc); flat(q.x0, q.z0 + e, q.x0 + e, q.z1 - e, yc); flat(q.x1 - e, q.z0 + e, q.x1, q.z1 - e, yc);
+				flat(q.x0 + e, q.z0 + e, q.x1 - e, q.z1 - e, top);
+				const X0 = q.x0 + e, X1 = q.x1 - e, Z0 = q.z0 + e, Z1 = q.z1 - e, uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+				g.quad('ceilingLit', [X0, yc, Z0], [X1, yc, Z0], [X1, top, Z0], [X0, top, Z0], [0, 0, 1], C, uv);
+				g.quad('ceilingLit', [X0, yc, Z1], [X1, yc, Z1], [X1, top, Z1], [X0, top, Z1], [0, 0, -1], C, uv);
+				g.quad('ceilingLit', [X0, yc, Z0], [X0, yc, Z1], [X0, top, Z1], [X0, top, Z0], [1, 0, 0], C, uv);
+				g.quad('ceilingLit', [X1, yc, Z0], [X1, yc, Z1], [X1, top, Z1], [X1, top, Z0], [-1, 0, 0], C, uv);
+			}
+			for (const r of cellRects(L, (c) => (lab[c] >= 0 && !raised.has(lab[c]) && !(L === 0 && inWell(c) && upOver(c)) ? (lit[lab[c]] ? 2 : 1) : null))) g.quad(r.k === 2 ? 'ceilingLit' : 'ceiling', [r.x0, yc, r.z0], [r.x1, yc, r.z0], [r.x1, yc, r.z1], [r.x0, yc, r.z1], [0, -1, 0], lin([0.95, 0.95, 0.93]), [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]]);
 		}
 		// stairs: treads, risers, a closed side; the rail on the open side; the well's edges
 		if (st) {

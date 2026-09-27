@@ -285,6 +285,14 @@ function buildingMaterial(shared, night, nearBand) {
 						glass = vec3(0.14, 0.16, 0.18); glassK = win * 0.8;
 						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, step(5.6, vLY));
 					}
+					// on about half the tall ones, a penthouse: the top level's ceilings twice as high,
+					// glazed floor to ceiling in wide bays between pale mullions
+					if (vCS.y > 30.0 && ih > 0.45 && vLY > vCS.y - 7.4 && roof < 0.5) {
+						float pf = fract(u / 2.4);
+						win = step(0.05, pf) * step(vCS.y - 7.0, vLY) * step(vLY, vCS.y - 0.9);
+						glass = vec3(0.3, 0.36, 0.42); glassK = win;
+						diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.9, 0.88), 1.0 - win);
+					}
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.27, 0.26, 0.25), step(vLY, 2.0) * (1.0 - roof));
 				} else if (vKind > 3.5 && vKind < 4.5) {
 					// parking: asphalt striped into bays
