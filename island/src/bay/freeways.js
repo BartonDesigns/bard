@@ -197,7 +197,7 @@ export function createFreeways(scene, bay, real, { isPhone = false } = {}) {
 			// bay/landmarks.js: a mapped bridge mostly over open water is theirs, not an overpass)
 			if (/golden gate bridge/i.test(r.name || '')) continue;
 			{ let wet = 0, n = 0; for (let i = 0; i < r.pts.length; i += 2) { n++; if (bay.heightAt(r.pts[i], r.pts[i + 1]) < -2) wet++; } if (wet > n * 0.3) continue; }
-			const hw = r.w / 2, W = r.w + 1.2, path = resample(r.pts, 4);
+			const W = r.w + 1.2, path = resample(r.pts, 4);
 			if (path.length < 2) continue;
 			const n = path.length;
 			// what passes under each point, and the clearance it needs
