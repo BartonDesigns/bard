@@ -156,8 +156,8 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		hand.add(new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.03, 0.095).translate(0, 0, 0.02), sk));
 		for (let k = 0; k < 4; k++) { const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.05, 3, 6).rotateX(Math.PI / 2).translate(0, 0, -0.03), sk); f.position.set(-0.03 + k * 0.02, -0.012, -0.03); f.rotation.x = 1.2; hand.add(f); }
 		const th = new THREE.Mesh(new THREE.CapsuleGeometry(0.011, 0.04, 3, 6).rotateX(Math.PI / 2), sk); th.position.set(0.05, -0.01, 0.0); th.rotation.set(0.9, 0.7, 0); hand.add(th);
-		const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.04, 0.4, 10).rotateX(Math.PI / 2).translate(0, 0, 0.25), new THREE.MeshStandardMaterial({ color: 0x3a4a5a, roughness: 0.9 }));
-		hand.add(arm);
+		// the wrist
+		hand.add(new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.027, 0.05, 10).rotateX(Math.PI / 2).translate(0, 0, 0.085), sk));
 	}
 	hand.visible = false;
 	camera.add(hand);

@@ -23,7 +23,7 @@ function writeStore(s) {
 const PANEL = 'background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px system-ui,sans-serif;';
 const stopEv = (el) => { for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) el.addEventListener(ev, (e) => e.stopPropagation()); };
 
-export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1] } = {}) {
+export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], minY = -Infinity } = {}) {
 	const { THREE, scene, camera } = ctx;
 	const K = { on: false, time: 0, last: null, cardOpen: false, accent, THREE };
 	let layer = null, hudText = null, card = null, api = null, g = null;
@@ -47,7 +47,8 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 			if (Number.isFinite(h)) gy = Math.max(gy, h);
 		}
 		K.root = new THREE.Group();
-		K.root.position.set(x, Number.isFinite(gy) ? gy : p.y - 1.7, z);
+		// (never below minY: a game set on the sea floats at sea level, not on the sea bed)
+		K.root.position.set(x, Math.max(minY, Number.isFinite(gy) ? gy : p.y - 1.7), z);
 		K.root.rotation.y = yaw;
 		K.yaw = yaw;
 		scene.add(K.root);
@@ -74,7 +75,8 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		if (K.root) {
 			const seen = new Set();
 			K.root.traverse((o) => {
-				if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }
+				// (a sprite's geometry is three's own, shared by every sprite: leave it be)
+				if (o.geometry && !o.isSprite && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }
 				for (const m of [].concat(o.material || [])) if (!seen.has(m)) { seen.add(m); m.map?.dispose(); m.dispose(); }
 			});
 			K.root.removeFromParent();
@@ -84,10 +86,12 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		camera.position.copy(saved.pos); camera.quaternion.copy(saved.quat);
 		if (camera.fov !== saved.fov) { camera.fov = saved.fov; camera.updateProjectionMatrix(); }
 		matCache.clear();
+		for (const t of texs) t.dispose();
+		texs.length = 0;
 	}
 
 	// materials, shared by colour within a game, with a little glow so games read at night
-	const matCache = new Map();
+	const matCache = new Map(), texs = [];
 	K.mat = (color, o = {}) => {
 		const key = o.map ? null : color + JSON.stringify(o);
 		if (key && matCache.has(key)) return matCache.get(key);
@@ -107,12 +111,20 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 	K.box = (w, h, d, color, x, y, z, parent) => K.mesh(new THREE.BoxGeometry(w, h, d), color, x, y, z, parent);
 	K.ball = (r, color, x, y, z, parent) => K.mesh(new THREE.SphereGeometry(r, 18, 12), color, x, y, z, parent);
 	K.cyl = (r0, r1, h, color, x, y, z, parent, seg = 18) => K.mesh(new THREE.CylinderGeometry(r0, r1, h, seg), color, x, y, z, parent);
+	// take something out of the stage part-way through a game: its shapes are freed, and its
+	// own materials (shared materials and the painted textures go when the game stops)
+	K.drop = (o) => {
+		const shared = new Set(matCache.values());
+		o.traverse((q) => { if (!q.isSprite) q.geometry?.dispose(); for (const m of [].concat(q.material || [])) if (!shared.has(m)) m.dispose(); });
+		o.removeFromParent();
+	};
 	K.group = (parent) => { const g0 = new THREE.Group(); (parent || K.root).add(g0); return g0; };
 	// a flat painted surface: a canvas drawn once, laid on the ground (or stood up)
 	K.canvas = (w, h, draw) => {
 		const c = document.createElement('canvas'); c.width = w; c.height = h;
 		draw(c.getContext('2d'), w, h);
 		const t = new THREE.CanvasTexture(c);
+		texs.push(t);
 		t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
 		return t;
 	};
@@ -187,6 +199,8 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 	K.pick = (x, y, objs) => {
 		const r = K.size();
 		ndc.set((x - r.left) / r.width * 2 - 1, -(y - r.top) / r.height * 2 + 1);
+		camera.updateMatrixWorld();
+		K.root.updateMatrixWorld(true);
 		ray.setFromCamera(ndc, camera);
 		return ray.intersectObjects(objs, true)[0] || null;
 	};
@@ -261,6 +275,16 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		if (to) o.frequency.exponentialRampToValueAtTime(Math.max(20, to), t0 + d);
 		gn.gain.setValueAtTime(0.0001, t0); gn.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
 		o.connect(gn); gn.connect(out); o.start(t0); o.stop(t0 + d + 0.05);
+	};
+	// a held tone, for as long as a key is down: returns the function that lets it go
+	K.hum = (f, vol = 0.08, type = 'sine') => {
+		const out = dest();
+		if (!out) return () => {};
+		const ac = out.context, t0 = ac.currentTime, o = ac.createOscillator(), gn = ac.createGain();
+		o.type = type; o.frequency.value = f;
+		gn.gain.setValueAtTime(0.0001, t0); gn.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+		o.connect(gn); gn.connect(out); o.start(t0);
+		return () => { const t1 = ac.currentTime; gn.gain.cancelScheduledValues(t1); gn.gain.setValueAtTime(gn.gain.value, t1); gn.gain.exponentialRampToValueAtTime(0.0001, t1 + 0.02); o.stop(t1 + 0.05); };
 	};
 	// a burst of filtered noise: clatter, splash, whoosh, thud
 	K.noise = (d = 0.2, { vol = 0.2, f = 1200, q = 0.8, type = 'bandpass', at = 0 } = {}) => {
