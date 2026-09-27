@@ -438,12 +438,31 @@ export function createSky(scene, shared, renderer) {
 		stars.material.uniforms.uCloudOff = w.uniforms.uCloudOff; stars.material.uniforms.uShowers = w.uniforms.uShowers;
 	}
 
+	// the real sun over the Bay Area (37.77 N) on today's date: its declination, the length
+	// of the day, and solar noon on the clock (Pacific time, an hour later in daylight time)
+	function sunToday() {
+		const now = new Date(), start = new Date(now.getFullYear(), 0, 0), N = Math.floor((now - start) / 864e5);
+		const dec = 23.44 * Math.PI / 180 * Math.sin(2 * Math.PI * (284 + N) / 365);
+		const jan = new Date(now.getFullYear(), 0, 1).getTimezoneOffset(), jul = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
+		const dst = now.getTimezoneOffset() < Math.max(jan, jul) ? 1 : (N > 69 && N < 307 ? 1 : 0);
+		// the equation of time, minutes
+		const B = 2 * Math.PI * (N - 81) / 364, eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+		const noon = 12 + dst + (122.4 - 120) / 15 - eot / 60;
+		const h0 = Math.acos(Math.max(-1, Math.min(1, (Math.sin(-0.833 * Math.PI / 180) - Math.sin(LAT) * Math.sin(dec)) / (Math.cos(LAT) * Math.cos(dec)))));
+		const half = h0 * 12 / Math.PI;
+		return { dec, noon, rise: noon - half, set: noon + half, day: N };
+	}
+	let SUN = sunToday();
+	state.sun = SUN;
 	function update(dt, focus) {
+		if (new Date().getDate() !== SUN.date) { SUN = sunToday(); SUN.date = new Date().getDate(); state.sun = SUN; }
 		// daylight hours pass slowly (~9 real minutes), night quickly (~2.5)
-		const day = state.hours >= 6 && state.hours < 18.5;
-		state.hours = (state.hours + dt * state.speed * (day ? 12.5 / 540 : 11.5 / 150)) % 24;
-		const a = (state.hours - 6) / 12 * Math.PI;
-		const sd = shared.uSunDir.value.set(Math.cos(a) * 0.82, Math.sin(a), 0.42).normalize();
+		const day = state.hours >= SUN.rise - 0.3 && state.hours < SUN.set + 0.5;
+		state.hours = (state.hours + dt * state.speed * (day ? (SUN.set - SUN.rise + 0.8) / 540 : (24 - (SUN.set - SUN.rise + 0.8)) / 150)) % 24;
+		// where the sun is: east is +x, north -z, up +y
+		const ha = (state.hours - SUN.noon) / 12 * Math.PI, cd = Math.cos(SUN.dec), sdc = Math.sin(SUN.dec);
+		const sd = shared.uSunDir.value.set(-cd * Math.sin(ha), Math.sin(LAT) * sdc + Math.cos(LAT) * cd * Math.cos(ha), Math.cos(LAT) * sdc - Math.sin(LAT) * cd * Math.cos(ha)).normalize();
+		sd.z = -sd.z;
 		const elev = sd.y;
 		const dayK = THREE.MathUtils.smoothstep(elev, -0.05, 0.25);
 		const setK = 1 - THREE.MathUtils.smoothstep(Math.abs(elev), 0.02, 0.3);

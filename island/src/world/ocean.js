@@ -191,18 +191,20 @@ uniforms.uUnder = shared.uUnder;
 				vec3 bottom = mix(sand, vec3(0.20, 0.24, 0.16), reef * 0.85);
 				// off the island this is the cold North Pacific and the bay: grey-green, murky
 				reef *= 1.0 - cold;
-				bottom = mix(bottom, vec3(0.42, 0.4, 0.33), cold);
+				// inside the Golden Gate, the bay: silty, a murkier grey-green than the open Pacific
+				float bayK = cold * smoothstep(9000.0, 12500.0, vW.x);
+				bottom = mix(bottom, mix(vec3(0.34, 0.33, 0.27), vec3(0.3, 0.29, 0.22), bayK), cold);
 				vec2 cq = vW.xz * 0.55;
 				float c1 = 1.0 - abs(vn(cq + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
 				float c2 = 1.0 - abs(vn(cq * 1.3 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
 				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth)) * (1.0 - 0.7 * cold);
 				float sunUp = clamp(uSunDir.y * 3.0, 0.0, 1.0);
 				bottom *= (0.55 + caust * sunUp) ;
-				vec3 trans = exp(-mix(vec3(0.34, 0.075, 0.052), vec3(0.5, 0.2, 0.19), cold) * vDepth);
-				vec3 deep = mix(vec3(0.0, 0.06, 0.19), vec3(0.008, 0.06, 0.085), cold);
+				vec3 trans = exp(-mix(vec3(0.34, 0.075, 0.052), mix(vec3(0.55, 0.3, 0.3), vec3(0.7, 0.45, 0.55), bayK), cold) * vDepth);
+				vec3 deep = mix(vec3(0.0, 0.06, 0.19), mix(vec3(0.016, 0.038, 0.052), vec3(0.03, 0.045, 0.038), bayK), cold);
 				vec3 body = bottom * trans + deep * (1.0 - trans);
 				// light scattering in shallow tropical water: turquoise over sand, fading with depth
-				body += mix(vec3(0.02, 0.42, 0.40), vec3(0.03, 0.12, 0.1), cold) * (1.0 - exp(-0.55 * vDepth)) * exp(-0.09 * vDepth) * (1.0 - reef * 0.6);
+				body += mix(vec3(0.02, 0.42, 0.40), mix(vec3(0.03, 0.06, 0.06), vec3(0.05, 0.07, 0.045), bayK), cold) * (1.0 - exp(-0.55 * vDepth)) * exp(-0.09 * vDepth) * (1.0 - reef * 0.6);
 				vec3 light = uAmbient + uSunColor * max(0.0, uSunDir.y) * 0.9;
 				body *= light;
 				// light through the wave faces: slopes tilted toward the sun glow, those turned away
@@ -224,7 +226,8 @@ uniforms.uUnder = shared.uUnder;
 				col += vec3(0.75, 0.82, 1.0) * glade;
 				// AgX is calm and a little grey; give the sea back its turquoise
 				float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-				col = max(vec3(0.0), mix(vec3(lum), col, mix(1.35, 1.08, cold)));
+				// (the cold water stays the cold North Pacific's slate and the bay's grey-green)
+				col = max(vec3(0.0), mix(vec3(lum), col, mix(1.35, 0.85, cold)));
 				// foam: breakers where it shallows, wash on the sand, caps on the crests
 				float surf = smoothstep(0.25, 0.6, vDepth) * (1.0 - smoothstep(1.2, 2.2, vDepth));
 				float roll = smoothstep(0.62, 0.97, sin(vRoll + 0.6));

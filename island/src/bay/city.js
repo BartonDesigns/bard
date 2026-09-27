@@ -896,7 +896,7 @@ export function createCity(shared, scene, bay, real = null) {
 			const ca = Math.cos(o.a), sa = Math.sin(o.a), W = (lx, lz) => [o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz];
 			const r = hash(o.x * 0.73 + 3.1, o.z * 0.61 - 1.7), area = o.w * o.d, top = o.y + o.h;
 			if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7) {
-				const n = Math.max(1, Math.min(o.kind === KIND.retail || o.kind === KIND.shop ? 10 : 6, Math.round(area / (o.kind === KIND.industry ? 700 : 280) * (0.6 + r * 0.8))));
+				const n = Math.max(1, Math.min(area > 4000 ? 18 : o.kind === KIND.retail || o.kind === KIND.shop ? 10 : 6, Math.round(area / (o.kind === KIND.industry ? 700 : 280) * (0.6 + r * 0.8))));
 				const along = o.w > o.d, L = along ? o.w : o.d, S = along ? o.d : o.w, big = area > 1500 ? 1.6 : area > 600 ? 1.25 : 1;
 				for (let k = 0; k < n; k++) {
 					const u = ((k + 0.5) / n - 0.5) * (L - 5) + (hash(o.x * 0.9 + k * 7, o.z * 1.1) - 0.5) * 2, v = (hash(o.z * 0.8 + k * 5, o.x * 1.2) - 0.5) * (S - 5);
@@ -1275,6 +1275,9 @@ export function createCity(shared, scene, bay, real = null) {
 		fillBlocks(x, z, 1200, list);
 		realBuildings(x, z, 2000, list);
 		decorate(list, x, z, 700);
+		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
+		// from points and lots; the land map knows where the pavement and the roofs are)
+		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees, k = list.kit; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; }
@@ -1283,5 +1286,5 @@ export function createCity(shared, scene, bay, real = null) {
 		uploadKit(list.kit);
 		placeTrees(x, z);
 	}
-	return { update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }
