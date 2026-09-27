@@ -63,7 +63,14 @@ export const tube = (pts, opt = {}) => loft(pts.map(([x, y, z, r]) => [x, y, z, 
 const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 const lin = (c) => c.map((v) => Math.pow(v, 2.2));
 const shade = (back, belly, soft = 0.35) => (s, up) => mix(belly, back, THREE.MathUtils.smoothstep(up, -soft, soft));
-const done = (parts) => { const g = mergeGeometries(parts); g.computeBoundingSphere(); return g; };
+// (every part down to the same attributes: position, normal, colour, indexed)
+const done = (parts) => {
+	const ps = parts.map((q) => { for (const k of Object.keys(q.attributes)) if (!['position', 'normal', 'color'].includes(k)) q.deleteAttribute(k); if (!q.attributes.normal) q.computeVertexNormals(); return q.index ? q : q.setIndex([...Array(q.attributes.position.count).keys()]); });
+	const g = mergeGeometries(ps);
+	if (!g) throw Error('creatures: parts would not merge');
+	g.computeBoundingSphere();
+	return g;
+};
 
 // ---------- the pinnipeds ----------
 // a harbor seal hauled out: a plump, spotted, tapering body in the "banana" pose (head and
