@@ -39,7 +39,10 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 
 	// ---------- a tower's plan ----------
 	function plan(o) {
-		const floor0 = bay.heightAt(o.x, o.z) + 0.12, top = o.y + o.h, key = Math.round(o.x) + ':' + Math.round(o.z);
+		// the lobby floor level with the highest corner of the lot, a step up off the pavement
+		let g0 = -1e9;
+		for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) { const ca = Math.cos(o.a), sa = Math.sin(o.a), lx = sx * o.w / 2, lz = sz * o.d / 2; g0 = Math.max(g0, bay.heightAt(o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz)); }
+		const floor0 = g0 + 0.25, top = o.y + o.h, key = Math.round(o.x) + ':' + Math.round(o.z);
 		const r = hh(Math.round(o.x * 0.37), Math.round(o.z * 0.29)), home = r < 0.42;
 		const W = o.w, D = o.d, hw = W / 2 - WALL, hd = D / 2 - WALL;
 		const n = Math.max(1, Math.floor((top - floor0 - LOBBY - 1.2) / STOREY));
@@ -201,7 +204,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 				if (T.up && T.up.L !== L) { group.remove(T.up.g); T.up.dispose(); T.up = null; }
 				if (L.kind !== 'lobby' && !T.up) T.up = level(T, L);
 				// out of the doors in front of the middle elevator
-				const [x, z] = world(0, T.coreZ + (L.kind === 'roof' ? 1.5 : 1.3)), p = P();
+				const [x, z] = world(0, T.coreZ + 3.2), p = P();
 				p.pos.set(x, L.y + 1.7, z);
 				p.vel?.set(0, 0, 0);
 				p.yaw = Math.PI - T.o.a;           // facing out, away from the doors

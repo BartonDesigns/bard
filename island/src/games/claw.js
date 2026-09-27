@@ -22,7 +22,7 @@ export const GAME = {
 	blurb: 'Five credits at the Musée Mécanique claw: sea lions, crabs, and the bridge nobody wins.',
 	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ff5ab4', dist: 1.3, room: { w: 5.5, z0: -2.6, z1: 4, h: 3.4, style: 'arcade' } });
+		const K = makeKit(ctx, GAME, { accent: '#ff5ab4', dist: 1.3, room: { w: 7, z0: -2.6, z1: 4, h: 3.4, style: 'arcade' } });
 		const { THREE } = ctx;
 		let claw, fingers = [], shadow, cable, prizes = [], S = {};
 
@@ -159,8 +159,8 @@ export const GAME = {
 			shadow.visible = S.state === 'right' || S.state === 'back';
 			hud();
 			// face on at the glass; swung round to the side while you judge the depth
-			if (S.state === 'back') K.frame(0, 1.3, 0, 1.2, 1.3, 0.75, 0.35, 0.6, 0.75, 2.5);
-			else K.frame(0, 1.35, 0, 1.15, 1.3, 0, 0.3, 1, 0.75, 2.5);
+			if (S.state === 'back') K.frame(0, 1.3, 0, 1.2, 1.5, 0.75, 0.35, 0.6, 0.75, 2.5);
+			else K.frame(0, 1.15, 0, 1.15, 2.0, 0, 0.3, 1, 0.75, 2.5);
 		}
 		return K.wrap({ build, reset, update, press });
 	},

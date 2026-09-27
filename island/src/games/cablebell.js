@@ -113,7 +113,7 @@ export const GAME = {
 				K.finish(S.score, { unit: 'pts', line: acc > 90 ? 'The judges are on their feet: a champion ringer.' : acc > 70 ? 'The crowd on Powell Street cheers.' : 'A polite round of applause from the tourists.', rows: [['Perfect', `${S.perfect} of ${total}`], ['Good', S.good], ['Missed', S.miss], ['Longest combo', S.maxCombo], ['Accuracy', acc + '%']] });
 			}
 			// the car's open front end at three-quarters, the bell in the middle of the shot
-			K.frame(2.8, 2.1, -1.2, 5.2, 3.4, 0.75, 0.12, 0.65, 0.8, 3);
+			K.frame(3.2, 2.1, -1.1, 3.4, 3.2, 0.75, 0.12, 0.65, 0.8, 3);
 		}
 		function end() { clearTimeout(S.jt); judge = null; }
 		return K.wrap({ build, reset, update, press, end });

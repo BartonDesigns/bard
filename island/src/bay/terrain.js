@@ -151,7 +151,51 @@ export function bayUniforms() {
 const CBD = [[37.7925, -122.399, 1, 800], [37.7785, -122.395, 0.45, 650], [37.8044, -122.2712, 0.6, 800], [37.3337, -121.8907, 0.5, 900], [37.87, -122.268, 0.25, 500], [37.901, -122.061, 0.25, 500], [37.8313, -122.2852, 0.3, 450], [37.5630, -122.3255, 0.15, 500], [37.4443, -122.1598, 0.15, 400], [38.4404, -122.7141, 0.2, 500], [37.978, -122.031, 0.2, 500], [37.3861, -122.0839, 0.15, 500], [37.3688, -122.0363, 0.15, 500], [37.4852, -122.2364, 0.15, 400]];
 // open land inside the towns: Alcatraz, Angel Island and Yerba Buena Island, San Ramon's Central Park and the Crow Canyon golf course,
 // Lake Merritt, and in San Francisco the parks, the Presidio, the hills
-const PARKS = [[37.8267, -122.4230, 420, 320, 0], [37.8609, -122.4326, 1500, 1500, 0], [37.8103, -122.3636, 650, 550, 0], [37.7650, -121.9522, 260, 200, 0], [37.7880, -121.9720, 500, 350, 0.15], [37.8290, -122.2600, 600, 450, 0], [37.7690, -122.4830, 2600, 450, 0], [37.7989, -122.4662, 1500, 1100, 0.06], [37.7544, -122.4477, 700, 700, 0], [37.7580, -122.4570, 600, 600, 0], [37.7200, -122.4950, 800, 900, 0], [37.7180, -122.4200, 700, 500, 0.5], [37.7850, -122.5050, 500, 400, 0], [37.8320, -122.5050, 2700, 1500, 0], [37.7560, -122.5095, 260, 3200, 0]];      // ... the Marin Headlands, Ocean Beach's sand
+const PARKS = [[37.8267, -122.4230, 420, 320, 0], [37.8609, -122.4326, 1500, 1500, 0], [37.8103, -122.3636, 650, 550, 0], [37.7650, -121.9522, 260, 200, 0], [37.7880, -121.9720, 500, 350, 0.15], [37.8290, -122.2600, 600, 450, 0], [37.7690, -122.4830, 2600, 450, 0], [37.7989, -122.4662, 1500, 1100, 0.06], [37.7544, -122.4477, 700, 700, 0], [37.7580, -122.4570, 600, 600, 0], [37.7200, -122.4950, 800, 900, 0], [37.7180, -122.4200, 700, 500, 0.5], [37.7850, -122.5050, 500, 400, 0], [37.8320, -122.5050, 2700, 1500, 0], [37.7560, -122.5095, 260, 3200, 0], [37.7683, -122.4410, 240, 190, 0], [37.7433, -122.4146, 330, 240, 0], [37.7385, -122.4545, 270, 230, 0]];      // ... the Marin Headlands, Ocean Beach's sand, Buena Vista, Bernal Heights, Mt Davidson
+// San Francisco's planted woods seen from above (Monterey cypress, pine and eucalyptus): the
+// groves on Mt Sutro, Mt Davidson and Buena Vista, the Presidio's forest (patchy: over 700 m
+// across), Lands End, Glen Canyon. Golden Gate Park and Stern Grove are woods too (realcity.js
+// GREENS). [lat, lon, half-width east, half-width north]
+const WOODS = [[37.7585, -122.4590, 430, 330], [37.7385, -122.4545, 260, 220], [37.7683, -122.4410, 230, 180], [37.7925, -122.4640, 950, 520], [37.7845, -122.5020, 480, 220], [37.7405, -122.4415, 160, 330]];
+// the lawns and meadows in them: the Polo Field, Speedway and Lindley Meadows, Sharon
+// Meadow, Big Rec, the Bison Paddock, the golf course and the Beach Chalet fields, Stern
+// Grove's concert meadow
+const MEADOWS = [[37.7681, -122.4925, 240, 145], [37.7688, -122.4868, 230, 70], [37.7684, -122.4902, 110, 55], [37.7694, -122.4560, 150, 80], [37.7669, -122.4637, 170, 80], [37.7697, -122.4984, 150, 60], [37.7688, -122.5066, 210, 120], [37.7356, -122.4768, 130, 60]];
+// and the lakes: Stow Lake (a ring round Strawberry Hill: w < 0), Spreckels, Lloyd, Elk
+// Glen, Middle and North Lakes, Metson, Stern Grove's Pine Lake
+const LAKES = [[37.7686, -122.4756, 280, 215, -1], [37.7706, -122.4958, 150, 60, 1], [37.7703, -122.4832, 60, 35, 1], [37.7676, -122.4888, 85, 40, 1], [37.7694, -122.5031, 100, 60, 1], [37.7718, -122.5052, 170, 65, 1], [37.7688, -122.4946, 60, 38, 1], [37.7369, -122.4905, 110, 45, 1]];
+const ellipses = (L) => L.map(([lat, lon, rx, rz, f]) => { const w = toWorld(lat, lon); return new THREE.Vector4(w.x, w.z, rx, rz * (f || 1)); });
+const WOODS_U = { uWoods: { value: ellipses(WOODS) }, uMeadow: { value: ellipses(MEADOWS) }, uLake: { value: ellipses(LAKES) } };
+
+// The wild woods as city.js grows them (wildLand): woodland gathers on the north faces and
+// down the draws, in groves, from the same value noise (the integer hash of BAY_GLSL, so the
+// ground's canopy is where the trees stand). Its floor is drawn under them.
+const WOODS_GLSL = /* glsl */`
+uniform vec4 uWoods[6], uMeadow[8], uLake[8]; uniform vec3 uSunDir;
+uint wHash(ivec2 p){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u); h = (h ^ (h >> 13u)) * 1274126177u; return h ^ (h >> 16u); }
+float wH01(ivec2 p){ return float(wHash(p) >> 8u) / 16777216.0; }
+float wVn(vec2 p){ vec2 i = floor(p), f = p - i; f = f * f * (3.0 - 2.0 * f); ivec2 k = ivec2(i);
+	return mix(mix(wH01(k), wH01(k + ivec2(1, 0)), f.x), mix(wH01(k + ivec2(0, 1)), wH01(k + ivec2(1, 1)), f.x), f.y); }
+// how much of the sky the wild trees close over a point (0 open .. 1 closed canopy)
+float wildCanopy(vec2 w, vec3 n, float h, float gully){
+	float ny = max(n.y, 0.05), slope = length(n.xz) / ny;
+	float north = clamp(-n.z / ny * 4.0, -1.0, 1.0), high = clamp((h - 350.0) / 600.0, 0.0, 1.0);
+	float grove = wVn(w / 140.0) * 0.7 + wVn(w / 45.0 + vec2(9.0, 3.0)) * 0.3;
+	float wood = clamp((0.08 + north * 0.55 + gully * 0.7 + slope * 0.2 - high * 0.15) * (0.25 + grove * 1.5), 0.0, 1.0);
+	return smoothstep(0.12, 0.55, wood * 0.8) * smoothstep(2.5, 5.0, h) * (1.0 - smoothstep(0.95, 1.15, slope));
+}
+// a planted wood seen from above: crowns of cypress and pine near black-green, stands of
+// eucalyptus a greyer olive, shadow between the crowns (each fading to its average where it
+// is finer than a pixel)
+vec3 parkWood(vec2 w){
+	float ck = 1.0 - smoothstep(0.3, 1.0, length(fwidth(w * 0.11)));
+	float crown = mix(0.5, vn(w * 0.11), ck), gap = mix(0.3, smoothstep(0.62, 0.8, vn(w * 0.23 + 4.0)), ck);
+	vec3 cyp = mix(vec3(0.022, 0.045, 0.026), vec3(0.05, 0.085, 0.042), crown);
+	vec3 euc = mix(vec3(0.055, 0.07, 0.048), vec3(0.1, 0.11, 0.072), crown);
+	vec3 col = mix(cyp, euc, smoothstep(0.42, 0.6, fbm3(w * 0.006 + 5.0)));
+	return col * (1.0 - 0.45 * gap) * (0.85 + 0.3 * fbm3(w * 0.02 + 1.7));
+}
+`;
 const hashStr = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
 
 // the CPU twin of the GLSL above
@@ -331,17 +375,31 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, { uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
-			sh.vertexShader = 'uniform vec2 uC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\n' + BAY_GLSL + BERM_GLSL + '\nfloat gradedHeight(vec2 w){ return bayHeight(w) + bermDelta(w); }\n' + sh.vertexShader
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, WOODS_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
+			sh.vertexShader = 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + '\nfloat gradedHeight(vec2 w){ return bayHeight(w) + bermDelta(w); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the ground as graded for the roads near you: berms.js)
 					float bh = gradedHeight(bw);
 					float be = max(3.0, length(position.xz) * 0.006);
 					vec3 objectNormal = normalize(vec3(gradedHeight(bw - vec2(be, 0.0)) - gradedHeight(bw + vec2(be, 0.0)), 2.0 * be, gradedHeight(bw - vec2(0.0, be)) - gradedHeight(bw + vec2(0.0, be))));
-					vBN = objectNormal;`)
+					vBN = objectNormal;
+					// the lie of the land about the point, for its colours: how far it sits below the
+					// ground round it (a draw, a fold) or above it (a spur), at the scale city.js grows
+					// its woods by (18 m, as its gully: x) and at the scale of a hill (y, -1..1); and
+					// (near you) whether the open ocean lies just to windward, where the bluffs are
+					// wind-scoured (z)
+					float bc = bh - bermDelta(bw), ge = max(18.0, be), fe = max(110.0, be * 4.0);
+					float lapG = bayHeight(bw + vec2(ge, 0.0)) + bayHeight(bw - vec2(ge, 0.0)) + bayHeight(bw + vec2(0.0, ge)) + bayHeight(bw - vec2(0.0, ge)) - 4.0 * bc;
+					float lapF = (bayHeight(bw + vec2(fe, 0.0)) + bayHeight(bw - vec2(fe, 0.0)) + bayHeight(bw + vec2(0.0, fe)) + bayHeight(bw - vec2(0.0, fe))) * 0.25 - bc;
+					float windS = 0.0;
+					if (uHole < 0.5 && bw.x < 58000.0) {
+						windS = max(step(bayHeight(bw - vec2(900.0, 0.0)), -2.0), step(bayHeight(bw - vec2(2200.0, 0.0)), -2.0));
+						if (bw.x < 12000.0) windS = max(windS, step(bayHeight(bw + vec2(0.0, 1500.0)), -2.0));
+					}
+					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + REAL_LAND + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -365,9 +423,9 @@ export function createBayArea(shared, scene, island, BU) {
 					float season = clamp(uSeason - uSeasonLag * fogbelt, 0.0, 1.0);
 					gold = mix(spring, gold, clamp(season + (n1 - 0.5) * 0.3 + slope * 0.4 * season, 0.0, 1.0));
 					vec3 c = gold;
-					// the watered city parks stay green all summer: meadows, and dark groves of cypress
-					// and eucalyptus
-					for (int i = 0; i < 4; i++) {
+					// the small watered city parks stay green all summer: lawns, and dark groves of
+					// cypress and eucalyptus (the big ones are woods: below)
+					for (int i = 2; i < 4; i++) {
 						vec2 gq = abs(vBW - uGreen[i].xy) / uGreen[i].zw;
 						float gk = 1.0 - smoothstep(0.85, 1.0, max(gq.x, gq.y));
 						if (gk > 0.0) c = mix(c, mix(mix(vec3(0.16, 0.3, 0.07), vec3(0.22, 0.36, 0.1), n2), vec3(0.05, 0.1, 0.04), smoothstep(0.5, 0.62, n1 + n3 * 0.1) * 0.85), gk);
@@ -396,16 +454,76 @@ export function createBayArea(shared, scene, island, BU) {
 					c = mix(c, rockC, max(smoothstep(0.5, 0.85, slope), outcrop));
 					// the fog forest's floor: moss and duff, green on the shady side
 					c = mix(c, mix(vec3(0.045, 0.09, 0.02), vec3(0.08, 0.05, 0.03), n3), forest * fogbelt * (0.25 + north * 0.5) * (1.0 - smoothstep(0.5, 0.85, slope)));
+					// the towns' map (below), and how far off this is
+					vec2 uu = (vBW - uUR.xy) / uUR.z;
+					vec2 US = vec2(textureSize(uUrban, 0));
+					vec4 T = texture2D(uUrban, uu / US);
+					float dist = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
+					// San Francisco's planted woods: Golden Gate Park and Stern Grove (with their
+					// meadows, lawns and lakes), and the groves on the hills and in the Presidio
+					float plantedK = 0.0;
+					for (int i = 0; i < 2; i++) { vec2 gq = abs(vBW - uGreen[i].xy) / uGreen[i].zw; plantedK = max(plantedK, 1.0 - smoothstep(0.85, 1.0, max(gq.x, gq.y))); }
+					float woodK = plantedK;
+					for (int i = 0; i < 6; i++) {
+						vec2 wq = (vBW - uWoods[i].xy) / uWoods[i].zw;
+						float wk = 1.0 - smoothstep(0.75, 1.0, length(wq) + (fbm3(vBW * 0.012 + float(i) * 7.1) - 0.5) * 0.5);
+						if (uWoods[i].z > 700.0) wk *= smoothstep(0.42, 0.56, fbm3(vBW * 0.004 + 3.3));
+						woodK = max(woodK, wk);
+					}
+					if (woodK > 0.0) {
+						vec3 wc = parkWood(vBW);
+						// close by, where the trees themselves stand (city.js), the ground under them:
+						// needles and leaf litter, ivy
+						vec3 underC = mix(vec3(0.075, 0.055, 0.035), vec3(0.06, 0.1, 0.035), smoothstep(0.45, 0.62, vn(vBW * 0.15)));
+						wc = mix(wc, underC, 1.0 - smoothstep(900.0, 2200.0, dist));
+						// open lawn in glades and the meadows; the lakes, dark still water with reeds
+						// round the edge (Stow Lake a ring round its hill)
+						float mead = smoothstep(0.64, 0.72, fbm3(vBW * 0.007 + 2.3)) * 0.8, lake = 0.0;
+						for (int i = 0; i < 8; i++) {
+							vec2 mq = (vBW - uMeadow[i].xy) / uMeadow[i].zw;
+							mead = max(mead, 1.0 - smoothstep(0.82, 1.0, length(mq) + (vn(vBW * 0.03 + float(i) * 5.0) - 0.5) * 0.2));
+							float lr = length((vBW - uLake[i].xy) / abs(uLake[i].zw)) + (vn(vBW * 0.05 + float(i) * 3.0) - 0.5) * 0.12;
+							float lk = 1.0 - smoothstep(0.9, 1.0, lr);
+							if (uLake[i].w < 0.0) lk *= smoothstep(0.55, 0.65, lr);
+							lake = max(lake, lk);
+						}
+						wc = mix(wc, mix(vec3(0.14, 0.27, 0.065), vec3(0.21, 0.33, 0.095), n2) * (0.9 + 0.2 * vn(vBW * 0.05)), mead);
+						wc = mix(wc, mix(vec3(0.03, 0.055, 0.055), vec3(0.1, 0.13, 0.06), 1.0 - smoothstep(0.6, 1.0, lake)), smoothstep(0.0, 0.3, lake));
+						c = mix(c, wc, woodK * (1.0 - smoothstep(0.5, 0.85, slope)));
+					}
+					// the wild woods' floor where their trees stand (far off the ground's own colours
+					// stand in for their canopy): under redwood and Douglas-fir in the fog belt, dark
+					// red-brown duff of fallen needles with soft patches of redwood sorrel; under the
+					// inland oak, bay and buckeye, paler leaf litter. Not in the towns or the mapped
+					// yards, and on the wind-scoured bluffs by the sea only down in the draws.
+					float wildOK = 1.0 - smoothstep(0.03, 0.08, T.r);
+					if (inRealAny(vBW)) {
+						wildOK = 1.0;
+						if (inReal(vBW)) {
+							vec4 M0 = texelFetch(uRealMap, ivec2(clamp((vBW - uRealR.xy) / uRealR.z, vec2(0.0), vec2(textureSize(uRealMap, 0)) - 1.0)), 0);
+							float lu0 = floor(M0.g * 255.0 / 16.0 + 0.5);
+							wildOK = (lu0 < 0.5 || (lu0 > 10.5 && lu0 < 12.5) ? 1.0 : 0.0) * (1.0 - smoothstep(0.15, 0.25, max(M0.r, M0.b)));
+						}
+					}
+					float gully = clamp(vCurv.x, 0.0, 1.0);
+					wildOK *= (1.0 - plantedK) * (1.0 - vCurv.z * step(0.5, fogbelt) * (1.0 - smoothstep(0.4, 0.9, gully)));
+					float duffK = wildCanopy(vBW, n, h, gully) * wildOK * (1.0 - smoothstep(1800.0, 2700.0, dist));
+					if (duffK > 0.0) {
+						float hiK = 1.0 - smoothstep(0.25, 0.8, length(fwidth(vBW * 4.3)));
+						vec3 duff = mix(vec3(0.075, 0.042, 0.026), vec3(0.12, 0.068, 0.04), vn(vBW * 0.9)) * (0.8 + 0.4 * mix(0.5, vn(vBW * 4.3), hiK));
+						float sorrel = smoothstep(0.56, 0.7, vn(vBW * 0.16) * 0.7 + vn(vBW * 0.9 + 3.0) * 0.3) * (0.5 + 0.5 * north);
+						duff = mix(duff, vec3(0.05, 0.1, 0.025), sorrel * 0.75);
+						vec3 litter = mix(vec3(0.17, 0.125, 0.07), vec3(0.24, 0.18, 0.1), vn(vBW * 0.7)) * (0.85 + 0.3 * mix(0.5, vn(vBW * 3.1), hiK));
+						duff = mix(litter, duff, smoothstep(0.45, 0.7, fogbelt));
+						// the crowns' shade: little of the sun reaches the floor of a closed wood
+						c = mix(c, duff * (1.0 - 0.3 * duffK), duffK);
+					}
 					// sand at the water's edge, mud and sand under water
 					float beach = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
 					c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h));
 					// the towns: a street grid at the town's own angle, roofs, trees, parks
-					vec2 uu = (vBW - uUR.xy) / uUR.z;
-					vec2 US = vec2(textureSize(uUrban, 0));
-					vec4 T = texture2D(uUrban, uu / US);
 					float urban = T.r * (1.0 - smoothstep(0.25, 0.4, slope)) * smoothstep(0.4, 1.5, h);
-					float dist = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
 					if (inRealAny(vBW)) {
 						// the real city: land use, then streets and roofs from the maps
 						urban = 0.0;
@@ -492,11 +610,18 @@ export function createBayArea(shared, scene, island, BU) {
 						vec3 cityC;
 						float down = T.b;
 						if (sty < 1.5) {
-							// San Francisco: pavement and flat roofs, the odd back garden
-							vec3 roofF = mix(vec3(0.62, 0.61, 0.58), vec3(0.78, 0.76, 0.72), lh);
+							// San Francisco: flat roofs lot by lot, tar-and-gravel grey, white and tan (their
+							// average where a lot is finer than a few pixels), the odd back garden, and
+							// along the street the shadow of each row's front
+							float lotK = 1.0 - smoothstep(0.25, 0.7, length(fwidth(fw)) / 7.6);
+							float lot = h21(vec2(floor(fw.x / 7.6), step(0.5, f.y)) + cid * 3.0);
+							vec3 roofF = lot < 0.4 ? mix(vec3(0.34, 0.34, 0.35), vec3(0.44, 0.43, 0.42), lh) : lot < 0.78 ? mix(vec3(0.58, 0.57, 0.54), vec3(0.7, 0.68, 0.64), lh) : mix(vec3(0.5, 0.43, 0.34), vec3(0.6, 0.51, 0.4), lh);
+							roofF = mix(vec3(0.48, 0.47, 0.45), roofF, lotK);
 							// back gardens down the middle of each block
 							float yard = step(abs(fw.y / B.y - 0.5), 0.12) * step(0.45, h21(floor(g / 8.0)));
 							cityC = mix(roofF, vec3(0.22, 0.3, 0.14), yard * (sty > 0.5 ? 0.5 : 0.8));
+							float edgeD = min(min(fw.x - BK.z, B.x - fw.x), min(fw.y - BK.z, B.y - fw.y));
+							cityC *= mix(0.86, mix(0.7, 1.0, smoothstep(0.0, 5.0, edgeD)), lotK);
 						} else if (sty < 2.5) {
 							// older towns: dark shingle roofs under a heavy canopy of street trees
 							vec3 roofO = mix(vec3(0.33, 0.31, 0.3), vec3(0.5, 0.42, 0.36), lh);
@@ -540,8 +665,12 @@ export function createBayArea(shared, scene, island, BU) {
 						float canopyF = smoothstep(0.52, 0.8, fbm3(vBW * 0.011) + 0.25 * vn(vBW * 0.05)) * (sty > 1.5 && sty < 3.5 ? 0.6 : 0.0) * (1.0 - down);
 						cityC = mix(cityC, mix(vec3(0.13, 0.2, 0.09), vec3(0.2, 0.26, 0.12), vn(vBW * 0.08)), canopyF);
 						// far off the grid melts into the town's own average colour, mottled
-						vec3 avgC = sty < 1.5 ? vec3(0.6, 0.59, 0.56) : sty < 2.5 ? vec3(0.27, 0.31, 0.21) : sty < 3.5 ? vec3(0.38, 0.39, 0.26) : (sty > 4.5 && sty < 5.5) ? vec3(0.55, 0.55, 0.53) : vec3(0.4, 0.4, 0.39);
-						avgC = mix(avgC, vec3(0.6, 0.58, 0.55), smoothstep(0.2, 0.6, down)) * (0.86 + 0.28 * fbm3(vBW * 0.0035));
+						// (San Francisco's is darker and warmer than its pale stucco: streets, the shadows of
+						// the rows, grey roofs; and block by block it varies, while blocks are still
+						// a few pixels across)
+						vec3 avgC = sty < 1.5 ? vec3(0.47, 0.45, 0.42) : sty < 2.5 ? vec3(0.27, 0.31, 0.21) : sty < 3.5 ? vec3(0.38, 0.39, 0.26) : (sty > 4.5 && sty < 5.5) ? vec3(0.55, 0.55, 0.53) : vec3(0.4, 0.4, 0.39);
+						avgC = mix(avgC, vec3(0.54, 0.52, 0.49), smoothstep(0.2, 0.6, down)) * (0.86 + 0.28 * fbm3(vBW * 0.0035));
+						avgC *= 0.9 + 0.2 * mix(0.5, h21(cid + 7.0), 1.0 - smoothstep(0.1, 0.3, length(fwidth(g)) / B.y));
 						cityC = mix(cityC, avgC, smoothstep(1500.0, 6000.0, dist));
 						c = mix(c, cityC, smoothstep(0.08, 0.35, urban));
 						// night: street lamps along the grid, windows in the blocks; far away,
@@ -562,6 +691,15 @@ export function createBayArea(shared, scene, island, BU) {
 						float farL = sparks(vBW, dist, 0.86 - T.b * 0.2, 0.0) * (1.2 + T.b) * smoothstep(600.0, 3500.0, dist);
 						cityGlow = mix(vec3(1.0, 0.62, 0.28), vec3(0.95, 0.9, 0.8), h21(floor(vBW / 18.0) + 3.0) * 0.5) * (nearL + farL) * smoothstep(0.08, 0.35, urban) * uNightB * 2.2;
 					}
+					// the lie of the land, drawn a little stronger than the light alone shows it (the
+					// tone mapping flattens a town's gentle hills into one carpet): the folds and
+					// hollows darker, the spurs and crowns lighter, the slopes turned to the sun lit
+					// and those turned away shaded; most over the towns, whose roofs and streets hide
+					// the ground's own colours
+					vec3 sunL = normalize(uSunDir);
+					float reliefK = (0.35 + 0.65 * smoothstep(0.08, 0.35, urban)) * step(0.0, h);
+					c *= 1.0 - (0.3 * max(vCurv.y, 0.0) - 0.1 * max(-vCurv.y, 0.0)) * reliefK;
+					c *= 1.0 + clamp((dot(n, sunL) - sunL.y) * 1.3, -0.4, 0.3) * smoothstep(0.0, 0.15, sunL.y) * reliefK;
 					// after rain the ground is darker (and glossier, below)
 					// close by, the open ground has a real grain: the hill grasses (by season) when
 					// they are there, the soil's otherwise; not on the pavement
@@ -573,6 +711,8 @@ export function createBayArea(shared, scene, island, BU) {
 						float gk = (1.0 - smoothstep(50.0, 120.0, dist)) * (1.0 - smoothstep(0.12, 0.35, grain)) * (1.0 - flatK);
 						float dL = texture2D(uGroundD, vBW * 0.35).r;
 						if (uGrassK > 0.5) dL = mix(texture2D(uSprG, vBW * 0.5).r, texture2D(uDryG, vBW * 0.5).r, uSeason);
+						// (under the trees the grain is the soil's, not the grass's)
+						dL = mix(dL, texture2D(uGroundD, vBW * 0.35).r, duffK);
 						c *= mix(1.0, dL / 0.9, gk * 0.55);
 					}
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);

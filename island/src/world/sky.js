@@ -48,6 +48,26 @@ float cumulus(vec3 d, float cloud, float time, out float base, out float sh){
 }
 `;
 
+// three.js's AgX tone mapping (tonemapping_pars_fragment) on the CPU, for one colour:
+// linear in, linear out. (The matrices are GLSL's, column by column.)
+const AGX_M = [
+	[0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956],
+	[0.856627153315983, 0.137318972929847, 0.11189821299995, 0.0951212405381588, 0.761241990602591, 0.0767994186031903, 0.0482516061458583, 0.101439036467562, 0.811302368396859],
+	[1.1271005818144368, -0.1413297634984383, -0.14132976349843826, -0.11060664309660323, 1.157823702216272, -0.11060664309660294, -0.016493938717834573, -0.016493938717834257, 1.2519364065950405],
+	[1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187],
+];
+const mat3x = (m, v) => [0, 1, 2].map((r) => m[r] * v[0] + m[3 + r] * v[1] + m[6 + r] * v[2]);
+function agx(c, exposure, out) {
+	let v = mat3x(AGX_M[1], mat3x(AGX_M[0], [c.r * exposure, c.g * exposure, c.b * exposure]));
+	v = v.map((x) => {
+		x = Math.min(1, Math.max(0, (Math.log2(Math.max(x, 1e-10)) + 12.47393) / (4.026069 + 12.47393)));
+		const x2 = x * x, x4 = x2 * x2;
+		return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+	});
+	v = mat3x(AGX_M[3], mat3x(AGX_M[2], v).map((x) => Math.pow(Math.max(0, x), 2.2)));
+	return out.setRGB(...v.map((x) => Math.min(1, Math.max(0, x))));
+}
+
 export function createSky(scene, shared, renderer) {
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
@@ -512,10 +532,15 @@ export function createSky(scene, shared, renderer) {
 		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) + (W?.flash || 0) * 2.5;
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
-		scene.fog.color.copy(tmpB).lerp(tmpA, 0.12);
-		if (W) scene.fog.color.lerp(tmpC.setRGB(0.5, 0.53, 0.57).multiplyScalar(1 - night * 0.9), Math.min(1, W.rainHere * 0.6 + gl * 0.3));
-		uniforms.uFogCol.value.copy(scene.fog.color);
+		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
+		if (W) haze.lerp(tmpC.setRGB(0.5, 0.53, 0.57).multiplyScalar(1 - night * 0.9), Math.min(1, W.rainHere * 0.6 + gl * 0.3));
 		renderer.toneMappingExposure = 1.15 + night * 0.15;
+		// The sky is tone mapped, but three.js mixes the fog in after the tone mapping, so a
+		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the
+		// sky's own horizon just above it, which drew a bright band where the far land and
+		// sea meet the sky. The fog gets the haze as the sky shows it instead.
+		if (renderer.toneMapping === THREE.AgXToneMapping) agx(haze, renderer.toneMappingExposure, scene.fog.color);
+		else scene.fog.color.copy(haze);
 		dome.position.copy(focus);
 		sats.position.copy(focus);
 		sats.userData.step(dt, elev);
