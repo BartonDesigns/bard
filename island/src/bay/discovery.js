@@ -65,7 +65,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 	const g = (x, z) => bay.heightAt(x, z);
 
 	function build() {
-		const B = { group: new THREE.Group(), col: [], floors: [], people: new THREE.Group() };
+		const B = { group: new THREE.Group(), col: [], floors: [], fronts: [] };
 		const parts = new Map(), add = (m, geo) => { if (!parts.has(m)) parts.set(m, []); parts.get(m).push(geo.index ? geo.toNonIndexed() : geo); };
 		// a box in a building's frame; solid ones go in the collision list (world space, oriented)
 		const boxIn = (Fr, m, w, h, d, x = 0, y = 0, z = 0, solid = false) => {
@@ -112,6 +112,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			const pd = 2.6, pz = zc + hd + pd / 2;
 			boxIn(F, mat.porch, W, 0.25, pd, 0, -0.25, pz);
 			B.floors.push({ F, x0: -hw, x1: hw, z0: zc + hd, z1: zc + hd + pd, y: y0 });
+			B.fronts.push({ F, w: W - 2, z: zc + hd + pd });
 			for (let k = -hw + 0.2; k <= hw - 0.1; k += W / Math.max(3, Math.round(W / 3.2))) boxIn(F, mat.trim, 0.18, H > 5 ? 6.6 : 3.4, 0.18, k, 0, zc + hd + pd - 0.15);
 			if (H > 5) { boxIn(F, mat.porch, W, 0.2, pd, 0, 3.4, pz); for (let k = -hw; k < hw; k += 0.18) boxIn(F, mat.trim, 0.05, 0.9, 0.05, k, 3.6, zc + hd + pd - 0.15); boxIn(F, mat.trim, W, 0.08, 0.12, 0, 4.5, zc + hd + pd - 0.15); }
 			boxIn(F, mat.roof, W + 0.3, 0.15, pd + 0.2, 0, H > 5 ? 6.6 : 3.4, pz);
@@ -187,57 +188,40 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			boxIn(F, mat.steel, 0.12, 4.4, 0.12, -4, 0, 12);
 		}
 		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); mesh.castShadow = !isPhone && m !== mat.glass; mesh.receiveShadow = true; B.group.add(mesh); }
-		B.group.add(B.people);
 		root.add(B.group);
 		built = B;
 	}
 
 	// ---------- families by the hour ----------
-	const figGeo = (() => {
-		const body = new THREE.CapsuleGeometry(0.2, 0.62, 4, 8).translate(0, 1.0, 0), legs = new THREE.CapsuleGeometry(0.09, 0.7, 3, 6).translate(0, 0.4, 0);
-		return mergeGeometries([body, legs].map((q) => q.toNonIndexed()));
-	})();
-	const headGeo = new THREE.SphereGeometry(0.12, 10, 8);
-	let lastH = -99, lastDay = -1;
+	// the visitors themselves are the real people (people/people.js), grown-ups with their
+	// children; this says how many and where they go
 	function busy(h, day) {
 		if (day === 1 || h < 9 || h >= 17) return 0;                     // closed Mondays, and out of hours
 		const morning = Math.exp(-(((h - 10.5) / 1.4) ** 2)), after = Math.exp(-(((h - 14) / 1.6) ** 2)) * 0.6;
 		return Math.min(1, (morning + after) * (day === 0 || day === 6 ? 1.1 : 0.9));
 	}
-	function populate(h, day) {
-		const B = built;
-		for (const c of [...B.people.children]) B.people.remove(c);
-		const k = busy(h, day), spots = [];
-		if (k <= 0) return;
-		const rnd = (i, j) => hh(i * 3.1 + h, j * 1.7 + day);
-		const inRoom = (R, n) => { if (!R) return; for (let i = 0; i < n; i++) { const lx = R.ix0 + 1 + rnd(i, 1) * (R.ix1 - R.ix0 - 2), lz = R.iz0 + 1 + rnd(i, 2) * (R.iz1 - R.iz0 - 2), ca = Math.cos(R.F.a), sa = Math.sin(R.F.a); spots.push([R.F.x + ca * lx - sa * lz, R.F.y, R.F.z + sa * lx + ca * lz, rnd(i, 3) < 0.55]); } };
-		inRoom(B.main, Math.round(26 * k)); inRoom(B.cafe, Math.round(10 * k));
-		for (let i = 0; i < Math.round(30 * k); i++) { const a = rnd(i, 4) * 6.283, r = rnd(i, 5) * 22, x = COVE.x + Math.cos(a) * r, z = COVE.z + Math.sin(a) * r; spots.push([x, Math.max(0.8, g(x, z)) + 0.12, z, rnd(i, 6) < 0.6]); }
-		for (let i = 0; i < Math.round(14 * k); i++) { const a = rnd(i, 7) * 6.283, r = 12 + rnd(i, 8) * 30, x = CAMPUS.x + Math.cos(a) * r, z = CAMPUS.z + Math.sin(a) * r; spots.push([x, g(x, z), z, rnd(i, 9) < 0.5]); }
-		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s1 = new THREE.Vector3(), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
-		const bodies = mat.cloth.map(() => []), heads = mat.skin.map(() => []);
-		spots.forEach(([x, y, z, kid], i) => {
-			const sc = kid ? 0.55 + rnd(i, 10) * 0.2 : 0.95 + rnd(i, 11) * 0.1;
-			q.setFromAxisAngle(Y, rnd(i, 12) * 6.283);
-			bodies[i % bodies.length].push(m4.clone().compose(p.set(x, y, z), q, s1.set(sc, sc, sc)));
-			heads[(i * 7) % heads.length].push(m4.clone().compose(p.set(x, y + 1.62 * sc, z), q, s1.set(sc * (kid ? 1.25 : 1), sc * (kid ? 1.25 : 1), sc * (kid ? 1.25 : 1))));
-		});
-		bodies.forEach((L, i) => { if (!L.length) return; const im = new THREE.InstancedMesh(figGeo, mat.cloth[i], L.length); L.forEach((M4, j) => im.setMatrixAt(j, M4)); B.people.add(im); });
-		heads.forEach((L, i) => { if (!L.length) return; const im = new THREE.InstancedMesh(headGeo, mat.skin[i], L.length); L.forEach((M4, j) => im.setMatrixAt(j, M4)); B.people.add(im); });
+	const inFrame = (F, lx, lz) => { const ca = Math.cos(F.a), sa = Math.sin(F.a); return { x: F.x + ca * lx - sa * lz, z: F.z + sa * lx + ca * lz }; };
+	function venue(cam, hours) {
+		if (!built || Math.hypot(cam.x - CAMPUS.x, cam.z - CAMPUS.z) > CAMPUS.r + 110) return null;
+		const k = busy(hours, new Date().getDay());
+		if (k <= 0) return { n: 0, kids: 0.5, areas: [] };
+		const B = built, room = (R) => (r) => inFrame(R.F, R.ix0 + 1 + r() * (R.ix1 - R.ix0 - 2), R.iz0 + 1.5 + r() * (R.iz1 - R.iz0 - 3));
+		const areas = [];
+		if (B.main) areas.push({ w: 0.34, pick: room(B.main) });
+		if (B.cafe) areas.push({ w: 0.12, pick: room(B.cafe) });
+		areas.push({ w: 0.34, pick: (r) => { const a = r() * 6.283, d = 4 + r() * 18; return { x: COVE.x + Math.cos(a) * d, z: COVE.z + Math.sin(a) * d }; } });
+		for (const Fr of B.fronts) areas.push({ w: 0.2 / B.fronts.length, pick: (r) => inFrame(Fr.F, (r() - 0.5) * Fr.w, Fr.z + 1.5 + r() * 5) });
+		return { n: Math.round(24 * k), kids: 0.5, areas };
 	}
-
-	function update(dt, camera, hours) {
+	function update(dt, camera) {
 		const d = Math.hypot(camera.position.x - CAMPUS.x, camera.position.z - CAMPUS.z);
-		if (!built && d < 900 && bay.loaded() && real?.loaded() && real.near('boxes', CAMPUS.x, CAMPUS.z, 60).length) { try { build(); } catch (e) { console.warn('discovery museum', e); built = { group: new THREE.Group(), col: [], floors: [], people: new THREE.Group() }; } }
-		if (built && d > 1600) { built.group.traverse((o) => o.geometry?.dispose()); root.remove(built.group); built = null; lastH = -99; return; }
-		if (!built) return;
-		const day = new Date().getDay();
-		if (Math.abs(hours - lastH) > 0.5 || day !== lastDay) { lastH = hours; lastDay = day; populate(hours, day); }
+		if (!built && d < 900 && bay.loaded() && real?.loaded() && real.near('boxes', CAMPUS.x, CAMPUS.z, 60).length) { try { build(); } catch (e) { console.warn('discovery museum', e); built = { group: new THREE.Group(), col: [], floors: [], fronts: [] }; } }
+		if (built && d > 1600) { built.group.traverse((o) => o.geometry?.dispose()); root.remove(built.group); built = null; }
 	}
 	const toLocal = (F, x, z) => { const dx = x - F.x, dz = z - F.z, ca = Math.cos(F.a), sa = Math.sin(F.a); return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
 	// the floors inside, the porches, the little bridge's deck and the boat
 	function floor(x, z, y) {
-		if (!built) return -1e9;
+		if (!built || Math.abs(x - CAMPUS.x) > 260 || Math.abs(z - CAMPUS.z) > 260) return -1e9;
 		let best = -1e9;
 		for (const f of built.floors) { const [lx, lz] = toLocal(f.F, x, z); if (lx > f.x0 && lx < f.x1 && lz > f.z0 && lz < f.z1 && y > f.y - 1.2) best = Math.max(best, f.y); }
 		return best;
@@ -262,5 +246,5 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		if (Math.hypot(pos.x - COVE.x, pos.z - COVE.z) < 32) return 'cove';
 		return inCampus(pos.x, pos.z) ? 'campus' : null;
 	}
-	return { group: root, update, floor, push, where, busy, get built() { return built; } };
+	return { group: root, update, floor, push, where, busy, venue, get built() { return built; } };
 }

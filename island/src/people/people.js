@@ -11,7 +11,7 @@ import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
 import { crowd, zoneOf, ZONE } from './flow.js';
 
-const MAX = 26, NEAR = 70;
+const MAX = 26, KIDS = 12, NEAR = 70;
 const steps = [];
 const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                 // hiked, down the middle
 
@@ -22,7 +22,8 @@ export function createPeople(scene, world) {
 	let A = null, failed = false;
 	const pool = [];                  // { P, M, role, route, ... }
 	let seedN = 1;
-	const ground = (x, z) => world().island.heightAt(x, z);
+	// the ground, or a floor people walk on (the museum's halls and porches, bay/discovery.js)
+	const ground = (x, z) => { const W = world(), g = W.island.heightAt(x, z), f = W.discovery?.floor?.(x, z, g + 1.2) ?? -1e9; return f > g ? f : g; };
 
 	async function ensure() {
 		if (A || failed) return;
@@ -35,6 +36,7 @@ export function createPeople(scene, world) {
 		const T = d.temper || { outgoing: 0.5, confident: 0.5, warmth: 0.5 }, x = r();
 		if (d.age < 35 && x < 0.45) return 'phone';
 		if (d.age > 62 && x < 0.5) return 'behind';
+		if (d.child) return x < 0.7 ? 'rest' : 'behind';
 		if (T.warmth < 0.35 && x < 0.6) return 'crossed';
 		if (T.confident > 0.7 && x < 0.35) return 'hip';
 		return x < 0.7 ? 'pockets' : 'rest';
@@ -66,13 +68,16 @@ export function createPeople(scene, world) {
 			const v = W.island.village, d = Math.hypot(cam.x - v.x, cam.z - v.z);
 			return { n: d < 260 ? Math.round(8 * (1 - night * 0.7)) : 0, island: true };
 		}
+		// a place with its own visitors (the Discovery Museum): families, and where they go
+		const V = W.discovery?.venue?.(cam, hours);
+		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 } };
 		const U = W.bayArea?.urbanAt(cam.x, cam.z);
 		// out on the trails: a few hikers by day
 		const real = W.real;
 		if (real?.loaded() && real.inside(cam.x, cam.z) && (!U || U.u < 0.2) && cam.y - ground(cam.x, cam.z) < 90) {
 			const trails = real.near('roads', cam.x, cam.z, 120).some((q) => TRAIL.has(q.cls));
 			const C = crowd(ZONE.trail, hours);
-			return { n: trails ? Math.round(6 * C.k) : 0, island: false, C };
+			return { n: trails ? Math.round(6 * C.k) : 0, kids: 0.15, island: false, C };
 		}
 		// a beach or a park's grounds (bay/beaches.js, bay/parkkit.js): its own crowd, the quiet
 		// beaches kept quiet
@@ -80,7 +85,7 @@ export function createPeople(scene, world) {
 		if ((bc || pk) && cam.y - ground(cam.x, cam.z) < 90 && real?.loaded() && real.inside(cam.x, cam.z)) {
 			const C = crowd(bc ? (bc.quiet ? ZONE.quiet : ZONE.beach) : ZONE.trail, hours);
 			const roads = real.near('roads', cam.x, cam.z, 150).length;
-			if (roads) return { n: Math.round((bc ? (bc.quiet ? 3 : 10) : 12) * C.k), island: false, C };
+			if (roads) return { n: Math.round((bc ? (bc.quiet ? 3 : 10) : 12) * C.k), kids: bc?.quiet ? 0 : 0.3, island: false, C };
 		}
 		if (!U || U.u < 0.2 || cam.y - ground(cam.x, cam.z) > 90) return { n: 0 };
 		// how busy, by what kind of place and the hour (flow.js)
@@ -128,7 +133,7 @@ export function createPeople(scene, world) {
 		return { kind: 'street', road, side: r() < 0.5 ? 1 : -1, s: Math.max(0, Math.min(L, best + (r() - 0.5) * 20)), dir: r() < 0.5 ? 1 : -1 };
 	}
 
-	function cast(p, cam, island, mood = null) {
+	function cast(p, cam, island, mood = null, venue = null) {
 		const r = rng(seedN * 7919 + 13);
 		const W = world();
 		const C = mood || { jog: 0.12, chat: 0.14, wait: 0.12 };
@@ -140,6 +145,23 @@ export function createPeople(scene, world) {
 		p.engaged = false; p.persona = null;
 		p.idlePose = idlePoseFor(p.P.dna, r);
 		M.setPose(p.role === 'wait' ? p.idlePose : r() < 0.08 ? 'phone' : r() < 0.06 ? 'pockets' : 'rest');
+		// at a venue: into one of its rooms or yards, within sight of here
+		if (venue) {
+			if (p.role === 'jog') p.role = 'walk';
+			for (let k = 0; k < 12; k++) {
+				let u = r() * venue.areas.reduce((a, q) => a + q.w, 0), area = venue.areas[0];
+				for (const q of venue.areas) { if ((u -= q.w) <= 0) { area = q; break; } }
+				if (!area) return false;
+				const q = area.pick(r), d = Math.hypot(q.x - cam.x, q.z - cam.z);
+				if (d > NEAR || d < 3) continue;
+				p.route = { kind: 'venue', area, goal: new THREE.Vector3(q.x, 0, q.z) };
+				const q2 = area.pick(r);
+				p.route.goal.set(q2.x, 0, q2.z);
+				M.place(q.x, ground(q.x, q.z), q.z, r() * 6.28);
+				return true;
+			}
+			return false;
+		}
 		// somewhere near but not in your face, and ideally out of sight
 		for (let k = 0; k < 20; k++) {
 			const a = r() * Math.PI * 2, d = 18 + r() * (NEAR - 25);
@@ -176,6 +198,50 @@ export function createPeople(scene, world) {
 		return false;
 	}
 
+	// a child goes with a grown-up already about: at their side, now and then running ahead
+	// or stopping to look, never far
+	function castChild(p, cam) {
+		const r = rng(seedN * 104729 + 7);
+		const parents = pool.filter((o) => o.active && !o.P.dna.child && !o.engaged && o.role !== 'jog' && (o.kids || 0) < 2 && o.M.S.pos.distanceTo(cam) < NEAR);
+		if (!parents.length) return false;
+		const par = parents[Math.floor(r() * parents.length)], at = par.M.S.pos;
+		par.kids = (par.kids || 0) + 1;
+		p.role = 'follow'; p.partner = null; p.engaged = false; p.persona = null; p.timer = 3 + r() * 6;
+		p.idlePose = idlePoseFor(p.P.dna, r);
+		p.M.S.talk = 0; p.M.S.look.target = null; p.M.setPose('rest');
+		p.route = { kind: 'follow', parent: par, side: (par.kids % 2 ? 1 : -1) * (0.7 + r() * 0.4), back: 0.3 + r() * 0.8, roam: new THREE.Vector3(), roaming: 0 };
+		const x = at.x + p.route.side, z = at.z - p.route.back;
+		p.M.place(x, ground(x, z), z, par.M.S.heading);
+		return true;
+	}
+	function followParent(p, dt) {
+		const M = p.M, S = M.S, R = p.route, par = R.parent, P = par.M.S;
+		const h = P.heading, sx = Math.cos(h), sz = -Math.sin(h), fx = Math.sin(h), fz = Math.cos(h);
+		p.timer -= dt;
+		// a wander off to look at something, while the grown-up stands still
+		if (p.timer < 0) { p.timer = 3 + Math.random() * 7; R.roaming = par.M.want.speed < 0.2 && Math.random() < 0.6 ? 2 + Math.random() * 3 : 0; if (R.roaming) { const a = Math.random() * 6.283, d = 1.5 + Math.random() * 2.5; R.roam.set(P.pos.x + Math.cos(a) * d, 0, P.pos.z + Math.sin(a) * d); } }
+		if (R.roaming > 0) R.roaming -= dt;
+		const tx = R.roaming > 0 ? R.roam.x : P.pos.x + sx * R.side - fx * R.back, tz = R.roaming > 0 ? R.roam.z : P.pos.z + sz * R.side - fz * R.back;
+		const d = Math.hypot(tx - S.pos.x, tz - S.pos.z);
+		M.want.run = d > 4 ? 1 : 0;
+		M.want.heading = d > 0.3 ? Math.atan2(tx - S.pos.x, tz - S.pos.z) : h;
+		M.want.speed = d < 0.35 ? 0 : Math.min(d > 4 ? 2.6 : 1.9, Math.max(par.M.want.speed * 1.05, d * 0.9));
+		// look up at the grown-up now and then
+		S.look.target = Math.sin(performance.now() / 1000 * 0.4 + p.P.dna.seed) > 0.7 ? new THREE.Vector3(P.pos.x, P.pos.y + par.P.height * 0.93, P.pos.z) : null;
+	}
+	function venueWander(p) {
+		const M = p.M, S = M.S, R = p.route;
+		const d = Math.hypot(R.goal.x - S.pos.x, R.goal.z - S.pos.z);
+		if (d < 1.2) {
+			const q = R.area.pick(Math.random);
+			R.goal.set(q.x, 0, q.z);
+			// stop to look at the exhibits, or to watch the children play
+			if (Math.random() < 0.55) { p.role = 'wait'; p.timer = 4 + Math.random() * 12; }
+		}
+		M.want.heading = Math.atan2(R.goal.x - S.pos.x, R.goal.z - S.pos.z);
+		M.want.speed = p.P.dna.gait.pace * 0.7;
+	}
+
 	function steer(p, dt, cam) {
 		const M = p.M, S = M.S, R = p.route;
 		p.timer -= dt;
@@ -197,7 +263,7 @@ export function createPeople(scene, world) {
 		if (p.role === 'chat') {
 			// find someone close to talk to, or wait for them to come
 			if (!p.partner) {
-				for (const o of pool) if (o !== p && o.active && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
+				for (const o of pool) if (o !== p && o.active && !o.P.dna.child && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
 			}
 			if (p.partner) {
 				const o = p.partner.M.S.pos, d = o.distanceTo(S.pos);
@@ -220,10 +286,12 @@ export function createPeople(scene, world) {
 			}
 			if (p.timer < 0) p.role = 'walk';
 		}
+		if (R.kind === 'follow') { followParent(p, dt); return; }
 		if (p.role === 'wait') { M.want.speed = 0; M.setPose(p.idlePose || 'rest'); if (p.timer < 0) { p.role = 'walk'; M.setPose('rest'); } return; }
 		const run = p.role === 'jog';
 		M.want.run = run ? 1 : 0;
 		const speed = run ? 2.6 + (p.P.dna.seed % 7) * 0.08 : pace;
+		if (R.kind === 'venue') { venueWander(p); return; }
 		if (R.kind === 'wander') {
 			const d = Math.hypot(R.goal.x - S.pos.x, R.goal.z - S.pos.z);
 			if (d < 1.5) { const W = world(), pts = (W.island.paths || []).flatMap((q) => q.points); const q = pts.length ? pts[Math.floor(Math.random() * pts.length)] : { x: R.home.x + (Math.random() - 0.5) * 60, z: R.home.z + (Math.random() - 0.5) * 60 }; R.goal.set(q.x, 0, q.z); if (Math.random() < 0.3) { p.role = 'wait'; p.timer = 3 + Math.random() * 6; } }
@@ -289,12 +357,13 @@ export function createPeople(scene, world) {
 
 	// ---------- the loop ----------
 	let building = false;
-	async function grow() {
-		if (building || !A || pool.length >= MAX) return;
+	async function grow(kid = false) {
+		if (building || !A) return;
 		building = true;
 		try {
 			const seed = (seedN++ * 2654435761) >>> 0;
-			const d = personDNA(seed, { jogger: false });
+			const r = rng(seed ^ 0xc41d);
+			const d = personDNA(seed, kid ? { age: 3 + r() * 8 } : { jogger: false });
 			const P = buildPerson(A, d);
 			const M = createMotion(P, ground);
 			const p = { P, M, active: false, role: 'walk' };
@@ -312,26 +381,38 @@ export function createPeople(scene, world) {
 		if (!enabled) return;
 		const need = demand(cam, night);
 		if (need.n > 0 && !A && !failed) ensure();
-		if (need.n > pool.filter((p) => p.active).length && pool.length < Math.min(MAX, need.n + 2)) grow();
-		let active = 0;
+		// grown-ups, and (where families go) children with them
+		const nk = Math.min(KIDS, Math.round(need.n * (need.kids || 0))), na = need.n - nk;
+		const kidPool = pool.filter((p) => p.P.dna.child), adultPool = pool.filter((p) => !p.P.dna.child && p.demo === undefined);
+		if (na > adultPool.filter((p) => p.active).length && adultPool.length < Math.min(MAX, na + 2)) grow(false);
+		else if (nk > kidPool.filter((p) => p.active).length && kidPool.length < Math.min(KIDS, nk + 1)) grow(true);
+		let active = 0, kids = 0;
+		const drop = (p) => { p.active = false; p.P.root.visible = false; if (p.partner) { p.partner.partner = null; p.partner = null; } if (p.route?.kind === 'follow' && p.route.parent) p.route.parent.kids = Math.max(0, (p.route.parent.kids || 1) - 1); };
 		for (const p of pool) {
 			const S = p.M.S;
 			if (p.active && p.demo === undefined) {
-				const d = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z);
-				if (!p.engaged && (d > NEAR * 1.25 || active >= need.n)) { p.active = false; p.P.root.visible = false; if (p.partner) { p.partner.partner = null; p.partner = null; } continue; }
-				active++;
+				const d = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z), kid = p.P.dna.child;
+				if (kid ? (!p.route?.parent?.active || kids >= nk) : !p.engaged && (d > NEAR * 1.25 || active >= na)) { drop(p); continue; }
+				if (!kid && !p.engaged && d > NEAR * 1.25) { drop(p); continue; }
+				if (kid) kids++; else active++;
 				steer(p, dt, cam);
 				p.M.update(dt, t, cam);
 			}
 		}
 		// fill up: one new arrival a frame at most
 		acc += dt;
-		if (active < need.n && acc > 0.15) {
+		if (acc > 0.15 && (active < na || kids < nk)) {
 			acc = 0;
-			const idle = pool.find((p) => !p.active && p.demo === undefined);
-			if (idle) { seedN++; if (cast(idle, cam, need.island, need.C)) { idle.active = true; idle.P.root.visible = true; } }
+			if (active < na) {
+				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child);
+				if (idle) { seedN++; idle.kids = 0; if (cast(idle, cam, need.island, need.C, need.venue)) { idle.active = true; idle.P.root.visible = true; } }
+			} else {
+				const idle = kidPool.find((p) => !p.active);
+				if (idle) { seedN++; if (castChild(idle, cam)) { idle.active = true; idle.P.root.visible = true; } }
+			}
 		}
 	}
+
 
 	// a line-up in front of you: for looking at the bodies and the gait
 	async function lineup(cam, heading, n = 8, walk = true) {

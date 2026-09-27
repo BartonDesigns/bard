@@ -747,7 +747,7 @@ export function createIslandWorld() {
 			if (pk) W.parkSeen = pk;
 		}
 		if (W.discovery) {
-			W.discovery.update(dt, camera, W.sky.state.hours);
+			W.discovery.update(dt, camera);
 			const at = W.discovery.where(camera.position);
 			if (at && at !== 'campus' && at !== W.museumSeen) {
 				const open = W.discovery.busy(W.sky.state.hours, new Date().getDay()) > 0;
