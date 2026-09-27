@@ -8,10 +8,12 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SPECIES } from '../nature/fieldguide.js';
+import { SPECIES, TRAILS } from '../nature/fieldguide.js';
+import { toWorld } from './geo.js';
 
 const GUIDE = Object.fromEntries(SPECIES.map((s) => [s.id, s]));
 const inHours = (s, h) => { const [a, b] = s.hours; return a <= b ? h >= a && h < b : h >= a || h < b; };
+const TRAIL_AT = TRAILS.map((t) => ({ ...t, ...toWorld(t.lat, t.lon) }));
 const about = (id, h, month) => { const s = GUIDE[id]; return !!s && s.months.includes(month) && inHours(s, h); };
 
 // a bird: body, head, and wings held out (dihedral for the vultures' V)
@@ -105,8 +107,25 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 		}
 	}
 
+	// at a trailhead: the naturalist's note, and what is out today (three likely, one to hope for)
+	let trailSeen = null;
+	function outToday(T, h, month) {
+		const now = (s) => s.months.includes(month) && inHours(s, h) && s.kind !== 'rock' && s.kind !== 'plant';
+		const here = (s) => !s.where || s.where.some(([la, lo, r]) => { const w = toWorld(la, lo); return Math.hypot(w.x - T.x, w.z - T.z) < r + 400; });
+		const local = SPECIES.filter((s) => now(s) && s.where && here(s)), common = SPECIES.filter((s) => now(s) && !s.where && s.rarity <= 2);
+		const pickN = (L, n) => L.map((s, i) => [Math.sin(i * 12.9898 + T.x * 0.001) % 1, s]).sort((a, b) => a[0] - b[0]).slice(0, n).map((q) => q[1]);
+		const likely = [...pickN(local.filter((s) => s.rarity <= 3), 3), ...pickN(common, 3)].slice(0, 3);
+		const rare = pickN(SPECIES.filter((s) => now(s) && here(s) && s.rarity >= 4), 1)[0];
+		return { likely, rare };
+	}
 	function update(dt, t, cam, hours) {
 		const month = new Date().getMonth() + 1;
+		const tr = cam.position.y - g(cam.position.x, cam.position.z) < 60 ? TRAIL_AT.find((T) => Math.hypot(T.x - cam.position.x, T.z - cam.position.z) < 250) : null;
+		if (tr && tr !== trailSeen) {
+			const { likely, rare } = outToday(tr, hours, month);
+			hint(`${tr.name}\n${tr.note}${likely.length ? '\nOut today: ' + likely.map((s) => s.name).join(', ') : ''}${rare ? '\nIf you are lucky: ' + rare.name : ''}`, 9000);
+		}
+		trailSeen = tr || (trailSeen && Math.hypot(trailSeen.x - cam.position.x, trailSeen.z - cam.position.z) < 400 ? trailSeen : null);
 		const onBay = bay.loaded() && Math.max(Math.abs(cam.position.x), Math.abs(cam.position.z)) > 1600 && cam.position.y < 2500;
 		group.visible = onBay;
 		if (!onBay) return;

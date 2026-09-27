@@ -15,6 +15,9 @@ import { toWorld } from './geo.js';
 const SITES = [
 	{ name: 'Fitzgerald Marine Reserve', lat: 37.5212, lon: -122.5183, R: 260, strike: 2.45, long: 1, wide: 0.6, seals: 6 },
 	{ name: 'Pillar Point reef', lat: 37.4922, lon: -122.4992, R: 240, strike: 2.1, long: 1, wide: 0.55, seals: 0 },
+	{ name: 'Pescadero Point', lat: 37.2560, lon: -122.4150, R: 200, strike: 2.0, long: 1, wide: 0.6, seals: 2 },
+	{ name: 'Bean Hollow tide pools', lat: 37.2300, lon: -122.4120, R: 200, strike: 2.2, long: 1, wide: 0.55, seals: 0 },
+	{ name: 'Pigeon Point tide pools', lat: 37.1812, lon: -122.3955, R: 180, strike: 1.9, long: 1, wide: 0.6, seals: 2 },
 	{ name: 'Duxbury Reef', lat: 37.8915, lon: -122.6990, R: 420, strike: 2.25, long: 1, wide: 0.42, seals: 3 },
 ].map((s) => ({ ...s, ...toWorld(s.lat, s.lon) }));
 export const TIDEPOOLS = SITES;

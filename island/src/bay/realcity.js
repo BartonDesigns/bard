@@ -17,17 +17,32 @@ import { lakeFeatures } from './lake.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
+// where the rock shows its own colour (steep ground, cliffs, road cuts)
+const ROCKS = [
+	[37.8255, -122.4990, 2600, 0x8e3c2c],      // Marin Headlands: red ribbon chert (Hawk Hill, Conzelman Road)
+	[37.7920, -122.4570, 900, 0x3a5a4a],       // the Presidio's serpentinite, waxy green-black
+	[37.4735, -122.2835, 1300, 0x40584a],      // Edgewood: serpentine grassland
+	[37.8450, -121.9400, 1600, 0xc8a068],      // Mt Diablo's Rock City and Castle Rock: honey sandstone
+	[37.5550, -122.5080, 2800, 0xc4b69c],      // Montara Mountain and Devil's Slide: pale speckled granite
+	[37.3400, -122.4000, 16000, 0xc8b89a],     // the Purisima mudstone bluffs down the San Mateo coast
+	[37.8980, -122.6950, 2500, 0x9a8a70],      // Duxbury: Monterey shale
+	[37.9290, -122.5780, 2200, 0x6e6a5c],      // Mt Tam: greenstone and serpentine
+].map(([lat, lon, r, c]) => ({ ...toWorld(lat, lon), r, c }));
 export const REAL_U = {
 	uRoadMap: { value: blank() }, uRoadR: { value: new THREE.Vector4(0, 0, 1, 0) },
 	uRoadMap2: { value: blank() }, uRoadR2: { value: new THREE.Vector4(0, 0, 1, 0) }, uPaintMap: { value: blank() },
 	uSeason: { value: 1 },                      // 0 spring green .. 1 summer gold
+	uSeasonLag: { value: 0 },                   // the foggy coast turns gold later than the inland hills
+	uBloom: { value: 0 },                       // spring wildflowers: poppies, lupine, goldfields (0..1)
+	// the rocks by region (the naturalist's geology): [x, z, radius, 0] and their colours
+	uRock: { value: ROCKS.map((r) => new THREE.Vector4(r.x, r.z, r.r, 0)) }, uRockC: { value: ROCKS.map((r) => new THREE.Color(r.c)) },
 	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB2: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB3: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB4: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB5: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB6: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB7: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB8: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB9: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason;
+uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason, uSeasonLag, uBloom; uniform vec4 uRock[8]; uniform vec3 uRockC[8];
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
 // the main region (its land use map), and any mapped region (real streets, no grid)
 bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }

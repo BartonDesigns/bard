@@ -44,13 +44,18 @@ import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
+import { createNatureSound } from './bay/naturesound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
 import { createDrive } from './drive.js';
 
 // the hills by the calendar: green from the winter rains into spring, gold by summer
-REAL_U.uSeason.value = [0, 0, 0, 0.05, 0.3, 0.6, 0.85, 1, 1, 1, 0.85, 0.35][new Date().getMonth()];
+// (the naturalist's curve: inland gold by late May; the foggy coast lags into July)
+REAL_U.uSeason.value = [0, 0, 0, 0.1, 0.45, 0.8, 1, 1, 1, 1, 0.8, 0.4][new Date().getMonth()];
+REAL_U.uSeasonLag.value = [0, 0, 0, 0, 0.2, 0.25, 0.2, 0.05, 0, 0, 0, 0][new Date().getMonth()];
+// the wildflower peak: late March and April
+REAL_U.uBloom.value = [0, 0.3, 0.8, 1, 0.45, 0, 0, 0, 0, 0, 0, 0][new Date().getMonth()];
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads } from './bay/roads.js';
@@ -443,6 +448,7 @@ export function createIslandWorld() {
 			// the Bay Area's wild animals by habitat, month and hour, and the field journal
 			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
+			world.natureSound = createNatureSound(bayArea, (x, z) => bayArea.heightAt(x, z));
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
 			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
@@ -729,6 +735,12 @@ export function createIslandWorld() {
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		people.demo(dt, time, camera.position);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half });
+		if (W.natureSound && W.bayArea?.loaded()) {
+			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
+			let pond = 1e9;
+			if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if (W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) != null) pond = r; } if (pond < 1e8) break; }
+			W.natureSound.update(dt, camera, { night: sk.night, hours: W.sky.state.hours, month: new Date().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
+		}
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly
@@ -952,6 +964,7 @@ if (typeof window !== 'undefined') {
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },
 		// the hills' season: 0 spring green .. 1 summer gold
 		season: (v) => { if (v !== undefined) REAL_U.uSeason.value = Math.max(0, Math.min(1, +v)); return REAL_U.uSeason.value; },
+		bloom: (v) => { if (v !== undefined) REAL_U.uBloom.value = Math.max(0, Math.min(1, +v)); return REAL_U.uBloom.value; },
 		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },
 		clearHome: () => { localStorage.removeItem('crysis-home'); return 'Home cleared.'; },
 		goHome: () => {

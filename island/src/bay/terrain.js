@@ -351,15 +351,27 @@ export function createBayArea(shared, scene, island, BU) {
 					gold = mix(gold, gold * vec3(1.12, 1.05, 0.9), smoothstep(0.55, 0.75, fbm3(vBW * 0.013 + 9.7)) * 0.6);
 					gold *= 0.9 + 0.2 * n3;
 					vec3 spring = mix(vec3(0.2, 0.36, 0.07), vec3(0.33, 0.47, 0.1), n2);
-					gold = mix(spring, gold, clamp(uSeason + (n1 - 0.5) * 0.3 + slope * 0.4 * uSeason, 0.0, 1.0));
+					float season = clamp(uSeason - uSeasonLag * fogbelt, 0.0, 1.0);
+					gold = mix(spring, gold, clamp(season + (n1 - 0.5) * 0.3 + slope * 0.4 * season, 0.0, 1.0));
 					vec3 c = gold;
+					// spring wildflowers in drifts across the open grass: California poppies (orange,
+					// on the sunny side), lupine (blue-violet, in swales), goldfields (yellow sheets)
+					if (uBloom > 0.01) {
+						float drift = smoothstep(0.58, 0.74, fbm3(vBW * 0.006 + 4.7)) * (1.0 - smoothstep(0.25, 0.5, slope)) * uBloom;
+						float kind = fbm3(vBW * 0.0021 + 13.1), speck = smoothstep(0.35, 0.75, vn(vBW * 1.7));
+						vec3 flower = kind < 0.45 ? vec3(0.9, 0.3, 0.02) : kind < 0.58 ? vec3(0.2, 0.16, 0.55) : vec3(0.85, 0.66, 0.05);
+						c = mix(c, flower, drift * speck * 0.85);
+					}
 					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4);
 					c = mix(c, mix(vec3(0.085, 0.1, 0.045), vec3(0.14, 0.15, 0.075), n3), chap * 0.85);          // chaparral: dark olive scrub
 					float oak = smoothstep(0.42, 0.68, n1 + north * 0.4 + fogbelt * 0.12 - south * 0.15 + (n2 - 0.5) * 0.3);
 					c = mix(c, mix(vec3(0.12, 0.16, 0.07), vec3(0.19, 0.23, 0.11), n3), oak * 0.88);
 					float forest = smoothstep(0.55, 0.78, n1 * 0.55 + north * 0.45 + fogbelt * 0.45) * smoothstep(40.0, 180.0, h);
 					c = mix(c, mix(vec3(0.05, 0.1, 0.05), vec3(0.08, 0.14, 0.07), n3), forest * 0.92);
-					c = mix(c, mix(vec3(0.27, 0.24, 0.19), vec3(0.4, 0.36, 0.29), n2), smoothstep(0.5, 0.85, slope));
+					// rock where it is steep, in its own region's colour (the naturalist's geology)
+					vec3 rockC = mix(vec3(0.27, 0.24, 0.19), vec3(0.4, 0.36, 0.29), n2);
+					for (int i = 0; i < 8; i++) { float rk = 1.0 - smoothstep(uRock[i].z * 0.6, uRock[i].z, distance(vBW, uRock[i].xy)); rockC = mix(rockC, uRockC[i] * (0.75 + 0.5 * n2), rk); }
+					c = mix(c, rockC, smoothstep(0.5, 0.85, slope));
 					// sand at the water's edge, mud and sand under water
 					float beach = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
