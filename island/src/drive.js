@@ -116,13 +116,16 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		const W = world(), P = W.player.state, x = P.pos.x, z = P.pos.z;
 		const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
 		let best = null;
-		if (W.real?.loaded() && W.real.inside(x, z)) {
-			for (const r of W.real.near('roads', x, z, 90)) {
-				if (r.pts.length < 4) continue;
-				const e = realEdge(r), [s, d] = nearestOn(e.pts, x, z);
-				if (d < 90 && (!best || d < best.d)) best = { e, s, d };
-			}
-		} else {
+		// the mapped roads, and the roads added by hand beyond the maps (the Golden Gate's deck,
+		// the Presidio Parkway): inside a mapped region anything within 90 m, outside it only a
+		// road you are right by
+		const inside = W.real?.loaded() && W.real.inside(x, z);
+		if (W.real?.loaded()) for (const r of W.real.near('roads', x, z, 90)) {
+			if (r.pts.length < 4 || (!inside && !r.drive)) continue;
+			const e = realEdge(r), [s, d] = nearestOn(e.pts, x, z);
+			if (d < (inside ? 90 : 40) && (!best || d < best.d)) best = { e, s, d };
+		}
+		if (!best && !inside) {
 			const U = W.bayArea?.urbanAt(x, z);
 			if (U && U.u > 0.2) {
 				const G = { a: Math.round(U.a / (Math.PI / 2) * 255) / 255 * Math.PI / 2, style: U.s }, [BX, BZ, ST] = BLOCKS[U.s];
