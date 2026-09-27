@@ -80,6 +80,7 @@ import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
 import { createVolcano } from './planet/volcano.js';
+import { planAlien, createAlien } from './planet/alien.js';
 import { createShare } from './share.js';
 
 const REALM = 'island';
@@ -446,7 +447,9 @@ export function createIslandWorld() {
 		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
 		// a planet's caves are planned first, so nothing grows in their mouths
 		const cavePlan = earth ? null : planCaves(island, profile);
-		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear];
+		// the works of whoever built here before: sited now, so nothing grows on them
+		const alienPlan = earth ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: fieldPlan.clear, isPhone });
+		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
 		const village = createVillage(island, shared, scene);
 		vegetation.addContacts(village.footprints);
@@ -488,6 +491,13 @@ export function createIslandWorld() {
 		// the ball fields: the island's, and the Bay's as you come near them (their fences are walked into)
 		world.fields = createSportsFields({ scene, getWorld: () => world, isPhone, plan: fieldPlan });
 		{ const own = island.extraPush, fp = world.fields.push; island.extraPush = own ? (p, footY) => { own(p, footY); fp(p, footY); } : fp; }
+		// the alien works: their platforms, causeways and halls are walked on, their walls walked into
+		if (alienPlan) {
+			const al = world.alien = createAlien(island, shared, scene, camera, profile, alienPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
+			const of = island.extraFloor, op = island.extraPush;
+			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), al.floor(x, z, y)) : al.floor;
+			island.extraPush = op ? (p, footY) => { op(p, footY); al.push(p, footY); } : al.push;
+		}
 		state.seed = seed;
 		state.earth = earth;
 		state.biome = params.biome;
@@ -580,6 +590,7 @@ export function createIslandWorld() {
 		world.shrooms?.dispose();
 		world.underworld?.dispose();
 		world.volcano?.dispose();
+		world.alien?.dispose();
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		while (scene.children.length) scene.remove(scene.children[0]);
 		world = null;
@@ -747,6 +758,7 @@ export function createIslandWorld() {
 		W.underwater.update(dt, time, under, surf);
 		W.magma.update(dt, time, under, surf);
 		W.volcano?.update(dt, time);
+		W.alien?.update(dt, time);
 		W.caverns.update(dt, time, under);
 		W.underworld?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
@@ -785,7 +797,7 @@ export function createIslandWorld() {
 		const caveK = W.underworld?.inside?.() || 0;
 		// deep down the surface overhead is never seen: stop drawing it
 		const open = caveK < 0.9;
-		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group]) if (o && o.visible !== open) o.visible = open;
+		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group, W.alien?.group]) if (o && o.visible !== open) o.visible = open;
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
 			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
@@ -1133,6 +1145,9 @@ if (typeof window !== 'undefined') {
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
 		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
 		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),
+		// the alien works (planet/alien.js): Crysis.alien() lists the sites, Crysis.alienGo(i) takes you to look at one
+		alien: () => window.L99Island?.world?.()?.alien?.sites || [],
+		alienGo: (i = 0) => window.L99Island?.world?.()?.alien?.go(i) || 'no alien works on this world',
 		// a volcanic world's eruptions (planet/volcano.js): Crysis.erupt() starts one now (or
 		// from a moment in: Crysis.erupt(30)),
 		// Crysis.volcano() tells where the cycle is ({ phase, next: seconds to the next, k })

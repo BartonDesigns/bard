@@ -324,7 +324,7 @@ export function createTerrain(island, shared) {
 					float sunG = pow(max(dot(gr, uSunDir2), 0.0), 900.0) * smoothstep(0.0, 0.15, uSunDir2.y);
 					float moonG = pow(max(dot(gr, md), 0.0), 500.0) * smoothstep(0.02, -0.15, uSunDir2.y) * 0.5;
 					totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * (sunG + moonG) * gSparkle * 10.0;
-					totalEmissiveRadiance += uPlGlow * gPlGlow * (1.0 - gBioA * 0.85) * mix(1.0, 0.45, smoothstep(0.0, 0.3, uSunDir2.y));
+					totalEmissiveRadiance += uPlGlow * gPlGlow * (1.0 - gBioA * 0.85) * mix(1.0, 0.18, smoothstep(0.0, 0.3, uSunDir2.y));
 					// an eruption: flowing magma, white-yellow in its channels, crusting red at the edges
 					float lv = plLava(vW, uEruptT);
 					if (lv > 0.0) {

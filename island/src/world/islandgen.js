@@ -258,32 +258,26 @@ export function generateIsland(params = {}) {
 	}
 
 	// Another world's land is carved harder (spires, mesas, crater rims), but the ground
-	// itself never breaks into a sawtooth: rock that stands steeper than a cliff can hold
-	// slumps down onto its neighbours (a few rounds of talus settling), then the surface
-	// is eased once, so ridges stay sharp to the eye without jagged ribs on their faces.
+	// itself never breaks into a sawtooth or a stair of ribs down a steep face.
 	// (Sharp, angular forms on these worlds belong to their builders, not to the ground.)
 	if (kind !== 'island') {
-		const maxStep = cell * 1.35, h2 = new Float32Array(N * N);
-		for (let pass = 0; pass < 40; pass++) {
-			let moved = 0;
+		// only where the ground stands steep does it ease toward its neighbours, a little
+		// more each round, so ribs melt into faces while gentle land keeps every detail
+		const h2 = new Float32Array(N * N);
+		for (let pass = 0; pass < 14; pass++) {
+			h2.set(height);
 			for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
 				const k = j * N + i, h = height[k];
 				if (h < 1) continue;
-				for (const n of [k - 1, k + 1, k - N, k + N]) {
-					const d = h - height[n] - maxStep;
-					if (d > 0) { const m = d * 0.3; height[k] -= m; height[n] += m; moved++; }
-				}
+				const a = height[k - 1], b = height[k + 1], c = height[k - N], d = height[k + N];
+				const steep = Math.max(Math.abs(h - a), Math.abs(h - b), Math.abs(h - c), Math.abs(h - d)) / cell;
+				const w = smoothstep(0.9, 2.0, steep) * 0.75;
+				if (w <= 0) continue;
+				const avg = (a + b + c + d) * 0.1667 + (height[k - N - 1] + height[k - N + 1] + height[k + N - 1] + height[k + N + 1]) * 0.0833;
+				h2[k] = h + (avg - h) * w;
 			}
-			if (!moved) break;
+			height.set(h2);
 		}
-		h2.set(height);
-		for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
-			const k = j * N + i;
-			if (height[k] < 3) continue;
-			const avg = (height[k - 1] + height[k + 1] + height[k - N] + height[k + N]) * 0.25;
-			h2[k] = height[k] * 0.5 + avg * 0.5;
-		}
-		height.set(h2);
 	}
 
 	// Level the village terrace: rises gently inland from the beach.
