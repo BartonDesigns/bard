@@ -46,7 +46,7 @@ export const LU = { wild: 0, residential: 1, park: 2, golf: 3, pitch: 4, playgro
 // building kinds of the real boxes: 0 house, 1/2 house with its garage left/right of the
 // front, 3 garage wing, 4 wing, 5 office, 6 retail, 7 school, 8 apartments, 9 industrial, 10 shed,
 // 11 downtown tower (generated towns only)
-const K = { house: 0, garageL: 1, garageR: 2, garage: 3, wing: 4, office: 5, retail: 6, school: 7, apartments: 8, shed: 10, tower: 11 };
+const K = { house: 0, garageL: 1, garageR: 2, garage: 3, wing: 4, office: 5, retail: 6, school: 7, apartments: 8, shed: 10, tower: 11, parking: 12 };
 
 // ---------- street names: learned words and suffixes ----------
 const TAILS = ['wood', 'brook', 'ridge', 'field', 'view', 'crest', 'dale', 'haven', 'glen', 'stone', 'hurst', 'mont'];
@@ -780,6 +780,10 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				const bw = a1 - a0, bd = b1 - b0;
 				if (bw < 30 || bd < 30) continue;
 				const [bx, bz] = at((a0 + a1) / 2, (b0 + b1) / 2);
+				// some blocks are parking: a concrete deck garage, or a surface lot off the main streets
+				const pr = r();
+				if (pr < 0.14 && bw > 36 && bd > 36) { boxes.push({ x: bx, z: bz, w: bw * 0.86, d: bd * 0.86, a: Math.atan2(sa, ca), wallH: 9 + Math.floor(r() * 3) * 3, roofH: 0, kind: K.parking, hip: 0, door: 0.5 }); continue; }
+				if (pr < 0.28) { s.lots = s.lots || []; s.lots.push({ x: bx, z: bz, ux, uz, hw: bw / 2, hd: bd / 2 }); for (let t = a0 + 4; t < a1 - 3; t += 14) { const [qx, qz] = at(t, b0 + 2); trees.push({ x: qx, z: qz, h: treeH() * 0.6, cone: 0 }); } continue; }
 				const near = clamp(1 - (Math.hypot(bx - cx, bz - cz) - 60) / (hw * 2.4), 0.2, 1);
 				const tw = clamp(bw * (0.42 + r() * 0.18), 22, 50), td = clamp(bd * (0.42 + r() * 0.18), 20, 46);
 				const sx = (r() - 0.5) * (bw - tw - 16), sz2 = (r() - 0.5) * (bd - td - 16);
@@ -892,7 +896,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		const sub = (a, b, hw, hd) => ({ x: s.x + s.ux * a - s.uz * b, z: s.z + s.uz * a + s.ux * b, ux: s.ux, uz: s.uz, hw, hd });
 		if (s.kind === 'freeway' || s.kind === 'approach' || s.kind === 'interchange') continue;
 		if (s.kind === 'shop') rect(s, 1, LU.commercial * 16, 4);
-		else if (s.kind === 'downtown') rect(s, 1, LU.plaza * 16, 4);
+		else if (s.kind === 'downtown') { rect(s, 1, LU.plaza * 16, 4); for (const L of s.lots || []) rect(L, 1, LU.commercial * 16, -2); }
 		else if (s.kind === 'school') {
 			const f = (s.fx * -s.uz + s.fz * s.ux) > 0 ? 1 : -1;
 			rect(s, 1, LU.school * 16, 2);

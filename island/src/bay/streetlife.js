@@ -98,6 +98,11 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const lampLightGeo = new THREE.BufferGeometry(); lampLightGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(900 * 3), 3));
 	const lampLights = new THREE.Points(lampLightGeo, new THREE.PointsMaterial({ color: 0xffc070, size: 3.2, map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false }));
 	lampLights.frustumCulled = false; group.add(lampLights);
+	// the pool of warm light each lamp throws on the street below it, after dark
+	const poolTex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
+	const poolMat = new THREE.MeshBasicMaterial({ color: 0xffb060, map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
+	const pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), poolMat, 900);
+	pools.count = 0; pools.frustumCulled = false; pools.renderOrder = 3; group.add(pools);
 	const sigGeo = new THREE.BufferGeometry(); sigGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(300 * 3), 3)); sigGeo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(300 * 3), 3));
 	const sigLights = new THREE.Points(sigGeo, new THREE.PointsMaterial({ size: 0.9, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
 	sigLights.frustumCulled = false; group.add(sigLights);
@@ -261,6 +266,11 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		for (const S of Object.values(parked)) S.n = Math.min(counts.get(S) || 0, S.instanceMatrix.count);
 		splitX = 1e9;
 		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true;
+		{
+			const A = lampLightGeo.attributes.position.array, M4 = new THREE.Matrix4();
+			for (let k = 0; k < nl; k++) pools.setMatrixAt(k, M4.makeScale(15, 1, 15).setPosition(A[k * 3], A[k * 3 + 1] - 8.1, A[k * 3 + 2]));
+			pools.count = nl; pools.instanceMatrix.needsUpdate = true;
+		}
 		sigGeo.setDrawRange(0, Math.min(300, signalList.length));
 		signalList.slice(0, 300).forEach((s, k) => sigGeo.attributes.position.array.set([s.x, s.y, s.z], k * 3));
 		sigGeo.attributes.position.needsUpdate = true;
@@ -290,6 +300,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		if (Math.hypot(x - lastX, z - lastZ) > 120) { lastX = x; lastZ = z; build(x, z); }
 		if (Math.hypot(x - splitX, cam.position.y - splitY, z - splitZ) > SPLIT_M || t - splitT > SPLIT_S || t < splitT) split(x, cam.position.y, z, t);
 		lampLights.material.opacity = nightK;
+		poolMat.opacity = nightK * 0.3;
 		// signals cycle green, amber, red
 		const sc2 = sigGeo.attributes.color.array, ns = Math.min(300, signalList.length);
 		for (let k = 0; k < ns; k++) {

@@ -171,9 +171,9 @@ export function createDiablo(scene, bay) {
 		const sdf = sdfOf(R.spec, ground), S = sdf.S * Math.max(1, sdf.T) * 1.1, N = Math.min(80, Math.round(S * 2 * 2.2));
 		job = { R, sdf, S, N, k: 0, field: new Float32Array(N * N * N), half: N / 2, yc: S * 0.75 - sdf.S * 0.5 };
 	}
-	function step() {
+	function step(budget = 6) {
 		const J = job, { sdf, S, N, half, yc } = J, t0 = performance.now();
-		while (J.k < N && performance.now() - t0 < 6) {
+		while (J.k < N && performance.now() - t0 < budget) {
 			const k = J.k++;
 			for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) J.field[k * N * N + j * N + i] = -sdf.f((i - half) / half * S, (j - half) / half * S + yc, (k - half) / half * S);
 		}
@@ -243,8 +243,13 @@ export function createDiablo(scene, bay) {
 		if (!bay.loaded()) return;
 		const x = cam.position.x, z = cam.position.z;
 		// build the rocks you come near, one a frame
-		if (job) step();
-		else for (const R of rocks) if (!R.built && Math.hypot(R.x - x, R.z - z) < 3500) { R.built = true; start(R); break; }
+		// (the nearest first, and faster when you are standing right by the one being built)
+		if (job) step(Math.hypot(job.R.x - x, job.R.z - z) < 400 ? 14 : 6);
+		else {
+			let best = null, bd = 3500;
+			for (const R of rocks) { const d = Math.hypot(R.x - x, R.z - z); if (!R.built && d < bd) { bd = d; best = R; } }
+			if (best) { best.built = true; start(best); }
+		}
 		for (const R of rocks) if (R.mesh) R.mesh.visible = Math.hypot(R.x - x, R.z - z) < 9000;
 		if (!summitPlaced) {
 			// the building sits just below the summit rocks, the tower on the top
