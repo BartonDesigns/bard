@@ -16,6 +16,10 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 	const SITES = [];
 	for (const G of GAMES) for (const s of G.where?.sites || []) SITES.push({ G, ...s, ...toWorld(s.lat, s.lon) });
 	let cur = null, curG = null, nearSite = null, scanT = 0, bus = null;
+	// an indoor game (a closed room) sees only itself: the camera draws one layer, the game's
+	// objects and the lights are put on it, and the world outside is simply not drawn
+	const ROOM = 5;
+	let stage = [], lit = [];
 
 	const ctx = {
 		THREE, scene, camera, mount, getWorld, isPhone,
@@ -91,7 +95,14 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 		const W = getWorld();
 		if (!W || W.player.state.flying) { hint('Land first, then play', 2000); return; }
 		try {
+			const before = new Set(scene.children);
 			curG = G; cur = G.create(ctx); cur.start();
+			stage = G.indoor ? scene.children.filter((o) => !before.has(o)) : [];
+			if (G.indoor) {
+				lit = [];
+				scene.traverse((o) => { if (o.isLight) { o.layers.enable(ROOM); lit.push(o); } });
+				camera.layers.set(ROOM);
+			}
 			layer.style.display = 'block'; play.style.display = 'none'; menu.style.display = 'none';
 		} catch (err) { console.error('[arcade]', G.id, err); cur = null; curG = null; layer.style.display = 'none'; }
 	}
@@ -100,6 +111,7 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 		try { if (cur.active()) cur.stop(); } catch (err) { console.error('[arcade]', err); }
 		cur = null; curG = null; down = false;
 		layer.style.display = 'none';
+		if (stage.length || lit.length) { camera.layers.set(0); for (const o of lit) o.layers.disable(ROOM); stage = []; lit = []; }
 	}
 
 	function update(dt, t, enabled) {
@@ -107,6 +119,8 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 		if (!enabled && menu.style.display !== 'none') menu.style.display = 'none';
 		if (cur) {
 			try { cur.update(dt, t); } catch (err) { console.error('[arcade]', curG?.id, err); stop(); return; }
+			// (whatever the game has added since, balls and pins and all, onto the room's layer)
+			for (const o of stage) o.traverse((q) => q.layers.enable(ROOM));
 			// closed from its own × or Done
 			if (!cur.active()) stop();
 			return;
