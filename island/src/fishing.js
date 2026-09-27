@@ -45,6 +45,16 @@ function fishPicture(name, back, belly) {
 	return c.toDataURL();
 }
 
+// San Francisco Bay, San Pablo Bay and the South Bay inside the Golden Gate (roughly): the
+// water outside it is the open Pacific (Ocean Beach, Pacifica, the San Mateo coast)
+const BAY = [[37.8105, -122.477], [37.83, -122.479], [37.87, -122.5], [37.95, -122.5], [38.1, -122.5], [38.12, -122.25], [38.06, -122.0], [38.05, -121.85], [37.9, -122.3], [37.8, -122.27], [37.45, -121.93], [37.45, -122.12], [37.6, -122.38], [37.71, -122.39], [37.806, -122.46]]
+	.map(([a, b]) => [(b + 122.57) * 111320 * Math.cos(37.76 * Math.PI / 180), -(a - 37.76) * 110996]);
+function inBay(x, z) {
+	let r = false;
+	for (let i = 0, j = BAY.length - 1; i < BAY.length; j = i++) { const [ax, az] = BAY[i], [bx, bz] = BAY[j]; if ((az > z) !== (bz > z) && x < (bx - ax) * (z - az) / (bz - az) + ax) r = !r; }
+	return r;
+}
+
 export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	let log = [];
 	try { log = JSON.parse(localStorage.getItem('crysis-fish-log') || '[]') || []; } catch { log = []; }
@@ -98,7 +108,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 			if (lv !== null && lv !== undefined) return { kind: 'lake', level: lv, x: px, z: pz };
 			if (W.island.heightAt(px, pz) < -0.4) {
 				const isl = Math.max(Math.abs(px), Math.abs(pz)) < W.island.half;
-				return { kind: isl ? 'island' : px < -16000 || (pz > -2000 && px < -9000) ? 'ocean' : 'bay', level: 0, x: px, z: pz };
+				return { kind: isl ? 'island' : inBay(px, pz) ? 'bay' : 'ocean', level: 0, x: px, z: pz };
 			}
 		}
 		return null;

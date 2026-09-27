@@ -136,6 +136,8 @@ export function createLandFauna(land, island, shared, scene, camera, vegetation)
 	group.name = 'crysis-land-fauna';
 	scene.add(group);
 	const H = (x, z) => island.heightAt(x, z);
+	// the tropical island's own animals stay on it (no ghost crabs or geckos in California)
+	const onIsl = (x, z) => Math.max(Math.abs(x), Math.abs(z)) < island.half - 20;
 	const rnd = Math.random;
 	const pools = [];
 
@@ -303,7 +305,7 @@ export function createLandFauna(land, island, shared, scene, camera, vegetation)
 		pool(crabGeo(g), animalMaterial(shared, 1, 'crab'), g.n, g.size, (a, cam) => {
 			for (let k = 0; k < 20; k++) {
 				const x = cam.x + (rnd() - 0.5) * 60, z = cam.z + (rnd() - 0.5) * 60, h = H(x, z);
-				if (h > 0.35 && h < 2.2 && Math.hypot(x - cam.x, z - cam.z) > 6) { a.p.set(x, h, z); a.state = 'idle'; a.t = rnd() * 3; a.yaw = rnd() * 6.28; return true; }
+				if (h > 0.35 && h < 2.2 && onIsl(x, z) && Math.hypot(x - cam.x, z - cam.z) > 6) { a.p.set(x, h, z); a.state = 'idle'; a.t = rnd() * 3; a.yaw = rnd() * 6.28; return true; }
 			}
 			return false;
 		}, (a, dt, t, cam) => {
@@ -338,7 +340,7 @@ export function createLandFauna(land, island, shared, scene, camera, vegetation)
 				a.p.set(o.x + Math.cos(a2) * d, o.y + o.scale * (o.k === 'tiderock' ? 0.9 : 0.75) + 0.3, o.z + Math.sin(a2) * d);
 			} else {
 				const x = cam.x + (rnd() - 0.5) * 50, z = cam.z + (rnd() - 0.5) * 50, h = H(x, z);
-				if (h < 1.5) return false;
+				if (h < 1.5 || !onIsl(x, z)) return false;
 				a.p.set(x, h, z);
 			}
 			a.state = 'bask'; a.t = 3 + rnd() * 8; a.yaw = rnd() * 6.28;

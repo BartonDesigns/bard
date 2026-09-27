@@ -72,7 +72,9 @@ export function createFauna(island, shared, scene) {
 			pos[i * 3] = px; pos[i * 3 + 1] = Math.max(ground, 0.2) + s.y + Math.sin(t * 2.3 + s.ph) * 0.25; pos[i * 3 + 2] = pz;
 		}
 		pg.attributes.position.needsUpdate = true;
-		fireMat.opacity = night * Math.min(1, pulse);
+		// (fireflies are the island's: California has none, so over the Bay Area there are none)
+		const onIsl = Math.max(Math.abs(focus.x), Math.abs(focus.z)) < island.half + 200;
+		fireMat.opacity = onIsl ? night * Math.min(1, pulse) : 0;
 		fireMat.size = 0.3 + shared.uHigh.value * 0.35;
 		butterMat.opacity = 0;          // butterflies are Crysis animals now (crysis/landfauna.js)
 	}

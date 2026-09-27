@@ -1031,10 +1031,20 @@ export function createCity(shared, scene, bay, real = null) {
 			const chap = Math.min(1, Math.max(0, -north * 0.5 + slope * 0.9 + high * 0.6 - 0.35 - gully * 0.5));
 			const r2 = hash(gx * 3.1 + 7, gz * 1.3 + 3), g = h - 0.3;
 			const tint = (base) => jit(base, r2);
-			if (r2 < wood * 0.8) trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: r2 < wood * 0.35 ? 0 : 1, col: tint(r2 < 0.3 ? [0.16, 0.24, 0.1] : [0.22, 0.28, 0.13]) });
-			else if (r2 < wood * 0.8 + chap * 0.75) { if (!far) trees.push({ x, y: g, z, h: 1.4 + r2 * 1.8, shrub: true, col: tint([0.2, 0.25, 0.13]) }); }
-			else if (r2 > 0.965 - high * 0.05) trees.push({ x, y: g, z, h: 11 + r2 * 9, cone: true, sp: 2, col: tint([0.3, 0.36, 0.26]) });   // gray pine
-			else if (r2 > 0.92 && slope < 0.35) trees.push({ x, y: g, z, h: 7 + r2 * 5, sp: 1, col: tint([0.3, 0.33, 0.2]) });          // blue oak in the grass
+			// the fog belt near the sea (as the ground's colours have it, terrain.js): redwoods down
+			// the canyons and on the shady slopes, in rings round where an old one stood, Douglas-fir
+			// up on the ridges, and coastal scrub, not chaparral; the blue oak and gray pine are
+			// inland trees and stay out of it
+			const fq = Math.min(1, Math.max(0, (x - 22000) / 36000)), fog = 1 - fq * fq * (3 - 2 * fq);
+			if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.2 || north > 0.25) && high < 0.5) {
+				const rh = 32 + r2 * 34 + gully * 10;
+				trees.push({ x, y: g, z, h: rh, cone: true, sp: 2, col: tint([0.12, 0.19, 0.09]) });
+				if (!far) for (let k = 0, n = 2 + Math.floor(hash(gx * 2.3, gz * 5.9) * 4); k < n; k++) { const a = k / n * 6.283 + r2 * 3, rr = 4 + hash(gx + k, gz - k) * 3, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.3, z: qz, h: rh * (0.6 + hash(gx * k, gz) * 0.3), cone: true, sp: 2, col: tint([0.12, 0.2, 0.09]) }); }
+			} else if (r2 < wood * 0.8 && fog > 0.6 && north < 0.1 && slope < 0.6) trees.push({ x, y: g, z, h: 22 + r2 * 18, cone: true, sp: 2, col: tint([0.15, 0.22, 0.12]) });      // Douglas-fir
+			else if (r2 < wood * 0.8) trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: r2 < wood * 0.35 ? 0 : 1, col: tint(r2 < 0.3 ? [0.16, 0.24, 0.1] : [0.22, 0.28, 0.13]) });
+			else if (r2 < wood * 0.8 + chap * 0.75) { if (!far) trees.push({ x, y: g, z, h: 1.4 + r2 * 1.8, shrub: true, col: tint(fog > 0.5 ? [0.28, 0.33, 0.2] : [0.2, 0.25, 0.13]) }); }
+			else if (fog < 0.4 && r2 > 0.965 - high * 0.05) trees.push({ x, y: g, z, h: 11 + r2 * 9, cone: true, sp: 2, col: tint([0.3, 0.36, 0.26]) });   // gray pine
+			else if (fog < 0.4 && r2 > 0.92 && slope < 0.35) trees.push({ x, y: g, z, h: 7 + r2 * 5, sp: 1, col: tint([0.3, 0.33, 0.2]) });          // blue oak in the grass
 			// the open grassland's own brush: coyote brush and sage in loose drifts, thicker on the
 			// shady side and in the draws, a few poison-oak thickets gone red in the dry season
 			// (drawn on their own, in clumps of two to four)

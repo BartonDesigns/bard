@@ -40,6 +40,7 @@ import { createLake } from './bay/lake.js';
 import { createTidepools } from './bay/tidepools.js';
 import { createBeaches } from './bay/beaches.js';
 import { createCommercial } from './bay/commercial.js';
+import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
@@ -439,6 +440,8 @@ export function createIslandWorld() {
 			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
 			// the beaches down Highway 1: lots, restrooms, camps and fires, surf, the lighthouse
 			world.beaches = createBeaches(scene, bayArea, world.real, shared, { isPhone });
+			// the Bay Area's wild animals by habitat, month and hour, and the field journal
+			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
@@ -712,6 +715,7 @@ export function createIslandWorld() {
 			if (tp && tp !== W.tpSeen) hint(`${tp.name}\nLow tide: look in the pools for ochre sea stars, green anemones and purple urchins${tp.seals ? '. Harbor seals haul out on the outer rocks.' : '.'}`, 7000);
 			if (tp) W.tpSeen = tp;
 		}
+		W.wildlife?.update(dt, time, camera, W.sky.state.hours);
 		if (W.beaches) {
 			W.beaches.update(dt, time, camera, sk.night);
 			const bc = camera.position.y < 150 ? W.beaches.beachAt(camera.position.x, camera.position.z) : null;

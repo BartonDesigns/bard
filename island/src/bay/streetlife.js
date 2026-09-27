@@ -102,7 +102,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const sigLights = new THREE.Points(sigGeo, new THREE.PointsMaterial({ size: 0.9, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
 	sigLights.frustumCulled = false; group.add(sigLights);
 
-	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), col = new THREE.Color(), Y = new THREE.Vector3(0, 1, 0);
+	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), col = new THREE.Color();
 	const eul = new THREE.Euler(0, 0, 0, 'YXZ');
 	const put = (im, k, x, y, z, yaw, s = 1, pitch = 0) => { eul.set(pitch, yaw, 0); q.setFromEuler(eul); sc.setScalar(s); p.set(x, y, z); im.setMatrixAt(k, m4.compose(p, q, sc)); };
 	// a car sits on the slope: the ground under its front and back wheels sets its pitch and height
@@ -166,7 +166,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 					}
 					// the kerb furniture
 					const kx = x + nx * (hw + 0.45) * side, kz = z + nz * (hw + 0.45) * side, kg = groundAt(kx, kz);
-					if (k % 19 === 9 && rank >= 1 && !r.bridge) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz)); const nl = getNl(); if (nl < 900) { lampPos.set([x + nx * (hw - 1.2) * side, kg + 8.2, z + nz * (hw - 1.2) * side], nl * 3); setNl(nl + 1); } } }
+					if (k % 19 === 9 && rank >= 1 && !r.bridge && (real.landAt(kx, kz)?.lu || 0) !== 0) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz)); const nl = getNl(); if (nl < 900) { lampPos.set([x + nx * (hw - 1.2) * side, kg + 8.2, z + nz * (hw - 1.2) * side], nl * 3); setNl(nl + 1); } } }
 					if (k % 47 === 20 && rank >= 1) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
 					if (rank >= 2 && k % 97 === 50) { const c = n(benches); if (c >= 0) put(benches, c, x + nx * (hw + 1.4) * side, kg, z + nz * (hw + 1.4) * side, Math.atan2(-side * nx, -side * nz)); }
 				}

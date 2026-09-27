@@ -217,7 +217,7 @@ export function createLandmarks(scene, bay) {
 	{ // the ring: four storeys of curved glass under white canopies at every floor, the solar
 		// roof, and the orchard and meadow inside (the mapped footprint is left out for this)
 		const F = at(37.33478, -122.00899, 0), R0 = 182, R1 = 231, H = 21, seg = 160;
-		const ring = (mat, r, h, y, open = true) => put(F, mat, new THREE.CylinderGeometry(r, r, h, seg, 1, open).translate(0, y + h / 2, 0));
+		const ring = (mat, r, h, y) => put(F, mat, new THREE.CylinderGeometry(r, r, h, seg, 1, true).translate(0, y + h / 2, 0));
 		ring(mats.glass, R1, H - 1, 0); ring(mats.glass, R0, H - 1, 0);
 		for (let k = 1; k <= 4; k++) {
 			const y = k * 4.8;
@@ -226,7 +226,7 @@ export function createLandmarks(scene, bay) {
 		}
 		// the roof: dark solar panels, a white edge
 		put(F, mats.dark, new THREE.RingGeometry(R0 - 3, R1 + 3, seg).rotateX(-Math.PI / 2).translate(0, H, 0));
-		ring(mats.white, R1 + 3, 0.8, H - 0.4, false); ring(mats.white, R0 - 3, 0.8, H - 0.4, false);
+		ring(mats.white, R1 + 3, 0.8, H - 0.4); ring(mats.white, R0 - 3, 0.8, H - 0.4);
 		// the courtyard: a meadow, a pond, and groves of fruit trees
 		put(F, mats.green, new THREE.CircleGeometry(R0 - 3, 96).rotateX(-Math.PI / 2).translate(0, 0.25, 0));
 		put(F, mats.glass, new THREE.CircleGeometry(24, 40).rotateX(-Math.PI / 2).scale(1.6, 1, 1).translate(-40, 0.32, 30));
