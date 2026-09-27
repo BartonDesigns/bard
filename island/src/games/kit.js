@@ -28,9 +28,9 @@ function writeStore(s) {
 const PANEL = 'background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px system-ui,sans-serif;';
 const stopEv = (el) => { for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) el.addEventListener(ev, (e) => e.stopPropagation()); };
 
-export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], place = 'clear', flat = 1.2, room = null, backdrop = null, dome = 60, hole = 0, lift = 0 } = {}) {
+export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], place = 'clear', flat = 1.2, room = null, backdrop = null, dome = 60, hole = 0, lift = 0, pose = null } = {}) {
 	const { THREE, scene, camera } = ctx;
-	const K = { on: false, time: 0, last: null, cardOpen: false, accent, THREE };
+	const K = { on: false, time: 0, last: null, cardOpen: false, accent, THREE, camera };
 	let layer = null, hudText = null, card = null, api = null, g = null;
 	const saved = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: 50 };
 	const camWant = { pos: new THREE.Vector3(), look: new THREE.Vector3(), k: 0, snap: true, ready: false };
@@ -45,14 +45,17 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		// where: a clear, flat spot near the player that the game's footprint fits (stage.js);
 		// an indoor game's footprint is its room
 		const foot = room ? [room.w, -room.z0, room.z1] : span;
-		const spot = findSpot(ctx, { mode: place, dist, span: foot, flat: room ? 4 : flat });
+		// (pose: a game with a venue of its own, a ball field, says where its stage goes)
+		const fixed = pose?.();
+		const spot = fixed ? { clear: true, water: false, ...fixed } : findSpot(ctx, { mode: place, dist, span: foot, flat: room ? 4 : flat });
 		K.clear = spot.clear; K.wet = spot.water;
 		const { x, z, yaw } = spot;
 		const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
 		// the stage sits on the highest ground under its footprint, so that uneven terrain
 		// never pokes up through a lane or a table; a water game sits at the water's level
 		let gy = -Infinity;
-		if (spot.water) gy = waterLevel(ctx, x, z) ?? 0;
+		if (fixed) gy = fixed.y ?? ctx.groundAt?.(x, z);
+		else if (spot.water) gy = waterLevel(ctx, x, z) ?? 0;
 		else for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
 			const back = foot[2] ?? 1, u = (i / 4 - 0.5) * foot[0], v = j / 4 * (foot[1] + back) - back;
 			const h = ctx.groundAt?.(x + fx * v - fz * u, z + fz * v + fx * u);

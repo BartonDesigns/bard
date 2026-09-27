@@ -9,12 +9,47 @@
 // curveballs that drop late. A hit leaves the bat at up to a hundred miles an hour and
 // flies a real arc with air drag into the netting; its carry on an open field is run on to
 // the ground. Fair balls count their distance; over the fence is a home run. Outside the
-// lines is foul.
+// lines is foul. (The pitching and the hitting are shared with the ball field's game,
+// baseball.js.)
 
 import { makeKit, clamp, rand } from './kit.js';
 
-const MOUND = 16, SWING = 0.16, PITCHES = 10, FENCE = 100;
-const TYPES = [['Fastball', 33, 0, 0], ['Fastball', 31, 0, 0], ['Change-up', 24, 0, 0], ['Curveball', 26, -0.9, 0.5], ['Slider', 28, -0.3, -0.6]];
+const MOUND = 16, PITCHES = 10, FENCE = 100;
+// the swing: the bat reaches the zone this long after the tap
+export const SWING = 0.16;
+// the machine's (and the pitcher's) mix: name, speed (m/s from sixteen metres), drop, sweep
+export const TYPES = [['Fastball', 33, 0, 0], ['Fastball', 31, 0, 0], ['Change-up', 24, 0, 0], ['Curveball', 26, -0.9, 0.5], ['Slider', 28, -0.3, -0.6]];
+
+// a ball in flight for dt: air drag and gravity
+export function fly(p, v, dt) {
+	v.addScaledVector(v, -0.0045 * v.length() * dt);
+	v.y -= 9.8 * dt;
+	p.addScaledVector(v, dt);
+}
+// where a ball in flight would come down on open ground at height `ground`, and after how long
+export function carry(p0, v0, ground = 0) {
+	const p = p0.clone(), v = v0.clone();
+	let t = 0;
+	for (let i = 0; i < 1500 && (p.y > ground || v.y > 0); i++) { fly(p, v, 1 / 120); t += 1 / 120; }
+	return { d: Math.hypot(p.x, p.z), x: p.x, z: p.z, hang: t };
+}
+// a pitch from p that crosses the plate (z = 0) at (tx, ty) once its break is done
+export function pitchVelocity(p, P, tx, ty, out) {
+	const T = P.time;
+	return out.set((tx - p.x - P.sweep * 1.6 * T * T / 6) / T, (ty - p.y + 0.5 * 9.8 * T * T + P.drop * 2.2 * T * T / 6) / T, -p.z / T);
+}
+// the break, mostly late: curveballs drop and sliders sweep
+export function breakStep(v, P, t, dt) {
+	const k = t / P.time;
+	v.y -= (9.8 + P.drop * 2.2 * k) * dt; v.x += P.sweep * 1.6 * k * dt;
+}
+// off the bat: e is how much sooner the bat got there than the ball (early pulls it left,
+// late pushes it right), q how squarely it met it, lift from where you tapped; k scales the
+// exit speed (a smaller field's hitters are smaller)
+export function offTheBat(e, q, lift, out, k = 1) {
+	const exit = (22 + q * 22) * k, dir = -clamp(e / 0.1, -1, 1) * 0.95 + rand(-0.08, 0.08), up = clamp(0.2 + lift * 0.9 + (1 - q) * rand(-0.3, 0.3), -0.25, 1.2);
+	return out.set(Math.sin(dir) * Math.cos(up) * exit, Math.sin(up) * exit, -Math.cos(dir) * Math.cos(up) * exit);
+}
 
 export const GAME = {
 	id: 'batting',
@@ -57,7 +92,7 @@ export const GAME = {
 			S.pitch = { name, speed, drop, sweep, time };
 			// aimed to cross the plate about belt high, with the break still to come
 			S.p.set(0, 1.35, -MOUND);
-			S.v.set(-sweep * 0.5 / time, (0.85 - 1.35 + 0.5 * 9.8 * time * time - drop * 0.5) / time, speed);
+			pitchVelocity(S.p, S.pitch, 0, 0.85, S.v);
 			S.state = 'pitch'; S.t = 0; ball.visible = true;
 			K.noise(0.15, { vol: 0.15, f: 400 });
 		}
@@ -75,8 +110,7 @@ export const GAME = {
 				if (S.t > 1.6) throwPitch();
 			} else if (S.state === 'pitch') {
 				// the break: curveballs drop and sliders sweep, mostly late
-				const k = S.t / S.pitch.time;
-				S.v.y -= (9.8 + S.pitch.drop * 2.2 * k) * dt; S.v.x += S.pitch.sweep * 1.6 * k * dt;
+				breakStep(S.v, S.pitch, S.t, dt);
 				S.p.addScaledVector(S.v, dt);
 				// contact: the bat reaches the zone SWING seconds after the tap
 				if (S.swingT >= SWING - 0.1 && S.swingT <= SWING + 0.1 && !S.contact && Math.abs(S.p.z) < 0.6) {
@@ -91,9 +125,7 @@ export const GAME = {
 			} else if (S.state === 'fly') {
 				// the ball flies until the netting stops it; where it would have landed on an open
 				// field was worked out at contact (carry)
-				S.v.addScaledVector(S.v, -0.0045 * S.v.length() * dt);
-				S.v.y -= 9.8 * dt;
-				S.p.addScaledVector(S.v, dt);
+				fly(S.p, S.v, dt);
 				if (!S.netted && (Math.abs(S.p.x) > 2.55 || S.p.z < -18.6 || S.p.y > 4.6)) { S.netted = true; S.v.multiplyScalar(-0.08); K.noise(0.2, { vol: 0.08, f: 300 }); }
 				if (S.p.y < 0.04) { S.p.y = 0.04; S.v.set(S.v.x * 0.5, Math.abs(S.v.y) * 0.3, S.v.z * 0.5); }
 				if (S.t > 1.6) {
@@ -117,14 +149,10 @@ export const GAME = {
 			K.cam(0.55, 1.65, 2.3, -0.1, 1.1, -MOUND, 4);
 		}
 		function hit(e, q) {
-			// early pulls it left, late pushes it right; the lift from where you tapped
-			const exit = 22 + q * 22, dir = -clamp(e / 0.1, -1, 1) * 0.95 + rand(-0.08, 0.08), up = clamp(0.2 + S.lift * 0.9 + (1 - q) * rand(-0.3, 0.3), -0.25, 1.2);
-			S.v.set(Math.sin(dir) * Math.cos(up) * exit, Math.sin(up) * exit, -Math.cos(dir) * Math.cos(up) * exit);
+			offTheBat(e, q, S.lift, S.v);
 			S.state = 'fly'; S.t = 0; S.contact = true; S.netted = false;
 			// the carry on an open field: the same flight, run on to the ground
-			const p = S.p.clone(), v = S.v.clone();
-			for (let i = 0; i < 1200 && (p.y > 0 || v.y > 0); i++) { v.addScaledVector(v, -0.0045 * v.length() / 120); v.y -= 9.8 / 120; p.addScaledVector(v, 1 / 120); }
-			S.carry = { d: Math.hypot(p.x, p.z), x: p.x, z: p.z };
+			S.carry = carry(S.p, S.v);
 			K.noise(0.08, { vol: 0.2 + q * 0.2, f: 1800 + q * 1500, q: 2 });
 			if (q > 0.85) K.say('Crack! Squared up.', 700);
 		}

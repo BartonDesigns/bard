@@ -543,17 +543,23 @@ export function* createCaveVillage(ctx) {
 		building = true;
 		try {
 			A = A || await loadPeopleAssets();
-			const n = Math.min(isPhone ? 6 : 9, 3 + seats.length + stalls.length);
+			const n = Math.min(isPhone ? 7 : 11, 6 + seats.length + stalls.length);
 			const roles = [];
 			for (let i = 0; i < Math.min(3, seats.length); i++) roles.push({ role: 'sit', seat: seats[i * 2 % seats.length] });
+			// a family going about the village: a grown-up with a child by each hand (the
+			// younger ones), or one by the hand and an older one alongside
+			const head = roles.length;
+			roles.push({ role: 'walk' }, { role: 'follow', child: true, head, side: 0.44, hold: true }, { role: 'follow', child: true, head, side: r() < 0.5 ? -0.44 : -0.8, hold: false });
+			roles[head + 2].hold = roles[head + 2].side > -0.5;
 			for (const s of stalls) roles.push({ role: 'keep', stall: s });
 			roles.push({ role: 'walk' }, { role: 'walk' });
 			if (houses.length > 1) { roles.push({ role: 'talk', pair: 0 }, { role: 'talk', pair: 1 }); }
+			// and a child at play on their own near home
 			roles.push({ role: 'walk', child: true });
 			const talkSpot = houses[1] ? { x: (houses[1].door.x * 2 + fp.x) / 3, z: (houses[1].door.z * 2 + fp.z) / 3 } : { x: fp.x + 4, z: fp.z };
 			for (let i = 0; i < Math.min(n, roles.length); i++) {
 				const R = roles[i];
-				const d = personDNA(((c.x * 1000) ^ (i * 7919 + 131)) >>> 0, R.child ? { age: 6 + r() * 5 } : { age: 18 + r() * 55 });
+				const d = personDNA(((c.x * 1000) ^ (i * 7919 + 131)) >>> 0, R.child ? { age: R.role === 'follow' ? (R.hold ? 3 + r() * 5 : 8 + r() * 4) : 6 + r() * 5 } : { age: i === head ? 24 + r() * 20 : 18 + r() * 55 });
 				// the clothes of this place
 				const pal = K.clothes;
 				d.outfit.top = pal[Math.floor(r() * pal.length)];
@@ -579,6 +585,11 @@ export function* createCaveVillage(ctx) {
 					const x = talkSpot.x + (R.pair ? 0.55 : -0.55), z = talkSpot.z;
 					M.place(x, ground(x, z), z, R.pair ? -Math.PI / 2 : Math.PI / 2);
 					M.setPose(R.pair ? 'hip' : 'listen');
+				} else if (R.role === 'follow') {
+					// beside their grown-up
+					const H = folk[R.head].M.S, x = H.pos.x + Math.cos(H.heading) * R.side, z = H.pos.z - Math.sin(H.heading) * R.side;
+					p.head = folk[R.head];
+					M.place(x, ground(x, z), z, H.heading);
 				} else {
 					const s = route[Math.floor(r() * route.length)];
 					M.place(s.x, ground(s.x, s.z), s.z, r() * 6.283);
@@ -622,6 +633,15 @@ export function* createCaveVillage(ctx) {
 					if (pd < 1.4) M.want.heading += 0.8;
 					if (dd < 0.5) { p.idle = 3 + Math.random() * 7; M.want.speed = 0; }
 				}
+			} else if (p.role === 'follow') {
+				// keep up with the grown-up, at their side; stop when they stop
+				const H = p.head.M.S, h = H.heading;
+				const ex = H.pos.x + Math.cos(h) * p.R.side - Sx.x, ez = H.pos.z - Math.sin(h) * p.R.side - Sx.z, dd = Math.hypot(ex, ez);
+				const vx = Math.sin(h) * Math.max(0, H.speed.v) + ex * 1.2, vz = Math.cos(h) * Math.max(0, H.speed.v) + ez * 1.2, v = Math.hypot(vx, vz);
+				if (v < 0.3 && dd < 0.4) { M.want.speed = 0; M.want.heading = h; } else { M.want.speed = Math.min(v, 2.2); M.want.heading = Math.atan2(vx, vz); }
+				M.want.run = dd > 3.5 ? 1 : 0;
+				const holding = p.R.hold && dd < 0.8;
+				M.hold(p.R.side > 0 ? 'R' : 'L', holding); p.head.M.hold(p.R.side > 0 ? 'L' : 'R', holding);
 			} else if (p.role === 'keep') {
 				M.want.speed = 0;
 				if (pd < 6 && p.t < 0) { p.t = 4 + Math.random() * 4; M.gesture(['explain', 'point', 'wave', 'open'][Math.floor(Math.random() * 4)]); M.want.heading = Math.atan2(cam.x - Sx.x, cam.z - Sx.z); }

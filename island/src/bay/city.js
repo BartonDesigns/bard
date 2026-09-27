@@ -19,6 +19,7 @@ import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
 import { GREENS } from './realcity.js';
 import { inCampus } from './discovery.js';
+import { inClearing, clearingVersion } from '../sportsfields.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -1263,7 +1264,7 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 	}
 
-	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0;
+	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, clearV = -1;
 	function update(cam, nightK) {
 		if (!bay.loaded()) return;
 		night.value = nightK;
@@ -1275,6 +1276,7 @@ export function createCity(shared, scene, bay, real = null) {
 		near.visible = hips.visible = gables.visible = farPts.visible = !high;
 		for (const im of [...shrubs, ...ferns, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
+		if (clearingVersion() !== clearV) { clearV = clearingVersion(); lastX = 1e9; }          // a ball field laid out nearby: its trees go
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
 		if (riseT0 >= 0) {
 			// the ring runs out at 700 m a second; no shadows from the buildings still underground
@@ -1293,6 +1295,8 @@ export function createCity(shared, scene, bay, real = null) {
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
+		// ...nor on a ball field (sportsfields.js)
+		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2));
 		// ...nor inside a tower (their lobbies are walked into): a coarse grid of the tall ones
 		{
 			const G = new Map(), cellOf = (x, z) => Math.floor(x / 60) + ',' + Math.floor(z / 60);

@@ -7,6 +7,8 @@ const q = new URLSearchParams(location.search);
 const w = window.L99IslandModule.island();
 // ?planet=MYSTICAL (or ARID, ICE, MAGMA, TOXIC, TERRAN, OCEAN, GAS…) opens another world
 const planet = q.get('planet');
-w.open(planet ? { seed: +(q.get('seed') || 4242), biome: planet, earth: false } : { seed: +(q.get('seed') || 1337) });
+// ?at=<code>: a shared spot (share.js)
+if (q.get('at')) w.openAt(q.get('at'));
+else w.open(planet ? { seed: +(q.get('seed') || 4242), biome: planet, earth: false } : { seed: +(q.get('seed') || 1337) });
 </script>
 </body></html>

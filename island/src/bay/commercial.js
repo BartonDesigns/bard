@@ -16,7 +16,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { crowd, ZONE } from '../people/flow.js';
+import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { inCampus } from './discovery.js';
 
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -40,6 +40,8 @@ function busyAt(type, h) {
 	if (type === 'restaurant') return Math.max(0, Math.min(1, Math.exp(-(((h - 19.4) / 1.8) ** 2)) + Math.exp(-(((h - 12.5) / 1.1) ** 2)) * 0.55));
 	return crowd(ZONE_OF[type], h).k;
 }
+// how many of those in are children (with their families), when children are about
+const KIDS_IN = { cafe: 0.14, restaurant: 0.2, shop: 0.16, office: 0, arcade: 0.3, bowling: 0.28, cinema: 0.22 };
 export const COMMERCIAL_TYPES = ['cafe', 'restaurant', 'shop', 'office', 'arcade', 'bowling', 'cinema'];
 
 export function createCommercial(scene, bay, real, city, { isPhone = false } = {}) {
@@ -248,7 +250,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 	// places to stand, from the list each building publishes here
 	function venue(cam, hours) {
 		const areas = [];
-		let n = 0;
+		let n = 0, kids = 0;
 		for (const B of built.values()) {
 			const [lx, lz] = local(B, cam.x, cam.z);
 			if (Math.abs(lx) > B.hw + 14 || Math.abs(lz) > B.hd + 14) continue;
@@ -266,9 +268,11 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			const want = Math.round(B.spots.length * k * (B.type === 'cinema' ? 0.7 : 0.55));
 			if (!want) continue;
 			n += want;
+			kids += want * (KIDS_IN[B.type] || 0);
 			areas.push({ w: want, seats: B.spots });
 		}
-		return areas.length ? { n: Math.min(n, 24), kids: 0, areas } : null;
+		// families at the tables: the children sit with their grown-ups (people/people.js)
+		return areas.length ? { n: Math.min(n, 24), kids: n ? Math.min(0.35, kids / n * kidsAbout(hours)) : 0, areas } : null;
 	}
 
 	// ---------- near you ----------

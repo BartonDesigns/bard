@@ -13,7 +13,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { crowd, ZONE } from '../people/flow.js';
+import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 
 const LOBBY = 6.2, STOREY = 3.9, WALL = 0.3;
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -299,7 +299,26 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			});
 		}
 		const n = Math.min(22, Math.round(B.spots.length * k * (B.L.kind === 'office' ? 0.6 : 0.5)));
-		return n ? { n, kids: 0, areas: [{ w: 1, seats: B.spots }] } : null;
+		// the homes have their families in; a few children pass through the lobby
+		const kids = B.L.kind === 'office' ? 0 : (B.L.kind === 'lobby' ? 0.08 : 0.3) * kidsAbout(hours);
+		return n ? { n, kids, areas: [{ w: 1, seats: B.spots }] } : null;
 	}
-	return { group, update, floor, push, venue, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
+	// where you stand in the tower you're at: which tower, which level (for homes and shared spots)
+	function here(pos) {
+		if (!T) return null;
+		const [lx, lz] = local(pos.x, pos.z);
+		if (Math.abs(lx) > T.W / 2 || Math.abs(lz) > T.D / 2) return null;
+		const L = levelAt(pos.y - 1.7);
+		return L && { key: T.key, i: T.levels.indexOf(L), n: L.n, kind: L.kind, type: T.type, x: T.o.x, z: T.o.z, label: label(L) };
+	}
+	// build level i of this tower without moving you (the floor you are put back on)
+	function raise(i) {
+		const L = T?.levels[i];
+		if (!L) return false;
+		if (L.kind === 'lobby') return true;
+		if (T.up && T.up.L !== L) { group.remove(T.up.g); T.up.dispose(); T.up = null; }
+		if (!T.up) T.up = level(T, L);
+		return true;
+	}
+	return { group, update, floor, push, venue, here, raise, key: () => T?.key || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
 }

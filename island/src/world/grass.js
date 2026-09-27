@@ -51,7 +51,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span }, uWidth: { value: width }, uTallK: { value: heightK },
 		uTime: shared.uTime, uWind: shared.uWind, uGust: shared.uGust, uWindT: shared.uWindT, uWindDir: shared.uWindDir, uHigh: shared.uHigh, uBass: shared.uBass,
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uOcc: shared.uOcc, uOccO: shared.uOccO,
-		...planetUniforms(shared), uPlGrassK: { value: shared.planet?.grass ?? 1 },
+		...planetUniforms(shared), uPlGrassK: { value: shared.planet?.grass ?? 1 }, uPl2GrassK: { value: shared.planet?.alt?.grass ?? 1 },
 	};
 
 	const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, alphaToCoverage: true });
@@ -62,7 +62,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			${NOISE_GLSL}
 			${OCC_GLSL}
 			${PLANET_GLSL}
-			uniform float uPlGrassK;
+			uniform float uPlGrassK, uPl2GrassK;
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge;
@@ -88,7 +88,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// around shrubs, bananas and flowers the grass crowds in and grows up the stems
 				density = min(1.0, density + hug * 0.6 * meadow);
 				// another world: sparse on a desert, none on ash, none in snow or down a cave mouth
-				density *= min(1.0, uPlGrassK) * (1.0 - plSnow(h, n1g)) * (1.0 - plHole(w));
+				plBegin(w);
+				density *= min(1.0, uPlGrassK * mix(1.0, uPl2GrassK, gBioA)) * (1.0 - plSnow(h, n1g)) * (1.0 - plHole(w));
 				// a tuft exists where its random falls under the local density: thinning is
 				// even and gradual, so edges feather out instead of breaking into bald spots
 				// toward the edge of the carpet each tuft grows in on its own: its own distance to

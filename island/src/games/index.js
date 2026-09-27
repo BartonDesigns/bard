@@ -23,5 +23,8 @@ import { GAME as tidepool } from './tidepool.js';
 import { GAME as stargaze } from './stargaze.js';
 import { GAME as morse } from './morse.js';
 import { GAME as batting } from './batting.js';
+import { GAME as baseball } from './baseball.js';
+import { GAME as soccer } from './soccer.js';
+import { GAME as football } from './football.js';
 
-export const GAMES = [bowling, skeeball, pinball, airhockey, hoops, minigolf, bocce, discgolf, stones, kite, surf, skate, cablebell, sealions, claw, drums, darts, cornhole, paperplane, sandcastle, tidepool, stargaze, morse, batting];
+export const GAMES = [bowling, skeeball, pinball, airhockey, hoops, minigolf, bocce, discgolf, stones, kite, surf, skate, cablebell, sealions, claw, drums, darts, cornhole, paperplane, sandcastle, tidepool, stargaze, morse, batting, baseball, soccer, football];

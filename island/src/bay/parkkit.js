@@ -5,13 +5,14 @@
 // a trailhead kiosk with its map boards at each trailhead, picnic tables with grills under
 // the trees, benches facing the view, a drinking fountain and trash and recycling cans, a
 // restroom in the agency's colours set back from the lot, and where the park has them a
-// playground (decks, a slide, swings, rubber surfacing), courts, a ball field's backstop
-// and soccer goals. Everything a park holds is merged per material into a few draws.
+// playground (decks, a slide, swings, rubber surfacing) and courts (the ball fields are
+// sportsfields.js's, and all this keeps off them). Everything a park holds is merged per material into a few draws.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PARKS, AGENCY_STYLE } from '../nature/parks.js';
 import { toWorld } from './geo.js';
+import { inClearing } from '../sportsfields.js';
 
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const SITES = PARKS.map((p) => ({ ...p, ...toWorld(p.lat, p.lon), trails: (p.trailheads || []).map((t) => ({ ...t, ...toWorld(t.lat, t.lon) })) }));
@@ -58,7 +59,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 		redwood: M('#8a5a3c'), green: M('#2f5d3a', 0.6), concrete: M('#b8b2a6', 0.9), black: M('#1d1d1d', 0.5, { metalness: 0.4 }), steel: M('#9aa0a4', 0.4, { metalness: 0.6 }),
 		post: M('#5a3d26', 0.85), roofB: M('#4e3b2c', 0.8), board: M('#e9e2cf', 0.7), mapBoard: M('#7f9aa8', 0.5), trashB: M('#5a3d26'), recyc: M('#2f5d8c'), compost: M('#3f7a3a'),
 		playG: M('#3f7a3a', 0.5), playB: M('#2f6f9a', 0.5), slide: M('#e8c23a', 0.35), slideR: M('#c23a2a', 0.35), rubber: M('#a8543a', 0.95), rubberB: M('#3a6ea8', 0.95), chain: M('#b8bcc0', 0.3, { metalness: 0.8 }),
-		net: M('#f4f4f0', 0.8, { transparent: true, opacity: 0.7 }), fence: M('#2a2a2a', 0.6, { metalness: 0.5, transparent: true, opacity: 0.55 }), goal: M('#f4f4f0', 0.5), clay: M('#b3714a', 0.95),
+		net: M('#f4f4f0', 0.8, { transparent: true, opacity: 0.7 }), fence: M('#2a2a2a', 0.6, { metalness: 0.5, transparent: true, opacity: 0.55 }),
 	};
 	const courtTex = { tennis: courtTexture('tennis'), pickleball: courtTexture('pickleball'), basketball: courtTexture('basketball') };
 	const g = (x, z) => bay.heightAt(x, z);
@@ -78,7 +79,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 			for (let k = 0; k < 80; k++) {
 				const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * spread, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
 				if (wet(px, pz) || slope(px, pz) > maxSlope || used.some((u) => Math.hypot(u.x - px, u.z - pz) < u.r + r)) continue;
-				if (inBuilding(px, pz) || onRoad(px, pz, r)) continue;
+				if (inBuilding(px, pz) || onRoad(px, pz, r) || inClearing(px, pz, r)) continue;
 				used.push({ x: px, z: pz, r });
 				return { x: px, z: pz, y: g(px, pz) };
 			}
@@ -174,15 +175,6 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 			slab.applyMatrix4(F); slab.position.y += 0.08; slab.receiveShadow = true; B.group.add(slab);
 			if (kind === 'basketball') for (const s of [-1, 1]) { box(F, mat.steel, 0.15, 3.3, 0.15, 0, 0, s * (L / 2 - 0.4)); box(F, mat.board, 1.83, 1.07, 0.05, 0, 2.9, s * (L / 2 - 1.2)); }
 			else { box(F, mat.net, Wd * 0.72, 0.9, 0.03, 0, 0.1, 0); box(F, mat.fence, Wd, 3.2, 0.05, 0, 0, L / 2); box(F, mat.fence, Wd, 3.2, 0.05, 0, 0, -L / 2); box(F, mat.fence, 0.05, 3.2, L, Wd / 2, 0, 0); box(F, mat.fence, 0.05, 3.2, L, -Wd / 2, 0, 0); }
-		}
-		// a ball field's backstop, and soccer goals
-		if (has('softball') || has('baseball')) {
-			const f = spot(P.x - 90, P.z + 70, 240, 30, 0.05);
-			if (f) { const F = frame(f, Math.PI * 1.25); box(F, mat.fence, 14, 6, 0.06, 0, 0, -4); const di = new THREE.CircleGeometry(16, 20, 0, Math.PI / 2).rotateX(-Math.PI / 2).rotateY(Math.PI / 4).translate(0, 0.07, -2); di.applyMatrix4(F); add(mat.clay, di); for (const u of [-9, 9]) box(F, M('#6a5a48'), 8, 2.4, 2.2, u, 0, -3); }
-		}
-		if (has('soccer')) {
-			const f = spot(P.x + 110, P.z + 60, 260, 40, 0.04);
-			if (f) { const F = frame(f, 0); for (const s of [-1, 1]) { box(F, mat.goal, 0.1, 2.44, 0.1, -3.66, 0, s * 45); box(F, mat.goal, 0.1, 2.44, 0.1, 3.66, 0, s * 45); box(F, mat.goal, 7.42, 0.1, 0.1, 0, 2.4, s * 45); } }
 		}
 		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); mesh.castShadow = !isPhone && m !== mat.fence && m !== mat.net; mesh.receiveShadow = true; B.group.add(mesh); }
 		root.add(B.group);

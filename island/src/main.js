@@ -2,6 +2,8 @@
 // third world beside the caves and space flight, sharing the faceplate's
 // music, keyboard, play surfaces and Journey transfers.
 
+import { createBiomes } from './planet/biomes.js';
+import { scrollable } from './ui/scroll.js';
 import { planetProfile } from './planet/profile.js';
 import * as THREE from 'three';
 import { generateIsland } from './world/islandgen.js';
@@ -50,6 +52,7 @@ import { createCommercial } from './bay/commercial.js';
 import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
 import { createArcade } from './arcade.js';
+import { planIslandFields, createSportsFields } from './sportsfields.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createNatureSound } from './bay/naturesound.js';
@@ -76,6 +79,8 @@ import { createGhost } from './people/ghost.js';
 import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
+import { createVolcano } from './planet/volcano.js';
+import { createShare } from './share.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -321,7 +326,7 @@ export function createIslandWorld() {
 	tpBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
 	dom.mount.appendChild(tpBtn);
 	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));max-height:calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5;');
-	dom.mount.appendChild(tpMenu);
+	dom.mount.appendChild(scrollable(tpMenu));
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	function teleport([name, lat, lon, yaw]) {
 		fishing.drop();
@@ -349,15 +354,22 @@ export function createIslandWorld() {
 		tpMenu.style.display = 'none';
 		hint(name, 2500);
 	}
+	const tpPlaces = [];
 	for (const pl of PLACES_TP) {
 		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;');
 		b.textContent = pl[0];
 		b.onclick = (e) => { e.stopPropagation(); teleport(pl); };
 		tpMenu.appendChild(b);
+		tpPlaces.push(b);
 	}
-	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); tpMenu.style.display = tpMenu.style.display === 'none' ? 'flex' : 'none'; });
+	// share where you are, and homes to come back to (share.js): at the top of the menu
+	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
+	HOOKS.share = share;
+	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
-		const P = world?.player.state, on = !!P?.flying && !!world?.bayArea;
+		// (shown on every world, walking too: sharing and homes live in the menu)
+		const P = world?.player.state, on = !!P && !arcade.active();
 		const d = on ? 'flex' : 'none';
 		if (tpBtn.style.display !== d) tpBtn.style.display = d;
 		if (!on && tpMenu.style.display !== 'none') tpMenu.style.display = 'none';
@@ -408,6 +420,12 @@ export function createIslandWorld() {
 		shared.planet = profile;
 		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768, profile });
 		island.profileHaze = profile.air?.haze || 1;
+		// the ball fields above the village: the ground levelled under them before anything is made of it
+		const fieldPlan = planIslandFields(island);
+		// the planet's second biome and its cold side, baked where the ground and plants can read it
+		island.biomes = createBiomes(island, profile);
+		(shared.uBiome ||= { value: null }).value = island.biomes.tex;
+		shared.biHalf = island.half;
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
 		const sky = createSky(scene, shared, renderer);
@@ -428,7 +446,7 @@ export function createIslandWorld() {
 		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
 		// a planet's caves are planned first, so nothing grows in their mouths
 		const cavePlan = earth ? null : planCaves(island, profile);
-		island.noPlant = cavePlan?.holes || [];
+		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear];
 		const vegetation = createVegetation(island, shared, scene, land);
 		const village = createVillage(island, shared, scene);
 		vegetation.addContacts(village.footprints);
@@ -461,6 +479,15 @@ export function createIslandWorld() {
 		}
 		// the mushrooms this world grows, and what they do to you
 		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
+		// a volcanic world's mountain: lava tubes, spouts, the crater's lake, and its eruptions
+		if (!earth && (profile.relief === 'volcano' || island.peak?.volcanic)) {
+			world.volcano = createVolcano(island, shared, scene, camera, profile, { isPhone, renderer });
+			island.extraFloor = world.volcano.floor;
+			island.extraPush = world.volcano.push;
+		}
+		// the ball fields: the island's, and the Bay's as you come near them (their fences are walked into)
+		world.fields = createSportsFields({ scene, getWorld: () => world, isPhone, plan: fieldPlan });
+		{ const own = island.extraPush, fp = world.fields.push; island.extraPush = own ? (p, footY) => { own(p, footY); fp(p, footY); } : fp; }
 		state.seed = seed;
 		state.earth = earth;
 		state.biome = params.biome;
@@ -535,7 +562,7 @@ export function createIslandWorld() {
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
 				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -552,6 +579,7 @@ export function createIslandWorld() {
 		world.shells?.dispose();
 		world.shrooms?.dispose();
 		world.underworld?.dispose();
+		world.volcano?.dispose();
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		while (scene.children.length) scene.remove(scene.children[0]);
 		world = null;
@@ -698,6 +726,7 @@ export function createIslandWorld() {
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
 		else if (!drive.update(dt)) W.player.update(dt, time);
+		W.fields?.update(dt, camera);
 		arcade.update(dt, time, !W.boat?.boarded?.());
 		stampPrints(W.player.state);
 		W.boat.update(dt, time);
@@ -717,6 +746,7 @@ export function createIslandWorld() {
 		W.ocean.renderOrder = under ? -5 : 1;
 		W.underwater.update(dt, time, under, surf);
 		W.magma.update(dt, time, under, surf);
+		W.volcano?.update(dt, time);
 		W.caverns.update(dt, time, under);
 		W.underworld?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
@@ -813,6 +843,7 @@ export function createIslandWorld() {
 		watchDoor(dt);
 		sunGlare(dt);
 		watchTeleport();
+		share.update(dt);
 		W.street?.update(dt, time, camera, sk.night);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
@@ -996,6 +1027,8 @@ export function createIslandWorld() {
 		},
 		active: () => visible && running,
 		world: () => world,
+		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
+		openAt: (code) => share.openAt(code),
 		guide, people,
 		renderer: () => renderer, camera: () => camera, scene: () => scene, dom, shared,
 	};
@@ -1100,15 +1133,27 @@ if (typeof window !== 'undefined') {
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
 		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
 		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),
+		// a volcanic world's eruptions (planet/volcano.js): Crysis.erupt() starts one now (or
+		// from a moment in: Crysis.erupt(30)),
+		// Crysis.volcano() tells where the cycle is ({ phase, next: seconds to the next, k })
+		erupt: (at) => window.L99Island?.world?.()?.volcano?.erupt(at) || 'no volcano on this world',
+		volcano: () => window.L99Island?.world?.()?.volcano?.state() || null,
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },
 		// the hills' season: 0 spring green .. 1 summer gold
 		season: (v) => { if (v !== undefined) REAL_U.uSeason.value = Math.max(0, Math.min(1, +v)); return REAL_U.uSeason.value; },
 		bloom: (v) => { if (v !== undefined) REAL_U.uBloom.value = Math.max(0, Math.min(1, +v)); return REAL_U.uBloom.value; },
-		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },
-		clearHome: () => { localStorage.removeItem('crysis-home'); return 'Home cleared.'; },
-		goHome: () => {
+		// share where you are: Crysis.share() (a link and a line of text), Crysis.share({ silent: true, from: 'Sam' })
+		share: (opts) => HOOKS.share?.share(opts),
+		openAt: (code) => HOOKS.share?.openAt(code),
+		// homes kept in this browser: Crysis.homes.list(), .add(name), .go(i or id), .rename(id, name), .remove(id)
+		homes: { list: () => HOOKS.share?.homes(), add: (name) => HOOKS.share?.addHome(name), go: (i) => HOOKS.share?.goHome(i), rename: (id, n) => HOOKS.share?.renameHome(id, n), remove: (id) => HOOKS.share?.removeHome(id), here: () => HOOKS.share?.building(window.L99Island?.world?.()?.player.state.pos, true) },
+		// (a home set by lat/lon here still works: it joins the homes list)
+		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); HOOKS.share?.refresh(); return 'Home set. Crysis.goHome() takes you there.'; },
+		clearHome: () => { localStorage.removeItem('crysis-home'); HOOKS.share?.refresh(); return 'Home cleared.'; },
+		goHome: (i = 0) => {
+			if (HOOKS.share?.homes().length) { HOOKS.share.goHome(i); return 'Home.'; }
 			let h = null; try { h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); } catch { /* no home stored */ }
 			const w = window.L99Island?.world?.();
 			if (!h || !w?.bayArea?.loaded()) return h ? 'The Bay Area is still loading.' : 'Set it first: Crysis.setHome(lat, lon)';

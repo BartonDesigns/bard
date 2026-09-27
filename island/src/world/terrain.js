@@ -90,12 +90,21 @@ export function makeMaskTexture(island) {
 // keeping their light and shade (see planet/profile.js)
 export const PLANET_GLSL = `
 uniform vec3 uPlG, uPlS, uPlR, uPlO, uPlGlow; uniform float uPlMix, uPlSnow; uniform vec4 uHoles[4];
-float gPlGlow = 0.0;
-vec3 plK(vec3 c, vec3 ref, vec3 tgt) { float l = dot(ref, vec3(0.299, 0.587, 0.114)); return mix(c, mix(c / ref * tgt, dot(c, vec3(0.299, 0.587, 0.114)) / l * tgt, 0.8), uPlMix); }
-vec3 plG(vec3 c) { return plK(c, vec3(0.34, 0.48, 0.10), uPlG); }
-vec3 plS(vec3 c) { return plK(c, vec3(0.88, 0.78, 0.58), uPlS); }
-vec3 plR(vec3 c) { return plK(c, vec3(0.44, 0.41, 0.37), uPlR); }
-vec3 plO(vec3 c) { return plK(c, vec3(0.30, 0.24, 0.15), uPlO); }
+// the second biome (its colours, its snow), the cold side, and the baked field saying where
+uniform vec3 uPl2G, uPl2S, uPl2R, uPl2O; uniform float uPl2Mix, uPlSnow2, uPlCold, uBiHalf; uniform sampler2D uBiome;
+// an erupting volcano: (x, z, reach, strength), and its clock
+uniform vec4 uErupt; uniform float uEruptT;
+float gPlGlow = 0.0, gBioA = 0.0, gBioC = 0.0;
+void plBegin(vec2 p) { vec4 b = texture2D(uBiome, (p + uBiHalf) / (uBiHalf * 2.0)); gBioA = b.r; gBioC = b.g; }
+vec3 plK(vec3 c, vec3 ref, vec3 t1, vec3 t2) {
+	vec3 tgt = mix(t1, t2, gBioA); float k = mix(uPlMix, uPl2Mix, gBioA);
+	float l = dot(ref, vec3(0.299, 0.587, 0.114));
+	return mix(c, mix(c / ref * tgt, dot(c, vec3(0.299, 0.587, 0.114)) / l * tgt, 0.8), k);
+}
+vec3 plG(vec3 c) { return plK(c, vec3(0.34, 0.48, 0.10), uPlG, uPl2G); }
+vec3 plS(vec3 c) { return plK(c, vec3(0.88, 0.78, 0.58), uPlS, uPl2S); }
+vec3 plR(vec3 c) { return plK(c, vec3(0.44, 0.41, 0.37), uPlR, uPl2R); }
+vec3 plO(vec3 c) { return plK(c, vec3(0.30, 0.24, 0.15), uPlO, uPl2O); }
 float plH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float plN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(plH(i), plH(i + vec2(1, 0)), f.x), mix(plH(i + vec2(0, 1)), plH(i + vec2(1, 1)), f.x), f.y); }
 float plVein(vec2 p) {
@@ -110,14 +119,33 @@ float plVein(vec2 p) {
 // cave mouths: the ground opens where a tunnel comes out of the hillside
 float plHole(vec2 p) { float k = 0.0; for (int i = 0; i < 4; i++) { vec4 H = uHoles[i]; if (H.z > 0.0 && length(p - H.xy) < H.z) k = 1.0; } return k; }
 // a green world's snowline, an ice world's snow everywhere
-float plSnow(float h, float n) { float line = mix(175.0, 2.6, uPlSnow); return smoothstep(line, line + 8.0, h + (n - 0.5) * 24.0) * step(0.01, uPlSnow); }
+float plSnowAmt() { return clamp(mix(uPlSnow, uPlSnow2, gBioA) + gBioC * uPlCold, 0.0, 1.0); }
+float plSnow(float h, float n) { float amt = plSnowAmt(); float line = mix(175.0, 2.6, amt); return smoothstep(line, line + 8.0, h + (n - 0.5) * 24.0) * step(0.01, amt); }
+// molten rock pouring over a volcano's cone while it erupts: 0..1 cover, and its heat
+float plLava(vec3 w, float t) {
+	if (uErupt.w < 0.001) return 0.0;
+	float d = length(w.xz - uErupt.xy) / max(uErupt.z, 1.0);
+	float tongue = plN(w.xz * 0.012 + 3.0) * 0.5 + plN(w.xz * 0.04 - t * 0.05) * 0.25;
+	float front = uErupt.w * 1.15;
+	return smoothstep(front, front - 0.12, d + tongue * 0.35) * step(1.0, w.y);
+}
 `;
 export const HOLE_GLSL = 'void holeCut(vec2 p) { if (plHole(p) > 0.5) discard; }';
+const blankBiome = (() => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; })();
 export function planetUniforms(shared) {
 	const P = shared.planet, g = P?.ground, c = (a, d) => new THREE.Vector3(...(a || d));
 	shared.uHoles ||= { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] };
 	const glowK = { MAGMA: 1.6, TOXIC: 0.5, MYSTICAL: 0.45, SINGULARITY: 0.45 }[P?.type] || 0;
+	const A = P?.alt, ag = A?.ground || g;
+	shared.uErupt ||= { value: new THREE.Vector4() };
+	shared.uEruptT ||= { value: 0 };
+	shared.uBiome ||= { value: blankBiome };
 	return {
+		uPl2G: { value: c(ag?.grass, [0.34, 0.48, 0.10]) }, uPl2S: { value: c(ag?.sand, [0.88, 0.78, 0.58]) },
+		uPl2R: { value: c(ag?.rock, [0.44, 0.41, 0.37]) }, uPl2O: { value: c(ag?.soil, [0.30, 0.24, 0.15]) },
+		uPl2Mix: { value: A ? 1 : g?.mix || 0 }, uPlSnow2: { value: A?.snow || 0 }, uPlCold: { value: P?.cold || 0 },
+		uBiome: shared.uBiome, uBiHalf: { value: shared.biHalf || 1300 },
+		uErupt: shared.uErupt, uEruptT: shared.uEruptT,
 		uPlG: { value: c(g?.grass, [0.34, 0.48, 0.10]) }, uPlS: { value: c(g?.sand, [0.88, 0.78, 0.58]) },
 		uPlR: { value: c(g?.rock, [0.44, 0.41, 0.37]) }, uPlO: { value: c(g?.soil, [0.30, 0.24, 0.15]) },
 		uPlMix: { value: g?.mix || 0 }, uPlSnow: { value: P?.snow || 0 },
@@ -154,6 +182,7 @@ export function createTerrain(island, shared) {
 		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				holeCut(vW.xz);
+				plBegin(vW.xz);
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
 				float n1 = fbm3(vW.xz * 0.06), n2 = vn(vW.xz * 0.9), n3 = vn(vW.xz * 7.0);
@@ -267,9 +296,13 @@ export function createTerrain(island, shared) {
 				}
 				// glow in the ground: lava in the cracks, bile in the seeps, ley light in the veins
 				gPlGlow = plVein(vW.xz) * step(0.6, h);
+				// the crack itself is dark rock around the glow, never a pale stripe by day
+				col = mix(col, vec3(0.07, 0.045, 0.035), min(1.0, gPlGlow) * (1.0 - gBioA * 0.85));
 				col *= 1.0 - occ * 0.36;
 				// damp, darker soil where a plant's roots hold it
 				col *= 1.0 - oc.g * 0.1 * grassW;
+				// under an eruption's lava the ground is black crust, so the glow reads as magma
+				col = mix(col, vec3(0.08, 0.05, 0.04), plLava(vW, uEruptT));
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
@@ -291,7 +324,14 @@ export function createTerrain(island, shared) {
 					float sunG = pow(max(dot(gr, uSunDir2), 0.0), 900.0) * smoothstep(0.0, 0.15, uSunDir2.y);
 					float moonG = pow(max(dot(gr, md), 0.0), 500.0) * smoothstep(0.02, -0.15, uSunDir2.y) * 0.5;
 					totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * (sunG + moonG) * gSparkle * 10.0;
-					totalEmissiveRadiance += uPlGlow * gPlGlow * mix(1.0, 0.45, smoothstep(0.0, 0.3, uSunDir2.y));
+					totalEmissiveRadiance += uPlGlow * gPlGlow * (1.0 - gBioA * 0.85) * mix(1.0, 0.45, smoothstep(0.0, 0.3, uSunDir2.y));
+					// an eruption: flowing magma, white-yellow in its channels, crusting red at the edges
+					float lv = plLava(vW, uEruptT);
+					if (lv > 0.0) {
+						float flow = plN(vec2(vW.x * 0.08, vW.z * 0.08 + vW.y * 0.15 + uEruptT * 0.6)) * 0.6 + plN(vW.xz * 0.3 - uEruptT * 0.3) * 0.4;
+						vec3 hot = mix(vec3(0.9, 0.18, 0.02), vec3(2.6, 1.3, 0.3), smoothstep(0.45, 0.8, flow));
+						totalEmissiveRadiance += hot * lv * (0.55 + 0.45 * uErupt.w) * 2.2;
+					}
 				
 				}`)
 			.replace('#include <normal_fragment_maps>', `

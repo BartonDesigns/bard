@@ -29113,7 +29113,13 @@ root.L99CaveRail227={patch};
             document.body.appendChild(b);
         }
         b.addEventListener('click', function () { open(); });
-        if (/[?&]island=/.test(location.search)) open();
+        /* ?at=<code>: a friend's shared spot (island/src/share.js); a bad code just opens the island */
+        var at = new URLSearchParams(location.search).get('at');
+        if (at && window._ISLAND !== false) {
+            if (window.L99Shell && window.L99Shell.active) window.L99Shell.toggleCaves();
+            engine().then(function (w) { return w.openAt ? w.openAt(at) : w.open({ seed: 1337, earth: true }); })
+                .catch(function (e) { console.warn('[island] shared spot', e); open(); });
+        } else if (/[?&]island=/.test(location.search)) open();
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(addDoor, 0); });
     else setTimeout(addDoor, 0);

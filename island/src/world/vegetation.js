@@ -3,6 +3,7 @@
 // stream in around the player from a 64 m cell index. Everything sways with
 // the wind and with the music's low end.
 
+import { PLANET_GLSL, planetUniforms } from './terrain.js';
 import * as THREE from 'three';
 import { usePhoto } from './photomats.js';
 import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
@@ -604,15 +605,16 @@ float rvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 float rfbm(vec2 p){ return rvn(p) * 0.5 + rvn(p * 2.1 + 3.1) * 0.3 + rvn(p * 4.3 - 1.7) * 0.2; }
 `;
 // a planet's leaf colour, normalised to keep the foliage's brightness
-function leafOf(P) {
-	const t = P?.leaf?.tint;
-	if (!t || !P.leaf.mix) return new THREE.Vector4(1, 1, 1, 0);
+function leafOf(P, second) {
+	const t = second ? P?.alt?.leaf : P?.leaf?.tint, mix = second ? P?.alt?.leafMix : P?.leaf?.mix;
+	if (!t || !mix) return new THREE.Vector4(1, 1, 1, 0);
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
-	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.leaf.mix);
+	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, mix);
 }
 export function swayMaterial(params, shared, stiff) {
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
 	(shared.uLeafT ||= { value: new THREE.Vector4() }).value.copy(leafOf(shared.planet));
+	(shared.uLeafT2 ||= { value: new THREE.Vector4() }).value.copy(leafOf(shared.planet, true));
 	const hook = (sh) => {
 		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT;
 		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
@@ -640,12 +642,27 @@ export function swayMaterial(params, shared, stiff) {
 		hook(sh);
 		addPulse(sh);
 		// another world's leaves: whatever is green takes the planet's leaf colour
-		sh.uniforms.uLeafT = shared.uLeafT;
-		sh.fragmentShader = 'varying float vGroundAO; uniform vec4 uLeafT;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+		sh.uniforms.uLeafT = shared.uLeafT; sh.uniforms.uLeafT2 = shared.uLeafT2;
+		// where the plant stands: which biome, and how much snow lies on it
+		Object.assign(sh.uniforms, planetUniforms(shared));
+		sh.vertexShader = PLANET_GLSL + '\nvarying float vSnowK, vBioA;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+			{
+				vec3 wp = (modelMatrix * vec4(ip, 1.0)).xyz;
+				plBegin(wp.xz);
+				vBioA = gBioA;
+				vSnowK = plSnow(wp.y + max(0.0, position.y) * 0.3, 0.5);
+			}`);
+		sh.fragmentShader = 'varying float vGroundAO, vSnowK, vBioA; uniform vec4 uLeafT, uLeafT2;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 	diffuseColor.rgb *= vGroundAO;
-	if (uLeafT.a > 0.0) {
+	vec4 lt = mix(uLeafT, uLeafT2, vBioA);
+	if (lt.a > 0.0) {
 		float green = clamp((diffuseColor.g - max(diffuseColor.r, diffuseColor.b)) * 25.0, 0.0, 1.0);
-		diffuseColor.rgb = mix(diffuseColor.rgb, dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)) * uLeafT.rgb, green * uLeafT.a);
+		diffuseColor.rgb = mix(diffuseColor.rgb, dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)) * lt.rgb, green * lt.a);
+	}`).replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+	// snow settles on whatever faces the sky: crowns, branches, the tops of leaves
+	if (vSnowK > 0.01) {
+		float upF = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
+		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), vSnowK * smoothstep(-0.15, 0.45, upF) * 0.92);
 	}`);
 		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
 	};
@@ -884,7 +901,10 @@ export function createVegetation(island, shared, scene, flora = null) {
 			const n = island.normalAt(px, pz), sl = 1 - n.y;
 			const m = { path: island.maskAt(px, pz, 0), village: island.maskAt(px, pz, 1), wild: island.maskAt(px, pz, 3) };
 			// another world grows less (a desert, ash, ice) or more; its stones stay
-			if (rnd() >= Math.min(1, sp.density(eco(px, pz, h, sl, m))) * (sp.kind === 'stone' ? 1 : plantK)) continue;
+			// ...and grows as its biome here does: thicker in an oasis, thinner in snow
+			const bio = island.biomes?.at(px, pz), snowy = island.biomes?.snowAt(px, pz, h) || 0;
+			const here = sp.kind === 'stone' ? 1 : plantK * (bio ? 1 + ((shared.planet?.alt?.trees ?? 1) - 1) * bio.alt : 1) * (1 - snowy * (sp.tree ? 0.5 : 0.9));
+			if (rnd() >= Math.min(1, sp.density(eco(px, pz, h, sl, m))) * Math.min(1, here)) continue;
 			const key = Math.floor(px / CELL) + ',' + Math.floor(pz / CELL);
 			let c = cells.get(key);
 			if (!c) cells.set(key, c = { x: Math.floor(px / CELL), z: Math.floor(pz / CELL), items: {} });

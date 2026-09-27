@@ -9,6 +9,7 @@
 // way a bell sounds: a strike and a handful of inharmonic partials dying away.
 
 import { makeKit, clamp } from './kit.js';
+import { icon } from './icons.js';
 
 const BPM = 132, BEAT = 60 / BPM, LEAD = 2.2, SPEED = 260;
 // motifs, in beats from the motif's start
@@ -54,7 +55,7 @@ export const GAME = {
 			K.ball(0.04, '#8a6a2a', 0, -0.27, 0, bell);
 			// the track the rings ride in on, with the bell at its left end
 			track = K.el('position:absolute;left:0;right:0;bottom:calc(120px + env(safe-area-inset-bottom));height:64px;background:rgba(8,20,26,.55);border-top:1px solid rgba(255,255,255,.15);border-bottom:1px solid rgba(255,255,255,.15);pointer-events:none;overflow:hidden',
-				'<div style="position:absolute;left:18%;top:6px;width:52px;height:52px;margin-left:-26px;border-radius:50%;border:3px solid #ffcc33;box-shadow:0 0 12px #ffcc33aa;text-align:center;font:26px/48px system-ui">🔔</div>');
+				'<div style="position:absolute;left:18%;top:6px;width:52px;height:52px;margin-left:-26px;border-radius:50%;border:3px solid #ffcc33;box-shadow:0 0 12px #ffcc33aa;display:flex;align-items:center;justify-content:center;color:#ffcc33">' + icon('cablebell', 26) + '</div>');
 			dots = [];
 			for (let i = 0; i < 24; i++) {
 				const d = document.createElement('div');

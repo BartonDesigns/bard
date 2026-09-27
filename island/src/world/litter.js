@@ -5,7 +5,7 @@
 // shadowed like everything else, so it sits in the dirt instead of on it.
 
 import * as THREE from 'three';
-import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL } from './terrain.js';
+import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL, PLANET_GLSL, planetUniforms } from './terrain.js';
 import { mulberry32, makeNoise } from '../noise.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -89,6 +89,7 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span },
 		uOcc: shared.uOcc, uOccO: shared.uOccO,
+		...planetUniforms(shared),
 	};
 	const mat = new THREE.MeshStandardMaterial({ roughness: rough, metalness: 0, map: map || null, alphaTest: map ? 0.5 : 0, alphaToCoverage: !!map, side: map ? THREE.DoubleSide : THREE.FrontSide });
 	mat.onBeforeCompile = (sh) => {
@@ -97,6 +98,7 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 			${HEIGHT_GLSL}
 			${NOISE_GLSL}
 			${OCC_GLSL}
+			${PLANET_GLSL}
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan;
 			attribute vec2 aOff; attribute vec2 aRand;
 			varying vec3 vLTint;
@@ -113,6 +115,9 @@ function field(island, shared, { geo, count, span, seed, place, map, rough = 0.9
 				vec2 rr = aRand;
 				float s = 0.0; vec3 tint = vec3(1.0);
 				${place}
+				// buried under a planet's snow, gone down a cave mouth
+				plBegin(w);
+				s *= (1.0 - plSnow(h, 0.5) * 0.97) * (1.0 - plHole(w));
 				s *= 1.0 - smoothstep(0.75, 1.0, length(w - uCam) / (uSpan * 0.5));
 				lS = s;
 				vLTint = tint * tint;

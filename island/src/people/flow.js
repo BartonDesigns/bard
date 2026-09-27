@@ -47,3 +47,15 @@ function crowdDay(zone, h) {
 		default: return { k: clamp(0.12 + bump(h, 7.6, 1.2) * 0.5 + bump(h, 18.3, 1.6) * 0.6), wait: 0.1, chat: 0.2, jog: 0.18, what: 'neighbourhood' };
 	}
 }
+
+// children about, by the hour (0..1+): the walk to school, after school the busiest, all day
+// at weekends, few after supper, hardly any after ten
+export function kidsAbout(h, weekend = isWeekend()) {
+	if (h < 6.5 || h >= 22) return 0.02;
+	if (h >= 21) return 0.12;
+	if (h >= 19.5) return 0.4;
+	if (weekend) return h < 8 ? 0.35 : 1.25;
+	return h < 7.5 ? 0.25 : h < 8.8 ? 0.85 : h < 15 ? 0.3 : 1;
+}
+// how many of the people in a kind of place are children, at their busiest
+export const KID_SHARE = { neighbourhood: 0.26, retail: 0.2, dining: 0.15, downtown: 0.1, office: 0.03, industrial: 0, trail: 0.16, beach: 0.3, quiet: 0.12 };
