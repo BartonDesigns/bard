@@ -80,9 +80,18 @@ export function createGoldenGate(shared, scene, heightAt) {
 	// ---------- anchorages and approach piers ----------
 	for (const sg of [-1, 1]) {
 		const s = sg * END, p = W(s, 0, 0), g = heightAt(p.x, p.z);
-		box(s, 0, (g + deckY(s) + 10) / 2, 40, 45, Math.max(8, deckY(s) + 10 - g), concrete);
-		// approach viaduct piers onto the land
-		for (let k = 1; k <= 4; k++) { const s2 = s + sg * k * 45, q = W(s2, 0, 0), g2 = heightAt(q.x, q.z); if (deckY(s2) - g2 > 3) box(s2, 0, (g2 + deckY(s2)) / 2, 5, 22, deckY(s2) - g2, steel); }
+		// (the anchorage is set into the ground: where the hill stands above the deck it only
+		// shows as the deck's concrete footing, never a block standing proud of the slope)
+		const top = Math.min(deckY(s) + 10, Math.max(g + 2, deckY(s) - 2)), bot = Math.min(g, deckY(s)) - 6;
+		if (top - bot > 3) box(s, 0, (top + bot) / 2, 40, 45, top - bot, concrete);
+		// approach viaduct piers onto the land: steel bents, two braced legs under the deck edges
+		for (let k = 1; k <= 4; k++) {
+			const s2 = s + sg * k * 45, q = W(s2, 0, 0), g2 = heightAt(q.x, q.z), hgt = deckY(s2) - g2;
+			if (hgt <= 3) continue;
+			for (const off of [-9, 9]) box(s2, off, (g2 + deckY(s2)) / 2, 2.2, 2.2, hgt, steel);
+			box(s2, 0, deckY(s2) - 1.2, 1.6, 20, 1.6, steel);
+			for (let y = g2 + 8; y < deckY(s2) - 6; y += 10) box(s2, 0, y, 1, 18, 0.6, steel);
+		}
 	}
 
 	// ---------- the deck: roadway, sidewalks, rails, and the stiffening truss ----------
