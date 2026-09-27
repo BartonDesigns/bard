@@ -1074,7 +1074,7 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const t of real.near('trees', cx, cz, 2700)) {
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
 			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
-			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2 || (t.x < 12000 && bay.heightAt(t.x, t.z + 1500) < -2))) { const L = real.landAt(t.x, t.z); if (L && L.lu !== 1 && L.lu !== 7 && L.lu !== 13) { const gl = (bay.heightAt(t.x + 18, t.z) + bay.heightAt(t.x - 18, t.z) + bay.heightAt(t.x, t.z + 18) + bay.heightAt(t.x, t.z - 18) - 4 * g) / 6; if (gl < 0.35) continue; } }
+			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2 || (t.x < 12000 && bay.heightAt(t.x, t.z + 1500) < -2))) { const L = real.landAt(t.x, t.z); if (L && L.lu !== 1 && L.lu !== 7 && L.lu !== 13) { const gl = (bay.heightAt(t.x + 60, t.z) + bay.heightAt(t.x - 60, t.z) + bay.heightAt(t.x, t.z + 60) + bay.heightAt(t.x, t.z - 60) - 4 * g) / 4; if (gl < 3) continue;      // (a real draw: several metres below its sides, 60 m out) } }
 			// in the fog belt the wild and park woods are redwood forest (Muir Woods, the canyons of
 			// Mt Tam and the Santa Cruz Mountains): the mapped trees there stand as redwoods
 			const fq2 = Math.min(1, Math.max(0, (t.x - 22000) / 36000));
@@ -1127,7 +1127,8 @@ export function createCity(shared, scene, bay, real = null) {
 			// the bluffs and headlands right on the open ocean are wind-scoured: coastal scrub and
 			// grass, with trees only down in the sheltered draws (the Marin Headlands, Devil's Slide)
 			const windswept = fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
-			if (windswept && gully < 0.35 && r2 < wood * 0.8) { if (!far && r2 < 0.5) trees.push({ x, y: g, z, h: 0.9 + r2 * 1.2, shrub: true, col: tint([0.28, 0.33, 0.2]) }); continue; }
+			const draw = windswept ? (H(x + 60, z) + H(x - 60, z) + H(x, z + 60) + H(x, z - 60) - 4 * h) / 4 : 0;
+			if (windswept && draw < 3 && r2 < wood * 0.8) { if (!far && r2 < 0.5) trees.push({ x, y: g, z, h: 0.9 + r2 * 1.2, shrub: true, col: tint([0.28, 0.33, 0.2]) }); continue; }
 			if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.1 || north > 0.1 || slope < 0.3) && high < 0.5) {
 				const rh = 32 + r2 * 34 + gully * 10;
 				trees.push({ x, y: g, z, h: rh, cone: true, sp: 2, col: tint([0.12, 0.19, 0.09]) });

@@ -290,7 +290,7 @@ export function conifer(seed, far, mid, g = null) {
 	const path = [], radii = [];
 	for (const t of [0, 0.015, 0.05, 0.15, 0.35, 0.6, 0.85, 1]) { path.push(V((r() - 0.5) * 0.08 * t * H * 0.05, H * t - (t === 0 ? 0.4 : 0), (r() - 0.5) * 0.08 * t * H * 0.05)); radii.push(R0 * (1 - t * 0.92) + R0 * 1.6 * Math.exp(-t * 30)); }
 	tube(trunk, far ? [path[0], path[4], path[7]] : path, far ? [radii[0], radii[4], radii[7]] : radii, far ? 4 : mid ? 6 : 10, BK, (t) => t * 0.05);
-	const base = 0.3 + r() * 0.08, nL = far ? 7 : mid ? 12 : 22, per = far ? 2 : mid ? 3 : 5, size = far ? 3.2 : mid ? 2.2 : 1.5;
+	const base = 0.3 + r() * 0.08, nL = far ? 10 : mid ? 20 : 34, per = far ? 4 : mid ? 7 : 9, size = far ? 5 : mid ? 3.6 : 2.4;
 	for (let i = 0; i < nL; i++) {
 		const t = base + (1 - base) * (i / nL) * 0.97, y = H * t, L = H * 0.2 * Math.pow(1 - (t - base) / (1 - base), 0.8) + 0.8, a = i * 2.39996 + r() * 0.6;
 		const dir = V(Math.cos(a), 0, Math.sin(a)), o = V(path[4].x * t, y, path[4].z * t);
@@ -300,7 +300,7 @@ export function conifer(seed, far, mid, g = null) {
 		// sprays of foliage along the limb, most toward its end
 		for (let k = 0; k < per; k++) {
 			const f = 0.35 + 0.65 * (k + r() * 0.8) / per, p = o.clone().lerp(m, Math.min(1, f * 1.4)).lerp(e, Math.max(0, f * 1.4 - 1) * 0.9);
-			p.add(V((r() - 0.5) * 0.6, (r() - 0.2) * 0.5, (r() - 0.5) * 0.6));
+			p.add(V((r() - 0.5) * 1.1, (r() - 0.3) * 0.8, (r() - 0.5) * 1.1));
 			const sh = 0.45 + 0.55 * t;
 			card(crown, p, size * (0.8 + r() * 0.5) * (1 - t * 0.35), r, { r: 0.13 * sh * LT[0], g: 0.22 * sh * LT[1], b: 0.12 * sh * LT[2] }, 0.6 + 0.4 * t, o, V(dir.x * 0.5, 0.8, dir.z * 0.5).normalize());
 		}

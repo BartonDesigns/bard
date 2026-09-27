@@ -73,7 +73,9 @@ const REAL_LAND = /* glsl */`
 vec3 wildflowers(vec3 c, vec2 w, float slope){
 	if (uBloom < 0.01) return c;
 	float drift = smoothstep(0.44, 0.58, fbm3(w * 0.01 + 4.7)) * (1.0 - smoothstep(0.25, 0.5, slope)) * uBloom;
-	float kind = fbm3(w * 0.0035 + 13.1), speck = smoothstep(0.3, 0.7, vn(w * 1.7)) * 0.5 + smoothstep(0.35, 0.65, vn(w * 0.2 + 3.0)) * 0.5;
+	// (the fine speckle fades where it would alias into stripes at a distance)
+	float hiK = 1.0 - smoothstep(0.25, 0.8, length(fwidth(w * 1.7)));
+	float kind = fbm3(w * 0.0035 + 13.1), speck = mix(0.5, smoothstep(0.3, 0.7, vn(w * 1.7)), hiK) * 0.5 + smoothstep(0.35, 0.65, vn(w * 0.2 + 3.0)) * 0.5;
 	vec3 flower = kind < 0.45 ? vec3(0.9, 0.3, 0.02) : kind < 0.58 ? vec3(0.2, 0.16, 0.55) : vec3(0.85, 0.66, 0.05);
 	return mix(c, flower, drift * (0.12 + 0.5 * speck * speck));
 }
