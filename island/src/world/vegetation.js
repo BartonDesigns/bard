@@ -279,6 +279,37 @@ export function hardwood(seed, far, mid, g = null) {
 	return { parts: [trunk.geometry(), crown.geometry()], height: H };
 }
 
+// a redwood (or Douglas-fir): one straight column of fibrous red-brown bark tapering to a
+// spire, bare for its lower third, then short limbs that sweep down and turn up at their
+// tips, longest low and shortening to the top, so the crown is a narrow ragged cone; the
+// foliage in flat sprays along each limb, dark blue-green
+export function conifer(seed, far, mid, g = null) {
+	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
+	const H = g ? g.height * (0.9 + r() * 0.2) : 30, BK = g ? new THREE.Color(BARK.r * g.bark[0], BARK.g * g.bark[1], BARK.b * g.bark[2]) : BARK;
+	const LT = g ? g.leaf : [0.8, 1, 0.9], R0 = H * 0.022;
+	const path = [], radii = [];
+	for (const t of [0, 0.015, 0.05, 0.15, 0.35, 0.6, 0.85, 1]) { path.push(V((r() - 0.5) * 0.08 * t * H * 0.05, H * t - (t === 0 ? 0.4 : 0), (r() - 0.5) * 0.08 * t * H * 0.05)); radii.push(R0 * (1 - t * 0.92) + R0 * 1.6 * Math.exp(-t * 30)); }
+	tube(trunk, far ? [path[0], path[4], path[7]] : path, far ? [radii[0], radii[4], radii[7]] : radii, far ? 4 : mid ? 6 : 10, BK, (t) => t * 0.05);
+	const base = 0.3 + r() * 0.08, nL = far ? 7 : mid ? 12 : 22, per = far ? 2 : mid ? 3 : 5, size = far ? 3.2 : mid ? 2.2 : 1.5;
+	for (let i = 0; i < nL; i++) {
+		const t = base + (1 - base) * (i / nL) * 0.97, y = H * t, L = H * 0.2 * Math.pow(1 - (t - base) / (1 - base), 0.8) + 0.8, a = i * 2.39996 + r() * 0.6;
+		const dir = V(Math.cos(a), 0, Math.sin(a)), o = V(path[4].x * t, y, path[4].z * t);
+		// the limb droops, then its tip turns up
+		const m = o.clone().add(dir.clone().multiplyScalar(L * 0.55)).add(V(0, -L * 0.22, 0)), e = o.clone().add(dir.clone().multiplyScalar(L)).add(V(0, -L * 0.12, 0));
+		if (!far) tube(trunk, [o, m, e], [R0 * 0.28 * (1 - t * 0.6), R0 * 0.14, 0.02], 4, BK, (q) => 0.2 + q * 0.5);
+		// sprays of foliage along the limb, most toward its end
+		for (let k = 0; k < per; k++) {
+			const f = 0.35 + 0.65 * (k + r() * 0.8) / per, p = o.clone().lerp(m, Math.min(1, f * 1.4)).lerp(e, Math.max(0, f * 1.4 - 1) * 0.9);
+			p.add(V((r() - 0.5) * 0.6, (r() - 0.2) * 0.5, (r() - 0.5) * 0.6));
+			const sh = 0.45 + 0.55 * t;
+			card(crown, p, size * (0.8 + r() * 0.5) * (1 - t * 0.35), r, { r: 0.13 * sh * LT[0], g: 0.22 * sh * LT[1], b: 0.12 * sh * LT[2] }, 0.6 + 0.4 * t, o, V(dir.x * 0.5, 0.8, dir.z * 0.5).normalize());
+		}
+	}
+	// the leader at the very top
+	for (let k = 0; k < (far ? 1 : 3); k++) card(crown, V(0, H * (0.97 + k * 0.015), 0), size * 0.7, r, { r: 0.12 * LT[0], g: 0.2 * LT[1], b: 0.11 * LT[2] }, 1, V(0, H * 0.8, 0));
+	return { parts: [trunk.geometry(), crown.geometry()], height: H };
+}
+
 function banana(seed) {
 	// a banana grows as a clump: a swollen corm at the ground, the main stem, a few
 	// suckers coming up around it, and old leaves hanging brown down the stems

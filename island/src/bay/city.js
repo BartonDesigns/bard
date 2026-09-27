@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { hardwood, shrub, fern, swayMaterial } from '../world/vegetation.js';
+import { hardwood, conifer, shrub, fern, swayMaterial } from '../world/vegetation.js';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
@@ -451,7 +451,7 @@ export function createCity(shared, scene, bay, real = null) {
 	const SPECIES = [
 		{ height: 11, crown: 'round', bark: [1.12, 1.08, 1.0], leaf: [1.1, 1.05, 0.85] },      // plane, sycamore, elm
 		{ height: 9, crown: 'oak', bark: [0.75, 0.72, 0.7], leaf: [0.6, 0.72, 0.58] },  // coast live oak: a dark, dense dome
-		{ height: 16, crown: 'columnar', bark: [0.95, 0.66, 0.52], leaf: [0.55, 0.72, 0.6] }, // redwood, cypress
+		{ height: 36, crown: 'columnar', bark: [1.05, 0.62, 0.45], leaf: [0.55, 0.72, 0.6], conifer: true }, // redwood, Douglas-fir, cypress, pine
 	];
 	const LEAF_REF = [0.25, 0.35, 0.15];
 	// the detail levels and where they hand over (metres): each dissolves into the next
@@ -490,7 +490,8 @@ export function createCity(shared, scene, bay, real = null) {
 		return a.map((v) => v / Math.max(1, n));
 	})();
 	const treeTiers = SPECIES.map((g, k) => {
-		const nearT = hardwood(9101 + k * 17, false, false, g), midT = hardwood(9101 + k * 17, false, true, g);
+		const make = g.conifer ? conifer : hardwood;
+		const nearT = make(9101 + k * 17, false, false, g), midT = make(9101 + k * 17, false, true, g);
 		const leafGeo = midT.parts[1];
 		// (the impostor's square spans the tree's height or its width, whichever is more)
 		const bbAll = new THREE.Box3().setFromBufferAttribute(leafGeo.attributes.position).union(new THREE.Box3().setFromBufferAttribute(midT.parts[0].attributes.position));
@@ -503,7 +504,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// the far tier: one point per tree, drawn as its species' impostor
 	const atlasCv = document.createElement('canvas');
 	atlasCv.width = IMP * 3; atlasCv.height = IMP;
-	SPECIES.forEach((g, k) => atlasCv.getContext('2d').drawImage(treeImpostor(hardwood(9101 + k * 17, false, true, g).parts, texAvg), k * IMP, 0));
+	SPECIES.forEach((g, k) => atlasCv.getContext('2d').drawImage(treeImpostor((g.conifer ? conifer : hardwood)(9101 + k * 17, false, true, g).parts, texAvg), k * IMP, 0));
 	const atlas = new THREE.CanvasTexture(atlasCv);
 	atlas.colorSpace = THREE.SRGBColorSpace; atlas.generateMipmaps = true; atlas.minFilter = THREE.LinearMipmapLinearFilter;
 	const fp = { pos: new Float32Array(TCAP * 3), size: new Float32Array(TCAP), sp: new Float32Array(TCAP), tint: new Float32Array(TCAP * 3) };
