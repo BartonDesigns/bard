@@ -1073,7 +1073,11 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const t of real.near('trees', cx, cz, 2700)) {
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
 			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
-			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2)) { const L = real.landAt(t.x, t.z); if (L && (L.lu === 0 || L.lu === 2 || L.lu === 12)) { const gl = (bay.heightAt(t.x + 18, t.z) + bay.heightAt(t.x - 18, t.z) + bay.heightAt(t.x, t.z + 18) + bay.heightAt(t.x, t.z - 18) - 4 * g) / 6; if (gl < 0.35) continue; } }
+			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2 || (t.x < 12000 && bay.heightAt(t.x, t.z + 1500) < -2))) { const L = real.landAt(t.x, t.z); if (L && L.lu !== 1 && L.lu !== 7 && L.lu !== 13) { const gl = (bay.heightAt(t.x + 18, t.z) + bay.heightAt(t.x - 18, t.z) + bay.heightAt(t.x, t.z + 18) + bay.heightAt(t.x, t.z - 18) - 4 * g) / 6; if (gl < 0.35) continue; } }
+			// in the fog belt the wild and park woods are redwood forest (Muir Woods, the canyons of
+			// Mt Tam and the Santa Cruz Mountains): the mapped trees there stand as redwoods
+			const fq2 = Math.min(1, Math.max(0, (t.x - 22000) / 36000));
+			if (g > 0.5 && g < 320 && 1 - fq2 * fq2 * (3 - 2 * fq2) > 0.6 && r < 0.75) { const L = real.landAt(t.x, t.z); if (L && (L.lu === 0 || L.lu === 2 || L.lu === 12)) { trees.push({ x: t.x, y: g - 0.3, z: t.z, h: 28 + r * 30, cone: true, sp: 2, col: jit([0.12, 0.19, 0.09], r) }); continue; } }
 			if (g > 0.5) trees.push({ x: t.x, y: g - 0.3, z: t.z, h: t.h, cone: !!t.cone, col: t.cone ? jit([0.13, 0.21, 0.11], r) : t.flower ? jit([0.62, 0.2, 0.34], r) : jit(pick(PAL.crown, r), r) });   // (crape myrtles in bloom)
 		}
 	}
