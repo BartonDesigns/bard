@@ -62,7 +62,7 @@ uniforms.uUnder = shared.uUnder;
 		dz += vec3(-Q * d.x * d.y * wa * s, d.y * wa * co, -Q * d.y * d.y * wa * s);
 	}
 	// how much of a wave of length L survives a sampling step h (vertex spacing or pixel size)
-	float keep(float L, float h){ return 1.0 - smoothstep(L * 0.06, L * 0.16, h); }
+	float keep(float L, float h){ return 1.0 - smoothstep(L * 0.035, L * 0.09, h); }
 	// the slope of the spectrum at p, each wave filtered for the step h, scaled by a
 	vec2 slopes(vec2 p, float h, float a){
 		vec2 g = vec2(0.0), pb = bend(p);
@@ -127,7 +127,9 @@ uniforms.uUnder = shared.uUnder;
 				vec3 w = vec3(p.x, 0.0, p.y) + disp;
 				// on the beach the sea is the swash: a sheet that thins to nothing as it runs up
 				float swl = swashLevel(p, uTime, uWave);
-				if (ground > -0.5) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground));
+				// (the island's steep beaches only: on the Bay Area's broad flat shelves its fronts
+				// would sweep hundreds of metres of shallows in rings)
+				if (ground > -0.5 && r < 3000.0) w.y = mix(w.y, max(min(w.y, swl), min(swl, ground + max(0.0, swl - ground) * 0.35 + 0.012)), smoothstep(-0.5, -0.1, ground));
 				vW = w; vDepth = depth; vFilm = w.y - ground; vCrest = disp.y / max(0.05, amp + swellA * 0.45 + 0.15);
 				float k = 6.28318 / 16.0; vRoll = k * (dot(inward, p) - sqrt(9.8 / k) * uTime);
 				vN = normalize(cross(dz, dx));
@@ -166,6 +168,10 @@ uniforms.uUnder = shared.uUnder;
 				float kr = 6.28318 / 16.0;
 				gL += vInward * (kr * vAmp.y * cos(kr * (dot(vInward, vP0) - sqrt(9.8 / kr) * uTime)) * keep(16.0, hp));
 				// what the fine waves cannot show becomes roughness: a wider, softer sun glint
+				// at a grazing look the reflection swings from sky to horizon within a pixel or
+				// two: there the ripples are laid down, so they cannot beat into moiré
+				float graze = smoothstep(0.02, 0.22, abs(V.y));
+				gL *= mix(0.3, 1.0, graze);
 				float rough = smoothstep(0.3, 6.0, hp) * (1.0 - 0.5 * slick);
 				vec3 N = normalize(vec3(-gL.x, 1.0, -gL.y) * vec3(1.0 - 0.5 * slick, 1.0, 1.0 - 0.5 * slick));
 				float r0 = 0.5 + 0.5 * clamp((gL.x + gL.y) * 3.0, -1.0, 1.0);
@@ -202,7 +208,7 @@ uniforms.uUnder = shared.uUnder;
 				vec2 cq = vW.xz * 0.55;
 				float c1 = 1.0 - abs(vn(cq + vec2(uTime * 0.35, uTime * 0.2)) * 2.0 - 1.0);
 				float c2 = 1.0 - abs(vn(cq * 1.3 - vec2(uTime * 0.28, -uTime * 0.31)) * 2.0 - 1.0);
-				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth)) * (1.0 - 0.7 * cold);
+				float caust = pow(min(c1, c2), 6.0) * 2.4 * (1.0 - smoothstep(0.5, 9.0, vDepth)) * (1.0 - 0.7 * cold) * (1.0 - smoothstep(0.08, 0.35, hp));   // (gone where a pixel spans a caustic cell: they would alias)
 				float sunUp = clamp(uSunDir.y * 3.0, 0.0, 1.0);
 				bottom *= (0.55 + caust * sunUp) ;
 				vec3 trans = exp(-mix(vec3(0.34, 0.075, 0.052), mix(vec3(0.55, 0.3, 0.3), vec3(0.7, 0.45, 0.55), bayK), cold) * vDepth);
@@ -235,9 +241,12 @@ uniforms.uUnder = shared.uUnder;
 				col = max(vec3(0.0), mix(vec3(lum), col, mix(1.35, 0.85, cold)));
 				// foam: breakers where it shallows, wash on the sand, caps on the crests
 				float surf = smoothstep(0.25, 0.6, vDepth) * (1.0 - smoothstep(1.2, 2.2, vDepth));
-				float roll = smoothstep(0.62, 0.97, sin(vRoll + 0.6));
-				float lace = fbm3(vW.xz * 0.6 + vec2(uTime * 0.4, 0.0));
-				float breaker = roll * surf * smoothstep(0.35, 0.65, lace + 0.15);
+				// (the bands softened by how fast they pass under the pixel, and faded to their
+				// average where they would be finer than it: far off they would only alias)
+				float rw = fwidth(vRoll);
+				float roll = mix(smoothstep(0.62 - rw * 0.6, 0.97 + rw * 0.3, sin(vRoll + 0.6)), 0.12, smoothstep(0.6, 2.0, rw));
+				float lace = mix(0.5, fbm3(vW.xz * 0.6 + vec2(uTime * 0.4, 0.0)), 1.0 - smoothstep(0.3, 1.2, hp));
+				float breaker = roll * surf * smoothstep(0.35, 0.65, lace + 0.15) * (1.0 - 0.6 * smoothstep(0.4, 2.0, hp));
 				float wash = 0.0;   // the swash below draws the beach edge
 				float cap = smoothstep(0.85, 1.1, vCrest) * smoothstep(0.55, 0.75, lace) * smoothstep(6.0, 20.0, vDepth) * near * 0.5;
 				float foam = clamp(breaker + wash + cap * 0.7, 0.0, 1.0);
@@ -248,7 +257,7 @@ uniforms.uUnder = shared.uUnder;
 				// bubbly lace: small cells of foam with holes, thinning as the sheet slows
 				vec2 fq = vW.xz * 4.5 + vec2(uTime * 0.25, 0.0);
 				float cells = vn(fq) * 0.6 + vn(fq * 2.3 + 5.1) * 0.4;
-				float laceF = smoothstep(0.52, 0.72, cells) * (0.55 + 0.45 * vn(vW.xz * 0.4 + uTime * 0.1));
+				float laceF = mix(0.35, smoothstep(0.52, 0.72, cells), 1.0 - smoothstep(0.04, 0.2, hp)) * (0.55 + 0.45 * vn(vW.xz * 0.4 + uTime * 0.1));
 				col = mix(col, vec3(0.93, 0.96, 0.97) * (uAmbient * 0.8 + uSunColor * max(0.1, uSunDir.y)), front * laceF * 0.6);
 				// thin sheets are nearly clear: you see the wet sand through them, and a sheen
 				// thin water is clear: the sand shows through it, with a sheen of sky at an angle

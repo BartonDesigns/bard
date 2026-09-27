@@ -126,9 +126,10 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 			return;
 		}
 		// a venue near you: its Play button
-		scanT -= dt;
-		if (scanT < 0) {
-			scanT = 0.5;
+		// (checked twice a second of real time, however slow the frames)
+		const now = performance.now();
+		if (now > scanT) {
+			scanT = now + 500;
 			const P = getWorld()?.player.state;
 			nearSite = enabled && P && !P.flying ? SITES.find((s) => Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < s.r) || null : null;
 			if (nearSite) play.textContent = `${ICON[nearSite.G.id] || '🎲'} Play ${nearSite.G.title}`;
