@@ -13,7 +13,7 @@ import { crowd, zoneOf, ZONE } from './flow.js';
 
 const MAX = 26, NEAR = 70;
 const steps = [];
-const TRAIL = new Set(['path', 'track', 'footway']);                 // hiked, down the middle
+const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                 // hiked, down the middle
 
 export function createPeople(scene, world) {
 	const group = new THREE.Group();
@@ -73,6 +73,14 @@ export function createPeople(scene, world) {
 			const trails = real.near('roads', cam.x, cam.z, 120).some((q) => TRAIL.has(q.cls));
 			const C = crowd(ZONE.trail, hours);
 			return { n: trails ? Math.round(6 * C.k) : 0, island: false, C };
+		}
+		// a beach or a park's grounds (bay/beaches.js, bay/parkkit.js): its own crowd, the quiet
+		// beaches kept quiet
+		const bc = W.beaches?.beachAt?.(cam.x, cam.z), pk = W.parks?.parkAt?.(cam.x, cam.z);
+		if ((bc || pk) && cam.y - ground(cam.x, cam.z) < 90 && real?.loaded() && real.inside(cam.x, cam.z)) {
+			const C = crowd(bc ? (bc.quiet ? ZONE.quiet : ZONE.beach) : ZONE.trail, hours);
+			const roads = real.near('roads', cam.x, cam.z, 150).length;
+			if (roads) return { n: Math.round((bc ? (bc.quiet ? 3 : 10) : 12) * C.k), island: false, C };
 		}
 		if (!U || U.u < 0.2 || cam.y - ground(cam.x, cam.z) > 90) return { n: 0 };
 		// how busy, by what kind of place and the hour (flow.js)

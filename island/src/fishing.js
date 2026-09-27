@@ -10,6 +10,7 @@
 // snapper and trevally round the island. Every catch is kept in a log on this device.
 
 import * as THREE from 'three';
+import { PARKS } from './nature/parks.js';
 
 const SPECIES = {
 	lake: [['bluegill', 0.34, 0.1, 0.8, '#6f8a52', '#d98a2b'], ['largemouth bass', 0.24, 0.6, 6, '#56703d', '#e8e2c8'], ['redear sunfish', 0.14, 0.2, 1.2, '#7d8a4a', '#c9602a'], ['channel catfish', 0.14, 1, 8, '#6d6a62', '#d8d4c8'], ['common carp', 0.14, 2, 14, '#a88a45', '#e3cf94']],
@@ -17,6 +18,15 @@ const SPECIES = {
 	ocean: [['blue rockfish', 0.26, 0.8, 3.5, '#3d5570', '#b8c6d4'], ['barred surfperch', 0.26, 0.4, 2.5, '#9a9a82', '#e9e6d6'], ['lingcod', 0.16, 4, 30, '#6b6a4c', '#d8d0a8'], ['cabezon', 0.14, 2, 12, '#6d4a3a', '#c9a28a'], ['California halibut', 0.18, 2, 20, '#8a7a5c', '#f2efe6']],
 	island: [['red snapper', 0.3, 1, 10, '#c9443a', '#f6d8cc'], ['giant trevally', 0.18, 5, 40, '#8b9aa6', '#e8eef2'], ['parrotfish', 0.28, 1, 8, '#3aa38a', '#f0a8c8'], ['bonefish', 0.24, 2, 10, '#b8c4c8', '#f4f6f6']],
 };
+// the local catch at a real park's water, by month (nature/parks.js), when there is one:
+// a card for each kind that may come up, and the posted limits
+const LOCAL = {
+	'rainbow trout': [0.5, 4, '#7d8a6a', '#e8c4c8'], 'striped bass': [3, 25, '#7f8b95', '#eef0f0'], 'largemouth bass': [0.6, 6, '#56703d', '#e8e2c8'], 'smallmouth bass': [0.5, 4, '#7a6a3a', '#e6d8b0'],
+	'channel catfish': [1, 8, '#6d6a62', '#d8d4c8'], 'bluegill': [0.1, 0.8, '#6f8a52', '#d98a2b'], 'black crappie': [0.3, 2, '#6a6a5a', '#e8e4d4'], 'jacksmelt': [0.3, 1.2, '#7aa0a8', '#eaf2f2'],
+	'leopard shark': [6, 25, '#7b7d7a', '#e6e2da'], 'Dungeness crab': [1, 3, '#b0603a', '#e8c49a'], 'king salmon': [8, 30, '#6a7a8a', '#e8eef2'], 'surfperch': [0.4, 2.5, '#9a9a82', '#e9e6d6'], 'halibut': [2, 20, '#8a7a5c', '#f2efe6'],
+};
+const LIMITS = { 'rainbow trout': '5 a day', 'striped bass': '2 a day, 18 in minimum', 'largemouth bass': '5 a day', 'California halibut': '3 a day, 22 in minimum', 'halibut': '3 a day, 22 in minimum', 'leopard shark': '3 a day, 36 in minimum', 'Dungeness crab': '10 a day, 5\u00be in across the shell (Nov\u2013Jun)', 'surfperch': '20 a day, combined' };
+const localKey = (name) => Object.keys(LOCAL).find((k) => name.toLowerCase().includes(k.toLowerCase().split(' ').slice(-2).join(' ').toLowerCase())) || Object.keys(LOCAL).find((k) => name.toLowerCase().includes(k.toLowerCase()));
 
 // a fish drawn for the catch card: body, tail, fins, eye, its colours and markings
 function fishPicture(name, back, belly) {
@@ -124,8 +134,20 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		F.bite = 3 + Math.random() * 7;
 		bobber.visible = line.visible = true;
 	}
+	// the park whose water this is, if any, and what bites there this month
+	function localList() {
+		const W = getWorld(), m = new Date().getMonth() + 1;
+		const P = PARKS.find((q) => q.fishing?.length && Math.hypot((q.lon + 122.57) * 111320 * Math.cos(37.76 * Math.PI / 180) - F.at.x, -(q.lat - 37.76) * 110996 - F.at.z) < 900);
+		if (!P || !W) return null;
+		const now = P.fishing.filter((f) => f.months.includes(m)).map((f) => { const k = localKey(f.species); return k ? [f.species.replace(/\s*\(.*\)/, ''), 1, ...LOCAL[k]] : null; }).filter(Boolean);
+		if (!now.length) return null;
+		for (const q of now) q[1] = 1 / now.length;
+		return { list: now, park: P };
+	}
 	function strike() {
-		const list = SPECIES[F.water];
+		const loc = F.water !== 'island' ? localList() : null;
+		const list = loc && Math.random() < 0.7 ? loc.list : SPECIES[F.water];
+		F.where = loc?.park || null;
 		let u = Math.random(), sp = list[0];
 		for (const s of list) { if (u < s[1]) { sp = s; break; } u -= s[1]; }
 		const lb = +(sp[2] + Math.pow(Math.random(), 2.2) * (sp[3] - sp[2])).toFixed(1);
@@ -138,7 +160,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		const { sp, lb } = F.fish;
 		log.push({ fish: sp[0], lb, water: F.water, t: Date.now() }); save();
 		const mine = log.filter((c) => c.fish === sp[0]), best = Math.max(...mine.map((c) => c.lb));
-		card.innerHTML = `<img src="${fishPicture(sp[0], sp[4], sp[5])}" style="width:100%;max-width:260px;display:block;margin:0 auto 6px"><div style="font:700 17px system-ui">${sp[0][0].toUpperCase() + sp[0].slice(1)}</div><div style="margin:4px 0 8px;opacity:.85">${lb} lb${lb >= best && mine.length > 1 ? ' · your biggest yet!' : mine.length === 1 ? ' · your first!' : ` · best ${best} lb`}</div><div style="opacity:.6;font-size:12px">${log.length} fish caught in all · tap to close</div>`;
+		card.innerHTML = `<img src="${fishPicture(sp[0], sp[4], sp[5])}" style="width:100%;max-width:260px;display:block;margin:0 auto 6px"><div style="font:700 17px system-ui">${sp[0][0].toUpperCase() + sp[0].slice(1)}</div><div style="margin:4px 0 8px;opacity:.85">${lb} lb${lb >= best && mine.length > 1 ? ' · your biggest yet!' : mine.length === 1 ? ' · your first!' : ` · best ${best} lb`}</div>${F.where ? `<div style="opacity:.75;font-size:12px;margin-bottom:4px">${F.where.name}${LIMITS[sp[0]] ? ' · posted limit: ' + LIMITS[sp[0]] : ''}</div>` : ''}${/pier/i.test(F.where?.name || '') ? '<div style="opacity:.75;font-size:12px;margin-bottom:4px">No fishing licence needed on a public pier</div>' : ''}<div style="opacity:.6;font-size:12px">${log.length} fish caught in all · tap to close</div>`;
 		card.style.display = 'block';
 		setTimeout(() => { card.style.display = 'none'; }, 7000);
 		stop('landed');

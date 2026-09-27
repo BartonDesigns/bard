@@ -25,7 +25,16 @@ export function zoneOf(U) {
 	return ZONE.neighbourhood;
 }
 
-export function crowd(zone, h) {
+// weekends: offices near empty, parks, trails and beaches half as busy again, the dining
+// streets a little livelier (the parks & rec survey)
+const WEEKEND = { office: 0.18, industrial: 0.3, trail: 1.7, beach: 1.6, quiet: 1.4, dining: 1.2, retail: 1.25, neighbourhood: 1.2, downtown: 0.85 };
+export const isWeekend = (d = new Date()) => d.getDay() === 0 || d.getDay() === 6;
+export function crowd(zone, h, weekend = isWeekend()) {
+	const c = crowdDay(zone, h);
+	if (weekend) c.k = clamp(c.k * (WEEKEND[zone] ?? 1));
+	return c;
+}
+function crowdDay(zone, h) {
 	switch (zone) {
 		case ZONE.office: return { k: clamp(0.1 + bump(h, 8.6, 1.1) * 0.8 + bump(h, 12.4, 0.9) * 0.9 + bump(h, 17.4, 0.9) * 0.7 - (h < 6 || h > 20 ? 0.1 : 0)), wait: 0.25, chat: 0.2, jog: 0.03, what: h < 11 ? 'coffee' : h < 14 ? 'lunch' : 'commute' };
 		case ZONE.retail: return { k: clamp(bump(h, 14.5, 3.6) * 0.9 + bump(h, 19, 1.5) * 0.35), wait: 0.2, chat: 0.25, jog: 0.02, what: 'shopping' };

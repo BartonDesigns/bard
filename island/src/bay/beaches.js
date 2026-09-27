@@ -24,7 +24,7 @@ const SITES = [
 	['Poplar Beach', 37.4560, -122.4470, { lot: 10, quiet: 1 }],
 	['Martins Beach', 37.3740, -122.4060, { quiet: 1 }],
 	['Tunitas Creek Beach', 37.3580, -122.4005, { lot: 4, quiet: 1 }],
-	['San Gregorio State Beach', 37.3225, -122.4020, { lot: 22, restroom: 1, forts: 7, fires: 2, tents: 3 }],
+	['San Gregorio State Beach', 37.3225, -122.4020, { lot: 22, restroom: 1, forts: 7 }],      // (day use only: no camping, no fires)
 	['Pomponio State Beach', 37.2990, -122.4060, { lot: 8, restroom: 1, quiet: 1 }],
 	['Pescadero State Beach', 37.2665, -122.4125, { lot: 14, restroom: 1, surf: 2 }],
 	['Bean Hollow State Beach', 37.2262, -122.4095, { lot: 5, quiet: 1 }],

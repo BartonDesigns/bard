@@ -266,14 +266,29 @@ export function createLandmarks(scene, bay) {
 		// the sign by the lawn
 		box(F, mats.white, 6, 1.4, 0.3, -14, 0.9, -14); box(F, mats.dark, 0.2, 0.9, 0.2, -16.5, 0, -14); box(F, mats.dark, 0.2, 0.9, 0.2, -11.5, 0, -14);
 	}
-	{ // the Fort Baker fishing pier out into Horseshoe Bay, the bridge towering overhead
-		const A = toWorld(37.83285, -122.47535), B = toWorld(37.83175, -122.47515);
-		const L = Math.hypot(B.x - A.x, B.z - A.z), ang = Math.atan2(B.x - A.x, B.z - A.z);
-		const g = new THREE.BoxGeometry(4.2, 0.5, L).translate(0, 3, L / 2).rotateY(ang).translate(A.x, 0, A.z);
+	// the fishing piers you can walk out on: Fort Baker's in Horseshoe Bay under the bridge,
+	// Pacifica's long concrete pier into the surf (no licence needed on a public pier), and
+	// Torpedo Wharf off Crissy Field
+	const pier = (a, b, deck, width) => {
+		const A = toWorld(a[0], a[1]), B = toWorld(b[0], b[1]);
+		const L = Math.hypot(B.x - A.x, B.z - A.z), ang = Math.atan2(B.x - A.x, B.z - A.z), hw = width / 2;
+		const g = new THREE.BoxGeometry(width, 0.5, L).translate(0, deck - 0.25, L / 2).rotateY(ang).translate(A.x, 0, A.z);
 		add(mats.concrete, g.toNonIndexed());
-		for (let k = 0; k <= Math.floor(L / 8); k++) { const t = k * 8; for (const s2 of [-1.7, 1.7]) { const pg = new THREE.CylinderGeometry(0.3, 0.3, 9, 8).translate(s2, -1.5, t).rotateY(ang).translate(A.x, 0, A.z); add(mats.concrete, pg.toNonIndexed()); const rg = new THREE.BoxGeometry(0.1, 1.1, 8).translate(s2 * 1.2, 3.8, t + 4).rotateY(ang).translate(A.x, 0, A.z); add(mats.steel, rg.toNonIndexed()); } }
-		PIERS.push({ ax: A.x, az: A.z, bx: B.x, bz: B.z, y: 3.25, hw: 2.1 });
-	}
+		for (let k = 0; k <= Math.floor(L / 8); k++) {
+			const t = k * 8;
+			for (const s2 of [-hw + 0.4, hw - 0.4]) {
+				const pg = new THREE.CylinderGeometry(0.3, 0.3, deck + 8, 8).translate(s2, (deck - 8) / 2 - 0.5, t).rotateY(ang).translate(A.x, 0, A.z); add(mats.concrete, pg.toNonIndexed());
+				const rg = new THREE.BoxGeometry(0.1, 1.07, 8).translate(Math.sign(s2) * (hw - 0.05), deck + 0.53, t + 4).rotateY(ang).translate(A.x, 0, A.z); add(mats.steel, rg.toNonIndexed());
+			}
+			// lamps every 20 m, a bench every 30
+			if (k % 3 === 0) { const lg = new THREE.CylinderGeometry(0.06, 0.08, 4, 6).translate(hw - 0.3, deck + 2, t).rotateY(ang).translate(A.x, 0, A.z); add(mats.dark, lg.toNonIndexed()); }
+			if (k % 4 === 2) { const bg = new THREE.BoxGeometry(0.45, 0.45, 1.8).translate(-hw + 1.2, deck + 0.22, t).rotateY(ang).translate(A.x, 0, A.z); add(mats.wood, bg.toNonIndexed()); }
+		}
+		PIERS.push({ ax: A.x, az: A.z, bx: B.x, bz: B.z, y: deck, hw });
+	};
+	pier([37.83285, -122.47535], [37.83175, -122.47515], 3.25, 4.2);        // Fort Baker
+	pier([37.63340, -122.49400], [37.63240, -122.49810], 5.5, 4.5);         // Pacifica Pier (347 m)
+	pier([37.81030, -122.47150], [37.81170, -122.47170], 3.5, 5);           // Torpedo Wharf
 
 	// ---------------- the other bridges ----------------
 	const bridge = (a, b, deck, span, hump = null, pierMat = mats.concrete, deckMat = mats.concrete, towers = null) => {
