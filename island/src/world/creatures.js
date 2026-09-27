@@ -143,15 +143,20 @@ export function deer() {
 	const body = loft([
 		[0, 1.0, -0.62, 0.05, 0.05, 0.05], [0, 1.02, -0.55, 0.17, 0.17, 0.2], [0, 1.0, -0.2, 0.22, 0.2, 0.27], [0, 1.02, 0.2, 0.21, 0.19, 0.26], [0, 1.06, 0.45, 0.17, 0.18, 0.2], [0, 1.1, 0.56, 0.08, 0.1, 0.1],
 	], { seg: 20, sub: 5, paint });
-	const neck = tube([[0, 1.08, 0.42, 0.14], [0, 1.3, 0.6, 0.1], [0, 1.48, 0.7, 0.085]], { paint: (s, up) => mix(coat, belly, up < -0.3 ? 0.6 : 0) });
-	const head = loft([[0, 1.52, 0.66, 0.08, 0.08, 0.07], [0, 1.54, 0.76, 0.085, 0.085, 0.075], [0, 1.5, 0.9, 0.055, 0.05, 0.05], [0, 1.47, 0.98, 0.035, 0.032, 0.03], [0, 1.46, 1.0, 0.004, 0.004, 0.004]], { seg: 16, sub: 4, paint: (s) => (s > 0.9 ? dark : coat) });
-	const ear = (sx) => loft([[sx * 0.06, 1.6, 0.7, 0.02, 0.01, 0.01], [sx * 0.14, 1.68, 0.66, 0.06, 0.012, 0.012], [sx * 0.2, 1.72, 0.63, 0.004, 0.004, 0.004]], { seg: 8, sub: 3, paint: () => coat });
+	const neck = tube([[0, 1.02, 0.36, 0.17], [0, 1.14, 0.48, 0.13], [0, 1.3, 0.6, 0.1], [0, 1.46, 0.68, 0.085], [0, 1.54, 0.72, 0.08]], { seg: 16, sub: 5, paint: (s, up) => mix(coat, belly, up < -0.4 && s > 0.5 ? 0.7 : 0) });
+	const head = loft([[0, 1.55, 0.64, 0.05, 0.05, 0.05], [0, 1.57, 0.7, 0.085, 0.085, 0.075], [0, 1.57, 0.78, 0.08, 0.08, 0.07], [0, 1.53, 0.88, 0.055, 0.05, 0.05], [0, 1.5, 0.96, 0.04, 0.035, 0.035], [0, 1.49, 1.0, 0.03, 0.028, 0.026], [0, 1.485, 1.02, 0.004, 0.004, 0.004]], { seg: 18, sub: 5, paint: (s, up) => (s > 0.86 ? dark : up < -0.5 && s > 0.5 ? belly : coat) });
+	const eyes = [-1, 1].map((sx) => { const e = new THREE.SphereGeometry(0.018, 10, 8).translate(sx * 0.068, 1.6, 0.8); const n = e.attributes.position.count; e.setAttribute('color', new THREE.Float32BufferAttribute(new Array(n * 3).fill(0.01), 3)); return e; });
+	// the mule-deer ears: big, cupped, held out to the sides
+	const ear = (sx) => loft([[sx * 0.05, 1.64, 0.68, 0.02, 0.012, 0.012], [sx * 0.13, 1.72, 0.66, 0.07, 0.016, 0.012], [sx * 0.21, 1.77, 0.64, 0.055, 0.014, 0.01], [sx * 0.26, 1.79, 0.63, 0.004, 0.004, 0.004]], { seg: 10, sub: 4, paint: (s, up) => (up < 0 ? lin([0.8, 0.7, 0.62]) : coat) });
 	const tail = tube([[0, 1.02, -0.6, 0.04], [0, 0.92, -0.7, 0.05], [0, 0.8, -0.72, 0.012]], { paint: (s, up) => (up > 0 ? dark : belly) });
-	const legs = [];
-	for (const [x, z, fwd] of [[0.12, 0.4, 1], [-0.12, 0.4, 1], [0.12, -0.45, -1], [-0.12, -0.45, -1]]) {
-		legs.push(tube([[x, 0.95, z, 0.08], [x, 0.62, z - fwd * 0.04, 0.045], [x, 0.42, z + (fwd < 0 ? -0.08 : 0.02), 0.03], [x, 0.08, z, 0.025], [x, 0.0, z + 0.02, 0.03]], { paint: (s) => (s > 0.9 ? dark : coat) }));
+	// the legs as a deer stands them: the foreleg straight and slender below the knee; the
+	// hind leg a heavy thigh, the hock bent back, the long cannon bone, small dark hooves
+	const T = { seg: 14, sub: 6 }, legs = [];
+	for (const sx of [-1, 1]) {
+		legs.push(tube([[sx * 0.12, 1.02, 0.36, 0.085], [sx * 0.12, 0.8, 0.4, 0.06], [sx * 0.115, 0.56, 0.4, 0.036], [sx * 0.112, 0.5, 0.41, 0.033], [sx * 0.11, 0.26, 0.42, 0.025], [sx * 0.11, 0.07, 0.43, 0.022], [sx * 0.11, 0.0, 0.46, 0.026]], { ...T, paint: (s) => (s > 0.93 ? dark : coat) }));
+		legs.push(tube([[sx * 0.13, 1.02, -0.36, 0.12], [sx * 0.13, 0.82, -0.44, 0.09], [sx * 0.125, 0.64, -0.5, 0.05], [sx * 0.12, 0.5, -0.56, 0.035], [sx * 0.118, 0.27, -0.5, 0.026], [sx * 0.116, 0.07, -0.46, 0.022], [sx * 0.116, 0.0, -0.43, 0.026]], { ...T, paint: (s) => (s > 0.93 ? dark : coat) }));
 	}
-	return done([body, neck, head, ear(1), ear(-1), tail, ...legs]);
+	return done([body, neck, head, ...eyes, ear(1), ear(-1), tail, ...legs]);
 }
 
 // ---------- birds, wings spread in flight ----------

@@ -95,7 +95,7 @@ uniforms.uUnder = shared.uUnder;
 			${NOISE_GLSL}
 			${SWASH_GLSL}
 			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
-			varying vec2 vInward; varying vec2 vAmp; varying float vHv;
+			varying vec2 vInward; varying vec2 vAmp; varying float vHv; varying vec2 vP0;
 			#include <fog_pars_vertex>
 			void main(){
 				vec2 p = position.xz + uCenter;
@@ -123,7 +123,7 @@ uniforms.uUnder = shared.uUnder;
 				}
 				float amp = uWave * mix(0.16, 0.5, open) * nearShore;
 				train(p, inward, 16.0, amp * keep(16.0, hv), mix(1.1, 0.6, open), 1.0, disp, dx, dz);
-				vInward = inward; vAmp = vec2(swellA, amp); vHv = hv;
+				vInward = inward; vAmp = vec2(swellA, amp); vHv = hv; vP0 = p;
 				vec3 w = vec3(p.x, 0.0, p.y) + disp;
 				// on the beach the sea is the swash: a sheet that thins to nothing as it runs up
 				float swl = swashLevel(p, uTime, uWave);
@@ -139,7 +139,7 @@ uniforms.uUnder = shared.uUnder;
 			uniform sampler2D uMasks; uniform float uHalf, uMid, uHigh;
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
 			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
-			varying vec2 vInward; varying vec2 vAmp; varying float vHv;
+			varying vec2 vInward; varying vec2 vAmp; varying float vHv; varying vec2 vP0;
 			${NOISE_GLSL}
 			${WAVES}
 			#include <fog_pars_fragment>
@@ -151,17 +151,20 @@ uniforms.uUnder = shared.uUnder;
 				// the pixel's footprint on the water: waves finer than it are left out
 				// (the worse of the two screen axes: at a low angle the water is foreshortened, and a
 				// wave kept across the view aliases into moiré along it)
-				float hp = max(max(length(dFdx(vW.xz)), length(dFdy(vW.xz))) * 1.4, 0.002);
+				float hp = max(max(length(dFdx(vP0)), length(dFdy(vP0))) * 1.4, 0.002);
 				// wind streaks: long calm slicks lying along the wind, where the ripples lie down
 				vec2 sw = mat2(0.82, 0.57, -0.57, 0.82) * vW.xz;
 				float slick = smoothstep(0.58, 0.78, vn(vec2(sw.x * 0.006, sw.y * 0.045) + vec2(uTime * 0.004, 0.0)));
 				// the whole spectrum per pixel; the short wind waves lie down in the slicks and
 				// gusty patches roughen, so the sea is never one even texture
 				float gust = 0.75 + 0.5 * vn(vW.xz * 0.004 + uTime * 0.01);
-				vec2 gL = slopes(vW.xz, hp, vAmp.x * gust);
+				// (the ripples at the water's own place, not where the swell has carried it: the
+				// swell's sideways shift is only known at the mesh's vertices, far apart out there,
+				// and reading the ripples through it bends their phase into rings)
+				vec2 gL = slopes(vP0, hp, vAmp.x * gust);
 				// the rollers toward the shore
 				float kr = 6.28318 / 16.0;
-				gL += vInward * (kr * vAmp.y * cos(kr * (dot(vInward, vW.xz) - sqrt(9.8 / kr) * uTime)) * keep(16.0, hp));
+				gL += vInward * (kr * vAmp.y * cos(kr * (dot(vInward, vP0) - sqrt(9.8 / kr) * uTime)) * keep(16.0, hp));
 				// what the fine waves cannot show becomes roughness: a wider, softer sun glint
 				float rough = smoothstep(0.3, 6.0, hp) * (1.0 - 0.5 * slick);
 				vec3 N = normalize(vec3(-gL.x, 1.0, -gL.y) * vec3(1.0 - 0.5 * slick, 1.0, 1.0 - 0.5 * slick));
