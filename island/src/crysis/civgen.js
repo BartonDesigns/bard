@@ -643,7 +643,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 
 	// ---------- 4. lots, houses, driveways, pools, trees ----------
-	const boxes = [], paths = [], pools = [], trees = [], ponds = [];
+	const boxes = [], paths = [], pools = [], trees = [], ponds = [], parksOut = [];
 	const HO = 4, ON = Math.ceil(2 * Rbox / HO) + 2, occ = new Uint8Array(ON * ON);    // 4 m occupancy of the buildings and yards claimed
 	const OI = Math.floor((cx - Rbox) / HO), OJ = Math.floor((cz - Rbox) / HO);
 	const okey = (i, j) => { const a = i - OI, b = j - OJ; return a < 0 || b < 0 || a >= ON || b >= ON ? -1 : b * ON + a; };
@@ -843,6 +843,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			for (let n = 0; n < nT; n++) { const e = r() * 4, t = r() * 2 - 1, [tx, tz] = e < 2 ? at(t * (hw - 4), (e < 1 ? 1 : -1) * (hd - 4)) : at((e < 3 ? 1 : -1) * (hw - 4), t * (hd - 4)); trees.push({ x: tx, z: tz, h: treeH(), cone: r() < 0.2 ? 1 : 0 }); }
 		} else {
 			// a park: lawns, a path round it, trees, a playground and maybe a field
+			parksOut.push({ x, z, hw, hd, a: Math.atan2(uz, ux), big: hw * hd * 4 > 12000 });
 			const loop = [];
 			for (let n = 0; n <= 24; n++) { const a = n / 24 * Math.PI * 2, [px, pz] = at(Math.cos(a) * (hw - 8), Math.sin(a) * (hd - 8)); loop.push(px, pz); }
 			roads.push({ cls: 'footway', w: 1.8, name: '', pts: new Float32Array(loop), end0: false, end1: false, bridge: false, link: false, divided: false });
@@ -923,7 +924,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const b of boxes) rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255);
 	return {
 		name, gen: true, seed, style, bounds: [x0, z0, x0 + MW * step, z0 + MH * step],
-		roads, boxes, paths, pools, trees, ponds,
+		roads, boxes, paths, pools, trees, ponds, parks: parksOut,
 		map: { px, w: MW, h: MH, x0, z0, step },
 		info: { freeway: FWY.on ? { name: FWY.name, crossings: FWY.cross.length, interchanges: FWY.cross.filter((c) => c.ic).length } : null, houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },
 	};

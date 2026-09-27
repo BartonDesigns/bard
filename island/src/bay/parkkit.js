@@ -194,17 +194,27 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 		root.remove(B.group);
 		built.delete(P);
 	}
+	// the generated towns' parks, furnished as a city furnishes them
+	let genV = -1, GEN = [];
+	function genSites() {
+		const v = real?.version ? real.version() : 0;
+		if (v === genV) return GEN;
+		for (const P of GEN) if (built.has(P)) drop(P);
+		genV = v;
+		GEN = (real?.genParks ? real.genParks() : []).map((q, i) => ({ id: 'gen' + i, name: `${q.town} ${['Community Park', 'Park', 'Commons', 'Green'][i % 4]}`, x: q.x, z: q.z, agency: 'city-sanramon', kind: 'city', trails: [], note: 'A neighbourhood park: the playground, the picnic tables, the path round the lawn.', amenities: ['playground', 'playground-tot', 'picnic', 'bbq', 'bench', 'drinking-fountain', ...(q.big ? ['restroom', 'soccer', 'basketball'] : [])] }));
+		return GEN;
+	}
 	let cool = 0;
 	function update(dt, camera) {
 		cool -= dt;
 		const x = camera.position.x, z = camera.position.z;
-		for (const P of SITES) {
+		for (const P of [...SITES, ...genSites()]) {
 			const d = Math.hypot(P.x - x, P.z - z);
 			if (!built.has(P) && d < 1600 && camera.position.y < 1500 && cool <= 0 && bay.loaded()) { try { build(P); } catch (e) { console.warn('park', P.name, e); built.set(P, { P, group: new THREE.Group() }); } cool = 0.5; }
 			else if (built.has(P) && d > 2600) drop(P);
 		}
 	}
 	// the park you are in, for a note
-	const parkAt = (x, z) => SITES.find((P) => Math.hypot(P.x - x, P.z - z) < 300) || null;
+	const parkAt = (x, z) => SITES.find((P) => Math.hypot(P.x - x, P.z - z) < 300) || GEN.find((P) => Math.hypot(P.x - x, P.z - z) < 120) || null;
 	return { group: root, update, parkAt, count: () => built.size };
 }
