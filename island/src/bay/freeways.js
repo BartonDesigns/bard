@@ -210,11 +210,15 @@ export function createFreeways(scene, bay, real, { isPhone = false } = {}) {
 				}
 				return { need, over };
 			});
+			// a "bridge" with no road under it (a culvert, a gully, the cut at Vista Point) is laid
+			// on the ground it crosses: no deck on stilts across open ground
+			const grounded = !below.some((q) => q.over);
 			// the deck: from the ground at its ends, lifted over what it crosses, ramped at 6%
 			const y0 = H(path[0].x, path[0].z), y1 = H(path[n - 1].x, path[n - 1].z);
 			let L = 0;
 			const s = path.map((p, i) => (i ? (L += Math.hypot(p.x - path[i - 1].x, p.z - path[i - 1].z)) : 0));
 			const ys = path.map((p, i) => {
+				if (grounded) return H(p.x, p.z) + 0.25;
 				let y = y0 + (y1 - y0) * s[i] / (L || 1);
 				for (let j = 0; j < n; j++) if (below[j].over) y = Math.max(y, below[j].need - Math.abs(s[i] - s[j]) * 0.06);
 				return Math.max(y, H(p.x, p.z) + 0.25);

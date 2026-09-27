@@ -101,7 +101,7 @@ function underwaterAudio(target, dt) {
 			out.disconnect(ctx.destination);
 			out.connect(lp); lp.connect(ctx.destination);
 			muffle.lp = lp; muffle.ctx = ctx;
-		} catch (e) { return; }
+		} catch { return; }
 	}
 	const k = muffle.k += (target - muffle.k) * Math.min(1, dt * 3);
 	muffle.lp.frequency.setTargetAtTime(20000 * Math.pow(420 / 20000, k), ctx.currentTime, 0.05);
@@ -278,7 +278,8 @@ export function createIslandWorld() {
 	guideApi.people = people;
 	// and, very rarely, in the woods after dark, someone who is not one of them
 	const ghost = createGhost(scene, { world: () => world, mount: dom.mount, canvas: dom.canvas, hush: (k) => world?.natureSound?.hush?.(k) });
-	HOOKS.ghost = () => ghost.summon(camera);
+	HOOKS.ghost = (at) => ghost.summon(camera, at);
+	HOOKS.ghostInfo = () => ghost.inspect();
 	// walk up to someone and talk: a button with their name, or Enter
 	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom));display:none;');
 	dom.mount.appendChild(talkBtn);
@@ -306,7 +307,12 @@ export function createIslandWorld() {
 		const W = world, P = W?.player.state;
 		if (!P) return;
 		let x, z;
-		if (lat === null) { x = W.island.village.coast.x; z = W.island.village.coast.z; }
+		if (lat === null) {
+			// the village: in among the houses, walked inland until on dry ground (not under the pier)
+			const v = W.island.village, sd = v.seaDir || { x: 0, z: 0 };
+			x = v.x; z = v.z;
+			for (let k = 0; k < 40 && W.island.heightAt(x, z) < 1.2; k++) { x -= sd.x * 3; z -= sd.z * 3; }
+		}
 		else if (lat === 'town') {
 			const towns = (W.bayArea?.towns || []).filter((t) => W.bayArea.heightAt(t.x, t.z) > 5 && !W.real?.inside(t.x, t.z));
 			const t = towns[Math.floor(Math.random() * towns.length)];
@@ -622,9 +628,19 @@ export function createIslandWorld() {
 		for (const o of W.caverns.group.children) if (!o.isLight) o.visible = band < 3;
 		for (const o of W.village.group.children) if (o !== W.village.boat) o.visible = band < 3;
 	}
+	// one part of the world failing must not stop the rest: the frame goes on, and each
+	// distinct error is reported once
+	const seenErr = new Set();
 	function frame(now) {
 		if (!running) return;
 		requestAnimationFrame(frame);
+		try { tick(now); } catch (err) {
+			const key = String(err?.message || err);
+			if (!seenErr.has(key)) { seenErr.add(key); console.error('[frame]', err); }
+			try { renderer.render(scene, camera); } catch { /* nothing more to do this frame */ }
+		}
+	}
+	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
 		if (!visible || !world || document.hidden) return;
@@ -1002,7 +1018,8 @@ if (typeof window !== 'undefined') {
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
 		// the child in the woods (people/ghost.js): very rare; this calls her now
-		ghost: () => HOOKS.ghost?.(),
+		ghost: (at) => HOOKS.ghost?.(at),
+		ghostInfo: () => HOOKS.ghostInfo?.(),
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },
@@ -1012,7 +1029,7 @@ if (typeof window !== 'undefined') {
 		setHome: (lat, lon, name = 'Home') => { localStorage.setItem('crysis-home', JSON.stringify({ lat: +lat, lon: +lon, name })); return 'Home set. Crysis.goHome() takes you there.'; },
 		clearHome: () => { localStorage.removeItem('crysis-home'); return 'Home cleared.'; },
 		goHome: () => {
-			let h = null; try { h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); } catch (e) { /* no home stored */ }
+			let h = null; try { h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); } catch { /* no home stored */ }
 			const w = window.L99Island?.world?.();
 			if (!h || !w?.bayArea?.loaded()) return h ? 'The Bay Area is still loading.' : 'Set it first: Crysis.setHome(lat, lon)';
 			const p = toWorld(h.lat, h.lon), P = w.player.state;

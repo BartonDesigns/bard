@@ -20,12 +20,12 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 	// ---------- the look of her ----------
 	const rimU = { value: 0 }, fadeU = { value: 0 };
 	function ghostMat(base, glow) {
-		const m = new THREE.MeshStandardMaterial({ color: base, emissive: glow, emissiveIntensity: 0.35, roughness: 1, transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0 });
+		const m = new THREE.MeshStandardMaterial({ color: base, emissive: glow, emissiveIntensity: 1.1, roughness: 1, transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 1 });
 		m.onBeforeCompile = (sh) => {
 			sh.uniforms.uRim = rimU; sh.uniforms.uFade = fadeU;
 			sh.fragmentShader = 'uniform float uRim;\nuniform float uFade;\n' + sh.fragmentShader
-				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\tfloat rim = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.2);\n\ttotalEmissiveRadiance += vec3(0.55, 0.72, 0.9) * rim * uRim;')
-				.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a *= uFade * (0.28 + rim * 0.62);');
+				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\tfloat rim = pow(1.0 - abs(dot(normalize(normal), normalize(vViewPosition))), 2.2);\n\ttotalEmissiveRadiance += vec3(0.6, 0.78, 1.0) * rim * uRim * 1.8;')
+				.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a *= uFade * (0.45 + rim * 0.5);');
 		};
 		m.customProgramCacheKey = () => 'ghost-child';
 		return m;
@@ -57,12 +57,12 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 	const veil = document.createElement('div');
 	veil.style.cssText = 'position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:multiply;background:radial-gradient(ellipse at 50% 50%, rgba(255,255,255,1) 30%, rgba(90,100,110,1) 72%, rgba(0,0,0,1) 100%)';
 	const grain = document.createElement('canvas');
-	grain.width = grain.height = 128;
-	grain.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;image-rendering:pixelated;mix-blend-mode:overlay';
+	grain.width = 320; grain.height = 200;
+	grain.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;mix-blend-mode:overlay';
 	// just over the picture, under the buttons and notes
 	(canvas.parentNode || mount).insertBefore(grain, canvas.nextSibling);
 	(canvas.parentNode || mount).insertBefore(veil, canvas.nextSibling);
-	const gctx = grain.getContext('2d'), gimg = gctx.createImageData(128, 128);
+	const gctx = grain.getContext('2d'), gimg = gctx.createImageData(320, 200);
 	let grainT = 0;
 	function drawGrain() {
 		const px = gimg.data;
@@ -119,17 +119,19 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 		if (U && U.u > 0.15) return false;
 		return W.city.treesNear(cam.x, cam.z, 35).filter((t) => !t.shrub && !t.fern).length >= 8;
 	}
-	async function appear(cam, yaw) {
+	async function appear(cam, yaw, at = null) {
 		const g = await make();
 		// ahead, off to one side, far enough to be unsure what you are seeing
-		const a = yaw + (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.5), d = 26 + Math.random() * 10;
+		const a = at ? yaw + 0.08 : yaw + (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.5), d = at || 26 + Math.random() * 10;
 		const x = cam.x - Math.sin(a) * d, z = cam.z - Math.cos(a) * d;
 		g.M.place(x, ground(x, z), z, Math.atan2(cam.x - x, cam.z - z));
 		g.M.setPose('rest');
 		if (!g.P.root.parent) scene.add(g.P.root);
 		g.P.root.visible = true;
-		state = { t: 0, phase: 'watch', watch: 4 + Math.random() * 4, fade: 0, gone: 0, flick: 0 };
+		// (called up on purpose, Crysis.ghost(metres), she is there at once and waits)
+		state = { t: 0, phase: 'watch', watch: at ? 1e9 : 4 + Math.random() * 4, fade: at ? 1 : 0, gone: 0, flick: 0, called: !!at };
 		note = 0; noteT = 1.5;
+		return `at ${x.toFixed(1)},${z.toFixed(1)} ${d.toFixed(0)} m, ground ${ground(x, z).toFixed(1)}`;
 	}
 	function vanish() { if (state) { state.phase = 'gone'; state.gone = 0; } }
 	function end() {
@@ -175,8 +177,8 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 			if (state.gone > 0.6) { end(); return; }
 		}
 		// too long, or you left: she is simply not there any more
-		if (state.phase !== 'gone' && (state.t > 90 || d > 70 || night < 0.5 || world().player?.state?.flying)) vanish();
-		M.update(dt, t, camera);
+		if (state.phase !== 'gone' && (state.t > 90 || d > 70 || (night < 0.5 && !state.called) || world().player?.state?.flying)) vanish();
+		M.update(dt, t, cam);
 		// the light of her: fading in, guttering, gone in a flicker
 		state.fade = Math.min(1, state.fade + dt / 3);
 		state.flick -= dt;
@@ -195,5 +197,16 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 			if (noteT < 0 && k > 0.15 && state.phase !== 'gone') { noteT = 0.55 + note * 0.06; musicBox(0.02 + k * 0.03); }
 		}
 	}
-	return { update, summon: (camera) => { cool = 0; camera.getWorldDirection(fwd); return appear(camera.position, Math.atan2(-fwd.x, -fwd.z)); }, active: () => !!state };
+	// for looking into her: where she is and what she is made of
+	function inspect() {
+		if (!G) return 'not made';
+		const P = G.P, w = new THREE.Vector3(), out = [];
+		P.root.getWorldPosition(w);
+		out.push(`root ${w.x.toFixed(1)},${w.y.toFixed(1)},${w.z.toFixed(1)} vis ${P.root.visible} parent ${!!P.root.parent} inScene ${!!P.root.parent?.isScene}`);
+		const b = P.bones[0]; b.getWorldPosition(w); out.push(`bone0 ${w.x.toFixed(1)},${w.y.toFixed(1)},${w.z.toFixed(1)}`);
+		P.root.traverse((o) => { if (o.isMesh) out.push(`${o.type} ${o.material.type} op ${o.material.opacity} tr ${o.material.transparent} v ${o.visible}`); });
+		out.push(`fade ${fadeU.value.toFixed(2)} state ${state?.phase}`);
+		return out.join(' | ');
+	}
+	return { update, summon: (camera, at) => { cool = 0; camera.getWorldDirection(fwd); return appear(camera.position, Math.atan2(-fwd.x, -fwd.z), at); }, active: () => !!state, inspect };
 }

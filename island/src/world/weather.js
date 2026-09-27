@@ -202,7 +202,7 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 			const cover = THREE.MathUtils.clamp(0.15 + u * 0.9, 0.05, 0.95);
 			const show = THREE.MathUtils.smoothstep(u, 0.55, 0.8), storm = THREE.MathUtils.smoothstep(u, 0.8, 0.92);
 			tgt = [cover, show, 0.25 + u * 0.8, storm];
-		} else tgt = MODES[S.mode];
+		} else tgt = MODES[S.mode] || MODES.fair;
 		const k = dt * 0.05;
 		S.cover = ease(S.cover, S.pin.cover ?? tgt[0], k);
 		S.showerRate = ease(S.showerRate, tgt[1], k);
@@ -316,7 +316,14 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 		stepBirds(dt, cam, windV, groundAt);
 		return S;
 	}
-	const set = (mode) => { S.mode = mode; if (mode === 'auto') S.pin = {}; };
+	// what people call the weather, to the modes there are (anything else leaves it as it is)
+	const ALIAS = { rain: 'showers', rainy: 'showers', shower: 'showers', drizzle: 'showers', thunder: 'storm', thunderstorm: 'storm', stormy: 'storm', sunny: 'clear', cloudy: 'fair', overcast: 'fair' };
+	const set = (mode) => {
+		const m = ALIAS[mode] || mode;
+		if (m !== 'auto' && !MODES[m]) { console.warn('[weather] no such mode', mode); return S.mode; }
+		S.mode = m; if (m === 'auto') S.pin = {};
+		return m;
+	};
 	const pin = (k, v) => { if (v === null) delete S.pin[k]; else S.pin[k] = v; };
 	return { update, uniforms: U, state: S, set, pin, windV };
 }
