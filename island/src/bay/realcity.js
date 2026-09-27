@@ -29,7 +29,7 @@ const ROCKS = [
 	[37.9290, -122.5780, 2200, 0x6e6a5c],      // Mt Tam: greenstone and serpentine
 ].map(([lat, lon, r, c]) => ({ ...toWorld(lat, lon), r, c }));
 export const GREENS = [
-	[37.7694, -122.4830, 2600, 330],           // Golden Gate Park
+	[37.7694, -122.4830, 2600, 450],           // Golden Gate Park
 	[37.7360, -122.4870, 700, 300],            // Stern Grove and Pine Lake
 	[37.7960, -122.4050, 150, 130],            // (a placeholder kept small: Portsmouth Square)
 	[37.8070, -122.4330, 350, 110],            // the Marina Green
