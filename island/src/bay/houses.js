@@ -13,6 +13,7 @@ import { Builder, houseMaterials, drawItem, lin } from './housekit.js';
 import { occasions } from '../calendar.js';
 import { carGeometry, carMaterial } from './cars.js';
 import { NONE_IN } from '../world/lodfade.js';
+import { inCampus } from './discovery.js';
 
 const FLOOR = { living: 'wood', dining: 'wood', family: 'wood', office: 'wood', entry: 'tile', hall: 'wood', loft: 'carpet', kitchen: 'tile', bath: 'tile', mbath: 'tile', powder: 'tile', laundry: 'tile', bed: 'carpet', master: 'carpet', closet: 'carpet', garage: 'concrete' };
 const PAINTS = [[0.93, 0.91, 0.86], [0.9, 0.88, 0.82], [0.87, 0.85, 0.79], [0.94, 0.93, 0.9], [0.86, 0.84, 0.8]];
@@ -467,7 +468,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			const seen = new Set();
 			cands = [];
 			for (const b of real.near('boxes', x, z, BUILD_R + 25)) {
-				if (!b.grp || b.grp.biz || seen.has(b.grp)) continue;
+				if (!b.grp || b.grp.biz || seen.has(b.grp) || inCampus(b.x, b.z)) continue;
 				seen.add(b.grp);
 				const Mb = mainOf(b.grp);
 				if (!Mb) continue;

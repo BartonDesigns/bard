@@ -253,19 +253,7 @@ export function createLandmarks(scene, bay) {
 	}
 
 	// ---------------- Fort Baker: the Bay Area Discovery Museum ----------------
-	{ // Lookout Cove, the museum's outdoor playground: a little Golden Gate Bridge to climb, a
-		// shipwreck, tide pools and a cave (the museum's own old army buildings are mapped)
-		const F = at(37.83395, -122.47655, 150);
-		const orange = mats.orange;
-		for (const z of [-11, 11]) { box(F, orange, 0.8, 7, 0.8, -1.4, 0, z); box(F, orange, 0.8, 7, 0.8, 1.4, 0, z); box(F, orange, 3.6, 0.5, 0.8, 0, 3.5, z); box(F, orange, 3.6, 0.5, 0.8, 0, 6.6, z); }
-		box(F, orange, 2.6, 0.35, 34, 0, 2.2, 0);
-		for (const x of [-1.4, 1.4]) for (let k = 0; k < 16; k++) { const z = -16 + k * 2.13, y = 2.4 + 4.4 * ((Math.abs(z) - 11) / 11) ** 2 * (Math.abs(z) < 11 ? 1 : 0.4); box(F, orange, 0.08, Math.max(0.2, y - 2.4), 0.08, x, 2.4, z); }
-		// the wreck, half buried in the sand
-		box(F, mats.wood, 4, 1.4, 11, 9, -0.3, 4, 0.3); box(F, mats.wood, 0.3, 5, 0.3, 9, 0, 4);
-		put(F, mats.tan, new THREE.CircleGeometry(15, 28).rotateX(-Math.PI / 2).translate(5, 0.15, 0));
-		// the sign by the lawn
-		box(F, mats.white, 6, 1.4, 0.3, -14, 0.9, -14); box(F, mats.dark, 0.2, 0.9, 0.2, -16.5, 0, -14); box(F, mats.dark, 0.2, 0.9, 0.2, -11.5, 0, -14);
-	}
+	// (Lookout Cove and the museum itself: bay/discovery.js)
 	// the fishing piers you can walk out on: Fort Baker's in Horseshoe Bay under the bridge,
 	// Pacifica's long concrete pier into the surf (no licence needed on a public pier), and
 	// Torpedo Wharf off Crissy Field

@@ -1,0 +1,266 @@
+// The Bay Area Discovery Museum, at Fort Baker under the north end of the Golden Gate: a
+// children's museum in the old army post's buildings round a courtyard east of the parade
+// ground, each built on its real footprint (Overture Maps) as the fort built them in 1905:
+// white clapboard, two storeys, a red-brown hip roof, a deep two-level porch along the front
+// on slim white posts with railings, tall six-over-six windows in white frames, grey-green
+// doors. The museum's sign at the courtyard gate, in its bright colours; stroller parking.
+// Inside the main hall, walk-in exhibit rooms: Tot Wetlands (a shallow blue pond, reeds, a
+// boardwalk bridge, soft ducks and fish), the Art Studio (easels, paint tables, splashes),
+// Discovery Hall (a climbing net and slide), a reading nook; the café in the next building.
+// Out east, Lookout Cove, the outdoor playground by the water: a little Golden Gate Bridge to
+// climb, a shipwreck and a fishing boat to play in, a sea cave, tide pools, a net climber,
+// and the real bridge towering over it all.
+// Families by the hour: open 9 to 5, closed Mondays, busiest on weekday mornings and at the
+// weekend. Built when you come near; the fort's mapped blocks give way to it.
+
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { toWorld } from './geo.js';
+
+export const CAMPUS = { ...toWorld(37.83560, -122.47660), r: 72 };
+export const inCampus = (x, z) => Math.hypot(x - CAMPUS.x, z - CAMPUS.z) < CAMPUS.r;
+const COVE = toWorld(37.83545, -122.47515);
+const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+
+function clapboard() {
+	const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+	const g = cv.getContext('2d');
+	g.fillStyle = '#f1efe8'; g.fillRect(0, 0, 256, 256);
+	for (let y = 0; y < 256; y += 16) { g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, y + 13, 256, 3); g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(0, y, 256, 2); }
+	const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+	return t;
+}
+function museumSign() {
+	const cv = document.createElement('canvas'); cv.width = 768; cv.height = 256;
+	const g = cv.getContext('2d');
+	g.fillStyle = '#ffffff'; g.fillRect(0, 0, 768, 256);
+	g.strokeStyle = '#1d4e89'; g.lineWidth = 10; g.strokeRect(8, 8, 752, 240);
+	const cols = ['#e8452c', '#f5a623', '#3fae49', '#1d8fd1', '#8e44ad', '#e8452c', '#f5a623'];
+	g.font = 'bold 78px "Trebuchet MS", sans-serif'; g.textBaseline = 'middle';
+	const word = 'DISCOVERY'; let x = 384 - g.measureText(word).width / 2;
+	for (let i = 0; i < word.length; i++) { g.fillStyle = cols[i % cols.length]; g.fillText(word[i], x, 118); x += g.measureText(word[i]).width; }
+	g.fillStyle = '#1d4e89'; g.textAlign = 'center';
+	g.font = 'bold 34px "Trebuchet MS", sans-serif'; g.fillText('BAY AREA', 384, 52);
+	g.font = 'bold 40px "Trebuchet MS", sans-serif'; g.fillText('MUSEUM', 384, 190);
+	g.font = '22px "Trebuchet MS", sans-serif'; g.fillText('Open Tuesday – Sunday · 9 am – 5 pm', 384, 232);
+	const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+	return t;
+}
+
+export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
+	const root = new THREE.Group();
+	root.name = 'discovery-museum';
+	scene.add(root);
+	const M = (c, rough = 0.75, extra = {}) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: rough, ...extra });
+	const siding = clapboard();
+	const mat = {
+		wall: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8 }), inWall: M('#f6f1e4', 0.9, { emissive: new THREE.Color('#6b665c') }), trim: M('#f7f6f2', 0.6), roof: M('#8a3b2c', 0.8), door: M('#4f6b5a', 0.6), glass: M('#6f8796', 0.1, { metalness: 0.55 }),
+		porch: M('#7a7064', 0.85), floor: M('#b98f5f', 0.6), rubber: M('#3a8fbf', 0.95), pond: M('#3aa0d8', 0.1, { metalness: 0.2 }), reed: M('#5f8a3a', 0.8), wood: M('#8a6440', 0.8), plush: M('#f5c518', 0.7), plush2: M('#e8452c', 0.7),
+		easel: M('#c9a67a', 0.7), paint: [M('#e8452c', 0.4), M('#f5a623', 0.4), M('#3fae49', 0.4), M('#1d8fd1', 0.4), M('#8e44ad', 0.4)], net: M('#2a2a2a', 0.6), slide: M('#f5a623', 0.35), book: M('#1d8fd1', 0.6),
+		orange: M('#c0362c', 0.55, { metalness: 0.25 }), sand: M('#d9c7a0', 0.95), rock: M('#6d655a', 0.95, { flatShading: true }), boat: M('#f2efe8', 0.6), boatHull: M('#1d4e89', 0.6), counter: M('#6b4a2e', 0.6), steel: M('#9aa0a4', 0.4, { metalness: 0.6 }),
+		cloth: [M('#2c3e50'), M('#e8452c'), M('#1d8fd1'), M('#3fae49'), M('#f5a623'), M('#8e44ad'), M('#eeeeee')], skin: [M('#e0b494'), M('#c68e6a'), M('#8d5a3b'), M('#f0cfb0')],
+		signFace: new THREE.MeshStandardMaterial({ map: museumSign(), roughness: 0.6 }),
+	};
+	let built = null;
+	const g = (x, z) => bay.heightAt(x, z);
+
+	function build() {
+		const B = { group: new THREE.Group(), col: [], floors: [], people: new THREE.Group() };
+		const parts = new Map(), add = (m, geo) => { if (!parts.has(m)) parts.set(m, []); parts.get(m).push(geo.index ? geo.toNonIndexed() : geo); };
+		// a box in a building's frame; solid ones go in the collision list (world space, oriented)
+		const boxIn = (Fr, m, w, h, d, x = 0, y = 0, z = 0, solid = false) => {
+			const geo = new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z); geo.applyMatrix4(Fr.m); add(m, geo);
+			if (solid) B.col.push({ F: Fr, x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, y0: Fr.y + y, y1: Fr.y + y + h });
+		};
+		const frameAt = (x, z, a, y) => ({ x, z, a, y, m: new THREE.Matrix4().makeRotationY(-a).setPosition(x, y, z) });
+		// the fort's buildings on their real footprints
+		const boxes = (real?.near ? real.near('boxes', CAMPUS.x, CAMPUS.z, CAMPUS.r + 30) : []).filter((b) => inCampus(b.x, b.z) && b.w * b.d > 120).sort((a, b) => b.w * b.d - a.w * a.d);
+		boxes.forEach((b, bi) => {
+			let y0 = -1e9;
+			for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const ca = Math.cos(b.a), sa = Math.sin(b.a); y0 = Math.max(y0, g(b.x + ca * sx * b.w / 2 - sa * sz * b.d / 2, b.z + sa * sx * b.w / 2 + ca * sz * b.d / 2)); }
+			y0 += 0.5;
+			const F = frameAt(b.x, b.z, b.a, y0), W = b.w, D = Math.max(9, b.d - 3), H = bi < 3 ? 7.4 : 4.2, hw = W / 2, hd = D / 2, zc = -1.5;
+			const main = bi === 0, cafe = bi === 1;
+			// foundation and floor
+			boxIn(F, mat.porch, W + 0.4, 1.2, D + 0.4, 0, -1.2, zc);
+			boxIn(F, mat.floor, W - 0.4, 0.05, D - 0.4, 0, 0, zc);
+			if (main || cafe) B.floors.push({ F, x0: -hw, x1: hw, z0: zc - hd, z1: zc + hd, y: y0 });
+			// the walls: clapboard outside, plaster in; the front has doors at its middle and ends
+			const T = 0.25, doors = [-hw * 0.6, 0, hw * 0.6];
+			for (const [side, len, along] of [[-1, W, 'x'], [1, W, 'x'], [-1, D, 'z'], [1, D, 'z']]) {
+				// plaster lines the inside of the walls where you can walk in
+				const lin = (w, h, d, x, y, z) => { if (main || cafe) boxIn(F, mat.inWall, w, h, d, x, y, z); };
+				if (along === 'z') { boxIn(F, mat.wall, T, H, D, side * (hw - T / 2), 0, zc, true); lin(0.04, H - 0.1, D - 0.6, side * (hw - T - 0.02), 0, zc); continue; }
+				const zz = zc + side * (hd - T / 2), zin = zz - side * (T / 2 + 0.02);
+				if (side > 0 && (main || cafe)) {
+					// the front: wall pieces between the door openings
+					let a0 = -hw;
+					for (const dx of doors) { if (dx - 0.9 - a0 > 0.1) { boxIn(F, mat.wall, dx - 0.9 - a0, H, T, (a0 + dx - 0.9) / 2, 0, zz, true); lin(dx - 0.9 - a0, H - 0.1, 0.04, (a0 + dx - 0.9) / 2, 0, zin); } boxIn(F, mat.wall, 1.8, H - 2.4, T, dx, 2.4, zz); lin(1.8, H - 2.5, 0.04, dx, 2.4, zin); boxIn(F, mat.door, 0.1, 2.4, 0.3, dx - 0.95, 0, zz); boxIn(F, mat.door, 0.1, 2.4, 0.3, dx + 0.95, 0, zz); a0 = dx + 0.9; }
+					boxIn(F, mat.wall, hw - a0, H, T, (a0 + hw) / 2, 0, zz, true); lin(hw - a0, H - 0.1, 0.04, (a0 + hw) / 2, 0, zin);
+				} else { boxIn(F, mat.wall, len, H, T, 0, 0, zz, true); lin(len - 0.6, H - 0.1, 0.04, 0, 0, zin); }
+				// windows: tall, white-framed, both storeys
+				for (let k = -hw + 2; k < hw - 1.5; k += 2.6) for (const wy of H > 5 ? [1.0, 4.6] : [1.0]) {
+					if (side > 0 && (main || cafe) && doors.some((dx) => Math.abs(dx - k) < 1.6) && wy < 2) continue;
+					boxIn(F, mat.glass, 1.0, 1.7, 0.06, k, wy, zz + side * (T / 2 + 0.01)); boxIn(F, mat.trim, 1.2, 0.12, 0.1, k, wy - 0.06, zz + side * (T / 2 + 0.04)); boxIn(F, mat.trim, 1.2, 0.12, 0.1, k, wy + 1.72, zz + side * (T / 2 + 0.04));
+				}
+			}
+			// the upper floor and the ceiling (inside, the ground floor is one open hall)
+			boxIn(F, mat.inWall, W - 0.4, 0.2, D - 0.4, 0, Math.min(3.6, H - 0.3), zc);
+			// the hip roof
+			{ const rg = new THREE.ConeGeometry(1, 1, 4, 1).rotateY(Math.PI / 4); rg.scale(W * 0.76, H > 5 ? 3.4 : 2.4, D * 0.76); rg.translate(0, H + (H > 5 ? 1.7 : 1.2), zc); rg.applyMatrix4(F.m); add(mat.roof, rg); }
+			// the porch: a deck along the front on white posts, a balcony above with railings
+			const pd = 2.6, pz = zc + hd + pd / 2;
+			boxIn(F, mat.porch, W, 0.25, pd, 0, -0.25, pz);
+			B.floors.push({ F, x0: -hw, x1: hw, z0: zc + hd, z1: zc + hd + pd, y: y0 });
+			for (let k = -hw + 0.2; k <= hw - 0.1; k += W / Math.max(3, Math.round(W / 3.2))) boxIn(F, mat.trim, 0.18, H > 5 ? 6.6 : 3.4, 0.18, k, 0, zc + hd + pd - 0.15);
+			if (H > 5) { boxIn(F, mat.porch, W, 0.2, pd, 0, 3.4, pz); for (let k = -hw; k < hw; k += 0.18) boxIn(F, mat.trim, 0.05, 0.9, 0.05, k, 3.6, zc + hd + pd - 0.15); boxIn(F, mat.trim, W, 0.08, 0.12, 0, 4.5, zc + hd + pd - 0.15); }
+			boxIn(F, mat.roof, W + 0.3, 0.15, pd + 0.2, 0, H > 5 ? 6.6 : 3.4, pz);
+			for (let k = -hw; k < hw; k += 0.2) if (!((main || cafe) && doors.some((dx) => Math.abs(dx - k) < 1.1))) boxIn(F, mat.trim, 0.05, 0.85, 0.05, k, 0, zc + hd + pd - 0.12);
+
+			// ---------- inside ----------
+			const ix0 = -hw + 0.6, ix1 = hw - 0.6, iz0 = zc - hd + 0.6, iz1 = zc + hd - 1.4, iw = ix1 - ix0;
+			if (main) {
+				// Tot Wetlands, a third of the hall: the pond, reeds, the boardwalk, ducks and fish
+				const tx = ix0 + iw / 6, tz = (iz0 + iz1) / 2;
+				{ const pg = new THREE.CircleGeometry(Math.min(iw / 7, (iz1 - iz0) / 2.4), 28).rotateX(-Math.PI / 2).scale(1.3, 1, 1).translate(tx, 0.07, tz); pg.applyMatrix4(F.m); add(mat.pond, pg); }
+				boxIn(F, mat.wood, 1.2, 0.3, (iz1 - iz0) * 0.7, tx, 0, tz);
+				for (let k = 0; k < 18; k++) { const a = k / 18 * 6.283, r = Math.min(iw / 7, (iz1 - iz0) / 2.4) * 1.05; boxIn(F, mat.reed, 0.06, 0.9 + hh(k, 2) * 0.5, 0.06, tx + Math.cos(a) * r * 1.3, 0, tz + Math.sin(a) * r); }
+				for (let k = 0; k < 5; k++) { const geo = new THREE.SphereGeometry(0.18, 10, 8).scale(1.3, 0.9, 1).translate(tx - 1 + k * 0.6, 0.18, tz + (k % 2 ? 0.8 : -0.9)); geo.applyMatrix4(F.m); add(k % 2 ? mat.plush : mat.plush2, geo); }
+				// the Art Studio: easels and a long paint table, splashes of colour
+				const ax = ix0 + iw / 2;
+				for (let k = 0; k < 4; k++) { const ex = ax - 2.4 + k * 1.6; boxIn(F, mat.easel, 0.06, 1.5, 0.06, ex - 0.35, 0, iz0 + 1.2); boxIn(F, mat.easel, 0.06, 1.5, 0.06, ex + 0.35, 0, iz0 + 1.2); boxIn(F, mat.paint[k % 5], 0.8, 0.6, 0.04, ex, 0.8, iz0 + 1.25); }
+				boxIn(F, mat.wood, 4.5, 0.06, 1.2, ax, 0.55, (iz0 + iz1) / 2 + 0.5, true);
+				for (let k = 0; k < 10; k++) boxIn(F, mat.paint[k % 5], 0.12, 0.14, 0.12, ax - 2 + k * 0.44, 0.61, (iz0 + iz1) / 2 + 0.5 + (k % 2 ? 0.3 : -0.3));
+				for (let k = 0; k < 6; k++) boxIn(F, mat.easel, 0.35, 0.3, 0.35, ax - 1.8 + k * 0.72, 0, (iz0 + iz1) / 2 + 1.5);
+				// Discovery Hall: a climbing tower with a net and a slide, a reading nook
+				const dx = ix1 - iw / 6;
+				for (const [a2, b2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) boxIn(F, mat.steel, 0.1, 2.6, 0.1, dx + a2 * 1.1, 0, tz + b2 * 1.1);
+				boxIn(F, mat.rubber, 2.4, 0.1, 2.4, dx, 1.4, tz); boxIn(F, mat.rubber, 5.5, 0.06, 5.5, dx, 0, tz);
+				for (let k = 0; k < 7; k++) boxIn(F, mat.net, 0.03, 1.4, 2.2, dx + 1.15, 0, tz, false), boxIn(F, mat.net, 2.2, 0.03, 0.03, dx, 0.2 * k, tz - 1.15);
+				{ const sl = new THREE.BoxGeometry(0.6, 0.05, 2.6).rotateX(-0.55).translate(dx, 0.75, tz + 2.1); sl.applyMatrix4(F.m); add(mat.slide, sl); }
+				for (let k = 0; k < 8; k++) boxIn(F, mat.book, 0.25, 0.3, 0.08, ix1 - 0.6, 0.4 + (k % 4) * 0.35, iz1 - 2 + Math.floor(k / 4) * 0.4);
+				boxIn(F, M('#d85c8a', 0.9), 2, 0.3, 1.2, ix1 - 1.6, 0, iz1 - 1.2);
+				// the front desk by the middle door
+				boxIn(F, mat.counter, 2.6, 1.05, 0.7, 0, 0, iz1 - 1.2, true);
+				B.main = { F, ix0, ix1, iz0, iz1 };
+			}
+			if (cafe) {
+				boxIn(F, mat.counter, iw * 0.6, 1.05, 0.7, 0, 0, iz0 + 1.2, true);
+				boxIn(F, mat.steel, 0.7, 0.5, 0.4, -iw * 0.2, 1.05, iz0 + 1.2);
+				for (let x2 = ix0 + 1.2; x2 < ix1 - 1; x2 += 2.2) for (let z2 = iz0 + 3; z2 < iz1 - 0.5; z2 += 2.2) { boxIn(F, mat.wood, 0.9, 0.05, 0.9, x2, 0.72, z2); boxIn(F, mat.steel, 0.08, 0.72, 0.08, x2, 0, z2); }
+				B.cafe = { F, ix0, ix1, iz0, iz1 };
+			}
+		});
+		// the sign at the courtyard gate, and stroller parking beside it
+		{
+			const a = boxes[0] ? boxes[0].a : 0, sx = CAMPUS.x - Math.sin(a) * 0 + Math.cos(a) * 0, sz = CAMPUS.z;
+			const F = frameAt(sx - 20, sz + 18, a + 0.4, g(sx - 20, sz + 18));
+			B.sign = { F };
+			boxIn(F, mat.trim, 0.2, 2.6, 0.2, -2.1, 0, 0); boxIn(F, mat.trim, 0.2, 2.6, 0.2, 2.1, 0, 0);
+			const sg = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.4, 0.12), [mat.trim, mat.trim, mat.trim, mat.trim, mat.signFace, mat.trim]); sg.applyMatrix4(F.m); sg.position.y += 1.9; B.group.add(sg);
+			for (let k = 0; k < 6; k++) { boxIn(F, mat.steel, 0.9, 0.03, 0.55, 3.6 + (k % 3) * 1.1, 0.5, Math.floor(k / 3) * 1.2); boxIn(F, mat.cloth[k % 7], 0.7, 0.45, 0.5, 3.6 + (k % 3) * 1.1, 0.55, Math.floor(k / 3) * 1.2); }
+		}
+
+		// ---------- Lookout Cove ----------
+		{
+			const F = frameAt(COVE.x, COVE.z, 0.5, Math.max(0.8, g(COVE.x, COVE.z)));
+			B.cove = { F };
+			// the sandy play yard
+			{ const pg = new THREE.CircleGeometry(30, 36).rotateX(-Math.PI / 2).translate(0, 0.12, 0); pg.applyMatrix4(F.m); add(mat.sand, pg); }
+			// a little Golden Gate: towers, a deck, the cables' sag in rails
+			for (const z of [-9, 9]) { boxIn(F, mat.orange, 0.7, 6, 0.7, -1.3, 0, z); boxIn(F, mat.orange, 0.7, 6, 0.7, 1.3, 0, z); boxIn(F, mat.orange, 3.3, 0.45, 0.7, 0, 3, z); boxIn(F, mat.orange, 3.3, 0.45, 0.7, 0, 5.7, z); }
+			boxIn(F, mat.orange, 2.4, 0.3, 28, 0, 1.9, 0);
+			B.floors.push({ F, x0: -1.2, x1: 1.2, z0: -14, z1: 14, y: F.y + 2.2 });
+			for (const x of [-1.3, 1.3]) for (let k = 0; k < 14; k++) { const z = -13 + k * 2, y = 2.2 + 3.6 * (Math.abs(z) / 9 - 1) ** 2 * (Math.abs(z) < 9 ? 1 : 0.3); boxIn(F, mat.orange, 0.06, Math.max(0.2, Math.min(3.6, y - 2.2)), 0.06, x, 2.2, z); }
+			// the shipwreck, half buried, and a fishing boat to climb aboard
+			{ const hull = new THREE.CylinderGeometry(1.6, 1.6, 9, 12, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).scale(1, 0.8, 1).translate(10, 0.5, 6); hull.applyMatrix4(F.m); add(mat.wood, hull); }
+			boxIn(F, mat.wood, 0.25, 4.5, 0.25, 10, 0, 6);
+			{ const hull = new THREE.CylinderGeometry(1.8, 1.2, 8, 10, 1, false).rotateX(Math.PI / 2).scale(1, 0.55, 1).translate(-12, 0.9, -6); hull.applyMatrix4(F.m); add(mat.boatHull, hull); }
+			boxIn(F, mat.boat, 2.2, 1.8, 2.4, -12, 1.2, -7.5); boxIn(F, mat.glass, 2.3, 0.6, 1.8, -12, 2.1, -7.5);
+			B.floors.push({ F, x0: -13.4, x1: -10.6, z0: -10, z1: -2, y: F.y + 1.3 });
+			// the sea cave: a rock arch to crawl through; the tide pools beside it
+			for (let k = 0; k < 9; k++) { const a = k / 8 * Math.PI, geo = new THREE.DodecahedronGeometry(1.2 + hh(k, 5) * 0.4, 0).translate(14 + Math.cos(a) * 2.6, Math.sin(a) * 2.2, -8); geo.applyMatrix4(F.m); add(mat.rock, geo); }
+			for (let k = 0; k < 4; k++) { const geo = new THREE.CircleGeometry(1.2 + hh(k, 7) * 0.6, 16).rotateX(-Math.PI / 2).translate(8 + k * 2.4, 0.16, -12 + (k % 2) * 1.5); geo.applyMatrix4(F.m); add(mat.pond, geo); }
+			for (let k = 0; k < 8; k++) { const geo = new THREE.DodecahedronGeometry(0.5 + hh(k, 9) * 0.3, 0).translate(7 + k * 1.3, 0.2, -13.5 + (k % 3)); geo.applyMatrix4(F.m); add(mat.rock, geo); }
+			// a net climber: a pyramid of ropes
+			for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283, geo = new THREE.CylinderGeometry(0.03, 0.03, 5.2, 4).rotateZ(0.9).rotateY(-a).translate(-4 + Math.cos(a) * 1.9, 2.1, 12 + Math.sin(a) * 1.9); geo.applyMatrix4(F.m); add(mat.net, geo); }
+			boxIn(F, mat.steel, 0.12, 4.4, 0.12, -4, 0, 12);
+		}
+		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); mesh.castShadow = !isPhone && m !== mat.glass; mesh.receiveShadow = true; B.group.add(mesh); }
+		B.group.add(B.people);
+		root.add(B.group);
+		built = B;
+	}
+
+	// ---------- families by the hour ----------
+	const figGeo = (() => {
+		const body = new THREE.CapsuleGeometry(0.2, 0.62, 4, 8).translate(0, 1.0, 0), legs = new THREE.CapsuleGeometry(0.09, 0.7, 3, 6).translate(0, 0.4, 0);
+		return mergeGeometries([body, legs].map((q) => q.toNonIndexed()));
+	})();
+	const headGeo = new THREE.SphereGeometry(0.12, 10, 8);
+	let lastH = -99, lastDay = -1;
+	function busy(h, day) {
+		if (day === 1 || h < 9 || h >= 17) return 0;                     // closed Mondays, and out of hours
+		const morning = Math.exp(-(((h - 10.5) / 1.4) ** 2)), after = Math.exp(-(((h - 14) / 1.6) ** 2)) * 0.6;
+		return Math.min(1, (morning + after) * (day === 0 || day === 6 ? 1.1 : 0.9));
+	}
+	function populate(h, day) {
+		const B = built;
+		for (const c of [...B.people.children]) B.people.remove(c);
+		const k = busy(h, day), spots = [];
+		if (k <= 0) return;
+		const rnd = (i, j) => hh(i * 3.1 + h, j * 1.7 + day);
+		const inRoom = (R, n) => { if (!R) return; for (let i = 0; i < n; i++) { const lx = R.ix0 + 1 + rnd(i, 1) * (R.ix1 - R.ix0 - 2), lz = R.iz0 + 1 + rnd(i, 2) * (R.iz1 - R.iz0 - 2), ca = Math.cos(R.F.a), sa = Math.sin(R.F.a); spots.push([R.F.x + ca * lx - sa * lz, R.F.y, R.F.z + sa * lx + ca * lz, rnd(i, 3) < 0.55]); } };
+		inRoom(B.main, Math.round(26 * k)); inRoom(B.cafe, Math.round(10 * k));
+		for (let i = 0; i < Math.round(30 * k); i++) { const a = rnd(i, 4) * 6.283, r = rnd(i, 5) * 22, x = COVE.x + Math.cos(a) * r, z = COVE.z + Math.sin(a) * r; spots.push([x, Math.max(0.8, g(x, z)) + 0.12, z, rnd(i, 6) < 0.6]); }
+		for (let i = 0; i < Math.round(14 * k); i++) { const a = rnd(i, 7) * 6.283, r = 12 + rnd(i, 8) * 30, x = CAMPUS.x + Math.cos(a) * r, z = CAMPUS.z + Math.sin(a) * r; spots.push([x, g(x, z), z, rnd(i, 9) < 0.5]); }
+		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s1 = new THREE.Vector3(), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+		const bodies = mat.cloth.map(() => []), heads = mat.skin.map(() => []);
+		spots.forEach(([x, y, z, kid], i) => {
+			const sc = kid ? 0.55 + rnd(i, 10) * 0.2 : 0.95 + rnd(i, 11) * 0.1;
+			q.setFromAxisAngle(Y, rnd(i, 12) * 6.283);
+			bodies[i % bodies.length].push(m4.clone().compose(p.set(x, y, z), q, s1.set(sc, sc, sc)));
+			heads[(i * 7) % heads.length].push(m4.clone().compose(p.set(x, y + 1.62 * sc, z), q, s1.set(sc * (kid ? 1.25 : 1), sc * (kid ? 1.25 : 1), sc * (kid ? 1.25 : 1))));
+		});
+		bodies.forEach((L, i) => { if (!L.length) return; const im = new THREE.InstancedMesh(figGeo, mat.cloth[i], L.length); L.forEach((M4, j) => im.setMatrixAt(j, M4)); B.people.add(im); });
+		heads.forEach((L, i) => { if (!L.length) return; const im = new THREE.InstancedMesh(headGeo, mat.skin[i], L.length); L.forEach((M4, j) => im.setMatrixAt(j, M4)); B.people.add(im); });
+	}
+
+	function update(dt, camera, hours) {
+		const d = Math.hypot(camera.position.x - CAMPUS.x, camera.position.z - CAMPUS.z);
+		if (!built && d < 900 && bay.loaded() && real?.loaded() && real.near('boxes', CAMPUS.x, CAMPUS.z, 60).length) { try { build(); } catch (e) { console.warn('discovery museum', e); built = { group: new THREE.Group(), col: [], floors: [], people: new THREE.Group() }; } }
+		if (built && d > 1600) { built.group.traverse((o) => o.geometry?.dispose()); root.remove(built.group); built = null; lastH = -99; return; }
+		if (!built) return;
+		const day = new Date().getDay();
+		if (Math.abs(hours - lastH) > 0.5 || day !== lastDay) { lastH = hours; lastDay = day; populate(hours, day); }
+	}
+	const toLocal = (F, x, z) => { const dx = x - F.x, dz = z - F.z, ca = Math.cos(F.a), sa = Math.sin(F.a); return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
+	// the floors inside, the porches, the little bridge's deck and the boat
+	function floor(x, z, y) {
+		if (!built) return -1e9;
+		let best = -1e9;
+		for (const f of built.floors) { const [lx, lz] = toLocal(f.F, x, z); if (lx > f.x0 && lx < f.x1 && lz > f.z0 && lz < f.z1 && y > f.y - 1.2) best = Math.max(best, f.y); }
+		return best;
+	}
+	function push(pos, footY) {
+		if (!built || Math.hypot(pos.x - CAMPUS.x, pos.z - CAMPUS.z) > CAMPUS.r + 20) return;
+		const R = 0.3;
+		for (const c of built.col) {
+			if (footY + 1.7 < c.y0 || footY + 0.25 > c.y1) continue;
+			let [lx, lz] = toLocal(c.F, pos.x, pos.z);
+			const qx = Math.max(c.x0, Math.min(c.x1, lx)), qz = Math.max(c.z0, Math.min(c.z1, lz)), dx = lx - qx, dz = lz - qz, d2 = dx * dx + dz * dz;
+			if (d2 >= R * R) continue;
+			if (d2 < 1e-8) { const pen = [lx - c.x0, c.x1 - lx, lz - c.z0, c.z1 - lz], m = Math.min(...pen), k = pen.indexOf(m); if (k === 0) lx = c.x0 - R; else if (k === 1) lx = c.x1 + R; else if (k === 2) lz = c.z0 - R; else lz = c.z1 + R; }
+			else { const d = Math.sqrt(d2); lx = qx + dx / d * R; lz = qz + dz / d * R; }
+			const ca = Math.cos(c.F.a), sa = Math.sin(c.F.a); pos.x = c.F.x + ca * lx - sa * lz; pos.z = c.F.z + sa * lx + ca * lz;
+		}
+	}
+	// where in the museum you are, for a note
+	function where(pos) {
+		if (!built) return null;
+		for (const [R, name] of [[built.main, 'main'], [built.cafe, 'cafe']]) { if (!R) continue; const [lx, lz] = toLocal(R.F, pos.x, pos.z); if (lx > R.ix0 - 0.6 && lx < R.ix1 + 0.6 && lz > R.iz0 - 0.6 && lz < R.iz1 + 1.4 && pos.y - R.F.y < 3.6) return name; }
+		if (Math.hypot(pos.x - COVE.x, pos.z - COVE.z) < 32) return 'cove';
+		return inCampus(pos.x, pos.z) ? 'campus' : null;
+	}
+	return { group: root, update, floor, push, where, busy, get built() { return built; } };
+}

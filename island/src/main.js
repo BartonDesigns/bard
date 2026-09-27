@@ -40,6 +40,7 @@ import { createLake } from './bay/lake.js';
 import { createTidepools } from './bay/tidepools.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
+import { createDiscovery } from './bay/discovery.js';
 import { createCommercial } from './bay/commercial.js';
 import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
@@ -448,6 +449,8 @@ export function createIslandWorld() {
 			world.beaches = createBeaches(scene, bayArea, world.real, shared, { isPhone });
 			// the parks furnished as their agencies furnish them: signs, kiosks, tables, playgrounds, courts
 			world.parks = createParkKit(scene, bayArea, world.real, { isPhone, lake: world.lake });
+			// the Bay Area Discovery Museum at Fort Baker: the barracks, the exhibits, Lookout Cove
+			world.discovery = createDiscovery(scene, bayArea, world.real, { isPhone });
 			// the Bay Area's wild animals by habitat, month and hour, and the field journal
 			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
@@ -480,8 +483,8 @@ export function createIslandWorld() {
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y));
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -742,6 +745,19 @@ export function createIslandWorld() {
 			const pk = camera.position.y - W.island.heightAt(camera.position.x, camera.position.z) < 80 ? W.parks.parkAt(camera.position.x, camera.position.z) : null;
 			if (pk && pk !== W.parkSeen) hint(`${pk.name}\n${pk.note}`, 8000, 1);
 			if (pk) W.parkSeen = pk;
+		}
+		if (W.discovery) {
+			W.discovery.update(dt, camera, W.sky.state.hours);
+			const at = W.discovery.where(camera.position);
+			if (at && at !== 'campus' && at !== W.museumSeen) {
+				const open = W.discovery.busy(W.sky.state.hours, new Date().getDay()) > 0;
+				hint({
+					main: 'Bay Area Discovery Museum\nTot Wetlands, the Art Studio and Discovery Hall\'s climbing tower',
+					cafe: 'The museum café\nCoffee for the grown-ups, snacks for the small ones',
+					cove: 'Lookout Cove\nA little Golden Gate, a shipwreck, a fishing boat and tide pools to climb about',
+				}[at] + (open ? '' : '\nClosed now: open Tuesday to Sunday, 9 to 5'), 7000, 1);
+			}
+			if (at) W.museumSeen = at;
 		}
 		if (W.beaches) {
 			W.beaches.update(dt, time, camera, sk.night);

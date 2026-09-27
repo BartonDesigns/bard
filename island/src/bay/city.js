@@ -18,6 +18,7 @@ import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styl
 import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
 import { GREENS } from './realcity.js';
+import { inCampus } from './discovery.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -1033,6 +1034,8 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const b of real.near('boxes', cx, cz, R)) {
 			const dx = b.x - cx, dz = b.z - cz;
 			if (dx * dx + dz * dz > R * R) continue;
+			// the Discovery Museum's barracks are built by bay/discovery.js
+			if (inCampus(b.x, b.z)) continue;
 			const g = bay.heightAt(b.x, b.z);
 			if (g < 0.5) continue;
 			// on a slope the walls go down to the lowest corner

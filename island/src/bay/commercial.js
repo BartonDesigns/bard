@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crowd, ZONE } from '../people/flow.js';
+import { inCampus } from './discovery.js';
 
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
@@ -246,7 +247,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			scanX = x; scanZ = z;
 			cands = [];
 			for (const b of real.near('boxes', x, z, BUILD_R + 20)) {
-				if (!b.grp?.biz) continue;
+				if (!b.grp?.biz || inCampus(b.x, b.z)) continue;
 				const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2;
 				if (d < BUILD_R) cands.push([d, b]);
 			}
