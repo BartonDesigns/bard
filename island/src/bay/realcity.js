@@ -175,6 +175,21 @@ export function createRealCity(renderer) {
 		});
 	}
 
+	// roads added by hand where no mapped region reaches (the Golden Gate's deck and its
+	// San Francisco approach): drivable like the mapped ones
+	function addRoads(list) {
+		for (const r of list) {
+			const i = R.roads.push(r) - 1, p = r.pts;
+			r.drive = true; r.walked = false;
+			let mnx = 1e9, mnz = 1e9, mxx = -1e9, mxz = -1e9;
+			for (let k = 0; k < p.length; k += 2) { mnx = Math.min(mnx, p[k]); mxx = Math.max(mxx, p[k]); mnz = Math.min(mnz, p[k + 1]); mxz = Math.max(mxz, p[k + 1]); }
+			r.box = [mnx, mnz, mxx, mxz];
+			for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) {
+				const k = gx + ',' + gz; let g = grid.get(k); if (!g) grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] });
+				g.roads.push(i);
+			}
+		}
+	}
 	const regionAt = (x, z, m = 60) => R.regions.find(({ bounds: b }) => x > b[0] + m && z > b[1] + m && x < b[2] - m && z < b[3] - m);
 	const inside = (x, z) => !!regionAt(x, z);
 	function near(kind, x, z, rad) {
@@ -427,5 +442,5 @@ export function createRealCity(renderer) {
 		return best;
 	}
 
-	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, version: () => version, ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
+	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, version: () => version, ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
 }

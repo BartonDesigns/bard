@@ -37,7 +37,7 @@ function nearestOn(p, x, z) {
 }
 
 export function createDrive({ world, camera, mount, isPhone, hint }) {
-	const D = { active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null };
+	const D = { active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined };
 
 	// ---------- the road network ----------
 	// an edge: { pts, L, cls, name, w, oneway, real?, grid? }
@@ -184,7 +184,7 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		const P = W.player.state;
 		if (W.boat?.boarded?.()) return;
 		if (!snap()) { hint('No road or trail here to follow. Walk or fly to one, then press the road button.', 3000); return; }
-		D.active = true; P.locked = true; P.flying = false; P.vel.set(0, 0, 0);
+		D.active = true; P.locked = true; P.flying = false; P.vel.set(0, 0, 0); D.look = 0; D.lastYaw = undefined;
 		pad.style.display = isPhone ? 'block' : 'none'; hud.style.display = 'block';
 		toggleBtn.style.background = '#01a982';
 		hint(isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'Driving: ← → pick the next turn, ↑ straight on, ↓ turn round, Shift to hurry. V to stop.', 4500);
@@ -249,12 +249,12 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		const trail = TRAIL.has(E.cls);
 		const off = trail || E.oneway || E.w < 7 ? 0 : E.w * 0.22;
 		const hx = dx * D.dir, hz = dz * D.dir;
-		const x = x0 - hz * off, z = z0 + hx * off;
+		const [x, z] = onBridge(x0 - hz * off, z0 + hx * off);
 		// the road under you: its own smoothed profile (graded like a real road, never steeper
 		// than 25%, level across), bridges included
 		const road = profileAt(E, D.s);
 		// (never under the ground where the profile cuts through a hump more than a metre)
-		const floorY = Math.max(road, W.island.heightAt(x, z) - 1.0, W.island.extraFloor ? W.island.extraFloor(x, z, (D.y ?? road) - 1) : -1e9);
+		const floorY = Math.max(road, W.island.heightAt(x, z) - 1.0, W.island.extraFloor ? W.island.extraFloor(x, z, Math.max(D.y ?? road, road + 1.5) - 1) : -1e9);
 		const eye = trail ? 1.65 : 1.45;                                      // a driver's eye, a walker's on a trail
 		D.y = D.y === null ? floorY + eye : D.y + (floorY + eye - D.y) * Math.min(1, dt * 8);
 		// face along the road, turning smoothly, and tilt with its grade
@@ -262,9 +262,14 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		let dyaw = want - D.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
 		D.yaw += dyaw * Math.min(1, dt * 4);
 		const grade = Math.max(-0.25, Math.min(0.25, (profileAt(E, D.s + D.dir * 8) - road) / 8));
-		P.pos.set(x, D.y, z); P.yaw = D.yaw;
+		// free look: turn your head while the road carries you on (drag or mouse as ever);
+		// after a few seconds without looking about, your gaze drifts back to the road
+		if (D.lastYaw !== undefined) { const dl = Math.atan2(Math.sin(P.yaw - D.lastYaw), Math.cos(P.yaw - D.lastYaw)); if (Math.abs(dl) > 1e-4) { D.look += dl; D.lookT = performance.now(); } }
+		if (performance.now() - (D.lookT || 0) > 5000) D.look *= 1 - Math.min(1, dt * 1.2);
+		D.look = Math.atan2(Math.sin(D.look), Math.cos(D.look));
+		P.pos.set(x, D.y, z); P.yaw = D.yaw + D.look; D.lastYaw = P.yaw;
 		camera.position.copy(P.pos);
-		camera.rotation.set(P.pitch + Math.atan(grade) * 0.5, D.yaw, 0, 'YXZ');
+		camera.rotation.set(P.pitch + Math.atan(grade) * 0.5, P.yaw, 0, 'YXZ');
 		const arrow = { straight: '↑ straight on', left: '← left next', right: '→ right next' }[D.queue];
 		hud.textContent = `${trail ? '🥾' : '🚗'} ${E.name || (E.cls === 'grid' ? 'Street' : E.cls.replace('_', ' '))} · ${arrow} · ${fmtSpeed(D.v)}`;
 		for (const [k, b] of Object.entries(arrows)) b.style.background = k === D.queue ? '#01a982' : 'rgba(8,20,26,.55)';
@@ -274,14 +279,31 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 	// 40 m (cut through the bumps, filled over the dips), then limited to a 25% grade both
 	// ways; kept on the road once worked out
 	const STEP = 5, MAXG = 0.25;
+	// the mapped line of the Golden Gate runs a little off the modelled deck: on the bridge,
+	// ride the deck (in its lanes, keeping right of the median)
+	function onBridge(x, z) {
+		const B = world()?.bridge;
+		if (!B) return [x, z];
+		const dx = x - B.centre.x, dz = z - B.centre.z, s = dx * B.axis.x + dz * B.axis.y, t = dx * -B.axis.y + dz * B.axis.x;
+		if (Math.abs(s) > B.length / 2 + 40 || Math.abs(t) > 45) return [x, z];
+		const t2 = Math.sign(t || 1) * Math.min(Math.max(Math.abs(t), 2.5), 9);
+		return [B.centre.x + B.axis.x * s - B.axis.y * t2, B.centre.z + B.axis.y * s + B.axis.x * t2];
+	}
 	function profileAt(E, s) {
 		if (!E.prof) {
 			const n = Math.max(2, Math.ceil(E.L / STEP) + 1), h = new Float32Array(n);
-			for (let i = 0; i < n; i++) { const [px, pz] = at(E.pts, Math.min(E.L, i * STEP)); h[i] = world().island.heightAt(px, pz); }
+			// (on a bridge or an overpass the road is its deck: the Golden Gate's, a freeway's)
+			const W = world(), deck = new Float32Array(n).fill(-1e9);
+			for (let i = 0; i < n; i++) {
+				const [px, pz] = at(E.pts, Math.min(E.L, i * STEP)), [qx, qz] = onBridge(px, pz);
+				h[i] = W.island.heightAt(qx, qz);
+				deck[i] = Math.max(W.bridge ? W.bridge.deckFloor(qx, qz, 1e4) : -1e9, W.freeways ? W.freeways.floor(qx, qz, 1e4) : -1e9);
+			}
 			for (let pass = 0; pass < 3; pass++) {
 				const c = h.slice();
 				for (let i = 0; i < n; i++) { let a = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += c[j]; k++; } h[i] = a / k; }
 			}
+			for (let i = 0; i < n; i++) if (deck[i] > -1e8) h[i] = deck[i] - 0.6 + 0.6;
 			for (let i = 1; i < n; i++) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
 			for (let i = n - 2; i >= 0; i--) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
 			E.prof = h;

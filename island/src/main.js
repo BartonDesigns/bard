@@ -59,7 +59,7 @@ REAL_U.uSeasonLag.value = [0, 0, 0, 0, 0.2, 0.25, 0.2, 0.05, 0, 0, 0, 0][new Dat
 REAL_U.uBloom.value = [0, 0.3, 0.8, 1, 0.45, 0, 0, 0, 0, 0, 0, 0][new Date().getMonth()];
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
-import { createRoads } from './bay/roads.js';
+import { createRoads, ROUTES } from './bay/roads.js';
 import { toWorld } from './bay/geo.js';
 import { createGuide } from './guide/guide.js';
 import { storagePanel } from './storage.js';
@@ -461,6 +461,18 @@ export function createIslandWorld() {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
 				world.bridge = bridge;
+				// the bridge's deck and the Presidio Parkway up to it, to drive (drive.js follows them)
+				{
+					const pts = [], B = bridge, half = B.length / 2;
+					for (let t = -half; t <= half + 0.1; t += 20) pts.push(B.centre.x + B.axis.x * t, B.centre.z + B.axis.y * t);
+					const south = pts.slice(0, 2), route = ROUTES['US-101 Presidio'].map(([a, b]) => toWorld(a, b));
+					const pp = [...south];
+					for (const q of route) pp.push(q.x, q.z);
+					world.real?.addRoads?.([
+						{ cls: 'motorway', name: 'US-101 · Golden Gate Bridge', w: 18, pts: new Float32Array(pts), bridge: true, end0: false, end1: false, link: false, divided: true },
+						{ cls: 'motorway', name: 'US-101 · Presidio Parkway', w: 18, pts: new Float32Array(pp), bridge: false, end0: false, end1: false, link: false, divided: true },
+					]);
+				}
 				world.landmarks = createLandmarks(scene, bayArea);
 				world.roads = createRoads(shared, scene, bayArea);
 				world.diablo = createDiablo(scene, bayArea);

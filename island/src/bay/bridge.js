@@ -27,6 +27,14 @@ export function createGoldenGate(shared, scene, heightAt) {
 	const END = MAIN / 2 + SIDE;                                        // anchorages
 	// the roadway rises gently to midspan
 	const deckY = (s) => 64 + 5.5 * Math.max(0, 1 - (s / END) * (s / END));
+	// past the anchorages the approach deck eases down to meet the ground at the toll plaza
+	// and the Marin approach (so the roads run straight on to it)
+	const ramp = (s) => {
+		const e = deckY(Math.max(-END, Math.min(END, s)));
+		if (Math.abs(s) <= END) return e;
+		const p = W(s, 0, 0), g = Math.max(heightAt(p.x, p.z), 2) + 0.4, t = Math.min(1, (Math.abs(s) - END) / 190);
+		return Math.max(g, e + (g - e) * t * t * (3 - 2 * t));
+	};
 	const cableY = (s) => {
 		const a = Math.abs(s);
 		if (a <= MAIN / 2) { const u = a / (MAIN / 2); return deckY(s) + 6 + (TOWER_H - 3 - deckY(s) - 6) * u * u; }
@@ -86,11 +94,11 @@ export function createGoldenGate(shared, scene, heightAt) {
 		if (top - bot > 3) box(s, 0, (top + bot) / 2, 40, 45, top - bot, concrete);
 		// approach viaduct piers onto the land: steel bents, two braced legs under the deck edges
 		for (let k = 1; k <= 4; k++) {
-			const s2 = s + sg * k * 45, q = W(s2, 0, 0), g2 = heightAt(q.x, q.z), hgt = deckY(s2) - g2;
+			const s2 = s + sg * k * 45, q = W(s2, 0, 0), g2 = heightAt(q.x, q.z), hgt = ramp(s2) - g2;
 			if (hgt <= 3) continue;
-			for (const off of [-9, 9]) box(s2, off, (g2 + deckY(s2)) / 2, 2.2, 2.2, hgt, steel);
-			box(s2, 0, deckY(s2) - 1.2, 1.6, 20, 1.6, steel);
-			for (let y = g2 + 8; y < deckY(s2) - 6; y += 10) box(s2, 0, y, 1, 18, 0.6, steel);
+			for (const off of [-9, 9]) box(s2, off, (g2 + ramp(s2)) / 2, 2.2, 2.2, hgt, steel);
+			box(s2, 0, ramp(s2) - 1.2, 1.6, 20, 1.6, steel);
+			for (let y = g2 + 8; y < ramp(s2) - 6; y += 10) box(s2, 0, y, 1, 18, 0.6, steel);
 		}
 	}
 
@@ -98,7 +106,7 @@ export function createGoldenGate(shared, scene, heightAt) {
 	const S0 = -END - 190, S1 = END + 190, STEP = 15.24;
 	{
 		const P = [], I = [], N = [], ring = (s) => {
-			const y = deckY(Math.max(-END, Math.min(END, s)));
+			const y = ramp(s);
 			return [W(s, -HALF_W, y), W(s, HALF_W, y)];
 		};
 		const top = new THREE.BufferGeometry(), pts = [];
@@ -167,7 +175,7 @@ export function createGoldenGate(shared, scene, heightAt) {
 		}
 		for (const [t, y, w, h] of [[0, -7.6, HALF_W * 2, 0.8], [-HALF_W + 0.4, 2.02, 0.3, 0.14], [HALF_W - 0.4, 2.02, 0.3, 0.14], [-10.5, 0.9, 0.5, 0.6], [10.5, 0.9, 0.5, 0.6]]) {
 			for (let k = 0; k < pts.length - 1; k++) {
-				const s = S0 + (k + 0.5) * STEP, y0 = deckY(Math.max(-END, Math.min(END, s)));
+				const s = S0 + (k + 0.5) * STEP, y0 = ramp(s);
 				if (t === 0 && Math.abs(s) > END) continue;
 				box(s, t, y0 + y, STEP + 0.05, w, h, steel);
 			}
@@ -223,7 +231,7 @@ export function createGoldenGate(shared, scene, heightAt) {
 	function deckFloor(x, z, y) {
 		const dx = x - c.x, dz = z - c.z, s = dx * ax.x + dz * ax.y, t = dx * lat.x + dz * lat.y;
 		if (Math.abs(t) > HALF_W - 0.6 || s < S0 || s > S1) return -Infinity;
-		const d = deckY(Math.max(-END, Math.min(END, s))) + 0.6;
+		const d = ramp(s) + 0.6;
 		return y > d - 3 ? d : -Infinity;
 	}
 	function update(t, night) {
