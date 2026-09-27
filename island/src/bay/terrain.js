@@ -357,10 +357,10 @@ export function createBayArea(shared, scene, island, BU) {
 					// spring wildflowers in drifts across the open grass: California poppies (orange,
 					// on the sunny side), lupine (blue-violet, in swales), goldfields (yellow sheets)
 					if (uBloom > 0.01) {
-						float drift = smoothstep(0.58, 0.74, fbm3(vBW * 0.006 + 4.7)) * (1.0 - smoothstep(0.25, 0.5, slope)) * uBloom;
+						float drift = smoothstep(0.5, 0.64, fbm3(vBW * 0.006 + 4.7)) * (1.0 - smoothstep(0.25, 0.5, slope)) * uBloom;
 						float kind = fbm3(vBW * 0.0021 + 13.1), speck = smoothstep(0.35, 0.75, vn(vBW * 1.7));
 						vec3 flower = kind < 0.45 ? vec3(0.9, 0.3, 0.02) : kind < 0.58 ? vec3(0.2, 0.16, 0.55) : vec3(0.85, 0.66, 0.05);
-						c = mix(c, flower, drift * speck * 0.85);
+						c = mix(c, flower, drift * (0.45 + 0.5 * speck));
 					}
 					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4);
 					c = mix(c, mix(vec3(0.085, 0.1, 0.045), vec3(0.14, 0.15, 0.075), n3), chap * 0.85);          // chaparral: dark olive scrub
@@ -370,8 +370,19 @@ export function createBayArea(shared, scene, island, BU) {
 					c = mix(c, mix(vec3(0.05, 0.1, 0.05), vec3(0.08, 0.14, 0.07), n3), forest * 0.92);
 					// rock where it is steep, in its own region's colour (the naturalist's geology)
 					vec3 rockC = mix(vec3(0.27, 0.24, 0.19), vec3(0.4, 0.36, 0.29), n2);
-					for (int i = 0; i < 8; i++) { float rk = 1.0 - smoothstep(uRock[i].z * 0.6, uRock[i].z, distance(vBW, uRock[i].xy)); rockC = mix(rockC, uRockC[i] * (0.75 + 0.5 * n2), rk); }
-					c = mix(c, rockC, smoothstep(0.5, 0.85, slope));
+					float rkMax = 0.0;
+					for (int i = 0; i < 8; i++) { float rk = 1.0 - smoothstep(uRock[i].z * 0.6, uRock[i].z, distance(vBW, uRock[i].xy)); rockC = mix(rockC, uRockC[i] * (0.75 + 0.5 * n2), rk); rkMax = max(rkMax, rk); }
+					// where the rock is its own, it breaks out of the grass on the moderate slopes too
+					float outcrop = rkMax * smoothstep(0.6, 0.76, n2 + n3 * 0.15) * smoothstep(0.12, 0.3, slope);
+					// the rock's own life: moss on its north faces in the damp, pale crusts of lichen,
+					// and near the sea the bright orange Xanthoria on the bird-perch tops
+					float lichS = smoothstep(0.62, 0.72, vn(vBW * 1.9)) * (0.4 + 0.6 * fogbelt);
+					rockC = mix(rockC, vec3(0.3, 0.32, 0.26), lichS * 0.6);
+					rockC = mix(rockC, vec3(0.62, 0.3, 0.04), smoothstep(0.7, 0.78, vn(vBW * 2.7 + 5.0)) * fogbelt * (1.0 - smoothstep(10.0, 60.0, h)) * 0.8);
+					rockC = mix(rockC, vec3(0.05, 0.1, 0.02), north * fogbelt * smoothstep(0.4, 0.7, n3) * 0.75);
+					c = mix(c, rockC, max(smoothstep(0.5, 0.85, slope), outcrop));
+					// the fog forest's floor: moss and duff, green on the shady side
+					c = mix(c, mix(vec3(0.045, 0.09, 0.02), vec3(0.08, 0.05, 0.03), n3), forest * fogbelt * (0.25 + north * 0.5) * (1.0 - smoothstep(0.5, 0.85, slope)));
 					// sand at the water's edge, mud and sand under water
 					float beach = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);

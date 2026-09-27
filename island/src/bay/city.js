@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { hardwood, shrub, swayMaterial } from '../world/vegetation.js';
+import { hardwood, shrub, fern, swayMaterial } from '../world/vegetation.js';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
@@ -83,6 +83,75 @@ function withRise(m, rise, key) {
 	m.customProgramCacheKey = () => (k0 ? k0() : '') + key;
 	return m;
 }
+// the life on a tree's bark, by species, aspect and the fog: the bark broken into plates by
+// fissures running up the trunk (deep on the oaks, fibrous on the redwoods, the plane's
+// smooth and mottled), moss thick on the north side and low down where the damp stays, pale
+// crusts of lichen, and all of it heavier in the fog belt near the sea.
+// kind: 0 plane/sycamore, 1 coast live oak, 2 redwood/cypress, 3 shrub stems
+const BARK_GLSL = /* glsl */`
+float bkH(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float bkN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(bkH(i), bkH(i + vec2(1, 0)), f.x), mix(bkH(i + vec2(0, 1)), bkH(i + vec2(1, 1)), f.x), f.y); }`;
+function mossify(m, kind) {
+	const prev = m.onBeforeCompile;
+	m.onBeforeCompile = (sh, r) => {
+		prev.call(m, sh, r);
+		sh.vertexShader = 'varying vec3 vBarkW; varying float vBarkY;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+			{
+				vec4 bw = vec4(transformed, 1.0);
+				#ifdef USE_INSTANCING
+				bw = instanceMatrix * bw;
+				#endif
+				bw = modelMatrix * bw; vBarkW = bw.xyz; vBarkY = position.y;
+			}`);
+		sh.fragmentShader = 'varying vec3 vBarkW; varying float vBarkY;\n' + BARK_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+			{
+				vec3 wn = normalize((vec4(vNormal, 0.0) * viewMatrix).xyz);
+				float north = clamp(-wn.z * 0.8 + 0.2, 0.0, 1.0);                    // (world -z is north)
+				float fog = 1.0 - smoothstep(22000.0, 58000.0, vBarkW.x);
+				vec2 bp = vec2((vBarkW.x + vBarkW.z) * ${[3.5, 5.0, 7.0, 6.0][kind].toFixed(1)}, vBarkW.y * ${[1.4, 1.1, 0.35, 1.2][kind].toFixed(2)});
+				// fissures: the contour lines of a noise stretched up the trunk
+				float fz = bkN(bp) * 0.7 + bkN(bp * 2.3 + 5.0) * 0.3;
+				float fiss = 1.0 - smoothstep(0.03, ${[0.06, 0.13, 0.11, 0.08][kind].toFixed(2)}, abs(fz - 0.5));
+				diffuseColor.rgb *= 1.0 - fiss * ${[0.25, 0.6, 0.55, 0.4][kind].toFixed(2)};
+				${kind === 0 ? 'diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.35, 1.3, 1.15), smoothstep(0.55, 0.7, bkN(bp * 0.6 + 3.0)) * 0.7);   // the plane\'s mottle' : ''}
+				// moss: north side, low down, in the damp
+				float patchy = smoothstep(0.35, 0.7, bkN(vBarkW.xz * 2.1 + vBarkW.y * 0.8) * 0.6 + bkN(bp * 1.7) * 0.4);
+				float moss = ${[0.5, 1.0, 0.25, 0.4][kind].toFixed(2)} * north * (1.0 - smoothstep(0.4, 3.2 + fog * 3.0, vBarkY)) * (0.35 + 0.65 * fog) * patchy;
+				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.11, 0.018) * (0.75 + 0.5 * bkN(bp * 3.0)), clamp(moss * 1.4, 0.0, 0.92));
+				// lichen: pale grey-green crusts, on the oaks most
+				float lich = smoothstep(0.72, 0.8, bkN(bp * 2.6 + 11.0)) * ${[0.35, 0.8, 0.15, 0.3][kind].toFixed(2)} * (0.3 + 0.7 * fog);
+				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.33, 0.26), lich * 0.8);
+			}`);
+	};
+	const pk = m.customProgramCacheKey?.bind(m);
+	m.customProgramCacheKey = () => (pk ? pk() : '') + '|bark' + kind;
+}
+// lace lichen: in the fog belt the coast live oaks hang with pale grey-green strands
+// among their leaves, thickest low in the crown
+function lichenLeaves(m) {
+	const prev = m.onBeforeCompile;
+	m.onBeforeCompile = (sh, r) => {
+		prev.call(m, sh, r);
+		sh.vertexShader = 'varying vec3 vLichW; varying float vLichY;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+			{
+				vec4 bw = vec4(transformed, 1.0);
+				#ifdef USE_INSTANCING
+				bw = instanceMatrix * bw;
+				#endif
+				bw = modelMatrix * bw; vLichW = bw.xyz; vLichY = position.y;
+			}`);
+		sh.fragmentShader = 'varying vec3 vLichW; varying float vLichY;\n' + BARK_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+			{
+				float fog = 1.0 - smoothstep(22000.0, 50000.0, vLichW.x);
+				float strands = smoothstep(0.55, 0.75, bkN(vec2((vLichW.x + vLichW.z) * 9.0, vLichW.y * 1.2))) * smoothstep(0.5, 0.62, bkN(vLichW.xz * 0.9));
+				float low = 1.0 - smoothstep(0.35, 0.75, vLichY / 9.0);
+				diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.34, 0.38, 0.28), strands * low * fog * 0.85);
+			}`);
+	};
+	const pk = m.customProgramCacheKey?.bind(m);
+	m.customProgramCacheKey = () => (pk ? pk() : '') + '|lichleaf';
+}
+
 function buildingMaterial(shared, night, nearBand) {
 	const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05 });
 	m.onBeforeCompile = (sh) => {
@@ -393,12 +462,14 @@ export function createCity(shared, scene, bay, real = null) {
 	const LOD = PHONE ? { near: [NONE_IN[0], NONE_IN[1], 150, 175], mid: [150, 175, 430, 470], far: [430, 470, 2000, 2400], shrub: [NONE_IN[0], NONE_IN[1], 260, 300] }
 		: { near: [NONE_IN[0], NONE_IN[1], 185, 215], mid: [185, 215, 560, 610], far: [560, 610, 2400, 2800], shrub: [NONE_IN[0], NONE_IN[1], 360, 410] };
 	const MARGIN = 45;                                        // the trees are re-placed every 40 m of travel
-	const tierMesh = (parts, cap, shadow, band) => {
+	const tierMesh = (parts, cap, shadow, band, kind = 3) => {
 		// each tier its own materials, so each can carry its own band
 		const mats = [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
 		for (const M of mats) addLodFade(M.material, 'uniform', band);
 		// photographed bark (with its relief) once it loads; lichen on the oaks' trunks
 		usePhoto(mats[0].material, [['bark', [2, 3], { mean: 0.8, contrast: 1.2, normal: 3 }, 0.9]]);
+		mossify(mats[0].material, kind);
+		if (kind === 1) lichenLeaves(mats[1].material);
 		return parts.map((geo, n) => {
 			const S = mats[n];
 			const im = new THREE.InstancedMesh(geo, S.material, cap);
@@ -424,9 +495,11 @@ export function createCity(shared, scene, bay, real = null) {
 		// (the impostor's square spans the tree's height or its width, whichever is more)
 		const bbAll = new THREE.Box3().setFromBufferAttribute(leafGeo.attributes.position).union(new THREE.Box3().setFromBufferAttribute(midT.parts[0].attributes.position));
 		const sizeK = Math.max(bbAll.max.y - Math.max(0, bbAll.min.y), bbAll.max.x - bbAll.min.x, bbAll.max.z - bbAll.min.z) / 0.98 / midT.height;
-		return { sizeK, near: tierMesh(nearT.parts, 2600, true, LOD.near), mid: tierMesh(midT.parts, 12000, false, LOD.mid), H: nearT.height, Hm: midT.height };
+		return { sizeK, near: tierMesh(nearT.parts, 2600, true, LOD.near, k), mid: tierMesh(midT.parts, 12000, false, LOD.mid, k), H: nearT.height, Hm: midT.height };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
+	// sword ferns on the shady forest floor (under the redwoods, on the north slopes, in the draws)
+	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8 }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
 	// the far tier: one point per tree, drawn as its species' impostor
 	const atlasCv = document.createElement('canvas');
 	atlasCv.width = IMP * 3; atlasCv.height = IMP;
@@ -805,6 +878,14 @@ export function createCity(shared, scene, bay, real = null) {
 			const yaw = hash(t.x * 3.1, t.z * 1.7) * 6.283;
 			q.setFromAxisAngle(Y, yaw);
 			const tint = [0, 1, 2].map((c) => Math.min(1.35, Math.max(0.65, t.col[c] / LEAF_REF[c])));
+			if (t.fern) {
+				if (d > LOD.shrub[3] + MARGIN) continue;
+				const k = next(ferns[0]); if (k < 0) continue;
+				const s2 = t.h / fernT.height;
+				m4.compose(p.set(t.x, t.y, t.z), q, sc.set(s2, s2, s2));
+				ferns[0].setMatrixAt(k, m4); ferns[0].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
+				continue;
+			}
 			if (t.shrub) {
 				if (d > LOD.shrub[3] + MARGIN) continue;
 				const k = next(shrubs[0]); if (k < 0) continue; next(shrubs[1]);
@@ -834,7 +915,7 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 		farGeo.setDrawRange(0, nf);
 		for (const a of ['position', 'aSize', 'aSp', 'aTint']) farGeo.attributes[a].needsUpdate = true;
-		const all = [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])];
+		const all = [...shrubs, ...ferns, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])];
 		for (const im of all) { im.count = cn.get(im) || 0; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
 	}
 
@@ -1036,11 +1117,17 @@ export function createCity(shared, scene, bay, real = null) {
 			// up on the ridges, and coastal scrub, not chaparral; the blue oak and gray pine are
 			// inland trees and stay out of it
 			const fq = Math.min(1, Math.max(0, (x - 22000) / 36000)), fog = 1 - fq * fq * (3 - 2 * fq);
+			// the bluffs and headlands right on the open ocean are wind-scoured: coastal scrub and
+			// grass, with trees only down in the sheltered draws (the Marin Headlands, Devil's Slide)
+			const windswept = fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
+			if (windswept && gully < 0.35 && r2 < wood * 0.8) { if (!far && r2 < 0.5) trees.push({ x, y: g, z, h: 0.9 + r2 * 1.2, shrub: true, col: tint([0.28, 0.33, 0.2]) }); continue; }
 			if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.2 || north > 0.25) && high < 0.5) {
 				const rh = 32 + r2 * 34 + gully * 10;
 				trees.push({ x, y: g, z, h: rh, cone: true, sp: 2, col: tint([0.12, 0.19, 0.09]) });
+				if (!far) for (let k = 0; k < 7; k++) { const a = hash(gx * 7 + k, gz * 3) * 6.283, rr = 2 + hash(gx + k * 3, gz * 5) * 9, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.05, z: qz, h: 0.7 + hash(gx * k, gz + k) * 0.6, fern: true, col: tint([0.18, 0.3, 0.1]) }); }
 				if (!far) for (let k = 0, n = 2 + Math.floor(hash(gx * 2.3, gz * 5.9) * 4); k < n; k++) { const a = k / n * 6.283 + r2 * 3, rr = 4 + hash(gx + k, gz - k) * 3, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.3, z: qz, h: rh * (0.6 + hash(gx * k, gz) * 0.3), cone: true, sp: 2, col: tint([0.12, 0.2, 0.09]) }); }
 			} else if (r2 < wood * 0.8 && fog > 0.6 && north < 0.1 && slope < 0.6) trees.push({ x, y: g, z, h: 22 + r2 * 18, cone: true, sp: 2, col: tint([0.15, 0.22, 0.12]) });      // Douglas-fir
+			else if (r2 < wood * 0.8 && !far && fog > 0.3 && north > 0.3) { trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: 1, col: tint([0.16, 0.24, 0.1]) }); for (let k = 0; k < 4; k++) { const a = hash(gx * 5 + k, gz) * 6.283, rr = 3 + hash(gx, gz * 7 + k) * 6, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.05, z: qz, h: 0.6 + hash(gx + k, gz) * 0.5, fern: true, col: tint([0.2, 0.3, 0.12]) }); } }
 			else if (r2 < wood * 0.8) trees.push({ x, y: g, z, h: 6 + r2 * 9 + gully * 5, sp: r2 < wood * 0.35 ? 0 : 1, col: tint(r2 < 0.3 ? [0.16, 0.24, 0.1] : [0.22, 0.28, 0.13]) });
 			else if (r2 < wood * 0.8 + chap * 0.75) { if (!far) trees.push({ x, y: g, z, h: 1.4 + r2 * 1.8, shrub: true, col: tint(fog > 0.5 ? [0.28, 0.33, 0.2] : [0.2, 0.25, 0.13]) }); }
 			else if (fog < 0.4 && r2 > 0.965 - high * 0.05) trees.push({ x, y: g, z, h: 11 + r2 * 9, cone: true, sp: 2, col: tint([0.3, 0.36, 0.26]) });   // gray pine
@@ -1069,7 +1156,7 @@ export function createCity(shared, scene, bay, real = null) {
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
 		near.visible = hips.visible = gables.visible = farPts.visible = !high;
-		for (const im of [...shrubs, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
+		for (const im of [...shrubs, ...ferns, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
 		if (riseT0 >= 0) {

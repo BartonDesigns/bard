@@ -446,7 +446,7 @@ export function createIslandWorld() {
 			// the beaches down Highway 1: lots, restrooms, camps and fires, surf, the lighthouse
 			world.beaches = createBeaches(scene, bayArea, world.real, shared, { isPhone });
 			// the Bay Area's wild animals by habitat, month and hour, and the field journal
-			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide?.say?.(t, w) });
+			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			world.natureSound = createNatureSound(bayArea, (x, z) => bayArea.heightAt(x, z));
 			// roads graded like real ones, with berms: the ground walked and driven on is the

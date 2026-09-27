@@ -325,7 +325,7 @@ function banana(seed) {
 	return { parts: [stem.geometry(), leaves.geometry()], height: H + 1 };
 }
 
-function fern(seed, g = null) {
+export function fern(seed, g = null) {
 	const r = mulberry32(seed), b = new Builder(), FT = g ? g.tint : [1, 1, 1], FS = g ? g.size : 1;
 	const nF = 8 + Math.floor(r() * 4);
 	for (let f = 0; f < nF; f++) {

@@ -38,6 +38,7 @@ function deerGeo() {
 }
 
 export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, say = () => {} } = {}) {
+	// (hint(text, ms, priority): the trailhead board outranks the place names)
 	const group = new THREE.Group();
 	group.name = 'wildlife';
 	scene.add(group);
@@ -123,7 +124,7 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 		const tr = cam.position.y - g(cam.position.x, cam.position.z) < 60 ? TRAIL_AT.find((T) => Math.hypot(T.x - cam.position.x, T.z - cam.position.z) < 250) : null;
 		if (tr && tr !== trailSeen) {
 			const { likely, rare } = outToday(tr, hours, month);
-			hint(`${tr.name}\n${tr.note}${likely.length ? '\nOut today: ' + likely.map((s) => s.name).join(', ') : ''}${rare ? '\nIf you are lucky: ' + rare.name : ''}`, 9000);
+			hint(`${tr.name}\n${tr.note}${likely.length ? '\nOut today: ' + likely.map((s) => s.name).join(', ') : ''}${rare ? '\nIf you are lucky: ' + rare.name : ''}`, 14000, 2);
 		}
 		trailSeen = tr || (trailSeen && Math.hypot(trailSeen.x - cam.position.x, trailSeen.z - cam.position.z) < 400 ? trailSeen : null);
 		const onBay = bay.loaded() && Math.max(Math.abs(cam.position.x), Math.abs(cam.position.z)) > 1600 && cam.position.y < 2500;
