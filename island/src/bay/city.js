@@ -17,6 +17,7 @@ import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
 import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
+import { GREENS } from './realcity.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -1127,7 +1128,10 @@ export function createCity(shared, scene, bay, real = null) {
 			const fq = Math.min(1, Math.max(0, (x - 22000) / 36000)), fog = 1 - fq * fq * (3 - 2 * fq);
 			// the bluffs and headlands right on the open ocean are wind-scoured: coastal scrub and
 			// grass, with trees only down in the sheltered draws (the Marin Headlands, Devil's Slide)
-			const windswept = fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
+			// (a watered city park is planted: Golden Gate Park's groves of cypress, pine and eucalyptus)
+			const planted = GREENS.some((G) => Math.abs(x - G.x) < G.rx && Math.abs(z - G.z) < G.rz);
+			if (planted && r2 < 0.42) { trees.push(r2 < 0.24 ? { x, y: g, z, h: 16 + r2 * 40, cone: true, sp: 2, col: tint([0.1, 0.17, 0.08]) } : { x, y: g, z, h: 12 + r2 * 14, sp: 0, col: tint([0.2, 0.28, 0.12]) }); continue; }      // (Monterey cypress and pine; eucalyptus)
+			const windswept = !planted && fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
 			const draw = windswept ? (H(x + 60, z) + H(x - 60, z) + H(x, z + 60) + H(x, z - 60) - 4 * h) / 4 : 0;
 			if (windswept && (draw < 7 || r2 > wood * 0.3) && r2 < wood * 0.8) { if (!far && r2 < 0.5) trees.push({ x, y: g, z, h: 0.9 + r2 * 1.2, shrub: true, col: tint([0.28, 0.33, 0.2]) }); continue; }
 			if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.1 || north > 0.1 || slope < 0.3) && high < 0.5) {

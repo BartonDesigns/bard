@@ -365,6 +365,13 @@ export function createBayArea(shared, scene, island, BU) {
 					float season = clamp(uSeason - uSeasonLag * fogbelt, 0.0, 1.0);
 					gold = mix(spring, gold, clamp(season + (n1 - 0.5) * 0.3 + slope * 0.4 * season, 0.0, 1.0));
 					vec3 c = gold;
+					// the watered city parks stay green all summer: meadows, and dark groves of cypress
+					// and eucalyptus
+					for (int i = 0; i < 4; i++) {
+						vec2 gq = abs(vBW - uGreen[i].xy) / uGreen[i].zw;
+						float gk = 1.0 - smoothstep(0.85, 1.0, max(gq.x, gq.y));
+						if (gk > 0.0) c = mix(c, mix(mix(vec3(0.16, 0.3, 0.07), vec3(0.22, 0.36, 0.1), n2), vec3(0.05, 0.1, 0.04), smoothstep(0.5, 0.62, n1 + n3 * 0.1) * 0.85), gk);
+					}
 					// spring wildflowers in drifts across the open grass: California poppies (orange,
 					// on the sunny side), lupine (blue-violet, in swales), goldfields (yellow sheets)
 					c = wildflowers(c, vBW, slope);

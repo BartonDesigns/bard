@@ -28,6 +28,12 @@ const ROCKS = [
 	[37.8980, -122.6950, 2500, 0x9a8a70],      // Duxbury: Monterey shale
 	[37.9290, -122.5780, 2200, 0x6e6a5c],      // Mt Tam: greenstone and serpentine
 ].map(([lat, lon, r, c]) => ({ ...toWorld(lat, lon), r, c }));
+export const GREENS = [
+	[37.7694, -122.4830, 2600, 330],           // Golden Gate Park
+	[37.7360, -122.4870, 700, 300],            // Stern Grove and Pine Lake
+	[37.7960, -122.4050, 150, 130],            // (a placeholder kept small: Portsmouth Square)
+	[37.8070, -122.4330, 350, 110],            // the Marina Green
+].map(([lat, lon, rx, rz]) => ({ ...toWorld(lat, lon), rx, rz }));
 export const REAL_U = {
 	uRoadMap: { value: blank() }, uRoadR: { value: new THREE.Vector4(0, 0, 1, 0) },
 	uRoadMap2: { value: blank() }, uRoadR2: { value: new THREE.Vector4(0, 0, 1, 0) }, uPaintMap: { value: blank() },
@@ -36,13 +42,15 @@ export const REAL_U = {
 	uBloom: { value: 0 },                       // spring wildflowers: poppies, lupine, goldfields (0..1)
 	// the rocks by region (the naturalist's geology): [x, z, radius, 0] and their colours
 	uRock: { value: ROCKS.map((r) => new THREE.Vector4(r.x, r.z, r.r, 0)) }, uRockC: { value: ROCKS.map((r) => new THREE.Color(r.c)) },
+	// the watered city parks, green all summer: [x, z, half-length, half-width] (axis-aligned)
+	uGreen: { value: GREENS.map((g) => new THREE.Vector4(g.x, g.z, g.rx, g.rz)) },
 	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB2: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB3: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB4: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB5: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 	uRealB6: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB7: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB8: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB9: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason, uSeasonLag, uBloom; uniform vec4 uRock[8]; uniform vec3 uRockC[8];
+uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason, uSeasonLag, uBloom; uniform vec4 uRock[8]; uniform vec3 uRockC[8]; uniform vec4 uGreen[4];
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
 // the main region (its land use map), and any mapped region (real streets, no grid)
 bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }
