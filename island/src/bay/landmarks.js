@@ -509,10 +509,7 @@ export function createLandmarks(scene, bay) {
 		for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2; box(F, mats.concrete, 22, 18, 30, Math.cos(a) * 95, 0, Math.sin(a) * 125, -a + Math.PI / 2); }
 		put(F, mats.green, new THREE.CylinderGeometry(70, 70, 0.6, 24).scale(1, 1, 1.35).translate(0, 0.3, 0));
 	}
-	{ // Mount Diablo's summit: the stone museum tower and its beacon
-		const F = at(37.8816, -121.9142, 0);
-		box(F, mats.tan, 14, 10, 14); box(F, mats.tan, 6, 8, 6, 0, 10, 0); cyl(F, mats.gold, 1, 1, 2, 0, 18, 0, 8);
-	}
+	// (Mount Diablo's summit building and beacon: bay/diablo.js, on the mapped footprints)
 
 	// ---------------- Peninsula and South Bay ----------------
 	{ // Hoover Tower at Stanford

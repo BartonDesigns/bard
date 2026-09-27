@@ -14,6 +14,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { elephantSeal } from '../world/creatures.js';
+import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
+import { createMotion } from '../people/motion.js';
 
 // the elephant seals, sculpted once (world/creatures.js)
 let ELE = null;
@@ -268,9 +270,20 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			const surfer = () => {
 				const s = new THREE.Group();
 				const board = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, (S.big ? 2.6 : 1.7), 4, 8).scale(1, 1, 0.16).rotateX(Math.PI / 2).rotateY(Math.PI / 2), mats.board); board.rotation.set(0, 0, 0); s.add(board);
-				const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.6, 4, 8), mats.wetsuit); body.position.y = 0.55; s.add(body);
-				const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mats.wetsuit); head.position.y = 1.05; s.add(head);
-				return { s, body, head };
+				// the surfer: one of the real people (people/body.js) in a black wetsuit, sat astride
+				// the board in the lineup, up and riding when a wave comes
+				const o = { s, M: null };
+				loadPeopleAssets().then((A) => {
+					const d = personDNA(Math.floor(rnd() * 1e9), { age: 17 + rnd() * 35 }), k = [0.05, 0.05, 0.06];
+					d.outfit = { top: k, bottom: k, shoes: k, sleeves: 'long', legs: 'long', jacket: null, fabricTop: 'knit' };
+					const P = buildPerson(A, d);
+					P.root.traverse((q) => { q.castShadow = !isPhone; });
+					o.M = createMotion(P, () => 0.08);
+					o.M.place(0, 0.08, 0, 0);
+					o.M.sit(0.1, true); o.M.setPose('lap');
+					s.add(P.root);
+				}).catch(() => { /* no people: the board alone */ });
+				return o;
 			};
 			const n = isPhone ? Math.ceil(S.surf / 2) : S.surf, out = S.big ? 260 : 70;
 			for (let i = 0; i < n; i++) {
@@ -315,7 +328,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		// the plinth, the tapering shaft, its door and the little windows lighting the stair
 		put(mats.white, new THREE.CylinderGeometry(4.9, 5.2, BASE + 0.4, 8).translate(0, (BASE + 0.4) / 2, 0), 0, g0 - 0.4, 0);
 		put(mats.white, new THREE.CylinderGeometry(rAt(BASE + SHAFT), rAt(BASE), SHAFT, 32, 1, true).translate(0, SHAFT / 2, 0), 0, g0 + BASE, 0);
-		put(mats.pane, new THREE.BoxGeometry(1.2, 2.3, 0.5).translate(0, 1.15, 0), 0, g0 + BASE, rAt(BASE + 1) - 0.1, 0.9);
+		put(mats.pane, new THREE.BoxGeometry(1.2, 2.3, 0.5).translate(0, 1.15, 0), rAt(BASE + 1) - 0.1, g0 + BASE, 0, Math.PI / 2);
 		for (let i = 0; i < 6; i++) {
 			const y = BASE + 4 + i * 4, a = 0.9 + (i % 2 ? Math.PI : 0) + (i % 3) * 0.35, r = rAt(y) - 0.12;
 			put(mats.pane, new THREE.BoxGeometry(0.6, 1.2, 0.4), Math.sin(a) * r, g0 + y, Math.cos(a) * r, a);
@@ -363,11 +376,14 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		}
 	}
 
-	let cool = 0, lightsUp = false;
+	// (the station waits for every level of the ground, not just the coarse first one, so it
+	// stands at the point's true height)
+	let cool = 0, lightsUp = false, groundIn = !bay.ready;
+	bay.ready?.then(() => { groundIn = true; });
 	function update(dt, t, camera, nightK) {
 		night.value = nightK;
 		cool -= dt;
-		if (!lightsUp && bay.loaded()) { lightsUp = true; for (const S of SITES) if (S.light) lightStation(S.light); }
+		if (!lightsUp && groundIn && bay.loaded()) { lightsUp = true; for (const S of SITES) if (S.light) lightStation(S.light); }
 		// Pigeon Point's characteristic: one white flash every ten seconds
 		mats.lens.emissiveIntensity = nightK * (t % 10 < 0.4 ? 7 : 0.8);
 		const cx = camera.position.x, cz = camera.position.z;
@@ -390,7 +406,12 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 				const d = Sf.d0 * (1 - u * 0.75), sx = Sf.sx + Math.sin(Sf.toSea) * d + Math.sin(Sf.along) * Sf.u, sz = Sf.sz + Math.cos(Sf.toSea) * d + Math.cos(Sf.along) * Sf.u;
 				Sf.s.position.set(sx, 0.05 + Math.sin(t * 1.3 + Sf.ph) * 0.25 + (riding ? Math.sin(u * Math.PI) * 0.5 : 0), sz);
 				Sf.s.rotation.y = riding ? Sf.toSea + Math.PI + 0.5 : Sf.toSea;
-				Sf.body.position.y = riding ? 0.75 : 0.45; Sf.body.rotation.x = riding ? 0 : 0.2; Sf.head.position.y = riding ? 1.3 : 0.95;
+				if (Sf.M) {
+					// (in the board's own frame: sat facing out to sea, or up and riding it in)
+					if (riding !== Sf.wasRiding) { Sf.wasRiding = riding; if (riding) { Sf.M.stand(); Sf.M.setPose('rest'); } else { Sf.M.sit(0.1); Sf.M.setPose('lap'); } }
+					Sf.M.S.pos.set(0, 0.08, 0); Sf.M.want.speed = 0; Sf.M.want.heading = riding ? Math.PI / 2 : 0;
+					Sf.M.update(dt, t, null);
+				}
 			}
 			for (const E of B.seals) { E.seal.position.y = E.y + Math.max(0, Math.sin(t * 0.3 + E.ph)) * 0.05; }
 		}

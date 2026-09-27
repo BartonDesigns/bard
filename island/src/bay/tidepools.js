@@ -2,7 +2,7 @@
 // under Pillar Point, and Duxbury Reef off Bolinas. Each is a shelf of tilted mudstone and
 // sandstone just above the sea, worn into long ribs along the strata and cut by surge
 // channels, the bluffs behind it (the real ground, bay/terrain.js). Water stands in the
-// hollows: pools lined with pink coralline algae and sea lettuce, holding green anemones,
+// troughs between the ribs: pools lined with pink coralline algae and sea lettuce, holding green anemones,
 // purple urchins in their pits and ochre and purple sea stars; black mussel beds and
 // gooseneck barnacles along the seaward edge where the swell breaks, bull kelp floating
 // beyond, and at Fitzgerald harbor seals hauled out on the outer rocks.
@@ -142,7 +142,9 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 					const d = Math.hypot(u / (S.R * S.long), v / (S.R * S.wide)) / (0.72 + 0.5 * fbm(x / 60 + 2, z / 60 - 5));
 					if (d > 1) continue;
 					const g = bay.heightAt(x, z), pk = poolK(u, t), D = pk * (0.22 + 0.3 * hh(t, 4.4));
-					let h = TOP + R.base + y * A - D * pw - chanK(u, v) * 1.2 + (fbm(x / 2.2, z / 2.2) - 0.5) * 0.14 * (1 - pw * 0.7);
+					// joints cut each rib into blocks along its length, each block a little higher or lower
+					const blk = (ih(Math.floor((r + k * 2.3) / 3), k) - 0.5) * 0.3 * A * y;
+					let h = TOP + R.base + y * A + blk - D * pw - chanK(u, v) * 1.2 + (fbm(x / 2.2, z / 2.2) - 0.5) * 0.14 * (1 - pw * 0.7);
 					// out from the shore the ribs step down into the sea; inland they go under the beach
 					const out = smooth(-0.5, -5.5 - fbm(x / 40, z / 40) * 4, g);
 					h = h * (1 - out) + (g + 0.25 + y * A * 0.7) * out;
