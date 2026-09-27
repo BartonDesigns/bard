@@ -443,6 +443,45 @@ export function createCity(shared, scene, bay, real = null) {
 	const near = mk(boxGeo(), mat, CAP, true);
 	const hipG = roofGeometry(true), gableG = roofGeometry(false);
 	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
+	// what is on and about the buildings up close: the air conditioners on the flat roofs of
+	// the shops, offices and warehouses; a glass sunroom off the back of some houses, a
+	// clothesline in some back yards (see decorate)
+	const kit = (() => {
+		const colored = (geo, c) => { const g = geo.toNonIndexed(), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
+		const B = (w, h, d, x, y, z, c) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
+		const C = (r, h, x, y, z, c, seg = 14) => colored(new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z), c);
+		const body = [0.8, 0.81, 0.8], dark = [0.16, 0.17, 0.18], grille = [0.42, 0.43, 0.44];
+		// a packaged rooftop unit on its curb: the cabinet, two fans in their shrouds on top,
+		// the louvred coil down one side
+		const ac = mergeGeometries([
+			B(1.25, 0.18, 2.1, 0, 0, 0, [0.46, 0.46, 0.45]), B(1.1, 1.0, 1.95, 0, 0.18, 0, body),
+			C(0.34, 0.12, 0, 1.18, -0.45, grille), C(0.3, 0.02, 0, 1.3, -0.45, dark), C(0.34, 0.12, 0, 1.18, 0.45, grille), C(0.3, 0.02, 0, 1.3, 0.45, dark),
+			B(0.03, 0.62, 1.5, 0.56, 0.4, 0, grille), B(0.4, 0.3, 0.3, 0, 0.18, 1.1, body),
+		]);
+		// the sunroom: white frames, glass between (two meshes)
+		const fr = [0.95, 0.95, 0.93], bars = [];
+		for (const x of [-0.5, -0.25, 0, 0.25, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, -0.5, fr));
+		for (const z of [-0.25, 0, 0.25]) for (const x of [-0.5, 0.5]) bars.push(B(0.02, 1, 0.02, x, 0, z, fr));
+		for (const y of [0, 0.33, 1]) { bars.push(B(1.02, 0.03, 0.02, 0, y, -0.5, fr)); bars.push(B(0.02, 0.03, 1.0, -0.5, y, 0, fr)); bars.push(B(0.02, 0.03, 1.0, 0.5, y, 0, fr)); }
+		bars.push(B(1.06, 0.03, 1.06, 0, 1.0, 0, fr), B(1.04, 0.33, 0.01, 0, 0, -0.5, [0.85, 0.84, 0.8]));
+		const sunF = mergeGeometries(bars);
+		const sunG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+		// a clothesline: two T-posts, three lines between, and the washing pegged out
+		const post = [0.55, 0.56, 0.57], line = [0.9, 0.9, 0.88], parts = [];
+		for (const x of [-2.4, 2.4]) { parts.push(C(0.04, 1.9, x, 0, 0, post, 6), B(0.05, 0.05, 1.0, x, 1.85, 0, post)); }
+		for (const z of [-0.4, 0, 0.4]) parts.push(B(4.8, 0.012, 0.012, 0, 1.87, z, line));
+		const wash = [[0.9, 0.9, 0.88], [0.3, 0.45, 0.7], [0.85, 0.35, 0.3], [0.95, 0.85, 0.45], [0.5, 0.65, 0.5], [0.95, 0.7, 0.75], [0.25, 0.25, 0.3]];
+		for (let k = 0; k < 9; k++) { const w = 0.35 + (k * 37 % 5) * 0.1, h = 0.35 + (k * 53 % 4) * 0.12; parts.push(B(w, h, 0.01, -2 + (k % 3) * 1.5 + (k * 29 % 7) * 0.08, 1.86 - h, [-0.4, 0, 0.4][Math.floor(k / 3)], wash[k % wash.length])); }
+		const lineG = mergeGeometries(parts);
+		const M = (o) => withRise(new THREE.MeshStandardMaterial({ vertexColors: true, ...o }), rise, 'kitrise');
+		const mkK = (geo, material, cap) => { const im = new THREE.InstancedMesh(geo, material, cap); im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true; group.add(im); return im; };
+		const glassM = withRise(new THREE.MeshStandardMaterial({ color: 0xa9c4cf, roughness: 0.05, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false }), rise, 'kitrise');
+		return {
+			ac: mkK(ac, M({ roughness: 0.55, metalness: 0.35 }), 12000),
+			sunF: mkK(sunF, M({ roughness: 0.5 }), 3000), sunG: mkK(sunG, glassM, 3000),
+			line: mkK(lineG, M({ roughness: 0.9, side: THREE.DoubleSide }), 3000),
+		};
+	})();
 	// trees. Up close and in the middle distance, the island's own leaf-card trees in the
 	// Bay Area's street species: London plane and sycamore (round), coast live oak (low
 	// and spreading), redwood and cypress (columnar), and yard shrubs. Far off, where a
@@ -843,6 +882,53 @@ export function createCity(shared, scene, bay, real = null) {
 
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color(), Y = new THREE.Vector3(0, 1, 0);
 	let slotOf = new Map();
+	// the kit on and about the buildings within R of (cx, cz): rooftop units on the flat roofs
+	// (more on a big store, a few on an office, the odd one on a shed), ducts running from
+	// the biggest; a sunroom off the back (local -z) of about one house in twelve, a
+	// clothesline in the back yard of about one in eight
+	const FLAT = new Set([KIND.office, KIND.retail, KIND.industry, KIND.shop, KIND.tower, KIND.row]);
+	const HOUSE = new Set([KIND.house, KIND.houseGarageL, KIND.houseGarageR]);
+	function decorate(list, cx, cz, R) {
+		const put = [[], [], []], n0 = list.length;
+		for (let i = 0; i < n0; i++) {
+			const o = list[i];
+			if (Math.abs(o.x - cx) > R || Math.abs(o.z - cz) > R || o.h < 3) continue;
+			const ca = Math.cos(o.a), sa = Math.sin(o.a), W = (lx, lz) => [o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz];
+			const r = hash(o.x * 0.73 + 3.1, o.z * 0.61 - 1.7), area = o.w * o.d, top = o.y + o.h;
+			if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7) {
+				const n = Math.max(1, Math.min(o.kind === KIND.retail || o.kind === KIND.shop ? 10 : 6, Math.round(area / (o.kind === KIND.industry ? 700 : 280) * (0.6 + r * 0.8))));
+				const along = o.w > o.d, L = along ? o.w : o.d, S = along ? o.d : o.w, big = area > 1500 ? 1.6 : area > 600 ? 1.25 : 1;
+				for (let k = 0; k < n; k++) {
+					const u = ((k + 0.5) / n - 0.5) * (L - 5) + (hash(o.x * 0.9 + k * 7, o.z * 1.1) - 0.5) * 2, v = (hash(o.z * 0.8 + k * 5, o.x * 1.2) - 0.5) * (S - 5);
+					const [x, z] = along ? W(u, v) : W(v, u);
+					put[0].push([x, top, z, o.a + (along ? 0 : Math.PI / 2) + (hash(o.x * 2 + k * 13, o.z * 2) < 0.2 ? Math.PI / 2 : 0), big * (0.9 + hash(o.x + k * 11, o.z - k * 3) * 0.3)]);
+				}
+				// the ducts: a run from the units along the roof and down into it
+				if (area > 800) {
+					const [x, z] = along ? W(0, S * 0.18) : W(S * 0.18, 0);
+					list.push({ x, y: top - 0.05, z, w: along ? L * 0.6 : 0.7, d: along ? 0.7 : L * 0.6, h: 0.75, a: o.a, col: [0.72, 0.73, 0.74], kind: KIND.plain, roof: null });
+				}
+			} else if (o.roof && HOUSE.has(o.kind) && area > 55 && o.w > 6.5) {
+				const [bx, bz] = W(0, -o.d / 2 - 7), g = bay.heightAt(bx, bz), g0 = bay.heightAt(o.x, o.z);
+				if (r < 0.085 && Math.abs(g - g0) < 1.5) {
+					const w = Math.min(4.8, o.w * 0.45), d = 3.2, [x, z] = W((hash(o.x * 1.3, o.z * 0.9) < 0.5 ? -1 : 1) * (o.w / 2 - w / 2 - 0.6), -o.d / 2 - d / 2 + 0.05);
+					put[1].push([x, g0 + 0.25, z, o.a, w, 2.6, d]);
+				} else if (r > 0.3 && r < 0.43 && Math.abs(g - g0) < 1.2 && g > 0.8) put[2].push([bx, g, bz, o.a + (hash(o.z * 1.1, o.x * 0.7) - 0.5) * 0.5, 1]);
+			}
+		}
+		list.kit = put;
+	}
+	function uploadKit(put) {
+		const [acs, suns, lines] = put || [[], [], []];
+		let n = 0;
+		for (const [x, y, z, a, s] of acs) { if (n >= kit.ac.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.ac.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
+		kit.ac.count = n; n = 0;
+		for (const [x, y, z, a, w, h, d] of suns) { if (n >= kit.sunF.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); m4.compose(p.set(x, y, z), q, sc.set(w, h, d)); kit.sunF.setMatrixAt(n, m4); m4.compose(p.set(x, y + 0.33 * h, z), q, sc.set(w - 0.04, h * 0.67 - 0.02, d - 0.04)); kit.sunG.setMatrixAt(n++, m4); }
+		kit.sunF.count = kit.sunG.count = n; n = 0;
+		for (const [x, y, z, a, s] of lines) { if (n >= kit.line.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.line.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
+		kit.line.count = n;
+		for (const im of [kit.ac, kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+	}
 	function upload(list, body, roofs) {
 		let n = 0, nh = 0, ng = 0;
 		const kinds = body.geometry.attributes.aKind, nearA = body.geometry.attributes.aNear;
@@ -1188,11 +1274,13 @@ export function createCity(shared, scene, bay, real = null) {
 		const list = [];
 		fillBlocks(x, z, 1200, list);
 		realBuildings(x, z, 2000, list);
+		decorate(list, x, z, 700);
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
-		if (list.length > CAP) { const t = list.trees; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; }
+		if (list.length > CAP) { const t = list.trees, k = list.kit; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
 		upload(list, near, [hips, gables]);
+		uploadKit(list.kit);
 		placeTrees(x, z);
 	}
 	return { update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };

@@ -51,7 +51,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 	const mats = {
 		wall: S(0xe9e4da, 0.9), walld: S(0x8a8074, 0.85), trim: S(0x3a3a3c, 0.5, { metalness: 0.4 }), glass: S(0x9fb4bf, 0.05, { metalness: 0.3, transparent: true, opacity: 0.28, depthWrite: false }),
 		floorW: S(0x8a6440, 0.55), floorT: S(0xc9c4ba, 0.45), carpet: S(0x5a5f6a, 0.95), lane: S(0xc79a5e, 0.25),
-		ceil: S(0xf2f0ea, 0.9), panel: S(0xffffff, 0.5, { emissive: new THREE.Color(0xfff4e0), emissiveIntensity: 0.9 }),
+		ceil: S(0xf2f0ea, 0.9), deck: S(0x2e3033, 0.9), duct: S(0xc4c8cc, 0.35, { metalness: 0.75 }), pipe: S(0xa8201c, 0.5), panel: S(0xffffff, 0.5, { emissive: new THREE.Color(0xfff4e0), emissiveIntensity: 0.9 }),
 		wood: S(0x6b4a2e, 0.6), dark: S(0x202224, 0.5), steel: S(0xb8bcc0, 0.3, { metalness: 0.7 }), white: S(0xf4f4f0, 0.5), red: S(0x9c2a26, 0.7), leather: S(0x5a2e22, 0.6),
 		green: S(0x3f6b3a, 0.8), screen: S(0x101418, 0.3, { emissive: new THREE.Color(0x6fb0ff), emissiveIntensity: 1.2 }), neon: S(0x220a22, 0.4, { emissive: new THREE.Color(0xff4fd0), emissiveIntensity: 1.6 }),
 		bigscreen: S(0x111111, 0.4, { emissive: new THREE.Color(0xc8d8ff), emissiveIntensity: 1.1 }), seat: S(0x7a1c24, 0.8), food: S(0xd9a54a, 0.7), cup: S(0xf4efe6, 0.4),
@@ -95,8 +95,47 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		box(mats.trim, doorX - dw / 2 - 0.08, 0, hd - WALL, doorX - dw / 2, STORE, hd); box(mats.trim, doorX + dw / 2, 0, hd - WALL, doorX + dw / 2 + 0.08, STORE, hd);
 		// an awning over the door, the name board above it
 		box(type === 'restaurant' ? mats.red : type === 'arcade' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
-		box(mats.ceil, -hw, CEIL, -hd, hw, CEIL + 0.12, hd);
-		for (let x = -hw + 2; x < hw - 1; x += 3) for (let z = -hd + 2; z < hd - 1; z += 3) box(type === 'cinema' && z < hd - 9 ? mats.ceil : mats.panel, x - 0.55, CEIL - 0.02, z - 0.55, x + 0.55, CEIL, z + 0.55);
+		// the ceiling: a dropped grid of light panels, or (the creative offices, the big stores,
+		// some cafés and restaurants) open to the roof: the deck painted dark, bowstring trusses
+		// arching across, spiral ducts, the sprinkler main, a cable tray, pendant lights
+		const open = H > CEIL + 1.4 && ((type === 'office' && rnd() < 0.5) || (type === 'shop' && W * D > 500) || ((type === 'cafe' || type === 'restaurant') && rnd() < 0.4));
+		if (!open) {
+			box(mats.ceil, -hw, CEIL, -hd, hw, CEIL + 0.12, hd);
+			for (let x = -hw + 2; x < hw - 1; x += 3) for (let z = -hd + 2; z < hd - 1; z += 3) box(type === 'cinema' && z < hd - 9 ? mats.ceil : mats.panel, x - 0.55, CEIL - 0.02, z - 0.55, x + 0.55, CEIL, z + 0.55);
+		} else openCeiling();
+		function openCeiling() {
+			const beam = (mat, x0, y0, x1, y1, z, t) => { const L = Math.hypot(x1 - x0, y1 - y0); add(mat, new THREE.BoxGeometry(L, t, t).rotateZ(Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2, z)); };
+			const top = H - 0.14, yb = Math.max(CEIL + 0.4, H - 1.9), span = W - 2 * WALL;
+			box(mats.deck, -hw, top, -hd, hw, top + 0.04, hd);
+			// the trusses: a straight bottom chord, an arched top chord, webs between
+			for (let z = -hd + 2.5; z < hd - 1.5; z += 4.5) {
+				const N = 12, arc = (t) => yb + (top - 0.06 - yb) * Math.sin(t * Math.PI);
+				beam(mats.deck, -span / 2, yb, span / 2, yb, z, 0.12);
+				for (let k = 0; k < N; k++) {
+					const t0 = k / N, t1 = (k + 1) / N, x0 = -span / 2 + span * t0, x1 = -span / 2 + span * t1;
+					beam(mats.deck, x0, arc(t0), x1, arc(t1), z, 0.14);
+					if (k > 0) beam(mats.deck, x0, yb, x0, arc(t0), z, 0.05);
+					beam(mats.deck, k % 2 ? x0 : x1, yb, k % 2 ? x1 : x0, arc(k % 2 ? t1 : t0), z, 0.04);
+				}
+			}
+			// the ducts: a big spiral duct each side down the length, drops to round diffusers
+			for (const sx of [-1, 1]) {
+				const x = sx * span * 0.28, y = yb - 0.45;
+				add(mats.duct, new THREE.CylinderGeometry(0.34, 0.34, D - 2, 14, 1, true).rotateX(Math.PI / 2).translate(x, y, 0));
+				for (let z = -hd + 3; z < hd - 2; z += 1.2) add(mats.duct, new THREE.TorusGeometry(0.345, 0.012, 4, 14).translate(x, y, z));
+				for (let z = -hd + 4; z < hd - 3; z += 6) { cyl(mats.duct, x, y - 0.9, z, 0.13, 0.6, 10); cyl(mats.duct, x, y - 0.95, z, 0.3, 0.06, 14); }
+			}
+			// the sprinkler main and its heads, a cable tray, and the pendant lights on long cords
+			add(mats.pipe, new THREE.CylinderGeometry(0.05, 0.05, D - 1, 8).rotateX(Math.PI / 2).translate(span * 0.06, yb - 0.12, 0));
+			for (let z = -hd + 2; z < hd - 1; z += 3) cyl(mats.steel, span * 0.06, yb - 0.3, z, 0.02, 0.18, 6);
+			box(mats.dark, -span * 0.1 - 0.2, yb - 0.25, -hd + 1, -span * 0.1 + 0.2, yb - 0.2, hd - 1);
+			for (let x = -span / 2 + 2.2; x < span / 2 - 1.5; x += 3.4) for (let z = -hd + 2.8; z < hd - 2.2; z += 3.4) {
+				if (Math.abs(Math.abs(x) - span * 0.28) < 0.8) continue;
+				box(mats.dark, x - 0.008, 3.1, z - 0.008, x + 0.008, top, z + 0.008);
+				add(mats.dark, new THREE.ConeGeometry(0.28, 0.3, 14, 1, true).translate(x, 3.0, z));
+				cyl(mats.panel, x, 2.86, z, 0.2, 0.02, 12);
+			}
+		}
 		box(mats.walld, -hw, H - 0.1, -hd, hw, H + 0.25, hd);
 
 		// ---------- the fit-out ----------

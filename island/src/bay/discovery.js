@@ -60,6 +60,8 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		orange: M('#c0362c', 0.55, { metalness: 0.25 }), sand: M('#d9c7a0', 0.95), rock: M('#6d655a', 0.95, { flatShading: true }), boat: M('#f2efe8', 0.6), boatHull: M('#1d4e89', 0.6), counter: M('#6b4a2e', 0.6), steel: M('#9aa0a4', 0.4, { metalness: 0.6 }),
 		cloth: [M('#2c3e50'), M('#e8452c'), M('#1d8fd1'), M('#3fae49'), M('#f5a623'), M('#8e44ad'), M('#eeeeee')], skin: [M('#e0b494'), M('#c68e6a'), M('#8d5a3b'), M('#f0cfb0')],
 		signFace: new THREE.MeshStandardMaterial({ map: museumSign(), roughness: 0.6 }),
+		roofD: M('#8a3b2c', 0.8, { side: THREE.DoubleSide }), wallD: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8, side: THREE.DoubleSide }),
+		vault: M('#f8f5ec', 0.9, { side: THREE.DoubleSide, emissive: new THREE.Color('#77736a') }), shade: M('#2f4f4a', 0.5, { side: THREE.DoubleSide }), bulb: M('#fff3d6', 0.4, { emissive: new THREE.Color('#ffe2a8'), emissiveIntensity: 1.4 }),
 	};
 	let built = null;
 	const g = (x, z) => bay.heightAt(x, z);
@@ -106,9 +108,45 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 				}
 			}
 			// the upper floor and the ceiling (inside, the ground floor is one open hall)
-			boxIn(F, mat.inWall, W - 0.4, 0.2, D - 0.4, 0, Math.min(3.6, H - 0.3), zc);
+			if (!(main || cafe) || H < 5) boxIn(F, mat.inWall, W - 0.4, 0.2, D - 0.4, 0, Math.min(3.6, H - 0.3), zc);
+			else {
+				// the halls are open to the roof: a white barrel vault springing from the wall tops,
+				// steel tie rods across, and the building's services left bare below it: two long
+				// spiral ducts, the red sprinkler main, pendant lights on long cords
+				const c = D - 0.6, rise = 2.3, R = (c * c / 4 + rise * rise) / (2 * rise), half = Math.asin(c / 2 / R);
+				const vg = new THREE.CylinderGeometry(R, R, W - 0.5, 40, 1, true, Math.PI / 2 - half, 2 * half).rotateZ(Math.PI / 2).translate(0, H - 0.05 + rise - R, zc);
+				vg.applyMatrix4(F.m); add(mat.vault, vg);
+				for (let k = -hw + 1.2; k < hw - 0.8; k += 3.2) {
+					boxIn(F, mat.steel, 0.04, 0.04, D - 0.6, k, H - 0.3, zc);
+					// ribs under the vault at each tie
+					for (let j = 0; j < 12; j++) {
+						const a0 = -half + (2 * half) * j / 12, a1 = -half + (2 * half) * (j + 1) / 12, y0 = H - 0.05 + rise - R + R * Math.cos(a0), y1 = H - 0.05 + rise - R + R * Math.cos(a1), z0 = zc + R * Math.sin(a0), z1 = zc + R * Math.sin(a1);
+						const rib = new THREE.BoxGeometry(0.12, 0.14, Math.hypot(z1 - z0, y1 - y0)).rotateX(-Math.atan2(y1 - y0, z1 - z0)).translate(k, (y0 + y1) / 2 - 0.05, (z0 + z1) / 2);
+						rib.applyMatrix4(F.m); add(mat.wood, rib);
+					}
+				}
+				for (const sz of [-1, 1]) {
+					const dz = zc + sz * D * 0.22, dy = H - 0.9;
+					const dg = new THREE.CylinderGeometry(0.3, 0.3, W - 1, 14, 1, true).rotateZ(Math.PI / 2).translate(0, dy, dz); dg.applyMatrix4(F.m); add(mat.steel, dg);
+					for (let k = -hw + 1.5; k < hw - 1; k += 1.1) { const t = new THREE.TorusGeometry(0.305, 0.012, 4, 14).rotateY(Math.PI / 2).translate(k, dy, dz); t.applyMatrix4(F.m); add(mat.steel, t); }
+					for (let k = -hw + 3; k < hw - 2; k += 5) boxIn(F, mat.steel, 0.5, 0.25, 0.5, k, dy - 0.55, dz);
+				}
+				{ const pg = new THREE.CylinderGeometry(0.045, 0.045, W - 1, 8).rotateZ(Math.PI / 2).translate(0, H - 0.5, zc + 0.8); pg.applyMatrix4(F.m); add(mat.orange, pg); }
+				for (let k = -hw + 2.4; k < hw - 1.5; k += 3.2) for (const lz of [zc - D * 0.3, zc, zc + D * 0.3]) {
+					boxIn(F, mat.net, 0.015, H - 3.2, 0.015, k, 3.1, lz);
+					const sh = new THREE.ConeGeometry(0.3, 0.28, 16, 1, true).translate(k, 3.05, lz); sh.applyMatrix4(F.m); add(mat.shade, sh);
+					const bulb = new THREE.SphereGeometry(0.1, 10, 6).translate(k, 2.95, lz); bulb.applyMatrix4(F.m); add(mat.bulb, bulb);
+				}
+			}
 			// the hip roof
-			{ const rg = new THREE.ConeGeometry(1, 1, 4, 1).rotateY(Math.PI / 4); rg.scale(W * 0.76, H > 5 ? 3.4 : 2.4, D * 0.76); rg.translate(0, H + (H > 5 ? 1.7 : 1.2), zc); rg.applyMatrix4(F.m); add(mat.roof, rg); }
+			if ((main || cafe) && H > 5) {
+				// the halls: a gable roof (ridge along the length) over the vault, clapboard gable ends
+				const rd = D / 2 + 0.5, rh = 3.4, L = W / 2 + 0.3, P = [[-L, 0, -rd], [L, 0, -rd], [L, rh, 0], [-L, rh, 0], [-L, 0, rd], [L, 0, rd]];
+				const tri = (a2, b2, c2) => [...P[a2], ...P[b2], ...P[c2]];
+				const rg = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([...tri(0, 3, 2), ...tri(0, 2, 1), ...tri(5, 2, 3), ...tri(5, 3, 4)], 3));
+				rg.computeVertexNormals(); rg.translate(0, H, zc); rg.applyMatrix4(F.m); add(mat.roofD, rg);
+				for (const sx of [-1, 1]) { const eg = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([sx * (W / 2), 0, -hd, sx * (W / 2), 0, hd, sx * (W / 2), rh - 0.25, 0], 3)).setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 0.4], 2)); eg.computeVertexNormals(); eg.translate(0, H, zc); eg.applyMatrix4(F.m); add(mat.wallD, eg); }
+			} else { const rg = new THREE.ConeGeometry(1, 1, 4, 1).rotateY(Math.PI / 4); rg.scale(W * 0.76, H > 5 ? 3.4 : 2.4, D * 0.76); rg.translate(0, H + (H > 5 ? 1.7 : 1.2), zc); rg.applyMatrix4(F.m); add(mat.roof, rg); }
 			// the porch: a deck along the front on white posts, a balcony above with railings
 			const pd = 2.6, pz = zc + hd + pd / 2;
 			boxIn(F, mat.porch, W, 0.25, pd, 0, -0.25, pz);
