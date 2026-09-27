@@ -6306,7 +6306,7 @@ float bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))
 				// contact shade: the wall darkens where it meets the ground (the sky it sees is
 				// half hidden there), so the building sits in the ground instead of on it
 				diffuseColor.rgb *= mix(1.0, mix(0.58, 1.0, smoothstep(0.9, 3.4, vLY)), (1.0 - roof) * step(vKind, 6.5));
-				float lit = max(mix(0.18, step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
+				float lit = max(mix(0.3, step(vKind > 1.5 ? 0.5 : 0.58, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
 				// each lit window its own: warm lamps or cool office tubes, brighter up by the
 				// ceiling light, some with the blinds half down (close up; far off, the average)
 				vec2 fc = fract(cell), cid = floor(cell);
@@ -6315,7 +6315,9 @@ float bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
 				// after dark the walls are not black: the city's own glow on them, and the warm
 				// spill of the streetlights up the lowest floors
-				winGlow += diffuseColor.rgb * (1.0 - win) * (1.0 - roof) * uNightC * (0.05 * vec3(0.8, 0.85, 1.0) + 0.16 * vec3(1.0, 0.78, 0.5) * (1.0 - smoothstep(2.5, 13.0, vLY)));
+				winGlow += diffuseColor.rgb * (1.0 - win) * (1.0 - roof) * uNightC * (0.14 * vec3(0.8, 0.85, 1.0) + 0.3 * vec3(1.0, 0.78, 0.5) * (1.0 - smoothstep(2.5, 16.0, vLY)));
+				// the dark windows are not holes: the night sky and the lit city in the glass
+				winGlow += vec3(0.05, 0.065, 0.09) * win * (1.0 - lit) * uNightC * (0.6 + 0.8 * bh(cid + 9.1));
 			}`).replace("#include <roughnessmap_fragment>",`#include <roughnessmap_fragment>
 roughnessFactor = mix(roughnessFactor, 0.12, glassK);`).replace("#include <emissivemap_fragment>",`#include <emissivemap_fragment>
 totalEmissiveRadiance += winGlow;`)},n.customProgramCacheKey=()=>"baybuilding11",n}function Ev(a){let e=a?.28:0,t=[-.5,0,-.5,.5,0,-.5,.5,0,.5,-.5,0,.5,-.5+e,1,0,.5-e,1,0],n=[0,4,5,0,5,1,2,5,4,2,4,3,1,5,2,3,4,0],o=new yt;o.setAttribute("position",new je(t,3)),o.setIndex(n);let s=o.toNonIndexed();return s.computeVertexNormals(),s}var ir=128;function xR(a,e){let t=document.createElement("canvas");t.width=t.height=ir;let n=t.getContext("2d"),[o,s]=a,i=new $n().setFromBufferAttribute(s.attributes.position).union(new $n().setFromBufferAttribute(o.attributes.position)),r=i.max.y-Math.max(0,i.min.y),l=Math.max(i.max.x-i.min.x,i.max.z-i.min.z),c=ir/Math.max(r,l)*.98,h=w=>ir/2+w*c,d=w=>ir-1-w*c,p=w=>Math.round(Math.min(255,Math.pow(Math.max(0,w),1/2.2)*255)),x=(w,f,g)=>{let u=w.attributes.position,m=w.attributes.color,v=w.index.array,M=[];for(let A=0;A<v.length;A+=3){let E=0;for(let b=0;b<3;b++)E+=u.getZ(v[A+b]);M.push([A,E])}M.sort((A,E)=>A[1]-E[1]);for(let[A]of M){let E=v[A],b=v[A+1],P=v[A+2],U=f(m,E);n.fillStyle=`rgba(${p(U[0])},${p(U[1])},${p(U[2])},${g})`,n.beginPath(),n.moveTo(h(u.getX(E)),d(u.getY(E))),n.lineTo(h(u.getX(b)),d(u.getY(b))),n.lineTo(h(u.getX(P)),d(u.getY(P))),n.closePath(),n.fill()}};x(o,()=>[.12,.09,.07],1),x(s,(w,f)=>[w.getX(f)*e[0],w.getY(f)*e[1],w.getZ(f)*e[2]],.7),n.globalCompositeOperation="destination-out";let S=7,y=()=>(S=S*16807%2147483647,S/2147483647);for(let w=0;w<700;w++){let f=y()*ir,g=y()*ir*.8;n.fillStyle=`rgba(0,0,0,${.25+y()*.35})`,n.beginPath(),n.arc(f,g,.6+y()*1.4,0,6.283),n.fill()}return t}var yR=`

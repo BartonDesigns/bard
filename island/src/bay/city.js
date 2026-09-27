@@ -335,7 +335,7 @@ function buildingMaterial(shared, night, nearBand) {
 				// contact shade: the wall darkens where it meets the ground (the sky it sees is
 				// half hidden there), so the building sits in the ground instead of on it
 				diffuseColor.rgb *= mix(1.0, mix(0.58, 1.0, smoothstep(0.9, 3.4, vLY)), (1.0 - roof) * step(vKind, 6.5));
-				float lit = max(mix(0.18, step(vKind > 1.5 ? 0.62 : 0.66, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
+				float lit = max(mix(0.3, step(vKind > 1.5 ? 0.5 : 0.58, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
 				// each lit window its own: warm lamps or cool office tubes, brighter up by the
 				// ceiling light, some with the blinds half down (close up; far off, the average)
 				vec2 fc = fract(cell), cid = floor(cell);
@@ -344,7 +344,9 @@ function buildingMaterial(shared, night, nearBand) {
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
 				// after dark the walls are not black: the city's own glow on them, and the warm
 				// spill of the streetlights up the lowest floors
-				winGlow += diffuseColor.rgb * (1.0 - win) * (1.0 - roof) * uNightC * (0.05 * vec3(0.8, 0.85, 1.0) + 0.16 * vec3(1.0, 0.78, 0.5) * (1.0 - smoothstep(2.5, 13.0, vLY)));
+				winGlow += diffuseColor.rgb * (1.0 - win) * (1.0 - roof) * uNightC * (0.14 * vec3(0.8, 0.85, 1.0) + 0.3 * vec3(1.0, 0.78, 0.5) * (1.0 - smoothstep(2.5, 16.0, vLY)));
+				// the dark windows are not holes: the night sky and the lit city in the glass
+				winGlow += vec3(0.05, 0.065, 0.09) * win * (1.0 - lit) * uNightC * (0.6 + 0.8 * bh(cid + 9.1));
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
