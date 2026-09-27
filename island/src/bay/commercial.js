@@ -186,11 +186,12 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			box(mats.red, inside.x0 + 1, 0, hall + 2, inside.x0 + 6, 1.05, hall + 2.8, true);
 			box(mats.food, inside.x0 + 1.2, 1.05, hall + 2.1, inside.x0 + 2, 1.7, hall + 2.7);
 			box(mats.screen, inside.x0 + 1, 2.2, hall + 0.2, inside.x0 + 6, 3, hall + 0.25);
-			box(mats.bigscreen, inside.x0 + 1, 0.9, inside.z0 + 0.05, inside.x1 - 1, Math.min(CEIL - 0.3, 3.3), inside.z0 + 0.12);
-			for (let r = 0, z = inside.z0 + 3.5; z < hall - 1; z += 1.1, r++) {
+			const hx0 = Math.max(inside.x0, -13), hx1 = Math.min(inside.x1, 13);          // (one screen's hall, not the whole block)
+			box(mats.bigscreen, hx0 + 1, 0.9, inside.z0 + 0.05, hx1 - 1, Math.min(CEIL - 0.3, 3.3), inside.z0 + 0.12);
+			for (let r = 0, z = inside.z0 + 3.5; z < hall - 1 && r < 16; z += 1.1, r++) {
 				const y = Math.min(1.2, r * 0.18);
-				box(mats.walld, inside.x0, 0, z - 0.5, inside.x1, y, z + 0.6);
-				for (let x = inside.x0 + 1; x < inside.x1 - 1; x += 0.62) { box(mats.seat, x - 0.26, y, z - 0.25, x + 0.26, y + 0.45, z + 0.2); box(mats.seat, x - 0.26, y + 0.45, z + 0.15, x + 0.26, y + 1.0, z + 0.25); seats.push([x, z - 0.02, 0, true, y]); }
+				box(mats.walld, hx0, 0, z - 0.5, hx1, y, z + 0.6);
+				for (let x = hx0 + 1; x < hx1 - 1; x += 0.62) { box(mats.seat, x - 0.26, y, z - 0.25, x + 0.26, y + 0.45, z + 0.2); box(mats.seat, x - 0.26, y + 0.45, z + 0.15, x + 0.26, y + 1.0, z + 0.25); seats.push([x, z - 0.02, 0, true, y]); }
 			}
 		}
 

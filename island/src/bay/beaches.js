@@ -329,5 +329,5 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		}
 		return -1e9;
 	}
-	return { group: root, update, beachAt, floor, sites: SITES };
+	return { group: root, update, beachAt, floor, sites: SITES, debug: () => [...built.values()].map((B) => ({ name: B.S.name, lot: !!B.lot, fires: B.fires.length, lanterns: B.lanterns.length, surfers: B.surfers.length, kids: B.group.children.length })) };
 }

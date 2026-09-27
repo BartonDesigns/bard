@@ -111,7 +111,9 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 			const x = x0 + i * CELL, z = z0 + j * CELL, g = bay.heightAt(x, z), sh = shelfAt(S, g, x, z), k = j * n + i;
 			G[k] = g; info[k] = sh;
 			// (under the ground, the rock is not drawn: the beach and the bluffs are the ground's)
-			H[k] = sh && sh.h > g - 0.05 ? sh.h : NaN;
+			// (where it runs under the beach it is still drawn, just below the sand, so the rock's
+			// edge is wherever the two surfaces cross: a smooth line, not the grid's steps)
+			H[k] = sh ? (sh.h > g - 0.05 ? sh.h : g - 0.25) : NaN;
 		}
 		B.H = H; B.n = n; B.x0 = x0; B.z0 = z0;
 		// the rock: every cell whose corners all show
