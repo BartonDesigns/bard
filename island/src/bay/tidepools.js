@@ -40,13 +40,13 @@ function shelfAt(S, g, x, z) {
 	if (d > 1) return null;
 	// the strata: ribs a few metres apart, bent by the noise, their edges sharp on one side
 	const w = across / 3.2 + fbm(x / 22, z / 22) * 3.2, rib = w - Math.floor(w);
-	const ribs = (rib < 0.72 ? rib / 0.72 : (1 - rib) / 0.28) * 0.34;
+	const ribs = (rib < 0.72 ? rib / 0.72 : (1 - rib) / 0.28) * 0.22;
 	// surge channels across the strata, and the pools
 	const chan = smooth(0.8, 0.9, vn(along / 7 + 3.1, across / 60)) * smooth(0.5, 0.7, fbm(along / 30, across / 30));
-	const pool = smooth(0.52, 0.66, fbm(x / 9 + 11, z / 9 - 4));
+	const pool = smooth(0.46, 0.6, fbm(x / 8 + 11, z / 8 - 4));
 	// out from the shore the rock goes down into the sea; inland it is under the beach
 	const out = smooth(-0.5, -5.5 - fbm(x / 40, z / 40) * 4, g);
-	let h = TOP + ribs - pool * 0.55 - chan * 1.3 + (fbm(x / 3, z / 3) - 0.5) * 0.22 + (hh(Math.floor(x / 1.3), Math.floor(z / 1.3)) - 0.5) * 0.12;
+	let h = TOP + ribs - pool * 0.55 - chan * 1.3 + (fbm(x / 3, z / 3) - 0.5) * 0.22;
 	h = h * (1 - out) + (g + 0.3) * out;
 	// and it fades into the ground round the edge of the site
 	const edge = smooth(0.8, 1, d);
@@ -60,7 +60,7 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 	const CELL = isPhone ? 2.6 : 1.6;            // (the rock's grid)
 	scene.add(root);
 	const built = new Map();
-	const rockM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0, flatShading: true });
+	const rockM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0 });
 	const poolM = new THREE.MeshStandardMaterial({ color: 0x163a3c, roughness: 0.03, metalness: 0.2, transparent: true, opacity: 0.42, depthWrite: false });
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler(), col = new THREE.Color();
 
@@ -126,14 +126,17 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 			// coralline in the pools, black mussel beds out on the edge
 			const n1 = fbm(x / 5, z / 5), wet = 1 - smooth(TOP - 0.1, TOP + 0.3, h);
 			// (picked in sRGB, stored linear)
-			let r = 0.5 + n1 * 0.14, gg = 0.45 + n1 * 0.12, b = 0.38 + n1 * 0.1;
-			r *= 1 - wet * 0.55; gg *= 1 - wet * 0.52; b *= 1 - wet * 0.48;
-			const lettuce = smooth(0.4, 0.7, fbm(x / 4 + 9, z / 4)) * smooth(0.5, 0.1, h) * (1 - sh.out);
-			r += (0.24 - r) * lettuce; gg += (0.42 - gg) * lettuce; b += (0.14 - b) * lettuce;
+			let r = 0.34 + n1 * 0.1, gg = 0.31 + n1 * 0.08, b = 0.27 + n1 * 0.07;
+			r *= 1 - wet * 0.5; gg *= 1 - wet * 0.48; b *= 1 - wet * 0.44;
+			// rockweed over most of the low rock, olive-brown; sea lettuce bright in the damp hollows
+			const weed = smooth(0.3, 0.55, fbm(x / 6 - 3, z / 6 + 5)) * smooth(0.75, 0.25, h) * (1 - sh.out * 0.6);
+			r += (0.3 - r) * weed; gg += (0.26 - gg) * weed; b += (0.1 - b) * weed;
+			const lettuce = smooth(0.5, 0.75, fbm(x / 4 + 9, z / 4)) * smooth(0.45, 0.1, h) * (1 - sh.out);
+			r += (0.22 - r) * lettuce; gg += (0.45 - gg) * lettuce; b += (0.12 - b) * lettuce;
 			const pink = sh.pool * smooth(0.45, 0.7, fbm(x / 2.5, z / 2.5 + 7));
-			r += (0.72 - r) * pink; gg += (0.47 - gg) * pink; b += (0.52 - b) * pink;
+			r += (0.62 - r) * pink; gg += (0.4 - gg) * pink; b += (0.46 - b) * pink;
 			const mussel = smooth(0.15, 0.5, sh.out) * (1 - smooth(0.6, 0.95, sh.out)) * smooth(0.35, 0.6, n1 + 0.2);
-			r += (0.08 - r) * mussel; gg += (0.09 - gg) * mussel; b += (0.12 - b) * mussel;
+			r += (0.07 - r) * mussel; gg += (0.08 - gg) * mussel; b += (0.1 - b) * mussel;
 			C.push(r ** 2.2, gg ** 2.2, b ** 2.2);
 			// the pool water over the hollows (not over the open sea)
 			if (h < POOL && sh.out < 0.35 && h > -0.4) { widx[k] = W.length / 3; W.push(x, POOL, z); }
