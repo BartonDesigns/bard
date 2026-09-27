@@ -383,5 +383,6 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	function splashAt(p, k) { splash.position.set(p.x, F.level + 0.02, p.z); splash.scale.setScalar(k); splash.material.opacity = 0.8; }
 	// (for a look at a catch: Crysis.fishing.showCatch('bay', 1), no fight)
 	const showCatch = (water = 'lake', i = 1, lb) => { const sp = SPECIES[water][i]; hold(sp, lb ?? (sp[2] + sp[3]) / 3); };
-	return { update, showCatch, log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy };
+	// (a game or a jump elsewhere: the catch goes back in the water at once)
+	return { update, showCatch, drop: () => letGo(true), log: () => log.slice(), state: () => F.state, tension: () => F.tension, last: () => lastWhy };
 }

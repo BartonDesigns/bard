@@ -68,6 +68,13 @@ function agx(c, exposure, out) {
 	return out.setRGB(...v.map((x) => Math.min(1, Math.max(0, x))));
 }
 
+// a planet's air colour, normalised to keep the sky's brightness
+function airOf(P) {
+	const t = P?.air?.tint;
+	if (!t || !P.air.mix) return new THREE.Vector4(1, 1, 1, 0);
+	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
+	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
+}
 export function createSky(scene, shared, renderer) {
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
@@ -78,6 +85,10 @@ export function createSky(scene, shared, renderer) {
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uFogCol: { value: new THREE.Color() },
+		// another world's air: its sky and haze take this colour (rgb), this much (a)
+		uAir: { value: airOf(shared.planet) },
+		// a gas giant over its moon (xyz: where, w: its size); a ringed world's rings (on/off)
+		uGiant: { value: new THREE.Vector4(0.42, 0.33, -0.84, shared.planet?.sky?.giant ? 0.2 : 0) }, uRings: { value: shared.planet?.sky?.rings ? 1 : 0 },
 		uMeteor: { value: 0 },           // 1 on the nights of the great showers
 		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
 	};
@@ -86,7 +97,7 @@ export function createSky(scene, shared, renderer) {
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -162,6 +173,34 @@ export function createSky(scene, shared, renderer) {
 						float md = length(d - (tail + seg * tt));
 						col += vec3(0.9, 0.95, 1.0) * smoothstep(0.0025, 0.0, md) * tt * (1.0 - mf / 0.12) * uNight * 1.5;
 					}
+				}
+				// the gas giant: a banded ball lit on the sun's side, its night side faintly lit by its moons
+				if (uGiant.w > 0.0 && d.y > -0.05){
+					vec3 gc = normalize(uGiant.xyz);
+					float gd = acos(clamp(dot(d, gc), -1.0, 1.0)) / uGiant.w;
+					if (gd < 1.0){
+						vec3 gu = normalize(cross(gc, vec3(0.2, 1.0, 0.1))), gv = cross(gu, gc);
+						vec2 q = vec2(dot(d - gc, gu), dot(d - gc, gv)) / sin(uGiant.w);
+						vec3 gn = normalize(q.x * gu + q.y * gv - sqrt(max(0.0, 1.0 - dot(q, q))) * gc);
+						float lat = q.y * 0.94 + q.x * 0.34;
+						float bands = sin(lat * 19.0 + sin(q.x * 6.0 + uTime * 0.01) * 0.6) * 0.5 + 0.5;
+						vec3 gcol = mix(vec3(0.78, 0.60, 0.42), vec3(0.95, 0.88, 0.74), bands);
+						gcol = mix(gcol, vec3(0.62, 0.36, 0.24), smoothstep(0.78, 0.9, 1.0 - length(q - vec2(0.25, -0.3)) * 3.5) * 0.8);
+						float lit = clamp(dot(-gn, uSunDir) * 1.1 + 0.05, 0.0, 1.0);
+						vec3 disk = gcol * (lit * 1.25 + 0.03) * (1.0 - smoothstep(0.9, 1.0, gd) * 0.35);
+						float a = smoothstep(1.0, 0.985, gd) * mix(0.55, 1.0, max(uNight, 1.0 - clamp(uSunDir.y * 2.0, 0.0, 1.0) * 0.4));
+						col = mix(col, disk, a);
+					}
+				}
+				// a ringed world: its rings arc across the sky, bands of pale ice and gaps
+				if (uRings > 0.5 && d.y > 0.0){
+					vec3 rn = normalize(vec3(0.25, 0.35, 0.9));
+					float rb = dot(d, rn);
+					vec3 rp = normalize(d - rn * rb);
+					float r = abs(rb) * 7.0 + 0.2 + rp.x * 0.05;
+					float band = smoothstep(0.02, 0.0, abs(rb) - 0.075) * (0.55 + 0.45 * sin(r * 40.0)) * step(0.2, fract(r * 3.1));
+					float shadowed = smoothstep(-0.05, 0.1, dot(rp, uSunDir) + 0.3);
+					col += vec3(0.92, 0.88, 0.8) * band * 0.45 * smoothstep(0.0, 0.15, d.y) * mix(0.6, 1.4, uNight) * shadowed;
 				}
 				if (uNight > 0.01 && d.y > 0.0){
 					// the moon, opposite the sun
@@ -272,6 +311,7 @@ export function createSky(scene, shared, renderer) {
 				// haze the land fades into, so no bright line runs along where the land ends
 				col = mix(col, mix(uSkyHor, uFogCol, 0.7), smoothstep(0.02, -0.12, d.y));
 				col = mix(col, uFogCol, smoothstep(0.012, -0.03, d.y) * 0.9);
+				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uAir.rgb, uAir.a);
 				gl_FragColor = vec4(col, 1.0);
 				#include <tonemapping_fragment>
 				#include <colorspace_fragment>
@@ -534,6 +574,8 @@ export function createSky(scene, shared, renderer) {
 		// haze: blue by day so far land stacks up in layers
 		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
 		if (W) haze.lerp(tmpC.setRGB(0.5, 0.53, 0.57).multiplyScalar(1 - night * 0.9), Math.min(1, W.rainHere * 0.6 + gl * 0.3));
+		const air = uniforms.uAir.value;
+		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w);
 		renderer.toneMappingExposure = 1.15 + night * 0.15;
 		// The sky is tone mapped, but three.js mixes the fog in after the tone mapping, so a
 		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the

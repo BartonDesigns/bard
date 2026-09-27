@@ -7,7 +7,6 @@ import * as THREE from 'three';
 import { usePhoto } from './photomats.js';
 import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
 import * as TX from './textures.js';
-import { HEIGHT_GLSL } from './terrain.js';
 import { addPulse } from '../pulse.js';
 import { addLodFade, fadeRange } from './lodfade.js';
 
@@ -604,8 +603,16 @@ float rh(vec2 p){ p = mod(p, 512.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 +
 float rvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rh(i), rh(i + vec2(1, 0)), f.x), mix(rh(i + vec2(0, 1)), rh(i + vec2(1, 1)), f.x), f.y); }
 float rfbm(vec2 p){ return rvn(p) * 0.5 + rvn(p * 2.1 + 3.1) * 0.3 + rvn(p * 4.3 - 1.7) * 0.2; }
 `;
+// a planet's leaf colour, normalised to keep the foliage's brightness
+function leafOf(P) {
+	const t = P?.leaf?.tint;
+	if (!t || !P.leaf.mix) return new THREE.Vector4(1, 1, 1, 0);
+	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
+	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.leaf.mix);
+}
 export function swayMaterial(params, shared, stiff) {
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
+	(shared.uLeafT ||= { value: new THREE.Vector4() }).value.copy(leafOf(shared.planet));
 	const hook = (sh) => {
 		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT;
 		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
@@ -632,7 +639,14 @@ export function swayMaterial(params, shared, stiff) {
 	m.onBeforeCompile = (sh) => {
 		hook(sh);
 		addPulse(sh);
-		sh.fragmentShader = 'varying float vGroundAO;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n\tdiffuseColor.rgb *= vGroundAO;');
+		// another world's leaves: whatever is green takes the planet's leaf colour
+		sh.uniforms.uLeafT = shared.uLeafT;
+		sh.fragmentShader = 'varying float vGroundAO; uniform vec4 uLeafT;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+	diffuseColor.rgb *= vGroundAO;
+	if (uLeafT.a > 0.0) {
+		float green = clamp((diffuseColor.g - max(diffuseColor.r, diffuseColor.b)) * 25.0, 0.0, 1.0);
+		diffuseColor.rgb = mix(diffuseColor.rgb, dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)) * uLeafT.rgb, green * uLeafT.a);
+	}`);
 		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
 	};
 	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '');
@@ -702,7 +716,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 			return m;
 		})(), depth: null },
 	};
-	const nz = makeNoise(island.seed + 101);
+	const plantK = shared.planet?.trees ?? 1;
 	const species = [
 		// densities are the chance a sample at `spacing` holds a plant: random within a
 		// patch, but the patches follow the land (see eco below), so plants clump
@@ -866,9 +880,11 @@ export function createVegetation(island, shared, scene, flora = null) {
 			const px = x + rnd() * s, pz = z + rnd() * s;
 			const h = island.heightAt(px, pz);
 			if (h < (sp.wet ? -2.2 : 0.2)) continue;
+			if (island.noPlant?.some((o) => Math.hypot(px - o.x, pz - o.z) < o.r + 3)) continue;
 			const n = island.normalAt(px, pz), sl = 1 - n.y;
 			const m = { path: island.maskAt(px, pz, 0), village: island.maskAt(px, pz, 1), wild: island.maskAt(px, pz, 3) };
-			if (rnd() >= sp.density(eco(px, pz, h, sl, m))) continue;
+			// another world grows less (a desert, ash, ice) or more; its stones stay
+			if (rnd() >= Math.min(1, sp.density(eco(px, pz, h, sl, m))) * (sp.kind === 'stone' ? 1 : plantK)) continue;
 			const key = Math.floor(px / CELL) + ',' + Math.floor(pz / CELL);
 			let c = cells.get(key);
 			if (!c) cells.set(key, c = { x: Math.floor(px / CELL), z: Math.floor(pz / CELL), items: {} });
@@ -960,7 +976,6 @@ export function createVegetation(island, shared, scene, flora = null) {
 			const cs = sp.tree ? CONTACT.hardwood : CONTACT[sp.key];
 			const R = sp.farR || sp.near, cr = Math.ceil(R / CELL);
 			const ci = Math.floor(cx / CELL), cj = Math.floor(cz / CELL);
-			const lim = sp.max;
 			for (let j = cj - cr; j <= cj + cr; j++) for (let i = ci - cr; i <= ci + cr; i++) {
 				const c = cells.get(i + ',' + j);
 				if (!c || !c.items[sp.key]) continue;

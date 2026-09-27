@@ -9,7 +9,7 @@
 // reaching one, so the ground close by reads as turf, not as a few cards.
 
 import * as THREE from 'three';
-import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL } from './terrain.js';
+import { HEIGHT_GLSL, NOISE_GLSL, OCC_GLSL, PLANET_GLSL, planetUniforms } from './terrain.js';
 import { grassStrip } from './textures.js';
 import { mulberry32 } from '../noise.js';
 
@@ -51,6 +51,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		uCam: { value: new THREE.Vector2() }, uSpan: { value: span }, uWidth: { value: width }, uTallK: { value: heightK },
 		uTime: shared.uTime, uWind: shared.uWind, uGust: shared.uGust, uWindT: shared.uWindT, uWindDir: shared.uWindDir, uHigh: shared.uHigh, uBass: shared.uBass,
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uOcc: shared.uOcc, uOccO: shared.uOccO,
+		...planetUniforms(shared), uPlGrassK: { value: shared.planet?.grass ?? 1 },
 	};
 
 	const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, alphaToCoverage: true });
@@ -60,6 +61,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			${HEIGHT_GLSL}
 			${NOISE_GLSL}
 			${OCC_GLSL}
+			${PLANET_GLSL}
+			uniform float uPlGrassK;
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
 			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge;
@@ -84,6 +87,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				density *= 0.85 + 0.15 * vn(w * 0.4 + 5.0);
 				// around shrubs, bananas and flowers the grass crowds in and grows up the stems
 				density = min(1.0, density + hug * 0.6 * meadow);
+				// another world: sparse on a desert, none on ash, none in snow or down a cave mouth
+				density *= min(1.0, uPlGrassK) * (1.0 - plSnow(h, n1g)) * (1.0 - plHole(w));
 				// a tuft exists where its random falls under the local density: thinning is
 				// even and gradual, so edges feather out instead of breaking into bald spots
 				// toward the edge of the carpet each tuft grows in on its own: its own distance to
@@ -115,6 +120,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float damp = smoothstep(0.3, 0.8, tallMap);
 				tint = mix(tint, vec3(0.28, 0.5, 0.14), damp * 0.35);
 				tint = mix(tint, vec3(0.62, 0.56, 0.28), max(dry * 0.45, (1.0 - damp) * smoothstep(0.55, 0.75, vn(w * 0.012 + 9.0)) * 0.4));
+				tint = plG(tint);
 				tint *= 0.97 + 0.06 * aRand.x;
 				vTall228 = tallMap;
 				tint *= 1.0 - occ * 0.25;
@@ -125,6 +131,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				groundC = mix(groundC, tg3, smoothstep(0.62, 0.8, fbm3(w * 0.013 + 3.0)) * 0.7);
 				groundC *= 0.82 + 0.3 * vn(w * 7.0);
 				groundC = mix(groundC, vec3(0.20, 0.24, 0.10), smoothstep(0.2, 0.8, mk.a) * 0.8);
+				groundC = plG(groundC);
 				vTint = mix(tint * tint * (1.0 - canopy * 0.55), groundC, max(0.35, smoothstep(0.3, 0.95, dCam)));   // tint is authored in display space
 				vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
 			.replace('#include <begin_vertex>', `

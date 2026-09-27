@@ -1293,6 +1293,20 @@ export function createCity(shared, scene, bay, real = null) {
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
+		// ...nor inside a tower (their lobbies are walked into): a coarse grid of the tall ones
+		{
+			const G = new Map(), cellOf = (x, z) => Math.floor(x / 60) + ',' + Math.floor(z / 60);
+			for (const o of list) if (o.h > 14 && o.w && o.d) { const k = cellOf(o.x, o.z); (G.get(k) || G.set(k, []).get(k)).push(o); }
+			const inside = (t) => {
+				const cx = Math.floor(t.x / 60), cz = Math.floor(t.z / 60);
+				for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of G.get((cx + i) + ',' + (cz + j)) || []) {
+					const ca = Math.cos(o.a || 0), sa = Math.sin(o.a || 0), dx = t.x - o.x, dz = t.z - o.z;
+					if (Math.abs(ca * dx + sa * dz) < o.w / 2 + 1 && Math.abs(-sa * dx + ca * dz) < o.d / 2 + 1) return true;
+				}
+				return false;
+			};
+			if (list.trees && G.size) list.trees = list.trees.filter((t) => !inside(t));
+		}
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees, k = list.kit; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; }

@@ -7,6 +7,13 @@ import * as THREE from 'three';
 import { radialGrid, HEIGHT_GLSL, NOISE_GLSL, SWASH_GLSL } from './terrain.js';
 import { BAY_GLSL } from '../bay/terrain.js';
 
+// a planet's water colour, normalised to keep the sea's brightness
+function waterOf(P) {
+	const t = P?.water?.tint;
+	if (!t || !P.water.mix) return new THREE.Vector4(1, 1, 1, 0);
+	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
+	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.water.mix);
+}
 export function createOcean(island, shared) {
 	// out to the Bay Area's horizons: dense underfoot, sparse tens of kilometres out
 	const geo = radialGrid(300, 70000, 3.3);
@@ -15,6 +22,7 @@ export function createOcean(island, shared) {
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCenter: { value: new THREE.Vector2() },
 		uWave: { value: 1 },
+		uWaterT: { value: waterOf(shared.planet) },
 	}]);
 	// the real Bay Area's depths beyond the island (live objects, filled as they load)
 	if (shared.bayU) Object.assign(uniforms, shared.bayU);
@@ -138,7 +146,7 @@ uniforms.uUnder = shared.uUnder;
 				#include <fog_vertex>
 			}`,
 		fragmentShader: /* glsl */`
-			uniform sampler2D uMasks; uniform float uHalf, uMid, uHigh;
+			uniform sampler2D uMasks; uniform float uHalf, uMid, uHigh; uniform vec4 uWaterT;
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
 			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
 			varying vec2 vInward; varying vec2 vAmp; varying float vHv; varying vec2 vP0;
@@ -195,7 +203,7 @@ uniforms.uUnder = shared.uUnder;
 				// wandering with broad noise, and the island's own reef and sand fading out
 				// before the map ends
 				float warmR = length(vW.xz) + (vn(vW.xz * 0.00045) - 0.5) * 3200.0 + (vn(vW.xz * 0.0017 + 7.0) - 0.5) * 900.0;
-				float cold = smoothstep(2600.0, 7600.0, warmR);
+				float cold = smoothstep(1900.0, 4300.0, warmR);
 				float inMap = 1.0 - smoothstep(0.86, 0.98, max(abs(muv.x - 0.5), abs(muv.y - 0.5)) * 2.0);
 				float reef = texture2D(uMasks, clamp(muv, 0.0, 1.0)).b * inMap;
 				vec3 sand = vec3(0.86, 0.80, 0.64);
@@ -262,6 +270,8 @@ uniforms.uUnder = shared.uUnder;
 				// thin sheets are nearly clear: you see the wet sand through them, and a sheen
 				// thin water is clear: the sand shows through it, with a sheen of sky at an angle
 				float film = smoothstep(0.0, 0.35, vFilm) * mix(0.08, 0.9, smoothstep(0.03, 0.35, vFilm)) + F * 0.25 * (1.0 - smoothstep(0.0, 0.3, vFilm));
+				// another world's sea: acid green, black glass, violet
+				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uWaterT.rgb, uWaterT.a * (1.0 - max(foam, front * laceF)));
 				gl_FragColor = vec4(col, max(film, max(foam, front * laceF) * smoothstep(0.0, 0.01, vFilm)));
 				#include <tonemapping_fragment>
 				#include <colorspace_fragment>

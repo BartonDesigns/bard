@@ -37,7 +37,7 @@ export function landProfile(seed) {
 const leafTint = (r, P) => { const y = (r() - 0.5) * 0.12, l = 0.85 + r() * 0.3; return [ (0.95 + y) * l, (1.0 - Math.abs(y) * 0.3) * l, (0.9 - y * 1.2 - P.rain * 0.1) * l ]; };
 const FLOWER = [[1.0, 0.28, 0.35], [0.98, 0.55, 0.15], [1.0, 0.85, 0.2], [0.92, 0.3, 0.75], [0.62, 0.4, 0.95], [1.0, 0.95, 0.9], [0.95, 0.45, 0.55]];
 
-export function buildLandEcology(seed) {
+export function buildLandEcology(seed, opts = {}) {
 	const P = landProfile(seed);
 	const r = mulberry32((seed ^ 0x7ee5) >>> 0);
 	const taken = new Set();
@@ -47,7 +47,8 @@ export function buildLandEcology(seed) {
 	const CROWNS = ['round', 'umbrella', 'columnar', 'layered', 'weeping'];
 	const nTrees = 2 + Math.round(P.soilAge * 1.6 + P.rain * 0.6);
 	const trees = [];
-	const crowns = [...CROWNS].sort(() => r() - 0.5);
+	// (a cold or burnt world grows only the tall narrow kinds)
+	const crowns = opts.crowns || [...CROWNS].sort(() => r() - 0.5);
 	for (let i = 0; i < nTrees; i++) {
 		const crown = crowns[i % crowns.length];
 		trees.push({

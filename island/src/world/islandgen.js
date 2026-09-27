@@ -13,7 +13,9 @@ export function generateIsland(params = {}) {
 	const S = WORLD_SIZE, half = S / 2, cell = S / (N - 1);
 	const rand = mulberry32(seed ^ 0x9e3779b9);
 	const nz = makeNoise(seed);
-	const R = 760 + rand() * 90;
+	// the world's kind shapes its land (see planet/profile.js): its coast's reach and its relief
+	const kind = params.profile?.relief || 'island';
+	const R = (760 + rand() * 90) * Math.min(1.15, params.profile?.coast || 1);
 	const peak = { x: (rand() - 0.5) * 360, z: (rand() - 0.5) * 360, h: 150 + rand() * 70, r: 430 + rand() * 80 };
 
 	function shape(x, z) {
@@ -43,6 +45,7 @@ export function generateIsland(params = {}) {
 		const ridge = nz.ridged(x * 0.0042 - 9, z * 0.0042 + 21, 5);
 		const mountain = cone * peak.h * (0.55 + 0.45 * ridge) * smoothstep(0.95, 0.55, t);
 		h += Math.max(0, hills + rolling) + mountain;
+		if (kind !== 'island') h = relief(x, z, h, t, inland, dp);
 		let reef = 0;
 		if (t > 0.97 && t < 1.22) {
 			const r = nz.fbm(x * 0.018 + 5, z * 0.018 - 3, 3);
@@ -50,6 +53,68 @@ export function generateIsland(params = {}) {
 			h += reef * 1.1;
 		}
 		return { h, t, reef };
+	}
+
+	// each kind of world reshapes the land above the shore; the beach and the sea stay
+	function relief(x, z, h, t, inland, dp) {
+		const up = Math.max(0, h - 3.2);
+		const keep = h - up;
+		if (kind === 'highland') {
+			// taller, sharper mountains with high meadows between
+			const crest = nz.ridged(x * 0.003 + 7, z * 0.003 - 3, 5);
+			return keep + up * 1.25 + Math.pow(crest, 2.6) * 150 * inland * smoothstep(0.8, 0.45, t);
+		}
+		if (kind === 'atoll') return keep + up * 0.4;
+		if (kind === 'mesa') {
+			// flat-topped tables with steep risers, cut by dry canyons
+			const H = up * 1.3 + nz.fbm(x * 0.004 + 9, z * 0.004, 3) * 40 * inland;
+			const step = 22, f = H / step, fl = Math.floor(f), fr = f - fl;
+			const terr = (fl + smoothstep(0.72, 0.95, fr)) * step;
+			const canyon = Math.pow(1 - Math.abs(nz.fbm(x * 0.0035 - 20, z * 0.0035 + 4, 3) * 2 - 1), 10) * 30 * inland;
+			return keep + Math.max(0, terr * 0.85 + H * 0.15 - canyon);
+		}
+		if (kind === 'glacier') {
+			// broad smooth ice swells and one great frozen peak, crevassed lines
+			const swell = nz.fbm(x * 0.0018 + 2, z * 0.0018 - 5, 3) * 60 * inland;
+			const crack = Math.pow(1 - Math.abs(nz.fbm(x * 0.02, z * 0.02, 2) * 2 - 1), 12) * 2.5;
+			return keep + up * 1.15 + swell - crack * inland;
+		}
+		if (kind === 'volcano') {
+			// one great cone with a crater at its top, lava-scoured gullies down its flanks
+			const cone = Math.pow(Math.max(0, 1 - dp * 0.8), 1.4) * 260 * smoothstep(0.95, 0.5, t);
+			const crater = smoothstep(0.2, 0.05, dp) * 90;
+			const gully = Math.pow(1 - Math.abs(nz.fbm(x * 0.012, z * 0.012, 2) * 2 - 1), 6) * 8 * inland;
+			return keep + up * 0.6 + cone - crater - gully;
+		}
+		if (kind === 'swamp') {
+			// low wet ground broken by pools and lagoons
+			const pool = smoothstep(0.52, 0.62, nz.fbm(x * 0.006 + 30, z * 0.006, 3)) * 7 * inland;
+			return keep + up * 0.45 - pool;
+		}
+		if (kind === 'enchanted') {
+			// warped plateaus, sharp moonstone spires, misty basins
+			const wx = x + (nz.fbm(x * 0.002, z * 0.002 + 50, 2) - 0.5) * 300, wz = z + (nz.fbm(x * 0.002 + 70, z * 0.002, 2) - 0.5) * 300;
+			const plateau = smoothstep(0.5, 0.58, nz.fbm(wx * 0.003, wz * 0.003, 3)) * 45 * inland;
+			const spire = Math.pow(Math.max(0, nz.ridged(wx * 0.011, wz * 0.011, 3) - 0.72) * 3.6, 3) * 55 * inland;
+			const basin = smoothstep(0.55, 0.7, nz.fbm(wx * 0.004 + 11, wz * 0.004 - 8, 3)) * 20 * inland;
+			return keep + Math.max(0, up + plateau + spire - basin);
+		}
+		if (kind === 'crater') {
+			// airless-looking ground pocked by craters with raised rims
+			let c = 0;
+			for (const q of craters) {
+				const d = Math.hypot(x - q.x, z - q.z) / q.r;
+				if (d > 1.6) continue;
+				c += (d < 1 ? -(1 - d * d) * q.r * 0.25 : 0) + Math.exp(-Math.pow((d - 1) * 5, 2)) * q.r * 0.08;
+			}
+			return keep + Math.max(-2, up * 0.7 + c * inland);
+		}
+		return h;
+	}
+	const craters = [];
+	if (kind === 'crater') for (let i = 0; i < 16; i++) {
+		const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * R * 0.75;
+		craters.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 20 + Math.pow(rand(), 2) * 110 });
 	}
 
 	const height = new Float32Array(N * N);

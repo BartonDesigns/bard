@@ -3834,6 +3834,8 @@ button, .pad, .ctrl-btn, .capsule-btn, .tab-btn, .selector, label,
   letter-spacing: 1px;
   margin-left: 2px;
 }
+/* one door: Crysis is the game and the music visualizer; space flight and the caves are inside it */
+#popout-btn, #caves-btn { display: none !important; }
 #expand-btn, #popout-btn, #caves-btn, #island-btn {
   margin-left: 6px;
   width: 28px;
@@ -29022,11 +29024,9 @@ root.L99CaveRail227={patch};
     /* Earth is Crysis: the island off the Golden Gate with the real Bay Area round it.
        The old flight build's Bay Area surface is gone; every Earth landing comes here. */
     function isEarth(u) { return !!u && (u.solName === 'Earth' || u.isEarthReplica || u.planetType === 'BAYAREA'); }
-    function tropical(u) {
-        if (!u) return false;
-        if (isEarth(u)) return true;
-        return u.planetType === 'TERRAN' || u.planetType === 'OCEAN';
-    }
+    /* every world lands in Crysis now: each planet type is its own generated world there
+       (green, ocean, desert, ice, volcanic, toxic, mystical, a gas giant's moon…), caves and all */
+    function tropical(u) { return !!u && !u.isStar; }
     function seedOf(u) {
         var s = u.seed;
         if (Number.isFinite(+s)) return (+s) >>> 0;
@@ -29053,7 +29053,7 @@ root.L99CaveRail227={patch};
             var J = window.L99Journey170;
             if (!J) throw Error('Journey is not ready');
             return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0,
-                planet: { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: 'tropical', earth: earth, palette: u.palette || null, origin: originOf(u) } });
+                planet: { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : (u.planetType || 'TERRAN'), earth: earth, palette: u.palette || null, origin: originOf(u) } });
         }).catch(function (e) { console.warn('[island landing]', e); }).then(function () { busy = false; });
     }
     function wrap() {
@@ -29102,8 +29102,8 @@ root.L99CaveRail227={patch};
         if (window._ISLAND === false || document.getElementById('island-btn')) return;
         var host = document.getElementById('caves-btn');
         var b = document.createElement('button');
-        b.type = 'button'; b.id = 'island-btn'; b.textContent = '≋';
-        b.title = 'island'; b.setAttribute('aria-label', 'Explore the island');
+        b.type = 'button'; b.id = 'island-btn'; b.textContent = '⧉';
+        b.title = 'Play: the world and music visualizer'; b.setAttribute('aria-label', 'Play: the world and music visualizer');
         if (host && host.parentNode) {
             b.className = host.className;
             b.style.cssText = 'margin-left:6px;font-size:15px;line-height:1;padding-left:10px;padding-right:10px;min-width:0;flex:0 0 auto;';

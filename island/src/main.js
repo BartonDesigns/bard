@@ -2,6 +2,7 @@
 // third world beside the caves and space flight, sharing the faceplate's
 // music, keyboard, play surfaces and Journey transfers.
 
+import { planetProfile } from './planet/profile.js';
 import * as THREE from 'three';
 import { generateIsland } from './world/islandgen.js';
 import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terrain.js';
@@ -23,6 +24,8 @@ import { createUnderwater } from './underwater.js';
 import { createSealife } from './sealife.js';
 import { createMagma } from './magma.js';
 import { createCaverns } from './caverns.js';
+import { createUnderworld } from './planet/underworld.js';
+import { planCaves } from './planet/cavenet.js';
 import { createReef } from './reef.js';
 import { buildEcology, describe } from './crysis/ecology.js';
 import { createFish } from './crysis/fish.js';
@@ -72,6 +75,7 @@ import { createPeople } from './people/people.js';
 import { createGhost } from './people/ghost.js';
 import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
+import { createMushrooms } from './planet/mushrooms.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -320,6 +324,7 @@ export function createIslandWorld() {
 	dom.mount.appendChild(tpMenu);
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	function teleport([name, lat, lon, yaw]) {
+		fishing.drop();
 		const W = world, P = W?.player.state;
 		if (!P) return;
 		let x, z;
@@ -394,11 +399,15 @@ export function createIslandWorld() {
 		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
 		// Other worlds flight lands on are their own islands, alone in their seas.
 		const earth = params.earth !== false;
-		if (world && state.seed === seed && state.earth === earth) return world;
+		if (world && state.seed === seed && state.earth === earth && state.biome === params.biome) return world;
 		if (world) teardown();
 		dom.loading.style.display = 'flex';
 		await new Promise((r) => requestAnimationFrame(r));
-		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768 });
+		// what kind of world: its ground, air, plants and underground (Earth's island is tropical)
+		const profile = planetProfile(earth ? 'TROPICAL' : params.biome, seed);
+		shared.planet = profile;
+		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768, profile });
+		island.profileHaze = profile.air?.haze || 1;
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
 		const sky = createSky(scene, shared, renderer);
@@ -416,7 +425,10 @@ export function createIslandWorld() {
 		scene.add(terrain, ocean, grass, turf);
 		const litter = createLitter(island, shared, scene, isPhone ? 0.6 : 1);
 		// Crysis: the land's plants and animals, grown from the seed
-		const land = buildLandEcology(island.seed);
+		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
+		// a planet's caves are planned first, so nothing grows in their mouths
+		const cavePlan = earth ? null : planCaves(island, profile);
+		island.noPlant = cavePlan?.holes || [];
 		const vegetation = createVegetation(island, shared, scene, land);
 		const village = createVillage(island, shared, scene);
 		vegetation.addContacts(village.footprints);
@@ -441,8 +453,17 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		// another world's underground: cave mouths on the hills, tunnels, ruins, a village by lamplight
+		if (!earth) {
+			world.underworld = createUnderworld(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, plan: cavePlan });
+			island.underFloor = world.underworld.floor;
+			island.underPush = world.underworld.push;
+		}
+		// the mushrooms this world grows, and what they do to you
+		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
 		state.seed = seed;
 		state.earth = earth;
+		state.biome = params.biome;
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
 		sky.update(0, camera.position);
@@ -529,6 +550,8 @@ export function createIslandWorld() {
 		drive.stop();
 		world.player.dispose();
 		world.shells?.dispose();
+		world.shrooms?.dispose();
+		world.underworld?.dispose();
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		while (scene.children.length) scene.remove(scene.children[0]);
 		world = null;
@@ -680,7 +703,7 @@ export function createIslandWorld() {
 		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
 		// the weather: frames running slow shed rain streaks; indoors the rain stays out
-		W.weather.state.sheltered = !!W.houses?.inside(camera.position);
+		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
 		surprises.update(dt, sk, wx);
 		W.music.update(dt);
@@ -695,6 +718,7 @@ export function createIslandWorld() {
 		W.underwater.update(dt, time, under, surf);
 		W.magma.update(dt, time, under, surf);
 		W.caverns.update(dt, time, under);
+		W.underworld?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
 		const bay = W.island.village.bay;
 		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40;
@@ -722,8 +746,23 @@ export function createIslandWorld() {
 			const lat = 37.76 - camera.position.z / 110996, lon = camera.position.x / (111320 * Math.cos(37.76 * Math.PI / 180)) - 122.57;
 			const clearK = THREE.MathUtils.smoothstep(lat, 37.5, 37.44) * THREE.MathUtils.smoothstep(lat, 37.02, 37.1) * THREE.MathUtils.smoothstep(lon, -122.2, -122.3);
 			scene.fog.density *= (1 + (wx.rainHere * 12 + wx.gloom * 1.5) * (1 - clearK * 0.8)) * (1 - clearK * 0.55);
+			// another world's air: dust, ash, spores, mist
+			scene.fog.density *= W.island.profileHaze || 1;
 			const far = THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
+		}
+		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
+		const caveK = W.underworld?.inside?.() || 0;
+		// deep down the surface overhead is never seen: stop drawing it
+		const open = caveK < 0.9;
+		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group]) if (o && o.visible !== open) o.visible = open;
+		if (caveK > 0) {
+			const dim = 1 - caveK * 0.96;
+			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
+			shared.uAmbient.value.multiplyScalar(dim);
+			const cg = W.underworld.fog?.() || [0.02, 0.022, 0.026];
+			scene.fog.color.lerp(new THREE.Color(cg[0], cg[1], cg[2]), caveK);
+			scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.012, caveK);
 		}
 		// the cities' glow washes out the faint stars
 		if (W.bayArea?.loaded()) {
@@ -732,7 +771,8 @@ export function createIslandWorld() {
 			shared.uSkyGlow.value += (Math.min(1, glow / 4) - shared.uSkyGlow.value) * Math.min(1, dt);
 		}
 		if (under !== frame.under) { frame.under = under; dom.veil.style.opacity = under ? '1' : '0'; }
-		if (under || muffle.k > 0.01) underwaterAudio(under ? Math.min(1, 0.75 + (surf - camera.position.y) * 0.03) : 0, dt);
+		const dazed = W.shrooms?.muffle() || 0;
+		if (under || dazed > 0 || muffle.k > 0.01) underwaterAudio(under ? Math.min(1, 0.75 + (surf - camera.position.y) * 0.03) : dazed, dt);
 		const sh = W.shells.update(dt, time);
 		const show = (el, on) => { const d = on ? 'block' : 'none'; if (el.style.display !== d) el.style.display = d; };
 		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
@@ -810,6 +850,7 @@ export function createIslandWorld() {
 			if (bc && bc !== W.beachSeen && !W.tidepools?.siteAt(camera.position.x, camera.position.z)) hint(`${bc.name}${bc.quiet ? '\nA quiet stretch: few people, the sound of the surf.' : bc.big ? '\nMavericks breaks half a mile out, in winter the biggest waves on the coast.' : bc.surf ? '\nSurf zone between the checkered flags.' : bc.tents ? '\nCampsites along the back of the beach.' : ''}`, 6000);
 			if (bc) W.beachSeen = bc;
 		}
+		if (arcade.active()) fishing.drop();
 		fishing.update(dt, time, !arcade.active() && !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);
@@ -825,7 +866,13 @@ export function createIslandWorld() {
 			W.natureSound.update(dt, camera, { night: sk.night, hours: W.sky.state.hours, month: new Date().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
 		}
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
-		renderer.render(scene, camera);
+		// a mushroom eaten: sizes swell and shrink (the field of view, from where it stood), and
+		// the frame is drawn through its effect; sober, it draws nothing and the frame is as ever
+		W.shrooms?.update(dt, time);
+		const fovK = arcade.active() ? 1 : W.shrooms?.fov() ?? 1;
+		if (fovK !== 1 && !tick.fov0) tick.fov0 = camera.fov;
+		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
+		if (!W.shrooms?.render(renderer, scene, camera)) renderer.render(scene, camera);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
 		if (quality === 'auto' && (frame.n = (frame.n || 0) + 1) % 45 === 0) {
@@ -980,7 +1027,7 @@ export function createIslandWorld() {
 		resize,
 		activate: () => show(),
 		park: () => hide(),
-		arrived: () => hint(state.earth ? 'Earth. An island off the Golden Gate: fly or sail east to reach San Francisco.' + (origin ? ' ⇪ returns you to your ship.' : '') : origin ? 'You come down on a tropical shore. ⇪ returns you to your ship.' : 'You come down on a tropical shore.', 6000),
+		arrived: () => hint(state.earth ? 'Earth. An island off the Golden Gate: fly or sail east to reach San Francisco.' + (origin ? ' ⇪ returns you to your ship.' : '') : (() => { const P = shared.planet, what = P && P.type !== 'TROPICAL' ? `You come down on a ${P.name}. Its caves go deep: look for the dark mouths in the hills.` : 'You come down on a tropical shore.'; return what + (origin ? ' ⇪ returns you to your ship.' : ''); })(), 6000),
 	});
 	};
 	api.link();
@@ -1045,7 +1092,14 @@ if (typeof window !== 'undefined') {
 		// the child in the woods (people/ghost.js): very rare; this calls her now
 		ghost: (at) => HOOKS.ghost?.(at),
 		ghostInfo: () => HOOKS.ghostInfo?.(),
+		// the mushrooms (planet/mushrooms.js): Crysis.trip('psilocybe'), or from a moment in
+		// (seconds in): Crysis.trip('amanita', 90); Crysis.tripInfo() tells where it is
+		trip: (kind, at) => window.L99Island?.world?.()?.shrooms?.eat(kind, at != null ? { at: +at } : undefined),
+		tripInfo: () => window.L99Island?.world?.()?.shrooms?.state(),
 		creatures: () => HOOKS.creatures?.(),
+		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
+		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
+		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },

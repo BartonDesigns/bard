@@ -86,6 +86,46 @@ export function makeMaskTexture(island) {
 	return tex;
 }
 
+// Another world's ground: the tropical colours are recoloured toward the planet's own,
+// keeping their light and shade (see planet/profile.js)
+export const PLANET_GLSL = `
+uniform vec3 uPlG, uPlS, uPlR, uPlO, uPlGlow; uniform float uPlMix, uPlSnow; uniform vec4 uHoles[4];
+float gPlGlow = 0.0;
+vec3 plK(vec3 c, vec3 ref, vec3 tgt) { float l = dot(ref, vec3(0.299, 0.587, 0.114)); return mix(c, mix(c / ref * tgt, dot(c, vec3(0.299, 0.587, 0.114)) / l * tgt, 0.8), uPlMix); }
+vec3 plG(vec3 c) { return plK(c, vec3(0.34, 0.48, 0.10), uPlG); }
+vec3 plS(vec3 c) { return plK(c, vec3(0.88, 0.78, 0.58), uPlS); }
+vec3 plR(vec3 c) { return plK(c, vec3(0.44, 0.41, 0.37), uPlR); }
+vec3 plO(vec3 c) { return plK(c, vec3(0.30, 0.24, 0.15), uPlO); }
+float plH(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float plN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(plH(i), plH(i + vec2(1, 0)), f.x), mix(plH(i + vec2(0, 1)), plH(i + vec2(1, 1)), f.x), f.y); }
+float plVein(vec2 p) {
+	if (dot(uPlGlow, uPlGlow) < 1e-4) return 0.0;
+	// thin wandering cracks, only in some patches of ground, brighter where they meet
+	float zone = smoothstep(0.5, 0.72, plN(p * 0.007 + 3.1));
+	vec2 q = p * 0.05 + vec2(plN(p * 0.018), plN(p * 0.018 + 5.2)) * 4.0;
+	float line = 1.0 - smoothstep(0.0, 0.028, abs(plN(q) - 0.5));
+	float fine = 1.0 - smoothstep(0.0, 0.02, abs(plN(q * 2.7 + 9.0) - 0.5));
+	return (line + fine * 0.4 * line) * zone;
+}
+// cave mouths: the ground opens where a tunnel comes out of the hillside
+float plHole(vec2 p) { float k = 0.0; for (int i = 0; i < 4; i++) { vec4 H = uHoles[i]; if (H.z > 0.0 && length(p - H.xy) < H.z) k = 1.0; } return k; }
+// a green world's snowline, an ice world's snow everywhere
+float plSnow(float h, float n) { float line = mix(175.0, 2.6, uPlSnow); return smoothstep(line, line + 8.0, h + (n - 0.5) * 24.0) * step(0.01, uPlSnow); }
+`;
+export const HOLE_GLSL = 'void holeCut(vec2 p) { if (plHole(p) > 0.5) discard; }';
+export function planetUniforms(shared) {
+	const P = shared.planet, g = P?.ground, c = (a, d) => new THREE.Vector3(...(a || d));
+	shared.uHoles ||= { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] };
+	const glowK = { MAGMA: 1.6, TOXIC: 0.5, MYSTICAL: 0.45, SINGULARITY: 0.45 }[P?.type] || 0;
+	return {
+		uPlG: { value: c(g?.grass, [0.34, 0.48, 0.10]) }, uPlS: { value: c(g?.sand, [0.88, 0.78, 0.58]) },
+		uPlR: { value: c(g?.rock, [0.44, 0.41, 0.37]) }, uPlO: { value: c(g?.soil, [0.30, 0.24, 0.15]) },
+		uPlMix: { value: g?.mix || 0 }, uPlSnow: { value: P?.snow || 0 },
+		uPlGlow: { value: c(P?.glow, [0, 0, 0]).multiplyScalar(glowK) },
+		uHoles: shared.uHoles,
+	};
+}
+
 export function createTerrain(island, shared) {
 	const geo = radialGrid(320, 2200, 2.3);
 	const mat = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
@@ -96,6 +136,7 @@ export function createTerrain(island, shared) {
 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
 		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
 		uDetail: { value: groundDetail() }, uOcc: shared.uOcc, uOccO: shared.uOccO,
+		...planetUniforms(shared),
 	};
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
@@ -110,8 +151,9 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
+				holeCut(vW.xz);
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
 				float n1 = fbm3(vW.xz * 0.06), n2 = vn(vW.xz * 0.9), n3 = vn(vW.xz * 7.0);
@@ -141,6 +183,8 @@ export function createTerrain(island, shared) {
 				grass = mix(grass, vec3(0.20, 0.24, 0.10) * (0.85 + 0.3 * n2), smoothstep(0.2, 0.8, mk.a) * 0.8);
 				vec3 rock = mix(vec3(0.36, 0.34, 0.31), vec3(0.52, 0.49, 0.44), n2) * (0.85 + 0.25 * n3);
 				vec3 dirt = mix(vec3(0.46, 0.35, 0.23), vec3(0.60, 0.48, 0.33), n2) * (0.88 + 0.2 * n3);
+				// another world: its own grass, sand, rock and earth
+				grass = plG(grass); sand = plS(sand); sandDry = plS(sandDry); rock = plR(rock); dirt = plO(dirt);
 				// the beach keeps its width, but its edge only wanders a little, so sand never
 				// breaks out in patches up inside the meadow
 				float grassW = smoothstep(1.4 + n1 * 0.5, 2.3 + n1 * 0.6, h);
@@ -168,7 +212,7 @@ export function createTerrain(island, shared) {
 				sand *= 0.96 + 0.08 * vn(vW.xz * 22.0);
 				rock *= 0.78 + 0.36 * dd.a;
 				// earth under the meadow: soil and litter show between the blades
-				vec3 soil = mix(vec3(0.24, 0.19, 0.12), vec3(0.36, 0.30, 0.19), dd.b);
+				vec3 soil = plO(mix(vec3(0.24, 0.19, 0.12), vec3(0.36, 0.30, 0.19), dd.b));
 				vec3 meadowGround = mix(soil, grass, smoothstep(0.25, 0.7, mk.a * 0.4 + n1 * 0.6 + dd.b * 0.2) * 0.75 + 0.1);
 				grass = mix(grass, meadowGround, near * 0.3);
 				// paths: packed earth with gravel that catches the light
@@ -191,7 +235,7 @@ export function createTerrain(island, shared) {
 				// each footprint is a shallow dish in the sand
 				gDetailH -= print * 0.05 * (1.0 - grassW);
 				// under the sea: bleached sand going blue-green with depth
-				col = mix(col, vec3(0.78, 0.74, 0.60), smoothstep(0.0, -1.0, h));
+				col = mix(col, plS(vec3(0.78, 0.74, 0.60)), smoothstep(0.0, -1.0, h));
 				// inside the drowned crater the sand gives way to dark volcanic rock and ash,
 				// ridged and scoured, greener with growth on the gentler floor
 				{
@@ -214,7 +258,15 @@ export function createTerrain(island, shared) {
 				vec2 oc = occAt(vW.xz);
 				float occ = oc.r;
 				vec3 humus = mix(vec3(0.36, 0.28, 0.18), vec3(0.46, 0.38, 0.26), dd.b) * mix(1.0, 1.35, 1.0 - grassW);
-				col = mix(col, humus, occ * 0.55 * step(0.4, h));
+				col = mix(col, plO(humus), occ * 0.55 * step(0.4, h));
+				// snow: on the peaks of a green world, over everything on an ice world
+				{
+					float snowW = plSnow(h, n1) * (1.0 - smoothstep(0.42, 0.7, slope + (n2 - 0.5) * 0.2));
+					vec3 snow = mix(vec3(0.84, 0.88, 0.95), vec3(0.97, 0.98, 1.0), n2) * (0.94 + 0.06 * dd.r);
+					col = mix(col, snow, snowW * (1.0 - occ * 0.5));
+				}
+				// glow in the ground: lava in the cracks, bile in the seeps, ley light in the veins
+				gPlGlow = plVein(vW.xz) * step(0.6, h);
 				col *= 1.0 - occ * 0.36;
 				// damp, darker soil where a plant's roots hold it
 				col *= 1.0 - oc.g * 0.1 * grassW;
@@ -239,6 +291,7 @@ export function createTerrain(island, shared) {
 					float sunG = pow(max(dot(gr, uSunDir2), 0.0), 900.0) * smoothstep(0.0, 0.15, uSunDir2.y);
 					float moonG = pow(max(dot(gr, md), 0.0), 500.0) * smoothstep(0.02, -0.15, uSunDir2.y) * 0.5;
 					totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * (sunG + moonG) * gSparkle * 10.0;
+					totalEmissiveRadiance += uPlGlow * gPlGlow * mix(1.0, 0.45, smoothstep(0.0, 0.3, uSunDir2.y));
 				
 				}`)
 			.replace('#include <normal_fragment_maps>', `

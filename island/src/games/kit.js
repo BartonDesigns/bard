@@ -118,7 +118,7 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		if (key && matCache.has(key)) return matCache.get(key);
 		const c = new THREE.Color(color);
 		const m = o.basic ? new THREE.MeshBasicMaterial({ color: c, transparent: !!o.opacity, opacity: o.opacity ?? 1, map: o.map || null, side: o.side ?? THREE.FrontSide, depthWrite: !o.opacity })
-			: new THREE.MeshStandardMaterial({ color: c, roughness: o.rough ?? 0.6, metalness: o.metal ?? 0, map: o.map || null, emissive: c.clone().multiplyScalar(o.glow ?? 0.18), transparent: !!o.opacity, opacity: o.opacity ?? 1, side: o.side ?? THREE.FrontSide });
+			: new THREE.MeshStandardMaterial({ color: c, roughness: o.rough ?? 0.6, metalness: o.metal ?? 0, map: o.map || null, emissiveMap: o.map || null, emissive: c.clone().multiplyScalar(o.glow ?? 0.18), transparent: !!o.opacity, opacity: o.opacity ?? 1, side: o.side ?? THREE.FrontSide });
 		if (key) matCache.set(key, m);
 		return m;
 	};

@@ -5,6 +5,8 @@
 import './dist/island.js';
 const q = new URLSearchParams(location.search);
 const w = window.L99IslandModule.island();
-w.open({ seed: +(q.get('seed') || 1337) });
+// ?planet=MYSTICAL (or ARID, ICE, MAGMA, TOXIC, TERRAN, OCEAN, GAS…) opens another world
+const planet = q.get('planet');
+w.open(planet ? { seed: +(q.get('seed') || 4242), biome: planet, earth: false } : { seed: +(q.get('seed') || 1337) });
 </script>
 </body></html>
