@@ -22,8 +22,10 @@ export function createPeople(scene, world) {
 	let A = null, failed = false;
 	const pool = [];                  // { P, M, role, route, ... }
 	let seedN = 1;
-	// the ground, or a floor people walk on (the museum's halls and porches, bay/discovery.js)
-	const ground = (x, z) => { const W = world(), g = W.island.heightAt(x, z), f = W.discovery?.floor?.(x, z, g + 1.2) ?? -1e9; return f > g ? f : g; };
+	// the ground, or a floor people walk on near it (a museum hall, a shop, a porch)
+	// (y: where the person is now, so one on a tower's twentieth floor stands on that floor)
+	const ground = (x, z, y) => { const W = world(), g = W.island.heightAt(x, z), f = W.island.extraFloor?.(x, z, y === undefined ? g + 1.2 : y + 1.0) ?? -1e9; return f > g && (y !== undefined || f < g + 2.5) ? f : g; };
+	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined)); return M; };
 
 	async function ensure() {
 		if (A || failed) return;
@@ -69,7 +71,9 @@ export function createPeople(scene, world) {
 			return { n: d < 260 ? Math.round(8 * (1 - night * 0.7)) : 0, island: true };
 		}
 		// a place with its own visitors (the Discovery Museum): families, and where they go
-		const V = W.discovery?.venue?.(cam, hours);
+		// (the museum, a shop, restaurant or office you are in or at, a tower's floor)
+		let V = null;
+		for (const src of [W.towers, W.commercial, W.discovery]) { V = src?.venue?.(cam, hours); if (V) break; }
 		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 } };
 		const U = W.bayArea?.urbanAt(cam.x, cam.z);
 		// out on the trails: a few hikers by day
@@ -148,6 +152,19 @@ export function createPeople(scene, world) {
 		// at a venue: into one of its rooms or yards, within sight of here
 		if (venue) {
 			if (p.role === 'jog') p.role = 'walk';
+			// a seat, or a place to stand (behind the counter, at the bar), free and in sight
+			const seated = venue.areas.filter((q) => q.seats);
+			if (seated.length) {
+				const free = seated.flatMap((q) => q.seats.filter((st) => !st.taken && Math.hypot(st.x - cam.x, st.z - cam.z) < NEAR && Math.hypot(st.x - cam.x, st.z - cam.z) > 1.2));
+				if (!free.length) return false;
+				const st = free[Math.floor(r() * free.length)];
+				st.taken = true;
+				p.route = { kind: 'seat', seat: st };
+				p.role = 'wait'; p.timer = 1e9;
+				M.place(st.x, st.y, st.z, st.heading);
+				if (st.sit) { M.sit(st.h, true); M.setPose(st.table ? 'table' : 'lap'); } else { M.stand(); M.setPose(p.idlePose); }
+				return true;
+			}
 			for (let k = 0; k < 12; k++) {
 				let u = r() * venue.areas.reduce((a, q) => a + q.w, 0), area = venue.areas[0];
 				for (const q of venue.areas) { if ((u -= q.w) <= 0) { area = q; break; } }
@@ -263,7 +280,7 @@ export function createPeople(scene, world) {
 		if (p.role === 'chat') {
 			// find someone close to talk to, or wait for them to come
 			if (!p.partner) {
-				for (const o of pool) if (o !== p && o.active && !o.P.dna.child && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
+				for (const o of pool) if (o !== p && o.active && !o.P.dna.child && o.route?.kind !== 'seat' && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
 			}
 			if (p.partner) {
 				const o = p.partner.M.S.pos, d = o.distanceTo(S.pos);
@@ -287,6 +304,14 @@ export function createPeople(scene, world) {
 			if (p.timer < 0) p.role = 'walk';
 		}
 		if (R.kind === 'follow') { followParent(p, dt); return; }
+		if (R.kind === 'seat') {
+			// in their seat: facing the table, now and then a word and a gesture to whoever is across
+			M.want.speed = 0; M.want.heading = R.seat.heading;
+			p.gT = (p.gT || Math.random() * 6) - dt;
+			if (p.gT < 0) { p.gT = 3 + Math.random() * 8; if (Math.random() < 0.6) M.gesture(['nod', 'explain', 'laugh', 'shrug', 'think'][Math.floor(Math.random() * 5)]); }
+			S.talk = Math.sin(performance.now() / 1000 * 0.3 + p.P.dna.seed) > 0.4 ? 1 : 0;
+			return;
+		}
 		if (p.role === 'wait') { M.want.speed = 0; M.setPose(p.idlePose || 'rest'); if (p.timer < 0) { p.role = 'walk'; M.setPose('rest'); } return; }
 		const run = p.role === 'jog';
 		M.want.run = run ? 1 : 0;
@@ -365,7 +390,7 @@ export function createPeople(scene, world) {
 			const r = rng(seed ^ 0xc41d);
 			const d = personDNA(seed, kid ? { age: 3 + r() * 8 } : { jogger: false });
 			const P = buildPerson(A, d);
-			const M = createMotion(P, ground);
+			const M = motionFor(P);
 			const p = { P, M, active: false, role: 'walk' };
 			// each footfall, for the street sound
 			M.S.onStep = (at, sp) => { if (p.active && steps.length < 64) steps.push({ x: at.x, z: at.z, k: Math.min(1.5, 0.5 + sp * 0.5) }); };
@@ -389,7 +414,7 @@ export function createPeople(scene, world) {
 		const wantK = nk > 0 && kidPool.length < Math.min(KIDS, nk + 1) && kidPool.length / nk < Math.max(0.3, adultPool.length / Math.max(1, na));
 		if (wantK && adultPool.length) grow(true); else if (wantA) grow(false);
 		let active = 0, kids = 0;
-		const drop = (p) => { p.active = false; p.P.root.visible = false; if (p.partner) { p.partner.partner = null; p.partner = null; } if (p.route?.kind === 'follow' && p.route.parent) p.route.parent.kids = Math.max(0, (p.route.parent.kids || 1) - 1); };
+		const drop = (p) => { p.active = false; p.P.root.visible = false; if (p.route?.kind === 'seat') { p.route.seat.taken = false; p.M.stand(); p.M.S.sitK.v = 0; p.route = null; } if (p.partner) { p.partner.partner = null; p.partner = null; } if (p.route?.kind === 'follow' && p.route.parent) p.route.parent.kids = Math.max(0, (p.route.parent.kids || 1) - 1); };
 		for (const p of pool) {
 			const S = p.M.S;
 			if (p.active && p.demo === undefined) {
@@ -422,7 +447,7 @@ export function createPeople(scene, world) {
 		if (!A) return 'assets failed';
 		for (let k = 0; k < n; k++) {
 			let p = pool[k];
-			if (!p) { const d = personDNA((k * 7919 + 17) >>> 0, {}); const P = buildPerson(A, d); p = { P, M: createMotion(P, ground), active: false, role: 'walk' }; pool.push(p); group.add(P.root); }
+			if (!p) { const d = personDNA((k * 7919 + 17) >>> 0, {}); const P = buildPerson(A, d); p = { P, M: motionFor(P), active: false, role: 'walk' }; pool.push(p); group.add(P.root); }
 			const side = (k - (n - 1) / 2) * 0.95;
 			const x = cam.x + Math.sin(heading) * 4.2 + Math.cos(heading) * side, z = cam.z + Math.cos(heading) * 4.2 - Math.sin(heading) * side;
 			p.M.place(x, ground(x, z), z, heading + Math.PI);

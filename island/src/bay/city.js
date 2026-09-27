@@ -889,7 +889,7 @@ export function createCity(shared, scene, bay, real = null) {
 	}
 
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color(), Y = new THREE.Vector3(0, 1, 0);
-	let slotOf = new Map();
+	let slotOf = new Map(), tallList = [];
 	// the kit on and about the buildings within R of (cx, cz): rooftop units on the flat roofs
 	// (more on a big store, a few on an office, the odd one on a shed), ducts running from
 	// the biggest; a sunroom off the back (local -z) of about one house in twelve, a
@@ -1292,7 +1292,9 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
 		upload(list, near, [hips, gables]);
 		uploadKit(list.kit);
+		// the tall ones, for going inside (bay/towers.js)
+		tallList = list.filter((o) => (o.kind === KIND.tower || (o.kind === KIND.office && o.h > 20)) && !o.roof && o.src?.kind !== 12 && !o.src?.grp?.biz && Math.min(o.w, o.d) > 12);
 		placeTrees(x, z);
 	}
-	return { kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }

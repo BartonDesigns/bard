@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
 import { createMotion } from './motion.js';
+import { noise } from '../world/soundbus.js';
 
 const CHANCE = 0.01, EVERY = 60, COOLDOWN = 20 * 60;
 
@@ -85,9 +86,14 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 		ctx = c;
 		const out = ctx.createGain(); out.gain.value = 0; out.connect(bus);
 		const drone = ctx.createGain(); drone.gain.value = 0.05; drone.connect(out);
-		for (const f of [55, 55.6, 82.4, 110.9]) { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(drone); o.start(); }
-		S = { out };
+		S = { out, drone, osc: null };
 		return S;
+	}
+	// the drone runs only while she is about (four oscillators left running all evening,
+	// silent, would cost for nothing); stopped once it has faded out
+	function droneOn() {
+		if (S.osc) return;
+		S.osc = [55, 55.6, 82.4, 110.9].map((f) => { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(S.drone); o.start(); return o; });
 	}
 	// the music box: a child's tune, a little flat, slowing down
 	const TUNE = [0, 4, 7, 12, 11, 7, 4, 5, 2, -1, 0];
@@ -102,12 +108,11 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 		note++;
 	}
 	function breath(level) {
-		// a sharp intake of breath, close by: filtered noise, gone in a moment
-		const t = ctx.currentTime, b = ctx.createBuffer(1, ctx.sampleRate * 0.8, ctx.sampleRate), d = b.getChannelData(0);
-		for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(i / d.length * Math.PI);
-		const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-		s.buffer = b; f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 0.8; g.gain.value = level;
-		s.connect(f).connect(g).connect(S.out); s.start(t);
+		// a sharp intake of breath, close by: filtered noise swelling and gone in a moment
+		const t = ctx.currentTime, s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+		s.buffer = noise(ctx, 'white'); f.type = 'bandpass'; f.frequency.setValueAtTime(1100, t); f.frequency.linearRampToValueAtTime(1700, t + 0.6); f.Q.value = 0.8;
+		g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level, t + 0.4); g.gain.linearRampToValueAtTime(0, t + 0.8);
+		s.connect(f).connect(g).connect(S.out); s.start(t, Math.random() * 3); s.stop(t + 0.85);
 	}
 
 	// ---------- when and where ----------
@@ -138,7 +143,10 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 		if (G) G.P.root.visible = false;
 		state = null; cool = COOLDOWN; fadeU.value = 0;
 		screen(0, 0); hush?.(0);
-		if (S) S.out.gain.setTargetAtTime(0, ctx.currentTime, 0.8);
+		if (S) {
+			S.out.gain.setTargetAtTime(0, ctx.currentTime, 0.8);
+			if (S.osc) { for (const o of S.osc) o.stop(ctx.currentTime + 5); S.osc = null; }
+		}
 	}
 
 	// camera: the camera (which way you face is which way it looks); night 0..1
@@ -192,6 +200,7 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 		if (grainT < 0 && k > 0.02) { grainT = 0.07; drawGrain(); }
 		hush?.(Math.min(1, k * 1.6));
 		if (sound()) {
+			droneOn();
 			S.out.gain.setTargetAtTime(k * 0.9, ctx.currentTime, 0.5);
 			noteT -= dt;
 			if (noteT < 0 && k > 0.15 && state.phase !== 'gone') { noteT = 0.55 + note * 0.06; musicBox(0.02 + k * 0.03); }

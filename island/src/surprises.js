@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { toWorld } from './bay/geo.js';
 import { occasions } from './calendar.js';
+import { soundBus, noise } from './world/soundbus.js';
 
 const VERSES = [
 	{ id: 'fortpoint', lat: 37.81045, lon: -122.47700, place: 'Fort Point', line: 'Where the red span meets the cold Pacific swell,', clue: 'Under the red span’s southern foot, where the old brick fort watches the tide.' },
@@ -60,17 +61,17 @@ function createFireworks(scene, isPhone) {
 	const P = [];            // live particles
 	const PAL = [[1, 0.25, 0.2], [0.3, 0.6, 1], [1, 0.85, 0.3], [0.4, 1, 0.5], [1, 0.4, 0.9], [1, 1, 1], [0.95, 0.55, 0.15]];
 	const spark = (x, y, z, vx, vy, vz, c, life, sz, drag, grav, kind = 0) => { if (P.length < MAX) P.push({ x, y, z, vx, vy, vz, c, life, max: life, sz, drag, grav, kind, trail: 0 }); };
-	let audio = null;
+	// the report of each shell, arriving after the flash at the speed of sound
 	function boom(x, y, z, cam, big) {
-		if (!audio || audio.state !== 'running') return;
-		const d = Math.hypot(x - cam.position.x, y - cam.position.y, z - cam.position.z), t0 = audio.currentTime + d / 343;
-		const len = audio.sampleRate * 1.6, buf = audio.createBuffer(1, len, audio.sampleRate), ch = buf.getChannelData(0);
-		for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audio.sampleRate * (0.18 + big * 0.2)));
-		const s = audio.createBufferSource(); s.buffer = buf;
-		const lp = audio.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260 + 900 * Math.max(0, 1 - d / 2500);
-		const g = audio.createGain(); g.gain.value = Math.min(0.9, 700 / (d + 200)) * (0.6 + big * 0.5);
-		s.connect(lp).connect(g).connect(audio.destination);
-		s.start(t0);
+		const A = soundBus();
+		if (!A) return;
+		const { ctx } = A, d = Math.hypot(x - cam.position.x, y - cam.position.y, z - cam.position.z), t0 = ctx.currentTime + d / 343;
+		const s = ctx.createBufferSource(); s.buffer = noise(ctx, 'white');
+		const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260 + 900 * Math.max(0, 1 - d / 2500);
+		const g = ctx.createGain(), peak = Math.min(0.6, 700 / (d + 200)) * (0.6 + big * 0.5);
+		g.gain.setValueAtTime(peak, t0); g.gain.setTargetAtTime(0, t0, 0.18 + big * 0.2);
+		s.connect(lp).connect(g).connect(A.out);
+		s.start(t0, Math.random() * 2); s.stop(t0 + 1.6);
 	}
 	function burst(x, y, z, cam, n, pal, shape) {
 		const c1 = PAL[pal % PAL.length], c2 = PAL[(pal + 3) % PAL.length], v = shape === 'sparkle' ? 2.2 : 72 + Math.random() * 30;      // real shells open 150-300 m across
@@ -138,46 +139,45 @@ function createFireworks(scene, isPhone) {
 		geo.setDrawRange(0, n);
 		for (const a of ['position', 'color', 'aSize']) geo.attributes[a].needsUpdate = true;
 	}
-	return { start, update, burst, busy: () => !!show, setAudio: (a) => { audio = a; }, count: () => P.length, dbg: () => ({ show: show && { x: Math.round(show.x), z: Math.round(show.z), g: show.g, t: show.t.toFixed(1) }, p: P.slice(0, 3).map((q) => [Math.round(q.x), Math.round(q.y), Math.round(q.z), q.life.toFixed(2), q.kind]) }) };
+	return { start, update, burst, busy: () => !!show, count: () => P.length, dbg: () => ({ show: show && { x: Math.round(show.x), z: Math.round(show.z), g: show.g, t: show.t.toFixed(1) }, p: P.slice(0, 3).map((q) => [Math.round(q.x), Math.round(q.y), Math.round(q.z), q.life.toFixed(2), q.kind]) }) };
 }
 
 export function createSurprises({ scene, camera, getWorld, hint, say, isPhone = false }) {
 	const occ = occasions();
 	const fw = createFireworks(scene, isPhone);
-	let audio = null;
-	const wake = () => {
-		if (audio) { if (audio.state === 'suspended') audio.resume(); return; }
-		try { audio = new (window.AudioContext || window.webkitAudioContext)(); fw.setAudio(audio); } catch { audio = null; }
-	};
-	for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, wake, { passive: true });
-
 	// ---------- sounds ----------
 	function chime() {
-		if (!audio || audio.state !== 'running') return;
-		const t = audio.currentTime;
+		const A = soundBus();
+		if (!A) return;
+		const { ctx } = A, t = ctx.currentTime;
 		[523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => {
-			const o = audio.createOscillator(), g = audio.createGain();
+			const o = ctx.createOscillator(), g = ctx.createGain();
 			o.type = 'sine'; o.frequency.value = f;
 			g.gain.setValueAtTime(0, t + i * 0.09); g.gain.linearRampToValueAtTime(0.12, t + i * 0.09 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.09 + 1.4);
-			o.connect(g).connect(audio.destination); o.start(t + i * 0.09); o.stop(t + i * 0.09 + 1.5);
+			o.connect(g).connect(A.out); o.start(t + i * 0.09); o.stop(t + i * 0.09 + 1.5);
 		});
 	}
-	// the Golden Gate's foghorns: a two-tone diaphone, the high note then the low
-	function foghorn(gain) {
-		if (!audio || audio.state !== 'running') return;
-		const t = audio.currentTime;
-		const echo = audio.createDelay(1); echo.delayTime.value = 0.42;
-		const fb = audio.createGain(); fb.gain.value = 0.3;
-		const out = audio.createGain(); out.gain.value = gain;
-		echo.connect(fb).connect(echo); echo.connect(out); out.connect(audio.destination);
+	// the Golden Gate's foghorns: a two-tone diaphone, the high note then the low, from the
+	// bridge's side, its echo off the water and the headlands (the echo's loop is taken
+	// apart once it has died away, or it would live on unheard)
+	function foghorn(gain, pan) {
+		const A = soundBus();
+		if (!A) return;
+		const { ctx } = A, t = ctx.currentTime;
+		const echo = ctx.createDelay(1); echo.delayTime.value = 0.42;
+		const fb = ctx.createGain(); fb.gain.value = 0.3;
+		const out = ctx.createGain(); out.gain.value = gain;
+		const p = ctx.createStereoPanner(); p.pan.value = pan;
+		echo.connect(fb).connect(echo); echo.connect(out); out.connect(p).connect(A.out);
 		for (const [f, at, dur] of [[196, 0, 1.7], [155, 2.1, 2.3]]) {
-			const o1 = audio.createOscillator(), o2 = audio.createOscillator(), lp = audio.createBiquadFilter(), g = audio.createGain();
+			const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
 			o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = f; o2.frequency.value = f * 1.004;
 			lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 1.4;
 			g.gain.setValueAtTime(0, t + at); g.gain.linearRampToValueAtTime(0.5, t + at + 0.18); g.gain.setValueAtTime(0.5, t + at + dur - 0.3); g.gain.linearRampToValueAtTime(0, t + at + dur);
 			o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(out); g.connect(echo);
 			for (const o of [o1, o2]) { o.start(t + at); o.stop(t + at + dur + 0.05); }
 		}
+		setTimeout(() => { echo.disconnect(); fb.disconnect(); out.disconnect(); p.disconnect(); }, 9000);
 	}
 
 	// ---------- the verses ----------
@@ -275,6 +275,8 @@ export function createSurprises({ scene, camera, getWorld, hint, say, isPhone = 
 		if (lines.length) { hint(lines.join('\n'), 7000); say?.(lines.join(' '), 'note'); }
 	}
 
+	// how far to the right of where you look a thing lies, for the panner
+	const bearing = (dx, dz, d) => { const e = camera.matrixWorld.elements; return Math.max(-0.8, Math.min(0.8, (dx * e[0] + dz * e[2]) / (d + 1))); };
 	let hornT = 8, showT = 0, placed = false;
 	function update(dt, sky, weather) {
 		const W = getWorld();
@@ -310,7 +312,7 @@ export function createSurprises({ scene, camera, getWorld, hint, say, isPhone = 
 		const grey = (weather?.gloom || 0) > 0.25 || (weather?.rainHere || 0) > 0.1 || (hours > 5 && hours < 9.5);
 		if (W.bayArea?.loaded() && dg < 7000 && cam.y < 600 && grey) {
 			hornT -= dt;
-			if (hornT <= 0) { hornT = 28 + Math.random() * 6; foghorn(0.32 * Math.pow(1 - dg / 7000, 1.5) + 0.02); }
+			if (hornT <= 0) { hornT = 28 + Math.random() * 6; foghorn(0.32 * Math.pow(1 - dg / 7000, 1.5) + 0.02, bearing(GG.x - cam.x, GG.z - cam.z, dg)); }
 		} else hornT = Math.min(hornT, 6);
 		// coming up your own street: the journal notices first
 		if (home && !neared && W.bayArea?.loaded() && Math.hypot(cam.x - home.x, cam.z - home.z) < 350 && cam.y - W.island.heightAt(cam.x, cam.z) < 40) {

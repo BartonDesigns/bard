@@ -218,3 +218,23 @@ export function waterfowl(kind = 'mallard') {
 	if (goose) { const cheek = new THREE.SphereGeometry(0.03, 8, 6).scale(1, 1.4, 0.6).translate(0.035, 0.44, 0.34); const n = cheek.attributes.position.count; cheek.setAttribute('color', new THREE.Float32BufferAttribute(new Array(n * 3).fill(0.9), 3)); parts.push(cheek, cheek.clone().translate(-0.07, 0, 0)); }
 	return done(parts);
 }
+
+// ---------- a great egret, wading ----------
+// white all over, the long S of the neck drawn back, a yellow dagger bill, long black legs
+export function egret() {
+	const white = lin([0.96, 0.96, 0.94]), yellow = lin([0.9, 0.72, 0.15]), black = lin([0.06, 0.06, 0.06]);
+	const body = loft([[0, 0.72, -0.34, 0.01, 0.01, 0.01], [0, 0.74, -0.24, 0.07, 0.05, 0.06], [0, 0.78, -0.05, 0.1, 0.1, 0.11], [0, 0.84, 0.1, 0.08, 0.08, 0.09], [0, 0.9, 0.16, 0.05, 0.05, 0.05]], { seg: 16, sub: 4, paint: () => white });
+	const neck = tube([[0, 0.9, 0.15, 0.04], [0, 1.02, 0.22, 0.03], [0, 1.1, 0.16, 0.026], [0, 1.2, 0.14, 0.024], [0, 1.3, 0.2, 0.026]], { seg: 12, sub: 6, paint: () => white });
+	const head = loft([[0, 1.3, 0.18, 0.03, 0.03, 0.028], [0, 1.32, 0.24, 0.032, 0.032, 0.028], [0, 1.315, 0.28, 0.018, 0.012, 0.012], [0, 1.3, 0.42, 0.006, 0.005, 0.005], [0, 1.298, 0.44, 0.002, 0.002, 0.002]], { seg: 12, sub: 4, paint: (s) => (s > 0.4 ? yellow : white) });
+	const legs = [-1, 1].map((sx) => tube([[sx * 0.04, 0.76, 0, 0.018], [sx * 0.04, 0.42, 0.01, 0.011], [sx * 0.04, 0.38, 0.0, 0.012], [sx * 0.045, 0.02, 0.02, 0.009], [sx * 0.045, 0.0, 0.09, 0.006]], { seg: 8, sub: 3, paint: () => black }));
+	return done([body, neck, head, ...legs]);
+}
+
+// ---------- a western pond turtle (or a slider), basking ----------
+export function turtle() {
+	const shell = lin([0.24, 0.26, 0.16]), skin = lin([0.2, 0.24, 0.14]), plastron = lin([0.72, 0.64, 0.38]);
+	const carapace = loft([[0, 0.05, -0.16, 0.01, 0.01, 0.01], [0, 0.06, -0.13, 0.1, 0.05, 0.02], [0, 0.07, -0.02, 0.13, 0.08, 0.025], [0, 0.07, 0.08, 0.12, 0.07, 0.025], [0, 0.06, 0.14, 0.07, 0.04, 0.02], [0, 0.055, 0.16, 0.01, 0.01, 0.01]], { seg: 20, sub: 4, paint: (s, up, p) => (up < -0.2 ? plastron : mix(shell, lin([0.4, 0.38, 0.2]), vnoise(p.x * 30, p.y * 30, p.z * 30) > 0.62 ? 0.5 : 0)) });
+	const neck = tube([[0, 0.06, 0.14, 0.025], [0, 0.08, 0.2, 0.022], [0, 0.085, 0.24, 0.02], [0, 0.083, 0.26, 0.003]], { seg: 10, sub: 3, paint: (s) => (s > 0.3 && s < 0.6 ? lin([0.6, 0.15, 0.1]) : skin) });
+	const legs = [[0.1, 0.09], [-0.1, 0.09], [0.1, -0.1], [-0.1, -0.1]].map(([x, z]) => tube([[x * 0.8, 0.04, z, 0.02], [x * 1.25, 0.02, z + Math.sign(z) * 0.03, 0.016], [x * 1.4, 0.005, z + Math.sign(z) * 0.05, 0.004]], { seg: 8, sub: 3, paint: () => skin }));
+	return done([carapace, neck, ...legs]);
+}

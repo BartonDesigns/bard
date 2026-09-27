@@ -41,6 +41,7 @@ import { createTidepools } from './bay/tidepools.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
 import { createDiscovery } from './bay/discovery.js';
+import { createTowers } from './bay/towers.js';
 import { createCommercial } from './bay/commercial.js';
 import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
@@ -462,6 +463,8 @@ export function createIslandWorld() {
 			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
 			// ...and the shops, cafés, restaurants, offices and places to play, walked into
 			world.commercial = createCommercial(scene, bayArea, world.real, world.city, { isPhone });
+			// inside the towers: the lobby, the elevators, every floor, the roof
+			world.towers = createTowers(scene, bayArea, world.city, { isPhone, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
@@ -507,8 +510,8 @@ export function createIslandWorld() {
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y));
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); };
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -750,6 +753,7 @@ export function createIslandWorld() {
 		W.houses?.update(camera, dt, sk.night);
 		if (W.commercial) {
 			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
+			W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
 			// stepping into a place: what it is, and how busy at this hour
 			const inB = W.commercial.inside(camera.position);
 			if (inB && inB !== W.bizSeen) {

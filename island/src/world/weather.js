@@ -15,6 +15,7 @@
 
 import * as THREE from 'three';
 import { BOW, loadBowTexture } from './rainbow.js';
+import { soundBus, noise } from './soundbus.js';
 
 const H_CLOUD = 1500;                  // cumulus base, metres above you
 const MODES = { clear: [0.05, 0.0, 0.2, 0], fair: [0.45, 0.0, 0.45, 0], showers: [0.62, 0.55, 0.6, 0.1], storm: [0.9, 1.0, 1.1, 1] };   // cover, showers, wind, storm
@@ -150,39 +151,87 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 	}
 
 	// ---------------------------------------------------------------------------
-	// sound: rain on everything, and thunder (a context of its own, woken by the
-	// first touch or key)
+	// sound, played into the Bard's master output (soundbus.js):
+	//   the wind: a low roar that rises with the wind's speed and with how exposed you are
+	//   (up on a ridge, a summit, in the air), a thin whistle in the gusts
+	//   the rain: the hiss of it all round, and the nearest drops ticking one by one
+	//   indoors: the whole of it through the walls, the rain drumming on the roof
+	//   thunder: the crack of a near strike, the long roll of a far one, from its side
 
-	let ac = null, rainGain = null, rainLP = null;
-	const wake = () => {
-		if (ac) return;
-		try {
-			ac = new (window.AudioContext || window.webkitAudioContext)();
-			const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
-			let b0 = 0, b1 = 0, b2 = 0;
-			for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; b0 = 0.99765 * b0 + w * 0.099; b1 = 0.963 * b1 + w * 0.2965; b2 = 0.57 * b2 + w * 1.0527; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.2; }
-			const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
-			rainLP = ac.createBiquadFilter(); rainLP.type = 'lowpass'; rainLP.frequency.value = 5000;
-			const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 400;
-			rainGain = ac.createGain(); rainGain.gain.value = 0;
-			src.connect(hp).connect(rainLP).connect(rainGain).connect(ac.destination);
-			src.start();
-		} catch { ac = null; }
-	};
-	for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, wake, { once: true, passive: true });
-	function thunder(dist, big) {
-		if (!ac || ac.state !== 'running') return;
-		const t0 = ac.currentTime + dist / 343, dur = 2.5 + big * 3 + dist / 3000;
-		const len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+	let snd = null;
+	function sound() {
+		const B = soundBus();
+		if (!B) return null;
+		if (snd && snd.ctx === B.ctx) return snd;
+		const ctx = B.ctx;
+		const room = ctx.createBiquadFilter(); room.type = 'lowpass'; room.frequency.value = 18000; room.Q.value = 0.5;
+		room.connect(B.out);
+		const loop = (colour, type, f, q) => {
+			const s = ctx.createBufferSource(); s.buffer = noise(ctx, colour); s.loop = true;
+			const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+			const g = ctx.createGain(); g.gain.value = 0;
+			s.connect(fl).connect(g).connect(room); s.start(0, Math.random() * 3);
+			return { fl, g };
+		};
+		snd = { ctx, room, rain: loop('pink', 'lowpass', 5000, 0.4), patter: loop('white', 'bandpass', 2600, 0.6), roar: loop('brown', 'bandpass', 260, 0.5), whistle: loop('pink', 'bandpass', 900, 9), dripT: 0 };
+		return snd;
+	}
+	// one drop close by: a click of noise through a narrow band (higher on leaves, duller on a roof)
+	function drip(A, level, f, pan) {
+		const { ctx } = A, t = ctx.currentTime + Math.random() * 0.03;
+		const s = ctx.createBufferSource(); s.buffer = noise(ctx, 'white');
+		const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = 4;
+		const g = ctx.createGain(); g.gain.setValueAtTime(level, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+		const p = ctx.createStereoPanner(); p.pan.value = pan;
+		s.connect(bp).connect(g).connect(p).connect(A.room);
+		s.start(t, Math.random() * 3.5); s.stop(t + 0.06);
+	}
+	const ease2 = (A, param, v, tc) => param.setTargetAtTime(v, A.ctx.currentTime, tc);
+	function voice(dt, cam, groundAt, W) {
+		const A = sound();
+		if (!A) return;
+		const wet = cam.position.y > -0.3 ? 1 : 0, inside = S.sheltered;
+		// how exposed you are: the height of the land you stand on, and how far above it
+		const alt = Math.max(0, cam.position.y - groundAt(cam.position.x, cam.position.z));
+		const expose = (0.4 + 0.6 * Math.min(1, Math.max(0, cam.position.y / 700)) + Math.min(0.8, alt / 150)) * wet * (inside ? 0.2 : 1);
+		const gust = shared.uGust.value;
+		ease2(A, A.room.frequency, inside ? 700 : 18000, 0.3);
+		ease2(A, A.roar.g.gain, 0.3 * Math.pow(Math.min(1.8, W), 1.6) * expose, 0.3);
+		ease2(A, A.roar.fl.frequency, 180 + W * 220 + gust * 160, 0.3);
+		ease2(A, A.whistle.g.gain, 0.15 * Math.max(0, W - 0.45) * (0.3 + gust) * expose, 0.25);
+		ease2(A, A.whistle.fl.frequency, 650 + gust * 900 + Math.sin(performance.now() / 2300) * 90, 0.4);
+		// the rain: hiss and patter outside, a dull drumming through the roof
+		const r = S.rainHere * wet;
+		ease2(A, A.rain.g.gain, r * (inside ? 0.5 : 0.45), 0.5);
+		ease2(A, A.rain.fl.frequency, inside ? 1800 : 3500 + S.drop * 3000, 0.5);
+		ease2(A, A.patter.g.gain, r * (inside ? 0.05 : 0.09) * (0.5 + S.drop), 0.5);
+		A.dripT -= dt;
+		if (A.dripT < 0 && r > 0.03) {
+			A.dripT = 1 / (4 + r * 16) * (0.5 + Math.random());
+			drip(A, (inside ? 0.2 : 0.15) * (0.4 + r) * (0.5 + Math.random() * 0.5), inside ? 900 + Math.random() * 700 : 1800 + Math.random() * 3200, (Math.random() - 0.5) * 1.6);
+		}
+	}
+	// bx, bz: the strike, from you; the flash is seen at once, the thunder heard after
+	function thunder(bx, bz, big, cam) {
+		const A = sound();
+		if (!A) return;
+		const ctx = A.ctx, dist = Math.hypot(bx, bz);
+		const t0 = ctx.currentTime + dist / 343, dur = 2.5 + big * 3 + dist / 3000;
+		const len = Math.floor(ctx.sampleRate * dur), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
 		let b = 0;
 		for (let i = 0; i < len; i++) {
-			const t = i / ac.sampleRate, env = Math.min(1, t * 20) * Math.exp(-t / (dur * 0.35)) * (0.6 + 0.4 * Math.sin(t * 7.3 + Math.sin(t * 2.1) * 3));
-			b = b * 0.985 + (Math.random() * 2 - 1) * 0.15; d[i] = b * env * (i < ac.sampleRate * 0.08 && dist < 1500 ? 3 : 1);
+			const t = i / ctx.sampleRate, env = Math.min(1, t * 20) * Math.exp(-t / (dur * 0.35)) * (0.6 + 0.4 * Math.sin(t * 7.3 + Math.sin(t * 2.1) * 3));
+			b = b * 0.985 + (Math.random() * 2 - 1) * 0.15; d[i] = b * env * (i < ctx.sampleRate * 0.08 && dist < 1500 ? 3 : 1);
 		}
-		const src = ac.createBufferSource(); src.buffer = buf;
-		const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 - Math.min(700, dist / 12);
-		const gn = ac.createGain(); gn.gain.value = Math.min(1, 1600 / (dist + 400)) * (0.6 + big * 0.4);
-		src.connect(lp).connect(gn).connect(ac.destination);
+		// which side it is on (the far roll comes from all round, the crack from where it struck)
+		const e = cam.matrixWorld.elements, rx = e[0], rz = e[2];
+		const side = (bx * rx + bz * rz) / (dist + 1) * Math.min(1, 2500 / (dist + 500));
+		const src = ctx.createBufferSource(); src.buffer = buf;
+		const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 - Math.min(700, dist / 12);
+		// (kept well under full scale: a near crack is three times the roll)
+		const gn = ctx.createGain(); gn.gain.value = Math.min(0.45, 700 / (dist + 400)) * (0.6 + big * 0.4);
+		const p = ctx.createStereoPanner(); p.pan.value = Math.max(-0.8, Math.min(0.8, side));
+		src.connect(lp).connect(gn).connect(p).connect(A.room);
 		src.start(t0);
 	}
 
@@ -281,9 +330,9 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 		if (stormy && S.nextStrike <= 0 && strongest) {
 			S.nextStrike = 4 + Math.random() * (18 - S.storm * 12);
 			const a = Math.random() * 6.283, rr = Math.sqrt(Math.random()) * strongest.r;
-			const bx = strongest.x + Math.cos(a) * rr - px, bz = strongest.z + Math.sin(a) * rr - pz, dist = Math.hypot(bx, bz);
+			const bx = strongest.x + Math.cos(a) * rr - px, bz = strongest.z + Math.sin(a) * rr - pz;
 			S.bolts.push({ x: bx, z: bz, age: 0, seed: Math.random() * 100, big: Math.random() });
-			thunder(dist, strongest.I);
+			thunder(bx, bz, strongest.I, cam);
 		}
 		let fl = 0;
 		for (let i = S.bolts.length - 1; i >= 0; i--) {
@@ -312,7 +361,7 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 		rain.visible = S.rainHere > 0.01 && !S.sheltered;
 		// shed drops if frames get slow
 		if (opts.slow) rainU.uCap.value = Math.max(0.35, rainU.uCap.value - dt * 0.2); else rainU.uCap.value = Math.min(1, rainU.uCap.value + dt * 0.05);
-		if (rainGain) { rainGain.gain.value = ease(rainGain.gain.value, S.rainHere * (S.sheltered ? 0.35 : 0.55), dt * 2); rainLP.frequency.value = S.sheltered ? 900 : 5000; }
+		voice(dt, cam, groundAt, W);
 		stepBirds(dt, cam, windV, groundAt);
 		return S;
 	}

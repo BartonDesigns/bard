@@ -8,7 +8,7 @@
 // catfish and carp, as the lake holds.
 
 import * as THREE from 'three';
-import { waterfowl } from '../world/creatures.js';
+import { waterfowl, egret as egretBody, turtle as turtleBody } from '../world/creatures.js';
 import { toWorld } from './geo.js';
 
 const RING = [[37.7653550, -121.9665241], [37.7652032, -121.9669164], [37.7650471, -121.9670750], [37.7648865, -121.9671251], [37.7646555, -121.9670361], [37.7644905, -121.9668274], [37.7644421, -121.9666242], [37.7645037, -121.9662820], [37.7645939, -121.9657783], [37.7645873, -121.9653248], [37.7644949, -121.9648378], [37.7643651, -121.9645679], [37.7640594, -121.9641755], [37.7635886, -121.9636413], [37.7635336, -121.9634298], [37.7635380, -121.9632100], [37.7636018, -121.9629957], [37.7636898, -121.9628510], [37.7638328, -121.9627647], [37.7640132, -121.9627286], [37.7641737, -121.9627536], [37.7649305, -121.9632684], [37.7647765, -121.9636246], [37.7647391, -121.9637915], [37.7647479, -121.9639529], [37.7647963, -121.9641199], [37.7648755, -121.9642507], [37.7649591, -121.9643341], [37.7651108, -121.9644009], [37.7652560, -121.9644148], [37.7653858, -121.9643731], [37.7654936, -121.9642868], [37.7657554, -121.9636802], [37.7659599, -121.9638082], [37.7649393, -121.9663182], [37.7649613, -121.9663766], [37.7650031, -121.9663849], [37.7650383, -121.9663376]];
@@ -233,24 +233,20 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null } 
 			W.birdsL.push({ b, x, z, h: h01(k + S.cx) * 6.28, v: 0.25 + h01(k * 3) * 0.3, turn: 0, ph: h01(k * 5) * 10, kind });
 		}
 		if (W.egret && rocks.length) {
-			// an egret in the shallows
-			const egret = new THREE.Group(), wm = duckMat(0xf5f5f0), ym = duckMat(0xd8b52a), km = duckMat(0x222222);
-			const eb = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), wm); eb.scale.set(1.6, 0.9, 0.8); eb.position.y = 0.75; egret.add(eb);
-			const en = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.55, 6), wm); en.position.set(0.22, 1.02, 0); en.rotation.z = -0.5; egret.add(en);
-			const eh = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), wm); eh.position.set(0.36, 1.26, 0); egret.add(eh);
-			const ebill = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.2, 5), ym); ebill.rotation.z = -Math.PI / 2; ebill.position.set(0.48, 1.25, 0); egret.add(ebill);
-			for (const dz of [-0.06, 0.06]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.65, 4), km); leg.position.set(0, 0.33, dz); egret.add(leg); }
+			// an egret in the shallows (it faces +x here, like the ducks)
+			const egret = new THREE.Group(), em = new THREE.Mesh(egretBody(), fowlM);
+			em.rotation.y = Math.PI / 2; em.castShadow = true; egret.add(em);
 			const es = rocks[Math.floor(rocks.length * 0.37)];
 			egret.position.set(es[0], level - 0.2, es[1]);
 			group.add(egret);
 			W.egretM = egret;
 		}
 		// turtles sunning on the rocks
-		const turtleM = duckMat(0x3f4a2c);
+		const turtleG = turtleBody();
 		for (let k = 0; k < Math.min(4, rocks.length); k++) {
 			const rk = rocks[Math.floor(rocks.length * (0.1 + k * 0.23))];
-			const t = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), turtleM);
-			t.scale.set(1.2, 0.55, 1); t.position.set(rk[0], level - rk[2] * 0.35 + rk[2] * 0.7 * 0.95, rk[1]); t.rotation.y = k * 1.7;
+			const t = new THREE.Mesh(turtleG, fowlM);
+			t.scale.setScalar(1.3); t.position.set(rk[0], level - rk[2] * 0.35 + rk[2] * 0.7 * 0.95 - 0.02, rk[1]); t.rotation.y = k * 1.7;
 			group.add(t);
 		}
 	}

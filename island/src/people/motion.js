@@ -50,6 +50,9 @@ export const POSES = {
 	hip: { lead: arm({ abd: 0.5, flex: -0.3, roll: 1.1, bend: 1.7, pro: 0.6, wflex: -0.3, curl: 0.5 }), off: arm({}), swing: 0.4 },
 	phone: { lead: arm({ abd: 0.12, flex: 0.45, roll: 0.45, bend: 1.9, pro: 1.35, wflex: -0.25, curl: 0.45 }), off: arm({}), swing: 0.35, look: 0.45 },
 	listen: { both: arm({ abd: 0.08, flex: 0.1, roll: 0.35, bend: 0.5, pro: 0.2, curl: 0.3 }), head: 0.08 },
+	// seated: hands in the lap, or forearms on a table
+	lap: { both: arm({ abd: 0.12, flex: 0.55, roll: 0.5, bend: 1.05, pro: 0.6, curl: 0.4 }), swing: 0 },
+	table: { both: arm({ abd: 0.2, flex: 0.85, roll: 0.35, bend: 1.45, pro: 0.9, curl: 0.3 }), swing: 0 },
 };
 // gestures: functions of progress u (0..1), time s (seconds) and size k (temperament);
 // arm.lead / arm.off targets, head motion, beats (small emphatic dips), feelings
@@ -93,6 +96,8 @@ export function createMotion(P, groundAt) {
 		arms: { L: armSprings(), R: armSprings() },
 		headOv: { yaw: 0, pitch: 0, roll: 0 }, headYawS: new Spring(0, 3), headPitchS: new Spring(0, 3), headRollS: new Spring(0, 2),
 		joyS: new Spring(0, 1.2), browS: new Spring(0, 2),
+		// sitting: how far down into a seat (0 standing .. 1 seated), and the seat's height
+		sitK: new Spring(0, 2.2), sitWant: 0, seatH: 0.46,
 	};
 	const legLen = H('upperleg01.L').y - H('foot.L').y;
 	const hipRest = H('upperleg01.L').y;
@@ -196,6 +201,17 @@ export function createMotion(P, groundAt) {
 			feet.push({ leg, target, pitch, u });
 		}
 
+		// seated: the feet set down a little ahead of the seat, flat
+		const sitK = clamp(S.sitK.to(S.sitWant, dt), 0, 1);
+		if (sitK > 0.001) {
+			const c = Math.cos(S.heading), sn = Math.sin(S.heading);
+			for (const f of feet) {
+				const lx = f.leg.side * hipHalf * 1.1, lz = 0.42;
+				_v2.set(S.pos.x + lx * c + lz * sn, 0, S.pos.z - lx * sn + lz * c); _v2.y = groundAt(_v2.x, _v2.z);
+				f.target.lerp(_v2, sitK); f.pitch *= 1 - sitK;
+				if (sitK > 0.5) { f.leg.lock.copy(f.target); f.leg.planted = true; f.leg.inSwing = false; }
+			}
+		}
 		// ---- the body over the feet ----
 		const gy = Math.min(groundAt(S.pos.x, S.pos.z), Math.max(feet[0].target.y, feet[1].target.y));
 		const bob = (-Math.cos(S.phase * TAU * 2) * 0.018 * g.bounce * amp) * (1 - run) + run * (Math.abs(Math.sin(S.phase * TAU)) - 0.5) * 0.06;
@@ -203,12 +219,12 @@ export function createMotion(P, groundAt) {
 		// the pelvis cannot sit higher than the lower foot allows
 		const lowFoot = Math.min(feet[0].target.y, feet[1].target.y);
 		S.pos.y = S.hipY.to(Math.min(gy, lowFoot + 0.02), dt);
-		const hipY = hipRest - crouch + bob;
+		const hipY = (hipRest - crouch + bob) * (1 - sitK) + (S.seatH + 0.09) * sitK;
 		// weight over the stance foot; slow sway standing
 		S.shiftT += dt;
 		const idleSway = (1 - amp) * Math.sin(S.shiftT * 0.35 + S.mood * 5) * 0.025;
 		const sway = S.sway.to(Math.sin(S.phase * TAU) * 0.022 * amp * (1 - run * 0.6) + idleSway, dt);
-		const lean = S.lean.to(g.posture + 0.04 * amp + 0.16 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
+		const lean = S.lean.to(-0.06 * sitK + g.posture + 0.04 * amp + 0.16 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
 		const turnLean = S.turnLean.to(clamp(-turnRate * speed * 0.05, -0.12, 0.12), dt);
 
 		// body space: the person's own frame (+z forward)
@@ -367,5 +383,8 @@ export function createMotion(P, groundAt) {
 	function gesture(name, dur) { if (!GESTURES[name]) return; if (S.gestures.length >= 3) S.gestures.splice(1, 1); S.gestures.push({ name, t: 0, dur: dur || GDUR[name] || 2 }); }       // the newest wins over stale ones
 	function setPose(name) { if (POSES[name]) S.pose = name; }
 	function feel(k, v = 1) { if (k in S.feel) S.feel[k] = Math.max(S.feel[k], v); }
-	return { S, update, gesture, setPose, feel, poses: POSES, want: S.want, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
+	// sit(h): down into a seat h metres up (now: already sitting); stand(): up again
+	const sit = (h = 0.46, now = false) => { S.sitWant = 1; S.seatH = h; if (now) { S.sitK.v = 1; S.sitK.dv = 0; } };
+	const stand = () => { S.sitWant = 0; };
+	return { S, update, gesture, setPose, feel, sit, stand, poses: POSES, want: S.want, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
 }

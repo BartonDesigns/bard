@@ -61,7 +61,6 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 	const FILL = [mats.wall, mats.walld, mats.ceil, mats.floorW, mats.floorT, mats.carpet, mats.lane, mats.wood, mats.white, mats.leather, mats.red, mats.seat, mats.steel, mats.food, mats.cup, mats.green, ...mats.goods, ...mats.skin, ...mats.cloth];
 	for (const m of FILL) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.1; }
 	const built = new Map();         // grp -> building
-	const Y = new THREE.Vector3(0, 1, 0);
 
 	// ---------- building one ----------
 	function build(b) {
@@ -167,7 +166,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 				add(mats.glass, new THREE.BoxGeometry(1.6, 0.5, 0.6).translate(inside.x1 - 1.6, 1.35, bz));
 				for (let k = 0; k < 6; k++) cyl(mats.food, inside.x1 - 2.2 + k * 0.22, 1.12, bz, 0.07, 0.05, 8);
 				box(mats.dark, inside.x0 + 1.5, 2.1, inside.z0 - 0.02, inside.x0 + 3.5, 3, inside.z0 + 0.05);
-			} else for (let x = inside.x0 + 1; x < inside.x1 - 0.6; x += 0.9) { cyl(mats.steel, x, 0, bz + 0.8, 0.03, 0.75, 6); cyl(mats.leather, x, 0.75, bz + 0.8, 0.2, 0.06, 10); seats.push([x, bz + 0.8, Math.PI, true]); }
+			} else for (let x = inside.x0 + 1; x < inside.x1 - 0.6; x += 0.9) { cyl(mats.steel, x, 0, bz + 0.8, 0.03, 0.75, 6); cyl(mats.leather, x, 0.75, bz + 0.8, 0.2, 0.06, 10); seats.push([x, bz + 0.8, Math.PI, true, 0, 0.8]); }
 			// booths down one wall (restaurants), tables through the room
 			if (type === 'restaurant') for (let z = bz + 2.4; z < inside.z1 - 1; z += 2) {
 				box(mats.leather, inside.x0, 0, z - 0.95, inside.x0 + 0.6, 1.15, z - 0.75, true); box(mats.leather, inside.x0, 0, z + 0.75, inside.x0 + 0.6, 1.15, z + 0.95, true);
@@ -238,37 +237,38 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// ---------- the building's people, by the hour ----------
 		const root = new THREE.Group();
 		for (const [mat, list] of parts) { const m = new THREE.Mesh(mergeGeometries(list), mat); m.receiveShadow = true; m.castShadow = !isPhone && mat !== mats.glass; root.add(m); }
-		const figures = new THREE.Group(); root.add(figures);
 		// (a hair inside the block it replaces, so the two never fight while it dissolves)
 		root.position.set(b.x, floorY, b.z); root.rotation.y = -b.a; root.scale.set((W - 0.12) / W, 1, (D - 0.12) / D);
 		group.add(root);
-		const B = { b, type, root, figures, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => root.traverse((o) => o.geometry?.dispose()) };
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => root.traverse((o) => o.geometry?.dispose()) };
 		return B;
 	}
 
-	// a seated or standing figure: body, head, arms; merged so a room of them is a few draws
-	const figGeo = (sit) => {
-		const g = [new THREE.CapsuleGeometry(0.2, sit ? 0.34 : 0.62, 4, 8).translate(0, sit ? 0.78 : 1.0, 0)];
-		if (sit) g.push(new THREE.BoxGeometry(0.34, 0.14, 0.46).translate(0, 0.5, -0.16), new THREE.BoxGeometry(0.3, 0.46, 0.12).translate(0, 0.23, -0.36));
-		else g.push(new THREE.CapsuleGeometry(0.08, 0.7, 3, 6).translate(-0.08, 0.4, 0), new THREE.CapsuleGeometry(0.08, 0.7, 3, 6).translate(0.08, 0.4, 0));
-		return mergeGeometries(g.map((q) => q.toNonIndexed()));
-	};
-	const FIG = { sit: figGeo(true), stand: figGeo(false), head: new THREE.SphereGeometry(0.12, 10, 8) };
-	function populate(B, hours) {
-		for (const c of [...B.figures.children]) B.figures.remove(c);
-		const k = busyAt(B.type, hours), n = Math.round(B.seats.length * k * (B.type === 'cinema' ? 0.7 : 0.55));
-		const order = B.seats.map((s, i) => [hh(i * 1.7, B.b.x) + (s[3] ? 0 : 0.1), s]).sort((a, c) => a[0] - c[0]).slice(0, n);
-		const bodyBy = new Map(), headBy = new Map(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s1 = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
-		order.forEach(([r, [x, z, yaw, sit, y0 = 0]], i) => {
-			const cloth = mats.cloth[Math.floor(hh(i, r * 9) * mats.cloth.length)], skin = mats.skin[Math.floor(hh(r * 7, i) * mats.skin.length)];
-			const key = cloth.uuid + (sit ? 's' : 't');
-			if (!bodyBy.has(key)) bodyBy.set(key, { mat: cloth, geo: sit ? FIG.sit : FIG.stand, list: [] });
-			bodyBy.get(key).list.push(m4.clone().compose(p.set(x, y0, z), q.setFromAxisAngle(Y, yaw), s1));
-			if (!headBy.has(skin)) headBy.set(skin, []);
-			headBy.get(skin).push(m4.clone().compose(p.set(x, y0 + (sit ? 1.22 : 1.62), z), q, s1));
-		});
-		for (const { mat, geo, list } of bodyBy.values()) { const im = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((M, i) => im.setMatrixAt(i, M)); B.figures.add(im); }
-		for (const [mat, list] of headBy) { const im = new THREE.InstancedMesh(FIG.head, mat, list.length); list.forEach((M, i) => im.setMatrixAt(i, M)); B.figures.add(im); }
+	// who is in, by the hour: the real people (people/people.js) take the seats and the
+	// places to stand, from the list each building publishes here
+	function venue(cam, hours) {
+		const areas = [];
+		let n = 0;
+		for (const B of built.values()) {
+			const [lx, lz] = local(B, cam.x, cam.z);
+			if (Math.abs(lx) > B.hw + 14 || Math.abs(lz) > B.hd + 14) continue;
+			const k = busyAt(B.type, hours);
+			if (k <= 0.02) continue;
+			if (!B.spots) {
+				const ca = Math.cos(B.b.a), sa = Math.sin(B.b.a);
+				// (not the cinema's raked rows: a sitter there would need the rake for a floor)
+				B.spots = B.seats.filter((q) => !(q[4] > 0.05)).map(([x, z, yaw, sit, y0 = 0, h = 0.46]) => {
+					// (a seat's yaw turns -z, the way its sitter faces, in the building's frame)
+					const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+					return { x: B.b.x + ca * x - sa * z, z: B.b.z + sa * x + ca * z, y: B.floorY + y0, h: sit ? h : 0, sit, heading: Math.atan2(fx * ca - fz * sa, fx * sa + fz * ca), taken: false, table: sit && h < 0.6 && B.type !== 'cinema' };
+				});
+			}
+			const want = Math.round(B.spots.length * k * (B.type === 'cinema' ? 0.7 : 0.55));
+			if (!want) continue;
+			n += want;
+			areas.push({ w: want, seats: B.spots });
+		}
+		return areas.length ? { n: Math.min(n, 24), kids: 0, areas } : null;
 	}
 
 	// ---------- near you ----------
@@ -305,8 +305,6 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			cool = 0.25;
 			break;
 		}
-		// who is in, as the hours go by
-		for (const B of built.values()) if (Math.abs(hours - B.lastH) > 0.5) { B.lastH = hours; populate(B, hours); }
 	}
 
 	const local = (B, x, z) => { const dx = x - B.b.x, dz = z - B.b.z, ca = Math.cos(B.b.a), sa = Math.sin(B.b.a); return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
@@ -344,5 +342,5 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const B of built.values()) { const [lx, lz] = local(B, pos.x, pos.z); if (Math.abs(lx) < B.hw - 0.3 && Math.abs(lz) < B.hd - 0.3 && pos.y - B.floorY < CEIL) return B; }
 		return null;
 	}
-	return { group, update, floor, push, inside, count: () => built.size };
+	return { group, update, floor, push, inside, venue, count: () => built.size };
 }
