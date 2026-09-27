@@ -16,6 +16,7 @@ const SEA_LIONS = [toWorld(37.8087, -122.4098), toWorld(37.1080, -122.3370)];
 
 export function createNatureSound(bay, groundAt) {
 	let ctx = null, A = null;
+	let hush = 0;                     // 0..1: the night falling silent (people/ghost.js)
 	let tCricket = 0, tOwl = 8, tCoyote = 40, tFrog = 0, tBird = 3, tQuail = 10, tLion = 2;
 
 	function setup() {
@@ -88,7 +89,7 @@ export function createNatureSound(bay, groundAt) {
 		const x = cam.position.x, z = cam.position.z, alt = cam.position.y - groundAt(x, z);
 		const onIsland = Math.max(Math.abs(x), Math.abs(z)) < (o.islandHalf || 0);
 		const near = Math.max(0, 1 - Math.max(0, alt - 3) / 150) * (o.under || onIsland ? 0 : 1);
-		ease(A.master.gain, near > 0.01 ? 1 : 0, 0.8);
+		ease(A.master.gain, near > 0.01 ? 1 - hush * 0.95 : 0, hush > 0 ? 0.3 : 0.8);
 		if (near <= 0.01) return;
 		const wild = near * (1 - Math.min(1, o.town || 0) * 0.8), h = o.hours, m = o.month, night = o.night;
 		// the surf: how close the open ocean's shore is (sampled in a ring)
@@ -127,5 +128,5 @@ export function createNatureSound(bay, groundAt) {
 			for (const L of SEA_LIONS) { const d = Math.hypot(L.x - x, L.z - z); if (d < 700) seaLion(0.05 * (1 - d / 700) * near, Math.max(-0.8, Math.min(0.8, (L.x - x) / (d + 30)))); }
 		}
 	}
-	return { update };
+	return { update, hush: (k) => { hush = k; } };
 }

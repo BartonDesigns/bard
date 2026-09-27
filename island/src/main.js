@@ -66,6 +66,7 @@ import { createGuide } from './guide/guide.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
 import { createPeople } from './people/people.js';
+import { createGhost } from './people/ghost.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -275,6 +276,9 @@ export function createIslandWorld() {
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world);
 	guideApi.people = people;
+	// and, very rarely, in the woods after dark, someone who is not one of them
+	const ghost = createGhost(scene, { world: () => world, mount: dom.mount, canvas: dom.canvas, hush: (k) => world?.natureSound?.hush?.(k) });
+	HOOKS.ghost = () => ghost.summon(camera);
 	// walk up to someone and talk: a button with their name, or Enter
 	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom));display:none;');
 	dom.mount.appendChild(talkBtn);
@@ -771,6 +775,7 @@ export function createIslandWorld() {
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		people.demo(dt, time, camera.position);
+		ghost.update(dt, time, camera, sk.night);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half });
 		if (W.natureSound && W.bayArea?.loaded()) {
 			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
@@ -996,6 +1001,8 @@ if (typeof window !== 'undefined') {
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
+		// the child in the woods (people/ghost.js): very rare; this calls her now
+		ghost: () => HOOKS.ghost?.(),
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },
