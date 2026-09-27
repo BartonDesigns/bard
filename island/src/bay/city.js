@@ -1012,7 +1012,8 @@ export function createCity(shared, scene, bay, real = null) {
 			const dd = (x - cx) * (x - cx) + (z - cz) * (z - cz);
 			if (dd > R * R || dd < rIn * rIn) continue;
 			// open country: the mapped wild land, or anywhere beyond the maps the towns don't reach
-			if (real.inside(x, z)) {
+			const inR = real.inside(x, z);
+			if (inR) {
 				const L = real.landAt(x, z);
 				if (!L || (L.lu !== 0 && L.lu !== 11 && L.lu !== 12) || L.road > 0.2 || L.roof > 0.2) continue;
 			} else if (bay.urbanAt(x, z).u > 0.06) continue;
@@ -1041,6 +1042,7 @@ export function createCity(shared, scene, bay, real = null) {
 				const kind = hash(gx * 5.3, gz * 2.9), c = kind < 0.55 ? [0.2, 0.27, 0.12] : kind < 0.85 ? [0.36, 0.4, 0.3] : [0.42, 0.22, 0.1];
 				for (let k = 0, n = 2 + Math.floor(hash(gx * 1.3, gz * 8.1) * 3); k < n; k++) {
 					const bx = x + (hash(gx * 3 + k, gz) - 0.5) * 9, bz = z + (hash(gx, gz * 3 + k) - 0.5) * 9;
+					if (inR) { const L2 = real.landAt(bx, bz); if (L2 && (L2.roof > 0.1 || L2.road > 0.2)) continue; }      // (not in a building or on a street)
 					trees.push({ x: bx, y: H(bx, bz) - 0.3, z: bz, h: 0.7 + hash(gx + k, gz * 7.1) * 1.2, shrub: true, col: tint(c) });
 				}
 			}

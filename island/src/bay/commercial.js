@@ -57,6 +57,8 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		goods: [S(0xc0392b), S(0x2e86c1), S(0xf1c40f), S(0x27ae60), S(0x8e44ad), S(0xe67e22), S(0xecf0f1)],
 		skin: [S(0xe0b494), S(0xc68e6a), S(0x8d5a3b), S(0x5a3a26), S(0xf0cfb0)], cloth: [S(0x2c3e50), S(0x7f8c8d), S(0xa93226), S(0x1f618d), S(0x117a65), S(0xd4ac0d), S(0x6c3483), S(0xeeeeee)],
 	};
+	const FILL = [mats.wall, mats.walld, mats.ceil, mats.floorW, mats.floorT, mats.carpet, mats.lane, mats.wood, mats.white, mats.leather, mats.red, mats.seat, mats.steel, mats.food, mats.cup, mats.green, ...mats.goods, ...mats.skin, ...mats.cloth];
+	for (const m of FILL) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.1; }
 	const built = new Map();         // grp -> building
 	const Y = new THREE.Vector3(0, 1, 0);
 
@@ -235,6 +237,9 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
 		mats.panel.emissiveIntensity = 0.7 + nightK * 0.6;
+		// the rooms are lit from their ceilings: a glow on everything inside, more after dark
+		// (no extra lights, so no shaders are rebuilt)
+		for (const m of FILL) m.emissiveIntensity = 0.1 + nightK * 0.28;
 		if (!real?.loaded() || high) return;
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
 			scanX = x; scanZ = z;
