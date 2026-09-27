@@ -74,6 +74,328 @@ export function createLandmarks(scene, bay) {
 	const cone = (F, mat, r, h, x = 0, y = 0, z = 0, seg = 4) => put(F, mat, new THREE.ConeGeometry(r, h, seg).translate(0, h / 2, 0), x, y, z);
 	const dome = (F, mat, r, x = 0, y = 0, z = 0, sy = 1) => put(F, mat, new THREE.SphereGeometry(r, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, sy, 1), x, y, z);
 
+	// ---------------- Alcatraz ----------------
+	// The Rock as it stands. The ground under it (bay/terrain.js) is a soft lump sampled every
+	// 15 m, so the island is built again over it here: the ground's own heights, steepened into
+	// cliffs at the water, stepped into the benches and retaining walls of the terraces, cut
+	// flat along the crest for the cellhouse and graded for the road, and never below the
+	// ground. Dark greywacke streaked white by the gulls on the sides; ice plant, dry grass,
+	// rubble and the old gardens on the terraces. On it, in the real layout: the cellhouse along
+	// the crest, 150 m by 40, running north-west to south-east, three storeys of barred windows
+	// under a flat roof with its long skylights, the recreation yard's walls on its south-west
+	// side; at its south-east end the 1909 lighthouse (84 ft, white, tapering) against the burnt
+	// shell of the warden's house; the water tower to the north with the occupation's words
+	// round its tank, and the powerhouse stack; Building 64, the old barracks, along the dock
+	// with its red INDIANS WELCOME; the officers' club's shell; the road switching back up from
+	// the dock by the parade ground; and the gulls, perched and wheeling.
+	function alcatraz() {
+		const O = toWorld(37.8267, -122.4230), CREST = 42.2, CELL = 3;
+		// a frame at (x, z) metres east and south of the island's middle, heading as at()'s
+		const atL = (x, z, heading, base) => ({ m: new THREE.Matrix4().makeRotationY(-heading * Math.PI / 180 + Math.PI).setPosition(O.x + x, base, O.z + z) });
+		const tAt = (x, z) => bay.heightAt(O.x + x, O.z + z);
+		// the cellhouse's axes: a along it (south-east), c across it (north-east); likewise the dock's
+		const axes = (x, z, h) => { const ax = Math.sin(h * Math.PI / 180), az = -Math.cos(h * Math.PI / 180); return { x, z, h, ax, az, to: (a, c) => [x + a * ax + c * az, z + a * az - c * ax], of: (px, pz) => [(px - x) * ax + (pz - z) * az, (px - x) * az - (pz - z) * ax] }; };
+		const CH = axes(20, 10, 125), DK = axes(186, 48, 143);
+		// a rod from p to q (each [x, y, z] in the frame F)
+		const Yv = new THREE.Vector3(0, 1, 0);
+		const rod = (F, mat, p, q, r, seg = 5) => {
+			const d = new THREE.Vector3(q[0] - p[0], q[1] - p[1], q[2] - p[2]), L = d.length();
+			const g = new THREE.CylinderGeometry(r, r, L, seg).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Yv, d.normalize()));
+			put(F, mat, g, (p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2);
+		};
+
+		// ---- the road, from the dock round by the parade ground and up the crest's flank ----
+		const WAY = [[167, 0], [150, 18], [200, 92], [150, 90], [100, 94], [80, 86], [40, 64], [4, 40]];
+		const DECK = (() => { let m = 0; for (let a = -45; a <= 45; a += 5) for (let c = 8; c <= 30; c += 4) { const [x, z] = DK.to(a, c); m = Math.max(m, tAt(x, z)); } return Math.max(2.6, m + 0.8); })();
+		const road = [];
+		for (let i = 0; i < WAY.length - 1; i++) {
+			const [x0, z0] = WAY[i], [x1, z1] = WAY[i + 1], l = Math.hypot(x1 - x0, z1 - z0);
+			for (let s = 0; s < l - 0.01; s += 2) road.push([x0 + (x1 - x0) * s / l, z0 + (z1 - z0) * s / l]);
+		}
+		road.push(WAY[WAY.length - 1]);
+		{
+			// its grade: never below the ground, climbing all the way, the last pitch at 16% to
+			// the crest; then eased
+			let s = 0, env = DECK;
+			const len = road.reduce((a, p, i) => a + (i ? Math.hypot(p[0] - road[i - 1][0], p[1] - road[i - 1][1]) : 0), 0);
+			road.forEach((p, i) => { if (i) s += Math.hypot(p[0] - road[i - 1][0], p[1] - road[i - 1][1]); p.push(tAt(p[0], p[1])); env = Math.max(env, p[2] + 0.8); p.push(Math.min(CREST, Math.max(env, CREST - (len - s) * 0.16))); });
+			for (let k = 0; k < 6; k++) { const y = road.map((p) => p[3]); for (let i = 1; i < road.length - 1; i++) road[i][3] = Math.max(road[i][2] + 0.8, (y[i - 1] + y[i] * 2 + y[i + 1]) / 4); }
+			road[road.length - 1][3] = CREST;
+		}
+		const roadAt = (x, z) => { let d = 1e9, y = 0; for (const p of road) { const e = (p[0] - x) ** 2 + (p[1] - z) ** 2; if (e < d) { d = e; y = p[3]; } } return [Math.sqrt(d), y]; };
+
+		// ---- the Rock itself ----
+		const X0 = -290, Z0 = -230, NX = Math.round(590 / CELL) + 1, NZ = Math.round(460 / CELL) + 1;
+		const H = new Float32Array(NX * NZ).fill(NaN), idx = new Int32Array(NX * NZ).fill(-1);
+		const inRect = (a, c, a0, a1, c0, c1) => Math.max(a0 - a, a - a1, c0 - c, c - c1), [la, lc] = CH.of(...WAY[WAY.length - 1]);
+		for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+			const x = X0 + i * CELL, z = Z0 + j * CELL, t = tAt(x, z), k = j * NX + i;
+			if (t < -7) continue;
+			// cliffs three times the ground's steepness at the water; above, benches every 10 m or
+			// so, their edges wandering (and never below the ground: see the last line)
+			const tw = t - 5 + (vn(x / 45 + 7, z / 45) - 0.5) * 5, fl = Math.floor(tw / 10), fr = tw / 10 - fl, qv = 10 * (fl + Math.min(1, fr * 4)) + 5, cl = 3 * t + 2;
+			let h = Math.min(cl, qv, CREST);
+			const rough = Math.max(smooth(0, 3, qv - cl), fr < 0.25 ? 1 : 0) * (h < CREST - 0.1 ? 1 : 0);
+			h += (vn(x / 5, z / 5) + vn(x / 2, z / 2) * 0.5 - 0.75) * 2.4 * rough;
+			// the crest cut level for the cellhouse, its yard, the lighthouse and the warden's house
+			const [a, c] = CH.of(x, z);
+			const dPad = Math.min(inRect(a, c, -95, 100, -26, 44), inRect(a, c, -86, -4, -70, -20), Math.hypot(a - la, c - lc) - 9);
+			h += (CREST - h) * smooth(5, 0, dPad);
+			// the dock, down at the water
+			const [da, dc] = DK.of(x, z);
+			h += (Math.min(h, DECK - 0.4) - h) * smooth(3, 0, inRect(da, dc, -50, 50, 8, 32));
+			// the road's bench
+			const [rd, ry] = roadAt(x, z);
+			h += (ry - 0.1 - h) * smooth(9, 3.5, rd);
+			if (t > -1) h = Math.max(h, t + 0.6);
+			H[k] = h;
+		}
+		const hAt = (x, z) => {
+			const fi = (x - X0) / CELL, fj = (z - Z0) / CELL;
+			if (fi < 0 || fj < 0 || fi >= NX - 1 || fj >= NZ - 1) return NaN;
+			const i = Math.floor(fi), j = Math.floor(fj), u = fi - i, v = fj - j, k = j * NX + i;
+			return (H[k] * (1 - u) + H[k + 1] * u) * (1 - v) + (H[k + NX] * (1 - u) + H[k + NX + 1] * u) * v;
+		};
+		{
+			const P = [], C = [], I = [];
+			for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) {
+				const k = j * NX + i, h = H[k];
+				if (h !== h) continue;
+				const x = X0 + i * CELL, z = Z0 + j * CELL;
+				idx[k] = P.length / 3;
+				P.push(O.x + x, h, O.z + z);
+				const nb = (di, dj) => { const v = H[Math.min(NZ - 1, Math.max(0, j + dj)) * NX + Math.min(NX - 1, Math.max(0, i + di))]; return v === v ? v : h; };
+				const slope = Math.hypot(nb(1, 0) - nb(-1, 0), nb(0, 1) - nb(0, -1)) / (2 * CELL), n1 = vn(x / 4, z / 4);
+				// dark greywacke, the gulls' white streaked down from the ledges
+				let r = 0.3 + n1 * 0.08, g = 0.29 + n1 * 0.07, b = 0.27 + n1 * 0.06;
+				const guano = 0.75 * smooth(0.6, 1.2, slope) * smooth(0.55, 0.75, vn(x / 3, z / 3 + h / 4) * 0.7 + vn(x / 9, z / 9) * 0.5) * smooth(2, 8, h);
+				r += (0.84 - r) * guano; g += (0.83 - g) * guano; b += (0.78 - b) * guano;
+				// on the level: ice plant, dry grass, old paving and rubble
+				const flat = smooth(0.55, 0.25, slope) * smooth(3, 6, h);
+				const plant = smooth(0.4, 0.62, vn(x / 11 + 3, z / 11)), pave = smooth(0.55, 0.75, vn(x / 7 - 5, z / 7 + 2));
+				let fr = 0.5 + n1 * 0.06, fg = 0.47 + n1 * 0.05, fb = 0.31;
+				fr += (0.26 - fr) * plant; fg += (0.38 - fg) * plant; fb += (0.17 - fb) * plant;
+				fr += (0.6 - fr) * pave; fg += (0.58 - fg) * pave; fb += (0.54 - fb) * pave;
+				r += (fr - r) * flat; g += (fg - g) * flat; b += (fb - b) * flat;
+				// wet and weedy at the water line
+				const wet = smooth(2.5, 0.2, h);
+				r += (0.14 - r) * wet; g += (0.15 - g) * wet; b += (0.12 - b) * wet;
+				C.push(r ** 2.2, g ** 2.2, b ** 2.2);
+			}
+			for (let j = 0; j < NZ - 1; j++) for (let i = 0; i < NX - 1; i++) {
+				const k = j * NX + i, a = idx[k], b = idx[k + 1], c = idx[k + NX], d = idx[k + NX + 1];
+				if (a >= 0 && b >= 0 && c >= 0 && d >= 0) I.push(a, c, b, b, c, d);
+			}
+			const g = new THREE.BufferGeometry();
+			g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+			g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+			g.setIndex(I); g.computeVertexNormals();
+			const rock = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true }));
+			rock.castShadow = true; rock.receiveShadow = true; rock.name = 'alcatraz-rock';
+			group.add(rock);
+		}
+		const base = (x, z) => { const h = hAt(x, z); return h === h ? h : Math.max(0, tAt(x, z)); };
+
+		// ---- the road: asphalt, a concrete parapet on its downhill side ----
+		{
+			const P = [], N = [], UV = [], I = [];
+			for (let i = 0; i < road.length; i++) {
+				const p = road[i], q = road[Math.min(road.length - 1, i + 1)], o = road[Math.max(0, i - 1)];
+				const dx = q[0] - o[0], dz = q[1] - o[1], l = Math.hypot(dx, dz) || 1, px = -dz / l * 2.7, pz = dx / l * 2.7;
+				P.push(O.x + p[0] + px, p[3] + 0.06, O.z + p[1] + pz, O.x + p[0] - px, p[3] + 0.06, O.z + p[1] - pz);
+				N.push(0, 1, 0, 0, 1, 0); UV.push(0, 0, 1, 0);
+				if (i) I.push(2 * i - 2, 2 * i - 1, 2 * i, 2 * i - 1, 2 * i + 1, 2 * i);
+				if (i % 2 === 0 && i < road.length - 1) {
+					// (the parapet where the ground falls away from the road)
+					const side = tAt(p[0] + px * 2, p[1] + pz * 2) < tAt(p[0] - px * 2, p[1] - pz * 2) ? 1 : -1;
+					const F = atL(p[0] + px * side * 1.05, p[1] + pz * side * 1.05, Math.atan2(dx, -dz) * 180 / Math.PI, p[3]);
+					box(F, mats.concrete, 0.3, 0.9, 4.1);
+				}
+			}
+			const g = new THREE.BufferGeometry();
+			g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+			g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+			g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
+			g.setIndex(I);
+			add(mats.pavement, g);
+		}
+
+		// ---- the cellhouse ----
+		{
+			const F = atL(CH.x, CH.z, CH.h, CREST);
+			box(F, mats.cellhouse, 42, 12, 152, 0, -12, 0);
+			box(F, mats.cellhouse, 40, 14.5, 150);
+			box(F, mats.cellhouse, 40.8, 0.7, 150.8, 0, 14.5, 0);
+			box(F, mats.concrete, 39.6, 0.3, 149.6, 0, 15.2, 0);
+			// the roof's two long skylight monitors
+			for (const s of [-1, 1]) { box(F, mats.cellhouse, 5, 2.4, 124, s * 9, 15.2, 0); box(F, mats.glass, 5.2, 1.3, 122, s * 9, 15.7, 0); box(F, mats.concrete, 5.6, 0.25, 124.6, s * 9, 17.6, 0); }
+			// the tall barred windows down both long sides, the small ones over them
+			for (let i = 0; i < 28; i++) for (const s of [-1, 1]) {
+				const z = -67.5 + i * 5;
+				box(F, mats.dark, 0.3, 9, 2.6, s * 20.02, 2.4, z);
+				for (const b of [-0.65, 0, 0.65]) box(F, mats.steel, 0.14, 9, 0.12, s * 20.2, 2.4, z + b);
+				for (let k = 0; k < 5; k++) box(F, mats.steel, 0.14, 0.12, 2.6, s * 20.2, 2.4 + k * 2.22, z);
+				box(F, mats.dark, 0.3, 1.1, 2.2, s * 20.02, 12.3, z);
+			}
+			for (let i = -3; i <= 3; i++) for (const s of [-1, 1]) box(F, mats.dark, 2.4, 8, 0.3, i * 5, 2.4, s * 75.02);
+			// the administration wing and main door at the south-east end, the dining hall at the other
+			box(F, mats.cellhouse, 30, 11, 15, 0, 0, 82.5); box(F, mats.cellhouse, 31, 0.6, 16, 0, 11, 82.5);
+			for (let i = -5; i <= 5; i++) for (const y of [2, 6.5]) if (i || y > 3) box(F, mats.dark, 1.3, 1.9, 0.3, i * 2.6, y, 90.02);
+			box(F, mats.dark, 3, 3.6, 0.4, 0, 0, 90.1);
+			box(F, mats.cellhouse, 36, 10, 15, 0, 0, -82.5); box(F, mats.cellhouse, 36.8, 0.6, 15.8, 0, 10, -82.5);
+			for (let i = -6; i <= 6; i++) box(F, mats.dark, 1.5, 4.5, 0.3, i * 2.7, 3, -90.02);
+			// the recreation yard: its high walls, the concrete steps, a guard tower at the corner
+			box(F, mats.concrete, 44, 0.2, 76, -42, 0, -44);
+			box(F, mats.cellhouse, 1, 6.5, 77, -64.5, 0, -44); box(F, mats.cellhouse, 45, 6.5, 1, -42, 0, -82.5); box(F, mats.cellhouse, 45, 6.5, 1, -42, 0, -5.5);
+			for (let k = 0; k < 7; k++) box(F, mats.concrete, 42, 0.55, (7 - k) * 1.1, -42, k * 0.55, -82 + (7 - k) * 0.55);
+			for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(F, mats.steel, 0.25, 9, 0.25, -64.5 + x * 1.6, 0, -82.5 + z * 1.6);
+			box(F, mats.cellhouse, 4.4, 2.6, 4.4, -64.5, 9, -82.5); box(F, mats.dark, 4.5, 1, 4.5, -64.5, 10.1, -82.5); box(F, mats.concrete, 5.4, 0.3, 5.4, -64.5, 11.6, -82.5);
+			// gulls along the roof's edge
+			for (let i = 0; i < 26; i++) gull(F, (i % 2 ? 1 : -1) * 20.2, 15.2, -70 + i * 5.4 + (i % 3), i * 1.7);
+		}
+		// ---- the lighthouse, 1909: white concrete, tapering, the gallery and lantern ----
+		{
+			const [x, z] = CH.to(84, 36), F = atL(x, z, CH.h, CREST);
+			box(F, mats.white, 6.5, 3.4, 6.5); box(F, mats.white, 7, 0.4, 7, 0, 3.4, 0);
+			cyl(F, mats.white, 2.7, 1.85, 17.6, 0, 3.4, 0, 8);
+			cyl(F, mats.white, 1.85, 2.4, 0.6, 0, 21, 0, 8);
+			cyl(F, mats.dark, 2.7, 2.7, 0.25, 0, 21.6, 0, 16);
+			for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; box(F, mats.dark, 0.06, 1, 0.06, Math.sin(a) * 2.6, 21.85, Math.cos(a) * 2.6); }
+			put(F, mats.dark, new THREE.TorusGeometry(2.6, 0.04, 4, 32).rotateX(Math.PI / 2), 0, 22.85, 0);
+			cyl(F, mats.dark, 1.5, 1.5, 0.7, 0, 21.85, 0, 12); cyl(F, mats.lamp, 1.42, 1.42, 1.9, 0, 22.55, 0, 12);
+			cone(F, mats.dark, 1.75, 1.1, 0, 24.45, 0, 12); dome(F, mats.dark, 0.3, 0, 25.5, 0); cyl(F, mats.dark, 0.03, 0.03, 0.9, 0, 25.7, 0, 4);
+			for (let i = 0; i < 5; i++) gull(F, (i - 2) * 1.2, 3.8, 3.3, i * 2.3);
+		}
+		// a shell of walls: piers and the bands between floors, the openings empty, the tops broken
+		const shell = (F, mat, L, W, ht, floors, seed) => {
+			const fh = ht / floors;
+			for (const [len, along, off] of [[L, true, W / 2], [L, true, -W / 2], [W, false, L / 2], [W, false, -L / 2]]) {
+				const bays = Math.max(2, Math.round(len / 3.2)), bw = len / bays;
+				const wall = (u, y, w, h) => (along ? box(F, mat, 0.5, h, w, off, y, u) : box(F, mat, w, h, 0.5, u, y, off));
+				for (let b = 0; b <= bays; b++) {
+					const u = -len / 2 + b * bw, top = ht - ih(b + seed, off > 0 ? 3 : 7) * ht * 0.45;
+					wall(u, 0, 1.2, top);
+					if (b === bays) break;
+					for (let f = 0; f < floors; f++) {
+						const y = f * fh;
+						if (y + fh > top + 0.5) break;
+						wall(u + bw / 2, y, bw - 1.2, 0.9);
+						wall(u + bw / 2, y + fh - 0.7, bw - 1.2, 0.7);
+					}
+				}
+			}
+			box(F, mats.dark, W - 1, 0.2, L - 1);
+		};
+		// ---- the warden's house, burnt in 1970: three storeys of empty walls and its chimneys ----
+		{
+			const [x, z] = CH.to(62, 34), F = atL(x, z, CH.h, CREST);
+			shell(F, mats.ruin, 24, 14, 10.5, 3, 11);
+			box(F, mats.ruin, 1.3, 13, 1.3, -7.6, 0, -6); box(F, mats.ruin, 1.3, 12, 1.3, 7.6, 0, 5);
+			for (let i = 0; i < 7; i++) gull(F, 7.3, 10.5 - (i % 3) * 1.4, -9 + i * 3, i * 3.1);
+		}
+		// ---- the officers' club, burnt the same summer: its long arcaded shell above the dock ----
+		{
+			const x = 152, z = 58, F = atL(x, z, DK.h, base(x, z));
+			box(F, mats.ruin, 16, 3, 32, 0, -3, 0);
+			shell(F, mats.ruin, 30, 13, 5, 1, 23);
+		}
+		// ---- Building 64 at the dock: the barracks, four storeys to the water, the red paint ----
+		{
+			const F = atL(DK.x, DK.z, DK.h, DECK);
+			box(F, mats.b64, 17, DECK + 4, 77, 0, -(DECK + 4), 0);
+			box(F, mats.b64, 16, 16, 76);
+			box(F, mats.concrete, 16.8, 0.5, 76.8, 0, 16, 0);
+			for (let f = 0; f < 4; f++) for (let i = 0; i < 19; i++) {
+				const z = -36 + i * 4;
+				if (!(f >= 2 && Math.abs(z) < 14)) box(F, mats.dark, 0.3, 1.8, 1.6, 8.02, 1.2 + f * 4, z);
+				if (f >= 1) box(F, mats.dark, 0.3, 1.8, 1.6, -8.02, 1.2 + f * 4, z);
+			}
+			box(F, mats.redPaint, 0.2, 1.1, 76.2, 8.12, 14.4, 0);
+			const sign = new THREE.PlaneGeometry(26, 6.5).rotateY(Math.PI / 2), uv = sign.attributes.uv;
+			for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * 0.5);
+			put(F, mats.painted, sign, 8.3, 11, 0);
+			// the wharf on its piles, bollards along its edge, the ferry slip
+			box(F, mats.concrete, 22, 1.2, 96, 19, -1.2, 0);
+			for (let i = -4; i <= 4; i++) { for (const x of [12, 20, 28]) cyl(F, mats.concrete, 0.45, 0.45, DECK + 7, x, -(DECK + 7), i * 11, 6); box(F, mats.dark, 0.5, 0.6, 0.5, 29.4, 0, i * 11 + 5); }
+			box(F, mats.steel, 8, 0.6, 14, 34, -1.4, 40);
+			for (let i = 0; i < 9; i++) gull(F, 29.5, 0.6, -44 + i * 11 + 5, i * 0.9);
+		}
+		// ---- the water tower, on its legs on the north end, the words round its tank ----
+		{
+			const x = -108, z = -108, F = atL(x, z, 20, base(x, z)), R = 6.4, TOP = 24;
+			const legs = [];
+			for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; legs.push([Math.cos(a), Math.sin(a)]); }
+			for (const [c, s] of legs) rod(F, mats.steel, [c * 7.2, 0, s * 7.2], [c * 5.6, TOP, s * 5.6], 0.3, 6);
+			for (let i = 0; i < 6; i++) {
+				const [c0, s0] = legs[i], [c1, s1] = legs[(i + 1) % 6], r = (y) => 7.2 - y / TOP * 1.6;
+				for (const [y0, y1] of [[1.5, 9], [9, 16.5], [16.5, TOP - 0.5]]) {
+					rod(F, mats.steel, [c0 * r(y0), y0, s0 * r(y0)], [c1 * r(y1), y1, s1 * r(y1)], 0.07, 4);
+					rod(F, mats.steel, [c1 * r(y0), y0, s1 * r(y0)], [c0 * r(y1), y1, s0 * r(y1)], 0.07, 4);
+					rod(F, mats.steel, [c0 * r(y1), y1, s0 * r(y1)], [c1 * r(y1), y1, s1 * r(y1)], 0.12, 4);
+				}
+			}
+			cyl(F, mats.steel, 0.5, 0.5, 6, 0, TOP - 6, 0, 8);
+			put(F, mats.steel, new THREE.ConeGeometry(R, 2.2, 24).rotateX(Math.PI), 0, TOP + 0.4, 0);
+			cyl(F, mats.dark, R + 0.9, R + 0.9, 0.2, 0, TOP + 1.4, 0, 24);
+			const tank = new THREE.CylinderGeometry(R, R, 9, 32, 1, true).translate(0, 4.5, 0), uv = tank.attributes.uv;
+			for (let i = 0; i < uv.count; i++) uv.setY(i, 0.5 + uv.getY(i) * 0.5);
+			put(F, mats.painted, tank, 0, TOP + 1.5, 0);
+			cone(F, mats.steel, R + 0.2, 2.4, 0, TOP + 10.5, 0, 24);
+			for (let i = 0; i < 8; i++) gull(F, Math.cos(i * 0.8) * (R + 0.7), TOP + 1.6, Math.sin(i * 0.8) * (R + 0.7), i);
+		}
+		// ---- the powerhouse and its stack; the model industries building on the north point ----
+		{
+			const x = -142, z = -92, F = atL(x, z, 35, base(x, z));
+			box(F, mats.b64, 16, 11, 26, 0, -3, 0); box(F, mats.concrete, 16.6, 0.5, 26.6, 0, 8, 0);
+			for (let i = -2; i <= 2; i++) box(F, mats.dark, 0.3, 3, 2.2, 8.02, 3, i * 5);
+			cyl(F, mats.concrete, 1.9, 1.3, 34, 0, 8, -8, 12);
+			const x2 = -176, z2 = -150, F2 = atL(x2, z2, 50, base(x2, z2));
+			box(F2, mats.b64, 14, 13, 90, 0, -4, 0); box(F2, mats.concrete, 14.6, 0.5, 90.6, 0, 9, 0);
+			for (let i = 0; i < 22; i++) for (const s of [-1, 1]) box(F2, mats.dark, 0.3, 2.2, 2.6, s * 7.02, 4.8, -42 + i * 4);
+		}
+		// ---- the parade ground: the rubble of the apartments pulled down in 1971 ----
+		for (let i = 0; i < 40; i++) {
+			const x = 120 + ih(i, 1) * 80, z = 96 + ih(i, 2) * 50, F = atL(x, z, ih(i, 3) * 360, base(x, z) - 0.3);
+			box(F, i % 3 ? mats.ruin : mats.concrete, 1 + ih(i, 4) * 3, 0.5 + ih(i, 5) * 1.2, 1 + ih(i, 6) * 4);
+		}
+		// ---- the gardens on the terraces, and a few old cypresses ----
+		for (let i = 0; i < 150; i++) {
+			const x = -70 + ih(i, 11) * 230, z = -60 + ih(i, 12) * 170, h = hAt(x, z), nb = hAt(x + 3, z);
+			if (h !== h || nb !== nb || h < 8 || Math.abs(nb - h) > 0.6 || Math.abs(h - CREST) < 0.3 || roadAt(x, z)[0] < 5) continue;
+			const F = atL(x, z, 0, h), r = 0.6 + ih(i, 13) * 0.9;
+			put(F, i % 5 ? mats.green : mats.cypress, new THREE.IcosahedronGeometry(r, 0).scale(1.3, 0.8, 1.2).translate(0, r * 0.5, 0));
+			if (i % 9 === 0) { cyl(F, mats.wood, 0.25, 0.2, 4, 1.5, 0, 0, 5); put(F, mats.cypress, new THREE.IcosahedronGeometry(3, 0).scale(1.4, 1, 1.2).translate(1.5, 5.5, 0)); }
+		}
+		// ---- the gulls: western gulls on the ledges of the cliffs ----
+		for (let i = 0, n = 0; i < 4000 && n < 110; i++) {
+			const x = X0 + ih(i, 21) * (NX - 1) * CELL, z = Z0 + ih(i, 22) * (NZ - 1) * CELL, h = hAt(x, z), nb = hAt(x, z + 2);
+			if (h !== h || nb !== nb || h < 3 || h > 30 || Math.abs(nb - h) > 0.8) continue;
+			gull(atL(x, z, 0, h), 0, 0, 0, i); n++;
+		}
+		// ---- and wheeling over it on the wind off the cliffs ----
+		for (const [n, r0, y0, w] of [[9, 90, 55, 0.12], [7, 150, 80, -0.08]]) {
+			const L = [], turn = w > 0 ? Math.PI : 0;
+			for (let i = 0; i < n; i++) {
+				const a = i / n * Math.PI * 2 + ih(i, n), r = r0 * (0.7 + ih(i, 5) * 0.6), x = Math.cos(a) * r, y = y0 + ih(i, 6) * 30, z = Math.sin(a) * r;
+				// (the body along its path round, the long wings a little bent)
+				for (const s of [-1, 1]) L.push(new THREE.BoxGeometry(0.75, 0.03, 0.22).translate(s * 0.4, 0, 0).rotateZ(s * 0.18).rotateY(turn - a).translate(x, y, z));
+				L.push(new THREE.SphereGeometry(0.14, 6, 4).scale(1, 1, 3).rotateY(turn - a).translate(x, y, z));
+			}
+			const wheel = new THREE.Mesh(mergeGeometries(L.map((g) => g.toNonIndexed())), mats.gull);
+			wheel.position.set(O.x, 0, O.z);
+			wheel.onBeforeRender = () => { wheel.rotation.y = performance.now() * 0.001 * w; };
+			group.add(wheel);
+		}
+		return { hAt, O };
+	}
+	// a western gull, standing: white body and head, grey mantle, yellow bill left to the eye
+	function gull(F, x, y, z, k) {
+		const a = k * 2.4;
+		put(F, mats.gull, new THREE.SphereGeometry(0.16, 6, 4).scale(1.7, 0.9, 0.9).rotateY(a), x, y + 0.2, z);
+		put(F, mats.gull, new THREE.SphereGeometry(0.08, 6, 4), x + Math.cos(a) * 0.24, y + 0.33, z - Math.sin(a) * 0.24);
+		put(F, mats.gullGrey, new THREE.SphereGeometry(0.15, 6, 4).scale(1.8, 0.5, 1).rotateY(a), x - Math.cos(a) * 0.03, y + 0.27, z + Math.sin(a) * 0.03);
+	}
+
 	// ---------------- San Francisco ----------------
 	{ // Ferry Building: a long granite shed along the Embarcadero and its clock tower
 		const F = at(37.7955, -122.3937, 150);
@@ -330,13 +652,15 @@ export function createLandmarks(scene, bay) {
 		m.castShadow = true; m.receiveShadow = true;
 		group.add(m);
 	}
-	// standing on a pier
+	// standing on a pier, or on the Rock (its ground is its own, over the terrain's)
 	function floor(x, z, y) {
 		for (const P of PIERS) {
 			const dx = P.bx - P.ax, dz = P.bz - P.az, l2 = dx * dx + dz * dz, t = ((x - P.ax) * dx + (z - P.az) * dz) / l2;
 			if (t < 0 || t > 1) continue;
 			if (Math.abs((x - P.ax) * dz - (z - P.az) * dx) / Math.sqrt(l2) < P.hw && y > P.y - 1.5) return P.y;
 		}
+		const h = ALC.hAt(x - ALC.O.x, z - ALC.O.z);
+		if (h === h && h > 0 && y > h - 1.5) return h;
 		return -1e9;
 	}
 	return { group, floor };

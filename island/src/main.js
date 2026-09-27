@@ -762,7 +762,7 @@ export function createIslandWorld() {
 			const inB = W.commercial.inside(camera.position);
 			if (inB && inB !== W.bizSeen) {
 				const NAME = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', office: 'Office lobby', arcade: 'Arcade', bowling: 'Bowling alley', cinema: 'Cinema' };
-				const n = inB.figures.children.reduce((a, m) => a + (m.count || 0), 0) / 2;
+				const n = (inB.spots || []).filter((q) => q.taken).length;
 				hint(`${NAME[inB.type]}${n < 1 ? ' · quiet at this hour' : n > inB.seats.length * 0.35 ? ' · busy' : ''}`, 3000);
 			}
 			W.bizSeen = inB;
