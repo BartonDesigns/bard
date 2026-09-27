@@ -68,6 +68,15 @@ float bayHeight(vec2 w){
 
 // the colour of each kind of real land use (0: leave the natural ground)
 const REAL_LAND = /* glsl */`
+// spring wildflowers in drifts across open grass: California poppies (orange, on the sunny
+// side), lupine (blue-violet, in swales), goldfields (yellow sheets)
+vec3 wildflowers(vec3 c, vec2 w, float slope){
+	if (uBloom < 0.01) return c;
+	float drift = smoothstep(0.5, 0.64, fbm3(w * 0.006 + 4.7)) * (1.0 - smoothstep(0.25, 0.5, slope)) * uBloom;
+	float kind = fbm3(w * 0.0021 + 13.1), speck = smoothstep(0.35, 0.75, vn(w * 1.7));
+	vec3 flower = kind < 0.45 ? vec3(0.9, 0.3, 0.02) : kind < 0.58 ? vec3(0.2, 0.16, 0.55) : vec3(0.85, 0.66, 0.05);
+	return mix(c, flower, drift * (0.45 + 0.5 * speck));
+}
 vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 	vec3 lawn = mix(vec3(0.2, 0.34, 0.1), vec3(0.3, 0.41, 0.15), gn);
 	vec3 dry = mix(lawn, mix(vec3(0.32, 0.22, 0.09), vec3(0.46, 0.33, 0.14), gn), uSeason);
@@ -77,7 +86,7 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 		vec3 y = mix(lawn, dry, smoothstep(0.55, 0.8, gf) * 0.6);
 		return mix(y, vec3(0.3, 0.24, 0.16), smoothstep(0.62, 0.72, vn(w * 0.35)) * 0.5);
 	}
-	if (lu < 2.5) return mix(lawn, dry, smoothstep(0.6, 0.85, gf) * 0.4);
+	if (lu < 2.5) return wildflowers(mix(lawn, dry, smoothstep(0.6, 0.85, gf) * 0.4), w, 0.15);
 	if (lu < 3.5) return mix(vec3(0.24, 0.42, 0.13), vec3(0.3, 0.47, 0.16), step(0.5, fract(dot(w, vec2(0.6, 0.8)) / 14.0)));
 	if (lu < 4.5) return mix(vec3(0.26, 0.47, 0.15), vec3(0.3, 0.52, 0.18), step(0.5, fract(w.x / 5.0)));
 	if (lu < 5.5) return mix(vec3(0.52, 0.4, 0.28), vec3(0.62, 0.5, 0.36), gn);
@@ -356,17 +365,12 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 c = gold;
 					// spring wildflowers in drifts across the open grass: California poppies (orange,
 					// on the sunny side), lupine (blue-violet, in swales), goldfields (yellow sheets)
-					if (uBloom > 0.01) {
-						float drift = smoothstep(0.5, 0.64, fbm3(vBW * 0.006 + 4.7)) * (1.0 - smoothstep(0.25, 0.5, slope)) * uBloom;
-						float kind = fbm3(vBW * 0.0021 + 13.1), speck = smoothstep(0.35, 0.75, vn(vBW * 1.7));
-						vec3 flower = kind < 0.45 ? vec3(0.9, 0.3, 0.02) : kind < 0.58 ? vec3(0.2, 0.16, 0.55) : vec3(0.85, 0.66, 0.05);
-						c = mix(c, flower, drift * (0.45 + 0.5 * speck));
-					}
+					c = wildflowers(c, vBW, slope);
 					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4);
 					c = mix(c, mix(vec3(0.085, 0.1, 0.045), vec3(0.14, 0.15, 0.075), n3), chap * 0.85);          // chaparral: dark olive scrub
 					float oak = smoothstep(0.42, 0.68, n1 + north * 0.4 + fogbelt * 0.12 - south * 0.15 + (n2 - 0.5) * 0.3);
 					c = mix(c, mix(vec3(0.12, 0.16, 0.07), vec3(0.19, 0.23, 0.11), n3), oak * 0.88);
-					float forest = smoothstep(0.55, 0.78, n1 * 0.55 + north * 0.45 + fogbelt * 0.45) * smoothstep(40.0, 180.0, h);
+					float forest = smoothstep(0.5, 0.74, n1 * 0.5 + north * 0.45 + fogbelt * 0.55) * smoothstep(12.0, 120.0, h);
 					c = mix(c, mix(vec3(0.05, 0.1, 0.05), vec3(0.08, 0.14, 0.07), n3), forest * 0.92);
 					// rock where it is steep, in its own region's colour (the naturalist's geology)
 					vec3 rockC = mix(vec3(0.27, 0.24, 0.19), vec3(0.4, 0.36, 0.29), n2);

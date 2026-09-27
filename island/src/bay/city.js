@@ -1072,6 +1072,8 @@ export function createCity(shared, scene, bay, real = null) {
 		wildLand(cx, cz, 2700, trees, 22, 1100);          // beyond: a coarser, cheaper scatter for the far masses
 		for (const t of real.near('trees', cx, cz, 2700)) {
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
+			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
+			if (t.x < 58000 && (bay.heightAt(t.x - 900, t.z) < -2 || bay.heightAt(t.x - 2200, t.z) < -2)) { const L = real.landAt(t.x, t.z); if (L && (L.lu === 0 || L.lu === 2 || L.lu === 12)) { const gl = (bay.heightAt(t.x + 18, t.z) + bay.heightAt(t.x - 18, t.z) + bay.heightAt(t.x, t.z + 18) + bay.heightAt(t.x, t.z - 18) - 4 * g) / 6; if (gl < 0.35) continue; } }
 			if (g > 0.5) trees.push({ x: t.x, y: g - 0.3, z: t.z, h: t.h, cone: !!t.cone, col: t.cone ? jit([0.13, 0.21, 0.11], r) : t.flower ? jit([0.62, 0.2, 0.34], r) : jit(pick(PAL.crown, r), r) });   // (crape myrtles in bloom)
 		}
 	}
@@ -1121,7 +1123,7 @@ export function createCity(shared, scene, bay, real = null) {
 			// grass, with trees only down in the sheltered draws (the Marin Headlands, Devil's Slide)
 			const windswept = fog > 0.5 && (H(x - 900, z) < -2 || H(x - 2200, z) < -2 || H(x, z + 1500) < -2 && x < 12000);
 			if (windswept && gully < 0.35 && r2 < wood * 0.8) { if (!far && r2 < 0.5) trees.push({ x, y: g, z, h: 0.9 + r2 * 1.2, shrub: true, col: tint([0.28, 0.33, 0.2]) }); continue; }
-			if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.2 || north > 0.25) && high < 0.5) {
+			if (r2 < wood * 0.8 && fog > 0.6 && (gully > 0.1 || north > 0.1 || slope < 0.3) && high < 0.5) {
 				const rh = 32 + r2 * 34 + gully * 10;
 				trees.push({ x, y: g, z, h: rh, cone: true, sp: 2, col: tint([0.12, 0.19, 0.09]) });
 				if (!far) for (let k = 0; k < 7; k++) { const a = hash(gx * 7 + k, gz * 3) * 6.283, rr = 2 + hash(gx + k * 3, gz * 5) * 9, qx = x + Math.cos(a) * rr, qz = z + Math.sin(a) * rr; trees.push({ x: qx, y: H(qx, qz) - 0.05, z: qz, h: 0.7 + hash(gx * k, gz + k) * 0.6, fern: true, col: tint([0.18, 0.3, 0.1]) }); }
