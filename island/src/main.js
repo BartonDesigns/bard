@@ -44,6 +44,7 @@ import { createDiscovery } from './bay/discovery.js';
 import { createCommercial } from './bay/commercial.js';
 import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
+import { createArcade } from './arcade.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createNatureSound } from './bay/naturesound.js';
@@ -67,6 +68,7 @@ import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
 import { createPeople } from './people/people.js';
 import { createGhost } from './people/ghost.js';
+import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
 
 const REALM = 'island';
@@ -270,6 +272,9 @@ export function createIslandWorld() {
 	// fishing, wherever there is water
 	const fishing = createFishing({ scene, camera, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount });
 	HOOKS.fishing = fishing;
+	// the minigames (games/*.js): a games button, and a Play button at their venues
+	const arcade = createArcade({ scene, camera, mount: dom.mount, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), isPhone, teleportTo: (name, lat, lon) => teleport([name, lat, lon, world?.player.state.yaw || 0]) });
+	HOOKS.arcade = arcade;
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
 	HOOKS.drive = drive;
@@ -280,6 +285,15 @@ export function createIslandWorld() {
 	const ghost = createGhost(scene, { world: () => world, mount: dom.mount, canvas: dom.canvas, hush: (k) => world?.natureSound?.hush?.(k) });
 	HOOKS.ghost = (at) => ghost.summon(camera, at);
 	HOOKS.ghostInfo = () => ghost.inspect();
+	// the sculpted animals in a row in front of you (a look at them: Crysis.creatures())
+	HOOKS.creatures = () => {
+		const P = world.player.state, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
+		const list = [CREATURES.harborSeal(0.3), CREATURES.harborSeal(0.8), CREATURES.seaLion(0.5), CREATURES.elephantSeal(true), CREATURES.deer(), CREATURES.waterfowl('mallard'), CREATURES.waterfowl('goose'), CREATURES.bird('gull'), CREATURES.bird('pelican'), CREATURES.bird('vulture'), CREATURES.bird('hawk')];
+		const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.6 }), g = new THREE.Group();
+		list.forEach((geo, i) => { const m = new THREE.Mesh(geo, mat), off = (i - (list.length - 1) / 2) * 2.4, x = P.pos.x + fx * 7 + rx * off, z = P.pos.z + fz * 7 + rz * off; m.position.set(x, world.island.heightAt(x, z) + (i >= 7 ? 1.2 : 0), z); m.rotation.y = P.yaw + Math.PI / 2 + 0.5; m.castShadow = true; g.add(m); });
+		scene.add(g);
+		return list.length;
+	};
 	// walk up to someone and talk: a button with their name, or Enter
 	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom));display:none;');
 	dom.mount.appendChild(talkBtn);
@@ -652,7 +666,10 @@ export function createIslandWorld() {
 		stepWind(dt, shared);
 		const W = world;
 		// driving a road carries you; otherwise you walk, swim or fly
-		if (!drive.update(dt)) W.player.update(dt, time);
+		// (a minigame has the screen and the camera while it runs)
+		if (arcade.active()) drive.stop();
+		else if (!drive.update(dt)) W.player.update(dt, time);
+		arcade.update(dt, time, !W.boat?.boarded?.());
 		stampPrints(W.player.state);
 		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
@@ -785,7 +802,7 @@ export function createIslandWorld() {
 			if (bc && bc !== W.beachSeen && !W.tidepools?.siteAt(camera.position.x, camera.position.z)) hint(`${bc.name}${bc.quiet ? '\nA quiet stretch: few people, the sound of the surf.' : bc.big ? '\nMavericks breaks half a mile out, in winter the biggest waves on the coast.' : bc.surf ? '\nSurf zone between the checkered flags.' : bc.tents ? '\nCampsites along the back of the beach.' : ''}`, 6000);
 			if (bc) W.beachSeen = bc;
 		}
-		fishing.update(dt, time, !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
+		fishing.update(dt, time, !arcade.active() && !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);
 		guide.update(dt);
 		watchTalk(dt);
@@ -1020,6 +1037,7 @@ if (typeof window !== 'undefined') {
 		// the child in the woods (people/ghost.js): very rare; this calls her now
 		ghost: (at) => HOOKS.ghost?.(at),
 		ghostInfo: () => HOOKS.ghostInfo?.(),
+		creatures: () => HOOKS.creatures?.(),
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },
@@ -1041,6 +1059,8 @@ if (typeof window !== 'undefined') {
 		verses: () => HOOKS.surprises?.verses(),
 		get surprises() { return HOOKS.surprises; },
 		get fishing() { return HOOKS.fishing; },
+		// the minigames: Crysis.arcade.start('bowling'), .stop(), .games()
+		get arcade() { return HOOKS.arcade; },
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};

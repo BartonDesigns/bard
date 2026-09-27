@@ -33,7 +33,7 @@ export const GAME = {
 	id: 'bowling',
 	title: 'Bowling',
 	blurb: 'Five frames on a real 60-foot lane: swipe to roll, curl it for hook.',
-	where: { kind: 'site', sites: [{ name: 'Presidio Bowling Center', lat: 37.7989, lon: -122.4583, r: 80 }, { name: 'Mission Bowling Club', lat: 37.7626, lon: -122.4117, r: 60 }] },
+	where: { kind: 'site', sites: [{ name: 'Presidio Bowling Center', lat: 37.7989, lon: -122.4583, r: 80 }, { name: 'Mission Bowling Club', lat: 37.7634, lon: -122.4157, r: 60 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#f2b33d', dist: 1.5, span: [3, 21] });
 		const { THREE } = ctx;
@@ -81,7 +81,7 @@ export const GAME = {
 			});
 		}
 		function reset() {
-			S = { rolls: [], frame: 0, ball: 0, state: 'aim', t: 0, bx: 0, bz: 0.4, vx: 0, vz: 0, hook: 0, gutter: false, spin: 0, first: 0 };
+			S = { rolls: [], frame: 0, ball: 0, state: 'aim', t: 0, bx: 0, bz: 0.4, vx: 0, vz: 0, hook: 0, gutter: false, first: 0 };
 			rack(true); placeBall(); hud();
 		}
 		function placeBall() { S.bx = S.bx0 || 0; S.bz = 0.4; ball.position.set(S.bx, 0.12 + BALL_R, S.bz); ball.visible = true; S.gutter = false; }

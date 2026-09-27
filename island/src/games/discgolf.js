@@ -16,7 +16,7 @@ export const GAME = {
 	id: 'discgolf',
 	title: 'Disc Golf',
 	blurb: 'Three holes over the real ground: flick to throw, curl it round the trees.',
-	where: { kind: 'site', sites: [{ name: 'Golden Gate Park Disc Golf Course', lat: 37.7704, lon: -122.4893, r: 200 }, { name: 'Stern Grove / Pine Lake', lat: 37.7362, lon: -122.4839, r: 150 }, { name: 'Anywhere with room to throw', lat: 37.8039, lon: -122.4636, r: 120 }] },
+	where: { kind: 'site', sites: [{ name: 'Golden Gate Park Disc Golf Course', lat: 37.7704, lon: -122.4893, r: 200 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#ffd23f', dist: 1, span: [2, 2] });
 		const { THREE } = ctx;

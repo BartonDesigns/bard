@@ -62,7 +62,7 @@ uniforms.uUnder = shared.uUnder;
 		dz += vec3(-Q * d.x * d.y * wa * s, d.y * wa * co, -Q * d.y * d.y * wa * s);
 	}
 	// how much of a wave of length L survives a sampling step h (vertex spacing or pixel size)
-	float keep(float L, float h){ return 1.0 - smoothstep(L * 0.12, L * 0.3, h); }
+	float keep(float L, float h){ return 1.0 - smoothstep(L * 0.06, L * 0.16, h); }
 	// the slope of the spectrum at p, each wave filtered for the step h, scaled by a
 	vec2 slopes(vec2 p, float h, float a){
 		vec2 g = vec2(0.0), pb = bend(p);
@@ -149,7 +149,9 @@ uniforms.uUnder = shared.uUnder;
 				float dist = length(cameraPosition - vW);
 				float near = 1.0 - smoothstep(60.0, 900.0, dist);
 				// the pixel's footprint on the water: waves finer than it are left out
-				float hp = max(length(fwidth(vW.xz)), 0.002);
+				// (the worse of the two screen axes: at a low angle the water is foreshortened, and a
+				// wave kept across the view aliases into moiré along it)
+				float hp = max(max(length(dFdx(vW.xz)), length(dFdy(vW.xz))) * 1.4, 0.002);
 				// wind streaks: long calm slicks lying along the wind, where the ripples lie down
 				vec2 sw = mat2(0.82, 0.57, -0.57, 0.82) * vW.xz;
 				float slick = smoothstep(0.58, 0.78, vn(vec2(sw.x * 0.006, sw.y * 0.045) + vec2(uTime * 0.004, 0.0)));

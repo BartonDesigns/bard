@@ -23,7 +23,7 @@ export const GAME = {
 	id: 'minigolf',
 	title: 'Mini Golf',
 	blurb: 'Three holes of San Francisco crazy golf: pull back and putt.',
-	where: { kind: 'site', sites: [{ name: 'Urban Putt, Mission District', lat: 37.7547, lon: -122.4167, r: 50 }, { name: 'Golfland, Milpitas', lat: 37.4302, lon: -121.9097, r: 80 }] },
+	where: { kind: 'site', sites: [{ name: 'Urban Putt, Mission District', lat: 37.7552, lon: -122.4166, r: 50 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#6bd66b', dist: 1.5, span: [5, 7] });
 		const { THREE } = ctx;

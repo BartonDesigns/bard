@@ -7,7 +7,7 @@
 // Spot one (near enough, in front of you) and it goes in your field journal.
 
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { bird, deer as deerBody } from '../world/creatures.js';
 import { SPECIES, TRAILS } from '../nature/fieldguide.js';
 import { toWorld } from './geo.js';
 
@@ -16,35 +16,15 @@ const inHours = (s, h) => { const [a, b] = s.hours; return a <= b ? h >= a && h 
 const TRAIL_AT = TRAILS.map((t) => ({ ...t, ...toWorld(t.lat, t.lon) }));
 const about = (id, h, month) => { const s = GUIDE[id]; return !!s && s.months.includes(month) && inHours(s, h); };
 
-// a bird: body, head, and wings held out (dihedral for the vultures' V)
-function birdGeo(span, dihedral, body = 0.12) {
-	const g = [new THREE.CapsuleGeometry(body, span * 0.28, 3, 6).rotateX(Math.PI / 2), new THREE.SphereGeometry(body * 0.8, 6, 5).translate(0, 0.02, span * 0.2)];
-	for (const s of [-1, 1]) {
-		const w = new THREE.BoxGeometry(span / 2, 0.02, span * 0.16).translate(s * span / 4, 0, 0);
-		w.rotateZ(s * dihedral);
-		g.push(w);
-	}
-	g.push(new THREE.BoxGeometry(span * 0.14, 0.02, span * 0.12).translate(0, 0, -span * 0.22));
-	return mergeGeometries(g.map((q) => q.toNonIndexed()));
-}
-function deerGeo() {
-	const g = [new THREE.CapsuleGeometry(0.28, 0.8, 4, 8).rotateX(Math.PI / 2).translate(0, 0.95, 0),
-		new THREE.CylinderGeometry(0.09, 0.12, 0.55, 6).rotateX(-0.7).translate(0, 1.3, 0.55),
-		new THREE.CapsuleGeometry(0.1, 0.22, 3, 6).rotateX(Math.PI / 2 - 0.4).translate(0, 1.52, 0.78),
-		new THREE.ConeGeometry(0.05, 0.16, 4).translate(0.09, 1.66, 0.7), new THREE.ConeGeometry(0.05, 0.16, 4).translate(-0.09, 1.66, 0.7),
-		new THREE.ConeGeometry(0.06, 0.2, 5).rotateX(Math.PI / 2 + 0.6).translate(0, 1.05, -0.62)];
-	for (const [x, z] of [[-0.16, 0.42], [0.16, 0.42], [-0.16, -0.42], [0.16, -0.42]]) g.push(new THREE.CylinderGeometry(0.04, 0.035, 0.8, 5).translate(x, 0.4, z));
-	return mergeGeometries(g.map((q) => q.toNonIndexed()));
-}
-
 export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, say = () => {} } = {}) {
 	// (hint(text, ms, priority): the trailhead board outranks the place names)
 	const group = new THREE.Group();
 	group.name = 'wildlife';
 	scene.add(group);
-	const mk = (geo, color, n) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.85 }), n); m.count = 0; m.frustumCulled = false; group.add(m); return m; };
-	const vult = mk(birdGeo(1.8, 0.18), 0x2a2522, 16), hawk = mk(birdGeo(1.25, 0.03), 0x6a4a30, 3);
-	const pel = mk(birdGeo(2.1, 0.0, 0.16), 0x5d5a55, 12), gull = mk(birdGeo(1.35, 0.06, 0.1), 0xe8e8e4, 14), deer = mk(deerGeo(), 0x7a5e44, 8);
+	// the animals sculpted, coloured in their own vertices (world/creatures.js)
+	const mk = (geo, n, rough = 0.8) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: rough }), n); m.count = 0; m.frustumCulled = false; m.castShadow = !isPhone; group.add(m); return m; };
+	const vult = mk(bird('vulture'), 16), hawk = mk(bird('hawk'), 3);
+	const pel = mk(bird('pelican'), 12), gull = mk(bird('gull'), 14), deer = mk(deerBody(), 8, 0.9);
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s1 = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
 	const g = (x, z) => bay.heightAt(x, z);
 	let seed = 1;

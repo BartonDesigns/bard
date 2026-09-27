@@ -9,6 +9,7 @@
 // Each is built when you come near, and you can walk out on the rock (floor()).
 
 import * as THREE from 'three';
+import { harborSeal } from '../world/creatures.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorld } from './geo.js';
 
@@ -95,15 +96,11 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 		for (let i = 0; i < 6; i++) parts.push(new THREE.PlaneGeometry(0.16, 2.2).translate(0, 0, 1.1).rotateX(Math.PI / 2).rotateY(i / 6 * Math.PI * 2 + 0.3));
 		return mergeGeometries(parts.map((g) => g.toNonIndexed()));
 	})();
-	const sealG = (() => {
-		const body = new THREE.SphereGeometry(1, 14, 10).scale(0.42, 0.3, 0.95);
-		const head = new THREE.SphereGeometry(0.2, 10, 8).scale(1, 0.9, 1.2).translate(0, 0.2, 0.95);
-		const flip = new THREE.ConeGeometry(0.22, 0.45, 5).rotateX(-Math.PI / 2).scale(1.4, 0.3, 1).translate(0, -0.05, -1.05);
-		return mergeGeometries([body, head, flip].map((g) => g.toNonIndexed()));
-	})();
+	// harbor seals, sculpted (world/creatures.js): a few coats, dark to pale
+	const sealGs = [0.15, 0.5, 0.85].map((t) => harborSeal(t).scale(0.82, 0.82, 0.82));
 	const creatureM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 });
 	const kelpM = new THREE.MeshStandardMaterial({ color: 0x6b4a1c, roughness: 0.6, side: THREE.DoubleSide });
-	const sealM = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+	const sealM = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.38, metalness: 0.05 });
 
 	function build(S) {
 		const B = { S, group: new THREE.Group(), seals: [] };
@@ -226,10 +223,8 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 		for (let t = 0; t < 6000 && B.seals.length < S.seals; t++) {
 			const i = Math.floor(rnd() * (n - 2)) + 1, j = Math.floor(rnd() * (n - 2)) + 1, k = j * n + i, h = H[k];
 			if (h !== h || info[k].out < 0.05 || info[k].out > 0.5 || h < 0.1) continue;
-			const seal = new THREE.Mesh(sealG, sealM.clone());
-			const tone = rnd();
-			seal.material.color.setRGB(0.32 + tone * 0.35, 0.3 + tone * 0.32, 0.28 + tone * 0.28);
-			seal.position.set(x0 + i * CELL, h + 0.22, z0 + j * CELL); seal.rotation.y = rnd() * 6.28;
+			const seal = new THREE.Mesh(sealGs[Math.floor(rnd() * sealGs.length)], sealM);
+			seal.position.set(x0 + i * CELL, h + 0.02, z0 + j * CELL); seal.rotation.y = rnd() * 6.28;
 			seal.castShadow = !isPhone;
 			seal.userData.ph = rnd() * 10;
 			B.group.add(seal); B.seals.push(seal);
@@ -239,7 +234,7 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 	}
 	function drop(S) {
 		const B = built.get(S);
-		B.group.traverse((o) => { if (o.geometry && o.geometry !== starG && o.geometry !== urchinG && o.geometry !== anemoneG && o.geometry !== musselG && o.geometry !== kelpG && o.geometry !== sealG) o.geometry.dispose(); });
+		B.group.traverse((o) => { if (o.geometry && o.geometry !== starG && o.geometry !== urchinG && o.geometry !== anemoneG && o.geometry !== musselG && o.geometry !== kelpG && !sealGs.includes(o.geometry)) o.geometry.dispose(); });
 		root.remove(B.group);
 		built.delete(S);
 	}

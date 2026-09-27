@@ -89,7 +89,7 @@ export const GAME = {
 			meter = K.meter('Hold, then let go to launch');
 		}
 		function reset() {
-			S = { balls: 3, score: 0, state: 'plunge', x: 0, y: 0, vx: 0, vy: 0, charge: 0, charging: false, lit: [false, false, false], mult: 1, flash: 0, t: 0 };
+			S = { balls: 3, score: 0, state: 'plunge', x: 0, y: 0, vx: 0, vy: 0, charge: 0, charging: false, lit: [false, false, false], mult: 1, t: 0 };
 			for (const f of flips) { f.a = 0; f.w = 0; f.held = false; }
 			serve();
 		}

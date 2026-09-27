@@ -44,7 +44,7 @@ export const GAME = {
 		function reset() {
 			for (const p of pieces) K.drop(p.m);
 			pieces.length = 0;
-			S = { n: 0, w: START, d: START, cx: 0, cz: 0, state: 'build', t: 0, streak: 0, perfects: 0, speed: 0.9, moving: null, turrets: [] };
+			S = { n: 0, w: START, d: START, cx: 0, cz: 0, state: 'build', t: 0, streak: 0, perfects: 0, speed: 0.9, moving: null };
 			flag.visible = false; tide.position.set(0, -1, -9);
 			pieces.push({ m: slab(START, START, 0, 0, 0, 0), fall: false });
 			next();

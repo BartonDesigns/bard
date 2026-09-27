@@ -16,7 +16,7 @@ export const GAME = {
 	id: 'skate',
 	title: 'Skateboarding',
 	blurb: 'A sixty-second line under the freeway: ollie, flip, grind, and hold the combo.',
-	where: { kind: 'site', sites: [{ name: 'SoMa West Skatepark', lat: 37.7704, lon: -122.4196, r: 90 }, { name: 'Potrero del Sol Skatepark', lat: 37.7524, lon: -122.4079, r: 70 }, { name: 'Berkeley Skate Park', lat: 37.8629, lon: -122.3027, r: 70 }] },
+	where: { kind: 'site', sites: [{ name: 'SoMa West Skatepark', lat: 37.7704, lon: -122.4196, r: 90 }, { name: 'Potrero del Sol Skatepark', lat: 37.7524, lon: -122.4079, r: 70 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#c6ff3d', dist: 0.5, span: [4, 30] });
 		const { THREE } = ctx;

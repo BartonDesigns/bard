@@ -47,7 +47,7 @@ export const GAME = {
 			K.root.add(trail);
 		}
 		function reset() {
-			S = { throwN: 0, best: 0, log: [], state: 'aim', p: new THREE.Vector3(), V: 0, gam: 0, psi: 0, phi: 0, hold: false, bankIn: 0, t: 0, rings: 0, hist: [] };
+			S = { throwN: 0, best: 0, log: [], state: 'aim', p: new THREE.Vector3(), V: 0, gam: 0, psi: 0, phi: 0, hold: false, t: 0, rings: 0, hist: [] };
 			ready();
 		}
 		function ready() {

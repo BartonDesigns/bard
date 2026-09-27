@@ -18,7 +18,7 @@ export const GAME = {
 	id: 'tidepool',
 	title: 'Tide Pools',
 	blurb: 'Kneel over a rock pool at low tide and spot the sea stars, nudibranchs and the octopus.',
-	where: { kind: 'site', sites: [{ name: 'Fitzgerald Marine Reserve, Moss Beach', lat: 37.5232, lon: -122.5163, r: 200 }, { name: 'Duxbury Reef, Bolinas', lat: 37.8900, lon: -122.6970, r: 250 }, { name: 'Pillar Point, Half Moon Bay', lat: 37.4955, lon: -122.4990, r: 200 }] },
+	where: { kind: 'site', sites: [{ name: 'Fitzgerald Marine Reserve, Moss Beach', lat: 37.5232, lon: -122.5163, r: 200 }, { name: 'Duxbury Reef, Bolinas', lat: 37.8936, lon: -122.6972, r: 250 }, { name: 'Pillar Point, Half Moon Bay', lat: 37.4955, lon: -122.4990, r: 200 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#ff8a5a', dist: 1.2, span: [2.5, 2.5] });
 		const { THREE } = ctx;

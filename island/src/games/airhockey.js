@@ -44,7 +44,7 @@ export const GAME = {
 			S.board = K.el('position:absolute;left:50%;top:calc(66px + env(safe-area-inset-top));transform:translateX(-50%);font:800 28px system-ui;color:#eafaf6;text-shadow:0 2px 6px #000;pointer-events:none');
 		}
 		function reset() {
-			S = { ...S, me: 0, them: 0, px: 0, pz: -0.5, vx: 0, vz: 0, mx: 0, mz: -0.15, mvx: 0, mvz: 0, ax: 0, az: -TL + 0.15, speed: 1.6, state: 'play', t: 0, face: 0, hits: 0 };
+			S = { ...S, me: 0, them: 0, px: 0, pz: -0.5, vx: 0, vz: 0, mx: 0, mz: -0.15, mvx: 0, mvz: 0, ax: 0, az: -TL + 0.15, speed: 1.6, state: 'play', t: 0 };
 			faceoff(1);
 		}
 		function faceoff(toMe) {

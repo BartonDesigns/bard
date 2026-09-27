@@ -11,6 +11,11 @@
 // Pigeon Point's lighthouse stands on its point. Each beach is built when you come near.
 
 import * as THREE from 'three';
+import { elephantSeal } from '../world/creatures.js';
+
+// the elephant seals, sculpted once (world/creatures.js)
+let ELE = null;
+const eleSeals = () => ELE || (ELE = { bull: elephantSeal(true), cow: elephantSeal(false), mat: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.55 }) });
 import { toWorld } from './geo.js';
 import { carGeometry, carMaterial } from './cars.js';
 
@@ -272,14 +277,16 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			}
 		}
 		// ---------- Año Nuevo's elephant seals, hauled out on the sand ----------
+		const ELE = eleSeals();
 		for (let i = 0; i < (S.seals || 0) * (isPhone ? 0.5 : 1); i++) {
 			const c = spot(sand, 160, 0.4, 3.5);
 			if (!c) break;
 			const big = rnd() < 0.2, L = big ? 4.2 : 2.6 + rnd() * 0.6;
-			const seal = new THREE.Mesh(new THREE.CapsuleGeometry(L * 0.19, L * 0.6, 4, 10).rotateX(Math.PI / 2), mats.seal);
-			seal.scale.set(1, 0.72, 1); seal.position.set(c.x, c.h + L * 0.13, c.z); seal.rotation.y = rnd() * 6.28;
+			const seal = new THREE.Mesh(big ? ELE.bull : ELE.cow, ELE.mat);
+			seal.scale.setScalar(L / (big ? 2.9 : 2.6)); seal.position.set(c.x, c.h - 0.03, c.z); seal.rotation.y = rnd() * 6.28;
+			seal.castShadow = !isPhone;
 			add(seal);
-			B.seals.push({ seal, ph: rnd() * 20, y: c.h + L * 0.13 });
+			B.seals.push({ seal, ph: rnd() * 20, y: c.h - 0.03 });
 		}
 		// ---------- Pigeon Point's lighthouse: 35 m of white brick, the black lantern ----------
 		if (S.light) {
@@ -298,7 +305,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 	}
 	function drop(S) {
 		const B = built.get(S);
-		B.group.traverse((o) => { if (o.geometry && !Object.values(carGeo).includes(o.geometry)) o.geometry.dispose(); });
+		B.group.traverse((o) => { if (o.geometry && !Object.values(carGeo).includes(o.geometry) && o.geometry !== ELE?.bull && o.geometry !== ELE?.cow) o.geometry.dispose(); });
 		root.remove(B.group);
 		built.delete(S);
 	}

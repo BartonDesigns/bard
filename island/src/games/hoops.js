@@ -17,7 +17,7 @@ export const GAME = {
 	id: 'hoops',
 	title: 'Hoops',
 	blurb: 'Sixty seconds, a rack of balls, and a hoop: swipe up to shoot.',
-	where: { kind: 'site', sites: [{ name: 'Panhandle basketball court', lat: 37.7722, lon: -122.4455, r: 60 }, { name: 'Mission Playground courts', lat: 37.7589, lon: -122.4221, r: 50 }, { name: 'Potrero Hill Rec Center courts', lat: 37.7572, lon: -122.3980, r: 60 }] },
+	where: { kind: 'site', sites: [{ name: 'Panhandle basketball court', lat: 37.7722, lon: -122.4455, r: 60 }, { name: 'Mission Playground courts', lat: 37.7594, lon: -122.4229, r: 50 }, { name: 'Potrero Hill Rec Center courts', lat: 37.7572, lon: -122.3980, r: 60 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#ff8a3d', dist: 8, span: [8, 1, 9] });
 		const { THREE } = ctx;
@@ -48,13 +48,13 @@ export const GAME = {
 			ball = K.ball(BR, K.mat('#ffffff', { map: skin, rough: 0.8 }), 0, 1, 4);
 		}
 		function reset() {
-			S = { time: TIME, score: 0, made: 0, shots: 0, streak: 0, spot: 0, state: 'ready', p: new THREE.Vector3(), v: new THREE.Vector3(), t: 0, rimT: 0, swish: true, started: false, swishes: 0 };
+			S = { time: TIME, score: 0, made: 0, shots: 0, streak: 0, spot: 0, state: 'ready', p: new THREE.Vector3(), v: new THREE.Vector3(), t: 0, swish: true, started: false, swishes: 0 };
 			ready();
 		}
 		function spot() { return SPOTS[S.spot]; }
 		function ready() {
 			const [x, z] = spot();
-			S.state = 'ready'; S.p.set(x, 2.0, z); S.v.set(0, 0, 0); S.swish = true; S.below = false; S.counted = false;
+			S.state = 'ready'; S.p.set(x, 2.0, z); S.v.set(0, 0, 0); S.swish = true; S.counted = false;
 		}
 		function press(down) {
 			if (down || S.state !== 'ready' || S.time <= 0) return;

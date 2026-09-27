@@ -8,6 +8,7 @@
 // catfish and carp, as the lake holds.
 
 import * as THREE from 'three';
+import { waterfowl } from '../world/creatures.js';
 import { toWorld } from './geo.js';
 
 const RING = [[37.7653550, -121.9665241], [37.7652032, -121.9669164], [37.7650471, -121.9670750], [37.7648865, -121.9671251], [37.7646555, -121.9670361], [37.7644905, -121.9668274], [37.7644421, -121.9666242], [37.7645037, -121.9662820], [37.7645939, -121.9657783], [37.7645873, -121.9653248], [37.7644949, -121.9648378], [37.7643651, -121.9645679], [37.7640594, -121.9641755], [37.7635886, -121.9636413], [37.7635336, -121.9634298], [37.7635380, -121.9632100], [37.7636018, -121.9629957], [37.7636898, -121.9628510], [37.7638328, -121.9627647], [37.7640132, -121.9627286], [37.7641737, -121.9627536], [37.7649305, -121.9632684], [37.7647765, -121.9636246], [37.7647391, -121.9637915], [37.7647479, -121.9639529], [37.7647963, -121.9641199], [37.7648755, -121.9642507], [37.7649591, -121.9643341], [37.7651108, -121.9644009], [37.7652560, -121.9644148], [37.7653858, -121.9643731], [37.7654936, -121.9642868], [37.7657554, -121.9636802], [37.7659599, -121.9638082], [37.7649393, -121.9663182], [37.7649613, -121.9663766], [37.7650031, -121.9663849], [37.7650383, -121.9663376]];
@@ -215,17 +216,13 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null } 
 			W.glass = glassM;
 		}
 		// wildlife
-		const duckMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
+		// (sculpted, world/creatures.js; they face +x here, so a quarter turn, and sit a little
+		// down in the water)
+		const fowl = { duck: waterfowl('mallard'), goose: waterfowl('goose') }, fowlM = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.75 });
 		const mkBird = (kind) => {
-			const b = new THREE.Group();
-			const goose = kind === 'goose', sc = goose ? 1.5 : 1;
-			const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), duckMat(goose ? 0x6b5d4d : 0x7a6a55)); body.scale.set(1.5, 0.75, 0.9); b.add(body);
-			const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, goose ? 0.4 : 0.18, 6), duckMat(goose ? 0x111111 : 0x1f5a34)); neck.position.set(0.24, goose ? 0.28 : 0.16, 0); neck.rotation.z = -0.35; b.add(neck);
-			const head = new THREE.Mesh(new THREE.SphereGeometry(goose ? 0.075 : 0.085, 10, 8), duckMat(goose ? 0x111111 : 0x1f5a34)); head.position.set(goose ? 0.34 : 0.3, goose ? 0.5 : 0.27, 0); b.add(head);
-			if (goose) { const chin = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), duckMat(0xf2f0ea)); chin.position.set(0.35, 0.47, 0); chin.scale.set(1, 0.8, 1.3); b.add(chin); }
-			const bill = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 6), duckMat(goose ? 0x111111 : 0xd9a321)); bill.rotation.z = -Math.PI / 2; bill.position.set(goose ? 0.43 : 0.39, goose ? 0.49 : 0.26, 0); b.add(bill);
-			b.scale.setScalar(sc);
-			b.traverse((o) => { o.castShadow = true; });
+			const b = new THREE.Group(), m = new THREE.Mesh(fowl[kind], fowlM);
+			m.rotation.y = Math.PI / 2; m.position.y = -0.04; m.castShadow = true;
+			b.add(m);
 			return b;
 		};
 		const spots = (n) => { for (let k = 0; k < 40; k++) { const x = minX + h01(n * 13 + k + S.cx) * (maxX - minX), z = minZ + h01(n * 7 + k * 3 + 1 + S.cz) * (maxZ - minZ); if (inLake(x, z) && edge(x, z).d > 4) return [x, z]; } return [S.cx, S.cz]; };
