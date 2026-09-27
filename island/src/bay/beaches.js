@@ -212,11 +212,27 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			add(T);
 		};
 		const back = { x: sand.x - Math.sin(toSea) * 40, z: sand.z - Math.cos(toSea) * 40 };
+		// a mapped campground's loop roads: the sites are pitched along them
+		const loops = [];
+		if (S.tents && real?.near) for (const r of real.near('roads', sand.x, sand.z, 420)) {
+			if (r.cls !== 'service' && r.cls !== 'unclassified') continue;
+			for (let i = 0; i + 3 < r.pts.length; i += 2) { const ax = r.pts[i], az = r.pts[i + 1], bx = r.pts[i + 2], bz = r.pts[i + 3], l = Math.hypot(bx - ax, bz - az); if (l > 4 && Math.hypot(ax - sand.x, az - sand.z) < 420) loops.push([ax, az, (bz - az) / l, -(bx - ax) / l, l]); }
+		}
+		const siteOnLoop = () => {
+			for (let k = 0; k < 30; k++) {
+				const [ax, az, nx, nz, l] = loops[Math.floor(rnd() * loops.length)], t = rnd(), side = rnd() < 0.5 ? 1 : -1, off = 7 + rnd() * 3;
+				// (along the road t of the way, then off to one side into the site)
+				const ux = ax + t * l * -nz, uz = az + t * l * nx;
+				const cx = ux + nx * off * side, cz = uz + nz * off * side, h = g(cx, cz);
+				if (h > 1 && h < 40 && slope(cx, cz) < 0.12 && camps.every((c) => Math.hypot(c.x - cx, c.z - cz) > 7)) { const c = { x: cx, z: cz, h, face: Math.atan2(-nx * side, -nz * side) }; camps.push(c); return c; }
+			}
+			return null;
+		};
 		let fires = S.fires || 0;
 		for (let i = 0; i < (S.tents || 0); i++) {
-			const c = spot(back, 110, 1.2, 14);
+			const c = loops.length > 6 ? siteOnLoop() : spot(back, 110, 1.2, 14);
 			if (!c) break;
-			tent(c.x, c.z, c.h, toSea + Math.PI + (rnd() - 0.5) * 0.8, Math.floor(rnd() * 4), tentCols[Math.floor(rnd() * tentCols.length)]);
+			tent(c.x, c.z, c.h, (c.face ?? toSea + Math.PI) + (rnd() - 0.5) * 0.8, Math.floor(rnd() * 4), tentCols[Math.floor(rnd() * tentCols.length)]);
 			if (fires > 0 && i % 3 === 0) { fires--; fireAt(c.x + Math.sin(toSea) * 4, c.z + Math.cos(toSea) * 4, g(c.x + Math.sin(toSea) * 4, c.z + Math.cos(toSea) * 4)); }
 		}
 		// San Gregorio's driftwood forts: lean-tos of grey logs up the back of the beach
