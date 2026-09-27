@@ -30,7 +30,7 @@ export const GAME = {
 	blurb: 'Nine darts at a regulation board: aim, settle your hand, and go for the treble twenty.',
 	where: { kind: 'anywhere' },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#e8403a', dist: 0.3, span: [2, 3] });
+		const K = makeKit(ctx, GAME, { accent: '#e8403a', dist: 0.3, room: { w: 4.5, z0: -2.45, z1: 1.6, h: 2.9, style: 'pub' } });
 		const { THREE } = ctx;
 		let board, ring, darts = [], S = {};
 

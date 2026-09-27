@@ -19,7 +19,7 @@ export const GAME = {
 	blurb: 'Sit in with the Hippie Hill drum circle: tap the djembe, conga and bongos in time.',
 	where: { kind: 'site', sites: [{ name: 'Hippie Hill, Golden Gate Park', lat: 37.7700, lon: -122.4585, r: 90 }, { name: 'Dolores Park', lat: 37.7596, lon: -122.4269, r: 120 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ffb347', dist: 2, span: [6, 6] });
+		const K = makeKit(ctx, GAME, { accent: '#ffb347', dist: 2, span: [10, 7, 2], flat: 1, backdrop: 'meadow', dome: 30 });
 		const { THREE } = ctx;
 		let drums = [], lanes, pads = [], dots = [], judge, S = {};
 		const notes = [];

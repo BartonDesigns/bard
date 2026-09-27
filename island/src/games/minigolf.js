@@ -25,7 +25,7 @@ export const GAME = {
 	blurb: 'Three holes of San Francisco crazy golf: pull back and putt.',
 	where: { kind: 'site', sites: [{ name: 'Urban Putt, Mission District', lat: 37.7552, lon: -122.4166, r: 50 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#6bd66b', dist: 1.5, span: [5, 7] });
+		const K = makeKit(ctx, GAME, { accent: '#6bd66b', dist: 1.5, span: [8, 7, 3], flat: 0.8, backdrop: 'meadow', dome: 30 });
 		const { THREE } = ctx;
 		let ball, holeG = null, aimLine, blockM = [], S = {};
 

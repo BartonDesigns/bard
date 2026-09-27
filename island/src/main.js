@@ -813,12 +813,12 @@ export function createIslandWorld() {
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		people.demo(dt, time, camera.position);
 		ghost.update(dt, time, camera, sk.night);
-		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half });
+		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, hours: W.sky.state.hours });
 		if (W.natureSound && W.bayArea?.loaded()) {
 			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
 			let pond = 1e9;
 			if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if (W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) != null) pond = r; } if (pond < 1e8) break; }
-			W.natureSound.update(dt, camera, { night: sk.night, hours: W.sky.state.hours, month: new Date().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
+			W.natureSound.update(dt, camera, { night: sk.night, hours: W.sky.state.hours, month: new Date().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
 		}
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		renderer.render(scene, camera);

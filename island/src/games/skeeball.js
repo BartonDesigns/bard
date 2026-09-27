@@ -30,7 +30,7 @@ export const GAME = {
 	blurb: 'Nine wooden balls up the alley: land them in the 50, or the 100 corners.',
 	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Santa Cruz Beach Boardwalk arcade', lat: 36.9643, lon: -122.0177, r: 80 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ff7a45', dist: 1.5, span: [2, 5] });
+		const K = makeKit(ctx, GAME, { accent: '#ff7a45', dist: 1.5, room: { w: 5.5, z0: -5.2, z1: 3, h: 3.4, style: 'arcade' } });
 		const { THREE } = ctx;
 		let ball, S = {}, lights = [];
 
@@ -141,7 +141,7 @@ export const GAME = {
 			S.flash = Math.max(0, S.flash - dt * 0.8);
 			lights.forEach((l, i) => { l.visible = S.flash > 0 ? Math.floor(S.t * 12) % 2 === 0 : (Math.floor(K.time * 4) + i) % 3 !== 0; });
 			if (S.state === 'fly' || S.state === 'drop') K.cam(0, 1.9, -1.2, 0, 1.4, -3.8, 3);
-			else K.cam(0, 1.65, 1.3, 0, 1.2, -3.2, 3);
+			else K.cam(0, 2.0, 1.3, 0, 1.35, -3.2, 3);
 		}
 		return K.wrap({ build, reset, update, press });
 	},

@@ -18,7 +18,7 @@ export const GAME = {
 	blurb: 'A stunt kite over the Berkeley Marina: steer through the rings, loop it, keep it up.',
 	where: { kind: 'site', sites: [{ name: 'Cesar Chavez Park, Berkeley Marina', lat: 37.8699, lon: -122.3197, r: 250 }, { name: 'Crissy Field', lat: 37.8039, lon: -122.4636, r: 250 }, { name: 'Ocean Beach', lat: 37.7594, lon: -122.5107, r: 300 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ff5a7a', dist: 0.5, span: [2, 2] });
+		const K = makeKit(ctx, GAME, { accent: '#ff5a7a', dist: 0.5, span: [40, 32, 5], flat: 4, backdrop: 'meadow', dome: 70 });
 		const { THREE } = ctx;
 		let kite, lines, ring, tails = [], S = {};
 		const hand = new THREE.Vector3(0, 1.3, 0);

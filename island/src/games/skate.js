@@ -18,7 +18,7 @@ export const GAME = {
 	blurb: 'A sixty-second line under the freeway: ollie, flip, grind, and hold the combo.',
 	where: { kind: 'site', sites: [{ name: 'SoMa West Skatepark', lat: 37.7704, lon: -122.4196, r: 90 }, { name: 'Potrero del Sol Skatepark', lat: 37.7524, lon: -122.4079, r: 70 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#c6ff3d', dist: 0.5, span: [4, 30] });
+		const K = makeKit(ctx, GAME, { accent: '#c6ff3d', dist: 0.5, span: [12, 60, 8], flat: 2, backdrop: 'meadow', dome: 90 });
 		const { THREE } = ctx;
 		let rider, deck, floorTex, pillars = [], S = {};
 

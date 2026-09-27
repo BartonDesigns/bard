@@ -18,7 +18,7 @@ export const GAME = {
 	blurb: 'Stack slabs of sand into a tower before the tide: tap to drop, don\'t let it overhang.',
 	where: { kind: 'site', sites: [{ name: 'Ocean Beach', lat: 37.7594, lon: -122.5107, r: 400 }, { name: 'Baker Beach', lat: 37.7936, lon: -122.4836, r: 200 }, { name: 'Stinson Beach', lat: 37.9005, lon: -122.6445, r: 300 }, { name: 'Crissy Field beach', lat: 37.8055, lon: -122.4570, r: 200 }, { name: 'Half Moon Bay State Beach', lat: 37.4636, lon: -122.4460, r: 300 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#f2c46a', dist: 2.5, span: [3, 3] });
+		const K = makeKit(ctx, GAME, { accent: '#f2c46a', dist: 2.5, span: [6, 8, 3], flat: 0.8, backdrop: 'sea', dome: 40 });
 		const { THREE } = ctx;
 		let sandTex, tide, flag, S = {};
 		const pieces = [];

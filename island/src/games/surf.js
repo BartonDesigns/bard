@@ -30,14 +30,18 @@ export const GAME = {
 	blurb: 'Paddle into an Ocean Beach wave, then ride the pocket, carve, and find the barrel.',
 	where: { kind: 'site', sites: [{ name: 'Ocean Beach', lat: 37.7594, lon: -122.5107, r: 400 }, { name: 'Linda Mar, Pacifica', lat: 37.5947, lon: -122.5024, r: 250 }, { name: 'Fort Point', lat: 37.8106, lon: -122.4771, r: 120 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#39d0ff', dist: 2, span: [4, 4], minY: 0 });
+		const K = makeKit(ctx, GAME, { accent: '#39d0ff', dist: 2, span: [40, 30, 6], place: 'water', backdrop: 'sea', dome: 120 });
 		const { THREE } = ctx;
 		let wave, foam, surfer, board, body, S = {}, meter;
 
 		function build() {
-			// the sea and the sand; the wave, a long moving ridge of water; its broken whitewater
-			K.mesh(new THREE.PlaneGeometry(160, 90), K.mat('#1f5d7a', { rough: 0.25, metal: 0.2 }), 0, 0, -40).rotation.x = -Math.PI / 2;
-			K.mesh(new THREE.PlaneGeometry(160, 12), K.mat('#d9c7a0', { rough: 1 }), 0, 0.05, 6).rotation.x = -Math.PI / 2;
+			// the sea and the sand (the real ones, when you're at the beach: set up at sea level
+			// the stage rides on the ocean itself); the wave, a long moving ridge of water; its
+			// broken whitewater
+			if (!K.wet) {
+				K.mesh(new THREE.PlaneGeometry(160, 90), K.mat('#1f5d7a', { rough: 0.25, metal: 0.2 }), 0, 0, -40).rotation.x = -Math.PI / 2;
+				K.mesh(new THREE.PlaneGeometry(160, 12), K.mat('#d9c7a0', { rough: 1 }), 0, 0.05, 6).rotation.x = -Math.PI / 2;
+			}
 			const pts = [], idx = [], X0 = -60, X1 = 100, NX = 64;
 			for (let i = 0; i <= NX; i++) for (const [y, z] of PROFILE) pts.push(X0 + (X1 - X0) * i / NX, y, z);
 			const n = PROFILE.length;

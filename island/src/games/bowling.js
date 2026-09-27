@@ -35,7 +35,7 @@ export const GAME = {
 	blurb: 'Five frames on a real 60-foot lane: swipe to roll, curl it for hook.',
 	where: { kind: 'site', sites: [{ name: 'Presidio Bowling Center', lat: 37.7989, lon: -122.4583, r: 80 }, { name: 'Mission Bowling Club', lat: 37.7634, lon: -122.4157, r: 60 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#f2b33d', dist: 1.5, span: [3, 21] });
+		const K = makeKit(ctx, GAME, { accent: '#f2b33d', dist: 1.5, room: { w: 8, z0: -21, z1: 6, h: 4.5, style: 'alley' } });
 		const { THREE } = ctx;
 		let ball, pins = [], S = {};
 

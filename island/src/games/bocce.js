@@ -19,7 +19,7 @@ export const GAME = {
 	blurb: 'Three frames against Sal on the Aquatic Park courts: roll close, or knock him away.',
 	where: { kind: 'site', sites: [{ name: 'Aquatic Park bocce courts', lat: 37.8063, lon: -122.4229, r: 60 }, { name: 'Washington Square, North Beach', lat: 37.8008, lon: -122.4101, r: 70 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#e8a64a', dist: 1.5, span: [3, 17] });
+		const K = makeKit(ctx, GAME, { accent: '#e8a64a', dist: 1.5, span: [4, 17, 2], flat: 0.8, backdrop: 'meadow', dome: 40 });
 		let S = {}, balls = [], pallino, ring;
 
 		function build() {

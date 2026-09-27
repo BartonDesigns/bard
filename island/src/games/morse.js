@@ -21,7 +21,7 @@ export const GAME = {
 	blurb: 'Signal the ships in the fog from Point Bonita: tap dots, hold dashes, before they reach the rocks.',
 	where: { kind: 'site', sites: [{ name: 'Point Bonita Lighthouse', lat: 37.8157, lon: -122.5297, r: 150 }, { name: 'Fort Point', lat: 37.8106, lon: -122.4771, r: 100 }, { name: 'Alcatraz lighthouse', lat: 37.8262, lon: -122.4222, r: 120 }, { name: 'Point Reyes Lighthouse', lat: 37.9956, lon: -123.0233, r: 150 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ffe27a', dist: 1.5, span: [3, 3] });
+		const K = makeKit(ctx, GAME, { accent: '#ffe27a', dist: 1.5, span: [14, 4, 4], flat: 2, backdrop: 'sea', dome: 95 });
 		const { THREE } = ctx;
 		let lamp, beam, ship, shipLamp, card, fogs = [], S = {};
 

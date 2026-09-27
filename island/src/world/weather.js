@@ -229,7 +229,7 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 		const src = ctx.createBufferSource(); src.buffer = buf;
 		const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900 - Math.min(700, dist / 12);
 		// (kept well under full scale: a near crack is three times the roll)
-		const gn = ctx.createGain(); gn.gain.value = Math.min(0.45, 700 / (dist + 400)) * (0.6 + big * 0.4);
+		const gn = ctx.createGain(); gn.gain.value = Math.min(0.5, 1200 / (dist + 400)) * (0.6 + big * 0.4);
 		const p = ctx.createStereoPanner(); p.pan.value = Math.max(-0.8, Math.min(0.8, side));
 		src.connect(lp).connect(gn).connect(p).connect(A.room);
 		src.start(t0);

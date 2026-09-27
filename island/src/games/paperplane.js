@@ -19,7 +19,7 @@ export const GAME = {
 	blurb: 'Fold, throw, glide: fly a paper plane off wherever you stand and see how far it goes.',
 	where: { kind: 'anywhere' },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ffffff', dist: 0.2, span: [1, 1] });
+		const K = makeKit(ctx, GAME, { accent: '#ffffff', dist: 0.2, span: [1, 1], place: 'here' });
 		const { THREE } = ctx;
 		let plane, ring, trail, S = {};
 

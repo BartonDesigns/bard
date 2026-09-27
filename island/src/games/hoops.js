@@ -19,7 +19,7 @@ export const GAME = {
 	blurb: 'Sixty seconds, a rack of balls, and a hoop: swipe up to shoot.',
 	where: { kind: 'site', sites: [{ name: 'Panhandle basketball court', lat: 37.7722, lon: -122.4455, r: 60 }, { name: 'Mission Playground courts', lat: 37.7594, lon: -122.4229, r: 50 }, { name: 'Potrero Hill Rec Center courts', lat: 37.7572, lon: -122.3980, r: 60 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ff8a3d', dist: 8, span: [8, 1, 9] });
+		const K = makeKit(ctx, GAME, { accent: '#ff8a3d', dist: 8, span: [9, 1, 9], flat: 0.8, backdrop: 'meadow', dome: 40 });
 		const { THREE } = ctx;
 		let ball, net, S = {};
 		const rimPts = [];

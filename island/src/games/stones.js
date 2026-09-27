@@ -16,7 +16,7 @@ export const GAME = {
 	blurb: 'Five flat stones: time the tilt, flick it low and fast, count the skips.',
 	where: { kind: 'water' },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#7fd3e8', dist: 0.3, span: [1, 1] });
+		const K = makeKit(ctx, GAME, { accent: '#7fd3e8', dist: 0.3, span: [1, 1], place: 'here' });
 		const { THREE } = ctx;
 		let stone, needle, rings = [], pond = null, S = {};
 

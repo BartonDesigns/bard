@@ -23,7 +23,7 @@ export const GAME = {
 	blurb: 'Ring the Powell Street car\'s bell in time: the Union Square bell-ringing contest.',
 	where: { kind: 'site', sites: [{ name: 'Union Square', lat: 37.7880, lon: -122.4075, r: 90 }, { name: 'Powell & Market turntable', lat: 37.7848, lon: -122.4077, r: 50 }, { name: 'Cable Car Museum', lat: 37.7946, lon: -122.4115, r: 50 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ffcc33', dist: 3, span: [3, 6] });
+		const K = makeKit(ctx, GAME, { accent: '#ffcc33', dist: 3, span: [11, 4, 7], flat: 1, backdrop: 'meadow', dome: 32 });
 		let bell, track, dots = [], judge, S = {};
 		const notes = [];
 		{
@@ -112,7 +112,8 @@ export const GAME = {
 				const acc = Math.round((S.perfect + S.good * 0.5) / total * 100);
 				K.finish(S.score, { unit: 'pts', line: acc > 90 ? 'The judges are on their feet: a champion ringer.' : acc > 70 ? 'The crowd on Powell Street cheers.' : 'A polite round of applause from the tourists.', rows: [['Perfect', `${S.perfect} of ${total}`], ['Good', S.good], ['Missed', S.miss], ['Longest combo', S.maxCombo], ['Accuracy', acc + '%']] });
 			}
-			K.cam(2.2, 2.6, 3.6, 2.6, 2.3, -1.5, 3);
+			// the car's open front end at three-quarters, the bell in the middle of the shot
+			K.frame(2.8, 2.1, -1.2, 5.2, 3.4, 0.75, 0.12, 0.65, 0.8, 3);
 		}
 		function end() { clearTimeout(S.jt); judge = null; }
 		return K.wrap({ build, reset, update, press, end });

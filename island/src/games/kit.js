@@ -1,8 +1,10 @@
 // The shared kit every minigame is built on, so that each game file can be about its game
 // and not about plumbing. It gives a game:
-//   a stage: a group set down on the ground in front of the player and turned to face the
-//     way they were looking, so a game builds in its own coordinates (-z ahead, +x right,
-//     y up, metres) and everything it adds is disposed of when it stops;
+//   a stage: a group set down on a clear, flat patch of ground near the player (stage.js
+//     finds it: no trees, houses or roads in it), so a game builds in its own coordinates
+//     (-z ahead, +x right, y up, metres) and everything it adds is disposed of when it stops;
+//   its venue: a closed room round an indoor game, or a painted backdrop round an outdoor
+//     game that found nowhere clear (rooms.js);
 //   a camera it can point, eased from shot to shot, and handed back as it was at the end;
 //   the HUD in the fishing card's style: a title strip with the score, a close (×) button,
 //     big buttons, and the result card with the stats and your best;
@@ -11,6 +13,9 @@
 //   the pointer: where a tap lands on a plane in the stage, and the flick at the end of a
 //     swipe (for rolls, tosses and throws).
 // Nothing here imports three: the host hands it over as ctx.THREE.
+
+import { findSpot, waterLevel } from './stage.js';
+import { buildRoom, buildBackdrop } from './rooms.js';
 
 const STORE = 'crysis-games';
 export function readStore() {
@@ -23,36 +28,49 @@ function writeStore(s) {
 const PANEL = 'background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#eafaf6;border-radius:16px;font:13px system-ui,sans-serif;';
 const stopEv = (el) => { for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'click']) el.addEventListener(ev, (e) => e.stopPropagation()); };
 
-export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], minY = -Infinity } = {}) {
+export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4, 1], place = 'clear', flat = 1.2, room = null, backdrop = null, dome = 60 } = {}) {
 	const { THREE, scene, camera } = ctx;
 	const K = { on: false, time: 0, last: null, cardOpen: false, accent, THREE };
 	let layer = null, hudText = null, card = null, api = null, g = null;
 	const saved = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: 50 };
 	const camWant = { pos: new THREE.Vector3(), look: new THREE.Vector3(), k: 0, snap: true };
-	const camLook = new THREE.Vector3();
+	// the camera's own eased pose (world): kept here, not read back from the camera, so that
+	// nothing else moving the camera between frames can drag the shot back to the player
+	const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 	const tv = new THREE.Vector3(), tm = new THREE.Matrix4(), ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 
 	// ---- the stage ----
 	function begin() {
-		const p = ctx.player.pos, yaw = ctx.player.yaw || 0;
-		const x = p.x - Math.sin(yaw) * dist, z = p.z - Math.cos(yaw) * dist;
-		// the stage sits on the highest ground under its footprint,
-		// so that uneven terrain never pokes up through a lane or a table (span: width, metres
-		// ahead of the stage's origin, metres behind it)
+		const p = ctx.player.pos;
+		// where: a clear, flat spot near the player that the game's footprint fits (stage.js);
+		// an indoor game's footprint is its room
+		const foot = room ? [room.w, -room.z0, room.z1] : span;
+		const spot = findSpot(ctx, { mode: place, dist, span: foot, flat: room ? 4 : flat });
+		K.clear = spot.clear; K.wet = spot.water;
+		const { x, z, yaw } = spot;
 		const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+		// the stage sits on the highest ground under its footprint, so that uneven terrain
+		// never pokes up through a lane or a table; a water game sits at the water's level
 		let gy = -Infinity;
-		for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
-			const back = span[2] ?? 1, u = (i / 4 - 0.5) * span[0], v = j / 4 * (span[1] + back) - back;
+		if (spot.water) gy = waterLevel(ctx, x, z) ?? 0;
+		else for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) {
+			const back = foot[2] ?? 1, u = (i / 4 - 0.5) * foot[0], v = j / 4 * (foot[1] + back) - back;
 			const h = ctx.groundAt?.(x + fx * v - fz * u, z + fz * v + fx * u);
 			if (Number.isFinite(h)) gy = Math.max(gy, h);
 		}
 		K.root = new THREE.Group();
-		// (never below minY: a game set on the sea floats at sea level, not on the sea bed)
-		K.root.position.set(x, Math.max(minY, Number.isFinite(gy) ? gy : p.y - 1.7), z);
+		K.root.position.set(x, Number.isFinite(gy) ? gy : p.y - 1.7, z);
 		K.root.rotation.y = yaw;
 		K.yaw = yaw;
 		scene.add(K.root);
 		K.root.updateMatrixWorld(true);
+		// the venue: a room around an indoor game; a painted backdrop round an outdoor one
+		// that found nowhere clear (or a water game that found no water)
+		if (room) buildRoom(K, room);
+		else if (backdrop && (place === 'water' ? !spot.water : !spot.clear)) {
+			const hr = ctx.getWorld?.()?.sky?.state?.hours ?? 12;
+			buildBackdrop(K, { kind: backdrop, r: dome, night: hr < 6.5 || hr > 19.5 });
+		}
 		saved.pos.copy(camera.position); saved.quat.copy(camera.quaternion); saved.fov = camera.fov;
 		camWant.snap = true;
 		layer = document.createElement('div');
@@ -143,16 +161,29 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		return Number.isFinite(gy) ? gy - K.root.position.y : 0;
 	};
 
+	// the water at a stage point, in stage height, or null for land
+	K.waterY = (x, z) => { K.world(tv.set(x, 0, z), tv); const lv = waterLevel(ctx, tv.x, tv.z); return lv === null ? null : lv - K.root.position.y; };
+
 	// ---- the camera: where it wants to be (stage coordinates), eased there each frame ----
 	K.cam = (px, py, pz, lx, ly, lz, k = 4) => { camWant.pos.set(px, py, pz); camWant.look.set(lx, ly, lz); camWant.k = k; };
+	// a framed shot: a subject (centre, apparent width and height in metres) seen from the
+	// direction (dx, dy, dz), backed off until it fills `fill` of the screen whichever way the
+	// phone is held (portrait squeezes the width, so it's the width that usually decides)
+	K.frame = (cx, cy, cz, w, h, dx, dy, dz, fill = 0.68, k = 4, maxD = Infinity) => {
+		const l = Math.hypot(dx, dy, dz) || 1, half = (camera.fov || 60) * Math.PI / 360;
+		const hw = Math.atan(Math.tan(half) * (camera.aspect || 1));
+		const d = Math.min(maxD, Math.max(h / 2 / Math.tan(half), w / 2 / Math.tan(hw)) / fill);
+		K.cam(cx + dx / l * d, cy + dy / l * d, cz + dz / l * d, cx, cy, cz, k);
+		return d;
+	};
 	K.fov = (f) => { if (camera.fov !== f) { camera.fov = f; camera.updateProjectionMatrix(); } };
 	function camTick(dt) {
 		if (!K.root) return;
 		const p = K.world(camWant.pos, tv);
-		const a = camWant.snap ? 1 : 1 - Math.exp(-dt * camWant.k);
-		camera.position.lerp(p, a);
+		if (camWant.snap) camPos.copy(p); else camPos.lerp(p, 1 - Math.exp(-dt * camWant.k));
 		const l = K.world(camWant.look);
-		if (camWant.snap) camLook.copy(l); else camLook.lerp(l, a);
+		if (camWant.snap) camLook.copy(l); else camLook.lerp(l, 1 - Math.exp(-dt * camWant.k));
+		camera.position.copy(camPos);
 		camera.lookAt(camLook);
 		camera.updateMatrixWorld();
 		camWant.snap = false;

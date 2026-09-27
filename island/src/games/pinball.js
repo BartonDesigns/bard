@@ -41,7 +41,7 @@ export const GAME = {
 	blurb: 'Fog City: three balls, two flippers, pop bumpers and the F-O-G lanes.',
 	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pacific Pinball Museum, Alameda', lat: 37.7719, lon: -122.2769, r: 50 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#b56cff', dist: 1.2, span: [1.4, 2.6] });
+		const K = makeKit(ctx, GAME, { accent: '#b56cff', dist: 1.2, room: { w: 5.5, z0: -3.6, z1: 2.4, h: 4, style: 'arcade' } });
 		const { THREE } = ctx;
 		const walls = tableWalls();
 		let table, ballM, flipM = [], bumpM = [], laneM = [], S = {}, meter;
@@ -183,7 +183,8 @@ export const GAME = {
 			bumpM.forEach((m) => { m.userData.flash = Math.max(0, (m.userData.flash || 0) - dt * 4); m.scale.setScalar(1 + m.userData.flash * 0.12); });
 			laneM.forEach((m, i) => { m.material = K.mat(S.lit[i] ? '#ffd35a' : '#555566', { glow: S.lit[i] ? 0.8 : 0.18 }); });
 			ballM.position.set(...at(S.x, S.y, R));
-			K.cam(0.04, 2.0, 0.9, 0.04, 0.4, -1.1, 4);
+			// looking down the table from over the flippers, as far back as it takes to fit
+			K.frame(0.04, 1.05, -1.2, 1.25, 1.7, 0, 0.8, 0.6, 0.72, 4);
 		}
 		return K.wrap({ build, reset, update, press });
 	},

@@ -17,7 +17,7 @@ export const GAME = {
 	blurb: 'First to five against the house player: slide your mallet, bank it off the rails.',
 	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#39d0ff', dist: 1.3, span: [1.4, 2.6] });
+		const K = makeKit(ctx, GAME, { accent: '#39d0ff', dist: 1.3, room: { w: 5.5, z0: -3.6, z1: 2.4, h: 4, style: 'arcade' } });
 		let puck, mine, theirs, S = {};
 
 		function build() {
@@ -119,7 +119,8 @@ export const GAME = {
 			puck.position.set(S.px, H + 0.006, S.pz);
 			mine.position.set(S.mx, H + 0.012, S.mz);
 			theirs.position.set(S.ax, H + 0.012, S.az);
-			K.cam(0, H + 1.15, 0.75, 0, H, -TL * 0.55, 4);
+			// from over your end, the whole table in view
+			K.frame(0, H, -1.0, 1.2, 1.75, 0, 0.8, 0.55, 0.74, 4);
 		}
 		return K.wrap({ build, reset, update, press, move });
 	},

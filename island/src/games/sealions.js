@@ -19,12 +19,12 @@ export const GAME = {
 	blurb: 'Pier 39\'s K-Dock: toss herring to the barking sea lions, fast; don\'t feed the gulls.',
 	where: { kind: 'site', sites: [{ name: 'Pier 39, K-Dock', lat: 37.8087, lon: -122.4103, r: 70 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ffb347', dist: 1, span: [8, 12], minY: 0 });
+		const K = makeKit(ctx, GAME, { accent: '#ffb347', dist: 1, span: [10, 13, 1], place: 'water' });
 		const { THREE } = ctx;
-		let S = {}, lions = [], fish;
+		let S = {}, lions = [], fish, WL = 0;
 
-		function makeLion(bull) {
-			const g = K.group();
+		function makeLion(bull, pool) {
+			const g = K.group(pool);
 			const brown = bull ? '#4a3524' : '#7a5a3a';
 			const body = K.mesh(new THREE.SphereGeometry(0.45, 14, 10), brown, 0, 0.35, 0, g);
 			body.scale.set(0.8, 0.7, 1.9);
@@ -37,8 +37,8 @@ export const GAME = {
 			g.userData = { neck, head };
 			return g;
 		}
-		function makeGull() {
-			const g = K.group();
+		function makeGull(pool) {
+			const g = K.group(pool);
 			K.mesh(new THREE.SphereGeometry(0.14, 10, 8), '#f4f4f0', 0, 0.2, 0, g).scale.set(0.8, 0.8, 1.6);
 			K.ball(0.08, '#f4f4f0', 0, 0.33, -0.18, g);
 			K.mesh(new THREE.ConeGeometry(0.025, 0.1, 6), '#f2c200', 0, 0.32, -0.3, g).rotation.x = -Math.PI / 2;
@@ -46,14 +46,28 @@ export const GAME = {
 			return g;
 		}
 		function build() {
-			K.mesh(new THREE.PlaneGeometry(40, 30), K.mat('#2a5a6a', { rough: 0.2, metal: 0.3 }), 0, -0.2, -10).rotation.x = -Math.PI / 2;
-			for (const [x, z] of SLOTS) K.box(2.6, 0.25, 2.6, '#8a7a62', x, -0.1, z);
+			// at the pier the floats ride on the bay itself; anywhere else they're in a
+			// concrete tank, like an aquarium's, its water raised to the level of the rim
+			WL = K.wet ? 0 : 0.8;
+			const pool = K.group(); pool.position.y = WL;
+			if (!K.wet) {
+				K.box(13.4, 0.2, 10.4, '#8a8f94', 0, 0.1, -7.9);
+				for (const s of [-1, 1]) {
+					K.box(0.4, 1.0, 10.4, '#b8bcc0', s * 6.7, 0.5, -7.9);
+					K.box(13.8, 1.0, 0.4, '#b8bcc0', 0, 0.5, s < 0 ? -13.1 : -2.7);
+				}
+				K.mesh(new THREE.PlaneGeometry(13, 10), K.mat('#2a5a6a', { rough: 0.2, metal: 0.3 }), 0, -0.02, -7.9, pool).rotation.x = -Math.PI / 2;
+				for (let i = 0; i < 5; i++) K.mesh(new THREE.DodecahedronGeometry(0.6 + i * 0.1, 0), K.mat('#6a6660', { rough: 1 }), -5 + i * 2.5, 0.1, -12.3, pool).scale.y = 0.6;
+			}
+			for (const [x, z] of SLOTS) K.box(2.6, 0.25, 2.6, '#8a7a62', x, -0.1, z, pool);
+			// the viewing deck you stand on, on its piles
+			for (const x of [-5.5, 0, 5.5]) for (const z of [-0.5, 1.1]) K.box(0.3, 1.9, 0.3, '#5a4a3a', x, 0.95, z);
 			// the pier rail in front of you
 			K.box(12, 0.08, 0.1, '#6b4a2e', 0, 3.1, -0.6);
 			for (let i = -5; i <= 5; i++) K.box(0.08, 1.1, 0.08, '#6b4a2e', i * 1.1, 2.55, -0.6);
 			K.box(12, 0.2, 2, '#7a6a52', 0, 1.9, 0.3);
 			lions = SLOTS.map(([x, z], i) => {
-				const l = makeLion(i === 4), gull = makeGull();
+				const l = makeLion(i === 4, pool), gull = makeGull(pool);
 				l.position.set(x, -1.2, z); gull.position.set(x, -9, z);
 				return { l, gull, x, z, state: 'away', t: rand(0.2, 3), kind: 'lion', bull: i === 4, fed: 0, patience: 0, bark: 0 };
 			});
@@ -78,7 +92,7 @@ export const GAME = {
 			if (!slot) {
 				// a near miss on screen still counts, within a finger's width
 				let bd = 60;
-				for (const s of lions) if (s.state === 'up') { const p = K.toScreen(new THREE.Vector3(s.x, 0.6, s.z)); const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; slot = s; } }
+				for (const s of lions) if (s.state === 'up') { const p = K.toScreen(new THREE.Vector3(s.x, WL + 0.6, s.z)); const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; slot = s; } }
 			}
 			if (!slot) return;
 			S.flights.push({ s: slot, t: 0 });
@@ -136,7 +150,7 @@ export const GAME = {
 			for (const f of S.flights) f.t += dt / 0.5;
 			const flying = S.flights.find((f) => f.t < 1);
 			fish.visible = !!flying;
-			if (flying) { const k = flying.t; fish.position.set(flying.s.x * k, 2.6 + (0.9 - 2.6) * k + Math.sin(k * Math.PI) * 1.6, -0.5 + (flying.s.z + 0.4 + 0.5) * k); fish.rotation.x = k * 6; }
+			if (flying) { const k = flying.t; fish.position.set(flying.s.x * k, 2.6 + (WL + 0.9 - 2.6) * k + Math.sin(k * Math.PI) * 1.6, -0.5 + (flying.s.z + 0.4 + 0.5) * k); fish.rotation.x = k * 6; }
 			for (const f of S.flights) if (f.t >= 1) feed(f.s);
 			S.flights = S.flights.filter((f) => f.t < 1);
 			K.hud(`${Math.max(0, Math.ceil(S.time))} s · ${S.score} pts · fed ${S.fed}`);
@@ -144,7 +158,8 @@ export const GAME = {
 				S.state = 'over';
 				K.finish(S.score, { unit: 'pts', line: S.missed === 0 ? 'Not one went hungry.' : `${S.missed} slid off hungry.`, rows: [['Sea lions fed', S.fed], ['Gulls fed (oops)', S.gulls]] });
 			}
-			K.cam(0, 3.6, 1.2, 0, 0, -8, 3);
+			// the floats from the deck; a tall phone backs off (but no further than the deck's end)
+			K.frame(0, WL + 0.3, -8.2, 11.5, 5, 0, 0.5, 1, 0.9, 3, 12);
 		}
 		return K.wrap({ build, reset, update, press });
 	},

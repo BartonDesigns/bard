@@ -17,7 +17,7 @@ export const GAME = {
 	blurb: 'Eight bags at a board 27 feet away: lob it on for one, drop it in for three.',
 	where: { kind: 'anywhere' },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ffcc33', dist: 0.5, span: [3, 10] });
+		const K = makeKit(ctx, GAME, { accent: '#ffcc33', dist: 0.5, span: [4, 10, 2], flat: 0.6, backdrop: 'meadow', dome: 25 });
 		const { THREE } = ctx;
 		let bagM = [], S = {};
 

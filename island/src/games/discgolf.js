@@ -18,7 +18,7 @@ export const GAME = {
 	blurb: 'Three holes over the real ground: flick to throw, curl it round the trees.',
 	where: { kind: 'site', sites: [{ name: 'Golden Gate Park Disc Golf Course', lat: 37.7704, lon: -122.4893, r: 200 }] },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#ffd23f', dist: 1, span: [2, 2] });
+		const K = makeKit(ctx, GAME, { accent: '#ffd23f', dist: 1, span: [16, 45, 3], flat: 8, backdrop: 'meadow', dome: 80 });
 		const { THREE } = ctx;
 		let disc, basket, trail, holeG = null, S = {};
 

@@ -26,14 +26,14 @@ export const GAME = {
 	blurb: 'Join the dots of six real constellations, from the Big Dipper to Lyra.',
 	where: { kind: 'anywhere' },
 	create(ctx) {
-		const K = makeKit(ctx, GAME, { accent: '#9fc4ff', dist: 0, span: [1, 1] });
+		const K = makeKit(ctx, GAME, { accent: '#9fc4ff', dist: 0, span: [6, 6, 6], flat: 3 });
 		const { THREE } = ctx;
-		let dome, stars = [], lines, band, rubber, S = {}, starTex, figure = null;
+		let stars = [], lines, band, rubber, S = {}, starTex, figure = null;
 
 		function build() {
 			// a night dome of our own, so it's night whenever you look up
-			dome = K.mesh(new THREE.SphereGeometry(DOME + 5, 32, 16), new THREE.MeshBasicMaterial({ color: 0x050a1c, side: THREE.BackSide, fog: false, depthWrite: false }), 0, 1.6, 0);
-			dome.renderOrder = -1;
+			// (it writes depth, so the world outside it stays hidden)
+			K.mesh(new THREE.SphereGeometry(DOME + 5, 32, 16), new THREE.MeshBasicMaterial({ color: 0x050a1c, side: THREE.BackSide, fog: false }), 0, 1.6, 0);
 			starTex = K.canvas(64, 64, (g) => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.2, 'rgba(220,235,255,.9)'); r.addColorStop(1, 'rgba(200,220,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); });
 			// the faint field: a thousand dim stars all over
 			const field = [];
