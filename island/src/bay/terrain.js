@@ -613,7 +613,7 @@ export function createBayArea(shared, scene, island, BU) {
 							// San Francisco: flat roofs lot by lot, tar-and-gravel grey, white and tan (their
 							// average where a lot is finer than a few pixels), the odd back garden, and
 							// along the street the shadow of each row's front
-							float lotK = 1.0 - smoothstep(0.25, 0.7, length(fwidth(fw)) / 7.6);
+							float lotK = 1.0 - smoothstep(0.25, 0.7, length(fwidth(g)) / 7.6);
 							float lot = h21(vec2(floor(fw.x / 7.6), step(0.5, f.y)) + cid * 3.0);
 							vec3 roofF = lot < 0.4 ? mix(vec3(0.34, 0.34, 0.35), vec3(0.44, 0.43, 0.42), lh) : lot < 0.78 ? mix(vec3(0.58, 0.57, 0.54), vec3(0.7, 0.68, 0.64), lh) : mix(vec3(0.5, 0.43, 0.34), vec3(0.6, 0.51, 0.4), lh);
 							roofF = mix(vec3(0.48, 0.47, 0.45), roofF, lotK);

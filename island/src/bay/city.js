@@ -342,6 +342,9 @@ function buildingMaterial(shared, night, nearBand) {
 				vec3 tint = mix(mix(vec3(1.0, 0.7, 0.4), vec3(1.0, 0.86, 0.66), step(1.5, vKind) * 0.6), vec3(0.78, 0.88, 1.0), step(0.72, bh(cid + 7.1)) * step(1.5, vKind));
 				float inner = mix(1.0, (0.55 + 0.6 * fc.y) * mix(1.0, step(fc.y, 0.3 + 0.6 * bh(cid + 5.7)), step(0.65, bh(cid + 2.2))), aaW);
 				winGlow = tint * win * lit * inner * uNightC * (0.45 + 0.55 * bh(cid + 3.3)) * 1.1;
+				// after dark the walls are not black: the city's own glow on them, and the warm
+				// spill of the streetlights up the lowest floors
+				winGlow += diffuseColor.rgb * (1.0 - win) * (1.0 - roof) * uNightC * (0.05 * vec3(0.8, 0.85, 1.0) + 0.16 * vec3(1.0, 0.78, 0.5) * (1.0 - smoothstep(2.5, 13.0, vLY)));
 			}`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
@@ -1160,6 +1163,8 @@ export function createCity(shared, scene, bay, real = null) {
 			else if (b.kind === 11) { kind = KIND.tower; col = jit(pick(PAL.tower, r2), r); }
 			else if (b.kind === 12) { kind = KIND.office; col = jit([0.6, 0.59, 0.56], r); }        // a parking garage: open concrete decks (ribbon openings)
 			else { kind = KIND.industry; col = jit(pick(PAL.industry, r2), r); }
+			// (a tall block mapped as a garage or a shed is an office block: glazed, not a blank wall)
+			if ((kind === KIND.garage || kind === KIND.plain) && top - y > 9) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
 			if (b.roofH > 0.1) roof = { hip: !!b.hip, h: b.roofH, col: rc };
 			list.push({ x: b.x, y, z: b.z, w: b.w, d: b.d, h: top - y, a: b.a, col, kind, roof, src: b });
 			if (b.kind >= 5 && b.kind !== 10) grounds(list, trees, b.x, b.z, b.w, b.d, b.a, g, y, kind, b.x * 0.37 + b.z * 0.11);

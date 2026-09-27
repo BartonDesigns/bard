@@ -168,7 +168,7 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 					// green algae and sea lettuce over the low rock, olive rockweed a little higher
 					const green = smooth(TOP + 0.2, TOP - 0.1, h) * smooth(0.5, 0.7, fbm(x / 4 + 9, z / 4)) * (1 - out * 0.5);
 					cr += (0.17 - cr) * green; cg += (0.4 - cg) * green; cb += (0.11 - cb) * green;
-					const weed = smooth(0.4, 0.62, fbm(x / 6 - 3, z / 6 + 5)) * smooth(TOP + 0.55, TOP + 0.1, h) * (1 - green);
+					const weed = smooth(0.5, 0.68, fbm(x / 6 - 3, z / 6 + 5)) * smooth(TOP + 0.45, TOP + 0.05, h) * (1 - green) * 0.8;
 					cr += (0.33 - cr) * weed; cg += (0.29 - cg) * weed; cb += (0.11 - cb) * weed;
 					// pink coralline lining the pools
 					const pink = pw * pk * smooth(0.35, 0.65, fbm(x / 2.5, z / 2.5 + 7)) * (1 - out);
@@ -217,8 +217,10 @@ export function createTidepools(scene, bay, shared, { isPhone = false } = {}) {
 					for (let rr = r0; rr <= r1; rr++) {
 						const K = rr * NC + t * NP, L = K - NP + EDGE_L, R = K + EDGE_R;
 						if (!(H[L] === H[L] && H[R] === H[R])) { first = true; continue; }
-						const u = -U + rr * DU, n = WP.length / 3;
-						WP.push(toX(u, V[L]), level, toZ(u, V[L]), toX(u, V[R]), level, toZ(u, V[R]));
+						// (the end rows drawn in toward the middle, so the pool's ends come round)
+						const u = -U + rr * DU, n = WP.length / 3, pinch = rr < run[0][0] || rr > run[run.length - 1][0] ? 0.6 : 0;
+						const vl = V[L] + (V[K] - V[L]) * pinch, vr = V[R] + (V[K] - V[R]) * pinch;
+						WP.push(toX(u, vl), level, toZ(u, vl), toX(u, vr), level, toZ(u, vr));
 						if (!first) WI.push(n - 2, n - 1, n, n - 1, n + 1, n);
 						first = false;
 					}

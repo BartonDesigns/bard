@@ -2,7 +2,7 @@
 // solids merged per material, so the whole set is a handful of draws.
 //
 // San Francisco: the Ferry Building and its 75 m clock tower, City Hall's 94 m dome, the
-// Palace of Fine Arts, Alcatraz (cellhouse, lighthouse, water tower), Fort Point under
+// Palace of Fine Arts, Alcatraz (the whole Rock: see below), Fort Point under
 // the bridge, Oracle Park and the Chase Center, the Dutch and Murphy windmills in Golden
 // Gate Park, the tallest downtown towers, the Embarcadero's finger piers, Point Bonita.
 // East Bay: Oakland City Hall and the Tribune Tower, the Oakland Temple, the Port of
@@ -19,6 +19,34 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 // piers you can walk out on (floor())
 const PIERS = [];
 const M = (color, rough = 0.7, metal = 0) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+// value noise on an integer lattice, for the Rock's faces
+const ih = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const vn = (x, z) => {
+	const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
+	return (ih(i, j) * (1 - a) + ih(i + 1, j) * a) * (1 - b) + (ih(i, j + 1) * (1 - a) + ih(i + 1, j + 1) * a) * b;
+};
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+// the words painted in 1969-71, during the occupation: round the water tower's tank, and in
+// red over the penitentiary's sign at the dock (one canvas: the tank's band above, the sign below)
+function alcatrazPaint() {
+	const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512;
+	const g = cv.getContext('2d');
+	// the tank: weathered grey-buff steel, rust running down from the seams
+	g.fillStyle = '#9a948a'; g.fillRect(0, 0, 1024, 256);
+	for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(${110 + (i % 5) * 12},${60 + (i % 3) * 8},40,${0.08 + (i % 4) * 0.04})`; g.fillRect((i * 173) % 1024, (i * 37) % 60, 2 + (i % 3) * 2, 80 + (i * 29) % 170); }
+	g.fillStyle = '#b3261e'; g.textAlign = 'center'; g.textBaseline = 'middle';
+	g.font = 'bold 50px Arial, sans-serif';
+	g.fillText('PEACE AND FREEDOM', 256, 96); g.fillText('WELCOME', 768, 96);
+	g.fillText('HOME OF THE FREE', 256, 170); g.fillText('INDIAN LAND', 768, 170);
+	// the sign: black on white, the red paint over it
+	g.fillStyle = '#e9e7df'; g.fillRect(0, 256, 1024, 256);
+	g.strokeStyle = '#22221f'; g.lineWidth = 8; g.strokeRect(12, 268, 1000, 232);
+	g.fillStyle = '#1d1d1b'; g.font = 'bold 64px Georgia, serif'; g.fillText('UNITED STATES PENITENTIARY', 512, 440);
+	g.fillStyle = '#b3261e'; g.font = 'bold 92px Arial, sans-serif'; g.fillText('INDIANS WELCOME', 512, 330);
+	const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+	return t;
+}
 
 export function createLandmarks(scene, bay) {
 	const group = new THREE.Group();
@@ -29,6 +57,8 @@ export function createLandmarks(scene, bay) {
 		gold: M(0xc9a646, 0.35, 0.8), glass: M(0x8fa3b0, 0.2, 0.6), dark: M(0x3a3c40, 0.5, 0.3), steel: M(0x9aa0a4, 0.45, 0.5), silver: M(0xc4c8cc, 0.35, 0.6),
 		orange: M(0xc0362c, 0.55, 0.25), green: M(0x3c6b3a, 0.9), concrete: M(0xb2aea6, 0.9), wood: M(0x6b5238, 0.9), craneRed: M(0xb8322a, 0.6, 0.3), craneWhite: M(0xe6e4df, 0.6, 0.3),
 		copper: M(0x5f8a78, 0.6, 0.3), tan: M(0xc8b08a, 0.8), sail: M(0xe8e2d4, 0.9), pavement: M(0x7d7b76, 0.95),
+		cellhouse: M(0xd8d5cb, 0.85), ruin: M(0xaba08e, 0.95), b64: M(0xcfc6b1, 0.9), redPaint: M(0xa3322a, 0.8), cypress: M(0x2f4a2c, 0.9),
+		gull: M(0xf3f3ef, 0.6), gullGrey: M(0x8c949a, 0.6), lamp: M(0x55646a, 0.1, 0.5), painted: new THREE.MeshStandardMaterial({ map: alcatrazPaint(), roughness: 0.8 }),
 	};
 	const parts = new Map();
 	const add = (mat, g) => { if (!parts.has(mat)) parts.set(mat, []); parts.get(mat).push(g.index ? g.toNonIndexed() : g); };
@@ -72,16 +102,7 @@ export function createLandmarks(scene, bay) {
 		dome(F, mats.salmon, 17.5, 0, 38, 0, 0.62);
 		for (let i = -12; i <= 12; i++) { const a = i / 12 * 1.2; cyl(F, mats.salmon, 1.4, 1.4, 16, Math.sin(a) * 90, 0, 40 - Math.cos(a) * 90 + 60, 8); }
 	}
-	{ // Alcatraz: cellhouse on the crown, the lighthouse, the water tower
-		const C = at(37.8269, -122.4229, 110);
-		box(C, mats.white, 38, 15, 150);
-		box(C, mats.concrete, 40, 3, 60, 0, 0, 90);
-		const L = at(37.8262, -122.4222);
-		cyl(L, mats.white, 3.2, 2.4, 25, 0, 0, 0, 8); cyl(L, mats.dark, 2.2, 2.2, 3, 0, 25, 0, 8); cone(L, mats.dark, 2.4, 2, 0, 28, 0, 8);
-		const T = at(37.8279, -122.4215);
-		for (const [x, z] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) box(T, mats.steel, 0.8, 24, 0.8, x, 0, z);
-		cyl(T, mats.concrete, 7, 7, 9, 0, 24, 0, 16);
-	}
+	const ALC = alcatraz();
 	{ // Fort Point, under the bridge's south end: four storeys of brick casemates
 		const F = at(37.8106, -122.4771, 60);
 		box(F, mats.brick, 70, 18, 45); box(F, mats.redbrick, 20, 22, 20, 30, 0, 18);

@@ -8,9 +8,11 @@
 // inside (a cooler, sleeping bags, a lantern that glows at night) and chairs out front round
 // a stone fire ring whose fire flickers after dark. Where people surf: the lifeguards'
 // checkered surf-zone flags on the sand and surfers waiting and riding in the lineup.
-// Pigeon Point's lighthouse stands on its point. Each beach is built when you come near.
+// Pigeon Point's light station stands on its point, seen from far along the coast. Each
+// beach is built when you come near.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { elephantSeal } from '../world/creatures.js';
 
 // the elephant seals, sculpted once (world/creatures.js)
@@ -19,7 +21,7 @@ const eleSeals = () => ELE || (ELE = { bull: elephantSeal(true), cow: elephantSe
 import { toWorld } from './geo.js';
 import { carGeometry, carMaterial } from './cars.js';
 
-// [name, lat, lon, {lot cars, restroom, tents, fires, surf surfers, quiet, forts, seals, light}]
+// [name, lat, lon, {lot cars, restroom, tents, fires, surf surfers, quiet, forts, seals, light: the tower's [lat, lon]}]
 const SITES = [
 	['Linda Mar Beach', 37.5945, -122.5028, { lot: 34, restroom: 1, surf: 9 }],
 	['Montara State Beach', 37.5450, -122.5150, { lot: 14, restroom: 1, surf: 3 }],
@@ -33,7 +35,7 @@ const SITES = [
 	['Pomponio State Beach', 37.2990, -122.4060, { lot: 8, restroom: 1, quiet: 1 }],
 	['Pescadero State Beach', 37.2665, -122.4125, { lot: 14, restroom: 1, surf: 2 }],
 	['Bean Hollow State Beach', 37.2262, -122.4095, { lot: 5, quiet: 1 }],
-	['Pigeon Point Light Station', 37.1820, -122.3935, { lot: 12, restroom: 1, light: 1 }],
+	['Pigeon Point Light Station', 37.1820, -122.3935, { lot: 12, restroom: 1, light: [37.1818, -122.3944] }],
 	['Año Nuevo State Park', 37.1105, -122.3300, { lot: 18, restroom: 1, quiet: 1, seals: 30 }],
 ].map(([name, lat, lon, o]) => ({ name, lat, lon, ...o, ...toWorld(lat, lon) }));
 export const BEACHES = SITES;
@@ -78,6 +80,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		log: M(0x5a3e28, 0.95), drift: M(0x9c9486, 0.95), cooler: M(0x2f6fb0, 0.5), lid: M(0xf2f2ee, 0.5), bag: M(0x2e5a3a, 0.8), chair: M(0x324a6a, 0.7),
 		lantern: M(0x222222, 0.5, { emissive: new THREE.Color(0xffc070), emissiveIntensity: 0 }), flame: new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
 		pole: M(0x9a9a9a, 0.4, { metalness: 0.6 }), board: M(0xf4efe4, 0.4), wetsuit: M(0x111214, 0.6), seal: M(0x6b6660, 0.5), white: M(0xf2f0ea, 0.6), black: M(0x1b1c1e, 0.5),
+		redRoof: M(0x8a3b2c, 0.75), pane: M(0x283036, 0.3, { metalness: 0.3 }), lens: M(0x33413f, 0.08, { metalness: 0.6, emissive: new THREE.Color(0xfff2c0), emissiveIntensity: 0 }),
 	};
 	const tentCols = [0xd9772b, 0x2d6fa6, 0x5b8a3a, 0xc9b23a, 0xb03a3a, 0x7a5aa0, 0x3a8a8a, 0xe0e0d8];
 	const carMat = carMaterial(night), carKinds = ['sedan', 'suv', 'pickup', 'van', 'hatch'];
@@ -107,7 +110,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			const roads = real?.near ? real.near('roads', sand.x, sand.z, 500).filter((r) => r.drive) : [];
 			for (let k = 0; k < 700; k++) {
 				const a = rnd() * Math.PI * 2, r = 30 + Math.sqrt(rnd()) * 360, x = sand.x + Math.cos(a) * r, z = sand.z + Math.sin(a) * r, h = g(x, z);
-				if (h < 3.5 || h > 60 || slope(x, z) > 0.07) continue;
+				if (h < 3.5 || h > 60 || slope(x, z) > 0.07 || keepClear.some(([kx, kz, kr]) => Math.hypot(x - kx, z - kz) < kr + 26)) continue;
 				let dRoad = 200;
 				for (const rd of roads) for (let i = 0; i < rd.pts.length; i += 2) dRoad = Math.min(dRoad, Math.hypot(rd.pts[i] - x, rd.pts[i + 1] - z));
 				if (dRoad < 14) continue;
@@ -288,19 +291,6 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			add(seal);
 			B.seals.push({ seal, ph: rnd() * 20, y: c.h - 0.03 });
 		}
-		// ---------- Pigeon Point's lighthouse: 35 m of white brick, the black lantern ----------
-		if (S.light) {
-			const L = new THREE.Group(), lh = Math.max(g(S.x, S.z), 8);
-			const tower = new THREE.Mesh(new THREE.CylinderGeometry(3, 4.6, 32, 20), mats.white); tower.position.y = 16; L.add(tower);
-			const gallery = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 0.4, 20), mats.black); gallery.position.y = 32.2; L.add(gallery);
-			const lantern = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 3, 14), M(0x9fb2b8, 0.1, { metalness: 0.5, emissive: new THREE.Color(0xfff2c0), emissiveIntensity: 0 })); lantern.position.y = 34; L.add(lantern);
-			const cap = new THREE.Mesh(new THREE.ConeGeometry(2.3, 2, 14), mats.black); cap.position.y = 36.5; L.add(cap);
-			const keeper = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 9), mats.white); keeper.position.set(14, 3, 6); L.add(keeper);
-			const kroof = new THREE.Mesh(new THREE.ConeGeometry(8.5, 3, 4).rotateY(Math.PI / 4), M(0x8a3a2a)); kroof.scale.set(1, 1, 0.75); kroof.position.set(14, 7.5, 6); L.add(kroof);
-			L.position.set(S.x, lh, S.z);
-			add(L);
-			B.beacon = lantern;
-		}
 		built.set(S, B);
 	}
 	function drop(S) {
@@ -310,10 +300,76 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		built.delete(S);
 	}
 
-	let cool = 0;
+	// ---------- Pigeon Point Light Station ----------
+	// The 1872 tower: 115 ft of white-plastered brick tapering from its base, the iron watch
+	// gallery on its corbels, the black sixteen-sided lantern that held the first-order Fresnel
+	// lens; the fog signal building at its foot and the keepers' houses along the drive (the
+	// hostel now). It is built once the ground is in and never taken down: from anywhere along
+	// this coast it is the mark on the point, so it must not wait on the beach's own build.
+	const keepClear = [];
+	function lightStation([lat, lon]) {
+		const T = toWorld(lat, lon), parts = new Map();
+		const put = (mat, geo, x, y, z, ry = 0) => { geo.rotateY(ry); geo.translate(T.x + x, y, T.z + z); if (!parts.has(mat)) parts.set(mat, []); parts.get(mat).push(geo.index ? geo.toNonIndexed() : geo); };
+		const gable = (w, d, h) => new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, h)]), { depth: d, bevelEnabled: false }).translate(0, 0, -d / 2).rotateY(Math.PI / 2);
+		const g0 = Math.max(g(T.x, T.z), 4), BASE = 1.2, SHAFT = 25.5, rAt = (y) => 4.3 - (y - BASE) / SHAFT * 1.45;
+		// the plinth, the tapering shaft, its door and the little windows lighting the stair
+		put(mats.white, new THREE.CylinderGeometry(4.9, 5.2, BASE + 0.4, 8).translate(0, (BASE + 0.4) / 2, 0), 0, g0 - 0.4, 0);
+		put(mats.white, new THREE.CylinderGeometry(rAt(BASE + SHAFT), rAt(BASE), SHAFT, 32, 1, true).translate(0, SHAFT / 2, 0), 0, g0 + BASE, 0);
+		put(mats.pane, new THREE.BoxGeometry(1.2, 2.3, 0.5).translate(0, 1.15, 0), 0, g0 + BASE, rAt(BASE + 1) - 0.1, 0.9);
+		for (let i = 0; i < 6; i++) {
+			const y = BASE + 4 + i * 4, a = 0.9 + (i % 2 ? Math.PI : 0) + (i % 3) * 0.35, r = rAt(y) - 0.12;
+			put(mats.pane, new THREE.BoxGeometry(0.6, 1.2, 0.4), Math.sin(a) * r, g0 + y, Math.cos(a) * r, a);
+		}
+		// the corbels under the watch gallery, its deck and railing
+		const yG = g0 + BASE + SHAFT;
+		put(mats.white, new THREE.CylinderGeometry(3.45, rAt(BASE + SHAFT), 0.9, 32).translate(0, 0.45, 0), 0, yG, 0);
+		for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; put(mats.white, new THREE.BoxGeometry(0.35, 0.9, 0.9).translate(0, -0.45, 0), Math.sin(a) * 3.2, yG + 0.9, Math.cos(a) * 3.2, a); }
+		put(mats.black, new THREE.CylinderGeometry(3.95, 3.95, 0.25, 32).translate(0, 0.125, 0), 0, yG + 0.9, 0);
+		for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2; put(mats.black, new THREE.BoxGeometry(0.07, 1.05, 0.07).translate(0, 0.52, 0), Math.sin(a) * 3.85, yG + 1.15, Math.cos(a) * 3.85); }
+		put(mats.black, new THREE.TorusGeometry(3.85, 0.05, 4, 40).rotateX(Math.PI / 2), 0, yG + 2.2, 0);
+		// the lantern: a black parapet, the glazing between sixteen astragals, the domed roof,
+		// its ventilator ball and the lightning rod
+		const yL = yG + 1.15;
+		put(mats.black, new THREE.CylinderGeometry(2.25, 2.25, 1.0, 16).translate(0, 0.5, 0), 0, yL, 0);
+		put(mats.lens, new THREE.CylinderGeometry(2.1, 2.1, 2.7, 16).translate(0, 1.35, 0), 0, yL + 1, 0);
+		for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2; put(mats.black, new THREE.BoxGeometry(0.09, 2.7, 0.09).translate(0, 1.35, 0), Math.sin(a) * 2.14, yL + 1, Math.cos(a) * 2.14); }
+		put(mats.black, new THREE.CylinderGeometry(2.4, 2.4, 0.2, 16).translate(0, 0.1, 0), 0, yL + 3.7, 0);
+		put(mats.black, new THREE.SphereGeometry(2.35, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.6, 1), 0, yL + 3.9, 0);
+		put(mats.black, new THREE.SphereGeometry(0.4, 10, 6), 0, yL + 5.5, 0);
+		put(mats.black, new THREE.CylinderGeometry(0.04, 0.06, 1.6, 5).translate(0, 0.8, 0), 0, yL + 5.8, 0);
+		keepClear.push([T.x, T.z, 8]);
+		// a house or shed with a gable roof, windows down its long sides, a chimney
+		const house = (x, z, ry, L, W, H, pitch, wins, chimney) => {
+			const y = Math.max(g(T.x + x, T.z + z), 4);
+			put(mats.white, new THREE.BoxGeometry(L, H + 1, W).translate(0, (H + 1) / 2, 0), x, y - 1, z, ry);
+			put(mats.redRoof, gable(W + 1, L + 1, pitch), x, y + H, z, ry);
+			const c = Math.cos(ry), s = Math.sin(ry);
+			for (let i = 0; i < wins; i++) for (const side of [-1, 1]) {
+				const u = (i + 0.5) / wins * L - L / 2, v = side * (W / 2 + 0.03);
+				put(mats.pane, new THREE.BoxGeometry(1.0, 1.4, 0.1), x + u * c + v * s, y + H * 0.35, z - u * s + v * c, ry);
+			}
+			if (chimney) put(mats.redRoof, new THREE.BoxGeometry(0.8, 2.2, 0.8), x + L * 0.25 * c, y + H + pitch * 0.4, z - L * 0.25 * s, ry);
+			keepClear.push([T.x + x, T.z + z, Math.max(L, W) / 2]);
+		};
+		// the fog signal building beside the tower, where the steam whistle stood
+		house(13, -9, 0.35, 19, 8, 4.2, 2.6, 5, false);
+		// the keepers' houses, two pairs of bungalows either side of the drive
+		for (const [x, z] of [[52, -24], [52, 22], [86, -24], [86, 22]]) house(x, z, 0, 17, 9, 3.4, 2.8, 4, true);
+		for (const [mat, list] of parts) {
+			const m = new THREE.Mesh(mergeGeometries(list), mat);
+			m.castShadow = !isPhone; m.receiveShadow = true;
+			m.name = 'pigeon-point-light';
+			root.add(m);
+		}
+	}
+
+	let cool = 0, lightsUp = false;
 	function update(dt, t, camera, nightK) {
 		night.value = nightK;
 		cool -= dt;
+		if (!lightsUp && bay.loaded()) { lightsUp = true; for (const S of SITES) if (S.light) lightStation(S.light); }
+		// Pigeon Point's characteristic: one white flash every ten seconds
+		mats.lens.emissiveIntensity = nightK * (t % 10 < 0.4 ? 7 : 0.8);
 		const cx = camera.position.x, cz = camera.position.z;
 		for (const S of SITES) {
 			const d = Math.hypot(cx - S.x, cz - S.z);
@@ -337,7 +393,6 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 				Sf.body.position.y = riding ? 0.75 : 0.45; Sf.body.rotation.x = riding ? 0 : 0.2; Sf.head.position.y = riding ? 1.3 : 0.95;
 			}
 			for (const E of B.seals) { E.seal.position.y = E.y + Math.max(0, Math.sin(t * 0.3 + E.ph)) * 0.05; }
-			if (B.beacon) B.beacon.material.emissiveIntensity = nightK * (Math.sin(t * 1.2) > 0.6 ? 6 : 1.2);
 		}
 	}
 	// which beach you are at (for zoning and hints)

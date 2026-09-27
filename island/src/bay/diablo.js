@@ -2,11 +2,12 @@
 //   Rock City: honey-coloured sandstone domes by South Gate Road, weathered into
 //     wind caves you can walk into, honeycombed with tafoni, ledged by old bedding
 //   Castle Rock: the sandstone crags over Pine Canyon
-//   the summit: the stone visitor centre on the peak with its tower and the beacon
+//   the summit: the stone Summit Building, its observation deck, its crenellated tower
+//     and the beacon, and the car park's walled loop
 // Each rock is carved from a signed-distance field (blobs, bedding ledges, caves hollowed
-// out of it) with marching cubes, built when you come near. The same field makes the
-// rock solid: you are pushed off its walls and can step up on its ledges, and the
-// caves are open to walk in.
+// out of it) into a surface-nets mesh, in a Web Worker, the nearest first as you come
+// near. The same field makes the rock solid: you are pushed off its walls and can step
+// up on its ledges, and the caves are open to walk in.
 
 import * as THREE from 'three';
 import { photoUniform, TRI_GLSL } from '../world/photomats.js';
@@ -429,10 +430,9 @@ export function createDiablo(scene, bay) {
 	summit.name = 'diablo-summit';
 	group.add(summit);
 	const [stoneMap, stoneBump] = stoneTextures();
-	const stone = new THREE.MeshStandardMaterial({ map: stoneMap, bumpMap: stoneBump, bumpScale: 2, roughness: 0.95 });
-	const trim = new THREE.MeshStandardMaterial({ color: 0xc9ae84, map: stoneMap, roughness: 0.85 });
-	trim.map = stoneMap.clone(); trim.map.repeat.set(0.25, 0.25);                               // the dressed stone: the same, finer and paler
-	trim.color.setRGB(1.25, 1.12, 0.95);
+	const stone = new THREE.MeshStandardMaterial({ map: stoneMap, bumpMap: stoneBump, bumpScale: 1, roughness: 0.95 });
+	// the dressed stone of the sills, arches and copings: paler and smooth
+	const trim = new THREE.MeshStandardMaterial({ color: 0xcfb58c, roughness: 0.85 });
 	const glassM = new THREE.MeshStandardMaterial({ color: 0x1b2328, roughness: 0.15, metalness: 0.4, emissive: 0xffb46a, emissiveIntensity: 0 });
 	const steel = new THREE.MeshStandardMaterial({ color: 0x2b2e31, roughness: 0.5, metalness: 0.6 });
 	const lens = new THREE.MeshStandardMaterial({ color: 0xd8d2c0, roughness: 0.2, metalness: 0.1, emissive: 0xfff0c8, emissiveIntensity: 0 });
@@ -447,9 +447,10 @@ export function createDiablo(scene, bay) {
 	// the beacon's turning white beam, and the steady red warning light under it
 	const beacon = glow(0xfff2dc), red = glow(0xff2a1a);
 	summit.add(beacon, red);
-	let summitPlaced = false;
+	// (built over three frames: the building, the car park's wall, then the stand-in cleared)
+	let summitPlaced = false, summitStage = 0;
 
-	function buildSummit() {
+	function buildHall() {
 		const { w: W, d: D } = HALL, T = TOWER.s;
 		const cx = sw.x + HALL.dx, cz = sw.z + HALL.dz;
 		const toW = (lx, lz) => [cx + ca * lx - sa * lz, cz + sa * lx + ca * lz];
@@ -466,7 +467,7 @@ export function createDiablo(scene, bay) {
 		const box = (list, w, h, d, x, y, z) => { const g = new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z); parts[list].push(list === 'stone' || list === 'trim' ? planarUV(g) : g); };
 		// the hall, and the tower rising through it
 		box('stone', W, Hm - yb, D, 0, yb, 0);
-		box('stone', W + 0.5, 0.9 - yb, D + 0.5, 0, yb, 0);                                         // the battered base course
+		box('stone', W + 0.5, 0.9 - yb, D + 0.5, 0, yb, 0);                                         // the projecting base course
 		box('trim', W + 0.24, 0.3, D + 0.24, 0, Hm * 0.5 - 0.15, 0);                                 // the string course between the floors
 		box('stone', T, Ht - yb, T, tx, yb, tz);
 		// the observation deck: a parapet round the roof, its coping, and the railing on it
@@ -508,7 +509,7 @@ export function createDiablo(scene, bay) {
 		for (const s of [-1, 1]) {
 			for (const x of [-10.5, -7, -3.5, 0, 3.5, 7, 10.5]) {
 				const door = s > 0 && x === -3.5;
-				if (door) win(x, Math.max(0, gAt(x, D / 2 + 0.5) - gc) + 0.05, D / 2, 0, 1.9, 3, 'steel');
+				if (door) win(x, gAt(x, D / 2 + 0.5) - gc + 0.05, D / 2, 0, 1.9, 3, 'steel');
 				else if (gAt(x, s * (D / 2 + 0.5)) - gc + 0.9 < low) win(x, low, s * D / 2, s > 0 ? 0 : Math.PI, 1.1, 2);
 				win(x, up, s * D / 2, s > 0 ? 0 : Math.PI, 1.1, 1.9);
 			}
@@ -528,9 +529,10 @@ export function createDiablo(scene, bay) {
 		}
 		const lm = new THREE.Mesh(lensG, lens);
 		summit.add(lm);
-
-		// the car park's low stone wall, outside the loop (open where the roads and the path
-		// cross it) and round the island in its middle
+	}
+	// the car park's low stone wall, outside the loop (open where the roads and the path
+	// cross it) and round the island in its middle
+	function buildLoopWall() {
 		const ctr = LOOP.reduce((a, p) => [a[0] + p[0] / LOOP.length, a[1] + p[1] / LOOP.length], [0, 0]);
 		const wall = [];
 		for (const off of [3.3, -3.3]) {
@@ -549,18 +551,18 @@ export function createDiablo(scene, bay) {
 		const wm = new THREE.Mesh(mergeGeometries(wall), stone);
 		wm.position.set(sw.x, 0, sw.z); wm.castShadow = wm.receiveShadow = true;
 		group.add(wm);
-
-		// landmarks.js's plain stand-in for this building stands 17 m off: fold its faces away
+	}
+	// landmarks.js's plain stand-in for this building stands 17 m off: fold its faces away
+	function foldStandIn() {
 		const lw = toWorld(STAND_IN.lat, STAND_IN.lon);
 		scene.getObjectByName('bay-landmarks')?.traverse((o) => {
 			const p = o.isMesh && !o.geometry.index && o.geometry.attributes.position;
-			if (!p) return;
+			if (!p || p.isInterleavedBufferAttribute) return;
+			const A = p.array, near = (v) => Math.abs(A[v] - lw.x) < 12 && Math.abs(A[v + 2] - lw.z) < 12;
 			let hit = false;
-			for (let t = 0; t < p.count; t += 3) {
-				let inside = true;
-				for (let v = t; v < t + 3; v++) if (Math.hypot(p.getX(v) - lw.x, p.getZ(v) - lw.z) > 12) inside = false;
-				if (!inside) continue;
-				for (let v = t + 1; v < t + 3; v++) p.setXYZ(v, p.getX(t), p.getY(t), p.getZ(t));
+			for (let t = 0; t < A.length; t += 9) {
+				if (!near(t) || !near(t + 3) || !near(t + 6)) continue;
+				for (let v = t + 3; v < t + 9; v++) A[v] = A[t + (v - t) % 3];
 				hit = true;
 			}
 			if (hit) { p.needsUpdate = true; o.geometry.computeBoundingSphere(); }
@@ -570,8 +572,8 @@ export function createDiablo(scene, bay) {
 	function update(dt, t, cam, nightK) {
 		if (!bay.loaded() || !fine()) return;
 		const x = cam.position.x, z = cam.position.z;
-		// carve the rocks you come near, the nearest first
-		if (!pending && !job) {
+		// the summit first, over three frames; then carve the rocks you come near, the nearest first
+		if (summitStage < 3) { [buildHall, buildLoopWall, foldStandIn][summitStage++](); summitPlaced = true; } else if (!pending && !job) {
 			let best = null, bd = 3500;
 			for (const R of rocks) { const d = Math.hypot(R.x - x, R.z - z); if (!R.built && d < bd) { bd = d; best = R; } }
 			if (best) {
@@ -580,16 +582,15 @@ export function createDiablo(scene, bay) {
 				if (worker) { pending = best; worker.postMessage({ id: rocks.indexOf(best), spec: best.spec, H: best.H, G, E: best.E }); }
 				else carveHere(best);
 			}
-		}
-		if (job) {
-			// (on the main thread: a few milliseconds of it a frame, never more)
+		} else if (job?.out) { build(job.R, job.out); job = null; } else if (job) {
+			// (on the main thread: a few milliseconds of it a frame, never more, and the mesh
+			// made on a frame of its own)
 			const t0 = performance.now();
 			let r = job.it.next();
-			while (!r.done && performance.now() - t0 < 3.5) r = job.it.next();
-			if (r.done) { const R = job.R; job = null; build(R, r.value); }
+			while (!r.done && performance.now() - t0 < 3) r = job.it.next();
+			if (r.done) job.out = r.value;
 		}
 		for (const R of rocks) if (R.mesh) R.mesh.visible = Math.hypot(R.x - x, R.z - z) < 9000;
-		if (!summitPlaced) { buildSummit(); summitPlaced = true; }
 		// the beacon turns: a flash each time its beam sweeps past you
 		const bw = beaconPos.clone().applyMatrix4(summit.matrixWorld), a = t * 1.9;
 		const to = new THREE.Vector2(cam.position.x - bw.x, cam.position.z - bw.z).normalize();
@@ -607,7 +608,8 @@ export function createDiablo(scene, bay) {
 	const local = (R, x, y, z) => { const c = Math.cos(-R.yaw), s = Math.sin(-R.yaw), dx = x - R.x, dz = z - R.z; return [dx * c - dz * s, y - R.y, dx * s + dz * c]; };
 	// the hall and the tower in the hall's frame, and a point there
 	const hallAt = (x, z) => { const dx = x - summit.position.x, dz = z - summit.position.z; return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
-	const rects = () => [{ x: 0, z: 0, hw: HALL.w / 2, hd: HALL.d / 2, top: dims.Hm }, { x: tx, z: tz, hw: TOWER.s / 2, hd: TOWER.s / 2, top: dims.Ht }];
+	// (the hall's walls stand from the ground; the tower's, over the deck, from the deck)
+	const rects = () => [{ x: 0, z: 0, hw: HALL.w / 2, hd: HALL.d / 2, bottom: -1e9, top: dims.Hm }, { x: tx, z: tz, hw: TOWER.s / 2, hd: TOWER.s / 2, bottom: dims.Hm - 0.4, top: dims.Ht }];
 	// push a body (feet at footY) off the rock walls and the building's
 	function push(p, footY) {
 		for (const R of rocks) {
@@ -623,10 +625,10 @@ export function createDiablo(scene, bay) {
 		let [lx, lz] = hallAt(p.x, p.z);
 		const y = footY - dims.gc, r0 = lx, s0 = lz;
 		for (const r of rects()) {
-			if (y > r.top - 0.4 || (r.top === dims.Hm ? false : y < dims.Hm - 0.4)) continue;
+			if (y > r.top - 0.4 || y < r.bottom) continue;
 			const qx = lx - r.x, qz = lz - r.z, ex = r.hw + 0.35 - Math.abs(qx), ez = r.hd + 0.35 - Math.abs(qz);
 			if (ex <= 0 || ez <= 0) continue;
-			if (ex < ez) lx += Math.sign(qx) * ex; else lz += Math.sign(qz) * ez;
+			if (ex < ez) lx += (qx < 0 ? -1 : 1) * ex; else lz += (qz < 0 ? -1 : 1) * ez;
 		}
 		// on the deck, the parapet keeps you there
 		if (y > dims.Hm - 0.4 && y < dims.Hm + 2 && Math.abs(lx) < HALL.w / 2 && Math.abs(lz) < HALL.d / 2) {

@@ -342,5 +342,5 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const B of built.values()) { const [lx, lz] = local(B, pos.x, pos.z); if (Math.abs(lx) < B.hw - 0.3 && Math.abs(lz) < B.hd - 0.3 && pos.y - B.floorY < CEIL) return B; }
 		return null;
 	}
-	return { group, update, floor, push, inside, venue, count: () => built.size };
+	return { group, update, floor, push, inside, venue, count: () => built.size, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length })) };
 }

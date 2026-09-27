@@ -42,6 +42,7 @@ import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
 import { createDiscovery } from './bay/discovery.js';
 import { createTowers } from './bay/towers.js';
+import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
@@ -459,6 +460,8 @@ export function createIslandWorld() {
 			// Crysis: the towns beyond the survey, grown street by street as you near them
 			world.civ = createCivilization({ real: world.real, bay: bayArea });
 			world.city = createCity(shared, scene, bayArea, world.real);
+			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
+			world.forestFloor = createForestFloor(scene, bayArea, world.city, world.real);
 			// the real houses close by, built whole with their rooms
 			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
 			// ...and the shops, cafés, restaurants, offices and places to play, walked into
@@ -750,6 +753,7 @@ export function createIslandWorld() {
 		W.real?.update(camera);
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);
+		W.forestFloor?.update(camera);
 		W.houses?.update(camera, dt, sk.night);
 		if (W.commercial) {
 			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
