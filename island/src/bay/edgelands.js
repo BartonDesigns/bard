@@ -49,8 +49,8 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 		sh.fragmentShader = 'uniform float uSeason;\n' + sh.fragmentShader.replace('#include <color_fragment>', `
 			#if defined( USE_INSTANCING_COLOR ) || defined( USE_COLOR )
 			{ float dry = clamp(vColor.r + uSeason * 0.65, 0.0, 1.0);
-			  vec3 g = mix(vec3(0.26, 0.4, 0.13), vec3(0.7, 0.6, 0.36), dry) * vColor.g;
-			  diffuseColor.rgb *= g * (0.5 + 0.6 * vUv.y); }
+			  vec3 g = mix(vec3(0.2, 0.3, 0.1), vec3(0.5, 0.42, 0.24), dry) * vColor.g;
+			  diffuseColor.rgb *= g * (0.45 + 0.55 * vUv.y); }
 			#endif`);
 	};
 	tuftMat.customProgramCacheKey = () => 'edgetuft';
@@ -167,7 +167,8 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 		// the ground: ribbons (cut to this tile by their segments) and patches
 		const G = { P: [], A: [], E: [], I: [] };
 		const vert = (x, y, z, u, s, kind, low, e0, e1) => { G.P.push(x, y, z); G.A.push(u, s, kind, low); G.E.push(e0, e1); return G.P.length / 3 - 1; };
-		const lift = (id) => 0.06 + ((id.length * 7 + id.charCodeAt(id.length - 1)) % 5) * 0.006;
+		// (above the paved yards city.js lays, a hand's breadth up; each line its own hair so crossings do not fight)
+		const lift = (id) => 0.15 + ((id.length * 7 + id.charCodeAt(id.length - 1)) % 5) * 0.006;
 		let n = 0;
 		for (const R of [...P.ground, ...P.rails.map((q) => ({ id: q.id, pts: q.pts, w: 3.4, kind: 4 }))]) {
 			{ const kk = R.id.startsWith('rr') ? 'rr' : R.id[0]; T.kinds[kk] = (T.kinds[kk] || 0) + 1; }
@@ -197,7 +198,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 			const nx = Math.max(2, Math.ceil(D.w / 4)), nz = Math.max(2, Math.ceil(D.d / 4)), ca = Math.cos(D.a), sa = Math.sin(D.a), base = G.P.length / 3;
 			for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
 				const lx = (i / nx - 0.5) * D.w, lz = (j / nz - 0.5) * D.d, x = D.x + ca * lx - sa * lz, z = D.z + sa * lx + ca * lz;
-				vert(x, H(x, z) + 0.05, z, i / nx, lz, D.kind, 0, Math.min(D.w / 2 - Math.abs(lx), D.d / 2 - Math.abs(lz)) + 0.05, 99);
+				vert(x, H(x, z) + 0.13, z, i / nx, lz, D.kind, 0, Math.min(D.w / 2 - Math.abs(lx), D.d / 2 - Math.abs(lz)) + 0.05, 99);
 			}
 			for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const a = base + j * (nx + 1) + i, b = a + nx + 1; G.I.push(a, b, a + 1, a + 1, b, b + 1); }
 		}

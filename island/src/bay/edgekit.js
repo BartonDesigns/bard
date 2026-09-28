@@ -322,13 +322,13 @@ export const slatTex = () => canvasTex(256, 64, (g, w, h) => {
 export const wireTex = () => canvasTex(32, 32, (g) => { g.strokeStyle = 'rgba(200,202,205,1)'; g.lineWidth = 2; g.strokeRect(1, 1, 30, 30); });
 // grass blades: a fan of tapering strokes, lighter to the tips
 export const bladeTex = () => canvasTex(128, 128, (g) => {
-	for (let k = 0; k < 26; k++) {
-		const x = 10 + hash(k, 1) * 108, lean = (hash(k, 2) - 0.5) * 50, top = 8 + hash(k, 3) * 60, w = 2 + hash(k, 4) * 2.5;
+	for (let k = 0; k < 18; k++) {
+		const x = 14 + hash(k, 1) * 100, lean = (hash(k, 2) - 0.5) * 70, top = 4 + hash(k, 3) * 70, w = 1 + hash(k, 4) * 1.4;
 		const s = 150 + Math.floor(hash(k, 5) * 100);
 		g.fillStyle = `rgb(${s},${s},${s})`;
 		g.beginPath(); g.moveTo(x - w, 128); g.quadraticCurveTo(x + lean * 0.3, 70, x + lean, top); g.quadraticCurveTo(x + lean * 0.3 + w * 0.5, 70, x + w, 128); g.closePath(); g.fill();
 		// a seed head on some
-		if (hash(k, 6) > 0.7) { g.beginPath(); g.ellipse(x + lean, top + 6, 2.2, 7, lean / 90, 0, Math.PI * 2); g.fill(); }
+		if (hash(k, 6) > 0.7) { g.beginPath(); g.ellipse(x + lean, top + 6, 1.6, 6, lean / 90, 0, Math.PI * 2); g.fill(); }
 	}
 });
 

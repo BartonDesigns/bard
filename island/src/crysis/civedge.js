@@ -57,18 +57,21 @@ export function industrialEdge(D, heightAt, nearWater = null) {
 		}
 	};
 	// one or two of the through roads, one side of each
-	const picks = mains.slice().sort(() => r() - 0.5).slice(0, 1 + (r() < 0.5 ? 1 : 0));
+	const outer = (q) => { let m = 0; for (let i = 0; i < q.pts.length; i += 2) m = Math.max(m, Math.hypot(q.pts[i] - cx, q.pts[i + 1] - cz)); return m; };
+	const picks = mains.filter((q) => outer(q) > reach * 0.75).sort(() => r() - 0.5);
+	const want = 4 + Math.floor(r() * 4);
 	for (const q of picks) {
-		const p = q.pts, side = r() < 0.5 ? 1 : -1;
+		if (D.edge.warehouses >= want) break;
+		const p = q.pts;
 		let placed = 0, lastS = -1e9, s = 0;
 		for (let i = 0; i + 3 < p.length && placed < 6; i += 2) {
 			const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], L = Math.hypot(dx, dz);
 			if (L < 1e-3) continue;
-			const ux = dx / L, uz = dz / L, nx = -uz * side, nz = ux * side;
+			const ux = dx / L, uz = dz / L;
 			for (let t = 0; t < L && placed < 6; t += 10) {
 				const x = p[i] + ux * t, z = p[i + 1] + uz * t, dc = Math.hypot(x - cx, z - cz);
-				if (dc < reach - 150 || s + t - lastS < 30) continue;
-				const w = 40 + r() * 45, d = 28 + r() * 22, set = (q.w || 12) / 2 + 22 + d / 2;
+				if (dc < reach * 0.7 || s + t - lastS < 30) continue;
+				const w = 40 + r() * 45, d = 28 + r() * 22, set = (q.w || 12) / 2 + 22 + d / 2, side = r() < 0.5 ? 1 : -1, nx = -uz * side, nz = ux * side;
 				const wx = x + ux * w / 2 + nx * set, wz = z + uz * w / 2 + nz * set, a = Math.atan2(uz, ux);
 				if (!clear(wx + nx * 6, wz + nz * 6, w + 12, d + 36, a)) continue;
 				// the building (its front to the road), its driveway, the yard round it marked industrial

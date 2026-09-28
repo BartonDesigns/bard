@@ -360,7 +360,8 @@ function feather(cv, f, blur) {
 }
 const GLOWS = { magma: true, toxic: true, mystic: true, sky: true };
 function paintArena(f, res) {
-	const [x0, x1, z0, z1] = f.rect, ppm = Math.min(res, 2048 / Math.max(x1 - x0, z1 - z0));
+	// (a little coarser than a pitch's chalk: the arenas' marks are broad, and a phone's paint is the stall)
+	const [x0, x1, z0, z1] = f.rect, ppm = Math.min(res * 0.75, 2048 / Math.max(x1 - x0, z1 - z0));
 	const A = sheet(f, ppm), E = GLOWS[f.theme] ? sheet(f, ppm * 0.5) : null;
 	PAINT[f.theme](f, A.g, E?.g);
 	feather(A.cv, f, f.theme === 'mystic' || f.theme === 'sky' || f.theme === 'ocean' ? 2 : THEMES[f.theme].blur);
@@ -501,7 +502,7 @@ export function buildArena(f, H, { res = 12, shadows = true } = {}) {
 		for (const sx of [-1, 1]) for (const z of [-L / 3, 0, L / 3]) {
 			const x = sx * (W / 2 + 2.2), y = G(x, z);
 			put(M.basalt, new THREE.CylinderGeometry(0.55, 0.35, 1.1, 6).translate(x, y + 0.55, z));
-			put(M.lava, new THREE.CylinderGeometry(0.48, 0.48, 0.06, 10).translate(x, y + 1.08, z));
+			put(M.lava, new THREE.SphereGeometry(0.5, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.45, 1).translate(x, y + 1.02, z));
 			const fl = glowSprite('#ff7a2a', 2.2, extra);
 			fl.position.set(x, y + 1.5, z); group.add(fl); movers.push({ o: fl, k: 'flicker', ph: hh(x, z) * 6, s: 2.2 });
 			walls.push([x, z, x, z, 0.55, y + 1.1]);

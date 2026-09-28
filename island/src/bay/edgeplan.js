@@ -455,6 +455,7 @@ export function* planTile(C, ti, tj, roads) {
 					const d = q.ux * ux + q.uz * uz < 0 ? -1 : 1;
 					ux = q.ux * d; uz = q.uz * d; x = q.x; z = q.z;
 					part.push(x, z, q.w);
+					if (k % 20 === 19) yield 'trace';
 					if (x < x0 - 30 || x > x1 + 30 || z < z0 - 30 || z > z1 + 30) break;
 				}
 				if (dir > 0) line.push(...part); else { for (let i = part.length - 3; i >= 0; i -= 3) line.unshift(part[i], part[i + 1], part[i + 2]); }
@@ -578,7 +579,9 @@ export function* planTile(C, ti, tj, roads) {
 			O.seg(q, 2.2, KEEP);
 			weedsAlong(offsetLine(q, 1.9), 0, 0.5, 0.6, 0.55); weedsAlong(offsetLine(q, -1.9), 0, 0.5, 0.6, 0.55);
 			drift(offsetLine(q, 2.4), 0, 0.35);
-			for (let i = 20; i + 20 < q.length; i += 30) if (inT(q[i], q[i + 1])) out.cands.push({ x: q[i] + (q[i + 3] - q[i - 1]) * 0.8, z: q[i + 1] - (q[i + 2] - q[i - 2]) * 0.8, yaw: Math.atan2(q[i + 2] - q[i - 2], q[i + 3] - q[i - 1]), w: 1.4, why: 'rail', back: 0 });
+			// (the camps keep to the yard side of the tracks, away from the street)
+			const sa = Math.sin(R.a), ca = Math.cos(R.a);
+			for (let i = 20; i + 20 < q.length; i += 30) if (inT(q[i], q[i + 1])) out.cands.push({ x: q[i] - sa * 7, z: q[i + 1] + ca * 7, yaw: Math.atan2(q[i + 2] - q[i - 2], q[i + 3] - q[i - 1]), w: 1.4, why: 'rail', back: 0 });
 		}
 	}
 	for (const [bx, bz, nx, nz, w, h] of yards) { backYard(bx, bz, nx, nz, w, h, 'proc'); yield 'yard'; }

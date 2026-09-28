@@ -1018,9 +1018,9 @@ export function createVolcano(island, shared, scene, camera, profile, opts = {})
 				const tg = bomb && aims.target ? aims.target() : null;
 				b.aim = !!tg;
 				if (tg) {
-					// thrown to land there: its time aloft by the distance, a little extra for the drag
-					const dx = tg.x - b.p.x, dz = tg.z - b.p.z, d = Math.hypot(dx, dz), T = Math.min(16, Math.max(5, d / 55)), k = 1 / (1 - 0.015 * T);
-					b.v.set(dx / T * k, ((H(tg.x, tg.z) - b.p.y) / T + 4.9 * T) * k, dz / T * k);
+					// thrown to land there: its time aloft by the distance, the air's drag (below) allowed for
+					const dx = tg.x - b.p.x, dz = tg.z - b.p.z, T = Math.min(16, Math.max(5, Math.hypot(dx, dz) / 55)), e = (1 - Math.exp(-0.03 * T)) / 0.03;
+					b.v.set(dx / e, (H(tg.x, tg.z) - b.p.y + 9.8 * T / 0.03) / e - 9.8 / 0.03, dz / e);
 					b.s = tg.size || b.s;
 				}
 			}
