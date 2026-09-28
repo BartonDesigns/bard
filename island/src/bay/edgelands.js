@@ -337,6 +337,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 	const camps = createCamps(scene, { world, shared, isPhone, H });
 	const stats = { tiles: 0, planned: 0, longest: 0, instances: 0, lastMs: 0, at: null, wanted: 1, slowStep: ['', 0] };
 	let cur = null, levelsN = -1, visible = true;
+	let hurry = false;
 	function update(dt, time, camera, night) {
 		const x = camera.position.x, z = camera.position.z;
 		const on = bay.loaded() && real?.loaded?.() && Math.max(Math.abs(x), Math.abs(z)) > (W()?.island?.half || 0) + 50;
@@ -378,7 +379,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					// (the rivers round here known first, for the levees and the banks; not waited on for ever)
 					const Wt = W()?.water;
 					T.t0 = T.t0 || performance.now();
-					if (Wt?.info && performance.now() - T.t0 < 8000 && !(Wt.ready() && Wt.info().queue === 0)) break;
+					if (Wt?.info && !hurry && performance.now() - T.t0 < 8000 && !(Wt.ready() && Wt.info().queue === 0)) break;
 					const f = roads.near(x0, z0, x0 + TILE, z0 + TILE, BUDGET - (performance.now() - t0));
 					if (!f) break;
 					T.roads = f; T.state = 'plan'; T.it = planTile(C, T.i, T.j, f);
@@ -448,5 +449,5 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 		for (const T of tiles.values()) for (const [k, v] of Object.entries(T.kinds)) g[k] = (g[k] || 0) + v;
 		return { ...stats, longest: +stats.longest.toFixed(1), lastMs: +stats.lastMs.toFixed(1), counts: n, ground: g, camps: camps.info(), pending: [...tiles.values()].filter((T) => T.state !== 'done').length };
 	}
-	return { group, update, push, floor, info, camps, tiles, flush: (camera, ms = 20000) => { const t0 = performance.now(); while (performance.now() - t0 < ms) { update(0, 0, camera, 0); if (!stats.wanted && !cur) break; } update(0, 0, camera, 0); } };
+	return { group, update, push, floor, info, camps, tiles, flush: (camera, ms = 20000) => { const t0 = performance.now(); hurry = true; while (performance.now() - t0 < ms) { update(0, 0, camera, 0); if (!stats.wanted && !cur) break; } update(0, 0, camera, 0); hurry = false; } };
 }
