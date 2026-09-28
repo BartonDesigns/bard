@@ -55,6 +55,11 @@ export const POSES = {
 	// seated: hands in the lap, or forearms on a table
 	lap: { both: arm({ abd: 0.12, flex: 0.55, roll: 0.5, bend: 1.05, pro: 0.6, curl: 0.4 }), swing: 0 },
 	table: { both: arm({ abd: 0.2, flex: 0.85, roll: 0.35, bend: 1.45, pro: 0.9, curl: 0.3 }), swing: 0 },
+	// a book held up in both hands, the head bent to it; hands held out to a small stove;
+	// both hands on a cart's handle, pushing it
+	read: { both: arm({ abd: 0.16, flex: 0.62, roll: 0.55, bend: 1.8, pro: 1.0, wflex: -0.2, curl: 0.35 }), swing: 0, look: 0.5 },
+	cook: { both: arm({ abd: 0.2, flex: 0.95, roll: 0.3, bend: 0.85, pro: 0.9, curl: 0.25 }), swing: 0, look: 0.35, lean: 0.12 },
+	push: { both: arm({ abd: 0.14, flex: 0.8, roll: 0.25, bend: 0.6, pro: 0.15, wflex: -0.1, curl: 0.85 }), swing: 0, lean: 0.08 },
 };
 // holding hands: a child's arm reaches up and out to the grown-up's, the grown-up's hangs a
 // little out and forward to meet it

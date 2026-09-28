@@ -15,9 +15,11 @@ export const fieldVenue = (kind) => ({
 });
 
 // the field the game was started on (or a stand-in), and where its stage goes on it:
-// `spot` is the stage's origin in the field's frame (the stage faces the field's -z)
+// `spot` is the stage's origin in the field's frame (the stage faces the field's -z). An
+// arena (arenas.js) is matched by its theme, which it carries as its size.
 export function fieldStage(ctx, kind, size, spot = null) {
-	const real = ctx.site?.field?.kind === kind ? ctx.site.field : null;
+	const sf = ctx.site?.field;
+	const real = sf?.kind === kind && (kind !== 'arena' || sf.theme === size) ? sf : null;
 	const f = real || { kind, x: 0, z: 0, yaw: 0, ...fieldSpec(kind, size) };
 	const at = spot ? spot(f) : playSpot(f);
 	const S = { field: f, real: !!real, at };
@@ -29,14 +31,18 @@ export function fieldStage(ctx, kind, size, spot = null) {
 		return { x, z, yaw: f.yaw, y: ctx.groundAt?.(x, z) };
 	};
 	// the field round the stage (its ground as the stage finds it), the world's own hidden
+	// (an arena has things that move on it: S.tick runs them)
+	let texs = [];
 	S.lay = (K) => {
 		const out = buildField(f, (lx, lz) => K.groundY(lx - at[0], lz - at[1]), { res: ctx.isPhone ? 8 : 14, shadows: false });
 		out.group.position.set(-at[0], 0, -at[1]);
 		K.root.add(out.group);
+		texs = out.tex || [];
+		S.tick = out.tick || null;
 		if (real) ctx.getWorld?.()?.fields?.hide(real, true);
 		return out.group;
 	};
-	S.unlay = () => { if (real) ctx.getWorld?.()?.fields?.hide(real, false); };
+	S.unlay = () => { for (const t of texs) t.dispose(); texs = []; if (real) ctx.getWorld?.()?.fields?.hide(real, false); };
 	return S;
 }
 

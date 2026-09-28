@@ -75,6 +75,38 @@
 		ground: (x, z) => Math.max(0, window.L99Island.world().island.heightAt(x, z)),
 		land: (x, z) => window.L99Island.world().island.heightAt(x, z),
 		LL: (lat, lon) => [(lon + 122.57) * 111320 * Math.cos(37.76 * Math.PI / 180), -(lat - 37.76) * 110996],
+		// the Boardwalk's own frame (bay/rides/kit.js): u along the promenade, v out to sea
+		BW: (u, v) => {
+			const [ox, oz] = CINE.LL(36.96354, -122.01674), a = 16 * Math.PI / 180;
+			return [ox + u * Math.cos(a) + v * Math.sin(a), oz - u * Math.sin(a) + v * Math.cos(a)];
+		},
+		// where the player stands and looks (after a Crysis go(): a cave, a castle, a site)
+		anchor() {
+			const P = window.L99Island.world().player.state, cp = Math.cos(P.pitch);
+			return { p: P.pos.toArray(), yaw: P.yaw, pitch: P.pitch, f: [-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp] };
+		},
+		// the highest ground within R of the centre (a coarse scan), as [x, y, z]
+		peak(R = 900, step = 20) {
+			let best = [0, -1e9, 0];
+			for (let x = -R; x <= R; x += step) for (let z = -R; z <= R; z += step) { const y = CINE.land(x, z); if (y > best[1]) best = [x, y, z]; }
+			return best;
+		},
+		// run the engine on without drawing (inside a shot's setup, to let a place build)
+		async settle(n = 60, pauseMs = 0) {
+			for (let i = 0; i < n; i++) {
+				window.__cine.noRender = true; window.__cine.step(1 / 60);
+				if (pauseMs && i % 10 === 9) await new Promise((r) => setTimeout(r, pauseMs));
+			}
+		},
+		// keys on an arc round c (radius r, height h over c) from angle a0 to a1, looking at c + [0, lookH, 0]
+		orbit(c, r, h, a0, a1, T, lookH = 0, n = 4, fov = 50) {
+			const keys = [];
+			for (let i = 0; i < n; i++) {
+				const k = i / (n - 1), a = a0 + (a1 - a0) * k;
+				keys.push({ t: T * k, p: [c[0] + Math.sin(a) * r, c[1] + h, c[2] + Math.cos(a) * r], l: [c[0], c[1] + lookH, c[2]], fov });
+			}
+			return keys;
+		},
 		sample(t) { return CINE.pose ? CINE.pose(t) : null; },
 		attach() {
 			const T = window.L99Island.T;

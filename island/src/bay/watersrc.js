@@ -134,6 +134,9 @@ export function bakedWater(bay, BU, riverLevel = () => null, riverSettled = null
 			for (let v = 0; v < k; v++, o += 8) {
 				px += dv.getInt16(o, true); pz += dv.getInt16(o + 2, true); pl += dv.getInt16(o + 4, true);
 				P.push([px * U + cx, pz * U + cz, pl / 20, dv.getUint16(o + 6, true) / 10]);
+				// (the San Lorenzo in its gorge above Santa Cruz is some 20 m across, not the 25
+				// its network gives it: as wide as sanlorenzo.js takes it on at the join)
+				if (sl && nm && /San Lorenzo/.test(H.names[nm - 1])) { const q = P[P.length - 1]; if (inSL(q[0], q[1])) q[3] = Math.min(q[3], 20); }
 			}
 			let cur = [];
 			const flush = (at) => {

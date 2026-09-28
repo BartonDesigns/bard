@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { mulberry32, makeNoise } from '../noise.js';
 import { glow } from '../world/textures.js';
+import { bombGeometry } from '../arenas.js';
 
 const RUMBLE = 8, ERUPT = 60, COOL = 120;
 const FLOWS = 12;
@@ -717,7 +718,8 @@ export function createVolcano(island, shared, scene, camera, profile, opts = {})
 
 	// ---------- the fountain: blobs of lava thrown up in arcs, bombs out onto the flanks ----------
 	const BN = isPhone ? 140 : 380;
-	const blobs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), BN);
+	// (clots of lava, lumpy and crusted: not balls)
+	const blobs = new THREE.InstancedMesh(bombGeometry(1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, vertexColors: true }), BN);
 	blobs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	blobs.setColorAt(0, new THREE.Color());
 	blobs.frustumCulled = false;
@@ -726,6 +728,9 @@ export function createVolcano(island, shared, scene, camera, profile, opts = {})
 	const bl = [];
 	for (let i = 0; i < BN; i++) bl.push({ p: new THREE.Vector3(), v: new THREE.Vector3(), s: 1, age: 1e9, bomb: false, spin: new THREE.Vector3() });
 	let blHead = 0;
+	// a share of the bombs can be asked for: aims.target() gives somewhere to throw one (or
+	// null), aims.landed() hears where it came down (sportsfields.js: the magma arena's balls)
+	const aims = { target: null, landed: null };
 	// the bright column itself, crossed sheets of spray standing over the vent
 	const jetMat = new THREE.ShaderMaterial({
 		uniforms: { uTime: shared.uTime, uK: { value: 0 } },
@@ -1010,6 +1015,14 @@ export function createVolcano(island, shared, scene, camera, profile, opts = {})
 				b.s = bomb ? 1.8 + Math.random() * 2.2 : 0.8 + Math.random() * 1.8;
 				b.age = 0; b.bomb = bomb;
 				b.spin.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+				const tg = bomb && aims.target ? aims.target() : null;
+				b.aim = !!tg;
+				if (tg) {
+					// thrown to land there: its time aloft by the distance, a little extra for the drag
+					const dx = tg.x - b.p.x, dz = tg.z - b.p.z, d = Math.hypot(dx, dz), T = Math.min(16, Math.max(5, d / 55)), k = 1 / (1 - 0.015 * T);
+					b.v.set(dx / T * k, ((H(tg.x, tg.z) - b.p.y) / T + 4.9 * T) * k, dz / T * k);
+					b.s = tg.size || b.s;
+				}
 			}
 			emit.spray += dt * f * (isPhone ? 260 : 900);
 			while (emit.spray >= 1) {
@@ -1030,6 +1043,7 @@ export function createVolcano(island, shared, scene, camera, profile, opts = {})
 			const g = Math.max(H(b.p.x, b.p.z), Math.hypot(b.p.x - cx, b.p.z - cz) < rimR * 1.1 ? lakeY : -1e9);
 			if (b.v.y < 0 && b.p.y < g + 0.5) {
 				b.age = 1e9;
+				if (b.aim) { b.aim = false; aims.landed?.(b.p.x, g, b.p.z); }
 				if (b.bomb && g > lakeY + 1) {
 					splash(b.p.x, b.p.z, b.s * 2.2, clock);
 					for (let j = 0; j < 10; j++) addP(0, b.p.x, g + 0.5, b.p.z, (Math.random() - 0.5) * 8, 3 + Math.random() * 7, (Math.random() - 0.5) * 8, 1 + Math.random(), -1e9);
@@ -1174,5 +1188,5 @@ export function createVolcano(island, shared, scene, camera, profile, opts = {})
 		glowTex.dispose();
 		smokeB.mesh.material.uniforms.uMap.value.dispose();
 	}
-	return { update, state, erupt, floor, push, dispose, group, skin, vent, rimR, coneR, lakeY, spots: { spouts, holes }, uniforms: U };
+	return { update, state, erupt, floor, push, dispose, group, skin, vent, rimR, coneR, lakeY, spots: { spouts, holes }, uniforms: U, aims };
 }

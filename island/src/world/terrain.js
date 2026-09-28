@@ -40,7 +40,10 @@ export const NOISE_GLSL = /* glsl */`
 // a fine-grain hash that stays random at island-scale coordinates: wrap the cell index
 // first so float precision never runs out, then scramble
 float gh(vec2 c){ c = mod(c, 1024.0); vec3 p3 = fract(vec3(c.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
-float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+// (in integers: the old fract() hash ran out of float bits past a few thousand cells, and
+// out over the Bay Area its noise came out as a regular grid, stripes on every hill)
+float h21(vec2 p){ vec2 i = floor(p); uvec2 x = uvec2(ivec2(i)) ^ (uvec2((p - i) * 65536.0) * 2654435761u);
+	uvec2 q = 1103515245u * ((x >> 1u) ^ x.yx); uint n = 1103515245u * (q.x ^ (q.y >> 3u)); return float(n >> 8u) * (1.0 / 16777216.0); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
 float fbm3(vec2 p){ return vn(p) * 0.55 + vn(p * 2.03 + 7.1) * 0.3 + vn(p * 4.1 - 3.7) * 0.15; }`;
@@ -110,7 +113,7 @@ float plN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f)
 float plVein(vec2 p) {
 	if (dot(uPlGlow, uPlGlow) < 1e-4) return 0.0;
 	// thin wandering cracks, only in some patches of ground, brighter where they meet
-	float zone = smoothstep(0.5, 0.72, plN(p * 0.007 + 3.1));
+	float zone = smoothstep(0.6, 0.78, plN(p * 0.007 + 3.1));
 	vec2 q = p * 0.05 + vec2(plN(p * 0.018), plN(p * 0.018 + 5.2)) * 4.0;
 	float line = 1.0 - smoothstep(0.0, 0.028, abs(plN(q) - 0.5));
 	float fine = 1.0 - smoothstep(0.0, 0.02, abs(plN(q * 2.7 + 9.0) - 0.5));
@@ -157,13 +160,14 @@ export function planetUniforms(shared) {
 export function createTerrain(island, shared) {
 	const geo = radialGrid(320, 2200, 2.3);
 	const mat = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
+	const detail = groundDetail();
 	const uniforms = {
 		uHeight: { value: shared.heightTex }, uMasks: { value: shared.maskTex },
 		uHalf: { value: island.half }, uCell: { value: island.cell }, uN: { value: island.N },
 		uCenter: { value: new THREE.Vector2() }, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uWave: shared.uWave,
 		uPrints: shared.uPrints, uPrintsO: shared.uPrintsO, uSunDir2: shared.uSunDir,
 		uBay: { value: island.village.bay ? new THREE.Vector3(island.village.bay.x, island.village.bay.z, island.village.bay.r) : new THREE.Vector3() },
-		uDetail: { value: groundDetail() }, uOcc: shared.uOcc, uOccO: shared.uOccO,
+		uDetail: { value: detail }, uDetailM: { value: detail.userData.mean }, uOcc: shared.uOcc, uOccO: shared.uOccO,
 		...planetUniforms(shared),
 	};
 	mat.onBeforeCompile = (sh) => {
@@ -179,13 +183,18 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				holeCut(vW.xz);
 				plBegin(vW.xz);
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
 				vec4 mk = texture2D(uMasks, muv);
-				float n1 = fbm3(vW.xz * 0.06), n2 = vn(vW.xz * 0.9), n3 = vn(vW.xz * 7.0);
+				// (the fine noises settle to their mean where they are finer than a pixel: from the
+				// air they would only alias into grain and moire)
+				float px = length(fwidth(vW.xz));
+				float n1 = fbm3(vW.xz * 0.06), n2 = mix(0.5, vn(vW.xz * 0.9), 1.0 - smoothstep(0.5, 1.2, px)), n3 = mix(0.5, vn(vW.xz * 7.0), 1.0 - smoothstep(0.06, 0.16, px));
+				// and the broadest wash, hundreds of metres across, so no two slopes match
+				float macro = vn(vW.xz * 0.0023 + 5.3) * 0.6 + vn(vW.xz * 0.0061 - 2.1) * 0.4;
 				// the slope from the smooth, interpolated normal (not each triangle's own facet)
 				vec3 wn = normalize(vWN);
 				float slope = 1.0 - clamp(wn.y, 0.0, 1.0);
@@ -208,6 +217,7 @@ export function createTerrain(island, shared) {
 				vec3 grass = mix(g1, g2, smoothstep(0.35, 0.7, n1));
 				grass = mix(grass, g3, smoothstep(0.62, 0.8, fbm3(vW.xz * 0.013 + 3.0)) * 0.7);
 				grass *= 0.82 + 0.3 * n3;
+				grass *= mix(vec3(0.86, 0.94, 1.02), vec3(1.1, 1.03, 0.88), macro);
 				// forest floor: shaded, leaf-littered, a deep moss-brown under the canopy
 				grass = mix(grass, vec3(0.20, 0.24, 0.10) * (0.85 + 0.3 * n2), smoothstep(0.2, 0.8, mk.a) * 0.8);
 				vec3 rock = mix(vec3(0.36, 0.34, 0.31), vec3(0.52, 0.49, 0.44), n2) * (0.85 + 0.25 * n3);
@@ -221,14 +231,23 @@ export function createTerrain(island, shared) {
 				float camD = length(cameraPosition - vW);
 				float near = 1.0 - smoothstep(18.0, 70.0, camD);
 				vec4 d1 = texture2D(uDetail, vW.xz * 0.42);
-				vec4 d2 = texture2D(uDetail, vW.xz * 0.11 + 0.37);
+				// the wider relief read twice, the second turned and scaled by an irrational ratio
+				// and blended in by slow noise, so its 9 m tile never lines up into a grid; far off
+				// it settles to its own average
+				float dk = smoothstep(0.3, 0.7, vn(vW.xz * 0.019 + 7.7));
+				vec4 d2 = mix(texture2D(uDetail, vW.xz * 0.11 + 0.37), texture2D(uDetail, mat2(0.809, -0.588, 0.588, 0.809) * vW.xz * 0.0865 + 0.61), dk);
+				d2 = mix(uDetailM + (d2 - uDetailM) * 1.25, uDetailM, smoothstep(120.0, 420.0, camD));
 				vec4 dd = mix(d2, d1 * 0.65 + d2 * 0.35, near);
 				// sand ripples: wide and soft on the dry beach, tightening as the sand goes
-				// under water (the waves pack them closer), with a gentle wander in spacing
+				// under water (the waves pack them closer), with a gentle wander in spacing;
+				// only on the sand, and only near enough to see (far off they are stripes)
 				float under = smoothstep(0.2, -2.5, h);
-				vec2 rq = vW.xz + vec2(vn(vW.xz * 0.05) * 3.0, 0.0);
-				float rA = texture2D(uDetail, rq * 0.19).r, rB = texture2D(uDetail, rq * 0.42 + 0.21).r;
-				dd.r = mix(rA, rB, under) * (0.8 + 0.4 * vn(vW.xz * 0.08 + 13.0));
+				float ripK = (1.0 - smoothstep(0.6, 1.0, grassW)) * (1.0 - smoothstep(60.0, 180.0, camD));
+				if (ripK > 0.0) {
+					vec2 rq = vW.xz + vec2(vn(vW.xz * 0.05) * 3.0, 0.0);
+					float rA = texture2D(uDetail, rq * 0.19).r, rB = texture2D(uDetail, rq * 0.42 + 0.21).r;
+					dd.r = mix(dd.r, mix(rA, rB, under) * (0.8 + 0.4 * vn(vW.xz * 0.08 + 13.0)), ripK);
+				}
 				// sand and rock take the relief as grain; wet sand is smoothed by the wash
 				sand *= 0.9 + 0.18 * dd.r * (1.0 - wet * 0.7);
 				// grains: a fine speckle of darker mineral and pale shell fragments, only up close
@@ -296,6 +315,8 @@ export function createTerrain(island, shared) {
 					vec2 wq = vW.xz + vec2(vn(vW.xz * 0.05) * 9.0, vn(vW.xz * 0.05 + 4.0) * 9.0);
 					float rip = sin(dot(wq, vec2(0.83, 0.56)) * 1.6 + vn(vW.xz * 0.21) * 3.0) * 0.5 + 0.5;
 					rip = rip * rip * (3.0 - 2.0 * rip);
+					// (seen from high up the ripples would line up into stripes: they settle out)
+					rip = mix(rip, 0.5, smoothstep(0.35, 0.9, px));
 					vec3 ice = vec3(0.70, 0.82, 0.95), snowHi = vec3(0.96, 0.98, 1.0);
 					vec3 snow = mix(ice, snowHi, 0.22 + 0.62 * rip + 0.16 * n2) * (0.95 + 0.05 * dd.r);
 					snow = mix(snow, vec3(0.62, 0.76, 0.92), smoothstep(0.6, 0.9, vn(vW.xz * 0.018 + 7.0)) * 0.35);   // bare blue ice where the wind scoured it
@@ -304,7 +325,8 @@ export function createTerrain(island, shared) {
 					gDetailH = mix(gDetailH, rip * 0.11 * (1.0 - smoothstep(30.0, 90.0, camD)), gSnowW);
 				}
 				// glow in the ground: lava in the cracks, bile in the seeps, ley light in the veins
-				gPlGlow = plVein(vW.xz) * step(0.6, h);
+				// (on the slopes only: never across the flats, the fields or the paths)
+				gPlGlow = plVein(vW.xz) * step(0.6, h) * smoothstep(0.06, 0.16, slope) * (1.0 - pathW);
 				// the crack itself is dark rock around the glow, never a pale stripe by day
 				col = mix(col, vec3(0.07, 0.045, 0.035), min(1.0, gPlGlow) * (1.0 - gBioA * 0.85));
 				col *= 1.0 - occ * 0.36;

@@ -17,6 +17,7 @@ import { BERM_U, BERM_GLSL } from './berms.js';
 import { REAL_U, REAL_GLSL } from './realcity.js';
 import { CARVE_U, CARVE_GLSL, carveDelta } from './carve.js';
 import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
+import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from './coastside.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
@@ -198,6 +199,17 @@ vec3 parkWood(vec2 w){
 	return col * (1.0 - 0.45 * gap) * (0.85 + 0.3 * fbm3(w * 0.02 + 1.7));
 }
 `;
+// A tiling photo read without its repeat showing: a second read, turned and scaled by an
+// irrational ratio, is blended in and out by slow noise, with the blend's contrast restored
+// about the photo's own mean m.
+const TILE2_GLSL = /* glsl */`
+float tile2(sampler2D t, vec2 uv, float m){
+	float k = smoothstep(0.25, 0.75, vn(uv * 0.173 + 2.9));
+	vec2 uv2 = mat2(0.809, -0.588, 0.588, 0.809) * uv * 0.786 + vec2(0.37, 0.61);
+	float v = mix(texture2D(t, uv).r, texture2D(t, uv2).r, k);
+	return m + (v - m) / sqrt(k * k + (1.0 - k) * (1.0 - k));
+}
+`;
 const hashStr = (s) => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
 
 // the CPU twin of the GLSL above
@@ -323,7 +335,8 @@ export function createBayArea(shared, scene, island, BU) {
 		const d = Math.min(fx, L.W - 1 - fx, fz, L.H - 1 - fz) * L.step;
 		return smooth(0, 1, Math.min(1, Math.max(0, d / m)));
 	}
-	function heightAt(x, z) {
+	// the ground as surveyed; heightAt adds the cliffs steepened near you (coastside.js)
+	function groundAt(x, z) {
 		if (!levels[0]) return -60;
 		const L0 = levels[0], e0 = levelH(L0, x, z);
 		const qx = (x - L0.x0) / L0.step, qz = (z - L0.zN) / L0.step;
@@ -334,6 +347,7 @@ export function createBayArea(shared, scene, island, BU) {
 		for (let i = 3; i < levels.length; i++) if (levels[i]) { const k = levelIn(levels[i], x, z, 400); if (k > 0) h += (levelH(levels[i], x, z) - h) * k; }
 		return h + carveDelta(x, z) + waterDelta(x, z);
 	}
+	const heightAt = (x, z) => groundAt(x, z) + cliffDelta(x, z);
 
 	// ---------- loading ----------
 	async function loadLevel(i) {
@@ -377,8 +391,8 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
-			sh.vertexShader = 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + '\nfloat cvK = 1.0, wvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
+			sh.vertexShader = 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + '\nfloat cvK = 1.0, wvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + cliffDelta(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
@@ -406,14 +420,25 @@ export function createBayArea(shared, scene, island, BU) {
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
 				.replace('#include <color_fragment>', `#include <color_fragment>
 				{
 					vec3 n = normalize(vBN); float slope = 1.0 - n.y, h = vBH;
-					float n1 = fbm3(vBW * 0.0025), n2 = fbm3(vBW * 0.021), n3 = vn(vBW * 0.23);
+					float n1 = fbm3(vBW * 0.0025), n2 = fbm3(vBW * 0.021);
+					// (the 4 m speckle settles to its mean where it is finer than a pixel, so far
+					// hills do not shimmer)
+					float n3 = mix(0.5, vn(vBW * 0.23), 1.0 - smoothstep(0.35, 0.9, length(fwidth(vBW * 0.23))));
+					// the broadest wash of all, kilometres across: some hillsides a little greener or
+					// browner, lighter or darker, so no two valleys wear the same coat
+					float macro = vn(vBW * 0.00041 + 3.7) * 0.6 + vn(vBW * 0.00113 - 8.2) * 0.4;
+					// the San Mateo coast (coastside.js): how far in from the sea; the terraces by it are
+					// open grass and fields, green in the fog, not woods or chaparral
+					float csD = csSea(vBW);
+					float csOpen = (1.0 - smoothstep(900.0, 2200.0, csD)) * (1.0 - smoothstep(60.0, 150.0, h));
+					float csGreen = (1.0 - smoothstep(1500.0, 3400.0, csD)) * (1.0 - smoothstep(160.0, 330.0, h)) * 0.85;
 					// the fog belt: the coast ranges and the west-facing hills stay green and wooded
 					float fogbelt = 1.0 - smoothstep(22000.0, 58000.0, vBW.x);
 					float north = clamp(-n.z * 2.2, 0.0, 1.0) * smoothstep(0.04, 0.25, slope);
@@ -426,9 +451,11 @@ export function createBayArea(shared, scene, island, BU) {
 					gold = mix(gold, vec3(0.26, 0.22, 0.09), smoothstep(0.52, 0.72, fbm3(vBW * 0.0045 + 3.1)) * 0.55);
 					gold = mix(gold, gold * vec3(1.12, 1.05, 0.9), smoothstep(0.55, 0.75, fbm3(vBW * 0.013 + 9.7)) * 0.6);
 					gold *= 0.9 + 0.2 * n3;
-					vec3 spring = mix(vec3(0.2, 0.36, 0.07), vec3(0.33, 0.47, 0.1), n2);
+					gold *= mix(vec3(0.9, 0.93, 1.02), vec3(1.08, 1.02, 0.9), macro);
+					vec3 spring = mix(vec3(0.2, 0.36, 0.07), vec3(0.33, 0.47, 0.1), n2 * 0.7 + macro * 0.3) * (0.9 + 0.2 * n3);
 					float season = clamp(uSeason - uSeasonLag * fogbelt, 0.0, 1.0);
 					gold = mix(spring, gold, clamp(season + (n1 - 0.5) * 0.3 + slope * 0.4 * season, 0.0, 1.0));
+					if (csGreen > 0.0) gold = mix(gold, csGrass(vBW, n2, n3, macro), csGreen);
 					vec3 c = gold;
 					// the small watered city parks stay green all summer: lawns, and dark groves of
 					// cypress and eucalyptus (the big ones are woods: below)
@@ -440,11 +467,11 @@ export function createBayArea(shared, scene, island, BU) {
 					// spring wildflowers in drifts across the open grass: California poppies (orange,
 					// on the sunny side), lupine (blue-violet, in swales), goldfields (yellow sheets)
 					c = wildflowers(c, vBW, slope);
-					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4);
+					float chap = south * smoothstep(0.2, 0.5, n1 + slope * 0.6) * (1.0 - fogbelt * 0.4) * (1.0 - csOpen);
 					c = mix(c, mix(vec3(0.085, 0.1, 0.045), vec3(0.14, 0.15, 0.075), n3), chap * 0.85);          // chaparral: dark olive scrub
-					float oak = smoothstep(0.42, 0.68, n1 + north * 0.4 + fogbelt * 0.12 - south * 0.15 + (n2 - 0.5) * 0.3);
+					float oak = smoothstep(0.42, 0.68, n1 + north * 0.4 + fogbelt * 0.12 - south * 0.15 + (n2 - 0.5) * 0.3) * (1.0 - csOpen);
 					c = mix(c, mix(vec3(0.12, 0.16, 0.07), vec3(0.19, 0.23, 0.11), n3), oak * 0.88);
-					float forest = smoothstep(0.5, 0.74, n1 * 0.5 + north * 0.45 + fogbelt * 0.55) * smoothstep(12.0, 120.0, h);
+					float forest = smoothstep(0.5, 0.74, n1 * 0.5 + north * 0.45 + fogbelt * 0.55) * smoothstep(12.0, 120.0, h) * (1.0 - csOpen);
 					c = mix(c, mix(vec3(0.05, 0.1, 0.05), vec3(0.08, 0.14, 0.07), n3), forest * 0.92);
 					// rock where it is steep, in its own region's colour (the naturalist's geology)
 					vec3 rockC = mix(vec3(0.27, 0.24, 0.19), vec3(0.4, 0.36, 0.29), n2);
@@ -529,6 +556,8 @@ export function createBayArea(shared, scene, island, BU) {
 					float beach = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
 					c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h));
+					// the coast's cliffs, coves, lip, links and farms
+					if (csD < 5000.0) c = coastSide(c, vBW, h, slope, csD, smoothstep(0.03, 0.08, T.r), dist, n2, n3);
 					// the river's banks (carve.js): wet gravel and sand at the water, the green of the
 					// willows' ground and the levees' grass, the paved path along the top
 					vec4 cv = carveAt(vBW);
@@ -742,10 +771,15 @@ export function createBayArea(shared, scene, island, BU) {
 						// own mean, 0.9, so it adds grain without lightening the ground near you)
 						float grain = length(fwidth(vBW * 0.5));
 						float gk = (1.0 - smoothstep(50.0, 120.0, dist)) * (1.0 - smoothstep(0.12, 0.35, grain)) * (1.0 - flatK);
-						float dL = texture2D(uGroundD, vBW * 0.35).r;
-						if (uGrassK > 0.5) dL = mix(texture2D(uSprG, vBW * 0.5).r, texture2D(uDryG, vBW * 0.5).r, uSeason);
+						// (each photo read twice, the second turned and scaled off the first, so its
+						// tile never lines up into a grid; only the season's own photo is read)
+						float dL = 0.0;
+						if (uGrassK > 0.5) {
+							if (uSeason < 0.99) dL += tile2(uSprG, vBW * 0.5, 0.9) * (1.0 - uSeason);
+							if (uSeason > 0.01) dL += tile2(uDryG, vBW * 0.5, 0.9) * uSeason;
+						} else dL = tile2(uGroundD, vBW * 0.35, 0.9);
 						// (under the trees the grain is the soil's, not the grass's)
-						dL = mix(dL, texture2D(uGroundD, vBW * 0.35).r, duffK);
+						if (duffK > 0.0) dL = mix(dL, texture2D(uGroundD, vBW * 0.35).r, duffK);
 						c *= mix(1.0, dL / 0.9, gk * 0.55);
 					}
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);
@@ -756,7 +790,12 @@ export function createBayArea(shared, scene, island, BU) {
 					float dist2 = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
 					// (past 6 km it has faded out entirely: its noise is not computed there)
 					float bh = 0.0;
-					if (dist2 < 6000.0) bh = (fbm3(vBW * 0.045) * 2.2 + fbm3(vBW * 0.22) * 0.5 + vn(vBW * 1.3) * 0.08) * (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
+					// (each scale fades as it nears a pixel: finer, it would only alias into ridges)
+					if (dist2 < 6000.0) {
+						float px = length(fwidth(vBW));
+						bh = fbm3(vBW * 0.045) * 2.2 * (1.0 - smoothstep(4.0, 9.0, px)) + fbm3(vBW * 0.22) * 0.5 * (1.0 - smoothstep(0.9, 2.2, px)) + vn(vBW * 1.3) * 0.08 * (1.0 - smoothstep(0.15, 0.4, px));
+						bh *= (1.0 - smoothstep(1500.0, 6000.0, dist2)) * step(0.0, vBH);
+					}
 					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
 					float fDet = dot(vSx, R1);
@@ -777,6 +816,9 @@ export function createBayArea(shared, scene, island, BU) {
 	for (const m of [near, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
 	near.visible = far.visible = false;
 
+	// the San Mateo coast's cliffs, farms, trail and fence
+	const coast = createCoastside({ groundAt, urbanAt, group });
+	ready.then(() => coast.start());
 	function update(cam, night) {
 		const on = BU.uBayOn.value > 0.5;
 		near.visible = far.visible = on;
@@ -786,6 +828,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const fx = Math.round(cam.position.x / 512) * 512, fz = Math.round(cam.position.z / 512) * 512;
 		near.position.set(nx, 0, nz); nearMat.userData.U2.uC.value.set(nx, nz);
 		far.position.set(fx, 0, fz); farMat.userData.U2.uC.value.set(fx, fz); farMat.userData.U2.uHoleC.value.set(nx, nz);
+		coast.update(cam);
 	}
-	return { group, update, heightAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
+	return { group, update, heightAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
 }

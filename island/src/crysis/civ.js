@@ -8,6 +8,7 @@
 
 import { generateTownSteps, hashStr } from './civgen.js';
 import { STYLE } from '../bay/styles.js';
+import { industrialEdge } from './civedge.js';
 
 const BUDGET = 6;           // ms of growing a frame
 const NEAR = 2500;          // start growing this far outside a town's reach
@@ -27,6 +28,9 @@ export function createCivilization({ real, bay, water = () => null }) {
 	}
 	function finish(J, region) {
 		if (!cache.find((c) => c.region === region)) { cache.push({ key: key(J.town), region }); if (cache.length > 2) cache.shift(); }
+		// its warehouses out past the last houses (civedge.js; once, so a cached town keeps its own)
+		const W = water();
+		industrialEdge(region, bay.heightAt, W ? (x, z) => W.near(x, z) : null);
 		active = { town: J.town, handle: real.addRegion(region), region };
 	}
 

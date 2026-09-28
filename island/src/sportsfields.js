@@ -15,19 +15,25 @@
 // A field is drawn in its own frame: y up, the play running along -z (from the plate out to
 // centre field; from one goal to the other), laid over the ground as it lies; the games
 // (games/baseball.js, soccer.js, football.js) build the same field round their stage.
+// Worlds that aren't green get an arena of their own instead (arenas.js): the island's plan
+// is handed the world's profile to know which.
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PARKS } from './nature/parks.js';
 import { toWorld } from './bay/geo.js';
+import { THEMES, arenaSpec, arenaSpot, arenaTheme, arenaDeck, buildArena, hotBallLayer } from './arenas.js';
 
 const YD = 0.9144;
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
-export const LABEL = { baseball: 'Baseball diamond', soccer: 'Soccer pitch', football: 'Football field' };
+export const LABEL = { baseball: 'Baseball diamond', soccer: 'Soccer pitch', football: 'Football field', arena: 'Arena' };
+const label = (f) => (f.kind === 'arena' ? THEMES[f.theme].label : LABEL[f.kind]);
 
 // ---------- the shapes ----------
 // a field's dimensions, and the rectangle it takes (its frame: x0, x1, z0, z1)
 export function fieldSpec(kind, size = 'full') {
+	// (an arena's size is its theme)
+	if (kind === 'arena') return arenaSpec(size);
 	if (kind === 'baseball') {
 		const d = size === 'full' ? { base: 27.43, mound: 18.44, fence: 99, back: 15 } : { base: 18.29, mound: 14.02, fence: 61, back: 8 };
 		return { kind, size, d, rect: [-(d.fence * 0.72 + 9), d.fence * 0.72 + 9, -(d.fence + 4), d.back + 3] };
@@ -56,6 +62,7 @@ function inside(f, x, z, pad = 0) {
 }
 // where each game is played from on a field: [x, z] in its frame, facing -z
 export function playSpot(f) {
+	if (f.kind === 'arena') return arenaSpot(f);
 	if (f.kind === 'baseball') return [0, 0];
 	if (f.kind === 'soccer') return [0, -f.d.L / 2 + 11];
 	return [0, -f.d.L / 2 + 10 * YD + 20 * YD];
@@ -121,8 +128,9 @@ function fits(f, ok, H, range, step = 6) {
 // the village. One of each sport where they fit, the ground under each made level (the
 // heights are the island's own, before its ground and plants are made from them). Returns the
 // fields and the circles nothing is to grow in.
-export function planIslandFields(island) {
+export function planIslandFields(island, profile = null) {
 	REG.list.length = 0; REG.grid.clear();
+	const theme = arenaTheme(profile);
 	const V = island.village || { x: 0, z: 0 }, H = island.heightAt;
 	const ok = (x, z) => {
 		const h = H(x, z);
@@ -131,7 +139,7 @@ export function planIslandFields(island) {
 		return Math.hypot(x - V.x, z - V.z) > 150;
 	};
 	const out = [], R = island.R * 0.95;
-	for (const [kind, size] of [['soccer', 'full'], ['baseball', 'youth'], ['football', 'full'], ['soccer', 'youth']]) {
+	for (const [kind, size] of theme ? [['arena', theme]] : [['soccer', 'full'], ['baseball', 'youth'], ['football', 'full'], ['soccer', 'youth']]) {
 		if (out.some((f) => f.kind === kind)) continue;
 		const cand = [];
 		for (let z = -R; z <= R; z += 34) for (let x = -R; x <= R; x += 34) {
@@ -147,7 +155,7 @@ export function planIslandFields(island) {
 		cand.sort((a, b) => a.score - b.score);
 		const best = cand.slice(0, 24).find((c) => fits(c.f, ok, H, 7, 3) >= 0);
 		if (!best) continue;
-		const f = finish(best.f, `${LABEL[kind]} above the village`, 'island');
+		const f = finish(best.f, `${label(best.f)} above the village`, 'island');
 		f.y = level(island, f);
 		out.push(f); register(f);
 	}
@@ -238,7 +246,7 @@ export function createSportsFields({ scene, getWorld, isPhone = false, plan = nu
 	const built = new Map(), hidden = new Set(), done = new Set();
 	const M = fieldMaterials();
 	// (bump: the trees near you to be planted again round new fields, at most every couple of seconds)
-	let cool = 0, known = null, realV = -1, bump = false, bumpT = 0;
+	let cool = 0, known = null, realV = -1, bump = false, bumpT = 0, aimed = false;
 	const unmapped = new Set(), placed = new Set();
 
 	const H = (x, z) => getWorld()?.island.heightAt(x, z) ?? 0;
@@ -389,9 +397,12 @@ export function createSportsFields({ scene, getWorld, isPhone = false, plan = nu
 		g.add(out.group);
 		g.visible = !hidden.has(f.id);
 		root.add(g);
+		// (a magma arena: the fresh balls the volcano has dropped on it)
+		const hot = f.theme === 'magma' ? hotBallLayer(f) : null;
+		if (hot) { g.add(hot.group); out.tex.push(...hot.tex); }
 		// the posts and fences, in the world, for walking into
 		const walls = out.walls.map(([ax, az, bx, bz, r, top]) => { const a = fromFrame(f, ax, az), b = fromFrame(f, bx, bz); return [a[0], a[1], b[0], b[1], r, top]; });
-		built.set(f, { g, walls, tex: out.tex });
+		built.set(f, { g, walls, tex: out.tex, tick: out.tick, hot, H: (lx, lz) => { const [x, z] = fromFrame(f, lx, lz); return W.island.heightAt(x, z); } });
 	}
 	function drop(f) {
 		const B = built.get(f);
@@ -426,6 +437,13 @@ export function createSportsFields({ scene, getWorld, isPhone = false, plan = nu
 			}
 		}
 		if (bump && performance.now() > bumpT) { bump = false; bumpT = performance.now() + 2000; REG.v++; }
+		// the arenas: what moves on them, and the volcano's bombs asked to land on a magma one
+		for (const B of built.values()) {
+			if (!B.g.visible) continue;
+			B.tick?.(dt, camera);
+			B.hot?.update(performance.now() / 1000, B.H);
+		}
+		if (W.volcano?.aims && !aimed) aimed = aimBombs(W.volcano.aims, all);
 		cool -= dt;
 		const near = isPhone ? 750 : 1100;
 		for (const f of all) {
@@ -456,7 +474,46 @@ export function createSportsFields({ scene, getWorld, isPhone = false, plan = nu
 		const B = built.get(f);
 		if (B) B.g.visible = !on;
 	}
-	return { group: root, update, near, push, hide, list: () => all.slice(), built: () => built.size };
+	// a raised arena's floor (the rune court, the pool's deck, the sky platform), walked on
+	function floor(x, z, y) {
+		const g = REG.grid.get(Math.floor(x / GC) + ',' + Math.floor(z / GC));
+		if (!g) return -Infinity;
+		for (const f of g) {
+			if (f.kind !== 'arena' || !THEMES[f.theme].lift) continue;
+			const [lx, lz] = toFrame(f, x, z), d = arenaDeck(f, lx, lz);
+			if (d === null) continue;
+			const top = H(x, z) + d;
+			if (y > top - 1.4) return top;
+		}
+		return -Infinity;
+	}
+	return { group: root, update, near, push, hide, floor, list: () => all.slice(), built: () => built.size };
+}
+
+// The volcano's bombs, some of them, sent to land on a magma arena (planet/volcano.js asks
+// aims.target() for somewhere to throw one, and tells aims.landed() where it came down):
+// one every few seconds at most, somewhere on the court; one that lands there lies as a
+// fresh magma ball (arenas.js draws them; the game counts them).
+function aimBombs(aims, all) {
+	const f = all.find((q) => q.kind === 'arena' && q.theme === 'magma');
+	if (!f) return true;
+	let last = 0;
+	f.hot ||= [];
+	aims.target = () => {
+		const now = performance.now() / 1000;
+		if (now - last < 3.5 || Math.random() > 0.2) return null;
+		last = now;
+		const { L, W } = f.d, [x, z] = fromFrame(f, (Math.random() - 0.5) * (W - 6), (Math.random() - 0.5) * (L - 8));
+		return { x, z, size: 0.45 };
+	};
+	aims.landed = (x, y, z) => {
+		const [lx, lz] = toFrame(f, x, z), { L, W } = f.d;
+		if (Math.abs(lx) > W / 2 + 8 || Math.abs(lz) > L / 2 + 8) return;
+		// (one that came down in the moat rolls up onto the court)
+		f.hot.push({ lx: Math.max(-W / 2 + 1, Math.min(W / 2 - 1, lx)), lz: Math.max(-L / 2 + 1, Math.min(L / 2 - 1, lz)), born: performance.now() / 1000 });
+		if (f.hot.length > 8) f.hot.shift();
+	};
+	return true;
 }
 
 // ---------- drawing a field ----------
@@ -621,6 +678,7 @@ function paint(f, res) {
 // group, the walls to walk into (segments in the frame: ax, az, bx, bz, radius, top) and the
 // textures it made.
 export function buildField(f, H, { M = fieldMaterials(), res = 12, shadows = true } = {}) {
+	if (f.kind === 'arena') return buildArena(f, H, { res, shadows });
 	const group = new THREE.Group(), parts = new Map(), walls = [];
 	const put = (m, geo) => { if (!parts.has(m)) parts.set(m, []); parts.get(m).push(geo.index ? geo.toNonIndexed() : geo); };
 	const box = (m, w, h, d, x, y, z, ry = 0) => put(m, new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0).rotateY(ry).translate(x, y, z));

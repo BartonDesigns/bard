@@ -63,6 +63,7 @@ import { createNatureSound } from './bay/naturesound.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
+import { createEdgelands } from './bay/edgelands.js';
 import { createDrive } from './drive.js';
 import { createAutoMusic } from './music/automusic.js';
 
@@ -461,8 +462,8 @@ export function createIslandWorld() {
 		shared.planet = profile;
 		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768, profile });
 		island.profileHaze = profile.air?.haze || 1;
-		// the ball fields above the village: the ground levelled under them before anything is made of it
-		const fieldPlan = planIslandFields(island);
+		// the ball fields above the village (or the world's own arena): the ground levelled under them before anything is made of it
+		const fieldPlan = planIslandFields(island, earth ? null : profile);
 		// a realm of castles and towns, where this world keeps one: sited now, the land shaped round it
 		const realmPlan = earth ? null : planRealm(island, profile, { fields: fieldPlan.clear, isPhone });
 		// the planet's second biome and its cold side, baked where the ground, plants and water can read it
@@ -542,6 +543,7 @@ export function createIslandWorld() {
 		// the ball fields: the island's, and the Bay's as you come near them (their fences are walked into)
 		world.fields = createSportsFields({ scene, getWorld: () => world, isPhone, plan: fieldPlan });
 		{ const own = island.extraPush, fp = world.fields.push; island.extraPush = own ? (p, footY) => { own(p, footY); fp(p, footY); } : fp; }
+		{ const of = island.extraFloor, ff = world.fields.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), ff(x, z, y)) : ff; }
 		// the alien works: their platforms, causeways and halls are walked on, their walls walked into
 		if (alienPlan) {
 			const al = world.alien = createAlien(island, shared, scene, camera, profile, alienPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
@@ -610,6 +612,8 @@ export function createIslandWorld() {
 			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			world.natureSound = createNatureSound(bayArea, (x, z) => bayArea.heightAt(x, z));
+			// the in-between places: dirt tracks, the industrial fringe, town's ragged edge, the odd camp
+			world.edge = createEdgelands(scene, { bay: bayArea, real: world.real, city: world.city, world: () => world, shared, isPhone });
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
 			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
@@ -642,6 +646,7 @@ export function createIslandWorld() {
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
 				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y));
 				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
+				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -930,6 +935,7 @@ export function createIslandWorld() {
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);
 		W.forestFloor?.update(camera);
+		W.edge?.update(dt, time, camera, sk.night);
 		W.houses?.update(camera, dt, sk.night);
 		if (W.commercial) {
 			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);

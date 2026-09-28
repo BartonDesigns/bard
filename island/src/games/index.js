@@ -26,5 +26,8 @@ import { GAME as batting } from './batting.js';
 import { GAME as baseball } from './baseball.js';
 import { GAME as soccer } from './soccer.js';
 import { GAME as football } from './football.js';
+import { GAME as joust } from './joust.js';
+import { MAGMABALL, TOXICDODGE, ICEPUCK, SANDBALL, ORBBALL, WATERPOLO, MOONBALL, ARCHERY } from './arenaball.js';
 
-export const GAMES = [bowling, skeeball, pinball, airhockey, hoops, minigolf, bocce, discgolf, stones, kite, surf, skate, cablebell, sealions, claw, drums, darts, cornhole, paperplane, sandcastle, tidepool, stargaze, morse, batting, baseball, soccer, football];
+export const GAMES = [bowling, skeeball, pinball, airhockey, hoops, minigolf, bocce, discgolf, stones, kite, surf, skate, cablebell, sealions, claw, drums, darts, cornhole, paperplane, sandcastle, tidepool, stargaze, morse, batting, baseball, soccer, football,
+	MAGMABALL, TOXICDODGE, ICEPUCK, SANDBALL, ORBBALL, WATERPOLO, MOONBALL, ARCHERY, joust];

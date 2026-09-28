@@ -61,6 +61,24 @@ export const ICONS = {
 	soccer: '<circle cx="12" cy="12" r="9"/><path d="M12 8l3.8 2.8-1.4 4.4H9.6l-1.4-4.4z"/><path d="M12 8V3.2M15.8 10.8l4.3-1.4M14.4 15.2l2.8 3.8M9.6 15.2l-2.8 3.8M8.2 10.8 3.9 9.4"/>',
 	// an American football and its laces
 	football: '<path d="M4 20C4 11 11 4 20 4c0 9-7 16-16 16z"/><path d="M9 15l6-6"/><path d="M10 12l2 2M11.8 10.2l2 2M8.2 13.8l2 2"/><path d="M4.5 16.5l3 3M16.5 4.5l3 3"/>',
+	// a ball of magma: crust plates, glowing cracks, the heat rising off it
+	magmaball: '<circle cx="11" cy="14" r="7"/><path d="M6.5 11.5l3 1.5 1.5-3M11 13l1 3.5 3.5 1M8 17.5l3-1.5"/><path d="M17 3c-1 1.2 1 2.2 0 3.5M20.5 5c-1 1.2 1 2.2 0 3.5"/>',
+	// a flask of acid, a drop off it, and the ball
+	toxicdodge: '<path d="M7 3h5M8.5 3v5L4 16.5A2.3 2.3 0 0 0 6 20h7a2.3 2.3 0 0 0 2-3.5L10.5 8V3"/><path d="M5.5 14h8"/><circle cx="18.5" cy="7" r="3"/><path d="M18.5 13.5c-1 1.3-1.5 2.2-1.5 3a1.5 1.5 0 0 0 3 0c0-.8-.5-1.7-1.5-3z"/>',
+	// a stick and a puck on the ice
+	icepuck: '<path d="M16 2.5l-5.5 14.5a2 2 0 0 1-1.9 1.3H4.5"/><ellipse cx="17" cy="18" rx="3.5" ry="1.5"/><path d="M13.5 18v1.2c0 .8 1.6 1.5 3.5 1.5s3.5-.7 3.5-1.5V18"/><path d="M2 22h20"/>',
+	// a stone wicket, its bails, and the ball coming in
+	sandball: '<path d="M7 21V8M11 21V8M15 21V8"/><path d="M6.5 7.5h4.5M11 7.5h4.5"/><circle cx="19.5" cy="15" r="2"/><path d="M3 21h18"/>',
+	// an orb through a ring of runes
+	orbball: '<ellipse cx="12" cy="12" rx="5" ry="9"/><circle cx="12" cy="12" r="2.5"/><path d="M3 12h2M19 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/>',
+	// a ball on the water, a floating goal behind it
+	waterpolo: '<path d="M3 4h11v6M3 4v6"/><path d="M3 7l3-3M3 10l6-6M7 10l6-6"/><circle cx="16.5" cy="13.5" r="3"/><path d="M2 19c1.7 0 1.7-1.2 3.3-1.2s1.7 1.2 3.4 1.2 1.6-1.2 3.3-1.2 1.7 1.2 3.3 1.2 1.7-1.2 3.4-1.2S20.3 19 22 19"/>',
+	// a ball high over a platform, its slow arc
+	moonball: '<circle cx="17" cy="6" r="3"/><path d="M4 16c1.5-6 5.5-10 10-10.5" stroke-dasharray="1.5 2.5"/><path d="M2 18h20M6 18v3M18 18v3"/>',
+	// a target and an arrow in it
+	archery: '<circle cx="10" cy="14" r="7.5"/><circle cx="10" cy="14" r="4"/><circle cx="10" cy="14" r=".6"/><path d="M10 14l10-10"/><path d="M17 3.5 20 4l.5 3M15.5 5.5l1 3 3 1"/>',
+	// a lance couched at a shield
+	joust: '<path d="M3 21 16 8"/><path d="M14 6l4 4"/><path d="M16 8l5-5"/><path d="M13.5 13.5 17 17M5.5 16.5l2 2"/><path d="M15 15.5h5.5V20c0 1-2.7 2-2.7 2S15 21 15 20z"/>',
 	// (any game without its own)
 	play: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M10 8.5v7l5.5-3.5z"/>',
 };

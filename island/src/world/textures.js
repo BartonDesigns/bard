@@ -251,6 +251,10 @@ export function groundDetail() {
 	t.minFilter = THREE.LinearMipmapLinearFilter;
 	t.generateMipmaps = true;
 	t.anisotropy = 8;
+	// each channel's average, what the relief settles to far off
+	const mean = [0, 0, 0, 0];
+	for (let i = 0; i < data.length; i += 4) for (let c = 0; c < 4; c++) mean[c] += data[i + c];
+	t.userData.mean = new THREE.Vector4(...mean.map((v) => v / (S * S * 255)));
 	t.needsUpdate = true;
 	return t;
 }

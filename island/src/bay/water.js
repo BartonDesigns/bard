@@ -10,8 +10,10 @@
 // sky-bright further out; a reservoir's earth dam rises where the ground falls away below
 // it. The rivers are ribbons laid down their channels, the channels carved round you on a
 // 2 m grid: a bed, gravel at the water, banks cut back to the land; in town a flood channel
-// is poured concrete. The water flows the way the stream does, quicker and white where it
-// falls. Willows, alders and sycamores line the wild banks (redwoods in the fog belt).
+// is poured concrete. The water flows the way the stream does: wide or in town slow, dark
+// and glassy with sand and mud at its edges; a country creek shallow and clear over its
+// cobbles, gravel at its edges, broken white where it falls and round the rocks and snags
+// in its bed. Willows, alders and sycamores line the wild banks (redwoods in the fog belt).
 // Where a road crosses, a deck carries it over. Small intermittent creeks run low by late
 // summer. On other worlds the water may be ice, or lava, or tinted as the world's sea is.
 //
@@ -96,10 +98,20 @@ vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres, float frozen){
 	return vec4(col, a);
 }
 `;
+// the rocks in a creek: one in some cells of CELL metres (along, across), found the same way
+// here and in the shader (a permutation that stays exact in single-precision floats)
+const ROCK_CELL = [6, 2.5], ROCK_P = 0.2;
+const pm = (x) => ((34 * x + 1) * x) % 289;
+function rockAt(ca, cb) {
+	const k1 = pm(pm(((ca % 289) + 289) % 289) + ((cb % 289) + 289) % 289);
+	if (k1 >= 289 * ROCK_P) return null;
+	const k2 = pm(k1 + 7), k3 = pm(k2 + 13), k4 = pm(k3 + 3);
+	return { a: (ca + 0.2 + 0.6 * k2 / 289) * ROCK_CELL[0], c: (cb + 0.2 + 0.6 * k3 / 289) * ROCK_CELL[1], r: 0.22 + 0.4 * k4 / 289 };
+}
 const RIVER_VERT = /* glsl */`
-attribute vec4 aC; attribute vec4 aF; attribute vec3 aT;
+attribute vec4 aC; attribute vec4 aF; attribute vec3 aT; attribute vec3 aR;
 uniform float uSeason;
-varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying float vDist;
+varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying vec3 vR; varying float vDist;
 #include <fog_pars_vertex>
 void main(){
 	vec3 p = position;
@@ -110,45 +122,112 @@ void main(){
 	// far off it rides up a little over the coarser ground drawn there
 	float d = length(cameraPosition.xz - w.xz);
 	w.y += 0.03 + clamp(d * 0.0024 - 0.1, 0.0, 5.0);
-	vW = w.xyz; vUv = aC.zw; vF = aF; vT = aT; vDist = d;
+	vW = w.xyz; vUv = aC.zw; vF = aF; vT = aT; vR = aR; vDist = d;
 	vec4 mvPosition = viewMatrix * w;
 	gl_Position = projectionMatrix * mvPosition;
 	#include <fog_vertex>
 }`;
+// vF: speed, white water (by the fall), drying, width; vR: the ribbon's half-width, how built
+// up the banks are, how rocky the bed is
 const RIVER_FRAG = /* glsl */`
-varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying float vDist;
+varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying vec3 vR; varying float vDist;
 #include <fog_pars_fragment>
-float rip(vec2 q){ return vn(q) * 0.55 + vn(q * 2.3 + 5.1) * 0.3 + vn(q * 5.1 - 2.7) * 0.15; }
+// (value noise on the wrapped hash: the stream's own coordinates run to kilometres)
+float gvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(gh(i), gh(i + vec2(1, 0)), f.x), mix(gh(i + vec2(0, 1)), gh(i + vec2(1, 1)), f.x), f.y); }
+float pm(float x){ return mod((34.0 * x + 1.0) * x, 289.0); }
+// the rock in a cell (as water.js places them): along, across, radius; z 0 if none
+vec3 rockAt(vec2 c){
+	float k1 = pm(pm(mod(c.x, 289.0)) + mod(c.y, 289.0));
+	if (k1 >= 289.0 * ${ROCK_P}) return vec3(0.0);
+	float k2 = pm(k1 + 7.0), k3 = pm(k2 + 13.0), k4 = pm(k3 + 3.0);
+	return vec3((c + vec2(0.2 + 0.6 * k2 / 289.0, 0.2 + 0.6 * k3 / 289.0)) * vec2(${ROCK_CELL[0]}.0, ${ROCK_CELL[1]}), 0.22 + 0.4 * k4 / 289.0);
+}
+// the surface's ripples: streaks drawn out along the flow and two sets of small waves
+// crossing it at an angle, each at its own scale and pace (no one of them a regular band)
+float ripH(vec2 u, float t){
+	vec2 a = vec2(u.x * 0.3 - t * 0.4, u.y * 0.9);
+	vec2 b = vec2((u.x * 0.87 + u.y * 0.5) * 1.1 - t * 0.8, (u.y * 0.87 - u.x * 0.5) * 2.1 + 3.7);
+	vec2 c = vec2((u.x * 0.8 - u.y * 0.6) * 2.3 - t * 1.1, (u.y * 0.8 + u.x * 0.6) * 4.1 - 5.3);
+	return gvn(a) * 0.5 + gvn(b) * 0.32 + gvn(c) * 0.18;
+}
 void main(){
 	vec2 T = normalize(vT.xy + vec2(1e-5, 0.0)), N = vec2(-T.y, T.x);
-	// (across in metres from the middle: world x, z are too big for float noise this fine)
-	float along = vUv.y, across = vUv.x * vF.w * 0.5;
-	float speed = vF.x, foamK = vF.y;
-	// ripples carried downstream, stretched along the flow
-	vec2 q = vec2(along * 0.55 - uTime * speed * 0.55, across * 1.3);
-	float e = 0.08;
-	float h0 = rip(q), ha = rip(q + vec2(e, 0.0)), hc = rip(q + vec2(0.0, e));
-	float k = 0.35 + foamK * 0.9;
-	vec2 g = vec2(ha - h0, hc - h0) / e * k * vec2(0.55, 1.3);
+	// (along and across in metres from the middle: world x, z are too big for float noise this fine)
+	float along = vUv.y, across = vUv.x * vR.x;
+	vec2 u = vec2(along, across);
+	float w = vF.w, foamK = vF.y, town = vR.y, rocky = vR.z;
+	// the look by the reach: wide or in town, slow, dark and glassy; narrow in the country,
+	// shallow and clear over its cobbles
+	float wide = smoothstep(7.0, 26.0, w);
+	float calm = clamp(max(wide, town * 0.85) * (1.0 - foamK), 0.0, 1.0);
+	float clear = (1.0 - wide) * (1.0 - town * 0.75);
+	float speed = vF.x * mix(1.0, 0.45, calm), t = uTime * speed;
+	float e = 0.12, h0 = ripH(u, t), ha = ripH(u + vec2(e, 0.0), t), hc = ripH(u + vec2(0.0, e), t);
+	float k = mix(0.3, 0.07, calm) + foamK * 0.5;
+	vec2 g = vec2(ha - h0, hc - h0) / e * k;
 	vec3 n = normalize(vec3(-(g.x * T.x + g.y * N.x), 1.0, -(g.x * T.y + g.y * N.y)));
 	n = normalize(mix(n, vec3(0.0, 1.0, 0.0), smoothstep(150.0, 900.0, vDist)));
 	vec3 v = normalize(cameraPosition - vW), r = reflect(-v, n);
-	float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
-	// how deep: clear over the gravel at the edges, dark green-brown in the pools
+	float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+	fres = mix(fres, min(1.0, fres * 1.25 + 0.06), calm);
 	float depth = vW.y - groundUnder(vW.xz);
 	float nearK = 1.0 - smoothstep(700.0, 1100.0, vDist);
 	float deepK = mix(0.8, smoothstep(0.05, 1.4, depth), nearK);
-	vec3 deep = mix(vec3(0.025, 0.05, 0.04), vec3(0.05, 0.06, 0.035), foamK) * (1.0 - uNight * 0.85);
-	vec3 col = mix(deep, skyIn(r, vW.xz) * vec3(0.8, 0.9, 0.85), fres);
-	col += uSunColor * pow(max(dot(r, uSunDir), 0.0), 300.0) * 4.0 * (1.0 - uNight);
-	// white water where it falls, streaked downstream; a thin lace along the edges
-	// (in streaks and boils, the dark water showing between them)
-	float fo = foamK * 0.85 * smoothstep(0.52, 0.85, rip(q * vec2(1.4, 2.2) + 11.0) + foamK * 0.12);
-	fo += (1.0 - smoothstep(0.02, 0.12, depth)) * 0.35 * smoothstep(0.5, 0.7, rip(q * 3.0)) * nearK;
+	// the water's own colour: tea-dark and silty in town, green over the gravel out of it
+	vec3 deep = mix(mix(vec3(0.03, 0.055, 0.045), vec3(0.045, 0.04, 0.03), town), vec3(0.05, 0.06, 0.035), foamK) * (1.0 - uNight * 0.85);
+	// the bed seen through the shallows: rounded cobbles, the light fading with depth
+	float px = length(fwidth(u));
+	float bedK = clear * nearK * (1.0 - smoothstep(0.1, 0.3, px)) * exp(-max(depth, 0.0) * 1.3);
+	vec3 bed = vec3(0.34, 0.31, 0.25);
+	if (bedK > 0.01) {
+		vec2 bp = u * 3.1, bi = floor(bp);
+		float f1 = 9.0, id = 0.0;
+		for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+			vec2 c = bi + vec2(float(x), float(y)), o = vec2(gh(c), gh(c + 17.0)) * 0.8 + 0.1;
+			float d = length(bp - c - o);
+			if (d < f1) { f1 = d; id = gh(c + 41.0); }
+		}
+		vec3 stone = mix(mix(vec3(0.22, 0.2, 0.17), vec3(0.46, 0.42, 0.35), id), vec3(0.4, 0.3, 0.2), step(0.8, id) * 0.6);
+		bed = mix(bed, stone * (0.55 + 0.45 * smoothstep(0.75, 0.25, f1)), 1.0 - smoothstep(0.1, 0.3, px));
+	}
+	vec3 seen = bed * exp(-max(depth, 0.0) * vec3(2.2, 1.2, 1.1)) * (1.0 - uNight * 0.85);
+	vec3 body = mix(deep, seen, bedK);
+	// the hills and trees round it darker in the still water's reflection
+	vec3 sky = skyIn(r, vW.xz) * mix(vec3(0.8, 0.9, 0.85), vec3(0.62, 0.7, 0.64), calm);
+	vec3 col = mix(body, sky, fres);
+	col += uSunColor * pow(max(dot(r, uSunDir), 0.0), mix(300.0, 900.0, calm)) * mix(4.0, 7.0, calm) * (1.0 - uNight);
+	// white water: broken patches where it falls fast, streaked along the flow
+	float fo = 0.0;
+	if (foamK > 0.01) {
+		float streak = gvn(vec2(along * 0.45 - t * 0.7, across * 1.9)) * 0.6 + gvn(vec2(along * 1.4 - t * 1.2, across * 4.3) + 9.0) * 0.4;
+		float blot = smoothstep(0.35, 0.7, gvn(vec2(along * 0.07, across * 0.35) + 4.0) + foamK * 0.2);
+		fo = foamK * blot * smoothstep(0.5, 0.78, streak);
+	}
+	// riffles round the rocks, trailing downstream
+	if (rocky > 0.02 && vDist < 450.0) {
+		vec2 cp = floor(u / vec2(${ROCK_CELL[0]}.0, ${ROCK_CELL[1]}));
+		float rf = 0.0, sc = clamp(w / 6.0, 0.5, 1.0);
+		for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+			vec3 R = rockAt(cp + vec2(float(x), float(y)));
+			if (R.z < 0.01) continue;
+			vec2 rel = u - R.xy; float rr = R.z * sc * 1.3;
+			float dd = length(vec2(rel.x > 0.0 ? rel.x / (2.5 + speed) : rel.x, rel.y));
+			rf = max(rf, smoothstep(rr * 1.8, rr * 1.2, dd) * smoothstep(rr * 0.7, rr * 1.1, dd));
+		}
+		rf *= smoothstep(0.45, 0.7, gvn(vec2(along * 2.1 - uTime * speed * 1.4, across * 4.3)) + 0.12) * rocky * nearK;
+		fo = max(fo, rf * 0.75);
+	}
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
-	float a = clamp(0.28 + deepK * 0.62 + fres * 0.25 + fo, 0.0, 0.96);
-	gl_FragColor = worldLook(col, a, vec2(along, across), speed, fres, vT.z);
-	// (its edges soft where they run up the bank)
+	// the edge: a gravel bar out of town, sand and mud in it, where the water thins to nothing
+	float edge = (1.0 - smoothstep(0.03, 0.16, depth)) * nearK;
+	vec3 grav = mix(vec3(0.42, 0.39, 0.33), bed * 1.15, 0.6), silt = mix(vec3(0.3, 0.25, 0.18), vec3(0.46, 0.4, 0.3), gvn(u * 0.8));
+	col = mix(col, mix(grav, silt, town) * (1.0 - uNight * 0.85), edge * 0.7 * (1.0 - fo));
+	float a = clamp(0.3 + deepK * 0.62 + fres * 0.25 + fo, 0.0, 0.96);
+	a = mix(a, 0.94, max(bedK, edge * 0.8));
+	gl_FragColor = worldLook(col, a, u, speed, fres, vT.z);
+	// (its edges soft where they meet the ground, and where they run up the bank)
+	gl_FragColor.a *= smoothstep(0.0, 0.04, depth) * nearK + (1.0 - nearK);
 	gl_FragColor.a *= 1.0 - smoothstep(0.82, 1.0, abs(vUv.x));
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -298,7 +377,9 @@ export function createWater(scene, shared, opts = {}) {
 			for (let k = 0; k < n; k++) lv[k] -= conc ? 2.0 : 0.15 + 0.9 * townK(x[k], z[k]) * Math.min(1, w[k] / 4);
 			for (let k = 1; k < n; k++) lv[k] = Math.min(lv[k], lv[k - 1]);
 		}
-		const L = { cls, int, name, n, x, z, lv, w, s, ice, conc, town, x0, z0, x1, z1, reach: wm / 2 + (conc ? 12 : 26) };
+		// (the country's creeks and rivers have rocks and snags in them; a world's lava or ice none)
+		const rocky = !conc && (cls === 'stream' || cls === 'river') && lookU.value.x < 0.5;
+		const L = { cls, int, name, n, x, z, lv, w, s, ice, conc, town, rocky, x0, z0, x1, z1, reach: wm / 2 + (conc ? 12 : 26) };
 		const id = T.lines.push(L) - 1;
 		// the segments by 64 m cell, for finding the water at a point
 		for (let k = 0; k + 1 < n; k++) {
@@ -307,6 +388,67 @@ export function createWater(scene, shared, opts = {}) {
 				const gk = gi * 100003 + gj; let g = T.grid.get(gk); if (!g) T.grid.set(gk, g = []); g.push(id, k);
 			}
 		}
+	}
+	// ---------- the rocks and fallen logs in a country creek's bed ----------
+	const rockyAt = (L, k) => (L.rocky && !L.ice[k] && L.w[k] >= 1.5 && L.w[k] <= 22 && townK(L.x[k], L.z[k]) < 0.3 ? 1 : 0);
+	// the bed under a point of the stream, as it is carved (or lower, where the ground is)
+	const bedAt = (x, z, lv, w, c) => Math.min(heightAt(x, z), lv - 0.06 - (carve ? depthOf(w) : 0.3 + w * 0.06) * Math.pow(Math.max(0, 1 - (2 * c / w) ** 2), 0.6));
+	function strewBed(L, rocks, logs) {
+		const [CA, CB] = ROCK_CELL;
+		for (let k = 0; k + 1 < L.n; k++) {
+			const s0 = L.s[k], s1 = L.s[k + 1], len = s1 - s0;
+			if (len < 0.5 || !rockyAt(L, k) && !rockyAt(L, k + 1)) continue;
+			const ux = (L.x[k + 1] - L.x[k]) / len, uz = (L.z[k + 1] - L.z[k]) / len, nx = -uz, nz = ux;
+			const wm = Math.max(L.w[k], L.w[k + 1]), J = Math.ceil(wm / 2 / CB) + 1;
+			for (let ca = Math.floor(s0 / CA); ca <= Math.floor(s1 / CA); ca++) for (let cb = -J; cb <= J; cb++) {
+				const R = rockAt(ca, cb);
+				if (!R || R.a < s0 || R.a >= s1) continue;
+				const f = (R.a - s0) / len;
+				// (as the shader sees it: rocky by the nearer end)
+				if (!rockyAt(L, f < 0.5 ? k : k + 1)) continue;
+				const w = L.w[k] + (L.w[k + 1] - L.w[k]) * f, r = R.r * Math.min(1, Math.max(0.5, w / 6));
+				if (Math.abs(R.c) > w / 2 - r * 0.6) continue;
+				const x = L.x[k] + ux * (R.a - s0) + nx * R.c, z = L.z[k] + uz * (R.a - s0) + nz * R.c, lv = L.lv[k] + (L.lv[k + 1] - L.lv[k]) * f;
+				rocks.push(x, bedAt(x, z, lv, w, R.c) + r * 0.45, z, r, h01(x, z));
+			}
+			// now and then a fallen trunk from the bank, lying out into the stream downstream
+			for (let ca = Math.floor(s0 / 70); ca <= Math.floor(s1 / 70); ca++) {
+				const hh = h01(ca * 0.37, L.x[0] * 0.01 + L.z[0] * 0.013), a = (ca + 0.5) * 70;
+				if (hh > 0.3 || a < s0 || a >= s1) continue;
+				const f = (a - s0) / len, w = L.w[k] + (L.w[k + 1] - L.w[k]) * f;
+				if (w < 2.5 || w > 20 || !rockyAt(L, f < 0.5 ? k : k + 1)) continue;
+				const sd = hh < 0.15 ? 1 : -1, th = 0.5 + hh * 1.6, lg = Math.min(w * 0.75 + 1, 3 + hh * 18), lv = L.lv[k] + (L.lv[k + 1] - L.lv[k]) * f;
+				const dx = ux * Math.cos(th) - nx * sd * Math.sin(th), dz = uz * Math.cos(th) - nz * sd * Math.sin(th);
+				const bx = L.x[k] + ux * (a - s0) + nx * sd * (w / 2 + 0.8), bz = L.z[k] + uz * (a - s0) + nz * sd * (w / 2 + 0.8);
+				logs.push(bx + dx * lg / 2, lv + 0.02, bz + dz * lg / 2, lg, 0.16 + hh * 0.4, Math.atan2(-dz, dx), -Math.atan2(0.35, lg));
+			}
+		}
+	}
+	const rockG = new THREE.IcosahedronGeometry(1, 1), logG = new THREE.CylinderGeometry(1, 1, 1, 7, 1).rotateZ(Math.PI / 2);
+	const bedMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+	function bedMesh(rocks, logs, cx, cz) {
+		const out = [], m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+		const make = (geo, n) => { const im = new THREE.InstancedMesh(geo.clone(), bedMat, n); im.position.set(cx, 0, cz); im.receiveShadow = true; im.visible = false; root.add(im); out.push(im); return im; };
+		if (rocks.length) {
+			const im = make(rockG, rocks.length / 5);
+			for (let i = 0; i < rocks.length; i += 5) {
+				const r = rocks[i + 3], hh = rocks[i + 4];
+				e.set(hh * 3, hh * 17, hh * 7); q.setFromEuler(e); p.set(rocks[i] - cx, rocks[i + 1], rocks[i + 2] - cz); sc.set(r * 1.3, r, r * 1.15);
+				im.setMatrixAt(i / 5, m.compose(p, q, sc));
+				// (grey and brown, dark where wet)
+				c.setRGB(0.2 + hh * 0.12, 0.19 + hh * 0.1, 0.16 + hh * 0.07); im.setColorAt(i / 5, c);
+			}
+		}
+		if (logs.length) {
+			const im = make(logG, logs.length / 7);
+			for (let i = 0; i < logs.length; i += 7) {
+				e.set(0, logs[i + 5], logs[i + 6], 'YZX'); q.setFromEuler(e); p.set(logs[i] - cx, logs[i + 1], logs[i + 2] - cz); sc.set(logs[i + 3], logs[i + 4], logs[i + 4]);
+				im.setMatrixAt(i / 7, m.compose(p, q, sc));
+				c.setRGB(0.2, 0.16, 0.12); im.setColorAt(i / 7, c);
+			}
+		}
+		for (const im of out) im.computeBoundingSphere();
+		return out;
 	}
 	// the water's half-width (as it runs now) at a point of a line
 	const lowK = (L) => (L.int && L.w[0] < 6 ? sm(0.55, 0.95, REAL_U.uSeason.value) * 0.6 : 0);
@@ -342,28 +484,46 @@ export function createWater(scene, shared, opts = {}) {
 		yield* loadTile(T);
 		const cx = (T.i + 0.5) * TILE, cz = (T.j + 0.5) * TILE;
 		const lines = [...T.lines.keys()].sort((a, b) => T.lines[b].w[0] - T.lines[a].w[0]);
-		const pos = [], aC = [], aF = [], aT = [], idx = [];
+		const pos = [], aC = [], aF = [], aT = [], aR = [], idx = [], rocks = [], logs = [];
 		let wide = 0, t0 = performance.now();
+		// (where a stream rises or sinks away its water narrows to a point, not a square end;
+		// not where it runs on into another, a lake, the sea or the next tile)
+		const joined = (L, k) => {
+			const x = L.x[k], z = L.z[k], r = L.w[k] + 2;
+			if (L.lv[k] < 1 || lakeAt(x, z) || Math.min(x - T.i * TILE, (T.i + 1) * TILE - x, z - T.j * TILE, (T.j + 1) * TILE - z) < 3) return true;
+			const g = T.grid.get(Math.floor(x / 64) * 100003 + Math.floor(z / 64)) || [];
+			for (let q = 0; q < g.length; q += 2) {
+				const M = T.lines[g[q]], m = g[q + 1];
+				if (M === L) continue;
+				const ax = M.x[m], az = M.z[m], dx = M.x[m + 1] - ax, dz = M.z[m + 1] - az, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+				if (Math.hypot(x - ax - dx * t, z - az - dz * t) < r + M.w[m] / 2) return true;
+			}
+			return false;
+		};
 		for (const id of lines) {
 			const L = T.lines[id], n = L.n, base = pos.length / 3;
 			const dry = L.int && L.w[0] < 6 ? 1 : 0;
+			const tip0 = L.conc || joined(L, 0) ? 1 : 0.3, tip1 = L.conc || joined(L, n - 1) ? 1 : 0.3;
 			for (let k = 0; k < n; k++) {
 				const a = Math.max(0, k - 1), b = Math.min(n - 1, k + 1);
 				let tx = L.x[b] - L.x[a], tz = L.z[b] - L.z[a]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
 				// (the mitre at a bend, not too long)
 				let mk = 1;
 				if (k > 0 && k < n - 1) { const ux = L.x[k] - L.x[k - 1], uz = L.z[k] - L.z[k - 1], ul = Math.hypot(ux, uz) || 1; mk = 1 / Math.max(0.5, (ux / ul) * tx + (uz / ul) * tz); }
-				const w = L.w[k], hw = (L.conc ? Math.max(0.7, w * 0.26) + 0.25 : w / 2 + 0.3 + 0.07 * w) * mk;
+				const w = L.w[k], hw = (L.conc ? Math.max(0.7, w * 0.26) + 0.25 : w / 2 + 0.3 + 0.07 * w) * mk * (k === 0 ? tip0 : k === n - 1 ? tip1 : 1);
 				const y = L.lv[k];
 				const seg = k < n - 1 ? k : k - 1, sl = Math.max(0, (L.lv[seg] - L.lv[seg + 1]) / Math.max(1, L.s[seg + 1] - L.s[seg]));
-				const speed = L.conc ? 0.9 : Math.min(2.4, 0.25 + Math.sqrt(sl) * 9), foam = L.conc ? 0.05 : sm(0.012, 0.06, sl);
+				const speed = L.conc ? 0.9 : Math.min(2.4, 0.25 + Math.sqrt(sl) * 9), foam = L.conc ? 0.05 : sm(0.02, 0.07, sl);
+				const tk = L.conc ? 1 : townK(L.x[k], L.z[k]), rk = rockyAt(L, k);
 				for (const sd of [-1, 0, 1]) {
 					pos.push(L.x[k] - tz * hw * sd - cx, y, L.z[k] + tx * hw * sd - cz);
 					aC.push(L.x[k] - cx, L.z[k] - cz, sd, L.s[k]);
 					aF.push(speed, foam, dry, w);
 					aT.push(tx, tz, L.ice[k]);
+					aR.push(hw, tk, rk);
 				}
 			}
+			if (L.rocky) strewBed(L, rocks, logs);
 			// (wound counter-clockwise seen from above)
 			for (let k = 0; k + 1 < n; k++) { const p = base + k * 3, q = p + 3; idx.push(p, p + 1, q, p + 1, q + 1, q, p + 1, p + 2, q + 1, p + 2, q + 2, q + 1); }
 			if (L.w[0] >= 5) wide = idx.length;
@@ -376,6 +536,7 @@ export function createWater(scene, shared, opts = {}) {
 			g.setAttribute('aC', new THREE.Float32BufferAttribute(aC, 4));
 			g.setAttribute('aF', new THREE.Float32BufferAttribute(aF, 4));
 			g.setAttribute('aT', new THREE.Float32BufferAttribute(aT, 3));
+			g.setAttribute('aR', new THREE.Float32BufferAttribute(aR, 3));
 			g.setIndex(pos.length / 3 > 65000 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
 			g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, pos[1], 0), 1600);
 			const m = new THREE.Mesh(g, riverMat);
@@ -385,6 +546,7 @@ export function createWater(scene, shared, opts = {}) {
 			T.mesh = m; T.wideIdx = wide; T.allIdx = idx.length;
 		}
 		yield;
+		if ((rocks.length || logs.length) && S.tiles.get(tkey(T.i, T.j)) === T) T.bed = bedMesh(rocks, logs, cx, cz);
 		if (trees) yield* plantBanks(T);
 		T.built = true;
 		S.stats.built++;
@@ -403,12 +565,13 @@ export function createWater(scene, shared, opts = {}) {
 				for (let s = h01(ax, az) * 8; s < len; s += 7 + h01(s, ax) * 5) {
 					for (const sd of [-1, 1]) {
 						const r = h01(ax + s * 1.3 + sd, az - s * 0.7);
-						if (r > 0.62) continue;
+						if (r > (w < 12 ? 0.78 : 0.62)) continue;
 						const f = s / len, bx = ax + dx * f, bz = az + dz * f, w = L.w[k] + (L.w[k + 1] - L.w[k]) * f, lv = L.lv[k] + (L.lv[k + 1] - L.lv[k]) * f;
 						// on the land at the top of the bank (where the channel's cut ends)
 						const g0 = heightAt(bx + nx * sd * (w / 2 + 3), bz + nz * sd * (w / 2 + 3));
 						const top = Math.min(18, Math.max(0, g0 - lv) / 0.9);
-						const off = w / 2 + 1.6 + top + h01(r, s) * 5;
+						// (a narrow creek's willows and alders close over it)
+						const off = w / 2 + (w < 12 ? 1.1 + h01(r, s) * 3 : 1.6 + h01(r, s) * 5) + top;
 						const x = bx + nx * sd * off, z = bz + nz * sd * off;
 						if (townK(x, z) > 0.2 || lakeAt(x, z) || opts.skip?.(x, z)) continue;
 						const fog = 1 - sm(22000, 58000, x), hh = h01(x * 0.13, z * 0.17);
@@ -725,7 +888,7 @@ export function createWater(scene, shared, opts = {}) {
 			if (!S.tiles.has(tkey(i, j))) tasks.push({ d, kind: 'tile', i, j });
 		}
 		// let go of the far ones
-		for (const [k, T] of S.tiles) if (!want.has(k) && Math.hypot((T.i + 0.5) * TILE - cx, (T.j + 0.5) * TILE - cz) > RANGE.data + 3000) { if (T.mesh) gone.push(T.mesh); S.tiles.delete(k); }
+		for (const [k, T] of S.tiles) if (!want.has(k) && Math.hypot((T.i + 0.5) * TILE - cx, (T.j + 0.5) * TILE - cz) > RANGE.data + 3000) { if (T.mesh) gone.push(T.mesh); if (T.bed) gone.push(...T.bed); S.tiles.delete(k); }
 		// the squares to carve
 		if (atlas) {
 			const C = RANGE.carve;
@@ -814,8 +977,10 @@ export function createWater(scene, shared, opts = {}) {
 		atlas?.centre(x, z, RANGE.carve);
 		// the ribbons: the whole of a near tile, only the wider water further off
 		for (const T of S.tiles.values()) {
-			if (!T.mesh) continue;
 			const d = Math.hypot(Math.max(0, Math.abs((T.i + 0.5) * TILE - x) - TILE / 2), Math.max(0, Math.abs((T.j + 0.5) * TILE - z) - TILE / 2));
+			// (the rocks and logs only close by)
+			if (T.bed) for (const im of T.bed) im.visible = d < (isPhone ? 250 : 500);
+			if (!T.mesh) continue;
 			T.mesh.visible = d < RANGE.far && cam.position.y < 9000 && (d < RANGE.near || T.wideIdx > 0);
 			T.mesh.geometry.setDrawRange(0, d < RANGE.near ? T.allIdx : T.wideIdx);
 		}

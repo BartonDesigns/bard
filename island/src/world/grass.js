@@ -114,7 +114,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float ang = aRand.y * 6.2831;
 				vGUv = uv; vTip = aTip;
 				// colour: broad drifts of green and sun-dried straw, barely any tuft speckle
-				float hue = vn(w * 0.035 + 3.0), dry = smoothstep(0.58, 0.82, vn(w * 0.02 - 7.0)) * (1.0 - mk.a * 0.8);
+				// (two scales at an irrational ratio, never one wavelength repeating across the field)
+				float hue = vn(w * 0.035 + 3.0) * 0.65 + vn(w * 0.0133 - 1.9) * 0.35, dry = smoothstep(0.58, 0.82, vn(w * 0.02 - 7.0) * 0.7 + vn(w * 0.0071 + 4.4) * 0.3) * (1.0 - mk.a * 0.8);
 				vec3 g1 = vec3(0.34, 0.50, 0.12), g2 = vec3(0.42, 0.55, 0.14);
 				vec3 tint = mix(g1, g2, hue);
 				// fresh green where it is damp and deep, straw-gold on the dry open slopes

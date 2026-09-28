@@ -19,7 +19,7 @@ import { hydrology, smoothLine } from '../crysis/hydro.js';
 
 const KINDS = {
 	TERRAN: { area: 0.035, look: 'water' }, TROPICAL: { area: 0.03, look: 'water' }, MEDIEVAL: { area: 0.035, look: 'water' }, SHEPHERD: { area: 0.04, look: 'water' },
-	OCEAN: { area: 0.08, look: 'water' }, ARID: { area: 0.25, look: 'water', few: 4, pools: 3 }, ICE: { area: 0.05, look: 'ice' }, MAGMA: { area: 0.06, look: 'lava', pools: 6 },
+	OCEAN: { area: 0.08, look: 'water' }, ARID: { area: 0.25, look: 'water', few: 4, pools: 3 }, ICE: { area: 0.05, look: 'ice' }, MAGMA: { area: 0.14, look: 'lava', pools: 6 },
 	TOXIC: { area: 0.04, look: 'water' }, MYSTICAL: { area: 0.04, look: 'water' }, SINGULARITY: { area: 0.05, look: 'water' },
 };
 
