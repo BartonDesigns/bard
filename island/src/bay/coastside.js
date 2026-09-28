@@ -501,5 +501,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 	function start() { if (!jobs.length && COAST_U.uCsRow.value.w < 0.5) jobs.push(shoreJob()); }
 	// (for the tests: the cliff grid, the work still queued, what stands)
 	const info = () => ({ cliff: COAST_U.uCliffR.value.toArray().map(Math.round), jobs: jobs.length + (job ? 1 : 0), shore: COAST_U.uCsRow.value.w, barns: fields.list.length, built: group.children.filter((c) => /coast/.test(c.name)).map((c) => c.name + (c.count ?? '')) });
-	return { update, start, seaDist, fields, info };
+	// (and for the tests, where frames come a second apart: finish the queued work now)
+	const flush = () => work(20000);
+	return { update, start, seaDist, fields, info, flush };
 }

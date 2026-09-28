@@ -345,8 +345,8 @@ export function createMotion(P, groundAt) {
 		// ---- pelvis ----
 		const rootI = map.root, rootB = bones[rootI];
 		rootB.position.set(rest.heads[rootI].x + sway, rest.heads[rootI].y - hipRest + hipY, rest.heads[rootI].z);
-		const hp = X.has.hp ? X.v.hp : null;
-		_e.set(lean * 0.35 + (hp ? hp[1] * aw : 0), pelvisYaw + (hp ? hp[0] * aw : 0), pelvisRoll + (hp ? hp[2] * aw : 0), 'YXZ');
+		const hpo = X.has.hp ? X.v.hp : null;
+		_e.set(lean * 0.35 + (hpo ? hpo[1] * aw : 0), pelvisYaw + (hpo ? hpo[0] * aw : 0), pelvisRoll + (hpo ? hpo[2] * aw : 0), 'YXZ');
 		const rootQ = _q.setFromEuler(_e).clone();
 		setLocal(rootI, rootQ, new THREE.Quaternion());
 
@@ -364,7 +364,7 @@ export function createMotion(P, groundAt) {
 			dist = clamp(dist, Math.abs(l1 - l2) + 0.01, (l1 + l2) * 0.9995);
 			const dir = toA.normalize();
 			// the knee points where the foot does, straight ahead but for the slight toe-out
-			const toeOut = pelvisYaw * 0.3 + f.leg.side * 0.1 + (hp ? hp[0] * aw * 0.8 : 0);
+			const toeOut = pelvisYaw * 0.3 + f.leg.side * 0.1 + (hpo ? hpo[0] * aw * 0.8 : 0);
 			const kneeHint = new THREE.Vector3(f.leg.side * 0.02, 0, 1).applyAxisAngle(Y, toeOut * 0.6).normalize();
 			const bend = kneeHint.addScaledVector(dir, -kneeHint.dot(dir)).normalize();
 			const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist);

@@ -124,7 +124,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					c = mix(c, straw * 0.6, smoothstep(0.6, 0.85, eNoise(vWp * 0.35 + 9.0)) * 0.6);
 				}
 				// puddles in the low spots of the ruts, after rain the more
-				if (kind < 2.5) pud = rut * smoothstep(0.35, 0.62, vG.w * (0.45 + 0.9 * n1) + uWet * 0.4);
+				if (kind < 2.5) pud = rut * smoothstep(0.4, 0.62, vG.w * (0.45 + 0.9 * n1) + uWet * 0.35 * n1);
 				c = mix(c, c * 0.72, smoothstep(0.0, 0.3, pud) * (1.0 - smoothstep(0.3, 0.6, pud)));
 				c = mix(c, vec3(0.1, 0.11, 0.12), smoothstep(0.45, 0.6, pud));
 				eRough = mix(eRough, 0.06, smoothstep(0.45, 0.6, pud));
@@ -181,7 +181,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					const a = Math.max(0, i - 1), b = Math.min(S.length - 1, i + 1), dx = p[b * 2] - p[a * 2], dz = p[b * 2 + 1] - p[a * 2 + 1], L = Math.hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L;
 					const x = p[i * 2], z = p[i * 2 + 1], h = H(x, z);
 					let low = 0;
-					if (R.puddles) { const k0 = Math.max(0, i - 3), k1 = Math.min(S.length - 1, i + 3); low = Math.max(0, Math.min(1, ((H(p[k0 * 2], p[k0 * 2 + 1]) + H(p[k1 * 2], p[k1 * 2 + 1])) / 2 - h) * 5 + 0.15)); }
+					if (R.puddles) { const k0 = Math.max(0, i - 3), k1 = Math.min(S.length - 1, i + 3); low = Math.max(0, Math.min(1, ((H(p[k0 * 2], p[k0 * 2 + 1]) + H(p[k1 * 2], p[k1 * 2 + 1])) / 2 - h) * 3)); }
 					const endD = R.kind === 4 ? 99 : Math.min(S[i], Ltot - S[i]) + 0.3;
 					for (const t of ACROSS) { const px = x + nx * hw * t, pz = z + nz * hw * t; vert(px, Math.max(H(px, pz), h - 0.3) + yo, pz, (t + 1) / 2, S[i], R.kind, low, (1 - Math.abs(t)) * hw + 0.05, endD); }
 				}

@@ -1157,6 +1157,7 @@ export function createIslandWorld() {
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
+	const worldOf = (planet) => ({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
 		async open(params = {}) {
@@ -1178,6 +1179,10 @@ export function createIslandWorld() {
 		openAt: (code) => share.openAt(code),
 		// back to the last place you were (after a crash or a reload); false if there is none
 		resume: () => { const c = share.resumeCode(); return c ? share.openAt(c, { resume: true }) : false; },
+		// flight's landing builds the world here first, out of sight, so Journey's own clock
+		// only covers the hand-over (a slow phone building the Bay Area outran it, and the
+		// failed passage left you on the old flight surface)
+		warm: async (planet = {}) => { await build(worldOf(planet)); return true; },
 		guide, people,
 		renderer: () => renderer, camera: () => camera, scene: () => scene, dom, shared,
 	};
@@ -1199,7 +1204,7 @@ export function createIslandWorld() {
 			const planet = packet.planet || {};
 			origin = planet.origin || null;
 			if (planet.earth) origin = EARTH_ORIGIN;
-			await build({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
+			await build(worldOf(planet));
 			check?.();
 			for (let i = 0; i < 6; i++) { world.player.update(0.016, time); world.sky.update(0.016, camera.position); world.vegetation.stream(camera, true); renderer.render(scene, camera); await new Promise((r) => requestAnimationFrame(r)); check?.(); }
 		},
