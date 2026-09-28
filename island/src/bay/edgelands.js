@@ -110,11 +110,12 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 				} else if (kind < 6.5) {
 					// old asphalt, cracked, weeds up the cracks, oil stains, a dirt drift at the edges
 					c = vec3(0.34, 0.34, 0.35) * (0.82 + 0.3 * n3) * (0.94 + 0.1 * n4);
-					// the cracks: a finer net, warped so it is never regular, faint in places
+					// the cracks: a few long ones wandering across, and alligator patches of a fine
+					// net where the surface has failed; the rest sound, warped so nothing repeats
 					vec2 wp = vWp + vec2(eNoise(vWp * 0.3), eNoise(vWp * 0.3 + 5.0)) * 1.6;
-					float fade = smoothstep(0.25, 0.65, eNoise(vWp * 0.12 + 2.0));
-					float cr = (1.0 - smoothstep(0.015, 0.045, eCrack(wp * 1.1))) * (0.35 + 0.65 * fade);
-					float cr2 = (1.0 - smoothstep(0.01, 0.03, eCrack(wp * 2.9 + 7.0))) * fade;
+					float fail = smoothstep(0.55, 0.8, eNoise(vWp * 0.09 + 2.0) * 0.7 + n3 * 0.3);
+					float cr = (1.0 - smoothstep(0.01, 0.03, eCrack(wp * 0.18))) * (0.4 + 0.6 * smoothstep(0.3, 0.6, n1));
+					float cr2 = (1.0 - smoothstep(0.012, 0.035, eCrack(wp * 3.2 + 7.0))) * fail;
 					c = mix(c, vec3(0.16, 0.16, 0.16), max(cr, cr2 * 0.6));
 					c = mix(c, grass * 0.85, cr * smoothstep(0.35, 0.6, n2));
 					c *= 1.0 - smoothstep(0.7, 0.9, eNoise(vWp * 0.5 + 3.0)) * 0.35;
@@ -358,7 +359,8 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 		group.visible = visible;
 		if (!on) return;
 		// finer heights arriving: lay everything again
-		const nl = bay.levels.filter(Boolean).length;
+		// (and when a mapped region or a grown town arrives or goes: what stands here changed)
+		const nl = bay.levels.filter(Boolean).length * 1000 + (real.version ? real.version() : 0);
 		if (nl !== levelsN) { if (levelsN >= 0) { for (const T of [...tiles.values()]) dropTile(T); roads.reset(); cur = null; dirty = true; } levelsN = nl; }
 		// the tiles wanted round here
 		const want = [];

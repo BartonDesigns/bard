@@ -67,7 +67,8 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 	float px = length(fwidth(w));
 	// sheer sandstone where the land drops to the sea: tan and ochre in layers, the layers
 	// dipping gently, runnels down the face, dark and wet at its foot
-	float cliffK = smoothstep(0.34, 0.6, slope) * (1.0 - smoothstep(350.0, 700.0, sea)) * (1.0 - smoothstep(70.0, 110.0, h)) * step(-1.0, h);
+	// (slope here is 1 - n.y: 0.12 is a 1 in 1.5 grade, 0.3 is 45 degrees)
+	float cliffK = smoothstep(0.1, 0.18, slope) * (1.0 - smoothstep(350.0, 700.0, sea)) * (1.0 - smoothstep(70.0, 110.0, h)) * step(-1.0, h);
 	if (cliffK > 0.0) {
 		float st = h + (wVn(w / 70.0) - 0.5) * 5.0 + dot(w, vec2(0.0035, 0.0055));
 		float bk = 1.0 - smoothstep(0.2, 0.6, fwidth(st) * 1.9);
@@ -82,7 +83,7 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 		c = mix(c, ss, cliffK);
 	}
 	// the coves' sand: warm tan, from the sandstone it is ground from
-	float cove = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h) * (1.0 - smoothstep(300.0, 600.0, sea));
+	float cove = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.03, 0.08, slope)) * step(-0.5, h) * (1.0 - smoothstep(300.0, 600.0, sea));
 	c = mix(c, mix(vec3(0.5, 0.41, 0.28), vec3(0.6, 0.5, 0.35), n2) * mix(0.72, 1.0, smoothstep(0.3, 1.2, h)), cove);
 	// rocks in the coves at the cliff foot, dark and wet
 	float lowSand = (1.0 - smoothstep(1.8, 3.5, h)) * step(-0.3, h) * (1.0 - smoothstep(250.0, 450.0, sea)) * (1.0 - cliffK);
@@ -91,7 +92,7 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 		c = mix(c, mix(vec3(0.07, 0.065, 0.06), vec3(0.16, 0.14, 0.12), n3), rk * lowSand);
 	}
 	// the lip: ice plant (green, reddening, magenta in flower in spring) and coyote brush
-	float lip = smoothstep(0.1, 0.22, slope) * (1.0 - smoothstep(0.42, 0.6, slope)) * (1.0 - smoothstep(250.0, 500.0, sea)) * smoothstep(3.0, 6.0, h);
+	float lip = smoothstep(0.035, 0.07, slope) * (1.0 - smoothstep(0.1, 0.16, slope)) * (1.0 - smoothstep(250.0, 500.0, sea)) * smoothstep(3.0, 6.0, h);
 	if (lip > 0.0) {
 		vec3 ice = mix(vec3(0.16, 0.24, 0.05), vec3(0.34, 0.16, 0.07), smoothstep(0.45, 0.75, wVn(w / 9.0 + 2.0)));
 		ice = mix(ice, vec3(0.55, 0.1, 0.32), (1.0 - uSeason) * 0.45 * smoothstep(0.55, 0.7, wVn(w / 2.1 + 6.0)) * (1.0 - smoothstep(0.8, 2.0, px)));
@@ -100,7 +101,7 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 	}
 	// the golf links on the bluff top: fairways winding between darker rough, greens, bunkers
 	vec2 rq = (w - uCsRitz.xy) / uCsRitz.zw;
-	float links = (1.0 - smoothstep(0.8, 1.0, length(rq) + (wVn(w / 90.0) - 0.5) * 0.25)) * smoothstep(5.0, 9.0, h) * (1.0 - smoothstep(0.14, 0.24, slope)) * smoothstep(30.0, 60.0, sea) * (1.0 - urb);
+	float links = (1.0 - smoothstep(0.8, 1.0, length(rq) + (wVn(w / 90.0) - 0.5) * 0.25)) * smoothstep(5.0, 9.0, h) * (1.0 - smoothstep(0.03, 0.06, slope)) * smoothstep(30.0, 60.0, sea) * (1.0 - urb);
 	if (links > 0.0) {
 		float fb = abs(wVn(w / 230.0 + 2.1) * 2.0 - 1.0) + (wVn(w / 40.0) - 0.5) * 0.08;
 		float fair = 1.0 - smoothstep(0.16, 0.2, fb);
@@ -117,7 +118,7 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 		c = mix(c, lc, links);
 	}
 	// the farms on the flats, a field to each cell of the turned grid
-	float farmOK = (1.0 - smoothstep(0.1, 0.16, slope)) * smoothstep(4.0, 7.0, h) * smoothstep(60.0, 110.0, sea) * (1.0 - urb) * (1.0 - links);
+	float farmOK = (1.0 - smoothstep(0.02, 0.04, slope)) * smoothstep(4.0, 7.0, h) * smoothstep(60.0, 110.0, sea) * (1.0 - urb) * (1.0 - links);
 	if (farmOK > 0.0) {
 		vec2 d = w - uCsO.xy;
 		vec2 q = vec2(d.x * uCsF.x + d.y * uCsF.y, -d.x * uCsF.y + d.y * uCsF.x) + (vec2(wVn(w / 310.0), wVn(w / 310.0 + vec2(17.0, 5.0))) - 0.5) * ${FWARP.toFixed(1)};
