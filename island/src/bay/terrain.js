@@ -402,7 +402,10 @@ export function createBayArea(shared, scene, island, BU) {
 					wvK = wcK(bw);
 					// (the ground as graded for the roads near you: berms.js)
 					float bh = gradedHeight(bw);
-					float be = max(3.0, length(position.xz) * 0.006);
+					// (the normal over the grid's own spacing, near ring or far: finer than that the
+					// survey aliases into stair-steps along the contours)
+					vec2 gsp = uHole > 0.5 ? 2.6 * 95000.0 * pow(max(abs(position.xz) / 95000.0, vec2(1e-5)), vec2(1.6 / 2.6)) * (2.0 / 256.0) : 2.0 * 4000.0 * sqrt(max(abs(position.xz) / 4000.0, vec2(1e-5))) * (2.0 / 300.0);
+					float be = max(max(3.0, length(position.xz) * 0.006), max(gsp.x, gsp.y) * 0.5);
 					vec3 objectNormal = normalize(vec3(gradedHeight(bw - vec2(be, 0.0)) - gradedHeight(bw + vec2(be, 0.0)), 2.0 * be, gradedHeight(bw - vec2(0.0, be)) - gradedHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;
 					// the lie of the land about the point, for its colours: how far it sits below the

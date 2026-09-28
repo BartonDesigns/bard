@@ -175,7 +175,10 @@ export function createTerrain(island, shared) {
 		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
 				vec2 wxz = position.xz + uCenter;
-				float e = uCell;
+				// the normal is taken over the grid's own spacing where that is wider than a height
+				// cell: sampled finer, far off, the height map aliases into rows of stair-steps
+				vec2 gsp = 2.3 * 2200.0 * pow(max(abs(position.xz) / 2200.0, vec2(1e-4)), vec2(1.3 / 2.3)) * (2.0 / 320.0);
+				float e = max(uCell, max(gsp.x, gsp.y) * 0.6);
 				float hL = heightAt(wxz - vec2(e, 0.0)), hR = heightAt(wxz + vec2(e, 0.0));
 				float hD = heightAt(wxz - vec2(0.0, e)), hU = heightAt(wxz + vec2(0.0, e));
 				vec3 objectNormal = normalize(vec3(hL - hR, 2.0 * e, hD - hU));

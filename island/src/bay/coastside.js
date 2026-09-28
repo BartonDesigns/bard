@@ -240,7 +240,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				}
 			}
 			rowsX[r] = found;
-			if (r % 20 === 19) yield;
+			if (r % 2 === 1) yield;
 		}
 		rowsTex.needsUpdate = true;
 		COAST_U.uCsRow.value.w = 1;
@@ -353,7 +353,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				if ((groundAt(x + 6, z) - h) / 6 < 0.12) { if (h < 45) lip = { x, z, h }; break; }
 			}
 			pts.push(lip);
-			if (++n % 40 === 0) yield;
+			if (++n % 8 === 0) yield;
 		}
 		// smooth runs of lip into lines, broken where a ravine or a beach cuts the bluff
 		const runs = [];
@@ -441,7 +441,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				raw[j * CN + i] = d > -40 && d < 260 ? groundAt(wx, wz) : NaN;
 				if (d > -40 && d < 260) any = true;
 			}
-			if (j % 24 === 23) yield;
+			if (j % 6 === 5) yield;
 		}
 		next.fill(0);
 		if (any) {
@@ -453,6 +453,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 					for (let k = Math.max(0, i - R); k <= Math.min(CN - 1, i + R); k++) { const v = src[j * CN + k]; if (v === v) m = m === m ? f(m, v) : v; }
 					tmp[j * CN + i] = m;
 				}
+				yield;
 				for (let j = 0; j < CN; j++) for (let i = 0; i < CN; i++) {
 					let m = tmp[j * CN + i];
 					for (let k = Math.max(0, j - R); k <= Math.min(CN - 1, j + R); k++) { const v = tmp[k * CN + i]; if (v === v) m = m === m ? f(m, v) : v; }
