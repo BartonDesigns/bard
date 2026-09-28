@@ -200,7 +200,7 @@ export function generateTown(opts) {
 
 // the same, one piece at a time: yields between the pieces (a superblock, a pass), so a
 // caller can spread the work over frames. The generator's return value is the region.
-export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0 }) {
+export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null }) {
 	const S = stats, r = rng(seed), T0 = Date.now();
 	const older = style === 'older';
 	const W = S.widths;
@@ -239,6 +239,9 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	const slope = (x, z) => Math.hypot(H(x + HC, z) - H(x - HC, z), H(x, z + HC) - H(x, z - HC)) / (2 * HC);
 	const dry = (x, z) => H(x, z) > 1.5;
+	// the creeks and lakes (crysis/rivers.js): streets cross them on bridges, but no house,
+	// yard or school stands in one; the parks take their banks
+	const wet = (x, z, m) => !!water && water.near(x, z) < m;
 	const MAXG = older ? 0.14 : 0.18;      // streets steeper than this are not built (the real ones: 90% under 0.21)
 
 	// reserved sites (schools, parks, shopping): oriented rectangles streets and lots keep out of
@@ -426,18 +429,21 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			const area = fromPct(S.siteHa.school, 0.3 + r() * 0.45) * 1e4, w = clamp(Math.sqrt(area * 1.3), 140, 280), d = clamp(area / w, 110, 220);
 			const [mx, mz, tx, tz] = along(B.col.pts, lengthOf(B.col.pts) * (0.3 + r() * 0.4)), sd = r() < 0.5 ? 1 : -1;
 			const x = mx - tz * sd * (W.tertiary / 2 + 6 + d / 2), z = mz + tx * sd * (W.tertiary / 2 + 6 + d / 2);
-			if (dry(x, z) && slope(x, z) < 0.1 && !inSite(x, z, Math.max(w, d) / 2)) sites.push({ kind: 'school', x, z, ux: tx, uz: tz, hw: w / 2, hd: d / 2, fx: tz * sd, fz: -tx * sd });
+			if (dry(x, z) && slope(x, z) < 0.1 && !inSite(x, z, Math.max(w, d) / 2) && !wet(x, z, Math.max(w, d) / 2 + 10)) sites.push({ kind: 'school', x, z, ux: tx, uz: tz, hw: w / 2, hd: d / 2, fx: tz * sd, fz: -tx * sd });
 		}
 		// a park somewhere inside
 		if (parks < nPark && r() < 0.7) {
 			const area = fromPct(S.siteHa.park, 0.3 + r() * 0.6) * 1e4, w = clamp(Math.sqrt(area * 1.4), 50, 260), d = clamp(area / w, 40, 200);
+			// (the first good spot, or better one that runs down to a creek)
+			let pick = null;
 			for (let tries = 0; tries < 6; tries++) {
 				const [x, z] = toW(B.u0 + SP * (0.2 + r() * 0.6), B.v0 + SP * (0.2 + r() * 0.6));
 				if (!dry(x, z) || slope(x, z) > 0.14 || inSite(x, z, Math.max(w, d) / 2 + 20) || G.nearest(x, z, Math.max(w, d) / 2 + 12)) continue;
-				sites.push({ kind: 'park', x, z, ux: ca, uz: sa, hw: w / 2, hd: d / 2 });
-				parks++;
-				break;
+				const bank = water ? water.near(x, z) : Infinity;
+				if (!pick || (bank < Math.max(w, d) * 0.7 && !(pick.bank < Math.max(w, d) * 0.7))) pick = { x, z, bank };
+				if (!water || bank < Math.max(w, d) * 0.7) break;
 			}
+			if (pick) { sites.push({ kind: 'park', x: pick.x, z: pick.z, ux: ca, uz: sa, hw: w / 2, hd: d / 2, creek: pick.bank < Math.max(w, d) * 0.7 }); parks++; }
 		}
 	}
 	// the sites' entrances: a service drive from the nearest arterial or collector
@@ -669,7 +675,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		const set = clamp(fromPct(S.lots.setback, r() * 0.8 + 0.1), 5, 16) * (older ? 0.75 : 1);
 		const off = hw + set + d / 2, x = ex + nx * off, z = ez + nz * off;
 		const ux = -nz, uz = nx;    // the box's local x in the world, along the street
-		if (!dry(x, z) || slope(x, z) > 0.2 || inSite(x, z, Math.max(w, d) / 2 + 4)) return false;
+		if (!dry(x, z) || slope(x, z) > 0.2 || inSite(x, z, Math.max(w, d) / 2 + 4) || wet(x, z, Math.max(w, d) / 2 + 6)) return false;
 		if (r() > Math.min(1, dens(x, z) * 1.25)) return false;
 		if (!free(x, z, ux, uz, w / 2 + 1.5, d / 2 + 1.5)) return false;
 		// the whole footprint and a back yard clear of the streets and the neighbours
@@ -712,7 +718,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (kind !== K.garage && r() < 0.8) { const o = (door - 0.5) * (w - 2.5), wx = fx + ux * o, wz = fz + uz * o; paths.push({ ax: wx, az: wz, bx: wx - nx * (set + hw * 0.5), bz: wz - nz * (set + hw * 0.5), w: 1.2 }); }
 		// out back: a pool now and then, and the yard trees
 		const bx = x + nx * (d / 2 + 9.5), bz = z + nz * (d / 2 + 9.5);
-		if (r() < S.lots.poolPerHouse * 0.9 && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5)) {
+		if (r() < S.lots.poolPerHouse * 0.9 && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8)) {
 			pools.push({ x: bx, z: bz, w: 4 + r() * 1.5, d: 8 + r() * 3, a: yaw + Math.PI / 2 + (r() - 0.5) * 0.2 });
 			claim(bx, bz, ux, uz, 3, 5);
 		}
@@ -850,7 +856,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			// a big, level park gets a pond in it, like Lake Annabel: an uneven oval off to one
 			// side, a grove of redwoods and oaks round its bank (bay/lake.js fills and stocks it)
 			let pond = null;
-			if (hw * hd * 4 > 9000) {
+			if (hw * hd * 4 > 9000 && !s.creek) {
 				let lo = 1e9, hi = -1e9;
 				for (let n = 0; n < 12; n++) { const a = n / 12 * Math.PI * 2, [qx, qz] = at(Math.cos(a) * hw * 0.6, Math.sin(a) * hd * 0.6), h = H(qx, qz); lo = Math.min(lo, h); hi = Math.max(hi, h); }
 				if (hi - lo < 1.6 && r() < 0.85) {
@@ -922,6 +928,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	yield 'map';
 	for (const b of boxes) rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255);
+	// (anything else that came to stand in the water taken out of it)
+	if (water) for (const L of [boxes, pools, trees]) { const keep = L.filter((b) => !wet(b.x, b.z, (b.w && b.d ? Math.max(b.w, b.d) / 2 : 0) + 2)); L.length = 0; L.push(...keep); }
 	return {
 		name, gen: true, seed, style, bounds: [x0, z0, x0 + MW * step, z0 + MH * step],
 		roads, boxes, paths, pools, trees, ponds, parks: parksOut,

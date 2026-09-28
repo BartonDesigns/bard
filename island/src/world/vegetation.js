@@ -898,6 +898,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 			const h = island.heightAt(px, pz);
 			if (h < (sp.wet ? -2.2 : 0.2)) continue;
 			if (island.noPlant?.some((o) => Math.hypot(px - o.x, pz - o.z) < o.r + 3)) continue;
+			if (island.inWater?.(px, pz) && !sp.wet) continue;                        // (not in a stream or a lake: planet/waters.js)
 			const n = island.normalAt(px, pz), sl = 1 - n.y;
 			const m = { path: island.maskAt(px, pz, 0), village: island.maskAt(px, pz, 1), wild: island.maskAt(px, pz, 3) };
 			// another world grows less (a desert, ash, ice) or more; its stones stay

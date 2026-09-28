@@ -13,7 +13,7 @@ const BUDGET = 6;           // ms of growing a frame
 const NEAR = 2500;          // start growing this far outside a town's reach
 const LEAVE = 4500;         // and drop it this far outside
 
-export function createCivilization({ real, bay }) {
+export function createCivilization({ real, bay, water = () => null }) {
 	let active = null, job = null;
 	const cache = [];        // the last few towns grown, newest last
 	const reach = (t) => t.r * 1.3 + 150;
@@ -22,7 +22,7 @@ export function createCivilization({ real, bay }) {
 	function start(t) {
 		const hit = cache.find((c) => c.key === key(t));
 		if (hit) return { town: t, done: hit.region };
-		const it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name });
+		const W = water(), it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name, water: W ? { near: (x, z) => W.near(x, z) } : null });
 		return { town: t, it, t0: performance.now(), work: 0 };
 	}
 	function finish(J, region) {
@@ -40,6 +40,9 @@ export function createCivilization({ real, bay }) {
 		const high = camera.position.y > 5000;
 		let want = !high && bd < NEAR ? best : null;
 		if (!want && active && !high && Math.hypot(active.town.x - x, active.town.z - z) - reach(active.town) < LEAVE) want = active.town;
+		// (a town waits for its creeks and lakes to be known, so it is laid out the same every time)
+		const W = water();
+		if (want && want !== active?.town && want !== job?.town && W && !W.readyAt(want.x, want.z, reach(want))) { W.pump(want.x, want.z, reach(want), BUDGET); return; }
 		if (want !== (job?.town || active?.town || null)) {
 			if (active && active.town !== want) { real.removeRegion(active.handle); active = null; }
 			job = want && want !== active?.town ? start(want) : null;

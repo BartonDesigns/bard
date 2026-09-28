@@ -20,7 +20,7 @@ import { usePhoto } from '../world/photomats.js';
 import { GREENS } from './realcity.js';
 import { inCampus } from './discovery.js';
 import { inBoardwalk } from './boardwalk.js';
-import { inRiverWater, riverTreesNear, carveVersion } from './carve.js';
+import { inRiverWater, riverTreesNear, carveVersion, carveNear } from './carve.js';
 import { inWater, waterTreesNear, waterVersion } from './watercarve.js';
 import { inClearing, clearingVersion } from '../sportsfields.js';
 
@@ -1284,7 +1284,7 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const im of [...shrubs, ...ferns, ...treeTiers.flatMap((T) => [...T.near, ...T.mid])]) im.visible = !high;
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (clearingVersion() !== clearV) { clearV = clearingVersion(); lastX = 1e9; }          // a ball field laid out nearby: its trees go
-		if (carveVersion() !== carveV) { carveV = carveVersion(); lastX = 1e9; }                  // a river carved: the ground under the trees moved
+		if (carveVersion() !== carveV) { carveV = carveVersion(); if (carveNear(x, z, 3000)) lastX = 1e9; }     // a river carved nearby: the ground under the trees moved
 		if (waterVersion() !== waterV) { waterV = waterVersion(); lastX = 1e9; }                  // trees stood up along the creeks near you
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
 		if (riseT0 >= 0) {

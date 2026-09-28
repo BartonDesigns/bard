@@ -163,7 +163,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		// where the railroad meets the river: the trestle's ends
 		const [rx, rz] = toW(RAIL.u0, RAIL.v), [ex, ez] = toW(RAIL.u0 + 1, RAIL.v), cr = river.crossing(rx, rz, ex - rx, ez - rz);
 		if (cr) { const uc = RAIL.u0 + cr.t; RAIL.t0 = uc - cr.w - 14; RAIL.t1 = uc + cr.w + 20; }
-		Q.push(buildGround, buildSeawall, buildCasino, buildNeptune, buildStands, buildLamps, buildBeach, buildBackdrop);
+		Q.push(buildGround, buildSeawall, buildCasino, buildNeptune, buildStands, buildLamps, buildBeach, buildBackdrop, ...[false, true].flatMap((e) => [() => buildTown(e, -214, -850), () => buildTown(e, -850, -1500)]));
 		B.wharf = createWharf({ group, bay, sound, isPhone, signs: B.signs, winMats: B.winMats });
 		Q.push(...B.wharf.steps);
 		const add = (make) => Q.push(() => { const r = make(); B.rides.push(r); for (const s of r.solid || []) B.solids.push([...s, 30]); for (const c of r.round || []) B.rounds.push(c); });
@@ -566,7 +566,8 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		LOTS.forEach((P, li) => {
 			const us = P.map((q) => q[0]), vs = P.map((q) => q[1]);
 			const U0 = Math.min(...us), V0 = Math.min(...vs), NI = Math.ceil((Math.max(...us) - U0) / C), NJ = Math.ceil((Math.max(...vs) - V0) / C);
-			const ok = (u, v) => { const [x, z] = toW(u, v); return inPoly(P, u, v) && river.influence(x, z) < 0.01; };
+			// (up to the levee's foot: the river's reach runs a little past it)
+			const ok = (u, v) => { const [x, z] = toW(u, v); return inPoly(P, u, v) && river.influence(x, z) < 0.35; };
 			const base = pos.length / 3, at = new Map();
 			const vert = (i, j) => { const k = j * (NI + 1) + i; if (!at.has(k)) { const u = U0 + i * C, v = V0 + j * C; at.set(k, base + at.size); pos.push(u, lotY(u, v), v); uv.push(u / 20, v / 16); } return at.get(k); };
 			for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) {
@@ -594,6 +595,31 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		Lm.done(group, { shadow: false });
 		bl.done(group, 1.6);
 		body.done(group); cab.done(group);
+	}
+	// the town round the river: the Beach Flats and the blocks up San Lorenzo Boulevard and
+	// East Cliff, houses a lot apart along streets; downtown west of the levee (north of
+	// Laurel Street) two and three storeys of shops and offices. Kept off the lots, the
+	// river's banks and levees. (In four pieces: each bank, near and far.)
+	function buildTown(east, va, vb) {
+		const Mg = merger(), r = rng((east ? 23 : 17) + va);
+		const HK = ['stucco', 'white', 'cream', 'stuccoPink', 'white', 'cream'], RK = ['tile', 'darksteel', 'darkwood', 'tile'];
+		for (let v = va; v > vb; v -= 34) for (let u = -520; u < 820; u += 17) {
+			// (a street every sixth lot along, every block across)
+			if (Math.floor((u + 520) / 17) % 6 === 5) continue;
+			const pu = u + (r() - 0.5) * 3, pv = v + (r() - 0.5) * 4, [x, z] = toW(pu, pv);
+			if (east !== river.side(x, z) > 0) continue;
+			if (river.influence(x, z) > 0 || river.influence(...toW(pu + 10, pv)) > 0 || river.influence(...toW(pu - 10, pv)) > 0 || river.influence(...toW(pu, pv + 14)) > 0 || river.influence(...toW(pu, pv - 14)) > 0) continue;
+			if (LOTS.some((P) => inPoly(P, pu, pv) || inPoly(P, pu + 10, pv) || inPoly(P, pu - 10, pv) || inPoly(P, pu, pv + 14))) continue;
+			if (pv > -300 && pu < 0) continue;                     // (Beach Hill: the backdrop's own houses)
+			const y = bay.heightAt(x, z);
+			if (y < 1.5 || r() < 0.12) continue;
+			const down = !east && pv < -760 && pu < -150 && pu > -600;
+			const w = down ? 15 : 9 + r() * 4, d = down ? 26 : 10 + r() * 6, h = down ? 7 + r() * 6 : 4 + r() * 3.5, a = (r() - 0.5) * 0.08;
+			Mg.box(w, h + 1, d, down ? ['cream', 'white', 'stucco', 'stuccoPink', 'concrete'][Math.floor(r() * 5)] : HK[Math.floor(r() * HK.length)], pu, y + h / 2 - 0.5, pv, 0, a);
+			if (down) Mg.box(w + 0.3, 0.5, d + 0.3, 'darksteel', pu, y + h + 0.25, pv, 0, a);
+			else Mg.geo(new THREE.ConeGeometry(Math.max(w, d) * 0.72, 2.2, 4, 1).rotateY(Math.PI / 4).scale(w / Math.max(w, d), 1, d / Math.max(w, d)), RK[Math.floor(r() * RK.length)], pu, y + h + 1.1, pv, 0, a);
+		}
+		Mg.done(group, { shadow: false });
 	}
 	// Beach Hill to the west and the Beach Flats' houses, the motels along Beach Street
 	// facing the park, the town rising behind; none in the lots, the river or its banks

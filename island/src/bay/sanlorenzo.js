@@ -148,7 +148,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 	// ---------- the water's level all the way up ----------
 	function levels(S, N) {
 		const n = S.n, L = new Float32Array(n), lag = 0.9;
-		const sLag = S.sOf(3), sLaurel = S.sOf(S.mouthN + 7), sWater = S.sOf(S.mouthN + 11), sHwy = S.sOf(S.mouthN + S.townN - 1);
+		const sBeach = S.sOf(2), sLag = S.sOf(3), sLaurel = S.sOf(S.mouthN + 7), sWater = S.sOf(S.mouthN + 11), sHwy = S.sOf(S.mouthN + S.townN - 1);
 		// the valley floor under the line (the lowest of a few points across it)
 		const floor = new Float32Array(n);
 		for (let i = 0; i < n; i++) {
@@ -163,7 +163,8 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		for (let i = 0; i < n; i++) {
 			const s = i * STEP;
 			let l;
-			if (s < sLag) l = 0.05 + (lag - 0.05) * sm(0, sLag, s);
+			// (out of the lagoon it runs down over the sand to the sea's own level at the surf)
+			if (s < sLag) l = 0.05 + (lag - 0.05) * sm(sBeach, sLag, s);
 			else if (s < sLaurel) l = lag;
 			else if (s < sWater) l = lag + 0.4 * (s - sLaurel) / (sWater - sLaurel);
 			else if (s < sHwy) l = lag + 0.4 + 0.5 * (s - sWater) / (sHwy - sWater);
@@ -186,7 +187,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(1, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) * 35);
 		for (let i = 0; i < n; i++) if (S.zone[i] === 'valley') S.D[i] = 0.55 + 1.35 * (1 - Math.min(1, S.foam[i] * 1.5));
 		for (let i = 0; i < n && i * STEP < sLag; i++) S.foam[i] = Math.max(S.foam[i], 0.5 * (1 - i * STEP / sLag));
-		S.sHwy = sHwy; S.sLaurel = sLaurel;
+		S.sHwy = sHwy; S.sLaurel = sLaurel; S.sBeach = sBeach;
 	}
 
 	// ---------- the cross-section: the ground at a distance from the middle ----------
@@ -413,6 +414,12 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		for (let i = Math.max(0, bi - 8); i <= Math.min(S.n - 1, bi + 8); i++) { const d = (S.x[i] - x) ** 2 + (S.z[i] - z) ** 2; if (d < bd) { bd = d; bi = i; } }
 		return { i: bi, d: Math.sqrt(bd) };
 	}
+	// which bank a point is on: + the east and north (East Cliff, San Lorenzo Boulevard), - the
+	// west and south (the Boardwalk, the River Lot, downtown)
+	function side(x, z) {
+		const S = R.S, { i } = nearest(x, z);
+		return S ? Math.sign((x - S.x[i]) * -S.tz[i] + (z - S.z[i]) * S.tx[i]) : 0;
+	}
 	// the ground as carved at a point across the line from sample i (for placing things)
 	function groundAt(S, i, d) {
 		const x = S.x[i] - S.tz[i] * d, z = S.z[i] + S.tx[i] * d;
@@ -465,6 +472,8 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		let rows = 0;
 		for (let i = 0; i < S.n; i++) {
 			if (S.zone[i] === 'valley' && i % 2 && i !== S.n - 1) continue;
+			// (below the surf line the sea itself fills the channel)
+			if (i * STEP < S.sBeach - STEP) continue;
 			const w = S.w[i] + 1.2, L = S.L[i];
 			const speed = S.zone[i] === 'lagoon' ? 0.06 : S.zone[i] === 'town' ? 0.25 : S.zone[i] === 'valley' ? 0.55 + S.foam[i] * 1.6 : 0.5;
 			for (const a of across) {
@@ -595,7 +604,9 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		if (!R.job && bay.levels?.[0]) R.job = carving();
 		if (!R.ready && !R.failed) {
 			const t0 = performance.now();
-			try { while (performance.now() - t0 < (isPhone ? 5 : 8)) if (R.job.next().done) break; } catch (e) { R.failed = true; console.warn('[river]', e); }
+			try {
+				while (performance.now() - t0 < (isPhone ? 5 : 8)) { const t1 = performance.now(), done = R.job.next().done; R.slow = Math.max(R.slow || 0, performance.now() - t1); if (done) break; }
+			} catch (e) { R.failed = true; console.warn('[river]', e); }
 		}
 		if (!R.ready) return;
 		uTime.value = t; uNight.value = night;
@@ -633,7 +644,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
 		scene.remove(group);
 	}
-	return { group, update, floor, push, levelAt, influence, crossing, destroy, ready: () => R.ready, settled: () => R.ready || !!R.failed, info: () => ({ end: R.S?.L ? endInfo() : null, ready: R.ready, tiles: R.tiles.size, samples: R.S?.n || 0, length: Math.round((R.S?.n || 0) * STEP), trees: R.trees.length, bridges: (R.names || []).map((b) => b.name) }) };
+	return { group, update, floor, push, levelAt, influence, side, crossing, destroy, ready: () => R.ready, settled: () => R.ready || !!R.failed, info: () => ({ end: R.S?.L ? endInfo() : null, ready: R.ready, slowestStepMs: Math.round(R.slow || 0), tiles: R.tiles.size, samples: R.S?.n || 0, length: Math.round((R.S?.n || 0) * STEP), trees: R.trees.length, bridges: (R.names || []).map((b) => b.name) }) };
 }
 
 const WATER_VERT = /* glsl */`
@@ -669,7 +680,9 @@ const WATER_FRAG = /* glsl */`
 		vec3 n = normalize(vec3(-sx * amp / e, 1.0, -sz * amp / e));
 		vec3 vv = normalize(cameraPosition - vW);
 		vec3 r = reflect(-vv, n);
-		float fres = 0.1 + 0.9 * pow(1.0 - max(dot(n, vv), 0.0), 4.0);
+		// (clamped: a dot a hair over one would make pow() of a negative, NaN, and the bloom
+		// would spread it over the whole screen)
+		float fres = 0.1 + 0.9 * pow(clamp(1.0 - dot(n, vv), 0.0, 1.0), 4.0);
 		vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5)) * vec3(0.72, 0.8, 0.86);
 		// low down in it, the dark banks, the willows and the town
 		sky = mix(vec3(0.035, 0.06, 0.03) * (1.0 - uNight * 0.8), sky, smoothstep(0.06, 0.26, r.y + (vn(p * 0.04) - 0.5) * 0.12));

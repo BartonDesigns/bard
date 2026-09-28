@@ -120,7 +120,7 @@ function shoreOf(P) {
 
 // The lakes: Lake Annabel, and the ponds the generated towns grow in their parks (their
 // outlines come with the town, crysis/civgen.js). Each is built when you come near.
-export function createLake(scene, bay, shared, { isPhone = false, real = null } = {}) {
+export function createLake(scene, bay, shared, { isPhone = false, real = null, ponds = true } = {}) {
 	const root = new THREE.Group();
 	root.name = 'lakes';
 	scene.add(root);
@@ -261,9 +261,9 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null } 
 	function update(dt, t, cam, night) {
 		const x = cam.position.x, z = cam.position.z;
 		if (!bay.loaded()) return;
-		// the generated towns' ponds, as they come and go
+		// the generated towns' ponds, as they come and go (unless water.js has them)
 		const v = real?.version ? real.version() : 0;
-		if (v !== pondsV) {
+		if (ponds && v !== pondsV) {
 			pondsV = v;
 			const now = new Set(real?.ponds ? real.ponds() : []);
 			for (let i = bodies.length - 1; i >= 1; i--) if (!now.has(bodies[i].src)) { drop(bodies[i]); bodies.splice(i, 1); }

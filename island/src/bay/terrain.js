@@ -716,8 +716,8 @@ export function createBayArea(shared, scene, island, BU) {
 					vec2 wv = wcAt(vBW);
 					if (wv.y > 0.004) {
 						float wn = vn(vBW * 0.37), wm = vn(vBW * 0.09);
-						vec3 mud = mix(vec3(0.2, 0.17, 0.12), vec3(0.34, 0.3, 0.23), wn) * (0.8 + 0.35 * wm);
-						mud = mix(mud, mix(vec3(0.36, 0.33, 0.27), vec3(0.52, 0.48, 0.4), vn(vBW * 1.3)), smoothstep(0.55, 0.75, wm) * 0.7);
+						vec3 mud = mix(vec3(0.1, 0.085, 0.06), vec3(0.2, 0.16, 0.11), wn) * (0.8 + 0.35 * wm);
+						mud = mix(mud, mix(vec3(0.26, 0.23, 0.18), vec3(0.4, 0.36, 0.29), vn(vBW * 1.3)), smoothstep(0.58, 0.78, wm) * 0.6);
 						vec3 conc = mix(vec3(0.5, 0.49, 0.46), vec3(0.6, 0.59, 0.55), wn) * (0.9 + 0.12 * wm);
 						conc = mix(conc, conc * 0.72, smoothstep(0.6, 0.8, vn(vBW * vec2(0.08, 2.0))) * 0.4);
 						c = mix(c, mud, clamp(wv.y, 0.0, 1.0));

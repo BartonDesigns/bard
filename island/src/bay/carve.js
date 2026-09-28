@@ -57,6 +57,8 @@ export function carveDelta(x, z) {
 	return (D[o] * (1 - u) + D[o + 1] * u) * (1 - v) + (D[o + T1] * (1 - u) + D[o + T1 + 1] * u) * v;
 }
 export const carveVersion = () => C.version;
+// within m metres of anything carved?
+export const carveNear = (x, z, m) => C.on && x > C.x0 - m && x < C.x0 + C.W * C.cell + m && z > C.zN - m && z < C.zN + C.H * C.cell + m;
 
 // A carving to fill: the grid of survey cells it may touch and how many tiles it will have;
 // tiles are added one cell at a time ([delta, gravel, green, path] at each texel, T1 x T1),
@@ -85,8 +87,8 @@ export function beginCarve(x0, zN, cell, W, H, n) {
 			CARVE_U.uCvIdx.value.dispose(); CARVE_U.uCvAt.value.dispose();
 			CARVE_U.uCvIdx.value = ti; CARVE_U.uCvAt.value = ta;
 			CARVE_U.uCvR.value.set(x0, zN, cell, 1);
+			// (the version moves when the river's hooks are set, just after: one rebuild, not two)
 			Object.assign(C, { on: true, x0, zN, cell, W, H, idx, dh });
-			C.version++;
 		},
 	};
 	return K;

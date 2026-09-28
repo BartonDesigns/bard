@@ -42,7 +42,9 @@ import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
 import { createLake } from './bay/lake.js';
+import { createEarthWater } from './bay/earthwater.js';
 import { createWater } from './bay/water.js';
+import { planWaters } from './planet/waters.js';
 import { createTidepools } from './bay/tidepools.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
@@ -463,6 +465,9 @@ export function createIslandWorld() {
 		const fieldPlan = planIslandFields(island);
 		// a realm of castles and towns, where this world keeps one: sited now, the land shaped round it
 		const realmPlan = earth ? null : planRealm(island, profile, { fields: fieldPlan.clear, isPhone });
+		// its streams and lakes (or ice, or lava), carved before its biomes, plants and caves are planned
+		const waterPlan = earth ? null : await planWaters(island, profile, { clear: [...fieldPlan.clear, ...(realmPlan?.clear || [])], realm: realmPlan });
+		if (waterPlan) island.inWater = waterPlan.inWater;
 		// the planet's second biome and its cold side, baked where the ground and plants can read it
 		island.biomes = createBiomes(island, profile);
 		(shared.uBiome ||= { value: null }).value = island.biomes.tex;
@@ -516,6 +521,10 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		if (waterPlan) {
+			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
+			island.waterAt = (x, z) => world?.water?.waterAt(x, z) ?? null;
+		}
 		// another world's underground: cave mouths on the hills, tunnels, ruins, a village by lamplight
 		if (!earth) {
 			world.underworld = createUnderworld(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, plan: cavePlan });
@@ -549,6 +558,8 @@ export function createIslandWorld() {
 			island.underFloor = md.underFloor(island.underFloor);
 			island.underPush = md.underPush(island.underPush);
 		}
+		// (the bridges where the realm's roads cross the streams are floors)
+		if (waterPlan?.source.decks.length) { const of = island.extraFloor, wf = world.water.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), wf(x, z, y)) : wf; }
 		state.seed = seed;
 		state.earth = earth;
 		state.biome = params.biome;
@@ -567,7 +578,7 @@ export function createIslandWorld() {
 			world.labels = createLabels(dom.mount, bayArea, null);
 			world.real = createRealCity(renderer);
 			// Crysis: the towns beyond the survey, grown street by street as you near them
-			world.civ = createCivilization({ real: world.real, bay: bayArea });
+			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen });
 			world.city = createCity(shared, scene, bayArea, world.real);
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 			world.forestFloor = createForestFloor(scene, bayArea, world.city, world.real);
@@ -581,9 +592,9 @@ export function createIslandWorld() {
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
-			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real });
+			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real, ponds: false });
 			// every other river, creek, lake and reservoir (bay/water.js)
-			world.water = createWater(scene, bayArea, shared, { isPhone, real: world.real, ground: (x, z) => island.heightAt(x, z) });
+			world.water = createEarthWater(scene, bayArea, shared, { isPhone, real: world.real, ground: (x, z) => island.heightAt(x, z) });
 			bayArea.waterName = (x, z) => world?.water?.nameAt(x, z) ?? null;
 			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
 			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
