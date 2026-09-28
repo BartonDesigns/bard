@@ -13,8 +13,8 @@ export const FPS = 60;
 // each shot's place caption (trailer/cards.py draws them): a title and a line under it
 export const CAPTIONS = {
 	gg: ['Golden Gate Bridge', 'San Francisco Bay, true to scale'],
-	sf: ['San Francisco', 'Downtown from the bay'],
-	diablo: ['Mt Diablo', 'The summit at sundown'],
+	sf: ['San Francisco', 'Downtown'],
+	diablo: ['Mt Diablo', 'At sundown'],
 	boardwalk: ['Santa Cruz Beach Boardwalk', 'The Giant Dipper and the Ferris wheel'],
 	wharf: ['Santa Cruz Municipal Wharf', 'Shops out over the bay'],
 	tropical: ['Worlds beyond', 'A tropical island'],
@@ -41,20 +41,29 @@ export const SHOTS = [
 			const [ax, az] = C.LL(37.8262, -122.4858), [bx, bz] = C.LL(37.8258, -122.4861), [tx, tz] = C.LL(37.8235, -122.4790);
 			return [{ t: 0, p: [ax, 30, az], l: [tx, 120, tz], fov: 45 }, { t: 3.5, p: [bx, 78, bz], l: [tx, 105, tz], fov: 45 }];
 		} },
-	// 3. downtown San Francisco: in off the bay over the Embarcadero, toward the towers
-	{ id: 'sf', dur: 4, warm: 150, settle: 2, opts: { ease: 'glide', shake: 0.1 },
-		setup: (w) => { w.sky.state.hours = 18.6; return {}; },
+	// 3. downtown San Francisco at street level: a slow dolly down a street, over the traffic
+	{ id: 'sf', dur: 4, warm: 180, settle: 3, opts: { ease: 'glide', shake: 0.04 },
+		setup: (w, C) => {
+			w.sky.state.hours = 18.3;
+			const [x, z] = C.LL(37.7890, -122.4010), S = C.street(x, z, 300, 140);
+			if (!S) return { info: 'no street' };
+			// start a third of the way along, heading whichever way looks at more of the run
+			const s0 = S.L * 0.3;
+			return { a: [S.a[0] + S.d[0] * s0, S.a[1] + S.d[1] * s0], d: S.d, L: S.L - s0, info: 'street ' + S.cls + ' L' + S.L.toFixed(0) };
+		},
 		cam: (S, w, C) => {
-			const [ax, az] = C.LL(37.7985, -122.3860), [bx, bz] = C.LL(37.7962, -122.3905), [tx, tz] = C.LL(37.7900, -122.4000);
-			return [{ t: 0, p: [ax, 150, az], l: [tx, 40, tz], fov: 50 }, { t: 4, p: [bx, 125, bz], l: [tx, 45, tz], fov: 50 }];
+			if (!S.a) return [{ t: 0, p: [0, 500, 0], l: [0, 0, -100] }, { t: 4, p: [0, 500, 0], l: [0, 0, -100] }];
+			const P = (s, h) => { const x = S.a[0] + S.d[0] * s, z = S.a[1] + S.d[1] * s; return [x, C.ground(x, z) + h, z]; };
+			const far = Math.min(S.L, 220);
+			return [{ t: 0, p: P(0, 9), l: P(far, 14), fov: 55 }, { t: 4, p: P(45, 6), l: P(far + 45, 12), fov: 55 }];
 		} },
-	// 4. Mt Diablo: a crane up off the summit, the valleys going gold
-	{ id: 'diablo', dur: 4, warm: 150, settle: 2, opts: { ease: 'inOut', shake: 0.1 },
-		setup: (w) => { w.sky.state.hours = 18.5; window.Crysis.season(0.8); return {}; },
+	// 4. Mt Diablo: in toward the summit at sundown, the valley falling away below
+	{ id: 'diablo', dur: 4, warm: 150, settle: 2, opts: { ease: 'glide', shake: 0.12 },
+		setup: (w) => { w.sky.state.hours = 18.7; window.Crysis.season(0.85); return {}; },
 		cam: (S, w, C) => {
-			const [sx, sz] = C.LL(37.8816, -121.9142), [ax, az] = C.LL(37.8806, -121.9180), [tx, tz] = C.LL(37.84, -122.06);
+			const [sx, sz] = C.LL(37.8816, -121.9142), [ax, az] = C.LL(37.8690, -121.9480), [bx, bz] = C.LL(37.8730, -121.9380);
 			const g = C.ground(sx, sz);
-			return [{ t: 0, p: [ax, C.ground(ax, az) + 6, az], l: [tx, g - 350, tz], fov: 55 }, { t: 4, p: [ax - 60, g + 60, az], l: [tx, g - 300, tz], fov: 55 }];
+			return [{ t: 0, p: [ax, g - 60, az], l: [sx, g - 40, sz], fov: 48 }, { t: 4, p: [bx, g - 20, bz], l: [sx, g - 10, sz], fov: 46 }];
 		} },
 	// 5. the Santa Cruz Beach Boardwalk from the beach: the Giant Dipper and the wheel
 	{ id: 'boardwalk', dur: 4.5, warm: 240, settle: 3, opts: { ease: 'inOut', shake: 0.06 },
@@ -76,6 +85,8 @@ export const SHOTS = [
 	{ id: 'tropical', world: '?planet=TROPICAL&seed=1', dur: 4, warm: 150, settle: 2, opts: { ease: 'glide', shake: 0.2 },
 		setup: (w, C) => {
 			w.sky.state.hours = 17.6;
+			// the alien works stay for their own shot (so each world reads as its own place)
+			if (w.alien?.group) w.alien.group.visible = false;
 			// in from the sea over the beach, toward the peak
 			const pk = C.peak(900), a = Math.atan2(pk[0], pk[2]) + 0.6;
 			let d = 50;
@@ -97,7 +108,7 @@ export const SHOTS = [
 		cam: (S, w, C) => C.orbit([S.v[0], S.v[1], S.v[2]], 520, 40, 2.2, 2.6, 5, 60, 4, 50) },
 	// 9. a snowbound ice world, over its highest peak
 	{ id: 'ice', world: '?planet=ICE&seed=1', dur: 4, warm: 150, settle: 2, opts: { ease: 'inOut', shake: 0.2 },
-		setup: (w, C) => { w.sky.state.hours = 15.5; const pk = C.peak(900); return { pk, info: 'peak ' + pk.map((q) => q.toFixed(0)) }; },
+		setup: (w, C) => { w.sky.state.hours = 15.5; if (w.alien?.group) w.alien.group.visible = false; const pk = C.peak(900); return { pk, info: 'peak ' + pk.map((q) => q.toFixed(0)) }; },
 		cam: (S, w, C) => C.orbit(S.pk, 380, 50, 0.3, 0.8, 4, -20, 4, 50) },
 	// 10. a mystical world, its alien city
 	{ id: 'alien', world: '?planet=MYSTICAL&seed=1', dur: 4.5, warm: 180, settle: 2, opts: { ease: 'inOut', shake: 0.15 },

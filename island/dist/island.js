@@ -7414,9 +7414,11 @@ void main(){
 			if (R.z < 0.01) continue;
 			vec2 rel = u - R.xy; float rr = R.z * sc * 1.3;
 			float dd = length(vec2(rel.x > 0.0 ? rel.x / (2.5 + speed) : rel.x, rel.y));
-			rf = max(rf, smoothstep(rr * 1.8, rr * 1.2, dd) * smoothstep(rr * 0.7, rr * 1.1, dd));
+			// (the wake behind it stronger than the pillow in front)
+			rf = max(rf, smoothstep(rr * 1.8, rr * 1.2, dd) * smoothstep(rr * 0.7, rr * 1.1, dd) * (rel.x > 0.0 ? 1.0 : 0.45));
 		}
-		rf *= smoothstep(0.45, 0.7, gvn(vec2(along * 2.1 - uTime * speed * 1.4, across * 4.3)) + 0.12) * rocky * nearK;
+		// (broken up, and only over the shallow stones that come near the top)
+		rf *= smoothstep(0.42, 0.72, gvn(vec2(along * 1.3 - uTime * speed * 1.4, across * 5.1)) * 0.6 + gvn(u * 3.7 + 2.0) * 0.4 + 0.1) * rocky * nearK * (1.0 - smoothstep(0.45, 0.9, depth));
 		fo = max(fo, rf * 0.75);
 	}
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));

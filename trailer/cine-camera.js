@@ -98,6 +98,44 @@
 				if (pauseMs && i % 10 === 9) await new Promise((r) => setTimeout(r, pauseMs));
 			}
 		},
+		// the longest straight run of mapped street within R of (x, z) that is at least minL long:
+		// { a: start, d: unit direction, L: length, cls } (the real map's roads; else the town grid)
+		street(x, z, R = 250, minL = 80) {
+			const w = CINE.W(), ok = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'trunk']);
+			let best = null;
+			if (w.real?.loaded?.()) {
+				for (const r of w.real.near('roads', x, z, R)) {
+					if (!r.pts || r.pts.length < 4 || (r.cls && !ok.has(r.cls))) continue;
+					const p = r.pts;
+					// runs of segments that keep within ~6 degrees of the first
+					for (let i = 0; i + 3 < p.length; i += 2) {
+						let dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1];
+						const l0 = Math.hypot(dx, dz);
+						if (l0 < 1) continue;
+						dx /= l0; dz /= l0;
+						let j = i + 2, L = l0;
+						while (j + 3 < p.length) {
+							const ex = p[j + 2] - p[j], ez = p[j + 3] - p[j + 1], le = Math.hypot(ex, ez);
+							if (le < 1 || (ex * dx + ez * dz) / le < 0.994) break;
+							L += le; j += 2;
+						}
+						const mx = p[i] + dx * L / 2, mz = p[i + 1] + dz * L / 2, off = Math.hypot(mx - x, mz - z);
+						const score = Math.min(L, 400) - off * 0.5;
+						if (L >= minL && (!best || score > best.score)) best = { a: [p[i], p[i + 1]], d: [dx, dz], L, cls: r.cls, score };
+					}
+				}
+			}
+			if (!best) {
+				const U = w.bayArea?.urbanAt?.(x, z), G = window.Crysis.grid;
+				if (U && G) {
+					const a = Math.round(U.a / (Math.PI / 2) * 255) / 255 * Math.PI / 2, [BX, , ST] = G.BLOCKS[U.s];
+					const [gx, gz] = G.toGrid(x, z, a, U.s), i = Math.round((gx - ST / 2) / BX), sx = i * BX + ST / 2;
+					const [ax, az] = G.fromGrid(sx, gz - 150, a, U.s), [bx, bz] = G.fromGrid(sx, gz + 150, a, U.s), L = Math.hypot(bx - ax, bz - az);
+					best = { a: [ax, az], d: [(bx - ax) / L, (bz - az) / L], L, cls: 'grid' };
+				}
+			}
+			return best;
+		},
 		// keys on an arc round c (radius r, height h over c) from angle a0 to a1, looking at c + [0, lookH, 0]
 		orbit(c, r, h, a0, a1, T, lookH = 0, n = 4, fov = 50) {
 			const keys = [];
