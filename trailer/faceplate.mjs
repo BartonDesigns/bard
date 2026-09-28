@@ -67,6 +67,28 @@ try {
 			return r ? [r.left + r.width / 2, r.top + r.height / 2] : [innerWidth / 2, innerHeight / 2];
 		});
 		await page.addScriptTag({ content: fs.readFileSync(path.join(here, 'cine-runtime.js'), 'utf8').replace('window.__cine = C;', 'window.__cine = C; C.begin();') }).catch(() => {});
+		// the touch marks and the button press, animated on the virtual clock (the page's own
+		// Web Animations and CSS run on real time, which the screenshots do not keep)
+		await page.evaluate(() => {
+			const live = [];
+			window.__touch = (x, y, big, el) => {
+				const m = document.createElement('div');
+				m.className = 'trailer-touch'; m.style.left = x + 'px'; m.style.top = y + 'px';
+				document.body.appendChild(m);
+				live.push({ m, t0: performance.now(), life: big ? 520 : 420, s1: big ? 1.4 : 1.25, el });
+			};
+			const tick = () => {
+				const now = performance.now();
+				for (let i = live.length - 1; i >= 0; i--) {
+					const q = live[i], k = Math.min(1, (now - q.t0) / q.life), e = 1 - (1 - k) * (1 - k);
+					q.m.style.opacity = String(0.95 * (1 - e)); q.m.style.transform = `scale(${0.55 + (q.s1 - 0.55) * e})`;
+					if (q.el) { q.el.style.transform = `scale(${0.92 + 0.08 * e})`; q.el.style.filter = `brightness(${1.8 - 0.8 * e})`; }
+					if (k >= 1) { q.m.remove(); if (q.el) { q.el.style.transform = ''; q.el.style.filter = ''; } live.splice(i, 1); }
+				}
+				requestAnimationFrame(tick);
+			};
+			requestAnimationFrame(tick);
+		});
 		const notes = TL.lead.filter((q) => q.t >= s.song - 1e-3 && q.t < s.song + s.dur - 1e-3).map((q) => ({ ...q, at: q.t - s.song }));
 		log(`${s.id}: ${n} frames, ${notes.length} notes, focus ${focus.map((v) => v.toFixed(0))}`);
 		let ni = 0, ti = 0, done = 0;
@@ -83,12 +105,7 @@ try {
 					const p = pads.find((e) => +e.dataset.degree === degree) || pads[d];
 					const r = p.getBoundingClientRect(), k = p.dataset.key;
 					document.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: 'Key' + k.toUpperCase(), bubbles: true }));
-					const m = document.createElement('div');
-					m.className = 'trailer-touch';
-					m.style.left = r.left + r.width / 2 + 'px'; m.style.top = r.top + r.height * 0.55 + 'px';
-					document.body.appendChild(m);
-					m.animate([{ opacity: 0.95, transform: 'scale(.55)' }, { opacity: 0, transform: 'scale(1.25)' }], { duration: 420, easing: 'ease-out', fill: 'forwards' });
-					setTimeout(() => m.remove(), 600);
+					window.__touch(r.left + r.width / 2, r.top + r.height * 0.55, false, null);
 					return k;
 				}, q);
 				if (key) down.push({ key, until: t + 0.16 });
@@ -101,12 +118,8 @@ try {
 				await page.evaluate(({ sel, click }) => {
 					const e = document.querySelector(sel);
 					if (!e) return;
-					const r = e.getBoundingClientRect(), m = document.createElement('div');
-					m.className = 'trailer-touch';
-					m.style.left = r.left + r.width / 2 + 'px'; m.style.top = r.top + r.height / 2 + 'px';
-					document.body.appendChild(m);
-					m.animate([{ opacity: 0.95, transform: 'scale(.55)' }, { opacity: 0, transform: 'scale(1.4)' }], { duration: 520, easing: 'ease-out', fill: 'forwards' });
-					e.animate([{ filter: 'brightness(1.8)', transform: 'scale(.92)' }, { filter: 'none', transform: 'none' }], { duration: 380, easing: 'ease-out' });
+					const r = e.getBoundingClientRect();
+					window.__touch(r.left + r.width / 2, r.top + r.height / 2, true, e);
 					if (click) e.click();
 				}, q);
 			}
@@ -118,7 +131,7 @@ try {
 			const cw = W / z, ch = H / z;
 			const cx = Math.min(W - cw / 2, Math.max(cw / 2, W / 2 + (focus[0] - W / 2) * e));
 			const cy = Math.min(H - ch / 2, Math.max(ch / 2, H / 2 + (focus[1] - H / 2) * e));
-			await page.screenshot({ path: file + '.tmp.jpg', type: 'jpeg', quality: 92, clip: { x: cx - cw / 2, y: cy - ch / 2, width: cw, height: ch }, animations: 'allow' });
+			await page.screenshot({ path: file + '.tmp.jpg', type: 'jpeg', quality: 92, clip: { x: cx - cw / 2, y: cy - ch / 2, width: cw, height: ch } });
 			fs.renameSync(file + '.tmp.jpg', file);
 			if (++done % 60 === 1) log(`  ${s.id} f${f}/${n}`);
 		}
