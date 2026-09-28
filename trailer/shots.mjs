@@ -28,6 +28,7 @@ export const CAPTIONS = {
 	stone: ['Strike stone', 'Each material its own voice'],
 	mystic: ['Other worlds', 'Other voices'],
 	soft: ['The world listens', 'Your bass moves the wind'],
+	maestro: ['MAESTRO', 'A faceplate of recorded orchestra'],
 	volcano: ['A world on fire', ''],
 	cave: ['The caves below', ''],
 	castle: ['A realm of castles', ''],
@@ -76,7 +77,9 @@ export const SHOTS = [
 		setup: tapSetup('wood', 17.2, [0, 0]), cam: tapCam },
 	{ id: 'soft', bars: 2, world: '?planet=TERRAN&seed=3', warm: 120, settle: 2, kind: 'soft', taps: TAPS, opts: { ease: 'inOut', shake: 0.03 },
 		setup: tapSetup('soft', 18.0, [0, 0]), cam: tapCam },
-	// bars 15-26: the worlds, a bar each, cut on the downbeat, the bands moving them
+	// bar 15: back to the faceplate as it switches to MAESTRO, the orchestra (trailer/faceplate.mjs)
+	{ id: 'maestro', bars: 1, dom: true },
+	// bars 16-26: the worlds on the orchestra, a bar each, cut on the downbeat, the bands moving them
 	// a volcano erupting, magma glowing at dusk
 	{ id: 'volcano', bars: 2, world: '?planet=MAGMA&seed=1', warm: 150, settle: 2, opts: { ease: 'inOut', shake: 0.25 },
 		setup: (w) => {
@@ -153,7 +156,7 @@ export const SHOTS = [
 			return [{ t: 0, p: P(0, 9), l: P(far, 14), fov: 55 }, { t: 4, p: P(45, 6), l: P(far + 45, 12), fov: 55 }];
 		} },
 	// Mt Diablo: in toward the summit at sundown, the valley falling away below
-	{ id: 'diablo', bars: 2, warm: 150, settle: 2, opts: { ease: 'glide', shake: 0.12 },
+	{ id: 'diablo', bars: 1, warm: 150, settle: 2, opts: { ease: 'glide', shake: 0.12 },
 		setup: (w) => { w.sky.state.hours = 18.7; window.Crysis.season(0.85); return {}; },
 		cam: (S, w, C) => {
 			const [sx, sz] = C.LL(37.8816, -121.9142), [ax, az] = C.LL(37.8690, -121.9480), [bx, bz] = C.LL(37.8730, -121.9380);

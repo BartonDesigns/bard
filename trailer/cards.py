@@ -74,7 +74,7 @@ def title():
 	d = ImageDraw.Draw(t)
 	spaced(d, (W / 2, H / 2 + 20 * S), 'LEVEL 99 BARD', font(SERIF_B, 124), (255, 248, 236, 255), 34)
 	rule(d, W / 2, H / 2 + 62 * S, 380, (255, 226, 176))
-	spaced(d, (W / 2, H / 2 + 118 * S), 'THE BAY AREA AND WORLDS BEYOND', font(SERIF, 30), (255, 233, 201, 255), 12)
+	spaced(d, (W / 2, H / 2 + 118 * S), 'AN INSTRUMENT THE SIZE OF A WORLD', font(SERIF, 30), (255, 233, 201, 255), 12)
 	# a gentle darkening behind the words
 	v = layer()
 	vd = ImageDraw.Draw(v)
