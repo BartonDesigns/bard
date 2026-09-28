@@ -340,7 +340,32 @@ export function createIslandWorld() {
 	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));max-height:calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5;');
 	dom.mount.appendChild(scrollable(tpMenu));
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
-	function teleport([name, lat, lon, yaw]) {
+	// travelling: the view fades to dark with the place's name, you are moved behind it, and
+	// it only lifts once the new place is built and the frames are running smoothly again
+	const travelVeil = css(document.createElement('div'), 'position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;transition:opacity .22s ease;background:radial-gradient(ellipse at 50% 45%,rgba(8,22,28,.92),rgba(2,8,12,.98));display:flex;align-items:center;justify-content:center;color:#eafaf6;font:600 15px system-ui;letter-spacing:.06em;text-align:center;padding:24px;');
+	dom.mount.appendChild(travelVeil);
+	let travelling = false;
+	function travel(label, move) {
+		if (travelling) return;
+		travelling = true;
+		travelVeil.textContent = label || '';
+		travelVeil.style.opacity = '1';
+		setTimeout(() => {
+			try { move(); } catch (err) { console.error('[travel]', err); }
+			const t0 = performance.now();
+			let last = t0, calm = 0;
+			const watch = (now) => {
+				calm = now - last < 70 ? calm + 1 : 0;
+				last = now;
+				// a dozen smooth frames in a row (or eight seconds, whatever happens)
+				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) { travelVeil.style.opacity = '0'; travelling = false; return; }
+				requestAnimationFrame(watch);
+			};
+			requestAnimationFrame(watch);
+		}, 240);
+	}
+	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
+	function teleportNow([name, lat, lon, yaw]) {
 		fishing.drop();
 		const W = world, P = W?.player.state;
 		if (!P) return;
@@ -751,6 +776,23 @@ export function createIslandWorld() {
 			try { renderer.render(scene, camera); } catch { /* nothing more to do this frame */ }
 		}
 	}
+	// the right-hand column: whichever of its buttons are showing sit one under another with
+	// no gaps (fly, drive, the ship, ×3, places, games come and go with what you are doing)
+	let stackT = 0;
+	function stackSidebar() {
+		const now = performance.now();
+		if (now < stackT) return;
+		stackT = now + 250;
+		const col = [...dom.mount.children].filter((e) => e.tagName === 'BUTTON' && !e.hidden && e.style.right.startsWith('calc(12px') && e.style.position === 'absolute' && /^calc\(\d+px/.test(e.style.top));
+		for (const e of col) if (!e.dataset.slot) e.dataset.slot = parseInt(e.style.top.slice(5), 10);
+		let i = 0;
+		for (const e of col.sort((a, b) => a.dataset.slot - b.dataset.slot)) {
+			if (e.style.display === 'none' || getComputedStyle(e).display === 'none') continue;
+			const top = `calc(${12 + i * 52}px + env(safe-area-inset-top))`;
+			if (e.style.top !== top) e.style.top = top;
+			i++;
+		}
+	}
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
@@ -890,6 +932,7 @@ export function createIslandWorld() {
 		sunGlare(dt);
 		watchTeleport();
 		share.update(dt);
+		stackSidebar();
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !arcade.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -1051,10 +1094,24 @@ export function createIslandWorld() {
 		if (!origin || !J || J.busy()) return;
 		if (world?.boat.boarded()) world.boat.leave();
 		dom.launch.disabled = true;
+		// the ship and this world never both fill the phone's memory: keep your place, let the
+		// world go behind the veil, then fly (landing builds it again; a failed launch rebuilds here)
+		const yaw = world.player.state.yaw;
+		share.keep(true);
+		travelVeil.textContent = 'Launching…';
+		travelVeil.style.opacity = '1';
+		await new Promise((r) => setTimeout(r, 260));
+		teardown();
 		try {
-			const ok = await J.request(REALM, 'flight', { kind: 'atmosphere', planet: origin, altitude: 420, piloting: true, yaw: world.player.state.yaw, pitch: 0.25, velocity: [0, 0, 0], fov: 72 });
-			if (!ok) hint('The ship is not ready yet. Try again in a moment.');
-		} finally { dom.launch.disabled = false; }
+			const ok = await J.request(REALM, 'flight', { kind: 'atmosphere', planet: origin, altitude: 420, piloting: true, yaw, pitch: 0.25, velocity: [0, 0, 0], fov: 72 });
+			if (!ok) throw new Error('the ship is not ready');
+		} catch (err) {
+			// no launch: back to exactly where you were
+			console.warn('[launch]', err);
+			hint('The ship is not ready yet. Try again in a moment.');
+			const c = share.resumeCode();
+			await (c ? share.openAt(c, { resume: true }) : api.open(origin?.earth ? { seed: 1337, earth: true } : { seed: origin.seed, biome: origin.type, earth: false, origin }));
+		} finally { dom.launch.disabled = false; travelVeil.style.opacity = '0'; }
 	});
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());

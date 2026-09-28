@@ -420,6 +420,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const send = el('button', btnCss + 'background:linear-gradient(135deg,#01a982,#10b981);border:none;', '➤'); send.setAttribute('aria-label', 'Send');
 	bar.append(input, mic, spk, send);
 	panel.append(head, settings, log, bar);
+	// (the guide has no button in the sidebar any more; G still opens it)
+	open.hidden = true;
 	mount.append(open, panel);
 	// keep typing and taps out of the game's controls
 	for (const ev of ['keydown', 'keyup', 'pointerdown', 'touchstart', 'wheel']) { panel.addEventListener(ev, (e) => e.stopPropagation()); open.addEventListener(ev, (e) => e.stopPropagation()); }
@@ -432,7 +434,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return b;
 	}
 	const scroll = () => { log.scrollTop = log.scrollHeight; };
-	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = on ? 'none' : ''; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length) greet(); } else input.blur(); };
+	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length) greet(); } else input.blur(); };
 	function greet() {
 		const s = snapshot();
 		say(s ? `Hello. You're on ${s.place}. Ask me anything — where to go, what something is, or what to do next.` : 'Hello.', 'guide');

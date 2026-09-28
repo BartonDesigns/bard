@@ -539,7 +539,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// the leaf texture's average colour (where it is solid), in linear light
 	const texAvg = (() => {
 		const img = leafTex.image, cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
-		const g = cv.getContext('2d'); g.drawImage(img, 0, 0, 64, 64);
+		const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, 64, 64);
 		const d = g.getImageData(0, 0, 64, 64).data, a = [0, 0, 0]; let n = 0;
 		const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
 		for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 115) { a[0] += lin(d[i]); a[1] += lin(d[i + 1]); a[2] += lin(d[i + 2]); n++; }

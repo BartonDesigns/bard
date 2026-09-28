@@ -482,28 +482,6 @@ export function fieldMaterials() {
 	return M;
 }
 
-// a canvas's alpha softened in place: a box blur of radius r pixels, twice each way
-function featherAlpha(g, w, h, r) {
-	const img = g.getImageData(0, 0, w, h), px = img.data;
-	let a = new Float32Array(w * h), b = new Float32Array(w * h);
-	for (let k = 0; k < w * h; k++) a[k] = px[k * 4 + 3];
-	for (let pass = 0; pass < 4; pass++) {
-		const hor = pass % 2 === 0;
-		for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-			let s = 0, n = 0;
-			for (let t = -r; t <= r; t++) {
-				const ii = hor ? i + t : i, jj = hor ? j : j + t;
-				if (ii < 0 || jj < 0 || ii >= w || jj >= h) { n++; continue; }
-				s += a[jj * w + ii]; n++;
-			}
-			b[j * w + i] = s / n;
-		}
-		[a, b] = [b, a];
-	}
-	for (let k = 0; k < w * h; k++) px[k * 4 + 3] = a[k];
-	g.putImageData(img, 0, 0);
-}
-
 // a field's paint on the ground: a canvas in the field's own metres (x across, z along)
 function paint(f, res) {
 	const [x0, x1, z0, z1] = f.rect, w = x1 - x0, d = z1 - z0;
@@ -614,7 +592,11 @@ function paint(f, res) {
 	const mk = document.createElement('canvas');
 	mk.width = mw; mk.height = md;
 	const m = mk.getContext('2d');
-	m.setTransform(MP, 0, 0, MP, -x0 * MP, -z0 * MP);
+	// the shape is drawn well off the canvas and only its blurred shadow lands on it: a soft
+	// edge made on the GPU, with no reading the pixels back (that stalled phones for seconds)
+	const OFF = mw + md + 64;
+	m.setTransform(MP, 0, 0, MP, -x0 * MP - OFF, -z0 * MP);
+	m.shadowColor = '#000'; m.shadowBlur = 4; m.shadowOffsetX = OFF; m.shadowOffsetY = 0;
 	m.fillStyle = '#000'; m.beginPath();
 	if (f.kind === 'baseball') {
 		const { base, fence } = f.d, e = base * 0.9 + 3.5, u = (-10 + Math.sqrt(100 - 2 * (100 - (fence + 1.5) ** 2))) / 2;
@@ -624,7 +606,6 @@ function paint(f, res) {
 		m.lineTo(10, 0); m.closePath();
 	} else m.rect(x0 + 3.5, z0 + 3.5, w - 7, d - 7);
 	m.fill();
-	featherAlpha(m, mw, md, 2);
 	g.setTransform(1, 0, 0, 1, 0, 0);
 	g.globalCompositeOperation = 'destination-in';
 	g.imageSmoothingEnabled = true;
