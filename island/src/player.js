@@ -179,7 +179,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		else { s.vel.x *= 0.2; s.vel.z *= 0.2; }
 		pushOut(s.pos);
 		const ground = floorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
-		const surface = waveHeight(island, s.pos.x, s.pos.z, t, shared.uWave?.value ?? 1);
+		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
+		const river = island.waterAt?.(s.pos.x, s.pos.z) ?? null;
+		const surface = Math.max(waveHeight(island, s.pos.x, s.pos.z, t, shared.uWave?.value ?? 1), river ?? -1e9);
 		// (never in a cave: its pools are shallow)
 		s.swimming = island.underFloor?.(s.pos.x, s.pos.z, s.pos.y - EYE) == null && (ground < surface - 1.35 || (s.diving && ground < surface - 0.6));
 		s.surface = surface;

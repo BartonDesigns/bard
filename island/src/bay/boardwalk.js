@@ -5,7 +5,10 @@
 // in the old plunge; the midway with its stands and games, the Ferris wheel, the bumper
 // cars, the Double Shot tower; the Sky Glider along the beach; and at the east end the Giant
 // Dipper's white timber by the river. The promenade runs the length of it above the sand,
-// lamps and flags along the seawall, the surf in front and the wharf out into the bay.
+// lamps and flags along the seawall, the surf in front and the Municipal Wharf out into the
+// bay (wharf.js). Behind it Beach Street and the beach train's line, the big lot across
+// from the Casino, and in the river's bend the River Lot; the San Lorenzo (sanlorenzo.js)
+// comes down past the east end under the trestle and out across the sand.
 //
 // Walk up to a ride and a button offers it; aboard, the ride has the camera (drag to look
 // round, × or Escape to get off). By day it is full of families; after dark the bulbs come
@@ -13,8 +16,9 @@
 //
 // The survey's heights here are 120 m apart (the coarse level), so the ground under the park
 // is regraded where it loads: the midway level, the beach sloping to the surf, the wharf's
-// ghost (the survey saw it as a sandbar) and a spike in the old data taken out, the river
-// mouth let in. The park is built when you come within two kilometres, a piece a frame.
+// ghost (the survey saw it as a sandbar) and a spike in the old data taken out; the river
+// carves its own channel once that is done. The park is built when you come within two
+// kilometres, a piece a frame.
 
 import * as THREE from 'three';
 import { H_OFF, H_SCALE } from './geo.js';
@@ -26,6 +30,8 @@ import { createBumper } from './rides/bumper.js';
 import { createCarousel } from './rides/carousel.js';
 import { createGlider } from './rides/glider.js';
 import { createDrop } from './rides/drop.js';
+import { createRiver } from './sanlorenzo.js';
+import { createWharf } from './wharf.js';
 import { createSwings, createTilt, createFlume, buildBackRow } from './rides/scenery.js';
 import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
 import { createMotion } from '../people/motion.js';
@@ -36,27 +42,37 @@ const PARK = { u0: -272, u1: 342, v0: -176, v1: 4 };
 const GROUND = { u0: -365, u1: 470, v0: -200, v1: 270 };
 const NEAR = 2000, FAR = 2600;
 // the shoreline: out from the promenade, narrower toward the wharf
-const shoreV = (u) => 118 - 48 * smooth(-150, -345, u) + 6 * Math.sin(u / 90);
-// the San Lorenzo: down past the Dipper's east end, out across the beach
-const RIVER_U = 392;
-const riverK = (u, v) => Math.exp(-(((u - RIVER_U - Math.max(0, v) * 0.35) / 34) ** 2));
+const shoreV = (u) => 118 - 48 * smooth(-247, -442, u) + 6 * Math.sin((u + 97) / 90);
+// the San Lorenzo's mouth, just east of the Dipper (sanlorenzo.js carves the river itself)
+const RIVER_U = 446;
 function smooth(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
-// the ground as built: the midway level, sand down to the surf, the river's bed
+// the ground as built: the midway level, sand down to the surf, Seabright's low bluff
+// across the river
 function groundY(u, v) {
 	if (v < 4 && u > PARK.u0 && u < PARK.u1) return DECK;
 	let y;
 	if (v < 4) y = DECK - 0.6;
 	else { const s = shoreV(u); y = v < s ? 2.3 - 2.3 * (v - 4) / (s - 4) : -(v - s) * 0.05; }
-	// Seabright's low bluff across the river
 	y += (8 - y) * smooth(RIVER_U + 50, RIVER_U + 95, u) * smooth(50, 5, v);
-	const r = riverK(u, v);
-	if (r > 0.01 && (u > PARK.u1 - 6 || v > 4)) y += (-1.4 - y) * r;
 	return y;
 }
-// (the survey is let down wide round the river, so the sea comes up the channel under the sand)
-const riverBand = (u, v) => Math.abs(u - RIVER_U - Math.max(0, v) * 0.35) < 150 && v < shoreV(u) + 20;
+// the parking lots: the big one across Beach Street from the Casino, and the River Lot in
+// the river's bend behind the Dipper
+const LOTS = [
+	[[-250, -201], [-40, -201], [-40, -292], [-250, -292]],
+	[[150, -200], [436, -200], [436, -475], [250, -475], [150, -330]],
+];
+function inPoly(P, u, v) {
+	let inside = false;
+	for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i][1] > v) !== (P[j][1] > v) && u < (P[j][0] - P[i][0]) * (v - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0]) inside = !inside;
+	return inside;
+}
+// the beach train's line along Beach Street, over the trestle (t0..t1, set once the river
+// is carved) and on toward Seabright
+const RAIL = { u0: -470, u1: 560, v: -171.5, t0: 405, t1: 495 };
+const railY = (u) => DECK + 0.1 + 2.0 * smooth(RAIL.t0 - 40, RAIL.t0, u) * (1 - smooth(RAIL.t1, RAIL.t1 + 40, u));
 // inside the park (for the trees the city plants to keep off)
-export function inBoardwalk(x, z) { const [u, v] = toL(x, z); return u > GROUND.u0 && u < GROUND.u1 && v > GROUND.v0 - 12 && v < 60; }
+export function inBoardwalk(x, z) { const [u, v] = toL(x, z); return (u > GROUND.u0 && u < GROUND.u1 && v > GROUND.v0 - 12 && v < 60) || LOTS.some((P) => inPoly(P, u, v)); }
 
 // ---------- the survey's heights regraded ----------
 function regrade(bay, BU) {
@@ -73,7 +89,22 @@ function regrade(bay, BU) {
 		if (w <= 0) continue;
 		const k = j * L.W + i, h0 = L.v[k] / H_SCALE - H_OFF;
 		// (under what is built, kept below it; the sea floor shelving off)
-		const t = Math.min(groundY(u, v) - 0.7, v > shoreV(u) ? -1 - (v - shoreV(u)) * 0.045 : 99, riverBand(u, v) && u > PARK.u1 - 100 ? -1.8 : 99);
+		const t = Math.min(groundY(u, v) - 0.7, v > shoreV(u) ? -1 - (v - shoreV(u)) * 0.045 : 99);
+		const h = h0 + (t - h0) * w;
+		L.v[k] = Math.round((h + H_OFF) * H_SCALE);
+		D[k] = THREE.DataUtils.toHalfFloat(h);
+	}
+	// out past the surf, the survey's sandbar (the old wharf's ghost, a few hundred metres off
+	// the beach) let down under the sea
+	const ss = [[-600, 60], [660, 60], [-600, 1150], [660, 1150]].map(([u, v]) => toW(u, v));
+	const si0 = Math.max(0, Math.floor((Math.min(...ss.map((c) => c[0])) - L.x0) / L.step)), si1 = Math.min(L.W - 1, Math.ceil((Math.max(...ss.map((c) => c[0])) - L.x0) / L.step));
+	const sj0 = Math.max(0, Math.floor((Math.min(...ss.map((c) => c[1])) - L.zN) / L.step)), sj1 = Math.min(L.H - 1, Math.ceil((Math.max(...ss.map((c) => c[1])) - L.zN) / L.step));
+	for (let j = sj0; j <= sj1; j++) for (let i = si0; i <= si1; i++) {
+		const [u, v] = toL(L.x0 + i * L.step, L.zN + j * L.step), sv = shoreV(u);
+		const w = smooth(-600, -540, u) * smooth(660, 600, u) * smooth(sv + 15, sv + 45, v) * smooth(1150, 1100, v);
+		if (w <= 0) continue;
+		const k = j * L.W + i, h0 = L.v[k] / H_SCALE - H_OFF, t = -1 - (v - sv) * 0.045;
+		if (h0 <= t) continue;
 		const h = h0 + (t - h0) * w;
 		L.v[k] = Math.round((h + H_OFF) * H_SCALE);
 		D[k] = THREE.DataUtils.toHalfFloat(h);
@@ -121,14 +152,20 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	scene.add(group);
 	group.updateMatrixWorld(true);
 	const sound = createSound();
+	const river = createRiver(scene, bay, shared, { isPhone, sound });
 	const B = { built: false, queue: null, rides: [], scen: [], solids: [], rounds: [], lamps: null, pools: null, winMats: [], signs: [], flags: null, crowd: null, beach: null, wharf: null };
-	let regraded = false, hintSeen = false;
+	let regraded = false, hintSeen = false, hintWharf = false, hintRiver = false, sinceGrade = 0;
 	const uTime = { value: 0 };
 
 	// ---------- the pieces, built one a frame ----------
 	function plan() {
 		const Q = [];
-		Q.push(buildGround, buildSeawall, buildCasino, buildNeptune, buildStands, buildLamps, buildBeach, buildWharf, buildBackdrop);
+		// where the railroad meets the river: the trestle's ends
+		const [rx, rz] = toW(RAIL.u0, RAIL.v), [ex, ez] = toW(RAIL.u0 + 1, RAIL.v), cr = river.crossing(rx, rz, ex - rx, ez - rz);
+		if (cr) { const uc = RAIL.u0 + cr.t; RAIL.t0 = uc - cr.w - 14; RAIL.t1 = uc + cr.w + 20; }
+		Q.push(buildGround, buildSeawall, buildCasino, buildNeptune, buildStands, buildLamps, buildBeach, buildBackdrop);
+		B.wharf = createWharf({ group, bay, sound, isPhone, signs: B.signs, winMats: B.winMats });
+		Q.push(...B.wharf.steps);
 		const add = (make) => Q.push(() => { const r = make(); B.rides.push(r); for (const s of r.solid || []) B.solids.push([...s, 30]); for (const c of r.round || []) B.rounds.push(c); });
 		add(() => createCarousel({ group, sound, isPhone, at: [-128, -34] }));
 		add(() => createWheel({ group, sound, isPhone, at: [22, -66] }));
@@ -141,7 +178,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		see('swings', () => createSwings({ group, isPhone, at: [-24, -104] }));
 		see('tilt', () => createTilt({ group, isPhone, at: [55, -112] }));
 		see('flume', () => createFlume({ group, isPhone, sound }));
-		Q.push(() => { const bk = buildBackRow({ group, isPhone }); for (const q of bk.solid) B.solids.push([...q, 30]); B.signs.push(...bk.signs); B.foodSeats = bk.seats; }, buildLot);
+		Q.push(() => { const bk = buildBackRow({ group, isPhone }); for (const q of bk.solid) B.solids.push([...q, 30]); B.signs.push(...bk.signs); B.foodSeats = bk.seats; }, buildLot, buildTrain);
 		Q.push(buildCrowd, () => { B.built = true; group.visible = true; });
 		return Q;
 	}
@@ -161,12 +198,12 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		prom.rotation.x = -Math.PI / 2; prom.position.set((PARK.u0 + PARK.u1) / 2, DECK + 0.015, -1.5);
 		prom.receiveShadow = true;
 		group.add(prom);
-		// Beach Street behind, and the railroad along it (the Santa Cruz Big Trees line)
+		// Beach Street behind, from the wharf to the levee
 		const Mg = merger();
 		const road = grainTexture('#3f3f41', ['#2a2a2b', '#59595b'], 2400);
 		road.repeat.set(200, 3);
 		const st = [];
-		for (let u = -430; u <= 350; u += 10) st.push(u);
+		for (let u = -520; u <= 400; u += 10) st.push(u);
 		const pos = [], uv = [], idx = [];
 		st.forEach((u, i) => {
 			for (const [k, v] of [[0, -178], [1, -192]]) { const [x, z] = toW(u, v); const y = Math.max(DECK - 0.4, bay.heightAt(x, z)) + 0.12; pos.push(u, y, v); uv.push(u / 10, k); }
@@ -174,20 +211,32 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		});
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
-		const rm = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: road, roughness: 0.95 }));
+		const rm = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: road, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1 }));
 		rm.receiveShadow = true;
 		group.add(rm);
+		// the railroad along it (the beach train's line), up onto the trestle over the river
+		// and on to the far bank
+		const RL = RAIL;
 		const ties = instancer(new THREE.BoxGeometry(0.25, 0.15, 2.6), paint('darkwood'));
-		for (let u = PARK.u0; u < PARK.u1; u += 0.7) ties.at(u, DECK + 0.07, -171.5);
+		for (let u = RL.u0; u < RL.u1; u += 0.7) ties.at(u, railY(u) + 0.07, RL.v);
 		ties.done(group);
-		for (const dv of [-0.72, 0.72]) Mg.box(PARK.u1 - PARK.u0, 0.12, 0.08, 'steel', (PARK.u0 + PARK.u1) / 2, DECK + 0.2, -171.5 + dv);
-		// the trestle over the river, where the line crosses to the east side
-		for (let u = PARK.u1 - 4; u < RIVER_U + 70; u += 6) {
-			Mg.box(0.5, 6, 0.5, 'darkwood', u, DECK - 1.2, -168.8).box(0.5, 6, 0.5, 'darkwood', u, DECK - 1.2, -174.2);
-			Mg.rod([u, DECK - 3, -168.8], [u + 6, DECK + 1.6, -168.8], 0.12, 'darkwood').rod([u, DECK - 3, -174.2], [u + 6, DECK + 1.6, -174.2], 0.12, 'darkwood');
+		for (let u = RL.u0; u < RL.u1; u += 8) for (const dv of [-0.72, 0.72]) Mg.rod([u, railY(u) + 0.2, RL.v + dv], [u + 8, railY(u + 8) + 0.2, RL.v + dv], 0.06, 'steel', 4);
+		// (a bank of ballast up to the trestle's ends)
+		for (let u = RL.t0 - 44; u < RL.t1 + 44; u += 4) { if (u > RL.t0 && u < RL.t1) continue; const y = railY(u); if (y > DECK + 0.3) Mg.box(4.2, y - DECK + 0.4, 3.6, 'concrete', u + 2, (y + DECK) / 2 - 0.2, RL.v); }
+		// the trestle: timber bents in the water, the deck, the steel spans' sides, the
+		// footwalk along its seaward side
+		for (let u = RL.t0; u <= RL.t1; u += 5) {
+			const [x, z] = toW(u, RL.v), gy = Math.min(bay.heightAt(x, z), 1) - 1, top = railY(u) - 0.3;
+			for (const dv of [-2.6, -0.9, 0.9, 2.6]) Mg.box(0.42, top - gy, 0.42, 'darkwood', u, (top + gy) / 2, RL.v + dv);
+			Mg.box(0.4, 0.4, 6.6, 'darkwood', u, top - 0.2, RL.v);
+			Mg.rod([u, gy + 1, RL.v - 2.6], [u, top - 0.5, RL.v + 2.6], 0.1, 'darkwood').rod([u, gy + 1, RL.v + 2.6], [u, top - 0.5, RL.v - 2.6], 0.1, 'darkwood');
 		}
-		Mg.box(RIVER_U + 74 - PARK.u1, 0.6, 6.2, 'darkwood', (PARK.u1 + RIVER_U + 70) / 2, DECK + 1.9, -171.5);
-		for (const dv of [-3.1, 3.1]) Mg.box(RIVER_U + 74 - PARK.u1, 2.6, 0.25, 'darksteel', (PARK.u1 + RIVER_U + 70) / 2, DECK + 3.4, -171.5 + dv);
+		const tm = (RL.t0 + RL.t1) / 2, tl = RL.t1 - RL.t0 + 4;
+		Mg.box(tl, 0.5, 3.4, 'darkwood', tm, railY(tm) - 0.05, RL.v);
+		for (const dv of [-1.9, 1.9]) Mg.box(tl, 1.4, 0.3, 'darksteel', tm, railY(tm) - 0.4, RL.v + dv);
+		Mg.box(tl, 0.12, 2.2, 'plank', tm, railY(tm) + 0.1, RL.v + 3.3);
+		for (let u = RL.t0 - 2; u <= RL.t1 + 2; u += 2.5) Mg.box(0.08, 1.1, 0.08, 'darksteel', u, railY(tm) + 0.65, RL.v + 4.35);
+		Mg.box(tl, 0.06, 0.08, 'darksteel', tm, railY(tm) + 1.2, RL.v + 4.35);
 		Mg.done(group, { shadow: !isPhone });
 	}
 	// the seawall between the promenade and the sand: its face, the rail, steps down at intervals
@@ -419,6 +468,11 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		B.pools = pools.done(group);
 		B.poolMat = pm;
 	}
+	// the sand as built: the beach, but the river's channel where it runs out across it
+	function beachY(u, v, x, z, th = bay.heightAt(x, z)) {
+		const y = Math.max(groundY(u, v), th + 0.1);
+		return y + (th + 0.08 - y) * river.influence(x, z);
+	}
 	// the beach: sand from the seawall to the surf and on under it, the river running out
 	// across it, the umbrellas and towels, the lifeguard tower, the volleyball nets
 	function buildBeach() {
@@ -430,7 +484,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			const [x, z] = toW(u, v), th = bay.heightAt(x, z);
 			// (at its edges it comes down onto the survey's ground)
 			const edge = Math.max(1 - Math.min(i, NU - i) / 5, 1 - Math.min(j, NV - j) / 5, 0);
-			let y = Math.max(groundY(u, v), th + 0.1);
+			let y = beachY(u, v, x, z, th);
 			if (v < 4 && u > PARK.u0 + 2 && u < PARK.u1 - 2) y = DECK - 0.6;
 			y += (th + 0.05 - y) * Math.min(1, edge * edge);
 			pos.push(u, y, v); uv.push(u / 3, v / 3);
@@ -456,7 +510,8 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		const spots = [];
 		for (let k = 0; k < (isPhone ? 90 : 160); k++) {
 			const u = -250 + r() * 560, v = 14 + r() * (shoreV(u) - 40);
-			if (Math.abs(u - RIVER_U) < 60) continue;
+			const [tx, tz] = toW(u, v);
+			if (river.influence(tx, tz) > 0.02) continue;
 			const y = groundY(u, v);
 			if (r() < 0.45) { umb.at(u, y + 2.1, v, 1, 1, 1, 0, new THREE.Color(UC[Math.floor(r() * UC.length)])); stick.at(u, y + 1.1, v); }
 			towel.at(u + 1.2, y + 0.02, v + 0.3, 1, 1, 1, r() * 0.6 - 0.3, new THREE.Color(TC[Math.floor(r() * TC.length)]));
@@ -478,72 +533,127 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		}
 		Mg.done(group, { shadow: !isPhone });
 	}
-	// the Municipal Wharf: half a mile of deck on pilings out into the bay, buildings at its end
-	function buildWharf() {
-		const b = [-362, 4], dir = [0.371, 0.929], len = 880, W2 = 9, Y = 5.2;
-		const ang = Math.atan2(dir[0], dir[1]);
-		const Mg = merger(), piles = instancer(new THREE.CylinderGeometry(0.22, 0.22, 1, 6), paint('darkwood'));
-		const P = (s, x) => [b[0] + dir[0] * s + dir[1] * x, b[1] + dir[1] * s - dir[0] * x];
-		for (let s = 6; s < len; s += 5) for (const x of [-W2 + 0.4, -W2 / 3, W2 / 3, W2 - 0.4]) { const [u, v] = P(s, x); const g = Math.min(groundY(u, v), 1); piles.at(u, (g + Y) / 2 - 1, v, 1, Y - g + 2, 1); }
-		const [cu, cv] = P(len / 2, 0);
-		Mg.box(W2 * 2, 0.5, len, 'plank', cu, Y - 0.25, cv, 0, ang);
-		for (const x of [-W2, W2]) { const [u, v] = P(len / 2, x); Mg.box(0.15, 1.0, len, 'white', u, Y + 0.5, v, 0, ang); }
-		// the ramp up from Beach Street
-		const [ru, rv] = P(-8, 0);
-		Mg.box(W2 * 2, 0.4, 20, 'concrete', ru, (Y + DECK) / 2 - 0.2, rv, Math.atan2(Y - DECK, 20), ang);
-		// the buildings along the end: fish markets and restaurants, grey shingle and white trim
-		const r = rng(1914);
-		for (let s = len - 300; s < len - 20; s += 34) for (const sd of [-1, 1]) {
-			if (r() < 0.25) continue;
-			const w = 6 + r() * 3, d = 14 + r() * 12, h = 4.5 + r() * 3.5, [u, v] = P(s, sd * (W2 - w / 2 - 0.6));
-			Mg.box(w, h, d, r() < 0.5 ? 'white' : 'cream', u, Y + h / 2, v, 0, ang);
-			Mg.box(w + 0.6, 0.35, d + 0.6, r() < 0.5 ? 'tile' : 'darksteel', u, Y + h + 0.18, v, 0, ang);
-		}
-		Mg.done(group, { shadow: !isPhone });
-		piles.done(group);
-		B.wharf = { b, dir, len, W2, Y };
-		const s = signBoard('SANTA CRUZ MUNICIPAL WHARF', 12, 1.2, { bg: '#1e3c8c', fg: '#ffffff', border: '#ffffff', glow: 0.2 });
-		const [su, sv] = P(-2, 0);
-		s.position.set(su, DECK + 5.5, sv); s.rotation.y = ang + Math.PI;
-		group.add(s);
-		const [a1u, a1v] = P(-2, -W2), [a2u, a2v] = P(-2, W2);
-		const A = merger(); A.box(0.4, 6, 0.4, 'white', a1u, DECK + 3, a1v).box(0.4, 6, 0.4, 'white', a2u, DECK + 3, a2v); A.done(group);
-	}
-	// the lot behind the Casino: striped stalls, the cars in them
+	// the parking: the lot behind the Casino, the big one across Beach Street from it, the
+	// River Lot in the bend (the rows by the park full, its far end mostly empty)
 	function buildLot() {
-		const u0 = -262, u1 = -150, v0 = -170, v1 = -72;
 		const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
 		const g = cv.getContext('2d');
 		g.fillStyle = '#48484a'; g.fillRect(0, 0, 256, 256);
+		for (let i = 0; i < 900; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(30,30,32,0.3)' : 'rgba(110,110,112,0.2)'; g.fillRect(Math.random() * 256, Math.random() * 256, 2 + Math.random() * 3, 2); }
 		g.fillStyle = '#e8e6de';
 		for (let x = 0; x < 256; x += 256 / 8) { g.fillRect(x, 0, 3, 90); g.fillRect(x, 166, 3, 90); }
-		const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set((u1 - u0) / 20, (v1 - v0) / 16); t.colorSpace = THREE.SRGBColorSpace;
-		const lot = new THREE.Mesh(new THREE.PlaneGeometry(u1 - u0, v1 - v0), new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }));
-		lot.rotation.x = -Math.PI / 2; lot.position.set((u0 + u1) / 2, DECK + 0.02, (v0 + v1) / 2); lot.receiveShadow = true;
-		group.add(lot);
+		const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+		const mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2 });
 		const r = rng(8), CC = [0xf4f1ea, 0x222222, 0x8a9096, 0xb3202a, 0x2656a8, 0x3a3f45, 0xd9d4c8, 0x5a6e50];
 		const body = instancer(new THREE.BoxGeometry(1.8, 0.8, 4.4), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.4 }));
 		const cab = instancer(new THREE.BoxGeometry(1.6, 0.6, 2.3), new THREE.MeshStandardMaterial({ color: 0x1a2226, roughness: 0.1, metalness: 0.5 }));
-		for (let v = v0 + 4; v < v1 - 3; v += 8) for (let u = u0 + 1.25; u < u1; u += 2.5) {
-			if (r() < 0.3) continue;
-			const c = new THREE.Color(CC[Math.floor(r() * CC.length)]);
-			body.at(u, DECK + 0.62, v, 1, 1, 1, 0, c); cab.at(u, DECK + 1.3, v - 0.2);
+		// behind the Casino, on the park's level
+		{
+			const u0 = -262, u1 = -150, v0 = -170, v1 = -72;
+			const lot = new THREE.Mesh(new THREE.PlaneGeometry(u1 - u0, v1 - v0), mat.clone());
+			lot.material.map = t.clone(); lot.material.map.repeat.set((u1 - u0) / 20, (v1 - v0) / 16); lot.material.map.needsUpdate = true;
+			lot.rotation.x = -Math.PI / 2; lot.position.set((u0 + u1) / 2, DECK + 0.02, (v0 + v1) / 2); lot.receiveShadow = true;
+			group.add(lot);
+			for (let v = v0 + 4; v < v1 - 3; v += 8) for (let u = u0 + 1.25; u < u1; u += 2.5) {
+				if (r() < 0.3) continue;
+				body.at(u, DECK + 0.62, v, 1, 1, 1, 0, new THREE.Color(CC[Math.floor(r() * CC.length)])); cab.at(u, DECK + 1.3, v - 0.2);
+			}
+			B.solids.push([u0 + 1, v0 + 2, u1 - 1, v1 - 2, 2]);
 		}
+		// the open lots: a sheet on the ground over each, 4 m cells, kept off the river's banks
+		const C = 4, pos = [], uv = [], idx = [];
+		const lotY = (u, v) => { const [x, z] = toW(u, v); return bay.heightAt(x, z) + 0.06; };
+		LOTS.forEach((P, li) => {
+			const us = P.map((q) => q[0]), vs = P.map((q) => q[1]);
+			const U0 = Math.min(...us), V0 = Math.min(...vs), NI = Math.ceil((Math.max(...us) - U0) / C), NJ = Math.ceil((Math.max(...vs) - V0) / C);
+			const ok = (u, v) => { const [x, z] = toW(u, v); return inPoly(P, u, v) && river.influence(x, z) < 0.01; };
+			const base = pos.length / 3, at = new Map();
+			const vert = (i, j) => { const k = j * (NI + 1) + i; if (!at.has(k)) { const u = U0 + i * C, v = V0 + j * C; at.set(k, base + at.size); pos.push(u, lotY(u, v), v); uv.push(u / 20, v / 16); } return at.get(k); };
+			for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) {
+				const u = U0 + i * C, v = V0 + j * C;
+				if (!ok(u, v) || !ok(u + C, v) || !ok(u, v + C) || !ok(u + C, v + C)) continue;
+				const a = vert(i, j), b2 = vert(i + 1, j), c = vert(i, j + 1), d = vert(i + 1, j + 1);
+				idx.push(a, c, b2, b2, c, d);
+			}
+			// the cars: the rows nearest the Boardwalk fullest
+			for (let v = V0 + 4; v < V0 + NJ * C - 3; v += 8) for (let u = U0 + 1.25; u < U0 + NI * C; u += 2.5) {
+				const full = li === 0 ? 0.75 : 0.85 * Math.exp(-(-200 - v) / 110);
+				if (r() > full || !ok(u - 2, v - 3) || !ok(u + 2, v + 3)) continue;
+				const y = lotY(u, v);
+				body.at(u, y + 0.56, v, 1, 1, 1, 0, new THREE.Color(CC[Math.floor(r() * CC.length)])); cab.at(u, y + 1.24, v - 0.2);
+			}
+		});
+		const lg = new THREE.BufferGeometry();
+		lg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); lg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); lg.setIndex(idx); lg.computeVertexNormals();
+		const lots = new THREE.Mesh(lg, mat);
+		lots.receiveShadow = true;
+		group.add(lots);
+		// the River Lot's lamps
+		const Lm = merger(), bl = bulbs();
+		for (let v = -230; v > -470; v -= 40) for (let u = 180; u < 436; u += 40) { const [x, z] = toW(u, v); if (!inPoly(LOTS[1], u, v) || river.influence(x, z) > 0.01) continue; const y = lotY(u, v); Lm.cyl(0.08, 0.12, 8, 'darksteel', u, y + 4, v, 6); bl.add(u, y + 8.1, v); }
+		Lm.done(group, { shadow: false });
+		bl.done(group, 1.6);
 		body.done(group); cab.done(group);
-		B.solids.push([u0 + 1, v0 + 2, u1 - 1, v1 - 2, 2]);
 	}
-	// Beach Hill and the motels across Beach Street, the town rising behind
+	// Beach Hill to the west and the Beach Flats' houses, the motels along Beach Street
+	// facing the park, the town rising behind; none in the lots, the river or its banks
 	function buildBackdrop() {
 		const Mg = merger(), r = rng(5);
-		for (let k = 0; k < 70; k++) {
-			const u = -330 + r() * 660, v = -205 - r() * 150;
+		const clear = (u, v, x, z) => LOTS.some((P) => inPoly(P, u, v) || inPoly(P, u + 8, v) || inPoly(P, u - 8, v) || inPoly(P, u, v + 8) || inPoly(P, u, v - 8)) || river.influence(x, z) > 0.001 || (u < -470 && v > -60);
+		for (let k = 0; k < (isPhone ? 110 : 170); k++) {
+			const u = -560 + r() * 960, v = -205 - r() * (u < -250 ? 260 : 330);
 			const [x, z] = toW(u, v), y = bay.heightAt(x, z);
-			if (y < 1.5) continue;
+			if (y < 1.5 || clear(u, v, x, z)) continue;
 			const w = 8 + r() * 10, d = 8 + r() * 12, h = 4 + r() * (v > -240 ? 7 : 4), key = ['stucco', 'white', 'cream', 'stuccoPink'][Math.floor(r() * 4)];
 			Mg.box(w, h + 1, d, key, u, y + h / 2 - 0.5, v, 0, (r() - 0.5) * 0.2);
 			Mg.box(w + 0.5, 0.35, d + 0.5, r() < 0.6 ? 'tile' : 'darksteel', u, y + h + 0.1, v, 0, (r() - 0.5) * 0.2);
 		}
+		// the motels and shops along Beach Street between the lots, two storeys, facing the park
+		for (let u = -34; u < 146; u += 16 + r() * 6) {
+			const [x, z] = toW(u, -210), y = Math.max(DECK - 0.4, bay.heightAt(x, z)), h = 6 + r() * 2, key = ['white', 'cream', 'stuccoPink', 'teal'][Math.floor(r() * 4)];
+			Mg.box(14, h, 12, key, u, y + h / 2, -210).box(14.4, 0.4, 12.4, 'darksteel', u, y + h + 0.2, -210).box(14, 0.15, 2, 'concrete', u, y + 3.2, -203.2);
+		}
 		Mg.done(group, { shadow: false });
+	}
+
+	// ---------- the beach train: down Beach Street, over the trestle, and back ----------
+	function buildTrain() {
+		const T = new THREE.Group();
+		const Mg = merger(), L = bulbs();
+		// the locomotive: black boiler, red cab, a tall stack, the cowcatcher (facing +u)
+		Mg.cyl(0.75, 0.75, 5.2, 'black', 1.2, 2.25, 0, 14, 0, 0, Math.PI / 2).cyl(0.28, 0.4, 1.3, 'black', 3.2, 3.4, 0, 10).cyl(0.35, 0.35, 0.5, 'brass', 1.8, 3.1, 0, 10);
+		Mg.box(2.4, 2.6, 2.6, 'red', -2.2, 2.6, 0).box(2.8, 0.2, 3.0, 'black', -2.2, 4.0, 0).box(8.4, 0.5, 2.4, 'black', 0, 1.1, 0);
+		Mg.geo(new THREE.ConeGeometry(1.1, 1.2, 4, 1).rotateZ(-Math.PI / 2), 'red', 4.6, 0.9, 0);
+		for (const x of [-2.4, -0.6, 1.2, 3.0]) for (const sd of [-1.05, 1.05]) Mg.cyl(0.55, 0.55, 0.12, x < 0 ? 'red' : 'black', x, 0.62, sd, 12, Math.PI / 2);
+		L.add(4.2, 2.8, 0);
+		// the open excursion cars: yellow, red roofs, benches
+		for (let k = 0; k < 3; k++) {
+			const x0 = -9.6 - k * 11.4;
+			Mg.box(10.4, 0.5, 2.8, 'yellow', x0, 1.3, 0).box(10.6, 0.2, 3.1, 'red', x0, 3.9, 0);
+			for (const x of [-4.8, -1.6, 1.6, 4.8]) for (const sd of [-1.3, 1.3]) Mg.box(0.12, 2.4, 0.12, 'yellow', x0 + x, 2.7, sd);
+			for (let b = -4; b <= 4; b += 1.6) Mg.box(0.5, 0.45, 2.4, 'plank', x0 + b, 1.8, 0);
+			for (const x of [-3.5, 3.5]) for (const sd of [-1.05, 1.05]) Mg.cyl(0.4, 0.4, 0.12, 'black', x0 + x, 0.55, sd, 10, Math.PI / 2);
+		}
+		Mg.done(T, { shadow: !isPhone });
+		L.done(T, 1.4);
+		group.add(T);
+		B.train = { T, u: RAIL.u0 + 40, dir: 1, wait: 20 };
+	}
+	function trainStep(dt, lu, lv) {
+		const R = B.train;
+		if (!R) return;
+		if (R.wait > 0) R.wait -= dt;
+		else {
+			const end = R.dir > 0 ? RAIL.t1 + 30 : RAIL.u0 + 40;
+			// (slow over the trestle and through the park, a walking pace)
+			R.u += R.dir * dt * (R.u > PARK.u0 && R.u < RAIL.t1 ? 3.2 : 6);
+			if ((R.u - end) * R.dir > 0) { R.u = end; R.dir *= -1; R.wait = 45; }
+			// the bell as it comes by
+			if (Math.random() < dt * 0.4 && Math.hypot(R.u - lu, RAIL.v - lv) < 150) for (let k = 0; k < 2; k++) sound.pipe(1180, k * 0.5, 0.45, 0.02 * Math.max(0, 1 - Math.hypot(R.u - lu, RAIL.v - lv) / 150), 'bell');
+		}
+		// (locomotive first going out; home, it backs its cars)
+		R.T.position.set(R.u, railY(R.u) + 0.2, RAIL.v);
+		R.T.rotation.set(0, 0, Math.atan2(railY(R.u + 3) - railY(R.u - 3), 6));
 	}
 
 	// ---------- the far crowd: figures on the promenade, the midway and the sand ----------
@@ -653,23 +763,24 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 
 	// ---------- walking: the floors, the walls ----------
 	function floor(x, z, y) {
-		if (!B.built) return -1e9;
+		const rf = river.floor(x, z, y);
+		if (!B.built) return rf;
 		const [u, v] = toL(x, z);
-		if (u < GROUND.u0 - 5 || u > GROUND.u1 + 5 || v < GROUND.v0 - 5 || v > 900) return -1e9;
-		// the wharf's deck
-		const W = B.wharf;
-		if (W) {
-			const du = u - W.b[0], dv = v - W.b[1], s = du * W.dir[0] + dv * W.dir[1], xo = du * W.dir[1] - dv * W.dir[0];
-			if (Math.abs(xo) < W.W2 && s > -18 && s < W.len) { const fy = s < 2 ? DECK + (W.Y - DECK) * Math.max(0, (s + 18) / 20) : W.Y; if (y > fy - 1.4) return fy; }
-		}
-		if (v > GROUND.v1) return -1e9;
+		// the wharf's deck, the trestle's
+		const wf = B.wharf?.built ? B.wharf.floor(u, v, y) : null;
+		if (wf !== null) return Math.max(wf, rf);
+		if (u > RAIL.t0 - 44 && u < RAIL.t1 + 44 && Math.abs(v - RAIL.v) < 4.4) { const fy = railY(u) + 0.25; if (y > fy - 1.4 && fy > DECK + 0.4) return fy; }
+		if (u < GROUND.u0 - 5 || u > GROUND.u1 + 5 || v < GROUND.v0 - 5 || v > GROUND.v1) return rf;
 		if (u > PARK.u0 && u < PARK.u1 && v > PARK.v0 && v < PARK.v1 + 0.1) return DECK;
-		if (v >= PARK.v1 && u > GROUND.u0 + 10 && u < GROUND.u1 - 10 && v < GROUND.v1 - 10) return groundY(u, v);
-		return -1e9;
+		if (v >= PARK.v1 && u > GROUND.u0 + 10 && u < GROUND.u1 - 10 && v < GROUND.v1 - 10) return Math.max(rf, beachY(u, v, x, z));
+		return rf;
 	}
 	function push(p, footY) {
+		river.push(p, footY);
 		if (!B.built) return;
 		let [u, v] = toL(p.x, p.z);
+		const q = B.wharf?.built ? B.wharf.push(u, v, footY) : null;
+		if (q) { [u, v] = q; const [x, z] = toW(u, v); p.x = x; p.z = z; }
 		if (u < PARK.u0 - 20 || u > PARK.u1 + 20 || v < PARK.v0 - 5 || v > 30) return;
 		const R = 0.3, y = footY - DECK;
 		let moved = false;
@@ -699,6 +810,9 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	function venue(cam, hours) {
 		if (!B.built) return null;
 		const [u, v] = toL(cam.x, cam.z);
+		// out on the wharf: its own visitors
+		const WV = B.wharf?.venue(u, v, cam.y, Math.max(crowd(ZONE.beach, hours).k, busyAt(hours)) * (hours < 7 || hours > 22.5 ? 0.3 : 1));
+		if (WV) return WV;
 		if (u < PARK.u0 - 10 || u > PARK.u1 + 10 || v < PARK.v0 || v > 120 || cam.y > 60) return null;
 		const k = Math.max(crowd(ZONE.beach, hours).k, busyAt(hours));
 		const pick = (u0, u1, v0, v1, yf) => (rr) => { for (let i = 0; i < 8; i++) { const pu = u0 + rr() * (u1 - u0), pv = v0 + rr() * (v1 - v0); if (!blocked(pu, pv)) { const [x, z] = toW(pu, pv); return { x, z, y: yf ? yf(pu, pv) : DECK }; } } const [x, z] = toW(u0, v0); return { x, z }; };
@@ -865,11 +979,13 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		if (!regraded && bay.levels?.[0]) regraded = regrade(bay, shared?.bayU);
 		const d = Math.hypot(cam.position.x - FRAME.x, cam.position.z - FRAME.z);
 		if (!regraded) return;
-		// in range: build a piece a frame; well out of range: let it all go
-		if (!B.built && d < NEAR && bay.loaded()) {
-			if (!B.queue) B.queue = plan();
+		// the river carves its channel once the regraded survey has gone up to the GPU
+		if (++sinceGrade > 30) river.update(dt, t, cam, night);
+		// in range (and the river carved): build a piece a frame; well out of range: let it all go
+		if (!B.built && d < NEAR && bay.loaded() && river.settled()) {
+			if (!B.queue) { B.queue = plan(); B.nq = B.queue.length; }
 			const t0 = performance.now();
-			while (B.queue.length && performance.now() - t0 < 12) { const f = B.queue.shift(), t1 = performance.now(); try { f(); } catch (e) { console.warn('[boardwalk]', e); } B.slow = Math.max(B.slow || 0, performance.now() - t1); }
+			while (B.queue.length && performance.now() - t0 < 12) { const f = B.queue.shift(), t1 = performance.now(); try { f(); } catch (e) { console.warn('[boardwalk]', e); } const ms = performance.now() - t1; if (ms > (B.slow || 0)) { B.slow = ms; B.slowName = f.name || '#' + (B.nq - B.queue.length); } }
 		}
 		if ((B.built || B.queue) && d > FAR && !Ride.cur) dispose();
 		if (!B.built) return;
@@ -894,6 +1010,8 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		}
 		const busy = busyAt(hours);
 		if (d < 1600) crowdStep(dt, t, lu, lv, busy);
+		trainStep(dt, lu, lv);
+		B.wharf?.update(dt, t, lu, lv, ly, night);
 		// the midway's own sound: the crowd's murmur, a game booth's bell now and then
 		const mid = Math.max(0, 1 - Math.hypot(Math.max(0, Math.abs(lu - 30) - 230), Math.max(0, Math.abs(lv + 30) - 40), Math.max(0, ly - DECK - 3)) / 120) * (Ride.cur ? 0.5 : 1);
 		babble.set(mid * busy * 0.09 * (0.75 + 0.25 * Math.sin(t * 2.3) * Math.sin(t * 3.7)), 600 + 150 * Math.sin(t * 1.3));
@@ -913,6 +1031,8 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			btn.style.display = offer ? 'flex' : 'none';
 			// arriving: what this is
 			if (!hintSeen && lu > PARK.u0 && lu < PARK.u1 && lv > PARK.v0 && lv < 60 && ly < DECK + 40) { hintSeen = true; hint('Santa Cruz Beach Boardwalk\nSince 1907: the Giant Dipper, the Looff Carousel and the midway. Walk up to a ride to get on.', 7000, 1); }
+			if (!hintWharf && B.wharf?.built && B.wharf.floor(lu, lv, ly - 1.7) !== null && ly < 20) { hintWharf = true; hint('Santa Cruz Municipal Wharf\nSince 1914: fish markets, chowder and saltwater taffy half a mile out over the bay. Look down through the viewing holes at the end for the sea lions.', 7000, 1); }
+			if (!hintRiver && river.levelAt(cam.position.x, cam.position.z) !== null && ly < 30) { hintRiver = true; hint('San Lorenzo River\nDown from the Santa Cruz Mountains through Henry Cowell\'s redwoods and the town, into the bay by the Boardwalk.', 6000, 1); }
 			// a ride asked for from the console, now that it is built
 			if (Ride.pending) { const R = B.rides.find((q) => q.id === Ride.pending); Ride.pending = null; if (R) board(R); }
 		}
@@ -929,13 +1049,13 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			group.remove(o);
 		}
 		for (const p of RP.pool) p.slot = null;
-		Object.assign(B, { built: false, queue: null, rides: [], solids: [], rounds: [], crowd: null, wharf: null, winMats: [], signs: [], pools: null, globe: null, poolMat: null });
+		Object.assign(B, { built: false, queue: null, rides: [], solids: [], rounds: [], crowd: null, wharf: null, train: null, winMats: [], signs: [], pools: null, globe: null, poolMat: null });
 		QUEUE.length = 0;
 		group.visible = false; btn.style.display = 'none'; offer = null;
 	}
 	// the console: where it stands, and a ride by name (taking you to it first)
 	function info() {
-		return { built: B.built, pieces: B.queue?.length ?? 0, slowestPieceMs: Math.round(B.slow || 0), rides: B.rides.map((R) => R.id), offer: offer?.id || null, riding: Ride.cur?.id || null, status: Ride.cur?.status?.() || '', regraded };
+		return { built: B.built, pieces: B.queue?.length ?? 0, slowestPieceMs: Math.round(B.slow || 0), slowestPiece: B.slowName || '', rides: B.rides.map((R) => R.id), offer: offer?.id || null, riding: Ride.cur?.id || null, status: Ride.cur?.status?.() || '', regraded, river: river.info(), wharf: B.wharf?.info() || null };
 	}
 	function rideNow(id) {
 		const P = player?.();
@@ -948,15 +1068,16 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		Ride.pending = key;
 		return 'On the way to the Boardwalk: the ride starts once it is built.';
 	}
-		// (run the ride on by some seconds without drawing: for trying it from the console)
+	// (run the ride on by some seconds without drawing: for trying it from the console)
 	const step = (sec) => { let t = 0; for (; t < sec && Ride.cur; t += 1 / 30) ride(1 / 30, performance.now() / 1000 + t); return info(); };
 	// the world is going: everything of ours with it
 	function destroy() {
 		dispose();
+		river.destroy();
 		babble.stop();
 		btn.remove(); layer.remove();
 		removeEventListener('keydown', onKey); removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);
 		scene.remove(group);
 	}
-	return { group, update, ride, destroy, riding: () => !!Ride.cur, leave, floor, push, venue, info, rideNow, step, inside: (x, z) => inBoardwalk(x, z), get cur() { return Ride.cur; } };
+	return { group, update, ride, destroy, riding: () => !!Ride.cur, leave, floor, push, venue, info, rideNow, step, inside: (x, z) => inBoardwalk(x, z), waterAt: (x, z) => river.levelAt(x, z), river, get cur() { return Ride.cur; } };
 }

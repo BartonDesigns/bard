@@ -10,8 +10,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorld } from '../geo.js';
 
-// the front edge of the promenade, halfway along
-const O = toWorld(36.9633, -122.0178);
+// the front edge of the promenade, halfway along (the Casino at the west end by Cliff
+// Street, the Giant Dipper at the east end short of the river)
+const O = toWorld(36.96354, -122.01674);
 export const FRAME = { x: O.x, z: O.z, a: 16 * Math.PI / 180 };
 const CA = Math.cos(FRAME.a), SA = Math.sin(FRAME.a);
 export const toW = (u, v) => [FRAME.x + u * CA + v * SA, FRAME.z - u * SA + v * CA];

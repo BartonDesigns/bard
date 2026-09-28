@@ -331,7 +331,7 @@ export function createIslandWorld() {
 		['San Ramon', 37.7700, -121.9380, 0], ['Lake Annabel, Bishop Ranch', 37.7646, -121.9660, -2.2], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
 		['Mt Tamalpais, East Peak', 37.9293, -122.5780, 2.2], ['Mission Peak', 37.5125, -121.8806, 1.5], ['Berkeley Hills', 37.8812, -122.2425, 1.9],
 		['Tide pools, Moss Beach', 37.5214, -122.5166, 1.75], ['Devil\'s Slide, Highway 1', 37.5738, -122.5148, 3.1], ['Half Moon Bay, Highway 1', 37.4640, -122.4330, 0], ['Duxbury Reef, Bolinas', 37.8936, -122.6972, 2.3],
-		['Bay Area Discovery Museum, Fort Baker', 37.8345, -122.4782, 3.3], ['Pacifica Pier', 37.6336, -122.4935, 1.8], ['San Ramon Central Park', 37.7643, -121.9528, 0.5], ['Apple Park, Cupertino', 37.3310, -122.0040, 0.6], ['Downtown San Jose', 37.3330, -121.8890, 0], ['Pescadero State Beach, Highway 1', 37.2680, -122.4105, 1.7], ['Pigeon Point Light Station', 37.1845, -122.3925, 2.3], ['Santa Cruz Beach Boardwalk', 36.96317, -122.01846, -1.29],
+		['Bay Area Discovery Museum, Fort Baker', 37.8345, -122.4782, 3.3], ['Pacifica Pier', 37.6336, -122.4935, 1.8], ['San Ramon Central Park', 37.7643, -121.9528, 0.5], ['Apple Park, Cupertino', 37.3310, -122.0040, 0.6], ['Downtown San Jose', 37.3330, -121.8890, 0], ['Pescadero State Beach, Highway 1', 37.2680, -122.4105, 1.7], ['Pigeon Point Light Station', 37.1845, -122.3925, 2.3], ['Santa Cruz Beach Boardwalk', 36.96317, -122.01846, -1.29], ['Santa Cruz Municipal Wharf', 36.96263, -122.02233, -2.97], ['San Lorenzo River, the Riverwalk', 36.97440, -122.02088, 3.14],
 		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
 	];
 	const tpBtn = button('', 'Teleport to a place', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
@@ -599,6 +599,8 @@ export function createIslandWorld() {
 			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
 			const own = island.heightAt, berms = world.berms;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : berms.apply(x, z, bayArea.heightAt(x, z));
+			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
+			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);

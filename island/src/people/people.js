@@ -178,7 +178,7 @@ export function createPeople(scene, world) {
 				p.route = { kind: 'venue', area, goal: new THREE.Vector3(q.x, 0, q.z) };
 				const q2 = area.pick(r);
 				p.route.goal.set(q2.x, 0, q2.z);
-				M.place(q.x, ground(q.x, q.z), q.z, r() * 6.28);
+				M.place(q.x, q.y ?? ground(q.x, q.z), q.z, r() * 6.28);
 				return true;
 			}
 			return false;
