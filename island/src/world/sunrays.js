@@ -145,7 +145,7 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 				// (Henyey-Greenstein, g 0.6, scaled to 1 straight at the sun)
 				const float g = 0.6;
 				float hg = pow((1.0 - g) / sqrt(1.0 + g * g - 2.0 * g * c), 3.0);
-				vec3 col = uColor * acc * (0.3 + 2.2 * hg);
+				vec3 col = uColor * acc * (0.5 + 1.0 * hg);
 				col = col / (1.0 + col * 0.8);
 				gl_FragColor = vec4(col + (j - 0.5) / 255.0, 1.0);
 			}`,
@@ -268,7 +268,7 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 
 	// ---------- when and how strongly ----------
 	const S = {
-		enabled: true, strength: 1, force: false, burst: null, snap: true,
+		enabled: true, strength: 1, force: false, burst: null, snap: true, adapt: true,
 		k: 0, canopy: 0, tall: 0, mist: 0, timeK: 0, burstK: 0, slow: 0,
 	};
 	let probeT = 0, canopyT = 0, tallT = 0;
@@ -330,7 +330,7 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 		if (S.force || S.snap || S.k < 0.003) S.k = k;
 		S.snap = false;
 		// frames slow for a while: the burst goes first, then a sheet or two
-		S.slow += ((frameMs > 24 ? 1 : 0) - S.slow) * Math.min(1, dt * 0.2);
+		S.slow = S.adapt ? S.slow + ((frameMs > 24 ? 1 : 0) - S.slow) * Math.min(1, dt * 0.2) : 0;
 		const on = S.k * S.strength > 0.005;
 		sheets.visible = motes.visible = on;
 		if (!on) { S.burstK = 0; return S; }
@@ -341,13 +341,13 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 		// the crowns' height: redwoods stand tall
 		U.uTop.value = 30 + 40 * S.tall;
 		U.uNear.value = Math.max(0.8, camera.near * 1.3);
-		U.uFar.value = 62;
+		U.uFar.value = 42;
 		const n = Math.max(3, tier.slices - (S.slow > 0.7 ? 2 : 0));
 		U.uCount.value = n;
 		sheetGeo.setDrawRange(0, n * 6);
 		// the sky's own light outside the shadow box: gaps are about as common as the canopy is thin
 		U.uOpen.value = 0.45 * (1 - S.canopy * 0.6);
-		U.uDens.value = 0.013 * S.mist;
+		U.uDens.value = 0.05 * S.mist;
 		// the mist drifts with the wind, slowed among the trunks (in the noise's units: 22 m)
 		const w = W.weather.windV;
 		U.uDrift.value.x = (U.uDrift.value.x + ((w?.x || 4) * 0.05 + 0.1) * dt * 0.045) % 64;
@@ -357,7 +357,7 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 		const a = air?.value;
 		tint.setRGB(1, 1, 1);
 		if (a && a.w > 0) tint.lerp(tmpV.set(a.x, a.y, a.z), a.w);
-		U.uColor.value.copy(shared.uSunColor.value).multiply(tint).multiplyScalar(S.k * S.strength * 1.3);
+		U.uColor.value.copy(shared.uSunColor.value).multiply(tint).multiplyScalar(S.k * S.strength);
 		moteU.uPx.value = renderer.getDrawingBufferSize(dbs).y;
 		moteU.uMote.value = 0.9;
 		const mc = Math.round(tier.motes * Math.min(1, 0.4 + S.mist * 0.6));
@@ -416,6 +416,7 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 			if ('burst' in v) S.burst = v.burst === null ? null : !!v.burst;
 			if ('strength' in v) S.strength = Math.max(0, Math.min(4, +v.strength));
 			if ('force' in v) S.force = !!v.force;
+			if ('adapt' in v) S.adapt = !!v.adapt;
 			if ('tier' in v && TIERS[v.tier]) { tier = TIERS[tierName = v.tier]; sheetMat.defines.STEPS = tier.steps; sheetMat.needsUpdate = true; }
 		}
 		return info();

@@ -2,10 +2,13 @@
 // (19k vertices, 64-bone skeleton with fingers), shaped per person by its morph targets:
 // ancestry (African, Asian, European, blended), sex, age, muscle and weight; heights from
 // real population ranges. Skin from the painted skin maps, tinted to the person; eyes
-// that move; fitted hair; and a wardrobe cut from the body's own cloth cage (shirts short
-// and long-sleeved, jackets, trousers, shorts, skirts, shoes) so clothes follow the body.
+// that move; fitted hair; and clothes cut from the body's own cloth cage so they follow the
+// body, dressed for who the person is, where and what they are doing (wardrobe.js) and
+// painted by one shader (garment.js): a cloth mesh, an accessories mesh, skin, eyes, hair.
 
 import * as THREE from 'three';
+import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
+import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial } from './garment.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -121,7 +124,26 @@ export function personDNA(seed, opts = {}) {
 		d.gait = { stride: 0.9 + r() * 0.1, bounce: 1.2 + r() * 0.5, armSwing: 1 + r() * 0.5, posture: -0.02, pace: 1.0 + r() * 0.35 };
 		d.temper.outgoing = 0.5 + r() * 0.5;
 	}
+	// what they are wearing today: by generation, place, weather and what they are doing
+	// (wardrobe.js), from their own seed so it is the same every time; the flat description
+	// above is kept for the places that still dress people by hand (if one changes it, the
+	// body is dressed from that instead)
+	const x = opts.ctx || {};
+	const cl = x.cold === undefined ? climate({ hours: x.hours, place: x.place, rain: x.rain, month: x.month }) : { cold: x.cold, wet: !!x.wet };
+	const rs = rng(seed ^ 0x57a1e);
+	d.style = opts.style || dressFor(rs, d, { place: x.place, activity: opts.jogger ? 'jog' : x.activity, cold: cl.cold, wet: cl.wet });
+	d.style.printKind = Math.floor(rs() * 9);
+	d.style.hair = hairFor(rs, d, d.style);
+	d.styleSig = JSON.stringify(d.outfit);
+	if (opts.skin) d.skinOverride = opts.skin;
 	return d;
+}
+// the outfit a body is dressed in: its style, unless its flat description was changed by hand
+export function outfitOf(d) {
+	if (d.style && (!d.styleSig || JSON.stringify(d.outfit) === d.styleSig)) return d.style;
+	const o = fromFlat(d.outfit);
+	o.hair = d.style?.hair || null;
+	return o;
 }
 function pickOutfit(r, male, age, opts) {
 	const P = (list) => list[Math.floor(r() * list.length)];
@@ -139,6 +161,7 @@ function pickOutfit(r, male, age, opts) {
 
 // ---------- building one ----------
 export function buildPerson(A, d) {
+	const t0 = performance.now();
 	const { D, targets, unit } = A;
 	// the shape: ancestry x sex x age, then muscle and weight
 	const p = Float32Array.from(A.base, (x) => x * unit);
@@ -169,88 +192,120 @@ export function buildPerson(A, d) {
 	const skeleton = new THREE.Skeleton(bones);
 	const map = Object.fromEntries(bones.map((b, i) => [b.name, i]));
 	const rest = { heads, tails, dirs: heads.map((h, i) => tails[i] ? tails[i].clone().sub(h).normalize() : new THREE.Vector3(0, 1, 0)) };
-
-	// where the clothes start and stop, from the joints
-	const Y = (n) => heads[map[n]].y;
-	const cut = { neck: Y('neck01') - 0.02, waist: Y('spine04') + 0.02, elbow: Y('lowerarm01.L'), wrist: Y('wrist.L') + 0.03, knee: Y('lowerleg01.L'), ankle: Y('foot.L') + 0.02, shoulderX: Math.abs(heads[map['upperarm01.L']].x) };
-	const o = d.outfit;
-	// which part of the body a triangle is on, from the bone that moves it most
-	const part = partOf(A);
-	const kinds = (tri) => { let arm = 0, fore = 0, hand = 0, thigh = 0, shin = 0, foot = 0; for (const v of tri) { const k = part[v]; if (k === 1) arm++; else if (k === 2) fore++; else if (k === 3) hand++; else if (k === 4) thigh++; else if (k === 5) shin++; else if (k === 6) foot++; } return { arm, fore, hand, thigh, shin, foot, torso: 3 - arm - fore - hand - thigh - shin - foot }; };
-	// m: a margin (m > 0 shrinks the region, for the skin hidden under the cloth)
-	const inTop = (c, tri, m = 0) => { const k = kinds(tri); if (k.hand || k.thigh || k.shin || k.foot) return false; if (k.fore) return o.sleeves === 'long' && c[1] > cut.wrist + m; if (k.arm) return o.sleeves === 'long' || c[1] > cut.elbow + 0.1 + m; return c[1] > cut.waist - 0.04 + m && c[1] < cut.neck - m; };
-	const inBottom = (c, tri, m = 0) => { const k = kinds(tri); if (k.arm || k.fore || k.hand || k.foot) return false; if (k.shin) return o.legs === 'long' && c[1] > cut.ankle + 0.02 + m; if (k.thigh) return o.legs === 'long' || (o.legs === 'skirt' ? c[1] > cut.knee - 0.04 + m : c[1] > cut.knee + 0.1 + m); return c[1] < cut.waist + 0.02 - m; };
-	const inShoe = (c, tri, m = 0) => kinds(tri).foot > 1 || c[1] < cut.ankle - m;
-	const covered = (c, tri) => inTop(c, tri, 0.035) || inBottom(c, tri, 0.035) || inShoe(c, tri, 0.02);
-
-	const meshes = [];
-	const add = (geo, mat) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); meshes.push(m); return m; };
-
-	// skin: everything the clothes do not cover (so no skin pokes through)
-	const bodyGeo = geometry(A, p, A.body, (c, tri) => !covered(c, tri));
-	faceMorphs(A, bodyGeo, S);
-	const skinKey = (d.ancestry[0] > 0.5 ? 'young_african' : d.age > 58 ? 'old_caucasian' : 'young_caucasian') + '_' + (d.male ? 'male' : 'female');
-	const melanin = d.ancestry[0] * 0.55 + d.ancestry[1] * 0.12;
-	const tint = new THREE.Color().setRGB(d.tone * (1 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.55)), d.tone * (0.96 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.62) + d.warmth * 0.02 + d.ancestry[1] * 0.02), d.tone * (0.9 - melanin * (skinKey.startsWith('young_african') ? 0.12 : 0.7) - d.ancestry[1] * 0.04));
-	const skinMat = new THREE.MeshPhysicalMaterial({ map: A.tex[skinKey], color: tint, roughness: 0.55, metalness: 0, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color(0.9, 0.5, 0.4) });
-	// a little light scattering under the skin: warm the terminator
-	skinMat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directDiffuse += reflectedLight.directDiffuse * vec3(0.16, 0.03, 0.0);'); };
-	const skinMesh = add(bodyGeo, skinMat);
-
-	// clothes from the cloth cage, offset off the skin
-	const fab = (col, kind, rough = 0.95) => new THREE.MeshStandardMaterial({ color: new THREE.Color(...col), roughness: rough, normalMap: A.fabric[kind], normalScale: new THREE.Vector2(0.35, 0.35), side: THREE.DoubleSide });
-	const topCol = o.jacket || o.top;
-	add(geometry(A, p, A.cage, inTop, 0.011, true, 22), fab(topCol, o.jacket ? 'canvas' : o.fabricTop));
-	add(geometry(A, p, A.cage, inBottom, o.legs === 'skirt' ? 0.02 : 0.009, true, 18, o.legs === 'skirt'), fab(o.bottom, 'twill', 0.9));
-	add(geometry(A, p, A.cage, inShoe, 0.012, true, 10), new THREE.MeshStandardMaterial({ color: new THREE.Color(...o.shoes), roughness: 0.55 }));
+	const cut = landmarks(A, p, heads, map, d.height);
 
 	// eyes: little spheres with an iris, in the sockets, parented to the head
 	const headI = map.head, headBone = bones[headI];
-	const eyes = [];
+	const eyes = [], eyeAt = [];
 	for (const side of ['L', 'R']) {
 		const c = at(D.eyes[side]);
 		let r = 0; for (const id of D.eyes[side]) r += Math.hypot(p[id * 3] - c.x, p[id * 3 + 1] - c.y, p[id * 3 + 2] - c.z); r /= D.eyes[side].length;
 		const eye = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.0105, r * 0.95), 16, 12), eyeMaterial(d));
 		eye.position.copy(c).sub(heads[headI]);
-		headBone.add(eye); eyes.push(eye);
+		headBone.add(eye); eyes.push(eye); eyeAt.push(c);
 	}
-	// hair, fitted to this skull
-	let hair = null;
-	if (d.hair) {
-		hair = fitHair(A, p, d.hair, heads[headI]);
-		hair.material = new THREE.MeshStandardMaterial({ map: A.tex['hair_' + d.hair], color: new THREE.Color(...d.hairColour).multiplyScalar(2.2), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.6 });
-		hair.castShadow = true;
-		headBone.add(hair);
-	}
-	return { root, body, bones, skeleton, map, rest, meshes, skin: skinMesh, eyes, hair, dna: d, height: d.height, legLength: heads[map['upperleg01.L']].y - heads[map['foot.L']].y };
+	const P = { root, body, bones, skeleton, map, rest, meshes: [], skin: null, cloth: null, acc: null, eyes, hair: null, dna: d, height: d.height, legLength: heads[map['upperleg01.L']].y - heads[map['foot.L']].y, cut };
+	// skin: the painted maps tinted to the person (or a far world's skin)
+	const skinKey = (d.ancestry[0] > 0.5 ? 'young_african' : d.age > 58 ? 'old_caucasian' : 'young_caucasian') + '_' + (d.male ? 'male' : 'female');
+	const melanin = d.ancestry[0] * 0.55 + d.ancestry[1] * 0.12;
+	const tint = new THREE.Color().setRGB(d.tone * (1 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.55)), d.tone * (0.96 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.62) + d.warmth * 0.02 + d.ancestry[1] * 0.02), d.tone * (0.9 - melanin * (skinKey.startsWith('young_african') ? 0.12 : 0.7) - d.ancestry[1] * 0.04));
+	const skinMat = new THREE.MeshPhysicalMaterial({ map: A.tex[skinKey], color: tint, roughness: 0.55, metalness: 0, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color(0.9, 0.5, 0.4) });
+	if (d.skinOverride) { skinMat.color.set(d.skinOverride.col); if (d.skinOverride.glow) { skinMat.emissive.set(d.skinOverride.col); skinMat.emissiveIntensity = d.skinOverride.glow; } }
+	// a little light scattering under the skin: warm the terminator; and a close crop of hair
+	// painted on the scalp (a buzz cut, or what shows under a cap)
+	const scalpU = { value: new THREE.Vector4(0, 0, 0, 0) };
+	skinMat.userData.scalp = scalpU;
+	skinMat.onBeforeCompile = (sh) => {
+		sh.uniforms.uScalp = scalpU;
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nvarying float vScalp;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;');
+		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec4 uScalp;\nvarying float vScalp;')
+			.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uScalp.rgb * (0.8 + 0.4 * fract(sin(dot(floor(vUv * 900.0), vec2(12.9898, 78.233))) * 43758.5453)), smoothstep(0.2, 0.8, vScalp) * uScalp.w);')
+			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directDiffuse += reflectedLight.directDiffuse * vec3(0.16, 0.03, 0.0);');
+	};
+	P.skinMat = skinMat;
+	P._p = p;
+	P._S = S;
+	P.redress = (o) => dress(A, P, o);
+	dress(A, P, outfitOf(d));
+	P.lod = (dist) => { const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.acc) P.acc.visible = dist < 90; };
+	P.buildMs = performance.now() - t0;
+	return P;
 }
 
-// body parts by dominant bone: 0 torso/head, 1 upper arm, 2 forearm, 3 hand, 4 thigh, 5 shin, 6 foot
-let partCache = null;
-function partOf(A) {
-	if (partCache) return partCache;
-	const kind = A.bones.map((b) => /^(upperarm|shoulder|clavicle)/.test(b.name) ? (b.name.startsWith('upperarm') ? 1 : 0) : /^lowerarm/.test(b.name) ? 2 : /^(wrist|metacarpal|finger)/.test(b.name) ? 3 : /^upperleg/.test(b.name) ? 4 : /^lowerleg/.test(b.name) ? 5 : /^foot/.test(b.name) ? 6 : 0);
-	const n = A.ids.length / 4, out = new Uint8Array(n);
-	for (let v = 0; v < n; v++) { let best = 0, bw = -1; for (let q = 0; q < 4; q++) { const w = A.weights[v * 4 + q]; if (w > bw) { bw = w; best = A.ids[v * 4 + q]; } } out[v] = kind[best] || 0; }
-	partCache = out;
-	return out;
+// dress (or re-dress) a body: its skin where the clothes leave it bare, the cloth, the
+// small things, the hair
+function dress(A, P, o) {
+	const d = P.dna, p = P._p, cut = P.cut, { bones, map, skeleton, rest, body } = P;
+	for (const m of [P.skin, P.cloth, P.acc]) if (m) { m.geometry.dispose(); m.removeFromParent(); }
+	if (P.hair) { P.hair.geometry.dispose(); P.hair.material.dispose(); P.hair.removeFromParent(); P.hair = null; }
+	P.outfit = o;
+	const R = regions(o, cut);
+	const part = partOf(A);
+	const kinds = (tri) => { const k = { arm: 0, fore: 0, hand: 0, thigh: 0, shin: 0, foot: 0 }; for (const v of tri) { const q = part[v]; if (q === 1) k.arm++; else if (q === 2) k.fore++; else if (q === 3) k.hand++; else if (q === 4) k.thigh++; else if (q === 5) k.shin++; else if (q === 6) k.foot++; } return k; };
+	// (the skin hidden under the cloth is left out, a little in from the garment's edge, so
+	// nothing pokes through)
+	const covered = (c, tri) => { const k = kinds(tri); return R.top(c, tri, k, 0.035) || R.outer(c, tri, k, 0.035) || R.bottom(c, tri, k, 0.035) || R.shoes(c, tri, k, 0.02); };
+	const add = (geo, mat, shadow = true) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); return m; };
+	const bodyGeo = geometry(A, p, A.body, (c, tri) => !covered(c, tri));
+	faceMorphs(A, bodyGeo, P._S);
+	// the scalp: where cropped hair is painted
+	const src = bodyGeo.userData.src, sc = new Float32Array(src.length), eyeY = P.eyes[0].position.y + rest.heads[map.head].y, hb = map.head;
+	for (let i = 0; i < src.length; i++) {
+		const v = src[i]; let sum = 0, hw = 0;
+		for (let q = 0; q < 4; q++) { const w = A.weights[v * 4 + q]; sum += w; if (A.ids[v * 4 + q] === hb) hw += w; }
+		const y = p[v * 3 + 1], z = p[v * 3 + 2], front = z > cut.skull.z1 - 0.05;
+		sc[i] = sum && hw / sum > 0.7 ? clamp((y - eyeY - (front ? 0.055 : -0.03)) / 0.02) * (front || y > eyeY - 0.06 ? 1 : 0) : 0;
+	}
+	bodyGeo.setAttribute('scalp', new THREE.BufferAttribute(sc, 1));
+	P.skin = add(bodyGeo, P.skinMat);
+	// hair, fitted to this skull: its colour (or a dye), fuller for some, cropped or up
+	const H = o.hair || {};
+	const hat = (o.acc || []).find((q) => /^(cap|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
+	const hairCol = H.dyed ? new THREE.Color(H.dyed).multiplyScalar(1.25) : new THREE.Color(...d.hairColour).multiplyScalar(2.2);
+	const covers = hat && hat.kind !== 'visor';
+	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && (d.hair !== 'ponytail01' || /^(helmet|hood|hazhood)$/.test(hat.kind)));
+	P.skinMat.userData.scalp.value.set(hairCol.r * 0.45, hairCol.g * 0.45, hairCol.b * 0.45, d.hair && (H.buzz || covers) && !H.scarf ? 0.9 : 0);
+	if (showHair) {
+		const headI = map.head;
+		const hair = fitHair(A, p, d.hair, rest.heads[headI]);
+		hair.material = new THREE.MeshStandardMaterial({ map: A.tex['hair_' + d.hair], color: hairCol, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.6 });
+		hair.castShadow = true;
+		if (H.volume > 1) { const sk = cut.skull, c = new THREE.Vector3((sk.x0 + sk.x1) / 2, (sk.y0 + sk.y1) / 2, (sk.z0 + sk.z1) / 2).sub(rest.heads[headI]); hair.scale.set(H.volume, 1 + (H.volume - 1) * 0.6, H.volume); hair.position.copy(c).multiplyScalar(1 - H.volume); hair.position.y = c.y * (1 - hair.scale.y); }
+		// (under a cap only the ponytail shows)
+		if (covers) hair.scale.multiplyScalar(0.96);
+		bones[headI].add(hair);
+		P.hair = hair;
+	}
+	// the clothes: one mesh, painted by garment
+	const clothGeo = clothGeometry(A, p, o, cut, R);
+	if (!P.clothMat) P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0);
+	else paint(P.clothMat, o);
+	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
+	P.clothMat.userData.U.uHem.value.set(R.topHem, sleeveEnd, cut.waist + 0.02, R.legEnd);
+	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
+	if (!P.cloth) clothGeo.dispose();
+	// caps, glasses, headphones, bags: one more mesh
+	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest }, o, cut, '#' + new THREE.Color(hairCol).multiplyScalar(0.55).getHexString());
+	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
+	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
+	return P;
 }
 
 // a skinned piece of the body from a face list: [vertex, uv] pairs, three per triangle
-function geometry(A, p, faces, select, offset = 0, clothUV = false, uvScale = 20, flare = false) {
+function geometry(A, p, faces, select) {
 	const V = [], T = [], SI = [], SW = [], I = [], key = new Map(), src = [];
+	const c = [0, 0, 0];
 	for (let i = 0; i < faces.length; i += 6) {
 		const tri = [faces[i], faces[i + 2], faces[i + 4]];
-		const c = [0, 1, 2].map((ax) => (p[tri[0] * 3 + ax] + p[tri[1] * 3 + ax] + p[tri[2] * 3 + ax]) / 3);
+		for (let ax = 0; ax < 3; ax++) c[ax] = (p[tri[0] * 3 + ax] + p[tri[1] * 3 + ax] + p[tri[2] * 3 + ax]) / 3;
 		if (select && !select(c, tri)) continue;
 		for (let j = 0; j < 6; j += 2) {
-			const id = faces[i + j], u = faces[i + j + 1], k0 = id + ':' + u;
+			const id = faces[i + j], u = faces[i + j + 1], k0 = id * 65536 + u;
 			let k = key.get(k0);
 			if (k === undefined) {
 				k = V.length / 3; key.set(k0, k); src.push(id);
 				V.push(p[id * 3], p[id * 3 + 1], p[id * 3 + 2]);
-				if (clothUV) T.push((Math.atan2(p[id * 3], p[id * 3 + 2]) + Math.PI) * uvScale * 0.08, p[id * 3 + 1] * uvScale);
-				else T.push(A.uv[u * 2] / 65535, 1 - A.uv[u * 2 + 1] / 65535);
+				T.push(A.uv[u * 2] / 65535, 1 - A.uv[u * 2 + 1] / 65535);
 				let sum = 0; for (let q = 0; q < 4; q++) sum += A.weights[id * 4 + q];
 				for (let q = 0; q < 4; q++) { SI.push(A.ids[id * 4 + q]); SW.push(A.weights[id * 4 + q] / (sum || 1)); }
 			}
@@ -268,16 +323,6 @@ function geometry(A, p, faces, select, offset = 0, clothUV = false, uvScale = 20
 	const n = g.attributes.normal, acc = new Map();
 	for (let i = 0; i < src.length; i++) { const a = acc.get(src[i]) || [0, 0, 0]; a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); acc.set(src[i], a); }
 	for (let i = 0; i < src.length; i++) { const a = acc.get(src[i]), l = Math.hypot(...a) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); }
-	if (offset) {
-		const P = g.attributes.position;
-		for (let i = 0; i < P.count; i++) {
-			const y = P.getY(i);
-			// a skirt flares out toward the hem; loose cloth has soft folds
-			const k = offset * (1 + 0.25 * Math.sin(y * 70 + P.getX(i) * 30 + P.getZ(i) * 25)) + (flare ? Math.max(0, 0.6 - y) * 0.12 : 0);
-			P.setXYZ(i, P.getX(i) + n.getX(i) * k, y + n.getY(i) * k * 0.3, P.getZ(i) + n.getZ(i) * k);
-		}
-		g.computeVertexNormals();
-	}
 	g.userData.src = src;
 	g.computeBoundingSphere();
 	return g;

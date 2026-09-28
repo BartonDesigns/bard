@@ -164,17 +164,20 @@ function buildingMaterial(shared, night, nearBand) {
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uNightC = night;
 		sh.uniforms.uNearBand = nearBand;
-		sh.vertexShader = 'attribute float aKind; attribute vec3 aNear; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
-			vNearK = aNear.z > 0.5 ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, length(aNear.xy - cameraPosition.xz)) : 0.0;
+		sh.vertexShader = 'attribute float aKind; attribute vec3 aNear; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+			vNearK = aNear.z > 0.5 && aNear.z < 1.5 ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, length(aNear.xy - cameraPosition.xz)) : 0.0;
+			// (a building with its rooms built inside: its front door cut out, aNear = door x, sill y, 2 + width)
+			vDoor = aNear.z > 1.5 ? vec3(aNear.xy, aNear.z - 2.0) : vec3(0.0);
 			vKind = aKind;
 			vLY = transformed.y * length(instanceMatrix[1].xyz);
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'uniform float uNightC; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform float uNightC; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;`)
+			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
+			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;`)
 			.replace('#include <color_fragment>', `#include <color_fragment>
 			{
 				float roof = step(0.7, vCN.y);
@@ -330,6 +333,8 @@ function buildingMaterial(shared, night, nearBand) {
 					// a dark stone plinth at the ground
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.29, 0.28), step(vLY, 1.9) * (1.0 - roof));
 				}
+				// a building with its rooms built: its front windows (and a bay's) are holes onto them
+				if (vDoor.z > 0.0 && win > 0.5 && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) discard;
 				// far off, where a window is smaller than a pixel or two, it is only its average
 				// (as a mipmap would be): no crawling speckle on distant facades at night
 				float aaW = smoothstep(0.75, 0.3, length(fwidth(cell)));
@@ -356,7 +361,7 @@ function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding11';
+	m.customProgramCacheKey = () => 'baybuilding12';
 	return m;
 }
 
@@ -601,9 +606,10 @@ export function createCity(shared, scene, bay, real = null) {
 		const face = opt?.face;
 		if (face === 'n') ang += Math.PI;
 		else if (face === 'e' || face === 'w') { ang += face === 'e' ? -Math.PI / 2 : Math.PI / 2; const t = w; w = d; d = t; }
-		if (opt?.lift) list.push({ x, y: g + opt.lift, z, w, d, h, a: ang, col, kind, roof: null });
-		else list.push(flat ? { x, y: g - 0.9, z, w, d, h: 0.98, a: ang, col, kind, roof: null } : { x, y: g - 1.2, z, w, d, h: h + 1.2, a: ang, col, kind, roof });
+		const o = opt?.lift ? { x, y: g + opt.lift, z, w, d, h, a: ang, col, kind, roof: null } : flat ? { x, y: g - 0.9, z, w, d, h: 0.98, a: ang, col, kind, roof: null } : { x, y: g - 1.2, z, w, d, h: h + 1.2, a: ang, col, kind, roof };
+		list.push(o);
 		if (!flat && !opt?.lift && !list.noGrounds && (kind === KIND.office || kind === KIND.retail || kind === KIND.industry)) grounds(list, list.trees || (list.trees = []), x, z, w, d, ang, g, g - 1.2, kind, gx * 0.31 + gz * 0.17);
+		return o;
 	}
 	// what grounds a building that isn't a house: a paved apron round it with a kerb, a
 	// dark stone plinth (in the shader), planters at the entrance with shrubs, and trees
@@ -957,9 +963,10 @@ export function createCity(shared, scene, bay, real = null) {
 			if (n >= body.instanceMatrix.count) break;
 			q.setFromAxisAngle(Y, -o.a); sc.set(o.w, o.h, o.d); p.set(o.x, o.y, o.z);
 			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2])); kinds.array[n] = o.kind;
-			const nc = o.src?.grp?.near;
-			nearA.array[n * 3] = nc ? nc[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : 0; nearA.array[n * 3 + 2] = nc ? 1 : 0;
+			const nc = o.src?.grp?.near, dr = roofs && !nc ? doors.get(lotKey(o)) : null;
+			nearA.array[n * 3] = nc ? nc[0] : dr ? dr[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : dr ? dr[1] : 0; nearA.array[n * 3 + 2] = nc ? 1 : dr ? 2 + dr[2] : 0;
 			if (roofs && o.src?.grp) { let l = slotOf.get(o.src.grp); if (!l) slotOf.set(o.src.grp, l = []); l.push(n); }
+			if (roofs) o.slot = n;
 			n++;
 			if (o.roof && roofs) {
 				const im = o.roof.hip ? roofs[0] : roofs[1], k = o.roof.hip ? nh++ : ng++;
@@ -1131,6 +1138,77 @@ export function createCity(shared, scene, bay, real = null) {
 		if (!l) return;
 		for (const n of l) { nearA.array[n * 3] = c ? c[0] : 0; nearA.array[n * 3 + 1] = c ? c[1] : 0; nearA.array[n * 3 + 2] = c ? 1 : 0; }
 		nearA.needsUpdate = true;
+	}
+	// ---------- the gridded towns' buildings, for walking into (interiors/, houses.js, commercial.js) ----------
+	// a lot's own key (the grid puts it in the same place every time the list is rebuilt)
+	const lotKey = (o) => Math.round(o.x * 4) + ':' + Math.round(o.z * 4);
+	// buildings with their rooms built inside keep their block, its front door cut out:
+	// key -> [door x across the front from the centre, sill above the block's foot, width]
+	const doors = new Map();
+	function setDoor(o, v) {
+		const k = lotKey(o);
+		if (v) doors.set(k, v); else doors.delete(k);
+		// (the list is rebuilt as you travel: the lot as it stands in the current one)
+		const cur = lotsNear(o.x, o.z, 0.5).find((q) => lotKey(q) === k);
+		if (!cur || cur.slot === undefined || cur.src?.grp?.near) return;
+		const nearA = near.geometry.attributes.aNear, n = cur.slot;
+		nearA.array[n * 3] = v ? v[0] : 0; nearA.array[n * 3 + 1] = v ? v[1] : 0; nearA.array[n * 3 + 2] = v ? 2 + v[2] : 0;
+		nearA.needsUpdate = true;
+	}
+	// the gridded houses (and a garage built onto one), and the shops and offices, given the
+	// shape of the mapped ones so houses.js and commercial.js build them the same way; kept
+	// by key, so one is the same house every time the list is rebuilt
+	const procGrp = new Map();
+	let procStamp = 0;
+	function procGroups(list, cx, cz) {
+		procStamp++;
+		const R2 = 260 * 260, gar = new Map(), cellK = (x, z) => Math.floor(x / 24) + ',' + Math.floor(z / 24);
+		for (const o of list) if (!o.src && o.kind === KIND.garage && (o.x - cx) ** 2 + (o.z - cz) ** 2 < R2) { const k = cellK(o.x, o.z); (gar.get(k) || gar.set(k, []).get(k)).push(o); }
+		const touch = (c, b) => { const ca = Math.cos(c.a), sa = Math.sin(c.a), dx = b.x - c.x, dz = b.z - c.z; return Math.abs(c.a - b.a) < 1e-3 && Math.abs(ca * dx + sa * dz) <= (c.w + b.w) / 2 + 0.4 && Math.abs(-sa * dx + ca * dz) <= (c.d + b.d) / 2 + 0.4; };
+		for (const o of list) {
+			if (o.src || (o.x - cx) ** 2 + (o.z - cz) ** 2 > R2) continue;
+			const house = Math.floor(o.kind) === KIND.house && o.kind > 1.005 && o.roof, biz = (o.kind === KIND.retail || (o.kind === KIND.office && o.h <= 20)) && o.w * o.d > 60 && o.w * o.d < 6000 && Math.min(o.w, o.d) > 6;
+			if (!house && !biz) continue;
+			const key = lotKey(o);
+			let grp = procGrp.get(key);
+			if (!grp) {
+				if (house) {
+					const door = Math.min(1, Math.max(0, ((o.kind - 1) - 0.01) / 0.38));
+					grp = [{ x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, wallH: o.h - 1.2, roofH: o.roof.h, kind: 0, door, hip: o.roof.hip ? 1 : 0, look: { wall: o.col, roof: o.roof.col, garage: null } }];
+					const [gi, gj] = [Math.floor(o.x / 24), Math.floor(o.z / 24)];
+					for (let j = gj - 1; j <= gj + 1 && grp.length < 2; j++) for (let i = gi - 1; i <= gi + 1 && grp.length < 2; i++) for (const g of gar.get(i + ',' + j) || []) if (!g.src && touch(o, g)) { grp.push({ x: g.x, z: g.z, w: g.w, d: g.d, a: g.a, wallH: 3.0, roofH: Math.min(1.6, g.roof?.h || 1.2), kind: 3, door: 0.5, hip: g.roof?.hip ? 1 : 0, lot: g }); break; }
+				} else {
+					const b = { x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, wallH: o.h - 1.2, roofH: 0, kind: o.kind === KIND.retail ? 6 : 5, door: 0.5, hip: 0 };
+					grp = [b]; b.grp = grp; grp.biz = true;
+				}
+				procGrp.set(key, grp);
+			}
+			grp.stamp = procStamp;
+			o.src = grp.biz ? grp[0] : { grp };
+			// (its garage hands over with it)
+			if (grp[1]?.lot) for (const g of gar.get(cellK(grp[1].x, grp[1].z)) || []) if (Math.abs(g.x - grp[1].x) < 0.05 && Math.abs(g.z - grp[1].z) < 0.05) g.src = { grp };
+		}
+		// (forget the ones long behind you)
+		if (procGrp.size > 3000) for (const [k, g] of procGrp) if (!g.near && procStamp - g.stamp > 3) procGrp.delete(k);
+	}
+	const procNear = (x, z, r, biz) => { const out = []; for (const g of procGrp.values()) if (g.stamp === procStamp && !!g.biz === biz && Math.hypot(g[0].x - x, g[0].z - z) < r) out.push(g); return out; };
+	// every building round a point, from the last list (for walls to walk into)
+	let lotGrid = new Map();
+	function indexLots(list) {
+		const G = new Map();
+		for (const o of list) {
+			if (o.h < 0.9 || o.kind === KIND.pool || !o.w) continue;
+			const k = Math.floor(o.x / 40) + ',' + Math.floor(o.z / 40);
+			(G.get(k) || G.set(k, []).get(k)).push(o);
+		}
+		lotGrid = G;
+	}
+	function lotsNear(x, z, r) {
+		const out = [];
+		for (let j = Math.floor((z - r - 60) / 40); j <= Math.floor((z + r + 60) / 40); j++) for (let i = Math.floor((x - r - 60) / 40); i <= Math.floor((x + r + 60) / 40); i++) {
+			for (const o of lotGrid.get(i + ',' + j) || []) if (Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2) out.push(o);
+		}
+		return out;
 	}
 	const REAL_ROOF = [[0.3, 0.31, 0.33], [0.24, 0.25, 0.27], [0.36, 0.36, 0.37], [0.4, 0.39, 0.38], [0.33, 0.3, 0.28], [0.42, 0.33, 0.27], [0.5, 0.3, 0.22], [0.46, 0.27, 0.2], [0.28, 0.29, 0.32], [0.38, 0.35, 0.33]];
 	function realBuildings(cx, cz, R, list) {
@@ -1328,11 +1406,13 @@ export function createCity(shared, scene, bay, real = null) {
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees, k = list.kit; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
+		procGroups(list, x, z);
 		upload(list, near, [hips, gables]);
+		indexLots(list);
 		uploadKit(list.kit);
 		// the tall ones, for going inside (bay/towers.js)
 		tallList = list.filter((o) => (o.kind === KIND.tower || (o.kind === KIND.office && o.h > 20)) && !o.roof && o.src?.kind !== 12 && !o.src?.grp?.biz && Math.min(o.w, o.d) > 12);
 		placeTrees(x, z);
 	}
-	return { towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }

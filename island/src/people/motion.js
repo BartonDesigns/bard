@@ -15,6 +15,7 @@
 // out from under them. Talking adds mouth, nods and hand gestures.
 
 import * as THREE from 'three';
+import { actionAt, ACTIONS } from './actions.js';
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -110,6 +111,9 @@ export function createMotion(P, groundAt) {
 		sitK: new Spring(0, 2.2), sitWant: 0, seatH: 0.46,
 		// a hand held by someone walking alongside, by side
 		hold: { L: false, R: false },
+		// a whole-body action over the walk (actions.js): its name, progress, weight, and its
+		// channels eased so that one key pose flows into the next
+		act: { name: null, u: 0, dur: 1, auto: false, w: 0, v: { sp: [0, 0, 0], hp: [0, 0, 0, 0], fL: [0, 0, 0], fR: [0, 0, 0], rt: [0, 0], hd: [0, 0, 0] }, has: {}, arms: null },
 	};
 	const hipRest = H('upperleg01.L').y;
 	const ankleH = H('foot.L').y;
@@ -186,8 +190,23 @@ export function createMotion(P, groundAt) {
 		if (f.feel) for (const k in f.feel) S.feel[k] = Math.max(S.feel[k], f.feel[k] * env);
 		return out;
 	}
+	// the action now: advanced, weighed in or out, its channels eased
+	function actionNow(dt) {
+		const X = S.act;
+		if (X.auto && X.name) { X.u += dt / X.dur; if (X.u >= 1 && !ACTIONS[X.name]?.loop) { X.u = 1; if (X.once) X.name = null; } }
+		X.w += ((X.name ? 1 : 0) - X.w) * Math.min(1, dt * 10);
+		if (X.w < 0.002) { X.w = 0; X.arms = null; return X; }
+		const a = X.name ? actionAt(X.name, X.u) : null;
+		if (a) {
+			const k = Math.min(1, dt * 14);
+			for (const c of ['sp', 'hp', 'fL', 'fR', 'rt', 'hd']) { if (a.has[c]) { X.has[c] = true; for (let j = 0; j < X.v[c].length; j++) X.v[c][j] += (a[c][j] - X.v[c][j]) * k; } else X.has[c] = X.has[c] && X.w > 0.05 && !(c === 'fL' || c === 'fR'); }
+			X.arms = { L: a.has.L ? { ...a.L } : null, R: a.has.R ? { ...a.R } : null };
+		}
+		return X;
+	}
 	function update(dt, t, cam) {
 		dt = Math.min(dt, 0.05);
+		const X = actionNow(dt), aw = X.w;
 		// ---- smoothed intentions ----
 		const speed = Math.max(0, S.speed.to(S.want.speed, dt));
 		const dh = wrap(S.want.heading - S.yaw.v);
@@ -274,6 +293,20 @@ export function createMotion(P, groundAt) {
 				if (sitK > 0.5) { f.leg.lock.set(_v2.x, f.gy, _v2.z); f.leg.planted = true; f.leg.inSwing = false; }
 			}
 		}
+		// an action's feet: set where it puts them (in the body's frame)
+		if (aw > 0) {
+			const c = Math.cos(S.heading), sn = Math.sin(S.heading);
+			for (const f of feet) {
+				const key = f.leg.name === 'L' ? 'fL' : 'fR';
+				if (!X.has[key]) continue;
+				const [lx, ly, lz] = X.v[key];
+				_v2.set(S.pos.x + lx * c + lz * sn, 0, S.pos.z - lx * sn + lz * c);
+				const floor = groundAt(_v2.x, _v2.z);
+				_v2.y = (sitK > 0.5 ? S.pos.y : floor) + ly + ankleH;
+				f.ankle.lerp(_v2, aw); f.pitch *= 1 - aw;
+				if (aw > 0.5) { f.leg.lock.set(_v2.x, floor, _v2.z); f.leg.planted = true; f.leg.inSwing = false; f.gy = Math.min(f.gy, floor + Math.max(0, ly)); }
+			}
+		}
 		// ---- the body over the feet ----
 		const gy = Math.min(groundAt(S.pos.x, S.pos.z), Math.max(feet[0].gy, feet[1].gy));
 		// the pelvis cannot sit higher than the lower foot allows
@@ -301,17 +334,19 @@ export function createMotion(P, groundAt) {
 			const d2 = Math.min(dx * dx + dz * dz, R * R * 0.9);
 			hipH = smin(hipH, f.ankle.y - S.pos.y + Math.sqrt(R * R - d2));
 		}
-		const hipY = hipH * (1 - sitK) + (S.seatH + 0.09) * sitK;
+		const hipY = hipH * (1 - sitK) + (S.seatH + 0.09) * sitK - (X.has.hp ? X.v.hp[3] * aw : 0);
 		const bob = hipH - hipStand;
 
 		// body space: the person's own frame (+z forward)
 		P.root.position.copy(S.pos);
-		P.root.rotation.set(0, heading, 0);
+		if (X.has.rt && aw > 0) P.root.rotation.set(X.v.rt[0] * aw, heading, X.v.rt[1] * aw, 'YXZ');
+		else P.root.rotation.set(0, heading, 0, 'YXZ');
 
 		// ---- pelvis ----
 		const rootI = map.root, rootB = bones[rootI];
 		rootB.position.set(rest.heads[rootI].x + sway, rest.heads[rootI].y - hipRest + hipY, rest.heads[rootI].z);
-		_e.set(lean * 0.35, pelvisYaw, pelvisRoll, 'YXZ');
+		const hp = X.has.hp ? X.v.hp : null;
+		_e.set(lean * 0.35 + (hp ? hp[1] * aw : 0), pelvisYaw + (hp ? hp[0] * aw : 0), pelvisRoll + (hp ? hp[2] * aw : 0), 'YXZ');
 		const rootQ = _q.setFromEuler(_e).clone();
 		setLocal(rootI, rootQ, new THREE.Quaternion());
 
@@ -329,7 +364,7 @@ export function createMotion(P, groundAt) {
 			dist = clamp(dist, Math.abs(l1 - l2) + 0.01, (l1 + l2) * 0.9995);
 			const dir = toA.normalize();
 			// the knee points where the foot does, straight ahead but for the slight toe-out
-			const toeOut = pelvisYaw * 0.3 + f.leg.side * 0.1;
+			const toeOut = pelvisYaw * 0.3 + f.leg.side * 0.1 + (hp ? hp[0] * aw * 0.8 : 0);
 			const kneeHint = new THREE.Vector3(f.leg.side * 0.02, 0, 1).applyAxisAngle(Y, toeOut * 0.6).normalize();
 			const bend = kneeHint.addScaledVector(dir, -kneeHint.dot(dir)).normalize();
 			const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist);
@@ -346,9 +381,10 @@ export function createMotion(P, groundAt) {
 		S.breath += dt * (0.24 + amp * 0.15 + run * 0.3);
 		const br = Math.sin(S.breath * TAU);
 		const counter = -pelvisYaw * 1.6;
-		setLocal(map.spine04, _q.setFromEuler(_e.set(lean * 0.25, counter * 0.3, -pelvisRoll * 0.5)), worldQ[rootI]);
-		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.01, counter * 0.35, -pelvisRoll * 0.3)), worldQ[map.spine04]);
-		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.012, counter * 0.35, -pelvisRoll * 0.2)), worldQ[map.spine02]);
+		const sp = X.has.sp ? X.v.sp.map((v) => v * aw) : [0, 0, 0];
+		setLocal(map.spine04, _q.setFromEuler(_e.set(lean * 0.25 + sp[1] * 0.3, counter * 0.3 + sp[0] * 0.3, -pelvisRoll * 0.5 + sp[2] * 0.3)), worldQ[rootI]);
+		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.01 + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.3 + sp[2] * 0.35)), worldQ[map.spine04]);
+		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.012 + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.2 + sp[2] * 0.35)), worldQ[map.spine02]);
 
 		// ---- gaze: head and eyes toward something worth looking at ----
 		const L = S.look;
@@ -366,9 +402,10 @@ export function createMotion(P, groundAt) {
 		const hy = L.yaw.to(ty, dt), hp = L.pitch.to(tp, dt);
 		const chestYaw = counter, chestPitch = lean * 0.6;
 		const nod = S.nod.to(S.talk > 0 ? Math.max(0, Math.sin(t * 3.1)) * 0.08 : 0, dt);
-		const HO = S.headOv, droop = (0.5 - (dna.temper?.confident ?? 0.5)) * 0.1 + (POSES[S.pose]?.look || 0);
-		setLocal(map.neck01, _q.setFromEuler(_e.set(hp * 0.4 - chestPitch * 0.5 + nod * 0.4 + (HO.pitch + droop) * 0.4, (hy - chestYaw) * 0.4 + HO.yaw * 0.4, pelvisRoll * 0.3 + HO.roll * 0.4, 'YXZ')), worldQ[map.spine01]);
-		setLocal(map.head, _q.setFromEuler(_e.set(hp * 0.6 - chestPitch * 0.4 + nod * 0.6 - bob * 0.8 + (HO.pitch + droop) * 0.6, (hy - chestYaw) * 0.6 + HO.yaw * 0.6, pelvisRoll * 0.3 + HO.roll * 0.6, 'YXZ')), worldQ[map.neck01]);
+		const HO = S.headOv, droop = (0.5 - (dna.temper?.confident ?? 0.5)) * 0.1 + (POSES[S.pose]?.look || 0) + (X.has.hd ? X.v.hd[1] * aw : 0);
+		const hdy = X.has.hd ? X.v.hd[0] * aw - sp[0] : 0, hdr = X.has.hd ? X.v.hd[2] * aw : 0;
+		setLocal(map.neck01, _q.setFromEuler(_e.set(hp * 0.4 - chestPitch * 0.5 + nod * 0.4 + (HO.pitch + droop) * 0.4, (hy - chestYaw) * 0.4 + (HO.yaw + hdy) * 0.4, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.4, 'YXZ')), worldQ[map.spine01]);
+		setLocal(map.head, _q.setFromEuler(_e.set(hp * 0.6 - chestPitch * 0.4 + nod * 0.6 - bob * 0.8 + (HO.pitch + droop) * 0.6, (hy - chestYaw) * 0.6 + (HO.yaw + hdy) * 0.6, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.6, 'YXZ')), worldQ[map.neck01]);
 		// the eyes lead the head, then settle
 		const ey = L.eyeYaw.to(clamp(ty - hy, -0.45, 0.45), dt), ep = L.eyePitch.to(clamp(tp - hp, -0.3, 0.3), dt);
 		for (const eye of P.eyes) eye.rotation.set(ep, ey, 0, 'YXZ');
@@ -388,13 +425,16 @@ export function createMotion(P, groundAt) {
 			const tgt = {};
 			for (const k of ARM_KEYS) tgt[k] = gp && gp[k] !== undefined ? bp[k] * (1 - ov.w) + gp[k] * ov.w : bp[k];
 			if (S.hold[side]) Object.assign(tgt, dna.child ? HOLD.kid : HOLD.adult);
+			const actArm = X.arms?.[side];
+			if (actArm) for (const k of ARM_KEYS) tgt[k] = tgt[k] * (1 - aw) + actArm[k] * aw;
 			// the walk: swing from the shoulder, the elbow bending as the arm comes forward
-			const sw = (side === 'L' ? -swingNow : swingNow) * swingA * amp * (S.hold[side] ? 0.25 : 1);
-			tgt.bend += run * 1.0;
+			const sw = (side === 'L' ? -swingNow : swingNow) * swingA * amp * (S.hold[side] ? 0.25 : 1) * (actArm ? 1 - aw : 1);
+			if (!actArm) tgt.bend += run * 1.0;
 			// running: forearms up, hands loosely closed
 			if (run > 0.01) { tgt.curl = tgt.curl * (1 - run) + 0.65 * run; tgt.pro = tgt.pro * (1 - run) + PALM_SIDE * run; }
 			const A = S.arms[side];
 			const P2 = {};
+			for (const k of ARM_KEYS) A[k].w = actArm ? 7 * TAU : 2.4 * TAU;
 			for (const k of ARM_KEYS) P2[k] = A[k].to(tgt[k] + (k === 'flex' && gp ? (ov.beat || 0) * (lead ? 0.12 : 0.05) : 0), dt);
 			// (the swing itself goes on after the springs, which would only lag and damp it)
 			P2.flex += sw - 0.05 * amp * (POSES[S.pose]?.swing ?? 1); P2.bend += Math.max(0, sw) * 0.6 + 0.08 * amp;
@@ -463,5 +503,9 @@ export function createMotion(P, groundAt) {
 	const stand = () => { S.sitWant = 0; };
 	// hold(side, on): a hand held (or let go)
 	const hold = (side, on = true) => { S.hold[side] = !!on; };
-	return { S, update, gesture, setPose, feel, sit, stand, hold, poses: POSES, want: S.want, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
+	// act(name, u): hold an action at progress u (the caller drives it); play(name, dur): run it
+	// through once (or round and round, for a looping one); act(null): let it go
+	const act = (name, u) => { const X = S.act; if (!name) { X.name = null; X.auto = false; return; } if (X.name !== name) X.u = u ?? 0; X.name = name; X.auto = u === undefined; if (u !== undefined) X.u = u; X.once = false; };
+	const play = (name, dur = 1, once = false) => { const X = S.act; X.name = name; X.u = 0; X.dur = dur; X.auto = true; X.once = once; };
+	return { S, update, gesture, setPose, feel, sit, stand, hold, act, play, poses: POSES, want: S.want, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
 }

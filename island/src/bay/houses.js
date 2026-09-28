@@ -58,7 +58,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const g = new Builder();
 		const col = [];                 // colliders: [x0, z0, x1, z1, y0, y1] in the house frame
 		const doors = [];
-		const look = city?.houseLook?.(Mb) || { wall: [0.88, 0.84, 0.76], roof: [0.3, 0.3, 0.32] };
+		const look = Mb.look || city?.houseLook?.(Mb) || { wall: [0.88, 0.84, 0.76], roof: [0.3, 0.3, 0.32] };
 		const WALL = lin(look.wall), WHITE = lin([0.94, 0.93, 0.9]), TRIM = lin(rnd() < 0.8 ? [0.95, 0.94, 0.91] : [0.42, 0.36, 0.3]);
 		const FOAM = lin(look.wall.map((c) => Math.min(1, c * 1.08 + 0.03)));
 		const paint = plan.rooms.map((r) => lin(r.type === 'garage' ? [0.82, 0.8, 0.76] : r.type === 'bed' && rnd() < 0.6 ? KIDS[Math.floor(rnd() * KIDS.length)] : PAINTS[Math.floor(rnd() * PAINTS.length)]));
@@ -489,13 +489,13 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
-		if (!real?.loaded() || high) return;
+		if ((!real?.loaded() && !city?.procHomes) || high) return;
 		// what is near, every few metres
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
 			scanX = x; scanZ = z;
 			const seen = new Set();
 			cands = [];
-			for (const b of real.near('boxes', x, z, BUILD_R + 25)) {
+			for (const b of real?.loaded() ? real.near('boxes', x, z, BUILD_R + 25) : []) {
 				if (!b.grp || b.grp.biz || seen.has(b.grp) || inCampus(b.x, b.z)) continue;
 				seen.add(b.grp);
 				const Mb = mainOf(b.grp);
@@ -503,6 +503,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				const d = Math.hypot(Mb.x - x, Mb.z - z);
 				if (d < BUILD_R) cands.push([d, b.grp]);
 			}
+			// ...and the gridded towns' houses (city.js gives them the same shape)
+			for (const grp of city?.procHomes?.(x, z, BUILD_R) || []) cands.push([Math.hypot(grp[0].x - x, grp[0].z - z), grp]);
 			cands.sort((p, q) => p[0] - q[0]);
 			cands.length = Math.min(cands.length, MAX);
 		}
@@ -634,7 +636,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 		return null;
 	}
-	return { update, floor: floorAt, push, doorNear, inside, group, count: () => houses.size, houses, buildMs: () => buildMs, busy: () => !!job };
+	return { update, floor: floorAt, push, doorNear, inside, group, M, count: () => houses.size, houses, buildMs: () => buildMs, busy: () => !!job };
 }
 
 function pick3(rnd, l) { return l[Math.floor(rnd() * l.length)]; }

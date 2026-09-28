@@ -54,6 +54,7 @@ import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
+import { createInteriors } from './interiors/index.js';
 import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
 import { createArcade } from './arcade.js';
@@ -430,7 +431,7 @@ export function createIslandWorld() {
 		if (doorT < 0.15) return;
 		doorT = 0;
 		const P = world?.player.state;
-		doorHere = P && !P.flying && world.houses ? world.houses.doorNear(camera) : null;
+		doorHere = P && !P.flying && world.houses ? world.houses.doorNear(camera) || world.interiors?.doorNear(camera) : null;
 		doorBtn.style.display = doorHere ? '' : 'none';
 		if (doorHere) {
 			const what = doorHere.kind === 'garage' ? 'garage door' : doorHere.kind === 'slider' ? 'slider' : 'door';
@@ -597,6 +598,9 @@ export function createIslandWorld() {
 			world.commercial = createCommercial(scene, bayArea, world.real, world.city, { isPhone });
 			// inside the towers: the lobby, the elevators, every floor, the roof
 			world.towers = createTowers(scene, bayArea, world.city, { isPhone, mount: dom.mount, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
+			// ...and every other building: solid, and built inside as you come to it (interiors/)
+			world.interiors = createInteriors(scene, bayArea, world.city, { isPhone, mats: world.houses.M, towers: world.towers });
+			{ const cv = world.commercial.venue, I = world.interiors; world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
@@ -654,6 +658,7 @@ export function createIslandWorld() {
 				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y));
 				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
+				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -949,6 +954,7 @@ export function createIslandWorld() {
 		if (W.commercial) {
 			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
 			W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
+			W.interiors?.update(camera, dt, W.sky.state.hours, sk.night);
 			// stepping into a place: what it is, and how busy at this hour
 			const inB = W.commercial.inside(camera.position);
 			if (inB && inB !== W.bizSeen) {
@@ -959,7 +965,7 @@ export function createIslandWorld() {
 			W.bizSeen = inB;
 		}
 		// indoors by day the eye opens up to the light from the windows
-		indoorK += ((W.houses?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
+		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
 		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
 		watchDoor(dt);
 		sunGlare(dt);
@@ -1273,6 +1279,10 @@ if (typeof window !== 'undefined') {
 		trip: (kind, at) => window.L99Island?.world?.()?.shrooms?.eat(kind, at != null ? { at: +at } : undefined),
 		tripInfo: () => window.L99Island?.world?.()?.shrooms?.state(),
 		creatures: () => HOOKS.creatures?.(),
+		// the buildings built inside round you (interiors/): Crysis.interiors() tells how they stand,
+		// Crysis.interiorGo('row') takes you to the front door of one ('shop', 'apt', 'warehouse'...)
+		interiors: () => window.L99Island?.world?.()?.interiors?.info() ?? 'none here',
+		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
 		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
 		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),

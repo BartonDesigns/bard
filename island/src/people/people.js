@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA, rng } from './body.js';
+import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
 import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE } from './flow.js';
@@ -70,20 +71,20 @@ export function createPeople(scene, world) {
 		const onIsland = Math.max(Math.abs(cam.x), Math.abs(cam.z)) < W.island.half;
 		if (onIsland) {
 			const v = W.island.village, d = Math.hypot(cam.x - v.x, cam.z - v.z);
-			return { n: d < 260 ? Math.round(8 * (1 - night * 0.7)) : 0, kids: 0.3 * kidsAbout(hours), island: true };
+			return { n: d < 260 ? Math.round(8 * (1 - night * 0.7)) : 0, kids: 0.3 * kidsAbout(hours), island: true, zone: 'island' };
 		}
 		// a place with its own visitors (the Discovery Museum): families, and where they go
 		// (the museum, a shop, restaurant or office you are in or at, a tower's floor)
-		let V = null;
-		for (const src of [W.towers, W.commercial, W.discovery, W.boardwalk]) { V = src?.venue?.(cam, hours); if (V) break; }
-		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 } };
+		let V = null, vz = null;
+		for (const [src, z] of [[W.towers, 'office'], [W.commercial, null], [W.discovery, null], [W.boardwalk, 'boardwalk']]) { V = src?.venue?.(cam, hours); if (V) { vz = z; break; } }
+		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 }, zone: vz || zoneOf(W.bayArea?.urbanAt(cam.x, cam.z)), sit: true };
 		const U = W.bayArea?.urbanAt(cam.x, cam.z);
 		// out on the trails: a few hikers by day
 		const real = W.real;
 		if (real?.loaded() && real.inside(cam.x, cam.z) && (!U || U.u < 0.2) && cam.y - ground(cam.x, cam.z) < 90) {
 			const trails = real.near('roads', cam.x, cam.z, 120).some((q) => TRAIL.has(q.cls));
 			const C = crowd(ZONE.trail, hours);
-			return { n: trails ? Math.round(6 * C.k) : 0, kids: KID_SHARE.trail * kidsAbout(hours), island: false, C };
+			return { n: trails ? Math.round(6 * C.k) : 0, kids: KID_SHARE.trail * kidsAbout(hours), island: false, C, zone: 'trail' };
 		}
 		// a beach or a park's grounds (bay/beaches.js, bay/parkkit.js): its own crowd, the quiet
 		// beaches kept quiet
@@ -91,13 +92,13 @@ export function createPeople(scene, world) {
 		if ((bc || pk) && cam.y - ground(cam.x, cam.z) < 90 && real?.loaded() && real.inside(cam.x, cam.z)) {
 			const C = crowd(bc ? (bc.quiet ? ZONE.quiet : ZONE.beach) : ZONE.trail, hours);
 			const roads = real.near('roads', cam.x, cam.z, 150).length;
-			if (roads) return { n: Math.round((bc ? (bc.quiet ? 3 : 10) : 12) * C.k), kids: (bc?.quiet ? 0.1 : 0.32) * kidsAbout(hours), island: false, C };
+			if (roads) return { n: Math.round((bc ? (bc.quiet ? 3 : 10) : 12) * C.k), kids: (bc?.quiet ? 0.1 : 0.32) * kidsAbout(hours), island: false, C, zone: bc ? 'beach' : 'trail' };
 		}
 		if (!U || U.u < 0.2 || cam.y - ground(cam.x, cam.z) > 90) return { n: 0 };
 		// how busy, by what kind of place and the hour (flow.js)
 		const zone = zoneOf(U), C = crowd(zone, hours);
 		const busy = zone === ZONE.downtown ? 1 : zone === ZONE.retail || zone === ZONE.dining ? 0.8 : zone === ZONE.office ? 0.7 : zone === ZONE.industrial ? 0.4 : 0.35;
-		return { n: Math.round(MAX * busy * C.k), kids: (KID_SHARE[zone] || 0) * kidsAbout(hours), island: false, C };
+		return { n: Math.round(MAX * busy * C.k), kids: (KID_SHARE[zone] || 0) * kidsAbout(hours), island: false, C, zone };
 	}
 
 	// the real city's sidewalks: a point beside a street, on one side, at distance s along it
@@ -444,6 +445,29 @@ export function createPeople(scene, world) {
 		M.want.speed = v;
 	}
 
+	// ---------- what they wear ----------
+	// dressed for the place and what they are doing there (wardrobe.js): the same person in
+	// the same place and doing the same thing always dressed the same way; re-dressed only
+	// when a body is handed on to somewhere, or something, new
+	let lastNeed = null;
+	function wearCtx(cam, need, activity) {
+		const W = world(), place = placeAt(cam.x, cam.z, need?.zone);
+		const cl = climate({ hours: W?.sky?.state?.hours ?? 13, place, rain: W?.weather?.state?.rainHere || 0, cover: W?.weather?.state?.cover ?? 0.4 });
+		return { place, activity, cold: cl.cold, wet: cl.wet, key: place + '|' + activity + '|' + Math.round(cl.cold * 3) + (cl.wet ? 'w' : '') };
+	}
+	function wear(p, cam, need) {
+		const act = p.role === 'jog' ? 'jog' : p.route?.kind === 'seat' ? (need?.zone === 'office' ? 'work' : 'sit') : 'walk';
+		const c = wearCtx(cam, need, act);
+		if (p.dressKey === c.key) return;
+		const d = p.P.dna, keep = d.style;
+		let h = 0; for (const ch of c.key) h = (h * 31 + ch.charCodeAt(0)) | 0;
+		const o = dressFor(rng(d.seed ^ h), d, c);
+		o.hair = keep?.hair; o.printKind = keep?.printKind;
+		d.style = o; d.styleSig = JSON.stringify(d.outfit);
+		p.P.redress(o);
+		p.dressKey = c.key;
+	}
+
 	// ---------- the loop ----------
 	let building = false;
 	async function grow(kid = false) {
@@ -452,10 +476,11 @@ export function createPeople(scene, world) {
 		try {
 			const seed = (seedN++ * 2654435761) >>> 0;
 			const r = rng(seed ^ 0xc41d);
-			const d = personDNA(seed, kid ? { age: 3 + r() * 8 } : { jogger: false });
+			const c = wearCtx(lastCam, lastNeed, 'walk');
+			const d = personDNA(seed, kid ? { age: 3 + r() * 8, ctx: c } : { ctx: c });
 			const P = buildPerson(A, d);
 			const M = motionFor(P);
-			const p = { P, M, active: false, role: 'walk' };
+			const p = { P, M, active: false, role: 'walk', dressKey: c.key };
 			// each footfall, for the street sound
 			M.S.onStep = (at, sp) => { if (p.active && steps.length < 64) steps.push({ x: at.x, z: at.z, k: Math.min(1.5, 0.5 + sp * 0.5) }); };
 			pool.push(p);
@@ -465,10 +490,12 @@ export function createPeople(scene, world) {
 	}
 
 	let acc = 0, turn = false;
+	const lastCam = new THREE.Vector3();
 	function update(dt, t, cam, night, enabled = true) {
 		group.visible = enabled;
 		if (!enabled) return;
 		const need = demand(cam, night);
+		lastNeed = need; lastCam.copy(cam);
 		if (need.n > 0 && !A && !failed) ensure();
 		// grown-ups, and (where families go) children with them
 		const nk = Math.min(KIDS, Math.round(need.n * (need.kids || 0))), na = need.n - nk;
@@ -494,6 +521,7 @@ export function createPeople(scene, world) {
 				const F = p.fam;
 				if (F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && (d > NEAR * 1.25 || active >= na))) { drop(p); continue; }
 				if (kid) kids++; else active++;
+				p.P.lod?.(d);
 				steer(p, dt, cam);
 				p.M.update(dt, t, cam);
 			}
@@ -508,11 +536,11 @@ export function createPeople(scene, world) {
 				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child);
 				// a second grown-up for a family, or someone new
 				const F = pool.find((o) => o.active && o.kids > 0 && o.spouseWant && !o.spouse && !o.engaged && o.M.S.pos.distanceTo(cam) < NEAR);
-				if (idle && F) { seedN++; if (castCompanion(idle, F)) { idle.active = true; idle.P.root.visible = true; } else F.spouseWant = false; }
-				else if (idle) { seedN++; if (cast(idle, cam, need.island, need.C, need.venue)) { idle.active = true; idle.P.root.visible = true; } }
+				if (idle && F) { seedN++; if (castCompanion(idle, F)) { wear(idle, cam, need); idle.active = true; idle.P.root.visible = true; } else F.spouseWant = false; }
+				else if (idle) { seedN++; if (cast(idle, cam, need.island, need.C, need.venue)) { wear(idle, cam, need); idle.active = true; idle.P.root.visible = true; } }
 			} else {
 				const idle = kidPool.find((p) => !p.active);
-				if (idle) { seedN++; if (castChild(idle, cam)) { idle.active = true; idle.P.root.visible = true; } }
+				if (idle) { seedN++; if (castChild(idle, cam)) { wear(idle, cam, need); idle.active = true; idle.P.root.visible = true; } }
 			}
 		}
 	}
@@ -535,6 +563,31 @@ export function createPeople(scene, world) {
 	}
 	function demo(dt, t, cam) {
 		for (const p of pool) if (p.demo !== undefined && p.P.root.visible && !p.active) { p.M.want.speed = p.demo ? 1.3 : 0; p.M.update(dt, t, cam); }
+		for (const p of shown) { p.M.want.speed = p.walk ? 1.3 : 0; p.M.update(dt, t, cam); }
+	}
+	// a line of people dressed for a place and a thing to do, for looking at the clothes:
+	// specs [{ age, male, place, activity, seed }] (or clear it with an empty list)
+	const shown = [];
+	async function showcase(cam, heading, specs = [], { gap = 0.9, dist = 4.2, walk = false } = {}) {
+		await ensure();
+		if (!A) return 'assets failed';
+		for (const p of shown.splice(0)) { p.P.root.removeFromParent(); p.P.root.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
+		specs.forEach((q, k) => {
+			let d = null;
+			for (let tries = 0; tries < 40; tries++) {
+				const seed = ((q.seed ?? k * 7919 + 17) + tries * 104729) >>> 0;
+				d = personDNA(seed, { age: q.age, ctx: { place: q.place, activity: q.activity, hours: q.hours ?? 13, cold: q.cold } });
+				if (q.male === undefined || d.male === q.male) break;
+			}
+			const P = buildPerson(A, d), M = motionFor(P);
+			const side = (k - (specs.length - 1) / 2) * gap;
+			const x = cam.x + Math.sin(heading) * dist + Math.cos(heading) * side, z = cam.z + Math.cos(heading) * dist - Math.sin(heading) * side;
+			M.place(x, ground(x, z), z, heading + Math.PI);
+			if (q.pose) M.setPose(q.pose);
+			group.add(P.root);
+			shown.push({ P, M, walk });
+		});
+		return shown.map((p) => { const o = p.P.outfit; return `${Math.round(p.P.dna.age)}${p.P.dna.male ? 'm' : 'f'} ${o.gen} ${o.top?.kind || '-'} ${o.outer?.kind || ''} ${o.bottom?.kind || '-'} ${o.shoes?.kind || '-'} [${(o.acc || []).map((a) => a.kind).join(',')}]`; }).join(' | ');
 	}
 	// the nearest pavement to a point: [x, z, heading along it]
 	function sidewalk(x, z) {
@@ -562,5 +615,5 @@ export function createPeople(scene, world) {
 	}
 	function engage(p) { p.engaged = true; p.role = 'wait'; if (p.partner) { p.partner.partner = null; p.partner = null; } p.M.S.gestures.length = 0; }
 	function release(p) { if (!p) return; p.engaged = false; p.speakUntil = 0; p.M.S.talk = 0; p.M.S.look.target = null; p.timer = 1 + Math.random() * 2; }
-	return { update, lineup, demo, pool, group, sidewalk, steps, facing, engage, release, ready: () => !!A };
+	return { update, lineup, showcase, demo, pool, group, sidewalk, steps, facing, engage, release, ready: () => !!A };
 }

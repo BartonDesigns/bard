@@ -3421,7 +3421,7 @@ root.L99Boot176={packed,cachedPatch,ensureWorld,core,show,hide,status,frame,flig
  const idle=cb=>root.requestIdleCallback?root.requestIdleCallback(cb,{timeout:4000}):setTimeout(cb,1500);
  async function run(){
   for(const f of files){
-   if(root._PREFETCH_WORLDS===false||pending.has(f))continue;
+   if(root._PREFETCH_WORLDS===false||pending.has(f)||f.startsWith('caves')&&root._V1_SURFACES!==true)continue;   // V1 caves are retired (V1_GUARD_227)
    try{const r=await fetch(new URL(f,base),{cache:'default',priority:'low'});if(r.ok)await r.arrayBuffer();}catch(_){return;}
    await new Promise(r=>idle(r));
   }
@@ -28111,16 +28111,24 @@ root.L99Room227={open,get active(){return active;}};
    Kill: window._ENTRY_DIVE = false. */
 (function(root){'use strict';
 const EDITS=[
- ["let surfaceMode     = 'space';","let surfaceMode     = 'space';\nwindow.__surfaceMode227=function(){return surfaceMode;};"],
- /* leaving Crysis Earth: the ship comes out in orbit round Earth in the Sol system */
- ["prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');","prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');\n if(r&&r.earth){surfaceMode='space';if(surfaceObjects)surfaceObjects.visible=false;if(surfaceSkyMesh)surfaceSkyMesh.visible=false;if(cockpitPlanets){cockpitPlanets.visible=true;cockpitPlanets.children.forEach(p=>{p.visible=true;});}for(const g of [cockpitObstacles,cockpitWeapons,starsNear,starsFar])if(g)g.visible=true;window._OBSERVER_FLIGHT170=false;walkMode=false;window._starSurface=false;startAtEarth207();cockpitCamera.fov=packet.fov||72;cockpitCamera.updateProjectionMatrix();for(let k=0;k<4;k++){check();cockpitRenderer.render(cockpitScene,cockpitCamera);await window.L99Journey170.frame();}return;}"],
- ["surfaceMode     = 'entering';\n    window._entryFrame190=performance.now();","surfaceMode     = 'entering';\n    try{window.L99Dive227&&window.L99Dive227.start(planet);}catch(eD227){}\n    window._entryFrame190=performance.now();"],
- ["if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';","if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';\n      try{window.L99Dive227&&window.L99Dive227.landed();}catch(eL227){}"]
+ ["let surfaceMode     = 'space';","let surfaceMode     = 'space';\nwindow.__surfaceMode227=function(){return surfaceMode;};\nfunction orbit227(r,fov){surfaceMode='space';try{_purgeTransientPlanetVisualsForSpace('crysis-orbit');}catch(eO227){}if(surfaceObjects)surfaceObjects.visible=false;if(surfaceSkyMesh)surfaceSkyMesh.visible=false;if(surfaceOverlayMesh)surfaceOverlayMesh.visible=false;if(cockpitPlanets){cockpitPlanets.visible=true;if(typeof visibility207==='function')visibility207();else cockpitPlanets.children.forEach(p=>{p.visible=true;});}for(const g of [cockpitObstacles,cockpitWeapons,starsNear,starsFar])if(g)g.visible=true;window._OBSERVER_FLIGHT170=false;walkMode=false;window._starSurface=false;window._blackHoleSurface=false;const o=window._surfOriginPlanet,body=r&&!r.earth?(planetPool.find(p=>r.id&&p.userData.travelId170===r.id)||(o&&o.position&&o.userData&&!o.userData.isStar&&o.userData.solName!=='Earth'?o:null)):null;if(body){const R=body.userData.radius||1000;cockpitCamera.position.copy(body.position).add(new THREE.Vector3(0,R*3,R*8));cockpitCamera.lookAt(body.position);shipQuat.copy(cockpitCamera.quaternion);shipVel.set(0,0,0);throttlePct=0;}else if(typeof startAtEarth207==='function')startAtEarth207();cockpitCamera.fov=fov||72;cockpitCamera.updateProjectionMatrix();}\nwindow.__flight227={enter:function(p){return enterSurface(p);},planets:function(){return planetPool;},orbit:orbit227};","mode accessor"],
+ /* leaving any Crysis world: the ship comes out in orbit round that planet (Earth in the Sol system).
+    The old flight surfaces only come back with window._V1_SURFACES = true */
+ ["prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');","prepare:async(packet,check)=>{await flightBoot170();check();const r=packet.planet,u=window.L99Life133.units('flight');\n if(r&&(r.earth||window._V1_SURFACES!==true)){orbit227(r,packet.fov);for(let k=0;k<4;k++){check();cockpitRenderer.render(cockpitScene,cockpitCamera);await window.L99Journey170.frame();}return;}","orbit on return"],
+ ["surfaceMode     = 'entering';\n    window._entryFrame190=performance.now();","surfaceMode     = 'entering';\n    try{window.L99Dive227&&window.L99Dive227.start(planet);}catch(eD227){}\n    window._entryFrame190=performance.now();","entry hook"],
+ ["if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';","if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';\n      try{window.L99Dive227&&window.L99Dive227.landed();}catch(eL227){}","landed hook"],
+ ["'Above '+packet.planet.name+'. Keep climbing to reach space.'","(window._V1_SURFACES!==true||packet.planet.earth?'In orbit round '+packet.planet.name+'.':'Above '+packet.planet.name+'. Keep climbing to reach space.')","orbit whisper"],
+ /* V1 bookmarks and #place= links put you straight on the old surface: land them in Crysis */
+ ["function teleportToBookmark(bookmark) {","function teleportToBookmark(bookmark) {\n  if(window._V1_SURFACES!==true){if(bookmark&&window.L99IslandLanding)window.L99IslandLanding.land({userData:{planetType:bookmark.type,seed:bookmark.seed,id:'place:'+bookmark.type+':'+bookmark.seed}});return;}","bookmark landing"]
 ];
+let missing=[];
+/* each edit stands alone: a missing anchor is loud, and the V1 guard in ISLAND_LANDING_227 still lands you in Crysis */
 function patch(code){
  if(typeof code!=='string'||code.includes('window.__surfaceMode227'))return code;
- for(const [a] of EDITS)if(code.split(a).length!==2){console.warn('DIVE_227: anchor missing, entry stays cinematic');return code;}
- for(const [a,b] of EDITS)code=code.replace(a,()=>b);return code;
+ missing=[];
+ for(const [a,b,name] of EDITS){if(code.split(a).length!==2){missing.push(name);continue;}code=code.replace(a,()=>b);}
+ if(missing.length)console.error('DIVE_227: flight anchors missing ('+missing.join(', ')+'): planetfall falls back to the V1 guard');
+ return code;
 }
 const EARTH=[[.19,.34,.19],[.22,.36,.62],[.60,.76,.98]];
 function palette(planet){
@@ -28141,6 +28149,10 @@ function start(planet){
   d.stable=dt<34?d.stable+1:0;
   const mode=root.__surfaceMode227?.();
   if(mode==='space'||mode==='leaving'){finish(false);return;}
+  /* a Crysis landing is on its way: hold the sky until it arrives, never reveal the old surface */
+  const L=root.L99IslandLanding,there=!!(root.L99Island&&root.L99Island.active());
+  if(L&&L.pending()&&!d.crysis){d.crysis=true;d.room.status('the world is forming…');}
+  if(d.crysis){if(there||now-d.t0>120000||root._V1_SURFACES===true&&!L.pending())finish(true);return;}
   if(now-d.t0>20000){finish(true);return;}
   if(d.landedAt&&now-d.landedAt>700&&now-d.t0>2600&&d.stable>=40)finish(true);};
  d.raf=requestAnimationFrame(tick);
@@ -28162,7 +28174,7 @@ setInterval(()=>{const m=root.__surfaceMode227?.();if(!m)return;
  prevMode=m;},120);
 function landed(){if(dive&&!dive.landedAt){dive.landedAt=performance.now();dive.room.status('breaking through the clouds…');}}
 function finish(reveal){const d=dive;if(!d)return;dive=null;cancelAnimationFrame(d.raf);d.room.close(reveal!==false);}
-root.L99Dive227={patch,start,climb,landed,finish,get active(){return !!dive;}};
+root.L99Dive227={patch,start,climb,landed,finish,get active(){return !!dive;},get missing(){return missing.slice();}};
 })(window);
 </script>
 <script id="caveworld227">
@@ -28936,6 +28948,8 @@ root.L99CaveRail227={patch};
     };
 
     S.enterCaves = function () {
+        /* V1_GUARD_227: the V1 caves are retired; the mountain door opens Crysis, whose worlds carry their own caves */
+        if(window._V1_SURFACES!==true&&window.L99IslandDoor){window.L99IslandDoor.open();return Promise.resolve(false);}
         if(S.loaded){S.show();return Promise.resolve(true);}
         window.L99Boot176.show('Loading caves…',S.enterCaves);
         /* ROOM_227: walk a light cave while the real one loads */
@@ -29027,20 +29041,27 @@ root.L99CaveRail227={patch};
 })();
 </script>
 <script id="island-landing227">
-/* ISLAND_LANDING_227: planetfall on a tropical world (TERRAN or OCEAN, not the
-   Earth replica) comes down on an island raised from that planet's own seed:
-   the same planet always gives the same island. Journey carries the view from
-   the sky dive into the island; other worlds land as before.
-   Kill: window._ISLAND_LANDING = false. */
+/* ISLAND_LANDING_227: every planetfall from space flight comes down in Crysis.
+   Earth is the island off the Golden Gate with the Bay Area round it; every
+   other world is raised from that planet's own seed as its own Crysis type
+   (the same planet always gives the same world). Journey carries the view
+   from the sky dive into it.
+   V1_GUARD_227: the old flight surfaces (and the V1 caves behind them) are
+   never shown. If any road still reaches one (a missing patch anchor, a
+   failed landing, a saved place), the guard lands you in Crysis instead, and
+   after repeated failures puts the ship back in orbit.
+   Kill: window._ISLAND_LANDING = false (no Crysis landing);
+   window._V1_SURFACES = true (the old surfaces and caves come back). */
 (function () {
     'use strict';
-    var busy = false;
+    var busy = false, busyAt = 0, fails = 0, retryAt = 0, done = false;
     /* Earth is Crysis: the island off the Golden Gate with the real Bay Area round it.
        The old flight build's Bay Area surface is gone; every Earth landing comes here. */
     function isEarth(u) { return !!u && (u.solName === 'Earth' || u.isEarthReplica || u.planetType === 'BAYAREA'); }
     /* every world lands in Crysis now: each planet type is its own generated world there
-       (green, ocean, desert, ice, volcanic, toxic, mystical, a gas giant's moon…), caves and all */
-    function tropical(u) { return !!u && !u.isStar; }
+       (green, ocean, desert, ice, volcanic, toxic, mystical, a gas giant's moon…), caves and all.
+       A star's surface comes down as a volcanic world, a black hole's as the world by the dark star. */
+    function tropical(u) { return !!u; }
     /* some green worlds are realms of castles and towns: a third of TERRAN planets, by seed,
        come down in Crysis as MEDIEVAL worlds (the same planet always the same) */
     function typeOf(u, seed) {
@@ -29049,43 +29070,86 @@ root.L99CaveRail227={patch};
     }
     function seedOf(u) {
         var s = u.seed;
-        if (Number.isFinite(+s)) return (+s) >>> 0;
+        if (Number.isFinite(+s) && s !== null && s !== '') return (+s) >>> 0;
         var t = String(s || u.id || u.name || 'island'), h = 2166136261;
         for (var i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
         return h >>> 0;
     }
-    /* the flight record of this planet, so the island can hand the view back to the ship */
+    /* the flight record of this planet, so the island can hand the view back to the ship
+       (a body without flight materials still gets one: ⇪ must always have somewhere to go) */
     function originOf(u) {
+        if (isEarth(u)) return null;
         try {
             var m = u.surfaceMat && u.surfaceMat.uniforms;
-            if (!m || !m.uSeed) return null;
-            return { id: u.travelId170 || u.id || ('planet:' + u.planetType + ':' + m.uSeed.value), seed: m.uSeed.value, type: u.planetType,
+            if (m && m.uSeed) return { id: u.travelId170 || u.id || ('planet:' + u.planetType + ':' + m.uSeed.value), seed: m.uSeed.value, type: u.planetType,
                 name: u.solName || u.name || 'this world', colorA: m.uColorA.value.toArray(), colorB: m.uColorB.value.toArray() };
-        } catch (e) { return null; }
+        } catch (e) {}
+        return { id: u.travelId170 || u.id || ('planet:' + (u.planetType || 'TERRAN') + ':' + seedOf(u)), seed: seedOf(u), type: u.planetType || 'TERRAN',
+            name: u.solName || u.name || u.planetName || 'this world', colorA: [0.3, 0.56, 0.44], colorB: [0.12, 0.22, 0.3] };
     }
     function land(planet) {
         var u = planet && planet.userData;
-        if (busy || window._ISLAND === false || window._ISLAND_LANDING === false || !tropical(u) || !window.L99IslandDoor) return;
-        busy = true;
+        if (busy || window._ISLAND === false || window._ISLAND_LANDING === false || !tropical(u) || !window.L99IslandDoor) return Promise.resolve(false);
+        busy = true; busyAt = Date.now(); done = false;
         var earth = isEarth(u), seed = earth ? 1337 : seedOf(u);
         if (!earth) try { localStorage.setItem('l99-island-seed', String(seed)); } catch (e) {}
-        window.L99IslandDoor.engine().then(function () {
+        return window.L99IslandDoor.engine().then(function () {
             var J = window.L99Journey170;
             if (!J) throw Error('Journey is not ready');
             return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0,
                 planet: { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : typeOf(u, seed), earth: earth, palette: u.palette || null, origin: originOf(u) } });
-        }).catch(function (e) { console.warn('[island landing]', e); }).then(function () { busy = false; });
+        }).then(function (ok) {
+            if (!ok) throw Error('the passage did not open');
+            fails = 0; done = true; return true;
+        }).catch(function (e) {
+            fails++; retryAt = Date.now() + 5000;
+            console.error('[island landing] Crysis landing failed (' + fails + '):', e && e.message || e);
+            return false;
+        }).then(function (ok) { busy = false; return ok; });
     }
     function wrap() {
         var D = window.L99Dive227;
-        if (!D || D.__island227) return !!D;
+        if (!D || D.__island227) return;
         var start = D.start;
         D.start = function (planet) { var r = start ? start.apply(this, arguments) : undefined; land(planet); return r; };
         D.__island227 = true;
-        return true;
     }
-    window.L99IslandLanding = { land: land, tropical: tropical };
-    if (!wrap()) { var n = 0, t = setInterval(function () { if (wrap() || ++n > 120) clearInterval(t); }, 500); }
+    /* Journey can no longer carry anyone into the V1 caves */
+    function fence() {
+        var J = window.L99Journey170;
+        if (!J || J.__v1fence227) return;
+        var request = J.request;
+        J.request = function (from, to) {
+            if (to === 'caves' && window._V1_SURFACES !== true) { console.warn('[V1 guard] the old caves are closed'); return Promise.resolve(false); }
+            return request.apply(this, arguments);
+        };
+        J.__v1fence227 = true;
+    }
+    function guard() {
+        if (window._V1_SURFACES === true || window._ISLAND === false || window._ISLAND_LANDING === false) return;
+        var J = window.L99Journey170, F = J && J.adapters && J.adapters.flight, m = window.__surfaceMode227 && window.__surfaceMode227();
+        if (m === 'space') done = false;
+        /* a landing whose engine never answered must not block every later one */
+        if (busy && J && !J.busy() && Date.now() - busyAt > 180000) { busy = false; fails++; }
+        if (!F || !J || busy || J.busy() || !F.active() || (m !== 'entering' && m !== 'surface' && m !== 'underground')) return;
+        if (window.L99Island && window.L99Island.active()) return;
+        var now = Date.now();
+        if (now < retryAt) return;
+        var planet = window._surfOriginPlanet, u = planet && planet.userData, F227 = window.__flight227;
+        /* back from a finished Crysis landing (or out of tries): the ship waits in orbit, not on the old ground */
+        if (done || fails >= 3) {
+            if (fails >= 3) console.error('[V1 guard] Crysis landing keeps failing: the ship goes back to orbit');
+            fails = 0; done = false; retryAt = now + 4000;
+            try { if (F227) F227.orbit(u ? (originOf(u) || { earth: true }) : { earth: true }, 72); } catch (e) { console.error('[V1 guard] orbit', e); }
+            return;
+        }
+        console.warn('[V1 guard] the old flight surface (' + m + ') was reached: landing in Crysis');
+        land(planet && u ? planet : { userData: { solName: 'Earth', planetType: 'BAYAREA' } });
+    }
+    window.L99IslandLanding = { land: land, tropical: tropical, pending: function () { return busy; } };
+    /* L99Dive227 and Journey can turn up at any time (the world core loads late): keep looking */
+    wrap(); fence();
+    setInterval(function () { wrap(); fence(); guard(); }, 500);
 })();
 </script>
 <script id="island-door227">

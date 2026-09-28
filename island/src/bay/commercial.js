@@ -285,15 +285,17 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// the rooms are lit from their ceilings: a glow on everything inside, more after dark
 		// (no extra lights, so no shaders are rebuilt)
 		for (const m of FILL) m.emissiveIntensity = 0.1 + nightK * 0.28;
-		if (!real?.loaded() || high) return;
+		if ((!real?.loaded() && !city?.procBiz) || high) return;
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
 			scanX = x; scanZ = z;
 			cands = [];
-			for (const b of real.near('boxes', x, z, BUILD_R + 20)) {
+			for (const b of real?.loaded() ? real.near('boxes', x, z, BUILD_R + 20) : []) {
 				if (!b.grp?.biz || inCampus(b.x, b.z)) continue;
 				const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2;
 				if (d < BUILD_R) cands.push([d, b]);
 			}
+			// ...and the gridded towns' shops and offices (city.js gives them the same shape)
+			for (const b of city?.procBiz?.(x, z, BUILD_R + 20) || []) { const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2; if (d < BUILD_R) cands.push([d, b]); }
 			cands.sort((p, q) => p[0] - q[0]);
 			cands.length = Math.min(cands.length, MAX);
 		}
