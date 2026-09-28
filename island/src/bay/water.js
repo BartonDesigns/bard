@@ -565,7 +565,7 @@ export function createWater(scene, shared, opts = {}) {
 				for (let s = h01(ax, az) * 8; s < len; s += 7 + h01(s, ax) * 5) {
 					for (const sd of [-1, 1]) {
 						const r = h01(ax + s * 1.3 + sd, az - s * 0.7);
-						if (r > (w < 12 ? 0.78 : 0.62)) continue;
+						if (r > (L.w[k] < 12 ? 0.78 : 0.62)) continue;
 						const f = s / len, bx = ax + dx * f, bz = az + dz * f, w = L.w[k] + (L.w[k + 1] - L.w[k]) * f, lv = L.lv[k] + (L.lv[k + 1] - L.lv[k]) * f;
 						// on the land at the top of the bank (where the channel's cut ends)
 						const g0 = heightAt(bx + nx * sd * (w / 2 + 3), bz + nz * sd * (w / 2 + 3));

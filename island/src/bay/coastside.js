@@ -26,7 +26,7 @@ const FO = toWorld(37.34, -122.40);
 // the cliff grid round you
 const CN = 320, CCELL = 5, CSIZE = CN * CCELL;
 // the Ritz-Carlton's links on the bluffs south of town: centre, half-widths
-const RITZ = toWorld(37.4300, -122.4405);
+const RITZ = toWorld(37.4290, -122.4365);
 // the Coastal Trail and its fence, from the links north to Poplar Beach
 const TRAIL_S = toWorld(37.405, -122.44).z, TRAIL_N = toWorld(37.456, -122.44).z;
 
@@ -34,7 +34,7 @@ export const COAST_U = {
 	uCliff: { value: null }, uCliffR: { value: new THREE.Vector4(0, 0, CSIZE, 0) },
 	uCsRows: { value: null }, uCsRow: { value: new THREE.Vector4(NW.z, ROW, NROW, 0) }, uCsBox: { value: new THREE.Vector4(NW.x, NW.z, SE.x, SE.z) },
 	uCsField: { value: null }, uCsO: { value: new THREE.Vector4(FO.x, FO.z, 0, 0) }, uCsF: { value: new THREE.Vector4(FC, FS, FX, FZ) },
-	uCsRitz: { value: new THREE.Vector4(RITZ.x, RITZ.z, 700, 1250) },
+	uCsRitz: { value: new THREE.Vector4(RITZ.x, RITZ.z, 650, 1500) },
 };
 
 // the cliffs, steepened (vertex)
@@ -192,7 +192,7 @@ const FIELDS = { data: null, W: 0, H: 0, i0: 0, j0: 0, v: 0 };
 export const coastVersion = () => FIELDS.v;
 export function inCoastField(x, z) {
 	if (!FIELDS.data || x < NW.x || x > SE.x || z < NW.z || z > SE.z) return false;
-	if (Math.hypot((x - RITZ.x) / 700, (z - RITZ.z) / 1250) < 0.95) return true;
+	if (Math.hypot((x - RITZ.x) / 650, (z - RITZ.z) / 1500) < 0.95) return true;
 	const dx = x - FO.x, dz = z - FO.z;
 	const qx = dx * FC + dz * FS + (vnI(x / 310, z / 310) - 0.5) * FWARP, qz = -dx * FS + dz * FC + (vnI(x / 310 + 17, z / 310 + 5) - 0.5) * FWARP;
 	const i = Math.floor(qx / FX) - FIELDS.i0, j = Math.floor(qz / FZ) - FIELDS.j0;
@@ -266,7 +266,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				if (h < 6 || h > 130) continue;
 				const e = 60, gx = (groundAt(x + e, z) - groundAt(x - e, z)) / (2 * e), gz = (groundAt(x, z + e) - groundAt(x, z - e)) / (2 * e);
 				if (Math.hypot(gx, gz) > 0.1 || urbanAt(x, z).u > 0.05) continue;
-				const dr = Math.hypot((x - RITZ.x) / 700, (z - RITZ.z) / 1250);
+				const dr = Math.hypot((x - RITZ.x) / 650, (z - RITZ.z) / 1500);
 				if (dr < 1.1) continue;
 				const r = h01(i * 7 + 3, j * 13 + 5);
 				if (r > 0.62) continue;                               // pasture and the odd empty field between the farms
