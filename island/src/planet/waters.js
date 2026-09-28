@@ -127,7 +127,8 @@ function* steps(island, profile, { clear = [], realm = null } = {}) {
 		name: 'planet', lakes, decks, version: () => 1, ready: () => true,
 		*tile(i, j) { return lines.filter((L) => { const p = L.P[Math.min(1, L.P.length - 1)], q = L.P[0]; return Math.floor((p[0] + q[0]) / 2 / 2048) === i && Math.floor((p[1] + q[1]) / 2 / 2048) === j; }); },
 	};
-	const look = { kind: K.look, tint: profile.water?.tint || null, mix: profile.water?.tint ? Math.min(0.8, (profile.water.mix || 0) * 1.6) : 0 };
+	// (tinted as the world's sea is: bay/water.js reads the world's own uWaterT)
+	const look = { kind: K.look };
 	return { source, look, inWater, roads: (x, z, rr) => roads.filter((q) => { for (let k = 0; k < q.pts.length; k += 2) if (Math.abs(q.pts[k] - x) < rr && Math.abs(q.pts[k + 1] - z) < rr) return true; return false; }), lines, lakes };
 }
 function inRing(R, x, z) {

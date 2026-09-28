@@ -65,7 +65,7 @@ export function bakedWater(bay, BU, riverLevel = () => null, riverSettled = null
 		if (!H) return;
 		S.H = H; S.dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
 		const dv = S.dv;
-		let o = H.lakes[0];
+		let o = H.lakes[0], t0 = performance.now();
 		for (let n = 0; n < H.lakes[1]; n++) {
 			const kind = dv.getUint8(o), fl = dv.getUint8(o + 1), nm = dv.getUint16(o + 2, true), level = dv.getInt16(o + 4, true) / 20, nr = dv.getUint16(o + 6, true);
 			const cx = dv.getFloat32(o + 8, true), cz = dv.getFloat32(o + 12, true), u = dv.getUint8(o + 16) / 8, nd = dv.getUint8(o + 17);
@@ -79,7 +79,7 @@ export function bakedWater(bay, BU, riverLevel = () => null, riverSettled = null
 			}
 			o = (o + 3) & ~3;
 			S.lakes.push({ kind, int: !!(fl & 1), name: nm ? H.names[nm - 1] : '', level, rings, dams, cx, cz });
-			if (n % 200 === 199) yield;
+			if (performance.now() - t0 > 3) { yield; t0 = performance.now(); }
 		}
 		yield* regrade();
 		S.ready = true; S.version++;
@@ -149,7 +149,8 @@ export function bakedWater(bay, BU, riverLevel = () => null, riverSettled = null
 				cur = [];
 			};
 			for (const q of P) { if (sl && (theirs(q[0], q[1]) || skipBox(q[0], q[1]))) flush(q); else cur.push(q); }
-			flush();
+			// (and where the bake left off for it, at the edge of its reach)
+			flush(sl && cur.length ? cur[cur.length - 1] : null);
 		}
 		return out;
 	}

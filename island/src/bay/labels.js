@@ -39,7 +39,8 @@ export function createLabels(mount, bay, bridge) {
 		if (wn) {
 			let near = null, nd = 1e18;
 			for (const p of places) { if (p.hood) continue; const d = (x - p.x) ** 2 + (z - p.z) ** 2; if (d < nd) { nd = d; near = p; } }
-			return { name: wn.name, sub: `${wn.kind} · ${near ? near.county : 'California'}` };
+			// (the county of a town close by; out in the hills with none, just the state)
+			return { name: wn.name, sub: `${wn.kind} · ${near && nd < 7000 * 7000 ? near.county : 'California'}` };
 		}
 		// landmarks and waters that contain you, the smallest first
 		let best = null;

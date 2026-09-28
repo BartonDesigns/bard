@@ -25,6 +25,7 @@ import { WC_U, WC_GLSL, WT, WN, createCarveAtlas, setWaterHooks, grewTrees, wate
 import { REAL_U } from './realcity.js';
 import { DEEP, crossings, edgeDist, bounds } from './watersrc.js';
 import { waterfowl } from '../world/creatures.js';
+import { waterOf } from '../world/ocean.js';
 
 const W1 = WN + 1, TILE = 2048;
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -63,9 +64,10 @@ const KIND_NAME = ['Lake', 'Reservoir', 'Basin', 'Pond', 'Pool'];
 const depthOf = (w) => (w < 3 ? 0.28 + w * 0.1 : w < 15 ? 0.45 + w * 0.06 : Math.min(5, 1.1 + w * 0.02));
 
 // ---------- the look of the water ----------
-// uLook: x 0 water, 1 ice, 2 lava; y how much of the world's water tint (uTintW)
+// uLook: x 0 water, 1 ice, 2 lava; y how much more of the world's water tint than its sea
+// takes (uWaterT, as world/ocean.js tints the sea: rgb over its brightness, a how much)
 const COMMON = /* glsl */`
-uniform float uTime, uNight, uSeason; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uTintW; uniform vec4 uLook;
+uniform float uTime, uNight, uSeason; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform vec4 uLook, uWaterT;
 vec3 skyIn(vec3 r, vec2 p){
 	vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5));
 	// low down, the dark line of the hills and trees round the shore
@@ -90,7 +92,7 @@ vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres, float frozen){
 		vec3 ice = mix(vec3(0.62, 0.74, 0.8), vec3(0.82, 0.9, 0.95), vn(p * 0.08)) * (1.0 - ck * 0.35);
 		return vec4(mix(ice, col, fres * 0.35) * (1.0 - uNight * 0.8), 1.0);
 	}
-	col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uTintW * 3.0, uLook.y);
+	col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uWaterT.rgb, min(0.8, uWaterT.a * uLook.y));
 	return vec4(col, a);
 }
 `;
@@ -119,7 +121,8 @@ varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying flo
 float rip(vec2 q){ return vn(q) * 0.55 + vn(q * 2.3 + 5.1) * 0.3 + vn(q * 5.1 - 2.7) * 0.15; }
 void main(){
 	vec2 T = normalize(vT.xy + vec2(1e-5, 0.0)), N = vec2(-T.y, T.x);
-	float along = vUv.y, across = dot(vW.xz, N);
+	// (across in metres from the middle: world x, z are too big for float noise this fine)
+	float along = vUv.y, across = vUv.x * vF.w * 0.5;
 	float speed = vF.x, foamK = vF.y;
 	// ripples carried downstream, stretched along the flow
 	vec2 q = vec2(along * 0.55 - uTime * speed * 0.55, across * 1.3);
@@ -139,7 +142,8 @@ void main(){
 	vec3 col = mix(deep, skyIn(r, vW.xz) * vec3(0.8, 0.9, 0.85), fres);
 	col += uSunColor * pow(max(dot(r, uSunDir), 0.0), 300.0) * 4.0 * (1.0 - uNight);
 	// white water where it falls, streaked downstream; a thin lace along the edges
-	float fo = foamK * smoothstep(0.45, 0.8, rip(q * vec2(1.4, 2.2) + 11.0) + foamK * 0.25);
+	// (in streaks and boils, the dark water showing between them)
+	float fo = foamK * 0.85 * smoothstep(0.52, 0.85, rip(q * vec2(1.4, 2.2) + 11.0) + foamK * 0.12);
 	fo += (1.0 - smoothstep(0.02, 0.12, depth)) * 0.35 * smoothstep(0.5, 0.7, rip(q * 3.0)) * nearK;
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
 	float a = clamp(0.28 + deepK * 0.62 + fres * 0.25 + fo, 0.0, 0.96);
@@ -151,25 +155,26 @@ void main(){
 	#include <fog_fragment>
 }`;
 const LAKE_VERT = /* glsl */`
-varying vec3 vW; varying float vDist;
+varying vec3 vW; varying vec2 vL; varying float vDist;
 #include <fog_pars_vertex>
 void main(){
 	vec4 w = modelMatrix * vec4(position, 1.0);
-	vW = w.xyz; vDist = length(cameraPosition.xz - w.xz);
+	vW = w.xyz; vL = position.xz; vDist = length(cameraPosition.xz - w.xz);
 	vec4 mvPosition = viewMatrix * w;
 	gl_Position = projectionMatrix * mvPosition;
 	#include <fog_vertex>
 }`;
 const LAKE_FRAG = /* glsl */`
 uniform vec3 uTint; uniform float uLevel, uIce;
-varying vec3 vW; varying float vDist;
+varying vec3 vW; varying vec2 vL; varying float vDist;
 #include <fog_pars_fragment>
 float wave(vec2 p){ return vn(p * 0.35 + uTime * vec2(0.05, 0.03)) * 0.6 + vn(p * 1.1 - uTime * vec2(0.04, 0.07)) * 0.3 + vn(p * 3.3 + uTime * vec2(0.11, -0.05)) * 0.1; }
 void main(){
-	vec2 p = vW.xz; float e = 0.15;
+	// (the ripples on the lake's own coordinates: the world's are too big for noise this fine)
+	vec2 p = vW.xz, pl = vL; float e = 0.15;
 	// wind on the water: patches of ripple and of calm
 	float wind = 0.5 + 0.5 * smoothstep(0.3, 0.7, vn(p * 0.004 + uTime * 0.01));
-	vec3 n = normalize(vec3(wave(p - vec2(e, 0.0)) - wave(p + vec2(e, 0.0)), 2.0 * e / (0.08 * wind), wave(p - vec2(0.0, e)) - wave(p + vec2(0.0, e))));
+	vec3 n = normalize(vec3(wave(pl - vec2(e, 0.0)) - wave(pl + vec2(e, 0.0)), 2.0 * e / (0.08 * wind), wave(pl - vec2(0.0, e)) - wave(pl + vec2(0.0, e))));
 	n = normalize(mix(n, vec3(0.0, 1.0, 0.0), smoothstep(300.0, 2500.0, vDist)));
 	vec3 v = normalize(cameraPosition - vW), r = reflect(-v, n);
 	float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
@@ -180,10 +185,10 @@ void main(){
 	vec3 col = mix(deep, skyIn(r, p) * mix(vec3(0.62, 0.86, 0.7), vec3(0.78, 0.88, 0.92), uTint.b * 4.0), fres);
 	col += uSunColor * (pow(max(dot(r, uSunDir), 0.0), 600.0) * 6.0 + pow(max(dot(r, uSunDir), 0.0), 40.0) * 0.12) * (1.0 - uNight);
 	// a lace of foam where the water laps the shore
-	float lace = (1.0 - smoothstep(0.0, 0.18, depth)) * smoothstep(0.45, 0.75, vn(p * 1.7 + uTime * 0.2)) * nearK * step(0.0, depth);
+	float lace = (1.0 - smoothstep(0.0, 0.18, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2)) * nearK * step(0.0, depth);
 	col = mix(col, vec3(0.82, 0.84, 0.8) * (1.0 - uNight * 0.8), lace * 0.6);
 	float a = clamp(0.3 + deepK * 0.66 + fres * 0.2 + lace * 0.4, 0.0, 0.97);
-	gl_FragColor = worldLook(col, a, p, 0.2, fres, uIce);
+	gl_FragColor = worldLook(col, a, pl, 0.2, fres, uIce);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 	#include <fog_fragment>
@@ -204,12 +209,12 @@ export function createWater(scene, shared, opts = {}) {
 	const RANGE = isPhone ? { data: 4600, near: 1800, far: 6500, carve: 720, slots: 49, budget: 3.5 } : { data: 7200, near: 2600, far: 9500, carve: 1100, slots: 100, budget: 5 };
 	const S = { lakes: [], lakeGrid: new Map(), tiles: new Map(), ready: false, jobs: [], plannedAt: -1e9, px: 1e9, pz: 1e9, srcV: '', stats: { longest: 0, slowest: 0, carved: 0, built: 0, spikes: {} } };
 	const atlas = carve ? createCarveAtlas(RANGE.slots) : null;
-	const lookU = { value: new THREE.Vector4(look?.kind === 'lava' ? 2 : look?.kind === 'ice' ? 1 : 0, look?.mix || 0, 0, 0) }, tintU = { value: new THREE.Vector3(...(look?.tint || [0.1, 0.3, 0.35])) };
+	const lookU = { value: new THREE.Vector4(look?.kind === 'lava' ? 2 : look?.kind === 'ice' ? 1 : 0, look ? 1.6 : 0, 0, 0) }, tintU = { value: waterOf(shared.planet) };
 	const uNight = { value: 0 };
 	// the ground under the water, as it is drawn
 	const GROUND = carve ? BAY_GLSL + WC_GLSL + 'float groundUnder(vec2 w){ return bayHeight(w) + wcAt(w).r * wcK(w); }\n' : HEIGHT_GLSL + 'float groundUnder(vec2 w){ return heightAt(w); }\n';
 	const groundU = carve ? { ...shared.bayU, ...WC_U } : { uHeight: { value: shared.heightTex }, uHalf: { value: island?.half || 1300 }, uCell: { value: island?.cell || 1 }, uN: { value: island?.N || 2 } };
-	const uniforms = () => ({ ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...groundU, uTime: shared.uTime, uNight, uSeason: REAL_U.uSeason, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uLook: lookU, uTintW: tintU });
+	const uniforms = () => ({ ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...groundU, uTime: shared.uTime, uNight, uSeason: REAL_U.uSeason, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uLook: lookU, uWaterT: tintU });
 	const FRAG_HEAD = GROUND + NOISE_GLSL + COMMON;
 	const riverMat = new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: RIVER_VERT, fragmentShader: FRAG_HEAD + RIVER_FRAG, fog: true, transparent: look?.kind !== 'lava' && look?.kind !== 'ice', depthWrite: false });
 	const lakeMats = new Map();
@@ -660,7 +665,13 @@ export function createWater(scene, shared, opts = {}) {
 	}
 	function dropLake(L) {
 		if (!L.mesh) return;
-		root.remove(L.mesh); L.mesh.geometry.dispose(); lakeMats.get(L)?.dispose(); lakeMats.delete(L); L.mesh = null;
+		gone.push(lakeMats.get(L), L.mesh); lakeMats.delete(L); L.mesh = null;
+	}
+	// (what is let go is taken down a millisecond's worth a frame: a long way flown lets go of a lot)
+	const gone = [];
+	function takeDown(ms) {
+		const t0 = performance.now();
+		while (gone.length && performance.now() - t0 < ms) { const o = gone.pop(); if (o?.isMesh) { root.remove(o); o.geometry.dispose(); } else o?.dispose(); }
 	}
 	const lakeRange = (L) => (L.area > 1e6 ? 32000 : L.area > 5e4 ? 14000 : L.area > 8000 ? 5000 : 2600) * (isPhone ? 0.65 : 1);
 
@@ -714,7 +725,7 @@ export function createWater(scene, shared, opts = {}) {
 			if (!S.tiles.has(tkey(i, j))) tasks.push({ d, kind: 'tile', i, j });
 		}
 		// let go of the far ones
-		for (const [k, T] of S.tiles) if (!want.has(k) && Math.hypot((T.i + 0.5) * TILE - cx, (T.j + 0.5) * TILE - cz) > RANGE.data + 3000) { if (T.mesh) { root.remove(T.mesh); T.mesh.geometry.dispose(); } S.tiles.delete(k); }
+		for (const [k, T] of S.tiles) if (!want.has(k) && Math.hypot((T.i + 0.5) * TILE - cx, (T.j + 0.5) * TILE - cz) > RANGE.data + 3000) { if (T.mesh) gone.push(T.mesh); S.tiles.delete(k); }
 		// the squares to carve
 		if (atlas) {
 			const C = RANGE.carve;
@@ -784,6 +795,7 @@ export function createWater(scene, shared, opts = {}) {
 		const vs = sources.map((q) => q.version()), sv = vs.join(',');
 		if (sv !== S.srcV) { const was = S.srcV.split(','); S.srcV = sv; regrid(sources.filter((q, i) => String(vs[i]) !== was[i])); S.plannedAt = -1e9; spike('regrid', f0); }
 		putLakes(2);
+		takeDown(1);
 		if (S.noCarve.size > 5000) S.noCarve.clear();
 		// a mapped region came in: its roads cross the creeks, so carve its squares again
 		const rn = real?.R?.regions?.length || 0;

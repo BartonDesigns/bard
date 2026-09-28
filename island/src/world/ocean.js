@@ -7,8 +7,8 @@ import * as THREE from 'three';
 import { radialGrid, HEIGHT_GLSL, NOISE_GLSL, SWASH_GLSL } from './terrain.js';
 import { BAY_GLSL } from '../bay/terrain.js';
 
-// a planet's water colour, normalised to keep the sea's brightness
-function waterOf(P) {
+// a planet's water colour, normalised to keep the sea's brightness (its streams and lakes too: bay/water.js)
+export function waterOf(P) {
 	const t = P?.water?.tint;
 	if (!t || !P.water.mix) return new THREE.Vector4(1, 1, 1, 0);
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;

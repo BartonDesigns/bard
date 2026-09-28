@@ -653,6 +653,8 @@ export function createCity(shared, scene, bay, real = null) {
 				const parkBlock = hash(i * 3 + 7, j * 5 + 1) > 0.975 && U.d < 0.2;              // a park or a playground
 				const ground = bay.heightAt(wx, wz);
 				if (ground < 0.8) continue;
+				// not in a lake, a reservoir or a creek (bay/water.js)
+				if ([[0.5, 0.5], [0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]].some(([u, v]) => { const [x, z] = fromGrid((i + u) * BX, (j + v) * BZ, a, style); return inWater(x, z); })) continue;
 				// not on the ocean beach: low ground with the Pacific a block away is sand and dune
 				// (the bay shore keeps its waterfront)
 				if (ground < 5 && wx < OCEAN_X && Math.min(bay.heightAt(wx - 120, wz), bay.heightAt(wx + 120, wz), bay.heightAt(wx, wz - 120), bay.heightAt(wx, wz + 120)) < 0.2) continue;
