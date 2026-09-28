@@ -571,7 +571,8 @@ export function createWater(scene, shared, opts = {}) {
 						const f = s / len, bx = ax + dx * f, bz = az + dz * f, w = L.w[k] + (L.w[k + 1] - L.w[k]) * f, lv = L.lv[k] + (L.lv[k + 1] - L.lv[k]) * f;
 						// on the land at the top of the bank (where the channel's cut ends)
 						const g0 = heightAt(bx + nx * sd * (w / 2 + 3), bz + nz * sd * (w / 2 + 3));
-						const top = Math.min(18, Math.max(0, g0 - lv) / 0.9);
+						// (the bank is cut back at its slope as carveTile cuts it, out to its reach)
+						const top = Math.min(24, Math.max(0, g0 - lv) / (w < 6 ? 0.95 : 0.6));
 						// (a narrow creek's willows and alders close over it)
 						const off = w / 2 + (w < 12 ? 1.1 + h01(r, s) * 3 : 1.6 + h01(r, s) * 5) + top;
 						const x = bx + nx * sd * off, z = bz + nz * sd * off;
@@ -592,7 +593,7 @@ export function createWater(scene, shared, opts = {}) {
 		}
 		if (T.trees.length) grew = true;
 	}
-	let grew = false, grewAt = 0;
+	let grew = false, grewAt = 0, carvedSince = false;
 	function treesNear(x, z, r) {
 		const out = [];
 		for (const T of S.tiles.values()) {
@@ -935,7 +936,7 @@ export function createWater(scene, shared, opts = {}) {
 				return Object.assign((function* () {
 					const r = yield* carveTile(t.i, t.j, lines, lakes);
 					carveQ.delete(k);
-					if (r) { atlas.put(t.i, t.j, r.draw, r.walk); S.stats.carved++; } else S.noCarve.add(k);
+					if (r) { atlas.put(t.i, t.j, r.draw, r.walk); S.stats.carved++; carvedSince = true; } else S.noCarve.add(k);
 				})(), { what: 'carve' });
 			}
 		}
@@ -987,6 +988,9 @@ export function createWater(scene, shared, opts = {}) {
 			T.mesh.geometry.setDrawRange(0, d < RANGE.near ? T.allIdx : T.wideIdx);
 		}
 		if (decksDirty || Math.hypot(x - lastDecks.x, z - lastDecks.z) > 800) { const d0 = performance.now(); lastDecks = { x, z }; buildDecks(Math.round(x / 64) * 64, Math.round(z / 64) * 64); spike('decks', d0); }
+		// (the ground under the trees moved where a channel was cut: once the carving round you
+		// is done, the trees are stood on it again)
+		if (carvedSince && !cur && !S.jobs.some((q) => q.kind === 'carve')) { carvedSince = false; grew = true; }
 		if (grew && t - grewAt > 4) { grew = false; grewAt = t; grewTrees(); }
 		// the birds paddle about, steering off the shore and clear of you
 		for (const B of flock) {

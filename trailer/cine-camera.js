@@ -136,6 +136,39 @@
 			}
 			return best;
 		},
+		// somewhere to strike: walks the player (the engine's camera with it) to spots round
+		// `center`, looks about, and casts the world's own tap ray (music.hitAt) through the
+		// middle of the view until it meets a plant or stone of the wanted kind (its
+		// material175: wood, stone, soft) between dmin and dmax metres off.
+		// Gives { p: the eye, l: the struck point, d, species } or null.
+		async find(kind, { center = [0, 0], R = 300, tries = 30, dmin = 5, dmax = 22, eye = 1.7, minLand = 1 } = {}) {
+			const w = CINE.W(), P = w.player.state;
+			CINE.hold = true;
+			let found = null;
+			for (let k = 0; k < tries && !found; k++) {
+				const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R;
+				const x = center[0] + Math.sin(a) * r, z = center[1] + Math.cos(a) * r;
+				if (CINE.land(x, z) < minLand) continue;
+				P.flying = true; P.vel.set(0, 0, 0); P.pos.set(x, CINE.land(x, z) + eye, z); P.pitch = -0.04;
+				await CINE.settle(24, 10);
+				for (let q = 0; q < 16 && !found; q++) {
+					P.yaw = q / 16 * Math.PI * 2; P.pos.set(x, CINE.land(x, z) + eye, z);
+					await CINE.settle(1);
+					const cam = CINE.camera;
+					if (!cam) continue;
+					cam.updateMatrixWorld();
+					for (const y of [-0.05, -0.2, 0.1]) {
+						const hit = w.music.hitAt(0, y);
+						if (hit && hit.object?.userData?.material175 === kind && hit.distance >= dmin && hit.distance <= dmax) {
+							found = { p: cam.position.toArray(), l: hit.point.toArray(), d: hit.distance, species: hit.object.userData.species };
+							break;
+						}
+					}
+				}
+			}
+			CINE.hold = false;
+			return found;
+		},
 		// keys on an arc round c (radius r, height h over c) from angle a0 to a1, looking at c + [0, lookH, 0]
 		orbit(c, r, h, a0, a1, T, lookH = 0, n = 4, fov = 50) {
 			const keys = [];
@@ -150,6 +183,7 @@
 			const T = window.L99Island.T;
 			const look = new T.Vector3();
 			window.Crysis.cine((camera) => {
+				CINE.camera = camera;
 				if (CINE.hold || !CINE.pose) return;
 				const s = CINE.pose(CINE.t);
 				if (!s) return;

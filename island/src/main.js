@@ -11,6 +11,7 @@ import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terra
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
+import { createSunRays } from './world/sunrays.js';
 import { createVegetation } from './world/vegetation.js';
 import { createGrass } from './world/grass.js';
 import { createLitter } from './world/litter.js';
@@ -522,6 +523,9 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		// sunbeams through the trees in mist (world/sunrays.js)
+		world.rays = createSunRays(scene, shared, renderer, { isPhone, sun: sky.sun, air: sky.uniforms.uAir });
+		world.rays.quality(quality);
 		if (waterPlan) {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
 			island.waterAt = (x, z) => world?.water?.waterAt(x, z) ?? null;
@@ -667,6 +671,7 @@ export function createIslandWorld() {
 		world.alien?.dispose();
 		world.medieval?.dispose();
 		world.boardwalk?.destroy();
+		world.rays?.dispose();
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		while (scene.children.length) scene.remove(scene.children[0]);
 		world = null;
@@ -729,6 +734,7 @@ export function createIslandWorld() {
 		if (quality !== 'auto' || force) pixelRatio = target;
 		renderer.setPixelRatio(pixelRatio);
 		renderer.shadowMap.enabled = !(quality === 'low');
+		world?.rays?.quality(quality);
 		resize();
 	}
 
@@ -1020,7 +1026,8 @@ export function createIslandWorld() {
 		const fovK = arcade.active() ? 1 : W.shrooms?.fov() ?? 1;
 		if (fovK !== 1 && !tick.fov0) tick.fov0 = camera.fov;
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
-		if (!W.shrooms?.render(renderer, scene, camera)) renderer.render(scene, camera);
+		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
+		if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
 		if (quality === 'auto' && (frame.n = (frame.n || 0) + 1) % 45 === 0) {
@@ -1281,6 +1288,9 @@ if (typeof window !== 'undefined') {
 		// Crysis.volcano() tells where the cycle is ({ phase, next: seconds to the next, k })
 		erupt: (at) => window.L99Island?.world?.()?.volcano?.erupt(at) || 'no volcano on this world',
 		volcano: () => window.L99Island?.world?.()?.volcano?.state() || null,
+		// sunbeams in the mist (world/sunrays.js): Crysis.rays() tells how they stand; 'on', 'off',
+		// 'force' (whatever the hour and the trees), a strength (1 is as made), or { burst: false }
+		rays: (v) => window.L99Island?.world?.()?.rays?.control(v) ?? 'no world yet',
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },

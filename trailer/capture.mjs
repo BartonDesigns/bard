@@ -37,18 +37,23 @@ const gpu = !!arg('gpu', false);
 
 if (arg('list', false)) {
 	let t = 0;
-	for (const s of SHOTS) { console.log(`${s.id.padEnd(16)} ${String(t.toFixed(2)).padStart(6)}s  ${s.dur.toFixed(2)}s  ${Math.round(s.dur * fps)} fr  ${s.world || 'earth'}`); t += s.dur; }
+	for (const s of SHOTS) { console.log(`${s.id.padEnd(16)} ${String(t.toFixed(2)).padStart(6)}s  ${s.dur.toFixed(2)}s  ${Math.round(s.dur * fps)} fr  ${s.dom ? 'faceplate' : s.world || 'earth'}`); t += s.dur; }
 	console.log(`total ${t.toFixed(2)} s, ${Math.round(t * fps)} frames at ${fps} fps`);
 	process.exit(0);
 }
 
 const runtime = fs.readFileSync(path.join(here, 'cine-runtime.js'), 'utf8');
 const rig = fs.readFileSync(path.join(here, 'cine-camera.js'), 'utf8');
+const musicRig = fs.readFileSync(path.join(here, 'cine-music.js'), 'utf8');
+// the soundtrack's note timeline (trailer/soundtrack.mjs): what the taps and the bands follow
+const tlFile = arg('timeline', process.env.TRAILER_TIMELINE || '/tmp/claude-0/trailer/timeline.json');
+const timeline = fs.existsSync(tlFile) ? fs.readFileSync(tlFile, 'utf8') : 'null';
 const src = (f) => (f ? f.toString() : null);
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 // shots grouped by the world they need, in order of first appearance
-const want = SHOTS.filter((s) => !only || only.includes(s.id));
+// (the faceplate's shots are the page's own UI: trailer/faceplate.mjs captures those)
+const want = SHOTS.filter((s) => !s.dom && (!only || only.includes(s.id)));
 const groups = new Map();
 for (const s of want) { const k = s.world || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
 
@@ -64,6 +69,7 @@ for (const [world, shots] of groups) {
 		page.on('pageerror', (e) => log('PAGEERROR', e.message));
 		page.on('console', (m) => { if (m.type() === 'error') log('CONSOLE', m.text().slice(0, 300)); });
 		await page.addInitScript(runtime);
+		await page.addInitScript(`window.__TL = ${timeline};`);
 		// no stored place to resume, no welcome: a clean world every run
 		await page.addInitScript(() => { try { localStorage.clear(); } catch { /* none */ } });
 		const t0 = Date.now();
@@ -74,6 +80,7 @@ for (const [world, shots] of groups) {
 		}, !world, { timeout: 600000, polling: 1000 });
 		await page.waitForTimeout(world ? 8000 : 4000);
 		await page.addScriptTag({ content: rig });
+		await page.addScriptTag({ content: musicRig });
 		await page.evaluate(() => {
 			const R = window.L99Island.renderer(), render = R.render.bind(R);
 			R.render = (s, c) => { if (!window.__cine.noRender) render(s, c); };
@@ -104,17 +111,19 @@ async function shoot(page, s) {
 	const n = nFrames(s), dt = 1 / fps, pre = s.pre || 0;
 	log(`shot ${s.id}: ${n} frames (${s.dur}s${pre ? ` + ${pre} pre` : ''}${s.post ? ` + ${s.post} post` : ''})`);
 	// set the scene: world state, the camera's keys
-	const info = await page.evaluate(async ({ setup, cam, opts, seed }) => {
+	const info = await page.evaluate(async ({ setup, cam, opts, seed, dur }) => {
 		window.__cine.seed(seed);
 		const C = window.CINE, w = C.W();
 		const ctx = setup ? await new Function('return (' + setup + ')')()(w, C) : {};
 		window.SHOT = ctx || {};
 		const keys = new Function('return (' + cam + ')')()(window.SHOT, w, C);
+		// the move fills the shot, however long the keys were written for
+		if (Array.isArray(keys) && opts?.fit !== false) { const T = keys[keys.length - 1].t; if (T > 0) for (const k of keys) k.t *= dur / T; }
 		C.pose = typeof keys === 'function' ? keys : C.path(keys, opts || {});
 		C.t = (opts && opts.t0) || 0;
 		C.hold = false;
 		return window.SHOT.info || 'ok';
-	}, { setup: src(s.setup), cam: src(s.cam), opts: s.opts || {}, seed: s.seed || 7 });
+	}, { setup: src(s.setup), cam: src(s.cam), opts: s.opts || {}, seed: s.seed || 7, dur: s.dur });
 	log(`  setup: ${typeof info === 'string' ? info : JSON.stringify(info)}`);
 	// settle: the world streams in round the first pose (sim only, a few rendered)
 	const warm = s.warm ?? 90;
@@ -122,12 +131,13 @@ async function shoot(page, s) {
 	for (let k = 0; k < warm; k++) {
 		// the last few drawn and read back, so every shader is compiled before frame 0 (else it can come out black)
 		const render = k >= warm - 8;
-		await page.evaluate(({ t, dt, render, frame }) => {
+		await page.evaluate(({ t, dt, render, frame, song }) => {
 			window.CINE.t = t; window.__cine.noRender = !render;
 			if (frame) new Function('return (' + frame + ')')()(t, window.SHOT, window.CINE.W(), -1);
+			if (song !== null) window.TRAILER.tick(song - dt, song, null);
 			window.__cine.step(dt);
 			if (render) window.__cine.grab('image/jpeg', 0.5);
-		}, { t: -pre * dt, dt, render, frame: null });
+		}, { t: -pre * dt, dt, render, frame: null, song: s.song != null ? s.song - (warm - k) * dt - pre * dt : null });
 		if (s.settle && k % 10 === 0) await page.waitForTimeout(s.settle * 100);
 	}
 	log(`  warm ${warm} steps in ${((Date.now() - tw) / 1000).toFixed(0)} s`);
@@ -136,14 +146,16 @@ async function shoot(page, s) {
 	for (let f = 0; f < n; f++) {
 		const t = (f - pre) * dt, file = fileOf(s, f);
 		const grab = want1(s, f) && (force || !fs.existsSync(file));
-		const url = await page.evaluate(({ t, dt, grab, frame, jpeg }) => {
+		const url = await page.evaluate(({ t, dt, grab, frame, jpeg, song, taps, kind }) => {
 			window.CINE.t = t; window.__cine.noRender = !grab;
 			if (frame) new Function('return (' + frame + ')')()(t, window.SHOT, window.CINE.W(), t);
+			// the song at this frame: its bands into the world, its lead notes struck on the shot's taps
+			if (song !== null) window.TRAILER.tick(song + t - dt, song + t, taps, kind);
 			const R = window.__cine.real, a = R();
 			window.__cine.step(dt);
 			const b = R(), u = grab ? window.__cine.grab(jpeg ? 'image/jpeg' : 'image/png', 0.96) : null;
 			return { u, ms: [Math.round(b - a), Math.round(R() - b)] };
-		}, { t, dt, grab, frame: onFrame, jpeg }).then((r) => { lastMs = r.ms; return r.u; });
+		}, { t, dt, grab, frame: onFrame, jpeg, song: s.song ?? null, taps: s.taps || null, kind: s.kind || null }).then((r) => { lastMs = r.ms; return r.u; });
 		if (grab && url) {
 			fs.writeFileSync(file + '.tmp', Buffer.from(url.slice(url.indexOf(',') + 1), 'base64'));
 			fs.renameSync(file + '.tmp', file);
