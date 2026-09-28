@@ -751,11 +751,15 @@ export function* planTile(C, ti, tj, roads) {
 	// ---- 8. a camp, now and then ----
 	// more near a downtown than out in the suburbs, more in the industrial flats; at most one
 	// a tile, and not in most
+	// (only where the land is downtown or industrial; the suburbs are left alone, but for the
+	// odd overpass)
+	const U1 = bay.urbanAt(cx, cz), campLand = U1.d > 0.12 || nInd >= 40;
+	if (!campLand) out.cands = out.cands.filter((c) => c.under && U1.d > 0.04);
 	if (out.cands.length) {
 		const U = bay.urbanAt(cx, cz), ind = nInd / (N * N);
 		const p = clamp(0.015 + U.d * 0.5 + ind * 0.05 + (U.u > 0.6 ? 0.015 : 0), 0, 0.2);
 		const roll = hash(ti * 31 + 7, tj * 17 + 3);
-		const cands = out.cands.slice().sort((a, b) => b.w - a.w + (hash(a.x, a.z) - hash(b.x, b.z)) * 0.5);
+		const cands = out.cands.filter((c) => c.why !== 'lot' || nInd >= 40).sort((a, b) => b.w - a.w + (hash(a.x, a.z) - hash(b.x, b.z)) * 0.5);
 		const pp = cands[0]?.under ? Math.min(0.5, p * 2.5) : p;
 		if (roll < pp) {
 			for (const c of cands) {
