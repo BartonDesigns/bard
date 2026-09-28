@@ -41,7 +41,7 @@ export const GAME = {
 	// played in a closed room the kit builds (the host may hide the city while it runs)
 	indoor: true,
 	blurb: 'Fog City: three balls, two flippers, pop bumpers and the F-O-G lanes.',
-	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pacific Pinball Museum, Alameda', lat: 37.7719, lon: -122.2769, r: 50 }] },
+	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pacific Pinball Museum, Alameda', lat: 37.7719, lon: -122.2769, r: 50 }, { name: 'Casino Fun Center, Santa Cruz Beach Boardwalk', lat: 36.96312, lon: -122.01984, r: 40 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#b56cff', dist: 1.2, room: { w: 5.5, z0: -3.6, z1: 2.4, h: 4, style: 'arcade' } });
 		const { THREE } = ctx;

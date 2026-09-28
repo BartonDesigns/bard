@@ -27,7 +27,7 @@ import { createSealife } from './sealife.js';
 import { createMagma } from './magma.js';
 import { createCaverns } from './caverns.js';
 import { createUnderworld } from './planet/underworld.js';
-import { planCaves } from './planet/cavenet.js';
+import { planCaves, makeField } from './planet/cavenet.js';
 import { createReef } from './reef.js';
 import { buildEcology, describe } from './crysis/ecology.js';
 import { createFish } from './crysis/fish.js';
@@ -46,6 +46,7 @@ import { createTidepools } from './bay/tidepools.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
 import { createDiscovery } from './bay/discovery.js';
+import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
@@ -60,6 +61,7 @@ import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
 import { createDrive } from './drive.js';
+import { createAutoMusic } from './music/automusic.js';
 
 // the hills by the calendar: green from the winter rains into spring, gold by summer
 // (the naturalist's curve: inland gold by late May; the foggy coast lags into July)
@@ -81,7 +83,10 @@ import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
 import { createVolcano } from './planet/volcano.js';
 import { planAlien, createAlien } from './planet/alien.js';
+import { planRealm, planDungeons } from './planet/medieval/plan.js';
+import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
+import { createWorldAudio } from './audio/audio.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -290,9 +295,15 @@ export function createIslandWorld() {
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
 	HOOKS.drive = drive;
+	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
+	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
+	HOOKS.autoMusic = autoMusic;
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world);
 	guideApi.people = people;
+	// the world's audio: footsteps, the room's sound, the places' ambience (audio/*.js)
+	const worldAudio = createWorldAudio({ getWorld: () => world, camera, people, busy: () => arcade.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.boardwalk?.riding?.(), planet: () => shared.planet });
+	HOOKS.audio = worldAudio;
 	// and, very rarely, in the woods after dark, someone who is not one of them
 	const ghost = createGhost(scene, { world: () => world, mount: dom.mount, canvas: dom.canvas, hush: (k) => world?.natureSound?.hush?.(k) });
 	HOOKS.ghost = (at) => ghost.summon(camera, at);
@@ -320,7 +331,7 @@ export function createIslandWorld() {
 		['San Ramon', 37.7700, -121.9380, 0], ['Lake Annabel, Bishop Ranch', 37.7646, -121.9660, -2.2], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
 		['Mt Tamalpais, East Peak', 37.9293, -122.5780, 2.2], ['Mission Peak', 37.5125, -121.8806, 1.5], ['Berkeley Hills', 37.8812, -122.2425, 1.9],
 		['Tide pools, Moss Beach', 37.5214, -122.5166, 1.75], ['Devil\'s Slide, Highway 1', 37.5738, -122.5148, 3.1], ['Half Moon Bay, Highway 1', 37.4640, -122.4330, 0], ['Duxbury Reef, Bolinas', 37.8936, -122.6972, 2.3],
-		['Bay Area Discovery Museum, Fort Baker', 37.8345, -122.4782, 3.3], ['Pacifica Pier', 37.6336, -122.4935, 1.8], ['San Ramon Central Park', 37.7643, -121.9528, 0.5], ['Apple Park, Cupertino', 37.3310, -122.0040, 0.6], ['Downtown San Jose', 37.3330, -121.8890, 0], ['Pescadero State Beach, Highway 1', 37.2680, -122.4105, 1.7], ['Pigeon Point Light Station', 37.1845, -122.3925, 2.3],
+		['Bay Area Discovery Museum, Fort Baker', 37.8345, -122.4782, 3.3], ['Pacifica Pier', 37.6336, -122.4935, 1.8], ['San Ramon Central Park', 37.7643, -121.9528, 0.5], ['Apple Park, Cupertino', 37.3310, -122.0040, 0.6], ['Downtown San Jose', 37.3330, -121.8890, 0], ['Pescadero State Beach, Highway 1', 37.2680, -122.4105, 1.7], ['Pigeon Point Light Station', 37.1845, -122.3925, 2.3], ['Santa Cruz Beach Boardwalk', 36.96317, -122.01846, -1.29],
 		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
 	];
 	const tpBtn = button('', 'Teleport to a place', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
@@ -423,6 +434,8 @@ export function createIslandWorld() {
 		island.profileHaze = profile.air?.haze || 1;
 		// the ball fields above the village: the ground levelled under them before anything is made of it
 		const fieldPlan = planIslandFields(island);
+		// a realm of castles and towns, where this world keeps one: sited now, the land shaped round it
+		const realmPlan = earth ? null : planRealm(island, profile, { fields: fieldPlan.clear, isPhone });
 		// the planet's second biome and its cold side, baked where the ground and plants can read it
 		island.biomes = createBiomes(island, profile);
 		(shared.uBiome ||= { value: null }).value = island.biomes.tex;
@@ -447,9 +460,11 @@ export function createIslandWorld() {
 		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
 		// a planet's caves are planned first, so nothing grows in their mouths
 		const cavePlan = earth ? null : planCaves(island, profile);
+		// ...and the realm's dungeons dug down to meet them
+		if (realmPlan) planDungeons(realmPlan, island, cavePlan, makeField);
 		// the works of whoever built here before: sited now, so nothing grows on them
-		const alienPlan = earth ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: fieldPlan.clear, isPhone });
-		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || [])];
+		const alienPlan = earth || realmPlan?.noAliens ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: [...fieldPlan.clear, ...(realmPlan?.clear || [])], isPhone });
+		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
 		const village = createVillage(island, shared, scene);
 		vegetation.addContacts(village.footprints);
@@ -498,6 +513,15 @@ export function createIslandWorld() {
 			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), al.floor(x, z, y)) : al.floor;
 			island.extraPush = op ? (p, footY) => { op(p, footY); al.push(p, footY); } : al.push;
 		}
+		// the realm: its castle, town and fields walked on and into; its dungeons reached before the caves
+		if (realmPlan) {
+			const md = world.medieval = createMedieval(realmPlan, { island, shared, scene, camera, profile, isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, player: () => world?.player.state, underworld: world.underworld });
+			const of = island.extraFloor, op = island.extraPush;
+			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), md.floor(x, z, y)) : md.floor;
+			island.extraPush = op ? (p, footY) => { op(p, footY); md.push(p, footY); } : md.push;
+			island.underFloor = md.underFloor(island.underFloor);
+			island.underPush = md.underPush(island.underPush);
+		}
 		state.seed = seed;
 		state.earth = earth;
 		state.biome = params.biome;
@@ -539,6 +563,8 @@ export function createIslandWorld() {
 			world.parks = createParkKit(scene, bayArea, world.real, { isPhone, lake: world.lake });
 			// the Bay Area Discovery Museum at Fort Baker: the barracks, the exhibits, Lookout Cove
 			world.discovery = createDiscovery(scene, bayArea, world.real, { isPhone });
+			// the Santa Cruz Beach Boardwalk: the Casino, the midway and its rides, the Giant Dipper
+			world.boardwalk = createBoardwalk(scene, bayArea, shared, { isPhone, mount: dom.mount, hint: (t, ms, pri = 1) => hint(t, ms, pri), camera, player: () => world?.player.state });
 			// the Bay Area's wild animals by habitat, month and hour, and the field journal
 			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
@@ -571,8 +597,8 @@ export function createIslandWorld() {
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y));
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -591,6 +617,8 @@ export function createIslandWorld() {
 		world.underworld?.dispose();
 		world.volcano?.dispose();
 		world.alien?.dispose();
+		world.medieval?.dispose();
+		world.boardwalk?.destroy();
 		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		while (scene.children.length) scene.remove(scene.children[0]);
 		world = null;
@@ -644,6 +672,7 @@ export function createIslandWorld() {
 			b.onclick = () => { TM.set(!TM.enabled); buildPanel(); };
 			p.appendChild(b);
 		}
+		autoMusic.panel(p);
 		panelClock = t;
 	}
 
@@ -736,12 +765,14 @@ export function createIslandWorld() {
 		// driving a road carries you; otherwise you walk, swim or fly
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
+		else if (W.boardwalk?.ride(dt, time)) drive.stop();
 		else if (!drive.update(dt)) W.player.update(dt, time);
 		W.fields?.update(dt, camera);
-		arcade.update(dt, time, !W.boat?.boarded?.());
+		arcade.update(dt, time, !W.boat?.boarded?.() && !W.boardwalk?.riding());
 		stampPrints(W.player.state);
 		W.boat.update(dt, time);
 		const sk = W.sky.update(dt, camera.position);
+		W.boardwalk?.update(dt, time, camera, sk.night, W.sky.state.hours);
 		// the weather: frames running slow shed rain streaks; indoors the rain stays out
 		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
@@ -759,6 +790,7 @@ export function createIslandWorld() {
 		W.magma.update(dt, time, under, surf);
 		W.volcano?.update(dt, time);
 		W.alien?.update(dt, time);
+		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
 		W.underworld?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
@@ -856,6 +888,8 @@ export function createIslandWorld() {
 		sunGlare(dt);
 		watchTeleport();
 		share.update(dt);
+		// where you are, kept every few seconds so a reload carries on from here
+		if (visible && !arcade.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
@@ -902,6 +936,7 @@ export function createIslandWorld() {
 		people.demo(dt, time, camera.position);
 		ghost.update(dt, time, camera, sk.night);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, hours: W.sky.state.hours });
+		worldAudio.update(dt, { under, night: sk.night, hours: W.sky.state.hours, rain: wx.rainHere || 0 });
 		if (W.natureSound && W.bayArea?.loaded()) {
 			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
 			let pond = 1e9;
@@ -1041,6 +1076,8 @@ export function createIslandWorld() {
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
 		openAt: (code) => share.openAt(code),
+		// back to the last place you were (after a crash or a reload); false if there is none
+		resume: () => { const c = share.resumeCode(); return c ? share.openAt(c, { resume: true }) : false; },
 		guide, people,
 		renderer: () => renderer, camera: () => camera, scene: () => scene, dom, shared,
 	};
@@ -1148,6 +1185,13 @@ if (typeof window !== 'undefined') {
 		// the alien works (planet/alien.js): Crysis.alien() lists the sites, Crysis.alienGo(i) takes you to look at one
 		alien: () => window.L99Island?.world?.()?.alien?.sites || [],
 		alienGo: (i = 0) => window.L99Island?.world?.()?.alien?.go(i) || 'no alien works on this world',
+		// a realm of castles (planet/medieval/): Crysis.medieval() tells of it, Crysis.medieval('castle')
+		// goes to look (castle, realm, gate, keep, wall, town, square, chapel, windmill, bridge, barrow…);
+		// Crysis.quests() lists its quests; Crysis.dungeon(i) goes down into one ('stair', 'last' or
+		// 'breach', where it meets the caves, as a second argument)
+		medieval: (where) => { const m = window.L99Island?.world?.()?.medieval; return !m ? 'no realm on this world' : where ? m.go(where) : m.info(); },
+		quests: () => window.L99Island?.world?.()?.medieval?.quests.info() || 'no realm on this world',
+		dungeon: (i = 0, where) => window.L99Island?.world?.()?.medieval?.dungeonGo(i, where) || 'no realm on this world',
 		// a volcanic world's eruptions (planet/volcano.js): Crysis.erupt() starts one now (or
 		// from a moment in: Crysis.erupt(30)),
 		// Crysis.volcano() tells where the cycle is ({ phase, next: seconds to the next, k })
@@ -1181,9 +1225,17 @@ if (typeof window !== 'undefined') {
 		verses: () => HOOKS.surprises?.verses(),
 		get surprises() { return HOOKS.surprises; },
 		get fishing() { return HOOKS.fishing; },
+		// the Santa Cruz Beach Boardwalk: Crysis.boardwalk() tells how it stands, Crysis.ride('dipper')
+		// (or 'wheel', 'bumper', 'carousel', 'glider', 'drop') takes you aboard
+		boardwalk: () => window.L99Island?.world?.()?.boardwalk?.info() ?? 'No Boardwalk on this world.',
+		ride: (name = 'dipper') => window.L99Island?.world?.()?.boardwalk?.rideNow(name) ?? 'No Boardwalk on this world.',
 		// the minigames: Crysis.arcade.start('bowling'), .stop(), .games()
 		get arcade() { return HOOKS.arcade; },
+		// auto music: Crysis.music.auto(true), .state(), .log(true), .level(0.5), .queue('chorus')
+		music: { auto: (on) => HOOKS.autoMusic?.auto(on), state: () => HOOKS.autoMusic?.state(), log: (on) => HOOKS.autoMusic?.log(on), level: (v) => HOOKS.autoMusic?.level(v), queue: (to, now) => HOOKS.autoMusic?.queue(to, now) },
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },
+		// the world's audio: Crysis.audio() (surface, room, beds, levels), .set({ amb, feet, steps }), .record(s)
+		audio: Object.assign(() => HOOKS.audio?.debug(), { set: (v) => HOOKS.audio?.set(v), record: (s) => HOOKS.audio?.record(s), tick: (dt, o) => HOOKS.audio?.tick(dt, o) }),
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};
 }

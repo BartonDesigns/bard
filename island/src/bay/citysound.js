@@ -3,18 +3,17 @@
 //   a low city bed (distant traffic, the freeways, air handling), louder downtown and by day
 //   tyre hiss and engine hum from the cars going past, panned and Doppler-shifted, the
 //   hiss louder and brighter on wet roads; now and then a horn downtown, a far siren
-//   footsteps: yours, on whatever is underfoot (pavement, grass, a dirt trail up high,
-//   sand by the water, a wooden floor indoors, splashy in the rain), and the people
-//   walking near you
-//   voices: a soft murmur where people stand and talk
+//   (footsteps, yours and the people's, and their voices are the audio/ modules' now)
 //   the cable cars' bells on the San Francisco lines, a church bell striking the hours
 //   birds in the leafy streets by day, crickets in the suburbs at night
 //   indoors: the street through the walls, and the house's own quiet hum
-// Everything but your own feet fades out when you fly up, go under water, or leave the towns.
+// Everything fades out when you fly up, go under water, or leave the towns. It all plays
+// through the ambience master (audio/acoustics.js), a little of it into the room.
 
 import { STYLE } from './styles.js';
 import { toWorld } from './geo.js';
 import { soundBus, noise } from '../world/soundbus.js';
+import { mix } from '../audio/acoustics.js';
 
 // the cable car lines: Powell St, the Mason and Hyde branches along Jackson, California St
 const CABLE = [
@@ -29,7 +28,7 @@ function toSegment(x, z, [a, b]) {
 
 export function createCitySound(bay, groundAt) {
 	let ctx = null, A = null;
-	let lastPos = null, stepAcc = 0, birdT = 2, cricketT = 0, walla = 0, cableT = 5, hornT = 20, sirenT = 90, lastHour = null;
+	let birdT = 2, cricketT = 0, cableT = 5, hornT = 20, sirenT = 90, lastHour = null;
 	const bellPan = Math.random() * 1.2 - 0.6;
 
 	function loop(buf, type, f, q, dest) {
@@ -46,10 +45,13 @@ export function createCitySound(bay, groundAt) {
 		if (ctx === B.ctx && A) return true;
 		ctx = B.ctx;
 		// indoors the street is heard through the walls: a low-pass over the town's sound
-		const room = ctx.createBiquadFilter(); room.type = 'lowpass'; room.frequency.value = 18000; room.Q.value = 0.5; room.connect(B.out);
+		const M = mix(), to = M ? M.amb : B.out;
+		const room = ctx.createBiquadFilter(); room.type = 'lowpass'; room.frequency.value = 18000; room.Q.value = 0.5; room.connect(to);
+		// the streets' sound between the buildings
+		if (M) { const sg = ctx.createGain(); sg.gain.value = 0.3; room.connect(sg).connect(M.send); }
 		const master = ctx.createGain(); master.gain.value = 0; master.connect(room);
-		// what you hear wherever you walk: your feet, the room you are in (not faded with the town)
-		const own = ctx.createGain(); own.gain.value = 1; own.connect(B.out);
+		// the room you are in (not faded with the town)
+		const own = ctx.createGain(); own.gain.value = 1; own.connect(to);
 		A = { master, room, own };
 		A.white = noise(ctx, 'white');
 		A.brown = noise(ctx, 'brown');
@@ -71,41 +73,9 @@ export function createCitySound(bay, groundAt) {
 		const eg = ctx.createGain(); eg.gain.value = 0;
 		eo.connect(el).connect(eg).connect(A.pan); eo.start();
 		A.car = { hf, hg, eo, eg };
-		// voices: noise through two formant bands, gated by a slow random envelope
-		const vs = ctx.createBufferSource(); vs.buffer = A.white; vs.loop = true;
-		const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 520; f1.Q.value = 4;
-		const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1450; f2.Q.value = 5;
-		const vg = ctx.createGain(); vg.gain.value = 0;
-		vs.connect(f1).connect(vg); vs.connect(f2).connect(vg); vg.connect(master); vs.start();
-		A.voice = { f1, f2, vg };
 		return true;
 	}
 	const panner = (v, dest) => { const p = ctx.createStereoPanner(); p.pan.value = v; p.connect(dest); return p; };
-	// a burst of noise: filter, level, attack and decay (s), where to
-	function burst(type, f, q, level, attack, decay, dest, t = ctx.currentTime) {
-		const s = ctx.createBufferSource(); s.buffer = A.white;
-		const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
-		const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level, t + attack); g.gain.setTargetAtTime(0, t + attack, decay / 3);
-		s.connect(fl).connect(g).connect(dest);
-		s.start(t, Math.random() * 3.5); s.stop(t + attack + decay + 0.02);
-	}
-	function thud(f, level, len, dest, t = ctx.currentTime) {
-		const o = ctx.createOscillator(), g = ctx.createGain();
-		o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + len);
-		g.gain.setValueAtTime(level, t); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-		o.connect(g).connect(dest); o.start(t); o.stop(t + len + 0.01);
-	}
-	// one footfall on a surface: 'pave', 'grass', 'dirt', 'sand', 'wood'; wet: 0..1
-	function step(level, pan, surface, wet = 0) {
-		if (!(level > 1e-4)) return;
-		const t = ctx.currentTime, p = panner(pan, surface === 'people' ? A.master : A.own), j = 0.85 + Math.random() * 0.3;
-		if (surface === 'pave' || surface === 'people') { thud(120 * j, level * 0.5, 0.04, p, t); burst('bandpass', 1400 * j, 1.1, level, 0.004, 0.08, p, t + 0.012); }
-		else if (surface === 'wood') { thud(150 * j, level * 0.9, 0.08, p, t); burst('bandpass', 600 * j, 2, level * 0.5, 0.003, 0.07, p, t); }
-		else if (surface === 'grass') burst('highpass', 2500 * j, 0.7, level * 0.6, 0.03, 0.14, p, t);
-		else if (surface === 'sand') { thud(90, level * 0.3, 0.06, p, t); burst('lowpass', 900 * j, 0.6, level * 0.8, 0.03, 0.16, p, t); }
-		else { burst('bandpass', 1800 * j, 0.8, level * 0.7, 0.005, 0.06, p, t); burst('bandpass', 2600 * j, 0.9, level * 0.5, 0.005, 0.07, p, t + 0.03 + Math.random() * 0.02); }
-		if (wet > 0.1 && surface !== 'wood') burst('bandpass', 3200 * j, 1.2, level * 0.6 * wet, 0.01, 0.15, p, t + 0.02);
-	}
 	function chirp(level, pan) {
 		const t = ctx.currentTime, n = 2 + Math.floor(Math.random() * 4), f0 = 2600 + Math.random() * 2400;
 		const p = panner(pan, A.master);
@@ -168,7 +138,7 @@ export function createCitySound(bay, groundAt) {
 	}
 	const ease = (param, v, tc = 0.25) => param.setTargetAtTime(v, ctx.currentTime, tc);
 
-	// cam: the camera; o: { night, cars, people, steps, player, under, islandHalf, and if
+	// cam: the camera; o: { night, cars, under, islandHalf, and if
 	// main passes them, indoors (true/false), rain (0..1), hours (0..24) }
 	function update(dt, cam, o) {
 		if (!setup()) return;
@@ -183,23 +153,8 @@ export function createCitySound(bay, groundAt) {
 		ease(A.room.frequency, inside ? 500 : 18000, 0.3);
 		ease(A.roomTone.g.gain, inside ? 0.05 : 0, 0.5);
 		ease(A.mainsG.gain, inside ? 0.0025 : 0, 0.5);
-		// your own footsteps, on whatever is underfoot, anywhere you walk
-		const P = o.player;
-		if (lastPos && P && P.grounded && !P.flying && !P.swimming && !o.under) {
-			const sp = Math.hypot(x - lastPos.x, z - lastPos.z) / Math.max(dt, 1e-3);
-			if (sp > 0.6 && sp < 9) {
-				stepAcc += sp * dt;
-				const stride = sp > 4 ? 1.5 : 0.75;
-				if (stepAcc > stride) {
-					stepAcc = 0;
-					const surface = inside ? 'wood' : town > 0.3 ? 'pave' : gy < 4 && !onIsland ? 'sand' : gy > 250 ? 'dirt' : 'grass';
-					step(0.09 * (sp > 4 ? 1.3 : 1), (Math.random() - 0.5) * 0.2, surface, inside ? 0 : Math.min(1, rain * 2));
-				}
-			}
-		} else stepAcc = 0;
-		lastPos = { x, z };
 		ease(A.master.gain, on > 0.01 ? (inside ? 0.5 : 1) : 0, 0.6);
-		if (on <= 0.01) { if (o.steps) o.steps.length = 0; return; }
+		if (on <= 0.01) return;
 		const busy = U.s === STYLE.sf || U.d > 0.2 ? 1 : U.s === STYLE.retail || U.s === STYLE.office ? 0.7 : U.s === STYLE.older ? 0.45 : 0.3;
 		const day = 1 - o.night * 0.6;
 		ease(A.bed.g.gain, 0.08 * on * (0.4 + busy) * day);
@@ -226,25 +181,6 @@ export function createCitySound(bay, groundAt) {
 			ease(A.car.hf.frequency, (700 + wetRoad * 1600) * dop + c.v * 30, 0.1);
 			ease(A.car.eo.frequency, (38 + c.v * 3.2) * dop, 0.1);
 		} else { ease(A.car.hg.gain, 0); ease(A.car.eg.gain, 0); }
-		// the people's footsteps and voices
-		const steps = o.steps || [];                                          // footstep events from the people: { x, z, k }
-		for (const s of steps) {
-			const dx = s.x - x, dz = s.z - z, d = Math.hypot(dx, dz);
-			if (d < 18) step(0.05 * on * s.k / (1 + d * d / 12), Math.max(-0.8, Math.min(0.8, -(fz * dx - fx * dz) / (d + 2))), 'people');
-		}
-		steps.length = 0;
-		let talk = 0;
-		for (const p of o.people || []) {
-			if (!p.active || p.role !== 'chat') continue;
-			const d = Math.hypot(p.M.S.pos.x - x, p.M.S.pos.z - z);
-			talk += 1 / (1 + d * d / 30);
-		}
-		walla += (Math.min(1, talk) - walla) * Math.min(1, dt * 2);
-		const now = performance.now() / 1000;
-		const syll = 0.5 + 0.5 * Math.sin(now * (5.3 + Math.sin(now / 2.1) * 1.7));
-		ease(A.voice.vg.gain, 0.05 * walla * on * syll, 0.04);
-		ease(A.voice.f1.frequency, 420 + syll * 260 + Math.sin(now / 0.7) * 80, 0.05);
-		ease(A.voice.f2.frequency, 1200 + (1 - syll) * 700, 0.05);
 		// downtown now and then a horn, and a siren somewhere across the city
 		hornT -= dt;
 		if (hornT < 0) { hornT = 25 + Math.random() * 60; if (busy > 0.6 && o.night < 0.8) horn(0.012 * on, (Math.random() - 0.5) * 1.4); }

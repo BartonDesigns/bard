@@ -17,7 +17,7 @@ export function createLabels(mount, bay, bridge) {
 
 	const places = PLACES.map((p) => ({ name: p[0], ...toWorld(p[1], p[2]), county: p[3], pop: p[4], hood: p[5], r: p[5] ? 700 : Math.max(650, 380 * Math.pow(p[4], 0.45)) }));
 	const zones = ZONES.map((z) => ({ name: z[0], ...toWorld(z[1], z[2]), sub: z[3], r: z[4] }));
-	const WATER = new Set(['Pacific Ocean', 'Golden Gate', 'San Francisco Bay', 'Richardson Bay', 'Raccoon Strait', 'San Pablo Bay', 'Carquinez Strait', 'Suisun Bay', 'South Bay']);
+	const WATER = new Set(['Pacific Ocean', 'Golden Gate', 'San Francisco Bay', 'Richardson Bay', 'Raccoon Strait', 'San Pablo Bay', 'Carquinez Strait', 'Suisun Bay', 'South Bay', 'Monterey Bay']);
 	const gate = zones.find((z) => z.name === 'Golden Gate');
 
 	// home: kept only on this device (localStorage), never in the published world

@@ -4,6 +4,9 @@
 // Bard has made its audio (the island on its own), a quiet context of our own stands in,
 // woken by the first touch or key.
 //
+// The world's ambience and footsteps go a step further, through audio/acoustics.js's mix (an
+// ambience master, the feet, and the room's reverberation) before they reach it.
+//
 // Noise buffers are made once per context and shared by every module that asks:
 //   white, pink (rain, wind, surf wash), brown (rumble, roar, the city's bed)
 

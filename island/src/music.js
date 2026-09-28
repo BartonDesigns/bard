@@ -59,7 +59,8 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 	}
 
 	function update(dt) {
-		const src = window.L99Continuity?.bands;
+		// sample the faceplate's analyser here too: nothing else does while only the island runs
+		const src = window.L99Continuity?.sample?.(performance.now()) || window.L99Continuity?.bands;
 		const k = Math.min(1, dt * 9);
 		for (const b of ['bass', 'mid', 'high']) {
 			const v = src && Number.isFinite(src[b]) ? Math.max(0, Math.min(1, src[b])) : 0;

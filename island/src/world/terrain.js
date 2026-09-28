@@ -179,7 +179,7 @@ export function createTerrain(island, shared) {
 			.replace('#include <begin_vertex>', `
 				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
 				vW = transformed;`);
-		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
 				holeCut(vW.xz);
 				plBegin(vW.xz);
@@ -291,8 +291,17 @@ export function createTerrain(island, shared) {
 				// snow: on the peaks of a green world, over everything on an ice world
 				{
 					float snowW = plSnow(h, n1) * (1.0 - smoothstep(0.42, 0.7, slope + (n2 - 0.5) * 0.2));
-					vec3 snow = mix(vec3(0.84, 0.88, 0.95), vec3(0.97, 0.98, 1.0), n2) * (0.94 + 0.06 * dd.r);
+					// wind-packed snow: long soft ripples laid across the wind, glazed to ice on top,
+					// blue where it is packed hard and in the troughs, bright on the crests
+					vec2 wq = vW.xz + vec2(vn(vW.xz * 0.05) * 9.0, vn(vW.xz * 0.05 + 4.0) * 9.0);
+					float rip = sin(dot(wq, vec2(0.83, 0.56)) * 1.6 + vn(vW.xz * 0.21) * 3.0) * 0.5 + 0.5;
+					rip = rip * rip * (3.0 - 2.0 * rip);
+					vec3 ice = vec3(0.70, 0.82, 0.95), snowHi = vec3(0.96, 0.98, 1.0);
+					vec3 snow = mix(ice, snowHi, 0.22 + 0.62 * rip + 0.16 * n2) * (0.95 + 0.05 * dd.r);
+					snow = mix(snow, vec3(0.62, 0.76, 0.92), smoothstep(0.6, 0.9, vn(vW.xz * 0.018 + 7.0)) * 0.35);   // bare blue ice where the wind scoured it
 					col = mix(col, snow, snowW * (1.0 - occ * 0.5));
+					gSnowW = snowW * (1.0 - occ * 0.5);
+					gDetailH = mix(gDetailH, rip * 0.11 * (1.0 - smoothstep(30.0, 90.0, camD)), gSnowW);
 				}
 				// glow in the ground: lava in the cracks, bile in the seeps, ley light in the veins
 				gPlGlow = plVein(vW.xz) * step(0.6, h);
@@ -306,10 +315,13 @@ export function createTerrain(island, shared) {
 				diffuseColor.rgb = col * col;   // authored in display space, lit in linear
 				// soaked sand is a mirror for a moment (sun, moon); drying sand goes dull
 				float rough = mix(0.97, mix(0.5, 0.14, soak), wet * (1.0 - grassW));
+				rough = mix(rough, 0.32, gSnowW);   // an icy glaze catches the sky
 				diffuseColor.rgb *= 1.0 - print * 0.12;
 				// moonlight catching the wet sand
 				gMoonGlint = wet * (1.0 - grassW) * smoothstep(0.02, -0.15, uSunDir2.y);
-				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 240.0) + 3.0)) * (1.0 - smoothstep(2.0, 7.0, camD));`)
+				gSparkle = (1.0 - grassW) * (1.0 - pathW) * (1.0 - rockW) * step(0.0, h) * (1.0 - smoothstep(3.0, 14.0, camD)) * step(0.55, gh(floor(vW.xz * 240.0) + 3.0)) * (1.0 - smoothstep(2.0, 7.0, camD));
+				// ice crystals glitter in the snow, a little further out than sand grains
+				gSparkle = max(gSparkle, gSnowW * step(0.72, gh(floor(vW.xz * 160.0) + 9.0)) * (1.0 - smoothstep(4.0, 22.0, camD)) * 0.8);`)
 			.replace('#include <roughnessmap_fragment>', '// after rain: darker, glossier ground\nfloat roughnessFactor = mix(rough, rough * 0.4, uWet * 0.8);\ndiffuseColor.rgb *= 1.0 - uWet * 0.28;')
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 				{

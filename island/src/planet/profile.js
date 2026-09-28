@@ -1,5 +1,6 @@
 // What kind of world flight has landed on. Space flight names every planet by type
-// (TERRAN, OCEAN, ARID, ICE, MAGMA, TOXIC, MYSTICAL, GAS, SHEPHERD, SINGULARITY, BAYAREA);
+// (TERRAN, OCEAN, ARID, ICE, MAGMA, TOXIC, MYSTICAL, GAS, SHEPHERD, SINGULARITY, BAYAREA, and
+// MEDIEVAL, a green realm some TERRAN planets come down as);
 // each type here becomes a whole ground: the shape of the land, the colours of its soil,
 // grass, leaves, rock and water, the air and sky, which plants grow, what lies underground
 // (the caves, the old ruins, the villages still lived in), and which mushrooms grow where.
@@ -128,6 +129,22 @@ const TYPES = {
 		shrooms: ['glowcap'],
 		sky: { giant: true },
 	},
+	// a green realm of rolling downs, woods and rivers, where people still build in stone:
+	// a castle on the high ground, a market town below it, mills, fields and hedgerows
+	MEDIEVAL: {
+		name: 'green realm',
+		ground: { grass: [0.30, 0.49, 0.15], sand: [0.80, 0.73, 0.56], rock: [0.46, 0.44, 0.40], soil: [0.32, 0.24, 0.15], mix: 0.5 },
+		leaf: { tint: [0.92, 1.05, 0.88], mix: 0.25 },
+		relief: 'downs', coast: 1.2, grass: 1.15, trees: 1.1, snow: 0.1, glow: null,
+		water: { tint: [0.12, 0.30, 0.36], mix: 0.2 },
+		air: { tint: null, mix: 0, haze: 1.1 },
+		alt: { share: 0.35, ground: { grass: [0.50, 0.46, 0.28], sand: [0.82, 0.74, 0.55], rock: [0.50, 0.46, 0.40], soil: [0.40, 0.30, 0.20] }, leaf: [1.0, 0.72, 0.38], leafMix: 0.45, trees: 0.7, grass: 0.9, snow: 0 }, cold: 0.5,
+		flora: 'temperate',
+		caves: { rock: [0.34, 0.31, 0.28], glow: [0.40, 0.90, 0.70], crystals: 0.15, lava: 0, ice: 0, water: 1 },
+		civ: { ruin: 'stone', village: 'hut', people: 'human' },
+		shrooms: ['psilocybe', 'amanita', 'glowcap'],
+		realm: true,
+	},
 };
 TYPES.SHEPHERD = { ...TYPES.TERRAN, name: 'ringed world', sky: { rings: true } };
 TYPES.SINGULARITY = { ...TYPES.MYSTICAL, name: 'world by the dark star', air: { tint: [0.6, 0.55, 0.75], mix: 0.5, haze: 1.5 } };
@@ -157,7 +174,7 @@ export function planetProfile(type, seed = 1) {
 		type: TYPES[key] ? key : 'TROPICAL',
 		ground: { ...base.ground, grass: drift(base.ground.grass, 0.25), rock: drift(base.ground.rock, 0.15) },
 		leaf: { ...base.leaf, tint: drift(base.leaf.tint, 0.2) },
-		earthlike: key === 'TROPICAL' || key === 'TERRAN' || key === 'OCEAN' || key === 'SHEPHERD',
+		earthlike: key === 'TROPICAL' || key === 'TERRAN' || key === 'OCEAN' || key === 'SHEPHERD' || key === 'MEDIEVAL',
 	};
 }
 

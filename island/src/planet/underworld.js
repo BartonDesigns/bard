@@ -52,11 +52,16 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	const L = caveLighting(shared, island, profile);
 
 	// the ground opens at each mouth (and over the sinkhole), once the rock there is made
-	const holes = plan.holes.slice(0, 4);
-	const openHoles = () => holes.forEach((h, i) => {
-		const ready = chunks.every((c) => c.state === 2 || !c.mouth || Math.hypot(c.x - h.x, c.z - h.z) > 30);
-		shared.uHoles.value[i].set(h.x, h.z, ready ? h.r : 0, 0);
-	});
+	// (four slots in the ground's shader: with more openings than that, as when a realm
+	// digs its own stairs down (shared.moreHoles), the four nearest the camera are open)
+	const holes = plan.holes;
+	const openHoles = () => {
+		const cam = camera.position, all = [];
+		for (const h of holes) all.push({ h, ready: chunks.every((c) => c.state === 2 || !c.mouth || Math.hypot(c.x - h.x, c.z - h.z) > 30) });
+		for (const h of shared.moreHoles || []) all.push({ h, ready: true });
+		if (all.length > 4) all.sort((a, b) => Math.hypot(a.h.x - cam.x, a.h.z - cam.z) - Math.hypot(b.h.x - cam.x, b.h.z - cam.z));
+		for (let i = 0; i < 4; i++) { const o = all[i]; if (o) shared.uHoles.value[i].set(o.h.x, o.h.z, o.ready ? o.h.r : 0, 0); else shared.uHoles.value[i].set(0, 0, 0, 0); }
+	};
 	if (shaft) L.U.uCvShaft.value.set(shaft.x, shaft.z, shaft.r, 1);
 
 	// ---------- the rock, a cube at a time ----------
@@ -593,6 +598,8 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 			const c = field.cave(cam.x, cam.y, cam.z);
 			if (c < 1.5) target = smoothstep(0.5, 8, H(cam.x, cam.z) - cam.y);
 		}
+		// (others underground, as a realm's dungeons, say how far in the camera is too)
+		if (api.extraInside) target = Math.max(target, api.extraInside());
 		inK += (target - inK) * (snapK ? 1 : Math.min(1, dt * 2.5));
 		snapK = false;
 		if (inK < 1e-3) inK = 0;
@@ -711,9 +718,11 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		shared.uCave.value = 0;
 		if (snd) { try { snd.out.disconnect(); snd.room.stop(); } catch { /* already stopped */ } snd = null; }
 	}
-	return {
+	const api = {
 		update, floor, push, go, dispose, entrances: list, spots,
 		inside: () => inK,
+		// for others building underground: a glowing place to light the rock, and the lighting
+		addGlow, lighting: L, openHoles,
 		fog: () => [fogC.r, fogC.g, fogC.b],
 		plan, group,
 		// build everything at once (for looking around in tests)
@@ -723,5 +732,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		settle: () => { snapK = true; },
 		// what it costs, for looking into it
 		stats: () => ({ chunks: chunks.length, built: chunks.filter((c) => c.state === 2).length, meshes: chunks.filter((c) => c.mesh).length, visible: chunks.filter((c) => c.mesh?.visible).length, tris: chunks.reduce((s, c) => s + (c.mesh?.visible ? c.mesh.geometry.index.count / 3 : 0), 0), spikes: spikes.length, crystals: crystals.length, worms: worms.length / 3, glows: glows.length, spots: spots.length }),
+		extraInside: null,
 	};
+	return api;
 }

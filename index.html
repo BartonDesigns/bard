@@ -12307,7 +12307,8 @@ function playLead(voiceId, degree, bank, chromatic, velocity) {
   // reassuring 0.55 floor, while the conductor may place background harmony as
   // low as 0.14 so an orchestral build breathes instead of flattening the mix.
   const _autoVoice = String(voiceId || '').indexOf('auto:') === 0;
-  const _velFloor = (_autoVoice || /^(cave:|flight:)/.test(String(voiceId))) ? 0.10 : 0.55;
+  // Crysis auto music sets its own quieter floor (window._autoVelFloor) while it plays a note
+  const _velFloor = (_autoVoice || /^(cave:|flight:)/.test(String(voiceId))) ? (_autoVoice && typeof window._autoVelFloor === 'number' ? window._autoVelFloor : 0.10) : 0.55;
   const vel = (typeof velocity === 'number') ? Math.max(_velFloor, Math.min(1, velocity)) : 1;
   const freq = getFreq(degree, bank, chromatic);
   const atk = parseFloat(document.getElementById('sl-atk').value);
@@ -14090,7 +14091,7 @@ function playDrum(name, velocity) {
   // fix396: conductor percussion may sit behind the player's beat. Manual
   // strikes keep the solid 0.6 floor; AUTO accents can enter softly.
   const _autoDrum = !!(window._autoComp && window._autoComp._selfDrum);
-  const vel = (typeof velocity === 'number') ? Math.max(window.L99FaceAudio222?.enabled()&&['DNB','DANCEHALL','BREW'].includes(face)?.05:_autoDrum?.22:.6, Math.min(1, velocity)) : 1;
+  const vel = (typeof velocity === 'number') ? Math.max(window.L99FaceAudio222?.enabled()&&['DNB','DANCEHALL','BREW'].includes(face)?.05:_autoDrum?(typeof window._autoVelFloor==='number'?window._autoVelFloor:.22):.6, Math.min(1, velocity)) : 1;
   // vox92: humanized velocity (±10% ref, scaled by dial) -- forces the per-hit
   // gain path even at vel=1 whenever the dial is up, so ALL kits get it.
   const _H = _drumHumAmt();
@@ -17829,6 +17830,19 @@ function buildUI() {
         if (!fm) return;
         for (var fl in fm) { if (fm[fl] === targetType) { currentScale = fl; return; } }
       } catch (e) {}
+    },
+    // Crysis auto music: a read-only snapshot of the faceplate's live settings
+    state: function() {
+      try {
+        var sc = FACE_SCALES[currentFace] || SCALES, iv = sc[currentScale] || Object.values(sc)[0];
+        var sw = document.getElementById('sl-swing'), fp = FACEPLATES[currentFace] || {}, types = fp.types || [];
+        var pat = (BEAT_PATTERNS[currentFace] || [])[currentBeat] || null;
+        var t3 = (window._LEAD3_TYPE != null) ? window._LEAD3_TYPE : currentType2;
+        return { face: currentFace, scale: currentScale, scaleId: iv.scaleId || '', intervals: iv.slice(), root: rootOffset, octave: octaveOffset,
+          bpm: bpm, faceBpm: fp.bpm || bpm, swing: sw ? (parseFloat(sw.value) || 0) : 0, beat: pat, beatLoopOn: !!beatLoopOn, sequencerRunning: !!sequencerRunning,
+          leads: [types[currentType] || '', types[currentType2] || '', types[t3] || ''], drums: DRUM_NAMES.slice(),
+          trims: [window._LEAD1_TRIM, window._LEAD2_TRIM, window._LEAD3_TRIM] };
+      } catch (e) { return null; }
     },
     ensureRunning: function() {
       try {
@@ -29027,6 +29041,12 @@ root.L99CaveRail227={patch};
     /* every world lands in Crysis now: each planet type is its own generated world there
        (green, ocean, desert, ice, volcanic, toxic, mystical, a gas giant's moon…), caves and all */
     function tropical(u) { return !!u && !u.isStar; }
+    /* some green worlds are realms of castles and towns: a third of TERRAN planets, by seed,
+       come down in Crysis as MEDIEVAL worlds (the same planet always the same) */
+    function typeOf(u, seed) {
+        var t = u.planetType || 'TERRAN';
+        return t === 'TERRAN' && (Math.imul(seed ^ 0x5eed, 2654435761) >>> 0) % 3 === 0 ? 'MEDIEVAL' : t;
+    }
     function seedOf(u) {
         var s = u.seed;
         if (Number.isFinite(+s)) return (+s) >>> 0;
@@ -29053,7 +29073,7 @@ root.L99CaveRail227={patch};
             var J = window.L99Journey170;
             if (!J) throw Error('Journey is not ready');
             return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0,
-                planet: { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : (u.planetType || 'TERRAN'), earth: earth, palette: u.palette || null, origin: originOf(u) } });
+                planet: { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : typeOf(u, seed), earth: earth, palette: u.palette || null, origin: originOf(u) } });
         }).catch(function (e) { console.warn('[island landing]', e); }).then(function () { busy = false; });
     }
     function wrap() {
@@ -29112,7 +29132,16 @@ root.L99CaveRail227={patch};
             b.style.cssText = 'position:fixed;top:calc(env(safe-area-inset-top, 0px) + 10px);right:60px;z-index:99999;background:rgba(10,14,22,0.85);color:#9fe8d0;border:1px solid #01a982;border-radius:10px;padding:8px 12px;font-size:15px;line-height:1;';
             document.body.appendChild(b);
         }
-        b.addEventListener('click', function () { open(); });
+        /* the button carries on from wherever you last were (a crash or a reload loses nothing) */
+        b.addEventListener('click', function () {
+            var kept = null;
+            try { kept = localStorage.getItem('crysis-resume'); } catch (e) {}
+            if (!kept || window._ISLAND === false) { open(); return; }
+            if (window.L99Shell && window.L99Shell.active) window.L99Shell.toggleCaves();
+            engine().then(function (w) { return w.resume ? w.resume() : w.open({ seed: 1337, earth: true }); })
+                .then(function (ok) { if (ok === false) open(); })
+                .catch(function (e) { console.warn('[island] resume', e); open(); });
+        });
         /* ?at=<code>: a friend's shared spot (island/src/share.js); a bad code just opens the island */
         var at = new URLSearchParams(location.search).get('at');
         if (at && window._ISLAND !== false) {

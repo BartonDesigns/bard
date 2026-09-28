@@ -86,7 +86,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				float density = meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)) * (1.0 - canopy * 0.65) * (1.0 - occ * 0.85);
 				density *= 0.85 + 0.15 * vn(w * 0.4 + 5.0);
 				// around shrubs, bananas and flowers the grass crowds in and grows up the stems
-				density = min(1.0, density + hug * 0.6 * meadow);
+				density = min(1.0, density + hug * 0.6 * meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)));   // (never up through paving)
 				// another world: sparse on a desert, none on ash, none in snow or down a cave mouth
 				plBegin(w);
 				density *= min(1.0, uPlGrassK * mix(1.0, uPl2GrassK, gBioA)) * (1.0 - plSnow(h, n1g)) * (1.0 - plHole(w));
@@ -95,8 +95,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// toward the edge of the carpet each tuft grows in on its own: its own distance to
 				// start from, then an eased rise, so as you walk the grass rises up out of the
 				// ground ahead of you instead of popping in at a line
-				float edgeAt = 0.66 + 0.26 * aRand.x;
-				float rise = 1.0 - smoothstep(edgeAt - 0.2, edgeAt, dCam);
+				float edgeAt = 0.52 + 0.42 * aRand.x;
+				float rise = 1.0 - smoothstep(edgeAt - 0.28, edgeAt, dCam);
 				rise = rise * rise * (3.0 - 2.0 * rise);
 				float grow = step(aRand.y, density) * rise;
 				vEdge = smoothstep(0.35, 0.9, dCam);
@@ -193,7 +193,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// each blade keeps its own tone, so the fine blades read one by one
 				// the blade's own shading (dark roots, bright tips) evens out toward the edge, where
 				// the tufts blend into the painted ground
-				diffuseColor.rgb = vTint * mix(mix(0.62, 1.08, rootK) * (0.62 + 0.55 * gt.g), 1.0, vEdge * 0.85);
+				diffuseColor.rgb = vTint * mix(mix(0.62, 1.08, rootK) * (0.62 + 0.55 * gt.g), 0.78, vEdge * 0.85);   // (evened to the blades' own average, not brighter)
 				// a gust flips the blades to show their paler undersides
 				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.35 + vec3(0.03, 0.03, 0.0), vGust * 0.5 * vTip);
 				// tall grass goes to seed: pale straw tips

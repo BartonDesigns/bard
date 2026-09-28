@@ -17,7 +17,7 @@ export const GAME = {
 	// played in a closed room the kit builds (the host may hide the city while it runs)
 	indoor: true,
 	blurb: 'First to five against the house player: slide your mallet, bank it off the rails.',
-	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }] },
+	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }, { name: 'Casino Fun Center, Santa Cruz Beach Boardwalk', lat: 36.96312, lon: -122.01984, r: 40 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#39d0ff', dist: 1.3, room: { w: 5.5, z0: -3.6, z1: 2.4, h: 4, style: 'arcade' } });
 		let puck, mine, theirs, S = {};

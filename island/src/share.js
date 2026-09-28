@@ -286,7 +286,7 @@ export function createShare(ctx) {
 			return true;
 		} finally { busy = false; }
 	}
-	async function openAt(code) {
+	async function openAt(code, opts = {}) {
 		const s = unpack(code);
 		// a reload starts fresh, not back at the link
 		try { const u = new URL(location.href); if (u.searchParams.has('at')) { u.searchParams.delete('at'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } } catch { /* keep the address */ }
@@ -295,8 +295,31 @@ export function createShare(ctx) {
 			hint('That link has no place in it, so here is the island.', 4000, 2);
 			return false;
 		}
+		if (opts.resume) return go(s, { msg: 'Back where you left off.', time: true });
 		return go(s, { msg: s.by ? `You're where ${s.by} was.` : 'You\'re where your friend was.', time: true });
 	}
+
+	// ---------- carrying on: where you are is kept every few seconds (and as the page
+	// goes away), so after a crash or a reload the visualizer opens right back here ----------
+	const RESUME_KEY = 'crysis-resume';
+	let keptT = 0, arrived = null;
+	function keepPlace(force) {
+		if (busy || (!force && performance.now() - keptT < 4000)) return;
+		keptT = performance.now();
+		const s = capture();
+		if (!s || !Number.isFinite(s.x)) return;
+		// a fresh arrival (a world just built, a spawn) is not a place you chose: keep the
+		// last one until you have moved off from where you came in
+		const key = s.earth + ':' + s.seed;
+		if (!arrived || arrived.key !== key) arrived = { key, x: s.x, z: s.z, moved: false };
+		if (!arrived.moved && Math.hypot(s.x - arrived.x, s.z - arrived.z) < 3) return;
+		arrived.moved = true;
+		delete s.by;
+		try { localStorage.setItem(RESUME_KEY, pack(s)); } catch { /* storage off */ }
+	}
+	addEventListener('pagehide', () => keepPlace(true));
+	document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') keepPlace(true); });
+	const resumeCode = () => { try { return localStorage.getItem(RESUME_KEY); } catch { return null; } };
 
 	// ---------- homes ----------
 	function homes() {
@@ -475,7 +498,7 @@ export function createShare(ctx) {
 	}
 
 	return {
-		update, refresh, share, openAt, go, capture, describe, link, pack, unpack, building,
+		update, refresh, share, openAt, go, capture, keep: keepPlace, resumeCode, describe, link, pack, unpack, building,
 		homes, addHome, renameHome, removeHome, goHome,
 		busy: () => busy,
 		setName: (n) => { try { localStorage.setItem(NAME_KEY, String(n || '').slice(0, 40)); } catch { /* storage off */ } return n; },

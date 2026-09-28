@@ -30,7 +30,7 @@ export const GAME = {
 	// played in a closed room the kit builds (the host may hide the city while it runs)
 	indoor: true,
 	blurb: 'Nine wooden balls up the alley: land them in the 50, or the 100 corners.',
-	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Santa Cruz Beach Boardwalk arcade', lat: 36.9643, lon: -122.0177, r: 80 }] },
+	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Casino Fun Center, Santa Cruz Beach Boardwalk', lat: 36.96312, lon: -122.01984, r: 40 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#ff7a45', dist: 1.5, room: { w: 5.5, z0: -5.2, z1: 3, h: 3.4, style: 'arcade' } });
 		const { THREE } = ctx;

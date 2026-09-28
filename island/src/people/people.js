@@ -75,7 +75,7 @@ export function createPeople(scene, world) {
 		// a place with its own visitors (the Discovery Museum): families, and where they go
 		// (the museum, a shop, restaurant or office you are in or at, a tower's floor)
 		let V = null;
-		for (const src of [W.towers, W.commercial, W.discovery]) { V = src?.venue?.(cam, hours); if (V) break; }
+		for (const src of [W.towers, W.commercial, W.discovery, W.boardwalk]) { V = src?.venue?.(cam, hours); if (V) break; }
 		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 } };
 		const U = W.bayArea?.urbanAt(cam.x, cam.z);
 		// out on the trails: a few hikers by day

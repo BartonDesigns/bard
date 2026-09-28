@@ -19,6 +19,7 @@ import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
 import { GREENS } from './realcity.js';
 import { inCampus } from './discovery.js';
+import { inBoardwalk } from './boardwalk.js';
 import { inClearing, clearingVersion } from '../sportsfields.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -1296,7 +1297,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
 		// ...nor on a ball field (sportsfields.js)
-		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2));
+		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !inBoardwalk(t.x, t.z));
 		// ...nor inside a tower (their lobbies are walked into): a coarse grid of the tall ones
 		{
 			const G = new Map(), cellOf = (x, z) => Math.floor(x / 60) + ',' + Math.floor(z / 60);

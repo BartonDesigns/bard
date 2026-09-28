@@ -15,10 +15,12 @@
 //   grass, scrub-jays scolding, California quail calling "chi-CA-go" in the mornings
 //   western gulls along every shore by day, and sea lions barking at Pier 39 and Año Nuevo
 //   indoors, all of it through the walls
+//   (people, the island's and the other worlds' wild: audio/ambience.js)
 // (the naturalist's list: who calls when is from nature/fieldguide.js)
 
 import { toWorld, toLatLon } from './geo.js';
 import { soundBus, noise } from '../world/soundbus.js';
+import { mix } from '../audio/acoustics.js';
 
 const SEA_LIONS = [toWorld(37.8087, -122.4098), toWorld(37.1080, -122.3370)];
 // the ridge of the peninsula and the Marin headlands, as longitude by latitude: water west
@@ -51,7 +53,10 @@ export function createNatureSound(bay, groundAt) {
 		if (ctx === B.ctx && A) return true;
 		ctx = B.ctx;
 		// everything goes through the walls when you are indoors: a low-pass, open outside
-		const room = ctx.createBiquadFilter(); room.type = 'lowpass'; room.frequency.value = 18000; room.Q.value = 0.5; room.connect(B.out);
+		// (through the ambience master, a little of it into the room: an echo off the cliffs)
+		const M = mix();
+		const room = ctx.createBiquadFilter(); room.type = 'lowpass'; room.frequency.value = 18000; room.Q.value = 0.5; room.connect(M ? M.amb : B.out);
+		if (M) { const sg = ctx.createGain(); sg.gain.value = 0.15; room.connect(sg).connect(M.send); }
 		const master = ctx.createGain(); master.gain.value = 0; master.connect(room);
 		// the far breakers all along the beach: brown noise, low-passed, a steady roar
 		const s = ctx.createBufferSource(); s.buffer = noise(ctx, 'brown'); s.loop = true;

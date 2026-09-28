@@ -134,12 +134,13 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	}
 	function update(dt, t) {
 		if (s.locked) return;
-		let mx = joy.x, mz = joy.y;
+		// (s.auto: { x, z, run } walks without a hand on the keys, for demos and tests)
+		let mx = joy.x + (s.auto?.x || 0), mz = joy.y + (s.auto?.z || 0);
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
 		if (keys.has('s') || keys.has('arrowdown')) mz += 1;
 		if (keys.has('a') || keys.has('arrowleft')) mx -= 1;
 		if (keys.has('d') || keys.has('arrowright')) mx += 1;
-		const run = s.run || keys.has('shift');
+		const run = s.run || keys.has('shift') || !!s.auto?.run;
 		fwd.set(-Math.sin(s.yaw), 0, -Math.cos(s.yaw));
 		right.set(Math.cos(s.yaw), 0, -Math.sin(s.yaw));
 		wish.set(0, 0, 0).addScaledVector(fwd, -mz).addScaledVector(right, mx);
@@ -166,6 +167,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');
 			return;
 		}
+		const x0 = s.pos.x, z0 = s.pos.z, wasGrounded = s.grounded, vy0 = s.vel.y;
 		const speed = s.swimming ? 2.2 : run ? 7.5 : 3.9;
 		const accel = s.grounded || s.swimming ? 10 : 2.5;
 		s.vel.x += (wish.x * speed - s.vel.x) * Math.min(1, accel * dt);
@@ -203,13 +205,32 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			if (s.pos.y < ground + EYE) { s.pos.y = ground + EYE; s.vel.y = 0; s.grounded = true; }
 			else if (s.pos.y > ground + EYE + 0.05) s.grounded = false;
 		}
-		// a gentle step rhythm while walking
-		const moving = Math.hypot(s.vel.x, s.vel.z);
-		s.bob = (s.bob || 0) + moving * dt * 2.2;
-		const bob = s.grounded ? Math.sin(s.bob) * 0.035 * Math.min(1, moving / 4) : 0;
+		// the gait: a footfall each step, and the head dipping as each foot lands
+		const G = gait(dt, Math.hypot(s.pos.x - x0, s.pos.z - z0) / Math.max(dt, 1e-3), run);
+		if (s.grounded && !wasGrounded && vy0 < -2.5) { G.lands++; G.impact = -vy0; }
+		const bob = s.grounded ? -Math.cos(G.phase * Math.PI * 2) * 0.035 * Math.min(1, G.speed / 4) : 0;
 		if (s.locked) return;   // the boat has the camera
 		camera.position.set(s.pos.x, s.pos.y + bob, s.pos.z);
 		camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');
+	}
+	// Steps as people take them (people/motion.js): a stride of 0.83 of the height at an easy
+	// 1.3 m/s, longer as the pace picks up; the cadence that gives, capped so a brisk walk or a
+	// run is never a patter (about 2.2 steps a second walking, 2.8 running). count goes up as
+	// each foot lands; foot says which
+	function gait(dt, v, run) {
+		const G = s.gait || (s.gait = { phase: 0, count: 0, foot: 0, speed: 0, rate: 0, run: false, moving: false, lands: 0, impact: 0, jit: 1 });
+		G.speed += (Math.min(v, 12) - G.speed) * Math.min(1, dt * 10);
+		// (a moment off the ground walking downhill holds the step; a jump or a fall ends it)
+		G.air = s.grounded ? 0 : (G.air || 0) + dt;
+		if (s.swimming || s.flying || G.air > 0.2 || G.speed < 0.4) { G.moving = false; G.rate = 0; return G; }
+		if (!s.grounded) return G;
+		const stride = 1.75 * 0.83 * Math.pow(G.speed / 1.3, 0.42) * (run ? 1.15 : 1);
+		G.rate = Math.min(run ? 2.8 : 2.2, Math.max(1.4, G.speed / (stride / 2))) * G.jit;
+		// setting off: the first foot comes down soon
+		if (!G.moving) { G.moving = true; G.phase = 0.7; }
+		G.phase += G.rate * dt;
+		if (G.phase >= 1) { G.phase -= 1; G.count++; G.foot ^= 1; G.run = run; G.jit = 0.97 + Math.random() * 0.06; }
+		return G;
 	}
 	function dispose() {
 		removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);

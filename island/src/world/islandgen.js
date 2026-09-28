@@ -65,6 +65,11 @@ export function generateIsland(params = {}) {
 			return keep + up * 1.25 + Math.pow(crest, 2.6) * 150 * inland * smoothstep(0.8, 0.45, t);
 		}
 		if (kind === 'atoll') return keep + up * 0.4;
+		if (kind === 'downs') {
+			// rolling downs: broad rounded hills and vales, the mountain worn down to a high moor
+			const swell = (nz.fbm(x * 0.0032 + 13, z * 0.0032 - 4, 4) - 0.35) * 50 * inland;
+			return keep + Math.max(0, up * 0.72 + swell);
+		}
 		if (kind === 'mesa') {
 			// flat-topped tables with steep risers, cut by dry canyons
 			const H = up * 1.3 + nz.fbm(x * 0.004 + 9, z * 0.004, 3) * 40 * inland;

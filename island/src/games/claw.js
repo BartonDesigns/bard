@@ -22,7 +22,7 @@ export const GAME = {
 	// played in a closed room the kit builds (the host may hide the city while it runs)
 	indoor: true,
 	blurb: 'Five credits at the Musée Mécanique claw: sea lions, crabs, and the bridge nobody wins.',
-	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }] },
+	where: { kind: 'site', sites: [{ name: 'Musée Mécanique, Pier 45', lat: 37.8094, lon: -122.4169, r: 50 }, { name: 'Pier 39 arcade', lat: 37.8087, lon: -122.4098, r: 70 }, { name: 'Casino Fun Center, Santa Cruz Beach Boardwalk', lat: 36.96312, lon: -122.01984, r: 40 }] },
 	create(ctx) {
 		const K = makeKit(ctx, GAME, { accent: '#ff5ab4', dist: 1.3, room: { w: 7, z0: -2.6, z1: 4, h: 3.4, style: 'arcade' } });
 		const { THREE } = ctx;
