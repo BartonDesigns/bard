@@ -101,11 +101,12 @@ export const SHOTS = [
 	// 10. a mystical world, its alien city
 	{ id: 'alien', world: '?planet=MYSTICAL&seed=1', dur: 4.5, warm: 180, settle: 2, opts: { ease: 'inOut', shake: 0.15 },
 		setup: (w) => {
-			w.sky.state.hours = 18.9;
-			const sites = window.Crysis.alien(), S = sites.find((s) => s.type === 'complex') || sites[0];
-			return { c: [S.x, S.y, S.z], r: S.r, info: S.name + ' ' + S.type + ' r' + S.r };
+			w.sky.state.hours = 16.6;
+			// the landmark: the tallest of the works, with the rest round it
+			const sites = window.Crysis.alien(), S = sites.find((q) => q.type === 'landmark') || sites[0];
+			return { c: [S.x, S.y, S.z], r: S.r, h: S.h || 80, info: S.name + ' ' + S.type + ' r' + S.r + ' h' + S.h };
 		},
-		cam: (S, w, C) => C.orbit(S.c, S.r + 110, 55, 0.2, 0.75, 4.5, 15, 4, 50) },
+		cam: (S, w, C) => C.orbit(S.c, S.r + 140 + S.h * 0.5, S.h * 0.3, 0.2, 0.85, 4.5, S.h * 0.45, 4, 52) },
 	// 11. a medieval castle on its hill
 	{ id: 'castle', world: '?planet=MEDIEVAL&seed=1', dur: 4.5, warm: 180, settle: 2, opts: { ease: 'inOut', shake: 0.12 },
 		setup: (w, C) => {

@@ -24,12 +24,13 @@ export function industrialEdge(D, heightAt, nearWater = null) {
 	if (!mains.length) return D;
 	const inBox = (x, z, m) => x > bx0 + m && z > bz0 + m && x < bx1 - m && z < bz1 - m;
 	// what is out past the houses already: road points every 5 m, and buildings
-	const pts = [], far = D.boxes.filter((b) => Math.hypot(b.x - cx, b.z - cz) > reach - 250);
+	const pts = [], far = D.boxes.filter((b) => Math.hypot(b.x - cx, b.z - cz) > reach * 0.6 - 150);
 	for (const q of D.roads) {
 		const p = q.pts;
+		if (q.box && Math.max(Math.abs(q.box[0] - cx), Math.abs(q.box[2] - cx)) ** 2 + Math.max(Math.abs(q.box[1] - cz), Math.abs(q.box[3] - cz)) ** 2 < (reach * 0.6 - 150) ** 2) continue;
 		for (let i = 0; i + 3 < p.length; i += 2) {
-			const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]), n = Math.max(1, Math.ceil(L / 5));
-			for (let k = 0; k <= n; k++) { const x = p[i] + (p[i + 2] - p[i]) * k / n, z = p[i + 1] + (p[i + 3] - p[i + 1]) * k / n; if (Math.hypot(x - cx, z - cz) > reach - 250) pts.push(x, z, (q.w || 6) / 2); }
+			const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]), n = Math.max(1, Math.ceil(L / 8));
+			for (let k = 0; k <= n; k++) { const x = p[i] + (p[i + 2] - p[i]) * k / n, z = p[i + 1] + (p[i + 3] - p[i + 1]) * k / n; if (Math.hypot(x - cx, z - cz) > reach * 0.6 - 150) pts.push(x, z, (q.w || 6) / 2); }
 		}
 	}
 	// (bucketed by 50 m, to ask quickly)

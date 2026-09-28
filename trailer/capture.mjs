@@ -120,11 +120,13 @@ async function shoot(page, s) {
 	const warm = s.warm ?? 90;
 	const tw = Date.now();
 	for (let k = 0; k < warm; k++) {
-		const render = k >= warm - 3;
+		// the last few drawn and read back, so every shader is compiled before frame 0 (else it can come out black)
+		const render = k >= warm - 8;
 		await page.evaluate(({ t, dt, render, frame }) => {
 			window.CINE.t = t; window.__cine.noRender = !render;
 			if (frame) new Function('return (' + frame + ')')()(t, window.SHOT, window.CINE.W(), -1);
 			window.__cine.step(dt);
+			if (render) window.__cine.grab('image/jpeg', 0.5);
 		}, { t: -pre * dt, dt, render, frame: null });
 		if (s.settle && k % 10 === 0) await page.waitForTimeout(s.settle * 100);
 	}

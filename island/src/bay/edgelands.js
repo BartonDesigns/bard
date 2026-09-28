@@ -171,7 +171,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 		const lift = (id) => 0.15 + ((id.length * 7 + id.charCodeAt(id.length - 1)) % 5) * 0.006;
 		let n = 0;
 		for (const R of [...P.ground, ...P.rails.map((q) => ({ id: q.id, pts: q.pts, w: 3.4, kind: 4 }))]) {
-			{ const kk = R.id.startsWith('rr') ? 'rr' : R.id[0]; T.kinds[kk] = (T.kinds[kk] || 0) + 1; }
+			{ const kk = R.id.startsWith('rr') ? 'rr' : R.id[0]; T.kinds[kk] = (T.kinds[kk] || 0) + 1; const m = R.pts.length >> 2 << 1; if (!T.at[kk] && own(R.pts[m], R.pts[m + 1], R.pts[m + 2] ?? R.pts[m], R.pts[m + 3] ?? R.pts[m + 1])) T.at[kk] = [R.pts[m], R.pts[m + 1], R.pts[m + 2] - R.pts[m], R.pts[m + 3] - R.pts[m + 1]]; }
 			const p = R.pts, S = along(p), Ltot = S[S.length - 1], hw = R.w / 2, ACROSS = R.w > 3 ? [-1, -0.5, 0, 0.5, 1] : [-1, 0, 1], yo = lift(R.id);
 			let run = null;
 			const flush = () => {
@@ -369,7 +369,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 			for (const w of want) {
 				const k = key(w.i, w.j);
 				let T = tiles.get(k);
-				if (!T) tiles.set(k, T = { k, i: w.i, j: w.j, d: w.d, state: 'roads', meshes: [], props: {}, kinds: {} });
+				if (!T) tiles.set(k, T = { k, i: w.i, j: w.j, d: w.d, state: 'roads', meshes: [], props: {}, kinds: {}, at: {} });
 				if (T.state !== 'done') { cur = T; break; }
 			}
 		}

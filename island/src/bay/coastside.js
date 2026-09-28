@@ -106,7 +106,9 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 		vec2 gc = floor(w / 170.0), go = (vec2(wH01(ivec2(gc) + 3), wH01(ivec2(gc) + 11)) * 0.6 + 0.2) * 170.0;
 		float gd = length(w - gc * 170.0 - go);
 		lc = mix(lc, vec3(0.14, 0.42, 0.09), (1.0 - smoothstep(13.0, 15.0, gd)) * fair);      // the green
-		float bunker = (1.0 - smoothstep(4.0, 5.5, abs(gd - 22.0) + (wVn(w / 6.0) - 0.5) * 6.0)) * step(0.4, wH01(ivec2(gc) + 7));
+		// a bunker or two beside the green, kidney-shaped
+		vec2 bo = (vec2(wH01(ivec2(gc) + 5), wH01(ivec2(gc) + 9)) - 0.5) * 50.0;
+		float bunker = (1.0 - smoothstep(5.0, 6.5, length((w - gc * 170.0 - go - bo) * vec2(1.0, 1.6)) + (wVn(w / 5.0) - 0.5) * 4.0)) * step(0.35, wH01(ivec2(gc) + 7));
 		lc = mix(lc, vec3(0.72, 0.64, 0.47), bunker);
 		c = mix(c, lc, links);
 	}
@@ -240,7 +242,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				}
 			}
 			rowsX[r] = found;
-			if (r % 2 === 1) yield;
+			yield;
 		}
 		rowsTex.needsUpdate = true;
 		COAST_U.uCsRow.value.w = 1;
@@ -280,7 +282,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				const k = ((j - j0) * W + (i - i0)) * 4;
 				data[k] = crop * 40; data[k + 1] = Math.round(th / Math.PI * 255); data[k + 2] = Math.round(r2 * 255); data[k + 3] = flags;
 				// a barn at the corner of a few fields, by the farm road
-				if (h01(i * 3 - 11, j * 5 + 2) < 0.045) fields.list.push({ i, j, x, z, qx, qz, th, r2, flags });
+				if (h01(i * 3 - 11, j * 5 + 2) < 0.02) fields.list.push({ i, j, x, z, qx, qz, th, r2, flags });
 			}
 			yield;
 		}
@@ -353,7 +355,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				if ((groundAt(x + 6, z) - h) / 6 < 0.12) { if (h < 45) lip = { x, z, h }; break; }
 			}
 			pts.push(lip);
-			if (++n % 8 === 0) yield;
+			if (++n % 3 === 0) yield;
 		}
 		// smooth runs of lip into lines, broken where a ravine or a beach cuts the bluff
 		const runs = [];
@@ -441,7 +443,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				raw[j * CN + i] = d > -40 && d < 260 ? groundAt(wx, wz) : NaN;
 				if (d > -40 && d < 260) any = true;
 			}
-			if (j % 6 === 5) yield;
+			if (j % 2 === 1) yield;
 		}
 		next.fill(0);
 		if (any) {
@@ -452,12 +454,14 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 					let m = src[j * CN + i];
 					for (let k = Math.max(0, i - R); k <= Math.min(CN - 1, i + R); k++) { const v = src[j * CN + k]; if (v === v) m = m === m ? f(m, v) : v; }
 					tmp[j * CN + i] = m;
+					if (i === CN - 1 && j % 64 === 63) yield;
 				}
 				yield;
 				for (let j = 0; j < CN; j++) for (let i = 0; i < CN; i++) {
 					let m = tmp[j * CN + i];
 					for (let k = Math.max(0, j - R); k <= Math.min(CN - 1, j + R); k++) { const v = tmp[k * CN + i]; if (v === v) m = m === m ? f(m, v) : v; }
 					dst[j * CN + i] = m;
+					if (i === CN - 1 && j % 64 === 63) yield;
 				}
 				yield;
 			}
@@ -471,6 +475,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				next[k] = (b + (t - b) * sharp - h) * 0.9;
 			}
 		}
+		yield;
 		cliff.set(next);
 		for (let k = 0; k < CN * CN; k++) cliffHalf[k] = THREE.DataUtils.toHalfFloat(cliff[k]);
 		cliffTex.needsUpdate = true;
