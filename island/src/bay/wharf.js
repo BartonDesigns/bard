@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DECK, toW, toL, merger, instancer, bulbs, signBoard, rng } from './rides/kit.js';
 import { toWorld } from './geo.js';
+import { carGeometry, carMaterial } from './cars.js';
 import { seaLion, bird, loft, tube } from '../world/creatures.js';
 
 // its foot on Beach Street and the way it points (bearing about 170°, nearly straight out)
@@ -86,6 +87,8 @@ function perched(kind) {
 export function createWharf({ group, bay, sound, isPhone = false, signs = [], winMats = [] }) {
 	const W = { solids: [], seats: [], counters: [], lions: [], swim: [], gulls: [], lampPools: null, built: false };
 	const r = rng(1914);
+	// parked, so their lamps stay off
+	const carMat = carMaterial({ value: 0 });
 	const paints = {};
 	for (const [k, c] of Object.entries(WALL)) paints[k] = new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 });
 	paints.deck = new THREE.MeshStandardMaterial({ map: plankTexture(), roughness: 0.95 });
@@ -294,13 +297,18 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 		Mg.done(group, { shadow: false });
 		W.lamps = L.done(group, 1.3);
 		// the cars: parallel down the neck, angled on the head
+		// the street's own lofted cars (bay/cars.js), a mix of kinds, some nosed in, some backed in
 		const CC = [0xf4f1ea, 0x222222, 0x8a9096, 0xb3202a, 0x2656a8, 0x3a3f45, 0xd9d4c8, 0x5a6e50];
-		const body = instancer(new THREE.BoxGeometry(1.8, 0.8, 4.4), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.15 }));
-		const cab = instancer(new THREE.BoxGeometry(1.6, 0.6, 2.3), new THREE.MeshStandardMaterial({ color: 0x1a2226, roughness: 0.1, metalness: 0.5 }));
-		const car = (s, x, a) => { const [u, v] = wP(s, x), c = new THREE.Color(CC[Math.floor(r() * CC.length)]); body.at(u, Y + 0.62, v, 1, 1, 1, ANG + a, c); cab.at(u, Y + 1.3, v, 1, 1, 1, ANG + a); W.solids.push([s - 2.4, x - 1.1, s + 2.4, x + 1.1]); };
-		for (let s = 30; s < 510; s += 6.2) { if (r() < 0.55) car(s, -6.75, 0); if (s < 360 && r() < 0.5) car(s, 3.2, 0); }
-		for (let s = 532; s < 762; s += 3) if (r() < 0.6) car(s, 13, 0.6);
-		body.done(group); cab.done(group);
+		const KINDS = ['sedan', 'sedan', 'suv', 'suv', 'hatch', 'pickup', 'van'];
+		const cars = Object.fromEntries(KINDS.map((k) => [k, instancer(carGeometry(k, 24, 10), carMat, { shadow: !isPhone })]));
+		const car = (s, x, a, len) => {
+			const k = KINDS[Math.floor(r() * KINDS.length)], [u, v] = wP(s, x), c = new THREE.Color(CC[Math.floor(r() * CC.length)]);
+			cars[k].at(u, Y + 0.02, v, 1, 1, 1, ANG + a + (r() < 0.5 ? Math.PI : 0), c);
+			W.solids.push([s - len, x - 1.1, s + len, x + 1.1]);
+		};
+		for (let s = 30; s < 510; s += 6.4) { if (r() < 0.55) car(s, -6.75, 0, 2.9); if (s < 360 && r() < 0.5) car(s, 3.2, 0, 2.9); }
+		for (let s = 532; s < 762; s += 3) if (r() < 0.6) car(s, 13, 0.6, 2.4);
+		for (const I of Object.values(cars)) I.done(group);
 		// the pools of light, after dark
 		const cv = document.createElement('canvas'); cv.width = cv.height = 64;
 		const g = cv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);

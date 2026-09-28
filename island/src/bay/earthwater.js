@@ -7,10 +7,10 @@ import { waterDelta } from './watercarve.js';
 import { proceduralWater } from '../crysis/rivers.js';
 import { LEVELS, toWorld } from './geo.js';
 
-export function createEarthWater(scene, bay, shared, { isPhone = false, real = null, ground = null } = {}) {
+export function createEarthWater(scene, bay, shared, { isPhone = false, real = null, ground = null, riverLevel = () => null } = {}) {
 	const L0 = LEVELS[0], a = toWorld(L0.lat[1], L0.lon[0]), b = toWorld(L0.lat[0], L0.lon[1]);
 	const inSurvey = (x, z) => x > a.x && x < b.x && z > a.z && z < b.z;
-	const baked = bakedWater(bay, shared.bayU);
+	const baked = bakedWater(bay, shared.bayU, riverLevel);
 	const gen = proceduralWater({ heightAt: (x, z) => bay.heightAt(x, z) - waterDelta(x, z), inSurvey });
 	const ponds = pondWater(real, (x, z) => bay.heightAt(x, z));
 	// how much a place is town (0 wild .. 1 built up), for concrete channels and the banks' trees

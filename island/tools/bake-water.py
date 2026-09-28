@@ -253,7 +253,9 @@ for i in order:
 	s = np.concatenate([[0], np.cumsum([math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(p, p[1:])])])
 	P['s'] = s; P['up'] = up + s / 1000
 	c = P['c']; u = P['up']
-	if c == 'river': w = np.clip(9 + 9 * np.log2(1 + u / 5), 10, 150)
+	# (a river's width from its network: the San Lorenzo, about 300 km of it, runs some 25 m
+	# across in its gorge; the broad ones have their riverbanks mapped)
+	if c == 'river': w = np.clip(5 + 4 * np.log2(1 + u / 5), 8, 60)
 	elif c == 'stream': w = np.clip(1.1 + 1.25 * np.log2(1 + u), 1.2, 14) * (0.75 if P['int'] else 1)
 	elif c == 'canal': w = np.full(n, 8.0 if P['n'] else 5.0)
 	elif c == 'drain': w = np.clip(3 + 1.2 * np.log2(1 + u), 3, 14)

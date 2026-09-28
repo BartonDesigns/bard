@@ -695,7 +695,13 @@ export function createWater(scene, shared, opts = {}) {
 	// ---------- each frame: plan what is near, then work through it a slice at a time ----------
 	const carveQ = new Set();
 	S.noCarve = new Set();
-	let job = (function* () { for (const src of sources) if (src.job) yield* src.job(); })(), cur = null, lastDecks = { x: 1e9, z: 1e9 };
+	// (loading: each source's own work, then every lake it has put in the grid, before anything is carved)
+	let job = (function* () {
+		for (const src of sources) if (src.job) yield* src.job();
+		S.srcV = sources.map((q) => q.version()).join(',');
+		regrid(sources);
+		while (addQ.length) { putLakes(3); yield; }
+	})(), cur = null, lastDecks = { x: 1e9, z: 1e9 };
 	function plan(cx, cz) {
 		S.px = cx; S.pz = cz;
 		const tasks = [];
@@ -734,6 +740,8 @@ export function createWater(scene, shared, opts = {}) {
 			const t = S.jobs.shift();
 			if (t.kind === 'tile') {
 				if (S.tiles.has(tkey(t.i, t.j))) continue;
+				// (one a source isn't ready to give yet is asked for again on the next plan)
+				if (sources.some((q) => q.wait?.(t.i, t.j))) continue;
 				const T = { i: t.i, j: t.j, lines: [], grid: new Map(), trees: [], mesh: null, wideIdx: 0, allIdx: 0, built: false };
 				S.tiles.set(tkey(t.i, t.j), T);
 				return Object.assign(buildTile(T), { what: 'tile' });
@@ -766,7 +774,8 @@ export function createWater(scene, shared, opts = {}) {
 		uNight.value = night;
 		const x = cam.position.x, z = cam.position.z;
 		if (job) {
-			while (job && performance.now() - f0 < RANGE.budget) { const s0 = performance.now(); if (job.next().done) job = null; spike('load', s0); }
+			// (a longer slice while loading: nothing else of the water's runs yet)
+			while (job && performance.now() - f0 < RANGE.budget * 2.5) { const s0 = performance.now(); if (job.next().done) job = null; spike('load', s0); }
 			if (job) return;
 			S.ready = true;
 			if (trees) { setWaterHooks({ water: inWater, trees: treesNear }); grewTrees(); }
@@ -775,8 +784,6 @@ export function createWater(scene, shared, opts = {}) {
 		const vs = sources.map((q) => q.version()), sv = vs.join(',');
 		if (sv !== S.srcV) { const was = S.srcV.split(','); S.srcV = sv; regrid(sources.filter((q, i) => String(vs[i]) !== was[i])); S.plannedAt = -1e9; spike('regrid', f0); }
 		putLakes(2);
-		// (nothing carved until every lake is in)
-		if (addQ.length) return;
 		if (S.noCarve.size > 5000) S.noCarve.clear();
 		// a mapped region came in: its roads cross the creeks, so carve its squares again
 		const rn = real?.R?.regions?.length || 0;

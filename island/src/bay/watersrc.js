@@ -42,7 +42,8 @@ export function edgeDist(R, x, z) {
 	return Math.sqrt(best);
 }
 
-export function bakedWater(bay, BU) {
+// riverLevel (x, z): sanlorenzo.js's water level there, or null
+export function bakedWater(bay, BU, riverLevel = () => null) {
 	const S = { H: null, dv: null, lakes: [], ready: false, err: null, version: 0 };
 	// Santa Cruz's river, from its mouth up the valley to Felton, is bay/sanlorenzo.js's:
 	// round it, none of ours where its water is (or within 22 m of it), and the Boardwalk's box
@@ -51,6 +52,7 @@ export function bakedWater(bay, BU) {
 	const inSL = (x, z) => x > SL.x0 && x < SL.x1 && z > SL.z0 && z < SL.z1;
 	const slReady = () => inRiverWater(SL.ref.x, SL.ref.z) || performance.now() - SL.t0 > 90000;
 	const theirs = (x, z) => { for (let a = 0; a < 8; a++) { const r = a ? 22 : 0; if (inRiverWater(x + Math.cos(a) * r, z + Math.sin(a) * r)) return true; } return false; };
+	const join = (q) => { for (let r = 0; r <= 40; r += 10) for (let a = 0; a < (r ? 8 : 1); a++) { const v = riverLevel(q[0] + Math.cos(a * 0.785) * r, q[1] + Math.sin(a * 0.785) * r); if (v !== null && v !== undefined) return v; } return null; };
 	const skipBox = (x, z) => (S.H?.skip || []).some((b) => x >= b[0] && x <= b[2] && z >= b[1] && z <= b[3]);
 
 	function* job() {
@@ -113,11 +115,12 @@ export function bakedWater(bay, BU) {
 			yield;
 		}
 	}
+	const nearSL = (i, j) => { const T = S.H?.tile || 2048, cx = (i + 0.5) * T, cz = (j + 0.5) * T; return inSL(cx, cz) || inSL(cx - 1024, cz - 1024) || inSL(cx + 1024, cz + 1024); };
 	// the lines of a 2 km tile (cut where sanlorenzo.js's river runs)
 	function* tile(i, j) {
 		const H = S.H, e = H?.tiles[i + ',' + j], out = [];
 		if (!e) return out;
-		const cx = (i + 0.5) * H.tile, cz = (j + 0.5) * H.tile, sl = inSL(cx, cz) || inSL(cx - 1024, cz - 1024) || inSL(cx + 1024, cz + 1024);
+		const cx = (i + 0.5) * H.tile, cz = (j + 0.5) * H.tile, sl = nearSL(i, j);
 		// (round Santa Cruz, wait for sanlorenzo.js to lay its river first)
 		while (sl && !slReady()) yield;
 		const dv = S.dv, U = H.unit;
@@ -131,13 +134,24 @@ export function bakedWater(bay, BU) {
 				P.push([px * U + cx, pz * U + cz, pl / 20, dv.getUint16(o + 6, true) / 10]);
 			}
 			let cur = [];
-			const flush = () => { if (cur.length > 1) out.push({ cls: H.classes[c], int: !!(fl & 1), name: nm ? H.names[nm - 1] : '', P: cur }); cur = []; };
-			for (const q of P) { if (sl && (theirs(q[0], q[1]) || skipBox(q[0], q[1]))) flush(); else cur.push(q); }
+			const flush = (at) => {
+				// (running into sanlorenzo.js's river: the last 250 m let down or up to its level there)
+				const their = at && cur.length > 1 ? join(at) : null;
+				if (their !== null) {
+					const d = their - cur[cur.length - 1][2];
+					let s = 0;
+					for (let q = cur.length - 1; q >= 0 && s < 250; q--) { cur[q][2] += d * (1 - s / 250); if (q) s += Math.hypot(cur[q][0] - cur[q - 1][0], cur[q][1] - cur[q - 1][1]); }
+					for (let q = 1; q < cur.length; q++) cur[q][2] = Math.min(cur[q][2], cur[q - 1][2]);
+				}
+				if (cur.length > 1) out.push({ cls: H.classes[c], int: !!(fl & 1), name: nm ? H.names[nm - 1] : '', P: cur });
+				cur = [];
+			};
+			for (const q of P) { if (sl && (theirs(q[0], q[1]) || skipBox(q[0], q[1]))) flush(q); else cur.push(q); }
 			flush();
 		}
 		return out;
 	}
-	return { name: 'baked', lakes: S.lakes, version: () => S.version, ready: () => S.ready, job, tile, err: () => S.err, attribution: () => S.H?.attribution, skip: skipBox };
+	return { name: 'baked', lakes: S.lakes, wait: (i, j) => nearSL(i, j) && !slReady(), version: () => S.version, ready: () => S.ready, job, tile, err: () => S.err, attribution: () => S.H?.attribution, skip: skipBox };
 }
 
 // a lake's box and area
