@@ -32,6 +32,9 @@ export function industrialEdge(D, heightAt, nearWater = null) {
 			for (let k = 0; k <= n; k++) { const x = p[i] + (p[i + 2] - p[i]) * k / n, z = p[i + 1] + (p[i + 3] - p[i + 1]) * k / n; if (Math.hypot(x - cx, z - cz) > reach - 250) pts.push(x, z, (q.w || 6) / 2); }
 		}
 	}
+	// (bucketed by 50 m, to ask quickly)
+	const cells = new Map(), bucket = (x, z, hw) => { const k = Math.floor(x / 50) * 65536 + Math.floor(z / 50); let c = cells.get(k); if (!c) cells.set(k, c = []); c.push(x, z, hw); };
+	for (let i = 0; i < pts.length; i += 3) bucket(pts[i], pts[i + 1], pts[i + 2]);
 	// is the footprint (a rectangle turned by a) clear: flat, dry, off every road, clear of every building
 	const clear = (x, z, w, d, a) => {
 		const ca = Math.cos(a), sa = Math.sin(a), hs = [];
@@ -44,7 +47,11 @@ export function industrialEdge(D, heightAt, nearWater = null) {
 		}
 		if (Math.max(...hs) - Math.min(...hs) > 5) return no('slope');
 		const inside = (px, pz, m) => { const dx = px - x, dz = pz - z; return Math.abs(dx * ca + dz * sa) < w / 2 + m && Math.abs(-dx * sa + dz * ca) < d / 2 + m; };
-		for (let i = 0; i < pts.length; i += 3) if (inside(pts[i], pts[i + 1], pts[i + 2] + 2)) return no('road');
+		const R = Math.hypot(w, d) / 2 + 12;
+		for (let gj = Math.floor((z - R) / 50); gj <= Math.floor((z + R) / 50); gj++) for (let gi = Math.floor((x - R) / 50); gi <= Math.floor((x + R) / 50); gi++) {
+			const c = cells.get(gi * 65536 + gj);
+			if (c) for (let i = 0; i < c.length; i += 3) if (inside(c[i], c[i + 1], c[i + 2] + 2)) return no('road');
+		}
 		for (const b of far) if (inside(b.x, b.z, Math.hypot(b.w, b.d) / 2 + 4)) return no('house');
 		return true;
 	};
@@ -79,7 +86,7 @@ export function industrialEdge(D, heightAt, nearWater = null) {
 				D.boxes.push(b); far.push(b);
 				const ex = x + ux * w / 2 + nx * ((q.w || 12) / 2), ez = z + uz * w / 2 + nz * ((q.w || 12) / 2), fx = wx - nx * (d / 2 + 2), fz = wz - nz * (d / 2 + 2);
 				D.roads.push({ cls: 'service', w: 6, name: '', pts: new Float32Array([ex, ez, fx, fz]), end0: false, end1: false, bridge: false, link: false, divided: false });
-				for (let k = 0; k <= 6; k++) pts.push(ex + (fx - ex) * k / 6, ez + (fz - ez) * k / 6, 3);
+				for (let k = 0; k <= 6; k++) bucket(ex + (fx - ex) * k / 6, ez + (fz - ez) * k / 6, 3);
 				paint(wx + nx * 6, wz + nz * 6, w + 24, d + 46, a);
 				placed++; lastS = s + t + w;
 				D.edge.warehouses++;
