@@ -44,10 +44,10 @@ const TOWN = [[36.9672, -122.0131, 28], [36.9678, -122.0140, 28], [36.9681, -122
 // West, then over to where the river above comes in at 36.995 N
 const VALLEY = [[36.98453, -122.02377], [36.98474, -122.02531], [36.98559, -122.02648], [36.98648, -122.02760], [36.98738, -122.02872], [36.98853, -122.02923], [36.98979, -122.02932], [36.99079, -122.03026], [36.99200, -122.03059], [36.99323, -122.03080], [36.99385, -122.03209], [36.99440, -122.03291], [36.99500, -122.03340]];
 // where bay/water.js's San Lorenzo crosses the box's north edge and ours takes over: its
-// level there and its width (so the two ribbons meet at the same height, edge to edge;
-// theirs is drawn w / 2 + 0.3 + 0.07 w each side of the line, ours (w + 1.2) * 1.12)
-const JOIN = { lat: 36.99500, lon: -122.03340, level: 7.65, width: 53.8 };
-const JOIN_HW = (JOIN.width / 2 + 0.3 + 0.07 * JOIN.width) / 1.12 - 1.2;
+// level there and the width its water is drawn (so the two meet at the same height, edge to
+// edge; ours is drawn (w + 1.2) * 1.12 each side of the line)
+const JOIN = { lat: 36.99500, lon: -122.03340, level: 7.649, drawn: 20 };
+const JOIN_HW = JOIN.drawn / 2.24 - 1.2;
 const JOIN_RAMP = 260;
 // the bridges where the roads cross [name, lat, lon, kind, deck width, skew]
 const BRIDGES = [
@@ -99,7 +99,7 @@ function centreLine() {
 		const q = P[i], a = sm(v0, v0 + 3, q.cp);
 		if (a <= 0) continue;
 		const tx = P[i + 1].x - P[i - 1].x, tz = P[i + 1].z - P[i - 1].z, l = Math.hypot(tx, tz) || 1, s = i * STEP;
-		const off = a * 17 * Math.sin(s / 95 + 1.3 * Math.sin(s / 310)) * (1 - sm(P.length - 1 - 300 / STEP, P.length - 1 - 120 / STEP, i));
+		const off = a * 17 * Math.sin(s / 95 + 1.3 * Math.sin(s / 310)) * (1 - sm(P.length - 1 - 110 / STEP, P.length - 1 - 25 / STEP, i));
 		q.mx = q.x + tz / l * off; q.mz = q.z - tx / l * off;
 	}
 	for (const q of P) if (q.mx !== undefined) { q.x = q.mx; q.z = q.mz; }
@@ -121,6 +121,8 @@ function centreLine() {
 		const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1), tx = S.x[b] - S.x[a], tz = S.z[b] - S.z[a], l = Math.hypot(tx, tz) || 1;
 		S.tx[i] = tx / l; S.tz[i] = tz / l;
 		// (opening out to the river above's width at the join)
+		// (breathing a little wider and narrower up the valley)
+		if (S.zone[i] === 'valley') S.w[i] *= 1 + 0.14 * Math.sin(i * STEP / 130 + 0.7) * Math.sin(i * STEP / 47);
 		S.w[i] += (JOIN_HW - S.w[i]) * sm((n - 1) * STEP - JOIN_RAMP, (n - 1) * STEP, i * STEP);
 	}
 	// the control points' places along it (for the levels and the bridges)
@@ -183,28 +185,23 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 			else l = Math.max(lag + 0.9, env[i]);
 			L[i] = l;
 		}
-		// a gentle smoothing that keeps it going up, then pools and riffles up the valley
-		for (let pass = 0; pass < 3; pass++) for (let i = 1; i + 1 < n; i++) if (i * STEP > sHwy + 60) L[i] = Math.min(env[i], (L[i - 1] + L[i] * 2 + L[i + 1]) / 4);
-		for (let i = 1; i < n; i++) L[i] = Math.max(L[i], L[i - 1]);
-		const W = new Float32Array(n), POOL = 150, RIF = 28;
-		for (let i = 0; i < n; i++) {
-			const s = i * STEP;
-			if (s < sHwy + 200) { W[i] = L[i]; continue; }
-			const k = Math.floor((s - sHwy - 200) / POOL), s0 = sHwy + 200 + k * POOL, iA = Math.min(n - 1, Math.round(s0 / STEP)), iB = Math.min(n - 1, Math.round((s0 + POOL) / STEP));
-			W[i] = L[iA] + (L[iB] - L[iA]) * sm(s0 + POOL - RIF, s0 + POOL, s);
-		}
-		// the last stretch up to the river above's level at the join (a run of rapids), kept
-		// under the valley floor
-		const sEnd = (n - 1) * STEP;
-		for (let i = 0; i < n; i++) { const k = sm(sEnd - JOIN_RAMP, sEnd, i * STEP); if (k > 0) W[i] = Math.min(W[i] + (JOIN.level - W[i]) * k, floor[i] - 0.3); }
+		// up the valley from Highway 1: one gentle grade to the river above's level at the join
+		// (slow, glassy water, as the lower river is), kept under the valley floor, never
+		// higher anywhere below, then eased so no step shows
+		const W = L, sEnd = (n - 1) * STEP, i0 = Math.round(sHwy / STEP), l0 = L[i0];
+		const cap = (i) => (i === n - 1 ? JOIN.level : Math.min(floor[i] - 0.3, JOIN.level));
+		for (let i = i0; i < n; i++) W[i] = Math.min(l0 + (JOIN.level - l0) * (i * STEP - sHwy) / (sEnd - sHwy), cap(i));
 		W[n - 1] = JOIN.level;
-		// (and never higher than it anywhere below)
+		for (let pass = 0; pass < 6; pass++) {
+			for (let i = n - 2; i >= i0; i--) W[i] = Math.min(W[i], W[i + 1]);
+			for (let i = i0 + 1; i + 1 < n; i++) W[i] = Math.min(cap(i), (W[i - 1] + W[i] * 2 + W[i + 1]) / 4);
+		}
 		for (let i = n - 2; i >= 0; i--) W[i] = Math.min(W[i], W[i + 1]);
 		S.floorEnd = floor[n - 1];
 		S.L = W;
-		// the riffles: where it falls, the water breaks white; the depth follows (pools deep)
+		// where it falls faster, a little broken water; the depth follows (deeper where still)
 		S.foam = new Float32Array(n);
-		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(1, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) * 35);
+		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(1, Math.max(0, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) - 0.004) * 30);
 		for (let i = 0; i < n; i++) if (S.zone[i] === 'valley') S.D[i] = 0.55 + 1.35 * (1 - Math.min(1, S.foam[i] * 1.5));
 		for (let i = 0; i < n && i * STEP < sLag; i++) S.foam[i] = Math.max(S.foam[i], 0.5 * (1 - i * STEP / sLag));
 		S.sHwy = sHwy; S.sLaurel = sLaurel; S.sBeach = sBeach; S.sSurf = sSurf;
@@ -245,6 +242,11 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		const j = Math.min(S.n - 1, i + 1);
 		for (const k of ['w', 'D', 'bench', 'bh', 'k', 'lev', 'gk', 'gb']) PS[k] = S[k][i] + (S[k][j] - S[k][i]) * f;
 		PS.L = S.L[i] + (S.L[j] - S.L[i]) * f;
+		// (the banks not the same all the way: steeper here, a wider bench there, each side its
+		// own; less so between the levees, and none at the very ends)
+		const s = (i + f) * STEP, vk = (1 - PS.lev * 0.8) * sm(0, 200, s) * (1 - sm((S.n - 1) * STEP - 60, (S.n - 1) * STEP, s));
+		PS.k *= 1 + 0.55 * vk * Math.sin(s / 83 + side * 1.9) * Math.sin(s / 211 + side);
+		PS.bench = Math.max(1.5, PS.bench * (1 + 0.45 * vk * Math.sin(s / 127 + side * 2.6)));
 		const r = side > 0 ? S.reachR : S.reachL;
 		PS.reach = r ? r[i] + (r[j] - r[i]) * f : 1e9;
 		return PS;
@@ -498,7 +500,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 			// (out in the surf it slips under the sea's own surface: no edge to see)
 			if (i * STEP < S.sSurf) continue;
 			const w = S.w[i] + 1.2, L = S.L[i];
-			const speed = S.zone[i] === 'lagoon' ? 0.06 : S.zone[i] === 'town' ? 0.25 : S.zone[i] === 'valley' ? 0.55 + S.foam[i] * 1.6 : 0.5;
+			const speed = S.zone[i] === 'lagoon' ? 0.06 : S.zone[i] === 'town' ? 0.25 : S.zone[i] === 'valley' ? 0.3 + S.foam[i] * 1.6 : 0.5;
 			for (const a of across) {
 				pos.push(S.x[i] - S.tz[i] * w * a, L, S.z[i] + S.tx[i] * w * a);
 				sd.push(i * STEP, a / 1.12);

@@ -153,7 +153,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	group.updateMatrixWorld(true);
 	const sound = createSound();
 	const river = createRiver(scene, bay, shared, { isPhone, sound });
-	const B = { built: false, standSigns: [], queue: null, rides: [], scen: [], solids: [], rounds: [], lamps: null, pools: null, winMats: [], signs: [], flags: null, crowd: null, beach: null, wharf: null };
+	const B = { town: [], built: false, standSigns: [], queue: null, rides: [], scen: [], solids: [], rounds: [], lamps: null, pools: null, winMats: [], signs: [], flags: null, crowd: null, beach: null, wharf: null };
 	let regraded = false, hintSeen = false, hintWharf = false, hintRiver = false, sinceGrade = 0;
 	const uTime = { value: 0 };
 
@@ -624,6 +624,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			if (y < 1.5 || r() < 0.12) continue;
 			const down = !east && pv < -760 && pu < -150 && pu > -600;
 			const w = down ? 15 : 9 + r() * 4, d = down ? 26 : 10 + r() * 6, h = down ? 7 + r() * 6 : 4 + r() * 3.5, a = (r() - 0.5) * 0.08;
+			B.town.push([pu - w / 2, pv - d / 2, pu + w / 2, pv + d / 2, y + h + 0.5]);
 			Mg.box(w, h + 1, d, down ? ['cream', 'white', 'stucco', 'stuccoPink', 'concrete'][Math.floor(r() * 5)] : HK[Math.floor(r() * HK.length)], pu, y + h / 2 - 0.5, pv, 0, a);
 			if (down) Mg.box(w + 0.3, 0.5, d + 0.3, 'darksteel', pu, y + h + 0.25, pv, 0, a);
 			else Mg.geo(new THREE.ConeGeometry(Math.max(w, d) * 0.72, 2.2, 4, 1).rotateY(Math.PI / 4).scale(w / Math.max(w, d), 1, d / Math.max(w, d)), RK[Math.floor(r() * RK.length)], pu, y + h + 1.1, pv, 0, a);
@@ -640,12 +641,14 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			const [x, z] = toW(u, v), y = bay.heightAt(x, z);
 			if (y < 1.5 || clear(u, v, x, z)) continue;
 			const w = 8 + r() * 10, d = 8 + r() * 12, h = 4 + r() * (v > -240 ? 7 : 4), key = ['stucco', 'white', 'cream', 'stuccoPink'][Math.floor(r() * 4)];
+			B.town.push([u - w / 2, v - d / 2, u + w / 2, v + d / 2, y + h + 0.5]);
 			Mg.box(w, h + 1, d, key, u, y + h / 2 - 0.5, v, 0, (r() - 0.5) * 0.2);
 			Mg.box(w + 0.5, 0.35, d + 0.5, r() < 0.6 ? 'tile' : 'darksteel', u, y + h + 0.1, v, 0, (r() - 0.5) * 0.2);
 		}
 		// the motels and shops along Beach Street between the lots, two storeys, facing the park
 		for (let u = -34; u < 146; u += 16 + r() * 6) {
 			const [x, z] = toW(u, -210), y = Math.max(DECK - 0.4, bay.heightAt(x, z)), h = 6 + r() * 2, key = ['white', 'cream', 'stuccoPink', 'teal'][Math.floor(r() * 4)];
+			B.town.push([u - 7, -216, u + 7, -204, y + h]);
 			Mg.box(14, h, 12, key, u, y + h / 2, -210).box(14.4, 0.4, 12.4, 'darksteel', u, y + h + 0.2, -210).box(14, 0.15, 2, 'concrete', u, y + 3.2, -203.2);
 		}
 		Mg.done(group, { shadow: false });
@@ -816,6 +819,18 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		let [u, v] = toL(p.x, p.z);
 		const q = B.wharf?.built ? B.wharf.push(u, v, footY) : null;
 		if (q) { [u, v] = q; const [x, z] = toW(u, v); p.x = x; p.z = z; }
+		// the town's houses, motels and shops round the park: walls, not air
+		if (v < -150) {
+			let hit = false;
+			for (const s of B.town) {
+				if (footY > s[4] || u < s[0] - 0.3 || u > s[2] + 0.3 || v < s[1] - 0.3 || v > s[3] + 0.3) continue;
+				const pen = [u - (s[0] - 0.3), s[2] + 0.3 - u, v - (s[1] - 0.3), s[3] + 0.3 - v], m = Math.min(...pen), k = pen.indexOf(m);
+				if (k === 0) u = s[0] - 0.3; else if (k === 1) u = s[2] + 0.3; else if (k === 2) v = s[1] - 0.3; else v = s[3] + 0.3;
+				hit = true;
+			}
+			if (hit) { const [x, z] = toW(u, v); p.x = x; p.z = z; }
+			return;
+		}
 		if (u < PARK.u0 - 20 || u > PARK.u1 + 20 || v < PARK.v0 - 5 || v > 30) return;
 		const R = 0.3, y = footY - DECK;
 		let moved = false;

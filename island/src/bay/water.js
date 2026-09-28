@@ -69,6 +69,11 @@ const depthOf = (w) => (w < 3 ? 0.28 + w * 0.1 : w < 15 ? 0.45 + w * 0.06 : Math
 // uLook: x 0 water, 1 ice, 2 lava; y how much more of the world's water tint than its sea
 // takes (uWaterT, as world/ocean.js tints the sea: rgb over its brightness, a how much)
 const COMMON = /* glsl */`
+// (value noise on the wrapped hash: the stream's own coordinates run to kilometres)
+float gvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(gh(i), gh(i + vec2(1, 0)), f.x), mix(gh(i + vec2(0, 1)), gh(i + vec2(1, 1)), f.x), f.y); }
+// how near the edge of the water: 0 out in it, 1 at the ground (set before worldLook)
+float gEdge = 0.0;
 uniform float uTime, uNight, uSeason; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform vec4 uLook, uWaterT;
 vec3 skyIn(vec3 r, vec2 p){
 	vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5));
@@ -78,15 +83,30 @@ vec3 skyIn(vec3 r, vec2 p){
 // the world's own water: frozen (the whole world's, or this stretch's), molten, or tinted as its sea is
 vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres, float frozen){
 	if (uLook.x > 1.5) {
-		// lava: a crust of dark rock broken over glowing melt, the cracks crawling downstream
-		// (the eruption's colours on the cone, world/terrain.js plLava: white-yellow in the
-		// channel, crusting red at the edges), brighter at night as the ground's glow is
-		float cr = smoothstep(0.4, 0.62, vn(p * 0.35 + vec2(uTime * flow * 0.05, 0.0)) * 0.6 + vn(p * 1.3 - uTime * 0.02) * 0.4);
-		// (in linear light: the crust near black, the melt a deep red going orange)
-		vec3 hot = mix(vec3(0.8, 0.06, 0.004), vec3(2.2, 0.55, 0.04), smoothstep(0.55, 0.9, vn(p * 0.7 + uTime * 0.3))) * (1.0 + uNight * 0.6);
-		// (far off, where the crust's cracks are finer than a pixel, their dull red average)
-		float far = clamp(length(fwidth(p)) * 0.6 - 0.2, 0.0, 1.0);
-		return vec4(mix(mix(hot, vec3(0.005, 0.004, 0.0035), cr), vec3(0.3, 0.025, 0.003) * (1.0 + uNight * 0.6), far), 1.0);
+		// lava, as the volcano's (world/terrain.js, the eruption): plates of dark cooling crust
+		// drifting downstream, broken by cracks of melt, white-yellow deep in them and red where
+		// it crusts over; the crust thin and the glow wide at the edges, where it meets the ground
+		vec2 q = p * 0.32 + vec2(uTime * flow * 0.025, 0.0) + vec2(gvn(p * 0.05), gvn(p * 0.05 + 7.0)) * 2.5;
+		vec2 qi = floor(q);
+		float f1 = 9.0, f2 = 9.0;
+		for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+			vec2 c = qi + vec2(float(x), float(y));
+			vec2 o = 0.5 + 0.4 * sin(uTime * 0.05 + 6.28 * vec2(gh(c), gh(c + 31.0)));
+			float d = length(q - c - o);
+			if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+		}
+		float heat = clamp(gvn(p * 0.09 - uTime * 0.02) * 0.7 + gEdge * 0.6, 0.0, 1.0);
+		float crack = 1.0 - smoothstep(0.02, 0.1 + heat * 0.16, f2 - f1);
+		float melt = gvn(p * 0.6 + vec2(uTime * 0.25, -uTime * 0.1));
+		vec3 hot = mix(vec3(0.9, 0.18, 0.02), vec3(2.6, 1.3, 0.3), smoothstep(0.35, 0.85, melt * 0.6 + heat * 0.5)) * (1.0 + uNight * 0.6);
+		// (the crust: near black, faintly red where it is thin, its plates' own relief)
+		vec3 crust = mix(vec3(0.012, 0.009, 0.008), vec3(0.08, 0.02, 0.006), smoothstep(0.3, 0.9, heat)) * (0.7 + 0.5 * smoothstep(0.0, 0.5, f1));
+		vec3 c = mix(crust, hot, max(crack, smoothstep(0.75, 1.0, gEdge) * 0.8));
+		// (far off, where the cracks are finer than a pixel, their glowing average)
+		float far = clamp(length(fwidth(q)) * 1.2 - 0.25, 0.0, 1.0);
+		c = mix(c, mix(crust, hot, 0.22 + heat * 0.25), far);
+		// (a soft edge where it laps the ground)
+		return vec4(c, 1.0 - smoothstep(0.9, 1.0, gEdge));
 	}
 	if (uLook.x > 0.5 || frozen > 0.5) {
 		// ice: pale and opaque, milky where it is thick, cracked, the sky faint in it
@@ -132,9 +152,6 @@ void main(){
 const RIVER_FRAG = /* glsl */`
 varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying vec3 vR; varying float vDist;
 #include <fog_pars_fragment>
-// (value noise on the wrapped hash: the stream's own coordinates run to kilometres)
-float gvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(gh(i), gh(i + vec2(1, 0)), f.x), mix(gh(i + vec2(0, 1)), gh(i + vec2(1, 1)), f.x), f.y); }
 float pm(float x){ return mod((34.0 * x + 1.0) * x, 289.0); }
 // the rock in a cell (as water.js places them): along, across, radius; z 0 if none
 vec3 rockAt(vec2 c){
@@ -196,13 +213,13 @@ void main(){
 	// the hills and trees round it darker in the still water's reflection
 	vec3 sky = skyIn(r, vW.xz) * mix(vec3(0.8, 0.9, 0.85), vec3(0.62, 0.7, 0.64), calm);
 	vec3 col = mix(body, sky, fres);
-	col += uSunColor * pow(max(dot(r, uSunDir), 0.0), mix(300.0, 900.0, calm)) * mix(4.0, 7.0, calm) * (1.0 - uNight);
+	col += uSunColor * min(1.5, pow(max(dot(r, uSunDir), 0.0), mix(300.0, 900.0, calm)) * mix(4.0, 7.0, calm)) * (1.0 - uNight);
 	// white water: broken patches where it falls fast, streaked along the flow
 	float fo = 0.0;
 	if (foamK > 0.01) {
 		float streak = gvn(vec2(along * 0.45 - t * 0.7, across * 1.9)) * 0.6 + gvn(vec2(along * 1.4 - t * 1.2, across * 4.3) + 9.0) * 0.4;
 		float blot = smoothstep(0.45, 0.75, gvn(vec2(along * 0.07, across * 0.35) + 4.0) + foamK * 0.25);
-		fo = foamK * blot * smoothstep(0.5, 0.78, streak);
+		fo = foamK * blot * smoothstep(0.5, 0.78, streak) * mix(1.0, smoothstep(0.45, 0.75, gvn(u * vec2(2.5, 7.0) + 21.0)), 1.0 - smoothstep(20.0, 80.0, vDist)) * 0.85;
 	}
 	// riffles round the rocks, trailing downstream
 	if (rocky > 0.02 && vDist < 450.0) {
@@ -218,7 +235,9 @@ void main(){
 		}
 		// (broken up, and only over the shallow stones that come near the top)
 		rf *= smoothstep(0.42, 0.72, gvn(vec2(along * 1.3 - uTime * speed * 1.4, across * 5.1)) * 0.6 + gvn(u * 3.7 + 2.0) * 0.4 + 0.1) * rocky * nearK * (1.0 - smoothstep(0.45, 0.9, depth));
-		fo = max(fo, rf * 0.75);
+		// (as flecks and threads of white on the dark water, not sheets of it)
+		float fleck = smoothstep(0.55, 0.8, gvn(vec2(along * 3.5 - uTime * speed * 2.0, across * 9.0) + 13.0));
+		fo = max(fo, rf * fleck * 0.55);
 	}
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
 	// the edge: a gravel bar out of town, sand and mud in it, where the water thins to nothing
@@ -227,6 +246,7 @@ void main(){
 	col = mix(col, mix(grav, silt, town) * (1.0 - uNight * 0.85), edge * 0.7 * (1.0 - fo));
 	float a = clamp(0.3 + deepK * 0.62 + fres * 0.25 + fo, 0.0, 0.96);
 	a = mix(a, 0.94, max(bedK, edge * 0.8));
+	gEdge = max(smoothstep(0.55, 1.0, abs(vUv.x)), 1.0 - smoothstep(0.0, 0.3, depth) * nearK - (1.0 - nearK));
 	gl_FragColor = worldLook(col, a, u, speed, fres, vT.z);
 	// (its edges soft where they meet the ground, and where they run up the bank)
 	gl_FragColor.a *= smoothstep(0.0, 0.04, depth) * nearK + (1.0 - nearK);
@@ -269,10 +289,29 @@ void main(){
 	float lace = (1.0 - smoothstep(0.0, 0.18, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2)) * nearK * step(0.0, depth);
 	col = mix(col, vec3(0.82, 0.84, 0.8) * (1.0 - uNight * 0.8), lace * 0.6);
 	float a = clamp(0.3 + deepK * 0.66 + fres * 0.2 + lace * 0.4, 0.0, 0.97);
+	gEdge = (1.0 - smoothstep(0.0, 0.5, depth)) * nearK;
 	gl_FragColor = worldLook(col, a, pl, 0.2, fres, uIce);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 	#include <fog_fragment>
+}`;
+
+// round lava: the heat's glow thrown on the ground, laid over it (the ground's height read
+// in the vertex shader), fading out from the edge
+const HALO_VERT = /* glsl */`
+attribute float aK;
+varying float vK; varying vec2 vP;
+void main(){
+	vec4 w = modelMatrix * vec4(position, 1.0);
+	w.y = groundUnder(w.xz) + 0.15;
+	vK = aK; vP = w.xz;
+	gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const HALO_FRAG = /* glsl */`
+varying float vK; varying vec2 vP;
+void main(){
+	float g = pow(1.0 - vK, 2.2) * (0.7 + 0.3 * gvn(vP * 0.08 + uTime * 0.15));
+	gl_FragColor = vec4(vec3(1.0, 0.3, 0.05) * g * (0.35 + uNight * 0.9), 1.0);
 }`;
 
 // opts: heightAt (the ground as walked, CPU), ground (the road's level for a deck, as walked),
@@ -297,7 +336,36 @@ export function createWater(scene, shared, opts = {}) {
 	const groundU = carve ? { ...shared.bayU, ...WC_U } : { uHeight: { value: shared.heightTex }, uHalf: { value: island?.half || 1300 }, uCell: { value: island?.cell || 1 }, uN: { value: island?.N || 2 } };
 	const uniforms = () => ({ ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...groundU, uTime: shared.uTime, uNight, uSeason: REAL_U.uSeason, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uLook: lookU, uWaterT: tintU });
 	const FRAG_HEAD = GROUND + NOISE_GLSL + COMMON;
-	const riverMat = new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: RIVER_VERT, fragmentShader: FRAG_HEAD + RIVER_FRAG, fog: true, transparent: look?.kind !== 'lava' && look?.kind !== 'ice', depthWrite: false });
+	const riverMat = new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: RIVER_VERT, fragmentShader: FRAG_HEAD + RIVER_FRAG, fog: true, transparent: look?.kind !== 'ice', depthWrite: false });
+	const haloMat = look?.kind === 'lava' ? new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: GROUND + HALO_VERT, fragmentShader: NOISE_GLSL + COMMON + HALO_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }) : null;
+	// a band of the glow along a line of points (x, z pairs), out to one side by `out` metres from `off`
+	const HALO_K = [0, 0.2, 0.45, 1];
+	function haloBand(pos, ak, idx, P, off, out, sd, closed) {
+		const n = P.length / 2, base = pos.length / 3;
+		for (let k = 0; k < n; k++) {
+			const a = closed ? (k - 1 + n) % n : Math.max(0, k - 1), b = closed ? (k + 1) % n : Math.min(n - 1, k + 1);
+			let tx = P[b * 2] - P[a * 2], tz = P[b * 2 + 1] - P[a * 2 + 1]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
+			const o = typeof off === 'number' ? off : off[k];
+			for (const f of HALO_K) { const d = o + f * out; pos.push(P[k * 2] + tz * d * sd, 0, P[k * 2 + 1] - tx * d * sd); ak.push(f); }
+		}
+		const R = HALO_K.length;
+		for (let k = 0; k + 1 < (closed ? n + 1 : n); k++) for (let r = 0; r + 1 < R; r++) {
+			const p = base + k * R + r, q = base + ((k + 1) % n) * R + r;
+			idx.push(p, q, p + 1, p + 1, q, q + 1, p, p + 1, q, p + 1, q + 1, q);
+		}
+	}
+	function haloMesh(pos, ak, idx, x, z) {
+		if (!idx.length) return null;
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+		g.setAttribute('aK', new THREE.Float32BufferAttribute(ak, 1));
+		g.setIndex(idx);
+		g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2500);
+		const m = new THREE.Mesh(g, haloMat);
+		m.position.set(x, 0, z); m.renderOrder = 3;
+		root.add(m);
+		return m;
+	}
 	const lakeMats = new Map();
 	const TINTS = [[0.012, 0.045, 0.04], [0.01, 0.04, 0.05], [0.03, 0.05, 0.03], [0.02, 0.05, 0.03], [0.02, 0.06, 0.07]];
 	function lakeMat(L) {
@@ -546,6 +614,16 @@ export function createWater(scene, shared, opts = {}) {
 			m.renderOrder = 2;
 			root.add(m);
 			T.mesh = m; T.wideIdx = wide; T.allIdx = idx.length;
+		}
+		if (haloMat) {
+			const hp = [], ak = [], hi = [];
+			for (const L of T.lines) {
+				const P = [];
+				for (let k = 0; k < L.n; k++) P.push(L.x[k] - cx, L.z[k] - cz);
+				const off = [...L.w].map((w) => w / 2);
+				for (const sd of [-1, 1]) haloBand(hp, ak, hi, P, off, 7 + L.w[0] * 0.4, sd, false);
+			}
+			T.halo = haloMesh(hp, ak, hi, cx, cz);
 		}
 		yield;
 		if ((rocks.length || logs.length) && S.tiles.get(tkey(T.i, T.j)) === T) T.bed = bedMesh(rocks, logs, cx, cz);
@@ -828,10 +906,17 @@ export function createWater(scene, shared, opts = {}) {
 		m.renderOrder = 1;
 		root.add(m);
 		L.mesh = m;
+		if (haloMat) {
+			const P = [], hp = [], ak = [], hi = [];
+			for (const v of outer) P.push(v.x, v.y);
+			haloBand(hp, ak, hi, P, 0, 12, 1, true);
+			L.halo = haloMesh(hp, ak, hi, L.cx, L.cz);
+		}
 	}
 	function dropLake(L) {
 		if (!L.mesh) return;
 		gone.push(lakeMats.get(L), L.mesh); lakeMats.delete(L); L.mesh = null;
+		if (L.halo) { gone.push(L.halo); L.halo = null; }
 	}
 	// (what is let go is taken down a millisecond's worth a frame: a long way flown lets go of a lot)
 	const gone = [];
@@ -891,7 +976,7 @@ export function createWater(scene, shared, opts = {}) {
 			if (!S.tiles.has(tkey(i, j))) tasks.push({ d, kind: 'tile', i, j });
 		}
 		// let go of the far ones
-		for (const [k, T] of S.tiles) if (!want.has(k) && Math.hypot((T.i + 0.5) * TILE - cx, (T.j + 0.5) * TILE - cz) > RANGE.data + 3000) { if (T.mesh) gone.push(T.mesh); if (T.bed) gone.push(...T.bed); S.tiles.delete(k); }
+		for (const [k, T] of S.tiles) if (!want.has(k) && Math.hypot((T.i + 0.5) * TILE - cx, (T.j + 0.5) * TILE - cz) > RANGE.data + 3000) { if (T.mesh) gone.push(T.mesh); if (T.halo) gone.push(T.halo); if (T.bed) gone.push(...T.bed); S.tiles.delete(k); }
 		// the squares to carve
 		if (atlas) {
 			const C = RANGE.carve;

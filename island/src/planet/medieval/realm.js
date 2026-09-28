@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { mulberry32, smoothstep, clamp } from '../../noise.js';
+import { createMedievalInteriors } from '../../interiors/medieval.js';
 import { Kit, M, kitUniforms, kitMaterial, flameMaterial, flameGeometry, haloMaterial, armsTexture, bannerMaterial, bannerGeo, riverMaterial } from './kit.js';
 import { createCollide } from './collide.js';
 import { buildCastle, buildHouse, buildSmithy, buildChapel, buildStall, buildSquare, buildWindmill, buildWatermill, buildWatchtower, buildStones, buildBridge, buildField, riverGeometry } from './build.js';
@@ -189,6 +190,9 @@ export function createMedieval(realm, o) {
 		group.add(g);
 		spin.push({ m, axis: s.axis, speed: s.speed });
 	}
+
+	// the houses' ground floors, furnished as you come to them (interiors/medieval.js)
+	const inner = createMedievalInteriors({ group, mat, col, houses: realm.houses, isPhone });
 
 	// ---------- fire and light ----------
 	const fm = flameMaterial(shared), fmAlways = flameMaterial(shared);
@@ -507,6 +511,7 @@ export function createMedieval(realm, o) {
 			if (n && n[0] < 22 && !deep) { lamp.position.set(n[1].x, n[1].y, n[1].z); lamp.intensity = (n[1].always ? 1 : lit) * 3.2; lamp.distance = n[1].r * 1.3; } else lamp.intensity = 0;
 		}
 		if (lamp.intensity > 0) lamp.intensity *= 0.97 + Math.random() * 0.06;
+		inner.update(dt, cam);
 		folk.update(dt, t, P, lit);
 		const armed = armedNow() && !!P && !P.flying;
 		foes?.update(dt, t, P);
@@ -589,7 +594,7 @@ export function createMedieval(realm, o) {
 		shared.moreHoles = null;
 		if (uw) uw.extraInside = null;
 	}
-	return {
+	return { interiors: inner,
 		update, dispose, go, dungeonGo, info, quests, folk, foes,
 		floor: (x, z, y) => surfFloor(x, z, y),
 		push: (p, footY) => col.push(p, footY),

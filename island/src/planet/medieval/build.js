@@ -5,6 +5,7 @@
 // frame (its front toward +z).
 
 import { M } from './kit.js';
+import { hearthZ } from '../../interiors/medieval.js';
 
 const TAU = Math.PI * 2;
 const DARK = [0.03, 0.03, 0.03];
@@ -94,12 +95,12 @@ function frameFace(ctx, k, ox, oz, dx, dz, nx, nz, W, y0, y1, opts = {}) {
 		if (i === door) {
 			// a plank door under a lintel, a step before it
 			const dw = Math.min(1.05, bw - 0.25);
-			k.face([pt(um - dw / 2, y0, 0.04), pt(um + dw / 2, y0, 0.04), pt(um + dw / 2, y0 + 2.05, 0.04), pt(um - dw / 2, y0 + 2.05, 0.04)], [nx, 0, nz], M.PLANK, PLANKC);
+			if (!opts.open) k.face([pt(um - dw / 2, y0, 0.04), pt(um + dw / 2, y0, 0.04), pt(um + dw / 2, y0 + 2.05, 0.04), pt(um - dw / 2, y0 + 2.05, 0.04)], [nx, 0, nz], M.PLANK, PLANKC);
 			k.beam(pt(um - dw / 2 - 0.1, y0 + 2.12), pt(um + dw / 2 + 0.1, y0 + 2.12), 0.18, 0.16, M.TIMBER, T);
 			k.beam(pt(um - dw / 2, y0), pt(um - dw / 2, y0 + 2.1), 0.12, 0.12, M.TIMBER, T);
 			k.beam(pt(um + dw / 2, y0), pt(um + dw / 2, y0 + 2.1), 0.12, 0.12, M.TIMBER, T);
 			// iron strap hinges and a ring
-			for (const hy of [0.4, 1.6]) k.face([pt(um - dw / 2 + 0.05, y0 + hy, 0.06), pt(um + dw * 0.1, y0 + hy, 0.06), pt(um + dw * 0.1, y0 + hy + 0.06, 0.06), pt(um - dw / 2 + 0.05, y0 + hy + 0.06, 0.06)], [nx, 0, nz], M.IRON, IRONC);
+			if (!opts.open) for (const hy of [0.4, 1.6]) k.face([pt(um - dw / 2 + 0.05, y0 + hy, 0.06), pt(um + dw * 0.1, y0 + hy, 0.06), pt(um + dw * 0.1, y0 + hy + 0.06, 0.06), pt(um - dw / 2 + 0.05, y0 + hy + 0.06, 0.06)], [nx, 0, nz], M.IRON, IRONC);
 			continue;
 		}
 		if (win.includes(i) && y1 - y0 > 2) {
@@ -506,9 +507,18 @@ export function buildHouse(ctx, b) {
 	for (let s = 0; s < storeys; s++) {
 		const h = s ? H2 : H1, y1 = y0 + h, ext = s ? 0.45 : 0;
 		const zf = d / 2 + ext, zb = -d / 2 - ext;
-		k.box(-w / 2, y0, zb, w / 2, y1, zf, M.PLASTER, wall, s ? '' : 'ny');
 		const nb = Math.max(2, Math.round(w / 1.5));
-		const front = { windows: s ? [0, nb - 1, Math.floor(nb / 2)].filter((q, i, a) => a.indexOf(q) === i && (nb > 2 || q !== Math.floor(nb / 2))) : [0, nb - 1].filter((q) => q !== Math.floor(nb / 2)), door: s ? -1 : Math.floor(nb / 2), shutter };
+		// the ground storey is hollow, its door a real opening (interiors/medieval.js furnishes
+		// it and hangs the door as you come near)
+		k.box(-w / 2, y0, zb, w / 2, y1, zf, M.PLASTER, wall, s ? '' : 'ny pz');
+		if (!s) {
+			const bw = w / nb, um = -w / 2 + (Math.floor(nb / 2) + 0.5) * bw, dw = Math.min(1.05, bw - 0.25);
+			k.quad([-w / 2, y0, zf], [um - dw / 2, y0, zf], [um - dw / 2, y1, zf], [-w / 2, y1, zf], M.PLASTER, wall);
+			k.quad([um + dw / 2, y0, zf], [w / 2, y0, zf], [w / 2, y1, zf], [um + dw / 2, y1, zf], M.PLASTER, wall);
+			k.quad([um - dw / 2, y0 + 2.05, zf], [um + dw / 2, y0 + 2.05, zf], [um + dw / 2, y1, zf], [um - dw / 2, y1, zf], M.PLASTER, wall);
+			b.inside = { w, d, y0, h: h, storeys, door: { x: um, w: dw }, nb, frontWin: [0, nb - 1].filter((q) => q !== Math.floor(nb / 2)), x: b.x, z: b.z, yaw: b.yaw, kind: b.kind || 'house', y: b.y };
+		}
+		const front = { windows: s ? [0, nb - 1, Math.floor(nb / 2)].filter((q, i, a) => a.indexOf(q) === i && (nb > 2 || q !== Math.floor(nb / 2))) : [0, nb - 1].filter((q) => q !== Math.floor(nb / 2)), door: s ? -1 : Math.floor(nb / 2), open: !s, shutter };
 		frameFace(ctx, k, -w / 2, zf, 1, 0, 0, 1, w, y0, y1, front);
 		frameFace(ctx, k, w / 2, zb, -1, 0, 0, -1, w, y0, y1, { windows: [1], shutter });
 		const sb = Math.max(2, Math.round((zf - zb) / 1.5));
@@ -559,14 +569,22 @@ export function buildHouse(ctx, b) {
 		lantern(ctx, k, 1.1, y + 2.3, d / 2 + 0.35);
 	} else if (r() < 0.45) lantern(ctx, k, 0.95, y + 2.2, d / 2 + 0.3);
 	if (b.kind === 'house' && r() < 0.5) barrel(k, (w / 2 - 0.5) * (r() < 0.5 ? 1 : -1), y, d / 2 + 0.45, 0.8);
-	col.solid(b.x, b.z, b.yaw, -w / 2 - 0.1, w / 2 + 0.1, -d / 2 - 0.1 - jet, d / 2 + 0.1 + jet, y - 1, y0 + 3);
-	b.door = k.w(0, y, d / 2 + 0.9);
+	// walls to walk into, the doorway left open; the floor inside; the storey above out of reach
+	const I = b.inside, T = 0.25, dl = I.door.x - I.door.w / 2, dr = I.door.x + I.door.w / 2, yf = I.y0;
+	for (const [x0, x1, z0, z1] of [[-w / 2 - 0.1, w / 2 + 0.1, -d / 2 - 0.1, -d / 2 + T], [-w / 2 - 0.1, -w / 2 + T, -d / 2, d / 2], [w / 2 - T, w / 2 + 0.1, -d / 2, d / 2], [-w / 2 - 0.1, dl, d / 2 - T, d / 2 + 0.1], [dr, w / 2 + 0.1, d / 2 - T, d / 2 + 0.1]]) col.solid(b.x, b.z, b.yaw, x0, x1, z0, z1, y - 1, y0 + 3);
+	col.solid(b.x, b.z, b.yaw, dl, dr, d / 2 - T, d / 2 + 0.1, yf + 2.05, y0 + 3);
+	col.slab(b.x, b.z, b.yaw, -w / 2, w / 2, -d / 2, d / 2, yf);
+	// the fire in the hearth inside (interiors/medieval.js builds the hearth round it)
+	{ k.at(b.x, 0, b.z, b.yaw); const p = k.w(-w / 2 + 0.3, yf + 0.3, hearthZ(I)); ctx.flames.push({ x: p[0], y: p[1], z: p[2], s: 0.16, always: true }); ctx.lights.push({ x: p[0], y: p[1] + 0.3, z: p[2], r: 5, always: true }); }
+	b.door = k.w(I.door.x, y, d / 2 + 0.9);
 }
 
 // the smithy: a small house with an open forge under a lean-to before it
 export function buildSmithy(ctx, b) {
 	const { k, col, st } = ctx;
-	buildHouse(ctx, { ...b, kind: 'house', w: b.w, d: b.d - 3.5, storeys: 1, roof: 'shingle', wall: st.plaster[3], z: b.z - Math.cos(b.yaw) * 1.75, x: b.x - Math.sin(b.yaw) * 1.75 });
+	const hb = { ...b, kind: 'house', w: b.w, d: b.d - 3.5, storeys: 1, roof: 'shingle', wall: st.plaster[3], z: b.z - Math.cos(b.yaw) * 1.75, x: b.x - Math.sin(b.yaw) * 1.75 };
+	buildHouse(ctx, hb);
+	b.inside = { ...hb.inside, kind: 'smithy' };
 	k.at(b.x, 0, b.z, b.yaw);
 	const y = b.y, zf = b.d / 2, z0 = zf - 3.5;
 	for (const x of [-b.w / 2 + 0.2, b.w / 2 - 0.2]) k.beam([x, y, zf - 0.2], [x, y + 2.5, zf - 0.2], 0.2, 0.2, M.TIMBER, st.timber);
