@@ -30750,32 +30750,44 @@ const pan={ 'VIOLIN-SECTION':-.3,'CELLO-SECTION':.25,'FRENCH-HORNS':-.18,'TRUMPE
 // Loading is progressive enhancement. App play controls never become download UI.
 function status(){}
 function mount(){}
-const RETRY_MS=30000,FETCH_MS=15000;
-let packPromise=null,retryAt=0,errorEpoch=0,preparing=0;
-const decoding=new Map();
+const RETRY_MS=30000,STALL_MS=20000;
+// ORCH_SPLIT: one file per instrument (runtime/orchestra220/), so the chosen voices
+// arrive in a second or two and a slow line never aborts a whole 15 MB pack. A
+// download is only given up when it stops moving, not when it is merely slow.
+const DRUM_NAMES_220=['kick','snare','hihat','shaker','rim','lotom','hitom','perc','ride','cymbal'];
+let retryAt=0,errorEpoch=0,preparing=0,warming=null;
+const files=new Map(),decoding=new Map();
 function ready(type){const entries=bank.get(type);return !!(entries&&entries.length&&entries.every(e=>e.buffer));}
 function selected(){return ['type-select','type-select-2','type-select-3'].map(id=>root.L99Maestro219?.names[Number(document.getElementById(id)?.value)]).filter(t=>types.has(t));}
-async function load(){return prepare(selected());}
-function fetchPack(){
- if(packPromise)return packPromise;
+const fileOf=type=>type.startsWith('drum:')?'drums':type;
+async function readAll(response,controller){
+ if(!response.body||!response.body.getReader)return response.text();
+ const reader=response.body.getReader(),parts=[];let timer=0;
+ const stall=()=>{root.clearTimeout(timer);timer=root.setTimeout(()=>controller?.abort(),STALL_MS);};
+ try{stall();for(;;){const {done,value}=await reader.read();if(done)break;parts.push(value);stall();}}finally{root.clearTimeout(timer);}
+ return new TextDecoder().decode(await new Blob(parts).arrayBuffer());
+}
+function fetchFile(name){
+ if(files.has(name))return files.get(name);
  const controller=typeof root.AbortController==='function'?new root.AbortController():null;
- let timer;
- const request=(async()=>{
-  const response=await root.fetch(new URL('runtime/orchestra220.json',document.baseURI),controller?{signal:controller.signal}:undefined);
+ const promise=(async()=>{
+  let timer=root.setTimeout(()=>controller?.abort(),STALL_MS);
+  let response;
+  try{response=await root.fetch(new URL('runtime/orchestra220/'+name+'.json',document.baseURI),controller?{signal:controller.signal}:undefined);}finally{root.clearTimeout(timer);}
   if(!response.ok)throw Error('Sample pack '+response.status);
-  const pack=await response.json();
+  const pack=JSON.parse(await readAll(response,controller));
   if(pack.version!==220||!Array.isArray(pack.entries)||!pack.entries.length||pack.entries.length>250)throw Error('Invalid orchestra sample pack');
   const next=new Map();
   for(const original of pack.entries){
    if(!original||typeof original.type!=='string'||!Number.isFinite(original.midi)||!Number.isFinite(original.layer)||typeof original.audio!=='string'||!original.audio.length)throw Error('Invalid orchestra sample');
-   const e={...original};if(!next.has(e.type))next.set(e.type,[]);next.get(e.type).push(e);
+   if(fileOf(original.type)!==name)continue;
+   if(!next.has(original.type))next.set(original.type,[]);next.get(original.type).push({...original});
   }
-  for(const type of types)if(!next.get(type)?.length)throw Error('Missing '+type);
-  return next;
- })();
- const deadline=new Promise((_,reject)=>{timer=root.setTimeout(()=>{controller?.abort();reject(Error('Orchestra sample request timed out'));},FETCH_MS);});
- packPromise=Promise.race([request,deadline]).then(next=>{bank=next;}).catch(e=>{packPromise=null;throw e;}).finally(()=>root.clearTimeout(timer));
- return packPromise;
+  if(!next.size)throw Error('Missing '+name);
+  for(const [type,entries] of next)if(!ready(type))bank.set(type,entries);
+ })().catch(e=>{files.delete(name);throw e;});
+ files.set(name,promise);
+ return promise;
 }
 async function decode(type){
  if(ready(type))return;
@@ -30790,6 +30802,7 @@ async function decode(type){
     const buffer=await decoder.decodeAudioData(bytes.buffer);
     if(!buffer||!Number.isFinite(buffer.duration)||buffer.duration<=0)throw Error('An orchestra sample could not be decoded');
     e.buffer=root.L99Stereo223?.correct?root.L99Stereo223.correct(buffer,e,'orchestra220.json'):buffer;
+    e.audio='';
    }
   })().finally(()=>decoding.delete(type));
   decoding.set(type,promise);
@@ -30798,18 +30811,26 @@ async function decode(type){
 }
 async function prepare(requested){
  const wanted=[...new Set((requested||selected()).filter(type=>types.has(type)))];
- const drumTypes=()=>[...bank.keys()].filter(type=>type.startsWith('drum:'));
- if(packPromise&&bank.size&&[...wanted,...drumTypes()].every(ready))return true;
+ const all=[...wanted,...DRUM_NAMES_220.map(n=>'drum:'+n)];
+ if(all.every(ready))return true;
  if(Date.now()<retryAt)return false;
  const epoch=errorEpoch;preparing++;state='loading';
  try{
-  await fetchPack();
-  for(const type of [...new Set([...wanted,...drumTypes()])])await decode(type);
+  for(const name of new Set(all.map(fileOf)))await fetchFile(name);
+  for(const type of all)if(bank.has(type))await decode(type);
   if(errorEpoch===epoch){error='';retryAt=0;}
   return true;
  }catch(e){error=String(e&&e.message||e);retryAt=Date.now()+RETRY_MS;errorEpoch++;return false;}
  finally{preparing--;state=preparing?'loading':error?'error':bank.size?'ready':'idle';}
 }
+// the rest of the orchestra, one section at a time behind the chosen ones, so
+// switching to any instrument later plays the recording straight away
+function warm(){
+ if(warming)return warming;
+ warming=(async()=>{for(const type of types){if(!ready(type)&&!await prepare([type]))break;}})().finally(()=>{warming=null;});
+ return warming;
+}
+async function load(){const ok=await prepare(selected());if(ok)warm();return ok;}
 // A real connection change permits the next requested instrument to try again.
 root.addEventListener('online',()=>{retryAt=0;});
 function select(type,midi,layer=0){const a=bank.get(type)||[];const entries=a.filter(e=>e.layer===layer);return (entries.length?entries:a).reduce((best,e)=>!best||Math.abs(e.midi-midi)<Math.abs(best.midi-midi)?e:best,null);}
