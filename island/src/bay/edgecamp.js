@@ -31,7 +31,7 @@ function radioBuffer(ctx) {
 	const pluck = (f, at, amp, decay = 0.996) => {
 		const n = Math.max(2, Math.round(sr / f)), buf = new Float32Array(n);
 		for (let i = 0; i < n; i++) buf[i] = (R() * 2 - 1) * amp;
-		const start = Math.floor(at * sr), dur = Math.min(len - start, Math.floor(sr * 2.2));
+		const start = Math.floor(at * sr), dur = Math.min(len - start, Math.floor(sr * 1.1));
 		let k = 0;
 		for (let i = 0; i < dur; i++) { const v = buf[k], nk = (k + 1) % n; buf[k] = decay * 0.5 * (v + buf[nk]); d[(start + i) % len] += v; k = nk; }
 	};
