@@ -21,6 +21,7 @@ import { GREENS } from './realcity.js';
 import { inCampus } from './discovery.js';
 import { inBoardwalk } from './boardwalk.js';
 import { inRiverWater, riverTreesNear, carveVersion } from './carve.js';
+import { inWater, waterTreesNear, waterVersion } from './watercarve.js';
 import { inClearing, clearingVersion } from '../sportsfields.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -1182,6 +1183,8 @@ export function createCity(shared, scene, bay, real = null) {
 		wildLand(cx, cz, 2700, trees, 22, 1100);          // beyond: a coarser, cheaper scatter for the far masses
 		// the willows, sycamores and redwoods along the San Lorenzo (sanlorenzo.js)
 		for (const t of riverTreesNear(cx, cz, 2700)) trees.push(t);
+		// ...and along every other creek and river's wild banks (water.js)
+		for (const t of waterTreesNear(cx, cz, 2700)) trees.push(t);
 		for (const t of real.near('trees', cx, cz, 2700)) {
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
 			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
@@ -1268,7 +1271,7 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 	}
 
-	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, clearV = -1, carveV = -1;
+	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, clearV = -1, carveV = -1, waterV = -1;
 	function update(cam, nightK) {
 		if (!bay.loaded()) return;
 		night.value = nightK;
@@ -1282,6 +1285,7 @@ export function createCity(shared, scene, bay, real = null) {
 		if (!realSeen && real?.loaded()) { realSeen = true; lastX = 1e9; }                   // the real city arrived: rebuild
 		if (clearingVersion() !== clearV) { clearV = clearingVersion(); lastX = 1e9; }          // a ball field laid out nearby: its trees go
 		if (carveVersion() !== carveV) { carveV = carveVersion(); lastX = 1e9; }                  // a river carved: the ground under the trees moved
+		if (waterVersion() !== waterV) { waterV = waterVersion(); lastX = 1e9; }                  // trees stood up along the creeks near you
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
 		if (riseT0 >= 0) {
 			// the ring runs out at 700 m a second; no shadows from the buildings still underground
@@ -1301,7 +1305,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
 		// ...nor on a ball field (sportsfields.js)
-		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z));
+		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
 		// ...nor inside a tower (their lobbies are walked into): a coarse grid of the tall ones
 		{
 			const G = new Map(), cellOf = (x, z) => Math.floor(x / 60) + ',' + Math.floor(z / 60);

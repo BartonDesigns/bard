@@ -21,7 +21,7 @@ export function createLabels(mount, bay, bridge) {
 	const gate = zones.find((z) => z.name === 'Golden Gate');
 
 	// home: kept only on this device (localStorage), never in the published world
-	const home = () => { try { const h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); return h && Number.isFinite(h.lat) ? { ...toWorld(h.lat, h.lon), name: h.name || 'Home' } : null; } catch (e) { return null; } };
+	const home = () => { try { const h = JSON.parse(localStorage.getItem('crysis-home') || 'null'); return h && Number.isFinite(h.lat) ? { ...toWorld(h.lat, h.lon), name: h.name || 'Home' } : null; } catch { return null; } };
 	let merged = 0;
 	function where(x, z, y, onIsland) {
 		if (onIsland) return null;
@@ -34,6 +34,13 @@ export function createLabels(mount, bay, bridge) {
 		}
 		const g = bay.heightAt(x, z), water = g < 0;
 		if (bridge && bridge.deckFloor(x, z, y) > -Infinity) return { name: 'Golden Gate Bridge', sub: 'San Francisco · Marin County' };
+		// a lake, a reservoir, a river or a creek (bay/water.js), in its county
+		const wn = !water && bay.waterName?.(x, z);
+		if (wn) {
+			let near = null, nd = 1e18;
+			for (const p of places) { if (p.hood) continue; const d = (x - p.x) ** 2 + (z - p.z) ** 2; if (d < nd) { nd = d; near = p; } }
+			return { name: wn.name, sub: `${wn.kind} · ${near ? near.county : 'California'}` };
+		}
 		// landmarks and waters that contain you, the smallest first
 		let best = null;
 		for (const zn of zones) {

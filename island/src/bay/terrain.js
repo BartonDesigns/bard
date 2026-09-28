@@ -16,6 +16,7 @@ import { bearingFor, styleFor, localOverride, WARP_GLSL, STYLE, sfDistrict } fro
 import { BERM_U, BERM_GLSL } from './berms.js';
 import { REAL_U, REAL_GLSL } from './realcity.js';
 import { CARVE_U, CARVE_GLSL, carveDelta } from './carve.js';
+import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
@@ -331,7 +332,7 @@ export function createBayArea(shared, scene, island, BU) {
 		if (levels[1]) { const k = levelIn(levels[1], x, z, 1500); if (k > 0) h += (levelH(levels[1], x, z) - h) * k; }
 		if (levels[2]) { const k = levelIn(levels[2], x, z, 500); if (k > 0) h += (levelH(levels[2], x, z) - h) * k; }
 		for (let i = 3; i < levels.length; i++) if (levels[i]) { const k = levelIn(levels[i], x, z, 400); if (k > 0) h += (levelH(levels[i], x, z) - h) * k; }
-		return h + carveDelta(x, z);
+		return h + carveDelta(x, z) + waterDelta(x, z);
 	}
 
 	// ---------- loading ----------
@@ -376,13 +377,15 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WOODS_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
-			sh.vertexShader = 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + '\nfloat cvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0); }\n' + sh.vertexShader
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
+			sh.vertexShader = 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + '\nfloat cvK = 1.0, wvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
 					// grid is fine enough to hold it)
 					cvK = 1.0 - smoothstep(1600.0, 3200.0, length(position.xz));
+					// (and the creeks' channels and the lakes' shores, water.js: near you)
+					wvK = wcK(bw);
 					// (the ground as graded for the roads near you: berms.js)
 					float bh = gradedHeight(bw);
 					float be = max(3.0, length(position.xz) * 0.006);
@@ -393,7 +396,7 @@ export function createBayArea(shared, scene, island, BU) {
 					// its woods by (18 m, as its gully: x) and at the scale of a hill (y, -1..1); and
 					// (near you) whether the open ocean lies just to windward, where the bluffs are
 					// wind-scoured (z)
-					float bc = bh - bermDelta(bw) - (cvK > 0.0 ? carveAt(bw).r * cvK : 0.0), ge = max(18.0, be), fe = max(110.0, be * 4.0);
+					float bc = bh - bermDelta(bw) - (cvK > 0.0 ? carveAt(bw).r * cvK : 0.0) - (wvK > 0.0 ? wcAt(bw).r * wvK : 0.0), ge = max(18.0, be), fe = max(110.0, be * 4.0);
 					float lapG = bayHeight(bw + vec2(ge, 0.0)) + bayHeight(bw - vec2(ge, 0.0)) + bayHeight(bw + vec2(0.0, ge)) + bayHeight(bw - vec2(0.0, ge)) - 4.0 * bc;
 					float lapF = (bayHeight(bw + vec2(fe, 0.0)) + bayHeight(bw - vec2(fe, 0.0)) + bayHeight(bw + vec2(0.0, fe)) + bayHeight(bw - vec2(0.0, fe))) * 0.25 - bc;
 					float windS = 0.0;
@@ -403,7 +406,7 @@ export function createBayArea(shared, scene, island, BU) {
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + CARVE_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -707,6 +710,19 @@ export function createBayArea(shared, scene, island, BU) {
 						// thicker downtown, fixed to the ground and never smaller than a pixel
 						float farL = sparks(vBW, dist, 0.86 - T.b * 0.2, 0.0) * (1.2 + T.b) * smoothstep(600.0, 3500.0, dist);
 						cityGlow = mix(vec3(1.0, 0.62, 0.28), vec3(0.95, 0.9, 0.8), h21(floor(vBW / 18.0) + 3.0) * 0.5) * (nearL + farL) * smoothstep(0.08, 0.35, urban) * uNightB * 2.2;
+					}
+					// the creeks' beds and the lakes' shores (water.js): wet gravel and mud at the water,
+					// the pale concrete of a flood channel; over the streets painted across them
+					vec2 wv = wcAt(vBW);
+					if (wv.y > 0.004) {
+						float wn = vn(vBW * 0.37), wm = vn(vBW * 0.09);
+						vec3 mud = mix(vec3(0.2, 0.17, 0.12), vec3(0.34, 0.3, 0.23), wn) * (0.8 + 0.35 * wm);
+						mud = mix(mud, mix(vec3(0.36, 0.33, 0.27), vec3(0.52, 0.48, 0.4), vn(vBW * 1.3)), smoothstep(0.55, 0.75, wm) * 0.7);
+						vec3 conc = mix(vec3(0.5, 0.49, 0.46), vec3(0.6, 0.59, 0.55), wn) * (0.9 + 0.12 * wm);
+						conc = mix(conc, conc * 0.72, smoothstep(0.6, 0.8, vn(vBW * vec2(0.08, 2.0))) * 0.4);
+						c = mix(c, mud, clamp(wv.y, 0.0, 1.0));
+						c = mix(c, conc, clamp(wv.y - 1.0, 0.0, 1.0));
+						flatK = max(flatK, clamp(wv.y - 1.0, 0.0, 1.0));
 					}
 					// the lie of the land, drawn a little stronger than the light alone shows it (the
 					// tone mapping flattens a town's gentle hills into one carpet): the folds and

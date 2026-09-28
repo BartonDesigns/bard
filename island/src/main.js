@@ -42,6 +42,7 @@ import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { createFreeways } from './bay/freeways.js';
 import { createLake } from './bay/lake.js';
+import { createWater } from './bay/water.js';
 import { createTidepools } from './bay/tidepools.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
@@ -332,6 +333,7 @@ export function createIslandWorld() {
 		['Mt Tamalpais, East Peak', 37.9293, -122.5780, 2.2], ['Mission Peak', 37.5125, -121.8806, 1.5], ['Berkeley Hills', 37.8812, -122.2425, 1.9],
 		['Tide pools, Moss Beach', 37.5214, -122.5166, 1.75], ['Devil\'s Slide, Highway 1', 37.5738, -122.5148, 3.1], ['Half Moon Bay, Highway 1', 37.4640, -122.4330, 0], ['Duxbury Reef, Bolinas', 37.8936, -122.6972, 2.3],
 		['Bay Area Discovery Museum, Fort Baker', 37.8345, -122.4782, 3.3], ['Pacifica Pier', 37.6336, -122.4935, 1.8], ['San Ramon Central Park', 37.7643, -121.9528, 0.5], ['Apple Park, Cupertino', 37.3310, -122.0040, 0.6], ['Downtown San Jose', 37.3330, -121.8890, 0], ['Pescadero State Beach, Highway 1', 37.2680, -122.4105, 1.7], ['Pigeon Point Light Station', 37.1845, -122.3925, 2.3], ['Santa Cruz Beach Boardwalk', 36.96317, -122.01846, -1.29], ['Santa Cruz Municipal Wharf', 36.96263, -122.02233, -2.97], ['San Lorenzo River, the Riverwalk', 36.97440, -122.02088, 3.14],
+		['Lake Chabot', 37.72148, -122.10911, -1.28], ['Crystal Springs Reservoir', 37.52951, -122.3625, 2.31], ['Lexington Reservoir', 37.2003, -121.98768, 2.09], ['San Lorenzo River, Ben Lomond', 37.08781, -122.08775, -1.57],
 		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
 	];
 	const tpBtn = button('', 'Teleport to a place', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
@@ -580,6 +582,9 @@ export function createIslandWorld() {
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real });
+			// every other river, creek, lake and reservoir (bay/water.js)
+			world.water = createWater(scene, bayArea, shared, { isPhone, real: world.real, ground: (x, z) => island.heightAt(x, z) });
+			bayArea.waterName = (x, z) => world?.water?.nameAt(x, z) ?? null;
 			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
 			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
 			// the beaches down Highway 1: lots, restrooms, camps and fires, surf, the lighthouse
@@ -600,7 +605,7 @@ export function createIslandWorld() {
 			const own = island.heightAt, berms = world.berms;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : berms.apply(x, z, bayArea.heightAt(x, z));
 			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
-			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? null;
+			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? world?.water?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
@@ -941,6 +946,7 @@ export function createIslandWorld() {
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		W.lake?.update(dt, time, camera, sk.night);
+		W.water?.update(dt, time, camera, sk.night);
 		if (W.tidepools) {
 			W.tidepools.update(dt, time, camera);
 			// arriving on a reef: what to look for
@@ -987,7 +993,7 @@ export function createIslandWorld() {
 		if (W.natureSound && W.bayArea?.loaded()) {
 			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
 			let pond = 1e9;
-			if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if (W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) != null) pond = r; } if (pond < 1e8) break; }
+			if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if ((W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) ?? W.water?.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r)) != null) pond = r; } if (pond < 1e8) break; }
 			W.natureSound.update(dt, camera, { night: sk.night, hours: W.sky.state.hours, month: new Date().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
 		}
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);

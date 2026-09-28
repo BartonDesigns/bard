@@ -2,12 +2,15 @@
 # built from OpenStreetMap, Microsoft and Google footprints and more) straight off its
 # public S3 bucket over HTTPS, reading only the parquet row groups whose bounding boxes
 # touch the region. Writes one parquet-free JSON per theme for bake-overture.mjs.
-#   python3 tools/overture-fetch.py <release> <west> <south> <east> <north> <outdir>
+#   python3 tools/overture-fetch.py <release> <west> <south> <east> <north> <outdir> [themes]
+# themes: a comma list of roads, buildings, landuse (the default) and water (rivers, creeks,
+# canals, lakes and reservoirs, for bake-water.py)
 import sys, os, io, json, re, concurrent.futures as cf
 import requests, pyarrow.parquet as pq, pyarrow as pa
 
 BASE = 'https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com'
 rel, W, S, E, N, out = sys.argv[1], *map(float, sys.argv[2:6]), sys.argv[6]
+want = set(sys.argv[7].split(',')) if len(sys.argv) > 7 else {'roads', 'buildings', 'landuse'}
 os.makedirs(out, exist_ok=True)
 sess = requests.Session()
 
@@ -72,6 +75,23 @@ def fetch(theme, cols):
 if __name__ == '__main__':
     import shapely.wkb
     def geo(b): return shapely.wkb.loads(b)
+    if 'water' in want:
+        wt = fetch('base/type=water', ['id', 'geometry', 'bbox', 'subtype', 'class', 'names', 'source_tags', 'is_intermittent', 'is_salt', 'level'])
+        TAGS = ('width', 'tunnel', 'culvert', 'layer', 'location', 'covered', 'intermittent', 'seasonal', 'water', 'waterway', 'natural', 'landuse', 'leisure', 'man_made', 'ele', 'name')
+        ws = []
+        for r in wt.to_pylist():
+            g = geo(r['geometry'])
+            tg = { k: v for k, v in (r.get('source_tags') or []) if k in TAGS }
+            base = { 's': r['subtype'], 'c': r['class'], 'n': (r.get('names') or {}).get('primary'), 'i': bool(r.get('is_intermittent')), 'salt': bool(r.get('is_salt')), 't': tg }
+            if g.geom_type in ('LineString', 'MultiLineString'):
+                for l in ([g] if g.geom_type == 'LineString' else g.geoms):
+                    ws.append({ **base, 'g': 'l', 'p': [[round(x, 6), round(y, 6)] for x, y in l.coords] })
+            elif g.geom_type in ('Polygon', 'MultiPolygon'):
+                for p in ([g] if g.geom_type == 'Polygon' else g.geoms):
+                    ws.append({ **base, 'g': 'a', 'p': [[round(x, 6), round(y, 6)] for x, y in p.exterior.coords][:-1], 'h': [[[round(x, 6), round(y, 6)] for x, y in h.coords][:-1] for h in p.interiors] })
+        json.dump(ws, open(f'{out}/water.json', 'w'))
+        print('water', len(ws), flush=True)
+    if not want & {'roads', 'buildings', 'landuse'}: sys.exit(0)
     seg = fetch('transportation/type=segment', ['id', 'geometry', 'bbox', 'subtype', 'class', 'names', 'road_flags', 'road_surface', 'level_rules'])
     roads = []
     for r in seg.to_pylist():

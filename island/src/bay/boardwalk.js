@@ -96,12 +96,12 @@ function regrade(bay, BU) {
 	}
 	// out past the surf, the survey's sandbar (the old wharf's ghost, a few hundred metres off
 	// the beach) let down under the sea
-	const ss = [[-600, 60], [660, 60], [-600, 1150], [660, 1150]].map(([u, v]) => toW(u, v));
+	const ss = [[-600, 60], [660, 60], [-600, 950], [660, 950]].map(([u, v]) => toW(u, v));
 	const si0 = Math.max(0, Math.floor((Math.min(...ss.map((c) => c[0])) - L.x0) / L.step)), si1 = Math.min(L.W - 1, Math.ceil((Math.max(...ss.map((c) => c[0])) - L.x0) / L.step));
 	const sj0 = Math.max(0, Math.floor((Math.min(...ss.map((c) => c[1])) - L.zN) / L.step)), sj1 = Math.min(L.H - 1, Math.ceil((Math.max(...ss.map((c) => c[1])) - L.zN) / L.step));
 	for (let j = sj0; j <= sj1; j++) for (let i = si0; i <= si1; i++) {
 		const [u, v] = toL(L.x0 + i * L.step, L.zN + j * L.step), sv = shoreV(u);
-		const w = smooth(-600, -540, u) * smooth(660, 600, u) * smooth(sv + 15, sv + 45, v) * smooth(1150, 1100, v);
+		const w = smooth(-600, -540, u) * smooth(660, 600, u) * smooth(sv + 15, sv + 45, v) * smooth(950, 900, v);
 		if (w <= 0) continue;
 		const k = j * L.W + i, h0 = L.v[k] / H_SCALE - H_OFF, t = -1 - (v - sv) * 0.045;
 		if (h0 <= t) continue;

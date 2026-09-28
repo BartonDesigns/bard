@@ -1,11 +1,12 @@
-// The San Lorenzo River, from the surf at the east end of Main Beach up into the Santa Cruz
-// Mountains. At the mouth it is a summer lagoon behind a sand spit, bending south-west
+// The lower San Lorenzo River, from the surf at the east end of Main Beach up past Highway 1
+// into the mouth of its valley. At the mouth it is a summer lagoon behind a sand spit, bending south-west
 // across the beach into the surf beside the Boardwalk; under the railroad trestle it runs
 // north along East Cliff, swings west round the River Lot along San Lorenzo Boulevard,
 // turns north again at Laurel Street and goes up through town between its grassy levees
 // (the Riverwalk along their tops), under Soquel, Water Street and the Highway 1 bridges,
-// then up the valley past Harvey West and Paradise Park and through the gorge to Henry
-// Cowell and Felton: willows and sycamores low down, redwoods up the canyon.
+// and on up the valley floor by Harvey West, willows and sycamores along it. It ends at
+// 36.995 N, where the rivers of the rest of the Bay Area take it on up to Henry Cowell and
+// Felton; the channel stops square there, not in a rounded cap.
 //
 // The survey is far too coarse for a river, so the channel is carved on carve.js's finer
 // grid: the bed, the wet gravel edge, the bench the willows grow on, the levees and their
@@ -17,7 +18,7 @@
 // all the way up, then the carving tile by tile; then the water and the bridges.
 
 import * as THREE from 'three';
-import { toWorld, H_OFF, H_SCALE } from './geo.js';
+import { toWorld, toLatLon, H_OFF, H_SCALE } from './geo.js';
 import { beginCarve, TILE, setRiverHooks } from './carve.js';
 import { toW, merger, bulbs, rng } from './rides/kit.js';
 
@@ -39,9 +40,9 @@ const MOUTH = [[378, 154, 8, 'surf'], [400, 131, 10, 'surf'], [424, 104, 15, 'be
 // Street, then north through town between the levees to Highway 1 [lat, lon, half-width]
 const TOWN = [[36.9672, -122.0131, 28], [36.9678, -122.0140, 28], [36.9681, -122.0152, 27], [36.9682, -122.0164, 27], [36.9684, -122.0178, 26], [36.9688, -122.0193, 25], [36.9694, -122.0205, 23], [36.9703, -122.0212, 21],
 	[36.9720, -122.0214, 16], [36.9745, -122.0213, 14], [36.9768, -122.0217, 12], [36.9787, -122.0222, 11], [36.9808, -122.0228, 10], [36.9828, -122.0234, 10]];
-// the valley: the survey's own valley floor (the lowest way up it), past Harvey West,
-// Paradise Park, through the gorge to Henry Cowell and Felton
-const VALLEY = [[36.98453, -122.02377], [36.98474, -122.02531], [36.98559, -122.02648], [36.98648, -122.02760], [36.98738, -122.02872], [36.98853, -122.02923], [36.98979, -122.02932], [36.99079, -122.03026], [36.99200, -122.03059], [36.99323, -122.03080], [36.99422, -122.03176], [36.99543, -122.03218], [36.99636, -122.03324], [36.99727, -122.03434], [36.99846, -122.03479], [36.99947, -122.03573], [37.00068, -122.03605], [37.00190, -122.03627], [37.00284, -122.03733], [37.00373, -122.03845], [37.00463, -122.03957], [37.00576, -122.04015], [37.00681, -122.04097], [37.00771, -122.04210], [37.00860, -122.04322], [37.00960, -122.04416], [37.01085, -122.04423], [37.01212, -122.04423], [37.01338, -122.04425], [37.01441, -122.04510], [37.01530, -122.04623], [37.01620, -122.04735], [37.01709, -122.04848], [37.01798, -122.04960], [37.01887, -122.05073], [37.01976, -122.05185], [37.02066, -122.05298], [37.02155, -122.05410], [37.02244, -122.05523], [37.02333, -122.05635], [37.02424, -122.05746], [37.02542, -122.05786], [37.02668, -122.05786], [37.02794, -122.05786], [37.02921, -122.05786], [37.03047, -122.05786], [37.03156, -122.05855], [37.03246, -122.05968], [37.03335, -122.06080], [37.03424, -122.06193], [37.03516, -122.06301], [37.03636, -122.06344], [37.03732, -122.06445], [37.03822, -122.06557], [37.03938, -122.06604], [37.04063, -122.06615], [37.04164, -122.06710], [37.04285, -122.06741], [37.04411, -122.06741], [37.04537, -122.06741], [37.04663, -122.06741], [37.04789, -122.06741], [37.04915, -122.06746], [37.05016, -122.06837], [37.05105, -122.06950], [37.05194, -122.07062], [37.05264, -122.07150]];
+// the valley's mouth: the survey's own valley floor (the lowest way up it), up by Harvey
+// West to 36.995 N
+const VALLEY = [[36.98453, -122.02377], [36.98474, -122.02531], [36.98559, -122.02648], [36.98648, -122.02760], [36.98738, -122.02872], [36.98853, -122.02923], [36.98979, -122.02932], [36.99079, -122.03026], [36.99200, -122.03059], [36.99323, -122.03080], [36.99422, -122.03176], [36.99500, -122.03203]];
 // the bridges where the roads cross [name, lat, lon, kind, deck width, skew]
 const BRIDGES = [
 	['Riverside Avenue', 36.9684, -122.0176, 'road', 15, 0.1],
@@ -268,6 +269,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 			if (!t) { t = { ci, cj, d2: new Float32Array(T1 * T1).fill(Infinity), seg: new Float32Array(T1 * T1), sd: new Float32Array(T1 * T1) }; tiles.set(key, t); }
 			return t;
 		};
+		const ne = S.n - 1, xe = S.x[ne], ze = S.z[ne];
 		for (let i = 0; i + 2 < S.n; i += 2) {
 			const ax = S.x[i], az = S.z[i], bx = S.x[i + 2], bz = S.z[i + 2], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
 			const rch = Math.max(S.reachL[i], S.reachR[i], S.reachL[i + 2], S.reachR[i + 2]) + 4;
@@ -279,6 +281,8 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 				const b0 = Math.max(0, Math.floor((Math.min(az, bz) - rch - Z0) / ts)), b1 = Math.min(TILE, Math.ceil((Math.max(az, bz) + rch - Z0) / ts));
 				for (let b = b0; b <= b1; b++) for (let a = a0; a <= a1; a++) {
 					const qx = X0 + a * ts, qz = Z0 + b * ts;
+					// (nothing past the upstream end: the channel stops square there)
+					if ((qx - xe) * S.tx[ne] + (qz - ze) * S.tz[ne] > 0) continue;
 					const u = Math.max(0, Math.min(1, ((qx - ax) * dx + (qz - az) * dz) / l2));
 					const ex = qx - ax - dx * u, ez = qz - az - dz * u, d2 = ex * ex + ez * ez, k = b * T1 + a;
 					if (d2 < t.d2[k]) { t.d2[k] = d2; t.seg[k] = i + 2 * u; t.sd[k] = dx * ez - dz * ex > 0 ? 1 : -1; }
@@ -468,7 +472,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 				sd.push(i * STEP, a / 1.12);
 				fl.push(-S.tx[i], -S.tz[i], speed, S.foam[i]);
 			}
-			if (rows) { const b = (rows - 1) * across.length, c2 = rows * across.length; for (let k = 0; k + 1 < across.length; k++) idx.push(b + k, c2 + k, b + k + 1, b + k + 1, c2 + k, c2 + k + 1); }
+			if (rows) { const b = (rows - 1) * across.length, c2 = rows * across.length; for (let k = 0; k + 1 < across.length; k++) idx.push(b + k, b + k + 1, c2 + k, b + k + 1, c2 + k + 1, c2 + k); }
 			rows++;
 		}
 		const g = new THREE.BufferGeometry();
@@ -618,13 +622,18 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		}
 		return null;
 	}
+	// where it ends upstream (for the rivers beyond to meet it)
+	function endInfo() {
+		const S = R.S, i = S.n - 1, ll = toLatLon(S.x[i], S.z[i]);
+		return { lat: +ll.lat.toFixed(5), lon: +ll.lon.toFixed(5), level: +S.L[i].toFixed(2), width: +(S.w[i] * 2).toFixed(1), bed: +(S.L[i] - S.D[i]).toFixed(2), heading: +(Math.atan2(S.tx[i], -S.tz[i]) * 180 / Math.PI).toFixed(0) };
+	}
 	function destroy() {
 		rush?.stop();
 		setRiverHooks({});
 		group.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
 		scene.remove(group);
 	}
-	return { group, update, floor, push, levelAt, influence, crossing, destroy, ready: () => R.ready, settled: () => R.ready || !!R.failed, info: () => ({ ready: R.ready, tiles: R.tiles.size, samples: R.S?.n || 0, length: Math.round((R.S?.n || 0) * STEP), trees: R.trees.length, bridges: (R.names || []).map((b) => b.name) }) };
+	return { group, update, floor, push, levelAt, influence, crossing, destroy, ready: () => R.ready, settled: () => R.ready || !!R.failed, info: () => ({ end: R.S?.L ? endInfo() : null, ready: R.ready, tiles: R.tiles.size, samples: R.S?.n || 0, length: Math.round((R.S?.n || 0) * STEP), trees: R.trees.length, bridges: (R.names || []).map((b) => b.name) }) };
 }
 
 const WATER_VERT = /* glsl */`
@@ -656,18 +665,18 @@ const WATER_FRAG = /* glsl */`
 		vec2 v = vFl.xy * vFl.z, p = vW.xz;
 		float e = 0.25, h = flowH(p, v);
 		float sx = flowH(p + vec2(e, 0.0), v) - h, sz = flowH(p + vec2(0.0, e), v) - h;
-		float amp = 0.1 + 0.35 * vFl.w + 0.1 * vFl.z;
+		float amp = 0.35 + 0.5 * vFl.w + 0.2 * vFl.z;
 		vec3 n = normalize(vec3(-sx * amp / e, 1.0, -sz * amp / e));
 		vec3 vv = normalize(cameraPosition - vW);
 		vec3 r = reflect(-vv, n);
-		float fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, vv), 0.0), 5.0);
-		vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5));
-		// low down in it, the dark banks and the trees
-		sky = mix(vec3(0.05, 0.07, 0.04) * (1.0 - uNight * 0.8), sky, smoothstep(0.04, 0.3, r.y + (vn(p * 0.04) - 0.5) * 0.15));
-		float edge = smoothstep(0.55, 1.0, abs(vSD.y));
-		vec3 deep = mix(vec3(0.03, 0.055, 0.045), vec3(0.075, 0.085, 0.06), edge) * (1.0 - uNight * 0.85);
-		vec3 col = mix(deep, sky * vec3(0.8, 0.88, 0.82), fres);
-		col += uSunColor * pow(max(dot(r, uSunDir), 0.0), 500.0) * 5.0 * (1.0 - uNight) + uSunColor * pow(max(dot(r, uSunDir), 0.0), 40.0) * 0.1 * (1.0 - uNight);
+		float fres = 0.1 + 0.9 * pow(1.0 - max(dot(n, vv), 0.0), 4.0);
+		vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5)) * vec3(0.72, 0.8, 0.86);
+		// low down in it, the dark banks, the willows and the town
+		sky = mix(vec3(0.035, 0.06, 0.03) * (1.0 - uNight * 0.8), sky, smoothstep(0.06, 0.26, r.y + (vn(p * 0.04) - 0.5) * 0.12));
+		float edge = smoothstep(0.6, 1.0, abs(vSD.y));
+		vec3 deep = mix(vec3(0.022, 0.058, 0.066), vec3(0.085, 0.09, 0.062), edge) * (1.0 - uNight * 0.85);
+		vec3 col = mix(deep, sky, fres * 0.82);
+		col += uSunColor * pow(max(dot(r, uSunDir), 0.0), 400.0) * 4.0 * (1.0 - uNight) + uSunColor * pow(max(dot(r, uSunDir), 0.0), 30.0) * 0.08 * (1.0 - uNight);
 		// white water over the riffles, a lace of it along the banks
 		float fn = vn((p - v * uTime) * 0.9) * 0.6 + vn((p - v * uTime * 1.3) * 2.6) * 0.4;
 		float foam = smoothstep(0.75, 0.95, fn + vFl.w * 0.55) * min(1.0, vFl.w * 1.6 + 0.08) + smoothstep(0.86, 1.0, abs(vSD.y)) * smoothstep(0.45, 0.8, fn) * 0.5;

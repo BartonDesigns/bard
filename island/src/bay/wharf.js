@@ -12,7 +12,8 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { DECK, toW, merger, instancer, bulbs, signBoard, rng } from './rides/kit.js';
+import { DECK, toW, toL, merger, instancer, bulbs, signBoard, rng } from './rides/kit.js';
+import { toWorld } from './geo.js';
 import { seaLion, bird, loft, tube } from '../world/creatures.js';
 
 // its foot on Beach Street and the way it points (bearing about 170°, nearly straight out)
@@ -146,10 +147,14 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 		for (const [hs, hx, h] of HOLES) {
 			for (const [ds, dx, w, d] of [[-h - 0.1, 0, 2 * h + 0.3, 0.1], [h + 0.1, 0, 2 * h + 0.3, 0.1], [0, -h - 0.1, 0.1, 2 * h + 0.3], [0, h + 0.1, 0.1, 2 * h + 0.3]]) { B(Mg, w, 0.08, d, 'white', hs + ds, hx + dx, Y + 1.0); B(Mg, 0.12, 1.0, 0.12, 'white', hs + ds, hx + dx, Y + 0.5); }
 			W.solids.push([hs - h - 0.25, hx - h - 0.25, hs + h + 0.25, hx + h + 0.25]);
-			const sg = signBoard('SEA LION VIEWING', 2.6, 0.5, { w: 768, h: 150, bg: '#1e3c8c', fg: '#ffffff', border: '#ffffff', font: 'bold 96px Georgia, serif', glow: 0.2 });
-			const [su, sv] = wP(hs - h - 0.2, hx);
-			sg.position.set(su, Y + 1.5, sv); sg.rotation.y = ANG + Math.PI;
-			group.add(sg); signs.push(sg);
+			// (a board each way, back to back, so it reads from both sides)
+			for (const e of [-1, 1]) {
+				const sg = signBoard('SEA LION VIEWING', 2.6, 0.5, { w: 768, h: 150, bg: '#1e3c8c', fg: '#ffffff', border: '#ffffff', font: 'bold 96px Georgia, serif', glow: 0.2 });
+				sg.material.side = THREE.FrontSide;
+				const [su, sv] = wP(hs - h - 0.2 + e * 0.02, hx);
+				sg.position.set(su, Y + 1.5, sv); sg.rotation.y = ANG + (e < 0 ? Math.PI : 0);
+				group.add(sg); signs.push(sg);
+			}
 		}
 		Mg.done(group, { shadow: !isPhone });
 		// the arch at its foot
@@ -281,7 +286,7 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 		W.lamps = L.done(group, 1.3);
 		// the cars: parallel down the neck, angled on the head
 		const CC = [0xf4f1ea, 0x222222, 0x8a9096, 0xb3202a, 0x2656a8, 0x3a3f45, 0xd9d4c8, 0x5a6e50];
-		const body = instancer(new THREE.BoxGeometry(1.8, 0.8, 4.4), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.4 }));
+		const body = instancer(new THREE.BoxGeometry(1.8, 0.8, 4.4), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.15 }));
 		const cab = instancer(new THREE.BoxGeometry(1.6, 0.6, 2.3), new THREE.MeshStandardMaterial({ color: 0x1a2226, roughness: 0.1, metalness: 0.5 }));
 		const car = (s, x, a) => { const [u, v] = wP(s, x), c = new THREE.Color(CC[Math.floor(r() * CC.length)]); body.at(u, Y + 0.62, v, 1, 1, 1, ANG + a, c); cab.at(u, Y + 1.3, v, 1, 1, 1, ANG + a); W.solids.push([s - 2.4, x - 1.1, s + 2.4, x + 1.1]); };
 		for (let s = 30; s < 510; s += 6.2) { if (r() < 0.55) car(s, -6.75, 0); if (s < 360 && r() < 0.5) car(s, 3.2, 0); }
@@ -337,6 +342,20 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 			group.add(m);
 			W.gulls.push({ m, s: 300 + r() * 500, x: r() * 30 - 10, rad: 18 + r() * 30, h: 12 + r() * 16, ph: r() * 6.28, sp: 0.2 + r() * 0.15 });
 		}
+	}
+
+	// ---------- the lighthouse on Lighthouse Point, across the water to the west ----------
+	function buildLighthouse() {
+		const p = toWorld(36.95145, -122.02675), [u, v] = toL(p.x, p.z), y = Math.max(2, bay.heightAt(p.x, p.z));
+		const Mg = merger(), L = bulbs();
+		// the red brick house and its square tower, white trim, the lantern on top
+		Mg.box(7, 3.6, 6, 'darkred', u + 3, y + 1.8, v).box(7.6, 0.4, 6.6, 'white', u + 3, y + 3.8, v);
+		Mg.box(3.2, 11, 3.2, 'darkred', u, y + 5.5, v).box(4.2, 0.35, 4.2, 'white', u, y + 11.1, v);
+		for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; Mg.box(0.08, 0.9, 0.08, 'white', u + Math.cos(a) * 1.95, y + 11.7, v + Math.sin(a) * 1.95); }
+		Mg.cyl(1.2, 1.2, 1.8, 'glass', u, y + 12.2, v, 12).geo(new THREE.ConeGeometry(1.45, 1.1, 12), 'darksteel', u, y + 13.65, v).cyl(0.06, 0.06, 1.2, 'darksteel', u, y + 14.6, v, 4);
+		Mg.done(group, { shadow: !isPhone });
+		L.add(u, y + 12.2, v, [1, 0.95, 0.8]);
+		L.done(group, 4);
 	}
 
 	// ---------- walking ----------
@@ -461,8 +480,8 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 
 	const steps = [
 		buildDeck, buildPiles,
-		() => buildShops(SHOPS.slice(0, 7)), () => buildShops(SHOPS.slice(7, 14)), () => buildShops(SHOPS.slice(14)),
-		buildStreet, buildAnimals,
+		...[0, 4, 8, 11, 14, 18].map((k, i, A) => () => buildShops(SHOPS.slice(k, A[i + 1] ?? SHOPS.length))),
+		buildStreet, buildAnimals, buildLighthouse,
 		() => { W.seatList = [...W.seats, ...W.counters].map((q) => { const [x, z] = toW(q.u, q.v); return { x, z, y: q.y, h: q.h || 0, sit: !!q.sit, table: !!q.table, heading: q.heading + 16 * Math.PI / 180, taken: false }; }); W.built = true; },
 	];
 	return { steps, floor, push, venue, update, get built() { return W.built; }, info: () => ({ built: W.built, shops: SHOPS.length, lions: W.lions.length, seats: W.seats.length + W.counters.length }), geom: { BASE, DIR, LEN, Y } };

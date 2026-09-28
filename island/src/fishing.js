@@ -5,7 +5,8 @@
 //   fight: hold to reel. The line's tension climbs while you reel and the fish pulls
 //     harder when it runs; keep it in the green, let go when it runs, or it snaps. Bring
 //     it in and it's yours: a card with the fish, its weight, and your best.
-// What bites depends on the water: bluegill, bass and catfish in the lake; striped bass,
+// What bites depends on the water: bluegill, bass and catfish in the lakes and reservoirs;
+// rainbow trout, smallmouth bass and pikeminnow in the rivers and creeks; striped bass,
 // halibut and leopard sharks in the bay; rockfish, surfperch and lingcod off the coast;
 // snapper and trevally round the island. Every catch is kept in a log on this device.
 
@@ -14,6 +15,7 @@ import { PARKS } from './nature/parks.js';
 
 const SPECIES = {
 	lake: [['bluegill', 0.34, 0.1, 0.8, '#6f8a52', '#d98a2b'], ['largemouth bass', 0.24, 0.6, 6, '#56703d', '#e8e2c8'], ['redear sunfish', 0.14, 0.2, 1.2, '#7d8a4a', '#c9602a'], ['channel catfish', 0.14, 1, 8, '#6d6a62', '#d8d4c8'], ['common carp', 0.14, 2, 14, '#a88a45', '#e3cf94']],
+	river: [['rainbow trout', 0.34, 0.4, 4, '#7d8a6a', '#e8c4c8'], ['smallmouth bass', 0.2, 0.5, 4, '#7a6a3a', '#e6d8b0'], ['Sacramento pikeminnow', 0.16, 0.5, 6, '#6e7a5e', '#e4e0cc'], ['green sunfish', 0.18, 0.1, 0.6, '#5e7a4a', '#e0b050'], ['Sacramento sucker', 0.12, 1, 5, '#7a6a52', '#e8dcc4']],
 	bay: [['striped bass', 0.3, 3, 25, '#7f8b95', '#eef0f0'], ['California halibut', 0.2, 2, 20, '#8a7a5c', '#f2efe6'], ['leopard shark', 0.14, 6, 25, '#7b7d7a', '#e6e2da'], ['jacksmelt', 0.24, 0.3, 1.2, '#7aa0a8', '#eaf2f2'], ['bat ray', 0.12, 5, 40, '#4e4a45', '#e8e4dc']],
 	ocean: [['blue rockfish', 0.26, 0.8, 3.5, '#3d5570', '#b8c6d4'], ['barred surfperch', 0.26, 0.4, 2.5, '#9a9a82', '#e9e6d6'], ['lingcod', 0.16, 4, 30, '#6b6a4c', '#d8d0a8'], ['cabezon', 0.14, 2, 12, '#6d4a3a', '#c9a28a'], ['California halibut', 0.18, 2, 20, '#8a7a5c', '#f2efe6']],
 	island: [['red snapper', 0.3, 1, 10, '#c9443a', '#f6d8cc'], ['giant trevally', 0.18, 5, 40, '#8b9aa6', '#e8eef2'], ['parrotfish', 0.28, 1, 8, '#3aa38a', '#f0a8c8'], ['bonefish', 0.24, 2, 10, '#b8c4c8', '#f4f6f6']],
@@ -183,6 +185,9 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 			const a = k / 12 * Math.PI * 2, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
 			const lv = lake?.waterAt(px, pz);
 			if (lv !== null && lv !== undefined) return { kind: 'lake', level: lv, x: px, z: pz };
+			// (every other lake, reservoir, river and creek: bay/water.js)
+			const wk = W.water?.kindAt(px, pz);
+			if (wk) return { kind: wk, level: W.water.waterAt(px, pz), x: px, z: pz };
 			if (W.island.heightAt(px, pz) < -0.4) {
 				const isl = Math.max(Math.abs(px), Math.abs(pz)) < W.island.half;
 				return { kind: isl ? 'island' : inBay(px, pz) ? 'bay' : 'ocean', level: 0, x: px, z: pz };
@@ -190,7 +195,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		}
 		return null;
 	}
-	const isWater = (W, x, z) => (F.water === 'lake' ? W.lake?.waterAt(x, z) != null : W.island.heightAt(x, z) < -0.3);
+	const isWater = (W, x, z) => (F.water === 'lake' || F.water === 'river' ? (W.lake?.waterAt(x, z) ?? W.water?.waterAt(x, z)) != null : W.island.heightAt(x, z) < -0.3);
 
 	function cast(W) {
 		const d = new THREE.Vector3(); camera.getWorldDirection(d); d.y = 0; d.normalize();
