@@ -81,6 +81,9 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 		ss = mix(ss, vec3(0.05, 0.06, 0.04), 1.0 - smoothstep(0.4, 1.4, h));
 		c = mix(c, ss, cliffK);
 	}
+	// the coves' sand: warm tan, from the sandstone it is ground from
+	float cove = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h) * (1.0 - smoothstep(300.0, 600.0, sea));
+	c = mix(c, mix(vec3(0.5, 0.41, 0.28), vec3(0.6, 0.5, 0.35), n2) * mix(0.72, 1.0, smoothstep(0.3, 1.2, h)), cove);
 	// rocks in the coves at the cliff foot, dark and wet
 	float lowSand = (1.0 - smoothstep(1.8, 3.5, h)) * step(-0.3, h) * (1.0 - smoothstep(250.0, 450.0, sea)) * (1.0 - cliffK);
 	if (lowSand > 0.0) {
@@ -101,14 +104,15 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 	if (links > 0.0) {
 		float fb = abs(wVn(w / 230.0 + 2.1) * 2.0 - 1.0) + (wVn(w / 40.0) - 0.5) * 0.08;
 		float fair = 1.0 - smoothstep(0.16, 0.2, fb);
-		vec3 lc = mix(vec3(0.12, 0.2, 0.05), vec3(0.15, 0.24, 0.06), n2);          // the rough
+		vec3 lc = mix(vec3(0.13, 0.19, 0.06), vec3(0.18, 0.22, 0.08), n2);          // the rough, a little tawny
 		lc = mix(lc, mix(vec3(0.17, 0.36, 0.07), vec3(0.2, 0.41, 0.08), n2), fair);
 		vec2 gc = floor(w / 170.0), go = (vec2(wH01(ivec2(gc) + 3), wH01(ivec2(gc) + 11)) * 0.6 + 0.2) * 170.0;
 		float gd = length(w - gc * 170.0 - go);
 		lc = mix(lc, vec3(0.14, 0.42, 0.09), (1.0 - smoothstep(13.0, 15.0, gd)) * fair);      // the green
 		// a bunker or two beside the green, kidney-shaped
 		vec2 bo = (vec2(wH01(ivec2(gc) + 5), wH01(ivec2(gc) + 9)) - 0.5) * 50.0;
-		float bunker = (1.0 - smoothstep(5.0, 6.5, length((w - gc * 170.0 - go - bo) * vec2(1.0, 1.6)) + (wVn(w / 5.0) - 0.5) * 4.0)) * step(0.35, wH01(ivec2(gc) + 7));
+		float onGreen = step(0.5, 1.0 - smoothstep(0.16, 0.2, abs(wVn((gc * 170.0 + go) / 230.0 + 2.1) * 2.0 - 1.0)));
+		float bunker = (1.0 - smoothstep(7.0, 9.0, length((w - gc * 170.0 - go - bo) * vec2(1.0, 1.6)) + (wVn(w / 5.0) - 0.5) * 5.0)) * step(0.35, wH01(ivec2(gc) + 7)) * onGreen;
 		lc = mix(lc, vec3(0.72, 0.64, 0.47), bunker);
 		c = mix(c, lc, links);
 	}

@@ -277,7 +277,8 @@ export function* planTile(C, ti, tj, roads) {
 	// ---- what stands here: buildings, streets, water ----
 	const procUrban = !real.inside(cx, cz) && U0.u >= 0.12;
 	const blds = [];
-	if (nBuilt > 0 && procUrban && C.city?.fill) {
+	// (the gridded buildings, only where there is industry: the yards are behind them)
+	if (nInd > 0 && procUrban && C.city?.fill) {
 		const L = [];
 		C.city.fill(cx, cz, T * 0.72 + M, L);
 		for (const o of L) if (o.h > 1.6) { blds.push(o); O.rect(o.x, o.z, o.w, o.d, o.a, 0.5, BLD); }
@@ -607,7 +608,8 @@ export function* planTile(C, ti, tj, roads) {
 	}
 
 	// ---- 5. the freeways' margins: a fence, a weedy dirt strip, litter blown against it ----
-	const urbanish = (x, z) => { const k = land[Math.floor(clamp((z - z0) / 20, 0, N - 1)) * N + Math.floor(clamp((x - x0) / 20, 0, N - 1))]; return k === 2 || k === 3; };
+	// (the gridded margins only through industry, where the buildings are known)
+	const urbanish = (x, z) => { const k = land[Math.floor(clamp((z - z0) / 20, 0, N - 1)) * N + Math.floor(clamp((x - x0) / 20, 0, N - 1))]; return k === 3; };
 	for (const fl of freewayLines()) {
 		let touch = false;
 		for (let i = 0; i < fl.length && !touch; i += 2) if (fl[i] > x0 - 60 && fl[i] < x1 + 60 && fl[i + 1] > z0 - 60 && fl[i + 1] < z1 + 60) touch = true;
