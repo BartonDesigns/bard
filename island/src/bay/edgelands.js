@@ -185,7 +185,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					const endD = R.kind === 4 ? 99 : Math.min(S[i], Ltot - S[i]) + 0.3;
 					for (const t of ACROSS) { const px = x + nx * hw * t, pz = z + nz * hw * t; vert(px, Math.max(H(px, pz), h - 0.3) + yo, pz, (t + 1) / 2, S[i], R.kind, low, (1 - Math.abs(t)) * hw + 0.05, endD); }
 				}
-				for (let k = 0; k + 1 < run.length; k++) for (let q = 0; q + 1 < na; q++) { const a = base + k * na + q, b = a + na; G.I.push(a, b, a + 1, a + 1, b, b + 1); }
+				for (let k = 0; k + 1 < run.length; k++) for (let q = 0; q + 1 < na; q++) { const a = base + k * na + q, b = a + na; G.I.push(a, a + 1, b, a + 1, b + 1, b); }
 				run = null;
 			};
 			for (let i = 0; i + 1 < S.length; i++) {

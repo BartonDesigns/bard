@@ -201,7 +201,7 @@ void main(){
 	float fo = 0.0;
 	if (foamK > 0.01) {
 		float streak = gvn(vec2(along * 0.45 - t * 0.7, across * 1.9)) * 0.6 + gvn(vec2(along * 1.4 - t * 1.2, across * 4.3) + 9.0) * 0.4;
-		float blot = smoothstep(0.35, 0.7, gvn(vec2(along * 0.07, across * 0.35) + 4.0) + foamK * 0.2);
+		float blot = smoothstep(0.45, 0.75, gvn(vec2(along * 0.07, across * 0.35) + 4.0) + foamK * 0.25);
 		fo = foamK * blot * smoothstep(0.5, 0.78, streak);
 	}
 	// riffles round the rocks, trailing downstream
@@ -515,7 +515,7 @@ export function createWater(scene, shared, opts = {}) {
 				const w = L.w[k], hw = (L.conc ? Math.max(0.7, w * 0.26) + 0.25 : w / 2 + 0.3 + 0.07 * w) * mk * (k === 0 ? tip0 : k === n - 1 ? tip1 : 1);
 				const y = L.lv[k];
 				const seg = k < n - 1 ? k : k - 1, sl = Math.max(0, (L.lv[seg] - L.lv[seg + 1]) / Math.max(1, L.s[seg + 1] - L.s[seg]));
-				const speed = L.conc ? 0.9 : Math.min(2.4, 0.25 + Math.sqrt(sl) * 9), foam = L.conc ? 0.05 : sm(0.02, 0.07, sl);
+				const speed = L.conc ? 0.9 : Math.min(2.4, 0.25 + Math.sqrt(sl) * 9), foam = L.conc ? 0.05 : sm(0.03, 0.1, sl) * (1 - sm(10, 30, w) * 0.6);
 				const tk = L.conc ? 1 : townK(L.x[k], L.z[k]), rk = rockyAt(L, k);
 				for (const sd of [-1, 0, 1]) {
 					pos.push(L.x[k] - tz * hw * sd - cx, y, L.z[k] + tx * hw * sd - cz);
