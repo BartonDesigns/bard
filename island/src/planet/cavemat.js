@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { HEIGHT_GLSL } from '../world/terrain.js';
+import { addPulse } from '../pulse.js';
 
 export const FAKE = 10;     // glowing places lighting each surface
 
@@ -303,6 +304,8 @@ export function rockMaterial(L, profile, opts = {}) {
 export function crystalMaterial(L, color) {
 	const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(...color).multiplyScalar(0.4), roughness: 0.08, metalness: 0.1, emissive: new THREE.Color(...color), emissiveIntensity: 0.9, transparent: true, opacity: 0.88 });
 	m.onBeforeCompile = (sh) => {
+		// first, so the ring of a struck note rides on top of the glow
+		addPulse(sh);
 		sh.uniforms.uTime = L.U.uTime;
 		sh.vertexShader = 'varying float vCy;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvCy = position.y;');
 		sh.fragmentShader = 'uniform float uTime; varying float vCy;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>

@@ -319,9 +319,11 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		return out;
 	})();
 	const up = new THREE.Vector3(0, 1, 0);
-	instanced(crystalGeo, crystalMaterial(L, crystalC), crystals, (o) => {
+	// the crystals ring when struck, like glass (music.js picks them)
+	const crystalIM = instanced(crystalGeo, crystalMaterial(L, crystalC), crystals, (o) => {
 		q4.setFromUnitVectors(up, o.dir); s4.set(o.rad, o.len, o.rad); p4.set(o.x, o.y, o.z);
 	});
+	if (crystalIM) crystalIM.userData.material175 = 'crystal';
 
 	// ---------- pools and lava ----------
 	const waterTint = [0.02, 0.03, 0.035];
@@ -720,6 +722,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	}
 	const api = {
 		update, floor, push, go, dispose, entrances: list, spots,
+		pickables: crystalIM ? [crystalIM] : [],
 		inside: () => inK,
 		// for others building underground: a glowing place to light the rock, and the lighting
 		addGlow, lighting: L, openHoles,

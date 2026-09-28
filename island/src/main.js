@@ -520,6 +520,8 @@ export function createIslandWorld() {
 		const fish = createFish(eco, island, shared, scene, camera, reef.bommies);
 		const inverts = createInverts(eco, island, shared, scene, camera, reef.bommies);
 		const pick = [...vegetation.pickables, ...village.pickables];
+		// the reef's corals and the sea's creatures ring too (tagged by what they are made of)
+		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
@@ -535,6 +537,7 @@ export function createIslandWorld() {
 			world.underworld = createUnderworld(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, plan: cavePlan });
 			island.underFloor = world.underworld.floor;
 			island.underPush = world.underworld.push;
+			pick.push(...world.underworld.pickables);
 		}
 		// the mushrooms this world grows, and what they do to you
 		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
