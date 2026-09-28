@@ -150,6 +150,8 @@ export function planCaves(island, profile) {
 			if (n.y > (relax ? 0.96 : 0.88) || n.y < (relax ? 0.4 : 0.5)) continue;
 			// the path on the ground is not a place for a hole
 			if (island.maskAt && island.maskAt(px, pz, 0) > 0.3) continue;
+			// ...nor a stream or a lake (planet/waters.js)
+			if (island.inWater && [[0, 0], [6, 0], [-6, 0], [0, 6], [0, -6]].some(([u, v]) => island.inWater(px + u, pz + v))) continue;
 			// the chamber this mouth leads down to: reachable on a gentle ramp
 			let best = null;
 			for (const c of chambers) {

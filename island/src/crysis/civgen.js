@@ -238,7 +238,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		return (g(i, j) * (1 - u) + g(i + 1, j) * u) * (1 - v) + (g(i, j + 1) * (1 - u) + g(i + 1, j + 1) * u) * v;
 	}
 	const slope = (x, z) => Math.hypot(H(x + HC, z) - H(x - HC, z), H(x, z + HC) - H(x, z - HC)) / (2 * HC);
-	const dry = (x, z) => H(x, z) > 1.5;
+	// (above the sea, and out of the lakes: crysis/rivers.js)
+	const dry = (x, z) => H(x, z) > 1.5 && !water?.lake?.(x, z);
 	// the creeks and lakes (crysis/rivers.js): streets cross them on bridges, but no house,
 	// yard or school stands in one; the parks take their banks
 	const wet = (x, z, m) => !!water && water.near(x, z) < m;

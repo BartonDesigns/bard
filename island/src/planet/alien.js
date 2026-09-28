@@ -39,14 +39,14 @@ export function planAlien(island, profile, avoid = {}) {
 		for (const s of sites) if (Math.hypot(x - s.x, z - s.z) < r + s.clearR + pad) return true;
 		return false;
 	};
-	// the ground under a footprint: its lowest and highest, and whether it is all dry,
-	// off the paths and the village, and clear of the shore
+	// the ground under a footprint: its lowest and highest, and whether it is all dry (out of
+	// the streams and lakes too), off the paths and the village, and clear of the shore
 	const ground = (x, z, r, paths = true) => {
 		let lo = H(x, z), hi = lo, ok = island.coastAt(x, z) > r + 30;
 		for (const f of [0.45, 0.8, 1.05]) for (let k = 0; k < 12; k++) {
 			const a = k / 12 * TAU, px = x + Math.sin(a) * r * f, pz = z + Math.cos(a) * r * f, h = H(px, pz);
 			lo = Math.min(lo, h); hi = Math.max(hi, h);
-			if (h < 2.5 || island.maskAt(px, pz, 1) > 0.05 || (paths && island.maskAt(px, pz, 0) > 0.35)) ok = false;
+			if (h < 2.5 || island.maskAt(px, pz, 1) > 0.05 || (paths && island.maskAt(px, pz, 0) > 0.35) || island.inWater?.(px, pz)) ok = false;
 		}
 		return { lo, hi, ok };
 	};

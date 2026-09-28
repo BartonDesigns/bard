@@ -39,6 +39,25 @@ function inRings(R, x, z) {
 	}
 	return c;
 }
+// a ring's points kept to draw it within tol metres (Douglas-Peucker), as indices
+function simplify(r, tol) {
+	const n = r.length / 2;
+	if (n < 8) return [...Array(n).keys()];
+	const keep = new Uint8Array(n), st = [0, n - 1], t2 = tol * tol;
+	keep[0] = keep[n - 1] = 1;
+	while (st.length) {
+		const b = st.pop(), a = st.pop(), ax = r[a * 2], az = r[a * 2 + 1], dx = r[b * 2] - ax, dz = r[b * 2 + 1] - az, l2 = dx * dx + dz * dz || 1;
+		let far = -1, fd = t2;
+		for (let k = a + 1; k < b; k++) {
+			const t = Math.max(0, Math.min(1, ((r[k * 2] - ax) * dx + (r[k * 2 + 1] - az) * dz) / l2)), ex = r[k * 2] - ax - dx * t, ez = r[k * 2 + 1] - az - dz * t, d = ex * ex + ez * ez;
+			if (d > fd) { fd = d; far = k; }
+		}
+		if (far >= 0) { keep[far] = 1; st.push(a, far, far, b); }
+	}
+	const out = [];
+	for (let k = 0; k < n; k++) if (keep[k]) out.push(k);
+	return out;
+}
 const KIND_NAME = ['Lake', 'Reservoir', 'Basin', 'Pond', 'Pool'];
 // a stream's depth at the middle, by its width
 const depthOf = (w) => (w < 3 ? 0.28 + w * 0.1 : w < 15 ? 0.45 + w * 0.06 : Math.min(5, 1.1 + w * 0.02));
@@ -52,15 +71,20 @@ vec3 skyIn(vec3 r, vec2 p){
 	// low down, the dark line of the hills and trees round the shore
 	return mix(vec3(0.035, 0.05, 0.035) * (1.0 - uNight * 0.8), sky, smoothstep(0.03, 0.22, r.y + (vn(p * 0.02) - 0.5) * 0.1));
 }
-// the world's own water: frozen, molten, or tinted as its sea is
-vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres){
+// the world's own water: frozen (the whole world's, or this stretch's), molten, or tinted as its sea is
+vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres, float frozen){
 	if (uLook.x > 1.5) {
 		// lava: a crust of dark rock broken over glowing melt, the cracks crawling downstream
-		float cr = smoothstep(0.35, 0.75, vn(p * 0.35 + vec2(uTime * flow * 0.05, 0.0)) * 0.6 + vn(p * 1.3 - uTime * 0.02) * 0.4);
-		vec3 hot = mix(vec3(3.2, 0.8, 0.12), vec3(4.5, 2.0, 0.4), vn(p * 2.0 + uTime * 0.3));
-		return vec4(mix(hot, vec3(0.06, 0.045, 0.04), cr), 1.0);
+		// (the eruption's colours on the cone, world/terrain.js plLava: white-yellow in the
+		// channel, crusting red at the edges), brighter at night as the ground's glow is
+		float cr = smoothstep(0.4, 0.62, vn(p * 0.35 + vec2(uTime * flow * 0.05, 0.0)) * 0.6 + vn(p * 1.3 - uTime * 0.02) * 0.4);
+		// (in linear light: the crust near black, the melt a deep red going orange)
+		vec3 hot = mix(vec3(0.8, 0.06, 0.004), vec3(2.2, 0.55, 0.04), smoothstep(0.55, 0.9, vn(p * 0.7 + uTime * 0.3))) * (1.0 + uNight * 0.6);
+		// (far off, where the crust's cracks are finer than a pixel, their dull red average)
+		float far = clamp(length(fwidth(p)) * 0.6 - 0.2, 0.0, 1.0);
+		return vec4(mix(mix(hot, vec3(0.005, 0.004, 0.0035), cr), vec3(0.3, 0.025, 0.003) * (1.0 + uNight * 0.6), far), 1.0);
 	}
-	if (uLook.x > 0.5) {
+	if (uLook.x > 0.5 || frozen > 0.5) {
 		// ice: pale and opaque, milky where it is thick, cracked, the sky faint in it
 		float ck = smoothstep(0.02, 0.0, abs(vn(p * 0.25) - 0.5)) * 0.5 + smoothstep(0.015, 0.0, abs(vn(p * 0.9 + 3.0) - 0.5)) * 0.3;
 		vec3 ice = mix(vec3(0.62, 0.74, 0.8), vec3(0.82, 0.9, 0.95), vn(p * 0.08)) * (1.0 - ck * 0.35);
@@ -71,9 +95,9 @@ vec4 worldLook(vec3 col, float a, vec2 p, float flow, float fres){
 }
 `;
 const RIVER_VERT = /* glsl */`
-attribute vec4 aC; attribute vec4 aF; attribute vec2 aT;
+attribute vec4 aC; attribute vec4 aF; attribute vec3 aT;
 uniform float uSeason;
-varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec2 vT; varying float vDist;
+varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying float vDist;
 #include <fog_pars_vertex>
 void main(){
 	vec3 p = position;
@@ -90,11 +114,11 @@ void main(){
 	#include <fog_vertex>
 }`;
 const RIVER_FRAG = /* glsl */`
-varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec2 vT; varying float vDist;
+varying vec3 vW; varying vec2 vUv; varying vec4 vF; varying vec3 vT; varying float vDist;
 #include <fog_pars_fragment>
 float rip(vec2 q){ return vn(q) * 0.55 + vn(q * 2.3 + 5.1) * 0.3 + vn(q * 5.1 - 2.7) * 0.15; }
 void main(){
-	vec2 T = normalize(vT + vec2(1e-5, 0.0)), N = vec2(-T.y, T.x);
+	vec2 T = normalize(vT.xy + vec2(1e-5, 0.0)), N = vec2(-T.y, T.x);
 	float along = vUv.y, across = dot(vW.xz, N);
 	float speed = vF.x, foamK = vF.y;
 	// ripples carried downstream, stretched along the flow
@@ -119,7 +143,7 @@ void main(){
 	fo += (1.0 - smoothstep(0.02, 0.12, depth)) * 0.35 * smoothstep(0.5, 0.7, rip(q * 3.0)) * nearK;
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
 	float a = clamp(0.28 + deepK * 0.62 + fres * 0.25 + fo, 0.0, 0.96);
-	gl_FragColor = worldLook(col, a, vec2(along, across), speed, fres);
+	gl_FragColor = worldLook(col, a, vec2(along, across), speed, fres, vT.z);
 	// (its edges soft where they run up the bank)
 	gl_FragColor.a *= 1.0 - smoothstep(0.82, 1.0, abs(vUv.x));
 	#include <tonemapping_fragment>
@@ -137,7 +161,7 @@ void main(){
 	#include <fog_vertex>
 }`;
 const LAKE_FRAG = /* glsl */`
-uniform vec3 uTint; uniform float uLevel;
+uniform vec3 uTint; uniform float uLevel, uIce;
 varying vec3 vW; varying float vDist;
 #include <fog_pars_fragment>
 float wave(vec2 p){ return vn(p * 0.35 + uTime * vec2(0.05, 0.03)) * 0.6 + vn(p * 1.1 - uTime * vec2(0.04, 0.07)) * 0.3 + vn(p * 3.3 + uTime * vec2(0.11, -0.05)) * 0.1; }
@@ -159,7 +183,7 @@ void main(){
 	float lace = (1.0 - smoothstep(0.0, 0.18, depth)) * smoothstep(0.45, 0.75, vn(p * 1.7 + uTime * 0.2)) * nearK * step(0.0, depth);
 	col = mix(col, vec3(0.82, 0.84, 0.8) * (1.0 - uNight * 0.8), lace * 0.6);
 	float a = clamp(0.3 + deepK * 0.66 + fres * 0.2 + lace * 0.4, 0.0, 0.97);
-	gl_FragColor = worldLook(col, a, p, 0.2, fres);
+	gl_FragColor = worldLook(col, a, p, 0.2, fres, uIce);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 	#include <fog_fragment>
@@ -178,7 +202,7 @@ export function createWater(scene, shared, opts = {}) {
 	root.name = 'water';
 	scene.add(root);
 	const RANGE = isPhone ? { data: 4600, near: 1800, far: 6500, carve: 720, slots: 49, budget: 3.5 } : { data: 7200, near: 2600, far: 9500, carve: 1100, slots: 100, budget: 5 };
-	const S = { lakes: [], lakeGrid: new Map(), tiles: new Map(), ready: false, jobs: [], plannedAt: -1e9, px: 1e9, pz: 1e9, srcV: '', stats: { longest: 0, slowest: 0, carved: 0, built: 0 } };
+	const S = { lakes: [], lakeGrid: new Map(), tiles: new Map(), ready: false, jobs: [], plannedAt: -1e9, px: 1e9, pz: 1e9, srcV: '', stats: { longest: 0, slowest: 0, carved: 0, built: 0, spikes: {} } };
 	const atlas = carve ? createCarveAtlas(RANGE.slots) : null;
 	const lookU = { value: new THREE.Vector4(look?.kind === 'lava' ? 2 : look?.kind === 'ice' ? 1 : 0, look?.mix || 0, 0, 0) }, tintU = { value: new THREE.Vector3(...(look?.tint || [0.1, 0.3, 0.35])) };
 	const uNight = { value: 0 };
@@ -191,28 +215,53 @@ export function createWater(scene, shared, opts = {}) {
 	const lakeMats = new Map();
 	const TINTS = [[0.012, 0.045, 0.04], [0.01, 0.04, 0.05], [0.03, 0.05, 0.03], [0.02, 0.05, 0.03], [0.02, 0.06, 0.07]];
 	function lakeMat(L) {
-		const m = new THREE.ShaderMaterial({ uniforms: { ...uniforms(), uTint: { value: new THREE.Vector3(...TINTS[L.kind]) }, uLevel: { value: L.level } }, vertexShader: LAKE_VERT, fragmentShader: FRAG_HEAD + LAKE_FRAG, fog: true, transparent: riverMat.transparent, depthWrite: true });
+		const m = new THREE.ShaderMaterial({ uniforms: { ...uniforms(), uTint: { value: new THREE.Vector3(...TINTS[L.kind]) }, uLevel: { value: L.level }, uIce: { value: L.ice ? 1 : 0 } }, vertexShader: LAKE_VERT, fragmentShader: FRAG_HEAD + LAKE_FRAG, fog: true, transparent: riverMat.transparent, depthWrite: true });
 		lakeMats.set(L, m);
 		return m;
 	}
 
 	// ---------- the lakes of every source, by 1 km cell ----------
 	const LCELL = 1024, lkey = (i, j) => i * 100003 + j;
-	function regrid() {
-		S.lakeGrid.clear();
-		const all = new Set();
-		for (const src of sources) for (const L of src.lakes) {
-			if (L.area === undefined) bounds(L);
-			all.add(L);
-			for (let gi = Math.floor(L.x0 / LCELL); gi <= Math.floor(L.x1 / LCELL); gi++) for (let gj = Math.floor(L.z0 / LCELL); gj <= Math.floor(L.z1 / LCELL); gj++) {
-				const k = lkey(gi, gj); let g = S.lakeGrid.get(k); if (!g) S.lakeGrid.set(k, g = []); g.push(L);
+	// (only the sources that changed are looked at again: there are thousands of lakes)
+	const had = new Map();
+	let lakeIds = 0;
+	const cellsOf = (L, fn) => { for (let gi = Math.floor(L.x0 / LCELL); gi <= Math.floor(L.x1 / LCELL); gi++) for (let gj = Math.floor(L.z0 / LCELL); gj <= Math.floor(L.z1 / LCELL); gj++) fn(lkey(gi, gj)); };
+	// (the new ones are put in a few milliseconds' worth a frame: the Bay's thousands come at once)
+	const addQ = [], live = (L) => { for (const set of had.values()) if (set.has(L)) return true; return false; };
+	function regrid(changed) {
+		let gone = false;
+		for (const src of changed) {
+			const now = new Set(src.lakes), old = had.get(src) || new Set();
+			for (const L of old) {
+				if (now.has(L) || !L.gridded) continue;
+				// (one gone: its water, its birds and its carving)
+				cellsOf(L, (k) => { const g = S.lakeGrid.get(k), q = g ? g.indexOf(L) : -1; if (q >= 0) g.splice(q, 1); });
+				dropLake(L); dropFlock(L); L.gridded = false; gone = true;
+				recarve(L);
+			}
+			for (const L of now) if (!old.has(L)) addQ.push(L);
+			had.set(src, now);
+		}
+		if (gone) { S.lakes = S.lakes.filter(live); S.noCarve.clear(); }
+	}
+	// (the squares carved round a lake that came or went, carved again)
+	function recarve(L) { if (atlas) for (const t of [...atlas.tiles()]) if (L.x1 > t.i * WT - 12 && L.x0 < (t.i + 1) * WT + 12 && L.z1 > t.j * WT - 12 && L.z0 < (t.j + 1) * WT + 12) atlas.drop(t.i, t.j); }
+	function putLakes(ms) {
+		if (!addQ.length) return;
+		const t0 = performance.now();
+		while (addQ.length && performance.now() - t0 < ms) {
+			for (let n = 0; n < 50 && addQ.length; n++) {
+				const L = addQ.pop();
+				if (L.gridded || !live(L)) continue;
+				if (L.area === undefined) bounds(L);
+				if (L.id === undefined) L.id = lakeIds++;
+				cellsOf(L, (k) => { let g = S.lakeGrid.get(k); if (!g) S.lakeGrid.set(k, g = []); g.push(L); });
+				L.gridded = true;
+				S.lakes.push(L);
+				recarve(L);
 			}
 		}
-		// (the ones gone: their water, their birds and their carving)
-		for (const L of S.lakes) if (!all.has(L)) { dropLake(L); dropFlock(L); if (atlas) for (const t of [...atlas.tiles()]) if (L.x1 > t.i * WT - 12 && L.x0 < (t.i + 1) * WT + 12 && L.z1 > t.j * WT - 12 && L.z0 < (t.j + 1) * WT + 12) atlas.drop(t.i, t.j); }
-		S.lakes = [...all];
-		S.lakes.forEach((L, i) => { if (L.id === undefined) L.id = i; });
-		S.noCarve.clear();
+		if (!addQ.length) { S.noCarve.clear(); S.plannedAt = -1e9; }
 	}
 	const lakesNear = (x0, z0, x1, z1) => {
 		const out = new Set();
@@ -233,9 +282,9 @@ export function createWater(scene, shared, opts = {}) {
 		}
 	}
 	function addLine(T, cls, int, name, P) {
-		const n = P.length, x = new Float64Array(n), z = new Float64Array(n), lv = new Float32Array(n), w = new Float32Array(n), s = new Float32Array(n);
+		const n = P.length, x = new Float64Array(n), z = new Float64Array(n), lv = new Float32Array(n), w = new Float32Array(n), s = new Float32Array(n), ice = new Uint8Array(n);
 		let x0 = 1e18, z0 = 1e18, x1 = -1e18, z1 = -1e18, wm = 0;
-		P.forEach((q, k) => { x[k] = q[0]; z[k] = q[1]; lv[k] = q[2]; w[k] = Math.max(0.8, q[3]); wm = Math.max(wm, w[k]); x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); if (k) s[k] = s[k - 1] + Math.hypot(q[0] - P[k - 1][0], q[1] - P[k - 1][1]); });
+		P.forEach((q, k) => { ice[k] = q[4] ? 1 : 0; x[k] = q[0]; z[k] = q[1]; lv[k] = q[2]; w[k] = Math.max(0.8, q[3]); wm = Math.max(wm, w[k]); x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); z0 = Math.min(z0, q[1]); z1 = Math.max(z1, q[1]); if (k) s[k] = s[k - 1] + Math.hypot(q[0] - P[k - 1][0], q[1] - P[k - 1][1]); });
 		const mid = P[n >> 1], town = townK(mid[0], mid[1]);
 		// a flood channel in town is poured concrete, its water a shallow sheet 2 m below the
 		// street; a natural creek in town runs a little deeper between its banks
@@ -244,7 +293,7 @@ export function createWater(scene, shared, opts = {}) {
 			for (let k = 0; k < n; k++) lv[k] -= conc ? 2.0 : 0.15 + 0.9 * townK(x[k], z[k]) * Math.min(1, w[k] / 4);
 			for (let k = 1; k < n; k++) lv[k] = Math.min(lv[k], lv[k - 1]);
 		}
-		const L = { cls, int, name, n, x, z, lv, w, s, conc, town, x0, z0, x1, z1, reach: wm / 2 + (conc ? 12 : 26) };
+		const L = { cls, int, name, n, x, z, lv, w, s, ice, conc, town, x0, z0, x1, z1, reach: wm / 2 + (conc ? 12 : 26) };
 		const id = T.lines.push(L) - 1;
 		// the segments by 64 m cell, for finding the water at a point
 		for (let k = 0; k + 1 < n; k++) {
@@ -277,9 +326,9 @@ export function createWater(scene, shared, opts = {}) {
 	function waterAt(x, z) {
 		if (!S.ready || lookU.value.x > 0.5) return null;
 		const L = lakeAt(x, z);
-		if (L) return L.level;
+		if (L) return L.ice ? null : L.level;
 		const r = riverAt(x, z);
-		return r ? r.level : null;
+		return r && !r.L.ice[r.k] ? r.level : null;
 	}
 	function inWater(x, z) { return !!lakeAt(x, z) || !!riverAt(x, z, 1.2); }
 
@@ -307,7 +356,7 @@ export function createWater(scene, shared, opts = {}) {
 					pos.push(L.x[k] - tz * hw * sd - cx, y, L.z[k] + tx * hw * sd - cz);
 					aC.push(L.x[k] - cx, L.z[k] - cz, sd, L.s[k]);
 					aF.push(speed, foam, dry, w);
-					aT.push(tx, tz);
+					aT.push(tx, tz, L.ice[k]);
 				}
 			}
 			// (wound counter-clockwise seen from above)
@@ -321,7 +370,7 @@ export function createWater(scene, shared, opts = {}) {
 			g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
 			g.setAttribute('aC', new THREE.Float32BufferAttribute(aC, 4));
 			g.setAttribute('aF', new THREE.Float32BufferAttribute(aF, 4));
-			g.setAttribute('aT', new THREE.Float32BufferAttribute(aT, 2));
+			g.setAttribute('aT', new THREE.Float32BufferAttribute(aT, 3));
 			g.setIndex(pos.length / 3 > 65000 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
 			g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, pos[1], 0), 1600);
 			const m = new THREE.Mesh(g, riverMat);
@@ -402,11 +451,15 @@ export function createWater(scene, shared, opts = {}) {
 		const X0 = ci * WT, Z0 = cj * WT, ts = WT / WN;
 		// the ground as it stands without this carving (on an 8 m grid; the survey is coarser)
 		const G = WN / 4 + 1, base = new Float32Array(G * G);
-		for (let b = 0; b < G; b++) for (let a = 0; a < G; a++) { const x = X0 + a * 8, z = Z0 + b * 8; base[b * G + a] = heightAt(x, z) - waterDelta(x, z); }
+		let t0 = performance.now();
+		for (let b = 0; b < G; b++) {
+			for (let a = 0; a < G; a++) { const x = X0 + a * 8, z = Z0 + b * 8; base[b * G + a] = heightAt(x, z) - waterDelta(x, z); }
+			if (performance.now() - t0 > 2.5) { yield; t0 = performance.now(); }
+		}
 		yield;
 		const B = (a, b) => { const fa = a / 4, fb = b / 4, i = Math.min(G - 2, Math.floor(fa)), j = Math.min(G - 2, Math.floor(fb)), u = fa - i, v = fb - j, k = j * G + i; return (base[k] * (1 - u) + base[k + 1] * u) * (1 - v) + (base[k + G] * (1 - u) + base[k + G + 1] * u) * v; };
 		const N = W1 * W1, lo = new Float32Array(N), hi = new Float32Array(N), kind = new Float32Array(N), dam = new Float32Array(N).fill(-1e9);
-		let t0 = performance.now();
+		t0 = performance.now();
 		// the streams: a bed under the water, banks cut back at a slope to the land, or a
 		// low lip where the land lies under the water's level; in town a concrete trapezoid
 		for (const L of lines) {
@@ -492,6 +545,7 @@ export function createWater(scene, shared, opts = {}) {
 		if (lines.length) {
 			for (const r of roadsNear(X0 + WT / 2, Z0 + WT / 2, WT * 0.75)) {
 				if (r.cls === 'track' || r.cls === 'steps') continue;
+				if (performance.now() - t0 > 2.5) { yield; t0 = performance.now(); }
 				const p = r.pts;
 				for (let e = 0; e + 3 < p.length; e += 2) {
 					const rx = p[e], rz = p[e + 1], ex = p[e + 2] - rx, ez = p[e + 3] - rz, el = Math.hypot(ex, ez);
@@ -576,12 +630,28 @@ export function createWater(scene, shared, opts = {}) {
 	}
 
 	// ---------- a lake's water ----------
-	function buildLake(L) {
-		const toV = (r) => { const v = []; for (let i = 0; i < r.length; i += 2) v.push(new THREE.Vector2(r[i] - L.cx, -(r[i + 1] - L.cz))); return v; };
-		const sh = new THREE.Shape(toV(L.rings[0]));
-		for (const r of L.rings.slice(1)) sh.holes.push(new THREE.Path(toV(r)));
-		const g = new THREE.ShapeGeometry(sh);
-		g.rotateX(-Math.PI / 2);
+	// (its shore drawn to within a few tens of centimetres, a big lake a little coarser:
+	// the mapped shores are dense, and cutting the water into triangles is done all at once)
+	function* buildLake(L) {
+		const tol = L.area > 1e6 ? 1.2 : L.area > 5e4 ? 0.6 : 0.25;
+		const toV = (r) => { const v = []; for (const k of simplify(r, tol)) v.push(new THREE.Vector2(r[k * 2] - L.cx, r[k * 2 + 1] - L.cz)); return v; };
+		const outer = toV(L.rings[0]), holes = [];
+		yield;
+		for (const r of L.rings.slice(1)) { const h = toV(r); if (h.length >= 3) holes.push(h); }
+		yield;
+		if (outer.length < 3 || !S.lakes.includes(L) || L.mesh) return;
+		if (THREE.ShapeUtils.isClockWise(outer)) outer.reverse();
+		for (const h of holes) if (!THREE.ShapeUtils.isClockWise(h)) h.reverse();
+		const tris = THREE.ShapeUtils.triangulateShape(outer, holes), all = outer.concat(...holes);
+		const pos = new Float32Array(all.length * 3), idx = [];
+		all.forEach((p, i) => { pos[i * 3] = p.x; pos[i * 3 + 2] = p.y; });
+		// (wound to face up)
+		for (const t of tris) idx.push(t[0], t[2], t[1]);
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+		g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(all.length * 3).map((v, i) => (i % 3 === 1 ? 1 : 0)), 3));
+		g.setIndex(all.length > 65000 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+		g.computeBoundingSphere();
 		const m = new THREE.Mesh(g, lakeMat(L));
 		m.position.set(L.cx, L.level, L.cz);
 		m.renderOrder = 1;
@@ -598,7 +668,7 @@ export function createWater(scene, shared, opts = {}) {
 	const fowlG = { duck: waterfowl('mallard'), goose: waterfowl('goose') }, fowlM = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.75 });
 	const flock = [];
 	function flockFor(L) {
-		if (L.birds || L.kind === 4 || L.area < 1500 || lookU.value.x > 0.5) return;
+		if (L.birds || L.kind === 4 || L.area < 1500 || L.ice || lookU.value.x > 0.5) return;
 		L.birds = [];
 		const n = Math.min(isPhone ? 4 : 8, 2 + Math.floor(Math.sqrt(L.area) / 40));
 		for (let k = 0; k < n; k++) {
@@ -666,9 +736,9 @@ export function createWater(scene, shared, opts = {}) {
 				if (S.tiles.has(tkey(t.i, t.j))) continue;
 				const T = { i: t.i, j: t.j, lines: [], grid: new Map(), trees: [], mesh: null, wideIdx: 0, allIdx: 0, built: false };
 				S.tiles.set(tkey(t.i, t.j), T);
-				return buildTile(T);
+				return Object.assign(buildTile(T), { what: 'tile' });
 			}
-			if (t.kind === 'lake') { if (!t.L.mesh && S.lakes.includes(t.L)) buildLake(t.L); continue; }
+			if (t.kind === 'lake') { if (!t.L.mesh && S.lakes.includes(t.L)) return Object.assign(buildLake(t.L), { what: 'lake' }); continue; }
 			if (t.kind === 'carve') {
 				const X0 = t.i * WT, Z0 = t.j * WT, k = t.i * 100003 + t.j;
 				if (atlas.has(t.i, t.j) || carveQ.has(k)) continue;
@@ -678,42 +748,49 @@ export function createWater(scene, shared, opts = {}) {
 				if (!lines.length && !lakes.length) { S.noCarve.add(k); continue; }
 				if (atlas.full()) continue;
 				carveQ.add(k);
-				return (function* () {
+				return Object.assign((function* () {
 					const r = yield* carveTile(t.i, t.j, lines, lakes);
 					carveQ.delete(k);
 					if (r) { atlas.put(t.i, t.j, r.draw, r.walk); S.stats.carved++; } else S.noCarve.add(k);
-				})();
+				})(), { what: 'carve' });
 			}
 		}
 		return null;
 	}
 
 	let realN = 0;
+	// (what took longest, for a look at a slow frame)
+	const spike = (what, s0) => { const d = performance.now() - s0; if (d > (S.stats.spikes[what] || 0)) S.stats.spikes[what] = Math.round(d * 10) / 10; };
 	function update(dt, t, cam, night = 0) {
 		const f0 = performance.now();
 		uNight.value = night;
 		const x = cam.position.x, z = cam.position.z;
 		if (job) {
-			while (job && performance.now() - f0 < RANGE.budget) { if (job.next().done) job = null; }
+			while (job && performance.now() - f0 < RANGE.budget) { const s0 = performance.now(); if (job.next().done) job = null; spike('load', s0); }
 			if (job) return;
 			S.ready = true;
 			if (trees) { setWaterHooks({ water: inWater, trees: treesNear }); grewTrees(); }
 		}
 		// the sources' lakes, as they change
-		const sv = sources.map((q) => q.version()).join(',');
-		if (sv !== S.srcV) { S.srcV = sv; regrid(); S.plannedAt = -1e9; }
+		const vs = sources.map((q) => q.version()), sv = vs.join(',');
+		if (sv !== S.srcV) { const was = S.srcV.split(','); S.srcV = sv; regrid(sources.filter((q, i) => String(vs[i]) !== was[i])); S.plannedAt = -1e9; spike('regrid', f0); }
+		putLakes(2);
+		// (nothing carved until every lake is in)
+		if (addQ.length) return;
 		if (S.noCarve.size > 5000) S.noCarve.clear();
 		// a mapped region came in: its roads cross the creeks, so carve its squares again
 		const rn = real?.R?.regions?.length || 0;
 		if (atlas && rn !== realN) { realN = rn; for (const q of [...atlas.tiles()]) atlas.drop(q.i, q.j); S.noCarve.clear(); for (const [k, D] of decks) if (!D.walk) decks.delete(k); decksDirty = true; S.plannedAt = -1e9; }
-		if (Math.hypot(x - S.px, z - S.pz) > 120 || t - S.plannedAt > 1.5) { S.plannedAt = t; plan(x, z); }
+		if (Math.hypot(x - S.px, z - S.pz) > 120 || t - S.plannedAt > 1.5) { const p0 = performance.now(); S.plannedAt = t; plan(x, z); spike('plan', p0); }
 		const t0 = performance.now();
 		while (performance.now() - t0 < RANGE.budget) {
 			if (!cur) cur = nextJob();
 			if (!cur) break;
 			const s0 = performance.now();
+			const what = cur.what;
 			try { if (cur.next().done) cur = null; } catch (e) { console.warn('water', e); cur = null; }
 			S.stats.slowest = Math.max(S.stats.slowest, performance.now() - s0);
+			spike(what || 'job', s0);
 		}
 		atlas?.centre(x, z, RANGE.carve);
 		// the ribbons: the whole of a near tile, only the wider water further off
@@ -723,7 +800,7 @@ export function createWater(scene, shared, opts = {}) {
 			T.mesh.visible = d < RANGE.far && cam.position.y < 9000 && (d < RANGE.near || T.wideIdx > 0);
 			T.mesh.geometry.setDrawRange(0, d < RANGE.near ? T.allIdx : T.wideIdx);
 		}
-		if (decksDirty || Math.hypot(x - lastDecks.x, z - lastDecks.z) > 800) { lastDecks = { x, z }; buildDecks(Math.round(x / 64) * 64, Math.round(z / 64) * 64); }
+		if (decksDirty || Math.hypot(x - lastDecks.x, z - lastDecks.z) > 800) { const d0 = performance.now(); lastDecks = { x, z }; buildDecks(Math.round(x / 64) * 64, Math.round(z / 64) * 64); spike('decks', d0); }
 		if (grew && t - grewAt > 4) { grew = false; grewAt = t; grewTrees(); }
 		// the birds paddle about, steering off the shore and clear of you
 		for (const B of flock) {
@@ -754,12 +831,13 @@ export function createWater(scene, shared, opts = {}) {
 	// what water is here, for fishing: 'lake', 'river' or null
 	function kindAt(x, z) {
 		if (!S.ready || lookU.value.x > 0.5) return null;
-		if (lakeAt(x, z)) return 'lake';
+		const L = lakeAt(x, z);
+		if (L) return L.ice ? null : 'lake';
 		const r = riverAt(x, z);
-		return r && !r.L.conc && r.hw > 0.9 ? 'river' : null;
+		return r && !r.L.conc && !r.L.ice[r.k] && r.hw > 0.9 ? 'river' : null;
 	}
 	function info() {
-		return { ready: S.ready, lakes: S.lakes.length, lakeMeshes: S.lakes.filter((L) => L.mesh).length, tiles: S.tiles.size, built: S.stats.built, carved: atlas ? atlas.count() : 0, decks: decks.size, birds: flock.length, queue: S.jobs.length + (cur ? 1 : 0), longestMs: Math.round(S.stats.longest * 10) / 10, slowestStepMs: Math.round(S.stats.slowest * 10) / 10, sources: sources.map((q) => q.name) };
+		return { ready: S.ready, lakes: S.lakes.length, lakeMeshes: S.lakes.filter((L) => L.mesh).length, tiles: S.tiles.size, built: S.stats.built, carved: atlas ? atlas.count() : 0, decks: decks.size, birds: flock.length, queue: S.jobs.length + (cur ? 1 : 0), longestMs: Math.round(S.stats.longest * 10) / 10, slowestStepMs: Math.round(S.stats.slowest * 10) / 10, spikes: S.stats.spikes, sources: sources.map((q) => q.name) };
 	}
 	return {
 		group: root, update, waterAt, inWater, nameAt, kindAt, floor, info, ready: () => S.ready,
@@ -771,7 +849,7 @@ export function createWater(scene, shared, opts = {}) {
 		lakeAt: (x, z) => { const L = lakeAt(x, z); return L ? { name: L.name, level: L.level, kind: KIND_NAME[L.kind] } : null; },
 		// (for a look at why a square is or isn't carved)
 		carveDebug(x, z) { const i = Math.floor(x / WT), j = Math.floor(z / WT), k = i * 100003 + j, ln = linesNear(i * WT, j * WT, (i + 1) * WT, (j + 1) * WT); return { has: atlas?.has(i, j), no: S.noCarve.has(k), q: carveQ.has(k), lines: ln ? ln.length : null, lakes: lakesNear(i * WT, j * WT, (i + 1) * WT, (j + 1) * WT).size, full: atlas?.full(), delta: waterDelta(x, z), jobs: S.jobs.length, tiles: [...S.tiles.values()].filter((T) => !T.built).length }; },
-		budget: (ms) => { RANGE.budget = ms; }, resetStats: () => { S.stats.longest = 0; S.stats.slowest = 0; },
+		budget: (ms) => { RANGE.budget = ms; }, resetStats: () => { S.stats.longest = 0; S.stats.slowest = 0; S.stats.spikes = {}; },
 		attribution: () => sources.map((q) => q.attribution?.()).filter(Boolean).join(' · '),
 	};
 }

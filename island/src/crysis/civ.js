@@ -22,7 +22,7 @@ export function createCivilization({ real, bay, water = () => null }) {
 	function start(t) {
 		const hit = cache.find((c) => c.key === key(t));
 		if (hit) return { town: t, done: hit.region };
-		const W = water(), it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name, water: W ? { near: (x, z) => W.near(x, z) } : null });
+		const W = water(), it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name, water: W ? { near: (x, z) => W.near(x, z), lake: (x, z) => W.inLake(x, z) } : null });
 		return { town: t, it, t0: performance.now(), work: 0 };
 	}
 	function finish(J, region) {

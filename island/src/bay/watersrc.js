@@ -82,7 +82,7 @@ export function bakedWater(bay, BU) {
 	}
 	// the survey's heights under each lake let down to its bed
 	function* regrade() {
-		let n = 0;
+		let n = 0, t0 = performance.now();
 		for (let k = 0; k < bay.levels.length; k++) {
 			const Lv = bay.levels[k], tex = BU?.['uB' + k]?.value, D = tex?.image?.data;
 			if (!Lv || !D || tex.image.width !== Lv.W) continue;
@@ -94,6 +94,8 @@ export function bakedWater(bay, BU) {
 				const [Dmax, sl] = DEEP[L.kind];
 				const j0 = Math.max(0, Math.ceil((L.z0 - Lv.zN) / st)), j1 = Math.min(Lv.H - 1, Math.floor((L.z1 - Lv.zN) / st));
 				for (let j = j0; j <= j1; j++) {
+					// (a big lake's rows a few at a time)
+					if (performance.now() - t0 > 3) { yield; t0 = performance.now(); }
 					const z = Lv.zN + j * st, xs = crossings(L.rings, z);
 					for (let c = 0; c + 1 < xs.length; c += 2) {
 						for (let i = Math.max(0, Math.ceil((xs[c] - Lv.x0) / st)); i <= Math.min(Lv.W - 1, Math.floor((xs[c + 1] - Lv.x0) / st)); i++) {

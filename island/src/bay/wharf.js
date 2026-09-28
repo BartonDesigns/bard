@@ -135,7 +135,14 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 		const rm = new THREE.Mesh(ramp, new THREE.MeshStandardMaterial({ color: 0xb4ada2, roughness: 0.95 }));
 		rm.receiveShadow = true;
 		group.add(rm);
-		// the rails all round: posts and two runs, white
+		Mg.done(group, { shadow: !isPhone });
+	}
+	// the rails all round: posts and two runs, white
+	function buildRails() {
+		const Mg = merger();
+		// (one board drawn, the rest copies of it)
+		const lionSign = signBoard('SEA LION VIEWING', 2.6, 0.5, { w: 768, h: 150, bg: '#1e3c8c', fg: '#ffffff', border: '#ffffff', font: 'bold 96px Georgia, serif', glow: 0.2 });
+		lionSign.material.side = THREE.FrontSide;
 		for (let i = 0; i + 1 < OUTLINE.length; i++) {
 			const [as, ax] = OUTLINE[i], [bs, bx] = OUTLINE[i + 1], L = Math.hypot(bs - as, bx - ax), n = Math.max(1, Math.round(L / 2.4));
 			const ms = (as + bs) / 2, mx = (ax + bx) / 2;
@@ -149,15 +156,17 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 			W.solids.push([hs - h - 0.25, hx - h - 0.25, hs + h + 0.25, hx + h + 0.25]);
 			// (a board each way, back to back, so it reads from both sides)
 			for (const e of [-1, 1]) {
-				const sg = signBoard('SEA LION VIEWING', 2.6, 0.5, { w: 768, h: 150, bg: '#1e3c8c', fg: '#ffffff', border: '#ffffff', font: 'bold 96px Georgia, serif', glow: 0.2 });
-				sg.material.side = THREE.FrontSide;
+				const sg = new THREE.Mesh(lionSign.geometry, lionSign.material);
+				sg.userData.sign = lionSign.material;
 				const [su, sv] = wP(hs - h - 0.2 + e * 0.02, hx);
 				sg.position.set(su, Y + 1.5, sv); sg.rotation.y = ANG + (e < 0 ? Math.PI : 0);
 				group.add(sg); signs.push(sg);
 			}
 		}
 		Mg.done(group, { shadow: !isPhone });
-		// the arch at its foot
+	}
+	// the arch at its foot
+	function buildArch() {
 		const A = merger();
 		for (const x of [-10.5, 10.5]) B(A, 0.6, 7, 0.6, 'white', -4, x, DECK + 3.5);
 		B(A, 22, 0.5, 0.7, 'white', -4, 0, DECK + 7.1);
@@ -479,8 +488,9 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 	}
 
 	const steps = [
-		buildDeck, buildPiles,
-		...[0, 4, 8, 11, 14, 18].map((k, i, A) => () => buildShops(SHOPS.slice(k, A[i + 1] ?? SHOPS.length))),
+		buildDeck, buildRails, buildArch, buildPiles,
+		// (two buildings a piece: each draws its own signs)
+		...SHOPS.filter((q, k) => k % 2 === 0).map((q, i) => () => buildShops(SHOPS.slice(i * 2, i * 2 + 2))),
 		buildStreet, buildAnimals, buildLighthouse,
 		() => { W.seatList = [...W.seats, ...W.counters].map((q) => { const [x, z] = toW(q.u, q.v); return { x, z, y: q.y, h: q.h || 0, sit: !!q.sit, table: !!q.table, heading: q.heading + 16 * Math.PI / 180, taken: false }; }); W.built = true; },
 	];

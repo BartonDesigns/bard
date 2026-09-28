@@ -136,44 +136,51 @@ export function createDipper({ group, sound, isPhone }) {
 	}
 
 	// ---------- the structure: white timber bents under the track, braced every way ----------
-	const timber = instancer(new THREE.BoxGeometry(1, 1, 1), paint('white'), { shadow: !isPhone });
-	const ties = instancer(new THREE.BoxGeometry(2.2, 0.12, 0.2), paint('darkwood'));
-	const Mg = merger();
-	const hb = V3(), up = new THREE.Vector3(0, 1, 0);
-	let prev = null;
-	for (let k = 0; k < n; k += 5) {
-		const F = S[k];
-		const top = F.p.y - 0.42, hgt = top - DECK;
-		if (F.sect === 'tunnel' || F.sect === 'station' || hgt < 0.5) { prev = null; continue; }
-		hb.crossVectors(F.t, up).normalize();
-		const wTop = 0.95, wBot = 0.95 + Math.min(2.2, hgt * 0.09);
-		const post = (sg, y) => { const w = wBot + (wTop - wBot) * ((y - DECK) / hgt); return [F.p.x + hb.x * w * sg, y, F.p.z + hb.z * w * sg]; };
-		timber.beam(post(-1, DECK), post(-1, top), 0.22).beam(post(1, DECK), post(1, top), 0.22);
-		// ledgers every 2.2 m, crossed between
-		const lv = [DECK + 0.3];
-		for (let y = DECK + 2.4; y < top - 0.6; y += 2.2) lv.push(y);
-		lv.push(top);
-		for (let i = 0; i < lv.length; i++) {
-			timber.beam(post(-1, lv[i]), post(1, lv[i]), 0.12, 0.2);
-			if (i) timber.beam(post(-1, lv[i - 1]), post(1, lv[i]), 0.08, 0.14).beam(post(1, lv[i - 1]), post(-1, lv[i]), 0.08, 0.14);
-		}
-		// stringers along to the bent before, and a diagonal in every other bay
-		if (prev && prev.k === k - 5) {
-			for (let i = 0; i < lv.length; i++) for (const sg of [-1, 1]) { const q = prev.post(sg, Math.min(lv[i], prev.top)); timber.beam(q, post(sg, Math.min(lv[i], prev.top)), 0.1, 0.16); }
-			if ((k / 5) % 2 === 0) for (const sg of [-1, 1]) for (let i = 1; i < lv.length; i++) if (lv[i] <= prev.top) timber.beam(prev.post(sg, lv[i - 1]), post(sg, lv[i]), 0.07, 0.12);
-		}
-		prev = { k, post, top };
+	// (in three pieces, built on the frames after the rest of the ride)
+	const up = new THREE.Vector3(0, 1, 0), lights = bulbs();
+	function buildBents() {
+		const timber = instancer(new THREE.BoxGeometry(1, 1, 1), paint('white'), { shadow: !isPhone });
+		const ties = instancer(new THREE.BoxGeometry(2.2, 0.12, 0.2), paint('darkwood'));
+		const hb = V3();
+		let prev = null;
+		for (let k = 0; k < n; k += 5) {
+			const F = S[k];
+			const top = F.p.y - 0.42, hgt = top - DECK;
+			if (F.sect === 'tunnel' || F.sect === 'station' || hgt < 0.5) { prev = null; continue; }
+			hb.crossVectors(F.t, up).normalize();
+			const wTop = 0.95, wBot = 0.95 + Math.min(2.2, hgt * 0.09);
+			const post = (sg, y) => { const w = wBot + (wTop - wBot) * ((y - DECK) / hgt); return [F.p.x + hb.x * w * sg, y, F.p.z + hb.z * w * sg]; };
+			timber.beam(post(-1, DECK), post(-1, top), 0.22).beam(post(1, DECK), post(1, top), 0.22);
+			// ledgers every 2.2 m, crossed between
+			const lv = [DECK + 0.3];
+			for (let y = DECK + 2.4; y < top - 0.6; y += 2.2) lv.push(y);
+			lv.push(top);
+			for (let i = 0; i < lv.length; i++) {
+				timber.beam(post(-1, lv[i]), post(1, lv[i]), 0.12, 0.2);
+				if (i) timber.beam(post(-1, lv[i - 1]), post(1, lv[i]), 0.08, 0.14).beam(post(1, lv[i - 1]), post(-1, lv[i]), 0.08, 0.14);
+			}
+			// stringers along to the bent before, and a diagonal in every other bay
+			if (prev && prev.k === k - 5) {
+				for (let i = 0; i < lv.length; i++) for (const sg of [-1, 1]) { const q = prev.post(sg, Math.min(lv[i], prev.top)); timber.beam(q, post(sg, Math.min(lv[i], prev.top)), 0.1, 0.16); }
+				if ((k / 5) % 2 === 0) for (const sg of [-1, 1]) for (let i = 1; i < lv.length; i++) if (lv[i] <= prev.top) timber.beam(prev.post(sg, lv[i - 1]), post(sg, lv[i]), 0.07, 0.12);
+			}
+			prev = { k, post, top };
 	}
-	// ties, rails with their steel caps, the catwalk with its handrail, and the bulbs
+	// the ties
 	for (let k = 0; k < n; k++) {
 		const F = S[k];
 		const m = new THREE.Matrix4().makeBasis(F.b, F.n, F.t).setPosition(F.p.x - F.n.x * 0.3, F.p.y - F.n.y * 0.3, F.p.z - F.n.z * 0.3);
 		ties.add(m);
 	}
-	const loop = [...S, S[0]];
-	for (const x of [-0.55, 0.55]) {
-		Mg.mat(sweep(loop, [[x - 0.09, -0.24], [x + 0.09, -0.24], [x + 0.09, -0.02], [x - 0.09, -0.02]], true), 'plank', new THREE.Matrix4());
-		Mg.mat(sweep(loop, [[x - 0.05, -0.02], [x + 0.05, -0.02], [x + 0.05, 0.02], [x - 0.05, 0.02]], true), 'steel', new THREE.Matrix4());
+	timber.done(root); ties.done(root);
+	}
+	// the rails with their steel caps, the catwalk with its handrail, and the bulbs
+	function buildRails() {
+		const Mg = merger();
+		const loop = [...S, S[0]];
+		for (const x of [-0.55, 0.55]) {
+			Mg.mat(sweep(loop, [[x - 0.09, -0.24], [x + 0.09, -0.24], [x + 0.09, -0.02], [x - 0.09, -0.02]], true), 'plank', new THREE.Matrix4());
+			Mg.mat(sweep(loop, [[x - 0.05, -0.02], [x + 0.05, -0.02], [x + 0.05, 0.02], [x - 0.05, 0.02]], true), 'steel', new THREE.Matrix4());
 	}
 	// (the catwalk and handrail along the outside, but not in the tunnel or the station)
 	const runs = [];
@@ -189,13 +196,18 @@ export function createDipper({ group, sound, isPhone }) {
 		// the bulbs along both edges of the track
 		for (let i = 0; i < R.length; i += 3) { const F = R[i]; for (const sg of [-1.02, 1.02]) lights.add(F.p.x + F.b.x * sg + F.n.x * 0.05, F.p.y + F.b.y * sg + F.n.y * 0.05, F.p.z + F.b.z * sg + F.n.z * 0.05); }
 	}
-	// the tunnel: a dark wooden shed the track dives into out of the station
-	{
-		const R = S.filter((F) => F.sect === 'tunnel');
-		const tm = paint('tunnel').clone(); tm.side = THREE.DoubleSide;
-		Mg.mat(sweep(R, [[-2.0, -1.0], [-2.0, 2.9], [2.0, 2.9], [2.0, -1.0]]), 'tunnelIn', new THREE.Matrix4());
-		Mg.mat(sweep(R, [[-2.15, -1.0], [-2.15, 3.05], [2.15, 3.05], [2.15, -1.0]]), 'darkred', new THREE.Matrix4());
-		root.userData.tunnelMat = tm;
+	Mg.done(root, { shadow: !isPhone });
+	posts.done(root);
+	}
+	function buildStation() {
+		const Mg = merger();
+		// the tunnel: a dark wooden shed the track dives into out of the station
+		{
+			const R = S.filter((F) => F.sect === 'tunnel');
+			const tm = paint('tunnel').clone(); tm.side = THREE.DoubleSide;
+			Mg.mat(sweep(R, [[-2.0, -1.0], [-2.0, 2.9], [2.0, 2.9], [2.0, -1.0]]), 'tunnelIn', new THREE.Matrix4());
+			Mg.mat(sweep(R, [[-2.15, -1.0], [-2.15, 3.05], [2.15, 3.05], [2.15, -1.0]]), 'darkred', new THREE.Matrix4());
+			root.userData.tunnelMat = tm;
 	}
 	// the station: platforms both sides under a long gabled roof, the sign on its gable
 	{
@@ -229,8 +241,8 @@ export function createDipper({ group, sound, isPhone }) {
 	}
 	const paints = { tunnelIn: root.userData.tunnelMat };
 	Mg.done(root, { shadow: !isPhone, paints });
-	timber.done(root); ties.done(root); posts.done(root);
-	const lit = lights.done(root, 0.9);
+	lights.done(root, 0.9);
+	}
 
 	// ---------- the train: four red cars, two benches of two in each ----------
 	const carGroup = (lead) => {
@@ -379,7 +391,8 @@ export function createDipper({ group, sound, isPhone }) {
 		id: 'dipper', name: 'Giant Dipper', icon: 'coaster', root,
 		blurb: 'The 1924 wooden coaster: the tunnel, the lift hill, a 65-foot drop',
 		board: { u: 212, v: -12, r: 4.5 }, exit: { u: 209, v: -9, yaw: Math.PI },
-		lights: lit,
+		// the timber, the rails and the station, a piece a frame after the rest
+		later: [buildBents, buildRails, buildStation],
 		// the footprint walked round (the queue's gate is the way in)
 		solid: [[192, -160, 336, -24], [203, -24, 221, -15]],
 		update(dt, t, info) { if (!R.rider) { stepSim(dt); place(); } else place(); if (!R.rider) audio(dt, info.dist(cars[0].matrix.elements[12], cars[0].matrix.elements[14]), false); },

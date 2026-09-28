@@ -10,7 +10,7 @@
 //      it joins, the lake it fills or the sea, each vertex with its water's level (falling,
 //      never rising) and how much drains into it.
 // Pure and deterministic: the same heights give the same water. It is a generator, yielding
-// every few thousand cells, so a caller can spread it over frames.
+// every few milliseconds of work, so a caller can spread it over frames.
 
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 
@@ -37,16 +37,23 @@ function heap(key) {
 // lakeCells, lakeDepth (the smallest lake kept), inset (water under the filled ground)
 export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDepth = 1.2, inset = 0.3 } = {}) {
 	const { W, H, h } = G, n = W * H, cell = G.cell;
+	// (time to let a frame through: checked every 256 cells)
+	let t0 = performance.now(), c = 0;
+	const due = () => { if ((++c & 255) || performance.now() - t0 < 3) return false; t0 = performance.now(); return true; };
 	// ---- 1. fill the hollows ----
 	const f = new Float32Array(n), done = new Uint8Array(n), Q = heap(f);
 	for (let k = 0; k < n; k++) {
 		const i = k % W, j = (k - i) / W;
 		f[k] = h[k];
 		if (i === 0 || j === 0 || i === W - 1 || j === H - 1 || h[k] <= sea) { done[k] = 1; Q.push(k); }
+		if (due()) yield;
 	}
-	let c = 0;
+	// (the cells as they come off the heap, lowest first: the order the water drains in, backwards)
+	const order = new Uint32Array(n);
+	let o = 0;
 	while (Q.size) {
 		const k = Q.pop(), i = k % W, j = (k - i) / W;
+		order[n - 1 - o++] = k;
 		for (const [di, dj] of N8) {
 			const a = i + di, b = j + dj;
 			if (a < 0 || b < 0 || a >= W || b >= H) continue;
@@ -57,7 +64,7 @@ export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDept
 			f[q] = Math.max(h[q], f[k] + 1e-3);
 			Q.push(q);
 		}
-		if (++c % 6000 === 0) yield;
+		if (due()) yield;
 	}
 	// ---- 2. where each cell drains, and how much drains through it ----
 	const rec = new Int32Array(n).fill(-1);
@@ -71,12 +78,8 @@ export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDept
 			const q = b * W + a, s = (f[k] - f[q]) / (di && dj ? 1.4142 : 1);
 			if (s > best) { best = s; rec[k] = q; }
 		}
-		if (k % 12000 === 0) yield;
+		if (due()) yield;
 	}
-	const order = new Uint32Array(n);
-	for (let k = 0; k < n; k++) order[k] = k;
-	order.sort((a, b) => f[b] - f[a] || a - b);
-	yield;
 	const acc = new Float32Array(n).fill(1);
 	for (let t = 0; t < n; t++) { const k = order[t]; if (rec[k] >= 0) acc[rec[k]] += acc[k]; }
 	yield;
@@ -98,15 +101,16 @@ export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDept
 				if (lakeId[p] !== -1 || f[p] - h[p] < 0.25 || h[p] <= sea) continue;
 				lakeId[p] = -2; cells.push(p); seen.push(p);
 			}
+			if (due()) yield;
 		}
 		const keep = cells.length >= lakeCells && deep >= lakeDepth;
 		const id = keep ? lakes.length : -3;
 		for (const q of seen) lakeId[q] = id;
 		if (keep) lakes.push({ cells, level: lvl, deep });
-		if (lakes.length % 20 === 0) yield;
+		if (due()) yield;
 	}
 	yield;
-	for (const L of lakes) L.rings = outline(G, L, lakeId, lakes.indexOf(L));
+	for (let q = 0; q < lakes.length; q++) { lakes[q].rings = outline(G, lakes[q], lakeId, q); if (q % 4 === 3) yield; }
 	yield;
 	// ---- 4. the streams ----
 	const chan = (k) => acc[k] >= minCells && lakeId[k] < 0 && h[k] > sea;
@@ -138,7 +142,7 @@ export function* hydrology(G, { sea = 0, minCells = 100, lakeCells = 5, lakeDept
 		// (the water never rises going down)
 		for (let q = 1; q < pts.length; q++) pts[q][2] = Math.min(pts[q][2], pts[q - 1][2]);
 		if (pts.length >= 2) streams.push({ pts, end, into, head: k0 });
-		if (streams.length % 40 === 0) yield;
+		if (due()) yield;
 	}
 	return { lakes, streams, filled: f, acc, lakeId, rec };
 }

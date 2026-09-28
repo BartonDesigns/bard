@@ -465,11 +465,11 @@ export function createIslandWorld() {
 		const fieldPlan = planIslandFields(island);
 		// a realm of castles and towns, where this world keeps one: sited now, the land shaped round it
 		const realmPlan = earth ? null : planRealm(island, profile, { fields: fieldPlan.clear, isPhone });
-		// its streams and lakes (or ice, or lava), carved before its biomes, plants and caves are planned
+		// the planet's second biome and its cold side, baked where the ground, plants and water can read it
+		island.biomes = createBiomes(island, profile);
+		// its streams and lakes (or ice, or lava), carved before its plants, caves and ruins are planned
 		const waterPlan = earth ? null : await planWaters(island, profile, { clear: [...fieldPlan.clear, ...(realmPlan?.clear || [])], realm: realmPlan });
 		if (waterPlan) island.inWater = waterPlan.inWater;
-		// the planet's second biome and its cold side, baked where the ground and plants can read it
-		island.biomes = createBiomes(island, profile);
 		(shared.uBiome ||= { value: null }).value = island.biomes.tex;
 		shared.biHalf = island.half;
 		shared.heightTex = makeHeightTexture(island);

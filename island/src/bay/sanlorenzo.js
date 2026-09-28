@@ -41,8 +41,14 @@ const MOUTH = [[378, 154, 8, 'surf'], [400, 131, 10, 'surf'], [424, 104, 15, 'be
 const TOWN = [[36.9672, -122.0131, 28], [36.9678, -122.0140, 28], [36.9681, -122.0152, 27], [36.9682, -122.0164, 27], [36.9684, -122.0178, 26], [36.9688, -122.0193, 25], [36.9694, -122.0205, 23], [36.9703, -122.0212, 21],
 	[36.9720, -122.0214, 16], [36.9745, -122.0213, 14], [36.9768, -122.0217, 12], [36.9787, -122.0222, 11], [36.9808, -122.0228, 10], [36.9828, -122.0234, 10]];
 // the valley's mouth: the survey's own valley floor (the lowest way up it), up by Harvey
-// West to 36.995 N
-const VALLEY = [[36.98453, -122.02377], [36.98474, -122.02531], [36.98559, -122.02648], [36.98648, -122.02760], [36.98738, -122.02872], [36.98853, -122.02923], [36.98979, -122.02932], [36.99079, -122.03026], [36.99200, -122.03059], [36.99323, -122.03080], [36.99422, -122.03176], [36.99500, -122.03203]];
+// West, then over to where the river above comes in at 36.995 N
+const VALLEY = [[36.98453, -122.02377], [36.98474, -122.02531], [36.98559, -122.02648], [36.98648, -122.02760], [36.98738, -122.02872], [36.98853, -122.02923], [36.98979, -122.02932], [36.99079, -122.03026], [36.99200, -122.03059], [36.99323, -122.03080], [36.99385, -122.03209], [36.99440, -122.03291], [36.99500, -122.03340]];
+// where bay/water.js's San Lorenzo crosses the box's north edge and ours takes over: its
+// level there and its width (so the two ribbons meet at the same height, edge to edge;
+// theirs is drawn w / 2 + 0.3 + 0.07 w each side of the line, ours (w + 1.2) * 1.12)
+const JOIN = { lat: 36.99500, lon: -122.03340, level: 7.65, width: 53.8 };
+const JOIN_HW = (JOIN.width / 2 + 0.3 + 0.07 * JOIN.width) / 1.12 - 1.2;
+const JOIN_RAMP = 260;
 // the bridges where the roads cross [name, lat, lon, kind, deck width, skew]
 const BRIDGES = [
 	['Riverside Avenue', 36.9684, -122.0176, 'road', 15, 0.1],
@@ -93,11 +99,15 @@ function centreLine() {
 		const q = P[i], a = sm(v0, v0 + 3, q.cp);
 		if (a <= 0) continue;
 		const tx = P[i + 1].x - P[i - 1].x, tz = P[i + 1].z - P[i - 1].z, l = Math.hypot(tx, tz) || 1, s = i * STEP;
-		const off = a * 17 * Math.sin(s / 95 + 1.3 * Math.sin(s / 310));
+		const off = a * 17 * Math.sin(s / 95 + 1.3 * Math.sin(s / 310)) * (1 - sm(P.length - 1 - 300 / STEP, P.length - 1 - 120 / STEP, i));
 		q.mx = q.x + tz / l * off; q.mz = q.z - tx / l * off;
 	}
 	for (const q of P) if (q.mx !== undefined) { q.x = q.mx; q.z = q.mz; }
 	P = resample(P);
+	// (the last sample right on the join, so ours stops where theirs does)
+	const jn = toWorld(JOIN.lat, JOIN.lon), pl = P[P.length - 1];
+	if (Math.hypot(jn.x - pl.x, jn.z - pl.z) < STEP * 0.5) P.pop();
+	P.push({ x: jn.x, z: jn.z, cp: C.length - 1 });
 	const n = P.length, S = { n, x: new Float64Array(n), z: new Float64Array(n), tx: new Float32Array(n), tz: new Float32Array(n), cp: new Float32Array(n) };
 	for (const k of keys) S[k] = new Float32Array(n);
 	S.zone = [];
@@ -110,6 +120,8 @@ function centreLine() {
 	for (let i = 0; i < n; i++) {
 		const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1), tx = S.x[b] - S.x[a], tz = S.z[b] - S.z[a], l = Math.hypot(tx, tz) || 1;
 		S.tx[i] = tx / l; S.tz[i] = tz / l;
+		// (opening out to the river above's width at the join)
+		S.w[i] += (JOIN_HW - S.w[i]) * sm((n - 1) * STEP - JOIN_RAMP, (n - 1) * STEP, i * STEP);
 	}
 	// the control points' places along it (for the levels and the bridges)
 	S.sOf = (cp) => { let i = 0; while (i < n - 1 && S.cp[i] < cp) i++; return i * STEP; };
@@ -148,7 +160,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 	// ---------- the water's level all the way up ----------
 	function levels(S, N) {
 		const n = S.n, L = new Float32Array(n), lag = 0.9;
-		const sBeach = S.sOf(2), sLag = S.sOf(3), sLaurel = S.sOf(S.mouthN + 7), sWater = S.sOf(S.mouthN + 11), sHwy = S.sOf(S.mouthN + S.townN - 1);
+		const sSurf = S.sOf(1), sBeach = S.sOf(2), sLag = S.sOf(3), sLaurel = S.sOf(S.mouthN + 7), sWater = S.sOf(S.mouthN + 11), sHwy = S.sOf(S.mouthN + S.townN - 1);
 		// the valley floor under the line (the lowest of a few points across it)
 		const floor = new Float32Array(n);
 		for (let i = 0; i < n; i++) {
@@ -163,8 +175,8 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		for (let i = 0; i < n; i++) {
 			const s = i * STEP;
 			let l;
-			// (out of the lagoon it runs down over the sand to the sea's own level at the surf)
-			if (s < sLag) l = 0.05 + (lag - 0.05) * sm(sBeach, sLag, s);
+			// (out of the lagoon it runs down over the sand to the sea's level, and just under it in the surf)
+			if (s < sLag) l = 0.05 + (lag - 0.05) * sm(sBeach, sLag, s) - 0.35 * (1 - sm(sSurf, sBeach, s));
 			else if (s < sLaurel) l = lag;
 			else if (s < sWater) l = lag + 0.4 * (s - sLaurel) / (sWater - sLaurel);
 			else if (s < sHwy) l = lag + 0.4 + 0.5 * (s - sWater) / (sHwy - sWater);
@@ -181,13 +193,21 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 			const k = Math.floor((s - sHwy - 200) / POOL), s0 = sHwy + 200 + k * POOL, iA = Math.min(n - 1, Math.round(s0 / STEP)), iB = Math.min(n - 1, Math.round((s0 + POOL) / STEP));
 			W[i] = L[iA] + (L[iB] - L[iA]) * sm(s0 + POOL - RIF, s0 + POOL, s);
 		}
+		// the last stretch up to the river above's level at the join (a run of rapids), kept
+		// under the valley floor
+		const sEnd = (n - 1) * STEP;
+		for (let i = 0; i < n; i++) { const k = sm(sEnd - JOIN_RAMP, sEnd, i * STEP); if (k > 0) W[i] = Math.min(W[i] + (JOIN.level - W[i]) * k, floor[i] - 0.3); }
+		W[n - 1] = JOIN.level;
+		// (and never higher than it anywhere below)
+		for (let i = n - 2; i >= 0; i--) W[i] = Math.min(W[i], W[i + 1]);
+		S.floorEnd = floor[n - 1];
 		S.L = W;
 		// the riffles: where it falls, the water breaks white; the depth follows (pools deep)
 		S.foam = new Float32Array(n);
 		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(1, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) * 35);
 		for (let i = 0; i < n; i++) if (S.zone[i] === 'valley') S.D[i] = 0.55 + 1.35 * (1 - Math.min(1, S.foam[i] * 1.5));
 		for (let i = 0; i < n && i * STEP < sLag; i++) S.foam[i] = Math.max(S.foam[i], 0.5 * (1 - i * STEP / sLag));
-		S.sHwy = sHwy; S.sLaurel = sLaurel; S.sBeach = sBeach;
+		S.sHwy = sHwy; S.sLaurel = sLaurel; S.sBeach = sBeach; S.sSurf = sSurf;
 	}
 
 	// ---------- the cross-section: the ground at a distance from the middle ----------
@@ -271,9 +291,9 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 			return t;
 		};
 		const ne = S.n - 1, xe = S.x[ne], ze = S.z[ne];
-		for (let i = 0; i + 2 < S.n; i += 2) {
-			const ax = S.x[i], az = S.z[i], bx = S.x[i + 2], bz = S.z[i + 2], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
-			const rch = Math.max(S.reachL[i], S.reachR[i], S.reachL[i + 2], S.reachR[i + 2]) + 4;
+		for (let i = 0; i + 1 < S.n; i += 2) {
+			const j = Math.min(i + 2, S.n - 1), ax = S.x[i], az = S.z[i], bx = S.x[j], bz = S.z[j], dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+			const rch = Math.max(S.reachL[i], S.reachR[i], S.reachL[j], S.reachR[j]) + 4;
 			const ci0 = Math.floor((Math.min(ax, bx) - rch - L.x0) / cell), ci1 = Math.floor((Math.max(ax, bx) + rch - L.x0) / cell);
 			const cj0 = Math.floor((Math.min(az, bz) - rch - L.zN) / cell), cj1 = Math.floor((Math.max(az, bz) + rch - L.zN) / cell);
 			for (let cj = cj0; cj <= cj1; cj++) for (let ci = ci0; ci <= ci1; ci++) {
@@ -286,7 +306,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 					if ((qx - xe) * S.tx[ne] + (qz - ze) * S.tz[ne] > 0) continue;
 					const u = Math.max(0, Math.min(1, ((qx - ax) * dx + (qz - az) * dz) / l2));
 					const ex = qx - ax - dx * u, ez = qz - az - dz * u, d2 = ex * ex + ez * ez, k = b * T1 + a;
-					if (d2 < t.d2[k]) { t.d2[k] = d2; t.seg[k] = i + 2 * u; t.sd[k] = dx * ez - dz * ex > 0 ? 1 : -1; }
+					if (d2 < t.d2[k]) { t.d2[k] = d2; t.seg[k] = i + (j - i) * u; t.sd[k] = dx * ez - dz * ex > 0 ? 1 : -1; }
 				}
 			}
 			if (i % 40 === 0) yield;
@@ -376,7 +396,10 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		K.commit();
 		yield;
 		plantTrees(S);
-		setRiverHooks({ water: (x, z) => levelAt(x, z) !== null, trees: treesNear });
+		// (the last 30 m not counted as ours: bay/watersrc.js drops any of its river's points
+		// within 22 m of our water, and would lose the one it meets us at)
+		const past = (x, z) => (x - S.x[ne]) * S.tx[ne] + (z - S.z[ne]) * S.tz[ne] > -30;
+		setRiverHooks({ water: (x, z) => levelAt(x, z) !== null && !past(x, z), trees: treesNear });
 		yield;
 		buildWater(S);
 		yield;
@@ -472,8 +495,8 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		let rows = 0;
 		for (let i = 0; i < S.n; i++) {
 			if (S.zone[i] === 'valley' && i % 2 && i !== S.n - 1) continue;
-			// (below the surf line the sea itself fills the channel)
-			if (i * STEP < S.sBeach - STEP) continue;
+			// (out in the surf it slips under the sea's own surface: no edge to see)
+			if (i * STEP < S.sSurf) continue;
 			const w = S.w[i] + 1.2, L = S.L[i];
 			const speed = S.zone[i] === 'lagoon' ? 0.06 : S.zone[i] === 'town' ? 0.25 : S.zone[i] === 'valley' ? 0.55 + S.foam[i] * 1.6 : 0.5;
 			for (const a of across) {
@@ -490,7 +513,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		g.setAttribute('aFl', new THREE.Float32BufferAttribute(fl, 4));
 		g.setIndex(idx);
 		g.computeBoundingSphere();
-		const U = { uTime, uNight, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor };
+		const U = { uFade: { value: new THREE.Vector2(S.sSurf, S.sBeach + 45) }, uTime, uNight, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor };
 		const mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]), vertexShader: WATER_VERT, fragmentShader: WATER_FRAG, fog: true });
 		Object.assign(mat.uniforms, U);
 		const mesh = new THREE.Mesh(g, mat);
@@ -636,7 +659,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 	// where it ends upstream (for the rivers beyond to meet it)
 	function endInfo() {
 		const S = R.S, i = S.n - 1, ll = toLatLon(S.x[i], S.z[i]);
-		return { lat: +ll.lat.toFixed(5), lon: +ll.lon.toFixed(5), level: +S.L[i].toFixed(2), width: +(S.w[i] * 2).toFixed(1), bed: +(S.L[i] - S.D[i]).toFixed(2), heading: +(Math.atan2(S.tx[i], -S.tz[i]) * 180 / Math.PI).toFixed(0) };
+		return { lat: +ll.lat.toFixed(5), lon: +ll.lon.toFixed(5), level: +S.L[i].toFixed(2), width: +(S.w[i] * 2).toFixed(1), drawn: +((S.w[i] + 1.2) * 2.24).toFixed(1), floor: +(S.floorEnd ?? 0).toFixed(2), bed: +(S.L[i] - S.D[i]).toFixed(2), heading: +(Math.atan2(S.tx[i], -S.tz[i]) * 180 / Math.PI).toFixed(0) };
 	}
 	function destroy() {
 		rush?.stop();
@@ -649,12 +672,14 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 
 const WATER_VERT = /* glsl */`
 	attribute vec2 aSD; attribute vec4 aFl;
+	uniform vec2 uFade;
 	varying vec3 vW; varying vec2 vSD; varying vec4 vFl;
 	#include <fog_pars_vertex>
 	void main(){
 		vec4 w = modelMatrix * vec4(position, 1.0);
 		// (far off, lifted a little over its banks, so the coarser ground there can't hide it)
-		w.y += clamp((length(cameraPosition.xz - w.xz) - 150.0) * 0.003, 0.0, 7.0);
+		// (but not out on the sand, where it meets the sea)
+		w.y += clamp((length(cameraPosition.xz - w.xz) - 150.0) * 0.003, 0.0, 7.0) * smoothstep(uFade.x, uFade.y + 60.0, aSD.x);
 		vW = w.xyz; vSD = aSD; vFl = aFl;
 		vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
 		#include <fog_vertex>

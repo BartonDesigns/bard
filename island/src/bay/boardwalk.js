@@ -153,7 +153,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	group.updateMatrixWorld(true);
 	const sound = createSound();
 	const river = createRiver(scene, bay, shared, { isPhone, sound });
-	const B = { built: false, queue: null, rides: [], scen: [], solids: [], rounds: [], lamps: null, pools: null, winMats: [], signs: [], flags: null, crowd: null, beach: null, wharf: null };
+	const B = { built: false, standSigns: [], queue: null, rides: [], scen: [], solids: [], rounds: [], lamps: null, pools: null, winMats: [], signs: [], flags: null, crowd: null, beach: null, wharf: null };
 	let regraded = false, hintSeen = false, hintWharf = false, hintRiver = false, sinceGrade = 0;
 	const uTime = { value: 0 };
 
@@ -163,10 +163,10 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		// where the railroad meets the river: the trestle's ends
 		const [rx, rz] = toW(RAIL.u0, RAIL.v), [ex, ez] = toW(RAIL.u0 + 1, RAIL.v), cr = river.crossing(rx, rz, ex - rx, ez - rz);
 		if (cr) { const uc = RAIL.u0 + cr.t; RAIL.t0 = uc - cr.w - 14; RAIL.t1 = uc + cr.w + 20; }
-		Q.push(buildGround, buildSeawall, buildCasino, buildNeptune, buildStands, buildLamps, buildBeach, buildBackdrop, ...[false, true].flatMap((e) => [() => buildTown(e, -214, -850), () => buildTown(e, -850, -1500)]));
+		Q.push(buildGround, buildSeawall, buildCasino, buildCasinoSigns, buildNeptune, buildStands, ...[0, 8, 16].map((k) => () => buildStandSigns(k, k + 8)), buildLamps, buildBeach, buildBackdrop, ...[false, true].flatMap((e) => [() => buildTown(e, -214, -850), () => buildTown(e, -850, -1500)]));
 		B.wharf = createWharf({ group, bay, sound, isPhone, signs: B.signs, winMats: B.winMats });
 		Q.push(...B.wharf.steps);
-		const add = (make) => Q.push(() => { const r = make(); B.rides.push(r); for (const s of r.solid || []) B.solids.push([...s, 30]); for (const c of r.round || []) B.rounds.push(c); });
+		const add = (make) => Q.push(() => { const r = make(); B.rides.push(r); if (r.later) B.queue.unshift(...r.later); for (const s of r.solid || []) B.solids.push([...s, 30]); for (const c of r.round || []) B.rounds.push(c); });
 		add(() => createCarousel({ group, sound, isPhone, at: [-128, -34] }));
 		add(() => createWheel({ group, sound, isPhone, at: [22, -66] }));
 		add(() => createBumper({ group, sound, isPhone, at: [78, -58] }));
@@ -325,7 +325,13 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		for (let u = u0; u <= u1; u += 0.7) lights.add(u, DECK + 10.9, front - 3.6);
 		Mg.done(group, { shadow: !isPhone });
 		lights.done(group, 0.9);
-		// the signs
+		B.solids.push([u0, back, u1, front - 3.4, 30], [u0, front - 4.2, u0 + 7, front, 30], [u1 - 7, front - 4.2, u1, front, 30]);
+		// the loggia's piers
+		for (let i = 0; i <= n; i++) B.solids.push([u0 + i * pitch - 0.45, front - 0.75, u0 + i * pitch + 0.45, front, 5]);
+	}
+	// its signs (a piece of their own: drawing them takes a while)
+	function buildCasinoSigns() {
+		const front = -4.5;
 		const s1 = signBoard('COCOANUT GROVE', 13, 1.5, { bg: '#1f5c4a', fg: '#fff3d0', border: '#d4a93a', glow: 0.25 });
 		s1.position.set(-236, DECK + 9.1, front - 3.4);
 		const s2 = signBoard('CASINO', 7, 1.4, { bg: '#b3202a', fg: '#fff3d0', border: '#f2c230', glow: 0.25 });
@@ -334,9 +340,6 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		s3.position.set(-194, DECK + 13.4, front - 3.2);
 		group.add(s1, s2, s3);
 		B.signs.push(s1, s2, s3);
-		B.solids.push([u0, back, u1, front - 3.4, 30], [u0, front - 4.2, u0 + 7, front, 30], [u1 - 7, front - 4.2, u1, front, 30]);
-		// the loggia's piers
-		for (let i = 0; i <= n; i++) B.solids.push([u0 + i * pitch - 0.45, front - 0.75, u0 + i * pitch + 0.45, front, 5]);
 	}
 	// Neptune's Kingdom: the old plunge, a vaulted hall with one great arched window to the sea
 	function buildNeptune() {
@@ -379,9 +382,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			const aw = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.4, 1.6), awMats[Math.floor(r() * awMats.length)]);
 			aw.position.set(u, DECK + h - 0.35, v + 0.7); aw.rotation.x = -1.0;
 			group.add(aw);
-			const s = signBoard(name, w - 0.4, 0.8, { w: 768, h: 128, bg: food ? '#fff6dc' : '#1e3c8c', fg: food ? '#b3202a' : '#ffe066', border: food ? '#b3202a' : '#ffffff', font: 'bold 84px Georgia, serif', glow: 0.35 });
-			s.position.set(u, DECK + h + 0.5, v + 0.05);
-			group.add(s); B.signs.push(s);
+			B.standSigns.push([name, food, u, v, w, h]);
 			for (let k = 0; k <= 12; k++) lights.add(u - w / 2 + k * w / 12, DECK + h + 1.0, v + 0.1);
 			if (!food) for (let k = 0; k < 14; k++) prizes.at(u - w / 2 + 0.5 + (k % 7) * 0.8, DECK + 1.9 + Math.floor(k / 7) * 0.5, v - 0.35, 1, 1, 1, 0, new THREE.Color(pc[Math.floor(r() * pc.length)]));
 			B.solids.push([u - w / 2, v - d, u + w / 2, v + 0.35, h]);
@@ -430,6 +431,14 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		for (const u of [-262.5, -206, -153.5]) fl.at(u, DECK + 21.5 - (u === -206 ? 1.5 : 0), -8.5, 1.2, 1.2, 1, 0.25);
 		poles.done(group, { shadow: false });
 		B.flags = fl.done(group);
+	}
+	// the stands' signs, some at a time (each one drawn on its own canvas)
+	function buildStandSigns(a, b) {
+		for (const [name, food, u, v, w, h] of B.standSigns.slice(a, b)) {
+			const s = signBoard(name, w - 0.4, 0.8, { w: 768, h: 128, bg: food ? '#fff6dc' : '#1e3c8c', fg: food ? '#b3202a' : '#ffe066', border: food ? '#b3202a' : '#ffffff', font: 'bold 84px Georgia, serif', glow: 0.35 });
+			s.position.set(u, DECK + h + 0.5, v + 0.05);
+			group.add(s); B.signs.push(s);
+		}
 	}
 	function flagTexture() {
 		// the stars and stripes, and the Boardwalk's own pennant
@@ -1011,7 +1020,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		if (!B.built && d < NEAR && bay.loaded() && river.settled()) {
 			if (!B.queue) { B.queue = plan(); B.nq = B.queue.length; }
 			const t0 = performance.now();
-			while (B.queue.length && performance.now() - t0 < 12) { const f = B.queue.shift(), t1 = performance.now(); try { f(); } catch (e) { console.warn('[boardwalk]', e); } const ms = performance.now() - t1; if (ms > (B.slow || 0)) { B.slow = ms; B.slowName = f.name || '#' + (B.nq - B.queue.length); } }
+			while (B.queue.length && performance.now() - t0 < 12) { const f = B.queue.shift(), t1 = performance.now(); try { f(); } catch (e) { console.warn('[boardwalk]', e); } const ms = performance.now() - t1; const nm = '#' + (B.nq - B.queue.length); if (ms > 40) (B.over ||= []).push(nm + ' ' + Math.round(ms)); if (ms > (B.slow || 0)) { B.slow = ms; B.slowName = nm; } }
 		}
 		if ((B.built || B.queue) && d > FAR && !Ride.cur) dispose();
 		if (!B.built) return;
@@ -1075,18 +1084,19 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			group.remove(o);
 		}
 		for (const p of RP.pool) p.slot = null;
-		Object.assign(B, { built: false, queue: null, rides: [], solids: [], rounds: [], crowd: null, wharf: null, train: null, winMats: [], signs: [], pools: null, globe: null, poolMat: null });
+		Object.assign(B, { built: false, standSigns: [], queue: null, rides: [], solids: [], rounds: [], crowd: null, wharf: null, train: null, winMats: [], signs: [], pools: null, globe: null, poolMat: null });
 		QUEUE.length = 0;
 		group.visible = false; btn.style.display = 'none'; offer = null;
 	}
 	// the console: where it stands, and a ride by name (taking you to it first)
 	function info() {
-		return { built: B.built, pieces: B.queue?.length ?? 0, slowestPieceMs: Math.round(B.slow || 0), slowestPiece: B.slowName || '', rides: B.rides.map((R) => R.id), offer: offer?.id || null, riding: Ride.cur?.id || null, status: Ride.cur?.status?.() || '', regraded, river: river.info(), wharf: B.wharf?.info() || null };
+		return { built: B.built, pieces: B.queue?.length ?? 0, slowestPieceMs: Math.round(B.slow || 0), slowestPiece: B.slowName || '', overPieces: B.over || [], rides: B.rides.map((R) => R.id), offer: offer?.id || null, riding: Ride.cur?.id || null, status: Ride.cur?.status?.() || '', regraded, river: river.info(), wharf: B.wharf?.info() || null };
 	}
 	function rideNow(id) {
 		const P = player?.();
 		const R = B.rides.find((q) => q.id === id || q.name.toLowerCase().includes(String(id).toLowerCase()));
-		if (R && B.built) { board(R); return `Riding the ${R.name}`; }
+		// (off whatever ride this is first)
+		if (R && B.built) { if (Ride.cur !== R) leave(); board(R); return Ride.cur === R ? `Riding the ${R.name}` : `The ${R.name} is not ready yet.`; }
 		// not built yet: to its gate, and aboard once it is up
 		const ids = { dipper: [212, -12], wheel: [22, -61.4], bumper: [78, -44], carousel: [-128, -22], glider: [-48, 15.5], drop: [138, -53] };
 		const key = Object.keys(ids).find((k) => k === id || String(id).toLowerCase().includes(k)) || 'dipper';

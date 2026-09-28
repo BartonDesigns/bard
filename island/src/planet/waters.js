@@ -5,8 +5,9 @@
 // the plants, caves and ruins are planned, and the plants keep out of the water.
 //
 // How much and what kind by the world (planet/profile.js): rich on green, tropical and
-// medieval worlds, a few dry-country creeks on a desert, frozen streams and lakes on ice,
-// lava running down from the cone on a volcanic world, tinted as its sea is on the toxic and
+// medieval worlds, a few dry-country creeks and oases on a desert, frozen streams and lakes
+// on ice (and on a green world's cold side, where its snow comes down), lava running down
+// from the cone and pooling on a volcanic world, tinted as its sea is on the toxic and
 // mystical ones, none on a gas giant's moon. The realm's own river (medieval/plan.js), its
 // castle, town and fields, and the village are left alone; where a realm road crosses a
 // stream a timber bridge carries it.
@@ -18,7 +19,7 @@ import { hydrology, smoothLine } from '../crysis/hydro.js';
 
 const KINDS = {
 	TERRAN: { area: 0.035, look: 'water' }, TROPICAL: { area: 0.03, look: 'water' }, MEDIEVAL: { area: 0.035, look: 'water' }, SHEPHERD: { area: 0.04, look: 'water' },
-	OCEAN: { area: 0.08, look: 'water' }, ARID: { area: 0.25, look: 'water', few: true }, ICE: { area: 0.05, look: 'ice' }, MAGMA: { area: 0.06, look: 'lava' },
+	OCEAN: { area: 0.08, look: 'water' }, ARID: { area: 0.25, look: 'water', few: 4, pools: 3 }, ICE: { area: 0.05, look: 'ice' }, MAGMA: { area: 0.06, look: 'lava', pools: 6 },
 	TOXIC: { area: 0.04, look: 'water' }, MYSTICAL: { area: 0.04, look: 'water' }, SINGULARITY: { area: 0.05, look: 'water' },
 };
 
@@ -42,22 +43,33 @@ function* steps(island, profile, { clear = [], realm = null } = {}) {
 	// what is left alone: the realm's river, its castle, town and fields, the ball fields, the village
 	const kept = (x, z, m) => !clear.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + m) && !(realm?.riverDist && realm.riverDist(x, z).d < 30 + m) && island.maskAt(x, z, 1) < 0.15;
 	const lines = [], lakes = [];
+	// frozen: an ice world's all, a greener world's where its cold side brings the snow down
+	const B = island.biomes, lava = K.look === 'lava';
+	const frozen = (x, z, h) => K.look === 'ice' || (!lava && !!B && (B.at(x, z).cold > 0.5 || B.snowAt(x, z, h) > 0.4));
+	// (a desert's few oases and a volcanic world's lava pools: the biggest hollows only)
+	const pools = new Set(K.pools ? [...R.lakes].sort((a, b) => b.cells.length - a.cells.length).slice(0, K.pools) : R.lakes);
 	for (const L of R.lakes) {
+		if (!pools.has(L)) continue;
 		const ring = L.rings[0];
 		if (!ring) continue;
 		let sx = 0, sz = 0;
 		for (let i = 0; i < ring.length; i += 2) { sx += ring[i]; sz += ring[i + 1]; }
 		sx /= ring.length / 2; sz /= ring.length / 2;
-		if (!kept(sx, sz, 20)) continue;
-		lakes.push({ kind: 0, int: false, name: '', level: L.level, rings: L.rings.map((q) => Float64Array.from(q)), dams: [], cx: sx, cz: sz });
+		// (the whole shore clear of what is left alone, not just its middle)
+		if (!kept(sx, sz, 20) || L.rings[0].some((v, i) => i % 8 === 0 && !kept(v, L.rings[0][i + 1], 6))) continue;
+		lakes.push({ kind: 0, int: false, name: '', level: L.level, rings: L.rings.map((q) => Float64Array.from(q)), dams: [], cx: sx, cz: sz, ice: frozen(sx, sz, L.level) });
 	}
 	let few = 0;
 	for (const S of R.streams) {
-		if (K.few && ++few > 4) break;
+		if (K.few && ++few > K.few) break;
+		// (one that ran into a hollow left dry sinks away before it)
+		if (S.end === 'lake' && !pools.has(R.lakes[S.into])) S.pts.pop();
+		if (S.pts[0]?.[4] >= 0 && !pools.has(R.lakes[S.pts[0][4]])) S.pts.shift();
+		if (S.pts.length < 2) continue;
 		const P = smoothLine(S.pts.map((p) => [p[0], p[1], p[2], Math.min(18, 1.2 + 6 * Math.sqrt(p[3] * cs * cs / 1e6))]));
 		let cur = [];
 		const flush = () => { if (cur.length >= 3) lines.push({ cls: P[P.length - 1][3] > 9 ? 'river' : 'stream', int: false, name: '', P: cur }); cur = []; };
-		for (const p of P) { if (kept(p[0], p[1], p[3] / 2 + 6)) cur.push(p.slice(0, 4)); else flush(); }
+		for (const p of P) { if (kept(p[0], p[1], p[3] / 2 + 6)) cur.push([p[0], p[1], p[2], p[3], frozen(p[0], p[1], p[2]) ? 1 : 0]); else flush(); }
 		flush();
 	}
 	// the realm's roads across the streams: timber bridges, the ground under them left as it was
@@ -80,7 +92,7 @@ function* steps(island, profile, { clear = [], realm = null } = {}) {
 		}
 	}
 	// the channels carved into the island's heights, the plants kept out of them
-	const wet = new Uint8Array(N * N), ice = K.look === 'ice';
+	const wet = new Uint8Array(N * N);
 	const at = (x, z) => { const i = Math.round((x + half) / cell), j = Math.round((z + half) / cell); return i < 0 || j < 0 || i >= N || j >= N ? -1 : j * N + i; };
 	for (const L of lines) for (let k = 0; k + 1 < L.P.length; k++) {
 		if (k % 16 === 0) yield;
@@ -90,7 +102,7 @@ function* steps(island, profile, { clear = [], realm = null } = {}) {
 		for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
 			const x = -half + i * cell, z = -half + j * cell, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / l2)), d = Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t);
 			if (d > Rr) continue;
-			const w = a[3] + (b[3] - a[3]) * t, lv = a[2] + (b[2] - a[2]) * t, hw = w / 2, D = ice ? 0.02 : K.look === 'lava' ? 0.35 : 0.3 + w * 0.06;
+			const w = a[3] + (b[3] - a[3]) * t, lv = a[2] + (b[2] - a[2]) * t, hw = w / 2, D = (t < 0.5 ? a : b)[4] ? 0.02 : lava ? 0.35 : 0.3 + w * 0.06;
 			const tg = d < hw ? lv - 0.05 - D * Math.pow(Math.max(0, 1 - (d / hw) ** 2), 0.6) : lv - 0.05 + (d - hw) * 0.8;
 			const q = j * N + i, fade = 1 - Math.max(0, Math.min(1, (d - Rr + 4) / 4));
 			if (tg < height[q]) height[q] += (tg - height[q]) * fade;
@@ -107,7 +119,7 @@ function* steps(island, profile, { clear = [], realm = null } = {}) {
 			if (q < 0) continue;
 			wet[q] = 1; island.masks[q * 4 + 3] = 0;
 			// (a frozen lake is flat ice to walk on)
-			if (ice) height[q] = Math.max(height[q], L.level - 0.03);
+			if (L.ice) height[q] = Math.max(height[q], L.level - 0.03);
 		}
 	}
 	const inWater = (x, z) => { const q = at(x, z); return q >= 0 && wet[q] === 1; };
