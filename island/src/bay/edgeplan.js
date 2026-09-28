@@ -502,7 +502,7 @@ export function* planTile(C, ti, tj, roads) {
 		const tx = -nz, tz = nx;          // along the wall
 		// how deep the yard is before a street, a building or the tile's edge
 		let depth = 0;
-		for (let d = 2; d <= 30; d += 2) { const x = bx + nx * d, z = bz + nz * d; if (!O.free(x, z, 0.5, BLD | ROAD | KEEP) || onStreet(x, z) || C.wet(x, z)) break; depth = d; }
+		for (let d = 3; d <= 31; d += 2) { const x = bx + nx * d, z = bz + nz * d; if (!O.free(x, z, 0.5, BLD | ROAD | KEEP) || onStreet(x, z) || C.wet(x, z)) break; depth = d; }
 		if (depth < 4) return;
 		const g = H(bx, bz);
 		// the tags, low on the wall where a person can reach
@@ -515,8 +515,8 @@ export function* planTile(C, ti, tj, roads) {
 		const slots = [];
 		for (let a = -len / 2 + 3; a < len / 2 - 3; a += 3 + r() * 3) slots.push(a);
 		for (const a of slots) {
-			const u = r(), x = bx + tx * a + nx * 1.3, z = bz + tz * a + nz * 1.3, yaw = Math.atan2(tx, tz);
-			if (!O.free(x, z, 0.8, BLD | ROAD | KEEP)) continue;
+			const u = r(), x = bx + tx * a + nx * 1.6, z = bz + tz * a + nz * 1.6, yaw = Math.atan2(tx, tz);
+			if (!O.free(x + nx * 1.2, z + nz * 1.2, 0.6, ROAD | KEEP) || onStreet(x, z)) continue;
 			if (u < 0.12) { put('dumpster', x + nx * 0.3, z + nz * 0.3, { yaw: Math.atan2(-nx, -nz), col: pickC(PAL.dump) }); O.disc(x, z, 1.2, KEEP); }
 			else if (u < 0.3) { const n = 2 + Math.floor(r() * 7); for (let k = 0; k < n; k++) put('pallet', x, z, { yaw: yaw + (r() - 0.5) * 0.15, lift: k * 0.145 }); if (r() < 0.4) put('pallet', x + tx * 1.4, z + tz * 1.4, { yaw: yaw + 0.3, pitch: -1.35, lift: 0.5 }); O.disc(x, z, 1, KEEP); }
 			else if (u < 0.45) { const n = 2 + Math.floor(r() * 5), col = pickC(PAL.drum); for (let k = 0; k < n; k++) { const q = k % 3, rr = Math.floor(k / 3); const px = x + tx * (q - 1) * 0.62 + nx * rr * 0.62, pz = z + tz * (q - 1) * 0.62 + nz * rr * 0.62; if (r() < 0.15) put('drum', px + nx * 0.8, pz + nz * 0.8, { yaw: r() * 6, roll: Math.PI / 2, lift: 0.29, col: r() < 0.6 ? col : pickC(PAL.drum) }); else put('drum', px, pz, { col: r() < 0.7 ? col : pickC(PAL.drum) }); } O.disc(x, z, 1.4, KEEP); }
@@ -737,10 +737,10 @@ export function* planTile(C, ti, tj, roads) {
 	// a tile, and not in most
 	if (out.cands.length) {
 		const U = bay.urbanAt(cx, cz), ind = nInd / (N * N);
-		const p = clamp(0.03 + U.d * 1.2 + ind * 0.12 + (U.u > 0.6 ? 0.03 : 0), 0, 0.45);
+		const p = clamp(0.02 + U.d * 0.7 + ind * 0.07 + (U.u > 0.6 ? 0.02 : 0), 0, 0.3);
 		const roll = hash(ti * 31 + 7, tj * 17 + 3);
 		const cands = out.cands.slice().sort((a, b) => b.w - a.w + (hash(a.x, a.z) - hash(b.x, b.z)) * 0.5);
-		const pp = cands[0]?.under ? Math.min(0.6, p * 2.2) : p;
+		const pp = cands[0]?.under ? Math.min(0.5, p * 2.5) : p;
 		if (roll < pp) {
 			for (const c of cands) {
 				if (!campOk(C, c.x, c.z) || slopeAt(c.x, c.z, 4) > 0.25 || !O.free(c.x, c.z, 3, BLD | ROAD) || onStreet(c.x, c.z)) continue;

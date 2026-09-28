@@ -334,7 +334,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 
 	// ---------- the stream ----------
 	const camps = createCamps(scene, { world, shared, isPhone, H });
-	const stats = { tiles: 0, planned: 0, longest: 0, instances: 0, lastMs: 0, at: null, wanted: 1 };
+	const stats = { tiles: 0, planned: 0, longest: 0, instances: 0, lastMs: 0, at: null, wanted: 1, slowStep: ['', 0] };
 	let cur = null, levelsN = -1, visible = true;
 	function update(dt, time, camera, night) {
 		const x = camera.position.x, z = camera.position.z;
@@ -378,10 +378,12 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					if (!f) break;
 					T.roads = f; T.state = 'plan'; T.it = planTile(C, T.i, T.j, f);
 				} else if (T.state === 'plan') {
-					const s = T.it.next();
+					const q0 = performance.now(), s = T.it.next(), q1 = performance.now() - q0;
+					if (q1 > stats.slowStep[1]) stats.slowStep = [s.value && typeof s.value === 'string' ? s.value : 'end', +q1.toFixed(1)];
 					if (s.done) { T.plan = s.value; T.props = s.value.props; T.state = 'build'; T.it = buildTile(T); stats.planned++; }
 				} else if (T.state === 'build') {
-					const s = T.it.next();
+					const q0 = performance.now(), s = T.it.next(), q1 = performance.now() - q0;
+					if (q1 > stats.slowStep[1]) stats.slowStep = ['build', +q1.toFixed(1)];
 					if (s.done) { T.state = 'done'; T.it = null; camps.add(T.k, T.plan.camps); T.plan.ground = T.plan.decals = null; dirty = true; break; }
 				}
 			}

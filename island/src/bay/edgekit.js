@@ -277,7 +277,7 @@ export function makeKit() {
 		cup: { geo: cup(), max: 500 },
 		paper: { geo: paper(), max: 600, mat: 'soft' },
 		bottle: { geo: bottle(), max: 300 },
-		weed: { geo: tuftGeo(1), max: 5000, mat: 'tuft' },
+		weed: { geo: tuftGeo(1), max: 7000, mat: 'tuft' },
 		tent: { geo: tent(), max: 40, shadow: true, mat: 'soft' },
 		tarp: { geo: tarp(), max: 30, shadow: true, mat: 'soft' },
 		chair: { geo: chair(), max: 40 },
