@@ -4,15 +4,17 @@
 #
 #   trailer/render.sh [capture flags...]     e.g. trailer/render.sh --gpu --w 3840 --h 2160
 #
-# FRAMES (default /tmp/claude-0/trailer/frames), LOCK (/tmp/claude-0/browser.lock) and
-# LOG (/tmp/claude-0/trailer/progress.log) may be set in the environment.
+# FRAMES (default /tmp/claude-0/trailer/frames), LOCK (/tmp/claude-0/browser.lock),
+# LOG (/tmp/claude-0/trailer/progress.log) and IDS (the shots to render, in order) may be
+# set in the environment.
 set -u
 cd "$(dirname "$0")/.."
 FRAMES=${FRAMES:-/tmp/claude-0/trailer/frames}
 LOCK=${LOCK:-/tmp/claude-0/browser.lock}
 LOG=${LOG:-/tmp/claude-0/trailer/progress.log}
 mkdir -p "$(dirname "$LOG")" "$FRAMES"
-ids=$(node trailer/capture.mjs --list | awk '$1 != "total" { print $1 }')
+# IDS="volcano gg" renders just those, in that order
+ids=${IDS:-$(node trailer/capture.mjs --list | awk '$1 != "total" { print $1 }')}
 for id in $ids; do
 	echo "$(date '+%F %T') shot $id: start" >> "$LOG"
 	for try in 1 2 3; do

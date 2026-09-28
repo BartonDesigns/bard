@@ -72,7 +72,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 				float rag = n1 * 0.7 + n2 * 0.45, e = min(vE.x, vE.y), ew = kind > 1.5 && kind < 2.5 ? 0.22 : kind > 5.5 ? 2.2 : 0.75;
 				if (e < rag * ew - 0.04) discard;
 				vec3 grass = mix(vec3(0.3, 0.4, 0.16), vec3(0.64, 0.55, 0.33), uSeason) * (0.8 + 0.35 * n2);
-				vec3 dust = mix(vec3(0.56, 0.47, 0.36), vec3(0.66, 0.56, 0.42), n3) * (0.86 + 0.24 * n2) * (0.92 + 0.12 * n4);
+				vec3 dust = mix(vec3(0.46, 0.38, 0.29), vec3(0.58, 0.48, 0.36), n3) * (0.8 + 0.3 * n2) * (0.9 + 0.15 * n4);
 				vec3 c = dust; float rut = 0.0, pud = 0.0;
 				if (kind < 0.5) {
 					// two wheel ruts, grass down the crown between them and at the sides
@@ -119,8 +119,9 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					eRough = 0.85;
 				} else {
 					// a lot gone to dry grass, bare dirt showing through
-					c = mix(grass * 1.05, dust, smoothstep(0.5, 0.8, n1 * 0.7 + n3 * 0.5) * 0.8);
-					c = mix(c, vec3(0.7, 0.6, 0.38) * (0.85 + 0.3 * n2), uSeason * 0.5);
+					vec3 straw = mix(vec3(0.42, 0.4, 0.2), vec3(0.56, 0.47, 0.28), uSeason) * (0.7 + 0.45 * n2) * (0.85 + 0.25 * n4);
+					c = mix(straw, dust * 0.8, smoothstep(0.55, 0.8, n1 * 0.7 + n3 * 0.5));
+					c = mix(c, straw * 0.6, smoothstep(0.6, 0.85, eNoise(vWp * 0.35 + 9.0)) * 0.6);
 				}
 				// puddles in the low spots of the ruts, after rain the more
 				if (kind < 2.5) pud = rut * smoothstep(0.35, 0.62, vG.w * (0.45 + 0.9 * n1) + uWet * 0.4);
@@ -374,6 +375,10 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 			const T = cur, x0 = T.i * TILE, z0 = T.j * TILE;
 			while (performance.now() - t0 < BUDGET) {
 				if (T.state === 'roads') {
+					// (the rivers round here known first, for the levees and the banks; not waited on for ever)
+					const Wt = W()?.water;
+					T.t0 = T.t0 || performance.now();
+					if (Wt?.info && performance.now() - T.t0 < 8000 && !(Wt.ready() && Wt.info().queue === 0)) break;
 					const f = roads.near(x0, z0, x0 + TILE, z0 + TILE, BUDGET - (performance.now() - t0));
 					if (!f) break;
 					T.roads = f; T.state = 'plan'; T.it = planTile(C, T.i, T.j, f);

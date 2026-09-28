@@ -11,7 +11,8 @@ const LU_IND = 8;
 
 export function industrialEdge(D, heightAt, nearWater = null) {
 	if (!D || D.edge) return D;
-	D.edge = { warehouses: 0 };
+	D.edge = { warehouses: 0, why: {} };
+	const no = (k) => { D.edge.why[k] = (D.edge.why[k] || 0) + 1; return false; };
 	const r = rng((D.seed || 1) * 31 + 7);
 	const [bx0, bz0, bx1, bz1] = D.bounds, cx = (bx0 + bx1) / 2, cz = (bz0 + bz1) / 2;
 	// how far out the houses reach
@@ -36,15 +37,15 @@ export function industrialEdge(D, heightAt, nearWater = null) {
 		const ca = Math.cos(a), sa = Math.sin(a), hs = [];
 		for (const [u, v] of [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5], [0, 0]]) {
 			const px = x + ca * u * w - sa * v * d, pz = z + sa * u * w + ca * v * d;
-			if (!inBox(px, pz, 90)) return false;
+			if (!inBox(px, pz, 60)) return no('box');
 			const h = heightAt(px, pz);
-			if (h < 1.5 || (nearWater && nearWater(px, pz) < 30)) return false;
+			if (h < 1.5 || (nearWater && nearWater(px, pz) < 30)) return no('water');
 			hs.push(h);
 		}
-		if (Math.max(...hs) - Math.min(...hs) > 3.5) return false;
+		if (Math.max(...hs) - Math.min(...hs) > 5) return no('slope');
 		const inside = (px, pz, m) => { const dx = px - x, dz = pz - z; return Math.abs(dx * ca + dz * sa) < w / 2 + m && Math.abs(-dx * sa + dz * ca) < d / 2 + m; };
-		for (let i = 0; i < pts.length; i += 3) if (inside(pts[i], pts[i + 1], pts[i + 2] + 2)) return false;
-		for (const b of far) if (inside(b.x, b.z, Math.hypot(b.w, b.d) / 2 + 4)) return false;
+		for (let i = 0; i < pts.length; i += 3) if (inside(pts[i], pts[i + 1], pts[i + 2] + 2)) return no('road');
+		for (const b of far) if (inside(b.x, b.z, Math.hypot(b.w, b.d) / 2 + 4)) return no('house');
 		return true;
 	};
 	const M = D.map, paint = (x, z, w, d, a) => {
@@ -66,7 +67,7 @@ export function industrialEdge(D, heightAt, nearWater = null) {
 			const ux = dx / L, uz = dz / L, nx = -uz * side, nz = ux * side;
 			for (let t = 0; t < L && placed < 6; t += 10) {
 				const x = p[i] + ux * t, z = p[i + 1] + uz * t, dc = Math.hypot(x - cx, z - cz);
-				if (dc < reach + 80 || s + t - lastS < 30) continue;
+				if (dc < reach - 150 || s + t - lastS < 30) continue;
 				const w = 40 + r() * 45, d = 28 + r() * 22, set = (q.w || 12) / 2 + 22 + d / 2;
 				const wx = x + ux * w / 2 + nx * set, wz = z + uz * w / 2 + nz * set, a = Math.atan2(uz, ux);
 				if (!clear(wx + nx * 6, wz + nz * 6, w + 12, d + 36, a)) continue;

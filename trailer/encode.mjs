@@ -40,8 +40,9 @@ let t = 0;
 const offsets = [];
 shots.forEach(({ s, f }, i) => {
 	inputs.push('-framerate', String(FPS), '-start_number', String(s.pre || 0), '-i', f.pattern);
+	const ki = inputs.filter((x) => x === '-i').length - 1;
 	const dur = s.dur, cap = CAPTIONS[s.id] && fs.existsSync(path.join(cards, `cap-${s.id}.png`));
-	let v = `[${i}:v]trim=end_frame=${Math.round(dur * FPS)},setpts=PTS-STARTPTS,scale=${W}:${H}:flags=lanczos,format=yuva420p,setsar=1`;
+	let v = `[${ki}:v]trim=end_frame=${Math.round(dur * FPS)},setpts=PTS-STARTPTS,scale=${W}:${H}:flags=lanczos,format=yuva420p,setsar=1`;
 	fc.push(`${v}[s${i}]`);
 	v = `s${i}`;
 	if (cap) {
@@ -91,7 +92,7 @@ fc.push(`[${ka}:a]lowpass=f=1800,aecho=0.8:0.7:120|260:0.35|0.25,volume=0.9,afad
 
 function run(args, what) {
 	console.log(`ffmpeg: ${what}`);
-	const r = spawnSync(ff, ['-hide_banner', '-loglevel', 'error', '-stats', '-y', ...args], { stdio: 'inherit' });
+	const r = spawnSync(ff, ['-hide_banner', '-loglevel', 'error', '-y', ...args], { stdio: 'inherit' });
 	if (r.status !== 0) throw new Error(`ffmpeg failed: ${what}`);
 }
 const main = path.join(outDir, `level99bard-trailer-${H}p${FPS}.mp4`);

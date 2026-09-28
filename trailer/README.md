@@ -14,7 +14,7 @@ Every frame is rendered by the engine itself (`island/dev.html`) in headless Chr
 | `capture.mjs` | Renders the frames of each shot to `<frames>/<shot>/f00000.png…`. It skips frames that are already on disk, so an interrupted render resumes where it stopped. `--list` prints the shot list with timings. |
 | `cine-runtime.js` | The virtual clock and a seeded `Math.random`, injected before the page loads. |
 | `cine-camera.js` | The spline camera rig: centripetal Catmull-Rom paths, eased timing and a faint handheld drift. It drives the camera through the engine's `Crysis.cine` hook. |
-| `cards.mjs` | Draws the opening title, the place captions and the end card as PNGs. |
+| `cards.py` | Draws the opening title, the place captions and the end card as PNGs with Pillow. |
 | `encode.mjs` | Cuts the trailer with ffmpeg: captions, crossfades, the title, the end card and the pad. It also writes the poster and the teaser. |
 | `render.sh` | Renders every shot, one shot and one browser lock at a time, and logs progress. |
 
@@ -26,7 +26,7 @@ Serve the repository root first: `python3 -m http.server 8765`. Then run:
 
 ```sh
 trailer/render.sh                            # 1080p frames (SwiftShader, CPU only: hours)
-node trailer/cards.mjs                       # title, captions, end card
+python3 trailer/cards.py                     # title, captions, end card (Pillow)
 node trailer/encode.mjs                      # the MP4s and the poster
 ```
 
@@ -42,7 +42,7 @@ Software rendering (SwiftShader) runs at about 1 fps at 4K, so the delivered cut
 
 ```sh
 FRAMES=/tmp/trailer4k/frames trailer/render.sh --gpu --w 3840 --h 2160
-node trailer/cards.mjs --w 3840 --h 2160 --out /tmp/trailer4k/cards
+python3 trailer/cards.py --w 3840 --h 2160 --out /tmp/trailer4k/cards
 node trailer/encode.mjs --frames /tmp/trailer4k/frames --cards /tmp/trailer4k/cards --w 3840 --h 2160 --out /tmp/trailer4k
 ```
 

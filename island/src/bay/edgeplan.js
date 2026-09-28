@@ -101,7 +101,8 @@ function occupancy(x0, z0, size) {
 			if (Math.abs(dx * ca + dz * sa) <= w / 2 + pad + 1 && Math.abs(-dx * sa + dz * ca) <= d / 2 + pad + 1) a[j * N + i] |= v;
 		}
 	};
-	const seg = (p, r, v = 1) => { for (let i = 0; i + 3 < p.length; i += 2) { const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]), n = Math.max(1, Math.ceil(L / C)); for (let k = 0; k <= n; k++) disc(p[i] + (p[i + 2] - p[i]) * k / n, p[i + 1] + (p[i + 3] - p[i + 1]) * k / n, r, v); } };
+	const X1 = x0 + N * C, Z1 = z0 + N * C;
+	const seg = (p, r, v = 1) => { for (let i = 0; i + 3 < p.length; i += 2) { if (Math.max(p[i], p[i + 2]) < x0 - r || Math.min(p[i], p[i + 2]) > X1 + r || Math.max(p[i + 1], p[i + 3]) < z0 - r || Math.min(p[i + 1], p[i + 3]) > Z1 + r) continue; const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]), n = Math.max(1, Math.ceil(L / C)); for (let k = 0; k <= n; k++) disc(p[i] + (p[i + 2] - p[i]) * k / n, p[i + 1] + (p[i + 3] - p[i + 1]) * k / n, r, v); } };
 	// free: nothing of the kinds in mask within r
 	const free = (x, z, r = 0, mask = 255) => { for (let j = Math.floor((z - r - z0) / C); j <= Math.floor((z + r - z0) / C); j++) for (let i = Math.floor((x - r - x0) / C); i <= Math.floor((x + r - x0) / C); i++) { if (i < 0 || j < 0 || i >= N || j >= N) return false; if (a[j * N + i] & mask) return false; } return true; };
 	return { disc, rect, seg, free, cell, a };
@@ -285,7 +286,13 @@ export function* planTile(C, ti, tj, roads) {
 	const rboxes = real.inside(cx, cz) || real.inside(x0, z0) || real.inside(x1, z1) ? real.near('boxes', cx, cz, T * 0.75 + M) : [];
 	for (const b of rboxes) O.rect(b.x, b.z, b.w, b.d, b.a, 0.6, BLD);
 	const rroads = real.near('roads', cx, cz, T * 0.75 + M);
-	for (const q of rroads) if (q.cls !== 'path' && q.cls !== 'track' && q.cls !== 'footway') O.seg(q.pts, q.w / 2 + (q.walked ? 2.2 : 0.8), ROAD);
+	let nq = 0;
+	for (const q of rroads) {
+		if (q.cls === 'path' || q.cls === 'track' || q.cls === 'footway') continue;
+		if (q.box && (q.box[2] < x0 - M || q.box[0] > x1 + M || q.box[3] < z0 - M || q.box[1] > z1 + M)) continue;
+		O.seg(q.pts, q.w / 2 + (q.walked ? 2.2 : 0.8), ROAD);
+		if (++nq % 60 === 0) yield 'stand';
+	}
 	yield 'stand';
 	// the procedural street grid: on a street or its pavement?
 	const onStreet = (x, z) => {
@@ -415,7 +422,7 @@ export function* planTile(C, ti, tj, roads) {
 		if (q.cls === 'track') { ribbon('t' + q.pts[0].toFixed(1) + ',' + q.pts[1].toFixed(1), q.rs || (q.rs = resample(q.pts, 3)), Math.max(3, q.w), 0, { puddles: true }); continue; }
 		if (!q.drive || q.bridge || q.cls === 'motorway' || q.cls === 'service' || q.cls === 'residential' || q.cls === 'living_street') continue;
 		const k = Math.floor(q.pts.length / 4) * 2, L = real.landAt(q.pts[k], q.pts[k + 1]);
-		if (!L || !(L.lu === 0 || L.lu === 11 || L.lu === 12) || L.roof > 0.15) continue;
+		if (!L || !(L.lu === 0 || L.lu === 11 || L.lu === 12) || L.roof > 0.15 || bay.urbanAt(q.pts[k], q.pts[k + 1]).u > 0.2) continue;
 		const rs = q.rs || (q.rs = resample(q.pts, 3));
 		for (const sd of [-1, 1]) ribbon('h' + sd + q.pts[0].toFixed(1) + ',' + q.pts[1].toFixed(1), offsetLine(rs, sd * (q.w / 2 + 0.9)), 1.8, 3);
 		// a gravel pull-out every so often, on the outside of the road
@@ -668,7 +675,7 @@ export function* planTile(C, ti, tj, roads) {
 				for (let s = q.w / 2 + 2.5; s < q.w / 2 + 16; s += 3) { const k = clamp(hit.i + sd * Math.round(s / 3) * 2, 0, bp.length - 2); pts.push(bp[k], bp[k + 1]); }
 				if (pts.length < 4) continue;
 				const mid = pts.length / 2 | 0, mx = pts[mid - (mid % 2)], mz = pts[mid - (mid % 2) + 1];
-				if (!O.free(mx, mz, 1, ROAD) || C.wet(mx, mz)) continue;
+				if (C.wet(mx, mz) || !O.free(mx, mz, 1, BLD)) continue;
 				ribbon('u' + sd + mx.toFixed(0) + ',' + mz.toFixed(0), pts, b.w + 2, 3);
 				drift(offsetLine(pts, b.w / 2 - 0.5), 0, 0.8);
 				drift(offsetLine(pts, -b.w / 2 + 0.5), 0, 0.8);
@@ -706,7 +713,7 @@ export function* planTile(C, ti, tj, roads) {
 			// an abandoned lot, gone to dry grass, a path worn across it
 			const lx = mx + nx * 22, lz = mz + nz * 22;
 			if (r() < 0.75 && clear(lx, lz, 6) && slopeAt(lx, lz, 10) < 0.12) {
-				const w = 40 + r() * 40, d = 26 + r() * 16;
+				const w = 26 + r() * 22, d = 18 + r() * 12;
 				decal(lx, lz, w, d, ang, 7);
 				tuftPatch(lx, lz, Math.min(w, d) * 0.5, 60, 0.85, 0.9);
 				const p = [], a0 = r() * 6.283, a1 = a0 + Math.PI + (r() - 0.5);

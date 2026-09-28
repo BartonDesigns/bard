@@ -10,7 +10,7 @@
 // setup and cam are sent to the page as source, so they may use only their arguments.
 export const FPS = 60;
 
-// each shot's place caption (trailer/cards.mjs draws them): a title and a line under it
+// each shot's place caption (trailer/cards.py draws them): a title and a line under it
 export const CAPTIONS = {
 	gg: ['Golden Gate Bridge', 'San Francisco Bay, true to scale'],
 	sf: ['San Francisco', 'Downtown'],
@@ -72,9 +72,19 @@ export const SHOTS = [
 			return [{ t: 0, p: [ax, 12, az], l: [tx, 5, tz], fov: 50 }, { t: 3.5, p: [bx, 10, bz], l: [tx, 5, tz], fov: 50 }];
 		} },
 	// 7. a tropical island from the air
-	{ id: 'tropical', world: '?planet=TROPICAL&seed=1', dur: 4, warm: 150, settle: 2, opts: { ease: 'inOut', shake: 0.2 },
-		setup: (w) => { w.sky.state.hours = 16.8; const R = w.island.R || 800; return { R }; },
-		cam: (S, w, C) => C.orbit([0, 0, 0], S.R * 1.15, 160, 0.4, 0.85, 4, 10, 4, 50) },
+	{ id: 'tropical', world: '?planet=TROPICAL&seed=1', dur: 4, warm: 150, settle: 2, opts: { ease: 'glide', shake: 0.2 },
+		setup: (w, C) => {
+			w.sky.state.hours = 17.6;
+			// in from the sea over the beach, toward the peak
+			const pk = C.peak(900), a = Math.atan2(pk[0], pk[2]) + 0.6;
+			let d = 50;
+			while (d < 1500 && C.land(Math.sin(a) * d, Math.cos(a) * d) > 0) d += 10;
+			return { pk, a, d, info: 'coast at ' + d + ' peak ' + pk.map((q) => q.toFixed(0)) };
+		},
+		cam: (S) => {
+			const P = (r, h) => [Math.sin(S.a) * r, h, Math.cos(S.a) * r];
+			return [{ t: 0, p: P(S.d + 220, 40), l: [S.pk[0], S.pk[1] * 0.55, S.pk[2]], fov: 50 }, { t: 4, p: P(S.d + 10, 55), l: [S.pk[0], S.pk[1] * 0.6, S.pk[2]], fov: 50 }];
+		} },
 	// 8. a volcano erupting, magma glowing at dusk
 	{ id: 'volcano', world: '?planet=MAGMA&seed=1', dur: 5, warm: 150, settle: 2, opts: { ease: 'inOut', shake: 0.25 },
 		setup: (w) => {
