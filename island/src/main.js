@@ -767,6 +767,8 @@ export function createIslandWorld() {
 		if (arcade.active()) drive.stop();
 		else if (W.boardwalk?.ride(dt, time)) drive.stop();
 		else if (!drive.update(dt)) W.player.update(dt, time);
+		// a director's camera (trailer/): posed after the player moves, before anything reads it
+		HOOKS.cine?.(camera, dt, time);
 		W.fields?.update(dt, camera);
 		arcade.update(dt, time, !W.boat?.boarded?.() && !W.boardwalk?.riding());
 		stampPrints(W.player.state);
@@ -1236,6 +1238,8 @@ if (typeof window !== 'undefined') {
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },
 		// the world's audio: Crysis.audio() (surface, room, beds, levels), .set({ amb, feet, steps }), .record(s)
 		audio: Object.assign(() => HOOKS.audio?.debug(), { set: (v) => HOOKS.audio?.set(v), record: (s) => HOOKS.audio?.record(s), tick: (dt, o) => HOOKS.audio?.tick(dt, o) }),
+		// the trailer's camera: Crysis.cine((camera, dt, time) => { ... }) poses it every frame; Crysis.cine() lets go
+		cine: (fn) => { HOOKS.cine = typeof fn === 'function' ? fn : null; return !!HOOKS.cine; },
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};
 }

@@ -36,9 +36,11 @@ class Spring {
 // bend (elbow), pro (palm: 0 to the thigh, + turned up/open), wflex (wrist), curl (0 loose,
 // 1 fist), shrug (shoulder up)
 const ARM_KEYS = ['abd', 'flex', 'roll', 'bend', 'pro', 'wflex', 'curl', 'shrug'];
-const arm = (o) => Object.assign({ abd: 0.06, flex: 0.02, roll: 0, bend: 0.2, pro: 0, wflex: 0.05, curl: 0, shrug: 0 }, o);
+// (at rest pro is PALM_SIDE: hands hang palm to the thigh, thumb and index finger forward)
+const PALM_SIDE = 1.57;
+const arm = (o) => Object.assign({ abd: 0.06, flex: 0.02, roll: 0, bend: 0.2, pro: PALM_SIDE, wflex: 0.05, curl: 0, shrug: 0 }, o);
 function armSprings() { const o = {}; for (const k of ARM_KEYS) o[k] = new Spring(arm({})[k], 2.4); return o; }
-// the rig's hands hang palm-back; this turns them palm to thigh (see update)
+// the rig's hands hang palm-back; PALM0 - pro turns them (pro = PALM_SIDE: palm to thigh)
 const PALM0 = 1.45;
 // held poses: 'both' for either arm, or 'lead' and 'off' for the leading and other hand;
 // swing scales the walk's arm swing, lean the chest, look the head's droop, head its tilt
@@ -385,7 +387,7 @@ export function createMotion(P, groundAt) {
 			const sw = (side === 'L' ? -swingNow : swingNow) * swingA * amp * (S.hold[side] ? 0.25 : 1);
 			tgt.bend += run * 1.0;
 			// running: forearms up, hands loosely closed
-			if (run > 0.01) { tgt.curl = tgt.curl * (1 - run) + 0.65 * run; tgt.pro = tgt.pro * (1 - run) + 0.25 * run; }
+			if (run > 0.01) { tgt.curl = tgt.curl * (1 - run) + 0.65 * run; tgt.pro = tgt.pro * (1 - run) + PALM_SIDE * run; }
 			const A = S.arms[side];
 			const P2 = {};
 			for (const k of ARM_KEYS) P2[k] = A[k].to(tgt[k] + (k === 'flex' && gp ? (ov.beat || 0) * (lead ? 0.12 : 0.05) : 0), dt);
