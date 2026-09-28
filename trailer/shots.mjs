@@ -74,7 +74,25 @@ export const SHOTS = [
 	{ id: 'stone', bars: 2, world: '?planet=TERRAN&seed=3', warm: 120, settle: 2, kind: 'stone', taps: TAPS, opts: { ease: 'inOut', shake: 0.03 },
 		setup: tapSetup('stone', 17.8, [0, 0]), cam: tapCam },
 	{ id: 'mystic', bars: 2, world: '?planet=MYSTICAL&seed=1', warm: 120, settle: 2, kind: 'crystal', taps: TAPS, opts: { ease: 'inOut', shake: 0.03 },
-		setup: tapSetup('wood', 17.2, [0, 0]), cam: tapCam },
+		setup: `async (w, C) => {
+			w.sky.state.hours = 17.2;
+			if (w.alien?.group) w.alien.group.visible = false;
+			// the cave crystals, when the world lets a tap ring them (underworld pickables)
+			const im = w.underworld?.pickables?.find((o) => o.userData.material175 === 'crystal');
+			if (im) {
+				const T = window.L99Island.T, m = new T.Matrix4(), p = new T.Vector3(), q = new T.Quaternion(), sc = new T.Vector3();
+				// the biggest crystal of a cluster
+				let best = -1, bi = 0;
+				for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, m); m.decompose(p, q, sc); if (sc.y > best) { best = sc.y; bi = i; } }
+				im.getMatrixAt(bi, m); m.decompose(p, q, sc);
+				const P = w.player.state, a = Math.random() * Math.PI * 2, eye = [p.x + Math.sin(a) * 3.2, p.y + sc.y * 0.6 + 0.4, p.z + Math.cos(a) * 3.2];
+				P.flying = true; P.pos.set(eye[0], eye[1], eye[2]);
+				await C.settle(120, 20);
+				return { f: { p: eye, l: [p.x, p.y + sc.y * 0.45, p.z], d: 3.2, species: 'cave crystal' }, info: 'crystal ' + best.toFixed(2) + ' m of ' + im.count };
+			}
+			const f = await C.find('wood', { center: [0, 0], R: 260, dmin: 6, dmax: 20 });
+			return f ? { f, info: 'no strikeable crystals: ' + f.species } : { info: 'nothing to strike' };
+		}`, cam: tapCam },
 	{ id: 'soft', bars: 2, world: '?planet=TERRAN&seed=3', warm: 120, settle: 2, kind: 'soft', taps: TAPS, opts: { ease: 'inOut', shake: 0.03 },
 		setup: tapSetup('soft', 18.0, [0, 0]), cam: tapCam },
 	// bar 15: back to the faceplate as it switches to MAESTRO, the orchestra (trailer/faceplate.mjs)
