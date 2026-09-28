@@ -28152,7 +28152,7 @@ function start(planet){
   /* a Crysis landing is on its way: hold the sky until it arrives, never reveal the old surface */
   const L=root.L99IslandLanding,there=!!(root.L99Island&&root.L99Island.active());
   if(L&&L.pending()&&!d.crysis){d.crysis=true;d.room.status('the world is forming…');}
-  if(d.crysis){if(there||now-d.t0>120000||root._V1_SURFACES===true&&!L.pending())finish(true);return;}
+  if(d.crysis){if(there||now-d.t0>240000||root._V1_SURFACES===true&&!L.pending())finish(true);return;}
   if(now-d.t0>20000){finish(true);return;}
   if(d.landedAt&&now-d.landedAt>700&&now-d.t0>2600&&d.stable>=40)finish(true);};
  d.raf=requestAnimationFrame(tick);
@@ -29093,11 +29093,14 @@ root.L99CaveRail227={patch};
         busy = true; busyAt = Date.now(); done = false;
         var earth = isEarth(u), seed = earth ? 1337 : seedOf(u);
         if (!earth) try { localStorage.setItem('l99-island-seed', String(seed)); } catch (e) {}
-        return window.L99IslandDoor.engine().then(function () {
+        var dest = { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : typeOf(u, seed), earth: earth, palette: u.palette || null, origin: originOf(u) };
+        /* build the world first, behind the sky dive: Journey gives a passage 120 s end to end,
+           and Earth's Bay Area on a slow phone outran it, which dropped you on the V1 surface */
+        return window.L99IslandDoor.engine().then(function (w) { return w && w.warm ? w.warm(dest) : null; }).then(function () {
             var J = window.L99Journey170;
             if (!J) throw Error('Journey is not ready');
-            return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0,
-                planet: { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : typeOf(u, seed), earth: earth, palette: u.palette || null, origin: originOf(u) } });
+            if (!(J.adapters.flight && J.adapters.flight.active())) throw Error('flight is not showing');
+            return J.request('flight', 'island', { kind: 'atmosphere', yaw: 0, pitch: 0, planet: dest });
         }).then(function (ok) {
             if (!ok) throw Error('the passage did not open');
             fails = 0; done = true; return true;
