@@ -119,7 +119,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					eRough = 0.85;
 				} else {
 					// a lot gone to dry grass, bare dirt showing through
-					vec3 straw = mix(vec3(0.42, 0.4, 0.2), vec3(0.56, 0.47, 0.28), uSeason) * (0.7 + 0.45 * n2) * (0.85 + 0.25 * n4);
+					vec3 straw = mix(vec3(0.34, 0.36, 0.17), vec3(0.5, 0.41, 0.23), uSeason) * (0.6 + 0.55 * n2) * (0.8 + 0.3 * n4) * (0.8 + 0.4 * eNoise(vWp * 0.08));
 					c = mix(straw, dust * 0.8, smoothstep(0.55, 0.8, n1 * 0.7 + n3 * 0.5));
 					c = mix(c, straw * 0.6, smoothstep(0.6, 0.85, eNoise(vWp * 0.35 + 9.0)) * 0.6);
 				}

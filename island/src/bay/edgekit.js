@@ -190,8 +190,7 @@ function tent() {
 	g.computeVertexNormals();
 	// the fly's seams along the two crossed poles show darker; the door dark
 	const parts = [part(g, 0, 0, 0, (x, y, z) => { const seam = Math.min(Math.abs(x / 1.15 - z / 1.05), Math.abs(x / 1.15 + z / 1.05)) < 0.12 ? 0.75 : 1; const k = (0.82 + y * 0.2) * seam - (x > 0.7 && Math.abs(z) < 0.4 && y < 0.95 ? 0.45 : 0); return [k, k, k]; })];
-	// the poles over it, crossed, and the guy lines' pegs
-	for (const s of [-1, 1]) { const P2 = []; for (let k = 0; k <= 10; k++) { const t = k / 10 * Math.PI; P2.push([Math.cos(t) * 1.18, Math.sin(t) * 1.17, Math.cos(t) * 1.08 * s]); } for (let k = 0; k < 10; k++) parts.push(bar(P2[k], P2[k + 1], 0.012, [0.25, 0.25, 0.27], 4)); }
+	// the guy lines to their pegs
 	for (const [x, z] of [[1.5, 1.3], [-1.5, 1.3], [1.5, -1.3], [-1.5, -1.3]]) parts.push(bar([x * 0.78, 0.55, z * 0.8], [x, 0.01, z], 0.004, [0.8, 0.8, 0.7], 3));
 	return merge(parts);
 }

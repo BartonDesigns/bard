@@ -506,7 +506,7 @@ export function* planTile(C, ti, tj, roads) {
 	};
 	const tag = (x, z, yaw, w, h, y0) => { if (inT(x, z)) out.tags.push({ x, y: y0, z, yaw, w, h, t: Math.floor(r() * 8) }); };
 	// dress the yard behind a wall: c the wall's middle, (nx, nz) out from it, len along it
-	function backYard(bx, bz, nx, nz, len, wallH, why) {
+	function* backYard(bx, bz, nx, nz, len, wallH, why) {
 		const tx = -nz, tz = nx;          // along the wall
 		// how deep the yard is before a street, a building or the tile's edge
 		let depth = 0;
@@ -519,18 +519,20 @@ export function* planTile(C, ti, tj, roads) {
 		weedsAlong([bx - tx * len / 2 + nx * 0.3, bz - tz * len / 2 + nz * 0.3, bx + tx * len / 2 + nx * 0.3, bz + tz * len / 2 + nz * 0.3], 0, 0.6, 0.5, 0.3);
 		drift([bx - tx * len / 2 + nx * 0.4, bz - tz * len / 2 + nz * 0.4, bx + tx * len / 2 + nx * 0.4, bz + tz * len / 2 + nz * 0.4], 1, 0.35);
 		decal(bx + nx * depth / 2, bz + nz * depth / 2, len, depth, Math.atan2(tz, tx), 6);
+		yield 'yard';
 		// against the wall: a dumpster, pallets stacked, drums, a heap of tyres
 		const slots = [];
 		for (let a = -len / 2 + 3; a < len / 2 - 3; a += 3 + r() * 3) slots.push(a);
 		for (const a of slots) {
 			const u = r(), x = bx + tx * a + nx * 1.6, z = bz + tz * a + nz * 1.6, yaw = Math.atan2(tx, tz);
-			if (!O.free(x + nx * 1.2, z + nz * 1.2, 0.6, ROAD | KEEP) || onStreet(x, z)) continue;
+			if (r() < 0.5 || !O.free(x + nx * 1.2, z + nz * 1.2, 0.6, ROAD | KEEP) || onStreet(x, z)) continue;
 			if (u < 0.12) { put('dumpster', x + nx * 0.3, z + nz * 0.3, { yaw: Math.atan2(-nx, -nz), col: pickC(PAL.dump) }); O.disc(x, z, 1.2, KEEP); }
 			else if (u < 0.3) { const n = 2 + Math.floor(r() * 7); for (let k = 0; k < n; k++) put('pallet', x, z, { yaw: yaw + (r() - 0.5) * 0.15, lift: k * 0.145 }); if (r() < 0.4) put('pallet', x + tx * 1.4, z + tz * 1.4, { yaw: yaw + 0.3, pitch: -1.35, lift: 0.5 }); O.disc(x, z, 1, KEEP); }
 			else if (u < 0.45) { const n = 2 + Math.floor(r() * 5), col = pickC(PAL.drum); for (let k = 0; k < n; k++) { const q = k % 3, rr = Math.floor(k / 3); const px = x + tx * (q - 1) * 0.62 + nx * rr * 0.62, pz = z + tz * (q - 1) * 0.62 + nz * rr * 0.62; if (r() < 0.15) put('drum', px + nx * 0.8, pz + nz * 0.8, { yaw: r() * 6, roll: Math.PI / 2, lift: 0.29, col: r() < 0.6 ? col : pickC(PAL.drum) }); else put('drum', px, pz, { col: r() < 0.7 ? col : pickC(PAL.drum) }); } O.disc(x, z, 1.4, KEEP); }
 			else if (u < 0.58) { const n = 3 + Math.floor(r() * 6); for (let k = 0; k < n; k++) put('tyre', x + (r() - 0.5) * 0.4, z + (r() - 0.5) * 0.4, { lift: k * 0.2, pitch: (r() - 0.5) * 0.15 }); if (r() < 0.5) put('tyre', x + tx * 1.2, z + tz * 1.2, { pitch: Math.PI / 2 - 0.2, lift: 0.28, yaw }); O.disc(x, z, 1, KEEP); }
-			else if (u < 0.63 && why !== 'real') { const cy = r() * 6.28; put('cart', x, z, { yaw: cy }); put('cartWire', x, z, { yaw: cy }); }
+			else if (u < 0.6 && why !== 'real' && r() < 0.3) { const cy = r() * 6.28; put('cart', x, z, { yaw: cy }); put('cartWire', x, z, { yaw: cy }); }
 		}
+		yield 'yard';
 		// out in the yard: shipping containers along it, one on another now and then
 		if (depth > 9) {
 			let a = -len / 2 + 2 + r() * 4;
@@ -584,7 +586,7 @@ export function* planTile(C, ti, tj, roads) {
 			for (let i = 20; i + 20 < q.length; i += 30) if (inT(q[i], q[i + 1])) out.cands.push({ x: q[i] - sa * 7, z: q[i + 1] + ca * 7, yaw: Math.atan2(q[i + 2] - q[i - 2], q[i + 3] - q[i - 1]), w: 1.4, why: 'rail', back: 0 });
 		}
 	}
-	for (const [bx, bz, nx, nz, w, h] of yards) { backYard(bx, bz, nx, nz, w, h, 'proc'); yield 'yard'; }
+	for (const [bx, bz, nx, nz, w, h] of yards) { yield* backYard(bx, bz, nx, nz, w, h, 'proc'); yield 'yard'; }
 	// the mapped industrial buildings (and a generated town's industrial edge): the side away
 	// from the street they face is the back
 	for (const b of rboxes) {
@@ -600,7 +602,7 @@ export function* planTile(C, ti, tj, roads) {
 			if (!best || dRoad > best.dRoad) best = { nx, nz, len, half, dRoad };
 		}
 		const bx = b.x + best.nx * best.half, bz = b.z + best.nz * best.half;
-		if (inT(bx, bz) && r() < 0.85) backYard(bx, bz, best.nx, best.nz, best.len, b.wallH, 'real');
+		if (inT(bx, bz) && r() < 0.85) yield* backYard(bx, bz, best.nx, best.nz, best.len, b.wallH, 'real');
 		yield 'ryard';
 	}
 
@@ -649,6 +651,7 @@ export function* planTile(C, ti, tj, roads) {
 	}
 	yield 'freeways';
 
+	const hits = new Map();
 	// ---- 6. under the overpasses: bare dust where no rain falls, litter, the odd camp ----
 	for (const b of rroads) {
 		if (!b.bridge || !b.drive || /golden gate/i.test(b.name || '')) continue;
@@ -658,7 +661,7 @@ export function* planTile(C, ti, tj, roads) {
 		if (!touch) continue;
 		yield 'bridge';
 		for (const q of rroads) {
-			if (q === b || !q.drive || q.bridge || (q.box && b.box && (q.box[0] > b.box[2] + 5 || q.box[2] < b.box[0] - 5 || q.box[1] > b.box[3] + 5 || q.box[3] < b.box[1] - 5))) continue;
+			if (q === b || !q.drive || q.bridge || q.w < 9 || (hits.get(b) || 0) >= 2 || (q.box && b.box && (q.box[0] > b.box[2] + 5 || q.box[2] < b.box[0] - 5 || q.box[1] > b.box[3] + 5 || q.box[3] < b.box[1] - 5))) continue;
 			// where the lane passes under it
 			let hit = null;
 			for (let i = 0; i + 3 < bp.length && !hit; i += 2) {
@@ -672,6 +675,7 @@ export function* planTile(C, ti, tj, roads) {
 				}
 			}
 			if (!hit) continue;
+			hits.set(b, (hits.get(b) || 0) + 1);
 			// either side of the lane below, under the deck: the embankment
 			for (const sd of [-1, 1]) {
 				const pts = [];
@@ -718,7 +722,7 @@ export function* planTile(C, ti, tj, roads) {
 			if (r() < 0.75 && clear(lx, lz, 6) && slopeAt(lx, lz, 10) < 0.12) {
 				const w = 26 + r() * 22, d = 18 + r() * 12;
 				decal(lx, lz, w, d, ang, 7);
-				tuftPatch(lx, lz, Math.min(w, d) * 0.5, 60, 0.85, 0.9);
+				tuftPatch(lx, lz, Math.min(w, d) * 0.55, 160, 0.9, 0.9);
 				const p = [], a0 = r() * 6.283, a1 = a0 + Math.PI + (r() - 0.5);
 				const sx = lx + Math.cos(a0) * w * 0.55, sz = lz + Math.sin(a0) * d * 0.55, fx = lx + Math.cos(a1) * w * 0.55, fz = lz + Math.sin(a1) * d * 0.55;
 				for (let t = 0; t <= 1.001; t += 0.1) p.push(sx + (fx - sx) * t + Math.sin(t * Math.PI * 2 + a0) * 2.2, sz + (fz - sz) * t + Math.cos(t * Math.PI * 1.5) * 2.2);
@@ -747,7 +751,7 @@ export function* planTile(C, ti, tj, roads) {
 	// a tile, and not in most
 	if (out.cands.length) {
 		const U = bay.urbanAt(cx, cz), ind = nInd / (N * N);
-		const p = clamp(0.02 + U.d * 0.7 + ind * 0.07 + (U.u > 0.6 ? 0.02 : 0), 0, 0.3);
+		const p = clamp(0.015 + U.d * 0.5 + ind * 0.05 + (U.u > 0.6 ? 0.015 : 0), 0, 0.2);
 		const roll = hash(ti * 31 + 7, tj * 17 + 3);
 		const cands = out.cands.slice().sort((a, b) => b.w - a.w + (hash(a.x, a.z) - hash(b.x, b.z)) * 0.5);
 		const pp = cands[0]?.under ? Math.min(0.5, p * 2.5) : p;
