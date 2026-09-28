@@ -300,7 +300,7 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 		// the street's own lofted cars (bay/cars.js), a mix of kinds, some nosed in, some backed in
 		const CC = [0xf4f1ea, 0x222222, 0x8a9096, 0xb3202a, 0x2656a8, 0x3a3f45, 0xd9d4c8, 0x5a6e50];
 		const KINDS = ['sedan', 'sedan', 'suv', 'suv', 'hatch', 'pickup', 'van'];
-		const cars = Object.fromEntries(KINDS.map((k) => [k, instancer(carGeometry(k, 24, 10), carMat, { shadow: !isPhone })]));
+		const cars = Object.fromEntries(KINDS.map((k) => [k, instancer(carGeometry(k, 32, 18), carMat, { shadow: !isPhone })]));
 		const car = (s, x, a, len) => {
 			const k = KINDS[Math.floor(r() * KINDS.length)], [u, v] = wP(s, x), c = new THREE.Color(CC[Math.floor(r() * CC.length)]);
 			cars[k].at(u, Y + 0.02, v, 1, 1, 1, ANG + a + (r() < 0.5 ? Math.PI : 0), c);

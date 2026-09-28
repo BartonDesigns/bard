@@ -42,15 +42,17 @@ export function edgeDist(R, x, z) {
 	return Math.sqrt(best);
 }
 
-// riverLevel (x, z): sanlorenzo.js's water level there, or null
-export function bakedWater(bay, BU, riverLevel = () => null) {
+// riverLevel (x, z): sanlorenzo.js's water level there, or null; riverSettled (): whether it
+// has laid its river (or failed to)
+export function bakedWater(bay, BU, riverLevel = () => null, riverSettled = null) {
 	const S = { H: null, dv: null, lakes: [], ready: false, err: null, version: 0 };
 	// Santa Cruz's river, from its mouth up the valley to Felton, is bay/sanlorenzo.js's:
 	// round it, none of ours where its water is (or within 22 m of it), and the Boardwalk's box
 	// (bake-water.py's skip list) is left out altogether
 	const SL = { x0: (-122.11 - LON0) * KX, x1: (-121.99 - LON0) * KX, z0: -(37.075 - LAT0) * KZ, z1: -(36.94 - LAT0) * KZ, ref: { x: (-122.0213 - LON0) * KX, z: -(36.9745 - LAT0) * KZ }, t0: performance.now() };
 	const inSL = (x, z) => x > SL.x0 && x < SL.x1 && z > SL.z0 && z < SL.z1;
-	const slReady = () => inRiverWater(SL.ref.x, SL.ref.z) || performance.now() - SL.t0 > 90000;
+	// (laid, or given up on: settled; without a way to ask, a few minutes at most)
+	const slReady = () => inRiverWater(SL.ref.x, SL.ref.z) || (riverSettled ? riverSettled() : performance.now() - SL.t0 > 240000);
 	const theirs = (x, z) => { for (let a = 0; a < 8; a++) { const r = a ? 22 : 0; if (inRiverWater(x + Math.cos(a) * r, z + Math.sin(a) * r)) return true; } return false; };
 	const join = (q) => { for (let r = 0; r <= 40; r += 10) for (let a = 0; a < (r ? 8 : 1); a++) { const v = riverLevel(q[0] + Math.cos(a * 0.785) * r, q[1] + Math.sin(a * 0.785) * r); if (v !== null && v !== undefined) return v; } return null; };
 	const skipBox = (x, z) => (S.H?.skip || []).some((b) => x >= b[0] && x <= b[2] && z >= b[1] && z <= b[3]);
