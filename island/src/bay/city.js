@@ -1390,10 +1390,10 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
 		// ...nor on a ball field (sportsfields.js)
 		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
-		// ...nor inside a tower (their lobbies are walked into): a coarse grid of the tall ones
+		// ...nor inside a building (every one can be walked into now): a coarse grid of them
 		{
 			const G = new Map(), cellOf = (x, z) => Math.floor(x / 60) + ',' + Math.floor(z / 60);
-			for (const o of list) if (o.h > 14 && o.w && o.d) { const k = cellOf(o.x, o.z); (G.get(k) || G.set(k, []).get(k)).push(o); }
+			for (const o of list) if (o.h > 3 && o.w && o.d) { const k = cellOf(o.x, o.z); (G.get(k) || G.set(k, []).get(k)).push(o); }
 			const inside = (t) => {
 				const cx = Math.floor(t.x / 60), cz = Math.floor(t.z / 60);
 				for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of G.get((cx + i) + ',' + (cz + j)) || []) {
