@@ -69,6 +69,7 @@ import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
 import { createEdgelands } from './bay/edgelands.js';
 import { createDrive } from './drive.js';
+import { createVehicles } from './vehicles/index.js';
 import { createAutoMusic } from './music/automusic.js';
 
 // the hills by the calendar: green from the winter rains into spring, gold by summer
@@ -616,6 +617,8 @@ export function createIslandWorld() {
 			world.interiors = createInteriors(scene, bayArea, world.city, { isPhone, mats: world.houses.M, towers: world.towers });
 			{ const cv = world.commercial.venue, I = world.interiors; world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
+			// the cars' people, their owners, and the cars as solid things (vehicles/)
+			world.vehicles = createVehicles({ scene, world: () => world, camera, isPhone, people: () => people });
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
@@ -673,6 +676,7 @@ export function createIslandWorld() {
 				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
+				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -992,6 +996,7 @@ export function createIslandWorld() {
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !arcade.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
+		W.vehicles?.update(dt, time);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		W.lake?.update(dt, time, camera, sk.night);

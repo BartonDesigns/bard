@@ -6,22 +6,22 @@
 // its own weight, power, suspension, grip, steering and top speed, so a pickup wallows and
 // a sports car bites.
 
-import { SPEC } from '../bay/cars.js';
+import { specOf } from '../bay/cars.js';
 
 // mass (kg), power (engine force, N), top (m/s), drive (front, rear, all), steer (radians),
 // spring (stiffness), travel (m), damp (compression, relaxation), grip (friction slip), side
 // (side friction stiffness), brake
 export const FEEL = {
-	sedan: { mass: 1500, power: 5200, top: 52, drive: 'front', steer: 0.58, spring: 32, travel: 0.18, damp: [3.2, 4.4], grip: 2.6, side: 1, brake: 55 },
-	hatch: { mass: 1250, power: 4600, top: 50, drive: 'front', steer: 0.62, spring: 34, travel: 0.17, damp: [3.2, 4.4], grip: 2.6, side: 1, brake: 50 },
-	crossover: { mass: 1750, power: 6000, top: 54, drive: 'all', steer: 0.55, spring: 28, travel: 0.22, damp: [3.0, 4.2], grip: 2.5, side: 0.95, brake: 60 },
-	suv: { mass: 2100, power: 6800, top: 50, drive: 'all', steer: 0.52, spring: 25, travel: 0.25, damp: [2.8, 4.0], grip: 2.3, side: 0.9, brake: 70 },
-	pickup: { mass: 2400, power: 7600, top: 48, drive: 'rear', steer: 0.48, spring: 20, travel: 0.3, damp: [2.3, 3.2], grip: 2.0, side: 0.8, brake: 75 },
-	van: { mass: 2000, power: 5400, top: 46, drive: 'front', steer: 0.52, spring: 26, travel: 0.22, damp: [2.8, 4.0], grip: 2.3, side: 0.9, brake: 65 },
-	delivery: { mass: 2900, power: 6200, top: 40, drive: 'rear', steer: 0.5, spring: 24, travel: 0.24, damp: [2.6, 3.6], grip: 2.0, side: 0.8, brake: 85 },
-	sports: { mass: 1400, power: 11000, top: 80, drive: 'rear', steer: 0.5, spring: 55, travel: 0.1, damp: [4.4, 5.6], grip: 3.4, side: 1.25, brake: 70 },
-	truck: { mass: 7500, power: 17000, top: 30, drive: 'rear', steer: 0.55, spring: 40, travel: 0.25, damp: [3.0, 4.0], grip: 1.8, side: 0.8, brake: 220 },
-	bus: { mass: 11000, power: 24000, top: 27, drive: 'rear', steer: 0.62, spring: 45, travel: 0.22, damp: [3.2, 4.2], grip: 1.8, side: 0.8, brake: 320 },
+	sedan: { mass: 1500, power: 7000, top: 52, drive: 'front', steer: 0.58, spring: 32, travel: 0.18, damp: [3.2, 4.4], grip: 2.6, side: 1, brake: 132 },
+	hatch: { mass: 1250, power: 6000, top: 50, drive: 'front', steer: 0.62, spring: 34, travel: 0.17, damp: [3.2, 4.4], grip: 2.6, side: 1, brake: 120 },
+	crossover: { mass: 1750, power: 8000, top: 54, drive: 'all', steer: 0.55, spring: 28, travel: 0.22, damp: [3.0, 4.2], grip: 2.5, side: 0.95, brake: 144 },
+	suv: { mass: 2100, power: 8800, top: 50, drive: 'all', steer: 0.52, spring: 25, travel: 0.25, damp: [2.8, 4.0], grip: 2.3, side: 0.9, brake: 168 },
+	pickup: { mass: 2400, power: 9500, top: 48, drive: 'rear', steer: 0.48, spring: 20, travel: 0.3, damp: [2.3, 3.2], grip: 2.0, side: 0.8, brake: 180 },
+	van: { mass: 2000, power: 7200, top: 46, drive: 'front', steer: 0.52, spring: 26, travel: 0.22, damp: [2.8, 4.0], grip: 2.3, side: 0.9, brake: 156 },
+	delivery: { mass: 2900, power: 8200, top: 40, drive: 'rear', steer: 0.5, spring: 24, travel: 0.24, damp: [2.6, 3.6], grip: 2.0, side: 0.8, brake: 204 },
+	sports: { mass: 1400, power: 12500, top: 80, drive: 'rear', steer: 0.5, spring: 55, travel: 0.1, damp: [4.4, 5.6], grip: 3.4, side: 1.25, brake: 168 },
+	truck: { mass: 7500, power: 22000, top: 30, drive: 'rear', steer: 0.55, spring: 40, travel: 0.25, damp: [3.0, 4.0], grip: 1.8, side: 0.8, brake: 528 },
+	bus: { mass: 11000, power: 30000, top: 27, drive: 'rear', steer: 0.62, spring: 45, travel: 0.22, damp: [3.2, 4.2], grip: 1.8, side: 0.8, brake: 768 },
 };
 
 let rapier = null;
@@ -38,20 +38,20 @@ export function loadRapier() {
 // the car: kind, where (x, z, yaw), and the world to drive in
 // env: { heightAt(x, z), floorAt(x, z, y), boxes(x, z, r) -> [{x, z, w, d, a, h}], cars(x, z, r) -> [{x, y, z, yaw, kind}], push(p, footY) }
 export function createCarPhysics(R, kind, start, env) {
-	const S = SPEC[kind] || SPEC.sedan, F = FEEL[kind] || FEEL.sedan;
+	const S = specOf(kind), F = FEEL[kind] || FEEL.sedan;
 	const world = new R.World({ x: 0, y: -9.81, z: 0 });
 	world.timestep = 1 / 60;
 	// the body: a box a little inside the car's shape, heavy low down
 	const y0 = env.floorAt(start.x, start.z, 1e4) + 0.3;
 	const q = { x: 0, y: Math.sin(start.yaw / 2), z: 0, w: Math.cos(start.yaw / 2) };
-	const body = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(start.x, y0 + S.wr + 0.2, start.z).setRotation(q).setCanSleep(false).setLinearDamping(0.05).setAngularDamping(0.6));
-	const hh = (S.H - (S.clear ?? 0.3)) / 2 * 0.8, hb = S.wr + 0.05;
-	world.createCollider(R.ColliderDesc.cuboid(S.W / 2 * 0.95, hh, S.L / 2 * 0.96).setTranslation(0, hb + hh - S.wr, 0).setMass(F.mass).setFriction(0.4).setRestitution(0.05), body);
-	// (the weight a little low and forward, as in a real car)
-	body.setAdditionalMassProperties(0, { x: 0, y: -0.25, z: 0.1 }, { x: F.mass * 0.6, y: F.mass * 0.8, z: F.mass * 0.4 }, { x: 0, y: 0, z: 0, w: 1 }, true);
+	const body = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(start.x, y0 + S.wr + 0.2, start.z).setRotation(q).setCanSleep(false).setLinearDamping(0.002).setAngularDamping(0.6));
+	// (in the body's frame the road is about a wheel and a bit of spring below; the box sits
+	// from the car's underside up, a little short of its roof, so the weight is low)
+	const x = S.W / 2 - 0.15, rest = F.travel + 0.12, G = 0.05 - rest * 0.8 - S.wr;
+	const hh = (S.H - (S.clear ?? 0.3)) / 2 * 0.8;
+	world.createCollider(R.ColliderDesc.cuboid(S.W / 2 * 0.95, hh, S.L / 2 * 0.96).setTranslation(0, G + (S.clear ?? 0.3) + hh, 0).setMass(F.mass).setFriction(0.4).setRestitution(0.05), body);
 	const V = world.createVehicleController(body);
 	V.indexUpAxis = 1; V.setIndexForwardAxis = 2;
-	const x = S.W / 2 - 0.15, rest = F.travel + 0.12;
 	for (const [wx, wz] of [[x, S.wz], [-x, S.wz], [x, -S.wz], [-x, -S.wz]]) V.addWheel({ x: wx, y: 0.05, z: wz }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, rest, S.wr);
 	for (let i = 0; i < 4; i++) {
 		V.setWheelSuspensionStiffness(i, F.spring); V.setWheelMaxSuspensionTravel(i, F.travel);
@@ -82,15 +82,13 @@ export function createCarPhysics(R, kind, start, env) {
 	}
 	// the cars about: parked ones fixed, the traffic moved each step (kinematic)
 	const carBodies = new Map();
-	let carT = 0;
-	function cars(cx, cz, dt) {
-		carT -= dt;
+	function cars(cx, cz) {
 		const list = env.cars(cx, cz, 45), seen = new Set();
 		for (const c of list) {
 			const key = c.id;
 			seen.add(key);
 			let e = carBodies.get(key);
-			const Sc = SPEC[c.kind] || SPEC.sedan, h = (Sc.H - (Sc.clear ?? 0.3)) / 2;
+			const Sc = specOf(c.kind), h = (Sc.H - (Sc.clear ?? 0.3)) / 2;
 			const rot = { x: 0, y: Math.sin(c.yaw / 2), z: 0, w: Math.cos(c.yaw / 2) };
 			if (!e) {
 				const rb = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(c.x, c.y + (Sc.clear ?? 0.3) + h, c.z).setRotation(rot));
@@ -106,7 +104,7 @@ export function createCarPhysics(R, kind, start, env) {
 	function step(dt) {
 		const p = body.translation();
 		if (Math.abs(p.x - gx) > 25 || Math.abs(p.z - gz) > 25) regrid(p.x, p.z);
-		cars(p.x, p.z, dt);
+		cars(p.x, p.z);
 		acc += Math.min(dt, 0.1);
 		let n = 0;
 		while (acc >= world.timestep && n < 4) {
@@ -118,7 +116,8 @@ export function createCarPhysics(R, kind, start, env) {
 			V.setWheelSteering(0, steerNow); V.setWheelSteering(1, steerNow);
 			// the engine: its force falling away toward the top speed; backwards when stopped and braking
 			const fwd = ctl.throttle, rev = ctl.brake > 0 && v < 0.8;
-			let force = fwd * F.power * Math.max(0, 1 - Math.max(0, v) / F.top);
+			// (full pull through the low gears, fading toward the top speed; the air's drag on top)
+			let force = fwd * F.power * Math.min(1, 1.4 * Math.max(0, 1 - Math.max(0, v) / F.top)) - Math.sign(v) * v * v * F.mass * 0.00018;
 			if (rev) force = -ctl.brake * F.power * 0.5 * Math.max(0, 1 + v / 8);
 			const brake = (!rev && ctl.brake > 0 ? ctl.brake * F.brake : 0) + (fwd === 0 && ctl.brake === 0 ? F.brake * 0.04 : 0);
 			for (let i = 0; i < 4; i++) {
@@ -154,8 +153,10 @@ export function createCarPhysics(R, kind, start, env) {
 	function pose() {
 		const t = body.translation(), r = body.rotation();
 		const wheels = [];
-		for (let i = 0; i < 4; i++) wheels.push({ spin: V.wheelRotation(i) || 0, steer: V.wheelSteering(i) || 0, compress: (V.wheelSuspensionLength(i) ?? rest) - rest, contact: V.wheelIsInContact(i) });
-		return { p: [t.x, t.y - 0.05 + S.wr - S.wr, t.z], q: [r.x, r.y, r.z, r.w], speed: V.currentVehicleSpeed(), wheels };
+		let susp = 0;
+		for (let i = 0; i < 4; i++) { const l = V.wheelSuspensionLength(i) ?? rest; susp += l / 4; wheels.push({ spin: V.wheelRotation(i) || 0, steer: V.wheelSteering(i) || 0, contact: V.wheelIsInContact(i) }); }
+		// (the car's own origin, on the road under it: the hubs a wheel's radius up)
+		return { p: [t.x, t.y, t.z], down: 0.05 - susp - S.wr, q: [r.x, r.y, r.z, r.w], speed: V.currentVehicleSpeed(), wheels };
 	}
 	// put it back on the ground, the right way up (after a roll, or a teleport)
 	function reset(x, z, yaw) {

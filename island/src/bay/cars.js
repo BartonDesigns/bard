@@ -37,6 +37,8 @@ export const SPEC = {
 export const KINDS = Object.keys(SPEC);
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const def = (S) => Object.assign({ clear: 0.3, wr: 0.34, tw: 0.23, plan: 5, tumble: 0.72, panel: -1e9 }, S);
+// a kind's measurements, the defaults filled in
+export const specOf = (kind) => def(SPEC[kind] || SPEC.sedan);
 
 // where the wheels are: [x, y, z] front left, front right, rear left, rear right (left is +x)
 export function wheelHubs(kind) {

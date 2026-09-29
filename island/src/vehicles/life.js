@@ -19,7 +19,7 @@ import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
 import { createMotion } from '../people/motion.js';
 import { fadePerson } from '../people/fade.js';
 import { zoneOf, crowd } from '../people/flow.js';
-import { SPEC, seatsOf } from '../bay/cars.js';
+import { specOf, seatsOf } from '../bay/cars.js';
 
 const hashS = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
 const frac = (h) => ((Math.imul(h ^ (h >>> 15), 2246822519) ^ (h >>> 13)) >>> 0) / 4294967296;
@@ -65,7 +65,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	}
 	// sat in a car: in the car's own frame, the seat's front edge [x, y, z]
 	function seat(b, kind, i) {
-		const S = SPEC[kind], C = seatsOf(kind), s = C.seats[Math.min(i, C.seats.length - 1)];
+		const S = specOf(kind), C = seatsOf(kind), s = C.seats[Math.min(i, C.seats.length - 1)];
 		b.mode = 'car'; b.floor = (S.clear ?? 0.3) + 0.1;
 		b.M.place(s[0], b.floor, s[2] - 0.22, 0);
 		b.M.sit(s[1] - 0.04 - b.floor, true);
@@ -156,7 +156,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	// start one: 'leave' or 'arrive', for the car in a space (car: from street.parkedNear)
 	function begin(kind, car, o) {
 		if (episodes.length >= (isPhone ? 1 : 2)) return false;
-		const door = doorOf(o, car), S = SPEC[car.kind];
+		const door = doorOf(o, car), S = specOf(car.kind);
 		const E = { kind, car, o, door, t: 0, phase: kind === 'leave' ? 'walk-out' : 'drive-in', matrix: new THREE.Matrix4(), spin: 0, steer: 0, pos: [car.x, car.z], yaw: car.yaw, v: 0, len: S.L };
 		// the driver's door, a step out from the car's left side
 		const C = seatsOf(car.kind), s = C.seats[0], sx = Math.cos(car.yaw), sz = -Math.sin(car.yaw), fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
@@ -200,7 +200,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 			case 'get-in': {
 				// turn to the car, sit down into it; then they are in and the car is theirs to move
 				b.M.want.speed = 0; b.M.want.heading = car.yaw - Math.PI / 2 + Math.PI;
-				if (E.t > 0.6) b.M.sit(SPEC[car.kind].hip - 0.05);
+				if (E.t > 0.6) b.M.sit(specOf(car.kind).hip - 0.05);
 				step(b, dt, t, null);
 				if (E.t > 1.6) {
 					St.hide(car.id, true); shown.set(E.o.key, false);
@@ -217,7 +217,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 				const k = Math.min(1, E.s / 9), ease = k * k * (3 - 2 * k);
 				const x = car.x + fx * E.s + E.lane[0] * ease, z = car.z + fz * E.s + E.lane[1] * ease;
 				const yaw = car.yaw + E.kerb * Math.atan(2.4 * 6 * k * (1 - k) / 9);
-				E.spin += E.v * dt / (SPEC[car.kind].wr || 0.34);
+				E.spin += E.v * dt / (specOf(car.kind).wr || 0.34);
 				carAt(E, x, z, yaw);
 				step(b, dt, t, E.matrix);
 				const d = Math.hypot(x - cam.x, z - cam.z);
@@ -233,7 +233,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 				const s2 = Math.min(0, along + E.v * dt);
 				const k = Math.max(0, Math.min(1, 1 + s2 / 9)), ease = k * k * (3 - 2 * k);
 				const x = tx + fx * s2 + E.lane[0] * (1 - ease), z = tz + fz * s2 + E.lane[1] * (1 - ease);
-				E.spin += E.v * dt / (SPEC[car.kind].wr || 0.34);
+				E.spin += E.v * dt / (specOf(car.kind).wr || 0.34);
 				carAt(E, x, z, car.yaw - E.kerb * Math.atan(2.4 * 6 * k * (1 - k) / 9));
 				step(b, dt, t, E.matrix);
 				if (s2 >= -0.02) { E.phase = 'park'; E.t = 0; carAt(E, tx, tz, car.yaw); }
@@ -246,7 +246,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 					St.hide(car.id, false); shown.set(E.o.key, true);
 					b.mode = 'walk';
 					b.M.place(E.side[0], groundAt(W, E.side[0], E.side[1]), E.side[1], car.yaw + Math.PI / 2);
-					b.M.sit(SPEC[car.kind].hip - 0.05, true); b.M.setPose('rest');
+					b.M.sit(specOf(car.kind).hip - 0.05, true); b.M.setPose('rest');
 					E.phase = 'walk-in'; E.t = 0; E.fade = 1;
 				}
 				break;
