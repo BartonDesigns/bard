@@ -106,6 +106,20 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		for (const f of foot) {
 			if (f.pier) continue;
 			let [lx, lz] = toLocal(f, p.x, p.z);
+			// a cottage you can walk into: its walls (and its furniture) one by one
+			if (f.walls) {
+				if (Math.abs(lx) > f.w / 2 + 1 || Math.abs(lz) > f.d / 2 + 1 || p.y - EYE > f.y + f.h) continue;
+				let moved = false;
+				for (const b of f.walls) {
+					if (b[4] !== undefined && p.y - EYE + 0.3 > f.y + b[4]) continue;
+					const qx = Math.max(b[0], Math.min(b[2], lx)), qz = Math.max(b[1], Math.min(b[3], lz)), dx = lx - qx, dz = lz - qz, d2 = dx * dx + dz * dz;
+					if (d2 >= 0.09) continue;
+					if (d2 < 1e-8) { const pen = [lx - b[0], b[2] - lx, lz - b[1], b[3] - lz], m = Math.min(...pen), k = pen.indexOf(m); if (k === 0) lx = b[0] - 0.3; else if (k === 1) lx = b[2] + 0.3; else if (k === 2) lz = b[1] - 0.3; else lz = b[3] + 0.3; } else { const d = Math.sqrt(d2); lx = qx + dx / d * 0.3; lz = qz + dz / d * 0.3; }
+					moved = true;
+				}
+				if (moved) [p.x, p.z] = toWorld(f, lx, lz);
+				continue;
+			}
 			// the walls are solid; the porch in front of them is not
 			const hw = f.w / 2 - 0.1, hd0 = -(f.d - 2.2) / 2 - 0.3, hd1 = (f.d - 2.2) / 2 + 0.3;
 			if (Math.abs(lx) < hw + 0.3 && lz > hd0 && lz < hd1 && p.y - EYE < f.y + f.h) {

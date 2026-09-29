@@ -42,15 +42,16 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 	const tuftMat = new THREE.MeshStandardMaterial({ map: bladeTex(), alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.95 });
 	tuftMat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, { uSeason, uTime, uWind });
-		sh.vertexShader = 'uniform float uTime, uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+		sh.vertexShader = 'uniform float uTime, uWind; varying float vTip;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+			vTip = uv.y;
 			#ifdef USE_INSTANCING
 			{ vec2 at = instanceMatrix[3].xz; float k = uv.y * uv.y * (0.04 + uWind * 0.08); transformed.x += sin(uTime * 1.7 + at.x * 0.4 + at.y * 0.3) * k; transformed.z += sin(uTime * 1.3 + at.y * 0.5) * k * 0.6; }
 			#endif`);
-		sh.fragmentShader = 'uniform float uSeason;\n' + sh.fragmentShader.replace('#include <color_fragment>', `
+		sh.fragmentShader = 'uniform float uSeason; varying float vTip;\n' + sh.fragmentShader.replace('#include <color_fragment>', `
 			#if defined( USE_INSTANCING_COLOR ) || defined( USE_COLOR )
 			{ float dry = clamp(vColor.r + uSeason * 0.65, 0.0, 1.0);
 			  vec3 g = mix(vec3(0.2, 0.3, 0.1), vec3(0.5, 0.42, 0.24), dry) * vColor.g;
-			  diffuseColor.rgb *= g * (0.45 + 0.55 * vUv.y); }
+			  diffuseColor.rgb *= g * (0.45 + 0.55 * vTip); }
 			#endif`);
 	};
 	tuftMat.customProgramCacheKey = () => 'edgetuft';

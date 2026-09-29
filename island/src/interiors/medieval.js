@@ -154,7 +154,18 @@ export function createMedievalInteriors({ group, mat, col, houses, isPhone = fal
 		}
 		return null;
 	}
-	return { update, inside, info: () => ({ live: live.size, houses: list.length, ...stats }), live };
+	// to a house of a kind: outside its door, or (in) just inside it looking across the room
+	function goTo(P, kind = 'house', inn = false, H) {
+		const b = list.find((q) => q.inside.kind === kind) || list[0];
+		if (!b) return null;
+		const I = b.inside, c = Math.cos(I.yaw), s = Math.sin(I.yaw), W = (lx, lz) => [I.x + lx * c + lz * s, I.z - lx * s + lz * c];
+		const [x, z] = W(inn ? I.door.x : I.door.x, inn ? I.d / 2 - 0.6 : I.d / 2 + 4), [tx, tz] = W(inn ? -I.w * 0.2 : I.door.x, inn ? -I.d / 2 : 0);
+		P.flying = false; P.vel?.set(0, 0, 0);
+		P.pos.set(x, (inn ? I.y0 : H(x, z)) + 1.7, z);
+		P.yaw = Math.atan2(-(tx - x), -(tz - z)); P.pitch = -0.08;
+		return { kind: I.kind, w: I.w, d: I.d };
+	}
+	return { update, inside, goTo, info: () => ({ live: live.size, houses: list.length, ...stats }), live };
 }
 // where the hearth stands along the left wall (the same in build.js, for its fire)
 export const hearthZ = (I) => Math.max(-I.d / 2 + 1.2, Math.min(I.d / 2 - 1.6, -I.d * 0.15));

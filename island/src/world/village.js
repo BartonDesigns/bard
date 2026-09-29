@@ -71,7 +71,12 @@ export function createVillage(island, shared, scene) {
 		const floor = hi + (onStone ? 0.55 : 0.45);
 		const local = [];
 		const add = (bucket, g, color) => local.push([bucket, paint(g, color)]);
-		add('wall', place(box(w, wallH, d), 0, wallH / 2, 0), colorW);
+		// the walls, hollow, the doorway open onto the porch (the rooms: interiors/cottage.js)
+		const T = 0.14, dx = -w * 0.18, walls = [[-w / 2, -d / 2, w / 2, -d / 2 + T], [-w / 2, -d / 2, -w / 2 + T, d / 2], [w / 2 - T, -d / 2, w / 2, d / 2], [-w / 2, d / 2 - T, dx - 0.5, d / 2], [dx + 0.5, d / 2 - T, w / 2, d / 2]];
+		for (const [x0, z0, x1, z1] of walls) add('wall', place(box(x1 - x0, wallH, z1 - z0), (x0 + x1) / 2, wallH / 2, (z0 + z1) / 2), colorW);
+		add('wall', place(box(1.0, wallH - 2.1, T), dx, (wallH + 2.1) / 2, d / 2 - T / 2), colorW);
+		add('wood', place(box(w - 0.1, 0.06, d - 0.1, 1.2), 0, wallH - 0.03, 0), [0.8, 0.74, 0.62]);
+		add('wood', place(box(w - 0.1, 0.05, d - 0.1, 1.2), 0, 0.01, 0), [0.62, 0.5, 0.38]);
 		add('wall', place(gable(w, d, rise), 0, wallH, 0), colorW);
 		// pitched roof, overhanging
 		const slope = Math.hypot(w / 2 + 0.5, rise), ang = Math.atan2(rise, w / 2 + 0.5);
@@ -85,7 +90,7 @@ export function createVillage(island, shared, scene) {
 		// railing
 		add('wood', place(box(w + 0.4, 0.08, 0.08), 0, 0.95, d / 2 + pd - 0.05), TRIM);
 		// door and windows
-		add('wood', place(box(1.0, 2.1, 0.08), -w * 0.18, 1.05, d / 2 + 0.03), [0.35, 0.28, 0.22]);
+		add('wood', place(box(0.06, 2.05, 0.95), dx - 0.47, 1.03, d / 2 - T - 0.5), [0.35, 0.28, 0.22]);
 		const winY = tall ? [1.5, 4.2] : [1.55];
 		for (const y of winY) {
 			add('glass', place(box(0.9, 1.1, 0.06), w * 0.22, y, d / 2 + 0.04), [1, 1, 1]);
@@ -125,7 +130,7 @@ export function createVillage(island, shared, scene) {
 		for (let k = 0; k < 3; k++) add('wood', place(box(1.2, 0.12, 0.35), 0, -0.25 - k * 0.2, d / 2 + pd + 0.2 + k * 0.32), [0.6, 0.52, 0.42]);
 		const m = new THREE.Matrix4().makeRotationY(face).setPosition(cx, floor, cz);
 		for (const [bucket, g] of local) parts[bucket].push(g.applyMatrix4(m));
-		footprints.push({ x: cx, z: cz, face, w: w + 0.4, d: d + pd, y: floor, h: wallH + rise });
+		footprints.push({ x: cx, z: cz, face, w: w + 0.4, d: d + pd, y: floor, h: wallH + rise, walls, room: { w, d, wallH, door: dx, tall } });
 		return true;
 	}
 

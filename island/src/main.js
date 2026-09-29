@@ -55,6 +55,8 @@ import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createInteriors } from './interiors/index.js';
+import { createCottageInteriors } from './interiors/cottage.js';
+import { planDwellings, createDwellings } from './interiors/alien.js';
 import { createWildlife } from './bay/wildlife.js';
 import { createFishing } from './fishing.js';
 import { createArcade } from './arcade.js';
@@ -499,6 +501,8 @@ export function createIslandWorld() {
 		if (realmPlan) planDungeons(realmPlan, island, cavePlan, makeField);
 		// the works of whoever built here before: sited now, so nothing grows on them
 		const alienPlan = earth || realmPlan?.noAliens ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: [...fieldPlan.clear, ...(realmPlan?.clear || [])], isPhone });
+		// (and the dwellings of whoever built them: interiors/alien.js)
+		if (alienPlan) alienPlan.clear.push(...planDwellings(island, alienPlan));
 		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
 		const village = createVillage(island, shared, scene);
@@ -526,6 +530,8 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		// the fishing cottages' rooms, furnished as you come near (interiors/cottage.js)
+		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
 		// sunbeams through the trees in mist (world/sunrays.js)
 		world.rays = createSunRays(scene, shared, renderer, { isPhone, sun: sky.sun, air: sky.uniforms.uAir });
 		world.rays.quality(quality);
@@ -558,6 +564,10 @@ export function createIslandWorld() {
 			const of = island.extraFloor, op = island.extraPush;
 			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), al.floor(x, z, y)) : al.floor;
 			island.extraPush = op ? (p, footY) => { op(p, footY); al.push(p, footY); } : al.push;
+			const dw = world.dwellings = createDwellings(scene, alienPlan, { isPhone });
+			const of2 = island.extraFloor, op2 = island.extraPush;
+			island.extraFloor = (x, z, y) => Math.max(of2(x, z, y), dw.floor(x, z, y));
+			island.extraPush = (p, footY) => { op2(p, footY); dw.push(p, footY); };
 		}
 		// the realm: its castle, town and fields walked on and into; its dungeons reached before the caves
 		if (realmPlan) {
@@ -871,6 +881,7 @@ export function createIslandWorld() {
 		W.magma.update(dt, time, under, surf);
 		W.volcano?.update(dt, time);
 		W.alien?.update(dt, time);
+		W.dwellings?.update(dt, camera.position);
 		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
 		W.underworld?.update(dt, time);
@@ -937,6 +948,7 @@ export function createIslandWorld() {
 		islandReach(W);
 		W.vegetation.stream(camera, false);
 		W.village.update(time, sk.night);
+		W.cottages?.update(camera.position, dt);
 		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
 		W.distant.group.visible = !W.bayArea;
 		if (!W.bayArea) W.distant.update(time, sk.night);

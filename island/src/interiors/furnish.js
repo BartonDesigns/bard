@@ -19,10 +19,13 @@ function sidesOf(P, rm) {
 	return out;
 }
 
-export function furnish(P) {
-	const rnd = P.rnd, items = P.items, seats = P.seats, lights = P.lights = [];
+// (one level at a time, as it is built: a tall block's floors are furnished when you climb to them)
+export function furnish(P, only = -1) {
+	const rnd = P.rnd, items = P.items, seats = P.seats, lights = P.lights || (P.lights = []);
 	const victorian = P.style === 'victorian' || P.style === 'edwardian';
 	for (const rm of P.rooms) {
+		if (rm.furnished || (only >= 0 && rm.k !== only)) continue;
+		rm.furnished = true;
 		const L = P.levels[rm.k], y0 = L.y, sides = sidesOf(P, rm), placed = [];
 		const bw = rm.x1 - rm.x0, bd = rm.z1 - rm.z0, cx = (rm.x0 + rm.x1) / 2, cz = (rm.z0 + rm.z1) / 2;
 		const hit = (b) => placed.some((p) => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1]);

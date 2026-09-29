@@ -396,7 +396,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 					const x = cx + nx * s * 1.1, z = cz + nz * s * 1.1;
 					P.push(x, groundAt(x, z) + cliffDelta(x, z) + 0.07, z);
 					const v = 0.9 + 0.2 * h01(Math.floor(x), Math.floor(z));
-					C.push(0.56 * v, 0.47 * v, 0.36 * v);
+					C.push(0.34 * v, 0.26 * v, 0.17 * v);
 				}
 				if (k > 0) { const o = base + (k - 1) * 2; I.push(o, o + 1, o + 2, o + 1, o + 3, o + 2); }
 				// the fence, between the trail and the edge

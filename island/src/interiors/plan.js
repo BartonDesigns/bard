@@ -87,7 +87,7 @@ export function minusHoles(r, holes) {
 export function planRow(S) {
 	const P = base(S), r = S.rnd, n = S.levels;
 	const { hw, hd } = P, PT = ST.part;
-	const side = S.doorX >= 0 ? 1 : -1;
+	const side = S.stairSide ?? (S.doorX >= 0 ? 1 : -1);
 	const sw = ST.stairW, hallW = clamp((2 * hw - sw) * 0.18, 0.95, 1.15);
 	const sx0 = side > 0 ? hw - sw : -hw, sx1 = sx0 + sw;
 	const hx0 = side > 0 ? sx0 - hallW : sx1, hx1 = hx0 + hallW;
@@ -128,8 +128,9 @@ export function planRow(S) {
 		void hall;
 		// the rooms beside the core, front to back
 		const sideLen = zf - zc0;
-		const roles = k === 0 ? (shop ? null : [S.garage ? 'garage' : r() < 0.5 ? 'den' : 'bed', 'laundry', 'bath'])
-			: k === 1 && n > 1 ? ['living', 'dining', 'powder'] : ['master', 'bath', 'bed'];
+		const first = k === 0 ? (S.garage ? 'garage' : r() < 0.5 ? 'den' : 'bed') : k === 1 ? 'living' : 'master';
+		const roles3 = [first, k === 0 ? 'bath' : k === 1 ? 'powder' : 'bath', k === 0 ? 'laundry' : k === 1 ? 'dining' : 'bed'];
+		const roles2 = [first, k === 0 ? 'laundry' : k === 1 ? 'dining' : 'bed'];
 		const hallWall = shop ? wall(P, k, 'z', side > 0 ? sx0 - PT / 2 : sx1 + PT / 2, zc0, zs, y, yc) : wall(P, k, 'z', xw, zc0, zf, y, yc);
 		if (shop) {
 			// the shop: the whole front beside the stair, the stair's foot open to it
@@ -138,9 +139,7 @@ export function planRow(S) {
 			const ws = sideLen > 10 ? [0.45, 0.2, 0.35] : sideLen > 5.8 ? [0.55, 0.45] : [1];
 			const sl = slots(zf, zc0, ws);
 			sl.forEach(([a, b], i) => {
-				let type = roles[Math.min(i, roles.length - 1)];
-				if (ws.length === 3 && i === 1) type = k === 1 ? 'powder' : 'bath';
-				if (ws.length === 2 && i === 1 && k >= 2) type = 'bed';
+				const type = (ws.length === 3 ? roles3 : roles2)[i] || first;
 				const rm = room(P, k, type, rx0, Math.min(a, b) + (i < sl.length - 1 ? PT / 2 : 0), rx1, Math.max(a, b) - (i > 0 ? PT / 2 : 0));
 				// a doorway to the hall; the garage's at its back, away from the car
 				const zmid = type === 'garage' ? rm.z0 + 0.7 : (rm.z0 + rm.z1) / 2;

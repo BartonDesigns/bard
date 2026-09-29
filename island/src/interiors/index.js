@@ -115,7 +115,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			P.f0 = f0; P.street = street;
 		}
 		P.style = spec.style;
-		furnish(P);
+		furnish(P, 0);
 		// steps up to the door from the street, where the floor stands above it
 		P.stoop = [];
 		const rise = P.f0 - P.street;
@@ -160,6 +160,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		for (let k = 0; k < B.P.levels.length; k++) {
 			const full = want(k), have = B.levels[k];
 			if (have && have.full === full) continue;
+			if (full && !B.P.rooms.every((r) => r.k !== k || r.furnished)) { furnish(B.P, k); B.spots = null; yield; }
 			const Lb = yield* buildLevel(B.P, M, B.C, k, full, night);
 			if (have) { B.root.remove(have.root); disposeTree(have.root); }
 			B.levels[k] = Lb;
