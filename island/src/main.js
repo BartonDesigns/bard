@@ -92,6 +92,7 @@ import { createRagdolls } from './people/ragdoll.js';
 import { createImpacts } from './vehicles/impact.js';
 import { createCarjack } from './vehicles/carjack.js';
 import { createAvatar } from './people/avatar.js';
+import { createSelf } from './people/self.js';
 import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
@@ -318,8 +319,16 @@ export function createIslandWorld() {
 	HOOKS.ragdolls = ragdolls;
 	HOOKS.impacts = createImpacts({ people: () => people, ragdolls });
 	// taking a car off its driver (E beside one in the traffic): you, shown, haul them out
-	const carjack = createCarjack({ world: () => world, camera, drive, ragdolls, avatar: createAvatar({ scene, world: () => world }), hint: (t, ms) => hint(t, ms, 1) });
+	const avatar = createAvatar({ scene, world: () => world });
+	const carjack = createCarjack({ world: () => world, camera, drive, ragdolls, avatar, hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.carjack = carjack;
+	// you, seen (P), knocked down by the traffic, and a shove (X) (people/self.js)
+	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active(), hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.self = you;
+	addEventListener('keydown', (e) => {
+		if (e.repeat || e.metaKey || e.ctrlKey || window._KEYS_PLAY_ON || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+		if (e.key === 'p' || e.key === 'P') { you.toggle(); e.preventDefault(); } else if (e.key === 'x' || e.key === 'X') { you.shove(); e.preventDefault(); }
+	});
 	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && carjack.candidate()) { carjack.begin(); e.preventDefault(); } });
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
@@ -879,6 +888,7 @@ export function createIslandWorld() {
 		if (arcade.active()) drive.stop();
 		else if (W.boardwalk?.ride(dt, time)) drive.stop();
 		else if (!carjack.update(dt, time) && !drive.update(dt)) W.player.update(dt, time);
+		you.update(dt, time);
 		// a director's camera (trailer/): posed after the player moves, before anything reads it
 		HOOKS.cine?.(camera, dt, time);
 		W.fields?.update(dt, camera);
@@ -1354,6 +1364,9 @@ if (typeof window !== 'undefined') {
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),
+		// see yourself (as P does), shove (as X does)
+		thirdPerson: () => HOOKS.self?.toggle(),
+		shove: () => HOOKS.self?.shove(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
