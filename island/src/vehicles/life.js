@@ -191,7 +191,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		switch (E.phase) {
 			case 'walk-out': {
 				// out of their door (fading in as they come through it), to the car
-				if (!E.placed) { E.placed = true; b.mode = 'walk'; b.M.stand(); b.M.S.sitK.v = 0; b.M.setPose('rest'); b.M.place(E.door[0], groundAt(W, E.door[0], E.door[1]), E.door[1], Math.atan2(E.side[0] - E.door[0], E.side[1] - E.door[1])); E.fade = 0; }
+				if (!E.placed) { E.placed = true; b.mode = 'walk'; b.P.root.visible = true; b.M.stand(); b.M.S.sitK.v = 0; b.M.setPose('rest'); b.M.place(E.door[0], groundAt(W, E.door[0], E.door[1]), E.door[1], Math.atan2(E.side[0] - E.door[0], E.side[1] - E.door[1])); E.fade = 0; }
 				E.fade = Math.min(1, E.fade + dt * 1.4); fadePerson(b.P, E.fade);
 				step(b, dt, t, null);
 				if (walkTo(b, E.side[0], E.side[1]) < 0.5 || E.t > 60) { E.phase = 'get-in'; E.t = 0; }
