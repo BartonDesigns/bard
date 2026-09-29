@@ -191,7 +191,7 @@ export function createRagdolls({ world, isPhone }) {
 		if (!P || P.ragdoll) return false;
 		if (live.length >= MAX) { const old = live.shift(); finish(old); }
 		P.ragdoll = true;
-		ready().then(() => start(P, how, onRest)).catch(() => { P.ragdoll = false; });
+		ready().then(() => start(P, how, onRest)).catch((e) => { lastErr = String(e && e.stack || e).slice(0, 400); P.ragdoll = false; });
 		return true;
 	}
 	function start(P, how, onRest) {
@@ -230,7 +230,7 @@ export function createRagdolls({ world, isPhone }) {
 		P.bones[P.map.root].position.copy(P.rest.heads[P.map.root]);
 	}
 
-	let acc = 0;
+	let acc = 0, lastErr = null;
 	function update(dt) {
 		if (down.length) tidy();
 		if (!live.length || !W3) return;
@@ -266,6 +266,6 @@ export function createRagdolls({ world, isPhone }) {
 			if (Math.hypot(at.x - me.x, at.z - me.z) > 70) { down.splice(i, 1); release(P); }
 		}
 	}
-	const info = () => ({ ready: !!R, live: live.length, max: MAX });
+	const info = () => ({ ready: !!R, live: live.length, max: MAX, err: lastErr });
 	return { hit, update, release, ready, info, massOf };
 }
