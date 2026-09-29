@@ -183,14 +183,14 @@ export function createLife({ scene, world, camera, isPhone }) {
 	function carAt(E, x, z, yaw) { E.pos = [x, z]; E.yaw = yaw; world().street.carMatrix(E.matrix, E.car.kind, x, z, yaw); }
 	function run(E, dt, t, cam) {
 		const W = world(), car = E.car, St = W.street;
-		E.t += dt;
 		const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
-		if (!E.b) { E.b = body(hashS('owner' + E.o.id), t); if (!E.b) return true; if (E.b.busy) { E.b = null; return true; } E.b.busy = true; }
+		if (!E.b) { E.b = body(hashS('owner' + E.o.id), t); if (!E.b) return E.wait = (E.wait || 0) + dt, E.wait < 20; if (E.b.busy) { E.b = null; return true; } E.b.busy = true; E.t = 0; }
+		E.t += dt;
 		const b = E.b;
 		switch (E.phase) {
 			case 'walk-out': {
 				// out of their door (fading in as they come through it), to the car
-				if (E.t < dt * 1.5) { b.mode = 'walk'; b.M.stand(); b.M.S.sitK.v = 0; b.M.setPose('rest'); b.M.place(E.door[0], groundAt(W, E.door[0], E.door[1]), E.door[1], Math.atan2(E.side[0] - E.door[0], E.side[1] - E.door[1])); E.fade = 0; }
+				if (!E.placed) { E.placed = true; b.mode = 'walk'; b.M.stand(); b.M.S.sitK.v = 0; b.M.setPose('rest'); b.M.place(E.door[0], groundAt(W, E.door[0], E.door[1]), E.door[1], Math.atan2(E.side[0] - E.door[0], E.side[1] - E.door[1])); E.fade = 0; }
 				E.fade = Math.min(1, E.fade + dt * 1.4); fadePerson(b.P, E.fade);
 				step(b, dt, t, null);
 				if (walkTo(b, E.side[0], E.side[1]) < 0.5 || E.t > 60) { E.phase = 'get-in'; E.t = 0; }

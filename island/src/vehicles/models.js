@@ -32,7 +32,7 @@ function paintMaterial(map) {
 		// the texture's alpha says where the paint is: only there does the car's colour go
 		m.onBeforeCompile = (sh) => {
 			sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'float paintK = 1.0;\n#ifdef USE_MAP\nvec4 txc = texture2D(map, vMapUv); diffuseColor.rgb *= txc.rgb; paintK = txc.a;\n#endif')
-				.replace('#include <color_fragment>', '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )\ndiffuseColor.rgb *= mix(vec3(1.0), vColor, paintK);\n#endif');
+				.replace('#include <color_fragment>', '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )\ndiffuseColor.rgb *= mix(vec3(1.0), vColor.rgb, paintK);\n#endif');
 		};
 		m.customProgramCacheKey = () => 'vpaintmask';
 	}
@@ -96,7 +96,9 @@ function takeApart(scene, lod) {
 			if (!hubs.some((h) => h.name === wheel.name)) hubs.push({ name: wheel.name, p: wheel.getWorldPosition(new THREE.Vector3()) });
 			if (!front) return;                                               // (the front wheels stand for the back ones)
 			// in the wheel's own frame, its hub at the origin
-			g.applyMatrix4(new THREE.Matrix4().copy(wheel.matrixWorld).invert().multiply(o.matrixWorld));
+			// (by the hub's place only: the node's own scale is the mesh's quantization)
+			const hub = wheel.getWorldPosition(new THREE.Vector3());
+			g.applyMatrix4(new THREE.Matrix4().makeTranslation(-hub.x, -hub.y, -hub.z).multiply(o.matrixWorld));
 			add(wheels[side], mat, g);
 		} else {
 			g.applyMatrix4(o.matrixWorld);
