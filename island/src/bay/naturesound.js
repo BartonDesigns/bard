@@ -21,6 +21,7 @@
 import { toWorld, toLatLon } from './geo.js';
 import { soundBus, noise } from '../world/soundbus.js';
 import { mix } from '../audio/acoustics.js';
+import { habitat } from '../nature/wildground.js';
 
 const SEA_LIONS = [toWorld(37.8087, -122.4098), toWorld(37.1080, -122.3370)];
 // the ridge of the peninsula and the Marin headlands, as longitude by latitude: water west
@@ -38,6 +39,10 @@ function oceanSide(x, z) {
 export function createNatureSound(bay, groundAt) {
 	let ctx = null, A = null;
 	let hush = 0;                     // 0..1: the night falling silent (people/ghost.js)
+	// what grows round you (nature/wildground.js), found every two seconds
+	const landAt = habitat(bay, null, (x, z) => groundAt(x, z));
+	const hab = { wood: 0, redwood: 0, brush: 0, open: 0, t: 0 };
+	let tWren = 5, tSteller = 9, tThrush = 20, tWood = 12, tBuzz = 3;
 	let tOwl = 8, tBarn = 60, tCoyote = 40, tFrog = 0, tBird = 3, tQuail = 10, tLion = 2, tGull = 4, tLap = 1, tWave = 1, tScan = 0;
 	let waveN = 0, setLeft = 0;
 	// the shore round you, found a few times a second: how near the ocean and the Bay's
@@ -65,7 +70,12 @@ export function createNatureSound(bay, groundAt) {
 		s.connect(lp).connect(sg).connect(master); s.start(0, Math.random() * 3);
 		// the surf's own panner: the waves come from the side the sea is on
 		const surfPan = ctx.createStereoPanner(); surfPan.connect(master);
-		A = { master, room, surfPan, bed: { lp, g: sg } };
+		// the wind in what grows round you: one noise, its colour set by the leaves or grass
+		const ws = ctx.createBufferSource(); ws.buffer = noise(ctx, 'pink'); ws.loop = true;
+		const wbp = ctx.createBiquadFilter(); wbp.type = 'bandpass'; wbp.frequency.value = 1200; wbp.Q.value = 0.6;
+		const wg = ctx.createGain(); wg.gain.value = 0;
+		ws.connect(wbp).connect(wg).connect(master); ws.start(0, Math.random() * 3);
+		A = { master, room, surfPan, bed: { lp, g: sg }, wind: { bp: wbp, g: wg } };
 		return true;
 	}
 	const pan = (v) => { const p = ctx.createStereoPanner(); p.pan.value = v; p.connect(A.master); return p; };
@@ -258,6 +268,41 @@ export function createNatureSound(bay, groundAt) {
 
 	// o: { night, hours, month, fog, under, islandHalf, pond (distance to still water, m),
 	//      town (0..1), and if main passes them, indoors (true/false) and rain (0..1) }
+	// the redwoods' birds: the Pacific wren's endless tinkling song, the Steller's jay's
+	// "shook-shook-shook", the varied thrush's one long buzzing whistle in winter
+	function wren(level) {
+		const t = ctx.currentTime, p = pan((Math.random() - 0.5) * 1.4), n = 30 + Math.floor(Math.random() * 30);
+		for (let k = 0; k < n; k++) { const f = 3500 + Math.random() * 3500; tone('sine', f, f * (0.9 + Math.random() * 0.2), t + k * 0.075, 0.05, level * (0.6 + Math.random() * 0.4), p, 0.004); }
+	}
+	function steller(level) {
+		const t = ctx.currentTime, p = pan((Math.random() - 0.5) * 1.6), n = 3 + Math.floor(Math.random() * 4);
+		for (let k = 0; k < n; k++) hiss('white', 'bandpass', 2200, 3, [[0.01, level], [0.09, level * 0.6], [0.14, 0]], p, t + k * 0.22, 1600);
+	}
+	function thrush(level) {
+		const t = ctx.currentTime, p = pan((Math.random() - 0.5) * 1.4), f = 2600 + Math.random() * 1400;
+		const o2 = ctx.createOscillator(), am = ctx.createOscillator(), ag = ctx.createGain(), g = ctx.createGain();
+		o2.frequency.value = f; am.frequency.value = 38; ag.gain.value = 0.5;
+		g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(level, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+		const mg = ctx.createGain(); mg.gain.value = 0.5; am.connect(ag).connect(mg.gain);
+		o2.connect(mg).connect(g).connect(p); o2.start(t); am.start(t); o2.stop(t + 2.3); am.stop(t + 2.3);
+	}
+	// the acorn woodpeckers' laughing "waka-waka-waka" from the oaks, and a bout of drumming
+	function woodpecker(level) {
+		const t = ctx.currentTime, p = pan((Math.random() - 0.5) * 1.6);
+		if (Math.random() < 0.6) for (let k = 0; k < 3 + Math.floor(Math.random() * 3); k++) glide('sawtooth', [[0, 900], [0.3, 1500], [1, 1100]], t + k * 0.2, 0.14, level * 0.5, p, 0.01);
+		else for (let k = 0; k < 14; k++) hiss('brown', 'bandpass', 900, 4, [[0.003, level * 2], [0.02, 0]], p, t + k * 0.05);
+	}
+	// high summer in the dry brush and grass: the cicadas' and grasshoppers' buzz
+	function buzz(level) {
+		const t = ctx.currentTime, p = pan((Math.random() - 0.5) * 1.6), len = 2 + Math.random() * 3;
+		const s2 = ctx.createBufferSource(); s2.buffer = noise(ctx, 'white');
+		const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 5200 + Math.random() * 1500; bp.Q.value = 6;
+		const g = ctx.createGain(), am = ctx.createOscillator(), ag = ctx.createGain();
+		am.frequency.value = 60 + Math.random() * 60; ag.gain.value = level * 0.5;
+		g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level * 0.5, t + 0.4); g.gain.setValueAtTime(level * 0.5, t + len - 0.5); g.gain.linearRampToValueAtTime(0, t + len);
+		am.connect(ag).connect(g.gain);
+		s2.connect(bp).connect(g).connect(p); s2.start(t, Math.random() * 2); am.start(t); s2.stop(t + len + 0.05); am.stop(t + len + 0.05);
+	}
 	function update(dt, cam, o) {
 		if (!setup() || !bay.loaded()) return;
 		const x = cam.position.x, z = cam.position.z, alt = cam.position.y - groundAt(x, z);
@@ -346,6 +391,27 @@ export function createNatureSound(bay, groundAt) {
 		}
 		tQuail -= dt;
 		if (tQuail < 0) { tQuail = 12 + Math.random() * 25; if (h > 6 && h < 10.5) quail(0.02 * wild * dry); }
+		// the land round you, and the wind in it: a hiss through the grass, a rustle in the
+		// oaks, a deep soughing in the redwoods
+		hab.t -= dt;
+		if (hab.t < 0) {
+			hab.t = 2;
+			const E = town < 0.5 ? landAt(x, z) : null;
+			hab.wood = E ? E.wood : 0; hab.redwood = E ? E.redwood : 0; hab.brush = E ? Math.max(E.chaparral, E.scrub) : 0; hab.open = E ? E.open : 0;
+		}
+		const windK = Math.min(1.5, (o.wind ?? 0.3) + 0.08);
+		const leafy = Math.min(1, hab.wood + hab.brush * 0.6);
+		ease(A.wind.g.gain, 0.012 * windK * wild * (0.4 + leafy * 0.6 + hab.open * 0.3), 1.2);
+		ease(A.wind.bp.frequency, hab.redwood > 0.3 ? 380 : 700 + leafy * 1600, 1.5);
+		if (day && wild > 0.1) {
+			const rw = hab.redwood * birds;
+			tWren -= dt; if (tWren < 0) { tWren = 14 + Math.random() * 30; if (rw > 0.2) wren(0.01 * rw); }
+			tSteller -= dt; if (tSteller < 0) { tSteller = 20 + Math.random() * 40; if (rw > 0.2) steller(0.02 * rw); }
+			tThrush -= dt; if (tThrush < 0) { tThrush = 15 + Math.random() * 25; if (rw > 0.2 && winter > 0.8) thrush(0.012 * rw); }
+			tWood -= dt; if (tWood < 0) { tWood = 18 + Math.random() * 35; if (hab.wood > 0.3 && hab.redwood < 0.2) woodpecker(0.018 * birds * hab.wood); }
+			const hot = [0, 0, 0, 0, 0.3, 0.8, 1, 1, 0.8, 0.3, 0, 0][m - 1] * bump(h, 10, 14, 18) * (1 - fog);
+			tBuzz -= dt; if (tBuzz < 0) { tBuzz = 1 + Math.random() * 4; if (hot > 0.2 && (hab.brush > 0.2 || hab.open > 0.5)) buzz(0.006 * hot * wild * Math.max(hab.brush, hab.open * 0.6)); }
+		}
 		// gulls along every shore by day, most of all where the sea lions are
 		let lions = 0, lionPan = 0;
 		for (const L of SEA_LIONS) { const d = Math.hypot(L.x - x, L.z - z); if (d < 900 && 1 - d / 900 > lions) { lions = 1 - d / 900; lionPan = Math.max(-0.8, Math.min(0.8, ((L.x - x) * e[0] + (L.z - z) * e[2]) / (d + 30))); } }

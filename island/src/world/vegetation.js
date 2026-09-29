@@ -358,16 +358,29 @@ function banana(seed) {
 }
 
 export function fern(seed, g = null) {
+	// a fountain of arching fronds, each a thin rachis with its leaflets cut out in the
+	// geometry (untextured, a frond drawn as one wide band reads as a flat green card)
 	const r = mulberry32(seed), b = new Builder(), FT = g ? g.tint : [1, 1, 1], FS = g ? g.size : 1;
-	const nF = 8 + Math.floor(r() * 4);
+	const nF = 12 + Math.floor(r() * 5);
 	for (let f = 0; f < nF; f++) {
-		const a = f / nF * 6.28 + r() * 0.4, L = (0.8 + r() * 0.5) * FS, dir = V(Math.cos(a), 0, Math.sin(a)), pts = [], widths = [];
-		for (let k = 0; k <= 4; k++) {
-			const s = k / 4, d = L * s;
-			pts.push(dir.clone().multiplyScalar(d).add(V(0, Math.sin(s * 2.4) * L * 0.55, 0)));
-			widths.push(0.36 * (1 - s * 0.7));
+		const a = f / nF * 6.28 + r() * 0.4, L = (0.7 + r() * 0.45) * FS, dir = V(Math.cos(a), 0, Math.sin(a)), side = V(-dir.z, 0, dir.x);
+		const elev = 1.0 + r() * 0.35, at = (s) => dir.clone().multiplyScalar(Math.cos(elev) * L * s * 1.25).add(V(0, Math.sin(elev) * L * s - 0.75 * L * s * s, 0));
+		const pts = [], widths = [];
+		for (let k = 0; k <= 4; k++) { pts.push(at(k / 4)); widths.push(0.025 * (1 - k / 5)); }
+		const c0 = { r: 0.2 * FT[0], g: 0.33 * FT[1], b: 0.12 * FT[2] }, c1 = { r: 0.3 * FT[0], g: 0.44 * FT[1], b: 0.16 * FT[2] };
+		strip(b, pts, widths, 0, c0, c1, 0.2, 1.0, 0.8);
+		// the leaflets: narrow, alternate, longest a third of the way out
+		const nP = 14;
+		for (let k = 1; k < nP; k++) {
+			const s = k / nP, o = at(s), along = at(Math.min(1, s + 0.02)).sub(o).normalize(), len = 0.16 * FS * Math.sin(Math.min(1, s * 1.3 + 0.15) * Math.PI) * (1 - s * 0.4);
+			const col = { r: c0.r + (c1.r - c0.r) * s, g: c0.g + (c1.g - c0.g) * s, b: c0.b + (c1.b - c0.b) * s }, n = V(0, 1, 0).add(along.clone().multiplyScalar(-0.3)).normalize();
+			for (const sd of [-1, 1]) {
+				const tip = o.clone().add(side.clone().multiplyScalar(sd * len)).add(along.clone().multiplyScalar(len * 0.45)).add(V(0, -len * 0.25, 0));
+				const w = along.clone().multiplyScalar(0.018 * FS + len * 0.12);
+				const i0 = b.vert(o.clone().sub(w), n, [s, 0.5], col, 0.2 + 0.8 * s), i1 = b.vert(o.clone().add(w), n, [s, 0.5], col, 0.2 + 0.8 * s), i2 = b.vert(tip, n, [s, sd > 0 ? 1 : 0], col, 0.3 + 0.8 * s);
+				b.tri(i0, i1, i2);
+			}
 		}
-		strip(b, pts, widths, 0.1, { r: 0.2 * FT[0], g: 0.33 * FT[1], b: 0.12 * FT[2] }, { r: 0.3 * FT[0], g: 0.44 * FT[1], b: 0.16 * FT[2] }, 0.2, 1.0, 0.8);
 	}
 	return { parts: [b.geometry()], height: 0.9 };
 }
@@ -735,11 +748,13 @@ export function createVegetation(island, shared, scene, flora = null) {
 		})(), depth: null },
 	};
 	const plantK = shared.planet?.trees ?? 1;
+	// no coconut palms on a cold, burnt, poisoned or bare world (a temperate one keeps a few)
+	const palmK = { boreal: 0, ash: 0, fungal: 0, barren: 0, temperate: 0.35 }[shared.planet?.flora] ?? 1;
 	const species = [
 		// densities are the chance a sample at `spacing` holds a plant: random within a
 		// patch, but the patches follow the land (see eco below), so plants clump
 		{ key: 'palm', variants: [0, 1, 2].map((v) => palm(island.seed * 7 + v, false, flora?.palm)), far: [0, 1, 2].map((v) => palm(island.seed * 7 + v, true, flora?.palm)), mats: ['palmbark', 'frond'], midIsFar: true, spacing: 5, near: 140, farR: 600, max: 700, farMax: 1800, kind: 'wood',
-			density: (e) => e.path > 0.2 || e.h < 0.7 || e.sl > 0.45 ? 0 : e.strand * e.clump(0.02, 0.45, 0.7) * 0.55 + e.yard * 0.05 + e.gully * 0.04 },
+			density: (e) => e.path > 0.2 || e.h < 0.7 || e.sl > 0.45 ? 0 : (e.strand * e.clump(0.02, 0.45, 0.7) * 0.55 + e.yard * 0.05 + e.gully * 0.04) * palmK },
 		// the canopy: one entry per Crysis tree species; the community field decides
 		// which species holds each stand (see standShare below)
 		...(flora ? flora.trees : [null]).map((g, ti, all) => ({ key: g ? g.key : 'hardwood', tree: true, genome: g,

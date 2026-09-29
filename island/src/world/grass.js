@@ -65,7 +65,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 			uniform float uPlGrassK, uPl2GrassK;
 			uniform sampler2D uMasks; uniform vec2 uCam; uniform float uSpan, uWidth, uTallK, uTime, uWind, uHigh, uBass, uGust, uWindT; uniform vec2 uWindDir;
 			attribute vec2 aOff; attribute vec2 aRand; attribute float aTip;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold;
 			float gTall;
 			` + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
@@ -89,6 +89,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				density = min(1.0, density + hug * 0.6 * meadow * (1.0 - smoothstep(0.2, 0.5, mk.r)));   // (never up through paving)
 				// another world: sparse on a desert, none on ash, none in snow or down a cave mouth
 				plBegin(w);
+				// a cold world's grass is sparse, thin and wiry: narrower tufts, softer at the edge
+				vCold = clamp(plSnowAmt() * 1.5 + uPlCold, 0.0, 1.0);
 				density *= min(1.0, uPlGrassK * mix(1.0, uPl2GrassK, gBioA)) * (1.0 - plSnow(h, n1g)) * (1.0 - plHole(w));
 				// a tuft exists where its random falls under the local density: thinning is
 				// even and gradual, so edges feather out instead of breaking into bald spots
@@ -138,7 +140,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
 			.replace('#include <begin_vertex>', `
 				vec3 p = position;
-				p.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz * uWidth * (0.9 + aRand.x * 0.2);
+				p.xz = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * p.xz * uWidth * (0.9 + aRand.x * 0.2) * mix(1.0, 0.55, vCold);
 				p.y *= tall;
 				// wind: a slow swell advected by the wind's own clock (so lulls slow it and
 				// gusts hurry it), plus the music's low end; stiffer when short
@@ -174,7 +176,7 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 		// both faces of a blade are lit as the meadow is (up), never as their dark underside
 		sh.fragmentShader = `
 			uniform sampler2D uMap; uniform vec3 uSunDir, uSunColor; uniform float uHigh, uTime;
-			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge;
+			varying vec2 vGUv; varying vec3 vTint; varying float vTip; varying vec3 vGW; varying float vTall228; varying float vGust; varying float vEdge; varying float vCold;
 			` + sh.fragmentShader
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\t\t\t\tnormal = normalize(vNormal);')
 			.replace('#include <map_fragment>', `
@@ -185,8 +187,8 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				// fine blades fall below a pixel with distance: widen their coverage as the
 				// texture minifies, so the meadow keeps its fill instead of thinning out
 				float mip = max(0.0, log2(max(fwidth(vGUv.x) * 512.0, 1e-3)));
-				float thr = max(0.04, 0.3 - mip * 0.09);
-				float cov = clamp((gt.a - thr) / max(fwidth(gt.a) * 1.2, 1e-3) + 0.5, 0.0, 1.0);
+				float thr = max(0.04, 0.3 - mip * 0.09) + vCold * 0.12;
+				float cov = clamp((gt.a - thr) / max(fwidth(gt.a) * (1.2 + vCold * 2.5), 1e-3) + 0.5, 0.0, 1.0);
 				if (cov < 0.02) discard;
 				diffuseColor.a = cov;
 				// darker at the root where blades crowd and shade each other, paler at the tips

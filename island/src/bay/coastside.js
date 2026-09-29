@@ -392,23 +392,27 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 				// inland is east: the normal pointing that way
 				let nx = -tz, nz = tx; if (nx < 0) { nx = -nx; nz = -nz; }
 				const cx = r[k].x + nx * 9, cz = r[k].z + nz * 9;
-				for (const s of [-1, 1]) {
-					const x = cx + nx * s * 1.1, z = cz + nz * s * 1.1;
-					P.push(x, groundAt(x, z) + cliffDelta(x, z) + 0.07, z);
-					const v = 0.9 + 0.2 * h01(Math.floor(x), Math.floor(z));
-					C.push(0.34 * v, 0.26 * v, 0.17 * v);
+				// across the tread: worn grass fading in over a few metres (a ragged edge), the
+				// packed tread, and a darker rut down the middle where most feet go
+				const rag = h01(k >> 1, 7) * 1.6, rag2 = h01(k >> 1, 13) * 1.6;
+				const cols = [[-2.6 - rag, 0], [-1.0, 1], [-0.25, 1.4], [0.25, 1.4], [1.0, 1], [2.6 + rag2, 0]];
+				for (const [o, a] of cols) {
+					const x = cx + nx * o, z = cz + nz * o;
+					P.push(x, groundAt(x, z) + cliffDelta(x, z) + (a > 0 ? 0.07 : 0.04), z);
+					const v = (0.9 + 0.2 * h01(Math.floor(x), Math.floor(z))) * (a > 1.2 ? 0.8 : 1);
+					C.push(0.34 * v, 0.26 * v, 0.17 * v, Math.min(1, a) * (0.85 + 0.15 * h01(k, Math.round(o * 4))));
 				}
-				if (k > 0) { const o = base + (k - 1) * 2; I.push(o, o + 1, o + 2, o + 1, o + 3, o + 2); }
+				if (k > 0) for (let c = 0; c < 5; c++) { const o = base + (k - 1) * 6 + c; I.push(o, o + 1, o + 6, o + 1, o + 7, o + 6); }
 				// the fence, between the trail and the edge
 				posts.push({ x: r[k].x + nx * 5.5, z: r[k].z + nz * 5.5 });
 			}
 		}
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-		g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+		g.setAttribute('color', new THREE.Float32BufferAttribute(C, 4));
 		g.setIndex(I);
 		g.computeVertexNormals();
-		const trail = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+		const trail = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
 		trail.receiveShadow = true; trail.name = 'coastal-trail';
 		group.add(trail);
 		// a post at every row (about 4 m apart), two rails between them

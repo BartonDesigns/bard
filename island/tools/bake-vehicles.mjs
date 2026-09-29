@@ -23,7 +23,7 @@ import path from 'node:path';
 export const MODELS = {
 	sports: { src: 'CarConcept/CarConcept.glb', len: 4.45, front: /^BodyHeadlights$/, drop: /Emblem|License|Logo|InteriorCage|Engine|Axles|Wipers$/, paint: /^Paint|^Panel Sides/, glass: /^Glass$/, lamp: /light$/i, fold: /Interior|Floormat|Mechanical|Disc/, near: 0.35, mid: 0.05 },
 	delivery: { src: 'van/scene.gltf', len: 5.4, front: /glass_windshield_ply$/, drop: /logo|plate/i, paint: /body_shd/, mask: (r, g, b) => r > 140 && g > r * 0.68 && b < r * 0.72 && r - b > 40, ref: 225, glass: /glass_shd/, lamp: /^$/, near: 1, mid: 0.2 },
-	crossover: { src: 'redcar/scene.gltf', len: 4.6, front: null, drop: /^$/, paint: /^initialShadingGroup$/, mask: (r, g, b) => r > 80 && r > g * 1.8 && r > b * 1.8, ref: 180, glass: /^$/, lamp: /^$/, near: 0.5, mid: 0.1 },
+	crossover: { src: 'redcar/scene.gltf', len: 4.6, front: null, drop: /^$/, paint: /^initialShadingGroup$/, mask: (r, g, b) => r > 80 && r > g * 1.8 && r > b * 1.8, ref: 180, keepWheels: true, glass: /^$/, lamp: /^$/, near: 0.5, mid: 0.1 },
 	bus: { src: 'bus/scene.gltf', len: 11.2, front: null, drop: /^1616862037160$/, paint: /^$/, glass: /^glass$/, lamp: /^light$/, near: 0.6, mid: 0.12, midError: 0.4 },
 };
 
@@ -117,7 +117,8 @@ async function bake(id, M, srcDir, outDir) {
 	}
 	// wheels: every loose piece down at a corner that is round side on (tyre, rim, disc) is
 	// lifted out onto a node of its own at that corner, its mesh centred on the hub
-	const wheels = splitWheels(doc, scene, b);
+	dropBadges(doc, b);
+	const wheels = M.keepWheels ? [] : splitWheels(doc, scene, b);
 	await doc.transform(prune(), dedup(), weld());
 	const report = { id, bounds: { min: b.min.map((v) => +v.toFixed(3)), max: b.max.map((v) => +v.toFixed(3)) }, wheels };
 	const out = async (file, ratio, tex) => {
@@ -142,6 +143,34 @@ async function bake(id, M, srcDir, outDir) {
 	// the middle distance: small textures
 	report.mid = await out(id + '-mid.glb', M.mid, 256);
 	return report;
+}
+
+// a maker's badge: a small loose piece at the middle of the nose or the tail
+function dropBadges(doc, b) {
+	const R = doc.getRoot(), L2 = (b.max[2] - b.min[2]) / 2;
+	for (const mesh of R.listMeshes()) for (const p of mesh.listPrimitives()) {
+		const pos = p.getAttribute('POSITION'), idx = p.getIndices();
+		if (!pos || !idx) continue;
+		const n = pos.getCount(), P = [], e = [];
+		for (let i = 0; i < n; i++) { pos.getElement(i, e); P.push(e[0], e[1], e[2]); }
+		const key = new Map(), root = new Int32Array(n);
+		for (let i = 0; i < n; i++) { const k = Math.round(P[i * 3] * 2000) + ',' + Math.round(P[i * 3 + 1] * 2000) + ',' + Math.round(P[i * 3 + 2] * 2000); if (!key.has(k)) key.set(k, i); root[i] = key.get(k); }
+		const par = Int32Array.from({ length: n }, (_, i) => i), find = (i) => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+		const T = idx.getCount();
+		for (let t = 0; t < T; t += 3) { const a = find(root[idx.getScalar(t)]); for (let k = 1; k < 3; k++) { const c = find(root[idx.getScalar(t + k)]); if (c !== a) par[c] = a; } }
+		const box = new Map();
+		for (let i = 0; i < n; i++) { const r = find(root[i]); let q = box.get(r); if (!q) box.set(r, q = [1e9, 1e9, 1e9, -1e9, -1e9, -1e9]); for (let k = 0; k < 3; k++) { q[k] = Math.min(q[k], P[i * 3 + k]); q[k + 3] = Math.max(q[k + 3], P[i * 3 + k]); } }
+		const drop = new Set();
+		for (const [r, q] of box) {
+			const cx = (q[0] + q[3]) / 2, cz = (q[2] + q[5]) / 2, cy = (q[1] + q[4]) / 2, size = Math.max(q[3] - q[0], q[4] - q[1]);
+			if (size < 0.2 && Math.abs(cx) < 0.15 && Math.abs(cz) > L2 - 0.5 && cy > 0.35 && cy < 1.3) drop.add(r);
+		}
+		if (!drop.size) continue;
+		const keep = [];
+		for (let t = 0; t < T; t += 3) if (!drop.has(find(root[idx.getScalar(t)]))) for (let k = 0; k < 3; k++) keep.push(idx.getScalar(t + k));
+		p.setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint32Array(keep)).setBuffer(R.listBuffers()[0]));
+		console.error('badges dropped', drop.size, 'from', mesh.getName());
+	}
 }
 
 function splitWheels(doc, scene, b) {
