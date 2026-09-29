@@ -12,7 +12,7 @@ import { addPulse } from '../pulse.js';
 import { addLodFade, fadeRange } from './lodfade.js';
 
 // ---------- geometry helpers ----------
-class Builder {
+export class Builder {
 	constructor() { this.p = []; this.n = []; this.uv = []; this.c = []; this.s = []; this.i = []; }
 	vert(p, n, uv, c, s) {
 		this.p.push(p.x, p.y, p.z); this.n.push(n.x, n.y, n.z); this.uv.push(uv[0], uv[1]);
@@ -33,10 +33,10 @@ class Builder {
 		return g;
 	}
 }
-const V = (x, y, z) => new THREE.Vector3(x, y, z);
+export const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
 
-function tube(b, path, radii, sides, color, swayOf, uvAt) {
+export function tube(b, path, radii, sides, color, swayOf, uvAt) {
 	const rings = [];
 	// texture runs by length along the tube, so unevenly spaced rings (the flare at a
 	// trunk's foot) don't squash the bark into a band
@@ -70,7 +70,7 @@ function tube(b, path, radii, sides, color, swayOf, uvAt) {
 	}
 }
 // a leaf strip along a curve: centre line with folded edges (a shallow V)
-function strip(b, pts, widths, fold, color, tipColor, swayBase, swayTip, normalUp = 0.6) {
+export function strip(b, pts, widths, fold, color, tipColor, swayBase, swayTip, normalUp = 0.6) {
 	const L = pts.length;
 	let prevSide = null;
 	const rows = [];
@@ -95,7 +95,7 @@ function strip(b, pts, widths, fold, color, tipColor, swayBase, swayTip, normalU
 		b.tri(a, d, c); b.tri(c, d, e);
 	}
 }
-function card(b, center, size, rnd, color, sway, outwardFrom, normal) {
+export function card(b, center, size, rnd, color, sway, outwardFrom, normal) {
 	const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd() * 3.1, rnd() * 6.3, rnd() * 3.1));
 	const n = normal || center.clone().sub(outwardFrom).normalize().multiplyScalar(0.75).add(V(0, 0.45, 0)).normalize();
 	const c = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].map(([x, y]) => V(x * size, y * size, 0).applyQuaternion(q).add(center));
@@ -554,7 +554,7 @@ function blob(b, c, r, sy, color) {
 	}
 	for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { b.tri(ids[j][i], ids[j + 1][i], ids[j][i + 1]); b.tri(ids[j][i + 1], ids[j + 1][i], ids[j + 1][i + 1]); }
 }
-function nut(b, c, rad, color) {
+export function nut(b, c, rad, color) {
 	const rows = 4, cols = 7, ids = [];
 	for (let j = 0; j <= rows; j++) {
 		const ph = j / rows * Math.PI, row = [];

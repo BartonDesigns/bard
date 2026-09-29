@@ -26,7 +26,9 @@ const PAINT = {
 const WOODS = { victorian: [[0.42, 0.26, 0.16], [0.36, 0.22, 0.14], [0.5, 0.32, 0.2]], edwardian: [[0.55, 0.38, 0.24], [0.62, 0.45, 0.3]], sunset: [[0.72, 0.56, 0.38], [0.78, 0.62, 0.44]], mission: [[0.6, 0.42, 0.26], [0.7, 0.52, 0.34]], modern: [[0.66, 0.6, 0.55], [0.82, 0.74, 0.6]], plain: [[0.6, 0.5, 0.4]] };
 const DOORC = [[0.38, 0.14, 0.12], [0.14, 0.2, 0.3], [0.3, 0.2, 0.12], [0.16, 0.28, 0.2], [0.9, 0.88, 0.84], [0.1, 0.1, 0.12]];
 
-const carMats = new Map();
+const carMats = new Map(), carGeos = {};
+// (one car of each shape for every garage: kept, never disposed)
+const carGeo = (k) => carGeos[k] || (carGeos[k] = Object.assign(carGeometry(k), {}), carGeos[k].userData.shared = true, carGeos[k]);
 function carMat(c, night) {
 	const k = c.join(',');
 	let m = carMats.get(k);
@@ -220,7 +222,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	yield;
 	for (const m of g.meshes(M)) root.add(m);
 	for (const it of cars) {
-		const car = new THREE.Mesh(carGeometry(it.v < 0.5 ? 'suv' : 'sedan'), carMat(CAR_PAINT[Math.floor(it.v * CAR_PAINT.length)], night));
+		const car = new THREE.Mesh(carGeo(it.v < 0.5 ? 'suv' : 'sedan'), carMat(CAR_PAINT[Math.floor(it.v * CAR_PAINT.length)], night));
 		car.position.set(it.x, it.y, it.z); car.rotation.y = it.rot * Math.PI / 2; car.castShadow = true;
 		root.add(car);
 		col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + 1.4]);

@@ -104,7 +104,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				bayLot = city.lotsNear(fx, fz, 1.5).find((q) => q.kind === K.bay && Math.abs(q.a - o.a) < 0.02 && Math.hypot(q.x - fx, q.z - fz) < 1.2) || null;
 				if (bayLot) { const [bx] = F.l(bayLot.x, bayLot.z); bayS = { x0: bx - bayLot.w / 2, x1: bx + bayLot.w / 2, y0: bayLot.y - f0, y1: bayLot.y + bayLot.h - f0 }; }
 			}
-			spec = { use: apt ? 'apt' : use, W, D, levels: n, doorX, stairSide, garage: !!garage, zb, winCols: winCols.length ? winCols : null, winRows, bay: bayS, shopType: SHOPS[dist]?.[Math.floor(rnd() * (SHOPS[dist]?.length || 1))] || SHOPS.any[Math.floor(rnd() * SHOPS.any.length)], rnd, style, party: !o.src && o.kind < 0.5 };
+			spec = { use: apt ? 'apt' : use, W, D, levels: n, reach: 3, doorX, stairSide, garage: !!garage, zb, winCols: winCols.length ? winCols : null, winRows, bay: bayS, shopType: SHOPS[dist]?.[Math.floor(rnd() * (SHOPS[dist]?.length || 1))] || SHOPS.any[Math.floor(rnd() * SHOPS.any.length)], rnd, style, party: !o.src && o.kind < 0.5 };
 			P = apt ? planApt(spec) : planRow(spec);
 			if (garage) P.garage = garage === 'L' ? [-W / 2 + 0.5, -W / 2 + 3.1] : [W / 2 - 3.1, W / 2 - 0.5];
 			P.f0 = f0; P.street = street; P.bayLot = bayLot;
@@ -169,7 +169,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		}
 		B.cur = cur;
 	}
-	function disposeTree(root) { root.traverse((q) => { if (q.isMesh && q.geometry && !q.geometry.userData?.shared && q.material?.userData?.kind !== 'car') q.geometry.dispose(); }); }
+	function disposeTree(root) { root.traverse((q) => { if (q.isMesh && q.geometry && !q.geometry.userData?.shared) q.geometry.dispose(); }); }
 	let stoneM = null;
 	const stoneMat = () => stoneM || (stoneM = new THREE.MeshStandardMaterial({ color: 0xa8a49a, roughness: 0.85 }));
 	function mergeBoxes(list) {

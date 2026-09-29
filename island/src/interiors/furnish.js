@@ -39,6 +39,7 @@ export function furnish(P, only = -1) {
 		for (const f of P.flights) if (f.k === rm.k) placed.push([f.x0 - 0.05, Math.min(f.zb, f.zt) - (f.dir > 0 ? 1 : 0), f.x1 + 0.05, Math.max(f.zb, f.zt) + (f.dir < 0 ? 1 : 0)]);
 		for (const h of L.holes) placed.push([h[0] - 0.4, h[1] - 0.4, h[2] + 0.4, h[3] + 0.4]);
 		const light = (kind = 'flush') => { items.push({ type: 'ceilingLight', kind, level: 0, y: y0, x: cx, z: cz, rot: 0, w: 0.35, d: 0.35, h: 0, v: rnd(), ceil: L.h }); lights.push([cx, y0 + L.h - 0.5, cz, rm.id]); };
+		if (rm.type === 'sealed') continue;
 		if (rm.stairs || rm.type === 'corridor') {
 			light(rm.type === 'corridor' ? 'flush' : 'pendant');
 			if (rm.type === 'corridor' && bd > 5) { items.push({ type: 'rug', x: cx, z: cz, y: y0, rot: 1, w: bd - 1.2, d: 0.8, h: 0.01, v: rnd() }); for (let z = rm.z0 + 3; z < rm.z1 - 2; z += 6) { items.push({ type: 'ceilingLight', kind: 'flush', level: 0, y: y0, x: cx, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h }); } }

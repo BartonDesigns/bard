@@ -85,7 +85,7 @@ export function minusHoles(r, holes) {
 //      windows), winRows[k] ([y0, y1] of the front windows on level k), bay ({ x0, x1, y0, y1 }
 //      or null), shopType, rnd, style }
 export function planRow(S) {
-	const P = base(S), r = S.rnd, n = S.levels;
+	const P = base(S), r = S.rnd, n = S.levels, reach = Math.min(n, S.reach || n);
 	const { hw, hd } = P, PT = ST.part;
 	const side = S.stairSide ?? (S.doorX >= 0 ? 1 : -1);
 	const sw = ST.stairW, hallW = clamp((2 * hw - sw) * 0.18, 0.95, 1.15);
@@ -96,7 +96,7 @@ export function planRow(S) {
 	const cx0 = Math.min(sx0, hx0), cx1 = Math.max(sx1, hx1);
 	const zf = hd, zs = zf - ST.vest;
 	const fz = (k) => zs - k * (ST.run + ST.land);
-	const zc0 = n > 1 ? fz(n - 2) - ST.run - ST.land : zs - 2.5;
+	const zc0 = reach > 1 ? fz(reach - 2) - ST.run - ST.land : zs - 2.5;
 	P.core = { sx0, sx1, hx0, hx1, zc0, side };
 	const doorW = S.use === 'shop' ? 1.2 : 1.0;
 	P.door = { x: S.doorX, w: doorW, y: 0, h: 2.3 };
@@ -106,8 +106,18 @@ export function planRow(S) {
 		const zb = Math.max(-hd, Math.min(S.zb?.[k] ?? -hd, zc0 - 0.01));
 		const L = { k, y, h: ST.ceil, zb, rooms: [], holes: [] };
 		P.levels.push(L);
+		// (the floors above the stair's reach: shut rooms behind the windows)
+		if (k >= reach) {
+			const front = wall(P, k, 'x', zf + E / 2, -hw - E, hw + E, y, top, 'ext', 1);
+			wall(P, k, 'x', zb - E / 2, -hw - E, hw + E, y, top, 'ext', -1);
+			wall(P, k, 'z', -hw - E / 2, zb, zf, y, top, 'ext', -1).party = true;
+			wall(P, k, 'z', hw + E / 2, zb, zf, y, top, 'ext', 1).party = true;
+			room(P, k, 'sealed', -hw, zb, hw, zf);
+			for (const c of S.winCols || []) { const [w0, w1] = S.winRows[k] || [y + 0.9, y + 2.4]; open(front, c - 0.5, c + 0.5, w0, w1, 'window'); }
+			continue;
+		}
 		// the flight up from here, the hole over the one from below, rails round it
-		if (k < n - 1) P.flights.push({ k, x0: sx0, x1: sx1, zb: fz(k), zt: fz(k) - ST.run, y0: y, y1: y + ST.storey, n: ST.risers, dir: -1, open: side > 0 ? -1 : 1 });
+		if (k < reach - 1) P.flights.push({ k, x0: sx0, x1: sx1, zb: fz(k), zt: fz(k) - ST.run, y0: y, y1: y + ST.storey, n: ST.risers, dir: -1, open: side > 0 ? -1 : 1 });
 		if (k > 0) {
 			const h0 = fz(k - 1) - ST.run, h1 = fz(k - 1);
 			L.holes.push([sx0, h0, sx1, h1]);
@@ -154,7 +164,7 @@ export function planRow(S) {
 			doorway(cw, shop ? (side > 0 ? (-hw + sx0) / 2 : (sx1 + hw) / 2) : (hx0 + hx1) / 2, y, 0.9);
 			const two = backLen > 7.5;
 			const bl = two ? slots(zc0 - PT, zb, [0.5, 0.5]) : [[zc0 - PT, zb]];
-			const types = shop ? ['storage', 'storage'] : k === 0 ? ['family', 'bed'] : k === 1 ? ['kitchen', n > 2 ? 'family' : 'bed'] : ['bed', 'office'];
+			const types = shop ? ['storage', 'storage'] : k === 0 ? ['family', 'bed'] : k === 1 ? ['kitchen', reach > 2 ? 'family' : 'bed'] : ['bed', 'office'];
 			bl.forEach(([a, b], i) => {
 				room(P, k, types[i], -hw, Math.min(a, b) + (i < bl.length - 1 ? PT / 2 : 0), hw, Math.max(a, b) - (i > 0 ? PT / 2 : 0));
 				if (i > 0) { const pw = wall(P, k, 'x', Math.max(a, b), -hw, hw, y, yc); doorway(pw, side * hw * 0.35, y, 0.95); }
