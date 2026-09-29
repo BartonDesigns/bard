@@ -185,7 +185,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	function run(E, dt, t, cam) {
 		const W = world(), car = E.car, St = W.street;
 		const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
-		if (!E.b) { E.b = body(hashS('owner' + E.o.id)); if (!E.b) return E.wait = (E.wait || 0) + dt, E.wait < 20; if (E.b.busy) { E.b = null; return true; } E.b.busy = true; E.t = 0; }
+		if (!E.b) { E.b = body(hashS('owner' + E.o.id)); if (!E.b) return E.wait = (E.wait || 0) + dt, E.wait < 20; if (E.b.busy) { E.b = null; return E.wait = (E.wait || 0) + dt, E.wait < 20; } E.b.busy = true; E.t = 0; }
 		E.t += dt;
 		const b = E.b;
 		switch (E.phase) {
