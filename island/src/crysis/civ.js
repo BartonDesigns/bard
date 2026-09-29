@@ -14,16 +14,18 @@ const BUDGET = 6;           // ms of growing a frame
 const NEAR = 2500;          // start growing this far outside a town's reach
 const LEAVE = 4500;         // and drop it this far outside
 
-export function createCivilization({ real, bay, water = () => null }) {
+// brief(town): the town's city brief from the director (earth/director.js): its street names and
+// shop signs; null while one is on its way (the town waits), undefined for none
+export function createCivilization({ real, bay, water = () => null, brief = null }) {
 	let active = null, job = null;
 	const cache = [];        // the last few towns grown, newest last
 	const reach = (t) => t.r * 1.3 + 150;
 	const key = (t) => Math.round(t.x) + ',' + Math.round(t.z);
 
-	function start(t) {
+	function start(t, B) {
 		const hit = cache.find((c) => c.key === key(t));
 		if (hit) return { town: t, done: hit.region };
-		const W = water(), it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name, water: W ? { near: (x, z) => W.near(x, z), lake: (x, z) => W.inLake(x, z) } : null });
+		const W = water(), it = generateTownSteps({ seed: hashStr(t.name + key(t)), cx: t.x, cz: t.z, radius: t.r, ang: t.ang, heightAt: bay.heightAt, style: t.style === STYLE.older ? 'older' : 'suburb', name: t.name, water: W ? { near: (x, z) => W.near(x, z), lake: (x, z) => W.inLake(x, z) } : null, brief: B || null });
 		return { town: t, it, t0: performance.now(), work: 0 };
 	}
 	function finish(J, region) {
@@ -47,9 +49,12 @@ export function createCivilization({ real, bay, water = () => null }) {
 		// (a town waits for its creeks and lakes to be known, so it is laid out the same every time)
 		const W = water();
 		if (want && want !== active?.town && want !== job?.town && W && !W.readyAt(want.x, want.z, reach(want))) { W.pump(want.x, want.z, reach(want), BUDGET); return; }
+		// (and for its brief, when the director is making one)
+		let B;
+		if (want && want !== active?.town && want !== job?.town && brief && (B = brief(want)) === null) return;
 		if (want !== (job?.town || active?.town || null)) {
 			if (active && active.town !== want) { real.removeRegion(active.handle); active = null; }
-			job = want && want !== active?.town ? start(want) : null;
+			job = want && want !== active?.town ? start(want, B) : null;
 		}
 		if (!job) return;
 		if (job.done) { finish(job, job.done); job = null; return; }

@@ -217,7 +217,7 @@ export function regionAt(lat, lon) {
 	for (const x of W) x.w /= tot;
 	W.sort((a, b) => b.w - a.w);
 	const top = W[0].R;
-	return { lat, lon, id: top.id, name: top.name, land: true, path: top.path, weights: W.map(({ id, name, w }) => ({ id, name, w: Math.round(w * 1000) / 1000 })), profile: top, mix: mixOf(W), coast: top.terrain?.coast || 'none', sea: sea || A.res.get('sea') || null };
+	return { lat, lon, id: top.id, name: top.name, land: true, path: top.path, weights: W.map(({ id, name, w }) => ({ id, name, w: Math.round(w * 1000) / 1000 })), profile: top, mix: mixOf(W), coast: top.terrain?.coast || 'none', sea };
 }
 function mixOf(W) {
 	const num = (f) => W.reduce((a, x) => a + (f(x.R) ?? 0) * x.w, 0);
@@ -298,7 +298,7 @@ export function describeAt(lat, lon) {
 	if (!at) return null;
 	const R = at.profile;
 	return {
-		place: at.names ? at.names.join(' › ') : R.names?.join(' › '), id: at.id, weights: at.weights, land: at.land, char: R.char,
+		place: R.names.join(' › '), id: at.id, weights: at.weights, land: at.land, char: R.char,
 		terrain: R.terrain, climate: R.climate, biome: R.biome, coast: at.coast, sea: at.sea?.name, mix: at.mix,
 		architecture: R.arch?.style, settlement: R.settle, language: R.lang, music: music(at.id), greet: phrase(at.id, 'greet', lat * 1000 + lon), chatter: phrase(at.id, 'chatter', lat + lon),
 		near: citiesNear(lat, lon, 80, 5).map((c) => `${c.name} (${c.km} km)`),

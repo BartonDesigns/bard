@@ -52,7 +52,7 @@ export const REGIONS = [
 		lm: 'mission church with a bell arch|palm-lined boulevard|lifeguard tower on the sand|Spanish-style city hall with a tile roof',
 	},
 	{
-		id: 'na.cal.bay', name: 'San Francisco Bay Area', box: [36.95, -123.1, 38.85, -121.45],
+		id: 'na.cal.bay', name: 'San Francisco Bay Area', box: [36.95, -123.1, 38.5, -121.6],
 		char: 'Fog through the Golden Gate, bridges over the bay, tech campuses and hills of Victorians',
 		climate: { kind: 'cool-summer mediterranean', seasons: 'summer fog on the coast, hot inland valleys, green rainy winters', temp: [10, 20], rain: 600, snow: 0, fog: 0.7 },
 		veg: '+coast redwood|Monterey cypress|California bay laurel|California buckeye|blue gum eucalyptus|coyote brush',
@@ -162,7 +162,7 @@ export const REGIONS = [
 		lm: 'concrete arch bridge over a canyon|cannery row warehouses',
 	},
 	{
-		id: 'na.cal.valley', name: 'the Central Valley', poly: [40.7, -122.6, 40.7, -121.8, 38.6, -120.9, 36.6, -119.1, 35.0, -118.7, 35.0, -119.7, 36.8, -121.0, 38.3, -122.1],
+		id: 'na.cal.valley', name: 'the Central Valley', pri: 3.1, poly: [40.7, -122.6, 40.7, -121.8, 38.6, -120.9, 36.6, -119.1, 35.0, -118.7, 35.0, -119.7, 36.8, -121.0, 38.3, -122.1],
 		char: 'Flat, hot and fertile: orchards, dairies, canals and farm towns under a wide sky',
 		terrain: { elev: [0, 150], relief: 'plains', coast: 'none' },
 		climate: { kind: 'hot-summer mediterranean', seasons: 'tule fog in winter, blazing dry summers', temp: [8, 28], rain: 350, fog: 0.3 },
@@ -443,7 +443,7 @@ export const REGIONS = [
 	{ id: 'na.south.atlanta', name: 'Atlanta', box: [33.45, -84.8, 34.15, -84.0], pri: 4, char: 'The capital of the South: peach-named streets, trees everywhere and hip-hop', settle: { density: 0.6 }, streets: { words: 'Peachtree|Ponce de Leon|Auburn|Piedmont|Spring|North|Decatur|Moreland' }, music: { genres: 'Atlanta hip hop|trap|R&B|gospel', face: 'HYPHY', bpm: [70, 140] }, say: { chatter: '+Peachtree Street, Peachtree Road, Peachtree everything.|Traffic on the Connector is wild.|Lemon pepper wings, trust me.' }, lm: '+glass towers above a tree canopy|gold-domed capitol' },
 	{ id: 'na.south.lowcountry', name: 'the Lowcountry', box: [31.5, -81.5, 33.3, -79.4], char: 'Charleston and Savannah: pastel houses, marsh, oaks and shrimp boats', terrain: { coast: 'salt marsh and sea islands' }, arch: { types: '+Charleston single house with piazzas|pastel rowhouses|town square with a fountain' }, food: '+shrimp and grits|she-crab soup|Lowcountry boil|benne wafers', say: { chatter: '+Rainbow Row is so pretty in the morning.|Shrimp boats came in this morning.|Sit a spell, it\'s too hot to rush.' }, lm: '+pastel Rainbow Row|oak squares hung with moss' },
 	{ id: 'na.south.carolina', name: 'the Carolinas', box: [33.8, -82.3, 36.6, -75.4], say: { chatter: '+Eastern or Western barbecue? Choose wisely.|Heading to the Outer Banks.' }, lm: '+striped lighthouse on the dunes' },
-	{ id: 'na.south.gulf', name: 'the Gulf Coast', box: [30.0, -89.5, 31.0, -85.0], terrain: { coast: 'white sand beach' }, say: { chatter: '+The Redneck Riviera, sugar-white sand.|Mardi Gras started in Mobile, you know.' } },
+	{ id: 'na.south.gulf', name: 'the Gulf Coast', box: [30.0, -89.5, 31.0, -85.0], terrain: { coast: 'white sand beach' }, say: { chatter: '+The Emerald Coast, sugar-white sand.|Mardi Gras started in Mobile, you know.' } },
 	{
 		id: 'na.la', name: 'Louisiana', box: [28.9, -94.05, 33.0, -88.8], pri: 2.5,
 		char: 'Bayous, Cajun French, crawfish boils, jazz and a party every weekend',
@@ -453,6 +453,7 @@ export const REGIONS = [
 		ground: '#4a5a32|#6a6a3a|#3a4a2a',
 		settle: { pattern: 'strip settlements along bayous|French Quarter grid|plantation parishes', density: 0.2 },
 		arch: { style: 'Creole and Acadian', materials: 'cypress|stucco|wrought iron|brick', roofs: 'steep hip|gable', walls: '#f0d8a8|#c8e0d0|#f4c0b0|#e8e0d0|#a8c0d8', roofc: '#5a4a3a|#3a3a3a', types: 'shotgun house|Creole cottage|Acadian cabin with a porch|raised house on piers|plantation house|camelback shotgun' },
+		road: { look: 'oak-shaded avenues, levee roads, streetcar tracks down the neutral ground', vehicles: 'green streetcar|pickup truck|airboat|shrimp boat|mule-drawn carriage' },
 		streets: { pat: 'Rue {w}|{w} Street|{w} Avenue|{w} Road', words: 'Royal|Bourbon|Chartres|Dauphine|Toulouse|St. Charles|Magazine|Esplanade|Tchoupitoulas|Canal|Bayou|Evangeline|Lafayette' },
 		food: 'gumbo|jambalaya|crawfish étouffée|po\'boys|beignets|boudin|red beans and rice|king cake',
 		music: { genres: 'zydeco|Cajun|New Orleans jazz|brass band|bounce|swamp pop', face: 'BREW', bpm: [96, 140], scale: 'mixolydian', inst: 'accordion|fiddle|rubboard|trumpet|sousaphone' },
@@ -490,7 +491,7 @@ export const REGIONS = [
 	{ id: 'na.fl.keys', name: 'the Florida Keys', box: [24.4, -82.2, 25.3, -80.25], pri: 4, char: 'The southern tip: a string of coral islands, sunsets and the road over the sea', terrain: { relief: 'islands', coast: 'coral reef and mangrove' }, climate: { kind: 'tropical', temp: [21, 29] }, settle: { pattern: 'island villages', density: 0.15 }, arch: { types: 'conch cottage with gingerbread trim|stilt house|tiki bar|sunset pier' }, music: { genres: 'island folk|reggae|yacht rock', face: 'DANCEHALL' }, say: { chatter: '+Southernmost point is just down the road.|Sunset celebration at Mallory Square.|Six-toed cats everywhere.|Island time, relax.', words: '+Conch: a Key West local|island time: no hurry' }, lm: '+striped buoy marking the southernmost point|seven-mile bridge over turquoise water|white lighthouse' },
 	{ id: 'na.fl.everglades', name: 'the Everglades', box: [25.2, -81.6, 26.4, -80.5], char: 'The river of grass: sawgrass, alligators, herons and airboats', terrain: { relief: 'wetland' }, veg: 'sawgrass|bald cypress|mangrove|royal palm|gumbo limbo', settle: { density: 0.01 }, say: { chatter: '+Airboat ride, hold onto your hat.|That log just blinked.' } },
 	{ id: 'na.fl.orlando', name: 'Central Florida', box: [27.8, -82.0, 29.2, -80.5], say: { chatter: '+Theme park lines are two hours.|Watch a rocket launch from the beach!' }, lm: '+fairy-tale castle|rocket launch tower on the coast' },
-	{ id: 'na.fl.panhandle', name: 'the Panhandle', box: [29.6, -87.6, 31.0, -84.2], say: { chatter: '+Sugar-white sand, emerald water.|It\'s basically Alabama here.' } },
+	{ id: 'na.fl.panhandle', name: 'the Panhandle', box: [29.6, -87.6, 31.0, -84.2], say: { chatter: '+Sugar-white sand, emerald water.|Folks here call it L.A., Lower Alabama.' } },
 	// ---------- Appalachia, the Mid-Atlantic, New York, New England ----------
 	{
 		id: 'na.app', name: 'Appalachia', box: [[34.8, -85.2, 37, -81], [37, -83.7, 40.5, -77.8], [40.5, -79.6, 42, -75.8]], pri: 2.6,

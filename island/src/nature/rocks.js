@@ -51,8 +51,8 @@ function finish(g) {
 	return m;
 }
 // a boulder: a lumpy rounded mass, flattened a little, its foot below y = 0
-export function boulder(seed, form = 'round') {
-	const g = new THREE.IcosahedronGeometry(1, 3), P = g.attributes.position, nz = makeNoise(seed), r = mulberry32(seed);
+export function boulder(seed, form = 'round', detail = 3) {
+	const g = new THREE.IcosahedronGeometry(1, detail), P = g.attributes.position, nz = makeNoise(seed), r = mulberry32(seed);
 	const sx = 0.9 + r() * 0.5, sz = 0.8 + r() * 0.4, sy = form === 'blocky' ? 0.75 + r() * 0.3 : 0.55 + r() * 0.25, tilt = (r() - 0.5) * 0.5;
 	for (let i = 0; i < P.count; i++) {
 		let x = P.getX(i), y = P.getY(i), z = P.getZ(i);
@@ -80,7 +80,7 @@ export function outcrop(seed, form = 'bedded') {
 	const r = mulberry32(seed), parts = [];
 	const n = form === 'round' ? 3 : 4 + Math.floor(r() * 3), dip = 0.35 + r() * 0.35;
 	for (let i = 0; i < n; i++) {
-		const g = boulder(seed * 13 + i, form === 'round' ? 'round' : form);
+		const g = boulder(seed * 13 + i, form === 'round' ? 'round' : form, 2);
 		const s = form === 'round' ? 0.7 + r() * 0.6 : 0.6 + r() * 0.5;
 		const m = new THREE.Matrix4().compose(
 			new THREE.Vector3((i - n / 2) * 0.9 * s + (r() - 0.5) * 0.4, (form === 'round' ? 0 : -0.15) + r() * 0.2, (r() - 0.5) * 0.9),

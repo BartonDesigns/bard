@@ -1,15 +1,13 @@
 import * as esbuild from 'esbuild';
 const watch = process.argv.includes('--watch');
+const common = { bundle: true, format: 'esm', minify: !watch, target: ['es2020', 'safari15'], legalComments: 'none', logLevel: 'info' };
 const ctx = await esbuild.context({
+	...common,
 	entryPoints: ['src/main.js'],
-	bundle: true,
-	format: 'esm',
-	minify: !watch,
 	sourcemap: watch ? 'inline' : false,
-	target: ['es2020', 'safari15'],
 	outfile: 'dist/island.js',
-	legalComments: 'none',
-	logLevel: 'info',
 });
-if (watch) await ctx.watch();
-else { await ctx.rebuild(); await ctx.dispose(); }
+// the Earth atlas's facts (src/earth/data), a file of their own beside the engine, fetched only
+// when first asked for (src/earth/atlas.js loadAtlas)
+const atlas = await esbuild.context({ ...common, entryPoints: ['src/earth/data/index.js'], outfile: 'dist/earth-atlas.js' });
+if (watch) { await ctx.watch(); await atlas.watch(); } else { await ctx.rebuild(); await atlas.rebuild(); await ctx.dispose(); await atlas.dispose(); }

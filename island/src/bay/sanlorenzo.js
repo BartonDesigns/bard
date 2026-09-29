@@ -201,7 +201,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		S.L = W;
 		// where it falls faster, a little broken water; the depth follows (deeper where still)
 		S.foam = new Float32Array(n);
-		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(1, Math.max(0, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) - 0.004) * 30);
+		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(0.3, Math.max(0, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) - 0.006) * 15);
 		for (let i = 0; i < n; i++) if (S.zone[i] === 'valley') S.D[i] = 0.55 + 1.35 * (1 - Math.min(1, S.foam[i] * 1.5));
 		for (let i = 0; i < n && i * STEP < sLag; i++) S.foam[i] = Math.max(S.foam[i], 0.5 * (1 - i * STEP / sLag));
 		S.sHwy = sHwy; S.sLaurel = sLaurel; S.sBeach = sBeach; S.sSurf = sSurf;

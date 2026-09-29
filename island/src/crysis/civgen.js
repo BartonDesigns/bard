@@ -50,9 +50,12 @@ const K = { house: 0, garageL: 1, garageR: 2, garage: 3, wing: 4, office: 5, ret
 
 // ---------- street names: learned words and suffixes ----------
 const TAILS = ['wood', 'brook', 'ridge', 'field', 'view', 'crest', 'dale', 'haven', 'glen', 'stone', 'hurst', 'mont'];
-function namer(r, S) {
+// (a town with a brief from the city director, earth/director.js, takes its main streets' names
+// from it in order; the learned name is still drawn, so the town is laid out the same either way)
+function namer(r, S, given = null) {
 	const used = new Set(), W = S.nameWords, word = () => W[Math.floor(r() * W.length)];
-	return (kind) => {
+	const pool = (given || []).filter((s) => typeof s === 'string' && s), taken = new Set();
+	const learned = (kind) => {
 		for (let k = 0; k < 12; k++) {
 			const u = r(), suf = pickW(S.suffix[kind] || S.suffix.street, r());
 			let a = word();
@@ -62,6 +65,11 @@ function namer(r, S) {
 			if (!used.has(n)) { used.add(n); return n; }
 		}
 		return word() + ' ' + (used.size + 1) + ' ' + pickW(S.suffix.street, r());
+	};
+	return (kind) => {
+		const n = learned(kind);
+		while (pool.length && kind !== 'cul') { const b = pool.shift(); if (!taken.has(b)) { taken.add(b); return b; } }
+		return n;
 	};
 }
 
@@ -200,7 +208,7 @@ export function generateTown(opts) {
 
 // the same, one piece at a time: yields between the pieces (a superblock, a pass), so a
 // caller can spread the work over frames. The generator's return value is the region.
-export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null }) {
+export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, heightAt, stats = STATS, style = 'suburb', name = 'Town', ang = 0, water = null, brief = null }) {
 	const S = stats, r = rng(seed), T0 = Date.now();
 	const older = style === 'older';
 	const W = S.widths;
@@ -220,7 +228,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		}
 	};
 	const covered = (x, z) => { const a = Math.floor((x - cx + Rbox) / CV), b = Math.floor((z - cz + Rbox) / CV); return a < 0 || b < 0 || a >= CN || b >= CN || cover[b * CN + a] === 1; };
-	const nameOf = namer(r, S);
+	const given = Array.isArray(brief?.streets) ? brief.streets : [], dtGiven = given.length >= 12 ? given.slice(-4) : null;
+	const nameOf = namer(r, S, dtGiven ? given.slice(0, -4) : given);
 
 	// heights on a lazy 16 m grid (the terrain function is too slow to call per step)
 	const HC = 16, HB = 32, hch = new Map();
@@ -374,7 +383,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	// a big town's downtown: the four corners of its main crossing laid out in short blocks
 	// on a street grid of their own, towers on plazas, trees along the pavements (claimed
 	// before the shops and the houses, which grow round it)
-	const DT_NAMES = ['Main Street', 'First Street', 'Second Street', 'Market Street', 'Center Street', 'Broadway', 'Civic Way', 'Plaza Way'];
+	const DT_NAMES = dtGiven || ['Main Street', 'First Street', 'Second Street', 'Market Street', 'Center Street', 'Broadway', 'Civic Way', 'Plaza Way'];
 	let dtName = Math.floor(r() * 3);
 	if (radius > 2000) {
 		const hw = clamp(radius * 0.055, 110, 200), off = W.primary / 2 + 5, nIn = hw > 150 ? 2 : 1;
@@ -931,8 +940,11 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const b of boxes) rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255);
 	// (anything else that came to stand in the water taken out of it)
 	if (water) for (const L of [boxes, pools, trees]) { const keep = L.filter((b) => !wet(b.x, b.z, (b.w && b.d ? Math.max(b.w, b.d) / 2 : 0) + 2)); L.length = 0; L.push(...keep); }
+	// the shop and office fronts get the brief's sign texts, in turn (b.sign; for whatever paints them)
+	const signs = Array.isArray(brief?.signs) ? brief.signs.filter((s) => typeof s === 'string' && s) : [];
+	if (signs.length) { let k = 0; for (const b of boxes) if (b.kind === K.retail || b.kind === K.office) b.sign = signs[k++ % signs.length]; }
 	return {
-		name, gen: true, seed, style, bounds: [x0, z0, x0 + MW * step, z0 + MH * step],
+		name, gen: true, seed, style, bounds: [x0, z0, x0 + MW * step, z0 + MH * step], brief: brief ? { id: brief.id, city: brief.city, source: brief.source, vibe: brief.vibe } : null,
 		roads, boxes, paths, pools, trees, ponds, parks: parksOut,
 		map: { px, w: MW, h: MH, x0, z0, step },
 		info: { freeway: FWY.on ? { name: FWY.name, crossings: FWY.cross.length, interchanges: FWY.cross.filter((c) => c.ic).length } : null, houses: nh, runs: runs.length, sites: sites.map((s) => s.kind), ms: Date.now() - T0, arterialSpacing: SP },

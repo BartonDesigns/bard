@@ -37,16 +37,12 @@ const C = 16;
 const GEO = GEOLOGY.map(([lat, lon, r, c, form]) => ({ ...toWorld(lat, lon), r, col: new THREE.Color(c), form }));
 const TRAILISH = /path|track|footway|bridleway/;
 
-export function createWildGround(scene, bay, { shared, real, isPhone = false, ground = null } = {}) {
-	const H = ground || ((x, z) => bay.heightAt(x, z));
-	const K = isPhone ? 0.45 : 1;                                      // density
-	const RK = isPhone ? 0.7 : 1;                                      // reach
-	const group = new THREE.Group();
-	group.name = 'wild-ground';
-	scene.add(group);
-
-	// ---------- what grows where: the land as city.js reckons it, plus the brush ----------
-	function landAt(x, z) {
+// ---------- what grows where: the land as city.js reckons it (wildLand), plus the brush ----------
+// habitat(bay, real, ground)(x, z): null where it is town, road, roof, a planted park or the
+// shore; otherwise the slope, aspect, draw, height, how wooded, redwood, chaparral, coastal
+// scrub and open grass (0..1 each), and the region's rock
+export function habitat(bay, real, H) {
+	return function landAt(x, z) {
 		const h = H(x, z);
 		if (h < 2.5) return null;
 		if (real?.inside(x, z)) {
@@ -73,7 +69,18 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		let rock = null, rd = 1e9;
 		for (const g of GEO) { const d = Math.hypot(x - g.x, z - g.z) / g.r; if (d < 1 && d < rd) { rd = d; rock = g; } }
 		return { h, slope, north, gully, high, wood: windswept ? wood * 0.3 : wood, fog, windswept, redwood, scrub, chaparral, open, rock, rockK: rock ? 1 - rd : 0 };
-	}
+	};
+}
+
+export function createWildGround(scene, bay, { shared, real, isPhone = false, ground = null } = {}) {
+	const H = ground || ((x, z) => bay.heightAt(x, z));
+	const K = isPhone ? 0.45 : 1;                                      // density
+	const RK = isPhone ? 0.7 : 1;                                      // reach
+	const group = new THREE.Group();
+	group.name = 'wild-ground';
+	scene.add(group);
+
+	const landAt = habitat(bay, real, H);
 
 	// ---------- the layers ----------
 	const fogU = { value: 0 };
@@ -103,7 +110,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 				im.name = 'wild-' + key;
 				group.add(im);
 				// a woody part (the stems inside a shrub) only needs drawing close by
-				L.meshes.push({ im, vi, R: pi === 0 && parts.length > 1 && woodR ? woodR * RK : R });
+				L.meshes.push({ im, vi, cap: im.instanceMatrix.count, R: pi === 0 && parts.length > 1 && woodR ? woodR * RK : R });
 			});
 		});
 		layers.push(L);
@@ -128,7 +135,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 
 	// (the shapes are made a few a frame, so no one frame stalls)
 	const shrubMats = [woodM, leafM];
-	let Lb, Lo, Ls, Lw, Lcb, Lch, Lmz, Lty, Lpo, Lsg, Lhk, Lfn, Lso, Lrk, Lout, Lst, Llf, Lsk, Lcn;
+	let Lrt, Lbar, Lb, Lo, Ls, Lw, Lcb, Lch, Lmz, Lty, Lpo, Lsg, Lhk, Lfn, Lso, Lrk, Lout, Lst, Llf, Lsk, Lcn;
+	const outs = [];
 	const steps = [
 		() => {
 			Lb = mk('bunch', [PL.tuft(11, 'bunch'), PL.tuft(12, 'bunch')], [bladeM], 42, 3200 * K);
@@ -158,14 +166,18 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		() => {
 			Lrk = mk('rock', [boulder(201, 'round'), boulder(202, 'bedded'), boulder(203, 'blocky')], [rockM], 260, 900 * K, { shadow: true });
 		},
+		() => { outs.push(outcrop(301, 'bedded')); },
+		() => { outs.push(outcrop(302, 'blocky')); },
 		() => {
-			Lout = mk('outcrop', [outcrop(301, 'bedded'), outcrop(302, 'blocky'), outcrop(303, 'round')], [rockM], 420, 240 * K, { shadow: true });
+			Lout = mk('outcrop', [...outs, outcrop(303, 'round')], [rockM], 420, 240 * K, { shadow: true });
 		},
 		() => {
 			Lst = mk('stone', [stone(401), stone(402)], [rockM], 40, 2000 * K);
 			Llf = mk('leaves', [leafLitter(0), leafLitter(1), leafLitter(2)], [litterM], 26, 4500 * K);
 			Lsk = mk('sticks', [sticks(501), sticks(502)], [stickM], 30, 700 * K);
 			Lcn = mk('cones', [cone(601), acorns(602)], [stickM], 18, 1400 * K);
+			Lrt = mk('roots', [roots(701), roots(702)], [stickM], 40, 500 * K);
+			Lbar = mk('bars', [waterBar(false), waterBar(true)], [stickM], 60, 80 * K, { shadow: true });
 		},
 	];
 	const FORM = { round: 0, bedded: 1, blocky: 2 };
@@ -184,6 +196,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		const fall = month >= 8 && month <= 11, winter = month === 12 || month <= 2;
 		// the trails through the cell: keep the tread clear, and lay its stones and roots
 		const trails = real ? real.near('roads', cx, cz, C).filter((q) => q && q.pts && TRAILISH.test(q.cls || '')) : [];
+		// (how far out of the tread a point is; tA is left holding the trail's heading there)
+		let tA = 0, tW = 2, tCls = '';
 		const trailD = (x, z) => {
 			let best = 1e9, w = 2;
 			for (const q of trails) {
@@ -191,9 +205,10 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 				for (let i = 0; i + 3 < p.length; i += 2) {
 					const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2));
 					const d = Math.hypot(x - p[i] - dx * t, z - p[i + 1] - dz * t);
-					if (d < best) { best = d; w = q.w || 2; }
+					if (d < best) { best = d; w = q.w || 2; tA = Math.atan2(dx, dz); tCls = q.cls; }
 				}
 			}
+			tW = w;
 			return best - w / 2;
 		};
 		const put = (L, x, z, yaw, sx, sy, col, v, sink = 0.05, lie = false) => {
@@ -319,8 +334,14 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 				const s = 0.04 + Math.pow(r(), 2.5) * (E.slope > 0.25 ? 0.35 : 0.15);
 				put(Lst, x, z, r() * 6.28, s, s * 0.8, J(col, 0.18), Math.floor(r() * 2), s * 0.45, true);
 			});
-			if (E.wood > 0.35) scatter(Math.round(6 * K), (x, z) => (trailD(x, z) < 0.1 ? 1 : 0), (x, z) => {
-				put(Lsk, x, z, r() * 6.28, 1.2 + r() * 0.6, 0.6, [0.62, 0.5, 0.4], 1, 0.03, true);
+			// roots worn bare across the tread under the trees
+			if (E.wood > 0.3) scatter(Math.round(10 * K * E.wood), (x, z) => (trailD(x, z) < 0.3 ? 1 : 0), (x, z) => {
+				put(Lrt, x, z, tA + (r() - 0.5) * 0.9, 0.8 + r() * 0.5, 0.8 + r() * 0.4, J([1, 1, 1], 0.15), Math.floor(r() * 2), 0.0, true);
+			});
+			// water bars: a log or a row of stones set slantwise across a steep footpath
+			if (E.slope > 0.14) scatter(2, (x, z) => (trailD(x, z) < -0.2 && !/track/.test(tCls) && drift(x, z, 22, 5) > 0.55 ? 1 : 0), (x, z) => {
+				const s = Math.max(0.8, tW / 2 + 0.4);
+				put(Lbar, x, z, tA + 0.5, s, 1, J([1, 1, 1], 0.1), E.wood > 0.3 ? 0 : 1, 0.05, true);
 			});
 		}
 		// litter under the trees: oak leaves and acorns, or the redwoods' needle duff and cones
@@ -355,12 +376,22 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		}
 		queue.sort((a, b) => a[0] - b[0]);
 	}
+	// the cells round you in order of distance (so a layer that runs out of room keeps the
+	// nearest): [di, dj, distance], out to the farthest reach
+	let rings = null;
 	function fill(cx, cz) {
 		const ci = Math.floor(cx / C), cj = Math.floor(cz / C);
+		if (!rings) {
+			rings = [];
+			const rc = Math.ceil(MAXR / C) + 1;
+			for (let j = -rc; j <= rc; j++) for (let i = -rc; i <= rc; i++) rings.push([i, j, Math.max(0, Math.hypot(i, j) - 1.5) * C]);
+			rings.sort((a, b) => a[2] - b[2]);
+		}
 		for (const L of layers) {
-			const counts = L.meshes.map(() => 0), R = L.R, rc = Math.ceil(R / C);
-			for (let j = cj - rc; j <= cj + rc; j++) for (let i = ci - rc; i <= ci + rc; i++) {
-				const c = cells.get(i + ',' + j), a = c && c[L.key];
+			const counts = L.meshes.map(() => 0), R = L.R;
+			for (const [di, dj, dmin] of rings) {
+				if (dmin > R) break;
+				const c = cells.get((ci + di) + ',' + (cj + dj)), a = c && c[L.key];
 				if (!a) continue;
 				for (let k = 0; k < a.length; k += ITEM) {
 					const d = Math.hypot(a[k] - cx, a[k + 2] - cz);
@@ -371,13 +402,13 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 					if (a[k + 10] || a[k + 11]) { const nx = a[k + 10], nz = a[k + 11]; q.premultiply(qt.setFromUnitVectors(UP, nrm.set(nx, Math.sqrt(Math.max(0, 1 - nx * nx - nz * nz)), nz))); }
 					m4.compose(p.set(a[k], a[k + 1], a[k + 2]), q, s.set(a[k + 4], a[k + 5], a[k + 4]));
 					col.setRGB(a[k + 6], a[k + 7], a[k + 8]);
-					L.meshes.forEach((M, mi) => {
-						if (M.vi !== v || d > M.R) return;
-						const n = counts[mi];
-						if (n >= M.im.instanceMatrix.count) return;
-						M.im.setMatrixAt(n, m4); M.im.setColorAt(n, col);
+					for (let mi = 0; mi < L.meshes.length; mi++) {
+						const M = L.meshes[mi], n = counts[mi];
+						if (M.vi !== v || d > M.R || n >= M.cap) continue;
+						m4.toArray(M.im.instanceMatrix.array, n * 16);
+						col.toArray(M.im.instanceColor.array, n * 3);
 						counts[mi] = n + 1;
-					});
+					}
 				}
 			}
 			L.meshes.forEach((M, mi) => {
@@ -410,7 +441,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		}
 		counted += made;
 		// refill as you walk, or as the near cells come in (not every frame while far ones do)
-		if (dirty || (made && (counted > 12 || !queue.length))) { fill(x, z); dirty = false; counted = 0; }
+		if (dirty || (made && (counted > 40 || !queue.length))) { fill(x, z); dirty = false; counted = 0; }
 	}
 	function info() {
 		const o = { cells: cells.size, queue: queue.length };
@@ -529,5 +560,55 @@ function acorns(seed) {
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
 	g.setAttribute('color', new THREE.Float32BufferAttribute(colA, 3));
 	g.setIndex(idx);
+	return g;
+}
+// roots across a trail: two or three sinuous tubes along x, half sunk, worn smooth and pale
+// on top where boots have scuffed them
+function roots(seed) {
+	const r = mulberry32(seed), pos = [], nor = [], colA = [], idx = [];
+	for (let k = 0; k < 2 + Math.floor(r() * 2); k++) {
+		const rad = 0.03 + r() * 0.04, z0 = (r() - 0.5) * 0.8, L = 1.2 + r() * 1.2, n = 10, seg = 6, o = pos.length / 3;
+		for (let i = 0; i <= n; i++) {
+			const t = i / n, x = (t - 0.5) * L, z = z0 + Math.sin(t * 5 + k) * 0.12, rr = rad * (1 - Math.abs(t - 0.4) * 0.6);
+			for (let j = 0; j <= seg; j++) {
+				const a = j / seg * Math.PI * 2, cy = Math.cos(a), sz = Math.sin(a);
+				pos.push(x, cy * rr - rad * 0.45, z + sz * rr); nor.push(0, cy, sz);
+				const top = Math.max(0, cy);
+				colA.push(0.3 + top * 0.22, 0.24 + top * 0.18, 0.18 + top * 0.14);
+			}
+		}
+		for (let i = 0; i < n; i++) for (let j = 0; j < seg; j++) { const a = o + i * (seg + 1) + j, b = a + seg + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+	}
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+	g.setAttribute('color', new THREE.Float32BufferAttribute(colA, 3));
+	g.setIndex(idx);
+	return g;
+}
+// a water bar, along x and about 2 m long: a peeled log half sunk in the tread, or a row
+// of flat stones set on edge
+function waterBar(stones) {
+	if (stones) {
+		const parts = [];
+		for (let i = 0; i < 6; i++) { const g = new THREE.BoxGeometry(0.32, 0.22, 0.12); g.rotateY((i % 2 - 0.5) * 0.3); g.translate(-0.9 + i * 0.36, 0.02, (i % 3 - 1) * 0.03); parts.push(g.toNonIndexed()); }
+		const g = mergeBoxes(parts, [0.46, 0.43, 0.38]);
+		return g;
+	}
+	const g = new THREE.CylinderGeometry(0.11, 0.13, 2.2, 8, 1);
+	g.rotateZ(Math.PI / 2); g.translate(0, 0.02, 0);
+	const P = g.attributes.position, col = new Float32Array(P.count * 3);
+	for (let i = 0; i < P.count; i++) { const top = P.getY(i) > 0.08; col[i * 3] = top ? 0.5 : 0.32; col[i * 3 + 1] = top ? 0.44 : 0.25; col[i * 3 + 2] = top ? 0.36 : 0.18; }
+	g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+	g.deleteAttribute('uv');
+	return g;
+}
+function mergeBoxes(parts, c) {
+	const pos = [], nor = [];
+	for (const q of parts) { pos.push(...q.attributes.position.array); nor.push(...q.attributes.normal.array); }
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+	g.setAttribute('color', new THREE.Float32BufferAttribute(pos.map((_, i) => c[i % 3] * (0.85 + ((i * 7919) % 13) / 60)), 3));
 	return g;
 }

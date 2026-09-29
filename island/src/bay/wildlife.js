@@ -10,13 +10,14 @@ import * as THREE from 'three';
 import { bird, deer as deerBody } from '../world/creatures.js';
 import { SPECIES, TRAILS } from '../nature/fieldguide.js';
 import { toWorld } from './geo.js';
+import { createSmallLife } from '../nature/smalllife.js';
 
 const GUIDE = Object.fromEntries(SPECIES.map((s) => [s.id, s]));
 const inHours = (s, h) => { const [a, b] = s.hours; return a <= b ? h >= a && h < b : h >= a || h < b; };
 const TRAIL_AT = TRAILS.map((t) => ({ ...t, ...toWorld(t.lat, t.lon) }));
 const about = (id, h, month) => { const s = GUIDE[id]; return !!s && s.months.includes(month) && inHours(s, h); };
 
-export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, say = () => {} } = {}) {
+export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, say = () => {}, real = null } = {}) {
 	// (hint(text, ms, priority): the trailhead board outranks the place names)
 	const group = new THREE.Group();
 	group.name = 'wildlife';
@@ -48,6 +49,9 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 		return (dx * f.x + dy * f.y + dz * f.z) / d > 0.85;
 	};
 
+	// the small life on the ground near you: squirrels, turkeys, quail, lizards, slugs, butterflies
+	const small = globalThis.WILD_N3 ? createSmallLife(group, bay, { real, isPhone, about, spot, seen }) : null;
+
 	// ---------- who is about, placed round you now and then ----------
 	let kettles = [], pels = null, gulls = [], herd = [], cx = 1e9, cz = 1e9, lastH = -1, hawkK = null;
 	function place(cam, h, month) {
@@ -78,7 +82,9 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 		}
 		// deer at dawn and dusk, on open grassy ground off the streets
 		herd = [];
-		if (about('black_tailed_deer', h, month) && (h > 16.5 || h < 8.5)) for (let k = 0; k < 80 && herd.length < (isPhone ? 4 : 7); k++) {
+		// (by day a doe or two lie up in the shade at the woods' edge, and get up as you come)
+		const dusk = h > 16.5 || h < 8.5, day = h > 8.5 && h < 16.5 && (Math.floor(cx / 900) + Math.floor(cz / 900)) % 3 === 0;
+		if (about('black_tailed_deer', h, month) || day) for (let k = 0; k < 80 && herd.length < (dusk ? (isPhone ? 4 : 7) : day ? 2 : 0); k++) {
 			const x = cx + (rnd() - 0.5) * 360, z = cz + (rnd() - 0.5) * 360, gh = g(x, z);
 			if (gh < 8 || bay.urbanAt(x, z).u > 0.35 || Math.hypot(x - cx, z - cz) < 40) continue;
 			const sl = Math.hypot(g(x + 5, z) - g(x - 5, z), g(x, z + 5) - g(x, z - 5)) / 10;
@@ -156,6 +162,7 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 			if (d < 90 && seen(cam, D.x, g(D.x, D.z) + 1, D.z, 90)) spot('black_tailed_deer');
 		});
 		deer.count = herd.length; deer.instanceMatrix.needsUpdate = true;
+		small?.update(dt, t, cam, hours, month);
 	}
-	return { group, update, journal: () => Object.keys(journal).map((id) => GUIDE[id]?.name).filter(Boolean) };
+	return { group, update, small, journal: () => Object.keys(journal).map((id) => GUIDE[id]?.name).filter(Boolean) };
 }

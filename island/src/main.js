@@ -80,7 +80,8 @@ REAL_U.uBloom.value = [0, 0.3, 0.8, 1, 0.45, 0, 0, 0, 0, 0, 0, 0][new Date().get
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads, ROUTES } from './bay/roads.js';
-import { toWorld } from './bay/geo.js';
+import { toWorld, toLatLon } from './bay/geo.js';
+import { createDirector } from './earth/director.js';
 import { createGuide } from './guide/guide.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
@@ -290,6 +291,9 @@ export function createIslandWorld() {
 	// people is filled in just below; the guide reaches it through this api object
 	const guideApi = { world: () => world, camera, shared, hint, people: null };
 	const guide = createGuide(dom.mount, guideApi);
+	// the city director (earth/): what should be in the towns and cities you come to, from the
+	// Earth atlas and, when one is loaded and idle, the Guide's on-device model
+	const earthDirector = HOOKS.earth = createDirector({ llm: guide.llm, toLatLon });
 	// secrets and surprises: the Bard's lost verses, fireworks, the foghorns, the calendar
 	const surprises = createSurprises({ scene, camera, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide.say(t, w), isPhone });
 	guideApi.secret = (t) => surprises.secret(t);
@@ -598,7 +602,7 @@ export function createIslandWorld() {
 			world.labels = createLabels(dom.mount, bayArea, null);
 			world.real = createRealCity(renderer);
 			// Crysis: the towns beyond the survey, grown street by street as you near them
-			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen });
+			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
 			world.city = createCity(shared, scene, bayArea, world.real);
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 			world.forestFloor = createForestFloor(scene, bayArea, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z) });
@@ -630,7 +634,7 @@ export function createIslandWorld() {
 			// the Santa Cruz Beach Boardwalk: the Casino, the midway and its rides, the Giant Dipper
 			world.boardwalk = createBoardwalk(scene, bayArea, shared, { isPhone, mount: dom.mount, hint: (t, ms, pri = 1) => hint(t, ms, pri), camera, player: () => world?.player.state });
 			// the Bay Area's wild animals by habitat, month and hour, and the field journal
-			world.wildlife = createWildlife(scene, bayArea, { isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
+			world.wildlife = createWildlife(scene, bayArea, { isPhone, real: world.real, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			world.natureSound = createNatureSound(bayArea, (x, z) => bayArea.heightAt(x, z));
 			// the in-between places: dirt tracks, the industrial fringe, town's ragged edge, the odd camp
@@ -957,6 +961,7 @@ export function createIslandWorld() {
 		W.bayArea?.update(camera, sk.night);
 		W.bridge?.update(time, sk.night);
 		W.civ?.update(camera);
+		if (W.civ) { const ll = toLatLon(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
 		W.real?.update(camera);
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);
@@ -1362,6 +1367,12 @@ if (typeof window !== 'undefined') {
 		audio: Object.assign(() => HOOKS.audio?.debug(), { set: (v) => HOOKS.audio?.set(v), record: (s) => HOOKS.audio?.record(s), tick: (dt, o) => HOOKS.audio?.tick(dt, o) }),
 		// the trailer's camera: Crysis.cine((camera, dt, time) => { ... }) poses it every frame; Crysis.cine() lets go
 		cine: (fn) => { HOOKS.cine = typeof fn === 'function' ? fn : null; return !!HOOKS.cine; },
+		// the Earth atlas and the city director (earth/): Crysis.atlas(lat, lon) tells what a place
+		// is like (here, with no arguments); Crysis.brief('Lisbon') gives a city's brief (a promise);
+		// Crysis.earth() how the director stands. The people can read chatter from earth/hub.js.
+		atlas: (lat, lon) => { if (lat == null) { const p = window.L99Island?.world?.()?.player?.state?.pos; const ll = p ? toLatLon(p.x, p.z) : { lat: 37.77, lon: -122.42 }; lat = ll.lat; lon = ll.lon; } return HOOKS.earth?.describe(+lat, +lon); },
+		brief: (name) => HOOKS.earth?.briefFor(name),
+		earth: () => HOOKS.earth?.info(),
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};
 }

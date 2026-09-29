@@ -25,6 +25,7 @@ let crashed = false;
 try { crashed = !!localStorage.getItem(GUARD); localStorage.removeItem(GUARD); } catch { /* private mode */ }
 const guard = (on) => { try { if (on) localStorage.setItem(GUARD, String(Date.now())); else localStorage.removeItem(GUARD); } catch { /* private mode */ } };
 export const crashedBefore = () => crashed;
+export const onPhone = () => PHONE;
 
 export function hasWebGPU() { return typeof navigator !== 'undefined' && !!navigator.gpu; }
 
@@ -40,7 +41,7 @@ export function createLLM() {
 		status.ready = false; status.progress = 0; status.text = 'Loading the model runtime…'; emit();
 		loading = (async () => {
 			const webllm = await import(/* @vite-ignore */ WEBLLM_URL);
-			if (engine) { try { await engine.unload(); } catch (e) { /* the old engine is gone either way */ } }
+			if (engine) { try { await engine.unload(); } catch { /* the old engine is gone either way */ } }
 			guard(true);
 			engine = await webllm.CreateMLCEngine(id, {
 				initProgressCallback: (p) => { status.progress = p.progress ?? 0; status.text = p.text || 'Loading…'; emit(); },
@@ -67,14 +68,16 @@ export function createLLM() {
 	}
 	function useNone() { kind = 'none'; status.ready = true; status.progress = 1; status.text = 'Guide only (no model)'; emit(); }
 
-	// one conversation at a time on the one engine: later calls wait their turn
+	// one conversation at a time on the one engine: later calls wait their turn. opts (the city
+	// director's): { maxTokens, temperature, json } where json asks for a JSON object
 	let queue = Promise.resolve();
-	function chat(messages, onToken, signal) {
-		const run = queue.then(() => chatNow(messages, onToken, signal));
+	function chat(messages, onToken, signal, opts) {
+		const run = queue.then(() => chatNow(messages, onToken, signal, opts));
 		queue = run.catch(() => null);
 		return run;
 	}
-	async function chatNow(messages, onToken, signal) {
+	async function chatNow(messages, onToken, signal, opts = {}) {
+		const temperature = opts.temperature ?? 0.6, cap = Math.min(opts.maxTokens ?? 320, 512);
 		if (kind === 'webllm') {
 			if (loading) await loading;
 			if (!engine) throw Error('The model is not loaded.');
@@ -82,14 +85,14 @@ export function createLLM() {
 			try {
 				// (on a phone the conversation is trimmed to fit the short memory)
 				const msgs = PHONE && messages.length > 5 ? [messages[0], ...messages.slice(-4)] : messages;
-				const stream = await engine.chat.completions.create({ messages: msgs, stream: true, temperature: 0.6, max_tokens: PHONE ? 160 : 320 });
+				const stream = await engine.chat.completions.create({ messages: msgs, stream: true, temperature, max_tokens: PHONE ? Math.min(cap, 160) : cap, ...(opts.json ? { response_format: { type: 'json_object' } } : {}) });
 				let text = '';
 				for await (const c of stream) { if (signal?.aborted) { engine.interruptGenerate?.(); break; } const d = c.choices?.[0]?.delta?.content || ''; if (d) { text += d; onToken(text); } }
 				return text;
 			} finally { busy = false; guard(false); }
 		}
 		if (kind === 'ollama') {
-			const r = await fetch(ollama.url + '/api/chat', { method: 'POST', signal, body: JSON.stringify({ model: ollama.model, messages, stream: true, options: { temperature: 0.6, num_predict: 320 } }) });
+			const r = await fetch(ollama.url + '/api/chat', { method: 'POST', signal, body: JSON.stringify({ model: ollama.model, messages, stream: true, ...(opts.json ? { format: 'json' } : {}), options: { temperature, num_predict: cap } }) });
 			const rd = r.body.getReader(), dec = new TextDecoder();
 			let text = '', buf = '';
 			for (;;) {
@@ -100,7 +103,7 @@ export function createLLM() {
 				while ((i = buf.indexOf('\n')) >= 0) {
 					const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
 					if (!line) continue;
-					try { const j = JSON.parse(line); if (j.message?.content) { text += j.message.content; onToken(text); } } catch (e) { /* a partial line; the rest comes next read */ }
+					try { const j = JSON.parse(line); if (j.message?.content) { text += j.message.content; onToken(text); } } catch { /* a partial line; the rest comes next read */ }
 				}
 			}
 			return text;

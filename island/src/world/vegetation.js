@@ -296,10 +296,11 @@ export function conifer(seed, far, mid, g = null) {
 		const dir = V(Math.cos(a), 0, Math.sin(a)), o = V(path[4].x * t, y, path[4].z * t);
 		// the limb droops, then its tip turns up
 		const m = o.clone().add(dir.clone().multiplyScalar(L * 0.55)).add(V(0, -L * 0.22, 0)), e = o.clone().add(dir.clone().multiplyScalar(L)).add(V(0, -L * 0.12, 0));
-		if (!far) tube(trunk, [o, m, e], [R0 * 0.28 * (1 - t * 0.6), R0 * 0.14, 0.02], 4, BK, (q) => 0.2 + q * 0.5);
-		// sprays of foliage along the limb, most toward its end
+		// (only close by: further off a bare limb reads as a spike sticking out of the crown)
+		if (!far && !mid) tube(trunk, [o, m, e], [R0 * 0.16 * (1 - t * 0.6), R0 * 0.08, 0.015], 4, BK, (q) => 0.2 + q * 0.5);
+		// sprays of foliage all along the limb, most toward its end, hiding the wood
 		for (let k = 0; k < per; k++) {
-			const f = 0.35 + 0.65 * (k + r() * 0.8) / per, p = o.clone().lerp(m, Math.min(1, f * 1.4)).lerp(e, Math.max(0, f * 1.4 - 1) * 0.9);
+			const f = 0.12 + 0.88 * (k + r() * 0.8) / per, p = o.clone().lerp(m, Math.min(1, f * 1.4)).lerp(e, Math.max(0, f * 1.4 - 1) * 0.9);
 			p.add(V((r() - 0.5) * 1.1, (r() - 0.3) * 0.8, (r() - 0.5) * 1.1));
 			const sh = 0.45 + 0.55 * t;
 			card(crown, p, size * (0.8 + r() * 0.5) * (1 - t * 0.35), r, { r: 0.13 * sh * LT[0], g: 0.22 * sh * LT[1], b: 0.12 * sh * LT[2] }, 0.6 + 0.4 * t, o, V(dir.x * 0.5, 0.8, dir.z * 0.5).normalize());
