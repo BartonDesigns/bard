@@ -310,7 +310,7 @@ function planShape(S, sp, P, fine, rnd) {
 	// the legs: a thigh of muscle, one tube down to the foot, toes and claws
 	for (const L of P.legs) {
 		const c = L.cfg, [u, l, m, t] = L.b;
-		S.ellipsoid(u, [0, 0, L.L1 * 0.38], [c.thigh, c.thigh * 1.15, L.L1 * 0.62], 'skin', { blend: [L.parent, 0, L.L1 * 0.3, 0.5], coat: coat && !L.cfg.bare ? 1 : 0 });
+		S.ellipsoid(u, [0, 0, L.L1 * 0.34], [c.thigh, c.thigh * 1.25, L.L1 * 0.66], 'skin', { blend: [L.parent, 0, L.L1 * 0.3, 0.5], coat: coat && !L.cfg.bare ? 1 : 0 });
 		S.tube([u, l, m], c.R, 'skin', { root: L.parent });
 		if (c.pad) S.ellipsoid(t, [0, c.pad[1] * 0.2, c.pad[2] * 0.3], c.pad, 'skin', { rows: 5, cols: 10 });
 		const toes = c.toes || 3;
@@ -380,8 +380,8 @@ const SPECIES = {
 			neckAt: [0, 0.25, 0.8], neck: [0.36, 0.34], neckUp: 0.75, neckBend: 0.45, neckR: [0.44, 0.4, 0.36],
 			headL: 1.4, jawAt: [0, -0.18, 0.1],
 			head: { skull: [[0, 0.1, 0.25], [0.36, 0.4, 0.5]], snout: [[0, -0.02, 0.8], [0.3, 0.3, 0.5]], jaw: [[0, -0.06, 0.55], [0.27, 0.14, 0.55]], eye: [0.3, 0.25, 0.35, 0.06], teeth: [0.24, -0.22, 0.45, 1.15, 0.1], horns: [[[0.2, 0.34, 0.3], [0.3, 1, 0.2], 0.12, 0.07], [[-0.2, 0.34, 0.3], [-0.3, 1, 0.2], 0.12, 0.07]] },
-			tailAt: [0, 0.12, -0.95], tail: [0.9, 0.85, 0.8, 0.72, 0.64, 0.55, 0.46, 0.38], tailLift: 0.08, tailDroop: 0.03, tailR: [0.52, 0.45, 0.38, 0.31, 0.24, 0.18, 0.12, 0.07, 0.03],
-			hind: { w: 0.42, drop: -0.05, L1: 1.05, L2: 1.1, L3: 0.6, toe: 0.35, beta: 0.45, footZ: 0.25, footY: 0.08, thigh: 0.32, R: [0.26, 0.2, 0.14, 0.1] },
+			tailAt: [0, 0.12, -0.8], tail: [0.9, 0.85, 0.8, 0.72, 0.64, 0.55, 0.46, 0.38], tailLift: 0.06, tailDroop: 0.045, tailR: [0.52, 0.45, 0.38, 0.31, 0.24, 0.18, 0.12, 0.07, 0.03],
+			hind: { w: 0.44, drop: -0.05, L1: 1.05, L2: 1.1, L3: 0.6, toe: 0.35, beta: 0.45, footZ: 0.25, footY: 0.1, thigh: 0.42, R: [0.36, 0.25, 0.17, 0.12] },
 			arm: { w: 0.4, at: [-0.2, 0.55], L: [0.3, 0.25, 0.12], R: [0.08, 0.06, 0.05, 0.04], claw: 0.08 },
 		},
 	},
@@ -422,7 +422,7 @@ const SPECIES = {
 			headL: 1.1, jawAt: [0, -0.18, 0.05], headTilt: 0.1,
 			head: { skull: [[0, 0.05, 0.25], [0.34, 0.36, 0.5]], jaw: [[0, -0.05, 0.35], [0.26, 0.14, 0.35]], eye: [0.3, 0.18, 0.32, 0.05], beak: [[0, -0.05, 0.62], [0, -0.3, 1], 0.35, 0.15],
 				horns: [[[0.17, 0.3, 0.35], [0.1, 0.6, 1], 0.75, 0.08], [[-0.17, 0.3, 0.35], [-0.1, 0.6, 1], 0.75, 0.08], [[0, 0.12, 0.62], [0, 1, 0.35], 0.22, 0.06]], frill: [[0, 0.42, -0.2], [0.8, 0.65, 0.08], -1.0] },
-			tailAt: [0, 0.05, -0.85], tail: [0.4, 0.38, 0.35, 0.3, 0.26], tailLift: -0.05, tailDroop: 0.06, tailR: [0.38, 0.3, 0.22, 0.15, 0.08, 0.03], tailTall: 1.3,
+			tailAt: [0, 0.05, -0.72], tail: [0.36, 0.33, 0.3, 0.26, 0.22], tailLift: -0.08, tailDroop: 0.07, tailR: [0.32, 0.24, 0.17, 0.11, 0.06, 0.025], tailTall: 1.3,
 			hind: { w: 0.45, drop: -0.05, L1: 0.62, L2: 0.58, L3: 0.3, toe: 0.12, beta: 0.35, footZ: 0.1, footY: 0.06, thigh: 0.3, R: [0.26, 0.2, 0.14, 0.12] },
 			front: { w: 0.45, drop: -0.2, z: 0.35, L1: 0.55, L2: 0.5, L3: 0.2, toe: 0.1, beta: 0.1, footZ: 0.08, footY: 0.06, thigh: 0.22, R: [0.2, 0.16, 0.12, 0.1] },
 		},
@@ -442,7 +442,7 @@ const SPECIES = {
 		},
 	},
 	longneck: {
-		name: 'Alamosaurus', pal: { back: [0.44, 0.43, 0.39], belly: [0.74, 0.70, 0.62] }, pat: [1.2, 0.3, 1], graze: [0.12, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3],
+		name: 'Alamosaurus', pal: { back: [0.34, 0.32, 0.28], belly: [0.62, 0.57, 0.48] }, pat: [1.2, 0.4, 1], graze: [0.12, 0.1, 0.1, 0.1, 0.1, 0.1, 0.3],
 		beh: { diet: 'plant', walk: 1.2, run: 2.6, alarm: 25, react: 'flee', turn: 0.45, herd: [3, 5] },
 		o: {
 			hip: 3.5, chestUp: 0.1, chestZ: 1.8, chestTilt: -0.04, pelC: [0, 0.1, -0.2], pelR: [0.95, 1.05, 1.3], chestC: [0, -0.05, 0.3], chestR: [1.0, 1.15, 1.4], bellyC: [0, -0.5, -0.3], bellyR: [0.85, 0.7, 1.4],
