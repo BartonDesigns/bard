@@ -311,7 +311,7 @@ export function createIslandWorld() {
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
 	// people: real bodies about the village and the city streets
-	const people = createPeople(scene, () => world);
+	const people = createPeople(scene, () => world, camera);
 	guideApi.people = people;
 	// the world's audio: footsteps, the room's sound, the places' ambience (audio/*.js)
 	const worldAudio = createWorldAudio({ getWorld: () => world, camera, people, busy: () => arcade.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.boardwalk?.riding?.(), planet: () => shared.planet });

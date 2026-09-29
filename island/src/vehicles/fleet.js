@@ -93,13 +93,14 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 			if (K) {
 				put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c);
 				if (t === 0 && K.hubs.length === 4) wheels(kind, M, o.spin || 0, o.steer || 0, K, cast);
-				if (o.riders && t === 1) riders(kind, M, o.riders);
+				if (o.riders) riders(kind, M, o.riders);
 				return t;
 			}
 		}
 		if (t === 0) {
 			put(set(kind + 'l0', [[loftGeo(kind, 0, false), [carMat, glassMat], true]], true, cap / 2, cast), M, c);
 			wheels(kind, M, o.spin || 0, o.steer || 0, null, cast);
+			if (o.riders) riders(kind, M, o.riders);
 		} else {
 			put(set(kind + 'l' + t, [[loftGeo(kind, t, true), carMat, true]], true, cap, cast), M, c);
 			if (o.riders && t === 1) riders(kind, M, o.riders);

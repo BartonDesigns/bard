@@ -84,7 +84,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		}
 		return out;
 	}
-	const hide = (id, on) => { if (on) hidden.add(id); else hidden.delete(id); splitT = -1e9; };
+	const hide = (id, on) => { if (hidden.has(id) === !!on) return; if (on) hidden.add(id); else hidden.delete(id); splitT = -1e9; };
 
 	// street furniture
 	const metal = new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: 0.5, metalness: 0.6 });
@@ -288,6 +288,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		splitX = 1e9;
 		hidden.clear();
 		regrid();
+		api.onBuild?.();
 		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true;
 		{
 			const A = lampLightGeo.attributes.position.array, M4 = new THREE.Matrix4();
@@ -383,6 +384,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// more cars to draw with the traffic (the owners' cars coming and going, yours)
 	const extra = [];
 	let avoid = null;
-	return { update, group, cars, parked, parkedNear, hide, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night };
+	const api = { update, group, cars, parked, parkedNear, hide, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
+	return api;
 }
 
