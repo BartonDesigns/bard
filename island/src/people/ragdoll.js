@@ -147,7 +147,7 @@ export function createRagdolls({ world, isPhone }) {
 				joints.push({ j, tone: 0 });
 			} else {
 				jd = R.JointData.spherical({ x: la.x, y: la.y, z: la.z }, { x: lb.x, y: lb.y, z: lb.z });
-				joints.push({ j: W3.createImpulseJoint(jd, p.rb, c.rb, true), tone: s.tone || 0.3, m: mass * c.s.m });
+				joints.push({ j: W3.createImpulseJoint(jd, p.rb, c.rb, true), tone: s.tone || 0.3, m: mass * c.s.m, rb: c.rb });
 			}
 		}
 		// (the root's offset from the pelvis piece, in its frame)
@@ -156,11 +156,14 @@ export function createRagdolls({ world, isPhone }) {
 		return { parts, joints, Qhi, rootOff, mass };
 	}
 	// the muscle tone: each free joint pulled gently back toward how it was held, fading
+	// (where the joints have no motors, the limbs' own turning is damped instead, as stiffly)
 	function tone(D, k) {
 		for (const J of D.joints) {
 			if (!J.tone) continue;
-			const st = J.tone * J.m * 60 * k, dm = J.tone * J.m * 6 * k + 0.05;
-			for (const ax of [R.JointAxis.AngX, R.JointAxis.AngY, R.JointAxis.AngZ]) J.j.configureMotorPosition(ax, 0, st, dm);
+			if (typeof J.j.configureMotorPosition === 'function') {
+				const st = J.tone * J.m * 60 * k, dm = J.tone * J.m * 6 * k + 0.05;
+				for (const ax of [R.JointAxis.AngX, R.JointAxis.AngY, R.JointAxis.AngZ]) J.j.configureMotorPosition(ax, 0, st, dm);
+			} else J.rb.setAngularDamping(1.2 + J.tone * 14 * k);
 		}
 	}
 
