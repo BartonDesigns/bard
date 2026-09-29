@@ -486,6 +486,22 @@ export function createBayArea(shared, scene, island, BU) {
 					rockC = mix(rockC, vec3(0.62, 0.3, 0.04), smoothstep(0.7, 0.78, vn(vBW * 2.7 + 5.0)) * fogbelt * (1.0 - smoothstep(10.0, 60.0, h)) * 0.8);
 					rockC = mix(rockC, vec3(0.05, 0.1, 0.02), north * fogbelt * smoothstep(0.4, 0.7, n3) * 0.75);
 					c = mix(c, rockC, max(smoothstep(0.5, 0.85, slope), outcrop));
+					// the grazed hills' own marks: cattle trails worn along the contours on the 20-35
+					// degree grass (thin, faint, gone where they would be finer than a pixel), bands of
+					// rock breaking out along the strata on the steeper faces, and dark brush down the
+					// gullies
+					{
+						float openG = (1.0 - chap) * (1.0 - oak) * (1.0 - forest) * (1.0 - smoothstep(0.3, 0.6, slope));
+						float ct = h / 1.9 + (vn(vBW * 0.004) - 0.5) * 3.0;
+						float ctA = 1.0 - smoothstep(0.15, 0.35, fwidth(ct));
+						float cattle = (1.0 - smoothstep(0.0, 0.12, abs(fract(ct) - 0.5) * 2.0 - 0.86)) * smoothstep(0.06, 0.09, slope) * (1.0 - smoothstep(0.18, 0.24, slope));
+						c = mix(c, c * vec3(0.8, 0.76, 0.7), cattle * ctA * openG * 0.5 * smoothstep(0.45, 0.6, vn(vBW * 0.006 + 2.0)));
+						float st = h / 11.0 + (vn(vBW * 0.0025) - 0.5) * 4.0;
+						float band = smoothstep(0.78, 0.9, sin(st * 6.2832) * 0.5 + 0.5) * (1.0 - smoothstep(0.2, 0.4, fwidth(st))) * smoothstep(0.12, 0.22, slope);
+						c = mix(c, rockC, band * 0.55 * smoothstep(0.4, 0.6, vn(vBW * 0.01 - 4.0)));
+						float gb = smoothstep(0.3, 0.7, clamp(vCurv.x, 0.0, 1.0)) * openG;
+						c = mix(c, mix(vec3(0.07, 0.09, 0.04), vec3(0.11, 0.13, 0.06), n3), gb * 0.6);
+					}
 					// the fog forest's floor: moss and duff, green on the shady side
 					c = mix(c, mix(vec3(0.045, 0.09, 0.02), vec3(0.08, 0.05, 0.03), n3), forest * fogbelt * (0.25 + north * 0.5) * (1.0 - smoothstep(0.5, 0.85, slope)));
 					// the towns' map (below), and how far off this is
