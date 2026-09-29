@@ -9,6 +9,8 @@
 
 import * as THREE from 'three';
 import { GREENS } from './realcity.js';
+import { toWorld } from './geo.js';
+import { createWildGround } from '../nature/wildground.js';
 
 // city.js's own hash and value noise, so the woods here are its woods
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -17,43 +19,135 @@ const vnoise = (x, z) => {
 	const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
 	return (a * (1 - su) + b * su) * (1 - sv) + (c * (1 - su) + d * su) * sv;
 };
-const C = 13, R = 240, MAXL = 420, MAXS = 160;
+const C = 13, R = 240, MAXL = 420, MAXS = 160, MAXN = 160;
 
-// a log: a unit cylinder along y, bark all round, moss and ferny green along its top (+x,
-// turned up when it is laid), the pale broken wood at its ends
-function logGeometry() {
-	const g = new THREE.CylinderGeometry(1, 1, 1, 12, 5);
-	const P = g.attributes.position, N = g.attributes.normal, col = new Float32Array(P.count * 3);
-	for (let i = 0; i < P.count; i++) {
-		const x = P.getX(i), y = P.getY(i), end = Math.abs(N.getY(i)) > 0.9;
-		const moss = Math.max(0, Math.min(1, (x - 0.1) * 2.2 + (hash(i * 3.7, y * 9) - 0.5) * 0.8));
-		let c = [0.3, 0.17, 0.1];
-		c = c.map((v, k) => v + ([0.13, 0.19, 0.05][k] - v) * moss);
-		if (end) c = [0.42, 0.28, 0.18];
-		const j = 0.85 + hash(i, 7) * 0.3;
-		col.set(c.map((v) => v * j), i * 3);
+// a log: along y from -0.5 (the foot) to 0.5 (the broken top), radius 1 at the foot; the
+// moss and ferny green along its top (+x, turned up when it is laid), bark in ridges, the
+// pale broken wood at its ends. A conifer's keeps its root wad, a fan of torn roots and
+// soil standing on edge; an oak limb is crooked, with the stubs of its side branches.
+function logGeometry(conifer) {
+	const seg = 14, rings = 9, pos = [], col = [], idx = [];
+	const bark = conifer ? [0.3, 0.16, 0.09] : [0.3, 0.25, 0.19], wood = [0.5, 0.36, 0.24], moss = conifer ? [0.12, 0.2, 0.04] : [0.2, 0.22, 0.1];
+	const bend = conifer ? 0 : 0.35;
+	for (let j = 0; j <= rings; j++) {
+		const t = j / rings, y = t - 0.5;
+		const taper = 1 - t * (conifer ? 0.35 : 0.45);
+		// the foot flares into the roots
+		const flare = conifer ? 1 + 0.55 * Math.pow(Math.max(0, 1 - t * 7), 2) : 1;
+		for (let i = 0; i <= seg; i++) {
+			const a = i / seg * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+			// bark in deep vertical ridges (fibrous on a redwood), less on the underside
+			const ridge = 1 + (conifer ? 0.07 : 0.04) * Math.sin(a * 11 + Math.sin(t * 9) * 0.6) * Math.sin(a * 5.3 + 1.7);
+			// the broken top: jagged, splintered
+			const brk = j === rings ? 0.02 * Math.sin(a * 7) + (hash(i, 91) - 0.5) * 0.03 : 0;
+			const r = taper * flare * ridge;
+			const off = bend * Math.sin(t * Math.PI) * 0.5;
+			pos.push(ca * r, y + brk, sa * r + off);
+			const up = Math.max(0, Math.min(1, (ca - 0.05) * 2.2 + (hash(i * 3.7, j * 9.1) - 0.5) * 0.9));
+			const c = bark.map((v, k) => v + (moss[k] - v) * up * (conifer ? 1 : 0.6));
+			const jj = 0.82 + hash(i + j * 31, 7) * 0.3;
+			col.push(c[0] * jj, c[1] * jj, c[2] * jj);
+		}
 	}
-	g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+	for (let j = 0; j < rings; j++) for (let i = 0; i < seg; i++) { const a = j * (seg + 1) + i, b = a + 1, c = a + seg + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+	// the end faces: pale wood, a darker heart
+	for (const [j, sgn] of [[0, -1], [rings, 1]]) {
+		const o = pos.length / 3, t = j / rings, taper = (1 - t * (conifer ? 0.35 : 0.45)) * (conifer && j === 0 ? 1.55 : 1) * 0.94;
+		pos.push(0, t - 0.5, bend * Math.sin(t * Math.PI) * 0.5); col.push(wood[0] * 0.6, wood[1] * 0.6, wood[2] * 0.6);
+		for (let i = 0; i <= seg; i++) { const a = i / seg * Math.PI * 2; pos.push(Math.cos(a) * taper, t - 0.5 + sgn * 0.004, Math.sin(a) * taper + bend * Math.sin(t * Math.PI) * 0.5); col.push(...wood); }
+		for (let i = 0; i < seg; i++) if (sgn > 0) idx.push(o, o + 1 + i, o + 2 + i); else idx.push(o, o + 2 + i, o + 1 + i);
+	}
+	// the root wad: torn roots fanning out of the foot, clotted with soil
+	if (conifer) for (let i = 0; i < 12; i++) {
+		const a = i / 12 * Math.PI * 2 + hash(i, 3) * 0.4, L = 1.4 + hash(i, 5) * 1.1, o = pos.length / 3;
+		const ca = Math.cos(a), sa = Math.sin(a), w = 0.16;
+		for (const [rr, yy, ww] of [[1.2, -0.49, w], [L, -0.5 - 0.004 * hash(i, 9), w * 0.4]]) {
+			pos.push(ca * rr - sa * ww, yy, sa * rr + ca * ww, ca * rr + sa * ww, yy, sa * rr - ca * ww);
+			col.push(0.26, 0.18, 0.12, 0.24, 0.17, 0.11);
+		}
+		idx.push(o, o + 2, o + 1, o + 1, o + 2, o + 3, o, o + 1, o + 2, o + 1, o + 3, o + 2);
+	}
+	// branch stubs sticking out of the sides and top
+	for (let i = 0; i < (conifer ? 5 : 4); i++) {
+		const t = 0.25 + hash(i, conifer ? 11 : 13) * 0.65, a = (hash(i, 17) - 0.5) * 2.4, o = pos.length / 3;
+		const r0 = (1 - t * 0.4) * 0.95, L = conifer ? 0.5 : 0.9, ca = Math.cos(a), sa = Math.sin(a), y = t - 0.5, w = conifer ? 0.12 : 0.2;
+		pos.push(ca * r0, y - w * 0.02, sa * r0 - w, ca * r0, y + w * 0.02, sa * r0 + w, ca * (r0 + L), y + 0.004, sa * (r0 + L));
+		col.push(...bark, ...bark, 0.42, 0.33, 0.24);
+		idx.push(o, o + 1, o + 2, o, o + 2, o + 1);
+	}
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+	g.setIndex(idx);
+	g.computeVertexNormals();
 	return g;
 }
-// a stump: flared to its roots, the cut top grey with weather and dark with rot
+// a stump: flared to its roots, the cut top grey with weather and dark with rot; old
+// redwood stumps keep the springboard notches the fallers cut
 function stumpGeometry() {
-	const g = new THREE.CylinderGeometry(0.82, 1.15, 1, 12, 2);
+	const g = new THREE.CylinderGeometry(0.82, 1.15, 1, 16, 3);
 	const P = g.attributes.position, N = g.attributes.normal, col = new Float32Array(P.count * 3);
 	for (let i = 0; i < P.count; i++) {
-		const top = N.getY(i) > 0.9, j = 0.85 + hash(i, 3) * 0.3;
-		const c = top ? [0.34, 0.29, 0.23] : P.getY(i) < 0 ? [0.22, 0.14, 0.08] : [0.3, 0.18, 0.11];
+		const x = P.getX(i), y = P.getY(i), z = P.getZ(i), a = Math.atan2(z, x), top = N.getY(i) > 0.9 && y > 0.49;
+		if (!top) {
+			// buttresses at the foot, fissured bark
+			const k = 1 + (y < 0 ? 0.25 * Math.pow(Math.abs(Math.sin(a * 3 + 0.5)), 3) * (-y * 2) : 0) + 0.04 * Math.sin(a * 13);
+			P.setX(i, x * k); P.setZ(i, z * k);
+		} else P.setY(i, y - 0.06 * Math.max(0, Math.sin(a * 2)) + (hash(i, 5) - 0.5) * 0.03);
+		const j = 0.85 + hash(i, 3) * 0.3, rr = Math.hypot(x, z);
+		const c = top ? (rr < 0.35 ? [0.16, 0.11, 0.08] : [0.36, 0.31, 0.25]) : y < 0 ? [0.22, 0.14, 0.08] : [0.3, 0.18, 0.11];
 		col.set(c.map((v) => v * j), i * 3);
 	}
 	g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+	g.computeVertexNormals();
 	return g;
 }
+// a snag: a dead tree still standing, from 0 to 1 up y, radius 1 at its foot, the top
+// snapped off in splinters, a few dead limbs; bark sloughed off to grey wood. Charred
+// ones (the 2020 fire in Big Basin) are black to well up the trunk.
+function snagGeometry() {
+	const seg = 10, rings = 8, pos = [], col = [], idx = [];
+	for (let j = 0; j <= rings; j++) {
+		const t = j / rings;
+		for (let i = 0; i <= seg; i++) {
+			const a = i / seg * Math.PI * 2, r = (1 - t * 0.62) * (1 + 0.35 * Math.pow(Math.max(0, 1 - t * 6), 2)) * (1 + 0.05 * Math.sin(a * 9));
+			const y = j === rings ? t - 0.06 * hash(i, 41) - 0.04 * Math.abs(Math.sin(a * 2)) : t;
+			pos.push(Math.cos(a) * r, y, Math.sin(a) * r);
+			// silver-grey weathered wood, patches of bark left low down (a burnt one is
+			// blackened by its instance tint)
+			const barkLeft = t < 0.4 && hash(i * 3, j) > 0.4;
+			const c = barkLeft ? [0.3, 0.22, 0.16] : [0.55, 0.52, 0.48];
+			const jj = 0.85 + hash(i + j * 17, 3) * 0.25;
+			col.push(c[0] * jj, c[1] * jj, c[2] * jj);
+		}
+	}
+	for (let j = 0; j < rings; j++) for (let i = 0; i < seg; i++) { const a = j * (seg + 1) + i, b = a + 1, c = a + seg + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+	// dead limbs, broken short, angled up (thin in the x/z scale, so kept few)
+	for (let i = 0; i < 4; i++) {
+		const t = 0.45 + i * 0.12, a = hash(i, 23) * 6.28, o = pos.length / 3, r0 = 1 - t * 0.62, L = 1.8 + hash(i, 29) * 1.6;
+		const ca = Math.cos(a), sa = Math.sin(a), w = 0.22;
+		pos.push(ca * r0 - sa * w, t, sa * r0 + ca * w, ca * r0 + sa * w, t, sa * r0 - ca * w, ca * (r0 + L), t + 0.05 + hash(i, 31) * 0.05, sa * (r0 + L));
+		col.push(0.5, 0.48, 0.44, 0.5, 0.48, 0.44, 0.58, 0.56, 0.52);
+		idx.push(o, o + 1, o + 2, o, o + 2, o + 1);
+	}
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+	g.setIndex(idx);
+	g.computeVertexNormals();
+	return g;
+}
+// where the 2020 CZU fire burned: Big Basin, the upper Waddell and Scott creek canyons
+const BURN = { ...toWorld(37.165, -122.245), r: 9500 };
 
-export function createForestFloor(scene, bay, city, real) {
+export function createForestFloor(scene, bay, city, real, opts = {}) {
+	// the ground cover, brush, rock and litter of the open country (nature/wildground.js)
+	const wild = opts.shared && globalThis.WILD_N3 ? createWildGround(scene, bay, { shared: opts.shared, real, isPhone: opts.isPhone, ground: opts.ground }) : null;
 	const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
-	const logs = new THREE.InstancedMesh(logGeometry(), mat, MAXL), stumps = new THREE.InstancedMesh(stumpGeometry(), mat, MAXS);
-	for (const m of [logs, stumps]) { m.count = 0; m.castShadow = m.receiveShadow = true; m.frustumCulled = false; m.userData.material175 = 'wood'; scene.add(m); }
-	logs.name = 'forest-logs'; stumps.name = 'forest-stumps';
+	const logs = new THREE.InstancedMesh(logGeometry(true), mat, MAXL), limbs = new THREE.InstancedMesh(logGeometry(false), mat, MAXL), stumps = new THREE.InstancedMesh(stumpGeometry(), mat, MAXS), snags = new THREE.InstancedMesh(snagGeometry(), mat, MAXN);
+	const all = [logs, limbs, stumps, snags];
+	for (const m of all) { m.count = 0; m.castShadow = m.receiveShadow = true; m.frustumCulled = false; m.userData.material175 = 'wood'; scene.add(m); }
+	logs.name = 'forest-logs'; limbs.name = 'forest-limbs'; stumps.name = 'forest-stumps'; snags.name = 'forest-snags';
 
 	const H = (x, z) => bay.heightAt(x, z);
 	const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
@@ -115,19 +209,32 @@ export function createForestFloor(scene, bay, city, real) {
 	}
 
 	function rebuild(cx, cz) {
-		let nl = 0, ns = 0;
+		let nl = 0, ns = 0, nb = 0, nn = 0;
 		if (cells.size > 60000) cells.clear();
 		for (let gz = Math.floor((cz - R) / C); gz <= Math.floor((cz + R) / C); gz++) for (let gx = Math.floor((cx - R) / C); gx <= Math.floor((cx + R) / C); gx++) {
 			// only where city.js stands no tree (its own roll: most cells are open ground)
 			if (hash(gx * 1.7 + 11, gz * 2.3 + 5) <= 0.62) continue;
 			const k = hash(gx * 4.3 + 17, gz * 3.7 - 9);
-			if (k > 0.26) continue;
+			if (k > 0.3) continue;
 			const x = (gx + 0.2 + hash(gx * 9 + 1, gz * 2) * 0.6) * C, z = (gz + 0.2 + hash(gx * 2, gz * 9 + 1) * 0.6) * C;
 			if ((x - cx) * (x - cx) + (z - cz) * (z - cz) > R * R) continue;
 			const W = woodAt(x, z);
 			if (!W || W.wood < 0.3 || W.slope > 0.8) continue;
 			const conifer = W.fog > 0.6 && W.high < 0.5, r2 = hash(gx * 5.3, gz * 7.1 + 2);
-			if (k < 0.2 * W.wood && nl < MAXL) {
+			const burnt = Math.hypot(x - BURN.x, z - BURN.z) < BURN.r;
+			if (k > 0.27) {
+				// a snag: a dead tree still standing, white-grey, or black from the fire
+				if (W.wood < 0.35 || nn >= MAXN) continue;
+				const rad = conifer ? 0.5 + r2 * 0.8 : 0.22 + r2 * 0.2, hgt = conifer ? 14 + r2 * 22 : 5 + r2 * 7;
+				if (!clear(x, z, x, z, rad * 1.3)) continue;
+				Q.setFromAxisAngle(UP, r2 * 6.283);
+				M.compose(P.set(x, W.h - 0.3, z), Q, S.set(rad, hgt, rad));
+				snags.setMatrixAt(nn, M);
+				const j = 0.85 + r2 * 0.3;
+				snags.setColorAt(nn++, burnt ? col.setRGB(0.16, 0.14, 0.13) : conifer ? col.setRGB(j * 0.85, j * 0.78, j * 0.72) : col.setRGB(j, j, j));
+				continue;
+			}
+			if (k < 0.2 * W.wood && (conifer ? nl : nb) < MAXL) {
 				// a fallen tree, half sunk in the duff: a great conifer in the fog belt, a limb
 				// under the oaks
 				// (the longest that lies clear of the standing trunks, at one of three angles)
@@ -146,9 +253,9 @@ export function createForestFloor(scene, bay, city, real) {
 				zA.crossVectors(upP, dir);
 				M.makeBasis(upP.multiplyScalar(rad), dir.multiplyScalar(len), zA.multiplyScalar(rad));
 				M.setPosition(x, (y0 + y1) / 2, z);
-				logs.setMatrixAt(nl, M);
-				const j = 0.8 + hash(gx, gz * 3.3) * 0.35;
-				logs.setColorAt(nl++, conifer ? col.setRGB(j, j * 0.95, j * 0.9) : col.setRGB(j * 0.92, j * 0.95, j));
+				const j = (0.8 + hash(gx, gz * 3.3) * 0.35) * (burnt ? 0.4 : 1);
+				if (conifer) { logs.setMatrixAt(nl, M); logs.setColorAt(nl++, col.setRGB(j, j * 0.95, j * 0.9)); }
+				else { limbs.setMatrixAt(nb, M); limbs.setColorAt(nb++, col.setRGB(j * 0.92, j * 0.95, j)); }
 			} else if (k < 0.26 * W.wood && conifer && ns < MAXS) {
 				// an old stump from the logging, taller than a man on the biggest
 				const rad = 0.5 + r2 * 1.1, hgt = 0.6 + hash(gx * 1.3, gz * 4.1) * 2.2;
@@ -157,11 +264,11 @@ export function createForestFloor(scene, bay, city, real) {
 				M.compose(P.set(x, W.h + hgt / 2 - 0.2, z), Q, S.set(rad, hgt, rad));
 				stumps.setMatrixAt(ns, M);
 				const j = 0.8 + r2 * 0.35;
-				stumps.setColorAt(ns++, col.setRGB(j, j, j));
+				stumps.setColorAt(ns++, burnt ? col.setRGB(0.3, 0.27, 0.25) : col.setRGB(j, j, j));
 			}
 		}
-		logs.count = nl; stumps.count = ns;
-		for (const m of [logs, stumps]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+		logs.count = nl; stumps.count = ns; limbs.count = nb; snags.count = nn;
+		for (const m of all) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
 	}
 
 	// the haze among the trunks: how many tall trees stand round you, eased
@@ -170,12 +277,13 @@ export function createForestFloor(scene, bay, city, real) {
 	const lum = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
 
 	function update(camera) {
-		if (!bay.loaded()) { logs.visible = stumps.visible = false; return; }
+		wild?.update(camera);
+		if (!bay.loaded()) { for (const m of all) m.visible = false; return; }
 		const x = camera.position.x, z = camera.position.z, agl = camera.position.y - H(x, z);
 		const now = performance.now() / 1000, dt = Math.min(0.2, now - lastT);
 		lastT = now;
 		// the logs round you, laid again as you move on (or as finer heights arrive)
-		logs.visible = stumps.visible = agl < 600;
+		for (const m of all) m.visible = agl < 600;
 		if (agl < 600) {
 			const n = bay.levels.filter(Boolean).length;
 			if (n !== levelsN) cells.clear();
@@ -197,5 +305,5 @@ export function createForestFloor(scene, bay, city, real) {
 		}
 	}
 
-	return { update, logs, stumps };
+	return { update, logs, stumps, limbs, snags, wild };
 }

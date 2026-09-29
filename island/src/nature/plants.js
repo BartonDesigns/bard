@@ -9,7 +9,7 @@
 // The leaves are cards cut from one painted atlas (leafAtlas), one cell per species.
 
 import * as THREE from 'three';
-import { Builder, V, tube, strip, nut } from '../world/vegetation.js';
+import { Builder, V, tube, strip } from '../world/vegetation.js';
 import { mulberry32 } from '../noise.js';
 
 // ---------- the leaf atlas: 4 x 2 cells of 256 px ----------
@@ -138,6 +138,11 @@ function stems(b, r, n, top, spread, col, rad = 0.035, twist = 0.3) {
 }
 
 const WOOD = new THREE.Color(0.42, 0.36, 0.3);
+// a bead: a berry or a flower head, eight faces
+function bead(b, c, rad, col) {
+	const ids = [V(rad, 0, 0), V(-rad, 0, 0), V(0, rad, 0), V(0, -rad, 0), V(0, 0, rad), V(0, 0, -rad)].map((d) => b.vert(c.clone().add(d), d.clone().normalize(), [0.5, 0.5], col, 0.8));
+	for (const [a, bb, cc] of [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]]) b.tri(ids[a], ids[bb], ids[cc]);
+}
 
 // coyote brush: a dense bright green mound to the ground; on the sea bluffs clipped low
 // and swept inland by the wind
@@ -198,7 +203,7 @@ export function toyon(seed, berries = false) {
 	dome(b, r, V(0, H * 0.3, 0), RX * 0.8, H * 0.28, 12, 0.8, { r: 0.13, g: 0.2, b: 0.09 }, CELL.toyon, 0.4);
 	if (berries) for (let i = 0; i < 16; i++) {
 		const th = r() * 6.28, ph = r() * 1.2, p = V(Math.sin(ph) * Math.cos(th) * RX, H * 0.58 + Math.cos(ph) * H * 0.45, Math.sin(ph) * Math.sin(th) * RX);
-		for (let k = 0; k < 5; k++) nut(w, p.clone().add(V((r() - 0.5) * 0.12, (r() - 0.5) * 0.08, (r() - 0.5) * 0.12)), 0.035, { r: 0.75, g: 0.08, b: 0.05 });
+		for (let k = 0; k < 5; k++) bead(w, p.clone().add(V((r() - 0.5) * 0.12, (r() - 0.5) * 0.08, (r() - 0.5) * 0.12)), 0.035, { r: 0.75, g: 0.08, b: 0.05 });
 	}
 	return { parts: [w.geometry(), b.geometry()], height: H };
 }
@@ -314,9 +319,9 @@ export function weed(seed, kind = 'thistle') {
 		for (let k = 0; k < (kind === 'thistle' ? 4 : 6); k++) {
 			const s = V(0, 0, 0).lerp(top, 0.45 + k * 0.09), ba = r() * 6.28, e = s.clone().add(V(Math.cos(ba) * 0.12, 0.08 + r() * 0.1, Math.sin(ba) * 0.12));
 			tube(b, [s, e], [0.005, 0.003], 3, STEM, (t) => 0.6 + t * 0.4);
-			nut(b, e, kind === 'thistle' ? 0.022 : 0.03, HEAD);
+			bead(b, e, kind === 'thistle' ? 0.022 : 0.03, HEAD);
 		}
-		nut(b, top, kind === 'fennel' ? 0.06 : 0.03, HEAD);
+		bead(b, top, kind === 'fennel' ? 0.06 : 0.03, HEAD);
 	}
 	return { parts: [b.geometry()], height: H };
 }

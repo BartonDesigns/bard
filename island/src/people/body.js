@@ -217,9 +217,9 @@ export function buildPerson(A, d) {
 	skinMat.userData.scalp = scalpU;
 	skinMat.onBeforeCompile = (sh) => {
 		sh.uniforms.uScalp = scalpU;
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nvarying float vScalp;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;');
-		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec4 uScalp;\nvarying float vScalp;')
-			.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uScalp.rgb * (0.8 + 0.4 * fract(sin(dot(floor(vUv * 900.0), vec2(12.9898, 78.233))) * 43758.5453)), smoothstep(0.2, 0.8, vScalp) * uScalp.w);')
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nvarying float vScalp;\nvarying vec2 vScalpUv;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;\nvScalpUv = uv;');
+		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec4 uScalp;\nvarying float vScalp;\nvarying vec2 vScalpUv;')
+			.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uScalp.rgb * (0.8 + 0.4 * fract(sin(dot(floor(vScalpUv * 900.0), vec2(12.9898, 78.233))) * 43758.5453)), smoothstep(0.2, 0.8, vScalp) * uScalp.w);')
 			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directDiffuse += reflectedLight.directDiffuse * vec3(0.16, 0.03, 0.0);');
 	};
 	P.skinMat = skinMat;

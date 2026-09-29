@@ -601,7 +601,7 @@ export function createIslandWorld() {
 			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen });
 			world.city = createCity(shared, scene, bayArea, world.real);
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
-			world.forestFloor = createForestFloor(scene, bayArea, world.city, world.real);
+			world.forestFloor = createForestFloor(scene, bayArea, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z) });
 			// the real houses close by, built whole with their rooms
 			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
 			// ...and the shops, cafés, restaurants, offices and places to play, walked into
