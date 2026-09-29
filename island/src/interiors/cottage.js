@@ -53,7 +53,7 @@ export function createCottageInteriors(scene, footprints, { isPhone = false, mat
 		t -= dt;
 		if (t > 0) return;
 		t = 0.5;
-		const near = list.map((f) => [Math.hypot(f.x - cam.x, f.z - cam.z), f]).filter((q) => q[0] < R && Math.abs(cam.y - f.y) < 60).sort((a, b) => a[0] - b[0]).slice(0, MAX);
+		const near = list.map((f) => [Math.hypot(f.x - cam.x, f.z - cam.z), f]).filter((q) => q[0] < R && Math.abs(cam.y - q[1].y) < 60).sort((a, b) => a[0] - b[0]).slice(0, MAX);
 		for (const [f, H] of live) if (!near.some((q) => q[1] === f)) { drop(f, H); live.delete(f); }
 		for (const [, f] of near) if (!live.has(f)) { live.set(f, build(f)); break; }
 	}

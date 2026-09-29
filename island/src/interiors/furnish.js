@@ -102,6 +102,66 @@ export function furnish(P, only = -1) {
 		const stand = (x, z, fx, fz) => seats.push({ x, z, y: y0, fx, fz, sit: false, h: 0, room: rm.id });
 		const art = (n) => { for (let k = 0; k < n; k++) against('art', 0.5 + rnd() * 0.6, 0.03, 0.01, { clear: 0, side: (s) => !s.ext || rnd() < 0.4 }); };
 		const clutter = (n) => { for (let k = 0; k < n; k++) against(rnd() < 0.5 ? 'boxes' : 'plant', 0.45, 0.4, 0.5 + rnd() * 0.4, { corner: true, clear: 0 }); };
+		// the seats round a table, where its drawing puts its chairs (housekit.js, kit.js)
+		function chairs(tb) {
+			const n = tb.chairs || 4, W2 = tb.w / 2, D2 = tb.d / 2, spots = [];
+			if (tb.type === 'cafeTable') spots.push([0, D2 + 0.25, -1], [0, -D2 - 0.25, 1]);
+			else { const per = Math.ceil(n / 2); for (let i = 0; i < per; i++) { const x = -W2 + tb.w * (i + 0.5) / per; spots.push([x, D2 + 0.14, -1]); if (i < n - per) spots.push([x, -D2 - 0.14, 1]); } }
+			const R = (x, z) => [[x, z], [z, -x], [-x, -z], [-z, x]][tb.rot];
+			for (const [lx, lz, f] of spots) { const [dx, dz] = R(lx, lz), [fx, fz] = R(0, f); seats.push({ x: tb.x + dx, z: tb.z + dz, y: y0, fx, fz, sit: true, h: 0.47, room: rm.id, table: true }); }
+		}
+		// a shop on the street, by its trade
+		function shopFit(r) {
+			const kind = r.shopType || 'cafe', front = sides.find((s) => s.axis === 'x' && s.n < 0), backS = sides.find((s) => s.axis === 'x' && s.n > 0);
+			const counter = against('shopCounter', Math.min(3.2, bw - 1.2), 0.7, 1.0, { side: (s) => s === backS || (s.axis === 'z' && s.walled), clear: 1.0, extra: { kind } });
+			if (counter) { const [fx, fz] = faceOf(counter.rot); stand(counter.x - fx * 0.55, counter.z - fz * 0.55, fx, fz); }
+			if (kind === 'cafe' || kind === 'restaurant' || kind === 'bar') {
+				if (kind === 'cafe') against('displayCase', 1.4, 0.6, 1.1, { clear: 0.8 });
+				const step = kind === 'restaurant' ? 2.2 : 1.8;
+				for (let z = r.z1 - 1.6; z > r.z0 + 2.4; z -= step) for (let x = r.x0 + 1.1; x < r.x1 - 0.9; x += step) {
+					const tb = standing(kind === 'cafe' ? 'cafeTable' : 'diningTable', x, z, kind === 'restaurant' ? 0.9 : 0.6, kind === 'restaurant' ? 0.9 : 0.6, 0.75, 0, 0.55, { chairs: 2 });
+					if (tb) chairs(tb);
+				}
+			} else if (kind === 'grocer' || kind === 'books' || kind === 'boutique' || kind === 'hardware') {
+				const tall = kind === 'books' ? 'bookcase' : 'shopShelf';
+				for (const s of sides) if (s.walled && s !== front && s.axis === 'z') for (let k = 0; k < 4; k++) against(tall, 1.2, 0.45, kind === 'books' ? 2.0 : 1.8, { side: (q) => q === s, clear: 0.9 });
+				for (let x = r.x0 + 2; x < r.x1 - 1.6; x += 2.2) standing(kind === 'grocer' ? 'produce' : kind === 'books' ? 'bookTable' : 'shopShelf', x, (r.z0 + r.z1) / 2 + 0.5, 0.9, Math.min(4, bd - 5), 1.2, 0, 0.7);
+				if (kind === 'books') { const ac = against('armchair', 0.8, 0.8, 0.85, { corner: true, clear: 0.6 }); if (ac) sitOn(ac, 1); }
+				for (let k = 0; k < 3; k++) stand(r.x0 + 1 + rnd() * (bw - 2), r.z0 + 2 + rnd() * (bd - 4), rnd() - 0.5, rnd() - 0.5);
+			} else if (kind === 'laundromat') {
+				for (const s of sides) if (s.walled && s !== front) for (let k = 0; k < 8; k++) against(k % 2 ? 'dryer' : 'washer', 0.7, 0.72, 0.95, { side: (q) => q === s, clear: 1.0 });
+				const be = standing('bench', (r.x0 + r.x1) / 2, r.z1 - 1.8, 1.6, 0.5, 0.45, 2, 0.3);
+				if (be) sitOn(be, 2, 0.45, 0.05);
+			} else if (kind === 'florist') {
+				for (let k = 0; k < 7; k++) against('flowers', 0.6, 0.5, 0.9, { clear: 0.7 });
+				for (let x = r.x0 + 1.5; x < r.x1 - 1; x += 1.6) standing('flowers', x, (r.z0 + r.z1) / 2, 0.8, 0.8, 0.9, 0, 0.6);
+			}
+			against('plant', 0.45, 0.45, 1.2, { corner: true, clear: 0 });
+			for (let x = r.x0 + 1.5; x < r.x1 - 1; x += 2.8) for (let z = r.z0 + 1.5; z < r.z1 - 1; z += 3) items.push({ type: 'ceilingLight', kind: kind === 'cafe' || kind === 'bar' ? 'pendant' : 'flush', level: 0, y: y0, x, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h });
+			lights.push([cx, y0 + L.h - 0.5, cz, rm.id]);
+		}
+		// the big halls: a region near the door fitted out, the rest left open
+		function bigFit(r) {
+			const u = r.type, x0 = Math.max(r.x0 + 1, P.door.x - 18), x1 = Math.min(r.x1 - 1, P.door.x + 18), z1 = r.z1 - 3, z0 = Math.max(r.z0 + 1, z1 - 30);
+			if (u === 'warehouse') {
+				for (let x = x0 + 1; x < x1 - 1; x += 3.4) standing('rack', x, (z0 + z1) / 2 - 1, 1.1, Math.min(14, z1 - z0 - 3), Math.min(5.5, L.h - 0.5), 0, 0.1);
+				for (let k = 0; k < 6; k++) standing('crates', x0 + rnd() * (x1 - x0), z1 - 1 - rnd() * 2, 1.2, 1.0, 0.6 + rnd() * 1.2, 0, 0.3);
+				standing('forklift', (x0 + x1) / 2 + 1.7, z1 - 2.2, 1.2, 2.4, 2.1, 0, 0.3);
+				stand((x0 + x1) / 2, z1 - 1, 0, -1);
+			} else if (u === 'store') {
+				for (let x = x0 + 1.5; x < x1 - 1; x += 2.6) standing('shopShelf', x, (z0 + z1) / 2 - 1, 0.9, Math.min(12, z1 - z0 - 4), 1.8, 0, 0.1);
+				for (let k = 0; k < 3; k++) { const it = standing('shopCounter', P.door.x - 4 + k * 3, z1 - 1, 1.6, 0.7, 1.0, 2, 0.4, { kind: 'grocer' }); if (it) stand(it.x, it.z - 0.8, 0, 1); }
+				for (let k = 0; k < 4; k++) stand(x0 + rnd() * (x1 - x0), z0 + rnd() * (z1 - z0), rnd() - 0.5, rnd() - 0.5);
+			} else if (u === 'parking' || u === 'garage2') {
+				for (let x = x0 + 1.4; x < x1 - 1.2; x += 2.7) for (const z of [z0 + 3, z1 - 3]) if (rnd() < 0.7) { const it = standing('car', x, z, 1.85, 4.6, 1.45, 0, 0.3); if (it) it.box = [x - 0.95, z - 2.3, x + 0.95, z + 2.3]; }
+			} else if (u === 'shed') {
+				against('workbench', 1.4, 0.6, 0.92, { clear: 0.6 }); against('shelves', 1.6, 0.5, 1.9, { clear: 0.5 }); against('bikes', 1.6, 0.5, 1.0, { clear: 0.4 }); clutter(3);
+			} else {
+				for (let x = x0 + 1; x < x1 - 1.6; x += 1.8) for (let z = z1 - 2; z > z0 + 1; z -= 2.6) { const it = standing('officeDesk', x, z, 1.5, 0.75, 0.76, 0, 0.45); if (it) seats.push({ x: x, z: z - 0.7, y: y0, fx: 0, fz: 1, sit: true, h: 0.47, room: rm.id, table: true }); }
+			}
+			for (let x = r.x0 + 3; x < r.x1 - 2; x += 6) for (let z = r.z0 + 3; z < r.z1 - 2; z += 6) items.push({ type: 'ceilingLight', kind: 'tube', level: 0, y: y0, x, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h });
+			lights.push([cx, y0 + L.h - 0.5, cz, rm.id]);
+		}
 		const t = rm.type;
 		if (t === 'living') {
 			if (victorian && !rm.flat) {
@@ -212,66 +272,6 @@ export function furnish(P, only = -1) {
 		} else if (t === 'warehouse' || t === 'store' || t === 'parking' || t === 'garage2' || t === 'shed' || t === 'office' || t === 'school') bigFit(rm);
 		else light();
 
-		// the seats round a table, where its drawing puts its chairs (housekit.js, kit.js)
-		function chairs(tb) {
-			const n = tb.chairs || 4, W2 = tb.w / 2, D2 = tb.d / 2, spots = [];
-			if (tb.type === 'cafeTable') spots.push([0, D2 + 0.25, -1], [0, -D2 - 0.25, 1]);
-			else { const per = Math.ceil(n / 2); for (let i = 0; i < per; i++) { const x = -W2 + tb.w * (i + 0.5) / per; spots.push([x, D2 + 0.14, -1]); if (i < n - per) spots.push([x, -D2 - 0.14, 1]); } }
-			const R = (x, z) => [[x, z], [z, -x], [-x, -z], [-z, x]][tb.rot];
-			for (const [lx, lz, f] of spots) { const [dx, dz] = R(lx, lz), [fx, fz] = R(0, f); seats.push({ x: tb.x + dx, z: tb.z + dz, y: y0, fx, fz, sit: true, h: 0.47, room: rm.id, table: true }); }
-		}
-		// a shop on the street, by its trade
-		function shopFit(r) {
-			const kind = r.shopType || 'cafe', front = sides.find((s) => s.axis === 'x' && s.n < 0), backS = sides.find((s) => s.axis === 'x' && s.n > 0);
-			const counter = against('shopCounter', Math.min(3.2, bw - 1.2), 0.7, 1.0, { side: (s) => s === backS || (s.axis === 'z' && s.walled), clear: 1.0, extra: { kind } });
-			if (counter) { const [fx, fz] = faceOf(counter.rot); stand(counter.x - fx * 0.55, counter.z - fz * 0.55, fx, fz); }
-			if (kind === 'cafe' || kind === 'restaurant' || kind === 'bar') {
-				if (kind === 'cafe') against('displayCase', 1.4, 0.6, 1.1, { clear: 0.8 });
-				const step = kind === 'restaurant' ? 2.2 : 1.8;
-				for (let z = r.z1 - 1.6; z > r.z0 + 2.4; z -= step) for (let x = r.x0 + 1.1; x < r.x1 - 0.9; x += step) {
-					const tb = standing(kind === 'cafe' ? 'cafeTable' : 'diningTable', x, z, kind === 'restaurant' ? 0.9 : 0.6, kind === 'restaurant' ? 0.9 : 0.6, 0.75, 0, 0.55, { chairs: 2 });
-					if (tb) chairs(tb);
-				}
-			} else if (kind === 'grocer' || kind === 'books' || kind === 'boutique' || kind === 'hardware') {
-				const tall = kind === 'books' ? 'bookcase' : 'shopShelf';
-				for (const s of sides) if (s.walled && s !== front && s.axis === 'z') for (let k = 0; k < 4; k++) against(tall, 1.2, 0.45, kind === 'books' ? 2.0 : 1.8, { side: (q) => q === s, clear: 0.9 });
-				for (let x = r.x0 + 2; x < r.x1 - 1.6; x += 2.2) standing(kind === 'grocer' ? 'produce' : kind === 'books' ? 'bookTable' : 'shopShelf', x, (r.z0 + r.z1) / 2 + 0.5, 0.9, Math.min(4, bd - 5), 1.2, 0, 0.7);
-				if (kind === 'books') { const ac = against('armchair', 0.8, 0.8, 0.85, { corner: true, clear: 0.6 }); if (ac) sitOn(ac, 1); }
-				for (let k = 0; k < 3; k++) stand(r.x0 + 1 + rnd() * (bw - 2), r.z0 + 2 + rnd() * (bd - 4), rnd() - 0.5, rnd() - 0.5);
-			} else if (kind === 'laundromat') {
-				for (const s of sides) if (s.walled && s !== front) for (let k = 0; k < 8; k++) against(k % 2 ? 'dryer' : 'washer', 0.7, 0.72, 0.95, { side: (q) => q === s, clear: 1.0 });
-				const be = standing('bench', (r.x0 + r.x1) / 2, r.z1 - 1.8, 1.6, 0.5, 0.45, 2, 0.3);
-				if (be) sitOn(be, 2, 0.45, 0.05);
-			} else if (kind === 'florist') {
-				for (let k = 0; k < 7; k++) against('flowers', 0.6, 0.5, 0.9, { clear: 0.7 });
-				for (let x = r.x0 + 1.5; x < r.x1 - 1; x += 1.6) standing('flowers', x, (r.z0 + r.z1) / 2, 0.8, 0.8, 0.9, 0, 0.6);
-			}
-			against('plant', 0.45, 0.45, 1.2, { corner: true, clear: 0 });
-			for (let x = r.x0 + 1.5; x < r.x1 - 1; x += 2.8) for (let z = r.z0 + 1.5; z < r.z1 - 1; z += 3) items.push({ type: 'ceilingLight', kind: kind === 'cafe' || kind === 'bar' ? 'pendant' : 'flush', level: 0, y: y0, x, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h });
-			lights.push([cx, y0 + L.h - 0.5, cz, rm.id]);
-		}
-		// the big halls: a region near the door fitted out, the rest left open
-		function bigFit(r) {
-			const u = r.type, x0 = Math.max(r.x0 + 1, P.door.x - 18), x1 = Math.min(r.x1 - 1, P.door.x + 18), z1 = r.z1 - 3, z0 = Math.max(r.z0 + 1, z1 - 30);
-			if (u === 'warehouse') {
-				for (let x = x0 + 1; x < x1 - 1; x += 3.4) standing('rack', x, (z0 + z1) / 2 - 1, 1.1, Math.min(14, z1 - z0 - 3), Math.min(5.5, L.h - 0.5), 0, 0.1);
-				for (let k = 0; k < 6; k++) standing('crates', x0 + rnd() * (x1 - x0), z1 - 1 - rnd() * 2, 1.2, 1.0, 0.6 + rnd() * 1.2, 0, 0.3);
-				standing('forklift', (x0 + x1) / 2 + 1.7, z1 - 2.2, 1.2, 2.4, 2.1, 0, 0.3);
-				stand((x0 + x1) / 2, z1 - 1, 0, -1);
-			} else if (u === 'store') {
-				for (let x = x0 + 1.5; x < x1 - 1; x += 2.6) standing('shopShelf', x, (z0 + z1) / 2 - 1, 0.9, Math.min(12, z1 - z0 - 4), 1.8, 0, 0.1);
-				for (let k = 0; k < 3; k++) { const it = standing('shopCounter', P.door.x - 4 + k * 3, z1 - 1, 1.6, 0.7, 1.0, 2, 0.4, { kind: 'grocer' }); if (it) stand(it.x, it.z - 0.8, 0, 1); }
-				for (let k = 0; k < 4; k++) stand(x0 + rnd() * (x1 - x0), z0 + rnd() * (z1 - z0), rnd() - 0.5, rnd() - 0.5);
-			} else if (u === 'parking' || u === 'garage2') {
-				for (let x = x0 + 1.4; x < x1 - 1.2; x += 2.7) for (const z of [z0 + 3, z1 - 3]) if (rnd() < 0.7) { const it = standing('car', x, z, 1.85, 4.6, 1.45, 0, 0.3); if (it) it.box = [x - 0.95, z - 2.3, x + 0.95, z + 2.3]; }
-			} else if (u === 'shed') {
-				against('workbench', 1.4, 0.6, 0.92, { clear: 0.6 }); against('shelves', 1.6, 0.5, 1.9, { clear: 0.5 }); against('bikes', 1.6, 0.5, 1.0, { clear: 0.4 }); clutter(3);
-			} else {
-				for (let x = x0 + 1; x < x1 - 1.6; x += 1.8) for (let z = z1 - 2; z > z0 + 1; z -= 2.6) { const it = standing('officeDesk', x, z, 1.5, 0.75, 0.76, 0, 0.45); if (it) seats.push({ x: x, z: z - 0.7, y: y0, fx: 0, fz: 1, sit: true, h: 0.47, room: rm.id, table: true }); }
-			}
-			for (let x = r.x0 + 3; x < r.x1 - 2; x += 6) for (let z = r.z0 + 3; z < r.z1 - 2; z += 6) items.push({ type: 'ceilingLight', kind: 'tube', level: 0, y: y0, x, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h });
-			lights.push([cx, y0 + L.h - 0.5, cz, rm.id]);
-		}
 	}
 	return P;
 }
