@@ -207,15 +207,17 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	// ---------- getting in and out ----------
 	const PAINTS = [[0.92, 0.92, 0.91], [0.05, 0.05, 0.06], [0.35, 0.36, 0.38], [0.66, 0.67, 0.69], [0.1, 0.2, 0.45], [0.55, 0.06, 0.06], [0.2, 0.3, 0.26]];
 	const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V3 = new THREE.Vector3(), E = new THREE.Euler();
-	function start() {
+	// (given: a car that is yours now, { kind, col, x, z, yaw } — one taken off its driver)
+	function start(given = null) {
 		const W = world();
 		if (!W || D.active) return;
 		const P = W.player.state, Vh = W.vehicles;
 		if (W.boat?.boarded?.()) return;
 		// which car: the parked one beside you, yours where you left it, or a new one
-		const near = Vh?.carToEnter(P.pos.x, P.pos.z), mine = Vh?.mine.car;
+		const near = given || Vh?.carToEnter(P.pos.x, P.pos.z), mine = Vh?.mine.car;
 		D.from = null;
-		if (near) { D.kind = near.kind; D.color.setRGB(...(near.col || [0.5, 0.5, 0.5])); D.from = { x: near.x, z: near.z, yaw: near.yaw }; if (near.id !== 'mine') W.street?.take(near.x, near.z); }
+		if (given) D.mode = 'free';
+		if (near) { D.kind = near.kind; D.color.setRGB(...(near.col || [0.5, 0.5, 0.5])); D.from = { x: near.x, z: near.z, yaw: near.yaw }; if (!given && near.id !== 'mine') W.street?.take(near.x, near.z); }
 		else if (mine && Math.hypot(mine.x - P.pos.x, mine.z - P.pos.z) < 40) { D.kind = mine.kind; D.color.copy(mine.color); D.from = { x: mine.x, z: mine.z, yaw: mine.yaw }; }
 		else { D.color.setRGB(...PAINTS[Math.floor(Math.random() * PAINTS.length)]); D.from = { x: P.pos.x - Math.cos(P.yaw) * 2.2, z: P.pos.z + Math.sin(P.yaw) * 2.2, yaw: P.yaw + Math.PI }; }
 		if (D.mode === 'assist' && !snap()) { hint('No road or trail here to follow: driving it yourself.', 2600); D.mode = 'free'; }

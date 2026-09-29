@@ -60,7 +60,9 @@ export function buildLandEcology(seed, opts = {}) {
 			likes: { core: r(), edge: r() * 0.6, gully: crown === 'weeping' ? 0.9 : r() * 0.6, ridge: crown === 'umbrella' ? 0.8 : r() * 0.4 },
 		});
 	}
-	const palm = { kind: 'palm', key: 'palm', genus: genus(), common: 'coconut palm', height: 7.5 + r() * 2 + P.exposure * 1.5, fronds: 14 + ((r() * 5) | 0), frondTint: leafTint(r, P), lean: 1 + P.exposure * 1.8 };
+	// (a cold world has none: the caller says so, or grows only the tall narrow kinds)
+	const grows = !opts.cold && !(opts.crowns && opts.crowns.every((c) => c === 'columnar'));
+	const palm = { kind: 'palm', key: 'palm', grows, genus: genus(), common: 'coconut palm', height: 7.5 + r() * 2 + P.exposure * 1.5, fronds: 14 + ((r() * 5) | 0), frondTint: leafTint(r, P), lean: 1 + P.exposure * 1.8 };
 	const understory = [
 		{ kind: 'fern', key: 'fern', genus: genus(), common: 'ground fern', tint: leafTint(r, P), size: 0.8 + P.rain * 0.4 },
 		{ kind: 'treefern', key: 'treefern', genus: genus(), common: 'tree fern', height: 2.2 + r() * 1.8 + P.rain, tint: leafTint(r, P), fronds: 9 + ((r() * 5) | 0) },
@@ -101,7 +103,8 @@ export function communityField(seed) {
 export function describeLand(L) {
 	const lines = [L.profile.thesis, '', 'Canopy:'];
 	for (const t of L.trees) lines.push(`  ${t.genus} (${t.common}, ${t.crown} crown) ~${t.height.toFixed(0)} m`);
-	lines.push(`  ${L.palm.genus} (${L.palm.common})`, 'Understory and ground:');
+	if (L.palm.grows !== false) lines.push(`  ${L.palm.genus} (${L.palm.common})`);
+	lines.push('Understory and ground:');
 	for (const u of [...L.understory, ...L.flowers]) lines.push(`  ${u.genus} (${u.common})`);
 	lines.push('Animals:');
 	for (const b of L.butterflies) lines.push(`  ${b.genus} (${b.common} butterfly) - pollinator, visits the flowers`);

@@ -90,6 +90,8 @@ import { createPeople } from './people/people.js';
 import { createGhost } from './people/ghost.js';
 import { createRagdolls } from './people/ragdoll.js';
 import { createImpacts } from './vehicles/impact.js';
+import { createCarjack } from './vehicles/carjack.js';
+import { createAvatar } from './people/avatar.js';
 import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
@@ -315,6 +317,10 @@ export function createIslandWorld() {
 	const ragdolls = createRagdolls({ world: () => world, isPhone });
 	HOOKS.ragdolls = ragdolls;
 	HOOKS.impacts = createImpacts({ people: () => people, ragdolls });
+	// taking a car off its driver (E beside one in the traffic): you, shown, haul them out
+	const carjack = createCarjack({ world: () => world, camera, drive, ragdolls, avatar: createAvatar({ scene, world: () => world }), hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.carjack = carjack;
+	addEventListener('keydown', (e) => { if ((e.key === 'e' || e.key === 'E') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && carjack.candidate()) { carjack.begin(); e.preventDefault(); } });
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
@@ -872,7 +878,7 @@ export function createIslandWorld() {
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
 		else if (W.boardwalk?.ride(dt, time)) drive.stop();
-		else if (!drive.update(dt)) W.player.update(dt, time);
+		else if (!carjack.update(dt, time) && !drive.update(dt)) W.player.update(dt, time);
 		// a director's camera (trailer/): posed after the player moves, before anything reads it
 		HOOKS.cine?.(camera, dt, time);
 		W.fields?.update(dt, camera);
@@ -1345,6 +1351,9 @@ if (typeof window !== 'undefined') {
 		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
 		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),
 		ragdolls: () => HOOKS.ragdolls?.info(),
+		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
+		jack: () => HOOKS.carjack?.begin(),
+		jackable: () => !!HOOKS.carjack?.candidate(),
 		// (tests: run the fallen on by n steps of 1/60 s)
 		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
 		// drive the roads: Crysis.drive.start(), .stop(), .state

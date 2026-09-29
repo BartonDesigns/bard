@@ -61,7 +61,8 @@ export function createRagdolls({ world, isPhone }) {
 	// ---------- the world round the fallen ----------
 	const N = 28, CELL = 1;
 	let ground = null, gx = 1e9, gz = 1e9;
-	const solids = [], cars = new Map();
+	// (a car someone is pulled out of is left out for a moment: they start inside it)
+	const solids = [], cars = new Map(), ignore = new Map();
 	function regrid(cx, cz) {
 		const Wd = world(), I = Wd.island;
 		const floorAt = (x, z) => Math.max(I.heightAt(x, z), I.extraFloor ? I.extraFloor(x, z, 1e4) : -1e9);
@@ -87,6 +88,7 @@ export function createRagdolls({ world, isPhone }) {
 		if (mine && Vh.mine.driving) list.push({ id: 'mine', kind: mine.kind, x: mine.x, y: mine.y, z: mine.z, yaw: mine.yaw });
 		for (const c of list) {
 			const key = c.id || c.kind + c.x.toFixed(1) + c.z.toFixed(1);
+			if (ignore.has(key)) continue;
 			seen.add(key);
 			const S = specOf(c.kind), h = (S.H - (S.clear ?? 0.3)) / 2;
 			const pos = { x: c.x, y: (c.y ?? 0) + (S.clear ?? 0.3) + h, z: c.z }, rot = { x: 0, y: Math.sin(c.yaw / 2), z: 0, w: Math.cos(c.yaw / 2) };
@@ -189,7 +191,8 @@ export function createRagdolls({ world, isPhone }) {
 
 	// ---------- a blow ----------
 	// how: { point: Vector3 where it struck, vel: its velocity (m/s), mass: its weight (kg,
-	// Infinity for a wall or a train), lift: how much of it throws upward (a bonnet's edge) }
+	// Infinity for a wall or a train), lift: how much of it throws upward (a bonnet's edge),
+	// ignore: the id of a car to leave out for a moment }
 	function hit(P, how, onRest) {
 		if (!P || P.ragdoll) return false;
 		if (live.length >= MAX) { const old = live.shift(); finish(old); }
@@ -201,6 +204,7 @@ export function createRagdolls({ world, isPhone }) {
 		if (!P.ragdoll) return;
 		const c = P.root.getWorldPosition(new THREE.Vector3());
 		if (!live.length || Math.hypot(c.x - gx, c.z - gz) > 6) regrid(c.x, c.z);
+		if (how.ignore) ignore.set(how.ignore, 1.2);
 		const D = build(P);
 		for (const m of P.meshes || []) m.frustumCulled = false;
 		tone(D, 1);
@@ -239,6 +243,7 @@ export function createRagdolls({ world, isPhone }) {
 		if (!live.length || !W3) return;
 		let cx = 0, cz = 0;
 		for (const L of live) { const t = L.D.parts.pelvis.rb.translation(); cx += t.x / live.length; cz += t.z / live.length; }
+		for (const [k, v] of ignore) if (v - dt <= 0) ignore.delete(k); else ignore.set(k, v - dt);
 		if (Math.hypot(cx - gx, cz - gz) > 8) regrid(cx, cz);
 		syncCars(cx, cz);
 		acc += Math.min(dt, 0.1);

@@ -812,9 +812,11 @@ export function createWater(scene, shared, opts = {}) {
 							if (u < 0 || u > 1 || v < 0 || v > 1) continue;
 							const X = rx + ex * u, Z = rz + ez * u, w = L.w[k] + (L.w[k + 1] - L.w[k]) * v;
 							const sin = Math.abs(den) / (el * Math.hypot(fx, fz)), hwR = r.w / 2 + 1.2;
-							const span = Math.min(70, (w / 2 + (L.conc ? 4 : 7)) / Math.max(0.35, sin));
+							// (a footbridge only just clears the stream: a trail runs on the ground either side)
+							const foot = r.cls === 'footway' || r.cls === 'path' || r.cls === 'cycleway' || r.cls === 'pedestrian';
+							const span = Math.min(foot ? 16 : 70, (w / 2 + (L.conc ? 4 : foot ? 2.5 : 7)) / Math.max(0.35, sin));
 							const dk = Math.round(X) + ',' + Math.round(Z), ux = ex / el, uz = ez / el;
-							if (!decks.has(dk)) { decks.set(dk, { x: X, z: Z, ux, uz, span, hw: hwR, foot: r.cls === 'footway' || r.cls === 'path' || r.cls === 'cycleway' || r.cls === 'pedestrian', own: !r.bridge, y: B(Math.max(0, Math.min(WN, (X - X0) / ts)), Math.max(0, Math.min(WN, (Z - Z0) / ts))) }); decksDirty = true; }
+							if (!decks.has(dk)) { decks.set(dk, { x: X, z: Z, ux, uz, span, hw: hwR, foot, own: !r.bridge, y: B(Math.max(0, Math.min(WN, (X - X0) / ts)), Math.max(0, Math.min(WN, (Z - Z0) / ts))) }); decksDirty = true; }
 							const R = span + hwR + 2;
 							const a0 = Math.max(0, Math.floor((X - R - X0) / ts)), a1 = Math.min(WN, Math.ceil((X + R - X0) / ts)), b0 = Math.max(0, Math.floor((Z - R - Z0) / ts)), b1 = Math.min(WN, Math.ceil((Z + R - Z0) / ts));
 							for (let b = b0; b <= b1; b++) for (let a = a0; a <= a1; a++) {
@@ -856,8 +858,31 @@ export function createWater(scene, shared, opts = {}) {
 			quad([P(a1, c0, y0), P(a1, c1, y0), P(a1, c1, y1), P(a1, c0, y1)], side);
 			quad([P(a0, c1, y0), P(a1, c1, y0), P(a1, c0, y0), P(a0, c0, y0)], side);
 		};
+		// a footbridge's planks follow the ground from bank to bank, set into it at the ends,
+		// rather than one flat slab held at the crossing's height
+		const strip = (D, c0, c1, lo, hi, y, c) => {
+			const n = Math.max(2, Math.ceil(D.span / 1.5)), P = (al, ac, yy) => [D.x + D.ux * al - D.uz * ac, yy, D.z + D.uz * al + D.ux * ac];
+			for (let k = 0; k < n; k++) {
+				const a0 = -D.span + 2 * D.span * k / n, a1 = -D.span + 2 * D.span * (k + 1) / n, y0 = y(a0), y1 = y(a1);
+				quad([P(a0, c0, y0 + hi), P(a0, c1, y0 + hi), P(a1, c1, y1 + hi), P(a1, c0, y1 + hi)], c);
+				quad([P(a0, c0, y0 + lo), P(a1, c0, y1 + lo), P(a1, c0, y1 + hi), P(a0, c0, y0 + hi)], c);
+				quad([P(a1, c1, y1 + lo), P(a0, c1, y0 + lo), P(a0, c1, y0 + hi), P(a1, c1, y1 + hi)], c);
+			}
+		};
 		for (const D of decks.values()) {
 			if (!D.own || Math.hypot(D.x - cx, D.z - cz) > 2500) continue;
+			if (D.foot && !D.walk && !D.wood) {
+				const at = (al) => { const x = D.x + D.ux * al, z = D.z + D.uz * al; return (ground ? ground(x, z) : heightAt(x, z)) ?? D.y; };
+				// (over the water it rides at the crossing's own level, easing down to the banks)
+				const mid = deckTop(D) - 0.08, y = (al) => Math.max(at(al), mid - Math.abs(al) * 0.3) + 0.1, rail = [0.36, 0.28, 0.2];
+				strip(D, -D.hw, D.hw, -0.4, 0, y, [0.42, 0.34, 0.24]);
+				for (const sd of [-1, 1]) {
+					const c0 = sd > 0 ? D.hw : -D.hw - 0.12, c1 = sd > 0 ? D.hw + 0.12 : -D.hw;
+					strip(D, c0, c1, 0.85, 0.97, y, rail);
+					for (let al = -D.span + 0.1; al < D.span; al += 2.4) box(D, al - 0.06, al + 0.06, c0, c1, y(al) - 0.3, y(al) + 0.97, rail, rail);
+				}
+				continue;
+			}
 			const top = deckTop(D), asph = D.foot || D.wood ? [0.42, 0.34, 0.24] : [0.16, 0.16, 0.17], conc = D.wood ? [0.36, 0.28, 0.2] : [0.55, 0.54, 0.5];
 			box(D, -D.span, D.span, -D.hw, D.hw, top - (D.foot ? 0.35 : 0.9), top, asph, conc);
 			for (const sd of [-1, 1]) box(D, -D.span, D.span, sd > 0 ? D.hw : -D.hw - 0.3, sd > 0 ? D.hw + 0.3 : -D.hw, top - 0.2, top + (D.foot ? 1.05 : 0.85), conc, conc);

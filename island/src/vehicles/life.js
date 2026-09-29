@@ -300,6 +300,44 @@ export function createLife({ scene, world, camera, isPhone }) {
 		begin('leave', car, o);
 	}
 
+	// ---------- taken out of their car ----------
+	// the driver of a car in the traffic, handed over (vehicles/carjack.js): out of their
+	// seat and no longer the traffic's; whoever else was in the car simply gone
+	function pull(c) {
+		const bs = seated.get(c);
+		if (!bs || !bs.length) return null;
+		seated.delete(c); c.seated = false;
+		const [b, ...rest] = bs;
+		for (const o of rest) { o.busy = false; o.P.root.visible = false; }
+		// (as they sat: the car's frame on them)
+		b.wrap.matrix.copy(c.matrix); b.wrap.matrixWorld.copy(c.matrix);
+		b.P.root.updateMatrixWorld(true);
+		return b;
+	}
+	// back on their feet after it (at x, z): up, and away from `from` at a run, then gone
+	const fleeing = [];
+	function flee(b, x, z, from) {
+		const W = world();
+		let ax = x - from.x, az = z - from.z;
+		const l = Math.hypot(ax, az) || 1; ax /= l; az /= l;
+		b.mode = 'walk';
+		b.wrap.matrix.copy(I); b.wrap.matrixWorld.copy(I);
+		b.M.place(x, groundAt(W, x, z), z, Math.atan2(ax, az));
+		b.M.stand(); b.M.setPose('rest'); b.M.want.run = 1;
+		b.P.root.visible = true; fadePerson(b.P, 1);
+		fleeing.push({ b, t: 0, to: [x + ax * 45, z + az * 45], fade: 1 });
+	}
+	function runFleeing(dt, t) {
+		for (let i = fleeing.length - 1; i >= 0; i--) {
+			const F = fleeing[i];
+			F.t += dt;
+			step(F.b, dt, t, null);
+			const d = walkTo(F.b, F.to[0], F.to[1]);
+			F.b.M.want.speed *= 2.2;
+			if (d < 1 || F.t > 14) { F.fade -= dt; fadePerson(F.b.P, F.fade); if (F.fade <= 0) { F.b.busy = false; F.b.P.root.visible = false; F.b.M.want.run = 0; fleeing.splice(i, 1); } }
+		}
+	}
+
 	let hooked = null, lastErr = null;
 	function update(dt, t) {
 		const W = world();
@@ -313,6 +351,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!A && !loading) { loading = true; loadPeopleAssets().then((a) => { A = a; }).catch(() => {}); }
 		if (!A) return;
 		traffic(dt, t, cam);
+		if (fleeing.length) runFleeing(dt, t);
 		scanT -= dt; errandT -= dt;
 		try {
 			if (scanT < 0) { scanT = 1.5; scan(cam); }
@@ -336,5 +375,5 @@ export function createLife({ scene, world, camera, isPhone }) {
 	// what cars there are that are not in the street's own lists (for bumping into)
 	const moving = () => episodes.filter((E) => E.phase === 'pull-out' || E.phase === 'drive-in' || E.phase === 'park').map((E) => ({ kind: E.car.kind, x: E.pos[0], z: E.pos[1], y: E.matrix.elements[13], yaw: E.yaw }));
 	const info = () => ({ err: lastErr, t: +(buildT || 0).toFixed(1), episodes: episodes.map((E) => E.kind + ':' + E.phase + ':' + E.car.kind), drivers: [...seated.values()].reduce((a, b) => a + b.length, 0), bodies: bodies.size });
-	return { update, draw, moving, info, episodes, begin, ownerOf, present, group };
+	return { update, draw, moving, info, episodes, begin, ownerOf, present, group, pull, flee };
 }

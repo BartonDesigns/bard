@@ -625,11 +625,23 @@ function leafOf(P, second) {
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, mix);
 }
+// near: { r, cap } for a low plant (ferns): inside r of the camera it shrinks away to
+// nothing, and out to 3 r it is held to at most cap times its size, so none fills the view
 export function swayMaterial(params, shared, stiff) {
+	const { near = null, ...rest } = params;
+	params = rest;
 	const m = new THREE.MeshStandardMaterial(Object.assign({ vertexColors: true, roughness: 0.85, metalness: 0, alphaToCoverage: !!params.alphaTest }, params));
 	(shared.uLeafT ||= { value: new THREE.Vector4() }).value.copy(leafOf(shared.planet));
 	(shared.uLeafT2 ||= { value: new THREE.Vector4() }).value.copy(leafOf(shared.planet, true));
-	const hook = (sh) => {
+	const nearGLSL = near ? `
+			#ifdef USE_INSTANCING
+			{
+				float nd = length((modelMatrix * vec4(ip, 1.0)).xz - cameraPosition.xz), isz = length(instanceMatrix[1].xyz);
+				float capK = min(1.0, mix(${near.cap.toFixed(2)}, 99.0, smoothstep(${near.r.toFixed(2)}, ${(near.r * 3).toFixed(2)}, nd)) / max(isz, 0.01));
+				transformed *= capK * smoothstep(${(near.r * 0.35).toFixed(2)}, ${near.r.toFixed(2)}, nd);
+			}
+			#endif` : '';
+	const hook = (sh, eye = false) => {
 		sh.uniforms.uTime = shared.uTime; sh.uniforms.uWind = shared.uWind; sh.uniforms.uBass = shared.uBass; sh.uniforms.uGust = shared.uGust; sh.uniforms.uWindT = shared.uWindT;
 		sh.vertexShader = 'attribute float aSway; uniform float uTime, uWind, uBass, uGust, uWindT;\nvarying float vGroundAO;\n' + sh.vertexShader.replace('#include <begin_vertex>', `
 			#include <begin_vertex>
@@ -648,12 +660,12 @@ export function swayMaterial(params, shared, stiff) {
 			float flutter = 0.006 + uWind * 0.035 + uGust * 0.06;
 			float wt = uWindT * 2.2;
 			transformed.x += (sin(wt * 1.25 + ph) * push + uGust * 0.25 + sin(uTime * 3.9 + ph * 2.0 + position.y * 1.7) * flutter) * sw;
-			transformed.z += (cos(wt * 1.05 + ph * 1.3) * push * 0.7 + uGust * 0.1 + cos(uTime * 4.3 + position.x * 1.3) * flutter * 0.8) * sw;`);
+			transformed.z += (cos(wt * 1.05 + ph * 1.3) * push * 0.7 + uGust * 0.1 + cos(uTime * 4.3 + position.x * 1.3) * flutter * 0.8) * sw;${eye ? nearGLSL : ''}`);
 	};
 	// leaves are thin: light both faces from the outward normal, as sunlight through
 	// a leaf does, instead of flipping the back face dark
 	m.onBeforeCompile = (sh) => {
-		hook(sh);
+		hook(sh, true);
 		addPulse(sh);
 		// another world's leaves: whatever is green takes the planet's leaf colour
 		sh.uniforms.uLeafT = shared.uLeafT; sh.uniforms.uLeafT2 = shared.uLeafT2;
@@ -680,7 +692,7 @@ export function swayMaterial(params, shared, stiff) {
 	}`);
 		if (params.side === THREE.DoubleSide) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal = normalize(vNormal);');
 	};
-	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '');
+	m.customProgramCacheKey = () => 'sway' + stiff + (params.map ? 'm' : '') + (near ? 'n' + near.r + ',' + near.cap : '');
 	let depth = null;
 	if (params.alphaTest) {
 		depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: params.map, alphaTest: params.alphaTest });
@@ -708,7 +720,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 		frond: swayMaterial({ map: tex.frond, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75 }, shared, 1),
 		leaf: swayMaterial({ map: tex.leaf, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8),
 		banana: swayMaterial({ map: tex.banana, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }, shared, 1.2),
-		fern: swayMaterial({ map: tex.fern, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }, shared, 1.2),
+		fern: swayMaterial({ map: tex.fern, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.2 } }, shared, 1.2),
 		stone: { material: (() => {
 			const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: false });
 			m.onBeforeCompile = (sh) => {
@@ -749,7 +761,9 @@ export function createVegetation(island, shared, scene, flora = null) {
 	};
 	const plantK = shared.planet?.trees ?? 1;
 	// no coconut palms on a cold, burnt, poisoned or bare world (a temperate one keeps a few)
-	const palmK = { boreal: 0, ash: 0, fungal: 0, barren: 0, temperate: 0.35 }[shared.planet?.flora] ?? 1;
+	// (nor on any world with lasting snow, whatever its flora)
+	const cold = (shared.planet?.snow ?? 0) >= 0.5 || flora?.palm?.grows === false;
+	const palmK = cold ? 0 : { boreal: 0, ash: 0, fungal: 0, barren: 0, temperate: 0.35 }[shared.planet?.flora] ?? 1;
 	const species = [
 		// densities are the chance a sample at `spacing` holds a plant: random within a
 		// patch, but the patches follow the land (see eco below), so plants clump
@@ -921,6 +935,8 @@ export function createVegetation(island, shared, scene, flora = null) {
 			// ...and grows as its biome here does: thicker in an oasis, thinner in snow
 			const bio = island.biomes?.at(px, pz), snowy = island.biomes?.snowAt(px, pz, h) || 0;
 			const here = sp.kind === 'stone' ? 1 : plantK * (bio ? 1 + ((shared.planet?.alt?.trees ?? 1) - 1) * bio.alt : 1) * (1 - snowy * (sp.tree ? 0.5 : 0.9));
+			// a palm never stands in snow, nor on a world's cold side
+			if (sp.key === 'palm' && (snowy > 0.02 || (bio?.cold ?? 0) > 0.4)) continue;
 			if (rnd() >= Math.min(1, sp.density(eco(px, pz, h, sl, m))) * Math.min(1, here)) continue;
 			const key = Math.floor(px / CELL) + ',' + Math.floor(pz / CELL);
 			let c = cells.get(key);

@@ -345,6 +345,8 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			const l = c.l, L = l.L;
 			const toEnd = c.dir > 0 ? (1 - c.u) * L : c.u * L;
 			let target = toEnd < 12 ? Math.max(0, (toEnd - 3) * 0.8) : c.vmax;
+			// (held: someone is at the driver's door, vehicles/carjack.js)
+			if (c.held) target = 0;
 			if (c.px !== undefined) {
 				const hx = Math.sin(c.yaw), hz = Math.cos(c.yaw), half = (SPEC[c.kind] || SPEC.sedan).L / 2;
 				for (const o of stops) {
@@ -387,7 +389,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	let avoid = null;
 	// a car taken from its space (you drove it off): gone from there for good
 	const take = (x, z) => { taken.add(spot(x, z)); splitT = -1e9; };
-	const api = { update, group, cars, parked, parkedNear, hide, take, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
+	// a car out of the traffic for good (taken off its driver)
+	const remove = (c) => { const i = cars.indexOf(c); if (i >= 0) cars.splice(i, 1); };
+	const api = { update, group, cars, parked, parkedNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
 	return api;
 }
 

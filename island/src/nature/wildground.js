@@ -86,7 +86,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	const fogU = { value: 0 };
 	const atlas = PL.leafAtlas();
 	const leafM = swayMaterial({ map: atlas, alphaTest: 0.32, side: THREE.DoubleSide, roughness: 0.85 }, shared, 0.7);
-	const fernM = swayMaterial({ map: atlas, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.8 }, shared, 0.9);
+	// (a fern at your feet shrinks away rather than filling the view)
+	const fernM = swayMaterial({ map: atlas, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.1 } }, shared, 0.9);
 	const woodM = swayMaterial({ roughness: 0.92 }, shared, 0.6);
 	const bladeM = swayMaterial({ side: THREE.DoubleSide, roughness: 0.9 }, shared, 1.4);
 	const rockM = rockMaterial(fogU);
