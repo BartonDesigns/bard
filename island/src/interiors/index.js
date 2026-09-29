@@ -154,7 +154,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	}
 	// which levels are full: all of a low building's; the one you're on and those either
 	// side of it (and the ground floor) of a tall one
-	const wantFull = (B, cur) => (k) => B.P.levels.length <= 5 || k === 0 || Math.abs(k - cur) <= 1;
+	const wantFull = (B, cur) => (k) => B.P.levels.length <= 5 || k === 0 || Math.abs(k - cur) <= (isPhone ? 0 : 1);
 	function* levelsFor(B, cur) {
 		const want = wantFull(B, cur);
 		for (let k = 0; k < B.P.levels.length; k++) {

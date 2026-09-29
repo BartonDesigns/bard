@@ -11,7 +11,7 @@
 // the wall. Runners move up as far as the batter does, and walks push them along.
 
 import { makeKit, clamp, rand } from './kit.js';
-import { fieldVenue, fieldStage, figure } from './fieldgame.js';
+import { fieldVenue, fieldStage, player, TEAMS } from './fieldgame.js';
 import { SWING, TYPES, fly, carry, pitchVelocity, breakStep, offTheBat } from './batting.js';
 
 const MAX_PITCHES = 30;
@@ -26,8 +26,9 @@ export const GAME = {
 		const { base, mound, fence } = F.field.d, s = base / 27.43, q = base / Math.SQRT2, big = fence > 80;
 		const K = makeKit(ctx, GAME, { accent: '#ff6b6b', pose: F.pose, dist: 1, span: [fence * 1.5, fence + 4, 12], flat: 2.5, backdrop: 'meadow', dome: fence + 40 });
 		const { THREE } = ctx;
-		let ball, bat, pitcher, catcher, zone, marker, board, S = {};
+		let ball, bat, pitcher, catcher, batter, zone, marker, board, S = {};
 		const fielders = [], runners = [];
+		const tv1 = new THREE.Vector3(), tv2 = new THREE.Vector3(), tv3 = new THREE.Vector3(), tv4 = new THREE.Vector3();
 		// where the defence stands (the frame's metres: the plate at the origin, the mound at -z)
 		const POS = [[18 * s, -24 * s], [8 * s, -36 * s], [-8 * s, -36 * s], [-18 * s, -24 * s], [-fence * 0.42, -fence * 0.68], [0, -fence * 0.8], [fence * 0.42, -fence * 0.68]];
 		const BASES = [[q, -q], [0, -2 * q], [-q, -q], [0, 0]];
@@ -35,19 +36,23 @@ export const GAME = {
 		function build() {
 			F.lay(K);
 			ball = K.ball(0.037, K.mat('#f7f4ee', { rough: 0.5, glow: 0.3 }), 0, 1, -mound);
-			bat = K.group(); bat.position.set(-0.55, K.groundY(0, 0) + 1.0, 0.1);
-			K.cyl(0.03, 0.018, 0.85, K.mat('#c8a060', { rough: 0.4 }), 0, 0.42, 0, bat, 10);
-			const home = { shirt: '#1d3f7a', pants: '#e8e4d8', cap: '#1d3f7a' };
-			pitcher = figure(K, home);
+			// the home side in the field, the visitors at bat: real people in their kits
+			pitcher = player(K, TEAMS.home, { sport: 'baseball', number: 21, extra: { glove: true }, seed: 1 });
 			pitcher.g.position.set(0, K.groundY(0, -mound) + 0.25 * s, -mound);
 			pitcher.g.rotation.y = Math.PI;
-			catcher = figure(K, { shirt: '#2a2a2a', pants: '#e8e4d8', cap: '#1d3f7a' });
-			catcher.g.position.set(0, K.groundY(0, 1.2), 1.2); catcher.g.scale.set(1, 0.6, 1);
-			// you, at the plate: a right-handed batter, side on to the pitcher
-			const batter = figure(K, { shirt: '#c8322c', pants: '#e8e4d8', cap: '#c8322c' });
+			pitcher.act('pitch', 0);
+			catcher = player(K, TEAMS.home, { sport: 'baseball', number: 8, extra: { helmet: true, glove: true }, seed: 2 });
+			catcher.g.position.set(0, K.groundY(0, 1.2), 1.2);
+			catcher.act('crouch', 0);
+			// you, at the plate: a right-handed batter, side on to the pitcher, the bat in hand
+			batter = player(K, TEAMS.away, { sport: 'baseball', number: 34, extra: { helmet: true }, seed: 3 });
 			batter.g.position.set(-0.8, K.groundY(-0.8, 0), 0.05); batter.g.rotation.y = -Math.PI / 2;
-			for (const [x, z] of POS) { const f = figure(K, home); f.g.position.set(x, K.groundY(x, z), z); f.g.rotation.y = Math.PI; f.home = [x, z]; fielders.push(f); }
-			for (let i = 0; i < 3; i++) { const r = figure(K, { shirt: '#c8322c', pants: '#e8e4d8', cap: '#c8322c' }); r.g.visible = false; runners.push(r); }
+			batter.act('bat', 0);
+			bat = K.group();
+			const b0 = K.cyl(0.018, 0.034, 0.86, K.mat('#c8a060', { rough: 0.4 }), 0, 0.33, 0, bat, 10);
+			b0.castShadow = true;
+			POS.forEach(([x, z], i) => { const f = player(K, TEAMS.home, { sport: 'baseball', number: [4, 13, 7, 2, 44, 9, 17][i], extra: { glove: true }, seed: 10 + i }); f.g.position.set(x, K.groundY(x, z), z); f.g.rotation.y = Math.PI; f.home = [x, z]; fielders.push(f); });
+			for (let i = 0; i < 3; i++) { const r = player(K, TEAMS.away, { sport: 'baseball', number: [5, 11, 27][i], extra: { helmet: true }, seed: 20 + i }); r.g.visible = false; runners.push(r); }
 			// the strike zone, faint over the plate, and where the last pitch crossed it
 			const zy = K.groundY(0, 0);
 			zone = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.44, 0.55)), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
@@ -168,10 +173,22 @@ export const GAME = {
 			for (let i = 0; i < 3; i++) { const r = runners[i], [x, z] = BASES[i]; r.g.visible = S.bases[i]; r.g.position.set(x + (i === 1 ? 0 : Math.sign(x) * -1.2), K.groundY(x, z), z + 0.8); }
 			// the pitcher's windup and delivery
 			const wind = S.state === 'wait' ? clamp((S.t - 1.1) / 0.7, 0, 1) : S.state === 'pitch' ? 1 : 0;
-			pitcher.arms[1].rotation.x = S.state === 'pitch' ? clamp(1 - S.t * 4, -1, 1) * -2.8 + 1.2 : -wind * 2.8;
-			// the bat comes round over SWING seconds and follows through
+			pitcher.act('pitch', S.state === 'pitch' ? Math.min(1, 0.66 + S.t * 0.8) : wind * 0.66);
+			// the swing comes round over SWING seconds and follows through; the bat rides the
+			// batter's hands (the top hand's grip, pointed from the bottom hand through it)
 			const sw = S.swingT < 0 ? 0 : clamp(S.swingT / (SWING * 1.6), 0, 1);
-			bat.rotation.set(0, -sw * 3.4, 0.9 - sw * 0.75);
+			batter.act('bat', sw > 0 ? 0.35 + sw * 0.65 : 0.12 + Math.sin(K.time * 2.2) * 0.06);
+			const hL = batter.at('wrist.L', tv1), hR = batter.at('wrist.R', tv2);
+			if (hL && hR) {
+				K.local(hL, hL); K.local(hR, hR);
+				const dir = tv3.subVectors(hR, hL);
+				// (the barrel goes on up past the top hand, tipped back over the shoulder)
+				if (dir.lengthSq() < 0.004) dir.set(0, 1, 0);
+				dir.normalize().add(tv4.set(0, 0.9 * (1 - sw), 0)).normalize();
+				bat.position.copy(hR).addScaledVector(dir, -0.12);
+				bat.quaternion.setFromUnitVectors(tv4.set(0, 1, 0), dir);
+			} else { bat.position.set(-0.55, K.groundY(0, 0) + 1.0, 0.1); bat.rotation.set(0, -sw * 3.4, 0.9 - sw * 0.75); }
+			for (const f of fielders) f.act(S.state === 'pitch' || (S.state === 'wait' && S.t > 1.2) ? 'ready' : null);
 			ball.position.copy(S.p);
 			marker.visible = !!S.cross && S.state !== 'fly';
 			// the view: from behind the plate, over the catcher, then up and after a ball in the air
@@ -197,6 +214,7 @@ export const GAME = {
 			const c = S.call;
 			S.state = 'after'; S.t = 0;
 			if (c.foul) { if (S.strikes < 2) S.strikes++; K.say('Foul ball', 900); S.log.push('F'); hud(); return; }
+			F.cheer(c.foul ? 0.3 : c.d >= fence ? 1 : 0.7);
 			if (c.d >= fence) { S.hits++; S.hr++; S.longest = Math.max(S.longest, c.d); const r = advance(4); K.say(r > 1 ? `Home run! ${r} runs score` : 'Home run!', 1600); K.tone(523, 0.15, { vol: 0.1 }); K.tone(659, 0.15, { vol: 0.1, at: 0.15 }); K.tone(784, 0.4, { vol: 0.1, at: 0.3 }); S.log.push('HR'); newBatterSoon(); return; }
 			// a fly ball a fielder can run under is caught; a grounder at an infielder is an out
 			const reach = (f) => Math.hypot(f.home[0] - c.x, f.home[1] - c.z);

@@ -36,17 +36,16 @@ export const GAME = {
 			deck = K.group(rider);
 			K.box(0.2, 0.03, 0.8, '#1a1a1a', 0, 0.09, 0, deck);
 			for (const z of [-0.26, 0.26]) for (const x of [-0.08, 0.08]) K.cyl(0.028, 0.028, 0.03, '#f4f4f0', x, 0.035, z, deck, 10).rotation.z = Math.PI / 2;
-			const body = K.group(rider);
-			K.cyl(0.11, 0.13, 0.62, '#d1323a', 0, 0.95, 0, body);
-			K.cyl(0.07, 0.07, 0.6, '#27324a', -0.07, 0.4, 0.06, body);
-			K.cyl(0.07, 0.07, 0.6, '#27324a', 0.07, 0.4, -0.06, body);
-			K.ball(0.11, '#8a5a3a', 0, 1.38, 0, body);
-			body.rotation.y = Math.PI / 2;
-			S.body = body;
+			// the skater: a real person dressed to skate, side-on to the line
+			const sk = K.person({ parent: rider, seed: 51, age: 19, style: (d, r) => ({ gen: 'z', top: { kind: 'tee', col: ['#b3162b', '#f2dc8a', '#1f8a4c', '#f3f2ee'][Math.floor(r() * 4)], acc: '#1b1b1d', acc2: '#2354c7', pat: 'graphic', fit: 'oversized', sleeves: 'short' }, outer: null, bottom: { kind: 'cargo', col: ['#5f6440', '#1b1b1d', '#a89a74'][Math.floor(r() * 3)], pat: 'cargo', legs: 'long', fit: 'baggy' }, shoes: { kind: 'skate', col: '#1b1b1d', acc: '#f3f2ee', sole: '#f3f2ee' }, acc: [{ kind: 'beanie', col: '#f07a28' }] }) });
+			sk.g.position.y = 0.11;
+			sk.g.rotation.y = Math.PI / 2;
+			sk.act('skate', 0.15);
+			S.body = sk.g; S.sk = sk;
 		}
 		function reset() {
 			for (const o of S.obs || []) K.drop(o.g);
-			S = { body: S.body, time: TIME, score: 0, combo: 0, mult: 1, bails: 0, speed: 7, y: 0, vy: 0, state: 'roll', ground: 0, trick: null, trickT: 0, obs: [], nextZ: -18, grind: null, bailT: 0, log: [], tricks: 0 };
+			S = { body: S.body, sk: S.sk, time: TIME, score: 0, combo: 0, mult: 1, bails: 0, speed: 7, y: 0, vy: 0, state: 'roll', ground: 0, trick: null, trickT: 0, obs: [], nextZ: -18, grind: null, bailT: 0, log: [], tricks: 0 };
 			for (let i = 0; i < 5; i++) spawn();
 		}
 		// the line ahead: cones, rails, gaps and kickers, far enough apart to set up for each
@@ -142,7 +141,8 @@ export const GAME = {
 			const k = S.trick ? clamp(S.trickT / 0.4, 0, 1) : 0, axes = S.trick ? TRICKS[S.trick][2] : '';
 			deck.rotation.set(0, axes.includes('y') ? k * Math.PI * 2 * (S.trick === 'up' ? 1 : 0.5) : 0, axes.includes('z') ? k * Math.PI * 2 * (S.trick === 'right' ? -1 : 1) : 0);
 			S.body.rotation.z = S.state === 'bail' ? 1.3 : 0;
-			S.body.position.y = S.state === 'air' ? 0.1 : 0;
+			S.body.position.y = 0.11 + (S.state === 'air' ? 0.1 : 0);
+			S.sk.act('skate', S.state === 'air' ? 0.9 : S.state === 'grind' ? 0.4 : S.ground < 0.25 ? 0.55 : 0.15);
 			hud();
 			K.cam(1.9, 2.1, 3.6, 0, 0.8, -6, 5);
 		}

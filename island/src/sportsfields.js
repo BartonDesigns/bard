@@ -679,7 +679,7 @@ function paint(f, res) {
 // textures it made.
 export function buildField(f, H, { M = fieldMaterials(), res = 12, shadows = true } = {}) {
 	if (f.kind === 'arena') return buildArena(f, H, { res, shadows });
-	const group = new THREE.Group(), parts = new Map(), walls = [];
+	const group = new THREE.Group(), parts = new Map(), walls = [], seats = [];
 	const put = (m, geo) => { if (!parts.has(m)) parts.set(m, []); parts.get(m).push(geo.index ? geo.toNonIndexed() : geo); };
 	const box = (m, w, h, d, x, y, z, ry = 0) => put(m, new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0).rotateY(ry).translate(x, y, z));
 	const cyl = (m, r, h, x, y, z, seg = 8) => put(m, new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z));
@@ -735,6 +735,8 @@ export function buildField(f, H, { M = fieldMaterials(), res = 12, shadows = tru
 		for (const u of [-w / 2 + 0.3, 0, w / 2 - 0.3]) { const [a, b] = [at(u, 0.2), at(u, -rows * 0.7 + 0.2)]; bar(M.steel, 0.04, [a[0], y, a[1]], [b[0], y + rows * 0.4 + 0.2, b[1]], 6); }
 		const [p, q] = [at(-w / 2, -rows * 0.35), at(w / 2, -rows * 0.35)];
 		walls.push([p[0], p[1], q[0], q[1], rows * 0.35, y + rows * 0.4 + 0.3]);
+		// where people sit on them (the games fill them: games/fieldgame.js)
+		for (let r = 0; r < rows; r++) for (let u = -w / 2 + 0.35; u <= w / 2 - 0.3; u += 0.55) { const [sx, sz] = at(u, -r * 0.7); seats.push({ x: sx, y: y + 0.445 + r * 0.4, z: sz, yaw }); }
 	};
 
 	// the ground, draped over the land where the field uses it
@@ -841,5 +843,5 @@ export function buildField(f, H, { M = fieldMaterials(), res = 12, shadows = tru
 		mesh.receiveShadow = true;
 		group.add(mesh);
 	}
-	return { group, walls, tex: texs };
+	return { group, walls, tex: texs, seats };
 }

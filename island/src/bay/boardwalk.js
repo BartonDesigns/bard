@@ -22,7 +22,8 @@
 
 import * as THREE from 'three';
 import { H_OFF, H_SCALE } from './geo.js';
-import { FRAME, toW, toL, DECK, merger, instancer, bulbs, paint, signBoard, setNight, figureGeometry, figureMaterial, rng } from './rides/kit.js';
+import { FRAME, toW, toL, DECK, merger, instancer, bulbs, paint, signBoard, setNight, rng } from './rides/kit.js';
+import { createCrowd } from '../people/crowd.js';
 import { createSound } from './rides/sound.js';
 import { createDipper } from './rides/dipper.js';
 import { createWheel } from './rides/wheel.js';
@@ -697,9 +698,9 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	// ---------- the far crowd: figures on the promenade, the midway and the sand ----------
 	function buildCrowd() {
 		const n = isPhone ? 140 : 300;
-		const im = new THREE.InstancedMesh(figureGeometry(), figureMaterial(), n);
-		const r = rng(42), c = new THREE.Color();
-		const CL = [0x2a64c8, 0xd8262e, 0xf4f1ea, 0x222222, 0x2e9b57, 0xf2c230, 0x8a3cc0, 0x6b8fb8, 0xe8742a, 0x777777];
+		// real bodies, baked and instanced (people/crowd.js), in summer Boardwalk clothes
+		const im = createCrowd(n, { kind: 'walk', place: 'boardwalk', seed: 42, cold: 0.25 });
+		const r = rng(42);
 		const F = [];
 		for (let i = 0; i < n; i++) {
 			const z = r(), zone = z < 0.4 ? 'prom' : z < 0.72 ? 'mid' : 'sand';
@@ -707,13 +708,10 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			const v = zone === 'prom' ? -7 + r() * 9.5 : zone === 'mid' ? -45 + r() * 26 : 12 + r() * 90;
 			const kid = r() < 0.3;
 			F.push({ u, v, u0: u, dir: r() < 0.5 ? 1 : -1, sp: (zone === 'sand' ? 0.3 : 1.1) + r() * 0.35, s: kid ? 0.6 + r() * 0.15 : 0.95 + r() * 0.12, still: zone === 'sand' ? r() < 0.7 : r() < 0.25, zone, ph: r() * 6 });
-			im.setColorAt(i, c.set(CL[Math.floor(r() * CL.length)]));
 		}
-		im.castShadow = false; im.frustumCulled = false;
-		group.add(im);
+		group.add(im.group);
 		B.crowd = { im, F };
 	}
-	const cm = new THREE.Matrix4(), cq = new THREE.Quaternion(), cs = new THREE.Vector3(), cp = new THREE.Vector3(), CY = new THREE.Vector3(0, 1, 0);
 	function crowdStep(dt, t, lu, lv, busy) {
 		const C = B.crowd;
 		if (!C) return;
@@ -726,11 +724,9 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			// near you the real people take over; far off, only the day's share are out
 			const k = i < on && d > 55 ? f.s : 0;
 			const bob = f.still ? 0 : Math.abs(Math.sin(t * 5 * f.sp + f.ph)) * 0.04;
-			cq.setFromAxisAngle(CY, f.still ? f.ph : f.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
-			cm.compose(cp.set(f.u, y + bob * k, f.v), cq, cs.set(k, k, k));
-			C.im.setMatrixAt(i, cm);
+			C.im.place(i, f.u, y + bob * k * 0.3, f.v, f.still ? f.ph : f.dir > 0 ? Math.PI / 2 : -Math.PI / 2, k);
 		}
-		C.im.instanceMatrix.needsUpdate = true;
+		C.im.update(t);
 	}
 
 	// ---------- the riders in the seats and the operators: real people, near you ----------
@@ -744,7 +740,8 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		// grow the pool a body at a time
 		if (RP.pool.length < RP.max) {
 			const seed = (RP.pool.length * 2654435761 + 99) >>> 0;
-			const d = personDNA(seed, RP.pool.length % 3 === 2 ? { age: 7 + (seed % 7) } : {});
+			const ctx = { place: 'boardwalk', activity: RP.pool.length < 6 ? 'work' : 'ride', cold: 0.3 };
+			const d = personDNA(seed, RP.pool.length % 3 === 2 ? { age: 7 + (seed % 7), ctx } : { ctx });
 			const P = buildPerson(RP.A, d);
 			P.root.traverse((q) => { q.castShadow = false; });
 			const holder = new THREE.Group();
@@ -781,7 +778,8 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 				const p = RP.pool.find((q) => !q.slot && (c.op ? !q.P.dna.child : true));
 				if (!p) break;
 				p.slot = c;
-				if (c.op) { p.M.stand(); p.M.S.sitK.v = 0; p.M.setPose('behind'); } else { p.M.sit(c.R.riders.sit, true); p.M.setPose(c.R.riders.pose); }
+				if (c.op) { p.M.stand(); p.M.S.sitK.v = 0; p.M.setPose('behind'); if (!p.staff) { p.staff = true; p.P.redress({ ...STAFF, hair: p.P.dna.style?.hair }); } }
+				else if (p.staff) { p.staff = false; p.P.redress(p.P.dna.style); } else { p.M.sit(c.R.riders.sit, true); p.M.setPose(c.R.riders.pose); }
 			}
 		}
 		for (const p of RP.pool) {
@@ -789,6 +787,9 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			let ok = false;
 			if (c?.op) { p.holder.matrix.makeRotationY(c.op[2]).setPosition(c.op[0], DECK, c.op[1]); ok = true; }
 			else if (c) ok = !!c.R.riders.at(c.i, p.holder.matrix);
+			// on the coaster: arms up on the drops (most people; some keep hold of the bar)
+			if (c && !c.op && c.R.riders.thrill) p.M.act('coaster', p.P.dna.temper.outgoing > 0.3 ? c.R.riders.thrill(c.i) : 0);
+			else if (p.M.S.act.name) p.M.act(null);
 			p.holder.visible = ok;
 			if (!ok) continue;
 			p.holder.matrixWorldNeedsUpdate = true;
@@ -796,6 +797,8 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 			p.M.update(dt, t, null);
 		}
 	}
+	// what the ride crews wear: the park's red polo, khaki shorts, a cap
+	const STAFF = { gen: 'staff', top: { kind: 'polo', col: '#b3162b', acc: '#f3f2ee', pat: 'ringer', fit: 'regular', sleeves: 'short', collar: true, tuck: true }, outer: null, bottom: { kind: 'shorts', col: '#a89a74', pat: 'plain', legs: 'bermuda', fit: 'regular' }, shoes: { kind: 'walker', col: '#1b1b1d', acc: '#565c63', sole: '#f3f2ee' }, acc: [{ kind: 'cap', col: '#b3162b', acc: '#f3f2ee' }] };
 	// the operators: one at each ride's gate, facing the queue [u, v, facing]
 	const OPS = [[208, -13.5, Math.PI * 0.25], [19.2, -61.2, 0], [80.5, -45.5, 0], [141, -52.5, 0], [-48.5, 15.5, Math.PI], [-121, -23, Math.PI]];
 

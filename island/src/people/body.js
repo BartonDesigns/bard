@@ -25,7 +25,9 @@ const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 export function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 // ---------- assets, loaded once ----------
-let assets = null;
+let assets = null, loaded = null;
+// the assets if they are in already (no waiting)
+export const peopleAssetsNow = () => loaded;
 export function loadPeopleAssets() {
 	if (assets) return assets;
 	assets = (async () => {
@@ -47,6 +49,7 @@ export function loadPeopleAssets() {
 		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; ok(t); }, undefined, no));
 		await Promise.all([...Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }), ...Object.entries(HAIR).map(async ([k, f]) => { A.tex['hair_' + k] = await load(f, true); })]);
 		A.fabric = fabricTextures();
+		loaded = A;
 		return A;
 	})();
 	return assets;
@@ -382,7 +385,9 @@ function eyeMaterial(d) {
 		// a faint pink at the corners of the white
 		g.fillStyle = 'rgba(210,120,110,0.25)'; g.fillRect(0, 44, 8, 40); g.fillRect(56, 44, 8, 40);
 		const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-		irisCache.set(key, new THREE.MeshPhysicalMaterial({ map: t, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02 }));
+		const m = new THREE.MeshPhysicalMaterial({ map: t, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02 });
+		m.userData.shared = true;
+		irisCache.set(key, m);
 	}
 	return irisCache.get(key);
 }

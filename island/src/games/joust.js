@@ -6,7 +6,7 @@
 // better each pass. Unhorse him with a clean strike on the last pass for 5.
 
 import { makeKit, clamp } from './kit.js';
-import { fieldStage, figure } from './fieldgame.js';
+import { fieldStage } from './fieldgame.js';
 
 const PASSES = 3, SPEED = 9, LANE = 1.5, LANCE = 3.6;
 
@@ -43,8 +43,11 @@ export const GAME = {
 		function knight(shirt, cloth, arms) {
 			const g = K.group();
 			const h = horse('#4a3a2c', cloth); g.add(h);
-			const k = figure(K, { shirt, pants: '#6a6e74', skin: '#8a9098', cap: '#8a9098' }, g);
-			k.g.position.set(0, 1.25, 0.1); k.g.scale.setScalar(1.05);
+			// the knight: a real person in mail under a surcoat of his colours, a great helm,
+			// astride, the lance couched
+			const k = K.person({ parent: g, seed: shirt.length * 97 + (shirt === '#2848a0' ? 1 : 2), age: 30, style: () => ({ gen: 'medieval', top: { kind: 'tunic', col: '#8a8e94', pat: 'mail', fit: 'regular', sleeves: 'long', fab: 'metal' }, outer: { kind: 'surcoat', col: shirt, acc: '#f0c828', pat: 'hem', fit: 'oversized', sleeves: 'none', open: false, long: true, fab: 'wool' }, bottom: { kind: 'hose', col: '#6a6e74', pat: 'mail', legs: 'long', fit: 'regular', fab: 'metal' }, shoes: { kind: 'boot', col: '#3a2a1c', sole: '#2a1c12' }, acc: [{ kind: 'helmet', col: '#9a9ca0', visor: '#141418' }] }) });
+			k.g.position.set(0, 1.65, 0.1);
+			k.sit(0); k.act('joust', 0);
 			const sh = K.box(0.08, 0.7, 0.55, K.mat('#ffffff', { map: arms, rough: 0.6 }), -0.42, 2.6, -0.1, g);
 			return { g, horse: h, rider: k, shield: sh };
 		}

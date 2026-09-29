@@ -3,10 +3,11 @@
 // the field's own spot (the plate, the penalty spot, the goal line) and builds the same
 // field round it while it runs (the world's copy is hidden meanwhile); started anywhere
 // else it lays a field down on the most open ground about, inside a painted backdrop.
-// Also: the players (simple figures in a team's colours), the trail a swipe leaves on the
+// Also: the players (real people in a team's kit), the trail a swipe leaves on the
 // screen, and where a point on the screen falls on an upright plane across the stage.
 
 import { buildField, fieldSpec, playSpot } from '../sportsfields.js';
+import { createCrowd } from '../people/crowd.js';
 
 // a game's `where`: the fields of its sport near a point
 export const fieldVenue = (kind) => ({
@@ -39,31 +40,35 @@ export function fieldStage(ctx, kind, size, spot = null) {
 		K.root.add(out.group);
 		texs = out.tex || [];
 		S.tick = out.tick || null;
+		// people in the stands: about half the seats taken, cheering when something happens
+		if (out.seats?.length) {
+			const seats = out.seats.filter((q, i) => ((i * 2654435761) >>> 0) % 100 < 55).slice(0, ctx.isPhone ? 60 : 150);
+			const C = createCrowd(seats.length, { kind: 'seat', seed: Math.round(Math.abs(f.x) + Math.abs(f.z)) + 7 });
+			seats.forEach((q, i) => C.place(i, q.x, q.y, q.z, q.yaw, 1));
+			out.group.add(C.group);
+			let k = 0.15;
+			S.cheer = (v = 1) => { k = Math.max(k, v); };
+			K.every((dt, t) => { C.update(t); k = Math.max(0.12, k - dt * 0.25); C.cheer(k); });
+			S.crowd = C;
+		}
 		if (real) ctx.getWorld?.()?.fields?.hide(real, true);
 		return out.group;
 	};
-	S.unlay = () => { for (const t of texs) t.dispose(); texs = []; if (real) ctx.getWorld?.()?.fields?.hide(real, false); };
+	S.cheer = () => {};
+	S.unlay = () => { S.crowd?.dispose(); S.crowd = null; for (const t of texs) t.dispose(); texs = []; if (real) ctx.getWorld?.()?.fields?.hide(real, false); };
 	return S;
 }
 
-// a player: legs, body, arms, head and cap, in a team's colours, standing at (x, z) facing
-// -z; its arms (and the throwing arm) can be swung
-export function figure(K, { shirt = '#c8322c', pants = '#e8e4d8', cap = null, skin = '#c68a62', scale = 1 } = {}, parent) {
-	const g = K.group(parent);
-	const mat = (c) => K.mat(c, { rough: 0.8, glow: 0.1 });
-	for (const sx of [-0.11, 0.11]) K.cyl(0.07, 0.06, 0.85, mat(pants), sx, 0.42, 0, g, 8);
-	K.box(0.42, 0.62, 0.24, mat(shirt), 0, 1.15, 0, g);
-	const head = K.ball(0.12, mat(skin), 0, 1.6, 0, g);
-	if (cap) { K.cyl(0.13, 0.13, 0.08, mat(cap), 0, 1.69, 0, g, 12); K.box(0.16, 0.02, 0.12, mat(cap), 0, 1.66, -0.12, g); }
-	const arms = [];
-	for (const sx of [-1, 1]) {
-		const sh = K.group(g); sh.position.set(sx * 0.27, 1.42, 0);
-		K.cyl(0.05, 0.045, 0.6, mat(shirt), 0, -0.3, 0, sh, 6);
-		K.ball(0.055, mat(skin), 0, -0.62, 0, sh);
-		arms.push(sh);
-	}
-	g.scale.setScalar(scale);
-	return { g, arms, head };
+// the players: real people (people/actors.js) in a team's kit, each a group standing at its
+// origin facing -z, the body built into it a frame or so later
+export const TEAMS = {
+	home: { a: '#1f2a44', b: '#f3f2ee', c: '#c8322c', pants: '#ece8dc', pat: 'jersey' },
+	away: { a: '#b3162b', b: '#f3f2ee', c: '#1f2a44', pants: '#d9ccb2', pat: 'jersey' },
+	keeper: { a: '#b8e04a', b: '#1b1b1d', c: '#1b1b1d', pants: '#1b1b1d', socks: '#b8e04a', pat: 'block' },
+	gold: { a: '#f2dc8a', b: '#33231c', c: '#b3162b', pants: '#33231c', pat: 'hoops' },
+};
+export function player(K, team, { sport = 'other', number = 0, extra = {}, seed = 1, parent, age, male, height } = {}) {
+	return K.person({ kit: [sport, team, number, extra], seed: seed * 7919 + number * 131, parent, age: age ?? 19 + (seed * 7 + number * 3) % 20, male, height });
 }
 
 // the swipe's trail on the screen: a line that follows the finger and fades

@@ -16,6 +16,7 @@
 
 import { findSpot, waterLevel } from './stage.js';
 import { buildRoom, buildBackdrop } from './rooms.js';
+import { createCast } from '../people/actors.js';
 
 const STORE = 'crysis-games';
 export function readStore() {
@@ -142,6 +143,12 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		o.traverse((q) => { if (!q.isSprite) q.geometry?.dispose(); for (const m of [].concat(q.material || [])) if (!shared.has(m)) m.dispose(); });
 		o.removeFromParent();
 	};
+	// a real person in the stage (people/actors.js): a group to place, the body built into it
+	let cast = null;
+	// things that run every frame while the game does (a crowd in the stands)
+	const ticks = [];
+	K.every = (fn) => ticks.push(fn);
+	K.person = (spec) => { cast = cast || createCast(K.root); return cast.add(spec); };
 	K.group = (parent) => { const g0 = new THREE.Group(); (parent || K.root).add(g0); return g0; };
 	// a flat painted surface: a canvas drawn once, laid on the ground (or stood up)
 	K.canvas = (w, h, draw) => {
@@ -341,8 +348,8 @@ export function makeKit(ctx, GAME, { accent = '#5ad1c8', dist = 4, span = [4, 4,
 		g = game;
 		api = {
 			start() { if (K.on) return; begin(); g.build(); g.reset(); g.update(0.001, 0); camTick(1); },
-			stop() { if (!K.on) return; g.end?.(); end(); },
-			update(dt, t) { if (!K.on) return; K.time += dt; g.update(dt, t); if (K.on) camTick(dt); },
+			stop() { if (!K.on) return; g.end?.(); cast?.dispose(); cast = null; ticks.length = 0; end(); },
+			update(dt, t) { if (!K.on) return; K.time += dt; g.update(dt, t); if (K.on) { camTick(dt); for (const f of ticks) f(dt, K.time); if (cast) { cast.camera(camera); cast.update(dt, K.time); } } },
 			press(down, x, y) { if (!K.on || K.cardOpen) return; track(down, x, y); g.press?.(down, x, y); },
 			move(x, y) { if (!K.on || K.cardOpen) return; track(null, x, y); g.move?.(x, y); },
 			active: () => K.on,

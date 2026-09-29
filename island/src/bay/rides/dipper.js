@@ -385,6 +385,8 @@ export function createDipper({ group, sound, isPhone }) {
 			return m.copy(seatM);
 		},
 		sit: 0.2, pose: 'lap',
+		// how wild it is at a seat now: on the steep drops and climbs, arms go up
+		thrill: (i) => { const e = cars[SEATS[i].car].matrix.elements; return Math.max(0, Math.min(1, (Math.abs(e[9]) - 0.15) * 4)); },
 		where: () => cars[0].matrix.elements.slice(12, 15),
 	};
 	return {

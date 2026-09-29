@@ -89,7 +89,7 @@ const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TA
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _e = new THREE.Euler();
 const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
-const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
 export function createMotion(P, groundAt) {
 	const { bones, map, rest, dna } = P;
@@ -201,7 +201,7 @@ export function createMotion(P, groundAt) {
 		const a = X.name ? actionAt(X.name, X.u) : null;
 		if (a) {
 			const k = Math.min(1, dt * 14);
-			for (const c of ['sp', 'hp', 'fL', 'fR', 'rt', 'hd']) { if (a.has[c]) { X.has[c] = true; for (let j = 0; j < X.v[c].length; j++) X.v[c][j] += (a[c][j] - X.v[c][j]) * k; } else X.has[c] = X.has[c] && X.w > 0.05 && !(c === 'fL' || c === 'fR'); }
+			for (const c of ['sp', 'hp', 'fL', 'fR', 'rt', 'hd']) { if (a.has[c]) { X.has[c] = true; for (let j = 0; j < X.v[c].length; j++) X.v[c][j] += (a[c][j] - X.v[c][j]) * k; } else if (c === 'fL' || c === 'fR') X.has[c] = false; else { let m = 0; for (let j = 0; j < X.v[c].length; j++) { X.v[c][j] *= 1 - k; m = Math.max(m, Math.abs(X.v[c][j])); } X.has[c] = m > 0.002; } }
 			X.arms = { L: a.has.L ? { ...a.L } : null, R: a.has.R ? { ...a.R } : null };
 		}
 		return X;
@@ -376,7 +376,7 @@ export function createMotion(P, groundAt) {
 			setWorld(iT, frameQ(rT, knee.clone().sub(hip), bend, new THREE.Quaternion()), worldQ[rootI]);
 			setWorld(iS, frameQ(rS, ankle.clone().sub(knee), bend, new THREE.Quaternion()), worldQ[iT]);
 			// the foot: forward (toes a little out), pitched through the roll-over
-			setWorld(iF, _q.setFromAxisAngle(Y, toeOut).multiply(_q2.setFromAxisAngle(X, f.pitch)).clone(), worldQ[iS]);
+			setWorld(iF, _q.setFromAxisAngle(Y, toeOut).multiply(_q2.setFromAxisAngle(AX, f.pitch)).clone(), worldQ[iS]);
 		}
 
 		// ---- spine: counter-rotation, lean, breath ----
@@ -446,7 +446,7 @@ export function createMotion(P, groundAt) {
 			setLocal(iC, _q.setFromEuler(_e.set(0, (-sw * 0.06 - back) * sx, (br * 0.01 + Math.max(0, sw) * 0.04 + P2.shrug * 0.28) * sx)), worldQ[map.spine01]);
 			setLocal(iSh, _q.identity(), worldQ[iC]);
 			// the upper arm: down, then out to the side, then forward
-			const up = _v.set(0, -1, 0).applyAxisAngle(Z, sx * (0.04 + dna.weight * 0.05 + P2.abd)).applyAxisAngle(X, -P2.flex).applyAxisAngle(Y, counter * 0.3).clone();
+			const up = _v.set(0, -1, 0).applyAxisAngle(Z, sx * (0.04 + dna.weight * 0.05 + P2.abd)).applyAxisAngle(AX, -P2.flex).applyAxisAngle(Y, counter * 0.3).clone();
 			setWorld(iU, aimQ(rest.dirs[iU], up, new THREE.Quaternion()), worldQ[iSh]);
 			setLocal(iU2, _q.identity(), worldQ[iU]);
 			// the forearm bends about the elbow's hinge, rolled in across the body or out

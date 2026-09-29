@@ -229,34 +229,3 @@ export function sweep(frames, corners, closed = false) {
 	return g;
 }
 
-// ---------- figures for far away: a body, a head, cheap enough by the hundred ----------
-let FIG = null;
-export function figureGeometry() {
-	if (FIG) return FIG;
-	const parts = [];
-	const add = (g, x, y, z) => { g.translate(x, y, z); parts.push(g); };
-	add(new THREE.CylinderGeometry(0.17, 0.2, 0.62, 7), 0, 1.12, 0);            // the torso
-	add(new THREE.CylinderGeometry(0.2, 0.15, 0.2, 7), 0, 0.74, 0);             // the hips
-	add(new THREE.CylinderGeometry(0.075, 0.06, 0.78, 5), -0.09, 0.38, 0);     // the legs
-	add(new THREE.CylinderGeometry(0.075, 0.06, 0.78, 5), 0.09, 0.38, 0);
-	add(new THREE.CylinderGeometry(0.055, 0.045, 0.62, 5), -0.23, 1.1, 0);     // the arms
-	add(new THREE.CylinderGeometry(0.055, 0.045, 0.62, 5), 0.23, 1.1, 0);
-	add(new THREE.SphereGeometry(0.115, 8, 6), 0, 1.58, 0);                     // the head
-	FIG = mergeGeometries(parts.map((g) => { g.deleteAttribute('uv'); return g; }));
-	// the head and arms in skin, the rest in the clothes' colour (a vertex shade: 1 skin, 0 cloth)
-	const n = FIG.attributes.position.count, sk = new Float32Array(n);
-	let o = 0;
-	parts.forEach((g, i) => { const c = g.attributes.position.count; for (let k = 0; k < c; k++) sk[o + k] = i === 6 || (i >= 4 && i <= 5 && g.attributes.position.getY(k) < 0.95) ? 1 : 0; o += c; });
-	FIG.setAttribute('skin', new THREE.BufferAttribute(sk, 1));
-	return FIG;
-}
-let FIG_MAT = null;
-export function figureMaterial() {
-	if (FIG_MAT) return FIG_MAT;
-	FIG_MAT = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 });
-	FIG_MAT.onBeforeCompile = (sh) => {
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float skin; varying float vSkin;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = skin;');
-		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vSkin;').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.52, 0.4), vSkin);');
-	};
-	return FIG_MAT;
-}

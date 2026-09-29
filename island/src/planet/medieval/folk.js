@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA } from '../../people/body.js';
 import { createMotion } from '../../people/motion.js';
+import { paint } from '../../people/garment.js';
 
 const DYES = { russet: [0.48, 0.23, 0.13], madder: [0.58, 0.15, 0.12], woad: [0.2, 0.28, 0.48], undyed: [0.72, 0.66, 0.54], brown: [0.38, 0.28, 0.19], green: [0.28, 0.38, 0.2], ochre: [0.68, 0.52, 0.24], grey: [0.44, 0.44, 0.42], black: [0.12, 0.11, 0.1], linen: [0.88, 0.85, 0.78], plum: [0.36, 0.16, 0.28] };
 const WORK = ['russet', 'undyed', 'brown', 'green', 'ochre', 'grey', 'woad'];
@@ -116,8 +117,9 @@ export function dress(A, P, g, arms) {
 		if (P.hair && g.hat !== 'cap') P.hair.visible = false;
 	}
 	// mail on the body: the shirt turned to iron rings
-	if (g.mail && P.meshes[1]) {
-		P.meshes[1].material = new THREE.MeshStandardMaterial({ color: 0x6d7074, metalness: 0.7, roughness: 0.42, normalMap: A.fabric.knit, normalScale: new THREE.Vector2(1.2, 1.2), side: THREE.DoubleSide });
+	if (g.mail && P.clothMat) {
+		P.outfit.top = { ...P.outfit.top, col: '#6d7074', pat: 'mail', fab: 'metal' };
+		paint(P.clothMat, P.outfit);
 	}
 	return out;
 }

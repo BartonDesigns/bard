@@ -28,7 +28,7 @@ const DOORC = [[0.38, 0.14, 0.12], [0.14, 0.2, 0.3], [0.3, 0.2, 0.12], [0.16, 0.
 
 const carMats = new Map(), carGeos = {};
 // (one car of each shape for every garage: kept, never disposed)
-const carGeo = (k) => carGeos[k] || (carGeos[k] = Object.assign(carGeometry(k), {}), carGeos[k].userData.shared = true, carGeos[k]);
+const carGeo = (k) => carGeos[k] || (carGeos[k] = carGeometry(k, 24, 12), carGeos[k].userData.shared = true, carGeos[k]);
 function carMat(c, night) {
 	const k = c.join(',');
 	let m = carMats.get(k);
@@ -58,12 +58,15 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	const WHITE = lin([0.94, 0.93, 0.9]), TRIM = lin(style === 'victorian' ? [0.93, 0.9, 0.84] : [0.95, 0.95, 0.93]);
 	const FT = { wood, tile: lin([0.88, 0.85, 0.8]), stone: lin([0.82, 0.8, 0.76]), concrete: lin([0.66, 0.65, 0.62]), carpet: lin([0.7, 0.66, 0.6]) };
 	const roomAt = (x, z) => { for (const id of L.rooms) { const r = P.rooms[id]; if (x > r.x0 - 0.02 && x < r.x1 + 0.02 && z > r.z0 - 0.02 && z < r.z1 + 0.02) return r; } return null; };
-	let step = 0;
+	let step = 0, tY = performance.now();
+	// (a slice ends when it has had its few milliseconds)
+	const slow = () => { if (performance.now() - tY < 4) return false; tY = performance.now(); return true; };
 
+	const wbox = (w, key, u0, u1, y0, y1, c0, c1, colr) => { if (w.axis === 'x') g.box(key, u0, y0, Math.min(c0, c1), u1, y1, Math.max(c0, c1), colr); else g.box(key, Math.min(c0, c1), y0, u0, Math.max(c0, c1), y1, u1, colr); };
 	// ---- the walls, cut round their openings
 	for (const w of P.walls) {
 		if (w.k !== k || (!full && w.kind !== 'ext')) continue;
-		if (++step % 16 === 0) yield;
+		if (++step % 16 === 0 || slow()) { yield; tY = performance.now(); }
 		const a0 = w.pos - w.t / 2, a1 = w.pos + w.t / 2;
 		const cuts = [w.s, w.e];
 		for (const o of w.open) cuts.push(Math.max(w.s, Math.min(w.e, o.s0)), Math.max(w.s, Math.min(w.e, o.s1)));
@@ -102,7 +105,6 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 			else g.box('trim', Math.min(face, f1), fy, u0, Math.max(face, f1), fy + 0.12, u1, TRIM);
 		}
 	}
-	const wbox = (w, key, u0, u1, y0, y1, c0, c1, colr) => { if (w.axis === 'x') g.box(key, u0, y0, Math.min(c0, c1), u1, y1, Math.max(c0, c1), colr); else g.box(key, Math.min(c0, c1), y0, u0, Math.max(c0, c1), y1, u1, colr); };
 	function dress(w, o, a0, a1) {
 		const fy = L.y;
 		if (o.type === 'window' || o.type === 'store') {
@@ -214,7 +216,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	const cars = [];
 	for (const it of P.items) {
 		if (levelOf(it.y) !== k) continue;
-		if (++step % 14 === 0) yield;
+		if (++step % 14 === 0 || slow()) { yield; tY = performance.now(); }
 		if (it.type === 'car') { cars.push(it); continue; }
 		drawAny(g, it, rnd);
 		if (!SOFT.has(it.type) && it.box) col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + Math.max(it.h, 0.3)]);

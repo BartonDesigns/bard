@@ -20,9 +20,9 @@ export const ACTIONS = {
 	pitch: { loop: false, keys: [
 		[0, { L: HANDS_SET, R: HANDS_SET, sp: [0, 0, 0], hp: [-0.6, 0, 0, 0], fL: [0.12, 0, 0.1], fR: [-0.12, 0, -0.1], hd: [0.5, 0, 0] }],
 		[0.3, { L: HANDS_SET, R: HANDS_SET, sp: [-0.2, -0.05, 0], hp: [-1.25, 0, 0.05, 0.02], fL: [0.05, 0.42, 0.18], fR: [-0.08, 0, -0.08], hd: [1.1, 0, 0] }],
-		[0.55, { L: arm({ abd: 0.5, flex: 1.35, roll: 0.3, bend: 0.5, pro: 0.3, curl: 0.4 }), R: arm({ abd: 1.45, flex: -0.5, roll: -1.2, bend: 1.7, pro: 1.2, curl: 0.8 }), sp: [-0.55, 0, -0.1], hp: [-1.0, 0, 0, 0.12], fL: [0.1, 0, 0.75], fR: [-0.1, 0, -0.2], hd: [1.2, 0, 0] }],
-		[0.7, { L: arm({ abd: 0.3, flex: 0.5, roll: 1.2, bend: 1.9, pro: 0.3, curl: 0.6 }), R: arm({ abd: 0.6, flex: 2.1, roll: 0.3, bend: 0.3, pro: 1.0, curl: 0.3 }), sp: [0.45, 0.35, 0], hp: [-0.1, 0.1, 0, 0.16], fL: [0.1, 0, 0.8], fR: [-0.12, 0.12, -0.25], hd: [0.2, 0.1, 0] }],
-		[1, { L: arm({ abd: 0.25, flex: 0.4, roll: 1.1, bend: 1.8, pro: 0.3, curl: 0.5 }), R: arm({ abd: 0.2, flex: 0.55, roll: 1.25, bend: 0.8, pro: 0.6, curl: 0.3 }), sp: [0.6, 0.5, 0], hp: [0.2, 0.15, 0, 0.12], fL: [0.1, 0, 0.8], fR: [-0.2, 0, 0.35], hd: [0, 0.15, 0] }],
+		[0.55, { L: arm({ abd: 0.5, flex: 1.35, roll: 0.3, bend: 0.5, pro: 0.3, curl: 0.4 }), R: arm({ abd: 1.45, flex: -0.5, roll: -1.2, bend: 1.7, pro: 1.2, curl: 0.8 }), sp: [-0.55, 0, -0.1], hp: [-1.0, 0, 0, 0.12], fL: [0.1, 0, 0.5], fR: [-0.1, 0, -0.3], hd: [1.2, 0, 0] }],
+		[0.7, { L: arm({ abd: 0.3, flex: 0.5, roll: 1.2, bend: 1.9, pro: 0.3, curl: 0.6 }), R: arm({ abd: 0.6, flex: 2.1, roll: 0.3, bend: 0.3, pro: 1.0, curl: 0.3 }), sp: [0.45, 0.35, 0], hp: [-0.1, 0.1, 0, 0.14], fL: [0.1, 0, 0.5], fR: [-0.12, 0.12, -0.3], hd: [0.2, 0.1, 0] }],
+		[1, { L: arm({ abd: 0.25, flex: 0.4, roll: 1.1, bend: 1.8, pro: 0.3, curl: 0.5 }), R: arm({ abd: 0.2, flex: 0.55, roll: 1.25, bend: 0.8, pro: 0.6, curl: 0.3 }), sp: [0.6, 0.5, 0], hp: [0.2, 0.15, 0, 0.1], fL: [0.1, 0, 0.5], fR: [-0.2, 0, 0.2], hd: [0, 0.15, 0] }],
 	] },
 	// the batter: set side-on with the bat up at the back shoulder, then the swing and the finish
 	bat: { loop: false, keys: [
@@ -113,6 +113,11 @@ export const ACTIONS = {
 	skate: { loop: false, keys: [
 		[0, { L: arm({ abd: 0.6, flex: 0.3, bend: 0.5, pro: 1.2 }), R: arm({ abd: 0.5, flex: -0.1, bend: 0.5, pro: 1.2 }), sp: [0.2, 0.15, 0], hp: [0, 0.1, 0, 0.12], fL: [0.2, 0.08, 0.25], fR: [-0.2, 0.08, -0.25], hd: [1.0, 0, 0] }],
 		[1, { L: arm({ abd: 0.9, flex: 0.6, bend: 0.7, pro: 1.2 }), R: arm({ abd: 0.8, flex: 0.1, bend: 0.8, pro: 1.2 }), sp: [0.2, 0.45, 0], hp: [0, 0.2, 0, 0.42], fL: [0.22, 0.08, 0.25], fR: [-0.22, 0.08, -0.25], hd: [1.0, -0.2, 0] }],
+	] },
+	// a walking stride held at its two extremes (the far crowd blends between them)
+	stride: { loop: false, keys: [
+		[0, { L: arm({ abd: 0.08, flex: -0.3, bend: 0.25 }), R: arm({ abd: 0.08, flex: 0.35, bend: 0.45 }), fL: [0.09, 0, 0.3], fR: [-0.09, 0.06, -0.28], hp: [0.08, 0, 0, 0.03] }],
+		[1, { L: arm({ abd: 0.08, flex: 0.35, bend: 0.45 }), R: arm({ abd: 0.08, flex: -0.3, bend: 0.25 }), fL: [0.09, 0.06, -0.28], fR: [-0.09, 0, 0.3], hp: [-0.08, 0, 0, 0.03] }],
 	] },
 	// a wave (the keeper's hello, a spectator)
 	wave: { loop: true, keys: [

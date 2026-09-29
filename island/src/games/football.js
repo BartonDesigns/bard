@@ -9,7 +9,7 @@
 // upright it may yet go in.
 
 import { makeKit, clamp, rand } from './kit.js';
-import { fieldVenue, fieldStage, figure, trail } from './fieldgame.js';
+import { fieldVenue, fieldStage, player, TEAMS, trail } from './fieldgame.js';
 
 const YD = 0.9144, PZ = -10 * YD, BAR = 3.05, HW = 5.64 / 2, DIST = [20, 27, 33, 39, 45, 52], HASH = [0, -6.1, 6.1, -6.1, 6.1, 0];
 
@@ -23,7 +23,7 @@ export const GAME = {
 		const F = fieldStage(ctx, 'football', 'full', (f) => [0, -f.d.L / 2 + 10 * YD]);
 		const K = makeKit(ctx, GAME, { accent: '#ffb347', pose: F.pose, dist: 1, span: [66, 13, 104], flat: 2.5, backdrop: 'meadow', dome: 125 });
 		const { THREE } = ctx;
-		let ball, holder, flag, tr, S = {};
+		let ball, holder, kicker, flag, tr, S = {};
 
 		function build() {
 			F.lay(K);
@@ -34,8 +34,10 @@ export const GAME = {
 			});
 			ball = K.mesh(new THREE.SphereGeometry(0.085, 20, 14), K.mat('#ffffff', { map: skin, rough: 0.7 }));
 			ball.scale.set(1, 1, 1.65);
-			holder = figure(K, { shirt: '#1d3f7a', pants: '#e8e4d8', cap: '#1d3f7a' });
-			holder.g.scale.set(1, 0.62, 1);
+			// the holder down on one knee, and you, the kicker, set back from the ball
+			holder = player(K, TEAMS.home, { sport: 'football', number: 12, seed: 7 });
+			holder.act('hold', 0);
+			kicker = player(K, TEAMS.home, { sport: 'football', number: 3, seed: 8 });
 			// the wind's flag, on the top of the left upright's ribbon's pole
 			flag = K.mesh(new THREE.PlaneGeometry(0.9, 0.5), K.mat('#ff6a1a', { side: THREE.DoubleSide, glow: 0.3 }), 0, 0, 0);
 			tr = trail(K, '#ffb347');
@@ -44,7 +46,8 @@ export const GAME = {
 			S = { n: 0, pts: 0, made: 0, state: 'aim', t: 0, log: [], p: new THREE.Vector3(), v: new THREE.Vector3(), spin: 0, wind: 0, long: 0 };
 			ready();
 		}
-		const spot = () => [HASH[S.n], PZ + DIST[S.n] * YD];
+		// (after the last kick, still the last spot)
+		const spot = () => { const i = Math.min(S.n, DIST.length - 1); return [HASH[i], PZ + DIST[i] * YD]; };
 		function ready() {
 			const [x, z] = spot();
 			S.state = 'aim'; S.t = 0; S.result = null; S.crossed = false;
@@ -53,6 +56,9 @@ export const GAME = {
 			S.wind = (Math.random() < 0.5 ? -1 : 1) * rand(0.5, 1.5 + S.n * 0.8);
 			holder.g.position.set(x + 0.55, K.groundY(x + 0.55, z), z + 0.1);
 			holder.g.rotation.y = Math.PI / 2;
+			const a = Math.atan2(-x, z - PZ);
+			kicker.g.position.set(x - Math.sin(a) * 2.2 - 0.7, K.groundY(x, z + 2), z + Math.cos(a) * 2.2);
+			kicker.g.rotation.y = -a + 0.4;
 			hud();
 		}
 		function windText() { const mph = Math.round(Math.abs(S.wind) * 2.237); return mph < 2 ? 'no wind' : `wind ${S.wind < 0 ? '←' : '→'} ${mph} mph`; }
@@ -106,6 +112,9 @@ export const GAME = {
 			} else if (S.state === 'after' && S.t > 1.3) {
 				if (S.n >= DIST.length) over(); else ready();
 			}
+			// the kicker: two steps up and through it
+			const kt = S.state === 'fly' ? S.t : S.state === 'after' ? 9 : -1;
+			kicker.act('kick', kt < 0 ? 0 : Math.min(1, 0.5 + kt * 1.8));
 			ball.position.copy(S.p);
 			// (the ball stands on its point in the hold, long axis up)
 			ball.scale.set(1, 1, 1.65);
@@ -127,6 +136,7 @@ export const GAME = {
 		}
 		function settle() {
 			const R = S.result || 'short', good = R === 'good' || R === 'doink good' || R === 'bar good', d = DIST[S.n];
+			F.cheer(good ? 1 : 0.25);
 			if (good) { S.pts += 3; S.made++; S.long = Math.max(S.long, d); K.say(R === 'good' ? `It's good! ${d} yards` : `Off the ${R.startsWith('bar') ? 'bar' : 'upright'}... and in! ${d} yards`, 1400); K.tone(523, 0.12, { vol: 0.1 }); K.tone(784, 0.3, { vol: 0.1, at: 0.12 }); }
 			else K.say(R === 'short' ? 'No good: short' : R === 'doink' ? 'Off the upright: no good' : R === 'bar' ? 'Off the crossbar: no good' : `No good: wide ${S.p.x < 0 ? 'left' : 'right'}`, 1300);
 			S.log.push(`${d}${good ? '✓' : '✗'}`);

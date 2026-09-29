@@ -8,6 +8,7 @@
 // synthesised: a pitched thump that drops as the skin settles, and a slap of noise.
 
 import { makeKit } from './kit.js';
+import { dressFor } from '../people/wardrobe.js';
 
 const BPM = 108, STEP = 60 / BPM / 4, LEAD = 2.4, FALL = 1.4;
 const LANES = [['Djembe', '#c47a3a', 95], ['Conga', '#b85a2a', 190], ['Bongos', '#d8a45a', 380]];
@@ -32,9 +33,13 @@ export const GAME = {
 			for (let i = 0; i < 9; i++) {
 				const a = Math.PI * 0.15 + i / 8 * Math.PI * 0.7, x = Math.cos(a) * 4, z = -2 - Math.sin(a) * 4;
 				const p = K.group(); p.position.set(x, 0, z); p.lookAt(K.world(new THREE.Vector3(0, 0, -2)));
-				K.cyl(0.18, 0.22, 0.6, ['#2a6fd1', '#d1323a', '#6bd66b', '#ffd23f', '#b56cff'][i % 5], 0, 0.55, 0, p);
-				K.ball(0.13, ['#8a5a3a', '#e0b894', '#5a3a2a'][i % 3], 0, 0.98, 0, p);
-				K.cyl(0.14, 0.12, 0.55, '#9a6a3a', 0, 0.28, 0.3, p);
+				// a drummer: whoever turned up this Sunday, all ages, in their own clothes, sat on
+				// a low stool with a drum between the knees
+				const who = K.person({ parent: p, seed: 700 + i * 37, age: [24, 67, 31, 19, 45, 58, 28, 36, 73][i], still: true, style: (d, r) => dressFor(r, d, { place: 'sf', activity: 'sit', cold: 0.35 }) });
+				who.g.rotation.y = Math.PI;
+				who.sit(0.36); who.play('drum', STEP * 8 * (1 + (i % 3) * 0.5));
+				K.cyl(0.16, 0.18, 0.34, '#6b4a2e', 0, 0.17, -0.12, p, 10);
+				K.cyl(0.14, 0.1, 0.5, ['#9a6a3a', '#7a4a2a', '#b07a4a'][i % 3], 0, 0.25, 0.38, p).rotation.x = -0.25;
 				p.userData.bob = i;
 				drums.push(p);
 			}
@@ -100,7 +105,6 @@ export const GAME = {
 			}
 			for (; di < dots.length; di++) dots[di].style.display = 'none';
 			pads.forEach((p, i) => { S.hitAt[i] = Math.max(0, S.hitAt[i] - dt * 6); p.scale.set(1 + S.hitAt[i] * 0.08, 1 - S.hitAt[i] * 0.06, 1 + S.hitAt[i] * 0.08); });
-			for (const p of drums) p.children[1].position.y = 0.98 + Math.abs(Math.sin((S.t / (STEP * 4)) * Math.PI + p.userData.bob)) * 0.04;
 			K.hud(`${S.score.toLocaleString()} · combo ${S.combo}${S.combo >= 10 ? ` ×${1 + Math.min(3, Math.floor(S.combo / 10))}` : ''}`);
 			if (S.state === 'play' && S.t > songEnd) {
 				S.state = 'over';

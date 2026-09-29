@@ -8,7 +8,7 @@
 // curl, bounces off the posts and the bar, and bulges the net.
 
 import { makeKit, clamp, rand } from './kit.js';
-import { fieldVenue, fieldStage, figure, trail, onWall } from './fieldgame.js';
+import { fieldVenue, fieldStage, player, TEAMS, trail, onWall } from './fieldgame.js';
 
 const GZ = -11, GW = 7.32, GH = 2.44, BR = 0.11, KICKS = 8, KZ = GZ + 0.45;
 
@@ -21,7 +21,7 @@ export const GAME = {
 		const F = fieldStage(ctx, 'soccer', 'youth');
 		const K = makeKit(ctx, GAME, { accent: '#4fd1ff', pose: F.pose, dist: 1, span: [56, 17, F.field.d.L - 6], flat: 2, backdrop: 'meadow', dome: 115 });
 		const { THREE } = ctx;
-		let ball, keeper, tr, S = {};
+		let ball, keeper, kicker, tr, S = {};
 
 		function build() {
 			F.lay(K);
@@ -30,8 +30,10 @@ export const GAME = {
 				for (const [x, y] of [[16, 16], [48, 40], [80, 16], [112, 40], [0, 48], [64, 60]]) { g.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2 - Math.PI / 2; g.lineTo(x + Math.cos(a) * 9, y + Math.sin(a) * 9); } g.fill(); }
 			});
 			ball = K.ball(BR, K.mat('#ffffff', { map: skin, rough: 0.5 }), 0, BR, 0);
-			keeper = figure(K, { shirt: '#d8f03a', pants: '#1a1a1a', skin: '#b0764a' });
-			for (const a of keeper.arms) K.ball(0.08, K.mat('#f4f4f0'), 0, -0.64, 0, a);
+			// the keeper, in gloves, tall enough that a full stretch reaches as the game says;
+			// and you, the penalty taker, waiting beside the ball
+			keeper = player(K, TEAMS.keeper, { sport: 'soccer', number: 1, extra: { keeper: true, gloves: '#f3f2ee' }, seed: 5, height: 1.88 });
+			kicker = player(K, TEAMS.away, { sport: 'soccer', number: 9, seed: 6 });
 			// the kicker's own shadow of a run-up: a mark where the ball sits
 			K.decal(0.5, 0.5, K.canvas(32, 32, (g) => { g.fillStyle = 'rgba(255,255,255,0.9)'; g.beginPath(); g.arc(16, 16, 6, 0, 7); g.fill(); }), 0, K.groundY(0, 0) + 0.075, 0, { opacity: 0.9 });
 			tr = trail(K, '#4fd1ff');
@@ -138,7 +140,14 @@ export const GAME = {
 			keeper.g.position.set(P.bx + (S.state === 'aim' ? Math.sin(K.time * 1.7) * 0.4 : 0), g + P.jy + hop, KZ - 0.1);
 			keeper.g.rotation.set(0, Math.PI, P.phi);
 			const up = S.dive && S.t > S.dive.wait ? Math.min(1, (S.t - S.dive.wait) * 5) : 0;
-			keeper.arms[0].rotation.z = -0.5 - up * 2.4; keeper.arms[1].rotation.z = 0.5 + up * 2.4;
+			// (ready on the line; then the full stretch the game tips over into the dive)
+			keeper.act(up > 0.2 ? 'reach' : 'ready', 0);
+			// the taker: a step back and to the side, then through the ball
+			const kt = S.state === 'fly' ? S.t : S.state === 'after' ? 9 : -1;
+			const ku = kt < 0 ? 0 : Math.min(1, 0.45 + kt * 2);
+			kicker.act('kick', ku);
+			kicker.g.position.set(-0.28 + (kt < 0 ? -0.35 : 0), K.groundY(-0.3, 0.9), kt < 0 ? 1.25 : 0.55);
+			kicker.g.rotation.y = kt < 0 ? -0.35 : 0;
 			ball.position.copy(S.p);
 			// the shot: from behind the spot, the goal filling the screen's width, the ball in view below it
 			const bz = S.state === 'fly' ? clamp(S.p.z, GZ + 1, 0) : 0;
@@ -148,6 +157,7 @@ export const GAME = {
 		}
 		function settle() {
 			const R = S.result || 'wide';
+			F.cheer(R === 'goal' ? 1 : R === 'save' ? 0.55 : 0.3);
 			if (R === 'goal') { S.goals++; if (S.top) S.bins++; K.say(S.top ? 'Top corner! Goal!' : 'Goal!', 1200); K.noise(0.5, { vol: 0.12, f: 900, q: 0.4 }); K.tone(660, 0.12, { vol: 0.1 }); K.tone(880, 0.25, { vol: 0.1, at: 0.12 }); }
 			else if (R === 'save') { S.saves++; K.say('Saved!', 1100); }
 			else if (R === 'post' || R === 'bar') { S.wide++; K.say(R === 'post' ? 'Off the post!' : 'Off the bar!', 1100); }

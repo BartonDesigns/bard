@@ -22,7 +22,8 @@
 //     let go; a full draw flies flat, a short one drops. The wind carries it. Rings 10 to 1.
 
 import { makeKit, clamp, rand } from './kit.js';
-import { fieldStage, figure, trail, onWall } from './fieldgame.js';
+import { fieldStage, player, trail, onWall } from './fieldgame.js';
+import { suitFor } from '../people/wardrobe.js';
 import { THEMES, hotBalls, moltenTex, bombGeometry } from '../arenas.js';
 
 // the arenas of a theme round a point
@@ -93,7 +94,7 @@ function makeGame(theme) {
 			const { THREE } = ctx;
 			const GZ = -T.shot, GW = T.gw, GH = T.gh, BR = C.br, KZ = GZ + 0.5, W2 = F.field.d.W / 2;
 			let ball, halo = null, haze = null, keeper = null, tr, fx, dust = null, S = {};
-			let ring = null, stumps = [], bails = [], devil = null, reticle = null, flash = null, heatM = null, hzBtn = null;
+			let archer = null, bow = null, ring = null, stumps = [], bails = [], devil = null, reticle = null, flash = null, heatM = null, hzBtn = null;
 			const arrows = [], blocks = [], bombs = [], warns = {}, own = [], tv = new THREE.Vector3();
 			// the floor under a stage point: the court (a raised one), or the pool's water
 			const floorY = (x, z) => K.groundY(x, z) + (T.water ?? T.lift);
@@ -111,9 +112,12 @@ function makeGame(theme) {
 				}
 				if (C.heat) { haze = shimmer(K, THREE); heatM = K.meter('Heat', 'linear-gradient(90deg,#3a1a10,#b0300a 35%,#ff7a1a 65%,#fff0b0)'); }
 				if (C.keeper) {
-					keeper = figure(K, C.keeper);
-					if (C.keeper.glow) keeper.head.material = K.mat(C.keeper.glow, { glow: 1.4 });
-					if (theme === 'ice') for (const s of [-1, 1]) K.box(0.28, 0.75, 0.12, K.mat('#e8eef2'), s * 0.14, 0.38, -0.12, keeper.g);
+					// the keeper: a real person in this world's gear (a heat suit, a hazmat suit, a
+					// goalie's kit, a water polo cap, a pressure suit), some of another world's skin
+					const Q = C.keeper, suit = { magma: 'heat', toxic: 'hazmat', sky: 'sky', ocean: 'dive', ice: 'ice' }[theme];
+					keeper = theme === 'ice' || theme === 'ocean' ? player(K, { a: Q.shirt, b: Q.pants, c: Q.cap || Q.pants, pants: Q.pants, pat: theme === 'ocean' ? 'hoops' : 'block' }, { sport: 'other', number: 1, extra: { sleeves: theme === 'ice' ? 'long' : 'none', legs: theme === 'ice' ? 'long' : 'brief' }, seed: 30, height: 1.8 * (Q.scale || 1) })
+						: K.person({ seed: 31, age: 28, height: 1.82 * (Q.scale || 1), skin: Q.glow ? { col: Q.skin, glow: 0.6 } : undefined, style: () => suitFor(suit, Q.shirt, Q.cap || Q.pants) });
+					if (theme === 'ice') { const pad = K.mat('#e8eef2'); for (const s of [-1, 1]) K.box(0.24, 0.7, 0.1, pad, s * 0.13, 0.36, -0.14, keeper.g); }
 				}
 				if (C.mode === 'ring') {
 					ring = K.group();
@@ -131,6 +135,16 @@ function makeGame(theme) {
 					reticle = K.el('position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border:2px solid #ffd76a;border-radius:50%;display:none;box-shadow:0 0 6px #000;',
 						'<div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;background:#ffd76a;border-radius:2px"></div>');
 					K.fov(20);
+					// the archer: you, side-on to the butt on the left of the shot, in the tourney's
+					// cloth, the bow in the left hand
+					archer = K.person({ seed: 41, age: 26, style: (d, r) => ({ gen: 'medieval', top: { kind: 'tunic', col: ['#2f4a38', '#6a2331', '#1f2a44', '#7a5a44'][Math.floor(r() * 4)], acc: '#d0a126', pat: 'hem', fit: 'regular', sleeves: 'long', fab: 'wool' }, outer: { kind: 'jerkin', col: '#4e3226', pat: 'plain', fit: 'regular', sleeves: 'none', open: false, fab: 'leather' }, bottom: { kind: 'hose', col: '#33231c', pat: 'plain', legs: 'long', fit: 'tight', fab: 'wool' }, shoes: { kind: 'boot', col: '#3a2a1c', sole: '#2a1c12' }, acc: [] }) });
+					archer.g.position.set(-0.55, floorY(-0.55, 1.0), 1.0);
+					archer.g.rotation.y = -Math.PI / 2;
+					archer.act('draw', 0.35);
+					bow = K.group();
+					const limb = K.mesh(new THREE.TorusGeometry(0.72, 0.014, 5, 20, 1.9), K.mat('#6b4423', { rough: 0.6 }), 0, 0, 0, bow);
+					limb.rotation.set(0, Math.PI / 2, Math.PI - 0.95);
+					bow.userData.string = K.mesh(new THREE.CylinderGeometry(0.002, 0.002, 1.18, 4), K.mat('#e8e0c8'), 0, 0, 0, bow);
 				}
 				if (C.move) {
 					K.button(ARROW(-1), (d) => { if (d) step(-1); }, 'left:16px;bottom:calc(24px + env(safe-area-inset-bottom));');
@@ -193,7 +207,7 @@ function makeGame(theme) {
 				if (C.mode === 'wicket') for (const s of stumps) { s.rotation.set(0, 0, 0); s.position.x = s.userData.x; s.position.y = floorY(0, GZ) + GH / 2; }
 				if (C.mode === 'wicket') bails.forEach((b, i) => { b.position.set(i ? 0.18 : -0.18, floorY(0, GZ) + GH + 0.03, GZ); b.rotation.set(0, 0, 0); b.userData.v = null; });
 				if (C.blocks) placeBlocks();
-				if (C.mode === 'butt') { ball = makeBall(); arrows.push(ball); S.p.set(0.25, floorY(0, 0) + 1.45, 0.2); S.draw = 0; }
+				if (C.mode === 'butt') { ball = makeBall(); arrows.push(ball); const hnd = archer?.at('wrist.L'); if (hnd) { K.local(hnd, hnd); S.p.set(hnd.x, hnd.y + 0.05, hnd.z - 0.05); } else S.p.set(-0.55, floorY(0, 0) + 1.45, 0.25); S.draw = 0; }
 				else {
 					// where it comes from: the moat, a puddle, the side, a hatch, out of the air
 					const s = Math.random() < 0.5 ? -1 : 1;
@@ -357,6 +371,22 @@ function makeGame(theme) {
 				// off the sky platform: gone
 				if (theme === 'sky' && (Math.abs(S.p.x) > W2 + 1.5) && !S.result) S.result = 'edge';
 			}
+			// ---------- the archer ----------
+			function archerAt() {
+				// the draw follows your drag; loosed, the bow arm holds as the arrow flies
+				const r = K.size(), dl = K.ptr.down && S.state === 'aim' && S.draw0 ? clamp(Math.hypot(K.ptr.x - S.draw0[0], K.ptr.y - S.draw0[1]) / (r.height * 0.3), 0, 1) : 0;
+				S.drawK = (S.drawK || 0) + ((S.state === 'aim' ? 0.35 + dl * 0.65 : S.state === 'fly' ? 0.4 : 0.1) - (S.drawK || 0)) * 0.25;
+				archer.act('draw', S.drawK);
+				const hnd = archer.at('wrist.L', tv);
+				if (!hnd) { bow.visible = false; return; }
+				bow.visible = true;
+				K.local(hnd, bow.position);
+				bow.position.y += 0.04;
+				const str = bow.userData.string;
+				str.position.set(0, 0, 0.26 + (S.drawK - 0.35) * 0.5);
+				// the arrow nocked on the string until it is loosed
+				if (S.state === 'aim' && ball) { S.p.copy(bow.position); ball.position.copy(S.p); ball.position.z -= 0.3; }
+			}
 			// ---------- the keeper ----------
 			function keeperAt(dt) {
 				const P = S.kp;
@@ -371,8 +401,10 @@ function makeGame(theme) {
 				const y = theme === 'ocean' ? floorY(P.x, KZ) - 0.75 + Math.sin(K.time * 2) * 0.05 : floorY(P.x, KZ);
 				keeper.g.position.set(P.x, y + (S.state === 'aim' ? Math.abs(Math.sin(K.time * 4)) * 0.05 : 0), KZ - 0.1);
 				keeper.g.rotation.set(0, Math.PI, -P.lean);
+				// ready, arms wide; at full stretch while the ball is coming
 				const up = S.state === 'fly' && !S.result ? 1 : 0.2;
-				keeper.arms[0].rotation.z = -0.4 - up * 1.8; keeper.arms[1].rotation.z = 0.4 + up * 1.8;
+				if (S.throwT > 0) S.throwT -= dt;
+				else keeper.act(up > 0.5 ? 'reach' : 'ready', 0);
 			}
 
 			// ---------- the hazards ----------
@@ -486,6 +518,7 @@ function makeGame(theme) {
 				if (halo) { halo.position.copy(S.p); halo.visible = ball.visible; halo.material.opacity = C.heat ? 0.25 + 0.7 * (S.state === 'fly' ? S.shotHeat : S.heat) : 0.8 + Math.sin(K.time * 3) * 0.15; }
 				if (haze) { haze.set(S.p, K.camera, C.heat ? (S.state === 'fly' ? S.shotHeat : S.heat) : 0, K.time); haze.mesh.visible = ball.visible; }
 				fx.tick(dt, K); dust?.tick(dt, K);
+				if (archer) archerAt();
 				camera();
 			}
 			function deliver() {
@@ -529,6 +562,7 @@ function makeGame(theme) {
 				K.say(say, 1100);
 				S.state = 'after'; S.t = 0; S.stuck = false; S.whirl = false;
 				// the keeper throws one back
+				if (theme === 'toxic') { keeper.play('throw', 0.7, true); S.throwT = 0.7; }
 				if (theme === 'toxic') bombAt(clamp(S.pxT + rand(-0.8, 0.8), -6.5, 6.5), rand(-0.4, 0.8), 'acid');
 				hud();
 			}

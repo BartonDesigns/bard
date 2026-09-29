@@ -58,10 +58,9 @@ export const GAME = {
 			surfer = K.group();
 			board = K.box(1.9, 0.06, 0.5, '#f7f1e3', 0, 0, 0, surfer);
 			K.box(1.7, 0.062, 0.05, '#e2552a', 0, 0.001, 0, board);
-			body = K.group(surfer);
-			K.cyl(0.14, 0.16, 0.8, '#15161a', 0, 0.55, 0, body);
-			K.ball(0.12, '#c99a74', 0, 1.05, 0, body);
-			K.box(1.1, 0.08, 0.08, '#15161a', 0, 0.75, 0, body);
+			// the surfer: a real person in a wetsuit (Ocean Beach is cold), paddling on the
+			// board, then up and riding side-on
+			body = K.person({ parent: surfer, seed: 61, age: 24, still: true, style: (d, r) => ({ gen: 'z', top: { kind: 'suit', col: '#15161a', acc: ['#2354c7', '#3fc2c0', '#f07a28'][Math.floor(r() * 3)], pat: 'block', fit: 'tight', sleeves: 'long', fab: 'tech' }, outer: null, bottom: { kind: 'suit', col: '#15161a', pat: 'plain', legs: 'long', fit: 'tight', fab: 'tech' }, shoes: { kind: 'barefoot' }, acc: [] }) });
 			meter = K.meter('Tap to paddle!', 'linear-gradient(90deg,#c8321c,#d9a21c 45%,#01a982 55%,#01a982)');
 		}
 		function reset() {
@@ -149,7 +148,9 @@ export const GAME = {
 			S.prevH = S.h;
 			surfer.rotation.set(0, 0, pitch);
 			board.rotation.x = S.state === 'ride' ? 0.55 : 0;
-			body.visible = S.state !== 'paddle' && S.state !== 'missed';
+			const prone = S.state === 'paddle' || S.state === 'missed' || S.state === 'wait';
+			if (prone) { body.play('paddle', 1.1); body.g.position.set(0.85, 0.02, 0); body.g.rotation.y = Math.PI / 2; }
+			else { body.act('surf', 0); body.g.position.set(0, 0.03, 0); body.g.rotation.y = 0; }
 			if (S.state === 'paddle' || S.state === 'missed') K.cam(S.x - 1, 2.4, -2, S.x, 1.2, -26, 3);
 			else K.cam(S.x - 3, 3.2, -3.5, S.x + 3, 1.2, -12, 3);
 		}
