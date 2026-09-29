@@ -15,6 +15,7 @@ import { caveLighting, rockMaterial, crystalMaterial, waterMaterial, lavaMateria
 import { buildRuins } from './caveruins.js';
 import { createCaveVillage } from './cavevillage.js';
 import { soundBus, noise } from '../world/soundbus.js';
+import { createDinosaurs } from './dinosaurs.js';
 
 const EYE = 1.68;
 const CHUNK = 24;
@@ -38,7 +39,10 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	for (const v of shared.uHoles.value) v.set(0, 0, 0, 0);
 	// (the plan may have been made earlier, to keep the plants out of the mouths: planCaves)
 	const plan = opts.plan || planCaves(island, profile);
-	const none = { update() {}, floor: () => null, push() {}, inside: () => 0, fog: () => [0.02, 0.022, 0.026], entrances: [], spots: [], go: () => 'no caves on this world', dispose() {}, plan: null };
+	// the wild worlds' dinosaurs walk the ground above (planet/dinosaurs.js): made with the underworld,
+	// which every other world gets, so they share its frame, its tap list and its clearing up
+	const dinos = createDinosaurs(island, shared, scene, camera, profile, { isPhone });
+	const none = { update: (dt, t) => dinos?.update(dt, t), floor: () => null, push() {}, inside: () => 0, fog: () => [0.02, 0.022, 0.026], entrances: [], spots: [], go: () => 'no caves on this world', dispose: () => dinos?.dispose(), plan: null, pickables: dinos?.pickables || [], dinosaurs: dinos };
 	if (!plan || !plan.entrances.length) return none;
 	const { field, chambers, tunnels, entrances, shaft } = plan;
 	const H = island.heightAt;
@@ -593,6 +597,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	const tmp = new THREE.Vector3(), fwd = new THREE.Vector3();
 	const fogC = new THREE.Color(...glowC).multiplyScalar(0.035).lerp(new THREE.Color(0.012, 0.012, 0.014), 0.5);
 	function update(dt, t) {
+		dinos?.update(dt, t);
 		const cam = camera.position;
 		// how far underground the camera is
 		let target = 0;
@@ -713,6 +718,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		return list[entrances.indexOf(e)].name;
 	}
 	function dispose() {
+		dinos?.dispose();
 		scene.remove(group);
 		group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		village?.dispose();
@@ -722,7 +728,8 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	}
 	const api = {
 		update, floor, push, go, dispose, entrances: list, spots,
-		pickables: crystalIM ? [crystalIM] : [],
+		pickables: [...(crystalIM ? [crystalIM] : []), ...(dinos?.pickables || [])],
+		dinosaurs: dinos,
 		inside: () => inK,
 		// for others building underground: a glowing place to light the rock, and the lighting
 		addGlow, lighting: L, openHoles,
