@@ -48,7 +48,7 @@ function nearestOn(p, x, z) {
 }
 
 export function createDrive({ world, camera, mount, isPhone, hint, strike = null }) {
-	const D = { active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined, mode: 'free', kind: 'sedan', color: new THREE.Color(0.1, 0.2, 0.45), car: null, chase: false, pedals: {} };
+	const D = { active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined, mode: 'free', kind: 'crossover', color: new THREE.Color(0.1, 0.2, 0.45), car: null, chase: false, pedals: {} };
 	const KINDS = ['sedan', 'hatch', 'crossover', 'suv', 'pickup', 'van', 'sports', 'delivery', 'truck', 'bus'];
 	const CREDITS = 'Vehicle models (CC BY 4.0): "Car Concept" by Eric Chadwick / Darmstadt Graphics Group; "Red Car" by Camay; "European Delivery Van" by Evan Hiltz; "Generic Town Bus" by own.guest. Physics: Rapier. Details: assets/vehicles/CREDITS.md';
 
@@ -279,6 +279,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const W = world(), P = W?.player.state, Vh = W?.vehicles, mine = Vh?.mine.car;
 		D.active = false;
 		D.car?.dispose(); D.car = null;
+		if (camera.near !== 0.25) { camera.near = 0.25; camera.updateProjectionMatrix(); }
 		// out of the driver's door; the car stays where it is
 		if (P && mine) {
 			Vh.setMine(mine.kind, mine.color, mine.matrix, { driving: false });
@@ -425,6 +426,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (D.chase) {
 			// from behind and above, looking over the car
 			const S = specOf(D.kind), back = S.L / 2 + 4 + S.H, fx = Math.sin(carYaw + D.look), fz = Math.cos(carYaw + D.look);
+			if (camera.near !== 0.25) { camera.near = 0.25; camera.updateProjectionMatrix(); }
 			const want = new THREE.Vector3(e[12] - fx * back, e[13] + S.H + 1.6, e[14] - fz * back);
 			const g = W.island.heightAt(want.x, want.z) + 1;
 			if (want.y < g) want.y = g;
@@ -433,6 +435,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 			P.pos.copy(camera.position);
 		} else {
 			D.chaseOn = false;
+			// (at the wheel the dash and the pillars are close: the near plane comes in to them)
+			if (camera.near !== 0.05) { camera.near = 0.05; camera.updateProjectionMatrix(); }
 			// at the wheel: the driver's eye, turning with the car (and your head on top)
 			const eye = seatsOf(D.kind).eye;
 			camera.position.set(eye[0], eye[1], eye[2]).applyMatrix4(M4);

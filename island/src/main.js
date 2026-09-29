@@ -1345,6 +1345,8 @@ if (typeof window !== 'undefined') {
 		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
 		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),
 		ragdolls: () => HOOKS.ragdolls?.info(),
+		// (tests: run the fallen on by n steps of 1/60 s)
+		ragdollStep: (n = 1) => { for (let i = 0; i < n; i++) HOOKS.ragdolls?.update(1 / 60); return HOOKS.ragdolls?.info(); },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), physics: () => HOOKS.drive?.physics?.(), get state() { return HOOKS.drive?.state; } },
 		// the hills' season: 0 spring green .. 1 summer gold
