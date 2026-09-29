@@ -72,7 +72,8 @@ export function createCarjack({ world, camera, drive, ragdolls, avatar, hint }) 
 			me.M.want.heading = Math.atan2(ex, ez); me.M.want.speed = d > 0.3 ? Math.min(1.8, d * 2) : 0;
 			if ((d < 0.35 && c.v < 0.6) || J.t > 4) { J.phase = 'reach'; J.t = 0; me.M.want.speed = 0; me.M.want.heading = Math.atan2(-sx, -sz); }
 		} else if (J.phase === 'reach') {
-			me.M.act('reach', Math.min(0.55, J.t * 1.1));
+			// (both hands in through the window, at the collar)
+			if (J.t < dt * 1.5) me.M.setPose('push');
 			if (J.t > 0.5) {
 				// out they come: hauled by the collar, away from the car and down
 				const b = W.vehicles.life.pull(c);
