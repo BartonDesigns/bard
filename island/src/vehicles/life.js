@@ -35,7 +35,8 @@ export function createLife({ scene, world, camera, isPhone }) {
 	// a small cache of people, by who they are (so a driver seen again is the same person)
 	const bodies = new Map();                  // seed -> body
 	let buildT = 0;
-	function body(seed, now) {
+	function body(seed) {
+		const now = performance.now() / 1000;
 		let b = bodies.get(seed);
 		if (b) { b.used = now; return b; }
 		if (!A || now - buildT < 0.35) return null;
@@ -100,7 +101,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 			let bs = seated.get(c);
 			if (!bs) { if (budget < need) continue; seated.set(c, bs = []); }
 			// (everyone in the car at once, or the silhouettes stay until they all are)
-			while (bs.length < need) { const b = body(hashS(c.id + ':' + bs.length), t); if (!b || b.busy) break; b.busy = true; seat(b, c.kind, bs.length); b.P.root.visible = false; bs.push(b); }
+			while (bs.length < need) { const b = body(hashS(c.id + ':' + bs.length)); if (!b || b.busy) break; b.busy = true; seat(b, c.kind, bs.length); b.P.root.visible = false; bs.push(b); }
 			budget -= need;
 			const all = bs.length === need;
 			c.seated = all;
@@ -184,7 +185,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	function run(E, dt, t, cam) {
 		const W = world(), car = E.car, St = W.street;
 		const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
-		if (!E.b) { E.b = body(hashS('owner' + E.o.id), t); if (!E.b) return E.wait = (E.wait || 0) + dt, E.wait < 20; if (E.b.busy) { E.b = null; return true; } E.b.busy = true; E.t = 0; }
+		if (!E.b) { E.b = body(hashS('owner' + E.o.id)); if (!E.b) return E.wait = (E.wait || 0) + dt, E.wait < 20; if (E.b.busy) { E.b = null; return true; } E.b.busy = true; E.t = 0; }
 		E.t += dt;
 		const b = E.b;
 		switch (E.phase) {
