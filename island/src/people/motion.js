@@ -56,6 +56,8 @@ export const POSES = {
 	// seated: hands in the lap, or forearms on a table
 	lap: { both: arm({ abd: 0.12, flex: 0.55, roll: 0.5, bend: 1.05, pro: 0.6, curl: 0.4 }), swing: 0 },
 	table: { both: arm({ abd: 0.2, flex: 0.85, roll: 0.35, bend: 1.45, pro: 0.9, curl: 0.3 }), swing: 0 },
+	// at the wheel: both hands up and forward on the rim, loosely closed
+	drive: { both: arm({ abd: 0.24, flex: 1.0, roll: 0.3, bend: 0.95, pro: 0.95, wflex: -0.1, curl: 0.75 }), swing: 0 },
 	// a book held up in both hands, the head bent to it; hands held out to a small stove;
 	// both hands on a cart's handle, pushing it
 	read: { both: arm({ abd: 0.16, flex: 0.62, roll: 0.55, bend: 1.8, pro: 1.0, wflex: -0.2, curl: 0.35 }), swing: 0, look: 0.5 },
