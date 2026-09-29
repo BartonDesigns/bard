@@ -28118,6 +28118,9 @@ const EDITS=[
  ["surfaceMode     = 'entering';\n    window._entryFrame190=performance.now();","surfaceMode     = 'entering';\n    try{window.L99Dive227&&window.L99Dive227.start(planet);}catch(eD227){}\n    window._entryFrame190=performance.now();","entry hook"],
  ["if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';","if (surfaceOverlayMesh) surfaceOverlayMesh.visible = false;   // vox326: degraded boot ran without the overlay; entering crashed here every frame\n      surfaceMode = 'surface';\n      try{window.L99Dive227&&window.L99Dive227.landed();}catch(eL227){}","landed hook"],
  ["'Above '+packet.planet.name+'. Keep climbing to reach space.'","(window._V1_SURFACES!==true||packet.planet.earth?'In orbit round '+packet.planet.name+'.':'Above '+packet.planet.name+'. Keep climbing to reach space.')","orbit whisper"],
+ /* Journey leaves display:block on the ship's overlay when it arrives; parked, that inline style
+    kept the flight view (over the old surface) on top of the island on every later landing */
+ ["park:()=>{setCockpitMode('closed');}","park:()=>{setCockpitMode('closed');const o227=document.getElementById('cockpit-overlay');if(o227){o227.style.display='';o227.style.opacity='';}}","park clears overlay"],
  /* V1 bookmarks and #place= links put you straight on the old surface: land them in Crysis */
  ["function teleportToBookmark(bookmark) {","function teleportToBookmark(bookmark) {\n  if(window._V1_SURFACES!==true){if(bookmark&&window.L99IslandLanding)window.L99IslandLanding.land({userData:{planetType:bookmark.type,seed:bookmark.seed,id:'place:'+bookmark.type+':'+bookmark.seed}});return;}","bookmark landing"]
 ];

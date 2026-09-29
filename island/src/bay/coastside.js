@@ -83,10 +83,10 @@ vec3 coastSide(vec3 c, vec2 w, float h, float slope, float sea, float urb, float
 		c = mix(c, ss, cliffK);
 	}
 	// the coves' sand: warm tan, from the sandstone it is ground from
-	float cove = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.03, 0.08, slope)) * step(-0.5, h) * (1.0 - smoothstep(300.0, 600.0, sea));
+	float cove = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.03, 0.08, slope)) * step(-0.5, h) * (1.0 - smoothstep(150.0, 300.0, sea));
 	c = mix(c, mix(vec3(0.5, 0.41, 0.28), vec3(0.6, 0.5, 0.35), n2) * mix(0.72, 1.0, smoothstep(0.3, 1.2, h)), cove);
 	// rocks in the coves at the cliff foot, dark and wet
-	float lowSand = (1.0 - smoothstep(1.8, 3.5, h)) * step(-0.3, h) * (1.0 - smoothstep(250.0, 450.0, sea)) * (1.0 - cliffK);
+	float lowSand = (1.0 - smoothstep(1.8, 3.5, h)) * step(-0.3, h) * (1.0 - smoothstep(80.0, 150.0, sea)) * (1.0 - cliffK);
 	if (lowSand > 0.0) {
 		float rk = smoothstep(0.62, 0.7, wVn(w / 14.0 + 3.0) * 0.7 + wVn(w / 3.3) * 0.3);
 		c = mix(c, mix(vec3(0.07, 0.065, 0.06), vec3(0.16, 0.14, 0.12), n3), rk * lowSand);

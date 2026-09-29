@@ -311,7 +311,7 @@ const HALO_FRAG = /* glsl */`
 varying float vK; varying vec2 vP;
 void main(){
 	float g = pow(1.0 - vK, 2.2) * (0.7 + 0.3 * gvn(vP * 0.08 + uTime * 0.15));
-	gl_FragColor = vec4(vec3(1.0, 0.3, 0.05) * g * (0.35 + uNight * 0.9), 1.0);
+	gl_FragColor = vec4(vec3(1.0, 0.3, 0.05) * g * (0.6 + uNight * 0.9), 1.0);
 }`;
 
 // opts: heightAt (the ground as walked, CPU), ground (the road's level for a deck, as walked),

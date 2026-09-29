@@ -99,7 +99,7 @@ function centreLine() {
 		const q = P[i], a = sm(v0, v0 + 3, q.cp);
 		if (a <= 0) continue;
 		const tx = P[i + 1].x - P[i - 1].x, tz = P[i + 1].z - P[i - 1].z, l = Math.hypot(tx, tz) || 1, s = i * STEP;
-		const off = a * 17 * Math.sin(s / 95 + 1.3 * Math.sin(s / 310)) * (1 - sm(P.length - 1 - 110 / STEP, P.length - 1 - 25 / STEP, i));
+		const off = a * (24 * Math.sin(s / 95 + 1.3 * Math.sin(s / 310)) + 6 * Math.sin(s / 37 + 2.1)) * (1 - sm(P.length - 1 - 110 / STEP, P.length - 1 - 25 / STEP, i));
 		q.mx = q.x + tz / l * off; q.mz = q.z - tx / l * off;
 	}
 	for (const q of P) if (q.mx !== undefined) { q.x = q.mx; q.z = q.mz; }
@@ -122,7 +122,7 @@ function centreLine() {
 		S.tx[i] = tx / l; S.tz[i] = tz / l;
 		// (opening out to the river above's width at the join)
 		// (breathing a little wider and narrower up the valley)
-		if (S.zone[i] === 'valley') S.w[i] *= 1 + 0.14 * Math.sin(i * STEP / 130 + 0.7) * Math.sin(i * STEP / 47);
+		if (S.zone[i] === 'valley') S.w[i] *= 1 + 0.22 * Math.sin(i * STEP / 130 + 0.7) * Math.sin(i * STEP / 47);
 		S.w[i] += (JOIN_HW - S.w[i]) * sm((n - 1) * STEP - JOIN_RAMP, (n - 1) * STEP, i * STEP);
 	}
 	// the control points' places along it (for the levels and the bridges)
@@ -201,7 +201,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		S.L = W;
 		// where it falls faster, a little broken water; the depth follows (deeper where still)
 		S.foam = new Float32Array(n);
-		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(0.3, Math.max(0, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) - 0.006) * 15);
+		for (let i = 1; i + 1 < n; i++) S.foam[i] = Math.min(0.2, Math.max(0, Math.abs(W[i + 1] - W[i - 1]) / (2 * STEP) - 0.012) * 10);
 		for (let i = 0; i < n; i++) if (S.zone[i] === 'valley') S.D[i] = 0.55 + 1.35 * (1 - Math.min(1, S.foam[i] * 1.5));
 		for (let i = 0; i < n && i * STEP < sLag; i++) S.foam[i] = Math.max(S.foam[i], 0.5 * (1 - i * STEP / sLag));
 		S.sHwy = sHwy; S.sLaurel = sLaurel; S.sBeach = sBeach; S.sSurf = sSurf;
@@ -515,7 +515,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		g.setAttribute('aFl', new THREE.Float32BufferAttribute(fl, 4));
 		g.setIndex(idx);
 		g.computeBoundingSphere();
-		const U = { uFade: { value: new THREE.Vector2(S.sSurf, S.sBeach + 45) }, uTime, uNight, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor };
+		const U = { uO: { value: new THREE.Vector2(Math.round(S.x[0]), Math.round(S.z[0])) }, uFade: { value: new THREE.Vector2(S.sSurf, S.sBeach + 45) }, uTime, uNight, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor };
 		const mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]), vertexShader: WATER_VERT, fragmentShader: WATER_FRAG, fog: true });
 		Object.assign(mat.uniforms, U);
 		const mesh = new THREE.Mesh(g, mat);
@@ -687,7 +687,7 @@ const WATER_VERT = /* glsl */`
 		#include <fog_vertex>
 	}`;
 const WATER_FRAG = /* glsl */`
-	uniform float uTime, uNight; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor;
+	uniform float uTime, uNight; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform vec2 uO;
 	varying vec3 vW; varying vec2 vSD; varying vec4 vFl;
 	#include <fog_pars_fragment>
 	float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -700,10 +700,14 @@ const WATER_FRAG = /* glsl */`
 		return mix(rip(p - v * b * T + 17.0), rip(p - v * a * T), wa) + 0.25 * vn(p * 0.2 + uTime * 0.05);
 	}
 	void main(){
-		vec2 v = vFl.xy * vFl.z, p = vW.xz;
+		// (from the river's own origin: the world's coordinates are too big for noise this fine,
+		// and ripple into bands)
+		vec2 v = vFl.xy * vFl.z, p = vW.xz - uO;
 		float e = 0.25, h = flowH(p, v);
 		float sx = flowH(p + vec2(e, 0.0), v) - h, sz = flowH(p + vec2(0.0, e), v) - h;
-		float amp = 0.35 + 0.5 * vFl.w + 0.2 * vFl.z;
+		// slow in town and the lagoon: glassy, the banks and bridges dark in it
+		float calm = 1.0 - smoothstep(0.2, 0.45, vFl.z);
+		float amp = mix(0.35 + 0.5 * vFl.w + 0.2 * vFl.z, 0.1, calm);
 		vec3 n = normalize(vec3(-sx * amp / e, 1.0, -sz * amp / e));
 		vec3 vv = normalize(cameraPosition - vW);
 		vec3 r = reflect(-vv, n);
@@ -715,11 +719,14 @@ const WATER_FRAG = /* glsl */`
 		sky = mix(vec3(0.035, 0.06, 0.03) * (1.0 - uNight * 0.8), sky, smoothstep(0.06, 0.26, r.y + (vn(p * 0.04) - 0.5) * 0.12));
 		float edge = smoothstep(0.6, 1.0, abs(vSD.y));
 		vec3 deep = mix(vec3(0.022, 0.058, 0.066), vec3(0.085, 0.09, 0.062), edge) * (1.0 - uNight * 0.85);
-		vec3 col = mix(deep, sky, fres * 0.82);
-		col += uSunColor * pow(max(dot(r, uSunDir), 0.0), 400.0) * 4.0 * (1.0 - uNight) + uSunColor * pow(max(dot(r, uSunDir), 0.0), 30.0) * 0.08 * (1.0 - uNight);
-		// white water over the riffles, a lace of it along the banks
+		deep *= 1.0 - calm * 0.35;
+		vec3 col = mix(deep, sky, fres * mix(0.82, 0.95, calm));
+		col += uSunColor * min(1.5, pow(max(dot(r, uSunDir), 0.0), mix(400.0, 900.0, calm)) * 4.0) * (1.0 - uNight) + uSunColor * pow(max(dot(r, uSunDir), 0.0), 30.0) * 0.08 * (1.0 - uNight);
+		// white water over the riffles, in flecks and threads along the flow; a little lace at
+		// the banks where it runs
 		float fn = vn((p - v * uTime) * 0.9) * 0.6 + vn((p - v * uTime * 1.3) * 2.6) * 0.4;
-		float foam = smoothstep(0.75, 0.95, fn + vFl.w * 0.55) * min(1.0, vFl.w * 1.6 + 0.08) + smoothstep(0.86, 1.0, abs(vSD.y)) * smoothstep(0.45, 0.8, fn) * 0.5;
+		float fleck = smoothstep(0.5, 0.8, vn((p - v * uTime * 1.6) * vec2(3.1, 4.3) + 7.0));
+		float foam = smoothstep(0.78, 0.95, fn + vFl.w * 0.5) * min(1.0, vFl.w * 1.6) * fleck + smoothstep(0.9, 1.0, abs(vSD.y)) * smoothstep(0.55, 0.85, fn) * 0.3 * (1.0 - calm);
 		col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.85), clamp(foam, 0.0, 0.9));
 		gl_FragColor = vec4(col, 1.0);
 		#include <tonemapping_fragment>
