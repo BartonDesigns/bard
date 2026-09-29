@@ -209,6 +209,8 @@ export function createMotion(P, groundAt) {
 		return X;
 	}
 	function update(dt, t, cam) {
+		// (gone limp: the ragdoll moves the bones now, people/ragdoll.js)
+		if (P.ragdoll) return;
 		dt = Math.min(dt, 0.05);
 		const X = actionNow(dt), aw = X.w;
 		// ---- smoothed intentions ----

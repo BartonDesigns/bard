@@ -88,6 +88,7 @@ import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
 import { createPeople } from './people/people.js';
 import { createGhost } from './people/ghost.js';
+import { createRagdolls } from './people/ragdoll.js';
 import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
@@ -309,6 +310,9 @@ export function createIslandWorld() {
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
 	HOOKS.drive = drive;
+	// anyone struck down or thrown: limp, weighed bodies (people/ragdoll.js)
+	const ragdolls = createRagdolls({ world: () => world, isPhone });
+	HOOKS.ragdolls = ragdolls;
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
@@ -1000,6 +1004,7 @@ export function createIslandWorld() {
 		if (visible && !arcade.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
 		W.vehicles?.update(dt, time);
+		ragdolls.update(dt);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		W.lake?.update(dt, time, camera, sk.night);
@@ -1335,6 +1340,9 @@ if (typeof window !== 'undefined') {
 		// 'force' (whatever the hour and the trees), a strength (1 is as made), or { burst: false }
 		rays: (v) => window.L99Island?.world?.()?.rays?.control(v) ?? 'no world yet',
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
+		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
+		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),
+		ragdolls: () => HOOKS.ragdolls?.info(),
 		// drive the roads: Crysis.drive.start(), .stop(), .state
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), physics: () => HOOKS.drive?.physics?.(), get state() { return HOOKS.drive?.state; } },
 		// the hills' season: 0 spring green .. 1 summer gold
