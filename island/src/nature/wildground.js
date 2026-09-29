@@ -335,6 +335,14 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 				const s = 0.04 + Math.pow(r(), 2.5) * (E.slope > 0.25 ? 0.35 : 0.15);
 				put(Lst, x, z, r() * 6.28, s, s * 0.8, J(col.map((c) => c * 0.72), 0.18), Math.floor(r() * 2), s * 0.62, true);
 			});
+			// the tread's edge is never a clean line: duff and leaves drift over it, grass and
+			// pebbles creep in (the ground's painted ribbon stops hard; this breaks it up)
+			scatter(Math.round(36 * K), (x, z) => { const d = trailD(x, z); return d > -0.45 && d < 0.6 ? 1 : 0; }, (x, z) => {
+				const q = r();
+				if (E.wood > 0.25 || E.redwood > 0.1) put(Llf, x, z, r() * 6.28, 0.4 + r() * 0.4, 1, E.redwood > 0.3 ? J([0.3, 0.2, 0.14], 0.2) : J([0.4, 0.33, 0.24], 0.2), E.redwood > 0.3 ? 2 : Math.floor(r() * 2), 0, true);
+				else if (q < 0.6) put(Ls, x, z, r() * 6.28, 0.7 + r() * 0.5, 0.7 + r() * 0.5, J([0.8, 0.62, 0.3], 0.15), 0, 0.03);
+				else put(Lst, x, z, r() * 6.28, 0.04 + r() * 0.06, 0.05, J(col.map((c) => c * 0.8), 0.15), Math.floor(r() * 2), 0.02, true);
+			});
 			// roots worn bare across the tread under the trees
 			if (E.wood > 0.3) scatter(Math.round(10 * K * E.wood), (x, z) => (trailD(x, z) < 0.3 ? 1 : 0), (x, z) => {
 				put(Lrt, x, z, tA + (r() - 0.5) * 0.9, 0.8 + r() * 0.5, 0.8 + r() * 0.4, J([1, 1, 1], 0.15), Math.floor(r() * 2), 0.0, true);
