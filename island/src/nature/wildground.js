@@ -85,7 +85,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	// ---------- the layers ----------
 	const fogU = { value: 0 };
 	const atlas = PL.leafAtlas();
-	const leafM = swayMaterial({ map: atlas, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.85 }, shared, 0.7);
+	const leafM = swayMaterial({ map: atlas, alphaTest: 0.32, side: THREE.DoubleSide, roughness: 0.85 }, shared, 0.7);
 	const fernM = swayMaterial({ map: atlas, alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.8 }, shared, 0.9);
 	const woodM = swayMaterial({ roughness: 0.92 }, shared, 0.6);
 	const bladeM = swayMaterial({ side: THREE.DoubleSide, roughness: 0.9 }, shared, 1.4);
@@ -231,7 +231,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		const J = (base, k = 0.12) => base.map((c) => c * (1 - k + r() * 2 * k));
 
 		// the grass: bunches in the open, sparse under the oaks, none under the redwoods
-		const grassK = E.open * (1 - E.redwood) + E.wood * 0.12 * (1 - E.redwood) + E.chaparral * 0.15;
+		// (city.js stands redwoods wherever the fog belt is even a little wooded: no grass there)
+		const grassK = (E.open + E.wood * 0.12 + E.chaparral * 0.15) * (1 - Math.min(1, E.redwood * 2.5));
 		if (grassK > 0.02) {
 			const gold = [0.52 + season * 0.12, 0.38 + season * 0.02, 0.14], green = [0.26, 0.44, 0.1];
 			const tone = (x, z) => { const dry = Math.min(1, Math.max(0, season * 1.25 - 0.1 + (drift(x, z, 40, 3) - 0.5) * 0.5 - E.fog * 0.25 * (1 - season))); return green.map((g, k) => (g + (gold[k] - g) * dry) * 1.7); };
@@ -291,7 +292,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		// the redwood floor: sword ferns everywhere in the shade, sorrel carpets, huckleberry
 		// in the light gaps; no grass
 		if (E.redwood > 0.12) {
-			scatter(Math.round(34 * K * E.redwood), (x, z) => (0.25 + drift(x, z, 10, 6)) * (avoidT(x, z, 0.5) ? 1 : 0), (x, z) => {
+			scatter(Math.round(34 * K * Math.min(1, E.redwood * 2)), (x, z) => (0.25 + drift(x, z, 10, 6)) * (avoidT(x, z, 0.5) ? 1 : 0), (x, z) => {
 				const s = 0.75 + r() * 0.6;
 				put(Lfn, x, z, r() * 6.28, s, s, J([1, 1, 1], 0.15), Math.floor(r() * 2), 0.03);
 			});
@@ -332,7 +333,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 			const col = E.rock ? [E.rock.col.r, E.rock.col.g, E.rock.col.b].map((c) => c * 0.9 + 0.08) : [0.45, 0.4, 0.34];
 			scatter(Math.round(40 * K), (x, z) => (trailD(x, z) < 0.2 ? 1 : 0), (x, z) => {
 				const s = 0.04 + Math.pow(r(), 2.5) * (E.slope > 0.25 ? 0.35 : 0.15);
-				put(Lst, x, z, r() * 6.28, s, s * 0.8, J(col, 0.18), Math.floor(r() * 2), s * 0.45, true);
+				put(Lst, x, z, r() * 6.28, s, s * 0.8, J(col.map((c) => c * 0.72), 0.18), Math.floor(r() * 2), s * 0.62, true);
 			});
 			// roots worn bare across the tread under the trees
 			if (E.wood > 0.3) scatter(Math.round(10 * K * E.wood), (x, z) => (trailD(x, z) < 0.3 ? 1 : 0), (x, z) => {

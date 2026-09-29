@@ -35,14 +35,14 @@ export function leafAtlas() {
 	// coyote brush: a dense clump of small toothed leaves on many short twigs
 	cell(0, () => {
 		for (let i = 0; i < 9; i++) twig(S / 2, S * 0.95, S * (0.15 + r() * 0.7), S * (0.1 + r() * 0.4), 2, 150);
-		for (let i = 0; i < 260; i++) { const a = r() * 6.28, d = Math.pow(r(), 0.6) * S * 0.44; leaf(S / 2 + Math.cos(a) * d, S * 0.48 + Math.sin(a) * d * 0.9, 7 + r() * 5, 4 + r() * 2, r() * 6.28, (150 + r() * 100) * (0.7 + 0.3 * d / (S * 0.44)), [0.78, 1, 0.6], false); }
+		for (let i = 0; i < 380; i++) { const a = r() * 6.28, d = Math.pow(r(), 0.6) * S * 0.44; leaf(S / 2 + Math.cos(a) * d, S * 0.48 + Math.sin(a) * d * 0.9, 9 + r() * 5, 5 + r() * 2, r() * 6.28, (150 + r() * 100) * (0.7 + 0.3 * d / (S * 0.44)), [0.78, 1, 0.6], false); }
 	});
 	// chamise: wiry stems with little bundles of needle leaves
 	cell(1, () => {
 		for (let i = 0; i < 14; i++) twig(S * (0.3 + r() * 0.4), S, S * (0.05 + r() * 0.9), S * (0.05 + r() * 0.5), 1.5, 120);
-		for (let i = 0; i < 420; i++) {
+		for (let i = 0; i < 700; i++) {
 			const x = S * (0.08 + r() * 0.84), y = S * (0.06 + Math.pow(r(), 0.8) * 0.8), l = 130 + r() * 110;
-			g.strokeStyle = rgb(l, [0.85, 1, 0.62]); g.lineWidth = 1.3;
+			g.strokeStyle = rgb(l, [0.85, 1, 0.62]); g.lineWidth = 2.4;
 			for (let k = 0; k < 4; k++) { const a = r() * 6.28; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 7, y + Math.sin(a) * 7); g.stroke(); }
 		}
 	});
@@ -71,7 +71,7 @@ export function leafAtlas() {
 		for (let i = 0; i < 10; i++) twig(S / 2, S, S * (0.1 + r() * 0.8), S * (0.1 + r() * 0.5), 1.2, 150);
 		for (let i = 0; i < 900; i++) {
 			const a = r() * 6.28, d = Math.pow(r(), 0.6) * S * 0.45, x = S / 2 + Math.cos(a) * d, y = S * 0.5 + Math.sin(a) * d * 0.9, l = 170 + r() * 80, b = r() * 6.28;
-			g.strokeStyle = rgb(l, [0.92, 0.98, 0.9], 0.9); g.lineWidth = 1; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(b) * 6, y + Math.sin(b) * 6); g.stroke();
+			g.strokeStyle = rgb(l, [0.92, 0.98, 0.9], 0.95); g.lineWidth = 2; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(b) * 6, y + Math.sin(b) * 6); g.stroke();
 		}
 	});
 	// sword fern: one long frond of narrow toothed pinnae (u runs along it)
@@ -85,7 +85,7 @@ export function leafAtlas() {
 	// huckleberry: small neat oval leaves in flat sprays (and redwood sorrel's clover)
 	cell(7, () => {
 		for (let i = 0; i < 8; i++) twig(S / 2, S, S * (0.1 + r() * 0.8), S * (0.1 + r() * 0.5), 1.5, 110);
-		for (let i = 0; i < 200; i++) { const a = r() * 6.28, d = Math.pow(r(), 0.6) * S * 0.45; leaf(S / 2 + Math.cos(a) * d, S * 0.48 + Math.sin(a) * d, 8 + r() * 3, 5, r() * 6.28, (130 + r() * 110) * (0.75 + 0.25 * d / (S * 0.45)), [0.76, 1, 0.62], false); }
+		for (let i = 0; i < 280; i++) { const a = r() * 6.28, d = Math.pow(r(), 0.6) * S * 0.45; leaf(S / 2 + Math.cos(a) * d, S * 0.48 + Math.sin(a) * d, 9 + r() * 3, 6, r() * 6.28, (130 + r() * 110) * (0.75 + 0.25 * d / (S * 0.45)), [0.76, 1, 0.62], false); }
 	});
 	atlas = new THREE.CanvasTexture(c);
 	atlas.colorSpace = THREE.SRGBColorSpace;
