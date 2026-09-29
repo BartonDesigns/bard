@@ -1,0 +1,15 @@
+{
+  "name": "l99-discovery",
+  "private": true,
+  "type": "module",
+  "description": "Shared discovery server for Level 99 Bard: one canonical brief per place, made once on Workers AI's free allowance",
+  "scripts": {
+    "test": "node test/worker.test.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/check"
+  },
+  "devDependencies": {
+    "wrangler": "^4.143.0"
+  }
+}

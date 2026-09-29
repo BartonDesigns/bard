@@ -3,7 +3,7 @@
 // makes are the game's. Nothing a player sends reaches a prompt: a place is only ever its id
 // (an atlas city's, or a generated town's 'gen:<slug>:<lat>,<lon>') and a size class.
 
-import { useAtlasData, city as atlasCity, cities, regionAt } from '../../../island/src/earth/atlas.js';
+import { useAtlasData, city as atlasCity, cities, regionAt, slug } from '../../../island/src/earth/atlas.js';
 import * as DATA from '../../../island/src/earth/data/index.js';
 import { parseGenId, genCity, briefRequest, briefFromReply, fallbackBrief, compactBrief, TOWN, BRIEF_SCHEMA, BRIEF_JSON_SCHEMA } from '../../../island/src/earth/brief.js';
 import { looseJSON } from '../../../island/src/earth/json.js';
@@ -32,14 +32,13 @@ export function placeOf(id, body = null) {
 			if (!Number.isInteger(body.pop) || body.pop < 0 || body.pop > 3) return { error: 'bad pop' };
 			pop = body.pop;
 		}
-		if (body.name !== undefined && (typeof body.name !== 'string' || body.name.length > 60 || slugOf(body.name) !== g.slug)) return { error: 'name does not match the id' };
+		if (body.name !== undefined && (typeof body.name !== 'string' || body.name.length > 60 || slug(body.name) !== g.slug)) return { error: 'name does not match the id' };
 	}
 	const at = regionAt(g.lat, g.lon);
 	if (!at || !at.land) return { error: 'not on land' };
 	// the name stays out: the brief says {town}, and each player's game puts the name in
 	return { city: genCity({ id, name: TOWN, lat: g.lat, lon: g.lon, pop }) };
 }
-const slugOf = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 // the prompt, from the atlas alone
 export const requestFor = (city) => briefRequest(city);
