@@ -5,6 +5,7 @@
 // are back on your feet. X shoves whoever is in front of you, by your weight and pace.
 
 import * as THREE from 'three';
+import { specOf } from '../bay/cars.js';
 
 const EYE = 1.68;
 const IDLE = ['pockets', 'crossed', 'phone', 'hip', 'behind'];
@@ -48,8 +49,10 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 			if (c.px === undefined || c.v < 2.5) continue;
 			const dx = P.pos.x - c.px, dz = P.pos.z - c.pz;
 			if (Math.abs(dx) > 4 || Math.abs(dz) > 4) continue;
-			const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), lon = dx * fx + dz * fz, lat = dx * fz - dz * fx;
-			if (lon < 1.6 || lon > 2.7 || Math.abs(lat) > 1.05) continue;
+			// (anywhere in its outline, its front a little ahead: at a low frame rate a car can
+			// move most of a metre between looks)
+			const Sp = specOf(c.kind), fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), lon = dx * fx + dz * fz, lat = dx * fz - dz * fx;
+			if (lon < -Sp.L / 2 || lon > Sp.L / 2 + 0.6 || Math.abs(lat) > Sp.W / 2 + 0.2) continue;
 			knockDown(P, v.set(fx * c.v, 0, fz * c.v), 1500);
 			return;
 		}
