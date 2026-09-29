@@ -51,9 +51,10 @@ float cumulus(vec3 d, float cloud, float time, out float base, out float sh){
 // the clouds as water shows them: the cumulus above (same field, same drift, same cover),
 // cheaper (three octaves, no showers), over the sky's own gradient and in the world's air.
 // Its own copy of the noise, so it drops into any shader. uCloudR: the cloud plane's
-// offset, cover, on (0: the plain sky); uCloudR2: night, time, gloom
+// offset, cover, on (0: the plain sky); uCloudR2: night, time, gloom, cirrus; uCloudR3: the
+// cirrus' offset, the wind
 export const CLOUD_REFLECT_GLSL = /* glsl */`
-uniform vec4 uCloudR, uCloudR2, uAirR;
+uniform vec4 uCloudR, uCloudR2, uCloudR3, uAirR;
 float crH(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float crN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(crH(i), crH(i + vec2(1, 0)), f.x), mix(crH(i + vec2(0, 1)), crH(i + vec2(1, 1)), f.x), f.y); }
@@ -69,6 +70,13 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 		float dens = smoothstep(cover, cover + 0.12, base) * smoothstep(0.01, 0.2, r.y);
 		// (lit as the dome lights them: sunlit tops, grey-blue bases, dark shapes by night)
 		vec3 cloud = mix(vec3(0.46, 0.52, 0.64), vec3(1.08), 0.55 + 0.4 * smoothstep(cover, cover + 0.35, base)) * mix(vec3(1.0), sunC * 0.9, 0.35) * (1.0 - uCloudR2.x * 0.975) * (1.0 - uCloudR2.z * 0.45) + hor * 0.12;
+		// the cirrus far above, combed out along the wind (uCloudR3: its offset, the wind)
+		if (uCloudR2.w > 0.01) {
+			vec2 cc = r.xz / (r.y + 0.03) * 0.55 + uCloudR3.xy, wd = normalize(uCloudR3.zw + vec2(1e-4));
+			vec2 q = vec2(dot(cc, wd) * 0.16, dot(cc, vec2(-wd.y, wd.x)));
+			float ci = smoothstep(0.55, 0.85, crF(q * 3.0) * 0.7 + crN(q * vec2(2.0, 11.0) + 3.0) * 0.3) * uCloudR2.w * smoothstep(0.0, 0.18, r.y) * (1.0 - uCloudR2.z * 0.7);
+			sky = mix(sky, mix(vec3(1.02), sunC * 1.35, 0.4) * (1.0 - uCloudR2.x * 0.93) + hor * 0.15, ci * 0.55 * (1.0 - dens));
+		}
 		sky = mix(sky, cloud, dens * 0.9);
 	}
 	return mix(sky, dot(sky, vec3(0.299, 0.587, 0.114)) * uAirR.rgb, uAirR.a);
@@ -77,8 +85,9 @@ vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
 export function cloudReflectU(shared) {
 	shared.uCloudR ||= { value: new THREE.Vector4(0, 0, 0.62, 1) };
 	shared.uCloudR2 ||= { value: new THREE.Vector4() };
+	shared.uCloudR3 ||= { value: new THREE.Vector4(0, 0, 1, 0) };
 	shared.uAirR ||= { value: airOf(shared.planet) };
-	return { uCloudR: shared.uCloudR, uCloudR2: shared.uCloudR2, uAirR: shared.uAirR };
+	return { uCloudR: shared.uCloudR, uCloudR2: shared.uCloudR2, uCloudR3: shared.uCloudR3, uAirR: shared.uAirR };
 }
 
 // three.js's AgX tone mapping (tonemapping_pars_fragment) on the CPU, for one colour:
@@ -618,7 +627,8 @@ export function createSky(scene, shared, renderer) {
 		else scene.fog.color.copy(haze);
 		// (the water's reflections: shared.cloudReflect false keeps them to the plain sky)
 		shared.uCloudR.value.set(uniforms.uCloudOff.value.x, uniforms.uCloudOff.value.y, uniforms.uCloud.value, shared.cloudReflect === false ? 0 : 1);
-		shared.uCloudR2.value.set(night, shared.uTime.value, uniforms.uGloom.value, 0);
+		shared.uCloudR2.value.set(night, shared.uTime.value, uniforms.uGloom.value, uniforms.uCirrus.value);
+		shared.uCloudR3.value.set(uniforms.uCirrusOff.value.x, uniforms.uCirrusOff.value.y, uniforms.uWindDir?.value?.x ?? 1, uniforms.uWindDir?.value?.y ?? 0);
 		dome.position.copy(focus);
 		sats.position.copy(focus);
 		sats.userData.step(dt, elev);
