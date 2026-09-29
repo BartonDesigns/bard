@@ -22,6 +22,7 @@ let ELE = null;
 const eleSeals = () => ELE || (ELE = { bull: elephantSeal(true), cow: elephantSeal(false), mat: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.55 }) });
 import { toWorld } from './geo.js';
 import { carGeometry, carMaterial } from './cars.js';
+import { STATIC_CARS } from '../vehicles/registry.js';
 
 // [name, lat, lon, {lot cars, restroom, tents, fires, surf surfers, quiet, forts, seals, light: the tower's [lat, lon]}]
 const SITES = [
@@ -85,8 +86,8 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		redRoof: M(0x8a3b2c, 0.75), pane: M(0x283036, 0.3, { metalness: 0.3 }), lens: M(0x33413f, 0.08, { metalness: 0.6, emissive: new THREE.Color(0xfff2c0), emissiveIntensity: 0 }),
 	};
 	const tentCols = [0xd9772b, 0x2d6fa6, 0x5b8a3a, 0xc9b23a, 0xb03a3a, 0x7a5aa0, 0x3a8a8a, 0xe0e0d8];
-	const carMat = carMaterial(night), carKinds = ['sedan', 'suv', 'pickup', 'van', 'hatch'];
-	const carGeo = Object.fromEntries(carKinds.map((k) => [k, carGeometry(k, 24, 10)]));
+	const carMat = carMaterial(night), carKinds = ['sedan', 'suv', 'pickup', 'van', 'hatch', 'crossover', 'suv'];
+	const carGeo = Object.fromEntries(carKinds.map((k) => [k, carGeometry(k, 40, 14)]));
 	const lotTex = lotTexture();
 	const Y = new THREE.Vector3(0, 1, 0), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();
 
@@ -147,6 +148,8 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 				im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(L.length * 3), 3);
 				const PAINT = [[0.92, 0.92, 0.91], [0.06, 0.06, 0.07], [0.36, 0.37, 0.39], [0.66, 0.67, 0.69], [0.12, 0.22, 0.45], [0.55, 0.08, 0.07], [0.3, 0.36, 0.26]];
 				L.forEach(([x, z, a, r], i) => { im.setMatrixAt(i, m4.compose(p.set(x, B.lotTop, z), q.setFromAxisAngle(Y, a), sc.set(1, 1, 1))); const c = PAINT[Math.floor(r * PAINT.length)]; im.instanceColor.setXYZ(i, c[0], c[1], c[2]); });
+				// (solid, to walk round: vehicles/)
+				for (const [x, z, a] of L) { const c = { kind: k, x, y: B.lotTop, z, yaw: a }; STATIC_CARS.add(c); (B.cars ||= []).push(c); }
 				add(im);
 			}
 			// the park sign, at the lot's entrance on the road side
@@ -310,6 +313,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		const B = built.get(S);
 		B.group.traverse((o) => { if (o.geometry && !Object.values(carGeo).includes(o.geometry) && o.geometry !== ELE?.bull && o.geometry !== ELE?.cow) o.geometry.dispose(); });
 		root.remove(B.group);
+		for (const c of B.cars || []) STATIC_CARS.delete(c);
 		built.delete(S);
 	}
 

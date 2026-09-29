@@ -241,15 +241,16 @@ void main(){
 	}
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
 	// the edge: a gravel bar out of town, sand and mud in it, where the water thins to nothing
-	float edge = (1.0 - smoothstep(0.03, 0.16, depth)) * nearK;
-	vec3 grav = mix(vec3(0.42, 0.39, 0.33), bed * 1.15, 0.6), silt = mix(vec3(0.3, 0.25, 0.18), vec3(0.46, 0.4, 0.3), gvn(u * 0.8));
+	// (only along the sides: a shallow in the middle shows its stones through the water)
+	float edge = (1.0 - smoothstep(0.03, 0.16, depth)) * nearK * smoothstep(0.55, 0.85, abs(vUv.x));
+	vec3 grav = mix(vec3(0.3, 0.28, 0.24), bed, 0.6), silt = mix(vec3(0.3, 0.25, 0.18), vec3(0.46, 0.4, 0.3), gvn(u * 0.8));
 	col = mix(col, mix(grav, silt, town) * (1.0 - uNight * 0.85), edge * 0.7 * (1.0 - fo));
 	float a = clamp(0.3 + deepK * 0.62 + fres * 0.25 + fo, 0.0, 0.96);
 	a = mix(a, 0.94, max(bedK, edge * 0.8));
 	gEdge = max(smoothstep(0.55, 1.0, abs(vUv.x)), 1.0 - smoothstep(0.0, 0.3, depth) * nearK - (1.0 - nearK));
 	gl_FragColor = worldLook(col, a, u, speed, fres, vT.z);
 	// (its edges soft where they meet the ground, and where they run up the bank)
-	gl_FragColor.a *= smoothstep(0.0, 0.04, depth) * nearK + (1.0 - nearK);
+	gl_FragColor.a *= mix(1.0, smoothstep(0.0, 0.04, depth), nearK * smoothstep(0.5, 0.8, abs(vUv.x)));
 	gl_FragColor.a *= 1.0 - smoothstep(0.82, 1.0, abs(vUv.x));
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>

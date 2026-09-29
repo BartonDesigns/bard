@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { specOf, seatsOf } from '../bay/cars.js';
 import { createLife } from './life.js';
+import { STATIC_CARS } from './registry.js';
 
 const R = 0.3;                                   // a person's reach round their middle
 
@@ -26,13 +27,9 @@ export function createVehicles({ scene, world, camera, isPhone, people = () => n
 		for (const c of life.moving()) if (Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
 		const m = mine.car;
 		if (m && !mine.driving && Math.abs(m.x - x) < r && Math.abs(m.z - z) < r) out.push({ kind: m.kind, x: m.x, y: m.y, z: m.z, yaw: m.yaw, id: 'mine' });
-		for (const c of statics) if (Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
+		for (const c of STATIC_CARS) if (Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
 		return out;
 	}
-	// cars placed by other parts of the world (a beach's lot): [{ kind, x, y, z, yaw }]
-	const statics = [];
-	const addStatic = (list) => { statics.push(...list); };
-	const removeStatic = (list) => { for (const c of list) { const i = statics.indexOf(c); if (i >= 0) statics.splice(i, 1); } };
 
 	// a point in a car's frame: along (+ forward) and across (+ its left)
 	const local = (c, x, z) => { const s = Math.sin(c.yaw), co = Math.cos(c.yaw), dx = x - c.x, dz = z - c.z; return [dx * s + dz * co, dx * co - dz * s]; };
@@ -112,6 +109,6 @@ export function createVehicles({ scene, world, camera, isPhone, people = () => n
 		c.spin = o.spin || 0; c.steer = o.steer || 0;
 		mine.driving = !!o.driving;
 	}
-	const info = () => ({ ...life.info(), mine: mine.car ? mine.car.kind + (mine.driving ? ' driving' : ' parked') : null, statics: statics.length });
-	return { update, push, floor, carsNear, carToEnter, setMine, mine, life, info, addStatic, removeStatic, seatsOf, specOf };
+	const info = () => ({ ...life.info(), mine: mine.car ? mine.car.kind + (mine.driving ? ' driving' : ' parked') : null });
+	return { update, push, floor, carsNear, carToEnter, setMine, mine, life, info, seatsOf, specOf };
 }

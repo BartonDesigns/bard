@@ -45,7 +45,8 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// car whose owner has driven it off is hidden from its space until they are back.
 	const store = (cap) => ({ m: new Float32Array(cap * 16), c: new Float32Array(cap * 3), n: 0, instanceMatrix: { count: cap }, setMatrixAt(i, m) { m.toArray(this.m, i * 16); }, setColorAt(i, c) { c.toArray(this.c, i * 3); } });
 	const parked = Object.fromEntries(kinds.map((k) => [k, store(1600)]));
-	const hidden = new Set();
+	const hidden = new Set(), taken = new Set();
+	const spot = (x, z) => Math.round(x) + ':' + Math.round(z);
 	// a coarse grid of the parked cars, for bumping into them and for finding the one you get into
 	const GRID = 12, grid = new Map();
 	const SPLIT_M = 6, SPLIT_S = 3;
@@ -57,7 +58,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		for (const k of kinds) {
 			const S = parked[k];
 			for (let i = 0; i < S.n; i++) {
-				if (hidden.has(k + i)) continue;
+				if (hidden.has(k + i) || (taken.size && taken.has(spot(S.m[i * 16 + 12], S.m[i * 16 + 14])))) continue;
 				const dx = S.m[i * 16 + 12] - x, dz = S.m[i * 16 + 14] - z;
 				pm.fromArray(S.m, i * 16); pc.fromArray(S.c, i * 3);
 				parkedFleet.add(k, pm, pc, dx * dx + dz * dz);
@@ -80,7 +81,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	function parkedNear(x, z, r, all = false) {
 		const out = [];
 		for (let gx = Math.floor((x - r) / GRID); gx <= Math.floor((x + r) / GRID); gx++) for (let gz = Math.floor((z - r) / GRID); gz <= Math.floor((z + r) / GRID); gz++) {
-			for (const c of grid.get(gx + ',' + gz) || []) if ((all || !hidden.has(c.id)) && Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
+			for (const c of grid.get(gx + ',' + gz) || []) if ((all || !hidden.has(c.id)) && !(taken.size && taken.has(spot(c.x, c.z))) && Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
 		}
 		return out;
 	}
@@ -384,7 +385,9 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// more cars to draw with the traffic (the owners' cars coming and going, yours)
 	const extra = [];
 	let avoid = null;
-	const api = { update, group, cars, parked, parkedNear, hide, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
+	// a car taken from its space (you drove it off): gone from there for good
+	const take = (x, z) => { taken.add(spot(x, z)); splitT = -1e9; };
+	const api = { update, group, cars, parked, parkedNear, hide, take, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
 	return api;
 }
 

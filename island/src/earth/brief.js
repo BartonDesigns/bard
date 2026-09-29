@@ -3,8 +3,14 @@
 // ambience). Made two ways, in the same shape:
 //
 //   fallbackBrief(city)       from the atlas alone, with seeded choices: the same every time
-//   validateBrief(raw, base)  from what the on-device model wrote (director.js), every field
-//                             checked and clamped, and anything missing or bad taken from base
+//   validateBrief(raw, base)  from what a model wrote, every field checked and clamped, and
+//                             anything missing or bad taken from base
+//
+// The model's briefs are made once, off the device, and shared: the atlas cities' are baked
+// into a static file (tools/bake-briefs.mjs), a generated town's is made by the discovery
+// server the first time anyone comes to it (server/discovery). Both ask with briefRequest,
+// built from the atlas alone, and keep what briefFromReply makes of the answer; every player
+// then reads the same brief back through canonicalBrief.
 //
 // The shape (BRIEF_SCHEMA; a change of shape bumps it, and the cached briefs are made anew):
 //   { v, id, city, region, country, lang, source: 'atlas' | 'llm' | 'mixed',
@@ -17,7 +23,7 @@
 //     music:      { genre, bpm, scale } (never a faceplate: the player chooses theirs)
 //     wardrobe, food, vehicles, vegetation: short lists }
 
-import { region, rng, streetName, music as musicOf, POP } from './atlas.js';
+import { region, regionAt, citiesNear, rng, slug, streetName, music as musicOf, POP } from './atlas.js';
 
 export const BRIEF_SCHEMA = 1;
 export const DISTRICT_KINDS = ['downtown', 'oldtown', 'residential', 'market', 'industrial', 'waterfront', 'campus', 'park', 'suburb', 'village', 'temple'];
@@ -34,7 +40,7 @@ export function clean(v, max = 80) {
 	if (typeof v === 'number') v = String(v);
 	if (typeof v !== 'string') return '';
 	let s = v.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/[*_`#]+/g, '').replace(/\s+/g, ' ').trim();
-	s = s.replace(/^[-•\d.)\s]+(?=\S)/, '').replace(/^["']|["']$/g, '').trim();
+	s = s.replace(/^(?:[-•]+\s*|\d{1,2}[.)]\s+)(?=\S)/, '').replace(/^["']|["']$/g, '').trim();
 	if (!s || PLACEHOLDER.test(s) || UNKIND.test(s)) return '';
 	if (s.length > max) s = s.slice(0, max).replace(/\s+\S*$/, '').trim() || s.slice(0, max);
 	return s;
@@ -256,18 +262,27 @@ export function validateBrief(raw, base) {
 
 // ---------- asking the model: three short questions, each a small JSON object ----------
 export const SYSTEM = 'You are a world designer for a game that recreates real places with affection. Reply with one JSON object only: no prose, no markdown, no comments. Keep every string short. Be authentic and warm: the things locals know and smile at, their food, music, streets, customs and humour. Describe places, not people. Never mock anyone; no slurs, and nothing about intelligence, poverty or crime.';
-export function briefPrompts(city, base) {
+// what the atlas knows of a place, a few short lines (for a generated town, where it is and
+// what is near, but never its name: that is written {town})
+export function briefFacts(city) {
 	const R = region(city.region) || region('na');
-	const where = [city.name, ...(R.names || []).slice(1).reverse().filter((n) => n !== city.name).slice(0, 2)].join(', ');
-	const facts = [
+	const up = (R.names || []).slice(1).reverse().filter((n) => n !== city.name).slice(0, 2);
+	const where = city.gen ? `a ${POP[city.pop | 0]} in ${up.join(', ') || R.name}` : [city.name, ...up].join(', ');
+	const near = city.gen ? citiesNear(city.lat, city.lon, 120, 3).map((c) => `${c.name} (${Math.round(c.km)} km)`) : [];
+	return [
 		`Place: ${where}${city.country ? ' (' + city.country + ')' : ''}. Size: ${POP[city.pop | 0]}.`,
-		`Character: ${city.char || R.char}.`,
-		city.landmarks.length ? `Known landmarks: ${city.landmarks.join('; ')}.` : '',
+		`Character: ${city.gen ? R.char || '' : city.char || R.char}.`,
+		near.length ? `Nearest known places: ${near.join('; ')}.` : '',
+		city.landmarks?.length ? `Known landmarks: ${city.landmarks.join('; ')}.` : '',
 		`Architecture: ${R.arch?.style || ''}; ${(R.arch?.types || []).slice(0, 5).join(', ')}.`,
 		`Climate: ${R.climate?.kind || ''}; plants: ${(R.veg || []).slice(0, 6).join(', ')}.`,
 		`Food: ${(R.food || []).slice(0, 6).join(', ')}. Music: ${(R.music?.genres || []).join(', ')}.`,
 		`Local language: ${langName(R.lang)}.`,
 	].filter(Boolean).join('\n');
+}
+export function briefPrompts(city, base) {
+	const R = region(city.region) || region('na');
+	const facts = briefFacts(city);
 	const slang = (R.say?.words || []).slice(0, 8).join('; '), greet = (R.say?.greet || []).slice(0, 3).join(' ');
 	const lang = langName(R.lang);
 	return [
