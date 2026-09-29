@@ -238,3 +238,57 @@ export function turtle() {
 	const legs = [[0.1, 0.09], [-0.1, 0.09], [0.1, -0.1], [-0.1, -0.1]].map(([x, z]) => tube([[x * 0.8, 0.04, z, 0.02], [x * 1.25, 0.02, z + Math.sign(z) * 0.03, 0.016], [x * 1.4, 0.005, z + Math.sign(z) * 0.05, 0.004]], { seg: 8, sub: 3, paint: () => skin }));
 	return done([carapace, neck, ...legs]);
 }
+
+// ---------- the small life of the open hills ----------
+// a California ground squirrel sitting up by its burrow: grey-brown flecked with pale,
+// a silver shawl over the shoulders, a bushy tail. Facing +z, ~0.3 m tall sitting up.
+export function groundSquirrel() {
+	const coat = lin([0.42, 0.36, 0.28]), pale = lin([0.72, 0.66, 0.56]), shawl = lin([0.6, 0.6, 0.58]);
+	const paint = (s, up, p) => { let c = shade(coat, pale, 0.4)(s, up); if (s > 0.55 && up > 0.2) c = mix(c, shawl, 0.45); return vnoise(p.x * 60, p.y * 60, p.z * 60) > 0.7 ? mix(c, pale, 0.5) : c; };
+	const body = loft([[0, 0.03, -0.06, 0.02, 0.02, 0.02], [0, 0.06, -0.05, 0.07, 0.07, 0.06], [0, 0.14, -0.01, 0.065, 0.06, 0.06], [0, 0.22, 0.02, 0.05, 0.05, 0.05], [0, 0.27, 0.04, 0.04, 0.04, 0.04], [0, 0.29, 0.08, 0.03, 0.028, 0.026], [0, 0.285, 0.11, 0.004, 0.004, 0.004]], { seg: 14, sub: 4, paint });
+	const tail = tube([[0, 0.04, -0.08, 0.03], [0, 0.05, -0.18, 0.035], [0, 0.1, -0.25, 0.03], [0, 0.14, -0.27, 0.004]], { seg: 10, sub: 3, paint: () => mix(coat, pale, 0.3) });
+	const eyes = [-1, 1].map((sx) => { const e = new THREE.SphereGeometry(0.008, 8, 6).translate(sx * 0.022, 0.3, 0.075); const n = e.attributes.position.count; e.setAttribute('color', new THREE.Float32BufferAttribute(new Array(n * 3).fill(0.01), 3)); return e; });
+	return done([body, tail, ...eyes]);
+}
+// a wild turkey walking: bronze-black body, fanned tail folded, bare blue-red head on a
+// long neck, long legs. ~1 m long.
+export function turkey() {
+	const bronze = lin([0.22, 0.17, 0.12]), dark = lin([0.08, 0.07, 0.06]), head = lin([0.55, 0.25, 0.25]), leg = lin([0.55, 0.4, 0.35]);
+	const paint = (s, up, p) => { const c = shade(bronze, dark, 0.5)(s, up); return vnoise(p.x * 40, p.y * 40, p.z * 40) > 0.6 ? mix(c, lin([0.4, 0.3, 0.18]), 0.4) : c; };
+	const body = loft([[0, 0.5, -0.42, 0.02, 0.02, 0.02], [0, 0.52, -0.36, 0.16, 0.06, 0.05], [0, 0.55, -0.15, 0.2, 0.18, 0.16], [0, 0.56, 0.08, 0.19, 0.2, 0.18], [0, 0.6, 0.22, 0.12, 0.12, 0.12], [0, 0.65, 0.28, 0.05, 0.05, 0.05]], { seg: 16, sub: 4, paint });
+	const neck = tube([[0, 0.64, 0.26, 0.045], [0, 0.78, 0.32, 0.03], [0, 0.88, 0.34, 0.026], [0, 0.9, 0.38, 0.028], [0, 0.89, 0.43, 0.01]], { seg: 10, sub: 3, paint: (s) => (s > 0.3 ? head : bronze) });
+	const legs = [-1, 1].map((sx) => tube([[sx * 0.07, 0.45, 0, 0.03], [sx * 0.07, 0.25, 0.02, 0.016], [sx * 0.07, 0.02, 0.04, 0.014], [sx * 0.07, 0, 0.1, 0.008]], { seg: 8, sub: 3, paint: () => leg }));
+	return done([body, neck, ...legs]);
+}
+// a California quail: a plump grey-brown ball with a scaly belly and the forward-curling
+// black topknot. ~0.25 m long.
+export function quail() {
+	const grey = lin([0.4, 0.4, 0.42]), brown = lin([0.45, 0.36, 0.26]), belly = lin([0.7, 0.62, 0.48]), black = lin([0.04, 0.04, 0.05]);
+	const body = loft([[0, 0.08, -0.13, 0.02, 0.02, 0.02], [0, 0.09, -0.1, 0.05, 0.03, 0.03], [0, 0.1, -0.03, 0.065, 0.065, 0.06], [0, 0.11, 0.05, 0.06, 0.06, 0.055], [0, 0.15, 0.09, 0.035, 0.035, 0.035], [0, 0.16, 0.12, 0.028, 0.025, 0.022], [0, 0.155, 0.14, 0.004, 0.004, 0.004]], { seg: 14, sub: 4, paint: (s, up) => (s > 0.8 ? (up < 0 ? black : grey) : up < -0.3 ? belly : s > 0.55 ? grey : brown) });
+	const plume = tube([[0, 0.18, 0.1, 0.006], [0, 0.22, 0.11, 0.008], [0, 0.23, 0.14, 0.009], [0, 0.215, 0.155, 0.003]], { seg: 6, sub: 3, paint: () => black });
+	const legs = [-1, 1].map((sx) => tube([[sx * 0.025, 0.06, 0, 0.008], [sx * 0.025, 0, 0.01, 0.005]], { seg: 6, sub: 2, paint: () => lin([0.4, 0.35, 0.3]) }));
+	return done([body, plume, ...legs]);
+}
+// a western fence lizard basking on a rock: grey-brown, a long tail. ~0.2 m.
+export function lizard() {
+	const back = lin([0.32, 0.3, 0.26]), belly = lin([0.3, 0.35, 0.55]);
+	const body = loft([[0, 0.012, -0.14, 0.003, 0.003, 0.003], [0, 0.012, -0.07, 0.008, 0.006, 0.005], [0, 0.014, -0.02, 0.018, 0.012, 0.008], [0, 0.016, 0.03, 0.02, 0.013, 0.008], [0, 0.017, 0.06, 0.013, 0.01, 0.007], [0, 0.017, 0.08, 0.004, 0.004, 0.003]], { seg: 10, sub: 3, paint: (s, up, p) => (up < -0.4 ? belly : vnoise(p.x * 200, 0, p.z * 200) > 0.6 ? lin([0.2, 0.18, 0.15]) : back) });
+	const legs = [[1, 0.035], [-1, 0.035], [1, -0.03], [-1, -0.03]].map(([sx, z]) => tube([[sx * 0.012, 0.012, z, 0.004], [sx * 0.03, 0.004, z + 0.008, 0.003], [sx * 0.035, 0, z + 0.012, 0.001]], { seg: 5, sub: 2, paint: () => back }));
+	return done([body, ...legs]);
+}
+// a banana slug on the redwood trail: bright yellow, dark-spotted, ~0.15 m
+export function bananaSlug() {
+	const y = lin([0.85, 0.72, 0.12]), sp = lin([0.2, 0.16, 0.05]);
+	return done([loft([[0, 0.008, -0.08, 0.004, 0.004, 0.003], [0, 0.012, -0.04, 0.012, 0.012, 0.006], [0, 0.014, 0.02, 0.014, 0.014, 0.007], [0, 0.013, 0.06, 0.011, 0.012, 0.006], [0, 0.012, 0.075, 0.004, 0.004, 0.003]], { seg: 10, sub: 3, paint: (s, up, p) => (vnoise(p.x * 180, p.y * 180, p.z * 180) > 0.72 ? sp : y) })]);
+}
+// one butterfly wing, hinged at x = 0, lying out along +x (mirror it for the other side);
+// white here, the instance colour gives the species
+export function butterflyWing() {
+	const g = new THREE.BufferGeometry();
+	const P = [0, 0, 0.004, 0.028, 0, 0.022, 0.034, 0, -0.002, 0.024, 0, -0.024, 0, 0, -0.01];
+	g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+	g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+	g.setAttribute('color', new THREE.Float32BufferAttribute([0.3, 0.3, 0.3, 1, 1, 1, 1, 1, 1, 0.9, 0.9, 0.9, 0.3, 0.3, 0.3], 3));
+	g.setIndex([0, 1, 2, 0, 2, 3, 0, 3, 4]);
+	return g;
+}
