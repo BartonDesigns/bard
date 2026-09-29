@@ -292,8 +292,9 @@ export function createIslandWorld() {
 	// people is filled in just below; the guide reaches it through this api object
 	const guideApi = { world: () => world, camera, shared, hint, people: null };
 	const guide = createGuide(dom.mount, guideApi);
-	// the city director (earth/): what should be in the towns and cities you come to, from the
-	// Earth atlas and, when one is loaded and idle, the Guide's on-device model
+	// the city director (earth/): what should be in the towns and cities you come to, the same
+	// for every player (the discovery server's brief, else the Earth atlas's); the Guide's
+	// model is passed only for the dev flag in earth/config.js
 	const earthDirector = HOOKS.earth = createDirector({ llm: guide.llm, toLatLon });
 	// secrets and surprises: the Bard's lost verses, fireworks, the foghorns, the calendar
 	const surprises = createSurprises({ scene, camera, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide.say(t, w), isPhone });

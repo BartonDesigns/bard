@@ -228,7 +228,8 @@ export function validateBrief(raw, base) {
 		if (share > 1) share /= 100;
 		districts.push({ name, kind, share: Math.min(1, share), architecture: clean(o.architecture ?? o.style ?? o.buildings, 90) || base.districts[0]?.architecture || '', height: heightOf(o.height ?? o.storeys ?? o.floors) });
 	}
-	if (districts.length >= LIMITS.districts[0]) { normShares(districts); out.districts = districts; took++; }
+	// (shares already summing to 1 are left as they are, so a kept brief reads back the same)
+	if (districts.length >= LIMITS.districts[0]) { if (Math.abs(districts.reduce((a, d) => a + d.share, 0) - 1) > 0.02) normShares(districts); out.districts = districts; took++; }
 	// landmarks
 	const Lm = Array.isArray(B.landmarks) ? B.landmarks : [];
 	const landmarks = [];
@@ -368,11 +369,25 @@ export function compactBrief(b) {
 export function canonicalBrief(kept, city) {
 	if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return null;
 	const named = city.gen ? nameTown(kept, city.name) : kept;
+	if (named.source === 'atlas') return keptAtlas(named, city);
 	const b = validateBrief(named, fallbackBrief(city));
 	const took = b.took;
 	delete b.took;
 	if (!took) return null;
 	b.source = ['llm', 'mixed', 'atlas'].includes(kept.source) ? kept.source : 'llm';
+	return b;
+}
+// an atlas brief kept on the server reads back as it was made (the atlas made it, so it is
+// not checked as a model's words are; only its shape is)
+function keptAtlas(k, city) {
+	const b = fallbackBrief(city);
+	const strs = (L) => Array.isArray(L) && L.every((x) => typeof x === 'string');
+	if (typeof k.vibe === 'string') b.vibe = k.vibe.slice(0, 200);
+	for (const key of ['streets', 'signs', 'chatter', 'wardrobe', 'food', 'vehicles', 'vegetation']) if (strs(k[key])) b[key] = k[key].slice(0, LIMITS[key][1]).map((x) => x.slice(0, 140));
+	if (Array.isArray(k.districts) && k.districts.length && k.districts.every((d) => d && typeof d.name === 'string' && DISTRICT_KINDS.includes(d.kind) && Number.isFinite(d.share))) b.districts = k.districts.slice(0, LIMITS.districts[1]).map((d) => ({ name: d.name, kind: d.kind, share: d.share, architecture: String(d.architecture ?? ''), height: heightOf(d.height) }));
+	if (Array.isArray(k.landmarks) && k.landmarks.every((l) => l && typeof l.look === 'string')) b.landmarks = k.landmarks.slice(0, LIMITS.landmarks[1]).map((l) => ({ look: l.look, name: String(l.name ?? ''), kind: LANDMARK_KINDS.includes(l.kind) ? l.kind : landmarkKind(l.look + ' ' + (l.name ?? '')) }));
+	if (k.music && typeof k.music.genre === 'string' && Number.isFinite(k.music.bpm)) b.music = { genre: k.music.genre, bpm: Math.max(50, Math.min(200, Math.round(k.music.bpm))), scale: b.music.scale };
+	b.source = 'atlas';
 	return b;
 }
 export function nameTown(v, name) {

@@ -1,0 +1,23 @@
+# Fully local run (npm run dev:local): no account, no Workers AI binding, and no allowance,
+# so every discovery keeps the atlas brief. For trying the routes, CORS and storage by hand.
+name = "l99-discovery-local"
+main = "../src/index.js"
+compatibility_date = "2026-09-01"
+
+[[durable_objects.bindings]]
+name = "BRIEFS"
+class_name = "BriefStore"
+
+[[durable_objects.bindings]]
+name = "LEDGER"
+class_name = "Ledger"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BriefStore", "Ledger"]
+
+[vars]
+ALLOWED_ORIGINS = "https://level99bard.com"
+ALLOW_LOCALHOST = "true"
+DAILY_NEURONS = "0"
+WAIT_MS = "5000"

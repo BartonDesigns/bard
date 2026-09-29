@@ -5,6 +5,7 @@
   "description": "Shared discovery server for Level 99 Bard: one canonical brief per place, made once on Workers AI's free allowance",
   "scripts": {
     "test": "node test/worker.test.mjs",
+    "dev:local": "wrangler dev -c test/local.toml --port 8787",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "check": "wrangler deploy --dry-run --outdir .wrangler/check"
