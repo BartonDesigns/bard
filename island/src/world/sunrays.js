@@ -347,7 +347,8 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 		sheetGeo.setDrawRange(0, n * 6);
 		// the sky's own light outside the shadow box: gaps are about as common as the canopy is thin
 		U.uOpen.value = 0.45 * (1 - S.canopy * 0.6);
-		U.uDens.value = 0.05 * S.mist;
+		// (under an open sky the sunlit mist is everywhere and shows as haze, not shafts: thinner)
+		U.uDens.value = 0.05 * S.mist * (0.3 + 0.7 * Math.min(1, S.canopy * 1.6));
 		// the mist drifts with the wind, slowed among the trunks (in the noise's units: 22 m)
 		const w = W.weather.windV;
 		U.uDrift.value.x = (U.uDrift.value.x + ((w?.x || 4) * 0.05 + 0.1) * dt * 0.045) % 64;
