@@ -40,10 +40,10 @@ export const NOISE_GLSL = /* glsl */`
 // a fine-grain hash that stays random at island-scale coordinates: wrap the cell index
 // first so float precision never runs out, then scramble
 float gh(vec2 c){ c = mod(c, 1024.0); vec3 p3 = fract(vec3(c.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
-// (in integers: the old fract() hash ran out of float bits past a few thousand cells, and
-// out over the Bay Area its noise came out as a regular grid, stripes on every hill)
-float h21(vec2 p){ vec2 i = floor(p); uvec2 x = uvec2(ivec2(i)) ^ (uvec2((p - i) * 65536.0) * 2654435761u);
-	uvec2 q = 1103515245u * ((x >> 1u) ^ x.yx); uint n = 1103515245u * (q.x ^ (q.y >> 3u)); return float(n >> 8u) * (1.0 / 16777216.0); }
+// (the cell wrapped to 4096 first: the old hash ran out of float bits past a few thousand
+// cells, and out over the Bay Area its noise came out as a regular grid, stripes on every
+// hill. As cheap as the old one; an integer hash measured twice the cost in software GL)
+float h21(vec2 p){ p = mod(p, 4096.0); vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
 float fbm3(vec2 p){ return vn(p) * 0.55 + vn(p * 2.03 + 7.1) * 0.3 + vn(p * 4.1 - 3.7) * 0.15; }`;

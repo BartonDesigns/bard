@@ -143,7 +143,7 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 		// liners in the wheel wells, so the arches show a dark well and not the car's inside
 		for (const [x, y, z] of wheelHubs(kind)) {
 			const r = S.wr + 0.1, sx = Math.sign(x), x0 = Math.abs(x) - S.tw / 2 - 0.06;
-			const liner = new THREE.CylinderGeometry(r, r, S.W / 2 - x0 + 0.02, 14, 1, true, -0.15 * Math.PI, 1.3 * Math.PI).rotateZ(Math.PI / 2);
+			const liner = new THREE.CylinderGeometry(r, r, S.W / 2 - x0 + 0.02, 14, 1, true, 0.08 * Math.PI, 0.84 * Math.PI).rotateZ(Math.PI / 2);
 			liner.translate(sx * (x0 + (S.W / 2 - x0) / 2), y, z);
 			parts.push(tag(liner, 8));
 			parts.push(tag(new THREE.CircleGeometry(r, 14, 0, Math.PI).rotateY(Math.PI / 2).translate(sx * x0, y, z), 8));

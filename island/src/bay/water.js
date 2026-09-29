@@ -507,8 +507,8 @@ export function createWater(scene, shared, opts = {}) {
 				const r = rocks[i + 3], hh = rocks[i + 4];
 				e.set(hh * 3, hh * 17, hh * 7); q.setFromEuler(e); p.set(rocks[i] - cx, rocks[i + 1], rocks[i + 2] - cz); sc.set(r * 1.3, r, r * 1.15);
 				im.setMatrixAt(i / 5, m.compose(p, q, sc));
-				// (grey and brown, dark where wet)
-				c.setRGB(0.2 + hh * 0.12, 0.19 + hh * 0.1, 0.16 + hh * 0.07); im.setColorAt(i / 5, c);
+				// (grey and brown, dark where wet; in linear light)
+				c.setRGB(0.045 + hh * 0.05, 0.042 + hh * 0.04, 0.035 + hh * 0.03); im.setColorAt(i / 5, c);
 			}
 		}
 		if (logs.length) {
@@ -516,7 +516,7 @@ export function createWater(scene, shared, opts = {}) {
 			for (let i = 0; i < logs.length; i += 7) {
 				e.set(0, logs[i + 5], logs[i + 6], 'YZX'); q.setFromEuler(e); p.set(logs[i] - cx, logs[i + 1], logs[i + 2] - cz); sc.set(logs[i + 3], logs[i + 4], logs[i + 4]);
 				im.setMatrixAt(i / 7, m.compose(p, q, sc));
-				c.setRGB(0.2, 0.16, 0.12); im.setColorAt(i / 7, c);
+				c.setRGB(0.04, 0.028, 0.018); im.setColorAt(i / 7, c);
 			}
 		}
 		for (const im of out) im.computeBoundingSphere();

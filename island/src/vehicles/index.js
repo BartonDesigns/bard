@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { specOf, seatsOf } from '../bay/cars.js';
 import { createLife } from './life.js';
 import { STATIC_CARS } from './registry.js';
+import { modelsReady } from './models.js';
 
 const R = 0.3;                                   // a person's reach round their middle
 
@@ -109,6 +110,6 @@ export function createVehicles({ scene, world, camera, isPhone, people = () => n
 		c.spin = o.spin || 0; c.steer = o.steer || 0;
 		mine.driving = !!o.driving;
 	}
-	const info = () => ({ ...life.info(), mine: mine.car ? mine.car.kind + (mine.driving ? ' driving' : ' parked') : null });
+	const info = () => ({ ...life.info(), models: modelsReady(), mine: mine.car ? mine.car.kind + (mine.driving ? ' driving' : ' parked') : null });
 	return { update, push, floor, carsNear, carToEnter, setMine, mine, life, info, seatsOf, specOf };
 }

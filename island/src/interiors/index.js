@@ -26,7 +26,8 @@ const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'resta
 const STYLE_OF = { victorian: 'victorian', pacheights: 'edwardian', nobhill: 'edwardian', northbeach: 'edwardian', chinatown: 'edwardian', marina: 'sunset', sunset: 'sunset', mission: 'mission' };
 
 export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 } } = {}) {
-	const BUILD_R = isPhone ? 55 : 85, DROP_R = BUILD_R + 30, MAX = isPhone ? 4 : 9, BUDGET = isPhone ? 3 : 4;
+	const BUILD_R = isPhone ? 55 : 85, DROP_R = BUILD_R + 30, MAX = isPhone ? 4 : 9;
+	let BUDGET = isPhone ? 3 : 4;
 	const group = new THREE.Group();
 	group.name = 'interiors';
 	scene.add(group);
@@ -248,7 +249,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			if (!r.done) continue;
 			if (!job.climb) {
 				if (!r.value) { live.delete(job.key); live.set(job.key, { key: job.key, o: job.B.o, use: null, dead: true }); }
-				else { const B = r.value; B.ready = true; city.setDoor(B.o, [B.P.door.x, B.P.f0 - B.o.y + B.P.door.y, B.P.door.w]); if (B.P.bayLot) city.setDoor(B.P.bayLot, [0, 0, 0.001]); stats.built++; stats.lastMs = B.ms; }
+				else { const B = r.value; B.ready = true; const top = Math.max(0, Math.floor(B.P.f0 - B.o.y + B.P.levels.length * ST.storey - 0.2)); city.setDoor(B.o, [B.P.door.x, B.P.f0 - B.o.y + B.P.door.y, B.P.door.w + 4 * top]); if (B.P.bayLot) city.setDoor(B.P.bayLot, [0, 0, 0.001 + 4 * Math.max(0, Math.floor(B.P.f0 + B.P.levels.length * ST.storey - B.P.bayLot.y - 0.2))]); stats.built++; stats.lastMs = B.ms; }
 			}
 			job = null;
 		}
@@ -422,5 +423,6 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		P.yaw = Math.atan2(-(dx - x), -(dz - z)); P.pitch = 0;
 		return { use: B.use, style: B.P.style, levels: B.P.levels.length };
 	}
-	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame };
+	// (budget: milliseconds a frame for building; tests on a slow machine give it more)
+	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, budget: (ms) => { BUDGET = ms; } };
 }

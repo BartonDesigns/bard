@@ -164,17 +164,19 @@ function buildingMaterial(shared, night, nearBand) {
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uNightC = night;
 		sh.uniforms.uNearBand = nearBand;
-		sh.vertexShader = 'attribute float aKind; attribute vec3 aNear; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+		sh.vertexShader = 'attribute float aKind; attribute vec3 aNear; uniform vec2 uNearBand; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
 			vNearK = aNear.z > 0.5 && aNear.z < 1.5 ? 1.0 - smoothstep(uNearBand.x, uNearBand.y, length(aNear.xy - cameraPosition.xz)) : 0.0;
 			// (a building with its rooms built inside: its front door cut out, aNear = door x, sill y, 2 + width)
 			vDoor = aNear.z > 1.5 ? vec3(aNear.xy, aNear.z - 2.0) : vec3(0.0);
+			// (and how high its rooms go: 2 + width + 4 x whole metres; its windows open only below that)
+			vDoorTop = aNear.z > 1.5 ? floor(vDoor.z / 4.0) : 0.0; vDoor.z -= vDoorTop * 4.0;
 			vKind = aKind;
 			vLY = transformed.y * length(instanceMatrix[1].xyz);
 			vCW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 			vCN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
 			vCS = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
 			vLP = transformed; vLN = objectNormal; vIP = instanceMatrix[3].xz;`);
-		sh.fragmentShader = 'uniform float uNightC; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
+		sh.fragmentShader = 'uniform float uNightC; varying float vNearK; varying float vKind; varying float vLY; varying vec3 vCW; varying vec3 vCN; varying vec3 vCS; varying vec3 vLP; varying vec3 vLN; varying vec2 vIP; varying vec3 vDoor; varying float vDoorTop;\nvec3 winGlow = vec3(0.0); float glassK = 0.0;\nfloat bh(vec2 p){ p = mod(p, 289.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }   // (wrapped first: sin() of a world-sized number is noise on a GPU)\n' + sh.fragmentShader
 			.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 			if (vNearK > 0.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearK) discard;
 			if (vDoor.z > 0.0 && vLN.z > 0.5 && abs(vLP.x * vCS.x - vDoor.x) < vDoor.z * 0.5 && vLY > vDoor.y && vLY < vDoor.y + 2.3) discard;`)
@@ -334,7 +336,7 @@ function buildingMaterial(shared, night, nearBand) {
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.29, 0.28), step(vLY, 1.9) * (1.0 - roof));
 				}
 				// a building with its rooms built: its front windows (and a bay's) are holes onto them
-				if (vDoor.z > 0.0 && win > 0.5 && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) discard;
+				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) discard;
 				// far off, where a window is smaller than a pixel or two, it is only its average
 				// (as a mipmap would be): no crawling speckle on distant facades at night
 				float aaW = smoothstep(0.75, 0.3, length(fwidth(cell)));
@@ -361,7 +363,7 @@ function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding12';
+	m.customProgramCacheKey = () => 'baybuilding13';
 	return m;
 }
 
