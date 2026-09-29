@@ -99,7 +99,8 @@ class Shape {
 		return this.raw(v1, n1, this.colour(col, n1.y), b, b1 < 0 ? b : b1, w, col === 'skin' ? smooth(-0.3, 0.7, n1.y) : 0);
 	}
 	raw(p, n, c, b0, b1, w, pat) {
-		this.p.push(p.x, p.y, p.z); this.n.push(n.x, n.y, n.z); this.c.push(c[0], c[1], c[2]); this.s.push(b0, b1, w, pat);
+		// colours are authored in display space; the shader lights in linear
+		this.p.push(p.x, p.y, p.z); this.n.push(n.x, n.y, n.z); this.c.push(c[0] ** 2.2, c[1] ** 2.2, c[2] ** 2.2); this.s.push(b0, b1, w, pat);
 		return this.p.length / 3 - 1;
 	}
 	// a triangle, turned to face the way its vertex normals point
@@ -870,12 +871,12 @@ export function createDinosaurs(island, shared, scene, camera, profile, opts = {
 	}
 
 	// ---------- each frame ----------
-	let sortT = 0, farT = 0;
+	let sortT = 0, farT = 0, calm = false;
 	const cam = V3();
 	function update(dt, t) {
 		dt = Math.min(dt, 0.05);
 		cam.copy(camera.position);
-		const camLow = cam.y - H(cam.x, cam.z) < 25;
+		const camLow = !calm && cam.y - H(cam.x, cam.z) < 25;
 		// the bodies are made one kind a frame, the nearest kind first
 		const pending = species.filter((s) => !s.built);
 		if (pending.length) {
@@ -936,6 +937,8 @@ export function createDinosaurs(island, shared, scene, camera, profile, opts = {
 			for (const a of agents) if (!key || a.sp.key === key) { const d = Math.hypot(a.x - from.x, a.z - from.z); if (d < bd) { bd = d; best = a; } }
 			return best && { key: best.sp.key, name: best.sp.def.name, x: best.x, y: best.y, z: best.z, yaw: best.yaw, d: bd, state: best.state, hip: best.sp.def.o.hip * best.s };
 		},
+		// let them ignore you (for looking at them)
+		calm: (on = true) => { calm = !!on; },
 		// build every body now (for looking at them in tests)
 		buildAll: () => { for (const s of species) if (!s.built) build(s); return species.length; },
 		stats: () => ({ agents: agents.length, herds: herds.length, drawn: species.reduce((n, s) => n + s.drawn.length, 0), drawCalls: species.reduce((n, s) => n + (s.drawn.length ? 2 : 0), 0), verts: species.map((s) => s.built ? [s.key, s.hi.geometry.attributes.position.count, s.lo.geometry.attributes.position.count] : [s.key, 0, 0]) }),
