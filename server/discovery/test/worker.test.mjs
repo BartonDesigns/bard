@@ -214,8 +214,8 @@ section('nightly round');
 {
 	const S = settings({}), worst = worstCase(requestFor(cityByName('Tokyo')), S);
 	const env = makeEnv({ DAILY_NEURONS: String(worst * 3 + 5), NIGHT_MAX: '10' });
-	const made = await nightly(env);
-	ok(made === 3 && env.AI.calls.length === 3, 'as many as the allowance holds: ' + made);
+	const made = await nightly(env), st = await state(env);
+	ok(made >= 3 && env.AI.calls.length === made && st.used <= st.cap, 'as many as the allowance holds: ' + made + ', ' + st.used + ' of ' + st.cap);
 	const ids = [...env.BRIEFS.live.keys()];
 	ok(ids.every((id) => cityByName(id)?.pop === 5 || placeOf(id).city?.pop >= 4), 'biggest cities first: ' + ids.join(', '));
 	const env2 = makeEnv({ DAILY_NEURONS: '100' });
