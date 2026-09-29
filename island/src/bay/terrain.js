@@ -392,7 +392,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
-			sh.vertexShader = 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + '\nfloat cvK = 1.0, wvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + cliffDelta(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
+			sh.vertexShader = (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + '\nfloat cvK = 1.0, wvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
@@ -402,10 +402,7 @@ export function createBayArea(shared, scene, island, BU) {
 					wvK = wcK(bw);
 					// (the ground as graded for the roads near you: berms.js)
 					float bh = gradedHeight(bw);
-					// (the normal over the grid's own spacing, near ring or far: finer than that the
-					// survey aliases into stair-steps along the contours)
-					vec2 gsp = uHole > 0.5 ? 2.6 * 95000.0 * pow(max(abs(position.xz) / 95000.0, vec2(1e-5)), vec2(1.6 / 2.6)) * (2.0 / 256.0) : 2.0 * 4000.0 * sqrt(max(abs(position.xz) / 4000.0, vec2(1e-5))) * (2.0 / 300.0);
-					float be = max(max(3.0, length(position.xz) * 0.006), max(gsp.x, gsp.y) * 0.5);
+					float be = max(3.0, length(position.xz) * 0.006);
 					vec3 objectNormal = normalize(vec3(gradedHeight(bw - vec2(be, 0.0)) - gradedHeight(bw + vec2(be, 0.0)), 2.0 * be, gradedHeight(bw - vec2(0.0, be)) - gradedHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;
 					// the lie of the land about the point, for its colours: how far it sits below the
@@ -436,7 +433,7 @@ export function createBayArea(shared, scene, island, BU) {
 					float n3 = mix(0.5, vn(vBW * 0.23), 1.0 - smoothstep(0.35, 0.9, length(fwidth(vBW * 0.23))));
 					// the broadest wash of all, kilometres across: some hillsides a little greener or
 					// browner, lighter or darker, so no two valleys wear the same coat
-					float macro = vn(vBW * 0.00041 + 3.7) * 0.6 + vn(vBW * 0.00113 - 8.2) * 0.4;
+					float macro = vn(vBW * 0.00053 + 3.7);
 					// the San Mateo coast (coastside.js): how far in from the sea; the terraces by it are
 					// open grass and fields, green in the fog, not woods or chaparral
 					float csD = csSea(vBW);
@@ -458,7 +455,7 @@ export function createBayArea(shared, scene, island, BU) {
 					vec3 spring = mix(vec3(0.2, 0.36, 0.07), vec3(0.33, 0.47, 0.1), n2 * 0.7 + macro * 0.3) * (0.9 + 0.2 * n3);
 					float season = clamp(uSeason - uSeasonLag * fogbelt, 0.0, 1.0);
 					gold = mix(spring, gold, clamp(season + (n1 - 0.5) * 0.3 + slope * 0.4 * season, 0.0, 1.0));
-					if (csGreen > 0.0) gold = mix(gold, csGrass(vBW, n2, n3, macro), csGreen);
+					if (uCsRow.w > 0.5 && csGreen > 0.0) gold = mix(gold, csGrass(vBW, n2, n3, macro), csGreen);
 					vec3 c = gold;
 					// the small watered city parks stay green all summer: lawns, and dark groves of
 					// cypress and eucalyptus (the big ones are woods: below)
@@ -560,7 +557,7 @@ export function createBayArea(shared, scene, island, BU) {
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
 					c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h));
 					// the coast's cliffs, coves, lip, links and farms
-					if (csD < 5000.0) c = coastSide(c, vBW, h, slope, csD, smoothstep(0.03, 0.08, T.r), dist, n2, n3);
+					if (uCsRow.w > 0.5 && csD < 5000.0) c = coastSide(c, vBW, h, slope, csD, smoothstep(0.03, 0.08, T.r), dist, n2, n3);
 					// the river's banks (carve.js): wet gravel and sand at the water, the green of the
 					// willows' ground and the levees' grass, the paved path along the top
 					vec4 cv = carveAt(vBW);

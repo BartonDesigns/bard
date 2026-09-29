@@ -48,6 +48,39 @@ float cumulus(vec3 d, float cloud, float time, out float base, out float sh){
 }
 `;
 
+// the clouds as water shows them: the cumulus above (same field, same drift, same cover),
+// cheaper (three octaves, no showers), over the sky's own gradient and in the world's air.
+// Its own copy of the noise, so it drops into any shader. uCloudR: the cloud plane's
+// offset, cover, on (0: the plain sky); uCloudR2: night, time, gloom
+export const CLOUD_REFLECT_GLSL = /* glsl */`
+uniform vec4 uCloudR, uCloudR2, uAirR;
+float crH(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float crN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(crH(i), crH(i + vec2(1, 0)), f.x), mix(crH(i + vec2(0, 1)), crH(i + vec2(1, 1)), f.x), f.y); }
+// (three of fbm5's five octaves, scaled to its mean)
+float crF(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 3; i++){ s += a * crN(p); p = p * 2.02 + 3.1; a *= 0.5; } return s * 1.107; }
+vec3 skyReflect(vec3 r, vec3 zen, vec3 hor, vec3 sunC){
+	vec3 sky = mix(hor, zen, pow(clamp(r.y, 0.0, 1.0), 0.5));
+	if (uCloudR.w > 0.5 && r.y > 0.01) {
+		vec2 cp = r.xz / (r.y + 0.08) * 1.6 + uCloudR.xy;
+		cp += (vec2(crF(cp * 0.35 + uCloudR2.y * 0.004), crF(cp * 0.35 + 7.3 - uCloudR2.y * 0.0035)) - 0.5) * 0.7;
+		float base = crF(cp * 0.9) * 0.6 + crF(cp * 0.32 + 11.0) * 0.55;
+		float cover = mix(0.8, 0.3, uCloudR.z);
+		float dens = smoothstep(cover, cover + 0.12, base) * smoothstep(0.01, 0.2, r.y);
+		// (lit as the dome lights them: sunlit tops, grey-blue bases, dark shapes by night)
+		vec3 cloud = mix(vec3(0.46, 0.52, 0.64), vec3(1.08), 0.55 + 0.4 * smoothstep(cover, cover + 0.35, base)) * mix(vec3(1.0), sunC * 0.9, 0.35) * (1.0 - uCloudR2.x * 0.975) * (1.0 - uCloudR2.z * 0.45) + hor * 0.12;
+		sky = mix(sky, cloud, dens * 0.9);
+	}
+	return mix(sky, dot(sky, vec3(0.299, 0.587, 0.114)) * uAirR.rgb, uAirR.a);
+}`;
+// its uniforms, shared through `shared` (sky.update keeps them current)
+export function cloudReflectU(shared) {
+	shared.uCloudR ||= { value: new THREE.Vector4(0, 0, 0.62, 1) };
+	shared.uCloudR2 ||= { value: new THREE.Vector4() };
+	shared.uAirR ||= { value: airOf(shared.planet) };
+	return { uCloudR: shared.uCloudR, uCloudR2: shared.uCloudR2, uAirR: shared.uAirR };
+}
+
 // three.js's AgX tone mapping (tonemapping_pars_fragment) on the CPU, for one colour:
 // linear in, linear out. (The matrices are GLSL's, column by column.)
 const AGX_M = [
@@ -86,7 +119,7 @@ export function createSky(scene, shared, renderer) {
 		uFlash: { value: 0 }, uBolt: { value: new THREE.Vector4(0, 0, 0, 99) },
 		uFogCol: { value: new THREE.Color() },
 		// another world's air: its sky and haze take this colour (rgb), this much (a)
-		uAir: { value: airOf(shared.planet) },
+		uAir: cloudReflectU(shared).uAirR,
 		// a gas giant over its moon (xyz: where, w: its size); a ringed world's rings (on/off)
 		uGiant: { value: new THREE.Vector4(0.42, 0.33, -0.84, shared.planet?.sky?.giant ? 0.2 : 0) }, uRings: { value: shared.planet?.sky?.rings ? 1 : 0 },
 		uMeteor: { value: 0 },           // 1 on the nights of the great showers
@@ -583,11 +616,16 @@ export function createSky(scene, shared, renderer) {
 		// sea meet the sky. The fog gets the haze as the sky shows it instead.
 		if (renderer.toneMapping === THREE.AgXToneMapping) agx(haze, renderer.toneMappingExposure, scene.fog.color);
 		else scene.fog.color.copy(haze);
+		// (the water's reflections: shared.cloudReflect false keeps them to the plain sky)
+		shared.uCloudR.value.set(uniforms.uCloudOff.value.x, uniforms.uCloudOff.value.y, uniforms.uCloud.value, shared.cloudReflect === false ? 0 : 1);
+		shared.uCloudR2.value.set(night, shared.uTime.value, uniforms.uGloom.value, 0);
 		dome.position.copy(focus);
 		sats.position.copy(focus);
 		sats.userData.step(dt, elev);
 		orientSky();
 		return { night, dayK, setK };
 	}
-	return { dome, sun, hemi, state, update, uniforms, attach };
+	// (the clouds in the water on or off, as the quality setting does)
+	const reflect = (on) => { shared.cloudReflect = on; };
+	return { dome, sun, hemi, state, update, uniforms, attach, reflect };
 }

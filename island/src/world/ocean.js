@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { radialGrid, HEIGHT_GLSL, NOISE_GLSL, SWASH_GLSL } from './terrain.js';
+import { CLOUD_REFLECT_GLSL, cloudReflectU } from './sky.js';
 import { BAY_GLSL } from '../bay/terrain.js';
 
 // a planet's water colour, normalised to keep the sea's brightness (its streams and lakes too: bay/water.js)
@@ -31,7 +32,7 @@ uniforms.uUnder = shared.uUnder;
 	Object.assign(uniforms, {
 		uTime: shared.uTime, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor,
 		uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uAmbient: shared.uAmbient,
-		uMid: shared.uMid, uHigh: shared.uHigh,
+		uMid: shared.uMid, uHigh: shared.uHigh, ...cloudReflectU(shared),
 	});
 	uniforms.uHeight.value = shared.heightTex;
 	uniforms.uMasks.value = shared.maskTex;
@@ -148,6 +149,7 @@ uniforms.uUnder = shared.uUnder;
 		fragmentShader: /* glsl */`
 			uniform sampler2D uMasks; uniform float uHalf, uMid, uHigh; uniform vec4 uWaterT;
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor, uAmbient; uniform float uUnder;
+			${CLOUD_REFLECT_GLSL}
 			varying vec3 vW; varying vec3 vN; varying float vDepth; varying float vCrest; varying float vRoll; varying float vFilm;
 			varying vec2 vInward; varying vec2 vAmp; varying float vHv; varying vec2 vP0;
 			${NOISE_GLSL}
@@ -232,7 +234,8 @@ uniforms.uUnder = shared.uUnder;
 				body *= 1.0 + clamp(dot(-gL, sunH) * 2.2, -0.35, 0.45) * (1.0 - rough);
 				// reflection of the sky and the sun
 				vec3 R = reflect(-V, N);
-				vec3 sky = mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)) * (0.82 + 0.12 * slick * near);
+				// (the clouds overhead in it, world/sky.js: clear on a slick, broken up on a rough sea)
+				vec3 sky = mix(skyReflect(R, uSkyZen, uSkyHor, uSunColor), mix(uSkyHor, uSkyZen, pow(clamp(R.y, 0.0, 1.0), 0.35)), rough * 0.6) * (0.82 + 0.12 * slick * near);
 				float spec = pow(max(dot(R, uSunDir), 0.0), mix(500.0, 60.0, rough)) * mix(14.0, 2.0, rough) * (0.25 + 0.75 * near) + pow(max(dot(R, uSunDir), 0.0), mix(60.0, 12.0, rough)) * 0.8;
 				// at night the moon (opposite the sun) lays a glittering path across the water
 				float nightK = smoothstep(0.02, -0.15, uSunDir.y);

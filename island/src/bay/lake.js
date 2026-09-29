@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { waterfowl, egret as egretBody, turtle as turtleBody } from '../world/creatures.js';
 import { toWorld } from './geo.js';
+import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
 
 const RING = [[37.7653550, -121.9665241], [37.7652032, -121.9669164], [37.7650471, -121.9670750], [37.7648865, -121.9671251], [37.7646555, -121.9670361], [37.7644905, -121.9668274], [37.7644421, -121.9666242], [37.7645037, -121.9662820], [37.7645939, -121.9657783], [37.7645873, -121.9653248], [37.7644949, -121.9648378], [37.7643651, -121.9645679], [37.7640594, -121.9641755], [37.7635886, -121.9636413], [37.7635336, -121.9634298], [37.7635380, -121.9632100], [37.7636018, -121.9629957], [37.7636898, -121.9628510], [37.7638328, -121.9627647], [37.7640132, -121.9627286], [37.7641737, -121.9627536], [37.7649305, -121.9632684], [37.7647765, -121.9636246], [37.7647391, -121.9637915], [37.7647479, -121.9639529], [37.7647963, -121.9641199], [37.7648755, -121.9642507], [37.7649591, -121.9643341], [37.7651108, -121.9644009], [37.7652560, -121.9644148], [37.7653858, -121.9643731], [37.7654936, -121.9642868], [37.7657554, -121.9636802], [37.7659599, -121.9638082], [37.7649393, -121.9663182], [37.7649613, -121.9663766], [37.7650031, -121.9663849], [37.7650383, -121.9663376]];
 export const LAKE = RING.map(([a, b]) => toWorld(a, b));
@@ -62,6 +63,7 @@ const WATER_VERT = /* glsl */`
 		#include <fog_vertex>
 	}`;
 const WATER_FRAG = /* glsl */`
+	${CLOUD_REFLECT_GLSL}
 	uniform float uTime; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uNight;
 	uniform vec4 uRings[6];
 	varying vec3 vW;
@@ -86,7 +88,7 @@ const WATER_FRAG = /* glsl */`
 		vec3 r = reflect(-v, n);
 		float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
 		// the sky in it, and low down the dark line of the trees round the shore
-		vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5));
+		vec3 sky = skyReflect(r, uSkyZen, uSkyHor, uSunColor);
 		sky = mix(vec3(0.03, 0.06, 0.03) * (1.0 - uNight * 0.8), sky, smoothstep(0.06, 0.32, r.y + (vn(p * 0.05) - 0.5) * 0.12));
 		vec3 deep = vec3(0.01, 0.05, 0.032) * (1.0 - uNight * 0.85);
 		// (a green lake: what it mirrors comes back through green water)
@@ -125,7 +127,7 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 	root.name = 'lakes';
 	scene.add(root);
 	const rings = [...Array(6)].map(() => new THREE.Vector4(0, 0, 0, 0));
-	const U = { uTime: { value: 0 }, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uNight: { value: 0 }, uRings: { value: rings } };
+	const U = { uTime: { value: 0 }, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uNight: { value: 0 }, uRings: { value: rings }, ...cloudReflectU(shared) };
 	const ring = (x, z, k = 1) => { const R = rings.reduce((a, b) => (b.w < a.w ? b : a)); R.set(x, z, 0.2, k); };
 	const bodies = [];
 	const annabel = { S: shoreOf(LAKE), roundhouse: true, birds: isPhone ? 8 : 14, egret: true };

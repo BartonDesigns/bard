@@ -761,6 +761,8 @@ export function createIslandWorld() {
 		if (quality !== 'auto' || force) pixelRatio = target;
 		renderer.setPixelRatio(pixelRatio);
 		renderer.shadowMap.enabled = !(quality === 'low');
+		// (the clouds in the water: the plain sky there on low)
+		shared.cloudReflect = quality !== 'low';
 		world?.rays?.quality(quality);
 		resize();
 	}

@@ -220,6 +220,8 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 	COAST_U.uCliff.value = cliffTex;
 	cliffData = cliff;
 
+	// (the coast's shading runs only while you are within reach of it: w of uCsRow)
+	let shoreReady = false;
 	const seaX = (z) => { const f = Math.max(0, Math.min(NROW - 1.001, (z - NW.z) / ROW)), i = Math.floor(f); return rowsX[i] + (rowsX[i + 1] - rowsX[i]) * (f - i); };
 	const seaDist = (x, z) => (x - seaX(z)) * 0.94;
 
@@ -250,7 +252,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 			yield;
 		}
 		rowsTex.needsUpdate = true;
-		COAST_U.uCsRow.value.w = 1;
+		shoreReady = true;
 		jobs.push(fieldJob(), trailJob());
 	}
 
@@ -495,7 +497,9 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 	function update(cam) {
 		const x = cam.position.x, z = cam.position.z;
 		const inCoast = x > NW.x - 2000 && x < SE.x + 2000 && z > NW.z - 2000 && z < SE.z + 2000;
-		if (COAST_U.uCsRow.value.w > 0.5 && inCoast && !busy && cam.position.y < 2500) {
+		const R = 30000 + Math.max(0, cam.position.y) * 8;
+		COAST_U.uCsRow.value.w = shoreReady && x > NW.x - R && x < SE.x + R && z > NW.z - R && z < SE.z + R ? 1 : 0;
+		if (shoreReady && inCoast && !busy && cam.position.y < 2500) {
 			const sd = seaDist(x, z);
 			if (sd < 1800 && Math.hypot(x - ccx, z - ccz) > 350) { ccx = x; ccz = z; jobs.unshift(cliffJob(x, z)); }
 		}
@@ -503,7 +507,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 		work(isPhone ? 4 : 6);
 	}
 	// the shore is found once the heights are in
-	function start() { if (!jobs.length && COAST_U.uCsRow.value.w < 0.5) jobs.push(shoreJob()); }
+	function start() { if (!jobs.length && !shoreReady) jobs.push(shoreJob()); }
 	// (for the tests: the cliff grid, the work still queued, what stands)
 	const info = () => ({ cliff: COAST_U.uCliffR.value.toArray().map(Math.round), jobs: jobs.length + (job ? 1 : 0), shore: COAST_U.uCsRow.value.w, barns: fields.list.length, built: group.children.filter((c) => /coast/.test(c.name)).map((c) => c.name + (c.count ?? '')) });
 	// (and for the tests, where frames come a second apart: finish the queued work now)

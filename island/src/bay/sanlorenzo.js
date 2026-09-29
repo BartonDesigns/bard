@@ -19,6 +19,7 @@
 
 import * as THREE from 'three';
 import { toWorld, toLatLon, H_OFF, H_SCALE } from './geo.js';
+import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
 import { beginCarve, TILE, setRiverHooks } from './carve.js';
 import { toW, merger, bulbs, rng } from './rides/kit.js';
 
@@ -515,7 +516,7 @@ export function createRiver(scene, bay, shared, { isPhone = false, sound = null 
 		g.setAttribute('aFl', new THREE.Float32BufferAttribute(fl, 4));
 		g.setIndex(idx);
 		g.computeBoundingSphere();
-		const U = { uO: { value: new THREE.Vector2(Math.round(S.x[0]), Math.round(S.z[0])) }, uFade: { value: new THREE.Vector2(S.sSurf, S.sBeach + 45) }, uTime, uNight, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor };
+		const U = { uO: { value: new THREE.Vector2(Math.round(S.x[0]), Math.round(S.z[0])) }, uFade: { value: new THREE.Vector2(S.sSurf, S.sBeach + 45) }, uTime, uNight, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, ...cloudReflectU(shared) };
 		const mat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {}]), vertexShader: WATER_VERT, fragmentShader: WATER_FRAG, fog: true });
 		Object.assign(mat.uniforms, U);
 		const mesh = new THREE.Mesh(g, mat);
@@ -687,6 +688,7 @@ const WATER_VERT = /* glsl */`
 		#include <fog_vertex>
 	}`;
 const WATER_FRAG = /* glsl */`
+	${CLOUD_REFLECT_GLSL}
 	uniform float uTime, uNight; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform vec2 uO;
 	varying vec3 vW; varying vec2 vSD; varying vec4 vFl;
 	#include <fog_pars_fragment>
@@ -714,7 +716,7 @@ const WATER_FRAG = /* glsl */`
 		// (clamped: a dot a hair over one would make pow() of a negative, NaN, and the bloom
 		// would spread it over the whole screen)
 		float fres = 0.1 + 0.9 * pow(clamp(1.0 - dot(n, vv), 0.0, 1.0), 4.0);
-		vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5)) * vec3(0.72, 0.8, 0.86);
+		vec3 sky = skyReflect(r, uSkyZen, uSkyHor, uSunColor) * vec3(0.72, 0.8, 0.86);
 		// low down in it, the dark banks, the willows and the town
 		sky = mix(vec3(0.035, 0.06, 0.03) * (1.0 - uNight * 0.8), sky, smoothstep(0.06, 0.26, r.y + (vn(p * 0.04) - 0.5) * 0.12));
 		float edge = smoothstep(0.6, 1.0, abs(vSD.y));

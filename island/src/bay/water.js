@@ -28,6 +28,7 @@ import { REAL_U } from './realcity.js';
 import { DEEP, crossings, edgeDist, bounds } from './watersrc.js';
 import { waterfowl } from '../world/creatures.js';
 import { waterOf } from '../world/ocean.js';
+import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
 
 const W1 = WN + 1, TILE = 2048;
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -76,7 +77,8 @@ float gvn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 float gEdge = 0.0;
 uniform float uTime, uNight, uSeason; uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform vec4 uLook, uWaterT;
 vec3 skyIn(vec3 r, vec2 p){
-	vec3 sky = mix(uSkyHor, uSkyZen, pow(max(r.y, 0.0), 0.5));
+	// (the clouds overhead in it too: world/sky.js)
+	vec3 sky = skyReflect(r, uSkyZen, uSkyHor, uSunColor);
 	// low down, the dark line of the hills and trees round the shore
 	return mix(vec3(0.035, 0.05, 0.035) * (1.0 - uNight * 0.8), sky, smoothstep(0.03, 0.22, r.y + (vn(p * 0.02) - 0.5) * 0.1));
 }
@@ -336,10 +338,10 @@ export function createWater(scene, shared, opts = {}) {
 	// the ground under the water, as it is drawn
 	const GROUND = carve ? BAY_GLSL + WC_GLSL + 'float groundUnder(vec2 w){ return bayHeight(w) + wcAt(w).r * wcK(w); }\n' : HEIGHT_GLSL + 'float groundUnder(vec2 w){ return heightAt(w); }\n';
 	const groundU = carve ? { ...shared.bayU, ...WC_U } : { uHeight: { value: shared.heightTex }, uHalf: { value: island?.half || 1300 }, uCell: { value: island?.cell || 1 }, uN: { value: island?.N || 2 } };
-	const uniforms = () => ({ ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...groundU, uTime: shared.uTime, uNight, uSeason: REAL_U.uSeason, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uLook: lookU, uWaterT: tintU });
-	const FRAG_HEAD = GROUND + NOISE_GLSL + COMMON;
+	const uniforms = () => ({ ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...groundU, uTime: shared.uTime, uNight, uSeason: REAL_U.uSeason, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uLook: lookU, uWaterT: tintU, ...cloudReflectU(shared) });
+	const FRAG_HEAD = GROUND + NOISE_GLSL + CLOUD_REFLECT_GLSL + COMMON;
 	const riverMat = new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: RIVER_VERT, fragmentShader: FRAG_HEAD + RIVER_FRAG, fog: true, transparent: look?.kind !== 'ice', depthWrite: false });
-	const haloMat = look?.kind === 'lava' ? new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: GROUND + HALO_VERT, fragmentShader: NOISE_GLSL + COMMON + HALO_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }) : null;
+	const haloMat = look?.kind === 'lava' ? new THREE.ShaderMaterial({ uniforms: uniforms(), vertexShader: GROUND + HALO_VERT, fragmentShader: NOISE_GLSL + CLOUD_REFLECT_GLSL + COMMON + HALO_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }) : null;
 	// a band of the glow along a line of points (x, z pairs), out to one side by `out` metres from `off`
 	const HALO_K = [0, 0.2, 0.45, 1];
 	function haloBand(pos, ak, idx, P, off, out, sd, closed) {
