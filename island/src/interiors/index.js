@@ -26,7 +26,7 @@ const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'resta
 const STYLE_OF = { victorian: 'victorian', pacheights: 'edwardian', nobhill: 'edwardian', northbeach: 'edwardian', chinatown: 'edwardian', marina: 'sunset', sunset: 'sunset', mission: 'mission' };
 
 export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 } } = {}) {
-	const BUILD_R = isPhone ? 55 : 85, DROP_R = BUILD_R + 30, MAX = isPhone ? 4 : 9;
+	const BUILD_R = isPhone ? 55 : 85, DROP_R = BUILD_R + 30, MAX = isPhone ? 3 : 6;
 	let BUDGET = isPhone ? 3 : 4;
 	const group = new THREE.Group();
 	group.name = 'interiors';
