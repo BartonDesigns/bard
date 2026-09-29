@@ -299,7 +299,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		begin('leave', car, o);
 	}
 
-	let hooked = null;
+	let hooked = null, lastErr = null;
 	function update(dt, t) {
 		const W = world();
 		// (a street built anew is sorted at once, before its cars are drawn)
@@ -313,9 +313,15 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!A) return;
 		traffic(dt, t, cam);
 		scanT -= dt; errandT -= dt;
-		if (scanT < 0) { scanT = 1.5; scan(cam); }
-		if (errandT < 0) { errandT = 5; errand(cam, t); }
-		for (let i = episodes.length - 1; i >= 0; i--) if (!run(episodes[i], dt, t, cam)) { endEpisode(episodes[i]); episodes.splice(i, 1); }
+		try {
+			if (scanT < 0) { scanT = 1.5; scan(cam); }
+			if (errandT < 0) { errandT = 5; errand(cam, t); }
+		} catch (e) { lastErr = 'scan ' + String(e && e.stack || e).slice(0, 300); }
+		for (let i = episodes.length - 1; i >= 0; i--) {
+			let go = false;
+			try { go = run(episodes[i], dt, t, cam); } catch (e) { lastErr = String(e && e.stack || e).slice(0, 300); }
+			if (!go) { endEpisode(episodes[i]); episodes.splice(i, 1); }
+		}
 	}
 	// the owners' cars on the move, for the street to draw with its traffic
 	function draw(fleet, x, z) {
@@ -328,6 +334,6 @@ export function createLife({ scene, world, camera, isPhone }) {
 	}
 	// what cars there are that are not in the street's own lists (for bumping into)
 	const moving = () => episodes.filter((E) => E.phase === 'pull-out' || E.phase === 'drive-in' || E.phase === 'park').map((E) => ({ kind: E.car.kind, x: E.pos[0], z: E.pos[1], y: E.matrix.elements[13], yaw: E.yaw }));
-	const info = () => ({ episodes: episodes.map((E) => E.kind + ':' + E.phase + ':' + E.car.kind), drivers: [...seated.values()].reduce((a, b) => a + b.length, 0), bodies: bodies.size });
+	const info = () => ({ err: lastErr, t: +(buildT || 0).toFixed(1), episodes: episodes.map((E) => E.kind + ':' + E.phase + ':' + E.car.kind), drivers: [...seated.values()].reduce((a, b) => a + b.length, 0), bodies: bodies.size });
 	return { update, draw, moving, info, episodes, begin, ownerOf, present, group };
 }
