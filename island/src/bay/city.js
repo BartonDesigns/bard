@@ -566,7 +566,7 @@ export function createCity(shared, scene, bay, real = null) {
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
 	// sword ferns on the shady forest floor (under the redwoods, on the north slopes, in the draws)
-	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8 }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
+	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.2 } }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
 	// the far tier: one point per tree, drawn as its species' impostor
 	const atlasCv = document.createElement('canvas');
 	atlasCv.width = IMP * 3; atlasCv.height = IMP;

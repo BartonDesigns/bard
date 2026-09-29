@@ -622,6 +622,8 @@ export function createBayArea(shared, scene, island, BU) {
 						float Y1 = PM.r;
 						vec4 f1 = max(fwidth(D1) * 0.75, vec4(0.004)), f2 = max(fwidth(D2) * 0.75, vec4(0.004));
 						vec4 C1 = smoothstep(0.5 - f1, 0.5 + f1, D1), C2 = smoothstep(0.5 - f2, 0.5 + f2, D2);
+						// a trail's edge is never a clean line: close by it frays into the ground
+						C1.b = mix(C1.b, smoothstep(0.3, 0.85, D1.b + (vn(vBW * 1.9) - 0.5) * 0.35), 1.0 - smoothstep(30.0, 60.0, dist));
 						float fy = max(fwidth(Y1) * 0.75, 0.004), yellow = smoothstep(0.5 - fy, 0.5 + fy, Y1) * e1;
 						vec4 RM = mix(C2 * e2, C1, e1);
 						float edge = max(e1, e2);
