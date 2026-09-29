@@ -236,7 +236,7 @@ export function huckleberry(seed) {
 // a sword fern: a fountain of 20-40 long, stiff, arching fronds from one crown
 export function swordFern(seed) {
 	const r = mulberry32(seed), b = new Builder();
-	const n = 22 + Math.floor(r() * 16), L0 = 0.8 + r() * 0.5;
+	const n = 16 + Math.floor(r() * 10), L0 = 0.8 + r() * 0.5;
 	const u0 = (CELL.fern % AC) / AC, v0 = 1 - (Math.floor(CELL.fern / AC) + 1) / AR;
 	for (let f = 0; f < n; f++) {
 		const a = f * 2.39996 + r() * 0.3, L = L0 * (0.7 + r() * 0.45), elev = 1.25 - (f / n) * 0.75 + (r() - 0.5) * 0.2, dir = V(Math.cos(a), 0, Math.sin(a));

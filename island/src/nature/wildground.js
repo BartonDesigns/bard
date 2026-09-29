@@ -158,7 +158,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		},
 		() => {
 			Lhk = mk('huckle', [PL.huckleberry(91)], shrubMats, 90, 400 * K, { shadow: true, woodR: 20 });
-			Lfn = mk('fern', [PL.swordFern(101), PL.swordFern(102)], [fernM], 80, 2200 * K);
+			Lfn = mk('fern', [PL.swordFern(101), PL.swordFern(102)], [fernM], 60, 1800 * K);
 		},
 		() => {
 			Lso = mk('sorrel', [PL.sorrel(111)], [leafM], 40, 600 * K);

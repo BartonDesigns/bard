@@ -50,7 +50,7 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 	};
 
 	// the small life on the ground near you: squirrels, turkeys, quail, lizards, slugs, butterflies
-	const small = globalThis.WILD_N3 ? createSmallLife(group, bay, { real, isPhone, about, spot, seen }) : null;
+	const small = createSmallLife(group, bay, { real, isPhone, about, spot, seen });
 
 	// ---------- who is about, placed round you now and then ----------
 	let kettles = [], pels = null, gulls = [], herd = [], cx = 1e9, cz = 1e9, lastH = -1, hawkK = null;
@@ -162,7 +162,7 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 			if (d < 90 && seen(cam, D.x, g(D.x, D.z) + 1, D.z, 90)) spot('black_tailed_deer');
 		});
 		deer.count = herd.length; deer.instanceMatrix.needsUpdate = true;
-		small?.update(dt, t, cam, hours, month);
+		small.update(dt, t, cam, hours, month);
 	}
 	return { group, update, small, journal: () => Object.keys(journal).map((id) => GUIDE[id]?.name).filter(Boolean) };
 }
