@@ -86,7 +86,7 @@ export function createCarjack({ world, camera, drive, ragdolls, avatar, hint }) 
 						setTimeout(() => { ragdolls.release(Pd); W.vehicles.life.flee(b, root.x, root.z, world().player.state.pos); }, 1400);
 					});
 				}
-				me.M.play('throw', 0.8);
+				me.M.setPose('rest'); me.M.play('throw', 0.8);
 				J.phase = 'in'; J.t = 0;
 			}
 		} else if (J.phase === 'in') {
