@@ -212,7 +212,7 @@ export function createRagdolls({ world, isPhone }) {
 		for (const pc of Object.values(D.parts)) {
 			const t = pc.rb.translation();
 			const dy = t.y - pt.y, w = Math.exp(-(dy * dy) / 0.18);
-			const k = share * (0.25 + 0.75 * w);
+			const k = share * (0.55 + 0.45 * w);
 			pc.rb.setLinvel({ x: v.x * k, y: v.y * k + sp * lift * w, z: v.z * k }, true);
 			// (the struck part spins with the blow: a leg swept from under the hips)
 			if (w > 0.5 && sp > 2) { const ax = _v.set(v.z, 0, -v.x).normalize().multiplyScalar(sp * 0.9 * w); pc.rb.setAngvel({ x: ax.x, y: 0, z: ax.z }, true); }
