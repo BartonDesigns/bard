@@ -1333,7 +1333,7 @@ if (typeof window !== 'undefined') {
 		rays: (v) => window.L99Island?.world?.()?.rays?.control(v) ?? 'no world yet',
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// drive the roads: Crysis.drive.start(), .stop(), .state
-		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), get state() { return HOOKS.drive?.state; } },
+		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), physics: () => HOOKS.drive?.physics?.(), get state() { return HOOKS.drive?.state; } },
 		// the hills' season: 0 spring green .. 1 summer gold
 		season: (v) => { if (v !== undefined) REAL_U.uSeason.value = Math.max(0, Math.min(1, +v)); return REAL_U.uSeason.value; },
 		bloom: (v) => { if (v !== undefined) REAL_U.uBloom.value = Math.max(0, Math.min(1, +v)); return REAL_U.uBloom.value; },

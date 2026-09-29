@@ -6,11 +6,11 @@
 //   validateBrief(raw, base)  from what a model wrote, every field checked and clamped, and
 //                             anything missing or bad taken from base
 //
-// The model's briefs are made once, off the device, and shared: the atlas cities' are baked
-// into a static file (tools/bake-briefs.mjs), a generated town's is made by the discovery
-// server the first time anyone comes to it (server/discovery). Both ask with briefRequest,
-// built from the atlas alone, and keep what briefFromReply makes of the answer; every player
-// then reads the same brief back through canonicalBrief.
+// A place's brief is made once, off the device, and shared: the discovery server (server/
+// discovery) makes it the first time anyone comes to the place, asking with briefRequest
+// (built from the atlas alone) and keeping what briefFromReply makes of the answer, or the
+// atlas brief when it cannot ask. Every player then reads the same brief through
+// canonicalBrief, for good.
 //
 // The shape (BRIEF_SCHEMA; a change of shape bumps it, and the cached briefs are made anew):
 //   { v, id, city, region, country, lang, source: 'atlas' | 'llm' | 'mixed',
@@ -302,4 +302,97 @@ export function briefPrompts(city, base) {
 			accept: (v) => (v && cleanList(v.chatter ?? v.lines, LIMITS.chatter).length >= 5 ? { chatter: v.chatter ?? v.lines } : null),
 		},
 	].map((P) => ({ ...P, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: P.user }], retry: [{ role: 'system', content: SYSTEM }, { role: 'user', content: P.user + '\nOnly the JSON object, starting with { and ending with }.' }] }));
+}
+
+// ---------- asking once, off the device, for the brief everyone shares ----------
+// One request per place, answered as JSON in this shape (structured output: no lengths or
+// ranges in a schema, so the counts are in the words and validateBrief clamps them). Built
+// from the atlas alone: nothing a player sends ever reaches the words.
+export const TOWN = '{town}';
+const STR = { type: 'string' }, LIST = { type: 'array', items: STR };
+const obj = (props) => ({ type: 'object', additionalProperties: false, required: Object.keys(props), properties: props });
+export const BRIEF_JSON_SCHEMA = obj({
+	vibe: STR,
+	districts: { type: 'array', items: obj({ name: STR, kind: { type: 'string', enum: DISTRICT_KINDS }, share: { type: 'number' }, architecture: STR, height: { type: 'string', enum: Object.keys(HEIGHT) } }) },
+	landmarks: { type: 'array', items: obj({ look: STR, name: STR }) },
+	streets: LIST, signs: LIST, chatter: LIST,
+	music: obj({ genre: STR, bpm: { type: 'integer' } }),
+	wardrobe: LIST, food: LIST, vehicles: LIST, vegetation: LIST,
+});
+
+export function briefRequest(city) {
+	const R = region(city.region) || region('na');
+	const base = fallbackBrief(city), lang = langName(R.lang), name = city.gen ? TOWN : city.name;
+	const slang = (R.say?.words || []).slice(0, 8).join('; '), greet = (R.say?.greet || []).slice(0, 3).join(' ');
+	const user = [
+		briefFacts(city),
+		`Street names there look like: ${base.streets.slice(0, 3).join('; ')}.`,
+		`Signs there look like: ${base.signs.slice(0, 3).join('; ')}.`,
+		`Local greetings: ${greet || 'hello'}. Local words: ${slang || 'none given'}.`,
+		'',
+		city.gen
+			? `This is a small place the game made up, so it has no real name here: write ${TOWN} wherever its name belongs, and give its landmarks an empty name (they stand for nothing real).`
+			: '',
+		`Write the brief for ${name}, one JSON object:`,
+		'- vibe: one sentence on how it looks and feels.',
+		`- districts: ${Math.min(6, 3 + (city.pop | 0) / 2 | 0)} districts with local names; kind is the nearest of the listed kinds; share is its part of the place (they sum to 1); architecture in a few words; height of its buildings.`,
+		`- landmarks: ${city.gen ? '1 to 3' : '3 to 5'}. look is a generic stand-in a game can build (e.g. "red suspension bridge"); name is the real landmark it stands for, or "".`,
+		`- streets: 14 street names in ${name}'s own style and language.`,
+		`- signs: 14 short shop, café and street sign texts as locals write them, in ${lang}${/^English/.test(lang) ? ' with local slang' : ''}.`,
+		`- chatter: 12 short things people say in passing on the street: friendly, everyday, under 14 words each, in English flavoured with local words${lang === 'English' ? ' and slang' : ' and a few words of ' + lang}.`,
+		'- music: the genre that fits the place, and its tempo in bpm (60 to 180).',
+		'- wardrobe, food, vehicles, vegetation: 4 to 6 short items each.',
+	].filter((x, i, L) => x || L[i - 1]).join('\n');
+	return { system: SYSTEM, user };
+}
+
+// what a reply makes: the brief (source 'llm', or 'mixed' where the atlas filled much in), or
+// null when too little of it could be used
+export function briefFromReply(value, city) {
+	const b = validateBrief(value, fallbackBrief(city));
+	if (b.took < 3) return null;
+	b.source = b.took >= 9 ? 'llm' : 'mixed';
+	delete b.took;
+	return b;
+}
+
+// kept and sent without what every player works out from the atlas (the id, names and size)
+const OWN = ['source', 'vibe', 'districts', 'landmarks', 'streets', 'signs', 'chatter', 'music', 'wardrobe', 'food', 'vehicles', 'vegetation'];
+export function compactBrief(b) {
+	const out = {};
+	for (const k of OWN) if (b[k] !== undefined) out[k] = k === 'music' ? { genre: b.music.genre, bpm: b.music.bpm } : b[k];
+	return out;
+}
+// a kept brief made whole for this player: a town's name put in, then checked again against
+// the atlas (the same for everyone, and never a faceplate)
+export function canonicalBrief(kept, city) {
+	if (!kept || typeof kept !== 'object' || Array.isArray(kept)) return null;
+	const named = city.gen ? nameTown(kept, city.name) : kept;
+	const b = validateBrief(named, fallbackBrief(city));
+	const took = b.took;
+	delete b.took;
+	if (!took) return null;
+	b.source = ['llm', 'mixed', 'atlas'].includes(kept.source) ? kept.source : 'llm';
+	return b;
+}
+export function nameTown(v, name) {
+	if (typeof v === 'string') return v.split(TOWN).join(name);
+	if (Array.isArray(v)) return v.map((x) => nameTown(x, name));
+	if (v && typeof v === 'object') { const o = {}; for (const [k, x] of Object.entries(v)) o[k] = nameTown(x, name); return o; }
+	return v;
+}
+
+// ---------- the generated towns: 'gen:<slug>:<lat>,<lon>' ----------
+export const genId = (name, lat, lon) => 'gen:' + slug(name || 'town') + ':' + lat.toFixed(2) + ',' + lon.toFixed(2);
+const GEN_ID = /^gen:([a-z0-9]+(?:-[a-z0-9]+)*):(-?\d{1,2}\.\d{2}),(-?\d{1,3}\.\d{2})$/;
+export function parseGenId(id) {
+	const m = typeof id === 'string' && id.length <= 80 ? id.match(GEN_ID) : null;
+	if (!m || m[1].length > 48) return null;
+	const lat = +m[2], lon = +m[3];
+	return Math.abs(lat) <= 85 && Math.abs(lon) <= 180 ? { slug: m[1], lat, lon } : null;
+}
+// a generated town as a city record (the atlas must be loaded)
+export function genCity({ id, name, lat, lon, pop = 1, char, landmarks }) {
+	const at = regionAt(lat, lon);
+	return { id: id || genId(name, lat, lon), name: name || 'Town', lat, lon, pop, char: char || `A ${pop >= 2 ? 'city' : 'town'} in ${at.name}`, landmarks: landmarks || [], region: at.id, regionName: at.name, country: at.profile.country || '', gen: true };
 }

@@ -96,16 +96,15 @@ export function createLife({ scene, world, camera, isPhone }) {
 		for (const [c, bs] of seated) if (!near.includes(c) || !S.cars.includes(c)) { for (const b of bs) { b.busy = false; b.P.root.visible = false; } seated.delete(c); c.seated = false; }
 		let budget = DRIVERS;
 		for (const c of near) {
+			const need = Math.min(c.riders || 1, 3);
 			let bs = seated.get(c);
-			if (!bs) {
-				const n = Math.min(c.riders || 1, budget), got = [];
-				for (let i = 0; i < n; i++) { const b = body(hashS(c.id + ':' + i), t); if (!b || b.busy) break; b.busy = true; seat(b, c.kind, i); got.push(b); }
-				if (!got.length) continue;
-				seated.set(c, bs = got);
-				c.seated = got.length >= (c.riders || 1);
-			}
-			budget -= bs.length;
-			for (const b of bs) step(b, dt, t, c.matrix);
+			if (!bs) { if (budget < need) continue; seated.set(c, bs = []); }
+			// (everyone in the car at once, or the silhouettes stay until they all are)
+			while (bs.length < need) { const b = body(hashS(c.id + ':' + bs.length), t); if (!b || b.busy) break; b.busy = true; seat(b, c.kind, bs.length); b.P.root.visible = false; bs.push(b); }
+			budget -= need;
+			const all = bs.length === need;
+			c.seated = all;
+			for (const b of bs) { b.P.root.visible = all; if (all) step(b, dt, t, c.matrix); }
 			if (budget <= 0) break;
 		}
 	}

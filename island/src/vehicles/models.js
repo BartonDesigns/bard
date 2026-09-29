@@ -80,6 +80,14 @@ function takeApart(scene, lod) {
 		const g = o.geometry.clone();
 		// (only the attributes the materials use, so that the parts merge)
 		for (const a of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(a)) g.deleteAttribute(a);
+		// (the quantized attributes as plain floats, so they can be moved and merged)
+		for (const [name, a] of Object.entries(g.attributes)) {
+			if (a.array instanceof Float32Array && !a.isInterleavedBufferAttribute) continue;
+			const f = new Float32Array(a.count * a.itemSize);
+			for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) f[i * a.itemSize + k] = a.getComponent(i, k);
+			g.setAttribute(name, new THREE.BufferAttribute(f, a.itemSize));
+		}
+		if (g.attributes.color && g.attributes.color.itemSize === 4) { const c = g.attributes.color, f = new Float32Array(c.count * 3); for (let i = 0; i < c.count; i++) { f[i * 3] = c.getX(i); f[i * 3 + 1] = c.getY(i); f[i * 3 + 2] = c.getZ(i); } g.setAttribute('color', new THREE.BufferAttribute(f, 3)); }
 		if (!g.attributes.normal) g.computeVertexNormals();
 		tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
 		const mat = o.material;
@@ -104,7 +112,7 @@ function takeApart(scene, lod) {
 }
 const add = (map, mat, g) => { const k = mat.name + '|' + (g.attributes.color ? 'c' : '') + (g.attributes.uv ? 'u' : ''); let e = map.get(k); if (!e) map.set(k, e = { mat, gs: [] }); e.gs.push(g); };
 function part(key, e) {
-	const gs = e.gs.map((g) => g.index ? g : g);
+	const gs = e.gs;
 	const geo = gs.length > 1 ? mergeGeometries(gs) || gs[0] : gs[0];
 	const n = e.mat.name;
 	const role = n === 'paint' ? 'paint' : n === 'glass' ? 'glass' : n === 'lamp' ? 'lamp' : 'solid';

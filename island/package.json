@@ -13,7 +13,6 @@
     "three": "0.186.1"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.129.0",
     "@gltf-transform/core": "^4.5.1",
     "@gltf-transform/extensions": "^4.5.1",
     "@gltf-transform/functions": "^4.5.1",

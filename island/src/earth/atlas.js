@@ -13,7 +13,7 @@
 // inherits what it does not say from the one above. A list written '+a|b' adds to the
 // parent's list instead of replacing it. Everything answers the same for the same seed.
 
-const DATA_URL = new URL('./earth-atlas.js', import.meta.url).href;     // next to the bundle
+const DATA_URL = (() => { try { return new URL('./earth-atlas.js', import.meta.url).href; } catch { return './earth-atlas.js'; } })();     // next to the bundle (a server bundle has no url)
 const DATA_SRC = './data/index.js';                                     // unbundled (tests, dev)
 
 const RAD = Math.PI / 180;
