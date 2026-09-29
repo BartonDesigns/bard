@@ -63,6 +63,8 @@ export const POSES = {
 	read: { both: arm({ abd: 0.16, flex: 0.62, roll: 0.55, bend: 1.8, pro: 1.0, wflex: -0.2, curl: 0.35 }), swing: 0, look: 0.5 },
 	cook: { both: arm({ abd: 0.2, flex: 0.95, roll: 0.3, bend: 0.85, pro: 0.9, curl: 0.25 }), swing: 0, look: 0.35, lean: 0.12 },
 	push: { both: arm({ abd: 0.14, flex: 0.8, roll: 0.25, bend: 0.6, pro: 0.15, wflex: -0.1, curl: 0.85 }), swing: 0, lean: 0.08 },
+	// a fishing rod held out over the rail in both hands
+	fish: { lead: arm({ abd: 0.15, flex: 0.75, roll: 0.35, bend: 0.95, pro: 0.9, curl: 1 }), off: arm({ abd: 0.12, flex: 0.45, roll: 0.6, bend: 1.2, pro: 0.9, curl: 1 }), swing: 0, look: 0.2 },
 };
 // holding hands: a child's arm reaches up and out to the grown-up's, the grown-up's hangs a
 // little out and forward to meet it

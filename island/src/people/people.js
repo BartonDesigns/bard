@@ -181,7 +181,7 @@ export function createPeople(scene, world, camera = null) {
 				p.route = { kind: 'seat', seat: st, seats: seated.flatMap((q) => q.seats) };
 				p.role = 'wait'; p.timer = 1e9;
 				M.place(st.x, st.y, st.z, st.heading);
-				if (st.sit) { M.sit(st.h, true); M.setPose(st.table ? 'table' : 'lap'); } else { M.stand(); M.setPose(p.idlePose); }
+				if (st.sit) { M.sit(st.h, true); M.setPose(st.table ? 'table' : 'lap'); } else if (st.rail) { M.stand(); M.setPose('fish'); rodFor(p).visible = true; } else { M.stand(); M.setPose(p.idlePose); }
 				return true;
 			}
 			for (let k = 0; k < 12; k++) {
@@ -459,6 +459,13 @@ export function createPeople(scene, world, camera = null) {
 		M.want.speed = v;
 	}
 
+	// a rod for someone fishing off the pier's rail: held out ahead of them, the line down
+	const rodGeo = new THREE.CylinderGeometry(0.006, 0.014, 2.4, 5).translate(0, 1.2, 0), rodMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.4 });
+	function rodFor(p) {
+		if (!p.rod) { p.rod = new THREE.Mesh(rodGeo, rodMat); p.rod.position.set(-0.08, p.P.height * 0.55, 0.3); p.rod.rotation.x = 0.9; p.P.root.add(p.rod); }
+		return p.rod;
+	}
+
 	// ---------- what they wear ----------
 	// dressed for the place and what they are doing there (wardrobe.js): the same person in
 	// the same place and doing the same thing always dressed the same way; re-dressed only
@@ -520,6 +527,7 @@ export function createPeople(scene, world, camera = null) {
 		if (wantK && adultPool.length) grow(true); else if (wantA) grow(false);
 		let active = 0, kids = 0;
 		const drop = (p) => {
+			if (p.rod) p.rod.visible = false;
 			p.active = false; p.P.root.visible = false; p.leaving = false; p.fade = 0;
 			// out of the family: the grown-up lets go of the hand
 			if (p.fam) { const F = p.fam; if (p.P.dna.child) F.kids = Math.max(0, (F.kids || 1) - 1); else if (F.spouse === p) F.spouse = null; if (p.route?.kind === 'follow') p.route.parent.M.hold(p.route.theirs, false); p.fam = null; }

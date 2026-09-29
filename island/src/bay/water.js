@@ -166,7 +166,7 @@ float ripH(vec2 u, float t){
 	vec2 a = vec2(u.x * 0.3 - t * 0.4, u.y * 0.9);
 	vec2 b = vec2((u.x * 0.87 + u.y * 0.5) * 1.1 - t * 0.8, (u.y * 0.87 - u.x * 0.5) * 2.1 + 3.7);
 	vec2 c = vec2((u.x * 0.8 - u.y * 0.6) * 2.3 - t * 1.1, (u.y * 0.8 + u.x * 0.6) * 4.1 - 5.3);
-	return gvn(a) * 0.5 + gvn(b) * 0.32 + gvn(c) * 0.18;
+	return gvn(a) * 0.3 + gvn(b) * 0.4 + gvn(c) * 0.3;
 }
 void main(){
 	vec2 T = normalize(vT.xy + vec2(1e-5, 0.0)), N = vec2(-T.y, T.x);
@@ -181,7 +181,8 @@ void main(){
 	float clear = (1.0 - wide) * (1.0 - town * 0.75);
 	float speed = vF.x * mix(1.0, 0.45, calm), t = uTime * speed;
 	float e = 0.12, h0 = ripH(u, t), ha = ripH(u + vec2(e, 0.0), t), hc = ripH(u + vec2(0.0, e), t);
-	float k = mix(0.3, 0.07, calm) + foamK * 0.5;
+	// (gentle: steeper facets throw the bright sky back in big smears)
+	float k = mix(0.13, 0.05, calm) + foamK * 0.25;
 	vec2 g = vec2(ha - h0, hc - h0) / e * k;
 	vec3 n = normalize(vec3(-(g.x * T.x + g.y * N.x), 1.0, -(g.x * T.y + g.y * N.y)));
 	n = normalize(mix(n, vec3(0.0, 1.0, 0.0), smoothstep(150.0, 900.0, vDist)));

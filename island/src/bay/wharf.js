@@ -500,7 +500,7 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 		// (two buildings a piece: each draws its own signs)
 		...SHOPS.filter((q, k) => k % 2 === 0).map((q, i) => () => buildShops(SHOPS.slice(i * 2, i * 2 + 2))),
 		buildStreet, buildAnimals, buildLighthouse,
-		() => { W.seatList = [...W.seats, ...W.counters].map((q) => { const [x, z] = toW(q.u, q.v); return { x, z, y: q.y, h: q.h || 0, sit: !!q.sit, table: !!q.table, heading: q.heading + 16 * Math.PI / 180, taken: false }; }); W.built = true; },
+		() => { W.seatList = [...W.seats, ...W.counters].map((q) => { const [x, z] = toW(q.u, q.v); return { x, z, y: q.y, h: q.h || 0, sit: !!q.sit, table: !!q.table, rail: !!q.rail, heading: q.heading + 16 * Math.PI / 180, taken: false }; }); W.built = true; },
 	];
 	return { steps, floor, push, venue, update, get built() { return W.built; }, info: () => ({ built: W.built, shops: SHOPS.length, lions: W.lions.length, seats: W.seats.length + W.counters.length }), geom: { BASE, DIR, LEN, Y } };
 }

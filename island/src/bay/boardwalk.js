@@ -699,7 +699,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 	function buildCrowd() {
 		const n = isPhone ? 140 : 300;
 		// real bodies, baked and instanced (people/crowd.js), in summer Boardwalk clothes
-		const im = createCrowd(n, { kind: 'walk', place: 'boardwalk', seed: 42, cold: 0.25 });
+		const im = createCrowd(n, { kind: 'walk', place: 'boardwalk', seed: 42, cold: 0.25, far: true });
 		const r = rng(42);
 		const F = [];
 		for (let i = 0; i < n; i++) {

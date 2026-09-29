@@ -13,11 +13,10 @@ import { createMotion } from './motion.js';
 import { dressFor } from './wardrobe.js';
 
 const SHAPES = [{ age: 27, male: false }, { age: 35, male: true }, { age: 54, male: true, weight: 0.65 }, { age: 63, male: false, weight: 0.35 }, { age: 19, male: false }, { age: 11, male: true }];
-const CELL = 0.035;
-const templates = { seat: [], walk: [], stand: [] };
+const templates = {};
 
 // one shape posed two ways, baked and thinned
-function bake(A, k, kind) {
+function bake(A, k, kind, CELL) {
 	const q = SHAPES[k];
 	let d = null;
 	for (let t = 0; t < 30; t++) { d = personDNA((k * 7919 + t * 104729 + 3) >>> 0, { age: q.age, ctx: { place: 'suburb', activity: 'walk', cold: 0.5 } }); if (d.male === q.male) break; }
@@ -107,7 +106,7 @@ vCrowd = rg == 0 ? iSkin : rg == 1 ? iTop : rg == 2 ? iOuter : rg == 3 ? iBottom
 }
 
 // a crowd of n: kind 'seat' (in the stands), 'walk' (going along), 'stand'
-export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 1, cold = 0.4 } = {}) {
+export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 1, cold = 0.4, far = false } = {}) {
 	const group = new THREE.Group();
 	group.name = 'crowd';
 	const meshes = [], slots = [];
@@ -126,8 +125,9 @@ export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 
 	// build a shape a frame, then the instanced mesh for it
 	function grow() {
 		if (!A || dead || made >= SHAPES.length) return;
-		const T = templates[kind];
-		if (!T[made]) T[made] = bake(A, made, kind);
+		// (seen only from far off, thinner still)
+		const T = templates[kind + far] || (templates[kind + far] = []);
+		if (!T[made]) T[made] = bake(A, made, kind, far ? 0.06 : 0.035);
 		const mine = who.map((w, i) => [w, i]).filter(([w]) => w.shape === made);
 		if (mine.length) {
 			// (the shape's geometry is shared by every crowd: each crowd's own attributes go on a copy)
