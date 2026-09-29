@@ -47,7 +47,7 @@ function nearestOn(p, x, z) {
 	return [best, bd];
 }
 
-export function createDrive({ world, camera, mount, isPhone, hint }) {
+export function createDrive({ world, camera, mount, isPhone, hint, strike = null }) {
 	const D = { active: false, edge: null, s: 0, dir: 1, v: 0, queue: 'straight', yaw: 0, y: null, plan: null, look: 0, lookT: 0, lastYaw: undefined, mode: 'free', kind: 'sedan', color: new THREE.Color(0.1, 0.2, 0.45), car: null, chase: false, pedals: {} };
 	const KINDS = ['sedan', 'hatch', 'crossover', 'suv', 'pickup', 'van', 'sports', 'delivery', 'truck', 'bus'];
 	const CREDITS = 'Vehicle models (CC BY 4.0): "Car Concept" by Eric Chadwick / Darmstadt Graphics Group; "Red Car" by Camay; "European Delivery Van" by Evan Hiltz; "Generic Town Bus" by own.guest. Physics: Rapier. Details: assets/vehicles/CREDITS.md';
@@ -408,6 +408,12 @@ export function createDrive({ world, camera, mount, isPhone, hint }) {
 		M4.multiply(new THREE.Matrix4().makeTranslation(0, o.down, 0));
 		const w = o.wheels;
 		W.vehicles.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer });
+		// anyone in the way is struck (vehicles/impact.js); the car gives up what it hands them
+		if (strike) {
+			const lv = C.body.linvel(), el = M4.elements;
+			const n = strike({ kind: D.kind, x: el[12], y: el[13], z: el[14], yaw: Math.atan2(el[8], el[10]), vx: lv.x, vz: lv.z, mass: C.feel.mass });
+			if (n) { const k = C.feel.mass / (C.feel.mass + 75 * n); C.body.setLinvel({ x: lv.x * k, y: lv.y, z: lv.z * k }, true); }
+		}
 		// upside down, or fallen through: back on its wheels
 		const up = V3.set(0, 1, 0).applyQuaternion(Q).y;
 		if (up < 0.2 && Math.abs(o.speed) < 1) { D.flipT = (D.flipT || 0) + dt; if (D.flipT > 2) { const e = M4.elements; C.reset(e[12], e[14], Math.atan2(e[8], e[10])); D.flipT = 0; } } else D.flipT = 0;

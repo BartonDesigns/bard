@@ -89,6 +89,7 @@ import { createSurprises } from './surprises.js';
 import { createPeople } from './people/people.js';
 import { createGhost } from './people/ghost.js';
 import { createRagdolls } from './people/ragdoll.js';
+import { createImpacts } from './vehicles/impact.js';
 import * as CREATURES from './world/creatures.js';
 import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
@@ -308,11 +309,12 @@ export function createIslandWorld() {
 	const arcade = createArcade({ scene, camera, mount: dom.mount, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), isPhone, teleportTo: (name, lat, lon) => teleport([name, lat, lon, world?.player.state.yaw || 0]) });
 	HOOKS.arcade = arcade;
 	// drive the roads, streets and trails: snap on, choose the turns
-	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint });
+	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint, strike: (car) => HOOKS.impacts?.strike(car) || 0 });
 	HOOKS.drive = drive;
 	// anyone struck down or thrown: limp, weighed bodies (people/ragdoll.js)
 	const ragdolls = createRagdolls({ world: () => world, isPhone });
 	HOOKS.ragdolls = ragdolls;
+	HOOKS.impacts = createImpacts({ people: () => people, ragdolls });
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;

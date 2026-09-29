@@ -232,6 +232,7 @@ export function createRagdolls({ world, isPhone }) {
 
 	let acc = 0;
 	function update(dt) {
+		if (down.length) tidy();
 		if (!live.length || !W3) return;
 		let cx = 0, cz = 0;
 		for (const L of live) { const t = L.D.parts.pelvis.rb.translation(); cx += t.x / live.length; cz += t.z / live.length; }
@@ -251,7 +252,18 @@ export function createRagdolls({ world, isPhone }) {
 			for (const pc of Object.values(L.D.parts)) { const v = pc.rb.linvel(); fast = Math.max(fast, Math.hypot(v.x, v.y, v.z)); }
 			L.still = fast < 0.12 ? L.still + dt : 0;
 			// at rest (or long enough): left lying as they fell
-			if (L.still > 1.2 || L.t > 12) { finish(L); live.splice(i, 1); L.onRest?.(L.P); }
+			if (L.still > 1.2 || L.t > 12) { finish(L); live.splice(i, 1); down.push(L.P); L.onRest?.(L.P); }
+		}
+	}
+	// the fallen, left where they lie until you are well away: then theirs to walk again
+	const down = [];
+	function tidy() {
+		const me = world()?.player?.state?.pos;
+		if (!me) return;
+		for (let i = down.length - 1; i >= 0; i--) {
+			const P = down[i], at = P.root.getWorldPosition(_v);
+			if (!P.ragdoll) { down.splice(i, 1); continue; }
+			if (Math.hypot(at.x - me.x, at.z - me.z) > 70) { down.splice(i, 1); release(P); }
 		}
 	}
 	const info = () => ({ ready: !!R, live: live.length, max: MAX });

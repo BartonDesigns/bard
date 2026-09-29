@@ -82,10 +82,16 @@ export function createCarPhysics(R, kind, start, env) {
 	}
 	// the cars about: parked ones fixed, the traffic moved each step (kinematic)
 	const carBodies = new Map();
+	// (a car already overlapping yours as you get in is left out until you are clear of it:
+	// otherwise the two start jammed and yours is thrown)
+	const ghosts = new Set(), clear = S.L / 2 + 1.2;
+	let first = true;
 	function cars(cx, cz) {
 		const list = env.cars(cx, cz, 45), seen = new Set();
 		for (const c of list) {
-			const key = c.id;
+			const key = c.id, d = Math.hypot(c.x - cx, c.z - cz);
+			if (first && d < clear + specOf(c.kind).L / 2 - 1.5) ghosts.add(key);
+			if (ghosts.has(key)) { if (d > clear + specOf(c.kind).L / 2 + 1) ghosts.delete(key); else continue; }
 			seen.add(key);
 			let e = carBodies.get(key);
 			const Sc = specOf(c.kind), h = (Sc.H - (Sc.clear ?? 0.3)) / 2;
@@ -97,6 +103,7 @@ export function createCarPhysics(R, kind, start, env) {
 			} else e.setNextKinematicTranslation({ x: c.x, y: c.y + (Sc.clear ?? 0.3) + h, z: c.z }), e.setNextKinematicRotation(rot);
 		}
 		for (const [key, rb] of carBodies) if (!seen.has(key)) { world.removeRigidBody(rb); carBodies.delete(key); }
+		first = false;
 	}
 
 	const ctl = { throttle: 0, brake: 0, steer: 0, hand: 0 };
