@@ -269,6 +269,9 @@ export function createRagdolls({ world, isPhone }) {
 			if (Math.hypot(at.x - me.x, at.z - me.z) > 70) { down.splice(i, 1); release(P); }
 		}
 	}
-	const info = () => ({ ready: !!R, live: live.length, max: MAX, err: lastErr });
+	const info = () => {
+		const L = live[0], t = L?.D.parts.pelvis.rb.translation(), h = L?.D.parts.head.rb.translation(), q = L?.D.parts.thighL.bone.quaternion;
+		return { ready: !!R, live: live.length, max: MAX, err: lastErr, pelvis: t && [t.x, t.y, t.z].map((v) => +v.toFixed(2)), head: h && [h.x, h.y, h.z].map((v) => +v.toFixed(2)), thigh: q && [q.x, q.y, q.z, q.w].map((v) => +v.toFixed(2)) };
+	};
 	return { hit, update, release, ready, info, massOf };
 }
