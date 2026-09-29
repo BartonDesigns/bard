@@ -77,7 +77,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	// one step of a body: in a car it is posed in the car's frame and carried by it
 	const I = new THREE.Matrix4();
 	function step(b, dt, t, carMatrix) {
-		if (b.mode === 'car') {
+		if (b.mode === 'car' && carMatrix) {
 			b.wrap.matrix.copy(I); b.wrap.matrixWorld.copy(I);
 			b.M.update(dt, t, null);
 			b.wrap.matrix.copy(carMatrix);
