@@ -160,12 +160,12 @@ export function coyoteBrush(seed, windswept = false) {
 export function chamise(seed) {
 	const r = mulberry32(seed), w = new Builder(), b = new Builder();
 	const H = 1.4 + r() * 1.1, RX = 0.8 + r() * 0.5;
-	const tips = stems(w, r, 11, H, RX, new THREE.Color(0.36, 0.3, 0.26), 0.028, 0.15);
+	const tips = stems(w, r, 8, H * 0.9, RX * 0.85, new THREE.Color(0.3, 0.26, 0.22), 0.02, 0.15);
 	for (let i = 0; i < tips.length; i += 2) {
 		const t = tips[i];
 		for (let k = 0; k < 3; k++) acard(b, t.clone().add(V((r() - 0.5) * 0.4, -k * 0.28 - r() * 0.15, (r() - 0.5) * 0.4)), 0.62, r, { r: 0.3, g: 0.34, b: 0.18 }, 0.7, V(t.x, 0.5, t.z), CELL.chamise);
 	}
-	dome(b, r, V(0, H * 0.55, 0), RX, H * 0.45, 16, 0.7, { r: 0.24, g: 0.28, b: 0.15 }, CELL.chamise, 0.6, 0.5);
+	dome(b, r, V(0, H * 0.55, 0), RX, H * 0.48, 34, 0.75, { r: 0.24, g: 0.28, b: 0.15 }, CELL.chamise, 0.6, 0.35);
 	return { parts: [w.geometry(), b.geometry()], height: H };
 }
 // manzanita: twisting smooth mahogany-red limbs, an open crown of grey-green leaves
@@ -276,7 +276,7 @@ export function sorrel(seed) {
 // the instance tint gives it its season.
 export function tuft(seed, kind = 'bunch') {
 	const r = mulberry32(seed), b = new Builder();
-	const n = kind === 'short' ? 16 : kind === 'oat' ? 14 : 22, H = kind === 'short' ? 0.16 : kind === 'oat' ? 0.55 : 0.42;
+	const n = kind === 'short' ? 22 : kind === 'oat' ? 20 : 30, H = kind === 'short' ? 0.16 : kind === 'oat' ? 0.55 : 0.42;
 	const nz = V(0, 1, 0);
 	for (let i = 0; i < n; i++) {
 		const a = r() * 6.28, h = H * (0.55 + r() * 0.6), lean = 0.15 + r() * 0.55, w = 0.012 + r() * 0.008, dx = Math.cos(a), dz = Math.sin(a);

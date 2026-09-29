@@ -279,7 +279,8 @@ export function palette(regionId) {
 	return { style: a.style || '', ground: R.ground || [], walls: a.walls || [], roofs: a.roofc || [], roofShapes: a.roofs || [], materials: a.materials || [], buildings: a.types || [], vegetation: R.veg || [], road: R.road?.look || '' };
 }
 
-// what the place sounds like, and the Bard faceplates that play it
+// what the place sounds like; the faceplates listed are only suggestions (for a menu), never
+// switched to by themselves: the player's own faceplate always plays
 export function music(regionId) {
 	const R = region(regionId);
 	if (!R) return null;

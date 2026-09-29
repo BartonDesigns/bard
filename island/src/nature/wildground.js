@@ -145,14 +145,14 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 			Lw = mk('weed', [PL.weed(21, 'thistle'), PL.weed(22, 'fennel'), PL.weed(23, 'mustard')], [bladeM], 45, 500 * K);
 		},
 		() => {
-			Lcb = mk('coyote', [PL.coyoteBrush(31), PL.coyoteBrush(32), PL.coyoteBrush(33, true)], shrubMats, 170, 900 * K, { shadow: true, woodR: 25 });
+			Lcb = mk('coyote', [PL.coyoteBrush(31), PL.coyoteBrush(32), PL.coyoteBrush(33, true)], shrubMats, 150, 900 * K, { shadow: true, woodR: 20 });
 		},
 		() => {
-			Lch = mk('chamise', [PL.chamise(41), PL.chamise(42)], shrubMats, 150, 1300 * K, { shadow: true, woodR: 25 });
+			Lch = mk('chamise', [PL.chamise(41), PL.chamise(42)], shrubMats, 140, 1300 * K, { shadow: true, woodR: 12 });
 			Lmz = mk('manzanita', [PL.manzanita(51), PL.manzanita(52)], shrubMats, 150, 500 * K, { shadow: true, woodR: 60 });
 		},
 		() => {
-			Lty = mk('toyon', [PL.toyon(61), PL.toyon(62, true)], shrubMats, 190, 400 * K, { shadow: true, woodR: 30 });
+			Lty = mk('toyon', [PL.toyon(61), PL.toyon(62, true)], shrubMats, 160, 400 * K, { shadow: true, woodR: 25 });
 			Lpo = mk('poisonoak', [PL.poisonOak(71), PL.poisonOak(72)], shrubMats, 110, 700 * K, { shadow: true, woodR: 20 });
 			Lsg = mk('sage', [PL.sage(81), PL.sage(82)], shrubMats, 120, 500 * K, { shadow: true, woodR: 15 });
 		},
@@ -164,12 +164,12 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 			Lso = mk('sorrel', [PL.sorrel(111)], [leafM], 40, 600 * K);
 		},
 		() => {
-			Lrk = mk('rock', [boulder(201, 'round'), boulder(202, 'bedded'), boulder(203, 'blocky')], [rockM], 260, 900 * K, { shadow: true });
+			Lrk = mk('rock', [boulder(201, 'round'), boulder(202, 'bedded'), boulder(203, 'blocky')], [rockM], 200, 900 * K, { shadow: true });
 		},
 		() => { outs.push(outcrop(301, 'bedded')); },
 		() => { outs.push(outcrop(302, 'blocky')); },
 		() => {
-			Lout = mk('outcrop', [...outs, outcrop(303, 'round')], [rockM], 420, 240 * K, { shadow: true });
+			Lout = mk('outcrop', [...outs, outcrop(303, 'round')], [rockM], 320, 240 * K, { shadow: true });
 		},
 		() => {
 			Lst = mk('stone', [stone(401), stone(402)], [rockM], 40, 2000 * K);
@@ -235,7 +235,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		if (grassK > 0.02) {
 			const gold = [0.52 + season * 0.12, 0.38 + season * 0.02, 0.14], green = [0.26, 0.44, 0.1];
 			const tone = (x, z) => { const dry = Math.min(1, Math.max(0, season * 1.25 - 0.1 + (drift(x, z, 40, 3) - 0.5) * 0.5 - E.fog * 0.25 * (1 - season))); return green.map((g, k) => (g + (gold[k] - g) * dry) * 1.7); };
-			scatter(Math.round(120 * K * grassK), (x, z) => (0.35 + 0.9 * drift(x, z, 9, 1)) * (trailD(x, z) > 0.3 ? 1 : 0), (x, z) => {
+			scatter(Math.round(190 * K * grassK), (x, z) => (0.35 + 0.9 * drift(x, z, 9, 1)) * (trailD(x, z) > 0.3 ? 1 : 0), (x, z) => {
 				const grazed = drift(x, z, 60, 7) > 0.62, s = 0.8 + r() * 0.6;
 				const L = grazed ? Ls : r() < 0.35 + season * 0.25 ? Lo : Lb;
 				put(L, x, z, r() * 6.28, s, s * (0.8 + r() * 0.5) * (E.windswept ? 0.7 : 1), J(tone(x, z), 0.1), Math.floor(r() * L.n));
@@ -347,9 +347,10 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		// litter under the trees: oak leaves and acorns, or the redwoods' needle duff and cones
 		if (E.wood > 0.2 || E.redwood > 0.1) {
 			const rw = E.redwood > 0.3;
-			scatter(Math.round(110 * K * Math.min(1, E.wood + 0.2)), (x, z) => (trailD(x, z) > -0.3 ? 0.5 + drift(x, z, 5, 3) : 0.15), (x, z) => {
-				const s = rw ? 0.9 + r() * 0.8 : 0.7 + r() * 0.6;
-				const t = rw ? J([0.55, 0.36, 0.24], 0.2) : fall || season > 0.6 ? J([0.72, 0.56, 0.34], 0.2) : J([0.55, 0.45, 0.3], 0.2);
+			scatter(Math.round(70 * K * Math.min(1, E.wood + 0.2) * (rw ? 0.5 : 1)), (x, z) => (trailD(x, z) > -0.3 ? 0.5 + drift(x, z, 5, 3) : 0.15), (x, z) => {
+				const s = rw ? 0.5 + r() * 0.5 : 0.45 + r() * 0.45;
+				// (dull and a little darker than the ground: dead leaves are brown-grey, not orange)
+				const t = rw ? J([0.3, 0.2, 0.14], 0.2) : fall || season > 0.6 ? J([0.42, 0.34, 0.24], 0.2) : J([0.34, 0.3, 0.22], 0.2);
 				put(Llf, x, z, r() * 6.28, s, s, t, rw ? 2 : Math.floor(r() * 2), 0, true);
 			});
 			scatter(Math.round(5 * K), () => 0.8, (x, z) => { const s = 0.7 + r() * 0.9; put(Lsk, x, z, r() * 6.28, s, s, [0.9, 0.85, 0.8], Math.floor(r() * 2), 0.02, true); });
@@ -435,7 +436,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		// a few cells a frame, nearest first, within a small budget
 		const t0 = performance.now();
 		let made = 0;
-		while (queue.length && performance.now() - t0 < (isPhone ? 3 : 5)) {
+		// (the cells right round you come first and a little faster)
+		while (queue.length && performance.now() - t0 < (isPhone ? 3 : queue[0][0] < 60 ? 9 : 5)) {
 			const [, i, j] = queue.shift(), k = i + ',' + j;
 			if (!cells.has(k)) { cells.set(k, makeCell(i, j)); made++; }
 		}
@@ -443,12 +445,21 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		// refill as you walk, or as the near cells come in (not every frame while far ones do)
 		if (dirty || (made && (counted > 40 || !queue.length))) { fill(x, z); dirty = false; counted = 0; }
 	}
+	// work out every cell within r at once (for a test, or a teleport)
+	function flush(camera, r = 80) {
+		const x = camera.position.x, z = camera.position.z;
+		while (steps.length) steps.shift()();
+		MAXR = Math.max(...layers.map((L) => L.R));
+		wanted(x, z);
+		while (queue.length && queue[0][0] < r) { const [, i, j] = queue.shift(); cells.set(i + ',' + j, makeCell(i, j)); }
+		at = { x, z }; fill(x, z);
+	}
 	function info() {
 		const o = { cells: cells.size, queue: queue.length };
 		for (const L of layers) o[L.key] = L.meshes.reduce((n, M) => n + M.im.count, 0);
 		return o;
 	}
-	return { update, group, info, landAt };
+	return { update, group, info, landAt, flush };
 }
 
 // ---------- litter ----------
@@ -478,16 +489,9 @@ function litterAtlas() {
 			g.beginPath(); g.moveTo(-30, 0); g.quadraticCurveTo(0, -12, 30, 0); g.quadraticCurveTo(0, 12, -30, 0); g.fill(); g.restore();
 		}
 	});
-	// redwood needles: flat sprays of short needles along a twig, and loose needles
+	// redwood needles and twigs: a loose scatter, no pattern
 	at(2, () => {
-		for (let k = 0; k < 7; k++) {
-			const x = 10 + r() * 90, y = 10 + r() * 108, a = r() * 6.28, l = 150 + r() * 80;
-			g.save(); g.translate(x, y); g.rotate(a); g.strokeStyle = `rgb(${l},${l * 0.85 | 0},${l * 0.7 | 0})`; g.lineWidth = 1.5;
-			g.beginPath(); g.moveTo(0, 0); g.lineTo(40, 0); g.stroke();
-			for (let t = 2; t < 40; t += 3) { g.beginPath(); g.moveTo(t, 0); g.lineTo(t + 3, -6); g.moveTo(t, 0); g.lineTo(t + 3, 6); g.stroke(); }
-			g.restore();
-		}
-		for (let k = 0; k < 60; k++) { const x = r() * S, y = r() * S, a = r() * 6.28, l = 140 + r() * 80; g.strokeStyle = `rgb(${l},${l * 0.8 | 0},${l * 0.65 | 0})`; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 7, y + Math.sin(a) * 7); g.stroke(); }
+		for (let k = 0; k < 140; k++) { const x = 6 + r() * (S - 12), y = 6 + r() * (S - 12), a = r() * 6.28, l = 120 + r() * 90, L = 4 + r() * 7; g.strokeStyle = `rgb(${l},${l * 0.78 | 0},${l * 0.62 | 0})`; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke(); }
 	});
 	litterTex = new THREE.CanvasTexture(c);
 	litterTex.colorSpace = THREE.SRGBColorSpace;

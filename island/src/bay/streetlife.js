@@ -8,7 +8,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from './styles.js';
-import { carGeometry, carMaterial } from './cars.js';
+import { SPEC } from './cars.js';
+import { createFleet } from '../vehicles/fleet.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
@@ -19,11 +20,10 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	group.name = 'street-life';
 	scene.add(group);
 	const night = { value: 0 };
-	const carMat = carMaterial(night);
-	const KINDS = ['sedan', 'sedan', 'sedan', 'hatch', 'suv', 'suv', 'suv', 'pickup', 'van'];
-	const kinds = ['sedan', 'hatch', 'suv', 'pickup', 'van'];
-	// (each set keeps its bounds up to date as it is filled, so a set wholly out of view, or
-	// out of the sun's shadow box, is skipped)
+	// parked, by what people drive round here; the traffic adds buses and box trucks
+	const KINDS = ['sedan', 'sedan', 'sedan', 'hatch', 'suv', 'suv', 'crossover', 'crossover', 'pickup', 'van', 'delivery', 'sports'];
+	const kinds = [...new Set(KINDS)];
+	const TRAFFIC = ['sedan', 'sedan', 'hatch', 'suv', 'suv', 'crossover', 'crossover', 'pickup', 'van', 'delivery', 'sports', 'truck'];
 	const mk = (geo, mat, cap, colors = true) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.count = 0; im.castShadow = true; im.receiveShadow = true; if (colors) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); group.add(im); return im; };
 	// upload only the instances in use (the buffers are sized for the busiest streets), and
 	// leave an empty set out of the frame
@@ -35,47 +35,56 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		}
 		im.computeBoundingSphere();
 	};
-	// Cars are the street's heaviest meshes (a lofted body and four wheels, some 2,700
-	// triangles), and from a rooftop or the air there are thousands in view, each drawn
-	// twice (once more into the sun's shadow map). Past 70 m a car is a few dozen pixels
-	// long and past 180 m barely a dozen, so there it is drawn from a coarser loft with
-	// plainer wheels: the same car at that size, at a third and then a fifth of the triangles.
-	const TIERS = [[70, 48, 20], [180, 16, 10], [Infinity, 8, 6]].map(([d, ns, ws]) => ({ d2: d * d, geo: Object.fromEntries(kinds.map((k) => [k, carGeometry(k, ns, ws)])) }));
-	const tierOf = (d2) => { let w = 0; while (d2 >= TIERS[w].d2) w++; return w; };
-	// The parked cars are placed into a plain store, then shared out between the tiers as you
-	// move, and within each tier cast into the sun's shadow map only where the shadow box
-	// (sky.js, it follows you) can reach while you are near here; the rest, most of them from
-	// a rooftop and all of them from the air, are left out of the shadow pass.
+	// Cars are the street's heaviest meshes, and from a rooftop there are thousands in view.
+	// The fleets (vehicles/fleet.js) draw them by distance: the real models and the cabins
+	// close by, coarser lofts further off, and only the nearer ones in the sun's shadow pass.
+	const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
+	const parkedFleet = createFleet(group, { cap: 1600, isPhone, night }), movingFleet = createFleet(group, { cap: 120, isPhone, night });
+	// The parked cars are placed into a plain store, then shared out between the levels as
+	// you move. Each has an id (kind and place) that the owners (vehicles/life.js) use, and a
+	// car whose owner has driven it off is hidden from its space until they are back.
 	const store = (cap) => ({ m: new Float32Array(cap * 16), c: new Float32Array(cap * 3), n: 0, instanceMatrix: { count: cap }, setMatrixAt(i, m) { m.toArray(this.m, i * 16); }, setColorAt(i, c) { c.toArray(this.c, i * 3); } });
-	const parked = Object.fromEntries(kinds.map((k) => [k, store(1200)]));
-	// per kind: [tier 0 casting, tier 0 not, tier 1 casting, ...]
-	const parkedSets = Object.fromEntries(kinds.map((k) => [k, TIERS.flatMap((T) => [mk(T.geo[k], carMat, 1200), mk(T.geo[k], carMat, 1200)])]));
-	for (const sets of Object.values(parkedSets)) sets.forEach((im, i) => { im.castShadow = i % 2 === 0; });
-	const moving = Object.fromEntries(kinds.map((k) => [k, TIERS.map((T) => mk(T.geo[k], carMat, 60))]));
-	// (re-shared every SPLIT_M of travel or SPLIT_S seconds, so the reach test allows for that
-	// much movement, the sun's drift, and a car's own size)
-	const SPLIT_M = 6, SPLIT_S = 3, BOX = shared.shadowBox || { half: 1e5, reach: 1e5 }, SLACK = SPLIT_M + 6;
-	const LAT = BOX.half * Math.SQRT2 + SLACK, DEPTH = BOX.reach + SLACK;
+	const parked = Object.fromEntries(kinds.map((k) => [k, store(1600)]));
+	const hidden = new Set();
+	// a coarse grid of the parked cars, for bumping into them and for finding the one you get into
+	const GRID = 12, grid = new Map();
+	const SPLIT_M = 6, SPLIT_S = 3;
 	let splitX = 1e9, splitY = 1e9, splitZ = 1e9, splitT = 0;
-	const shareN = new Array(TIERS.length * 2).fill(0);
+	const pm = new THREE.Matrix4(), pc = new THREE.Color();
 	function split(x, y, z, t) {
 		splitX = x; splitY = y; splitZ = z; splitT = t;
-		const sd = shared.uSunDir.value;
+		parkedFleet.begin();
 		for (const k of kinds) {
-			const S = parked[k], sets = parkedSets[k];
-			shareN.fill(0);
+			const S = parked[k];
 			for (let i = 0; i < S.n; i++) {
-				const dx = S.m[i * 16 + 12] - x, dy = S.m[i * 16 + 13] - y, dz = S.m[i * 16 + 14] - z;
-				// along the light, and across it (the box's square taken as its circle)
-				const a = dx * sd.x + dy * sd.y + dz * sd.z, across = dx * dx + dy * dy + dz * dz - a * a;
-				const w = tierOf(dx * dx + dz * dz) * 2 + (Math.abs(a) < DEPTH && across < LAT * LAT ? 0 : 1);
-				const j = shareN[w]++, im = sets[w];
-				im.instanceMatrix.array.set(S.m.subarray(i * 16, i * 16 + 16), j * 16);
-				im.instanceColor.array.set(S.c.subarray(i * 3, i * 3 + 3), j * 3);
+				if (hidden.has(k + i)) continue;
+				const dx = S.m[i * 16 + 12] - x, dz = S.m[i * 16 + 14] - z;
+				pm.fromArray(S.m, i * 16); pc.fromArray(S.c, i * 3);
+				parkedFleet.add(k, pm, pc, dx * dx + dz * dz);
 			}
-			sets.forEach((im, w) => { im.count = shareN[w]; mark(im); });
+		}
+		parkedFleet.end();
+	}
+	function regrid() {
+		grid.clear();
+		for (const k of kinds) {
+			const S = parked[k];
+			for (let i = 0; i < S.n; i++) {
+				const x = S.m[i * 16 + 12], z = S.m[i * 16 + 14], key = Math.floor(x / GRID) + ',' + Math.floor(z / GRID);
+				let L = grid.get(key); if (!L) grid.set(key, L = []);
+				L.push({ kind: k, i, x, y: S.m[i * 16 + 13], z, yaw: Math.atan2(S.m[i * 16 + 8], S.m[i * 16 + 10]), id: k + i, col: [S.c[i * 3], S.c[i * 3 + 1], S.c[i * 3 + 2]] });
+			}
 		}
 	}
+	// the parked cars within r of a point (hidden ones left out unless asked for)
+	function parkedNear(x, z, r, all = false) {
+		const out = [];
+		for (let gx = Math.floor((x - r) / GRID); gx <= Math.floor((x + r) / GRID); gx++) for (let gz = Math.floor((z - r) / GRID); gz <= Math.floor((z + r) / GRID); gz++) {
+			for (const c of grid.get(gx + ',' + gz) || []) if ((all || !hidden.has(c.id)) && Math.abs(c.x - x) < r && Math.abs(c.z - z) < r) out.push(c);
+		}
+		return out;
+	}
+	const hide = (id, on) => { if (on) hidden.add(id); else hidden.delete(id); splitT = -1e9; };
 
 	// street furniture
 	const metal = new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: 0.5, metalness: 0.6 });
@@ -114,6 +123,18 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const putCar = (im, k, x, z, yaw) => {
 		const fx = Math.sin(yaw) * 1.4, fz = Math.cos(yaw) * 1.4, gf = groundAt(x + fx, z + fz), gb = groundAt(x - fx, z - fz);
 		put(im, k, x, (gf + gb) / 2, z, yaw, 1, -Math.atan2(gf - gb, 2.8));
+	};
+	// a car on the ground under its four wheels: height, pitch and roll (and the slope's
+	// height at its middle, for easing)
+	const carMatrix = (out, kind, x, z, yaw, yEase = null) => {
+		const S = SPEC[kind] || SPEC.sedan, wz = S.wz, tw = S.W / 2 - 0.15;
+		const sx = Math.sin(yaw), cz = Math.cos(yaw);
+		const gf = groundAt(x + sx * wz, z + cz * wz), gb = groundAt(x - sx * wz, z - cz * wz);
+		const gl = groundAt(x + cz * tw, z - sx * tw), gr = groundAt(x - cz * tw, z + sx * tw);
+		const y = yEase ?? Math.max((gf + gb) / 2, (gl + gr) / 2);
+		eul.set(-Math.atan2(gf - gb, 2 * wz), yaw, Math.atan2(gl - gr, 2 * tw) * -1, 'YXZ');
+		q.setFromEuler(eul); p.set(x, y, z);
+		return out.compose(p, q, sc.set(1, 1, 1));
 	};
 
 	// ---------- building the street furniture round a point ----------
@@ -265,6 +286,8 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		}
 		for (const S of Object.values(parked)) S.n = Math.min(counts.get(S) || 0, S.instanceMatrix.count);
 		splitX = 1e9;
+		hidden.clear();
+		regrid();
 		lampLightGeo.setDrawRange(0, nl); lampLightGeo.attributes.position.needsUpdate = true;
 		{
 			const A = lampLightGeo.attributes.position.array, M4 = new THREE.Matrix4();
@@ -282,16 +305,20 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			for (let k = 0; k < nC; k++) {
 				const r = Math.random();
 				if (r > (l.style === STYLE.suburb ? 0.45 : 0.75)) continue;
-				cars.push({ l, u: Math.random(), dir: l.oneway || Math.random() < 0.5 ? 1 : -1, v: 0, vmax: (l.style === STYLE.suburb ? 8 : 12) + Math.random() * 5, kind: kinds[Math.floor(Math.random() * kinds.length)], col: PAINT[Math.floor(Math.random() * PAINT.length)], wait: 0, lane: l.oneway ? (Math.random() < 0.5 ? -0.5 : 0.5) : 0 });
+				const busy = l.style === STYLE.sf || l.style === STYLE.office || l.style === STYLE.retail;
+				const kind = busy && Math.random() < 0.07 ? 'bus' : TRAFFIC[Math.floor(Math.random() * TRAFFIC.length)];
+				// (who is in it: the driver, and now and then someone beside them or behind)
+				const riders = kind === 'bus' ? 1 : 1 + (Math.random() < 0.3 ? 1 : 0) + (Math.random() < 0.12 ? 1 : 0);
+				cars.push({ l, u: Math.random(), dir: l.oneway || Math.random() < 0.5 ? 1 : -1, v: 0, vmax: (l.style === STYLE.suburb ? 8 : 12) + Math.random() * 5 - (kind === 'bus' || kind === 'truck' ? 3 : 0), kind, col: kind === 'bus' ? [0.9, 0.9, 0.88] : PAINT[Math.floor(Math.random() * PAINT.length)], wait: 0, lane: l.oneway ? (Math.random() < 0.5 ? -0.5 : 0.5) : 0, spin: 0, steer: 0, riders, id: 'tr' + (trafficN++) });
 			}
 		}
 	}
 	const cars = [];
+	let trafficN = 0;
 
 	function update(dt, t, cam, nightK) {
 		if (!bay.loaded()) return;
-		night.value = nightK;
-		carMat.envMapIntensity = 0.9 * (1 - nightK * 0.9);
+		parkedFleet.setNight(nightK); movingFleet.setNight(nightK);
 		const high = cam.position.y - groundAt(cam.position.x, cam.position.z) > 450;
 		group.visible = !high;
 		if (high) return;
@@ -308,13 +335,27 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			if (c < 0.45) { sc2[o] = 0.1; sc2[o + 1] = 1; sc2[o + 2] = 0.4; } else if (c < 0.52) { sc2[o] = 1; sc2[o + 1] = 0.7; sc2[o + 2] = 0.05; } else { sc2[o] = 1; sc2[o + 1] = 0.08; sc2[o + 2] = 0.05; }
 		}
 		sigGeo.attributes.color.needsUpdate = true;
-		// traffic: along the lane, easing to a stop near the far end, then a new lane
-		for (const k of kinds) for (const im of moving[k]) im.count = 0;
+		// traffic: along the lane, easing to a stop near the far end, then a new lane; slowing
+		// for anyone (or any car) in the road ahead
+		const stops = avoid ? avoid() : [];
+		movingFleet.begin();
 		for (const c of cars) {
 			const l = c.l, L = l.L;
 			const toEnd = c.dir > 0 ? (1 - c.u) * L : c.u * L;
-			const target = toEnd < 12 ? Math.max(0, (toEnd - 3) * 0.8) : c.vmax;
-			c.v += (target - c.v) * Math.min(1, dt * 1.2);
+			let target = toEnd < 12 ? Math.max(0, (toEnd - 3) * 0.8) : c.vmax;
+			if (c.px !== undefined) {
+				const hx = Math.sin(c.yaw), hz = Math.cos(c.yaw), half = (SPEC[c.kind] || SPEC.sedan).L / 2;
+				for (const o of stops) {
+					const dx = o.x - c.px, dz = o.z - c.pz, ahead = dx * hx + dz * hz, across = Math.abs(dx * hz - dz * hx);
+					if (ahead > 0 && ahead < half + 14 && across < 1.6) target = Math.min(target, Math.max(0, (ahead - half - 2.5) * 0.9));
+				}
+				for (const o of cars) {
+					if (o === c || o.px === undefined) continue;
+					const dx = o.px - c.px, dz = o.pz - c.pz, ahead = dx * hx + dz * hz, across = Math.abs(dx * hz - dz * hx);
+					if (ahead > 0 && ahead < 12 && across < 1.2 && o.vx * hx + o.vz * hz > -1) target = Math.min(target, Math.max(0, (ahead - 7) * 1.2));
+				}
+			}
+			c.v += (target - c.v) * Math.min(1, dt * (target < c.v ? 2.5 : 1.2));
 			if (toEnd < 3.5) {
 				c.wait += dt;
 				// a one-way carriageway starts again at its beginning; a street turns round
@@ -323,15 +364,25 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			c.u = Math.min(1, Math.max(0, c.u + c.dir * c.v * dt / L));
 			const [lx, lz, dx, dz] = laneAt(l, c.u * L);
 			const off = l.oneway ? c.lane * l.half : (c.dir > 0 ? -1 : 1) * Math.min(1.8, l.half * 0.4);
-			const px = lx + dz * off, pz = lz - dx * off;
-			c.px = px; c.pz = pz; c.vx = dx * c.dir * c.v; c.vz = dz * c.dir * c.v;      // for the street sound
-			const im = moving[c.kind][tierOf((px - x) * (px - x) + (pz - z) * (pz - z))], k = im.count;
-			if (k >= im.instanceMatrix.count) continue;
-			putCar(im, k, px, pz, Math.atan2(dx * c.dir, dz * c.dir));
-			im.setColorAt(k, col.setRGB(c.col[0], c.col[1], c.col[2]));
-			im.count++;
+			const px = lx + dz * off, pz = lz - dx * off, yaw = Math.atan2(dx * c.dir, dz * c.dir);
+			// the wheels roll with the road, the front ones turned into a bend
+			const S = SPEC[c.kind] || SPEC.sedan;
+			const dyaw = c.yaw === undefined ? 0 : Math.atan2(Math.sin(yaw - c.yaw), Math.cos(yaw - c.yaw));
+			c.steer += (Math.max(-0.5, Math.min(0.5, c.v > 0.3 ? dyaw / Math.max(dt, 1e-3) * S.wz * 2 / c.v : 0)) - c.steer) * Math.min(1, dt * 4);
+			c.spin = (c.spin + c.v * dt / (S.wr || 0.34)) % (Math.PI * 2);
+			c.px = px; c.pz = pz; c.yaw = yaw; c.vx = dx * c.dir * c.v; c.vz = dz * c.dir * c.v;      // for the street sound
+			carMatrix(pm, c.kind, px, pz, yaw);
+			c.py = pm.elements[13]; c.matrix = c.matrix || new THREE.Matrix4(); c.matrix.copy(pm);
+			pc.setRGB(c.col[0], c.col[1], c.col[2]);
+			// (a car with a real person at the wheel shows no silhouette)
+			c.tier = movingFleet.add(c.kind, pm, pc, (px - x) * (px - x) + (pz - z) * (pz - z), { spin: c.spin, steer: c.steer, riders: c.seated ? 0 : c.riders });
 		}
-		for (const k of kinds) for (const im of moving[k]) mark(im);
+		for (const X of extra) X(movingFleet, x, z);
+		movingFleet.end();
 	}
-	return { update, group, cars };
+	// more cars to draw with the traffic (the owners' cars coming and going, yours)
+	const extra = [];
+	let avoid = null;
+	return { update, group, cars, parked, parkedNear, hide, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night };
 }
+

@@ -14,10 +14,10 @@
 //     streets:    10-20 street names in the local pattern
 //     signs:      10-20 shop and sign texts in the local language or slang
 //     chatter:    10-20 short lines people say in passing
-//     music:      { genre, bpm, face (a Bard faceplate), scale }
+//     music:      { genre, bpm, scale } (never a faceplate: the player chooses theirs)
 //     wardrobe, food, vehicles, vegetation: short lists }
 
-import { region, rng, streetName, music as musicOf, faceFor, FACEPLATES, POP } from './atlas.js';
+import { region, rng, streetName, music as musicOf, POP } from './atlas.js';
 
 export const BRIEF_SCHEMA = 1;
 export const DISTRICT_KINDS = ['downtown', 'oldtown', 'residential', 'market', 'industrial', 'waterfront', 'campus', 'park', 'suburb', 'village', 'temple'];
@@ -195,7 +195,7 @@ export function fallbackBrief(city) {
 		v: BRIEF_SCHEMA, id: city.id, city: city.name, region: R.id, country: city.country || R.country || '', lang, source: 'atlas',
 		vibe: clean([city.char, R.char].filter(Boolean).join('. '), 200) || R.name,
 		districts, landmarks, streets: [...streets], signs: signs.slice(0, 20), chatter: chatter.slice(0, 20),
-		music: { genre, bpm, face: M.faces.find((f) => f === faceFor(genre)) || M.face, scale: M.scale },
+		music: { genre, bpm, scale: M.scale },
 		wardrobe: shuffle(R.wear || [], r).slice(0, 6), food: shuffle(food, r).slice(0, 8), vehicles: (R.road?.vehicles || []).slice(0, 6), vegetation: shuffle(R.veg || [], r).slice(0, 6),
 		pop: POP[pop],
 	};
@@ -247,8 +247,7 @@ export function validateBrief(raw, base) {
 	if (genre) {
 		let bpm = Math.round(+String(M.bpm ?? M.tempo ?? '').replace(/[^\d.]/g, ''));
 		if (!Number.isFinite(bpm) || bpm < 50 || bpm > 200) bpm = base.music.bpm;
-		const face = String(M.face || '').toUpperCase();
-		out.music = { genre, bpm, face: FACEPLATES.includes(face) ? face : faceFor(genre), scale: base.music.scale };
+		out.music = { genre, bpm, scale: base.music.scale };
 		took++;
 	}
 	out.took = took;
