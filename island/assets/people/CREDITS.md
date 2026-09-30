@@ -16,7 +16,59 @@ required, and is given here anyway.
 per-vertex shading (ambient occlusion, thin flesh, the T-zone, the flush) and the brow
 lines from the base mesh; those are the game's own.
 
-The hair (cards grown on each head, `src/people/hair.js`), the eyes' iris and cornea
+The locs, braids and cornrows and the stand-in hair (`src/people/hair.js`), the short
+beards, goatees, moustaches and stubble grown from the skin (`src/people/hairkit.js`), the eyes' iris and cornea
 (`src/people/face.js`), the lashes, brows and tear line, the skin shading
 (`src/people/skin.js`) and the clothes (`src/people/garment.js`) are drawn by the game's
 own code, with no other textures.
+
+## Hair and beards (`hair/`)
+
+Baked by `tools/bake-people-hair.mjs` into `hair/<id>.bin.gz` (each vertex tied to the base
+mesh, as the MakeHuman proxy files have it; heavier meshes thinned) and `hair/<id>.webp` (the
+texture made grey and alpha, 512 px, so the game can tint it; no colour kept). Only assets
+released as CC0 or CC-BY are used; assets under AGPL or with no stated licence were left out.
+
+CC-BY 4.0 assets: © their authors, used under the Creative Commons Attribution licence
+(https://creativecommons.org/licenses/by/4.0/). Changes: converted, retextured to grey and
+alpha, resized, and some meshes simplified.
+
+| id | Asset | Author | Licence | Source |
+|----|-------|--------|---------|--------|
+| afro01 | afro01 | MakeHuman team | CC0 | MakeHuman system assets (makehuman-community-hair 1.3.0, http://ppa.launchpad.net/makehuman-official/makehuman-community/; https://github.com/makehumancommunity) |
+| bob01 | bob01 | MakeHuman team | CC0 | MakeHuman system assets (as above) |
+| bob02 | bob02 | MakeHuman team | CC0 | MakeHuman system assets |
+| braid01 | braid01 | MakeHuman team | CC0 | MakeHuman system assets |
+| long01 | long01 | MakeHuman team | CC0 | MakeHuman system assets |
+| ponytail01 | ponytail01 | MakeHuman team | CC0 | MakeHuman system assets |
+| short01 | short01 | MakeHuman team | CC0 | MakeHuman system assets |
+| short02 | short02 | MakeHuman team | CC0 | MakeHuman system assets |
+| short03 | short03 | MakeHuman team | CC0 | MakeHuman system assets |
+| short04 | short04 | MakeHuman team | CC0 | MakeHuman system assets |
+| updo50s | 50s Updo | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2001 |
+| adrienne | Adrienne Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1862 |
+| ashley | Ashley May Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1861 |
+| braidbun | Braid Bun | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2177 |
+| daisy | Daisy Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1859 |
+| grump | Grump Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2796 |
+| hazel | Hazel Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2816 |
+| curlybob | Inverted Curly Bob | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2683 |
+| island | Island Princess Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1811 |
+| katherine | Katherine Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1863 |
+| keylth | Keylth Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2173 |
+| hippy | Lady Hippy Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1812 |
+| puffs | Micky Afro | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2817 |
+| shortdaisy | Short Daisy Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1860 |
+| tousled | That 80s Babe Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2174 |
+| wavybob | Wavy Bob | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1551 |
+| faun | Faun Beard | culturalibre | CC0 | MakeHuman community assets (http://www.makehumancommunity.org) |
+| viking | Beard Viking | Rehman Polanski | CC0 | MakeHuman community assets (http://www.makehumancommunity.org) |
+| moustache | Moustache Viking | Rehman Polanski | CC0 | MakeHuman community assets (http://www.makehumancommunity.org) |
+| scruffy | Scruffy Beard 1 | Elvaerwyn | CC-BY | MakeHuman community assets (http://www.makehumancommunity.org) |
+
+The MakeHuman community site and its asset server could not be reached when these were
+baked; the files were taken from public copies of the same packs on GitHub
+(Ismail-Bzk/Synthetic_Face_Generator: the community hair pack `hair02_ccby` with its
+`hair02.json` listing each asset's author, licence and page; TomasKlecer/mpfb_backup: the
+system hair and the CC0 beards; RavinMaddHatter/Madhatters-Table-Top-RPG-Mini-Maker: the
+scruffy beard), each file's own header naming its author and licence.

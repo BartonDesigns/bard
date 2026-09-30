@@ -538,6 +538,8 @@ export function* createCaveVillage(ctx) {
 			L.lit(o.material, 'folk-' + tag + '-' + (o === Pp.skin ? 'skin' : o === Pp.hair ? 'hair' : Pp.eyes?.includes(o) ? 'eye' : 'cloth'));
 			o.castShadow = false;
 		});
+		// (and hair that comes in later)
+		Pp.relit = (o) => { L.lit(o.material, 'folk-' + tag + '-hair'); o.castShadow = false; };
 	};
 	async function makeFolk() {
 		building = true;

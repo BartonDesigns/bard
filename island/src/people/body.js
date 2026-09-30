@@ -14,6 +14,8 @@ import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, acce
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
+import { fadePerson } from './fade.js';
+import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -273,7 +275,6 @@ export function buildPerson(A, d) {
 function dress(A, P, o) {
 	const d = P.dna, p = P._p, cut = P.cut, { bones, map, skeleton, rest, body } = P;
 	for (const m of [P.skin, P.cloth, P.acc]) if (m) { m.geometry.dispose(); m.removeFromParent(); }
-	if (P.hair) { P.hair.geometry.dispose(); P.hair.material.dispose(); P.hair.removeFromParent(); P.hair = null; }
 	P.outfit = o;
 	const R = regions(o, cut);
 	const part = partOf(A);
@@ -292,26 +293,21 @@ function dress(A, P, o) {
 	bodyGeo.setAttribute('scalp', new THREE.BufferAttribute(sc, 1));
 	P.skin = add(bodyGeo, P.skinMat);
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
-	// hair, grown on this skull (hair.js): its cut, its colour (or a dye, the roots showing),
-	// only what shows under a hat
+	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
+	// locs, braids and cornrows, and stands in while a style is on its way)
 	const hat = (o.acc || []).find((q) => /^(cap|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
-	// (grey and white hair: never paper-white, it has some pigment left and shades itself)
-	const natural = new THREE.Color(...d.hairColour.map((c) => Math.min(c, 0.5)));
-	const hairCol = H.dyed ? new THREE.Color(H.dyed) : natural.clone();
+	const cols = hairColours(d, H);
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));
 	// the scalp under it, painted: a close crop, or the shade between the strands
-	const paintCol = hairCol.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
+	const paintCol = cols.hair.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
 	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : 0.75);
-	if (showHair) {
-		const g = buildHair(A, P, p, cutName, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
-		const root = (H.dyed && !H.fresh ? natural : hairCol).clone().multiplyScalar(0.6), tip = hairCol.clone().multiplyScalar(H.dyed ? 0.95 : 1.0);
-		if (H.salt) tip.lerp(new THREE.Color(0.42, 0.42, 0.4), H.salt);
-		const hair = new THREE.Mesh(g, hairMaterial(root, tip));
-		hair.castShadow = true;
-		bones[map.head].add(hair);
-		P.hair = hair;
-	}
+	const beard = hat?.kind === 'hazhood' ? null : beardFor(d, H, rng(d.seed ^ 0xbea4d));
+	const stubble = cols.beard.clone().multiplyScalar(0.55);
+	P.skinMat.userData.beard.value.set(stubble.r, stubble.g, stubble.b, beard ? beard.stubble : 0);
+	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));
+	P.hairWant = { style: showHair ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
+	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
 	if (!P.clothMat) P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0);
@@ -325,10 +321,78 @@ function dress(A, P, o) {
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	// caps, glasses, headphones, bags: one more mesh
-	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes }, o, cut, '#' + hairCol.clone().multiplyScalar(1.1).getHexString());
+	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
 	return P;
+}
+
+// the hair's colours: its own (or a dye, the roots showing), and the beard's, which is the
+// hair's natural colour, greying sooner (grey and white hair are never paper-white: some
+// pigment is left, and it shades itself)
+function hairColours(d, H) {
+	const natural = new THREE.Color(...d.hairColour.map((c) => Math.min(c, 0.5)));
+	const hair = H.dyed ? new THREE.Color(H.dyed) : natural.clone();
+	const root = (H.dyed && !H.fresh ? natural : hair).clone().multiplyScalar(0.6), tip = hair.clone().multiplyScalar(H.dyed ? 0.95 : 1.0);
+	const beard = natural.clone().multiplyScalar(0.85);
+	const grey = d.age > 40 ? Math.min(0.85, (d.age - 40) / 35 + (H.salt || 0) * 0.4) : 0;
+	return { natural, hair, root, tip, beard, salt: H.salt || 0, beardSalt: grey };
+}
+
+// how much hair shines by how it grows
+const SHINE = { straight: 1, wavy: 0.8, curly: 0.55, coily: 0.35 };
+
+// (re)grow the hair and beard P wants: the real style if it is in, else the procedural cut
+// while it comes (then again when it has)
+function hairUp(A, P) {
+	const t0 = performance.now(), W = P.hairWant, d = P.dna, p = P._p, { bones, map, skeleton, body } = P;
+	// (a material someone else put on it, such as a ghost's, is theirs to keep)
+	for (const k of ['hair', 'beard']) if (P[k]) { P[k].geometry.dispose(); if (P[k].material.userData.U) P[k].material.dispose(); P[k].removeFromParent(); P[k] = null; }
+	const { cols, H, hat, covers } = W;
+	const need = [W.style?.id, W.beard && (SHELLS[W.beard.kind] ? 'shells' : W.beard.kind)].filter(Boolean);
+	const ready = need.every((id) => styleNow(id));
+	// (when it comes: shown or hidden as the stand-in was, faded as the rest of them is)
+	if (!ready) Promise.all(need.map(loadStyle)).then(() => {
+		if (P.hairWant !== W) return;
+		const vis = P.hair ? P.hair.visible : true;
+		hairUp(A, P);
+		if (P.hair) P.hair.visible = vis;
+		if (P.fadeK !== undefined) { const k = P.fadeK; P.fadeK = -1; fadePerson(P, k); }
+	}).catch(() => {});
+	const capY = covers ? P.skull.eyeY + (hat.kind === 'beanie' ? 0.042 : 0.05) : 99;
+	const skinned = (g, m) => { const s = new THREE.SkinnedMesh(g, m); s.frustumCulled = false; s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
+	const kitMat = (style, beardSt) => {
+		const m = kitMaterial(style?.tex, beardSt?.tex), U = m.userData.U;
+		U.uRoot.value.copy(cols.root); U.uTip.value.copy(cols.tip); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);
+		U.uSalt.value.set(cols.salt * 0.5, cols.beardSalt, style?.grain === 0 ? 0 : 1, 0);
+		U.uHC.value.copy(P.skull.c);
+		U.uSpec.value.set(SHINE[STYLES[W.style?.id]] ?? 1, 0.2);
+		U.uClip.value.set(capY, W.style?.fade ? P.skull.eyeY + 0.062 - (1 - W.style.fade) * 0.04 : -99, W.style?.thin || 0, 0);
+		return m;
+	};
+	const rb = rng(d.seed ^ 0xbead);
+	if (ready && W.style) {
+		// the real style (with the beard, one mesh)
+		const g = hairGeometry(A, P, p, W.style, W.beard, rb);
+		P.hair = skinned(g, kitMat(styleNow(W.style.id), W.beard && styleNow(W.beard.kind)));
+	} else {
+		if (W.cut) {
+			const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
+			const tip = cols.tip.clone();
+			if (H.salt) tip.lerp(new THREE.Color(0.42, 0.42, 0.4), H.salt);
+			const hair = new THREE.Mesh(g, hairMaterial(cols.root, tip));
+			hair.castShadow = true;
+			bones[map.head].add(hair);
+			P.hair = hair;
+		}
+		// the beard on its own, if it is in
+		if (W.beard && need.every((id) => id === W.style?.id || styleNow(id))) {
+			const g = hairGeometry(A, P, p, null, W.beard, rb);
+			if (g) P.beard = skinned(g, kitMat(null, W.beard.kind && styleNow(W.beard.kind)));
+		}
+	}
+	for (const m of [P.hair, P.beard]) if (m && P.relit) P.relit(m);
+	P.hairMs = performance.now() - t0;
 }
 
 // a skinned piece of the body from a face list: [vertex, uv] pairs, three per triangle

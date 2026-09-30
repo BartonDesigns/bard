@@ -40,11 +40,10 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 		d.gait = { stride: 0.8, bounce: 0.2, armSwing: 0.15, posture: 0.06, pace: 0.7 };
 		const P = buildPerson(A, d);
 		const skin = ghostMat(new THREE.Color('#c8d2da'), new THREE.Color('#6f8aa6')), cloth = ghostMat(new THREE.Color('#e4e8ea'), new THREE.Color('#8aa2b8'));
-		P.root.traverse((o) => {
-			if (!o.material) return;
-			o.material = o === P.skin ? skin : cloth;
-			o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5;
-		});
+		const ghostly = (o) => { o.material = o === P.skin ? skin : cloth; o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; };
+		P.root.traverse((o) => { if (o.material) ghostly(o); });
+		// (and the hair that comes in later)
+		P.relit = ghostly;
 		// (no lashes or brows on a ghost)
 		if (P.detail) { P.detail.removeFromParent(); P.detail.geometry.dispose(); P.detail = null; }
 		// the eyes: two dark hollows with a pinprick of light
