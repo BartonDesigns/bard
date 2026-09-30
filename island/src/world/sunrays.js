@@ -145,8 +145,9 @@ export function createSunRays(scene, shared, renderer, { isPhone = false, sun, a
 				// (Henyey-Greenstein, g 0.6, scaled to 1 straight at the sun)
 				const float g = 0.6;
 				float hg = pow((1.0 - g) / sqrt(1.0 + g * g - 2.0 * g * c), 3.0);
-				vec3 col = uColor * acc * (0.5 + 1.0 * hg);
-				col = col / (1.0 + col * 0.8);
+				vec3 col = uColor * acc * (0.35 + 0.65 * hg);
+				// (shafts, not a white-out: they are held well short of the sky's own light)
+				col = 0.7 * col / (1.0 + col * 1.4);
 				gl_FragColor = vec4(col + (j - 0.5) / 255.0, 1.0);
 			}`,
 	});

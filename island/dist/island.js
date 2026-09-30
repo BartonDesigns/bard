@@ -6020,8 +6020,9 @@ float sunLit(vec3 p){
 				// (Henyey-Greenstein, g 0.6, scaled to 1 straight at the sun)
 				const float g = 0.6;
 				float hg = pow((1.0 - g) / sqrt(1.0 + g * g - 2.0 * g * c), 3.0);
-				vec3 col = uColor * acc * (0.5 + 1.0 * hg);
-				col = col / (1.0 + col * 0.8);
+				vec3 col = uColor * acc * (0.35 + 0.65 * hg);
+				// (shafts, not a white-out: they are held well short of the sky's own light)
+				col = 0.7 * col / (1.0 + col * 1.4);
 				gl_FragColor = vec4(col + (j - 0.5) / 255.0, 1.0);
 			}`}),m=new mt(u,d);m.frustumCulled=!1,m.renderOrder=8,m.name="sunrays",m.visible=!1,o.add(m);let y=700,x=new Mt;{let Q=new Float32Array(y*4);for(let J=0;J<Q.length;J++)Q[J]=Math.random();x.setAttribute("position",new lt(new Float32Array(y*3),3)),x.setAttribute("aSeed",new lt(Q,4))}let g={...f,uPx:{value:800},uMote:{value:0}},p=new Hn({uniforms:g,transparent:!0,depthWrite:!1,blending:Bn,fog:!1,toneMapped:!1,vertexShader:`
 			precision highp sampler2DShadow;
