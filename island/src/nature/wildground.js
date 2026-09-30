@@ -435,9 +435,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		}
 		// open country: meadow, pasture or prairie; tall where it rains enough, forbs through it
 		const tall = sm(350, 800, rain);
-		scatter(Math.round((110 + tall * 110) * K), (x, z) => 0.35 + 0.8 * drift(x, z, 9, 1), (x, z) => {
-			const s2 = 0.8 + r() * 0.6, L = r() < tall * 0.6 ? Lo : Lb;
-			put(L, x, z, r() * 6.28, s2, s2 * (0.8 + tall * 0.7), tone(0.1 * (1 - tall)), Math.floor(r() * L.n), 0.03);
+		scatter(Math.round((140 + tall * 200) * K), (x, z) => 0.45 + 0.7 * drift(x, z, 9, 1), (x, z) => {
+			const s2 = (1 + r() * 0.6) * (1 + tall * 0.4), L = r() < tall * 0.6 ? Lo : Lb;
+			put(L, x, z, r() * 6.28, s2, s2 * (0.8 + tall * 0.9), tone(0.1 * (1 - tall)), Math.floor(r() * L.n), 0.03);
 		});
 		scatter(Math.round(8 * K), () => 0.5, (x, z) => put(Lw, x, z, r() * 6.28, 0.8 + r() * 0.4, 0.8 + r() * 0.4, [1, 1, 1], r() < 0.5 ? 0 : 2, 0.02));
 		// hedges and scrub: a few shrubs, more where it is wetter (the Azores' hedgerows, gorse)
