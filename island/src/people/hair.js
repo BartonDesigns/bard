@@ -241,6 +241,8 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 			const gravity = len > 0.08 ? 0.9 : len > 0.05 ? 0.35 : 0.1;
 			// long hair: to the cut's length below the eyes, wherever it starts
 			if (cut.drop !== undefined) len = Math.max(len * 0.5, s.y - (eyeY + cut.drop) + (d.y > 0.5 ? 0.05 : 0.02) + (rnd() - 0.5) * 0.02);
+			// a fringe stops at the brows
+			if (cut.fringe && d.z > 0.35 && d.y > 0.2) len = Math.min(len, Math.max(0.03, (s.y - eyeY - 0.022) * 1.3 + 0.02));
 			let path;
 			if (cut.tie) {
 				// gathered: along the scalp to the tie
