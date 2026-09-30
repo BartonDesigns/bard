@@ -549,6 +549,7 @@ export function createIslandWorld() {
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
 		const sky = createSky(scene, shared, renderer);
+		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 		const weather = createWeather(scene, shared, { isPhone });
 		sky.attach(weather);
@@ -808,6 +809,11 @@ export function createIslandWorld() {
 		sel.value = String(monthPicked());
 		sel.onchange = () => pickMonth(+sel.value);
 		p.append(ml, sel);
+		// the constellations' lines drawn faintly among the stars (the real sky has none; off by default)
+		const conB = css(document.createElement('button'), 'margin-top:8px;width:100%;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (world.sky.lines() ? '#01a982' : 'transparent') + ';color:#fff;font:600 13px system-ui;cursor:pointer;');
+		conB.textContent = world.sky.lines() ? 'CONSTELLATION LINES: ON' : 'CONSTELLATION LINES: OFF';
+		conB.onclick = () => { const on = !world.sky.lines(); world.sky.lines(on); try { localStorage.setItem('l99-conlines', on ? '1' : ''); } catch { /* private mode */ } buildPanel(); };
+		p.appendChild(conB);
 		const q = css(document.createElement('div'), 'display:flex;gap:6px;margin-top:6px;');
 		for (const mode of ['auto', 'high', 'low']) {
 			const b = css(document.createElement('button'), 'flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
