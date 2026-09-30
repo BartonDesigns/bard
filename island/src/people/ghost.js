@@ -45,6 +45,8 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 			o.material = o === P.skin ? skin : cloth;
 			o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5;
 		});
+		// (no lashes or brows on a ghost)
+		if (P.detail) { P.detail.removeFromParent(); P.detail.geometry.dispose(); P.detail = null; }
 		// the eyes: two dark hollows with a pinprick of light
 		for (const e of P.eyes || []) e.material = new THREE.MeshBasicMaterial({ color: '#0a0d10', transparent: true, opacity: 0.9 });
 		const M = createMotion(P, ground);

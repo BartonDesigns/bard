@@ -10,7 +10,8 @@
 // and a forward lean. The pelvis bobs twice a cycle, rolls down on the swing side,
 // turns with the stride and shifts over the stance foot; the chest counter-rotates;
 // the arms swing opposite the legs from relaxed shoulders with lagging elbows; the head
-// stays level and looks where it wants to, the eyes leading. Standing, people breathe,
+// stays level and looks where it wants to, the eyes leading and darting (saccades), turned
+// in a touch towards what is near. Standing, people breathe (chest and shoulders),
 // shift their weight, glance about, blink, and take a small step when their feet are
 // out from under them. Talking adds mouth, nods and hand gestures.
 
@@ -102,7 +103,9 @@ export function createMotion(P, groundAt) {
 		speed: new Spring(0, 1.1), yaw: new Spring(0, 1.4), run: new Spring(0, 0.8),
 		phase: Math.random(), look: { target: null, yaw: new Spring(0, 2.2), pitch: new Spring(0, 2.2), eyeYaw: new Spring(0, 6), eyePitch: new Spring(0, 6), idleT: 0, idleYaw: 0, idlePitch: 0 },
 		lean: new Spring(0, 1.5), turnLean: new Spring(0, 1.5), armL: new Spring(0, 2.5), armR: new Spring(0, 2.5), elbow: new Spring(0.3, 2),
-		hipY: new Spring(0, 3), sway: new Spring(0, 1.8), breath: Math.random() * 10, shiftT: Math.random() * 10,
+		hipY: new Spring(0, 3), sway: new Spring(0, 1.8), breath: Math.random() * 10, shiftT: Math.random() * 10, shiftSide: Math.random() < 0.5 ? -1 : 1, shiftNext: 2 + Math.random() * 6,
+		// the eyes' own small jumps (saccades), a few times a second
+		sacc: { t: Math.random(), y: 0, p: 0 }, saccY: new Spring(0, 14), saccP: new Spring(0, 14),
 		blink: 0, nextBlink: 1 + Math.random() * 4, talk: 0, talkT: 0, gesture: new Spring(0, 1.5), nod: new Spring(0, 3),
 		legs: [0, 1].map((i) => ({ side: i ? -1 : 1, name: i ? 'R' : 'L', planted: true, inSwing: false, lock: new THREE.Vector3(), from: new THREE.Vector3(), phase: 0, init: false })),
 		mood: Math.random(),
@@ -318,9 +321,12 @@ export function createMotion(P, groundAt) {
 		// the pelvis cannot sit higher than the lower foot allows
 		const lowFoot = Math.min(feet[0].gy, feet[1].gy);
 		S.pos.y = S.hipY.to(Math.min(gy, lowFoot + 0.02), dt);
-		// weight over the stance foot; slow sway standing
+		// weight over the stance foot; standing, the weight rests on one leg a while, then
+		// shifts to the other
 		S.shiftT += dt;
-		const idleSway = (1 - amp) * Math.sin(S.shiftT * 0.35 + S.mood * 5) * 0.025;
+		S.shiftNext -= dt;
+		if (S.shiftNext <= 0) { S.shiftSide = -S.shiftSide; S.shiftNext = 3 + Math.random() * 9 * (1 - (dna.temper?.fidget ?? 0.5) * 0.6); }
+		const idleSway = (1 - amp) * (S.shiftSide * (0.016 + S.mood * 0.012) + Math.sin(S.shiftT * 0.35 + S.mood * 5) * 0.006);
 		const sway = S.sway.to(Math.sin(S.phase * TAU) * 0.02 * amp * (1 - run * 0.6) + idleSway, dt);
 		const lean = S.lean.to(-0.06 * sitK + g.posture + 0.03 * amp + 0.14 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
 		const turnLean = S.turnLean.to(clamp(-turnRate * speed * 0.05, -0.12, 0.12), dt);
@@ -385,12 +391,14 @@ export function createMotion(P, groundAt) {
 
 		// ---- spine: counter-rotation, lean, breath ----
 		S.breath += dt * (0.24 + amp * 0.15 + run * 0.3);
-		const br = Math.sin(S.breath * TAU);
+		// breathing: the chest lifts and the shoulders rise a little on each breath in (in
+		// quicker than out), most visibly standing still
+		const bph = S.breath % 1, br = (bph < 0.4 ? Math.sin(bph / 0.4 * Math.PI / 2) : Math.cos((bph - 0.4) / 0.6 * Math.PI / 2)) * 2 - 1, brA = 1 + (1 - amp) * 0.8;
 		const counter = -pelvisYaw * 1.6;
 		const sp = X.has.sp ? X.v.sp.map((v) => v * aw) : [0, 0, 0];
 		setLocal(map.spine04, _q.setFromEuler(_e.set(lean * 0.25 + sp[1] * 0.3, counter * 0.3 + sp[0] * 0.3, -pelvisRoll * 0.5 + sp[2] * 0.3)), worldQ[rootI]);
-		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.01 + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.3 + sp[2] * 0.35)), worldQ[map.spine04]);
-		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.012 + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.2 + sp[2] * 0.35)), worldQ[map.spine02]);
+		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.014 * brA + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.3 + sp[2] * 0.35)), worldQ[map.spine04]);
+		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.015 * brA + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.2 + sp[2] * 0.35)), worldQ[map.spine02]);
 
 		// ---- gaze: head and eyes toward something worth looking at ----
 		const L = S.look;
@@ -414,7 +422,24 @@ export function createMotion(P, groundAt) {
 		setLocal(map.head, _q.setFromEuler(_e.set(hp * 0.6 - chestPitch * 0.4 + nod * 0.6 - bob * 0.8 + (HO.pitch + droop) * 0.6, (hy - chestYaw) * 0.6 + (HO.yaw + hdy) * 0.6, pelvisRoll * 0.3 + (HO.roll + hdr) * 0.6, 'YXZ')), worldQ[map.neck01]);
 		// the eyes lead the head, then settle
 		const ey = L.eyeYaw.to(clamp(ty - hy, -0.45, 0.45), dt), ep = L.eyePitch.to(clamp(tp - hp, -0.3, 0.3), dt);
-		for (const eye of P.eyes) eye.rotation.set(ep, ey, 0, 'YXZ');
+		// saccades: small quick jumps about what they are looking at (wider when nothing holds
+		// the gaze), now and then with a blink; and the eyes turned in a touch towards what is near
+		const Sc = S.sacc;
+		Sc.t -= dt;
+		if (Sc.t <= 0) {
+			Sc.t = 0.3 + Math.random() * (tgt ? 1.2 : 2.2);
+			Sc.y = (Math.random() - 0.5) * (tgt ? 0.07 : 0.16); Sc.p = (Math.random() - 0.5) * (tgt ? 0.04 : 0.08);
+			if (Math.random() < 0.12 && S.nextBlink > 0.3) S.nextBlink = 0.04;
+		}
+		const sy = S.saccY.to(Sc.y, dt), spp = S.saccP.to(Sc.p, dt);
+		const verg = tgt ? clamp(0.032 / Math.max(0.4, Math.hypot(tgt.x - S.pos.x, tgt.z - S.pos.z)), 0.004, 0.07) : 0.008;
+		for (const eye of P.eyes) eye.rotation.set(ep + spp, ey + sy - Math.sign(eye.position.x) * verg, 0, 'YXZ');
+		// far off, the eyes, lashes and brows are not drawn
+		if (cam && !(P.fadeK < 0.6)) {
+			const dd = Math.hypot(cam.x - S.pos.x, cam.z - S.pos.z);
+			if (P.eyes[0] && P.eyes[0].visible !== dd < 30) for (const eye of P.eyes) eye.visible = dd < 30;
+			if (P.detail) P.detail.visible = dd < 14;
+		}
 
 		// ---- arms: a pose (how this person holds themselves right now), gestures over it,
 		// and the walk's swing through it; every joint parameter rides its own spring ----
@@ -447,7 +472,7 @@ export function createMotion(P, groundAt) {
 			const iC = map['clavicle.' + side], iSh = map['shoulder01.' + side], iU = map['upperarm01.' + side], iU2 = map['upperarm02.' + side], iL = map['lowerarm01.' + side], iL2 = map['lowerarm02.' + side], iW = map['wrist.' + side];
 			// the shoulder girdle: shrugs, breath, a confident person's shoulders back and down
 			const back = (T.confident - 0.5) * 0.08;
-			setLocal(iC, _q.setFromEuler(_e.set(0, (-sw * 0.06 - back) * sx, (br * 0.01 + Math.max(0, sw) * 0.04 + P2.shrug * 0.28) * sx)), worldQ[map.spine01]);
+			setLocal(iC, _q.setFromEuler(_e.set(0, (-sw * 0.06 - back) * sx, (br * 0.016 * brA + Math.max(0, sw) * 0.04 + P2.shrug * 0.28) * sx)), worldQ[map.spine01]);
 			setLocal(iSh, _q.identity(), worldQ[iC]);
 			// the upper arm: down, then out to the side, then forward
 			const up = _v.set(0, -1, 0).applyAxisAngle(Z, sx * (0.04 + dna.weight * 0.05 + P2.abd)).applyAxisAngle(AX, -P2.flex).applyAxisAngle(Y, counter * 0.3).clone();
@@ -491,10 +516,15 @@ export function createMotion(P, groundAt) {
 			if (S.nextBlink <= 0) { S.blink = 0.14; S.nextBlink = 1.5 + Math.random() * 5; }
 			S.blink = Math.max(0, S.blink - dt);
 			infl[0] = S.blink > 0 ? Math.sin((1 - S.blink / 0.14) * Math.PI) : 0;
-			if (S.talk > 0) { S.talkT += dt; infl[1] = Math.max(0, Math.sin(S.talkT * 11) * Math.sin(S.talkT * 2.3 + 1)) * 0.35; } else infl[1] *= 0.8;
+			// talking: syllables in phrases, with pauses between
+			if (S.talk > 0) {
+				S.talkT += dt;
+				const phrase = smooth(Math.sin(S.talkT * 0.9 + S.mood * 4) * 2 + 0.7), syl = Math.max(0, Math.sin(S.talkT * 12.5 + Math.sin(S.talkT * 3.7) * 1.6));
+				infl[1] = syl * (0.1 + 0.26 * phrase);
+			} else infl[1] *= 0.8;
 			// feelings fade back to this person's resting face
 			for (const k in S.feel) S.feel[k] *= Math.exp(-dt * 0.25);
-			const joy = S.joyS.to(0.12 + (dna.temper?.warmth ?? 0.5) * 0.18 + S.feel.joy * 0.7 - S.feel.sad * 0.3 - S.feel.anger * 0.3 + (S.talk > 0 ? 0.1 : 0), dt);
+			const joy = S.joyS.to(0.12 + (dna.temper?.warmth ?? 0.5) * 0.18 + S.feel.joy * 0.7 - S.feel.sad * 0.3 - S.feel.anger * 0.3 + (S.talk > 0 ? 0.1 + Math.sin(S.talkT * 0.7) * 0.08 : 0), dt);
 			infl[2] = clamp(joy, 0, 1);
 			const brow = S.browS.to(S.feel.surprise * 0.9 + S.feel.sad * 0.4 + (S.talk > 0 ? Math.max(0, Math.sin(S.talkT * 1.7)) * 0.3 : 0), dt);
 			infl[3] = clamp(brow, 0, 1);

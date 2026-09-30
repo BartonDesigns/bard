@@ -1,14 +1,19 @@
 // Crysis people: real human bodies. The CC0 MakeHuman base mesh from the caves build
 // (19k vertices, 64-bone skeleton with fingers), shaped per person by its morph targets:
 // ancestry (African, Asian, European, blended), sex, age, muscle and weight; heights from
-// real population ranges. Skin from the painted skin maps, tinted to the person; eyes
-// that move; fitted hair; and clothes cut from the body's own cloth cage so they follow the
+// real population ranges; a face of their own from the MakeHuman face targets (face.js).
+// Skin from the painted skin maps, tinted to the person and lit as skin (skin.js); eyes with
+// a cornea and an iris, lashes and brows (face.js); hair grown on their own skull in their
+// own cut (hair.js); and clothes cut from the body's own cloth cage so they follow the
 // body, dressed for who the person is, where and what they are doing (wardrobe.js) and
 // painted by one shader (garment.js): a cloth mesh, an accessories mesh, skin, eyes, hair.
 
 import * as THREE from 'three';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
 import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial } from './garment.js';
+import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
+import { skinMaterial } from './skin.js';
+import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -18,7 +23,6 @@ const SKINS = {
 	old_caucasian_female: 'human-old_caucasian_female-5c8b8cd784.webp', old_caucasian_male: 'human-old_caucasian_male-4126648f8f.webp',
 	young_african_female: 'human-young_african_female-2c0f99940e.webp', young_african_male: 'human-young_african_male-8b9e87bf3a.webp',
 };
-const HAIR = { short01: 'human-hair-short01-a0ac470402.webp', short02: 'human-hair-short02-880498da47.webp', ponytail01: 'human-hair-ponytail01-0958cf0101.webp' };
 
 const decode = (s, Type) => { const a = Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); return new Type(a.buffer); };
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -35,6 +39,7 @@ export function loadPeopleAssets() {
 		if (!gz.ok) throw Error('human base mesh ' + gz.status);
 		const text = await new Response(gz.body.pipeThrough(new DecompressionStream('gzip'))).text();
 		const D = JSON.parse(text);
+		const faces = loadFaces().catch(() => null);
 		const rig = await (await fetch(RIG_URL)).json();
 		// the full 64-bone rig: extra joints and their skin influences patched over the 18-bone base
 		const raw = Uint8Array.from(atob(rig.patch), (c) => c.charCodeAt(0)), view = new DataView(raw.buffer);
@@ -47,8 +52,9 @@ export function loadPeopleAssets() {
 		for (const [n, s] of Object.entries(D.targets)) A.targets[n] = decode(s, Int16Array);
 		const loader = new THREE.TextureLoader();
 		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; ok(t); }, undefined, no));
-		await Promise.all([...Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }), ...Object.entries(HAIR).map(async ([k, f]) => { A.tex['hair_' + k] = await load(f, true); })]);
+		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
+		A.faces = await faces;
 		loaded = A;
 		return A;
 	})();
@@ -134,11 +140,16 @@ export function personDNA(seed, opts = {}) {
 	const x = opts.ctx || {};
 	const cl = x.cold === undefined ? climate({ hours: x.hours, place: x.place, rain: x.rain, month: x.month }) : { cold: x.cold, wet: !!x.wet };
 	const rs = rng(seed ^ 0x57a1e);
-	d.style = opts.style || dressFor(rs, d, { place: x.place, activity: opts.jogger ? 'jog' : x.activity, cold: cl.cold, wet: cl.wet });
+	d.style = opts.style || dressFor(rs, d, { place: x.place, activity: opts.jogger ? 'jog' : x.activity, cold: cl.cold, wet: cl.wet, night: x.night ?? (x.hours !== undefined && (x.hours >= 20 || x.hours < 4)) });
 	d.style.printKind = Math.floor(rs() * 9);
 	d.style.hair = hairFor(rs, d, d.style);
 	d.styleSig = JSON.stringify(d.outfit);
 	if (opts.skin) d.skinOverride = opts.skin;
+	// the face: its features and the colour of the eyes (a stream of its own, so the rest of
+	// the person stays as they were)
+	const rf = rng(seed ^ 0xfa1ce);
+	d.face = faceDNA(rf, d);
+	d.iris = irisOf(d, rf);
 	return d;
 }
 // the outfit a body is dressed in: its style, unless its flat description was changed by hand
@@ -178,6 +189,8 @@ export function buildPerson(A, d) {
 		const t = targets['universal-' + sx + '-young-' + n];
 		for (let i = 0; i < p.length; i++) p[i] += t[i] * amt * w * unit;
 	}
+	// the face's own features
+	shapeFace(A.faces, p, d.face);
 	let min = Infinity, top = -Infinity;
 	for (let i = 1; i < p.length; i += 3) { min = Math.min(min, p[i]); top = Math.max(top, p[i]); }
 	const S = d.height / (top - min);
@@ -196,6 +209,24 @@ export function buildPerson(A, d) {
 	const map = Object.fromEntries(bones.map((b, i) => [b.name, i]));
 	const rest = { heads, tails, dirs: heads.map((h, i) => tails[i] ? tails[i].clone().sub(h).normalize() : new THREE.Vector3(0, 1, 0)) };
 	const cut = landmarks(A, p, heads, map, d.height);
+	// the ear lobes, for earrings: the lowest point of each ear
+	const lobes = [null, null];
+	{
+		const hb = map.head, ey = (at(D.eyes.L).y + at(D.eyes.R).y) / 2, n = A.ids.length / 4, hv = [];
+		let mx = 0;
+		for (let v = 0; v < n; v++) {
+			const y = p[v * 3 + 1];
+			if (y < ey - 0.07 || y > ey + 0.03) continue;
+			let sw = 0, hw = 0;
+			for (let q = 0; q < 4; q++) { const w = A.weights[v * 4 + q]; sw += w; if (A.ids[v * 4 + q] === hb) hw += w; }
+			if (!sw || hw / sw < 0.6) continue;
+			hv.push(v); mx = Math.max(mx, Math.abs(p[v * 3]));
+		}
+		for (const v of hv) {
+			const x = p[v * 3], y = p[v * 3 + 1], k = x > 0 ? 0 : 1;
+			if (Math.abs(x) > mx - 0.018 && (!lobes[k] || y < lobes[k].y)) lobes[k] = new THREE.Vector3(x, y, p[v * 3 + 2]);
+		}
+	}
 
 	// eyes: little spheres with an iris, in the sockets, parented to the head
 	const headI = map.head, headBone = bones[headI];
@@ -203,34 +234,33 @@ export function buildPerson(A, d) {
 	for (const side of ['L', 'R']) {
 		const c = at(D.eyes[side]);
 		let r = 0; for (const id of D.eyes[side]) r += Math.hypot(p[id * 3] - c.x, p[id * 3 + 1] - c.y, p[id * 3 + 2] - c.z); r /= D.eyes[side].length;
-		const eye = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.0105, r * 0.95), 16, 12), eyeMaterial(d));
+		const eye = new THREE.Mesh(eyeGeometry(), eyeMaterial(d.iris ?? 0));
+		eye.scale.setScalar(Math.max(0.0105, r * 0.95));
 		eye.position.copy(c).sub(heads[headI]);
 		headBone.add(eye); eyes.push(eye); eyeAt.push(c);
 	}
-	const P = { root, body, bones, skeleton, map, rest, meshes: [], skin: null, cloth: null, acc: null, eyes, hair: null, dna: d, height: d.height, legLength: heads[map['upperleg01.L']].y - heads[map['foot.L']].y, cut };
+	const P = { root, body, bones, skeleton, map, rest, meshes: [], skin: null, cloth: null, acc: null, eyes, eyeAt, hair: null, detail: null, dna: d, height: d.height, legLength: heads[map['upperleg01.L']].y - heads[map['foot.L']].y, cut, lobes };
 	// skin: the painted maps tinted to the person (or a far world's skin)
 	const skinKey = (d.ancestry[0] > 0.5 ? 'young_african' : d.age > 58 ? 'old_caucasian' : 'young_caucasian') + '_' + (d.male ? 'male' : 'female');
 	const melanin = d.ancestry[0] * 0.55 + d.ancestry[1] * 0.12;
 	const tint = new THREE.Color().setRGB(d.tone * (1 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.55)), d.tone * (0.96 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.62) + d.warmth * 0.02 + d.ancestry[1] * 0.02), d.tone * (0.9 - melanin * (skinKey.startsWith('young_african') ? 0.12 : 0.7) - d.ancestry[1] * 0.04));
-	const skinMat = new THREE.MeshPhysicalMaterial({ map: A.tex[skinKey], color: tint, roughness: 0.55, metalness: 0, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color(0.9, 0.5, 0.4) });
-	if (d.skinOverride) { skinMat.color.set(d.skinOverride.col); if (d.skinOverride.glow) { skinMat.emissive.set(d.skinOverride.col); skinMat.emissiveIntensity = d.skinOverride.glow; } }
-	// a little light scattering under the skin: warm the terminator; and a close crop of hair
-	// painted on the scalp (a buzz cut, or what shows under a cap)
-	const scalpU = { value: new THREE.Vector4(0, 0, 0, 0) };
-	skinMat.userData.scalp = scalpU;
-	skinMat.onBeforeCompile = (sh) => {
-		sh.uniforms.uScalp = scalpU;
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nvarying float vScalp;\nvarying vec2 vScalpUv;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;\nvScalpUv = uv;');
-		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec4 uScalp;\nvarying float vScalp;\nvarying vec2 vScalpUv;')
-			.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, uScalp.rgb * (0.8 + 0.4 * fract(sin(dot(floor(vScalpUv * 900.0), vec2(12.9898, 78.233))) * 43758.5453)), smoothstep(0.2, 0.8, vScalp) * uScalp.w);')
-			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.directDiffuse += reflectedLight.directDiffuse * vec3(0.16, 0.03, 0.0);');
-	};
+	const skinMat = skinMaterial(A.tex[skinKey], tint, d.age);
+	if (d.skinOverride) { skinMat.color.set(d.skinOverride.col); if (d.skinOverride.glow) { skinMat.emissive.set(d.skinOverride.col); skinMat.emissiveIntensity = d.skinOverride.glow; skinMat.userData.skin.value.set(0, 0.6, 0.5, 0); } }
 	P.skinMat = skinMat;
 	P._p = p;
 	P._S = S;
 	P.redress = (o) => dress(A, P, o);
 	dress(A, P, outfitOf(d));
-	P.lod = (dist) => { const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.acc) P.acc.visible = dist < 90; };
+	// lashes, brows, the wet line: one small mesh, closing and lifting with the face
+	const dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow));
+	if (dg) {
+		const dm = new THREE.SkinnedMesh(dg, detailMaterial(browColour(d)));
+		dm.frustumCulled = false; dm.renderOrder = 1;
+		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
+		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
+		P.detail = dm;
+	}
+	P.lod = (dist) => { const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; };
 	P.buildMs = performance.now() - t0;
 	return P;
 }
@@ -251,32 +281,32 @@ function dress(A, P, o) {
 	const add = (geo, mat, shadow = true) => { const m = new THREE.SkinnedMesh(geo, mat); m.frustumCulled = false; m.castShadow = shadow; m.receiveShadow = true; body.add(m); m.bind(skeleton, new THREE.Matrix4()); return m; };
 	const bodyGeo = geometry(A, p, A.body, (c, tri) => !covered(c, tri));
 	faceMorphs(A, bodyGeo, P._S);
-	// the scalp: where cropped hair is painted
-	const src = bodyGeo.userData.src, sc = new Float32Array(src.length), eyeY = P.eyes[0].position.y + rest.heads[map.head].y, hb = map.head;
-	for (let i = 0; i < src.length; i++) {
-		const v = src[i]; let sum = 0, hw = 0;
-		for (let q = 0; q < 4; q++) { const w = A.weights[v * 4 + q]; sum += w; if (A.ids[v * 4 + q] === hb) hw += w; }
-		const y = p[v * 3 + 1], z = p[v * 3 + 2], front = z > cut.skull.z1 - 0.05;
-		sc[i] = sum && hw / sum > 0.7 ? clamp((y - eyeY - (front ? 0.055 : -0.03)) / 0.02) * (front || y > eyeY - 0.06 ? 1 : 0) : 0;
-	}
+	bodyGeo.setAttribute('skinx', skinAttribute(A.faces, bodyGeo.userData.src));
+	// the scalp: where close-cropped hair is painted (hair.js), to the cut's own hairline
+	const H = o.hair || {}, cutName = H.cut || cutOf(d.hair);
+	P.skull = P.skull || skullOf(A, p, P);
+	const sc = scalpMask(A, P, p, P.skull, bodyGeo.userData.src, cutName, { recede: H.recede, thin: H.thin });
 	bodyGeo.setAttribute('scalp', new THREE.BufferAttribute(sc, 1));
 	P.skin = add(bodyGeo, P.skinMat);
-	// hair, fitted to this skull: its colour (or a dye), fuller for some, cropped or up
-	const H = o.hair || {};
+	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
+	// hair, grown on this skull (hair.js): its cut, its colour (or a dye, the roots showing),
+	// only what shows under a hat
 	const hat = (o.acc || []).find((q) => /^(cap|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
-	const hairCol = H.dyed ? new THREE.Color(H.dyed).multiplyScalar(1.25) : new THREE.Color(...d.hairColour).multiplyScalar(2.2);
+	// (grey and white hair: never paper-white, it has some pigment left and shades itself)
+	const natural = new THREE.Color(...d.hairColour.map((c) => Math.min(c, 0.5)));
+	const hairCol = H.dyed ? new THREE.Color(H.dyed) : natural.clone();
 	const covers = hat && hat.kind !== 'visor';
-	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && (d.hair !== 'ponytail01' || /^(helmet|hood|hazhood)$/.test(hat.kind)));
-	P.skinMat.userData.scalp.value.set(hairCol.r * 0.45, hairCol.g * 0.45, hairCol.b * 0.45, d.hair && (H.buzz || covers) && !H.scarf ? 0.9 : 0);
+	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));
+	// the scalp under it, painted: a close crop, or the shade between the strands
+	const paintCol = hairCol.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
+	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : 0.75);
 	if (showHair) {
-		const headI = map.head;
-		const hair = fitHair(A, p, d.hair, rest.heads[headI]);
-		hair.material = new THREE.MeshStandardMaterial({ map: A.tex['hair_' + d.hair], color: hairCol, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.6 });
+		const g = buildHair(A, P, p, cutName, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
+		const root = (H.dyed && !H.fresh ? natural : hairCol).clone().multiplyScalar(0.6), tip = hairCol.clone().multiplyScalar(H.dyed ? 0.95 : 1.0);
+		if (H.salt) tip.lerp(new THREE.Color(0.42, 0.42, 0.4), H.salt);
+		const hair = new THREE.Mesh(g, hairMaterial(root, tip));
 		hair.castShadow = true;
-		if (H.volume > 1) { const sk = cut.skull, c = new THREE.Vector3((sk.x0 + sk.x1) / 2, (sk.y0 + sk.y1) / 2, (sk.z0 + sk.z1) / 2).sub(rest.heads[headI]); hair.scale.set(H.volume, 1 + (H.volume - 1) * 0.6, H.volume); hair.position.copy(c).multiplyScalar(1 - H.volume); hair.position.y = c.y * (1 - hair.scale.y); }
-		// (under a cap only the ponytail shows)
-		if (covers) hair.scale.multiplyScalar(0.96);
-		bones[headI].add(hair);
+		bones[map.head].add(hair);
 		P.hair = hair;
 	}
 	// the clothes: one mesh, painted by garment
@@ -285,10 +315,14 @@ function dress(A, P, o) {
 	else paint(P.clothMat, o);
 	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
 	P.clothMat.userData.U.uHem.value.set(R.topHem, sleeveEnd, cut.waist + 0.02, R.legEnd);
+	// the necklines, cut smooth (the cage's triangles would leave them ragged)
+	const T0 = o.top, scoop = T0 && (T0.kind === 'crop' || T0.kind === 'tank' || (T0.kind === 'tee' && o.gen === 'z')) ? 0.045 : 0;
+	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.013, cut.neck - 0.01, scoop, 0);
+	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	// caps, glasses, headphones, bags: one more mesh
-	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest }, o, cut, '#' + new THREE.Color(hairCol).multiplyScalar(0.55).getHexString());
+	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes }, o, cut, '#' + hairCol.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
 	return P;
@@ -343,51 +377,19 @@ function faceMorphs(A, g, S) {
 	}
 }
 
-// the hair proxy: each vertex hangs off three body vertices plus a scaled offset
-function fitHair(A, p, name, headCenter) {
-	const a = A.D.hairMeshes[name];
-	const ids = decode(a.ids, Uint16Array), w = decode(a.weights, Float32Array), off = decode(a.offsets, Float32Array), uv = decode(a.uv, Uint16Array), faces = decode(a.faces, Uint16Array);
-	const scale = ['x', 'y', 'z'].map((axis, j) => { const [a0, b, n] = a.scales[axis]; return Math.abs(p[a0 * 3 + j] - p[b * 3 + j]) / n; });
-	const pos = [];
-	for (let i = 0; i < ids.length; i += 3) for (let c = 0; c < 3; c++) { let x = off[i + c] * scale[c]; for (let j = 0; j < 3; j++) x += p[ids[i + j] * 3 + c] * w[i + j]; pos.push(x - headCenter.getComponent(c)); }
-	const V = [], T = [], I = [], key = new Map();
-	for (let i = 0; i < faces.length; i += 2) {
-		const id = faces[i], u = faces[i + 1], k0 = id + ':' + u;
-		let k = key.get(k0);
-		if (k === undefined) { k = V.length / 3; key.set(k0, k); V.push(pos[id * 3], pos[id * 3 + 1], pos[id * 3 + 2]); T.push(uv[u * 2] / 65535, 1 - uv[u * 2 + 1] / 65535); }
-		I.push(k);
-	}
-	const g = new THREE.BufferGeometry();
-	g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3));
-	g.setAttribute('uv', new THREE.Float32BufferAttribute(T, 2));
-	g.setIndex(I); g.computeVertexNormals();
-	return new THREE.Mesh(g);
+// brows: the hair's own colour, a shade darker; greying later and less than the head
+function browColour(d) {
+	const c = new THREE.Color(...d.hairColour).multiplyScalar(0.85);
+	const grey = (c.r + c.g + c.b) / 3;
+	if (grey > 0.45) c.lerp(new THREE.Color(0.3, 0.27, 0.24), 0.45);
+	return c;
 }
 
-let irisCache = null;
-function eyeMaterial(d) {
-	if (!irisCache) irisCache = new Map();
-	const key = d.ancestry[2] > 0.7 ? Math.floor(d.seed % 4) : 0;
-	if (!irisCache.has(key)) {
-		const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
-		g.fillStyle = '#f2eee8'; g.fillRect(0, 0, 128, 128);
-		const col = ['#3b2414', '#4a6a8a', '#5b6b3a', '#6b4a24'][key];
-		// the iris faces +z: on a sphere's default UV the front sits at u = 0.25, v = 0.5
-		const cx = 32, cy = 64;
-		// the iris spans about 60 degrees of the eyeball: 21 px of u (360 deg), 43 px of v (180 deg)
-		g.save(); g.translate(cx, cy); g.scale(1, 2);
-		const grd = g.createRadialGradient(0, 0, 1, 0, 0, 11); grd.addColorStop(0, '#040404'); grd.addColorStop(0.36, '#040404'); grd.addColorStop(0.42, col); grd.addColorStop(0.9, col); grd.addColorStop(1, '#1c1814');
-		g.fillStyle = grd; g.beginPath(); g.arc(0, 0, 11, 0, Math.PI * 2); g.fill();
-		// fibres radiating from the pupil
-		g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 0.6;
-		for (let k = 0; k < 40; k++) { const a = k / 40 * Math.PI * 2; g.beginPath(); g.moveTo(Math.cos(a) * 4.5, Math.sin(a) * 4.5); g.lineTo(Math.cos(a) * 10, Math.sin(a) * 10); g.stroke(); }
-		g.restore();
-		// a faint pink at the corners of the white
-		g.fillStyle = 'rgba(210,120,110,0.25)'; g.fillRect(0, 44, 8, 40); g.fillRect(56, 44, 8, 40);
-		const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-		const m = new THREE.MeshPhysicalMaterial({ map: t, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02 });
-		m.userData.shared = true;
-		irisCache.set(key, m);
-	}
-	return irisCache.get(key);
+// the skin's normals at the brow's vertices (for laying the brow hairs on the skin)
+function normalsOf(g, brow) {
+	const want = new Set();
+	for (let j = 0; j < brow.length; j += 2) want.add(brow[j]);
+	const src = g.userData.src, at = new Map(), na = g.attributes.normal;
+	for (let i = 0; i < src.length; i++) if (want.has(src[i])) at.set(src[i], i);
+	return (v, out) => { const i = at.get(v); if (i === undefined) out.set(0, 0, 1); else out.fromBufferAttribute(na, i); };
 }

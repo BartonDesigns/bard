@@ -24,17 +24,33 @@ uniform vec4 uCutA;
 uniform vec4 uCutB;
 uniform vec4 uMisc;
 uniform vec4 uHem;
+uniform vec4 uNeck;
+uniform vec4 uEdge;
 uniform sampler2D uKnit;
 uniform sampler2D uCanvas;
 varying vec3 vBind;
 varying vec3 vBN;
 flat varying float vSlot;
 flat varying float vLimb;
-float gRough = 0.9, gMetal = 0.0, gFab = 0.0, gNorm = 0.35;
+float gRough = 0.9, gMetal = 0.0, gFab = 0.0, gNorm = 0.35, gCollar = 0.0;
 float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
 float band(float x, float a, float b, float s) { return smoothstep(a - s, a, x) * (1.0 - smoothstep(b, b + s, x)); }
 float line(float x, float w) { return 1.0 - smoothstep(0.0, w, abs(x)); }
+// folds: compression folds round the elbows, the backs of the knees and the waist,
+// fabric stacked at the ankles, and a slow drape all over (a height, for the bump)
+float folds(vec3 P, float limb, int s) {
+	float h = (vn(P.xy * 9.0 + P.z * 5.0) - 0.5) * 0.15;
+	float wob = vn(vec2(atan(P.x, P.z) * 3.0, P.y * 20.0)) * 1.4;
+	float az = atan(P.x, P.z);
+	if (limb > 0.5 && limb < 1.5) h += sin(P.y * 300.0 + wob * 5.0 + sin(az * 2.0) * 2.0) * (1.0 - smoothstep(0.015, 0.06, abs(P.y - uCutB.z))) * 0.55;
+	if (limb > 1.5) {
+		h += sin(P.y * 280.0 + wob * 5.0 + sin(az * 3.0) * 2.5) * (1.0 - smoothstep(0.015, 0.06, abs(P.y - uCutB.x))) * 0.45;
+		h += sin(P.y * 240.0 + wob * 6.0) * (1.0 - smoothstep(0.0, 0.09, P.y - uCutB.y - 0.01)) * 0.6 * step(2.0, float(s));
+	}
+	if (limb < 0.5 && s < 2) h += sin(P.y * 220.0 + wob * 5.0 + az * 3.0) * (1.0 - smoothstep(0.015, 0.06, abs(P.y - uCutA.z - 0.03))) * 0.35;
+	return h;
+}
 // seven segments: a number on a shirt
 float seg(vec2 q, int d) {
 	int m = d == 0 ? 63 : d == 1 ? 6 : d == 2 ? 91 : d == 3 ? 79 : d == 4 ? 102 : d == 5 ? 109 : d == 6 ? 125 : d == 7 ? 7 : d == 8 ? 127 : 111;
@@ -107,7 +123,7 @@ vec3 garment(int s, vec3 P, vec3 N) {
 	}
 	else if (k == 5) {
 		// colour blocks: the sleeves in one, a yoke across the chest in another
-		if (arm > 0.5) c = a;
+		if (step(uEdge.y + 0.01, abs(P.x)) > 0.5) c = a;
 		else if (P.y > chest + 0.03) c = b;
 		if (s == 2) c = P.x > 0.0 ? base : a;
 	}
@@ -237,6 +253,8 @@ export function garmentMaterial(A, o, cut, number = 0) {
 		uCutB: { value: new THREE.Vector4(cut.knee, cut.ankle, cut.elbow, cut.wrist) },
 		uMisc: { value: new THREE.Vector4(number, (cut.backZ + cut.frontZ) / 2, 0, (cut.hipZ[0] + cut.hipZ[1]) / 2) },
 		uHem: { value: new THREE.Vector4(cut.waist, cut.wrist, cut.waist, cut.ankle) },
+		uNeck: { value: new THREE.Vector4(cut.neck, cut.neck, 0, 0) },
+		uEdge: { value: new THREE.Vector4(0, cut.shoulderX, 0, 0) },
 		uKnit: { value: A.fabric.knit }, uCanvas: { value: A.fabric.canvas },
 	};
 	m.userData.U = U;
@@ -247,11 +265,13 @@ export function garmentMaterial(A, o, cut, number = 0) {
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vBN = normal; vSlot = mod(slot, 10.0); vLimb = floor(slot / 10.0 + 0.01);');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL_HEAD)
-			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN);\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && abs(vBind.x) < 0.035 + max(0.0, uCutA.y - vBind.y) * 0.12 && vBind.y > uCutA.z - 0.3) s = 0;\n diffuseColor.rgb *= garment(s, vBind, N); }')
+			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN);\n\n if (s == 0 && (vLimb < 0.5 ? vBind.y < uHem.x + 0.012 : vLimb < 1.5 && vBind.y < uHem.y + 0.012)) discard;\n if (s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) - 0.004 * fr; if (vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && abs(vBind.x) < 0.035 + max(0.0, uCutA.y - vBind.y) * 0.12 && vBind.y > uCutA.z - 0.3) s = 0;\n diffuseColor.rgb *= garment(s, vBind, N) * (1.0 - gCollar * 0.14); }')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = gRough; metalnessFactor = gMetal;')
-			.replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;', 'int fb = int(gFab + 0.5);\n\tvec3 mapN = (fb == 0 || fb == 4 ? texture2D( uKnit, vNormalMapUv ) : fb == 1 ? texture2D( normalMap, vNormalMapUv ) : texture2D( uCanvas, vNormalMapUv )).xyz * 2.0 - 1.0;\n\tmapN.xy *= fb == 3 || fb >= 5 ? 0.3 : fb == 4 ? 1.6 : 1.0;');
+			.replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;', 'int fb = int(gFab + 0.5);\n\tvec3 mapN = (fb == 0 || fb == 4 ? texture2D( uKnit, vNormalMapUv ) : fb == 1 ? texture2D( normalMap, vNormalMapUv ) : texture2D( uCanvas, vNormalMapUv )).xyz * 2.0 - 1.0;\n\tmapN.xy *= fb == 3 || fb >= 5 ? 0.3 : fb == 4 ? 1.6 : 1.0;')
+			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = folds(vBind, vLimb, int(vSlot + 0.5)) * 0.0017 * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))); vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
+			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n{ int fb = int(gFab + 0.5); float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0); reflectedLight.indirectDiffuse += diffuseColor.rgb * rim * (fb == 0 || fb == 4 ? 0.5 : fb == 1 ? 0.15 : 0.25); }');
 	};
-	m.customProgramCacheKey = () => 'crysis-garment-1';
+	m.customProgramCacheKey = () => 'crysis-garment-2';
 	paint(m, o);
 	return m;
 }
@@ -450,7 +470,7 @@ export function clothGeometry(A, p, o, cut, R) {
 	return g;
 }
 
-// ---------- the small things: caps, glasses, headphones, bags ----------
+// ---------- the small things: caps, glasses, headphones, bags, watches, earrings, a chain ----------
 // one geometry for all of them, each vertex bound whole to the bone it rides
 export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const { map, heads, eyes } = P0;
@@ -504,16 +524,43 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			if (q.kind === 'sunhat') { const b = new THREE.CylinderGeometry(1, 1, 0.018, 20, 1, true); b.scale(rx + 0.019, 1, rz + 0.019); b.translate(cx, rim + 0.012, cz); put(b, 'head', a2); }
 		} else if (q.kind === 'glasses' || q.kind === 'sunglasses') {
 			if (!eyes) continue;
-			const sun = q.kind === 'sunglasses', slim = q.slim;
+			// frames: a closed rim round each lens (rounded rectangles, or round), fine wire
+			// or thicker acetate, the bridge between, the arms back to the ears
+			const sun = q.kind === 'sunglasses', round = q.shape === 'round', wire = !!q.wire;
+			const w = round ? 0.0205 : sun ? 0.026 : 0.0245, h = round ? 0.0195 : sun ? 0.021 : 0.0165, tube = wire ? 0.0009 : q.slim ? 0.0016 : 0.0022, pw = round ? 2 : 4;
+			const z = eyeZ + 0.017, gl = wire ? 2 : 0.6;
+			const rim = (ex, ey) => { const pts = []; for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a); pts.push(new THREE.Vector3(ex + Math.sign(c) * Math.pow(Math.abs(c), 2 / pw) * w, ey + Math.sign(s2) * Math.pow(Math.abs(s2), 2 / pw) * h * (s2 < 0 && !round ? 0.92 : 1), z - Math.abs(c) * 0.002)); } return pts; };
 			for (const e of eyes) {
-				const w = slim ? 0.024 : 0.028, h = slim ? 0.013 : sun ? 0.022 : 0.019;
-				const fr = new THREE.TorusGeometry(1, 0.12, 5, 16); fr.scale(w, h, 0.03); fr.translate(e.x, e.y, eyeZ + 0.016);
-				put(fr, 'head', c, 0.6);
-				if (sun) { const lens = new THREE.CircleGeometry(1, 16); lens.scale(w, h, 1); lens.translate(e.x, e.y, eyeZ + 0.015); put(lens, 'head', '#141418', 1); }
+				const ex = e.x + Math.sign(e.x) * 0.003, ey = e.y + 0.001, pts = rim(ex, ey);
+				put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 28, tube, 5, true), 'head', q.col || c, gl);
+				if (sun) { const sh = new THREE.Shape(pts.map((p2) => new THREE.Vector2(p2.x, p2.y))); const lens = new THREE.ShapeGeometry(sh); lens.translate(0, 0, z - 0.001); put(lens, 'head', '#16181c', 1); }
 				// the arm back to the ear
-				const armG = new THREE.BoxGeometry(0.004, 0.004, 0.1); armG.translate(e.x + Math.sign(e.x) * (w + 0.004), e.y + 0.004, eyeZ - 0.035); put(armG, 'head', c, 0.6);
+				const x0 = ex + Math.sign(e.x) * (w + tube), arm = new THREE.BoxGeometry(wire ? 0.0018 : 0.003, wire ? 0.0018 : 0.004, 0.105);
+				arm.translate(x0 + Math.sign(e.x) * 0.004, ey + h * 0.4, z - 0.053); put(arm, 'head', q.col || c, gl);
 			}
-			const br = new THREE.BoxGeometry(Math.abs(eyes[0].x - eyes[1].x) - 0.05, 0.004, 0.004); br.translate((eyes[0].x + eyes[1].x) / 2, eyes[0].y + 0.004, eyeZ + 0.018); put(br, 'head', c, 0.6);
+			const b0 = eyes[0].x + Math.sign(eyes[0].x) * 0.003, b1 = eyes[1].x + Math.sign(eyes[1].x) * 0.003, bx0 = Math.min(b0, b1) + w, bx1 = Math.max(b0, b1) - w;
+			const bridge = new THREE.CatmullRomCurve3([new THREE.Vector3(bx0, eyes[0].y + h * 0.3, z), new THREE.Vector3((bx0 + bx1) / 2, eyes[0].y + h * 0.5, z + 0.002), new THREE.Vector3(bx1, eyes[0].y + h * 0.3, z)]);
+			put(new THREE.TubeGeometry(bridge, 6, tube, 5, false), 'head', q.col || c, gl);
+		} else if (q.kind === 'watch') {
+			// on the left wrist, the face on the back of it
+			const w = heads[map['wrist.L']], arm = map['lowerarm02.L'] !== undefined ? 'lowerarm02.L' : 'lowerarm01.L', dir = w.clone().sub(heads[map['lowerarm01.L']]).normalize();
+			const k = cut.height / 1.7, r = 0.027 * k, at = w.clone().addScaledVector(dir, -0.03 * k);
+			const qn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+			const band = new THREE.CylinderGeometry(r, r, 0.018 * k, 16, 1, true); band.applyQuaternion(qn); band.translate(at.x, at.y, at.z); put(band, arm, q.metal ? q.acc : c, q.metal ? 2 : 0.2);
+			const out2 = new THREE.Vector3(1, 0, 0).addScaledVector(dir, -dir.x).normalize();
+			const face = new THREE.CylinderGeometry(0.017 * k, 0.017 * k, 0.007, 20); face.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), out2));
+			face.translate(at.x + out2.x * (r + 0.003), at.y + out2.y * (r + 0.003), at.z + out2.z * (r + 0.003)); put(face, arm, q.acc || '#c9ccd0', 2);
+		} else if (q.kind === 'earrings') {
+			for (const L of P0.lobes || []) {
+				if (!L) continue;
+				const sx = Math.sign(L.x);
+				if (q.hoop) { const hp = new THREE.TorusGeometry(0.009, 0.0011, 5, 18); hp.rotateY(Math.PI / 2); hp.translate(L.x + sx * 0.001, L.y - 0.008, L.z); put(hp, 'head', c, 2); }
+				else { const st = new THREE.SphereGeometry(0.0026, 8, 6); st.translate(L.x + sx * 0.002, L.y + 0.002, L.z + 0.001); put(st, 'head', c, 2); }
+			}
+		} else if (q.kind === 'chain') {
+			// a fine chain round the neck, lower at the front
+			const ch = new THREE.TorusGeometry(1, 0.022, 4, 40); ch.rotateX(Math.PI / 2 - 0.5); ch.scale(0.068, 0.068, 0.072);
+			ch.translate(0, cut.neck - 0.035, (cut.backZ + cut.frontZ) / 2 + 0.012); put(ch, 'spine01', c, 2);
 		} else if (q.kind === 'headphones') {
 			const band = new THREE.TorusGeometry(1, 0.035, 6, 20, Math.PI); band.scale(rx + 0.03, top - eyeY + 0.06, 0.35); band.translate(cx, eyeY - 0.02, cz - 0.01);
 			put(band, 'head', c, 0.4);
@@ -538,7 +585,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const strap2 = strap.clone(); strap2.translate(0, 0, -0.12); put(strap2, 'wrist.L', c);
 			const print = new THREE.CircleGeometry(0.06, 12); print.rotateY(Math.PI / 2); print.translate(w.x + 0.061, w.y - 0.25, w.z); put(print, 'wrist.L', a2);
 		} else if (q.kind === 'crossbody') {
-			const bag = new THREE.BoxGeometry(0.2, 0.12, 0.06); bag.translate(0.09, cut.waist - 0.02, cut.frontZ + 0.02); put(bag, 'spine04', c);
+			const bag = q.small ? new THREE.BoxGeometry(0.16, 0.1, 0.045) : new THREE.BoxGeometry(0.2, 0.12, 0.06); bag.translate(0.09, cut.waist - 0.02, cut.frontZ + 0.02); put(bag, 'spine04', c);
 			// the strap across the chest, from the right shoulder to the left hip
 			const s0 = new THREE.Vector3(-cut.shoulderX * 0.55, cut.shoulder + 0.05, (cut.backZ + cut.frontZ) / 2), s1 = new THREE.Vector3(-0.06, cut.chest, cut.frontZ + 0.02), s2 = new THREE.Vector3(0.12, cut.waist + 0.03, cut.frontZ + 0.01);
 			for (const [a, b, bone] of [[s0, s1, 'spine01'], [s1, s2, 'spine02']]) {
@@ -594,9 +641,9 @@ export function accessoryMaterial() {
 	accMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide });
 	accMat.onBeforeCompile = (sh) => {
 		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float gloss;\nvarying float vGloss;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGloss = gloss;');
-		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vGloss;').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = mix(0.8, 0.12, vGloss); metalnessFactor = vGloss * 0.3;');
+		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vGloss;').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = vGloss > 1.5 ? 0.24 : mix(0.8, 0.12, vGloss); metalnessFactor = vGloss > 1.5 ? 1.0 : vGloss * 0.3;');
 	};
-	accMat.customProgramCacheKey = () => 'crysis-acc-1';
+	accMat.customProgramCacheKey = () => 'crysis-acc-2';
 	accMat.userData.shared = true;
 	return accMat;
 }

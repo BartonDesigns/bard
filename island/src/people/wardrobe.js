@@ -13,7 +13,13 @@
 // flannel, pull-on boots and practical outdoor gear; boomers in polos, windbreakers,
 // khakis, sun hats and comfortable walking shoes. Hikers in shells and trail runners,
 // beachgoers in swimwear and board shorts, office workers in smart casual, players in
-// their team's kit with a number.
+// their team's kit with a number. Out at night, darker and sharper: leather, black denim,
+// a chain, earrings. Each grown-up has a look of their own (minimal, earthy, workwear,
+// gorpcore, preppy, all black, colourful, coastal, soft): one palette their clothes are
+// drawn from, whatever they put on today; and their small things: glasses, a watch,
+// earrings, a chain. Hair to suit the person and the look (hairFor): fades and crops,
+// curls, coils and afros, locs, braids and cornrows, buns, ponytails, bobs and long
+// layers, and hair that recedes, thins and greys with the years.
 
 import { toLatLon } from '../bay/geo.js';
 
@@ -37,6 +43,56 @@ const KID = ['cherry', 'cobalt', 'lime', 'hotpink', 'butter', 'aqua', 'lilac', '
 const PASTEL = ['babyblue', 'mint', 'lilac', 'butter', 'pink', 'lavender', 'cream'];
 const SHELL = ['tangerine', 'cobalt', 'kelly', 'teal', 'cherry', 'mustard', 'black', 'olive', 'skyblue', 'lime'];
 const WASH = ['rinse', 'indigo', 'midwash', 'lightwash', 'bleach', 'blackdenim', 'greydenim'];
+// metals for jewellery and watches
+const GOLD = '#d4af6a', SILVER = '#c9ccd0';
+
+// ---------- a look: the palette a person's clothes come from ----------
+// each role: light, mid, dark and a pop of colour; a garment keeps its tone and takes the
+// look's colour for it (the same colour always becomes the same colour on one person)
+export const LOOKS = {
+	minimal: { light: ['white', 'cream', 'oat'], mid: ['stone', 'grey', 'camel'], dark: ['black', 'charcoal', 'ink'], pop: ['camel', 'oat', 'white'] },
+	earthy: { light: ['cream', 'oat', 'sand'], mid: ['olive', 'tan', 'clay', 'sage', 'khaki'], dark: ['chocolate', 'espresso', 'moss', 'forest'], pop: ['rust', 'mustard', 'terracotta'] },
+	workwear: { light: ['cream', 'oat', 'stone'], mid: ['tan', 'khaki', 'camel', 'rust'], dark: ['chocolate', 'navy', 'charcoal', 'olive'], pop: ['rust', 'tangerine', 'mustard'] },
+	gorp: { light: ['cream', 'heather', 'oat'], mid: ['sage', 'teal', 'slate', 'khaki'], dark: ['black', 'forest', 'charcoal'], pop: ['tangerine', 'kelly', 'cobalt', 'butter'] },
+	preppy: { light: ['white', 'babyblue', 'cream'], mid: ['khaki', 'stone', 'skyblue'], dark: ['navy', 'burgundy', 'forest'], pop: ['cherry', 'kelly', 'butter'] },
+	mono: { light: ['heather', 'grey', 'white'], mid: ['slate', 'charcoal', 'grey'], dark: ['black', 'black', 'charcoal', 'ink'], pop: ['cherry', 'white', 'black'] },
+	colour: { light: ['butter', 'lilac', 'babyblue', 'mint', 'pink', 'white'], mid: ['cobalt', 'kelly', 'tangerine', 'aqua', 'lavender'], dark: ['navy', 'plum', 'black'], pop: ['hotpink', 'lime', 'cherry', 'cobalt'] },
+	coastal: { light: ['white', 'sand', 'cream', 'babyblue'], mid: ['skyblue', 'stone', 'sage'], dark: ['navy', 'ink'], pop: ['coral', 'aqua', 'butter'] },
+	soft: { light: ['cream', 'oat', 'lavender', 'pink'], mid: ['sage', 'lilac', 'mocha', 'camel'], dark: ['mocha', 'chocolate', 'plum'], pop: ['butter', 'coral'] },
+};
+const LOOK_BY = {
+	z: [['colour', 2], ['earthy', 2], ['workwear', 1.5], ['gorp', 1.5], ['mono', 1.5], ['minimal', 1.5]],
+	millennial: [['minimal', 2.5], ['earthy', 1.5], ['gorp', 1.5], ['preppy', 1.5], ['workwear', 1.5], ['mono', 1], ['soft', 0.5]],
+	x: [['workwear', 2.5], ['earthy', 2], ['preppy', 2], ['gorp', 1.5], ['minimal', 1], ['mono', 1]],
+	boomer: [['preppy', 3.5], ['coastal', 3], ['soft', 2], ['earthy', 1.5]],
+};
+// a person's look: from their own seed, so it is theirs wherever they are
+export function lookOf(d) {
+	const gen = d.child ? 'alpha' : generation(d.age);
+	const L = LOOK_BY[gen];
+	if (!L) return null;
+	let x = ((Math.imul(d.seed ^ 0x100c, 2654435761) >>> 0) / 4294967296) * L.reduce((a, b) => a + b[1], 0);
+	for (const [k, w] of L) { if ((x -= w) < 0) return k; }
+	return L[0][0];
+}
+function toneOf(hex) {
+	const c = parseInt(hex.slice(1), 16), R = (c >> 16 & 255) / 255, G = (c >> 8 & 255) / 255, B = (c & 255) / 255;
+	const mx = Math.max(R, G, B), mn = Math.min(R, G, B), lum = 0.3 * R + 0.59 * G + 0.11 * B, sat = mx ? (mx - mn) / mx : 0;
+	return sat > 0.55 && lum > 0.25 ? 'pop' : lum > 0.62 ? 'light' : lum > 0.3 ? 'mid' : 'dark';
+}
+function applyLook(r, o, look) {
+	const L = LOOKS[look];
+	if (!L) return;
+	const seen = new Map();
+	const re = (hex) => { if (typeof hex !== 'string' || hex[0] !== '#') return hex; if (!seen.has(hex)) seen.set(hex, col(pick(r, L[toneOf(hex)]))); return seen.get(hex); };
+	for (const g of [o.top, o.outer, o.bottom]) {
+		if (!g || g.pat === 'denim' || g.pat === 'chambray' || g.kind === 'jersey' || g.fab === 'leather') continue;
+		g.col = re(g.col); if (g.acc) g.acc = re(g.acc); if (g.acc2) g.acc2 = re(g.acc2);
+	}
+	if (o.shoes && o.shoes.col !== C.white && chance(r, 0.6)) o.shoes.col = re(o.shoes.col);
+	for (const q of o.acc) if (/^(cap|beanie|bucket|tote|crossbody|backpack)$/.test(q.kind)) q.col = re(q.col);
+	o.look = look;
+}
 
 // who: the generation from the age (in 2026)
 export function generation(age) {
@@ -89,15 +145,54 @@ export function dressFor(r, d, ctx = {}) {
 	if (act === 'hike' || (place === 'trail' && act !== 'sit')) return hiker(r, d, o, cold, wet);
 	if (place === 'beach' && act !== 'work' && cold < 0.62 && chance(r, 0.7 - cold * 0.6)) return beach(r, d, o);
 	const office = place === 'office' && act !== 'ride' && !d.child && d.age > 21 && d.age < 70;
-	({ alpha, z: genz, millennial, x: genx, boomer })[gen](r, d, o, { place, act, cold, wet, office, male });
+	// a night out in the city: darker and sharper
+	if (ctx.night && (place === 'sf' || place === 'oakland' || place === 'boardwalk') && act === 'walk' && !d.child && d.age > 20 && d.age < 58 && chance(r, 0.6)) nightOut(r, d, o, { cold });
+	else ({ alpha, z: genz, millennial, x: genx, boomer })[gen](r, d, o, { place, act, cold, wet, office, male });
+	// their look: the palette it is all drawn from
+	const look = lookOf(d);
+	if (look && !o.night && chance(r, 0.85)) applyLook(r, o, office && (look === 'colour' || look === 'gorp') ? 'minimal' : look);
+	smallThings(r, d, o, { office });
 	// the weather: over it all, a warm layer when it is cold, a shell in the rain
 	if (wet && !o.outer && chance(r, 0.7)) o.outer = { kind: 'shell', col: col(pick(r, gen === 'boomer' ? ['navy', 'red', 'teal', 'black'] : SHELL)), acc: col('black'), fit: 'regular', open: false, sleeves: 'long', pat: 'plain', fab: 'nylon' };
 	if (cold > 0.72 && !o.outer && chance(r, 0.8)) o.outer = gen === 'z' || gen === 'alpha' ? { kind: 'puffer', col: col(pick(r, gen === 'alpha' ? KID : ['black', 'cream', 'olive', 'chocolate', 'butter', 'cobalt', 'cherry', 'sage'])), fit: 'oversized', open: false, sleeves: 'long', pat: 'quilt', fab: 'nylon' } : { kind: 'quilted', col: col(pick(r, ['navy', 'olive', 'black', 'chocolate', 'camel'])), fit: 'regular', open: true, sleeves: 'long', pat: 'quilt', fab: 'nylon' };
 	if (cold > 0.6 && chance(r, gen === 'z' ? 0.45 : gen === 'alpha' ? 0.3 : 0.12) && !o.acc.some((q) => q.kind === 'cap' || q.kind === 'beanie' || q.kind === 'bucket' || q.kind === 'sunhat')) o.acc.push({ kind: 'beanie', col: col(pick(r, gen === 'alpha' ? KID : ['black', 'charcoal', 'oat', 'olive', 'rust', 'butter', 'cherry', 'navy', 'chocolate'])) });
 	if (cold < 0.3 && !o.acc.some((q) => q.kind === 'sunglasses' || q.kind === 'glasses') && chance(r, 0.25)) o.acc.push({ kind: 'sunglasses', col: col(pick(r, ['black', 'tan', 'espresso', 'white', 'cherry'])) });
 	// the eyes: glasses for about a third of adults, more with the years
-	if (!d.child && !o.acc.some((q) => q.kind === 'sunglasses' || q.kind === 'glasses') && chance(r, 0.15 + Math.max(0, d.age - 40) * 0.012)) o.acc.push({ kind: 'glasses', col: col(pick(r, ['black', 'tan', 'espresso', 'grey', 'white', 'navy'])) });
+	if (!d.child && !o.acc.some((q) => q.kind === 'sunglasses' || q.kind === 'glasses') && chance(r, 0.15 + Math.max(0, d.age - 40) * 0.012)) {
+		const wire = chance(r, gen === 'boomer' ? 0.45 : 0.3);
+		o.acc.push({ kind: 'glasses', shape: chance(r, gen === 'z' || gen === 'millennial' ? 0.55 : 0.25) ? 'round' : 'rect', wire, col: wire ? pick(r, [GOLD, SILVER, col('black')]) : col(pick(r, ['black', 'tan', 'espresso', 'black', 'grey', 'navy', 'burgundy'])) });
+	}
 	return finish(o, cold);
+}
+
+// out at night: black and dark tones, leather or a sharp jacket, black denim or wide trousers
+function nightOut(r, d, o, { cold }) {
+	const f = !d.male, gen = o.gen;
+	o.night = true;
+	const k = r();
+	o.top = f && k < 0.3 ? { kind: 'crop', col: col(pick(r, ['black', 'cream', 'burgundy', 'charcoal'])), pat: pick(r, ['plain', 'rib']), fit: 'fitted', sleeves: cold > 0.5 ? 'long' : 'short', crop: gen === 'z' }
+		: k < 0.6 ? { kind: 'tee', col: col(pick(r, ['black', 'black', 'white', 'charcoal'])), pat: 'plain', fit: gen === 'z' ? 'oversized' : 'fitted', sleeves: 'short' }
+			: { kind: 'shirt', col: col(pick(r, ['black', 'burgundy', 'cream', 'ink', 'olive'])), pat: 'plain', fit: 'regular', sleeves: 'long', collar: true, fab: 'nylon' };
+	const w = r();
+	if (cold > 0.3 || w < 0.6) o.outer = w < 0.45 ? { kind: 'leather', col: col(pick(r, ['black', 'black', 'espresso', 'chocolate'])), pat: 'plain', fit: 'regular', sleeves: 'long', open: true, crop: chance(r, 0.35), fab: 'leather' }
+		: { kind: 'blazer', col: col(pick(r, ['black', 'charcoal', 'ink', 'chocolate'])), pat: 'plain', fit: 'oversized', sleeves: 'long', open: true };
+	const b = r();
+	o.bottom = f && b < 0.3 ? { kind: 'skirt', col: col(pick(r, ['black', 'espresso', 'burgundy', 'ink'])), pat: 'plain', legs: 'skirt', len: pick(r, ['midi', 'maxi']), fab: 'nylon' }
+		: b < 0.6 ? { kind: 'jeans', col: col(pick(r, ['blackdenim', 'rinse', 'blackdenim'])), pat: 'denim', legs: 'long', fit: pick(r, ['straight', 'wide', 'slim']) }
+			: { kind: 'trousers', col: col(pick(r, ['black', 'charcoal', 'ink'])), pat: 'plain', legs: 'long', fit: 'wide' };
+	o.shoes = chance(r, 0.45) ? { kind: 'boot', col: col('black'), sole: col('black') } : chance(r, 0.5) ? { kind: 'loafer', col: col(pick(r, ['black', 'espresso'])), sole: col('black') } : { kind: 'chunky', col: col(pick(r, ['black', 'white'])), acc: col('black'), sole: col(pick(r, ['black', 'white'])) };
+	if (f && chance(r, 0.5)) o.acc.push({ kind: 'crossbody', small: true, col: col(pick(r, ['black', 'burgundy', 'cream'])) });
+	if (chance(r, 0.4)) o.acc.push({ kind: 'chain', col: chance(r, 0.6) ? SILVER : GOLD });
+}
+
+// the small things people wear every day: a watch, earrings, a chain (none on children)
+function smallThings(r, d, o, { office }) {
+	if (d.child) return;
+	const gen = o.gen, f = !d.male, has = (k) => o.acc.some((q) => q.kind === k);
+	const metal = chance(r, 0.5) ? GOLD : SILVER;
+	if (!has('watch') && chance(r, (({ z: 0.12, millennial: 0.35, x: 0.5, boomer: 0.55 })[gen] ?? 0.2) + (office ? 0.2 : 0))) o.acc.push({ kind: 'watch', col: col(pick(r, ['black', 'chocolate', 'tan', 'charcoal'])), acc: metal, metal: chance(r, 0.35) });
+	if (!has('earrings') && chance(r, f ? 0.6 : gen === 'z' ? 0.18 : 0.05)) o.acc.push({ kind: 'earrings', hoop: f && chance(r, gen === 'z' || gen === 'millennial' ? 0.45 : 0.2), col: metal });
+	if (!has('chain') && chance(r, gen === 'z' ? 0.18 : gen === 'millennial' ? 0.08 : 0.03)) o.acc.push({ kind: 'chain', col: metal });
 }
 
 // a sleeve length for the day
@@ -145,10 +240,14 @@ function genz(r, d, o, { place, act, cold, office }) {
 		else if (w < 0.45) o.outer = { kind: 'bomber', col: col(pick(r, ['black', 'olive', 'chocolate', 'burgundy', 'navy', 'cream'])), acc: col('tangerine'), pat: 'plain', fit: 'oversized', sleeves: 'long', open: chance(r, 0.6), fab: 'nylon' };
 		else if (w < 0.62) o.outer = { kind: 'denim', col: col(pick(r, ['midwash', 'lightwash', 'blackdenim', 'bleach'])), pat: 'denim', fit: 'oversized', sleeves: 'long', open: true };
 		else if (w < 0.8) o.outer = { kind: 'fleece', col: col(pick(r, ['cream', 'sage', 'mocha', 'navy', 'butter', 'lilac', 'teal'])), acc: col(pick(r, ['rust', 'kelly', 'cobalt', 'chocolate', 'tangerine'])), pat: 'fleeceblock', fit: 'regular', sleeves: 'long', open: false, fab: 'fleece' };
-		else o.outer = { kind: 'shell', col: col(pick(r, SHELL)), acc: col(pick(r, ['black', 'cream', 'charcoal'])), pat: 'block', fit: 'oversized', sleeves: 'long', open: chance(r, 0.5), fab: 'nylon' };
+		else o.outer = chance(r, 0.5) ? { kind: 'shell', col: col(pick(r, SHELL)), acc: col(pick(r, ['black', 'cream', 'charcoal'])), pat: 'block', fit: 'oversized', sleeves: 'long', open: chance(r, 0.5), fab: 'nylon' }
+			// a boxy cropped jacket: canvas, suede-ish or leather
+			: { kind: 'jacket', col: col(pick(r, ['chocolate', 'black', 'tan', 'olive', 'cream', 'burgundy'])), pat: 'plain', fit: 'oversized', sleeves: 'long', open: chance(r, 0.6), crop: true, fab: chance(r, 0.3) ? 'leather' : 'canvas' };
 	}
 	const b = r();
-	if (f && b < 0.18 && cold < 0.6) o.bottom = { kind: 'skirt', col: col(pick(r, ['black', 'chocolate', 'olive', 'midwash', 'cream', 'butter', 'plum'])), acc: S.c, pat: pick(r, ['plain', 'plain', 'plaid', 'denim']), legs: 'skirt', len: pick(r, ['mini', 'maxi', 'midi']) };
+	if (chance(r, 0.16)) o.bottom = chance(r, 0.5) ? { kind: 'carpenter', col: col(pick(r, ['tan', 'chocolate', 'khaki', 'cream', 'black'])), pat: 'plain', legs: 'long', fit: 'wide', fab: 'canvas' }
+		: { kind: 'trousers', col: col(pick(r, ['black', 'charcoal', 'chocolate', 'stone', 'olive'])), pat: 'plain', legs: 'long', fit: 'wide' };
+	else if (f && b < 0.18 && cold < 0.6) o.bottom = { kind: 'skirt', col: col(pick(r, ['black', 'chocolate', 'olive', 'midwash', 'cream', 'butter', 'plum'])), acc: S.c, pat: pick(r, ['plain', 'plain', 'plaid', 'denim']), legs: 'skirt', len: pick(r, ['mini', 'maxi', 'midi']) };
 	else if (b < 0.55) o.bottom = { kind: 'jeans', col: col(pick(r, WASH)), pat: 'denim', legs: cold < 0.2 && chance(r, 0.35) ? 'jorts' : 'long', fit: pick(r, ['wide', 'wide', 'baggy', 'straight']) };
 	else if (b < 0.78) o.bottom = { kind: 'cargo', col: col(pick(r, ['olive', 'khaki', 'black', 'stone', 'chocolate', 'grey', 'cream'])), acc: S.b, pat: 'cargo', legs: 'long', fit: pick(r, ['baggy', 'wide']) };
 	else if (b < 0.9) o.bottom = { kind: 'track', col: col(pick(r, ['black', 'navy', 'kelly', 'burgundy', 'cobalt', 'grey'])), acc: col(pick(r, ['white', 'cream', 'butter'])), pat: 'track', legs: 'long', fit: 'wide' };
@@ -176,7 +275,7 @@ function millennial(r, d, o, { place, cold, office }) {
 			: { kind: 'tee', col: col(pick(r, ['white', 'black', 'oat', 'heather'])), pat: 'plain', fit: 'fitted', sleeves: 'short' };
 	else if (k < 0.45) o.top = { kind: 'tee', col: col(chance(r, 0.7) ? neutral : accent), pat: 'plain', fit: 'fitted', sleeves: sl };
 	else if (k < 0.65) o.top = { kind: 'halfzip', col: col(pick(r, ['navy', 'black', 'heather', 'sage', 'oat', 'charcoal'])), acc: col(accent), pat: 'plain', fit: 'fitted', sleeves: 'long', collar: true };
-	else if (k < 0.8) o.top = { kind: 'sweat', col: col(pick(r, ['heather', 'oat', 'navy', 'sage', 'cream', 'butter'])), acc: col(neutral), pat: 'rib', fit: 'regular', sleeves: 'long' };
+	else if (k < 0.8) o.top = chance(r, 0.4) && cold > 0.3 ? { kind: 'knit', col: col(pick(r, ['oat', 'cream', 'camel', 'charcoal', 'sage', 'navy'])), pat: 'rib', fit: 'oversized', sleeves: 'long' } : { kind: 'sweat', col: col(pick(r, ['heather', 'oat', 'navy', 'sage', 'cream', 'butter'])), acc: col(neutral), pat: 'rib', fit: 'regular', sleeves: 'long' };
 	else o.top = { kind: 'henley', col: col(pick(r, ['white', 'oat', 'olive', 'navy', 'rust', 'charcoal'])), pat: 'plain', fit: 'fitted', sleeves: sl };
 	// the outer: the quilted jacket, the fleece vest over a shirt (tech), a chore jacket
 	const w = r();
@@ -191,6 +290,7 @@ function millennial(r, d, o, { place, cold, office }) {
 	const b = r();
 	if (office) o.bottom = f && chance(r, 0.35) ? { kind: 'skirt', col: col(pick(r, ['black', 'camel', 'navy', 'olive', 'chocolate'])), pat: pick(r, ['plain', 'pleat']), legs: 'skirt', len: 'midi' } : { kind: 'trousers', col: col(pick(r, ['charcoal', 'navy', 'khaki', 'black', 'stone', 'olive'])), pat: 'plain', legs: 'long', fit: f ? pick(r, ['wide', 'straight']) : 'slim' };
 	else if (b < 0.35) o.bottom = { kind: 'jeans', col: col(pick(r, ['rinse', 'indigo', 'midwash', 'blackdenim'])), pat: 'denim', legs: 'long', fit: pick(r, ['straight', 'slim', 'straight', f ? 'wide' : 'straight']) };
+	else if (f && b < 0.45) o.bottom = { kind: 'trousers', col: col(pick(r, ['black', 'camel', 'stone', 'chocolate', 'oat'])), pat: 'plain', legs: 'long', fit: 'wide' };
 	else if (b < 0.55) o.bottom = { kind: 'joggers', col: col(pick(r, ['black', 'charcoal', 'navy', 'heather', 'olive'])), pat: 'plain', legs: 'long', fit: 'slim', cuff: true };
 	else if (b < 0.72) o.bottom = { kind: 'chinos', col: col(pick(r, ['khaki', 'stone', 'navy', 'olive', 'oat'])), pat: 'plain', legs: cold < 0.25 && chance(r, 0.5) ? 'shorts' : 'long', fit: 'slim' };
 	else if (f && b < 0.9) o.bottom = { kind: 'leggings', col: col(pick(r, ['black', 'charcoal', 'navy', 'olive', 'mocha'])), pat: 'plain', legs: 'long', fit: 'tight' };
@@ -350,17 +450,42 @@ export function suitFor(kind, a, b) {
 	return o;
 }
 
-// hair to go with the look: colours (a few dyed among the young), and how it is worn
+// hair to go with the person and the look: the cut (hair.js CUTS) by how their hair grows,
+// their generation and what they wear; colours (a few dyed among the young, the roots
+// showing on some); hairlines that recede and crowns that thin on some men with the years,
+// salt and pepper in middle age
+const wpick = (r, L) => { let x = r() * L.reduce((a, b) => a + b[1], 0); for (const [k, w] of L) { if ((x -= w) < 0) return k; } return L[0][0]; };
+const CUT_BY = {
+	coily: {
+		m: [['fade', 3], ['coils', 2], ['shortlocs', 1], ['locs', 1], ['cornrows', 0.7], ['afro', 0.6], ['braids', 0.4], ['crop', 1]],
+		f: [['braids', 2.2], ['locs', 1], ['afro', 1], ['coils', 1.2], ['bun', 1.4], ['pony', 1], ['cornrows', 0.6], ['long', 0.8], ['bob', 0.8]],
+	},
+	z: { m: [['fade', 2.2], ['textured', 2.2], ['quiff', 1], ['short', 1.2], ['crop', 1], ['lob', 0.4], ['bun', 0.4]], f: [['long', 2.2], ['waves', 1.6], ['lob', 1.2], ['pony', 1.4], ['bun', 1.2], ['bob', 1], ['fringe', 0.8], ['pixie', 0.3]] },
+	millennial: { m: [['short', 2.5], ['fade', 1.5], ['quiff', 1.2], ['slick', 1.2], ['crop', 1.5], ['bun', 0.5]], f: [['lob', 2], ['long', 1.6], ['waves', 1.2], ['pony', 1.4], ['bun', 1.4], ['bob', 1.2], ['pixie', 0.6], ['fringe', 0.6]] },
+	x: { m: [['short', 3.5], ['crop', 2.5], ['slick', 1], ['textured', 0.6]], f: [['bob', 2.5], ['lob', 2.5], ['pixie', 1.5], ['waves', 1.5], ['pony', 1]] },
+	boomer: { m: [['short', 3], ['crop', 3], ['slick', 0.6]], f: [['bob', 3], ['pixie', 3], ['curls', 2], ['lob', 1.5]] },
+	alpha: { m: [['crop', 3.5], ['short', 2.5], ['fade', 2], ['curls', 1]], f: [['pony', 3.5], ['long', 2.5], ['bun', 1], ['bob', 1]] },
+};
 export function hairFor(r, d, o) {
-	const out = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false };
+	const out = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, cut: 'short', recede: 0, thin: 0, salt: 0, part: r() < 0.5 ? -1 : 1, fresh: false };
+	const g = d.child ? 'alpha' : o?.gen && CUT_BY[o.gen] ? o.gen : generation(d.age), f = !d.male;
+	const afr = d.ancestry?.[0] || 0, coily = afr > 0.55 || (afr > 0.3 && chance(r, 0.6)), curly = !coily && chance(r, 0.12 + afr * 0.4);
+	out.cut = wpick(r, coily && !d.child ? CUT_BY.coily[f ? 'f' : 'm'] : CUT_BY[g][f ? 'f' : 'm']);
+	if (d.child && coily) out.cut = f ? pick(r, ['braids', 'pony', 'coils', 'bun']) : pick(r, ['coils', 'fade', 'crop']);
+	// curly hair stays curly
+	if (curly && /^(short|crop|textured|lob|long|bob)$/.test(out.cut)) out.cut = /^(lob|long)$/.test(out.cut) ? 'waves' : 'curls';
+	// the look: sharper cuts in the office, looser hair on the trail and the beach
+	if (o?.look === 'preppy' && /^(textured|shortlocs)$/.test(out.cut)) out.cut = 'short';
 	if (d.child) return out;
-	const g = o?.gen || generation(d.age);
 	if (g === 'z' && chance(r, 0.14)) out.dyed = pick(r, ['#e8a3c4', '#b9a3e0', '#7fb2e8', '#e8dcb8', '#c8643a', '#f0e6d2', '#8fd0b8']);
 	else if (g === 'millennial' && chance(r, 0.05)) out.dyed = pick(r, ['#c8643a', '#e8dcb8', '#b9a3e0']);
-	if (d.male && d.hair && chance(r, 0.18)) out.buzz = true;
-	if (!d.male && d.hair === 'ponytail01' && chance(r, 0.3)) out.bun = true;
-	// fuller, curlier hair for some
-	if (d.hair && chance(r, (d.ancestry?.[0] || 0) * 0.5 + 0.08)) out.volume = 1.08 + r() * 0.1;
+	else if (!d.male && d.age > 40 && d.age < 70 && chance(r, 0.25)) out.dyed = pick(r, ['#5a3a24', '#8a6a48', '#b89a70', '#3a2a20']);
+	out.fresh = chance(r, 0.5);
+	if (d.male && d.hair && chance(r, coily ? 0.12 : 0.1)) out.buzz = true;
+	// the years: a receding hairline, a thinning crown, grey coming in
+	if (d.male && d.age > 26) { out.recede = Math.min(1, (d.age - 26) / 40) * (0.3 + r() * 0.9); if (d.age > 42 && chance(r, 0.35)) { out.thin = 0.5 + r() * 0.5; if (!/^(fade|crop|short|slick)$/.test(out.cut)) out.cut = 'short'; if (out.thin > 0.8) out.cut = 'thinning'; } }
+	if (!d.male && d.age > 58 && chance(r, 0.3)) out.thin = 0.3;
+	if (d.age > 36 && d.age < 64 && !out.dyed) out.salt = Math.min(1, (d.age - 36) / 28) * r() * 0.8;
 	// a headscarf for a few women, in the season's colours
 	if (!d.male && d.age > 16 && chance(r, 0.03)) out.scarf = pick(r, ['#2f4a38', '#1f2a44', '#b08552', '#6a2331', '#d9ccb2', '#57304a', '#1b1b1d', '#9aa58a']);
 	return out;

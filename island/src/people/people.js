@@ -473,8 +473,9 @@ export function createPeople(scene, world, camera = null) {
 	let lastNeed = null;
 	function wearCtx(cam, need, activity) {
 		const W = world(), place = placeAt(cam.x, cam.z, need?.zone);
-		const cl = climate({ hours: W?.sky?.state?.hours ?? 13, place, rain: W?.weather?.state?.rainHere || 0, cover: W?.weather?.state?.cover ?? 0.4 });
-		return { place, activity, cold: cl.cold, wet: cl.wet, key: place + '|' + activity + '|' + Math.round(cl.cold * 3) + (cl.wet ? 'w' : '') };
+		const hours = W?.sky?.state?.hours ?? 13, night = hours >= 20 || hours < 4;
+		const cl = climate({ hours, place, rain: W?.weather?.state?.rainHere || 0, cover: W?.weather?.state?.cover ?? 0.4 });
+		return { place, activity, cold: cl.cold, wet: cl.wet, night, key: place + '|' + activity + '|' + Math.round(cl.cold * 3) + (cl.wet ? 'w' : '') + (night ? 'n' : '') };
 	}
 	function wear(p, cam, need) {
 		const act = p.role === 'jog' ? 'jog' : p.route?.kind === 'seat' ? (need?.zone === 'office' ? 'work' : 'sit') : 'walk';
