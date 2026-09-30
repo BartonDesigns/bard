@@ -51,7 +51,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	};
 	function material(grid, oct, hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.93, metalness: 0 });
-		const own = { uGGrid: { value: new THREE.Vector3(...grid) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
+		const own = { uGGrid: { value: new THREE.Vector3(grid[1], grid[2], grid[0]) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, WC_U, U, common, own, { uGT3: { value: data.tex[3] }, uGT4: { value: data.tex[4] } });
 			sh.uniforms.uGT0 = { get value() { return data.tex[0]; } }; sh.uniforms.uGT1 = { get value() { return data.tex[1]; } }; sh.uniforms.uGT2 = { get value() { return data.tex[2]; } };
@@ -68,7 +68,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					vec2 gd = position.xz + uGOff;
 					float gr = max(abs(position.x), abs(position.z));
 					float gsp = max(0.3, 2.0 * uGGrid.y * uGGrid.x * pow(max(1e-4, pow(gr / uGGrid.x, 1.0 / uGGrid.y)), uGGrid.y - 1.0) / uGGrid.z);
-					float goct = clamp(log2(${8192}.0 / (2.5 * gsp)) + 1.0, 1.0, uGOct);
+					float goct = clamp(log2(${8192}.0 / (4.0 * gsp)) + 1.0, 1.0, uGOct);
 					float ge = max(2.0, gsp);
 					float gx = gGround(gd + vec2(ge, 0.0), goct), gz = gGround(gd + vec2(0.0, ge), goct);
 					float gh = gGround(gd, goct);
@@ -90,7 +90,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					vGCC = uGWin.xy + gd * uGWin.zw;
 				`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, gh, position.z); vGW = vec3(gd.x, gh, gd.y);');
-			sh.fragmentShader = FRAG_GLSL + NOISE_GLSL + sh.fragmentShader
+			sh.fragmentShader = FRAG_GLSL + NOISE_GLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (uGBay > 0.5 && (vGC.w < uGSeam.x || max(abs(vGW.x), abs(vGW.z)) < uGIsl)) discard;          // the Bay's own ground is there
 					if (uGHole.z > 0.5 && max(abs(vGW.x - uGHole.x), abs(vGW.z - uGHole.y)) < uGHole.w) discard;    // the fine ring draws here`)
@@ -110,11 +110,11 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// the air up here: the atlas's warmth is the place's lived-in ground (taken as 800 m up)
 					// cooled 6.5 C a km above it. Trees up to the tree line, not on cliffs
 					float air = temp - 6.5 * max(0.0, h - 800.0) / 1000.0;
-					float forest = smoothstep(0.3, 0.7, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.25) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
+					float forest = smoothstep(0.44, 0.56, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
 					vec3 wood = mix(vec3(0.028, 0.05, 0.03), vec3(0.045, 0.075, 0.025), smoothstep(4.0, 14.0, temp));
 					wood = mix(wood, vec3(0.035, 0.085, 0.02), smoothstep(20.0, 26.0, temp));
 					// fields where it is wet and warm enough, and gentle: a patchwork, not woods
-					float farm = (1.0 - forest) * smoothstep(350.0, 650.0, rain) * smoothstep(3.0, 9.0, temp) * (1.0 - smoothstep(0.08, 0.2, slope)) * (1.0 - smoothstep(1200.0, 2200.0, h)) * smoothstep(0.2, 0.45, 1.0 - trees);
+					float farm = (1.0 - forest) * smoothstep(250.0, 500.0, rain) * smoothstep(3.0, 9.0, temp) * (1.0 - smoothstep(0.08, 0.2, slope)) * (1.0 - smoothstep(1200.0, 2200.0, h)) * smoothstep(0.2, 0.45, 1.0 - trees);
 					float fid = gfCell(4, 51u), fid2 = gfCell(5, 53u);
 					vec3 crop = fid < 0.3 ? vec3(0.07, 0.12, 0.03) : fid < 0.55 ? vec3(0.3, 0.25, 0.1) : fid < 0.75 ? vec3(0.13, 0.09, 0.05) : mix(gA, vec3(0.1, 0.13, 0.05), 0.4);
 					crop *= 0.85 + 0.3 * fid2;
@@ -124,7 +124,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
 					c = mix(c, mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35), rockK);
 					// snow where the air up here stays cold enough to keep it through the summer, off the cliffs
-					float snowK = (1.0 - smoothstep(-8.5, -5.5, air + (pM - 0.5) * 3.0)) * (1.0 - smoothstep(0.6, 0.9, slope));
+					float snowK = (1.0 - smoothstep(-10.0, -7.0, air + (pM - 0.5) * 3.0)) * (1.0 - smoothstep(0.45, 0.75, slope));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
 					// the shore: sand on the gentle ground just above the water
 					float shore = (1.0 - smoothstep(0.0, 0.035, vGC.x)) * (1.0 - smoothstep(vGC.z + 2.0, vGC.z + 6.0, h)) * (1.0 - smoothstep(0.12, 0.3, slope));
@@ -167,7 +167,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
 					float fDet = dot(vSx, R1);
 					vec2 dH = vec2(dFdx(bh), dFdy(bh));
-					normal = normalize(abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2));
+					vec3 nb = abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2);
+					if (d2 < 5000.0 && dot(nb, nb) > 1e-20) normal = normalize(nb);
 				}`)
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCityGlow;');
 			sh.fragmentShader = 'vec3 gCityGlow = vec3(0.0);\n' + sh.fragmentShader;

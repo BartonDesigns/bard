@@ -136,6 +136,8 @@ export function createGlobeData() {
 		win.moving = place(gi - NW / 2, gj - NW / 2).finally(() => { win.moving = null; });
 		return win.moving;
 	}
+	// resolves once the window covers (lat, lon), however many moves that takes
+	async function cover(lat, lon) { for (let i = 0; i < 4; i++) { const p = follow(lat, lon); if (!p) return; await p; } }
 	// a cell's values by latitude and longitude, from the window (for the vegetation and colours)
 	function cellAt(lat, lon) {
 		const lonW0 = -180 + win.gi0 / RES, latW1 = 90 - win.gj0 / RES;
@@ -145,5 +147,5 @@ export function createGlobeData() {
 		return o;
 	}
 	const bytes = () => [...tiles.values()].reduce((a, v) => a + (v.px ? v.px.length : 0), 0) + NW * NW * (4 * PLANES.length + 16 + 16) * 2;
-	return { win, tex, follow, anchor, cellAt, stats, bytes, tiles };
+	return { win, tex, follow, cover, anchor, cellAt, stats, bytes, tiles };
 }

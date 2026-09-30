@@ -111,10 +111,10 @@ export function createGlobeHeight(win) {
 			const v = nn + (r - nn) * c.RG;
 			sum += v * amp * w;
 			w = 1 + (clamp(0.55 + 0.6 * v, 0.2, 1) - 1) * c.RG;
-			amp *= 0.5;
+			amp *= 0.55;
 		}
 		const U = lon, V = lat;
-		return assemble(c, sum * 0.75, n2, n3, n4, n5, (fi) => famAt(FAM[fi], 20 + fi * 8, U, V));
+		return assemble(c, sum * (0.7 + 0.8 * c.RG), n2, n3, n4, n5, (fi) => famAt(FAM[fi], 20 + fi * 8, U, V));
 	}
 	function assemble(c, D, n2, n3, n4, n5, fam) {
 		const coastN = n2 * 0.5 + n3 * 0.3 + n4 * 0.2;
@@ -129,7 +129,7 @@ export function createGlobeHeight(win) {
 			if (fs > 0.01) rel = D * (1 - fs) + (c.BNR > 0.01 ? (fam(0) * 2 - 1) * c.BNR : 0) + (c.RV > 0.01 ? (fam(1) * 2 - 1) * c.RV : 0);
 			let hl = Math.max(c.e, Ws + 0.5) + rel * c.A * sstep(0, 0.1, cs);
 			if (c.DUNE > 0.01) hl += c.DUNE * (18 + 0.25 * c.A) * (fam(2) * 2 - 1) * sstep(0, 0.1, cs);
-			if (c.KARST > 0.01) { const t = sstep(0.1, 0.55, 0.65 * n4 + 0.35 * n5); hl += c.KARST * (40 + 0.8 * c.A) * t * Math.sqrt(t) * sstep(0, 0.1, cs); }
+			if (c.KARST > 0.01) { const t = sstep(0.05, 0.4, 0.65 * n4 + 0.35 * n5); hl += c.KARST * (60 + 1.0 * c.A) * t * Math.sqrt(t) * sstep(0, 0.1, cs); }
 			if (c.TR > 0.01) {
 				const st = clamp(c.A * 0.3, 10, 80), q = (hl - Ws) / st, fq = fract(q);
 				hl += (Ws + (Math.floor(q) + sstep(0.3, 0.7, fq)) * st - hl) * c.TR * 0.8;
@@ -241,9 +241,9 @@ float globeHeight(vec2 d, float oct){
 		float v = mix(nn, r, RG) * clamp(oct - fk, 0.0, 1.0);
 		sum += v * amp * w;
 		w = mix(1.0, clamp(0.55 + 0.6 * v, 0.2, 1.0), RG);
-		amp *= 0.5;
+		amp *= 0.55;
 	}
-	float D = sum * 0.75;
+	float D = sum * (0.7 + 0.8 * RG);
 	vec2 dd = vec2(d.x * uGDeg.x, -d.y * uGDeg.y);          // degrees of longitude and latitude from the anchor
 	float cs = L - 0.5 + (n2 * 0.5 + n3 * 0.3 + n4 * 0.2) * 0.1;
 	float lake = smoothstep(0.4, 0.6, K / max(0.02, 1.0 - L)), Ws = WL * lake;
@@ -254,7 +254,7 @@ float globeHeight(vec2 d, float oct){
 		if (fs > 0.01) rel = D * (1.0 - fs) + (BNR > 0.01 ? (gFam(0, dd, int(min(oct, 4.0)), 20) * 2.0 - 1.0) * BNR : 0.0) + (RV > 0.01 ? (gFam(1, dd, int(min(oct, 4.0)), 28) * 2.0 - 1.0) * RV : 0.0);
 		float hl2 = max(e, Ws + 0.5) + rel * A * ck;
 		if (DUNE > 0.01 && oct > 5.0) hl2 += DUNE * (18.0 + 0.25 * A) * (gFam(2, dd, 3, 36) * 2.0 - 1.0) * ck;
-		if (KARST > 0.01) { float t = smoothstep(0.1, 0.55, 0.65 * n4 + 0.35 * n5); hl2 += KARST * (40.0 + 0.8 * A) * t * sqrt(t) * ck; }
+		if (KARST > 0.01) { float t = smoothstep(0.05, 0.4, 0.65 * n4 + 0.35 * n5); hl2 += KARST * (60.0 + 1.0 * A) * t * sqrt(t) * ck; }
 		if (TR > 0.01) {
 			float st = clamp(A * 0.3, 10.0, 80.0), q = (hl2 - Ws) / st, fq = fract(q);
 			hl2 += (Ws + (floor(q) + smoothstep(0.3, 0.7, fq)) * st - hl2) * TR * 0.8;

@@ -129,8 +129,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		// (a jump out of the window: nothing is drawn or placed from the old one meanwhile)
 		const gi = Math.floor((lon + 180) * 10), gj = Math.floor((90 - lat) * 10), W = data.win;
 		if (Math.abs(((gi - W.gi0 - 128) % 3600 + 5400) % 3600 - 1800) > 110 || Math.abs(gj - W.gj0 - 128) > 110) W.ready = false;
-		const ready = data.follow(lat, lon);
-		return { x: p.x, z: p.z, ready: (ready || Promise.resolve()).then(() => anchorUniforms(data.U, data.win)) };
+		return { x: p.x, z: p.z, ready: data.cover(lat, lon).then(() => { data.anchor(); anchorUniforms(data.U, data.win); }) };
 	}
 
 	// ---------- each frame ----------
