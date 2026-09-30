@@ -21,7 +21,7 @@ import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from '
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
-uniform highp sampler2D uB0, uB1, uB2, uB3, uB4, uB5, uB6, uB7, uB8, uB9; uniform vec4 uR0, uR1, uR2, uR3, uR4, uR5, uR6, uR7, uR8, uR9; uniform float uBayOn;
+uniform highp sampler2D uB0, uBa, uBb, uBc; uniform vec4 uR0, uRa, uRb, uRc; uniform float uBayOn;
 float bLevel(highp sampler2D t, vec4 r, vec2 w){
 	vec2 S = vec2(textureSize(t, 0));
 	vec2 f = clamp((w - r.xy) / r.z, vec2(0.0), S - 1.001);
@@ -56,15 +56,11 @@ float bayHeight(vec2 w){
 	float dOut = length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z;
 	float edge0 = bLevel(uB0, uR0, w);
 	float h = mix(beyondH(w, edge0, dOut), edge0, bIn(uB0, uR0, w, 3000.0));
-	float k1 = bIn(uB1, uR1, w, 1500.0); if (k1 > 0.0) h = mix(h, bLevel(uB1, uR1, w), k1);
-	float k2 = bIn(uB2, uR2, w, 500.0); if (k2 > 0.0) h = mix(h, bLevel(uB2, uR2, w), k2);
-	float k3 = bIn(uB3, uR3, w, 400.0); if (k3 > 0.0) h = mix(h, bLevel(uB3, uR3, w), k3);
-	float k4 = bIn(uB4, uR4, w, 400.0); if (k4 > 0.0) h = mix(h, bLevel(uB4, uR4, w), k4);
-	float k5 = bIn(uB5, uR5, w, 400.0); if (k5 > 0.0) h = mix(h, bLevel(uB5, uR5, w), k5);
-	float k6 = bIn(uB6, uR6, w, 400.0); if (k6 > 0.0) h = mix(h, bLevel(uB6, uR6, w), k6);
-	float k7 = bIn(uB7, uR7, w, 400.0); if (k7 > 0.0) h = mix(h, bLevel(uB7, uR7, w), k7);
-	float k8 = bIn(uB8, uR8, w, 400.0); if (k8 > 0.0) h = mix(h, bLevel(uB8, uR8, w), k8);
-	float k9 = bIn(uB9, uR9, w, 500.0); if (k9 > 0.0) h = mix(h, bLevel(uB9, uR9, w), k9);
+	// the finer surveys: the three finest round you, chosen as you move (update() below;
+	// a GPU draws at most 16 textures at once, and ten levels were too many). w: the margin
+	if (uRa.w > 0.0) { float k = bIn(uBa, uRa, w, uRa.w); if (k > 0.0) h = mix(h, bLevel(uBa, uRa, w), k); }
+	if (uRb.w > 0.0) { float k = bIn(uBb, uRb, w, uRb.w); if (k > 0.0) h = mix(h, bLevel(uBb, uRb, w), k); }
+	if (uRc.w > 0.0) { float k = bIn(uBc, uRc, w, uRc.w); if (k > 0.0) h = mix(h, bLevel(uBc, uRc, w), k); }
 	return h;
 }
 `;
@@ -117,9 +113,6 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);
 // the photographed trail surfaces (build 191), for the dirt roads and paths close by
 const LOAM = photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 }), GRAVEL = photoUniform('riverbed', { colour: true, mean: 0.52, contrast: 1.0 });
-// the texture of the open ground close by: the generated hill grasses when they exist
-// (ASSET_PROMPTS_HOUSES.md, hills.webp), else the loam's grain as a grey detail
-const GROUND_D = photoUniform('loam', { mean: 0.9, contrast: 0.9 }), DRYGRASS = photoUniform('dryGrass', { mean: 0.9, contrast: 1 }), SPRINGGRASS = photoUniform('springGrass', { mean: 0.9, contrast: 1 });
 
 // Points of city light far off. The old sparks sat in cells whose size followed the
 // camera's distance, so every step re-dealt them (static on a dead channel), and at a
@@ -146,7 +139,7 @@ float sparks(vec2 w, float dist, float thr, float seed){
 
 export function bayUniforms() {
 	const blank = () => { const t = new THREE.DataTexture(new Uint16Array([0, 0, 0, 0]), 2, 2, THREE.RedFormat, THREE.HalfFloatType); t.needsUpdate = true; return t; };
-	return { uB0: { value: blank() }, uB1: { value: blank() }, uB2: { value: blank() }, uB3: { value: blank() }, uB4: { value: blank() }, uB5: { value: blank() }, uB6: { value: blank() }, uB7: { value: blank() }, uB8: { value: blank() }, uB9: { value: blank() }, uR0: { value: OFF.clone() }, uR1: { value: OFF.clone() }, uR2: { value: OFF.clone() }, uR3: { value: OFF.clone() }, uR4: { value: OFF.clone() }, uR5: { value: OFF.clone() }, uR6: { value: OFF.clone() }, uR7: { value: OFF.clone() }, uR8: { value: OFF.clone() }, uR9: { value: OFF.clone() }, uBayOn: { value: 0 } };
+	return { uB0: { value: blank() }, uBa: { value: blank() }, uBb: { value: blank() }, uBc: { value: blank() }, uR0: { value: OFF.clone() }, uRa: { value: OFF.clone() }, uRb: { value: OFF.clone() }, uRc: { value: OFF.clone() }, uBayOn: { value: 0 } };
 }
 
 // the towns: how far each one's streets reach, their street-grid angle, and the
@@ -203,10 +196,13 @@ vec3 parkWood(vec2 w){
 // irrational ratio, is blended in and out by slow noise, with the blend's contrast restored
 // about the photo's own mean m.
 const TILE2_GLSL = /* glsl */`
-float tile2(sampler2D t, vec2 uv, float m){
+// (the ground's grain: the loam photo's own light and shade, about 0.9, so it needs no
+// texture of its own; a GPU draws at most 16 at once)
+float loamGrain(vec2 uv){ return 0.9 + (dot(texture2D(uLoam, uv).rgb, vec3(0.299, 0.587, 0.114)) - 0.5) * 0.82; }
+float tile2(vec2 uv, float m){
 	float k = smoothstep(0.25, 0.75, vn(uv * 0.173 + 2.9));
 	vec2 uv2 = mat2(0.809, -0.588, 0.588, 0.809) * uv * 0.786 + vec2(0.37, 0.61);
-	float v = mix(texture2D(t, uv).r, texture2D(t, uv2).r, k);
+	float v = mix(loamGrain(uv), loamGrain(uv2), k);
 	return m + (v - m) / sqrt(k * k + (1.0 - k) * (1.0 - k));
 }
 `;
@@ -362,12 +358,13 @@ export function createBayArea(shared, scene, island, BU) {
 		const W = bmp.width, H = bmp.height, v = new Uint16Array(W * H), half = new Uint16Array(W * H);
 		for (let k = 0; k < W * H; k++) { v[k] = px[k * 4] * 256 + px[k * 4 + 1]; half[k] = THREE.DataUtils.toHalfFloat(v[k] / H_SCALE - H_OFF); }
 		const x0 = (L.lon[0] - LON0) * KX, zN = -(L.lat[1] - LAT0) * KZ;
-		levels[i] = { x0, zN, step: L.step, W, H, v };
+		levels[i] = { x0, zN, step: L.step, W, H, v, tex: null };
 		const tex = new THREE.DataTexture(half, W, H, THREE.RedFormat, THREE.HalfFloatType);
 		tex.minFilter = tex.magFilter = THREE.NearestFilter;
 		tex.needsUpdate = true;
-		BU['uB' + i].value = tex;
-		BU['uR' + i].value.set(x0, zN, L.step, 0);
+		levels[i].tex = tex;
+		if (i === 0) { BU.uB0.value = tex; BU.uR0.value.set(x0, zN, L.step, 0); }
+		slotsAt = null;
 		if (i === 0) { BU.uBayOn.value = 1; buildUrban(); }
 	}
 	// the whole Bay Area coarse first, then the finer levels nearest the island first
@@ -391,7 +388,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundD: GROUND_D[0], uGroundK: GROUND_D[1], uDryG: DRYGRASS[0], uSprG: SPRINGGRASS[0], uGrassK: DRYGRASS[1] });
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
 			sh.vertexShader = (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + '\nfloat cvK = 1.0, wvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -420,7 +417,7 @@ export function createBayArea(shared, scene, island, BU) {
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK, uGrassK; uniform sampler2D uLoam, uGravel, uGroundD, uDryG, uSprG; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam, uGravel; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -789,15 +786,11 @@ export function createBayArea(shared, scene, island, BU) {
 						// own mean, 0.9, so it adds grain without lightening the ground near you)
 						float grain = length(fwidth(vBW * 0.5));
 						float gk = (1.0 - smoothstep(50.0, 120.0, dist)) * (1.0 - smoothstep(0.12, 0.35, grain)) * (1.0 - flatK);
-						// (each photo read twice, the second turned and scaled off the first, so its
-						// tile never lines up into a grid; only the season's own photo is read)
-						float dL = 0.0;
-						if (uGrassK > 0.5) {
-							if (uSeason < 0.99) dL += tile2(uSprG, vBW * 0.5, 0.9) * (1.0 - uSeason);
-							if (uSeason > 0.01) dL += tile2(uDryG, vBW * 0.5, 0.9) * uSeason;
-						} else dL = tile2(uGroundD, vBW * 0.35, 0.9);
-						// (under the trees the grain is the soil's, not the grass's)
-						if (duffK > 0.0) dL = mix(dL, texture2D(uGroundD, vBW * 0.35).r, duffK);
+						// (the photo read twice, the second turned and scaled off the first, so its tile
+						// never lines up into a grid)
+						float dL = tile2(vBW * 0.35, 0.9);
+						// (under the trees the grain is the soil's, unturned)
+						if (duffK > 0.0) dL = mix(dL, loamGrain(vBW * 0.35), duffK);
 						c *= mix(1.0, dL / 0.9, gk * 0.55);
 					}
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);
@@ -837,10 +830,32 @@ export function createBayArea(shared, scene, island, BU) {
 	// the San Mateo coast's cliffs, farms, trail and fence
 	const coast = createCoastside({ groundAt, urbanAt, group });
 	ready.then(() => coast.start());
+	// the three finest surveys within reach of you go into the ground's three slots (the
+	// coarse whole-Bay level is always bound); chosen again when you have moved half a km
+	const MARGIN = [0, 1500, 500, 400, 400, 400, 400, 400, 400, 500], SLOTS = ['a', 'b', 'c'];
+	let slotsAt = null;
+	function pickSlots(x, z) {
+		if (slotsAt && Math.hypot(x - slotsAt[0], z - slotsAt[1]) < 500) return;
+		slotsAt = [x, z];
+		const near3 = [];
+		for (let i = levels.length - 1; i >= 1 && near3.length < 3; i--) {
+			const L = levels[i];
+			if (!L?.tex) continue;
+			const dx = Math.max(L.x0 - x, 0, x - (L.x0 + L.W * L.step)), dz = Math.max(L.zN - z, 0, z - (L.zN + L.H * L.step));
+			if (Math.hypot(dx, dz) < 4000) near3.push(i);
+		}
+		// (coarser first, so the finer one lies over it)
+		near3.sort((a, b) => a - b);
+		SLOTS.forEach((k, n) => {
+			const i = near3[n], L = levels[i];
+			if (L) { BU['uB' + k].value = L.tex; BU['uR' + k].value.set(L.x0, L.zN, L.step, MARGIN[i]); } else BU['uR' + k].value.copy(OFF);
+		});
+	}
 	function update(cam, night) {
 		const on = BU.uBayOn.value > 0.5;
 		near.visible = far.visible = on;
 		if (!on) return;
+		pickSlots(cam.position.x, cam.position.z);
 		uNightB.value = night;
 		const nx = Math.round(cam.position.x / 32) * 32, nz = Math.round(cam.position.z / 32) * 32;
 		const fx = Math.round(cam.position.x / 512) * 512, fz = Math.round(cam.position.z / 512) * 512;

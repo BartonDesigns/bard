@@ -88,7 +88,7 @@ export function bakedWater(bay, BU, riverLevel = () => null, riverSettled = null
 	function* regrade() {
 		let n = 0, t0 = performance.now();
 		for (let k = 0; k < bay.levels.length; k++) {
-			const Lv = bay.levels[k], tex = BU?.['uB' + k]?.value, D = tex?.image?.data;
+			const Lv = bay.levels[k], tex = Lv?.tex, D = tex?.image?.data;
 			if (!Lv || !D || tex.image.width !== Lv.W) continue;
 			const rows = new Set(), st = Lv.step, h = THREE.DataUtils.toHalfFloat;
 			const X1 = Lv.x0 + (Lv.W - 1) * st, Z1 = Lv.zN + (Lv.H - 1) * st;
