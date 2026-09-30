@@ -38,6 +38,20 @@ for (const f of FAM) {
 	f.M = [Math.cos(t) * cu / f.s0, -Math.sin(t) * cv / f.s0, Math.sin(t) * cu / f.stretch / f.s0, Math.cos(t) * cv / f.stretch / f.s0];
 }
 
+// each octave's lattice turned its own way, so the creases of one don't line up with the next's
+// (value noise on one lattice shows its grid as streaks down every slope)
+const ROT = [];
+{
+	let s = 0x9e3779b9;
+	const r = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+	for (let k = 0; k < OCT; k++) {
+		let [a, b, c, d] = [r() - 0.5, r() - 0.5, r() - 0.5, r() - 0.5];
+		const n = Math.hypot(a, b, c, d); a /= n; b /= n; c /= n; d /= n;
+		ROT.push([1 - 2 * (c * c + d * d), 2 * (b * c - a * d), 2 * (b * d + a * c), 2 * (b * c + a * d), 1 - 2 * (b * b + d * d), 2 * (c * d - a * b), 2 * (b * d - a * c), 2 * (c * d + a * b), 1 - 2 * (b * b + c * c)]);
+	}
+}
+const rot = (M, x, y, z) => [M[0] * x + M[1] * y + M[2] * z, M[3] * x + M[4] * y + M[5] * z, M[6] * x + M[7] * y + M[8] * z];
+
 // ---------- the noise (the GLSL below matches) ----------
 const SALT = -1640531535;
 function h3(x, y, z, s) {
@@ -107,9 +121,10 @@ export function createGlobeHeight(win) {
 		const cp = Math.cos(lat * RAD), px = EARTH_R * cp * Math.cos(lon * RAD), py = EARTH_R * cp * Math.sin(lon * RAD), pz = EARTH_R * Math.sin(lat * RAD);
 		let sum = 0, w = 1, amp = 1, n2 = 0, n3 = 0, n4 = 0, n5 = 0;
 		for (let k = 0; k < OCT; k++) {
-			const m = 2 ** k / S0, nn = 2 * vn3(px * m, py * m, pz * m, Math.imul(k + 1, SALT)) - 1;
+			const m = 2 ** k / S0, q = rot(ROT[k], px, py, pz), nn = 2 * vn3(q[0] * m, q[1] * m, q[2] * m, Math.imul(k + 1, SALT)) - 1;
 			if (k === 2) n2 = nn; else if (k === 3) n3 = nn; else if (k === 4) n4 = nn; else if (k === 5) n5 = nn;
-			let r = 1 - Math.abs(nn); r = r * r * 3 - 1;
+			// (the crest a little rounded: a razor edge only aliases)
+			let r = 1 - Math.sqrt(nn * nn + 0.004); r = r * r * 3 - 1;
 			const v = nn + (r - nn) * c.RG;
 			sum += v * amp * w;
 			w = 1 + (clamp(0.55 + 0.6 * v, 0.2, 1) - 1) * c.RG;
@@ -164,6 +179,10 @@ export function anchorUniforms(U, win) {
 	const P = [EARTH_R * cp * Math.cos(lon * RAD) / S0, EARTH_R * cp * Math.sin(lon * RAD) / S0, EARTH_R * Math.sin(lat * RAD) / S0];
 	U.uGI0.value.set(Math.floor(P[0]), Math.floor(P[1]), Math.floor(P[2]));
 	U.uGF0.value.set(P[0] - Math.floor(P[0]), P[1] - Math.floor(P[1]), P[2] - Math.floor(P[2]));
+	for (let k = 0; k < OCT; k++) {
+		const q = rot(ROT[k], P[0], P[1], P[2]).map((v) => v * 2 ** k);
+		for (let a = 0; a < 3; a++) { U.uGOI.value[k * 3 + a] = Math.floor(q[a]); U.uGOF.value[k].setComponent(a, q[a] - Math.floor(q[a])); }
+	}
 	U.uGAnc.value.set(Math.sin(lat * RAD), Math.cos(lat * RAD), Math.sin(lon * RAD), Math.cos(lon * RAD));
 	U.uGDeg.value.set(1 / F.kx, 1 / F.kz);
 	U.uGWin.value.set(win.cx0, win.cy0, RES / F.kx, RES / F.kz);
@@ -184,6 +203,7 @@ export function globeUniforms() {
 		uGT0: { value: null }, uGT1: { value: null }, uGT2: { value: null }, uGT3: { value: null }, uGT4: { value: null },
 		uGWin: { value: new THREE.Vector4() }, uGOff: { value: new THREE.Vector2() }, uGAnc: { value: new THREE.Vector4() }, uGDeg: { value: new THREE.Vector2() },
 		uGI0: { value: new THREE.Vector3() }, uGF0: { value: new THREE.Vector3() },
+		uGOI: { value: new Int32Array(OCT * 3) }, uGOF: { value: Array.from({ length: OCT }, () => new THREE.Vector3()) },
 		uGFamI: { value: new Int32Array(FAM.length * 2) }, uGFamF: { value: FAM.map(() => new THREE.Vector2()) }, uGFamM: { value: FAM.map(() => new THREE.Vector4()) },
 	};
 }
@@ -193,7 +213,8 @@ export function globeUniforms() {
 // to draw (fewer far off, where the grid can't hold them; the last fades in)
 export const GLOBE_GLSL = /* glsl */`
 uniform highp sampler2D uGT0, uGT1, uGT2;
-uniform vec4 uGWin, uGAnc; uniform vec2 uGOff, uGDeg; uniform ivec3 uGI0; uniform vec3 uGF0;
+uniform vec4 uGWin, uGAnc; uniform vec2 uGOff, uGDeg; uniform ivec3 uGI0; uniform vec3 uGF0; uniform ivec3 uGOI[${OCT}]; uniform vec3 uGOF[${OCT}];
+const mat3 G_ROT[${OCT}] = mat3[${OCT}](${ROT.map((M) => 'mat3(' + [M[0], M[3], M[6], M[1], M[4], M[7], M[2], M[5], M[8]].map((v) => v.toFixed(9)).join(', ') + ')').join(', ')});
 uniform ivec2 uGFamI[${FAM.length}]; uniform vec2 uGFamF[${FAM.length}]; uniform vec4 uGFamM[${FAM.length}];
 float gH3(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
 float gVn3(ivec3 i, vec3 f, uint s){
@@ -250,8 +271,8 @@ vec3 gSphere(vec2 d){
 // one octave of the relief's noise, -1..1
 float gOct(int k, vec3 dP){
 	float m = float(1 << k);
-	vec3 t = uGF0 * m + dP * m, ft = floor(t);
-	return 2.0 * gVn3(uGI0 * (1 << k) + ivec3(ft), t - ft, uint(k + 1) * G_SALT) - 1.0;
+	vec3 t = uGOF[k] + (G_ROT[k] * dP) * m, ft = floor(t);
+	return 2.0 * gVn3(uGOI[k] + ivec3(ft), t - ft, uint(k + 1) * G_SALT) - 1.0;
 }
 // the coast's side, the lake and its level from the coarse cells and the coast's wiggle
 float gShore(float n2, float n3){
@@ -274,7 +295,7 @@ float globeHeight(vec2 d, float oct){
 		float nn = gOct(k, dP);
 		if (k == 2) n2 = nn; else if (k == 3) n3 = nn; else if (k == 4) n4 = nn * fade; else if (k == 5) n5 = nn * fade;
 		nn *= fade;
-		float r = 1.0 - abs(nn); r = r * r * 3.0 - 1.0;
+		float r = 1.0 - sqrt(nn * nn + 0.004); r = r * r * 3.0 - 1.0;
 		float v = mix(nn, r, RG) * fade;
 		sum += v * amp * w;
 		w = mix(1.0, clamp(0.55 + 0.6 * v, 0.2, 1.0), RG);

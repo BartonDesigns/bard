@@ -261,12 +261,17 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		const pos = [], uv = [], idx = [];
 		for (const r of out) {
 			const p = r.pts, n = p.length / 2, hw = r.w / 2, v0 = pos.length / 3;
+			// the road's own profile, as the grading has it (berms.js: the ground on the centre line
+			// smoothed over about 40 m either way)
+			const H = new Float32Array(n);
+			for (let q = 0; q < n; q++) H[q] = groundAt(p[q * 2], p[q * 2 + 1]);
+			for (let pass = 0; pass < 2; pass++) { const c = H.slice(); for (let q = 0; q < n; q++) { let a = 0, k = 0; for (let j = Math.max(0, q - 2); j <= Math.min(n - 1, q + 2); j++) { a += c[j]; k++; } H[q] = a / k; } }
 			let s = 0;
 			for (let q = 0; q < n; q++) {
 				const a = Math.max(0, q - 1), b = Math.min(n - 1, q + 1);
 				let dx = p[b * 2] - p[a * 2], dz = p[b * 2 + 1] - p[a * 2 + 1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
 				if (q) s += Math.hypot(p[q * 2] - p[q * 2 - 2], p[q * 2 + 1] - p[q * 2 - 1]);
-				const y = groundAt(p[q * 2], p[q * 2 + 1]) + 0.12;
+				const y = H[q] + 0.12;
 				pos.push(p[q * 2] - dz * hw, y, p[q * 2 + 1] + dx * hw, p[q * 2] + dz * hw, y, p[q * 2 + 1] - dx * hw);
 				uv.push(-1, s, 1, s);
 				if (q) { const k = v0 + q * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
