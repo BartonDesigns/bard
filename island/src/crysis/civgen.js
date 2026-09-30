@@ -679,12 +679,12 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const treeH = () => fromPct(S.treeHeight, r());
 	function house(ex, ez, tx, tz, side, hw, frontage, big) {
 		// the street's edge at the lot, its normal into the lot (the house faces back along it)
-		const nx = -tz * side, nz = tx * side;
+		let nx = -tz * side, nz = tx * side;
 		const u = r(), w = clamp(fromPct(HS.w, clamp(u + (r() - 0.5) * 0.3, 0, 1)) * (big ? 1.2 : 1), 7, Math.min(24, frontage - 3));
 		const d = clamp(fromPct(HS.d, clamp(u + (r() - 0.5) * 0.4, 0, 1)), 8, 22);
 		const set = clamp(fromPct(S.lots.setback, r() * 0.8 + 0.1), 5, 16) * (older ? 0.75 : 1);
 		const off = hw + set + d / 2, x = ex + nx * off, z = ez + nz * off;
-		const ux = -nz, uz = nx;    // the box's local x in the world, along the street
+		let ux = -nz, uz = nx;    // the box's local x in the world, along the street
 		if (!dry(x, z) || slope(x, z) > 0.2 || inSite(x, z, Math.max(w, d) / 2 + 4) || wet(x, z, Math.max(w, d) / 2 + 6)) return false;
 		if (r() > Math.min(1, dens(x, z) * 1.25)) return false;
 		if (!free(x, z, ux, uz, w / 2 + 1.5, d / 2 + 1.5)) return false;
@@ -701,7 +701,10 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		};
 		for (const [a, b, m] of [[-1, -1, 3], [1, -1, 3], [-1, 1, 3], [1, 1, 3], [0, 2.2, 3]]) if (!roadClear(x + ux * a * w / 2 + nx * b * d / 2, z + uz * a * w / 2 + nz * b * d / 2, m)) return false;
 		claim(x, z, ux, uz, w / 2 + 1.5, d / 2 + 1.5);
-		const yaw = Math.atan2(nx, -nz);   // the front (local +z) faces the street
+		let yaw = Math.atan2(nx, -nz);   // the front (local +z) faces the street
+		// not every house square to its street (the older towns least of all): the house turned a
+		// few degrees about its middle, its garage, drive and yard with it
+		if (r() < (older ? 0.4 : 0.18)) { yaw += (r() - 0.5) * 0.1; ux = Math.cos(yaw); uz = Math.sin(yaw); nx = uz; nz = -ux; }
 		const roofH = clamp(fromPct(HS.roofH, r()), 1, Math.min(3.2, Math.min(w, d) * 0.25));
 		const two = r() < (older ? 0.35 : 0.2);
 		const wallH = two ? 5.2 + r() * 0.8 : clamp(fromPct(HS.wallH, r() * 0.6), 2.6, 3.4);
@@ -728,9 +731,19 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (kind !== K.garage && r() < 0.8) { const o = (door - 0.5) * (w - 2.5), wx = fx + ux * o, wz = fz + uz * o; paths.push({ ax: wx, az: wz, bx: wx - nx * (set + hw * 0.5), bz: wz - nz * (set + hw * 0.5), w: 1.2 }); }
 		// out back: a pool now and then, and the yard trees
 		const bx = x + nx * (d / 2 + 9.5), bz = z + nz * (d / 2 + 9.5);
-		if (r() < S.lots.poolPerHouse * 0.9 && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8)) {
-			pools.push({ x: bx, z: bz, w: 4 + r() * 1.5, d: 8 + r() * 3, a: yaw + Math.PI / 2 + (r() - 0.5) * 0.2 });
+		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8)) {
+			pools.push({ x: bx, z: bz, w: (4 + r() * 1.5) * (big ? 1.3 : 1), d: (8 + r() * 3) * (big ? 1.3 : 1), a: yaw + Math.PI / 2 + (r() - 0.5) * 0.2 });
 			claim(bx, bz, ux, uz, 3, 5);
+		}
+		// a shed in the back corner, or a cottage out back (a guest house on the big lots)
+		const sr = r(), sa2 = r() < 0.5 ? -1 : 1;
+		if (sr < (big ? 0.7 : 0.22)) {
+			const cot = sr < (big ? 0.4 : 0.05), sw = cot ? 6 : 2.8, sd = cot ? 6.5 : 2.4;
+			const qx = x + ux * sa2 * (w / 2 - sw / 2) + nx * (d / 2 + 12 + sd / 2), qz = z + uz * sa2 * (w / 2 - sw / 2) + nz * (d / 2 + 12 + sd / 2);
+			if (roadClear(qx, qz, 3) && free(qx, qz, ux, uz, sw / 2, sd / 2) && !wet(qx, qz, 4) && dry(qx, qz)) {
+				claim(qx, qz, ux, uz, sw / 2 + 0.5, sd / 2 + 0.5);
+				boxes.push({ x: qx, z: qz, w: sw, d: sd, a: yaw + Math.PI, wallH: cot ? 3.0 : 2.3, roofH: cot ? 1.5 : 0.8, kind: K.shed, hip: 0, door: 0.5 });
+			}
 		}
 		const nT = Math.round((S.treesPerHa.residential / S.housesPerHa) * 0.55 * (0.5 + r()));
 		for (let n = 0; n < nT; n++) {
@@ -738,6 +751,29 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			const qx = x + ux * a + nx * b, qz = z + uz * a + nz * b;
 			if (roadClear(qx, qz, 2.5) && free(qx, qz, ux, uz, 1, 1)) trees.push({ x: qx, z: qz, h: treeH() * (back ? 1 : 0.8), cone: r() < 0.22 ? 1 : 0 });
 		}
+		return true;
+	}
+	// garden apartments: two or three storeys in blocks round a courtyard, the pool in the
+	// middle, parking down the side (city.js lays out the loungers round it)
+	function complexAt(ex, ez, tx, tz, side, hw, frontage) {
+		const nx = -tz * side, nz = tx * side, ux = -nz, uz = nx, D = 64, W = frontage - 8;
+		const off = hw + 7 + D / 2, x = ex + nx * off, z = ez + nz * off, yaw = Math.atan2(nx, -nz);
+		if (!dry(x, z) || slope(x, z) > 0.12 || inSite(x, z, D / 2 + 6) || wet(x, z, D / 2 + 8) || !free(x, z, ux, uz, W / 2 + 1, D / 2 + 1)) return false;
+		for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, 0]]) { const px = x + ux * a * W / 2 + nx * b * D / 2, pz = z + uz * a * W / 2 + nz * b * D / 2; if (!roadClear(px, pz, 4) || !dry(px, pz)) return false; }
+		claim(x, z, ux, uz, W / 2 + 1, D / 2 + 1);
+		const fl = r() < 0.6 ? 2 : 3, wallH = fl * 2.8 + 0.4, bd = 13, at = (a, b) => [x + ux * a + nx * b, z + uz * a + nz * b];
+		const bw = W - 22;
+		// the front and back rows, a wing across the far end; the courtyard between
+		for (const b of [-D / 2 + bd / 2, D / 2 - bd / 2]) { const [bx, bz] = at(-11, b); boxes.push({ x: bx, z: bz, w: bw, d: bd, a: yaw, wallH, roofH: 2.2, kind: K.apartments, hip: 1, door: 0.5 }); }
+		{ const [bx, bz] = at(-W / 2 + bd / 2, 0); boxes.push({ x: bx, z: bz, w: D - 2 * bd - 4, d: bd, a: Math.atan2(-ux, uz), wallH, roofH: 2.2, kind: K.apartments, hip: 1, door: 0.5 }); }
+		const [px, pz] = at(-2, 0);
+		pools.push({ x: px, z: pz, w: 14, d: 7, a: yaw });
+		const [sx, sz] = at(8, -3);
+		pools.push({ x: sx, z: sz, w: 2.6, d: 2.6, a: yaw });
+		// the drive in and the parking down the open end
+		const [d0x, d0z] = at(W / 2 - 6, -D / 2 - 7), [d1x, d1z] = at(W / 2 - 6, D / 2 - 2);
+		paths.push({ ax: d0x, az: d0z, bx: d1x, bz: d1z, w: 12 });
+		for (const [a, b] of [[-bw / 2 - 11, -D / 2 - 3], [0, -D / 2 - 3], [bw / 2 - 11, -D / 2 - 3], [-W / 2 + 3, 0], [4, 12], [-10, -12]]) { const [qx, qz] = at(a, b); trees.push({ x: qx, z: qz, h: treeH() * 0.8, cone: 0 }); }
 		return true;
 	}
 	// down both sides of every residential street (and some collectors)
@@ -748,9 +784,15 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		for (const side of [1, -1]) {
 			let s = 6 + r() * 6;
 			while (s < L - 4) {
-				const fr = clamp(fromPct(S.lots.frontage, 0.25 + r() * 0.6), 14, 40) * (older ? 0.75 : 1);
+				let fr = clamp(fromPct(S.lots.frontage, 0.25 + r() * 0.6), 14, 40) * (older ? 0.75 : 1);
+				// now and then a double lot with an estate on it, an empty lot, or (on a collector)
+				// a block of garden apartments round its pool
+				const lk = r();
+				if (q.cls !== 'residential' && lk < 0.22 && s + 90 < L - 4) { fr = 80 + r() * 30; const [x, z, tx, tz] = along(p, s + fr / 2); if (complexAt(x, z, tx, tz, side, hw, fr)) { s += fr; continue; } fr = 30; }
+				const big = lk > 0.955;
+				if (big) fr *= 2.1;
 				const [x, z, tx, tz] = along(p, s + fr / 2);
-				if (house(x, z, tx, tz, side, hw, fr, false)) nh++;
+				if (lk > 0.03 || big) { if (house(x, z, tx, tz, side, hw, fr, big)) nh++; }
 				s += fr;
 			}
 			// street trees behind the kerb

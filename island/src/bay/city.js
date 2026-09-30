@@ -1000,7 +1000,7 @@ export function createCity(shared, scene, bay, real = null) {
 						for (const e of [-1, 1]) lot(list, a, style, dx + e * (pw / 2 - 0.2), at(hf - 2.3), 0.22, 0.22, 2.7, KIND.plain, [0.9, 0.89, 0.85], null, false, O);
 						if (R(10) < 0.6) for (const e of [-1, 1]) lot(list, a, style, dx + e * (pw / 4 + 0.35), at(hf - 2.3), pw / 2 - 1.3, 0.08, 0.95, KIND.plain, [0.9, 0.89, 0.85], null, false, O);
 						// the front fence: pickets, a low chain link, or nothing
-						if (R(11) < 0.25) { fenceRun('picket', lotX + 0.3, at(0.5), gx - 1.6 * (gs > 0 ? 1 : -1) * 0 - 1.5, at(0.5)); }
+						if (R(11) < 0.25) for (const [f0, f1] of thin ? [[lotX + 0.3, lotX + Lw - 0.3]] : [[lotX + 0.3, gx - 1.6], [gx + 1.6, lotX + Lw - 0.3]]) if (f1 - f0 > 1) fenceRun('picket', f0, at(0.5), f1, at(0.5));
 						else if (R(11) < 0.33) lot(list, a, style, lotX + Lw / 2, at(0.5), Lw - 3.4, 0.05, 1.1, KIND.plain, [0.55, 0.56, 0.57], null, false, { face });
 						if (!thin) {
 							pave(gx, at(12), 2.8, 24, KIND.plain, [0.56, 0.55, 0.52]);
@@ -1027,7 +1027,7 @@ export function createCity(shared, scene, bay, real = null) {
 					if (!detail) return;
 					const [ux, uz] = LX[face], [nx, nz] = NZ[face], ew = face === 's' || face === 'n';
 					for (let f = first; f < floors; f++) for (let m = 0; (m + 0.5) * pitch + off * 3.6 - 1.8 <= W - 1.6; m++) {
-						const fxc = m * pitch + off * 3.6 + (pitch > 7 ? 0 : 0);
+						const fxc = m * pitch + off * 3.6;
 						const bw = fract(fxc / 25.2);
 						if (pitch > 7 && bw > 0.44 && bw < 0.56) continue;
 						const bx = gxC + ux * (fxc - W / 2) + nx * (D / 2 + 0.7), bz = gzC + uz * (fxc - W / 2) + nz * (D / 2 + 0.7);
@@ -1036,7 +1036,7 @@ export function createCity(shared, scene, bay, real = null) {
 				};
 				// a small apartment building on a lot and a half (the older towns' fourplexes)
 				const fourplex = (c, wc) => {
-					const { lotX, Lw, face, at, r, k, side } = c, fl = r < 0.6 ? 2 : 3, W = Lw - 5, D = 16 + r * 5;
+					const { lotX, Lw, face, at, r, side } = c, fl = r < 0.6 ? 2 : 3, W = Lw - 5, D = 16 + r * 5;
 					const col = jit(wc, r), o = lot(list, a, style, lotX + 1.5 + W / 2, at(5 + D / 2), W, D, fl * 2.8 + 0.4, KIND.apt, col, r < 0.5 ? { hip: true, h: 1.6, col: pick(PAL.olderRoof, r * 3.3 % 1), t: ROOF.shingle, ov: 0.5 } : null, false, { face });
 					setCond(o, condFor(o, 0.06));
 					balconies(lotX + 1.5 + W / 2, at(5 + D / 2), W, D, face, fl, 2.8, col.map((v) => Math.min(1, v * 1.06)));
@@ -1279,7 +1279,8 @@ export function createCity(shared, scene, bay, real = null) {
 					const L = !sub ? 12 : modern ? 16 : eich ? 19 : 20;
 					const treeK = sub ? [0.9, 0.7, 0.3, 0.9][era] : 1, treeH = sub ? [11, 9, 5, 10][era] : 12;
 					const roofT = !sub ? (hash(ti, tj * 3) < 0.15 ? ROOF.metal : ROOF.shingle) : modern ? (roofs[0][0] > roofs[0][2] * 1.4 ? ROOF.barrel : ROOF.flatTile) : eich ? ROOF.gravel : era === ERA.seventies ? ROOF.shake : ROOF.shingle;
-					const neglectK = sub ? 0.04 : 0.11;
+					// (more let go out at the ragged edge of town, where it thins into the open land)
+				const neglectK = (sub ? 0.04 : 0.11) * (U.u < 0.45 ? 2.2 : 1);
 					// a block of garden apartments round a pool now and then (more toward the town centres)
 					const br = hash(i * 41 + 7, j * 43 + 11);
 					if (br < (sub ? 0.035 : 0.025) + U.d * 0.5 && IX > 80 && IZ > 55) { complex(); continue; }
@@ -1696,6 +1697,8 @@ export function createCity(shared, scene, bay, real = null) {
 			if (o.src || (o.x - cx) ** 2 + (o.z - cz) ** 2 > R2) continue;
 			const house = Math.floor(o.kind) === KIND.house && o.kind > 1.005 && o.roof, biz = (o.kind === KIND.retail || (o.kind === KIND.office && o.h <= 20)) && o.w * o.d > 60 && o.w * o.d < 6000 && Math.min(o.w, o.d) > 6;
 			if (!house && !biz) continue;
+			// (a house boarded up or burnt out stays shut: no rooms built in it)
+			if (house && (o.cond === COND.boarded || o.cond === COND.burnt)) continue;
 			const key = lotKey(o);
 			let grp = procGrp.get(key);
 			if (!grp) {

@@ -59,6 +59,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (k === K.retail) return 'store';
 		if (k === K.office) return hA > 12 ? 'apt' : 'office';
 		if (k === K.tower) return 'apt';
+		if (k === K.apt) return hA > 5 ? 'apt' : null;
 		return null;
 	}
 	// the lot's frame: local (x across, z toward the front) to the world and back
