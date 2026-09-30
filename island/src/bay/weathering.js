@@ -52,13 +52,14 @@ vec3 asphaltAge(vec3 c, vec2 w, float ld, float lk, float pat, float cov, float 
 	#ifndef WX_LITE
 	if (mid > 0.0) {
 		// long meandering cracks on the old stretches; alligator cracking in their wheel paths
-		float crk = wxLine(vn(w * 0.9 + 7.0), 0.006) * smoothstep(0.42, 0.7, age);
+		// (in runs with gaps between, never one line wandering on forever)
+		float crk = wxLine(vn(w * 0.9 + 7.0), 0.006) * smoothstep(0.42, 0.7, age) * smoothstep(0.35, 0.65, vn(w * 0.07 + 3.0));
 		float gt = smoothstep(0.55, 0.8, age + vn(w * 0.2) * 0.3) * smoothstep(0.2, 0.6, tr);
-		if (gt > 0.0) crk = max(crk, max(wxLine(vn(wl * 4.0 + 1.3), 0.01), wxLine(vn(wl * 4.0 + 17.7), 0.01)) * gt * 0.7);
-		c = mix(c, c * 0.55, crk * mid * (1.0 - pat));
+		if (gt > 0.0) crk = max(crk, max(wxLine(vn(wl * 4.0 + 1.3), 0.01), wxLine(vn(wl * 4.0 + 17.7), 0.01)) * gt * 0.5);
+		c = mix(c, c * 0.72, crk * mid * (1.0 - pat));
 		// the black tar snakes where a crew sealed them
 		float snake = wxLine(vn(w * 0.35 + 2.0), 0.007) * smoothstep(0.6, 0.7, vn(w * 0.02 + 9.0)) * mid * (1.0 - pat);
-		c = mix(c, vec3(0.03, 0.03, 0.033), snake * 0.8);
+		c = mix(c, vec3(0.03, 0.03, 0.033), snake * 0.6);
 		wxGloss += snake * 0.5;
 		// ravelled aggregate: the pale stone showing through on the oldest
 		c = mix(c, vec3(0.34, 0.33, 0.31), step(0.9, h21(floor(wl * 20.0))) * smoothstep(0.6, 0.9, age) * (1.0 - smoothstep(0.02, 0.05, px)) * 0.5);
@@ -228,7 +229,7 @@ export function rotWood(m) {
 				vec2 fc = floor(bp * vec2(2.2, 3.0)), ff = fract(bp * vec2(2.2, 3.0)) - 0.5;
 				float fh = wxH(fc + 17.0);
 				float shelf = step(0.9 - decay * 0.08, fh) * (1.0 - smoothstep(0.26, 0.32, length(ff * vec2(1.0, 1.8)))) * side * (1.0 - standing * 0.6) * mid;
-				c = mix(c, fh > 0.975 ? vec3(0.85, 0.5, 0.08) : mix(vec3(0.66, 0.56, 0.4), vec3(0.8, 0.74, 0.6), step(0.1, ff.y)), shelf);
+				c = mix(c, fh > 0.975 ? vec3(0.75, 0.45, 0.08) : mix(vec3(0.5, 0.4, 0.28), vec3(0.64, 0.56, 0.42), step(0.1, ff.y)), shelf * 0.8);
 				// lichen crusts: pale grey-green, on the snags and the drier wood
 				c = mix(c, vec3(0.42, 0.45, 0.36), smoothstep(0.74, 0.8, wxN(bp * 5.0 + 11.0)) * (0.3 + 0.7 * standing) * (0.4 + 0.6 * fog) * 0.7);
 				// underneath: dark and wet where it lies on the ground
