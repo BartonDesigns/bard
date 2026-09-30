@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { NOISE_GLSL } from './terrain.js';
 import { STARS_B64, STAR_COUNT } from './starcat.js';
+import { today } from '../calendar.js';
 
 // The real sky over the Bay Area: latitude 37.8 N, a midsummer night (the sun near
 // RA 7.6 h), so the Milky Way's heart stands over the southern horizon in the evening
@@ -543,7 +544,7 @@ export function createSky(scene, shared, renderer) {
 	// the real sun over the Bay Area (37.77 N) on today's date: its declination, the length
 	// of the day, and solar noon on the clock (Pacific time, an hour later in daylight time)
 	function sunToday() {
-		const now = new Date(), start = new Date(now.getFullYear(), 0, 0), N = Math.floor((now - start) / 864e5);
+		const now = today(), start = new Date(now.getFullYear(), 0, 0), N = Math.floor((now - start) / 864e5);
 		const dec = 23.44 * Math.PI / 180 * Math.sin(2 * Math.PI * (284 + N) / 365);
 		const jan = new Date(now.getFullYear(), 0, 1).getTimezoneOffset(), jul = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
 		const dst = now.getTimezoneOffset() < Math.max(jan, jul) ? 1 : (N > 69 && N < 307 ? 1 : 0);
@@ -557,7 +558,7 @@ export function createSky(scene, shared, renderer) {
 	let SUN = sunToday();
 	state.sun = SUN;
 	function update(dt, focus) {
-		if (new Date().getDate() !== SUN.date) { SUN = sunToday(); SUN.date = new Date().getDate(); state.sun = SUN; }
+		{ const d = today(); if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month) { SUN = sunToday(); SUN.date = d.getDate(); SUN.month = d.getMonth(); state.sun = SUN; } }
 		// daylight hours pass slowly (~9 real minutes), night quickly (~2.5)
 		const day = state.hours >= SUN.rise - 0.3 && state.hours < SUN.set + 0.5;
 		state.hours = (state.hours + dt * state.speed * (day ? (SUN.set - SUN.rise + 0.8) / 540 : (24 - (SUN.set - SUN.rise + 0.8)) / 150)) % 24;

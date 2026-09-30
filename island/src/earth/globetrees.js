@@ -18,6 +18,7 @@ import { addLodFade } from '../world/lodfade.js';
 import { mulberry32 } from '../noise.js';
 import { F, toXZ, RAD, EARTH_R, lonRaw } from './globeframe.js';
 import { vn3, S0 } from './globeheight.js';
+import { today } from '../calendar.js';
 
 const FORMS = ['broad', 'conifer', 'palm', 'bush'];
 const WORDS = [
@@ -88,12 +89,13 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 	}
 	const hash = (a, b, s) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ s; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 8) / 16777216; };
 	const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+	const clamp01 = (x) => Math.min(1, Math.max(0, x));
 	// the terrain's own wooded mask at a point (see globeterrain.js's colours)
 	function woodAt(lat, lon, h, slope, cell) {
 		const cp = Math.cos(lat * RAD), p = [EARTH_R * cp * Math.cos(lon * RAD), EARTH_R * cp * Math.sin(lon * RAD), EARTH_R * Math.sin(lat * RAD)];
 		const m4 = 16 / S0, m6 = 64 / S0;
 		const pM = vn3(p[0] * m4, p[1] * m4, p[2] * m4, 23), pS = vn3(p[0] * m6, p[1] * m6, p[2] * m6, 37);
-		const air = cell.TEMP - 6.5 * Math.max(0, h - 800) / 1000;
+		const air = cell.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * cell.E) / 1000;       // (as the terrain's, globeterrain.js)
 		return { k: sst(0.44, 0.56, cell.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, slope)), air };
 	}
 	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide
@@ -134,7 +136,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 				// (naturalist: a lone tree on dry open ground is a juniper or a pinyon, not an oak)
 				if (open && dry > 0.5 && form === 'broad') form = 'conifer';
 				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
-				out.push({ x: p.x, y: h - 0.2, z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37) });
+				out.push({ x: p.x, y: h - 0.2, z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
 				if (++n % 60 === 0) yield;
 			}
 		}
@@ -143,6 +145,16 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 	// ---------- laying out as you move ----------
 	let job = null, at = null, placed = { near: [], far: [] }, epoch = -1;
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3(), col = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0);
+	// autumn: how far into its colour a broadleaf wood is this month (0..1), past 35 degrees; the
+	// colour comes first in the far north, peaks mid-October at 45 (mid-April in the south)
+	const AUTUMN = [[1.7, 0.95, 0.3], [1.9, 0.75, 0.25], [2.1, 0.5, 0.28]];       // yellow, orange, red (times the green leaf)
+	function autumnK(la) {
+		const a = Math.abs(la);
+		if (a < 35) return 0;
+		const d = today(), m = (d.getMonth() + (d.getDate() - 1) / 30 + (la < 0 ? 6 : 0)) % 12;
+		const peak = 9.5 - (a - 45) * 0.05;
+		return clamp01(1 - Math.abs(m - peak) / 1.4) * sst(35, 40, a);
+	}
 	function commit(name, list) {
 		const cnt = {};
 		for (const f of FORMS) cnt[f] = 0;
@@ -154,6 +166,11 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 			for (const im of M) im.setMatrixAt(k, m4);
 			const tone = 0.8 + it.t * 0.4;
 			col.setRGB(tone * (0.95 + it.t * 0.1), tone, tone * (0.9 + (1 - it.t) * 0.15));
+			if (it.form === 'broad' && it.la !== undefined) {
+				// each tree turns in its own time, yellow the most, then orange, then red
+				const k = clamp01(autumnK(it.la) * 1.3 - it.t * 0.45);
+				if (k > 0) { const A = AUTUMN[it.t < 0.5 ? 0 : it.t < 0.8 ? 1 : 2]; col.setRGB(col.r + (A[0] * tone - col.r) * k, col.g + (A[1] * tone - col.g) * k, col.b + (A[2] * tone - col.b) * k); }
+			}
 			M[1].setColorAt(k, col);
 			cnt[it.form]++;
 		}
@@ -166,12 +183,14 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 		yield* lay(cx, cz, FAR, isPhone ? 40 : 28, far, 'far');
 		commit('far', far); placed.far = far;
 	}
-	let winV = -1;
+	let winV = -1, monthAt = -1;
 	function update(cam, veg, on, version) {
 		group.visible = on;
 		if (!on) return;
 		if (version !== winV) { winV = version; at = null; job = null; }
 		if (veg !== mixAt) { mixAt = veg; setRegion(veg); at = null; }
+		const mo = today().getMonth();
+		if (mo !== monthAt) { monthAt = mo; at = null; }
 		const x = cam.position.x, z = cam.position.z;
 		if (epoch !== F.epoch) { epoch = F.epoch; at = null; job = null; }
 		if (!job && (!at || Math.hypot(x - at[0], z - at[1]) > 120)) { at = [x, z]; job = build(x, z); }

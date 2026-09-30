@@ -22,6 +22,7 @@
 // layers, and hair that recedes, thins and greys with the years.
 
 import { toLatLon } from '../bay/geo.js';
+import { today } from '../calendar.js';
 
 // ---------- the palette: this year's colours, as people buy them ----------
 export const C = {
@@ -117,7 +118,7 @@ export function placeAt(x, z, zone) {
 }
 
 // the weather as it feels: 0 warm .. 1 cold, and wet, from the month, the hour and the place
-export function climate({ month = new Date().getMonth(), hours = 13, place = 'suburb', rain = 0, cover = 0.4 } = {}) {
+export function climate({ month = today().getMonth(), hours = 13, place = 'suburb', rain = 0, cover = 0.4 } = {}) {
 	// the Bay: inland summers are warm, the coast and SF stay cool (the fog), winters are mild
 	const season = 0.5 + 0.5 * Math.cos((month - 0.5) / 12 * Math.PI * 2);          // 1 in January, 0 in July
 	const coastal = place === 'sf' || place === 'beach' || place === 'boardwalk' ? 0.28 : place === 'trail' ? 0.12 : 0;

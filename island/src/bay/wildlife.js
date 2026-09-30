@@ -11,6 +11,7 @@ import { bird, deer as deerBody } from '../world/creatures.js';
 import { SPECIES, TRAILS } from '../nature/fieldguide.js';
 import { toWorld } from './geo.js';
 import { createSmallLife } from '../nature/smalllife.js';
+import { today } from '../calendar.js';
 
 const GUIDE = Object.fromEntries(SPECIES.map((s) => [s.id, s]));
 const inHours = (s, h) => { const [a, b] = s.hours; return a <= b ? h >= a && h < b : h >= a || h < b; };
@@ -106,7 +107,7 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 		return { likely, rare };
 	}
 	function update(dt, t, cam, hours) {
-		const month = new Date().getMonth() + 1;
+		const month = today().getMonth() + 1;
 		const tr = cam.position.y - g(cam.position.x, cam.position.z) < 60 ? TRAIL_AT.find((T) => Math.hypot(T.x - cam.position.x, T.z - cam.position.z) < 250) : null;
 		if (tr && tr !== trailSeen) {
 			const { likely, rare } = outToday(tr, hours, month);

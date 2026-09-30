@@ -24,6 +24,8 @@ import { toWorld } from '../bay/geo.js';
 import { mulberry32 } from '../noise.js';
 import * as PL from './plants.js';
 import { GEOLOGY, boulder, outcrop, stone, rockMaterial } from './rocks.js';
+import { today } from '../calendar.js';
+import { GLOBE_U } from '../earth/globeheight.js';
 
 // city.js's own hash and value noise, so the land is reckoned as its woods are
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -197,7 +199,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		const E = away ? { rock: null } : landAt(cx, cz);
 		if (!E) return out;
 		const r = mulberry32((ci * 73856093) ^ (cj * 19349663) ^ 0x5bd1e995);
-		const season = REAL_U.uSeason.value, month = new Date().getMonth() + 1;
+		const season = REAL_U.uSeason.value, month = today().getMonth() + 1;
 		const fall = month >= 8 && month <= 11, winter = month === 12 || month <= 2;
 		// the trails through the cell: keep the tread clear, and lay its stones and roots
 		const trails = real ? real.near('roads', cx, cz, C).filter((q) => q && q.pts && TRAILISH.test(q.cls || '')) : [];
@@ -387,7 +389,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		const c = G.data.cellAt(ll.lat, ll.lon), h = H(cx, cz);
 		if (h < 1) return;
 		const e = 8, slope = Math.hypot(H(cx + e, cz) - H(cx - e, cz), H(cx, cz + e) - H(cx, cz - e)) / (2 * e);
-		const air = c.TEMP - 6.5 * Math.max(0, h - 800) / 1000, rain = c.RAIN, trees = c.TREES;
+		const air = c.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * c.E) / 1000, rain = c.RAIN, trees = c.TREES;
 		// the dry season: the hemisphere's late summer browns the grass where it rains little
 		const nh = ll.lat > 0 ? season : 1 - season, tropic = Math.abs(ll.lat) < 23;
 		const dry = Math.min(1, Math.max(0, (700 - rain) / 450)) * (tropic ? 0.6 : nh);
@@ -404,8 +406,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		}
 		scatter(Math.round(6 * K * Math.min(2, rockW)), () => 0.6, (x, z) => { const s2 = 0.25 + Math.pow(r(), 2.5) * 1.6; put(Lrk, x, z, r() * 6.28, s2, s2 * (0.8 + r() * 0.4), J(rockC, 0.12), cold > 0.5 ? 2 : karst > 0.3 ? 1 : 0, s2 * 0.35); });
 		scatter(Math.round(18 * K * Math.min(1.5, rockW + 0.15)), () => 0.8, (x, z) => { const s2 = 0.05 + Math.pow(r(), 3) * 0.22; put(Lst, x, z, r() * 6.28, s2, s2, J(rockC, 0.15), Math.floor(r() * 2), s2 * 0.3, true); });
-		// (above the snowline the terrain lies white: rock and scree only, no turf on the snow)
-		if (air < -4.5) return;
+		// (above the snowline, or under this winter's snow, the terrain lies white: rock and scree
+		// only, no turf on the snow)
+		if (air < -4.5 || air + GLOBE_U.uGSeason.value < -1.5) return;
 		if (cold > 0.5) {
 			// alpine turf and tundra: short grass in patches, cushions of moss campion and saxifrage
 			scatter(Math.round(90 * K * (1 - cold * 0.5)), (x, z) => 0.3 + drift(x, z, 8, 1) * 0.7, (x, z) => put(Ls, x, z, r() * 6.28, 0.8 + r() * 0.5, 0.7 + r() * 0.4, tone(0.3), 0, 0.03));
@@ -449,7 +452,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	// ---------- streaming ----------
 	let MAXR = 0;
 	const queue = [];
-	let at = null, dirty = true, levelsN = -1, seasonAt = -1, epochSeen;
+	let at = null, dirty = true, levelsN = -1, seasonAt = -1, monthAt = -1, epochSeen;
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qt = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), col = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3();
 	function wanted(cx, cz) {
 		// the cells round you, nearest first
@@ -516,7 +519,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		fogU.value = 1 - sm(22000, 58000, x);
 		// finer heights arrived (the ground moved) or the season turned: work it all out again
 		const nl = bay.levels.filter(Boolean).length;
-		if (nl !== levelsN || Math.abs(REAL_U.uSeason.value - seasonAt) > 0.08) { levelsN = nl; seasonAt = REAL_U.uSeason.value; cells.clear(); at = null; }
+		const mo = today().getMonth();
+		if (nl !== levelsN || Math.abs(REAL_U.uSeason.value - seasonAt) > 0.08 || mo !== monthAt) { levelsN = nl; seasonAt = REAL_U.uSeason.value; monthAt = mo; cells.clear(); at = null; }
 		// the globe's frame moved (earth/globeframe.js): every cell's place with it
 		const ep = globe?.()?.frame?.epoch;
 		if (ep !== undefined && ep !== epochSeen) { epochSeen = ep; cells.clear(); at = null; }

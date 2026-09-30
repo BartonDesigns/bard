@@ -72,13 +72,22 @@ import { createEdgelands } from './bay/edgelands.js';
 import { createDrive } from './drive.js';
 import { createVehicles } from './vehicles/index.js';
 import { createAutoMusic } from './music/automusic.js';
+import { today, onMonth, monthPicked, pickMonth } from './calendar.js';
 
 // the hills by the calendar: green from the winter rains into spring, gold by summer
 // (the naturalist's curve: inland gold by late May; the foggy coast lags into July)
-REAL_U.uSeason.value = [0, 0, 0, 0.1, 0.45, 0.8, 1, 1, 1, 1, 0.8, 0.4][new Date().getMonth()];
-REAL_U.uSeasonLag.value = [0, 0, 0, 0, 0.2, 0.25, 0.2, 0.05, 0, 0, 0, 0][new Date().getMonth()];
-// the wildflower peak: late March and April
-REAL_U.uBloom.value = [0, 0.3, 0.8, 1, 0.45, 0, 0, 0, 0, 0, 0, 0][new Date().getMonth()];
+// (and the month picked in the Sky & World panel, when one is)
+function applySeason(d) {
+	const m = d.getMonth();
+	REAL_U.uSeason.value = [0, 0, 0, 0.1, 0.45, 0.8, 1, 1, 1, 1, 0.8, 0.4][m];
+	REAL_U.uSeasonLag.value = [0, 0, 0, 0, 0.2, 0.25, 0.2, 0.05, 0, 0, 0, 0][m];
+	// the wildflower peak: late March and April
+	REAL_U.uBloom.value = [0, 0.3, 0.8, 1, 0.45, 0, 0, 0, 0, 0, 0, 0][m];
+	// dead leaves in the gutters
+	REAL_U.uLeafFall.value = [0.5, 0.2, 0, 0, 0, 0, 0, 0.05, 0.2, 0.6, 1, 0.8][m];
+}
+applySeason(today());
+onMonth(applySeason);
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads, ROUTES } from './bay/roads.js';
@@ -780,7 +789,15 @@ export function createIslandWorld() {
 		slider(p, 'Cloud cover', 0, 1, 0.01, () => world.sky.uniforms.uCloud.value, (v) => { WX.pin('cover', v); world.sky.uniforms.uCloud.value = v; }, (v) => Math.round(v * 100) + '%');
 		slider(p, 'Waves', 0, 2, 0.05, () => shared.uWave.value, (v) => { shared.uWave.value = v; world.ocean.userData.uniforms.uWave.value = v; }, (v) => v.toFixed(2));
 		slider(p, 'Wind', 0, 1.5, 0.05, () => shared.uWind.value, (v) => { WX.pin('wind', v); shared.uWind.value = v; }, (v) => v.toFixed(2));
-		slider(p, 'Season', 0, 1, 0.01, () => REAL_U.uSeason.value, (v) => { REAL_U.uSeason.value = v; }, (v) => v < 0.2 ? 'spring green' : v < 0.55 ? 'late spring' : v < 0.85 ? 'early summer' : 'summer gold');
+		// the month the world keeps: today's, or one picked (the hills, the flowers, the leaves, the
+		// snow, the sun's path, the birds, the fish, what people wear); remembered
+		const ml = css(document.createElement('div'), 'opacity:.9;margin-top:8px;'); ml.textContent = 'Month';
+		const sel = css(document.createElement('select'), 'width:100%;min-height:36px;margin-top:4px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:#1a1a1a;color:#fff;padding:0 10px;font:inherit;');
+		sel.setAttribute('aria-label', 'Month');
+		['Live (today)', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].forEach((t, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = t; sel.appendChild(o); });
+		sel.value = String(monthPicked());
+		sel.onchange = () => pickMonth(+sel.value);
+		p.append(ml, sel);
 		const q = css(document.createElement('div'), 'display:flex;gap:6px;margin-top:6px;');
 		for (const mode of ['auto', 'high', 'low']) {
 			const b = css(document.createElement('button'), 'flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
@@ -1104,7 +1121,7 @@ export function createIslandWorld() {
 			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
 			let pond = 1e9;
 			if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if ((W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) ?? W.water?.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r)) != null) pond = r; } if (pond < 1e8) break; }
-			W.natureSound.update(dt, camera, { wind: shared.uWind?.value, night: sk.night, hours: W.sky.state.hours, month: new Date().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
+			W.natureSound.update(dt, camera, { wind: shared.uWind?.value, night: sk.night, hours: W.sky.state.hours, month: today().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
 		}
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		// a mushroom eaten: sizes swell and shrink (the field of view, from where it stood), and
@@ -1410,6 +1427,8 @@ if (typeof window !== 'undefined') {
 		drive: { start: () => HOOKS.drive?.start(), stop: () => HOOKS.drive?.stop(), update: (dt) => HOOKS.drive?.update(dt), options: () => HOOKS.drive?.debugOptions(), physics: () => HOOKS.drive?.physics?.(), get state() { return HOOKS.drive?.state; } },
 		// the hills' season: 0 spring green .. 1 summer gold
 		season: (v) => { if (v !== undefined) REAL_U.uSeason.value = Math.max(0, Math.min(1, +v)); return REAL_U.uSeason.value; },
+		// the month the world keeps: 0 today's, 1..12 that month
+		month: (m) => { if (m !== undefined) pickMonth(m); return monthPicked(); },
 		bloom: (v) => { if (v !== undefined) REAL_U.uBloom.value = Math.max(0, Math.min(1, +v)); return REAL_U.uBloom.value; },
 		// share where you are: Crysis.share() (a link and a line of text), Crysis.share({ silent: true, from: 'Sam' })
 		share: (opts) => HOOKS.share?.share(opts),

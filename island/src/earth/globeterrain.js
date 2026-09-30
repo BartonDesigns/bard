@@ -25,8 +25,8 @@ const CITIES = 12;
 
 const FRAG_GLSL = /* glsl */`
 uniform highp sampler2D uGT2, uGT3, uGT4; uniform vec4 uGWin; uniform ivec3 uGI0; uniform vec3 uGF0; uniform vec2 uGSeam; uniform float uGBay, uGNight;
-uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug;
-varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC;
+uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason;
+varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;
 float gfH(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
 // value noise on the sphere at 8192 / 2^k metres (the same lattice as the relief)
 float gfN(int k, uint s){
@@ -55,7 +55,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		const own = { uGGrid: { value: new THREE.Vector3(grid[1], grid[2], grid[0]) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, WC_U, BERM_U, U, common, own);
-			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; uniform vec3 uGGrid;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC;\n' + BAY_GLSL + WC_GLSL + BERM_GLSL + GLOBE_GLSL + `
+			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; uniform vec3 uGGrid;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;\n' + BAY_GLSL + WC_GLSL + BERM_GLSL + GLOBE_GLSL + `
 				vec3 gDP;
 				float gOut(vec2 w){ if (uGBay < 0.5) return 1e9; vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (w - uR0.xy) / uR0.z; return length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
 				float gGround(vec2 d, float oct){
@@ -75,6 +75,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float gx = gGround(gd + vec2(ge, 0.0), goct) - gGround(gd - vec2(ge, 0.0), goct), gz = gGround(gd + vec2(0.0, ge), goct) - gGround(gd - vec2(0.0, ge), goct);
 					float gh = gGround(gd, goct);
 					vGC = vec4(gCoast, gLake, gLevel, gOut(gd));
+					vGE = gE;
 					vGP = ${'vec3(0.0)'};
 					{
 						// (the sphere's metres again, for the fragment's patches: cheap, the angles only)
@@ -112,9 +113,10 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					vec3 c = mix(gA, gB, smoothstep(0.3, 0.7, pB * 0.55 + pM * 0.3 + pS * 0.15));
 					// the grass greener where it rains, straw where it doesn't
 					c = mix(c, c * vec3(0.8, 1.02, 0.7), smoothstep(500.0, 1300.0, rain) * 0.5);
-					// the air up here: the atlas's warmth is the place's lived-in ground (taken as 800 m up)
-					// cooled 6.5 C a km above it. Trees up to the tree line, not on cliffs
-					float air = temp - 6.5 * max(0.0, h - 800.0) / 1000.0;
+					// the air up here: the atlas's warmth is the place's lived-in ground, taken as halfway up
+					// the region's mean height (plus 400 m), cooled 6.5 C a km above it (Tuolumne near 0,
+					// Denver near 10). Trees up to the tree line, not on cliffs
+					float air = temp - 6.5 * max(0.0, h - 400.0 - 0.5 * vGE) / 1000.0;
 					float forest = smoothstep(0.44, 0.56, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
 					vec3 wood = mix(vec3(0.028, 0.05, 0.03), vec3(0.045, 0.075, 0.025), smoothstep(4.0, 14.0, temp));
 					wood = mix(wood, vec3(0.035, 0.085, 0.02), smoothstep(20.0, 26.0, temp));
@@ -128,9 +130,11 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// rock on the steep ground, and above the plants
 					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
 					c = mix(c, mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35), rockK);
-					// snow where the air up here stays cold enough to keep it through the summer, off the
-					// cliffs; by the summer's end only in the hollows and the high fields, rock between
-					float snowK = (1.0 - smoothstep(-12.0, -8.0, air + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5)) * (1.0 - smoothstep(0.4, 0.65, slope));
+					// snow: the high fields' that lasts the summer, and the winter's wherever this month's
+					// air is below freezing, patchier as it thaws; off the cliffs either way
+					float keep = 1.0 - smoothstep(-12.0, -8.0, air + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5);
+					float lying = 1.0 - smoothstep(-3.0, 0.5, air + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
+					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
 					// the shore: sand on the gentle ground just above the water
 					float shore = (1.0 - smoothstep(0.0, 0.035, vGC.x)) * (1.0 - smoothstep(vGC.z + 2.0, vGC.z + 6.0, h)) * (1.0 - smoothstep(0.12, 0.3, slope));
