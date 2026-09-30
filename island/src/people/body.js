@@ -317,7 +317,7 @@ function dress(A, P, o) {
 	P.clothMat.userData.U.uHem.value.set(R.topHem, sleeveEnd, cut.waist + 0.02, R.legEnd);
 	// the necklines, cut smooth (the cage's triangles would leave them ragged)
 	const T0 = o.top, scoop = T0 && (T0.kind === 'crop' || T0.kind === 'tank' || (T0.kind === 'tee' && o.gen === 'z')) ? 0.045 : 0;
-	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.013, cut.neck - 0.01, scoop, 0);
+	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.02, cut.neck - 0.02, scoop, 0);
 	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();

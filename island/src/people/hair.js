@@ -159,7 +159,7 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 			out.subVectors(q, c).normalize();
 			side.crossVectors(along, out).normalize();
 			if (side.lengthSq() < 0.5) side.set(1, 0, 0);
-			const ww = w * (kind === 1 ? 1 : 1 - t * 0.55) / 2;
+			const ww = w * (kind === 1 ? 1 : 1.15 - t * 0.75) / 2;
 			const nrm = out.clone().multiplyScalar(0.75).addScaledVector(side.clone().cross(along), 0.25).normalize();
 			for (const s of [-1, 1]) {
 				V.push(q.x + side.x * ww * s, q.y + side.y * ww * s, q.z + side.z * ww * s);
@@ -255,7 +255,7 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 				path = grow(s, d, f, len, segs, cut.lift, cut.curl ? cut.curl * (0.7 + rnd() * 0.6) : 0, 16, gravity, off, clamp(0.9 - cut.lift * 30));
 			}
 			if (!path) continue;
-			const w = (kind === 'locs' ? 0.017 : kind === 'braids' ? 0.012 : 0.026) * wk * (cut.tie ? 1.2 : 1);
+			const w = (kind === 'locs' ? 0.017 : kind === 'braids' ? 0.012 : 0.03) * wk * (cut.tie ? 1.2 : 1);
 			const kd = kind === 'locs' ? 2 : kind === 'braids' ? 3 : kind === 'coil' ? 4 : 0;
 			card(path, w, off > 0.003 ? 1 : 0.4, ao, rnd() * 50, kd);
 			// locs and braids are round: a second card across the first
@@ -340,7 +340,7 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 	}
 	// flyaways: a few stray hairs off the outline
 	if (!low && kind === 'strands' && !opts.capY) {
-		for (let i = 0; i < 6; i++) {
+		for (let i = 0; i < 3; i++) {
 			const r0 = roots[Math.floor(rnd() * roots.length)];
 			if (!r0) break;
 			const len = Math.min(0.12, (r0.d.y > 0.55 ? cut.top : cut.sides) * (0.6 + rnd() * 0.6));
@@ -378,7 +378,9 @@ void RE_Direct_Hair( const in IncidentLight directLight, const in vec3 geometryP
 	vec3 irr = directLight.color * saturate( nl * 0.6 + 0.4 );
 	reflectedLight.directDiffuse += irr * BRDF_Lambert( material.diffuseColor );
 	vec3 T = normalize( vHT ), H = normalize( directLight.direction + geometryViewDir );
-	float s1 = kk( normalize( T + geometryNormal * 0.1 ), H, 90.0 ), s2 = kk( normalize( T - geometryNormal * 0.12 ), H, 22.0 );
+	// (softer and broader far off, where a tight highlight would only shimmer)
+	float far = smoothstep( 2.0, 10.0, length( vViewPosition ) );
+	float s1 = kk( normalize( T + geometryNormal * 0.1 ), H, mix( 80.0, 24.0, far ) ) * ( 1.0 - far * 0.5 ), s2 = kk( normalize( T - geometryNormal * 0.12 ), H, mix( 22.0, 10.0, far ) ) * ( 1.0 - far * 0.4 );
 	float vis = saturate( nl + 0.35 );
 	reflectedLight.directSpecular += directLight.color * vis * ( s1 * 0.12 + s2 * 0.22 * material.diffuseColor * 2.5 ) * vHK.x;
 }
@@ -406,15 +408,23 @@ export function hairMaterial(root, tip) {
 		float tw = kind == 3 ? abs(fract(v * 26.0 + x * 0.5) - 0.5) * 2.0 : 0.6 + 0.4 * hh(floor(v * 60.0 + x * 3.0) + seed);
 		shade = (0.65 + 0.35 * tw) * (1.0 - x * x * 0.45);
 	} else {
-		// strands across the card, ending here and there towards the tip
-		float n = kind == 4 ? 7.0 : kind == 5 ? 1.0 : 11.0;
-		float u = vHUv.x * n + seed, id = floor(u), f = fract(u);
-		float len = 0.7 + 0.3 * hh(id + seed * 3.1);
-		float w = mix(0.46, 0.2, v / len) * (vHK.x < 0.6 ? 1.6 : 1.0);
-		a = step(v, len) * (1.0 - smoothstep(w * 0.55, w, abs(f - 0.5 + (hh(id) - 0.5) * 0.25)));
-		// the card's own edges soften
-		a *= smoothstep(0.0, 0.08, vHUv.x) * smoothstep(1.0, 0.92, vHUv.x) * 1.5;
-		shade = 0.82 + 0.36 * hh(id * 1.7 + seed);
+		// locks: the card is solid at the root and parts into a few clumps towards the tip,
+		// each clump tapering; the strands within show as shading, not as holes (no fuzz
+		// of tiny strands at the outline); far off, the clumps close up
+		float far = smoothstep(1.5, 6.0, length(vViewPosition));
+		float n = kind == 4 ? 7.0 : kind == 5 ? 1.0 : 3.0;
+		float u = vHUv.x * n + seed, id = floor(u), f = fract(u) - 0.5;
+		float len = 0.8 + 0.2 * hh(id + seed * 3.1);
+		float t = v / len, x = abs(vHUv.x - 0.5) * 2.0;
+		float lock = 1.0 - smoothstep(0.35 - t * 0.2, 0.5 - t * 0.2, abs(f + (hh(id) - 0.5) * 0.15));
+		float split = smoothstep(0.25, 0.7, t) * (1.0 - far * 0.7);
+		a = mix(1.0, lock, split) * (1.0 - smoothstep(0.85 - t * 0.3, 1.0 - t * 0.3, x)) * (1.0 - smoothstep(0.9, 1.0, t));
+		// the inner layer is solid: no scalp or sky through it
+		if (vHK.x < 0.6) a = max(a, 1.0 - smoothstep(0.75 - v * 0.6, 0.95 - v * 0.6, x));
+		if (kind == 5) a *= 1.0 - smoothstep(1.0, 3.0, length(vViewPosition));
+		// the strands, as fine shading along the lock
+		float strand = 0.5 + 0.25 * sin(vHUv.x * 57.0 + seed * 7.0) + 0.25 * sin(vHUv.x * 131.0 + seed * 3.0 + v * 4.0);
+		shade = (0.8 + 0.3 * hh(id * 1.7 + seed)) * mix(0.85 + 0.3 * strand, 1.0, far) * (0.85 + 0.15 * lock);
 		if (kind == 4) {
 			// a patch of coils: little rings, denser in the inner shells, round-edged
 			vec2 q = vHUv * 7.0 + seed * 3.7;
@@ -431,6 +441,6 @@ export function hairMaterial(root, tip) {
 }`)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.25 * vHK.x;\nreflectedLight.indirectDiffuse *= 0.6 + 0.4 * vHK.x;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hair-1';
+	m.customProgramCacheKey = () => 'crysis-hair-2';
 	return m;
 }

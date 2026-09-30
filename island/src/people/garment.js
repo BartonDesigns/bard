@@ -265,7 +265,7 @@ export function garmentMaterial(A, o, cut, number = 0) {
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vBN = normal; vSlot = mod(slot, 10.0); vLimb = floor(slot / 10.0 + 0.01);');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL_HEAD)
-			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN);\n\n if (s == 0 && (vLimb < 0.5 ? vBind.y < uHem.x + 0.012 : vLimb < 1.5 && vBind.y < uHem.y + 0.012)) discard;\n if (s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) - 0.004 * fr; if (vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && abs(vBind.x) < 0.035 + max(0.0, uCutA.y - vBind.y) * 0.12 && vBind.y > uCutA.z - 0.3) s = 0;\n diffuseColor.rgb *= garment(s, vBind, N) * (1.0 - gCollar * 0.14); }')
+			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN);\n\n if (s == 0 && (vLimb < 0.5 ? vBind.y < uHem.x + 0.012 : vLimb < 1.5 && vBind.y < uHem.y + 0.012)) discard;\n if (s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) - 0.004 * fr; if (vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && vBind.y > uCutA.z - 0.3) { float e = abs(vBind.x) - 0.035 - max(0.0, uCutA.y - vBind.y) * 0.12; if (e < 0.0) discard; gCollar = max(gCollar, 1.0 - smoothstep(0.003, 0.008, e)); }\n diffuseColor.rgb *= garment(s, vBind, N) * (1.0 - gCollar * 0.14); }')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = gRough; metalnessFactor = gMetal;')
 			.replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;', 'int fb = int(gFab + 0.5);\n\tvec3 mapN = (fb == 0 || fb == 4 ? texture2D( uKnit, vNormalMapUv ) : fb == 1 ? texture2D( normalMap, vNormalMapUv ) : texture2D( uCanvas, vNormalMapUv )).xyz * 2.0 - 1.0;\n\tmapN.xy *= fb == 3 || fb >= 5 ? 0.3 : fb == 4 ? 1.6 : 1.0;')
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = folds(vBind, vLimb, int(vSlot + 0.5)) * 0.0017 * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))); vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
@@ -386,10 +386,12 @@ export function regions(o, cut) {
 // how far each garment stands off the skin
 function offsets(o) {
 	const T = o.top, J = o.outer, B = o.bottom, F = o.shoes;
-	const fitOff = (g) => !g ? 0.01 : g.fit === 'tight' ? 0.004 : g.fit === 'fitted' ? 0.007 : g.fit === 'oversized' ? 0.022 : g.fit === 'baggy' ? 0.02 : 0.011;
-	const top = fitOff(T) + (T?.kind === 'knit' || T?.kind === 'hoodie' ? 0.003 : 0);
-	const puffy = J && (J.pat === 'quilt') ? 0.022 : J?.fab === 'fleece' ? 0.006 : 0.002;
-	return { top, outer: J ? Math.max(top, fitOff(J)) + 0.012 + puffy : 0, bottom: fitOff(B), shoes: F?.kind === 'chunky' ? 0.02 : F?.kind === 'boot' ? 0.014 : F?.kind === 'sandal' ? 0.004 : 0.012 };
+	// thin cloth a few millimetres off the skin, jeans close, knits a little looser; only a
+	// real puffer stands well off
+	const fitOff = (g) => !g ? 0.006 : g.fit === 'tight' ? 0.0025 : g.fit === 'fitted' || g.fit === 'slim' ? 0.004 : g.fit === 'straight' ? 0.006 : g.fit === 'oversized' ? 0.015 : g.fit === 'baggy' ? 0.013 : g.fit === 'wide' ? 0.008 : 0.007;
+	const top = fitOff(T) + (T?.kind === 'knit' || T?.kind === 'hoodie' || T?.kind === 'sweat' ? 0.003 : 0);
+	const puffy = J && J.pat === 'quilt' && /puffer|quilted/i.test(J.kind) ? (J.kind === 'puffer' ? 0.02 : 0.01) : J?.fab === 'fleece' ? 0.004 : 0;
+	return { top, outer: J ? Math.max(top, fitOff(J)) + 0.008 + puffy : 0, bottom: fitOff(B), shoes: F?.kind === 'chunky' ? 0.02 : F?.kind === 'boot' ? 0.014 : F?.kind === 'sandal' ? 0.004 : 0.012 };
 }
 
 // ---------- the cloth mesh ----------
@@ -446,26 +448,45 @@ export function clothGeometry(A, p, o, cut, R) {
 	const n = g.attributes.normal, acc = new Map();
 	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]) || [0, 0, 0]; a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); acc.set(src[i], a); }
 	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]), l = Math.hypot(...a) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); }
-	// then each garment stood off the skin: fitted or loose, legs straight, wide or baggy
-	const off = offsets(o), P = g.attributes.position, B = o.bottom, knee = cut.knee;
-	const legFlare = B?.fit === 'wide' ? 0.075 : B?.fit === 'baggy' ? 0.06 : B?.legs === 'board' ? 0.03 : 0;
-	const tuck = o.top?.tuck;
+	// then each garment stood off the skin: fitted or loose; wide and baggy legs flare
+	// evenly from the hip to the hem
+	const off = offsets(o), P = g.attributes.position, B = o.bottom;
+	const legFlare = B?.fit === 'wide' ? 0.045 : B?.fit === 'baggy' ? 0.04 : B?.legs === 'board' ? 0.02 : 0;
+	const flareTop = cut.hip - 0.06, flareLen = Math.max(0.2, flareTop - cut.ankle);
+	const tuck = o.top?.tuck, K = new Float32Array(P.count);
 	for (let i = 0; i < P.count; i++) {
 		if (src[i] < 0) continue;
-		const s = SL[i] % 10, y = P.getY(i), x = P.getX(i), z = P.getZ(i);
+		const s = SL[i] % 10, y = P.getY(i);
 		let k = s === 0 ? off.top : s === 1 ? off.outer : s === 2 ? off.bottom : off.shoes;
 		if (s === 2) {
 			if (tuck && y > cut.waist - 0.06) k = Math.max(k, off.top + 0.004);
-			if (legFlare && y < cut.hip - 0.05) k += Math.min(0.06, Math.max(0, knee + 0.2 - y) * legFlare * 1.2) + (B.fit === 'baggy' ? 0.012 : 0);
-			if (B?.legs === 'skirt') k = 0.02 + Math.max(0, 0.6 - y) * 0.12;
+			if (legFlare && y < flareTop && SL[i] >= 20) { const t = Math.min(1, (flareTop - y) / flareLen); k += legFlare * t * (0.6 + 0.4 * t); }
+			if (B?.legs === 'skirt') k = 0.015 + Math.max(0, 0.6 - y) * 0.1;
 		}
 		if (s === 3 && o.shoes?.kind === 'chunky' && y < 0.04) k += 0.012;
-		if (s === 3 && y > cut.ankle + 0.02) k = 0.004;
-		const loose = s === 1 || (s === 0 && o.top?.fit === 'oversized') || (s === 2 && (legFlare || B?.legs === 'skirt'));
-		k *= 1 + (loose ? 0.35 : 0.2) * Math.sin(y * 70 + x * 30 + z * 25);
-		P.setXYZ(i, x + n.getX(i) * k, y + n.getY(i) * k * 0.3, z + n.getZ(i) * k);
+		if (s === 3 && y > cut.ankle + 0.02) k = 0.003;
+		K[i] = k;
 	}
+	// the offsets smoothed over the neighbours (a few passes): no steps where one allowance
+	// meets another
+	const nb = new Map(), I2 = g.index.array;
+	const link = (a, b) => { let L = nb.get(a); if (!L) nb.set(a, L = []); L.push(b); };
+	for (let t = 0; t < I2.length; t += 3) for (let j = 0; j < 3; j++) { const a = I2[t + j], b = I2[t + (j + 1) % 3]; if (src[a] >= 0 && src[b] >= 0 && SL[a] % 10 === SL[b] % 10) { link(a, b); link(b, a); } }
+	// (vertices split at UV seams move as one)
+	const same = new Map();
+	for (let i = 0; i < P.count; i++) if (src[i] >= 0) { const L = same.get(src[i]); if (L) L.push(i); else same.set(src[i], [i]); }
+	for (let pass = 0; pass < 3; pass++) {
+		const K2 = Float32Array.from(K);
+		for (const [i, L] of nb) { let sum = 0; for (const j of L) sum += K[j]; K2[i] = K[i] * 0.4 + sum / L.length * 0.6; }
+		K.set(K2);
+	}
+	for (const L of same.values()) { let k = 0; for (const i of L) k += K[i]; k /= L.length; for (const i of L) K[i] = k; }
+	for (let i = 0; i < P.count; i++) if (src[i] >= 0) P.setXYZ(i, P.getX(i) + n.getX(i) * K[i], P.getY(i) + n.getY(i) * K[i] * 0.3, P.getZ(i) + n.getZ(i) * K[i]);
 	g.computeVertexNormals();
+	// smooth normals across the seams again, after the move
+	acc.clear();
+	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]) || [0, 0, 0]; a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); acc.set(src[i], a); }
+	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]), l = Math.hypot(...a) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); }
 	g.computeBoundingSphere();
 	return g;
 }

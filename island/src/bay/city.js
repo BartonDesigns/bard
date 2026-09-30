@@ -24,12 +24,19 @@ import { inBoardwalk } from './boardwalk.js';
 import { inRiverWater, riverTreesNear, carveVersion, carveNear } from './carve.js';
 import { inWater, waterTreesNear, waterVersion } from './watercarve.js';
 import { inClearing, clearingVersion } from '../sportsfields.js';
+import { roofGeometry, roofDetail, ROOF } from './roofs.js';
+import { createProps } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
 // house (1.0-1.4), which side the garage is on a row house (0, 0.1, 0.2)
-const KIND = { row: 0, house: 1, tower: 2, office: 3, paved: 4, industry: 5, retail: 6, plain: 7, garage: 8, shop: 9, bay: 10, houseGarageL: 11, houseGarageR: 12, pool: 13 };
+// (14 garden apartments, 15 a court: .0 tennis, .5 pickleball; 16 a parapet with its coping)
+const KIND = { row: 0, house: 1, tower: 2, office: 3, paved: 4, industry: 5, retail: 6, plain: 7, garage: 8, shop: 9, bay: 10, houseGarageL: 11, houseGarageR: 12, pool: 13, apt: 14, court: 15, parapet: 16 };
+// a building's condition rides on its age (aAge = age + 2 x condition): 1 boarded up and
+// empty, 2 burnt out, 3 run down. It comes from how old and neglected the place is, never
+// from who lives there
+const COND = { ok: 0, boarded: 1, burnt: 2, rundown: 3 };
 // a house's front door, from 0 (left) to 1 (right); a bare 1.0 is a wing with no door
 const doorKind = (base, door) => base + 0.01 + door * 0.38;
 
@@ -67,6 +74,32 @@ const vnoise = (x, z) => {
 	return (a * (1 - su) + b * su) * (1 - sv) + (c * (1 - su) + d * su) * sv;
 };
 const jit = (c, r) => [c[0] * (0.95 + r * 0.1), c[1] * (0.95 + ((r * 7.3) % 1) * 0.1), c[2] * (0.95 + ((r * 3.1) % 1) * 0.1)];
+const fract = (v) => v - Math.floor(v);
+// a house repainted since: any decade's colours
+const REMODEL = [...PAL.suburb, ...PAL.ranch, ...PAL.seventies];
+// the cars in the drives; the faded ones left to sit; umbrella and cabana canvas
+const CARS = [[0.92, 0.92, 0.9], [0.08, 0.08, 0.09], [0.45, 0.46, 0.48], [0.7, 0.71, 0.72], [0.2, 0.28, 0.45], [0.55, 0.1, 0.1], [0.3, 0.32, 0.3], [0.6, 0.55, 0.45], [0.85, 0.85, 0.83]];
+const FADED = [[0.55, 0.45, 0.38], [0.5, 0.52, 0.5], [0.62, 0.58, 0.5], [0.42, 0.36, 0.3]];
+const CANVAS = [[0.9, 0.88, 0.82], [0.2, 0.36, 0.55], [0.75, 0.3, 0.2], [0.25, 0.45, 0.35], [0.85, 0.7, 0.35]];
+// back fences: [colour, height, thickness]: cedar, weathered boards, white vinyl, a block wall, chain link, dark stain
+const FENCES = [[0.46, 0.38, 0.3, 1.8, 0.1], [0.55, 0.52, 0.47, 1.8, 0.1], [0.92, 0.92, 0.9, 1.8, 0.1], [0.7, 0.64, 0.55, 1.9, 0.2], [0.5, 0.51, 0.52, 1.5, 0.04], [0.36, 0.3, 0.24, 1.6, 0.1], [0.46, 0.38, 0.3, 1.8, 0.1]];
+// a face's turn, and its local x and front (+z) as grid directions
+const FACE_A = { s: 0, n: Math.PI, e: -Math.PI / 2, w: Math.PI / 2 };
+const LX = { s: [1, 0], n: [-1, 0], e: [0, -1], w: [0, 1] }, NZ = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] };
+// how a place has held up: rare, and only where the buildings are old and the neighbourhood
+// has let things go (a slow, kilometre-scale neglect field), with base the chance for the
+// kind of place. Age and neglect only: never who lives there
+function condFor(o, base) {
+	if (!o) return COND.ok;
+	const nb = vnoise(o.x / 420 + 17.3, o.z / 420 - 5.1);
+	const k = Math.min(1, Math.max(0, (o.age - 0.5) / 0.4));
+	const p = base * k * k * (0.2 + 1.8 * nb * nb);
+	const q = hash(o.x * 0.91 + 3.3, o.z * 0.77 - 1.1);
+	if (q >= p) return COND.ok;
+	const u = q / p;
+	return u < 0.5 ? COND.rundown : u < 0.85 ? COND.boarded : COND.burnt;
+}
+function setCond(o, c) { if (o && c) o.cond = c; }
 
 // facades by kind: SF bay windows and cornices, house windows, curtain wall, ribbon glazing
 // a house built for real close by (houses.js) takes over from its block: aNear holds the
@@ -184,6 +217,7 @@ function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <color_fragment>', `#include <color_fragment>
 			{
 				float roof = step(0.7, vCN.y);
+				float cond = floor(vAge * 0.5 + 0.001), age = vAge - cond * 2.0;
 				vec2 t = normalize(vec2(-vCN.z, vCN.x) + 1e-5);
 				float u = dot(vCW.xz, t), v = vCW.y;
 				float win = 0.0; vec2 cell = vec2(0.0);
@@ -196,7 +230,44 @@ function buildingMaterial(shared, night, nearBand) {
 				// a house with its garage built in (11 left, 12 right) is a house with garage doors
 				float K = vKind, garSide = 0.0;
 				if (K > 10.5 && K < 12.5) { garSide = K < 11.5 ? -1.0 : 1.0; K -= K < 11.5 ? 10.0 : 11.0; }
-				if (K > 12.5) {
+				if (K > 15.5) {
+					// a parapet: the wall's own colour, a pale coping along its top
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.77, 0.74), roof);
+				} else if (K > 14.5) {
+					// a court: the playing surface and its lines (tennis, or pickleball), a green surround
+					vec2 cp = vLP.xz * vCS.xz;
+					float pb = step(0.25, fract(K));
+					vec2 hc = pb > 0.5 ? vec2(3.05, 6.7) : vec2(5.49, 11.89);
+					float inC = step(abs(cp.x), hc.x) * step(abs(cp.y), hc.y);
+					vec3 sc = mix(vec3(0.22, 0.42, 0.3), pb > 0.5 ? vec3(0.2, 0.36, 0.62) : vec3(0.26, 0.38, 0.56), inC);
+					float lw = 0.05, ln = 0.0;
+					ln = max(ln, step(abs(abs(cp.x) - hc.x), lw) * step(abs(cp.y), hc.y + lw));
+					ln = max(ln, step(abs(abs(cp.y) - hc.y), lw) * step(abs(cp.x), hc.x + lw));
+					if (pb > 0.5) ln = max(ln, max(step(abs(abs(cp.y) - 2.13), lw) * step(abs(cp.x), hc.x), step(abs(cp.x), lw) * step(2.13, abs(cp.y)) * step(abs(cp.y), hc.y)));
+					else {
+						ln = max(ln, step(abs(abs(cp.x) - 4.11), lw) * step(abs(cp.y), hc.y));
+						ln = max(ln, step(abs(abs(cp.y) - 6.4), lw) * step(abs(cp.x), 4.11));
+						ln = max(ln, step(abs(cp.x), lw) * step(abs(cp.y), 6.4));
+					}
+					float fwc = length(fwidth(cp));
+					diffuseColor.rgb = mix(diffuseColor.rgb, mix(sc, vec3(0.95), ln * (1.0 - smoothstep(0.05, 0.25, fwc))), roof);
+				} else if (K > 13.5) {
+					// garden apartments: 2.8 m floors, each unit a window pair and a slider onto its
+					// balcony, a pale band at each floor, open breezeways to the stairs now and then
+					cell = vec2((front > 0.5 ? fx : u) / 3.6, gy / 2.8); vec2 f = fract(cell);
+					float slider = front * step(0.5, fract(cell.x * 0.5 + 0.25));
+					win = step(0.2, f.x) * step(f.x, 0.8) * step(mix(0.32, 0.04, slider), f.y) * step(f.y, 0.8);
+					float frame = step(0.17, f.x) * step(f.x, 0.83) * step(mix(0.28, 0.02, slider), f.y) * step(f.y, 0.84);
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.92, 0.88), frame * (1.0 - win) * (1.0 - roof));
+					float band = step(fract(gy / 2.8 + 0.01), 0.05) * step(1.0, gy) * (1.0 - roof);
+					diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.12 + 0.04, band);
+					float bw = fract((front > 0.5 ? fx : u) / 25.2);
+					float breeze = step(0.46, bw) * step(bw, 0.54) * step(gy, vCS.y - 2.4) * front;
+					diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.35, breeze);
+					win *= 1.0 - breeze;
+					diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.62, (1.0 - roof) * step(gy, 0.3));
+					glass = vec3(0.17, 0.2, 0.23);
+				} else if (K > 12.5) {
 					// a pool: water in a white coping
 					float top = step(0.7, vCN.y);
 					vec2 pl = vLP.xz * vCS.xz;
@@ -233,7 +304,7 @@ function buildingMaterial(shared, night, nearBand) {
 						float bx = fract(fx / bw) * bw;
 						float doorG = front * step(0.3, bx) * step(bx, bw - 0.3) * step(gy, 2.2);
 						vec3 dc = ih > 0.6 ? vec3(0.92, 0.91, 0.87) : ih > 0.3 ? diffuseColor.rgb * 1.08 : vec3(0.55, 0.42, 0.3);
-						dc *= 0.9 + 0.1 * step(0.08, fract(gy / 0.54));
+						dc *= (0.9 + 0.1 * step(0.08, fract(gy / 0.54))) * (1.0 - 0.12 * step(0.93, fract((bx - 0.3) / 0.62)));
 						diffuseColor.rgb = mix(diffuseColor.rgb, dc, doorG);
 						diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5, front * step(gy, 2.3) * step(2.2, gy) * step(0.3, bx) * step(bx, bw - 0.3));
 					}
@@ -275,11 +346,30 @@ function buildingMaterial(shared, night, nearBand) {
 					win *= 1.0 - gzone; frame *= 1.0 - gzone;
 					float gb = fract((fx - gx0) / 2.7) * 2.7;
 					float gdoor = gzone * step(0.12, gb) * step(gb, 2.58) * step(gy, 2.15);
+					float gpan = 1.0 - 0.12 * step(0.93, fract((gb - 0.12) / 0.615));
 					vec3 gdc = ih > 0.5 ? vec3(0.92, 0.91, 0.87) : diffuseColor.rgb * 1.06;
 					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.94, 0.9), max(frame * (1.0 - win), doorF * (1.0 - door)));
+					// a sill under each window (its shadow below it), a head over it; shutters on
+					// some houses, divided lights on some
+					float wz = wOn * (1.0 - gzone) * (1.0 - hasDoor * front * step(abs(fx - doorX), 1.3) * step(gy, 2.4)) * (1.0 - roof);
+					float sill = wz * step(0.21, f.x) * step(f.x, 0.79) * step(0.215, f.y) * step(f.y, 0.26);
+					float sillSh = wz * step(0.23, f.x) * step(f.x, 0.77) * step(0.185, f.y) * step(f.y, 0.215);
+					float head = wz * step(0.23, f.x) * step(f.x, 0.77) * step(0.82, f.y) * step(f.y, 0.865);
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.97, 0.96, 0.93), max(sill, head));
+					diffuseColor.rgb *= 1.0 - sillSh * 0.35;
+					float hs = bh(floor(vIP * 0.5) + 2.7);
+					if (hs > 0.68) {
+						float sh = wz * step(0.13, f.x) * step(f.x, 0.25) * step(0.3, f.y) * step(f.y, 0.79) + wz * step(0.75, f.x) * step(f.x, 0.87) * step(0.3, f.y) * step(f.y, 0.79);
+						vec3 shc = hs > 0.9 ? vec3(0.08, 0.1, 0.09) : hs > 0.82 ? vec3(0.1, 0.2, 0.14) : hs > 0.75 ? vec3(0.1, 0.14, 0.24) : vec3(0.35, 0.1, 0.08);
+						diffuseColor.rgb = mix(diffuseColor.rgb, shc * (0.85 + 0.15 * step(0.4, fract(gy * 12.0))), sh);
+					}
+					if (hs < 0.35) win *= 1.0 - (step(abs(f.x - 0.5), 0.008) + step(abs(f.y - 0.54), 0.008)) * 0.9;
 					vec3 dcol = ih > 0.75 ? vec3(0.45, 0.1, 0.08) : ih > 0.5 ? vec3(0.1, 0.16, 0.26) : ih > 0.25 ? vec3(0.38, 0.24, 0.14) : vec3(0.9, 0.9, 0.86);
 					diffuseColor.rgb = mix(diffuseColor.rgb, dcol, door);
-					diffuseColor.rgb = mix(diffuseColor.rgb, gdc * (0.9 + 0.1 * step(0.08, fract(gy / 0.54))), gdoor);
+					diffuseColor.rgb = mix(diffuseColor.rgb, gdc * gpan * (0.9 + 0.1 * step(0.08, fract(gy / 0.54))), gdoor);
+					// a row of lites across the top of some garage doors
+					float glite = gdoor * step(0.6, ih) * step(1.68, gy) * step(gy, 1.98) * step(0.15, fract((gb - 0.12) / 0.615)) * step(fract((gb - 0.12) / 0.615), 0.85);
+					diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.12, 0.14, 0.16), glite);
 					// a darker skirt of foundation at the ground
 					diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.62, (1.0 - roof) * step(gy, 0.3));
 					glass = vec3(0.18, 0.2, 0.22);
@@ -338,6 +428,36 @@ function buildingMaterial(shared, night, nearBand) {
 				}
 				// a building with its rooms built: its front windows (and a bay's) are holes onto them
 				if (vDoor.z > 0.0 && win > 0.5 && vLY < vDoorTop && (K < 0.5 || K > 8.5) && K < 10.5 && (front > 0.5 || K > 9.5)) discard;
+				// the condition of the place: boarded up (plywood over the openings), burnt out
+				// (the openings black, soot up the wall above them), run down (grimy glass, a
+				// pane or two broken)
+				vec2 cf = fract(cell), ci = floor(cell);
+				if (cond > 0.5 && roof < 0.5) {
+					if (cond < 1.5) {
+						float ply = 0.62 + 0.25 * bh(ci + 4.4);
+						vec3 pc = vec3(0.66, 0.54, 0.38) * ply * (0.92 + 0.08 * step(0.5, fract(vCW.y * 3.0 + bh(ci) * 3.0)));
+						diffuseColor.rgb = mix(diffuseColor.rgb, pc, win);
+						win = 0.0; glassK = 0.0;
+					} else if (cond < 2.5) {
+						float sn = wxN(vec2(u * 0.7, vLY * 0.45));
+						float plume = smoothstep(0.75, 1.0, cf.y) * (1.0 - smoothstep(0.1, 0.5, abs(cf.x - 0.5) - (cf.y - 0.75) * 0.6)) * step(0.35, bh(ci + 1.9));
+						float soot = clamp((vLY / max(vCS.y, 1.0)) * 1.3 - 0.35 + (sn - 0.5) * 1.2, 0.0, 1.0) * 0.8;
+						diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.035, 0.03, 0.028), max(soot, plume * 0.9));
+						glass = vec3(0.015); glassK = 0.0;
+					} else {
+						glass = mix(glass, vec3(0.34, 0.33, 0.3), 0.45);
+						glass = mix(glass, vec3(0.01), step(0.88, bh(ci + 6.2)));
+					}
+				}
+				if (cond > 1.5 && cond < 2.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03), roof);
+				// the flat roofs: white membrane in seamed strips, grey gravel, or dark torch-down
+				if (roof > 0.5 && (K < 0.5 || (K > 2.5 && K < 3.5) || (K > 4.5 && K < 6.5) || (K > 8.5 && K < 9.5) || (K > 13.5 && K < 14.5))) {
+					float rk = bh(floor(vIP * 0.5) + 8.8), pxR = length(fwidth(vCW.xz));
+					vec3 rc = rk < 0.45 ? vec3(0.8, 0.8, 0.78) * (1.0 - 0.1 * step(0.97, fract(dot(vCW.xz, t) / 3.05)) * (1.0 - smoothstep(0.05, 0.3, pxR)))
+						: rk < 0.8 ? vec3(0.46, 0.45, 0.42) * (0.85 + 0.3 * bh(floor(vCW.xz * 12.0)) * (1.0 - smoothstep(0.03, 0.12, pxR)))
+						: vec3(0.16, 0.16, 0.17) * (0.9 + 0.2 * step(0.5, fract(dot(vCW.xz, t) / 0.9)) * (1.0 - smoothstep(0.03, 0.12, pxR)));
+					diffuseColor.rgb = rc * 1.25;
+				}
 				// far off, where a window is smaller than a pixel or two, it is only its average
 				// (as a mipmap would be): no crawling speckle on distant facades at night
 				float aaW = smoothstep(0.75, 0.3, length(fwidth(cell)));
@@ -350,19 +470,19 @@ function buildingMaterial(shared, night, nearBand) {
 					if (roof < 0.5) {
 						float edgeW = abs(vLN.z) > 0.5 ? (0.5 - abs(vLP.x)) * vCS.x : (0.5 - abs(vLP.z)) * vCS.z;
 						float concW = K > 1.5 && K < 3.5 ? 0.6 : K > 4.5 && K < 5.5 ? 0.3 : K > 5.5 ? 0.35 : 0.1;
-						diffuseColor.rgb = wallAge(diffuseColor.rgb, vCW, vCN, vLY, vCS.y, edgeW, vAge, pxW, concW);
-					} else diffuseColor.rgb = roofAge(diffuseColor.rgb, vCW, vCN, vAge);
+						diffuseColor.rgb = wallAge(diffuseColor.rgb, vCW, vCN, vLY, vCS.y, edgeW, age, pxW, concW);
+					} else diffuseColor.rgb = roofAge(diffuseColor.rgb, vCW, vCN, age);
 				} else if (K > 7.5 && K < 12.5) {
 					float pxW = length(fwidth(vCW));
-					if (roof < 0.5) diffuseColor.rgb = wallAge(diffuseColor.rgb, vCW, vCN, vLY, vCS.y, abs(vLN.z) > 0.5 ? (0.5 - abs(vLP.x)) * vCS.x : (0.5 - abs(vLP.z)) * vCS.z, vAge, pxW, 0.05);
-					else diffuseColor.rgb = roofAge(diffuseColor.rgb, vCW, vCN, vAge);
+					if (roof < 0.5) diffuseColor.rgb = wallAge(diffuseColor.rgb, vCW, vCN, vLY, vCS.y, abs(vLN.z) > 0.5 ? (0.5 - abs(vLP.x)) * vCS.x : (0.5 - abs(vLP.z)) * vCS.z, age, pxW, 0.05);
+					else diffuseColor.rgb = roofAge(diffuseColor.rgb, vCW, vCN, age);
 				}
 				diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
 				diffuseColor.rgb *= mix(1.0, 0.8, roof);
 				// contact shade: the wall darkens where it meets the ground (the sky it sees is
 				// half hidden there), so the building sits in the ground instead of on it
 				diffuseColor.rgb *= mix(1.0, mix(0.58, 1.0, smoothstep(0.9, 3.4, vLY)), (1.0 - roof) * step(vKind, 6.5));
-				float lit = max(mix(0.3, step(vKind > 1.5 ? 0.5 : 0.58, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih));
+				float lit = max(mix(0.3, step(vKind > 1.5 ? 0.5 : 0.58, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih)) * step(cond, 0.5);
 				// each lit window its own: warm lamps or cool office tubes, brighter up by the
 				// ceiling light, some with the blinds half down (close up; far off, the average)
 				vec2 fc = fract(cell), cid = floor(cell);
@@ -378,21 +498,8 @@ function buildingMaterial(shared, night, nearBand) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, glassK);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += winGlow;');
 	};
-	m.customProgramCacheKey = () => 'baybuilding13';
+	m.customProgramCacheKey = () => 'baybuilding14';
 	return m;
-}
-
-// hip and gable roofs: a unit block with a ridge; scaled per house
-function roofGeometry(hip) {
-	const r = hip ? 0.28 : 0.0;
-	const P = [-0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0, 0.5, -0.5, 0, 0.5, -0.5 + r, 1, 0, 0.5 - r, 1, 0];
-	const I = [0, 4, 5, 0, 5, 1, 2, 5, 4, 2, 4, 3, 1, 5, 2, 3, 4, 0];
-	const g = new THREE.BufferGeometry();
-	g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-	g.setIndex(I);
-	const n = g.toNonIndexed();
-	n.computeVertexNormals();
-	return n;
 }
 
 // The far trees as impostors: each species' own middle-distance tree, its leaf cards and
@@ -469,7 +576,7 @@ export function createCity(shared, scene, bay, real = null) {
 	const rise = { value: new THREE.Vector4(0, 0, 0, 0) };
 	let riseT0 = -1;
 	const mat = withRise(buildingMaterial(shared, night, nearBand), rise, 'rise1');
-	const roofMat = withRise(weatherRoofs(new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide })), rise, 'roofrise1');
+	const roofMat = withRise(roofDetail(weatherRoofs(new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide }))), rise, 'roofrise1');
 	const CAP = 32000;
 	const boxGeo = () => { const g = new THREE.InstancedBufferGeometry().copy(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0)); return g; };
 	const mk = (geo, material, cap, kinds) => {
@@ -482,7 +589,10 @@ export function createCity(shared, scene, bay, real = null) {
 	};
 	const near = mk(boxGeo(), mat, CAP, true);
 	const hipG = roofGeometry(true), gableG = roofGeometry(false);
+	for (const g of [hipG, gableG]) { g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4)); g.setAttribute('aWall', new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3)); }
 	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
+	// the props of the lived-in streets and on the roofs (lotkit.js)
+	const kit2 = createProps(group, (m) => withRise(m, rise, 'kitrise'), PHONE);
 	// what is on and about the buildings up close: the air conditioners on the flat roofs of
 	// the shops, offices and warehouses; a glass sunroom off the back of some houses, a
 	// clothesline in some back yards (see decorate)
@@ -621,9 +731,12 @@ export function createCity(shared, scene, bay, real = null) {
 		const [x2, z2] = fromGrid(gx + 5, gz, a, style);
 		let ang = Math.atan2(z2 - z, x2 - x);
 		const face = opt?.face;
+		// (a house not quite square to its street: turned about its lot, with its garage and drive)
+		let X = x, Z = z;
+		if (opt?.rot && opt.pw) { const c = Math.cos(opt.rot), s2 = Math.sin(opt.rot), dx = x - opt.pw[0], dz = z - opt.pw[1]; X = opt.pw[0] + c * dx - s2 * dz; Z = opt.pw[1] + s2 * dx + c * dz; ang += opt.rot; }
 		if (face === 'n') ang += Math.PI;
 		else if (face === 'e' || face === 'w') { ang += face === 'e' ? -Math.PI / 2 : Math.PI / 2; const t = w; w = d; d = t; }
-		const o = opt?.lift ? { x, y: g + opt.lift, z, w, d, h, a: ang, col, kind, roof: null } : flat ? { x, y: g - 0.9, z, w, d, h: 0.98, a: ang, col, kind, roof: null } : { x, y: g - 1.2, z, w, d, h: h + 1.2, a: ang, col, kind, roof };
+		const o = opt?.lift ? { x: X, y: g + opt.lift, z: Z, w, d, h, a: ang, col, kind, roof: null } : flat ? { x: X, y: g - 0.9, z: Z, w, d, h: 0.98, a: ang, col, kind, roof: null } : { x: X, y: g - 1.2, z: Z, w, d, h: h + 1.2, a: ang, col, kind, roof };
 		o.age = ageFor(style, kind, x, z);
 		list.push(o);
 		if (!flat && !opt?.lift && !list.noGrounds && (kind === KIND.office || kind === KIND.retail || kind === KIND.industry)) grounds(list, list.trees || (list.trees = []), x, z, w, d, ang, g, g - 1.2, kind, gx * 0.31 + gz * 0.17);
@@ -727,16 +840,18 @@ export function createCity(shared, scene, bay, real = null) {
 				// a tree in grid space: height, round or conical, crown colour
 				const tree = (gx, gz, h, cone, r) => { const [x, z] = fromGrid(gx, gz, a, style), g = bay.heightAt(x, z); if (g > 0.8) trees.push({ x, y: g - 0.3, z, h, cone, col: cone ? jit([0.13, 0.21, 0.11], r) : jit(pick(PAL.crown, r), r) }); };
 				// paved ground: parking lots, yards, plazas
-				const pave = (gx, gz, w, d, kind = KIND.paved, col = [0.25, 0.25, 0.26]) => lot(list, a, style, gx, gz, w, d, 0.25 - 1.2 + 1.35, kind, col, null, 0.9);
+				const pave = (gx, gz, w, d, kind = KIND.paved, col = [0.25, 0.25, 0.26], O = null) => lot(list, a, style, gx, gz, w, d, 0.25 - 1.2 + 1.35, kind, col, null, 0.9, O?.rot ? { rot: O.rot, pw: O.pw } : null);
 				// close in, each house gets its porch, walk, shrubs and back fences
 				const detail = Math.hypot(wx - cx, wz - cz) < 480;
 				// the back fences of a lot from x0 to x1: its left side line (the neighbour has the
 				// right), and the back line on one side of the block; at(m) is depth into the block
+				// (of all kinds: cedar, weathered grey boards, white vinyl, a block wall, chain link, dark stain)
 				const fences = (x0, x1, at, m0, m1, side, r) => {
 					if (m1 - m0 < 2) return;
-					const fc = jit([0.46, 0.38, 0.3], r);
-					lot(list, a, style, x0, at((m0 + m1) / 2), 0.12, m1 - m0, 1.8, KIND.plain, fc, null);
-					if (!side) lot(list, a, style, (x0 + x1) / 2, at(m1), x1 - x0, 0.12, 1.8, KIND.plain, fc, null);
+					const F = FENCES[Math.floor(hash(r * 97.1, i + j * 3) * FENCES.length)];
+					const fc = jit(F, r), th = F[4];
+					lot(list, a, style, x0, at((m0 + m1) / 2), th, m1 - m0, F[3], KIND.plain, fc, null);
+					if (!side) lot(list, a, style, (x0 + x1) / 2, at(m1), x1 - x0, th, F[3], KIND.plain, fc, null);
 				};
 				// foundation shrubs across a house front, leaving the door clear
 				const shrubs = (hx, gz, w, dx, r) => {
@@ -745,6 +860,331 @@ export function createCity(shared, scene, bay, real = null) {
 						if (Math.abs(sx - dx) < 1.4 || hash(n * 7 + r * 100, i + j) < 0.3) continue;
 						const [x, z] = fromGrid(sx, gz, a, style), g = bay.heightAt(x, z);
 						if (g > 0.8) trees.push({ x, y: g - 0.1, z, h: 1.1 + hash(n, r * 50) * 0.9, shrub: true, col: jit(pick(PAL.crown, hash(n, r)), r) });
+					}
+				};
+				// ---------- the lived-in blocks (older towns and suburbs) ----------
+				const props = list.props || (list.props = {});
+				let bAngV = null;
+				const bAng = () => { if (bAngV === null) { const [x1, z1] = fromGrid(X0, Z0 + IZ / 2, a, style), [x2, z2] = fromGrid(X0 + 10, Z0 + IZ / 2, a, style); bAngV = Math.atan2(z2 - z1, x2 - x1); } return bAngV; };
+				// one of the props (lotkit.js) at a grid point, turned to face a street (+ yaw)
+				const prop = (k, gx, gz, face, yaw = 0, sc = 1, c = null, lift = 0, tilt = 0) => {
+					if (!detail || !kit2.has(k)) return;
+					const [x, z] = fromGrid(gx, gz, a, style), g = bay.heightAt(x, z);
+					if (g < 0.8) return;
+					const e = [x, g + lift, z, bAng() + FACE_A[face] + yaw, ...(typeof sc === 'number' ? [sc, sc, sc] : sc), tilt];
+					if (c) e.push(c[0], c[1], c[2]);
+					(props[k] || (props[k] = [])).push(e);
+				};
+				// a run of fence panels (props) from one grid point to another
+				const fenceRun = (k, x0, z0, x1, z1, sy = 1) => {
+					const L2 = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L2 / 2.4)), f = Math.abs(x1 - x0) > Math.abs(z1 - z0) ? 's' : 'e';
+					for (let m = 0; m < n; m++) prop(k, x0 + (x1 - x0) * (m + 0.5) / n, z0 + (z1 - z0) * (m + 0.5) / n, f, 0, [L2 / n / 2.4, sy, 1]);
+				};
+				const weeds = (x0, x1, z0, z1, n, seed) => { if (!detail) return; for (let m = 0; m < n; m++) { const [x, z] = fromGrid(x0 + hash(m, seed * 3 + i) * (x1 - x0), z0 + hash(seed + m * 7, j) * (z1 - z0), a, style), g = bay.heightAt(x, z); if (g > 0.8) trees.push({ x, y: g - 0.2, z, h: 0.8 + hash(m * 3, seed) * 1.4, shrub: true, col: jit([0.32, 0.34, 0.17], hash(m, seed)) }); } };
+				const lawn = (gx, gz, w, d, c, face) => lot(list, a, style, gx, gz, w, d, 0.34, KIND.plain, c, null, false, { face, lift: -0.3 });
+				const rolls = (k, side) => (n) => hash(k * 7.7 + n * 3.1 + side * 1.3, i * 13 + j * 7 + n * 0.7);
+				// out front and out back: the walk, the porch, the fences, the cars and bins, the AC
+				// unit; a pool on its deck, a shed, a cottage, raised beds; and on the run-down
+				// ones, dead lawn, weeds and a car left to sit
+				const yard = (c) => {
+					const { lotX, Lw, side, face, at, r, k, x: hx, w, d, hf, setback, gx, gw, gs, dw, dx0, pad, big, cnd, col, rc, door, O, SY } = c, R2 = rolls(k + 50, side);
+					const dx = hx + (side ? 1 : -1) * (door - 0.5) * (w - 2.5);
+					const back = hf + d, room = IZ / 2 - back;
+					let pool = false;
+					if (detail) {
+						pave(dx, at(hf / 2), 1.1, hf, KIND.plain, [0.7, 0.69, 0.65], O);
+						if (c.porch) {
+							lot(list, a, style, dx, at(hf - 0.8), 2.6, 1.8, 0.22, KIND.plain, rc, null, false, { ...O, lift: 2.6 });
+							if (c.modern || r > 0.5) for (const e of [-1, 1]) lot(list, a, style, dx + e * 1.15, at(hf - 1.55), 0.2, 0.2, 2.6, KIND.plain, [0.92, 0.91, 0.88], null, false, O);
+						}
+						fences(lotX, lotX + Lw, at, hf + d * 0.55, IZ / 2, side, r);
+						if (!cnd) shrubs(hx, at(hf - 0.9), w, dx, r);
+						if (gw > 0) {
+							if (!cnd && R2(1) < 0.55) prop('car', gx - gs * gw / 4, at(setback * 0.45), face, (R2(2) - 0.5) * 0.08, 1, pick(CARS, R2(3)));
+							if (!cnd && R2(1) < 0.2 && gw > 5) prop('car', gx + gs * gw / 4, at(setback * 0.4), face, (R2(4) - 0.5) * 0.1, 1, pick(CARS, R2(5)));
+							if (pad && R2(6) < 0.4) prop(R2(7) < 0.55 ? 'rv' : 'boat', dx0 - gs * (dw / 2 - 1.35), at(4.4), face);
+							if (!cnd && R2(9) < 0.07) prop('hoop', gx + gs * (gw / 2 - 0.3), at(setback + 0.15), face);
+						}
+						if (!cnd && R2(8) < 0.35) prop('bins', (gw > 0 ? dx0 + gs * (dw / 2 + 1.1) : lotX + 1.6), at(0.7), face);
+						if (R2(10) < 0.6) prop('cond', hx - gs * (w / 2 + 0.7), at(hf + d * 0.6), face);
+						if (room > 11 && R2(11) < (big ? 0.85 : c.pools)) {
+							pool = true;
+							const pl = big ? 12 : 8.5, pwd = big ? 5.5 : 4.2, pz = back + 3.2 + pwd / 2, px = hx + (R2(12) - 0.5) * Math.max(0, w - pl) * 0.8;
+							lot(list, a, style, px, at(pz), pl + 2.8, pwd + 2.8, 0.36, KIND.plain, jit([0.8, 0.77, 0.7], R2(12)), null, false, { face, lift: -0.3 });
+							const PL = lot(list, a, style, px, at(pz), pl, pwd, 0, KIND.pool, [0.9, 0.89, 0.85], null, 0.9, { face });
+							if (PL) PL.dec = true;
+							if (big) { prop('cabana', px + (pl / 2 + 3.2) * (R2(13) < 0.5 ? 1 : -1), at(pz), face); for (let n = 0; n < 3; n++) prop('lounger', px - pl / 2 + 2 + n * 1.3, at(pz + pwd / 2 + 1.5), face, Math.PI); }
+							else if (R2(13) < 0.6) prop('lounger', px - pl / 4, at(pz + pwd / 2 + 1.4), face, Math.PI);
+						}
+						if (room > 9 && R2(14) < (big ? 0.6 : 0.2)) lot(list, a, style, gs > 0 ? lotX + 2.2 : lotX + Lw - 2.2, at(IZ / 2 - 2.6), 2.8, 2.4, 2.3, KIND.garage, R2(15) < 0.5 ? [0.6, 0.55, 0.45] : jit(col, R2(15)), { hip: false, rot: true, h: 0.9, col: rc, t: R2(15) < 0.3 ? ROOF.metal : ROOF.shingle, ov: 0.2, trim: 3 }, false, { face });
+						if (room > 15 && R2(16) < (big ? 0.5 : c.adu)) setCond(lot(list, a, style, gs > 0 ? lotX + Lw - SY - 3.4 : lotX + SY + 3.4, at(IZ / 2 - 4.3), 6.2, 6.4, 3.2, doorKind(KIND.house, 0.5), jit(col, R2(17)), { hip: R2(17) < 0.5, h: 1.6, col: rc, t: ROOF.shingle, ov: 0.4 }, false, { face: face === 's' ? 'n' : 's' }), cnd);
+						if (room > 8 && R2(18) < 0.09) for (let n = 0; n < 2; n++) prop('bed', hx + (n - 0.5) * 2.4, at(IZ / 2 - 2.2), face);
+						if (cnd) {
+							lawn(lotX + Lw / 2, at(hf / 2), Lw - 1, hf - 0.6, jit([0.46, 0.41, 0.27], r), face);
+							weeds(lotX + 1, lotX + Lw - 1, at(0.8), at(hf - 0.8), 10, k * 7 + side);
+							if (R2(19) < 0.45) prop('car', gw > 0 ? gx : hx, at(setback * 0.5), face, (R2(20) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, R2(21)), -0.09, 0.03);
+						}
+					}
+					// yard trees: a front tree and one or two out back, bigger in the older places
+					if (hash(k + 1, side + i * 3) < c.treeK * 0.6) tree(hx - gs * (w * 0.3), at(2.5), c.treeH * (0.7 + r * 0.6), false, r * 3.1 % 1);
+					if (hash(k + 5, side + j * 7) < c.treeK) tree(hx + (r - 0.5) * 6, at(pool ? IZ / 2 - 3 : back + 7), c.treeH * (0.8 + r * 0.7), r > 0.82, r * 5.7 % 1);
+					if (big) for (let n = 0; n < 3; n++) tree(lotX + 3 + hash(n, k + i) * (Lw - 6), at(IZ / 2 - 2 - hash(k, n + j) * 4), c.treeH * 1.1, n === 2, hash(n * 5, k));
+				};
+				// a suburban house: the tract's, or an estate on a double lot, or a skinny infill
+				const suburbHome = (c, T) => {
+					const { lotX, Lw, face, at, r, rw, k, side } = c, { era, modern, eich, big, thin } = T, R = rolls(k, side);
+					const remodel = R(3) < 0.14, rr = R(0);
+					const col = jit(remodel ? pick(REMODEL, rw * 7.3 % 1) : T.walls[Math.floor(r * 4)], r);
+					const rc = jit(rr < 0.1 || (remodel && rr < 0.5) ? pick(T.roofsAll, rr * 10 % 1) : T.roofs[r > 0.8 ? 1 : 0], rr).map((v) => v * (0.9 + ((rr * 13.7) % 1) * 0.16));
+					const rt = remodel && rr < 0.3 ? ROOF.shingle : T.roofT;
+					const across = modern || thin;
+					const setback = (modern ? 6 : 8) + (R(1) - 0.5) * (modern ? 1.5 : 3.2) + (big ? 5 : 0), SY = 1.1 + R(2) * 1.8;
+					const two = big || thin || (modern ? r > 0.12 : era === ERA.seventies ? r > 0.5 : era === ERA.ranch ? r > 0.9 : false);
+					const h = two ? 6.4 : 3.3, gs = r > 0.5 ? 1 : -1;
+					const gw = big ? 9.4 : thin ? 3.6 : modern && r > 0.7 ? 8.8 : 6.2;
+					const avail = Lw - 2 * SY;
+					const w = big ? Math.min(avail - gw - 3, 15 + r * 9) : across ? avail - ((r * 2.9) % 1) * 1.5 : avail - gw - ((r * 2.9) % 1) * 1.8;
+					if (w < 5) return;
+					const d = big ? 14 + r * 5 : modern ? 12 + ((r * 5.3) % 1) * 3 : 10 + ((r * 5.3) % 1) * 3;
+					const hf = across ? setback + 3 : setback + 1.5;
+					const hx = across ? lotX + Lw / 2 : big ? lotX + Lw / 2 - gs * (gw + 1) / 2 : lotX + SY + (gs > 0 ? w / 2 : gw + w / 2);
+					const gx = big ? hx + gs * (w / 2 + 0.5 + gw / 2) : gs > 0 ? lotX + Lw - SY - gw / 2 : lotX + SY + gw / 2;
+					const roofH = eich ? 0.9 : Math.min(w, d) * (modern ? 0.3 : era === ERA.ranch ? 0.2 : 0.26) * (big ? 1.15 : 1);
+					const door = modern ? (gs > 0 ? 0.28 : 0.72) : 0.35 + ((r * 3.3) % 1) * 0.3;
+					const ov = eich ? 0.95 : era === ERA.ranch ? 0.65 : 0.45;
+					const roof = { hip: modern || big || (era === ERA.ranch && r > 0.4), h: roofH, col: rc, t: rt, ov };
+					// not every house square to its street (the older tracts least of all)
+					const rot = R(4) < (modern ? 0.12 : 0.4) ? (R(5) - 0.5) * (modern ? 0.05 : 0.1) : 0;
+					const O = { face, rot, pw: rot ? fromGrid(lotX + Lw / 2, at(hf + d / 2), a, style) : null };
+					// a second storey popped up over part of an old one-storey house
+					const pop = !two && w > 11 && R(6) < 0.1, w1 = pop ? w * 0.56 : w;
+					const H = lot(list, a, style, pop ? hx - gs * (w - w1) / 2 : hx, at(hf + d / 2), w1, d, h, doorKind(KIND.house, pop ? Math.min(0.75, Math.max(0.25, door)) : door), col, roof, false, O);
+					if (!H) return;
+					const cnd = condFor(H, T.neglectK);
+					setCond(H, cnd);
+					if (pop) setCond(lot(list, a, style, hx + gs * w1 / 2, at(hf + d / 2 + 0.6), w - w1, d - 1.2, 6.4, KIND.house, col, { ...roof, hip: true, h: Math.min(w - w1, d) * 0.28 }, false, O), cnd);
+					// an addition out the back
+					if (R(7) < 0.13 && !eich) setCond(lot(list, a, style, hx + (R(2) - 0.5) * w * 0.4, at(hf + d + 2.2), Math.min(w * 0.5, 7), 4.6, 3.1, KIND.house, remodel ? col : jit(col, R(7) * 7 % 1), { hip: false, rot: true, h: 1.3, col: rc, t: R(7) < 0.05 ? ROOF.metal : rt, ov: 0.35 }, false, O), cnd);
+					// the garage, its doors to the street (or made into a room, the drive still to it)
+					const conv = !big && !modern && R(8) < 0.06;
+					setCond(lot(list, a, style, gx, at(setback + 3.5), gw, 7, 3.1, conv ? KIND.house : KIND.garage, col, { hip: modern || big, h: eich ? 0.5 : 1.6, col: rc, t: rt, ov }, false, O), cnd);
+					// the driveway: one car wide, two, or three with a pad to the side for the RV
+					const pad = !thin && R(9) < 0.3 ? 2.8 : 0, dw = gw - 0.6 + pad, dx0 = gx - gs * pad / 2;
+					pave(dx0, at(setback / 2), dw, setback, KIND.plain, jit([0.62, 0.61, 0.58], R(9)), O);
+					yard({ ...c, x: hx, w, d, hf, setback, gx, gw, gs, dw, dx0, pad, big, cnd, col, rc, door, O, SY, porch: !eich, modern, pools: modern ? 0.28 : 0.2, adu: 0.06, treeK: T.treeK, treeH: T.treeH });
+				};
+				// an older town's house: wood, a deep porch, the drive down the side to a garage out back
+				const olderHome = (c, T) => {
+					const { lotX, Lw, face, at, r, k, side } = c, { big, thin } = T, R = rolls(k, side);
+					const w = big ? Math.min(Lw - 6, 12 + r * 5) : thin ? Lw - 1.6 : Math.min(Lw - 3.6, 7.6 * Lw / 12 + r * 2), d = big ? 14 + r * 4 : 10 + ((r * 7.7) % 1) * 4;
+					const h = big || thin || r > 0.55 ? 6.4 : 3.6;
+					const col = jit(pick(PAL.older, hash(i + k * 13, j * 7 + side)), r);
+					const rc = pick(PAL.olderRoof, hash(i * 3 + k, j + side * 5));
+					const gs = r > 0.5 ? 1 : -1;
+					const cx = thin ? lotX + Lw / 2 : lotX + Lw / 2 - gs * (Lw - w - 3) / 2;
+					const hf = 6 + (R(1) - 0.5) * 3 + (big ? 3 : 0);
+					const door = 0.25 + ((r * 3.3) % 1) * 0.5;
+					const rot = R(4) < 0.45 ? (R(5) - 0.5) * 0.12 : 0;
+					const O = { face, rot, pw: rot ? fromGrid(cx, at(hf + d / 2), a, style) : null };
+					const H = lot(list, a, style, cx, at(hf + d / 2), w, d, h, doorKind(KIND.house, door), col, { hip: big || r > 0.8, rot: r < 0.3 && !big, h: Math.min(w, d) * (0.42 + (R(6) - 0.5) * 0.2), col: rc, t: T.roofT, ov: 0.45 }, false, O);
+					if (!H) return;
+					const cnd = condFor(H, T.neglectK);
+					setCond(H, cnd);
+					if (R(7) < 0.15) setCond(lot(list, a, style, cx + (R(2) - 0.5) * w * 0.3, at(hf + d + 2), Math.min(w * 0.6, 6), 4.2, 3.2, KIND.house, jit(col, R(7) * 5 % 1), { hip: false, rot: true, h: 1.2, col: rc, t: R(7) < 0.06 ? ROOF.metal : T.roofT, ov: 0.3 }, false, O), cnd);
+					const dx = cx + (side ? 1 : -1) * (door - 0.5) * (w - 2.5);
+					const gx = lotX + Lw / 2 + gs * (Lw / 2 - 1.9);
+					if (detail) {
+						// the porch: a roof on posts across much of the front, a rail between, steps
+						const pw = w * (0.5 + r * 0.3);
+						lot(list, a, style, dx, at(hf - 1.2), pw, 2.6, 0.25, KIND.plain, rc, null, false, { ...O, lift: 2.7 });
+						for (const e of [-1, 1]) lot(list, a, style, dx + e * (pw / 2 - 0.2), at(hf - 2.3), 0.22, 0.22, 2.7, KIND.plain, [0.9, 0.89, 0.85], null, false, O);
+						if (R(10) < 0.6) for (const e of [-1, 1]) lot(list, a, style, dx + e * (pw / 4 + 0.35), at(hf - 2.3), pw / 2 - 1.3, 0.08, 0.95, KIND.plain, [0.9, 0.89, 0.85], null, false, O);
+						// the front fence: pickets, a low chain link, or nothing
+						if (R(11) < 0.25) { fenceRun('picket', lotX + 0.3, at(0.5), gx - 1.6 * (gs > 0 ? 1 : -1) * 0 - 1.5, at(0.5)); }
+						else if (R(11) < 0.33) lot(list, a, style, lotX + Lw / 2, at(0.5), Lw - 3.4, 0.05, 1.1, KIND.plain, [0.55, 0.56, 0.57], null, false, { face });
+						if (!thin) {
+							pave(gx, at(12), 2.8, 24, KIND.plain, [0.56, 0.55, 0.52]);
+							if (r > 0.3) setCond(lot(list, a, style, gx - gs * 0.6, at(hf + d + 6), 3.6, 6, 2.8, R(12) < 0.1 ? doorKind(KIND.house, 0.5) : KIND.garage, jit(col, r * 3.1 % 1), { hip: false, h: 1.3, col: rc, t: T.roofT, ov: 0.3 }, false, { face }), cnd);
+							if (!cnd && R(13) < 0.45) prop('car', gx, at(hf + 1 + R(14) * 4), face, (R(14) - 0.5) * 0.05, 1, pick(CARS, R(15)));
+							if (!cnd && R(13) > 0.97) prop(R(15) < 0.5 ? 'rv' : 'boat', gx, at(hf + 6), face);
+						}
+					}
+					yard({ ...c, x: cx, w, d, hf, setback: hf, gx, gw: 0, gs, dw: 0, dx0: gx, pad: 0, big, cnd, col, rc, door, O, SY: 1, porch: false, modern: false, pools: 0.06, adu: 0.13, treeK: 1, treeH: 12 });
+					if (k % 2 === 0) tree(lotX + Lw / 2, side ? Z0 + IZ + 1.9 : Z0 - 1.9, 9 + r * 6, false, r);
+				};
+				const home = (c, T) => (T.sub ? suburbHome(c, T) : olderHome(c, T));
+				// an empty lot: dirt or dry grass, weeds, a sign up now and then
+				const vacant = (c) => {
+					const { lotX, Lw, face, at, r, k, side } = c;
+					lawn(lotX + Lw / 2, at(IZ / 4), Lw - 0.6, IZ / 2 - 1, r * 7.1 % 1 < 0.5 ? jit([0.5, 0.42, 0.32], r) : jit([0.47, 0.44, 0.27], r), face);
+					if (hash(r * 31, 7) < 0.55) prop('sign', lotX + Lw * 0.3, at(1.6), face);
+					weeds(lotX + 1, lotX + Lw - 1, at(1), at(IZ / 2 - 2), 14, k * 5 + side);
+					if (r * 3.3 % 1 < 0.5) tree(lotX + Lw * 0.6, at(IZ / 3), 8 + r * 5, false, r);
+				};
+				// balconies across a front, one to each unit above the ground floor (the facade's
+				// sliders are on the odd bays); lift = floor height; the flats' own storey
+				const balconies = (gxC, gzC, W, D, face, floors, storey, c, first = 1, pitch = 7.2, off = 1.5) => {
+					if (!detail) return;
+					const [ux, uz] = LX[face], [nx, nz] = NZ[face], ew = face === 's' || face === 'n';
+					for (let f = first; f < floors; f++) for (let m = 0; (m + 0.5) * pitch + off * 3.6 - 1.8 <= W - 1.6; m++) {
+						const fxc = m * pitch + off * 3.6 + (pitch > 7 ? 0 : 0);
+						const bw = fract(fxc / 25.2);
+						if (pitch > 7 && bw > 0.44 && bw < 0.56) continue;
+						const bx = gxC + ux * (fxc - W / 2) + nx * (D / 2 + 0.7), bz = gzC + uz * (fxc - W / 2) + nz * (D / 2 + 0.7);
+						lot(list, a, style, bx, bz, ew ? 3.0 : 1.4, ew ? 1.4 : 3.0, 1.05, KIND.plain, c, null, false, { face, lift: f * storey - 0.12 });
+					}
+				};
+				// a small apartment building on a lot and a half (the older towns' fourplexes)
+				const fourplex = (c, wc) => {
+					const { lotX, Lw, face, at, r, k, side } = c, fl = r < 0.6 ? 2 : 3, W = Lw - 5, D = 16 + r * 5;
+					const col = jit(wc, r), o = lot(list, a, style, lotX + 1.5 + W / 2, at(5 + D / 2), W, D, fl * 2.8 + 0.4, KIND.apt, col, r < 0.5 ? { hip: true, h: 1.6, col: pick(PAL.olderRoof, r * 3.3 % 1), t: ROOF.shingle, ov: 0.5 } : null, false, { face });
+					setCond(o, condFor(o, 0.06));
+					balconies(lotX + 1.5 + W / 2, at(5 + D / 2), W, D, face, fl, 2.8, col.map((v) => Math.min(1, v * 1.06)));
+					if (detail) { pave(lotX + Lw - 1.8, at(IZ / 4), 2.8, IZ / 2 - 2, KIND.plain, [0.55, 0.54, 0.52]); pave(lotX + Lw / 2, at(IZ / 2 - 5), Lw - 1, 8, KIND.paved); prop('bins', lotX + Lw - 1.5, at(0.8), face); }
+					fences(lotX, lotX + Lw, at, 5 + D, IZ / 2, side, r);
+					tree(lotX + 2, at(2.5), 9 + r * 4, false, r * 1.7 % 1);
+				};
+				// garden apartments round a courtyard: blocks along the streets, a third wing across
+				// the end, and in the middle the pool with its deck, spa, loungers, umbrellas, a
+				// cabana and the grill, the clubhouse beside it; parking under carports; a gated
+				// drive in, the mailbox kiosk by it; lawns, shrubs and trees
+				const complex = () => {
+					const q = (n) => hash(i * 5.3 + n * 1.7, j * 7.1 + n * 2.9);
+					const floors = q(0) < 0.55 ? 2 : 3, bh = floors * 2.8 + 0.4;
+					const col = jit(pick(PAL.suburb, q(1)), q(0)), rcol = pick(PAL.tile, q(2) * 0.99);
+					const roof = { hip: true, h: 2.2, col: rcol, t: rcol[0] > rcol[2] * 1.4 ? ROOF.barrel : ROOF.flatTile, ov: 0.7, trim: q(3) < 0.5 ? 0 : 3 };
+					const e = 4.5, bd = 13, entry = 18, fw = IX - 2 * e - entry;
+					const balc = col.map((v) => Math.min(1, v * 1.06));
+					const bldg = (gx, gz, w, d, face) => {
+						const o = lot(list, a, style, gx, gz, w, d, bh, KIND.apt, col, roof, false, { face });
+						setCond(o, condFor(o, 0.02));
+						const ew = face === 's' || face === 'n';
+						balconies(gx, gz, ew ? w : d, ew ? d : w, face, floors, 2.8, balc);
+						if (detail) { const [nx, nz] = NZ[face], [ux, uz] = LX[face], W = ew ? w : d, D = ew ? d : w; for (let m = 0; m < W / 4; m++) { const [x, z] = fromGrid(gx + ux * (m * 4 + 2 - W / 2) + nx * (D / 2 + 1.2), gz + uz * (m * 4 + 2 - W / 2) + nz * (D / 2 + 1.2), a, style), g = bay.heightAt(x, z); if (g > 0.8) trees.push({ x, y: g - 0.1, z, h: 1.0 + hash(m, gx) * 0.8, shrub: true, col: jit(pick(PAL.crown, hash(m, gz)), q(4)) }); } }
+					};
+					bldg(X0 + e + fw / 2, Z0 + e + bd / 2, fw, bd, 'n');
+					bldg(X0 + e + fw / 2, Z0 + IZ - e - bd / 2, fw, bd, 's');
+					const m0 = Z0 + e + bd + 3, m1 = Z0 + IZ - e - bd - 3, mz = (m0 + m1) / 2, band = m1 - m0;
+					const west = band > 20;
+					if (west) bldg(X0 + e + bd / 2, mz, bd, band - 1, 'e');
+					const cx0 = X0 + e + (west ? bd + 3 : 2), cx1 = X0 + IX * 0.6, ccx = (cx0 + cx1) / 2;
+					// the courtyard lawn, the deck, the pool and spa
+					lawn((cx0 + cx1) / 2, mz, cx1 - cx0, band, jit([0.3, 0.46, 0.2], q(5)), 's');
+					const pl = Math.min(15, (cx1 - cx0) * 0.4), pw2 = Math.min(7, band * 0.35), dk = [Math.min(cx1 - cx0 - 14, pl + 12), Math.min(band - 2, pw2 + 8)];
+					lot(list, a, style, ccx, mz, dk[0], dk[1], 0.38, KIND.plain, jit([0.82, 0.78, 0.7], q(6)), null, false, { face: 's', lift: -0.3 });
+					const PL = lot(list, a, style, ccx - 1, mz, pl, pw2, 0, KIND.pool, [0.9, 0.89, 0.85], null, 0.9, { face: 's' });
+					if (PL) PL.dec = true;
+					lot(list, a, style, ccx + pl / 2 + 2.2, mz - pw2 / 2 + 1.3, 2.6, 2.6, 0, KIND.pool, [0.86, 0.84, 0.8], null, 0.9, { face: 's' });
+					if (detail) {
+						for (const s2 of [-1, 1]) for (let n = 0; n < Math.floor(pl / 1.6); n++) {
+							const lx = ccx - 1 - pl / 2 + 0.8 + n * 1.6;
+							if (n % 3 === 2) prop('umbrella', lx, mz + s2 * (pw2 / 2 + 2.0), 's', 0, 1, pick(CANVAS, q(7 + n)));
+							else prop('lounger', lx, mz + s2 * (pw2 / 2 + 1.9), s2 > 0 ? 'n' : 's');
+						}
+						prop('cabana', ccx - dk[0] / 2 + 2.2, mz, 'e', 0, 1, pick(CANVAS, q(8)));
+						prop('bbq', ccx + dk[0] / 2 - 1.6, mz + dk[1] / 2 - 1.2, 'n');
+						for (const s2 of [-1, 1]) prop('table', ccx + dk[0] / 2 - 3.5, mz + s2 * 2.2, 's');
+						// the pool fence round the deck
+						const fx0 = ccx - dk[0] / 2, fx1 = ccx + dk[0] / 2, fz0 = mz - dk[1] / 2, fz1 = mz + dk[1] / 2;
+						fenceRun('iron', fx0, fz0, fx1, fz0); fenceRun('iron', fx0, fz1, fx1 - 2, fz1); fenceRun('iron', fx0, fz0, fx0, fz1); fenceRun('iron', fx1, fz0, fx1, fz1);
+						for (const [tx, tz] of [[cx0 + 2, m0 + 2], [cx0 + 2, m1 - 2], [cx1 - 2, m0 + 2], [cx1 - 2, m1 - 2]]) tree(tx, tz, 7 + q(9) * 4, false, q(9));
+					}
+					// the clubhouse, facing the pool
+					lot(list, a, style, cx1 + 7, mz, 11, Math.min(band - 4, 12), 4.2, KIND.office, jit(col, q(10)), { ...roof, h: 2.4 }, false, { face: 'w' });
+					// the parking: carports down both sides of the lane, cars under most
+					const px0 = cx1 + 14, px1 = X0 + IX - e;
+					pave((px0 + px1) / 2, mz, px1 - px0, band + 4, KIND.paved);
+					pave(X0 + IX - e - entry / 2, (Z0 + m0) / 2, entry - 5, m0 - Z0, KIND.plain, [0.3, 0.3, 0.31]);
+					pave(X0 + IX - e - entry / 2, (m1 + Z0 + IZ) / 2, entry - 5, Z0 + IZ - m1, KIND.plain, [0.3, 0.3, 0.31]);
+					if (detail) for (let x = px0 + 1.6; x < px1 - 1.5; x += 3.0) for (const [z, f] of [[m0 + 1.2, 'n'], [m1 - 1.2, 's']]) {
+						prop('carport', x, z + (f === 'n' ? 1.8 : -1.8), f, 0, [1, 1, 1], [0.8, 0.79, 0.76]);
+						if (hash(x, z + i) < 0.7) prop('car', x, z + (f === 'n' ? 1.8 : -1.8), f, 0, 1, pick(CARS, hash(z, x + j)));
+					}
+					// the gate across the drive in, the mailbox kiosk inside it
+					prop('gate', X0 + IX - e - entry / 2, Z0 + 3, 's');
+					prop('mailbox', X0 + IX - e - entry + 0.6, m0 - 1.2, 'e');
+					for (let t = 5; t < IX - 3; t += 11) for (const ez of [1.6, IZ - 1.6]) tree(X0 + t, Z0 + ez, 8 + hash(t, ez) * 3, false, hash(t * 3, ez + i));
+				};
+				// townhouses in rows of four to six, garages under, little patios out back
+				const townhouses = (side, at, face, wc, rcol) => {
+					const len = IX - 4, uw = 6.4 + hash(i * 3, j * 5 + side) * 1.4, d = 12, fl = hash(i * 7 + side, j * 3) < 0.5 ? 2 : 3;
+					const h = fl * 3.0 + 0.6, sb = 4 + hash(i, j * 9 + side) * 2;
+					const tones = [wc, jit(wc, 0.9).map((v) => v * 0.9), [0.9, 0.88, 0.82]];
+					let x = 2;
+					for (let g = 0; x < len - uw * 3; g++) {
+						const n = Math.min(Math.floor((len - x) / uw), 4 + Math.floor(hash(g * 3 + i, j + side) * 3));
+						for (let u = 0; u < n; u++) {
+							const gxC = X0 + x + uw * (u + 0.5), rU = hash(g * 11 + u, i * 7 + j + side);
+							const o = lot(list, a, style, gxC, at(sb + d / 2 + (u % 2) * 0.6), uw + 0.02, d, h + (u % 3 === 1 ? 0.6 : 0), KIND.row + (u % 2 ? 0.1 : 0.2), jit(tones[(u + g) % 3], rU), { hip: false, rot: true, h: 2.2, col: rcol, t: ROOF.shingle, ov: 0.3 }, false, { face });
+							setCond(o, condFor(o, 0.02));
+							if (!detail) continue;
+							pave(gxC, at(sb / 2), uw * 0.5, sb, KIND.plain, [0.64, 0.63, 0.6]);
+							lawn(gxC, at(sb + d + 2.4), uw - 0.4, 4.4, [0.7, 0.68, 0.63], face);
+							lot(list, a, style, gxC - uw / 2, at(sb + d + 2.4), 0.1, 4.6, 1.6, KIND.plain, [0.5, 0.42, 0.33], null, false, { face });
+							lot(list, a, style, gxC, at(sb + d + 4.7), uw, 0.1, 1.6, KIND.plain, [0.5, 0.42, 0.33], null, false, { face });
+							if (rU < 0.4) prop('table', gxC, at(sb + d + 2.3), face);
+							if (rU > 0.7) prop('bins', gxC + uw * 0.3, at(0.7), face);
+						}
+						x += uw * n + 5 + hash(g, i + j) * 4;
+					}
+					for (let t = 4; t < IX - 3; t += 12) tree(X0 + t, at(-1.8), 7 + hash(t, side) * 3, false, hash(t, i + side));
+				};
+				// the neighbourhood's own: tennis and pickleball courts, a dog park, a community
+				// garden, a pocket park
+				const amenities = (side, at, face) => {
+					const len = IX - 4, dep = IZ / 2 - 3, pa = hash(i * 13 + side, j * 17);
+					const kinds = pa < 0.3 ? ['tennis', 'dog'] : pa < 0.55 ? ['pickle', 'garden', 'park'] : pa < 0.8 ? ['park', 'tennis'] : ['garden', 'dog', 'pickle'];
+					const each = len / kinds.length;
+					kinds.forEach((kd, n) => {
+						const cx = X0 + 2 + each * (n + 0.5), cz = at(dep / 2 + 1.5);
+						lawn(cx, cz, each - 1, dep, jit([0.3, 0.44, 0.2], pa + n * 0.1), face);
+						if (kd === 'tennis' && each > 37.5 && dep > 19) {
+							lot(list, a, style, cx, cz, 36.6, 18.3, 0, KIND.court, [0.3, 0.4, 0.3], null, 0.9, { face: 'e' });
+							prop('net', cx, cz, 'e', 0, [11.9, 1, 1]);
+							fenceRun('iron', cx - 18.3, cz - 9.15, cx + 18.3, cz - 9.15, 2); fenceRun('iron', cx - 18.3, cz + 9.15, cx + 18.3, cz + 9.15, 2);
+							fenceRun('iron', cx - 18.3, cz - 9.15, cx - 18.3, cz + 9.15, 2); fenceRun('iron', cx + 18.3, cz - 9.15, cx + 18.3, cz + 9.15, 2);
+						} else if (kd === 'pickle' || kd === 'tennis') {
+							const nc = Math.max(1, Math.min(4, Math.floor((each - 2) / 10)));
+							for (let m = 0; m < nc; m++) {
+								const px = cx + (m - (nc - 1) / 2) * 10;
+								lot(list, a, style, px, cz, 9.6, Math.min(18, dep - 1), 0, KIND.court + 0.5, [0.3, 0.4, 0.3], null, 0.9, { face: 's' });
+								prop('net', px, cz, 's', 0, [6.6, 0.85, 1]);
+							}
+							fenceRun('iron', cx - each / 2 + 0.6, cz - dep / 2 + 0.5, cx + each / 2 - 0.6, cz - dep / 2 + 0.5, 1.6); fenceRun('iron', cx - each / 2 + 0.6, cz + dep / 2 - 0.5, cx + each / 2 - 0.6, cz + dep / 2 - 0.5, 1.6);
+						} else if (kd === 'dog') {
+							lawn(cx, cz, each - 3, dep - 2, jit([0.44, 0.42, 0.26], pa), face);
+							fenceRun('iron', cx - each / 2 + 1.5, cz - dep / 2 + 1, cx + each / 2 - 1.5, cz - dep / 2 + 1, 0.8); fenceRun('iron', cx - each / 2 + 1.5, cz + dep / 2 - 1, cx + each / 2 - 1.5, cz + dep / 2 - 1, 0.8);
+							fenceRun('iron', cx - each / 2 + 1.5, cz - dep / 2 + 1, cx - each / 2 + 1.5, cz + dep / 2 - 1, 0.8); fenceRun('iron', cx + each / 2 - 1.5, cz - dep / 2 + 1, cx + each / 2 - 1.5, cz + dep / 2 - 1, 0.8);
+							for (let m = 0; m < 3; m++) prop('bench', cx - each / 4 + m * each / 4, cz + dep / 2 - 3, face);
+							prop('cabana', cx + each / 4, cz, face, 0, 1, [0.55, 0.6, 0.62]);
+							for (let m = 0; m < 3; m++) tree(cx + (hash(m, n + i) - 0.5) * (each - 8), cz + (hash(n, m + j) - 0.5) * (dep - 6), 8 + hash(m, n) * 5, false, hash(m * 3, n));
+						} else if (kd === 'garden') {
+							for (let bx = cx - each / 2 + 3; bx < cx + each / 2 - 3; bx += 2.2) for (let bz = cz - dep / 2 + 3; bz < cz + dep / 2 - 5; bz += 3.4) prop('bed', bx, bz, 's', 0, 1, jit([1, 1, 1], hash(bx, bz)));
+							lot(list, a, style, cx + each / 2 - 3, cz + dep / 2 - 3, 3, 3, 2.4, KIND.garage, [0.5, 0.42, 0.3], { hip: false, h: 1, col: [0.35, 0.33, 0.3], t: ROOF.metal, ov: 0.2 }, false, { face });
+							fenceRun('picket', cx - each / 2 + 1, cz - dep / 2 + 1, cx + each / 2 - 1, cz - dep / 2 + 1);
+						} else {
+							pave(cx, cz, 2, dep - 2, KIND.plain, [0.72, 0.7, 0.64]);
+							for (let m = 0; m < 3; m++) prop('bench', cx + 2, cz + (m - 1) * 6, 'e');
+							prop('table', cx - 5, cz + 3, 's'); prop('table', cx - 6, cz - 5, 's');
+							for (let m = 0; m < 6; m++) tree(cx + (hash(m, n * 3 + i) - 0.5) * (each - 6), cz + (hash(n * 5, m + j) - 0.5) * (dep - 4), 8 + hash(m, n) * 6, m === 5, hash(m * 7, n));
+						}
+					});
+				};
+				// shops below, flats above with their balconies, built out to the pavement; parking behind
+				const mixedUse = () => {
+					pave(X0 + IX / 2, Z0 + IZ / 2, IX * 0.95, IZ * 0.4);
+					for (const side of [0, 1]) {
+						const face = side ? 's' : 'n', at = (m) => (side ? Z0 + IZ - m : Z0 + m);
+						for (let x = 1, k = 0; x < IX - 8; k++) {
+							const rr = hash(i * 31 + k * 5 + side, j * 29 + k), w = Math.min(IX - 1 - x, 10 + rr * 16), D = 16 + rr * 4, fl = 3 + Math.floor(rr * 2.2);
+							const col = jit(pick(rr < 0.5 ? PAL.retail : PAL.sunset, rr * 7.7 % 1), rr), h = fl * 3.3 + 0.9;
+							const o = lot(list, a, style, X0 + x + w / 2, at(0.6 + D / 2), w, D, h, KIND.shop, col, null, false, { face });
+							setCond(o, condFor(o, 0.02));
+							if (rr > 0.35) balconies(X0 + x + w / 2, at(0.6 + D / 2), w, D, face, fl, 3.3, [0.25, 0.25, 0.27], 2, 5.08, 0.85);
+							if (detail && hash(k, side + i) < 0.7) { const aw = hash(i + k, j * 9 + side); lot(list, a, style, X0 + x + w / 2, at(-0.2), w * 0.86, 1.6, 0.18, KIND.plain, aw < 0.3 ? [0.55, 0.12, 0.1] : aw < 0.6 ? [0.1, 0.3, 0.2] : [0.2, 0.2, 0.2], null, false, { face, lift: 3.0 }); }
+							x += w + (rr > 0.8 ? 4 : 0.02);
+						}
+						for (let t = 5; t < IX - 3; t += 10) tree(X0 + t, side ? Z0 + IZ + 1.6 : Z0 - 1.6, 7, false, hash(t, side + i));
 					}
 				};
 				const arterial = (style === STYLE.suburb || style === STYLE.older) && (((i % 7) + 7) % 7 === 0);
@@ -757,8 +1197,10 @@ export function createCity(shared, scene, bay, real = null) {
 					continue;
 				}
 				if (arterial) {
-					// a commercial strip on the arterial: shops at the back, parking in front, a pad or two
+					// a commercial strip on the arterial: shops at the back, parking in front, a pad or
+					// two; or (more toward the centres) a street of shops with flats over them
 					const r = hash(i * 17 + 1, j * 19 + 3);
+					if (hash(i * 23 + 5, j * 7 + 1) < 0.3 + U.d * 2) { mixedUse(); continue; }
 					pave(X0 + IX * 0.5, Z0 + IZ * 0.36, IX * 0.95, IZ * 0.62);
 					lot(list, a, style, X0 + IX * 0.5, Z0 + IZ * 0.84, IX * (0.7 + r * 0.2), 22, 7.4 + r * 2, KIND.retail, jit(pick(PAL.retail, r), r), null);
 					if (r > 0.4) lot(list, a, style, X0 + IX * 0.18, Z0 + IZ * 0.18, 18, 14, 6.5, KIND.retail, jit(pick(PAL.retail, r * 3.7), r), null);
@@ -775,10 +1217,21 @@ export function createCity(shared, scene, bay, real = null) {
 					const share = { chinatown: 0.85, northbeach: 0.6, mission: 0.3, sunset: 0.14 }[dist] ?? 0.2;
 					const comm = (jj) => hash(jj * 7 + 13, Math.round(a * 1000) + style * 5) < share;
 					const nK = Math.ceil((IX - 0.1) / L);
-					for (let k = 0; k * L < IX - 0.1; k++) for (const side of [0, 1]) {
+					for (const side of [0, 1]) for (let k = 0, skip = -1; k * L < IX - 0.1; k++) {
+						if (k === skip) continue;
 						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
-						if (r < 0.03) continue;
-						let h = { chinatown: 11 + r * 7, northbeach: 9 + r * 5, nobhill: 16 + Math.pow(r, 1.5) * 26, mission: 8.5 + Math.floor(r * 3) * 2.8, pacheights: 11 + r * 4, marina: 8 + r * 3, sunset: 7 + r * 1.5 }[dist] ?? 8.5 + Math.floor(r * 3) * 2.8 + (r > 0.93 ? 6 : 0);
+						// an empty lot now and then, fenced; now and then a double lot with a bigger
+						// block of flats on it
+						if (r < 0.03) {
+							const gz = side ? Z0 + IZ - deep / 2 : Z0 + deep / 2;
+							lot(list, a, style, X0 + k * L + L / 2, gz, L - 0.3, deep - 0.6, 0.34, KIND.plain, jit([0.46, 0.42, 0.34], r), null, false, { lift: -0.3 });
+							lot(list, a, style, X0 + k * L + L / 2, side ? Z0 + IZ - 0.4 : Z0 + 0.4, L - 0.2, 0.05, 1.9, KIND.plain, [0.5, 0.51, 0.52], null, false, { face: side ? 's' : 'n' });
+							continue;
+						}
+						const dbl = k * L + 2 * L < IX - 0.1 && hash(i * 57 + k * 3 + side, j * 11 + k) < 0.07 && dist !== 'chinatown';
+						if (dbl) skip = k + 1;
+						const Lk = dbl ? 2 * L : L;
+						let h = ({ chinatown: 11 + r * 7, northbeach: 9 + r * 5, nobhill: 16 + Math.pow(r, 1.5) * 26, mission: 8.5 + Math.floor(r * 3) * 2.8, pacheights: 11 + r * 4, marina: 8 + r * 3, sunset: 7 + r * 1.5 }[dist] ?? 8.5 + Math.floor(r * 3) * 2.8 + (r > 0.93 ? 6 : 0)) + (dbl ? 3.3 + Math.floor(r * 2) * 3.3 : 0);
 						const col = jit(pick(pal, hash(i + k * 13, j * 7 + side)), r);
 						let roof = null;
 						if (dist === 'victorian' && r > 0.3) roof = { hip: false, rot: true, h: 3.4, col: [0.3, 0.3, 0.32] };                      // the gable faces the street
@@ -793,14 +1246,15 @@ export function createCity(shared, scene, bay, real = null) {
 						const r2 = hash(i * 37 + k * 11 + side, j * 43 + k);
 						const garageP = { sunset: 0.85, nobhill: 0.08, chinatown: 0.04, northbeach: 0.15, pacheights: 0.4 }[dist] ?? 0.55;
 						const kind = shop ? KIND.shop : KIND.row + (r2 < garageP ? (r2 < garageP / 2 ? 0.1 : 0.2) : 0);
-						lot(list, a, style, X0 + k * L + L / 2, gz, L + 0.02, deep, h, kind, col, roof, false, { face });
+						const so = lot(list, a, style, X0 + k * L + Lk / 2, gz, Lk + 0.02, deep, h, kind, col, roof, false, { face });
+						if (dist !== 'nobhill' && dist !== 'pacheights') setCond(so, condFor(so, 0.02));
 						// bay windows stacked up the front, from the first floor up
-						if (style === STYLE.sf && r > 0.35 && dist !== 'nobhill' && dist !== 'chinatown' && h > 7) lot(list, a, style, X0 + k * L + L / 2, out(0.5), Math.min(3.6, L * 0.47), 1.4, h - 4.4, KIND.bay, col.map((c) => Math.min(1, c * 1.05)), null, false, { face, lift: 3.4 });
+						if (style === STYLE.sf && r > 0.35 && dist !== 'nobhill' && dist !== 'chinatown' && h > 7) lot(list, a, style, X0 + k * L + Lk / 2, out(0.5), Math.min(3.6, L * 0.47), 1.4, h - 4.4, KIND.bay, col.map((c) => Math.min(1, c * 1.05)), null, false, { face, lift: 3.4 });
 						// an awning over the shopfront
 						if (shop && hash(k * 5 + side, i * 3 + j) < 0.75) {
 							const aw = hash(i + k, j * 9 + side);
 							const ac = aw < 0.25 ? [0.55, 0.12, 0.1] : aw < 0.45 ? [0.1, 0.3, 0.2] : aw < 0.6 ? [0.12, 0.18, 0.36] : aw < 0.75 ? [0.2, 0.2, 0.2] : aw < 0.88 ? [0.86, 0.6, 0.18] : [0.9, 0.88, 0.82];
-							lot(list, a, style, X0 + k * L + L / 2, out(0.8), L * 0.86, 1.6, 0.18, KIND.plain, ac, null, false, { face, lift: 3.0 });
+							lot(list, a, style, X0 + k * L + Lk / 2, out(0.8), Lk * 0.86, 1.6, 0.18, KIND.plain, ac, null, false, { face, lift: 3.0 });
 						}
 						// a street tree now and then (more in the Sunset and the Mission)
 						if (hash(k * 3 + side, i * 5 + j) < (dist === 'sunset' || dist === 'mission' ? 0.2 : 0.1)) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 2.0 : Z0 - 2.0, 6 + r * 3, false, r);
@@ -813,91 +1267,48 @@ export function createCity(shared, scene, bay, real = null) {
 						const r2 = hash(i * 29 + k * 13 + side, j * 31 + k);
 						lot(list, a, style, side ? X0 + IX - deep / 2 : X0 + deep / 2, Z0 + deep + k * L + L / 2, deep, L + 0.02, h, r2 < 0.2 ? KIND.shop : KIND.row + (r2 < 0.55 ? 0.1 : 0), col, null, false, { face: side ? 'e' : 'w' });
 					}
-				} else if (style === STYLE.older) {
-					// older towns: detached wood houses with deep front porches, a driveway down
-					// the side to a garage out back, leafy yards
-					const L = 12;
-					for (let k = 0; k * L < IX - 2; k++) for (const side of [0, 1]) {
-						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
-						if (r < 0.08) continue;
-						const w = 7.6 + r * 2, d = 10 + ((r * 7.7) % 1) * 4, h = r > 0.55 ? 6.4 : 3.6;
-						const col = jit(pick(PAL.older, hash(i + k * 13, j * 7 + side)), r);
-						const rc = pick(PAL.olderRoof, hash(i * 3 + k, j + side * 5));
-						const fz = side ? Z0 + IZ : Z0, inw = side ? -1 : 1, face = side ? 's' : 'n', at = (m) => fz + inw * m;
-						const lotX = X0 + k * L, gs = r > 0.5 ? 1 : -1;
-						const cx = lotX + L / 2 - gs * (L - w - 3) / 2;             // the house to one side, the driveway down the other
-						const hf = 6;                                                 // house front, back from the pavement
-						const door = 0.25 + ((r * 3.3) % 1) * 0.5;
-						lot(list, a, style, cx, at(hf + d / 2), w, d, h, doorKind(KIND.house, door), col, { hip: r > 0.8, rot: r < 0.3, h: Math.min(w, d) * 0.42, col: rc }, false, { face });
-						const dx = cx + (side ? 1 : -1) * (door - 0.5) * (w - 2.5);
-						if (detail) {
-							// the porch: a roof on posts across much of the front, steps to a path
-							const pw = w * (0.5 + r * 0.3);
-							lot(list, a, style, dx, at(hf - 1.2), pw, 2.6, 0.25, KIND.plain, rc, null, false, { face, lift: 2.7 });
-							for (const e of [-1, 1]) lot(list, a, style, dx + e * (pw / 2 - 0.2), at(hf - 2.3), 0.22, 0.22, 2.7, KIND.plain, [0.9, 0.89, 0.85], null, false, { face });
-							pave(dx, at(hf / 2 - 1), 1.2, hf - 2.2, KIND.plain, [0.68, 0.66, 0.62]);
-							// the driveway to a small garage at the back of the lot
-							const gx = lotX + L / 2 + gs * (L / 2 - 1.9);
-							pave(gx, at(12), 2.8, 24, KIND.plain, [0.56, 0.55, 0.52]);
-							if (r > 0.3) lot(list, a, style, gx - gs * 0.6, at(hf + d + 6), 3.6, 6, 2.8, KIND.garage, jit(col, r * 3.1 % 1), { hip: false, h: 1.3, col: rc }, false, { face });
-							fences(lotX, lotX + L, at, hf + d * 0.6, IZ / 2, side, r);
-							shrubs(cx, at(hf - 0.8), w, dx, r);
-						}
-						// old neighbourhoods are leafy: street trees and big backyard trees
-						if (k % 2 === 0) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 1.9 : Z0 - 1.9, 9 + r * 6, false, r);
-						if (r > 0.4) tree(X0 + k * L + L / 2 + 3, side ? Z0 + IZ - 30 : Z0 + 30, 10 + r * 8, r > 0.85, r * 1.7 % 1);
-					}
-				} else if (style === STYLE.suburb) {
-					// the tract: one builder, one decade, one look
+				} else if (style === STYLE.older || style === STYLE.suburb) {
+					const sub = style === STYLE.suburb;
+					// the tract (suburbs): one builder, one decade, one look; then fifty years of owners
 					const ti = Math.floor(((i * BX) + 1e6) / 520), tj = Math.floor(((j * BZ) + 1e6) / 400);
-					const tr = hash(ti * 7 + 3, tj * 13 + 5), era = eraFor(wx, wz, tr);
-					const wallsAll = [PAL.ranch, PAL.seventies, PAL.suburb, PAL.eichler][era], roofsAll = [PAL.ranchRoof, PAL.shake, PAL.tile, PAL.flat][era];
+					const tr = hash(ti * 7 + 3, tj * 13 + 5), era = sub ? eraFor(wx, wz, tr) : ERA.ranch;
+					const wallsAll = sub ? [PAL.ranch, PAL.seventies, PAL.suburb, PAL.eichler][era] : PAL.older, roofsAll = sub ? [PAL.ranchRoof, PAL.shake, PAL.tile, PAL.flat][era] : PAL.olderRoof;
 					const walls = [0, 1, 2, 3].map((n) => pick(wallsAll, hash(ti + n * 17, tj + n * 31)));
 					const roofs = [0, 1].map((n) => pick(roofsAll, hash(ti * 3 + n, tj * 5 + n)));
-					const modern = era === ERA.modern;
-					const L = modern ? 16 : era === ERA.eichler ? 19 : 20;
-					const setback = modern ? 6 : 8, SY = 1.5;                      // front and side setbacks
-					const treeK = [0.9, 0.7, 0.3, 0.9][era], treeH = [11, 9, 5, 10][era];
-					for (let k = 0; k * L < IX - 4; k++) for (const side of [0, 1]) {
-						const r = hash(i * 131 + k * 7 + side, j * 17 + k);
-						if (r < 0.04) continue;
+					const modern = sub && era === ERA.modern, eich = sub && era === ERA.eichler;
+					const L = !sub ? 12 : modern ? 16 : eich ? 19 : 20;
+					const treeK = sub ? [0.9, 0.7, 0.3, 0.9][era] : 1, treeH = sub ? [11, 9, 5, 10][era] : 12;
+					const roofT = !sub ? (hash(ti, tj * 3) < 0.15 ? ROOF.metal : ROOF.shingle) : modern ? (roofs[0][0] > roofs[0][2] * 1.4 ? ROOF.barrel : ROOF.flatTile) : eich ? ROOF.gravel : era === ERA.seventies ? ROOF.shake : ROOF.shingle;
+					const neglectK = sub ? 0.04 : 0.11;
+					// a block of garden apartments round a pool now and then (more toward the town centres)
+					const br = hash(i * 41 + 7, j * 43 + 11);
+					if (br < (sub ? 0.035 : 0.025) + U.d * 0.5 && IX > 80 && IZ > 55) { complex(); continue; }
+					for (const side of [0, 1]) {
 						const fz = side ? Z0 + IZ : Z0, inw = side ? -1 : 1, face = side ? 's' : 'n', at = (m) => fz + inw * m;
-						const two = modern ? r > 0.12 : era === ERA.seventies ? r > 0.5 : era === ERA.ranch ? r > 0.9 : false;
-						const h = two ? 6.4 : 3.3;
-						const col = jit(walls[Math.floor(r * 4)], r);
-						// the tract's roofs, each weathered its own way, and now and then one re-roofed since
-						const rr = hash(i * 53 + k * 19 + side, j * 61 + k), rc = jit(rr < 0.1 ? pick(roofsAll, rr * 10) : roofs[r > 0.8 ? 1 : 0], rr).map((c) => c * (0.9 + ((rr * 13.7) % 1) * 0.16));
-						const lotX = X0 + k * L, gs = r > 0.5 ? 1 : -1;
-						const gw = modern && r > 0.7 ? 8.8 : 6.2;
-						const avail = L - 2 * SY;
-						// new tracts: a two-storey house across the lot with the garage stepped out in
-						// front; older tracts: a long low house with the garage at one end
-						const w = modern ? avail - ((r * 2.9) % 1) * 1.5 : avail - gw - ((r * 2.9) % 1) * 1.8;
-						const d = modern ? 12 + ((r * 5.3) % 1) * 3 : 10 + ((r * 5.3) % 1) * 3;
-						const hf = modern ? setback + 3 : setback + 1.5;              // house front
-						const hx = modern ? lotX + L / 2 : lotX + SY + (gs > 0 ? w / 2 : gw + w / 2);
-						const gx = gs > 0 ? lotX + L - SY - gw / 2 : lotX + SY + gw / 2;
-						const roofH = era === ERA.eichler ? 0.9 : Math.min(w, d) * (modern ? 0.3 : era === ERA.ranch ? 0.2 : 0.26);
-						const door = modern ? (gs > 0 ? 0.28 : 0.72) : 0.35 + ((r * 3.3) % 1) * 0.3;
-						lot(list, a, style, hx, at(hf + d / 2), w, d, h, doorKind(KIND.house, door), col, { hip: modern || (era === ERA.ranch && r > 0.4), h: roofH, col: rc }, false, { face });
-						// the garage, its doors to the street
-						lot(list, a, style, gx, at(setback + 3.5), gw, 7, 3.1, KIND.garage, col, { hip: modern, h: era === ERA.eichler ? 0.5 : 1.6, col: rc }, false, { face });
-						// the driveway
-						pave(gx, at(setback / 2), gw - 0.6, setback, KIND.plain, [0.62, 0.61, 0.58]);
-						const dx = hx + (side ? 1 : -1) * (door - 0.5) * (w - 2.5);
-						if (detail) {
-							// the front walk, a porch over the door, shrubs along the front, fences round the back
-							pave(dx, at(hf / 2), 1.1, hf, KIND.plain, [0.7, 0.69, 0.65]);
-							if (era !== ERA.eichler) {
-								lot(list, a, style, dx, at(hf - 0.8), 2.6, 1.8, 0.22, KIND.plain, rc, null, false, { face, lift: 2.6 });
-								if (modern || r > 0.5) for (const e of [-1, 1]) lot(list, a, style, dx + e * 1.15, at(hf - 1.55), 0.2, 0.2, 2.6, KIND.plain, [0.92, 0.91, 0.88], null, false, { face });
-							}
-							fences(lotX, lotX + L, at, hf + d * 0.55, IZ / 2, side, r);
-							shrubs(hx, at(hf - 0.9), w, dx, r);
+						// a row of townhouses along one side, or the neighbourhood's courts, dog park and garden
+						const sr = hash(i * 47 + side * 5, j * 53 + 3);
+						if (sr < (sub ? 0.045 : 0.03)) { townhouses(side, at, face, pick(wallsAll, sr * 13.1), roofs[0]); continue; }
+						if (sr < (sub ? 0.065 : 0.045)) { amenities(side, at, face); continue; }
+						const len = IX - (sub ? 4 : 2);
+						for (let x = 0, k = 0; x < len - 6; k++) {
+							const r = hash(i * 131 + k * 7 + side, j * 17 + k), rw = hash(i * 71 + k * 13 + side * 3, j * 37 + k * 5);
+							// lots of their own widths: most near the tract's, now and then a double or a
+							// triple lot with an estate on it, a skinny infill, an empty one
+							let Lw = L * (0.86 + rw * 0.3), kind = 'house';
+							if (rw < 0.05 && x + L * 2.4 < len) { Lw = L * (rw < 0.016 ? 3 : 2) * (0.95 + r * 0.1); kind = 'estate'; }
+							else if (rw > 0.955) { Lw = L * (sub ? 0.62 : 0.7); kind = 'narrow'; }
+							else if (r < (sub ? 0.03 : 0.05)) kind = 'vacant';
+							else if (!sub && rw > 0.9 && x + L * 1.8 < len) { Lw = L * 1.7; kind = 'plex'; }
+							if (len - (x + Lw) < L * 0.55) Lw = len - x;              // (the last takes what is left)
+							const lotX = X0 + x;
+							x += Lw;
+							if (Lw < 6.5) break;
+							const corner = k === 0 || x >= len - 0.1;
+							const ctx = { lotX, Lw, side, face, at, r, rw, k, corner };
+							if (kind === 'vacant') { vacant(ctx); continue; }
+							if (kind === 'plex') { fourplex(ctx, pick(wallsAll, r * 5.1)); continue; }
+							home(ctx, { sub, era, modern, eich, big: kind === 'estate', thin: kind === 'narrow', L, walls, wallsAll, roofs, roofsAll, roofT, neglectK, treeK, treeH });
 						}
-						// yard trees: a front tree and one out back, bigger in older tracts
-						if (hash(k + 1, side + i * 3) < treeK * 0.6) tree(hx - gs * (w * 0.3), at(2.5), treeH * (0.7 + r * 0.6), false, r * 3.1 % 1);
-						if (hash(k + 5, side + j * 7) < treeK) tree(hx + (r - 0.5) * 6, at(hf + d + 7), treeH * (0.8 + r * 0.7), r > 0.82, r * 5.7 % 1);
 					}
 				} else if (style === STYLE.industry) {
 					// warehouses and plants in concrete yards, trailers at the docks
@@ -938,15 +1349,33 @@ export function createCity(shared, scene, bay, real = null) {
 	// (more on a big store, a few on an office, the odd one on a shed), ducts running from
 	// the biggest; a sunroom off the back (local -z) of about one house in twelve, a
 	// clothesline in the back yard of about one in eight
-	const FLAT = new Set([KIND.office, KIND.retail, KIND.industry, KIND.shop, KIND.tower, KIND.row]);
+	const FLAT = new Set([KIND.office, KIND.retail, KIND.industry, KIND.shop, KIND.tower, KIND.row, KIND.apt]);
+	const ROOFED = new Set([KIND.house, KIND.houseGarageL, KIND.houseGarageR, KIND.apt]);
+	const BRICK = [[0.5, 0.24, 0.18], [0.56, 0.3, 0.22], [0.44, 0.22, 0.17], [0.6, 0.36, 0.28]];
+	// the height of a building's pitched roof over its own local point (lx, lz), and the slope
+	// across the ridge: along the ridge ua, across it uc (sign: which side)
+	function roofAt(o, lx, lz) {
+		const R = o.roof, ov = R.ov ?? 0.4, rot = !!R.rot;
+		const LA = (rot ? o.d : o.w) / 2 + ov, LC = (rot ? o.w : o.d) / 2 + ov;
+		const ua = rot ? lz : lx, uc = rot ? lx : lz;
+		let y = 1 - Math.abs(uc) / LC;
+		if (R.hip) y = Math.min(y, (0.5 - Math.abs(ua) / (2 * LA)) / 0.28);
+		return o.y + o.h + R.h * Math.max(0, y);
+	}
 	const HOUSE = new Set([KIND.house, KIND.houseGarageL, KIND.houseGarageR]);
 	function decorate(list, cx, cz, R) {
 		const put = [[], [], []], n0 = list.length;
+		put.props = list.props || (list.props = {});
 		for (let i = 0; i < n0; i++) {
 			const o = list[i];
-			if (Math.abs(o.x - cx) > R || Math.abs(o.z - cz) > R || o.h < 3) continue;
+			if (Math.abs(o.x - cx) > R || Math.abs(o.z - cz) > R || (o.h < 3 && o.kind !== KIND.pool)) continue;
 			const ca = Math.cos(o.a), sa = Math.sin(o.a), W = (lx, lz) => [o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz];
 			const r = hash(o.x * 0.73 + 3.1, o.z * 0.61 - 1.7), area = o.w * o.d, top = o.y + o.h;
+			if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7 && o.h < 70 && !o.src?.grp) {
+				// a parapet round the flat roof, capped with its coping
+				const ph = 0.7 + r * 0.5, pc = o.col.map((v) => v * 0.97);
+				for (const [lx, lz, w2, d2] of [[0, o.d / 2 - 0.13, o.w, 0.26], [0, -o.d / 2 + 0.13, o.w, 0.26], [o.w / 2 - 0.13, 0, 0.26, o.d - 0.5], [-o.w / 2 + 0.13, 0, 0.26, o.d - 0.5]]) { const [x, z] = W(lx, lz); list.push({ x, y: top - 0.05, z, w: w2, d: d2, h: ph + 0.05, a: o.a, col: pc, kind: KIND.parapet, roof: null, age: o.age }); }
+			}
 			if (!o.roof && FLAT.has(o.kind) && area > 110 && o.src?.kind !== 12 && Math.min(o.w, o.d) > 7) {
 				const n = Math.max(1, Math.min(area > 4000 ? 18 : o.kind === KIND.retail || o.kind === KIND.shop ? 10 : 6, Math.round(area / (o.kind === KIND.industry ? 700 : 280) * (0.6 + r * 0.8))));
 				const along = o.w > o.d, L = along ? o.w : o.d, S = along ? o.d : o.w, big = area > 1500 ? 1.6 : area > 600 ? 1.25 : 1;
@@ -960,7 +1389,66 @@ export function createCity(shared, scene, bay, real = null) {
 					const [x, z] = along ? W(0, S * 0.18) : W(S * 0.18, 0);
 					list.push({ x, y: top - 0.05, z, w: along ? L * 0.6 : 0.7, d: along ? 0.7 : L * 0.6, h: 0.75, a: o.a, col: [0.72, 0.73, 0.74], kind: KIND.plain, roof: null });
 				}
-			} else if (o.roof && HOUSE.has(o.kind) && area > 55 && o.w > 6.5) {
+			}
+			// on the pitched roofs close by: a chimney (brick on the old houses, stucco on the
+			// tile ones) or a metal flue, the plumbing vents and box vents, now and then a
+			// skylight, a solar array on the sunny side, a dish; dormers on some old ones; the
+			// downspouts down the corners
+			const dd = (o.x - cx) * (o.x - cx) + (o.z - cz) * (o.z - cz);
+			if (o.roof && ROOFED.has(Math.floor(o.kind)) && area > 30 && dd < ROOF_R * ROOF_R && o.roof.h > 0.4) {
+				const R = o.roof, ov = R.ov ?? 0.4, rot = !!R.rot, t = R.t ?? 0;
+				const LA = (rot ? o.d : o.w) / 2, LC = (rot ? o.w : o.d) / 2;
+				const P2 = (ua, uc) => (rot ? W(uc, ua) : W(ua, uc)), Lp = (ua, uc) => (rot ? [uc, ua] : [ua, uc]);
+				const slope = Math.atan2(R.h, LC + ov), yawR = rot ? o.a - Math.PI / 2 : o.a;
+				const hr = (n) => hash(o.x * 1.37 + n * 7.1, o.z * 0.91 - n * 3.3);
+				const burnt = o.cond === COND.burnt;
+				if (hr(1) < (t === ROOF.shingle || t === ROOF.shake ? 0.5 : 0.28) && LA > 3) {
+					const ua = (hr(2) < 0.5 ? -1 : 1) * (LA - 1.1), uc = (hr(3) - 0.5) * 1.2, [lx, lz] = Lp(ua, uc), [x, z] = P2(ua, uc);
+					const base = roofAt(o, lx, lz) - 0.4, H = o.y + o.h + R.h + 0.8 - base;
+					const brick = t === ROOF.shingle || t === ROOF.shake || hr(4) < 0.3;
+					kitPut(put, 'chimney', [x, base, z, o.a, 0.75, H, 1.15, 0, ...(brick ? pick(BRICK, hr(5)) : o.col)]);
+				} else if (hr(1) < 0.75 && !burnt) {
+					const ua = (hr(2) - 0.5) * LA, uc = -(0.3 + hr(3) * 0.4) * LC, [lx, lz] = Lp(ua, uc), [x, z] = P2(ua, uc);
+					kitPut(put, 'flue', [x, roofAt(o, lx, lz) - 0.1, z, 0, 1, 0.9 + hr(4) * 0.5, 1, 0]);
+				}
+				if (dd < 260 * 260 && !burnt) {
+					for (let n = 0, m = 1 + Math.floor(hr(6) * 3); n < m; n++) { const ua = (hr(7 + n) - 0.5) * LA * 1.4, uc = -(0.2 + hr(9 + n) * 0.5) * LC, [lx, lz] = Lp(ua, uc), [x, z] = P2(ua, uc); kitPut(put, 'pipe', [x, roofAt(o, lx, lz) - 0.05, z, 0, 1, 1, 1, 0]); }
+					for (let n = 0, m = Math.floor(hr(12) * 3); n < m; n++) { const ua = (n - (m - 1) / 2) * 1.6, uc = -(0.12 + hr(13) * 0.15) * LC, [lx, lz] = Lp(ua, uc), [x, z] = P2(ua, uc); kitPut(put, 'boxvent', [x, roofAt(o, lx, lz) - 0.05, z, yawR, 1, 1, 1, -slope]); }
+				}
+				if (!burnt && hr(14) < 0.12 && LC > 3) { const ua = (hr(15) - 0.5) * LA, uc = -LC * 0.45, [lx, lz] = Lp(ua, uc), [x, z] = P2(ua, uc); kitPut(put, 'skylight', [x, roofAt(o, lx, lz), z, yawR, 1, 1, 1, -slope]); }
+				// solar on the slope that faces most nearly south (world +z)
+				const sd = rot ? Math.sin(o.a) : Math.cos(o.a), s = sd >= 0 ? 1 : -1;
+				if (!burnt && !o.cond && hr(16) < (t === ROOF.barrel || t === ROOF.flatTile ? 0.3 : 0.18) && LA > 4 && LC > 3 && Math.abs(sd) > 0.3) {
+					const run = (LC + ov) / Math.cos(slope), rows = Math.max(1, Math.min(3, Math.floor((run - 1.2) / 1.72))), cols = Math.max(2, Math.floor((LA * 2 - (R.hip ? LC : 0) * 1.2 - 1.5) / 1.03));
+					const uc = s * (LC + ov) * 0.5, ua = (hr(17) - 0.5) * 0.8, [lx, lz] = Lp(ua, uc), [x, z] = P2(ua, uc);
+					kitPut(put, 'solar', [x, roofAt(o, lx, lz) + 0.1, z, yawR, cols * 1.03, 0.05, rows * 1.72, s * slope]);
+				}
+				if (!burnt && hr(18) < 0.07) { const ua = (hr(19) < 0.5 ? -1 : 1) * (LA - 0.8), uc = -(LC * 0.6), [lx, lz] = Lp(ua, uc), [x, z] = P2(ua, uc); kitPut(put, 'dish', [x, roofAt(o, lx, lz) - 0.05, z, o.a + hr(20) * 2, 1, 1, 1, 0]); }
+				// dormers across the front of a steep old roof
+				if (!rot && !R.hip && Math.floor(o.kind) === KIND.house && R.h / (LC + ov) > 0.62 && hr(21) < 0.3 && LA > 3.5) {
+					for (let n = 0, m = LA > 6 ? 2 : 1; n < m; n++) {
+						const ua = m === 1 ? 0 : (n ? 1 : -1) * LA * 0.45, uc = LC * 0.25, [x, z] = W(ua, uc), y = roofAt(o, ua, uc + 1) - 0.15;
+						kitPut(put, 'dormer', [x, y, z, o.a, 1, 1, 1, 0, ...o.col]);
+						kitPut(put, 'dormerRoof', [x, y, z, o.a, 1, 1, 1, 0, ...R.col]);
+					}
+				}
+				// the downspouts, at the corners under the eaves
+				if (dd < 220 * 220 && Math.floor(o.kind) !== KIND.office) {
+					const sp = R.trim === 3 ? o.col : [0.92, 0.91, 0.88];
+					const eaves = rot ? [[1, 0], [-1, 0]] : [[0, 1], [0, -1]];
+					for (const [ex, ez] of eaves) { const lx = ex ? ex * (o.w / 2 + 0.06) : (hr(22) < 0.5 ? -1 : 1) * (o.w / 2 - 0.15), lz = ez ? ez * (o.d / 2 + 0.06) : (hr(23) < 0.5 ? -1 : 1) * (o.d / 2 - 0.15), [x, z] = W(lx, lz); kitPut(put, 'spout', [x, o.y + 1.0, z, o.a, 1, o.h - 1.05, 1, 0, ...sp]); }
+				}
+			}
+			// round a big pool (a complex's, a club's): loungers down its sides, umbrellas between
+			if (o.kind === KIND.pool && area > 60 && !o.dec) {
+				const along = o.w > o.d, L = along ? o.w : o.d, S = along ? o.d : o.w;
+				for (const sd2 of [-1, 1]) for (let n = 0; n < Math.floor(L / 1.7); n++) {
+					const u = -L / 2 + 0.85 + n * 1.7, v = sd2 * (S / 2 + 1.7), [x, z] = along ? W(u, v) : W(v, u), g = bay.heightAt(x, z);
+					if (n % 3 === 2) kitPut(put, 'umbrella', [x, g, z, o.a, 1, 1, 1, 0, ...pick(CANVAS, hash(x, z))]);
+					else kitPut(put, 'lounger', [x, g, z, o.a + (along ? 0 : Math.PI / 2) + (sd2 > 0 ? Math.PI : 0), 1, 1, 1, 0]);
+				}
+			}
+			if (o.roof && HOUSE.has(o.kind) && area > 55 && o.w > 6.5) {
 				const [bx, bz] = W(0, -o.d / 2 - 7), g = bay.heightAt(bx, bz), g0 = bay.heightAt(o.x, o.z);
 				if (r < 0.085 && Math.abs(g - g0) < 1.5) {
 					const w = Math.min(4.8, o.w * 0.45), d = 3.2, [x, z] = W((hash(o.x * 1.3, o.z * 0.9) < 0.5 ? -1 : 1) * (o.w / 2 - w / 2 - 0.6), -o.d / 2 - d / 2 + 0.05);
@@ -970,6 +1458,8 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 		list.kit = put;
 	}
+	const ROOF_R = PHONE ? 200 : 380;
+	function kitPut(put, k, e) { if (kit2.has(k)) (put.props[k] || (put.props[k] = [])).push(e); }
 	function uploadKit(put) {
 		const [acs, suns, lines] = put || [[], [], []];
 		let n = 0;
@@ -988,7 +1478,7 @@ export function createCity(shared, scene, bay, real = null) {
 		for (const o of list) {
 			if (n >= body.instanceMatrix.count) break;
 			q.setFromAxisAngle(Y, -o.a); sc.set(o.w, o.h, o.d); p.set(o.x, o.y, o.z);
-			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2])); kinds.array[n] = o.kind; ages.array[n] = o.age ?? 0.4;
+			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2])); kinds.array[n] = o.kind; ages.array[n] = (o.age ?? 0.4) + 2 * (o.cond || 0);
 			const nc = o.src?.grp?.near, dr = roofs && !nc ? doors.get(lotKey(o)) : null;
 			nearA.array[n * 3] = nc ? nc[0] : dr ? dr[0] : 0; nearA.array[n * 3 + 1] = nc ? nc[1] : dr ? dr[1] : 0; nearA.array[n * 3 + 2] = nc ? 1 : dr ? 2 + dr[2] : 0;
 			if (roofs && o.src?.grp) { let l = slotOf.get(o.src.grp); if (!l) slotOf.set(o.src.grp, l = []); l.push(n); }
@@ -998,13 +1488,23 @@ export function createCity(shared, scene, bay, real = null) {
 				const im = o.roof.hip ? roofs[0] : roofs[1], k = o.roof.hip ? nh++ : ng++;
 				if (k >= im.instanceMatrix.count) continue;
 				p.set(o.x, o.y + o.h, o.z);
-				if (o.roof.rot) { q.setFromAxisAngle(Y, -o.a + Math.PI / 2); sc.set(o.d + 0.8, o.roof.h, o.w + 0.8); } else sc.set(o.w + 0.8, o.roof.h, o.d + 0.8);
-				im.setMatrixAt(k, m4.compose(p, q, sc)); im.setColorAt(k, col.setRGB(o.roof.col[0], o.roof.col[1], o.roof.col[2]));
+				const ov = o.roof.ov ?? 0.4, R = o.roof;
+				if (R.rot) { q.setFromAxisAngle(Y, -o.a + Math.PI / 2); sc.set(o.d + 2 * ov, R.h, o.w + 2 * ov); } else sc.set(o.w + 2 * ov, R.h, o.d + 2 * ov);
+				im.setMatrixAt(k, m4.compose(p, q, sc)); im.setColorAt(k, col.setRGB(R.col[0], R.col[1], R.col[2]));
+				// its covering (by colour where the lot didn't say: the reds are clay tile), trim,
+				// and condition (a run-down house's roof patched and sagging, a burnt one holed)
+				const rh = hash(o.x * 0.61 + 7.7, o.z * 0.83 - 2.9);
+				const t = R.t ?? (R.col[0] > R.col[2] * 1.45 && R.col[0] > 0.38 ? ROOF.barrel : rh < 0.72 ? ROOF.shingle : rh < 0.9 ? ROOF.flatTile : ROOF.metal);
+				const trim = R.trim ?? (rh * 7.3 % 1 < 0.45 ? 0 : rh * 7.3 % 1 < 0.6 ? 1 : rh * 7.3 % 1 < 0.75 ? 2 : rh * 7.3 % 1 < 0.95 ? 3 : 4);
+				const rc2 = o.cond === COND.burnt ? 2 : o.cond === COND.boarded ? (rh < 0.5 ? 3 : 1) : o.cond === COND.rundown ? (rh < 0.3 ? 3 : 1) : 0;
+				const ra = im.geometry.attributes.aRoof, wa = im.geometry.attributes.aWall;
+				ra.array[k * 4] = t; ra.array[k * 4 + 1] = ov; ra.array[k * 4 + 2] = trim; ra.array[k * 4 + 3] = rc2;
+				wa.array[k * 3] = o.col[0]; wa.array[k * 3 + 1] = o.col[1]; wa.array[k * 3 + 2] = o.col[2];
 			}
 		}
 		body.count = n; kinds.needsUpdate = true; nearA.needsUpdate = true; ages.needsUpdate = true;
 		for (const im of [body, ...(roofs || [])]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.computeBoundingSphere(); }
-		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); }
+		if (roofs) { roofs[0].count = Math.min(nh, roofs[0].instanceMatrix.count); roofs[1].count = Math.min(ng, roofs[1].instanceMatrix.count); for (const im of roofs) { im.geometry.attributes.aRoof.needsUpdate = true; im.geometry.attributes.aWall.needsUpdate = true; } }
 		if (roofs) treeList = list.trees || [];
 	}
 
@@ -1189,7 +1689,8 @@ export function createCity(shared, scene, bay, real = null) {
 	function procGroups(list, cx, cz) {
 		procStamp++;
 		const R2 = 260 * 260, gar = new Map(), cellK = (x, z) => Math.floor(x / 24) + ',' + Math.floor(z / 24);
-		for (const o of list) if (!o.src && o.kind === KIND.garage && (o.x - cx) ** 2 + (o.z - cz) ** 2 < R2) { const k = cellK(o.x, o.z); (gar.get(k) || gar.set(k, []).get(k)).push(o); }
+		// (the garages, and the wings: a pop-up storey, an addition, a garage made a room)
+		for (const o of list) if (!o.src && (o.kind === KIND.garage || o.kind === KIND.house) && o.roof && (o.x - cx) ** 2 + (o.z - cz) ** 2 < R2) { const k = cellK(o.x, o.z); (gar.get(k) || gar.set(k, []).get(k)).push(o); }
 		const touch = (c, b) => { const ca = Math.cos(c.a), sa = Math.sin(c.a), dx = b.x - c.x, dz = b.z - c.z; return Math.abs(c.a - b.a) < 1e-3 && Math.abs(ca * dx + sa * dz) <= (c.w + b.w) / 2 + 0.4 && Math.abs(-sa * dx + ca * dz) <= (c.d + b.d) / 2 + 0.4; };
 		for (const o of list) {
 			if (o.src || (o.x - cx) ** 2 + (o.z - cz) ** 2 > R2) continue;
@@ -1202,7 +1703,11 @@ export function createCity(shared, scene, bay, real = null) {
 					const door = Math.min(1, Math.max(0, ((o.kind - 1) - 0.01) / 0.38));
 					grp = [{ x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, wallH: o.h - 1.2, roofH: o.roof.h, kind: 0, door, hip: o.roof.hip ? 1 : 0, look: { wall: o.col, roof: o.roof.col, garage: null } }];
 					const [gi, gj] = [Math.floor(o.x / 24), Math.floor(o.z / 24)];
-					for (let j = gj - 1; j <= gj + 1 && grp.length < 2; j++) for (let i = gi - 1; i <= gi + 1 && grp.length < 2; i++) for (const g of gar.get(i + ',' + j) || []) if (!g.src && touch(o, g)) { grp.push({ x: g.x, z: g.z, w: g.w, d: g.d, a: g.a, wallH: 3.0, roofH: Math.min(1.6, g.roof?.h || 1.2), kind: 3, door: 0.5, hip: g.roof?.hip ? 1 : 0, lot: g }); break; }
+					let hasG = false;
+					for (let j = gj - 1; j <= gj + 1 && grp.length < 4; j++) for (let i = gi - 1; i <= gi + 1 && grp.length < 4; i++) for (const g of gar.get(i + ',' + j) || []) {
+						if (g.src || !touch(o, g) || grp.some((q) => q.lot === g)) continue;
+						if (g.kind === KIND.garage) { if (hasG) continue; hasG = true; grp.push({ x: g.x, z: g.z, w: g.w, d: g.d, a: g.a, wallH: 3.0, roofH: Math.min(1.6, g.roof?.h || 1.2), kind: 3, door: 0.5, hip: g.roof?.hip ? 1 : 0, lot: g }); } else grp.push({ x: g.x, z: g.z, w: g.w, d: g.d, a: g.a, wallH: g.h - 1.2, roofH: g.roof?.h || 1.2, kind: 4, door: 0.5, hip: g.roof?.hip ? 1 : 0, lot: g, look: { wall: g.col, roof: g.roof?.col || o.roof.col, garage: null } });
+					}
 				} else {
 					const b = { x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, wallH: o.h - 1.2, roofH: 0, kind: o.kind === KIND.retail ? 6 : 5, door: 0.5, hip: 0 };
 					grp = [b]; b.grp = grp; grp.biz = true;
@@ -1212,7 +1717,7 @@ export function createCity(shared, scene, bay, real = null) {
 			grp.stamp = procStamp;
 			o.src = grp.biz ? grp[0] : { grp };
 			// (its garage hands over with it)
-			if (grp[1]?.lot) for (const g of gar.get(cellK(grp[1].x, grp[1].z)) || []) if (Math.abs(g.x - grp[1].x) < 0.05 && Math.abs(g.z - grp[1].z) < 0.05) g.src = { grp };
+			for (const m of grp) if (m.lot) for (const g of gar.get(cellK(m.x, m.z)) || []) if (Math.abs(g.x - m.x) < 0.05 && Math.abs(g.z - m.z) < 0.05) g.src = { grp };
 		}
 		// (forget the ones long behind you)
 		if (procGrp.size > 3000) for (const [k, g] of procGrp) if (!g.near && procStamp - g.stamp > 3) procGrp.delete(k);
@@ -1265,7 +1770,8 @@ export function createCity(shared, scene, bay, real = null) {
 			let col = look.wall;
 			let kind, roof = null;
 			const rc = look.roof, r = look.r, r2 = look.r2;
-			if (b.kind === 0 || b.kind === 8) kind = doorKind(KIND.house, b.door);
+			if (b.kind === 0) kind = doorKind(KIND.house, b.door);
+			else if (b.kind === 8) kind = KIND.apt;
 			else if (b.kind === 1) kind = doorKind(KIND.houseGarageL, b.door);
 			else if (b.kind === 2) kind = doorKind(KIND.houseGarageR, b.door);
 			else if (b.kind === 3) kind = KIND.garage;
@@ -1430,12 +1936,13 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
-		if (list.length > CAP) { const t = list.trees, k = list.kit; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; }
+		if (list.length > CAP) { const t = list.trees, k = list.kit, pr = list.props; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; list.props = pr; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
 		procGroups(list, x, z);
 		upload(list, near, [hips, gables]);
 		indexLots(list);
 		uploadKit(list.kit);
+		kit2.upload(list.props);
 		// the tall ones, for going inside (bay/towers.js)
 		tallList = list.filter((o) => (o.kind === KIND.tower || (o.kind === KIND.office && o.h > 20)) && !o.roof && o.src?.kind !== 12 && !o.src?.grp?.biz && Math.min(o.w, o.d) > 12);
 		placeTrees(x, z);

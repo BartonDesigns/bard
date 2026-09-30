@@ -149,7 +149,9 @@ export function fromGrid(gx, gz, a, style) {
 	if (style !== STYLE.suburb) return [x, z];
 	for (let i = 0; i < 16; i++) {
 		const [wx, wz] = warp(x, z, style), ux = gx - wx, uz = gz - wz;
-		x = c * ux - s * uz; z = s * ux + c * uz;
+		const nx = c * ux - s * uz, nz = s * ux + c * uz, moved = Math.abs(nx - x) + Math.abs(nz - z);
+		x = nx; z = nz;
+		if (moved < 0.002) break;                  // (settled: a couple of millimetres)
 	}
 	return [x, z];
 }
