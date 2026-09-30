@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { GREENS } from './realcity.js';
 import { toWorld } from './geo.js';
 import { createWildGround } from '../nature/wildground.js';
+import { rotWood } from './weathering.js';
 
 // city.js's own hash and value noise, so the woods here are its woods
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -143,7 +144,8 @@ const BURN = { ...toWorld(37.165, -122.245), r: 9500 };
 export function createForestFloor(scene, bay, city, real, opts = {}) {
 	// the ground cover, brush, rock and litter of the open country (nature/wildground.js)
 	const wild = opts.shared ? createWildGround(scene, bay, { shared: opts.shared, real, isPhone: opts.isPhone, ground: opts.ground }) : null;
-	const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
+	// (rotting as it lies: weathering.js)
+	const mat = rotWood(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }));
 	const logs = new THREE.InstancedMesh(logGeometry(true), mat, MAXL), limbs = new THREE.InstancedMesh(logGeometry(false), mat, MAXL), stumps = new THREE.InstancedMesh(stumpGeometry(), mat, MAXS), snags = new THREE.InstancedMesh(snagGeometry(), mat, MAXN);
 	const all = [logs, limbs, stumps, snags];
 	for (const m of all) { m.count = 0; m.castShadow = m.receiveShadow = true; m.frustumCulled = false; m.userData.material175 = 'wood'; scene.add(m); }

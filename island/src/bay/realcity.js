@@ -40,6 +40,7 @@ export const REAL_U = {
 	uSeason: { value: 1 },                      // 0 spring green .. 1 summer gold
 	uSeasonLag: { value: 0 },                   // the foggy coast turns gold later than the inland hills
 	uBloom: { value: 0 },                       // spring wildflowers: poppies, lupine, goldfields (0..1)
+	uLeafFall: { value: [0.5, 0.2, 0, 0, 0, 0, 0, 0.05, 0.2, 0.6, 1, 0.8][new Date().getMonth()] },     // dead leaves in the gutters (0..1)
 	// the rocks by region (the naturalist's geology): [x, z, radius, 0] and their colours
 	uRock: { value: ROCKS.map((r) => new THREE.Vector4(r.x, r.z, r.r, 0)) }, uRockC: { value: ROCKS.map((r) => new THREE.Color(r.c)) },
 	// the watered city parks, green all summer: [x, z, half-length, half-width] (axis-aligned)
@@ -50,7 +51,7 @@ export const REAL_U = {
 	uRealB6: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB7: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB8: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB9: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason, uSeasonLag, uBloom; uniform vec4 uRock[8]; uniform vec3 uRockC[8]; uniform vec4 uGreen[4];
+uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason, uSeasonLag, uBloom, uLeafFall; uniform vec4 uRock[8]; uniform vec3 uRockC[8]; uniform vec4 uGreen[4];
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
 // the main region (its land use map), and any mapped region (real streets, no grid)
 bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }
@@ -341,6 +342,39 @@ export function createRealCity(renderer) {
 	}
 	// channels: R asphalt, G concrete, B dirt, A white lines; the paint map's R: yellow lines
 	const ASPH = [1, 0, 0, 0], CONC = [0, 1, 0, 0], DIRT = [0, 0, 1, 0], WHITE = [0, 0, 0, 1], YELLOW = [1, 0, 0, 0], WEAR = [0, 1, 0, 0], JOINT = [0, 1, 0, 0], FWY = [0, 0.35, 0, 0];       // (the paint map holds two channels: both in green)
+	// the asphalt's years, in the paint map's green below the freeway's: each lane a tent
+	// falling from 0.07 at its centre to 0 at 1.8 m (so the ground knows where the wheels
+	// run), a patch's plateau at 0.2, a cover at 0.28 (see asphaltAge in weathering.js)
+	const LANE = [0, 0.14, 0, 0], PATCH = [0, 0.2, 0, 0], COVER = [0, 0.56, 0, 0];
+	// a road's own dice, from where it starts, so its patches stay put
+	const dice = (r) => { let h = (Math.imul(Math.round(r.pts[0] * 4), 73856093) ^ Math.imul(Math.round(r.pts[1] * 4), 19349663)) >>> 0; return () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; }; };
+	function wear(r, p, hw, Lb, Y) {
+		const lanes = [];
+		if (r.w < 6.5) lanes.push(0);
+		else if (r.divided || r.link) { const n = Math.max(1, Math.round(r.w / 3.6)), lw = r.w / n; for (let k = 0; k < n; k++) lanes.push(-hw + lw * (k + 0.5)); }
+		else for (let k = 0, n = Math.max(1, Math.floor(r.w / 7.2)); k < n; k++) lanes.push(1.8 + 3.6 * k, -1.8 - 3.6 * k);
+		for (const o of lanes) Lb.line(p, 0, LANE, true, o);
+		const rnd = dice(r);
+		let run = rnd() * 40;
+		for (let i = 0; i + 1 < p.length; i++) {
+			const [ax, ay] = p[i], [bx, by] = p[i + 1], L = Math.hypot(bx - ax, by - ay);
+			if (L < 2) continue;
+			const tx = (bx - ax) / L, ty = (by - ay) / L, nx = -ty, ny = tx;
+			const at = (s, o) => [ax + tx * s + nx * o, ay + ty * s + ny * o];
+			// patched rectangles in the lanes, a trench cut across or along now and then
+			for (let n = 0, N = Math.floor(L / 55 + rnd()); n < N; n++) {
+				const s = rnd() * L, len = 1.5 + rnd() * 4, o = lanes[Math.floor(rnd() * lanes.length)] + (rnd() - 0.5) * 0.8;
+				const pw = Math.min(0.7 + rnd() * 0.7, hw - Math.abs(o) - 0.2);
+				if (pw > 0.3) Y.line([at(s, o), at(Math.min(L, s + len), o)], pw, PATCH, false);
+			}
+			if (rnd() < L / 260) { const s = rnd() * L, a = at(s, -hw + 0.3), b = at(s, hw - 0.3); Y.line([a, b], 0.3 + rnd() * 0.3, PATCH, false); }
+			if (rnd() < L / 380) { const s = rnd() * L, o = (rnd() - 0.5) * hw, a = at(s, o), b = at(Math.min(L, s + 12 + rnd() * 40), o); Y.line([a, b], 0.35 + rnd() * 0.15, PATCH, false); }
+			// manholes and utility covers, every forty metres or so
+			let s = run;
+			for (; s < L; s += 35 + rnd() * 30) { const c = at(s, rnd() < 0.5 ? 0 : lanes[0]); Y.disc(c[0], c[1], rnd() < 0.3 ? 0.18 : 0.26, COVER); }
+			run = s - L;
+		}
+	}
 	function render(target, meshes, SIZE) {
 		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
 		for (const m of meshes) scene2.add(m);
@@ -359,7 +393,7 @@ export function createRealCity(renderer) {
 	function drawRoadMap(M, cx, cz) {
 		M.x = cx; M.z = cz;
 		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
-		const B = builder(M.ramp), Y = builder(M.ramp), fine = !!M.paint;
+		const B = builder(M.ramp), Y = builder(M.ramp), Lb = builder(1.8), fine = !!M.paint;
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
 		for (const r of near('roads', cx, cz, SIZE * 0.72)) {
 			const p = loc(r.pts), hw = r.w / 2;
@@ -389,13 +423,14 @@ export function createRealCity(renderer) {
 				for (let k = 0; k < nL; k++) for (const e of [-0.85, 0.85]) Y.line(p, 0.42, WEAR, false, -hw + lw * (k + 0.5) + e);
 				Y.line(p, hw - 0.3, JOINT, false, 0, 0.25, 4.3);
 			}
+			if (surf === ASPH && r.drive && !r.bridge) wear(r, p, hw, Lb, Y);
 			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
 		// driveways and front walks
 		for (const q of near('paths', cx, cz, SIZE * 0.72)) B.line([[q.ax - x0, q.az - z0], [q.bx - x0, q.bz - z0]], q.w / 2, CONC, false);
 		const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
 		render(M.rt, [B.mesh()], SIZE);
-		if (M.paint) render(M.paint, [Y.mesh()], SIZE);
+		if (M.paint) render(M.paint, [Lb.mesh(), Y.mesh()], SIZE);
 		renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
 		M.u[0].value = M.rt.texture;
 		M.u[1].value.set(x0, z0, SIZE, 1);

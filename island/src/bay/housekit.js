@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { addLodFade, NONE_IN } from '../world/lodfade.js';
+import { weatherStucco } from './weathering.js';
 import { usePhoto } from '../world/photomats.js';
 
 const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
@@ -267,7 +268,7 @@ export function houseMaterials(band, night) {
 	const env = roomEnv();
 	const std = (o) => new THREE.MeshStandardMaterial({ vertexColors: true, ...o });
 	const M = {
-		stucco: std({ map: T.stucco, roughness: 0.95 }),
+		stucco: weatherStucco(std({ map: T.stucco, roughness: 0.95 })),
 		paint: std({ map: T.paint, roughness: 0.9, emissive: 0x22211e }),
 		trim: std({ roughness: 0.42 }),
 		ceiling: std({ map: T.paint, roughness: 0.95, emissive: 0x4a4945 }),

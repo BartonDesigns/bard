@@ -18,6 +18,7 @@ import { REAL_U, REAL_GLSL } from './realcity.js';
 import { CARVE_U, CARVE_GLSL, carveDelta } from './carve.js';
 import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
 import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from './coastside.js';
+import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
@@ -417,7 +418,7 @@ export function createBayArea(shared, scene, island, BU) {
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam, uGravel; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = WX_DEFS + 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam, uGravel; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
@@ -501,6 +502,53 @@ export function createBayArea(shared, scene, island, BU) {
 					}
 					// the fog forest's floor: moss and duff, green on the shady side
 					c = mix(c, mix(vec3(0.045, 0.09, 0.02), vec3(0.08, 0.05, 0.03), n3), forest * fogbelt * (0.25 + north * 0.5) * (1.0 - smoothstep(0.5, 0.85, slope)));
+					// the weather's work on the open ground: rills and gullies down the bare steep
+					// slopes (along the fall line: the nearest of four compass lines to it), cut banks
+					// in the draws, scree fanned below the rock, the drainages dark and wet, the high
+					// ridges scoured pale by the wind
+					float pxE = length(fwidth(vBW)), gullyE = clamp(vCurv.x, 0.0, 1.0);
+					{
+						float bare = (1.0 - chap) * (1.0 - forest) * (1.0 - oak * 0.7);
+						vec3 soil = mix(vec3(0.3, 0.2, 0.12), vec3(0.44, 0.31, 0.19), n2) * (0.85 + 0.3 * n3);
+						float erK = bare * smoothstep(0.2, 0.38, slope) * (1.0 - smoothstep(0.7, 0.9, slope)) * smoothstep(0.4, 0.65, vn(vBW * 0.006 + 5.0) + slope * 0.3);
+						if (erK > 0.01 && pxE < 2.0) {
+							vec2 fall = normalize(n.xz + vec2(1e-4, 0.0));
+							float th = mod(atan(fall.y, fall.x) / 0.7853982, 4.0), b0 = floor(th), bt = smoothstep(0.25, 0.75, th - b0);
+							float rl = 0.0;
+							for (int k = 0; k < 2; k++) {
+								float a = (b0 + float(k)) * 0.7853982;
+								vec2 d = vec2(cos(a), sin(a));
+								float al = dot(vBW, d), ac = dot(vBW, vec2(-d.y, d.x));
+								float r = max(wxLine(vn(vec2(al * 0.07, ac * 0.75) + float(k) * 7.0), 0.07), wxLine(vn(vec2(al * 0.025, ac * 0.2) + 3.0), 0.05) * 1.3);
+								rl += r * (k == 0 ? 1.0 - bt : bt);
+							}
+							c = mix(c, soil, erK * 0.45);
+							c = mix(c, soil * vec3(0.62, 0.55, 0.5), clamp(rl, 0.0, 1.0) * erK);
+							wxBump -= clamp(rl, 0.0, 1.0) * erK * 0.12;
+						}
+						// cut banks: the steep sides of the draws, bare soil
+						c = mix(c, soil * 0.8, smoothstep(0.3, 0.7, gullyE) * smoothstep(0.3, 0.5, slope) * (1.0 - smoothstep(0.8, 1.0, slope)) * 0.6);
+						// scree: moderately steep ground at the foot of the steeper, where the rock is
+						float screeK = smoothstep(0.3, 0.42, slope) * (1.0 - smoothstep(0.6, 0.75, slope)) * smoothstep(0.02, 0.3, vCurv.y) * smoothstep(0.45, 0.65, vn(vBW * 0.02) * 0.6 + rkMax * 0.35 + smoothstep(250.0, 700.0, h) * 0.3) * (1.0 - forest);
+						if (screeK > 0.01) {
+							vec2 sq = mod(vBW, 1024.0) * 2.5 + (vn(vBW * 1.1) - 0.5) * 0.8;
+							vec2 sf = fract(sq); float gap = min(min(sf.x, 1.0 - sf.x), min(sf.y, 1.0 - sf.y));
+							float fineS = 1.0 - smoothstep(0.08, 0.25, pxE);
+							vec3 screeC = mix(rockC * 1.1, vec3(0.42, 0.4, 0.37), 0.4) * mix(1.0, 0.7 + 0.6 * h21(floor(sq)), fineS);
+							screeC *= 1.0 - fineS * 0.45 * (1.0 - smoothstep(0.04, 0.12, gap));
+							c = mix(c, screeC, screeK * 0.85);
+							wxBump += screeK * fineS * smoothstep(0.0, 0.2, gap) * 0.06;
+						}
+						// the drainages: dark, wet soil in the bottoms of the draws
+						float drain = smoothstep(0.35, 0.8, gullyE) * (1.0 - smoothstep(0.15, 0.35, slope)) * step(2.0, h);
+						c *= 1.0 - drain * (0.25 + 0.15 * uWet);
+						wxDamp = drain;
+						wxPud = drain * smoothstep(0.7 - uWet * 0.3, 0.75 - uWet * 0.3, vn(vBW * 0.3)) * smoothstep(0.1, 0.4, uWet);
+						// the wind-scoured ridges: grass cropped pale, gravelly bare patches
+						float ridgeK = smoothstep(0.15, 0.5, -vCurv.y) * smoothstep(250.0, 650.0, h) * bare;
+						c = mix(c, c * vec3(1.1, 1.06, 0.98) + 0.02, ridgeK * 0.4);
+						c = mix(c, mix(rockC, soil, 0.5) * 1.1, ridgeK * smoothstep(0.62, 0.75, vn(vBW * 0.05 + 2.0)) * 0.7);
+					}
 					// the towns' map (below), and how far off this is
 					vec2 uu = (vBW - uUR.xy) / uUR.z;
 					vec2 US = vec2(textureSize(uUrban, 0));
@@ -562,6 +610,18 @@ export function createBayArea(shared, scene, island, BU) {
 						duff = mix(duff, vec3(0.05, 0.1, 0.025), sorrel * 0.75);
 						vec3 litter = mix(vec3(0.17, 0.125, 0.07), vec3(0.24, 0.18, 0.1), vn(vBW * 0.7)) * (0.85 + 0.3 * mix(0.5, vn(vBW * 3.1), hiK));
 						duff = mix(litter, duff, smoothstep(0.45, 0.7, fogbelt));
+						// leaf and needle litter drifted deep in the hollows, fresh and pale on top
+						duff = mix(duff, mix(vec3(0.2, 0.12, 0.06), vec3(0.28, 0.2, 0.09), vn(vBW * 1.7)), smoothstep(0.2, 0.6, gullyE) * (1.0 - smoothstep(0.3, 0.5, slope)) * 0.6);
+						// roots bared where the slope has washed out from under them
+						float rootK = smoothstep(0.28, 0.5, slope) * smoothstep(0.45, 0.65, vn(vBW * 0.07 + 8.0));
+						#ifndef WX_LITE
+						if (rootK > 0.0 && pxE < 0.2) {
+							vec2 rq = mod(vBW, 1024.0);
+							float root = max(wxLine(vn(rq * vec2(0.9, 0.35) + 2.0), 0.025), wxLine(vn(rq * vec2(0.35, 0.9) + 6.0), 0.02));
+							duff = mix(duff, vec3(0.2, 0.14, 0.09) * (0.8 + 0.4 * vn(rq * 6.0)), root * rootK);
+							wxBump += root * rootK * 0.05;
+						}
+						#endif
 						// the crowns' shade: little of the sun reaches the floor of a closed wood
 						c = mix(c, duff * (1.0 - 0.3 * duffK), duffK);
 					}
@@ -619,6 +679,7 @@ export function createBayArea(shared, scene, island, BU) {
 						float Y1 = PM.r;
 						vec4 f1 = max(fwidth(D1) * 0.75, vec4(0.004)), f2 = max(fwidth(D2) * 0.75, vec4(0.004));
 						vec4 C1 = smoothstep(0.5 - f1, 0.5 + f1, D1), C2 = smoothstep(0.5 - f2, 0.5 + f2, D2);
+						float px = length(fwidth(vBW));
 						// a trail's edge is never a clean line: close by it frays into the ground
 						C1.b = mix(C1.b, smoothstep(0.3, 0.85, D1.b + (vn(vBW * 1.9) - 0.5) * 0.35), 1.0 - smoothstep(30.0, 60.0, dist));
 						float fy = max(fwidth(Y1) * 0.75, 0.004), yellow = smoothstep(0.5 - fy, 0.5 + fy, Y1) * e1;
@@ -638,6 +699,16 @@ export function createBayArea(shared, scene, island, BU) {
 							dirtC = mix(dirtC, ph * vec3(1.08, 1.0, 0.92), (1.0 - smoothstep(45.0, 90.0, dist)) * 0.85);
 						}
 						c = mix(c, dirtC, dirt);
+						// the trail's edges: roots bared where the feet and the rain have worn it down
+						// under the trees, and after rain, water standing in its ruts
+						#ifndef WX_LITE
+						if (dirt > 0.01 && duffK > 0.05 && dist < 60.0) {
+							vec2 rq = mod(vBW, 1024.0);
+							float root = wxLine(vn(rq * vec2(0.8, 0.8) + 4.0), 0.03) * (1.0 - smoothstep(0.35, 0.9, dirt)) * smoothstep(0.05, 0.3, dirt + 0.2) * smoothstep(0.45, 0.6, vn(vBW * 0.2));
+							c = mix(c, vec3(0.2, 0.14, 0.09) * (0.8 + 0.4 * vn(rq * 5.0)), root * duffK);
+						}
+						#endif
+						wxPud = max(wxPud, dirt * smoothstep(0.78 - uWet * 0.25, 0.82 - uWet * 0.25, vn(vBW * 0.4) * 0.7 + vn(vBW * 1.6) * 0.3) * smoothstep(0.1, 0.4, uWet));
 						// a freeway's concrete: the wheel paths worn dark, the slab joints
 						float fwyK = smoothstep(0.08, 0.14, PM.g) * e1;
 						concC *= mix(1.0, 0.8, fwyK) * (1.0 - 0.2 * smoothstep(0.45, 0.8, PM.g) * e1);
@@ -648,11 +719,33 @@ export function createBayArea(shared, scene, island, BU) {
 						float dK = 0.5 - D1.r;
 						float kerb = smoothstep(-0.02, 0.02, dK) * (1.0 - smoothstep(0.14, 0.18, dK)) * step(0.5, D1.g) * e1;
 						float gutter = smoothstep(-0.45, -0.3, dK) * (1.0 - smoothstep(-0.02, 0.0, dK)) * step(0.5, D1.g) * e1;
+						// the streets' years close by (weathering.js), from the paint map's green: each lane
+						// a tent (0.07 at its middle to 0 at 1.8 m), patches at 0.2, covers at 0.28
+						float lk = 0.0, trk = 0.0;
+						if (asph > 0.01 && dist < 400.0) {
+							float lg = PM.g * e1, lw = max(fwidth(lg), 1e-4);
+							lk = smoothstep(0.003, 0.012, lg) * (1.0 - smoothstep(0.075, 0.09, lg));
+							float ld = 1.8 * (1.0 - clamp(lg / 0.07, 0.0, 1.0));
+							float noFwy = 1.0 - smoothstep(0.32, 0.34, lg);
+							float cov = smoothstep(0.24 - lw, 0.24 + lw, lg) * noFwy;
+							float pat = smoothstep(0.1 - lw, 0.1 + lw, lg) * noFwy * (1.0 - cov);
+							asphC = asphaltAge(asphC, vBW, ld, lk, pat, cov, px, gutter);
+							trk = lk * exp(-(ld - 0.85) * (ld - 0.85) * 10.0);
+							wxGloss *= asph; wxPudA *= asph;
+						}
+						if (conc > 0.01 && dist < 250.0 && fwyK < 0.5) {
+							float seam = max(1.0 - smoothstep(0.04, 0.16, abs(D1.g - 0.5)), 1.0 - smoothstep(0.04, 0.16, abs(dK))) * e1;
+							c = mix(c, walkAge(concC, vBW, px, seam), conc);
+						}
 						c = mix(c, asphC, asph);
 						c = mix(c, c * 0.7, gutter);
-						c = mix(c, vec3(0.76, 0.75, 0.72), kerb);
-						c = mix(c, vec3(0.88, 0.88, 0.84), white * 0.92);
-						c = mix(c, vec3(0.86, 0.68, 0.16), yellow * 0.92);
+						if (gutter > 0.01 && dist < 200.0) c = gutterAge(c, vBW, gutter * smoothstep(-0.45, 0.0, dK), px);
+						// (roots have heaved the kerb here and there, and the weeds come up along it)
+						c = mix(c, vec3(0.76, 0.75, 0.72) * (0.8 + 0.2 * vn(vBW * 0.9)), kerb);
+						// the paint worn thin and polished off where the tyres cross it
+						float paintK = (1.0 - 0.6 * trk) * (0.7 + 0.3 * vn(vBW * 0.6)) * mix(0.85, 0.55 + 0.45 * step(0.35, h21(floor(mod(vBW, 1024.0) * 12.0))), 1.0 - smoothstep(0.02, 0.06, px));
+						c = mix(c, vec3(0.88, 0.88, 0.84), white * 0.92 * paintK);
+						c = mix(c, vec3(0.86, 0.68, 0.16), yellow * 0.92 * paintK);
 						flatK = max(max(asph, conc), dirt * 0.6);
 						// night: windows and lamps as sparks far off
 						float spark = sparks(vBW, dist, 0.8, 0.0) * max(M.b, M.r);
@@ -720,10 +813,38 @@ export function createBayArea(shared, scene, island, BU) {
 						cityC = mix(cityC, mix(vec3(0.55, 0.54, 0.52), vec3(0.72, 0.69, 0.64), lh), smoothstep(0.2, 0.6, down));
 						float park = step(0.96, h21(cid + 3.1)) * (1.0 - down);
 						cityC = mix(cityC, vec3(0.2, 0.32, 0.13), park);
-						cityC = mix(cityC, vec3(0.62, 0.61, 0.58), sidewalk * 0.7);
+						// close by, the sidewalk's slabs and the street's years (weathering.js), in the
+						// grid's own frame: across and along the street
+						vec3 walkC = vec3(0.62, 0.61, 0.58), stC = vec3(0.2, 0.2, 0.21);
+						float px = length(fwidth(vBW));
+						if (dist < 350.0) {
+							float xs = step(fw.x, BK.z);
+							float ax = mix(fw.y, fw.x, xs), al = mix(g.x, g.y, xs);
+							if (sidewalk > 0.01) {
+								float sx = min(fw.x - BK.z, B.x - fw.x), sy = min(fw.y - BK.z, B.y - fw.y);
+								float jd = abs(fract((sx < sy ? g.y : g.x) / 1.5) - 0.5) * 1.5;
+								float joint = (1.0 - smoothstep(0.015, 0.015 + px, 0.75 - jd)) * (1.0 - smoothstep(0.04, 0.12, px));
+								walkC = walkAge(walkC * (1.0 - 0.3 * joint), vBW, px, max(joint, 1.0 - smoothstep(0.0, 0.3, min(sx, sy))));
+							}
+							if (street > 0.01) {
+								float cd = abs(ax - BK.z * 0.5), ld = abs(cd - 1.8), lk = step(cd, 3.6);
+								float ph = h21(vec2(floor(al / 9.0), step(BK.z * 0.5, ax)) + cid * 1.7);
+								float pat = step(0.85, ph) * step(abs(fract(al / 9.0) - 0.5) * 9.0, 1.0 + ph * 2.0) * step(abs(cd - 1.8), 0.6 + ph * 0.6);
+								float cov = 1.0 - smoothstep(0.3, 0.3 + px, length(vec2(mod(al + 20.0, 40.0) - 20.0, cd)));
+								float gut = 1.0 - smoothstep(0.0, 0.5, min(ax, BK.z - ax));
+								stC = asphaltAge(stC, vBW, ld, lk, pat, cov, px, gut);
+								stC = mix(stC, stC * 0.7, gut * 0.6);
+								if (gut > 0.01) stC = gutterAge(stC, vBW, gut, px);
+								// a faded double yellow down the middle of the wider streets
+								float yl = (1.0 - smoothstep(0.05, 0.05 + px, abs(cd - 0.16))) * step(12.5, BK.z) * (1.0 - smoothstep(0.1, 0.3, px));
+								stC = mix(stC, vec3(0.8, 0.64, 0.18), yl * (0.45 + 0.4 * vn(vBW * 0.5)) * (1.0 - pat));
+								wxGloss *= street; wxPudA *= street;
+							}
+						}
+						cityC = mix(cityC, walkC, sidewalk * 0.7);
 						// the streets fade with distance, as they do in an aerial photograph (lines a
 						// pixel wide all bending together read as a pattern, not a town)
-						cityC = mix(cityC, vec3(0.2, 0.2, 0.21), street * (1.0 - 0.55 * smoothstep(1200.0, 3200.0, dist)));
+						cityC = mix(cityC, stC, street * (1.0 - 0.55 * smoothstep(1200.0, 3200.0, dist)));
 						// mature trees in clumps over lawns and streets alike, thicker in some
 						// neighbourhoods than others
 						float canopyF = smoothstep(0.52, 0.8, fbm3(vBW * 0.011) + 0.25 * vn(vBW * 0.05)) * (sty > 1.5 && sty < 3.5 ? 0.6 : 0.0) * (1.0 - down);
@@ -793,6 +914,9 @@ export function createBayArea(shared, scene, island, BU) {
 						if (duffK > 0.0) dL = mix(dL, loamGrain(vBW * 0.35), duffK);
 						c *= mix(1.0, dL / 0.9, gk * 0.55);
 					}
+					// standing water: dark, and glossy as glass (below)
+					wxPud = max(wxPud * (1.0 - flatK), wxPudA);
+					c *= 1.0 - wxPud * 0.45;
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);
 				}`)
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -812,11 +936,11 @@ export function createBayArea(shared, scene, island, BU) {
 					float fDet = dot(vSx, R1);
 					// paving is smooth: the relief fades under it (scaling the slope, not the height,
 					// so the paving's edge draws no line of its own)
-					vec2 dH = vec2(dFdx(bh), dFdy(bh)) * (1.0 - flatK * 0.9);
+					vec2 dH = (vec2(dFdx(bh), dFdy(bh)) * (1.0 - flatK * 0.9) + vec2(dFdx(wxBump), dFdy(wxBump))) * (1.0 - wxPud);
 					normal = normalize(abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2));
 				}`)
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += cityGlow;')
-				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);');
+				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);\nroughnessFactor = mix(mix(roughnessFactor, 0.6, max(wxGloss, wxDamp * 0.5)), 0.04, wxPud);');
 		};
 		m.customProgramCacheKey = () => 'bayground2' + (hole ? 'far' : 'near');
 		m.userData.U2 = U2;
