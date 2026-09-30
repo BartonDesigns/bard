@@ -185,14 +185,16 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			return;
 		}
 		const x0 = s.pos.x, z0 = s.pos.z, wasGrounded = s.grounded, vy0 = s.vel.y;
-		const speed = s.swimming ? 2.2 : run ? 7.5 : 3.9;
+		// (the brush holds you back a little: nature/wildground.js)
+		const speed = (s.swimming ? 2.2 : run ? 7.5 : 3.9) * (s.swimming ? 1 : 1 - (island.dragAt?.(s.pos.x, s.pos.z) ?? 0));
 		const accel = s.grounded || s.swimming ? 10 : 2.5;
 		s.vel.x += (wish.x * speed - s.vel.x) * Math.min(1, accel * dt);
 		s.vel.z += (wish.z * speed - s.vel.z) * Math.min(1, accel * dt);
 		const nx = s.pos.x + s.vel.x * dt, nz = s.pos.z + s.vel.z * dt;
-		// refuse steps up cliffs
+		// refuse steps up cliffs (and up the side of a rock): measured from your feet, so a jump
+		// clears onto the top of one
 		const gNow = floorAt(s.pos.x, s.pos.z, s.pos.y - EYE), gNext = floorAt(nx, nz, s.pos.y - EYE);
-		if (gNext - gNow < 0.9 * Math.max(dt * 60, 1) || s.swimming) { s.pos.x = nx; s.pos.z = nz; }
+		if (gNext - Math.max(gNow, s.pos.y - EYE) < 0.55 * Math.max(dt * 60, 1) || s.swimming) { s.pos.x = nx; s.pos.z = nz; }
 		else { s.vel.x *= 0.2; s.vel.z *= 0.2; }
 		pushOut(s.pos);
 		const ground = floorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
@@ -247,8 +249,23 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		G.rate = Math.min(run ? 2.8 : 2.2, Math.max(1.4, G.speed / (stride / 2))) * G.jit;
 		// setting off: the first foot comes down soon
 		if (!G.moving) { G.moving = true; G.phase = 0.7; }
+		// in time with the music (s.beat: main.js, while it plays or you have just played): the
+		// beat's subdivision nearest your own cadence, each foot eased onto it, so the steps
+		// fall with the song rather than across it
+		const B = s.beat?.();
+		G.locked = !!B;
+		if (B) {
+			let I = B.period;
+			const own = 1 / G.rate;
+			while (I > own * 1.4) I /= 2;
+			while (I < own / 1.4) I *= 2;
+			G.rate = 1 / I;
+			const want = (((performance.now() - B.at) / 1000 / I) % 1 + 1) % 1;
+			let err = want - G.phase; err -= Math.round(err);
+			G.phase += err * Math.min(1, dt * 2.5);
+		}
 		G.phase += G.rate * dt;
-		if (G.phase >= 1) { G.phase -= 1; G.count++; G.foot ^= 1; G.run = run; G.jit = 0.97 + Math.random() * 0.06; }
+		if (G.phase >= 1) { G.phase -= 1; G.count++; G.foot ^= 1; G.run = run; G.jit = B ? 1 : 0.97 + Math.random() * 0.06; }
 		return G;
 	}
 	function dispose() {

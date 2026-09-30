@@ -54,6 +54,7 @@ export function createAutoMusic(opts) {
 		const pl = window.playLead, pd = window.playDrum;
 		const mine = (id) => /^(auto:|seq:|lg:|rg:|remote:|spf:)/.test(String(id)) || window._spAuto || window._seqAt != null;
 		window.playLead = function (id, degree, bank, chromatic) {
+			if (!mine(id)) S.userAt = performance.now();
 			if (S.playing && !mine(id)) {
 				S.manualUntil = performance.now() + 1800;
 				if (!chromatic && bank !== 2) composer.heard(degree | 0);
@@ -62,6 +63,7 @@ export function createAutoMusic(opts) {
 		};
 		window.playLead.crysisAuto = true;
 		if (typeof pd === 'function') window.playDrum = function () {
+			if (!window._spAuto) S.userAt = performance.now();
 			if (S.playing && !window._spAuto && window._seqAt == null) S.manualDrumUntil = performance.now() + 1400;
 			return pd.apply(this, arguments);
 		};
@@ -351,7 +353,16 @@ export function createAutoMusic(opts) {
 		};
 	}
 
+	// the music's pulse, for the footsteps (player.js): this score's own while it plays, else the
+	// faceplate's tempo for half a minute after you last played it, counted from your last note
+	function clock() {
+		if (hasBard()) wireListen();
+		if (S.playing && S.bar && S.bpm) return { period: 60 / S.bpm, at: S.bar.at };
+		if (S.userAt && performance.now() - S.userAt < 30000) { const F = faceplate(); return F.bpm ? { period: 60 / F.bpm, at: S.userAt } : null; }
+		return null;
+	}
+
 	sync();
 	if (S.on) loop();
-	return { auto, state, panel, log: (on) => { S.log = on === undefined ? !S.log : !!on; return S.log; }, queue: (to, urgent) => composer.queue(to, urgent), level: (v) => { if (v !== undefined) { S.level = clamp(+v, 0, 1); save({ on: S.on, level: S.level }); } return S.level; } };
+	return { auto, state, panel, clock, log: (on) => { S.log = on === undefined ? !S.log : !!on; return S.log; }, queue: (to, urgent) => composer.queue(to, urgent), level: (v) => { if (v !== undefined) { S.level = clamp(+v, 0, 1); save({ on: S.on, level: S.level }); } return S.level; } };
 }

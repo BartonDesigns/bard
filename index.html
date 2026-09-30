@@ -19611,6 +19611,8 @@ document.addEventListener('keydown', e => {
   // so derive distinct tokens from e.code.
   const key = _kbdKey102(e);
 
+  // walking a trail hands-free, Space is the jump off the path (island/src/drive.js)
+  if (key === ' ' && window.L99Keyboard149 && window.L99Keyboard149.autoWalk && window.L99Keyboard149.autoWalk()) return;
   if (key === ' ') {
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -27773,7 +27775,7 @@ window._handoffCopy = function () {
     };
   }
   window.L99Keyboard149 = {
-    eligible: eligible, playing: playing, faceplate: faceplate, world: world, sync: sync, set: set,
+    eligible: eligible, playing: playing, faceplate: faceplate, world: world, sync: sync, set: set, autoWalk: autoWalk,
     release: releaseKeyboard,
     reset: function () { releaseKeyboard(); return set(false); }, guard: guard,
     quantize: function (play, record) { var first=maybeArmFirstHit(); guard(play)(); if(record&&loopRecording&&sequencerRunning)guard(record)(first?firedStep():quantizedRecordStep()); },

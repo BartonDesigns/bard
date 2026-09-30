@@ -227,7 +227,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		toggleBtn.style.background = '#01a982';
 		labels();
 		if (D.mode === 'free') startPhysics();
-		hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. Assist lets the road steer. The road button stops.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'On the road: ← → pick the next turn, ↑ straight on, ↓ turn round. The letter keys play music as you go. Esc to stop.'), 4500);
+		hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. Assist lets the road steer. The road button stops.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'On the road: ← → pick the next turn (hold to turn round), ↑ straight on. The letter keys play music as you go. Space jumps off, Shift+arrow steps off, Esc stops.'), 4500);
 	}
 	function startPhysics() {
 		const W = world(), f = D.from;
@@ -253,12 +253,15 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!D.active) { D.mode = m; return; }
 		const W = world(), mine = W?.vehicles?.mine.car;
 		if (m === 'assist') {
-			if (mine) { W.player.state.pos.set(mine.x, W.player.state.pos.y, mine.z); }
+			// (from the car you drove: where it is now; walking, where you stand)
+			if (mine && D.car) { W.player.state.pos.set(mine.x, W.player.state.pos.y, mine.z); }
 			if (!snap()) { hint('No road here for the assist to follow.', 2200); return; }
 			D.car?.dispose(); D.car = null; D.mode = 'assist'; D.y = null;
 		} else {
 			D.mode = 'free';
-			D.from = mine ? { x: mine.x, z: mine.z, yaw: mine.yaw } : { x: W.player.state.pos.x, z: W.player.state.pos.z, yaw: D.yaw + Math.PI };
+			// on a trail the car was left at the trailhead: it is brought round to you, not you to it
+			D.from = mine && !D.onTrail ? { x: mine.x, z: mine.z, yaw: mine.yaw } : { x: W.player.state.pos.x, z: W.player.state.pos.z, yaw: D.yaw + Math.PI };
+			D.onTrail = false;
 			startPhysics();
 		}
 		labels();
@@ -282,8 +285,9 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		D.active = false;
 		D.car?.dispose(); D.car = null;
 		if (camera.near !== 0.25) { camera.near = 0.25; camera.updateProjectionMatrix(); }
-		// out of the driver's door; the car stays where it is
-		if (P && mine) {
+		// out of the driver's door; the car stays where it is (walking a trail, you simply stop
+		// where you are: the car is back at the trailhead)
+		if (P && mine && !D.onTrail) {
 			Vh.setMine(mine.kind, mine.color, mine.matrix, { driving: false });
 			const S = specOf(mine.kind), s = seatsOf(mine.kind).seats[0];
 			V3.set(S.W / 2 + 0.7, 0, s[2] - 0.2).applyMatrix4(mine.matrix);
@@ -291,6 +295,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 			P.pos.set(V3.x, Math.max(g, W.island.extraFloor ? W.island.extraFloor(V3.x, V3.z, mine.y + 0.5) : -1e9) + 1.68, V3.z);
 			camera.position.copy(P.pos);
 		}
+		else if (P && D.onTrail) { P.pos.y = Math.max(P.pos.y, W.island.heightAt(P.pos.x, P.pos.z) + 1.68); camera.position.copy(P.pos); }
+		D.onTrail = false;
 		if (P) { P.locked = false; P.vel.set(0, 0, 0); }
 		pad.style.display = 'none'; hud.style.display = 'none';
 		for (const b of [kindBtn, modeBtn, credBtn]) b.style.display = 'none';
@@ -309,10 +315,27 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!e.repeat && k === 'n') { nextKind(); e.preventDefault(); return; }
 		if (!e.repeat && k === 'c') { D.chase = !D.chase; e.preventDefault(); return; }
 		if (D.mode === 'free') { if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault(); return; }
+		// off the path: Space jumps off it, Shift with an arrow steps off that way (your own
+		// feet take over, the arrow still held)
+		if (k === ' ' && !e.repeat) { leave(true); e.preventDefault(); return; }
+		if (e.shiftKey && ['arrowleft', 'arrowright', 'arrowdown', 'arrowup'].includes(k) && !e.repeat) { leave(false); return; }
 		const m = { arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right', arrowup: 'straight', w: 'straight', arrowdown: 'back', s: 'back' }[k];
-		if (m && !e.repeat) { input(m); e.preventDefault(); }
+		if (m && !e.repeat) { input(m); holdAt[k] = performance.now(); e.preventDefault(); }
 	});
-	window.addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
+	window.addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); held.delete(k); delete holdAt[k]; });
+	// ← or → held (not tapped) turns you round
+	const holdAt = {};
+	function holdTurn() {
+		for (const k of ['arrowleft', 'arrowright', 'a', 'd']) {
+			const t0 = holdAt[k];
+			if (t0 && performance.now() - t0 > 650 && held.has(k)) { holdAt[k] = 0; D.queue = 'straight'; input('back'); hint('Turning round.', 1200); }
+		}
+	}
+	function leave(jump) {
+		const W = world();
+		stop();
+		if (jump) W?.player?.jump?.();
+	}
 
 	// ---------- moving ----------
 	const fmtSpeed = (v) => Math.round(v * 2.237) + ' mph';
@@ -321,6 +344,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const W = world();
 		if (!W) { stop(); return false; }
 		if (D.mode === 'free') return drive(dt, W);
+		holdTurn();
 		const P = W.player.state, e = D.edge;
 		const boost = held.has('shift') ? 2 : 1;
 		const toEnd = D.dir > 0 ? e.L - D.s : D.s;
@@ -352,6 +376,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const [x0, z0, dx, dz] = at(E.pts, Math.min(E.L, Math.max(0, D.s)));
 		// keep right on a two-way road; ride the middle of a trail or a one-way
 		const trail = TRAIL.has(E.cls);
+		D.onTrail = trail;
 		const off = trail || E.oneway || E.w < 7 ? 0 : E.w * 0.22;
 		const hx = dx * D.dir, hz = dz * D.dir;
 		const [x, z] = onBridge(x0 - hz * off, z0 + hx * off);
