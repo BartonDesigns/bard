@@ -386,7 +386,7 @@ const FRAG = /* glsl */`
 	float kind = vHK.y, a, g;
 	vec4 t = texture2D(map, vMapUv);
 	// (the strands' own cells: long along them, so what varies by strand varies by hair)
-	vec2 cell = floor(vMapUv * (uSalt.z > 0.5 ? vec2(260.0, 12.0) : vec2(12.0, 260.0)));
+	vec2 cell = floor(vMapUv * (uSalt.z > 0.5 ? vec2(420.0, 18.0) : vec2(18.0, 420.0)));
 	if (kind < 1.5) {
 		a = t.a; g = t.r;
 		// (mipmaps thin the alpha out far off: give it back)
@@ -421,7 +421,7 @@ const FRAG = /* glsl */`
 		col = mix(uTip, uRoot, smoothstep(0.6, 1.0, vHK.x));
 		// salt and pepper: hairs gone grey among the rest
 		// (the temples first)
-		if (uSalt.x > 0.0) col = mix(col, uGrey * (0.85 + g * 0.3), step(hh(cell), clamp(uSalt.x * (0.8 + 0.7 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))), 0.0, 1.0)));
+		if (uSalt.x > 0.0) col = mix(col, uGrey * (0.85 + g * 0.3), step(hh(cell), clamp(uSalt.x * (0.8 + 0.7 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))), 0.0, 1.0)) * 0.85);
 		// cut away under a cap; tapered into the painted crop down a fade, each strand
 		// ending at its own height; thin at the crown
 		a *= 1.0 - smoothstep(uClip.x - 0.005, uClip.x + 0.004, vRest.y);

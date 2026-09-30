@@ -554,10 +554,10 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			// each lens (brow, lids, cheek) and of the bridge of the nose; the arms clear of
 			// the temples back to just in front of the ears
 			const most = (test, pick) => { let m = -1e9; for (let i = 0; i < nb; i += 3) if (test(p[i], p[i + 1], p[i + 2])) m = Math.max(m, pick(p[i], p[i + 1], p[i + 2])); return m; };
-			let z = eyeZ + 0.017;
+			let z = p ? eyeZ + 0.008 : eyeZ + 0.017;
 			if (p) for (const e of eyes) {
 				const ex = e.x + Math.sign(e.x) * 0.003;
-				z = Math.max(z, most((x, y, zz) => Math.abs(x - ex) < w + tube && Math.abs(y - e.y) < h + tube && zz > eyeZ - 0.02, (x, y, zz) => zz) + 0.003 + tube);
+				z = Math.max(z, most((x, y, zz) => Math.abs(x - ex) < w * 0.85 && Math.abs(x) > 0.016 && Math.abs(y - e.y) < h + tube && zz > eyeZ - 0.02, (x, y, zz) => zz) + 0.002 + tube);
 			}
 			const zb = p ? Math.max(z, most((x, y, zz) => Math.abs(x) < 0.008 && Math.abs(y - eyes[0].y - h * 0.4) < 0.006 && zz > eyeZ - 0.02, (x, y, zz) => zz) + 0.002 + tube) : z;
 			const rim = (ex, ey) => { const pts = []; for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a); pts.push(new THREE.Vector3(ex + Math.sign(c) * Math.pow(Math.abs(c), 2 / pw) * w, ey + Math.sign(s2) * Math.pow(Math.abs(s2), 2 / pw) * h * (s2 < 0 && !round ? 0.92 : 1), z - Math.abs(c) * 0.002)); } return pts; };
