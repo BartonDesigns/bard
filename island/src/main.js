@@ -348,6 +348,7 @@ export function createIslandWorld() {
 	const inkBtn = button('🖋 Tattoo studio', 'Tattoo studio (T)', 'left:50%;transform:translateX(-50%);bottom:calc(200px + env(safe-area-inset-bottom));display:none;');
 	dom.mount.appendChild(inkBtn);
 	inkBtn.addEventListener('click', (e) => { e.stopPropagation(); studio.start(); });
+	HOOKS.tattoo = () => studio.start();
 	for (const ev of ['pointerdown', 'touchstart']) inkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if ((e.key === 't' || e.key === 'T') && !e.repeat && world?.bizSeen?.type === 'tattoo' && !studio.active() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); studio.start(); } });
 	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active(), hint: (t, ms) => hint(t, ms, 1) });
@@ -1440,7 +1441,7 @@ if (typeof window !== 'undefined') {
 		// the month the world keeps: 0 today's, 1..12 that month
 		month: (m) => { if (m !== undefined) pickMonth(m); return monthPicked(); },
 		// the tattoo studio, wherever you are
-		tattoo: () => { studio.start(); return 'Tattoo studio'; },
+		tattoo: () => { HOOKS.tattoo?.(); return 'Tattoo studio'; },
 		bloom: (v) => { if (v !== undefined) REAL_U.uBloom.value = Math.max(0, Math.min(1, +v)); return REAL_U.uBloom.value; },
 		// share where you are: Crysis.share() (a link and a line of text), Crysis.share({ silent: true, from: 'Sam' })
 		share: (opts) => HOOKS.share?.share(opts),

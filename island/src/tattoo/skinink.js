@@ -54,7 +54,7 @@ vec3 inkAt(vec3 b) {
 }`;
 
 const blank = (() => { let t = null; return () => { if (!t) { t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 0]), 1, 1); t.needsUpdate = true; } return t; }; })();
-const V4 = () => Array.from({ length: MAX }, () => new THREE.Vector4());
+const V4 = () => Array.from({ length: MAX }, () => new THREE.Vector4(0, 0, 0, 0));        // (w 0: no piece there)
 export function inkUniforms() {
 	return { uTat: { value: blank() }, uTatA: { value: V4() }, uTatD: { value: V4() }, uTatE: { value: V4() }, uTatP: { value: V4() }, uTatT: { value: V4() } };
 }
