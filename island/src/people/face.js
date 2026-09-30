@@ -76,7 +76,7 @@ export function skinAttribute(F, src) {
 
 // ---------- lashes, brows and the lower lid's wet line: one small skinned mesh ----------
 const MORPHS = [['eye-left-closure', 'eye-right-closure'], ['mouth-open'], ['mouth-corner-puller'], ['eyebrows-left-up', 'eyebrows-right-up']];
-export function faceDetail(A, F, P, p, S, rnd, normalOf) {
+export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 	if (!F) return null;
 	const V = [], UV = [], K = [], SI = [], SW = [], I = [], src = [];
 	const vert = (x, y, z, u, v, kind, from) => { V.push(x, y, z); UV.push(u, v); K.push(kind); src.push(from); let s = 0; for (let q = 0; q < 4; q++) s += A.weights[from * 4 + q]; for (let q = 0; q < 4; q++) { SI.push(A.ids[from * 4 + q]); SW.push(A.weights[from * 4 + q] / (s || 1)); } return V.length / 3 - 1; };
@@ -104,7 +104,8 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf) {
 		}
 	}
 	// the brows: short hairs lying on the skin along each brow's arch, thick at the inner
-	// end and thinning to the tail; inner hairs stand up, the rest sweep outward
+	// end and thinning to the tail; inner hairs stand up, the rest sweep outward; the grey
+	// share of them (grey) drawn grey
 	const B = F.brow, n0 = new THREE.Vector3(), n1 = new THREE.Vector3(), cx = (eyeC[0].x + eyeC[1].x) / 2;
 	const dens = 0.7 + rnd() * 0.6, thick = 0.8 + rnd() * 0.45;
 	// the skin round the brows (its vertices and normals, in a fine grid), so that every
@@ -115,7 +116,7 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf) {
 		if (tb < ta) continue;
 		const a = new THREE.Vector3(...at(va)), b = new THREE.Vector3(...at(vb)), side = Math.sign(a.x - cx) || 1;
 		normalOf(va, n0); normalOf(vb, n1);
-		const count = Math.round(40 * dens * (1.15 - ta * 0.5));
+		const count = Math.round(54 * dens * (1.15 - ta * 0.5));
 		for (let h = 0; h < count; h++) {
 			const f = rnd(), t = ta + (tb - ta) * f, n = n0.clone().lerp(n1, f).normalize();
 			const band = (0.0075 * (1 - t) + 0.0028 * t) * thick * S;
@@ -123,13 +124,13 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf) {
 			const ang = THREE.MathUtils.lerp(1.3, -0.35, Math.min(1, t * 1.25)) + (rnd() - 0.5) * 0.45;
 			const dir = new THREE.Vector3(Math.cos(ang) * side, Math.sin(ang), 0);
 			dir.addScaledVector(n, -dir.dot(n)).normalize();
-			const len = (0.005 + rnd() * 0.004) * S, wid = 0.0012 * S;
+			const len = (0.005 + rnd() * 0.004) * S, wid = 0.0014 * S, kind = grey && hash(j * 131 + h) < grey ? 4 : 2;
 			const tip = root.clone().addScaledVector(dir, len).addScaledVector(n, 0.0006);
 			onSkin(root, 0.0006); onSkin(tip, 0.0008);
 			const sv = new THREE.Vector3().crossVectors(n, dir).normalize().multiplyScalar(wid / 2);
 			const from = f < 0.5 ? va : vb;
-			const a0 = vert(root.x - sv.x, root.y - sv.y, root.z - sv.z, 0, 0, 2, from), a1 = vert(root.x + sv.x, root.y + sv.y, root.z + sv.z, 1, 0, 2, from);
-			const b0 = vert(tip.x - sv.x, tip.y - sv.y, tip.z - sv.z, 0, 1, 2, from), b1 = vert(tip.x + sv.x, tip.y + sv.y, tip.z + sv.z, 1, 1, 2, from);
+			const a0 = vert(root.x - sv.x, root.y - sv.y, root.z - sv.z, 0, 0, kind, from), a1 = vert(root.x + sv.x, root.y + sv.y, root.z + sv.z, 1, 0, kind, from);
+			const b0 = vert(tip.x - sv.x, tip.y - sv.y, tip.z - sv.z, 0, 1, kind, from), b1 = vert(tip.x + sv.x, tip.y + sv.y, tip.z + sv.z, 1, 1, kind, from);
 			I.push(a0, a1, b1, a0, b1, b0);
 		}
 	}
@@ -150,6 +151,8 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf) {
 	g.computeBoundingSphere();
 	return g;
 }
+
+const hash = (x) => { const s = Math.sin(x * 12.9898) * 43758.5453; return s - Math.floor(s); };
 
 // a point kept a little out from the skin near the given vertices (off: how far, m): the
 // skin's vertices there with their normals, bucketed; each point is set against the nearest
@@ -177,10 +180,11 @@ function skinNear(A, p, verts) {
 	};
 }
 
-// lashes, brows and the wet line: strands drawn in the shader, no textures
-export function detailMaterial(hairCol) {
+// lashes, brows and the wet line: strands drawn in the shader, no textures (hairCol: the
+// brows' colour, greyCol: their grey hairs')
+export function detailMaterial(hairCol, greyCol = hairCol) {
 	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-	const U = { uHair: { value: new THREE.Color(hairCol) } };
+	const U = { uHair: { value: new THREE.Color(hairCol) }, uGrey: { value: new THREE.Color(greyCol) } };
 	m.userData.U = U;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U);
@@ -188,10 +192,11 @@ export function detailMaterial(hairCol) {
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvKind = kind; vSt = uv;');
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 uniform vec3 uHair;
+uniform vec3 uGrey;
 varying float vKind;
 varying vec2 vSt;
 float dh(float x) { return fract(sin(x * 91.7) * 43758.5453); }
-float gRgh = 0.7;`)
+float gRgh = 0.7, gSpec = 1.0, gLit = 1.0;`)
 			.replace('#include <color_fragment>', `#include <color_fragment>
 {
 	int k = int(vKind + 0.5);
@@ -204,11 +209,13 @@ float gRgh = 0.7;`)
 		a = step(t, 1.0) * (1.0 - smoothstep(w * 0.6, w, abs(fract(x + (dh(id) - 0.5) * 0.3 + t * 0.15) - 0.5)));
 		a *= k == 0 ? 1.0 : 0.6;
 		c = uHair * 0.3 + vec3(0.008);
-	} else if (k == 2) {
-		// a brow hair: thin, tapering to the tip
+	} else if (k == 2 || k == 4) {
+		// a brow hair: thin, tapering to the tip; matt and in its own shade, as hair lying
+		// thick on skin is (a shine on so fine a thing only greys it)
 		float w = 0.5 * (1.0 - vSt.y * 0.8);
-		a = 1.0 - smoothstep(w * 0.5, w, abs(vSt.x - 0.5));
-		c = uHair;
+		a = 1.0 - smoothstep(w * 0.45, w, abs(vSt.x - 0.5));
+		c = k == 4 ? uGrey : uHair;
+		gRgh = 0.85; gSpec = 0.15; gLit = 0.7;
 	} else {
 		// the wet line: clear, glossy, a little pink where it meets the lid
 		a = sin(vSt.y * 3.14159) * 0.45;
@@ -219,9 +226,10 @@ float gRgh = 0.7;`)
 	diffuseColor.a *= a;
 	if (diffuseColor.a < 0.02) discard;
 }`)
-			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRgh;');
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gRgh;')
+			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.directSpecular *= gSpec; reflectedLight.indirectSpecular *= gSpec; reflectedLight.directDiffuse *= gLit; reflectedLight.indirectDiffuse *= gLit;');
 	};
-	m.customProgramCacheKey = () => 'crysis-face-detail-1';
+	m.customProgramCacheKey = () => 'crysis-face-detail-3';
 	return m;
 }
 

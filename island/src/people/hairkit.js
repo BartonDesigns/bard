@@ -184,8 +184,42 @@ function fixed(A, St, kind) {
 		}
 		return d;
 	});
-	St.fix = { N, T, UV, K, SI, SW, M, I: St.idx };
+	// the style's pieces (its cards, each a run of joined triangles), so a piece is moved
+	// off the face all one way
+	const up = new Int32Array(nv).map((x, i) => i), find = (i) => { while (up[i] !== i) i = up[i] = up[up[i]]; return i; };
+	for (let i = 0; i < St.idx.length; i += 3) { const a = find(St.idx[i]); up[find(St.idx[i + 1])] = a; up[find(St.idx[i + 2])] = a; }
+	const piece = new Int32Array(nv);
+	for (let v = 0; v < nv; v++) piece[v] = find(v);
+	St.fix = { N, T, UV, K, SI, SW, M, I: St.idx, piece };
 	return St.fix;
+}
+
+// the face, to keep hair off it: in 4 mm steps of height (from under the chin to the brows),
+// how far to either side this body's skin reaches in front of the ears, and how far forward
+// it comes at each distance out from the middle, or further out
+const FG = 0.004, FNY = 48, FNX = 30;
+function faceFront(P, p) {
+	if (P.faceFront && P.faceFront.p === p) return P.faceFront;
+	const K = P.skull, y0 = K.eyeY - 0.19, W = new Float32Array(FNY), Z = new Float32Array(FNY * FNX).fill(-9);
+	for (let v = 0; v < p.length / 3; v++) {
+		const x = Math.abs(p[v * 3] - K.c.x), z = p[v * 3 + 2], yi = Math.floor((p[v * 3 + 1] - y0) / FG), xi = Math.floor(x / FG);
+		if (yi < 0 || yi >= FNY || xi >= FNX || z < K.eyeZ - 0.12) continue;
+		if (z > K.eyeZ - 0.07) W[yi] = Math.max(W[yi], x);
+		Z[yi * FNX + xi] = Math.max(Z[yi * FNX + xi], z);
+	}
+	for (let yi = 0; yi < FNY; yi++) for (let xi = FNX - 2; xi >= 0; xi--) Z[yi * FNX + xi] = Math.max(Z[yi * FNX + xi], Z[yi * FNX + xi + 1]);
+	P.faceFront = { p, W, Z, y0 };
+	return P.faceFront;
+}
+// where a hair vertex (V[o..o+2]) is against the face below the eyes, into out: how much
+// it is to be moved off it (all of it beside the face, less and less below the chin and up
+// to the eyes, none behind the ears), how far out the face's side is there, and how far it
+// is in front of the cheek's edge
+function offFace(FF, K, V, o, out) {
+	const y = V[o + 1], yi = Math.floor((y - FF.y0) / FG), w = yi >= 0 && yi < FNY ? FF.W[yi] : 0;
+	out[0] = w ? sm(FF.y0, K.eyeY - 0.12, y) * (1 - sm(K.eyeY - 0.035, K.eyeY - 0.01, y)) * sm(K.eyeZ - 0.085, K.eyeZ - 0.065, V[o + 2]) : 0;
+	out[1] = w + 0.004;
+	out[2] = out[0] > 0 ? Math.max(0, V[o + 2] - FF.Z[yi * FNX + Math.min(FNX - 1, Math.floor(w / FG))] - 0.006) : 0;
 }
 
 // a style tied onto this body (p: its vertices; vol scales how far the hair stands off the
@@ -193,7 +227,7 @@ function fixed(A, St, kind) {
 function styleChunk(A, P, p, St, kind, vol, fadeY = -99) {
 	const { nv, refs, wts, off, den, sref } = St, F = fixed(A, St, kind);
 	const sc = [0, 1, 2].map((a) => { const [i, j] = sref[a]; return (i === j ? P._S : Math.abs(p[i * 3 + a] - p[j * 3 + a]) / den[a]) * vol / 40000; });
-	const V = new Float32Array(nv * 3), K = P.skull, d = new THREE.Vector3();
+	const V = new Float32Array(nv * 3), K = P.skull, d = new THREE.Vector3(), FF = kind === 0 && faceFront(P, p);
 	for (let v = 0; v < nv; v++) {
 		let x = 0, y = 0, z = 0;
 		for (let k = 0; k < 3; k++) { const r = refs[v * 3 + k] * 3, w = wts[v * 3 + k]; x += w * p[r]; y += w * p[r + 1]; z += w * p[r + 2]; }
@@ -206,6 +240,31 @@ function styleChunk(A, P, p, St, kind, vol, fadeY = -99) {
 			d.set(V[v * 3] - K.c.x, V[v * 3 + 1] - K.c.y, V[v * 3 + 2] - K.c.z);
 			const r = d.length(), R = K.radius(d.multiplyScalar(1 / (r || 1))) + 0.0035;
 			if (r < R) { V[v * 3] = K.c.x + d.x * R; V[v * 3 + 1] = K.c.y + d.y * R; V[v * 3 + 2] = K.c.z + d.z * R; }
+		}
+	}
+	if (FF) {
+		// the face kept clear from the front and from either side: each piece of the style (a
+		// card) moved as one, out to the side most of it is on (the locks kept in their order
+		// in a band beside the cheeks) and back behind the cheek's edge, as far as its part
+		// furthest over the face needs, so the cards bend aside whole and never tear or fold;
+		// a piece that spans the face goes strand by strand. A fringe is cut at the brows in
+		// the shader
+		const piece = F.piece, M = new Map(), at = [0, 0, 0], W = new Float32Array(nv * 3), band = 0.015;
+		for (let v = 0; v < nv; v++) {
+			offFace(FF, K, V, v * 3, at); W.set(at, v * 3);
+			const x = V[v * 3] - K.c.x, e = M.get(piece[v]) || [0, 1, -1, 0, 0];
+			e[0] += x; e[1] = Math.min(e[1], x); e[2] = Math.max(e[2], x);
+			M.set(piece[v], e);
+		}
+		const sideOf = (v, e) => Math.sign(e[1] < -0.03 && e[2] > 0.03 ? V[v * 3] - K.c.x : e[0]) || 1;
+		const out = (v, e) => { const u = (V[v * 3] - K.c.x) * sideOf(v, e), edge = W[v * 3 + 1]; return u < edge + band ? edge + Math.max(0, u) * band / (edge + band) - u : 0; };
+		for (let v = 0; v < nv; v++) if (W[v * 3] > 0) { const e = M.get(piece[v]); e[3] = Math.max(e[3], out(v, e)); e[4] = Math.max(e[4], W[v * 3 + 2]); }
+		for (let v = 0; v < nv; v++) {
+			const k = W[v * 3];
+			if (!(k > 0)) continue;
+			const e = M.get(piece[v]), wide = e[1] < -0.03 && e[2] > 0.03;
+			V[v * 3] += sideOf(v, e) * (wide ? out(v, e) : e[3]) * k;
+			V[v * 3 + 2] -= (wide ? W[v * 3 + 2] : e[4]) * k;
 		}
 	}
 	return { ...F, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
@@ -394,11 +453,12 @@ const FRAG = /* glsl */`
 		a *= 1.0 + max(0.0, 0.5 * log2(max(dot(dx, dx), dot(dy, dy)))) * 0.22;
 	} else {
 		// a shell of a beard grown from the skin. The first lies on the skin: the shade of
-		// the roots, smooth, so between the hairs is shadow, not bare skin. The rest: fine
-		// hairs running down the face, each its own length, fewer and finer further out;
-		// far off, just how much they cover. Everything thins out towards the beard's edge
-		float l = fract(kind), dn = smoothstep(0.03, 0.75, vHK.z);
-		if (l < 0.01) { a = dn * 0.7; g = 0.3; }
+		// the roots, smooth and nearly solid, so between the hairs is beard, not bare skin.
+		// The rest: fine hairs running down the face, each its own length, fewer and finer
+		// further out; a step or two off, just how much they cover, so the beard reads as
+		// one soft mass. Everything thins out, softly, towards the beard's edge
+		float l = fract(kind), dn = smoothstep(0.03, 0.8, vHK.z);
+		if (l < 0.01) { a = dn * 0.92; g = 0.36; }
 		else {
 			vec2 q = vMapUv * vec2(420.0, 70.0);
 			float col = floor(q.x), jx = hh(vec2(col, 1.3)), off = hh(vec2(col, 7.7)) * 7.0;
@@ -409,19 +469,19 @@ const FRAG = /* glsl */`
 			float across = 1.0 - smoothstep(wd - w, wd + w, abs(fx));
 			float along = smoothstep(0.0, 0.1, seg) * (1.0 - smoothstep(0.55 + 0.35 * jx, 0.7 + 0.3 * jx, seg));
 			float cover = dn * (1.0 - l * 0.4);
-			a = across * along * step(hh(vec2(col, floor(sq))), cover);
-			a = mix(a, cover * 0.5, smoothstep(0.25, 0.8, w));
+			a = across * along * smoothstep(0.0, 0.35, cover - hh(vec2(col, floor(sq))) * 0.5);
+			a = mix(a, cover * 0.8, smoothstep(0.2, 0.6, w));
 			// (the hairs of a clump: fine lines along it)
-			float fine = 0.75 + 0.25 * sin(fx * 40.0 + jx * 6.0);
-			g = (0.32 + 0.3 * hh(vec2(col, floor(sq) + 3.1))) * fine;
+			float fine = 0.85 + 0.15 * sin(fx * 40.0 + jx * 6.0);
+			g = (0.38 + 0.14 * hh(vec2(col, floor(sq) + 3.1))) * mix(fine, 1.0, smoothstep(0.2, 0.6, w));
 		}
 	}
 	vec3 col;
 	if (kind < 0.5) {
 		col = mix(uTip, uRoot, smoothstep(0.6, 1.0, vHK.x));
-		// salt and pepper: hairs gone grey among the rest
-		// (the temples first)
-		if (uSalt.x > 0.0) col = mix(col, uGrey * (0.85 + g * 0.3), step(hh(cell), clamp(uSalt.x * (0.8 + 0.7 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))), 0.0, 1.0)) * 0.85);
+		// salt and pepper: hairs gone grey among the rest, the temples well ahead of the
+		// crown while there are few
+		if (uSalt.x > 0.0) col = mix(col, uGrey * (0.85 + g * 0.3), step(hh(cell), clamp(uSalt.x * (0.5 + 1.2 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))) + uSalt.x * uSalt.x * 0.5, 0.0, 1.0)) * 0.9);
 		// cut away under a cap; tapered into the painted crop down a fade, each strand
 		// ending at its own height; thin at the crown
 		a *= 1.0 - smoothstep(uClip.x - 0.005, uClip.x + 0.004, vRest.y);
@@ -432,14 +492,20 @@ const FRAG = /* glsl */`
 			vec3 fq = vRest - vec3(uHC.x, uFace.x, uFace.y);
 			float hw = mix(0.028, 0.062, smoothstep(-0.13, -0.02, fq.y));
 			float cl = (1.0 - smoothstep(hw - 0.012, hw, abs(fq.x))) * smoothstep(0.022, 0.014, fq.y) * smoothstep(-0.15, -0.13, fq.y) * smoothstep(-0.045, -0.025, fq.z);
+			// (each strand cut clean, at its own place: never a veil of half-there hair)
 			float e = hh(cell + 23.0) * 0.6 + 0.2;
-			a *= smoothstep(e - 0.2, e + 0.2, 1.0 - cl);
+			a *= smoothstep(e - 0.03, e + 0.03, 1.0 - cl);
 		}
 		if (uClip.z > 0.0) a *= 1.0 - uClip.z * 0.85 * smoothstep(0.8, 0.95, dot(normalize(vRest - uHC), normalize(vec3(0.1, 0.9, -0.45)))) * step(0.35, hh(floor(vMapUv * 200.0)));
 	} else {
 		col = uBeard.rgb * mix(1.0, 0.65, vHK.x);
-		// (the chin first)
-		if (uSalt.y > 0.0) col = mix(col, uGrey, step(hh(floor(vMapUv * vec2(420.0, 70.0)) + 5.0), clamp(uSalt.y * (0.85 + 0.4 * smoothstep(-0.02, -0.06, vRest.y - uHC.y)), 0.0, 1.0)));
+		// (the chin first; hair by hair close to, the mix of them on the roots' shade and
+		// further off)
+		if (uSalt.y > 0.0) {
+			float s = clamp(uSalt.y * (0.85 + 0.4 * smoothstep(-0.02, -0.06, vRest.y - uHC.y)), 0.0, 1.0);
+			float far = kind > 1.5 ? max(step(fract(kind), 0.01), smoothstep(0.2, 0.6, fwidth(vMapUv.x * 420.0))) : 0.0;
+			col = mix(col, uGrey, mix(step(hh(floor(vMapUv * vec2(420.0, 70.0)) + 5.0), s), s, far));
+		}
 	}
 	diffuseColor.rgb = col * g * 2.0;
 	diffuseColor.a *= a;
@@ -473,6 +539,6 @@ export function kitMaterial(tex, beard = false) {
 			.replace('#include <map_fragment>', FRAG)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-5' + (beard ? '-b' : msaa ? '' : '-c');
+	m.customProgramCacheKey = () => 'crysis-hairkit-6' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

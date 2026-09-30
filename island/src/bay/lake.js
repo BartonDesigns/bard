@@ -315,7 +315,9 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 		const e = W.S.edgeOf(p.x, p.z), dx = e.x - p.x, dz = e.z - p.z, l = Math.hypot(dx, dz) || 1;
 		p.x = e.x + dx / l * 0.4; p.z = e.z + dz / l * 0.4;
 	}
-	return { group: root, update, push, waterAt, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
+	// (rings on the water: a float landing, a fish on the line; fishing.js)
+	const ripple = (x, z, k = 0.5) => { if (bodyAt(x, z)) ring(x, z, Math.min(1, k)); };
+	return { group: root, update, push, waterAt, ripple, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
 }
 
 // the reed blades merged into one geometry (a small local version, to keep this module

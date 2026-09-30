@@ -107,13 +107,16 @@ function bornHair(age, anc, r, seed) {
 	if (r() < 0.6) r();
 	return naturalHair(anc, rng(seed ^ 0xc01));
 }
-// how grey their hair has gone (0..1: the share of grey hairs): none before forty; salt and
-// pepper through the forties to a third or so by the mid fifties; mostly grey by seventy;
-// grey to white past it. Each person a few years early or late, never before forty
-export function greyOf(d) {
-	if (d.child || d.age < 40) return 0;
-	const a = Math.max(40, d.age + (d.greyShift || 0));
-	return a < 55 ? 0.03 + (a - 40) / 15 * 0.32 : a < 70 ? 0.35 + (a - 55) / 15 * 0.5 : Math.min(1, 0.85 + (a - 70) / 15 * 0.15);
+// how grey their hair has gone (0..1: the share of grey hairs): none before the mid
+// thirties; a few at the temples from then into the forties; salt and pepper through the
+// fifties; mostly grey by the early sixties; all grey from seventy or so, whitening. Each
+// person a few years early or late (lag: years later still, as brows go grey after the head)
+const GREYING = [[35, 0], [45, 0.07], [52, 0.22], [60, 0.6], [66, 0.85], [72, 1]];
+export function greyOf(d, lag = 0) {
+	if (d.child || d.age < 33) return 0;
+	const a = d.age + (d.greyShift || 0) - lag;
+	for (let i = 1; i < GREYING.length; i++) if (a < GREYING[i][0]) { const [a0, g0] = GREYING[i - 1], [a1, g1] = GREYING[i]; return Math.max(0, g0 + (a - a0) / (a1 - a0) * (g1 - g0)); }
+	return 1;
 }
 // the hair's colour as seen from afar: its own, greyed as far as it has gone
 export function hairTone(d) {
@@ -145,7 +148,7 @@ export function personDNA(seed, opts = {}) {
 		temper: { outgoing: r(), confident: r(), warmth: r(), fidget: r() },
 	};
 	// when their hair goes grey: some a few years early, some late
-	d.greyShift = (rng(seed ^ 0x9e7)() - 0.5) * 12;
+	d.greyShift = (rng(seed ^ 0x9e7)() - 0.5) * 8;
 	// children: the base mesh's child shape, at a child's height (about 0.95 m at three,
 	// 1.4 m at eleven), slight, quick on their feet, in bright play clothes
 	if (age < 16) {
@@ -286,9 +289,9 @@ export function buildPerson(A, d) {
 	P.redress = (o) => dress(A, P, o);
 	dress(A, P, outfitOf(d));
 	// lashes, brows, the wet line: one small mesh, closing and lifting with the face
-	const dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow));
+	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow), brow.grey);
 	if (dg) {
-		const dm = new THREE.SkinnedMesh(dg, detailMaterial(browColour(d)));
+		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
 		dm.frustumCulled = false; dm.renderOrder = 1;
 		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
@@ -476,12 +479,12 @@ function faceMorphs(A, g, S) {
 	}
 }
 
-// brows: the hair's own colour, a shade darker; greying later and less than the head
-function browColour(d) {
-	const c = new THREE.Color(...d.hairColour).multiplyScalar(0.85);
-	// (a few grey hairs in them past sixty)
-	if (d.age > 60) c.lerp(new THREE.Color(0.5, 0.5, 0.48), greyOf(d) * 0.35);
-	return c;
+// brows: the hair's natural colour (a dye leaves them be), a shade darker; going grey hair
+// by hair on the head's own curve, some years behind it
+function browOf(d) {
+	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * 0.6));
+	const g = greyOf(d, 12);
+	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
 }
 
 // the skin's normals at the brow's vertices (for laying the brow hairs on the skin)

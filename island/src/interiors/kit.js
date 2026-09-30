@@ -124,6 +124,41 @@ const EXTRA = {
 		bx(g, 'metal', -W2, 0.6, -D2, W2, 1.5, D2, c);
 		for (let x = -W2 + 0.05; x < W2 - 0.2; x += 0.3) for (let y = 0.65; y < 1.45; y += 0.2) bx(g, 'metal', x, y, D2, x + 0.26, y + 0.16, D2 + 0.01, lin([0.8, 0.68, 0.36]));
 	},
+	// a museum's case: a wooden base, a glass case on it, rocks, a fossil and a few old things
+	exhibitCase(g, it, rnd) {
+		const W2 = it.w / 2, D2 = it.d / 2, wd = lin(pick(WOOD, it.v));
+		bx(g, 'grain', -W2, 0, -D2, W2, 0.8, D2, wd);
+		bx(g, 'matte', -W2 + 0.04, 0.8, -D2 + 0.04, W2 - 0.04, 0.82, D2 - 0.04, lin([0.2, 0.22, 0.2]));
+		for (let x = -W2 + 0.2; x < W2 - 0.15; x += 0.28) g.sphere('matte', x + (rnd() - 0.5) * 0.06, 0.86, (rnd() - 0.5) * D2, 0.07 + rnd() * 0.04, 0.04 + rnd() * 0.03, 0.06, lin(pick([[0.75, 0.62, 0.42], [0.45, 0.42, 0.38], [0.62, 0.3, 0.22], [0.86, 0.82, 0.72], [0.3, 0.45, 0.35]], rnd())), 6);
+		g.cyl('matte', 0, 0.82, D2 * 0.4, 0.09, 0.012, lin([0.7, 0.66, 0.55]), 10);
+		bx(g, 'glass', -W2, 0.82, -D2, W2, 1.05, D2, WHITE);
+		bx(g, 'matte', -W2 + 0.05, 0.62, D2, W2 - 0.05, 0.74, D2 + 0.01, lin([0.9, 0.88, 0.8]));
+	},
+	// a panel on two legs, printed with the mountain's story: pictures and bands of colour
+	exhibitPanel(g, it, rnd) {
+		const W2 = it.w / 2, c = lin([0.26, 0.2, 0.14]);
+		for (const x of [-W2 + 0.04, W2 - 0.08]) bx(g, 'metal', x, 0, -0.04, x + 0.04, 2.0, 0.04, BLACK);
+		bx(g, 'matte', -W2, 0.7, -0.03, W2, 2.0, 0.03, lin([0.92, 0.88, 0.78]));
+		bx(g, 'matte', -W2, 1.78, 0.03, W2, 1.98, 0.035, c);
+		for (let k = 0; k < 3; k++) { const x = -W2 + 0.1 + k * (it.w - 0.2) / 3; bx(g, 'matte', x, 1.2, 0.03, x + (it.w - 0.4) / 3, 1.7, 0.036, lin(pick([[0.45, 0.55, 0.62], [0.62, 0.52, 0.32], [0.38, 0.5, 0.3], [0.7, 0.45, 0.3]], rnd()))); }
+		for (let y = 0.8; y < 1.12; y += 0.07) bx(g, 'matte', -W2 + 0.1, y, 0.03, W2 - 0.1 - rnd() * 0.3, y + 0.03, 0.034, lin([0.35, 0.33, 0.3]));
+	},
+	// the mountain in relief on a plinth: its two summits and the ridges down from them
+	reliefModel(g, it) {
+		const W2 = it.w / 2, D2 = it.d / 2;
+		bx(g, 'grain', -W2, 0, -D2, W2, 0.85, D2, lin([0.3, 0.22, 0.15]));
+		bx(g, 'matte', -W2 + 0.05, 0.85, -D2 + 0.05, W2 - 0.05, 0.88, D2 - 0.05, lin([0.62, 0.6, 0.45]));
+		const G = lin([0.42, 0.46, 0.3]), B = lin([0.55, 0.47, 0.34]);
+		g.sphere('matte', 0.1 * W2, 0.88, 0, W2 * 0.55, 0.28, D2 * 0.6, G, 10);
+		g.sphere('matte', -0.35 * W2, 0.88, -0.2 * D2, W2 * 0.3, 0.22, D2 * 0.35, B, 8);
+		g.sphere('matte', 0.45 * W2, 0.88, 0.25 * D2, W2 * 0.35, 0.2, D2 * 0.3, G, 8);
+		g.sphere('matte', 0.2 * W2, 1.02, 0, W2 * 0.18, 0.18, D2 * 0.2, B, 8);
+	},
+	// a spinning rack of postcards
+	postcards(g, it, rnd) {
+		g.cyl('metal', 0, 0, 0, 0.2, 0.03, BLACK, 10); g.cyl('metal', 0, 0, 0, 0.02, 1.6, BLACK, 6);
+		for (let y = 0.5; y < 1.55; y += 0.22) for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, x = Math.sin(a) * 0.14, z = Math.cos(a) * 0.14; bx(g, 'matte', x - 0.07, y, z - 0.07, x + 0.07, y + 0.15, z + 0.07, lin(pick(BRIGHT, rnd()))); }
+	},
 	bench(g, it) {
 		const W2 = it.w / 2, D2 = it.d / 2, wd = lin(pick(WOOD, it.v));
 		bx(g, 'grain', -W2, 0.4, -D2, W2, 0.46, D2, wd);

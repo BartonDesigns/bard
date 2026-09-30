@@ -18,7 +18,7 @@
 // flights of stairs, landings, rails, the holes in the floors over the stairs. The rooms
 // are then furnished (furnish.js).
 
-export const ST = { storey: 3.3, ceil: 3.0, ext: 0.18, part: 0.1, vest: 1.3, run: 4.0, land: 1.0, stairW: 1.0, risers: 18, door: 2.1 };
+export const ST = { storey: 3.3, ceil: 3.0, ext: 0.18, part: 0.1, vest: 1.3, run: 4.0, land: 1.25, stairW: 1.0, risers: 18, door: 2.1 };
 
 export function rng(seed) {
 	let a = seed >>> 0;
@@ -88,7 +88,7 @@ export function planRow(S) {
 	const P = base(S), r = S.rnd, n = S.levels, reach = Math.min(n, S.reach || n);
 	const { hw, hd } = P, PT = ST.part;
 	const side = S.stairSide ?? (S.doorX >= 0 ? 1 : -1);
-	const sw = ST.stairW, hallW = clamp((2 * hw - sw) * 0.18, 0.95, 1.15);
+	const sw = ST.stairW, hallW = 1.25;
 	const sx0 = side > 0 ? hw - sw : -hw, sx1 = sx0 + sw;
 	const hx0 = side > 0 ? sx0 - hallW : sx1, hx1 = hx0 + hallW;
 	const xw = side > 0 ? hx0 - PT / 2 : hx1 + PT / 2;
@@ -132,19 +132,20 @@ export function planRow(S) {
 		back.earth = zb > -hd + 0.05;
 		wall(P, k, 'z', -hw - E / 2, zb, zf, y, top, 'ext', -1).party = true;
 		wall(P, k, 'z', hw + E / 2, zb, zf, y, top, 'ext', 1).party = true;
-		// the core: the stair strip and the hall beside it
+		// the core: the stair strip and the hall beside it (in a shop, the flat's way up
+		// from the back of the shop)
 		const shop = S.use === 'shop' && k === 0;
-		const hall = room(P, k, 'hall', shop ? sx0 : cx0, zc0, shop ? sx1 : cx1, zf, { stairs: true });
+		const hall = room(P, k, 'hall', cx0, zc0, cx1, zf, { stairs: true });
 		void hall;
 		// the rooms beside the core, front to back
 		const sideLen = zf - zc0;
 		const first = k === 0 ? (S.garage ? 'garage' : r() < 0.5 ? 'den' : 'bed') : k === 1 ? 'living' : 'master';
 		const roles3 = [first, k === 0 ? 'bath' : k === 1 ? 'powder' : 'bath', k === 0 ? 'laundry' : k === 1 ? 'dining' : 'bed'];
 		const roles2 = [first, k === 0 ? 'laundry' : k === 1 ? 'dining' : 'bed'];
-		const hallWall = shop ? wall(P, k, 'z', side > 0 ? sx0 - PT / 2 : sx1 + PT / 2, zc0, zs, y, yc) : wall(P, k, 'z', xw, zc0, zf, y, yc);
+		const hallWall = wall(P, k, 'z', xw, zc0, shop ? zs : zf, y, yc);
 		if (shop) {
 			// the shop: the whole front beside the stair, the stair's foot open to it
-			room(P, k, 'shop', side > 0 ? -hw : sx1 + PT / 2, zc0, side > 0 ? sx0 - PT / 2 : hw, zf, { shopType: S.shopType });
+			room(P, k, 'shop', rx0, zc0, rx1, zf, { shopType: S.shopType });
 		} else {
 			const ws = sideLen > 10 ? [0.45, 0.2, 0.35] : sideLen > 5.8 ? [0.55, 0.45] : [1];
 			const sl = slots(zf, zc0, ws);
@@ -161,7 +162,7 @@ export function planRow(S) {
 		const backLen = zc0 - PT - zb;
 		if (backLen > 2.2) {
 			const cw = wall(P, k, 'x', zc0 - PT / 2, -hw, hw, y, yc);
-			doorway(cw, shop ? (side > 0 ? (-hw + sx0) / 2 : (sx1 + hw) / 2) : (hx0 + hx1) / 2, y, 0.9);
+			doorway(cw, shop ? (rx0 + rx1) / 2 : (hx0 + hx1) / 2, y, 0.9);
 			const two = backLen > 7.5;
 			const bl = two ? slots(zc0 - PT, zb, [0.5, 0.5]) : [[zc0 - PT, zb]];
 			const types = shop ? ['storage', 'storage'] : k === 0 ? ['family', 'bed'] : k === 1 ? ['kitchen', reach > 2 ? 'family' : 'bed'] : ['bed', 'office'];
@@ -177,7 +178,7 @@ export function planRow(S) {
 			if (d) d.main = true;
 			if (shop) {
 				// the shopfront: glass from the kick plate to the sign, the door in it
-				const a = side > 0 ? -hw + 0.1 : sx1 + 0.1, b = side > 0 ? sx0 - 0.1 : hw - 0.1;
+				const a = side > 0 ? -hw + 0.1 : hx1 + 0.1, b = side > 0 ? hx0 - 0.1 : hw - 0.1;
 				for (const [s0, s1] of [[a, S.doorX - doorW / 2 - 0.1], [S.doorX + doorW / 2 + 0.1, b]]) if (s1 - s0 > 0.4) open(front, s0, s1, 0.45, 2.95, 'store');
 			}
 		}
@@ -285,11 +286,14 @@ function flat(P, k, x0, z0, x1, z1, sd, cwall, r) {
 	const y = k * ST.storey, yc = y + ST.ceil, PT = ST.part, len = z1 - z0, deep = x1 - x0;
 	// the door off the corridor, into the living room
 	const liveFront = r() < 0.5;
-	const lz = liveFront ? [z0 + len * 0.42, z1] : [z0, z1 - len * 0.42];
-	const bz = liveFront ? [z0, z0 + len * 0.42 - PT] : [z1 - len * 0.42 + PT, z1];
-	room(P, k, 'living', x0, lz[0] + (liveFront ? PT / 2 : 0), x1, lz[1], { flat: true });
+	// (too short for a bedroom as well: a studio, all one room)
+	if (len < 6) { room(P, k, 'living', x0, z0, x1, z1, { flat: true }); doorway(cwall, (z0 + z1) / 2, y, 0.95); return; }
+	const bl = Math.min(len - 3.2, Math.max(2.7, len * 0.42));
+	const lz = liveFront ? [z0 + bl, z1] : [z0, z1 - bl];
+	const bz = liveFront ? [z0, z0 + bl - PT] : [z1 - bl + PT, z1];
+	room(P, k, 'living', x0, lz[0] + (liveFront ? PT / 2 : 0), x1, lz[1] - (liveFront ? 0 : PT / 2), { flat: true });
 	doorway(cwall, (lz[0] + lz[1]) / 2 + (liveFront ? 1 : -1) * Math.min(1.2, len * 0.15), y, 0.95);
-	const split = wall(P, k, 'x', liveFront ? z0 + len * 0.42 : z1 - len * 0.42, x0, x1, y, yc);
+	const split = wall(P, k, 'x', liveFront ? z0 + bl : z1 - bl, x0, x1, y, yc);
 	// the bath at the corridor side of the bedroom's slice
 	const bathW = Math.min(2.3, deep * 0.4), bx = sd < 0 ? [x1 - bathW, x1] : [x0, x0 + bathW], rx = sd < 0 ? [x0, x1 - bathW - PT] : [x0 + bathW + PT, x1];
 	if (bz[1] - bz[0] > 2.4 && deep > 5) {
@@ -339,6 +343,71 @@ export function planHall(S) {
 	if (S.use !== 'garage' && S.use !== 'shed' && S.use !== 'parking') {
 		const wy = S.use === 'warehouse' ? [h - 1.6, h - 0.5] : [0.9, 2.3];
 		for (const [w, a, b] of [[front, -hw, hw], [back, -hw, hw], [wl, -hd, hd], [wr, -hd, hd]]) for (const c of evenly(a, b, S.use === 'warehouse' ? 6 : 3.2)) open(w, c - 0.6, c + 0.6, wy[0], wy[1], 'window');
+	}
+	return P;
+}
+
+// ---------------------------------------------------------------------------------
+// the Summit Building on Mt Diablo (1939-42, the CCC's sandstone: bay/diablo.js draws its
+// stone outside and hollows it). Through the door from the car park, the lobby with the
+// information desk and the stair up; the gift shop on the one hand; on the other the Summit
+// Museum, a gallery round the base of the tower (a solid pier of stone through both floors).
+// Upstairs a second gallery over the shop, the landing, and the museum's upper room; from the
+// landing a stair on up through the roof to the observation deck.
+
+// S: { W, D (the inside of the stone shell), pier ([x0, z0, x1, z1]: the tower's base),
+//      doorX, roofY (the deck, over the ground floor), windows ([side, u, k]: side 'z+', 'z-',
+//      'x+', 'x-', u along the wall, k the level), rnd }
+export function planSummit(S = {}) {
+	const P = base({ use: 'site', W: S.W ?? 25.4, D: S.D ?? 11.75, rnd: S.rnd || rng(1939), style: 'plain' });
+	const E = ST.ext, PT = ST.part, { hw, hd } = P;
+	const pier = S.pier ?? [4.7, -3.2, 11.1, 3.2], doorX = S.doorX ?? -3.5, roofY = S.roofY ?? 6.9;
+	const windows = S.windows ?? [...[-10.5, -7, 0, 3.5, 7, 10.5].flatMap((u) => [['z+', u, 0], ['z-', u, 0], ['z+', u, 1], ['z-', u, 1]]), ['z-', -3.5, 0], ['z+', -3.5, 1], ['z-', -3.5, 1], ...[-3, 3].flatMap((u) => [['x-', u, 0], ['x-', u, 1], ['x+', u, 0], ['x+', u, 1]])];
+	// the shop's wall and the lobby's, across the building
+	const xs = Math.max(-hw + 4, doorX - 3), xl = Math.min(pier[0] - 3.2, doorX + 3);
+	P.door = { x: doorX, w: 1.2, y: 0, h: 2.3 };
+	P.solid = [];
+	P.topHoles = [];
+	for (let k = 0; k < 2; k++) {
+		const y = k * ST.storey, yc = y + ST.ceil, top = k ? roofY : y + ST.storey;
+		const L = { k, y, h: ST.ceil, zb: -hd, rooms: [], holes: [[pier[0], pier[1], pier[2], pier[3]]] };
+		P.levels.push(L);
+		P.solid.push({ k, box: [pier[0], pier[1], pier[2], pier[3], y - 0.2, top] });
+		const ext = { 'z+': wall(P, k, 'x', hd + E / 2, -hw - E, hw + E, y, top, 'ext', 1), 'z-': wall(P, k, 'x', -hd - E / 2, -hw - E, hw + E, y, top, 'ext', -1), 'x-': wall(P, k, 'z', -hw - E / 2, -hd, hd, y, top, 'ext', -1), 'x+': wall(P, k, 'z', hw + E / 2, -hd, hd, y, top, 'ext', 1) };
+		for (const [side, u, kk] of windows) if (kk === k) open(ext[side], u - 0.55, u + 0.55, y + 0.85, y + 2.3, 'window');
+		// the west room (the shop below, a gallery above), the lobby or landing, the museum
+		room(P, k, k ? 'gallery' : 'shop', -hw, -hd, xs - PT / 2, hd, { shopType: 'gift' });
+		room(P, k, k ? 'hall' : 'visitor', xs + PT / 2, -hd, xl - PT / 2, hd, { stairs: true });
+		room(P, k, 'gallery', xl + PT / 2, -hd, pier[0], hd);
+		room(P, k, 'gallery', pier[0], pier[3], hw, hd);
+		room(P, k, 'gallery', pier[0], -hd, hw, pier[1]);
+		// (the strip between the tower and the east wall: a store cupboard)
+		room(P, k, 'closet', pier[2] + PT, pier[1] + PT / 2, hw, pier[3] - PT / 2);
+		wall(P, k, 'z', pier[2] + PT / 2, pier[1] - PT, pier[3] + PT, y, yc);
+		wall(P, k, 'x', pier[1] - PT / 2, pier[2], hw, y, yc);
+		const sf = wall(P, k, 'x', pier[3] + PT / 2, pier[2], hw, y, yc);
+		doorway(sf, (pier[2] + hw) / 2 + 0.1, y, 0.8);
+		// the walls either side of the lobby, and their openings
+		const ws = wall(P, k, 'z', xs, -hd, hd, y, yc), wl = wall(P, k, 'z', xl, -hd, hd, y, yc);
+		open(ws, hd - 2.6, hd - 1.1, y, y + 2.3, 'wide');
+		// (upstairs, clear of the stair on up to the deck along it)
+		const up = -hd + 1.25 + (Math.max(12, Math.round((roofY - ST.storey) / 0.18)) - 1) * 0.25 + 0.4;
+		open(wl, k ? Math.max(0.6, up) : -2, k ? Math.max(0.6, up) + 3 : 2.4, y, y + 2.6, 'wide');
+		if (k === 0) {
+			const d = open(ext['z+'], doorX - 0.6, doorX + 0.6, 0, 2.3, 'front');
+			if (d) d.main = true;
+			// the stair up, along the shop's wall, climbing toward the back
+			const x0 = xs + PT / 2 + 0.02;
+			P.flights.push({ k, x0, x1: x0 + 1.1, zb: 1.6, zt: 1.6 - ST.run, y0: 0, y1: ST.storey, n: ST.risers, dir: -1, open: 1 });
+		} else {
+			const f = P.flights[0];
+			L.holes.push([f.x0, f.zt, f.x1, f.zb]);
+			P.rails.push({ k, x0: f.x1 - 0.03, z0: f.zt, x1: f.x1 + 0.03, z1: f.zb, y0: y, y1: y + 0.95 }, { k, x0: f.x0, z0: f.zb - 0.03, x1: f.x1 + 0.03, z1: f.zb + 0.03, y0: y, y1: y + 0.95 });
+			// and on up to the deck, along the museum's wall, toward the front
+			const x1 = xl - PT / 2 - 0.02, n = Math.max(12, Math.round((roofY - y) / 0.18)), run = (n - 1) * 0.25, zb = -hd + 1.25;
+			P.flights.push({ k, x0: x1 - 1.1, x1, zb, zt: zb + run, y0: y, y1: roofY, n, dir: 1, open: -1 });
+			P.topHoles.push([x1 - 1.1, zb, x1, zb + run]);
+		}
 	}
 	return P;
 }
