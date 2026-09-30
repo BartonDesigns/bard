@@ -339,6 +339,7 @@ function hairColours(d, H) {
 	return { natural, hair, root, tip, beard, salt: H.salt || 0, beardSalt: grey };
 }
 
+const GREY = new THREE.Color(0.42, 0.42, 0.4);
 // how much hair shines by how it grows
 const SHINE = { straight: 1, wavy: 0.8, curly: 0.55, coily: 0.35 };
 
@@ -361,35 +362,34 @@ function hairUp(A, P) {
 	}).catch(() => {});
 	const capY = covers ? P.skull.eyeY + (hat.kind === 'beanie' ? 0.042 : 0.05) : 99;
 	const skinned = (g, m) => { const s = new THREE.SkinnedMesh(g, m); s.frustumCulled = false; s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
-	const kitMat = (style, beardSt) => {
-		const m = kitMaterial(style?.tex, beardSt?.tex), U = m.userData.U;
-		U.uRoot.value.copy(cols.root); U.uTip.value.copy(cols.tip); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);
-		U.uSalt.value.set(cols.salt * 0.5, cols.beardSalt, style?.grain === 0 ? 0 : 1, 0);
+	const tune = (m) => {
+		const U = m.userData.U;
+		// (greying: some hairs gone grey, and the rest a little paler)
+		U.uRoot.value.copy(cols.root).lerp(GREY, cols.salt * 0.3); U.uTip.value.copy(cols.tip).lerp(GREY, cols.salt * 0.35); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);
+		U.uSalt.value.set(cols.salt * 0.5, cols.beardSalt, styleNow(W.style?.id)?.grain === 0 ? 0 : 1, 0);
 		U.uHC.value.copy(P.skull.c);
 		U.uSpec.value.set(SHINE[STYLES[W.style?.id]] ?? 1, 0.2);
-		U.uClip.value.set(capY, W.style?.fade ? P.skull.eyeY + 0.062 - (1 - W.style.fade) * 0.04 : -99, W.style?.thin || 0, 0);
+		U.uClip.value.set(capY, W.style?.fade ? W.style.fadeY : -99, W.style?.thin || 0, 0);
 		return m;
 	};
-	const rb = rng(d.seed ^ 0xbead);
-	if (ready && W.style) {
-		// the real style (with the beard, one mesh)
-		const g = hairGeometry(A, P, p, W.style, W.beard, rb);
-		P.hair = skinned(g, kitMat(styleNow(W.style.id), W.beard && styleNow(W.beard.kind)));
-	} else {
-		if (W.cut) {
-			const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
-			const tip = cols.tip.clone();
-			if (H.salt) tip.lerp(new THREE.Color(0.42, 0.42, 0.4), H.salt);
-			const hair = new THREE.Mesh(g, hairMaterial(cols.root, tip));
-			hair.castShadow = true;
-			bones[map.head].add(hair);
-			P.hair = hair;
-		}
-		// the beard on its own, if it is in
-		if (W.beard && need.every((id) => id === W.style?.id || styleNow(id))) {
-			const g = hairGeometry(A, P, p, null, W.beard, rb);
-			if (g) P.beard = skinned(g, kitMat(null, W.beard.kind && styleNow(W.beard.kind)));
-		}
+	const has = (id) => !id || styleNow(id);
+	if (W.style?.fade) W.style.fadeY = P.skull.eyeY + 0.062 - (1 - W.style.fade) * 0.04;
+	// the hair: the real style, or the procedural cut while it comes
+	if (W.style && has(W.style.id)) P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+	else if (W.cut) {
+		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
+		// (grey coming in evenly, root to tip)
+		const root = cols.root.clone().lerp(GREY, cols.salt * 0.3), tip = cols.tip.clone().lerp(GREY, cols.salt * 0.35);
+		const hair = new THREE.Mesh(g, hairMaterial(root, tip));
+		hair.castShadow = true;
+		bones[map.head].add(hair);
+		P.hair = hair;
+	}
+	// the beard: drawn after the face, blended
+	const bid = W.beard && (SHELLS[W.beard.kind] ? 'shells' : W.beard.kind);
+	if (bid && has(bid)) {
+		const g = hairGeometry(A, P, p, null, W.beard, rng(d.seed ^ 0xbead));
+		if (g) { P.beard = skinned(g, tune(kitMaterial(SHELLS[W.beard.kind] ? null : styleNow(bid).tex, true))); P.beard.castShadow = false; P.beard.renderOrder = 2; }
 	}
 	for (const m of [P.hair, P.beard]) if (m && P.relit) P.relit(m);
 	P.hairMs = performance.now() - t0;

@@ -47,7 +47,6 @@ alpha, resized, and some meshes simplified.
 | short04 | short04 | MakeHuman team | CC0 | MakeHuman system assets |
 | updo50s | 50s Updo | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2001 |
 | adrienne | Adrienne Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1862 |
-| ashley | Ashley May Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1861 |
 | braidbun | Braid Bun | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2177 |
 | daisy | Daisy Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1859 |
 | grump | Grump Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2796 |
@@ -61,7 +60,6 @@ alpha, resized, and some meshes simplified.
 | shortdaisy | Short Daisy Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1860 |
 | tousled | That 80s Babe Hair | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/2174 |
 | wavybob | Wavy Bob | Elvaerwyn | CC-BY | http://www.makehumancommunity.org/node/1551 |
-| faun | Faun Beard | culturalibre | CC0 | MakeHuman community assets (http://www.makehumancommunity.org) |
 | viking | Beard Viking | Rehman Polanski | CC0 | MakeHuman community assets (http://www.makehumancommunity.org) |
 | moustache | Moustache Viking | Rehman Polanski | CC0 | MakeHuman community assets (http://www.makehumancommunity.org) |
 | scruffy | Scruffy Beard 1 | Elvaerwyn | CC-BY | MakeHuman community assets (http://www.makehumancommunity.org) |

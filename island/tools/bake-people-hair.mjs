@@ -43,7 +43,6 @@ const LIST = [
 	['short04', SYS + 'short04', 'short04.mhclo', 'short04_diffuse.png', MH, 'CC0', 'MakeHuman system assets'],
 	['updo50s', ELV + 'elvs_50s_updo', 'elvs_50s_updo.mhclo', 'elv_50supdo1_diffuse.png', 'Elvaerwyn', 'CC-BY', node(2001)],
 	['adrienne', ELV + 'elvs_adrienne_hair', 'elvs_adrienne_hair.mhclo', 'elvs_adrienne_hair1_diffuse.png', 'Elvaerwyn', 'CC-BY', node(1862)],
-	['ashley', ELV + 'elvs_ashley_may_hair', 'elvs_ashley_may_hair.mhclo', 'elvs_ashley_mayhair1_diffuse.png', 'Elvaerwyn', 'CC-BY', node(1861)],
 	['braidbun', ELV + 'elvs_braid_bun', 'elvs_braid_bun.mhclo', 'elvs_braid_bun_q1_diffuse.png', 'Elvaerwyn', 'CC-BY', node(2177)],
 	['daisy', ELV + 'elvs_daisy_hair', 'elvs_daisy_hair.mhclo', 'elvs_daisyhair1_diffuse.png', 'Elvaerwyn', 'CC-BY', node(1859)],
 	['grump', ELV + 'elvs_grump_hair', 'elvs_grump_hair.mhclo', 'elvs_grumphair_diffuse.png', 'Elvaerwyn', 'CC-BY', node(2796)],
@@ -58,12 +57,11 @@ const LIST = [
 	['tousled', ELV + 'elvs_that_80s_babe_hair', 'elvs_that_80s_babe_hair.mhclo', '80shairtex8.png', 'Elvaerwyn', 'CC-BY', node(2174)],
 	['wavybob', ELV + 'elvs_wavy_bob', 'elvs_wavy_bob.mhclo', 'black.png', 'Elvaerwyn', 'CC-BY', node(1551)],
 	// beards and moustaches
-	['faun', CLO + 'culturalibre_faun_beard', 'culturalibre_faun_beard.mhclo', 'brown.png', 'culturalibre', 'CC0', 'MakeHuman community assets'],
 	['viking', CLO + 'rehmanpolanski_beard_viking', 'rehmanpolanski_beard_viking.mhclo', 'BeardViking.png', 'Rehman Polanski', 'CC0', 'MakeHuman community assets'],
 	['moustache', CLO + 'rehmanpolanski_moustache_viking', 'rehmanpolanski_moustache_viking.mhclo', 'MoustacheViking.png', 'Rehman Polanski', 'CC0', 'MakeHuman community assets'],
 	['scruffy', MAD + 'elvs_scruffy_beard1', 'elvs_scruffy_beard1.mhclo', 'elvs_beard1_longscruffy3_diffuse.png', 'Elvaerwyn', 'CC-BY', 'MakeHuman community assets'],
 ];
-const BEARDS = new Set(['faun', 'viking', 'moustache', 'scruffy']);
+const BEARDS = new Set(['viking', 'moustache', 'scruffy']);
 const TEX = 512;
 // the most triangles a style keeps (the heavier ones are thinned, their cards' outlines kept)
 const MAXT = 5000;
@@ -85,10 +83,13 @@ let hc = [0, 0, 0];
 	for (const v of headV) if (base[v * 3 + 1] > eyeY + 0.03) { x0 = Math.min(x0, base[v * 3]); x1 = Math.max(x1, base[v * 3]); z0 = Math.min(z0, base[v * 3 + 2]); z1 = Math.max(z1, base[v * 3 + 2]); }
 	hc = [(x0 + x1) / 2, eyeY + 0.012, (z0 + z1) / 2];
 }
-// a coarse grid over the head's surface, for the nearest point
-const G = 0.02, grid = new Map();
-for (const v of headV) { const k = [0, 1, 2].map((a) => Math.floor(base[v * 3 + a] / G)).join(); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(v); }
-function nearest(q) {
+// coarse grids over the head's surface, for the nearest point: all of it (for a beard, the
+// face), and the scalp alone (for hair: long hair by the neck is far from its roots)
+const G = 0.02;
+const gridOf = (vs) => { const g = new Map(); for (const v of vs) { const k = [0, 1, 2].map((a) => Math.floor(base[v * 3 + a] / G)).join(); if (!g.has(k)) g.set(k, []); g.get(k).push(v); } return g; };
+const eyeZ = (avg(D.eyes.L)[2] + avg(D.eyes.R)[2]) / 2;
+const faceGrid = gridOf(headV), scalpGrid = gridOf(headV.filter((v) => base[v * 3 + 1] > eyeY - 0.03 && !(base[v * 3 + 2] > eyeZ - 0.03 && base[v * 3 + 1] < eyeY + 0.055)));
+function nearest(grid, q) {
 	let best = 1e9;
 	for (let r = 1; r <= 4 && best > (r - 1) * G; r++) {
 		const c = q.map((x) => Math.floor(x / G));
@@ -247,7 +248,7 @@ async function bake([id, dir, clo, tex]) {
 	const nv = vs.length, nt = tris.length;
 	const T = await texture(path.join(folder, tex), id, UV, tris);
 	// how near the root: the distance from the scalp (or the face, for a beard)
-	const dist = P.map((q) => nearest(q));
+	const dist = P.map((q) => nearest(BEARDS.has(id) ? faceGrid : scalpGrid, q));
 	// per triangle: its normal, and the direction the strands run
 	const Nv = P.map(() => [0, 0, 0]), Tv = P.map(() => [0, 0, 0]);
 	for (const [a, b, c] of tris) {
@@ -312,7 +313,7 @@ async function bake([id, dir, clo, tex]) {
 // own vertices over the cheeks, the lips, the chin and under it, far fewer triangles
 async function shells() {
 	const uvOf = new Map(), tri = [];
-	const inFace = (v) => { const X = base[v * 3], Y = base[v * 3 + 1] - eyeY, Z = base[v * 3 + 2] - (avg(D.eyes.L)[2] + avg(D.eyes.R)[2]) / 2; return Y < 0.025 && Y > -0.19 && Z > -0.105 && Math.abs(X) < 0.09; };
+	const inFace = (v) => { const X = base[v * 3], Y = base[v * 3 + 1] - eyeY, Z = base[v * 3 + 2] - eyeZ; return Y < 0.025 && Y > -0.19 && Z > -0.105 && Math.abs(X) < 0.09; };
 	for (let i = 0; i < bodyF.length; i += 6) {
 		const t = [bodyF[i], bodyF[i + 2], bodyF[i + 4]];
 		if (!t.every(inFace)) continue;
@@ -321,7 +322,7 @@ async function shells() {
 	}
 	const ids = [...uvOf.keys()], local = new Map(ids.map((v, i) => [v, i]));
 	await MeshoptSimplifier.ready;
-	const [ind] = MeshoptSimplifier.simplify(Uint32Array.from(tri.flat().map((v) => local.get(v))), Float32Array.from(ids.flatMap((v) => [base[v * 3], base[v * 3 + 1], base[v * 3 + 2]])), 3, 1400 * 3, 0.008, ['LockBorder']);
+	const [ind] = MeshoptSimplifier.simplify(Uint32Array.from(tri.flat().map((v) => local.get(v))), Float32Array.from(ids.flatMap((v) => [base[v * 3], base[v * 3 + 1], base[v * 3 + 2]])), 3, 2600 * 3, 0.005, ['LockBorder']);
 	const keep = [...new Set(ind)], at = new Map(keep.map((v, i) => [v, i]));
 	const vid = Uint16Array.from(keep.map((i) => ids[i])), uvid = Uint16Array.from(keep.map((i) => uvOf.get(ids[i]))), idx = Uint16Array.from([...ind].map((i) => at.get(i)));
 	const nv = vid.length, nt = idx.length / 3;

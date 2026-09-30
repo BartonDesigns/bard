@@ -4,12 +4,13 @@
 // MakeHuman's proxies are, so the hair sits on each head as its shape has it, and rides the
 // bones those vertices ride (the head, and the neck and shoulders for long hair). A style
 // is fetched when someone first wears it (the procedural hair of hair.js stands in till it
-// comes). Short beards, goatees and moustaches are grown here from the skin itself: shells
+// comes). Short beards, goatees and chinstraps are grown here from the skin itself: shells
 // over the jaw, the chin and the lip, strands cut from them in the shader; a shadow of
-// stubble is painted on the skin (skin.js). One mesh a head, hair and beard together, drawn
-// by one shader with the style's texture and the beard's: grey strands and alpha, tinted by
-// the person's own colour, darker at the root, lit with the two highlights hair has
-// (Kajiya-Kay, along the strands), edges softened by alpha to coverage.
+// stubble is painted on the skin (skin.js). The hair is one mesh a head, drawn by one
+// shader with the style's texture: grey strands and alpha, tinted by the person's own
+// colour, darker at the root, lit with the two highlights hair has (Kajiya-Kay, along the
+// strands), edges softened by alpha to coverage. A beard is one more, drawn blended after
+// the face, so its soft edges stay soft.
 
 import * as THREE from 'three';
 
@@ -21,7 +22,7 @@ const sm = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 
 // how each grows: straight, wavy, curly or coily (for how much it shines)
 export const STYLES = {
 	short01: 'straight', short02: 'straight', short03: 'straight', short04: 'straight', grump: 'wavy', afro01: 'coily', puffs: 'coily',
-	bob01: 'straight', bob02: 'straight', shortdaisy: 'straight', curlybob: 'curly', wavybob: 'curly', ashley: 'wavy', katherine: 'straight', tousled: 'wavy',
+	bob01: 'straight', bob02: 'straight', shortdaisy: 'straight', curlybob: 'curly', wavybob: 'curly', katherine: 'straight', tousled: 'wavy',
 	long01: 'straight', hazel: 'straight', daisy: 'straight', adrienne: 'straight', hippy: 'straight', island: 'wavy', keylth: 'straight',
 	ponytail01: 'straight', braid01: 'straight', updo50s: 'wavy', braidbun: 'straight',
 };
@@ -31,7 +32,7 @@ const FOR_CUT = {
 	crop: [['short02', 2, 0.8], ['short04', 1.5, 0.85], ['short01', 1, 0.75]],
 	short: [['short02', 2], ['short01', 1.5], ['short04', 1.5], ['short03', 0.6]],
 	textured: [['short01', 2, 1, 0.6], ['grump', 1, 0.8, 0.6], ['short04', 1, 1.05, 0.6]],
-	fade: [['short02', 1.5, 0.8, 1], ['short04', 1, 0.85, 1], ['short01', 1, 0.8, 1]],
+	fade: [['short04', 1.5, 0.75, 1], ['short02', 1, 0.7, 1], ['short03', 1, 0.75, 1]],
 	quiff: [['short01', 2, 1.1, 0.8], ['short04', 1, 1.15, 0.8]],
 	curls: [['grump', 1.5], ['curlybob', 1, 0.8], ['afro01', 1, 0.55]],
 	coils: [['afro01', 3, 0.45, 0.5]],
@@ -39,9 +40,9 @@ const FOR_CUT = {
 	bun: [['updo50s', 1.5], ['braidbun', 1], ['ponytail01', 0.4]],
 	pony: [['ponytail01', 3], ['braid01', 1]],
 	bob: [['bob01', 1.5], ['bob02', 1], ['shortdaisy', 1.5]],
-	lob: [['ashley', 1.5], ['katherine', 1], ['shortdaisy', 0.5], ['tousled', 0.6]],
+	lob: [['katherine', 1.2], ['shortdaisy', 1], ['tousled', 0.8], ['bob01', 0.5]],
 	long: [['long01', 1.5], ['hazel', 1.2], ['daisy', 1], ['adrienne', 1], ['hippy', 0.8], ['keylth', 0.6]],
-	waves: [['island', 1.5], ['tousled', 1.2], ['ashley', 0.6]],
+	waves: [['island', 1.5], ['tousled', 1.2]],
 	pixie: [['short03', 2], ['bob02', 0.3, 0.8]],
 	fringe: [['bob02', 1.5], ['katherine', 1.2]],
 	slick: [['short02', 1, 0.8], ['short03', 1]],
@@ -71,16 +72,16 @@ export function styleFor(d, H, cutName, r) {
 // little rarer where it tends to grow sparse. [kind, weight]; imported ones by their id
 const BEARDS = {
 	young: [['none', 5], ['stubble', 4], ['short', 1.6], ['goatee', 0.8], ['moustache', 0.3], ['circle', 0.6], ['chinstrap', 0.4], ['full', 0.5], ['scruffy', 0.2]],
-	mid: [['none', 4.5], ['stubble', 2.5], ['short', 2], ['full', 1.2], ['goatee', 0.8], ['circle', 0.8], ['moustache', 0.6], ['scruffy', 0.4], ['viking', 0.15], ['faun', 0.2]],
-	old: [['none', 5.5], ['stubble', 1], ['short', 1.4], ['full', 1.2], ['moustache', 1.2], ['circle', 0.5], ['scruffy', 0.4], ['viking', 0.25], ['faun', 0.15]],
+	mid: [['none', 4.5], ['stubble', 2.5], ['short', 2], ['full', 1.2], ['goatee', 0.8], ['circle', 0.8], ['moustache', 0.6], ['scruffy', 0.4], ['viking', 0.2]],
+	old: [['none', 5.5], ['stubble', 1], ['short', 1.4], ['full', 1.2], ['moustache', 1.2], ['circle', 0.5], ['scruffy', 0.4], ['viking', 0.3]],
 };
-export const SHELLS = { short: { len: 0.004, layers: 3 }, full: { len: 0.008, layers: 4 }, goatee: { len: 0.006, layers: 3 }, circle: { len: 0.005, layers: 3 }, chinstrap: { len: 0.004, layers: 3 }, moustache: { len: 0.005, layers: 3 } };
+export const SHELLS = { short: { len: 0.004, layers: 3 }, full: { len: 0.008, layers: 4 }, goatee: { len: 0.006, layers: 3 }, circle: { len: 0.005, layers: 3 }, chinstrap: { len: 0.004, layers: 3 } };
 export function beardFor(d, H, r) {
 	if (H.beard !== undefined) return H.beard ? { kind: H.beard, stubble: H.beard === 'stubble' ? 0.7 : 0.35, asset: !SHELLS[H.beard] && H.beard !== 'stubble' } : null;
 	if (!d.male || d.child || d.age < 18) return null;
 	const L = BEARDS[d.age < 30 ? 'young' : d.age < 55 ? 'mid' : 'old'];
 	const sparse = (d.ancestry?.[1] || 0) > 0.6 ? 0.6 : 1;
-	const e = pickW(r, L.map(([k, w]) => [k, /^(full|scruffy|viking|faun|short)$/.test(k) ? w * sparse : w]));
+	const e = pickW(r, L.map(([k, w]) => [k, /^(full|scruffy|viking|short)$/.test(k) ? w * sparse : w]));
 	if (e[0] === 'none') return null;
 	// a shadow of stubble under every beard, a heavier one on its own
 	return { kind: e[0], stubble: e[0] === 'stubble' ? 0.5 + r() * 0.4 : 0.35, asset: !SHELLS[e[0]] && e[0] !== 'stubble' };
@@ -178,14 +179,16 @@ function fixed(A, St, kind) {
 
 // a style tied onto this body (p: its vertices; vol scales how far the hair stands off the
 // head): the ties' own vertices, and the offset, scaled as the body is
-function styleChunk(A, P, p, St, kind, vol) {
+function styleChunk(A, P, p, St, kind, vol, fadeY = -99) {
 	const { nv, refs, wts, off, den, sref } = St, F = fixed(A, St, kind);
 	const sc = [0, 1, 2].map((a) => { const [i, j] = sref[a]; return (i === j ? P._S : Math.abs(p[i * 3 + a] - p[j * 3 + a]) / den[a]) * vol / 40000; });
 	const V = new Float32Array(nv * 3);
 	for (let v = 0; v < nv; v++) {
 		let x = 0, y = 0, z = 0;
 		for (let k = 0; k < 3; k++) { const r = refs[v * 3 + k] * 3, w = wts[v * 3 + k]; x += w * p[r]; y += w * p[r + 1]; z += w * p[r + 2]; }
-		V[v * 3] = x + off[v * 3] * sc[0]; V[v * 3 + 1] = y + off[v * 3 + 1] * sc[1]; V[v * 3 + 2] = z + off[v * 3 + 2] * sc[2];
+		// (down a fade the hair lies closer, thinning into the painted crop)
+		const k = fadeY > -9 ? 0.35 + 0.65 * sm(fadeY - 0.035, fadeY + 0.02, y) : 1;
+		V[v * 3] = x + off[v * 3] * sc[0] * k; V[v * 3 + 1] = y + off[v * 3 + 1] * sc[1] * k; V[v * 3 + 2] = z + off[v * 3 + 2] * sc[2] * k;
 	}
 	return { ...F, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
 }
@@ -193,19 +196,19 @@ function styleChunk(A, P, p, St, kind, vol) {
 // ---------- the beard's zones on the face ----------
 // per vertex of the head's skin (the base mesh, by where it sits against the eyes): the
 // full beard (cheeks below the cheekbone, the jaw, the chin, under it to the throat, the
-// upper lip, the sideburns), the moustache, the chin, the jawline; the lips and the nose
+// upper lip, the sideburns), the chin, the jawline; the lips and the nose
 // left bare
 function zones(A) {
 	if (A.beardZones) return A.beardZones;
 	const n = A.base.length / 3, u = A.unit, D = A.D;
 	const avg = (ids, a) => ids.reduce((s, i) => s + A.base[i * 3 + a] * u, 0) / ids.length;
 	const ey = (avg(D.eyes.L, 1) + avg(D.eyes.R, 1)) / 2, ez = (avg(D.eyes.L, 2) + avg(D.eyes.R, 2)) / 2;
-	const full = new Float32Array(n), mous = new Float32Array(n), chin = new Float32Array(n), jaw = new Float32Array(n), x = new Float32Array(n);
+	const full = new Float32Array(n), chin = new Float32Array(n), jaw = new Float32Array(n), x = new Float32Array(n), y = new Float32Array(n);
 	const used = new Uint8Array(n);
 	for (let i = 0; i < A.body.length; i += 2) used[A.body[i]] = 1;
 	for (let v = 0; v < n; v++) {
 		if (!used[v]) continue;
-		x[v] = A.base[v * 3] * u;
+		x[v] = A.base[v * 3] * u; y[v] = A.base[v * 3 + 1] * u - ey;
 		const X = Math.abs(x[v]), Y = A.base[v * 3 + 1] * u - ey, Z = A.base[v * 3 + 2] * u - ez;
 		if (Y > 0.02 || Y < -0.19 || Z < -0.1) continue;
 		// the lips (an oval round the mouth) and the mouth's inside
@@ -218,17 +221,15 @@ function zones(A) {
 		// the sideburns, in front of the ear
 		if (X > 0.058 && Z > -0.095 && Z < -0.05 && Y < 0.012) f = Math.max(f, (1 - sm(0.0, 0.012, Y)) * sm(0.058, 0.064, X));
 		// not behind the jaw, down to the throat
-		f *= sm(-0.085, -0.07, Z + (Y < -0.095 ? 0.025 : 0)) * sm(-0.15, -0.13, Y);
+		f *= sm(-0.085, -0.07, Z + (Y < -0.095 ? 0.025 : 0)) * sm(-0.14, -0.115, Y);
 		full[v] = f;
-		// the moustache: the upper lip
-		mous[v] = X < 0.034 && Y > -0.064 ? (1 - sm(0.024, 0.032, X)) * sm(-0.061, -0.057, Y) * (1 - sm(-0.05, -0.046, Y)) * bare : 0;
 		// the chin, below the lower lip, and the corners of the mouth down to it
 		chin[v] = (1 - sm(0.02, 0.028, X)) * (1 - sm(-0.078, -0.074, Y)) * sm(-0.125, -0.115, Y) * bare * sm(-0.02, 0, Z);
 		// the jawline: along the jaw's edge (where the face turns under), to the sideburns
 		const jl = X < 0.055 ? -0.112 + X / 0.055 * 0.025 : -0.087 + (X - 0.055) / 0.015 * 0.06;
 		jaw[v] = f * (1 - sm(0.006, 0.012, Math.abs(Y - jl)));
 	}
-	A.beardZones = { full, mous, chin, jaw, x };
+	A.beardZones = { full, chin, jaw, x, y };
 	return A.beardZones;
 }
 // the stubble's shadow on the skin: per vertex of a piece of skin (src: its base vertices)
@@ -239,9 +240,8 @@ export function stubbleMask(A, src) {
 }
 // how much of each zone a beard covers
 function beardDensity(Z, kind, v) {
-	if (kind === 'moustache') return Z.mous[v];
-	if (kind === 'goatee') return Math.max(Z.mous[v], Z.chin[v]);
-	if (kind === 'circle') return Math.max(Z.mous[v], Z.chin[v], Z.full[v] * (1 - sm(0.03, 0.036, Math.abs(Z.x[v]))));
+	if (kind === 'goatee') return Z.chin[v];
+	if (kind === 'circle') return Math.max(Z.chin[v], Z.full[v] * (1 - sm(0.03, 0.036, Math.abs(Z.x[v]))) * (1 - sm(-0.07, -0.06, Z.y[v])));
 	if (kind === 'chinstrap') return Z.jaw[v];
 	return Z.full[v];
 }
@@ -268,8 +268,8 @@ function shellChunk(A, P, p, kind, rnd) {
 	const V = new Float32Array(n * L * 3), N = new Float32Array(n * L * 3), T = new Float32Array(n * L * 3), UV = new Float32Array(n * L * 2), K = new Float32Array(n * L * 3), SI = new Uint16Array(n * L * 4), SW = new Float32Array(n * L * 4);
 	const M = [0, 1, 2, 3].map(() => new Float32Array(n * L * 3)), I = [];
 	for (let l = 0; l < L; l++) {
-		// (the first just off the skin, clear of it where the thinned face cuts a corner)
-		const k = (l + 1) / L, lift = 0.0015 + grow * k;
+		// (the first on the skin, just clear of it where the thinned face cuts a corner)
+		const k = l / (L - 1), lift = 0.0012 + grow * k;
 		for (let j = 0; j < n; j++) {
 			const u = used[j], v = vid[u], o = l * n + j;
 			let nx = nrm[u * 3], ny = nrm[u * 3 + 1], nz = nrm[u * 3 + 2];
@@ -290,11 +290,11 @@ function shellChunk(A, P, p, kind, rnd) {
 	return { n: n * L, V, N, T, UV, K, SI, SW, I, M };
 }
 
-// hair and beard for one person, one geometry (in the body's rest frame, skinned to it)
+// a person's hair, or their beard, as one geometry (in the body's rest frame, skinned to it)
 export function hairGeometry(A, P, p, style, beard, rnd) {
 	if (!A.ride) A.ride = A.bones.map((b) => RIDE.has(b.name));
 	const parts = [];
-	if (style) parts.push(styleChunk(A, P, p, styleNow(style.id), 0, style.vol));
+	if (style) parts.push(styleChunk(A, P, p, styleNow(style.id), 0, style.vol, style.fadeY));
 	if (beard?.asset) parts.push(styleChunk(A, P, p, styleNow(beard.kind), 1, 1));
 	else if (beard && SHELLS[beard.kind]) parts.push(shellChunk(A, P, p, beard.kind, rnd));
 	const C = parts.filter(Boolean);
@@ -325,7 +325,8 @@ export function hairGeometry(A, P, p, style, beard, rnd) {
 
 // ---------- the shader ----------
 // alpha to coverage wants multisampling: without it (a canvas or target with none), the
-// strands' edges are dithered instead
+// strands are cut clean at half their alpha instead. A beard is drawn blended, after the
+// face, so its fine hairs and its soft edges stay soft either way
 let msaa = true;
 const HEAD = /* glsl */`
 uniform vec3 uRoot;
@@ -335,7 +336,6 @@ uniform vec4 uClip;
 uniform vec4 uSalt;
 uniform vec3 uHC;
 uniform vec2 uSpec;
-uniform sampler2D uBeardMap;
 float hairSpec = 1.0;
 varying vec3 vHT;
 varying vec3 vHK;
@@ -364,42 +364,51 @@ void RE_Direct_Hair( const in IncidentLight directLight, const in vec3 geometryP
 const FRAG = /* glsl */`
 {
 	float kind = vHK.y, a, g;
-	vec4 th = texture2D(map, vMapUv), tb = texture2D(uBeardMap, vMapUv);
+	vec4 t = texture2D(map, vMapUv);
+	// (the strands' own cells: long along them, so what varies by strand varies by hair)
+	vec2 cell = floor(vMapUv * (uSalt.z > 0.5 ? vec2(260.0, 12.0) : vec2(12.0, 260.0)));
 	if (kind < 1.5) {
-		vec4 t = kind < 0.5 ? th : tb;
 		a = t.a; g = t.r;
 		// (mipmaps thin the alpha out far off: give it back)
 		vec2 dx = dFdx(vMapUv * 512.0), dy = dFdy(vMapUv * 512.0);
 		a *= 1.0 + max(0.0, 0.5 * log2(max(dot(dx, dx), dot(dy, dy)))) * 0.22;
 	} else {
-		// a shell of the beard: strands where the cells say, thinner further out, each a
-		// little dot; far off, just the coverage
-		// (the cells long down the face, as the hairs lie; the inner shell nearly solid)
-		float l = fract(kind);
-		vec2 q = vMapUv * vec2(1500.0, 520.0);
-		vec2 c = floor(q), f = fract(q) - 0.5;
-		float cover = vHK.z * (1.0 - l * 0.55);
-		float on = step(hh(c), cover);
-		float rad = 0.5 * (1.0 - l * 0.35);
-		float d = length((f + (vec2(hh(c + 7.1), hh(c + 3.3)) - 0.5) * 0.25) * vec2(1.0, 0.45));
-		float w = length(fwidth(q));
-		a = on * (1.0 - smoothstep(rad - w * 0.5, rad + w * 0.5, d));
-		a = mix(a, cover * 0.85, smoothstep(0.4, 1.2, w));
-		g = (0.3 + 0.25 * hh(c + 1.7)) * (0.7 + 0.3 * l);
+		// a shell of a beard grown from the skin. The first lies on the skin: the shade of
+		// the roots, smooth, so between the hairs is shadow, not bare skin. The rest: fine
+		// hairs running down the face, each its own length, fewer and finer further out;
+		// far off, just how much they cover. Everything thins out towards the beard's edge
+		float l = fract(kind), dn = smoothstep(0.03, 0.75, vHK.z);
+		if (l < 0.01) { a = dn * 0.7; g = 0.3; }
+		else {
+			vec2 q = vMapUv * vec2(420.0, 70.0);
+			float col = floor(q.x), jx = hh(vec2(col, 1.3)), off = hh(vec2(col, 7.7)) * 7.0;
+			float sq = q.y + off, seg = fract(sq), h1 = hh(vec2(col, floor(sq) + 0.5)), h2 = hh(vec2(floor(sq), col + 0.5));
+			// (each clump off the grid a little, and leaning its own way)
+			float fx = fract(q.x) - 0.5 - (h1 - 0.5) * 0.5 - (seg - 0.5) * (h2 - 0.5) * 0.7;
+			float w = fwidth(q.x), wd = (0.24 + 0.16 * h2) * (1.0 - l * 0.35) * (1.0 - seg * 0.5);
+			float across = 1.0 - smoothstep(wd - w, wd + w, abs(fx));
+			float along = smoothstep(0.0, 0.1, seg) * (1.0 - smoothstep(0.55 + 0.35 * jx, 0.7 + 0.3 * jx, seg));
+			float cover = dn * (1.0 - l * 0.4);
+			a = across * along * step(hh(vec2(col, floor(sq))), cover);
+			a = mix(a, cover * 0.5, smoothstep(0.25, 0.8, w));
+			// (the hairs of a clump: fine lines along it)
+			float fine = 0.75 + 0.25 * sin(fx * 40.0 + jx * 6.0);
+			g = (0.32 + 0.3 * hh(vec2(col, floor(sq) + 3.1))) * fine;
+		}
 	}
 	vec3 col;
 	if (kind < 0.5) {
-		col = mix(uTip, uRoot, pow(vHK.x, 1.5));
-		// salt and pepper: strands gone grey among the rest
-		// (cells long along the strands, so a grey hair is a hair, not a speck)
-		if (uSalt.x > 0.0) col = mix(col, vec3(0.42, 0.42, 0.4) * (0.8 + g * 0.4), step(hh(floor(vMapUv * (uSalt.z > 0.5 ? vec2(260.0, 12.0) : vec2(12.0, 260.0)))), uSalt.x) * 0.7);
-		// cut away under a cap, clipped short up the sides, thin at the crown
+		col = mix(uTip, uRoot, smoothstep(0.6, 1.0, vHK.x));
+		// salt and pepper: hairs gone grey among the rest
+		if (uSalt.x > 0.0) col = mix(col, vec3(0.42, 0.42, 0.4) * (0.8 + g * 0.4), step(hh(cell), uSalt.x) * 0.7);
+		// cut away under a cap; tapered into the painted crop down a fade, each strand
+		// ending at its own height; thin at the crown
 		a *= 1.0 - smoothstep(uClip.x - 0.005, uClip.x + 0.004, vRest.y);
-		a *= smoothstep(uClip.y - 0.004, uClip.y + 0.006, vRest.y);
+		if (uClip.y > -9.0) { vec2 hd = normalize((vRest - uHC).xz); float e = hh(cell + 11.0) * 0.7 + 0.15; a *= mix(1.0, smoothstep(e - 0.3, e + 0.3, smoothstep(uClip.y - 0.05, uClip.y + 0.02, vRest.y)), smoothstep(0.85, 0.6, hd.y)); }
 		if (uClip.z > 0.0) a *= 1.0 - uClip.z * 0.85 * smoothstep(0.8, 0.95, dot(normalize(vRest - uHC), normalize(vec3(0.1, 0.9, -0.45)))) * step(0.35, hh(floor(vMapUv * 200.0)));
 	} else {
-		col = uBeard.rgb * mix(1.0, 0.7, vHK.x);
-		if (uSalt.y > 0.0) col = mix(col, vec3(0.45, 0.45, 0.43), step(hh(floor(vMapUv * 400.0) + 5.0), uSalt.y) * 0.9);
+		col = uBeard.rgb * mix(1.0, 0.65, vHK.x);
+		if (uSalt.y > 0.0) col = mix(col, vec3(0.45, 0.45, 0.43), step(hh(floor(vMapUv * vec2(1700.0, 20.0)) + 5.0), uSalt.y) * 0.85);
 	}
 	diffuseColor.rgb = col * g * 2.0;
 	diffuseColor.a *= a;
@@ -407,29 +416,32 @@ const FRAG = /* glsl */`
 	hairSpec = (kind < 0.5 ? uSpec.x : uSpec.y) * (0.4 + 0.6 * g);
 }`;
 let blank = null;
-export function kitMaterial(tex, beardTex) {
+// hair (tex: the style's texture) or a beard (beard: true; its texture, or none for one
+// grown from the skin)
+export function kitMaterial(tex, beard = false) {
 	if (!tex && !blank) { blank = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1); blank.needsUpdate = true; }
 	tex = tex || blank;
-	const m = new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide, alphaTest: 0.4, alphaToCoverage: true });
+	const m = beard
+		? new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide, transparent: true, depthWrite: false })
+		: new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide, alphaTest: 0.4, alphaToCoverage: true });
 	const U = {
 		uRoot: { value: new THREE.Color() }, uTip: { value: new THREE.Color() }, uBeard: { value: new THREE.Vector4(0, 0, 0, 1) },
 		uClip: { value: new THREE.Vector4(99, -99, 0, 0) }, uSpec: { value: new THREE.Vector2(1, 0.5) }, uSalt: { value: new THREE.Vector4(0, 0, 0, 0) }, uHC: { value: new THREE.Vector3() },
-		uBeardMap: { value: beardTex || tex },
 	};
 	m.userData.U = U;
 	m.onBeforeCompile = (sh, r) => {
 		const rt = r.getRenderTarget(), ms = rt ? rt.samples > 0 : r.getContext().getContextAttributes().antialias;
-		if (!ms && msaa) { msaa = false; m.alphaToCoverage = false; }
+		if (!ms && msaa) msaa = false;
+		if (!msaa && m.alphaToCoverage) m.alphaToCoverage = false;
 		Object.assign(sh.uniforms, U);
 		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 hairT;\nattribute vec3 hairK;\nvarying vec3 vHT;\nvarying vec3 vHK;\nvarying vec3 vRest;')
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position; vHK = hairK;')
 			.replace('#include <skinnormal_vertex>', '#include <skinnormal_vertex>\nvec3 hT = hairT;\n#ifdef USE_SKINNING\nhT = (skinMatrix * vec4(hT, 0.0)).xyz;\n#endif\nvHT = normalize(normalMatrix * hT);');
-		sh.fragmentShader = (msaa ? '' : '#undef ALPHA_TO_COVERAGE\n#define HAIR_DITHER\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
+		sh.fragmentShader = (msaa || beard ? '' : '#undef ALPHA_TO_COVERAGE\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + LIGHT)
 			.replace('#include <map_fragment>', FRAG)
-			.replace('#include <alphatest_fragment>', '#ifdef HAIR_DITHER\nif (diffuseColor.a < hh(gl_FragCoord.xy * 0.73) * 0.9 + 0.05) discard;\n#else\n#include <alphatest_fragment>\n#endif')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-2' + (msaa ? '' : '-d');
+	m.customProgramCacheKey = () => 'crysis-hairkit-3' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

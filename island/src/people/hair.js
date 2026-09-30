@@ -446,11 +446,12 @@ export function hairMaterial(root, tip) {
 			shade = 0.75 + 0.5 * (1.0 - ring * 3.0);
 		}
 	}
-	diffuseColor.rgb = mix(uRoot, uTip, smoothstep(0.0, 1.0, v)) * shade * (0.45 + 0.55 * vHK.x);
+	// (a loc or a braid is one colour its whole length, the root just darker)
+	diffuseColor.rgb = mix(uRoot, uTip, smoothstep(0.0, kind == 2 || kind == 3 ? 0.15 : 1.0, v)) * shade * (0.45 + 0.55 * vHK.x);
 	diffuseColor.a *= a;
 }`)
-			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.25 * vHK.x;\nreflectedLight.indirectDiffuse *= 0.6 + 0.4 * vHK.x;');
+			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n{\n\t// (a round loc or braid catches the sky all over: less of it)\n\tfloat tk = floor(vHK.y / 100.0), tube = tk == 2.0 || tk == 3.0 ? 0.45 : 1.0;\n\treflectedLight.indirectSpecular *= 0.25 * vHK.x * tube;\n\treflectedLight.indirectDiffuse *= (0.6 + 0.4 * vHK.x) * mix(0.75, 1.0, tube);\n\treflectedLight.directSpecular *= tube;\n}');
 	};
-	m.customProgramCacheKey = () => 'crysis-hair-3';
+	m.customProgramCacheKey = () => 'crysis-hair-5';
 	return m;
 }
