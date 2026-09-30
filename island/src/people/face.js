@@ -107,6 +107,9 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf) {
 	// end and thinning to the tail; inner hairs stand up, the rest sweep outward
 	const B = F.brow, n0 = new THREE.Vector3(), n1 = new THREE.Vector3(), cx = (eyeC[0].x + eyeC[1].x) / 2;
 	const dens = 0.7 + rnd() * 0.6, thick = 0.8 + rnd() * 0.45;
+	// the skin round the brows (its vertices and normals, in a fine grid), so that every
+	// hair lies on it, a hair's width out, whatever the brow ridge's shape
+	const onSkin = skinNear(A, p, B);
 	for (let j = 0; j + 2 < B.length; j += 2) {
 		const va = B[j], vb = B[j + 2], ta = B[j + 1] / 65535, tb = B[j + 3] / 65535;
 		if (tb < ta) continue;
@@ -122,6 +125,7 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf) {
 			dir.addScaledVector(n, -dir.dot(n)).normalize();
 			const len = (0.005 + rnd() * 0.004) * S, wid = 0.0012 * S;
 			const tip = root.clone().addScaledVector(dir, len).addScaledVector(n, 0.0006);
+			onSkin(root, 0.0006); onSkin(tip, 0.0008);
 			const sv = new THREE.Vector3().crossVectors(n, dir).normalize().multiplyScalar(wid / 2);
 			const from = f < 0.5 ? va : vb;
 			const a0 = vert(root.x - sv.x, root.y - sv.y, root.z - sv.z, 0, 0, 2, from), a1 = vert(root.x + sv.x, root.y + sv.y, root.z + sv.z, 1, 0, 2, from);
@@ -145,6 +149,32 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf) {
 	});
 	g.computeBoundingSphere();
 	return g;
+}
+
+// a point kept a little out from the skin near the given vertices (off: how far, m): the
+// skin's vertices there with their normals, bucketed; each point is set against the nearest
+function skinNear(A, p, verts) {
+	let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+	for (let j = 0; j < verts.length; j += 2) { const v = verts[j] * 3; x0 = Math.min(x0, p[v]); x1 = Math.max(x1, p[v]); y0 = Math.min(y0, p[v + 1]); y1 = Math.max(y1, p[v + 1]); z0 = Math.min(z0, p[v + 2]); z1 = Math.max(z1, p[v + 2]); }
+	const m = 0.015, inBox = (v) => p[v * 3] > x0 - m && p[v * 3] < x1 + m && p[v * 3 + 1] > y0 - m && p[v * 3 + 1] < y1 + m && p[v * 3 + 2] > z0 - m && p[v * 3 + 2] < z1 + m;
+	const nrm = new Map(), F = A.body;
+	for (let i = 0; i < F.length; i += 6) {
+		const a = F[i], b = F[i + 2], c = F[i + 4];
+		if (!inBox(a) && !inBox(b) && !inBox(c)) continue;
+		const ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2], wx = p[c * 3] - p[a * 3], wy = p[c * 3 + 1] - p[a * 3 + 1], wz = p[c * 3 + 2] - p[a * 3 + 2];
+		const n = [uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx];
+		for (const v of [a, b, c]) { const q = nrm.get(v) || [0, 0, 0]; q[0] += n[0]; q[1] += n[1]; q[2] += n[2]; nrm.set(v, q); }
+	}
+	const G = 0.004, grid = new Map(), key = (x, y, z) => Math.floor(x / G) + ',' + Math.floor(y / G) + ',' + Math.floor(z / G);
+	for (const [v, n] of nrm) { const l = Math.hypot(...n) || 1, e = [p[v * 3], p[v * 3 + 1], p[v * 3 + 2], n[0] / l, n[1] / l, n[2] / l], k = key(e[0], e[1], e[2]); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(e); }
+	return (q, off) => {
+		let best = null, bd = 1e9;
+		const cx = Math.floor(q.x / G), cy = Math.floor(q.y / G), cz = Math.floor(q.z / G);
+		for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) for (const e of grid.get((cx + i) + ',' + (cy + j) + ',' + (cz + k)) || []) { const d = (q.x - e[0]) ** 2 + (q.y - e[1]) ** 2 + (q.z - e[2]) ** 2; if (d < bd) { bd = d; best = e; } }
+		if (!best) return;
+		const s = (q.x - best[0]) * best[3] + (q.y - best[1]) * best[4] + (q.z - best[2]) * best[5];
+		if (s < off) { q.x += best[3] * (off - s); q.y += best[4] * (off - s); q.z += best[5] * (off - s); }
+	};
 }
 
 // lashes, brows and the wet line: strands drawn in the shader, no textures

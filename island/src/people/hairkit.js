@@ -137,7 +137,8 @@ function fixed(A, St, kind) {
 	if (St.fix) return St.fix;
 	const { nv, refs, wts, uv, tn, root } = St, ride = A.ride, head = A.bones.findIndex((b) => b.name === 'head');
 	const N = new Float32Array(nv * 3), T = new Float32Array(nv * 3), UV = new Float32Array(nv * 2), K = new Float32Array(nv * 3), SI = new Uint16Array(nv * 4), SW = new Float32Array(nv * 4);
-	const bi = new Int32Array(12), bw = new Float32Array(12);
+	const bi = new Int32Array(13), bw = new Float32Array(13);
+	const eyeB = [...A.D.eyes.L, ...A.D.eyes.R].reduce((a, i) => a + A.base[i * 3 + 1] * A.unit, 0) / (A.D.eyes.L.length + A.D.eyes.R.length);
 	for (let v = 0; v < nv; v++) {
 		let n = 0;
 		for (let k = 0; k < 3; k++) {
@@ -151,6 +152,16 @@ function fixed(A, St, kind) {
 				bw[j] += x;
 			}
 		}
+		// (down to the jaw it rides the head alone, so side locks turn with the face and never
+		// into it; below, more and more the neck and shoulders)
+		let yb = 0;
+		for (let k = 0; k < 3; k++) yb += wts[v * 3 + k] * A.base[refs[v * 3 + k] * 3 + 1] * A.unit;
+		const hk = sm(eyeB - 0.17, eyeB - 0.1, yb);
+		let tot = 0; for (let j = 0; j < n; j++) tot += bw[j];
+		for (let j = 0; j < n; j++) bw[j] *= (1 - hk) / (tot || 1);
+		let hj = 0; while (hj < n && bi[hj] !== head) hj++;
+		if (hj === n) { bi[n] = head; bw[n++] = 0; }
+		bw[hj] += hk + (tot ? 0 : 1 - hk);
 		// the four that count most
 		let tw = 0;
 		for (let q = 0; q < 4; q++) {
@@ -182,13 +193,20 @@ function fixed(A, St, kind) {
 function styleChunk(A, P, p, St, kind, vol, fadeY = -99) {
 	const { nv, refs, wts, off, den, sref } = St, F = fixed(A, St, kind);
 	const sc = [0, 1, 2].map((a) => { const [i, j] = sref[a]; return (i === j ? P._S : Math.abs(p[i * 3 + a] - p[j * 3 + a]) / den[a]) * vol / 40000; });
-	const V = new Float32Array(nv * 3);
+	const V = new Float32Array(nv * 3), K = P.skull, d = new THREE.Vector3();
 	for (let v = 0; v < nv; v++) {
 		let x = 0, y = 0, z = 0;
 		for (let k = 0; k < 3; k++) { const r = refs[v * 3 + k] * 3, w = wts[v * 3 + k]; x += w * p[r]; y += w * p[r + 1]; z += w * p[r + 2]; }
 		// (down a fade the hair lies closer, thinning into the painted crop)
 		const k = fadeY > -9 ? 0.35 + 0.65 * sm(fadeY - 0.035, fadeY + 0.02, y) : 1;
 		V[v * 3] = x + off[v * 3] * sc[0] * k; V[v * 3 + 1] = y + off[v * 3 + 1] * sc[1] * k; V[v * 3 + 2] = z + off[v * 3 + 2] * sc[2] * k;
+		// never inside the head: out to its surface (this head's own, all round) and a little
+		// more; hair on the brow sits in front of the skin
+		if (kind === 0 && V[v * 3 + 1] > K.eyeY - 0.11) {
+			d.set(V[v * 3] - K.c.x, V[v * 3 + 1] - K.c.y, V[v * 3 + 2] - K.c.z);
+			const r = d.length(), R = K.radius(d.multiplyScalar(1 / (r || 1))) + 0.0035;
+			if (r < R) { V[v * 3] = K.c.x + d.x * R; V[v * 3 + 1] = K.c.y + d.y * R; V[v * 3 + 2] = K.c.z + d.z * R; }
+		}
 	}
 	return { ...F, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
 }
@@ -331,10 +349,12 @@ let msaa = true;
 const HEAD = /* glsl */`
 uniform vec3 uRoot;
 uniform vec3 uTip;
+uniform vec3 uGrey;
 uniform vec4 uBeard;
 uniform vec4 uClip;
 uniform vec4 uSalt;
 uniform vec3 uHC;
+uniform vec2 uFace;
 uniform vec2 uSpec;
 float hairSpec = 1.0;
 varying vec3 vHT;
@@ -400,15 +420,26 @@ const FRAG = /* glsl */`
 	if (kind < 0.5) {
 		col = mix(uTip, uRoot, smoothstep(0.6, 1.0, vHK.x));
 		// salt and pepper: hairs gone grey among the rest
-		if (uSalt.x > 0.0) col = mix(col, vec3(0.42, 0.42, 0.4) * (0.8 + g * 0.4), step(hh(cell), uSalt.x) * 0.7);
+		// (the temples first)
+		if (uSalt.x > 0.0) col = mix(col, uGrey * (0.85 + g * 0.3), step(hh(cell), clamp(uSalt.x * (0.8 + 0.7 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))), 0.0, 1.0)));
 		// cut away under a cap; tapered into the painted crop down a fade, each strand
 		// ending at its own height; thin at the crown
 		a *= 1.0 - smoothstep(uClip.x - 0.005, uClip.x + 0.004, vRest.y);
 		if (uClip.y > -9.0) { vec2 hd = normalize((vRest - uHC).xz); float e = hh(cell + 11.0) * 0.7 + 0.15; a *= mix(1.0, smoothstep(e - 0.3, e + 0.3, smoothstep(uClip.y - 0.05, uClip.y + 0.02, vRest.y)), smoothstep(0.85, 0.6, hd.y)); }
+		// the face kept clear: nothing between the brows and the chin in front of the cheeks
+		// (a fringe stops at the brows; side locks end, strand by strand, beside the face)
+		{
+			vec3 fq = vRest - vec3(uHC.x, uFace.x, uFace.y);
+			float hw = mix(0.028, 0.062, smoothstep(-0.13, -0.02, fq.y));
+			float cl = (1.0 - smoothstep(hw - 0.012, hw, abs(fq.x))) * smoothstep(0.022, 0.014, fq.y) * smoothstep(-0.15, -0.13, fq.y) * smoothstep(-0.045, -0.025, fq.z);
+			float e = hh(cell + 23.0) * 0.6 + 0.2;
+			a *= smoothstep(e - 0.2, e + 0.2, 1.0 - cl);
+		}
 		if (uClip.z > 0.0) a *= 1.0 - uClip.z * 0.85 * smoothstep(0.8, 0.95, dot(normalize(vRest - uHC), normalize(vec3(0.1, 0.9, -0.45)))) * step(0.35, hh(floor(vMapUv * 200.0)));
 	} else {
 		col = uBeard.rgb * mix(1.0, 0.65, vHK.x);
-		if (uSalt.y > 0.0) col = mix(col, vec3(0.45, 0.45, 0.43), step(hh(floor(vMapUv * vec2(1700.0, 20.0)) + 5.0), uSalt.y) * 0.85);
+		// (the chin first)
+		if (uSalt.y > 0.0) col = mix(col, uGrey, step(hh(floor(vMapUv * vec2(420.0, 70.0)) + 5.0), clamp(uSalt.y * (0.85 + 0.4 * smoothstep(-0.02, -0.06, vRest.y - uHC.y)), 0.0, 1.0)));
 	}
 	diffuseColor.rgb = col * g * 2.0;
 	diffuseColor.a *= a;
@@ -425,8 +456,8 @@ export function kitMaterial(tex, beard = false) {
 		? new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide, transparent: true, depthWrite: false })
 		: new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide, alphaTest: 0.4, alphaToCoverage: true });
 	const U = {
-		uRoot: { value: new THREE.Color() }, uTip: { value: new THREE.Color() }, uBeard: { value: new THREE.Vector4(0, 0, 0, 1) },
-		uClip: { value: new THREE.Vector4(99, -99, 0, 0) }, uSpec: { value: new THREE.Vector2(1, 0.5) }, uSalt: { value: new THREE.Vector4(0, 0, 0, 0) }, uHC: { value: new THREE.Vector3() },
+		uRoot: { value: new THREE.Color() }, uTip: { value: new THREE.Color() }, uGrey: { value: new THREE.Color() }, uBeard: { value: new THREE.Vector4(0, 0, 0, 1) },
+		uClip: { value: new THREE.Vector4(99, -99, 0, 0) }, uSpec: { value: new THREE.Vector2(1, 0.5) }, uSalt: { value: new THREE.Vector4(0, 0, 0, 0) }, uHC: { value: new THREE.Vector3() }, uFace: { value: new THREE.Vector2() },
 	};
 	m.userData.U = U;
 	m.onBeforeCompile = (sh, r) => {
@@ -442,6 +473,6 @@ export function kitMaterial(tex, beard = false) {
 			.replace('#include <map_fragment>', FRAG)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-3' + (beard ? '-b' : msaa ? '' : '-c');
+	m.customProgramCacheKey = () => 'crysis-hairkit-5' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

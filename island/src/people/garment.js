@@ -549,18 +549,32 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			// or thicker acetate, the bridge between, the arms back to the ears
 			const sun = q.kind === 'sunglasses', round = q.shape === 'round', wire = !!q.wire;
 			const w = round ? 0.0205 : sun ? 0.026 : 0.0245, h = round ? 0.0195 : sun ? 0.021 : 0.0165, tube = wire ? 0.0009 : q.slim ? 0.0016 : 0.0022, pw = round ? 2 : 4;
-			const z = eyeZ + 0.017, gl = wire ? 2 : 0.6;
+			const gl = wire ? 2 : 0.6, p = P0.p, nb = Math.min(p ? p.length : 0, 13380 * 3);
+			// fitted to this face: the frame just clear of the furthest-forward skin behind
+			// each lens (brow, lids, cheek) and of the bridge of the nose; the arms clear of
+			// the temples back to just in front of the ears
+			const most = (test, pick) => { let m = -1e9; for (let i = 0; i < nb; i += 3) if (test(p[i], p[i + 1], p[i + 2])) m = Math.max(m, pick(p[i], p[i + 1], p[i + 2])); return m; };
+			let z = eyeZ + 0.017;
+			if (p) for (const e of eyes) {
+				const ex = e.x + Math.sign(e.x) * 0.003;
+				z = Math.max(z, most((x, y, zz) => Math.abs(x - ex) < w + tube && Math.abs(y - e.y) < h + tube && zz > eyeZ - 0.02, (x, y, zz) => zz) + 0.003 + tube);
+			}
+			const zb = p ? Math.max(z, most((x, y, zz) => Math.abs(x) < 0.008 && Math.abs(y - eyes[0].y - h * 0.4) < 0.006 && zz > eyeZ - 0.02, (x, y, zz) => zz) + 0.002 + tube) : z;
 			const rim = (ex, ey) => { const pts = []; for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2, c = Math.cos(a), s2 = Math.sin(a); pts.push(new THREE.Vector3(ex + Math.sign(c) * Math.pow(Math.abs(c), 2 / pw) * w, ey + Math.sign(s2) * Math.pow(Math.abs(s2), 2 / pw) * h * (s2 < 0 && !round ? 0.92 : 1), z - Math.abs(c) * 0.002)); } return pts; };
 			for (const e of eyes) {
-				const ex = e.x + Math.sign(e.x) * 0.003, ey = e.y + 0.001, pts = rim(ex, ey);
+				const sx = Math.sign(e.x), ex = e.x + sx * 0.003, ey = e.y + 0.001, pts = rim(ex, ey);
 				put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 28, tube, 5, true), 'head', q.col || c, gl);
 				if (sun) { const sh = new THREE.Shape(pts.map((p2) => new THREE.Vector2(p2.x, p2.y))); const lens = new THREE.ShapeGeometry(sh); lens.translate(0, 0, z - 0.001); put(lens, 'head', '#16181c', 1); }
-				// the arm back to the ear
-				const x0 = ex + Math.sign(e.x) * (w + tube), arm = new THREE.BoxGeometry(wire ? 0.0018 : 0.003, wire ? 0.0018 : 0.004, 0.105);
-				arm.translate(x0 + Math.sign(e.x) * 0.004, ey + h * 0.4, z - 0.053); put(arm, 'head', q.col || c, gl);
+				// the arm back to the ear, over the temple
+				const x0 = ex + sx * (w + tube), ya = ey + h * 0.4, lobe = P0.lobes?.[e.x > 0 ? 0 : 1];
+				const zEar = lobe ? lobe.z + 0.012 : z - 0.1;
+				const side = (za, zc) => p ? most((x, y, zz) => x * sx > 0.02 && Math.abs(y - ya) < 0.012 && zz > za && zz < zc, (x) => Math.abs(x)) : Math.abs(x0);
+				const xt = Math.max(Math.abs(x0) + 0.002, side(z - 0.05, z - 0.005) + 0.004), xe = Math.max(xt - 0.004, side(zEar - 0.02, zEar + 0.02) + 0.004);
+				const path = new THREE.CatmullRomCurve3([new THREE.Vector3(x0, ya, z - 0.002), new THREE.Vector3(sx * xt, ya, z - 0.03), new THREE.Vector3(sx * xe, ya - 0.004, zEar)]);
+				put(new THREE.TubeGeometry(path, 10, wire ? 0.0009 : 0.0018, 4, false), 'head', q.col || c, gl);
 			}
 			const b0 = eyes[0].x + Math.sign(eyes[0].x) * 0.003, b1 = eyes[1].x + Math.sign(eyes[1].x) * 0.003, bx0 = Math.min(b0, b1) + w, bx1 = Math.max(b0, b1) - w;
-			const bridge = new THREE.CatmullRomCurve3([new THREE.Vector3(bx0, eyes[0].y + h * 0.3, z), new THREE.Vector3((bx0 + bx1) / 2, eyes[0].y + h * 0.5, z + 0.002), new THREE.Vector3(bx1, eyes[0].y + h * 0.3, z)]);
+			const bridge = new THREE.CatmullRomCurve3([new THREE.Vector3(bx0, eyes[0].y + h * 0.3, z), new THREE.Vector3((bx0 + bx1) / 2, eyes[0].y + h * 0.5, Math.max(z, zb) + 0.001), new THREE.Vector3(bx1, eyes[0].y + h * 0.3, z)]);
 			put(new THREE.TubeGeometry(bridge, 6, tube, 5, false), 'head', q.col || c, gl);
 		} else if (q.kind === 'watch') {
 			// on the left wrist, the face on the back of it

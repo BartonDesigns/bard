@@ -98,6 +98,29 @@ const CLOTH = {
 const KID_TOPS = [[0.9, 0.25, 0.2], [0.2, 0.55, 0.9], [0.95, 0.75, 0.2], [0.35, 0.7, 0.35], [0.85, 0.45, 0.7], [0.55, 0.35, 0.8], [0.95, 0.95, 0.95], [0.2, 0.7, 0.75]];
 const KID_SHOES = [[0.9, 0.9, 0.88], [0.9, 0.3, 0.3], [0.2, 0.4, 0.8], [0.95, 0.6, 0.8], [0.1, 0.1, 0.1]];
 
+// the hair someone is born with, by their ancestry
+const naturalHair = (anc, r) => anc[0] + anc[1] > 0.6 ? HAIR_COLOURS[r() < 0.8 ? 0 : 1] : HAIR_COLOURS[Math.floor(r() * 7)];
+// (the draws the old grey pick for the over-sixties made are still made, so the rest of the
+// person stays as they were)
+function bornHair(age, anc, r, seed) {
+	if (age <= 62) return naturalHair(anc, r);
+	if (r() < 0.6) r();
+	return naturalHair(anc, rng(seed ^ 0xc01));
+}
+// how grey their hair has gone (0..1: the share of grey hairs): none before forty; salt and
+// pepper through the forties to a third or so by the mid fifties; mostly grey by seventy;
+// grey to white past it. Each person a few years early or late, never before forty
+export function greyOf(d) {
+	if (d.child || d.age < 40) return 0;
+	const a = Math.max(40, d.age + (d.greyShift || 0));
+	return a < 55 ? 0.03 + (a - 40) / 15 * 0.32 : a < 70 ? 0.35 + (a - 55) / 15 * 0.5 : Math.min(1, 0.85 + (a - 70) / 15 * 0.15);
+}
+// the hair's colour as seen from afar: its own, greyed as far as it has gone
+export function hairTone(d) {
+	const g = greyOf(d), grey = HAIR_COLOURS[7];
+	return d.hairColour.map((c, i) => c + (grey[i] - c) * g * g);
+}
+
 export function personDNA(seed, opts = {}) {
 	const r = rng(seed ^ 0x5eed1e);
 	// the Bay Area: roughly a third Asian, a third European, Hispanic and African American,
@@ -113,13 +136,16 @@ export function personDNA(seed, opts = {}) {
 		seed, sex, male, ancestry: anc, age, height, muscle: r() * 0.5 * (male ? 1 : 0.6), weight: Math.pow(r(), 1.6) * 0.7,
 		tone: 0.9 + r() * 0.14, warmth: r(),
 		hair: age > 70 && male && r() < 0.35 ? null : male ? (r() < 0.6 ? 'short02' : 'short01') : (r() < 0.55 ? 'ponytail01' : r() < 0.6 ? 'short01' : 'short02'),
-		hairColour: age > 62 ? (r() < 0.6 ? HAIR_COLOURS[7 + (r() < 0.5 ? 1 : 0)] : HAIR_COLOURS[2]) : anc[0] + anc[1] > 0.6 ? HAIR_COLOURS[r() < 0.8 ? 0 : 1] : HAIR_COLOURS[Math.floor(r() * 7)],
+		// (the colour they were born with; the grey comes with the years, greyOf)
+		hairColour: bornHair(age, anc, r, seed),
 		outfit: pickOutfit(r, male, age, opts),
 		gait: { stride: 0.95 + r() * 0.12, bounce: 0.8 + r() * 0.5, armSwing: 0.7 + r() * 0.6, posture: (r() - 0.5) * 0.08 + (age > 65 ? 0.08 : 0), pace: 1.18 + r() * 0.3 - (age > 65 ? 0.3 : 0) },
 		// temperament: how outgoing (bigger, more frequent gestures, head up, arms swinging),
 		// how sure of themselves (chest up or a slump), and their usual mood
 		temper: { outgoing: r(), confident: r(), warmth: r(), fidget: r() },
 	};
+	// when their hair goes grey: some a few years early, some late
+	d.greyShift = (rng(seed ^ 0x9e7)() - 0.5) * 12;
 	// children: the base mesh's child shape, at a child's height (about 0.95 m at three,
 	// 1.4 m at eleven), slight, quick on their feet, in bright play clothes
 	if (age < 16) {
@@ -306,8 +332,7 @@ function dress(A, P, o) {
 	const paintCol = cols.hair.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
 	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : 0.75);
 	const beard = hat?.kind === 'hazhood' ? null : beardFor(d, H, rng(d.seed ^ 0xbea4d));
-	const stubble = cols.beard.clone().multiplyScalar(0.55);
-	P.skinMat.userData.beard.value.set(stubble.r, stubble.g, stubble.b, beard ? beard.stubble : 0);
+	P.skinMat.userData.beard.value.set(cols.stubble.r, cols.stubble.g, cols.stubble.b, beard ? beard.stubble : 0);
 	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));
 	P.hairWant = { style: showHair ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
 	hairUp(A, P);
@@ -324,7 +349,7 @@ function dress(A, P, o) {
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	// caps, glasses, headphones, bags: one more mesh
-	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
+	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
 	return P;
@@ -334,15 +359,18 @@ function dress(A, P, o) {
 // hair's natural colour, greying sooner (grey and white hair are never paper-white: some
 // pigment is left, and it shades itself)
 function hairColours(d, H) {
-	const natural = new THREE.Color(...d.hairColour.map((c) => Math.min(c, 0.5)));
+	// (the lightest blond is toned down whole, not clipped, so it stays blond, not grey)
+	const g = greyOf(d), top = Math.max(...d.hairColour), natural = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top)));
+	// the grey hairs: grey, towards white in the eighties
+	const grey = GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15));
 	const hair = H.dyed ? new THREE.Color(H.dyed) : natural.clone();
-	const root = (H.dyed && !H.fresh ? natural : hair).clone().multiplyScalar(0.6), tip = hair.clone().multiplyScalar(H.dyed ? 0.95 : 1.0);
-	const beard = natural.clone().multiplyScalar(0.85);
-	const grey = d.age > 40 ? Math.min(0.85, (d.age - 40) / 35 + (H.salt || 0) * 0.4) : 0;
-	return { natural, hair, root, tip, beard, salt: H.salt || 0, beardSalt: grey };
+	const root = (H.dyed && !H.fresh ? natural.clone().lerp(grey, g * 0.8) : hair).clone().multiplyScalar(0.6), tip = hair.clone().multiplyScalar(H.dyed ? 0.95 : 1.0);
+	// the beard greys a little ahead of the head, at the chin first
+	const beard = natural.clone().multiplyScalar(0.85), beardSalt = Math.min(1, g * 1.2);
+	return { natural, hair, root, tip, grey, beard, salt: H.dyed ? 0 : g, beardSalt, stubble: beard.clone().lerp(grey, beardSalt * 0.7).multiplyScalar(0.55) };
 }
 
-const GREY = new THREE.Color(0.42, 0.42, 0.4);
+const GREY = new THREE.Color(0.42, 0.42, 0.4), WHITE = new THREE.Color(0.55, 0.55, 0.53);
 // how much hair shines by how it grows
 const SHINE = { straight: 1, wavy: 0.8, curly: 0.55, coily: 0.35 };
 
@@ -367,10 +395,10 @@ function hairUp(A, P) {
 	const skinned = (g, m) => { const s = new THREE.SkinnedMesh(g, m); s.frustumCulled = false; s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
 	const tune = (m) => {
 		const U = m.userData.U;
-		// (greying: some hairs gone grey, and the rest a little paler)
-		U.uRoot.value.copy(cols.root).lerp(GREY, cols.salt * 0.3); U.uTip.value.copy(cols.tip).lerp(GREY, cols.salt * 0.35); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);
-		U.uSalt.value.set(cols.salt * 0.5, cols.beardSalt, styleNow(W.style?.id)?.grain === 0 ? 0 : 1, 0);
-		U.uHC.value.copy(P.skull.c);
+		U.uRoot.value.copy(cols.root); U.uTip.value.copy(cols.tip); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);
+		U.uGrey.value.copy(cols.grey);
+		U.uSalt.value.set(cols.salt, cols.beardSalt, styleNow(W.style?.id)?.grain === 0 ? 0 : 1, 0);
+		U.uHC.value.copy(P.skull.c); U.uFace.value.set(P.skull.eyeY, P.skull.eyeZ);
 		U.uSpec.value.set(SHINE[STYLES[W.style?.id]] ?? 1, 0.2);
 		U.uClip.value.set(capY, W.style?.fade ? W.style.fadeY : -99, W.style?.thin || 0, 0);
 		return m;
@@ -382,7 +410,8 @@ function hairUp(A, P) {
 	else if (W.cut) {
 		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
 		// (grey coming in evenly, root to tip)
-		const root = cols.root.clone().lerp(GREY, cols.salt * 0.3), tip = cols.tip.clone().lerp(GREY, cols.salt * 0.35);
+		// (greying all over, as there are no single hairs to grey)
+		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
 		const hair = new THREE.Mesh(g, hairMaterial(root, tip));
 		hair.castShadow = true;
 		bones[map.head].add(hair);
@@ -450,8 +479,8 @@ function faceMorphs(A, g, S) {
 // brows: the hair's own colour, a shade darker; greying later and less than the head
 function browColour(d) {
 	const c = new THREE.Color(...d.hairColour).multiplyScalar(0.85);
-	const grey = (c.r + c.g + c.b) / 3;
-	if (grey > 0.45) c.lerp(new THREE.Color(0.3, 0.27, 0.24), 0.45);
+	// (a few grey hairs in them past sixty)
+	if (d.age > 60) c.lerp(new THREE.Color(0.5, 0.5, 0.48), greyOf(d) * 0.35);
 	return c;
 }
 

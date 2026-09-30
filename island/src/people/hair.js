@@ -173,9 +173,9 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 		}
 	};
 	// a strand's path from a root: out of the scalp, the way it grows, down under its weight
-	const grow = (root, nrm, flow, len, segs, lift, curl, curlF, gravity, layerOff, hug = 0.5) => {
+	const grow = (root, nrm, flow, len, segs, lift, curl, curlF, gravity, layerOff, hug = 0.5, rise = 0.35) => {
 		const path = [root.clone().addScaledVector(nrm, layerOff)];
-		dir.copy(nrm).multiplyScalar(0.35 + lift * 25).add(flow).normalize();
+		dir.copy(nrm).multiplyScalar(rise + lift * 25).add(flow).normalize();
 		const q = path[0].clone(), step = len / segs, ph = rnd() * TAU;
 		const u = v3().crossVectors(dir, nrm).normalize();
 		for (let i = 1; i <= segs; i++) {
@@ -184,7 +184,8 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 			// short hair lies along the head; volume lets it stand off
 			out.subVectors(q, c).normalize();
 			const od = dir.dot(out);
-			if (od > 0) dir.addScaledVector(out, -od * hug).normalize();
+			// (a rope hugs the head only down to its widest; past it, it hangs)
+			if (od > 0 && (hug < 1 || q.y > c.y + 0.01)) dir.addScaledVector(out, -od * hug).normalize();
 			q.addScaledVector(dir, step);
 			keepOut(q, layerOff + lift * (1 - t * 0.5));
 			const pt = q.clone();
@@ -255,7 +256,11 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 			} else if (kind === 'rows') path = null;
 			else {
 				const segs = low ? Math.max(2, Math.min(5, Math.round(len / 0.04))) : Math.max(3, Math.min(kind === 'locs' || kind === 'braids' ? 8 : 10, Math.round(len / 0.03)));
-				path = grow(s, d, f, len, segs, cut.lift, cut.curl ? cut.curl * (0.7 + rnd() * 0.6) : 0, 16, gravity, off, clamp(0.9 - cut.lift * 30));
+				// (locs and braids lie flat along the scalp from their roots, clear of it by their
+				// own thickness, and hang straight down from the widest of the head: no volume)
+				const rope = kind === 'locs' || kind === 'braids';
+				path = rope ? grow(s, d, f, len, segs, 0, 0, 16, gravity, (kind === 'locs' ? 0.0055 : 0.0046) + 0.0012, 1, 0.04)
+					: grow(s, d, f, len, segs, cut.lift, cut.curl ? cut.curl * (0.7 + rnd() * 0.6) : 0, 16, gravity, off, clamp(0.9 - cut.lift * 30));
 			}
 			if (!path) continue;
 			const w = (kind === 'locs' ? 0.017 : kind === 'braids' ? 0.012 : 0.03) * wk * (cut.tie ? 1.2 : 1);
