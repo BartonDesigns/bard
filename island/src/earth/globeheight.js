@@ -134,13 +134,14 @@ export function createGlobeHeight(win) {
 		return assemble(c, alpine(sum * (0.7 + 0.8 * c.RG), c), n2, n3, n4, n5, (fi) => famAt(FAM[fi], 20 + fi * 8, U, V));
 	}
 	// the high ranges carved by ice: the valleys widened and floored (U-shaped), the ridges
-	// between them sharpened to aretes and the peaks lifted toward their real heights
+	// between them sharpened to aretes and only the peaks lifted (lifting the whole range put
+	// Tuolumne 600 m too high, under snow in September)
 	function alpine(D, c) {
 		const al = sstep(450, 900, c.A) * c.RG;
 		if (al <= 0) return D;
 		let d = D < -0.3 ? -0.3 + (D + 0.3) * 0.35 : D;
 		d = d > 0.4 ? 0.4 + (d - 0.4) * 1.5 : d;
-		return (D + (d - D) * al) * (1 + 0.4 * al);
+		return D + (d - D) * al;
 	}
 	// the land's edge: a beach where the coast is low (sand rising gently out of the surf for a few
 	// hundred metres), a steep shore where the land is rugged
@@ -318,7 +319,7 @@ float globeHeight(vec2 d, float oct){
 	float D = sum * (0.7 + 0.8 * RG);
 	// the high ranges carved by ice (see alpine() on the CPU)
 	float al = smoothstep(450.0, 900.0, A) * RG;
-	if (al > 0.0) { float dd = D < -0.3 ? -0.3 + (D + 0.3) * 0.35 : D; dd = dd > 0.4 ? 0.4 + (dd - 0.4) * 1.5 : dd; D = mix(D, dd, al) * (1.0 + 0.4 * al); }
+	if (al > 0.0) { float dd = D < -0.3 ? -0.3 + (D + 0.3) * 0.35 : D; dd = dd > 0.4 ? 0.4 + (dd - 0.4) * 1.5 : dd; D = mix(D, dd, al); }
 	vec2 dd = vec2(d.x * uGDeg.x, -d.y * uGDeg.y);          // degrees of longitude and latitude from the anchor
 	float cs = gShore(n2, n3), Ws = gLevel;
 	gAmp = A; gRel = D;

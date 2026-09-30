@@ -128,8 +128,9 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// rock on the steep ground, and above the plants
 					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
 					c = mix(c, mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35), rockK);
-					// snow where the air up here stays cold enough to keep it through the summer, off the cliffs
-					float snowK = (1.0 - smoothstep(-10.0, -7.0, air + (pM - 0.5) * 3.0)) * (1.0 - smoothstep(0.45, 0.75, slope));
+					// snow where the air up here stays cold enough to keep it through the summer, off the
+					// cliffs; by the summer's end only in the hollows and the high fields, rock between
+					float snowK = (1.0 - smoothstep(-12.0, -8.0, air + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5)) * (1.0 - smoothstep(0.4, 0.65, slope));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
 					// the shore: sand on the gentle ground just above the water
 					float shore = (1.0 - smoothstep(0.0, 0.035, vGC.x)) * (1.0 - smoothstep(vGC.z + 2.0, vGC.z + 6.0, h)) * (1.0 - smoothstep(0.12, 0.3, slope));
