@@ -108,14 +108,3 @@ export function drawDesign(g, design, x0, y0, size) {
 	}
 	g.restore();
 }
-
-// a random design from the flash sheet, for someone in the street (a seeded rand())
-export function flashDesign(rand) {
-	const names = Object.keys(SHAPES), d = newDesign();
-	const pick = (a) => a[Math.floor(rand() * a.length)];
-	const ink = rand() < 0.75 ? 'black' : pick(['grey', 'red', 'blue', 'green']);
-	const main = pick(names), style = main === 'band' || rand() < 0.3 ? 'tribal' : pick(['line', 'line', 'dotted', 'dashed']);
-	d.marks.push({ kind: 'shape', shape: main, x: 0.5, y: 0.5, s: 0.38, rot: 0, style, ink, size: 0.025, fill: rand() < 0.25 && main !== 'wave' && main !== 'spiral' && main !== 'band' });
-	if (rand() < 0.4) d.marks.push({ kind: 'shape', shape: 'circle', x: 0.5, y: 0.5, s: 0.46, rot: 0, style: pick(['dotted', 'dashed', 'line']), ink: 'black', size: 0.012 });
-	return d;
-}

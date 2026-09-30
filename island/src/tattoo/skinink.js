@@ -5,7 +5,8 @@
 // (the designs laid out in tiles); the people in the street share one of flash designs.
 
 import * as THREE from 'three';
-import { drawDesign, flashDesign } from './ink.js';
+import { drawDesign } from './ink.js';
+import { MOTIFS, motifDesign, inkOf } from './lore.js';
 
 export const MAX = 6;
 // where a design can go: the axis from one joint to the next (top first, so a design's top is
@@ -44,7 +45,10 @@ vec3 inkAt(vec3 b) {
 		p = vec2(c * p.x + sn * p.y, -sn * p.x + c * p.y) / uTatP[i].z;
 		if (abs(p.x) > 1.0 || abs(p.y) > 1.0) continue;
 		vec4 t = texture2D(uTat, uTatT[i].xy + (p * vec2(0.5, -0.5) + 0.5) * uTatT[i].zw);
-		ink *= mix(vec3(1.0), t.rgb, t.a * 0.88);
+		// (w: how fresh; old ink is fainter, and black drifts a little blue-green)
+		float f = uTatE[i].w;
+		vec3 c = mix(mix(t.rgb, vec3(0.2, 0.3, 0.34), (1.0 - f) * 1.2), t.rgb, step(0.99, f));
+		ink *= mix(vec3(1.0), c, t.a * 0.88 * f);
 	}
 	return ink;
 }`;
@@ -84,7 +88,7 @@ export function inkRig(P) {
 }
 
 // lay placements on a skin material: [{ slot, angle (from the front), along (0..1 down the
-// part), size (m across), rot, tile: [u0, v0, du, dv] }] over a texture of designs
+// part), size (m across), rot, fade (1 new .. 0.5 old), tile: [u0, v0, du, dv] }] over a texture of designs
 export function applyInk(mat, P, placements, tex) {
 	const U = mat.userData.ink;
 	if (!U) return;
@@ -95,7 +99,7 @@ export function applyInk(mat, P, placements, tex) {
 		if (!G) { U.uTatE.value[i].w = 0; continue; }
 		U.uTatA.value[i].set(G.a.x, G.a.y, G.a.z, G.len);
 		U.uTatD.value[i].set(G.d.x, G.d.y, G.d.z, G.r);
-		U.uTatE.value[i].set(G.e1.x, G.e1.y, G.e1.z, 1);
+		U.uTatE.value[i].set(G.e1.x, G.e1.y, G.e1.z, Math.max(0.5, Math.min(1, pl.fade ?? 1)));
 		U.uTatP.value[i].set(pl.angle || 0, (pl.along ?? 0.5) * G.len, (pl.size || 0.1) / 2, pl.rot || 0);
 		U.uTatT.value[i].set(...pl.tile);
 	}
@@ -120,26 +124,15 @@ export function inkAtlas(designs, cols = 4, rows = 2, px = 256) {
 	return { tex, tiles, draw, canvas: cv };
 }
 
-// the flash sheet the street wears: sixteen designs, drawn once
+// the flash sheet: the motifs people wear (tattoo/lore.js), drawn once; a parlour's walls
+// show the same sheet
 let FLASH = null;
 export function flashAtlas() {
-	if (FLASH) return FLASH;
-	let s = 0x7a770;
-	const rand = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-	const designs = Array.from({ length: 16 }, () => flashDesign(rand));
-	FLASH = inkAtlas(designs, 4, 4, 256);
+	if (!FLASH) FLASH = inkAtlas(MOTIFS.map((m) => motifDesign(m)), 4, 4, 256);
 	return FLASH;
 }
-// a passer-by's tattoos: about one adult in ten, one to three pieces from the flash sheet
-export function flashFor(dna, rand) {
-	if (dna.child || dna.age < 18 || rand() > 0.1) return [];
-	const F = flashAtlas(), n = 1 + Math.floor(rand() * rand() * 3), out = [];
-	const where = ['forearm.L', 'forearm.R', 'upperarm.L', 'upperarm.R', 'calf.L', 'calf.R', 'torso', 'thigh.R'];
-	for (let k = 0; k < n; k++) {
-		const slot = where[Math.floor(rand() * where.length)];
-		if (out.some((o) => o.slot === slot)) continue;
-		const big = slot === 'torso' || slot.startsWith('thigh');
-		out.push({ slot, angle: slot === 'torso' ? (rand() < 0.5 ? 0 : Math.PI) + (rand() - 0.5) * 0.6 : (rand() - 0.5) * 2.4, along: 0.35 + rand() * 0.3, size: (big ? 0.12 : 0.07) + rand() * 0.05, rot: (rand() - 0.5) * 0.3, tile: F.tiles[Math.floor(rand() * F.tiles.length)] });
-	}
-	return out;
+// a passer-by's tattoos, as their life gave them (tattoo/lore.js), on the flash sheet
+export function inkFor(dna) {
+	const F = flashAtlas();
+	return inkOf(dna).map((t) => ({ ...t, tile: F.tiles[t.motif] }));
 }
