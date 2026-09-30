@@ -204,8 +204,14 @@ export function createRealCity(renderer) {
 			}
 		}
 		for (const G of gens) nearGen(G, kind, x, z, rad, out);
+		for (const S of sources) S.near(kind, x, z, rad, out);
 		return out;
 	}
+	// other streets and roads that come and go on their own (the globe's highways, earth/globeroads.js):
+	// a source's near(kind, x, z, rad, out) adds its own to what near() finds
+	const sources = [];
+	const addSource = (S) => { if (!sources.includes(S)) sources.push(S); };
+	const removeSource = (S) => { const i = sources.indexOf(S); if (i >= 0) sources.splice(i, 1); };
 
 	// ---------- Crysis: generated regions (see crysis/civgen.js and crysis/civ.js) ----------
 	// A town grown by the civilization engine arrives in the same shape as a baked region
@@ -477,5 +483,5 @@ export function createRealCity(renderer) {
 		return best;
 	}
 
-	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, version: () => version, ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
+	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, version: () => version, ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
 }

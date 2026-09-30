@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { radialGrid, HEIGHT_GLSL, NOISE_GLSL, SWASH_GLSL } from './terrain.js';
 import { CLOUD_REFLECT_GLSL, cloudReflectU } from './sky.js';
 import { BAY_GLSL } from '../bay/terrain.js';
+import { GLOBE_U, GLOBE_SEA_GLSL } from '../earth/globeheight.js';
 
 // a planet's water colour, normalised to keep the sea's brightness (its streams and lakes too: bay/water.js)
 export function waterOf(P) {
@@ -26,7 +27,7 @@ export function createOcean(island, shared) {
 		uWaterT: { value: waterOf(shared.planet) },
 	}]);
 	// the real Bay Area's depths beyond the island (live objects, filled as they load)
-	if (shared.bayU) Object.assign(uniforms, shared.bayU);
+	if (shared.bayU) Object.assign(uniforms, shared.bayU, GLOBE_U);          // (and the globe's coasts past the survey: earth/globeheight.js)
 uniforms.uUnder = shared.uUnder;
 	// shared, live objects (not copies)
 	Object.assign(uniforms, {
@@ -90,6 +91,7 @@ uniforms.uUnder = shared.uUnder;
 		vertexShader: /* glsl */`
 			${HEIGHT_GLSL}
 			${BAY_GLSL}
+			${shared.bayU ? GLOBE_SEA_GLSL : 'float seaGround(vec2 p){ return bayHeight(p); }'}
 			// the island's own sea bed inside its map, the real one outside
 			// the island's own sea floor eased into the real one across a wide, wavy band
 			// (switching at the island map's edge drew a square in the water's colour)
@@ -97,7 +99,7 @@ uniforms.uUnder = shared.uUnder;
 				float e = max(abs(p.x), abs(p.y)) + (sin(p.x * 0.0021 + 1.3) * sin(p.y * 0.0017 + 0.4) + sin((p.x + p.y) * 0.0009)) * 180.0;
 				float k = smoothstep(uHalf - 1400.0, uHalf - 60.0, e);
 				if (k <= 0.0) return heightAt(p);
-				float b = bayHeight(p);
+				float b = seaGround(p);
 				return k >= 1.0 || max(abs(p.x), abs(p.y)) >= uHalf - 20.0 ? b : mix(heightAt(p), b, k);
 			}
 			${WAVES}

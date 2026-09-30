@@ -443,7 +443,7 @@ export function createIslandWorld() {
 		const p = W.globe.place(+lat, +lon);
 		P.flying = true; P.diving = false; P.vel.set(0, 0, 0); P.pitch = -0.25;
 		P.pos.set(p.x, 3000, p.z); camera.position.copy(P.pos);
-		p.ready.then(() => { if (world === W) { P.pos.y = Math.max(0, W.island.heightAt(p.x, p.z)) + agl; camera.position.copy(P.pos); } });
+		p.ready.then(() => { if (world === W) { const g = W.island.heightAt(p.x, p.z); P.pos.y = (Number.isFinite(g) ? Math.max(0, g) : 0) + agl; camera.position.copy(P.pos); } });
 		return `To ${(+lat).toFixed(3)}, ${(+lon).toFixed(3)}.`;
 	};
 	const tpPlaces = [];

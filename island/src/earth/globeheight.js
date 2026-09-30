@@ -20,6 +20,7 @@
 // double precision (the anchor's cell and fraction) and the GPU only adds the few km from
 // there, so a float holds it to the millimetre anywhere on Earth.
 
+import * as THREE from 'three';
 import { F, RAD, EARTH_R, lonRaw } from './globeframe.js';
 
 export const RES = 10;                 // cells a degree
@@ -96,11 +97,12 @@ export function createGlobeHeight(win) {
 		return { e, L: bl(P.L), WL: bl(P.WL), A: bl(P.A), RG: bl(P.RG), TR: bl(P.TR), BNR: bl(P.BNR), RV: bl(P.RV), DUNE: bl(P.DUNE), KARST: bl(P.KARST), K: bl(P.K) };
 	}
 	// the height at the engine's (x, z) in the frame now
-	function at(x, z) {
-		const dx = x - F.fx, dz = z - F.fz;
-		const cx = win.cx0 + dx * RES / F.kx, cy = win.cy0 + dz * RES / F.kz;
+	const at = (x, z) => atLL(F.lat - (z - F.fz) / F.kz, lonRaw(x));
+	// ...and at a latitude and longitude (the same ground whatever the frame)
+	function atLL(lat, lon) {
+		const lonW0 = -180 + win.gi0 / RES, latW1 = 90 - win.gj0 / RES;
+		const cx = ((((lon - lonW0) % 360) + 360) % 360) * RES - 0.5, cy = (latW1 - lat) * RES - 0.5;
 		const c = coarse(cx, cy);
-		const lat = F.lat - dz / F.kz, lon = lonRaw(x);
 		// on the sphere, in metres, for the relief's noise
 		const cp = Math.cos(lat * RAD), px = EARTH_R * cp * Math.cos(lon * RAD), py = EARTH_R * cp * Math.sin(lon * RAD), pz = EARTH_R * Math.sin(lat * RAD);
 		let sum = 0, w = 1, amp = 1, n2 = 0, n3 = 0, n4 = 0, n5 = 0;
@@ -114,10 +116,19 @@ export function createGlobeHeight(win) {
 			amp *= 0.55;
 		}
 		const U = lon, V = lat;
-		return assemble(c, sum * (0.7 + 0.8 * c.RG), n2, n3, n4, n5, (fi) => famAt(FAM[fi], 20 + fi * 8, U, V));
+		return assemble(c, alpine(sum * (0.7 + 0.8 * c.RG), c), n2, n3, n4, n5, (fi) => famAt(FAM[fi], 20 + fi * 8, U, V));
+	}
+	// the high ranges carved by ice: the valleys widened and floored (U-shaped), the ridges
+	// between them sharpened to aretes and the peaks lifted toward their real heights
+	function alpine(D, c) {
+		const al = sstep(450, 900, c.A) * c.RG;
+		if (al <= 0) return D;
+		let d = D < -0.3 ? -0.3 + (D + 0.3) * 0.35 : D;
+		d = d > 0.4 ? 0.4 + (d - 0.4) * 1.5 : d;
+		return (D + (d - D) * al) * (1 + 0.4 * al);
 	}
 	function assemble(c, D, n2, n3, n4, n5, fam) {
-		const coastN = n2 * 0.5 + n3 * 0.3 + n4 * 0.2;
+		const coastN = n2 * 0.6 + n3 * 0.4;
 		const cs = c.L - 0.5 + coastN * 0.1;
 		const lake = sstep(0.4, 0.6, c.K / Math.max(0.02, 1 - c.L)), Ws = c.WL * lake;
 		out.land = cs; out.lake = lake; out.level = Ws;
@@ -140,10 +151,11 @@ export function createGlobeHeight(win) {
 			const hs = Math.min(c.e, Ws - 2 - 90 * -cs);
 			h = Ws - 2 + (hs - Ws + 2) * sstep(0, 0.02, -cs);
 		}
+		if (h !== h) h = 0;             // (never a NaN into the game: a guard, it should not happen)
 		out.h = h;
 		return h;
 	}
-	return { at, out, coarse };
+	return { at, atLL, out, coarse };
 }
 
 // ---------- the anchor's share: the lattice cells and fractions the GPU starts from ----------
@@ -163,9 +175,12 @@ export function anchorUniforms(U, win) {
 	});
 }
 
-// the uniforms the GLSL reads (textures and the window's place: globedata.js sets them)
-export function globeUniforms(THREE) {
+// the uniforms the GLSL reads (textures and the window's place: globedata.js sets them); one set
+// for the page, so the sea (world/ocean.js) can read the globe's coasts from the start
+export const GLOBE_U = globeUniforms();
+export function globeUniforms() {
 	return {
+		uGOn: { value: 0 }, uGF: { value: new THREE.Vector2() }, uGBay: { value: 1 }, uGSeam: { value: new THREE.Vector2(3000, 25000) },
 		uGT0: { value: null }, uGT1: { value: null }, uGT2: { value: null }, uGT3: { value: null }, uGT4: { value: null },
 		uGWin: { value: new THREE.Vector4() }, uGOff: { value: new THREE.Vector2() }, uGAnc: { value: new THREE.Vector4() }, uGDeg: { value: new THREE.Vector2() },
 		uGI0: { value: new THREE.Vector3() }, uGF0: { value: new THREE.Vector3() },
@@ -212,47 +227,71 @@ vec4 gBil(highp sampler2D T, ivec2 i, vec2 u){ return mix(mix(gFetch(T, i), gFet
 float gCr(float p0, float p1, float p2, float p3, float t){ return p1 + 0.5 * t * (p2 - p0 + t * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3 + t * (3.0 * (p1 - p2) + p3 - p0))); }
 // (what the height found out on the way: the coast's side, the lake, its level, the relief)
 float gCoast, gLake, gLevel, gAmp, gRel;
-float globeHeight(vec2 d, float oct){
+// the coarse cells at d: E (bicubic, kept inside its four nearest), and the planes bilinear
+float gE; vec4 gC0, gC1, gC2;
+void gCoarse(vec2 d){
 	float N = float(textureSize(uGT0, 0).x);
 	vec2 cc = clamp(uGWin.xy + d * uGWin.zw, vec2(1.0), vec2(N - 2.001));
 	ivec2 i = ivec2(floor(cc)); vec2 u = cc - floor(cc);
 	float r0[4];
 	for (int b = -1; b <= 2; b++) r0[b + 1] = gCr(gFetch(uGT0, i + ivec2(-1, b)).r, gFetch(uGT0, i + ivec2(0, b)).r, gFetch(uGT0, i + ivec2(1, b)).r, gFetch(uGT0, i + ivec2(2, b)).r, u.x);
-	vec4 c0 = gBil(uGT0, i, u), c1 = gBil(uGT1, i, u), c2 = gBil(uGT2, i, u);
+	gC0 = gBil(uGT0, i, u); gC1 = gBil(uGT1, i, u); gC2 = gBil(uGT2, i, u);
 	float e00 = gFetch(uGT0, i).r, e10 = gFetch(uGT0, i + ivec2(1, 0)).r, e01 = gFetch(uGT0, i + ivec2(0, 1)).r, e11 = gFetch(uGT0, i + ivec2(1, 1)).r;
-	float e = clamp(gCr(r0[0], r0[1], r0[2], r0[3], u.y), min(min(e00, e10), min(e01, e11)), max(max(e00, e10), max(e01, e11)));
-	float L = c0.g, WL = c0.b, A = c0.a, RG = c1.r, TR = c1.g, BNR = c1.b, RV = c1.a, DUNE = c2.r, KARST = c2.g, K = c2.b;
-	// the metres from the anchor on the sphere, found from the small angles (never the big numbers)
+	gE = clamp(gCr(r0[0], r0[1], r0[2], r0[3], u.y), min(min(e00, e10), min(e01, e11)), max(max(e00, e10), max(e01, e11)));
+}
+// the metres from the anchor on the sphere (over S0), found from the small angles (never the big numbers)
+vec3 gSphere(vec2 d){
 	float dph = -d.y * uGDeg.y * ${RAD}, dla = d.x * uGDeg.x * ${RAD};
 	float hp = sin(dph * 0.5), hl = sin(dla * 0.5), sp = sin(dph), sl = sin(dla);
 	float dcp = -2.0 * hp * hp * uGAnc.y - sp * uGAnc.x, dsp = -2.0 * hp * hp * uGAnc.x + sp * uGAnc.y;
 	float dcl = -2.0 * hl * hl * uGAnc.w - sl * uGAnc.z, dsl = -2.0 * hl * hl * uGAnc.z + sl * uGAnc.w;
-	vec3 dP = ${EARTH_R}.0 * vec3(dcp * (uGAnc.w + dcl) + uGAnc.y * dcl, dcp * (uGAnc.z + dsl) + uGAnc.y * dsl, dsp) / ${S0}.0;
+	return ${EARTH_R}.0 * vec3(dcp * (uGAnc.w + dcl) + uGAnc.y * dcl, dcp * (uGAnc.z + dsl) + uGAnc.y * dsl, dsp) / ${S0}.0;
+}
+// one octave of the relief's noise, -1..1
+float gOct(int k, vec3 dP){
+	float m = float(1 << k);
+	vec3 t = uGF0 * m + dP * m, ft = floor(t);
+	return 2.0 * gVn3(uGI0 * (1 << k) + ivec3(ft), t - ft, uint(k + 1) * G_SALT) - 1.0;
+}
+// the coast's side, the lake and its level from the coarse cells and the coast's wiggle
+float gShore(float n2, float n3){
+	float L = gC0.g, WL = gC0.b, K = gC2.b;
+	gCoast = L - 0.5 + (n2 * 0.6 + n3 * 0.4) * 0.1;
+	gLake = smoothstep(0.4, 0.6, K / max(0.02, 1.0 - L)); gLevel = WL * gLake;
+	return gCoast;
+}
+float gSeaSide(float cs, float Ws){ float hs = min(gE, Ws - 2.0 - 90.0 * -cs); return mix(Ws - 2.0, hs, smoothstep(0.0, 0.02, -cs)); }
+float globeHeight(vec2 d, float oct){
+	gCoarse(d);
+	float A = gC0.a, RG = gC1.r, TR = gC1.g, BNR = gC1.b, RV = gC1.a, DUNE = gC2.r, KARST = gC2.g;
+	vec3 dP = gSphere(d);
 	float sum = 0.0, w = 1.0, amp = 1.0, n2 = 0.0, n3 = 0.0, n4 = 0.0, n5 = 0.0;
 	for (int k = 0; k < ${OCT}; k++) {
 		float fk = float(k);
-		if (fk >= oct) break;
-		float m = float(1 << k);
-		vec3 t = uGF0 * m + dP * m, ft = floor(t);
-		float nn = 2.0 * gVn3(uGI0 * (1 << k) + ivec3(ft), t - ft, uint(k + 1) * G_SALT) - 1.0;
-		nn *= clamp(oct - fk, 0.0, 1.0);
-		if (k == 2) n2 = nn; else if (k == 3) n3 = nn; else if (k == 4) n4 = nn; else if (k == 5) n5 = nn;
+		if (fk >= oct && k > 3) break;
+		// (the first four always: the coast's wiggle is theirs, and the sea's surf reads it)
+		float fade = clamp(oct - fk, 0.0, 1.0);
+		float nn = gOct(k, dP);
+		if (k == 2) n2 = nn; else if (k == 3) n3 = nn; else if (k == 4) n4 = nn * fade; else if (k == 5) n5 = nn * fade;
+		nn *= fade;
 		float r = 1.0 - abs(nn); r = r * r * 3.0 - 1.0;
-		float v = mix(nn, r, RG) * clamp(oct - fk, 0.0, 1.0);
+		float v = mix(nn, r, RG) * fade;
 		sum += v * amp * w;
 		w = mix(1.0, clamp(0.55 + 0.6 * v, 0.2, 1.0), RG);
 		amp *= 0.55;
 	}
 	float D = sum * (0.7 + 0.8 * RG);
+	// the high ranges carved by ice (see alpine() on the CPU)
+	float al = smoothstep(450.0, 900.0, A) * RG;
+	if (al > 0.0) { float dd = D < -0.3 ? -0.3 + (D + 0.3) * 0.35 : D; dd = dd > 0.4 ? 0.4 + (dd - 0.4) * 1.5 : dd; D = mix(D, dd, al) * (1.0 + 0.4 * al); }
 	vec2 dd = vec2(d.x * uGDeg.x, -d.y * uGDeg.y);          // degrees of longitude and latitude from the anchor
-	float cs = L - 0.5 + (n2 * 0.5 + n3 * 0.3 + n4 * 0.2) * 0.1;
-	float lake = smoothstep(0.4, 0.6, K / max(0.02, 1.0 - L)), Ws = WL * lake;
-	gCoast = cs; gLake = lake; gLevel = Ws; gAmp = A; gRel = D;
+	float cs = gShore(n2, n3), Ws = gLevel;
+	gAmp = A; gRel = D;
 	float h;
 	if (cs > 0.0) {
 		float rel = D, fs = min(0.85, BNR + RV), ck = smoothstep(0.0, 0.1, cs);
 		if (fs > 0.01) rel = D * (1.0 - fs) + (BNR > 0.01 ? (gFam(0, dd, int(min(oct, 4.0)), 20) * 2.0 - 1.0) * BNR : 0.0) + (RV > 0.01 ? (gFam(1, dd, int(min(oct, 4.0)), 28) * 2.0 - 1.0) * RV : 0.0);
-		float hl2 = max(e, Ws + 0.5) + rel * A * ck;
+		float hl2 = max(gE, Ws + 0.5) + rel * A * ck;
 		if (DUNE > 0.01 && oct > 5.0) hl2 += DUNE * (18.0 + 0.25 * A) * (gFam(2, dd, 3, 36) * 2.0 - 1.0) * ck;
 		if (KARST > 0.01) { float t = smoothstep(0.05, 0.4, 0.65 * n4 + 0.35 * n5); hl2 += KARST * (60.0 + 1.0 * A) * t * sqrt(t) * ck; }
 		if (TR > 0.01) {
@@ -261,10 +300,32 @@ float globeHeight(vec2 d, float oct){
 		}
 		hl2 = max(hl2, Ws + 0.3);
 		h = mix(Ws - 2.0, hl2, smoothstep(0.0, 0.02, cs));
-	} else {
-		float hs = min(e, Ws - 2.0 - 90.0 * -cs);
-		h = mix(Ws - 2.0, hs, smoothstep(0.0, 0.02, -cs));
-	}
+	} else h = gSeaSide(cs, Ws);
 	return h;
+}
+// the sea's view of the ground: the coarse cells and the coast as the ground has it, without the
+// land's relief (for the surf, the shallows and the swash, world/ocean.js)
+float globeSea(vec2 d){
+	gCoarse(d);
+	vec3 dP = gSphere(d);
+	float cs = gShore(gOct(2, dP), gOct(3, dP)), Ws = gLevel;
+	return cs > 0.0 ? mix(Ws - 2.0, max(gE, Ws + 0.5), smoothstep(0.0, 0.02, cs)) : gSeaSide(cs, Ws);
+}
+`;
+
+// the sea floor as the sea sees it, anywhere: the Bay's survey (its own GLSL, bay/terrain.js)
+// eased into the globe's past it, as the ground does (world/ocean.js)
+export const GLOBE_SEA_GLSL = /* glsl */`
+uniform float uGOn, uGBay; uniform vec2 uGF, uGSeam;
+${GLOBE_GLSL}
+float seaGround(vec2 p){
+	float b = bayHeight(p);
+	if (uGOn < 0.5) return b;
+	float k = 1.0;
+	if (uGBay > 0.5) {
+		vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (p - uR0.xy) / uR0.z;
+		k = smoothstep(uGSeam.x, uGSeam.y, length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z);
+	}
+	return k <= 0.0 ? b : mix(b, globeSea(p - uGF), k);
 }
 `;

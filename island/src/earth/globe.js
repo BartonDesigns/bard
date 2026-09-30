@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import { F, toLL, toXZ, setFrame, bayFrame, bayKm, BAY_KM, BAY_BACK_KM, DRIFT, DRIFT_MAX, FAR } from './globeframe.js';
 import { createGlobeData } from './globedata.js';
-import { createGlobeHeight, anchorUniforms, globeUniforms } from './globeheight.js';
+import { createGlobeHeight, anchorUniforms, GLOBE_U } from './globeheight.js';
 import { createGlobeTerrain, SEAM_A, SEAM_B } from './globeterrain.js';
 import { createGlobeTrees } from './globetrees.js';
 import { createGlobeTowns } from './globetowns.js';
@@ -43,7 +43,8 @@ export const BAY_WILD_KM = 180;
 
 export function createGlobe({ scene, shared, bay, island, camera, world, director = null, hint = () => {}, isPhone = false, busy = () => false }) {
 	const data = createGlobeData();
-	data.U = globeUniforms(THREE);
+	data.U = GLOBE_U;
+	data.tex.forEach((t, i) => { GLOBE_U['uGT' + i].value = t; });
 	const height = createGlobeHeight(data.win);
 	const terrain = createGlobeTerrain({ scene, data, BU: shared.bayU, isPhone });
 	const stats = { rebases: 0, lastRebase: 0, updateMs: 0, maxMs: 0 };
@@ -104,6 +105,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		if (bayBack) bayFrame(); else setFrame(ll.lat, ll.lon);
 		const p = bayBack ? toXZ(ll.lat, ll.lon) : { x: FAR.x, z: FAR.z };
 		const dx = p.x - x0, dz = p.z - z0;
+		if (!Number.isFinite(dx) || !Number.isFinite(dz)) return { dx: 0, dz: 0 };
 		if (P) { P.pos.x += dx; P.pos.z += dz; }
 		camera.position.x += dx; camera.position.z += dz;
 		camera.updateMatrixWorld();
@@ -134,8 +136,24 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 
 	// ---------- each frame ----------
 	let regionT = 0, regionId = null, veg = null;
+	// a guard: the camera and you are never left at a NaN (the frame moves, the jumps and the
+	// heights all feed them); if one ever turns up you go back to the last good place, once said
+	const good = { p: new THREE.Vector3(), v: new THREE.Vector3(), c: new THREE.Vector3(), q: new THREE.Quaternion(), ok: false, said: false };
+	function sane(cam) {
+		const P = world()?.player?.state;
+		const fin = (v) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+		if (fin(cam.position) && Number.isFinite(cam.quaternion.w) && (!P || (fin(P.pos) && fin(P.vel)))) {
+			good.c.copy(cam.position); good.q.copy(cam.quaternion); if (P) { good.p.copy(P.pos); good.v.copy(P.vel); } good.ok = true;
+			return;
+		}
+		if (!good.said) { good.said = true; console.warn('[globe] a NaN reached the camera or the player: put back'); }
+		if (!good.ok) return;
+		cam.position.copy(good.c); cam.quaternion.copy(good.q); cam.updateMatrixWorld();
+		if (P) { P.pos.copy(good.p); P.vel.set(0, 0, 0); if (!Number.isFinite(P.yaw)) P.yaw = 0; if (!Number.isFinite(P.pitch)) P.pitch = 0; }
+	}
 	function update(dt, cam, night) {
 		const t0 = performance.now();
+		sane(cam);
 		frameCheck();
 		const x = cam.position.x, z = cam.position.z, ll = toLL(x, z);
 		const moving = data.follow(ll.lat, ll.lon);
@@ -176,6 +194,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	function dispose() {
 		setFarGround(null);
+		GLOBE_U.uGOn.value = 0;
 		BAY_DETAIL_U.uBDAmp.value = 0;
 		delete island.flyCeiling;
 		if (!F.bay) bayFrame();

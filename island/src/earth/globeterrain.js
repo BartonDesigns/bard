@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
 import { BAY_GLSL } from '../bay/terrain.js';
 import { WC_U, WC_GLSL } from '../bay/watercarve.js';
+import { BERM_U, BERM_GLSL } from '../bay/berms.js';
 import { GLOBE_GLSL, OCT } from './globeheight.js';
 
 export const SEAM_A = 3000, SEAM_B = 25000;     // m past the Bay's survey: the Bay's ground stops, the globe's is whole
@@ -46,16 +47,15 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	scene.add(group);
 	const U = data.U;
 	const common = {
-		uGSeam: { value: new THREE.Vector2(SEAM_A, SEAM_B) }, uGBay: { value: 1 }, uGF: { value: new THREE.Vector2() },
+		uGSeam: U.uGSeam, uGBay: U.uGBay, uGF: U.uGF,
 		uGIsl: { value: 1400 }, uGNight: { value: 0 }, uGDebug: { value: 0 }, uGCity: { value: Array.from({ length: CITIES }, () => new THREE.Vector4(0, 0, 0, 0)) },
 	};
 	function material(grid, oct, hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.93, metalness: 0 });
 		const own = { uGGrid: { value: new THREE.Vector3(grid[1], grid[2], grid[0]) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, WC_U, U, common, own, { uGT3: { value: data.tex[3] }, uGT4: { value: data.tex[4] } });
-			sh.uniforms.uGT0 = { get value() { return data.tex[0]; } }; sh.uniforms.uGT1 = { get value() { return data.tex[1]; } }; sh.uniforms.uGT2 = { get value() { return data.tex[2]; } };
-			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; uniform vec3 uGGrid;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC;\n' + BAY_GLSL + WC_GLSL + GLOBE_GLSL + `
+			Object.assign(sh.uniforms, BU, WC_U, BERM_U, U, common, own);
+			sh.vertexShader = 'uniform vec2 uGSeam, uGF; uniform float uGBay, uGOct; uniform vec3 uGGrid;\nvarying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC;\n' + BAY_GLSL + WC_GLSL + BERM_GLSL + GLOBE_GLSL + `
 				vec3 gDP;
 				float gOut(vec2 w){ if (uGBay < 0.5) return 1e9; vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (w - uR0.xy) / uR0.z; return length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
 				float gGround(vec2 d, float oct){
@@ -69,8 +69,10 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float gr = max(abs(position.x), abs(position.z));
 					float gsp = max(0.3, 2.0 * uGGrid.y * uGGrid.x * pow(max(1e-4, pow(gr / uGGrid.x, 1.0 / uGGrid.y)), uGGrid.y - 1.0) / uGGrid.z);
 					float goct = clamp(log2(${8192}.0 / (4.0 * gsp)) + 1.0, 1.0, uGOct);
+					// (the normal from the height itself, across the grid's own spacing either side: the
+					// relief finer than the grid is left out of it, so far ridges don't break into facets)
 					float ge = max(2.0, gsp);
-					float gx = gGround(gd + vec2(ge, 0.0), goct), gz = gGround(gd + vec2(0.0, ge), goct);
+					float gx = gGround(gd + vec2(ge, 0.0), goct) - gGround(gd - vec2(ge, 0.0), goct), gz = gGround(gd + vec2(0.0, ge), goct) - gGround(gd - vec2(0.0, ge), goct);
 					float gh = gGround(gd, goct);
 					vGC = vec4(gCoast, gLake, gLevel, gOut(gd));
 					vGP = ${'vec3(0.0)'};
@@ -83,9 +85,12 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 						vGP = ${6371000}.0 * vec3(dcp * (uGAnc.w + dcl) + uGAnc.y * dcl, dcp * (uGAnc.z + dsl) + uGAnc.y * dsl, dsp) / ${8192}.0;
 					}
 					vec2 gw = gd + uGF;
-					float gwc = wcAt(gw).r * wcK(gw);
+					// the creeks' channels (water.js) and the roads' grading (berms.js), as the ground is walked
+					float gwc = wcAt(gw).r * wcK(gw) + bermDelta(gw);
 					gh += gwc;
-					vec3 objectNormal = normalize(vec3(gh - gwc - gx, ge, gh - gwc - gz));
+					vec3 objectNormal = normalize(vec3(-gx, 2.0 * ge, -gz));
+					if (any(isnan(objectNormal))) objectNormal = vec3(0.0, 1.0, 0.0);
+					if (gh != gh) gh = 0.0;
 					vGN = objectNormal;
 					vGCC = uGWin.xy + gd * uGWin.zw;
 				`)
@@ -151,6 +156,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float px = length(fwidth(vGW.xz));
 					float grain = mix(0.5, fbm3(vGW.xz * 0.045), 1.0 - smoothstep(4.0, 12.0, px)) * 0.6 + mix(0.5, vn(vGW.xz * 0.27), 1.0 - smoothstep(0.8, 2.5, px)) * 0.4;
 					c *= 0.86 + 0.28 * grain;
+					if (any(isnan(c)) || any(isinf(c))) c = vec3(0.3);
 					diffuseColor.rgb = c;
 					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : vec3(fract(h / 500.0), snowK, forest);
 				}`)
@@ -178,7 +184,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		return m;
 	}
 	// the rings: n segments, the reach, how fast the spacing grows
-	const NEAR = isPhone ? [160, 6000, 2.2] : [256, 6000, 2.2], FARG = isPhone ? [128, 250000, 2.8] : [192, 250000, 2.7];
+	const NEAR = isPhone ? [160, 6000, 2.2] : [256, 6000, 2.2], FARG = isPhone ? [128, 250000, 2.8] : [256, 250000, 2.7];
 	const nearMat = material(NEAR, isPhone ? 8 : OCT, false), farMat = material(FARG, isPhone ? 7 : 9, true);
 	const near = new THREE.Mesh(radialGrid(...NEAR), nearMat), far = new THREE.Mesh(radialGrid(...FARG), farMat);
 	for (const m of [near, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
@@ -189,8 +195,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	const lakeOff = { value: new THREE.Vector2() };
 	lakeMat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U, common, { uGOff: lakeOff });
-		sh.uniforms.uGT0 = { get value() { return data.tex[0]; } }; sh.uniforms.uGT1 = { get value() { return data.tex[1]; } }; sh.uniforms.uGT2 = { get value() { return data.tex[2]; } };
 		sh.vertexShader = 'uniform float uGBay; varying float vLk; varying vec2 vLd;\n' + GLOBE_GLSL + sh.vertexShader
+			.replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')
 			.replace('#include <begin_vertex>', `vec2 gd = position.xz + uGOff; float gh = globeHeight(gd, 5.0); vLk = gLake * step(gh, gLevel - 0.3) * step(1.0, gLevel); vLd = gd;
 				vec3 transformed = vec3(position.x, gLevel, position.z);`);
 		sh.fragmentShader = 'varying float vLk; varying vec2 vLd; uniform float uGIsl;\n' + sh.fragmentShader
@@ -204,6 +210,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	// place the rings round the camera; bayOut: how far past the Bay's survey the camera is (m)
 	function update(cam, F, { bay, bayOut, night, cities, on: may = true }) {
 		const on = data.win.ready && may;
+		U.uGOn.value = data.win.ready ? 1 : 0;            // (the sea reads the coasts from here too)
 		const x = cam.position.x, z = cam.position.z;
 		// (in the Bay's frame the fine ring is only wanted near the survey's edge and past it)
 		near.visible = on && (!bay || bayOut > SEAM_A - 7000);
