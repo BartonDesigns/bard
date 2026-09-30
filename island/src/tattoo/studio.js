@@ -34,12 +34,12 @@ const ON = 'background:#01a982;border-color:#01a982;';
 export function createTattooStudio({ mount, avatar, player, setCine, hint = () => {}, isPhone = false }) {
 	let root = null, pieces = [], cur = 0, open = false;
 	const tool = { mode: 'pen', style: 'line', ink: 'black', width: 0.02, shape: 'star', fill: false };
-	let orbit = 0, drag = null;
+	let orbit = 0, drag = null, lastError = null;
 
 	function piece() { return pieces[cur]; }
 	function fresh() { return { design: newDesign(), slot: 'forearm.L', angle: 0, along: 0.5, size: 0.1, rot: 0 }; }
 	// the body under the needle: your own, stood before the camera
-	function wear() { const me = avatar.me; if (me) wearOwnInk(me.P, pieces); }
+	function wear() { for (const me of [avatar.me, avatar.chairMe]) if (me) wearOwnInk(me.P, pieces); }
 
 	// ---------- the pad ----------
 	let pad = null, pg = null, live = null;
@@ -165,7 +165,7 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 	function onDragMove(e) { if (drag !== null) { orbit -= (e.clientX - drag) * 0.01; drag = e.clientX; } }
 	function onDragUp() { drag = null; }
 	function cam(camera) {
-		const me = avatar.me;
+		const me = avatar.chairMe;
 		if (!me) return;
 		const at = me.M.S.pos, h = me.M.S.heading, sl = piece()?.slot || 'torso';
 		const part = sl.split('.')[0], side = SIDE[sl.split('.')[1]] || 0;
@@ -185,11 +185,16 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 		root.style.display = '';
 		refresh();
 		const P = player().state;
-		await avatar.ready();
-		if (!open) return;
-		avatar.show(P.pos.x, P.pos.z, P.yaw + Math.PI);
-		wear();
-		setCine((camera) => cam(camera));
+		try {
+			const me = await avatar.chair();
+			if (!open) return;
+			me.M.place(P.pos.x, P.pos.y - 1.68, P.pos.z, P.yaw + Math.PI);
+			me.M.stand(); me.M.setPose('rest'); me.M.act(null);
+			me.P.root.visible = true;
+			wear();
+			// (your body stood still in the chair, moved each frame as the rig moves anyone)
+			setCine((camera, dt, t) => { me.M.want.speed = 0; me.M.update(dt || 0.016, t || 0, null); cam(camera); });
+		} catch (e) { lastError = String(e?.message || e); console.warn('tattoo studio', e); }
 		addEventListener('pointerdown', onDragDown); addEventListener('pointermove', onDragMove); addEventListener('pointerup', onDragUp);
 		hint('Tattoo studio', 1500);
 	}
@@ -197,13 +202,14 @@ export function createTattooStudio({ mount, avatar, player, setCine, hint = () =
 		if (!open) return;
 		open = false;
 		if (keep) { pieces = pieces.filter((p) => p.design.marks.length); saveInk(pieces); }
-		const me = avatar.me;
-		if (me) wearOwnInk(me.P);
+		for (const me of [avatar.me, avatar.chairMe]) if (me) wearOwnInk(me.P);
 		setCine(null);
-		avatar.hide();
+		if (avatar.chairMe) avatar.chairMe.P.root.visible = false;
 		removeEventListener('pointerdown', onDragDown); removeEventListener('pointermove', onDragMove); removeEventListener('pointerup', onDragUp);
 		if (root) root.style.display = 'none';
 		if (keep) hint(pieces.length ? 'Saved. Wear it well.' : 'No tattoos kept.', 2200);
 	}
-	return { start, finish, active: () => open };
+	// (for tests: is it open, is your body up, anything that went wrong)
+	const info = () => ({ open, me: !!avatar.chairMe, shown: !!avatar.chairMe?.P.root.visible, pieces: pieces.length, error: lastError });
+	return { start, finish, active: () => open, info };
 }

@@ -349,6 +349,7 @@ export function createIslandWorld() {
 	dom.mount.appendChild(inkBtn);
 	inkBtn.addEventListener('click', (e) => { e.stopPropagation(); studio.start(); });
 	HOOKS.tattoo = () => studio.start();
+	HOOKS.tattooInfo = () => studio.info();
 	for (const ev of ['pointerdown', 'touchstart']) inkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if ((e.key === 't' || e.key === 'T') && !e.repeat && world?.bizSeen?.type === 'tattoo' && !studio.active() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); studio.start(); } });
 	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active(), hint: (t, ms) => hint(t, ms, 1) });
@@ -1442,6 +1443,7 @@ if (typeof window !== 'undefined') {
 		month: (m) => { if (m !== undefined) pickMonth(m); return monthPicked(); },
 		// the tattoo studio, wherever you are
 		tattoo: () => { HOOKS.tattoo?.(); return 'Tattoo studio'; },
+		tattooInfo: () => HOOKS.tattooInfo?.(),
 		bloom: (v) => { if (v !== undefined) REAL_U.uBloom.value = Math.max(0, Math.min(1, +v)); return REAL_U.uBloom.value; },
 		// share where you are: Crysis.share() (a link and a line of text), Crysis.share({ silent: true, from: 'Sam' })
 		share: (opts) => HOOKS.share?.share(opts),
