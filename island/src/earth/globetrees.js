@@ -95,7 +95,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 		const cp = Math.cos(lat * RAD), p = [EARTH_R * cp * Math.cos(lon * RAD), EARTH_R * cp * Math.sin(lon * RAD), EARTH_R * Math.sin(lat * RAD)];
 		const m4 = 16 / S0, m6 = 64 / S0;
 		const pM = vn3(p[0] * m4, p[1] * m4, p[2] * m4, 23), pS = vn3(p[0] * m6, p[1] * m6, p[2] * m6, 37);
-		const air = cell.TEMP - 6.5 * Math.max(0, h - 800) / 1000;
+		const air = cell.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * cell.E) / 1000;       // (as the terrain's, globeterrain.js)
 		return { k: sst(0.44, 0.56, cell.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, slope)), air };
 	}
 	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide

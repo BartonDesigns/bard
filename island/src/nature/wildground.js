@@ -389,7 +389,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		const c = G.data.cellAt(ll.lat, ll.lon), h = H(cx, cz);
 		if (h < 1) return;
 		const e = 8, slope = Math.hypot(H(cx + e, cz) - H(cx - e, cz), H(cx, cz + e) - H(cx, cz - e)) / (2 * e);
-		const air = c.TEMP - 6.5 * Math.max(0, h - 800) / 1000, rain = c.RAIN, trees = c.TREES;
+		const air = c.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * c.E) / 1000, rain = c.RAIN, trees = c.TREES;
 		// the dry season: the hemisphere's late summer browns the grass where it rains little
 		const nh = ll.lat > 0 ? season : 1 - season, tropic = Math.abs(ll.lat) < 23;
 		const dry = Math.min(1, Math.max(0, (700 - rain) / 450)) * (tropic ? 0.6 : nh);

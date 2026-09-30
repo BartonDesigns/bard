@@ -29,7 +29,7 @@ import { BAY_DETAIL_U, BAY_DETAIL_AMP } from './baydetail.js';
 import { loadAtlas, atlasReady, regionAt, palette, citiesNear } from './atlas.js';
 import { setFarGround } from '../bay/terrain.js';
 import { LAT0, LON0 } from '../bay/geo.js';
-import { today } from '../calendar.js';
+import { today, onMonth } from '../calendar.js';
 
 // the countries that drive on the left (the rest keep right)
 const LEFT = /United Kingdom|England|Scotland|Wales|Ireland|Japan|India|Pakistan|Bangladesh|Sri Lanka|Nepal|Bhutan|Thailand|Malaysia|Singapore|Indonesia|Brunei|Hong Kong|Macau|Australia|New Zealand|South Africa|Kenya|Tanzania|Uganda|Zambia|Zimbabwe|Botswana|Namibia|Mozambique|Malawi|Lesotho|Eswatini|Mauritius|Seychelles|Cyprus|Malta|Jamaica|Bahamas|Barbados|Trinidad|Guyana|Suriname|Bermuda|Cayman|Virgin Islands|Saint Lucia|Grenada|Dominica|Antigua|Saint Kitts|Saint Vincent|Fiji|Papua|Solomon|Tonga|Samoa|Timor|Falkland/i;
@@ -171,7 +171,8 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 
 	// ---------- each frame ----------
-	let regionT = 0, regionId = null, veg = null;
+	let regionT = 0, regionId = null, veg = null, seasonT = 0;
+	const offMonth = onMonth(() => { seasonT = 0; });
 	// a guard: the camera and you are never left at a NaN (the frame moves, the jumps and the
 	// heights all feed them); if one ever turns up you go back to the last good place, once said
 	const good = { p: new THREE.Vector3(), v: new THREE.Vector3(), c: new THREE.Vector3(), q: new THREE.Quaternion(), ok: false, said: false };
@@ -197,10 +198,12 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const out = bayOut(x, z);
 		terrain.update(cam, F, { bay: F.bay, bayOut: out, night, cities: towns.lit(12), on: !F.bay || bay.loaded() });
 		// the place: its name as you come into it, its plants for the woods (every 2 s)
+		// the season here, once the window is in (and at once when another month is picked)
+		seasonT -= dt;
+		if (seasonT <= 0 && data.win.ready) { seasonT = 2; GLOBE_U.uGSeason.value = seasonal(ll.lat, ll.lon); }
 		regionT -= dt;
 		if (regionT <= 0) {
 			regionT = 2;
-			if (data.win.ready) GLOBE_U.uGSeason.value = seasonal(ll.lat, ll.lon);
 			if (!atlasReady()) loadAtlas().catch(() => {});
 			else {
 				const R = regionAt(ll.lat, ll.lon);
@@ -237,6 +240,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	function dispose() {
 		setFarGround(null);
+		offMonth();
 		delete bay.farWhere;
 		GLOBE_U.uGOn.value = 0;
 		sourced?.removeSource?.(roads);
