@@ -96,7 +96,7 @@ export function createVehicles({ scene, world, camera, isPhone, people = () => n
 			hooked = W.street;
 			W.street.setAvoid(stops);
 			// your car is drawn with the traffic
-			W.street.extra.push((fleet, x, z) => { const m = mine.car; if (m) fleet.add(m.kind, m.matrix, m.color, (m.x - x) ** 2 + (m.z - z) ** 2, { spin: m.spin, steer: m.steer, riders: 0 }); });
+			W.street.extra.push((fleet, x, z) => { const m = mine.car; if (m) fleet.add(m.kind, m.matrix, m.color, (m.x - x) ** 2 + (m.z - z) ** 2, { spin: m.spin, steer: m.steer, riders: 0, first: true }); });
 		}
 		life.update(dt, t);
 	}

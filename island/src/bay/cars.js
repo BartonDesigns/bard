@@ -71,9 +71,10 @@ export function seatsOf(kind) {
 // NS: sections along the body, WS: sides round each tyre (cars in the distance use fewer
 // of both; they are many). opts: wheels (built in, or left for the caller to turn), cabin
 // (mirrors, wheel-well liners, seats, dash and wheel: the close ones), glass (the glass as
-// a second group, for a see-through material)
+// a second group, for a see-through material), only ('cabin': just the cabin; 'shell': just
+// the body without its glass; to fit inside a real model, vehicles/fleet.js)
 export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
-	const { wheels = true, cabin = false, glass = false } = opts;
+	const { wheels = true, cabin = false, glass = false, only = null } = opts;
 	const S = def(SPEC[kind]), L2 = S.L / 2;
 	const bottom = (s) => S.clear + 0.1 * sm(L2 - 0.55, L2, Math.abs(s));
 	// the belt line: the hood falls to the nose, the deck is level, and both roll over at the ends
@@ -140,9 +141,10 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	body.setAttribute('aE', new THREE.Float32BufferAttribute(E, 4));
 	body.setIndex(idx);
 	body.computeVertexNormals();
-	const parts = [body.toNonIndexed()];
-	if (wheels) for (const [x, y, z] of wheelHubs(kind)) parts.push(wheelGeometry(kind, WS).applyMatrix4(new THREE.Matrix4().makeScale(Math.sign(x), 1, 1).setPosition(x, y, z)));
-	if (cabin) {
+	const parts = only === 'cabin' ? [] : [body.toNonIndexed()];
+	if (only === 'cabin') parts.push(...cabinGeometry(kind, S, belt, top, halfW));
+	if (wheels && !only) for (const [x, y, z] of wheelHubs(kind)) parts.push(wheelGeometry(kind, WS).applyMatrix4(new THREE.Matrix4().makeScale(Math.sign(x), 1, 1).setPosition(x, y, z)));
+	if (cabin && !only) {
 		// the mirrors, on stalks at the foot of the A pillars
 		const ms = S.ws - 0.14, mb = belt(ms), mw = halfW(ms);
 		for (const sx of [-1, 1]) {
@@ -177,7 +179,8 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	g.setAttribute('aW', new THREE.BufferAttribute(aw, 4));
 	g.setAttribute('aD', new THREE.BufferAttribute(ad, 3));
 	g.setAttribute('aS', new THREE.BufferAttribute(as, 4));
-	if (glass) splitGlass(g);
+	if (glass || only === 'shell') splitGlass(g);
+	if (only === 'shell') { g.setDrawRange(0, g.groups[0].count); g.clearGroups(); }
 	g.computeBoundingSphere();
 	return g;
 }
@@ -411,7 +414,7 @@ const PAINT = /* glsl */`
 		// the body's inside: the headliner overhead, below the glass the door cards, a rest
 		// for the arm along them
 		carEnv = 0.0; carCoat = 0.0; carRough = 0.95;
-		diffuseColor.rgb = yN > 1.03 ? vec3(0.16, 0.155, 0.145) : yN > 0.86 ? vec3(0.045) : abs(yN - 0.7) < 0.035 ? vec3(0.06, 0.057, 0.053) : vec3(0.028);
+		diffuseColor.rgb = yN > 1.03 ? vec3(0.2, 0.198, 0.192) : yN > 0.86 ? vec3(0.045) : abs(yN - 0.7) < 0.035 ? vec3(0.06, 0.057, 0.053) : vec3(0.028);
 	}
 	else if (P > 15.5) { diffuseColor.rgb = vec3(0.42, 0.43, 0.44); carRough = 0.35; carMetal = 0.9; carCoat = 0.0; }
 	else if (P > 12.5) { diffuseColor.rgb = vec3(0.045, 0.045, 0.048); carRough = 0.45; carMetal = 0.7; carCoat = 0.0; }
@@ -447,8 +450,8 @@ const PAINT = /* glsl */`
 	else if (P > 9.5) { diffuseColor.rgb = vec3(0.9); carRough = 0.07; carMetal = 1.0; carCoat = 0.0; }
 	else if (P > 8.5) { diffuseColor.rgb = vec3(0.75); carRough = 0.02; carMetal = 1.0; carCoat = 0.0; }
 	else if (P > 7.5) { diffuseColor.rgb = vec3(0.012); carRough = 0.95; carCoat = 0.0; carEnv = 0.0; }
-	else if (P > 6.5) { diffuseColor.rgb = vec3(0.03); carRough = 0.6; carCoat = 0.0; carEnv = 0.3; }
-	else if (P > 5.5) { diffuseColor.rgb = vec3(0.055, 0.052, 0.05); carRough = 0.95; carCoat = 0.0; carEnv = 0.15; }
+	else if (P > 6.5) { diffuseColor.rgb = vec3(0.03); carRough = 0.6; carCoat = 0.0; carEnv = 0.1; }
+	else if (P > 5.5) { diffuseColor.rgb = vec3(0.055, 0.052, 0.05); carRough = 0.95; carCoat = 0.0; carEnv = 0.05; }
 	else if (P > 4.5) {
 		// a far wheel's rim: five spokes painted on, dark between them and at the hub
 		float a = atan(vE.x, vE.y), rr = length(vE.xy) / max(vE.z, 0.01);
@@ -537,9 +540,10 @@ const PAINT = /* glsl */`
 	}
 }`;
 
-// o.cheap (phones): the plain sky in the reflections, not its clouds
+// o.cheap (phones): the plain sky in the reflections, not its clouds; o.side: BackSide for
+// a body seen only from within
 export function carMaterial(night, o = {}) {
-	const m = new THREE.MeshPhysicalMaterial({ roughness: 0.3, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05, side: THREE.DoubleSide });
+	const m = new THREE.MeshPhysicalMaterial({ roughness: 0.3, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05, side: o.side ?? THREE.DoubleSide });
 	if (o.cheap) m.defines = { CAR_CHEAP: '' };
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, carSky, { uNightS: night });

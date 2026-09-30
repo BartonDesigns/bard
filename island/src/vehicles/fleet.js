@@ -19,15 +19,18 @@ const geos = {};
 // (a body is built the first time its kind comes into a level, one a frame per fleet, so
 // that a street full of new kinds does not stall a frame; until then it waits, drawn coarser)
 let budget = 1;
-function loftGeo(kind, t, wheels) {
+function loftGeo(kind, t, wheels, force = false) {
 	const k = kind + t + (wheels ? 'w' : '');
 	if (!geos[k]) {
-		if (budget <= 0) return null;
+		if (budget <= 0 && !force) return null;
 		budget--;
 		const [ns, ws, cabin] = LOFT[t]; geos[k] = carGeometry(kind, ns, ws, { wheels, cabin, glass: cabin });
 	}
 	return geos[k];
 }
+// your own car where it is a real model: the loft's cabin inside it, and the loft's body
+// seen from within (door cards, the headliner), as the model has no inside of its own
+const cabGeo = (kind) => geos[kind + 'cab'] || (geos[kind + 'cab'] = { cabin: carGeometry(kind, 32, 12, { wheels: false, only: 'cabin' }), shell: carGeometry(kind, 48, 12, { wheels: false, only: 'shell' }) });
 const wgeo = {};
 const wheelGeo = (kind) => wgeo[kind] || (wgeo[kind] = wheelGeometry(kind, 18));
 // someone in a far car: head and shoulders, dark against the glass
@@ -35,6 +38,7 @@ const riderGeo = (() => { const h = new THREE.SphereGeometry(0.11, 8, 6).transla
 
 export function createFleet(group, { cap = 200, isPhone = false, night = { value: 0 }, shadows = true } = {}) {
 	const carMat = carMaterial(night, { cheap: isPhone }), glassMat = carGlassMaterial({ cheap: isPhone });
+	let insideMat = null;
 	const riderMat = new THREE.MeshStandardMaterial({ color: 0x2a221d, roughness: 0.9 });
 	const near2 = (isPhone ? 28 : REACH[0]) ** 2, mid2 = REACH[1] ** 2, far2 = REACH[2] ** 2;
 	// a set: meshes sharing one list of instances (the parts of a model, or a loft and its glass)
@@ -90,7 +94,8 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		for (let i = 0; i < n && i < C.seats.length; i++) { const s = C.seats[i]; w4.makeTranslation(s[0], s[1] - 0.05, s[2] - 0.3).premultiply(M); put(S, w4); }
 	}
 	// o: { spin, steer, riders (how many to show as silhouettes), still (a parked car: its
-	// wheels part of the body where that is cheaper) }
+	// wheels part of the body where that is cheaper), first (built now, whatever the budget:
+	// your own car) }
 	function add(kind, M, c, d2, o = {}) {
 		if (!SPEC[kind]) kind = 'sedan';
 		const t = d2 < near2 ? 0 : d2 < mid2 ? 1 : d2 < far2 ? 2 : 3;
@@ -100,11 +105,16 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 			if (K) {
 				put(set(kind + 'm' + t, K.parts.map((p) => [p.geo, p.mat, p.role === 'paint']), true, t ? cap : cap / 2, cast), M, c);
 				if (t === 0 && K.hubs.length === 4) wheels(kind, M, o.spin || 0, o.steer || 0, K, cast);
+				if (t === 0 && o.first) {
+					const G = cabGeo(kind);
+					insideMat ||= carMaterial(night, { cheap: isPhone, side: THREE.BackSide });
+					put(set(kind + 'cab', [[G.cabin, carMat, false], [G.shell, insideMat, false]], false, 2, false), M);
+				}
 				if (o.riders) riders(kind, M, o.riders);
 				return t;
 			}
 		}
-		const near = t === 0 && loftGeo(kind, 0, false);
+		const near = t === 0 && loftGeo(kind, 0, false, o.first);
 		if (near) {
 			put(set(kind + 'l0', [[near, [carMat, glassMat], true]], true, cap / 2, cast), M, c);
 			wheels(kind, M, o.spin || 0, o.steer || 0, null, cast);
