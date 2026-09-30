@@ -24,7 +24,7 @@ const CITIES = 12;
 
 const FRAG_GLSL = /* glsl */`
 uniform highp sampler2D uGT2, uGT3, uGT4; uniform vec4 uGWin; uniform ivec3 uGI0; uniform vec3 uGF0; uniform vec2 uGSeam; uniform float uGBay, uGNight;
-uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl;
+uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug;
 varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC;
 float gfH(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
 // value noise on the sphere at 8192 / 2^k metres (the same lattice as the relief)
@@ -40,18 +40,18 @@ float gfCell(int k, uint s){ float m = float(1 << k); vec3 t = uGF0 * m + vGP * 
 vec3 gLin(vec3 c){ return pow(c, vec3(2.2)); }
 `;
 
-export function createGlobeTerrain({ scene, shared, data, BU, isPhone }) {
+export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	const group = new THREE.Group();
 	group.name = 'globe';
 	scene.add(group);
 	const U = data.U;
 	const common = {
 		uGSeam: { value: new THREE.Vector2(SEAM_A, SEAM_B) }, uGBay: { value: 1 }, uGF: { value: new THREE.Vector2() },
-		uGIsl: { value: 1400 }, uGNight: { value: 0 }, uGCity: { value: Array.from({ length: CITIES }, () => new THREE.Vector4(0, 0, 0, 0)) },
+		uGIsl: { value: 1400 }, uGNight: { value: 0 }, uGDebug: { value: 0 }, uGCity: { value: Array.from({ length: CITIES }, () => new THREE.Vector4(0, 0, 0, 0)) },
 	};
 	function material(grid, oct, hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.93, metalness: 0 });
-		const own = { uGGrid: { value: new THREE.Vector3(...grid) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) } };
+		const own = { uGGrid: { value: new THREE.Vector3(...grid) }, uGOct: { value: oct }, uGHole: { value: new THREE.Vector4(0, 0, hole ? 1 : 0, 0) }, uGOff: { value: new THREE.Vector2() } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, WC_U, U, common, own, { uGT3: { value: data.tex[3] }, uGT4: { value: data.tex[4] } });
 			sh.uniforms.uGT0 = { get value() { return data.tex[0]; } }; sh.uniforms.uGT1 = { get value() { return data.tex[1]; } }; sh.uniforms.uGT2 = { get value() { return data.tex[2]; } };
@@ -107,9 +107,10 @@ export function createGlobeTerrain({ scene, shared, data, BU, isPhone }) {
 					vec3 c = mix(gA, gB, smoothstep(0.3, 0.7, pB * 0.55 + pM * 0.3 + pS * 0.15));
 					// the grass greener where it rains, straw where it doesn't
 					c = mix(c, c * vec3(0.8, 1.02, 0.7), smoothstep(500.0, 1300.0, rain) * 0.5);
-					// trees: up to the tree line (where the year's mean air is about 1 C), not on cliffs
-					float air = temp - 6.5 * max(0.0, h) / 1000.0;
-					float forest = smoothstep(0.3, 0.7, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.25) * smoothstep(0.5, 2.5, air) * (1.0 - smoothstep(0.55, 0.85, slope));
+					// the air up here: the atlas's warmth is the place's lived-in ground (taken as 800 m up)
+					// cooled 6.5 C a km above it. Trees up to the tree line, not on cliffs
+					float air = temp - 6.5 * max(0.0, h - 800.0) / 1000.0;
+					float forest = smoothstep(0.3, 0.7, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.25) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
 					vec3 wood = mix(vec3(0.028, 0.05, 0.03), vec3(0.045, 0.075, 0.025), smoothstep(4.0, 14.0, temp));
 					wood = mix(wood, vec3(0.035, 0.085, 0.02), smoothstep(20.0, 26.0, temp));
 					// fields where it is wet and warm enough, and gentle: a patchwork, not woods
@@ -120,16 +121,16 @@ export function createGlobeTerrain({ scene, shared, data, BU, isPhone }) {
 					c = mix(c, crop, farm * smoothstep(0.3, 0.6, pB + 0.25) * (1.0 - smoothstep(8000.0, 30000.0, dist) * 0.6));
 					c = mix(c, wood, forest);
 					// rock on the steep ground, and above the plants
-					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15), smoothstep(0.5, -2.5, air) * 0.7);
+					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
 					c = mix(c, mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35), rockK);
-					// snow where the air at this height stays near freezing, off the cliffs
-					float snowK = smoothstep(-1.0, -4.0, air + (pM - 0.5) * 3.0) * (1.0 - smoothstep(0.6, 0.9, slope));
+					// snow where the air up here stays cold enough to keep it through the summer, off the cliffs
+					float snowK = (1.0 - smoothstep(-8.5, -5.5, air + (pM - 0.5) * 3.0)) * (1.0 - smoothstep(0.6, 0.9, slope));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
 					// the shore: sand on the gentle ground just above the water
 					float shore = (1.0 - smoothstep(0.0, 0.035, vGC.x)) * (1.0 - smoothstep(vGC.z + 2.0, vGC.z + 6.0, h)) * (1.0 - smoothstep(0.12, 0.3, slope));
 					c = mix(c, mix(vec3(0.62, 0.56, 0.42), gA, 0.3), shore * step(0.0, vGC.x - 0.0));
 					// under water: the bed darkens
-					c = mix(c, c * vec3(0.5, 0.6, 0.6), smoothstep(vGC.z, vGC.z - 6.0, h));
+					c = mix(c, c * vec3(0.5, 0.6, 0.6), (1.0 - smoothstep(vGC.z - 6.0, vGC.z, h)));
 					// the towns and cities round you: built ground, and their lights after dark
 					float urb = 0.0;
 					for (int i = 0; i < ${CITIES}; i++) {
@@ -146,6 +147,7 @@ export function createGlobeTerrain({ scene, shared, data, BU, isPhone }) {
 						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk + street * 0.5)) * 0.35;
 					}
 					diffuseColor.rgb = c;
+					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : vec3(fract(h / 500.0), snowK, forest);
 				}`)
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCityGlow;');
 			sh.fragmentShader = 'vec3 gCityGlow = vec3(0.0);\n' + sh.fragmentShader;
@@ -163,8 +165,9 @@ export function createGlobeTerrain({ scene, shared, data, BU, isPhone }) {
 
 	// the big lakes' water: flat at each lake's level, only where the lake is
 	const lakeMat = new THREE.MeshStandardMaterial({ color: 0x1d4a5c, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.88 });
+	const lakeOff = { value: new THREE.Vector2() };
 	lakeMat.onBeforeCompile = (sh) => {
-		Object.assign(sh.uniforms, U, common);
+		Object.assign(sh.uniforms, U, common, { uGOff: lakeOff });
 		sh.uniforms.uGT0 = { get value() { return data.tex[0]; } }; sh.uniforms.uGT1 = { get value() { return data.tex[1]; } }; sh.uniforms.uGT2 = { get value() { return data.tex[2]; } };
 		sh.vertexShader = 'uniform float uGBay; varying float vLk; varying vec2 vLd;\n' + GLOBE_GLSL + sh.vertexShader
 			.replace('#include <begin_vertex>', `vec2 gd = position.xz + uGOff; float gh = globeHeight(gd, 5.0); vLk = gLake * step(gh, gLevel - 0.3) * step(1.0, gLevel); vLd = gd;
@@ -178,8 +181,8 @@ export function createGlobeTerrain({ scene, shared, data, BU, isPhone }) {
 	group.add(lakes);
 
 	// place the rings round the camera; bayOut: how far past the Bay's survey the camera is (m)
-	function update(cam, F, { bay, bayOut, night, cities }) {
-		const on = data.win.ready;
+	function update(cam, F, { bay, bayOut, night, cities, on: may = true }) {
+		const on = data.win.ready && may;
 		const x = cam.position.x, z = cam.position.z;
 		// (in the Bay's frame the fine ring is only wanted near the survey's edge and past it)
 		near.visible = on && (!bay || bayOut > SEAM_A - 7000);
@@ -191,14 +194,10 @@ export function createGlobeTerrain({ scene, shared, data, BU, isPhone }) {
 		const nx = Math.round(x / 32) * 32, nz = Math.round(z / 32) * 32, fx = Math.round(x / 512) * 512, fz = Math.round(z / 512) * 512;
 		near.position.set(nx, 0, nz); far.position.set(fx, 0, fz); lakes.position.set(fx, 0, fz);
 		// each ring's offset from the anchor (the GPU adds its own few km to it)
-		nearMat.userData.off = [nx - F.fx, nz - F.fz]; farMat.userData.off = [fx - F.fx, fz - F.fz];
+		nearMat.userData.own.uGOff.value.set(nx - F.fx, nz - F.fz); farMat.userData.own.uGOff.value.set(fx - F.fx, fz - F.fz); lakeOff.value.set(fx - F.fx, fz - F.fz);
 		farMat.userData.own.uGHole.value.set(nx - F.fx, nz - F.fz, near.visible ? 1 : 0, NEAR[1] * 0.97);
 		// the cities round you (anchor-relative: x, z, reach, how built up)
 		for (let i = 0; i < CITIES; i++) { const c = cities[i]; if (c) common.uGCity.value[i].set(c.x - F.fx, c.z - F.fz, c.r, c.k); else common.uGCity.value[i].set(0, 0, 0, 0); }
 	}
-	// each ring's own offset uniform, set just before it is drawn
-	for (const [mesh, mat] of [[near, nearMat], [far, farMat], [lakes, lakeMat]]) {
-		mesh.onBeforeRender = () => { const o = (mat === lakeMat ? farMat : mat).userData.off; if (o) U.uGOff.value.set(o[0], o[1]); };
-	}
-	return { group, update, near, far, lakes, materials: [nearMat, farMat, lakeMat] };
+	return { group, update, near, far, lakes, materials: [nearMat, farMat, lakeMat], debug: (v) => { common.uGDebug.value = v; } };
 }

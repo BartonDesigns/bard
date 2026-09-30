@@ -5,6 +5,8 @@
 
 import * as THREE from 'three';
 import { toWorld, toLatLon } from './bay/geo.js';
+import { toLL, bayKm } from './earth/globeframe.js';
+import { atlasReady, citiesNear, regionAt } from './earth/atlas.js';
 import { PLACES, ZONES } from './bay/places.js';
 
 const V = 1;
@@ -156,7 +158,7 @@ export function createShare(ctx) {
 		if (!w) return null;
 		const P = w.player.state, st = ctx.state, o = ctx.origin();
 		const s = { v: V, earth: !!st.earth, seed: st.seed, x: P.pos.x, y: P.pos.y, z: P.pos.z, yaw: P.yaw, pitch: P.pitch, fly: !!P.flying, hours: w.sky?.state?.hours };
-		if (s.earth) Object.assign(s, toLatLon(P.pos.x, P.pos.z));
+		if (s.earth) Object.assign(s, toLL(P.pos.x, P.pos.z));        // (the globe's frame: the Bay's near it)
 		else {
 			s.type = String(st.biome || shared().type || 'TERRAN');
 			if (o) { s.origin = { id: o.id, seed: o.seed, type: o.type, name: o.name, colorA: o.colorA, colorB: o.colorB }; s.id = o.id; }
@@ -172,8 +174,8 @@ export function createShare(ctx) {
 	function describe(s) {
 		const w = W();
 		if (s.earth) {
-			const ll = s.lat != null ? s : toLatLon(s.x, s.z), island = w && Math.max(Math.abs(s.x), Math.abs(s.z)) < (w.island?.half || 0);
-			const pl = island ? { name: 'the island', area: 'off the Golden Gate' } : earthPlace(s.x, s.z, ctx.places || []);
+			const ll = s.lat != null ? s : toLatLon(s.x, s.z), far = bayKm(ll.lat, ll.lon) > 250, island = !far && w && Math.max(Math.abs(s.x), Math.abs(s.z)) < (w.island?.half || 0);
+			const pl = island ? { name: 'the island', area: 'off the Golden Gate' } : far ? farPlace(ll) : earthPlace(s.x, s.z, ctx.places || []);
 			const where = `${pl.name}${pl.area && !pl.name.includes(pl.area) ? ', ' + pl.area : ''}`;
 			const b = s.bld, what = !b ? '' : b.k === 'tower' ? (b.i ? `in a tower (${(b.n || '').split(' · ').slice(0, 2).join(', ')})` : 'in a tower lobby') : b.k === 'shop' ? `at a ${(b.n || 'shop').split(' on ')[0].toLowerCase()}` : 'at a house';
 			return { place: where, text: what ? `Meet me ${what} near ${where}` : `Meet me at ${where}`, coords: `${ll.lat.toFixed(6)}, ${ll.lon.toFixed(6)} · ${Math.round(s.y - 1.7)} m` };
@@ -190,6 +192,13 @@ export function createShare(ctx) {
 		const km = (v) => (Math.abs(v) >= 1000 ? (v / 1000).toFixed(2) + ' km' : Math.round(v) + ' m');
 		const coords = `${name} · ${typeName} · ${km(Math.abs(s.x))} ${s.x >= 0 ? 'E' : 'W'}, ${km(Math.abs(s.z))} ${s.z <= 0 ? 'N' : 'S'}, ${Math.round(s.y - 1.7)} m up`;
 		return { place: `${name} (${typeName})`, text: `Meet me on ${name} (${typeName})${where ? ', ' + where : ''}`, coords };
+	}
+
+	// far from the Bay: the nearest of the atlas's towns, and its region (earth/atlas.js)
+	function farPlace(ll) {
+		if (!atlasReady()) return { name: `${ll.lat.toFixed(2)}, ${ll.lon.toFixed(2)}`, area: '' };
+		const c = citiesNear(ll.lat, ll.lon, 120, 1)[0], R = regionAt(ll.lat, ll.lon);
+		return c ? { name: c.km < 8 ? c.name : `near ${c.name}`, area: R?.name || '' } : { name: R?.name || `${ll.lat.toFixed(2)}, ${ll.lon.toFixed(2)}`, area: '' };
 	}
 
 	const base = () => { try { return new URL('../../', import.meta.url).href; } catch { return location.origin + '/'; } };
@@ -244,6 +253,8 @@ export function createShare(ctx) {
 			if (!same || !ctx.visible()) await ctx.enter(s.earth ? { seed: s.seed, earth: true } : { seed: s.seed, biome: s.type, earth: false, origin: s.origin || null });
 			w = W();
 			if (!w) return false;
+			// the globe: a place far off moves the frame there first (earth/globe.js)
+			if (s.earth && s.lat != null && w.globe) { const p = w.globe.place(s.lat, s.lon); s.x = p.x; s.z = p.z; await p.ready; }
 			ctx.beforeMove?.();
 			if (w.boat?.boarded?.()) w.boat.leave();
 			const P = w.player.state;

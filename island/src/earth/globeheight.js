@@ -44,7 +44,7 @@ function h3(x, y, z, s) {
 	h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
 	return (h >>> 8) / 16777216;
 }
-function vn3(qx, qy, qz, s) {
+export function vn3(qx, qy, qz, s) {
 	const i = Math.floor(qx), j = Math.floor(qy), k = Math.floor(qz);
 	let u = qx - i, v = qy - j, w = qz - k;
 	u = u * u * (3 - 2 * u); v = v * v * (3 - 2 * v); w = w * w * (3 - 2 * w);
@@ -157,7 +157,7 @@ export function anchorUniforms(U, win) {
 	U.uGWin.value.set(win.cx0, win.cy0, RES / F.kx, RES / F.kz);
 	FAM.forEach((f, i) => {
 		const a = f.M[0] * lon + f.M[1] * lat, b = f.M[2] * lon + f.M[3] * lat;
-		U.uGFamI.value[i].set(Math.floor(a), Math.floor(b));
+		U.uGFamI.value[i * 2] = Math.floor(a); U.uGFamI.value[i * 2 + 1] = Math.floor(b);
 		U.uGFamF.value[i].set(a - Math.floor(a), b - Math.floor(b));
 		U.uGFamM.value[i].set(...f.M);
 	});
@@ -169,7 +169,7 @@ export function globeUniforms(THREE) {
 		uGT0: { value: null }, uGT1: { value: null }, uGT2: { value: null }, uGT3: { value: null }, uGT4: { value: null },
 		uGWin: { value: new THREE.Vector4() }, uGOff: { value: new THREE.Vector2() }, uGAnc: { value: new THREE.Vector4() }, uGDeg: { value: new THREE.Vector2() },
 		uGI0: { value: new THREE.Vector3() }, uGF0: { value: new THREE.Vector3() },
-		uGFamI: { value: FAM.map(() => new THREE.Vector2()) }, uGFamF: { value: FAM.map(() => new THREE.Vector2()) }, uGFamM: { value: FAM.map(() => new THREE.Vector4()) },
+		uGFamI: { value: new Int32Array(FAM.length * 2) }, uGFamF: { value: FAM.map(() => new THREE.Vector2()) }, uGFamM: { value: FAM.map(() => new THREE.Vector4()) },
 	};
 }
 

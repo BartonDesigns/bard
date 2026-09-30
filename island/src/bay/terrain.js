@@ -19,6 +19,14 @@ import { CARVE_U, CARVE_GLSL, carveDelta } from './carve.js';
 import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
 import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from './coastside.js';
 import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
+import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp } from '../earth/baydetail.js';
+
+// the globe past the survey (earth/globe.js): { ready(), at(x, z), seam: [a, b] (m past the
+// survey's edge: the Bay's ground stops at a, the globe's is whole by b), whenReady, hideBay() }.
+// Until one is set (or while its data loads) the survey's edge is carried out as before.
+let farG = null;
+const BSEAM_U = { uBSeam: { value: 1e9 } };
+export function setFarGround(g) { farG = g; }
 
 // ---------- the shared GLSL: height from the finest level that covers a point ----------
 export const BAY_GLSL = /* glsl */`
@@ -319,6 +327,15 @@ export function createBayArea(shared, scene, island, BU) {
 		return { u: U.data[k] / 255, a: U.data[k + 1] / 255 * Math.PI / 2, d: U.data[k + 2] / 255, s: Math.round(U.data[k + 3] / 40) };
 	}
 
+	// the town map's density, bilinear (the GPU's bdUrban twin)
+	function urbanBil(x, z) {
+		if (!U.data) return 0;
+		const fx = (x - U.x0) / U.cell - 0.5, fz = (z - U.zN) / U.cell - 0.5;
+		if (fx < 0 || fz < 0 || fx >= U.W - 1 || fz >= U.H - 1) return 0;
+		const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = (j * U.W + i) * 4, D = U.data, R = U.W * 4;
+		return ((D[k] * (1 - u) + D[k + 4] * u) * (1 - v) + (D[k + R] * (1 - u) + D[k + R + 4] * u) * v) / 255;
+	}
+
 	// ---------- heights on the CPU ----------
 	function levelH(L, x, z) {
 		let fx = (x - L.x0) / L.step, fz = (z - L.zN) / L.step;
@@ -338,11 +355,23 @@ export function createBayArea(shared, scene, island, BU) {
 		const L0 = levels[0], e0 = levelH(L0, x, z);
 		const qx = (x - L0.x0) / L0.step, qz = (z - L0.zN) / L0.step;
 		const dOut = Math.hypot(Math.max(0, -qx, qx - (L0.W - 1)), Math.max(0, -qz, qz - (L0.H - 1))) * L0.step;
-		let h = beyondH(x, z, e0, dOut) + (e0 - beyondH(x, z, e0, dOut)) * levelIn(L0, x, z, 3000);
+		const inS = levelIn(L0, x, z, 3000);
+		let h = beyondH(x, z, e0, dOut) + (e0 - beyondH(x, z, e0, dOut)) * inS;
+		// past the survey the globe's ground takes over (earth/globe.js; the same blend on the GPU)
+		if (farG?.ready()) { const k = sstep(farG.seam[0], farG.seam[1], dOut); if (k > 0) h += (farG.at(x, z) - h) * k; }
 		if (levels[1]) { const k = levelIn(levels[1], x, z, 1500); if (k > 0) h += (levelH(levels[1], x, z) - h) * k; }
 		if (levels[2]) { const k = levelIn(levels[2], x, z, 500); if (k > 0) h += (levelH(levels[2], x, z) - h) * k; }
-		for (let i = 3; i < levels.length; i++) if (levels[i]) { const k = levelIn(levels[i], x, z, 400); if (k > 0) h += (levelH(levels[i], x, z) - h) * k; }
-		return h + carveDelta(x, z) + waterDelta(x, z);
+		let fine = 0;
+		for (let i = 3; i < levels.length; i++) if (levels[i]) { const k = levelIn(levels[i], x, z, 400); if (k > 0) { h += (levelH(levels[i], x, z) - h) * k; if (levels[i].step <= 16) fine = Math.max(fine, k); } }
+		if (levels[2]?.step <= 16) fine = Math.max(fine, levelIn(levels[2], x, z, 500));
+		// the engine's relief finer than the survey (earth/baydetail.js)
+		const wet = waterDelta(x, z);
+		if (inS > 0 && h >= 3 && BAY_DETAIL_U.uBDAmp.value > 0) {
+			const sl = Math.hypot(levelH(L0, x + 40, z) - e0, levelH(L0, x, z + 40) - e0) / 40;
+			const a = detailAmp(inS, sl, h, urbanBil(x, z), wet, fine);
+			if (a > 0) h += rills(x, z) * a;
+		}
+		return h + carveDelta(x, z) + wet;
 	}
 	const heightAt = (x, z) => groundAt(x, z) + cliffDelta(x, z);
 
@@ -366,7 +395,7 @@ export function createBayArea(shared, scene, island, BU) {
 		levels[i].tex = tex;
 		if (i === 0) { BU.uB0.value = tex; BU.uR0.value.set(x0, zN, L.step, 0); }
 		slotsAt = null;
-		if (i === 0) { BU.uBayOn.value = 1; buildUrban(); }
+		if (i === 0) { BU.uBayOn.value = 1; await Promise.race([farG?.whenReady || Promise.resolve(), new Promise((ok) => setTimeout(ok, 8000))]); buildUrban(); }
 	}
 	// the whole Bay Area coarse first, then the finer levels nearest the island first
 	const order = [0, ...LEVELS.map((L, i) => i).slice(1).sort((a, b) => {
@@ -389,17 +418,21 @@ export function createBayArea(shared, scene, island, BU) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
-			sh.vertexShader = (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + '\nfloat cvK = 1.0, wvK = 1.0;\nfloat gradedHeight(vec2 w){ return bayHeight(w) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
+			sh.vertexShader = (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); vec2 wc = wcAt(w); return b + (bdK > 0.0 ? bayDetail(w, b, wc.r) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wc.r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
 					// grid is fine enough to hold it)
 					cvK = 1.0 - smoothstep(1600.0, 3200.0, length(position.xz));
+					// (the engine's relief finer than the survey, earth/baydetail.js: the near ring only)
+					bdK = uHole > 0.5 ? 0.0 : 1.0 - smoothstep(2400.0, 3600.0, length(position.xz));
 					// (and the creeks' channels and the lakes' shores, water.js: near you)
 					wvK = wcK(bw);
 					// (the ground as graded for the roads near you: berms.js)
 					float bh = gradedHeight(bw);
+					// (how far past the survey: past the seam the globe's ground draws, earth/globeterrain.js)
+					{ vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (bw - uR0.xy) / uR0.z; vBOut = length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
 					float be = max(3.0, length(position.xz) * 0.006);
 					vec3 objectNormal = normalize(vec3(gradedHeight(bw - vec2(be, 0.0)) - gradedHeight(bw + vec2(be, 0.0)), 2.0 * be, gradedHeight(bw - vec2(0.0, be)) - gradedHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal;
@@ -418,10 +451,11 @@ export function createBayArea(shared, scene, island, BU) {
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = WX_DEFS + 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam, uGravel; uniform vec2 uHoleC;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = WX_DEFS + 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam, uGravel; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
-					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here`)
+					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here
+					if (vBOut > uBSeam) discard;                                                            // the globe's ground from here out`)
 				.replace('#include <color_fragment>', `#include <color_fragment>
 				{
 					vec3 n = normalize(vBN); float slope = 1.0 - n.y, h = vBH;
@@ -976,8 +1010,9 @@ export function createBayArea(shared, scene, island, BU) {
 		});
 	}
 	function update(cam, night) {
-		const on = BU.uBayOn.value > 0.5;
+		const on = BU.uBayOn.value > 0.5 && !farG?.hideBay?.();
 		near.visible = far.visible = on;
+		BSEAM_U.uBSeam.value = farG?.ready() ? farG.seam[0] + 150 : 1e9;
 		if (!on) return;
 		pickSlots(cam.position.x, cam.position.z);
 		uNightB.value = night;

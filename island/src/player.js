@@ -175,7 +175,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			s.pos.addScaledVector(s.vel, dt);
 			const floor = Math.max(floorAt(s.pos.x, s.pos.z, s.pos.y) , 0) + 1.2;
 			if (s.pos.y < floor) { s.pos.y = floor; s.vel.y = Math.max(0, s.vel.y); }
-			s.pos.y = Math.min(s.pos.y, Math.max(900, floor + 900));                     // a ceiling above the land, so Mt Diablo can be flown over
+			// a ceiling above the land, so Mt Diablo can be flown over (out over the globe, earth/globe.js,
+			// a cruising height: the speed above grows with it, so a continent is minutes away)
+			const ceil = island.flyCeiling ? island.flyCeiling(s.pos.x, s.pos.z) : 900;
+			s.pos.y = Math.min(s.pos.y, Math.max(ceil, floor + ceil));
 			s.grounded = false; s.swimming = false;
 			camera.position.copy(s.pos);
 			camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');

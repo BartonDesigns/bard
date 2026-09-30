@@ -3,7 +3,7 @@
 // put together from them for the ground: as flat arrays for the CPU (globeheight.js) and as
 // five textures for the GPU. The window moves when you are 6 degrees from its middle; the
 // tiles it needs load first, so it moves in one go and the ground never changes under you.
-// At most eight tiles are kept (about 12 MB), the least lately used let go.
+// At most six tiles are kept (about 15 MB), the least lately used let go.
 //
 // The planes of a cell (see the bake): E elevation, L land share, WL the lake's level round a
 // lake (0 elsewhere), A the relief's height, RG ridges, TR terraces, BNR / RV the ranges'
@@ -15,14 +15,17 @@ import { F } from './globeframe.js';
 import { RES } from './globeheight.js';
 
 const TILE = 30, TN = TILE * RES, GW = 360 * RES, GH = 180 * RES;
-const NW = 256, MOVE = 60, KEEP = 8;
+const NW = 256, MOVE = 60, KEEP = 6;
 const PLANES = ['E', 'L', 'WL', 'A', 'RG', 'TR', 'BNR', 'RV', 'DUNE', 'KARST', 'K', 'TREES', 'TEMP', 'RAIN'];
 
 export function createGlobeData() {
 	const tiles = new Map();                // 'tj-ti' -> { px: Uint8ClampedArray (RGBA of 300 x 2100), used } | Promise
-	const P = {};
-	for (const k of PLANES) P[k] = new Float32Array(NW * NW);
-	const rgba = [new Float32Array(NW * NW * 4), new Uint8Array(NW * NW * 4), new Uint8Array(NW * NW * 4), new Uint8Array(NW * NW * 4), new Uint8Array(NW * NW * 4)];
+	// two of everything: the window in use, and the next one put together behind it a slice
+	// at a time, then swapped in at once (so no frame waits on the whole of it)
+	const planes = () => { const o = {}; for (const k of PLANES) o[k] = new Float32Array(NW * NW); return o; };
+	const layers = () => [new Float32Array(NW * NW * 4), new Uint8Array(NW * NW * 4), new Uint8Array(NW * NW * 4), new Uint8Array(NW * NW * 4), new Uint8Array(NW * NW * 4)];
+	const P = planes(), rgba = layers();
+	let backP = planes(), backL = layers();
 	const tex = rgba.map((a, i) => {
 		const t = new THREE.DataTexture(a, NW, NW, THREE.RGBAFormat, i === 0 ? THREE.FloatType : THREE.UnsignedByteType);
 		t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
@@ -69,52 +72,53 @@ export function createGlobeData() {
 		for (const c of [[NW - 1, 0], [0, NW - 1], [NW - 1, NW - 1]]) need.add(tileOf(gi0 + c[0], gj0 + c[1]).join('-'));
 		const got = new Map();
 		await Promise.all([...need].map(async (k) => { const [tj, ti] = k.split('-').map(Number); got.set(k, await tile(tj, ti)); }));
-		compose(gi0, gj0, got);
+		await compose(gi0, gj0, got);
 	}
-	function compose(gi0, gj0, got) {
-		const t0 = performance.now();
-		const [A, B, C, D] = rgba.slice(0, 4), G4 = rgba[4];
+	const colX = new Int32Array(NW), colT = new Int32Array(NW), bestD = new Uint8Array(NW * NW);
+	async function compose(gi0, gj0, got) {
+		let t0 = performance.now(), work = 0;
+		const [A, B, C, D, G4] = backL, PS = TN * TN * 4;
+		const { E: PE, L: PL, A: PA, RG: PRG, TR: PTR, BNR: PBNR, RV: PRV, DUNE: PDU, KARST: PKA, K: PK, TREES: PTREES, TEMP: PTEMP, RAIN: PRAIN } = backP;
+		for (let i = 0; i < NW; i++) { const gi = (((gi0 + i) % GW) + GW) % GW, ti = Math.floor(gi / TN); colT[i] = ti; colX[i] = gi - ti * TN; }
 		for (let j = 0; j < NW; j++) {
+			if ((j & 31) === 31) { work += performance.now() - t0; await new Promise((ok) => setTimeout(ok, 0)); t0 = performance.now(); }
 			const gj = Math.min(GH - 1, gj0 + j), tj = Math.floor(gj / TN), y = gj - tj * TN;
+			let tiNow = -1, px = null;
 			for (let i = 0; i < NW; i++) {
-				const gi = (((gi0 + i) % GW) + GW) % GW, ti = Math.floor(gi / TN), x = gi - ti * TN;
-				const px = got.get(tj + '-' + ti).px, k = j * NW + i;
-				const at = (plane) => ((plane * TN + y) * TN + x) * 4;
-				let q = at(0);
-				const E = (px[q] * 256 + px[q + 1]) / 2 - 11000, L = px[q + 2] / 255;
-				q = at(1); const Am = (px[q] / 8) ** 2, RG = px[q + 1], TR = px[q + 2];
-				q = at(2); const BNR = px[q], RV = px[q + 1], DUNE = px[q + 2];
-				q = at(3); const KARST = px[q], K = px[q + 1], TREES = px[q + 2];
-				const qa = at(4), qb = at(5), qc = at(6);
-				P.E[k] = E; P.L[k] = L; P.A[k] = Am; P.RG[k] = RG / 255; P.TR[k] = TR / 255; P.BNR[k] = BNR / 255; P.RV[k] = RV / 255;
-				P.DUNE[k] = DUNE / 255; P.KARST[k] = KARST / 255; P.K[k] = K / 255; P.TREES[k] = TREES / 255; P.TEMP[k] = px[qc] / 4 - 30; P.RAIN[k] = (px[qc + 1] / 4) ** 2;
-				A[k * 4] = E; A[k * 4 + 1] = L; A[k * 4 + 3] = Am;
-				B[k * 4] = RG; B[k * 4 + 1] = TR; B[k * 4 + 2] = BNR; B[k * 4 + 3] = RV;
-				C[k * 4] = DUNE; C[k * 4 + 1] = KARST; C[k * 4 + 2] = K; C[k * 4 + 3] = TREES;
-				D[k * 4] = px[qa]; D[k * 4 + 1] = px[qa + 1]; D[k * 4 + 2] = px[qa + 2]; D[k * 4 + 3] = px[qc];
-				G4[k * 4] = px[qb]; G4[k * 4 + 1] = px[qb + 1]; G4[k * 4 + 2] = px[qb + 2]; G4[k * 4 + 3] = px[qc + 1];
+				if (colT[i] !== tiNow) { tiNow = colT[i]; px = got.get(tj + '-' + tiNow).px; }
+				const k = j * NW + i, k4 = k * 4, q = (y * TN + colX[i]) * 4, q1 = q + PS, q2 = q1 + PS, q3 = q2 + PS, qa = q3 + PS, qb = qa + PS, qc = qb + PS;
+				const E = (px[q] * 256 + px[q + 1]) / 2 - 11000, L = px[q + 2] / 255, Am = (px[q1] / 8) ** 2;
+				PE[k] = E; PL[k] = L; PA[k] = Am; PRG[k] = px[q1 + 1] / 255; PTR[k] = px[q1 + 2] / 255; PBNR[k] = px[q2] / 255; PRV[k] = px[q2 + 1] / 255;
+				PDU[k] = px[q2 + 2] / 255; PKA[k] = px[q3] / 255; PK[k] = px[q3 + 1] / 255; PTREES[k] = px[q3 + 2] / 255; PTEMP[k] = px[qc] / 4 - 30; PRAIN[k] = (px[qc + 1] / 4) ** 2;
+				A[k4] = E; A[k4 + 1] = L; A[k4 + 3] = Am;
+				B[k4] = px[q1 + 1]; B[k4 + 1] = px[q1 + 2]; B[k4 + 2] = px[q2]; B[k4 + 3] = px[q2 + 1];
+				C[k4] = px[q2 + 2]; C[k4 + 1] = px[q3]; C[k4 + 2] = px[q3 + 1]; C[k4 + 3] = px[q3 + 2];
+				D[k4] = px[qa]; D[k4 + 1] = px[qa + 1]; D[k4 + 2] = px[qa + 2]; D[k4 + 3] = px[qc];
+				G4[k4] = px[qb]; G4[k4 + 1] = px[qb + 1]; G4[k4 + 2] = px[qb + 2]; G4[k4 + 3] = px[qc + 1];
 			}
 		}
 		// the big lakes' level, carried two cells out round each so it holds to the shore
-		const lakeCell = (k) => P.K[k] > 0.02 && P.K[k] >= 0.5 * (1 - P.L[k]);
-		P.WL.fill(0);
-		for (let j = 0; j < NW; j++) for (let i = 0; i < NW; i++) {
-			const k = j * NW + i;
-			if (lakeCell(k)) { P.WL[k] = P.E[k]; continue; }
-			let best = 9, lv = 0;
+		const WL = backP.WL;
+		WL.fill(0); bestD.fill(99);
+		for (let k = 0; k < NW * NW; k++) {
+			if (!(PK[k] > 0.02 && PK[k] >= 0.5 * (1 - PL[k]))) continue;
+			const i = k % NW, j = (k - i) / NW;
 			for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) {
 				const ii = i + a, jj = j + b;
 				if (ii < 0 || jj < 0 || ii >= NW || jj >= NW) continue;
 				const q = jj * NW + ii, d = a * a + b * b;
-				if (d < best && lakeCell(q)) { best = d; lv = P.E[q]; }
+				if (d < bestD[q]) { bestD[q] = d; WL[q] = PE[k]; }
 			}
-			P.WL[k] = lv;
 		}
-		for (let k = 0; k < NW * NW; k++) A[k * 4 + 2] = P.WL[k];
-		for (const t of tex) t.needsUpdate = true;
+		for (let k = 0; k < NW * NW; k++) A[k * 4 + 2] = WL[k];
+		// the swap: the planes and the textures' data at once
+		const oldP = {}, oldL = rgba.slice();
+		for (const k of PLANES) { oldP[k] = P[k]; P[k] = backP[k]; }
+		backL.forEach((a, i) => { rgba[i] = a; tex[i].image.data = a; tex[i].needsUpdate = true; });
+		backP = oldP; backL = oldL;
 		win.gi0 = gi0; win.gj0 = gj0; win.ready = true; win.version++;
 		anchor();
-		stats.composeMs = Math.round(performance.now() - t0);
+		stats.composeMs = Math.round(work + performance.now() - t0);
 	}
 	// where the frame's anchor falls in the window (after the window or the frame moves)
 	function anchor() {
@@ -140,6 +144,6 @@ export function createGlobeData() {
 		for (const p of PLANES) o[p] = P[p][k];
 		return o;
 	}
-	const bytes = () => [...tiles.values()].reduce((a, v) => a + (v.px ? v.px.length : 0), 0) + NW * NW * (4 * PLANES.length + 16 + 16);
+	const bytes = () => [...tiles.values()].reduce((a, v) => a + (v.px ? v.px.length : 0), 0) + NW * NW * (4 * PLANES.length + 16 + 16) * 2;
 	return { win, tex, follow, anchor, cellAt, stats, bytes, tiles };
 }

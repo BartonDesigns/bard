@@ -183,19 +183,25 @@ for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 	if (nl) { const m = sl / nl; E[k] = m; STD[k] = Math.sqrt(Math.max(0, sl2 / nl - m * m)); } else E[k] = nw ? Math.min(-1, sw / nw) : 0;
 	if (nl && E[k] < 1) E[k] = Math.max(E[k], 1);
 }
-// each big lake's surface: the lowest tenth of the land round its shore
+// each big lake's surface: its own shallows (where the elevation is the lake's bed, the
+// shallowest of it; where it is the surface, the surface), kept under most of its shore
 {
-	const shore = lakes.map(() => []);
+	const shore = lakes.map(() => []), inner = lakes.map(() => []);
 	for (let y = 1; y < SH - 1; y++) for (let x = 0; x < SW; x++) {
 		if (mask[y * SW + x] !== 2) continue;
 		const id = lakeOf[Math.floor(y / SUB) * W + Math.floor(x / SUB)];
 		if (id < 0) continue;
+		if ((x + y) % 3 === 0 && inner[id].length < 40000) inner[id].push(elevAt(90 - (y + 0.5) / PER, -180 + (x + 0.5) / PER));
 		for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
 			const xx = (x + dx + SW) % SW, yy = y + dy;
 			if (mask[yy * SW + xx] === 1 && shore[id].length < 20000) shore[id].push(elevAt(90 - (yy + 0.5) / PER, -180 + (xx + 0.5) / PER));
 		}
 	}
-	for (let id = 0; id < lakes.length; id++) { const s = shore[id].sort((a, b) => a - b); lakes[id].level = s.length ? s[Math.floor(s.length * 0.1)] : 0; }
+	for (let id = 0; id < lakes.length; id++) {
+		const s = shore[id].sort((a, b) => a - b), q = inner[id].sort((a, b) => a - b);
+		const top = q.length ? q[Math.floor(q.length * 0.95)] : 0, low = s.length ? s[Math.floor(s.length * 0.3)] : top;
+		lakes[id].level = Math.min(top, low);
+	}
 	// a lake at or under the sea's level is left to the sea (the Caspian, the Dead Sea)
 	for (let k = 0; k < W * H; k++) {
 		const id = lakeOf[k];
@@ -205,6 +211,32 @@ for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 		if (LAKE[k] >= LAND[k]) E[k] = L.level;
 	}
 	console.log(lakes.filter((L) => L.level > 1).map((L) => L.name + ' ' + Math.round(L.level)).join(', '));
+}
+
+// ---------- the small islands: a lone cluster of land cells (under about 4 cells of land in
+// all) has its share lifted, so an island like Bermuda stands out of the sea at this grid ----------
+{
+	const seen = new Uint8Array(W * H);
+	let lifted = 0;
+	for (let k0 = 0; k0 < W * H; k0++) {
+		if (seen[k0] || LAND[k0] < 3) continue;
+		const comp = [k0], stack = [k0]; seen[k0] = 1;
+		let area = 0;
+		while (stack.length && comp.length < 60) {
+			const k = stack.pop(); area += LAND[k] / 255;
+			const i = k % W, j = (k - i) / W;
+			for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) {
+				const jj = j + b; if (jj < 0 || jj >= H) continue;
+				const q = jj * W + (i + a + W) % W;
+				if (!seen[q] && LAND[q] >= 3) { seen[q] = 1; comp.push(q); stack.push(q); }
+			}
+		}
+		if (comp.length >= 60 || area > 4) continue;
+		const peak = Math.max(...comp.map((k) => LAND[k]));
+		for (const k of comp) if (LAND[k] === peak || LAND[k] >= 20) { LAND[k] = Math.max(LAND[k], LAND[k] === peak ? 190 : 150); E[k] = Math.max(E[k], 4); }
+		lifted++;
+	}
+	console.log('small islands lifted', lifted);
 }
 
 // ---------- kept small: the land to 6 m, the shelf to 10 m, the deep sea smoothed to 200 m ----------

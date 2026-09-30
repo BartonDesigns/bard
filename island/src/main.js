@@ -82,8 +82,11 @@ REAL_U.uBloom.value = [0, 0.3, 0.8, 1, 0.45, 0, 0, 0, 0, 0, 0, 0][new Date().get
 import { toGrid as gridTo, fromGrid as gridFrom, BLOCKS as gridBlocks } from './bay/styles.js';
 import { createLandmarks } from './bay/landmarks.js';
 import { createRoads, ROUTES } from './bay/roads.js';
-import { toWorld, toLatLon } from './bay/geo.js';
+import { toWorld } from './bay/geo.js';
 import { createDirector } from './earth/director.js';
+// the rest of the Earth, one engine with the Bay (earth/globe.js); its frame's latitude and longitude
+import { createGlobe, BAY_WILD_KM } from './earth/globe.js';
+import { toLL as globeLL, bayKm, F as globeF } from './earth/globeframe.js';
 import { createGuide } from './guide/guide.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
@@ -303,7 +306,7 @@ export function createIslandWorld() {
 	// the city director (earth/): what should be in the towns and cities you come to, the same
 	// for every player (the discovery server's brief, else the Earth atlas's); the Guide's
 	// model is passed only for the dev flag in earth/config.js
-	const earthDirector = HOOKS.earth = createDirector({ llm: guide.llm, toLatLon });
+	const earthDirector = HOOKS.earth = createDirector({ llm: guide.llm, toLatLon: globeLL });
 	// secrets and surprises: the Bard's lost verses, fireworks, the foghorns, the calendar
 	const surprises = createSurprises({ scene, camera, getWorld: () => world, hint: (t, ms) => hint(t, ms, 1), say: (t, w) => guide.say(t, w), isPhone });
 	guideApi.secret = (t) => surprises.secret(t);
@@ -430,6 +433,19 @@ export function createIslandWorld() {
 		tpMenu.style.display = 'none';
 		hint(name, 2500);
 	}
+	// globe: anywhere on Earth by latitude and longitude, arriving in the air above it (Crysis.goTo,
+	// a landing from orbit with a place, a shared link far off)
+	HOOKS.goTo = (lat, lon, agl = 700) => {
+		const W = world, P = W?.player.state;
+		if (!W?.globe || !P || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return 'Earth only: Crysis.goTo(lat, lon).';
+		drive.stop();
+		if (W.boat?.boarded?.()) W.boat.leave();
+		const p = W.globe.place(+lat, +lon);
+		P.flying = true; P.diving = false; P.vel.set(0, 0, 0); P.pitch = -0.25;
+		P.pos.set(p.x, 3000, p.z); camera.position.copy(P.pos);
+		p.ready.then(() => { if (world === W) { P.pos.y = Math.max(0, W.island.heightAt(p.x, p.z)) + agl; camera.position.copy(P.pos); } });
+		return `To ${(+lat).toFixed(3)}, ${(+lon).toFixed(3)}.`;
+	};
 	const tpPlaces = [];
 	for (const pl of PLACES_TP) {
 		const b = css(document.createElement('button'), 'flex:none;touch-action:pan-y;text-align:left;padding:8px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eafaf6;font:13px system-ui;min-height:36px;cursor:pointer;');
@@ -625,13 +641,18 @@ export function createIslandWorld() {
 		if (earth) {
 			const bayArea = createBayArea(shared, scene, island, shared.bayU);
 			world.bayArea = bayArea;
+			// globe: the Earth past the survey, and the engine's relief on the Bay's own ground (earth/globe.js)
+			world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => drive.active() || !!world?.boat?.boarded?.() });
+			// globe: the Bay's woods and wild things are California's; far off (or once the frame floats)
+			// they give way to the globe's own (their view of the Bay says it is not loaded there)
+			const bayNear = Object.create(bayArea, { loaded: { value: () => bayArea.loaded() && globeF.bay && (() => { const ll = globeLL(camera.position.x, camera.position.z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM; })() } });
 			world.labels = createLabels(dom.mount, bayArea, null);
 			world.real = createRealCity(renderer);
 			// Crysis: the towns beyond the survey, grown street by street as you near them
 			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
-			world.city = createCity(shared, scene, bayArea, world.real);
+			world.city = createCity(shared, scene, bayNear, world.real);
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
-			world.forestFloor = createForestFloor(scene, bayArea, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z) });
+			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z) });
 			// the real houses close by, built whole with their rooms
 			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
 			// ...and the shops, cafés, restaurants, offices and places to play, walked into
@@ -662,11 +683,11 @@ export function createIslandWorld() {
 			// the Santa Cruz Beach Boardwalk: the Casino, the midway and its rides, the Giant Dipper
 			world.boardwalk = createBoardwalk(scene, bayArea, shared, { isPhone, mount: dom.mount, hint: (t, ms, pri = 1) => hint(t, ms, pri), camera, player: () => world?.player.state });
 			// the Bay Area's wild animals by habitat, month and hour, and the field journal
-			world.wildlife = createWildlife(scene, bayArea, { isPhone, real: world.real, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
+			world.wildlife = createWildlife(scene, bayNear, { isPhone, real: world.real, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
-			world.natureSound = createNatureSound(bayArea, (x, z) => bayArea.heightAt(x, z));
+			world.natureSound = createNatureSound(bayNear, (x, z) => bayArea.heightAt(x, z));
 			// the in-between places: dirt tracks, the industrial fringe, town's ragged edge, the odd camp
-			world.edge = createEdgelands(scene, { bay: bayArea, real: world.real, city: world.city, world: () => world, shared, isPhone });
+			world.edge = createEdgelands(scene, { bay: bayNear, real: world.real, city: world.city, world: () => world, shared, isPhone });
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
 			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
@@ -713,6 +734,7 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		world.globe?.dispose();         // globe: the frame back to the Bay's, its hooks off
 		drive.stop();
 		world.player.dispose();
 		world.shells?.dispose();
@@ -991,9 +1013,10 @@ export function createIslandWorld() {
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bayArea?.update(camera, sk.night);
+		W.globe?.update(dt, camera, sk.night);          // globe: the Earth past the Bay (may move the frame, and you with it)
 		W.bridge?.update(time, sk.night);
 		W.civ?.update(camera);
-		if (W.civ) { const ll = toLatLon(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
+		if (W.civ) { const ll = globeLL(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
 		W.real?.update(camera);
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.city?.update(camera, sk.night);
@@ -1129,6 +1152,7 @@ export function createIslandWorld() {
 		if (dom.launch.style.display !== L) dom.launch.style.display = L;
 	}
 	let origin = null;   // the planet flight landed us from, if any
+	let launchedAt = null;   // globe: where on Earth you launched from, when far from the Bay
 	// Earth, where it sits in the Sol system: flight puts the ship in orbit round it
 	const EARTH_ORIGIN = { id: 'earth', seed: 1337, type: 'TERRAN', name: 'Earth', earth: true, colorA: [0.2, 0.45, 0.85], colorB: [0.25, 0.65, 0.4] };
 
@@ -1189,6 +1213,8 @@ export function createIslandWorld() {
 		// the ship and this world never both fill the phone's memory: keep your place, let the
 		// world go behind the veil, then fly (landing builds it again; a failed launch rebuilds here)
 		const yaw = world.player.state.yaw;
+		// globe: launching far from the Bay, the ship brings you back down there
+		{ const ll = globeLL(camera.position.x, camera.position.z); launchedAt = world.globe && bayKm(ll.lat, ll.lon) > BAY_WILD_KM ? ll : null; }
 		share.keep(true);
 		travelVeil.textContent = 'Launching…';
 		travelVeil.style.opacity = '1';
@@ -1216,6 +1242,7 @@ export function createIslandWorld() {
 			origin = params.origin || (params.earth !== false ? EARTH_ORIGIN : null);
 			show();
 			await build(params);
+			if (params.earth !== false && params.at) HOOKS.goTo(params.at.lat, params.at.lon);      // globe: straight to a place
 			api.link();
 			hint(isPhone ? 'Left thumb to walk, right thumb to look. ✈ to fly, ☀ for the sky.' : 'WASD to walk, drag to look, Space to jump, F to fly. ☀ for the sky.');
 			return true;
@@ -1256,6 +1283,9 @@ export function createIslandWorld() {
 			origin = planet.origin || null;
 			if (planet.earth) origin = EARTH_ORIGIN;
 			await build(worldOf(planet));
+			// globe: a landing that names a place on Earth comes down there; one back from a launch far
+			// off comes down where it left
+			if (planet.earth) { const at = planet.at || launchedAt; launchedAt = null; if (at && Number.isFinite(at.lat)) HOOKS.goTo(at.lat, at.lon, 900); }
 			check?.();
 			for (let i = 0; i < 6; i++) { world.player.update(0.016, time); world.sky.update(0.016, camera.position); world.vegetation.stream(camera, true); renderer.render(scene, camera); await new Promise((r) => requestAnimationFrame(r)); check?.(); }
 		},
@@ -1415,9 +1445,13 @@ if (typeof window !== 'undefined') {
 		// the Earth atlas and the city director (earth/): Crysis.atlas(lat, lon) tells what a place
 		// is like (here, with no arguments); Crysis.brief('Lisbon') gives a city's brief (a promise);
 		// Crysis.earth() how the director stands. The people can read chatter from earth/hub.js.
-		atlas: (lat, lon) => { if (lat == null) { const p = window.L99Island?.world?.()?.player?.state?.pos; const ll = p ? toLatLon(p.x, p.z) : { lat: 37.77, lon: -122.42 }; lat = ll.lat; lon = ll.lon; } return HOOKS.earth?.describe(+lat, +lon); },
+		atlas: (lat, lon) => { if (lat == null) { const p = window.L99Island?.world?.()?.player?.state?.pos; const ll = p ? globeLL(p.x, p.z) : { lat: 37.77, lon: -122.42 }; lat = ll.lat; lon = ll.lon; } return HOOKS.earth?.describe(+lat, +lon); },
 		brief: (name) => HOOKS.earth?.briefFor(name),
 		earth: () => HOOKS.earth?.info(),
+		// the globe (earth/globe.js): Crysis.globe() where you are on it and how it streams;
+		// Crysis.goTo(lat, lon) flies you there, anywhere on Earth
+		globe: () => window.L99Island?.world?.()?.globe?.info() ?? 'Earth only.',
+		goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.',
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};
 }
