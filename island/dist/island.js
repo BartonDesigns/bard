@@ -8234,7 +8234,7 @@ float rfBump = 0.0, rfRough = -1.0, rfMetal = -1.0;
 				if (cond > 0.5) trimC = mix(trimC, vec3(0.5, 0.48, 0.44), 0.45);
 				vec3 L = vRL;
 				float px = length(fwidth(L));
-				float fine = 1.0 - smoothstep(0.03, 0.09, px);
+				float fine = 1.0 - smoothstep(0.05, 0.18, px);
 				if (part > 3.5 && part < 4.5) {
 					// the gable wall: the house's colour, lap siding or stucco, a louvred vent up top
 					vec3 wc = vRWall;
@@ -8270,10 +8270,10 @@ float rfBump = 0.0, rfRough = -1.0, rfMetal = -1.0;
 						// three-tab shingle: 14 cm courses, tabs a third of a metre, staggered
 						float cv = v / 0.143, ci = floor(cv), f = fract(cv);
 						float tu = u / 0.333 + ci * 0.5, tabI = floor(tu), tf = fract(tu);
-						float tone = 0.86 + 0.28 * rfH(vec2(tabI, ci));
+						float tone = 0.8 + 0.4 * rfH(vec2(tabI, ci));
 						float slot = step(0.965, tf) * step(f, 0.55);
-						float edge = smoothstep(0.86, 1.0, f);
-						c *= mix(1.0, tone * (1.0 - edge * 0.38) * (1.0 - slot * 0.5), fine);
+						float edge = smoothstep(0.8, 1.0, f);
+						c *= mix(1.0, tone * (1.0 - edge * 0.55) * (1.0 - slot * 0.6), fine);
 						h = (1.0 - f) * 0.6 - slot * 0.3; avg = 0.94;
 					} else if (rType < 1.5) {
 						// barrel tile: the rolls across, a course each third of a metre
@@ -8310,6 +8310,9 @@ float rfBump = 0.0, rfRough = -1.0, rfMetal = -1.0;
 						avg = 0.92;
 					}
 					c *= mix(avg, 1.0, fine);
+					// blotches where the granules have worn and the colour varies batch to batch,
+					// seen from any distance
+					c *= 0.86 + 0.28 * rfN(vec2(u, v) * 0.45 + seed) * (rType > 2.5 && rType < 3.5 ? 0.3 : 1.0);
 					// the neglected: shingles gone in patches, the felt showing; a blue tarp
 					if (cond > 0.5) {
 						float miss = smoothstep(0.62, 0.66, rfN(vec2(u, v) * 1.3 + seed)) * step(0.5, rfN(vec2(u, v) * 0.35 + seed * 2.0));
@@ -8332,7 +8335,7 @@ if (rfRough >= 0.0) roughnessFactor = rfRough;`).replace("#include <metalnessmap
 if (rfMetal >= 0.0) metalnessFactor = rfMetal;`).replace("#include <normal_fragment_maps>",`#include <normal_fragment_maps>
 			${s?`{
 				// the courses as relief, from the pattern's own slope across the pixel
-				float bs = 0.012;
+				float bs = 0.03;
 				vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
 				vec3 R1 = cross(sy, normal), R2 = cross(normal, sx);
 				float det = dot(sx, R1);
