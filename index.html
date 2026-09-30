@@ -8563,6 +8563,7 @@ root.L99Hyphy182={mount,groove,renderShout,stop:()=>current?.stop(),dispose:()=>
         <div class="slider-group" style="flex:0 0 auto;"><label style="font-size:7px;opacity:0.7;">DRUM FX</label></div>
       </div>
       <div class="sliders-row">
+        <div class="slider-group"><label for="sl-drum-vol">DRUM VOLUME </label><input type="range" aria-label="DRUM VOLUME" id="sl-drum-vol" min="0" max="1.5" step="0.01" value="0.7"></div>
         <div class="slider-group"><label for="sl-drum-delay">DRUM DELAY </label><input type="range" aria-label="DRUM DELAY" id="sl-drum-delay" min="0" max="1" step="0.01" value="0"></div>
         <div class="slider-group"><label for="sl-drum-space">DRUM REVERB </label><input type="range" aria-label="DRUM REVERB" id="sl-drum-space" min="0" max="1" step="0.01" value="0"></div>
         <!-- vox91: scales the dancehall kit's per-hit pitch/level drift.
@@ -10049,6 +10050,11 @@ let reverbSend3;   // vox115: SPACE3 -- Lead 3's own send into the shared reverb
 // delay/reverb sends (off by default) so the user can intentionally add FX
 // to drums via the drum-FX sliders.
 let drumBus, drumDelaySend, drumReverbSend;
+// the player's drum volume, kept between visits (1 = the old level before it came down 30%)
+window._drumVol = function () {
+  try { const v = parseFloat(localStorage.getItem('l99_drumvol')); if (!isNaN(v)) return Math.max(0, Math.min(1.5, v)); } catch (e) {}
+  return 0.7;
+};
 let reverbBuffer = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -11396,7 +11402,7 @@ function initAudio() {
     ['sl-crunch','sl-grit','sl-lpf','sl-delay','sl-space',
      'sl-crunch-2','sl-grit-2','sl-lpf-2','sl-delay-2','sl-space-2',
      'sl-crunch-3','sl-grit-3','sl-lpf-3','sl-delay-3','sl-space-3',
-     'sl-drum-delay','sl-drum-space','sl-sub','sl-osc2','sl-osc2-detune',
+     'sl-drum-vol','sl-drum-delay','sl-drum-space','sl-sub','sl-osc2','sl-osc2-detune',
      'sl-lfo-depth','sl-lfo-rate','sl-swing'].forEach(function(id){
       var el = document.getElementById(id);
       if (el) el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -11538,7 +11544,8 @@ function initAudio() {
   // sends (which hang off pannerNode). Dry by default. Optional drum-only
   // delay/reverb sends start at 0 so the user can dial them in deliberately.
   drumBus = ctx.createGain();
-  drumBus.gain.value = 0.92;
+  // 0.92 was the old full level; DRUM VOLUME scales it (default 0.7, 30% down)
+  drumBus.gain.value = 0.92 * window._drumVol();
   // Hyphy drum punch comes from the compressor and gentle EQ. Avoid adding
   // another hidden saturation stage over the already-shaped kit voices.
   window._slapComp = ctx.createDynamicsCompressor();
@@ -18776,7 +18783,16 @@ function buildUI() {
     })();
     paintList();
   })();
-  // ── DRUM FX slider listeners (drum bus delay/reverb sends) ──────────────
+  // ── DRUM FX slider listeners (drum bus volume, delay/reverb sends) ──────
+  const sl_drumVol = document.getElementById('sl-drum-vol');
+  if (sl_drumVol) {
+    sl_drumVol.value = String(window._drumVol());
+    sl_drumVol.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      try { localStorage.setItem('l99_drumvol', String(v)); } catch (err) {}
+      if (drumBus && ctx) drumBus.gain.setTargetAtTime(0.92 * v, ctx.currentTime, 0.03);
+    });
+  }
   const sl_drumDelay = document.getElementById('sl-drum-delay');
   if (sl_drumDelay) sl_drumDelay.addEventListener('input', e => { if (drumDelaySend) drumDelaySend.gain.value = parseFloat(e.target.value); });
   const sl_drumSpace = document.getElementById('sl-drum-space');
