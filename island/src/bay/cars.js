@@ -61,7 +61,8 @@ export function seatsOf(kind) {
 	const x = Math.min(0.38, S.W * 0.2), seats = [[x, S.hip, front], [-x, S.hip, front]];
 	if (d && d[2] !== null && kind !== 'pickup' && kind !== 'delivery') seats.push([x, S.hip + 0.03, front - 0.85], [-x, S.hip + 0.03, front - 0.85]);
 	if (kind === 'pickup') seats.push([x, S.hip, front - 0.8], [-x, S.hip, front - 0.8]);
-	return { seats, wheel: [x, S.hip + 0.36, front + 0.42], eye: [x, S.hip + 0.72, front - 0.12] };
+	// (the eye: over the hip, leaning back, well behind the top of the windshield)
+	return { seats, wheel: [x, S.hip + 0.36, front + 0.42], eye: [x, S.hip + 0.7, Math.min(front - 0.38, S.rf - 0.3)] };
 }
 
 // NS: sections along the body, WS: sides round each tyre (cars in the distance use fewer
