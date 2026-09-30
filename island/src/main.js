@@ -211,6 +211,10 @@ export function createIslandWorld() {
 	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
 	// lets leaves and grass edges fade (alpha to coverage) instead of stair-stepping
 	const renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: true, powerPreference: 'high-performance' });
+	// three numbers a program's textures across both its stages and warns past the one stage's
+	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
+	// (32 there), and each stage keeps inside its 16 (the smoke's samplers check)
+	{ const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); }
 	// AgX: a film-like curve that rolls highlights off gently and keeps greens from going
 	// neon; ACES crushed the shade and pushed saturation, which read as harsh
 	renderer.toneMapping = THREE.AgXToneMapping;
