@@ -404,6 +404,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		}
 		scatter(Math.round(6 * K * Math.min(2, rockW)), () => 0.6, (x, z) => { const s2 = 0.25 + Math.pow(r(), 2.5) * 1.6; put(Lrk, x, z, r() * 6.28, s2, s2 * (0.8 + r() * 0.4), J(rockC, 0.12), cold > 0.5 ? 2 : karst > 0.3 ? 1 : 0, s2 * 0.35); });
 		scatter(Math.round(18 * K * Math.min(1.5, rockW + 0.15)), () => 0.8, (x, z) => { const s2 = 0.05 + Math.pow(r(), 3) * 0.22; put(Lst, x, z, r() * 6.28, s2, s2, J(rockC, 0.15), Math.floor(r() * 2), s2 * 0.3, true); });
+		// (above the snowline the terrain lies white: rock and scree only, no turf on the snow)
+		if (air < -4.5) return;
 		if (cold > 0.5) {
 			// alpine turf and tundra: short grass in patches, cushions of moss campion and saxifrage
 			scatter(Math.round(90 * K * (1 - cold * 0.5)), (x, z) => 0.3 + drift(x, z, 8, 1) * 0.7, (x, z) => put(Ls, x, z, r() * 6.28, 0.8 + r() * 0.5, 0.7 + r() * 0.4, tone(0.3), 0, 0.03));
