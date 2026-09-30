@@ -13,9 +13,11 @@ const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile
 
 const HEAD = /* glsl */`
 uniform vec4 uScalp;
+uniform vec4 uBeard;
 uniform vec4 uSkin;
 uniform vec4 uVit;
 varying float vScalp;
+varying float vBeard;
 varying vec2 vScalpUv;
 varying vec4 vSkin;
 varying vec3 vBindP;
@@ -48,23 +50,34 @@ export function skinMaterial(map, tint, age) {
 	const m = new THREE.MeshPhysicalMaterial({ map, color: tint, roughness: 0.55, metalness: 0, ior: 1.4, specularIntensity: 0.7, sheen: 0.12, sheenRoughness: 0.7, sheenColor: tint.clone().multiplyScalar(0.45) });
 	// a close crop of hair painted on the scalp (a buzz cut, or what shows under a cap)
 	const scalpU = { value: new THREE.Vector4(0, 0, 0, 0) };
+	// the shadow of a beard shaved or under a beard: its colour and how heavy
+	const beardU = { value: new THREE.Vector4(0, 0, 0, 0) };
 	// x: how much light goes through (0 for the far worlds' painted skins), y: pore depth by
 	// age, z: how shiny the T-zone, w: the flush
 	const skinU = { value: new THREE.Vector4(1, 0.6 + Math.min(1, Math.max(0, (age - 25) / 50)) * 0.8, 1, 1) };
 	// vitiligo (a person in a hundred): x on, yzw where their patches fall
 	const vitU = { value: new THREE.Vector4(0, 0, 0, 0) };
 	m.userData.scalp = scalpU;
+	m.userData.beard = beardU;
 	m.userData.skin = skinU;
 	m.userData.vit = vitU;
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uScalp = scalpU;
+		sh.uniforms.uBeard = beardU;
 		sh.uniforms.uSkin = skinU;
 		sh.uniforms.uVit = vitU;
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nattribute vec4 skinx;\nvarying float vScalp;\nvarying vec2 vScalpUv;\nvarying vec4 vSkin;\nvarying vec3 vBindP;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;\nvScalpUv = uv;\nvSkin = skinx;\nvBindP = position;');
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nattribute float beard;\nattribute vec4 skinx;\nvarying float vScalp;\nvarying float vBeard;\nvarying vec2 vScalpUv;\nvarying vec4 vSkin;\nvarying vec3 vBindP;')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;\nvBeard = beard;\nvScalpUv = uv;\nvSkin = skinx;\nvBindP = position;');
 		sh.fragmentShader = (isPhone ? '' : '#define SKIN_PORES\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + SSS)
 			.replace('#include <color_fragment>', `#include <color_fragment>
+// stubble: the cut hairs just under and through the skin, a fine grain, soft-edged
+// (far off, just its shade: no grain to shimmer)
+if (uBeard.w > 0.0) {
+	vec2 bq = vScalpUv * 1400.0;
+	float bg = mix(fract(sin(dot(floor(bq), vec2(12.9898, 78.233))) * 43758.5453), 0.5, smoothstep(0.3, 1.0, length(fwidth(bq))));
+	diffuseColor.rgb = mix(diffuseColor.rgb, uBeard.rgb, vBeard * uBeard.w * (0.45 + 0.55 * bg) * 0.6);
+}
 diffuseColor.rgb = mix(diffuseColor.rgb, uScalp.rgb * (0.8 + 0.4 * fract(sin(dot(floor(vScalpUv * 900.0), vec2(12.9898, 78.233))) * 43758.5453)), smoothstep(0.2, 0.8, vScalp) * uScalp.w);
 // the flush: blood near the surface of the cheeks, the nose, the ears, the lips; faint, a
 // multiply of the skin's own colour, so it never reads as a patch
@@ -72,7 +85,8 @@ diffuseColor.rgb *= mix(vec3(1.0), vec3(1.02, 0.94, 0.93), vSkin.w * uSkin.w * (
 // vitiligo: soft-edged pale patches where the pigment has gone, for the few who have it
 if (uVit.x > 0.5) {
 	float v = sn3(vBindP * 9.0 + uVit.yzw) * 0.7 + sn3(vBindP * 23.0 + uVit.zwy) * 0.3;
-	diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.74, 0.55, 0.47), smoothstep(0.6, 0.64, v) * (1.0 - smoothstep(0.2, 0.8, vScalp)));
+	float t = mix(0.6, 0.54, smoothstep(1.4, 1.52, vBindP.y));        // (most often on the face)
+	diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.54, 0.46), smoothstep(t, t + 0.04, v) * (1.0 - smoothstep(0.2, 0.8, vScalp)));
 }`)
 			.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 // a slightly oilier T-zone and lips, matte cheeks (a sheen, not a shine: a broad bright patch
@@ -108,6 +122,6 @@ roughnessFactor = mix(0.58, 0.47, vSkin.z * uSkin.z) + (sn3(vBindP * 400.0) - 0.
 	reflectedLight.directSpecular *= mix(1.0, ao, 0.6);
 }`);
 	};
-	m.customProgramCacheKey = () => 'crysis-skin-3' + (isPhone ? '-lo' : '');
+	m.customProgramCacheKey = () => 'crysis-skin-4' + (isPhone ? '-lo' : '');
 	return m;
 }
