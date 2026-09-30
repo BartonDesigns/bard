@@ -192,11 +192,12 @@ export function createGrass(island, shared, count = 20000, span = 84, opts = {})
 				if (cov < 0.02) discard;
 				diffuseColor.a = cov;
 				// darker at the root where blades crowd and shade each other, paler at the tips
-				float rootK = smoothstep(0.0, 0.6, vGUv.y);
+				// (as low as a tree's foot in its own shade, the lower two thirds climbing out of it)
+				float rootK = smoothstep(0.0, 0.7, vGUv.y);
 				// each blade keeps its own tone, so the fine blades read one by one
 				// the blade's own shading (dark roots, bright tips) evens out toward the edge, where
 				// the tufts blend into the painted ground
-				diffuseColor.rgb = vTint * mix(mix(0.62, 1.08, rootK) * (0.62 + 0.55 * gt.g), 0.78, vEdge * 0.85);   // (evened to the blades' own average, not brighter)
+				diffuseColor.rgb = vTint * mix(mix(0.4, 1.08, rootK) * (0.62 + 0.55 * gt.g), 0.7, vEdge * 0.45);   // (evened to the blades' own average, not brighter)
 				// a gust flips the blades to show their paler undersides
 				diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.35 + vec3(0.03, 0.03, 0.0), vGust * 0.5 * vTip);
 				// tall grass goes to seed: pale straw tips

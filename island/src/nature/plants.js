@@ -272,7 +272,7 @@ export function sorrel(seed) {
 // ---------- grass in bunches ----------
 // a tuft: blades as thin bent tapering strips from one crown. kind: 'bunch' (brome and
 // needlegrass, fine and arching), 'oat' (wild oats: taller stems with nodding seed
-// spikelets), 'short' (grazed). Vertex colour runs dark at the root to pale at the tip;
+// spikelets), 'short' (grazed). Vertex colour runs dark at the root (shaded in the tuft's own crowd, as a tree's foot is) to pale at the tip;
 // the instance tint gives it its season.
 export function tuft(seed, kind = 'bunch') {
 	const r = mulberry32(seed), b = new Builder();
@@ -285,7 +285,7 @@ export function tuft(seed, kind = 'bunch') {
 		for (let k = 0; k <= seg; k++) {
 			const t = k / seg, bend = lean * t * t;
 			const p = o.clone().add(V(dx * bend * h * 0.8, h * t * (1 - bend * 0.35), dz * bend * h * 0.8));
-			const ww = w * (1 - t * 0.9), l = 0.55 + 0.45 * t;
+			const ww = w * (1 - t * 0.9), l = 0.3 + 0.7 * Math.pow(t, 0.7);
 			const col = { r: l, g: l, b: l };
 			const nn = nz.clone().add(V(dx * 0.4, 0, dz * 0.4)).normalize();
 			ids.push(b.vert(p.clone().add(side.clone().multiplyScalar(-ww)), nn, [0, t], col, t), b.vert(p.clone().add(side.clone().multiplyScalar(ww)), nn, [1, t], col, t));
