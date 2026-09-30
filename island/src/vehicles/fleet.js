@@ -16,9 +16,16 @@ import { MODEL_KINDS, modelKit, wantModel, modelNight } from './models.js';
 export const REACH = [40, 120, 320];
 const LOFT = [[64, 24, true], [28, 12, false], [14, 8, false], [8, 6, false]];
 const geos = {};
+// (a body is built the first time its kind comes into a level, one a frame per fleet, so
+// that a street full of new kinds does not stall a frame; until then it waits, drawn coarser)
+let budget = 1;
 function loftGeo(kind, t, wheels) {
 	const k = kind + t + (wheels ? 'w' : '');
-	if (!geos[k]) { const [ns, ws, cabin] = LOFT[t]; geos[k] = carGeometry(kind, ns, ws, { wheels, cabin, glass: cabin }); }
+	if (!geos[k]) {
+		if (budget <= 0) return null;
+		budget--;
+		const [ns, ws, cabin] = LOFT[t]; geos[k] = carGeometry(kind, ns, ws, { wheels, cabin, glass: cabin });
+	}
 	return geos[k];
 }
 const wgeo = {};
@@ -27,7 +34,7 @@ const wheelGeo = (kind) => wgeo[kind] || (wgeo[kind] = wheelGeometry(kind, 18));
 const riderGeo = (() => { const h = new THREE.SphereGeometry(0.11, 8, 6).translate(0, 0.62, -0.02), b = new THREE.SphereGeometry(1, 8, 6).scale(0.2, 0.28, 0.13).translate(0, 0.3, 0); const g = new THREE.BufferGeometry(); const m = [h, b].map((q) => q.toNonIndexed()); const pos = new Float32Array(m.reduce((a, q) => a + q.attributes.position.array.length, 0)); let o = 0; for (const q of m) { pos.set(q.attributes.position.array, o); o += q.attributes.position.array.length; } g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals(); return g; })();
 
 export function createFleet(group, { cap = 200, isPhone = false, night = { value: 0 }, shadows = true } = {}) {
-	const carMat = carMaterial(night), glassMat = carGlassMaterial();
+	const carMat = carMaterial(night, { cheap: isPhone }), glassMat = carGlassMaterial({ cheap: isPhone });
 	const riderMat = new THREE.MeshStandardMaterial({ color: 0x2a221d, roughness: 0.9 });
 	const near2 = (isPhone ? 28 : REACH[0]) ** 2, mid2 = REACH[1] ** 2, far2 = REACH[2] ** 2;
 	// a set: meshes sharing one list of instances (the parts of a model, or a loft and its glass)
@@ -55,7 +62,7 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 		if (S.color && c) c.toArray(S.color.array, S.n * 3);
 		S.n++;
 	}
-	function begin() { for (const S of sets.values()) S.n = 0; }
+	function begin() { budget = 1; for (const S of sets.values()) S.n = 0; }
 	function end() {
 		for (const S of sets.values()) {
 			for (const im of S.meshes) { im.count = S.n; im.visible = S.n > 0; }
@@ -97,17 +104,23 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 				return t;
 			}
 		}
-		if (t === 0) {
-			put(set(kind + 'l0', [[loftGeo(kind, 0, false), [carMat, glassMat], true]], true, cap / 2, cast), M, c);
+		const near = t === 0 && loftGeo(kind, 0, false);
+		if (near) {
+			put(set(kind + 'l0', [[near, [carMat, glassMat], true]], true, cap / 2, cast), M, c);
 			wheels(kind, M, o.spin || 0, o.steer || 0, null, cast);
 			if (o.riders) riders(kind, M, o.riders);
-		} else {
-			put(set(kind + 'l' + t, [[loftGeo(kind, t, true), carMat, true]], true, cap, cast), M, c);
-			if (o.riders && t === 1) riders(kind, M, o.riders);
+			return t;
+		}
+		for (let u = Math.max(1, t); u < LOFT.length; u++) {
+			const geo = loftGeo(kind, u, true);
+			if (!geo) continue;
+			put(set(kind + 'l' + u, [[geo, carMat, true]], true, cap, cast), M, c);
+			if (o.riders && u === 1) riders(kind, M, o.riders);
+			return u;
 		}
 		return t;
 	}
-	function setNight(k) { night.value = k; modelNight.value = k; carMat.envMapIntensity = 0.9 * (1 - k * 0.9); }
+	function setNight(k) { night.value = k; modelNight.value = k; }
 	const stats = () => { let draws = 0, inst = 0; for (const S of sets.values()) if (S.n) { draws += S.meshes.length; inst += S.n; } return { draws, instances: inst, sets: sets.size }; };
 	function dispose() { for (const S of sets.values()) for (const im of S.meshes) { im.removeFromParent(); im.dispose(); } sets.clear(); }
 	return { begin, add, end, setNight, stats, dispose, carMat };

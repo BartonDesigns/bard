@@ -41,6 +41,7 @@ import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
 import { createHouses } from './bay/houses.js';
 import { createStreetLife } from './bay/streetlife.js';
+import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
 import { createLake } from './bay/lake.js';
 import { createEarthWater } from './bay/earthwater.js';
@@ -225,6 +226,8 @@ export function createIslandWorld() {
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
 		uWave: { value: 1 }, uUnder: { value: 0 }, startHours: 10.5,
 	};
+	// (the cars' paint and glass reflect this sky)
+	bindCarSky(shared);
 	// ground occupancy around the player (filled by vegetation, read by terrain and grass)
 	// r: bare, shaded earth (trees, palms, rocks); g: a soil mound that grass hugs (every plant)
 	shared.occ = new THREE.DataTexture(new Uint8Array(256 * 256 * 2), 256, 256, THREE.RGFormat, THREE.UnsignedByteType);

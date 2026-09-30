@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { skyEnv } from '../bay/cars.js';
+import { skyEnv, withCarSky, carGlassMaterial } from '../bay/cars.js';
 
 // which kinds have a model, and its files (near, and for the middle distance)
 export const MODEL_KINDS = { sports: ['sports.glb', 'sports-mid.glb'], crossover: ['crossover.glb', 'crossover-mid.glb'], delivery: ['delivery.glb', 'delivery-mid.glb'], bus: ['bus.glb', 'bus.glb'] };
@@ -27,18 +27,18 @@ function gltf() {
 const night = { value: 0 };
 export const modelNight = night;
 function paintMaterial(map) {
-	const m = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.06, envMap: skyEnv(), envMapIntensity: 0.9, map: map || null });
-	if (map) {
-		// the texture's alpha says where the paint is: only there does the car's colour go
-		m.onBeforeCompile = (sh) => {
-			sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'float paintK = 1.0;\n#ifdef USE_MAP\nvec4 txc = texture2D(map, vMapUv); diffuseColor.rgb *= txc.rgb; paintK = txc.a;\n#endif')
-				.replace('#include <color_fragment>', '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )\ndiffuseColor.rgb *= mix(vec3(1.0), vColor.rgb, paintK);\n#endif');
-		};
-		m.customProgramCacheKey = () => 'vpaintmask';
-	}
+	const m = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05, map: map || null });
+	// the live sky in the paint (bay/cars.js); with a texture, its alpha says where the paint
+	// is: only there does the car's colour go
+	m.onBeforeCompile = (sh) => {
+		withCarSky(sh);
+		if (map) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'float paintK = 1.0;\n#ifdef USE_MAP\nvec4 txc = texture2D(map, vMapUv); diffuseColor.rgb *= txc.rgb; paintK = txc.a;\n#endif')
+			.replace('#include <color_fragment>', '#if defined( USE_COLOR ) || defined( USE_INSTANCING_COLOR )\ndiffuseColor.rgb *= mix(vec3(1.0), vColor.rgb, paintK);\n#endif');
+	};
+	m.customProgramCacheKey = () => map ? 'vpaintmask2' : 'vpaint2';
 	return m;
 }
-const glassMat = () => new THREE.MeshPhysicalMaterial({ color: 0x0b1115, roughness: 0.04, metalness: 0, envMap: skyEnv(), envMapIntensity: 1.1, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
+const glassMat = () => carGlassMaterial();
 function lampMaterial() {
 	const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.15 });
 	m.onBeforeCompile = (sh) => {
