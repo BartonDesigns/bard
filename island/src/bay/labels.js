@@ -32,6 +32,9 @@ export function createLabels(mount, bay, bridge) {
 			const near = places.filter((p) => !p.hood).sort((a, b) => Math.hypot(x - a.x, z - a.z) - Math.hypot(x - b.x, z - b.z))[0];
 			return { name: H.name, sub: near ? `${near.name} · California` : 'California' };
 		}
+		// far from the Bay the globe names the place (earth/globe.js)
+		const far = bay.farWhere?.(x, z);
+		if (far !== undefined) return far;
 		const g = bay.heightAt(x, z), water = g < 0;
 		if (bridge && bridge.deckFloor(x, z, y) > -Infinity) return { name: 'Golden Gate Bridge', sub: 'San Francisco · Marin County' };
 		// a lake, a reservoir, a river or a creek (bay/water.js), in its county

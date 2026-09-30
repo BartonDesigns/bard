@@ -184,11 +184,13 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		return m;
 	}
 	// the rings: n segments, the reach, how fast the spacing grows
-	const NEAR = isPhone ? [160, 6000, 2.2] : [256, 6000, 2.2], FARG = isPhone ? [128, 250000, 2.8] : [256, 250000, 2.7];
-	const nearMat = material(NEAR, isPhone ? 8 : OCT, false), farMat = material(FARG, isPhone ? 7 : 9, true);
-	const near = new THREE.Mesh(radialGrid(...NEAR), nearMat), far = new THREE.Mesh(radialGrid(...FARG), farMat);
-	for (const m of [near, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
-	near.visible = far.visible = false;
+	// (a middle ring between them, out to 40 km, so the mountains a few km off are drawn every
+	// 250-500 m and not in the far ring's kilometre-wide facets; a phone makes do without it)
+	const NEAR = isPhone ? [160, 6000, 2.2] : [256, 6000, 2.2], MID = [224, 40000, 2.2], FARG = isPhone ? [128, 250000, 2.8] : [192, 250000, 2.7];
+	const nearMat = material(NEAR, isPhone ? 8 : OCT, false), midMat = material(MID, 8, true), farMat = material(FARG, isPhone ? 7 : 8, true);
+	const near = new THREE.Mesh(radialGrid(...NEAR), nearMat), mid = new THREE.Mesh(radialGrid(...MID), midMat), far = new THREE.Mesh(radialGrid(...FARG), farMat);
+	for (const m of [near, mid, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
+	near.visible = mid.visible = far.visible = false;
 
 	// the big lakes' water: flat at each lake's level, only where the lake is
 	const lakeMat = new THREE.MeshStandardMaterial({ color: 0x1d4a5c, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.88 });
@@ -215,17 +217,22 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		// (in the Bay's frame the fine ring is only wanted near the survey's edge and past it)
 		near.visible = on && (!bay || bayOut > SEAM_A - 7000);
 		far.visible = lakes.visible = on;
+		mid.visible = on && !isPhone;
 		if (!on) return;
 		common.uGBay.value = bay ? 1 : 0;
 		common.uGF.value.set(F.fx, F.fz);
 		common.uGNight.value = night;
 		const nx = Math.round(x / 32) * 32, nz = Math.round(z / 32) * 32, fx = Math.round(x / 512) * 512, fz = Math.round(z / 512) * 512;
-		near.position.set(nx, 0, nz); far.position.set(fx, 0, fz); lakes.position.set(fx, 0, fz);
+		const mx = Math.round(x / 128) * 128, mz = Math.round(z / 128) * 128;
+		near.position.set(nx, 0, nz); mid.position.set(mx, 0, mz); far.position.set(fx, 0, fz); lakes.position.set(fx, 0, fz);
+		midMat.userData.own.uGOff.value.set(mx - F.fx, mz - F.fz);
+		midMat.userData.own.uGHole.value.set(nx - F.fx, nz - F.fz, near.visible ? 1 : 0, NEAR[1] * 0.97);
 		// each ring's offset from the anchor (the GPU adds its own few km to it)
 		nearMat.userData.own.uGOff.value.set(nx - F.fx, nz - F.fz); farMat.userData.own.uGOff.value.set(fx - F.fx, fz - F.fz); lakeOff.value.set(fx - F.fx, fz - F.fz);
-		farMat.userData.own.uGHole.value.set(nx - F.fx, nz - F.fz, near.visible ? 1 : 0, NEAR[1] * 0.97);
+		if (mid.visible) farMat.userData.own.uGHole.value.set(mx - F.fx, mz - F.fz, 1, MID[1] * 0.97);
+		else farMat.userData.own.uGHole.value.set(nx - F.fx, nz - F.fz, near.visible ? 1 : 0, NEAR[1] * 0.97);
 		// the cities round you (anchor-relative: x, z, reach, how built up)
 		for (let i = 0; i < CITIES; i++) { const c = cities[i]; if (c) common.uGCity.value[i].set(c.x - F.fx, c.z - F.fz, c.r, c.k); else common.uGCity.value[i].set(0, 0, 0, 0); }
 	}
-	return { group, update, near, far, lakes, materials: [nearMat, farMat, lakeMat], debug: (v) => { common.uGDebug.value = v; } };
+	return { group, update, near, mid, far, lakes, materials: [nearMat, midMat, farMat, lakeMat], debug: (v) => { common.uGDebug.value = v; } };
 }

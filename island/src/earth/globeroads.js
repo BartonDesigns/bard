@@ -332,20 +332,35 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 			}
 			queue.sort((p, q) => p[0] - q[0]);
 		}
+		// (a route for somewhere you have since left is dropped, and found again if you come back)
+		if (job && Math.min(kmBetween(ll, job.L.a), kmBetween(ll, job.L.b)) > ROUTE_KM * 1.5) job = null;
 		if (!job && queue.length && !data.win.moving) { const L = queue.shift()[1]; job = { L, it: route(L) }; }
-		if (job) {
-			const r = job.it.next();
-			if (r.done) { routes.set(job.L.id, r.value); if (r.value === 'none') stats.failed++; else stats.routed++; job = null; at = null; }
-		}
+		if (job) step(job);
 		// the roads round you made again when you have come far, the frame moved, a town came or went, or a route arrived
 		const tk = town ? town.id : null;
 		if (tk !== (townNow ? townNow.id : null)) { townNow = town; at = null; }
 		if (!making && (!at || epoch !== F.epoch || Math.hypot(x - at[0], z - at[1]) > REBUILD)) { at = [x, z]; epoch = F.epoch; making = make(x, z); }
 		if (making) { const t0 = performance.now(); while (performance.now() - t0 < (isPhone ? 2 : 4)) if (making.next().done) { making = null; break; } }
 	}
+	function step(J) {
+		const r = J.it.next();
+		if (r.done) { routes.set(J.L.id, r.value); if (r.value === 'none') stats.failed++; else stats.routed++; if (job === J) job = null; at = null; }
+		return r.done;
+	}
 	// the frame moved: what is standing is in the old metres, so it goes at once (and is made again)
 	function reframe() { grid.clear(); built = []; making = null; at = null; mesh.geometry.dispose(); mesh.geometry = new THREE.BufferGeometry(); }
-	function settle() { while (making && !making.next().done); making = null; }
+	// everything near you finished now, in one go (tests, and a jump)
+	function settle(cam) {
+		if (!links) { if (!build && atlasReady()) build = network(); while (build && !build.next().done); build = null; }
+		if (cam && links) {
+			const ll = toLL(cam.position.x, cam.position.z);
+			const near = links.filter((L) => !routes.has(L.id) && Math.min(kmBetween(ll, L.a), kmBetween(ll, L.b)) < 90).sort((a, b) => Math.min(kmBetween(ll, a.a), kmBetween(ll, a.b)) - Math.min(kmBetween(ll, b.a), kmBetween(ll, b.b))).slice(0, 8);
+			for (const L of near) { const J = { L, it: route(L) }; while (!step(J)); }
+			if (job) while (!step(job));
+			at = null; making = make(cam.position.x, cam.position.z); epoch = F.epoch; at = [cam.position.x, cam.position.z];
+		}
+		while (making && !making.next().done); making = null;
+	}
 	const info = () => ({ ...stats, near: built.length, queue: queue.length, routing: job ? `${job.L.a.name} – ${job.L.b.name}` : null });
 	return { update, near, reframe, settle, info, group, links: () => links, routes };
 }

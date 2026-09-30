@@ -25,7 +25,7 @@ import { createGlobeTrees } from './globetrees.js';
 import { createGlobeTowns } from './globetowns.js';
 import { createGlobeRoads } from './globeroads.js';
 import { BAY_DETAIL_U, BAY_DETAIL_AMP } from './baydetail.js';
-import { loadAtlas, atlasReady, regionAt, palette } from './atlas.js';
+import { loadAtlas, atlasReady, regionAt, palette, citiesNear } from './atlas.js';
 import { setFarGround } from '../bay/terrain.js';
 import { LAT0, LON0 } from '../bay/geo.js';
 
@@ -93,6 +93,20 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	// ---------- the roads between the places (globeroads.js), found by the real city's near() ----------
 	let leftSide = false, sourced = null;
 	const roads = createGlobeRoads({ scene, height, data, groundAt: (x, z) => island.heightAt(x, z), isPhone, left: () => leftSide });
+
+	// the place's name for the Bay's labels (bay/labels.js), out where the Bay's own names don't
+	// reach: the town you are in, else the region; the sea by the atlas's name for it
+	bay.farWhere = (x, z) => {
+		const ll = toLL(x, z);
+		if (F.bay && bayKm(ll.lat, ll.lon) < BAY_WILD_KM) return undefined;
+		if (!atlasReady()) return null;
+		const R = regionAt(ll.lat, ll.lon), cap = (t) => t ? t[0].toUpperCase() + t.slice(1) : '';
+		if (!R) return null;
+		if (!R.land || height.at(x, z) < 0) return { name: cap(R.sea?.name || R.name || 'The open sea'), sub: '' };
+		const c = citiesNear(ll.lat, ll.lon, 25, 1)[0], country = R.profile.country || '';
+		if (c && c.km < 4 + c.pop * 2) return { name: c.name, sub: [cap(R.name), country].filter((t, i, a) => t && a.indexOf(t) === i).join(' · ') };
+		return { name: cap(R.name), sub: country };
+	};
 
 	// ---------- flying: a cruising height out over the globe ----------
 	island.flyCeiling = (x, z) => {
@@ -207,6 +221,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	function dispose() {
 		setFarGround(null);
+		delete bay.farWhere;
 		GLOBE_U.uGOn.value = 0;
 		sourced?.removeSource?.(roads);
 		BAY_DETAIL_U.uBDAmp.value = 0;
@@ -217,6 +232,6 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		for (const t of data.tex) t.dispose();
 	}
 	// finish what is being laid out now, in one go (tests, and after a jump)
-	function settle() { trees.settle(); towns.civ().flush(); roads.settle(); }
+	function settle() { trees.settle(); towns.civ().flush(); roads.settle(camera); }
 	return { update, place, info, dispose, settle, roads, toLL, toXZ, height, data, terrain, trees, towns, whenReady, frame: F, bayOut };
 }

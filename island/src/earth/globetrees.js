@@ -52,7 +52,8 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 	const CAP = isPhone ? { near: 1500, far: 5000 } : { near: 3500, far: 14000 };
 	const G = {
 		broad: { height: 12, crown: 'round', bark: [1.05, 1, 0.95], leaf: [1, 1.05, 0.85] },
-		conifer: { height: 22, crown: 'columnar', bark: [1.0, 0.75, 0.6], leaf: [0.6, 0.78, 0.62], conifer: true },
+		// (naturalist: grey-brown bark, a spruce's or fir's; the red bark is the coast redwood's alone)
+		conifer: { height: 22, crown: 'columnar', bark: [0.82, 0.74, 0.68], leaf: [0.6, 0.78, 0.62], conifer: true },
 	};
 	const geo = {
 		broad: { near: hardwood(7101, false, true, G.broad), far: hardwood(7101, true, false, G.broad) },
@@ -120,6 +121,9 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 				// wooded ground: trees; open ground: a few bushes and the odd tree
 				const open = r > W.k * 0.55;
 				if (open && r > 0.05 + (1 - cell.TREES) * 0.02) continue;
+				// (naturalist: out on open prairie and steppe the odd tree stands by water, a
+				// cottonwood or willow along a creek, not scattered over the grass)
+				if (open && cell.TREES < 0.25 && (cell.RV || 0) < 0.2 && hash(row, col, 41) > 0.2) continue;
 				// the form: the region's mix, leaned cold by the air up here and dry by little rain
 				const cold = sst(5, -3, W.air), dry = sst(500, 200, cell.RAIN);
 				let q = hash(row, col, 17), form = 'broad';
@@ -127,7 +131,9 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 				const tot = wC + wP + wB + wBr;
 				q *= tot;
 				if ((q -= wC) < 0) form = 'conifer'; else if ((q -= wP) < 0) form = 'palm'; else if ((q -= wB) < 0) form = 'bush'; else form = 'broad';
-				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4);
+				// (naturalist: a lone tree on dry open ground is a juniper or a pinyon, not an oak)
+				if (open && dry > 0.5 && form === 'broad') form = 'conifer';
+				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
 				out.push({ x: p.x, y: h - 0.2, z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37) });
 				if (++n % 60 === 0) yield;
 			}
