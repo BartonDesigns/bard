@@ -14,7 +14,7 @@
 // the towns and cities (grey by day, lit by night) round the atlas's cities near you.
 
 import * as THREE from 'three';
-import { radialGrid } from '../world/terrain.js';
+import { radialGrid, NOISE_GLSL } from '../world/terrain.js';
 import { BAY_GLSL } from '../bay/terrain.js';
 import { WC_U, WC_GLSL } from '../bay/watercarve.js';
 import { GLOBE_GLSL, OCT } from './globeheight.js';
@@ -90,7 +90,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					vGCC = uGWin.xy + gd * uGWin.zw;
 				`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, gh, position.z); vGW = vec3(gd.x, gh, gd.y);');
-			sh.fragmentShader = FRAG_GLSL + sh.fragmentShader
+			sh.fragmentShader = FRAG_GLSL + NOISE_GLSL + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (uGBay > 0.5 && (vGC.w < uGSeam.x || max(abs(vGW.x), abs(vGW.z)) < uGIsl)) discard;          // the Bay's own ground is there
 					if (uGHole.z > 0.5 && max(abs(vGW.x - uGHole.x), abs(vGW.z - uGHole.y)) < uGHole.w) discard;    // the fine ring draws here`)
@@ -146,8 +146,28 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 						c = mix(c, built, smoothstep(0.08, 0.5, urb) * (1.0 - smoothstep(20000.0, 60000.0, dist) * 0.5));
 						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk + street * 0.5)) * 0.35;
 					}
+					// the grain close by: a few metres of mottle (the frame's metres: it may shift when the
+					// frame moves, far too fine to see it)
+					float px = length(fwidth(vGW.xz));
+					float grain = mix(0.5, fbm3(vGW.xz * 0.045), 1.0 - smoothstep(4.0, 12.0, px)) * 0.6 + mix(0.5, vn(vGW.xz * 0.27), 1.0 - smoothstep(0.8, 2.5, px)) * 0.4;
+					c *= 0.86 + 0.28 * grain;
 					diffuseColor.rgb = c;
 					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : vec3(fract(h / 500.0), snowK, forest);
+				}`)
+				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+				{
+					// the relief finer than the grid round you, as a bump (as the Bay's ground has it)
+					float d2 = length(vViewPosition), bh = 0.0;
+					if (d2 < 5000.0) {
+						float px = length(fwidth(vGW.xz));
+						bh = fbm3(vGW.xz * 0.06) * 2.5 * (1.0 - smoothstep(4.0, 9.0, px)) + fbm3(vGW.xz * 0.3) * 0.5 * (1.0 - smoothstep(0.9, 2.2, px));
+						bh *= 1.0 - smoothstep(1500.0, 5000.0, d2);
+					}
+					vec3 sp = -vViewPosition, vSx = dFdx(sp), vSy = dFdy(sp);
+					vec3 R1 = cross(vSy, normal), R2 = cross(normal, vSx);
+					float fDet = dot(vSx, R1);
+					vec2 dH = vec2(dFdx(bh), dFdy(bh));
+					normal = normalize(abs(fDet) * normal - sign(fDet) * (dH.x * R1 + dH.y * R2));
 				}`)
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCityGlow;');
 			sh.fragmentShader = 'vec3 gCityGlow = vec3(0.0);\n' + sh.fragmentShader;
