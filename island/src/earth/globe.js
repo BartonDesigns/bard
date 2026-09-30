@@ -8,6 +8,7 @@
 //   globeterrain.js  drawn: its own rings and lakes, coloured by the place
 //   globetrees.js    the woods and bushes of the place
 //   globetowns.js    the atlas's real towns and cities, grown by the town generator
+//   globeroads.js    the highways and main roads between them, driven like any mapped road
 //   baydetail.js     the same relief on the Bay's real ground, finer than its survey
 //
 // This module runs them: it keeps the coarse window round you, moves the frame when you go far

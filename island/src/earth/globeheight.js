@@ -142,6 +142,14 @@ export function createGlobeHeight(win) {
 		d = d > 0.4 ? 0.4 + (d - 0.4) * 1.5 : d;
 		return (D + (d - D) * al) * (1 + 0.4 * al);
 	}
+	// the land's edge: a beach where the coast is low (sand rising gently out of the surf for a few
+	// hundred metres), a steep shore where the land is rugged
+	function shoreLand(cs, hl, Ws, A) {
+		const cliff = Ws - 1.5 + (hl - Ws + 1.5) * sstep(0, 0.02, cs);
+		const beach = Ws - 1.5 + Math.min(cs, 0.03) / 0.03 * 4, sand = beach + (hl - beach) * sstep(0.015, 0.06, cs);
+		const k = 1 - sstep(80, 300, A);
+		return cliff + (Math.min(sand, Math.max(hl, beach)) - cliff) * k;
+	}
 	function assemble(c, D, n2, n3, n4, n5, fam) {
 		const coastN = n2 * 0.6 + n3 * 0.4;
 		const cs = c.L - 0.5 + coastN * 0.1;
@@ -161,10 +169,10 @@ export function createGlobeHeight(win) {
 				hl += (Ws + (Math.floor(q) + sstep(0.3, 0.7, fq)) * st - hl) * c.TR * 0.8;
 			}
 			hl = Math.max(hl, Ws + 0.3);
-			h = Ws - 2 + (hl - Ws + 2) * sstep(0, 0.02, cs);
+			h = shoreLand(cs, hl, Ws, c.A);
 		} else {
-			const hs = Math.min(c.e, Ws - 2 - 90 * -cs);
-			h = Ws - 2 + (hs - Ws + 2) * sstep(0, 0.02, -cs);
+			const hs = Math.min(c.e, Ws - 1.5 - 60 * -cs);
+			h = Ws - 1.5 + (hs - Ws + 1.5) * sstep(0, 0.02, -cs);
 		}
 		if (h !== h) h = 0;             // (never a NaN into the game: a guard, it should not happen)
 		out.h = h;
@@ -281,7 +289,13 @@ float gShore(float n2, float n3){
 	gLake = smoothstep(0.4, 0.6, K / max(0.02, 1.0 - L)); gLevel = WL * gLake;
 	return gCoast;
 }
-float gSeaSide(float cs, float Ws){ float hs = min(gE, Ws - 2.0 - 90.0 * -cs); return mix(Ws - 2.0, hs, smoothstep(0.0, 0.02, -cs)); }
+float gSeaSide(float cs, float Ws){ float hs = min(gE, Ws - 1.5 - 60.0 * -cs); return mix(Ws - 1.5, hs, smoothstep(0.0, 0.02, -cs)); }
+// the land's edge: a beach where the coast is low, a steep shore where it is rugged (shoreLand on the CPU)
+float gShoreLand(float cs, float hl, float Ws, float A){
+	float cliff = mix(Ws - 1.5, hl, smoothstep(0.0, 0.02, cs));
+	float beach = Ws - 1.5 + min(cs, 0.03) / 0.03 * 4.0, sand = mix(beach, hl, smoothstep(0.015, 0.06, cs));
+	return mix(cliff, min(sand, max(hl, beach)), 1.0 - smoothstep(80.0, 300.0, A));
+}
 float globeHeight(vec2 d, float oct){
 	gCoarse(d);
 	float A = gC0.a, RG = gC1.r, TR = gC1.g, BNR = gC1.b, RV = gC1.a, DUNE = gC2.r, KARST = gC2.g;
@@ -320,7 +334,7 @@ float globeHeight(vec2 d, float oct){
 			hl2 += (Ws + (floor(q) + smoothstep(0.3, 0.7, fq)) * st - hl2) * TR * 0.8;
 		}
 		hl2 = max(hl2, Ws + 0.3);
-		h = mix(Ws - 2.0, hl2, smoothstep(0.0, 0.02, cs));
+		h = gShoreLand(cs, hl2, Ws, A);
 	} else h = gSeaSide(cs, Ws);
 	return h;
 }
@@ -330,7 +344,7 @@ float globeSea(vec2 d){
 	gCoarse(d);
 	vec3 dP = gSphere(d);
 	float cs = gShore(gOct(2, dP), gOct(3, dP)), Ws = gLevel;
-	return cs > 0.0 ? mix(Ws - 2.0, max(gE, Ws + 0.5), smoothstep(0.0, 0.02, cs)) : gSeaSide(cs, Ws);
+	return cs > 0.0 ? gShoreLand(cs, max(gE, Ws + 0.5), Ws, gC0.a) : gSeaSide(cs, Ws);
 }
 `;
 
