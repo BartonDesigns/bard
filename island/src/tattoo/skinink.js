@@ -41,8 +41,8 @@ vec3 inkAt(vec3 b) {
 		float th = atan(dot(rr, e2), dot(rr, uTatE[i].xyz));
 		float dth = mod(th - uTatP[i].x + 3.14159265, 6.2831853) - 3.14159265;
 		vec2 p = vec2(dth * uTatD[i].w, s - uTatP[i].y);
-		float c = cos(uTatP[i].w), sn = sin(uTatP[i].w);
-		p = vec2(c * p.x + sn * p.y, -sn * p.x + c * p.y) / uTatP[i].z;
+		float cr = cos(uTatP[i].w), sn = sin(uTatP[i].w);
+		p = vec2(cr * p.x + sn * p.y, -sn * p.x + cr * p.y) / uTatP[i].z;
 		if (abs(p.x) > 1.0 || abs(p.y) > 1.0) continue;
 		vec4 t = texture2D(uTat, uTatT[i].xy + (p * vec2(0.5, -0.5) + 0.5) * uTatT[i].zw);
 		// (w: how fresh; old ink is fainter, and black drifts a little blue-green)
