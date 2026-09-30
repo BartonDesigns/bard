@@ -41,6 +41,9 @@ export const SPEC = {
 };
 export const KINDS = Object.keys(SPEC);
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// the windshield's and the rear glass's rise, 0 at the foot to 1 at the roof: nearly
+// straight, bowed a little, easing in at the foot and meeting the roof at an edge
+const glassRise = (t) => { t = Math.min(1, Math.max(0, t)); return 0.55 * t + 0.45 * (1 - (1 - t) * (1 - t)) - 0.24 * t * (1 - t) * (1 - t); };
 const def = (S) => Object.assign({ clear: 0.3, wr: 0.34, tw: 0.23, plan: 5, tumble: 0.72, panel: -1e9, cp: 0.12 }, S);
 // the lamps and grille: 0 a car's swept lamps, 1 the tall cars' square ones behind a chrome
 // grille, 2 the vans' and trucks' upright ones
@@ -84,8 +87,8 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 			if (s < S.box) return S.H - 0.02 * sm(-L2 + 0.2, -L2, s);
 			return s > S.rf ? b + (S.cabH - b) * sm(S.ws, S.rf, s) : S.cabH;
 		}
-		if (s > S.rf) return b + (S.H - b) * sm(S.ws, S.rf, s);
-		if (s < S.rr) return b + (S.H - b) * sm(S.rb, S.rr, s);
+		if (s > S.rf) return b + (S.H - b) * glassRise((S.ws - s) / (S.ws - S.rf));
+		if (s < S.rr) return b + (S.H - b) * glassRise((s - S.rb) / (S.rr - S.rb));
 		return S.H + 0.02 * Math.sin((s - S.rr) / (S.rf - S.rr) * Math.PI);
 	};
 	// half width in plan, rounded off at the nose and tail
@@ -99,7 +102,8 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 		const b0 = bottom(s), bl = belt(s), tp = top(s), wb = halfW(s), h = bl - b0, f = 1 + 0.028 * flare(s);
 		const g = Math.min(1, Math.max(0, (tp - bl - 0.02) / Math.max(0.3, (S.box !== undefined ? S.cabH : S.H) - S.belt)));
 		const inBox = S.box !== undefined && s < S.box;
-		const glassHere = g > 0.3 && s > S.panel && !inBox ? 1 : 0, roofHere = tp > S.H - 0.05 || (S.box !== undefined && tp > S.cabH - 0.05) ? 1 : 0;
+		const glassHere = g > 0.15 && s > S.panel && !inBox ? 1 : 0;
+		const roofHere = S.box !== undefined ? tp > S.H - 0.05 || tp > S.cabH - 0.05 : s < S.rf + 0.01 && s > S.rr - 0.01;
 		const bed = S.bed !== undefined && s < S.bed ? 1 : 0;
 		// the half section, from under the car round the side to the centre of the top: the
 		// floor tucked in, the side bulging to its widest halfway up, a rounded shoulder, then
@@ -291,8 +295,13 @@ function cabinGeometry(kind, S, belt, top, halfW) {
 	const dash = new THREE.ExtrudeGeometry(pro, { depth: dw, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.012, bevelSegments: 2, curveSegments: 5 });
 	out.push(tag(dash.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, -dw / 2, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1)), 7));
 	// the gauges under their hood, facing you over the wheel
-	out.push(tag(new THREE.CylinderGeometry(0.15, 0.15, 0.13, 12, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.55, 1).translate(wx, b + 0.005, zb + 0.13), 7));
-	out.push(screen(0.27, 0.085, 0, M4(wx, b + 0.038, zb + 0.16, 0.3).multiply(new THREE.Matrix4().makeRotationY(Math.PI))));
+	out.push(tag(new THREE.CylinderGeometry(0.16, 0.16, 0.16, 12, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.75, 1).translate(wx, b + 0.02, zb + 0.12), 7));
+	out.push(tag(new THREE.CircleGeometry(0.16, 12, 0, Math.PI).scale(1, 0.75, 1).translate(wx, b + 0.02, zb + 0.2), 7));
+	out.push(screen(0.28, 0.095, 0, M4(wx, b + 0.075, zb + 0.17, 0.3).multiply(new THREE.Matrix4().makeRotationY(Math.PI))));
+	// the vents across its face, and a bright strip under them
+	const faceZ = (y) => zb + (b - 0.07 - y) / 0.21 * 0.05 - 0.014;
+	for (const vx of [-(dw / 2 - 0.13), -0.19, 0.19, dw / 2 - 0.13]) out.push(rbox(0.15, 0.05, 0.02, 0.008, 13, M4(vx, b - 0.1, faceZ(b - 0.1))));
+	out.push(rbox(dw - 0.08, 0.012, 0.01, 0.004, 16, M4(0, b - 0.145, faceZ(b - 0.145))));
 	// the screen in the middle, standing on the dash
 	if (!big) out.push(screen(0.24, 0.14, 1, M4(0, b + 0.075, zb + 0.14, 0.18).multiply(new THREE.Matrix4().makeRotationY(Math.PI))), rbox(0.26, 0.16, 0.025, 0.008, 7, M4(0, b + 0.075, zb + 0.155, 0.18)));
 	// the console between the front seats, down from the dash, and the gear selector
