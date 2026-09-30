@@ -481,13 +481,47 @@ float dHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.
 float dNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(mix(dHash(i), dHash(i + vec3(1, 0, 0)), f.x), mix(dHash(i + vec3(0, 1, 0)), dHash(i + vec3(1, 1, 0)), f.x), f.y),
 		mix(mix(dHash(i + vec3(0, 0, 1)), dHash(i + vec3(1, 0, 1)), f.x), mix(dHash(i + vec3(0, 1, 1)), dHash(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+// the scales: the nearest of a jittered lattice of cells (2x2x2 look-up), the distance to
+// the next giving the crease between them
+vec3 dCell(vec3 p) {
+	vec3 i = floor(p), f = fract(p);
+	float d1 = 8.0, d2 = 8.0, id = 0.0;
+	for (int z = 0; z <= 1; z++) for (int y = 0; y <= 1; y++) for (int x = 0; x <= 1; x++) {
+		vec3 g = vec3(x, y, z) - step(0.5, f) + 0.5, c = i + g;
+		vec3 o = g - 0.5 + vec3(dHash(c), dHash(c + 7.1), dHash(c + 13.7)) * 0.9 + 0.05;
+		float d = length(o - (f - 0.5));
+		if (d < d1) { d2 = d1; d1 = d; id = dHash(c + 3.3); } else if (d < d2) d2 = d;
+	}
+	return vec3(d1, d2 - d1, id);
+}
+float dScale = 0.0;
 ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 	{
-		// the hide: bands or blotches over the back, fading down the flanks, and a fine grain of scales
-		float nA = dNoise(vRest * uPat.x + uPat.w), nB = dNoise(vRest * uPat.x * 9.0);
+		// the hide: bands or blotches over the back, fading down the flanks
+		float nA = dNoise(vRest * uPat.x + uPat.w);
 		float band = smoothstep(0.3, 0.7, 0.5 + 0.5 * sin(vRest.z * uPat.x * 2.6 + nA * 4.0));
 		float spot = smoothstep(0.55, 0.7, nA);
-		diffuseColor.rgb *= 1.0 - vPat * uPat.y * mix(band, spot, uPat.z) - 0.1 * (nB - 0.5) * step(0.001, vPat);
+		float hide = step(0.001, vPat);
+		diffuseColor.rgb *= 1.0 - vPat * uPat.y * mix(band, spot, uPat.z);
+		// scales, a few centimetres across, bigger and knobbly along the back; each its own
+		// shade, the creases between them dark; the lower flanks scuffed paler
+		float back = smoothstep(0.2, 0.9, vPat);
+		float sz = mix(0.045, 0.075, back);
+		vec3 sc = dCell(vRest / sz);
+		// (gone to their average where a scale is smaller than a couple of pixels: no speckle)
+		float near = hide * (1.0 - smoothstep(0.2, 0.6, length(fwidth(vRest / sz))));
+		float crease = 1.0 - smoothstep(0.02, 0.16, sc.y);
+		dScale = (1.0 - crease) * (1.0 - sc.x * 0.6) * near;
+		diffuseColor.rgb *= mix(1.0, (0.94 + 0.12 * sc.z) * (1.0 - 0.2 * crease), near) * mix(1.0, 0.93, hide - near);
+		diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.18 + 0.03, hide * (1.0 - back) * smoothstep(0.5, 0.8, dNoise(vRest * 3.1)) * 0.5);
+	}`).replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+	roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.78, dScale);`).replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+	{
+		// (each scale domed: the light catches its top and falls off into the crease)
+		vec2 dH = vec2(dFdx(dScale), dFdy(dScale)) * 0.9;
+		vec3 vSx = dFdx(-vViewPosition), vSy = dFdy(-vViewPosition), R1 = cross(vSy, normal), R2 = cross(normal, vSx);
+		float det = dot(vSx, R1) * (gl_FrontFacing ? 1.0 : -1.0);
+		normal = normalize(abs(det) * normal - (dH.x * R1 + dH.y * R2) * sign(det));
 	}`);
 		}
 	};
