@@ -176,7 +176,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 
 	// ---------- the roads round you, in the frame's metres ----------
 	const grid = new Map(), CELL = 400;
-	let built = [], at = null, epoch = -1, townNow = null, making = null;
+	let built = [], at = null, epoch = -1, townNow = null, making = null, version = 0;
 	const pieceCache = new Map();
 	function near(kind, x, z, rad, out) {
 		if (kind !== 'roads' || !built.length) return;
@@ -282,7 +282,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		// in one go: the store near() reads and the ribbons
 		grid.clear();
 		for (const r of out) for (let gx = Math.floor(r.box[0] / CELL); gx <= Math.floor(r.box[2] / CELL); gx++) for (let gz = Math.floor(r.box[1] / CELL); gz <= Math.floor(r.box[3] / CELL); gz++) { const k = gx + ',' + gz; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(r); }
-		built = out;
+		built = out; version++;
 		mesh.geometry.dispose(); mesh.geometry = geo;
 		stats.pieces = out.length; stats.buildMs = Math.max(stats.buildMs, Math.round(work + performance.now() - s0));
 		// (keep only this epoch's pieces)
@@ -361,6 +361,20 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		}
 		while (making && !making.next().done); making = null;
 	}
+	// whether a point is on one of these roads, or within pad metres of its edge (the trees keep off)
+	const tmp = [];
+	function onRoad(x, z, pad = 3) {
+		tmp.length = 0; near('roads', x, z, 20, tmp);
+		for (const r of tmp) {
+			const p = r.pts, hw = r.w / 2 + pad;
+			for (let k = 0; k + 3 < p.length; k += 2) {
+				const ax = p[k], az = p[k + 1], dx = p[k + 2] - ax, dz = p[k + 3] - az, l2 = dx * dx + dz * dz || 1;
+				const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
+				if (Math.hypot(x - ax - dx * t, z - az - dz * t) < hw) return true;
+			}
+		}
+		return false;
+	}
 	const info = () => ({ ...stats, near: built.length, queue: queue.length, routing: job ? `${job.L.a.name} – ${job.L.b.name}` : null });
-	return { update, near, reframe, settle, info, group, links: () => links, routes };
+	return { update, near, onRoad, version: () => version, reframe, settle, info, group, links: () => links, routes };
 }

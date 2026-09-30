@@ -63,9 +63,13 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	setFarGround({ ready: () => data.win.ready, at: (x, z) => height.at(x, z), seam: [SEAM_A, SEAM_B], whenReady, hideBay: () => !F.bay });
 
+	// ---------- the roads between the places (globeroads.js), found by the real city's near() ----------
+	let leftSide = false, sourced = null;
+	const roads = createGlobeRoads({ scene, height, data, groundAt: (x, z) => island.heightAt(x, z), isPhone, left: () => leftSide });
+
 	// ---------- the woods and the towns ----------
 	const inBayWild = (x, z) => { if (!F.bay) return false; const ll = toLL(x, z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM + 10; };
-	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A });
+	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z) });
 	// a city the Bay already has: its towns' map, a mapped region, or one of its generated towns
 	// (a generated town where the atlas has a real one gives way to it)
 	function bayHas(x, z, r) {
@@ -90,9 +94,6 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	};
 	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas });
 
-	// ---------- the roads between the places (globeroads.js), found by the real city's near() ----------
-	let leftSide = false, sourced = null;
-	const roads = createGlobeRoads({ scene, height, data, groundAt: (x, z) => island.heightAt(x, z), isPhone, left: () => leftSide });
 
 	// the place's name for the Bay's labels (bay/labels.js), out where the Bay's own names don't
 	// reach: the town you are in, else the region; the sea by the atlas's name for it
@@ -198,7 +199,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 			}
 		}
 		const steady = data.win.ready && !data.win.moving;
-		trees.update(cam, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version);
+		trees.update(cam, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version());
 		if (steady) towns.update(cam);
 		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
 		const real = world()?.real;

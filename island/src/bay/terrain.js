@@ -121,7 +121,7 @@ vec3 realLand(float lu, vec3 nat, float gn, float gf, vec2 w){
 `;
 const OFF = new THREE.Vector4(1e9, 1e9, 1, 0);
 // the photographed trail surfaces (build 191), for the dirt roads and paths close by
-const LOAM = photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 }), GRAVEL = photoUniform('riverbed', { colour: true, mean: 0.52, contrast: 1.0 });
+const LOAM = photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 });
 
 // Points of city light far off. The old sparks sat in cells whose size followed the
 // camera's distance, so every step re-dealt them (static on a dead channel), and at a
@@ -406,19 +406,13 @@ export function createBayArea(shared, scene, island, BU) {
 
 	// ---------- the ground ----------
 	const uUrban = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, uUR = { value: new THREE.Vector4(0, 0, 1, 0) };
-	// cos and sin of each street angle byte, computed here in double precision: GPU sin() and
-	// cos() are only good to a few parts in a million, and times 80 km of coordinate that is metres
-	const rotLUT = new Float32Array(256 * 4);
-	for (let i = 0; i < 256; i++) { const a = i / 255 * Math.PI / 2; rotLUT[i * 4] = Math.cos(a); rotLUT[i * 4 + 1] = Math.sin(a); }
-	const uRot = { value: new THREE.DataTexture(rotLUT, 256, 1, THREE.RGBAFormat, THREE.FloatType) };
-	uRot.value.needsUpdate = true;
 	uUrban.value.needsUpdate = true;
 	const uNightB = { value: 0 };
 	function groundMaterial(hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
 		m.onBeforeCompile = (sh) => {
-			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, { uSunDir: shared.uSunDir, uUrban, uUR, uRot, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uGravel: GRAVEL[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
+			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
 			sh.vertexShader = (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); vec2 wc = wcAt(w); return b + (bdK > 0.0 ? bayDetail(w, b, wc.r) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wc.r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
@@ -451,7 +445,7 @@ export function createBayArea(shared, scene, island, BU) {
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = WX_DEFS + 'uniform sampler2D uUrban, uRot; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam, uGravel; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here
@@ -728,7 +722,8 @@ export function createBayArea(shared, scene, island, BU) {
 						dirtC = mix(dirtC, dirtC * 0.8, step(0.7, vn(vBW * 6.0)) * 0.5);                       // stones and ruts
 						// close by, the trail is real ground: packed loam, and gravel where it washes
 						if (dirt > 0.01 && uTrailK > 0.5 && dist < 90.0) {
-							vec3 lo = texture2D(uLoam, vBW * 0.45).rgb, gr = texture2D(uGravel, vBW * 0.6 + 0.37).rgb;
+							vec3 lo = texture2D(uLoam, vBW * 0.45).rgb, gr = texture2D(uLoam, vBW.yx * 1.3 + 0.37).rgb;
+							gr = mix(vec3(dot(gr, vec3(0.33))), gr, 0.45) * 1.12;   // (the loam finer and greyer: washed gravel, one less texture)
 							vec3 ph = mix(lo, gr, smoothstep(0.45, 0.75, vn(vBW * 0.07)) * 0.8);
 							dirtC = mix(dirtC, ph * vec3(1.08, 1.0, 0.92), (1.0 - smoothstep(45.0, 90.0, dist)) * 0.85);
 						}
@@ -788,7 +783,7 @@ export function createBayArea(shared, scene, island, BU) {
 					if (urban > 0.02){
 						vec4 TX = texelFetch(uUrban, ivec2(clamp(uu, vec2(0.0), US - 1.0)), 0);
 						float sty = floor(TX.a * 255.0 / 40.0 + 0.5);
-						vec2 cs = texelFetch(uRot, ivec2(int(TX.g * 255.0 + 0.5), 0), 0).xy;
+						vec2 cs = texelFetch(uCsRows, ivec2(int(TX.g * 255.0 + 0.5), 0), 0).gb;   // (the cos and sin worked out on the CPU: bay/coastside.js)
 						vec2 g = vec2(cs.x * vBW.x + cs.y * vBW.y, cs.x * vBW.y - cs.y * vBW.x) + streetWarp(vBW, sty);
 						vec3 BK = blockOf(sty);
 						vec2 B = BK.xy, f = fract(g / B), cid = floor(g / B);

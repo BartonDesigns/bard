@@ -208,8 +208,13 @@ export function inCoastField(x, z) {
 }
 
 export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
-	const rowsX = new Float32Array(NROW);
-	const rowsTex = new THREE.DataTexture(rowsX, NROW, 1, THREE.RedFormat, THREE.FloatType);
+	// r: where the land begins on each row; g and b: the cos and sin of each street angle
+	// byte for the Bay's ground (bay/terrain.js; the GPU's own are metres out at 80 km), sharing the one texture so the ground's
+	// shader stays inside the 16 a phone allows
+	const RW = Math.max(NROW, 256), rows = new Float32Array(RW * 4);
+	for (let i = 0; i < 256; i++) { const a = i / 255 * Math.PI / 2; rows[i * 4 + 1] = Math.cos(a); rows[i * 4 + 2] = Math.sin(a); }
+	const rowsTex = new THREE.DataTexture(rows, RW, 1, THREE.RGBAFormat, THREE.FloatType);
+	rowsTex.needsUpdate = true;
 	rowsTex.magFilter = rowsTex.minFilter = THREE.NearestFilter;
 	COAST_U.uCsRows.value = rowsTex;
 	const blank = new THREE.DataTexture(new Uint8Array(4), 1, 1); blank.needsUpdate = true;
@@ -222,7 +227,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 
 	// (the coast's shading runs only while you are within reach of it: w of uCsRow)
 	let shoreReady = false;
-	const seaX = (z) => { const f = Math.max(0, Math.min(NROW - 1.001, (z - NW.z) / ROW)), i = Math.floor(f); return rowsX[i] + (rowsX[i + 1] - rowsX[i]) * (f - i); };
+	const seaX = (z) => { const f = Math.max(0, Math.min(NROW - 1.001, (z - NW.z) / ROW)), i = Math.floor(f); return rows[i * 4] + (rows[i * 4 + 4] - rows[i * 4]) * (f - i); };
 	const seaDist = (x, z) => (x - seaX(z)) * 0.94;
 
 	// ---------- the work, a slice at a time (a few ms a frame) ----------
@@ -248,7 +253,7 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 					found = a; break;
 				}
 			}
-			rowsX[r] = found;
+			rows[r * 4] = found;
 			yield;
 		}
 		rowsTex.needsUpdate = true;
