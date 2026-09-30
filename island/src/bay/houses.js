@@ -496,7 +496,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			const seen = new Set();
 			cands = [];
 			for (const b of real?.loaded() ? real.near('boxes', x, z, BUILD_R + 25) : []) {
-				if (!b.grp || b.grp.biz || seen.has(b.grp) || inCampus(b.x, b.z)) continue;
+				if (!b.grp || b.grp.biz || b.grp.shut || seen.has(b.grp) || inCampus(b.x, b.z)) continue;      // (not a house boarded up or burnt out)
 				seen.add(b.grp);
 				const Mb = mainOf(b.grp);
 				if (!Mb) continue;

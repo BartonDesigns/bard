@@ -932,6 +932,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		}
 	}
 	yield 'sites';
+	for (const b of boxes) b.gen = 1;          // (grown, not surveyed: city.js lets these weather into neglect)
 
 	// ---------- 5. the land-use map: R roads, G land use x16, B roofs ----------
 	const step = Rbox > 3500 ? 10 : 8, x0 = cx - Rbox, z0 = cz - Rbox, MW = Math.ceil(2 * Rbox / step), MH = MW;
