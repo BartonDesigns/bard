@@ -5,11 +5,20 @@ import * as THREE from 'three';
 import { NOISE_GLSL } from './terrain.js';
 import { STARS_B64, STAR_COUNT } from './starcat.js';
 import { today } from '../calendar.js';
+import { constellations } from './constellations.js';
 
-// The real sky over the Bay Area: latitude 37.8 N, a midsummer night (the sun near
-// RA 7.6 h), so the Milky Way's heart stands over the southern horizon in the evening
-// and the Summer Triangle overhead. East is +x, north is -z, up is +y.
-const LAT = 37.8 * Math.PI / 180, SUN_RA = 7.6;
+// The real sky over the Bay Area: latitude 37.8 N, turned for the date (the sun where it
+// really stands among the stars), so each season has its own stars: the Summer Triangle
+// overhead on summer evenings, Orion rising on winter ones. East is +x, north is -z, up is +y.
+const LAT = 37.8 * Math.PI / 180;
+// where the sun stands among the stars on a date (its right ascension, hours): the sky turns
+// with it, so the stars overhead at midnight are the season's own
+function sunRAh(d) {
+	const n = (d.getTime() - Date.UTC(2000, 0, 1, 12)) / 864e5, R = Math.PI / 180;
+	const g = (357.528 + 0.9856003 * n) * R, lam = (280.46 + 0.9856474 * n + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * R;
+	return ((Math.atan2(Math.cos(23.439 * R) * Math.sin(lam), Math.cos(lam)) / Math.PI * 12) + 24) % 24;
+}
+let SUN_RA = sunRAh(today());
 // equatorial (J2000) to galactic
 const EQ2GAL = [-0.0548755604, -0.8734370902, -0.4838350155, 0.4941094279, -0.4448296300, 0.7469822445, -0.8676661490, -0.1980763734, 0.4559837762];
 
@@ -424,10 +433,8 @@ export function createSky(scene, shared, renderer) {
 	})();
 
 	// ---------- the planets, where they really are tonight ----------
-	// Keplerian elements (JPL, J2000 and their rates per century) for today's date. The
-	// sky here keeps the sun at one place among the stars (a midsummer night), so each
-	// planet is set at its real angle from the real sun: Venus stays an evening or morning
-	// star, the outer planets where they truly are relative to the sun.
+	// Keplerian elements (JPL, J2000 and their rates per century) for today's date: each
+	// planet where it truly is among the stars (Venus an evening or a morning star).
 	const planets = (() => {
 		const EL = {
 			mercury: [0.38709927, 0.20563593, 7.00497902, 252.2503235, 77.45779628, 48.33076593, 3.7e-7, 1.906e-5, -0.00594749, 149472.67411175, 0.16047689, -0.12534081],
@@ -449,13 +456,11 @@ export function createSky(scene, shared, renderer) {
 		};
 		const eps = 23.4393 * R, earth = helio('earth');
 		const radec = (v) => { const x = v[0], y = v[1] * Math.cos(eps) - v[2] * Math.sin(eps), z = v[1] * Math.sin(eps) + v[2] * Math.cos(eps); const r = Math.hypot(x, y, z); return [Math.atan2(y, x), Math.asin(z / r)]; };
-		const sunRA = radec(earth.map((v) => -v))[0];
 		const LIST = [['mercury', -0.2, [1, 0.92, 0.85]], ['venus', -4.3, [1, 1, 0.94]], ['mars', 0.6, [1, 0.62, 0.42]], ['jupiter', -2.3, [1, 0.95, 0.85]], ['saturn', 0.6, [1, 0.93, 0.72]]];
 		const pos = new Float32Array(LIST.length * 3), mag = new Float32Array(LIST.length), col = new Float32Array(LIST.length * 3);
 		LIST.forEach(([k, m2, c], i) => {
 			const h = helio(k), [ra, dec] = radec([h[0] - earth[0], h[1] - earth[1], h[2] - earth[2]]);
-			const ra2 = ra - sunRA + SUN_RA / 12 * Math.PI;
-			pos.set([Math.cos(dec) * Math.cos(ra2), Math.cos(dec) * Math.sin(ra2), Math.sin(dec)], i * 3);
+			pos.set([Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec)], i * 3);
 			mag[i] = m2; col.set(c, i * 3);
 		});
 		const g = new THREE.BufferGeometry();
@@ -497,6 +502,31 @@ export function createSky(scene, shared, renderer) {
 		};
 		return p;
 	})();
+	// ---------- the constellations' lines: faint, only when asked for (the real sky has none) ----------
+	const uCon = { value: 0 };
+	const conLines = (() => {
+		const pos = [];
+		const u = (ra, de) => { const a = ra / 12 * Math.PI, d = de * Math.PI / 180; return [Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)]; };
+		for (const C of constellations()) for (const [a, b] of C.lines) pos.push(...u(C.stars[a][0], C.stars[a][1]), ...u(C.stars[b][0], C.stars[b][1]));
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+		const m = new THREE.ShaderMaterial({
+			uniforms: { uNight: uniforms.uNight, uCon },
+			vertexShader: `uniform float uNight, uCon; varying float vA;
+				void main(){
+					vec3 w = normalize(mat3(modelMatrix) * position);
+					gl_Position = projectionMatrix * viewMatrix * vec4(cameraPosition + w * 10990.0, 1.0); gl_Position.z = gl_Position.w * 0.99997;
+					vA = uCon * uNight * smoothstep(-0.02, 0.15, w.y);
+				}`,
+			fragmentShader: 'varying float vA; void main(){ if (vA < 0.01) discard; gl_FragColor = vec4(vec3(0.55, 0.7, 1.0) * vA * 0.45, 1.0); }',
+			transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+		});
+		const L = new THREE.LineSegments(g, m);
+		L.frustumCulled = false; L.renderOrder = -9; L.matrixAutoUpdate = false;
+		scene.add(L);
+		return L;
+	})();
+
 	const eqM = new THREE.Matrix4(), rz = new THREE.Matrix4(), w2e = new THREE.Matrix3();
 	// the celestial sphere turns with the clock: local sidereal time from solar time
 	function orientSky() {
@@ -506,6 +536,7 @@ export function createSky(scene, shared, renderer) {
 		eqM.set(0, 1, 0, 0, cf, 0, sf, 0, sf, 0, -cf, 0, 0, 0, 0, 1).multiply(rz);
 		stars.matrix.copy(eqM); stars.matrixWorld.copy(eqM);
 		planets.matrix.copy(eqM); planets.matrixWorld.copy(eqM);
+		conLines.matrix.copy(eqM); conLines.matrixWorld.copy(eqM);
 		w2e.setFromMatrix4(eqM).transpose();
 		uniforms.uW2E.value.copy(w2e);
 	}
@@ -558,7 +589,7 @@ export function createSky(scene, shared, renderer) {
 	let SUN = sunToday();
 	state.sun = SUN;
 	function update(dt, focus) {
-		{ const d = today(); if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month) { SUN = sunToday(); SUN.date = d.getDate(); SUN.month = d.getMonth(); state.sun = SUN; } }
+		{ const d = today(); if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month) { SUN = sunToday(); SUN.date = d.getDate(); SUN.month = d.getMonth(); state.sun = SUN; SUN_RA = sunRAh(d); } }
 		// daylight hours pass slowly (~9 real minutes), night quickly (~2.5)
 		const day = state.hours >= SUN.rise - 0.3 && state.hours < SUN.set + 0.5;
 		state.hours = (state.hours + dt * state.speed * (day ? (SUN.set - SUN.rise + 0.8) / 540 : (24 - (SUN.set - SUN.rise + 0.8)) / 150)) % 24;
@@ -638,5 +669,11 @@ export function createSky(scene, shared, renderer) {
 	}
 	// (the clouds in the water on or off, as the quality setting does)
 	const reflect = (on) => { shared.cloudReflect = on; };
-	return { dome, sun, hemi, state, update, uniforms, attach, reflect };
+	// a place on the celestial sphere (right ascension, hours; declination, degrees) as a direction
+	// in the world tonight; is it dark enough to see the stars (the sun an hour and more down);
+	// the constellations' lines on or off
+	const celestial = (ra, de, out = new THREE.Vector3()) => { const a = ra / 12 * Math.PI, d = de * Math.PI / 180; return out.set(Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)).applyMatrix4(eqM).normalize(); };
+	const dark = () => state.hours > SUN.set + 1 || state.hours < SUN.rise - 1;
+	const lines = (on) => { if (on !== undefined) uCon.value = on ? 1 : 0; return uCon.value > 0; };
+	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines };
 }
