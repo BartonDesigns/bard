@@ -652,7 +652,7 @@ export function createIslandWorld() {
 			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
 			world.city = createCity(shared, scene, bayNear, world.real);
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
-			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z) });
+			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z), globe: () => world?.globe });
 			// the real houses close by, built whole with their rooms
 			world.houses = createHouses(scene, bayArea, world.real, world.city, { isPhone });
 			// ...and the shops, cafés, restaurants, offices and places to play, walked into
@@ -683,7 +683,7 @@ export function createIslandWorld() {
 			// the Santa Cruz Beach Boardwalk: the Casino, the midway and its rides, the Giant Dipper
 			world.boardwalk = createBoardwalk(scene, bayArea, shared, { isPhone, mount: dom.mount, hint: (t, ms, pri = 1) => hint(t, ms, pri), camera, player: () => world?.player.state });
 			// the Bay Area's wild animals by habitat, month and hour, and the field journal
-			world.wildlife = createWildlife(scene, bayNear, { isPhone, real: world.real, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
+			world.wildlife = createWildlife(scene, bayNear, { isPhone, real: world.real, globe: () => world?.globe, hint: (t, ms, pri = 1) => hint(t, ms, pri), say: (t, w) => guide?.say?.(t, w) });
 			world.citySound = createCitySound(bayArea, (x, z) => island.heightAt(x, z));
 			world.natureSound = createNatureSound(bayNear, (x, z) => bayArea.heightAt(x, z));
 			// the in-between places: dirt tracks, the industrial fringe, town's ragged edge, the odd camp

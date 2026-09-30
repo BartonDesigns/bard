@@ -72,7 +72,7 @@ export function habitat(bay, real, H) {
 	};
 }
 
-export function createWildGround(scene, bay, { shared, real, isPhone = false, ground = null } = {}) {
+export function createWildGround(scene, bay, { shared, real, isPhone = false, ground = null, globe = null } = {}) {
 	const H = ground || ((x, z) => bay.heightAt(x, z));
 	const K = isPhone ? 0.45 : 1;                                      // density
 	const RK = isPhone ? 0.7 : 1;                                      // reach
@@ -190,7 +190,11 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	const ITEM = 12;
 	function makeCell(ci, cj) {
 		const out = {}, x0 = ci * C, z0 = cj * C, cx = x0 + C / 2, cz = z0 + C / 2;
-		const E = landAt(cx, cz);
+		// out on the rest of the globe (earth/globe.js), past the Bay's own wild land: the
+		// region's climate decides the ground instead (globeCell below)
+		const G = globe?.(), ll = G?.toLL ? G.toLL(cx, cz) : null;
+		const away = ll && Math.hypot((ll.lat - 37.6) * 111, (ll.lon + 122.1) * 88) > 190;
+		const E = away ? { rock: null } : landAt(cx, cz);
 		if (!E) return out;
 		const r = mulberry32((ci * 73856093) ^ (cj * 19349663) ^ 0x5bd1e995);
 		const season = REAL_U.uSeason.value, month = new Date().getMonth() + 1;
@@ -231,6 +235,7 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		const drift = (x, z, s, o = 0) => vnoise(x / s + o, z / s - o * 1.7);
 		const J = (base, k = 0.12) => base.map((c) => c * (1 - k + r() * 2 * k));
 
+		if (away) { globeCell(G, ll, cx, cz, put, scatter, drift, J, r, season); return out; }
 		// the grass: bunches in the open, sparse under the oaks, none under the redwoods
 		// (city.js stands redwoods wherever the fog belt is even a little wooded: no grass there)
 		const grassK = (E.open + E.wood * 0.12 + E.chaparral * 0.15) * (1 - Math.min(1, E.redwood * 2.5));
@@ -371,10 +376,78 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		return out;
 	}
 
+	// ---------- the rest of the world ----------
+	// The ground cover by climate, from the globe's cell (mean temperature, rain, tree cover,
+	// karst) and the air's temperature at this height: tundra and alpine turf with cushion
+	// plants and scree; sagebrush steppe; creosote desert; prairie of tall grass and forbs;
+	// the floor of a broadleaf or conifer forest (ferns, laurel and rhododendron, blueberry,
+	// leaf or needle litter); the dense ferny floor of the humid subtropics; limestone
+	// breaking out where the land is karst.
+	function globeCell(G, ll, cx, cz, put, scatter, drift, J, r, season) {
+		const c = G.data.cellAt(ll.lat, ll.lon), h = H(cx, cz);
+		if (h < 1) return;
+		const e = 8, slope = Math.hypot(H(cx + e, cz) - H(cx - e, cz), H(cx, cz + e) - H(cx, cz - e)) / (2 * e);
+		const air = c.TEMP - 6.5 * Math.max(0, h - 800) / 1000, rain = c.RAIN, trees = c.TREES;
+		// the dry season: the hemisphere's late summer browns the grass where it rains little
+		const nh = ll.lat > 0 ? season : 1 - season, tropic = Math.abs(ll.lat) < 23;
+		const dry = Math.min(1, Math.max(0, (700 - rain) / 450)) * (tropic ? 0.6 : nh);
+		const green = [0.26, 0.44, 0.1], straw = [0.58, 0.44, 0.2];
+		const tone = (k = 0) => J(green.map((g, i) => (g + (straw[i] - g) * Math.min(1, dry + k)) * 1.7), 0.1);
+		const cold = sm(1, -3, air), arid = sm(420, 180, rain), hot = sm(14, 20, air), forest = sm(0.3, 0.55, trees) * (1 - arid);
+		const karst = c.KARST || 0;
+		const rockC = karst > 0.3 ? [0.62, 0.6, 0.55] : arid > 0.5 ? [0.56, 0.42, 0.32] : [0.46, 0.44, 0.41];
+		// rock: scree and outcrops with height and steepness, limestone towers' foot in karst
+		const rockW = Math.max(0, slope - 0.25) * 2.2 + cold * 0.8 + arid * 0.3 + karst * 0.8;
+		if (rockW > 0.2 && drift(cx, cz, 90, 21) > 0.5 && r() < rockW * 0.7) {
+			const x = cx + (r() - 0.5) * 10, z = cz + (r() - 0.5) * 10, s2 = 1.6 + r() * 2.2 * Math.min(1.5, rockW);
+			put(Lout, x, z, drift(cx, cz, 400, 3) * 6.28, s2, s2 * (0.8 + r() * 0.4), J(rockC, 0.1), karst > 0.3 || cold > 0.5 ? 1 : 0, s2 * 0.45);
+		}
+		scatter(Math.round(6 * K * Math.min(2, rockW)), () => 0.6, (x, z) => { const s2 = 0.25 + Math.pow(r(), 2.5) * 1.6; put(Lrk, x, z, r() * 6.28, s2, s2 * (0.8 + r() * 0.4), J(rockC, 0.12), cold > 0.5 ? 2 : karst > 0.3 ? 1 : 0, s2 * 0.35); });
+		scatter(Math.round(18 * K * Math.min(1.5, rockW + 0.15)), () => 0.8, (x, z) => { const s2 = 0.05 + Math.pow(r(), 3) * 0.22; put(Lst, x, z, r() * 6.28, s2, s2, J(rockC, 0.15), Math.floor(r() * 2), s2 * 0.3, true); });
+		if (cold > 0.5) {
+			// alpine turf and tundra: short grass in patches, cushions of moss campion and saxifrage
+			scatter(Math.round(90 * K * (1 - cold * 0.5)), (x, z) => 0.3 + drift(x, z, 8, 1) * 0.7, (x, z) => put(Ls, x, z, r() * 6.28, 0.8 + r() * 0.5, 0.7 + r() * 0.4, tone(0.3), 0, 0.03));
+			scatter(Math.round(8 * K), () => 0.7, (x, z) => put(Lso, x, z, r() * 6.28, 0.5 + r() * 0.4, 1, J([0.9, 0.95, 0.7], 0.15), 0, 0.02, true));
+			return;
+		}
+		if (arid > 0.4) {
+			if (hot > 0.5) {
+				// hot desert: creosote and bursage spaced evenly apart on bare ground
+				scatter(Math.round(7 * K), () => 0.9, (x, z) => { const s2 = 0.8 + r() * 0.6; put(Lcb, x, z, r() * 6.28, s2, s2 * 1.1, J([0.75, 0.72, 0.4], 0.1), Math.floor(r() * 2), 0.1); });
+				scatter(Math.round(10 * K), () => 0.5, (x, z) => put(Ls, x, z, r() * 6.28, 0.7, 0.6, tone(0.6), 0, 0.03));
+			} else {
+				// sagebrush steppe: silver-grey sage to the horizon, bunchgrass between
+				scatter(Math.round(34 * K * arid), (x, z) => 0.5 + drift(x, z, 14, 4) * 0.5, (x, z) => { const s2 = 0.7 + r() * 0.7; put(Lsg, x, z, r() * 6.28, s2, s2, J([0.95, 0.95, 0.85], 0.1), Math.floor(r() * 2), 0.08); });
+				scatter(Math.round(50 * K), () => 0.6, (x, z) => { const s2 = 0.6 + r() * 0.5; put(Lb, x, z, r() * 6.28, s2, s2, tone(0.4), Math.floor(r() * 2), 0.03); });
+			}
+			return;
+		}
+		if (forest > 0.3) {
+			const conif = air < 7 ? 1 : 0, humid = hot * sm(900, 1500, rain);
+			// the forest floor: ferns and shrubs in the shade, litter everywhere, little grass
+			scatter(Math.round((14 + humid * 22) * K * forest), (x, z) => 0.3 + drift(x, z, 10, 6), (x, z) => { const s2 = 0.7 + r() * 0.6; put(Lfn, x, z, r() * 6.28, s2, s2, J(conif ? [1.1, 1.05, 0.9] : [1.25, 1.2, 1], 0.12), Math.floor(r() * 2), 0.03); });
+			scatter(Math.round(6 * K * forest), (x, z) => 0.3 + drift(x, z, 18, 2), (x, z) => { const s2 = 0.8 + r() * 0.6; put(Lhk, x, z, r() * 6.28, s2, s2, J(conif ? [1, 1, 1] : [0.8, 0.9, 0.8], 0.1), 0, 0.05); });
+			if (!conif) scatter(Math.round(3 * K * forest), () => 0.6, (x, z) => { const s2 = 0.7 + r() * 0.4; put(Lty, x, z, r() * 6.28, s2, s2, J([0.9, 1, 0.9], 0.1), 0, 0.1); });
+			scatter(Math.round(70 * K * forest), () => 0.6 + drift(cx, cz, 5, 3) * 0.4, (x, z) => { const s2 = 0.5 + r() * 0.5; put(Llf, x, z, r() * 6.28, s2, s2, conif ? J([0.3, 0.22, 0.15], 0.2) : J([0.45, 0.33, 0.2], 0.2), conif ? 2 : Math.floor(r() * 2), 0, true); });
+			scatter(Math.round(5 * K), () => 0.8, (x, z) => { const s2 = 0.7 + r() * 0.9; put(Lsk, x, z, r() * 6.28, s2, s2, [0.9, 0.85, 0.8], Math.floor(r() * 2), 0.02, true); });
+			scatter(Math.round(20 * K * (1 - forest)), () => 0.5, (x, z) => put(Ls, x, z, r() * 6.28, 0.8, 0.8, tone(0), 0, 0.03));
+			return;
+		}
+		// open country: meadow, pasture or prairie; tall where it rains enough, forbs through it
+		const tall = sm(350, 800, rain);
+		scatter(Math.round((110 + tall * 110) * K), (x, z) => 0.35 + 0.8 * drift(x, z, 9, 1), (x, z) => {
+			const s2 = 0.8 + r() * 0.6, L = r() < tall * 0.6 ? Lo : Lb;
+			put(L, x, z, r() * 6.28, s2, s2 * (0.8 + tall * 0.7), tone(0.1 * (1 - tall)), Math.floor(r() * L.n), 0.03);
+		});
+		scatter(Math.round(8 * K), () => 0.5, (x, z) => put(Lw, x, z, r() * 6.28, 0.8 + r() * 0.4, 0.8 + r() * 0.4, [1, 1, 1], r() < 0.5 ? 0 : 2, 0.02));
+		// hedges and scrub: a few shrubs, more where it is wetter (the Azores' hedgerows, gorse)
+		scatter(Math.round(3 * K * (0.5 + trees)), (x, z) => (drift(x, z, 30, 7) > 0.5 ? 1 : 0), (x, z) => { const s2 = 0.8 + r() * 0.6; put(Lcb, x, z, r() * 6.28, s2, s2, J([1, 1, 1], 0.1), Math.floor(r() * 2), 0.1); });
+	}
+
 	// ---------- streaming ----------
 	let MAXR = 0;
 	const queue = [];
-	let at = null, dirty = true, levelsN = -1, seasonAt = -1;
+	let at = null, dirty = true, levelsN = -1, seasonAt = -1, epochSeen;
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qt = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), col = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3();
 	function wanted(cx, cz) {
 		// the cells round you, nearest first
@@ -433,7 +506,8 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 	let counted = 0;
 	function update(camera) {
 		const x = camera.position.x, z = camera.position.z;
-		const on = bay.loaded() && Math.max(Math.abs(x), Math.abs(z)) > 1500 && camera.position.y - H(x, z) < 400;
+		// (the Bay's wild land when it is here; otherwise the globe's, once its data is in)
+		const G = globe?.(), on = (bay.loaded() || !!G?.data?.win?.ready) && Math.max(Math.abs(x), Math.abs(z)) > 1500 && camera.position.y - H(x, z) < 400;
 		group.visible = on;
 		if (!on) return;
 		if (steps.length) { steps.shift()(); if (!steps.length) MAXR = Math.max(...layers.map((L) => L.R)); return; }
@@ -441,6 +515,9 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		// finer heights arrived (the ground moved) or the season turned: work it all out again
 		const nl = bay.levels.filter(Boolean).length;
 		if (nl !== levelsN || Math.abs(REAL_U.uSeason.value - seasonAt) > 0.08) { levelsN = nl; seasonAt = REAL_U.uSeason.value; cells.clear(); at = null; }
+		// the globe's frame moved (earth/globeframe.js): every cell's place with it
+		const ep = globe?.()?.frame?.epoch;
+		if (ep !== undefined && ep !== epochSeen) { epochSeen = ep; cells.clear(); at = null; }
 		if (cells.size > 9000) cells.clear();
 		if (!at || Math.hypot(x - at.x, z - at.z) > 8) { wanted(x, z); dirty = true; at = { x, z }; }
 		// a few cells a frame, nearest first, within a small budget

@@ -17,7 +17,7 @@ const inHours = (s, h) => { const [a, b] = s.hours; return a <= b ? h >= a && h 
 const TRAIL_AT = TRAILS.map((t) => ({ ...t, ...toWorld(t.lat, t.lon) }));
 const about = (id, h, month) => { const s = GUIDE[id]; return !!s && s.months.includes(month) && inHours(s, h); };
 
-export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, say = () => {}, real = null } = {}) {
+export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, say = () => {}, real = null, globe = null } = {}) {
 	// (hint(text, ms, priority): the trailhead board outranks the place names)
 	const group = new THREE.Group();
 	group.name = 'wildlife';
@@ -114,8 +114,11 @@ export function createWildlife(scene, bay, { isPhone = false, hint = () => {}, s
 		}
 		trailSeen = tr || (trailSeen && Math.hypot(trailSeen.x - cam.position.x, trailSeen.z - cam.position.z) < 400 ? trailSeen : null);
 		const onBay = bay.loaded() && Math.max(Math.abs(cam.position.x), Math.abs(cam.position.z)) > 1600 && cam.position.y < 2500;
-		group.visible = onBay;
-		if (!onBay) return;
+		// (these are the Bay Area's animals: away on the rest of the globe, none of them)
+		const G = globe?.(), ll = G?.toLL ? G.toLL(cam.position.x, cam.position.z) : null;
+		const home = !ll || Math.hypot((ll.lat - 37.6) * 111, (ll.lon + 122.1) * 88) < 200;
+		group.visible = onBay && home;
+		if (!group.visible) return;
 		if (Math.hypot(cam.position.x - cx, cam.position.z - cz) > 900 || Math.abs(hours - lastH) > 0.75) place(cam, hours, month);
 		// vultures: rocking in the V, circling, the kettle drifting downwind
 		let n = 0;

@@ -76,7 +76,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 			for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (const m of cell.get(key(Math.floor(n.lat / 5) + a, Math.floor(n.lon / 5) + b)) || []) if (m !== n) { const d = kmBetween(n, m); if (d < km) out.push([m, d]); }
 			return out;
 		};
-		links = [];
+		const links2 = [];
 		let t0 = performance.now();
 		for (const a of nodes) {
 			const cand = near(a, 600);
@@ -85,13 +85,14 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 				// a third place nearer to both: the road goes by way of it
 				let block = false;
 				for (const [c, dc] of cand) if (c !== b && dc < d && kmBetween(b, c) < d) { block = true; break; }
-				if (!block && d < 450) links.push({ id: links.length, a, b, km: d, ...(Math.min(a.pop, b.pop) >= 2 && d > 25 ? MOTORWAY : MAIN) });
+				if (!block && d < 450) links2.push({ id: links2.length, a, b, km: d, ...(Math.min(a.pop, b.pop) >= 2 && d > 25 ? MOTORWAY : MAIN) });
 			}
 			if (performance.now() - t0 > 4) { yield; t0 = performance.now(); }
 		}
-		for (const L of links) { L.a.links.push(L); L.b.links.push(L); }
+		for (const L of links2) { L.a.links.push(L); L.b.links.push(L); }
 		// a place left alone is joined to its nearest
-		for (const a of nodes) if (!a.links.length) { const c = near(a, 800).sort((p, q) => p[1] - q[1])[0]; if (c) { const L = { id: links.length, a, b: c[0], km: c[1], ...MAIN }; links.push(L); a.links.push(L); c[0].links.push(L); } }
+		for (const a of nodes) if (!a.links.length) { const c = near(a, 800).sort((p, q) => p[1] - q[1])[0]; if (c) { const L = { id: links2.length, a, b: c[0], km: c[1], ...MAIN }; links2.push(L); a.links.push(L); c[0].links.push(L); } }
+		links = links2;
 		stats.links = links.length;
 	}
 
@@ -102,7 +103,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		const latM = (L.a.lat + L.b.lat) / 2, kx = 111320 * Math.cos(latM * Math.PI / 180), kz = 110996;
 		let dl = L.b.lon - L.a.lon; dl = ((dl + 540) % 360) - 180;
 		const ex = dl * kx, ey = (L.b.lat - L.a.lat) * kz, len = Math.hypot(ex, ey), ux = ex / len, uy = ey / len;
-		const cs = Math.max(200, Math.min(900, len / 300)), pad = 3000, half = Math.max(3000, len * 0.22);
+		const cs = Math.max(120, Math.min(500, len / 450)), pad = 3000, half = Math.max(3000, len * 0.22);
 		const NU = Math.ceil((len + 2 * pad) / cs) + 1, NV = Math.ceil(2 * half / cs) + 1, N = NU * NV;
 		// a cell's place (east, north metres from A)
 		const pos = (i, j) => { const u = -pad + i * cs, v = -half + j * cs; return [u * ux - v * uy, u * uy + v * ux]; };
@@ -140,7 +141,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 				const ng = g[k] + c;
 				if (ng < g[q]) { g[q] = ng; f[q] = ng + hq(q); from[q] = k; open.push(q); }
 			}
-			if ((++n & 127) === 0 && performance.now() - s0 > 3) { work += performance.now() - s0; yield; s0 = performance.now(); }
+			if ((++n & 31) === 0 && performance.now() - s0 > 3) { work += performance.now() - s0; yield; s0 = performance.now(); }
 		}
 		work += performance.now() - s0;
 		stats.routeMs = Math.max(stats.routeMs, Math.round(work));
@@ -289,7 +290,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 	}
 
 	// ---------- drawn ----------
-	const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+	const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 	mat.onBeforeCompile = (sh) => {
 		sh.vertexShader = 'attribute vec2 aRoad; varying vec2 vRoad;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
 			vRoad = aRoad;

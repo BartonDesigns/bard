@@ -23,6 +23,7 @@ import { createGlobeHeight, anchorUniforms, GLOBE_U } from './globeheight.js';
 import { createGlobeTerrain, SEAM_A, SEAM_B } from './globeterrain.js';
 import { createGlobeTrees } from './globetrees.js';
 import { createGlobeTowns } from './globetowns.js';
+import { createGlobeRoads } from './globeroads.js';
 import { BAY_DETAIL_U, BAY_DETAIL_AMP } from './baydetail.js';
 import { loadAtlas, atlasReady, regionAt, palette } from './atlas.js';
 import { setFarGround } from '../bay/terrain.js';
@@ -89,6 +90,10 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	};
 	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas });
 
+	// ---------- the roads between the places (globeroads.js), found by the real city's near() ----------
+	let leftSide = false, sourced = null;
+	const roads = createGlobeRoads({ scene, height, data, groundAt: (x, z) => island.heightAt(x, z), isPhone, left: () => leftSide });
+
 	// ---------- flying: a cruising height out over the globe ----------
 	island.flyCeiling = (x, z) => {
 		if (!F.bay) return 12000;
@@ -112,6 +117,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		data.anchor(); anchorUniforms(data.U, data.win);
 		trees.shift(dx, dz);
 		towns.reset();
+		roads.reframe();
 		stats.rebases++; stats.lastRebase = performance.now();
 		return { dx, dz };
 	}
@@ -127,6 +133,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	function place(lat, lon) {
 		if (bayKm(lat, lon) < BAY_BACK_KM) { if (!F.bay) { bayFrame(); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); } }
 		else { setFrame(lat, lon); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); }
+		roads.reframe();
 		const p = toXZ(lat, lon);
 		// (a jump out of the window: nothing is drawn or placed from the old one meanwhile)
 		const gi = Math.floor((lon + 180) * 10), gj = Math.floor((90 - lat) * 10), W = data.win;
@@ -168,6 +175,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 			else {
 				const R = regionAt(ll.lat, ll.lon);
 				veg = R?.land ? R.profile.veg : veg;
+				if (R?.land) leftSide = LEFT.test(R.profile.country || '');
 				const top = R?.weights?.[0];
 				if (R?.land && top && top.w > 0.6 && R.id !== regionId && out > SEAM_A) {
 					const was = regionId; regionId = R.id;
@@ -178,6 +186,11 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const steady = data.win.ready && !data.win.moving;
 		trees.update(cam, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version);
 		if (steady) towns.update(cam);
+		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
+		const real = world()?.real;
+		if (real?.addSource && sourced !== real) { real.addSource(roads); sourced = real; }
+		const A = towns.civ().active();
+		roads.update(dt, cam, steady && (!F.bay || out > SEAM_A), A?.region ? { id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] } : null);
 		const ms = performance.now() - t0;
 		stats.updateMs += (ms - stats.updateMs) * 0.05; stats.maxMs = Math.max(stats.maxMs * 0.995, ms);
 	}
@@ -187,7 +200,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const ll = toLL(camera.position.x, camera.position.z);
 		return {
 			at: `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)}`, frame: F.bay ? 'the Bay\'s' : `floating at ${F.lat.toFixed(3)}, ${F.lon.toFixed(3)}`, rebases: stats.rebases,
-			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(),
+			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(),
 			window: { cell0: [data.win.gi0, data.win.gj0], tiles: data.stats.tiles, composeMs: data.stats.composeMs, decodeMs: Math.round(data.stats.decodeMs), mb: Math.round(data.bytes() / 1e5) / 10 },
 			ms: { mean: Math.round(stats.updateMs * 100) / 100, peak: Math.round(stats.maxMs * 10) / 10 },
 		};
@@ -195,14 +208,15 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	function dispose() {
 		setFarGround(null);
 		GLOBE_U.uGOn.value = 0;
+		sourced?.removeSource?.(roads);
 		BAY_DETAIL_U.uBDAmp.value = 0;
 		delete island.flyCeiling;
 		if (!F.bay) bayFrame();
 		towns.reset();
-		for (const g of [terrain.group, trees.group]) { scene.remove(g); g.traverse((o) => { o.geometry?.dispose?.(); }); }
+		for (const g of [terrain.group, trees.group, roads.group]) { scene.remove(g); g.traverse((o) => { o.geometry?.dispose?.(); }); }
 		for (const t of data.tex) t.dispose();
 	}
 	// finish what is being laid out now, in one go (tests, and after a jump)
-	function settle() { trees.settle(); towns.civ().flush(); }
-	return { update, place, info, dispose, settle, toLL, toXZ, height, data, terrain, trees, towns, whenReady, frame: F, bayOut };
+	function settle() { trees.settle(); towns.civ().flush(); roads.settle(); }
+	return { update, place, info, dispose, settle, roads, toLL, toXZ, height, data, terrain, trees, towns, whenReady, frame: F, bayOut };
 }

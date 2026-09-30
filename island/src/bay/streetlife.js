@@ -195,7 +195,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 					const kx = x + nx * (hw + 0.45) * side, kz = z + nz * (hw + 0.45) * side, kg = groundAt(kx, kz);
 					if (k % 19 === 9 && rank >= 1 && !r.bridge && (real.landAt(kx, kz)?.lu || 0) !== 0) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, Math.atan2(-side * nx, -side * nz)); const nl = getNl(); if (nl < 900) { lampPos.set([x + nx * (hw - 1.2) * side, kg + 8.2, z + nz * (hw - 1.2) * side], nl * 3); setNl(nl + 1); } } }
 					if (k % 47 === 20 && rank >= 1) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
-					if (rank >= 2 && k % 97 === 50) { const c = n(benches); if (c >= 0) put(benches, c, x + nx * (hw + 1.4) * side, kg, z + nz * (hw + 1.4) * side, Math.atan2(-side * nx, -side * nz)); }
+					if (rank >= 2 && !r.rural && k % 97 === 50) { const c = n(benches); if (c >= 0) put(benches, c, x + nx * (hw + 1.4) * side, kg, z + nz * (hw + 1.4) * side, Math.atan2(-side * nx, -side * nz)); }
 				}
 			}
 		}

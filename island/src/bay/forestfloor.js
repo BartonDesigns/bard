@@ -143,7 +143,7 @@ const BURN = { ...toWorld(37.165, -122.245), r: 9500 };
 
 export function createForestFloor(scene, bay, city, real, opts = {}) {
 	// the ground cover, brush, rock and litter of the open country (nature/wildground.js)
-	const wild = opts.shared ? createWildGround(scene, bay, { shared: opts.shared, real, isPhone: opts.isPhone, ground: opts.ground }) : null;
+	const wild = opts.shared ? createWildGround(scene, bay, { shared: opts.shared, real, isPhone: opts.isPhone, ground: opts.ground, globe: opts.globe }) : null;
 	// (rotting as it lies: weathering.js)
 	const mat = rotWood(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }));
 	const logs = new THREE.InstancedMesh(logGeometry(true), mat, MAXL), limbs = new THREE.InstancedMesh(logGeometry(false), mat, MAXL), stumps = new THREE.InstancedMesh(stumpGeometry(), mat, MAXS), snags = new THREE.InstancedMesh(snagGeometry(), mat, MAXN);
