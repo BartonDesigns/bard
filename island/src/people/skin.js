@@ -8,6 +8,7 @@
 // baked shading rides a vertex attribute (skinx: ao, thin, oil, flush; face.js).
 
 import * as THREE from 'three';
+import { INK_GLSL, inkUniforms } from '../tattoo/skinink.js';
 
 const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
@@ -61,16 +62,22 @@ export function skinMaterial(map, tint, age) {
 	m.userData.beard = beardU;
 	m.userData.skin = skinU;
 	m.userData.vit = vitU;
+	// tattoos: none until someone's are laid on (tattoo/skinink.js)
+	const inkU = inkUniforms();
+	m.userData.ink = inkU;
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uScalp = scalpU;
 		sh.uniforms.uBeard = beardU;
 		sh.uniforms.uSkin = skinU;
 		sh.uniforms.uVit = vitU;
+		Object.assign(sh.uniforms, inkU);
 		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nattribute float beard;\nattribute vec4 skinx;\nvarying float vScalp;\nvarying float vBeard;\nvarying vec2 vScalpUv;\nvarying vec4 vSkin;\nvarying vec3 vBindP;')
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;\nvBeard = beard;\nvScalpUv = uv;\nvSkin = skinx;\nvBindP = position;');
-		sh.fragmentShader = (isPhone ? '' : '#define SKIN_PORES\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
+		sh.fragmentShader = (isPhone ? '' : '#define SKIN_PORES\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD + INK_GLSL)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + SSS)
 			.replace('#include <color_fragment>', `#include <color_fragment>
+// tattoos: ink in the skin, a multiply of its own colour (tattoo/skinink.js)
+diffuseColor.rgb *= inkAt(vBindP);
 // stubble: the cut hairs just under and through the skin, a fine grain, soft-edged
 // (far off, just its shade: no grain to shimmer)
 if (uBeard.w > 0.0) {
@@ -122,6 +129,6 @@ roughnessFactor = mix(0.58, 0.47, vSkin.z * uSkin.z) + (sn3(vBindP * 400.0) - 0.
 	reflectedLight.directSpecular *= mix(1.0, ao, 0.6);
 }`);
 	};
-	m.customProgramCacheKey = () => 'crysis-skin-4' + (isPhone ? '-lo' : '');
+	m.customProgramCacheKey = () => 'crysis-skin-5' + (isPhone ? '-lo' : '');
 	return m;
 }

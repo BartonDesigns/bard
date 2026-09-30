@@ -9,6 +9,8 @@
 // questions, jokes, agreement, refusal, directions, doubt and emphasis, each turned into a
 // gesture, a nod or a shake, a face.
 
+import { inkStory } from '../tattoo/lore.js';
+
 const rng = (seed) => { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 
@@ -48,6 +50,8 @@ export function personaFor(P, where) {
 	return {
 		name: `${first} ${last}`, first, age, job, place: where.name, kind, years,
 		mood: pick(r, MOODS), errand: pick(r, ERRANDS), style, temper: T,
+		// the tattoos they have, and why (the same ones their body wears: tattoo/lore.js)
+		tattoos: inkStory(d),
 		hobby: pick(r, ['hiking Mount Diablo', 'pickup basketball', 'baking bread', 'a book club', 'surfing at Pacifica', 'gardening', 'birding', 'cycling the Iron Horse Trail', 'photography', 'playing guitar', 'the Warriors', 'cooking for too many people']),
 	};
 }
@@ -57,7 +61,7 @@ export function personaPrompt(p, world) {
 Talk like a normal person, not an assistant: short (usually one or two sentences), casual, in your own voice, with your own opinions and small details of your life. You don't know you are in a game. Never make up facts about real places beyond everyday local knowledge; if unsure, say so. If the player is rude you can end the chat politely.
 If the player asks what to do or where to go, you can send them somewhere from the list below, as a favour or a tip, by adding [[quest: PLACE]] with the place's exact name (only places in the list).
 Start every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful. You may add one gesture in double brackets when it fits: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.
-WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
+${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
 }
 
 // ---------- without a model: simple, in character ----------
@@ -72,6 +76,10 @@ export function personaOffline(p, text, world) {
 	if (/where.*(go|visit|see)|recommend|what.*(do|should)|bored|any (tips|ideas)/.test(q)) {
 		const pickN = world?.near?.[1 + (p.age % 3)] || near;
 		return pickN ? `[[mood: happy]] [[gesture: point]] Go see ${pickN.name} — ${pickN.dir}, about ${pickN.dist}. Tell me what you think. [[quest: ${pickN.name}]]` : '[[mood: thoughtful]] [[gesture: shrug]] Honestly? Just walk around. It\'s nice.';
+	}
+	if (/tattoo|\bink\b|inked/.test(q)) {
+		const t = p.tattoos || [];
+		return t.length ? `[[mood: ${p.temper.warmth > 0.4 ? 'happy' : 'calm'}]] [[gesture: ${t.length > 1 ? 'explain' : 'open'}]] ${t[0][0].toUpperCase() + t[0].slice(1)}.${t.length > 1 ? ` And ${t.length - 1 === 1 ? 'one more' : `${t.length - 1} more`}; ask me another time.` : ''}` : '[[mood: amused]] [[gesture: shrug]] Not one. Never could decide on anything forever.';
 	}
 	if (/weather|hot|cold|rain/.test(q)) return '[[mood: calm]] [[gesture: shrug]] Typical — cool mornings, warm afternoons.';
 	if (/bye|see you|later|thanks|thank you/.test(q)) return '[[mood: happy]] [[gesture: wave]] Take care!';

@@ -9,6 +9,7 @@
 // painted by one shader (garment.js): a cloth mesh, an accessories mesh, skin, eyes, hair.
 
 import * as THREE from 'three';
+import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
 import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial } from './garment.js';
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
@@ -251,6 +252,8 @@ export function buildPerson(A, d) {
 	if (!d.skinOverride && vh % 100 === 0) skinMat.userData.vit.value.set(1, (vh >>> 8) % 97, (vh >>> 12) % 89, (vh >>> 16) % 83);
 	P.skinMat = skinMat;
 	P._p = p;
+	// their tattoos, as their life gave them (tattoo/lore.js): on the shared flash sheet
+	if (!d.skinOverride) { const ink = inkFor(d); if (ink.length) applyInk(skinMat, P, ink, flashAtlas().tex); }
 	P._S = S;
 	P.redress = (o) => dress(A, P, o);
 	dress(A, P, outfitOf(d));

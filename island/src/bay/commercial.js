@@ -18,7 +18,20 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { inCampus } from './discovery.js';
+import { flashAtlas } from '../tattoo/skinink.js';
 
+// the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
+let SHEET = null;
+function flashSheet() {
+	if (SHEET) return SHEET;
+	const F = flashAtlas(), cv = document.createElement('canvas');
+	cv.width = F.canvas.width; cv.height = F.canvas.height;
+	const g = cv.getContext('2d');
+	g.fillStyle = '#efe6d2'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(F.canvas, 0, 0);
+	const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+	SHEET = { tiles: F.tiles, mat: new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }) };
+	return SHEET;
+}
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
 
@@ -30,10 +43,11 @@ function typeOf(b) {
 	if (area > 900 && deep > 24 && r < 0.2) return 'cinema';
 	if (r < 0.36) return 'restaurant';
 	if (r < 0.54) return 'cafe';
+	if (r < 0.575 && area < 700) return 'tattoo';
 	if (r < 0.62 && area > 250) return 'arcade';
 	return 'shop';
 }
-const ZONE_OF = { cafe: ZONE.dining, restaurant: ZONE.dining, shop: ZONE.retail, office: ZONE.office, arcade: 'play', bowling: 'play', cinema: 'play' };
+const ZONE_OF = { cafe: ZONE.dining, restaurant: ZONE.dining, shop: ZONE.retail, tattoo: ZONE.retail, office: ZONE.office, arcade: 'play', bowling: 'play', cinema: 'play' };
 function busyAt(type, h) {
 	if (ZONE_OF[type] === 'play') return Math.max(0, Math.min(1, Math.exp(-(((h - 20) / 2.6) ** 2)) + Math.exp(-(((h - 15) / 2.5) ** 2)) * 0.45));
 	if (type === 'cafe') return Math.max(0, Math.min(1, Math.exp(-(((h - 8.3) / 1.6) ** 2)) + Math.exp(-(((h - 14) / 2) ** 2)) * 0.35));
@@ -41,8 +55,8 @@ function busyAt(type, h) {
 	return crowd(ZONE_OF[type], h).k;
 }
 // how many of those in are children (with their families), when children are about
-const KIDS_IN = { cafe: 0.14, restaurant: 0.2, shop: 0.16, office: 0, arcade: 0.3, bowling: 0.28, cinema: 0.22 };
-export const COMMERCIAL_TYPES = ['cafe', 'restaurant', 'shop', 'office', 'arcade', 'bowling', 'cinema'];
+const KIDS_IN = { tattoo: 0, cafe: 0.14, restaurant: 0.2, shop: 0.16, office: 0, arcade: 0.3, bowling: 0.28, cinema: 0.22 };
+export const COMMERCIAL_TYPES = ['cafe', 'restaurant', 'shop', 'tattoo', 'office', 'arcade', 'bowling', 'cinema'];
 
 export function createCommercial(scene, bay, real, city, { isPhone = false } = {}) {
 	const BUILD_R = isPhone ? 36 : 50, DROP_R = BUILD_R + 25, MAX = isPhone ? 3 : 6;
@@ -95,7 +109,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		}
 		box(mats.trim, doorX - dw / 2 - 0.08, 0, hd - WALL, doorX - dw / 2, STORE, hd); box(mats.trim, doorX + dw / 2, 0, hd - WALL, doorX + dw / 2 + 0.08, STORE, hd);
 		// an awning over the door, the name board above it
-		box(type === 'restaurant' ? mats.red : type === 'arcade' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
+		box(type === 'restaurant' ? mats.red : type === 'arcade' || type === 'tattoo' ? mats.neon : mats.dark, doorX - 2.2, STORE + 0.1, hd, doorX + 2.2, STORE + 0.25, hd + 1.4);
 		// the ceiling: a dropped grid of light panels, or (the creative offices, the big stores,
 		// some cafés and restaurants) open to the roof: the deck painted dark, bowstring trusses
 		// arching across, spiral ducts, the sprinkler main, a cable tray, pendant lights
@@ -179,6 +193,29 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			for (let z = bz + 2.6; z < inside.z1 - 0.6; z += step) for (let x = inside.x0 + (type === 'restaurant' ? 3 : 1.4); x < inside.x1 - 1; x += step) table(x, z, type === 'restaurant' && rnd() < 0.5 ? 4 : 2, type === 'cafe');
 			// pendant lights over the bar
 			for (let x = inside.x0 + 1.5; x < inside.x1 - 1; x += 2.2) { cyl(mats.dark, x, 2.4, bz, 0.01, CEIL - 2.4, 4); add(mats.panel, new THREE.SphereGeometry(0.16, 10, 6).translate(x, 2.35, bz)); }
+		} else if (type === 'tattoo') {
+			// a tattoo parlour: the counter by the door, the flash sheets framed down one wall,
+			// and down the other the stations: a reclined chair, the artist's stool, a lamp over it
+			box(mats.dark, doorX - 1.4, 0, inside.z1 - 1.6, doorX + 1.4, 1.05, inside.z1 - 1, true);
+			seats.push([doorX, inside.z1 - 2.1, 0, false]);
+			const F = flashSheet();
+			for (let z = inside.z0 + 0.9, k = 0; z < inside.z1 - 2.6; z += 1.15, k++) for (const y of [1.25, 2.25]) {
+				const t = F.tiles[(k * 2 + (y > 2 ? 1 : 0)) % F.tiles.length], g = new THREE.PlaneGeometry(0.9, 0.9).rotateY(Math.PI / 2).translate(inside.x0 - 0.36, y, z);
+				const uv = g.attributes.uv;
+				for (let i = 0; i < uv.count; i++) uv.setXY(i, t[0] + uv.getX(i) * t[2], t[1] + uv.getY(i) * t[3]);
+				add(F.mat, g);
+				box(mats.dark, inside.x0 - 0.39, y - 0.48, z - 0.48, inside.x0 - 0.35, y + 0.48, z + 0.48);
+			}
+			for (let z = inside.z0 + 1.3; z < inside.z1 - 3; z += 2.6) {
+				const x = inside.x1 - 1.3;
+				box(mats.leather, x - 0.35, 0.5, z - 0.9, x + 0.35, 0.7, z + 0.3, true);
+				add(mats.leather, new THREE.BoxGeometry(0.7, 0.12, 0.8).rotateX(-0.6).translate(x, 0.9, z - 1.1));
+				cyl(mats.steel, x, 0, z - 0.3, 0.06, 0.5, 8);
+				cyl(mats.steel, x - 0.9, 0, z - 0.2, 0.03, 0.5, 6); cyl(mats.leather, x - 0.9, 0.5, z - 0.2, 0.2, 0.06, 10);
+				cyl(mats.steel, x + 0.6, 0, z + 0.5, 0.02, 1.9, 6); add(mats.panel, new THREE.SphereGeometry(0.14, 10, 6).translate(x + 0.3, 1.85, z + 0.2));
+				seats.push([x, z - 0.4, Math.PI, true], [x - 0.9, z - 0.2, Math.PI / 2, true]);
+			}
+			box(mats.neon, doorX - 1.1, 2.3, hd - WALL - 0.06, doorX + 1.1, 2.55, hd - WALL - 0.02);
 		} else if (type === 'shop') {
 			for (let z = inside.z0 + 1; z < inside.z1 - 2.5; z += 2.6) {
 				box(mats.white, inside.x0 + 1.2, 0, z - 0.45, inside.x1 - 1.2, 1.7, z + 0.45, true);
