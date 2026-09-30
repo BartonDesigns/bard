@@ -14,6 +14,7 @@ const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile
 const HEAD = /* glsl */`
 uniform vec4 uScalp;
 uniform vec4 uSkin;
+uniform vec4 uVit;
 varying float vScalp;
 varying vec2 vScalpUv;
 varying vec4 vSkin;
@@ -43,28 +44,40 @@ void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryP
 `;
 
 export function skinMaterial(map, tint, age) {
-	const m = new THREE.MeshPhysicalMaterial({ map, color: tint, roughness: 0.55, metalness: 0, ior: 1.4, sheen: 0.2, sheenRoughness: 0.65, sheenColor: new THREE.Color(0.85, 0.55, 0.45) });
+	// (the sheen is the skin's own colour, so it softens the edges without paling dark skin)
+	const m = new THREE.MeshPhysicalMaterial({ map, color: tint, roughness: 0.55, metalness: 0, ior: 1.4, specularIntensity: 0.7, sheen: 0.12, sheenRoughness: 0.7, sheenColor: tint.clone().multiplyScalar(0.45) });
 	// a close crop of hair painted on the scalp (a buzz cut, or what shows under a cap)
 	const scalpU = { value: new THREE.Vector4(0, 0, 0, 0) };
 	// x: how much light goes through (0 for the far worlds' painted skins), y: pore depth by
 	// age, z: how shiny the T-zone, w: the flush
 	const skinU = { value: new THREE.Vector4(1, 0.6 + Math.min(1, Math.max(0, (age - 25) / 50)) * 0.8, 1, 1) };
+	// vitiligo (a person in a hundred): x on, yzw where their patches fall
+	const vitU = { value: new THREE.Vector4(0, 0, 0, 0) };
 	m.userData.scalp = scalpU;
 	m.userData.skin = skinU;
+	m.userData.vit = vitU;
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uScalp = scalpU;
 		sh.uniforms.uSkin = skinU;
+		sh.uniforms.uVit = vitU;
 		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nattribute vec4 skinx;\nvarying float vScalp;\nvarying vec2 vScalpUv;\nvarying vec4 vSkin;\nvarying vec3 vBindP;')
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;\nvScalpUv = uv;\nvSkin = skinx;\nvBindP = position;');
 		sh.fragmentShader = (isPhone ? '' : '#define SKIN_PORES\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + SSS)
 			.replace('#include <color_fragment>', `#include <color_fragment>
 diffuseColor.rgb = mix(diffuseColor.rgb, uScalp.rgb * (0.8 + 0.4 * fract(sin(dot(floor(vScalpUv * 900.0), vec2(12.9898, 78.233))) * 43758.5453)), smoothstep(0.2, 0.8, vScalp) * uScalp.w);
-// the flush: blood near the surface of the cheeks, the nose, the ears, the lips
-diffuseColor.rgb *= mix(vec3(1.0), vec3(1.05, 0.86, 0.84), vSkin.w * uSkin.w * (1.0 - uScalp.w * smoothstep(0.2, 0.8, vScalp)));`)
+// the flush: blood near the surface of the cheeks, the nose, the ears, the lips; faint, a
+// multiply of the skin's own colour, so it never reads as a patch
+diffuseColor.rgb *= mix(vec3(1.0), vec3(1.02, 0.94, 0.93), vSkin.w * uSkin.w * (1.0 - uScalp.w * smoothstep(0.2, 0.8, vScalp)));
+// vitiligo: soft-edged pale patches where the pigment has gone, for the few who have it
+if (uVit.x > 0.5) {
+	float v = sn3(vBindP * 9.0 + uVit.yzw) * 0.7 + sn3(vBindP * 23.0 + uVit.zwy) * 0.3;
+	diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.74, 0.55, 0.47), smoothstep(0.6, 0.64, v) * (1.0 - smoothstep(0.2, 0.8, vScalp)));
+}`)
 			.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-// an oily T-zone and lips, matte cheeks; finer variation close up
-roughnessFactor = mix(0.6, 0.36, vSkin.z * uSkin.z) + (sn3(vBindP * 400.0) - 0.5) * 0.08;`)
+// a slightly oilier T-zone and lips, matte cheeks (a sheen, not a shine: a broad bright patch
+// reads on dark skin as lost pigment); finer variation close up
+roughnessFactor = mix(0.58, 0.47, vSkin.z * uSkin.z) + (sn3(vBindP * 400.0) - 0.5) * 0.06;`)
 			.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 #ifdef SKIN_PORES
 {
@@ -89,12 +102,12 @@ roughnessFactor = mix(0.6, 0.36, vSkin.z * uSkin.z) + (sn3(vBindP * 400.0) - 0.5
 {
 	// the folds' baked shade: the sky and bounce light most, the sun a little
 	float ao = vSkin.x;
-	reflectedLight.indirectDiffuse *= ao;
+	reflectedLight.indirectDiffuse *= mix(1.0, ao, 0.75);
 	reflectedLight.indirectSpecular *= ao * ao;
-	reflectedLight.directDiffuse *= mix(1.0, ao, 0.35);
+	reflectedLight.directDiffuse *= mix(1.0, ao, 0.2);
 	reflectedLight.directSpecular *= mix(1.0, ao, 0.6);
 }`);
 	};
-	m.customProgramCacheKey = () => 'crysis-skin-2' + (isPhone ? '-lo' : '');
+	m.customProgramCacheKey = () => 'crysis-skin-3' + (isPhone ? '-lo' : '');
 	return m;
 }

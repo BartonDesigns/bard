@@ -246,6 +246,9 @@ export function buildPerson(A, d) {
 	const tint = new THREE.Color().setRGB(d.tone * (1 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.55)), d.tone * (0.96 - melanin * (skinKey.startsWith('young_african') ? 0.1 : 0.62) + d.warmth * 0.02 + d.ancestry[1] * 0.02), d.tone * (0.9 - melanin * (skinKey.startsWith('young_african') ? 0.12 : 0.7) - d.ancestry[1] * 0.04));
 	const skinMat = skinMaterial(A.tex[skinKey], tint, d.age);
 	if (d.skinOverride) { skinMat.color.set(d.skinOverride.col); if (d.skinOverride.glow) { skinMat.emissive.set(d.skinOverride.col); skinMat.emissiveIntensity = d.skinOverride.glow; skinMat.userData.skin.value.set(0, 0.6, 0.5, 0); } }
+	// one in a hundred has vitiligo (from a hash of the seed, so no one else's looks change)
+	const vh = Math.imul((d.seed ?? 0) ^ 0x9e3779b9, 2654435761) >>> 0;
+	if (!d.skinOverride && vh % 100 === 0) skinMat.userData.vit.value.set(1, (vh >>> 8) % 97, (vh >>> 12) % 89, (vh >>> 16) % 83);
 	P.skinMat = skinMat;
 	P._p = p;
 	P._S = S;
