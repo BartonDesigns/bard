@@ -385,7 +385,7 @@ const SKY_MAPS = `#include <lights_fragment_maps>
 if (carEnv > 0.0) {
 	radiance += carSky((vec4(reflect(-geometryViewDir, geometryNormal), 0.0) * viewMatrix).xyz, material.roughness) * carEnv;
 	#ifdef USE_CLEARCOAT
-	if (material.clearcoat > 0.0) clearcoatRadiance += carSky((vec4(reflect(-geometryViewDir, geometryClearcoatNormal), 0.0) * viewMatrix).xyz, material.clearcoatRoughness) * carEnv;
+	if (material.clearcoat > 0.0) clearcoatRadiance += carSky((vec4(reflect(-geometryViewDir, geometryClearcoatNormal), 0.0) * viewMatrix).xyz, material.clearcoatRoughness) * carEnv * 1.6;
 	#endif
 }
 #endif`;
@@ -576,7 +576,7 @@ export function carGlassMaterial(o = {}) {
 				if (carPil < 0.5) {
 					float F = 0.04 + 0.96 * pow(1.0 - saturate(dot(normal, geometryViewDir)), 5.0);
 					vec3 refl = carSky((vec4(reflect(-geometryViewDir, normal), 0.0) * viewMatrix).xyz, 0.03);
-					float T = 0.62;
+					float T = 0.5;
 					if (!gl_FrontFacing) { F *= 0.25; refl *= 0.1; T = 0.84; }
 					float a = 1.0 - T * (1.0 - F);
 					gl_FragColor = vec4((refl * F + outgoingLight) / a, a);
