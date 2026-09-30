@@ -717,6 +717,8 @@ export function createIslandWorld() {
 			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
 			const own = island.heightAt, berms = world.berms;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : berms.apply(x, z, bayArea.heightAt(x, z));
+			// (the ground as the GPU draws it, where people stand: bay/terrain.js)
+			island.drawnAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.drawnAt(x, z, island.heightAt);
 			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
 			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? world?.water?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
@@ -1291,6 +1293,8 @@ export function createIslandWorld() {
 			window.L99IslandDoor?.closed?.();
 		},
 		active: () => visible && running,
+		// walking or riding a road hands-free: the keyboard plays music meanwhile
+		autoWalk: () => visible && running && !!drive.auto?.(),
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
 		openAt: (code) => share.openAt(code),

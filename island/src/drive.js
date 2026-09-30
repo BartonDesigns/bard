@@ -227,7 +227,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		toggleBtn.style.background = '#01a982';
 		labels();
 		if (D.mode === 'free') startPhysics();
-		hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. Assist lets the road steer. The road button stops.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'Driving: ← → pick the next turn, ↑ straight on, ↓ turn round, Shift to hurry. V to stop.'), 4500);
+		hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. Assist lets the road steer. The road button stops.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'On the road: ← → pick the next turn, ↑ straight on, ↓ turn round. The letter keys play music as you go. Esc to stop.'), 4500);
 	}
 	function startPhysics() {
 		const W = world(), f = D.from;
@@ -302,6 +302,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!mount.isConnected || mount.style.display === 'none' || e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
 		const k = e.key.toLowerCase();
 		if (k === 'v' && !e.repeat) { D.active ? stop() : start(); e.preventDefault(); return; }
+		if (k === 'escape' && D.active) { stop(); e.preventDefault(); return; }
 		if (!D.active) return;
 		held.add(k);
 		if (!e.repeat && k === 'm') { setMode(D.mode === 'free' ? 'assist' : 'free'); e.preventDefault(); return; }
@@ -490,5 +491,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	}
 	// for tests: the choices at the end of the road you are on
 	const debugOptions = () => { const E = D.edge, [, , hx, hz] = at(E.pts, D.dir > 0 ? E.L : 0); return options(E, D.dir).map((o) => ({ name: o.e.name || o.e.cls, then: o.then ? (o.then.e.name || o.then.e.cls) : '', L: Math.round(o.e.L), turn: +(Math.atan2(hx * D.dir * o.dz - hz * D.dir * o.dx, hx * D.dir * o.dx + hz * D.dir * o.dz) * 57.3).toFixed(0) })); };
-	return { update, start, stop, debugOptions, active: () => D.active, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car };
+	// following the road on its own (walking a trail, or the road steering): the hands are
+	// free, so the letter keys go to the music (index.html's keyboard asks this)
+	const auto = () => D.active && D.mode === 'assist';
+	return { update, start, stop, debugOptions, active: () => D.active, auto, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car };
 }

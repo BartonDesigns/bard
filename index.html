@@ -27723,9 +27723,12 @@ window._handoffCopy = function () {
       releaseKeyboard();
     } finally { refreshing = false; }
   }
+  // on the island, walking a trail (or riding a road) hands-free frees the letter keys,
+  // so they play music without the MOVE/MUSIC toggle; arrows still pick the turns
+  function autoWalk() { return world() === 'island' && !!(window.L99Island && window.L99Island.autoWalk && window.L99Island.autoWalk()); }
   function playing() {
     refresh();
-    return faceplate() || (enabled && eligible());
+    return faceplate() || (eligible() && (enabled || autoWalk()));
   }
   function paint() {
     if (!button) return;
