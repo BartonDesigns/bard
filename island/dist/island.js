@@ -5159,16 +5159,16 @@ vec3 asphaltAge(vec3 c, vec2 w, float ld, float lk, float pat, float cov, float 
 	c *= 1.0 - 0.22 * tr;
 	wxGloss = tr * 0.3;
 	// oil dripped down the lane's middle
-	float oil = lk * (1.0 - smoothstep(0.15, 0.5, ld)) * smoothstep(0.58, 0.8, vn(wl * 4.0) * 0.55 + vn(w * 0.45) * 0.45);
-	c = mix(c, vec3(0.06, 0.06, 0.065), oil * 0.4);
+	float oil = lk * (1.0 - smoothstep(0.2, 0.55, ld)) * (smoothstep(0.55, 0.85, vn(w * 0.45)) * 0.35 + wxSpots(wl, 0.45, 0.07, 0.3) * (1.0 - smoothstep(0.03, 0.08, px)) * 0.65);
+	c = mix(c, vec3(0.05, 0.05, 0.055), oil * 0.55);
 	wxGloss += oil * 0.25;
 	#ifndef WX_LITE
 	if (mid > 0.0) {
 		// long meandering cracks on the old stretches; alligator cracking in their wheel paths
 		float crk = wxLine(vn(w * 0.9 + 7.0), 0.006) * smoothstep(0.42, 0.7, age);
 		float gt = smoothstep(0.55, 0.8, age + vn(w * 0.2) * 0.3) * smoothstep(0.2, 0.6, tr);
-		if (gt > 0.0) crk = max(crk, max(wxLine(vn(wl * 4.0 + 1.3), 0.018), wxLine(vn(wl * 4.0 + 17.7), 0.018)) * gt);
-		c = mix(c, c * 0.45, crk * mid * (1.0 - pat));
+		if (gt > 0.0) crk = max(crk, max(wxLine(vn(wl * 4.0 + 1.3), 0.01), wxLine(vn(wl * 4.0 + 17.7), 0.01)) * gt * 0.7);
+		c = mix(c, c * 0.55, crk * mid * (1.0 - pat));
 		// the black tar snakes where a crew sealed them
 		float snake = wxLine(vn(w * 0.35 + 2.0), 0.007) * smoothstep(0.6, 0.7, vn(w * 0.02 + 9.0)) * mid * (1.0 - pat);
 		c = mix(c, vec3(0.03, 0.03, 0.033), snake * 0.8);
