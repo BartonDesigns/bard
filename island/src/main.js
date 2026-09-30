@@ -73,6 +73,7 @@ import { createDrive } from './drive.js';
 import { createVehicles } from './vehicles/index.js';
 import { createAutoMusic } from './music/automusic.js';
 import { today, onMonth, monthPicked, pickMonth } from './calendar.js';
+import { createTattooStudio } from './tattoo/studio.js';
 
 // the hills by the calendar: green from the winter rains into spring, gold by summer
 // (the naturalist's curve: inland gold by late May; the foggy coast lags into July)
@@ -342,6 +343,13 @@ export function createIslandWorld() {
 	const carjack = createCarjack({ world: () => world, camera, drive, ragdolls, avatar, hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.carjack = carjack;
 	// you, seen (P), knocked down by the traffic, and a shove (X) (people/self.js)
+	// the tattoo studio (in a parlour, or Crysis.tattoo()): your own designs, worn from then on
+	const studio = createTattooStudio({ mount: dom.mount, avatar, player: () => world.player, setCine: (fn) => { HOOKS.cine = fn; }, hint: (t, ms) => hint(t, ms, 1), isPhone });
+	const inkBtn = button('🖋 Tattoo studio', 'Tattoo studio (T)', 'left:50%;transform:translateX(-50%);bottom:calc(200px + env(safe-area-inset-bottom));display:none;');
+	dom.mount.appendChild(inkBtn);
+	inkBtn.addEventListener('click', (e) => { e.stopPropagation(); studio.start(); });
+	for (const ev of ['pointerdown', 'touchstart']) inkBtn.addEventListener(ev, (e) => e.stopPropagation());
+	addEventListener('keydown', (e) => { if ((e.key === 't' || e.key === 'T') && !e.repeat && world?.bizSeen?.type === 'tattoo' && !studio.active() && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { e.preventDefault(); studio.start(); } });
 	const you = createSelf({ world: () => world, camera, avatar, ragdolls, people: () => people, busy: () => carjack.active() || drive.active(), hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.self = you;
 	addEventListener('keydown', (e) => {
@@ -933,6 +941,7 @@ export function createIslandWorld() {
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
 		else if (W.boardwalk?.ride(dt, time)) drive.stop();
+		else if (studio.active()) { /* in the chair: the studio holds the camera */ }
 		else if (!carjack.update(dt, time) && !drive.update(dt)) W.player.update(dt, time);
 		you.update(dt, time);
 		// a director's camera (trailer/): posed after the player moves, before anything reads it
@@ -1051,11 +1060,12 @@ export function createIslandWorld() {
 			// stepping into a place: what it is, and how busy at this hour
 			const inB = W.commercial.inside(camera.position);
 			if (inB && inB !== W.bizSeen) {
-				const NAME = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', office: 'Office lobby', arcade: 'Arcade', bowling: 'Bowling alley', cinema: 'Cinema' };
+				const NAME = { cafe: 'Café', restaurant: 'Restaurant', shop: 'Shop', tattoo: 'Tattoo parlor · T to design your own', office: 'Office lobby', arcade: 'Arcade', bowling: 'Bowling alley', cinema: 'Cinema' };
 				const n = (inB.spots || []).filter((q) => q.taken).length;
 				hint(`${NAME[inB.type]}${n < 1 ? ' · quiet at this hour' : n > inB.seats.length * 0.35 ? ' · busy' : ''}`, 3000);
 			}
 			W.bizSeen = inB;
+			inkBtn.style.display = inB?.type === 'tattoo' && !studio.active() ? '' : 'none';
 		}
 		// indoors by day the eye opens up to the light from the windows
 		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
@@ -1429,6 +1439,8 @@ if (typeof window !== 'undefined') {
 		season: (v) => { if (v !== undefined) REAL_U.uSeason.value = Math.max(0, Math.min(1, +v)); return REAL_U.uSeason.value; },
 		// the month the world keeps: 0 today's, 1..12 that month
 		month: (m) => { if (m !== undefined) pickMonth(m); return monthPicked(); },
+		// the tattoo studio, wherever you are
+		tattoo: () => { studio.start(); return 'Tattoo studio'; },
 		bloom: (v) => { if (v !== undefined) REAL_U.uBloom.value = Math.max(0, Math.min(1, +v)); return REAL_U.uBloom.value; },
 		// share where you are: Crysis.share() (a link and a line of text), Crysis.share({ silent: true, from: 'Sam' })
 		share: (opts) => HOOKS.share?.share(opts),

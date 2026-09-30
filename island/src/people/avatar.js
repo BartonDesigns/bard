@@ -4,6 +4,7 @@
 
 import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
 import { createMotion } from './motion.js';
+import { wearOwnInk } from '../tattoo/studio.js';
 
 const KEY = 'l99-me';
 
@@ -20,6 +21,7 @@ export function createAvatar({ scene, world }) {
 		if (me) return Promise.resolve(me);
 		if (!loading) loading = loadPeopleAssets().then((A) => {
 			const P = buildPerson(A, personDNA(seed(), { age: 30 }));
+			wearOwnInk(P);                  // (your tattoos, if you have any: tattoo/studio.js)
 			const M = createMotion(P, (x, z) => world().island.heightAt(x, z));
 			P.root.visible = false;
 			scene.add(P.root);
