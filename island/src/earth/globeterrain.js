@@ -25,7 +25,7 @@ const CITIES = 12;
 
 const FRAG_GLSL = /* glsl */`
 uniform highp sampler2D uGT2, uGT3, uGT4; uniform vec4 uGWin; uniform ivec3 uGI0; uniform vec3 uGF0; uniform vec2 uGSeam; uniform float uGBay, uGNight;
-uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug;
+uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason;
 varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC;
 float gfH(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
 // value noise on the sphere at 8192 / 2^k metres (the same lattice as the relief)
@@ -128,9 +128,11 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// rock on the steep ground, and above the plants
 					float rockK = max(smoothstep(0.42, 0.7, slope + (pS - 0.5) * 0.15), (1.0 - smoothstep(-5.0, -3.0, air)) * 0.7);
 					c = mix(c, mix(vec3(0.3, 0.29, 0.27), gA * 0.8, 0.35), rockK);
-					// snow where the air up here stays cold enough to keep it through the summer, off the
-					// cliffs; by the summer's end only in the hollows and the high fields, rock between
-					float snowK = (1.0 - smoothstep(-12.0, -8.0, air + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5)) * (1.0 - smoothstep(0.4, 0.65, slope));
+					// snow: the high fields' that lasts the summer, and the winter's wherever this month's
+					// air is below freezing, patchier as it thaws; off the cliffs either way
+					float keep = 1.0 - smoothstep(-12.0, -8.0, air + (pM - 0.5) * 3.0 + (pS - 0.5) * 2.5);
+					float lying = 1.0 - smoothstep(-3.0, 0.5, air + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
+					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
 					// the shore: sand on the gentle ground just above the water
 					float shore = (1.0 - smoothstep(0.0, 0.035, vGC.x)) * (1.0 - smoothstep(vGC.z + 2.0, vGC.z + 6.0, h)) * (1.0 - smoothstep(0.12, 0.3, slope));

@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { PARKS } from './nature/parks.js';
+import { today } from './calendar.js';
 
 const SPECIES = {
 	lake: [['bluegill', 0.34, 0.1, 0.8, '#6f8a52', '#d98a2b'], ['largemouth bass', 0.24, 0.6, 6, '#56703d', '#e8e2c8'], ['redear sunfish', 0.14, 0.2, 1.2, '#7d8a4a', '#c9602a'], ['channel catfish', 0.14, 1, 8, '#6d6a62', '#d8d4c8'], ['common carp', 0.14, 2, 14, '#a88a45', '#e3cf94']],
@@ -208,7 +209,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	}
 	// the park whose water this is, if any, and what bites there this month
 	function localList() {
-		const W = getWorld(), m = new Date().getMonth() + 1;
+		const W = getWorld(), m = today().getMonth() + 1;
 		const P = PARKS.find((q) => q.fishing?.length && Math.hypot((q.lon + 122.57) * 111320 * Math.cos(37.76 * Math.PI / 180) - F.at.x, -(q.lat - 37.76) * 110996 - F.at.z) < 900);
 		if (!P || !W) return null;
 		const now = P.fishing.filter((f) => f.months.includes(m)).map((f) => { const k = localKey(f.species); return k ? [f.species.replace(/\s*\(.*\)/, ''), 1, ...LOCAL[k]] : null; }).filter(Boolean);

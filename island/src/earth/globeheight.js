@@ -208,6 +208,8 @@ export function anchorUniforms(U, win) {
 export const GLOBE_U = globeUniforms();
 export function globeUniforms() {
 	return {
+		// uGSeason: how far this month's air is from the year's mean here (C; globe.js)
+		uGSeason: { value: 0 },
 		uGOn: { value: 0 }, uGF: { value: new THREE.Vector2() }, uGBay: { value: 1 }, uGSeam: { value: new THREE.Vector2(3000, 25000) },
 		uGT0: { value: null }, uGT1: { value: null }, uGT2: { value: null }, uGT3: { value: null }, uGT4: { value: null },
 		uGWin: { value: new THREE.Vector4() }, uGOff: { value: new THREE.Vector2() }, uGAnc: { value: new THREE.Vector4() }, uGDeg: { value: new THREE.Vector2() },

@@ -29,6 +29,7 @@ import { BAY_DETAIL_U, BAY_DETAIL_AMP } from './baydetail.js';
 import { loadAtlas, atlasReady, regionAt, palette, citiesNear } from './atlas.js';
 import { setFarGround } from '../bay/terrain.js';
 import { LAT0, LON0 } from '../bay/geo.js';
+import { today } from '../calendar.js';
 
 // the countries that drive on the left (the rest keep right)
 const LEFT = /United Kingdom|England|Scotland|Wales|Ireland|Japan|India|Pakistan|Bangladesh|Sri Lanka|Nepal|Bhutan|Thailand|Malaysia|Singapore|Indonesia|Brunei|Hong Kong|Macau|Australia|New Zealand|South Africa|Kenya|Tanzania|Uganda|Zambia|Zimbabwe|Botswana|Namibia|Mozambique|Malawi|Lesotho|Eswatini|Mauritius|Seychelles|Cyprus|Malta|Jamaica|Bahamas|Barbados|Trinidad|Guyana|Suriname|Bermuda|Cayman|Virgin Islands|Saint Lucia|Grenada|Dominica|Antigua|Saint Kitts|Saint Vincent|Fiji|Papua|Solomon|Tonga|Samoa|Timor|Falkland/i;
@@ -117,6 +118,18 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		return 900 + k * k * 11100;
 	};
 
+	// ---------- the season ----------
+	// how far this month's air is from the year's mean (C): coldest mid-January in the north and
+	// mid-July in the south; a wide swing inland at high latitudes, a small one by the sea and
+	// near the equator (how much land lies within a few hundred km)
+	function seasonal(lat, lon) {
+		let land = 0;
+		for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) land += Math.min(1, Math.max(0, data.cellAt(lat + a * 1.2, lon + b * 1.5).L || 0));
+		const A = (3 + 0.28 * Math.min(60, Math.abs(lat))) * (0.35 + 0.65 * land / 25);
+		const d = today(), m = d.getMonth() + (d.getDate() - 1) / 30;
+		return -A * Math.cos(2 * Math.PI * (m - 0.5) / 12) * (lat < 0 ? -1 : 1);
+	}
+
 	// ---------- the frame ----------
 	// move it so the camera sits at its anchor (or back to the Bay's): everything of ours moves
 	// with it, and you and the camera; the Bay's own things stay (they are far off by then)
@@ -187,6 +200,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		regionT -= dt;
 		if (regionT <= 0) {
 			regionT = 2;
+			if (data.win.ready) GLOBE_U.uGSeason.value = seasonal(ll.lat, ll.lon);
 			if (!atlasReady()) loadAtlas().catch(() => {});
 			else {
 				const R = regionAt(ll.lat, ll.lon);

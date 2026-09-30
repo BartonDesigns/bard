@@ -40,7 +40,7 @@ export const REAL_U = {
 	uSeason: { value: 1 },                      // 0 spring green .. 1 summer gold
 	uSeasonLag: { value: 0 },                   // the foggy coast turns gold later than the inland hills
 	uBloom: { value: 0 },                       // spring wildflowers: poppies, lupine, goldfields (0..1)
-	uLeafFall: { value: [0.5, 0.2, 0, 0, 0, 0, 0, 0.05, 0.2, 0.6, 1, 0.8][new Date().getMonth()] },     // dead leaves in the gutters (0..1)
+	uLeafFall: { value: 0 },                  // dead leaves in the gutters (0..1; by the month, main.js)
 	// the rocks by region (the naturalist's geology): [x, z, radius, 0] and their colours
 	uRock: { value: ROCKS.map((r) => new THREE.Vector4(r.x, r.z, r.r, 0)) }, uRockC: { value: ROCKS.map((r) => new THREE.Color(r.c)) },
 	// the watered city parks, green all summer: [x, z, half-length, half-width] (axis-aligned)
