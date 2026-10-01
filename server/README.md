@@ -43,20 +43,25 @@ discovered yet, just before the allowance resets at 00:00 UTC.
 
 1. **Make a Cloudflare account.** Go to dash.cloudflare.com/sign-up, sign up with an email,
    and verify it. The free plan is the default; you don't need to add a card or a domain.
-2. **Install the tools** on your computer: Node.js 20 or newer, then in this folder:
+2. **Get the code and the tools** on your computer: install Node.js 20 or newer and git, then
+   run these one at a time (`wrangler login` opens the browser to authorise your account):
    ```
-   cd server/discovery
+   git clone https://github.com/BartonDesigns/bard.git ~/bard
+   cd ~/bard/server/discovery
    npm install
-   npx wrangler login        # opens the browser to authorise wrangler with your account
+   npx wrangler login
    ```
-3. **Set the salt** used to hash player addresses, a long random string you keep to yourself:
+3. **Set the salt** used to hash player addresses: a long random string you keep to yourself.
+   Make one, copy it, then paste it when the second command asks (say yes if it offers to
+   create the Worker):
    ```
+   openssl rand -hex 32
    npx wrangler secret put IP_SALT
    ```
-4. **Check, then deploy:**
+4. **Check, then deploy** (`npm test` runs the offline checks and should end "72 passed, 0 failed"; `npm run check` is a dry run):
    ```
-   npm test                  # the offline checks: no account, no network
-   npm run check             # a dry run of the deploy
+   npm test
+   npm run check
    npm run deploy
    ```
    Wrangler prints the Worker's address, for example
