@@ -154,7 +154,7 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 				if (b.gT < 0) { b.gT = 5 + Math.random() * 10; if (Math.random() < 0.3) b.M.gesture(b.task === 'stall' ? 'open' : 'think'); }
 				S.look.target = Math.hypot(cam.position.x - S.pos.x, cam.position.z - S.pos.z) < 8 && Math.sin(t * 0.2 + b.P.dna.seed) > 0.2 ? cam.position.clone() : null;
 			}
-			b.M.update(dt, t, cam);
+			b.M.update(dt, t, cam.position);
 		}
 	}
 
