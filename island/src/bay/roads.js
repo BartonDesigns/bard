@@ -6,11 +6,10 @@
 
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
-import { REAL_EXTENTS } from './realcity.js';
+import { realCovered } from './realcity.js';
 
 // where the real map takes over, its own freeways and trails are drawn instead
-const REAL_W = REAL_EXTENTS.map(([w, s, e, n]) => { const a = toWorld(n, w), b = toWorld(s, e); return [a.x + 70, a.z + 70, b.x - 70, b.z - 70]; });
-const inRealW = (p) => REAL_W.some(([x0, z0, x1, z1]) => p.x > x0 && p.z > z0 && p.x < x1 && p.z < z1);
+const inRealW = (p) => realCovered(p.x, p.z, 70);
 
 // [lat, lon] waypoints, following the real alignments
 export const ROUTES = {

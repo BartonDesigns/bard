@@ -98,9 +98,15 @@ def rect_decomp(poly):
 			if not out or v - out[-1] > 0.6: out.append(v)
 		return out
 	xs, zs = snap([p[0] for p in pts]), snap([p[1] for p in pts])
+	b = loc.bounds
 	if not square or len(xs) > 10 or len(zs) > 10 or len(xs) < 2 or len(zs) < 2:
-		b = loc.bounds
-		return ang, ctr, [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0], b[3] - b[1])]
+		# not square, or too intricate: cut it on a grid of about eight cells a side, so a
+		# wedge or a curve is the steps under it, not the rectangle round it
+		if loc.area > 0.8 * (b[2] - b[0]) * (b[3] - b[1]): return ang, ctr, [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0], b[3] - b[1])]
+		g = max(1.5, max(b[2] - b[0], b[3] - b[1]) / 8)
+		nx, nz = max(1, round((b[2] - b[0]) / g)), max(1, round((b[3] - b[1]) / g))
+		xs = [b[0] + (b[2] - b[0]) * i / nx for i in range(nx + 1)]
+		zs = [b[1] + (b[3] - b[1]) * j / nz for j in range(nz + 1)]
 	inside = [[loc.contains(Point((xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2)) for i in range(len(xs) - 1)] for j in range(len(zs) - 1)]
 	strips = []
 	for j, row in enumerate(inside):
@@ -122,9 +128,9 @@ def rect_decomp(poly):
 		if w < 1.4 or d < 1.4: continue
 		rects.append(((xs[i0] + xs[i1 + 1]) / 2, (zs[j0] + zs[j1 + 1]) / 2, w, d))
 	if not rects:
-		b = loc.bounds
 		rects = [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[2] - b[0], b[3] - b[1])]
-	return ang, ctr, rects
+	# (the biggest eight are plenty)
+	return ang, ctr, sorted(rects, key=lambda r: -r[2] * r[3])[:8]
 
 # kinds for the runtime: 0 house, 1 house with its garage on the left of the front, 2 on
 # the right, 3 garage wing, 4 wing (no door), 5 office/commercial, 6 retail, 7 school,
@@ -140,6 +146,8 @@ for b in blds:
 	poly = Polygon(pts)
 	if not poly.is_valid: poly = poly.buffer(0)
 	if poly.geom_type != 'Polygon' or poly.area < MINA: continue
+	# (nothing mapped as one building is a kilometre long: a stray outline)
+	if max(poly.bounds[2] - poly.bounds[0], poly.bounds[3] - poly.bounds[1]) > 1000: continue
 	bpolys.append(poly); found.append(b)
 # which footprints are built wall to wall with a neighbour (a terrace)
 attached = [False] * len(bpolys)
@@ -212,7 +220,7 @@ for k, (poly, b) in enumerate(zip(bpolys, found)):
 			p = nearest_points(driveLines[tree_idx.nearest(Point(sx, sz))], Point(sx, sz))[0]
 			if math.hypot(p.x - sx, p.y - sz) < 35: WALKS.append((sx, sz, p.x, p.y, 1.2))
 			# a pool out back now and then
-			if rnd.random() < 0.18 and area > 120:
+			if rnd.random() < 0.18 and area > 120 and not row:
 				bx, bz = wx - fx * (d / 2 + 6), wz - fz * (d / 2 + 6)
 				POOLS.append((bx, bz, 4 + rnd.random() * 1.5, 8 + rnd.random() * 3, yaw + (rnd.random() - 0.5) * 0.2))
 print('buildings', len(bpolys), 'boxes', len(BOX), 'drives', len(DRIVES), 'walks', len(WALKS), 'pools', len(POOLS))
@@ -252,7 +260,8 @@ def scatter(polys, per_m2, hmin, hmax, conifer):
 			pt = Point(x, z)
 			if not pp.contains(pt) or pb.contains(pt): continue
 			TREES.append((x, z, rnd.uniform(hmin, hmax), 1 if rnd.random() < conifer else 0)); n -= 1
-scatter(res, 1 / 140, 6, 15, 0.22)
+# (a tiled area: yard trees a little sparser; the nearest are all the city draws anyway)
+scatter(res, 1 / (200 if TILES else 140), 6, 15, 0.22)
 scatter(parks, 1 / 450, 7, 16, 0.2)
 # street trees along the residential streets, behind the sidewalk
 for r in roads:
@@ -285,9 +294,12 @@ if TILES:
 	# the built-up blocks no land use polygon covers (most of a city's): town, so its
 	# streets get their sidewalks
 	from PIL import ImageFilter
-	dense = np.asarray(B.filter(ImageFilter.BoxBlur(3))) > 30
+	cover = np.asarray(B.filter(ImageFilter.BoxBlur(3)))
 	g = np.asarray(G).copy()
-	g[(g == 0) & dense] = 16
+	g[(g == 0) & (cover > 30)] = 16
+	# a terraced city's packed blocks (downtown, the shopping streets) are paved to the walls,
+	# not lawns or parking lots
+	if ROWS: g[((g == 16) | (g == 7 * 16)) & (cover > 120)] = 13 * 16
 	G = Image.fromarray(g)
 A = Image.new('L', (MW, MH), 255)
 MAP = Image.merge('RGBA', (R, G, B, A))
@@ -331,7 +343,7 @@ def write(path, rect, roads, BOX, PATHS, POOLS, TREES, mapbox):
 	for (tx, tz, h, con) in TREES: out += i16(q(tx - OX), q(tz - OZ), int(round(h * 20)), con)
 	secs['trees'] = [start, len(TREES)]
 	os.makedirs(os.path.dirname(path), exist_ok=True)
-	with gzip.open(path + '.bin.gz', 'wb', compresslevel=9, mtime=0) as f: f.write(out)
+	with gzip.GzipFile(path + '.bin.gz', 'wb', 9, mtime=0) as f: f.write(out)
 	# the coarse map, cut from the area's at whole pixels round the box
 	i0, j0, i1, j1 = mapbox
 	MAP.crop((i0, j0, i1, j1)).save(path + '.png', optimize=True)

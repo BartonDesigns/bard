@@ -94,6 +94,13 @@ own, or `index.html` for the full site.
   on the same heights (`island.heightAt`), and people stand on the ground as drawn
   (`island.drawnAt`), so nobody sinks into a hillside the mesh is too coarse to show. Roads are
   graded with berms; trails are cut level into the slope.
+- **The mapped cities** (`island/src/bay/realcity.js`, `realtiles.js`, `tools/bake-realcity.py`): real
+  streets and footprints from Overture Maps. The big cities are baked as cells of one tile grid
+  (`assets/bayarea/real/t/<i>_<j>`, about 2.6 by 2.8 km); only the regions within about 3 km are
+  fetched and they are dropped past 4.5 km, so start-up and memory do not grow with the map. The
+  ground shader holds the loaded regions nearest you in 16 box slots (tiles side by side merged)
+  and one coarse map drawn from all of them. Where the mapped regions meet the procedural world the
+  generated blocks, grid and freeways stop 60 m inside the edge, and the mapped data stops there too.
 - **Seasons and calendar** (`island/src/calendar.js`): today's month, or one picked in the Sky &
   World panel; hills, bloom, leaves, snow, birds, fish, clothes and holidays follow it.
 - **Sky** (`island/src/world/sky.js`, `constellations.js`): sun, moon and planets where they
@@ -147,6 +154,12 @@ own, or `index.html` for the full site.
   animals, World sounds, a whole deer, the sea drawn only where it is in reach, interiors
   without awkward hallways and the remaining fake buildings made real, Lake Annabel at ground
   level and fishing by choice with a wooden rod.
+- **1 October, later:** more street-level Bay. San Francisco (all of it, with Treasure Island and the
+  Headlands' south side), Oakland, Berkeley, Emeryville, Alameda and Albany; Orinda, Lafayette, Walnut
+  Creek, Pleasant Hill and Concord; the Peninsula from Daly City to Mountain View; San Leandro,
+  Hayward, Union City and Fremont; San Rafael and the 101 towns of Marin, all baked from Overture in
+  265 tiles (about 60 MB) and fetched by distance. The ground's nine region slots became 16 slots of
+  the loaded regions nearest you; the far skylines use the real towers.
 
 ## Known issues and next refinements
 
@@ -166,6 +179,14 @@ own, or `index.html` for the full site.
 - **Fishing:** the float's final size was not seen in a test frame.
 - **Trails:** a faint saw-tooth where the ground mesh meets the trail's cut.
 - **Sky:** the sky is computed for the Bay's latitude even on the globe.
+
+- **Mapped cities:** the terrain under Oakland's and Berkeley's hills and the Peninsula is the 60 m
+  survey (only San Francisco has 15 m), so hillside houses there sit on coarse ground; the tiles
+  have no creeks of their own beyond the Bay-wide water bake. Gaps between the baked areas: Castro
+  Valley, Moraga and Canyon, Richmond and El Cerrito, Novato, south of Mountain View. Golden Gate
+  Park's woods under the mapped land use have not been looked at in a test frame yet. Real
+  places start neutral (only the grown towns weather). In the headless tests a tile takes tens of
+  seconds to arrive (a frame there is seconds long); on a device it is about 50–100 ms of parsing.
 
 ## Parked
 

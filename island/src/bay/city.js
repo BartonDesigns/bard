@@ -17,7 +17,7 @@ import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
 import { houseFloor, wallTop, mainOf, isHome } from './houseplan.js';
 import { usePhoto } from '../world/photomats.js';
-import { GREENS } from './realcity.js';
+import { GREENS, realCovered, REAL_TALL } from './realcity.js';
 import { WALL_GLSL, weatherRoofs } from './weathering.js';
 import { inCampus } from './discovery.js';
 import { inBoardwalk } from './boardwalk.js';
@@ -798,7 +798,7 @@ export function createCity(shared, scene, bay, real = null) {
 				if (Math.hypot(wx - cx, wz - cz) > R) continue;
 				const U = bay.urbanAt(wx, wz);
 				if (U.u < 0.15 || U.s !== style || Math.abs(U.a - a) > 0.01) continue;
-				if (real?.inside(wx, wz)) continue;                                              // mapped for real
+				if (real?.inside(wx, wz) || (minH && realCovered(wx, wz))) continue;              // mapped for real (the far skyline's are REAL_TALL)
 				const parkBlock = hash(i * 3 + 7, j * 5 + 1) > 0.975 && U.d < 0.2;              // a park or a playground
 				const ground = bay.heightAt(wx, wz);
 				if (ground < 0.8) continue;
@@ -1579,6 +1579,12 @@ export function createCity(shared, scene, bay, real = null) {
 			seen.add(key);
 			fillBlocks(Math.floor(x / 3000) * 3000 + 1500, Math.floor(z / 3000) * 3000 + 1500, 2200, skyline, 38);
 		}
+		// ...and the mapped cities' real towers, loaded or not
+		for (let k = 0; k < REAL_TALL.length; k += 6) {
+			const [x, z, w, d, a, h] = REAL_TALL.slice(k, k + 6), g = bay.heightAt(x, z);
+			if (g < 0.5 || onLandmark(x, z, Math.max(w, d) / 2)) continue;
+			skyline.push({ x, y: g - 1.2, z, w, d, h: h + 1.2, a, col: jit(pick(PAL.tower, hash(x, z)), hash(z, x)), kind: KIND.tower, roof: null });
+		}
 		upload(skyline, skyMesh, null);
 	}
 
@@ -1772,6 +1778,17 @@ export function createCity(shared, scene, bay, real = null) {
 		if (hr(10) < 0.16) { const s = hr(11) < 0.5 ? -1 : 1, lx = s * (b.w / 2 - 2), lz = -b.d / 2 - 9; if (open(lx, lz) && open(lx + 2, lz - 2) && open(lx - 2, lz + 2)) { const [x, z] = W(lx, lz), gy = bay.heightAt(x, z); if (Math.abs(gy - g) < 1.5) list.push({ x, y: gy - 1.2, z, w: 2.8, d: 2.4, h: 3.5, a: b.a + Math.PI, col: hr(12) < 0.5 ? [0.6, 0.55, 0.45] : look.wall, kind: KIND.garage, roof: { hip: false, rot: true, h: 0.9, col: look.roof, t: hr(12) < 0.3 ? ROOF.metal : ROOF.shingle, ov: 0.2, trim: 3 }, age: 0.5 }); } }
 		if (cnd) { if (hr(13) < 0.45 && gx !== null) put('car', gx, gz + 3, (hr(14) - 0.5) * 0.5, [1, 0.94, 1], pick(FADED, hr(15)), -0.09, 0.03); }
 	}
+	// the generated blocks stop where a mapped region starts: what stands on its side of the
+	// seam is its own (a block half over the line keeps only its lots on this side)
+	function clipMapped(list) {
+		if (!real?.loaded()) return;
+		const out = (o) => !real.inside(o.x, o.z);
+		let n = 0;
+		for (const o of list) if (out(o)) list[n++] = o;
+		list.length = n;
+		if (list.trees) list.trees = list.trees.filter(out);
+		for (const k in list.props || {}) list.props[k] = list.props[k].filter((e) => !real.inside(e[0], e[2]));
+	}
 	function realBuildings(cx, cz, R, list) {
 		if (!real?.loaded()) return;
 		const trees = list.trees || (list.trees = []);
@@ -1920,7 +1937,7 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 	}
 
-	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, clearV = -1, coastV = 0, carveV = -1, waterV = -1;
+	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, genV = 0, clearV = -1, coastV = 0, carveV = -1, waterV = -1;
 	function update(cam, nightK) {
 		if (!bay.loaded()) return;
 		night.value = nightK;
@@ -1936,7 +1953,9 @@ export function createCity(shared, scene, bay, real = null) {
 		if (coastVersion() !== coastV) { coastV = coastVersion(); lastX = 1e9; }                // the coast's farms and links laid out: theirs go
 		if (carveVersion() !== carveV) { carveV = carveVersion(); if (carveNear(x, z, 3000)) lastX = 1e9; }     // a river carved nearby: the ground under the trees moved
 		if (waterVersion() !== waterV) { waterV = waterVersion(); lastX = 1e9; }                  // trees stood up along the creeks near you
-		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }   // a generated town came or went: it rises
+		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }          // a mapped region came or went near you
+		// a grown town arrived or went: it rises, and its towers join the skylines
+		if (real?.genVersion && real.genVersion() !== genV) { genV = real.genVersion(); skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }
 		if (riseT0 >= 0) {
 			// the ring runs out at 700 m a second; no shadows from the buildings still underground
 			const front = (performance.now() - riseT0) / 1000 * 700;
@@ -1949,6 +1968,7 @@ export function createCity(shared, scene, bay, real = null) {
 		lastX = x; lastZ = z;
 		const list = [];
 		fillBlocks(x, z, 1200, list);
+		clipMapped(list);
 		realBuildings(x, z, 2000, list);
 		decorate(list, x, z, 700);
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed

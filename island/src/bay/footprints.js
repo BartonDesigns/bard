@@ -32,6 +32,15 @@ const RECTS = [
 	[37.33065, -122.00715, 0, 0, 0, 30, 30],           // its theater
 	[37.3325, -122.0053, 90, 0, 0, 30, 58],            // its visitor centre
 	[37.7705, -122.5087, 90, 0, 0, 9, 9], [37.7658, -122.5087, 90, 0, 0, 9, 9],      // the windmills
+	// (and city.js's: the towers and masts it models whole)
+	[37.78975, -122.39687, 0, 0, 0, 32, 32],          // Salesforce Tower
+	[37.79519, -122.40279, 0, 0, 0, 30, 30],          // the Transamerica Pyramid
+	[37.80239, -122.40582, 0, 0, 0, 12, 12],          // Coit Tower
+	[37.75523, -122.45278, 0, 0, 0, 22, 22],          // Sutro Tower
+	[37.8078, -122.1978, 0, 0, 0, 34, 34],            // the Oakland Temple
+	[37.8157, -122.5298, 0, 0, 0, 10, 10],            // Point Bonita lighthouse
+	// the Embarcadero's finger piers north of the Ferry Building
+	...Array.from({ length: 14 }, (v, k) => [37.7975 + k * 0.00115, -122.3945 - k * 0.00125, 60, 0, 100, 19, 97]),
 ].map(([lat, lon, h, ox, oz, hw, hd]) => {
 	const w = toWorld(lat, lon), t = -h * Math.PI / 180 + Math.PI, c = Math.cos(t), s = Math.sin(t);
 	return { x: w.x + c * ox + s * oz, z: w.z - s * ox + c * oz, c, s, hw, hd, r: Math.hypot(hw, hd) };

@@ -18,7 +18,7 @@
 import { toGrid, fromGrid, BLOCKS, STYLE } from './styles.js';
 import { toWorld } from './geo.js';
 import { ROUTES } from './roads.js';
-import { REAL_EXTENTS } from './realcity.js';
+import { realCovered } from './realcity.js';
 
 export const TILE = 320;
 const RC = 1600;                              // the road cells: fire roads and farm roads
@@ -30,8 +30,7 @@ const vnoise = (x) => { const i = Math.floor(x), u = x - i, s = u * u * (3 - 2 *
 // where nobody camps: the Boardwalk and the wharves, the Discovery Museum, Pier 39
 const NO_CAMP = [[36.9640, -122.0180, 750], [37.8087, -122.4100, 700], [37.8355, -122.4770, 450], [37.7960, -122.3935, 350]].map(([a, b, r]) => ({ ...toWorld(a, b), r }));
 // the freeways outside the mapped regions (roads.js draws them on the ground there)
-const REAL_W = REAL_EXTENTS.map(([w, s, e, n]) => { const a = toWorld(n, w), b = toWorld(s, e); return [a.x + 70, a.z + 70, b.x - 70, b.z - 70]; });
-const inRealW = (x, z) => REAL_W.some(([x0, z0, x1, z1]) => x > x0 && z > z0 && x < x1 && z < z1);
+const inRealW = (x, z) => realCovered(x, z, 70);
 let FWY = null;
 function freewayLines() {
 	if (FWY) return FWY;

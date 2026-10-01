@@ -1,11 +1,12 @@
-// The real city: where the Bay Area is mapped street by street (San Ramon, Danville,
-// Mt Diablo and Clayton), the
+// The real city: where the Bay Area is mapped street by street (San Francisco, Oakland and
+// Berkeley, the Peninsula, the Tri-Valley and Mt Diablo, and more: realtiles.js), the
 // roads, buildings, driveways, pools and trees come from Overture Maps (OpenStreetMap,
-// Microsoft and Google footprints), baked by tools/bake-realcity.py. Inside the region
-// the procedural street grid gives way to this:
+// Microsoft and Google footprints), baked by tools/bake-realcity.py. The regions near you
+// are fetched as you come (the big cities in tiles of a few kilometres) and dropped as you
+// leave. Inside them the procedural street grid gives way to this:
 //   the ground shader paints the streets from a road map rendered round you at half a
 //   metre a pixel (asphalt, sidewalks and kerbs, driveways and walks, dirt trails,
-//   lane lines), and from a baked 8 m map further out (roads, land use, roofs);
+//   lane lines), and from the baked 8 m maps further out (roads, land use, roofs);
 //   city.js raises the buildings, streetlife.js parks and drives the cars along the
 //   real streets, and people walk the real sidewalks.
 
@@ -15,6 +16,7 @@ import { groupBoxes } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
+import { REAL_REGIONS, REAL_TALL } from './realtiles.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -35,6 +37,10 @@ export const GREENS = [
 	[37.7960, -122.4050, 150, 130],            // (a placeholder kept small: Portsmouth Square)
 	[37.8070, -122.4330, 350, 110],            // the Marina Green
 ].map(([lat, lon, rx, rz]) => ({ ...toWorld(lat, lon), rx, rz }));
+// how many mapped regions the ground shader tells from the procedural world at once: the
+// loaded ones nearest you (tiles side by side are merged into one box first)
+export const REAL_SLOTS = 16;
+const NOWHERE = () => new THREE.Vector4(1e9, 1e9, -1e9, -1e9);
 export const REAL_U = {
 	uRoadMap: { value: blank() }, uRoadR: { value: new THREE.Vector4(0, 0, 1, 0) },
 	uRoadMap2: { value: blank() }, uRoadR2: { value: new THREE.Vector4(0, 0, 1, 0) }, uPaintMap: { value: blank() },
@@ -46,165 +52,309 @@ export const REAL_U = {
 	uRock: { value: ROCKS.map((r) => new THREE.Vector4(r.x, r.z, r.r, 0)) }, uRockC: { value: ROCKS.map((r) => new THREE.Color(r.c)) },
 	// the watered city parks, green all summer: [x, z, half-length, half-width] (axis-aligned)
 	uGreen: { value: GREENS.map((g) => new THREE.Vector4(g.x, g.z, g.rx, g.rz)) },
-	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
-	uRealB2: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB3: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
-	uRealB4: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB5: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
-	uRealB6: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB7: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB8: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) }, uRealB9: { value: new THREE.Vector4(1e9, 1e9, -1e9, -1e9) },
+	// the coarse map round you (land use, far roads and roofs), where it lies, and its box
+	uRealMap: { value: blank() }, uRealR: { value: new THREE.Vector4(0, 0, 8, 0) }, uRealB: { value: NOWHERE() },
+	// the mapped regions' boxes, and the box round all of them
+	uRealBs: { value: Array.from({ length: REAL_SLOTS }, NOWHERE) }, uRealAll: { value: NOWHERE() },
 };
 export const REAL_GLSL = /* glsl */`
-uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealB2, uRealB3, uRealB4, uRealB5, uRealB6, uRealB7, uRealB8, uRealB9; uniform float uSeason, uSeasonLag, uBloom, uLeafFall; uniform vec4 uRock[8]; uniform vec3 uRockC[8]; uniform vec4 uGreen[4];
+uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealAll, uRealBs[${REAL_SLOTS}]; uniform float uSeason, uSeasonLag, uBloom, uLeafFall; uniform vec4 uRock[8]; uniform vec3 uRockC[8]; uniform vec4 uGreen[4];
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
-// the main region (its land use map), and any mapped region (real streets, no grid)
+// any mapped region (real streets, no grid): inside the loaded regions' boxes and 60 m from
+// their outer edge (boxes side by side are one; see realCovered), and where the coarse map covers it
+bool inRealBox(vec2 w){
+	for (int i = 0; i < ${REAL_SLOTS}; i++) if (inBox(w, uRealBs[i])) return true;
+	return false;
+}
+bool inRealAny(vec2 w){
+	if (!inBox(w, uRealAll + vec4(60.0, 60.0, -60.0, -60.0))) return false;
+	bool any = false;
+	for (int i = 0; i < ${REAL_SLOTS}; i++) {
+		if (inBox(w, uRealBs[i] + vec4(60.0, 60.0, -60.0, -60.0))) return true;
+		any = any || inBox(w, uRealBs[i]);
+	}
+	return any && inRealBox(w + vec2(60.0, 0.0)) && inRealBox(w - vec2(60.0, 0.0)) && inRealBox(w + vec2(0.0, 60.0)) && inRealBox(w - vec2(0.0, 60.0));
+}
 bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }
-bool inRealAny(vec2 w){ return inReal(w) || inBox(w, uRealB2) || inBox(w, uRealB3) || inBox(w, uRealB4) || inBox(w, uRealB5) || inBox(w, uRealB6) || inBox(w, uRealB7) || inBox(w, uRealB8) || inBox(w, uRealB9); }
 `;
 
-// the first region's coarse map colours the ground; the others are streets, buildings and trails
-const REGIONS = ['eastbay', 'tam', 'missionpeak', 'coast', 'bolinas', 'sausalito', 'cupertino', 'sanjose', 'southcoast'];
-// the regions' extents [west, south, east, north], known before their data loads
-export const REAL_EXTENTS = [[-122.02, 37.715, -121.84, 37.95], [-122.66, 37.87, -122.53, 37.96], [-121.95, 37.48, -121.84, 37.55], [-122.53, 37.455, -122.425, 37.665], [-122.735, 37.875, -122.66, 37.93], [-122.505, 37.825, -122.47, 37.872], [-122.035, 37.315, -121.995, 37.345], [-121.91, 37.318, -121.87, 37.345], [-122.43, 37.10, -122.29, 37.455]];   // Tri-Valley and Mt Diablo; Mt Tam and Mill Valley; Mission Peak; the San Mateo coast (Pacifica to Half Moon Bay, Highway 1); Bolinas; Sausalito and Fort Baker (the Bay Area Discovery Museum); Cupertino and Apple Park; downtown San Jose; the coast south of Half Moon Bay to Año Nuevo
+// the regions, baked whole or as cells of the tile grid (realtiles.js), and their extents
+// [west, south, east, north], known before their data loads
+const NAMES = REAL_REGIONS.map((r) => r[0]);
+export const REAL_EXTENTS = REAL_REGIONS.map((r) => r.slice(1, 5));
+const BOXES = REAL_EXTENTS.map(([w, s, e, n]) => { const a = toWorld(n, w), b = toWorld(s, e); return [a.x, a.z, b.x, b.z]; });
+// a coarse index of them, 2 km cells
+const IDX = new Map();
+BOXES.forEach((B, i) => { for (let gx = Math.floor(B[0] / 2000); gx <= Math.floor(B[2] / 2000); gx++) for (let gz = Math.floor(B[1] / 2000); gz <= Math.floor(B[3] / 2000); gz++) { const k = gx * 4096 + gz; (IDX.get(k) || IDX.set(k, []).get(k)).push(i); } });
+const inMapped = (x, z) => (IDX.get(Math.floor(x / 2000) * 4096 + Math.floor(z / 2000)) || []).some((i) => { const B = BOXES[i]; return x > B[0] && z > B[1] && x < B[2] && z < B[3]; });
+// whether a point is mapped (loaded or not) and at least m from where the mapped regions meet
+// the procedural world: regions side by side are one, so only their outer edge is a seam.
+// There the generated blocks, grid and freeways stop, and the mapped data stops m inside it.
+export const realCovered = (x, z, m = 60) => inMapped(x, z) && inMapped(x - m, z) && inMapped(x + m, z) && inMapped(x, z - m) && inMapped(x, z + m);
+export { REAL_TALL };
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
+const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+// a region is fetched when you come this near its edge and dropped when you are this far
+// (the buildings stand to 2 km, the trees a little further); a change this near you is
+// news to everything built round you (version())
+const LOAD = PHONE ? 2500 : 3000, DROP = PHONE ? 3600 : 4500, NEWS = 2600;
+// the coarse maps round you are drawn into one, at most this many texels a side
+const COMP = PHONE ? 1024 : 2048;
 
 async function gunzip(res) {
+	if (!res.ok) throw new Error(res.status + ' ' + res.url);
 	const ds = new DecompressionStream('gzip');
 	return new Uint8Array(await new Response(res.body.pipeThrough(ds)).arrayBuffer());
 }
+// a coarse map's pixels, exactly as baked
+async function pixels(url) {
+	const bm = await createImageBitmap(await (await fetch(url)).blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+	const cv = document.createElement('canvas');
+	cv.width = bm.width; cv.height = bm.height;
+	const cx = cv.getContext('2d', { willReadFrequently: true });
+	cx.drawImage(bm, 0, 0);
+	bm.close();
+	return cx.getImageData(0, 0, cv.width, cv.height).data;
+}
 
 export function createRealCity(renderer) {
-	const R = { regions: [], loaded: false, roads: [], boxes: [], paths: [], pools: [], trees: [], bounds: null, names: [] };
+	const R = { regions: [], loaded: false, attribution: '' };
 	const LF = lakeFeatures();
 	const CELL = 250;
-	const grid = new Map();
-	const put = (kind, x, z, i) => { const k = Math.floor(x / CELL) + ',' + Math.floor(z / CELL); let g = grid.get(k); if (!g) grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] }); g[kind].push(i); };
+	const key = (gx, gz) => (gx + 4096) * 8192 + gz + 4096;
+	const cellIn = (grid, x, z) => { const k = key(Math.floor(x / CELL), Math.floor(z / CELL)); let g = grid.get(k); if (!g) grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] }); return g; };
+	const roadBox = (r) => {
+		const p = r.pts;
+		let mnx = 1e9, mnz = 1e9, mxx = -1e9, mxz = -1e9;
+		for (let i = 0; i < p.length; i += 2) { mnx = Math.min(mnx, p[i]); mxx = Math.max(mxx, p[i]); mnz = Math.min(mnz, p[i + 1]); mxz = Math.max(mxz, p[i + 1]); }
+		return [mnx, mnz, mxx, mxz];
+	};
+	// a road goes in every cell its box touches; the region's reach grows to hold it
+	const putRoad = (G, r) => {
+		const [mnx, mnz, mxx, mxz] = r.box;
+		for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) cellIn(G.grid, gx * CELL + 1, gz * CELL + 1).roads.push(r);
+		G.reach[0] = Math.min(G.reach[0], mnx); G.reach[1] = Math.min(G.reach[1], mnz); G.reach[2] = Math.max(G.reach[2], mxx); G.reach[3] = Math.max(G.reach[3], mxz);
+	};
+	const live = new Map(), pending = new Map(), failed = new Set();
+	let camX = 1e9, camZ = 1e9, late = 0;
 
-	async function load(name) {
-		const base = new URL(`../assets/bayarea/real/${name}`, import.meta.url).href;
-		const [H, bin, map] = await Promise.all([
+	async function load(i) {
+		const name = NAMES[i], base = new URL(`../assets/bayarea/real/${name}`, import.meta.url).href;
+		const [H, bin, px] = await Promise.all([
 			fetch(base + '.json').then((r) => r.json()),
 			fetch(base + '.bin.gz').then(gunzip),
-			new Promise((ok, no) => new THREE.TextureLoader().load(base + '.png', ok, undefined, no)),
+			pixels(base + '.png'),
 		]);
-		const dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
+		const t0 = performance.now(), dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
 		// a region baked round another origin: shift it (the mapping is a pure translation in x)
 		const shiftX = ((H.geo ? H.geo[1] : LON0_LEGACY) - LON0) * KX;
-		H.origin[0] += shiftX; H.bounds[0] += shiftX; H.bounds[2] += shiftX;
-		const [OX, OZ] = H.origin, U = H.unit, S = H.sections;
+		const [OX, OZ] = [H.origin[0] + shiftX, H.origin[1]], U = H.unit, S = H.sections;
+		const [bx0, bz0, bx1, bz1] = [H.bounds[0] + shiftX, H.bounds[1], H.bounds[2] + shiftX, H.bounds[3]];
+		// what stands within 60 m of the seam with the procedural world is left to the procedural
+		// towns, so nothing doubles there
+		const inIb = (x, z) => realCovered(x, z);
+		const G = { name, i, bounds: [bx0, bz0, bx1, bz1], reach: [bx0, bz0, bx1, bz1], grid: new Map(), boxes: [] };
 		// roads: class, flags, name, points
 		let o = S.roads[0];
 		for (let n = 0; n < S.roads[1]; n++) {
 			const c = dv.getUint8(o), f = dv.getUint8(o + 1), nm = dv.getUint16(o + 2, true), k = dv.getUint16(o + 4, true); o += 6;
 			const pts = new Float32Array(k * 2);
-			let mnx = 1e9, mnz = 1e9, mxx = -1e9, mxz = -1e9;
-			for (let i = 0; i < k; i++) {
-				const x = dv.getInt16(o, true) * U + OX, z = dv.getInt16(o + 2, true) * U + OZ; o += 4;
-				pts[i * 2] = x; pts[i * 2 + 1] = z;
-				mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mnz = Math.min(mnz, z); mxz = Math.max(mxz, z);
-			}
+			for (let j = 0; j < k; j++) { pts[j * 2] = dv.getInt16(o, true) * U + OX; pts[j * 2 + 1] = dv.getInt16(o + 2, true) * U + OZ; o += 4; }
 			const cls = H.classes[c];
-			const r = { cls, w: H.widths[c], name: nm ? H.names[nm - 1] : '', bridge: !!(f & 1), link: !!(f & 2), end0: !!(f & 4), end1: !!(f & 8), divided: !!(f & 16), drive: DRIVE.has(cls), walked: WALKED.has(cls), pts, box: [mnx, mnz, mxx, mxz] };
-			const id = R.roads.push(r) - 1;
-			for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) put('roads', gx * CELL + 1, gz * CELL + 1, id);
+			const r = { cls, w: H.widths[c], name: nm ? H.names[nm - 1] : '', bridge: !!(f & 1), link: !!(f & 2), end0: !!(f & 4), end1: !!(f & 8), divided: !!(f & 16), drive: DRIVE.has(cls), walked: WALKED.has(cls), pts };
+			r.box = roadBox(r);
+			putRoad(G, r);
 		}
 		o = S.boxes[0];
 		// Mt Diablo's summit building is modelled (diablo.js): its footprint here would stand
 		// a second, ordinary building in the middle of it
-		const sm = toWorld(SUMMIT.lat, SUMMIT.lon), first = R.boxes.length;
+		const sm = toWorld(SUMMIT.lat, SUMMIT.lon);
 		for (let n = 0; n < S.boxes[1]; n++, o += 18) {
 			const kh = dv.getInt16(o + 14, true);
 			const b = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000, wallH: dv.getInt16(o + 10, true) / 20, roofH: dv.getInt16(o + 12, true) / 20, kind: kh & 255, hip: kh >> 8, door: dv.getInt16(o + 16, true) / 1000 };
-			if (Math.hypot(b.x - sm.x, b.z - sm.z) < 90 || LF.skip(b.x, b.z) || onLandmark(b.x, b.z, Math.max(b.w, b.d) / 2)) continue;
-			put('boxes', b.x, b.z, R.boxes.push(b) - 1);
+			if (!inIb(b.x, b.z) || Math.hypot(b.x - sm.x, b.z - sm.z) < 90 || LF.skip(b.x, b.z) || onLandmark(b.x, b.z, Math.max(b.w, b.d) / 2)) continue;
+			G.boxes.push(b);
 		}
 		// a building's blocks, gathered into the house they make (houses.js builds them)
-		groupBoxes(R.boxes.slice(first));
+		groupBoxes(G.boxes);
+		for (const b of G.boxes) cellIn(G.grid, b.x, b.z).boxes.push(b);
 		o = S.paths[0];
 		for (let n = 0; n < S.paths[1]; n++, o += 10) {
 			const p = { ax: dv.getInt16(o, true) * U + OX, az: dv.getInt16(o + 2, true) * U + OZ, bx: dv.getInt16(o + 4, true) * U + OX, bz: dv.getInt16(o + 6, true) * U + OZ, w: dv.getInt16(o + 8, true) / 20 };
-			put('paths', p.ax, p.az, R.paths.push(p) - 1);
+			if (inIb(p.ax, p.az)) cellIn(G.grid, p.ax, p.az).paths.push(p);
 		}
 		o = S.pools[0];
 		for (let n = 0; n < S.pools[1]; n++, o += 10) {
 			const p = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000 };
-			put('pools', p.x, p.z, R.pools.push(p) - 1);
+			if (inIb(p.x, p.z)) cellIn(G.grid, p.x, p.z).pools.push(p);
 		}
 		o = S.trees[0];
 		for (let n = 0; n < S.trees[1]; n++, o += 8) {
 			const t = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, h: dv.getInt16(o + 4, true) / 20, cone: dv.getInt16(o + 6, true) };
-			if (LF.skip(t.x, t.z) || onLandmark(t.x, t.z, 2)) continue;
-			put('trees', t.x, t.z, R.trees.push(t) - 1);
+			if (!inIb(t.x, t.z) || LF.skip(t.x, t.z) || onLandmark(t.x, t.z, 2)) continue;
+			cellIn(G.grid, t.x, t.z).trees.push(t);
 		}
+		// the coarse map, for what grows where (and drawn into the ground's, compose())
+		const M = H.map;
+		G.map = { px, w: M.w, h: M.h, x0: (M.x0 ?? H.bounds[0]) + shiftX, z0: M.z0 ?? H.bounds[1], step: M.step };
 		// Lake Annabel's trees and its walk (lake.js), where this region holds it
 		const [lx0, lz0, lx1, lz1] = LF.bounds;
-		if (H.bounds[0] < lx0 && H.bounds[1] < lz0 && H.bounds[2] > lx1 && H.bounds[3] > lz1) {
+		if (bx0 < lx0 && bz0 < lz0 && bx1 > lx1 && bz1 > lz1) {
 			// (not on the roads and parking aisles)
-			const onRoad = (x, z) => near('roads', x, z, 30).some((q) => { const p = q.pts; for (let i = 0; i + 3 < p.length; i += 2) { const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2)); if (Math.hypot(x - p[i] - dx * t, z - p[i + 1] - dz * t) < q.w / 2 + 2.5) return true; } return false; });
-			const onBox = (x, z) => near('boxes', x, z, 60).some((b) => Math.hypot(x - b.x, z - b.z) < Math.max(b.w, b.d) / 2 + 3);
-			for (const t of LF.trees) if (!onRoad(t.x, t.z) && !onBox(t.x, t.z)) put('trees', t.x, t.z, R.trees.push(t) - 1);
-			for (const q of LF.paths) put('paths', q.ax, q.az, R.paths.push(q) - 1);
+			const local = (kind, x, z, rad) => { const out = []; nearIn(G, kind, x, z, rad, out); return out; };
+			const onRoad = (x, z) => local('roads', x, z, 30).some((q) => { const p = q.pts; for (let i = 0; i + 3 < p.length; i += 2) { const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - p[i]) * dx + (z - p[i + 1]) * dz) / l2)); if (Math.hypot(x - p[i] - dx * t, z - p[i + 1] - dz * t) < q.w / 2 + 2.5) return true; } return false; });
+			const onBox = (x, z) => local('boxes', x, z, 60).some((b) => Math.hypot(x - b.x, z - b.z) < Math.max(b.w, b.d) / 2 + 3);
+			for (const t of LF.trees) if (!onRoad(t.x, t.z) && !onBox(t.x, t.z)) cellIn(G.grid, t.x, t.z).trees.push(t);
+			for (const q of LF.paths) cellIn(G.grid, q.ax, q.az).paths.push(q);
 		}
-		const [bx0, bz0, bx1, bz1] = H.bounds;
-		// a CPU copy of the coarse map, for what grows where
-		const img = map.image, cv = document.createElement('canvas');
-		cv.width = img.width; cv.height = img.height;
-		const cx2 = cv.getContext('2d', { willReadFrequently: true });
-		cx2.drawImage(img, 0, 0);
-		const reg = { name, bounds: [bx0, bz0, bx1, bz1], map: { px: cx2.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height, x0: bx0, z0: bz0, step: H.map.step } };
-		R.regions.push(reg);
-		// the region, pulled in a little so its edge meets the procedural towns cleanly
-		const inset = [bx0 + 60, bz0 + 60, bx1 - 60, bz1 - 60];
-		if (name === REGIONS[0]) {
-			// the main region's coarse map colours the ground (land use, far roads and roofs)
-			map.flipY = false; map.minFilter = THREE.LinearFilter; map.magFilter = THREE.LinearFilter; map.generateMipmaps = false; map.colorSpace = THREE.NoColorSpace;
-			map.needsUpdate = true;
-			REAL_U.uRealMap.value = map;
-			REAL_U.uRealR.value.set(bx0, bz0, H.map.step, 1);
-			REAL_U.uRealB.value.set(...inset);
-		} else REAL_U['uRealB' + (REGIONS.indexOf(name) + 1)].value.set(...inset);
-		R.attribution = H.attribution;
-		R.loaded = true;
+		G.ms = Math.round(performance.now() - t0);
+		return { G, attribution: H.attribution };
 	}
-	// one at a time, the nearest to the island first
-	const byDist = REGIONS.map((n, i) => { const [w, so, e, no] = REAL_EXTENTS[i], c = toWorld((so + no) / 2, (w + e) / 2); return [n, Math.hypot(c.x, c.z)]; }).sort((a, b) => a[1] - b[1]).map((r) => r[0]);
-	// (the far-flung coast regions wait until you come within a few miles of them)
-	const LAZY = new Set(['coast', 'bolinas', 'sausalito', 'cupertino', 'sanjose', 'southcoast']), lazy = new Map();
-	const ready = (async () => { for (const n of byDist) if (!LAZY.has(n)) await load(n).catch((e) => console.warn('real city', n, e)); })();
-	function wake(x, z) {
-		REGIONS.forEach((n, i) => {
-			if (!LAZY.has(n) || lazy.has(n)) return;
-			const [w, so, e, no] = REAL_EXTENTS[i], a = toWorld(no, w), b = toWorld(so, e);
-			if (Math.hypot(Math.max(0, a.x - x, x - b.x), Math.max(0, a.z - z, z - b.z)) < 12000) lazy.set(n, ready.then(() => load(n)).then(() => { version++; }).catch((err) => console.warn('real city', n, err)));
+	// the regions near you come, the far ones go (a few at a time, the nearest first)
+	let checkX = 1e9, checkZ = 1e9, lastCheck = 0;
+	const gap = (i, x, z) => { const b = BOXES[i]; return Math.hypot(Math.max(0, b[0] - x, x - b[2]), Math.max(0, b[1] - z, z - b[3])); };
+	function stream(x, z) {
+		const now = performance.now();
+		if (Math.hypot(x - checkX, z - checkZ) < 60 && now - lastCheck < 1500) return;
+		checkX = x; checkZ = z; lastCheck = now;
+		for (const [i, G] of live) if (gap(i, x, z) > DROP) drop(i, G);
+		const want = [];
+		for (let i = 0; i < NAMES.length; i++) if (!live.has(i) && !pending.has(i) && !failed.has(i)) { const d = gap(i, x, z); if (d < LOAD) want.push([d, i]); }
+		want.sort((a, b) => a[0] - b[0]);
+		for (const [, i] of want) {
+			if (pending.size >= 2) break;
+			pending.set(i, load(i).then(({ G, attribution }) => {
+				pending.delete(i);
+				if (gap(i, camX, camZ) > DROP) { late++; return; }          // (gone past it while it came)
+				live.set(i, G);
+				R.regions.push(G);
+				R.attribution = attribution;
+				R.loaded = true;
+				changed(i, camX, camZ);
+			}).catch((err) => { pending.delete(i); failed.add(i); console.warn('real city', NAMES[i], err); }));
+		}
+	}
+	function drop(i, G) {
+		live.delete(i);
+		R.regions.splice(R.regions.indexOf(G), 1);
+		R.loaded = R.regions.length > 0;
+		changed(i, camX, camZ);
+	}
+	// what came or went: the ground's map and boxes again; news to the things built round you
+	// only when it is near (the rest find it as they are built)
+	let version = 0, genVersion = 0, quiet = 0;
+	function changed(i, x, z) {
+		if (i < 0 || gap(i, x, z) < NEWS) version++; else quiet++;
+		compose(); slots(x, z);
+		for (const M2 of MAPS) M2.x = 1e9;          // repaint the road maps
+	}
+
+	// ---------- the ground's coarse map: the loaded regions' maps drawn into one ----------
+	let comp = null;
+	function compose() {
+		const regs = [...live.values()];
+		if (!regs.length) { comp?.tex.dispose(); comp = null; bindMain(); return; }
+		let ux0 = 1e9, uz0 = 1e9, ux1 = -1e9, uz1 = -1e9;
+		for (const { map: M } of regs) { ux0 = Math.min(ux0, M.x0); uz0 = Math.min(uz0, M.z0); ux1 = Math.max(ux1, M.x0 + M.w * M.step); uz1 = Math.max(uz1, M.z0 + M.h * M.step); }
+		const step = Math.max(8, Math.min(...regs.map((G) => G.map.step)), Math.ceil(Math.max(ux1 - ux0, uz1 - uz0) / COMP));
+		const w = Math.ceil((ux1 - ux0) / step), h = Math.ceil((uz1 - uz0) / step);
+		if (!comp || comp.w !== w || comp.h !== h) {
+			comp?.tex.dispose();
+			const px = new Uint8Array(w * h * 4);
+			const tex = new THREE.DataTexture(px, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
+			tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.colorSpace = THREE.NoColorSpace; tex.generateMipmaps = false;
+			comp = { w, h, px, tex };
+		} else comp.px.fill(0);
+		comp.x0 = ux0; comp.z0 = uz0; comp.step = step;
+		// nearest texel, so the land use codes stay whole
+		for (const { map: M } of regs) {
+			const i0 = Math.max(0, Math.floor((M.x0 - ux0) / step)), i1 = Math.min(w, Math.ceil((M.x0 + M.w * M.step - ux0) / step));
+			const j0 = Math.max(0, Math.floor((M.z0 - uz0) / step)), j1 = Math.min(h, Math.ceil((M.z0 + M.h * M.step - uz0) / step));
+			const si = new Int32Array(i1 - i0);
+			for (let i = i0; i < i1; i++) si[i - i0] = Math.min(M.w - 1, Math.max(0, Math.floor((ux0 + (i + 0.5) * step - M.x0) / M.step)));
+			for (let j = j0; j < j1; j++) {
+				const sj = Math.min(M.h - 1, Math.max(0, Math.floor((uz0 + (j + 0.5) * step - M.z0) / M.step)));
+				const row = sj * M.w, out = j * w;
+				for (let i = i0; i < i1; i++) {
+					const s = (row + si[i - i0]) * 4, d = (out + i) * 4;
+					if (M.px[s + 3] === 0) continue;
+					comp.px[d] = M.px[s]; comp.px[d + 1] = M.px[s + 1]; comp.px[d + 2] = M.px[s + 2]; comp.px[d + 3] = 255;
+				}
+			}
+		}
+		comp.tex.needsUpdate = true;
+		bindMain();
+	}
+	// the coarse map in the ground shader: a grown town's while one stands (the real regions are
+	// far off whenever it does), else the loaded regions'
+	function bindMain() {
+		const G = gens[gens.length - 1];
+		if (G) {
+			REAL_U.uRealMap.value = G.tex;
+			REAL_U.uRealR.value.set(G.map.x0, G.map.z0, G.map.step, 1);
+			REAL_U.uRealB.value.set(...G.bounds);
+		} else if (comp) {
+			REAL_U.uRealMap.value = comp.tex;
+			REAL_U.uRealR.value.set(comp.x0, comp.z0, comp.step, 1);
+			REAL_U.uRealB.value.set(comp.x0, comp.z0, comp.x0 + comp.w * comp.step, comp.z0 + comp.h * comp.step);
+		} else REAL_U.uRealR.value.w = 0;
+	}
+	// the boxes the shader keeps the procedural grid off: the loaded regions' and the grown
+	// towns', those side by side merged, the nearest in the slots
+	let slotX = 1e9, slotZ = 1e9;
+	function slots(x, z) {
+		slotX = x; slotZ = z;
+		let bs = [...live.values(), ...gens].map((G) => [...G.bounds]);
+		for (let merged = true; merged;) {
+			merged = false;
+			for (let a = 0; a < bs.length && !merged; a++) for (let b = 0; b < bs.length && !merged; b++) {
+				if (a === b) continue;
+				const A = bs[a], B = bs[b];
+				const row = Math.abs(A[2] - B[0]) < 1 && Math.abs(A[1] - B[1]) < 1 && Math.abs(A[3] - B[3]) < 1;
+				const col = Math.abs(A[3] - B[1]) < 1 && Math.abs(A[0] - B[0]) < 1 && Math.abs(A[2] - B[2]) < 1;
+				if (row || col) { bs[a] = [Math.min(A[0], B[0]), Math.min(A[1], B[1]), Math.max(A[2], B[2]), Math.max(A[3], B[3])]; bs.splice(b, 1); merged = true; }
+			}
+		}
+		const d = (b) => Math.hypot(Math.max(0, b[0] - x, x - b[2]), Math.max(0, b[1] - z, z - b[3]));
+		bs = bs.sort((a, b) => d(a) - d(b)).slice(0, REAL_SLOTS);
+		const all = REAL_U.uRealAll.value.set(1e9, 1e9, -1e9, -1e9);
+		REAL_U.uRealBs.value.forEach((v, k) => {
+			const b = bs[k];
+			if (!b) { v.set(1e9, 1e9, -1e9, -1e9); return; }
+			v.set(...b);
+			all.set(Math.min(all.x, b[0]), Math.min(all.y, b[1]), Math.max(all.z, b[2]), Math.max(all.w, b[3]));
 		});
 	}
 
 	// roads added by hand where no mapped region reaches (the Golden Gate's deck and its
 	// San Francisco approach): drivable like the mapped ones
+	const hand = { name: 'hand', bounds: [0, 0, 0, 0], reach: [1e9, 1e9, -1e9, -1e9], grid: new Map() };
 	function addRoads(list) {
 		for (const r of list) {
-			const i = R.roads.push(r) - 1, p = r.pts;
-			r.drive = true; r.walked = false;
-			let mnx = 1e9, mnz = 1e9, mxx = -1e9, mxz = -1e9;
-			for (let k = 0; k < p.length; k += 2) { mnx = Math.min(mnx, p[k]); mxx = Math.max(mxx, p[k]); mnz = Math.min(mnz, p[k + 1]); mxz = Math.max(mxz, p[k + 1]); }
-			r.box = [mnx, mnz, mxx, mxz];
-			for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) {
-				const k = gx + ',' + gz; let g = grid.get(k); if (!g) grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] });
-				g.roads.push(i);
-			}
+			r.drive = true; r.walked = false; r.hand = true;
+			r.box = roadBox(r);
+			putRoad(hand, r);
 		}
 	}
-	const regionAt = (x, z, m = 60) => R.regions.find(({ bounds: b }) => x > b[0] + m && z > b[1] + m && x < b[2] - m && z < b[3] - m);
+	// the region holding a point, inside its seams; its coarse map's
+	const regionAt = (x, z) => R.regions.find(({ bounds: b, gen }) => (gen ? x > b[0] + 60 && z > b[1] + 60 && x < b[2] - 60 && z < b[3] - 60 : x > b[0] && z > b[1] && x < b[2] && z < b[3] && realCovered(x, z)));
+	const mapAt = (x, z) => R.regions.find(({ map: M }) => x >= M.x0 && z >= M.z0 && x < M.x0 + M.w * M.step && z < M.z0 + M.h * M.step);
 	const inside = (x, z) => !!regionAt(x, z);
-	function near(kind, x, z, rad) {
-		const out = [], seen = kind === 'roads' ? new Set() : null;
+	function nearIn(G, kind, x, z, rad, out) {
+		const b = G.reach;
+		if (x + rad < b[0] || x - rad > b[2] || z + rad < b[1] || z - rad > b[3]) return;
+		const seen = kind === 'roads' ? new Set() : null;
 		for (let gx = Math.floor((x - rad) / CELL); gx <= Math.floor((x + rad) / CELL); gx++) for (let gz = Math.floor((z - rad) / CELL); gz <= Math.floor((z + rad) / CELL); gz++) {
-			const g = grid.get(gx + ',' + gz);
+			const g = G.grid.get(key(gx, gz));
 			if (!g) continue;
-			for (const i of g[kind]) {
-				if (seen) { if (seen.has(i)) continue; seen.add(i); }
-				out.push(R[kind][i]);
-			}
+			for (const o of g[kind]) { if (seen) { if (seen.has(o)) continue; seen.add(o); } out.push(o); }
 		}
-		for (const G of gens) nearGen(G, kind, x, z, rad, out);
+	}
+	function near(kind, x, z, rad) {
+		const out = [];
+		for (const G of R.regions) nearIn(G, kind, x, z, rad, out);
+		if (kind === 'roads') nearIn(hand, kind, x, z, rad, out);
 		for (const S of sources) S.near(kind, x, z, rad, out);
 		return out;
 	}
@@ -217,53 +367,32 @@ export function createRealCity(renderer) {
 	// ---------- Crysis: generated regions (see crysis/civgen.js and crysis/civ.js) ----------
 	// A town grown by the civilization engine arrives in the same shape as a baked region
 	// and joins it here: its own spatial grid (so it can be dropped again without touching
-	// the real ones), its land-use map for landAt(), and while it is the active one, its map
-	// stands in for the main region's in the ground shader (uRealMap/uRealR/uRealB), which
-	// paints its land use and streets and keeps the procedural grid off it. Only one generated
-	// town is active at a time; the real main region is far off whenever it is.
+	// the real ones), its land-use map for landAt(), and while it stands, its map is the
+	// ground shader's coarse map (bindMain), which paints its land use and streets, and its
+	// box keeps the procedural grid off it. The real regions are far off whenever one stands.
 	const gens = [];
-	let version = 0, saved = null;
-	function nearGen(G, kind, x, z, rad, out) {
-		const seen = kind === 'roads' ? new Set() : null;
-		for (let gx = Math.floor((x - rad) / CELL); gx <= Math.floor((x + rad) / CELL); gx++) for (let gz = Math.floor((z - rad) / CELL); gz <= Math.floor((z + rad) / CELL); gz++) {
-			const g = G.grid.get(gx + ',' + gz);
-			if (!g) continue;
-			for (const o of g[kind]) { if (seen) { if (seen.has(o)) continue; seen.add(o); } out.push(o); }
-		}
-	}
-	function swapIn(G) {
-		if (REAL_U.uRealMap.value === G.tex) return;
-		saved = { map: REAL_U.uRealMap.value, r: REAL_U.uRealR.value.clone(), b: REAL_U.uRealB.value.clone() };
-		REAL_U.uRealMap.value = G.tex;
-		REAL_U.uRealR.value.set(G.map.x0, G.map.z0, G.map.step, 1);
-		REAL_U.uRealB.value.set(G.bounds[0] + 60, G.bounds[1] + 60, G.bounds[2] - 60, G.bounds[3] - 60);
-	}
 	function addRegion(D) {
-		const G = { name: D.name, gen: true, bounds: D.bounds, map: D.map, grid: new Map(), data: D };
-		const cell = (x, z) => { const k = Math.floor(x / CELL) + ',' + Math.floor(z / CELL); let g = G.grid.get(k); if (!g) G.grid.set(k, g = { roads: [], boxes: [], paths: [], pools: [], trees: [] }); return g; };
+		const b = D.bounds;
+		const G = { name: D.name, gen: true, bounds: b, reach: [...b], map: D.map, grid: new Map(), data: D };
 		for (const r of D.roads) {
-			const p = r.pts;
-			let mnx = 1e9, mnz = 1e9, mxx = -1e9, mxz = -1e9;
-			for (let i = 0; i < p.length; i += 2) { mnx = Math.min(mnx, p[i]); mxx = Math.max(mxx, p[i]); mnz = Math.min(mnz, p[i + 1]); mxz = Math.max(mxz, p[i + 1]); }
-			r.box = [mnx, mnz, mxx, mxz]; r.drive = DRIVE.has(r.cls); r.walked = WALKED.has(r.cls);
-			for (let gx = Math.floor(mnx / CELL); gx <= Math.floor(mxx / CELL); gx++) for (let gz = Math.floor(mnz / CELL); gz <= Math.floor(mxz / CELL); gz++) cell(gx * CELL + 1, gz * CELL + 1).roads.push(r);
+			r.box = roadBox(r); r.drive = DRIVE.has(r.cls); r.walked = WALKED.has(r.cls);
+			putRoad(G, r);
 		}
 		// the generated town's houses are gathered like the real ones, so they are built
 		// whole and can be walked into (houses.js)
 		groupBoxes(D.boxes);
-		for (const b of D.boxes) cell(b.x, b.z).boxes.push(b);
-		for (const p of D.paths) cell(p.ax, p.az).paths.push(p);
-		for (const p of D.pools) cell(p.x, p.z).pools.push(p);
-		for (const t of D.trees) cell(t.x, t.z).trees.push(t);
+		for (const q of D.boxes) cellIn(G.grid, q.x, q.z).boxes.push(q);
+		for (const p of D.paths) cellIn(G.grid, p.ax, p.az).paths.push(p);
+		for (const p of D.pools) cellIn(G.grid, p.x, p.z).pools.push(p);
+		for (const t of D.trees) cellIn(G.grid, t.x, t.z).trees.push(t);
 		const M = D.map;
 		G.tex = new THREE.DataTexture(M.px, M.w, M.h, THREE.RGBAFormat, THREE.UnsignedByteType);
 		G.tex.minFilter = G.tex.magFilter = THREE.LinearFilter; G.tex.colorSpace = THREE.NoColorSpace; G.tex.needsUpdate = true;
 		gens.push(G);
 		R.regions.unshift(G);                       // found first where it overlaps nothing real anyway
-		swapIn(G);
 		R.loaded = true;
-		version++;
-		for (const M2 of MAPS) M2.x = 1e9;          // repaint the road maps
+		genVersion++;
+		changed(-1, camX, camZ);
 		return G;
 	}
 	function removeRegion(G) {
@@ -271,10 +400,11 @@ export function createRealCity(renderer) {
 		if (i < 0) return;
 		gens.splice(i, 1);
 		R.regions.splice(R.regions.indexOf(G), 1);
-		if (REAL_U.uRealMap.value === G.tex && saved) { REAL_U.uRealMap.value = saved.map; REAL_U.uRealR.value.copy(saved.r); REAL_U.uRealB.value.copy(saved.b); saved = null; }
+		R.loaded = R.regions.length > 0;
+		bindMain();
 		G.tex.dispose();
-		version++;
-		for (const M2 of MAPS) M2.x = 1e9;
+		genVersion++;
+		changed(-1, camX, camZ);
 	}
 
 	// ---------- the road maps round you: a fine one close by, a coarser one further out ----------
@@ -403,6 +533,9 @@ export function createRealCity(renderer) {
 		const B = builder(M.ramp), Y = builder(M.ramp), Lb = builder(1.8), fine = !!M.paint;
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
 		for (const r of near('roads', cx, cz, SIZE * 0.72)) {
+			// (a road added by hand is driven, not painted: where it runs through a mapped region the
+			// mapped one is on the ground already)
+			if (r.hand) continue;
 			const p = loc(r.pts), hw = r.w / 2;
 			if (r.cls === 'path' || r.cls === 'track') { B.line(p, hw, DIRT); continue; }
 			if (r.cls === 'footway' || r.cls === 'steps' || r.cls === 'pedestrian') { B.line(p, hw, CONC); continue; }
@@ -445,11 +578,12 @@ export function createRealCity(renderer) {
 	}
 
 	function update(camera) {
-		if (camera.position.y < 6000) wake(camera.position.x, camera.position.z);
-		if (!R.loaded) return;
-		if (gens.length) swapIn(gens[gens.length - 1]);      // (a real region loading late would take the map back)
 		const x = camera.position.x, z = camera.position.z;
-		const on = !!regionAt(x, z, -800) && camera.position.y < 3000;
+		camX = x; camZ = z;
+		if (camera.position.y < 6000) stream(x, z);
+		if (!R.loaded) return;
+		if (Math.hypot(x - slotX, z - slotZ) > 400) slots(x, z);
+		const on = camera.position.y < 3000 && R.regions.some(({ reach: b }) => x > b[0] - 800 && z > b[1] - 800 && x < b[2] + 800 && z < b[3] + 800);
 		for (const M of MAPS) {
 			if (!on) { M.u[1].value.w = 0; M.x = 1e9; continue; }
 			if (Math.hypot(x - M.x, z - M.z) > M.move) { drawRoadMap(M, x, z); break; }      // one map a frame
@@ -458,7 +592,7 @@ export function createRealCity(renderer) {
 
 	// the coarse map at a point: land use (0 wild), roads and roofs coverage
 	function landAt(x, z) {
-		const M = regionAt(x, z, 0)?.map;
+		const M = mapAt(x, z)?.map;
 		if (!M) return null;
 		const i = Math.floor((x - M.x0) / M.step), j = Math.floor((z - M.z0) / M.step);
 		if (i < 0 || j < 0 || i >= M.w || j >= M.h) return null;
@@ -484,5 +618,7 @@ export function createRealCity(renderer) {
 		return best;
 	}
 
-	return { ready, R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, version: () => version, ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
+	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
+	// town came or went)
+	return { R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
 }

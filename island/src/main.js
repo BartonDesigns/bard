@@ -841,7 +841,7 @@ export function createIslandWorld() {
 		p.appendChild(q);
 		// the credits the data and the assets ask for where they are shown (OpenStreetMap, CC BY)
 		const credit = css(document.createElement('div'), 'margin-top:8px;font:11px system-ui;opacity:.6;line-height:1.35;');
-		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets and buildings: Overture Maps Foundation, © OpenStreetMap contributors (ODbL), Microsoft and Google footprints. Hair and beards: the MakeHuman team, culturalibre and Rehman Polanski (CC0); Elvaerwyn (CC BY 4.0), via the MakeHuman community.';
+		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets, buildings and land use (San Francisco, the East Bay, the Peninsula, Marin and the South Bay): Overture Maps Foundation (CC BY 4.0), © OpenStreetMap contributors (ODbL), Microsoft and Google building footprints. Hair and beards: the MakeHuman team, culturalibre and Rehman Polanski (CC0); Elvaerwyn (CC BY 4.0), via the MakeHuman community.';
 		p.appendChild(credit);
 		// what the site keeps on this device, by kind, each removable
 		storagePanel(p, { activeModel: () => (guide.llm.kind() === 'webllm' ? guide.llm.model() : ''), onModelRemoved: () => guide.llm.useNone() });
