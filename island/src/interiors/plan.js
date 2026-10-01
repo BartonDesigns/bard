@@ -366,6 +366,8 @@ export function planSummit(S = {}) {
 	// the shop's wall and the lobby's, across the building
 	const xs = Math.max(-hw + 4, doorX - 3), xl = Math.min(pier[0] - 3.2, doorX + 3);
 	P.door = { x: doorX, w: 1.2, y: 0, h: 2.3 };
+	// (an oak door, as the CCC hung)
+	P.doorColor = [0.3, 0.19, 0.11];
 	P.solid = [];
 	P.topHoles = [];
 	for (let k = 0; k < 2; k++) {

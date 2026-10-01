@@ -103,5 +103,7 @@ export function walkIns() {
 		return best;
 	}
 	const drop = (tag) => { for (let i = list.length - 1; i >= 0; i--) if (list[i].tag === tag) list.splice(i, 1); };
-	return { add, push, floor, drop };
+	// (where they stand and which way they face, for looking round and tests)
+	const where = () => list.map((R) => ({ x: R.x, y: R.y, z: R.z, yaw: Math.atan2(R.sa, R.ca), w: R.hw * 2, d: R.hd * 2 }));
+	return { add, push, floor, drop, where };
 }

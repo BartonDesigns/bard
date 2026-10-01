@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { planRow, planApt, planHall, rng, seedOf, ST } from './plan.js';
 import { furnish } from './furnish.js';
 import { prepare, buildLevel } from './build.js';
-import { houseMaterials } from '../bay/housekit.js';
+import { houseMaterials, lin } from '../bay/housekit.js';
 import { STYLE, sfDistrict } from '../bay/styles.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 
@@ -160,6 +160,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		P.private = P.private ?? !PUBLIC.has(B.use);
 		if (!M) M = houseMaterials([-2, -1, 150, 160]);
 		B.C = prepare(P, { outside: B.o.col || [0.85, 0.82, 0.76], litShare: 0.55 });
+		if (P.doorColor) B.C.doorC = lin(P.doorColor);
 		B.root = new THREE.Group();
 		B.root.position.set(B.o.x, P.f0, B.o.z);
 		B.root.rotation.y = -B.o.a;

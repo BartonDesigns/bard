@@ -220,5 +220,5 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 	}
 	// the park you are in, for a note
 	const parkAt = (x, z) => SITES.find((P) => Math.hypot(P.x - x, P.z - z) < 300) || GEN.find((P) => Math.hypot(P.x - x, P.z - z) < 120) || null;
-	return { group: root, update, parkAt, count: () => built.size, push: rooms.push, floor: rooms.floor };
+	return { group: root, update, parkAt, count: () => built.size, push: rooms.push, floor: rooms.floor, restrooms: rooms.where };
 }

@@ -372,7 +372,7 @@ export function planHouse(grp, opt = {}) {
 	// is made that the plan did not ask for. A few layouts are tried and the best is kept.
 	function layout(L, prog, pools) {
 		let best = null;
-		for (let t = 0; t < 10; t++) {
+		for (let t = 0; t < 6; t++) {
 			const a = attempt(L, prog, pools, t ? 0.45 : 0);
 			if (!best || a.cost < best.cost - 1e-9) best = a;
 		}
@@ -463,7 +463,8 @@ export function planHouse(grp, opt = {}) {
 		const E = extent(L);
 		for (const pool of pools) {
 			extraType = pool.extra || 'office';
-			const zs = zonesOf(Uint8Array.from(pool.mask));
+			// (the zones are the same each try: cut once, copied)
+			const zs = (pool.zs || (pool.zs = zonesOf(Uint8Array.from(pool.mask)))).map((q) => ({ ...q }));
 			const good = zs.filter((q) => Math.min(q.w, q.d) >= 1.3 && q.w * q.d >= 2.5);
 			const scraps = absorb(good, zs.filter((q) => !good.includes(q)));
 			for (const q of good) { q.acc = accessOf(L, q, pool.hubs); q.units = []; }
@@ -821,10 +822,9 @@ export function planHouse(grp, opt = {}) {
 	}
 	function cellAt(x, z) {
 		if (x < X[0] || x > X[nx] || z < Z[0] || z > Z[nz]) return -1;
-		let i = 0, j = 0;
-		while (i < nx - 1 && X[i + 1] <= x) i++;
-		while (j < nz - 1 && Z[j + 1] <= z) j++;
-		return i + j * nx;
+		// (the last line at or before each: halving the lines)
+		const find = (L, n, v) => { let lo = 0, hi = n - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (L[m] <= v) lo = m; else hi = m - 1; } return lo; };
+		return find(X, nx, x) + find(Z, nz, z) * nx;
 	}
 
 	// ---- walls: every boundary between a room and the outside or another room

@@ -169,14 +169,16 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 			if (!Lv || !D || tex.image.width !== Lv.W) continue;
 			const st = Lv.step, i0 = Math.max(0, Math.floor((S.minX - Lv.x0) / st)), i1 = Math.min(Lv.W - 1, Math.ceil((S.maxX - Lv.x0) / st));
 			const j0 = Math.max(0, Math.floor((S.minZ - Lv.zN) / st)), j1 = Math.min(Lv.H - 1, Math.ceil((S.maxZ - Lv.zN) / st));
-			let lo = -1, hi = -1;
+			const rows = new Set();
 			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
 				const x = Lv.x0 + i * st, z = Lv.zN + j * st;
 				if (!S.inside(x, z)) continue;
 				const q = j * Lv.W + i, t = level - Math.min(1.2, 0.14 + S.edgeOf(x, z).d * 0.06);
-				if (t < Lv.v[q] / H_SCALE - H_OFF) { Lv.v[q] = Math.round((t + H_OFF) * H_SCALE); D[q] = THREE.DataUtils.toHalfFloat(t); if (lo < 0) lo = j; hi = j; }
+				if (t < Lv.v[q] / H_SCALE - H_OFF) { Lv.v[q] = Math.round((t + H_OFF) * H_SCALE); D[q] = THREE.DataUtils.toHalfFloat(t); rows.add(j); }
 			}
-			if (lo >= 0) { tex.addUpdateRange(lo * Lv.W, (hi - lo + 1) * Lv.W); tex.needsUpdate = true; }
+			// (a row at a time: three.js uploads each range as one row, counted as if RGBA)
+			for (const j of rows) tex.addUpdateRange(j * Lv.W * 4, Lv.W * 4);
+			if (rows.size) tex.needsUpdate = true;
 		}
 	}
 	// (a lake to dig waits for the finest survey over it to have loaded)
@@ -220,15 +222,16 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 			}
 		}
 		const conc = new THREE.MeshStandardMaterial({ color: 0xb9b4a9, roughness: 0.85 });
-		const lipG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+		// (a wedge: its top a hand over the water at the edge, sloping down into the bank behind,
+		// so where the bank stands higher it is buried in it and where it is low it shows no wall)
+		const lipG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0.5);
+		{ const P2 = lipG.attributes.position; for (let i = 0; i < P2.count; i++) if (P2.getY(i) > 0.5 && P2.getZ(i) > 0.5) P2.setY(i, 0.62); lipG.computeVertexNormals(); }
 		const lips = new THREE.InstancedMesh(lipG, conc, Math.max(1, lip.length));
 		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 		lip.forEach((e, k) => {
-			// (a low kerb a hand over the water, the bank meeting its top; where the bank stands
-			// higher it is buried in it)
-			const y0 = level - 0.9, top = level + 0.15;
-			q.setFromAxisAngle(Y, -Math.atan2(e.b.z - e.a.z, e.b.x - e.a.x));
-			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 + e.nx * 0.2, y0, (e.a.z + e.b.z) / 2 + e.nz * 0.2), q, s.set(e.L + 0.6, top - y0, 0.6)));
+			const y0 = level - 0.95, top = level + 0.15, flip = e.nx * (e.a.z - e.b.z) + e.nz * (e.b.x - e.a.x) < 0 ? Math.PI : 0;
+			q.setFromAxisAngle(Y, flip - Math.atan2(e.b.z - e.a.z, e.b.x - e.a.x));
+			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 - e.nx * 0.1, y0, (e.a.z + e.b.z) / 2 - e.nz * 0.1), q, s.set(e.L + 0.6, top - y0, 1.5)));
 		});
 		lips.count = lip.length;
 		lips.castShadow = lips.receiveShadow = true;
