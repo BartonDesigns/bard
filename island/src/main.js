@@ -1156,7 +1156,7 @@ export function createIslandWorld() {
 			// (anyone about within 150 m: out alone long enough, the wolves)
 			let company = 0;
 			for (const q of people.pool) if (q.active && Math.hypot(q.M.S.pos.x - cx, q.M.S.pos.z - cz) < 150) company++;
-			W.natureSound.update(dt, camera, { company, wind: shared.uWind?.value, night: sk.night, hours: W.sky.state.hours, month: today().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
+			W.natureSound.update(dt, camera, { company, wind: shared.uWind?.value, gust: shared.uGust?.value, night: sk.night, hours: W.sky.state.hours, month: today().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
 		}
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		// a mushroom eaten: sizes swell and shrink (the field of view, from where it stood), and

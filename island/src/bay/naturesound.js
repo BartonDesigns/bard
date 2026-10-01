@@ -428,8 +428,13 @@ export function createNatureSound(bay, groundAt) {
 		}
 		const windK = Math.min(1.5, (o.wind ?? 0.3) + 0.08);
 		const leafy = Math.min(1, hab.wood + hab.brush * 0.6);
-		ease(A.wind.g.gain, 0.012 * windK * wild * (0.4 + leafy * 0.6 + hab.open * 0.3), 1.2);
-		ease(A.wind.bp.frequency, hab.redwood > 0.3 ? 380 : 700 + leafy * 1600, 1.5);
+		// the wind comes in gusts and rustles the leaves: a steady broad hiss read as distant surf
+		// everywhere inland, so it all but drops away between the gusts, and through the trees
+		// and the brush it is a brighter, narrower rustle
+		const gust = Math.min(1, o.gust ?? 0.3);
+		ease(A.wind.g.gain, 0.011 * windK * wild * (0.12 + gust * 0.88) * (0.35 + leafy * 0.65 + hab.open * 0.2), 0.6);
+		ease(A.wind.bp.frequency, hab.redwood > 0.3 ? 420 : 1400 + leafy * 1800 + gust * 600, 1.2);
+		ease(A.wind.bp.Q, hab.redwood > 0.3 ? 0.7 : 1.1 + leafy * 0.6, 1.5);
 		if (day && wild > 0.1) {
 			const rw = hab.redwood * birds;
 			tWren -= dt; if (tWren < 0) { tWren = 14 + Math.random() * 30; if (rw > 0.2) wren(0.01 * rw); }
