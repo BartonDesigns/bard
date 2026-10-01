@@ -226,7 +226,7 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 		lip.forEach((e, k) => {
 			// (a low kerb a hand over the water, the bank meeting its top; where the bank stands
 			// higher it is buried in it)
-			const y0 = level - 0.9, top = level + 0.22;
+			const y0 = level - 0.9, top = level + 0.15;
 			q.setFromAxisAngle(Y, -Math.atan2(e.b.z - e.a.z, e.b.x - e.a.x));
 			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 + e.nx * 0.2, y0, (e.a.z + e.b.z) / 2 + e.nz * 0.2), q, s.set(e.L + 0.6, top - y0, 0.6)));
 		});

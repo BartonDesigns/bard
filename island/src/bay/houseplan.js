@@ -23,7 +23,9 @@ const HALLW = 1.4;
 const MIN = { bath: 1.8, mbath: 1.8, powder: 1.5, laundry: 1.8, closet: 1.2 };
 const minOf = (t) => MIN[t] ?? 2.5;
 // which go first when a zone has no room for all it was given
-const RANK = { closet: 0, loft: 1, office: 1.5, powder: 2, bath: 2.5, bed: 3, laundry: 3, dining: 3.5 };
+// (and the rooms every house keeps: its kitchen, a living room, a bath, a bedroom)
+const RANK = { closet: 0, loft: 1, office: 1.5, powder: 2, bath: 2.5, bed: 3, laundry: 3, dining: 3.5, family: 5, master: 8, living: 8, kitchen: 9 };
+const KEEP = new Set(['kitchen', 'living', 'master']);
 
 // the runtime kinds (bake-realcity.py): 0 house, 1 garage left, 2 garage right, 3 garage wing, 4 wing
 export const storeysOf = (b) => ((b.kind <= 2 || b.kind === 4) && b.wallH >= 3.8 ? 2 : 1);
@@ -142,8 +144,9 @@ export function planHouse(grp, opt = {}) {
 	const M = mainOf(grp);
 	if (!M) return null;
 	const rnd = rng(houseSeed(M) ^ (opt.salt || 0));
-	// (the kind of room a zone with floor to spare takes, as the rooms are laid out)
-	let extraType = 'office';
+	// (the kind of room a zone with floor to spare takes, as the rooms are laid out; the
+	// level's programme)
+	let extraType = 'office', progTypes = [];
 	const { ca, sa, rects } = frameOf(grp, M);
 	if (!rects.length) return null;
 	const R0 = rects.find((r) => r.main) || rects[0];
@@ -375,10 +378,12 @@ export function planHouse(grp, opt = {}) {
 		}
 		for (const p of best.pieces) {
 			if (p.join) continue;
-			const r = addRoom(p.type, L, { target: p.target });
+			const r = addRoom(p.type, L, { target: p.target, kitchenette: p.kitchenette });
 			for (const c of p.cells) give(r, c);
 		}
 		for (const p of best.pieces) if (p.join) for (const c of p.join.cells) give(p.join.to, c);
+		// (a cabin's or a studio's kitchen is along a wall of its one room)
+		if (L === 0 && !prog.some((q) => q[0] === 'kitchen')) for (const r of rooms) if (r.level === 0 && r.type === 'living') r.kitchenette = true;
 	}
 	function zonesOf(mask) {
 		const out = [], h = new Int16Array(nx);
@@ -453,11 +458,12 @@ export function planHouse(grp, opt = {}) {
 	}
 	function attempt(L, prog, pools, jit) {
 		const pieces = [], hubCells = [];
+		progTypes = prog.map((p) => p[0]);
 		let cost = 0;
 		const E = extent(L);
 		for (const pool of pools) {
 			extraType = pool.extra || 'office';
-			const zs = zonesOf(pool.mask);
+			const zs = zonesOf(Uint8Array.from(pool.mask));
 			const good = zs.filter((q) => Math.min(q.w, q.d) >= 1.3 && q.w * q.d >= 2.5);
 			const scraps = absorb(good, zs.filter((q) => !good.includes(q)));
 			for (const q of good) { q.acc = accessOf(L, q, pool.hubs); q.units = []; }
@@ -504,7 +510,9 @@ export function planHouse(grp, opt = {}) {
 					const c = Math.hypot(dx, dz) * 0.25 + Math.max(0, load + u.target - q.w * q.d) / Math.max(4, u.target) * 6 + (u.hub && !q.acc ? 6 : 0) + (Math.min(q.w, q.d) < mn - 0.05 ? 30 : 0) + (q.units.length && q.w * q.d < 2 * mn * mn ? 30 : 0);
 					if (c < bc) { bc = c; bz = q; }
 				}
-				if (bz && bc < 30) bz.units.push(u); else cost += 5;
+				if (bz && bc < 30) bz.units.push(u);
+				// (a room the house must have goes to the biggest zone, whatever else is there)
+				else if (good.length && (KEEP.has(u.rooms[0].type) || only(u))) { good.reduce((a, b) => (a.w * a.d > b.w * b.d ? a : b)).units.push(u); cost += 2; } else cost += 5;
 			}
 			// a zone left empty takes a room from a crowded neighbour, or one of its own
 			for (const q of good) {
@@ -533,8 +541,8 @@ export function planHouse(grp, opt = {}) {
 				const kf = fl.length ? Math.max(0.3, room) / ft : 1, kx = fl.length || room < 0 ? Math.min(1, Aq / Math.max(1e-3, fixedA())) : Aq / Math.max(1e-3, fixedA());
 				for (const u of q.units) { for (const r of u.rooms) r.share = r.target * (r.fixed ? kx : kf); u.share = u.rooms.reduce((s, r) => s + r.share, 0); }
 				const out = [];
-				cost += cut(q, q.units, q.acc, out);
-				for (const p of out) pieces.push({ type: p.room.type, target: p.room.target, cells: cellsOf(p), q: p });
+				cost += cut(q, q.units, pool.hall ? q.acc : null, out);
+				for (const p of out) pieces.push({ type: p.room.type, target: p.room.target, cells: cellsOf(p), q: p, kitchenette: p.room.kitchenette });
 			}
 			for (const q of scraps) pieces.push({ scrap: true, q, cells: cellsOf(q) });
 		}
@@ -564,7 +572,15 @@ export function planHouse(grp, opt = {}) {
 		for (const p of pieces) if (p.merge) { p.merge.cells.push(...p.cells); p.cells = []; }
 		const kept = pieces.filter((p) => !p.solid && (p.join || (!p.scrap && p.cells.length)));
 		for (const p of kept) if (p.join) { p.cells = []; p.type = null; }
-		// the score: shapes, sizes, and every room that needs a hall on one
+		// the score: every room of the programme kept (the kitchen, a living room, a bath, a
+		// bedroom above all), the shapes and sizes, and every room that needs a hall on one
+		const want = {}, have = {};
+		for (const [t] of prog) if (pools.some((q) => q.takes(t))) want[t] = (want[t] || 0) + 1;
+		for (const p of kept) if (p.type) { have[p.type] = (have[p.type] || 0) + 1; if (p.kitchenette) have.kitchen = (have.kitchen || 0) + 1; }
+		for (const t in want) {
+			const miss = Math.max(0, want[t] - (have[t] || 0));
+			if (miss) cost += miss * (KEEP.has(t) || ((t === 'bath' || t === 'bed') && !have.bath && !have.mbath && !have.bed && !have.master) ? 20 : 4);
+		}
 		const lab2 = new Int32Array(N).fill(-1), spur = new Uint8Array(N);
 		kept.forEach((p, k) => { for (const c of p.cells) lab2[c] = k; });
 		for (const c of hubCells) spur[c] = 1;
@@ -594,7 +610,7 @@ export function planHouse(grp, opt = {}) {
 		return L === 1 || !PUBLIC.has(type);
 	}
 	// cut a zone among its units: returns the cost of what it could not do
-	function cut(q, units, acc, out) {
+	function cut(q, units, acc, out, relax = 1) {
 		if (units.length === 1) return suite(q, units[0], acc, out);
 		const tries = acc ? [acc.side[0] === 'z'] : q.w >= q.d ? [true, false] : [false, true];
 		let best = null;
@@ -608,7 +624,7 @@ export function planHouse(grp, opt = {}) {
 				const A = us.slice(0, k), B = us.slice(k), want = lines[lo] + span * ta / tot;
 				for (let c = lo + 1; c <= hi; c++) {
 					const la = lines[c] - lines[lo], lb = lines[hi + 1] - lines[c];
-					if (la < need(A, depth) - 0.05 || lb < need(B, depth) - 0.05) continue;
+					if (la < need(A, depth) * relax - 0.05 || lb < need(B, depth) * relax - 0.05) continue;
 					let cost = Math.abs(lines[c] - want) / span * 2 + (alongX === tries[0] ? 0 : 0.15);
 					if (A.length === 1) cost += Math.max(0, Math.max(la, depth) / Math.min(la, depth) - 2);
 					if (B.length === 1) cost += Math.max(0, Math.max(lb, depth) / Math.min(lb, depth) - 2);
@@ -616,16 +632,30 @@ export function planHouse(grp, opt = {}) {
 				}
 			}
 		}
+		// (no room for them all with every one on the hall: cut freely, the rooms off the far
+		// end reached through the others)
+		if (!best && acc) return 2 + cut(q, units, null, out, relax);
+		// (too small a house for a living room and a kitchen both: the kitchen in the living room)
+		const lv = units.find((u) => u.rooms[0].type === 'living'), kt = units.find((u) => u.rooms[0].type === 'kitchen');
+		if (!best && lv && kt) { lv.rooms[0].kitchenette = true; lv.share += kt.share; lv.target += kt.target; return 1 + cut(q, units.filter((u) => u !== kt), acc, out, relax); }
 		if (!best) {
 			// no room for them all: the least needed one goes
 			const drop = [...units].sort((a, b) => rank(a) - rank(b))[0];
-			return 4 + cut(q, units.filter((u) => u !== drop), acc, out);
+			// (rather a room a little narrow than a house without its kitchen or living room)
+			if (rank(drop) >= 7 && relax > 0.9) return 3 + cut(q, units, acc, out, relax === 1 ? 0.94 : 0.86);
+			return (rank(drop) >= 7 ? 25 : 4) + cut(q, units.filter((u) => u !== drop), acc, out, relax);
 		}
 		const qa = zone(best.alongX ? { ...q, i1: best.c - 1 } : { ...q, j1: best.c - 1 }), qb = zone(best.alongX ? { ...q, i0: best.c } : { ...q, j0: best.c });
-		return cut(qa, best.A, acc, out) + cut(qb, best.B, acc, out);
+		return cut(qa, best.A, acc, out, relax) + cut(qb, best.B, acc, out, relax);
 	}
-	function need(G, depth) { return G.reduce((s, u) => s + (u.rooms.length > 1 && depth < 4.3 ? u.rooms.reduce((t, r) => t + minOf(r.type), 0) : minOf(u.rooms[0].type)), 0); }
-	function rank(u) { const t = u.rooms[0].type; return (RANK[t] ?? 5) + u.target * 0.01; }
+	// how far along a cut a group needs: side by side, or (when they stack in the depth) the widest
+	function need(G, depth) {
+		const each = G.map((u) => (u.rooms.length > 1 && depth < 4.3 ? u.rooms.reduce((t, r) => t + minOf(r.type), 0) : minOf(u.rooms[0].type)));
+		return G.length > 1 && each.reduce((s, v) => s + v, 0) <= depth + 0.05 ? Math.max(...each) : each.reduce((s, v) => s + v, 0);
+	}
+	function rank(u) { const t = u.rooms[0].type; return (RANK[t] ?? 5) + (only(u) ? 6 : 0) + (u.rooms[0].kitchenette ? 4 : 0) + u.target * 0.01; }
+	// (the house's one bath, or its one bedroom)
+	function only(u) { const t = u.rooms[0].type; return (t === 'bath' || t === 'bed') && progTypes.filter((q) => q === t || (t === 'bed' && q === 'master') || (t === 'bath' && q === 'mbath')).length === 1; }
 	// a main bedroom with its bath and closet: the bedroom on the hall, the others beyond it
 	// (or beside it, where the zone is too shallow)
 	function suite(q, u, acc, out) {
@@ -1023,6 +1053,10 @@ function furnish(plan) {
 			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.7 });
 			against('floorLamp', 0.35, 0.35, 1.6, { corner: true, clear: 0 });
 			against('plant', 0.45, 0.45, 1.2, { corner: true, clear: 0 });
+			// a small house's kitchen along one wall of its living room
+			// (and a studio's bed, where the house has no bedroom of its own)
+			if (room.kitchenette && !rooms.some((r) => r.cells.length && (r.type === 'bed' || r.type === 'master'))) against('bed', 1.4, 2.05, 0.6, { clear: 0.5, score: (s) => (s.ext ? 0 : 0.5) });
+			if (room.kitchenette) { against('fridge', 0.85, 0.72, 1.8, { corner: true, clear: 0.9 }); const ct = against('counter', Math.min(2.6, Math.max(bw, bd) - 1.6), 0.63, 0.92, { long: true, clear: 0.9, noWindow: true }); if (ct) { ct.sink = ct.c - ct.w * 0.2; ct.range = ct.c + ct.w * 0.25; ct.uppers = 0.6; } }
 			art(2); light();
 		} else if (t === 'family') {
 			const tv = against('tvConsole', 1.7, 0.45, 0.55, { long: true, clear: 2.0, score: (s) => (s.ext ? -1 : 1) });
@@ -1138,6 +1172,18 @@ function furnish(plan) {
 			light('tube');
 		} else if (t === 'closet') {
 			against('shelf', Math.min(1.2, Math.max(bw, bd) - 0.4), 0.35, 1.8, { clear: 0.3 });
+		} else if (t === 'office') {
+			against('desk', 1.3, 0.6, 0.75, { clear: 0.9, score: (s) => (s.ext ? 1 : 0) });
+			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.7 });
+			against('armchair', 0.85, 0.85, 0.85, { corner: true, clear: 0.7 });
+			against('plant', 0.45, 0.45, 1.2, { corner: true, clear: 0 });
+			art(1); light();
+		} else if (t === 'loft') {
+			const so = against('sofa', 2.0, 0.92, 0.85, { long: true, clear: 1.3 });
+			if (so) inFront(so, 'coffeeTable', 1.0, 0.55, 0.42, 0.45);
+			against('tvConsole', 1.5, 0.45, 0.55, { clear: 1.6 });
+			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.7 });
+			light();
 		}
 	}
 	return items;
