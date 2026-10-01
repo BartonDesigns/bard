@@ -131,7 +131,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 				// the form: the region's mix, leaned cold by the air up here and dry by little rain
 				const cold = sst(5, -3, W.air), dry = sst(500, 200, cell.RAIN);
 				let q = hash(row, col, 17), form = 'broad';
-				const wC = mix.treeless ? 0 : mix.conifer + cold * 0.8, wP = mix.palm * sst(15, 21, W.air), wB = mix.bush + dry * 0.6 + (open ? 0.5 : 0), wBr = mix.broad * (1 - cold * 0.7);
+				const wC = mix.treeless ? 0 : mix.conifer + cold * 0.8, wP = mix.palm * sst(15, 21, W.air), wB = mix.bush + dry * 0.6 + (open ? 0.5 : 0), wBr = mix.treeless ? 0 : mix.broad * (1 - cold * 0.7);
 				const tot = wC + wP + wB + wBr;
 				q *= tot;
 				if ((q -= wC) < 0) form = 'conifer'; else if ((q -= wP) < 0) form = 'palm'; else if ((q -= wB) < 0) form = 'bush'; else form = 'broad';
