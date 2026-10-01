@@ -70,11 +70,13 @@ export function createLabels(mount, bay, bridge) {
 		return { name: pick.name, sub };
 	}
 
-	let shown = '', pending = '', since = 0, hideAt = 0, acc = 0;
-	function update(dt, t, cam, onIsland) {
-		acc += dt;
-		if (acc < 0.4) return;
-		acc = 0;
+	// timed on the real clock: game time is held back at low frame rates, which left the banner
+	// naming a town already passed
+	let shown = '', pending = '', since = 0, hideAt = 0, next = 0;
+	function update(cam, onIsland) {
+		const t = performance.now() / 1000;
+		if (t < next) return;
+		next = t + 0.4;
 		if (!bay.loaded()) return;
 		const w = where(cam.x, cam.z, cam.y, onIsland);
 		const key = w ? w.name : '';

@@ -27,12 +27,12 @@ shipped work). Before doing anything:
   screenshot and one conversation each, then widen.
 - **Townsfolk's cloud voice:** the discovery server is deployed at
   `https://l99-discovery.joshbarton1921.workers.dev` and `island/src/earth/config.js` points at it.
-  Check `/status` in a browser. The talk model's Neuron prices in `server/discovery/wrangler.toml`
-  were set from memory and should be checked against the Workers AI pricing page. Next layer
+  Check `/status` in a browser. Both models' Neuron prices in `server/discovery/wrangler.toml`
+  were checked against the Workers AI pricing page (1 October 2026) and match. Next layer
   (agents with memory, shared happenings) is in `server/README.md`.
 - **Street-level Bay:** done and live (eight new areas, tiles streamed by distance). Gaps: Castro
-  Valley, Moraga, Richmond and El Cerrito, Novato, south of Mountain View. The place-name banner
-  may show the wrong town at low frame rates (`bay/labels.js`); check on a real device.
+  Valley, Moraga, Richmond and El Cerrito, Novato, south of Mountain View. The place-name banner (`bay/labels.js`) now runs on the real
+  clock, so it no longer lags behind and names a town already passed at low frame rates.
 - **Hair refinement** (asked for "next week"): see Known issues.
 - **Hiker lighting** against the hillside: still unchecked.
 
