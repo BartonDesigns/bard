@@ -154,7 +154,8 @@ regional profile, a kit chosen from the atlas region, its culture and its climat
 - `folk.js`, `dress.js`, `talk.js`, `climate.js`, `here.js`: the people of the place (dressed
   for it and the weather, at its work, talkable), and what they say: the greeting with its
   meaning, the weather and season there, the food, the landmark's story, the road on
-  (`people/persona.js` puts it in the prompt and answers from it without a model)
+  (`people/persona.js` puts it in the prompt and answers from it without a model; its `region`,
+  `lang` and `facts` fields carry the same to the cloud voice)
 
 `globe.js` runs it (`Crysis.world().globe.regional`; `Crysis.globe().regional` reports it);
 `globetowns.js` leaves the towns it claims to it. The new atlas data for the Arctic, the
