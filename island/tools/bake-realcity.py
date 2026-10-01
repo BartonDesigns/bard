@@ -6,8 +6,14 @@
 # rectangle, and if its sides run square, cut into the fewest rectangles (the house, its
 # garage wing, an L or a T), each carrying the height Overture gives and a hip roof; the
 # front faces the nearest street, where the door, garage doors, driveway and walk go.
-#   python3 tools/bake-realcity.py <overture dir> <name> <west> <south> <east> <north> [map step]
-import sys, os, json, math, struct, random
+#   python3 tools/bake-realcity.py <overture dir> <name> <west> <south> <east> <north> [map step] [--tiles] [--rows]
+# --tiles cuts the area into the shared tile grid (TILE below) and writes each cell the area
+# holds as its own region, assets/bayarea/real/t/<i>_<j>.*, so the game fetches only the
+# tiles near you; cells another area already holds, and the regions baked whole, are left
+# to them. The catalogue of regions, src/bay/realtiles.js, is rewritten to match.
+# --rows: a city of terraces (San Francisco, Oakland): a house built wall to wall with its
+# neighbours has a flat roof behind a parapet, not a hip roof of its own.
+import sys, os, json, math, struct, random, gzip, re
 import numpy as np
 from shapely.geometry import Polygon, LineString, Point, box
 from shapely.strtree import STRtree
@@ -15,16 +21,18 @@ from shapely.ops import unary_union, nearest_points
 from shapely import affinity
 from PIL import Image, ImageDraw
 
-src, name = sys.argv[1], sys.argv[2]
+flags = {a for a in sys.argv[1:] if a.startswith('--')}
+args = [a for a in sys.argv[1:] if not a.startswith('--')]
+TILES, ROWS = '--tiles' in flags, '--rows' in flags
+src, name = args[0], args[1]
 LAT0, LON0 = 37.76, -122.57                 # must match src/bay/geo.js
 KX, KZ = 111320 * math.cos(LAT0 * math.pi / 180), 110996
-W_, S_, E_, N_ = map(float, sys.argv[3:7])
+W_, S_, E_, N_ = map(float, args[2:6])
 def world(lon, lat): return ((lon - LON0) * KX, -(lat - LAT0) * KZ)
 x0, zN = world(W_, N_); x1, zS = world(E_, S_)
-OX, OZ = round((x0 + x1) / 2), round((zN + zS) / 2)
-# coordinates are int16 offsets from the region's centre: pick the finest unit that still
-# reaches its corners (quarter metres for a small region, half or whole for a big one)
-# (set from the data's real extent just before writing; roads can run past the box)
+# coordinates are int16 offsets from the region's centre, at the finest unit that still
+# reaches its corners (quarter metres for a small region, half or whole for a big one; set
+# in write() from the data's real extent, as roads can run past the box)
 Q = 4
 def q(v):
 	n = int(round(v * Q))
@@ -40,6 +48,8 @@ roads = []
 for r in json.load(open(f'{src}/roads.json')):
 	if r['c'] not in CLS: continue
 	if any(f in r['f'] for f in ('is_tunnel', 'is_indoor', 'is_abandoned', 'is_under_construction')): continue
+	# (the Golden Gate's deck is modelled whole, bay/bridge.js, and its road added by hand)
+	if r['n'] and 'golden gate bridge' in r['n'].lower(): continue
 	pts = [world(x, y) for x, y in r['p']]
 	if len(pts) < 2: continue
 	roads.append({ 'c': r['c'], 'n': r['n'], 'bridge': 'is_bridge' in r['f'], 'link': 'is_link' in r['f'], 'p': pts })
@@ -68,8 +78,6 @@ for nm, rs in byname.items():
 			if 6 < Lo.distance(m) < 40 and 3 < t < Lo.length - 3:
 				d1 = np.subtract(o['p'][-1], o['p'][0]); d1 = d1 / (np.linalg.norm(d1) + 1e-9)
 				if abs(np.dot(d0, d1)) > 0.8: r['div'] = True; break
-names = sorted({r['n'] for r in roads if r['n']})
-nix = { n: i + 1 for i, n in enumerate(names) }
 driveLines = [LineString(r['p']) for r in roads if r['c'] in DRIVE and r['c'] != 'service']
 driveRoads = [r for r in roads if r['c'] in DRIVE and r['c'] != 'service']
 tree_idx = STRtree(driveLines)
@@ -123,14 +131,26 @@ def rect_decomp(poly):
 # 8 apartments, 9 industrial, 10 shed or carport
 BOX = []; DRIVES = []; WALKS = []; POOLS = []
 blds = json.load(open(f'{src}/buildings.json'))
-bpolys = []
+bpolys, found = [], []
+# (a tiled city drops the garden sheds under 10 m²)
+MINA = 10 if TILES else 8
 for b in blds:
 	pts = [world(x, y) for x, y in b['p']]
 	if len(pts) < 3: continue
 	poly = Polygon(pts)
 	if not poly.is_valid: poly = poly.buffer(0)
-	if poly.geom_type != 'Polygon' or poly.area < 8: continue
-	bpolys.append(poly)
+	if poly.geom_type != 'Polygon' or poly.area < MINA: continue
+	bpolys.append(poly); found.append(b)
+# which footprints are built wall to wall with a neighbour (a terrace)
+attached = [False] * len(bpolys)
+if ROWS:
+	bidx = STRtree(bpolys)
+	for k, P in enumerate(bpolys):
+		if P.area > 700: continue
+		edge = P.buffer(0.6)
+		for m in bidx.query(edge):
+			if m != k and edge.intersection(bpolys[m]).area > 2.5: attached[k] = True; break
+for k, (poly, b) in enumerate(zip(bpolys, found)):
 	cls = b['c'] or ''
 	area = poly.area
 	ang, ctr, rects = rect_decomp(poly)
@@ -146,9 +166,10 @@ for b in blds:
 	yaw = math.atan2(-fx, fz)                        # local +z faces the street (see city.js upload)
 	across = fa[0] == 'v'                            # the front is along the frame's z: box width runs along u
 	big = area > 700 or cls in ('commercial', 'retail', 'office', 'industrial', 'school', 'warehouse', 'hospital', 'church', 'civic', 'public', 'university', 'college', 'supermarket', 'hotel')
-	h = b['h'] or (4.6 if area < 260 else 7.4)
+	row = attached[k] and not big
+	h = b['h'] or (9.5 if row else 4.6 if area < 260 else 7.4)
 	if cls in ('shed', 'carport', 'garage', 'garages', 'roof') or area < 22: h = min(h, 3.2)
-	kind0 = 6 if cls in ('retail', 'supermarket') else 7 if cls in ('school', 'university', 'college') else 9 if cls in ('industrial', 'warehouse') else 8 if cls in ('apartments',) and area > 400 else 5
+	kind0 = 6 if cls in ('retail', 'supermarket') else 7 if cls in ('school', 'university', 'college') else 9 if cls in ('industrial', 'warehouse') else 8 if cls in ('apartments',) and area > 400 else 12 if cls == 'parking' else 11 if h >= 40 else 5
 	main = max(range(len(rects)), key=lambda k: rects[k][2] * rects[k][3])
 	boxes = []
 	for k, (cx, cz, rw, rd) in enumerate(rects):
@@ -172,6 +193,8 @@ for b in blds:
 			kind = 10 if h <= 3.2 and area < 40 else 3 if k == garage else 4 if k != main else 0
 			if k == main and garage < 0 and w >= 11 and h > 3.3: kind = 1 if rnd.random() < 0.5 else 2
 			if k == garage: wallH = 3.0; roofH = min(roofH, 1.6)
+			# a terrace house: flat roofed, its walls up to its full height
+			if row and kind != 10: wallH, roofH = max(wallH, h), 0
 		door = rnd.random() * 0.6 + 0.2
 		if kind in (1, 2): door = rnd.random() * 0.3 + (0.55 if kind == 1 else 0.15)
 		BOX.append((wx, wz, w, d, yaw, wallH, roofH, kind, door, 1 if (rnd.random() < 0.55 or kind == 3) else 0))
@@ -248,7 +271,7 @@ for r in roads:
 print('trees', len(TREES))
 
 # ---------- the coarse map ----------
-PX = float(sys.argv[7]) if len(sys.argv) > 7 else 8
+PX = float(args[6]) if len(args) > 6 else 8
 MW, MH = int((x1 - x0) / PX) + 1, int((zS - zN) / PX) + 1
 def pix(p): return ((p[0] - x0) / PX, (p[1] - zN) / PX)
 R = Image.new('L', (MW, MH), 0); G = Image.new('L', (MW, MH), 0); B = Image.new('L', (MW, MH), 0)
@@ -258,41 +281,154 @@ for r in roads:
 	if r['c'] in ('footway', 'path', 'track', 'steps', 'cycleway'): continue
 	dr.line([pix(p) for p in r['p']], fill=255, width=max(1, round(WIDTH[r['c']] / PX + 0.4)))
 for P in bpolys: db.polygon([pix(p) for p in P.exterior.coords], fill=255)
+if TILES:
+	# the built-up blocks no land use polygon covers (most of a city's): town, so its
+	# streets get their sidewalks
+	from PIL import ImageFilter
+	dense = np.asarray(B.filter(ImageFilter.BoxBlur(3))) > 30
+	g = np.asarray(G).copy()
+	g[(g == 0) & dense] = 16
+	G = Image.fromarray(g)
 A = Image.new('L', (MW, MH), 255)
-Image.merge('RGBA', (R, G, B, A)).save(f'assets/bayarea/real/{name}.png', optimize=True)
+MAP = Image.merge('RGBA', (R, G, B, A))
+ATTR = 'Map data: Overture Maps Foundation (CC BY 4.0 / ODbL), incl. © OpenStreetMap contributors, Microsoft and Google building footprints'
+CLASSES = { 'classes': CLS, 'widths': [WIDTH[c] for c in CLS] }
 
 # ---------- the binary ----------
-HALF = max([abs(v) for r in roads for p in r['p'] for v in (p[0] - OX, p[1] - OZ)] + [abs(b[0] - OX) for b in BOX] + [abs(b[1] - OZ) for b in BOX] + [max(x1 - x0, zS - zN) / 2]) + 100
-Q = 4 if HALF * 4 < 32000 else 2 if HALF * 2 < 32000 else 1 if HALF < 32000 else 0.5
-print('extent', round(HALF), 'm, unit', 1 / Q, 'm')
-out = bytearray()
 def i16(*v): return struct.pack('<' + 'h' * len(v), *v)
-def u16(*v): return struct.pack('<' + 'H' * len(v), *v)
-secs = {}
-start = len(out)
+def write(path, rect, roads, BOX, PATHS, POOLS, TREES, mapbox):
+	"""one region's files: path.bin.gz, path.png, path.json; rect its world box [x0, zN, x1, zS]"""
+	global Q
+	rx0, rzN, rx1, rzS = rect
+	OX, OZ = round((rx0 + rx1) / 2), round((rzN + rzS) / 2)
+	# coordinates are int16 offsets from the region's centre: the finest unit that still
+	# reaches everything (roads can run past the box)
+	HALF = max([abs(v) for r in roads for p in r['p'] for v in (p[0] - OX, p[1] - OZ)] + [abs(b[0] - OX) for b in BOX] + [abs(b[1] - OZ) for b in BOX] + [max(rx1 - rx0, rzS - rzN) / 2]) + 100
+	Q = 4 if HALF * 4 < 32000 else 2 if HALF * 2 < 32000 else 1 if HALF < 32000 else 0.5
+	names = sorted({r['n'] for r in roads if r['n']})
+	nix = { n: i + 1 for i, n in enumerate(names) }
+	out = bytearray()
+	secs = {}
+	start = len(out)
+	for r in roads:
+		fl = (1 if r['bridge'] else 0) | (2 if r['link'] else 0) | (4 if r['end0'] else 0) | (8 if r['end1'] else 0) | (16 if r.get('div') else 0)
+		pts = r['p']
+		out += struct.pack('<BBHH', CLS.index(r['c']), fl, nix.get(r['n'], 0), len(pts))
+		for p in pts: out += i16(q(p[0] - OX), q(p[1] - OZ))
+	secs['roads'] = [start, len(roads)]
+	while len(out) % 2: out += b'\0'
+	start = len(out)
+	for (wx, wz, w, d, yaw, wallH, roofH, kind, door, hip) in BOX:
+		out += i16(q(wx - OX), q(wz - OZ), int(round(w * 20)), int(round(d * 20)), int(round(yaw * 10000)), int(round(wallH * 20)), int(round(roofH * 20)), kind | (hip << 8), int(round(door * 1000)))
+	secs['boxes'] = [start, len(BOX)]
+	start = len(out)
+	for (ax, az, bx, bz, w) in PATHS: out += i16(q(ax - OX), q(az - OZ), q(bx - OX), q(bz - OZ), int(round(w * 20)))
+	secs['paths'] = [start, len(PATHS)]
+	start = len(out)
+	for (px, pz, w, d, yaw) in POOLS: out += i16(q(px - OX), q(pz - OZ), int(round(w * 20)), int(round(d * 20)), int(round(yaw * 10000)))
+	secs['pools'] = [start, len(POOLS)]
+	start = len(out)
+	for (tx, tz, h, con) in TREES: out += i16(q(tx - OX), q(tz - OZ), int(round(h * 20)), con)
+	secs['trees'] = [start, len(TREES)]
+	os.makedirs(os.path.dirname(path), exist_ok=True)
+	with gzip.open(path + '.bin.gz', 'wb', compresslevel=9, mtime=0) as f: f.write(out)
+	# the coarse map, cut from the area's at whole pixels round the box
+	i0, j0, i1, j1 = mapbox
+	MAP.crop((i0, j0, i1, j1)).save(path + '.png', optimize=True)
+	json.dump({ 'name': os.path.basename(path), 'geo': [LAT0, LON0], 'origin': [OX, OZ], 'unit': 1 / Q, 'bounds': [rx0, rzN, rx1, rzS],
+		'map': { 'step': PX, 'w': i1 - i0, 'h': j1 - j0, 'x0': x0 + i0 * PX, 'z0': zN + j0 * PX }, **CLASSES, 'sections': secs, 'names': names, 'attribution': ATTR },
+		open(path + '.json', 'w'), separators=(',', ':'))
+	return len(out)
+
+if not TILES:
+	n = write(f'assets/bayarea/real/{name}', (x0, zN, x1, zS), roads, BOX, DRIVES + WALKS, POOLS, TREES, (0, 0, MW, MH))
+	print('bin', n, 'bytes; map', MW, 'x', MH)
+	sys.exit(0)
+
+# ---------- the tiles ----------
+# the shared grid every tiled area is cut on, in degrees (about 2.6 by 2.8 km here)
+TILE = (-122.60, 37.30, 0.03, 0.025)
+CAT = 'src/bay/realtiles.js'
+ROW = re.compile(r"^\t\['([^']+)', ([-\d.]+), ([-\d.]+), ([-\d.]+), ([-\d.]+), '([^']*)'\],")
+cat = [m.groups() for m in map(ROW.match, open(CAT).read().splitlines()) if m]
+cat = [(n, float(w), float(s), float(e), float(nn), a) for n, w, s, e, nn, a in cat]
+others = [c for c in cat if c[5] != name]
+whole = [c[1:5] for c in others if not c[0].startswith('t/')]          # the regions baked whole
+held = {c[0] for c in others}
+L0, B0, DL, DB = TILE
+cells = []
+for i in range(math.ceil((W_ - L0) / DL - 1e-6), math.floor((E_ - L0) / DL + 1e-6)):
+	for j in range(math.ceil((S_ - B0) / DB - 1e-6), math.floor((N_ - B0) / DB + 1e-6)):
+		nm = f't/{i}_{j}'
+		if nm in held: continue
+		w, s, e, n = round(L0 + i * DL, 4), round(B0 + j * DB, 4), round(L0 + (i + 1) * DL, 4), round(B0 + (j + 1) * DB, 4)
+		# a region baked whole takes its ground: keep the biggest rectangle left beside it
+		for (ww, ss, ee, nn) in whole:
+			if ww >= e or ee <= w or ss >= n or nn <= s: continue
+			cand = [(w, s, ww, n), (ee, s, e, n), (w, s, e, ss), (w, nn, e, n)]
+			cand = [c for c in cand if c[2] - c[0] > 0.002 and c[3] - c[1] > 0.002]
+			if not cand: w = None; break
+			w, s, e, n = max(cand, key=lambda c: (c[2] - c[0]) * (c[3] - c[1]))
+		if w is not None: cells.append((nm, w, s, e, n))
+print('cells', len(cells))
+def wbox(c):
+	a, b = world(c[1], c[4]), world(c[3], c[2])
+	return (a[0], a[1], b[0], b[1])
+WB = [wbox(c) for c in cells]
+def cellOf(x, z):
+	for k, (a, b, c, d) in enumerate(WB):
+		if a <= x < c and b <= z < d: return k
+	return -1
+parts = [{ 'roads': [], 'box': [], 'paths': [], 'pools': [], 'trees': [] } for _ in cells]
+def put(kind, x, z, v):
+	k = cellOf(x, z)
+	if k >= 0: parts[k][kind].append(v)
 for r in roads:
-	fl = (1 if r['bridge'] else 0) | (2 if r['link'] else 0) | (4 if r['end0'] else 0) | (8 if r['end1'] else 0) | (16 if r.get('div') else 0)
-	pts = r['p']
-	out += struct.pack('<BBHH', CLS.index(r['c']), fl, nix.get(r['n'], 0), len(pts))
-	for p in pts: out += i16(q(p[0] - OX), q(p[1] - OZ))
-secs['roads'] = [start, len(roads)]
-while len(out) % 2: out += b'\0'
-start = len(out)
-for (wx, wz, w, d, yaw, wallH, roofH, kind, door, hip) in BOX:
-	out += i16(q(wx - OX), q(wz - OZ), int(round(w * 20)), int(round(d * 20)), int(round(yaw * 10000)), int(round(wallH * 20)), int(round(roofH * 20)), kind | (hip << 8), int(round(door * 1000)))
-secs['boxes'] = [start, len(BOX)]
-start = len(out)
-for (ax, az, bx, bz, w) in DRIVES + WALKS: out += i16(q(ax - OX), q(az - OZ), q(bx - OX), q(bz - OZ), int(round(w * 20)))
-secs['paths'] = [start, len(DRIVES) + len(WALKS)]
-start = len(out)
-for (px, pz, w, d, yaw) in POOLS: out += i16(q(px - OX), q(pz - OZ), int(round(w * 20)), int(round(d * 20)), int(round(yaw * 10000)))
-secs['pools'] = [start, len(POOLS)]
-start = len(out)
-for (tx, tz, h, con) in TREES: out += i16(q(tx - OX), q(tz - OZ), int(round(h * 20)), con)
-secs['trees'] = [start, len(TREES)]
-open(f'assets/bayarea/real/{name}.bin', 'wb').write(out)
-json.dump({ 'name': name, 'geo': [LAT0, LON0], 'origin': [OX, OZ], 'unit': 1 / Q, 'bounds': [x0, zN, x1, zS], 'map': { 'step': PX, 'w': MW, 'h': MH },
-	'classes': CLS, 'widths': [WIDTH[c] for c in CLS], 'sections': secs, 'names': names,
-	'attribution': 'Map data: Overture Maps Foundation (CC BY 4.0 / ODbL), incl. © OpenStreetMap contributors, Microsoft and Google building footprints' },
-	open(f'assets/bayarea/real/{name}.json', 'w'))
-print('bin', len(out), 'bytes; map', MW, 'x', MH)
+	m = r['p'][len(r['p']) // 2] if len(r['p']) > 2 else ((r['p'][0][0] + r['p'][-1][0]) / 2, (r['p'][0][1] + r['p'][-1][1]) / 2)
+	put('roads', m[0], m[1], r)
+for b in BOX: put('box', b[0], b[1], b)
+for p in DRIVES + WALKS: put('paths', p[0], p[1], p)
+for p in POOLS: put('pools', p[0], p[1], p)
+for t in TREES: put('trees', t[0], t[1], t)
+mine, total = [], 0
+for c, (a, b, cc, d), P in zip(cells, WB, parts):
+	if len(P['box']) < 25 and len(P['roads']) < 25: continue           # open water, empty hills
+	mb = (max(0, int((a - x0) / PX)), max(0, int((b - zN) / PX)), min(MW, int(math.ceil((cc - x0) / PX)) + 1), min(MH, int(math.ceil((d - zN) / PX)) + 1))
+	n = write(f'assets/bayarea/real/{c[0]}', (a, b, cc, d), P['roads'], P['box'], P['paths'], P['pools'], P['trees'], mb)
+	total += n
+	mine.append(c)
+	print(c[0], 'boxes', len(P['box']), 'roads', len(P['roads']), 'trees', len(P['trees']), n, 'bytes')
+print('tiles', len(mine), 'raw', total, 'bytes')
+
+# ---------- the catalogue ----------
+# every region, and the tall buildings of all of them (the far skylines, city.js)
+def tall(path, H):
+	b = gzip.open(path + '.bin.gz').read()
+	o, n = H['sections']['boxes']
+	U, (OX, OZ) = H['unit'], H['origin']
+	shift = ((H['geo'][1] if 'geo' in H else -122.78) - LON0) * KX
+	out = []
+	for k in range(n):
+		v = struct.unpack_from('<9h', b, o + k * 18)
+		if v[5] / 20 >= 38 and v[2] * v[3] / 400 > 150: out.append([round(v[0] * U + OX + shift, 1), round(v[1] * U + OZ, 1), round(v[2] / 20, 1), round(v[3] / 20, 1), round(v[4] / 10000, 3), round(v[5] / 20, 1)])
+	return out
+rows = [c for c in others] + [(c[0], c[1], c[2], c[3], c[4], name) for c in mine]
+whole_rows = [c for c in rows if not c[0].startswith('t/')]
+tile_rows = sorted([c for c in rows if c[0].startswith('t/')], key=lambda c: (c[5], c[0]))
+T = []
+for c in whole_rows + tile_rows:
+	base = f'assets/bayarea/real/{c[0]}'
+	if os.path.exists(base + '.json'): T += tall(base, json.load(open(base + '.json')))
+fmt = lambda v: ('%.4f' % v).rstrip('0').rstrip('.')
+with open(CAT, 'w') as f:
+	f.write('// The mapped regions (written by tools/bake-realcity.py; see realcity.js): each one\'s file\n')
+	f.write('// under assets/bayarea/real/, its extent [west, south, east, north] and the area it was baked\n')
+	f.write('// with. Those named t/<i>_<j> are cells of the shared tile grid, fetched as you come near.\n')
+	f.write('export const REAL_REGIONS = [\n')
+	for c in whole_rows + tile_rows: f.write(f"\t['{c[0]}', {fmt(c[1])}, {fmt(c[2])}, {fmt(c[3])}, {fmt(c[4])}, '{c[5]}'],\n")
+	f.write('];\n')
+	f.write('// the tall buildings among them, for the far skylines: x, z, width, depth, angle, height\n')
+	f.write('export const REAL_TALL = [\n')
+	for k in range(0, len(T), 6): f.write('\t' + ', '.join(', '.join(fmt(v) for v in t) for t in T[k:k + 6]) + ',\n')
+	f.write('];\n')
+print('catalogue', len(whole_rows), 'whole,', len(tile_rows), 'tiles,', len(T), 'tall')
