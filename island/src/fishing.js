@@ -1,6 +1,6 @@
 // Fishing, anywhere there is water to fish: Lake Annabel, the bay, the Pacific shore, the
 // island's lagoon. Walk up to the water and the rod icon appears beside the jump button
-// (F on a keyboard); the rod stays put away until you tap it. Then:
+// (H on a keyboard); the rod stays put away until you tap it. Then:
 //   cast: the rod swings, the line flies out, the float lands and rides the water;
 //   wait: it twitches now and then; when it goes under, strike (tap, or R);
 //   fight: hold to reel. The line's tension climbs while you reel and the fish pulls
@@ -268,13 +268,13 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	camera.add(hand);
 	const H = { fish: null, t: 0, energy: 0, flop: 0, toss: null };
 	// ---- the UI ----
-	// the rod icon, beside the jump button whenever there is water to fish (F): tap it and the
+	// the rod icon, beside the jump button whenever there is water to fish (H): tap it and the
 	// rod comes out and you cast; tap again and it is put away
 	const rodBtn = document.createElement('button');
-	rodBtn.type = 'button'; rodBtn.title = 'Fish (F)'; rodBtn.setAttribute('aria-label', 'Fish (F)');
+	rodBtn.type = 'button'; rodBtn.title = 'Fish (H)'; rodBtn.setAttribute('aria-label', 'Fish (H)');
 	rodBtn.style.cssText = 'position:absolute;right:calc(26px + env(safe-area-inset-right));bottom:calc(100px + env(safe-area-inset-bottom));width:44px;height:44px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:4;cursor:pointer;touch-action:manipulation;';
 	// (a line icon: the rod, its reel, the line down to a float; and the key beside it)
-	rodBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21 19 4"/><circle cx="7.2" cy="15.2" r="2"/><path d="M19 4v9.5"/><path d="M17.6 15.2a1.4 1.4 0 1 0 2.8 0 1.4 1.4 0 1 0-2.8 0"/><path d="M19 16.6v1.6"/></svg><span style="position:absolute;right:3px;bottom:1px;font:600 9px system-ui;opacity:.7">F</span>';
+	rodBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21 19 4"/><circle cx="7.2" cy="15.2" r="2"/><path d="M19 4v9.5"/><path d="M17.6 15.2a1.4 1.4 0 1 0 2.8 0 1.4 1.4 0 1 0-2.8 0"/><path d="M19 16.6v1.6"/></svg><span style="position:absolute;right:3px;bottom:1px;font:600 9px system-ui;opacity:.7">H</span>';
 	// the one button for the rest: cast, strike, hold to reel (R)
 	const btn = document.createElement('button');
 	btn.type = 'button';
@@ -381,7 +381,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || typing()) return;
 		const k = e.key.toLowerCase();
-		if (k === 'f' && rodBtn.style.display !== 'none') { toggleRod(); e.preventDefault(); } else if (k === 'r' && btn.style.display !== 'none') press(true);
+		if (k === 'h' && rodBtn.style.display !== 'none') { toggleRod(); e.preventDefault(); } else if (k === 'r' && btn.style.display !== 'none') press(true);
 	});
 	addEventListener('keyup', (e) => { if (e.key === 'r' || e.key === 'R') { if (F.state === 'fight') F.hold = false; } });
 
@@ -456,7 +456,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 			F.near = near;
 			if (F.state === 'off') {
 				F.state = 'near';
-				if (t - hintAt > 90) { hintAt = t; hint?.('Water here: tap the rod or press F to fish', 2600); }
+				if (t - hintAt > 90) { hintAt = t; hint?.('Water here: tap the rod or press H to fish', 2600); }
 			}
 		} else if (F.state !== 'off' && (!onFoot || F.state === 'near' || F.state === 'ready' || !F.near || Math.hypot(camera.position.x - F.at.x, camera.position.z - F.at.z) > 30)) {
 			if (F.state === 'fight') stop('lost');

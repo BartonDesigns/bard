@@ -452,7 +452,7 @@ export function createDiablo(scene, bay) {
 	let summitPlaced = false, summitStage = 0;
 	// the inside: the stone shell is hollow, its door and windows open, and the rooms are built
 	// within it as you come near (interiors/index.js addSite, from the plan in interiors/plan.js)
-	const SHELL = 0.45, deck = { hatch: null, rails: [] };
+	const SHELL = 0.45, deck = { hatch: null, rails: [], shell: [] };
 	const site = { key: 'diablo-summit', o: null, spec: null, live: false, ready: () => !!site.o, plan: () => planSummit(site.spec) };
 
 	function buildHall() {
@@ -505,6 +505,8 @@ export function createDiablo(scene, bay) {
 		const rx0 = -W / 2 + SHELL, rx1 = W / 2 - SHELL, rz0 = -D / 2 + SHELL, rz1 = D / 2 - SHELL, ry = f0 + 6.32;
 		box('stone', hatch[0] - rx0, Hm - ry, rz1 - rz0, (rx0 + hatch[0]) / 2, ry, 0); box('stone', rx1 - hatch[2], Hm - ry, rz1 - rz0, (hatch[2] + rx1) / 2, ry, 0);
 		box('stone', hatch[2] - hatch[0], Hm - ry, hatch[1] - rz0, (hatch[0] + hatch[2]) / 2, ry, (rz0 + hatch[1]) / 2); box('stone', hatch[2] - hatch[0], Hm - ry, rz1 - hatch[3], (hatch[0] + hatch[2]) / 2, ry, (hatch[3] + rz1) / 2);
+		// (the stone walls are solid once the inside is built: the doorway open)
+		deck.shell = [[-W / 2, D / 2 - SHELL, doorX - 0.8, D / 2], [doorX + 0.8, D / 2 - SHELL, W / 2, D / 2], [-W / 2, -D / 2, W / 2, -D / 2 + SHELL], [-W / 2, -D / 2, -W / 2 + SHELL, D / 2], [W / 2 - SHELL, -D / 2, W / 2, D / 2]];
 		// a rail round the opening on the deck, open where the stair comes up
 		deck.hatch = hatch;
 		deck.rails = [[hatch[0] - 0.05, hatch[1] - 0.05, hatch[0] + 0.05, hatch[3]], [hatch[2] - 0.05, hatch[1] - 0.05, hatch[2] + 0.05, hatch[3]], [hatch[0], hatch[1] - 0.05, hatch[2], hatch[1] + 0.05]];
@@ -666,20 +668,26 @@ export function createDiablo(scene, bay) {
 		if (!summitPlaced || Math.abs(p.x - summit.position.x) + Math.abs(p.z - summit.position.z) > 40) return;
 		let [lx, lz] = hallAt(p.x, p.z);
 		const y = footY - dims.gc, r0 = lx, s0 = lz, rects0 = rects();
-		for (const r of rects()) {
+		for (const r of rects0) {
 			// (the hall is walked into once its inside is built: its walls are the plan's then)
 			if (y > r.top - 0.4 || y < r.bottom || (r === rects0[0] && site.live)) continue;
 			const qx = lx - r.x, qz = lz - r.z, ex = r.hw + 0.35 - Math.abs(qx), ez = r.hd + 0.35 - Math.abs(qz);
 			if (ex <= 0 || ez <= 0) continue;
 			if (ex < ez) lx += (qx < 0 ? -1 : 1) * ex; else lz += (qz < 0 ? -1 : 1) * ez;
 		}
+		// the stone walls, round the hollow hall
+		const circle = (b) => {
+			const qx = Math.max(b[0], Math.min(b[2], lx)), qz = Math.max(b[1], Math.min(b[3], lz)), dx = lx - qx, dz = lz - qz, d = Math.hypot(dx, dz);
+			if (d >= 0.3) return;
+			if (d > 1e-6) { lx = qx + dx / d * 0.3; lz = qz + dz / d * 0.3; return; }
+			const pen = [lx - b[0], b[2] - lx, lz - b[1], b[3] - lz], m = Math.min(...pen), k = pen.indexOf(m);
+			if (k === 0) lx = b[0] - 0.3; else if (k === 1) lx = b[2] + 0.3; else if (k === 2) lz = b[1] - 0.3; else lz = b[3] + 0.3;
+		};
+		if (site.live && y < dims.Hm - 0.4) for (const b of deck.shell) circle(b);
 		// on the deck, the parapet keeps you there, and the rail round the stair's opening
 		if (y > dims.Hm - 0.4 && y < dims.Hm + 2 && Math.abs(lx) < HALL.w / 2 && Math.abs(lz) < HALL.d / 2) {
 			lx = Math.max(-HALL.w / 2 + 0.8, Math.min(HALL.w / 2 - 0.8, lx)); lz = Math.max(-HALL.d / 2 + 0.8, Math.min(HALL.d / 2 - 0.8, lz));
-			for (const b of deck.rails) {
-				const qx = Math.max(b[0], Math.min(b[2], lx)), qz = Math.max(b[1], Math.min(b[3], lz)), dx = lx - qx, dz = lz - qz, d = Math.hypot(dx, dz);
-				if (d < 0.3 && d > 1e-6) { lx = qx + dx / d * 0.3; lz = qz + dz / d * 0.3; }
-			}
+			for (const b of deck.rails) circle(b);
 		}
 		p.x += ca * (lx - r0) - sa * (lz - s0); p.z += sa * (lx - r0) + ca * (lz - s0);
 	}

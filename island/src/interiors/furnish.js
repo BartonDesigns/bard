@@ -280,7 +280,8 @@ export function furnish(P, only = -1) {
 			const big = bw > 4.2 && bd > 4.2;
 			if (big) { const m = standing('reliefModel', cx, cz, Math.min(2.4, bw - 2.6), Math.min(1.6, bd - 2.6), 1.0, 0, 0.9); if (m) for (const [fx, fz] of [[0, 1], [0, -1]]) stand(m.x - fx * (m.d / 2 + 0.55), m.z - fz * (m.d / 2 + 0.55), fx, fz); }
 			for (let n = 0; n < 5; n++) { const c = against('exhibitCase', 1.5, 0.7, 1.05, { clear: 1.0 }); if (c && n % 2 === 0) { const [fx, fz] = faceOf(c.rot); stand(c.x + fx * 1.0, c.z + fz * 1.0, -fx, -fz); } }
-			for (let n = 0; n < 3; n++) against('exhibitPanel', 1.4, 0.12, 2.0, { clear: 0.9, side: (s) => !s.ext });
+			for (let n = 0; n < 3; n++) against('exhibitPanel', 1.4, 0.12, 2.0, { clear: 0.9, score: (s) => (s.ext ? 0 : 1) });
+			if (big) for (const sz of [-1, 1]) standing('exhibitPanel', cx + (bw > bd ? sz * bw * 0.3 : 0), cz + (bw > bd ? 0 : sz * bd * 0.3), 1.6, 0.12, 2.0, bw > bd ? 1 : 0, 0.8);
 			const be = against('bench', 1.6, 0.5, 0.45, { clear: 1.0 });
 			if (be) sitOn(be, 2, 0.45, 0.05);
 			for (let x = rm.x0 + 1.5; x < rm.x1 - 1; x += 3) for (let z = rm.z0 + 1.2; z < rm.z1 - 0.8; z += 3) items.push({ type: 'ceilingLight', kind: 'flush', level: 0, y: y0, x, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h });

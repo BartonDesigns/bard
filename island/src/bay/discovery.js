@@ -6,7 +6,8 @@
 // doors. The museum's sign at the courtyard gate, in its bright colours; stroller parking.
 // Inside the main hall, walk-in exhibit rooms: Tot Wetlands (a shallow blue pond, reeds, a
 // boardwalk bridge, soft ducks and fish), the Art Studio (easels, paint tables, splashes),
-// Discovery Hall (a climbing net and slide), a reading nook; the café in the next building.
+// Discovery Hall (a climbing net and slide), a reading nook; the café in the next building,
+// and in the rest the studios and classrooms, low tables and shelves of paint and paper.
 // Out east, Lookout Cove, the outdoor playground by the water: a little Golden Gate Bridge to
 // climb, a shipwreck and a fishing boat to play in, a sea cave, tide pools, a net climber,
 // and the real bridge towering over it all.
@@ -83,19 +84,20 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const ca = Math.cos(b.a), sa = Math.sin(b.a); y0 = Math.max(y0, g(b.x + ca * sx * b.w / 2 - sa * sz * b.d / 2, b.z + sa * sx * b.w / 2 + ca * sz * b.d / 2)); }
 			y0 += 0.5;
 			const F = frameAt(b.x, b.z, b.a, y0), W = b.w, D = Math.max(9, b.d - 3), H = bi < 3 ? 7.4 : 4.2, hw = W / 2, hd = D / 2, zc = -1.5;
+			// (every one of them walked into: the hall's exhibits, the café, the studios and classrooms)
 			const main = bi === 0, cafe = bi === 1;
 			// foundation and floor
 			boxIn(F, mat.porch, W + 0.4, 1.2, D + 0.4, 0, -1.2, zc);
 			boxIn(F, mat.floor, W - 0.4, 0.05, D - 0.4, 0, 0, zc);
-			if (main || cafe) B.floors.push({ F, x0: -hw, x1: hw, z0: zc - hd, z1: zc + hd, y: y0 });
+			B.floors.push({ F, x0: -hw, x1: hw, z0: zc - hd, z1: zc + hd, y: y0 });
 			// the walls: clapboard outside, plaster in; the front has doors at its middle and ends
 			const T = 0.25, doors = [-hw * 0.6, 0, hw * 0.6];
 			for (const [side, len, along] of [[-1, W, 'x'], [1, W, 'x'], [-1, D, 'z'], [1, D, 'z']]) {
 				// plaster lines the inside of the walls where you can walk in
-				const lin = (w, h, d, x, y, z) => { if (main || cafe) boxIn(F, mat.inWall, w, h, d, x, y, z); };
+				const lin = (w, h, d, x, y, z) => boxIn(F, mat.inWall, w, h, d, x, y, z);
 				if (along === 'z') { boxIn(F, mat.wall, T, H, D, side * (hw - T / 2), 0, zc, true); lin(0.04, H - 0.1, D - 0.6, side * (hw - T - 0.02), 0, zc); continue; }
 				const zz = zc + side * (hd - T / 2), zin = zz - side * (T / 2 + 0.02);
-				if (side > 0 && (main || cafe)) {
+				if (side > 0) {
 					// the front: wall pieces between the door openings
 					let a0 = -hw;
 					for (const dx of doors) { if (dx - 0.9 - a0 > 0.1) { boxIn(F, mat.wall, dx - 0.9 - a0, H, T, (a0 + dx - 0.9) / 2, 0, zz, true); lin(dx - 0.9 - a0, H - 0.1, 0.04, (a0 + dx - 0.9) / 2, 0, zin); } boxIn(F, mat.wall, 1.8, H - 2.4, T, dx, 2.4, zz); lin(1.8, H - 2.5, 0.04, dx, 2.4, zin); boxIn(F, mat.door, 0.1, 2.4, 0.3, dx - 0.95, 0, zz); boxIn(F, mat.door, 0.1, 2.4, 0.3, dx + 0.95, 0, zz); a0 = dx + 0.9; }
@@ -103,7 +105,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 				} else { boxIn(F, mat.wall, len, H, T, 0, 0, zz, true); lin(len - 0.6, H - 0.1, 0.04, 0, 0, zin); }
 				// windows: tall, white-framed, both storeys
 				for (let k = -hw + 2; k < hw - 1.5; k += 2.6) for (const wy of H > 5 ? [1.0, 4.6] : [1.0]) {
-					if (side > 0 && (main || cafe) && doors.some((dx) => Math.abs(dx - k) < 1.6) && wy < 2) continue;
+					if (side > 0 && doors.some((dx) => Math.abs(dx - k) < 1.6) && wy < 2) continue;
 					boxIn(F, mat.glass, 1.0, 1.7, 0.06, k, wy, zz + side * (T / 2 + 0.01)); boxIn(F, mat.trim, 1.2, 0.12, 0.1, k, wy - 0.06, zz + side * (T / 2 + 0.04)); boxIn(F, mat.trim, 1.2, 0.12, 0.1, k, wy + 1.72, zz + side * (T / 2 + 0.04));
 				}
 			}
@@ -155,7 +157,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			for (let k = -hw + 0.2; k <= hw - 0.1; k += W / Math.max(3, Math.round(W / 3.2))) boxIn(F, mat.trim, 0.18, H > 5 ? 6.6 : 3.4, 0.18, k, 0, zc + hd + pd - 0.15);
 			if (H > 5) { boxIn(F, mat.porch, W, 0.2, pd, 0, 3.4, pz); for (let k = -hw; k < hw; k += 0.18) boxIn(F, mat.trim, 0.05, 0.9, 0.05, k, 3.6, zc + hd + pd - 0.15); boxIn(F, mat.trim, W, 0.08, 0.12, 0, 4.5, zc + hd + pd - 0.15); }
 			boxIn(F, mat.roof, W + 0.3, 0.15, pd + 0.2, 0, H > 5 ? 6.6 : 3.4, pz);
-			for (let k = -hw; k < hw; k += 0.2) if (!((main || cafe) && doors.some((dx) => Math.abs(dx - k) < 1.1))) boxIn(F, mat.trim, 0.05, 0.85, 0.05, k, 0, zc + hd + pd - 0.12);
+			for (let k = -hw; k < hw; k += 0.2) if (!doors.some((dx) => Math.abs(dx - k) < 1.1)) boxIn(F, mat.trim, 0.05, 0.85, 0.05, k, 0, zc + hd + pd - 0.12);
 
 			// ---------- inside ----------
 			const ix0 = -hw + 0.6, ix1 = hw - 0.6, iz0 = zc - hd + 0.6, iz1 = zc + hd - 1.4, iw = ix1 - ix0;
@@ -183,6 +185,17 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 				// the front desk by the middle door
 				boxIn(F, mat.counter, 2.6, 1.05, 0.7, 0, 0, iz1 - 1.2, true);
 				B.main = { F, ix0, ix1, iz0, iz1, pond: [tx, tz, Math.min(iw / 7, (iz1 - iz0) / 2.4) * 1.45] };
+			}
+			if (!main && !cafe) {
+				// a studio or a classroom: low tables with their stools, shelves of paint and paper
+				// along the back, the children's pictures on the walls, a rug to sit on for a story
+				for (let x2 = ix0 + 1.6; x2 < ix1 - 1.4; x2 += 3.2) for (let z2 = iz0 + 1.8; z2 < iz1 - 1.8; z2 += 2.6) {
+					boxIn(F, mat.wood, 1.6, 0.05, 0.8, x2, 0.55, z2, true);
+					for (const [sx, sz] of [[-0.5, -0.65], [0.5, -0.65], [-0.5, 0.65], [0.5, 0.65]]) boxIn(F, mat.paint[(Math.round(x2 + z2) + sx * 2 + 5) % 5 | 0], 0.3, 0.32, 0.3, x2 + sx, 0, z2 + sz);
+				}
+				for (let x2 = ix0 + 0.6; x2 < ix1 - 0.8; x2 += 1.4) { boxIn(F, mat.wood, 1.2, 1.4, 0.4, x2 + 0.6, 0, iz0 - 0.3, true); for (let k = 0; k < 3; k++) boxIn(F, mat.paint[(k + Math.round(x2)) % 5 | 0], 0.3, 0.22, 0.3, x2 + 0.25 + k * 0.35, 1.4, iz0 - 0.3); }
+				for (let x2 = ix0 + 1; x2 < ix1 - 1; x2 += 1.8) boxIn(F, mat.paint[Math.round(x2) % 5 | 0], 0.7, 0.5, 0.02, x2, 1.4, iz0 - 0.52);
+				boxIn(F, M('#5aa0d0', 0.9), 2.4, 0.02, 1.8, ix1 - 1.6, 0, iz1 - 1.3);
 			}
 			if (cafe) {
 				boxIn(F, mat.counter, iw * 0.6, 1.05, 0.7, 0, 0, iz0 + 1.2, true);

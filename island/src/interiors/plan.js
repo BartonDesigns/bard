@@ -377,7 +377,7 @@ export function planSummit(S = {}) {
 		for (const [side, u, kk] of windows) if (kk === k) open(ext[side], u - 0.55, u + 0.55, y + 0.85, y + 2.3, 'window');
 		// the west room (the shop below, a gallery above), the lobby or landing, the museum
 		room(P, k, k ? 'gallery' : 'shop', -hw, -hd, xs - PT / 2, hd, { shopType: 'gift' });
-		room(P, k, k ? 'hall' : 'visitor', xs + PT / 2, -hd, xl - PT / 2, hd, { stairs: true });
+		room(P, k, k ? 'hall' : 'visitor', xs + PT / 2, -hd, xl - PT / 2, hd, { stairs: !!k });
 		room(P, k, 'gallery', xl + PT / 2, -hd, pier[0], hd);
 		room(P, k, 'gallery', pier[0], pier[3], hw, hd);
 		room(P, k, 'gallery', pier[0], -hd, hw, pier[1]);

@@ -130,18 +130,29 @@ function checkLevel(Lv, out) {
 	// ---- non-orthogonal walls (every planner here lays walls on the two axes)
 	for (const w of W) if (w.axis !== 'x' && w.axis !== 'z') out.angle++;
 
-	// ---- clear widths: each room's floor (less its walls and the stairs) opened by squares
+	// ---- clear widths: the level's floor (less its walls, doorways and stairs) opened by
+	// squares, so rooms that open into each other with no wall between are one space; then
+	// each room's own floor held to the width its use needs
+	const freeAll = new Uint8Array(nx * nz);
+	for (let c = 0; c < nx * nz; c++) if (lab[c] >= 0 && !wallAt[c] && !gapAt[c] && !(stuffAt[c] && isStair(Lv, c, nx, X, Z))) freeAll[c] = 1;
+	const th = thickness(freeAll, nx, nz);
 	for (const r of Lv.rooms) {
 		const free = new Uint8Array(nx * nz);
 		let n = 0;
-		for (let c = 0; c < nx * nz; c++) if (lab[c] === r.id && !wallAt[c] && !gapAt[c] && !(stuffAt[c] && isStair(Lv, c, nx, X, Z))) { free[c] = 1; n++; }
+		for (let c = 0; c < nx * nz; c++) if (lab[c] === r.id && freeAll[c]) { free[c] = 1; n++; }
 		if (n < 4) continue;
-		const th = thickness(free, nx, nz);
 		const lim = HALLS.has(r.type) ? PASSAGE : SMALLER[r.type] ?? ROOM;
 		let bad = 0;
 		// (a gap of a hand's width between the stairs and a wall is no passage: not counted)
 		for (let c = 0; c < nx * nz; c++) if (free[c] && th[c] * RES < lim - RES * 1.01 && th[c] * RES > 0.25) bad++;
 		if (bad * RES * RES >= 0.3 && showKind) for (let c = 0; c < nx * nz; c++) if (free[c] && th[c] * RES < lim - RES * 1.01 && th[c] * RES > 0.25) out.marks.push([Lv.L, X(c % nx), Z(Math.floor(c / nx))]);
+		if (bad * RES * RES >= 0.3 && process.env.FINE && out.fine++ < 1) {
+			// (a fine raster round the room: walls #, stairs and things =, doorways g, floor ., too narrow !)
+			let i0 = nx, i1 = 0, j0 = nz, j1 = 0;
+			for (let c = 0; c < nx * nz; c++) if (lab[c] === r.id) { i0 = Math.min(i0, c % nx); i1 = Math.max(i1, c % nx); j0 = Math.min(j0, Math.floor(c / nx)); j1 = Math.max(j1, Math.floor(c / nx)); }
+			console.log(r.type, 'x', X(i0).toFixed(2), 'z', Z(j0).toFixed(2));
+			for (let j = Math.max(0, j0 - 3); j <= Math.min(nz - 1, j1 + 3); j++) { let row = ''; for (let i = Math.max(0, i0 - 3); i <= Math.min(nx - 1, i1 + 3); i++) { const c = i + j * nx; row += wallAt[c] ? '#' : gapAt[c] ? 'g' : stuffAt[c] ? '=' : lab[c] !== r.id ? ' ' : th[c] * RES < lim - RES * 1.01 && th[c] * RES > 0.25 ? '!' : '.'; } console.log(row); }
+		}
 		if (bad * RES * RES >= 0.3) { if (HALLS.has(r.type)) out.passage++; else out.narrow++; out.why.push(r.type + (HALLS.has(r.type) ? ' passage' : ' narrow') + ' ' + (bad * RES * RES).toFixed(1) + 'm2'); }
 	}
 
@@ -227,14 +238,14 @@ function townGroups(seed, max) {
 	return houseGroups(r.value.boxes, max);
 }
 
-const tally = () => ({ marks: [], plans: 0, levels: 0, rooms: 0, cross: 0, overlap: 0, stray: 0, sliver: 0, angle: 0, passage: 0, narrow: 0, door: 0, why: [] });
+const tally = () => ({ marks: [], fine: 0, plans: 0, levels: 0, rooms: 0, cross: 0, overlap: 0, stray: 0, sliver: 0, angle: 0, passage: 0, narrow: 0, door: 0, why: [] });
 const T = {};
 const shown = {};
 function run(kind, levels, show) {
 	const t = T[kind] || (T[kind] = tally()), o = tally();
 	for (const Lv of levels) { checkLevel(Lv, o); o.levels++; o.rooms += Lv.rooms.length; }
 	t.plans++;
-	for (const k of Object.keys(o)) if (k !== 'why' && k !== 'plans' && k !== 'marks') t[k] += o[k];
+	for (const k of Object.keys(o)) if (k !== 'why' && k !== 'plans' && k !== 'marks' && k !== 'fine') t[k] += o[k];
 	for (const w of o.why) t.why.push(w);
 	const bad = o.cross + o.overlap + o.stray + o.sliver + o.angle + o.passage + o.narrow + o.door;
 	if (bad && showKind === kind && (!process.env.WHY || o.why.some((w) => w.includes(process.env.WHY))) && (shown[kind] = (shown[kind] || 0) + 1) <= 4) { console.log(`\n[${kind}]`, o.why.join('; '), `cross ${o.cross} overlap ${o.overlap} stray ${o.stray} sliver ${o.sliver}`); show?.(o.marks); }
