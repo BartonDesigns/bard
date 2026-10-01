@@ -155,11 +155,12 @@ own, or `index.html` for the full site.
   see-through on pale skin; brows heavy on some women.
 - **Hikers:** their lighting against the hillside has not been looked at yet (no hikers were in the
   test frames).
-- **Landmarks without interiors** (you can still walk through their walls): the Ferry Building,
-  both City Halls, the Palace of Fine Arts, Alcatraz, Fort Point, stadiums and arenas, Hangar
-  One, the Campanile, Lick Observatory, Apple Park, lighthouses; the Santa Cruz boardwalk's
-  Casino and carousel house, the wharf shops, Pigeon Point, Lake Annabel's Roundhouse, farm
-  barns. A good next round.
+- **Landmarks (interiors 2.0):** every landmark is solid; the public ones are walked into
+  (`island/src/interiors/landmarks.js`, `bay/landmarks.js`, `bay/footprints.js` keeps the generated
+  city out of them). Not yet seen in a test frame: Hoover Tower, Lick, the windmills, the arenas'
+  bowls, Tribune Tower, Oakland and San Ramon City Halls, the barns. The Oakland Temple's roof can
+  be stepped onto from uphill. The wharf's shops keep their own small rooms (only six interiors
+  are built near you at once).
 - **House plans:** 259 of 4050 test plans still flag small things (1 m² corners at hall
   junctions, a few 2.0–2.2 m living rooms or kitchens, doors against a stairwell).
 - **Fishing:** the float's final size was not seen in a test frame.
