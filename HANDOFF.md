@@ -168,6 +168,18 @@ own, or `index.html` for the full site.
   reel; a sagging line to a red-and-white float. Lake Annabel's water sits just below its path
   with a low concrete edge (its bed carved on water.js's fine grid).
 
+- **Regional kit** (`island/src/region/`): `kits.js` holds 22 profiles (polar, station, snow, alpine,
+  himalaya, andes, village, farm, outback, mediterranean, desert, pueblo, bazaar, steppe, savanna,
+  sahel, jungle, island, eastvillage, eastcity, southcity, southasia). `choose.js` picks one from
+  the atlas region, its coldest and warmest months, rain, height and town size, blending near
+  borders; anything unmatched is "village". `structures.js`/`layout.js`/`settle.js` build
+  vertex-coloured buildings in 120 m cells (no textures); `landmarks.js` has 52 real landmarks
+  and 30 generated kinds with legends; `ice.js` the sea ice and aurora; `folk.js`, `dress.js`,
+  `talk.js` the people, clothes and talk (persona `region`, `lang`, `facts` feed the cloud voice).
+  Left to do: re-check talk in the eight regions shot before the folk fix, reframe the jungle and
+  steppe views, look at Svalbard after the tundra fix, a brighter aurora, jobs matched to a
+  person's community, and the call to prayer and night sounds checked with audio.
+
 ## History
 
 - **Late August to mid September 2026:** the faceplate's builds (up to Bard Build 226), caves and
