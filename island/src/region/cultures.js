@@ -68,6 +68,8 @@ export const NAMES = {
 	aussie: { m: ['Jack', 'Liam', 'Noah', 'Brodie', 'Mitch'], f: ['Charlotte', 'Olivia', 'Chloe', 'Matilda', 'Jess'], s: ['Smith', 'Jones', 'Brown', 'Nguyen', 'Kelly', 'Wilson'] },
 	american: { m: ['Michael', 'James', 'Luis', 'Tyler', 'Darnell', 'Kevin', 'Cody'], f: ['Emily', 'Ashley', 'Maria', 'Jasmine', 'Hannah', 'Kayla', 'Grace'], s: ['Smith', 'Johnson', 'Garcia', 'Miller', 'Brown', 'Nguyen', 'Davis'] },
 	mexican: { m: ['José', 'Juan', 'Luis', 'Jesús', 'Alejandro', 'Ricardo'], f: ['Guadalupe', 'María', 'Ximena', 'Fernanda', 'Lupita', 'Itzel'], s: ['Hernández', 'García', 'Martínez', 'López', 'González', 'Pérez'] },
+	// the research stations: people from everywhere, there for a season or a year
+	station: { m: ['Tom', 'Javier', 'Hiroshi', 'Mateo', 'Erik', 'Sanjay', 'Kwame', 'Pierre', 'Dmitri', 'Wei'], f: ['Kate', 'Ana', 'Yuki', 'Ingrid', 'Priya', 'Chloé', 'Olivia', 'Mei', 'Sofía', 'Amara'], s: ['Clarke', 'Romero', 'Sato', 'Hansen', 'Iyer', 'Mensah', 'Dubois', 'Volkov', 'Chen', 'Walker'] },
 	caribbean: { m: ['Andre', 'Marlon', 'Devon', 'Jean', 'Rafael', 'Kemar'], f: ['Shanice', 'Keisha', 'Marie', 'Yolanda', 'Tamika', 'Nadine'], s: ['Campbell', 'Williams', 'Joseph', 'Pierre', 'Rodríguez', 'Brown'] },
 };
 
@@ -83,7 +85,7 @@ const ANC = {
 	spanish: [0.02, 0.02, 0.96], andean: [0.03, 0.62, 0.35], brazil: [0.3, 0.08, 0.62], amazon: [0.04, 0.72, 0.24], portuguese: [0.03, 0.02, 0.95],
 	french: [0.05, 0.03, 0.92], german: [0.02, 0.03, 0.95], italian: [0.02, 0.02, 0.96], greek: [0.02, 0.02, 0.96], balkan: [0.01, 0.02, 0.97],
 	slavic: [0.01, 0.03, 0.96], british: [0.05, 0.05, 0.9], polynesian: [0.2, 0.55, 0.25], melanesian: [0.78, 0.15, 0.07], maori: [0.15, 0.55, 0.3],
-	aussie: [0.03, 0.15, 0.82], american: [0.14, 0.12, 0.74], mexican: [0.05, 0.42, 0.53], caribbean: [0.78, 0.04, 0.18],
+	aussie: [0.03, 0.15, 0.82], station: [0.08, 0.22, 0.7], american: [0.14, 0.12, 0.74], mexican: [0.05, 0.42, 0.53], caribbean: [0.78, 0.04, 0.18],
 };
 
 // what is worn on the head, by custom (shares of grown-ups): scarf (women's headscarf),
@@ -104,7 +106,7 @@ const RULES = [
 	['na.ak.north', 'inupiat'], ['na.ak', 'american'], ['na.can.arctic', 'inuit'], ['atl.greenland', 'kalaallit'],
 	['eu.nordic.lapland', 'sami'], ['eu.nordic.svalbard', 'nordic'], ['eu.nordic', 'nordic'], ['atl.iceland', 'nordic'],
 	['as.ru.yakutia', 'sakha'], ['as.ru.arctic', 'nenets'], ['as.ru', 'russian'], ['eu.east.ru', 'russian'], ['eu.east.ua', 'slavic'], ['eu.east', 'slavic'],
-	['an', 'nordic'],
+	['an', 'station'],
 	['af.maghreb', 'maghreb', 'maghreb'], ['af.sahara', 'tuareg', 'tuareg'], ['af.sahel', 'mande', 'sahel'], ['af.west.hausa', 'hausa', 'sahel'], ['af.west.ng', 'nigeria', 'westafrica'], ['af.west.gh', 'akan', 'westafrica'], ['af.west.ci', 'akan', 'westafrica'], ['af.west.sn', 'wolof', 'sahel'], ['af.west', 'westafrica', 'westafrica'],
 	['af.egypt', 'arab', 'arab'], ['af.sudan', 'arab', 'sahel'], ['af.horn', 'horn', 'horn'], ['af.east.rift', 'maasai', 'swahili'], ['af.east.coast', 'swahili', 'swahili'], ['af.east', 'swahili', 'swahili'],
 	['af.congo', 'congo'], ['af.madagascar', 'malagasy'], ['af.south', 'southernafrica'], ['af', 'westafrica'],
@@ -142,6 +144,20 @@ const SAY = {
 	maasai: { greet: ['Supa!', 'Jambo!'], words: ['supa: hello (Maa)', 'ashe oleng: thank you very much (Maa)', 'enkang: a homestead'] },
 	sami: { greet: ['Buorre beaivi!', 'Hei!'], words: ['buorre beaivi: good day (Northern Sámi)', 'giitu: thanks', 'joik: a Sámi song for a person or a place'] },
 };
+// the language people speak among themselves, where it is not the region's own (the atlas
+// gives the region's: Intl names it)
+const LANG = {
+	inuit: 'Inuktitut', kalaallit: 'Kalaallisut (Greenlandic)', inupiat: 'Iñupiaq and English', sami: 'Northern Sámi and Swedish or Norwegian', sakha: 'Sakha and Russian', nenets: 'Nenets and Russian',
+	tuareg: 'Tamasheq', mande: 'Bambara and French', hausa: 'Hausa', wolof: 'Wolof and French', akan: 'Twi and English', maasai: 'Maa and Swahili', swahili: 'Swahili',
+	dayak: 'Iban and Malay', amazon: 'their own language and Portuguese', andean: 'Quechua and Spanish', tibetan: 'Tibetan', nepali: 'Nepali and Sherpa', mongol: 'Mongolian',
+	maori: 'English and te reo Māori', polynesian: 'Samoan or Tongan and English', melanesian: 'Tok Pisin', station: 'English, and the languages of a dozen countries',
+};
+let names = null;
+export function languageOf(C, code = '') {
+	if (C && LANG[C.key]) return LANG[C.key];
+	if (!code) return '';
+	try { names = names || new Intl.DisplayNames(['en'], { type: 'language' }); return (names.of(code) || '').replace(/ Bokmål$/, ''); } catch { return ''; }
+}
 const seen = new Map();
 // the culture of a region id: { key, names, ancestry, head }
 export function cultureOf(id = '') {

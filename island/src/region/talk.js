@@ -7,6 +7,9 @@
 // It speaks plainly, as a neighbour would: no accents written out, no lectures, nobody
 // performing their culture for a visitor.
 
+import { today } from '../calendar.js';
+import { languageOf } from './cultures.js';
+
 const pick = (r, L) => (L && L.length ? L[Math.floor(r() * L.length)] : '');
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const deg = (C, t) => (C.f ? `${Math.round(t * 9 / 5 + 32)} degrees` : `${t} degrees`);
@@ -143,8 +146,8 @@ export function regionalSheet(H, r) {
 	const place = H.town?.name || (H.regionName ? H.regionName[0].toUpperCase() + H.regionName.slice(1) : 'here');
 	return {
 		place, region: H.regionName, country: H.country, kit: kit?.name || '', culture: H.culture?.key,
-		greet: g, bye: farewell(R, r), word: w,
-		weather: weatherLine(kit, C, H.wx, r, R), season: C.season, month: MONTHS[new Date().getMonth()], temp: C.now, f: !!C.f,
+		greet: g, bye: farewell(R, r), word: w, lang: languageOf(H.culture, R?.lang),
+		weather: weatherLine(kit, C, H.wx, r, R), season: C.season, month: MONTHS[today().getMonth()], temp: C.now, f: !!C.f,
 		food: foodLine(R, r, H.town?.name), foods: (R?.food || []).slice(0, 4),
 		landmark: H.landmark ? { ...H.landmark, line: landmarkLine(H.landmark, r) } : null,
 		onward: H.onward ? { ...H.onward, line: onwardLine(H.onward, kit, r) } : null,

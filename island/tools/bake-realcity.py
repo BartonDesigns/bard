@@ -44,6 +44,9 @@ rnd = random.Random(7)
 CLS = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'footway', 'path', 'track', 'cycleway', 'steps', 'pedestrian', 'unknown']
 WIDTH = { 'motorway': 14, 'trunk': 13, 'primary': 13, 'secondary': 12, 'tertiary': 11, 'residential': 10.5, 'unclassified': 9, 'living_street': 8, 'service': 5.5, 'footway': 1.8, 'path': 1.6, 'track': 3.2, 'cycleway': 2.4, 'steps': 2, 'pedestrian': 4, 'unknown': 6 }
 DRIVE = { 'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown' }
+# a driveway or path named for the house it serves ("12 Oak Drive") is someone's address: no name
+ADDRESS = re.compile(r'(^|&\s*)\d+[a-z]?\s+\S.*\b(street|st|avenue|ave|road|rd|drive|dr|way|lane|ln|court|ct|corte|place|pl|circle|terrace|boulevard|blvd|path|camino|vista|access)\b', re.I)
+def unaddress(n): return '' if n and ADDRESS.search(n) else n
 roads = []
 for r in json.load(open(f'{src}/roads.json')):
 	if r['c'] not in CLS: continue
@@ -52,7 +55,7 @@ for r in json.load(open(f'{src}/roads.json')):
 	if r['n'] and 'golden gate bridge' in r['n'].lower(): continue
 	pts = [world(x, y) for x, y in r['p']]
 	if len(pts) < 2: continue
-	roads.append({ 'c': r['c'], 'n': r['n'], 'bridge': 'is_bridge' in r['f'], 'link': 'is_link' in r['f'], 'p': pts })
+	roads.append({ 'c': r['c'], 'n': unaddress(r['n']), 'bridge': 'is_bridge' in r['f'], 'link': 'is_link' in r['f'], 'p': pts })
 # dead ends of residential streets get a turning circle
 def key(p): return (round(p[0] * 2), round(p[1] * 2))
 deg = {}
