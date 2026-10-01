@@ -14,6 +14,7 @@
 
 import * as THREE from 'three';
 import { toWorld } from './geo.js';
+import { barn } from '../interiors/landmarks.js';
 
 // the stretch of coast: [west, south, east, north] in lat/lon
 const LAT_S = 37.15, LAT_N = 37.53, LON_W = -122.54, LON_E = -122.30;
@@ -307,11 +308,24 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 	}
 
 	// ---------- barns ----------
+	// Each is walked into: its board walls hollow (the long sides and the roof a shell open at the
+	// ends, the gable ends on with a big door in each), the stalls, the hay and the tractor inside
+	// built by the interiors as you come near (barnSites; interiors/landmarks.js barn)
+	const barnList = [], barnSites = [];
+	let onBarn = null;
 	function buildBarns() {
 		const bodyG = [], roofG = [];
-		const body = new THREE.Shape([new THREE.Vector2(-6, 0), new THREE.Vector2(6, 0), new THREE.Vector2(6, 5), new THREE.Vector2(0, 9), new THREE.Vector2(-6, 5)]);
+		const outline = [[-6, 0], [6, 0], [6, 5], [0, 9], [-6, 5]].map(([a, b]) => new THREE.Vector2(a, b));
+		const body = new THREE.Shape(outline);
+		body.holes.push(new THREE.Path([[-5.7, 0.02], [5.7, 0.02], [5.7, 4.8], [0, 8.6], [-5.7, 4.8]].map(([a, b]) => new THREE.Vector2(a, b))));
 		const bodyGeo = new THREE.ExtrudeGeometry(body, { depth: 20, bevelEnabled: false });
 		bodyGeo.translate(0, 0, -10);
+		// a gable end, its door from the floor (dy up from the barn's foot) 3.4 wide, 3.6 high
+		const endGeo = (dy) => {
+			const e = new THREE.Shape(outline);
+			e.holes.push(new THREE.Path([[-1.7, dy], [1.7, dy], [1.7, dy + 3.6], [-1.7, dy + 3.6]].map(([a, b]) => new THREE.Vector2(a, b))));
+			return new THREE.ExtrudeGeometry(e, { depth: 0.3, bevelEnabled: false });
+		};
 		const roofGeo = new THREE.BoxGeometry(7.6, 0.25, 21);
 		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 		for (const f of fields.list) {
@@ -320,13 +334,24 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 			let y = 1e9;
 			for (const [a, b] of [[-8, -12], [8, -12], [-8, 12], [8, 12]]) y = Math.min(y, groundAt(x + a, z + b));
 			const yaw = -FA + (f.r2 > 0.5 ? Math.PI / 2 : 0);
-			const b = bodyGeo.clone();
-			b.applyMatrix4(m4.compose(new THREE.Vector3(x, y - 0.4, z), q.setFromAxisAngle(Y, yaw), new THREE.Vector3(1, 1, 1)));
+			let top = -1e9;
+			for (const [a, c] of [[-6, -10], [6, -10], [-6, 10], [6, 10], [0, 0]]) top = Math.max(top, groundAt(x + a * Math.cos(yaw) + c * Math.sin(yaw), z - a * Math.sin(yaw) + c * Math.cos(yaw)));
+			const dy = Math.max(0.45, top + 0.05 - (y - 0.4));
 			const tone = f.r2 < 0.55 ? [0.36, 0.1, 0.07] : [0.42, 0.39, 0.34];      // barn red, or grey weathered board
-			const col = new Float32Array(b.attributes.position.count * 3);
-			for (let k = 0; k < col.length; k += 3) col.set(tone, k);
-			b.setAttribute('color', new THREE.BufferAttribute(col, 3));
-			bodyG.push(b);
+			const place = m4.compose(new THREE.Vector3(x, y - 0.4, z), q.setFromAxisAngle(Y, yaw), new THREE.Vector3(1, 1, 1)).clone();
+			for (const g of [bodyGeo.clone(), endGeo(dy).translate(0, 0, 9.7), endGeo(dy).translate(0, 0, -10)]) {
+				const b = g.index ? g.toNonIndexed() : g;
+				b.applyMatrix4(place);
+				const col = new Float32Array(b.attributes.position.count * 3);
+				for (let k = 0; k < col.length; k += 3) col.set(tone, k);
+				b.setAttribute('color', new THREE.BufferAttribute(col, 3));
+				bodyG.push(b);
+			}
+			const B = { x, z, y0: y - 0.4, f0: y - 0.4 + dy, yaw };
+			barnList.push(B);
+			const S = { key: 'barn:' + Math.round(x) + ':' + Math.round(z), o: { x, z, a: -yaw, w: 12, d: 20, f0: B.f0, street: B.f0 }, ready: () => true, plan: () => barn({ W: 11.4, D: 19.4, door: { x: 0, w: 3.4, h: 3.6 } }) };
+			barnSites.push(S);
+			onBarn?.(S);
 			for (const s of [-1, 1]) {
 				const r = roofGeo.clone();
 				const tilt = new THREE.Quaternion().setFromAxisAngle(Z, -s * Math.atan2(4, 6));
@@ -517,5 +542,24 @@ export function createCoastside({ groundAt, urbanAt, group, isPhone = false }) {
 	const info = () => ({ cliff: COAST_U.uCliffR.value.toArray().map(Math.round), jobs: jobs.length + (job ? 1 : 0), shore: COAST_U.uCsRow.value.w, barns: fields.list.length, built: group.children.filter((c) => /coast/.test(c.name)).map((c) => c.name + (c.count ?? '')) });
 	// (and for the tests, where frames come a second apart: finish the queued work now)
 	const flush = () => work(20000);
-	return { update, start, seaDist, fields, info, flush };
+	// the barns' walls: you go round them, and in at their doors
+	function push(p, footY) {
+		const R = 0.3;
+		for (const B of barnList) {
+			const dx = p.x - B.x, dz = p.z - B.z;
+			if (dx * dx + dz * dz > 400 || footY + 1.7 < B.y0 || footY > B.y0 + 8) continue;
+			const c = Math.cos(B.yaw), sn = Math.sin(B.yaw);
+			let lx = c * dx - sn * dz, lz = sn * dx + c * dz;
+			const inX = Math.abs(lx) < 6 + R, inZ = Math.abs(lz) < 10 + R;
+			if (!inX || !inZ) continue;
+			// the long walls
+			if (Math.abs(lz) < 10 && Math.abs(Math.abs(lx) - 5.85) < 0.15 + R) lx = Math.abs(lx) > 5.85 ? Math.sign(lx) * (6 + R) : Math.sign(lx) * (5.7 - R);
+			// the ends, but at their doors
+			else if (Math.abs(lx) > 1.7 - R && Math.abs(Math.abs(lz) - 9.85) < 0.15 + R) lz = Math.abs(lz) > 9.85 ? Math.sign(lz) * (10 + R) : Math.sign(lz) * (9.7 - R);
+			else continue;
+			p.x = B.x + c * lx + sn * lz; p.z = B.z - sn * lx + c * lz;
+		}
+	}
+	const sites = { list: barnSites, each: (f) => { onBarn = f; barnSites.forEach(f); } };
+	return { update, start, seaDist, fields, info, flush, push, sites };
 }

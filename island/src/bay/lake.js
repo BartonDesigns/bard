@@ -123,6 +123,7 @@ function shoreOf(P) {
 // The lakes: Lake Annabel, and the ponds the generated towns grow in their parks (their
 // outlines come with the town, crysis/civgen.js). Each is built when you come near.
 export function createLake(scene, bay, shared, { isPhone = false, real = null, ponds = true } = {}) {
+	const RH = { gap: 0.06 };
 	const root = new THREE.Group();
 	root.name = 'lakes';
 	scene.add(root);
@@ -264,9 +265,11 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 			const R = ROUNDHOUSE.r;
 			const mk = (geo, mat, y) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.castShadow = m.receiveShadow = true; rh.add(m); return m; };
 			const white = new THREE.MeshStandardMaterial({ color: 0xe7e3da, roughness: 0.7 });
-			const glassM = new THREE.MeshStandardMaterial({ color: 0x33403f, roughness: 0.08, metalness: 0.6, emissive: 0xffd9a0, emissiveIntensity: 0 });
+			const glassM = new THREE.MeshStandardMaterial({ color: 0x33403f, roughness: 0.08, metalness: 0.6, emissive: 0xffd9a0, emissiveIntensity: 0, side: THREE.DoubleSide, transparent: true, opacity: 0.55 });
 			mk(new THREE.CylinderGeometry(R + 3, R + 3.5, 0.9, 64), white, 0.45);                       // the terrace
-			mk(new THREE.CylinderGeometry(R - 5, R - 5, 4.6, 64, 1, true), glassM, 3.2);                 // glass all round
+			// glass all round, but for its two doors (toward +z and -z)
+			for (const t0 of [RH.gap, Math.PI + RH.gap]) mk(new THREE.CylinderGeometry(R - 5, R - 5, 4.6, 32, 1, true, t0, Math.PI - 2 * RH.gap), glassM, 3.2);
+			RH.x = ROUNDHOUSE.x; RH.z = ROUNDHOUSE.z; RH.y = rh.position.y + 0.9; RH.r = R - 5; RH.mats = { white, wood: new THREE.MeshStandardMaterial({ color: 0x6b4a30, roughness: 0.7 }), dark: new THREE.MeshStandardMaterial({ color: 0x2a2826, roughness: 0.6 }), cloth: new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.9 }) };
 			mk(new THREE.CylinderGeometry(R + 1.5, R - 4, 1.4, 64), new THREE.MeshStandardMaterial({ color: 0x2a2826, roughness: 0.6 }), 6.2);   // the dark roof ring
 			mk(new THREE.CylinderGeometry(R * 0.5, R * 0.52, 2.6, 48), white, 8.1);                      // the drum on top
 			mk(new THREE.SphereGeometry(R * 0.35, 32, 10, 0, Math.PI * 2, 0, 0.45), white, 8.8);        // its shallow dome
@@ -321,6 +324,7 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 	function update(dt, t, cam, night) {
 		const x = cam.position.x, z = cam.position.z;
 		if (!bay.loaded()) return;
+		if (RH.x !== undefined) roundhouse(x, z);
 		// the generated towns' ponds, as they come and go (unless water.js has them)
 		const v = real?.version ? real.version() : 0;
 		if (ponds && v !== pondsV) {
@@ -365,9 +369,57 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 	const bodyAt = (x, z) => bodies.find((W) => W.built && x > W.S.minX && x < W.S.maxX && z > W.S.minZ && z < W.S.maxZ && W.S.inside(x, z)) || null;
 	// the water's level where you are, or null if it is dry land
 	const waterAt = (x, z) => { const W = bodyAt(x, z); return W ? W.level : null; };
+	// the Roundhouse to walk into: its terrace, the glass kept to but at its doors; inside, drawn as
+	// you come near, the kitchen's round core in the middle, the bar round it, tables by the glass
+	function roundhouse(x, z) {
+		const d = Math.hypot(x - RH.x, z - RH.z);
+		if (!RH.inside && d < 150) {
+			const G = new THREE.Group(), { white, wood, dark, cloth } = RH.mats, y = RH.y;
+			const add = (geo, mat, px, py, pz) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = m.receiveShadow = true; G.add(m); return m; };
+			add(new THREE.CylinderGeometry(8, 8, 4.6, 32), white, 0, y + 2.3, 0);
+			add(new THREE.CylinderGeometry(10.2, 10.2, 1.1, 40, 1, false, 0.5, Math.PI * 2 - 1), wood, 0, y + 0.55, 0);
+			const tabs = [], tops = [], legs = [], chairs = [];
+			for (let r = 15; r < RH.r - 2.5; r += 4.5) for (let a = 0; a < Math.PI * 2; a += 4.2 / r) {
+				if (Math.abs(Math.cos(a)) > 0.97) continue;
+				const tx = Math.sin(a) * r, tz = Math.cos(a) * r;
+				tabs.push([tx, tz]); tops.push([tx, tz]); legs.push([tx, tz]);
+				for (const k of [0, 1, 2, 3]) chairs.push([tx + Math.sin(a + k * Math.PI / 2) * 0.85, tz + Math.cos(a + k * Math.PI / 2) * 0.85]);
+			}
+			const inst = (geo, mat, list, py) => { const I = new THREE.InstancedMesh(geo, mat, list.length), m4 = new THREE.Matrix4(); list.forEach(([px, pz], i) => I.setMatrixAt(i, m4.makeTranslation(px, py, pz))); I.castShadow = I.receiveShadow = true; G.add(I); };
+			inst(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 16), cloth, tops, y + 0.75);
+			inst(new THREE.CylinderGeometry(0.06, 0.2, 0.74, 8), dark, legs, y + 0.37);
+			inst(new THREE.BoxGeometry(0.45, 0.9, 0.45), wood, chairs, y + 0.45);
+			// the ceiling under the roof ring, its lamps
+			add(new THREE.CircleGeometry(RH.r - 0.1, 64).rotateX(Math.PI / 2), white, 0, y + 4.6, 0);
+			const lampM = new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xfff0d0, emissiveIntensity: 1 });
+			const lamps = [];
+			for (let r = 14; r < RH.r - 3; r += 9) for (let a = 0; a < Math.PI * 2; a += 9 / r) lamps.push([Math.sin(a) * r, Math.cos(a) * r]);
+			inst(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 12), lampM, lamps, y + 4.55);
+			G.position.set(RH.x, 0, RH.z);
+			root.add(G);
+			RH.inside = G; RH.tabs = tabs;
+		} else if (RH.inside && d > 220) { root.remove(RH.inside); RH.inside.traverse((o) => o.geometry?.dispose()); RH.inside = null; RH.tabs = null; }
+	}
+	function roundPush(p, footY) {
+		if (RH.x === undefined || Math.abs(footY - RH.y) > 2.5) return;
+		const dx = p.x - RH.x, dz = p.z - RH.z, d = Math.hypot(dx, dz), R = 0.3;
+		if (d > RH.r + 1 || d < 1e-6) return;
+		const out = (r) => { p.x = RH.x + dx / d * r; p.z = RH.z + dz / d * r; };
+		// the glass, but at the doors
+		if (d > RH.r - 0.1 - R && Math.abs(Math.sin(Math.atan2(dx, dz))) > Math.sin(RH.gap)) { out(d < RH.r ? RH.r - 0.1 - R : RH.r + 0.1 + R); return; }
+		// the core, the bar round it but at its gate (toward +z)
+		if (d < 8 + R) { out(8 + R); return; }
+		if (d < 10.2 + R && Math.abs(Math.atan2(dx, dz)) > 0.5) { out(10.2 + R); return; }
+		for (const [tx, tz] of RH.tabs || []) { const ex = p.x - RH.x - tx, ez = p.z - RH.z - tz, e = Math.hypot(ex, ez); if (e < 0.9 + R && e > 1e-6) { p.x = RH.x + tx + ex / e * (0.9 + R); p.z = RH.z + tz + ez / e * (0.9 + R); } }
+	}
+	function floor(x, z, y) {
+		if (RH.x === undefined) return -1e9;
+		return Math.hypot(x - RH.x, z - RH.z) < RH.r + 8 && y > RH.y - 1.4 ? RH.y : -1e9;
+	}
 	// the water is water: you walk round it, not over it
 	function push(p, footY, flying) {
 		if (flying) return;
+		roundPush(p, footY);
 		const W = bodyAt(p.x, p.z);
 		if (!W || footY > W.level + 3) return;
 		const e = W.S.edgeOf(p.x, p.z), dx = e.x - p.x, dz = e.z - p.z, l = Math.hypot(dx, dz) || 1;
@@ -375,7 +427,7 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 	}
 	// (rings on the water: a float landing, a fish on the line; fishing.js)
 	const ripple = (x, z, k = 0.5) => { if (bodyAt(x, z)) ring(x, z, Math.min(1, k)); };
-	return { group: root, update, push, waterAt, ripple, source, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
+	return { group: root, update, push, floor, waterAt, ripple, source, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
 }
 
 // the reed blades merged into one geometry (a small local version, to keep this module

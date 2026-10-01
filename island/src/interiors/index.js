@@ -33,7 +33,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	const group = new THREE.Group();
 	group.name = 'interiors';
 	scene.add(group);
-	let M = mats;
+	let M = mats, MW = null;
 	const K = city.KIND;
 	const live = new Map();         // lot key -> building
 	const lamps = [...Array(isPhone ? 1 : 2)].map(() => { const l = new THREE.PointLight(0xffc88a, 0, 8, 1.6); scene.add(l); return l; });
@@ -159,6 +159,9 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		B.P = P;
 		P.private = P.private ?? !PUBLIC.has(B.use);
 		if (!M) M = houseMaterials([-2, -1, 150, 160]);
+		// (the houses' materials dissolve past the near band, by the building's middle: a big hall
+		// or a landmark's would vanish round you, so these have their own, seen to 150 m)
+		B.M = B.site || Math.max(P.W, P.D) > 30 ? (MW || (MW = houseMaterials([-2, -1, 150, 160]))) : M;
 		B.C = prepare(P, { outside: B.o.col || [0.85, 0.82, 0.76], litShare: 0.55 });
 		if (P.doorColor) B.C.doorC = lin(P.doorColor);
 		B.root = new THREE.Group();
@@ -186,7 +189,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			const full = want(k), have = B.levels[k];
 			if (have && have.full === full) continue;
 			if (full && !B.P.rooms.every((r) => r.k !== k || r.furnished)) { furnish(B.P, k); B.spots = null; yield; }
-			const Lb = yield* buildLevel(B.P, M, B.C, k, full, night);
+			const Lb = yield* buildLevel(B.P, B.M || M, B.C, k, full, night);
 			if (have) { B.root.remove(have.root); disposeTree(have.root); }
 			B.levels[k] = Lb;
 			B.root.add(Lb.root);
@@ -394,7 +397,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			const [lx, lz] = localOf(B, pos.x, pos.z), P = B.P;
 			if (Math.abs(lx) > P.hw || lz > P.hd || lz < -P.hd) continue;
 			const fy = pos.y - 1.7 - P.f0;
-			if (fy < -1 || fy > P.levels.length * ST.storey) continue;
+			if (fy < -1 || fy > (P.top ?? P.levels.length * ST.storey)) continue;
 			return { B, level: levelAt(B, pos.y - 1.7), use: B.use };
 		}
 		return null;
@@ -419,7 +422,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (!h) return null;
 		const B = h.B, P = B.P, lvY = P.levels[h.level].y;
 		const home = B.use === 'row' || B.use === 'apt';
-		const k = B.use === 'shop' && h.level === 0 ? crowd(ZONE.retail, hours).k : home ? (hours > 18 || hours < 8 ? 0.75 : 0.35) : B.use === 'school' ? (hours > 8 && hours < 15.5 ? 0.9 : 0.02) : B.use === 'office' ? crowd(ZONE.office, hours).k : B.use === 'store' ? crowd(ZONE.retail, hours).k : B.use === 'site' ? (hours > 9.5 && hours < 16.5 ? 0.6 : 0) : 0.2;
+		const k = B.use === 'shop' && h.level === 0 ? crowd(ZONE.retail, hours).k : home ? (hours > 18 || hours < 8 ? 0.75 : 0.35) : B.use === 'school' ? (hours > 8 && hours < 15.5 ? 0.9 : 0.02) : B.use === 'office' ? crowd(ZONE.office, hours).k : B.use === 'store' ? crowd(ZONE.retail, hours).k : B.use === 'site' ? (hours > (P.hours?.[0] ?? 9.5) && hours < (P.hours?.[1] ?? 16.5) ? 0.6 : 0) : 0.2;
 		if (!B.spots) {
 			const F = frame(B.o);
 			B.spots = P.seats.map((s) => { const [wx, wz] = F.w(s.x, s.z), wfx = F.ca * s.fx - F.sa * s.fz, wfz = F.sa * s.fx + F.ca * s.fz; return { x: wx, z: wz, y: P.f0 + s.y, ly: s.y, h: s.h, sit: s.sit, heading: Math.atan2(wfx, wfz), taken: false, table: !!s.table }; });

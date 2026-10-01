@@ -33,6 +33,7 @@ import { createGlider } from './rides/glider.js';
 import { createDrop } from './rides/drop.js';
 import { createRiver } from './sanlorenzo.js';
 import { createWharf } from './wharf.js';
+import { casino } from '../interiors/landmarks.js';
 import { createSwings, createTilt, createFlume, buildBackRow } from './rides/scenery.js';
 import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
 import { createMotion } from '../people/motion.js';
@@ -143,6 +144,10 @@ const RIDE_ICONS = {
 	drop: '<path d="M12 2v20"/><path d="M9 21h6"/><path d="M7 8h10v4H7z"/><path d="M8 14l-1 3M16 14l1 3"/><path d="M10 2h4"/>',
 };
 const rideIcon = (id, size = 20) => `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline-block;vertical-align:middle;flex:none">${RIDE_ICONS[id] || ''}</svg>`;
+
+// the Casino's hollow front half: its depth behind the loggia, the doors in from the loggia
+// [u from its middle, width], their height; the towers that stand into it [u0, v0, u1, v1]
+const CASINO = { u0: -266, u1: -150, d: 30, h: 3, doors: [[-34.6, 2.6], [12, 2.6], [34.6, 2.6]], towers: [[-266, -12, -259, -8], [-209, -11.5, -203, -8], [-157, -12, -150, -8]] };
 
 export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hint, camera, player } = {}) {
 	const group = new THREE.Group();
@@ -296,8 +301,16 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		// the balcony rail over the loggia
 		for (let u = u0 + 0.5; u < u1; u += 0.5) Mg.box(0.08, 0.8, 0.08, 'trim', u, DECK + 6.6, front - 0.2);
 		Mg.box(len, 0.12, 0.2, 'trim', (u0 + u1) / 2, DECK + 7.0, front - 0.2);
-		// the body of the building behind, its roof of red tile
-		Mg.box(len, 10.8, back - (front - 3.5), 'stucco', (u0 + u1) / 2, DECK + 5.4, (back + front - 3.5) / 2);
+		// the body of the building behind, its roof of red tile; its front half hollow, the arcade
+		// and the ballroom in it (interiors/landmarks.js), in at three doors off the loggia
+		const fw = front - 3.5, bk = fw - CASINO.d, T = 0.45, um = (u0 + u1) / 2;
+		Mg.box(len, 10.8, bk - back, 'stucco', um, DECK + 5.4, (back + bk) / 2);
+		let a = u0;
+		for (const [du, w] of CASINO.doors) { const g0 = um + du - w / 2; Mg.box(g0 - a, 10.8, T, 'stucco', (a + g0) / 2, DECK + 5.4, fw - T / 2); Mg.box(w, 10.8 - CASINO.h, T, 'stucco', um + du, DECK + CASINO.h + (10.8 - CASINO.h) / 2, fw - T / 2); B.solids.push([a, fw - T, g0, fw, 30]); a = g0 + w; }
+		Mg.box(u1 - a, 10.8, T, 'stucco', (a + u1) / 2, DECK + 5.4, fw - T / 2); B.solids.push([a, fw - T, u1, fw, 30]);
+		for (const u of [u0 + T / 2, u1 - T / 2]) Mg.box(T, 10.8, CASINO.d, 'stucco', u, DECK + 5.4, (fw + bk) / 2);
+		Mg.box(len, 0.4, CASINO.d, 'stucco', um, DECK + 10.6, (fw + bk) / 2);
+		B.casino = true;
 		const roofW = front - 3.5 - back;
 		for (const sg of [-1, 1]) Mg.box(len, 0.3, roofW / 2 / Math.cos(0.13) + 0.8, 'tile', (u0 + u1) / 2, DECK + 11.0 + Math.tan(0.13) * roofW / 4, (back + front - 3.5) / 2 + sg * roofW / 4, sg * -0.13, 0, 0);
 		// the parapet along the front, hiding the roof's foot
@@ -311,10 +324,12 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		tower(Mg, u0 + 3.5, front - 4, 7, 15);
 		tower(Mg, -206, front - 4, 6, 13.5, 'teal');
 		tower(Mg, u1 - 3.5, front - 4, 7, 15);
-		// the back wall of the loggia: doors and shop windows, lit at night
-		const win = new THREE.Mesh(new THREE.PlaneGeometry(len - 2, 3.4), glow(0xffd9a0));
-		win.position.set((u0 + u1) / 2, DECK + 1.9, front - 3.45);
-		group.add(win);
+		// the back wall of the loggia: its shop windows, lit at night, between the doors
+		{
+			const wm = glow(0xffd9a0);
+			let a = u0 + 1;
+			for (const [du, w] of [...CASINO.doors, [u1 - um + 1, 2]]) { const g0 = um + du - w / 2 - 0.3; if (g0 - a > 0.5) { const win = new THREE.Mesh(new THREE.PlaneGeometry(g0 - a, 3.4), wm); win.position.set((a + g0) / 2, DECK + 1.9, front - 3.45); group.add(win); } a = um + du + w / 2 + 0.3; }
+		}
 		const win2 = new THREE.Mesh(new THREE.PlaneGeometry(len - 2, 2.9), glow(0xffe8c0));
 		win2.position.set((u0 + u1) / 2, DECK + 7.5, front - 3.75);
 		group.add(win2);
@@ -326,7 +341,7 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		for (let u = u0; u <= u1; u += 0.7) lights.add(u, DECK + 10.9, front - 3.6);
 		Mg.done(group, { shadow: !isPhone });
 		lights.done(group, 0.9);
-		B.solids.push([u0, back, u1, front - 3.4, 30], [u0, front - 4.2, u0 + 7, front, 30], [u1 - 7, front - 4.2, u1, front, 30]);
+		B.solids.push([u0, back, u1, bk, 30], [u0, bk, u0 + T, fw, 30], [u1 - T, bk, u1, fw, 30], [u0, front - 7.5, u0 + 7, front, 30], [u1 - 7, front - 7.5, u1, front, 30], [-209, front - 7, -203, front - 1, 30]);
 		// the loggia's piers
 		for (let i = 0; i <= n; i++) B.solids.push([u0 + i * pitch - 0.45, front - 0.75, u0 + i * pitch + 0.45, front, 5]);
 	}
@@ -1133,5 +1148,11 @@ export function createBoardwalk(scene, bay, shared, { isPhone = false, mount, hi
 		removeEventListener('keydown', onKey); removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);
 		scene.remove(group);
 	}
-	return { group, update, ride, destroy, riding: () => !!Ride.cur, leave, floor, push, venue, info, rideNow, step, inside: (x, z) => inBoardwalk(x, z), waterAt: (x, z) => river.levelAt(x, z), river, get cur() { return Ride.cur; } };
+	// the Casino's inside, built by the interiors as you come to it (main.js: addSite)
+	const cu = (CASINO.u0 + CASINO.u1) / 2, cv = -8 - CASINO.d / 2, [sx, sz] = toW(cu, cv);
+	const sites = [{
+		key: 'boardwalk-casino', o: { x: sx, z: sz, a: -FRAME.a, w: CASINO.u1 - CASINO.u0, d: CASINO.d, f0: DECK + 0.03, street: DECK + 0.03 }, ready: () => B.built && !!B.casino, hours: [11, 23],
+		plan: () => { const P = casino(CASINO.towers.map(([a, b, c, d]) => [a - cu, b - cv, c - cu, d - cv]))({ W: CASINO.u1 - CASINO.u0 - 0.6, D: CASINO.d - 0.6, door: { x: CASINO.doors[1][0], w: 2.6, h: CASINO.h } }); P.hours = [11, 23]; return P; },
+	}];
+	return { group, update, ride, destroy, riding: () => !!Ride.cur, leave, floor, push, venue, info, rideNow, step, sites, inside: (x, z) => inBoardwalk(x, z), waterAt: (x, z) => river.levelAt(x, z), river, get cur() { return Ride.cur; } };
 }

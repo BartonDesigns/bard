@@ -14,6 +14,7 @@ import { restroomParts, walkIns } from '../interiors/restroom.js';
 import { PARKS, AGENCY_STYLE } from '../nature/parks.js';
 import { toWorld } from './geo.js';
 import { inClearing } from '../sportsfields.js';
+import { onLandmark } from './footprints.js';
 
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const SITES = PARKS.map((p) => ({ ...p, ...toWorld(p.lat, p.lon), trails: (p.trailheads || []).map((t) => ({ ...t, ...toWorld(t.lat, t.lon) })) }));
@@ -83,7 +84,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 			for (let k = 0; k < 80; k++) {
 				const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * spread, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
 				if (wet(px, pz) || slope(px, pz) > maxSlope || used.some((u) => Math.hypot(u.x - px, u.z - pz) < u.r + r)) continue;
-				if (inBuilding(px, pz) || onRoad(px, pz, r) || inClearing(px, pz, r)) continue;
+				if (inBuilding(px, pz) || onRoad(px, pz, r) || inClearing(px, pz, r) || onLandmark(px, pz, r)) continue;
 				used.push({ x: px, z: pz, r });
 				return { x: px, z: pz, y: g(px, pz) };
 			}

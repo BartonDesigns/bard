@@ -323,6 +323,25 @@ for (let s = 0; s < SEEDS; s++) {
 	if (planSummit) cityRun('summit', planSummit({ rnd: rng(s + 5), roofY: 6.9 + (s % 4) * 0.4 }));
 }
 
+// the landmarks' insides, at the sizes their shells give them (bay/landmarks.js: the plan
+// stands 0.3 m inside the shell all round)
+{
+	const LM = await import(at('CITYPLAN', '../src/interiors/landmarks.js'));
+	const inner = (W, D, door) => ({ W: W - 0.6, D: D - 0.6, door });
+	const fp = (45 - 0.6) / 2 - 11;
+	const list = [
+		['ferry', LM.ferryBuilding, inner(200, 30, { x: 12, w: 3.2, h: 3.6 })], ['sf-city-hall', LM.sfCityHall, inner(92, 124, { x: 0, w: 3.2, h: 4.5 })],
+		['oakland', LM.oaklandCityHall, inner(52, 34, { x: 0, w: 2.4, h: 3.2 })], ['palace', LM.palaceHall, inner(105, 36, { x: 0, w: 4, h: 4 })],
+		['cellhouse', LM.cellhouse, inner(40, 150, { x: 0, w: 3, h: 3.6 })], ['alcatraz-hall', LM.oneRoom('rotunda', 5, {}, [{ side: 'z-', u: 0, w: 3, h: 3.6 }]), inner(30, 15, { x: 0, w: 3, h: 3.6 })],
+		['fort-point', LM.fortPoint, inner(45, 70, { x: -fp + fp / 2, w: 2.6, h: 3.2 })], ['tribune', LM.towerLobby, inner(15, 15, { x: 0, w: 1.8, h: 2.8 })],
+		['sr-city-hall', LM.cityHall, inner(70, 30, { x: 0, w: 2.4, h: 3 })], ['sr-library', LM.library, inner(45, 35, { x: 0, w: 2.4, h: 3 })],
+		['visitor', LM.visitorCentre, inner(44, 100, { x: 0, w: 3, h: 3 })], ['casino', LM.casino([[-58, 11, -51, 15], [-1, 11.5, 5, 15], [51, 11, 58, 15]]), inner(116, 30, { x: 12, w: 2.6, h: 3 })],
+		['barn', LM.barn, { W: 11.4, D: 19.4, door: { x: 0, w: 3.4, h: 3.6 } }], ['roundhouse', LM.oneRoom('dining', 4.6, { big: true }), inner(40, 40, { x: 0, w: 2.4, h: 3 })],
+	];
+	for (const w of [45, 50, 60, 80]) { const n = Math.max(2, Math.round(w / 12)), Wp = w - 0.6; list.push(['shops-' + w, LM.shopRow(['restaurant', 'cafe', 'boutique', 'books', 'gift', 'bar', 'candy'].slice(0, n)), inner(w, 34, { x: -Wp / 2 + Wp / n / 2, w: 1.8 })]); }
+	for (const [name, fn, S] of list) { const P = fn(S); P.name = name; cityRun('landmark', P); }
+}
+
 console.log('\nkind          plans  failing  rooms  cross  overlap  stray  sliver  angle  passage<1.1  room<2.2  door');
 let all = null;
 for (const [k, t] of Object.entries(T)) {

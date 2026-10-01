@@ -24,6 +24,7 @@ import { inBoardwalk } from './boardwalk.js';
 import { inRiverWater, riverTreesNear, carveVersion, carveNear } from './carve.js';
 import { inWater, waterTreesNear, waterVersion } from './watercarve.js';
 import { inClearing, clearingVersion } from '../sportsfields.js';
+import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { createProps } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
@@ -734,6 +735,8 @@ export function createCity(shared, scene, bay, real = null) {
 		// (a house not quite square to its street: turned about its lot, with its garage and drive)
 		let X = x, Z = z;
 		if (opt?.rot && opt.pw) { const c = Math.cos(opt.rot), s2 = Math.sin(opt.rot), dx = x - opt.pw[0], dz = z - opt.pw[1]; X = opt.pw[0] + c * dx - s2 * dz; Z = opt.pw[1] + s2 * dx + c * dz; ang += opt.rot; }
+		// (not on a landmark's ground: it is built there, to walk into)
+		if (onLandmark(X, Z, Math.max(w, d) / 2)) return;
 		if (face === 'n') ang += Math.PI;
 		else if (face === 'e' || face === 'w') { ang += face === 'e' ? -Math.PI / 2 : Math.PI / 2; const t = w; w = d; d = t; }
 		const o = opt?.lift ? { x: X, y: g + opt.lift, z: Z, w, d, h, a: ang, col, kind, roof: null } : flat ? { x: X, y: g - 0.9, z: Z, w, d, h: 0.98, a: ang, col, kind, roof: null } : { x: X, y: g - 1.2, z: Z, w, d, h: h + 1.2, a: ang, col, kind, roof };
@@ -1952,7 +1955,7 @@ export function createCity(shared, scene, bay, real = null) {
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
 		// ...nor on a ball field (sportsfields.js)
-		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
+		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !onLandmark(t.x, t.z, 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
 		// ...nor inside a building (every one can be walked into now): a coarse grid of them
 		{
 			const G = new Map(), cellOf = (x, z) => Math.floor(x / 60) + ',' + Math.floor(z / 60);

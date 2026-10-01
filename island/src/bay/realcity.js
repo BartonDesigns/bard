@@ -14,6 +14,7 @@ import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
 import { groupBoxes } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
+import { onLandmark } from './footprints.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -112,7 +113,7 @@ export function createRealCity(renderer) {
 		for (let n = 0; n < S.boxes[1]; n++, o += 18) {
 			const kh = dv.getInt16(o + 14, true);
 			const b = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000, wallH: dv.getInt16(o + 10, true) / 20, roofH: dv.getInt16(o + 12, true) / 20, kind: kh & 255, hip: kh >> 8, door: dv.getInt16(o + 16, true) / 1000 };
-			if (Math.hypot(b.x - sm.x, b.z - sm.z) < 90 || LF.skip(b.x, b.z)) continue;
+			if (Math.hypot(b.x - sm.x, b.z - sm.z) < 90 || LF.skip(b.x, b.z) || onLandmark(b.x, b.z, Math.max(b.w, b.d) / 2)) continue;
 			put('boxes', b.x, b.z, R.boxes.push(b) - 1);
 		}
 		// a building's blocks, gathered into the house they make (houses.js builds them)
@@ -130,7 +131,7 @@ export function createRealCity(renderer) {
 		o = S.trees[0];
 		for (let n = 0; n < S.trees[1]; n++, o += 8) {
 			const t = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, h: dv.getInt16(o + 4, true) / 20, cone: dv.getInt16(o + 6, true) };
-			if (LF.skip(t.x, t.z)) continue;
+			if (LF.skip(t.x, t.z) || onLandmark(t.x, t.z, 2)) continue;
 			put('trees', t.x, t.z, R.trees.push(t) - 1);
 		}
 		// Lake Annabel's trees and its walk (lake.js), where this region holds it

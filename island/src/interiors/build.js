@@ -10,10 +10,10 @@
 import * as THREE from 'three';
 import { Builder, lin } from '../bay/housekit.js';
 import { carGeometry, carMaterial } from '../bay/cars.js';
-import { ST, minusHoles } from './plan.js';
+import { minusHoles } from './plan.js';
 import { drawAny, SOFT } from './kit.js';
 
-const FLOOR = { living: 'wood', dining: 'wood', family: 'wood', office: 'wood', den: 'wood', hall: 'wood', bed: 'wood', master: 'wood', corridor: 'wood', well: 'wood', lobby: 'stone', kitchen: 'tile', bath: 'tile', powder: 'tile', laundry: 'tile', garage: 'concrete', storage: 'concrete', warehouse: 'concrete', parking: 'concrete', shed: 'concrete', garage2: 'concrete', store: 'tile', shop: 'wood', classroom: 'tile', school: 'tile' };
+const FLOOR = { living: 'wood', dining: 'wood', family: 'wood', office: 'wood', den: 'wood', hall: 'wood', bed: 'wood', master: 'wood', corridor: 'wood', well: 'wood', lobby: 'stone', kitchen: 'tile', bath: 'tile', powder: 'tile', laundry: 'tile', garage: 'concrete', storage: 'concrete', warehouse: 'concrete', parking: 'concrete', shed: 'concrete', garage2: 'concrete', store: 'tile', shop: 'wood', classroom: 'tile', school: 'tile', market: 'stone', rotunda: 'stone', mezzanine: 'stone', exhibition: 'stone', towerLobby: 'stone', cellhouse: 'concrete', messhall: 'concrete', casemate: 'stone', courtyard: 'stone', arcade: 'tile', barn: 'concrete', reading: 'wood', library: 'wood', ballroom: 'wood', chamber: 'wood' };
 // the walls' colours by the building's style and the room
 const PAINT = {
 	victorian: [[0.62, 0.68, 0.55], [0.78, 0.6, 0.58], [0.36, 0.5, 0.5], [0.86, 0.74, 0.5], [0.9, 0.86, 0.76], [0.55, 0.36, 0.34], [0.7, 0.72, 0.8]],
@@ -47,7 +47,8 @@ export function prepare(P, { outside = [0.85, 0.82, 0.76], litShare = 0.6 } = {}
 		OUT: lin(outside), doorC: lin(DOORC[Math.floor(rnd() * DOORC.length)]), seed: Math.floor(rnd() * 1e9),
 	};
 }
-const levelOf = (y) => Math.max(0, Math.round((y - 0.05) / ST.storey - 0.2));
+// the level a thing stands on (the levels of a landmark are of any height)
+const levelOf = (P, y) => P.levels.reduce((b, L) => (Math.abs(L.y - y) < Math.abs(b.y - y) ? L : b), P.levels[0]).k;
 
 // one level of it (a generator: yields between slices): full, or (full false) only its
 // outside walls, floor and ceiling, for the floors of a tall block you are not on, seen
@@ -141,11 +142,12 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 			const R = { x0: r.x0 - e, z0: r.z0 - e, x1: r.x1 + e, z1: r.z1 + e };
 			for (const [x0, z0, x1, z1] of minusHoles(R, L.holes)) g.quad(fk, [x0, L.y, z0], [x1, L.y, z0], [x1, L.y, z1], [x0, L.y, z1], [0, 1, 0], FT[fk] || wood, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
 			const yc = L.y + L.h;
+			if (r.sky) continue;
 			for (const [x0, z0, x1, z1] of minusHoles(R, above ? above.holes : P.topHoles || [])) g.quad(lit[id] ? 'ceilingLit' : 'ceiling', [x0, yc, z0], [x1, yc, z0], [x1, yc, z1], [x0, yc, z1], [0, -1, 0], lin([0.95, 0.95, 0.93]), [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
 		}
 		// the edges of the holes, between the ceiling below and this floor
 		for (const [x0, z0, x1, z1] of L.holes) {
-			const yb = L.y - (ST.storey - L.h), yt = L.y;
+			const yb = k ? P.levels[k - 1].y + P.levels[k - 1].h : L.y - 0.3, yt = L.y;
 			const q = (a, b, n) => g.quad('paint', [a[0], yb, a[1]], [b[0], yb, b[1]], [b[0], yt, b[1]], [a[0], yt, a[1]], n, WHITE, [[0, 0], [1, 0], [1, 1], [0, 1]]);
 			q([x0, z0], [x1, z0], [0, 0, 1]); q([x0, z1], [x1, z1], [0, 0, -1]); q([x0, z0], [x0, z1], [1, 0, 0]); q([x1, z0], [x1, z1], [-1, 0, 0]);
 		}
@@ -218,7 +220,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	// ---- the furniture
 	const cars = [];
 	for (const it of P.items) {
-		if (levelOf(it.y) !== k) continue;
+		if (levelOf(P, it.y) !== k) continue;
 		if (++step % 14 === 0 || slow()) { yield; tY = performance.now(); }
 		if (it.type === 'car') { cars.push(it); continue; }
 		drawAny(g, it, rnd);

@@ -10,6 +10,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { BLOCKS, toGrid, fromGrid, STYLE } from './styles.js';
 import { SPEC } from './cars.js';
 import { createFleet } from '../vehicles/fleet.js';
+import { onLandmark } from './footprints.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // car paint by what sells: white, black, grey, silver, then blue, red, a little of the rest
@@ -247,7 +248,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 							const rr = hash(i * 13 + k * 7 + side, j * 29 + (along ? 3 : 1));
 							if (rr > (city ? 0.82 : style === STYLE.suburb ? 0.3 : 0.55)) continue;
 							const [gx, gz] = at(side ? ST - 1.25 : 1.25), [x, z] = W(gx, gz), g = groundAt(x, z);
-							if (g < 0.5) continue;
+							if (g < 0.5 || onLandmark(x, z, 2.5)) continue;
 							const kind = KINDS[Math.floor(hash(rr * 1000, k) * KINDS.length)], im = parked[kind], c = n(im);
 							if (c < 0) continue;
 							put(im, c, x, g, z, yaw + (side ? Math.PI : 0) + (rr - 0.5) * 0.04);
@@ -256,7 +257,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 						}
 						// the kerb furniture on the block's side of the street
 						const [kx, kz] = W(...at(ST + 0.45)), kg = groundAt(kx, kz);
-						if (kg < 0.5) continue;
+						if (kg < 0.5 || onLandmark(kx, kz, 1)) continue;
 						if (k % 13 === 6) { const c = n(lamps); if (c >= 0) { put(lamps, c, kx, kg, kz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); if (nl < 900) { const [lx, lz] = W(...at(ST - 1.2)); lampPos.set([lx, kg + 8.2, lz], nl * 3); nl++; } } }
 						if (k % 37 === 18) { const c = n(hydrants); if (c >= 0) put(hydrants, c, kx, kg, kz, yaw); }
 						if (city && k % 5 === 2 && t > ST + 4 && t < L - 4) { const c = n(meters); if (c >= 0) put(meters, c, kx, kg, kz, yaw); }
@@ -266,13 +267,15 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 					}
 					// the traffic lanes on this street, for moving cars
 					const [x0, z0] = W(...(along ? [i * BX + ST / 2, j * BZ] : [i * BX, j * BZ + ST / 2])), [x1, z1] = W(...(along ? [i * BX + ST / 2, (j + 1) * BZ] : [(i + 1) * BX, j * BZ + ST / 2]));
-					lanes.push(laneOf([x0, z0, x1, z1], ST / 2, style, false));
+					if (!onLandmark((x0 + x1) / 2, (z0 + z1) / 2, 4) && !onLandmark(x0, z0, 4) && !onLandmark(x1, z1, 4)) lanes.push(laneOf([x0, z0, x1, z1], ST / 2, style, false));
 				}
 				// signals at the busy corners
 				if (busy && hash(i * 3, j * 5) < 0.4) {
 					for (const [ox, oz, yw] of [[ST + 0.4, ST + 0.4, 0], [-0.4, -0.4, Math.PI]]) {
-						const [x, z] = W(i * BX + ox, j * BZ + oz), g = groundAt(x, z), c = n(signals);
-						if (c < 0 || g < 0.5) continue;
+						const [x, z] = W(i * BX + ox, j * BZ + oz), g = groundAt(x, z);
+						if (g < 0.5 || onLandmark(x, z, 1)) continue;
+						const c = n(signals);
+						if (c < 0) continue;
 						const yaw = head(i * BX + ST / 2, j * BZ + ST / 2, 1, 0) + yw;
 						put(signals, c, x, g, z, yaw);
 						signalList.push({ x: x + Math.sin(yaw) * 3.4, y: g + 5.1, z: z + Math.cos(yaw) * 3.4, ph: hash(i, j) * 60 });

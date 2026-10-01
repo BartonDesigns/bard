@@ -9,6 +9,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DECK, merger, bulbs, paint, rng } from './kit.js';
 
 const PLAT = DECK + 0.45, CROWN = DECK + 4.7, RIM = 8.9;
+// the bays of the house left open, its doorways (0 and 15 either side of the boarding place)
+const DOORS = new Set([15, 0, 4, 8, 11]);
 const ROWS = [[7.7, 22, false], [6.5, 18, true], [5.3, 14, true]];      // radius, horses, jumpers
 const COATS = [0xf4efe4, 0xf2ead8, 0xe9e2d2, 0x7a4a2a, 0x3b2a20, 0xd9c7a0, 0xf6f3ee, 0x9a6b44, 0x202020, 0xeeeeee];
 const TRAPS = [0xc8323a, 0x2656a8, 0x2e8b57, 0xe8a030, 0x7a3c9a, 0x1e8c8c, 0xd85a8a];
@@ -100,6 +102,18 @@ export function createCarousel({ group, sound, isPhone, at: [U, V] }) {
 		Mg.box(Math.hypot(x2 - x, z2 - z), 0.7, 0.3, 'cream', (x + x2) / 2, DECK + 5.25, (z + z2) / 2, 0, (a + b) / 2);
 		for (let k = 0; k <= 8; k++) { const t = k / 8, h = Math.sin(t * Math.PI) * 0.9; lights.add(x + (x2 - x) * t, DECK + 3.9 + h, z + (z2 - z) * t); }
 	}
+	// its walls between the posts, windows in them, but for the doorways (one each side of the
+	// boarding place, three more round it); a ceiling under the roof; the walls kept to
+	const walls = [];
+	for (let i = 0; i < 16; i++) {
+		if (DOORS.has(i)) continue;
+		const a = i / 16 * Math.PI * 2, b = (i + 1) / 16 * Math.PI * 2, x = Math.sin(a) * BR, z = Math.cos(a) * BR, x2 = Math.sin(b) * BR, z2 = Math.cos(b) * BR, L = Math.hypot(x2 - x, z2 - z), m = (a + b) / 2;
+		Mg.box(L - 0.4, 4.9, 0.25, 'cream', (x + x2) / 2, DECK + 2.45, (z + z2) / 2, 0, m);
+		Mg.box(L - 1.6, 1.8, 0.3, 'glass', (x + x2) / 2, DECK + 2.5, (z + z2) / 2, 0, m);
+		for (let t = 0.1; t < 0.95; t += 0.09) walls.push([U + x + (x2 - x) * t, V + z + (z2 - z) * t, 0.25]);
+	}
+	for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; walls.push([U + Math.sin(a) * BR, V + Math.cos(a) * BR, 0.3]); }
+	Mg.geo(new THREE.RingGeometry(2.4, BR + 0.3, 32).rotateX(Math.PI / 2), 'cream', 0, DECK + 5.6, 0);
 	const roof = new THREE.ConeGeometry(BR + 1.4, 4.2, 16, 1, true);
 	Mg.geo(roof, 'tile', 0, DECK + 7.7, 0, 0, Math.PI / 16);
 	Mg.cyl(2.0, 2.0, 1.6, 'cream', 0, DECK + 10.4, 0, 16).geo(new THREE.ConeGeometry(2.5, 1.6, 16), 'tile', 0, DECK + 12.0, 0);
@@ -268,7 +282,7 @@ export function createCarousel({ group, sound, isPhone, at: [U, V] }) {
 		blurb: '1911 hand-carved horses, the band organ, and the brass ring',
 		board: { u: U, v: V + BR - 0.5, r: 3.5 }, exit: { u: U + 1.5, v: V + BR + 1.2, yaw: Math.PI },
 		lights: lit,
-		solid: [], round: [[U, V, RIM - 0.2]],
+		solid: [], round: [[U, V, RIM - 0.2], ...walls],
 		update(dt, t, info) {
 			if (S.rider < 0) { drive(dt); if (info.near < 160) placeHorses(t); }
 			organ(S.rider >= 0 ? 1 : Math.max(0, 1 - info.near / 90) ** 1.5);

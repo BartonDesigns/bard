@@ -84,7 +84,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		log: M(0x5a3e28, 0.95), drift: M(0x9c9486, 0.95), cooler: M(0x2f6fb0, 0.5), lid: M(0xf2f2ee, 0.5), bag: M(0x2e5a3a, 0.8), chair: M(0x324a6a, 0.7),
 		lantern: M(0x222222, 0.5, { emissive: new THREE.Color(0xffc070), emissiveIntensity: 0 }), flame: new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }),
 		pole: M(0x9a9a9a, 0.4, { metalness: 0.6 }), board: M(0xf4efe4, 0.4), wetsuit: M(0x111214, 0.6), seal: M(0x6b6660, 0.5), white: M(0xf2f0ea, 0.6), black: M(0x1b1c1e, 0.5),
-		redRoof: M(0x8a3b2c, 0.75), pane: M(0x283036, 0.3, { metalness: 0.3 }), lens: M(0x33413f, 0.08, { metalness: 0.6, emissive: new THREE.Color(0xfff2c0), emissiveIntensity: 0 }),
+		redRoof: M(0x8a3b2c, 0.75), pane: M(0x283036, 0.3, { metalness: 0.3 }), lens: M(0x33413f, 0.08, { metalness: 0.6, emissive: new THREE.Color(0xfff2c0), emissiveIntensity: 0, side: THREE.DoubleSide }), wall2: M(0xf2f0ea, 0.6, { side: THREE.DoubleSide }),
 	};
 	// (the restrooms are walked into: interiors/restroom.js)
 	const restroomMats = { tile: M(0xe6e2d8, 0.5), porcelain: M(0xf4f3ef, 0.25), steel: M(0x9aa0a4, 0.4, { metalness: 0.6 }), mirror: M(0xc8d0d4, 0.08, { metalness: 0.9 }) }, rooms = walkIns();
@@ -329,32 +329,56 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 	// hostel now). It is built once the ground is in and never taken down: from anywhere along
 	// this coast it is the mark on the point, so it must not wait on the beach's own build.
 	const keepClear = [];
+	const ST = { boxes: [], rings: [], walls: [] };
 	function lightStation([lat, lon]) {
 		const T = toWorld(lat, lon), parts = new Map();
 		const put = (mat, geo, x, y, z, ry = 0) => { geo.rotateY(ry); geo.translate(T.x + x, y, T.z + z); if (!parts.has(mat)) parts.set(mat, []); parts.get(mat).push(geo.index ? geo.toNonIndexed() : geo); };
 		const gable = (w, d, h) => new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-w / 2, 0), new THREE.Vector2(w / 2, 0), new THREE.Vector2(0, h)]), { depth: d, bevelEnabled: false }).translate(0, 0, -d / 2).rotateY(Math.PI / 2);
 		const g0 = Math.max(g(T.x, T.z), 4), BASE = 1.2, SHAFT = 25.5, rAt = (y) => 4.3 - (y - BASE) / SHAFT * 1.45;
-		// the plinth, the tapering shaft, its door and the little windows lighting the stair
+		// the plinth and the steps up it to the door (toward +x), the tapering shaft, its doorway
+		// and the little windows lighting the stair
 		put(mats.white, new THREE.CylinderGeometry(4.9, 5.2, BASE + 0.4, 8).translate(0, (BASE + 0.4) / 2, 0), 0, g0 - 0.4, 0);
-		put(mats.white, new THREE.CylinderGeometry(rAt(BASE + SHAFT), rAt(BASE), SHAFT, 32, 1, true).translate(0, SHAFT / 2, 0), 0, g0 + BASE, 0);
-		put(mats.pane, new THREE.BoxGeometry(1.2, 2.3, 0.5).translate(0, 1.15, 0), rAt(BASE + 1) - 0.1, g0 + BASE, 0, Math.PI / 2);
+		for (let k = 0; k < 4; k++) { const top = g0 + BASE * (k + 1) / 4, x0 = 5.3 + (3 - k) * 0.35; put(mats.white, new THREE.BoxGeometry(0.4, top - g0 + 1, 1.8).translate(0, (top - g0 + 1) / 2, 0), x0, g0 - 1, 0); ST.boxes.push({ x: T.x + x0, z: T.z, hw: 0.2, hd: 0.9, y1: top }); }
+		const gap = 0.24, H0 = 2.3;
+		put(mats.wall2, new THREE.CylinderGeometry(rAt(BASE + H0), rAt(BASE), H0, 32, 1, true, Math.PI / 2 + gap, Math.PI * 2 - 2 * gap).translate(0, H0 / 2, 0), 0, g0 + BASE, 0);
+		put(mats.wall2, new THREE.CylinderGeometry(rAt(BASE + SHAFT), rAt(BASE + H0), SHAFT - H0, 32, 1, true).translate(0, (SHAFT - H0) / 2, 0), 0, g0 + BASE + H0, 0);
+		ST.cx = T.x; ST.cz = T.z; ST.y0 = g0 + BASE;
+		// (the wall: kept off it inside and out, but at the door)
+		const ri = (y) => rAt(y - g0) - 0.55;
+		ST.rings.push({ r0: ri(g0 + BASE + SHAFT), r1: rAt(BASE) + 0.1, y0: g0 + BASE, y1: g0 + BASE + 2.4, gaps: [[-gap, gap]] }, { r0: ri(g0 + BASE + SHAFT), r1: rAt(BASE) + 0.1, y0: g0 + BASE + 2.4, y1: g0 + BASE + SHAFT + 1, gaps: [] });
+		// the stair: sixteen treads a turn round the post, up to the lantern's floor
 		for (let i = 0; i < 6; i++) {
 			const y = BASE + 4 + i * 4, a = 0.9 + (i % 2 ? Math.PI : 0) + (i % 3) * 0.35, r = rAt(y) - 0.12;
 			put(mats.pane, new THREE.BoxGeometry(0.6, 1.2, 0.4), Math.sin(a) * r, g0 + y, Math.cos(a) * r, a);
 		}
 		// the corbels under the watch gallery, its deck and railing
 		const yG = g0 + BASE + SHAFT;
-		put(mats.white, new THREE.CylinderGeometry(3.45, rAt(BASE + SHAFT), 0.9, 32).translate(0, 0.45, 0), 0, yG, 0);
+		{
+			const yTop = yG + 1.15, n = Math.ceil((yTop - ST.y0) / 0.2), dt = Math.PI * 2 / 16, t0 = 2.6;
+			put(mats.black, new THREE.CylinderGeometry(0.13, 0.13, yTop - ST.y0 + 1, 8).translate(0, (yTop - ST.y0 + 1) / 2, 0), 0, ST.y0, 0);
+			for (let k = 0; k < n; k++) {
+				const y1 = Math.min(yTop, ST.y0 + (k + 1) * 0.2), re = Math.min(ri(y1), ri(y1 - 2)) - 0.05, rm = (0.13 + re) / 2, a = t0 + k * dt;
+				put(mats.black, new THREE.BoxGeometry(dt * re + 0.05, 0.12, re - 0.13).translate(0, -0.06, 0), Math.sin(a) * rm, y1, Math.cos(a) * rm, a);
+				ST.boxes.push({ x: T.x + Math.sin(a) * rm, z: T.z + Math.cos(a) * rm, yaw: a, hw: (dt * re + 0.05) / 2, hd: (re - 0.13) / 2, y1 });
+			}
+		}
+		put(mats.white, new THREE.CylinderGeometry(3.45, rAt(BASE + SHAFT), 0.9, 32, 1, true).translate(0, 0.45, 0), 0, yG, 0);
 		for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; put(mats.white, new THREE.BoxGeometry(0.35, 0.9, 0.9).translate(0, -0.45, 0), Math.sin(a) * 3.2, yG + 0.9, Math.cos(a) * 3.2, a); }
 		put(mats.black, new THREE.CylinderGeometry(3.95, 3.95, 0.25, 32).translate(0, 0.125, 0), 0, yG + 0.9, 0);
 		for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2; put(mats.black, new THREE.BoxGeometry(0.07, 1.05, 0.07).translate(0, 0.52, 0), Math.sin(a) * 3.85, yG + 1.15, Math.cos(a) * 3.85); }
 		put(mats.black, new THREE.TorusGeometry(3.85, 0.05, 4, 40).rotateX(Math.PI / 2), 0, yG + 2.2, 0);
 		// the lantern: a black parapet, the glazing between sixteen astragals, the domed roof,
 		// its ventilator ball and the lightning rod
-		const yL = yG + 1.15;
-		put(mats.black, new THREE.CylinderGeometry(2.25, 2.25, 1.0, 16).translate(0, 0.5, 0), 0, yL, 0);
-		put(mats.lens, new THREE.CylinderGeometry(2.1, 2.1, 2.7, 16).translate(0, 1.35, 0), 0, yL + 1, 0);
-		for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2; put(mats.black, new THREE.BoxGeometry(0.09, 2.7, 0.09).translate(0, 1.35, 0), Math.sin(a) * 2.14, yL + 1, Math.cos(a) * 2.14); }
+		const yL = yG + 1.15, lg = 0.42;
+		// (the lantern room's door out onto the gallery, toward +x like the tower's; the lens in
+		// the middle of the room, a small one now)
+		put(mats.wall2, new THREE.CylinderGeometry(2.25, 2.25, 1.0, 16, 1, true, Math.PI / 2 + lg, Math.PI * 2 - 2 * lg).translate(0, 0.5, 0), 0, yL, 0);
+		put(mats.lens, new THREE.CylinderGeometry(2.1, 2.1, 2.7, 16, 1, true, Math.PI / 2 + lg, Math.PI * 2 - 2 * lg).translate(0, 1.35, 0), 0, yL + 1, 0);
+		put(mats.lens, new THREE.CylinderGeometry(0.55, 0.55, 1.5, 12).translate(0, 0.75, 0), 0, yL + 0.6, 0);
+		put(mats.black, new THREE.CylinderGeometry(0.4, 0.5, 0.6, 12).translate(0, 0.3, 0), 0, yL, 0);
+		ST.rings.push({ r0: 2.15, r1: 2.3, y0: yL, y1: yL + 3.7, gaps: [[-lg, lg]] }, { r0: 3.8, r1: 3.95, y0: yL, y1: yL + 1.1, gaps: [] }, { r0: 0, r1: 0.6, y0: yL, y1: yL + 2.1, gaps: [] });
+		ST.deck = yL; ST.deckR = 3.9;
+		for (let i = 0; i < 16; i++) { const a = (i + 0.5) / 16 * Math.PI * 2; if (Math.abs(Math.sin(a) - 1) < 0.1) continue; put(mats.black, new THREE.BoxGeometry(0.09, 2.7, 0.09).translate(0, 1.35, 0), Math.sin(a) * 2.14, yL + 1, Math.cos(a) * 2.14); }
 		put(mats.black, new THREE.CylinderGeometry(2.4, 2.4, 0.2, 16).translate(0, 0.1, 0), 0, yL + 3.7, 0);
 		put(mats.black, new THREE.SphereGeometry(2.35, 16, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.6, 1), 0, yL + 3.9, 0);
 		put(mats.black, new THREE.SphereGeometry(0.4, 10, 6), 0, yL + 5.5, 0);
@@ -372,6 +396,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			}
 			if (chimney) put(mats.redRoof, new THREE.BoxGeometry(0.8, 2.2, 0.8), x + L * 0.25 * c, y + H + pitch * 0.4, z - L * 0.25 * s, ry);
 			keepClear.push([T.x + x, T.z + z, Math.max(L, W) / 2]);
+			ST.walls.push({ x: T.x + x, z: T.z + z, yaw: ry, hw: L / 2, hd: W / 2, y0: y - 1, y1: y + H + pitch });
 		};
 		// the fog signal building beside the tower, where the steam whistle stood
 		house(13, -9, 0.35, 19, 8, 4.2, 2.6, 5, false);
@@ -425,6 +450,45 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			for (const E of B.seals) { E.seal.position.y = E.y + Math.max(0, Math.sin(t * 0.3 + E.ph)) * 0.05; }
 		}
 	}
+	// the light station to walk round and climb: its houses solid, the tower's wall kept to, its
+	// stair's treads and the gallery to stand on
+	function stationPush(p, footY) {
+		if (ST.cx === undefined || Math.hypot(p.x - ST.cx, p.z - ST.cz) > 140) return;
+		const lo = footY + 0.55, hi = footY + 1.7, R = 0.3;
+		const boxPush = (b) => {
+			const c = Math.cos(b.yaw || 0), sn = Math.sin(b.yaw || 0), dx = p.x - b.x, dz = p.z - b.z;
+			let lx = c * dx - sn * dz, lz = sn * dx + c * dz;
+			if (Math.abs(lx) > b.hw + R || Math.abs(lz) > b.hd + R) return;
+			const qx = Math.max(-b.hw, Math.min(b.hw, lx)), qz = Math.max(-b.hd, Math.min(b.hd, lz)), ex = lx - qx, ez = lz - qz, d = Math.hypot(ex, ez);
+			if (d >= R) return;
+			if (d > 1e-6) { lx = qx + ex / d * R; lz = qz + ez / d * R; } else if (b.hw - Math.abs(lx) < b.hd - Math.abs(lz)) lx = Math.sign(lx || 1) * (b.hw + R); else lz = Math.sign(lz || 1) * (b.hd + R);
+			p.x = b.x + c * lx + sn * lz; p.z = b.z - sn * lx + c * lz;
+		};
+		for (const b of ST.walls) if (b.y1 > lo && b.y0 < hi) boxPush(b);
+		for (const b of ST.boxes) if (b.y1 > lo && b.y1 - 0.12 < hi) boxPush(b);
+		for (const q of ST.rings) {
+			if (q.y1 <= lo || q.y0 > hi) continue;
+			const dx = p.x - ST.cx, dz = p.z - ST.cz, d = Math.hypot(dx, dz);
+			if (d < q.r0 - R || d > q.r1 + R || d < 1e-6) continue;
+			const a = Math.atan2(dz, dx);
+			if (q.gaps.some(([a0, a1]) => a > a0 && a < a1)) continue;
+			const r = q.r0 > 0 && d - q.r0 < q.r1 - d ? q.r0 - R : q.r1 + R;
+			p.x = ST.cx + dx / d * r; p.z = ST.cz + dz / d * r;
+		}
+	}
+	function stationFloor(x, z, y) {
+		if (ST.cx === undefined || Math.hypot(x - ST.cx, z - ST.cz) > 140) return -1e9;
+		let best = -1e9;
+		for (const b of ST.boxes) {
+			if (b.y1 > y + 0.55 || b.y1 < y - 1.5 || b.y1 <= best) continue;
+			const c = Math.cos(b.yaw || 0), sn = Math.sin(b.yaw || 0), dx = x - b.x, dz = z - b.z;
+			if (Math.abs(c * dx - sn * dz) < b.hw && Math.abs(sn * dx + c * dz) < b.hd) best = b.y1;
+		}
+		const d = Math.hypot(x - ST.cx, z - ST.cz);
+		if (d < 5.15 && y > ST.y0 - 0.7) best = Math.max(best, ST.y0);
+		if (d < ST.deckR && y > ST.deck - 0.55 && y < ST.deck + 1.5) best = Math.max(best, ST.deck);
+		return best;
+	}
 	// which beach you are at (for zoning and hints)
 	const beachAt = (x, z) => SITES.find((S) => Math.hypot(x - S.x, z - S.z) < 450) || null;
 	// the lot's slab under you, to walk and drive onto
@@ -435,7 +499,8 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			const dx = x - L.x, dz = z - L.z, c = Math.cos(L.face), s = Math.sin(L.face);
 			if (Math.abs(dx * c - dz * s) < L.W / 2 && Math.abs(dx * s + dz * c) < L.D / 2 && y > B.lotTop - 1.5) return B.lotTop;
 		}
-		return rooms.floor(x, z, y);
+		return Math.max(rooms.floor(x, z, y), stationFloor(x, z, y));
 	}
-	return { group: root, update, beachAt, floor, push: rooms.push, sites: SITES, debug: () => [...built.values()].map((B) => ({ name: B.S.name, lot: !!B.lot, fires: B.fires.length, lanterns: B.lanterns.length, surfers: B.surfers.length, kids: B.group.children.length })) };
+	const push = (p, footY) => { rooms.push(p, footY); stationPush(p, footY); };
+	return { group: root, update, beachAt, floor, push, sites: SITES, debug: () => [...built.values()].map((B) => ({ name: B.S.name, lot: !!B.lot, fires: B.fires.length, lanterns: B.lanterns.length, surfers: B.surfers.length, kids: B.group.children.length })) };
 }

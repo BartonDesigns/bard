@@ -21,6 +21,7 @@ import { GREENS, REAL_U } from '../bay/realcity.js';
 import { inWater } from '../bay/watercarve.js';
 import { inRiverWater } from '../bay/carve.js';
 import { toWorld } from '../bay/geo.js';
+import { onLandmark } from '../bay/footprints.js';
 import { mulberry32 } from '../noise.js';
 import * as PL from './plants.js';
 import { GEOLOGY, boulder, outcrop, stone, rockMaterial } from './rocks.js';
@@ -46,7 +47,7 @@ const TRAILISH = /path|track|footway|bridleway/;
 export function habitat(bay, real, H) {
 	return function landAt(x, z) {
 		const h = H(x, z);
-		if (h < 2.5) return null;
+		if (h < 2.5 || onLandmark(x, z, 1)) return null;
 		if (real?.inside(x, z)) {
 			const L = real.landAt(x, z);
 			if (!L || (L.lu !== 0 && L.lu !== 11 && L.lu !== 12) || L.road > 0.35 || L.roof > 0.2) return null;

@@ -241,12 +241,42 @@ export function createWharf({ group, bay, sound, isPhone = false, signs = [], wi
 				for (let k = 0; k < (isPhone ? 10 : 22); k++) { const q = r(), [u, v] = wP(s0 + 1 + q * (len - 2), xb - into * (0.4 + (k % 2) * 0.1)); goods.at(u, Y + 0.5 + Math.floor(r() * 4) * 0.5, v, 1, 1, 1, ANG, new THREE.Color(gc[Math.floor(r() * gc.length)])); }
 				if (kind === 'market') for (let k = 0; k < 10; k++) { const [u, v] = wP(s0 + 1.5 + k * (len - 3) / 10, xc); goods.at(u, Y + 1.1, v, 2.4, 0.5, 0.8, ANG + 0.3, new THREE.Color(k % 2 ? 0xc8d0d8 : 0xd89070)); }
 				W.solids.push([s0 + 1.2, Math.min(xc - 0.45, xc + 0.45), s1 - 1.2, Math.max(xc - 0.45, xc + 0.45)]);
+				// shelves down the end walls, stocked; the trade's own things
+				for (const e of [-1, 1]) {
+					const se = sm + e * (len / 2 - 0.55);
+					B(Mg, depth - 2.8, 1.9, 0.4, 'darkwood', se, xm + into * 0.3, Y + 0.95);
+					for (let k = 0; k < (isPhone ? 4 : 9); k++) { const [u, v] = wP(se, xm + into * 0.3 + (r() - 0.5) * (depth - 3.2)); goods.at(u, Y + 0.4 + Math.floor(r() * 4) * 0.45, v, 1, 1, 1, ANG, new THREE.Color((GC[kind] || GC.shop)[Math.floor(r() * 3)])); }
+					W.solids.push([se - 0.25, Math.min(xf, xb) + 1.3, se + 0.25, Math.max(xf, xb) - 1.3]);
+				}
+				if (kind === 'market') {
+					// the iced case along the front, the fish laid on the ice
+					const xi = xf + into * 1.4;
+					B(Mg, 0.9, 0.85, len - 4.4, 'steel', sm, xi, Y + 0.42); B(Mg, 0.8, 0.06, len - 4.6, 'white', sm, xi, Y + 0.88);
+					for (let k = 0; k < 14; k++) { const [u, v] = wP(sm + (k / 13 - 0.5) * (len - 5.2), xi + (k % 2 - 0.5) * 0.4); goods.at(u, Y + 0.94, v, 1.6, 0.35, 0.7, ANG + (k % 3 - 1) * 0.3, new THREE.Color(k % 3 ? 0xc8d0d8 : 0xe08070)); }
+					W.solids.push([sm - (len - 4.4) / 2, Math.min(xi - 0.45, xi + 0.45), sm + (len - 4.4) / 2, Math.max(xi - 0.45, xi + 0.45)]);
+				} else if (kind === 'bait') {
+					// the rods in their rack by the door, the live wells
+					for (let k = 0; k < 10; k++) B(Mg, 0.03, 2.2, 0.03, 'darkwood', s0 + 1.0 + k * 0.12, xf + into * 0.7, Y + 1.1);
+					B(Mg, 0.8, 0.8, 2.2, 'blue', s1 - 2.2, xf + into * 1.6, Y + 0.4);
+					W.solids.push([s1 - 3.3, Math.min(xf + into * 1.2, xf + into * 2.0), s1 - 1.1, Math.max(xf + into * 1.2, xf + into * 2.0)]);
+				} else if (kind === 'candy') {
+					// glass cases of taffy and fudge down the middle
+					const xi = xf + into * 1.5;
+					B(Mg, 0.8, 0.75, len - 5, 'wood', sm, xi, Y + 0.37); B(Mg, 0.78, 0.4, len - 5.1, 'glass', sm, xi, Y + 0.95);
+					for (let k = 0; k < 18; k++) { const [u, v] = wP(sm + (r() - 0.5) * (len - 5.6), xi + (r() - 0.5) * 0.5); goods.at(u, Y + 0.82, v, 0.6, 0.5, 0.6, ANG, new THREE.Color(GC.candy[Math.floor(r() * GC.candy.length)])); }
+					W.solids.push([sm - (len - 5) / 2, Math.min(xi - 0.4, xi + 0.4), sm + (len - 5) / 2, Math.max(xi - 0.4, xi + 0.4)]);
+				}
 				// the clerk behind the counter, customers in front of it
 				for (const k of [0.3, 0.7]) { const [u, v] = wP(s0 + k * len, xc - into * 1.0); W.counters.push({ u, v, y: Y, heading: face }); }
 				{ const [u, v] = wP(sm, xc + into * 1.0); W.counters.push({ u, v, y: Y, heading: face + Math.PI }); }
 			} else {
-				// tables and chairs
-				for (let a = s0 + 2.5; a < s1 - 2; a += 3.2) for (let b = 1.6; b < depth - 1.4; b += 2.8) {
+				// the bar along the back, its stools, the kitchen's pass behind it; tables and chairs
+				const xr = xb - into * 1.9, bl = Math.min(8, len - 6);
+				B(Mg, 0.7, 1.08, bl, 'darkwood', sm, xr, Y + 0.54); B(Mg, 0.8, 0.05, bl + 0.1, 'plank', sm, xr, Y + 1.1);
+				B(Mg, 0.3, 1.3, bl, 'steel', sm, xb - into * 0.5, Y + 1.25);
+				for (let a = sm - bl / 2 + 0.5; a < sm + bl / 2; a += 0.9) { B(Mg, 0.38, 0.72, 0.38, 'darkwood', a, xr - into * 0.75, Y + 0.36); const [u, v] = wP(a, xr - into * 0.75); W.seats.push({ u, v, y: Y, h: 0.72, sit: true, table: true, heading: face + Math.PI }); }
+				W.solids.push([sm - bl / 2, Math.min(xr - 0.35, xr + 0.35), sm + bl / 2, Math.max(xr - 0.35, xr + 0.35)]);
+				for (let a = s0 + 2.5; a < s1 - 2; a += 3.2) for (let b = 1.6; b < depth - 4.2; b += 2.8) {
 					const x = xf + into * b;
 					B(Mg, 0.9, 0.06, 0.9, 'white', a, x, Y + 0.75); B(Mg, 0.1, 0.75, 0.1, 'darksteel', a, x, Y + 0.37);
 					for (const e of [-0.75, 0.75]) { B(Mg, 0.45, 0.45, 0.45, 'darkwood', a + e, x, Y + 0.22); const [u, v] = wP(a + e, x); W.seats.push({ u, v, y: Y, h: 0.45, sit: true, table: true, heading: e > 0 ? ANG + Math.PI : ANG }); }

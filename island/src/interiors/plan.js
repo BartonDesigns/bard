@@ -413,3 +413,54 @@ export function planSummit(S = {}) {
 	}
 	return P;
 }
+
+// ---------------------------------------------------------------------------------
+// the landmarks' insides (interiors/landmarks.js lays each out): a stone or glass shell drawn
+// by its own module, and within it, here, levels of any height, their rooms, the walls
+// between, doors, stairs and what stands solid
+
+// S: { W, D (inside the shell), levels ([{ y, h }]), top (the roof, over the ground floor),
+//      door ({ x, w, h }: on the front), doors ([{ side, u, w, h }]: more, at the ground),
+//      use, style, rnd, layout (K) => the rooms }
+export function planShell(S) {
+	const P = base({ use: S.use || 'site', W: S.W, D: S.D, rnd: S.rnd || rng(seedOf(S.W, S.D, 77)), style: S.style || 'plain' });
+	const E = ST.ext, { hw, hd } = P;
+	P.door = { x: S.door?.x ?? 0, w: S.door?.w ?? 1.6, y: 0, h: S.door?.h ?? 2.6 };
+	P.solid = [];
+	P.topHoles = [];
+	P.top = S.top ?? S.levels.reduce((m, L) => Math.max(m, L.y + L.h), 0);
+	const ext = [];
+	S.levels.forEach((Lv, k) => {
+		const L = { k, y: Lv.y, h: Lv.h, zb: -hd, rooms: [], holes: [] };
+		P.levels.push(L);
+		const top = k < S.levels.length - 1 ? S.levels[k + 1].y : P.top;
+		ext.push({ 'z+': wall(P, k, 'x', hd + E / 2, -hw - E, hw + E, L.y, top, 'ext', 1), 'z-': wall(P, k, 'x', -hd - E / 2, -hw - E, hw + E, L.y, top, 'ext', -1), 'x-': wall(P, k, 'z', -hw - E / 2, -hd, hd, L.y, top, 'ext', -1), 'x+': wall(P, k, 'z', hw + E / 2, -hd, hd, L.y, top, 'ext', 1) });
+	});
+	const f = open(ext[0]['z+'], P.door.x - P.door.w / 2, P.door.x + P.door.w / 2, 0, P.door.h, 'front');
+	if (f) f.main = true;
+	for (const d of S.doors || []) open(ext[0][d.side], d.u - d.w / 2, d.u + d.w / 2, 0, d.h || P.door.h, 'wide');
+	const lv = (k) => P.levels[k];
+	const K = {
+		P, hw, hd, ext,
+		room: (k, type, x0, z0, x1, z1, extra) => room(P, k, type, x0, z0, x1, z1, extra),
+		// a partition along x (at z = pos) or along z (at x = pos), the level's height
+		wall: (k, axis, pos, s, e, y1 = null) => wall(P, k, axis, pos, s, e, lv(k).y, y1 ?? lv(k).y + lv(k).h),
+		door: (w, c, width = 0.95) => doorway(w, c, w.y0, width),
+		wide: (w, s0, s1, h = 2.6) => open(w, s0, s1, w.y0, w.y0 + h, 'wide'),
+		window: (side, k, u, w = 1.2, y0 = 0.9, y1 = 2.4) => open(ext[k][side], u - w / 2, u + w / 2, lv(k).y + y0, lv(k).y + y1, 'window'),
+		// a flight up from level k: along z, from zb toward zt, to y1 (the next level, or the roof)
+		flight: (k, x0, x1, zb, zt, y1 = null, open1 = 1) => {
+			const y0 = lv(k).y, top = y1 ?? (lv(k + 1)?.y ?? P.top), n = Math.max(6, Math.round((top - y0) / 0.18));
+			const F = { k, x0, x1, zb, zt, y0, y1: top, n, dir: zt < zb ? -1 : 1, open: open1 };
+			P.flights.push(F);
+			if (lv(k + 1) && Math.abs(top - lv(k + 1).y) < 0.05) lv(k + 1).holes.push([x0, Math.min(zb, zt), x1, Math.max(zb, zt)]);
+			else if (Math.abs(top - P.top) < 0.05) P.topHoles.push([x0, Math.min(zb, zt), x1, Math.max(zb, zt)]);
+			return F;
+		},
+		hole: (k, x0, z0, x1, z1) => lv(k).holes.push([x0, z0, x1, z1]),
+		rail: (k, x0, z0, x1, z1) => P.rails.push({ k, x0, z0, x1, z1, y0: lv(k).y, y1: lv(k).y + 1.0 }),
+		solid: (k, x0, z0, x1, z1, y1 = null) => { P.solid.push({ k, box: [x0, z0, x1, z1, lv(k).y - 0.2, y1 ?? lv(k).y + lv(k).h] }); lv(k).holes.push([x0, z0, x1, z1]); },
+	};
+	S.layout(K);
+	return P;
+}
