@@ -20,7 +20,7 @@ export const NAMES = {
 	nenets: { m: ['Vasili', 'Ilya', 'Yakov', 'Sergei', 'Pyotr'], f: ['Maria', 'Galina', 'Olga', 'Nadezhda', 'Anna'], s: ['Khudi', 'Serotetto', 'Laptander', 'Okotetto', 'Vanuito'] },
 	arab: { m: ['Ahmad', 'Omar', 'Yusuf', 'Khalid', 'Hassan', 'Karim', 'Tariq', 'Samir', 'Ibrahim', 'Faisal'], f: ['Fatima', 'Layla', 'Amira', 'Noor', 'Mariam', 'Huda', 'Rania', 'Salma', 'Yasmin', 'Aisha'], s: ['Haddad', 'Khoury', 'Al-Sayed', 'Nasser', 'Mansour', 'Saleh', 'Hamdan', 'Darwish', 'Aziz'] },
 	maghreb: { m: ['Youssef', 'Mohamed', 'Hamid', 'Rachid', 'Karim', 'Amine', 'Idir', 'Said'], f: ['Fatima Zahra', 'Khadija', 'Salma', 'Imane', 'Nadia', 'Tiziri', 'Amal', 'Houda'], s: ['El Idrissi', 'Benali', 'Amrani', 'Bennani', 'Ait Ali', 'Tazi', 'Ouali', 'Haddou'] },
-	tuareg: { m: ['Ghali', 'Mohamed', 'Ibrahim', 'Amastan', 'Assalek', 'Moussa'], f: ['Tinhinan', 'Fatimata', 'Takamat', 'Aminatou', 'Mariama'], s: ['Ag Alhassane', 'Ag Ghali', 'Ag Mohamed', 'Walet Ibrahim'] },
+	tuareg: { m: ['Ghali', 'Mohamed', 'Ibrahim', 'Amastan', 'Assalek', 'Moussa'], f: ['Tinhinan', 'Fatimata', 'Takamat', 'Aminatou', 'Mariama'], s: ['Ag Alhassane', 'Ag Ghali', 'Ag Mohamed'], sf: ['Walet Ibrahim', 'Walet Alhassane', 'Walet Mohamed'] },
 	persian: { m: ['Reza', 'Ali', 'Amir', 'Hossein', 'Mehdi', 'Dariush', 'Kaveh', 'Babak'], f: ['Maryam', 'Shirin', 'Leila', 'Parisa', 'Neda', 'Sara', 'Azadeh', 'Roya'], s: ['Ahmadi', 'Hosseini', 'Karimi', 'Rezaei', 'Tehrani', 'Moradi', 'Jafari', 'Sadeghi'] },
 	turkish: { m: ['Mehmet', 'Mustafa', 'Emre', 'Can', 'Burak', 'Ahmet', 'Murat', 'Kemal'], f: ['Elif', 'Zeynep', 'Ayşe', 'Fatma', 'Emine', 'Selin', 'Deniz', 'Merve'], s: ['Yılmaz', 'Kaya', 'Demir', 'Şahin', 'Çelik', 'Yıldız', 'Aydın', 'Öztürk'] },
 	caucasus: { m: ['Giorgi', 'Levan', 'Davit', 'Aram', 'Tigran', 'Elnur', 'Nika'], f: ['Nino', 'Tamar', 'Mariam', 'Anahit', 'Lilit', 'Aygun', 'Salome'], s: ['Beridze', 'Kapanadze', 'Gelashvili', 'Petrosyan', 'Hakobyan', 'Mammadov', 'Aliyev'] },
@@ -28,18 +28,30 @@ export const NAMES = {
 	mongol: { m: ['Bat-Erdene', 'Ganbold', 'Temuulen', 'Bold', 'Enkhbayar', 'Sükhbaatar', 'Tömör'], f: ['Oyunchimeg', 'Sarnai', 'Altantsetseg', 'Enkhjargal', 'Narantuya', 'Bolormaa'], s: ['Batbayar', 'Gantulga', 'Dorj', 'Erdene', 'Tsogt', 'Bayar'] },
 	tibetan: { m: ['Tenzin', 'Tashi', 'Dorje', 'Norbu', 'Sonam', 'Karma', 'Pema'], f: ['Dolma', 'Pema', 'Yangchen', 'Dechen', 'Lhamo', 'Sonam', 'Tsering'], s: ['Tsering', 'Wangchuk', 'Gyatso', 'Namgyal', 'Dorje', 'Phuntsok'] },
 	nepali: { m: ['Bikash', 'Pasang', 'Ram', 'Suresh', 'Ang', 'Mingma', 'Hari'], f: ['Sita', 'Laxmi', 'Pasang', 'Sunita', 'Maya', 'Dawa', 'Anita'], s: ['Sherpa', 'Gurung', 'Tamang', 'Shrestha', 'Thapa', 'Rai', 'Magar'] },
-	southasia: { m: ['Arjun', 'Rahul', 'Vikram', 'Imran', 'Rohan', 'Sanjay', 'Harpreet', 'Anil', 'Farhan', 'Karthik'], f: ['Priya', 'Ananya', 'Sunita', 'Fatima', 'Lakshmi', 'Meera', 'Kavya', 'Ayesha', 'Deepa', 'Simran'], s: ['Sharma', 'Patel', 'Singh', 'Kumar', 'Iyer', 'Das', 'Khan', 'Reddy', 'Nair', 'Gill'] },
+	southasia: { m: ['Arjun', 'Rahul', 'Vikram', 'Imran', 'Rohan', 'Sanjay', 'Harpreet', 'Anil', 'Farhan', 'Karthik'], f: ['Priya', 'Ananya', 'Sunita', 'Fatima', 'Lakshmi', 'Meera', 'Kavya', 'Ayesha', 'Deepa', 'Simran'], s: ['Sharma', 'Patel', 'Kumar', 'Das'],
+		// given and family names go together within a community
+		g: [
+			{ w: 5, m: ['Arjun', 'Rahul', 'Vikram', 'Rohan', 'Sanjay', 'Anil'], f: ['Priya', 'Ananya', 'Sunita', 'Meera', 'Deepa', 'Pooja'], s: ['Sharma', 'Patel', 'Kumar', 'Das', 'Gupta', 'Verma'] },
+			{ w: 2, m: ['Karthik', 'Suresh', 'Venkat', 'Arun'], f: ['Lakshmi', 'Kavya', 'Divya', 'Anjali'], s: ['Iyer', 'Reddy', 'Nair', 'Pillai'] },
+			{ w: 2, m: ['Imran', 'Farhan', 'Salman', 'Arif'], f: ['Fatima', 'Ayesha', 'Zainab', 'Sana'], s: ['Khan', 'Qureshi', 'Ansari', 'Siddiqui'] },
+			{ w: 1, m: ['Harpreet', 'Gurdeep', 'Manpreet', 'Jasbir'], f: ['Simran', 'Harleen', 'Jaspreet', 'Gurleen'], s: ['Singh', 'Gill', 'Sandhu'], sf: ['Kaur', 'Gill', 'Sandhu'] },
+		] },
 	chinese: { m: ['Wei', 'Jun', 'Hao', 'Lei', 'Ming', 'Jian', 'Tao', 'Yong', 'Bo'], f: ['Mei', 'Li', 'Xiu', 'Fang', 'Jing', 'Yan', 'Hui', 'Lan', 'Xin'], s: ['Wang', 'Li', 'Zhang', 'Liu', 'Chen', 'Yang', 'Huang', 'Zhao', 'Wu', 'Zhou'] },
 	japanese: { m: ['Haruto', 'Takeshi', 'Kenji', 'Hiroshi', 'Daiki', 'Sota', 'Ren', 'Yuto'], f: ['Yui', 'Aoi', 'Sakura', 'Haruka', 'Mei', 'Yuki', 'Rin', 'Emi'], s: ['Sato', 'Suzuki', 'Takahashi', 'Tanaka', 'Watanabe', 'Ito', 'Yamamoto', 'Nakamura'] },
 	korean: { m: ['Min-jun', 'Seo-jun', 'Ji-ho', 'Hyun-woo', 'Dong-hyun', 'Jae-won'], f: ['Seo-yeon', 'Ji-woo', 'Min-seo', 'Su-bin', 'Ha-eun', 'Ye-jin'], s: ['Kim', 'Lee', 'Park', 'Choi', 'Jung', 'Kang', 'Yoon'] },
 	vietnamese: { m: ['Minh', 'Tuấn', 'Hùng', 'Đức', 'Long', 'Nam', 'Quang'], f: ['Lan', 'Hoa', 'Linh', 'Mai', 'Thảo', 'Ngọc', 'Hương'], s: ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Vũ', 'Đặng'] },
 	thai: { m: ['Somchai', 'Anan', 'Krit', 'Niran', 'Pichai', 'Thanawat'], f: ['Malee', 'Siriporn', 'Nok', 'Ploy', 'Kanya', 'Pim'], s: ['Saetang', 'Wongsa', 'Srisuk', 'Chaiyaporn', 'Boonmee', 'Thongchai'] },
-	malay: { m: ['Ahmad', 'Hafiz', 'Budi', 'Agus', 'Rizal', 'Wayan', 'Made', 'Joko'], f: ['Siti', 'Nurul', 'Dewi', 'Putri', 'Ayu', 'Ketut', 'Sri', 'Intan'], s: ['bin Ahmad', 'Santoso', 'Wijaya', 'Hidayat', 'Saputra', 'binti Ismail', 'Pratama'] },
+	malay: { m: ['Ahmad', 'Hafiz', 'Budi', 'Agus', 'Rizal', 'Wayan', 'Made', 'Joko'], f: ['Siti', 'Nurul', 'Dewi', 'Putri', 'Ayu', 'Ketut', 'Sri', 'Intan'], s: ['Santoso', 'Wijaya', 'Hidayat', 'Saputra', 'Pratama'],
+		g: [
+			{ w: 3, m: ['Ahmad', 'Hafiz', 'Rizal', 'Faiz'], f: ['Siti', 'Nurul', 'Aisyah', 'Intan'], s: ['bin Ahmad', 'bin Ismail', 'bin Yusof'], sf: ['binti Ahmad', 'binti Ismail', 'binti Yusof'] },
+			{ w: 4, m: ['Budi', 'Agus', 'Joko', 'Eko'], f: ['Dewi', 'Putri', 'Sri', 'Rina'], s: ['Santoso', 'Wijaya', 'Hidayat', 'Saputra', 'Pratama'] },
+			{ w: 1, m: ['Wayan', 'Made', 'Nyoman'], f: ['Ayu', 'Ketut', 'Komang'], s: ['Sudarta', 'Suarjana', 'Wirawan', 'Arsana'] },
+		] },
 	dayak: { m: ['Jimbun', 'Langgi', 'Ngumbang', 'Unggang', 'Ricky', 'Nyipa'], f: ['Sindai', 'Inggai', 'Rapi', 'Mary', 'Dayang', 'Lulong'], s: ['anak Jimbun', 'anak Langgi', 'Unting', 'Ngau', 'Sigat'] },
 	filipino: { m: ['Jose', 'Mark', 'Juan', 'Paolo', 'Rogelio', 'Jun'], f: ['Maria', 'Grace', 'Angelica', 'Joy', 'Rowena', 'Liza'], s: ['Santos', 'Reyes', 'Cruz', 'Bautista', 'Ocampo', 'Garcia'] },
 	burmese: { m: ['Aung', 'Kyaw', 'Min', 'Zaw', 'Htet', 'Thant'], f: ['Su', 'Thandar', 'Hnin', 'Ei', 'Myat', 'Khin'], s: ['Aung', 'Win', 'Myint', 'Oo', 'Htun', 'Thein'] },
 	swahili: { m: ['Juma', 'Baraka', 'Omari', 'Joseph', 'Daudi', 'Kamau', 'Otieno', 'Wanjiru'], f: ['Amina', 'Neema', 'Zawadi', 'Grace', 'Wanjiku', 'Akinyi', 'Rehema', 'Halima'], s: ['Mwangi', 'Odhiambo', 'Kamau', 'Otieno', 'Mohamed', 'Njoroge', 'Mushi', 'Mbwana'] },
-	maasai: { m: ['Lekishon', 'Saitoti', 'Kenta', 'Lemayian', 'Parsimei'], f: ['Naserian', 'Nashipae', 'Nalangu', 'Resian', 'Nalotuesha'], s: ['Ole Sankale', 'Ole Ntimama', 'Ole Kisio', 'Ole Pere'] },
+	maasai: { m: ['Lekishon', 'Saitoti', 'Kenta', 'Lemayian', 'Parsimei'], f: ['Naserian', 'Nashipae', 'Nalangu', 'Resian', 'Nalotuesha'], s: ['Ole Sankale', 'Ole Ntimama', 'Ole Kisio', 'Ole Pere'], sf: ['Sankale', 'Ntimama', 'Kisio', 'Pere'] },
 	westafrica: { m: ['Kwame', 'Kofi', 'Chinedu', 'Emeka', 'Tunde', 'Musa', 'Abdoulaye', 'Moussa', 'Seydou'], f: ['Ama', 'Abena', 'Ngozi', 'Chiamaka', 'Folake', 'Aminata', 'Fatoumata', 'Awa', 'Adjoa'], s: ['Mensah', 'Okafor', 'Adeyemi', 'Diallo', 'Traoré', 'Ndiaye', 'Boateng', 'Okeke', 'Coulibaly'] },
 	mande: { m: ['Moussa', 'Seydou', 'Bakary', 'Mamadou', 'Oumar', 'Souleymane', 'Ibrahim'], f: ['Aminata', 'Fatoumata', 'Awa', 'Mariam', 'Kadiatou', 'Assitan', 'Oumou'], s: ['Traoré', 'Coulibaly', 'Diarra', 'Keïta', 'Konaté', 'Sangaré', 'Touré', 'Cissé'] },
 	akan: { m: ['Kwame', 'Kofi', 'Kwaku', 'Yaw', 'Kwabena', 'Kojo'], f: ['Ama', 'Abena', 'Akosua', 'Adjoa', 'Efua', 'Yaa'], s: ['Mensah', 'Boateng', 'Owusu', 'Asante', 'Agyeman', 'Ofori'] },
@@ -181,7 +193,9 @@ export function ancestryFor(C, r, mixed = 0.08) {
 
 // a name: given and family
 export function nameFor(C, male, r) {
-	const N = C.names, L = male ? N.m : N.f, first = L[Math.floor(r() * L.length)], last = N.s[Math.floor(r() * N.s.length)];
+	let N = C.names;
+	if (N.g) { let u = r() * N.g.reduce((a, x) => a + x.w, 0); N = N.g.find((x) => (u -= x.w) <= 0) || N.g[0]; }
+	const L = male ? N.m : N.f, S = (!male && N.sf) || N.s, first = L[Math.floor(r() * L.length)], last = S[Math.floor(r() * S.length)];
 	// (family name first where that is the custom)
 	return /^(chinese|korean|vietnamese|japanese|mongol)$/.test(C.key) ? { first, name: `${first} ${last}`, formal: `${last} ${first}` } : { first, name: `${first} ${last}` };
 }
