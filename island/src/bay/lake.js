@@ -390,11 +390,11 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 			inst(new THREE.CylinderGeometry(0.06, 0.2, 0.74, 8), dark, legs, y + 0.37);
 			inst(new THREE.BoxGeometry(0.45, 0.9, 0.45), wood, chairs, y + 0.45);
 			// the ceiling under the roof ring, its lamps
-			add(new THREE.CircleGeometry(RH.r - 0.1, 64).rotateX(Math.PI / 2), white, 0, y + 4.6, 0);
+			add(new THREE.CircleGeometry(RH.r - 0.1, 64).rotateX(Math.PI / 2), white, 0, y + 4.45, 0);
 			const lampM = new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xfff0d0, emissiveIntensity: 1 });
 			const lamps = [];
 			for (let r = 14; r < RH.r - 3; r += 9) for (let a = 0; a < Math.PI * 2; a += 9 / r) lamps.push([Math.sin(a) * r, Math.cos(a) * r]);
-			inst(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 12), lampM, lamps, y + 4.55);
+			inst(new THREE.CylinderGeometry(0.4, 0.4, 0.05, 12), lampM, lamps, y + 4.4);
 			G.position.set(RH.x, 0, RH.z);
 			root.add(G);
 			RH.inside = G; RH.tabs = tabs;
