@@ -17,6 +17,7 @@ export const here = {
 	landmark: null,             // the nearest landmark with a story: { name, tale, km, dir, real }
 	onward: null,               // the next town on: { name, km, dir }
 	known: null,                // the nearest real town and the landmarks it is known for
+	coast: true,                // the sea within about 15 km (inland places get no harbour talk)
 	minaret: null,              // the nearest minaret (for the call to prayer): [x, y, z]
 };
 export const regionalNow = () => (here.on ? here : null);

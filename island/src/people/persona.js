@@ -78,7 +78,7 @@ function regionalPersona(P, H) {
 	const sheet = regionalSheet(H, r);
 	return {
 		name: nm.name, first: nm.first, age, job, place: sheet.place, kind: H.kit.id, years: Math.max(1, Math.min(age - 3, Math.round(5 + r() * 40))),
-		mood: pick(r, MOODS), errand: P.errand || pick(r, F.errands || ERRANDS), style, temper: T,
+		mood: pick(r, MOODS), errand: P.errand || pick(r, (H.coast === false && F.errands?.filter((e) => !/harbour|boats|shore/.test(e))) || F.errands || ERRANDS), style, temper: T,
 		tattoos: inkStory(d), hobby: pick(r, F.hobbies || ['walking']), local: sheet,
 		// what the cloud voice reads (guide.js npcFor): the region, the language, local facts
 		region: sheet.country && !sheet.country.includes(sheet.region) && sheet.region !== sheet.place ? `${sheet.region}, ${sheet.country}` : sheet.country || sheet.region || '', lang: sheet.lang, facts: localFacts(sheet),

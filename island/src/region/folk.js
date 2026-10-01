@@ -75,9 +75,10 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 			bodies.push({ P, M, key: keyNow(), busy: false, task, active: true });
 		} catch (e) { console.warn('[regional folk]', e); } finally { building = false; }
 	}
-	// the work that goes with what they are doing
+	// the work that goes with what they are doing (no sailors far from the sea)
+	const SEA = /fisherman|sailor|harbour|ferry|boat builder/;
 	function jobFor(kit, task, r) {
-		const J = kit.folk?.jobs || [];
+		const J = (kit.folk?.jobs || []).filter((j) => here.coast !== false || task === 'fish' || !SEA.test(j));
 		const m = { stall: /sell|merchant|smith|stall|shop|market|carpet|spice|baker|fruit|tailor/, tea: /tea|chai|café|cafe/, fish: /fish/, herd: /herd|cattle|yak|llama|horse|camel|goat|cow|dairy/, farm: /grow|farm|rice|tea|olive|date|millet|garden|terrace/, monk: /temple|monastery/ }[task];
 		const L = m ? J.filter((j) => m.test(j)) : [];
 		if (task === 'monk') return 'a monk at the monastery';

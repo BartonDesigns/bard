@@ -44,7 +44,7 @@ export const REGIONS = [
 		},
 		lm: 'square minaret over a medina|tiled gate with horseshoe arches|mud kasbah in a palm valley|great square with food stalls',
 	},
-	{ id: 'af.maghreb.ma', name: 'Morocco', box: [27.6, -13.3, 35.95, -1.0], pri: 2.5, country: 'Morocco', lang: 'ar-MA', say: { chatter: '+Msemen for breakfast!|The Atlas has snow today.' } },
+	{ id: 'af.maghreb.ma', name: 'Morocco', box: [27.6, -13.3, 35.95, -1.0], pri: 2.5, country: 'Morocco', lang: 'ar-MA', food: 'tagine|couscous on Friday|mint tea|harira|msemen|pastilla|amlou|olives', say: { chatter: '+Msemen for breakfast!|The Atlas has snow today.' } },
 	{ id: 'af.maghreb.ma.marrakesh', name: 'Marrakesh', box: [31.5, -8.15, 31.75, -7.85], pri: 4, char: 'The red city: a vast square of storytellers and snake charmers under the Atlas', arch: { walls: '#c86a4a|#d8805a' }, say: { chatter: '+Meet me at Jemaa el-Fna at sunset.|Balak! Balak! Mind the cart.', words: '+balak: watch out (make way)' }, lm: '+great square full of food stalls|tall square minaret of pink stone|blue garden villa' },
 	{ id: 'af.maghreb.ma.fez', name: 'Fez', box: [33.95, -5.1, 34.15, -4.9], pri: 4, char: 'A labyrinth medina, leather tanneries and the oldest university', lm: '+tannery of dye vats|blue-tiled gate|madrasa with carved cedar' },
 	{ id: 'af.maghreb.ma.atlas', name: 'the High Atlas', box: [30.8, -9.0, 32.6, -4.5], pri: 3, char: 'Snowy peaks, Amazigh villages of earth and walnut valleys', terrain: { relief: 'mountains', elev: [800, 4167] }, veg: '+walnut|juniper|Atlas cedar|almond', say: { greet: '+Azul!', chatter: '+Tanmirt! Thank you.|The pass is closed with snow.', words: '+tanmirt: thank you (Amazigh)' }, lm: '+earthen village stacked on a slope|mud-brick ksar in a gorge' },

@@ -185,6 +185,7 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 	}
 
 	// ---------- the profile of where you are ----------
+	const coastAt = { x: Infinity, z: Infinity };
 	function updateHere(lat, lon, cam) {
 		const elev = ground(cam.position.x, cam.position.z);
 		const KH = kitHere(lat, lon, -1, elev);
@@ -194,6 +195,13 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		here.on = true; here.lat = lat; here.lon = lon;
 		here.region = at.profile; here.regionId = at.id; here.regionName = at.name; here.country = at.profile.country || '';
 		here.weights = K.weights; here.culture = { ...K.culture, id: at.id };
+		// the sea within about 15 km: sampled again only after moving a few km
+		if (!(Math.hypot(cam.position.x - coastAt.x, cam.position.z - coastAt.z) < 3000)) {
+			coastAt.x = cam.position.x; coastAt.z = cam.position.z;
+			let sea = false;
+			for (let k = 0; k < 16 && !sea; k++) { const a = k / 8 * Math.PI, d = k < 8 ? 6000 : 15000; sea = wet(cam.position.x + Math.sin(a) * d, cam.position.z + Math.cos(a) * d); }
+			here.coast = sea;
+		}
 		here.climate = climateNow(at, env.month, elev, hours);
 		const Wx = globe.world?.()?.weather?.state;
 		here.wx = { rain: Wx?.rainHere || 0, cover: Wx?.cover ?? 0.4 };

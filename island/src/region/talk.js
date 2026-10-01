@@ -39,7 +39,7 @@ export function aWord(R, r) {
 }
 
 // the weather and the season, said as people here would say it
-export function weatherLine(kit, C, wx, r, R) {
+export function weatherLine(kit, C, wx, r, R, coast = true) {
 	const k = kit?.id || 'village', s = C.season, t = C.now, rain = (wx?.rain || 0) > 0.25;
 	const L = [];
 	if (rain && C.temp > 2) L.push('Wet one today, isn\'t it? It will clear by evening, or it won\'t.');
@@ -110,7 +110,7 @@ export function weatherLine(kit, C, wx, r, R) {
 		case 'mediterranean':
 			if (s === 'summer') L.push('Thirty-something every day, and the cicadas never stop. The afternoon rest isn\'t optional.');
 			else if (s === 'winter') L.push('Rain on the hills; the olives are coming in. The whole family helps with the harvest.');
-			else L.push('The best time of year: warm sun, cool evenings, the sea still warm enough to swim.');
+			else L.push(coast ? 'The best time of year: warm sun, cool evenings, the sea still warm enough to swim.' : 'The best time of year: warm sun, cool evenings, and the markets full of pomegranates.');
 			break;
 		default:
 			L.push(s === 'winter' ? `${deg(C, t)} and grey. The wood stove is lit.` : s === 'summer' ? `${deg(C, t)}, a proper summer day.` : 'Changeable weather. Four seasons in a day, some days.');
@@ -134,9 +134,10 @@ export function landmarkLine(L, r) {
 	return L.real ? `${N} is ${where}. ${L.tale}` : pick(r, [`Have you seen ${L.name}? It's ${where}. ${L.tale}`, `${N}, ${where}. My grandmother told it like this. ${L.tale}`]);
 }
 // the road onward
-export function onwardLine(O, kit, r) {
+export function onwardLine(O, kit, r, coast = true) {
+	const way = (coast ? kit?.travel : kit?.travelInland || kit?.travel) || '';
 	if (!O) return '';
-	return pick(r, [`${O.name} is about ${O.km} km ${O.dir}, ${kit?.travel || 'down the road'}.`, `Going on? ${O.name}, ${O.km} km ${O.dir}. ${kit?.travel ? kit.travel[0].toUpperCase() + kit.travel.slice(1) + '.' : ''}`]).trim();
+	return pick(r, [`${O.name} is about ${O.km} km ${O.dir}, ${way || 'down the road'}.`, `Going on? ${O.name}, ${O.km} km ${O.dir}. ${way ? way[0].toUpperCase() + way.slice(1) + '.' : ''}`]).trim();
 }
 
 // the whole sheet, for a persona (here: region/here.js; r: the person's own random stream)
@@ -147,12 +148,12 @@ export function regionalSheet(H, r) {
 	return {
 		place, region: H.regionName, country: H.country, kit: kit?.name || '', culture: H.culture?.key,
 		greet: g, bye: farewell(R, r), word: w, lang: languageOf(H.culture, R?.lang),
-		weather: weatherLine(kit, C, H.wx, r, R), season: C.season, month: MONTHS[today().getMonth()], temp: C.now, f: !!C.f,
+		weather: weatherLine(kit, C, H.wx, r, R, H.coast !== false), season: C.season, month: MONTHS[today().getMonth()], temp: C.now, f: !!C.f,
 		food: foodLine(R, r, H.town?.name), foods: (R?.food || []).slice(0, 4),
 		landmark: H.landmark ? { ...H.landmark, line: landmarkLine(H.landmark, r) } : null,
-		onward: H.onward ? { ...H.onward, line: onwardLine(H.onward, kit, r) } : null,
+		onward: H.onward ? { ...H.onward, line: onwardLine(H.onward, kit, r, H.coast !== false) } : null,
 		chatter: (R?.say?.chatter || []).slice(0, 6),
 		known: H.known?.landmarks?.length ? `${H.known.town}: ${H.known.landmarks.join(', ')}` : '',
-		travel: kit?.travel || '',
+		travel: (H.coast === false && kit?.travelInland) || kit?.travel || '',
 	};
 }

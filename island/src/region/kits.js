@@ -196,6 +196,7 @@ export const KITS = {
 		music: { penta: 0, phrygian: 0.4, swing: 0.05 },
 		lore: ['watchtower', 'chapelrock', 'ruin'],
 		travel: 'on the ferry from the harbour, or the bus along the coast road',
+		travelInland: 'on the bus, or a shared taxi along the valley road',
 	},
 	desert: {
 		name: 'desert town', climate: 'desert',
