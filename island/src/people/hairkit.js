@@ -218,11 +218,13 @@ function faceFront(P, p) {
 }
 // where a hair vertex (V[o..o+2]) is against the face below the eyes, into out: how much
 // it is to be moved off it (all of it beside the face, less and less below the chin and up
-// to the eyes, none behind the ears), how far out the face's side is there, and how far it
+// to the eyes and brows, none behind the ears), how far out the face's side is there, and how far it
 // is in front of the cheek's edge
 function offFace(FF, K, V, o, out) {
 	const y = V[o + 1], yi = Math.floor((y - FF.y0) / FG), w = yi >= 0 && yi < FNY ? FF.W[yi] : 0;
-	out[0] = w ? sm(FF.y0, K.eyeY - 0.12, y) * (1 - sm(K.eyeY - 0.035, K.eyeY - 0.01, y)) * sm(K.eyeZ - 0.085, K.eyeZ - 0.065, V[o + 2]) : 0;
+	// (up to the eyes in the middle, where a fringe is cut instead; up to the brows beside them)
+	const top = K.eyeY - 0.01 + 0.035 * sm(0.035, 0.05, Math.abs(V[o] - K.c.x));
+	out[0] = w ? sm(FF.y0, K.eyeY - 0.12, y) * (1 - sm(top - 0.025, top, y)) * sm(K.eyeZ - 0.085, K.eyeZ - 0.065, V[o + 2]) : 0;
 	out[1] = w + 0.004;
 	out[2] = out[0] > 0 ? Math.max(0, V[o + 2] - FF.Z[yi * FNX + Math.min(FNX - 1, Math.floor(w / FG))] - 0.006) : 0;
 }
