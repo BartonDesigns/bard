@@ -453,8 +453,8 @@ export function suitFor(kind, a, b) {
 
 // hair to go with the person and the look: the cut (hair.js CUTS) by how their hair grows,
 // their generation and what they wear; colours (a few dyed among the young, the roots
-// showing on some); hairlines that recede and crowns that thin on some men with the years,
-// salt and pepper in middle age
+// showing on some); hairlines that recede and crowns that thin on some men with the years
+// (the grey that comes with them is body.js greyOf)
 const wpick = (r, L) => { let x = r() * L.reduce((a, b) => a + b[1], 0); for (const [k, w] of L) { if ((x -= w) < 0) return k; } return L[0][0]; };
 const CUT_BY = {
 	coily: {
@@ -468,7 +468,7 @@ const CUT_BY = {
 	alpha: { m: [['crop', 3.5], ['short', 2.5], ['fade', 2], ['curls', 1]], f: [['pony', 3.5], ['long', 2.5], ['bun', 1], ['bob', 1]] },
 };
 export function hairFor(r, d, o) {
-	const out = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, cut: 'short', recede: 0, thin: 0, salt: 0, part: r() < 0.5 ? -1 : 1, fresh: false };
+	const out = { dyed: null, buzz: false, bun: false, volume: 1, scarf: false, cut: 'short', recede: 0, thin: 0, part: r() < 0.5 ? -1 : 1, fresh: false };
 	const g = d.child ? 'alpha' : o?.gen && CUT_BY[o.gen] ? o.gen : generation(d.age), f = !d.male;
 	const afr = d.ancestry?.[0] || 0, coily = afr > 0.55 || (afr > 0.3 && chance(r, 0.6)), curly = !coily && chance(r, 0.12 + afr * 0.4);
 	out.cut = wpick(r, coily && !d.child ? CUT_BY.coily[f ? 'f' : 'm'] : CUT_BY[g][f ? 'f' : 'm']);
@@ -486,7 +486,9 @@ export function hairFor(r, d, o) {
 	// the years: a receding hairline, a thinning crown, grey coming in
 	if (d.male && d.age > 26) { out.recede = Math.min(1, (d.age - 26) / 40) * (0.3 + r() * 0.9); if (d.age > 42 && chance(r, 0.35)) { out.thin = 0.5 + r() * 0.5; if (!/^(fade|crop|short|slick)$/.test(out.cut)) out.cut = 'short'; if (out.thin > 0.8) out.cut = 'thinning'; } }
 	if (!d.male && d.age > 58 && chance(r, 0.3)) out.thin = 0.3;
-	if (d.age > 36 && d.age < 64 && !out.dyed) out.salt = Math.min(1, (d.age - 36) / 28) * r() * 0.8;
+	// (grey comes with the years, body.js greyOf; the draw that once set it is kept, so the
+	// rest of the look stays as it was)
+	if (d.age > 36 && d.age < 64 && !out.dyed) r();
 	// a headscarf for a few women, in the season's colours
 	if (!d.male && d.age > 16 && chance(r, 0.03)) out.scarf = pick(r, ['#2f4a38', '#1f2a44', '#b08552', '#6a2331', '#d9ccb2', '#57304a', '#1b1b1d', '#9aa58a']);
 	return out;

@@ -8,7 +8,7 @@
 // that goes up and down, a walk. One draw call a body shape, whatever the crowd's size.
 
 import * as THREE from 'three';
-import { loadPeopleAssets, peopleAssetsNow, buildPerson, personDNA, rng } from './body.js';
+import { loadPeopleAssets, peopleAssetsNow, buildPerson, personDNA, rng, hairTone } from './body.js';
 import { createMotion } from './motion.js';
 import { dressFor } from './wardrobe.js';
 
@@ -144,7 +144,7 @@ export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 
 				c.setRGB(0.72 * (1 - tone * 0.62), 0.52 * (1 - tone * 0.7), 0.4 * (1 - tone * 0.75)); attrs.iSkin.setXYZ(j, c.r, c.g, c.b);
 				const set = (a, col) => { c.set(col || '#777777'); attrs[a].setXYZ(j, c.r, c.g, c.b); };
 				set('iTop', o.top?.col || o.outer?.col); set('iOuter', o.outer?.col || o.top?.col); set('iBottom', o.bottom?.col); set('iShoes', o.shoes?.kind === 'barefoot' ? '#b08560' : o.shoes?.col);
-				c.setRGB(...d.hairColour); attrs.iHair.setXYZ(j, c.r, c.g, c.b);
+				c.setRGB(...hairTone(d)); attrs.iHair.setXYZ(j, c.r, c.g, c.b);
 				attrs.iAnim.setXYZ(j, rr() * 6.28, kind === 'walk' ? 5 + rr() : 0, kind === 'walk' ? 1 : 0);
 				slots[i] = { im, j };
 			});

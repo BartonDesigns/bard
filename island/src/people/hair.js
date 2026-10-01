@@ -5,6 +5,9 @@
 // gives the colour its depth; the outer layers break into strands, with a few flyaways.
 // The cuts: crops, fades, textured tops, curls, afros, locs, box braids and cornrows,
 // buns, ponytails, bobs and long layers; receding and thinning hair for some with the years.
+// Locs, box braids and cornrows are round: tubes, the twist or the plait drawn on them.
+// Most cuts are now real styles (hairkit.js); these grow the locs, braids and cornrows, and
+// stand in for the rest while a style is fetched (or if it cannot be).
 // One mesh and one draw a head, drawn by one shader: strands cut from each card by alpha,
 // darker at the root, lit with the two highlights hair has (Kajiya-Kay: a white one, and
 // a second in the hair's own colour, shifted along the strand). No textures.
@@ -30,7 +33,7 @@ export const CUTS = {
 	curls: { top: 0.06, sides: 0.045, back: 0.05, flow: 'crown', lift: 0.012, curl: 0.006 },
 	coils: { top: 0.03, sides: 0.02, back: 0.02, flow: 'out', lift: 0.012, curl: 0.004, kind: 'coil', fade: 0.5 },
 	afro: { top: 0.07, sides: 0.06, back: 0.06, flow: 'out', lift: 0.05, curl: 0.006, kind: 'coil' },
-	locs: { top: 0.2, sides: 0.2, back: 0.24, drop: -0.14, flow: 'crown', lift: 0.008, kind: 'locs' },
+	locs: { top: 0.2, sides: 0.2, back: 0.24, drop: -0.14, flow: 'back', lift: 0.008, kind: 'locs' },
 	shortlocs: { top: 0.09, sides: 0.08, back: 0.09, flow: 'up', lift: 0.02, kind: 'locs' },
 	braids: { top: 0.3, sides: 0.3, back: 0.32, drop: -0.24, flow: 'back', lift: 0.004, kind: 'braids' },
 	cornrows: { top: 0.14, sides: 0.14, back: 0.12, flow: 'back', lift: 0.002, kind: 'rows' },
@@ -170,9 +173,9 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 		}
 	};
 	// a strand's path from a root: out of the scalp, the way it grows, down under its weight
-	const grow = (root, nrm, flow, len, segs, lift, curl, curlF, gravity, layerOff, hug = 0.5) => {
+	const grow = (root, nrm, flow, len, segs, lift, curl, curlF, gravity, layerOff, hug = 0.5, rise = 0.35) => {
 		const path = [root.clone().addScaledVector(nrm, layerOff)];
-		dir.copy(nrm).multiplyScalar(0.35 + lift * 25).add(flow).normalize();
+		dir.copy(nrm).multiplyScalar(rise + lift * 25).add(flow).normalize();
 		const q = path[0].clone(), step = len / segs, ph = rnd() * TAU;
 		const u = v3().crossVectors(dir, nrm).normalize();
 		for (let i = 1; i <= segs; i++) {
@@ -181,7 +184,8 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 			// short hair lies along the head; volume lets it stand off
 			out.subVectors(q, c).normalize();
 			const od = dir.dot(out);
-			if (od > 0) dir.addScaledVector(out, -od * hug).normalize();
+			// (a rope hugs the head only down to its widest; past it, it hangs)
+			if (od > 0 && (hug < 1 || q.y > c.y + 0.01)) dir.addScaledVector(out, -od * hug).normalize();
 			q.addScaledVector(dir, step);
 			keepOut(q, layerOff + lift * (1 - t * 0.5));
 			const pt = q.clone();
@@ -193,7 +197,7 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 	// the roots: spread evenly over the scalp inside the hairline
 	const kind = cut.kind || 'strands';
 	const dense = (low ? 0.55 : 1) * (opts.density || 1) * (1 - thin * 0.35);
-	const baseN = kind === 'locs' ? 44 : kind === 'braids' ? 80 : kind === 'rows' || kind === 'coil' ? 0 : 230;
+	const baseN = kind === 'locs' ? 60 : kind === 'braids' ? 80 : kind === 'rows' || kind === 'coil' ? 0 : 230;
 	const count = Math.round(baseN * dense);
 	const roots = [];
 	for (let i = 0; i < count * 3 && roots.length < count; i++) {
@@ -251,48 +255,59 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 				for (let i = 1; i <= n; i++) { q.lerp(tieAt, 1 / (n - i + 1)); keepOut(q, off); path.push(q.clone()); }
 			} else if (kind === 'rows') path = null;
 			else {
-				const segs = low ? Math.max(2, Math.min(5, Math.round(len / 0.04))) : Math.max(3, Math.min(10, Math.round(len / 0.03)));
-				path = grow(s, d, f, len, segs, cut.lift, cut.curl ? cut.curl * (0.7 + rnd() * 0.6) : 0, 16, gravity, off, clamp(0.9 - cut.lift * 30));
+				const segs = low ? Math.max(2, Math.min(5, Math.round(len / 0.04))) : Math.max(3, Math.min(kind === 'locs' || kind === 'braids' ? 8 : 10, Math.round(len / 0.03)));
+				// (locs and braids lie flat along the scalp from their roots, clear of it by their
+				// own thickness, and hang straight down from the widest of the head: no volume)
+				const rope = kind === 'locs' || kind === 'braids';
+				path = rope ? grow(s, d, f, len, segs, 0, 0, 16, gravity, (kind === 'locs' ? 0.0055 : 0.0046) + 0.0012, 1, 0.04)
+					: grow(s, d, f, len, segs, cut.lift, cut.curl ? cut.curl * (0.7 + rnd() * 0.6) : 0, 16, gravity, off, clamp(0.9 - cut.lift * 30));
 			}
 			if (!path) continue;
 			const w = (kind === 'locs' ? 0.017 : kind === 'braids' ? 0.012 : 0.03) * wk * (cut.tie ? 1.2 : 1);
 			const kd = kind === 'locs' ? 2 : kind === 'braids' ? 3 : kind === 'coil' ? 4 : 0;
-			card(path, w, off > 0.003 ? 1 : 0.4, ao, rnd() * 50, kd);
-			// locs and braids are round: a second card across the first
-			if (kd === 2 || kd === 3) { const rot = path.map((q) => q.clone()); for (const q of rot) q.x += 0.0001; cardX(rot, w, ao, kd); }
+			// locs and braids are round: tubes
+			if (kd === 2 || kd === 3) tube(path, w * (kd === 2 ? 0.32 : 0.38), ao, rnd() * 50, kd);
+			else card(path, w, off > 0.003 ? 1 : 0.4, ao, rnd() * 50, kd);
 		}
 	}
-	// a card turned a quarter round the strand (locs and braids)
-	function cardX(path, w, ao, kd) {
-		const m = path.length - 1, base = V.length / 3;
+	// a tube along the path (a loc, a braid): a ring of sides round it, closed at the end
+	function tube(path, r, ao, seed, kd) {
+		const m = path.length - 1, base = V.length / 3, sides = low ? 4 : 5, u = v3(), w = v3();
 		for (let i = 0; i <= m; i++) {
 			const q = path[i], t = i / m;
 			const along = (i < m ? tmp.subVectors(path[i + 1], q) : tmp.subVectors(q, path[i - 1])).normalize();
 			out.subVectors(q, c).normalize();
-			for (const s of [-1, 1]) {
-				V.push(q.x + out.x * w / 2 * s, q.y + out.y * w / 2 * s, q.z + out.z * w / 2 * s);
-				const sd = side.crossVectors(along, out).normalize();
-				N.push(sd.x, sd.y, sd.z); T.push(along.x, along.y, along.z); UV.push(s < 0 ? 0 : 1, t); HK.push(ao, kd * 100 + 7);
+			u.crossVectors(along, out).normalize();
+			if (u.lengthSq() < 0.5) u.set(1, 0, 0);
+			w.crossVectors(u, along);
+			// (a little thinner towards the end, and closed)
+			const rr = i === m ? r * 0.15 : r * (1 - t * 0.2);
+			for (let k = 0; k <= sides; k++) {
+				const a = k / sides * TAU, ca = Math.cos(a), sa = Math.sin(a);
+				const nx = u.x * ca + w.x * sa, ny = u.y * ca + w.y * sa, nz = u.z * ca + w.z * sa;
+				V.push(q.x + nx * rr, q.y + ny * rr, q.z + nz * rr);
+				N.push(nx, ny, nz); T.push(along.x, along.y, along.z); UV.push(k / sides, t); HK.push(ao * (0.6 + 0.4 * sm(0, 0.3, t)), kd * 100 + seed * 0.5);
 			}
-			if (i < m) { const a = base + i * 2; I.push(a, a + 1, a + 3, a, a + 3, a + 2); }
+			if (i < m) for (let k = 0; k < sides; k++) { const a = base + i * (sides + 1) + k, b = a + sides + 1; I.push(a, b, b + 1, a, b + 1, a + 1); }
 		}
 	}
 	// cornrows: braids in rows from the hairline back over the scalp, then hanging
 	if (kind === 'rows') {
 		const rows = low ? 7 : 11;
 		for (let k = 0; k < rows; k++) {
-			const az = (k / (rows - 1) - 0.5) * 2.2, path = [];
+			// (each row over the top of the head from the front to the nape, fanned out to the sides)
+			const az = (k / (rows - 1) - 0.5) * 2.0, path = [];
 			for (let i = 0; i <= 12; i++) {
-				const el = 1.25 - i / 12 * 2.1;
-				const d = new THREE.Vector3(Math.sin(az) * Math.cos(el) * (1 - Math.abs(az) * 0.05), Math.sin(el), Math.cos(az) * Math.cos(el));
+				const th = 0.45 + i / 12 * 3.1;
+				const d = new THREE.Vector3(Math.sin(az) * (0.45 + 0.55 * Math.max(0, Math.sin(th))), Math.sin(th) * Math.cos(az * 0.8), Math.cos(th) * Math.cos(az * 0.8));
 				d.normalize();
 				const deg = Math.abs(Math.atan2(d.x, d.z)) * 180 / Math.PI, s = c.clone().addScaledVector(d, radius(d) + 0.003);
-				if (s.y - eyeY < hairline(deg) && i < 4) continue;
+				if (s.y - eyeY < hairline(deg)) { if (path.length) break; continue; }
 				path.push(s);
 			}
 			const tail = path[path.length - 1].clone();
 			for (let i = 1; i <= 4; i++) { tail.y -= 0.03; keepOut(tail, 0.004); path.push(tail.clone()); }
-			if (path.length > 2) { card(path, 0.011, 1, 0.9, k * 3.1, 3); cardX(path, 0.011, 0.9, 3); }
+			if (path.length > 2) tube(path, 0.0045, 0.9, k * 3.1, 3);
 		}
 	}
 	// coily hair: shells of curls over the scalp out to the hair's rounded outline, the
@@ -382,7 +397,7 @@ void RE_Direct_Hair( const in IncidentLight directLight, const in vec3 geometryP
 	float far = smoothstep( 2.0, 10.0, length( vViewPosition ) );
 	float s1 = kk( normalize( T + geometryNormal * 0.1 ), H, mix( 80.0, 24.0, far ) ) * ( 1.0 - far * 0.5 ), s2 = kk( normalize( T - geometryNormal * 0.12 ), H, mix( 22.0, 10.0, far ) ) * ( 1.0 - far * 0.4 );
 	float vis = saturate( nl + 0.35 );
-	reflectedLight.directSpecular += directLight.color * vis * ( s1 * 0.12 + s2 * 0.22 * material.diffuseColor * 2.5 ) * vHK.x;
+	reflectedLight.directSpecular += directLight.color * vis * ( s1 * 0.08 + s2 * 0.16 * material.diffuseColor * 2.5 ) * vHK.x;
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Hair
@@ -403,10 +418,10 @@ export function hairMaterial(root, tip) {
 	float seed = mod(vHK.y, 100.0), v = vHUv.y, a = 1.0, shade = 1.0;
 	if (kind == 2 || kind == 3) {
 		// a loc (felted, twisted) or a braid (plaits in a chevron): solid, rounded
-		float x = abs(vHUv.x - 0.5) * 2.0;
-		a = 1.0 - smoothstep(0.75, 1.0, x) - step(0.985, v) ;
-		float tw = kind == 3 ? abs(fract(v * 26.0 + x * 0.5) - 0.5) * 2.0 : 0.6 + 0.4 * hh(floor(v * 60.0 + x * 3.0) + seed);
-		shade = (0.65 + 0.35 * tw) * (1.0 - x * x * 0.45);
+		// (a tube: round by its own normals, the plaits or the felt drawn round it)
+		float x = abs(fract(vHUv.x * 2.0) - 0.5) * 2.0;
+		float tw = kind == 3 ? abs(fract(v * 26.0 + x * 0.5) - 0.5) * 2.0 : 0.6 + 0.4 * hh(floor(v * 60.0 + vHUv.x * 6.0) + seed);
+		shade = (0.5 + 0.3 * tw) * (0.85 + 0.3 * hh(seed * 7.3));
 	} else {
 		// locks: the card is solid at the root and parts into a few clumps towards the tip,
 		// each clump tapering; the strands within show as shading, not as holes (no fuzz
@@ -436,11 +451,12 @@ export function hairMaterial(root, tip) {
 			shade = 0.75 + 0.5 * (1.0 - ring * 3.0);
 		}
 	}
-	diffuseColor.rgb = mix(uRoot, uTip, smoothstep(0.0, 1.0, v)) * shade * (0.45 + 0.55 * vHK.x);
+	// (a loc or a braid is one colour its whole length, the root just darker)
+	diffuseColor.rgb = mix(uRoot, uTip, smoothstep(0.0, kind == 2 || kind == 3 ? 0.15 : 1.0, v)) * shade * (0.45 + 0.55 * vHK.x);
 	diffuseColor.a *= a;
 }`)
-			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.25 * vHK.x;\nreflectedLight.indirectDiffuse *= 0.6 + 0.4 * vHK.x;');
+			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n{\n\t// (a round loc or braid catches the sky all over: less of it)\n\tfloat tk = floor(vHK.y / 100.0), tube = tk == 2.0 || tk == 3.0 ? 0.45 : 1.0;\n\treflectedLight.indirectSpecular *= 0.25 * vHK.x * tube;\n\treflectedLight.indirectDiffuse *= (0.6 + 0.4 * vHK.x) * mix(0.75, 1.0, tube);\n\treflectedLight.directSpecular *= tube;\n}');
 	};
-	m.customProgramCacheKey = () => 'crysis-hair-2';
+	m.customProgramCacheKey = () => 'crysis-hair-5';
 	return m;
 }

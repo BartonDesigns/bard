@@ -7,7 +7,7 @@ export function fadePerson(P, k) {
 	const on = k < 0.999;
 	if (P.fadeK === k && k >= 0.6) return;
 	P.fadeK = k;
-	for (const m of [P.skin?.material, P.cloth?.material, P.hair?.material]) {
+	for (const m of [P.skin?.material, P.cloth?.material, P.hair?.material, P.beard?.material]) {
 		if (!m) continue;
 		if (m.alphaHash !== on) { m.alphaHash = on; m.needsUpdate = true; }
 		m.opacity = on ? k : 1;

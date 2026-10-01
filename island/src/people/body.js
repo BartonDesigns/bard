@@ -15,6 +15,8 @@ import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, acce
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
+import { fadePerson } from './fade.js';
+import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -84,7 +86,8 @@ function fabricTextures() {
 }
 
 // ---------- who someone is ----------
-const HAIR_COLOURS = [[0.07, 0.05, 0.04], [0.12, 0.08, 0.05], [0.25, 0.16, 0.09], [0.4, 0.28, 0.16], [0.6, 0.45, 0.26], [0.75, 0.62, 0.42], [0.35, 0.12, 0.06], [0.72, 0.72, 0.7], [0.9, 0.9, 0.88]];
+// (black hair is darker than it looks: a little of the light it catches is its own colour)
+const HAIR_COLOURS = [[0.035, 0.026, 0.02], [0.07, 0.048, 0.032], [0.25, 0.16, 0.09], [0.4, 0.28, 0.16], [0.6, 0.45, 0.26], [0.75, 0.62, 0.42], [0.35, 0.12, 0.06], [0.72, 0.72, 0.7], [0.9, 0.9, 0.88]];
 // clothes: what people in the Bay Area actually wear (lots of navy, grey, black, denim, earth tones, the odd bright)
 const CLOTH = {
 	top: [[0.08, 0.1, 0.18], [0.35, 0.36, 0.38], [0.06, 0.06, 0.07], [0.93, 0.92, 0.9], [0.55, 0.6, 0.66], [0.3, 0.36, 0.24], [0.62, 0.48, 0.34], [0.5, 0.12, 0.12], [0.12, 0.3, 0.5], [0.9, 0.7, 0.3], [0.85, 0.5, 0.55], [0.2, 0.45, 0.42], [0.7, 0.72, 0.74]],
@@ -95,6 +98,32 @@ const CLOTH = {
 
 const KID_TOPS = [[0.9, 0.25, 0.2], [0.2, 0.55, 0.9], [0.95, 0.75, 0.2], [0.35, 0.7, 0.35], [0.85, 0.45, 0.7], [0.55, 0.35, 0.8], [0.95, 0.95, 0.95], [0.2, 0.7, 0.75]];
 const KID_SHOES = [[0.9, 0.9, 0.88], [0.9, 0.3, 0.3], [0.2, 0.4, 0.8], [0.95, 0.6, 0.8], [0.1, 0.1, 0.1]];
+
+// the hair someone is born with, by their ancestry
+const naturalHair = (anc, r) => anc[0] + anc[1] > 0.6 ? HAIR_COLOURS[r() < 0.8 ? 0 : 1] : HAIR_COLOURS[Math.floor(r() * 7)];
+// (the draws the old grey pick for the over-sixties made are still made, so the rest of the
+// person stays as they were)
+function bornHair(age, anc, r, seed) {
+	if (age <= 62) return naturalHair(anc, r);
+	if (r() < 0.6) r();
+	return naturalHair(anc, rng(seed ^ 0xc01));
+}
+// how grey their hair has gone (0..1: the share of grey hairs): none before the mid
+// thirties; a few at the temples from then into the forties; salt and pepper through the
+// fifties; mostly grey by the early sixties; all grey from seventy or so, whitening. Each
+// person a few years early or late (lag: years later still, as brows go grey after the head)
+const GREYING = [[35, 0], [45, 0.07], [52, 0.22], [60, 0.6], [66, 0.85], [72, 1]];
+export function greyOf(d, lag = 0) {
+	if (d.child || d.age < 33) return 0;
+	const a = d.age + (d.greyShift || 0) - lag;
+	for (let i = 1; i < GREYING.length; i++) if (a < GREYING[i][0]) { const [a0, g0] = GREYING[i - 1], [a1, g1] = GREYING[i]; return Math.max(0, g0 + (a - a0) / (a1 - a0) * (g1 - g0)); }
+	return 1;
+}
+// the hair's colour as seen from afar: its own, greyed as far as it has gone
+export function hairTone(d) {
+	const g = greyOf(d), grey = HAIR_COLOURS[7];
+	return d.hairColour.map((c, i) => c + (grey[i] - c) * g * g);
+}
 
 export function personDNA(seed, opts = {}) {
 	const r = rng(seed ^ 0x5eed1e);
@@ -111,13 +140,16 @@ export function personDNA(seed, opts = {}) {
 		seed, sex, male, ancestry: anc, age, height, muscle: r() * 0.5 * (male ? 1 : 0.6), weight: Math.pow(r(), 1.6) * 0.7,
 		tone: 0.9 + r() * 0.14, warmth: r(),
 		hair: age > 70 && male && r() < 0.35 ? null : male ? (r() < 0.6 ? 'short02' : 'short01') : (r() < 0.55 ? 'ponytail01' : r() < 0.6 ? 'short01' : 'short02'),
-		hairColour: age > 62 ? (r() < 0.6 ? HAIR_COLOURS[7 + (r() < 0.5 ? 1 : 0)] : HAIR_COLOURS[2]) : anc[0] + anc[1] > 0.6 ? HAIR_COLOURS[r() < 0.8 ? 0 : 1] : HAIR_COLOURS[Math.floor(r() * 7)],
+		// (the colour they were born with; the grey comes with the years, greyOf)
+		hairColour: bornHair(age, anc, r, seed),
 		outfit: pickOutfit(r, male, age, opts),
 		gait: { stride: 0.95 + r() * 0.12, bounce: 0.8 + r() * 0.5, armSwing: 0.7 + r() * 0.6, posture: (r() - 0.5) * 0.08 + (age > 65 ? 0.08 : 0), pace: 1.18 + r() * 0.3 - (age > 65 ? 0.3 : 0) },
 		// temperament: how outgoing (bigger, more frequent gestures, head up, arms swinging),
 		// how sure of themselves (chest up or a slump), and their usual mood
 		temper: { outgoing: r(), confident: r(), warmth: r(), fidget: r() },
 	};
+	// when their hair goes grey: some a few years early, some late
+	d.greyShift = (rng(seed ^ 0x9e7)() - 0.5) * 8;
 	// children: the base mesh's child shape, at a child's height (about 0.95 m at three,
 	// 1.4 m at eleven), slight, quick on their feet, in bright play clothes
 	if (age < 16) {
@@ -258,9 +290,9 @@ export function buildPerson(A, d) {
 	P.redress = (o) => dress(A, P, o);
 	dress(A, P, outfitOf(d));
 	// lashes, brows, the wet line: one small mesh, closing and lifting with the face
-	const dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow));
+	const brow = browOf(d), dg = A.faces && faceDetail(A, A.faces, P, p, S, rng(d.seed ^ 0xb50e), normalsOf(P.skin.geometry, A.faces.brow), brow.grey);
 	if (dg) {
-		const dm = new THREE.SkinnedMesh(dg, detailMaterial(browColour(d)));
+		const dm = new THREE.SkinnedMesh(dg, detailMaterial(brow.col, brow.greyCol));
 		dm.frustumCulled = false; dm.renderOrder = 1;
 		body.add(dm); dm.bind(skeleton, new THREE.Matrix4());
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
@@ -276,7 +308,6 @@ export function buildPerson(A, d) {
 function dress(A, P, o) {
 	const d = P.dna, p = P._p, cut = P.cut, { bones, map, skeleton, rest, body } = P;
 	for (const m of [P.skin, P.cloth, P.acc]) if (m) { m.geometry.dispose(); m.removeFromParent(); }
-	if (P.hair) { P.hair.geometry.dispose(); P.hair.material.dispose(); P.hair.removeFromParent(); P.hair = null; }
 	P.outfit = o;
 	const R = regions(o, cut);
 	const part = partOf(A);
@@ -295,26 +326,20 @@ function dress(A, P, o) {
 	bodyGeo.setAttribute('scalp', new THREE.BufferAttribute(sc, 1));
 	P.skin = add(bodyGeo, P.skinMat);
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
-	// hair, grown on this skull (hair.js): its cut, its colour (or a dye, the roots showing),
-	// only what shows under a hat
+	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
+	// locs, braids and cornrows, and stands in while a style is on its way)
 	const hat = (o.acc || []).find((q) => /^(cap|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
-	// (grey and white hair: never paper-white, it has some pigment left and shades itself)
-	const natural = new THREE.Color(...d.hairColour.map((c) => Math.min(c, 0.5)));
-	const hairCol = H.dyed ? new THREE.Color(H.dyed) : natural.clone();
+	const cols = hairColours(d, H);
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));
 	// the scalp under it, painted: a close crop, or the shade between the strands
-	const paintCol = hairCol.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
+	const paintCol = cols.hair.clone().multiplyScalar(H.dyed ? 0.5 : 0.9);
 	P.skinMat.userData.scalp.value.set(paintCol.r, paintCol.g, paintCol.b, !d.hair || H.scarf ? 0 : H.buzz || covers ? 0.9 : H.thin ? 0.35 : 0.75);
-	if (showHair) {
-		const g = buildHair(A, P, p, cutName, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
-		const root = (H.dyed && !H.fresh ? natural : hairCol).clone().multiplyScalar(0.6), tip = hairCol.clone().multiplyScalar(H.dyed ? 0.95 : 1.0);
-		if (H.salt) tip.lerp(new THREE.Color(0.42, 0.42, 0.4), H.salt);
-		const hair = new THREE.Mesh(g, hairMaterial(root, tip));
-		hair.castShadow = true;
-		bones[map.head].add(hair);
-		P.hair = hair;
-	}
+	const beard = hat?.kind === 'hazhood' ? null : beardFor(d, H, rng(d.seed ^ 0xbea4d));
+	P.skinMat.userData.beard.value.set(cols.stubble.r, cols.stubble.g, cols.stubble.b, beard ? beard.stubble : 0);
+	bodyGeo.setAttribute('beard', new THREE.BufferAttribute(stubbleMask(A, bodyGeo.userData.src), 1));
+	P.hairWant = { style: showHair ? styleFor(d, H, cutName, rng(d.seed ^ 0x57e1e)) : null, beard: beard && beard.kind !== 'stubble' ? beard : null, cut: showHair ? cutName : null, hat, covers, cols, H };
+	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
 	if (!P.clothMat) P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0);
@@ -328,10 +353,82 @@ function dress(A, P, o) {
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	// caps, glasses, headphones, bags: one more mesh
-	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes }, o, cut, '#' + hairCol.clone().multiplyScalar(1.1).getHexString());
+	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
 	return P;
+}
+
+// the hair's colours: its own (or a dye, the roots showing), and the beard's, which is the
+// hair's natural colour, greying sooner (grey and white hair are never paper-white: some
+// pigment is left, and it shades itself)
+function hairColours(d, H) {
+	// (the lightest blond is toned down whole, not clipped, so it stays blond, not grey)
+	const g = greyOf(d), top = Math.max(...d.hairColour), natural = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top)));
+	// the grey hairs: grey, towards white in the eighties
+	const grey = GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15));
+	const hair = H.dyed ? new THREE.Color(H.dyed) : natural.clone();
+	const root = (H.dyed && !H.fresh ? natural.clone().lerp(grey, g * 0.8) : hair).clone().multiplyScalar(0.6), tip = hair.clone().multiplyScalar(H.dyed ? 0.95 : 1.0);
+	// the beard greys a little ahead of the head, at the chin first
+	const beard = natural.clone().multiplyScalar(0.85), beardSalt = Math.min(1, g * 1.2);
+	return { natural, hair, root, tip, grey, beard, salt: H.dyed ? 0 : g, beardSalt, stubble: beard.clone().lerp(grey, beardSalt * 0.7).multiplyScalar(0.55) };
+}
+
+const GREY = new THREE.Color(0.42, 0.42, 0.4), WHITE = new THREE.Color(0.55, 0.55, 0.53);
+// how much hair shines by how it grows
+const SHINE = { straight: 1, wavy: 0.8, curly: 0.55, coily: 0.35 };
+
+// (re)grow the hair and beard P wants: the real style if it is in, else the procedural cut
+// while it comes (then again when it has)
+function hairUp(A, P) {
+	const t0 = performance.now(), W = P.hairWant, d = P.dna, p = P._p, { bones, map, skeleton, body } = P;
+	// (a material someone else put on it, such as a ghost's, is theirs to keep)
+	for (const k of ['hair', 'beard']) if (P[k]) { P[k].geometry.dispose(); if (P[k].material.userData.U) P[k].material.dispose(); P[k].removeFromParent(); P[k] = null; }
+	const { cols, H, hat, covers } = W;
+	const need = [W.style?.id, W.beard && (SHELLS[W.beard.kind] ? 'shells' : W.beard.kind)].filter(Boolean);
+	const ready = need.every((id) => styleNow(id));
+	// (when it comes: shown or hidden as the stand-in was, faded as the rest of them is)
+	if (!ready) Promise.all(need.map(loadStyle)).then(() => {
+		if (P.hairWant !== W) return;
+		const vis = P.hair ? P.hair.visible : true;
+		hairUp(A, P);
+		if (P.hair) P.hair.visible = vis;
+		if (P.fadeK !== undefined) { const k = P.fadeK; P.fadeK = -1; fadePerson(P, k); }
+	}).catch(() => {});
+	const capY = covers ? P.skull.eyeY + (hat.kind === 'beanie' ? 0.042 : 0.05) : 99;
+	const skinned = (g, m) => { const s = new THREE.SkinnedMesh(g, m); s.frustumCulled = false; s.castShadow = true; body.add(s); s.bind(skeleton, new THREE.Matrix4()); if (g.morphAttributes.position) s.morphTargetInfluences = P.skin.morphTargetInfluences; return s; };
+	const tune = (m) => {
+		const U = m.userData.U;
+		U.uRoot.value.copy(cols.root); U.uTip.value.copy(cols.tip); U.uBeard.value.set(cols.beard.r, cols.beard.g, cols.beard.b, 1);
+		U.uGrey.value.copy(cols.grey);
+		U.uSalt.value.set(cols.salt, cols.beardSalt, styleNow(W.style?.id)?.grain === 0 ? 0 : 1, 0);
+		U.uHC.value.copy(P.skull.c); U.uFace.value.set(P.skull.eyeY, P.skull.eyeZ);
+		U.uSpec.value.set(SHINE[STYLES[W.style?.id]] ?? 1, 0.2);
+		U.uClip.value.set(capY, W.style?.fade ? W.style.fadeY : -99, W.style?.thin || 0, 0);
+		return m;
+	};
+	const has = (id) => !id || styleNow(id);
+	if (W.style?.fade) W.style.fadeY = P.skull.eyeY + 0.062 - (1 - W.style.fade) * 0.04;
+	// the hair: the real style, or the procedural cut while it comes
+	if (W.style && has(W.style.id)) P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+	else if (W.cut) {
+		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
+		// (grey coming in evenly, root to tip)
+		// (greying all over, as there are no single hairs to grey)
+		const root = cols.root.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9), tip = cols.tip.clone().lerp(cols.grey, cols.salt * cols.salt * 0.9);
+		const hair = new THREE.Mesh(g, hairMaterial(root, tip));
+		hair.castShadow = true;
+		bones[map.head].add(hair);
+		P.hair = hair;
+	}
+	// the beard: drawn after the face, blended
+	const bid = W.beard && (SHELLS[W.beard.kind] ? 'shells' : W.beard.kind);
+	if (bid && has(bid)) {
+		const g = hairGeometry(A, P, p, null, W.beard, rng(d.seed ^ 0xbead));
+		if (g) { P.beard = skinned(g, tune(kitMaterial(SHELLS[W.beard.kind] ? null : styleNow(bid).tex, true))); P.beard.castShadow = false; P.beard.renderOrder = 2; }
+	}
+	for (const m of [P.hair, P.beard]) if (m && P.relit) P.relit(m);
+	P.hairMs = performance.now() - t0;
 }
 
 // a skinned piece of the body from a face list: [vertex, uv] pairs, three per triangle
@@ -383,12 +480,12 @@ function faceMorphs(A, g, S) {
 	}
 }
 
-// brows: the hair's own colour, a shade darker; greying later and less than the head
-function browColour(d) {
-	const c = new THREE.Color(...d.hairColour).multiplyScalar(0.85);
-	const grey = (c.r + c.g + c.b) / 3;
-	if (grey > 0.45) c.lerp(new THREE.Color(0.3, 0.27, 0.24), 0.45);
-	return c;
+// brows: the hair's natural colour (a dye leaves them be), a shade darker; going grey hair
+// by hair on the head's own curve, some years behind it
+function browOf(d) {
+	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * 0.6));
+	const g = greyOf(d, 12);
+	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
 }
 
 // the skin's normals at the brow's vertices (for laying the brow hairs on the skin)
