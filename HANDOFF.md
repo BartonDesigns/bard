@@ -34,7 +34,12 @@ shipped work). Before doing anything:
   Valley, Moraga, Richmond and El Cerrito, Novato, south of Mountain View. The place-name banner (`bay/labels.js`) now runs on the real
   clock, so it no longer lags behind and names a town already passed at low frame rates.
 - **Hair refinement** (asked for "next week"): see Known issues.
-- **Hiker lighting** against the hillside: still unchecked.
+- **Hiker lighting** against the hillside: checked (1 October 2026, Diablo at 15:30). Lit by the same
+  sun as the slope, with shadows on the ground, nothing to fix.
+- **Regional talk** re-checked in 8 places (Svalbard, Marrakesh, Istanbul, Kyoto, Manaus, Ulaanbaatar,
+  Zermatt, Iqaluit). Fixed: harbour and ferry talk inland (a coast flag in `region/here.js`), Amazon
+  and Moroccan food. Still to look at: herders' clothes (skate shoes, chains), and big cities
+  described as villages (Kyoto, Marrakesh).
 
 ## What it is
 
