@@ -115,9 +115,19 @@ own, or `index.html` for the full site.
   drive mode drives a real car or walks a trail hands-free (the letter keys then play music;
   arrows pick turns, hold to turn round, Shift+arrow steps off, Space jumps off, Esc stops).
   Rocks are solid and climbable, brush slows you, pebbles never trip you.
-- **Buildings** (`island/src/interiors/`, `bay/houses.js`, `commercial.js`): footprints from real
-  map data raised into houses, shops, offices and landmarks, with generated floor plans,
-  furniture and doors.
+- **Buildings** (`island/src/interiors/`, `bay/houses.js`, `houseplan.js`, `commercial.js`):
+  footprints from real map data raised into houses, shops, offices and landmarks, with generated
+  floor plans, furniture and doors. Plans are rectangles cut with straight walls and one proper
+  hall; `node island/tools/interior-check.mjs` checks thousands of plans for crossing walls,
+  slivers, narrow passages, small rooms and blocked doors (`HOUSEPLAN=` / `CITYPLAN=` compare an
+  older planner). Public doors open for walkers too: `interiors.walkers(list)`,
+  `interiors.doorsNear(x, z, r)`, `interiors.addDoors(...)`; townsfolk now and then step into
+  shops, the summit museum and restrooms. The Mt Diablo Summit Building is a real interior
+  (lobby, museum, gift shop, upper gallery, stair to the deck).
+- **Fishing** (`island/src/fishing.js`, `bay/lake.js`): near water a rod icon (or H) takes the
+  rod out and casts; R strikes and reels. A varnished cane rod with silk wraps, rings and a
+  reel; a sagging line to a red-and-white float. Lake Annabel's water sits just below its path
+  with a low concrete edge (its bed carved on water.js's fine grid).
 
 ## History
 
@@ -143,8 +153,16 @@ own, or `index.html` for the full site.
 - **Hair (next week):** grey shows as streaks rather than salt-and-pepper; dark slabs under long
   straight hair; stray strands at the ear on the bobs, the tousled cut and the fade; white beards
   see-through on pale skin; brows heavy on some women.
-- **Hikers:** check their lighting against the ground; route them in and out of public buildings
-  through the doors.
+- **Hikers:** their lighting against the hillside has not been looked at yet (no hikers were in the
+  test frames).
+- **Landmarks without interiors** (you can still walk through their walls): the Ferry Building,
+  both City Halls, the Palace of Fine Arts, Alcatraz, Fort Point, stadiums and arenas, Hangar
+  One, the Campanile, Lick Observatory, Apple Park, lighthouses; the Santa Cruz boardwalk's
+  Casino and carousel house, the wharf shops, Pigeon Point, Lake Annabel's Roundhouse, farm
+  barns. A good next round.
+- **House plans:** 259 of 4050 test plans still flag small things (1 m² corners at hall
+  junctions, a few 2.0–2.2 m living rooms or kitchens, doors against a stairwell).
+- **Fishing:** the float's final size was not seen in a test frame.
 - **Trails:** a faint saw-tooth where the ground mesh meets the trail's cut.
 - **Sky:** the sky is computed for the Bay's latitude even on the globe.
 
