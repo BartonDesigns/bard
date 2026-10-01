@@ -92,7 +92,7 @@ export function createDirector({ llm = null, toLatLon = null, store = idbStore()
 			return null;
 		} finally { clearTimeout(cut); }
 	}
-	const getRec = async (c) => { const r = await http('/brief/' + encodeURIComponent(c.id), { method: 'GET' }, getMs); return !r ? undefined : r.status === 200 ? r.body : r.status === 404 ? null : undefined; };
+	const getRec = async (c) => { const r = await http('/brief/' + encodeURIComponent(c.id), { method: 'GET' }, getMs); return !r ? undefined : r.status === 200 ? r.body : r.status === 204 || r.status === 404 ? null : undefined; };
 	async function keep(c, rec) {
 		const b = fromRec(rec, c);
 		if (!b) return null;

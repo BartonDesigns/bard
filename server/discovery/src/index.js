@@ -2,7 +2,7 @@
 // streets, signs, chatter, music...), the same for everyone. The first player to come to a
 // place has it made (Workers AI, inside the free daily allowance); everyone after gets that one.
 //
-//   GET  /brief/:id      the kept brief, or 404 while no one has discovered the place
+//   GET  /brief/:id      the kept brief, or 204 (empty) while no one has discovered the place
 //   POST /discover       { id, lat, lon, name, pop } -> the brief (made now if need be), or 202
 //                        while it is still being made; 429 / 403 say use the atlas brief for now
 //   POST /talk           a townsperson's reply (talk.js), inside its own share of the day
@@ -58,7 +58,9 @@ export async function handle(request, env) {
 		const P = placeOf(id);
 		if (P.error) return reply({ error: P.error }, 400, H);
 		const r = await store(env, P.city.id).fetch('https://store/', { method: 'GET' });
-		// a kept brief never changes: it can be cached; a miss must not be
+		// a kept brief never changes: it can be cached; a miss must not be (and is an empty 204,
+		// not a 404, so a browser's console doesn't list every place no one has reached yet)
+		if (r.status === 404) return new Response(null, { status: 204, headers: { ...H, 'cache-control': 'no-store' } });
 		return reply(await r.json(), r.status, H, { 'cache-control': r.status === 200 ? 'public, max-age=86400' : 'no-store' });
 	}
 

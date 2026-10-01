@@ -225,7 +225,17 @@ export function createIslandWorld() {
 	// three numbers a program's textures across both its stages and warns past the one stage's
 	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
 	// (32 there), and each stage keeps inside its 16 (the smoke's samplers check)
-	{ const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); }
+	const fullUnits = () => { const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); };
+	fullUnits();
+	// the graphics can be lost (a phone short of memory): three stops drawing and rebuilds when
+	// they come back; if they don't within a few seconds, say to reload
+	let lost = false;
+	dom.canvas.addEventListener('webglcontextlost', () => {
+		lost = true;
+		hint('The graphics were reset. Restoring…', 6000, 3);
+		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
+	});
+	dom.canvas.addEventListener('webglcontextrestored', () => { lost = false; fullUnits(); hint('Graphics restored.', 2500, 3); });
 	// AgX: a film-like curve that rolls highlights off gently and keeps greens from going
 	// neon; ACES crushed the shade and pushed saturation, which read as harsh
 	renderer.toneMapping = THREE.AgXToneMapping;

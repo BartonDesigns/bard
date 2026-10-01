@@ -543,7 +543,7 @@ export function kitMaterial(tex, beard = false) {
 	};
 	m.userData.U = U;
 	m.onBeforeCompile = (sh, r) => {
-		const rt = r.getRenderTarget(), ms = rt ? rt.samples > 0 : r.getContext().getContextAttributes().antialias;
+		const rt = r.getRenderTarget(), ms = rt ? rt.samples > 0 : !!r.getContext().getContextAttributes()?.antialias;
 		if (!ms && msaa) msaa = false;
 		if (!msaa && m.alphaToCoverage) m.alphaToCoverage = false;
 		Object.assign(sh.uniforms, U);

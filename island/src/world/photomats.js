@@ -12,8 +12,12 @@ import * as THREE from 'three';
 
 const BASE = new URL('../../textures/', import.meta.url);
 const images = new Map();
+// the house atlases are not made yet (ASSET_PROMPTS_HOUSES.md): don't ask the server for them;
+// set this true when textures/houses/ is added
+const HOUSE_ATLASES = false;
 function image(path) {
 	let p = images.get(path);
+	if (!p && !HOUSE_ATLASES && path.startsWith('houses/')) { p = Promise.reject(new Error('no house atlas')); p.catch(() => {}); images.set(path, p); }
 	if (!p) {
 		p = new Promise((ok, no) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = no; im.src = new URL(path, BASE).href; });
 		images.set(path, p);

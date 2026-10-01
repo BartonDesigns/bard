@@ -101,7 +101,7 @@ section('CORS');
 	const envNoLocal = makeEnv({ ALLOW_LOCALHOST: 'false' });
 	ok((await get(envNoLocal, ID, 'http://localhost:8080')).status === 403, 'localhost can be turned off');
 	const miss = await get(env, ID);
-	ok(miss.status === 404 && miss.headers.get('access-control-allow-origin') === SITE && miss.headers.get('cache-control') === 'no-store', 'a miss: 404, CORS, not cached');
+	ok(miss.status === 204 && miss.headers.get('access-control-allow-origin') === SITE && miss.headers.get('cache-control') === 'no-store', 'a miss: 204, CORS, not cached');
 }
 
 // ---------- generate once ----------
@@ -194,7 +194,7 @@ section('rate limits');
 	const other = genId('Fresh', 37.8, -121.7);
 	ok((await post(env, { id: other, lat: 37.8, lon: -121.7, pop: 1 }, { ip: '198.51.100.1' })).status === 200, 'another address is fine');
 	const r429 = await post(env, { id: genId('Spam 9', 37.8, -121.6), lat: 37.8, lon: -121.6, pop: 1 });
-	ok((await r429.json()).fallback === 'atlas' && (await get(env, genId('Spam 9', 37.8, -121.6))).status === 404, 'rate limited: atlas for now, nothing kept');
+	ok((await r429.json()).fallback === 'atlas' && (await get(env, genId('Spam 9', 37.8, -121.6))).status === 204, 'rate limited: atlas for now, nothing kept');
 	// one spot, many names: two at most
 	const env2 = makeEnv();
 	const s = [];
