@@ -8,6 +8,7 @@
 
 import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
 import { pruneModels } from '../storage.js';
+import { DISCOVERY_URL } from '../earth/config.js';
 import { PLACES, ZONES } from '../bay/places.js';
 import { toWorld } from '../bay/geo.js';
 import { personaFor, personaPrompt, personaOffline, bodyFor, TAG_RE } from '../people/persona.js';
@@ -68,7 +69,7 @@ const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '
 export function createGuide(mount, api) {
 	// api: { world(), camera, shared, hint(text) }
 	const llm = createLLM();
-	const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode: nothing persists */ } } };
+	const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode: nothing persists */ } } };
 	const journal = store.get('crysis-journal', {});
 
 	// ---------- where things are ----------
@@ -150,7 +151,7 @@ export function createGuide(mount, api) {
 			try {
 				const r = await llm.chat([{ role: 'system', content: 'You write one-sentence field notes for an explorer\'s journal: vivid, specific, calm, under 25 words. Use only the facts given; if there are none, describe the setting plainly.' }, { role: 'user', content: `Place: ${name} (${sub}). Facts: ${t?.fact || 'none'}. Time: ${snapshot()?.time}.` }], () => {}, null);
 				if (r) note = r.replace(/^["\s]+|["\s]+$/g, '');
-			} catch (e) { /* the plain fact will do */ }
+			} catch { /* the plain fact will do */ }
 			noteBusy = false;
 		}
 		if (note) { say('📍 ' + note, 'note'); api.hint('📍 ' + note, 5000); }
@@ -303,6 +304,17 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		bodySync(p, reply + (/[.!?]$/.test(reply) ? '' : '.'), 0);
 		if (speakIt && voiceOut) speak(clean);
 	}
+	// a person as the shared voice needs them (server/discovery talk.js): who they are and a few
+	// short facts, never a prompt of our own
+	function npcFor(pp, world) {
+		const near = (world?.near || []).slice(0, 6).map((n) => (typeof n === 'string' ? n : n?.name)).filter(Boolean);
+		const facts = [
+			`has lived around here about ${pp.years} years`, `right now: ${pp.errand}, feeling ${pp.mood}`, `likes ${pp.hobby}`,
+			...(pp.facts || []), ...(pp.tattoos || []).slice(0, 2).map((t) => 'a tattoo: ' + t),
+			world?.time ? 'the time: ' + world.time : '', near.length ? 'nearby: ' + near.join(', ') : '',
+		].filter(Boolean);
+		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts, places: near };
+	}
 	async function askPerson(text) {
 		const P2 = partner, p = P2.p;
 		say(text, 'me');
@@ -317,10 +329,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { place: world?.place, time: world?.time, near: world?.near?.slice(0, 4) }) }, ...P2.history], (t) => {
 					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim(); scroll();
 					from = bodySync(p, t, from);
-				}, ctrl.signal);
+				}, ctrl.signal, { npc: npcFor(P2.persona, world) });
 				if (reply) P2.history.push({ role: 'assistant', content: reply });
 			}
-		} catch (e) { reply = null; }
+		} catch { reply = null; }
 		if (!reply) { reply = personaOffline(P2.persona, text, world); from = 0; }
 		bodySync(p, reply + (/[.!?]$/.test(reply.trim()) ? '' : '.'), from);
 		reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
@@ -462,14 +474,18 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	if (saved?.kind === 'webllm' && phone && saved.id === 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' && saved.auto !== false) saved.id = autoId;
 	// phones never load a model: it shares the GPU and the page's memory with the world, and
 	// crashed the page; people there use the built-in replies
-	const choice = phone ? { kind: 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2' } : saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
+	// (a phone keeps the shared voice if it was chosen: nothing runs on the device)
+	const choice = phone ? (saved?.kind === 'cloud' && DISCOVERY_URL ? saved : { kind: 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2' }) : saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
 	// the phone keeps only the voice it uses (after the world has loaded)
 	if (phone) setTimeout(() => { pruneModels('(none)').then((b) => { if (b > 5e7) say(`Freed ${(b / 1e9).toFixed(2)} GB on this device: removed a voice model no longer in use.`, 'note'); }).catch(() => {}); }, 20000);
 	function drawSettings() {
 		settings.innerHTML = '';
 		const row = (label, node) => { const r = el('label', 'display:flex;align-items:center;gap:8px;margin:6px 0;'); r.append(el('span', 'width:74px;color:rgba(255,255,255,.6);', label), node); settings.append(r); return r; };
 		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
-		for (const [v, t] of phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']]) { const o = el('option', null, t); o.value = v; sel.append(o); }
+		const opts = phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']];
+		// the shared voice, once the discovery server is deployed (earth/config.js): phones too
+		if (DISCOVERY_URL) opts.push(['cloud', 'Free cloud voice (people only)']);
+		for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; sel.append(o); }
 		sel.value = choice.kind;
 		row('Voice', sel);
 		if (choice.kind === 'webllm') {
@@ -479,6 +495,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			row('Model', m);
 			settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', hasWebGPU() ? 'Downloads once, then runs offline. Nothing you say leaves this device.' : 'This browser has no WebGPU (try Chrome or Edge on desktop or Android), or use Ollama.'));
 		}
+		if (choice.kind === 'cloud') settings.append(el('div', 'color:rgba(255,255,255,.5);margin:4px 0 8px;', 'People answer from a small model on the game\'s own server, inside a free daily allowance. What you say to them is sent there to answer and is not kept. When the day\'s share is used, they use their own lines.'));
 		if (choice.kind === 'ollama') {
 			const u = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); u.value = choice.url; u.onchange = () => { choice.url = u.value; };
 			const n = el('input', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);'); n.value = choice.name; n.onchange = () => { choice.name = n.value; };
@@ -495,15 +512,16 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		try {
 			if (choice.kind === 'webllm') await llm.useWebLLM(choice.id);
 			else if (choice.kind === 'ollama') await llm.useOllama(choice.url, choice.name);
+			else if (choice.kind === 'cloud' && DISCOVERY_URL) await llm.useCloud(DISCOVERY_URL);
 			else llm.useNone();
 			if (user) { settings.style.display = 'none'; say(llm.status.text + ' — ready.', 'note'); }
-		} catch (e) { if (user) say(llm.status.text, 'note'); }
+		} catch { if (user) say(llm.status.text, 'note'); }
 	}
 	gearB.onclick = () => { const on = settings.style.display === 'none'; settings.style.display = on ? 'block' : 'none'; if (on) drawSettings(); };
 	llm.onStatus((st) => { statusEl.textContent = st.ready ? st.text : `${st.text}`.slice(0, 80); });
 	// a model chosen before comes back by itself when it was downloaded already (Ollama
 	// always); a first download only ever starts from the button
-	if (choice.kind === 'ollama') connect(false);
+	if (choice.kind === 'ollama' || (choice.kind === 'cloud' && DISCOVERY_URL)) connect(false);
 	else if (choice.kind === 'webllm') setTimeout(() => connect(false), store.get('crysis-guide-loaded', false) ? 1500 : 9000);   // after the world is up
 	// a quiet progress pill while the model downloads the first time
 	const pill = el('div', 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(124px + env(safe-area-inset-top));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px system-ui;pointer-events:none;display:none;');

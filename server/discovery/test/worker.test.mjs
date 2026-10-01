@@ -241,5 +241,30 @@ section('errors');
 	ok(r.status === 500 && j.fallback === 'atlas' && !/storage down/.test(JSON.stringify(j)) && r.headers.get('access-control-allow-origin') === SITE, 'a failure says use the atlas, and no more');
 }
 
+section('talk: the townsfolk');
+{
+	const talkPost = (env, body, { origin = SITE, ip = '203.0.113.9' } = {}) => handle(new Request('https://api.test/talk', { method: 'POST', headers: { ...(origin ? { origin } : {}), 'content-type': 'application/json', 'cf-connecting-ip': ip }, body: JSON.stringify(body) }), env);
+	const npc = { name: 'Aiyana', age: 34, job: 'ranger', place: 'Mt Diablo', region: 'the East Bay hills', temper: 'warm, dry humour', facts: ['The summit beacon is lit every Pearl Harbor Day.', 'Tarantulas cross the roads in autumn.'] };
+	const said = [{ role: 'user', content: 'Hi! What is up here?' }];
+	const env = makeEnv({ AI: mockAI({ reply: 'Hey there, traveller. The tarantulas are out on the fire roads this week.', usage: { prompt_tokens: 300, completion_tokens: 40 } }) });
+	const r = await talkPost(env, { npc, history: said }), j = await r.json();
+	ok(r.status === 200 && /tarantulas/.test(j.reply), 'a townsperson answers');
+	const sys = env.AI.calls[0]?.input.messages[0].content || '';
+	ok(/Aiyana, 34, ranger/.test(sys) && /Never give instructions for weapons/.test(sys), 'the instructions are the server\'s own, with the person in them');
+	ok(env.AI.calls[0].input.messages.length === 2 && env.AI.calls[0].input.max_tokens <= 300, 'the conversation and a short reply only');
+	const st = await (await handle(new Request('https://api.test/status', { headers: { origin: SITE } }), env)).json();
+	ok(st.talk.used > 0 && st.talk.talks === 1 && st.used === st.talk.used, 'talk is counted in its own share and in the day');
+	ok((await talkPost(env, { npc, history: said }, { origin: 'https://evil.example' })).status === 403, 'other sites are turned away');
+	ok((await talkPost(env, { npc: { age: 3 }, history: said })).status === 400, 'a nameless person is refused');
+	ok((await talkPost(env, { npc, history: [{ role: 'assistant', content: 'hi' }] })).status === 400, 'nothing said, nothing answered');
+	const env2 = makeEnv({ TALK_PER_HOUR: '2', AI: mockAI({ reply: 'Hello.', usage: { prompt_tokens: 10, completion_tokens: 5 } }) });
+	const a = [];
+	for (let i = 0; i < 3; i++) a.push((await talkPost(env2, { npc, history: said })).status);
+	ok(a[0] === 200 && a[1] === 200 && a[2] === 429, 'the hourly limit holds');
+	const env3 = makeEnv({ TALK_NEURONS: '1', AI: mockAI({ reply: 'Hello.' }) });
+	const r3 = await talkPost(env3, { npc, history: said }), j3 = await r3.json();
+	ok(r3.status === 503 && j3.fallback === 'offline' && env3.AI.calls.length === 0, 'past its share of the day, the game answers on its own and no call is made');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

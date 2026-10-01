@@ -39,3 +39,12 @@ DAILY_NEURONS = "8000"
 RATE_PER_HOUR = "12"
 WAIT_MS = "25000"
 NIGHT_MAX = "30"
+# the townsfolk's voice (POST /talk): a small model, short replies, its own share of the day
+# and its own hourly limit per player. Prices are Neurons per million tokens from the Workers
+# AI pricing page: change them with the model
+TALK_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+TALK_IN_PER_M = "4625"
+TALK_OUT_PER_M = "30475"
+TALK_MAX_TOKENS = "160"
+TALK_NEURONS = "3000"
+TALK_PER_HOUR = "60"

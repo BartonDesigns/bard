@@ -9,13 +9,20 @@ export function settings(env = {}) {
 	const n = (v, d) => (Number.isFinite(+v) && +v > 0 ? +v : d);
 	return { model: env.MODEL || DEFAULTS.model, inPerM: n(env.NEURONS_IN_PER_M, DEFAULTS.inPerM), outPerM: n(env.NEURONS_OUT_PER_M, DEFAULTS.outPerM), maxTokens: Math.min(4000, n(env.MAX_TOKENS, DEFAULTS.maxTokens)) };
 }
+// the townsfolk's voice: a smaller, cheaper model and short replies (wrangler.toml TALK_*)
+export const TALK_DEFAULTS = { model: '@cf/meta/llama-3.2-3b-instruct', inPerM: 4625, outPerM: 30475, maxTokens: 160 };
+export function talkSettings(env = {}) {
+	const n = (v, d) => (Number.isFinite(+v) && +v > 0 ? +v : d);
+	return { model: env.TALK_MODEL || TALK_DEFAULTS.model, inPerM: n(env.TALK_IN_PER_M, TALK_DEFAULTS.inPerM), outPerM: n(env.TALK_OUT_PER_M, TALK_DEFAULTS.outPerM), maxTokens: Math.min(300, n(env.TALK_MAX_TOKENS, TALK_DEFAULTS.maxTokens)) };
+}
 // the most one attempt can cost: the prompt (counted generously, 3 characters a token) and
 // every token it may write
 export const worstCase = (req, S) => Math.ceil(((req.system.length + req.user.length) / 3 + 50) * S.inPerM / 1e6 + S.maxTokens * S.outPerM / 1e6);
 
 // -> { value, neurons, exhausted, error }; value is the parsed object or text, when there is one
-export async function ask(ai, req, S, { json = true, schema = null } = {}) {
-	const input = { messages: [{ role: 'system', content: req.system }, { role: 'user', content: req.user }], max_tokens: S.maxTokens, temperature: 0.6 };
+export async function ask(ai, req, S, { json = true, schema = null, messages = null, temperature = 0.6 } = {}) {
+	// (a conversation passes its own lines after the system's; a brief, one request)
+	const input = { messages: [{ role: 'system', content: req.system }, ...(messages || [{ role: 'user', content: req.user }])], max_tokens: S.maxTokens, temperature };
 	if (json && schema) input.response_format = { type: 'json_schema', json_schema: schema };
 	const worst = worstCase(req, S);
 	let out;

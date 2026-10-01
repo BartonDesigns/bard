@@ -4,6 +4,10 @@
 //             downloads once (0.4-1.6 GB) and is cached; nothing leaves the device.
 //   ollama  - a model served by Ollama on this computer (http://localhost:11434).
 //             Start it with OLLAMA_ORIGINS=https://level99bard.com ollama serve
+//   cloud   - the townsfolk's shared voice on the discovery server (server/discovery POST /talk,
+//             Workers AI inside the free daily allowance). Only people talk this way: the
+//             server writes their instructions, and when the day's share is spent (or the
+//             server is not deployed) they answer with their own built-in lines.
 //   none    - no model: the built-in guide answers from the world itself.
 //
 // All three share one call: chat(messages, onToken) -> full reply text.
@@ -30,7 +34,7 @@ export const onPhone = () => PHONE;
 export function hasWebGPU() { return typeof navigator !== 'undefined' && !!navigator.gpu; }
 
 export function createLLM() {
-	let busy = false, kind = 'none', engine = null, loading = null, model = '', ollama = { url: 'http://localhost:11434', model: 'llama3.2' };
+	let busy = false, kind = 'none', engine = null, loading = null, model = '', ollama = { url: 'http://localhost:11434', model: 'llama3.2' }, cloud = '';
 	const status = { text: 'Guide only (no model)', ready: true, progress: 1 };
 	const listeners = new Set();
 	const emit = () => { for (const f of listeners) f(status); };
@@ -66,6 +70,19 @@ export function createLLM() {
 			throw e;
 		}
 	}
+	async function useCloud(url) {
+		kind = 'cloud'; cloud = String(url || '').replace(/\/$/, '');
+		status.ready = false; status.text = 'Reaching the shared voice…'; emit();
+		try {
+			const r = await fetch(cloud + '/status');
+			if (!r.ok) throw Error('status ' + r.status);
+			const j = await r.json();
+			status.ready = true; status.progress = 1; status.text = j.talk && j.talk.left <= 0 ? 'Shared voice: resting until tomorrow (people use their own lines)' : 'Shared voice (free, in the cloud)'; emit();
+		} catch (e) {
+			status.text = 'The shared voice is not reachable; people use their own lines.'; emit();
+			throw e;
+		}
+	}
 	function useNone() { kind = 'none'; status.ready = true; status.progress = 1; status.text = 'Guide only (no model)'; emit(); }
 
 	// one conversation at a time on the one engine: later calls wait their turn. opts (the city
@@ -91,6 +108,17 @@ export function createLLM() {
 				return text;
 			} finally { busy = false; guard(false); }
 		}
+		if (kind === 'cloud') {
+			// people only (opts.npc: who they are, from guide.js); anything else answers built in
+			if (!opts.npc) return null;
+			const history = messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-8).map((m) => ({ role: m.role, content: String(m.content).slice(0, 400) }));
+			const r = await fetch(cloud + '/talk', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ npc: opts.npc, history }) });
+			if (!r.ok) return null;
+			const j = await r.json();
+			if (!j.reply) return null;
+			onToken(j.reply);
+			return j.reply;
+		}
 		if (kind === 'ollama') {
 			const r = await fetch(ollama.url + '/api/chat', { method: 'POST', signal, body: JSON.stringify({ model: ollama.model, messages, stream: true, ...(opts.json ? { format: 'json' } : {}), options: { temperature, num_predict: cap } }) });
 			const rd = r.body.getReader(), dec = new TextDecoder();
@@ -110,5 +138,5 @@ export function createLLM() {
 		}
 		return null;
 	}
-	return { useWebLLM, useOllama, useNone, chat, status, busy: () => busy, kind: () => kind, model: () => model, ollama: () => ({ ...ollama }), onStatus: (f) => { listeners.add(f); f(status); return () => listeners.delete(f); } };
+	return { useWebLLM, useOllama, useCloud, useNone, chat, status, busy: () => busy, kind: () => kind, model: () => model, ollama: () => ({ ...ollama }), onStatus: (f) => { listeners.add(f); f(status); return () => listeners.delete(f); } };
 }
