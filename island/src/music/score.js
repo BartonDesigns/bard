@@ -12,8 +12,11 @@
 //   answer     the counter voice answers the call in the melody's rests, or quotes what
 //              the player just played
 //   dynamics   an arc that rises slowly into a chorus and lets go faster; builds swell
-//   drums      the faceplate's own selected beat, thinned or filled by energy, varied a
-//              little each bar, with fills at phrase ends and a crash on a new section
+//   breath     the way the caves sing: chords held for bars, arpeggios carrying the
+//              chord, the melody resting whole phrases so it is missed when it returns
+//   drums      soft and not always there: some sections have none; when they come it is
+//              a kick on one and three, a rim on two and four, hats whispering between;
+//              the faceplate's beat only lends its kick when the music is up
 
 export function rng(seed) {
 	let s = (seed >>> 0) || 1;
@@ -73,12 +76,12 @@ const PROGS = {
 
 // the form: where each section tends to go, what it asks of each part
 export const SECTIONS = {
-	intro: { energy: 0.32, bars: [4, 8], next: { verse: 3, build: 0.4 }, parts: { mel: 0.35, counter: 0.2, arp: 0.7, pad: 1, bass: 0.5, drums: 0.25 } },
-	verse: { energy: 0.52, bars: [8, 16], next: { chorus: 3, bridge: 1.4, verse: 0.6, breakdown: 0.5 }, parts: { mel: 1, counter: 0.5, arp: 0.3, pad: 1, bass: 1, drums: 0.75 } },
-	chorus: { energy: 0.84, bars: [8, 8], next: { verse: 2, breakdown: 1.4, bridge: 1, chorus: 0.4 }, parts: { mel: 1, counter: 0.8, arp: 0.5, pad: 1, bass: 1, drums: 1 } },
-	bridge: { energy: 0.6, bars: [8, 8], next: { build: 2, chorus: 1.2, breakdown: 0.6 }, parts: { mel: 0.8, counter: 1, arp: 0.4, pad: 1, bass: 0.9, drums: 0.7 } },
-	breakdown: { energy: 0.26, bars: [4, 8], next: { build: 2.2, verse: 1.2, intro: 0.3 }, parts: { mel: 0.4, counter: 0.5, arp: 1, pad: 1, bass: 0.4, drums: 0.15 } },
-	build: { energy: 0.7, bars: [2, 4], next: { chorus: 4 }, parts: { mel: 0.6, counter: 0.4, arp: 1, pad: 1, bass: 1, drums: 1 } },
+	intro: { energy: 0.3, bars: [8, 8], next: { verse: 3, build: 0.3 }, parts: { mel: 0.3, counter: 0.2, arp: 1, pad: 1, bass: 0.5, drums: 0 } },
+	verse: { energy: 0.48, bars: [8, 16], next: { chorus: 2.4, bridge: 1.4, verse: 0.8, breakdown: 0.8 }, parts: { mel: 1, counter: 0.5, arp: 0.75, pad: 1, bass: 1, drums: 0.55 } },
+	chorus: { energy: 0.72, bars: [8, 8], next: { verse: 2, breakdown: 1.6, bridge: 1, chorus: 0.3 }, parts: { mel: 1, counter: 0.8, arp: 0.8, pad: 1, bass: 1, drums: 0.8 } },
+	bridge: { energy: 0.52, bars: [8, 8], next: { build: 1.4, chorus: 1.2, breakdown: 0.9 }, parts: { mel: 0.8, counter: 1, arp: 0.7, pad: 1, bass: 0.9, drums: 0.45 } },
+	breakdown: { energy: 0.24, bars: [8, 8], next: { build: 1.6, verse: 1.4, intro: 0.4 }, parts: { mel: 0.35, counter: 0.5, arp: 1, pad: 1, bass: 0.4, drums: 0 } },
+	build: { energy: 0.62, bars: [2, 4], next: { chorus: 4 }, parts: { mel: 0.6, counter: 0.4, arp: 1, pad: 1, bass: 1, drums: 0.6 } },
 };
 const ARC = { intro: 0.4, verse: 0.6, chorus: 0.92, bridge: 0.66, breakdown: 0.34, build: 0.7 };
 
@@ -104,7 +107,7 @@ export function createComposer(seed = 1) {
 	const chance = (p) => R() < p;
 	const S = {
 		section: null, secBars: 0, barIn: 0, abs: 0, arc: 0.35, themes: {}, progs: {}, prog: null,
-		lastMel: null, pad: null, history: [], queued: null, lastChordRoot: 0, phraseType: 'aaba', userRiff: [],
+		lastMel: null, pad: null, history: [], queued: null, lastChordRoot: 0, phraseType: 'aaba', userRiff: [], rhythm: false, rest: false,
 	};
 
 	function weightedNext(from, M) {
@@ -140,6 +143,9 @@ export function createComposer(seed = 1) {
 		else if (chance(0.25)) { const p = S.progs[key].slice(); p[2] = pick([1, 2, 3, 5, 6]); S.progs[key] = p; }
 		S.prog = S.progs[key];
 		S.phraseType = pick(name === 'chorus' ? ['aaba', 'seq', 'abac'] : name === 'bridge' ? ['call', 'seq'] : ['aaba', 'call', 'abac', 'call']);
+		// like the caves: not every section has a beat, and the first never does
+		const beatK = SECTIONS[name].parts.drums;
+		S.rhythm = S.history.length > 0 && beatK > 0 && chance(clamp(beatK * (0.6 + M.energy * 0.6), 0, 0.95));
 		S.history.push({ name, bars, at: S.abs });
 		if (S.history.length > 40) S.history.shift();
 		S.fresh = true;
@@ -277,7 +283,8 @@ export function createComposer(seed = 1) {
 		const tones = [...chord, chord[0] + pcs.length];
 		const base = S.arpBase ?? 0;
 		for (let s = 0, i = base; s < 16; s += rate, i++) {
-			if (M.sparse > 0.5 && chance(0.3)) continue;
+			// rests keep it breathing, not a sequencer wall
+			if (chance(M.sparse > 0.5 ? 0.35 : 0.18)) continue;
 			let d = tones[seq[i % seq.length] % tones.length];
 			while (d < M.arpLo) d += pcs.length;
 			while (d > M.arpLo + pcs.length + 2) d -= pcs.length;
@@ -287,65 +294,42 @@ export function createComposer(seed = 1) {
 		return out;
 	}
 
-	// the drums: the faceplate's pattern as the core, thinned or filled by energy
+	// the drums, the caves' way: a kick on one and three, a rim answering on two and four,
+	// hats whispering between, nothing hard. The faceplate's own kick row joins only when
+	// the music is up, and a snare only at the top of a chorus
 	function drumBar(M, beat, sec, e, lastOfPhrase, lastOfSection) {
 		const out = [];
-		if (!beat || M.drums <= 0.02) return out;
+		if (M.drums <= 0.02 || !S.rhythm) return out;
 		const hit = (s, name, vel) => out.push({ s, name, vel });
-		const row = (k) => beat[k] || null;
-		const tier = e < 0.2 ? 0 : e < 0.4 ? 1 : e < 0.66 ? 2 : 3;
-		const half = M.half > 0.5;
+		const row = (k) => beat?.[k] || null;
+		const hatName = row('shaker') && !row('hihat') ? 'shaker' : 'hihat';
 		if (sec === 'build') {
-			// a snare roll that tightens over the build: quarters, eighths, sixteenths
+			// a soft rim run that fills in over the build
 			const k = S.secBars <= 1 ? 1 : S.barIn / (S.secBars - 1);
-			const every = k < 0.34 ? 4 : k < 0.67 ? 2 : 1;
-			for (let s = 0; s < 16; s += every) hit(s, 'snare', 0.35 + 0.5 * (k * 0.7 + s / 16 * 0.3));
-			hit(0, 'kick', 0.8);
-			if (k > 0.5) for (const s of [4, 8, 12]) hit(s, 'kick', 0.6);
+			const every = k < 0.5 ? 4 : 2;
+			for (let s = 0; s < 16; s += every) hit(s, 'rim', 0.3 + 0.3 * (k * 0.7 + s / 16 * 0.3));
+			hit(0, 'kick', 0.6);
 			return out;
 		}
-		if (tier === 0) {
-			if (S.barIn % 2 === 0) hit(0, 'kick', 0.5);
-			if (row('shaker') || row('hihat')) for (const s of [4, 12]) hit(s, row('shaker') ? 'shaker' : 'hihat', 0.3);
+		if (e < 0.25) {
+			if (S.barIn % 2 === 0) hit(0, 'kick', 0.45);
+			for (const s of [4, 12]) if (chance(0.6)) hit(s, hatName, 0.22);
 			return out;
 		}
-		const kick = row('kick') || [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0];
-		const snare = row('snare') || row('clap') || [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
-		const hat = row('hihat') || row('shaker');
-		for (let s = 0; s < 16; s++) {
-			if (kick[s]) {
-				if (tier >= 2 || s % 8 === 0) hit(s, 'kick', s === 0 ? 1 : 0.85);
-			}
-			if (snare[s]) {
-				if (half) { if (s === 8 || (tier === 3 && s === 12 && chance(0.2))) hit(s, beat.snare ? 'snare' : 'clap', 0.9); }
-				else if (tier >= 2) hit(s, beat.snare ? 'snare' : 'clap', 0.9);
-				else if (s === 12) hit(s, 'rim', 0.7);
-			}
-			if (hat && hat[s]) {
-				const every = tier === 1 ? 4 : tier === 2 ? 2 : 1;
-				if (s % every === 0) hit(s, row('hihat') ? 'hihat' : 'shaker', (s % 4 === 0 ? 0.75 : 0.5) * (0.9 + R() * 0.2));
-			}
-		}
-		// the faceplate's other rows join when it is lively
-		if (tier === 3) for (const k of ['clap', 'cowbell', 'rim', 'shaker', 'perc', 'openhat', 'ride', 'hitom', 'lotom']) {
-			const r = row(k);
-			if (!r || (k === 'clap' && !beat.snare)) continue;
-			for (let s = 0; s < 16; s++) if (r[s] && chance(0.75)) hit(s, k, 0.55);
-		}
-		// variation: a kick moves or is added, a ghost note, an open hat
-		if (tier >= 2 && chance(0.3)) hit(pick([3, 7, 10, 11, 14]), 'kick', 0.6);
-		if (tier === 3 && e > 0.8 && chance(0.5)) for (const s of [7, 15]) if (chance(0.5)) hit(s, 'snare', 0.28);
-		if (tier >= 2 && chance(0.25)) hit(14, 'openhat', 0.5);
-		if (M.climax && S.barIn % 2 === 0) hit(0, 'cymbal', 0.8);
-		// fills at the end of a phrase: a snare run, a tom run or a flam
-		if (lastOfPhrase && tier >= 2) {
-			for (let i = out.length - 1; i >= 0; i--) if (out[i].s >= 12 && out[i].name !== 'kick') out.splice(i, 1);
-			const f = pick(lastOfSection ? ['toms', 'snare', 'toms'] : ['snare', 'toms', 'flam', 'none']);
-			if (f === 'snare') for (let s = 12; s < 16; s++) hit(s, 'snare', 0.45 + (s - 12) * 0.13);
-			if (f === 'toms') for (const [s, n] of [[12, 'hitom'], [13, 'hitom'], [14, 'lotom'], [15, 'lotom']]) hit(s, n, 0.7);
-			if (f === 'flam') { hit(14, 'snare', 0.5); hit(15, 'snare', 0.8); }
-		}
-		if (S.fresh && tier >= 2 && sec !== 'breakdown') hit(0, 'cymbal', 0.7);
+		const half = M.half > 0.5;
+		hit(0, 'kick', 0.8);
+		if (!half) hit(8, 'kick', 0.65);
+		// the faceplate's kick, only on the beat, only when lively
+		const kr = row('kick');
+		if (kr && e > 0.6) for (const s of [4, 12]) if (kr[s] && chance(0.5)) hit(s, 'kick', 0.45);
+		const top = sec === 'chorus' && e > 0.7;
+		for (const s of half ? [8] : [4, 12]) hit(s, top ? 'snare' : 'rim', top ? 0.5 : 0.55);
+		for (let s = 2; s < 16; s += 4) if (chance(0.6)) hit(s, hatName, 0.28 * (0.85 + R() * 0.3));
+		if (e > 0.55) for (const s of [0, 8]) if (chance(0.35)) hit(s, hatName, 0.2);
+		// the phrase's last bar lets go rather than fills
+		if (lastOfPhrase) for (let i = out.length - 1; i >= 0; i--) if (out[i].s >= 12 && out[i].name !== 'kick') out.splice(i, 1);
+		if (lastOfSection && chance(0.5)) hit(14, 'rim', 0.35);
+		if (S.fresh && sec === 'chorus') hit(0, 'cymbal', 0.3);
 		return out;
 	}
 
@@ -362,8 +346,8 @@ export function createComposer(seed = 1) {
 		else if (S.barIn >= S.secBars) enter(weightedNext(S.section, M), M);
 		const sec = S.section, SP = SECTIONS[sec];
 		const barIn = S.barIn, inPhrase = barIn % 4, lastOfPhrase = inPhrase === 3, lastOfSection = barIn === S.secBars - 1;
-		// harmony: one chord a bar, or one every two bars when the air is wide
-		const hr = M.slowHarmony ? 2 : 1;
+		// harmony: a chord held two bars (four when the air is wide), as the caves hold theirs
+		const hr = M.slowHarmony ? 4 : 2;
 		const prog = S.prog;
 		const ci = Math.floor(barIn / hr) % prog.length;
 		const root = prog[ci], nextRoot = prog[(Math.floor((barIn + 1) / hr)) % prog.length];
@@ -385,7 +369,9 @@ export function createComposer(seed = 1) {
 			S.themes[sec] = old && chance(0.7) ? develop(old, pick(['same', 'ornament', 'displace', 'same'])) : makeMotif(M.density, M.energy);
 		}
 		const motif = S.themes[sec];
-		let melOn = chance(P.mel * (M.sparse > 0.6 ? 0.6 : 1)) || (P.mel >= 1 && inPhrase === 0);
+		// a breath: now and then the melody sits a whole phrase out and the arp carries it
+		if (inPhrase === 0) S.rest = sec !== 'build' && chance(clamp((sec === 'chorus' ? 0.15 : 0.35) + M.sparse * 0.3, 0, 0.8));
+		let melOn = !S.rest && (chance(P.mel * (M.sparse > 0.6 ? 0.6 : 1)) || (P.mel >= 1 && inPhrase === 0));
 		let op = 'same', shift = 0, answer = false;
 		const T = S.phraseType;
 		if (T === 'aaba') { op = ['same', 'ornament', pick(['invert', 'retro', 'displace']), 'same'][inPhrase]; }
@@ -429,7 +415,7 @@ export function createComposer(seed = 1) {
 			}
 		}
 		// the arpeggio
-		if (chance(P.arp * (0.5 + M.arp))) for (const n of arpBar(M, pcs, chord, style)) ev.push({ role: 'arp', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.38 * dyn });
+		if (S.rest || chance(P.arp * (0.5 + M.arp))) for (const n of arpBar(M, pcs, chord, style)) ev.push({ role: 'arp', s: n.s, semi: semiOf(pcs, n.d), dur: n.dur, vel: n.vel * 0.38 * dyn });
 		// pads
 		if (chance(P.pad)) {
 			const voices = voicePad(pcs, chord, M.padCenter);

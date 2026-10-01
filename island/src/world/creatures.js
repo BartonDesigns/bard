@@ -24,7 +24,7 @@ const cr = (p0, p1, p2, p3, t) => 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 *
 
 // keys: [x, y, z, halfWidth, topRadius, bottomRadius] along the spine, head end last.
 // paint(s, up, p) -> [r, g, b]: s along the spine 0..1, up -1 (belly) .. 1 (back), p the point.
-export function loft(keys, { seg = 20, sub = 5, paint = () => [0.5, 0.5, 0.5] } = {}) {
+export function loft(keys, { seg = 20, sub = 5, paint = () => [0.5, 0.5, 0.5], caps = false } = {}) {
 	const K = keys.length, S = [];
 	for (let i = 0; i < K - 1; i++) {
 		for (let j = 0; j < sub; j++) {
@@ -38,7 +38,10 @@ export function loft(keys, { seg = 20, sub = 5, paint = () => [0.5, 0.5, 0.5] } 
 	for (let i = 0; i < M; i++) {
 		const q = S[i], q0 = S[Math.max(0, i - 1)], q1 = S[Math.min(M - 1, i + 1)];
 		T.set(q1[0] - q0[0], q1[1] - q0[1], q1[2] - q0[2]).normalize();
-		side.crossVectors(Math.abs(T.y) > 0.85 ? Z : Y, T).normalize();
+		// the ring's frame carried along the curve (not chosen afresh at each ring, which turned
+		// it a quarter round wherever a leg bent past the vertical and pinched it to a gap)
+		if (i === 0) side.crossVectors(Math.abs(T.y) > 0.85 ? Z : Y, T).normalize();
+		else { side.addScaledVector(T, -side.dot(T)); if (side.lengthSq() < 1e-8) side.crossVectors(Math.abs(T.y) > 0.85 ? Z : Y, T); side.normalize(); }
 		up.crossVectors(T, side).normalize();
 		for (let k = 0; k <= seg; k++) {
 			const an = k / seg * Math.PI * 2, s = Math.sin(an), c = Math.cos(an);
@@ -51,6 +54,13 @@ export function loft(keys, { seg = 20, sub = 5, paint = () => [0.5, 0.5, 0.5] } 
 		const a = i * (seg + 1) + k, b = a + seg + 1;
 		idx.push(a, b, a + 1, b, b + 1, a + 1);
 	}
+	// (closed at both ends, so a limb ends in a hoof or a stump, not a hollow paper ring)
+	if (caps) for (const [ring, flip] of [[0, true], [M - 1, false]]) {
+		const q = S[ring], c = pos.length / 3;
+		pos.push(q[0], q[1], q[2]);
+		col.push(...col.slice(ring * (seg + 1) * 3, ring * (seg + 1) * 3 + 3));
+		for (let k = 0; k < seg; k++) { const a = ring * (seg + 1) + k; if (flip) idx.push(c, a + 1, a); else idx.push(c, a, a + 1); }
+	}
 	const g = new THREE.BufferGeometry();
 	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
 	g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -59,7 +69,7 @@ export function loft(keys, { seg = 20, sub = 5, paint = () => [0.5, 0.5, 0.5] } 
 	return g;
 }
 // a limb or a neck: a tube through points [x, y, z, r]
-export const tube = (pts, opt = {}) => loft(pts.map(([x, y, z, r]) => [x, y, z, r, r, r]), { seg: 12, sub: 4, ...opt });
+export const tube = (pts, opt = {}) => loft(pts.map(([x, y, z, r]) => [x, y, z, r, r, r]), { seg: 12, sub: 4, caps: true, ...opt });
 const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 const lin = (c) => c.map((v) => Math.pow(v, 2.2));
 const shade = (back, belly, soft = 0.35) => (s, up) => mix(belly, back, THREE.MathUtils.smoothstep(up, -soft, soft));

@@ -18,7 +18,8 @@ const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const LEAD = { mel: 1, pad: 2, bass: 2, counter: 3, arp: 3 };
 const CAP = { mel: 2, pad: 5, bass: 2, counter: 2, arp: 3 };
 // the kits hit far harder than a lead note at the same velocity: a balance per drum
-const KIT = { kick: 0.5, snare: 0.55, clap: 0.55, hitom: 0.6, lotom: 0.6, cymbal: 0.45, openhat: 0.8, ride: 0.8, hihat: 1.2, shaker: 1.2, rim: 0.9, cowbell: 0.6, perc: 0.8 };
+// (kept well under the leads: the drums sit behind the music, as in the caves)
+const KIT = { kick: 0.32, snare: 0.3, clap: 0.3, hitom: 0.35, lotom: 0.35, cymbal: 0.22, openhat: 0.4, ride: 0.45, hihat: 0.6, shaker: 0.65, rim: 0.55, cowbell: 0.35, perc: 0.45 };
 const ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/><path d="M3 9.5c1.2-1 2.2-1 3.4 0M2 6.5c2-1.7 3.8-1.7 5.6 0" opacity=".7"/></svg>';
 
 function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; } }
@@ -53,6 +54,7 @@ export function createAutoMusic(opts) {
 		const pl = window.playLead, pd = window.playDrum;
 		const mine = (id) => /^(auto:|seq:|lg:|rg:|remote:|spf:)/.test(String(id)) || window._spAuto || window._seqAt != null;
 		window.playLead = function (id, degree, bank, chromatic) {
+			if (!mine(id)) S.userAt = performance.now();
 			if (S.playing && !mine(id)) {
 				S.manualUntil = performance.now() + 1800;
 				if (!chromatic && bank !== 2) composer.heard(degree | 0);
@@ -61,6 +63,7 @@ export function createAutoMusic(opts) {
 		};
 		window.playLead.crysisAuto = true;
 		if (typeof pd === 'function') window.playDrum = function () {
+			if (!window._spAuto) S.userAt = performance.now();
 			if (S.playing && !window._spAuto && window._seqAt == null) S.manualDrumUntil = performance.now() + 1400;
 			return pd.apply(this, arguments);
 		};
@@ -350,7 +353,16 @@ export function createAutoMusic(opts) {
 		};
 	}
 
+	// the music's pulse, for the footsteps (player.js): this score's own while it plays, else the
+	// faceplate's tempo for half a minute after you last played it, counted from your last note
+	function clock() {
+		if (hasBard()) wireListen();
+		if (S.playing && S.bar && S.bpm) return { period: 60 / S.bpm, at: S.bar.at };
+		if (S.userAt && performance.now() - S.userAt < 30000) { const F = faceplate(); return F.bpm ? { period: 60 / F.bpm, at: S.userAt } : null; }
+		return null;
+	}
+
 	sync();
 	if (S.on) loop();
-	return { auto, state, panel, log: (on) => { S.log = on === undefined ? !S.log : !!on; return S.log; }, queue: (to, urgent) => composer.queue(to, urgent), level: (v) => { if (v !== undefined) { S.level = clamp(+v, 0, 1); save({ on: S.on, level: S.level }); } return S.level; } };
+	return { auto, state, panel, clock, log: (on) => { S.log = on === undefined ? !S.log : !!on; return S.log; }, queue: (to, urgent) => composer.queue(to, urgent), level: (v) => { if (v !== undefined) { S.level = clamp(+v, 0, 1); save({ on: S.on, level: S.level }); } return S.level; } };
 }

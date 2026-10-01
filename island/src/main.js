@@ -65,6 +65,7 @@ import { planIslandFields, createSportsFields } from './sportsfields.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createNatureSound } from './bay/naturesound.js';
+import { worldLevel } from './world/soundbus.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
@@ -686,6 +687,8 @@ export function createIslandWorld() {
 			// ...and every other building: solid, and built inside as you come to it (interiors/)
 			world.interiors = createInteriors(scene, bayArea, world.city, { isPhone, mats: world.houses.M, towers: world.towers });
 			{ const cv = world.commercial.venue, I = world.interiors; world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
+			// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
+			world.interiors.addDoors(world.commercial);
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
 			world.vehicles = createVehicles({ scene, world: () => world, camera, isPhone, people: () => people });
@@ -694,7 +697,7 @@ export function createIslandWorld() {
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real, ponds: false });
 			// every other river, creek, lake and reservoir (bay/water.js)
-			world.water = createEarthWater(scene, bayArea, shared, { isPhone, real: world.real, ground: (x, z) => island.heightAt(x, z), riverLevel: (x, z) => world?.boardwalk?.waterAt(x, z) ?? null, riverSettled: () => world?.boardwalk?.river?.settled?.() ?? !world?.boardwalk });
+			world.water = createEarthWater(scene, bayArea, shared, { isPhone, real: world.real, ground: (x, z) => island.heightAt(x, z), riverLevel: (x, z) => world?.boardwalk?.waterAt(x, z) ?? null, riverSettled: () => world?.boardwalk?.river?.settled?.() ?? !world?.boardwalk, extra: [world.lake.source] });
 			bayArea.waterName = (x, z) => world?.water?.nameAt(x, z) ?? null;
 			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
 			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
@@ -717,6 +720,8 @@ export function createIslandWorld() {
 			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
 			const own = island.heightAt, berms = world.berms;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : berms.apply(x, z, bayArea.heightAt(x, z));
+			// (the ground as the GPU draws it, where people stand: bay/terrain.js)
+			island.drawnAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.drawnAt(x, z, island.heightAt);
 			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
 			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? world?.water?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
@@ -738,15 +743,19 @@ export function createIslandWorld() {
 				world.landmarks = createLandmarks(scene, bayArea);
 				world.roads = createRoads(shared, scene, bayArea);
 				world.diablo = createDiablo(scene, bayArea);
+				// the Summit Building's rooms, built inside its stone as you come near
+				world.interiors?.addSite(world.diablo.site);
 				world.labels = createLabels(dom.mount, bayArea, bridge);
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y), world.parks?.floor?.(x, z, y) ?? -1e9);
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); world.beaches.push?.(p, footY); world.parks?.push?.(p, footY); };
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
+				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
+				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
 				renderer.compile(scene, camera);
 			});
 			const w0 = world;
@@ -799,6 +808,8 @@ export function createIslandWorld() {
 		slider(p, 'Rain', 0, 1, 0.01, () => WX.state.pin.rain ?? WX.state.rainHere, (v) => { WX.pin('rain', v); }, (v) => v < 0.02 ? 'dry' : v < 0.3 ? 'drizzle' : v < 0.7 ? 'shower' : 'downpour');
 		slider(p, 'Cloud cover', 0, 1, 0.01, () => world.sky.uniforms.uCloud.value, (v) => { WX.pin('cover', v); world.sky.uniforms.uCloud.value = v; }, (v) => Math.round(v * 100) + '%');
 		slider(p, 'Waves', 0, 2, 0.05, () => shared.uWave.value, (v) => { shared.uWave.value = v; world.ocean.userData.uniforms.uWave.value = v; }, (v) => v.toFixed(2));
+		// the world's sounds (nature, the city, footsteps, the wolves) under the music: world/soundbus.js
+		slider(p, 'World sounds', 0, 1.5, 0.05, () => worldLevel(), (v) => worldLevel(v), (v) => Math.round(v * 100) + '%');
 		slider(p, 'Wind', 0, 1.5, 0.05, () => shared.uWind.value, (v) => { WX.pin('wind', v); shared.uWind.value = v; }, (v) => v.toFixed(2));
 		// the month the world keeps: today's, or one picked (the hills, the flowers, the leaves, the
 		// snow, the sun's path, the birds, the fish, what people wear); remembered
@@ -822,9 +833,9 @@ export function createIslandWorld() {
 			q.appendChild(b);
 		}
 		p.appendChild(q);
-		// the map data's credit (OpenStreetMap's licence asks for it where the data is shown)
+		// the credits the data and the assets ask for where they are shown (OpenStreetMap, CC BY)
 		const credit = css(document.createElement('div'), 'margin-top:8px;font:11px system-ui;opacity:.6;line-height:1.35;');
-		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets and buildings: Overture Maps Foundation, © OpenStreetMap contributors (ODbL), Microsoft and Google footprints.';
+		credit.textContent = 'Terrain: USGS 3DEP, NOAA via AWS Terrain Tiles. Streets and buildings: Overture Maps Foundation, © OpenStreetMap contributors (ODbL), Microsoft and Google footprints. Hair and beards: the MakeHuman team, culturalibre and Rehman Polanski (CC0); Elvaerwyn (CC BY 4.0), via the MakeHuman community.';
 		p.appendChild(credit);
 		// what the site keeps on this device, by kind, each removable
 		storagePanel(p, { activeModel: () => (guide.llm.kind() === 'webllm' ? guide.llm.model() : ''), onModelRemoved: () => guide.llm.useNone() });
@@ -1017,7 +1028,7 @@ export function createIslandWorld() {
 		const caveK = W.underworld?.inside?.() || 0;
 		// deep down the surface overhead is never seen: stop drawing it
 		const open = caveK < 0.9;
-		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group, W.alien?.group]) if (o && o.visible !== open) o.visible = open;
+		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
 			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
@@ -1040,6 +1051,7 @@ export function createIslandWorld() {
 		show(dom.shell, sh === 'near' && !W.boat.boarded()); show(dom.toss, sh === 'held'); show(dom.place, sh === 'held');
 		actions();
 		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
+		seaView(W, camera, dt, open);
 		W.litter.update(camera);
 		islandReach(W);
 		W.vegetation.stream(camera, false);
@@ -1134,12 +1146,17 @@ export function createIslandWorld() {
 		people.demo(dt, time, camera.position);
 		ghost.update(dt, time, camera, sk.night);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, hours: W.sky.state.hours });
+		// (your footsteps keep the music's time: player.js)
+		if (!W.player.state.beat) W.player.state.beat = () => autoMusic.clock();
 		worldAudio.update(dt, { under, night: sk.night, hours: W.sky.state.hours, rain: wx.rainHere || 0 });
 		if (W.natureSound && W.bayArea?.loaded()) {
 			const cx = camera.position.x, cz = camera.position.z, U = W.bayArea.urbanAt(cx, cz);
 			let pond = 1e9;
 			if (W.lake) for (const r of [20, 60, 110]) { for (let k = 0; k < 8 && pond > 1e8; k++) { const a = k / 8 * Math.PI * 2; if ((W.lake.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r) ?? W.water?.waterAt(cx + Math.cos(a) * r, cz + Math.sin(a) * r)) != null) pond = r; } if (pond < 1e8) break; }
-			W.natureSound.update(dt, camera, { wind: shared.uWind?.value, night: sk.night, hours: W.sky.state.hours, month: today().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
+			// (anyone about within 150 m: out alone long enough, the wolves)
+			let company = 0;
+			for (const q of people.pool) if (q.active && Math.hypot(q.M.S.pos.x - cx, q.M.S.pos.z - cz) < 150) company++;
+			W.natureSound.update(dt, camera, { company, wind: shared.uWind?.value, gust: shared.uGust?.value, night: sk.night, hours: W.sky.state.hours, month: today().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
 		}
 		W.labels?.update(dt, time, camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		// a mushroom eaten: sizes swell and shrink (the field of view, from where it stood), and
@@ -1291,6 +1308,8 @@ export function createIslandWorld() {
 			window.L99IslandDoor?.closed?.();
 		},
 		active: () => visible && running,
+		// walking or riding a road hands-free: the keyboard plays music meanwhile
+		autoWalk: () => visible && running && !!drive.auto?.(),
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
 		openAt: (code) => share.openAt(code),
@@ -1377,6 +1396,25 @@ function stepWind(dt, shared) {
 	shared.uWindT.value += dt * (0.15 + W * 0.7 + shared.uGust.value * 1.2);
 	wind.veer += (Math.sin(t * 0.021) * 0.25 + Math.sin(t * 0.0057 + 2) * 0.3 - (wind.veer - 0.36)) * dt * 0.02;
 	shared.uWindDir.value.set(Math.cos(wind.veer), Math.sin(wind.veer));
+}
+
+// the sea is only drawn where some of it is within reach: far inland (the Diablo foothills,
+// the Sierra) a look round every couple of seconds, out to 40 km on sixteen bearings, finds
+// none, and the ocean under the whole map stops being drawn (its waves, its shading)
+const seaLook = { t: 0, on: true };
+function seaView(W, camera, dt, open) {
+	if (!W.bayArea?.loaded() || !open) return;
+	seaLook.t -= dt;
+	if (seaLook.t > 0) return;
+	seaLook.t = 2;
+	const x = camera.position.x, z = camera.position.z;
+	let sea = W.island.heightAt(x, z) < 2;
+	for (let k = 0; k < 16 && !sea; k++) {
+		const a = k / 16 * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
+		for (const r of [300, 800, 1600, 3000, 5500, 9000, 14000, 20000, 28000, 40000]) if (W.island.heightAt(x + c * r, z + sn * r) < -1.5) { sea = true; break; }
+	}
+	seaLook.on = sea;
+	if (W.ocean.visible !== sea) W.ocean.visible = sea;
 }
 
 function hashString(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }

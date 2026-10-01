@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { photoUniform, TRI_GLSL } from '../world/photomats.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { toWorld } from './geo.js';
+import { planSummit } from '../interiors/plan.js';
 
 // ---------- the landmarks ----------
 // size: half the formation's extent; blobs: how many masses; caves: hollows; tall: spires
@@ -449,6 +450,10 @@ export function createDiablo(scene, bay) {
 	summit.add(beacon, red);
 	// (built over three frames: the building, the car park's wall, then the stand-in cleared)
 	let summitPlaced = false, summitStage = 0;
+	// the inside: the stone shell is hollow, its door and windows open, and the rooms are built
+	// within it as you come near (interiors/index.js addSite, from the plan in interiors/plan.js)
+	const SHELL = 0.45, deck = { hatch: null, rails: [], shell: [] };
+	const site = { key: 'diablo-summit', o: null, spec: null, live: false, ready: () => !!site.o, plan: () => planSummit(site.spec) };
 
 	function buildHall() {
 		const { w: W, d: D } = HALL, T = TOWER.s;
@@ -459,16 +464,62 @@ export function createDiablo(scene, bay) {
 		const gc = gAt(0, 0);
 		let gmin = 0, gmax = 0;
 		for (let a = -1; a <= 1; a += 1 / 3) for (let b = -1; b <= 1; b += 0.5) { const h = gAt(a * W / 2, b * D / 2) - gc; gmin = Math.min(gmin, h); gmax = Math.max(gmax, h); }
-		const yb = gmin - 1.5, Hm = Math.max(0, gmax) + 7, Ht = Hm + 5.6;
+		// the ground floor just over the highest ground under it, the deck two storeys up
+		const doorX = -3.5, f0 = Math.max(gmax, gAt(doorX, D / 2 + 0.6) - gc) + 0.12;
+		const yb = gmin - 1.5, Hm = Math.max(Math.max(0, gmax) + 7, f0 + 6.9), Ht = Hm + 5.6;
 		Object.assign(dims, { Hm, Ht, gc });
 		summit.position.set(cx, gc, cz); summit.rotation.y = -HALL.a;
 		const parts = { stone: [], trim: [], glass: [], steel: [] };
 		// a block placed in the hall's frame, textured where it stands so the courses run on
 		const box = (list, w, h, d, x, y, z) => { const g = new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z); parts[list].push(list === 'stone' || list === 'trim' ? planarUV(g) : g); };
-		// the hall, and the tower rising through it
-		box('stone', W, Hm - yb, D, 0, yb, 0);
-		box('stone', W + 0.5, 0.9 - yb, D + 0.5, 0, yb, 0);                                         // the projecting base course
-		box('trim', W + 0.24, 0.3, D + 0.24, 0, Hm * 0.5 - 0.15, 0);                                 // the string course between the floors
+		// the windows the ground lets be (the lower ones only where it falls away below their sills)
+		const wins = [];
+		for (const s of [-1, 1]) {
+			for (const x of [-10.5, -7, -3.5, 0, 3.5, 7, 10.5]) for (const k of [0, 1]) {
+				if ((s > 0 && x === doorX && k === 0) || (k === 0 && gAt(x, s * (D / 2 + 0.5)) - gc > f0 + 0.25)) continue;
+				wins.push([s > 0 ? 'z+' : 'z-', x, k]);
+			}
+			for (const z of [-3, 3]) for (const k of [0, 1]) if (k || gAt(s * (W / 2 + 0.5), z) - gc <= f0 + 0.25) wins.push([s > 0 ? 'x+' : 'x-', z, k]);
+		}
+		// the plan of the inside, and where it stands (the hall's frame is the plan's)
+		site.spec = { W: W - 0.6, D: D - 0.6, pier: [tx - T / 2, tz - T / 2, tx + T / 2, tz + T / 2], doorX, roofY: Hm - f0, windows: wins };
+		const P = planSummit(site.spec), hatch = P.topHoles[0];
+		site.o = { x: cx, z: cz, a: HALL.a, w: W, d: D, f0: gc + f0, street: gAt(doorX, D / 2 + 1.2) };
+		// the walls of stone, less their openings: the door, and the windows at the plan's
+		const holes = { 'z+': [[doorX - 0.8, doorX + 0.8, yb - 1, f0 + 2.5]], 'z-': [], 'x+': [], 'x-': [] };
+		for (const [side, u, k] of wins) holes[side].push([u - 0.55, u + 0.55, f0 + k * 3.3 + 0.85, f0 + k * 3.3 + 2.3]);
+		const seg = (side, u0, u1, y0, y1) => {
+			const a = (side[1] === '+' ? 1 : -1) * ((side[0] === 'z' ? D : W) / 2 - SHELL / 2);
+			if (side[0] === 'z') box('stone', u1 - u0, y1 - y0, SHELL, (u0 + u1) / 2, y0, a); else box('stone', SHELL, y1 - y0, u1 - u0, a, y0, (u0 + u1) / 2);
+		};
+		for (const [side, s0, s1] of [['z+', -W / 2, W / 2], ['z-', -W / 2, W / 2], ['x+', -D / 2 + SHELL, D / 2 - SHELL], ['x-', -D / 2 + SHELL, D / 2 - SHELL]]) {
+			const cuts = [s0, s1, ...holes[side].flatMap((h) => [h[0], h[1]])].filter((u) => u >= s0 && u <= s1).sort((a, b) => a - b);
+			for (let i = 0; i < cuts.length - 1; i++) {
+				const u0 = cuts[i], u1 = cuts[i + 1], um = (u0 + u1) / 2;
+				if (u1 - u0 < 0.01) continue;
+				let y = yb;
+				for (const h of [...holes[side].filter((q) => q[0] < um && q[1] > um).sort((a, b) => a[2] - b[2]), [0, 0, Hm, Hm]]) { if (h[2] > y + 0.01) seg(side, u0, u1, y, Math.min(h[2], Hm)); y = Math.max(y, h[3]); }
+			}
+		}
+		// the roof over the upper ceiling, open over the stair to the deck
+		const rx0 = -W / 2 + SHELL, rx1 = W / 2 - SHELL, rz0 = -D / 2 + SHELL, rz1 = D / 2 - SHELL, ry = f0 + 6.32;
+		box('stone', hatch[0] - rx0, Hm - ry, rz1 - rz0, (rx0 + hatch[0]) / 2, ry, 0); box('stone', rx1 - hatch[2], Hm - ry, rz1 - rz0, (hatch[2] + rx1) / 2, ry, 0);
+		box('stone', hatch[2] - hatch[0], Hm - ry, hatch[1] - rz0, (hatch[0] + hatch[2]) / 2, ry, (rz0 + hatch[1]) / 2); box('stone', hatch[2] - hatch[0], Hm - ry, rz1 - hatch[3], (hatch[0] + hatch[2]) / 2, ry, (hatch[3] + rz1) / 2);
+		// (the stone walls are solid once the inside is built: the doorway open)
+		deck.shell = [[-W / 2, D / 2 - SHELL, doorX - 0.8, D / 2], [doorX + 0.8, D / 2 - SHELL, W / 2, D / 2], [-W / 2, -D / 2, W / 2, -D / 2 + SHELL], [-W / 2, -D / 2, -W / 2 + SHELL, D / 2], [W / 2 - SHELL, -D / 2, W / 2, D / 2]];
+		// a rail round the opening on the deck, open where the stair comes up
+		deck.hatch = hatch;
+		deck.rails = [[hatch[0] - 0.05, hatch[1] - 0.05, hatch[0] + 0.05, hatch[3]], [hatch[2] - 0.05, hatch[1] - 0.05, hatch[2] + 0.05, hatch[3]], [hatch[0], hatch[1] - 0.05, hatch[2], hatch[1] + 0.05]];
+		for (const [a0, b0, a1, b1] of deck.rails) {
+			box('steel', a1 - a0, 0.06, b1 - b0, (a0 + a1) / 2, Hm + 0.95, (b0 + b1) / 2);
+			for (const [px, pz] of [[a0, b0], [a1, b1], [(a0 + a1) / 2, (b0 + b1) / 2]]) box('steel', 0.06, 0.95, 0.06, px, Hm, pz);
+		}
+		box('stone', W + 0.5, f0 - 0.02 - yb, D + 0.5, 0, yb, 0);                                   // the projecting base course
+		for (const s of [-1, 1]) { box('trim', W + 0.24, 0.3, 0.14, 0, f0 + 3.15, s * (D / 2 + 0.05)); box('trim', 0.14, 0.3, D, s * (W / 2 + 0.05), f0 + 3.15, 0); }   // the string course between the floors
+		// the door's dressed-stone surround
+		box('trim', 2.1, 0.35, 0.16, doorX, f0 + 2.5, D / 2 + 0.06);
+		for (const s of [-1, 1]) box('trim', 0.25, 2.5, 0.16, doorX + s * 0.925, f0 - 0.02, D / 2 + 0.06);
+		// the tower, its base a pier of stone through both floors
 		box('stone', T, Ht - yb, T, tx, yb, tz);
 		// the observation deck: a parapet round the roof, its coping, and the railing on it
 		box('stone', W, 1.1, 0.45, 0, Hm, D / 2 - 0.225); box('stone', W, 1.1, 0.45, 0, Hm, -D / 2 + 0.225);
@@ -505,18 +556,11 @@ export function createDiablo(scene, bay) {
 			parts[glass].push(archGeo(w, h).rotateY(ry).translate(lx + nx * 0.06, y, lz + nz * 0.06));
 			parts.trim.push(planarUV(new THREE.BoxGeometry(w + 0.5, 0.12, 0.3)).rotateY(ry).translate(lx + nx * 0.1, y - 0.12, lz + nz * 0.1));
 		};
-		const low = Hm * 0.5 - 2.6, up = Hm - 2.7;
+		for (const [side, u, k] of wins) {
+			const y = f0 + k * 3.3 + 0.85, sg = side[1] === '+' ? 1 : -1;
+			if (side[0] === 'z') win(u, y, sg * D / 2, sg > 0 ? 0 : Math.PI, 1.1, 2); else win(sg * W / 2, y, u, sg * Math.PI / 2, 1.1, 2);
+		}
 		for (const s of [-1, 1]) {
-			for (const x of [-10.5, -7, -3.5, 0, 3.5, 7, 10.5]) {
-				const door = s > 0 && x === -3.5;
-				if (door) win(x, gAt(x, D / 2 + 0.5) - gc + 0.05, D / 2, 0, 1.9, 3, 'steel');
-				else if (gAt(x, s * (D / 2 + 0.5)) - gc + 0.9 < low) win(x, low, s * D / 2, s > 0 ? 0 : Math.PI, 1.1, 2);
-				win(x, up, s * D / 2, s > 0 ? 0 : Math.PI, 1.1, 1.9);
-			}
-			for (const z of [-3, 3]) {
-				if (gAt(s * (W / 2 + 0.5), z) - gc + 0.9 < low) win(s * W / 2, low, z, s * Math.PI / 2, 1.1, 2);
-				win(s * W / 2, up, z, s * Math.PI / 2, 1.1, 1.9);
-			}
 			// the tower's tall windows, looking out over the deck
 			win(tx + s * T / 2, Hm + 1.5, tz, s * Math.PI / 2, 1.2, 2.8);
 			win(tx, Hm + 1.5, tz + s * T / 2, s > 0 ? 0 : Math.PI, 1.2, 2.8);
@@ -623,16 +667,27 @@ export function createDiablo(scene, bay) {
 		}
 		if (!summitPlaced || Math.abs(p.x - summit.position.x) + Math.abs(p.z - summit.position.z) > 40) return;
 		let [lx, lz] = hallAt(p.x, p.z);
-		const y = footY - dims.gc, r0 = lx, s0 = lz;
-		for (const r of rects()) {
-			if (y > r.top - 0.4 || y < r.bottom) continue;
+		const y = footY - dims.gc, r0 = lx, s0 = lz, rects0 = rects();
+		for (const r of rects0) {
+			// (the hall is walked into once its inside is built: its walls are the plan's then)
+			if (y > r.top - 0.4 || y < r.bottom || (r === rects0[0] && site.live)) continue;
 			const qx = lx - r.x, qz = lz - r.z, ex = r.hw + 0.35 - Math.abs(qx), ez = r.hd + 0.35 - Math.abs(qz);
 			if (ex <= 0 || ez <= 0) continue;
 			if (ex < ez) lx += (qx < 0 ? -1 : 1) * ex; else lz += (qz < 0 ? -1 : 1) * ez;
 		}
-		// on the deck, the parapet keeps you there
+		// the stone walls, round the hollow hall
+		const circle = (b) => {
+			const qx = Math.max(b[0], Math.min(b[2], lx)), qz = Math.max(b[1], Math.min(b[3], lz)), dx = lx - qx, dz = lz - qz, d = Math.hypot(dx, dz);
+			if (d >= 0.3) return;
+			if (d > 1e-6) { lx = qx + dx / d * 0.3; lz = qz + dz / d * 0.3; return; }
+			const pen = [lx - b[0], b[2] - lx, lz - b[1], b[3] - lz], m = Math.min(...pen), k = pen.indexOf(m);
+			if (k === 0) lx = b[0] - 0.3; else if (k === 1) lx = b[2] + 0.3; else if (k === 2) lz = b[1] - 0.3; else lz = b[3] + 0.3;
+		};
+		if (site.live && y < dims.Hm - 0.4) for (const b of deck.shell) circle(b);
+		// on the deck, the parapet keeps you there, and the rail round the stair's opening
 		if (y > dims.Hm - 0.4 && y < dims.Hm + 2 && Math.abs(lx) < HALL.w / 2 && Math.abs(lz) < HALL.d / 2) {
 			lx = Math.max(-HALL.w / 2 + 0.8, Math.min(HALL.w / 2 - 0.8, lx)); lz = Math.max(-HALL.d / 2 + 0.8, Math.min(HALL.d / 2 - 0.8, lz));
+			for (const b of deck.rails) circle(b);
 		}
 		p.x += ca * (lx - r0) - sa * (lz - s0); p.z += sa * (lx - r0) + ca * (lz - s0);
 	}
@@ -648,9 +703,10 @@ export function createDiablo(scene, bay) {
 		}
 		if (summitPlaced && Math.abs(x - summit.position.x) + Math.abs(z - summit.position.z) < 40) {
 			const [lx, lz] = hallAt(x, z);
-			for (const r of rects()) if (Math.abs(lx - r.x) < r.hw && Math.abs(lz - r.z) < r.hd && footY > dims.gc + r.top - 1.2) best = Math.max(best, dims.gc + r.top);
+			const h = deck.hatch, overHatch = site.live && h && lx > h[0] && lx < h[2] && lz > h[1] && lz < h[3];
+			for (const r of rects()) if (Math.abs(lx - r.x) < r.hw && Math.abs(lz - r.z) < r.hd && footY > dims.gc + r.top - 1.2 && !(overHatch && r.top === dims.Hm)) best = Math.max(best, dims.gc + r.top);
 		}
 		return best;
 	}
-	return { update, push, floor, group, rocks, setBeaconDay: (on) => { beaconDay = on ? 1 : 0; } };
+	return { update, push, floor, group, rocks, site, setBeaconDay: (on) => { beaconDay = on ? 1 : 0; } };
 }

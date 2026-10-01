@@ -122,10 +122,11 @@ export function furnish(P, only = -1) {
 					const tb = standing(kind === 'cafe' ? 'cafeTable' : 'diningTable', x, z, kind === 'restaurant' ? 0.9 : 0.6, kind === 'restaurant' ? 0.9 : 0.6, 0.75, 0, 0.55, { chairs: 2 });
 					if (tb) chairs(tb);
 				}
-			} else if (kind === 'grocer' || kind === 'books' || kind === 'boutique' || kind === 'hardware') {
+			} else if (kind === 'grocer' || kind === 'books' || kind === 'boutique' || kind === 'hardware' || kind === 'gift') {
 				const tall = kind === 'books' ? 'bookcase' : 'shopShelf';
 				for (const s of sides) if (s.walled && s !== front && s.axis === 'z') for (let k = 0; k < 4; k++) against(tall, 1.2, 0.45, kind === 'books' ? 2.0 : 1.8, { side: (q) => q === s, clear: 0.9 });
-				for (let x = r.x0 + 2; x < r.x1 - 1.6; x += 2.2) standing(kind === 'grocer' ? 'produce' : kind === 'books' ? 'bookTable' : 'shopShelf', x, (r.z0 + r.z1) / 2 + 0.5, 0.9, Math.min(4, bd - 5), 1.2, 0, 0.7);
+				for (let x = r.x0 + 2; x < r.x1 - 1.6; x += 2.2) standing(kind === 'grocer' ? 'produce' : kind === 'books' || kind === 'gift' ? 'bookTable' : 'shopShelf', x, (r.z0 + r.z1) / 2 + 0.5, 0.9, Math.min(4, bd - 5), 1.2, 0, 0.7);
+				if (kind === 'gift') { against('postcards', 0.5, 0.5, 1.6, { corner: true, clear: 0.6 }); against('postcards', 0.5, 0.5, 1.6, { corner: true, clear: 0.6 }); }
 				if (kind === 'books') { const ac = against('armchair', 0.8, 0.8, 0.85, { corner: true, clear: 0.6 }); if (ac) sitOn(ac, 1); }
 				for (let k = 0; k < 3; k++) stand(r.x0 + 1 + rnd() * (bw - 2), r.z0 + 2 + rnd() * (bd - 4), rnd() - 0.5, rnd() - 0.5);
 			} else if (kind === 'laundromat') {
@@ -242,7 +243,8 @@ export function furnish(P, only = -1) {
 			against('shelf', 0.9, 0.35, 1.8, { clear: 0.6 }); against('waterHeater', 0.6, 0.6, 1.55, { corner: true, clear: 0 });
 			clutter(2); light('tube');
 		} else if (t === 'garage') {
-			if (bw > 2.6 && bd > 5.0) { items.push({ type: 'car', x: cx, z: cz + 0.2, y: y0, rot: 0, w: 1.85, d: 4.6, h: 1.45, v: rnd(), box: [cx - 0.95, cz - 2.1, cx + 0.95, cz + 2.5] }); placed.push([cx - 1.2, cz - 2.4, cx + 1.2, cz + 2.8]); }
+			// the car nosed up to the garage door, clear of the way in from the hall at the back
+			if (bw > 2.6 && bd > 5.95) { const z = rm.z1 - 2.6; items.push({ type: 'car', x: cx, z, y: y0, rot: 0, w: 1.85, d: 4.6, h: 1.45, v: rnd(), box: [cx - 0.95, z - 2.1, cx + 0.95, z + 2.5] }); placed.push([cx - 1.2, z - 2.4, cx + 1.2, z + 2.6]); }
 			against('shelves', Math.min(2.2, bd - 1), 0.5, 1.9, { clear: 0.5, side: (s) => s.axis === 'z' });
 			against('bins', 1.4, 0.7, 1.1, { clear: 0.4 }); against('bikes', 1.7, 0.5, 1.0, { clear: 0.4 }); against('workbench', 1.5, 0.6, 0.92, { clear: 0.6 });
 			clutter(2); light('tube');
@@ -263,6 +265,30 @@ export function furnish(P, only = -1) {
 			standing('rug', cx, cz, Math.min(3, bw - 2), Math.min(2, bd - 2), 0.01);
 			stand(cx + 1, cz, 0, 1); art(2); light('chandelier');
 		} else if (t === 'shop') shopFit(rm);
+		else if (t === 'visitor') {
+			// a visitor centre's lobby: the information desk, a bench, the map of the park
+			const desk = against('shopCounter', Math.min(2.6, bd - 2), 0.7, 1.0, { side: (s) => s.axis === 'z', clear: 1.2, extra: { kind: 'info' } });
+			if (desk) { const [fx, fz] = faceOf(desk.rot); stand(desk.x - fx * 0.55, desk.z - fz * 0.55, fx, fz); }
+			against('exhibitPanel', 1.6, 0.12, 2.0, { clear: 1.0, side: (s) => s.axis === 'x' });
+			const be = against('bench', 1.6, 0.5, 0.45, { clear: 0.8 });
+			if (be) sitOn(be, 2, 0.45, 0.05);
+			against('plant', 0.5, 0.5, 1.4, { corner: true, clear: 0 });
+			stand(cx, cz + 1, 0, -1); light('pendant');
+		} else if (t === 'gallery') {
+			// a museum's room: cases of rocks, fossils and old things along the walls, panels
+			// standing out in the room, the mountain in relief where there is space for it, a bench
+			const big = bw > 4.2 && bd > 4.2;
+			if (big) { const m = standing('reliefModel', cx, cz, Math.min(2.4, bw - 2.6), Math.min(1.6, bd - 2.6), 1.0, 0, 0.9); if (m) for (const [fx, fz] of [[0, 1], [0, -1]]) stand(m.x - fx * (m.d / 2 + 0.55), m.z - fz * (m.d / 2 + 0.55), fx, fz); }
+			for (let n = 0; n < 5; n++) { const c = against('exhibitCase', 1.5, 0.7, 1.05, { clear: 1.0 }); if (c && n % 2 === 0) { const [fx, fz] = faceOf(c.rot); stand(c.x + fx * 1.0, c.z + fz * 1.0, -fx, -fz); } }
+			for (let n = 0; n < 3; n++) against('exhibitPanel', 1.4, 0.12, 2.0, { clear: 0.9, score: (s) => (s.ext ? 0 : 1) });
+			if (big) for (const sz of [-1, 1]) standing('exhibitPanel', cx + (bw > bd ? sz * bw * 0.3 : 0), cz + (bw > bd ? 0 : sz * bd * 0.3), 1.6, 0.12, 2.0, bw > bd ? 1 : 0, 0.8);
+			const be = against('bench', 1.6, 0.5, 0.45, { clear: 1.0 });
+			if (be) sitOn(be, 2, 0.45, 0.05);
+			for (let x = rm.x0 + 1.5; x < rm.x1 - 1; x += 3) for (let z = rm.z0 + 1.2; z < rm.z1 - 0.8; z += 3) items.push({ type: 'ceilingLight', kind: 'flush', level: 0, y: y0, x, z, rot: 0, w: 0.3, d: 0.3, h: 0, v: rnd(), ceil: L.h });
+			lights.push([cx, y0 + L.h - 0.5, cz, rm.id]);
+		} else if (t === 'closet') {
+			against('shelves', Math.min(2.2, Math.max(bw, bd) - 0.6), 0.45, 1.9, { clear: 0.4 }); clutter(2); light('tube');
+		}
 		else if (t === 'classroom') {
 			const bb = against('blackboard', Math.min(4, bw - 1.5), 0.08, 1.2, { side: (s) => s.axis === 'x' && !s.ext, clear: 2.4, centre: true });
 			const fz = bb ? faceOf(bb.rot)[1] : 1;

@@ -235,6 +235,11 @@ export function beyondH(x, z, he, d) {
 	return he + (30 + n * 170 + r * r * 950 * ranges - he) * t;
 }
 
+// the near ground's grid round you: its spacing grows with distance, about a metre at 10 m
+// and two at 30 m (fine enough to hold a trail's tread), the same 60 m at its 4 km edge
+// (a phone draws fewer: about 3 m apart at 30 m)
+const NEAR_SEG = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
+
 export function createBayArea(shared, scene, island, BU) {
 	const levels = [];                       // CPU copies: { x0, zN, step, W, H, v: Uint16Array }
 	const group = new THREE.Group();
@@ -976,7 +981,7 @@ export function createBayArea(shared, scene, island, BU) {
 		return m;
 	}
 	const nearMat = groundMaterial(false), farMat = groundMaterial(true);
-	const near = new THREE.Mesh(radialGrid(300, 4000, 2.0), nearMat), far = new THREE.Mesh(radialGrid(256, 95000, 2.6), farMat);
+	const near = new THREE.Mesh(radialGrid(NEAR_SEG, NEAR_R, NEAR_POW), nearMat), far = new THREE.Mesh(radialGrid(256, 95000, 2.6), farMat);
 	for (const m of [near, far]) { m.frustumCulled = false; m.receiveShadow = true; m.userData.material175 = 'stone'; group.add(m); }
 	near.visible = far.visible = false;
 
@@ -1004,6 +1009,24 @@ export function createBayArea(shared, scene, island, BU) {
 			if (L) { BU['uB' + k].value = L.tex; BU['uR' + k].value.set(L.x0, L.zN, L.step, MARGIN[i]); } else BU['uR' + k].value.copy(OFF);
 		});
 	}
+	// the ground as drawn, not as surveyed: the near grid's vertices sit on the graded ground
+	// and the triangles between them are flat, so a trail's level tread (a metre or two across)
+	// or a small rill can fall between vertices. People out there stand on this (hFn gives
+	// the ground at a vertex), so nobody walks knee-deep in a hillside the mesh never drew
+	const gridAt = (d) => { const u = Math.sign(d) * Math.pow(Math.abs(d) / NEAR_R, 1 / NEAR_POW); return (u + 1) / 2 * NEAR_SEG; };
+	const gridPos = (i) => { const u = i / NEAR_SEG * 2 - 1; return Math.sign(u) * Math.pow(Math.abs(u), NEAR_POW) * NEAR_R; };
+	function drawnAt(x, z, hFn) {
+		const cx = near.position.x, cz = near.position.z, dx = x - cx, dz = z - cz;
+		if (!near.visible || Math.max(Math.abs(dx), Math.abs(dz)) >= NEAR_R) return hFn(x, z);
+		const i = Math.min(NEAR_SEG - 1, Math.floor(gridAt(dx))), j = Math.min(NEAR_SEG - 1, Math.floor(gridAt(dz)));
+		const x0 = gridPos(i), x1 = gridPos(i + 1), z0 = gridPos(j), z1 = gridPos(j + 1);
+		const fx = (dx - x0) / (x1 - x0 || 1), fz = (dz - z0) / (z1 - z0 || 1);
+		// (the same split as radialGrid's: a, c, b below the diagonal, b, c, d above it)
+		const hb = hFn(cx + x1, cz + z0), hc = hFn(cx + x0, cz + z1);
+		if (fx + fz <= 1) { const ha = hFn(cx + x0, cz + z0); return ha + (hb - ha) * fx + (hc - ha) * fz; }
+		const hd = hFn(cx + x1, cz + z1);
+		return hd + (hc - hd) * (1 - fx) + (hb - hd) * (1 - fz);
+	}
 	function update(cam, night) {
 		const on = BU.uBayOn.value > 0.5 && !farG?.hideBay?.();
 		near.visible = far.visible = on;
@@ -1017,5 +1040,5 @@ export function createBayArea(shared, scene, island, BU) {
 		far.position.set(fx, 0, fz); farMat.userData.U2.uC.value.set(fx, fz); farMat.userData.U2.uHoleC.value.set(nx, nz);
 		coast.update(cam);
 	}
-	return { group, update, heightAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
+	return { group, update, heightAt, drawnAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
 }

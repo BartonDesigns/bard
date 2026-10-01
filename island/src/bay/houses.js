@@ -310,7 +310,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		};
 		const cxz = (c) => [(X[c % nx] + X[c % nx + 1]) / 2, (Z[Math.floor(c / nx)] + Z[Math.floor(c / nx) + 1]) / 2];
 		const st = plan.stairs;
-		const inWell = (c) => { if (!st) return false; const [x, z] = cxz(c); return x > st.x0 && x < st.x1 && z > st.zt && z < st.zb; };
+		// (the well upstairs: over the flight, and on to the front wall where the entry below rises two storeys)
+		const inWell = (c) => { if (!st) return false; const [x, z] = cxz(c); return x > st.x0 && x < st.x1 && z > st.zt && z < (st.zw ?? st.zb); };
 		const FT = { wood: lin(pick3(rnd, [[0.78, 0.6, 0.42], [0.5, 0.36, 0.25], [0.66, 0.6, 0.55], [0.85, 0.72, 0.55]])), tile: lin(pick3(rnd, [[0.9, 0.86, 0.78], [0.75, 0.73, 0.7], [0.86, 0.8, 0.7]])), carpet: lin(pick3(rnd, [[0.78, 0.74, 0.66], [0.62, 0.62, 0.6], [0.7, 0.66, 0.6]])), concrete: lin([0.72, 0.71, 0.68]) };
 		const upOver = (c) => plan.onLevel(c, 1);
 		for (const L of [0, 1]) {
@@ -356,8 +357,9 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			}
 			// the edges of the well between the ceiling and the floor above
 			const sl = (x0, z0, x1, z1, n2) => g.quad('paint', [x0, HT.ceil0, z0], [x1, HT.ceil0, z1], [x1, HT.floor1, z1], [x0, HT.floor1, z0], n2, WHITE, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-			sl(st.x0, st.zb, st.x1, st.zb, [0, 0, -1]); sl(st.x0, st.zt, st.x1, st.zt, [0, 0, 1]);
-			sl(st.x0, st.zt, st.x0, st.zb, [1, 0, 0]); sl(st.x1, st.zt, st.x1, st.zb, [-1, 0, 0]);
+			const zw = st.zw ?? st.zb;
+			sl(st.x0, zw, st.x1, zw, [0, 0, -1]); sl(st.x0, st.zt, st.x1, st.zt, [0, 0, 1]);
+			sl(st.x0, st.zt, st.x0, zw, [1, 0, 0]); sl(st.x1, st.zt, st.x1, zw, [-1, 0, 0]);
 			// rails where the stair's side or the well's edge is open to the room
 			const railCol = lin([0.3, 0.22, 0.16]);
 			const sameRoom = (L, x, z, xr, zr) => { const a = plan.cellAt(x, z), b = plan.cellAt(xr, zr); return a >= 0 && b >= 0 && labels[L][a] >= 0 && labels[L][a] === labels[L][b]; };
@@ -376,7 +378,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				// upstairs, along the well
 				if (sameRoom(1, xs + dx * 0.3, zm, xs + dx * 0.3, st.zt - 0.3)) railing(xr, st.zt, xr, st.zb, 'z');
 			}
-			if (sameRoom(1, (st.x0 + st.x1) / 2, st.zb + 0.3, (st.x0 + st.x1) / 2, st.zt - 0.3)) railing(st.x0, st.zb + 0.02, st.x1, st.zb + 0.02, 'x');
+			if (sameRoom(1, (st.x0 + st.x1) / 2, (st.zw ?? st.zb) + 0.3, (st.x0 + st.x1) / 2, st.zt - 0.3)) railing(st.x0, (st.zw ?? st.zb) + 0.02, st.x1, (st.zw ?? st.zb) + 0.02, 'x');
 			function railing(x0, z0, x1, z1, axis) {
 				const L = axis === 'x' ? x1 - x0 : z1 - z0, y = HT.floor1;
 				for (let u = 0.06; u < L; u += 0.12) { const x = axis === 'x' ? x0 + u : x0, z = axis === 'x' ? z0 : z0 + u; g.box('trim', x - 0.018, y, z - 0.018, x + 0.018, y + 0.9, z + 0.018, WHITE); }
@@ -571,7 +573,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				const k = Math.floor((st.zb - lz) / st.T);
 				const sy = Math.min(HT.floor1, (k + 1) * st.R);
 				if (y > sy - 0.75) f = sy;
-			} else if (p.onLevel(c, 1) && y > HT.floor1 - 0.6) f = HT.floor1;
+			} else if (p.onLevel(c, 1) && y > HT.floor1 - 0.6 && !(st && lx > st.x0 && lx < st.x1 && lz >= st.zb && lz < (st.zw ?? st.zb))) f = HT.floor1;
 			best = Math.max(best, h.floorY + f);
 		}
 		return best;

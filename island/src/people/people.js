@@ -28,7 +28,8 @@ export function createPeople(scene, world, camera = null) {
 	let seedN = 1;
 	// the ground, or a floor people walk on near it (a museum hall, a shop, a porch)
 	// (y: where the person is now, so one on a tower's twentieth floor stands on that floor)
-	const ground = (x, z, y) => { const W = world(), g = W.island.heightAt(x, z), f = W.island.extraFloor?.(x, z, y === undefined ? g + 1.2 : y + 1.0) ?? -1e9; return f > g && (y !== undefined || f < g + 2.5) ? f : g; };
+	// (on the ground as drawn: out on a hillside the mesh is coarser than the survey)
+	const ground = (x, z, y) => { const W = world(), g = (W.island.drawnAt ?? W.island.heightAt)(x, z), f = W.island.extraFloor?.(x, z, y === undefined ? g + 1.2 : y + 1.0) ?? -1e9; return f > g && (y !== undefined || f < g + 2.5) ? f : g; };
 	// in plain sight: in the camera's view and near enough to be made out. Nobody is made or
 	// let go where you can see it happen: they arrive out of sight (behind you, round the
 	// corner, far off) and fade in, and go when out of sight again (or fade, if you keep
@@ -383,6 +384,7 @@ export function createPeople(scene, world, camera = null) {
 			if (p.timer < 0) p.role = 'walk';
 		}
 		if (R.kind === 'follow') { followParent(p, dt); return; }
+		if (R.kind === 'visit') { visit(p, dt, cam); return; }
 		if (R.kind === 'seat') {
 			// in their seat: facing the table, now and then a word and a gesture to whoever is across
 			M.want.speed = 0; M.want.heading = R.seat.heading;
@@ -400,9 +402,10 @@ export function createPeople(scene, world, camera = null) {
 			const d = Math.hypot(R.goal.x - S.pos.x, R.goal.z - S.pos.z);
 			if (d < 1.5) { const W = world(), pts = (W.island.paths || []).flatMap((q) => q.points); const q = pts.length ? pts[Math.floor(Math.random() * pts.length)] : { x: R.home.x + (Math.random() - 0.5) * 60, z: R.home.z + (Math.random() - 0.5) * 60 }; R.goal.set(q.x, 0, q.z); if (Math.random() < 0.3) { p.role = 'wait'; p.timer = 3 + Math.random() * 6; } }
 			M.want.heading = Math.atan2(R.goal.x - S.pos.x, R.goal.z - S.pos.z);
-			M.want.speed = speed * 0.85;
+			M.want.speed = giveWay(p, speed * 0.85, cam);
 			return;
 		}
+		if (R.kind === 'street' && maybeVisit(p, dt)) return;
 		if (R.kind === 'street') {
 			// along the sidewalk; at the end of the street, on into the one that joins it, or back
 			let tgt = curbPoint(R.road, R.s, R.side);
@@ -423,10 +426,7 @@ export function createPeople(scene, world, camera = null) {
 				tgt = curbPoint(R.road, R.s, R.side);
 			}
 			M.want.heading = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z);
-			let v = speed;
-			const dc = Math.hypot(cam.x - S.pos.x, cam.z - S.pos.z);
-			if (dc < 1.5) { v *= 0.3; M.want.heading += 0.6; }
-			M.want.speed = v;
+			M.want.speed = giveWay(p, speed, cam);
 			return;
 		}
 		// round the block; at a corner, sometimes cross to the next block
@@ -454,9 +454,81 @@ export function createPeople(scene, world, camera = null) {
 				if (ahead > 0.6) { v *= 0.5; M.want.heading += 0.4; }
 			}
 		}
-		const dc = Math.hypot(cam.x - S.pos.x, cam.z - S.pos.z);
-		if (dc < 1.5) { v *= 0.3; M.want.heading += 0.6; }
-		M.want.speed = v;
+		M.want.speed = giveWay(p, v, cam);
+	}
+	// in through a door: now and then someone passing a public building (a shop, the summit's
+	// museum, a park's restroom) goes in by its door, which opens for them (interiors/index.js
+	// walkers), looks about a while, and comes out again to carry on
+	function maybeVisit(p, dt) {
+		p.visitT = (p.visitT ?? 8 + Math.random() * 20) - dt;
+		if (p.visitT > 0 || p.P.dna.child || p.fam || p.partner) return false;
+		p.visitT = 15 + Math.random() * 30;
+		const I = world().interiors, S = p.M.S;
+		if (!I?.doorsNear || Math.random() > 0.35) return false;
+		const ds = I.doorsNear(S.pos.x, S.pos.z, 25);
+		if (!ds.length) return false;
+		const D = ds[Math.floor(Math.random() * ds.length)];
+		p.route = { kind: 'visit', back: p.route, door: D, stage: 0, t: 0 };
+		return true;
+	}
+	function visit(p, dt, cam) {
+		const R = p.route, M = p.M, S = M.S, D = R.door;
+		R.t += dt;
+		const tgt = R.stage === 0 || R.stage === 2 ? D.outside : D.inside;
+		const d = Math.hypot(tgt.x - S.pos.x, tgt.z - S.pos.z);
+		if (R.stage === 1 && d < 0.8) { R.stage = 3; R.wait = 4 + Math.random() * 10; }
+		if (R.stage === 3) {
+			M.want.speed = 0; M.setPose('rest');
+			R.wait -= dt;
+			if (R.wait < 0) R.stage = 2;
+			return;
+		}
+		if (d < 0.8) { if (R.stage === 0) R.stage = 1; else if (R.stage === 2) { p.route = R.back; return; } }
+		// (given up if it takes too long: the way in was not there after all)
+		if (R.t > 90) { p.route = R.back; return; }
+		M.want.heading = Math.atan2(tgt.x - S.pos.x, tgt.z - S.pos.z);
+		M.want.speed = giveWay(p, p.P.dna.gait.pace * (d < 2 ? 0.6 : 1), cam);
+	}
+	// solid: people keep out of walls, parked cars and the rocks (the same pushes you get)
+	// and out of your own space; walked into a wall for a while, they turn back
+	const PP = new THREE.Vector3(), walkers = [];
+	function solid(p, dt, cam) {
+		const S = p.M.S, W = world(), I = W.island;
+		const x0 = S.pos.x, z0 = S.pos.z;
+		if (I.extraPush) { PP.set(S.pos.x, S.pos.y + 1.6, S.pos.z); I.extraPush(PP, S.pos.y); S.pos.x = PP.x; S.pos.z = PP.z; }
+		const Y = you(cam), dx = S.pos.x - Y.x, dz = S.pos.z - Y.z, d = Math.hypot(dx, dz), R = 0.62;
+		if (d < R && Math.abs(S.pos.y - (Y.y - 1.68)) < 1.4) { const k = d > 1e-3 ? R / d : 0; S.pos.x = Y.x + (d > 1e-3 ? dx * k : R); S.pos.z = Y.z + (d > 1e-3 ? dz * k : 0); }
+		const pushed = Math.hypot(S.pos.x - x0, S.pos.z - z0);
+		p.stuckT = pushed > 0.004 && p.M.want.speed > 0.3 && d > 1.2 ? (p.stuckT || 0) + dt : Math.max(0, (p.stuckT || 0) - dt);
+		if (p.stuckT > 2) {
+			p.stuckT = 0;
+			const R2 = p.route;
+			if (R2?.kind === 'street') { R2.dir = -R2.dir; R2.s += R2.dir * 5; }
+			else if (R2?.kind === 'wander') R2.goal.set(R2.home.x + (Math.random() - 0.5) * 40, 0, R2.home.z + (Math.random() - 0.5) * 40);
+			else if (R2?.loop) R2.next = (R2.next - R2.dir + 8) % 4;
+		}
+	}
+	// you, where you stand (not the camera, which in third person hangs behind you)
+	function you(cam) { const P = world().player?.state; return P && !P.flying ? P.pos : cam; }
+	// making room: someone coming your way (or anyone's) eases to their right from a few
+	// metres off and slows as they pass, as people do on a trail; returns the speed
+	function giveWay(p, v, cam) {
+		const M = p.M, S = M.S, hx = Math.sin(S.heading), hz = Math.cos(S.heading);
+		const dodge = (x, z, reach, k) => {
+			const dx = x - S.pos.x, dz = z - S.pos.z, d = Math.hypot(dx, dz);
+			if (d > reach || d < 1e-3) return;
+			const ahead = (dx * hx + dz * hz) / d;
+			if (ahead < 0.2) return;
+			// to the right of them, unless the other is already on that side
+			const side = dx * hz - dz * hx > 0.4 * d ? -1 : 1;
+			const near = 1 - d / reach;
+			M.want.heading += side * near * ahead * 0.9 * k;
+			v *= 1 - near * ahead * 0.55 * k;
+		};
+		const Y = you(cam);
+		dodge(Y.x, Y.z, 4.5, 1);
+		for (const o of pool) if (o !== p && o.active && o.partner !== p && o.route?.parent !== p && p.route?.parent !== o) dodge(o.M.S.pos.x, o.M.S.pos.z, 2.2, 0.6);
+		return v;
 	}
 
 	// a rod for someone fishing off the pier's rail: held out ahead of them, the line down
@@ -556,8 +628,12 @@ export function createPeople(scene, world, camera = null) {
 				fadePerson(p.P, p.fade ?? 1);
 				steer(p, dt, cam);
 				p.M.update(dt, t, cam);
+				if (d < 150 && p.route?.kind !== 'seat') solid(p, dt, cam);
 			}
 		}
+		// the doors of public buildings open for the people coming to them (interiors/index.js)
+		const I = world().interiors;
+		if (I?.walkers) { walkers.length = 0; for (const p of pool) if (p.active) walkers.push({ x: p.M.S.pos.x, z: p.M.S.pos.z, footY: p.M.S.pos.y }); I.walkers(walkers); }
 		// fill up: one new arrival a frame at most
 		acc += dt;
 		if (acc > 0.15 && (active < na || kids < nk)) {

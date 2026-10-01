@@ -138,9 +138,10 @@ export function createMedievalInteriors({ group, mat, col, houses, isPhone = fal
 			// one a beat (each is a few milliseconds)
 			for (const [, b] of near) if (!live.has(b)) { live.set(b, build(b)); break; }
 		}
-		// the doors open as you come to them
+		// the doors open as you come to them, or as the villagers do
 		for (const H of live.values()) {
-			const d = Math.hypot(H.at[0] - cam.x, H.at[2] - cam.z), want = d < 2.4 && Math.abs(cam.y - 1.7 - H.b.inside.y0) < 1.8 ? 1 : 0;
+			const d = Math.hypot(H.at[0] - cam.x, H.at[2] - cam.z), y0 = H.b.inside.y0;
+			const want = (d < 2.4 && Math.abs(cam.y - 1.7 - y0) < 1.8) || walkers.some((q) => Math.abs(q.footY - y0) < 1.8 && Math.hypot(q.x - H.at[0], q.z - H.at[2]) < 2.4) ? 1 : 0;
 			H.open += Math.sign(want - H.open) * Math.min(Math.abs(want - H.open), dt * 1.8);
 			H.pivot.rotation.y = H.b.inside.yaw + H.open * Math.PI * 0.5;
 			H.doorSolid.off = H.open > 0.35;
@@ -165,7 +166,21 @@ export function createMedievalInteriors({ group, mat, col, houses, isPhone = fal
 		P.yaw = Math.atan2(-(tx - x), -(tz - z)); P.pitch = -0.08;
 		return { kind: I.kind, w: I.w, d: I.d };
 	}
-	return { update, inside, goTo, info: () => ({ live: live.size, houses: list.length, ...stats }), live };
+	// walkers(list): where the villagers are this frame ([{ x, z, footY }]); doorsNear(x, z, r):
+	// the doors they may use (the inn's and the smithy's: the cottages are homes)
+	let walkers = [];
+	function doorsNear(x, z, r = 40) {
+		const out = [];
+		for (const H of live.values()) {
+			const I = H.b.inside;
+			if (I.kind === 'house' || Math.hypot(H.at[0] - x, H.at[2] - z) > r) continue;
+			const c = Math.cos(I.yaw), s = Math.sin(I.yaw), W = (lx, lz) => [I.x + lx * c + lz * s, I.z - lx * s + lz * c];
+			const [ix, iz] = W(I.door.x, I.d / 2 - 1.2), [ox, oz] = W(I.door.x, I.d / 2 + 1.4), nx = s, nz = c;
+			out.push({ x: H.at[0], z: H.at[2], y: I.y0, heading: Math.atan2(nx, nz), nx, nz, inside: { x: ix, z: iz }, outside: { x: ox, z: oz }, use: I.kind, B: H });
+		}
+		return out;
+	}
+	return { update, inside, goTo, walkers: (list) => { walkers = list || []; }, doorsNear, info: () => ({ live: live.size, houses: list.length, ...stats }), live };
 }
 // where the hearth stands along the left wall (the same in build.js, for its fire)
 export const hearthZ = (I) => Math.max(-I.d / 2 + 1.2, Math.min(I.d / 2 - 1.6, -I.d * 0.15));

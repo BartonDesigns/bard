@@ -44,8 +44,11 @@ export function createFootsteps() {
 			v = (v + 1 + Math.floor(Math.random() * (STEP_VARIANTS - 1))) % STEP_VARIANTS;
 			const run = !!G.run, left = G.foot === 0;
 			// a touch louder running; each one a little different
-			const gain = D.level * (run ? 1.3 : 1) * (0.82 + Math.random() * 0.3) * (left ? 1 : 0.92) * Math.min(1, 0.45 + G.speed / 3);
-			const opts = { gain, pan: (left ? -0.12 : 0.12) + (Math.random() - 0.5) * 0.05, rate: 0.94 + Math.random() * 0.12, when: Math.random() * 0.018, send };
+			// (in time with the music, player.js: tighter, on the beat with no slop, the left foot a
+			// little heavier like a downbeat, so the steps play along rather than across it)
+			const lock = !!G.locked, spread = lock ? 0.3 : 1;
+			const gain = D.level * (run ? 1.3 : 1) * (0.82 + Math.random() * 0.3 * spread) * (left ? 1 : lock ? 0.8 : 0.92) * Math.min(1, 0.45 + G.speed / 3);
+			const opts = { gain, pan: (left ? -0.12 : 0.12) + (Math.random() - 0.5) * 0.05, rate: 0.94 + 0.06 * (1 - spread) + Math.random() * 0.12 * spread, when: lock ? 0 : Math.random() * 0.018, send };
 			play(A, A.B.step(surf, v, run), opts);
 			// on a wet day the ground squelches a little too
 			if (wet) play(A, A.B.step('water', v, run), { ...opts, gain: gain * 0.22, rate: opts.rate * 1.1 });

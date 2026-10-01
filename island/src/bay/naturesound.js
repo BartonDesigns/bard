@@ -43,6 +43,7 @@ export function createNatureSound(bay, groundAt) {
 	const landAt = habitat(bay, null, (x, z) => groundAt(x, z));
 	const hab = { wood: 0, redwood: 0, brush: 0, open: 0, t: 0 };
 	let tWren = 5, tSteller = 9, tThrush = 20, tWood = 12, tBuzz = 3;
+	let aloneT = 0, tWolf = 60;
 	let tOwl = 8, tBarn = 60, tCoyote = 40, tFrog = 0, tBird = 3, tQuail = 10, tLion = 2, tGull = 4, tLap = 1, tWave = 1, tScan = 0;
 	let waveN = 0, setLeft = 0;
 	// the shore round you, found a few times a second: how near the ocean and the Bay's
@@ -171,10 +172,31 @@ export function createNatureSound(bay, groundAt) {
 		hiss('white', 'bandpass', 5200, 4, [[0.1, level * 0.4], [1.1, level * 0.3], [1.6, 0]], p, t, 6600);
 	}
 	function coyote(level) {
-		// yips from a few throats, then a long wavering howl
-		const t = ctx.currentTime, p = pan((Math.random() - 0.5) * 1.8);
-		for (let k = 0; k < 7; k++) { const f = 650 + Math.random() * 500; tone('triangle', f, f * (k % 2 ? 1.5 : 0.7), t + k * 0.18 + Math.random() * 0.1, 0.2, level, p, 0.03); }
-		glide('triangle', [[0, 650], [0.3, 1100], [0.6, 1000], [0.8, 1150], [1, 800]], t + 1.4, 1.6, level * 0.8, p, 0.2);
+		// a pack going off: three or four throats yipping over each other, cackling (quick
+		// broken yelps leaping up and cracking), then the long wavering howls on top, all from
+		// one side of the hill
+		const t = ctx.currentTime, side = (Math.random() - 0.5) * 1.6, n = 3 + Math.floor(Math.random() * 2);
+		for (let v = 0; v < n; v++) {
+			const p = pan(side + (Math.random() - 0.5) * 0.5), base = 600 + Math.random() * 450, t0 = t + v * 0.35 + Math.random() * 0.4;
+			for (let k = 0, at = 0; k < 8 + Math.floor(Math.random() * 8); k++) {
+				const f = base * (0.8 + Math.random() * 0.6), len = 0.07 + Math.random() * 0.12;
+				tone('triangle', f, f * (Math.random() < 0.5 ? 1.6 : 0.6), t0 + at, len, level * (0.6 + Math.random() * 0.4), p, 0.01);
+				at += len + 0.03 + Math.random() * 0.12;
+			}
+			if (Math.random() < 0.7) glide('triangle', [[0, base], [0.25, base * 1.7], [0.5, base * 1.55], [0.7, base * 1.75], [1, base * 1.1]], t0 + 1.6 + Math.random() * 0.6, 1.4 + Math.random(), level * 0.7, p, 0.15);
+		}
+	}
+	function wolf(level) {
+		// a wolf at the moon: a long low howl rising from a moan, held with a slow waver and
+		// falling away; now and then the rest of the pack joins a little higher, a third apart
+		const t = ctx.currentTime, side = (Math.random() - 0.5) * 1.6, n = Math.random() < 0.5 ? 1 : 2 + Math.floor(Math.random() * 2);
+		for (let v = 0; v < n; v++) {
+			const p = pan(side + (Math.random() - 0.5) * 0.4), f = (330 + Math.random() * 60) * [1, 1.19, 1.5][v], t0 = t + v * (1.2 + Math.random());
+			const len = 3.5 + Math.random() * 2.5;
+			glide('sine', [[0, f * 0.72], [0.12, f], [0.5, f * 1.02], [0.8, f * 0.98], [1, f * 0.7]], t0, len, level, p, 0.35);
+			glide('sine', [[0, f * 1.44], [0.12, f * 2], [0.5, f * 2.04], [0.8, f * 1.96], [1, f * 1.4]], t0, len, level * 0.18, p, 0.35);
+			glide('triangle', [[0, f * 0.72], [0.12, f], [0.5, f * 1.02], [0.8, f * 0.98], [1, f * 0.7]], t0, len, level * 0.12, p, 0.35);
+		}
 	}
 	function chorusFrog(level) {
 		// "rib-bit": two short buzzy notes, the second rising
@@ -361,13 +383,18 @@ export function createNatureSound(bay, groundAt) {
 		if (tBarn < 0) { tBarn = 50 + Math.random() * 90; if (night > 0.8 && town < 0.3) barnOwl(0.01 * wild * dry); }
 		tCoyote -= dt;
 		if (tCoyote < 0) { tCoyote = 70 + Math.random() * 120; if (night > 0.7 && Math.random() < 0.6) coyote(0.012 * wild); }
+		// out in the wild alone for a good while after dark, far from the towns, a wolf howls
+		// (rarely, and far off: they are only now coming back to California)
+		aloneT = (o.company || 0) > 0 || town > 0.15 ? 0 : aloneT + dt;
+		tWolf -= dt;
+		if (tWolf < 0) { tWolf = 90 + Math.random() * 150; if (night > 0.8 && aloneT > 180 && Math.random() < 0.55) wolf(0.02 * wild * dry); }
 		// frogs by still water after dark: chorus frogs in the wet months, bullfrogs in summer
 		const byPond = Math.max(0, 1 - (o.pond ?? 1e9) / 120);
 		tFrog -= dt;
 		if (tFrog < 0) {
 			tFrog = 0.3 + Math.random() * 0.8;
 			if (night > 0.5 && byPond > 0) {
-				if ([11, 12, 1, 2, 3, 4].includes(m)) chorusFrog(0.02 * byPond * near);
+				if ([10, 11, 12, 1, 2, 3, 4].includes(m)) { if (Math.random() < 0.7) chorusFrog(0.02 * byPond * near); }
 				else if ([5, 6, 7, 8, 9].includes(m) && Math.random() < 0.25) bullfrog(0.035 * byPond * near);
 			}
 		}
@@ -401,8 +428,13 @@ export function createNatureSound(bay, groundAt) {
 		}
 		const windK = Math.min(1.5, (o.wind ?? 0.3) + 0.08);
 		const leafy = Math.min(1, hab.wood + hab.brush * 0.6);
-		ease(A.wind.g.gain, 0.012 * windK * wild * (0.4 + leafy * 0.6 + hab.open * 0.3), 1.2);
-		ease(A.wind.bp.frequency, hab.redwood > 0.3 ? 380 : 700 + leafy * 1600, 1.5);
+		// the wind comes in gusts and rustles the leaves: a steady broad hiss read as distant surf
+		// everywhere inland, so it all but drops away between the gusts, and through the trees
+		// and the brush it is a brighter, narrower rustle
+		const gust = Math.min(1, o.gust ?? 0.3);
+		ease(A.wind.g.gain, 0.011 * windK * wild * (0.12 + gust * 0.88) * (0.35 + leafy * 0.65 + hab.open * 0.2), 0.6);
+		ease(A.wind.bp.frequency, hab.redwood > 0.3 ? 420 : 1400 + leafy * 1800 + gust * 600, 1.2);
+		ease(A.wind.bp.Q, hab.redwood > 0.3 ? 0.7 : 1.1 + leafy * 0.6, 1.5);
 		if (day && wild > 0.1) {
 			const rw = hab.redwood * birds;
 			tWren -= dt; if (tWren < 0) { tWren = 14 + Math.random() * 30; if (rw > 0.2) wren(0.01 * rw); }
@@ -422,5 +454,7 @@ export function createNatureSound(bay, groundAt) {
 		tLion -= dt;
 		if (tLion < 0) { tLion = 1.2 + Math.random() * 2.5; if (lions > 0) seaLion(0.05 * lions * near, lionPan + (Math.random() - 0.5) * 0.3); }
 	}
-	return { update, hush: (k) => { hush = k; } };
+	// (for the tests: how near the ocean and the Bay's edge seem, and the surf bed's level)
+	const info = () => ({ ocean: +shore.ocean.toFixed(3), bay: +shore.bay.toFixed(3), bed: A ? +A.bed.g.gain.value.toFixed(4) : null, master: A ? +A.master.gain.value.toFixed(3) : null });
+	return { update, info, hush: (k) => { hush = k; } };
 }

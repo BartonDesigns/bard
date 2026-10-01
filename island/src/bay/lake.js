@@ -1,15 +1,15 @@
 // Lake Annabel, at Bishop Ranch in San Ramon: the office park's lake, and a favourite
 // family fishing spot. Its true outline (Overture Maps / OpenStreetMap), with the
 // Roundhouse on its peninsula; the water deep green and still, mirroring the sky and the
-// trees round it; a concrete edge with a walk along it, rock riprap and reeds, oaks and
-// redwoods close round. Mallards and Canada geese paddle about, an egret stalks the
+// trees round it; the water a little under the walk round it, over a low concrete edge,
+// with rock riprap and reeds, oaks and redwoods close round. Mallards and Canada geese paddle about, an egret stalks the
 // shallows, turtles sun on the rocks, and now and then a fish jumps.
 // Fish it from the edge (fishing.js): bluegill, largemouth bass, redear sunfish, channel
 // catfish and carp, as the lake holds.
 
 import * as THREE from 'three';
 import { waterfowl, egret as egretBody, turtle as turtleBody } from '../world/creatures.js';
-import { toWorld } from './geo.js';
+import { toWorld, LEVELS, H_OFF, H_SCALE } from './geo.js';
 import { CLOUD_REFLECT_GLSL, cloudReflectU } from '../world/sky.js';
 
 const RING = [[37.7653550, -121.9665241], [37.7652032, -121.9669164], [37.7650471, -121.9670750], [37.7648865, -121.9671251], [37.7646555, -121.9670361], [37.7644905, -121.9668274], [37.7644421, -121.9666242], [37.7645037, -121.9662820], [37.7645939, -121.9657783], [37.7645873, -121.9653248], [37.7644949, -121.9648378], [37.7643651, -121.9645679], [37.7640594, -121.9641755], [37.7635886, -121.9636413], [37.7635336, -121.9634298], [37.7635380, -121.9632100], [37.7636018, -121.9629957], [37.7636898, -121.9628510], [37.7638328, -121.9627647], [37.7640132, -121.9627286], [37.7641737, -121.9627536], [37.7649305, -121.9632684], [37.7647765, -121.9636246], [37.7647391, -121.9637915], [37.7647479, -121.9639529], [37.7647963, -121.9641199], [37.7648755, -121.9642507], [37.7649591, -121.9643341], [37.7651108, -121.9644009], [37.7652560, -121.9644148], [37.7653858, -121.9643731], [37.7654936, -121.9642868], [37.7657554, -121.9636802], [37.7659599, -121.9638082], [37.7649393, -121.9663182], [37.7649613, -121.9663766], [37.7650031, -121.9663849], [37.7650383, -121.9663376]];
@@ -130,20 +130,75 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 	const U = { uTime: { value: 0 }, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uNight: { value: 0 }, uRings: { value: rings }, ...cloudReflectU(shared) };
 	const ring = (x, z, k = 1) => { const R = rings.reduce((a, b) => (b.w < a.w ? b : a)); R.set(x, z, 0.2, k); };
 	const bodies = [];
-	const annabel = { S: shoreOf(LAKE), roundhouse: true, birds: isPhone ? 8 : 14, egret: true };
+	// Lake Annabel as water.js knows a lake, so it carves the ground under the water and round
+	// its edge on its fine grid, as for every other lake (it draws none of it: that is all
+	// here), the bank rising gently to the walk (lip)
+	const source = { name: 'annabel', lakes: [], v: 0, version: () => source.v, ready: () => true, *tile() { return []; } };
+	const annabel = { S: shoreOf(LAKE), roundhouse: true, dig: true, birds: isPhone ? 8 : 14, egret: true };
 	bodies.push(annabel);
 
+	// the ground along the walk round a lake (1.5 and 3.2 m out from its edge): its lowest
+	// few percent, so the water sits under the path everywhere
+	function bankOf(S) {
+		const P = S.P, hs = [];
+		for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+			const a = P[j], b = P[i], L = Math.hypot(b.x - a.x, b.z - a.z);
+			if (L < 0.5) continue;
+			const nx = -(b.z - a.z) / L, nz = (b.x - a.x) / L, out = S.inside((a.x + b.x) / 2 + nx * 1.5, (a.z + b.z) / 2 + nz * 1.5) ? -1 : 1;
+			for (let t = 0; t < L; t += 2) for (const o of [1.5, 3.2]) {
+				const x = a.x + (b.x - a.x) * t / L + nx * out * o, z = a.z + (b.z - a.z) * t / L + nz * out * o;
+				if (!S.inside(x, z)) hs.push(bay.heightAt(x, z));
+			}
+		}
+		hs.sort((p, q) => p - q);
+		return hs.length ? hs[Math.floor(hs.length * 0.05)] : bay.heightAt(S.cx, S.cz);
+	}
+	// a generated town's pond: just over the ground inside (the ground there is its surface)
+	function pondLevel(S) {
+		let hi = -1e9;
+		for (let x = S.minX; x < S.maxX; x += 6) for (let z = S.minZ; z < S.maxZ; z += 6) if (S.inside(x, z)) hi = Math.max(hi, bay.heightAt(x, z));
+		for (const q of S.P) if (hi < -1e8) hi = bay.heightAt(q.x, q.z);
+		return hi + 0.06;
+	}
+	// the survey's heights inside a lake let down under its water (as watersrc.js does for
+	// the baked lakes), drawn and walked alike; the water is dark, so a shallow bed will do,
+	// shallowest at the edge so the bank meets the water close to its true line
+	function dig(S, level) {
+		for (const Lv of bay.levels || []) {
+			const tex = Lv?.tex, D = tex?.image?.data;
+			if (!Lv || !D || tex.image.width !== Lv.W) continue;
+			const st = Lv.step, i0 = Math.max(0, Math.floor((S.minX - Lv.x0) / st)), i1 = Math.min(Lv.W - 1, Math.ceil((S.maxX - Lv.x0) / st));
+			const j0 = Math.max(0, Math.floor((S.minZ - Lv.zN) / st)), j1 = Math.min(Lv.H - 1, Math.ceil((S.maxZ - Lv.zN) / st));
+			const rows = new Set();
+			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+				const x = Lv.x0 + i * st, z = Lv.zN + j * st;
+				if (!S.inside(x, z)) continue;
+				const q = j * Lv.W + i, t = level - Math.min(1.2, 0.14 + S.edgeOf(x, z).d * 0.06);
+				if (t < Lv.v[q] / H_SCALE - H_OFF) { Lv.v[q] = Math.round((t + H_OFF) * H_SCALE); D[q] = THREE.DataUtils.toHalfFloat(t); rows.add(j); }
+			}
+			// (a row at a time: three.js uploads each range as one row, counted as if RGBA)
+			for (const j of rows) tex.addUpdateRange(j * Lv.W * 4, Lv.W * 4);
+			if (rows.size) tex.needsUpdate = true;
+		}
+	}
+	// (a lake to dig waits for the finest survey over it to have loaded)
+	const surveyed = (W) => !W.dig || LEVELS.every((L, i) => { const a = toWorld(L.lat[1], L.lon[0]), b = toWorld(L.lat[0], L.lon[1]); return W.S.cx < a.x || W.S.cx > b.x || W.S.cz < a.z || W.S.cz > b.z || bay.levels?.[i]?.tex; });
 	function build(W) {
 		const { S } = W, inLake = S.inside, edge = S.edgeOf, P = S.P, group = new THREE.Group();
 		W.group = group; W.built = true; W.birdsL = [];
 		root.add(group);
 		const { minX, maxX, minZ, maxZ } = S;
-		// the water's level: just over the ground inside (the mapped ground is the lake's
-		// surface, flattened), the edge a concrete lip standing over it
-		let hi = -1e9;
-		for (let x = minX; x < maxX; x += 6) for (let z = minZ; z < maxZ; z += 6) if (inLake(x, z)) hi = Math.max(hi, bay.heightAt(x, z));
-		for (const q of P) if (hi < -1e8) hi = bay.heightAt(q.x, q.z);
-		const level = W.level = hi + 0.06;
+		// the water's level: a little under the walk round it (the lowest of it), and the
+		// survey's ground under the water let down below that (dig), so you stand on the path
+		// and look down into the lake over a low edge
+		// (once: built again later, the ground is dug already)
+		W.bank ??= W.dig ? bankOf(S) : null;
+		const level = W.level = W.dig ? W.bank - 0.38 : pondLevel(S);
+		if (W.dig && !W.dug) {
+			dig(S, level); W.dug = true;
+			source.lakes.push({ kind: 0, int: false, name: 'Lake Annabel', level, rings: [Float64Array.from(S.P.flatMap((q) => [q.x, q.z]))], dams: [], cx: S.cx, cz: S.cz, own: true, lip: 0.07 });
+			source.v++;
+		}
 		// the water
 		const shape = new THREE.Shape(P.map((q) => new THREE.Vector2(q.x, -q.z)));
 		const wg = new THREE.ShapeGeometry(shape, 8);
@@ -153,7 +208,7 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 		water.position.y = level;
 		water.receiveShadow = true;
 		group.add(water);
-		// the concrete lip all round, and rocks and reeds along parts of the shore
+		// a low concrete edge all round, and rocks and reeds along parts of the shore
 		const lip = [], rocks = [], reeds = [];
 		for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
 			const a = P[j], b = P[i], L = Math.hypot(b.x - a.x, b.z - a.z);
@@ -167,13 +222,16 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 			}
 		}
 		const conc = new THREE.MeshStandardMaterial({ color: 0xb9b4a9, roughness: 0.85 });
-		const lipG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+		// (a wedge: its top a hand over the water at the edge, sloping down into the bank behind,
+		// so where the bank stands higher it is buried in it and where it is low it shows no wall)
+		const lipG = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0.5);
+		{ const P2 = lipG.attributes.position; for (let i = 0; i < P2.count; i++) if (P2.getY(i) > 0.5 && P2.getZ(i) > 0.5) P2.setY(i, 0.62); lipG.computeVertexNormals(); }
 		const lips = new THREE.InstancedMesh(lipG, conc, Math.max(1, lip.length));
 		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 		lip.forEach((e, k) => {
-			const g = Math.min(bay.heightAt(e.a.x, e.a.z), bay.heightAt(e.b.x, e.b.z)), y0 = Math.min(g, level) - 0.8, top = Math.max(level + 0.3, g + 0.12);
-			q.setFromAxisAngle(Y, -Math.atan2(e.b.z - e.a.z, e.b.x - e.a.x));
-			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 + e.nx * 0.3, y0, (e.a.z + e.b.z) / 2 + e.nz * 0.3), q, s.set(e.L + 0.6, top - y0, 0.6)));
+			const y0 = level - 0.95, top = level + 0.15, flip = e.nx * (e.a.z - e.b.z) + e.nz * (e.b.x - e.a.x) < 0 ? Math.PI : 0;
+			q.setFromAxisAngle(Y, flip - Math.atan2(e.b.z - e.a.z, e.b.x - e.a.x));
+			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 - e.nx * 0.1, y0, (e.a.z + e.b.z) / 2 - e.nz * 0.1), q, s.set(e.L + 0.6, top - y0, 1.5)));
 		});
 		lips.count = lip.length;
 		lips.castShadow = lips.receiveShadow = true;
@@ -275,7 +333,7 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 		for (const R of rings) if (R.w > 0) { R.z += dt * 1.4; R.w -= dt * 0.35; }
 		for (const W of bodies) {
 			const S = W.S, far = Math.hypot(x - S.cx, z - S.cz);
-			if (!W.built) { if (far < 2500) build(W); else continue; }
+			if (!W.built) { if (far < 2500 && surveyed(W)) build(W); else continue; }
 			W.group.visible = far < 4000 && cam.position.y < 2500;
 			if (!W.group.visible) continue;
 			if (W.glass) W.glass.emissiveIntensity = night * 1.3;
@@ -315,7 +373,9 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 		const e = W.S.edgeOf(p.x, p.z), dx = e.x - p.x, dz = e.z - p.z, l = Math.hypot(dx, dz) || 1;
 		p.x = e.x + dx / l * 0.4; p.z = e.z + dz / l * 0.4;
 	}
-	return { group: root, update, push, waterAt, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
+	// (rings on the water: a float landing, a fish on the line; fishing.js)
+	const ripple = (x, z, k = 0.5) => { if (bodyAt(x, z)) ring(x, z, Math.min(1, k)); };
+	return { group: root, update, push, waterAt, ripple, source, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
 }
 
 // the reed blades merged into one geometry (a small local version, to keep this module

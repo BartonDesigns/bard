@@ -385,5 +385,17 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const B of built.values()) { const [lx, lz] = local(B, pos.x, pos.z); if (Math.abs(lx) < B.hw - 0.3 && Math.abs(lz) < B.hd - 0.3 && pos.y - B.floorY < CEIL) return B; }
 		return null;
 	}
-	return { group, update, floor, push, inside, venue, count: () => built.size, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length })) };
+	// the doorways a walker may use (always open: a storefront's door stands open), each with
+	// its outward normal and a point just inside and just outside
+	function doorsNear(x, z, r = 40) {
+		const out = [];
+		for (const B of built.values()) {
+			if (Math.hypot(B.b.x - x, B.b.z - z) > r + Math.max(B.hw, B.hd)) continue;
+			const ca = Math.cos(B.b.a), sa = Math.sin(B.b.a), W = (lx, lz) => [B.b.x + ca * lx - sa * lz, B.b.z + sa * lx + ca * lz];
+			const [dx, dz] = W(B.doorX, B.hd), [ix, iz] = W(B.doorX, B.hd - 1.6), [ox, oz] = W(B.doorX, B.hd + 1.6);
+			out.push({ x: dx, z: dz, y: B.floorY, heading: Math.atan2(-sa, ca), nx: -sa, nz: ca, inside: { x: ix, z: iz }, outside: { x: ox, z: oz, y: bay.heightAt(ox, oz) }, use: B.type, B });
+		}
+		return out;
+	}
+	return { group, update, floor, push, inside, venue, doorsNear, count: () => built.size, list: () => [...built.values()].map((B) => ({ x: B.b.x, z: B.b.z, a: B.b.a, type: B.type, y: B.floorY, hw: B.hw, hd: B.hd, seats: B.seats.length })) };
 }

@@ -141,7 +141,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 			const R = { x0: r.x0 - e, z0: r.z0 - e, x1: r.x1 + e, z1: r.z1 + e };
 			for (const [x0, z0, x1, z1] of minusHoles(R, L.holes)) g.quad(fk, [x0, L.y, z0], [x1, L.y, z0], [x1, L.y, z1], [x0, L.y, z1], [0, 1, 0], FT[fk] || wood, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
 			const yc = L.y + L.h;
-			for (const [x0, z0, x1, z1] of minusHoles(R, above ? above.holes : [])) g.quad(lit[id] ? 'ceilingLit' : 'ceiling', [x0, yc, z0], [x1, yc, z0], [x1, yc, z1], [x0, yc, z1], [0, -1, 0], lin([0.95, 0.95, 0.93]), [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
+			for (const [x0, z0, x1, z1] of minusHoles(R, above ? above.holes : P.topHoles || [])) g.quad(lit[id] ? 'ceilingLit' : 'ceiling', [x0, yc, z0], [x1, yc, z0], [x1, yc, z1], [x0, yc, z1], [0, -1, 0], lin([0.95, 0.95, 0.93]), [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
 		}
 		// the edges of the holes, between the ceiling below and this floor
 		for (const [x0, z0, x1, z1] of L.holes) {
@@ -157,6 +157,9 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		g.quad('ceiling', [A.x0, A.y + 2.64, A.z0], [A.x1, A.y + 2.64, A.z0], [A.x1, A.y + 2.64, A.z1], [A.x0, A.y + 2.64, A.z1], [0, -1, 0], lin([0.95, 0.95, 0.93]), [[0, 0], [1, 0], [1, 1], [0, 1]]);
 		col.push([A.x0 - 0.1, A.z1, A.x1 + 0.1, A.z1 + 0.1, A.y, A.y + 2.7], [A.x0 - 0.1, A.z0, A.x0, A.z1, A.y, A.y + 2.7], [A.x1, A.z0, A.x1 + 0.1, A.z1, A.y, A.y + 2.7]);
 	}
+
+	// what stands solid through the floors (the stone base of the Summit Building's tower)
+	for (const q of P.solid || []) if (q.k === k) col.push(q.box);
 
 	yield;
 	const root = new THREE.Group(), doors = [];

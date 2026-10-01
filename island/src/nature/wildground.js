@@ -552,7 +552,55 @@ export function createWildGround(scene, bay, { shared, real, isPhone = false, gr
 		for (const L of layers) o[L.key] = L.meshes.reduce((n, M) => n + M.im.count, 0);
 		return o;
 	}
-	return { update, group, info, landAt, flush };
+	// ---------- underfoot: the rocks are solid, the brush holds you back ----------
+	// a boulder or an outcrop is a dome over its footprint (its own geometry's box, turned and
+	// scaled as it is drawn): you step up onto the low ones, jump onto the middling ones and
+	// stand on top, and go round the rest. The stones and pebbles are nothing to trip on
+	const BRUSH = { coyote: 0.5, chamise: 0.55, manzanita: 0.6, toyon: 0.5, poisonoak: 0.4, sage: 0.35, huckle: 0.45 };
+	const boxes = new Map();
+	function boxOf(key, v) {
+		const id = key + ':' + v;
+		if (!boxes.has(id)) {
+			const L = layers.find((q) => q.key === key), g = L?.meshes[Math.max(0, Math.min(v | 0, L.meshes.length - 1))]?.im.geometry;
+			if (g && !g.boundingBox) g.computeBoundingBox();
+			boxes.set(id, g?.boundingBox || null);
+		}
+		return boxes.get(id);
+	}
+	function eachNear(x, z, keys, reach, fn) {
+		const ci = Math.floor(x / C), cj = Math.floor(z / C);
+		for (let dj = -reach; dj <= reach; dj++) for (let di = -reach; di <= reach; di++) {
+			const c = cells.get((ci + di) + ',' + (cj + dj));
+			if (c) for (const key of keys) { const a = c[key]; if (a) for (let k = 0; k < a.length; k += ITEM) fn(key, a, k); }
+		}
+	}
+	function rockTop(x, z) {
+		let top = -1e9;
+		eachNear(x, z, ['rock', 'outcrop'], 1, (key, a, k) => {
+			const B = boxOf(key, a[k + 9]);
+			if (!B) return;
+			const sx = a[k + 4], sy = a[k + 5], dx = x - a[k], dz = z - a[k + 2];
+			const ex = (B.max.x - B.min.x) / 2, ez = (B.max.z - B.min.z) / 2;
+			if (dx * dx + dz * dz > (Math.max(ex, ez) * sx + 1.5) ** 2) return;
+			// into the rock's own frame (turned about the vertical by its yaw)
+			const c = Math.cos(a[k + 3]), sn = Math.sin(a[k + 3]);
+			const lx = (dx * c - dz * sn) / sx - (B.min.x + B.max.x) / 2, lz = (dx * sn + dz * c) / sx - (B.min.z + B.max.z) / 2;
+			const u = (lx / (ex * 0.9)) ** 2 + (lz / (ez * 0.9)) ** 2;
+			if (u >= 1) return;
+			top = Math.max(top, a[k + 1] + B.max.y * sy * Math.sqrt(1 - u));
+		});
+		return top;
+	}
+	// how much the brush round you holds you back (0 clear .. about 0.5 in the thick of it)
+	function dragAt(x, z) {
+		let k = 0;
+		eachNear(x, z, Object.keys(BRUSH), 1, (key, a, i) => {
+			const r = a[i + 4] * 0.85, d = Math.hypot(x - a[i], z - a[i + 2]);
+			if (d < r) k = Math.max(k, BRUSH[key] * (1 - (d / r) ** 2));
+		});
+		return k;
+	}
+	return { update, group, info, landAt, flush, rockTop, dragAt };
 }
 
 // ---------- litter ----------

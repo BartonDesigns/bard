@@ -18,11 +18,13 @@ import * as THREE from 'three';
 import { planRow, planApt, planHall, rng, seedOf, ST } from './plan.js';
 import { furnish } from './furnish.js';
 import { prepare, buildLevel } from './build.js';
-import { houseMaterials } from '../bay/housekit.js';
+import { houseMaterials, lin } from '../bay/housekit.js';
 import { STYLE, sfDistrict } from '../bay/styles.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 
 const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'restaurant'], mission: ['cafe', 'restaurant', 'laundromat', 'grocer', 'bar', 'florist'], northbeach: ['cafe', 'restaurant', 'bar', 'books'], sunset: ['restaurant', 'cafe', 'laundromat', 'grocer'], any: ['cafe', 'grocer', 'books', 'restaurant', 'laundromat', 'bar', 'florist', 'boutique'] };
+// the buildings anyone may walk into (the rest are homes, or shut)
+const PUBLIC = new Set(['shop', 'store', 'office', 'school', 'site']);
 const STYLE_OF = { victorian: 'victorian', pacheights: 'edwardian', nobhill: 'edwardian', northbeach: 'edwardian', chinatown: 'edwardian', marina: 'sunset', sunset: 'sunset', mission: 'mission' };
 
 export function createInteriors(scene, bay, city, { isPhone = false, mats = null, towers = null, night = { value: 0 } } = {}) {
@@ -39,6 +41,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 
 	// ---------- what a lot is, and its plan ----------
 	function useOf(o, tall) {
+		if (underSite(o)) return null;
 		if (o.src?.grp || tall.has(o) || o.w < 3.2 || o.d < 3.2 || o.w * o.d > 26000) return null;
 		const b = o.src, top = o.y + o.h, g = bay.heightAt(o.x, o.z), hA = top - g;
 		if (hA < 2.4) return null;
@@ -62,6 +65,9 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (k === K.apt) return hA > 5 ? 'apt' : null;
 		return null;
 	}
+	// a mapped block standing where a landmark is built inside (addSite) is the landmark's
+	const sites = [];
+	const underSite = (o) => sites.some((S) => { if (!S.o) return false; const [lx, lz] = frame(S.o).l(o.x, o.z); return Math.abs(lx) < S.o.w / 2 + 1 && Math.abs(lz) < S.o.d / 2 + 1; });
 	// the lot's frame: local (x across, z toward the front) to the world and back
 	const frame = (o) => { const ca = Math.cos(o.a), sa = Math.sin(o.a); return { ca, sa, w: (lx, lz) => [o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz], l: (x, z) => { const dx = x - o.x, dz = z - o.z; return [ca * dx + sa * dz, -sa * dx + ca * dz]; } }; };
 	function plan(o, use) {
@@ -128,16 +134,33 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		return P;
 	}
 
+	// a landmark's own plan (addSite): its floor, the street at its door, the steps up
+	function sitePlan(S) {
+		const P = S.plan();
+		P.f0 = S.o.f0; P.street = S.o.street ?? S.o.f0;
+		P.style = P.style || 'plain';
+		furnish(P, 0);
+		P.stoop = [];
+		const rise = P.f0 - P.street;
+		if (rise > 0.22) {
+			const n = Math.min(14, Math.ceil(rise / 0.18)), dw = P.door.w + 0.5;
+			for (let i = 0; i < n; i++) { const y = rise * (n - i) / (n + 1) - rise, z0 = P.D / 2 + i * 0.28; P.stoop.push([P.door.x - dw / 2, z0, P.door.x + dw / 2, z0 + 0.28, y]); }
+		}
+		return P;
+	}
+
 	// ---------- building one, level by level ----------
 	function* make(B) {
 		const t0 = performance.now();
-		const P = plan(B.o, B.use);
+		const P = B.site ? sitePlan(B.site) : plan(B.o, B.use);
 		stats.planMs = performance.now() - t0;
 		if (!P) return null;
 		yield;
 		B.P = P;
+		P.private = P.private ?? !PUBLIC.has(B.use);
 		if (!M) M = houseMaterials([-2, -1, 150, 160]);
 		B.C = prepare(P, { outside: B.o.col || [0.85, 0.82, 0.76], litShare: 0.55 });
+		if (P.doorColor) B.C.doorC = lin(P.doorColor);
 		B.root = new THREE.Group();
 		B.root.position.set(B.o.x, P.f0, B.o.z);
 		B.root.rotation.y = -B.o.a;
@@ -186,6 +209,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (!B) return;
 		live.delete(key);
 		if (B.root) { group.remove(B.root); disposeTree(B.root); }
+		if (B.site) { B.site.live = false; return; }
 		city.setDoor(B.o, null);
 		if (B.P?.bayLot) city.setDoor(B.P.bayLot, null);
 		stats.dropped++;
@@ -212,6 +236,12 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 				const d = Math.max(0, Math.hypot(o.x - x, o.z - z) - Math.max(o.w, o.d) / 2);
 				if (d < BUILD_R) cands.push({ d, key, o, use });
 			}
+			// the landmarks built inside (addSite)
+			for (const S of sites) {
+				if (!S.ready()) continue;
+				const d = Math.max(0, Math.hypot(S.o.x - x, S.o.z - z) - Math.max(S.o.w, S.o.d) / 2);
+				if (d < BUILD_R) cands.push({ d, key: S.key, o: S.o, use: 'site', site: S });
+			}
 			cands.sort((a, b) => a.d - b.d);
 			cands.length = Math.min(cands.length, MAX);
 			for (const [key, B] of live) {
@@ -232,7 +262,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		// one building at a time, a few milliseconds a frame
 		if (job && !live.has(job.key)) job = null;
 		if (!job) {
-			for (const c of cands) if (!live.has(c.key)) { const B = { key: c.key, o: c.o, use: c.use, ms: 0 }; live.set(c.key, B); job = { key: c.key, B, gen: make(B) }; break; }
+			for (const c of cands) if (!live.has(c.key)) { const B = { key: c.key, o: c.o, use: c.use, site: c.site, ms: 0 }; live.set(c.key, B); job = { key: c.key, B, gen: make(B) }; break; }
 			// ...or a tall one's floors, as you climb it
 			if (!job) for (const B of live.values()) {
 				if (!B.ready || B.P.levels.length <= 5) continue;
@@ -250,15 +280,17 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			if (!r.done) continue;
 			if (!job.climb) {
 				if (!r.value) { live.delete(job.key); live.set(job.key, { key: job.key, o: job.B.o, use: null, dead: true }); }
+				else if (r.value.site) { const B = r.value; B.ready = true; B.site.live = true; stats.built++; stats.lastMs = B.ms; }
 				else { const B = r.value; B.ready = true; const top = Math.max(0, Math.floor(B.P.f0 - B.o.y + B.P.levels.length * ST.storey - 0.2)); city.setDoor(B.o, [B.P.door.x, B.P.f0 - B.o.y + B.P.door.y, B.P.door.w + 4 * top]); if (B.P.bayLot) city.setDoor(B.P.bayLot, [0, 0, 0.001 + 4 * Math.max(0, Math.floor(B.P.f0 + B.P.levels.length * ST.storey - B.P.bayLot.y - 0.2))]); stats.built++; stats.lastMs = B.ms; }
 			}
 			job = null;
 		}
-		// the doors: open as you come to them, shut behind you
+		// the doors: open as you come to them (you, or anyone walking by), shut behind you
 		for (const B of live.values()) {
 			if (!B.ready) continue;
 			for (const D of B.levels[0]?.doors || []) {
-				const [wx, wz] = frame(B.o).w(D.at[0], D.at[2]), d = Math.hypot(wx - x, wz - z), near = d < 2.3 && Math.abs(p.y - 1.7 - (B.P.f0 + D.y0)) < 1.8;
+				const [wx, wz] = frame(B.o).w(D.at[0], D.at[2]), d = Math.hypot(wx - x, wz - z), fy = B.P.f0 + D.y0;
+				const near = (d < 2.3 && Math.abs(p.y - 1.7 - fy) < 1.8) || (!B.P.private && walkers.some((q) => Math.abs(q.footY - fy) < 1.8 && Math.hypot(q.x - wx, q.z - wz) < 2.3));
 				if (!D.manual) D.target = near ? 1 : 0;
 				else if (d > 5) D.manual = false;
 				if (Math.abs(D.open - D.target) > 1e-3) { D.open += Math.sign(D.target - D.open) * Math.min(Math.abs(D.target - D.open), dt * 1.8); D.apply(); }
@@ -351,7 +383,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			const top = o.y + o.h;
 			if (footY + 0.35 > top || footY + 1.7 < o.y) continue;
 			const key = city.lotKey(o);
-			if (claimed.has(key)) continue;
+			if (claimed.has(key) || underSite(o)) continue;
 			const F = frame(o), q = F.l(pos.x, pos.z);
 			if (pushBox(q, [-o.w / 2, -o.d / 2, o.w / 2, o.d / 2])) { const [wx, wz] = F.w(q[0], q[1]); pos.x = wx; pos.z = wz; }
 		}
@@ -387,7 +419,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (!h) return null;
 		const B = h.B, P = B.P, lvY = P.levels[h.level].y;
 		const home = B.use === 'row' || B.use === 'apt';
-		const k = B.use === 'shop' && h.level === 0 ? crowd(ZONE.retail, hours).k : home ? (hours > 18 || hours < 8 ? 0.75 : 0.35) : B.use === 'school' ? (hours > 8 && hours < 15.5 ? 0.9 : 0.02) : B.use === 'office' ? crowd(ZONE.office, hours).k : B.use === 'store' ? crowd(ZONE.retail, hours).k : 0.2;
+		const k = B.use === 'shop' && h.level === 0 ? crowd(ZONE.retail, hours).k : home ? (hours > 18 || hours < 8 ? 0.75 : 0.35) : B.use === 'school' ? (hours > 8 && hours < 15.5 ? 0.9 : 0.02) : B.use === 'office' ? crowd(ZONE.office, hours).k : B.use === 'store' ? crowd(ZONE.retail, hours).k : B.use === 'site' ? (hours > 9.5 && hours < 16.5 ? 0.6 : 0) : 0.2;
 		if (!B.spots) {
 			const F = frame(B.o);
 			B.spots = P.seats.map((s) => { const [wx, wz] = F.w(s.x, s.z), wfx = F.ca * s.fx - F.sa * s.fz, wfz = F.sa * s.fx + F.ca * s.fz; return { x: wx, z: wz, y: P.f0 + s.y, ly: s.y, h: s.h, sit: s.sit, heading: Math.atan2(wfx, wfz), taken: false, table: !!s.table }; });
@@ -424,6 +456,28 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		P.yaw = Math.atan2(-(dx - x), -(dz - z)); P.pitch = 0;
 		return { use: B.use, style: B.P.style, levels: B.P.levels.length };
 	}
+	// ---------- the people walking about: their doors ----------
+	// walkers(list): where the townspeople and hikers are this frame ([{ x, z, footY }]); a
+	// public building's doors open for them as for you. doorsNear(x, z, r): the doors a walker
+	// may use, the public buildings' only (shops, stores, offices, schools, the visitor
+	// centre...), and those of any other source added with addDoors({ doorsNear, walkers })
+	let walkers = [];
+	const sources = [];
+	function setWalkers(list) { walkers = list || []; for (const s of sources) s.walkers?.(walkers); }
+	function doorsNear(x, z, r = 40) {
+		const out = [];
+		for (const B of live.values()) {
+			if (!B.ready || !PUBLIC.has(B.use) || B.P.private || Math.hypot(B.o.x - x, B.o.z - z) > r + Math.max(B.o.w, B.o.d) / 2) continue;
+			const F = frame(B.o), fw = B.P.walls.find((w) => w.k === 0 && w.kind === 'ext' && w.axis === 'x' && w.out > 0);
+			for (const D of B.levels[0]?.doors || []) {
+				const [dx, dz] = F.w(D.at[0], D.at[2]), [ix, iz] = F.w(D.at[0], (fw ? fw.pos : D.at[2]) - 1.4), [ox, oz] = F.w(D.at[0], D.at[2] + 1.6);
+				const nx = -F.sa, nz = F.ca;
+				out.push({ x: dx, z: dz, y: B.P.f0 + D.y0, heading: Math.atan2(nx, nz), nx, nz, inside: { x: ix, z: iz }, outside: { x: ox, z: oz, y: B.P.street ?? B.P.f0 }, use: B.use, B });
+			}
+		}
+		for (const s of sources) for (const d of s.doorsNear?.(x, z, r) || []) out.push(d);
+		return out;
+	}
 	// (budget: milliseconds a frame for building; tests on a slow machine give it more)
-	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, budget: (ms) => { BUDGET = ms; } };
+	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }
