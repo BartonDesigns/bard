@@ -4,6 +4,38 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Start here (handoff, 1 October 2026)
+
+This round paused at the end of a weekly budget, about four days before it resets. **The live
+site may have moved on since these notes were written** (another agent, or the owner, may have
+shipped work). Before doing anything:
+
+1. `git fetch origin` and compare `main` with the working branch `claude/affectionate-heisenberg-3g4qv1`
+   (`git log --oneline origin/main -15`, `git log --oneline origin/main..origin/claude/affectionate-heisenberg-3g4qv1`).
+   Work from whichever is newest; never overwrite newer live work with older branch files.
+2. Read this file's "Known issues" and "Open threads" below, then `island/README.md`.
+3. Ship only through the checks in "Branches and shipping": build, lint, smoke test, fast-forward.
+
+### Open threads
+
+- **Regional kit** (`island/src/region/`, `earth/data/polar.js`, regional hooks in `earth/globe.js`,
+  `globetowns.js`, `globetrees.js`, `people/persona.js`, `body.js`, `people.js`, `music/`): a
+  regional style layer keyed by atlas region and climate (far north and polar sea, jungle, desert,
+  bazaars, East Asia, valleys and story landmarks, and the other climates the globe crosses), with
+  regional people, clothes and talk. Built in stages; what each region type has and what is left is
+  in its section under "How the main systems work". Next: finish and verify the region types, one
+  screenshot and one conversation each, then widen.
+- **Townsfolk's cloud voice:** the discovery server is deployed at
+  `https://l99-discovery.joshbarton1921.workers.dev` and `island/src/earth/config.js` points at it.
+  Check `/status` in a browser. The talk model's Neuron prices in `server/discovery/wrangler.toml`
+  were set from memory and should be checked against the Workers AI pricing page. Next layer
+  (agents with memory, shared happenings) is in `server/README.md`.
+- **Street-level Bay:** done and live (eight new areas, tiles streamed by distance). Gaps: Castro
+  Valley, Moraga, Richmond and El Cerrito, Novato, south of Mountain View. The place-name banner
+  may show the wrong town at low frame rates (`bay/labels.js`); check on a real device.
+- **Hair refinement** (asked for "next week"): see Known issues.
+- **Hiker lighting** against the hillside: still unchecked.
+
 ## What it is
 
 **Level 99 Bard** (level99bard.com) is a playable instrument. The faceplate (`index.html`)
@@ -136,6 +168,18 @@ own, or `index.html` for the full site.
   reel; a sagging line to a red-and-white float. Lake Annabel's water sits just below its path
   with a low concrete edge (its bed carved on water.js's fine grid).
 
+- **Regional kit** (`island/src/region/`): `kits.js` holds 22 profiles (polar, station, snow, alpine,
+  himalaya, andes, village, farm, outback, mediterranean, desert, pueblo, bazaar, steppe, savanna,
+  sahel, jungle, island, eastvillage, eastcity, southcity, southasia). `choose.js` picks one from
+  the atlas region, its coldest and warmest months, rain, height and town size, blending near
+  borders; anything unmatched is "village". `structures.js`/`layout.js`/`settle.js` build
+  vertex-coloured buildings in 120 m cells (no textures); `landmarks.js` has 52 real landmarks
+  and 30 generated kinds with legends; `ice.js` the sea ice and aurora; `folk.js`, `dress.js`,
+  `talk.js` the people, clothes and talk (persona `region`, `lang`, `facts` feed the cloud voice).
+  Left to do: re-check talk in the eight regions shot before the folk fix, reframe the jungle and
+  steppe views, look at Svalbard after the tundra fix, a brighter aurora, jobs matched to a
+  person's community, and the call to prayer and night sounds checked with audio.
+
 ## History
 
 - **Late August to mid September 2026:** the faceplate's builds (up to Bard Build 226), caves and
@@ -160,6 +204,11 @@ own, or `index.html` for the full site.
   Hayward, Union City and Fremont; San Rafael and the 101 towns of Marin, all baked from Overture in
   265 tiles (about 60 MB) and fetched by distance. The ground's nine region slots became 16 slots of
   the loaded regions nearest you; the far skylines use the real towers.
+
+- **1 October (later):** interiors 2.0 (every landmark solid; the public ones walked into);
+  street-level Bay across SF, Oakland and Berkeley, Walnut Creek and Concord, the Peninsula,
+  Fremont and Hayward, Marin; the Cloudflare discovery server deployed with the townsfolk's free
+  cloud voice; the regional kit begun.
 
 ## Known issues and next refinements
 

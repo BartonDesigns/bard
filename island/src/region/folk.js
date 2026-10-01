@@ -109,7 +109,8 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 				rod(b, b.task === 'fish', b.task === 'fish' && onIce(x, z));
 			} else if (R.out) { const a = Math.random() * Math.PI * 2; x += Math.sin(a) * R.out * 0.5; z += Math.cos(a) * R.out * 0.5; yaw = a; }
 			b.M.place(x, ground(x, z), z, yaw);
-			if (R.seat) b.M.sit(R.seat + (q.y > ground(q.x, q.z) + 0.3 ? q.y - ground(q.x, q.z) : 0), true); else { b.M.stand(); b.M.S.sitK.v = 0; }
+			// (they sit only where there is a seat: on a doorstep they stand)
+			if (R.seat && q.kind !== 'door' && b.task !== 'fish') b.M.sit(R.seat + (q.y > ground(q.x, q.z) + 0.3 ? q.y - ground(q.x, q.z) : 0), true); else if (b.task === 'fish' && R.seat) b.M.sit(R.seat, true); else { b.M.stand(); b.M.S.sitK.v = 0; }
 			b.M.setPose(R.pose || (Math.random() < 0.5 ? 'rest' : 'pockets'));
 			if (R.walk) { b.route = { goal: null, pause: Math.random() * 3 }; }
 			// someone to talk with: the next free body stands facing them
@@ -154,13 +155,13 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 				if (b.gT < 0) { b.gT = 5 + Math.random() * 10; if (Math.random() < 0.3) b.M.gesture(b.task === 'stall' ? 'open' : 'think'); }
 				S.look.target = Math.hypot(cam.position.x - S.pos.x, cam.position.z - S.pos.z) < 8 && Math.sin(t * 0.2 + b.P.dna.seed) > 0.2 ? cam.position.clone() : null;
 			}
-			b.M.update(dt, t, cam);
+			b.M.update(dt, t, cam.position);
 		}
 	}
 
 	function update(dt, t, cam) {
 		const on = here.on && here.kit && here.town && here.town.km < 0.4;
-		if (!on) { for (const b of bodies) if (b.busy && !b.engaged) { b.busy = false; b.P.root.visible = false; } return; }
+		if (!on) { for (const b of bodies) if (b.busy && !b.engaged) { b.busy = false; b.P.root.visible = false; } castKey = ''; return; }
 		if (!A && !failed) ensure();
 		// people of another place go; people of this place come, one at a time
 		const k = keyNow();
@@ -169,7 +170,7 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 		else if (A && bodies.length < MAXB) grow();
 		castT -= dt;
 		const cell = Math.round(cam.position.x / 80) + ',' + Math.round(cam.position.z / 80) + ':' + bodies.length;
-		if (castT <= 0 && cell !== castKey) { castT = 3; castKey = cell; cast(cam); }
+		if (castT <= 0 && cell !== castKey) { castT = 3; castKey = cell; cast(cam); if (!bodies.some((b) => b.busy)) { castT = 0.5; castKey = ''; } }
 		live(dt, t, cam);
 	}
 	function dispose() { rodMat.dispose(); rodGeo.dispose(); shortGeo.dispose(); stopTalk(); for (const b of bodies) free(b); bodies.length = 0; scene.remove(group); }

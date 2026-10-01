@@ -24,7 +24,7 @@ const FORMS = ['broad', 'conifer', 'palm', 'bush'];
 const WORDS = [
 	[/pine|fir\b|spruce|cedar|larch|hemlock|juniper|cypress|redwood|sequoia|yew|conifer|taiga|tamarack/i, 'conifer'],
 	[/palm|coconut|date\b/i, 'palm'],
-	[/sage|brush|scrub|shrub|heath|gorse|broom|maquis|garrigue|creosote|mesquite|saxaul|tamarisk|bush|thorn|fynbos|chaparral|cactus|agave|succulent|grass/i, 'bush'],
+	[/sage|brush|scrub|shrub|heath|gorse|broom|maquis|garrigue|creosote|mesquite|saxaul|tamarisk|bush|thorn|fynbos|chaparral|cactus|agave|succulent|grass|moss|lichen|saxifrage|poppy|sedge|crowberry|cloudberry|dwarf|tundra|arctic|angelica|fireweed/i, 'bush'],
 ];
 const formOf = (w) => (WORDS.find(([re]) => re.test(w)) || [null, 'broad'])[1];
 
@@ -85,6 +85,8 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 		(veg || []).forEach((w, i) => { m[formOf(w)] += 1 / (i + 1.5); });
 		const t = Object.values(m).reduce((a, b) => a + b, 0);
 		for (const k in m) m[k] /= t;
+		// the tundra: dwarf plants only, no cold lean to conifers
+		m.treeless = m.conifer + m.palm < 0.01 && m.bush > 0.8;
 		mix = m;
 	}
 	const hash = (a, b, s) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ s; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 8) / 16777216; };
@@ -129,12 +131,12 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 				// the form: the region's mix, leaned cold by the air up here and dry by little rain
 				const cold = sst(5, -3, W.air), dry = sst(500, 200, cell.RAIN);
 				let q = hash(row, col, 17), form = 'broad';
-				const wC = mix.conifer + cold * 0.8, wP = mix.palm * sst(15, 21, W.air), wB = mix.bush + dry * 0.6 + (open ? 0.5 : 0), wBr = mix.broad * (1 - cold * 0.7);
+				const wC = mix.treeless ? 0 : mix.conifer + cold * 0.8, wP = mix.palm * sst(15, 21, W.air), wB = mix.bush + dry * 0.6 + (open ? 0.5 : 0), wBr = mix.treeless ? 0 : mix.broad * (1 - cold * 0.7);
 				const tot = wC + wP + wB + wBr;
 				q *= tot;
 				if ((q -= wC) < 0) form = 'conifer'; else if ((q -= wP) < 0) form = 'palm'; else if ((q -= wB) < 0) form = 'bush'; else form = 'broad';
 				// (naturalist: a lone tree on dry open ground is a juniper or a pinyon, not an oak)
-				if (open && dry > 0.5 && form === 'broad') form = 'conifer';
+				if (open && dry > 0.5 && form === 'broad' && !mix.treeless) form = 'conifer';
 				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
 				out.push({ x: p.x, y: h - 0.2, z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
 				if (++n % 60 === 0) yield;
