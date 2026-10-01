@@ -224,8 +224,9 @@ function makeTackle() {
 	rod.traverse((o) => { o.frustumCulled = false; });
 	// the float: a red cap over a white body, a quill antenna, a dark eye below
 	const fp = [[0, -0.05], [0.004, -0.05], [0.004, -0.036], [0.018, -0.022], [0.027, -0.004], [0.026, 0.008], [0.018, 0.022], [0.004, 0.03], [0.0025, 0.03], [0.0025, 0.1], [0, 0.102]].map(([r, y]) => new THREE.Vector2(r, y));
-	const fg = new THREE.LatheGeometry(fp, 14), fc = [], red = new THREE.Color(0xd62418), white = new THREE.Color(0xf2f0ea), band = new THREE.Color(0x1c1c1c);
-	for (let i = 0; i < fg.attributes.position.count; i++) { const y = fg.attributes.position.getY(i); const c = y < -0.035 ? band : y > 0.004 ? red : white; fc.push(c.r, c.g, c.b); }
+	// (a big pike float, so it can be seen out on the water)
+	const fg = new THREE.LatheGeometry(fp, 14).scale(1.6, 1.6, 1.6), fc = [], red = new THREE.Color(0xd62418), white = new THREE.Color(0xf2f0ea), band = new THREE.Color(0x1c1c1c);
+	for (let i = 0; i < fg.attributes.position.count; i++) { const y = fg.attributes.position.getY(i) / 1.6; const c = y < -0.035 ? band : y > 0.004 ? red : white; fc.push(c.r, c.g, c.b); }
 	fg.setAttribute('color', new THREE.Float32BufferAttribute(fc, 3));
 	const float = new THREE.Mesh(fg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35 }));
 	float.castShadow = true;
