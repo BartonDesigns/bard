@@ -21,6 +21,7 @@ import { createMotion } from '../people/motion.js';
 let ELE = null;
 const eleSeals = () => ELE || (ELE = { bull: elephantSeal(true), cow: elephantSeal(false), mat: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.55 }) });
 import { toWorld } from './geo.js';
+import { restroomParts, walkIns } from '../interiors/restroom.js';
 import { carGeometry, carMaterial } from './cars.js';
 import { STATIC_CARS } from '../vehicles/registry.js';
 
@@ -85,6 +86,8 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		pole: M(0x9a9a9a, 0.4, { metalness: 0.6 }), board: M(0xf4efe4, 0.4), wetsuit: M(0x111214, 0.6), seal: M(0x6b6660, 0.5), white: M(0xf2f0ea, 0.6), black: M(0x1b1c1e, 0.5),
 		redRoof: M(0x8a3b2c, 0.75), pane: M(0x283036, 0.3, { metalness: 0.3 }), lens: M(0x33413f, 0.08, { metalness: 0.6, emissive: new THREE.Color(0xfff2c0), emissiveIntensity: 0 }),
 	};
+	// (the restrooms are walked into: interiors/restroom.js)
+	const restroomMats = { tile: M(0xe6e2d8, 0.5), porcelain: M(0xf4f3ef, 0.25), steel: M(0x9aa0a4, 0.4, { metalness: 0.6 }), mirror: M(0xc8d0d4, 0.08, { metalness: 0.9 }) }, rooms = walkIns();
 	const tentCols = [0xd9772b, 0x2d6fa6, 0x5b8a3a, 0xc9b23a, 0xb03a3a, 0x7a5aa0, 0x3a8a8a, 0xe0e0d8];
 	const carMat = carMaterial(night), carKinds = ['sedan', 'suv', 'pickup', 'van', 'hatch', 'crossover', 'suv'];
 	const carGeo = Object.fromEntries(carKinds.map((k) => [k, carGeometry(k, 40, 14)]));
@@ -163,13 +166,14 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			// the restroom: a concrete block with a shed roof, men's and women's doors
 			if (S.restroom) {
 				const rx = lot.x + side.x * (W / 2 + 6), rz = lot.z + side.z * (W / 2 + 6), ry = Math.max(g(rx, rz), B.lotTop - 0.2);
-				const rr = new THREE.Group();
-				const body = new THREE.Mesh(new THREE.BoxGeometry(6.2, 3, 4.4), mats.concrete); body.position.y = 1.5; rr.add(body);
-				const roof = new THREE.Mesh(new THREE.BoxGeometry(7, 0.25, 5.4), mats.roof); roof.position.y = 3.2; roof.rotation.x = 0.12; rr.add(roof);
-				for (const u of [-1.5, 1.5]) { const d = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.1, 0.08), mats.door); d.position.set(u, 1.05, 2.22); rr.add(d); }
-				const found = new THREE.Mesh(new THREE.BoxGeometry(7, 1.4, 5.2), mats.concrete); found.position.y = -0.7; rr.add(found);
+				const rr = new THREE.Group(), RR = restroomParts(6.2, 4.4, 2.9, 2);
+				const RM = { wall: mats.concrete, tile: restroomMats.tile, floor: mats.concrete, fixture: restroomMats.porcelain, steel: restroomMats.steel, mirror: restroomMats.mirror, door: mats.door };
+				for (const k in RR.parts) { const m = new THREE.Mesh(mergeGeometries(RR.parts[k]), RM[k]); m.castShadow = m.receiveShadow = true; rr.add(m); }
+				const roof = new THREE.Mesh(new THREE.BoxGeometry(7, 0.25, 5.4), mats.roof); roof.position.y = 3.1; roof.rotation.x = 0.12; rr.add(roof);
+				const found = new THREE.Mesh(new THREE.BoxGeometry(7, 1.4, 5.2), mats.concrete); found.position.y = -0.76; rr.add(found);
 				rr.position.set(rx, ry, rz); rr.rotation.y = face;
 				add(rr);
+				rooms.add(new THREE.Matrix4().makeRotationY(face).setPosition(rx, ry, rz), RR.solids, 6.2, 4.4, B);
 			}
 		}
 
@@ -315,6 +319,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 		root.remove(B.group);
 		for (const c of B.cars || []) STATIC_CARS.delete(c);
 		built.delete(S);
+		rooms.drop(B);
 	}
 
 	// ---------- Pigeon Point Light Station ----------
@@ -430,7 +435,7 @@ export function createBeaches(scene, bay, real, shared, { isPhone = false } = {}
 			const dx = x - L.x, dz = z - L.z, c = Math.cos(L.face), s = Math.sin(L.face);
 			if (Math.abs(dx * c - dz * s) < L.W / 2 && Math.abs(dx * s + dz * c) < L.D / 2 && y > B.lotTop - 1.5) return B.lotTop;
 		}
-		return -1e9;
+		return rooms.floor(x, z, y);
 	}
-	return { group: root, update, beachAt, floor, sites: SITES, debug: () => [...built.values()].map((B) => ({ name: B.S.name, lot: !!B.lot, fires: B.fires.length, lanterns: B.lanterns.length, surfers: B.surfers.length, kids: B.group.children.length })) };
+	return { group: root, update, beachAt, floor, push: rooms.push, sites: SITES, debug: () => [...built.values()].map((B) => ({ name: B.S.name, lot: !!B.lot, fires: B.fires.length, lanterns: B.lanterns.length, surfers: B.surfers.length, kids: B.group.children.length })) };
 }

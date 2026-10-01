@@ -130,6 +130,10 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 	const U = { uTime: { value: 0 }, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor, uNight: { value: 0 }, uRings: { value: rings }, ...cloudReflectU(shared) };
 	const ring = (x, z, k = 1) => { const R = rings.reduce((a, b) => (b.w < a.w ? b : a)); R.set(x, z, 0.2, k); };
 	const bodies = [];
+	// Lake Annabel as water.js knows a lake, so it carves the ground under the water and round
+	// its edge on its fine grid, as for every other lake (it draws none of it: that is all
+	// here), the bank rising gently to the walk (lip)
+	const source = { name: 'annabel', lakes: [], v: 0, version: () => source.v, ready: () => true, *tile() { return []; } };
 	const annabel = { S: shoreOf(LAKE), roundhouse: true, dig: true, birds: isPhone ? 8 : 14, egret: true };
 	bodies.push(annabel);
 
@@ -188,7 +192,11 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 		// (once: built again later, the ground is dug already)
 		W.bank ??= W.dig ? bankOf(S) : null;
 		const level = W.level = W.dig ? W.bank - 0.38 : pondLevel(S);
-		if (W.dig && !W.dug) { dig(S, level); W.dug = true; }
+		if (W.dig && !W.dug) {
+			dig(S, level); W.dug = true;
+			source.lakes.push({ kind: 0, int: false, name: 'Lake Annabel', level, rings: [Float64Array.from(S.P.flatMap((q) => [q.x, q.z]))], dams: [], cx: S.cx, cz: S.cz, own: true, lip: 0.07 });
+			source.v++;
+		}
 		// the water
 		const shape = new THREE.Shape(P.map((q) => new THREE.Vector2(q.x, -q.z)));
 		const wg = new THREE.ShapeGeometry(shape, 8);
@@ -216,10 +224,11 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 		const lips = new THREE.InstancedMesh(lipG, conc, Math.max(1, lip.length));
 		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 		lip.forEach((e, k) => {
-			// (a low kerb a hand over the water; where the bank stands higher it is buried in it)
-			const y0 = level - 0.9, top = level + 0.16;
+			// (a low kerb a hand over the water, the bank meeting its top; where the bank stands
+			// higher it is buried in it)
+			const y0 = level - 0.9, top = level + 0.22;
 			q.setFromAxisAngle(Y, -Math.atan2(e.b.z - e.a.z, e.b.x - e.a.x));
-			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 + e.nx * 0.25, y0, (e.a.z + e.b.z) / 2 + e.nz * 0.25), q, s.set(e.L + 0.6, top - y0, 0.7)));
+			lips.setMatrixAt(k, m4.compose(p.set((e.a.x + e.b.x) / 2 + e.nx * 0.2, y0, (e.a.z + e.b.z) / 2 + e.nz * 0.2), q, s.set(e.L + 0.6, top - y0, 0.6)));
 		});
 		lips.count = lip.length;
 		lips.castShadow = lips.receiveShadow = true;
@@ -363,7 +372,7 @@ export function createLake(scene, bay, shared, { isPhone = false, real = null, p
 	}
 	// (rings on the water: a float landing, a fish on the line; fishing.js)
 	const ripple = (x, z, k = 0.5) => { if (bodyAt(x, z)) ring(x, z, Math.min(1, k)); };
-	return { group: root, update, push, waterAt, ripple, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
+	return { group: root, update, push, waterAt, ripple, source, inLake: (x, z) => waterAt(x, z) !== null, level: () => annabel.level ?? 0 };
 }
 
 // the reed blades merged into one geometry (a small local version, to keep this module

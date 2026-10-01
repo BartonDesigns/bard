@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { restroomParts, walkIns } from '../interiors/restroom.js';
 import { PARKS, AGENCY_STYLE } from '../nature/parks.js';
 import { toWorld } from './geo.js';
 import { inClearing } from '../sportsfields.js';
@@ -61,6 +62,9 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 		playG: M('#3f7a3a', 0.5), playB: M('#2f6f9a', 0.5), slide: M('#e8c23a', 0.35), slideR: M('#c23a2a', 0.35), rubber: M('#a8543a', 0.95), rubberB: M('#3a6ea8', 0.95), chain: M('#b8bcc0', 0.3, { metalness: 0.8 }),
 		net: M('#f4f4f0', 0.8, { transparent: true, opacity: 0.7 }), fence: M('#2a2a2a', 0.6, { metalness: 0.5, transparent: true, opacity: 0.55 }),
 	};
+	// (the restrooms are walked into: interiors/restroom.js)
+	mat.tile = M('#e6e2d8', 0.5); mat.porcelain = M('#f4f3ef', 0.25); mat.mirror = M('#c8d0d4', 0.08, { metalness: 0.9 });
+	const rooms = walkIns();
 	const courtTex = { tennis: courtTexture('tennis'), pickleball: courtTexture('pickleball'), basketball: courtTexture('basketball') };
 	const g = (x, z) => bay.heightAt(x, z);
 	const slope = (x, z) => Math.hypot(g(x + 4, z) - g(x - 4, z), g(x, z + 4) - g(x, z - 4)) / 8;
@@ -140,11 +144,18 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 		if (has('restroom') || has('restroom-vault') || has('restroom-flush')) {
 			const r = spot(P.x + 60, P.z + 40, 180, 6, 0.1);
 			if (r) {
-				const F = frame(r, facing(r)), Bd = style.building || { wall: '#c8b89a', roof: '#5b4a3c', trim: '#3a2e24' }, big = has('restroom-flush') || P.kind === 'city';
-				const W = big ? 8 : 3.2, D = big ? 6 : 2.4;
-				box(F, M(Bd.wall, 0.9), W, 2.8, D, 0, -0.4); const rf = new THREE.BoxGeometry(W + 0.8, 0.25, D + 0.8).rotateX(0.1).translate(0, 2.6, 0); rf.applyMatrix4(F); add(M(Bd.roof, 0.8), rf);
-				for (const u of big ? [-2, 2] : [0]) box(F, M(Bd.trim || '#3a2e24', 0.6), 0.9, 2.05, 0.06, u, 0, D / 2 + 0.02);
-				if (!big) cyl(F, mat.black, 0.1, 1.2, 0.9, 2.5, -0.6);
+				const Bd = style.building || { wall: '#c8b89a', roof: '#5b4a3c', trim: '#3a2e24' }, big = has('restroom-flush') || P.kind === 'city';
+				const W = big ? 8 : 3.2, D = big ? 6 : 2.4, yaw = facing(r);
+				// its floor over the highest ground under it, on a footing down to the lowest
+				let hi = -1e9, lo = 1e9;
+				for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) { const h = g(r.x + Math.cos(yaw) * a * W / 2 + Math.sin(yaw) * b * D / 2, r.z - Math.sin(yaw) * a * W / 2 + Math.cos(yaw) * b * D / 2); hi = Math.max(hi, h); lo = Math.min(lo, h); }
+				const F = frame({ x: r.x, y: hi + 0.12, z: r.z }, yaw), RR = restroomParts(W, D, 2.6, big ? 2 : 1);
+				box(F, mat.concrete, W + 0.2, hi + 0.12 - lo + 0.4, D + 0.2, 0, lo - hi - 0.52);
+				const RM = { wall: M(Bd.wall, 0.9), tile: mat.tile, floor: mat.concrete, fixture: mat.porcelain, steel: mat.steel, mirror: mat.mirror, door: M(Bd.trim || '#3a2e24', 0.6) };
+				for (const k in RR.parts) for (const geo of RR.parts[k]) { geo.applyMatrix4(F); add(RM[k], geo); }
+				const rf = new THREE.BoxGeometry(W + 0.8, 0.25, D + 0.8).rotateX(0.1).translate(0, 2.75, 0); rf.applyMatrix4(F); add(M(Bd.roof, 0.8), rf);
+				if (!big) cyl(F, mat.black, 0.1, 1.2, 0.9, 2.6, -0.6);
+				rooms.add(F, RR.solids, W, D, P);
 			}
 		}
 		// a playground: rubber surfacing, a deck structure with a slide and a tube slide, swings
@@ -185,6 +196,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 		B.group.traverse((o) => o.geometry?.dispose());
 		root.remove(B.group);
 		built.delete(P);
+		rooms.drop(P);
 	}
 	// the generated towns' parks, furnished as a city furnishes them
 	let genV = -1, GEN = [];
@@ -208,5 +220,5 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 	}
 	// the park you are in, for a note
 	const parkAt = (x, z) => SITES.find((P) => Math.hypot(P.x - x, P.z - z) < 300) || GEN.find((P) => Math.hypot(P.x - x, P.z - z) < 120) || null;
-	return { group: root, update, parkAt, count: () => built.size };
+	return { group: root, update, parkAt, count: () => built.size, push: rooms.push, floor: rooms.floor };
 }

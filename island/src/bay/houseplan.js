@@ -196,7 +196,7 @@ export function planHouse(grp, opt = {}) {
 		const xs = [];
 		for (let x0 = bx0 + 0.2; x0 + STAIR.w < bx1 - 0.2; x0 += 0.25) xs.push(x0);
 		for (const r of rects) if (r.st === 2) xs.push(r.x0 + TW.ext, r.x1 - TW.ext - STAIR.w);
-		const want = door.x + (gSide > 0 ? -1 : 1) * (door.w / 2 + 0.75 + STAIR.w / 2);
+		const want = door.x + (gSide > 0 ? -1 : 1) * (door.w / 2 + 0.75 + STAIR.w / 2), zEdges = rects.flatMap((r) => [r.z0, r.z1]);
 		for (const x0 of xs) for (let zb = door.z - 1.3; zb - STAIR.run - STAIR.land > bz0 + 0.2; zb -= 0.25) {
 			// beside the door, on the side away from the garage when both fit
 			let c = Math.abs(x0 + STAIR.w / 2 - want) + Math.abs(zb - (door.z - 1.3)) * 0.6;
@@ -205,6 +205,8 @@ export function planHouse(grp, opt = {}) {
 			// the strips beside the stairwell upstairs: against the wall, or wide enough for a room
 			const zm = zb - STAIR.run / 2;
 			for (const g of [reach(x0, zm, -1), reach(x0 + STAIR.w, zm, 1)]) if (g > 0.25 && g < 2.7) c += 6;
+			// (and the landing's lines not so near a wall's that the grid would lose them)
+			for (const z of [zb - STAIR.run, zb - STAIR.run - STAIR.land]) if (zEdges.some((e) => Math.abs(e - z) > 0.02 && Math.abs(e - z) < 0.47)) c += 2;
 			if (!best || c < best.c) best = { x0, zb, c };
 		}
 		if (best) stairs = { x0: best.x0, x1: best.x0 + STAIR.w, zb: best.zb, zt: best.zb - STAIR.run, zl: best.zb - STAIR.run - STAIR.land, n: STAIR.n };
@@ -224,7 +226,7 @@ export function planHouse(grp, opt = {}) {
 		else {
 			// the stairs stand elsewhere: a hall of their own, with a passage beside them
 			const side = at(stairs.x1 + 0.5, (stairs.zb + stairs.zt) / 2) && !inGarage(stairs.x1 + 0.5, (stairs.zb + stairs.zt) / 2) ? 1 : -1;
-			stairHall = { x0: side > 0 ? stairs.x0 : stairs.x0 - HALLW, x1: side > 0 ? stairs.x1 + HALLW : stairs.x1, z0: stairs.zt, z1: stairs.zb + 1.2 };
+			stairHall = { x0: side > 0 ? stairs.x0 : stairs.x0 - HALLW, x1: side > 0 ? stairs.x1 + HALLW : stairs.x1, z0: stairs.zt, z1: stairs.zb + 1.5 };
 		}
 	}
 
@@ -248,7 +250,8 @@ export function planHouse(grp, opt = {}) {
 		while (xa - 0.1 > bx0 && at(xa - 0.1, zc) && !inGarage(xa - 0.1, zc)) xa -= 0.1;
 		while (xb + 0.1 < bx1 && at(xb + 0.1, zc) && !inGarage(xb + 0.1, zc)) xb += 0.1;
 		const x0 = far > 0 ? entry.x0 : xa - 0.2, x1 = far > 0 ? xb + 0.2 : entry.x1;
-		if (x1 - x0 > 5 && z0 > Math.min(...rects.map((r) => r.z0)) + 2.6) hall0 = { x0, x1, z0, z1 };
+		// (a narrow house has its rooms one off another, as a cottage does, and no hall)
+		if (x1 - x0 > 5 && xb - xa > 9.5 && z0 > Math.min(...rects.map((r) => r.z0)) + 2.6) hall0 = { x0, x1, z0, z1 };
 	}
 
 	// the grid, with the stairs, garage, entry and halls on its lines (the first given win
@@ -508,7 +511,7 @@ export function planHouse(grp, opt = {}) {
 				for (let g = 0; g < 6; g++) {
 					const fl = flex(), rest = Aq - fixedA(), ft = fl.reduce((s, r) => s + r.target, 0);
 					// (a long zone would make long rooms: another room shortens them)
-					const long = fl.length && Math.max(q.w, q.d) / fl.length / Math.min(q.w, q.d) > 2.6 && rest / (fl.length + 1) >= 6.5;
+					const long = fl.length && Math.max(q.w, q.d) / fl.length / Math.min(q.w, q.d) > 2.1 && rest / (fl.length + 1) >= 6.5;
 					if (!long && (fl.length ? rest / ft < 2 || rest / (fl.length + 1) < 9 : rest < 4.5)) break;
 					const type = rest < 7.5 || Math.min(q.w, q.d) < 2.45 ? 'closet' : g && pool.extra2 ? pool.extra2 : pool.extra || 'office', t = fl.length ? rest / (fl.length + 1) : rest;
 					const ang = (q.units.length * 2.4) % 6.28, px = q.x0 + q.w * (0.5 + 0.4 * Math.cos(ang)), pz = q.z0 + q.d * (0.5 + 0.4 * Math.sin(ang));
@@ -539,13 +542,15 @@ export function planHouse(grp, opt = {}) {
 			const list = [...near.values()].filter((e) => !(L === 1 && e.o.room?.type === 'hall'));
 			const sq = list.filter(fits).sort((a, b) => b.len - a.len)[0];
 			if (sq) { p.merge = sq.o.piece; continue; }
+			// (a strip under a metre: no room's, the wall furred out over it)
+			if (Math.min(q.w, q.d) < 0.95) { p.scrap = false; p.solid = true; cost += 0.2; continue; }
 			if (q.w * q.d >= 1.4 && Math.min(q.w, q.d) >= 1.15 && list.some((e) => e.o.piece && e.o.piece.type !== 'closet')) { p.scrap = false; p.type = 'closet'; p.target = q.w * q.d; continue; }
 			const lg = list.sort((a, b) => b.len - a.len)[0];
 			if (lg?.o.piece) p.merge = lg.o.piece; else if (lg) p.join = { to: lg.o.room, cells: p.cells };
 			cost += 0.5;
 		}
 		for (const p of pieces) if (p.merge) { p.merge.cells.push(...p.cells); p.cells = []; }
-		const kept = pieces.filter((p) => p.join || (!p.scrap && p.cells.length));
+		const kept = pieces.filter((p) => !p.solid && (p.join || (!p.scrap && p.cells.length)));
 		for (const p of kept) if (p.join) { p.cells = []; p.type = null; }
 		// the score: shapes, sizes, and every room that needs a hall on one
 		const lab2 = new Int32Array(N).fill(-1), spur = new Uint8Array(N);
@@ -779,7 +784,9 @@ export function planHouse(grp, opt = {}) {
 			if (!A && !B) return null;
 			if (A && B) {
 				const ra = lab[a], rb = lab[b];
-				if (ra === rb || ra < 0 || rb < 0) return null;
+				if (ra === rb || (ra < 0 && rb < 0)) return null;
+				// (round a strip too thin to be any room's: the wall furred out over it, solid)
+				if (ra < 0 || rb < 0) { const c = ra < 0 ? b : a; return { kind: 'ext', room: lab[c], inSide: ra < 0 ? 1 : -1, yb: L ? HT.floor1 : null, yt: L ? topOf(c) : rects[occ[c]].st === 2 ? HT.floor1 : topOf(c), blocked: true }; }
 				return { kind: 'part', ra, rb, yb: L ? HT.floor1 : 0, yt: L ? HT.ceil1 : HT.ceil0 };
 			}
 			const c = A ? a : b, other = A ? b : a;

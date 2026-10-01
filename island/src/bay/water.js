@@ -770,7 +770,7 @@ export function createWater(scene, shared, opts = {}) {
 						if (v < lo[q]) lo[q] = v;
 						kind[q] = Math.max(kind[q], 1);
 					} else if (d < 10) {
-						const v = Math.max(0, L.level + 0.12 + d * 0.3 - g) * (1 - sm(4, 10, d));
+						const v = Math.max(0, L.level + 0.12 + d * (L.lip ?? 0.3) - g) * (1 - sm(4, 10, d));
 						if (v > hi[q]) hi[q] = v;
 						kind[q] = Math.max(kind[q], 1 - sm(0.5, 3, d));
 					}
@@ -1020,6 +1020,8 @@ export function createWater(scene, shared, opts = {}) {
 		S.jobs = tasks;
 		// the lakes' water
 		for (const L of S.lakes) {
+			// (a lake drawn by its own module, lake.js: only its ground carved here)
+			if (L.own) continue;
 			const d = Math.hypot(Math.max(0, L.x0 - cx, cx - L.x1), Math.max(0, L.z0 - cz, cz - L.z1));
 			if (d < lakeRange(L)) { if (!L.mesh) S.jobs.push({ d, kind: 'lake', L }); } else if (d > lakeRange(L) * 1.2) dropLake(L);
 			if (d < (isPhone ? 300 : 450)) flockFor(L); else if (d > 900) dropFlock(L);

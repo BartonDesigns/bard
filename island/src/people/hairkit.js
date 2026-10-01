@@ -185,12 +185,17 @@ function fixed(A, St, kind) {
 		return d;
 	});
 	// the style's pieces (its cards, each a run of joined triangles), so a piece is moved
-	// off the face all one way
+	// off the face all one way, and each vertex's neighbours along them
 	const up = new Int32Array(nv).map((x, i) => i), find = (i) => { while (up[i] !== i) i = up[i] = up[up[i]]; return i; };
 	for (let i = 0; i < St.idx.length; i += 3) { const a = find(St.idx[i]); up[find(St.idx[i + 1])] = a; up[find(St.idx[i + 2])] = a; }
-	const piece = new Int32Array(nv);
+	const piece = new Int32Array(nv), nbs = Array.from({ length: nv }, () => new Set());
 	for (let v = 0; v < nv; v++) piece[v] = find(v);
-	St.fix = { N, T, UV, K, SI, SW, M, I: St.idx, piece };
+	for (let i = 0; i < St.idx.length; i += 3) for (let j = 0; j < 3; j++) { const a = St.idx[i + j], b = St.idx[i + (j + 1) % 3]; nbs[a].add(b); nbs[b].add(a); }
+	const nb0 = new Int32Array(nv + 1);
+	for (let v = 0; v < nv; v++) nb0[v + 1] = nb0[v] + nbs[v].size;
+	const nb = new Int32Array(nb0[nv]);
+	for (let v = 0; v < nv; v++) nb.set([...nbs[v]], nb0[v]);
+	St.fix = { N, T, UV, K, SI, SW, M, I: St.idx, piece, nb0, nb };
 	return St.fix;
 }
 
@@ -243,29 +248,38 @@ function styleChunk(A, P, p, St, kind, vol, fadeY = -99) {
 		}
 	}
 	if (FF) {
-		// the face kept clear from the front and from either side: each piece of the style (a
-		// card) moved as one, out to the side most of it is on (the locks kept in their order
-		// in a band beside the cheeks) and back behind the cheek's edge, as far as its part
-		// furthest over the face needs, so the cards bend aside whole and never tear or fold;
-		// a piece that spans the face goes strand by strand. A fringe is cut at the brows in
-		// the shader
-		const piece = F.piece, M = new Map(), at = [0, 0, 0], W = new Float32Array(nv * 3), band = 0.015;
+		// the face kept clear from the front and from either side: what hangs over the face or
+		// into it goes out to the side its piece of the style (its card) is mostly on, the locks
+		// kept in their order in a band beside the cheeks, and back behind the cheek's edge.
+		// Each vertex's move spreads a few steps along its card, so the card bends aside whole
+		// and never tears or folds; a piece that spans the face goes strand by strand. A fringe
+		// is cut at the brows in the shader
+		const { piece, nb0, nb } = F, M = new Map(), at = [0, 0, 0], D = new Float32Array(nv * 2), band = 0.015;
 		for (let v = 0; v < nv; v++) {
-			offFace(FF, K, V, v * 3, at); W.set(at, v * 3);
-			const x = V[v * 3] - K.c.x, e = M.get(piece[v]) || [0, 1, -1, 0, 0];
+			const x = V[v * 3] - K.c.x, e = M.get(piece[v]) || [0, 1, -1];
 			e[0] += x; e[1] = Math.min(e[1], x); e[2] = Math.max(e[2], x);
 			M.set(piece[v], e);
 		}
-		const sideOf = (v, e) => Math.sign(e[1] < -0.03 && e[2] > 0.03 ? V[v * 3] - K.c.x : e[0]) || 1;
-		const out = (v, e) => { const u = (V[v * 3] - K.c.x) * sideOf(v, e), edge = W[v * 3 + 1]; return u < edge + band ? edge + Math.max(0, u) * band / (edge + band) - u : 0; };
-		for (let v = 0; v < nv; v++) if (W[v * 3] > 0) { const e = M.get(piece[v]); e[3] = Math.max(e[3], out(v, e)); e[4] = Math.max(e[4], W[v * 3 + 2]); }
 		for (let v = 0; v < nv; v++) {
-			const k = W[v * 3];
-			if (!(k > 0)) continue;
-			const e = M.get(piece[v]), wide = e[1] < -0.03 && e[2] > 0.03;
-			V[v * 3] += sideOf(v, e) * (wide ? out(v, e) : e[3]) * k;
-			V[v * 3 + 2] -= (wide ? W[v * 3 + 2] : e[4]) * k;
+			offFace(FF, K, V, v * 3, at);
+			if (!(at[0] > 0)) continue;
+			const e = M.get(piece[v]), x = V[v * 3] - K.c.x, side = Math.sign(e[1] < -0.03 && e[2] > 0.03 ? x : e[0]) || 1, u = x * side, edge = at[1];
+			D[v * 2] = (u < edge + band ? edge + Math.max(0, u) * band / (edge + band) - u : 0) * side * at[0];
+			D[v * 2 + 1] = -at[2] * at[0];
 		}
+		for (let it = 0; it < 3; it++) {
+			const E = D.slice();
+			for (let v = 0; v < nv; v++) {
+				const n = nb0[v + 1] - nb0[v];
+				if (!n) continue;
+				let mx = 0, mz = 0;
+				for (let j = nb0[v]; j < nb0[v + 1]; j++) { mx += E[nb[j] * 2]; mz += E[nb[j] * 2 + 1]; }
+				mx /= n; mz /= n;
+				if (Math.abs(mx) > Math.abs(D[v * 2])) D[v * 2] = mx;
+				if (mz < D[v * 2 + 1]) D[v * 2 + 1] = mz;
+			}
+		}
+		for (let v = 0; v < nv; v++) { V[v * 3] += D[v * 2]; V[v * 3 + 2] += D[v * 2 + 1]; }
 	}
 	return { ...F, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
 }

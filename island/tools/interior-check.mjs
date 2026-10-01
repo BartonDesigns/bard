@@ -8,13 +8,16 @@
 // Prints the counts; --show prints the first few failing plans as text.
 import fs from 'fs';
 import zlib from 'zlib';
-import { planHouse, groupBoxes, mainOf, HT, TW } from '../src/bay/houseplan.js';
-import { planRow, planApt, planHall, rng, ST } from '../src/interiors/plan.js';
-import { furnish } from '../src/interiors/furnish.js';
+import { pathToFileURL } from 'url';
 import { generateTownSteps, hashStr } from '../src/crysis/civgen.js';
 
-// (the Summit Building's plan, where the planner has one)
-const planSummit = (await import('../src/interiors/plan.js')).planSummit;
+// (another copy of the planners can be checked instead, to compare: HOUSEPLAN=<file>, CITYPLAN=<dir
+// holding plan.js and furnish.js>)
+const at = (env, rel) => (process.env[env] ? pathToFileURL(process.env[env] + (rel.endsWith('houseplan.js') ? '' : '/' + rel.split('/').pop())).href : new URL(rel, import.meta.url).href);
+const { planHouse, groupBoxes, mainOf, HT, TW } = await import(at('HOUSEPLAN', '../src/bay/houseplan.js'));
+const { planRow, planApt, planHall, planSummit, rng } = await import(at('CITYPLAN', '../src/interiors/plan.js'));
+const { furnish } = await import(at('CITYPLAN', '../src/interiors/furnish.js'));
+
 const args = process.argv.slice(2);
 const showKind = args.includes('--show') ? args[args.indexOf('--show') + 1] : null;
 const nums = args.filter((a, i) => /^\d+$/.test(a) && args[i - 1] !== '--show').map(Number);
@@ -218,7 +221,7 @@ function houseGroups(boxes, max) {
 	return out;
 }
 function townGroups(seed, max) {
-	const it = generateTownSteps({ seed: hashStr('check' + seed), cx: 0, cz: 0, radius: 700, ang: seed * 0.37, heightAt: () => 0, style: seed % 2 ? 'older' : 'suburb', name: 'Check ' + seed, water: null, brief: null });
+	const it = generateTownSteps({ seed: hashStr('check' + seed), cx: 0, cz: 0, radius: 700, ang: seed * 0.37, heightAt: (x, z) => 60 + Math.sin(x * 0.004) * 6 + Math.cos(z * 0.005) * 5, style: seed % 2 ? 'older' : 'suburb', name: 'Check ' + seed, water: null, brief: null });
 	let r = it.next();
 	while (!r.done) r = it.next();
 	return houseGroups(r.value.boxes, max);
@@ -241,6 +244,7 @@ function run(kind, levels, show) {
 // the real houses of each region, then the same with other seeds
 const CH = { garage: 'G', entry: 'E', hall: 'H', living: 'L', dining: 'D', kitchen: 'K', family: 'F', powder: 'p', laundry: 'u', master: 'M', bed: 'B', bath: 'b', mbath: 'm', closet: 'c', office: 'O', loft: 'l' };
 const drawHouse = (p) => (marks = []) => {
+	if (process.env.DUMP) console.log(JSON.stringify({ stairs: p.stairs, rects: p.rects.map((r) => [r.x0, r.z0, r.x1, r.z1, r.st].map((v) => +v.toFixed(2))), X: p.X.map((v) => +v.toFixed(2)) }));
 	const S = p.stairs;
 	for (const L of [0, 1]) {
 		if (L && !p.up) continue;

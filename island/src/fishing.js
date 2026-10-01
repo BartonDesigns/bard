@@ -370,7 +370,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	function toggleRod() {
 		const W = getWorld();
 		if (!W || F.state === 'off') return;
-		if (F.state === 'near') { F.state = 'ready'; F.swing = 0; cast(W); return; }
+		if (F.state === 'near') { F.state = 'ready'; F.water = F.near.kind; F.level = F.near.level; cast(W); return; }
 		if (F.state === 'fight') hint?.('Rod away: it got off.', 1600);
 		F.state = 'near'; F.fish = null; F.hold = false; meter.style.display = 'none';
 	}
@@ -478,7 +478,7 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 		T.bendU.value += (bend - T.bendU.value) * Math.min(1, dt * 10);
 		const sw = F.swing > 0.6 ? (1 - F.swing) / 0.4 * 0.5 : -Math.sin((0.6 - F.swing) / 0.6 * Math.PI) * 0.9;
 		rod.position.set(0.3, -0.36, -0.5);
-		rod.rotation.set(-0.72 + (F.swing > 0 ? sw : 0) + T.bendU.value * 0.3, -0.3, -0.2 + Math.sin(t * 1.3) * 0.012);
+		rod.rotation.set(-0.84 + (F.swing > 0 ? sw : 0) + T.bendU.value * 0.3, -0.3, -0.2 + Math.sin(t * 1.3) * 0.012);
 		if (F.state === 'fight' && F.hold) T.reel.crank.rotation.x -= dt * 14;
 		else if (F.state === 'wait' && F.t < 0.4) T.reel.crank.rotation.x -= dt * 6;
 		camera.updateMatrixWorld();

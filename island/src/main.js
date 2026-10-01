@@ -697,7 +697,7 @@ export function createIslandWorld() {
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real, ponds: false });
 			// every other river, creek, lake and reservoir (bay/water.js)
-			world.water = createEarthWater(scene, bayArea, shared, { isPhone, real: world.real, ground: (x, z) => island.heightAt(x, z), riverLevel: (x, z) => world?.boardwalk?.waterAt(x, z) ?? null, riverSettled: () => world?.boardwalk?.river?.settled?.() ?? !world?.boardwalk });
+			world.water = createEarthWater(scene, bayArea, shared, { isPhone, real: world.real, ground: (x, z) => island.heightAt(x, z), riverLevel: (x, z) => world?.boardwalk?.waterAt(x, z) ?? null, riverSettled: () => world?.boardwalk?.river?.settled?.() ?? !world?.boardwalk, extra: [world.lake.source] });
 			bayArea.waterName = (x, z) => world?.water?.nameAt(x, z) ?? null;
 			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
 			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
@@ -749,8 +749,8 @@ export function createIslandWorld() {
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
-				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y));
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); };
+				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y), world.parks?.floor?.(x, z, y) ?? -1e9);
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); world.beaches.push?.(p, footY); world.parks?.push?.(p, footY); };
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
