@@ -159,8 +159,15 @@ export function createRealCity(renderer) {
 		let o = S.roads[0];
 		for (let n = 0; n < S.roads[1]; n++) {
 			const c = dv.getUint8(o), f = dv.getUint8(o + 1), nm = dv.getUint16(o + 2, true), k = dv.getUint16(o + 4, true); o += 6;
-			const pts = new Float32Array(k * 2);
-			for (let j = 0; j < k; j++) { pts[j * 2] = dv.getInt16(o, true) * U + OX; pts[j * 2 + 1] = dv.getInt16(o + 2, true) * U + OZ; o += 4; }
+			// (a point repeated on the next is dropped: a zero-length piece has no direction)
+			let pts = new Float32Array(k * 2), m = 0;
+			for (let j = 0; j < k; j++, o += 4) {
+				const x = dv.getInt16(o, true) * U + OX, z = dv.getInt16(o + 2, true) * U + OZ;
+				if (m && Math.abs(x - pts[m * 2 - 2]) < 0.05 && Math.abs(z - pts[m * 2 - 1]) < 0.05) continue;
+				pts[m * 2] = x; pts[m * 2 + 1] = z; m++;
+			}
+			if (m < 2) continue;
+			if (m < k) pts = pts.slice(0, m * 2);
 			const cls = H.classes[c];
 			const r = { cls, w: H.widths[c], name: nm ? H.names[nm - 1] : '', bridge: !!(f & 1), link: !!(f & 2), end0: !!(f & 4), end1: !!(f & 8), divided: !!(f & 16), drive: DRIVE.has(cls), walked: WALKED.has(cls), pts };
 			r.box = roadBox(r);

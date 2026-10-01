@@ -1540,6 +1540,8 @@ if (typeof window !== 'undefined') {
 		// the globe (earth/globe.js): Crysis.globe() where you are on it and how it streams;
 		// Crysis.goTo(lat, lon) flies you there, anywhere on Earth
 		globe: () => window.L99Island?.world?.()?.globe?.info() ?? 'Earth only.',
+		// the regional kit (region/): which kit, culture, weather and places are round you
+		region: () => window.L99Island?.world?.()?.globe?.regional?.info() ?? 'Earth only.',
 		goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.',
 		ecology: () => { const w = window.L99Island?.world?.(); return w?.eco ? describeLand(w.land) + '\n\n' + describe(w.eco) : 'no world open'; },
 	};

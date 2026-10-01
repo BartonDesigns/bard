@@ -132,6 +132,8 @@ export function personDNA(seed, opts = {}) {
 	const roll = r();
 	let anc = roll < 0.34 ? [0.05, 0.85, 0.1] : roll < 0.62 ? [0.02, 0.06, 0.92] : roll < 0.82 ? [0.18, 0.2, 0.62] : roll < 0.92 ? [0.85, 0.02, 0.13] : [r(), r(), r()];
 	anc = anc.map((v) => v * (0.8 + r() * 0.4)); const s = anc.reduce((a, b) => a + b, 0); anc = anc.map((v) => v / s);
+	// (a place elsewhere in the world gives its own mix: region/cultures.js; the draws above are still made)
+	if (opts.ancestry) anc = opts.ancestry.slice();
 	const sex = r() < 0.5 ? 0.08 + r() * 0.12 : 0.8 + r() * 0.15;
 	const male = sex > 0.5;
 	let age = opts.age ?? (18 + Math.pow(r(), 1.3) * 64);

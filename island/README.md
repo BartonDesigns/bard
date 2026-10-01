@@ -127,6 +127,39 @@ the ship in orbit round Earth. The old flight build's Bay Area surface is gone.
 Home: `Crysis.setHome(lat, lon)` marks your home (kept only in that browser's storage, never
 published); `Crysis.goHome()` takes you there.
 
+## Regional design: the regional kit (src/region/)
+
+Out on the globe every place takes its look, buildings, people, sounds and talk from one
+regional profile, a kit chosen from the atlas region, its culture and its climate:
+
+- `kits.js`: the profiles (Arctic settlement, snow village, alpine, Himalayan and Andean
+  villages, old village, farm country, outback, Mediterranean, desert town, adobe village,
+  bazaar, herders' camp, savanna, Sahel, rainforest, island, East Asian village and city, South
+  Asian village and city): structures and layout, ground, plants, air, roles and jobs, dress,
+  sounds, a colour on the music, the lore found there, how people travel on
+- `choose.js`: which kit a point is (region id, culture, coldest and warmest months, rain,
+  height, the town's size); near a border the atlas's weights blend two
+- `cultures.js`: names, the ancestry mix the body system blends, head-covering customs, the
+  faith's building and its sound, by atlas region
+- `geo.js`, `structures.js`, `layout.js`: vertex-coloured procedural buildings and props (no
+  textures) in each place's real proportions, and the way each kind of place is laid out
+- `settle.js`: the places round you (claimed real towns, villages of the open country,
+  farmsteads, lore and real landmarks), planned within 3 km and built in 120 m cells a few
+  ms a frame: one merged mesh, one mesh of lit things, the painted ground, chimney smoke
+- `landmarks.js`: real landmarks at their real coordinates, simplified; generated ones
+  with a name and a local legend the people nearby tell
+- `ice.js` (sea ice by month, ridges, icebergs, the aurora), `flora.js` (the region's plants
+  round you, by season), `air.js` (snow, dust, mist, pollen, fireflies; the fog's haze),
+  `sound.js` (the place's beds and bells, the call to prayer at the hours, far and soft)
+- `folk.js`, `dress.js`, `talk.js`, `climate.js`, `here.js`: the people of the place (dressed
+  for it and the weather, at its work, talkable), and what they say: the greeting with its
+  meaning, the weather and season there, the food, the landmark's story, the road on
+  (`people/persona.js` puts it in the prompt and answers from it without a model)
+
+`globe.js` runs it (`Crysis.world().globe.regional`; `Crysis.globe().regional` reports it);
+`globetowns.js` leaves the towns it claims to it. The new atlas data for the Arctic, the
+Antarctic, Borneo and New Guinea is `earth/data/polar.js`.
+
 ## People you can talk to
 
 Walk up to someone and press Enter (or 💬): they stop, turn to you and listen. The

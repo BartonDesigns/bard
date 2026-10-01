@@ -8,8 +8,9 @@ import * as AF from './africa.js';
 import * as AS from './asia.js';
 import * as EA from './eastasia.js';
 import * as REST from './rest.js';
+import * as POLAR from './polar.js';
 
-const PARTS = [NA, ATL, EU, AF, AS, EA, REST];
+const PARTS = [NA, ATL, EU, AF, AS, EA, REST, POLAR];
 export const VERSION = 1;
 export const REGIONS = PARTS.flatMap((p) => p.REGIONS);
 export const CITIES = PARTS.flatMap((p) => p.CITIES);

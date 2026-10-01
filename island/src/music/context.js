@@ -2,6 +2,8 @@
 // composer (adapt): how fast you are going and how, where you are, the hour, the weather,
 // the kind of world, the volcano, a mushroom trip, a minigame.
 
+import { regionalNow } from '../region/here.js';
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
@@ -43,6 +45,8 @@ export function sense(W, x) {
 	out.planet = x.shared.planet?.type || 'TROPICAL';
 	const V = W.volcano?.state?.();
 	if (V) out.volcano = V.phase;
+	// the place's own colour, out in the world (region/kits.js music): never the faceplate itself
+	out.regional = regionalNow()?.kit?.music || null;
 	const T = W.shrooms?.state?.();
 	if (T && T.phase !== 'sober') { out.trip = T.k || 0.5; out.tripPhase = T.phase; }
 	return out;
@@ -98,6 +102,16 @@ export function adapt(g) {
 		case 'ARID': M.drone = 0.7; M.phrygian = 1; M.swingAdd += 0.05; break;
 		case 'GAS': M.sparse += 0.35; M.slowHarmony = true; M.drums *= 0.55; M.echo += 0.25; M.density *= 0.75; break;
 		case 'OCEAN': M.arp += 0.3; M.swingAdd += 0.05; break;
+	}
+	// the place's colour: a pentatonic in East Asia and the steppe, a phrygian edge in the souk,
+	// a drone under the desert and the Himalaya, space in the north (the faceplate's own key)
+	const RC = g.regional;
+	if (RC) {
+		if ((RC.phrygian || 0) > 0.5) M.phrygian = 1;
+		if ((RC.lydian || 0) > 0.25) M.lydian = Math.max(M.lydian, RC.lydian > 0.5 ? 1 : 0);
+		M.penta = RC.penta || 0;
+		M.drone = Math.max(M.drone, RC.drone || 0);
+		M.sparse += (RC.sparse || 0) * 0.6; M.swingAdd += RC.swing || 0; M.reg += RC.reg || 0; M.arp += RC.arp || 0;
 	}
 	// the volcano: a rumble builds, an eruption is the climax
 	if (g.volcano === 'rumble') { M.tension = Math.max(M.tension, 0.75); M.energy += 0.2; }

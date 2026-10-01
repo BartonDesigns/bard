@@ -212,6 +212,8 @@ export function createAutoMusic(opts) {
 			pcs = pcs.slice();
 			if (M.lydian > 0.5 && pcs[3] === 5) pcs[3] = 6;
 			if (M.phrygian > 0.5 && pcs[1] === 2) pcs[1] = 1;
+			// a pentatonic: the major's fourth and seventh left out, or the minor's second and sixth
+			if (M.penta > 0.5) pcs = pcs[2] === 4 ? pcs.filter((_, i) => i !== 3 && i !== 6) : pcs.filter((_, i) => i !== 1 && i !== 5);
 		}
 		S.pcs = pcs;
 		// the tempo: the faceplate's, bent by the game, eased a little each bar; locked to the

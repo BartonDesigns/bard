@@ -30,6 +30,7 @@ import { loadAtlas, atlasReady, regionAt, palette, citiesNear } from './atlas.js
 import { setFarGround } from '../bay/terrain.js';
 import { LAT0, LON0 } from '../bay/geo.js';
 import { today, onMonth } from '../calendar.js';
+import { createRegional } from '../region/index.js';
 
 // the countries that drive on the left (the rest keep right)
 const LEFT = /United Kingdom|England|Scotland|Wales|Ireland|Japan|India|Pakistan|Bangladesh|Sri Lanka|Nepal|Bhutan|Thailand|Malaysia|Singapore|Indonesia|Brunei|Hong Kong|Macau|Australia|New Zealand|South Africa|Kenya|Tanzania|Uganda|Zambia|Zimbabwe|Botswana|Namibia|Mozambique|Malawi|Lesotho|Eswatini|Mauritius|Seychelles|Cyprus|Malta|Jamaica|Bahamas|Barbados|Trinidad|Guyana|Suriname|Bermuda|Cayman|Virgin Islands|Saint Lucia|Grenada|Dominica|Antigua|Saint Kitts|Saint Vincent|Fiji|Papua|Solomon|Tonga|Samoa|Timor|Falkland/i;
@@ -94,7 +95,11 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		addRegion: (r) => { if (r && r.name) r.place = placeOf(r); return world().real.addRegion(r); },
 		removeRegion: (h) => world()?.real?.removeRegion(h),
 	};
-	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas });
+	// the regional kit (region/): the look, the buildings, the people and the sounds of the place;
+	// it builds the towns it claims itself, and the town generator leaves those to it
+	const heightRef = { height, world };
+	const regional = createRegional({ scene, island, globe: heightRef, hint, isPhone, F, toLL, toXZ, bayKm, bayWildKm: BAY_WILD_KM });
+	const towns = createGlobeTowns({ real: realP, heightAt: (x, z) => bay.heightAt(x, z), water: () => world()?.water?.gen, director, skip: bayHas, claim: (c) => regional.claims(c) });
 
 
 	// the place's name for the Bay's labels (bay/labels.js), out where the Bay's own names don't
@@ -219,6 +224,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const steady = data.win.ready && !data.win.moving;
 		trees.update(cam, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version());
 		if (steady) towns.update(cam);
+		if (data.win.ready) regional.update(dt, cam, { night, out: !F.bay || out > SEAM_A - 3000, wind: shared.uWindDir ? { x: shared.uWindDir.value.x * (0.3 + (shared.uWind?.value || 0.5)), y: shared.uWindDir.value.y * (0.3 + (shared.uWind?.value || 0.5)) } : null });
 		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
 		const real = world()?.real;
 		if (real?.addSource && sourced !== real) { real.addSource(roads); sourced = real; }
@@ -233,7 +239,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const ll = toLL(camera.position.x, camera.position.z);
 		return {
 			at: `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)}`, frame: F.bay ? 'the Bay\'s' : `floating at ${F.lat.toFixed(3)}, ${F.lon.toFixed(3)}`, rebases: stats.rebases,
-			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(),
+			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(), regional: regional.info(),
 			window: { cell0: [data.win.gi0, data.win.gj0], tiles: data.stats.tiles, composeMs: data.stats.composeMs, decodeMs: Math.round(data.stats.decodeMs), mb: Math.round(data.bytes() / 1e5) / 10 },
 			ms: { mean: Math.round(stats.updateMs * 100) / 100, peak: Math.round(stats.maxMs * 10) / 10 },
 		};
@@ -241,6 +247,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	function dispose() {
 		setFarGround(null);
 		offMonth();
+		regional.dispose();
 		delete bay.farWhere;
 		GLOBE_U.uGOn.value = 0;
 		sourced?.removeSource?.(roads);
@@ -253,5 +260,5 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	// finish what is being laid out now, in one go (tests, and after a jump)
 	function settle() { trees.settle(); towns.civ().flush(); roads.settle(camera); }
-	return { update, place, info, dispose, settle, roads, toLL, toXZ, height, data, terrain, trees, towns, whenReady, frame: F, bayOut };
+	return { update, place, info, dispose, settle, roads, toLL, toXZ, height, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
 }

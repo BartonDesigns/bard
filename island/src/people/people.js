@@ -14,10 +14,20 @@ import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
 import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE } from './flow.js';
 import { fadePerson } from './fade.js';
+import { regionalNow } from '../region/here.js';
+import { regionalDress } from '../region/dress.js';
+import { ancestryFor } from '../region/cultures.js';
+import { coldOf } from '../region/climate.js';
 
 const MAX = 26, KIDS = 12, NEAR = 70;
 const steps = [];
 const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                 // hiked, down the middle
+
+// other systems' people you can stop and talk to (region/folk.js): each a function giving
+// a list of { P, M, active } like the walkers here
+const TALKERS = new Set();
+export function addTalkers(fn) { TALKERS.add(fn); return () => TALKERS.delete(fn); }
+function talkers() { const out = []; for (const f of TALKERS) { try { for (const p of f()) out.push(p); } catch { /* a system gone */ } } return out; }
 
 export function createPeople(scene, world, camera = null) {
 	const group = new THREE.Group();
@@ -547,7 +557,17 @@ export function createPeople(scene, world, camera = null) {
 		const W = world(), place = placeAt(cam.x, cam.z, need?.zone);
 		const hours = W?.sky?.state?.hours ?? 13, night = hours >= 20 || hours < 4;
 		const cl = climate({ hours, place, rain: W?.weather?.state?.rainHere || 0, cover: W?.weather?.state?.cover ?? 0.4 });
+		// out in the world: the place's own weather and ways (region/)
+		const H = regionalNow();
+		if (H?.kit) { const cold = coldOf(H.climate); return { place, activity, cold, wet: cl.wet, night, H, key: H.culture?.key + '|' + H.kit.id + '|' + activity + '|' + Math.round(cold * 3) + (night ? 'n' : '') }; }
 		return { place, activity, cold: cl.cold, wet: cl.wet, night, key: place + '|' + activity + '|' + Math.round(cl.cold * 3) + (cl.wet ? 'w' : '') + (night ? 'n' : '') };
+	}
+	// an outfit for the context: the wardrobe's, or the region's own out in the world
+	function outfitFor(r, d, c) {
+		if (!c.H) return dressFor(r, d, c);
+		const { outfit, head } = regionalDress(r, d, c.H.kit, c.H.culture, { cold: c.cold, role: c.activity === 'sit' ? 'sit' : 'walk', id: c.H.regionId });
+		outfit.gen = outfit.gen || 'x'; outfit.headScarf = head.scarf;
+		return outfit;
 	}
 	function wear(p, cam, need) {
 		const act = p.role === 'jog' ? 'jog' : p.route?.kind === 'seat' ? (need?.zone === 'office' ? 'work' : 'sit') : 'walk';
@@ -555,8 +575,9 @@ export function createPeople(scene, world, camera = null) {
 		if (p.dressKey === c.key) return;
 		const d = p.P.dna, keep = d.style;
 		let h = 0; for (const ch of c.key) h = (h * 31 + ch.charCodeAt(0)) | 0;
-		const o = dressFor(rng(d.seed ^ h), d, c);
+		const o = outfitFor(rng(d.seed ^ h), d, c);
 		o.hair = keep?.hair; o.printKind = keep?.printKind;
+		if (o.hair) o.hair = { ...o.hair, scarf: o.headScarf || (c.H ? null : o.hair.scarf) };
 		d.style = o; d.styleSig = JSON.stringify(d.outfit);
 		p.P.redress(o);
 		p.dressKey = c.key;
@@ -571,7 +592,9 @@ export function createPeople(scene, world, camera = null) {
 			const seed = (seedN++ * 2654435761) >>> 0;
 			const r = rng(seed ^ 0xc41d);
 			const c = wearCtx(lastCam, lastNeed, 'walk');
-			const d = personDNA(seed, kid ? { age: 3 + r() * 8, ctx: c } : { ctx: c });
+			const anc = c.H ? ancestryFor(c.H.culture, rng(seed ^ 0xa11), c.H.kit.build?.dense ? 0.15 : 0.06) : undefined;
+			const d = personDNA(seed, kid ? { age: 3 + r() * 8, ctx: c, ancestry: anc } : { ctx: c, ancestry: anc });
+			if (c.H && !kid) { const o = outfitFor(rng(seed ^ 0x57a1e), d, c); o.hair = d.style.hair; o.printKind = d.style.printKind; if (o.headScarf) o.hair = { ...o.hair, scarf: o.headScarf }; d.style = o; d.styleSig = JSON.stringify(d.outfit); }
 			const P = buildPerson(A, d);
 			const M = motionFor(P);
 			const p = { P, M, active: false, role: 'walk', dressKey: c.key };
@@ -706,11 +729,12 @@ export function createPeople(scene, world, camera = null) {
 		for (let k = 0; k < 4; k++) { const a = L.pts[k], b = L.pts[(k + 1) % 4]; for (let t = 0; t <= 1; t += 0.05) { const px = a.x + (b.x - a.x) * t, pz = a.z + (b.z - a.z) * t, d = Math.hypot(px - x, pz - z); if (d < bd) { bd = d; best = [px, pz, Math.atan2(b.x - a.x, b.z - a.z)]; } } }
 		return best;
 	}
-	// the person just ahead of you, close enough to talk to
+	// the person just ahead of you, close enough to talk to (the walkers here, and anyone
+	// another system has out: addTalkers)
 	function facing(cam, yaw, maxD = 3.4) {
 		let best = null, bs = 1e9;
 		const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
-		for (const p of pool) {
+		for (const p of [...pool, ...talkers()]) {
 			if (!p.active || p.demo !== undefined) continue;
 			const S = p.M.S, dx = S.pos.x - cam.x, dz = S.pos.z - cam.z, d = Math.hypot(dx, dz);
 			if (d > maxD || Math.abs(S.pos.y + 1.6 - cam.y) > 2.5) continue;

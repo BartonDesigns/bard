@@ -22,7 +22,7 @@ const SPREAD = [1400, 3200, 6500, 11000, 18000, 26000];
 const GLOW = [0.35, 0.55, 0.75, 0.9, 1, 1];
 const SCAN_KM = 260, RESCAN = 1500;
 
-export function createGlobeTowns({ real, heightAt, water, director, skip }) {
+export function createGlobeTowns({ real, heightAt, water, director, skip, claim = () => false }) {
 	const towns = [];                  // for civ.js: { x, z, r, ang, style, name, pop, city }
 	let list = [], civ = null, scanAt = null, scanEpoch = -1, scanT = -1e9;
 	const view = { towns, heightAt: (x, z) => heightAt(x, z), loaded: () => true };
@@ -51,6 +51,8 @@ export function createGlobeTowns({ real, heightAt, water, director, skip }) {
 			const p = toXZ(c.lat, c.lon), size = Math.max(0, Math.min(5, c.pop | 0));
 			const rec = { city: c, x: p.x, z: p.z, size, spread: SPREAD[size], km: c.km };
 			if (skip(p.x, p.z, REACH[size])) { rec.bay = true; list.push(rec); continue; }
+			// (a place the regional kit builds in its own manner: lit at night, not grown here)
+			if (claim(c)) { rec.regional = true; list.push(rec); continue; }
 			list.push(rec);
 			// the old world's towns keep their old grids; the new world's big cities too
 			const R = regionAt(c.lat, c.lon), id = R?.id || '';
