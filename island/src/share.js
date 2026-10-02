@@ -330,7 +330,8 @@ export function createShare(ctx) {
 	}
 	addEventListener('pagehide', () => keepPlace(true));
 	document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') keepPlace(true); });
-	const resumeCode = () => { try { return localStorage.getItem(RESUME_KEY); } catch { return null; } };
+	// (not straight after the graphics were lost there: start somewhere safe instead of looping)
+	const resumeCode = () => { try { return Date.now() - (+localStorage.getItem('l99-gl-lost') || 0) < 15 * 60000 ? null : localStorage.getItem(RESUME_KEY); } catch { return null; } };
 
 	// ---------- homes ----------
 	function homes() {

@@ -238,6 +238,9 @@ export function createIslandWorld() {
 	let lost = false;
 	dom.canvas.addEventListener('webglcontextlost', () => {
 		lost = true;
+		// remembered, so the next load starts somewhere safe; and what was being built, for the console
+		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
+		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'last shaders built:', shaderWarm.recent());
 		hint('The graphics were reset. Restoring…', 6000, 3);
 		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
 	});

@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 
 export function createShaderWarm(renderer, scene, camera) {
-	const done = new WeakSet(), batch = new THREE.Group();
+	const done = new WeakSet(), batch = new THREE.Group(), last = [];
 	const mats = (o) => (Array.isArray(o.material) ? o.material : [o.material]);
 	// the drawable objects with a material not built yet
 	function pending() {
@@ -33,6 +33,8 @@ export function createShaderWarm(renderer, scene, camera) {
 		batch.children = take;
 		try { renderer.compile(batch, camera, scene); } catch (e) { console.warn('[shaders]', e); } finally { batch.children = []; }
 		for (const m of fresh) done.add(m);
+		// the last few built (what was being built if the graphics are lost: see main.js)
+		for (const m of fresh) { last.push(`${m.type}${m.name ? ' ' + m.name : ''}${m.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey ? ' ' + String(m.customProgramCacheKey()).slice(0, 40) : ''} / ${take.find((o) => mats(o).includes(m))?.parent?.name || ''}`); if (last.length > 24) last.shift(); }
 	}
 	// everything there is now, n materials a frame
 	async function all(n = 6) {
@@ -50,5 +52,5 @@ export function createShaderWarm(renderer, scene, camera) {
 		if (!queue.length && t > 0.5) { t = 0; queue = pending(); }
 		if (queue.length) step(queue, 2);
 	}
-	return { all, tick };
+	return { all, tick, recent: () => last.slice() };
 }

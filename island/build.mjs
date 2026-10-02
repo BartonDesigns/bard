@@ -17,3 +17,12 @@ const atlas = await esbuild.context({ ...common, entryPoints: ['src/earth/data/i
 	if (fs.existsSync(src) && (!fs.existsSync('dist/rapier.mjs') || fs.statSync(src).mtimeMs > fs.statSync('dist/rapier.mjs').mtimeMs)) fs.copyFileSync(src, 'dist/rapier.mjs');
 }
 if (watch) { await ctx.watch(); await atlas.watch(); } else { await ctx.rebuild(); await atlas.rebuild(); await ctx.dispose(); await atlas.dispose(); }
+// the site loads the engine by a URL that changes with it (index.html), so a browser never keeps
+// running an old copy after a release
+if (!watch) {
+	const fs = await import('node:fs'), { createHash } = await import('node:crypto');
+	const v = createHash('sha1').update(fs.readFileSync('dist/island.js')).digest('hex').slice(0, 10);
+	const page = '../index.html', html = fs.readFileSync(page, 'utf8');
+	const next = html.replace(/import\('\.\/island\/dist\/island\.js(\?v=[0-9a-f]+)?'\)/, `import('./island/dist/island.js?v=${v}')`);
+	if (next !== html) fs.writeFileSync(page, next);
+}
