@@ -275,24 +275,22 @@ function buildDom() {
 		tidy();
 	};
 	new MutationObserver((list) => { for (const m of list) for (const el of m.addedNodes) if (el.nodeType === 1) dock(el); }).observe(mount, { childList: true });
-	// the groups' sizes, for what is laid out round them: the prompts keep clear of the thumb
-	// buttons beside them (in portrait only of the round ones: the rest sit above) and of the
-	// resting joystick, and the rail and the menus stop short of them
+	// the groups' sizes, for what is laid out round them: the prompts take the room between
+	// the resting joystick (or the left edge) and the right-hand stack, and the rail and the
+	// menus stop short of the thumb's groups
 	const fit = () => {
-		const bigOn = !big.hidden && big.offsetWidth > 0;
-		const clear = 12 + (land.matches || !bigOn ? thumb.offsetWidth : big.offsetWidth);
 		// (a short landscape screen: the rail can reach down beside a tall stack of prompts too)
-		const right = Math.max(clear, land.matches ? 12 + rail.offsetWidth : 0) + 8;
+		const right = Math.max(12 + thumb.offsetWidth, land.matches ? 12 + rail.offsetWidth : 0) + 8;
 		const ring = mount.classList.contains('l99-touch') && !mount.classList.contains('l99-still');
 		set('--l99-side', `${right}px`);
-		set('--l99-left', `${ring ? 16 + 88 + 8 : right}px`);
+		set('--l99-left', `${ring ? 16 + 88 + 8 : 24}px`);
 		// (16 px between the thumb's stack and the rail: two groups, one column)
 		set('--l99-low', `${16 + thumb.offsetHeight + 16}px`);
 		set('--l99-menu-r', `${12 + rail.offsetWidth + 8}px`);
 	};
 	// (a frame later: sizes set inside the observer's own call would loop it)
 	const ro = new ResizeObserver(() => requestAnimationFrame(fit));
-	for (const el of [mount, rail, thumb, big]) ro.observe(el);
+	for (const el of [mount, rail, thumb]) ro.observe(el);
 	land.addEventListener?.('change', () => {
 		for (const el of mount.querySelectorAll('[data-hud^="mode "]')) dock(el);
 		tidy(); fit();
