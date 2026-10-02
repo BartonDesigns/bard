@@ -34,6 +34,12 @@ shipped work). Before doing anything:
   Valley, Moraga, Richmond and El Cerrito, Novato, south of Mountain View. The place-name banner (`bay/labels.js`) now runs on the real
   clock, so it no longer lags behind and names a town already passed at low frame rates.
 - **Hair refinement** (asked for "next week"): see Known issues.
+- **Graphics lost on a device** (reported 1 October 2026, Safari): the game now recovers or says to
+  reload, but the cause is likely memory (Bay tiles plus regional towns). Next: a lower memory budget
+  on phones (fewer `uRealBs` slots, smaller tile radius).
+- **Discovery server:** `GET /brief/:id` now answers 204 for an undiscovered place (was 404). The
+  game accepts both; the owner needs to redeploy (`cd server/discovery && npm run deploy`) for it to
+  take effect.
 - **Hiker lighting** against the hillside: checked (1 October 2026, Diablo at 15:30). Lit by the same
   sun as the slope, with shadows on the ground, nothing to fix.
 - **Regional talk** re-checked in 8 places (Svalbard, Marrakesh, Istanbul, Kyoto, Manaus, Ulaanbaatar,
