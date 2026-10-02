@@ -178,10 +178,12 @@ function button(label, title, style, hud) {
 // the group, then its place in it).
 //   rail: the right-hand column under the sun (fly, drive, places, games...); it wraps into
 //         a second column leftwards when it runs into the thumb buttons
-//   thumb: bottom right, under the right thumb: big (jump, descend) and side (boat, rod, strike)
+//   thumb: bottom right, under the right thumb: big (jump, descend), side (boat, rod, strike)
+//          and pill (the car's labelled buttons), so the rail keeps only square icons
 //   prompt: bottom centre, one over another (pick up, talk, doors...), with the hint on top
 //   left: under ◀ Bard (homes, the quest purse)
-// A short landscape screen lays the thumb buttons in a row, to leave the rail its height.
+// A short landscape screen lays the thumb buttons in a row, to leave the rail its height
+// (the 44 px ones lifted 10 px, to centre on the round 64 px ones).
 const HUD_LAND = '(orientation: landscape) and (max-height: 540px)';
 const HUD_CSS = `
 #l99-island-mount .l99-rail{position:absolute;top:calc(64px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));height:calc(100% - 64px - env(safe-area-inset-top) - var(--l99-low, 88px) - env(safe-area-inset-bottom));display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,44px);grid-auto-columns:max-content;gap:8px;direction:rtl;justify-items:start;align-content:start;pointer-events:none;}
@@ -195,7 +197,7 @@ const HUD_CSS = `
 #l99-island-mount .l99-prompts>*{max-width:100%;box-sizing:border-box;}
 #l99-island-mount :is(.l99-thumb>div,.l99-pair)[hidden]{display:none;}
 #l99-island-mount:not(.l99-touch) .l99-big{display:none;}
-@media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}}
+@media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}#l99-island-mount.l99-touch .l99-big:not([hidden])~:is(.l99-side,.l99-pill){margin-bottom:10px;}}
 `;
 
 function buildDom() {
@@ -210,9 +212,9 @@ function buildDom() {
 	const knob = css(document.createElement('div'), 'position:absolute;left:33px;top:33px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.45);');
 	joy.appendChild(knob);
 	const box = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
-	const rail = box('l99-rail'), thumb = box('l99-thumb'), big = box('l99-big'), side = box('l99-side'), prompts = box('l99-prompts'), left = box('l99-left'), pair = box('l99-pair');
-	thumb.append(big, side);
-	const groups = { rail, big, side, prompt: prompts, left };
+	const rail = box('l99-rail'), thumb = box('l99-thumb'), big = box('l99-big'), side = box('l99-side'), pill = box('l99-pill'), prompts = box('l99-prompts'), left = box('l99-left'), pair = box('l99-pair');
+	thumb.append(big, side, pill);
+	const groups = { rail, big, side, pill, prompt: prompts, left };
 	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));');
 	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
@@ -238,7 +240,7 @@ function buildDom() {
 	const panel = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(300px,78vw);box-sizing:border-box;padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;');
 	// a group with nothing showing is hidden, so it leaves no gap either
 	const tidy = () => {
-		for (const g of [big, side, pair]) {
+		for (const g of [big, side, pill, pair]) {
 			const none = ![...g.children].some((c) => c.style.display !== 'none');
 			if (g.hidden !== none) g.hidden = none;
 		}
