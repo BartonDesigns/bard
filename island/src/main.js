@@ -51,6 +51,7 @@ import { createTidepools } from './bay/tidepools.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
 import { createDiscovery } from './bay/discovery.js';
+import { createShaderWarm } from './world/shaderwarm.js';
 import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
@@ -221,7 +222,12 @@ export function createIslandWorld() {
 	let drive = { update: () => false, stop() {}, active: () => false };
 	// MSAA on phones too: Apple's tile GPUs resolve it almost for free, and it is what
 	// lets leaves and grass edges fade (alpha to coverage) instead of stair-stepping
-	const renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: true, powerPreference: 'high-performance' });
+	// after a graphics reset a browser may refuse this page new graphics until the tab is closed
+	// (Safari does): say so plainly instead of three's error
+	const BLOCKED = 'The browser has paused 3D graphics for this page after a graphics reset. Close this tab and open the site in a new one (or restart the browser).';
+	let renderer;
+	try { renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { console.warn('[island]', e); throw new Error(BLOCKED); }
+	if (renderer.getContext().isContextLost()) throw new Error(BLOCKED);
 	// three numbers a program's textures across both its stages and warns past the one stage's
 	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
 	// (32 there), and each stage keeps inside its 16 (the smoke's samplers check)
@@ -247,6 +253,7 @@ export function createIslandWorld() {
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = new THREE.Scene();
+	const shaderWarm = createShaderWarm(renderer, scene, camera);
 
 	const shared = {
 		uTime: { value: 0 }, uWet: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
@@ -670,7 +677,7 @@ export function createIslandWorld() {
 		vegetation.stream(camera, true);
 		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
 		litter.update(camera);
-		renderer.compile(scene, camera);
+		await shaderWarm.all();
 		// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 		// for everything: the island's own map on the island, the real land beyond it
 		if (earth) {
@@ -772,7 +779,7 @@ export function createIslandWorld() {
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
 				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
-				renderer.compile(scene, camera);
+				shaderWarm.all();
 			});
 			const w0 = world;
 		}
@@ -1157,6 +1164,7 @@ export function createIslandWorld() {
 		if (arcade.active()) fishing.drop();
 		fishing.update(dt, time, !arcade.active() && !W.player.state.flying && !drive.active() && !W.boat.boarded() && camera.position.y > -0.3);
 		W.roads?.update(time, sk.night);
+		shaderWarm.tick(dt);
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
