@@ -58,6 +58,7 @@ export const REAL_U = {
 	// the mapped regions' boxes, and the box round all of them
 	uRealBs: { value: Array.from({ length: REAL_SLOTS }, NOWHERE) }, uRealAll: { value: NOWHERE() },
 };
+const EMPTY_MAPS = [REAL_U.uRoadMap.value, REAL_U.uRoadMap2.value, REAL_U.uPaintMap.value, REAL_U.uRealMap.value];
 export const REAL_GLSL = /* glsl */`
 uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR, uRoadR2, uRealR, uRealB, uRealAll, uRealBs[${REAL_SLOTS}]; uniform float uSeason, uSeasonLag, uBloom, uLeafFall; uniform vec4 uRock[8]; uniform vec3 uRockC[8]; uniform vec4 uGreen[4];
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
@@ -107,14 +108,18 @@ async function gunzip(res) {
 	return new Uint8Array(await new Response(res.body.pipeThrough(ds)).arrayBuffer());
 }
 // a coarse map's pixels, exactly as baked
-async function pixels(url) {
-	const bm = await createImageBitmap(await (await fetch(url)).blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
-	const cv = document.createElement('canvas');
-	cv.width = bm.width; cv.height = bm.height;
-	const cx = cv.getContext('2d', { willReadFrequently: true });
-	cx.drawImage(bm, 0, 0);
-	bm.close();
-	return cx.getImageData(0, 0, cv.width, cv.height).data;
+async function pixels(url, signal) {
+	const res = await fetch(url, { signal });
+	if (!res.ok) throw new Error(res.status + ' ' + res.url);
+	const bm = await createImageBitmap(await res.blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+	try {
+		if (signal.aborted) throw new DOMException('Tile cancelled', 'AbortError');
+		const cv = document.createElement('canvas');
+		cv.width = bm.width; cv.height = bm.height;
+		const cx = cv.getContext('2d', { willReadFrequently: true });
+		cx.drawImage(bm, 0, 0);
+		return cx.getImageData(0, 0, cv.width, cv.height).data;
+	} finally { bm.close(); }
 }
 
 export function createRealCity(renderer) {
@@ -136,15 +141,17 @@ export function createRealCity(renderer) {
 		G.reach[0] = Math.min(G.reach[0], mnx); G.reach[1] = Math.min(G.reach[1], mnz); G.reach[2] = Math.max(G.reach[2], mxx); G.reach[3] = Math.max(G.reach[3], mxz);
 	};
 	const live = new Map(), pending = new Map(), failed = new Set();
+	let disposed = false, cancelled = 0;
 	let camX = 1e9, camZ = 1e9, late = 0;
 
-	async function load(i) {
+	async function load(i, signal) {
 		const name = NAMES[i], base = new URL(`../assets/bayarea/real/${name}`, import.meta.url).href;
 		const [H, bin, px] = await Promise.all([
-			fetch(base + '.json').then((r) => r.json()),
-			fetch(base + '.bin.gz').then(gunzip),
-			pixels(base + '.png'),
+			fetch(base + '.json', { signal }).then((r) => { if (!r.ok) throw new Error(r.status + ' ' + r.url); return r.json(); }),
+			fetch(base + '.bin.gz', { signal }).then(gunzip),
+			pixels(base + '.png', signal),
 		]);
+		if (signal.aborted) throw new DOMException('Tile cancelled', 'AbortError');
 		const t0 = performance.now(), dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
 		// a region baked round another origin: shift it (the mapping is a pure translation in x)
 		const shiftX = ((H.geo ? H.geo[1] : LON0_LEGACY) - LON0) * KX;
@@ -218,19 +225,26 @@ export function createRealCity(renderer) {
 		return { G, attribution: H.attribution };
 	}
 	// the regions near you come, the far ones go (a few at a time, the nearest first)
-	let checkX = 1e9, checkZ = 1e9, lastCheck = 0;
+	let checkX = 1e9, checkZ = 1e9, checkNear, lastCheck = 0;
 	const gap = (i, x, z) => { const b = BOXES[i]; return Math.hypot(Math.max(0, b[0] - x, x - b[2]), Math.max(0, b[1] - z, z - b[3])); };
-	function stream(x, z) {
+	function stream(x, z, loadNear) {
 		const now = performance.now();
-		if (Math.hypot(x - checkX, z - checkZ) < 60 && now - lastCheck < 1500) return;
-		checkX = x; checkZ = z; lastCheck = now;
+		if (loadNear === checkNear && Math.hypot(x - checkX, z - checkZ) < 60 && now - lastCheck < 1500) return;
+		checkX = x; checkZ = z; checkNear = loadNear; lastCheck = now;
+		for (const [i, task] of pending) if (!loadNear || gap(i, x, z) > DROP) {
+			pending.delete(i); task.controller.abort(); cancelled++;
+		}
 		for (const [i, G] of live) if (gap(i, x, z) > DROP) drop(i, G);
+		if (!loadNear) return;
 		const want = [];
 		for (let i = 0; i < NAMES.length; i++) if (!live.has(i) && !pending.has(i) && !failed.has(i)) { const d = gap(i, x, z); if (d < LOAD) want.push([d, i]); }
 		want.sort((a, b) => a[0] - b[0]);
 		for (const [, i] of want) {
 			if (pending.size >= 2) break;
-			pending.set(i, load(i).then(({ G, attribution }) => {
+			const task = { controller: new AbortController() };
+			pending.set(i, task);
+			task.promise = load(i, task.controller.signal).then(({ G, attribution }) => {
+				if (disposed || task.controller.signal.aborted || pending.get(i) !== task) return;
 				pending.delete(i);
 				if (gap(i, camX, camZ) > DROP) { late++; return; }          // (gone past it while it came)
 				live.set(i, G);
@@ -238,7 +252,14 @@ export function createRealCity(renderer) {
 				R.attribution = attribution;
 				R.loaded = true;
 				changed(i, camX, camZ);
-			}).catch((err) => { pending.delete(i); failed.add(i); console.warn('real city', NAMES[i], err); }));
+			}).catch((err) => {
+				if (pending.get(i) !== task) return;
+				pending.delete(i);
+				const aborted = task.controller.signal.aborted;
+				task.controller.abort();             // stop the other files when one fails
+				if (disposed || aborted) return;
+				failed.add(i); console.warn('real city', NAMES[i], err);
+			});
 		}
 	}
 	function drop(i, G) {
@@ -584,10 +605,11 @@ export function createRealCity(renderer) {
 	}
 
 	function update(camera) {
+		if (disposed) return;
 		const x = camera.position.x, z = camera.position.z;
 		camX = x; camZ = z;
-		if (camera.position.y < 6000) stream(x, z);
-		if (!R.loaded) return;
+		stream(x, z, camera.position.y < 6000);
+		if (!R.loaded) { for (const M of MAPS) { M.u[1].value.w = 0; M.x = 1e9; } return; }
 		if (Math.hypot(x - slotX, z - slotZ) > 400) slots(x, z);
 		const on = camera.position.y < 3000 && R.regions.some(({ reach: b }) => x > b[0] - 800 && z > b[1] - 800 && x < b[2] + 800 && z < b[3] + 800);
 		for (const M of MAPS) {
@@ -624,7 +646,30 @@ export function createRealCity(renderer) {
 		return best;
 	}
 
+	function dispose() {
+		if (disposed) return;
+		disposed = true;
+		for (const task of pending.values()) task.controller.abort();
+		pending.clear();
+		for (const [i, M] of MAPS.entries()) {
+			if (M.u[0].value === M.rt.texture) { M.u[0].value = EMPTY_MAPS[i]; M.u[1].value.w = 0; }
+			if (M.paint && M.u[2].value === M.paint.texture) M.u[2].value = EMPTY_MAPS[2];
+			M.rt.dispose(); M.paint?.dispose();
+		}
+		if (REAL_U.uRealMap.value === comp?.tex || gens.some((G) => REAL_U.uRealMap.value === G.tex)) {
+			REAL_U.uRealMap.value = EMPTY_MAPS[3]; REAL_U.uRealR.value.w = 0;
+			REAL_U.uRealB.value.copy(NOWHERE()); REAL_U.uRealAll.value.copy(NOWHERE());
+			for (const b of REAL_U.uRealBs.value) b.copy(NOWHERE());
+		}
+		comp?.tex.dispose(); comp = null;
+		for (const G of gens) G.tex.dispose();
+		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
+		layerMat.dispose();
+		live.clear(); gens.length = 0; sources.length = 0; hand.grid.clear(); failed.clear();
+		R.regions.length = 0; R.loaded = false;
+	}
+
 	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
 	// town came or went)
-	return { R, inside, near, update, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
+	return { R, inside, near, update, dispose, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
 }

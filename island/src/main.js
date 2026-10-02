@@ -822,6 +822,7 @@ export function createIslandWorld() {
 	function teardown() {
 		if (!world) return;
 		world.globe?.dispose();         // globe: the frame back to the Bay's, its hooks off
+		world.real?.dispose();
 		drive.stop();
 		world.player.dispose();
 		world.shells?.dispose();

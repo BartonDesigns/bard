@@ -18,6 +18,18 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Bay streaming lifecycle (2 October 2026, feature branch):** `realcity.js` now cancels
+  tile requests after travel, vertical departure and world teardown. Late callbacks cannot
+  insert an old tile or clear a newer request for it. Teardown releases the offscreen road
+  render targets, combined map, generated-town textures and drawing resources, and resets
+  their shared shader bindings. `main.js` calls this cleanup when replacing the world.
+  Seven regression checks pass (`cd island && node --test tools/realcity-lifecycle.test.mjs`),
+  the engine is rebuilt and the faceplate's bundle URL updated; unused-variable lint passes
+  for `realcity.js`. Browser/GPU smoke testing is still pending: the browser installation
+  download was truncated in this environment. Keep this on the feature branch until the
+  faceplate/island/Bay/globe/planet smoke test and an actual iPhone session pass. This fixes
+  specific resource leaks; it does not establish that all graphics-loss causes are resolved.
+
 - **Apple devices and the Bay ground shader (2 October 2026):** Apple's shader compiler (every
   browser on iPhone, iPad and Mac) loses the graphics building the full Bay ground shader
   (`bay/terrain.js`, ~180 KB, its height pipeline inlined many times). Apple devices now take a
