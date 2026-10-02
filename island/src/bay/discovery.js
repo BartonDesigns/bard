@@ -294,7 +294,8 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		return best;
 	}
 	function push(pos, footY) {
-		if (!built || Math.hypot(pos.x - CAMPUS.x, pos.z - CAMPUS.z) > CAMPUS.r + 20) return;
+		// (the cove, and Faith on it, lie out east past the campus's circle)
+		if (!built || (Math.hypot(pos.x - CAMPUS.x, pos.z - CAMPUS.z) > CAMPUS.r + 20 && Math.hypot(pos.x - COVE.x, pos.z - COVE.z) > 40)) return;
 		const R = 0.3;
 		for (const c of built.col) {
 			if (footY + 1.7 < c.y0 || footY + 0.25 > c.y1) continue;

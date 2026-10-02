@@ -259,6 +259,10 @@ export function buildFaith({ glass, beached = false } = {}) {
 	box(CX * 2 + 0.24, 0.1, CZ1 - CZ0 + 0.2, 0, CT + 0.05, (CZ0 + CZ1) / 2, C.house);
 	box(CX * 2 + 0.26, 0.04, CZ1 - CZ0 + 0.22, 0, CT, (CZ0 + CZ1) / 2, C.frame);
 	box(0.7, 0.06, 0.45, -0.8, UP - 0.03, CZ1 + 0.22, C.house);                            // the ladder's head
+	// the wheel up there, on its console behind the screen
+	box(0.6, 0.95, 0.4, 0.4, UP + 0.475, CZ0 + 0.45, C.house);
+	put(new THREE.TorusGeometry(0.24, 0.025, 5, 16).rotateX(-0.5).translate(0.4, UP + 1.05, CZ0 + 0.72), C.wood);
+	for (let k = 0; k < 4; k++) { const a = k * Math.PI / 4; put(new THREE.BoxGeometry(0.5, 0.025, 0.025).rotateZ(a).rotateX(-0.5).translate(0.4, UP + 1.05, CZ0 + 0.72), C.wood); }
 	// the curved white screen at the bridge's front: bowed forward, sweeping down along the sides
 	{
 		const sx = CX + 0.1, n = 16, bot = [], top = [], zA = -0.25, zF = CZ0 - 0.05, run = [];
