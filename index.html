@@ -3,6 +3,49 @@
 <head>
 <meta name="l99-build" content="226">
 <meta charset="UTF-8">
+<script>
+/* ?debug on the address: an on-screen console (phones have none), with a Copy button. Only
+   errors, warnings and the game's own diagnostic lines; nothing is sent anywhere. */
+(function () {
+	if (!/[?&]debug\b/.test(location.search)) return;
+	var lines = [], box = null, list = null;
+	function text(a) { return Array.prototype.map.call(a, function (v) { if (v && v.stack && v.message) return v.message; if (typeof v === 'object') { try { return JSON.stringify(v); } catch (e) { return String(v); } } return String(v); }).join(' '); }
+	function add(kind, a) {
+		var t = text(a);
+		if (lines.length && lines[lines.length - 1].t === t) { lines[lines.length - 1].n++; } else { lines.push({ k: kind, t: t, n: 1 }); if (lines.length > 300) lines.shift(); }
+		draw();
+	}
+	function draw() {
+		if (!list) return;
+		list.textContent = lines.map(function (l) { return (l.k === 'error' ? '✖ ' : l.k === 'warn' ? '⚠ ' : '· ') + l.t + (l.n > 1 ? '  (×' + l.n + ')' : ''); }).join('\n\n');
+		list.scrollTop = list.scrollHeight;
+	}
+	['error', 'warn'].forEach(function (k) { var o = console[k]; console[k] = function () { add(k, arguments); return o.apply(console, arguments); }; });
+	var log = console.log; console.log = function () { var t = text(arguments); if (/context|graphics|webgl|shader|three/i.test(t)) add('log', arguments); return log.apply(console, arguments); };
+	addEventListener('error', function (e) { add('error', [e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')']); });
+	addEventListener('unhandledrejection', function (e) { add('error', ['unhandled: ' + (e.reason && e.reason.message || e.reason)]); });
+	function mount() {
+		box = document.createElement('div');
+		box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;max-height:42vh;z-index:2147483647;background:rgba(10,10,10,.92);color:#e8e8e8;border:1px solid rgba(255,255,255,.2);border-radius:10px;font:11px/1.35 ui-monospace,Menlo,monospace;display:flex;flex-direction:column;';
+		var bar = document.createElement('div');
+		bar.style.cssText = 'display:flex;gap:8px;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.15);align-items:center;';
+		bar.innerHTML = '<b style="flex:1;color:#01a982">Console</b>';
+		function btn(label, fn) { var b = document.createElement('button'); b.textContent = label; b.style.cssText = 'background:#01a982;color:#fff;border:0;border-radius:6px;padding:6px 10px;font:600 12px system-ui;'; b.onclick = fn; bar.appendChild(b); return b; }
+		var copy = btn('Copy', function () {
+			var all = 'Level 99 Bard console · ' + navigator.userAgent + '\n\n' + lines.map(function (l) { return l.k + ': ' + l.t + (l.n > 1 ? ' (x' + l.n + ')' : ''); }).join('\n');
+			var done = function () { copy.textContent = 'Copied'; setTimeout(function () { copy.textContent = 'Copy'; }, 1500); };
+			if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(all).then(done, function () { prompt('Copy this:', all); });
+			else prompt('Copy this:', all);
+		});
+		btn('Hide', function () { var h = list.style.display === 'none'; list.style.display = h ? '' : 'none'; this.textContent = h ? 'Hide' : 'Show'; });
+		list = document.createElement('pre');
+		list.style.cssText = 'margin:0;padding:8px;overflow:auto;white-space:pre-wrap;word-break:break-word;flex:1;';
+		box.appendChild(bar); box.appendChild(list); document.body.appendChild(box);
+		add('log', ['console on · ' + navigator.userAgent]);
+	}
+	if (document.body) mount(); else addEventListener('DOMContentLoaded', mount);
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
