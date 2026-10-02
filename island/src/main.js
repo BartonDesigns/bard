@@ -195,7 +195,7 @@ const HUD_CSS = `
 #l99-island-mount .l99-prompts>*{max-width:100%;box-sizing:border-box;}
 #l99-island-mount :is(.l99-thumb>div,.l99-pair)[hidden]{display:none;}
 #l99-island-mount:not(.l99-touch) .l99-big{display:none;}
-@media ${HUD_LAND}{#l99-island-mount :is(.l99-thumb,.l99-big){flex-direction:row-reverse;}}
+@media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}}
 `;
 
 function buildDom() {
@@ -265,7 +265,8 @@ function buildDom() {
 		set('--l99-low', `${16 + thumb.offsetHeight + 8}px`);
 		set('--l99-menu-r', `${12 + rail.offsetWidth + 8}px`);
 	};
-	const ro = new ResizeObserver(fit);
+	// (a frame later: sizes set inside the observer's own call would loop it)
+	const ro = new ResizeObserver(() => requestAnimationFrame(fit));
 	for (const el of [mount, rail, thumb, big]) ro.observe(el);
 	land.addEventListener?.('change', fit);
 	mount.append(style, canvas, veil, joy, rail, thumb, prompts, left, back, gear, fly, boost, jump, down, act, shell, pair, launch, hint, panel, loading);
