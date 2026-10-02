@@ -18,6 +18,15 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Apple devices and the Bay ground shader (2 October 2026):** Apple's shader compiler (every
+  browser on iPhone, iPad and Mac) loses the graphics building the full Bay ground shader
+  (`bay/terrain.js`, ~180 KB, its height pipeline inlined many times). Apple devices now take a
+  light version from the start (`world/gpulite.js`, `GROUND_LITE` in the shader): plainer ground,
+  no painted street detail. Next: restructure the full shader so Apple can build it (fewer
+  inlined `gradedHeight`/`bayHeight` calls in the vertex stage, the colour block split), then
+  drop the Apple default. Switches on the site's address: `?debug` (on-screen console with Copy),
+  `?lite` / `?full`, `?safe` (no AA, shadows or high resolution), `?offline` (no discovery server).
+
 - **Regional kit** (`island/src/region/`, `earth/data/polar.js`, regional hooks in `earth/globe.js`,
   `globetowns.js`, `globetrees.js`, `people/persona.js`, `body.js`, `people.js`, `music/`): a
   regional style layer keyed by atlas region and climate (far north and polar sea, jungle, desert,
