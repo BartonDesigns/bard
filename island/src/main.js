@@ -225,8 +225,11 @@ export function createIslandWorld() {
 	// after a graphics reset a browser may refuse this page new graphics until the tab is closed
 	// (Safari does): say so plainly instead of three's error
 	const BLOCKED = 'The browser has paused 3D graphics for this page after a graphics reset. Close this tab and open the site in a new one (or restart the browser).';
+	// (?safe on the site's address: no anti-aliasing, no shadows, one pixel per pixel, to tell a
+	// graphics card's limits from the rest)
+	const SAFE = new URLSearchParams(location.search).has('safe');
 	let renderer;
-	try { renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { console.warn('[island]', e); throw new Error(BLOCKED); }
+	try { renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: !SAFE, powerPreference: 'high-performance' }); } catch (e) { console.warn('[island]', e); throw new Error(BLOCKED); }
 	if (renderer.getContext().isContextLost()) throw new Error(BLOCKED);
 	// three numbers a program's textures across both its stages and warns past the one stage's
 	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
@@ -249,9 +252,9 @@ export function createIslandWorld() {
 	// neon; ACES crushed the shade and pushed saturation, which read as harsh
 	renderer.toneMapping = THREE.AgXToneMapping;
 	renderer.outputColorSpace = THREE.SRGBColorSpace;
-	renderer.shadowMap.enabled = true;
+	renderer.shadowMap.enabled = !SAFE;
 	renderer.shadowMap.type = THREE.PCFShadowMap;
-	const maxRatio = Math.min(window.devicePixelRatio || 1, isPhone ? 2 : 1.75);
+	const maxRatio = SAFE ? 1 : Math.min(window.devicePixelRatio || 1, isPhone ? 2 : 1.75);
 	let pixelRatio = isPhone ? Math.min(maxRatio, 1.5) : maxRatio;
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
@@ -880,7 +883,7 @@ export function createIslandWorld() {
 		const target = quality === 'high' ? maxRatio : quality === 'low' ? Math.min(1, maxRatio) * 0.75 : pixelRatio;
 		if (quality !== 'auto' || force) pixelRatio = target;
 		renderer.setPixelRatio(pixelRatio);
-		renderer.shadowMap.enabled = !(quality === 'low');
+		renderer.shadowMap.enabled = !SAFE && !(quality === 'low');
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = quality !== 'low';
 		world?.rays?.quality(quality);

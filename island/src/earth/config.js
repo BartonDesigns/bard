@@ -3,7 +3,9 @@
 
 // the discovery server's address, e.g. 'https://l99-discovery.<account>.workers.dev'; empty
 // until it is deployed, and then every place has its atlas brief (the same for everyone too)
-export const DISCOVERY_URL = 'https://l99-discovery.joshbarton1921.workers.dev';
+// (?offline on the site's address turns it off, to tell a server problem from the game's own)
+const OFFLINE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('offline');
+export const DISCOVERY_URL = OFFLINE ? '' : 'https://l99-discovery.joshbarton1921.workers.dev';
 
 // how long to wait on it (ms): a kept brief, and one being made (the server waits 25 s)
 export const GET_MS = 6000;
