@@ -40,6 +40,7 @@ export const GREENS = [
 // how many mapped regions the ground shader tells from the procedural world at once: the
 // loaded ones nearest you (tiles side by side are merged into one box first)
 export const REAL_SLOTS = 16;
+const SLOTS = Array.from({ length: REAL_SLOTS }, (v, i) => i);
 const NOWHERE = () => new THREE.Vector4(1e9, 1e9, -1e9, -1e9);
 export const REAL_U = {
 	uRoadMap: { value: blank() }, uRoadR: { value: new THREE.Vector4(0, 0, 1, 0) },
@@ -62,18 +63,16 @@ uniform sampler2D uRoadMap, uRoadMap2, uPaintMap, uRealMap; uniform vec4 uRoadR,
 bool inBox(vec2 w, vec4 b){ return w.x > b.x && w.y > b.y && w.x < b.z && w.y < b.w; }
 // any mapped region (real streets, no grid): inside the loaded regions' boxes and 60 m from
 // their outer edge (boxes side by side are one; see realCovered), and where the coarse map covers it
+// (written out flat, each box by its own index: loops over the array, with early returns, in
+// a shader this size were too much for Apple's shader compiler, which lost the graphics)
 bool inRealBox(vec2 w){
-	for (int i = 0; i < ${REAL_SLOTS}; i++) if (inBox(w, uRealBs[i])) return true;
-	return false;
+	return ${SLOTS.map((i) => `inBox(w, uRealBs[${i}])`).join(' || ')};
 }
 bool inRealAny(vec2 w){
 	if (!inBox(w, uRealAll + vec4(60.0, 60.0, -60.0, -60.0))) return false;
-	bool any = false;
-	for (int i = 0; i < ${REAL_SLOTS}; i++) {
-		if (inBox(w, uRealBs[i] + vec4(60.0, 60.0, -60.0, -60.0))) return true;
-		any = any || inBox(w, uRealBs[i]);
-	}
-	return any && inRealBox(w + vec2(60.0, 0.0)) && inRealBox(w - vec2(60.0, 0.0)) && inRealBox(w + vec2(0.0, 60.0)) && inRealBox(w - vec2(0.0, 60.0));
+	const vec4 IN = vec4(60.0, 60.0, -60.0, -60.0);
+	if (${SLOTS.map((i) => `inBox(w, uRealBs[${i}] + IN)`).join(' || ')}) return true;
+	return inRealBox(w) && inRealBox(w + vec2(60.0, 0.0)) && inRealBox(w - vec2(60.0, 0.0)) && inRealBox(w + vec2(0.0, 60.0)) && inRealBox(w - vec2(0.0, 60.0));
 }
 bool inReal(vec2 w){ return uRealR.w > 0.5 && inBox(w, uRealB); }
 `;

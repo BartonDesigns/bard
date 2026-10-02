@@ -239,10 +239,10 @@ export function createIslandWorld() {
 	const linking = { what: '' };
 	{
 		const gl = renderer.getContext(), src = new WeakMap(), ss = gl.shaderSource.bind(gl), lp = gl.linkProgram.bind(gl), at = gl.attachShader.bind(gl), parts = new WeakMap();
-		gl.shaderSource = (sh, text) => { src.set(sh, text); ss(sh, text); };
-		gl.attachShader = (pr, sh) => { const l = parts.get(pr) || []; l.push(sh); parts.set(pr, l); at(pr, sh); };
+		gl.shaderSource = (sh, text) => { if (sh) src.set(sh, text); ss(sh, text); };
+		gl.attachShader = (pr, sh) => { if (pr && sh) { const l = parts.get(pr) || []; l.push(sh); parts.set(pr, l); } at(pr, sh); };
 		gl.linkProgram = (pr) => {
-			const text = (parts.get(pr) || []).map((sh) => src.get(sh) || '').join('\n');
+			const text = pr ? (parts.get(pr) || []).map((sh) => src.get(sh) || '').join('\n') : '';
 			const own = [...new Set((text.match(/uniform\s+\w+\s+(u[A-Z]\w*)/g) || []).map((x) => x.split(/\s+/).pop()))];
 			linking.what = `${Math.round(text.length / 1000)} KB, ${(text.match(/#define SHADER_NAME (.*)/) || [])[1] || ''} uniforms: ${own.slice(0, 16).join(' ')}`;
 			lp(pr);
