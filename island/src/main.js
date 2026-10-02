@@ -234,6 +234,27 @@ export function createIslandWorld() {
 	// three numbers a program's textures across both its stages and warns past the one stage's
 	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
 	// (32 there), and each stage keeps inside its 16 (the smoke's samplers check)
+	// the shader last linked (if the graphics are lost while one is being built, it is the one):
+	// its size and its own uniforms, for the console
+	const linking = { what: '' };
+	{
+		const gl = renderer.getContext(), src = new WeakMap(), ss = gl.shaderSource.bind(gl), lp = gl.linkProgram.bind(gl), at = gl.attachShader.bind(gl), parts = new WeakMap();
+		gl.shaderSource = (sh, text) => { src.set(sh, text); ss(sh, text); };
+		gl.attachShader = (pr, sh) => { const l = parts.get(pr) || []; l.push(sh); parts.set(pr, l); at(pr, sh); };
+		gl.linkProgram = (pr) => {
+			const text = (parts.get(pr) || []).map((sh) => src.get(sh) || '').join('\n');
+			const own = [...new Set((text.match(/uniform\s+\w+\s+(u[A-Z]\w*)/g) || []).map((x) => x.split(/\s+/).pop()))];
+			linking.what = `${Math.round(text.length / 1000)} KB, ${(text.match(/#define SHADER_NAME (.*)/) || [])[1] || ''} uniforms: ${own.slice(0, 16).join(' ')}`;
+			lp(pr);
+		};
+	}
+	// a shader that fails: say which (its features and its own uniforms), then three's usual report
+	renderer.debug.onShaderError = (gl, program, vs, fs) => {
+		const text = (gl.getShaderSource(vs) || '') + (gl.getShaderSource(fs) || '');
+		const defs = [...new Set((text.match(/#define (USE_\w+|\w*SHADOW\w*|ALPHA\w+|DOUBLE_SIDED|FLIP_SIDED|INSTANCED\w*)/g) || []).map((d) => d.slice(8)))];
+		const own = [...new Set((text.match(/uniform\s+\w+\s+(u[A-Z]\w*)/g) || []).map((x) => x.split(/\s+/).pop()))];
+		console.error('[shader failed]', Math.round(text.length / 1000) + ' KB', 'lost:', gl.isContextLost(), 'link:', gl.getProgramInfoLog(program), 'vs:', gl.getShaderInfoLog(vs), 'fs:', gl.getShaderInfoLog(fs), 'defines:', defs.join(' '), 'uniforms:', own.join(' '));
+	};
 	const fullUnits = () => { const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); };
 	fullUnits();
 	// the graphics can be lost (a phone short of memory): three stops drawing and rebuilds when
@@ -243,7 +264,7 @@ export function createIslandWorld() {
 		lost = true;
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
-		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'last shaders built:', shaderWarm.recent());
+		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent());
 		hint('The graphics were reset. Restoring…', 6000, 3);
 		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
 	});
