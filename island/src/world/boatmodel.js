@@ -325,13 +325,13 @@ export function buildFaith({ glass, beached = false } = {}) {
 		// the bow fitting: a plate along the stem head, a cheek either side
 		const plate = new THREE.BoxGeometry(0.22, 0.1, 1.0).rotateX(-0.22).translate(0, y0 + 0.12, z0 + 0.2); put(plate, C.red);
 		for (const sx of [-1, 1]) put(new THREE.BoxGeometry(0.03, 0.34, 0.7).rotateX(-0.22).translate(sx * 0.1, y0 + 0.28, z0 + 0.05), C.red);
-		// the anchor: shank down the plate, the crown and flukes forward over the bow, the stock aft
-		const a = v3(0, y0 + 0.62, z0 + 0.55), b = v3(0, y0 + 0.3, z0 - 0.42);
-		pipe(a, b, 0.045, C.red, 8);
-		const crown = new THREE.TorusGeometry(0.3, 0.045, 6, 12, Math.PI).rotateZ(Math.PI).rotateY(Math.PI / 2).rotateX(-0.3).translate(b.x, b.y + 0.06, b.z + 0.02);
-		put(crown, C.red);
-		for (const e of [-1, 1]) put(new THREE.ConeGeometry(0.1, 0.26, 4).rotateX(e * 0.5).translate(0, b.y + 0.12, b.z + e * 0.3), C.red);
-		pipe(v3(-0.32, a.y + 0.02, a.z), v3(0.32, a.y + 0.02, a.z), 0.035, C.red, 6);
+		// the anchor hung off the roller across the stem: ring, stock, shank, the crown and flukes
+		const az = z0 - 0.36, top = y0 + 0.5, bot = y0 - 0.45;
+		pipe(v3(0, top, az), v3(0, bot, az), 0.05, C.red, 8);
+		put(new THREE.TorusGeometry(0.09, 0.025, 5, 12).translate(0, top + 0.1, az), C.red);
+		pipe(v3(-0.26, top - 0.12, az), v3(0.26, top - 0.12, az), 0.035, C.red, 6);
+		put(new THREE.TorusGeometry(0.32, 0.05, 6, 14, Math.PI).rotateZ(Math.PI).translate(0, bot + 0.32, az), C.red);
+		for (const e of [-1, 1]) put(new THREE.ConeGeometry(0.11, 0.28, 4).rotateZ(-e * 0.6).translate(e * 0.36, bot + 0.4, az), C.red);
 	}
 
 	// ---- the masts, a yard, the bunting ----
@@ -343,11 +343,11 @@ export function buildFaith({ glass, beached = false } = {}) {
 	pipe(v3(-1.5, yardY, 0.9), v3(1.5, yardY, 0.9), 0.045, 0xe9e8e4, 8);
 	put(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 10).translate(0, 4.7, 0.9), 0xffffff);         // a masthead light
 	let fi = 0;
-	function bunting(a, b, sag = 0.05) {
+	function bunting(a, b, sag = 0.05, flags = true) {
 		const n = Math.max(4, Math.round(a.distanceTo(b) / 0.55)), pts = [];
 		for (let k = 0; k <= n; k++) { const s = k / n; pts.push(a.clone().lerp(b, s).add(v3(0, -sag * a.distanceTo(b) * 4 * s * (1 - s), 0))); }
 		for (let k = 0; k < n; k++) lineP.push(pts[k].x, pts[k].y, pts[k].z, pts[k + 1].x, pts[k + 1].y, pts[k + 1].z);
-		for (let k = 1; k < n; k++) {
+		for (let k = 1; flags && k < n; k++) {
 			// a flag hanging under the line: two colours side by side, or a pennant
 			const p = pts[k], dir = pts[k + 1].clone().sub(pts[k - 1]).setY(0).normalize(), w = 0.17, h = 0.36;
 			const c1 = FLAG[fi % FLAG.length], c2 = FLAG[(fi * 3 + 2) % FLAG.length], pen = fi % 4 === 3;
@@ -387,14 +387,14 @@ export function buildFaith({ glass, beached = false } = {}) {
 		const hr = [v3(GW.x1 + 0.05, GROUND + 0.2, zb), v3(GW.x1 + 0.05, GW.top, zl), v3(GW.x1 + 0.05, GW.top, GW.z)];
 		rail(hr, 0.95, { net: false, every: 1.0 });
 		walk.walls.push({ x0: GW.x1, x1: GW.x1 + 0.12, z0: zb, z1: GW.z, y0: GROUND, y1: GW.top + 1 });
-		// weathered pilings, a rope between the near ones
+		// weathered pilings, a rope slung between the near ones
 		const pil = [[3.5, 3.4, 2.2], [3.5, 0.6, 1.8], [3.5, -2.0, 2.0], [1.3, L1 + 1.6, 1.6], [-1.1, L1 + 1.9, 2.1], [-3.0, -3.2, 1.5]];
 		for (const [x, z, h] of pil) {
 			put(new THREE.CylinderGeometry(0.17, 0.2, h, 10).translate(x, GROUND + h / 2, z), C.piling);
 			put(new THREE.CylinderGeometry(0.175, 0.175, 0.12, 10).translate(x, GROUND + h - 0.25, z), 0x4a3c2e);
 			walk.walls.push({ x0: x - 0.2, x1: x + 0.2, z0: z - 0.2, z1: z + 0.2, y0: GROUND - 1, y1: GROUND + h });
 		}
-		for (let i = 0; i < 2; i++) { const a = pil[i], b = pil[i + 1]; bunting(v3(a[0], GROUND + a[2] - 0.3, a[1]), v3(b[0], GROUND + b[2] - 0.3, b[1]), 0.06); }
+		for (let i = 0; i < 2; i++) { const a = pil[i], b = pil[i + 1]; bunting(v3(a[0], GROUND + a[2] - 0.3, a[1]), v3(b[0], GROUND + b[2] - 0.3, b[1]), 0.06, false); }
 	}
 
 	// ---- where you can stand, and what stops you, in her frame ----
