@@ -177,7 +177,7 @@ function button(label, title, style, hud) {
 // hidden one closes its gap; any module's element joins one by its data-hud ('rail 60':
 // the group, then its place in it: from the top in the rail, from the bottom in the thumb's
 // groups). Everything you press with the right thumb is one stack up the right edge, 8 px
-// apart, from the bottom:
+// apart (16 px between the thumb's groups and the rail), from the bottom:
 //   thumb: big (jump, descend), side (boat, rod, strike), pill (the car's labelled buttons)
 //          and mode (drive, camera, fly, ×3)
 //   rail: above them, the ways to go elsewhere (places, games, the guide, the ship); a
@@ -202,6 +202,7 @@ const HUD_CSS = `
 #l99-island-mount :is(.l99-rail,.l99-thumb>div,.l99-prompts,.l99-left,.l99-pair)>*{position:relative !important;inset:auto !important;transform:none !important;margin:0;flex:none;pointer-events:auto;}
 #l99-island-mount :is(.l99-rail,.l99-mode)>*{direction:ltr;display:flex;align-items:center;justify-content:center;width:44px;padding:0;}
 #l99-island-mount .l99-prompts>*{max-width:100%;box-sizing:border-box;}
+#l99-island-mount .l99-pill>*{align-items:center;justify-content:center;}
 #l99-island-mount :is(.l99-thumb>div,.l99-pair)[hidden]{display:none;}
 #l99-island-mount:not(.l99-touch) .l99-big{display:none;}
 #l99-island-mount .l99-joy{display:none;}
@@ -285,7 +286,8 @@ function buildDom() {
 		const ring = mount.classList.contains('l99-touch') && !mount.classList.contains('l99-still');
 		set('--l99-side', `${right}px`);
 		set('--l99-left', `${ring ? 16 + 88 + 8 : right}px`);
-		set('--l99-low', `${16 + thumb.offsetHeight + 8}px`);
+		// (16 px between the thumb's stack and the rail: two groups, one column)
+		set('--l99-low', `${16 + thumb.offsetHeight + 16}px`);
 		set('--l99-menu-r', `${12 + rail.offsetWidth + 8}px`);
 	};
 	// (a frame later: sizes set inside the observer's own call would loop it)
