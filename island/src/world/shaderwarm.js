@@ -10,6 +10,7 @@ import * as THREE from 'three';
 
 export function createShaderWarm(renderer, scene, camera) {
 	const done = new WeakSet(), batch = new THREE.Group(), last = [];
+	let queue = [], t = 0;
 	const mats = (o) => (Array.isArray(o.material) ? o.material : [o.material]);
 	// the drawable objects with a material not built yet
 	function pending() {
@@ -36,17 +37,20 @@ export function createShaderWarm(renderer, scene, camera) {
 		// the last few built (what was being built if the graphics are lost: see main.js)
 		for (const m of fresh) { last.push(`${m.type}${m.name ? ' ' + m.name : ''}${m.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey ? ' ' + String(m.customProgramCacheKey()).slice(0, 40) : ''} / ${take.find((o) => mats(o).includes(m))?.parent?.name || ''}`); if (last.length > 24) last.shift(); }
 	}
-	// everything there is now, n materials a frame
-	async function all(n = 6) {
-		const list = pending();
+	// everything there is now, n materials a frame; for at most budget ms (the rest is built in
+	// play, by tick); progress(0..1) as it goes
+	async function all({ n = 6, budget = Infinity, progress = null } = {}) {
+		const list = pending(), total = list.length || 1, t0 = performance.now();
 		while (list.length) {
 			if (renderer.getContext().isContextLost()) return;
+			if (performance.now() - t0 > budget) { queue = list; return; }
 			step(list, n);
+			progress?.(1 - list.length / total);
 			await new Promise((ok) => setTimeout(ok, 0));
 		}
+		progress?.(1);
 	}
 	// in play: looked for twice a second, two a frame
-	let queue = [], t = 0;
 	function tick(dt) {
 		if (renderer.getContext().isContextLost()) return;
 		t += dt;

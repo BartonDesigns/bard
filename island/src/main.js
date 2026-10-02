@@ -706,7 +706,9 @@ export function createIslandWorld() {
 		vegetation.stream(camera, true);
 		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
 		litter.update(camera);
-		await shaderWarm.all();
+		// (shown as soon as the first few seconds of it are done; the rest is built in play)
+		await shaderWarm.all({ budget: 2500, progress: (k) => { dom.loading.textContent = `Raising the island… ${Math.round(k * 100)}%`; } });
+		dom.loading.textContent = 'Raising the island…';
 		// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 		// for everything: the island's own map on the island, the real land beyond it
 		if (earth) {
@@ -808,7 +810,7 @@ export function createIslandWorld() {
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
 				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
-				shaderWarm.all();
+				shaderWarm.all({ n: 3 });
 			});
 			const w0 = world;
 		}
