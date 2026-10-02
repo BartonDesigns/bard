@@ -191,7 +191,7 @@ const HUD_CSS = `
 #l99-island-mount .l99-left{position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-start;gap:8px;pointer-events:none;}
 #l99-island-mount .l99-pair{display:flex;gap:8px;}
 #l99-island-mount :is(.l99-rail,.l99-thumb>div,.l99-prompts,.l99-left,.l99-pair)>*{position:relative !important;inset:auto !important;transform:none !important;margin:0;flex:none;pointer-events:auto;}
-#l99-island-mount .l99-rail>*{direction:ltr;}
+#l99-island-mount .l99-rail>*{direction:ltr;align-items:center;justify-content:center;}
 #l99-island-mount .l99-prompts>*{max-width:100%;box-sizing:border-box;}
 #l99-island-mount :is(.l99-thumb>div,.l99-pair)[hidden]{display:none;}
 #l99-island-mount:not(.l99-touch) .l99-big{display:none;}
@@ -225,7 +225,7 @@ function buildDom() {
 	pair.append(toss, place);
 	pair.dataset.hud = 'prompt 31';
 	const act = button('', '', 'display:none;', 'side 10');
-	// beside the road button: a line rocket, back to the ship
+	// in the rail: a line rocket, back to the ship
 	const launch = button('', 'Take off and return to your ship', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 40');
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
@@ -261,7 +261,8 @@ function buildDom() {
 		const bigOn = !big.hidden && big.offsetWidth > 0;
 		const clear = land.matches || !bigOn ? thumb.offsetWidth : big.offsetWidth;
 		const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
-		set('--l99-side', `${16 + clear + 8}px`);
+		// (a short landscape screen: the rail can reach down beside a tall stack of prompts too)
+		set('--l99-side', `${Math.max(16 + clear, land.matches ? 12 + rail.offsetWidth : 0) + 8}px`);
 		set('--l99-low', `${16 + thumb.offsetHeight + 8}px`);
 		set('--l99-menu-r', `${12 + rail.offsetWidth + 8}px`);
 	};
