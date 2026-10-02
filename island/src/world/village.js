@@ -8,7 +8,7 @@ import { mulberry32 } from '../noise.js';
 import * as TX from './textures.js';
 import { addPulse } from '../pulse.js';
 import { usePhoto } from './photomats.js';
-import { buildBoat } from './boatmodel.js';
+import { buildFaith } from './boatmodel.js';
 
 const WALLS = [[0.93, 0.93, 0.90], [0.58, 0.72, 0.86], [0.52, 0.75, 0.68], [0.95, 0.86, 0.56], [0.88, 0.58, 0.50], [0.93, 0.93, 0.90]];
 const ROOFS = [[0.70, 0.20, 0.17], [0.22, 0.48, 0.52], [0.52, 0.55, 0.58], [0.45, 0.22, 0.18]];
@@ -212,10 +212,10 @@ export function createVillage(island, shared, scene) {
 		pickables.push(mesh);
 	}
 
-	// a fishing boat on its mooring off the pier head
-	const boat = buildBoat(mats.glass, mats.wood);
+	// Faith, the old fishing boat, on her mooring off the pier head
+	const boat = buildFaith({ glass: mats.glass });
 	boat.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.userData.material175 = 'wood'; pickables.push(o); } });
-	const bx = pier.x + v.seaDir.x * (pier.len - 6) + side.x * 5.5, bz = pier.z + v.seaDir.z * (pier.len - 6) + side.z * 5.5;
+	const bx = pier.x + v.seaDir.x * (pier.len - 6) + side.x * 6, bz = pier.z + v.seaDir.z * (pier.len - 6) + side.z * 6;
 	boat.position.set(bx, 0, bz);
 	boat.rotation.y = seaAng + Math.PI / 2 + 0.2;
 	group.add(boat);

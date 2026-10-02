@@ -170,13 +170,13 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		mount.appendChild(b);
 		return b;
 	};
-	const toggleBtn = btn('', 'Drive the road (V)', 'width:44px;display:flex;align-items:center;justify-content:center;', 'rail 30');
+	const toggleBtn = btn('', 'Drive the road (V)', 'width:44px;display:flex;align-items:center;justify-content:center;', 'mode 10');
 	// a line icon: a road running away to the horizon
 	toggleBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 3 5 21M15 3l4 18"/><path d="M12 4v2.5M12 10v3M12 17v3.5"/></svg>';
 	// the car's own controls: which car, drive it yourself or let the road take you, credits
 	const kindBtn = btn('Sedan', 'Which car (N)', 'display:none;font-size:13px;', 'pill 10');
 	const modeBtn = btn('Assist', 'Let the road steer (M)', 'display:none;font-size:13px;', 'pill 11');
-	const credBtn = btn('ⓘ', 'Vehicle credits', 'display:none;width:44px;font-size:14px;', 'rail 33');
+	const credBtn = btn('ⓘ', 'Vehicle credits', 'display:none;width:44px;font-size:14px;', 'rail 70');
 	kindBtn.addEventListener('click', (e) => { e.stopPropagation(); nextKind(); });
 	modeBtn.addEventListener('click', (e) => { e.stopPropagation(); setMode(D.mode === 'free' ? 'assist' : 'free'); });
 	credBtn.addEventListener('click', (e) => { e.stopPropagation(); hint(CREDITS, 9000); });

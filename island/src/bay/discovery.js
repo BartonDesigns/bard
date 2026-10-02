@@ -17,10 +17,12 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorld } from './geo.js';
+import { buildFaith } from '../world/boatmodel.js';
 
 export const CAMPUS = { ...toWorld(37.83560, -122.47660), r: 72 };
 export const inCampus = (x, z) => Math.hypot(x - CAMPUS.x, z - CAMPUS.z) < CAMPUS.r;
 const COVE = toWorld(37.83545, -122.47515);
+const GATE = toWorld(37.8262, -122.4790);           // the bridge's north tower, past Faith's bow
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 function clapboard() {
@@ -58,7 +60,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		wall: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8 }), inWall: M('#f6f1e4', 0.9, { emissive: new THREE.Color('#6b665c') }), trim: M('#f7f6f2', 0.6), roof: M('#8a3b2c', 0.8), door: M('#4f6b5a', 0.6), glass: M('#6f8796', 0.1, { metalness: 0.55 }),
 		porch: M('#7a7064', 0.85), floor: M('#b98f5f', 0.6), rubber: M('#3a8fbf', 0.95), pond: M('#3aa0d8', 0.1, { metalness: 0.2 }), reed: M('#5f8a3a', 0.8), wood: M('#8a6440', 0.8), plush: M('#f5c518', 0.7), plush2: M('#e8452c', 0.7),
 		easel: M('#c9a67a', 0.7), paint: [M('#e8452c', 0.4), M('#f5a623', 0.4), M('#3fae49', 0.4), M('#1d8fd1', 0.4), M('#8e44ad', 0.4)], net: M('#2a2a2a', 0.6), slide: M('#f5a623', 0.35), book: M('#1d8fd1', 0.6),
-		orange: M('#c0362c', 0.55, { metalness: 0.25 }), sand: M('#d9c7a0', 0.95), rock: M('#6d655a', 0.95, { flatShading: true }), boat: M('#f2efe8', 0.6), boatHull: M('#1d4e89', 0.6), counter: M('#6b4a2e', 0.6), steel: M('#9aa0a4', 0.4, { metalness: 0.6 }),
+		orange: M('#c0362c', 0.55, { metalness: 0.25 }), sand: M('#d9c7a0', 0.95), rock: M('#6d655a', 0.95, { flatShading: true }), counter: M('#6b4a2e', 0.6), steel: M('#9aa0a4', 0.4, { metalness: 0.6 }),
 		cloth: [M('#2c3e50'), M('#e8452c'), M('#1d8fd1'), M('#3fae49'), M('#f5a623'), M('#8e44ad'), M('#eeeeee')], skin: [M('#e0b494'), M('#c68e6a'), M('#8d5a3b'), M('#f0cfb0')],
 		signFace: new THREE.MeshStandardMaterial({ map: museumSign(), roughness: 0.6 }),
 		roofD: M('#8a3b2c', 0.8, { side: THREE.DoubleSide }), wallD: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8, side: THREE.DoubleSide }),
@@ -227,12 +229,23 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			boxIn(F, mat.orange, 2.4, 0.3, 28, 0, 1.9, 0);
 			B.floors.push({ F, x0: -1.2, x1: 1.2, z0: -14, z1: 14, y: F.y + 2.2 });
 			for (const x of [-1.3, 1.3]) for (let k = 0; k < 14; k++) { const z = -13 + k * 2, y = 2.2 + 3.6 * (Math.abs(z) / 9 - 1) ** 2 * (Math.abs(z) < 9 ? 1 : 0.3); boxIn(F, mat.orange, 0.06, Math.max(0.2, Math.min(3.6, y - 2.2)), 0.06, x, 2.2, z); }
-			// the shipwreck, half buried, and a fishing boat to climb aboard
+			// the shipwreck, half buried
 			{ const hull = new THREE.CylinderGeometry(1.6, 1.6, 9, 12, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).scale(1, 0.8, 1).translate(10, 0.5, 6); hull.applyMatrix4(F.m); add(mat.wood, hull); }
 			boxIn(F, mat.wood, 0.25, 4.5, 0.25, 10, 0, 6);
-			{ const hull = new THREE.CylinderGeometry(1.8, 1.2, 8, 10, 1, false).rotateX(Math.PI / 2).scale(1, 0.55, 1).translate(-12, 0.9, -6); hull.applyMatrix4(F.m); add(mat.boatHull, hull); }
-			boxIn(F, mat.boat, 2.2, 1.8, 2.4, -12, 1.2, -7.5); boxIn(F, mat.glass, 2.3, 0.6, 1.8, -12, 2.1, -7.5);
-			B.floors.push({ F, x0: -13.4, x1: -10.6, z0: -10, z1: -2, y: F.y + 1.3 });
+			// Faith, the old fishing boat hauled up on the gravel, bow to the bay and the bridge:
+			// up the gangway, round the netted foredeck, the ladder to the flying bridge
+			{
+				const at = inFrame(F, -12, -6), a = Math.atan2(GATE.x - at.x, -(GATE.z - at.z));
+				const faith = buildFaith({ glass: mat.glass, beached: true });
+				const BF = frameAt(at.x, at.z, a, F.y + 0.12 - faith.userData.ground);
+				faith.applyMatrix4(BF.m);
+				faith.traverse((o) => { if (o.isMesh) o.castShadow = !isPhone && o.castShadow; });
+				B.group.add(faith);
+				const { floors, walls } = faith.userData.walk;
+				for (const f of floors) B.floors.push({ F: BF, x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1, y: BF.y + f.y });
+				for (const c of walls) B.col.push({ F: BF, x0: c.x0, x1: c.x1, z0: c.z0, z1: c.z1, y0: BF.y + c.y0, y1: BF.y + c.y1 });
+				B.faith = BF;
+			}
 			// the sea cave: a rock arch to crawl through; the tide pools beside it
 			for (let k = 0; k < 9; k++) { const a = k / 8 * Math.PI, geo = new THREE.DodecahedronGeometry(1.2 + hh(k, 5) * 0.4, 0).translate(14 + Math.cos(a) * 2.6, Math.sin(a) * 2.2, -8); geo.applyMatrix4(F.m); add(mat.rock, geo); }
 			for (let k = 0; k < 4; k++) { const geo = new THREE.CircleGeometry(1.2 + hh(k, 7) * 0.6, 16).rotateX(-Math.PI / 2).translate(8 + k * 2.4, 0.16, -12 + (k % 2) * 1.5); geo.applyMatrix4(F.m); add(mat.pond, geo); }
