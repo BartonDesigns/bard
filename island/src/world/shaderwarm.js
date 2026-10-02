@@ -48,6 +48,7 @@ export function createShaderWarm(renderer, scene, camera) {
 	// in play: looked for twice a second, two a frame
 	let queue = [], t = 0;
 	function tick(dt) {
+		if (renderer.getContext().isContextLost()) return;
 		t += dt;
 		if (!queue.length && t > 0.5) { t = 0; queue = pending(); }
 		if (queue.length) step(queue, 2);
