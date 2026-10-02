@@ -438,7 +438,8 @@ export function createShare(ctx) {
 	// ---------- "Make this my home", in and at buildings ----------
 	const homeBtn = document.createElement('button');
 	homeBtn.type = 'button';
-	homeBtn.style.cssText = 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));min-height:36px;padding:6px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(8,20,26,.5);color:#eafaf6;font:600 12px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;display:none;opacity:.9;';
+	homeBtn.dataset.hud = 'left 10';
+	homeBtn.style.cssText = 'position:absolute;min-height:44px;padding:6px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(8,20,26,.5);color:#eafaf6;font:600 12px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;display:none;opacity:.9;';
 	for (const ev of ['pointerdown', 'touchstart', 'keydown']) homeBtn.addEventListener(ev, (e) => e.stopPropagation());
 	mount.appendChild(homeBtn);
 	let here = null, mine = null, watchT = 0, keep = null;

@@ -91,7 +91,7 @@ export function createQuests(R) {
 	const set = (id, s, extra) => { S.q[id] = { ...(S.q[id] || {}), s, ...(extra || {}) }; save(); refresh(); };
 
 	// ---------- the DOM ----------
-	const hud = guard(css(document.createElement('div'), 'position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:flex;align-items:center;gap:8px;z-index:4;'));
+	const hud = guard(css(document.createElement('div'), 'position:absolute;display:flex;align-items:center;gap:8px;z-index:4;'));
 	const logBtn = css(document.createElement('button'), BTN + 'width:44px;padding:0;justify-content:center;');
 	logBtn.type = 'button'; logBtn.title = 'Quest log'; logBtn.setAttribute('aria-label', 'Quest log'); logBtn.innerHTML = svg('scroll', 22);
 	const purse = css(document.createElement('div'), 'display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:12px;' + PANEL + `color:${GOLD};font:600 13px system-ui;`);
@@ -109,9 +109,9 @@ export function createQuests(R) {
 	const tText = css(document.createElement('span'), 'overflow:hidden;text-overflow:ellipsis;');
 	tracker.append(tArrow, tText);
 	// the buttons that come and go: speak, do, strike
-	const speakBtn = guard(css(document.createElement('button'), BTN + 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom));display:none;z-index:4;'));
-	const doBtn = guard(css(document.createElement('button'), BTN + `position:absolute;left:50%;transform:translateX(-50%);bottom:calc(204px + env(safe-area-inset-bottom));display:none;z-index:4;border-color:${GOLD};`));
-	const strikeBtn = guard(css(document.createElement('button'), BTN + 'position:absolute;right:calc(90px + env(safe-area-inset-right));bottom:calc(100px + env(safe-area-inset-bottom));width:64px;height:64px;border-radius:50%;padding:0;justify-content:center;display:none;z-index:4;border-color:rgba(226,191,106,.7);'));
+	const speakBtn = guard(css(document.createElement('button'), BTN + 'position:absolute;display:none;z-index:4;'));
+	const doBtn = guard(css(document.createElement('button'), BTN + `position:absolute;display:none;z-index:4;border-color:${GOLD};`));
+	const strikeBtn = guard(css(document.createElement('button'), BTN + 'position:absolute;width:64px;height:64px;border-radius:50%;padding:0;justify-content:center;display:none;z-index:4;border-color:rgba(226,191,106,.7);'));
 	strikeBtn.type = speakBtn.type = doBtn.type = 'button';
 	strikeBtn.innerHTML = svg('sword', 28); strikeBtn.title = 'Strike (Q)'; strikeBtn.setAttribute('aria-label', 'Strike');
 	// the dialogue card
@@ -121,6 +121,8 @@ export function createQuests(R) {
 	// a dark pulse at the edges when struck, and the black of fainting
 	const hurt = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .35s;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 55%,rgba(60,10,6,.55));z-index:2;');
 	const faint = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity 1.1s;background:#000;z-index:7;');
+	// (into the HUD's groups: the purse under ◀ Bard, speak and do with the prompts, strike by the thumb)
+	hud.dataset.hud = 'left 20'; speakBtn.dataset.hud = 'prompt 51'; doBtn.dataset.hud = 'prompt 52'; strikeBtn.dataset.hud = 'side 30';
 	mount.append(hud, tracker, speakBtn, doBtn, strikeBtn, card, log, hurt, faint);
 
 	logBtn.addEventListener('click', (e) => { e.stopPropagation(); logBtn.blur(); log.style.display = log.style.display === 'none' ? 'block' : 'none'; if (log.style.display === 'block') drawLog(); });

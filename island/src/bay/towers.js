@@ -174,7 +174,8 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 
 	// ---------- the elevator ----------
 	const panel = document.createElement('div');
-	panel.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(120px + env(safe-area-inset-bottom));max-height:48dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;display:none;flex-direction:column;gap:4px;padding:10px;width:min(240px,70vw);border-radius:14px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.2);z-index:6;color:#eafaf6;font:13px system-ui;';
+	panel.dataset.hud = 'prompt 80';
+	panel.style.cssText = 'position:absolute;max-height:48dvh;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;display:none;flex-direction:column;gap:4px;padding:10px;width:min(240px,70vw);border-radius:14px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.2);z-index:6;color:#eafaf6;font:13px system-ui;';
 	for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) panel.addEventListener(ev, (e) => e.stopPropagation());
 	mount?.appendChild(panel);
 	const veil = document.createElement('div');
