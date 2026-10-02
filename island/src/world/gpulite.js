@@ -4,10 +4,9 @@
 const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
 const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* private mode */ } return null; };
 if (q.has('full')) store('l99-gpu-lite', null);
-// (Apple's devices, iPhone, iPad and Mac, take it from the start: their shader compiler loses the
-// graphics on the full one)
-const APPLE = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
-export const GPU_LITE = q.has('lite') || (!q.has('full') && !q.has('ground') && (APPLE || store('l99-gpu-lite') === '1'));
+// (the full one builds on Apple's devices since its height reads went into loops, bay/terrain.js;
+// the light one stays for a device that has lost its graphics)
+export const GPU_LITE = q.has('lite') || (!q.has('full') && !q.has('ground') && store('l99-gpu-lite') === '1');
 // its two halves, for testing one at a time: ?ground=v (the full shape, light colour) and
 // ?ground=f (light shape, full colour)
 const half = q.get('ground');

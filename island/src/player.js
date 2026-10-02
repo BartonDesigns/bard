@@ -186,7 +186,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 		const x0 = s.pos.x, z0 = s.pos.z, wasGrounded = s.grounded, vy0 = s.vel.y;
 		// (the brush holds you back a little: nature/wildground.js)
-		const speed = (s.swimming ? 2.2 : run ? 7.5 : 3.9) * (s.swimming ? 1 : 1 - (island.dragAt?.(s.pos.x, s.pos.z) ?? 0));
+		const speed = (s.swimming ? 2.2 : run ? 10 : 5.2) * (s.swimming ? 1 : 1 - (island.dragAt?.(s.pos.x, s.pos.z) ?? 0));
 		const accel = s.grounded || s.swimming ? 10 : 2.5;
 		s.vel.x += (wish.x * speed - s.vel.x) * Math.min(1, accel * dt);
 		s.vel.z += (wish.z * speed - s.vel.z) * Math.min(1, accel * dt);
