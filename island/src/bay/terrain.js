@@ -20,7 +20,7 @@ import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
 import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from './coastside.js';
 import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
 import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp } from '../earth/baydetail.js';
-import { GPU_LITE } from '../world/gpulite.js';
+import { LITE_V, LITE_F } from '../world/gpulite.js';
 
 // the globe past the survey (earth/globe.js): { ready(), at(x, z), seam: [a, b] (m past the
 // survey's edge: the Bay's ground stops at a, the globe's is whole by b), whenReady, hideBay() }.
@@ -416,10 +416,10 @@ export function createBayArea(shared, scene, island, BU) {
 	const uNightB = { value: 0 };
 	function groundMaterial(hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
-		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 } };
+		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
-			sh.vertexShader = (GPU_LITE ? '#define GROUND_LITE\n' : '') + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); vec2 wc = wcAt(w); return b + (bdK > 0.0 ? bayDetail(w, b, wc.r) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wc.r * wvK : 0.0); }\n' + sh.vertexShader
+			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); vec2 wc = wcAt(w); return b + (bdK > 0.0 ? bayDetail(w, b, wc.r) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wc.r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
@@ -434,12 +434,18 @@ export function createBayArea(shared, scene, island, BU) {
 					// (how far past the survey: past the seam the globe's ground draws, earth/globeterrain.js)
 					{ vec2 S0 = vec2(textureSize(uB0, 0)), q0 = (bw - uR0.xy) / uR0.z; vBOut = length(max(vec2(0.0), max(-q0, q0 - (S0 - 1.0)))) * uR0.z; }
 					float be = max(3.0, length(position.xz) * 0.006);
-					#ifdef GROUND_LITE
+					#ifdef GROUND_LITE_V
 					// (light: the slope from the survey's own height, no lie-of-the-land colours)
 					vec3 objectNormal = normalize(vec3(bayHeight(bw - vec2(be, 0.0)) - bayHeight(bw + vec2(be, 0.0)), 2.0 * be, bayHeight(bw - vec2(0.0, be)) - bayHeight(bw + vec2(0.0, be))));
 					vBN = objectNormal; vCurv = vec3(0.0);
 					#else
-					vec3 objectNormal = normalize(vec3(gradedHeight(bw - vec2(be, 0.0)) - gradedHeight(bw + vec2(be, 0.0)), 2.0 * be, gradedHeight(bw - vec2(0.0, be)) - gradedHeight(bw + vec2(0.0, be))));
+					// (the neighbours read in loops whose length the compiler cannot know, uN4 and uN8: so it
+					// keeps one copy of the height code, not one per call. Inlined sixteen times over, the
+					// shader was too big for Apple's compiler, which lost the graphics.)
+					const vec2 DIRS[4] = vec2[4](vec2(-1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, -1.0), vec2(0.0, 1.0));
+					float hN[4];
+					for (int i = 0; i < uN4; i++) hN[i] = gradedHeight(bw + DIRS[i] * be);
+					vec3 objectNormal = normalize(vec3(hN[0] - hN[1], 2.0 * be, hN[2] - hN[3]));
 					vBN = objectNormal;
 					// the lie of the land about the point, for its colours: how far it sits below the
 					// ground round it (a draw, a fold) or above it (a spur), at the scale city.js grows
@@ -447,23 +453,24 @@ export function createBayArea(shared, scene, island, BU) {
 					// (near you) whether the open ocean lies just to windward, where the bluffs are
 					// wind-scoured (z)
 					float bc = bh - bermDelta(bw) - (cvK > 0.0 ? carveAt(bw).r * cvK : 0.0) - (wvK > 0.0 ? wcAt(bw).r * wvK : 0.0), ge = max(18.0, be), fe = max(110.0, be * 4.0);
-					float lapG = bayHeight(bw + vec2(ge, 0.0)) + bayHeight(bw - vec2(ge, 0.0)) + bayHeight(bw + vec2(0.0, ge)) + bayHeight(bw - vec2(0.0, ge)) - 4.0 * bc;
-					float lapF = (bayHeight(bw + vec2(fe, 0.0)) + bayHeight(bw - vec2(fe, 0.0)) + bayHeight(bw + vec2(0.0, fe)) + bayHeight(bw - vec2(0.0, fe))) * 0.25 - bc;
+					float sG = 0.0, sF = 0.0;
+					for (int i = 0; i < uN8; i++) { float hh = bayHeight(bw + DIRS[i & 3] * (i < 4 ? ge : fe)); if (i < 4) sG += hh; else sF += hh; }
+					float lapG = sG - 4.0 * bc, lapF = sF * 0.25 - bc;
 					float windS = 0.0;
 					if (uHole < 0.5 && bw.x < 58000.0) {
-						windS = max(step(bayHeight(bw - vec2(900.0, 0.0)), -2.0), step(bayHeight(bw - vec2(2200.0, 0.0)), -2.0));
-						if (bw.x < 12000.0) windS = max(windS, step(bayHeight(bw + vec2(0.0, 1500.0)), -2.0));
+						int nW = bw.x < 12000.0 ? 3 : 2;
+						for (int i = 0; i < nW; i++) windS = max(windS, step(bayHeight(bw + (i == 0 ? vec2(-900.0, 0.0) : i == 1 ? vec2(-2200.0, 0.0) : vec2(0.0, 1500.0))), -2.0));
 					}
 					vCurv = vec3(lapG * (324.0 / (ge * ge)) / 6.0, clamp(lapF / (0.04 * fe + 2.0), -1.0, 1.0), windS);
 					#endif`)
 				.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position.x, bh, position.z); vBW = bw; vBH = bh;');
-			sh.fragmentShader = (GPU_LITE ? '#define GROUND_LITE\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
+			sh.fragmentShader = (LITE_F ? '#define GROUND_LITE_F\n' : '') + WX_DEFS + 'uniform sampler2D uUrban; uniform vec4 uUR; uniform float uNightB, uIslHalf, uHole, uTime, uWet, uTrailK, uGroundK; uniform sampler2D uLoam; uniform vec2 uHoleC; uniform float uBSeam;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\nvec3 cityGlow = vec3(0.0); float flatK = 0.0;\n' + NOISE_GLSL + '\n' + SPARKS_GLSL + '\n' + WARP_GLSL + '\n' + REAL_GLSL + '\n' + WX_GLSL + STREET_GLSL + '\n' + CARVE_GLSL + '\n' + WC_GLSL + '\n' + REAL_LAND + '\n' + WOODS_GLSL + '\n' + TILE2_GLSL + '\n' + COAST_FGLSL + '\n' + sh.fragmentShader
 				.replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 					if (max(abs(vBW.x), abs(vBW.y)) < uIslHalf) discard;                           // the island draws itself
 					if (uHole > 0.5 && max(abs(vBW.x - uHoleC.x), abs(vBW.y - uHoleC.y)) < 3900.0) discard;   // the near ring draws here
 					if (vBOut > uBSeam) discard;                                                            // the globe's ground from here out`)
 				.replace('#include <color_fragment>', `#include <color_fragment>
-				#ifdef GROUND_LITE
+				#ifdef GROUND_LITE_F
 				{
 					// light: grass that goes gold with the season, woods, rock on the steeps, sand by the water
 					vec3 n = normalize(vBN); float slope = 1.0 - n.y, h = vBH;
@@ -974,7 +981,7 @@ export function createBayArea(shared, scene, island, BU) {
 				}
 				#endif`)
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-				#ifndef GROUND_LITE
+				#ifndef GROUND_LITE_F
 				{
 					// fine relief the survey cannot see: gullies, knolls and grain, as a bump
 					float dist2 = length(cameraPosition - vec3(vBW.x, vBH, vBW.y));
@@ -998,7 +1005,7 @@ export function createBayArea(shared, scene, island, BU) {
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += cityGlow;')
 				.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, roughnessFactor * 0.35, uWet * 0.85);\nroughnessFactor = mix(mix(roughnessFactor, 0.6, max(wxGloss, wxDamp * 0.5)), 0.04, wxPud);');
 		};
-		m.customProgramCacheKey = () => 'bayground2' + (hole ? 'far' : 'near') + (GPU_LITE ? '-lite' : '');
+		m.customProgramCacheKey = () => 'bayground2' + (hole ? 'far' : 'near') + (LITE_V ? '-lv' : '') + (LITE_F ? '-lf' : '');
 		m.userData.U2 = U2;
 		return m;
 	}

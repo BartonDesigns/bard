@@ -7,6 +7,11 @@ if (q.has('full')) store('l99-gpu-lite', null);
 // (Apple's devices, iPhone, iPad and Mac, take it from the start: their shader compiler loses the
 // graphics on the full one)
 const APPLE = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
-export const GPU_LITE = q.has('lite') || (!q.has('full') && (APPLE || store('l99-gpu-lite') === '1'));
+export const GPU_LITE = q.has('lite') || (!q.has('full') && !q.has('ground') && (APPLE || store('l99-gpu-lite') === '1'));
+// its two halves, for testing one at a time: ?ground=v (the full shape, light colour) and
+// ?ground=f (light shape, full colour)
+const half = q.get('ground');
+export const LITE_V = half ? half !== 'v' : GPU_LITE;
+export const LITE_F = half ? half !== 'f' : GPU_LITE;
 // remembered when the graphics are lost, for the next load
 export const preferLite = () => store('l99-gpu-lite', '1');
