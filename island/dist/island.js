@@ -5402,7 +5402,7 @@ float bayDetail(vec2 w, float base, float wet){
 	float a = uBDAmp * (0.25 + 1.6 * min(sl, 0.6)) * inS * smoothstep(3.0, 25.0, base) * (1.0 - smoothstep(0.03, 0.2, bdUrban(w))) * (1.0 - smoothstep(0.05, 0.6, abs(wet))) * (1.0 - bdFine(w) * 0.75);
 	return a > 0.0 ? bdRills(w) * a : 0.0;
 }
-`;var Rb=typeof location<"u"?new URLSearchParams(location.search):new URLSearchParams,tA=(o,e)=>{try{if(e===void 0)return localStorage.getItem(o);e===null?localStorage.removeItem(o):localStorage.setItem(o,e)}catch{}return null};Rb.has("full")&&tA("l99-gpu-lite",null);var nB=Rb.has("lite")||!Rb.has("full")&&!Rb.has("ground")&&tA("l99-gpu-lite")==="1",yM=Rb.get("ground"),oA=yM?yM!=="v":nB,nA=yM?yM!=="f":nB,aB=()=>tA("l99-gpu-lite","1");var yu=null,sB={uBSeam:{value:1e9}};function lA(o){yu=o}var xp=`
+`;var Rb=typeof location<"u"?new URLSearchParams(location.search):new URLSearchParams,tA=(o,e)=>{try{if(e===void 0)return localStorage.getItem(o);e===null?localStorage.removeItem(o):localStorage.setItem(o,e)}catch{}return null};Rb.has("full")&&tA("l99-gpu-lite2",null);var nB=Rb.has("lite")||!Rb.has("full")&&!Rb.has("ground")&&tA("l99-gpu-lite2")==="1",yM=Rb.get("ground"),oA=yM?yM!=="v":nB,nA=yM?yM!=="f":nB,aB=()=>tA("l99-gpu-lite2","1");var yu=null,sB={uBSeam:{value:1e9}};function lA(o){yu=o}var xp=`
 uniform highp sampler2D uB0, uBa, uBb, uBc; uniform vec4 uR0, uRa, uRb, uRc; uniform float uBayOn;
 float bLevel(highp sampler2D t, vec4 r, vec2 w){
 	vec2 S = vec2(textureSize(t, 0));
