@@ -419,7 +419,9 @@ export function* planTile(C, ti, tj, roads) {
 
 	// ---- 2. the real map's own: dirt tracks worn into ruts; rural roads' shoulders and pull-outs ----
 	for (const q of rroads) {
-		if (q.cls === 'track') { ribbon('t' + q.pts[0].toFixed(1) + ',' + q.pts[1].toFixed(1), q.rs || (q.rs = resample(q.pts, 3)), Math.max(3, q.w), 0, { puddles: true }); continue; }
+		// (the map's dirt tracks are worn into the ground by its own shader, realcity.js: a strip
+		// laid on them as well stood off the slope over the trail)
+		if (q.cls === 'track') continue;
 		if (!q.drive || q.bridge || q.cls === 'motorway' || q.cls === 'service' || q.cls === 'residential' || q.cls === 'living_street') continue;
 		const k = Math.floor(q.pts.length / 4) * 2, L = real.landAt(q.pts[k], q.pts[k + 1]);
 		if (!L || !(L.lu === 0 || L.lu === 11 || L.lu === 12) || L.roof > 0.15 || bay.urbanAt(q.pts[k], q.pts[k + 1]).u > 0.2) continue;

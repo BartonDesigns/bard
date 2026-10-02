@@ -181,7 +181,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 		const G = { P: [], A: [], E: [], I: [] };
 		const vert = (x, y, z, u, s, kind, low, e0, e1) => { G.P.push(x, y, z); G.A.push(u, s, kind, low); G.E.push(e0, e1); return G.P.length / 3 - 1; };
 		// (above the paved yards city.js lays, a hand's breadth up; each line its own hair so crossings do not fight)
-		const lift = (id) => 0.15 + ((id.length * 7 + id.charCodeAt(id.length - 1)) % 5) * 0.006;
+		const lift = (id) => 0.04 + ((id.length * 7 + id.charCodeAt(id.length - 1)) % 5) * 0.006;
 		let n = 0;
 		for (const R of [...P.ground, ...P.rails.map((q) => ({ id: q.id, pts: q.pts, w: 3.4, kind: 4 }))]) {
 			{ const kk = R.id.startsWith('rr') ? 'rr' : R.id[0]; T.kinds[kk] = (T.kinds[kk] || 0) + 1; const m = R.pts.length >> 2 << 1; if (!T.at[kk] && own(R.pts[m], R.pts[m + 1], R.pts[m + 2] ?? R.pts[m], R.pts[m + 3] ?? R.pts[m + 1])) T.at[kk] = [R.pts[m], R.pts[m + 1], R.pts[m + 2] - R.pts[m], R.pts[m + 3] - R.pts[m + 1]]; }
@@ -196,7 +196,7 @@ export function createEdgelands(scene, { bay, real, city, world, shared, isPhone
 					let low = 0;
 					if (R.puddles) { const k0 = Math.max(0, i - 3), k1 = Math.min(S.length - 1, i + 3); low = Math.max(0, Math.min(1, ((H(p[k0 * 2], p[k0 * 2 + 1]) + H(p[k1 * 2], p[k1 * 2 + 1])) / 2 - h - 0.08) * 4)); }
 					const endD = R.kind === 4 ? 99 : Math.min(S[i], Ltot - S[i]) + 0.3;
-					for (const t of ACROSS) { const px = x + nx * hw * t, pz = z + nz * hw * t; vert(px, Math.max(H(px, pz), h - 0.3) + yo, pz, (t + 1) / 2, S[i], R.kind, low, (1 - Math.abs(t)) * hw + 0.05, endD); }
+					for (const t of ACROSS) { const px = x + nx * hw * t, pz = z + nz * hw * t; vert(px, H(px, pz) + yo, pz, (t + 1) / 2, S[i], R.kind, low, (1 - Math.abs(t)) * hw + 0.05, endD); }
 				}
 				for (let k = 0; k + 1 < run.length; k++) for (let q = 0; q + 1 < na; q++) { const a = base + k * na + q, b = a + na; G.I.push(a, a + 1, b, a + 1, b + 1, b); }
 				run = null;
