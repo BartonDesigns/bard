@@ -384,9 +384,12 @@ export function buildFaith({ glass, beached = false } = {}) {
 		}
 		// a handrail on the outside, down to the gravel
 		const zb = zl - run * (GW.steps - 1);
-		const hr = [v3(GW.x1 + 0.05, GROUND + 0.2, zb), v3(GW.x1 + 0.05, GW.top, zl), v3(GW.x1 + 0.05, GW.top, GW.z)];
+		const hr = [v3(GW.x1 + 0.05, GROUND + 0.2, zb), v3(GW.x1 + 0.05, GW.top, zl), v3(GW.x1 + 0.05, GW.top, GW.z + 0.05), v3(1.85, GW.top, GW.z + 0.05)];
 		rail(hr, 0.95, { net: false, every: 1.0 });
 		walk.walls.push({ x0: GW.x1, x1: GW.x1 + 0.12, z0: zb, z1: GW.z, y0: GROUND, y1: GW.top + 1 });
+		// and across the landing's far end, and the gap beside the top step, so nobody steps off
+		walk.walls.push({ x0: 1.3, x1: GW.x1 + 0.12, z0: GW.z, z1: GW.z + 0.12, y0: GROUND, y1: GW.top + 1 });
+		walk.walls.push({ x0: 1.3, x1: GW.x0, z0: zl - 0.12, z1: zl, y0: GROUND, y1: GW.top + 1 });
 		// weathered pilings, a rope slung between the near ones
 		const pil = [[3.5, 3.4, 2.2], [3.5, 0.6, 1.8], [3.5, -2.0, 2.0], [1.3, L1 + 1.6, 1.6], [-1.1, L1 + 1.9, 2.1], [-3.0, -3.2, 1.5]];
 		for (const [x, z, h] of pil) {
