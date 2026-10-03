@@ -18,17 +18,30 @@ shipped work). Before doing anything:
 
 ### Open threads
 
-- **Bay streaming lifecycle (2 October 2026, feature branch):** `realcity.js` now cancels
-  tile requests after travel, vertical departure and world teardown. Late callbacks cannot
-  insert an old tile or clear a newer request for it. Teardown releases the offscreen road
-  render targets, combined map, generated-town textures and drawing resources, and resets
-  their shared shader bindings. `main.js` calls this cleanup when replacing the world.
-  Seven regression checks pass (`cd island && node --test tools/realcity-lifecycle.test.mjs`),
-  the engine is rebuilt and the faceplate's bundle URL updated; unused-variable lint passes
-  for `realcity.js`. Browser/GPU smoke testing is still pending: the browser installation
-  download was truncated in this environment. Keep this on the feature branch until the
-  faceplate/island/Bay/globe/planet smoke test and an actual iPhone session pass. This fixes
-  specific resource leaks; it does not establish that all graphics-loss causes are resolved.
+- **Central black hole and Bay lifecycle (3 October 2026):** The galactic-center hole now
+  uses the supplied GARGANTUA reference's Schwarzschild integration, turbulent disk,
+  Doppler shading and photon ring. Editable source: `runtime/gargantua228.mjs`; rebuild
+  the packed flight engine and its cache URLs with `node tools/build-gargantua.mjs`.
+  Central location, radius, flight controls and horizon entry remain in the existing engine.
+  The old approximate central lens is disabled to avoid warping the new disk twice;
+  small anomalies retain their renderer. The reference's procedural sky blends into
+  Bard's backdrop locally; its standalone UI, analytics and SDK are not included.
+  Phones use 200 integration steps, desktop 320, with no added textures/render targets.
+- **Bay streaming lifecycle:** `realcity.js` cancels tile requests after travel, vertical
+  departure and world teardown. Late callbacks cannot insert an old tile or clear a newer
+  request. Teardown releases road render targets, combined maps, generated-town textures
+  and drawing resources, and resets shared shader bindings. `main.js` calls this cleanup
+  when replacing the world. These are specific resource-leak fixes, not a claim that every
+  device graphics-loss cause is resolved.
+- **Verification (3 October):** island rebuild; unused-variable lint on changed modules;
+  three black-hole regressions and seven Bay lifecycle regressions pass. Chromium/SwiftShader
+  renders the reference's elevated and edge-on views using flight's bundled Three r160.
+  Actual faceplate/flight/island/Bay/globe/volcanic-planet smoke checks pass with no page or
+  shader errors; flight reports 39 healthy programs. World shaders use at most 9 active
+  samplers in this safe-mode smoke run, below the 16-per-stage budget. Native iPhone
+  performance and prolonged Bay streaming still need device testing.
+  Run regression checks after `npm --prefix island ci` with
+  `node tools/gargantua.test.mjs` and `node island/tools/realcity-lifecycle.test.mjs`.
 
 - **Apple devices and the Bay ground shader (2 October 2026):** Apple's shader compiler (every
   browser on iPhone, iPad and Mac) loses the graphics building the full Bay ground shader

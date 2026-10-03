@@ -3443,7 +3443,7 @@ async function cachedPatch(name,raw,patch){
 }
 function rewrite(code,resolved){return code.replace(/(\bfrom\s+|\bimport\s+)['"]([^'"]+)['"]/g,(m,lead,spec)=>resolved[spec]?lead+JSON.stringify(resolved[spec]):m);}
 async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(flightReady)return flightReady;root.__cockpitLoadError170=null;
- flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-179.js.gz'),ensureWorld()]);const resolved={},urls=[];
+ flightReady=(async()=>{const files=await Promise.all([packed('flight-vendors-176.json.gz').then(JSON.parse),packed('flight-179.js.gz?v=0bd106de8afc'),ensureWorld()]);const resolved={},urls=[];
   try{for(const [spec,code]of files[0]){const url=URL.createObjectURL(new Blob([rewrite(code,resolved)],{type:'text/javascript'}));resolved[spec]=url;urls.push(url);}
    await frame();const patched=await cachedPatch('flight',files[1],src=>{const out=root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(src))));return root.L99Dive227?root.L99Dive227.patch(out):out;});const url=URL.createObjectURL(new Blob([rewrite(patched,resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
@@ -3458,7 +3458,7 @@ root.L99Boot176={packed,cachedPatch,ensureWorld,core,show,hide,status,frame,flig
    packed() later reads it back from cache. Skipped on data-saver and 2G.
    Kill: window._PREFETCH_WORLDS = false. */
 (function(){
- const files=['caves-179.html.gz','world-core-179.json.gz','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-179.js.gz'];
+ const files=['caves-179.html.gz','world-core-179.json.gz','characters-kay-176.b64.gz','flight-vendors-176.json.gz','flight-179.js.gz?v=0bd106de8afc'];
  const net=navigator.connection||{};
  if(net.saveData||/(^|-)2g$/.test(net.effectiveType||''))return;
  const idle=cb=>root.requestIdleCallback?root.requestIdleCallback(cb,{timeout:4000}):setTimeout(cb,1500);
