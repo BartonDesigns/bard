@@ -123,21 +123,32 @@ export const photo = (name, opt) => { const [p, g, c] = PHOTO[name]; return swat
 // covers (the material's uvs being in metres), detail options, relief], ...], the first
 // that loads wins; if none does, the material keeps what it had
 export async function usePhoto(mat, choices) {
-	for (const [name, metres, opt = {}, normalScale = 0.6] of choices) {
-		let t;
-		try { t = await photo(name, opt); } catch { continue; }
-		// (clones share the image, so one upload serves every scale; metres may be [u, v]
-		// tiles for surfaces whose uvs are not in metres, like trunks)
-		const map = t.map.clone(), normalMap = t.normalMap?.clone() || null;
-		const [ru, rv] = Array.isArray(metres) ? metres : [1 / metres, 1 / metres];
-		map.repeat.set(ru, rv);
-		const hadMap = !!mat.map, hadN = !!mat.normalMap;
-		mat.map = map;
-		if (normalMap) { normalMap.repeat.set(ru, rv); mat.normalMap = normalMap; mat.normalScale.set(normalScale, normalScale); }
-		if (!hadMap || (normalMap && !hadN)) mat.needsUpdate = true;
-		return name;
-	}
-	return null;
+	let cancelled = false;
+	const cancel = () => { cancelled = true; };
+	mat.addEventListener('dispose', cancel);
+	try {
+		for (const [name, metres, opt = {}, normalScale = 0.6] of choices) {
+			let t;
+			try { t = await photo(name, opt); } catch { continue; }
+			if (cancelled) return null;
+			// (clones share the image, so one upload serves every scale; metres may be [u, v]
+			// tiles for surfaces whose uvs are not in metres, like trunks)
+			const map = t.map.clone(), normalMap = t.normalMap?.clone() || null;
+			const [ru, rv] = Array.isArray(metres) ? metres : [1 / metres, 1 / metres];
+			map.repeat.set(ru, rv);
+			const hadMap = !!mat.map, hadN = !!mat.normalMap;
+			// A fallback can be shared by several materials in the kit. Retain its
+			// ownership until world cleanup, even after it is replaced here.
+			const retired = (mat.userData.photoFallbacks ||= []);
+			if (mat.map) retired.push(mat.map);
+			if (normalMap && mat.normalMap) retired.push(mat.normalMap);
+			mat.map = map;
+			if (normalMap) { normalMap.repeat.set(ru, rv); mat.normalMap = normalMap; mat.normalScale.set(normalScale, normalScale); }
+			if (!hadMap || (normalMap && !hadN)) mat.needsUpdate = true;
+			return name;
+		}
+		return null;
+	} finally { mat.removeEventListener('dispose', cancel); }
 }
 
 // for shaders of their own: a uniform holding a swatch once it loads (a grey pixel till

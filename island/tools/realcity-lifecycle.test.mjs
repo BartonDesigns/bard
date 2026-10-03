@@ -165,3 +165,12 @@ test('repeated world entry releases all three road targets, town maps and drawin
 		assert.deepEqual(c.R.regions, []);
 	}
 });
+
+test('phone road maps avoid multisample attachments and use a quarter of the pixels', () => {
+	const mobile = createRealCity({}, { isPhone: true });cities.push(mobile);
+	const desktop = city();
+	assert.equal(mobile.rt.width, 1024);assert.equal(mobile.rt.height, 1024);
+	assert.equal(mobile.rt.samples, 0);
+	assert.equal(desktop.rt.width, 2048);assert.equal(desktop.rt.samples, 4);
+	assert.equal(mobile.rt.depthBuffer, false);
+});

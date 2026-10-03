@@ -9,7 +9,8 @@
 import * as THREE from 'three';
 
 export function createShaderWarm(renderer, scene, camera) {
-	const done = new WeakSet(), batch = new THREE.Group(), last = [];
+	let done = new WeakSet(), epoch = 0;
+	const batch = new THREE.Group(), last = [];
 	let queue = [], t = 0;
 	const mats = (o) => (Array.isArray(o.material) ? o.material : [o.material]);
 	// the drawable objects with a material not built yet
@@ -40,15 +41,17 @@ export function createShaderWarm(renderer, scene, camera) {
 	// everything there is now, n materials a frame; for at most budget ms (the rest is built in
 	// play, by tick); progress(0..1) as it goes
 	async function all({ n = 6, budget = Infinity, progress = null } = {}) {
+		const generation = epoch;
 		const list = pending(), total = list.length || 1, t0 = performance.now();
 		while (list.length) {
+			if (generation !== epoch) return;
 			if (renderer.getContext().isContextLost()) return;
 			if (performance.now() - t0 > budget) { queue = list; return; }
 			step(list, n);
 			progress?.(1 - list.length / total);
 			await new Promise((ok) => setTimeout(ok, 0));
 		}
-		progress?.(1);
+		if (generation === epoch) progress?.(1);
 	}
 	// in play: looked for twice a second, two a frame
 	function tick(dt) {
@@ -57,5 +60,6 @@ export function createShaderWarm(renderer, scene, camera) {
 		if (!queue.length && t > 0.5) { t = 0; queue = pending(); }
 		if (queue.length) step(queue, 2);
 	}
-	return { all, tick, recent: () => last.slice() };
+	function reset() { epoch++; queue = []; done = new WeakSet(); last.length = 0; t = 0; }
+	return { all, tick, reset, recent: () => last.slice() };
 }

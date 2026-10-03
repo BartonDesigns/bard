@@ -864,7 +864,7 @@ export function createMushrooms(island, shared, scene, camera, profile, opts = {
 		// the scene drawn as if to the screen: flagged like an XR target, three tone maps and
 		// encodes into it exactly as it does to the canvas (same shaders, nothing recompiles),
 		// and blending happens in the same space. Stored as plain bytes, as the canvas is.
-		rtScene = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType, colorSpace: THREE.SRGBColorSpace, samples: 4, depthBuffer: true });
+		rtScene = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType, colorSpace: THREE.SRGBColorSpace, samples: isPhone ? 0 : 4, depthBuffer: true });
 		rtScene.texture.internalFormat = 'RGBA8';
 		rtScene.isXRRenderTarget = true;
 		const ts = isPhone ? 0.5 : 1, tw = Math.max(1, Math.round(w * ts)), th = Math.max(1, Math.round(h * ts));

@@ -127,7 +127,7 @@ function airOf(P) {
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
 }
-export function createSky(scene, shared, renderer) {
+export function createSky(scene, shared, renderer, { isPhone = false } = {}) {
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
 		uTime: shared.uTime, uNight: { value: 0 }, uCloud: { value: 0.62 }, uHigh: shared.uHigh,
@@ -543,7 +543,7 @@ export function createSky(scene, shared, renderer) {
 
 	const sun = new THREE.DirectionalLight(0xffffff, 3);
 	sun.castShadow = true;
-	sun.shadow.mapSize.set(2048, 2048);
+	sun.shadow.mapSize.set(isPhone ? 1024 : 2048, isPhone ? 1024 : 2048);
 	const sc = sun.shadow.camera;
 	sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 1; sc.far = 400;
 	// the box the shadows are drawn in, for whoever wants to leave out what cannot be in it:

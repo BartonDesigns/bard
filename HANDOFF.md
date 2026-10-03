@@ -18,6 +18,28 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Planet stability (3 October 2026):** Repeated TROPICAL/ICE round trips reproduced
+  texture growth from 66 to 426 allocated textures over five round trips. World teardown
+  now captures resources before subsystem removal, including shader-injected maps,
+  instance buffers, skeleton maps, custom shadow materials and light targets. Hidden
+  cottage material palettes have their own cleanup. Pending shader warm-up work is
+  canceled on world replacement; render lists are cleared. Bay height-map requests are
+  aborted on departure, decoded bitmaps/canvases released promptly, and late results cannot
+  restart the old terrain. Context loss pauses world updates until restoration.
+  Phones start at 1.25 pixel ratio, capped at 1.5; canvas/effect multisampling is disabled,
+  sun shadows use 1024 instead of 2048, and road targets use half-size dimensions without
+  multisample attachments. Desktop budgets remain as before. The full native device crash
+  is not reproduced here; these fixes address measured leaks and reduce phone GPU pressure.
+  Replaced photographic fallback maps are retained for cleanup; late material upgrades are
+  canceled after disposal. Final phone-profile TROPICAL/ICE round trip: 64 textures before,
+  63 after (no growing texture count). Forced context loss/restoration succeeds. A preceding
+  150-second stationary soak held geometry/texture/heap counts steady. Faceplate, island,
+  Bay, globe and volcanic-planet smoke checks pass with no unexpected page/shader errors;
+  9 active samplers maximum in the safe-mode world run. Five resource regressions, eight
+  Bay regressions and three black-hole regressions pass (16 total).
+  Regressions: `node island/tools/world-resources.test.mjs` plus the Bay and black-hole tests.
+
+
 - **Central black hole and Bay lifecycle (3 October 2026):** The galactic-center hole now
   uses the supplied GARGANTUA reference's Schwarzschild integration, turbulent disk,
   Doppler shading and photon ring. Editable source: `runtime/gargantua228.mjs`; rebuild

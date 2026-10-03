@@ -122,7 +122,7 @@ async function pixels(url, signal) {
 	} finally { bm.close(); }
 }
 
-export function createRealCity(renderer) {
+export function createRealCity(renderer, { isPhone = false } = {}) {
 	const R = { regions: [], loaded: false, attribution: '' };
 	const LF = lakeFeatures();
 	const CELL = 250;
@@ -439,7 +439,7 @@ export function createRealCity(renderer) {
 	// falling to 0 a ramp's width outside, blended by maximum so crossings union cleanly. The
 	// ground shader cuts that at 0.5, so edges come out straight and sharp at any distance,
 	// with no stair-steps from the texels. A second map carries the yellow lines.
-	const mkRT = (res, fmt = THREE.RGBAFormat) => { const t = new THREE.WebGLRenderTarget(res, res, { format: fmt, samples: 4, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false }); t.texture.colorSpace = THREE.NoColorSpace; return t; };
+	const mkRT = (res, fmt = THREE.RGBAFormat) => { const t = new THREE.WebGLRenderTarget(isPhone ? res / 2 : res, isPhone ? res / 2 : res, { format: fmt, samples: isPhone ? 0 : 4, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false }); t.texture.colorSpace = THREE.NoColorSpace; return t; };
 	const MAPS = [
 		{ rt: mkRT(2048), paint: mkRT(2048, THREE.RGFormat), size: 512, ramp: 0.5, move: 110, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap, REAL_U.uRoadR, REAL_U.uPaintMap] },
 		{ rt: mkRT(1024), paint: null, size: 1536, ramp: 3, move: 380, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap2, REAL_U.uRoadR2] },

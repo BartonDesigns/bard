@@ -242,6 +242,8 @@ export function beyondH(x, z, he, d) {
 const NEAR_SEG = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 320 : 400, NEAR_R = 4000, NEAR_POW = 3;
 
 export function createBayArea(shared, scene, island, BU) {
+	let disposed = false;
+	const requests = new AbortController();
 	const levels = [];                       // CPU copies: { x0, zN, step, W, H, v: Uint16Array }
 	const group = new THREE.Group();
 	group.name = 'bayarea';
@@ -385,13 +387,21 @@ export function createBayArea(shared, scene, island, BU) {
 	async function loadLevel(i) {
 		const L = LEVELS[i];
 		const url = new URL(`../assets/bayarea/${L.name}.png`, import.meta.url);
-		const blob = await (await fetch(url)).blob();
+		const response = await fetch(url, { signal: requests.signal });
+		if (!response.ok) throw new Error(`Bay height map: ${response.status}`);
+		const blob = await response.blob();
+		if (disposed) return;
 		const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+		if (disposed) { bmp.close(); return; }
 		const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
-		const cx = cv.getContext('2d', { willReadFrequently: true });
-		cx.drawImage(bmp, 0, 0);
-		const px = cx.getImageData(0, 0, bmp.width, bmp.height).data;
-		const W = bmp.width, H = bmp.height, v = new Uint16Array(W * H), half = new Uint16Array(W * H);
+		const W = bmp.width, H = bmp.height;
+		let px;
+		try {
+			const cx = cv.getContext('2d', { willReadFrequently: true });
+			cx.drawImage(bmp, 0, 0);
+			px = cx.getImageData(0, 0, W, H).data;
+		} finally { bmp.close(); cv.width = cv.height = 0; }
+		const v = new Uint16Array(W * H), half = new Uint16Array(W * H);
 		for (let k = 0; k < W * H; k++) { v[k] = px[k * 4] * 256 + px[k * 4 + 1]; half[k] = THREE.DataUtils.toHalfFloat(v[k] / H_SCALE - H_OFF); }
 		const x0 = (L.lon[0] - LON0) * KX, zN = -(L.lat[1] - LAT0) * KZ;
 		levels[i] = { x0, zN, step: L.step, W, H, v, tex: null };
@@ -401,14 +411,14 @@ export function createBayArea(shared, scene, island, BU) {
 		levels[i].tex = tex;
 		if (i === 0) { BU.uB0.value = tex; BU.uR0.value.set(x0, zN, L.step, 0); }
 		slotsAt = null;
-		if (i === 0) { BU.uBayOn.value = 1; await Promise.race([farG?.whenReady || Promise.resolve(), new Promise((ok) => setTimeout(ok, 8000))]); buildUrban(); }
+		if (i === 0) { BU.uBayOn.value = 1; await Promise.race([farG?.whenReady || Promise.resolve(), new Promise((ok) => setTimeout(ok, 8000))]); if (!disposed) buildUrban(); }
 	}
 	// the whole Bay Area coarse first, then the finer levels nearest the island first
 	const order = [0, ...LEVELS.map((L, i) => i).slice(1).sort((a, b) => {
 		const d = (L) => { const c = toWorld((L.lat[0] + L.lat[1]) / 2, (L.lon[0] + L.lon[1]) / 2); return Math.hypot(c.x, c.z); };
 		return d(LEVELS[a]) - d(LEVELS[b]);
 	})];
-	const ready = (async () => { for (const i of order) { try { await loadLevel(i); } catch (e) { console.warn('bay level', i, e); } } })();
+	const ready = (async () => { for (const i of order) { if (disposed) return; try { await loadLevel(i); } catch (e) { if (!disposed) console.warn('bay level', i, e); } } })();
 
 	// ---------- the ground ----------
 	const uUrban = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, uUR = { value: new THREE.Vector4(0, 0, 1, 0) };
@@ -1016,7 +1026,7 @@ export function createBayArea(shared, scene, island, BU) {
 
 	// the San Mateo coast's cliffs, farms, trail and fence
 	const coast = createCoastside({ groundAt, urbanAt, group });
-	ready.then(() => coast.start());
+	ready.then(() => { if (!disposed) coast.start(); });
 	// the three finest surveys within reach of you go into the ground's three slots (the
 	// coarse whole-Bay level is always bound); chosen again when you have moved half a km
 	const MARGIN = [0, 1500, 500, 400, 400, 400, 400, 400, 400, 500], SLOTS = ['a', 'b', 'c'];
@@ -1069,5 +1079,12 @@ export function createBayArea(shared, scene, island, BU) {
 		far.position.set(fx, 0, fz); farMat.userData.U2.uC.value.set(fx, fz); farMat.userData.U2.uHoleC.value.set(nx, nz);
 		coast.update(cam);
 	}
-	return { group, update, heightAt, drawnAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
+	function dispose() {
+		if (disposed) return;
+		disposed = true; requests.abort();
+		for (const level of levels) level?.tex?.dispose();
+		levels.fill(null);
+		BU.uBayOn.value = 0;
+	}
+	return { group, update, dispose, heightAt, drawnAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
 }

@@ -52,6 +52,7 @@ import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
 import { createDiscovery } from './bay/discovery.js';
 import { createShaderWarm } from './world/shaderwarm.js';
+import { captureResources } from './world/resources.js';
 import { preferLite } from './world/gpulite.js';
 import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
@@ -330,7 +331,7 @@ export function createIslandWorld() {
 	// graphics card's limits from the rest)
 	const SAFE = new URLSearchParams(location.search).has('safe');
 	let renderer;
-	try { renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: !SAFE, powerPreference: 'high-performance' }); } catch (e) { console.warn('[island]', e); throw new Error(BLOCKED); }
+	try { renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: !SAFE && !isPhone, powerPreference: 'high-performance' }); } catch (e) { console.warn('[island]', e); throw new Error(BLOCKED); }
 	if (renderer.getContext().isContextLost()) throw new Error(BLOCKED);
 	// three numbers a program's textures across both its stages and warns past the one stage's
 	// limit (16 on Macs and phones), every draw; the units themselves go up to the combined limit
@@ -361,7 +362,8 @@ export function createIslandWorld() {
 	// the graphics can be lost (a phone short of memory): three stops drawing and rebuilds when
 	// they come back; if they don't within a few seconds, say to reload
 	let lost = false;
-	dom.canvas.addEventListener('webglcontextlost', () => {
+	dom.canvas.addEventListener('webglcontextlost', (event) => {
+		event.preventDefault();
 		lost = true;
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
@@ -370,15 +372,15 @@ export function createIslandWorld() {
 		hint('The graphics were reset. Restoring…', 6000, 3);
 		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
 	});
-	dom.canvas.addEventListener('webglcontextrestored', () => { lost = false; fullUnits(); hint('Graphics restored.', 2500, 3); });
+	dom.canvas.addEventListener('webglcontextrestored', () => { lost = false; fullUnits(); shaderWarm.reset(); hint('Graphics restored.', 2500, 3); });
 	// AgX: a film-like curve that rolls highlights off gently and keeps greens from going
 	// neon; ACES crushed the shade and pushed saturation, which read as harsh
 	renderer.toneMapping = THREE.AgXToneMapping;
 	renderer.outputColorSpace = THREE.SRGBColorSpace;
 	renderer.shadowMap.enabled = !SAFE;
 	renderer.shadowMap.type = THREE.PCFShadowMap;
-	const maxRatio = SAFE ? 1 : Math.min(window.devicePixelRatio || 1, isPhone ? 2 : 1.75);
-	let pixelRatio = isPhone ? Math.min(maxRatio, 1.5) : maxRatio;
+	const maxRatio = SAFE ? 1 : Math.min(window.devicePixelRatio || 1, isPhone ? 1.5 : 1.75);
+	let pixelRatio = isPhone ? Math.min(maxRatio, 1.25) : maxRatio;
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
 	const scene = new THREE.Scene();
@@ -695,7 +697,7 @@ export function createIslandWorld() {
 		shared.biHalf = island.half;
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
-		const sky = createSky(scene, shared, renderer);
+		const sky = createSky(scene, shared, renderer, { isPhone });
 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 		const weather = createWeather(scene, shared, { isPhone });
@@ -820,7 +822,7 @@ export function createIslandWorld() {
 			// they give way to the globe's own (their view of the Bay says it is not loaded there)
 			const bayNear = Object.create(bayArea, { loaded: { value: () => bayArea.loaded() && globeF.bay && (() => { const ll = globeLL(camera.position.x, camera.position.z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM; })() } });
 			world.labels = createLabels(dom.mount, bayArea, null);
-			world.real = createRealCity(renderer);
+			world.real = createRealCity(renderer, { isPhone });
 			// Crysis: the towns beyond the survey, grown street by street as you near them
 			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
 			world.city = createCity(shared, scene, bayNear, world.real);
@@ -921,10 +923,18 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		shaderWarm.reset();
+		const release = captureResources(scene, {
+			renderer,
+			textures: [shared.heightTex, shared.maskTex, world.island.biomes?.tex],
+			keepTextures: [shared.occ, shared.prints],
+		});
 		world.globe?.dispose();         // globe: the frame back to the Bay's, its hooks off
+		world.bayArea?.dispose();
 		world.real?.dispose();
 		drive.stop();
 		world.player.dispose();
+		world.cottages?.dispose();
 		world.shells?.dispose();
 		world.shrooms?.dispose();
 		world.underworld?.dispose();
@@ -933,8 +943,11 @@ export function createIslandWorld() {
 		world.medieval?.dispose();
 		world.boardwalk?.destroy();
 		world.rays?.dispose();
-		scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
+		release();
 		while (scene.children.length) scene.remove(scene.children[0]);
+		renderer.renderLists.dispose();
+		shared.heightTex = shared.maskTex = null;
+		shared.uBiome.value = null;
 		world = null;
 		islandReach.band = undefined;
 	}
@@ -1086,7 +1099,7 @@ export function createIslandWorld() {
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
-		if (!visible || !world || document.hidden) return;
+		if (!visible || !world || document.hidden || lost) return;
 		// on a phone the world holds still while someone thinks of a reply: the model and
 		// the world share the GPU and the page's memory
 		if (isPhone && guide.llm?.busy?.()) return;

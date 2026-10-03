@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { Builder, houseMaterials } from '../bay/housekit.js';
 import { drawAny, SOFT } from './kit.js';
+import { captureResources } from '../world/resources.js';
 
 export function createCottageInteriors(scene, footprints, { isPhone = false, mats = null } = {}) {
 	const R = isPhone ? 30 : 45, MAX = isPhone ? 2 : 4;
@@ -57,5 +58,13 @@ export function createCottageInteriors(scene, footprints, { isPhone = false, mat
 		for (const [f, H] of live) if (!near.some((q) => q[1] === f)) { drop(f, H); live.delete(f); }
 		for (const [, f] of near) if (!live.has(f)) { live.set(f, build(f)); break; }
 	}
-	return { update, group, count: () => live.size, cottages: list.length };
+	function dispose() {
+		for (const [f, H] of live) drop(f, H);
+		live.clear(); group.removeFromParent();
+		// The kit outlives individual streamed rooms, including periods with no room
+		// in the scene. Release the owned palette when the world itself is retired.
+		if (M && !mats) captureResources(group, { materials: Object.values(M) })();
+		M = null;
+	}
+	return { update, dispose, group, count: () => live.size, cottages: list.length };
 }
