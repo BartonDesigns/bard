@@ -9,6 +9,7 @@ import { usePhoto } from './photomats.js';
 import { mulberry32, makeNoise, smoothstep, clamp } from '../noise.js';
 import * as TX from './textures.js';
 import { addPulse } from '../pulse.js';
+import { stepResonance } from '../music/performance.js';
 import { addLodFade, fadeRange } from './lodfade.js';
 
 // ---------- geometry helpers ----------
@@ -1018,11 +1019,14 @@ export function createVegetation(island, shared, scene, flora = null) {
 		if (sp.far) t.push({ lod: 'far', a0: sp.near - W2, a1: sp.near, b0: end[0], b1: end[1] });
 		return (sp.tiers = t);
 	}
+	const resonanceBindings = [], waves = [];
+	let lastKick = 0;
 	let lastX = 1e9, lastZ = 1e9, occUsed = true;
 	function stream(cam, force) {
 		const cx = cam.position.x, cz = cam.position.z;
 		if (!force && Math.hypot(cx - lastX, cz - lastZ) < 6) return;
 		lastX = cx; lastZ = cz;
+		resonanceBindings.length = 0;
 		for (const sp of species) for (const m of sp.meshes) m.im.count = 0;
 		contacts.length = 0;
 		for (const sp of species) {
@@ -1038,7 +1042,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 					if (cs && d < OSPAN * 0.72) contacts.push(it.x, it.z, cs[0] * (sp.key === 'boulder' ? it.scale : it.scale * 0.9 + 0.1), cs[1], cs[2]);
 					q.setFromAxisAngle(UP, it.rot);
 					sc.setScalar(it.scale);
-					pos.set(it.x, it.y, it.z);
+					pos.set(it.x, it.y + (it.resonance?.y || 0), it.z);
 					m4.compose(pos, q, sc);
 					col.setScalar(it.tint);
 					// the tiers this plant is in: across each hand-over band, both, sharing its pixels
@@ -1050,6 +1054,7 @@ export function createVegetation(island, shared, scene, flora = null) {
 						for (const m of sp.meshes) {
 							if (m.lod !== lod || m.vi !== vi || m.im.count >= m.im.userData.cap) continue;
 							m.im.setMatrixAt(m.im.count, m4);
+							if (sp.key === 'boulder') resonanceBindings.push({ it, im: m.im, index: m.im.count });
 							m.im.setColorAt(m.im.count, col);
 							const fa = m.im.geometry.attributes.aFade;
 							fa.array[m.im.count * 2] = f0; fa.array[m.im.count * 2 + 1] = f1;
@@ -1098,15 +1103,46 @@ export function createVegetation(island, shared, scene, flora = null) {
 			im.computeBoundingSphere();
 		}
 	}
+	// Near boulders translate as real instances, so shadows and picking follow them.
+	// Static terrain/outcrops remain fixed; the footprint test below follows lifted rocks.
+	function react(dt, focus) {
+		const music = shared.performance;
+		if (!music) return;
+		if (music.kick && music.sequence !== lastKick) {
+			lastKick = music.sequence;
+			waves.push({ x: focus.x, z: focus.z, y: focus.y, radius: 0, strength: music.kick, hit: new WeakSet() });
+			if (waves.length > 8) waves.shift();
+		}
+		for (const w of waves) w.radius += Math.min(.2, dt) * 22;
+		while (waves.length && waves[0].radius > 45) waves.shift();
+		const seen = new Set(), changed = new Set();
+		for (const b of resonanceBindings) {
+			const it = b.it, r = it.resonance ||= { y: 0, v: 0 };
+			if (!seen.has(it)) {
+				seen.add(it);
+				const d = Math.hypot(it.x - focus.x, it.y - focus.y, it.z - focus.z);
+				let impulse = 0;
+				for (const w of waves) {
+					const wd = Math.hypot(it.x - w.x, it.z - w.z);
+					if (wd <= w.radius && wd < 45 && Math.abs(it.y - w.y) < 20 && !w.hit.has(it)) { impulse += w.strength * (1 - wd / 45); w.hit.add(it); }
+				}
+				stepResonance(r, dt, music.held * Math.max(0, 1 - d / 45), impulse);
+			}
+			const a = b.im.instanceMatrix.array, at = b.index * 16 + 13, y = it.y + r.y;
+			if (Math.abs(a[at] - y) > .0001) { a[at] = y; changed.add(b.im); }
+		}
+		for (const im of changed) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+	}
 	// solid trunks and boulders the walker bumps into
 	const solidKeys = ['palm', 'boulder', 'tiderock', 'pandanus', 'treefern', ...species.filter((q) => q.tree).map((q) => q.key)];
-	function obstacles(x, z, r) {
+	function obstacles(x, z, r, eye) {
 		const out = [];
 		const ci = Math.floor(x / CELL), cj = Math.floor(z / CELL);
 		for (let j = cj - 1; j <= cj + 1; j++) for (let i = ci - 1; i <= ci + 1; i++) {
 			const c = cells.get(i + ',' + j);
 			if (!c) continue;
 			for (const k of solidKeys) for (const it of c.items[k] || []) {
+				if (k === 'boulder' && Number.isFinite(eye) && it.resonance?.y > 0) { const cy = it.y + it.resonance.y; if (cy - it.scale > eye + .2 || cy + it.scale < eye - 1.7) continue; }
 				const rad = k === 'boulder' ? it.scale * 1.0 : k === 'tiderock' ? it.scale * 1.3 : 0.35 * it.scale;
 				if (Math.hypot(it.x - x, it.z - z) < r + rad + 1) out.push({ x: it.x, z: it.z, r: rad });
 			}
@@ -1136,5 +1172,5 @@ export function createVegetation(island, shared, scene, flora = null) {
 		}
 		if (lastX < 1e8) stream({ position: { x: lastX, z: lastZ } }, true);
 	};
-	return { group, stream, pickables, obstacles, species, cells, eco, addContacts };
+	return { group, stream, react, pickables, obstacles, species, cells, eco, addContacts };
 }

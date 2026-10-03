@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 
 (async () => {
-	const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+	const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 	try {
 		const page = await browser.newPage({ viewport: { width: 480, height: 320 }, hasTouch: true, deviceScaleFactor: 1,
 			userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15' });
@@ -20,6 +20,7 @@ const { chromium } = require('playwright');
 			window._KEYS_PLAY_ON = false;
 		});
 		console.log('Full faceplate and Earth ready');
+		await page.evaluate(async () => { initAudio(); await ctx.resume(); window._leadLatch = false; playLead('kbd:orbit-hold', 7, 1, false, .7); });
 		// Real keyboard input, and cancellation of the launch assist, in the surface controller.
 		await page.evaluate(() => { const P = L99Island.world().player.state; P.flying = true; P.climbAssist = true; });
 		await page.keyboard.down('c');
@@ -33,6 +34,9 @@ const { chromium } = require('playwright');
 				P.flyUp = P.boost = false; P.vel.set(0, 0, 0); P.pitch = -.8;
 				return { ticks: n, info: W.orbit.info(), same: W === orbitCheck.world, context: L99Island.renderer().getContext() === orbitCheck.context };
 			});
+			const saved = await page.evaluate(() => { const before = localStorage.getItem('crysis-resume'), held = L99Continuity.performance().notes.some(n => n.id === 'kbd:orbit-hold'); dispatchEvent(new Event('pagehide')); return { before, after: localStorage.getItem('crysis-resume'), held }; });
+			assert.ok(saved.before); assert.equal(saved.before, saved.after);
+			if (trip === 0) { assert.ok(saved.held); await page.evaluate(() => stopLead('kbd:orbit-hold', true)); }
 			assert.ok(ascent.ticks < 30000); assert.ok(ascent.info.altitude > 100000); assert.ok(ascent.same && ascent.context);
 			await page.waitForFunction(() => document.querySelector('[data-orbit-hud]')?.textContent.includes('SPACE'));
 			// A held key still drives the very same controller above the rendering boundary.

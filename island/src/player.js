@@ -134,7 +134,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 		// the world's own solid things (Mt Diablo's sandstone)
 		if (island.extraPush) island.extraPush(p, p.y - EYE);
-		for (const o of vegetation.obstacles(p.x, p.z, 0.35)) {
+		for (const o of vegetation.obstacles(p.x, p.z, 0.35, p.y)) {
 			const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), min = o.r + 0.35;
 			if (d < min && d > 1e-4) { p.x = o.x + dx / d * min; p.z = o.z + dz / d * min; }
 		}

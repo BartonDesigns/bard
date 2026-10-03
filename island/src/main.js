@@ -121,6 +121,7 @@ import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
 import { createWorldAudio } from './audio/audio.js';
 import { createOrbitalFlight } from './space/flight.js';
+import { worldBody, sameBody } from './space/body.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -678,7 +679,8 @@ export function createIslandWorld() {
 		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
 		// Other worlds flight lands on are their own islands, alone in their seas.
 		const earth = params.earth !== false;
-		if (world && state.seed === seed && state.earth === earth && state.biome === params.biome) return world;
+		const body = worldBody(params);
+		if (world && sameBody(state.body, body)) return world;
 		if (world) teardown();
 		dom.loading.style.display = 'flex';
 		await new Promise((r) => requestAnimationFrame(r));
@@ -802,12 +804,13 @@ export function createIslandWorld() {
 		}
 		// (the bridges where the realm's roads cross the streams are floors)
 		if (waterPlan?.source.decks.length) { const of = island.extraFloor, wf = world.water.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), wf(x, z, y)) : wf; }
+		state.body = world.body = body;
 		state.seed = seed;
 		state.earth = earth;
 		state.biome = params.biome;
 		world.orbit = createOrbitalFlight({ renderer, camera, dom, world, earth, seed, profile, shared,
 			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
-			sun: () => shared.uSunDir.value, departed: () => share.keep(true), hint,
+			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint,
 		});
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -931,6 +934,7 @@ export function createIslandWorld() {
 	function teardown() {
 		if (!world) return;
 		world.orbit?.dispose();
+		world.music?.dispose();
 		worldAir(1);
 		shaderWarm.reset();
 		const release = captureResources(scene, {
@@ -973,6 +977,12 @@ export function createIslandWorld() {
 			galaxy.onclick = () => { dom.panel.style.display = 'none'; legacyLaunch(); };
 			p.appendChild(galaxy);
 		}
+		const musicMode = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
+		const on = !!window.L99Continuity?.musicMode?.();
+		musicMode.textContent = `Music guides wildlife: ${on ? 'on' : 'off'}`;
+		musicMode.setAttribute('aria-pressed', String(on));
+		musicMode.onclick = () => { window.L99Continuity?.musicMode?.(!on); buildPanel(); };
+		p.appendChild(musicMode);
 		const S = world.sky.state;
 		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 		const t = slider(p, 'Time of day', 0, 23.99, 0.05, () => S.hours, (v) => { S.hours = v; }, fmtH);
@@ -1233,6 +1243,7 @@ export function createIslandWorld() {
 		W.litter.update(camera);
 		islandReach(W);
 		W.vegetation.stream(camera, false);
+		W.vegetation.react(dt, camera.position);
 		W.village.update(time, sk.night);
 		W.cottages?.update(camera.position, dt);
 		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
@@ -1487,7 +1498,7 @@ export function createIslandWorld() {
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
-	const worldOf = (planet) => ({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
+	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
 		async open(params = {}) {
@@ -1628,6 +1639,8 @@ if (typeof window !== 'undefined') {
 	window.Crysis = {
 		version: 1,
 		world: () => window.L99Island?.world?.(),
+		performance: () => window.L99Island?.world?.()?.music?.performance,
+		body: () => window.L99Island?.world?.()?.body,
 		orbit: () => window.L99Island?.world?.()?.orbit?.info(),
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,

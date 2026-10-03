@@ -13501,6 +13501,8 @@ function playLead(voiceId, degree, bank, chromatic, velocity) {
     nodes,
     gainNode,
     targetFreq: freq,
+    velocity: vel,
+    audibleAt: typeof window._seqAt === 'number' ? window._seqAt : ctx.currentTime,
     workletVoice: workletDispatched,   // sentinel for stopLead routing
     release226: _release226,            // vox226: recorded-instrument release floor
     bank: bank,                         // 1 or 2 — routes note-off to the right worklet node
@@ -27977,22 +27979,52 @@ window._handoffCopy = function () {
             return { face:currentFace, name:currentScale, root: rootOffset, octave: octaveOffset, scale: scales[currentScale] || Object.values(scales)[0], bpm: bpm };
         } catch (e) { return null; }
     };
+    // Read the actual voice registry so latch, panic, voice stealing and release agree
+    // with the instrument. No audio nodes or user input are owned by the world.
+    C.musicMode = function (value) {
+        if (typeof value === 'boolean') {
+            window._musicModeEnabled = value;
+            try { localStorage.setItem('level99-music-mode', value ? '1' : '0'); } catch (_) {}
+        }
+        if (typeof window._musicModeEnabled === 'boolean') return window._musicModeEnabled;
+        try { return localStorage.getItem('level99-music-mode') === '1'; } catch (_) { return false; }
+    };
+    C.performance = function () {
+        var notes = [], clock = typeof ctx !== 'undefined' && ctx;
+        if (clock && clock.state === 'running' && typeof activeVoices !== 'undefined') {
+            for (var id of Object.keys(activeVoices).slice(0, 64)) {
+                var v = activeVoices[id];
+                if (v && (!Number.isFinite(v.audibleAt) || v.audibleAt <= clock.currentTime)) notes.push({ id:id, frequency:v.targetFreq, velocity:v.velocity === undefined ? 1 : v.velocity, started:v._startedAt });
+            }
+        }
+        var tempo = typeof bpm === 'number' ? bpm : 120, weight = typeof sequencerRunning !== 'undefined' && sequencerRunning ? .85 : 0;
+        try { var dj = window._djDominantBpm?.(); if (dj && dj.bpm > 0 && Math.min(1.5, (dj.gain || 0) * 1.6) > weight) tempo = dj.bpm; } catch (_) {}
+        return { notes:notes, bpm:tempo, musicMode:C.musicMode() };
+    };
+    var sourceBuffers = new WeakMap();
     C.sample = function (now) {
-        if (now - C.last < 25) return C.bands;
+        if (C.last >= 0 && now - C.last < 25) return C.bands;
         var elapsed = C.last < 0 ? 0.025 : Math.min(0.2, (now - C.last) / 1000);
         C.last = now;
-        var a = null;
-        try { if (typeof analyser !== 'undefined') a = analyser; } catch (e) {}
-        var target = [0, 0, 0];
-        if (a && a.context.state === 'running') {
-            if (!C.buffer || C.buffer.length !== a.frequencyBinCount) C.buffer = new Uint8Array(a.frequencyBinCount);
-            a.getByteFrequencyData(C.buffer);
-            var cuts = [1, Math.max(2, Math.round(250 * a.fftSize / a.context.sampleRate)), Math.max(3, Math.round(2000 * a.fftSize / a.context.sampleRate)), C.buffer.length];
-            for (var b = 0; b < 3; b++) {
-                var count = 0;
-                for (var i = cuts[b]; i < Math.min(cuts[b+1], C.buffer.length); i++) { target[b] += C.buffer[i] / 255; count++; }
-                target[b] /= Math.max(1, count);
-            }
+        var synth = typeof analyser !== 'undefined' ? analyser : null;
+        var sources = [[synth, 1], [window._micActive ? window._micAnalyser : null, 1], [window._djReactiveAnalyser, 1.12]].filter(function (s) { return s[0] && s[0].context.state === 'running'; });
+        var base = sources.length ? sources[0][0] : null, len = base ? base.frequencyBinCount : 1024;
+        if (!C.buffer || C.buffer.length !== len) C.buffer = new Uint8Array(len);
+        C.buffer.fill(0);
+        for (var source of sources) {
+            var node = source[0], scratch = sourceBuffers.get(node);
+            if (!scratch || scratch.length !== node.frequencyBinCount) { scratch = new Uint8Array(node.frequencyBinCount); sourceBuffers.set(node, scratch); }
+            try { node.getByteFrequencyData(scratch); } catch (_) { continue; }
+            // Merge by frequency, not array index: mic and decks may use different FFTs.
+            var ratio = base.context.sampleRate / base.fftSize * node.fftSize / node.context.sampleRate;
+            for (var i = 0; i < len; i++) { var j = Math.round(i * ratio); if (j < scratch.length) C.buffer[i] = Math.max(C.buffer[i], Math.min(255, scratch[j] * source[1])); }
+        }
+        var rateHz = base ? base.context.sampleRate / base.fftSize : 48000 / 2048;
+        var cuts = [1, Math.max(2, Math.round(250 / rateHz)), Math.max(3, Math.round(2000 / rateHz)), len], target = [0, 0, 0];
+        for (var b = 0; b < 3; b++) {
+            var count = 0;
+            for (var i = cuts[b]; i < Math.min(cuts[b+1], len); i++) { target[b] += C.buffer[i] / 255; count++; }
+            target[b] /= Math.max(1, count);
         }
         ['bass','mid','high'].forEach(function (key, i) {
             var rate = target[i] > C.bands[key] ? 24 : 6;
@@ -29151,7 +29183,7 @@ root.L99CaveRail227={patch};
             if (m && m.uSeed) return { id: u.travelId170 || u.id || ('planet:' + u.planetType + ':' + m.uSeed.value), seed: m.uSeed.value, type: u.planetType,
                 name: u.solName || u.name || 'this world', colorA: m.uColorA.value.toArray(), colorB: m.uColorB.value.toArray() };
         } catch (e) {}
-        return { id: u.travelId170 || u.id || ('planet:' + (u.planetType || 'TERRAN') + ':' + seedOf(u)), seed: seedOf(u), type: u.planetType || 'TERRAN',
+        return { id: u.travelId170 || u.id || ('planet:' + (u.planetType || 'TERRAN') + ':' + seedOf(u)), seed: Number.isFinite(+u.seed) && u.seed !== null && u.seed !== '' ? +u.seed : seedOf(u), type: u.planetType || 'TERRAN',
             name: u.solName || u.name || u.planetName || 'this world', colorA: [0.3, 0.56, 0.44], colorB: [0.12, 0.22, 0.3] };
     }
     function land(planet) {
@@ -29160,7 +29192,7 @@ root.L99CaveRail227={patch};
         busy = true; busyAt = Date.now(); done = false;
         var earth = isEarth(u), seed = earth ? 1337 : seedOf(u);
         if (!earth) try { localStorage.setItem('l99-island-seed', String(seed)); } catch (e) {}
-        var dest = { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : typeOf(u, seed), earth: earth, palette: u.palette || null, origin: originOf(u) };
+        var dest = { id: earth ? 'earth' : (u.id || u.name || ('planet:' + seed)), seed: seed, type: earth ? 'TROPICAL' : typeOf(u, seed), earth: earth, palette: u.palette || null, primal: !!(u.isWild || (u.palette && u.palette.primal)), origin: originOf(u) };
         /* build the world first, behind the sky dive: Journey gives a passage 120 s end to end,
            and Earth's Bay Area on a slow phone outran it, which dropped you on the V1 surface */
         return window.L99IslandDoor.engine().then(function (w) { return w && w.warm ? w.warm(dest) : null; }).then(function () {
@@ -29232,7 +29264,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=666e12195a'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=c743cf047a'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29240,7 +29272,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=666e12195a'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=c743cf047a'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }

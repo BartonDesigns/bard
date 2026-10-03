@@ -1582,10 +1582,10 @@
           "line": 3128
         }
       ],
-      "crysis_coverage": "partial separate save system",
+      "crysis_coverage": "partial: versioned body descriptors in Crysis homes/share/resume; full legacy progress migration pending",
       "crysis_sources": [
         {
-          "path": "island/src/storage.js"
+          "path": "island/src/space/body.js"
         },
         {
           "path": "island/src/share.js"
@@ -3123,10 +3123,13 @@
           "decoded_line": 652
         }
       ],
-      "crysis_coverage": "shared sample consumer",
+      "crysis_coverage": "shared synth/DJ/enabled-mic analyser merge, with frequency-aligned FFT bins; native capture/device validation pending",
       "crysis_sources": [
         {
           "path": "island/src/music.js"
+        },
+        {
+          "path": "island/src/music/performance.js"
         }
       ],
       "required_migration_and_test": "Verify synth-only, DJ-only and mic-only input all drive the same live bands; legacy per-bin max merge plus 1.12 DJ gain must not disappear when flight is parked.",
@@ -3194,16 +3197,13 @@
           "decoded_line": 39063
         }
       ],
-      "crysis_coverage": "partial band-driven grass only",
+      "crysis_coverage": "partial: bounded radial bass-attack impulses on nearby island boulders; plant shader fronts pending",
       "crysis_sources": [
         {
-          "path": "island/src/world/grass.js"
+          "path": "island/src/music/performance.js"
         },
         {
           "path": "island/src/world/vegetation.js"
-        },
-        {
-          "path": "island/src/pulse.js"
         }
       ],
       "required_migration_and_test": "Restore bounded spatial fronts from note/drum events with per-plant delay/amplitude; distinguish these from the new strike-light ripple and verify silence decay.",
@@ -3226,10 +3226,16 @@
           "decoded_line": 39063
         }
       ],
-      "crysis_coverage": "not migrated",
+      "crysis_coverage": "implemented for streamed island boulders: held-voice spring lift, ballistic release/bounce, moved instance picking/shadows and vertical collision filtering; wild-country/outcrop parity pending",
       "crysis_sources": [
         {
-          "path": "island/src/nature/rocks.js"
+          "path": "island/src/music/performance.js"
+        },
+        {
+          "path": "island/src/world/vegetation.js"
+        },
+        {
+          "path": "island/src/player.js"
         }
       ],
       "required_migration_and_test": "Preserve hold-to-rise and release-to-ballistic-fall/bounce. Legacy transform is visual shader displacement, not a moved collision body; decide physical collision explicitly and test both.",
@@ -3365,16 +3371,13 @@
           "decoded_line": 57928
         }
       ],
-      "crysis_coverage": "partial new orbital thrust and whale",
+      "crysis_coverage": "partial: bounded orbital thrust plus opt-in flying-wildlife steering; trust and wider species behavior pending",
       "crysis_sources": [
         {
           "path": "island/src/space/flight.js"
         },
         {
-          "path": "island/src/whale.js"
-        },
-        {
-          "path": "island/src/planet/dinosaurs.js"
+          "path": "island/src/crysis/landfauna.js"
         }
       ],
       "required_migration_and_test": "Keep expressive bounded note influence on movement, nearby animals and interaction, with player steering dominant. Cap velocities, avoid forced collision and document which effects alter simulation.",
@@ -3397,13 +3400,13 @@
           "decoded_line": 13604
         }
       ],
-      "crysis_coverage": "not migrated",
+      "crysis_coverage": "partial: music-mode opt-in flying wildlife responds to low/held melody and bright-energy repulsion; full grazer/ground-species parity pending",
       "crysis_sources": [
         {
           "path": "island/src/crysis/landfauna.js"
         },
         {
-          "path": "island/src/planet/dinosaurs.js"
+          "path": "island/src/music/performance.js"
         }
       ],
       "required_migration_and_test": "Preserve nearby grazers/floaters approaching bass and hoppers/birds retreating from bright energy, blended with flee/herd priorities; verify enabled/disabled semantics.",
@@ -46507,5 +46510,25 @@
         "first_argument_javascript": "'THE CODEX:  A new aesthetic enters the lattice. The cosmos retunes.'"
       }
     ]
-  }
+  },
+  "migration_updates": [
+    {
+      "date": "2026-10-03",
+      "scope": "Native music response and body identity, after the baseline audit",
+      "features": [
+        "FLT-045",
+        "FLT-083",
+        "FLT-085",
+        "FLT-086",
+        "FLT-090",
+        "FLT-091"
+      ],
+      "checks": [
+        "8 performance/body regressions",
+        "3 extracted live-page bridge regressions",
+        "Full faceplate held-note/instance/vertical-collision and home-identity integration"
+      ],
+      "remaining": "Legacy galaxy, full plant/animal reactions, kinetic rigs, audience/bonds, complete saved-progress migration and native phone validation remain open."
+    }
+  ]
 }

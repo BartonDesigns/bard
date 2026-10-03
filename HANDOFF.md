@@ -18,6 +18,17 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Native music/identity follow-up (3 October 2026, same draft branch):** Shared music sampling
+  now includes synth, enabled mic and DJ sources with frequency-aligned FFT merging; held synth
+  voices and dominant BPM feed `music/performance.js`. Nearby island boulders lift, fall and bounce
+  through actual instance matrices and vertical collision filtering. Flying fauna reacts under
+  the old opt-in music-mode setting. Full plant, wild-country, kinetic-rig and social parity remain
+  open. `space/body.js` separates original body identity from unchanged integer terrain seeds and
+  carries it through homes/share/resume; orbit page-hide cannot overwrite the departure save.
+  Eight body/performance tests, three bridge tests and real faceplate voice/rock/home integration
+  pass. See the updated inventory and `island/ORBITAL-FLIGHT.md` for scope and device-test limits.
+
+
 - **Continuous Crysis orbit (3 October 2026, feature branch):** Native flight now crosses
   the old ceiling using the existing player and renderer. `island/src/space/` blends a
   camera-relative orbital pass over the retained ground, preserves the departure

@@ -71,3 +71,31 @@ biome remain device/acceptance checks. The orbital globe is a coarse rendering l
 the ground is still a retained local patch, not a fully spherical terrain mesh.
 The native orbital pass currently includes the departure planet, moon, sun and stars;
 the legacy universe's other systems remain on the galaxy route.
+
+## Body identity and physical music response
+
+`space/body.js` carries a versioned descriptor through world reuse and saved locations.
+It preserves the original fractional seed, type, palette/primal flags, supplied body/system/galaxy IDs,
+and the effective Crysis profile, separately from the established integer terrain seed.
+Old links remain readable. Full legacy progress migration and universe-registry population remain open.
+Departure saving now works even for a straight vertical launch; page-hide saving in orbit cannot
+replace the departure with space coordinates.
+
+The shared faceplate sampler includes synth, enabled microphone and DJ audio even before legacy
+flight loads. `music/performance.js` exposes actual held/released synth voices and audible bass
+attacks. Recorded tracks/mic input supply bands, not invented note identities. Dominant audible
+BPM is available to consumers. No new audio routing or microphone permission is introduced.
+
+Nearby streamed island boulders use spring lift while an audible synth note is held, then gravity
+and bounded bounce after release. Actual instance matrices move, including picking and shadows;
+vertical collision filtering lets the player pass beneath lifted rocks. They do not become
+standable moving platforms or full rigid bodies. Bass fronts produce delayed bounded impulses.
+Wild-country boulders/outcrops and the full plant shockwave shaders still need migration.
+Flying wildlife responds under the existing opt-in music-mode setting; the Sky & World panel
+exposes it. Full species behavior, trust, audience and kinetic instruments remain outstanding.
+
+Checks: `node island/tools/music-performance.test.mjs`,
+`node island/tools/music-bridge.test.mjs`, and
+`BARD_URL=http://127.0.0.1:8766 node island/tools/music-browser.cjs`.
+The browser test uses a real faceplate voice lifecycle with controlled analyser energy; source-mix
+fixtures cover DJ/mic FFT combinations. These do not replace native device/listening tests.
