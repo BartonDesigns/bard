@@ -18,6 +18,26 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Continuous Crysis orbit (3 October 2026, feature branch):** Native flight now crosses
+  the old ceiling using the existing player and renderer. `island/src/space/` blends a
+  camera-relative orbital pass over the retained ground, preserves the departure
+  position/frame, and rebases a returning flight before the ground reappears. The rocket
+  starts an interruptible climb; WASD/touch and Space/C remain live throughout. The
+  instrument analyser continues in orbit; bass/pulses affect bounded commanded thrust,
+  and bass/mids/highs affect atmosphere/haze/stars. Ground ambience fades independently
+  of music. The original galaxy route remains in Sky & World → Explore galaxy; its
+  existing handoff still loads. This is not complete migration of flight's four months
+  of features. Read `island/ORBITAL-FLIGHT.md` and `docs/flight-migration-inventory.md`
+  before replacing or removing any legacy feature. The latter also lists features that
+  the pre-existing default Crysis landing route already bypasses. Five coordinate/speed
+  regressions and the three-round-trip Chromium controller check pass. Earth ascent
+  to 180 km and return preserve the same world/context with 0 m departure error and no
+  loading overlay; held controls, touch cancellation and live analyser response pass.
+  Five orbital planet profiles compile with one mesh/texture and no shader errors.
+  Existing 16 resource/Bay/black-hole regressions pass. Native iPhone/Safari and sustained
+  real-time performance remain unverified. Do not call the entire flight migration done.
+
+
 - **Planet stability (3 October 2026):** Repeated TROPICAL/ICE round trips reproduced
   texture growth from 66 to 426 allocated textures over five round trips. World teardown
   now captures resources before subsystem removal, including shader-injected maps,

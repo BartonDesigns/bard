@@ -25,14 +25,15 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function keyDown(e) {
 		if (!s.active || window._KEYS_PLAY_ON || e.target.closest?.('input,textarea,[contenteditable]')) return;
 		const k = e.key.toLowerCase();
-		if (k === 'f' && !e.repeat) { s.flying = !s.flying; s.vel.y = 0; s.onFly?.(s.flying); e.preventDefault(); return; }
+		if (k === 'f' && !e.repeat) { if (!s.orbit?.high()) { s.flying = !s.flying; s.vel.y = 0; } s.climbAssist = false; s.onFly?.(s.flying); e.preventDefault(); return; }
 		if (k === 'b' && !e.repeat && s.flying) { s.boost = !s.boost; s.onBoost?.(s.boost); e.preventDefault(); return; }
-		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { keys.add(k); e.preventDefault(); }
+		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = false; keys.add(k); e.preventDefault(); }
 	}
 	function keyUp(e) { keys.delete(e.key.toLowerCase()); }
 	let mouse = null;
 	function pDown(e) {
 		if (!s.active || !owns(e)) return;
+		s.climbAssist = false;
 		const r = dom.canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
 		if (e.pointerType === 'mouse') { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY }; return; }
 		if (x < 0.42 && y > 0.35 && !touch.move) {
@@ -70,7 +71,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	addEventListener('keydown', keyDown); addEventListener('keyup', keyUp);
 	dom.canvas.addEventListener('pointerdown', pDown);
 	addEventListener('pointermove', pMove); addEventListener('pointerup', pUp); addEventListener('pointercancel', pUp);
-	addEventListener('blur', () => { keys.clear(); mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; });
+	function clearInput() { keys.clear(); mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.run = s.flyUp = s.flyDown = s.climbAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
+	addEventListener('blur', clearInput);
 
 	// ---------- ground and walls ----------
 	const foot = village.footprints.filter((f) => !f.fence);
@@ -138,7 +140,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 	}
 
-	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3();
+	const fwd = new THREE.Vector3(), right = new THREE.Vector3(), wish = new THREE.Vector3(), lift = new THREE.Vector3();
+	const flightQ = new THREE.Quaternion(), flightE = new THREE.Euler(0, 0, 0, 'YXZ');
 	function input() {
 		let mx = joy.x, mz = joy.y;
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
@@ -163,26 +166,29 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (s.flying) {
 			// free flight: move where you look, climb with Space (or the ⇡ button), sink with C
 			// higher up, faster: from a few hundred metres the coast is a couple of minutes away
-			const agl = Math.max(0, s.pos.y - Math.max(0, island.heightAt(s.pos.x, s.pos.z)));
+			const agl = s.orbit?.high() ? 0 : Math.max(0, s.pos.y - Math.max(0, island.heightAt(s.pos.x, s.pos.z)));
 			// the higher you are, the faster: gently near the ground, then strongly (about
 			// 3x at 300 m, 8x at a kilometre); the ×3 boost (B or the button) on top
 			const hk = 1 + Math.max(0, agl - 40) / 120 + Math.max(0, agl - 250) / 140;
-			const fs = (run ? 38 : 16) * hk * (s.boost ? 3 : 1), cp = Math.cos(s.pitch);
-			const fx = -Math.sin(s.yaw) * cp, fy = Math.sin(s.pitch), fz = -Math.cos(s.yaw) * cp;
-			const up = (keys.has(' ') || s.flyUp ? 1 : 0) - (keys.has('c') || s.flyDown ? 1 : 0);
-			const tx = (fx * -mz + right.x * mx) * fs, ty = fy * -mz * fs + up * Math.max(fs * 0.6, 10), tz = (fz * -mz + right.z * mx) * fs;
+			const fs = s.orbit ? s.orbit.speed(run, s.boost, agl) : (run ? 38 : 16) * hk * (s.boost ? 3 : 1);
+			flightQ.setFromEuler(flightE.set(s.pitch, s.yaw, s.roll || 0));
+			fwd.set(0, 0, -1).applyQuaternion(flightQ); right.set(1, 0, 0).applyQuaternion(flightQ);
+			const up = (keys.has(' ') || s.flyUp || s.climbAssist ? 1 : 0) - (keys.has('c') || s.flyDown ? 1 : 0);
+			if (s.orbit) s.orbit.up(lift); else lift.set(0, 1, 0);
+			wish.copy(fwd).multiplyScalar(-mz).addScaledVector(right, mx).addScaledVector(lift, up * .6);
+			if (wish.lengthSq() > 1) wish.normalize();
+			const tx = wish.x * fs, ty = wish.y * fs, tz = wish.z * fs;
 			const k = Math.min(1, dt * 3);
 			s.vel.x += (tx - s.vel.x) * k; s.vel.y += (ty - s.vel.y) * k; s.vel.z += (tz - s.vel.z) * k;
 			s.pos.addScaledVector(s.vel, dt);
-			const floor = Math.max(floorAt(s.pos.x, s.pos.z, s.pos.y) , 0) + 1.2;
+			const floor = s.orbit?.high() ? -Infinity : Math.max(floorAt(s.pos.x, s.pos.z, s.pos.y) , 0) + 1.2;
 			if (s.pos.y < floor) { s.pos.y = floor; s.vel.y = Math.max(0, s.vel.y); }
 			// a ceiling above the land, so Mt Diablo can be flown over (out over the globe, earth/globe.js,
 			// a cruising height: the speed above grows with it, so a continent is minutes away)
-			const ceil = island.flyCeiling ? island.flyCeiling(s.pos.x, s.pos.z) : 900;
-			s.pos.y = Math.min(s.pos.y, Math.max(ceil, floor + ceil));
+			if (!s.orbit) { const ceil = island.flyCeiling ? island.flyCeiling(s.pos.x, s.pos.z) : 900; s.pos.y = Math.min(s.pos.y, Math.max(ceil, floor + ceil)); }
 			s.grounded = false; s.swimming = false;
 			camera.position.copy(s.pos);
-			camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ');
+			camera.rotation.set(s.pitch, s.yaw, s.roll || 0, 'YXZ');
 			return;
 		}
 		const x0 = s.pos.x, z0 = s.pos.z, wasGrounded = s.grounded, vy0 = s.vel.y;
@@ -272,6 +278,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function dispose() {
 		removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);
 		removeEventListener('pointermove', pMove); removeEventListener('pointerup', pUp); removeEventListener('pointercancel', pUp);
+		removeEventListener('blur', clearInput); dom.canvas.removeEventListener('pointerdown', pDown);
 	}
 	// the jump button dives when you are swimming at the surface
 	function jump() {
@@ -279,5 +286,5 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.jumpQueued = true;
 		return 'jump';
 	}
-	return { state: s, update, input, dispose, jump, floorAt, clearInput: () => { keys.clear(); joy.x = joy.y = 0; } };
+	return { state: s, update, input, dispose, jump, floorAt, clearInput };
 }

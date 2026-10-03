@@ -68,7 +68,7 @@ import { planIslandFields, createSportsFields } from './sportsfields.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createNatureSound } from './bay/naturesound.js';
-import { worldLevel } from './world/soundbus.js';
+import { worldLevel, worldAir } from './world/soundbus.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
@@ -120,6 +120,7 @@ import { planRealm, planDungeons } from './planet/medieval/plan.js';
 import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
 import { createWorldAudio } from './audio/audio.js';
+import { createOrbitalFlight } from './space/flight.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -246,7 +247,7 @@ function buildDom() {
 	pair.dataset.hud = 'prompt 31';
 	const act = button('', '', 'display:none;', 'side 10');
 	// at the top of the rail: a line rocket, back to the ship
-	const launch = button('', 'Take off and return to your ship', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 30');
+	const launch = button('', 'Climb to space (steer to take control)', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 30');
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
 	// (the hint rides on top of the prompts, so it never covers one)
@@ -580,6 +581,7 @@ export function createIslandWorld() {
 	}
 	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
 	function teleportNow([name, lat, lon, yaw]) {
+		world?.orbit?.cancel();
 		fishing.drop();
 		const W = world, P = W?.player.state;
 		if (!P) return;
@@ -610,6 +612,7 @@ export function createIslandWorld() {
 	HOOKS.goTo = (lat, lon, agl = 700) => {
 		const W = world, P = W?.player.state;
 		if (!W?.globe || !P || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return 'Earth only: Crysis.goTo(lat, lon).';
+		W.orbit?.cancel();
 		drive.stop();
 		if (W.boat?.boarded?.()) W.boat.leave();
 		const p = W.globe.place(+lat, +lon);
@@ -628,7 +631,7 @@ export function createIslandWorld() {
 	}
 	// share where you are, and homes to come back to (share.js): at the top of the menu
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
-	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
 	HOOKS.share = share;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
@@ -802,6 +805,10 @@ export function createIslandWorld() {
 		state.seed = seed;
 		state.earth = earth;
 		state.biome = params.biome;
+		world.orbit = createOrbitalFlight({ renderer, camera, dom, world, earth, seed, profile, shared,
+			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
+			sun: () => shared.uSunDir.value, departed: () => share.keep(true), hint,
+		});
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
 		sky.update(0, camera.position);
@@ -923,6 +930,8 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		world.orbit?.dispose();
+		worldAir(1);
 		shaderWarm.reset();
 		const release = captureResources(scene, {
 			renderer,
@@ -958,6 +967,12 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		if (origin) {
+			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
+			galaxy.textContent = 'Explore galaxy';
+			galaxy.onclick = () => { dom.panel.style.display = 'none'; legacyLaunch(); };
+			p.appendChild(galaxy);
+		}
 		const S = world.sky.state;
 		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 		const t = slider(p, 'Time of day', 0, 23.99, 0.05, () => S.hours, (v) => { S.hours = v; }, fmtH);
@@ -1107,12 +1122,25 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		stepWind(dt, shared);
 		const W = world;
+		W.music.update(dt);
+		W.orbit?.before();
 		// driving a road carries you; otherwise you walk, swim or fly
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
 		else if (W.boardwalk?.ride(dt, time)) drive.stop();
 		else if (studio.active()) { /* in the chair: the studio holds the camera */ }
 		else if (!carjack.update(dt, time) && !drive.update(dt)) W.player.update(dt, time);
+		W.orbit?.after(dt);
+		W.orbit?.updateHud();
+		worldAir(1 - (W.orbit?.blend() || 0));
+		if (W.orbit?.space()) {
+			// The retained ground stops streaming and drawing; only the orbital pass runs.
+			// The same input state and faceplate analyser continue on every frame.
+			dom.veil.style.opacity = '0'; glare.style.opacity = '0';
+			actions();
+			W.orbit.render(time);
+			return;
+		}
 		you.update(dt, time);
 		// a director's camera (trailer/): posed after the player moves, before anything reads it
 		HOOKS.cine?.(camera, dt, time);
@@ -1126,7 +1154,6 @@ export function createIslandWorld() {
 		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
 		surprises.update(dt, sk, wx);
-		W.music.update(dt);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
 		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
@@ -1214,7 +1241,7 @@ export function createIslandWorld() {
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bayArea?.update(camera, sk.night);
-		W.globe?.update(dt, camera, sk.night);          // globe: the Earth past the Bay (may move the frame, and you with it)
+		if (!W.orbit?.active()) W.globe?.update(dt, camera, sk.night); // orbital departure retains the ground frame
 		W.bridge?.update(time, sk.night);
 		W.civ?.update(camera);
 		if (W.civ) { const ll = globeLL(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
@@ -1247,7 +1274,7 @@ export function createIslandWorld() {
 		watchTeleport();
 		share.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
-		if (visible && !arcade.active()) share.keep();
+		if (visible && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
 		W.vehicles?.update(dt, time);
 		ragdolls.update(dt);
@@ -1319,6 +1346,7 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
+		W.orbit?.render(time);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
 		if (quality === 'auto' && (frame.n = (frame.n || 0) + 1) % 45 === 0) {
@@ -1357,8 +1385,11 @@ export function createIslandWorld() {
 		if (dom.boost.style.display !== bd) dom.boost.style.display = bd;
 		if (dom.boost.style.background !== bb) dom.boost.style.background = bb;
 		if (!W.player.state.flying) W.player.state.boost = false;
-		const L = origin && !window.L99Journey170?.busy?.() ? 'flex' : 'none';
+		const L = W.orbit && !drive.active() && !arcade.active() ? 'flex' : 'none';
 		if (dom.launch.style.display !== L) dom.launch.style.display = L;
+		dom.launch.style.background = P.climbAssist ? '#01a982' : 'rgba(8,20,26,.55)';
+		const title = P.climbAssist ? 'Stop automatic climb' : 'Climb to space (steer to take control)';
+		if (dom.launch.title !== title) { dom.launch.title = title; dom.launch.setAttribute('aria-label', title); }
 	}
 	let origin = null;   // the planet flight landed us from, if any
 	let launchedAt = null;   // globe: where on Earth you launched from, when far from the Bay
@@ -1368,6 +1399,7 @@ export function createIslandWorld() {
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
 	function show() {
 		visible = true;
+		if (world) world.player.state.active = true;
 		dom.mount.style.display = 'block';
 		resize();
 		start();
@@ -1375,6 +1407,8 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		if (world) world.player.state.active = false;
+		worldAir(0);
 		if (muffle.lp) { muffle.k = 0; muffle.lp.frequency.value = 20000; muffle.lp.Q.value = 0.9; }
 		dom.mount.style.display = 'none';
 		world?.player.clearInput();
@@ -1386,7 +1420,8 @@ export function createIslandWorld() {
 	function toggleFly() {
 		const P = world?.player.state;
 		if (!P || world.boat.boarded()) return;
-		P.flying = !P.flying; P.vel.y = 0;
+		if (!P.orbit?.high()) { P.flying = !P.flying; P.vel.y = 0; }
+		P.climbAssist = false;
 		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B for ×3. F to land.') : 'Landing.', 3500);
 	}
 	dom.fly.addEventListener('click', (e) => { e.stopPropagation(); toggleFly(); });
@@ -1395,7 +1430,7 @@ export function createIslandWorld() {
 	dom.toss.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.throwIt(); });
 	dom.place.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.putDown(); });
 	const hold = (el, key) => {
-		el.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (world?.player.state.flying) world.player.state[key] = true; });
+		el.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (world?.player.state.flying) { world.player.state.climbAssist = false; world.player.state[key] = true; } });
 		for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => { if (world) world.player.state[key] = false; });
 	};
 	hold(dom.jump, 'flyUp'); hold(dom.down, 'flyDown');
@@ -1413,18 +1448,27 @@ export function createIslandWorld() {
 		if (B.boarded()) B.leave(); else if (B.near()) B.board();
 	});
 	// back to the ship: the island hands the view to space flight above the same planet
-	dom.launch.addEventListener('click', async (e) => {
+	dom.launch.addEventListener('click', (e) => {
 		e.stopPropagation();
+		if (!world || drive.active() || arcade.active() || studio.active()) return;
+		if (world.boat.boarded()) world.boat.leave();
+		const P = world.player.state;
+		P.flying = true; P.diving = false; P.climbAssist = !P.climbAssist;
+		hint(P.climbAssist ? 'Climbing to space. Steer, look, or press ⇣ / C to take control.' : 'Climb stopped. You have control.', 4000);
+	});
+	// The original galaxy remains reachable until its complete feature set is migrated.
+	async function legacyLaunch() {
 		const J = window.L99Journey170;
 		if (!origin || !J || J.busy()) return;
 		if (world?.boat.boarded()) world.boat.leave();
 		dom.launch.disabled = true;
 		// the ship and this world never both fill the phone's memory: keep your place, let the
 		// world go behind the veil, then fly (landing builds it again; a failed launch rebuilds here)
-		const yaw = world.player.state.yaw;
+		const departure = world.orbit?.info().anchor;
+		const yaw = departure?.yaw ?? world.player.state.yaw;
 		// globe: launching far from the Bay, the ship brings you back down there
-		{ const ll = globeLL(camera.position.x, camera.position.z); launchedAt = world.globe && bayKm(ll.lat, ll.lon) > BAY_WILD_KM ? ll : null; }
-		share.keep(true);
+		{ const ll = departure || globeLL(camera.position.x, camera.position.z); launchedAt = world.globe && bayKm(ll.lat, ll.lon) > BAY_WILD_KM ? { lat: ll.lat, lon: ll.lon } : null; }
+		if (!departure) share.keep(true);
 		travelVeil.textContent = 'Launching…';
 		travelVeil.style.opacity = '1';
 		await new Promise((r) => setTimeout(r, 260));
@@ -1439,7 +1483,7 @@ export function createIslandWorld() {
 			const c = share.resumeCode();
 			await (c ? share.openAt(c, { resume: true }) : api.open(origin?.earth ? { seed: 1337, earth: true } : { seed: origin.seed, biome: origin.type, earth: false, origin }));
 		} finally { dom.launch.disabled = false; travelVeil.style.opacity = '0'; }
-	});
+	}
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
@@ -1584,6 +1628,7 @@ if (typeof window !== 'undefined') {
 	window.Crysis = {
 		version: 1,
 		world: () => window.L99Island?.world?.(),
+		orbit: () => window.L99Island?.world?.()?.orbit?.info(),
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,

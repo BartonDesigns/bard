@@ -1,5 +1,7 @@
 # Crysis (the island engine, stage 1)
 
+Continuous planet/orbit flight and its current migration boundary: [ORBITAL-FLIGHT.md](ORBITAL-FLIGHT.md). Full flight preservation audit: [inventory](../docs/flight-migration-inventory.md).
+
 The tropical island world for Level 99 Bard. It is a separate ES-module
 project bundled into `dist/island.js`, which the faceplate (`../index.html`)
 loads on demand from the sea door (`≋`) or when space flight enters a

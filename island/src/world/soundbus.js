@@ -23,16 +23,24 @@ for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, 
 // Bard's master for everything the world plays, kept between visits; the music is not in it
 let level = (() => { try { const v = parseFloat(localStorage.getItem('l99-worldvol')); return isNaN(v) ? 1 : Math.max(0, Math.min(1.5, v)); } catch { return 1; } })();
 const gates = new WeakMap(), live = [];
+let air = 1;
+// Atmosphere attenuation is transient; it never changes the saved volume or the music.
+export function worldAir(v) {
+	const next = Math.max(0, Math.min(1, v));
+	if (Math.abs(next - air) < .001) return;
+	air = next;
+	for (const g of live) g.gain.setTargetAtTime(level * air, g.context.currentTime, .15);
+}
 function gate(ctx, dest) {
 	let g = gates.get(dest);
-	if (!g) { g = ctx.createGain(); g.gain.value = level; g.connect(dest); gates.set(dest, g); live.push(g); }
+	if (!g) { g = ctx.createGain(); g.gain.value = level * air; g.connect(dest); gates.set(dest, g); live.push(g); }
 	return g;
 }
 export function worldLevel(v) {
 	if (v === undefined) return level;
 	level = Math.max(0, Math.min(1.5, +v || 0));
 	try { localStorage.setItem('l99-worldvol', String(level)); } catch { /* private mode: not kept */ }
-	for (const g of live) g.gain.setTargetAtTime(level, g.context.currentTime, 0.05);
+	for (const g of live) g.gain.setTargetAtTime(level * air, g.context.currentTime, 0.05);
 	return level;
 }
 
