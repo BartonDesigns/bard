@@ -92,8 +92,8 @@ vertical collision filtering lets the player pass beneath lifted rocks. They do 
 standable moving platforms or full rigid bodies. Bass fronts produce delayed bounded impulses.
 Wild-country boulders/outcrops and the full plant shockwave shaders still need migration.
 Flying wildlife responds under the existing opt-in music-mode setting; the Sky & World panel
-exposes it. Full species behavior, trust and audience remain outstanding. Two native kinetic instruments
-are now available; the rest of the legacy rig catalogue remains outstanding.
+exposes it. Full species behavior, trust and audience remain outstanding. All ten native kinetic instrument types
+are now available; multi-rig persistence and wider legacy progression remain outstanding.
 
 Checks: `node island/tools/music-performance.test.mjs`,
 `node island/tools/music-bridge.test.mjs`, and
@@ -102,21 +102,27 @@ The browser test uses a real faceplate voice lifecycle with controlled analyser 
 fixtures cover DJ/mic FFT combinations. These do not replace native device/listening tests.
 
 
-## First native kinetic instruments
+## Native kinetic instruments
 
-Sky & World can place a sunflower bounce garden or a pendulum wave on sampled clear,
-flat ground. Garden gravity and restitution are live controls; replay uses the audible
-BPM for the drop cascade. Pendulum periods remain length-based. Both send collision or
-crossing notes through actual faceplate `playLead`/`stopLead`, preserving the current
-instrument/FX. This route does not provide per-ball stereo panning.
+Sky & World places any of the ten authored rigs on sampled clear, flat ground: garden,
+pendulum, dominoes, chimes, cradle, droplets, harp, stairs, fountain and wave bars.
+`music/kinetic-rigs.js` retains their distinct event timing; `kinetic-view.js` renders
+pooled geometry for their distinct silhouettes. All events use actual faceplate
+`playLead`/`stopLead`, preserving the current instrument/FX. This route does not provide
+per-ball stereo panning.
 
-The phone budget is one rig, 192 default garden balls (256 max) or 15 pendulums,
-eight concurrent voices, 24 notes/second and bounded catch-up. Stop/hide/orbit releases
-owned voices; Clear/travel/world teardown disposes meshes. Replay is explicit after a
-pause. These rigs are not persistent, and do not provide player-platform collisions.
-Eight other legacy rig types and full controls/persistence parity remain open.
+The menu exposes Stop/Replay/Clear, current or authored scale and pitch offset, live
+garden gravity/restitution, replay drop height and cascade tempo, and droplet density.
+Pendulum and other authored periods remain independent of the tempo control. Placing
+uses audible BPM; later replay respects manual settings, with an explicit track-tempo
+sync button. One rig, eight concurrent voices, 24 notes/second and bounded catch-up
+limit work. Stops/hide/orbit release owned voices; Clear/travel/teardown dispose meshes.
+Replay after returning is explicit. Globe frame rebasing is held while an orbital
+anchor is active, so a lateral ascent cannot invalidate the saved departure coordinates.
+Rigs are not saved across reload/world replacement and do not provide player-platform
+collisions; multi-rig persistence and wider progression are separate migration work.
 
-Checks: `node island/tools/kinetic.test.mjs` and
-`node island/tools/kinetic-placement.test.mjs`;
-`BARD_URL=http://127.0.0.1:8766 node island/tools/expansion-browser.cjs` exercises
-real terrain placement, faceplate notes, stop/replay and cleanup.
+Checks include `kinetic.test.mjs`, `kinetic-placement.test.mjs`, the authored-rig/model
+and renderer tests, `expansion-browser.cjs` and `completion-browser.cjs` in `island/tools`.
+These check the actual faceplate integration and bounded resource use; software-browser
+timing is not native iPhone/Safari performance certification.

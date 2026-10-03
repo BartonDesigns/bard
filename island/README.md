@@ -168,20 +168,30 @@ so a city does not inherit only countryside work and Arctic climates do not shar
 community's traditions. Daylight follows latitude and month; seasonal particle gates
 keep warm rain separate from snow. Regional sound pauses with the world and releases
 its own graph on teardown. Regression fixtures cover eight atlas communities, herder
-outfits, polar seasons, weather selection and audio lifecycle. The rendered sun path
-still uses the Bay Area latitude, and pale ground shading in the Svalbard/Manaus visual
-smoke needs follow-up; the regional climate fixes do not complete those renderers.
+outfits, polar seasons, weather selection and audio lifecycle. The rendered sun and celestial catalogue follow the globe latitude and selected month.
+Atlas-derived ground/climate/vegetation fields can be refreshed offline with
+`node tools/refresh-globe-atlas.mjs`; survey elevations, land and lakes are preserved.
+Broad city colouring no longer paints over forest floors or snow.
 
 ### Native kinetic instruments
 
-In Sky & World, choose **Place bounce garden** or **Place pendulum wave** near open,
-flat ground. Impacts and pendulum crossings play the current Bard faceplate. Use
-**Stop**, **Replay**, or **Clear**; the garden also has gravity and bounce sliders.
-Placement rejects water and sampled obstructions. One rig is retained per local world;
-travel clears it and hiding the world or entering space stops it. It is not saved.
-The garden has 192 balls (256 maximum through the console), the wave 15 pendulums,
-with at most eight voices and 24 notes per second. These are instrument simulations,
-not standable moving platforms. The other eight legacy rigs remain to be migrated.
+In Sky & World, choose a kinetic instrument and **Place instrument** near open, flat
+ground. All ten authored rigs are available: bounce garden, pendulum wave, domino
+spiral, chime tree, Newton’s cradle, droplet pool, gravity harp, Plinko staircase,
+ball fountain and kinetic wave. Each keeps its own authored motion and musical events.
+Impacts, crossings, gusts and orbital passes play the current Bard faceplate.
+
+Use **Stop**, **Replay**, or **Clear**. Choose the current Bard scale or one of the four
+legacy rig scales and a pitch offset. Garden gravity/bounce are live; drop height
+and garden/domino cascade tempo take effect on replay. **Use track tempo** copies the
+current audible BPM without changing the faceplate. Droplet density is live.
+Other rigs retain their authored periods and trajectories.
+
+One rig is retained per local world; travel clears it and hiding the world or entering
+space stops it. Returning to the ground keeps it available for explicit Replay. It is
+not saved across world replacement or reload. Notes are capped at eight voices and
+24 per second, with bounded catch-up; all visible bodies use finite pools. These are
+instrument simulations, not standable moving platforms or a universal rigid-body solver.
 
 ## People you can talk to
 

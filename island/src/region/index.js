@@ -241,8 +241,9 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		}
 	}
 	function update(dt, cam, { night = 0, wind = null, out = true } = {}) {
-		const d = today();
-		env.month = d.getMonth() + (d.getDate() - 1) / 30; env.night = night;
+		const d = today(), month = d.getMonth() + (d.getDate() - 1) / 30;
+		if (month !== env.month) hereT = 0;
+		env.month = month; env.night = night;
 		const ll = toLL(cam.position.x, cam.position.z);
 		const far = !F.bay || bayKm(ll.lat, ll.lon) > bayWildKm - 20;
 		if (!atlasReady()) { loadAtlas().catch(() => {}); return; }
@@ -253,7 +254,10 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 			return;
 		}
 		wrapSolid();
-		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2) { scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; }
+		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2) {
+			if (scanEpoch !== F.epoch) { coastAt.x = Infinity; coastAt.z = Infinity; }
+			scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; hereT = 0;
+		}
 		hereT -= dt;
 		if (hereT <= 0) { hereT = 0.5; updateHere(ll.lat, ll.lon, cam); tell(cam); }
 		S.update(dt, cam, { night, wind });

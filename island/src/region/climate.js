@@ -3,6 +3,8 @@
 // season by the place's own reckoning (winter and summer away from the tropics; the wet and
 // the dry within them; the monsoon where it comes), the polar night and the midnight sun.
 
+import { solarDeclination, solarDaylight } from '../world/solar.js';
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // at: atlas regionAt(); month: 0..11.99 (fractional); elev: metres; hours: 0..24
@@ -29,11 +31,7 @@ export function climateNow(at, month, elev = 0, hours = 13) {
 	// midnight sun, while places just inside the polar circle only do near solstice.
 	// Use fractional month, with June/December solstices near the 21st; this is
 	// geometric daylight (no terrain or atmospheric refraction), not a forecast.
-	const rad = Math.PI / 180, declination = 23.44 * rad * Math.cos(2 * Math.PI * (month - 5.67) / 12);
-	const p = clamp(lat, -89.9999, 89.9999) * rad;
-	const horizon = -Math.tan(p) * Math.tan(declination);
-	const daylight = 24 * Math.acos(clamp(horizon, -1, 1)) / Math.PI;
-	const polar = horizon >= 1 ? 'night' : horizon <= -1 ? 'sun' : null;
+	const { daylight, polar } = solarDaylight(lat, solarDeclination(month));
 	return { temp: Math.round(temp), now: Math.round(now), snow, season, polar, daylight, rain: mix.rain || 0, hot: now > 30, cold: now < 0, south, f: /^na\.|^atl\.carib\.(pr)/.test(id) && !/^na\.(can|mx|cam)/.test(id) };
 }
 // how cold it feels for dressing (0 warm .. 1 bitter)

@@ -197,8 +197,8 @@ Status words refer to source evidence, not a completed device test. **Bypassed**
 | FLT-092 **World-shaping musical generation** (P0) | opt-in legacy music mode. `SCALE_MOODS`:13516, `FACEPLATE_AFFINITY`:13579, `_pickBiasedPalette`:13707, `_galaxyBiasPalette`:13748 | not migrated. `planet/profile.js` | Preserve scale/face weighting for unborn worlds, keep every palette reachable and visited world identity stable. Note seven newer palettes have no original PALETTE_TAGS entries. |
 | FLT-093 **Scale-selected lore and remembered songs** (P1) | opt-in legacy surface feature. `SCALE_TO_BOOKS`:55071, `_pickCodexVerseForScale`:55086, `enterSurface`:56350 | not migrated. `people/persona.js` | Preserve different Codex books by scale and each world's remembered prior song; playing a phrase after returning should recall it without renaming the planet. |
 | FLT-094 **Playable surfaces and strike-position pitch** (P0) | implemented shared touch contract. `L99TouchMusic175`:1029, `L99TouchMusic175`:68975, `quests217-code` | implemented. `music.js`; `pulse.js` | Preserve material-aware note mapping, continuous drag playing, per-object/instance strike position, gesture ownership and releaseAllNotes on cancel/blur; same feel on ground and in orbit UI. |
-| FLT-095 **Resonance garden and kinetic instrument rigs** (P0) | legacy surface implementation bypassed. `_rgSpawn`:22296, `_rgSpawnPendulums`:21998, `_rgSpawnDominoes`:22050, `_rgSpawnChimes`:22092, `_rgSpawnCradle`:22160, `_rgSpawnDroplets`:22184, `_rgSpawnHarp`:22204, `_rgSpawnStairs`:22223, `_rgSpawnFountain`:22250, `_rgSpawnWaveBars`:22277, `_rgTick`:22473 | partial native implementation: opt-in bounce garden and pendulum wave; one rig per world. `music/kinetic-model.js` (`createKineticModel`:5); `music/kinetic.js` (`createKinetic`:9); `music/kinetic-placement.js` (`findKineticSpot`:3); `main.js` (`placeKinetic`:975); `games/stones.js`; `games/drums.js` | Preserve all ten legacy rig types. Native garden integrates gravity/restitution; pendulum notes follow kinematic center crossings. Sky & World exposes place/replay/stop/clear and garden gravity/bounce; BPM is sampled on placement/replay, while scale/root/drop configuration is API-only. Implement the other eight rigs (dominoes, chimes, cradle, droplets, harp, stairs, fountain, wave bars), multiple rigs, saved placement/settings, complete control parity and explicit orbit/return behavior. Verify contact timing, rest/replay, clear-ground placement, cleanup and phone performance; do not claim full rig or collision-world parity. |
-| FLT-096 **Kinetic world events play the faceplate** (P0) | legacy resonance bridge. `_rgNote`:21905, `L99CaveInstrument`:572 | partial native impact-to-faceplate bridge: garden impacts and pendulum center crossings. `music/kinetic-model.js` (`createKineticVoices`:59); `music/kinetic.js` (`createKinetic`:9); `main.js` (`placeKinetic`:975); `music.js`; `games/kit.js` | Native rig events call actual host playLead/stopLead with unique owned IDs, active faceplate scale by default, fixed-scale alternatives, distance attenuation and timed release. The integrated bridge caps 8 live voices and 24 notes/sec with a 4-note burst; only its own voices stop. Verify audible instrument/FX/gain/scale fidelity, failures, stall/hidden/orbit cleanup and coexistence with manual notes, loops and composer. Port the remaining rig event sources; individual-ball stereo pan and general world-collision sonification are not implemented. |
+| FLT-095 **Resonance garden and kinetic instrument rigs** (P0) | legacy surface implementation bypassed. `_rgSpawn`:22296, `_rgSpawnPendulums`:21998, `_rgSpawnDominoes`:22050, `_rgSpawnChimes`:22092, `_rgSpawnCradle`:22160, `_rgSpawnDroplets`:22184, `_rgSpawnHarp`:22204, `_rgSpawnStairs`:22223, `_rgSpawnFountain`:22250, `_rgSpawnWaveBars`:22277, `_rgTick`:22473 | All ten native authored rig types; one opt-in rig per world with player controls and bounded pools. `music/kinetic-model.js`; `music/kinetic-rigs.js`; `music/kinetic-view.js`; `music/kinetic.js`; `music/kinetic-placement.js`; `main.js` | All ten authored rigs and their distinct musical event sources are present. UI provides placement/replay/stop/clear, scale/root, garden physics/drop, garden/domino cascade tempo and droplet density. Preserve the current bounded single-rig lifecycle. Multiple simultaneous rigs, saved settings/placement and legacy progression remain separate migration work; no general rigid-body or player-platform collision claim. |
+| FLT-096 **Kinetic world events play the faceplate** (P0) | legacy resonance bridge. `_rgNote`:21905, `L99CaveInstrument`:572 | Native musical events from all ten rigs route through actual faceplate playLead/stopLead. `music/kinetic-model.js`; `music/kinetic-rigs.js`; `music/kinetic-view.js`; `music/kinetic.js`; `music/kinetic-placement.js`; `main.js` | Impacts, transfers, crests, gusts and periapsis crossings use owned note IDs, active faceplate scale or four authored scales, distance attenuation and timed release. Eight voices, 24 notes/second, four-note bursts; stop only owned voices. Continue native audible instrument/FX/gain acceptance. Individual-ball stereo and arbitrary world-collision sonification remain outside this bridge. |
 | FLT-097 **Three-lead adaptive score and phrasing** (P1) | active legacy composer. `_acDirectorTick`:950, `_acSection`:958, `_acLoopTick`:788, `_AC_ARC_TARGET`:771 | implemented newer composer. `music/automusic.js`; `music/context.js`; `music/score.js` | Preserve melodic/pad/bass/counter/ostinato roles, phrase/bar transitions, crest/climax and breathing silence. Never stop user-owned loops; score stops only loops it owns. |
 | FLT-098 **Ambient world sounds and mix respect** (P1) | legacy implementation surface bypassed. `_ambienceTick`:10188, `_faunaCall`:10156, `playFootstep`:66992, `_foleyDuckTick`:23480, `_ceremony`:8141 | implemented and expanded. `world/soundbus.js`; `audio/`; `bay/naturesound.js` | Preserve biome beds, calls, weather, footstep/collision sounds and ducking; all honor master/world sliders without feedback storms or duplicate directors. |
 | FLT-099 **Psychedelic visual mode** (P1) | active patch over legacy rendering. `celestial205-code`, `perception208-code` | different mushroom experience. `planet/mushrooms.js` | Preserve recursive growth, material flow, morphing, color phases, gas-like aura and scintillation in the space renderer; mushroom onset/peak/fade is related but distinct. |
@@ -238,28 +238,49 @@ The catalog stores a source anchor for every key. Several are geometry recipes s
 | Scale / face change with music mode enabled | Bias future world palettes and NPC book selection | Never rewrite visited world identity; preserve the opt-in setting. |
 | Ascent / return | Audio clock, held notes, loops and world response continue | New orbital band/thrust behavior covers only this shell, not full galaxy music parity; it adds at most 12% to commanded thrust and cannot move or steer the player by itself. |
 
-The current Crysis bridge already samples `L99Continuity`, feeds bass/mid/high uniforms, makes struck surfaces ring, moves grass/wind, lights alien inlays and triggers a whale breach on a strong bass edge. Crysis also has a three-lead composer. Those are meaningful existing pieces; the later partial native kinetic implementation adds two rigs and a bounded faceplate note bridge, as detailed below. Full legacy rig, audience, bond, request and galaxy parity remains open; individual migration rows track the newer surface-response work.
+The current Crysis bridge already samples `L99Continuity`, feeds bass/mid/high uniforms, makes struck surfaces ring, moves grass/wind, lights alien inlays and triggers a whale breach on a strong bass edge. Crysis also has a three-lead composer. Those are meaningful existing pieces; the native kinetic implementation now adds all ten authored rig types and a bounded faceplate note bridge, as detailed below. Full legacy rig, audience, bond, request and galaxy parity remains open; individual migration rows track the newer surface-response work.
 
 
-## Partial native kinetic migration
+## Native kinetic rig types
 
-The Crysis surface now offers an opt-in **bounce garden** and **pendulum wave** in Sky & World, with Place, Replay, Stop and Clear. The garden integrates gravity and restitution, releases rings according to the BPM captured on placement/replay, and settles at rest. The pendulum wave uses authored kinematic motion and plays at center crossings; it is not a rigid-body collision simulation. Garden gravity/bounce are UI controls; fixed scale, root, drop height and BPM configuration remain API-only.
+All ten authored rig types now have native models, distinct renderers and real faceplate
+notes: bounce garden, pendulum wave, domino spiral, chime tree, Newton’s cradle, droplet
+pool, gravity harp, Plinko staircase, ball fountain and kinetic wave. The garden uses
+integrated gravity/restitution; other rigs retain authored kinematic behavior and trigger
+notes at their contacts, crossings, gusts, crests or periapsis. They are not a universal
+rigid-body or player-platform collision system.
 
-`music/kinetic-model.js` owns the simulation and voice bridge, `music/kinetic.js` owns rendering/lifecycle, and `music/kinetic-placement.js` searches a sampled clear footprint. `main.js` integrates placement, controls, updates and cleanup. Placement rejects water, blocked sites, unknown terrain and excessive slope; the support meshes do not become player or animal collision bodies.
+Sky & World exposes rig choice and Place/Replay/Stop/Clear, current Bard or four legacy
+scales and fixed-scale pitch offset. Garden gravity/bounce and droplet density are live;
+garden drop height and garden/domino cascade tempo apply on replay. Placement captures
+audible BPM; replay respects the chosen setting and an explicit button copies track tempo.
 
 | Native limit | Current implementation |
 |---|---|
 | Rigs per world | One; placing another replaces it |
-| Bounce garden | 192 balls by default; maximum 256 |
-| Pendulum wave | 15 pendulums by default and at most |
-| Faceplate budget | 8 live voices; 24 notes/second sustained; bursts of at most 4 |
-| Distance and catch-up | Notes only within 120 world units; simulation catch-up capped at 0.1 second in substeps of at most 1/120 second |
+| Garden / pendulum | 192 default garden balls, 256 maximum; 15 pendulums maximum |
+| Dominoes / chimes / cradle | 60/80 tiles; 7/12 chimes; five cradle balls |
+| Droplets / harp | 10/24 drops plus six ripples; 3/6 orbiting bodies |
+| Stairs / fountain / wave | One ball over 16 steps; six shots over 8/16 pads; 20/32 bars |
+| Faceplate | Eight live voices, 24 notes/second, four-note bursts |
+| Distance / catch-up | 120-unit audible radius; 0.1-second catch-up in ≤1/120-second substeps |
 
-Garden impacts and pendulum crossings call the actual host `playLead`/`stopLead`, with private rig note IDs, timed release and the active faceplate scale by default. The host supplies instrument, FX and gain; distance changes note velocity. Rig cleanup stops only its own voices. Individual-ball stereo pan and general world-collision sonification are not implemented.
+`kinetic-rigs.js` holds authored models, `kinetic-view.js` their pooled geometry, and
+`kinetic-placement.js` their count-aware sampled footprints. Placement rejects water,
+blocked sites, unknown terrain and excessive slope. Models emit actual `playLead` and
+`stopLead` events through owned IDs and timed release; current host instrument, FX and
+gain remain in control. The bridge does not add per-ball stereo panning.
 
-The other **eight rigs remain outstanding**: dominoes, chimes, cradle, droplets, harp, stairs, fountain and wave bars. Multiple rigs, saved placement/settings, full controls and legacy progression are also outstanding. Hide/orbit-space silences the current rig; returning does not automatically replay it. Teleport/share relocation and Earth frame changes clear it, and world teardown disposes it. This behavior needs an explicit continuity decision before complete migration parity can be claimed.
+Hide/orbit releases rig voices and freezes its motion. Returning to the retained surface
+keeps it available for explicit Replay. Active orbital anchors now block globe frame
+rebasing so lateral ascent cannot invalidate the departure. Teleport/share relocation,
+ordinary Earth frame changes and world replacement clear the rig. Multi-rig persistence,
+legacy progression and arbitrary world-collision sonification remain separate work.
 
-The model/voice and placement test sources cover settling/replay, crossings, parameter effects, voice ownership/release/failure, disposal and placement rejection. This inventory-only update reviewed those tests without rerunning them or building. Audible faceplate fidelity, coexistence with manual performance, visual placement and phone performance still require acceptance evidence.
+The combined Node suite has 94 passing regressions, including all ten musical models,
+renderer matrices/resource cleanup, placement, solar geometry and atlas refresh. Browser
+checks exercise the real faceplate and GPU, with evidence in the PR and HANDOFF. Headless
+software rendering does not certify native iPhone/Safari speed or listening quality.
 
 ## Persistence and identity checklist
 

@@ -18,6 +18,32 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Completion pass (3 October 2026, same draft branch):** All ten authored kinetic rig
+  types now run natively, with distinct pooled visuals and real faceplate event notes.
+  Sky & World offers the ten choices, scale/root, live garden physics and droplet density,
+  replay drop/cascade tempo, and explicit track-tempo sync. One rig remains the bounded
+  native policy; save/multi-rig/progression parity is separate from completing these types.
+  `world/solar.js` drives actual sun and celestial orientation from globe latitude and
+  selected month, sharing seasonal geometry with regional climate. Polar clocks advance
+  throughout midnight sun/night. The Bay clock convention remains unchanged.
+  Offline atlas refresh corrected 37/72 packed tiles and the orbit map; all 32,400,000
+  survey-derived elevation/land/lake/amplitude bytes are unchanged. Svalbard now uses
+  tundra colours, -4 C annual mean and zero tree cover. The Manaus GPU diagnosis found
+  an 18 km city tint masking forest; broad urban colour now respects forest/snow while
+  actual buildings/roads and city lights remain. GPU pixel tests confirm all three cases.
+  Active orbit now blocks globe rebasing, preserving departure coordinates on lateral
+  atmospheric travel. 94 Node regressions pass; build, lint and GPU ground checks pass.
+  All ten rigs pass actual placement/voice/render checks; 20 replacement cycles return
+  exactly to 258 geometries/72 textures. Polar sky, unchanged orbit frame, held-note
+  boulder motion and three exact-return flights pass without shader/context errors.
+  Explicit month/region changes now invalidate the short climate cache immediately;
+  four first-update browser cases confirm matching sky/weather in both hemispheres.
+  See `docs/crysis-completion-validation.md` for measured evidence. Native iPhone/Safari speed
+  and real-device listening cannot be certified by the software-rendered browser here.
+  The older regional/kinetic bullets below describe the previous checkpoint; their
+  eight-rig, stale-ground and fixed-solar-latitude gaps are resolved by this pass.
+
+
 - **Regional expansion and kinetic instruments (3 October 2026, same draft branch):**
   Community-aware occupations/dialogue now distinguish cities from rural kits and keep
   Arctic traditions tied to their authored cultures. Steppe herders have boots and long

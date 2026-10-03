@@ -1,6 +1,7 @@
 // One camera-relative orbital pass, on the same canvas as the ground. No second
 // WebGL context or full-screen render targets. The ground remains resident below it.
 import * as THREE from 'three';
+import { GLOBE_ASSET_VERSION } from '../earth/globe-assets.js';
 
 export const ORBIT_FRAGMENT = /* glsl */`
 precision highp float;
@@ -102,7 +103,7 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 	quad.frustumCulled = false; scene.add(quad);
 	let disposed = false, map = null;
 	if (earth) {
-		new THREE.TextureLoader().load(new URL('../assets/orbit-earth.png', import.meta.url).href, (t) => {
+		new THREE.TextureLoader().load(new URL(`../assets/orbit-earth.png?v=${GLOBE_ASSET_VERSION}`, import.meta.url).href, (t) => {
 			if (disposed) { t.dispose(); return; }
 			map = t; t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping;
 			uniforms.uMap.value = t; uniforms.uMapReady.value = 1;

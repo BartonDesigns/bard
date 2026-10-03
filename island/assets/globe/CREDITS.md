@@ -30,3 +30,19 @@ https://www.naturalearthdata.com/ (fetched from github.com/nvkelso/natural-earth
 
 The relief's shape, ground colours, tree cover and climate come from the game's own
 Earth atlas (`src/earth/data`), written for the game.
+
+## Refreshing the atlas
+
+Run `node island/tools/refresh-globe-atlas.mjs` from the repository root after editing
+the atlas. This offline refresh updates ground colours, temperature, rain, snow,
+tree cover and relief shapes across all 72 tiles. Elevation/land (plane 0 RGB), lake
+share (plane 3 G) and relief amplitude (plane 1 R) remain byte-identical. Amplitude
+uses the original survey's standard deviation, which is not stored in the tiles;
+changes to the atlas's relief floor/gain need the full `bake-globe.mjs` instead.
+
+Then run `node island/tools/bake-orbit-earth.mjs` to refresh the orbital map and
+rebuild the island bundle. `refresh-globe-atlas.mjs --check` verifies every atlas
+cell and the generated `atlas-refresh.json` manifest without writing. The manifest
+records all tile hashes, preserved survey-byte hashes and the atlas source hash.
+Both globe and orbital asset URLs use its generated content version to invalidate
+cached images. Tiles retain the existing seven-plane 300 × 2100 RGB format.

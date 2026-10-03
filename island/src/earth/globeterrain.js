@@ -153,7 +153,11 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					if (urb > 0.01) {
 						float blk = gfCell(7, 71u), street = 1.0 - smoothstep(0.02, 0.06, min(fract(vGW.x / 110.0), fract(vGW.z / 110.0)));
 						vec3 built = mix(vec3(0.22, 0.21, 0.2), vec3(0.4, 0.37, 0.33), blk) * (1.0 - street * 0.45);
-						c = mix(c, built, smoothstep(0.08, 0.5, urb) * (1.0 - smoothstep(20000.0, 60000.0, dist) * 0.5));
+						// A city's broad footprint is only a distant land-use hint. Keep the actual
+						// forest floor and snow: Manaus's 18 km footprint must not pave the jungle.
+						// Constructed streets and buildings draw their own surfaces above this ground.
+						float builtK = smoothstep(0.08, 0.5, urb) * (1.0 - forest) * (1.0 - snowK);
+						c = mix(c, built, builtK * (1.0 - smoothstep(20000.0, 60000.0, dist) * 0.5));
 						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk + street * 0.5)) * 0.35;
 					}
 					// the grain close by: a few metres of mottle (the frame's metres: it may shift when the
@@ -184,7 +188,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCityGlow;');
 			sh.fragmentShader = 'vec3 gCityGlow = vec3(0.0);\n' + sh.fragmentShader;
 		};
-		m.customProgramCacheKey = () => 'globeground1';
+		m.customProgramCacheKey = () => 'globeground2';
 		m.userData.own = own;
 		return m;
 	}

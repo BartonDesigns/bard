@@ -706,7 +706,7 @@ export function createIslandWorld() {
 		shared.biHalf = island.half;
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
-		const sky = createSky(scene, shared, renderer, { isPhone });
+		const sky = createSky(scene, shared, renderer, { isPhone, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 		const weather = createWeather(scene, shared, { isPhone });
@@ -833,7 +833,7 @@ export function createIslandWorld() {
 			const bayArea = createBayArea(shared, scene, island, shared.bayU);
 			world.bayArea = bayArea;
 			// globe: the Earth past the survey, and the engine's relief on the Bay's own ground (earth/globe.js)
-			world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => drive.active() || !!world?.boat?.boarded?.() });
+			world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => drive.active() || !!world?.boat?.boarded?.() || !!world?.orbit?.active() });
 			// globe: the Bay's woods and wild things are California's; far off (or once the frame floats)
 			// they give way to the globe's own (their view of the Bay says it is not loaded there)
 			const bayNear = Object.create(bayArea, { loaded: { value: () => bayArea.loaded() && globeF.bay && (() => { const ll = globeLL(camera.position.x, camera.position.z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM; })() } });
@@ -990,7 +990,7 @@ export function createIslandWorld() {
 		if (ok) { W.kineticEpoch = W.globe?.frame?.epoch; hint('Instrument placed nearby. It plays your current faceplate; Stop and Replay are in Sky & World.', 5000); }
 		return ok;
 	}
-	function replayKinetic() { if (!world || world.orbit?.active()) return; window.initAudio?.(); world.kinetic.configure({ bpm: world.music.performance.bpm }); world.kinetic.replay(); }
+	function replayKinetic() { if (!world || world.orbit?.active()) return; window.initAudio?.(); world.kinetic.replay(); }
 	HOOKS.kinetic = { place: placeKinetic, state: () => world?.kinetic?.state(), replay: replayKinetic, stop: () => world?.kinetic?.silence(), clear: () => world?.kinetic?.clear(), configure: (v) => world?.kinetic?.configure(v) };
 	function buildPanel() {
 		const p = dom.panel;
@@ -1012,16 +1012,40 @@ export function createIslandWorld() {
 		p.appendChild(musicMode);
 		const rigTitle = css(document.createElement('div'), 'margin:8px 0;font-weight:600;');
 		rigTitle.textContent = 'Kinetic instruments'; p.appendChild(rigTitle);
-		const rigRow = css(document.createElement('div'), 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;');
 		const rig = world.kinetic.state();
-		for (const [label, action] of [['Place bounce garden', () => placeKinetic('garden')], ['Place pendulum wave', () => placeKinetic('pendulum')], ...(rig.kind ? [['Replay', replayKinetic], ['Stop', () => world.kinetic.silence()], ['Clear', () => world.kinetic.clear()]] : [])]) {
+		const kinds = [['garden', 'Bounce garden'], ['pendulum', 'Pendulum wave'], ['dominoes', 'Domino spiral'], ['chimes', 'Chime tree'], ['cradle', 'Newton’s cradle'], ['droplets', 'Droplet pool'], ['harp', 'Gravity harp'], ['stairs', 'Plinko staircase'], ['fountain', 'Ball fountain'], ['wavebars', 'Kinetic wave']];
+		const choice = css(document.createElement('select'), 'width:100%;min-height:38px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
+		choice.setAttribute('aria-label', 'Kinetic instrument');
+		for (const [value, label] of kinds) { const o = document.createElement('option'); o.value = value; o.textContent = label; choice.appendChild(o); }
+		choice.value = world.kineticChoice || rig.kind || 'garden';
+		choice.onchange = () => { world.kineticChoice = choice.value; };
+		p.appendChild(choice);
+		const rigRow = css(document.createElement('div'), 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;');
+		for (const [label, action] of [['Place instrument', () => placeKinetic(choice.value)], ...(rig.kind ? [['Replay', replayKinetic], ['Stop', () => world.kinetic.silence()], ['Clear', () => world.kinetic.clear()]] : [])]) {
 			const b = css(document.createElement('button'), 'flex:1;min-height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px system-ui;cursor:pointer;padding:5px;');
 			b.textContent = label; b.onclick = () => { action(); buildPanel(); }; rigRow.appendChild(b);
 		}
 		p.appendChild(rigRow);
+		if (rig.kind) {
+			const playing = css(document.createElement('div'), 'opacity:.85;font-size:12px;margin:4px 0 8px;');
+			playing.textContent = `${kinds.find(([k]) => k === rig.kind)?.[1] || rig.kind} · ${rig.running ? 'playing' : 'stopped'}`;
+			p.appendChild(playing);
+			const scale = css(document.createElement('select'), 'width:100%;min-height:36px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
+			scale.setAttribute('aria-label', 'Instrument scale');
+			for (const [value, label] of [['faceplate', 'Current Bard scale'], ['0', 'Minor pentatonic'], ['1', 'Major pentatonic'], ['2', 'Dorian'], ['3', 'Whole tone']]) { const o = document.createElement('option'); o.value = value; o.textContent = label; scale.appendChild(o); }
+			scale.value = String(rig.scale); scale.onchange = () => { world.kinetic.configure({ scale: scale.value === 'faceplate' ? 'faceplate' : +scale.value }); buildPanel(); }; p.appendChild(scale);
+			if (rig.scale !== 'faceplate') slider(p, 'Pitch offset', -12, 12, 1, () => world.kinetic.state().root, v => world.kinetic.configure({ root: v }), v => `${v > 0 ? '+' : ''}${v} semitones`);
+		}
 		if (rig.kind === 'garden') {
-			slider(p, 'Garden gravity', .1, 8, .1, () => world.kinetic.state().gravity, v => world.kinetic.configure({ gravity: v }), v => v.toFixed(1));
-			slider(p, 'Garden bounce', 0, .98, .01, () => world.kinetic.state().restitution, v => world.kinetic.configure({ restitution: v }), v => Math.round(v * 100) + '%');
+			slider(p, 'Gravity', .1, 20, .1, () => world.kinetic.state().gravity, v => world.kinetic.configure({ gravity: v }), v => v.toFixed(1));
+			slider(p, 'Bounce', 0, .98, .01, () => world.kinetic.state().restitution, v => world.kinetic.configure({ restitution: v }), v => Math.round(v * 100) + '%');
+			slider(p, 'Drop height on replay', .1, 4, .1, () => world.kinetic.state().drop, v => world.kinetic.configure({ drop: v }), v => v.toFixed(1));
+		}
+		if (rig.kind === 'droplets') slider(p, 'Droplet density', .2, 3, .1, () => world.kinetic.state().rain, v => world.kinetic.configure({ rain: v }), v => v.toFixed(1) + '×');
+		if (rig.kind === 'garden' || rig.kind === 'dominoes') {
+			slider(p, 'Cascade tempo', 30, 240, 1, () => world.kinetic.state().bpm, v => world.kinetic.configure({ bpm: v }), v => `${Math.round(v)} BPM`);
+			const sync = css(document.createElement('button'), 'min-height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;margin-bottom:8px;');
+			sync.textContent = 'Use track tempo'; sync.onclick = () => { world.kinetic.configure({ bpm: world.music.performance.bpm }); buildPanel(); }; p.appendChild(sync);
 		}
 		const S = world.sky.state;
 		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
