@@ -4,6 +4,7 @@
 // A link carries a spot to a friend (?at=...); homes are spots kept in this browser.
 
 import * as THREE from 'three';
+import { worldBody, sameBody } from './space/body.js';
 import { toWorld, toLatLon } from './bay/geo.js';
 import { toLL, bayKm } from './earth/globeframe.js';
 import { atlasReady, citiesNear, regionAt } from './earth/atlas.js';
@@ -35,6 +36,7 @@ export function pack(s) {
 	if (s.seed != null && !(s.earth && s.seed === 1337)) o.s = s.seed;
 	if (!s.earth) { o.t = s.type; if (s.id) o.i = s.id; }
 	if (s.origin) { const g = s.origin; o.o = { i: g.id, s: g.seed, t: g.type, n: g.name, a: (g.colorA || []).map((v) => +(+v).toFixed(3)), b: (g.colorB || []).map((v) => +(+v).toFixed(3)) }; }
+	if (s.body?.version === 1) o.d = s.body;
 	if (s.fly) o.f = 1;
 	if (Number.isFinite(s.hours)) o.h = r2(s.hours * 10);
 	if (s.bld) { const b = s.bld; o.b = { k: b.k, id: b.id, n: b.n, x: r2(b.cx), z: r2(b.cz) }; if (b.key) { o.b.key = b.key; o.b.l = b.i; } }
@@ -59,6 +61,7 @@ export function unpack(code) {
 			const g = o.o, col = (c) => (Array.isArray(c) && c.length === 3 && c.every((v) => num(v, 10)) ? c : [0.5, 0.5, 0.5]);
 			s.origin = { id: String(g.i || s.id || 'planet').slice(0, 80), seed: num(g.s, 1e12) ? g.s : 0, type: String(g.t || s.type || 'TERRAN').slice(0, 20), name: String(g.n || 'this world').slice(0, 40), colorA: col(g.a), colorB: col(g.b) };
 		}
+		if (o.d?.version === 1) s.body = worldBody({ earth: s.earth, seed: s.seed, biome: s.type, origin: s.origin, body: o.d });
 		if (num(o.h, 240)) s.hours = o.h / 10;
 		if (o.b && typeof o.b === 'object' && KIND[o.b.k]) {
 			s.bld = { k: o.b.k, id: String(o.b.id || '').slice(0, 60), n: String(o.b.n || KIND[o.b.k]).slice(0, 80), cx: num(o.b.x, 5e5) ? o.b.x : s.x, cz: num(o.b.z, 5e5) ? o.b.z : s.z };
@@ -158,6 +161,7 @@ export function createShare(ctx) {
 		if (!w) return null;
 		const P = w.player.state, st = ctx.state, o = ctx.origin();
 		const s = { v: V, earth: !!st.earth, seed: st.seed, x: P.pos.x, y: P.pos.y, z: P.pos.z, yaw: P.yaw, pitch: P.pitch, fly: !!P.flying, hours: w.sky?.state?.hours };
+		s.body = st.body;
 		if (s.earth) Object.assign(s, toLL(P.pos.x, P.pos.z));        // (the globe's frame: the Bay's near it)
 		else {
 			s.type = String(st.biome || shared().type || 'TERRAN');
@@ -249,8 +253,8 @@ export function createShare(ctx) {
 		try {
 			const st = ctx.state;
 			let w = W();
-			const same = w && (s.earth ? st.earth === true && st.seed === s.seed : st.earth === false && st.seed === s.seed && String(st.biome) === String(s.type));
-			if (!same || !ctx.visible()) await ctx.enter(s.earth ? { seed: s.seed, earth: true } : { seed: s.seed, biome: s.type, earth: false, origin: s.origin || null });
+			const same = w && sameBody(st.body, worldBody({ earth: s.earth, seed: s.seed, biome: s.type, origin: s.origin, body: s.body }));
+			if (!same || !ctx.visible()) await ctx.enter(s.earth ? { seed: s.seed, earth: true } : { seed: s.seed, biome: s.type, earth: false, origin: s.origin || null, body: s.body });
 			w = W();
 			if (!w) return false;
 			// the globe: a place far off moves the frame there first (earth/globe.js)
@@ -314,16 +318,17 @@ export function createShare(ctx) {
 	// goes away), so after a crash or a reload the visualizer opens right back here ----------
 	const RESUME_KEY = 'crysis-resume';
 	let keptT = 0, arrived = null;
-	function keepPlace(force) {
+	function keepPlace(force, departure = false) {
+		if (W()?.orbit?.active() && !departure) return;
 		if (busy || (!force && performance.now() - keptT < 4000)) return;
 		keptT = performance.now();
 		const s = capture();
 		if (!s || !Number.isFinite(s.x)) return;
 		// a fresh arrival (a world just built, a spawn) is not a place you chose: keep the
 		// last one until you have moved off from where you came in
-		const key = s.earth + ':' + s.seed;
+		const key = s.body?.key || s.earth + ':' + s.seed;
 		if (!arrived || arrived.key !== key) arrived = { key, x: s.x, z: s.z, moved: false };
-		if (!arrived.moved && Math.hypot(s.x - arrived.x, s.z - arrived.z) < 3) return;
+		if (!departure && !arrived.moved && Math.hypot(s.x - arrived.x, s.z - arrived.z) < 3) return;
 		arrived.moved = true;
 		delete s.by;
 		try { localStorage.setItem(RESUME_KEY, pack(s)); } catch { /* storage off */ }
@@ -383,7 +388,7 @@ export function createShare(ctx) {
 		ctx.closeMenu?.();
 		return go(h.s, { msg: `Home: ${h.name}` });
 	}
-	const sameWorld = (s) => { const st = ctx.state; return s.earth ? st.earth === true : st.earth === false && st.seed === s.seed && String(st.biome) === String(s.type); };
+	const sameWorld = (s) => sameBody(ctx.state.body, worldBody({ earth: s.earth, seed: s.seed, biome: s.type, origin: s.origin, body: s.body }));
 
 	// ---------- the menu: share, and the homes ----------
 	const sec = document.createElement('div');

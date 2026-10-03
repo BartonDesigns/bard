@@ -18,6 +18,7 @@ import { createLitter } from './world/litter.js';
 import { createVillage } from './world/village.js';
 import { createDistant } from './world/distant.js';
 import { createPlayer } from './player.js';
+import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 import { createMusic } from './music.js';
 import { createFauna } from './fauna.js';
 import { createBoat } from './boat.js';
@@ -68,7 +69,7 @@ import { planIslandFields, createSportsFields } from './sportsfields.js';
 import { createBerms } from './bay/berms.js';
 import { createCitySound } from './bay/citysound.js';
 import { createNatureSound } from './bay/naturesound.js';
-import { worldLevel } from './world/soundbus.js';
+import { worldLevel, worldAir } from './world/soundbus.js';
 import { createRealCity, REAL_U } from './bay/realcity.js';
 import { createCivilization } from './crysis/civ.js';
 import { createDiablo } from './bay/diablo.js';
@@ -120,6 +121,10 @@ import { planRealm, planDungeons } from './planet/medieval/plan.js';
 import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
 import { createWorldAudio } from './audio/audio.js';
+import { createOrbitalFlight } from './space/flight.js';
+import { worldBody, sameBody } from './space/body.js';
+import { createKinetic } from './music/kinetic.js';
+import { findKineticSpot } from './music/kinetic-placement.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -237,7 +242,7 @@ function buildDom() {
 	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
 	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
-	const boost = button('×3', 'Fly three times faster (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
+	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
 	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
 	const shell = button('🐚', 'Pick up the shell (E)', 'display:none;', 'prompt 30');
 	const toss = button('Throw', 'Throw it (T)', 'display:none;');
@@ -246,7 +251,7 @@ function buildDom() {
 	pair.dataset.hud = 'prompt 31';
 	const act = button('', '', 'display:none;', 'side 10');
 	// at the top of the rail: a line rocket, back to the ship
-	const launch = button('', 'Take off and return to your ship', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 30');
+	const launch = button('', 'Climb to space (steer to take control)', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 30');
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
 	// (the hint rides on top of the prompts, so it never covers one)
@@ -580,6 +585,9 @@ export function createIslandWorld() {
 	}
 	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
 	function teleportNow([name, lat, lon, yaw]) {
+		world?.labels?.hide();
+		world?.kinetic?.clear();
+		world?.orbit?.cancel();
 		fishing.drop();
 		const W = world, P = W?.player.state;
 		if (!P) return;
@@ -610,6 +618,9 @@ export function createIslandWorld() {
 	HOOKS.goTo = (lat, lon, agl = 700) => {
 		const W = world, P = W?.player.state;
 		if (!W?.globe || !P || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return 'Earth only: Crysis.goTo(lat, lon).';
+		W.labels?.hide();
+		W.kinetic?.clear();
+		W.orbit?.cancel();
 		drive.stop();
 		if (W.boat?.boarded?.()) W.boat.leave();
 		const p = W.globe.place(+lat, +lon);
@@ -628,7 +639,7 @@ export function createIslandWorld() {
 	}
 	// share where you are, and homes to come back to (share.js): at the top of the menu
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
-	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
 	HOOKS.share = share;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
@@ -675,7 +686,8 @@ export function createIslandWorld() {
 		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
 		// Other worlds flight lands on are their own islands, alone in their seas.
 		const earth = params.earth !== false;
-		if (world && state.seed === seed && state.earth === earth && state.biome === params.biome) return world;
+		const body = worldBody(params);
+		if (world && sameBody(state.body, body)) return world;
 		if (world) teardown();
 		dom.loading.style.display = 'flex';
 		await new Promise((r) => requestAnimationFrame(r));
@@ -697,7 +709,7 @@ export function createIslandWorld() {
 		shared.biHalf = island.half;
 		shared.heightTex = makeHeightTexture(island);
 		shared.maskTex = makeMaskTexture(island);
-		const sky = createSky(scene, shared, renderer, { isPhone });
+		const sky = createSky(scene, shared, renderer, { isPhone, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
 		const weather = createWeather(scene, shared, { isPhone });
@@ -749,6 +761,7 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		player.state.onBoost = speed => { hint(`Flying ×${speed}.`, 1500); actions(); };
 		// the fishing cottages' rooms, furnished as you come near (interiors/cottage.js)
 		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
 		// sunbeams through the trees in mist (world/sunrays.js)
@@ -799,9 +812,16 @@ export function createIslandWorld() {
 		}
 		// (the bridges where the realm's roads cross the streams are floors)
 		if (waterPlan?.source.decks.length) { const of = island.extraFloor, wf = world.water.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), wf(x, z, y)) : wf; }
+		world.kinetic = createKinetic({ scene });
+		world.kineticEpoch = world.globe?.frame?.epoch;
+		state.body = world.body = body;
 		state.seed = seed;
 		state.earth = earth;
 		state.biome = params.biome;
+		world.orbit = createOrbitalFlight({ renderer, camera, dom, world, earth, seed, profile, shared,
+			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
+			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint,
+		});
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
 		sky.update(0, camera.position);
@@ -817,7 +837,7 @@ export function createIslandWorld() {
 			const bayArea = createBayArea(shared, scene, island, shared.bayU);
 			world.bayArea = bayArea;
 			// globe: the Earth past the survey, and the engine's relief on the Bay's own ground (earth/globe.js)
-			world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => drive.active() || !!world?.boat?.boarded?.() });
+			world.globe = createGlobe({ scene, shared, bay: bayArea, island, camera, world: () => world, director: earthDirector, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => drive.active() || !!world?.boat?.boarded?.() || !!world?.orbit?.active() });
 			// globe: the Bay's woods and wild things are California's; far off (or once the frame floats)
 			// they give way to the globe's own (their view of the Bay says it is not loaded there)
 			const bayNear = Object.create(bayArea, { loaded: { value: () => bayArea.loaded() && globeF.bay && (() => { const ll = globeLL(camera.position.x, camera.position.z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM; })() } });
@@ -901,7 +921,7 @@ export function createIslandWorld() {
 				world.interiors?.addDoors(world.landmarks);
 				bayArea.coast?.sites?.each((S) => world.interiors?.addSite(S));
 				world.landmarks.yieldTo((x, z) => (world.city?.towersNear?.(x, z, 20) || []).length > 0);
-				world.labels = createLabels(dom.mount, bayArea, bridge);
+				world.labels.setBridge(bridge);
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
@@ -923,6 +943,11 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		world.labels?.dispose();
+		world.kinetic?.dispose();
+		world.orbit?.dispose();
+		world.music?.dispose();
+		worldAir(1);
 		shaderWarm.reset();
 		const release = captureResources(scene, {
 			renderer,
@@ -952,12 +977,81 @@ export function createIslandWorld() {
 		islandReach.band = undefined;
 	}
 
+	function placeKinetic(kind) {
+		const W = world, P = W?.player.state;
+		if (!W || W.orbit?.active() || P.locked || drive.active() || arcade.active() || studio.active()) return false;
+		if (P.pos.y - Math.max(0, W.island.heightAt(P.pos.x, P.pos.z)) > 20) { hint('Come down near clear ground to place an instrument.', 3500); return false; }
+		const spot = findKineticSpot({ player: P, kind, ground: (x, z) => W.island.heightAt(x, z),
+			wet: (x, z) => !!W.island.inWater?.(x, z) || W.lake?.waterAt?.(x, z) != null,
+			blocked: (x, z) => {
+				if (W.vegetation.obstacles(x, z, 1).length || W.globe?.regional?.settlements.blocked(x, z, 1)) return true;
+				if (W.village.footprints.some(f => Math.hypot(x - f.x, z - f.z) < Math.max(f.w || 0, f.d || 0) * .75 + 1)) return true;
+				return (W.real?.near?.('boxes', x, z, 20) || []).some(b => Math.hypot(x - b.x, z - b.z) < Math.max(b.w, b.d) * .75 + 1);
+			},
+		});
+		if (!spot) { hint('Find a flatter, open patch for the instrument.', 3500); return false; }
+		window.initAudio?.();
+		const ok = W.kinetic.spawn({ ...spot, bpm: W.music.performance.bpm });
+		if (ok) { W.kineticEpoch = W.globe?.frame?.epoch; hint('Instrument placed nearby. It plays your current faceplate; Stop and Replay are in Sky & World.', 5000); }
+		return ok;
+	}
+	function replayKinetic() { if (!world || world.orbit?.active()) return; window.initAudio?.(); world.kinetic.replay(); }
+	HOOKS.kinetic = { place: placeKinetic, state: () => world?.kinetic?.state(), replay: replayKinetic, stop: () => world?.kinetic?.silence(), clear: () => world?.kinetic?.clear(), configure: (v) => world?.kinetic?.configure(v) };
 	function buildPanel() {
 		const p = dom.panel;
 		p.replaceChildren();
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		if (origin) {
+			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
+			galaxy.textContent = 'Explore galaxy';
+			galaxy.onclick = () => { dom.panel.style.display = 'none'; legacyLaunch(); };
+			p.appendChild(galaxy);
+		}
+		const musicMode = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
+		const on = !!window.L99Continuity?.musicMode?.();
+		musicMode.textContent = `Music guides wildlife: ${on ? 'on' : 'off'}`;
+		musicMode.setAttribute('aria-pressed', String(on));
+		musicMode.onclick = () => { window.L99Continuity?.musicMode?.(!on); buildPanel(); };
+		p.appendChild(musicMode);
+		const rigTitle = css(document.createElement('div'), 'margin:8px 0;font-weight:600;');
+		rigTitle.textContent = 'Kinetic instruments'; p.appendChild(rigTitle);
+		const rig = world.kinetic.state();
+		const kinds = [['garden', 'Bounce garden'], ['pendulum', 'Pendulum wave'], ['dominoes', 'Domino spiral'], ['chimes', 'Chime tree'], ['cradle', 'Newton’s cradle'], ['droplets', 'Droplet pool'], ['harp', 'Gravity harp'], ['stairs', 'Plinko staircase'], ['fountain', 'Ball fountain'], ['wavebars', 'Kinetic wave']];
+		const choice = css(document.createElement('select'), 'width:100%;min-height:38px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
+		choice.setAttribute('aria-label', 'Kinetic instrument');
+		for (const [value, label] of kinds) { const o = document.createElement('option'); o.value = value; o.textContent = label; choice.appendChild(o); }
+		choice.value = world.kineticChoice || rig.kind || 'garden';
+		choice.onchange = () => { world.kineticChoice = choice.value; };
+		p.appendChild(choice);
+		const rigRow = css(document.createElement('div'), 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;');
+		for (const [label, action] of [['Place instrument', () => placeKinetic(choice.value)], ...(rig.kind ? [['Replay', replayKinetic], ['Stop', () => world.kinetic.silence()], ['Clear', () => world.kinetic.clear()]] : [])]) {
+			const b = css(document.createElement('button'), 'flex:1;min-height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px system-ui;cursor:pointer;padding:5px;');
+			b.textContent = label; b.onclick = () => { action(); buildPanel(); }; rigRow.appendChild(b);
+		}
+		p.appendChild(rigRow);
+		if (rig.kind) {
+			const playing = css(document.createElement('div'), 'opacity:.85;font-size:12px;margin:4px 0 8px;');
+			playing.textContent = `${kinds.find(([k]) => k === rig.kind)?.[1] || rig.kind} · ${rig.running ? 'playing' : 'stopped'}`;
+			p.appendChild(playing);
+			const scale = css(document.createElement('select'), 'width:100%;min-height:36px;border-radius:9px;background:#16332e;color:#eafaf6;padding:5px;margin-bottom:6px;');
+			scale.setAttribute('aria-label', 'Instrument scale');
+			for (const [value, label] of [['faceplate', 'Current Bard scale'], ['0', 'Minor pentatonic'], ['1', 'Major pentatonic'], ['2', 'Dorian'], ['3', 'Whole tone']]) { const o = document.createElement('option'); o.value = value; o.textContent = label; scale.appendChild(o); }
+			scale.value = String(rig.scale); scale.onchange = () => { world.kinetic.configure({ scale: scale.value === 'faceplate' ? 'faceplate' : +scale.value }); buildPanel(); }; p.appendChild(scale);
+			if (rig.scale !== 'faceplate') slider(p, 'Pitch offset', -12, 12, 1, () => world.kinetic.state().root, v => world.kinetic.configure({ root: v }), v => `${v > 0 ? '+' : ''}${v} semitones`);
+		}
+		if (rig.kind === 'garden') {
+			slider(p, 'Gravity', .1, 20, .1, () => world.kinetic.state().gravity, v => world.kinetic.configure({ gravity: v }), v => v.toFixed(1));
+			slider(p, 'Bounce', 0, .98, .01, () => world.kinetic.state().restitution, v => world.kinetic.configure({ restitution: v }), v => Math.round(v * 100) + '%');
+			slider(p, 'Drop height on replay', .1, 4, .1, () => world.kinetic.state().drop, v => world.kinetic.configure({ drop: v }), v => v.toFixed(1));
+		}
+		if (rig.kind === 'droplets') slider(p, 'Droplet density', .2, 3, .1, () => world.kinetic.state().rain, v => world.kinetic.configure({ rain: v }), v => v.toFixed(1) + '×');
+		if (rig.kind === 'garden' || rig.kind === 'dominoes') {
+			slider(p, 'Cascade tempo', 30, 240, 1, () => world.kinetic.state().bpm, v => world.kinetic.configure({ bpm: v }), v => `${Math.round(v)} BPM`);
+			const sync = css(document.createElement('button'), 'min-height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;margin-bottom:8px;');
+			sync.textContent = 'Use track tempo'; sync.onclick = () => { world.kinetic.configure({ bpm: world.music.performance.bpm }); buildPanel(); }; p.appendChild(sync);
+		}
 		const S = world.sky.state;
 		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 		const t = slider(p, 'Time of day', 0, 23.99, 0.05, () => S.hours, (v) => { S.hours = v; }, fmtH);
@@ -1099,7 +1193,7 @@ export function createIslandWorld() {
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
-		if (!visible || !world || document.hidden || lost) return;
+		if (!visible || !world || document.hidden || lost) { world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
 		// on a phone the world holds still while someone thinks of a reply: the model and
 		// the world share the GPU and the page's memory
 		if (isPhone && guide.llm?.busy?.()) return;
@@ -1107,12 +1201,28 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		stepWind(dt, shared);
 		const W = world;
+		W.music.update(dt);
+		W.orbit?.before();
 		// driving a road carries you; otherwise you walk, swim or fly
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
 		else if (W.boardwalk?.ride(dt, time)) drive.stop();
 		else if (studio.active()) { /* in the chair: the studio holds the camera */ }
 		else if (!carjack.update(dt, time) && !drive.update(dt)) W.player.update(dt, time);
+		W.orbit?.after(dt);
+		W.orbit?.updateHud();
+		worldAir(1 - (W.orbit?.blend() || 0));
+		if (W.orbit?.space()) {
+			W.labels?.hide();
+			W.globe?.regional?.pause();
+			W.kinetic?.silence();
+			// The retained ground stops streaming and drawing; only the orbital pass runs.
+			// The same input state and faceplate analyser continue on every frame.
+			dom.veil.style.opacity = '0'; glare.style.opacity = '0';
+			actions();
+			W.orbit.render(time);
+			return;
+		}
 		you.update(dt, time);
 		// a director's camera (trailer/): posed after the player moves, before anything reads it
 		HOOKS.cine?.(camera, dt, time);
@@ -1126,7 +1236,6 @@ export function createIslandWorld() {
 		W.weather.state.sheltered = !!W.houses?.inside(camera.position) || (W.underworld?.inside() || 0) > 0.4;
 		const wx = W.weather.update(dt, W.sky, camera, (x, z) => W.island.heightAt(x, z), { slow: frameAvg > 26 });
 		surprises.update(dt, sk, wx);
-		W.music.update(dt);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
 		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
@@ -1206,6 +1315,9 @@ export function createIslandWorld() {
 		W.litter.update(camera);
 		islandReach(W);
 		W.vegetation.stream(camera, false);
+		W.vegetation.react(dt, camera.position);
+		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }
+		W.kinetic.update(dt, { listener: camera.position });
 		W.village.update(time, sk.night);
 		W.cottages?.update(camera.position, dt);
 		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
@@ -1214,7 +1326,7 @@ export function createIslandWorld() {
 		W.fauna.update(time, sk.night, camera.position);
 		W.landFauna.update(dt, time, sk.night, camera.position, camera.position.y > -0.5);
 		W.bayArea?.update(camera, sk.night);
-		W.globe?.update(dt, camera, sk.night);          // globe: the Earth past the Bay (may move the frame, and you with it)
+		if (!W.orbit?.active()) W.globe?.update(dt, camera, sk.night); // orbital departure retains the ground frame
 		W.bridge?.update(time, sk.night);
 		W.civ?.update(camera);
 		if (W.civ) { const ll = globeLL(camera.position.x, camera.position.z); earthDirector.update(ll.lat, ll.lon, dt); }
@@ -1247,7 +1359,7 @@ export function createIslandWorld() {
 		watchTeleport();
 		share.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
-		if (visible && !arcade.active()) share.keep();
+		if (visible && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
 		W.vehicles?.update(dt, time);
 		ragdolls.update(dt);
@@ -1319,6 +1431,7 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
+		W.orbit?.render(time);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
 		if (quality === 'auto' && (frame.n = (frame.n || 0) + 1) % 45 === 0) {
@@ -1352,13 +1465,19 @@ export function createIslandWorld() {
 		if (dom.down.style.display !== dd) dom.down.style.display = dd;
 		const fb = P.flying ? '#01a982' : 'rgba(8,20,26,.55)';
 		if (dom.fly.style.background !== fb) dom.fly.style.background = fb;
-		// the ×3 boost shows while flying, lit when on
-		const bd = W.player.state.flying ? '' : 'none', bb = W.player.state.boost ? '#01a982' : 'rgba(8,20,26,.55)';
+		// Flight speed shows its current multiplier; B and touch use the same cycle.
+		if (!P.flying) P.boost = 1;
+		const speed = flightMultiplier(P.boost), speedTitle = `Flight speed ${speed}×; next ${nextFlightSpeed(speed)}× (B)`;
+		if (dom.boost.textContent !== `×${speed}`) dom.boost.textContent = `×${speed}`;
+		if (dom.boost.title !== speedTitle) { dom.boost.title = speedTitle; dom.boost.setAttribute('aria-label', speedTitle); }
+		const bd = P.flying ? '' : 'none', bb = speed > 1 ? '#01a982' : 'rgba(8,20,26,.55)';
 		if (dom.boost.style.display !== bd) dom.boost.style.display = bd;
 		if (dom.boost.style.background !== bb) dom.boost.style.background = bb;
-		if (!W.player.state.flying) W.player.state.boost = false;
-		const L = origin && !window.L99Journey170?.busy?.() ? 'flex' : 'none';
+		const L = W.orbit && !drive.active() && !arcade.active() ? 'flex' : 'none';
 		if (dom.launch.style.display !== L) dom.launch.style.display = L;
+		dom.launch.style.background = P.climbAssist ? '#01a982' : 'rgba(8,20,26,.55)';
+		const title = P.climbAssist ? 'Stop automatic climb' : 'Climb to space (steer to take control)';
+		if (dom.launch.title !== title) { dom.launch.title = title; dom.launch.setAttribute('aria-label', title); }
 	}
 	let origin = null;   // the planet flight landed us from, if any
 	let launchedAt = null;   // globe: where on Earth you launched from, when far from the Bay
@@ -1368,6 +1487,7 @@ export function createIslandWorld() {
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
 	function show() {
 		visible = true;
+		if (world) world.player.state.active = true;
 		dom.mount.style.display = 'block';
 		resize();
 		start();
@@ -1375,6 +1495,11 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		world?.labels?.hide();
+		world?.globe?.regional?.pause();
+		world?.kinetic?.silence();
+		if (world) world.player.state.active = false;
+		worldAir(0);
 		if (muffle.lp) { muffle.k = 0; muffle.lp.frequency.value = 20000; muffle.lp.Q.value = 0.9; }
 		dom.mount.style.display = 'none';
 		world?.player.clearInput();
@@ -1386,16 +1511,17 @@ export function createIslandWorld() {
 	function toggleFly() {
 		const P = world?.player.state;
 		if (!P || world.boat.boarded()) return;
-		P.flying = !P.flying; P.vel.y = 0;
-		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B for ×3. F to land.') : 'Landing.', 3500);
+		if (!P.orbit?.high()) { P.flying = !P.flying; P.vel.y = 0; }
+		P.climbAssist = false;
+		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B cycles ×1 / ×3 / ×6 / ×9. F to land.') : 'Landing.', 3500);
 	}
 	dom.fly.addEventListener('click', (e) => { e.stopPropagation(); toggleFly(); });
-	dom.boost.addEventListener('click', (e) => { e.stopPropagation(); const P = world?.player.state; if (P?.flying) { P.boost = !P.boost; hint(P.boost ? 'Flying ×3.' : 'Normal speed.', 1500); } });
+	dom.boost.addEventListener('click', (e) => { e.stopPropagation(); const P = world?.player.state; if (P?.flying) world.player.cycleBoost(); });
 	dom.shell.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.pick(); });
 	dom.toss.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.throwIt(); });
 	dom.place.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.putDown(); });
 	const hold = (el, key) => {
-		el.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (world?.player.state.flying) world.player.state[key] = true; });
+		el.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (world?.player.state.flying) { world.player.state.climbAssist = false; world.player.state[key] = true; } });
 		for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(ev, () => { if (world) world.player.state[key] = false; });
 	};
 	hold(dom.jump, 'flyUp'); hold(dom.down, 'flyDown');
@@ -1413,18 +1539,27 @@ export function createIslandWorld() {
 		if (B.boarded()) B.leave(); else if (B.near()) B.board();
 	});
 	// back to the ship: the island hands the view to space flight above the same planet
-	dom.launch.addEventListener('click', async (e) => {
+	dom.launch.addEventListener('click', (e) => {
 		e.stopPropagation();
+		if (!world || drive.active() || arcade.active() || studio.active()) return;
+		if (world.boat.boarded()) world.boat.leave();
+		const P = world.player.state;
+		P.flying = true; P.diving = false; P.climbAssist = !P.climbAssist;
+		hint(P.climbAssist ? 'Climbing to space. Steer, look, or press ⇣ / C to take control.' : 'Climb stopped. You have control.', 4000);
+	});
+	// The original galaxy remains reachable until its complete feature set is migrated.
+	async function legacyLaunch() {
 		const J = window.L99Journey170;
 		if (!origin || !J || J.busy()) return;
 		if (world?.boat.boarded()) world.boat.leave();
 		dom.launch.disabled = true;
 		// the ship and this world never both fill the phone's memory: keep your place, let the
 		// world go behind the veil, then fly (landing builds it again; a failed launch rebuilds here)
-		const yaw = world.player.state.yaw;
+		const departure = world.orbit?.info().anchor;
+		const yaw = departure?.yaw ?? world.player.state.yaw;
 		// globe: launching far from the Bay, the ship brings you back down there
-		{ const ll = globeLL(camera.position.x, camera.position.z); launchedAt = world.globe && bayKm(ll.lat, ll.lon) > BAY_WILD_KM ? ll : null; }
-		share.keep(true);
+		{ const ll = departure || globeLL(camera.position.x, camera.position.z); launchedAt = world.globe && bayKm(ll.lat, ll.lon) > BAY_WILD_KM ? { lat: ll.lat, lon: ll.lon } : null; }
+		if (!departure) share.keep(true);
 		travelVeil.textContent = 'Launching…';
 		travelVeil.style.opacity = '1';
 		await new Promise((r) => setTimeout(r, 260));
@@ -1439,11 +1574,11 @@ export function createIslandWorld() {
 			const c = share.resumeCode();
 			await (c ? share.openAt(c, { resume: true }) : api.open(origin?.earth ? { seed: 1337, earth: true } : { seed: origin.seed, biome: origin.type, earth: false, origin }));
 		} finally { dom.launch.disabled = false; travelVeil.style.opacity = '0'; }
-	});
+	}
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
-	const worldOf = (planet) => ({ seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
+	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
 		async open(params = {}) {
@@ -1584,6 +1719,10 @@ if (typeof window !== 'undefined') {
 	window.Crysis = {
 		version: 1,
 		world: () => window.L99Island?.world?.(),
+		performance: () => window.L99Island?.world?.()?.music?.performance,
+		get kinetic() { return HOOKS.kinetic; },
+		body: () => window.L99Island?.world?.()?.body,
+		orbit: () => window.L99Island?.world?.()?.orbit?.info(),
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,

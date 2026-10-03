@@ -7,7 +7,6 @@
 // species; wings and legs move in the vertex shader.
 
 import * as THREE from 'three';
-import { mulberry32 } from '../noise.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -378,6 +377,15 @@ export function createLandFauna(land, island, shared, scene, camera, vegetation)
 					if (!active || !P.spawn(a, cam)) { a.p.y = -999; a.state = 'gone'; P.im.setMatrixAt(i, m4.makeScale(0, 0, 0)); continue; }
 				}
 				P.think(a, dt, t, cam, i);
+				// Music mode draws flying wildlife toward low melody; bright energy repels it.
+				// Keep existing ground/burrow behavior and prevent music dragging animals into terrain.
+				const music = shared.performance, dist = a.p.distanceTo(cam);
+				if (music?.musicMode && a.state === 'fly' && dist > 3 && dist < 30) {
+					const force = music.high > .18 ? -music.high * 3 : music.bass * 1.5 + music.held * .6;
+					const dx = (cam.x - a.p.x) / dist * force * dt, dz = (cam.z - a.p.z) / dist * force * dt;
+					const x = a.p.x + dx, z = a.p.z + dz;
+					if (a.p.y > H(x, z) + .2) { a.p.x = x; a.p.z = z; }
+				}
 				const yaw = a.face ?? (a.state === 'fly' || a.v.lengthSq() > 0.01 && a.state !== 'bolt' && a.state !== 'dart' && a.state !== 'run' && a.state !== 'hop' ? Math.atan2(a.v.x, a.v.z) : a.yaw);
 				e.set(-a.pitch || 0, yaw + Math.PI, 0);
 				q.setFromEuler(e);

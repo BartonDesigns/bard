@@ -5,9 +5,12 @@
 
 import * as THREE from 'three';
 import { strikePulse, PULSE } from './pulse.js';
+import { createPerformance } from './music/performance.js';
 
 export function createMusic(shared, scene, camera, canvas, pickables, active) {
 	const bands = { bass: 0, mid: 0, high: 0 };
+	const performanceState = createPerformance();
+	shared.performance = performanceState.state;
 	const ray = new THREE.Raycaster();
 	ray.far = 90;
 	const v2 = new THREE.Vector2();
@@ -48,11 +51,12 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 		}
 		// the shared discovery hook tells us when a strike landed in our world
 		const EX = window.L99Explore175;
+		if (EX) EX.islandStrike = ripple;
 		if (EX && !EX.__island) {
 			EX.__island = true;
 			const prev = EX.struck ? EX.struck.bind(EX) : null;
 			EX.struck = function (realm, hit, d) {
-				if (realm === 'island' && hit) ripple(hit, window.L99TouchMusic175?.material(hit));
+				if (realm === 'island' && hit) EX.islandStrike?.(hit, window.L99TouchMusic175?.material(hit));
 				return prev ? prev(realm, hit, d) : undefined;
 			};
 		}
@@ -66,11 +70,12 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 			const v = src && Number.isFinite(src[b]) ? Math.max(0, Math.min(1, src[b])) : 0;
 			bands[b] += (v - bands[b]) * k;
 		}
+		performanceState.update(dt, src || {}, window.L99Continuity?.performance?.() || {});
 		shared.uBass.value = bands.bass;
 		shared.uMid.value = bands.mid;
 		shared.uHigh.value = bands.high;
 		shared.uPulse.value *= Math.exp(-dt * 2.5);
 		PULSE.uPulseNow.value = shared.uTime.value;
 	}
-	return { bands, update, register, hitAt, ripple };
+	return { bands, performance: performanceState.state, update, register, hitAt, ripple, dispose() { const ex = window.L99Explore175; if (ex?.islandStrike === ripple) ex.islandStrike = null; } };
 }

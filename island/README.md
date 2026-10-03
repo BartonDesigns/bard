@@ -1,5 +1,7 @@
 # Crysis (the island engine, stage 1)
 
+Continuous planet/orbit flight and its current migration boundary: [ORBITAL-FLIGHT.md](ORBITAL-FLIGHT.md). Full flight preservation audit: [inventory](../docs/flight-migration-inventory.md).
+
 The tropical island world for Level 99 Bard. It is a separate ES-module
 project bundled into `dist/island.js`, which the faceplate (`../index.html`)
 loads on demand from the sea door (`≋`) or when space flight enters a
@@ -160,6 +162,36 @@ regional profile, a kit chosen from the atlas region, its culture and its climat
 `globe.js` runs it (`Crysis.world().globe.regional`; `Crysis.globe().regional` reports it);
 `globetowns.js` leaves the towns it claims to it. The new atlas data for the Arctic, the
 Antarctic, Borneo and New Guinea is `earth/data/polar.js`.
+
+Community jobs and dialogue also use the named town's size and culture (`community.js`),
+so a city does not inherit only countryside work and Arctic climates do not share one
+community's traditions. Daylight follows latitude and month; seasonal particle gates
+keep warm rain separate from snow. Regional sound pauses with the world and releases
+its own graph on teardown. Regression fixtures cover eight atlas communities, herder
+outfits, polar seasons, weather selection and audio lifecycle. The rendered sun and celestial catalogue follow the globe latitude and selected month.
+Atlas-derived ground/climate/vegetation fields can be refreshed offline with
+`node tools/refresh-globe-atlas.mjs`; survey elevations, land and lakes are preserved.
+Broad city colouring no longer paints over forest floors or snow.
+
+### Native kinetic instruments
+
+In Sky & World, choose a kinetic instrument and **Place instrument** near open, flat
+ground. All ten authored rigs are available: bounce garden, pendulum wave, domino
+spiral, chime tree, Newton’s cradle, droplet pool, gravity harp, Plinko staircase,
+ball fountain and kinetic wave. Each keeps its own authored motion and musical events.
+Impacts, crossings, gusts and orbital passes play the current Bard faceplate.
+
+Use **Stop**, **Replay**, or **Clear**. Choose the current Bard scale or one of the four
+legacy rig scales and a pitch offset. Garden gravity/bounce are live; drop height
+and garden/domino cascade tempo take effect on replay. **Use track tempo** copies the
+current audible BPM without changing the faceplate. Droplet density is live.
+Other rigs retain their authored periods and trajectories.
+
+One rig is retained per local world; travel clears it and hiding the world or entering
+space stops it. Returning to the ground keeps it available for explicit Replay. It is
+not saved across world replacement or reload. Notes are capped at eight voices and
+24 per second, with bounded catch-up; all visible bodies use finite pools. These are
+instrument simulations, not standable moving platforms or a universal rigid-body solver.
 
 ## People you can talk to
 

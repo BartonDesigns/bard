@@ -139,6 +139,6 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 			layout(x, z, kit, climate, culture);
 		}
 	}
-	function dispose() { scene.remove(group); for (const m of Object.values(meshes)) m.geometry.dispose(); mat.dispose(); }
+	function dispose() { scene.remove(group); for (const m of Object.values(meshes)) { m.geometry.dispose(); m.dispose(); } mat.dispose(); }
 	return { update, dispose, info: () => Object.fromEntries(FORMS.map((f) => [f, meshes[f].count]).filter((e) => e[1])) };
 }

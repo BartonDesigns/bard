@@ -6,19 +6,10 @@ import { NOISE_GLSL } from './terrain.js';
 import { STARS_B64, STAR_COUNT } from './starcat.js';
 import { today } from '../calendar.js';
 import { constellations } from './constellations.js';
+import { BAY_LATITUDE, solarLatitude, solarDate, solarTimes, solarDirection, advanceSolarClock } from './solar.js';
 
-// The real sky over the Bay Area: latitude 37.8 N, turned for the date (the sun where it
-// really stands among the stars), so each season has its own stars: the Summer Triangle
-// overhead on summer evenings, Orion rising on winter ones. East is +x, north is -z, up is +y.
-const LAT = 37.8 * Math.PI / 180;
-// where the sun stands among the stars on a date (its right ascension, hours): the sky turns
-// with it, so the stars overhead at midnight are the season's own
-function sunRAh(d) {
-	const n = (d.getTime() - Date.UTC(2000, 0, 1, 12)) / 864e5, R = Math.PI / 180;
-	const g = (357.528 + 0.9856003 * n) * R, lam = (280.46 + 0.9856474 * n + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * R;
-	return ((Math.atan2(Math.cos(23.439 * R) * Math.sin(lam), Math.cos(lam)) / Math.PI * 12) + 24) % 24;
-}
-let SUN_RA = sunRAh(today());
+// The real catalogue follows the observer's latitude and the chosen date. The island
+// keeps its Bay Area latitude; the globe supplies the camera's current latitude.
 // equatorial (J2000) to galactic
 const EQ2GAL = [-0.0548755604, -0.8734370902, -0.4838350155, 0.4941094279, -0.4448296300, 0.7469822445, -0.8676661490, -0.1980763734, 0.4559837762];
 
@@ -127,7 +118,7 @@ function airOf(P) {
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
 }
-export function createSky(scene, shared, renderer, { isPhone = false } = {}) {
+export function createSky(scene, shared, renderer, { isPhone = false, latitude = () => BAY_LATITUDE } = {}) {
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
 		uTime: shared.uTime, uNight: { value: 0 }, uCloud: { value: 0.62 }, uHigh: shared.uHigh,
@@ -174,7 +165,8 @@ export function createSky(scene, shared, renderer, { isPhone = false } = {}) {
 				vec3 gold = mix(uSunColor, vec3(1.0, 0.8, 0.42), 0.6);
 				col += gold * (pow(sd, 6.0) * 0.8 + pow(sd, 40.0) * 0.8 + toward * (1.0 - smoothstep(0.0, 0.3, d.y)) * 0.9) * lowK * (1.0 - uCloud * 0.35);
 				{
-					vec3 t1 = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0))), t2 = cross(t1, uSunDir);
+					vec3 axis = abs(uSunDir.y) > 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+					vec3 t1 = normalize(cross(uSunDir, axis)), t2 = cross(t1, uSunDir);
 					vec2 q = vec2(dot(d, t1), dot(d, t2));
 					float r = length(q), a = atan(q.y, q.x);
 					float rays = pow(abs(cos(a * 3.0)), 60.0) + 0.6 * pow(abs(cos(a * 4.0 + 0.5)), 90.0) + 0.3 * pow(abs(cos(a * 9.0 + 1.3)), 30.0);
@@ -530,8 +522,8 @@ export function createSky(scene, shared, renderer, { isPhone = false } = {}) {
 	const eqM = new THREE.Matrix4(), rz = new THREE.Matrix4(), w2e = new THREE.Matrix3();
 	// the celestial sphere turns with the clock: local sidereal time from solar time
 	function orientSky() {
-		const lst = ((state.hours + SUN_RA - 12) % 24 + 24) % 24 / 12 * Math.PI;
-		const sf = Math.sin(LAT), cf = Math.cos(LAT);
+		const lst = ((state.hours + SUN.ra - SUN.noon) % 24 + 24) % 24 / 12 * Math.PI;
+		const lat = SUN.lat * Math.PI / 180, sf = Math.sin(lat), cf = Math.cos(lat);
 		rz.set(Math.cos(lst), Math.sin(lst), 0, 0, -Math.sin(lst), Math.cos(lst), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 		eqM.set(0, 1, 0, 0, cf, 0, sf, 0, sf, 0, -cf, 0, 0, 0, 0, 1).multiply(rz);
 		stars.matrix.copy(eqM); stars.matrixWorld.copy(eqM);
@@ -572,31 +564,17 @@ export function createSky(scene, shared, renderer, { isPhone = false } = {}) {
 		stars.material.uniforms.uCloudOff = w.uniforms.uCloudOff; stars.material.uniforms.uShowers = w.uniforms.uShowers;
 	}
 
-	// the real sun over the Bay Area (37.77 N) on today's date: its declination, the length
-	// of the day, and solar noon on the clock (Pacific time, an hour later in daylight time)
-	function sunToday() {
-		const now = today(), start = new Date(now.getFullYear(), 0, 0), N = Math.floor((now - start) / 864e5);
-		const dec = 23.44 * Math.PI / 180 * Math.sin(2 * Math.PI * (284 + N) / 365);
-		const jan = new Date(now.getFullYear(), 0, 1).getTimezoneOffset(), jul = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
-		const dst = now.getTimezoneOffset() < Math.max(jan, jul) ? 1 : (N > 69 && N < 307 ? 1 : 0);
-		// the equation of time, minutes
-		const B = 2 * Math.PI * (N - 81) / 364, eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
-		const noon = 12 + dst + (122.4 - 120) / 15 - eot / 60;
-		const h0 = Math.acos(Math.max(-1, Math.min(1, (Math.sin(-0.833 * Math.PI / 180) - Math.sin(LAT) * Math.sin(dec)) / (Math.cos(LAT) * Math.cos(dec)))));
-		const half = h0 * 12 / Math.PI;
-		return { dec, noon, rise: noon - half, set: noon + half, day: N };
-	}
-	let SUN = sunToday();
+	let SUN = solarDate(today());
+	Object.assign(SUN, solarTimes(latitude(), SUN.dec, SUN.noon));
 	state.sun = SUN;
 	function update(dt, focus) {
-		{ const d = today(); if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month) { SUN = sunToday(); SUN.date = d.getDate(); SUN.month = d.getMonth(); state.sun = SUN; SUN_RA = sunRAh(d); } }
+		const d = today(), lat = solarLatitude(latitude());
+		if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month || d.getFullYear() !== SUN.year) { SUN = solarDate(d); state.sun = SUN; }
+		if (lat !== SUN.lat) Object.assign(SUN, solarTimes(lat, SUN.dec, SUN.noon));
 		// daylight hours pass slowly (~9 real minutes), night quickly (~2.5)
-		const day = state.hours >= SUN.rise - 0.3 && state.hours < SUN.set + 0.5;
-		state.hours = (state.hours + dt * state.speed * (day ? (SUN.set - SUN.rise + 0.8) / 540 : (24 - (SUN.set - SUN.rise + 0.8)) / 150)) % 24;
+		state.hours = advanceSolarClock(state.hours, dt, state.speed, SUN);
 		// where the sun is: east is +x, north -z, up +y
-		const ha = (state.hours - SUN.noon) / 12 * Math.PI, cd = Math.cos(SUN.dec), sdc = Math.sin(SUN.dec);
-		const sd = shared.uSunDir.value.set(-cd * Math.sin(ha), Math.sin(LAT) * sdc + Math.cos(LAT) * cd * Math.cos(ha), Math.cos(LAT) * sdc - Math.sin(LAT) * cd * Math.cos(ha)).normalize();
-		sd.z = -sd.z;
+		const sd = solarDirection(SUN.lat, SUN.dec, state.hours, SUN.noon, shared.uSunDir.value);
 		const elev = sd.y;
 		const dayK = THREE.MathUtils.smoothstep(elev, -0.05, 0.25);
 		const setK = 1 - THREE.MathUtils.smoothstep(Math.abs(elev), 0.02, 0.3);
@@ -673,7 +651,7 @@ export function createSky(scene, shared, renderer, { isPhone = false } = {}) {
 	// in the world tonight; is it dark enough to see the stars (the sun an hour and more down);
 	// the constellations' lines on or off
 	const celestial = (ra, de, out = new THREE.Vector3()) => { const a = ra / 12 * Math.PI, d = de * Math.PI / 180; return out.set(Math.cos(d) * Math.cos(a), Math.cos(d) * Math.sin(a), Math.sin(d)).applyMatrix4(eqM).normalize(); };
-	const dark = () => state.hours > SUN.set + 1 || state.hours < SUN.rise - 1;
+	const dark = () => solarDirection(SUN.lat, SUN.dec, state.hours, SUN.noon).y < Math.sin(-12 * Math.PI / 180);
 	const lines = (on) => { if (on !== undefined) uCon.value = on ? 1 : 0; return uCon.value > 0; };
 	return { dome, sun, hemi, state, update, uniforms, attach, reflect, celestial, dark, lines };
 }

@@ -207,7 +207,7 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		here.wx = { rain: Wx?.rainHere || 0, cover: Wx?.cover ?? 0.4 };
 		// the settlement you are in, or the nearest; its kit is the one you are in
 		const N = S.nearest(cam.position.x, cam.position.z, ['town', 'village', 'farm']);
-		here.town = N && N.d < 2500 ? { name: N.site.name || '', kind: N.site.kind, km: Math.round(N.d / 100) / 10, kit: N.site.kitId } : null;
+		here.town = N && N.d < 2500 ? { name: N.site.name || '', kind: N.site.kind, km: Math.round(N.d / 100) / 10, kit: N.site.kitId, pop: N.site.pop } : null;
 		here.kit = here.town && N.d < 400 ? KITS[here.town.kit] : K.kit;
 		// the nearest landmark with a story
 		const L = S.nearest(cam.position.x, cam.position.z, ['lore', 'real']);
@@ -241,19 +241,23 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		}
 	}
 	function update(dt, cam, { night = 0, wind = null, out = true } = {}) {
-		const d = today();
-		env.month = d.getMonth() + (d.getDate() - 1) / 30; env.night = night;
+		const d = today(), month = d.getMonth() + (d.getDate() - 1) / 30;
+		if (month !== env.month) hereT = 0;
+		env.month = month; env.night = night;
 		const ll = toLL(cam.position.x, cam.position.z);
 		const far = !F.bay || bayKm(ll.lat, ll.lon) > bayWildKm - 20;
 		if (!atlasReady()) { loadAtlas().catch(() => {}); return; }
 		time += dt;
 		if (!far || !out) {
-			here.on = false; S.update(dt, cam, { night, wind, budget: 1 }); folk.update(dt, time, cam);
+			here.on = false; sound.pause(); S.update(dt, cam, { night, wind, budget: 1 }); folk.update(dt, time, cam);
 			ice.update(dt, cam, { month: env.month, night, lat: ll.lat, on: false }); flora.update(cam, { on: false }); air.update(dt, cam, { on: false });
 			return;
 		}
 		wrapSolid();
-		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2) { scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; }
+		if (scanEpoch !== F.epoch || !scanAt || km(ll.lat, ll.lon, scanAt[0], scanAt[1]) > 1.2) {
+			if (scanEpoch !== F.epoch) { coastAt.x = Infinity; coastAt.z = Infinity; }
+			scan(ll.lat, ll.lon); scanAt = [ll.lat, ll.lon]; scanEpoch = F.epoch; hereT = 0;
+		}
 		hereT -= dt;
 		if (hereT <= 0) { hereT = 0.5; updateHere(ll.lat, ll.lon, cam); tell(cam); }
 		S.update(dt, cam, { night, wind });
@@ -283,8 +287,9 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		}
 	}
 	const info = () => ({ sound: sound.debug(), folk: folk.info(), ice: ice.info(), flora: flora.info(), kit: here.kit?.id, region: here.regionId, culture: here.culture?.key, climate: here.climate, town: here.town, landmark: here.landmark?.name, onward: here.onward, ...S.info() });
-	function dispose() { folk.dispose(); ice.dispose(); flora.dispose(); air.dispose(); S.dispose(); here.on = false; }
-	return { update, claims, info, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
+	function pause() { sound.pause(); }
+	function dispose() { sound.dispose(); folk.dispose(); ice.dispose(); flora.dispose(); air.dispose(); S.dispose(); here.on = false; }
+	return { update, claims, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
 }
 
 const firstSentence = (t = '') => (t.match(/^.*?[.!?](\s|$)/)?.[0] || t).trim();

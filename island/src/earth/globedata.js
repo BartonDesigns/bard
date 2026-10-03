@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { F } from './globeframe.js';
 import { RES } from './globeheight.js';
+import { GLOBE_ASSET_VERSION } from './globe-assets.js';
 
 const TILE = 30, TN = TILE * RES, GW = 360 * RES, GH = 180 * RES;
 const NW = 256, MOVE = 60, KEEP = 6;
@@ -35,7 +36,7 @@ export function createGlobeData() {
 	const win = { N: NW, P, gi0: 0, gj0: 0, cx0: 0, cy0: 0, ready: false, version: 0, moving: null };
 	const stats = { tiles: 0, loads: 0, composeMs: 0, decodeMs: 0 };
 
-	const url = (tj, ti) => { try { return new URL(`../assets/globe/g${tj}-${ti}.png`, import.meta.url).href; } catch { return `assets/globe/g${tj}-${ti}.png`; } };
+	const url = (tj, ti) => { try { return new URL(`../assets/globe/g${tj}-${ti}.png?v=${GLOBE_ASSET_VERSION}`, import.meta.url).href; } catch { return `assets/globe/g${tj}-${ti}.png?v=${GLOBE_ASSET_VERSION}`; } };
 	function tile(tj, ti) {
 		const k = tj + '-' + ti;
 		let T = tiles.get(k);

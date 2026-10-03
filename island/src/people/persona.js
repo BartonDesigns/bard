@@ -12,6 +12,7 @@
 import { inkStory } from '../tattoo/lore.js';
 import { regionalNow } from '../region/here.js';
 import { regionalSheet } from '../region/talk.js';
+import { communityFolk, communityJob } from '../region/community.js';
 import { nameFor } from '../region/cultures.js';
 
 const rng = (seed) => { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
@@ -67,8 +68,8 @@ export function personaFor(P, where) {
 // landmark's story, the road on
 function regionalPersona(P, H) {
 	const d = P.dna, r = rng(d.seed * 7919 + 17), T = d.temper || { outgoing: 0.5, confident: 0.5, warmth: 0.5, fidget: 0.5 };
-	const F = H.kit.folk || {}, nm = nameFor(H.culture, d.male, r), age = Math.round(d.age);
-	const work = P.job || pick(r, F.jobs || JOBS.suburb);
+	const F = communityFolk(H), nm = nameFor(H.culture, d.male, r), age = Math.round(d.age);
+	const work = P.job || communityJob(H, 'walk', r);
 	const job = age < 20 ? 'still at school, helping out at home' : age > 68 ? `retired now; ${work.replace(/^(a|an) /, 'was a ')} for most of a lifetime` : work;
 	const style = [
 		T.outgoing > 0.65 ? 'chatty and animated' : T.outgoing < 0.3 ? 'quiet, a person of few words' : 'friendly but brief',
@@ -78,7 +79,7 @@ function regionalPersona(P, H) {
 	const sheet = regionalSheet(H, r);
 	return {
 		name: nm.name, first: nm.first, age, job, place: sheet.place, kind: H.kit.id, years: Math.max(1, Math.min(age - 3, Math.round(5 + r() * 40))),
-		mood: pick(r, MOODS), errand: P.errand || pick(r, (H.coast === false && F.errands?.filter((e) => !/harbour|boats|shore/.test(e))) || F.errands || ERRANDS), style, temper: T,
+		mood: pick(r, MOODS), errand: P.errand || pick(r, F.errands?.length ? F.errands : ERRANDS), style, temper: T,
 		tattoos: inkStory(d), hobby: pick(r, F.hobbies || ['walking']), local: sheet,
 		// what the cloud voice reads (guide.js npcFor): the region, the language, local facts
 		region: sheet.country && !sheet.country.includes(sheet.region) && sheet.region !== sheet.place ? `${sheet.region}, ${sheet.country}` : sheet.country || sheet.region || '', lang: sheet.lang, facts: localFacts(sheet),

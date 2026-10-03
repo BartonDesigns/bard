@@ -18,6 +18,96 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **HUD follow-up (3 October 2026):** Location banners now have one owner. Late bridge
+  initialization updates the existing banner instead of creating an abandoned duplicate;
+  world teardown removes it. Names fade ten real seconds after area entry, including
+  when render updates pause, and old text/timers clear on a new area or travel/hide/orbit.
+  The flight button and B cycle 1× → 3× → 6× → 9× → 1×, showing the current multiplier.
+  The same multiplier applies on the surface and in orbit; legacy boolean boost callers
+  still map to 1×/3×. Regression sources: `flight-hud.test.mjs`, `flight-hud-browser.cjs`
+  and the updated three-trip orbital test (now tests 3×, 6× and 9×).
+  Museum inspiration images mentioned by the owner were not attached in this turn;
+  no image-based museum changes have been inferred or made.
+
+
+- **Completion pass (3 October 2026, same draft branch):** All ten authored kinetic rig
+  types now run natively, with distinct pooled visuals and real faceplate event notes.
+  Sky & World offers the ten choices, scale/root, live garden physics and droplet density,
+  replay drop/cascade tempo, and explicit track-tempo sync. One rig remains the bounded
+  native policy; save/multi-rig/progression parity is separate from completing these types.
+  `world/solar.js` drives actual sun and celestial orientation from globe latitude and
+  selected month, sharing seasonal geometry with regional climate. Polar clocks advance
+  throughout midnight sun/night. The Bay clock convention remains unchanged.
+  Offline atlas refresh corrected 37/72 packed tiles and the orbit map; all 32,400,000
+  survey-derived elevation/land/lake/amplitude bytes are unchanged. Svalbard now uses
+  tundra colours, -4 C annual mean and zero tree cover. The Manaus GPU diagnosis found
+  an 18 km city tint masking forest; broad urban colour now respects forest/snow while
+  actual buildings/roads and city lights remain. GPU pixel tests confirm all three cases.
+  Active orbit now blocks globe rebasing, preserving departure coordinates on lateral
+  atmospheric travel. 94 Node regressions pass; build, lint and GPU ground checks pass.
+  All ten rigs pass actual placement/voice/render checks; 20 replacement cycles return
+  exactly to 258 geometries/72 textures. Polar sky, unchanged orbit frame, held-note
+  boulder motion and three exact-return flights pass without shader/context errors.
+  Explicit month/region changes now invalidate the short climate cache immediately;
+  four first-update browser cases confirm matching sky/weather in both hemispheres.
+  See `docs/crysis-completion-validation.md` for measured evidence. Native iPhone/Safari speed
+  and real-device listening cannot be certified by the software-rendered browser here.
+  The older regional/kinetic bullets below describe the previous checkpoint; their
+  eight-rig, stale-ground and fixed-solar-latitude gaps are resolved by this pass.
+
+
+- **Regional expansion and kinetic instruments (3 October 2026, same draft branch):**
+  Community-aware occupations/dialogue now distinguish cities from rural kits and keep
+  Arctic traditions tied to their authored cultures. Steppe herders have boots and long
+  trousers. Polar daylight uses latitude/month geometry; warm rain, winter pollen and
+  cold-night fireflies are gated; aurora brightness is increased within the existing budget.
+  Regional audio owns and releases its nodes, schedules calls/bells on the audio clock,
+  and pauses on hide/orbit. Sky & World now places one native bounce garden or pendulum
+  wave on nearby clear, flat ground. Collisions play the current faceplate with bounded
+  voices; Stop/Replay/Clear and garden gravity/bounce controls are exposed. These are two
+  of ten legacy rigs, with no persistence or general rigid-body/player-platform claim.
+  Regional profiles and kinetic behavior have 34 new Node regressions (66 total pass).
+  Existing real-faceplate music integration and three exact-return orbital trips pass. Review the draft
+  branch visually before live; native device performance and listening remain open.
+  Headless visual smoke rendered Svalbard tundra/aurora, Manaus canopy and Mongolian
+  steppe without page/shader errors. Ground shading still appears too pale in the first
+  two daytime views. Svalbard's baked g0-6 tile still stores -14 C/sea colours despite
+  the current atlas's -4 C mean/tundra colours: refresh atlas-derived climate/ground
+  planes while preserving elevation/land. Manaus's baked data matches the atlas;
+  diagnose its GPU sampling before changing snow logic. `sky.js` still uses the Bay Area solar latitude; regional polar
+  daylight currently governs climate/talk, not a globally accurate rendered sun path.
+
+- **Native music/identity follow-up (3 October 2026, same draft branch):** Shared music sampling
+  now includes synth, enabled mic and DJ sources with frequency-aligned FFT merging; held synth
+  voices and dominant BPM feed `music/performance.js`. Nearby island boulders lift, fall and bounce
+  through actual instance matrices and vertical collision filtering. Flying fauna reacts under
+  the old opt-in music-mode setting. Full plant, wild-country, remaining kinetic-rig and social parity remain
+  open. `space/body.js` separates original body identity from unchanged integer terrain seeds and
+  carries it through homes/share/resume; orbit page-hide cannot overwrite the departure save.
+  Eight body/performance tests, three bridge tests and real faceplate voice/rock/home integration
+  pass. See the updated inventory and `island/ORBITAL-FLIGHT.md` for scope and device-test limits.
+
+
+- **Continuous Crysis orbit (3 October 2026, feature branch):** Native flight now crosses
+  the old ceiling using the existing player and renderer. `island/src/space/` blends a
+  camera-relative orbital pass over the retained ground, preserves the departure
+  position/frame, and rebases a returning flight before the ground reappears. The rocket
+  starts an interruptible climb; WASD/touch and Space/C remain live throughout. The
+  instrument analyser continues in orbit; bass/pulses affect bounded commanded thrust,
+  and bass/mids/highs affect atmosphere/haze/stars. Ground ambience fades independently
+  of music. The original galaxy route remains in Sky & World → Explore galaxy; its
+  existing handoff still loads. This is not complete migration of flight's four months
+  of features. Read `island/ORBITAL-FLIGHT.md` and `docs/flight-migration-inventory.md`
+  before replacing or removing any legacy feature. The latter also lists features that
+  the pre-existing default Crysis landing route already bypasses. Five coordinate/speed
+  regressions and the three-round-trip Chromium controller check pass. Earth ascent
+  to 180 km and return preserve the same world/context with 0 m departure error and no
+  loading overlay; held controls, touch cancellation and live analyser response pass.
+  Five orbital planet profiles compile with one mesh/texture and no shader errors.
+  Existing 16 resource/Bay/black-hole regressions pass. Native iPhone/Safari and sustained
+  real-time performance remain unverified. Do not call the entire flight migration done.
+
+
 - **Planet stability (3 October 2026):** Repeated TROPICAL/ICE round trips reproduced
   texture growth from 66 to 426 allocated textures over five round trips. World teardown
   now captures resources before subsystem removal, including shader-injected maps,

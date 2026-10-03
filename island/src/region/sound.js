@@ -15,7 +15,8 @@ import { noise } from '../world/soundbus.js';
 
 const MAXV = 5;
 const rnd = (a) => (Math.random() * 2 - 1) * a;
-// the hours of prayer, roughly by the sun (dawn, midday, afternoon, sunset, night)
+// Authored approximate in-game hours (dawn, midday, afternoon, sunset, night);
+// a musical ambience cue, not a calculation of religious prayer times.
 const PRAYER = [5.1, 12.6, 15.8, 18.6, 20.1];
 
 // a short loop: crickets, frogs (made once per context)
@@ -37,9 +38,36 @@ function loopBuffer(ctx, kind) {
 	return B;
 }
 
-export function createRegionalSound() {
+export function createRegionalSound({ getMix = mix } = {}) {
 	const beds = {}, T = {}, D = { beds: {}, events: {} };
 	let voices = 0, call = null, lastHour = null, lastStrike = -1;
+	let current = null, eventGate = null, eventSend = null, disposed = false, bells = null;
+	// Own every node in this regional graph; shared acoustics/World sounds buses stay untouched.
+	const live = new Set();
+	function release(nodes, sources = []) {
+		for (const s of sources) { s.onended = null; try { s.stop(); } catch { /* already ended */ } }
+		for (const n of nodes) n.disconnect();
+	}
+	function voice(nodes, sources, end) {
+		const done = () => { if (!live.delete(done)) return; voices--; release(nodes, sources); };
+		live.add(done); voices++; end.onended = done;
+	}
+	function silence() {
+		call = bells = null;
+		for (const done of [...live]) done();
+	}
+	function pause() {
+		silence();
+		for (const [k, b] of Object.entries(beds)) { release(b.nodes, b.sources); delete beds[k]; delete D.beds[k]; }
+	}
+	function audio() {
+		if (disposed) return null;
+		const A = getMix();
+		if (A !== current) { pause(); eventGate?.disconnect(); eventSend?.disconnect(); eventGate = eventSend = null; current = A;
+			if (A) { eventGate = A.ctx.createGain(); eventGate.gain.value = 0; eventGate.connect(A.amb); eventSend = A.ctx.createGain(); eventSend.gain.value = 0; eventSend.connect(A.send); }
+		}
+		return A;
+	}
 	const bufs = new WeakMap();
 	const buf = (A, k) => { let m = bufs.get(A.ctx); if (!m) bufs.set(A.ctx, m = {}); return m[k] || (m[k] = loopBuffer(A.ctx, k)); };
 
@@ -52,28 +80,28 @@ export function createRegionalSound() {
 		const t = A.ctx.currentTime;
 		b.g.gain.setTargetAtTime(level, t, 1.2);
 		D.beds[name] = Math.round(level * 1000) / 1000;
-		if (level < 1e-4) { b.idle = (b.idle || 0) + dt; if (b.idle > 6) { try { b.s.stop(); b.lfo?.stop(); } catch { /* stopped */ } b.g.disconnect(); delete beds[name]; delete D.beds[name]; } } else b.idle = 0;
+		if (level < 1e-4) { b.idle = (b.idle || 0) + dt; if (b.idle > 6) { release(b.nodes, b.sources); delete beds[name]; delete D.beds[name]; } } else b.idle = 0;
 	}
 	const noiseBed = (colour, type, f, q, am = 0, amDepth = 0) => (A) => {
 		const ctx = A.ctx, s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain(), m = ctx.createGain();
 		s.buffer = noise(ctx, colour); s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.value = 0; m.gain.value = 1 - amDepth;
 		s.connect(fl).connect(m).connect(g).connect(A.amb);
 		const sg = ctx.createGain(); sg.gain.value = 0.25; g.connect(sg).connect(A.send);
-		let lfo = null;
-		if (am) { lfo = ctx.createOscillator(); const lg = ctx.createGain(); lfo.frequency.value = am; lg.gain.value = amDepth; lfo.connect(lg).connect(m.gain); lfo.start(); }
+		let lfo = null; const nodes = [s, fl, g, m, sg], sources = [s];
+		if (am) { lfo = ctx.createOscillator(); const lg = ctx.createGain(); lfo.frequency.value = am; lg.gain.value = amDepth; lfo.connect(lg).connect(m.gain); nodes.push(lfo, lg); sources.push(lfo); lfo.start(); }
 		s.start(0, Math.random() * 3);
-		return { s, g, lfo, f: fl };
+		return { s, g, nodes, sources };
 	};
 	const bufBed = (get, lp = 0) => (A) => {
 		const b = get(A);
 		if (!b) return null;
 		const ctx = A.ctx, s = ctx.createBufferSource(), g = ctx.createGain();
 		s.buffer = b; s.loop = true; g.gain.value = 0;
-		let head = s;
-		if (lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; s.connect(f); head = f; }
+		let head = s; const nodes = [s, g];
+		if (lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; s.connect(f); head = f; nodes.push(f); }
 		head.connect(g).connect(A.amb);
 		s.start(0, Math.random() * b.duration);
-		return { s, g };
+		return { s, g, nodes, sources: [s] };
 	};
 	const BEDS = {
 		wind: [noiseBed('pink', 'bandpass', 520, 0.6, 0.11, 0.6), 0.05],
@@ -96,24 +124,25 @@ export function createRegionalSound() {
 	function out(A, gain, pan, send = 0.5, lp = 0) {
 		const ctx = A.ctx, g = ctx.createGain(), p = ctx.createStereoPanner();
 		g.gain.value = gain; p.pan.value = Math.max(-1, Math.min(1, pan));
-		let head = g;
-		if (lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; f.connect(g); head = f; }
-		g.connect(p).connect(A.amb);
-		const s = ctx.createGain(); s.gain.value = send; p.connect(s).connect(A.send);
-		return head;
+		let head = g; const nodes = [g, p];
+		if (lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lp; f.connect(g); head = f; nodes.push(f); }
+		g.connect(p).connect(eventGate);
+		const s = ctx.createGain(); s.gain.value = send; p.connect(s); s.connect(eventSend); nodes.push(s);
+		head.regionalNodes = nodes; return head;
 	}
 	// a struck thing (a bell): partials [ratio, level, decay s]
 	function strike(A, f, partials, gain, pan, kind, send = 0.6, lp = 0) {
 		if (voices >= MAXV) return;
 		const ctx = A.ctx, t = ctx.currentTime, dest = out(A, gain, pan, send, lp);
-		let first = true;
+		const nodes = [...dest.regionalNodes], sources = []; let end, longest = -1;
 		for (const [m, lv, dec] of partials) {
 			const o = ctx.createOscillator(), g = ctx.createGain();
 			o.frequency.value = f * m;
 			g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(lv, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
 			o.connect(g).connect(dest); o.start(t); o.stop(t + dec + 0.05);
-			if (first) { voices++; o.onended = () => { voices--; }; first = false; }
+			nodes.push(o, g); sources.push(o); if (dec > longest) { longest = dec; end = o; }
 		}
+		if (end) voice(nodes, sources, end);
 		D.events[kind] = (D.events[kind] || 0) + 1;
 	}
 	// a voice or a call: a tone along a pitch path [[at s, Hz]...], shaped by formants
@@ -121,15 +150,15 @@ export function createRegionalSound() {
 		if (voices >= MAXV) return 0;
 		const ctx = A.ctx, t = ctx.currentTime, o = ctx.createOscillator(), env = ctx.createGain(), dest = out(A, gain, pan, send, lp);
 		o.type = type;
-		const dur = path[path.length - 1][0];
+		const dur = path[path.length - 1][0], nodes = [...dest.regionalNodes, o, env];
 		o.frequency.setValueAtTime(path[0][1], t);
 		for (const [at, f] of path.slice(1)) o.frequency.linearRampToValueAtTime(f, t + at);
 		const v = ctx.createOscillator(), vg = ctx.createGain(); v.frequency.value = vib; vg.gain.value = path[0][1] * depth; v.connect(vg).connect(o.frequency);
-		env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(1, t + attack); env.gain.setValueAtTime(1, t + dur - 0.6); env.gain.linearRampToValueAtTime(0, t + dur);
+		env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(1, t + attack); env.gain.setValueAtTime(1, t + Math.max(attack, dur - 0.6)); env.gain.linearRampToValueAtTime(0, t + dur);
 		o.connect(env);
-		for (const [f, q] of formants) { const b = ctx.createBiquadFilter(); b.type = 'bandpass'; b.frequency.value = f; b.Q.value = q; env.connect(b).connect(dest); }
+		for (const [f, q] of formants) { const b = ctx.createBiquadFilter(); b.type = 'bandpass'; b.frequency.value = f; b.Q.value = q; env.connect(b).connect(dest); nodes.push(b); }
 		o.start(t); v.start(t); o.stop(t + dur + 0.05); v.stop(t + dur + 0.05);
-		voices++; o.onended = () => { voices--; };
+		nodes.push(v, vg); voice(nodes, [o, v], o);
 		D.events[kind] = (D.events[kind] || 0) + 1;
 		return dur;
 	}
@@ -141,22 +170,21 @@ export function createRegionalSound() {
 	function startCall(A, pan, dist) {
 		const root = 196 + Math.random() * 20, s = [0, 1, 4, 5, 7, 8, 10, 12].map((x) => root * Math.pow(2, x / 12));
 		const phrases = [[[0, s[4]], [1.2, s[4]], [2.2, s[5]], [3.4, s[4]], [4.6, s[3]], [6.2, s[4]], [7.4, s[4]]], [[0, s[5]], [1.5, s[6]], [2.8, s[5]], [4.2, s[4]], [5.8, s[3]], [7.2, s[2]], [8.4, s[3]]], [[0, s[3]], [1.4, s[4]], [2.9, s[4]], [4.3, s[3]], [5.6, s[2]], [7.6, s[3]]]];
-		call = { A, pan, gain: 0.03 / (1 + (dist / 900) ** 2), n: 0, wait: 0, phrases };
+		call = { A, pan, gain: 0.03 / (1 + (dist / 900) ** 2), n: 0, next: A.ctx.currentTime, phrases };
 	}
-	function stepCall(dt) {
+	function stepCall() {
 		if (!call) return;
-		call.wait -= dt;
-		if (call.wait > 0) return;
+		if (call.A.ctx.currentTime < call.next) return;
 		if (call.n >= 7) { call = null; return; }
 		const P = call.phrases[call.n % call.phrases.length];
 		const dur = sing(call.A, P, call.gain, call.pan, { type: 'sawtooth', formants: [[650, 5], [1080, 7], [2450, 9]], vib: 5.2, depth: 0.01, lp: 1900, send: 1, kind: 'call', attack: 0.4 });
 		call.n++;
-		call.wait = (dur || 6) + 3 + Math.random() * 2;
+		call.next = call.A.ctx.currentTime + (dur || 6) + 3 + Math.random() * 2;
 	}
 
 	// h: here.js; o: { cam, night, hours, indoor, alt, rain, near: the nearest site { kind, d }, church: d (m) or null }
 	function update(dt, h, o) {
-		const A = mix();
+		const A = audio();
 		if (!A) return D;
 		const on = !!h?.on && !!h.kit;
 		const hush = on ? Math.max(0, 1 - Math.max(0, (o.alt || 0) - 30) / 120) * (o.indoor ? 0.35 : 1) : 0;
@@ -170,30 +198,33 @@ export function createRegionalSound() {
 			if ((o.rain || 0) > 0.3 && /insects|cicadas|crickets/.test(k)) L *= 0.3;
 			bed(A, k, L, dt, make);
 		}
-		if (!on || hush < 0.05) { stepCall(dt); return D; }
+		eventGate.gain.value = eventSend.gain.value = hush;
+		if (!on || hush < 0.05) { silence(); return D; }
+		if (call && (!h.minaret || h.culture?.faith !== 'mosque')) silence();
+		if (call) { const dx = h.minaret[0] - o.cam.position.x, dz = h.minaret[2] - o.cam.position.z; call.gain = 0.03 / (1 + (Math.hypot(dx, dz) / 900) ** 2); }
 		const has = (k) => want.has(k);
 		// the north: dogs singing together, far off; the ice
-		if (has('dogs') && every('dogs', dt, 70)) { const f = 520 + Math.random() * 120, p = rnd(0.9); for (let i = 0; i < 3; i++) sing(A, [[0, f * (1 + i * 0.07)], [0.6, f * 1.25 * (1 + i * 0.05)], [2.4 + i * 0.3, f * 0.9]], 0.006 * hush, p + rnd(0.1), { type: 'triangle', formants: [[800, 3], [1300, 4]], vib: 6, depth: 0.02, lp: 1800, kind: 'dogs', attack: 0.3 }); }
-		if (has('ice') && every('icecrack', dt, 25)) strike(A, 70 + Math.random() * 40, [[1, 1, 1.6], [1.5, 0.6, 0.9], [3.1, 0.3, 0.3]], 0.03 * hush, rnd(1), 'ice', 0.9, 900);
+		if (has('dogs') && every('dogs', dt, 70)) { const f = 520 + Math.random() * 120, p = rnd(0.9); for (let i = 0; i < 3; i++) sing(A, [[0, f * (1 + i * 0.07)], [0.6, f * 1.25 * (1 + i * 0.05)], [2.4 + i * 0.3, f * 0.9]], 0.006, p + rnd(0.1), { type: 'triangle', formants: [[800, 3], [1300, 4]], vib: 6, depth: 0.02, lp: 1800, kind: 'dogs', attack: 0.3 }); }
+		if (has('ice') && every('icecrack', dt, 25)) strike(A, 70 + Math.random() * 40, [[1, 1, 1.6], [1.5, 0.6, 0.9], [3.1, 0.3, 0.3]], 0.03, rnd(1), 'ice', 0.9, 900);
 		// bells: on the herds (yaks, sheep, llamas, cattle), and a cow's deeper one in the Alps
-		if (has('bells') && every('bells', dt, 6)) strike(A, 1200 + Math.random() * 900, [[1, 1, 0.5], [2.4, 0.5, 0.3], [4.1, 0.3, 0.2]], 0.008 * hush, rnd(0.9), 'bells', 0.5);
-		if (has('cowbells') && every('cowbells', dt, 4)) strike(A, 520 + Math.random() * 300, [[1, 1, 0.7], [1.83, 0.6, 0.5], [2.9, 0.35, 0.3]], 0.01 * hush, rnd(0.9), 'cowbells', 0.5);
-		if ((has('cattle') || has('sheep') || has('goats') || has('horses')) && every('herd', dt, 9)) strike(A, 700 + Math.random() * 500, [[1, 1, 0.45], [2.2, 0.4, 0.25]], 0.006 * hush, rnd(0.9), 'herd', 0.5);
+		if (has('bells') && every('bells', dt, 6)) strike(A, 1200 + Math.random() * 900, [[1, 1, 0.5], [2.4, 0.5, 0.3], [4.1, 0.3, 0.2]], 0.008, rnd(0.9), 'bells', 0.5);
+		if (has('cowbells') && every('cowbells', dt, 4)) strike(A, 520 + Math.random() * 300, [[1, 1, 0.7], [1.83, 0.6, 0.5], [2.9, 0.35, 0.3]], 0.01, rnd(0.9), 'cowbells', 0.5);
+		if ((has('cattle') || has('sheep') || has('goats') || has('horses')) && every('herd', dt, 9)) strike(A, 700 + Math.random() * 500, [[1, 1, 0.45], [2.2, 0.4, 0.25]], 0.006, rnd(0.9), 'herd', 0.5);
 		// the wood being split
-		if (has('chop') && every('chop', dt, 14)) strike(A, 160, [[1, 1, 0.12], [2.7, 0.6, 0.06], [6.1, 0.4, 0.04]], 0.02 * hush, rnd(0.7), 'chop', 0.7);
+		if (has('chop') && every('chop', dt, 14)) strike(A, 160, [[1, 1, 0.12], [2.7, 0.6, 0.06], [6.1, 0.4, 0.04]], 0.02, rnd(0.7), 'chop', 0.7);
 		// birds
-		const bird = (k, f0, f1, n, gap, g) => { if (has(k) && every(k, dt, gap)) { let at = 0; const path = []; for (let i = 0; i < n; i++) { path.push([at, f0 + Math.random() * (f1 - f0)]); at += 0.08 + Math.random() * 0.1; } path.push([at + 0.1, f0]); sing(A, path, g * hush, rnd(0.9), { type: 'sine', formants: [[f0 * 1.1, 1]], vib: 0, depth: 0, lp: 0, send: 0.4, kind: k, attack: 0.02 }); } };
+		const bird = (k, f0, f1, n, gap, g) => { if (has(k) && every(k, dt, gap)) { let at = 0; const path = []; for (let i = 0; i < n; i++) { path.push([at, f0 + Math.random() * (f1 - f0)]); at += 0.08 + Math.random() * 0.1; } path.push([at + 0.1, f0]); sing(A, path, g, rnd(0.9), { type: 'sine', formants: [[f0 * 1.1, 1]], vib: 0, depth: 0, lp: 0, send: 0.4, kind: k, attack: 0.02 }); } };
 		bird('birds', 2800, 5200, 4, 7, 0.012); bird('birdscold', 3200, 4200, 2, 11, 0.012); bird('birdsjungle', 1400, 3600, 6, 5, 0.014); bird('birdsdry', 380, 520, 3, 12, 0.02); bird('nightbirds', 1600, 2600, 3, 15, 0.01);
-		if (has('owl') && every('owl', dt, 30)) sing(A, [[0, 380], [0.3, 360], [0.6, 380], [1.1, 340]], 0.012 * hush, rnd(0.9), { type: 'sine', formants: [[400, 1]], vib: 0, lp: 900, kind: 'owl', attack: 0.05 });
-		if (has('clinks') && every('clinks', dt, 4)) { const c = A.B.get('clink' + Math.floor(Math.random() * 4)); if (c && voices < MAXV) { const s = A.ctx.createBufferSource(); s.buffer = c; s.connect(out(A, 0.04 * hush, rnd(0.8), 0.5)); voices++; s.onended = () => { voices--; }; s.start(); D.events.clinks = (D.events.clinks || 0) + 1; } }
+		if (has('owl') && every('owl', dt, 30)) sing(A, [[0, 380], [0.3, 360], [0.6, 380], [1.1, 340]], 0.012, rnd(0.9), { type: 'sine', formants: [[400, 1]], vib: 0, lp: 900, kind: 'owl', attack: 0.05 });
+		if (has('clinks') && every('clinks', dt, 4)) { const c = A.B.get('clink' + Math.floor(Math.random() * 4)); if (c && voices < MAXV) { const s = A.ctx.createBufferSource(); s.buffer = c; const dest = out(A, 0.04, rnd(0.8), 0.5); s.connect(dest); voice([s, ...dest.regionalNodes], [s], s); s.start(); D.events.clinks = (D.events.clinks || 0) + 1; } }
 		// a temple bell at dawn and dusk, far off
-		if (has('templebell') && ((o.hours > 5.5 && o.hours < 7) || (o.hours > 17.5 && o.hours < 19)) && every('templebell', dt, 45)) strike(A, 98 + Math.random() * 10, BELL.map(([m, l, d]) => [m, l, d * 3]), 0.03 * hush, rnd(0.6), 'templebell', 1, 1600);
+		if (has('templebell') && ((o.hours > 5.5 && o.hours < 7) || (o.hours > 17.5 && o.hours < 19)) && every('templebell', dt, 45)) strike(A, 98 + Math.random() * 10, BELL.map(([m, l, d]) => [m, l, d * 3]), 0.03, rnd(0.6), 'templebell', 1, 1600);
 		// the church bell tells the hour in the villages (from eight in the morning to eight at night)
 		const hour = Math.floor(o.hours || 0);
 		if (o.church != null && o.church < 1500 && hour >= 8 && hour <= 20 && hour !== lastHour && (o.hours % 1) < 0.05) {
 			lastHour = hour;
-			const n = hour > 12 ? hour - 12 : hour, g = 0.03 * hush / (1 + (o.church / 400) ** 2);
-			for (let i = 0; i < n; i++) setTimeout(() => strike(A, 440, BELL, g, 0, 'churchbell', 0.9, 2800), i * 1800);
+			const n = hour > 12 ? hour - 12 : hour;
+			bells = { left: n, next: A.ctx.currentTime };
 		}
 		// the call to prayer, at the hours, from the nearest minaret
 		if (h.minaret && h.culture?.faith === 'mosque') {
@@ -207,8 +238,10 @@ export function createRegionalSound() {
 			}
 			if (idx < 0) lastStrike = -1;
 		}
-		stepCall(dt);
+		if (bells && (o.church == null || o.church >= 1500)) bells = null;
+		if (bells && A.ctx.currentTime >= bells.next) { strike(A, 440, BELL, 0.03 / (1 + (o.church / 400) ** 2), 0, 'churchbell', 0.9, 2800); bells.next = A.ctx.currentTime + 1.8; if (--bells.left <= 0) bells = null; }
+		stepCall();
 		return D;
 	}
-	return { update, debug: () => D, callNow: (cam, h) => { const A = mix(); if (A && h?.minaret) { const d = Math.hypot(h.minaret[0] - cam.position.x, h.minaret[2] - cam.position.z); startCall(A, 0, d); } } };
+	return { update, pause, dispose: () => { if (disposed) return; pause(); eventGate?.disconnect(); eventSend?.disconnect(); eventGate = eventSend = current = null; disposed = true; }, debug: () => D, callNow: (cam, h) => { const A = audio(); if (A && h?.minaret) { const d = Math.hypot(h.minaret[0] - cam.position.x, h.minaret[2] - cam.position.z); startCall(A, 0, d); } } };
 }

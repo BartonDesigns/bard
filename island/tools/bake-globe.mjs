@@ -17,13 +17,16 @@
 // atlas (src/earth/atlas.js): basin and range, ridge and valley, mesas, dunes and karst where
 // the atlas says the land is so. Re-run it when the atlas's terrain changes.
 //
+// For atlas colours/climate/shapes only, use tools/refresh-globe-atlas.mjs without downloads.
 // Run from island/: node tools/bake-globe.mjs   (fetches into /tmp/terrarium and /tmp/globe-cache)
 import fs from 'node:fs';
 import path from 'node:path';
 import { PNG } from 'pngjs';
 import sharp from 'sharp';
 import * as DATA from '../src/earth/data/index.js';
-import { useAtlasData, regionAt, region } from '../src/earth/atlas.js';
+import { useAtlasData, regionAt } from '../src/earth/atlas.js';
+import { characterOf, surfaceOf, enc } from './globe-atlas-fields.mjs';
+import { writeAssetManifest } from './globe-assets-manifest.mjs';
 
 const RES = 10, TILE = 30, N = RES * TILE, W = 360 * RES, H = 180 * RES;
 const SUB = 6, PER = RES * SUB, SW = W * SUB, SH = H * SUB;          // the land raster: a sixtieth of a degree
@@ -120,54 +123,6 @@ console.log('lakes kept', lakes.length);
 
 // ---------- the atlas: the character of each place ----------
 useAtlasData(DATA);
-const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-// how a kind of relief is shaped: floor (m) and gain (times the local relief) set the
-// detail's height; ridge its sharpness; the rest the particular forms
-const RELIEF = {
-	mountains: { floor: 60, gain: 1.15, ridge: 0.85 },
-	fjord: { floor: 60, gain: 1.2, ridge: 0.9 },
-	'taiga plains and mountains': { floor: 25, gain: 0.9, ridge: 0.55 },
-	hills: { floor: 25, gain: 0.9, ridge: 0.45 }, 'rocky hills': { floor: 30, gain: 0.9, ridge: 0.6 }, 'low hills': { floor: 12, gain: 0.8, ridge: 0.3 },
-	'volcanic hills': { floor: 25, gain: 0.9, ridge: 0.4 }, rolling: { floor: 14, gain: 0.75, ridge: 0.25 },
-	plains: { floor: 4, gain: 0.5, ridge: 0.1 }, 'coastal plain': { floor: 3, gain: 0.4, ridge: 0.05 }, 'plains edge': { floor: 8, gain: 0.6, ridge: 0.2 },
-	'river plain': { floor: 3, gain: 0.4, ridge: 0.05 }, 'river valley': { floor: 8, gain: 0.8, ridge: 0.3 }, delta: { floor: 1.5, gain: 0.3, ridge: 0 }, 'delta plain': { floor: 1.5, gain: 0.3, ridge: 0 },
-	wetland: { floor: 1.5, gain: 0.3, ridge: 0 }, lagoon: { floor: 2, gain: 0.4, ridge: 0 }, coastal: { floor: 8, gain: 0.7, ridge: 0.2 },
-	steppe: { floor: 6, gain: 0.55, ridge: 0.15 }, 'rainforest basin': { floor: 6, gain: 0.6, ridge: 0.15 },
-	plateau: { floor: 20, gain: 0.85, ridge: 0.35, terrace: 0.45 }, 'highland plateau': { floor: 25, gain: 0.9, ridge: 0.45, terrace: 0.25 },
-	'desert plateau': { floor: 25, gain: 0.9, ridge: 0.3, terrace: 0.7 }, 'volcanic plateau': { floor: 15, gain: 0.8, ridge: 0.25, terrace: 0.35 },
-	'loess plateau': { floor: 25, gain: 0.9, ridge: 0.55, terrace: 0.5 }, canyon: { floor: 40, gain: 1.0, ridge: 0.45, terrace: 0.9 },
-	'eroded tuff valleys': { floor: 30, gain: 0.9, ridge: 0.5, terrace: 0.6 },
-	'basin and range': { floor: 30, gain: 1.1, ridge: 0.7, bnr: 0.8 }, 'desert basins and mountains': { floor: 25, gain: 1.0, ridge: 0.6, bnr: 0.45 },
-	volcanic: { floor: 30, gain: 1.0, ridge: 0.5 }, 'volcanic islands': { floor: 30, gain: 1.0, ridge: 0.55 }, islands: { floor: 18, gain: 0.9, ridge: 0.4 },
-	dunes: { floor: 10, gain: 0.5, ridge: 0.2, dune: 0.9 }, desert: { floor: 8, gain: 0.6, ridge: 0.3, dune: 0.45 }, 'gravel desert and steppe': { floor: 6, gain: 0.55, ridge: 0.2, dune: 0.15 },
-	karst: { floor: 40, gain: 0.9, ridge: 0.4, karst: 0.9 }, 'karst plain': { floor: 10, gain: 0.6, ridge: 0.2, karst: 0.4 },
-	ocean: { floor: 0, gain: 0, ridge: 0 },
-};
-// the Appalachians' long ridges run north-east (the atlas's region, and the Valley and Ridge)
-const RIDGE_VALLEY = /^na\.(app|ma)\b/;
-function reliefOf(R) {
-	const k = (R.terrain?.relief || 'rolling').toLowerCase();
-	const b = { floor: 14, gain: 0.75, ridge: 0.25, terrace: 0, bnr: 0, rv: 0, dune: 0, karst: 0, ...(RELIEF[k] || {}) };
-	if (RIDGE_VALLEY.test(R.id) && /mountain|hill|rolling/.test(k)) b.rv = 0.7;
-	return b;
-}
-// how much of the ground is under trees, from the biome, then held down by a dry climate
-function treesOf(R) {
-	const b = String(R.biome || '').toLowerCase(), rain = R.climate?.rain ?? 600;
-	let v = 0.35;
-	if (/rainforest|taiga|boreal|forest|woodland|jungle|swamp|bayou/.test(b)) v = 0.75;
-	if (/farmland|farm/.test(b)) v = /forest/.test(b) ? 0.42 : 0.2;
-	if (/savanna|bushveld|chaparral|mediterranean/.test(b)) v = 0.28;
-	if (/prairie|steppe|grass/.test(b)) v = 0.06;
-	if (/desert/.test(b)) v = 0.02;
-	if (/alpine/.test(b)) v = 0.35;
-	if (/tropical island|island|subtropical/.test(b)) v = 0.5;
-	if (!b) v = Math.min(0.7, Math.max(0.02, (rain - 250) / 1100));
-	return Math.min(v, Math.max(0.02, (rain - 150) / 700));
-}
-const cacheR = new Map();
-function charOf(id, R) { let c = cacheR.get(id); if (!c) cacheR.set(id, c = { ...reliefOf(R), trees: treesOf(R) }); return c; }
-
 // ---------- the cells ----------
 console.log('cells...');
 const E = new Float32Array(W * H), LAND = new Uint8Array(W * H), LAKE = new Uint8Array(W * H), STD = new Float32Array(W * H);
@@ -261,7 +216,6 @@ for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
 }
 
 // ---------- the tiles ----------
-const enc = (v) => Math.max(0, Math.min(255, Math.round(v)));
 let total = 0;
 const t0 = Date.now();
 for (let tj = 0; tj < 180 / TILE; tj++) for (let ti = 0; ti < 360 / TILE; ti++) {
@@ -274,26 +228,15 @@ for (let tj = 0; tj < 180 / TILE; tj++) for (let ti = 0; ti < 360 / TILE; ti++) 
 		const v = Math.max(0, Math.min(65535, Math.round((E[k] + 11000) * 2)));
 		put(0, x, y, v >> 8, v & 255, LAND[k]);
 		// the character, only where there is land or lake near
-		let c = { floor: 0, gain: 0, ridge: 0, terrace: 0, bnr: 0, rv: 0, dune: 0, karst: 0, trees: 0 }, ground = [[70, 90, 110], [70, 90, 110]], temp = 15, rain = 800, snow = 0;
-		if (LAND[k] || LAKE[k] || E[k] > -60) {
-			const at = regionAt(lat, lon);
-			if (at) {
-				if (at.land) {
-					c = { floor: 0, gain: 0, ridge: 0, terrace: 0, bnr: 0, rv: 0, dune: 0, karst: 0, trees: 0 };
-					const tot = at.weights.reduce((a, w) => a + w.w, 0) || 1;
-					for (const w of at.weights) { const R = charOf(w.id, region(w.id)); for (const f in c) c[f] += R[f] * w.w / tot; }
-				}
-				ground = [hex(at.mix.ground[0]), hex(at.mix.ground[1])];
-				temp = (at.mix.temp[0] + at.mix.temp[1]) / 2; rain = at.mix.rain; snow = at.mix.snow;
-			}
-		}
+		const at = LAND[k] || LAKE[k] || E[k] > -60 ? regionAt(lat, lon) : null;
+		const c = characterOf(at), { ground, climate } = surfaceOf(at);
 		const amp = c.floor + c.gain * STD[k] * 1.25;
 		put(1, x, y, enc(Math.round(Math.sqrt(amp) * 2) * 4), enc(c.ridge * 255), enc(c.terrace * 255));
 		put(2, x, y, enc(c.bnr * 255), enc(c.rv * 255), enc(c.dune * 255));
 		put(3, x, y, enc(c.karst * 255), LAKE[k], enc(c.trees * 255));
 		put(4, x, y, ...ground[0]);
 		put(5, x, y, ...ground[1]);
-		put(6, x, y, enc((temp + 30) * 4), enc(Math.sqrt(Math.max(0, rain)) * 4), enc(snow * 255));
+		put(6, x, y, ...climate);
 	}
 	const rgb = Buffer.alloc(N * N * 7 * 3);
 	for (let q = 0; q < N * N * 7; q++) { rgb[q * 3] = D[q * 4]; rgb[q * 3 + 1] = D[q * 4 + 1]; rgb[q * 3 + 2] = D[q * 4 + 2]; }
@@ -303,3 +246,4 @@ for (let tj = 0; tj < 180 / TILE; tj++) for (let ti = 0; ti < 360 / TILE; ti++) 
 	process.stdout.write(`\r${tj},${ti} ${(total / 1e6).toFixed(2)} MB ${((Date.now() - t0) / 1000).toFixed(0)}s   `);
 }
 console.log('\ntotal', (total / 1e6).toFixed(2), 'MB');
+writeAssetManifest();

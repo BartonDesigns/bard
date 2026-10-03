@@ -154,6 +154,12 @@ export function regionalDress(r, d, kit, C, { cold = 0.3, role = 'walk', id = ''
 		case 'steppe':
 			if (chance(r, old || cold > 0.5 ? 0.75 : 0.4)) { o.outer = { kind: 'jacket', col: pick(r, COL.deel), acc: pick(r, COL.sash), pat: 'sash', fit: 'oversized', sleeves: 'long', open: false, long: true, fab: 'wool' }; o.bottom = { kind: 'trousers', col: pick(r, COL.wool), pat: 'plain', legs: 'long', fit: 'regular' }; boots(pick(r, ['#1b1b1d', '#6a2331', '#33231c'])); }
 			if (cold > 0.55) acc({ kind: chance(r, 0.6) ? 'hood' : 'beanie', col: pick(r, [...COL.fur, ...COL.wool]) });
+			// Work clothes follow the activity, not everybody's culture or age.
+			if (role === 'herd') {
+				boots(pick(r, ['#1b1b1d', '#33231c', '#7a5a44']));
+				o.bottom = { kind: 'trousers', col: pick(r, COL.wool), pat: 'plain', legs: 'long', fit: 'regular' };
+				o.acc = o.acc.filter((a) => a.kind !== 'chain');
+			}
 			break;
 		case 'outback':
 			top('shirt', pick(r, ['#a9cdee', '#ede4d0', '#5f6440', '#c0694a', '#1f2a44']), { collar: true, sleeves: chance(r, 0.6) ? 'long' : 'short', pat: chance(r, 0.4) ? 'check' : 'plain' });
