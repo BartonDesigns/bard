@@ -128,7 +128,7 @@ export function createBoat(island, village, player, camera, shared, scene) {
 		if (s.boarded) {
 			// stand at the wheel on the flying bridge, and look where you like
 			const P = player.state;
-			const eye = new THREE.Vector3(0.4, 5.35, 0.4).applyQuaternion(boat.quaternion).add(boat.position);
+			const eye = new THREE.Vector3(0.4, 5.15, -0.45).applyQuaternion(boat.quaternion).add(boat.position);
 			camera.position.copy(eye);
 			P.pos.copy(eye);
 			camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ');
