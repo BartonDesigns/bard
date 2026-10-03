@@ -163,8 +163,9 @@ const HOOKS = {};
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 function css(el, s) { el.style.cssText = s; return el; }
-function button(label, title, style) {
+function button(label, title, style, hud) {
 	const b = document.createElement('button');
+	if (hud) b.dataset.hud = hud;
 	b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
 	// hand focus back after a click, so Space and the play keys keep driving the game
 	b.addEventListener('click', () => b.blur());
@@ -172,34 +173,133 @@ function button(label, title, style) {
 	return b;
 }
 
+// The HUD's groups. Buttons sit in flex and grid boxes rather than at fixed offsets, so a
+// hidden one closes its gap; any module's element joins one by its data-hud ('rail 60':
+// the group, then its place in it: from the top in the rail, from the bottom in the thumb's
+// groups). Everything you press with the right thumb is one stack up the right edge, 8 px
+// apart (16 px between the thumb's groups and the rail), from the bottom:
+//   thumb: big (jump, descend), side (boat, rod, strike), pill (the car's labelled buttons)
+//          and mode (drive, camera, fly, ×3)
+//   rail: above them, the ways to go elsewhere (places, games, the guide, the ship); a
+//         grid, so when it runs out of height it carries on in a second column leftwards
+// and beside it:
+//   prompt: bottom centre, between the thumbs, one over another (pick up, talk, doors...),
+//           with the hint on top
+//   left: under ◀ Bard (homes, the quest purse)
+// The joystick rests bottom left, opposite the jump, until a thumb takes it.
+// A short landscape screen lays the thumb buttons in a row and puts the modes in the
+// rail, to leave the rail its height (the 44 px ones lifted 10 px, to centre on the round
+// 64 px ones).
+const HUD_LAND = '(orientation: landscape) and (max-height: 540px)';
+const HUD_CSS = `
+#l99-island-mount .l99-rail{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + env(safe-area-inset-bottom));height:min(calc(var(--l99-rail-n, 1) * 52px - 8px),calc(100% - 64px - env(safe-area-inset-top) - var(--l99-low, 88px) - env(safe-area-inset-bottom)));display:grid;grid-auto-flow:column;grid-template-rows:repeat(auto-fill,44px);grid-auto-columns:max-content;gap:8px;direction:rtl;justify-items:start;align-content:end;pointer-events:none;}
+#l99-island-mount .l99-thumb{position:absolute;right:calc(12px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;pointer-events:none;}
+#l99-island-mount .l99-thumb>div{display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;}
+#l99-island-mount .l99-big{align-self:flex-end;}
+#l99-island-mount .l99-prompts{position:absolute;left:calc(var(--l99-left, 88px) + env(safe-area-inset-left));right:calc(var(--l99-side, 88px) + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;align-items:center;gap:8px;pointer-events:none;}
+#l99-island-mount .l99-left{position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-start;gap:8px;pointer-events:none;}
+#l99-island-mount .l99-pair{display:flex;gap:8px;}
+#l99-island-mount :is(.l99-rail,.l99-thumb>div,.l99-prompts,.l99-left,.l99-pair)>*{position:relative !important;inset:auto !important;transform:none !important;margin:0;flex:none;pointer-events:auto;}
+#l99-island-mount :is(.l99-rail,.l99-mode)>*{direction:ltr;display:flex;align-items:center;justify-content:center;width:44px;padding:0;}
+#l99-island-mount .l99-prompts>*{max-width:100%;box-sizing:border-box;}
+#l99-island-mount .l99-pill>*{align-items:center;justify-content:center;}
+#l99-island-mount :is(.l99-thumb>div,.l99-pair)[hidden]{display:none;}
+#l99-island-mount:not(.l99-touch) .l99-big{display:none;}
+#l99-island-mount .l99-joy{display:none;}
+#l99-island-mount.l99-touch .l99-joy{display:block;}
+#l99-island-mount.l99-touch .l99-joy:not(.held){left:calc(16px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));transform:scale(.8);transform-origin:0 100%;opacity:.5;}
+#l99-island-mount.l99-still .l99-joy:not(.held){display:none;}
+@media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}#l99-island-mount.l99-touch .l99-big:not([hidden])~:is(.l99-side,.l99-pill){margin-bottom:10px;}}
+`;
+
 function buildDom() {
 	const mount = css(document.createElement('div'), 'position:fixed;inset:0;z-index:40;display:none;background:#000;overflow:hidden;touch-action:none;');
 	mount.id = 'l99-island-mount';
+	// (the jump and descend buttons, and the resting joystick, only on touch screens: the
+	// keyboard has Space and C)
+	mount.classList.toggle('l99-touch', isPhone || matchMedia('(pointer: coarse)').matches);
+	const style = document.createElement('style');
+	style.textContent = HUD_CSS;
 	const canvas = css(document.createElement('canvas'), 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;');
-	const joy = css(document.createElement('div'), 'position:absolute;width:110px;height:110px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);display:none;pointer-events:none;');
-	const knob = css(document.createElement('div'), 'position:absolute;left:33px;top:33px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.45);');
+	const joy = css(document.createElement('div'), 'position:absolute;width:110px;height:110px;box-sizing:border-box;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);pointer-events:none;transition:opacity .2s;');
+	joy.className = 'l99-joy';
+	const knob = css(document.createElement('div'), 'position:absolute;left:31px;top:31px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.45);');
 	joy.appendChild(knob);
+	const box = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
+	const rail = box('l99-rail'), thumb = box('l99-thumb'), big = box('l99-big'), side = box('l99-side'), pill = box('l99-pill'), mode = box('l99-mode'), prompts = box('l99-prompts'), left = box('l99-left'), pair = box('l99-pair');
+	thumb.append(big, side, pill, mode);
+	const land = matchMedia(HUD_LAND);
+	const groups = { rail, big, side, pill, mode, prompt: prompts, left };
+	// (the modes join the rail on a short landscape screen)
+	const home = (g) => (g === 'mode' && land.matches ? rail : groups[g]);
 	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));');
-	const jump = button('⤒', 'Jump', 'right:calc(18px + env(safe-area-inset-right));bottom:calc(28px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;font-size:22px;');
+	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
-	const fly = button('✈', 'Fly (F)', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:44px;font-size:18px;');
-	const boost = button('×3', 'Fly three times faster (B)', 'right:calc(12px + env(safe-area-inset-right));top:calc(272px + env(safe-area-inset-top));width:44px;font-size:13px;display:none;');
-	const down = button('⇣', 'Descend', 'right:calc(18px + env(safe-area-inset-right));bottom:calc(98px + env(safe-area-inset-bottom));width:60px;height:60px;border-radius:50%;font-size:22px;display:none;');
-	const shell = button('🐚', 'Pick up the shell (E)', 'left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
-	const toss = button('Throw', 'Throw it (T)', 'left:calc(50% - 96px);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
-	const place = button('Put down', 'Put it down (E)', 'left:calc(50% + 12px);bottom:calc(84px + env(safe-area-inset-bottom));display:none;');
-	const act = button('', '', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(36px + env(safe-area-inset-bottom));display:none;');
-	// under the road button: a line rocket, back to the ship
-	const launch = button('', 'Take off and return to your ship', 'right:calc(12px + env(safe-area-inset-right));top:calc(220px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
+	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
+	const boost = button('×3', 'Fly three times faster (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
+	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
+	const shell = button('🐚', 'Pick up the shell (E)', 'display:none;', 'prompt 30');
+	const toss = button('Throw', 'Throw it (T)', 'display:none;');
+	const place = button('Put down', 'Put it down (E)', 'display:none;');
+	pair.append(toss, place);
+	pair.dataset.hud = 'prompt 31';
+	const act = button('', '', 'display:none;', 'side 10');
+	// at the top of the rail: a line rocket, back to the ship
+	const launch = button('', 'Take off and return to your ship', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 30');
 	launch.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5c3 2.4 4.5 6 4.5 10.5l-1.5 3.5h-6L7.5 13C7.5 8.5 9 4.9 12 2.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M7.8 12.5 5 15.5V19l4-2.5M16.2 12.5 19 15.5V19l-4-2.5M10.5 19.5 12 22l1.5-2.5"/></svg>';
 	const veil = css(document.createElement('div'), 'position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at 50% 30%,rgba(40,140,150,.10),rgba(2,30,40,.55));');
-	const hint = css(document.createElement('div'), 'position:absolute;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;max-width:80vw;white-space:pre-line;');
+	// (the hint rides on top of the prompts, so it never covers one)
+	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
+	hint.dataset.hud = 'prompt 99';
 	const loading = css(document.createElement('div'), 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
 	loading.textContent = 'Raising the island…';
-	const panel = css(document.createElement('div'), 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));width:min(300px,78vw);padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);');
-	mount.append(canvas, veil, joy, back, gear, fly, boost, jump, down, act, shell, toss, place, launch, hint, panel, loading);
+	// (beside the rail, stopping short of the thumb buttons, as the places and games menus do)
+	const panel = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(300px,78vw);box-sizing:border-box;padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;');
+	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
+	// a group with nothing showing is hidden, so it leaves no gap either; and the rail is as
+	// tall as what it shows, so it sits right on the thumb buttons
+	const showing = (g) => [...g.children].filter((c) => c.style.display !== 'none').length;
+	const tidy = () => {
+		for (const g of [big, side, pill, mode, pair]) {
+			const none = !showing(g);
+			if (g.hidden !== none) g.hidden = none;
+		}
+		set('--l99-rail-n', String(Math.max(1, showing(rail))));
+	};
+	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
+	const dock = (el) => {
+		const [g, n] = (el.dataset?.hud || '').split(' '), to = groups[g] && home(g);
+		if (!to || el.parentNode === to) return;
+		el.style.order = n || '0';
+		to.appendChild(el);
+		tidy();
+	};
+	new MutationObserver((list) => { for (const m of list) for (const el of m.addedNodes) if (el.nodeType === 1) dock(el); }).observe(mount, { childList: true });
+	// the groups' sizes, for what is laid out round them: the prompts take the room between
+	// the resting joystick (or the left edge) and the right-hand stack, and the rail and the
+	// menus stop short of the thumb's groups
+	const fit = () => {
+		// (a short landscape screen: the rail can reach down beside a tall stack of prompts too)
+		const right = Math.max(12 + thumb.offsetWidth, land.matches ? 12 + rail.offsetWidth : 0) + 8;
+		const ring = mount.classList.contains('l99-touch') && !mount.classList.contains('l99-still');
+		set('--l99-side', `${right}px`);
+		set('--l99-left', `${ring ? 16 + 88 + 8 : 24}px`);
+		// (16 px between the thumb's stack and the rail: two groups, one column)
+		set('--l99-low', `${16 + thumb.offsetHeight + 16}px`);
+		set('--l99-menu-r', `${12 + rail.offsetWidth + 8}px`);
+	};
+	// (a frame later: sizes set inside the observer's own call would loop it)
+	const ro = new ResizeObserver(() => requestAnimationFrame(fit));
+	for (const el of [mount, rail, thumb]) ro.observe(el);
+	land.addEventListener?.('change', () => {
+		for (const el of mount.querySelectorAll('[data-hud^="mode "]')) dock(el);
+		tidy(); fit();
+	});
+	// driving, a game, the tattoo chair: no resting joystick
+	const still = (on) => { if (mount.classList.contains('l99-still') !== on) { mount.classList.toggle('l99-still', on); fit(); } };
+	mount.append(style, canvas, veil, joy, rail, thumb, prompts, left, back, gear, fly, boost, jump, down, act, shell, pair, launch, hint, panel, loading);
 	document.body.appendChild(mount);
-	return { mount, canvas, joy, knob, back, jump, gear, fly, boost, down, act, shell, toss, place, launch, veil, hint, loading, panel };
+	return { mount, canvas, joy, knob, back, jump, gear, fly, boost, down, act, shell, toss, place, launch, veil, hint, loading, panel, still };
 }
 
 function slider(panel, label, min, max, step, get, set, fmt) {
@@ -392,7 +492,7 @@ export function createIslandWorld() {
 	// you, seen (P), knocked down by the traffic, and a shove (X) (people/self.js)
 	// the tattoo studio (in a parlour, or Crysis.tattoo()): your own designs, worn from then on
 	const studio = createTattooStudio({ mount: dom.mount, avatar, player: () => world.player, setCine: (fn) => { HOOKS.cine = fn; }, hint: (t, ms) => hint(t, ms, 1), isPhone });
-	const inkBtn = button('🖋 Tattoo studio', 'Tattoo studio (T)', 'left:50%;transform:translateX(-50%);bottom:calc(200px + env(safe-area-inset-bottom));display:none;');
+	const inkBtn = button('🖋 Tattoo studio', 'Tattoo studio (T)', 'display:none;', 'prompt 61');
 	dom.mount.appendChild(inkBtn);
 	inkBtn.addEventListener('click', (e) => { e.stopPropagation(); studio.start(); });
 	HOOKS.tattoo = () => studio.start();
@@ -429,14 +529,14 @@ export function createIslandWorld() {
 		return list.length;
 	};
 	// walk up to someone and talk: a button with their name, or Enter
-	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom));display:none;');
+	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'display:none;', 'prompt 50');
 	dom.mount.appendChild(talkBtn);
 	let talkTarget = null, talkT = 0;
 	const talkNow = () => { if (talkTarget) guide.talkTo(talkTarget); };
 	talkBtn.addEventListener('click', (e) => { e.stopPropagation(); talkNow(); });
 	for (const ev of ['pointerdown', 'touchstart']) talkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if (e.key === 'Enter' && talkTarget && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); talkNow(); } });
-	// teleport while flying: a line pin button under the boost, and a list of places to land
+	// teleport while flying: a line pin button in the rail, and a list of places to land
 	const PLACES_TP = [
 		['Golden Gate Bridge, Vista Point', 37.8326, -122.4814, 2.6], ['Downtown San Francisco', 37.7936, -122.3965, 0.9], ['Twin Peaks', 37.7544, -122.4477, 0.2],
 		['San Ramon', 37.7700, -121.9380, 0], ['Lake Annabel, Bishop Ranch', 37.7646, -121.9660, -2.2], ['Mt Diablo summit', 37.8816, -121.9142, 0.8], ['Rock City, Mt Diablo', 37.8452, -121.9400, -1.3],
@@ -446,10 +546,10 @@ export function createIslandWorld() {
 		['Lake Chabot', 37.72148, -122.10911, -1.28], ['Crystal Springs Reservoir', 37.52951, -122.3625, 2.31], ['Lexington Reservoir', 37.2003, -121.98768, 2.09], ['San Lorenzo River, Ben Lomond', 37.08781, -122.08775, -1.57],
 		['The island village', null, null, 0], ['A town beyond the map', 'town', null, 0],
 	];
-	const tpBtn = button('', 'Teleport to a place', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;');
+	const tpBtn = button('', 'Teleport to a place', 'width:44px;padding:6px 10px;align-items:center;justify-content:center;display:none;', 'rail 60');
 	tpBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg>';
 	dom.mount.appendChild(tpBtn);
-	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));max-height:calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5;');
+	const tpMenu = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;gap:4px;padding:8px;border-radius:12px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:5;');
 	dom.mount.appendChild(scrollable(tpMenu));
 	for (const el of [tpBtn, tpMenu]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 	// travelling: the view fades to dark with the place's name, you are moved behind it, and
@@ -537,7 +637,7 @@ export function createIslandWorld() {
 		if (!on && tpMenu.style.display !== 'none') tpMenu.style.display = 'none';
 	}
 	// doors within reach: a button, or E
-	const doorBtn = button('🚪 Open', 'Open the door (E)', 'left:50%;transform:translateX(-50%);bottom:calc(200px + env(safe-area-inset-bottom));display:none;');
+	const doorBtn = button('🚪 Open', 'Open the door (E)', 'display:none;', 'prompt 60');
 	dom.mount.appendChild(doorBtn);
 	let doorHere = null, doorT = 0, indoorK = 0;
 	const useDoor = () => { if (doorHere) { doorHere.toggle(); doorT = 1; } };
@@ -983,23 +1083,6 @@ export function createIslandWorld() {
 			try { renderer.render(scene, camera); } catch { /* nothing more to do this frame */ }
 		}
 	}
-	// the right-hand column: whichever of its buttons are showing sit one under another with
-	// no gaps (fly, drive, the ship, ×3, places, games come and go with what you are doing)
-	let stackT = 0;
-	function stackSidebar() {
-		const now = performance.now();
-		if (now < stackT) return;
-		stackT = now + 250;
-		const col = [...dom.mount.children].filter((e) => e.tagName === 'BUTTON' && !e.hidden && e.style.right.startsWith('calc(12px') && e.style.position === 'absolute' && /^calc\(\d+px/.test(e.style.top));
-		for (const e of col) if (!e.dataset.slot) e.dataset.slot = parseInt(e.style.top.slice(5), 10);
-		let i = 0;
-		for (const e of col.sort((a, b) => a.dataset.slot - b.dataset.slot)) {
-			if (e.style.display === 'none' || getComputedStyle(e).display === 'none') continue;
-			const top = `calc(${12 + i * 52}px + env(safe-area-inset-top))`;
-			if (e.style.top !== top) e.style.top = top;
-			i++;
-		}
-	}
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
@@ -1150,7 +1233,6 @@ export function createIslandWorld() {
 		sunGlare(dt);
 		watchTeleport();
 		share.update(dt);
-		stackSidebar();
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !arcade.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -1236,6 +1318,7 @@ export function createIslandWorld() {
 	let actState = '';
 	function actions() {
 		const W = world, B = W.boat, P = W.player.state;
+		dom.still(drive.active() || arcade.active() || studio.active() || !!W.boardwalk?.riding?.());
 		const want = B.boarded() ? 'leave' : B.near() ? 'board' : '';
 		if (want !== actState) {
 			actState = want;

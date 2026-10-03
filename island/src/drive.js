@@ -160,8 +160,9 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	}
 
 	// ---------- the controls ----------
-	const btn = (label, title, style) => {
+	const btn = (label, title, style, hud) => {
 		const b = document.createElement('button');
+		if (hud) b.dataset.hud = hud;
 		b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
 		b.style.cssText = 'position:absolute;min-width:44px;min-height:44px;padding:6px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;font:600 16px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);touch-action:manipulation;cursor:pointer;' + style;
 		for (const ev of ['pointerdown', 'touchstart', 'keydown']) b.addEventListener(ev, (e) => e.stopPropagation());
@@ -169,21 +170,27 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		mount.appendChild(b);
 		return b;
 	};
-	const toggleBtn = btn('', 'Drive the road (V)', 'right:calc(12px + env(safe-area-inset-right));top:calc(168px + env(safe-area-inset-top));width:44px;display:flex;align-items:center;justify-content:center;');
+	const toggleBtn = btn('', 'Drive the road (V)', 'width:44px;display:flex;align-items:center;justify-content:center;', 'mode 10');
 	// a line icon: a road running away to the horizon
 	toggleBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 3 5 21M15 3l4 18"/><path d="M12 4v2.5M12 10v3M12 17v3.5"/></svg>';
 	// the car's own controls: which car, drive it yourself or let the road take you, credits
-	const kindBtn = btn('Sedan', 'Which car (N)', 'right:calc(12px + env(safe-area-inset-right));top:calc(220px + env(safe-area-inset-top));display:none;font-size:13px;');
-	const modeBtn = btn('Assist', 'Let the road steer (M)', 'right:calc(12px + env(safe-area-inset-right));top:calc(272px + env(safe-area-inset-top));display:none;font-size:13px;');
-	const credBtn = btn('ⓘ', 'Vehicle credits', 'right:calc(12px + env(safe-area-inset-right));top:calc(324px + env(safe-area-inset-top));display:none;width:44px;font-size:14px;');
+	const kindBtn = btn('Sedan', 'Which car (N)', 'display:none;font-size:13px;', 'pill 10');
+	const modeBtn = btn('Assist', 'Let the road steer (M)', 'display:none;font-size:13px;', 'pill 11');
+	const credBtn = btn('ⓘ', 'Vehicle credits', 'display:none;width:44px;font-size:14px;', 'rail 70');
+	// the camera, driving it yourself: the driver's seat or from behind (C); a line camera
+	const camBtn = btn('', 'Camera: from behind or the driver\'s seat (C)', 'display:none;width:44px;align-items:center;justify-content:center;', 'mode 11');
+	camBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="7" width="13" height="10" rx="2"/><path d="m15.5 10.5 6-3v9l-6-3"/></svg>';
+	const chase = () => { D.chase = !D.chase; labels(); };
+	camBtn.addEventListener('click', (e) => { e.stopPropagation(); chase(); });
 	kindBtn.addEventListener('click', (e) => { e.stopPropagation(); nextKind(); });
 	modeBtn.addEventListener('click', (e) => { e.stopPropagation(); setMode(D.mode === 'free' ? 'assist' : 'free'); });
 	credBtn.addEventListener('click', (e) => { e.stopPropagation(); hint(CREDITS, 9000); });
 	const pad = document.createElement('div');
-	pad.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));width:170px;height:120px;display:none;';
+	pad.style.cssText = 'position:absolute;width:148px;height:124px;display:none;';
+	pad.dataset.hud = 'prompt 10';
 	mount.appendChild(pad);
 	const arrows = {};
-	for (const [k, label, css] of [['left', '◀', 'left:0;top:38px;'], ['straight', '▲', 'left:63px;top:0;'], ['right', '▶', 'right:0;top:38px;'], ['back', '▼', 'left:63px;top:76px;']]) {
+	for (const [k, label, css] of [['left', '◀', 'left:0;top:40px;'], ['straight', '▲', 'left:52px;top:0;'], ['right', '▶', 'left:104px;top:40px;'], ['back', '▼', 'left:52px;top:80px;']]) {
 		const b = btn(label, { left: 'Turn left next', right: 'Turn right next', straight: 'Straight on', back: 'Turn round' }[k], css + 'width:44px;');
 		pad.appendChild(b);
 		b.addEventListener('click', (e) => { e.stopPropagation(); input(k); });
@@ -195,6 +202,11 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	const hud = document.createElement('div');
 	hud.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top));padding:6px 12px;border-radius:10px;background:rgba(8,20,26,.55);color:#eafaf6;font:13px system-ui;pointer-events:none;display:none;white-space:nowrap;';
 	mount.appendChild(hud);
+	// the keys a keyboard has for it, small under the line above (not on a phone: it has the buttons)
+	const keys = document.createElement('div');
+	keys.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(100px + env(safe-area-inset-top));padding:4px 10px;border-radius:8px;background:rgba(8,20,26,.45);color:rgba(234,250,246,.8);font:11px system-ui;letter-spacing:.02em;pointer-events:none;display:none;white-space:nowrap;';
+	keys.textContent = 'C · camera';
+	mount.appendChild(keys);
 
 	function input(k) {
 		if (!D.active || D.mode === 'free') return;
@@ -278,6 +290,11 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		kindBtn.textContent = D.kind[0].toUpperCase() + D.kind.slice(1) + ' ▸';
 		modeBtn.textContent = D.mode === 'free' ? 'Assist' : 'Drive';
 		modeBtn.title = D.mode === 'free' ? 'Let the road steer (M)' : 'Drive it yourself (M)';
+		// (the camera only turns when you drive it yourself)
+		const cam = D.active && D.mode === 'free';
+		camBtn.style.display = cam ? 'flex' : 'none';
+		camBtn.style.background = D.chase ? '#01a982' : 'rgba(8,20,26,.55)';
+		keys.style.display = cam && !isPhone ? 'block' : 'none';
 	}
 	function stop() {
 		if (!D.active) return;
@@ -298,8 +315,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		else if (P && D.onTrail) { P.pos.y = Math.max(P.pos.y, W.island.heightAt(P.pos.x, P.pos.z) + 1.68); camera.position.copy(P.pos); }
 		D.onTrail = false;
 		if (P) { P.locked = false; P.vel.set(0, 0, 0); }
-		pad.style.display = 'none'; hud.style.display = 'none';
-		for (const b of [kindBtn, modeBtn, credBtn]) b.style.display = 'none';
+		pad.style.display = 'none'; hud.style.display = 'none'; keys.style.display = 'none';
+		for (const b of [kindBtn, modeBtn, credBtn, camBtn]) b.style.display = 'none';
 		toggleBtn.style.background = 'rgba(8,20,26,.55)';
 	}
 	toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); D.active ? stop() : start(); });
@@ -313,7 +330,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		held.add(k);
 		if (!e.repeat && k === 'm') { setMode(D.mode === 'free' ? 'assist' : 'free'); e.preventDefault(); return; }
 		if (!e.repeat && k === 'n') { nextKind(); e.preventDefault(); return; }
-		if (!e.repeat && k === 'c') { D.chase = !D.chase; e.preventDefault(); return; }
+		if (!e.repeat && k === 'c') { chase(); e.preventDefault(); return; }
 		if (D.mode === 'free') { if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault(); return; }
 		// off the path: Space jumps off it, Shift with an arrow steps off that way (your own
 		// feet take over, the arrow still held)

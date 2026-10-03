@@ -411,7 +411,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const css = (el, s) => { el.style.cssText = s; return el; };
 	const el = (tag, s, text) => { const e = document.createElement(tag); if (s) css(e, s); if (text) e.textContent = text; return e; };
 	const btnCss = 'min-width:40px;min-height:40px;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#eafaf6;font:600 13px system-ui;cursor:pointer;';
-	const open = el('button', 'position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(116px + env(safe-area-inset-top));width:44px;min-height:44px;border-radius:12px;border:1px solid rgba(1,169,130,.7);background:rgba(8,20,26,.55);color:#9fe8d0;font:600 18px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;', '✦');
+	const open = el('button', 'position:absolute;width:44px;min-height:44px;border-radius:12px;border:1px solid rgba(1,169,130,.7);background:rgba(8,20,26,.55);color:#9fe8d0;font:600 18px system-ui;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;', '✦');
+	open.dataset.hud = 'rail 40';
 	open.title = 'Talk to the guide (G)'; open.setAttribute('aria-label', 'Talk to the guide');
 	const panel = el('div', 'position:absolute;left:calc(12px + env(safe-area-inset-left));bottom:calc(12px + env(safe-area-inset-bottom));width:min(420px,calc(100vw - 24px));max-height:min(62vh,560px);display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(10,14,18,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 20px 60px rgba(0,0,0,.6);color:#f2f5f4;font:14px/1.45 system-ui;z-index:5;');
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'The Guide');
@@ -524,7 +525,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	if (choice.kind === 'ollama' || (choice.kind === 'cloud' && DISCOVERY_URL)) connect(false);
 	else if (choice.kind === 'webllm') setTimeout(() => connect(false), store.get('crysis-guide-loaded', false) ? 1500 : 9000);   // after the world is up
 	// a quiet progress pill while the model downloads the first time
-	const pill = el('div', 'position:absolute;right:calc(64px + env(safe-area-inset-right));top:calc(124px + env(safe-area-inset-top));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px system-ui;pointer-events:none;display:none;');
+	const pill = el('div', 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(72px + env(safe-area-inset-top));padding:5px 10px;border-radius:10px;background:rgba(8,20,26,.6);color:#9fe8d0;font:11px system-ui;pointer-events:none;display:none;');
 	mount.append(pill);
 	llm.onStatus((st) => {
 		if (llm.kind() !== 'webllm') { pill.style.display = 'none'; return; }

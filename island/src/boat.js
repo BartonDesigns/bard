@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import { waveHeight } from './world/ocean.js';
 import { glow } from './world/textures.js';
 
-const DRAFT = 0.9;   // metres of water the hull needs
+const DRAFT = 1.0;   // metres of water the hull needs
+const HALF = 5;      // about half her length, bow or stern from her middle
 
 export function createBoat(island, village, player, camera, shared, scene) {
 	const boat = village.boat;
@@ -35,7 +36,7 @@ export function createBoat(island, village, player, camera, shared, scene) {
 
 	function near() {
 		const p = player.state.pos;
-		return Math.hypot(p.x - s.x, p.z - s.z) < 7.5 && Math.abs(p.y - 1.6 - waveHeight(island, s.x, s.z, shared.uTime.value)) < 4;
+		return Math.hypot(p.x - s.x, p.z - s.z) < 9 && Math.abs(p.y - 1.6 - waveHeight(island, s.x, s.z, shared.uTime.value)) < 4;
 	}
 	function board() {
 		if (s.boarded) return;
@@ -57,7 +58,7 @@ export function createBoat(island, village, player, camera, shared, scene) {
 		const P = player.state.pos, pier = village.pier;
 		let best = null;
 		for (const side of [1, -1]) {
-			const x = s.x + sx * side * 3.2, z = s.z + sz * side * 3.2;
+			const x = s.x + sx * side * 3.8, z = s.z + sz * side * 3.8;
 			const floor = player.floorAt(x, z, 3);
 			if (!best || floor > best.floor) best = { x, z, floor };
 		}
@@ -83,27 +84,27 @@ export function createBoat(island, village, player, camera, shared, scene) {
 		const [fx, fz] = fwd();
 		const nx = s.x + fx * s.speed * dt, nz = s.z + fz * s.speed * dt;
 		// the bow feels the bottom before the hull does
-		const probe = island.heightAt(nx + fx * 4 * Math.sign(s.speed || 1), nz + fz * 4 * Math.sign(s.speed || 1));
+		const probe = island.heightAt(nx + fx * (HALF + 0.5) * Math.sign(s.speed || 1), nz + fz * (HALF + 0.5) * Math.sign(s.speed || 1));
 		if (probe < -DRAFT) { s.x = nx; s.z = nz; }
 		else s.speed *= -0.25;
 		// ride the swell: height, pitch and roll from the water under bow, stern and beam
 		const hc = waveHeight(island, s.x, s.z, t, wave);
-		const hb = waveHeight(island, s.x + fx * 3, s.z + fz * 3, t, wave), hs = waveHeight(island, s.x - fx * 3, s.z - fz * 3, t, wave);
-		const hl = waveHeight(island, s.x - fz * 1.5, s.z + fx * 1.5, t, wave), hr = waveHeight(island, s.x + fz * 1.5, s.z - fx * 1.5, t, wave);
+		const hb = waveHeight(island, s.x + fx * 3.8, s.z + fz * 3.8, t, wave), hs = waveHeight(island, s.x - fx * 3.8, s.z - fz * 3.8, t, wave);
+		const hl = waveHeight(island, s.x - fz * 1.8, s.z + fx * 1.8, t, wave), hr = waveHeight(island, s.x + fz * 1.8, s.z - fx * 1.8, t, wave);
 		s.lean += ((s.boarded ? -s.turn * Math.min(1, Math.abs(s.speed) / 6) * 0.12 : 0) - s.lean) * Math.min(1, dt * 2);
-		const pitch = Math.atan2(hb - hs, 6) + Math.min(0.08, Math.max(0, s.speed) * 0.007);
-		boat.position.set(s.x, hc - 0.35, s.z);
+		const pitch = Math.atan2(hb - hs, 7.6) + Math.min(0.08, Math.max(0, s.speed) * 0.007);
+		boat.position.set(s.x, hc - 0.05, s.z);
 		boat.rotation.set(0, 0, 0);
 		boat.rotateY(s.heading);
 		boat.rotateX(pitch);
-		boat.rotateZ(Math.atan2(hr - hl, 3) * 0.8 + s.lean);
+		boat.rotateZ(Math.atan2(hr - hl, 3.6) * 0.8 + s.lean);
 
 		// wake puffs at the stern
 		s.wakeT -= dt;
 		if (Math.abs(s.speed) > 1.2 && s.wakeT <= 0) {
 			s.wakeT = 0.07;
 			const i = puffs.length < W ? puffs.length : puffs.findIndex((p) => p.t > p.life) ;
-			const p = { x: s.x - fx * 3.4 + (Math.random() - 0.5) * 0.6, z: s.z - fz * 3.4 + (Math.random() - 0.5) * 0.6, t: 0, life: 3 + Math.random(), size: 1.4 + Math.abs(s.speed) * 0.12 };
+			const p = { x: s.x - fx * (HALF - 0.4) + (Math.random() - 0.5) * 0.6, z: s.z - fz * (HALF - 0.4) + (Math.random() - 0.5) * 0.6, t: 0, life: 3 + Math.random(), size: 1.4 + Math.abs(s.speed) * 0.12 };
 			if (i >= 0) puffs[i] = p;
 		}
 		let n = 0;
@@ -125,9 +126,9 @@ export function createBoat(island, village, player, camera, shared, scene) {
 		wake.instanceColor.needsUpdate = true;
 
 		if (s.boarded) {
-			// sit at the helm, behind the cabin, and look where you like
+			// stand at the wheel on the flying bridge, and look where you like
 			const P = player.state;
-			const eye = new THREE.Vector3(0.35, 4.05, 2.9).applyQuaternion(boat.quaternion).add(boat.position);
+			const eye = new THREE.Vector3(0.4, 5.15, -0.45).applyQuaternion(boat.quaternion).add(boat.position);
 			camera.position.copy(eye);
 			P.pos.copy(eye);
 			camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ');

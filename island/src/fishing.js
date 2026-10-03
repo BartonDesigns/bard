@@ -273,15 +273,18 @@ export function createFishing({ scene, camera, getWorld, hint, mount }) {
 	// rod comes out and you cast; tap again and it is put away
 	const rodBtn = document.createElement('button');
 	rodBtn.type = 'button'; rodBtn.title = 'Fish (H)'; rodBtn.setAttribute('aria-label', 'Fish (H)');
-	rodBtn.style.cssText = 'position:absolute;right:calc(26px + env(safe-area-inset-right));bottom:calc(100px + env(safe-area-inset-bottom));width:44px;height:44px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:4;cursor:pointer;touch-action:manipulation;';
+	rodBtn.dataset.hud = 'side 20';
+	rodBtn.style.cssText = 'position:absolute;width:44px;height:44px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(8,20,26,.55);color:#eafaf6;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:4;cursor:pointer;touch-action:manipulation;';
 	// (a line icon: the rod, its reel, the line down to a float; and the key beside it)
 	rodBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21 19 4"/><circle cx="7.2" cy="15.2" r="2"/><path d="M19 4v9.5"/><path d="M17.6 15.2a1.4 1.4 0 1 0 2.8 0 1.4 1.4 0 1 0-2.8 0"/><path d="M19 16.6v1.6"/></svg><span style="position:absolute;right:3px;bottom:1px;font:600 9px system-ui;opacity:.7">H</span>';
 	// the one button for the rest: cast, strike, hold to reel (R)
 	const btn = document.createElement('button');
 	btn.type = 'button';
-	btn.style.cssText = 'position:absolute;left:50%;bottom:calc(74px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 22px;border-radius:24px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.78);color:#eafaf6;font:600 15px system-ui;display:none;z-index:4;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;';
+	btn.dataset.hud = 'prompt 20';
+	btn.style.cssText = 'position:absolute;padding:12px 22px;border-radius:24px;border:1px solid rgba(255,255,255,.25);background:rgba(8,20,26,.78);color:#eafaf6;font:600 15px system-ui;display:none;z-index:4;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;';
 	const meter = document.createElement('div');
-	meter.style.cssText = 'position:absolute;left:50%;bottom:calc(128px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(280px,70vw);display:none;z-index:4;pointer-events:none;font:12px system-ui;color:#eafaf6;text-align:center;';
+	meter.dataset.hud = 'prompt 21';
+	meter.style.cssText = 'position:absolute;width:min(280px,70vw);display:none;z-index:4;pointer-events:none;font:12px system-ui;color:#eafaf6;text-align:center;';
 	meter.innerHTML = '<div data-t style="margin-bottom:4px">Hold to reel · keep it in the green</div><div style="position:relative;height:12px;border-radius:6px;background:linear-gradient(90deg,#2b5f8a 0%,#01a982 35%,#01a982 72%,#d9a21c 85%,#c8321c 100%);"><div data-k style="position:absolute;top:-3px;width:4px;height:18px;border-radius:2px;background:#fff;left:0"></div></div><div style="margin-top:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.15)"><div data-p style="height:100%;width:0;border-radius:3px;background:#eafaf6"></div></div>';
 	const card = document.createElement('div');
 	card.style.cssText = 'position:absolute;left:50%;top:18%;transform:translateX(-50%);width:min(320px,84vw);padding:14px 16px;border-radius:16px;background:rgba(8,20,26,.9);border:1px solid rgba(255,255,255,.18);color:#eafaf6;font:13px system-ui;text-align:center;display:none;z-index:6;';

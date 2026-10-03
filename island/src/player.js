@@ -37,7 +37,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (e.pointerType === 'mouse') { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY }; return; }
 		if (x < 0.42 && y > 0.35 && !touch.move) {
 			touch.move = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
-			dom.joy.style.display = 'block';
+			// (the joystick leaves its rest, bottom left, for under the thumb)
+			dom.joy.classList.add('held');
 			dom.joy.style.left = e.clientX - 55 + 'px'; dom.joy.style.top = e.clientY - 55 + 'px';
 		} else touch.look.set(e.pointerId, { x: e.clientX, y: e.clientY });
 		dom.canvas.setPointerCapture?.(e.pointerId);
@@ -62,7 +63,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (mouse && e.pointerId === mouse.id) mouse = null;
 		if (touch.move && e.pointerId === touch.move.id) {
 			touch.move = null; joy.x = joy.y = 0; s.run = false;
-			dom.joy.style.display = 'none'; dom.knob.style.transform = '';
+			dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = '';
 		}
 		touch.look.delete(e.pointerId);
 	}
