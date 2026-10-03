@@ -92,10 +92,31 @@ vertical collision filtering lets the player pass beneath lifted rocks. They do 
 standable moving platforms or full rigid bodies. Bass fronts produce delayed bounded impulses.
 Wild-country boulders/outcrops and the full plant shockwave shaders still need migration.
 Flying wildlife responds under the existing opt-in music-mode setting; the Sky & World panel
-exposes it. Full species behavior, trust, audience and kinetic instruments remain outstanding.
+exposes it. Full species behavior, trust and audience remain outstanding. Two native kinetic instruments
+are now available; the rest of the legacy rig catalogue remains outstanding.
 
 Checks: `node island/tools/music-performance.test.mjs`,
 `node island/tools/music-bridge.test.mjs`, and
 `BARD_URL=http://127.0.0.1:8766 node island/tools/music-browser.cjs`.
 The browser test uses a real faceplate voice lifecycle with controlled analyser energy; source-mix
 fixtures cover DJ/mic FFT combinations. These do not replace native device/listening tests.
+
+
+## First native kinetic instruments
+
+Sky & World can place a sunflower bounce garden or a pendulum wave on sampled clear,
+flat ground. Garden gravity and restitution are live controls; replay uses the audible
+BPM for the drop cascade. Pendulum periods remain length-based. Both send collision or
+crossing notes through actual faceplate `playLead`/`stopLead`, preserving the current
+instrument/FX. This route does not provide per-ball stereo panning.
+
+The phone budget is one rig, 192 default garden balls (256 max) or 15 pendulums,
+eight concurrent voices, 24 notes/second and bounded catch-up. Stop/hide/orbit releases
+owned voices; Clear/travel/world teardown disposes meshes. Replay is explicit after a
+pause. These rigs are not persistent, and do not provide player-platform collisions.
+Eight other legacy rig types and full controls/persistence parity remain open.
+
+Checks: `node island/tools/kinetic.test.mjs` and
+`node island/tools/kinetic-placement.test.mjs`;
+`BARD_URL=http://127.0.0.1:8766 node island/tools/expansion-browser.cjs` exercises
+real terrain placement, faceplate notes, stop/replay and cleanup.

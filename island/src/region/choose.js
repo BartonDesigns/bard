@@ -81,7 +81,11 @@ export function kitAt(at, opts = {}) {
 		const k = kitFor(x.id, R, { ...opts, lat: at.lat });
 		sum.set(k, (sum.get(k) || 0) + x.w);
 	}
-	const weights = [...sum].map(([id, w]) => ({ id, w })).sort((a, b) => b.w - a.w);
+	// Atlas query weights are rounded to three decimals for reporting. Restore
+	// a unit total before weighted picking so the final sliver cannot fall back
+	// to the dominant kit at a border.
+	const total = [...sum.values()].reduce((a, b) => a + b, 0);
+	const weights = [...sum].map(([id, w]) => ({ id, w: w / total })).sort((a, b) => b.w - a.w);
 	const id = weights[0].id;
 	return { id, kit: KITS[id], weights, culture: cultureOf(at.id) };
 }

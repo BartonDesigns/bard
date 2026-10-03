@@ -24,7 +24,7 @@ const VS = /* glsl */`
 		gl_Position = projectionMatrix * mv;
 		float d = length(q);
 		gl_PointSize = uSize * (uKind > 1.5 && uKind < 2.5 ? 70.0 : 1.0) / max(0.5, -mv.z) * (0.6 + aSeed.w * 0.8);
-		vA = uK * smoothstep(uBox * 0.5, uBox * 0.25, d) * smoothstep(0.3, 2.0, d);
+		vA = uK * (1.0 - smoothstep(uBox * 0.25, uBox * 0.5, d)) * smoothstep(0.3, 2.0, d);
 		vGlow = uKind > 3.5 ? smoothstep(0.6, 1.0, sin(uTime * 2.0 + aSeed.w * 60.0)) : 0.0;
 		if (uKind > 3.5) vA *= vGlow;
 	}`;
@@ -32,12 +32,23 @@ const FS = /* glsl */`
 	uniform vec3 uCol; uniform float uKind; varying float vA; varying float vGlow;
 	void main() {
 		vec2 d = gl_PointCoord - 0.5; float r = length(d);
-		float a = (uKind > 1.5 && uKind < 2.5 ? smoothstep(0.5, 0.0, r) * 0.12 : smoothstep(0.5, 0.15, r)) * vA;
+		float a = (uKind > 1.5 && uKind < 2.5 ? (1.0 - smoothstep(0.0, 0.5, r)) * 0.12 : (1.0 - smoothstep(0.15, 0.5, r))) * vA;
 		if (a < 0.01) discard;
 		gl_FragColor = vec4(uCol * (1.0 + vGlow * 2.0), a);
 	}`;
 
 const KIND = { snow: 0, dust: 1, mist: 2, pollen: 3, fireflies: 4 };
+
+// What the air holds here and now. Ground snow alone does not turn warm rain into snowfall.
+export function airKindNow(kit, C, wx, night) {
+	const a = kit?.air?.kind;
+	if (!a) return null;
+	if (a === 'snow') return (C?.now ?? 15) <= 2 && ((C?.snow || 0) > 0.3 || (wx?.rain || 0) > 0.2) ? 'snow' : null;
+	if (a === 'mist') return night > 0.6 && (C?.now ?? 0) > 16 && C?.season !== 'dry' ? 'fireflies' : 'mist';
+	if (a === 'dust') return 'dust';
+	if ((a === 'pollen' || a === 'haze' || a === 'clear') && (C?.season === 'summer' || C?.season === 'spring') && (C?.now ?? 0) > 5) return night > 0.6 && (C?.now || 0) > 16 ? 'fireflies' : 'pollen';
+	return null;
+}
 
 export function createAir(scene, { isPhone = false }) {
 	const N = isPhone ? 700 : 1600, seeds = new Float32Array(N * 4);
@@ -52,20 +63,10 @@ export function createAir(scene, { isPhone = false }) {
 	pts.frustumCulled = false; pts.name = 'regional air';
 	scene.add(pts);
 	const haze = new THREE.Color();
-	let k = 0;
+	let k = 0, strength = 0;
 
-	// what the air holds here and now
-	function kindNow(kit, C, wx, night) {
-		const a = kit?.air?.kind;
-		if (!a) return null;
-		if (a === 'snow') return (C?.snow || 0) > 0.3 || (wx?.rain || 0) > 0.2 ? 'snow' : null;
-		if (a === 'mist') return night > 0.6 && C?.season !== 'dry' ? 'fireflies' : 'mist';
-		if (a === 'dust') return 'dust';
-		if (a === 'pollen' || ((a === 'haze' || a === 'clear') && (C?.season === 'summer' || C?.season === 'spring'))) return night > 0.6 && (C?.now || 0) > 16 ? 'fireflies' : 'pollen';
-		return null;
-	}
 	function update(dt, cam, { kit = null, climate = null, wx = null, night = 0, on = true, fog = null, wind = null } = {}) {
-		const kind = on ? kindNow(kit, climate, wx, night) : null;
+		const kind = on ? airKindNow(kit, climate, wx, night) : null;
 		k += ((kind ? 1 : 0) - k) * Math.min(1, dt * 0.5);
 		pts.visible = k > 0.01;
 		U.uTime.value += dt;
@@ -74,8 +75,9 @@ export function createAir(scene, { isPhone = false }) {
 			U.uBox.value = kind === 'mist' ? 120 : kind === 'fireflies' ? 70 : 55;
 			U.uSize.value = kind === 'snow' ? 26 : kind === 'dust' ? 9 : kind === 'pollen' ? 8 : kind === 'fireflies' ? 16 : 30;
 			U.uCol.value.set(kind === 'snow' ? '#f4f8ff' : kind === 'dust' ? '#e8d0a0' : kind === 'mist' ? '#dfe6e0' : kind === 'fireflies' ? '#c8ff6a' : '#fff6d8');
-			U.uK.value = k * (kind === 'snow' ? 0.9 : kind === 'dust' ? 0.5 : kind === 'mist' ? 0.7 : kind === 'fireflies' ? 1 : 0.4) * (kind === 'mist' ? 1 - night * 0.6 : 1);
+			strength = (kind === 'snow' ? 0.9 : kind === 'dust' ? 0.5 : kind === 'mist' ? 0.7 : kind === 'fireflies' ? 1 : 0.4) * (kind === 'mist' ? 1 - night * 0.6 : 1);
 		}
+		U.uK.value = k * strength;
 		if (wind) U.uWind.value.set(wind.x, wind.y);
 		U.uCam.value.copy(cam.position);
 		// the place's haze on the fog

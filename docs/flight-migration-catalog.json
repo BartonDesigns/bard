@@ -3576,8 +3576,28 @@
           "decoded_line": 22473
         }
       ],
-      "crysis_coverage": "no full equivalent",
+      "crysis_coverage": "partial native implementation: opt-in bounce garden and pendulum wave; one rig per world",
       "crysis_sources": [
+        {
+          "path": "island/src/music/kinetic-model.js",
+          "symbol": "createKineticModel",
+          "line": 5
+        },
+        {
+          "path": "island/src/music/kinetic.js",
+          "symbol": "createKinetic",
+          "line": 9
+        },
+        {
+          "path": "island/src/music/kinetic-placement.js",
+          "symbol": "findKineticSpot",
+          "line": 3
+        },
+        {
+          "path": "island/src/main.js",
+          "symbol": "placeKinetic",
+          "line": 975
+        },
         {
           "path": "island/src/games/stones.js"
         },
@@ -3585,7 +3605,7 @@
           "path": "island/src/games/drums.js"
         }
       ],
-      "required_migration_and_test": "Preserve all rig types, live gravity/restitution/BPM/scale controls, per-rig trigger/replay, bounded notes and rest state. Ball bounces integrate gravity; cradle/harp are kinematic, not a universal physics engine.",
+      "required_migration_and_test": "Preserve all ten legacy rig types. Native garden integrates gravity/restitution; pendulum notes follow kinematic center crossings. Sky & World exposes place/replay/stop/clear and garden gravity/bounce; BPM is sampled on placement/replay, while scale/root/drop configuration is API-only. Implement the other eight rigs (dominoes, chimes, cradle, droplets, harp, stairs, fountain, wave bars), multiple rigs, saved placement/settings, complete control parity and explicit orbit/return behavior. Verify contact timing, rest/replay, clear-ground placement, cleanup and phone performance; do not claim full rig or collision-world parity.",
       "priority": "P0"
     },
     {
@@ -3606,8 +3626,23 @@
           "decoded_line": 572
         }
       ],
-      "crysis_coverage": "implemented strike bridge only",
+      "crysis_coverage": "partial native impact-to-faceplate bridge: garden impacts and pendulum center crossings",
       "crysis_sources": [
+        {
+          "path": "island/src/music/kinetic-model.js",
+          "symbol": "createKineticVoices",
+          "line": 59
+        },
+        {
+          "path": "island/src/music/kinetic.js",
+          "symbol": "createKinetic",
+          "line": 9
+        },
+        {
+          "path": "island/src/main.js",
+          "symbol": "placeKinetic",
+          "line": 975
+        },
         {
           "path": "island/src/music.js"
         },
@@ -3615,7 +3650,7 @@
           "path": "island/src/games/kit.js"
         }
       ],
-      "required_migration_and_test": "Route collisions/rig notes through actual playLead/stopLead with current instrument, FX and gain. Legacy faceplate route sacrifices per-ball stereo; do not claim spatial pan it lacks.",
+      "required_migration_and_test": "Native rig events call actual host playLead/stopLead with unique owned IDs, active faceplate scale by default, fixed-scale alternatives, distance attenuation and timed release. The integrated bridge caps 8 live voices and 24 notes/sec with a 4-note burst; only its own voices stop. Verify audible instrument/FX/gain/scale fidelity, failures, stall/hidden/orbit cleanup and coexistence with manual notes, loops and composer. Port the remaining rig event sources; individual-ball stereo pan and general world-collision sonification are not implemented.",
       "priority": "P0"
     },
     {
@@ -37465,7 +37500,10 @@
     "island/src/planet/medieval/dungeon.js",
     "island/src/planet/medieval/plan.js",
     "island/src/planet/medieval/foes.js",
-    "island/src/planet/medieval/collide.js"
+    "island/src/planet/medieval/collide.js",
+    "island/src/music/kinetic-model.js",
+    "island/src/music/kinetic.js",
+    "island/src/music/kinetic-placement.js"
   ],
   "history_audit": {
     "revisions_considered": 227,
@@ -44197,7 +44235,7 @@
       "kick-propagated flora fronts",
       "held-note rock levitation/release envelope",
       "fauna attraction/repulsion",
-      "kinetic rigs and impact-to-note loops",
+      "remaining eight kinetic rig types, multiple/saved rigs and complete impact-to-note/control parity; two native rigs now have a bounded faceplate bridge",
       "audience, bonds, renown and song requests",
       "galaxy, star, black-hole and narrative music progression"
     ]
@@ -46529,6 +46567,121 @@
         "Full faceplate held-note/instance/vertical-collision and home-identity integration"
       ],
       "remaining": "Legacy galaxy, full plant/animal reactions, kinetic rigs, audience/bonds, complete saved-progress migration and native phone validation remain open."
+    },
+    {
+      "date": "2026-10-03",
+      "scope": "Partial native kinetic rigs and impact-to-faceplate routing, after the baseline audit",
+      "features": [
+        "FLT-095",
+        "FLT-096"
+      ],
+      "source_review": [
+        "music/kinetic-model.js",
+        "music/kinetic.js",
+        "music/kinetic-placement.js",
+        "main.js placeKinetic/buildPanel/update lifecycle"
+      ],
+      "checks": [
+        "Current source and test sources reviewed; existing authored tables, legacy anchors and history preserved.",
+        "JSON and documentation consistency checked; no runtime tests or build run in this documentation-only update."
+      ],
+      "remaining": "Eight legacy rig types, multiple rigs, persistence, full controls, orbit/return continuity and real-device/audible faceplate acceptance remain open."
     }
-  ]
+  ],
+  "native_kinetic_migration": {
+    "status": "partial implementation; source-reviewed, not full legacy parity",
+    "sources": [
+      {
+        "path": "island/src/music/kinetic-model.js",
+        "symbol": "createKineticModel",
+        "line": 5
+      },
+      {
+        "path": "island/src/music/kinetic-model.js",
+        "symbol": "createKineticVoices",
+        "line": 59
+      },
+      {
+        "path": "island/src/music/kinetic.js",
+        "symbol": "createKinetic",
+        "line": 9
+      },
+      {
+        "path": "island/src/music/kinetic-placement.js",
+        "symbol": "findKineticSpot",
+        "line": 3
+      },
+      {
+        "path": "island/src/main.js",
+        "symbol": "placeKinetic",
+        "line": 975
+      }
+    ],
+    "implemented_rigs": [
+      {
+        "kind": "garden",
+        "simulation": "Integrated vertical gravity/restitution with BPM-staggered ring release; impacts trigger notes until balls settle.",
+        "default_bodies": 192,
+        "maximum_bodies": 256
+      },
+      {
+        "kind": "pendulum",
+        "simulation": "Kinematic wave with distinct lengths; center crossings trigger notes. This is not rigid-body collision.",
+        "default_bodies": 15,
+        "maximum_bodies": 15
+      }
+    ],
+    "limits": {
+      "simultaneous_rigs": 1,
+      "integrated_live_voices": 8,
+      "sustained_notes_per_second": 24,
+      "maximum_note_burst": 4,
+      "audible_radius_world_units": 120,
+      "maximum_catchup_seconds": 0.1,
+      "maximum_substep_seconds": 0.008333333333333333
+    },
+    "controls": {
+      "ui": [
+        "place bounce garden",
+        "place pendulum wave",
+        "replay",
+        "stop",
+        "clear",
+        "garden gravity",
+        "garden restitution"
+      ],
+      "bpm": "Current performance BPM is read on placement and replay; no continuously locked BPM or dedicated BPM UI.",
+      "api_only": [
+        "fixed scale or faceplate scale",
+        "root",
+        "drop height",
+        "BPM configuration"
+      ],
+      "pendulum": "Uses authored fixed gravity/length timing; garden gravity/restitution controls do not change its motion."
+    },
+    "placement": "Searches sampled footprints near the player; rejects water, unknown terrain, blocked sites and height variation above 0.8. Main rejects placement in orbit, while locked/driving/arcade/studio, or more than 20 above ground. Support geometry is not registered as player/animal collision.",
+    "faceplate_bridge": "playLead/stopLead use private rig IDs, timed note release, current host instrument/FX/gain, active faceplate scale by default and optional four fixed scales. Distance changes velocity; there is no individual-ball stereo pan. Host automation flags are restored after each note.",
+    "lifecycle": "Replacing/clearing a rig disposes its instanced meshes, geometry and materials. Hide, lost context and orbit-space paths silence the rig; return does not automatically replay it. Teleport, share relocation and Earth frame-epoch changes clear it. World teardown disposes it. No saved rigs or offline catch-up.",
+    "remaining": [
+      "dominoes",
+      "chimes",
+      "cradle",
+      "droplets",
+      "harp",
+      "stairs",
+      "fountain",
+      "wave bars",
+      "multiple simultaneous rigs",
+      "persistent placement/settings/progression migration",
+      "complete legacy controls and per-rig replay behavior",
+      "explicit continuity policy through orbit/return",
+      "general world collision-to-note integration",
+      "device and audible faceplate acceptance"
+    ],
+    "test_sources": [
+      "island/tools/kinetic.test.mjs",
+      "island/tools/kinetic-placement.test.mjs"
+    ],
+    "verification_note": "Test source covers model settling/replay, pendulum crossings, parameter behavior, voice ownership/release/failure, scene disposal and placement rejection. This documentation-only update did not rerun tests or a build, and does not assert browser/audio or phone acceptance."
+  }
 }

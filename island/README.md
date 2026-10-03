@@ -163,6 +163,26 @@ regional profile, a kit chosen from the atlas region, its culture and its climat
 `globetowns.js` leaves the towns it claims to it. The new atlas data for the Arctic, the
 Antarctic, Borneo and New Guinea is `earth/data/polar.js`.
 
+Community jobs and dialogue also use the named town's size and culture (`community.js`),
+so a city does not inherit only countryside work and Arctic climates do not share one
+community's traditions. Daylight follows latitude and month; seasonal particle gates
+keep warm rain separate from snow. Regional sound pauses with the world and releases
+its own graph on teardown. Regression fixtures cover eight atlas communities, herder
+outfits, polar seasons, weather selection and audio lifecycle. The rendered sun path
+still uses the Bay Area latitude, and pale ground shading in the Svalbard/Manaus visual
+smoke needs follow-up; the regional climate fixes do not complete those renderers.
+
+### Native kinetic instruments
+
+In Sky & World, choose **Place bounce garden** or **Place pendulum wave** near open,
+flat ground. Impacts and pendulum crossings play the current Bard faceplate. Use
+**Stop**, **Replay**, or **Clear**; the garden also has gravity and bounce sliders.
+Placement rejects water and sampled obstructions. One rig is retained per local world;
+travel clears it and hiding the world or entering space stops it. It is not saved.
+The garden has 192 balls (256 maximum through the console), the wave 15 pendulums,
+with at most eight voices and 24 notes per second. These are instrument simulations,
+not standable moving platforms. The other eight legacy rigs remain to be migrated.
+
 ## People you can talk to
 
 Walk up to someone and press Enter (or 💬): they stop, turn to you and listen. The

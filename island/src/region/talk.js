@@ -9,6 +9,7 @@
 
 import { today } from '../calendar.js';
 import { languageOf } from './cultures.js';
+import { communityName } from './community.js';
 
 const pick = (r, L) => (L && L.length ? L[Math.floor(r() * L.length)] : '');
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -44,11 +45,11 @@ export function weatherLine(kit, C, wx, r, R, coast = true) {
 	const L = [];
 	if (rain && C.temp > 2) L.push('Wet one today, isn\'t it? It will clear by evening, or it won\'t.');
 	if (rain && C.temp <= 2) L.push('Snowing again. Good for the skis, bad for the roads.');
-	if (C.polar === 'night') L.push(`The sun won\'t be back over the hills until February. We have the moon, the lamps and the lights in the sky.`);
-	if (C.polar === 'sun') L.push('The sun hasn\'t set in weeks. You stop knowing what time it is; the children play outside at midnight.');
+	if (C.polar === 'night') L.push(`The sun stays below the horizon today. We have the lamps and the changing light in the sky.`);
+	if (C.polar === 'sun') L.push('The sun stays above the horizon today. It can be hard to keep track of the time in all that light.');
 	switch (k) {
 		case 'station':
-			L.push('The katabatic wind comes off the plateau like a door slamming. Rope lines between the buildings when it blows.', C.polar === 'sun' || (C.south && C.season === 'summer') ? 'Twenty-four hours of daylight: we sleep with the blinds taped down.' : `${minus(C, t)} today. Everything takes three times as long in the cold.`);
+			L.push('The katabatic wind comes off the plateau like a door slamming. Rope lines between the buildings when it blows.', C.polar === 'sun' ? 'Twenty-four hours of daylight: we sleep with the blinds taped down.' : `${minus(C, t)} today. Everything takes three times as long in the cold.`);
 			break;
 		case 'polar':
 			if (C.temp < -5) L.push(`${minus(C, t)} this morning and the sea is frozen out past the point. Good for travelling, at least.`, 'The floe edge is a day out by snowmobile. That\'s where the seals are, and the hunters.');
@@ -146,7 +147,7 @@ export function regionalSheet(H, r) {
 	const g = greeting(R, r, H.culture), w = H.culture?.say && r() < 0.5 ? aWord({ say: { words: H.culture.say.words } }, r) : aWord(R, r);
 	const place = H.town?.name || (H.regionName ? H.regionName[0].toUpperCase() + H.regionName.slice(1) : 'here');
 	return {
-		place, region: H.regionName, country: H.country, kit: kit?.name || '', culture: H.culture?.key,
+		place, region: H.regionName, country: H.country, kit: communityName(H), culture: H.culture?.key,
 		greet: g, bye: farewell(R, r), word: w, lang: languageOf(H.culture, R?.lang),
 		weather: weatherLine(kit, C, H.wx, r, R, H.coast !== false), season: C.season, month: MONTHS[today().getMonth()], temp: C.now, f: !!C.f,
 		food: foodLine(R, r, H.town?.name), foods: (R?.food || []).slice(0, 4),

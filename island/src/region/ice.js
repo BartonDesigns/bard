@@ -59,8 +59,8 @@ function bergGeometry(kind) {
 }
 
 const AURORA_VS = /* glsl */`
-	varying vec2 vUv; varying float vH;
-	void main() { vUv = uv; vH = position.y; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); p.z = p.w * 0.99997; gl_Position = p; }`;
+	varying vec2 vUv;
+	void main() { vUv = uv; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); p.z = p.w * 0.99997; gl_Position = p; }`;
 const AURORA_FS = /* glsl */`
 	uniform float uTime, uK; varying vec2 vUv;
 	float h1(float x) { return fract(sin(x * 127.1) * 43758.5); }
@@ -73,9 +73,16 @@ const AURORA_FS = /* glsl */`
 		float base = smoothstep(0.0, 0.08, y) * (1.0 - smoothstep(0.35, 1.0, y));
 		vec3 green = vec3(0.25, 1.0, 0.55), red = vec3(0.75, 0.2, 0.45);
 		vec3 c = mix(green, red, smoothstep(0.3, 0.85, y));
-		float a = base * rays * fold * uK * smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-		gl_FragColor = vec4(c * a * 0.75, 1.0);
+		float a = base * rays * fold * uK * smoothstep(0.0, 0.08, vUv.x) * (1.0 - smoothstep(0.92, 1.0, vUv.x));
+		gl_FragColor = vec4(c * a * 1.2, 1.0);
 	}`;
+
+// Bounded artistic visibility, not a geomagnetic forecast. Keep the same three
+// curtains and fade out in daylight/cloud: brightness needs no new GPU passes.
+export function auroraStrength(lat, night, cloud, activity = 0.5) {
+	const alat = Math.abs(lat), band = smooth(54, 62, alat) * (1 - smooth(78, 84, alat));
+	return band * smooth(0.55, 0.9, night) * (1 - smooth(0.45, 0.85, cloud)) * (0.55 + 0.45 * Math.max(0, Math.min(1, activity)));
+}
 
 export function createIce(scene, { height, toXZ, toLL, isPhone = false }) {
 	const group = new THREE.Group();
@@ -164,9 +171,9 @@ export function createIce(scene, { height, toXZ, toLL, isPhone = false }) {
 		group.visible = on;
 		if (on && (!at || Math.hypot(x - at[0], z - at[1]) > 180 || at[2] !== epoch || Math.abs(at[3] - month) > 0.25)) { at = [x, z, epoch, month]; layout(x, z, month); }
 		// the aurora on clear dark nights in the oval (some nights brighter: the night's own number)
-		const alat = Math.abs(lat), band = smooth(54, 62, alat) * (1 - smooth(78, 84, alat));
-		const d = new Date(), nightly = 0.35 + 0.65 * hash(d.getFullYear(), d.getMonth() * 31 + d.getDate(), 5)();
-		const k = on ? band * smooth(0.55, 0.9, night) * (1 - smooth(0.45, 0.85, cloud)) * nightly : 0;
+		const alat = Math.abs(lat), d = new Date();
+		const nightly = hash(d.getFullYear(), d.getMonth() * 31 + d.getDate(), 5)();
+		const k = on ? auroraStrength(lat, night, cloud, nightly) : 0;
 		auroraU.uK.value += (k - auroraU.uK.value) * Math.min(1, dt * 0.5);
 		auroraU.uTime.value += dt;
 		aurora.visible = auroraU.uK.value > 0.01;
@@ -190,6 +197,6 @@ export function createIce(scene, { height, toXZ, toLL, isPhone = false }) {
 		if (!group.visible) return;
 		for (const [bx, bz, r, h] of solid) { const dx = p.x - bx, dz = p.z - bz, d = Math.hypot(dx, dz); if (d < r && footY < h * 0.9 && d > 1e-3) { p.x = bx + dx / d * r; p.z = bz + dz / d * r; } }
 	}
-	function dispose() { scene.remove(group); scene.remove(aurora); iceMat.dispose(); auroraMat.dispose(); for (const m of [floes, rubble, ...bergs]) m.geometry.dispose(); for (const m of aurora.children) m.geometry.dispose(); }
+	function dispose() { scene.remove(group); scene.remove(aurora); iceMat.dispose(); auroraMat.dispose(); for (const m of [floes, rubble, ...bergs]) { m.geometry.dispose(); m.dispose(); } for (const m of aurora.children) m.geometry.dispose(); }
 	return { update, floor, push, dispose, info: () => ({ cover: Math.round(cover * 100) / 100, floes: floes.count, bergs: bergs.reduce((a, m) => a + m.count, 0), ridges: rubble.count, aurora: Math.round(auroraU.uK.value * 100) / 100 }) };
 }

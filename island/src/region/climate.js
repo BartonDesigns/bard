@@ -25,8 +25,16 @@ export function climateNow(at, month, elev = 0, hours = 13) {
 		const wetN = monsoon ? nm >= 5 && nm <= 8 : nm >= 4 && nm <= 9;
 		season = alat < 5 && !monsoon ? (mix.rain > 1800 ? 'wet' : 'warm') : wetN ? (monsoon ? 'monsoon' : 'wet') : 'dry';
 	} else season = nm <= 1 || nm === 11 ? 'winter' : nm <= 4 ? 'spring' : nm <= 7 ? 'summer' : 'autumn';
-	const polar = alat > 66.5 ? (nm === 11 || nm <= 0 ? 'night' : nm >= 5 && nm <= 6 ? 'sun' : null) : null;
-	return { temp: Math.round(temp), now: Math.round(now), snow, season, polar, rain: mix.rain || 0, hot: now > 30, cold: now < 0, south, f: /^na\.|^atl\.carib\.(pr)/.test(id) && !/^na\.(can|mx|cam)/.test(id) };
+	// A latitude-dependent solar cycle: high Arctic spring can already have
+	// midnight sun, while places just inside the polar circle only do near solstice.
+	// Use fractional month, with June/December solstices near the 21st; this is
+	// geometric daylight (no terrain or atmospheric refraction), not a forecast.
+	const rad = Math.PI / 180, declination = 23.44 * rad * Math.cos(2 * Math.PI * (month - 5.67) / 12);
+	const p = clamp(lat, -89.9999, 89.9999) * rad;
+	const horizon = -Math.tan(p) * Math.tan(declination);
+	const daylight = 24 * Math.acos(clamp(horizon, -1, 1)) / Math.PI;
+	const polar = horizon >= 1 ? 'night' : horizon <= -1 ? 'sun' : null;
+	return { temp: Math.round(temp), now: Math.round(now), snow, season, polar, daylight, rain: mix.rain || 0, hot: now > 30, cold: now < 0, south, f: /^na\.|^atl\.carib\.(pr)/.test(id) && !/^na\.(can|mx|cam)/.test(id) };
 }
 // how cold it feels for dressing (0 warm .. 1 bitter)
 export const coldOf = (C) => clamp((18 - (C?.now ?? 15)) / 30, 0, 1);

@@ -18,11 +18,32 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Regional expansion and kinetic instruments (3 October 2026, same draft branch):**
+  Community-aware occupations/dialogue now distinguish cities from rural kits and keep
+  Arctic traditions tied to their authored cultures. Steppe herders have boots and long
+  trousers. Polar daylight uses latitude/month geometry; warm rain, winter pollen and
+  cold-night fireflies are gated; aurora brightness is increased within the existing budget.
+  Regional audio owns and releases its nodes, schedules calls/bells on the audio clock,
+  and pauses on hide/orbit. Sky & World now places one native bounce garden or pendulum
+  wave on nearby clear, flat ground. Collisions play the current faceplate with bounded
+  voices; Stop/Replay/Clear and garden gravity/bounce controls are exposed. These are two
+  of ten legacy rigs, with no persistence or general rigid-body/player-platform claim.
+  Regional profiles and kinetic behavior have 34 new Node regressions (66 total pass).
+  Existing real-faceplate music integration and three exact-return orbital trips pass. Review the draft
+  branch visually before live; native device performance and listening remain open.
+  Headless visual smoke rendered Svalbard tundra/aurora, Manaus canopy and Mongolian
+  steppe without page/shader errors. Ground shading still appears too pale in the first
+  two daytime views. Svalbard's baked g0-6 tile still stores -14 C/sea colours despite
+  the current atlas's -4 C mean/tundra colours: refresh atlas-derived climate/ground
+  planes while preserving elevation/land. Manaus's baked data matches the atlas;
+  diagnose its GPU sampling before changing snow logic. `sky.js` still uses the Bay Area solar latitude; regional polar
+  daylight currently governs climate/talk, not a globally accurate rendered sun path.
+
 - **Native music/identity follow-up (3 October 2026, same draft branch):** Shared music sampling
   now includes synth, enabled mic and DJ sources with frequency-aligned FFT merging; held synth
   voices and dominant BPM feed `music/performance.js`. Nearby island boulders lift, fall and bounce
   through actual instance matrices and vertical collision filtering. Flying fauna reacts under
-  the old opt-in music-mode setting. Full plant, wild-country, kinetic-rig and social parity remain
+  the old opt-in music-mode setting. Full plant, wild-country, remaining kinetic-rig and social parity remain
   open. `space/body.js` separates original body identity from unchanged integer terrain seeds and
   carries it through homes/share/resume; orbit page-hide cannot overwrite the departure save.
   Eight body/performance tests, three bridge tests and real faceplate voice/rock/home integration

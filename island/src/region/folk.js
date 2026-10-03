@@ -18,6 +18,7 @@ import { regionalDress } from './dress.js';
 import { ancestryFor } from './cultures.js';
 import { coldOf } from './climate.js';
 import { here } from './here.js';
+import { communityFolk, communityJob, communityKey } from './community.js';
 
 const wpick = (r, L) => { let x = r() * L.reduce((a, b) => a + b[1], 0); for (const [k, w] of L) { if ((x -= w) < 0) return k; } return L[0][0]; };
 const NEAR = 140;
@@ -51,7 +52,7 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 
 	async function ensure() { if (A || failed) return; try { A = await loadPeopleAssets(); } catch (e) { failed = true; console.warn('[regional folk]', e); } }
 	// the kind of person this place has now (bodies of another place are let go and rebuilt)
-	const keyNow = () => `${here.culture?.key}|${here.kit?.folk?.dress}|${Math.round(coldOf(here.climate) * 3)}`;
+	const keyNow = () => `${communityKey(here)}|${Math.round(coldOf(here.climate) * 3)}`;
 	function grow() {
 		if (building || !A || bodies.length >= MAXB || !here.kit) return;
 		building = true;
@@ -59,7 +60,7 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 			const seed = (Math.imul(seedN++, 2654435761) ^ (Math.round(here.lat * 1000) * 7919)) >>> 0;
 			const r = rng(seed ^ 0x51ede), C = here.culture, kit = here.kit;
 			const d = personDNA(seed, { age: 18 + Math.pow(r(), 1.2) * 58, ancestry: ancestryFor(C, r, kit.build?.dense ? 0.12 : 0.04) });
-			const task = wpick(r, kit.folk?.roles || [['walk', 1]]);
+			const task = wpick(r, communityFolk(here).roles || [['walk', 1]]);
 			const { outfit, head } = regionalDress(r, d, kit, C, { cold: coldOf(here.climate), role: task, id: here.regionId });
 			outfit.gen = outfit.gen || 'x';
 			d.style = outfit; d.style.printKind = Math.floor(r() * 9);
@@ -71,18 +72,9 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 			const M = createMotion(P, (x, z) => ground(x, z));
 			P.root.visible = false;
 			group.add(P.root);
-			P.job = jobFor(kit, task, r); P.errand = null;
+			P.job = communityJob(here, task, r); P.errand = null;
 			bodies.push({ P, M, key: keyNow(), busy: false, task, active: true });
 		} catch (e) { console.warn('[regional folk]', e); } finally { building = false; }
-	}
-	// the work that goes with what they are doing (no sailors far from the sea)
-	const SEA = /fisherman|sailor|harbour|ferry|boat builder/;
-	function jobFor(kit, task, r) {
-		const J = (kit.folk?.jobs || []).filter((j) => here.coast !== false || task === 'fish' || !SEA.test(j));
-		const m = { stall: /sell|merchant|smith|stall|shop|market|carpet|spice|baker|fruit|tailor/, tea: /tea|chai|café|cafe/, fish: /fish/, herd: /herd|cattle|yak|llama|horse|camel|goat|cow|dairy/, farm: /grow|farm|rice|tea|olive|date|millet|garden|terrace/, monk: /temple|monastery/ }[task];
-		const L = m ? J.filter((j) => m.test(j)) : [];
-		if (task === 'monk') return 'a monk at the monastery';
-		return (L.length ? L : J)[Math.floor(r() * (L.length ? L.length : J.length))] || null;
 	}
 	function free(b) { group.remove(b.P.root); b.P.root.traverse((o) => { o.geometry?.dispose?.(); }); }
 

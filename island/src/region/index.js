@@ -207,7 +207,7 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		here.wx = { rain: Wx?.rainHere || 0, cover: Wx?.cover ?? 0.4 };
 		// the settlement you are in, or the nearest; its kit is the one you are in
 		const N = S.nearest(cam.position.x, cam.position.z, ['town', 'village', 'farm']);
-		here.town = N && N.d < 2500 ? { name: N.site.name || '', kind: N.site.kind, km: Math.round(N.d / 100) / 10, kit: N.site.kitId } : null;
+		here.town = N && N.d < 2500 ? { name: N.site.name || '', kind: N.site.kind, km: Math.round(N.d / 100) / 10, kit: N.site.kitId, pop: N.site.pop } : null;
 		here.kit = here.town && N.d < 400 ? KITS[here.town.kit] : K.kit;
 		// the nearest landmark with a story
 		const L = S.nearest(cam.position.x, cam.position.z, ['lore', 'real']);
@@ -248,7 +248,7 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		if (!atlasReady()) { loadAtlas().catch(() => {}); return; }
 		time += dt;
 		if (!far || !out) {
-			here.on = false; S.update(dt, cam, { night, wind, budget: 1 }); folk.update(dt, time, cam);
+			here.on = false; sound.pause(); S.update(dt, cam, { night, wind, budget: 1 }); folk.update(dt, time, cam);
 			ice.update(dt, cam, { month: env.month, night, lat: ll.lat, on: false }); flora.update(cam, { on: false }); air.update(dt, cam, { on: false });
 			return;
 		}
@@ -283,8 +283,9 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		}
 	}
 	const info = () => ({ sound: sound.debug(), folk: folk.info(), ice: ice.info(), flora: flora.info(), kit: here.kit?.id, region: here.regionId, culture: here.culture?.key, climate: here.climate, town: here.town, landmark: here.landmark?.name, onward: here.onward, ...S.info() });
-	function dispose() { folk.dispose(); ice.dispose(); flora.dispose(); air.dispose(); S.dispose(); here.on = false; }
-	return { update, claims, info, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
+	function pause() { sound.pause(); }
+	function dispose() { sound.dispose(); folk.dispose(); ice.dispose(); flora.dispose(); air.dispose(); S.dispose(); here.on = false; }
+	return { update, claims, info, pause, dispose, settlements: S, folk, ice, flora, air, sound, here, kitHere };
 }
 
 const firstSentence = (t = '') => (t.match(/^.*?[.!?](\s|$)/)?.[0] || t).trim();

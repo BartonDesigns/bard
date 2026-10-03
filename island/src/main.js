@@ -122,6 +122,8 @@ import { createShare } from './share.js';
 import { createWorldAudio } from './audio/audio.js';
 import { createOrbitalFlight } from './space/flight.js';
 import { worldBody, sameBody } from './space/body.js';
+import { createKinetic } from './music/kinetic.js';
+import { findKineticSpot } from './music/kinetic-placement.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -582,6 +584,7 @@ export function createIslandWorld() {
 	}
 	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
 	function teleportNow([name, lat, lon, yaw]) {
+		world?.kinetic?.clear();
 		world?.orbit?.cancel();
 		fishing.drop();
 		const W = world, P = W?.player.state;
@@ -613,6 +616,7 @@ export function createIslandWorld() {
 	HOOKS.goTo = (lat, lon, agl = 700) => {
 		const W = world, P = W?.player.state;
 		if (!W?.globe || !P || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return 'Earth only: Crysis.goTo(lat, lon).';
+		W.kinetic?.clear();
 		W.orbit?.cancel();
 		drive.stop();
 		if (W.boat?.boarded?.()) W.boat.leave();
@@ -632,7 +636,7 @@ export function createIslandWorld() {
 	}
 	// share where you are, and homes to come back to (share.js): at the top of the menu
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
-	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
 	HOOKS.share = share;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
@@ -804,6 +808,8 @@ export function createIslandWorld() {
 		}
 		// (the bridges where the realm's roads cross the streams are floors)
 		if (waterPlan?.source.decks.length) { const of = island.extraFloor, wf = world.water.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), wf(x, z, y)) : wf; }
+		world.kinetic = createKinetic({ scene });
+		world.kineticEpoch = world.globe?.frame?.epoch;
 		state.body = world.body = body;
 		state.seed = seed;
 		state.earth = earth;
@@ -933,6 +939,7 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();
 		worldAir(1);
@@ -965,6 +972,26 @@ export function createIslandWorld() {
 		islandReach.band = undefined;
 	}
 
+	function placeKinetic(kind) {
+		const W = world, P = W?.player.state;
+		if (!W || W.orbit?.active() || P.locked || drive.active() || arcade.active() || studio.active()) return false;
+		if (P.pos.y - Math.max(0, W.island.heightAt(P.pos.x, P.pos.z)) > 20) { hint('Come down near clear ground to place an instrument.', 3500); return false; }
+		const spot = findKineticSpot({ player: P, kind, ground: (x, z) => W.island.heightAt(x, z),
+			wet: (x, z) => !!W.island.inWater?.(x, z) || W.lake?.waterAt?.(x, z) != null,
+			blocked: (x, z) => {
+				if (W.vegetation.obstacles(x, z, 1).length || W.globe?.regional?.settlements.blocked(x, z, 1)) return true;
+				if (W.village.footprints.some(f => Math.hypot(x - f.x, z - f.z) < Math.max(f.w || 0, f.d || 0) * .75 + 1)) return true;
+				return (W.real?.near?.('boxes', x, z, 20) || []).some(b => Math.hypot(x - b.x, z - b.z) < Math.max(b.w, b.d) * .75 + 1);
+			},
+		});
+		if (!spot) { hint('Find a flatter, open patch for the instrument.', 3500); return false; }
+		window.initAudio?.();
+		const ok = W.kinetic.spawn({ ...spot, bpm: W.music.performance.bpm });
+		if (ok) { W.kineticEpoch = W.globe?.frame?.epoch; hint('Instrument placed nearby. It plays your current faceplate; Stop and Replay are in Sky & World.', 5000); }
+		return ok;
+	}
+	function replayKinetic() { if (!world || world.orbit?.active()) return; window.initAudio?.(); world.kinetic.configure({ bpm: world.music.performance.bpm }); world.kinetic.replay(); }
+	HOOKS.kinetic = { place: placeKinetic, state: () => world?.kinetic?.state(), replay: replayKinetic, stop: () => world?.kinetic?.silence(), clear: () => world?.kinetic?.clear(), configure: (v) => world?.kinetic?.configure(v) };
 	function buildPanel() {
 		const p = dom.panel;
 		p.replaceChildren();
@@ -983,6 +1010,19 @@ export function createIslandWorld() {
 		musicMode.setAttribute('aria-pressed', String(on));
 		musicMode.onclick = () => { window.L99Continuity?.musicMode?.(!on); buildPanel(); };
 		p.appendChild(musicMode);
+		const rigTitle = css(document.createElement('div'), 'margin:8px 0;font-weight:600;');
+		rigTitle.textContent = 'Kinetic instruments'; p.appendChild(rigTitle);
+		const rigRow = css(document.createElement('div'), 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;');
+		const rig = world.kinetic.state();
+		for (const [label, action] of [['Place bounce garden', () => placeKinetic('garden')], ['Place pendulum wave', () => placeKinetic('pendulum')], ...(rig.kind ? [['Replay', replayKinetic], ['Stop', () => world.kinetic.silence()], ['Clear', () => world.kinetic.clear()]] : [])]) {
+			const b = css(document.createElement('button'), 'flex:1;min-height:38px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:12px system-ui;cursor:pointer;padding:5px;');
+			b.textContent = label; b.onclick = () => { action(); buildPanel(); }; rigRow.appendChild(b);
+		}
+		p.appendChild(rigRow);
+		if (rig.kind === 'garden') {
+			slider(p, 'Garden gravity', .1, 8, .1, () => world.kinetic.state().gravity, v => world.kinetic.configure({ gravity: v }), v => v.toFixed(1));
+			slider(p, 'Garden bounce', 0, .98, .01, () => world.kinetic.state().restitution, v => world.kinetic.configure({ restitution: v }), v => Math.round(v * 100) + '%');
+		}
 		const S = world.sky.state;
 		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 		const t = slider(p, 'Time of day', 0, 23.99, 0.05, () => S.hours, (v) => { S.hours = v; }, fmtH);
@@ -1124,7 +1164,7 @@ export function createIslandWorld() {
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
-		if (!visible || !world || document.hidden || lost) return;
+		if (!visible || !world || document.hidden || lost) { world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
 		// on a phone the world holds still while someone thinks of a reply: the model and
 		// the world share the GPU and the page's memory
 		if (isPhone && guide.llm?.busy?.()) return;
@@ -1144,6 +1184,8 @@ export function createIslandWorld() {
 		W.orbit?.updateHud();
 		worldAir(1 - (W.orbit?.blend() || 0));
 		if (W.orbit?.space()) {
+			W.globe?.regional?.pause();
+			W.kinetic?.silence();
 			// The retained ground stops streaming and drawing; only the orbital pass runs.
 			// The same input state and faceplate analyser continue on every frame.
 			dom.veil.style.opacity = '0'; glare.style.opacity = '0';
@@ -1244,6 +1286,8 @@ export function createIslandWorld() {
 		islandReach(W);
 		W.vegetation.stream(camera, false);
 		W.vegetation.react(dt, camera.position);
+		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }
+		W.kinetic.update(dt, { listener: camera.position });
 		W.village.update(time, sk.night);
 		W.cottages?.update(camera.position, dt);
 		// the old far islands and hill town belong to other worlds; on Earth the real coast is there
@@ -1418,6 +1462,8 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		world?.globe?.regional?.pause();
+		world?.kinetic?.silence();
 		if (world) world.player.state.active = false;
 		worldAir(0);
 		if (muffle.lp) { muffle.k = 0; muffle.lp.frequency.value = 20000; muffle.lp.Q.value = 0.9; }
@@ -1640,6 +1686,7 @@ if (typeof window !== 'undefined') {
 		version: 1,
 		world: () => window.L99Island?.world?.(),
 		performance: () => window.L99Island?.world?.()?.music?.performance,
+		get kinetic() { return HOOKS.kinetic; },
 		body: () => window.L99Island?.world?.()?.body,
 		orbit: () => window.L99Island?.world?.()?.orbit?.info(),
 		// your home on Earth: stored only in this browser, never published
