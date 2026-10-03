@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { waveHeight } from './world/ocean.js';
+import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 
 const EYE = 1.68;
 
@@ -13,7 +14,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	const s = {
 		pos: new THREE.Vector3(island.spawn.x, 0, island.spawn.z),
 		vel: new THREE.Vector3(), yaw: island.spawn.yaw, pitch: -0.04,
-		grounded: false, swimming: false, diving: false, flying: false, run: false, locked: false,
+		grounded: false, swimming: false, diving: false, flying: false, boost: 1, run: false, locked: false,
 	};
 	s.pos.y = island.heightAt(s.pos.x, s.pos.z) + EYE;
 	const keys = new Set();
@@ -26,9 +27,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (!s.active || window._KEYS_PLAY_ON || e.target.closest?.('input,textarea,[contenteditable]')) return;
 		const k = e.key.toLowerCase();
 		if (k === 'f' && !e.repeat) { if (!s.orbit?.high()) { s.flying = !s.flying; s.vel.y = 0; } s.climbAssist = false; s.onFly?.(s.flying); e.preventDefault(); return; }
-		if (k === 'b' && !e.repeat && s.flying) { s.boost = !s.boost; s.onBoost?.(s.boost); e.preventDefault(); return; }
+		if (k === 'b' && !e.repeat && s.flying) { cycleBoost(); e.preventDefault(); return; }
 		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = false; keys.add(k); e.preventDefault(); }
 	}
+	function cycleBoost() { if (!s.flying) return 1; s.boost = nextFlightSpeed(s.boost); s.onBoost?.(s.boost); return s.boost; }
 	function keyUp(e) { keys.delete(e.key.toLowerCase()); }
 	let mouse = null;
 	function pDown(e) {
@@ -168,9 +170,9 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			// higher up, faster: from a few hundred metres the coast is a couple of minutes away
 			const agl = s.orbit?.high() ? 0 : Math.max(0, s.pos.y - Math.max(0, island.heightAt(s.pos.x, s.pos.z)));
 			// the higher you are, the faster: gently near the ground, then strongly (about
-			// 3x at 300 m, 8x at a kilometre); the ×3 boost (B or the button) on top
+			// 3x at 300 m, 8x at a kilometre); the selected boost on top
 			const hk = 1 + Math.max(0, agl - 40) / 120 + Math.max(0, agl - 250) / 140;
-			const fs = s.orbit ? s.orbit.speed(run, s.boost, agl) : (run ? 38 : 16) * hk * (s.boost ? 3 : 1);
+			const fs = s.orbit ? s.orbit.speed(run, s.boost, agl) : (run ? 38 : 16) * hk * flightMultiplier(s.boost);
 			flightQ.setFromEuler(flightE.set(s.pitch, s.yaw, s.roll || 0));
 			fwd.set(0, 0, -1).applyQuaternion(flightQ); right.set(1, 0, 0).applyQuaternion(flightQ);
 			const up = (keys.has(' ') || s.flyUp || s.climbAssist ? 1 : 0) - (keys.has('c') || s.flyDown ? 1 : 0);
@@ -286,5 +288,5 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.jumpQueued = true;
 		return 'jump';
 	}
-	return { state: s, update, input, dispose, jump, floorAt, clearInput };
+	return { state: s, update, input, dispose, jump, floorAt, clearInput, cycleBoost };
 }

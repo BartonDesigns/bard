@@ -27,13 +27,13 @@ const { chromium } = require('playwright');
 		assert.equal(await page.evaluate(() => L99Island.world().player.state.climbAssist), false);
 		await page.keyboard.up('c');
 		for (let trip = 0; trip < 3; trip++) {
-			const ascent = await page.evaluate(() => {
+			const ascent = await page.evaluate(trip => {
 				const W = L99Island.world(), P = W.player.state;
-				P.flying = true; P.flyUp = true; P.boost = true;
+				P.flying = true; P.flyUp = true; P.boost = [3, 6, 9][trip];
 				let n = 0; for (; n < 30000 && P.pos.y < 180000; n++) { W.orbit.before(); W.player.update(1/60, n/60); W.orbit.after(1/60); }
 				P.flyUp = P.boost = false; P.vel.set(0, 0, 0); P.pitch = -.8;
 				return { ticks: n, info: W.orbit.info(), same: W === orbitCheck.world, context: L99Island.renderer().getContext() === orbitCheck.context };
-			});
+			}, trip);
 			const saved = await page.evaluate(() => { const before = localStorage.getItem('crysis-resume'), held = L99Continuity.performance().notes.some(n => n.id === 'kbd:orbit-hold'); dispatchEvent(new Event('pagehide')); return { before, after: localStorage.getItem('crysis-resume'), held }; });
 			assert.ok(saved.before); assert.equal(saved.before, saved.after);
 			if (trip === 0) { assert.ok(saved.held); await page.evaluate(() => stopLead('kbd:orbit-hold', true)); }
@@ -43,13 +43,13 @@ const { chromium } = require('playwright');
 			await page.keyboard.down('w');
 			const steer = await page.evaluate(() => { const W = L99Island.world(), P = W.player.state, p = P.pos.clone(); W.player.update(.05, 0); return P.pos.distanceTo(p); });
 			assert.ok(steer > 0); await page.keyboard.up('w');
-			const descent = await page.evaluate(() => {
+			const descent = await page.evaluate(trip => {
 				const W = L99Island.world(), P = W.player.state, a = W.orbit.info().anchor;
-				P.vel.set(0, 0, 0); P.flyDown = P.boost = true;
+				P.vel.set(0, 0, 0); P.flyDown = true; P.boost = [3, 6, 9][trip];
 				let n = 0; for (; n < 30000 && P.pos.y > 80; n++) { W.orbit.before(); W.player.update(1/60, n/60); W.orbit.after(1/60); }
 				P.flyDown = P.boost = false; P.vel.set(0, 0, 0);
 				return { ticks: n, error: Math.hypot(P.pos.x-a.x, P.pos.z-a.z), same: W === orbitCheck.world, entries: W.orbit.info().entries };
-			});
+			}, trip);
 			assert.ok(descent.ticks < 30000 && descent.same); assert.ok(descent.error < .001); assert.equal(descent.entries, trip + 1);
 			console.log(`Round trip ${trip+1}: same world/context, exit error ${descent.error} m`);
 		}

@@ -2,6 +2,7 @@
 // A return rotates the orbital frame above the atmosphere, preserving every view ray,
 // then lays the retained ground patch under the arrival at its original coordinates.
 import * as THREE from 'three';
+import { flightMultiplier } from '../flight-speed.js';
 
 export const ORBIT = Object.freeze({ start: 12000, end: 60000, entry: 95000, radius: 6371000 });
 const UP = new THREE.Vector3(0, 1, 0);
@@ -28,7 +29,7 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius } = {}) {
 		// Smooth through the old ceiling, gentle through the atmosphere, fast far from it.
 		const ground = 16 * (1 + Math.max(0, h - 40) / 120 + Math.max(0, h - 250) / 140);
 		const base = Math.min(1800, ground) + Math.max(0, h - ORBIT.end) * 0.085;
-		return Math.min(3e7, base * (run ? 2.375 : 1) * (boost ? 3 : 1));
+		return Math.min(3e7, base * (run ? 2.375 : 1) * flightMultiplier(boost));
 	}
 	function update(P) {
 		if (!anchor) return false;

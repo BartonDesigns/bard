@@ -18,6 +18,7 @@ import { createLitter } from './world/litter.js';
 import { createVillage } from './world/village.js';
 import { createDistant } from './world/distant.js';
 import { createPlayer } from './player.js';
+import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 import { createMusic } from './music.js';
 import { createFauna } from './fauna.js';
 import { createBoat } from './boat.js';
@@ -241,7 +242,7 @@ function buildDom() {
 	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
 	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
-	const boost = button('×3', 'Fly three times faster (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
+	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
 	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
 	const shell = button('🐚', 'Pick up the shell (E)', 'display:none;', 'prompt 30');
 	const toss = button('Throw', 'Throw it (T)', 'display:none;');
@@ -584,6 +585,7 @@ export function createIslandWorld() {
 	}
 	function teleport(pl) { tpMenu.style.display = 'none'; travel(pl[0], () => teleportNow(pl)); }
 	function teleportNow([name, lat, lon, yaw]) {
+		world?.labels?.hide();
 		world?.kinetic?.clear();
 		world?.orbit?.cancel();
 		fishing.drop();
@@ -616,6 +618,7 @@ export function createIslandWorld() {
 	HOOKS.goTo = (lat, lon, agl = 700) => {
 		const W = world, P = W?.player.state;
 		if (!W?.globe || !P || !Number.isFinite(+lat) || !Number.isFinite(+lon)) return 'Earth only: Crysis.goTo(lat, lon).';
+		W.labels?.hide();
 		W.kinetic?.clear();
 		W.orbit?.cancel();
 		drive.stop();
@@ -636,7 +639,7 @@ export function createIslandWorld() {
 	}
 	// share where you are, and homes to come back to (share.js): at the top of the menu
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
-	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
 	HOOKS.share = share;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
@@ -758,6 +761,7 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		player.state.onBoost = speed => { hint(`Flying ×${speed}.`, 1500); actions(); };
 		// the fishing cottages' rooms, furnished as you come near (interiors/cottage.js)
 		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
 		// sunbeams through the trees in mist (world/sunrays.js)
@@ -917,7 +921,7 @@ export function createIslandWorld() {
 				world.interiors?.addDoors(world.landmarks);
 				bayArea.coast?.sites?.each((S) => world.interiors?.addSite(S));
 				world.landmarks.yieldTo((x, z) => (world.city?.towersNear?.(x, z, 20) || []).length > 0);
-				world.labels = createLabels(dom.mount, bayArea, bridge);
+				world.labels.setBridge(bridge);
 				// walk and drive across the deck; climb about Mt Diablo's rocks, not through them
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
@@ -939,6 +943,7 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		world.labels?.dispose();
 		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();
@@ -1208,6 +1213,7 @@ export function createIslandWorld() {
 		W.orbit?.updateHud();
 		worldAir(1 - (W.orbit?.blend() || 0));
 		if (W.orbit?.space()) {
+			W.labels?.hide();
 			W.globe?.regional?.pause();
 			W.kinetic?.silence();
 			// The retained ground stops streaming and drawing; only the orbital pass runs.
@@ -1459,11 +1465,14 @@ export function createIslandWorld() {
 		if (dom.down.style.display !== dd) dom.down.style.display = dd;
 		const fb = P.flying ? '#01a982' : 'rgba(8,20,26,.55)';
 		if (dom.fly.style.background !== fb) dom.fly.style.background = fb;
-		// the ×3 boost shows while flying, lit when on
-		const bd = W.player.state.flying ? '' : 'none', bb = W.player.state.boost ? '#01a982' : 'rgba(8,20,26,.55)';
+		// Flight speed shows its current multiplier; B and touch use the same cycle.
+		if (!P.flying) P.boost = 1;
+		const speed = flightMultiplier(P.boost), speedTitle = `Flight speed ${speed}×; next ${nextFlightSpeed(speed)}× (B)`;
+		if (dom.boost.textContent !== `×${speed}`) dom.boost.textContent = `×${speed}`;
+		if (dom.boost.title !== speedTitle) { dom.boost.title = speedTitle; dom.boost.setAttribute('aria-label', speedTitle); }
+		const bd = P.flying ? '' : 'none', bb = speed > 1 ? '#01a982' : 'rgba(8,20,26,.55)';
 		if (dom.boost.style.display !== bd) dom.boost.style.display = bd;
 		if (dom.boost.style.background !== bb) dom.boost.style.background = bb;
-		if (!W.player.state.flying) W.player.state.boost = false;
 		const L = W.orbit && !drive.active() && !arcade.active() ? 'flex' : 'none';
 		if (dom.launch.style.display !== L) dom.launch.style.display = L;
 		dom.launch.style.background = P.climbAssist ? '#01a982' : 'rgba(8,20,26,.55)';
@@ -1486,6 +1495,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		world?.labels?.hide();
 		world?.globe?.regional?.pause();
 		world?.kinetic?.silence();
 		if (world) world.player.state.active = false;
@@ -1503,10 +1513,10 @@ export function createIslandWorld() {
 		if (!P || world.boat.boarded()) return;
 		if (!P.orbit?.high()) { P.flying = !P.flying; P.vel.y = 0; }
 		P.climbAssist = false;
-		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B for ×3. F to land.') : 'Landing.', 3500);
+		hint(P.flying ? (isPhone ? 'Flying: steer with the left thumb, look with the right. ⇡ ⇣ to climb and sink.' : 'Flying: WASD moves where you look, Space climbs, C sinks, Shift is fast, B cycles ×1 / ×3 / ×6 / ×9. F to land.') : 'Landing.', 3500);
 	}
 	dom.fly.addEventListener('click', (e) => { e.stopPropagation(); toggleFly(); });
-	dom.boost.addEventListener('click', (e) => { e.stopPropagation(); const P = world?.player.state; if (P?.flying) { P.boost = !P.boost; hint(P.boost ? 'Flying ×3.' : 'Normal speed.', 1500); } });
+	dom.boost.addEventListener('click', (e) => { e.stopPropagation(); const P = world?.player.state; if (P?.flying) world.player.cycleBoost(); });
 	dom.shell.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.pick(); });
 	dom.toss.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.throwIt(); });
 	dom.place.addEventListener('click', (e) => { e.stopPropagation(); world?.shells.putDown(); });

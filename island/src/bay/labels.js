@@ -5,8 +5,9 @@
 import { PLACES, ZONES } from './places.js';
 import { toWorld } from './geo.js';
 
-export function createLabels(mount, bay, bridge) {
+export function createLabels(mount, bay, bridge, { clock = () => performance.now(), schedule = setTimeout, cancel = clearTimeout } = {}) {
 	const box = document.createElement('div');
+	box.dataset.locationLabel = '';
 	box.style.cssText = 'position:absolute;left:50%;top:calc(18px + env(safe-area-inset-top));transform:translateX(-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.4s ease;color:#f4f1ea;text-shadow:0 1px 12px rgba(0,0,0,.55);max-width:86vw;';
 	const title = document.createElement('div');
 	title.style.cssText = 'font:300 26px/1.15 Georgia,"Times New Roman",serif;letter-spacing:.04em;';
@@ -70,27 +71,34 @@ export function createLabels(mount, bay, bridge) {
 		return { name: pick.name, sub };
 	}
 
-	// timed on the real clock: game time is held back at low frame rates, which left the banner
-	// naming a town already passed
-	let shown = '', pending = '', since = 0, hideAt = 0, next = 0;
+	// A single banner owns its timer, including while rendering is paused or in space.
+	let shown = '', pending = '', since = 0, next = 0, timer = null, disposed = false;
+	function hide() {
+		if (timer !== null) cancel(timer);
+		timer = null; shown = pending = ''; next = 0;
+		box.style.opacity = '0'; title.textContent = sub.textContent = '';
+	}
 	function update(cam, onIsland) {
-		const t = performance.now() / 1000;
+		if (disposed) return;
+		const t = clock() / 1000;
 		if (t < next) return;
 		next = t + 0.4;
-		if (!bay.loaded()) return;
-		const w = where(cam.x, cam.z, cam.y, onIsland);
-		const key = w ? w.name : '';
-		if (key !== pending) { pending = key; since = t; }
-		// only once you have been somewhere a moment, so crossing a corner does not flicker
-		if (pending !== shown && t - since > 1.2) {
-			shown = pending;
-			if (w) {
-				title.textContent = w.name; sub.textContent = w.sub;
-				box.style.opacity = '1';
-				hideAt = t + 5.5;
-			} else box.style.opacity = '0';
+		if (!bay.loaded()) { hide(); return; }
+		const w = where(cam.x, cam.z, cam.y, onIsland), key = w?.name || '';
+		if (key !== pending) {
+			// Never leave the old place behind the incoming name during the debounce.
+			if (timer !== null) cancel(timer);
+			timer = null; box.style.opacity = '0'; title.textContent = sub.textContent = '';
+			pending = key; since = t; shown = '';
 		}
-		if (hideAt && t > hideAt) { box.style.opacity = '0'; hideAt = 0; }
+		if (pending && pending !== shown && t - since >= 1.2) {
+			shown = pending;
+			// The ten seconds start at entry, not after the confirmation delay.
+			if (t - since >= 10) return;
+			title.textContent = w.name; sub.textContent = w.sub || '';
+			box.style.opacity = '1';
+			timer = schedule(() => { timer = null; box.style.opacity = '0'; }, Math.max(0, (since + 10 - t) * 1000));
+		}
 	}
-	return { update, where };
+	return { update, where, hide, setBridge(value) { bridge = value; }, dispose() { if (disposed) return; hide(); disposed = true; box.remove(); } };
 }

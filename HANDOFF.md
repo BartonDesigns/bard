@@ -18,6 +18,18 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **HUD follow-up (3 October 2026):** Location banners now have one owner. Late bridge
+  initialization updates the existing banner instead of creating an abandoned duplicate;
+  world teardown removes it. Names fade ten real seconds after area entry, including
+  when render updates pause, and old text/timers clear on a new area or travel/hide/orbit.
+  The flight button and B cycle 1× → 3× → 6× → 9× → 1×, showing the current multiplier.
+  The same multiplier applies on the surface and in orbit; legacy boolean boost callers
+  still map to 1×/3×. Regression sources: `flight-hud.test.mjs`, `flight-hud-browser.cjs`
+  and the updated three-trip orbital test (now tests 3×, 6× and 9×).
+  Museum inspiration images mentioned by the owner were not attached in this turn;
+  no image-based museum changes have been inferred or made.
+
+
 - **Completion pass (3 October 2026, same draft branch):** All ten authored kinetic rig
   types now run natively, with distinct pooled visuals and real faceplate event notes.
   Sky & World offers the ten choices, scale/root, live garden physics and droplet density,
