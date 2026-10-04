@@ -24,9 +24,9 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 
 ## BR-003 — Floodgate feedback intake and running requests
 
-- **Priority/status:** P0 / implementing.
+- **Priority/status:** P0 / configured; first scheduled intake pending.
 - **Source:** Josh authorized configuring Floodgate to add feedback to this repo as a running list of build requests.
-- **Implementation:** `agents/floodgate.md` defines intake, deduplication, statuses, source attribution and release evidence. Daily connected automation checks repo feedback and maintains this file through a feature branch/PR.
+- **Implementation:** `agents/floodgate.md` defines intake, deduplication, statuses, source attribution and release evidence. The enabled “Floodgate build requests” automation checks repo feedback daily around 8 a.m. America/Los_Angeles and maintains this file through a feature branch/PR. Configuration succeeded on 4 October 2026; its first scheduled intake has not yet run.
 - **Acceptance:** every captured request has a stable ID, source/date, intended player outcome, dependencies, status and testable completion criteria; existing requests/history are preserved; blocked requests stay visible; reports distinguish gameplay effects, tested code and verified live release.
 - **Boundary:** no existing externally hosted Floodgate agent was found. This repo workflow and connected daily task are the concrete setup made here; no claim is made about changing an unidentified external agent.
 
@@ -49,3 +49,5 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 ## Intake log
 
 - 2026-10-03 Pacific: captured owner feedback above. World-development rewards supersede gold-centric recommendations for new design. No invented player survey findings or synthetic feedback treated as real playtest evidence. Existing historical feedback should be linked when found, not recreated or silently overwritten.
+
+- 2026-10-04 Pacific: enabled the daily Floodgate build-request intake, approximately 8 a.m. local time. Initial queue is committed in PR #9. Future passes review repository issues and PR feedback; private chat ingestion is not automatic.

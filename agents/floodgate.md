@@ -2,6 +2,8 @@
 
 Repository: BartonDesigns/bard. Canonical queue: docs/build-requests.md.
 
+Connected task: “Floodgate build requests”, enabled 4 October 2026, daily around 8 a.m. America/Los_Angeles. The first scheduled pass was pending when configured.
+
 ## Purpose
 
 Turn owner/player feedback into a durable, prioritized list of build requests. Preserve four months of authored content and development progress. The owner's new reward direction is tangible, persistent world development rather than accumulating gold. Keep the existing medieval rewards compatible until an explicit migration exists.
