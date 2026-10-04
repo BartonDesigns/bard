@@ -1,0 +1,88 @@
+{
+  "mode": "real player.update walking along seeded tunnel path, no cave teleport",
+  "result": {
+    "deep": {
+      "position": [
+        280.6461535763975,
+        3.3603215525275907,
+        148.24772178819703
+      ],
+      "inside": 1,
+      "depth": 76.50051440932492,
+      "stats": {
+        "elements": {
+          "sites": 3,
+          "stones": 9,
+          "bats": 15,
+          "completed": 0,
+          "saveError": "",
+          "disposed": false
+        },
+        "queued": 0,
+        "generating": 0,
+        "openMouths": 3,
+        "pickables": 136,
+        "streamBudgetMs": 5,
+        "chunks": 281,
+        "built": 248,
+        "meshes": 122,
+        "visible": 46,
+        "tris": 92902,
+        "spikes": 1054,
+        "crystals": 0,
+        "worms": 2200,
+        "glows": 26,
+        "spots": 174
+      }
+    },
+    "steps": 9833,
+    "maxStep": 0.18659882619132084,
+    "returned": [
+      2.87627480572435,
+      76.78849156876383,
+      -160.456625659735
+    ],
+    "surface": 75.10849156876382,
+    "inside": 0,
+    "sameWorld": true,
+    "sameScene": true,
+    "sameURL": true,
+    "audioPresent": true,
+    "sameAudio": true,
+    "loading": "none",
+    "stats": {
+      "elements": {
+        "sites": 3,
+        "stones": 9,
+        "bats": 15,
+        "completed": 0,
+        "saveError": "",
+        "disposed": false
+      },
+      "queued": 0,
+      "generating": 0,
+      "openMouths": 3,
+      "pickables": 78,
+      "streamBudgetMs": 5,
+      "chunks": 281,
+      "built": 190,
+      "meshes": 64,
+      "visible": 25,
+      "tris": 21288,
+      "spikes": 1054,
+      "crystals": 0,
+      "worms": 2200,
+      "glows": 26,
+      "spots": 174
+    },
+    "cavesDoor": {
+      "sameWorld": true,
+      "sameScene": true,
+      "samePosition": true,
+      "sameFrames": true,
+      "dialog": "THE GUIDE\nGuide only (no model)\n⚙\n✕\nPeople\nQuests\nConversations\nCAVE EXPLORATION\nWalk through a hillside mouth into the underground. Play the three resonant stones in an alcove to restore guiding lights. You can walk back to the surface at any time.\nThe Old Mouth · 10 m south\nLook toward The Old Mouth\nEcho Cave · 340 m east\nLook toward Echo Cave\n0 of 3 resonance alcoves restored. Progress is saved on this device.\n🎙\n🔈\n➤"
+    }
+  },
+  "errors": [],
+  "shaderErrors": []
+}

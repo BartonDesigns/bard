@@ -3877,8 +3877,8 @@ button, .pad, .ctrl-btn, .capsule-btn, .tab-btn, .selector, label,
   letter-spacing: 1px;
   margin-left: 2px;
 }
-/* one door: Crysis is the game and the music visualizer; space flight and the caves are inside it */
-#popout-btn, #caves-btn { display: none !important; }
+/* Crysis owns both doors: the world and direct guidance to its connected caves. */
+#popout-btn { display: none !important; }
 #expand-btn, #popout-btn, #caves-btn, #island-btn {
   margin-left: 6px;
   width: 28px;
@@ -29048,7 +29048,7 @@ root.L99CaveRail227={patch};
 
     S.enterCaves = function () {
         /* V1_GUARD_227: the V1 caves are retired; the mountain door opens Crysis, whose worlds carry their own caves */
-        if(window._V1_SURFACES!==true&&window.L99IslandDoor){window.L99IslandDoor.open();return Promise.resolve(false);}
+        if(window._V1_SURFACES!==true&&window.L99IslandDoor){return window.L99IslandDoor.engine().then(function(w){return w.exploreCaves();});}
         if(S.loaded){S.show();return Promise.resolve(true);}
         window.L99Boot176.show('Loading caves…',S.enterCaves);
         /* ROOM_227: walk a light cave while the real one loads */
@@ -29119,8 +29119,8 @@ root.L99CaveRail227={patch};
         cb.dataset.cavesBound163 = '1';
         cb.id = 'caves-btn';
         cb.textContent = '\u26f0';
-        cb.title = 'caves';
-        cb.setAttribute('aria-label', 'caves');
+        cb.title = 'Explore caves';
+        cb.setAttribute('aria-label', 'Explore caves');
         if (host && host.parentNode) {
             cb.className = host.className;
             cb.style.cssText = 'margin-left:6px;font-size:15px;line-height:1;padding-left:10px;padding-right:10px;min-width:0;flex:0 0 auto;';
@@ -29264,7 +29264,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=771d3d92c7'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=d14b7464c7'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29272,7 +29272,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=771d3d92c7'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=d14b7464c7'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }

@@ -16,6 +16,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { rockDetail, TRI_GLSL } from './cavemat.js';
 import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
 import { createMotion } from '../people/motion.js';
+import { caveResidentMeta } from './cave-lore.js';
 
 // surfaces
 const PLASTER = 0, THATCH = 1, WOOD = 2, METAL = 3, CLOTH = 4, GLOW = 5, SNOW = 6, CAP = 7, STONE = 9, PANEL = 10;   // (8: a dark void)
@@ -310,7 +311,20 @@ export function* createCaveVillage(ctx) {
 	// the ways in: tunnel ends inside the chamber stay open
 	const ways = [];
 	for (const t of plan.tunnels) for (const end of [t.pts[0], t.pts[t.pts.length - 1]]) if (Math.hypot(end.x - c.x, end.z - c.z) < Math.max(c.rx, c.rz)) ways.push(toUV(end.x, end.z));
-	const free = (u, v, rad) => keep.every((k) => Math.hypot(k.u - u, k.v - v) > k.r + rad) && ways.every((w) => {
+	// Reserve the actual incoming passages as well as the endpoint-to-plaza lanes.
+	// An endpoint is well inside the chamber; reserving only that last leg let
+	// dwellings block the tunnel's arrival through the chamber wall.
+	const passages = [];
+	for (const tunnel of plan.tunnels) for (let i = 1; i < tunnel.pts.length; i++) {
+		const a = tunnel.pts[i - 1], b = tunnel.pts[i];
+		if (Math.min(Math.hypot(a.x - c.x, a.z - c.z), Math.hypot(b.x - c.x, b.z - c.z)) < Math.max(c.rx, c.rz) + 12) passages.push([toUV(a.x, a.z), toUV(b.x, b.z)]);
+	}
+	const passageFree = (u, v, rad) => passages.every(([a, b]) => {
+		const dx = b.u - a.u, dz = b.v - a.v, len2 = dx * dx + dz * dz;
+		const t = len2 ? Math.max(0, Math.min(1, ((u - a.u) * dx + (v - a.v) * dz) / len2)) : 0;
+		return Math.hypot(u - a.u - dx * t, v - a.v - dz * t) > rad + 1.8;
+	});
+	const free = (u, v, rad) => passageFree(u, v, rad) && keep.every((k) => Math.hypot(k.u - u, k.v - v) > k.r + rad) && ways.every((w) => {
 		// keep a lane from each way in to the plaza
 		const dx = plaza.u - w.u, dv = plaza.v - w.v, l = Math.hypot(dx, dv) || 1, t = Math.max(0, Math.min(1, ((u - w.u) * dx + (v - w.v) * dv) / (l * l)));
 		return Math.hypot(u - w.u - dx * t, v - w.v - dv * t) > rad + 1.8;
@@ -327,7 +341,7 @@ export function* createCaveVillage(ctx) {
 		if (kind === 'stilt' && pool && houses.filter((h) => h.over).length < 3 && r() < 0.6) {
 			const pq = toUV(pool.x, pool.z), b = r() * 6.283;
 			u = pq.u + Math.cos(b) * pool.r * 0.55; v = pq.v + Math.sin(b) * pool.r * 0.55;
-			over = keep.filter((k) => !k.pool).every((k) => Math.hypot(k.u - u, k.v - v) > k.r + 3.5 * s);
+			over = passageFree(u, v, 3.5 * s) && keep.filter((k) => !k.pool).every((k) => Math.hypot(k.u - u, k.v - v) > k.r + 3.5 * s);
 			if (!over) continue;
 		} else if (!free(u, v, 3.2 * s)) continue;
 		const wp = W(u, v);
@@ -523,7 +537,7 @@ export function* createCaveVillage(ctx) {
 
 	// ---------- the people ----------
 	const folk = [];
-	let building = false, built = false, A = null;
+	let building = false, built = false, disposed = false, A = null;
 	const centre = new THREE.Vector3(fp.x, fy, fp.z);
 	const ground = (x, z) => floorAt(x, z);
 	const route = [];
@@ -545,6 +559,7 @@ export function* createCaveVillage(ctx) {
 		building = true;
 		try {
 			A = A || await loadPeopleAssets();
+			if (disposed) return;
 			const n = Math.min(isPhone ? 7 : 11, 6 + seats.length + stalls.length);
 			const roles = [];
 			for (let i = 0; i < Math.min(3, seats.length); i++) roles.push({ role: 'sit', seat: seats[i * 2 % seats.length] });
@@ -560,6 +575,7 @@ export function* createCaveVillage(ctx) {
 			roles.push({ role: 'walk', child: true });
 			const talkSpot = houses[1] ? { x: (houses[1].door.x * 2 + fp.x) / 3, z: (houses[1].door.z * 2 + fp.z) / 3 } : { x: fp.x + 4, z: fp.z };
 			for (let i = 0; i < Math.min(n, roles.length); i++) {
+				if (disposed) break;
 				const R = roles[i];
 				const d = personDNA(((c.x * 1000) ^ (i * 7919 + 131)) >>> 0, R.child ? { age: R.role === 'follow' ? (R.hold ? 3 + r() * 5 : 8 + r() * 4) : 6 + r() * 5 } : { age: i === head ? 24 + r() * 20 : 18 + r() * 55 });
 				// the clothes of this place
@@ -574,7 +590,11 @@ export function* createCaveVillage(ctx) {
 				litPerson(Pp, kind);
 				let M = null;
 				M = createMotion(Pp, (x, z) => ground(x, z));
-				const p = { P: Pp, M, role: R.role, R, t: r() * 5, target: null, idle: 0 };
+				const caveMeta = caveResidentMeta({ worldSeed: ctx.island?.seed ?? plan?.seed ?? 0, chamber: c, index: i, age: d.age, activity: R.role, parent: i === head });
+				Pp.caveMeta = caveMeta;
+				Pp.root.userData.caveResident = caveMeta.id;
+				const p = { P: Pp, M, role: R.role, R, caveMeta, active: true, engaged: false, socialOwned: false, t: r() * 5, target: null, idle: 0 };
+				p.detachForSocial = () => { p.socialOwned = true; M.hold('L', false); M.hold('R', false); Pp.root.removeFromParent(); return true; };
 				if (R.role === 'sit') {
 					const s = R.seat;
 					M.place(s.x, s.y, s.z, s.face);
@@ -612,17 +632,30 @@ export function* createCaveVillage(ctx) {
 		const cam = camera.position;
 		const d = cam.distanceTo(centre);
 		for (const f of flames) f.visible = d < 200;
-		if (d < 120 && !built && !building) makeFolk();
+		if (!disposed && d < 120 && !built && !building) makeFolk();
 		const on = d < 140;
-		for (const p of folk) p.P.root.visible = on;
+		for (const p of folk) if (!p.socialOwned) p.P.root.visible = on;
 		if (!on) return;
 		look.copy(cam);
 		for (const p of folk) {
+			if (p.socialOwned) continue;
 			const M = p.M, Sx = M.S.pos;
 			p.t -= dt;
 			const pd = Math.hypot(cam.x - Sx.x, cam.z - Sx.z);
 			// everyone turns to look at a stranger who comes close
 			M.S.look.target = pd < 5 && player ? look : null;
+			if (p.engaged) {
+				M.want.speed = 0; M.want.heading = Math.atan2(cam.x - Sx.x, cam.z - Sx.z);
+				M.update(dt, t, cam);
+				continue;
+			}
+			if (p.role === 'wait') p.role = p.R.role;
+			if (p.role === 'follow' && p.head?.socialOwned) {
+				// Stay near the family home if a parent joins the player; never keep a
+				// child's old ambient follow link attached to a persistent actor.
+				p.role = 'walk'; p.R.role = 'walk'; p.target = route[0];
+				M.hold('L', false); M.hold('R', false);
+			}
 			if (p.role === 'walk') {
 				if (p.idle > 0) {
 					p.idle -= dt; M.want.speed = 0;
@@ -661,7 +694,8 @@ export function* createCaveVillage(ctx) {
 		fire.k = 3.6 * (0.85 + 0.15 * Math.sin(t * 5.3) * Math.sin(t * 2.1 + 1));
 	}
 	function dispose() {
-		for (const p of folk) p.P.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
+		disposed = true;
+		for (const p of folk) if (!p.socialOwned) p.P.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		folk.length = 0;
 	}
 	return { update, dispose, folk, houses, stalls, centre, glows: glowSpots };

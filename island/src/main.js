@@ -105,7 +105,7 @@ import { toLL as globeLL, bayKm, F as globeF } from './earth/globeframe.js';
 import { createGuide } from './guide/guide.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
-import { createPeople } from './people/people.js';
+import { createPeople, addTalkers } from './people/people.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createRagdolls } from './people/ragdoll.js';
@@ -521,6 +521,7 @@ export function createIslandWorld() {
 	const people = createPeople(scene, () => world, camera);
 	guideApi.people = people;
 	const social = createNpcSocial({ scene, world: () => world, camera, people, isPhone, hint });
+	addTalkers(() => world?.underworld?.village?.()?.folk.filter(p => !p.socialOwned && p.P.root.visible) || []);
 	guideApi.social = social;
 	HOOKS.social = social;
 	addEventListener('pagehide', () => social.flush());
@@ -732,7 +733,7 @@ export function createIslandWorld() {
 		// Crysis: the land's plants and animals, grown from the seed
 		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
 		// a planet's caves are planned first, so nothing grows in their mouths
-		const cavePlan = earth ? null : planCaves(island, profile);
+		const cavePlan = planCaves(island, profile);
 		// ...and the realm's dungeons dug down to meet them
 		if (realmPlan) planDungeons(realmPlan, island, cavePlan, makeField);
 		// the works of whoever built here before: sited now, so nothing grows on them
@@ -763,7 +764,7 @@ export function createIslandWorld() {
 		const pick = [...vegetation.pickables, ...village.pickables];
 		// the reef's corals and the sea's creatures ring too (tagged by what they are made of)
 		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
-		const music = createMusic(shared, scene, camera, dom.canvas, () => pick, () => running && visible);
+		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
 		player.state.onBoost = speed => { hint(`Flying ×${speed}.`, 1500); actions(); };
@@ -776,12 +777,12 @@ export function createIslandWorld() {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
 			island.waterAt = (x, z) => world?.water?.waterAt(x, z) ?? null;
 		}
-		// another world's underground: cave mouths on the hills, tunnels, ruins, a village by lamplight
-		if (!earth) {
-			world.underworld = createUnderworld(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, plan: cavePlan });
+		// Every generated surface, including Earth's island, owns its underground in this scene.
+		{
+			world.underworld = createUnderworld(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, plan: cavePlan, dinosaurs: !earth, bodyKey: body.key });
 			island.underFloor = world.underworld.floor;
 			island.underPush = world.underworld.push;
-			pick.push(...world.underworld.pickables);
+			island.underClear = world.underworld.clearBody;
 		}
 		// the mushrooms this world grows, and what they do to you
 		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
@@ -1295,8 +1296,10 @@ export function createIslandWorld() {
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
 		const caveK = W.underworld?.inside?.() || 0;
-		// deep down the surface overhead is never seen: stop drawing it
-		const open = caveK < 0.9;
+		// Keep the surface visible through mouths and skylights, even from deep shade.
+		const cavePlan = W.underworld?.plan;
+		const vista = cavePlan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
+		const open = caveK < 0.9 || !!vista;
 		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
@@ -1619,6 +1622,12 @@ export function createIslandWorld() {
 		// failed passage left you on the old flight surface)
 		warm: async (planet = {}) => { await build(worldOf(planet)); return true; },
 		guide, people,
+		async exploreCaves() {
+			if (!world) await api.open({ seed: 1337, earth: true });
+			else show();
+			guide.showCaves();
+			return true;
+		},
 		renderer: () => renderer, camera: () => camera, scene: () => scene, dom, shared,
 	};
 

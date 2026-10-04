@@ -85,3 +85,21 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 - **Work:** independent clean/mature language, understated/bold personality and brief/balanced/rich replies. Adult NPCs can use natural profanity and discuss mature life themes when appropriate to their individual character. Child characters remain age-appropriate. Provider limits still apply.
 - **Acceptance:** preferences persist, local/cloud prompts receive the same validated settings, arbitrary saved/request fields cannot inject system instructions, distinct NPC personalities remain, and changing style never fabricates actions or quest outcomes.
 - **Release/boundary amendment (4 October 2026):** The controls and client prompt settings shipped in [PR #10](https://github.com/BartonDesigns/bard/pull/10) and [Pages run 37205907433](https://github.com/BartonDesigns/bard/actions/runs/37205907433). [The committed progress record](https://github.com/BartonDesigns/bard/blob/44bc21638444b0a1ed5a0c765b97e09c3af61a64/docs/npc-dialogue-archive-progress.md) confirms the owner already has a deployed Worker; its new code version was not verified because the status probe received HTTP 403 and this workspace lacks deployment access. Keep cloud style support pending a separately verified Worker deployment. Automated normalization/prompt checks do not establish live-provider personality quality or remove provider limits.
+
+## BR-009 · Native surface-connected procedural caves
+
+- **Source:** owner request, 4 October 2026; legacy build and current source audited.
+- **Priority/status:** P0 / verified generated-island release candidate; publication pending.
+- **Request:** carry the rich historical caves into Crysis, walk naturally from surface to underground and back without loading screen or separate route, with different procedural systems per planet.
+- **Current deliverable:** generated Earth-island/planet cave mouths, readiness/collision agreement, bounded rock streaming, musical cave objects, persistent resonance lights, stable cave NPC lore and conversation, journal/entrance guidance.
+- **Acceptance:** actual controller walk from outside through a mouth and back with unchanged scene/camera/player/audio/URL; no loader/shader error; saved environmental reward returns; headroom/walls respected; multiple profile seeds tested.
+- **Visual requirement (owner, 4 October 2026):** strong local visual fidelity without breaking seamless play or device budgets. Wet rock, ice and crystals now catch nearby cave glow; existing procedural detail and biome palettes remain. Validate compiled shaders and phone controls, and do not substitute software-rendered functional checks for native-device FPS evidence.
+- **Preservation:** docs/cave-migration-inventory.md records the remaining depth/core/trials, water/geode/torch, echo/shard and civic mechanics. Keep legacy archive intact. Mainland cave coverage needs distinct real-terrain siting and carving work. Shared world rewards require BR-006.
+
+## BR-010 · Street-walking gameplay improvements
+
+- **Source:** owner-requested agent playtest, docs/street-walking-playtest.md.
+- **Priority/status:** P1 / observed journal and cave-wayfinding fixes in current cave branch.
+- **Findings:** exploration goals were hidden by a story-only journal; cave targets needed real mouth identity; companions need navigable cave routes; rewards should leave visible world changes.
+- **Verification amendment (4 October 2026):** a real runtime cave resident followed 4.625 m on a sampled reachable route, with bounded movement and valid cave floor/headroom; see docs/verification/cave-gameplay/companion-report.json. This supersedes the original zero-movement probe and does not establish arbitrary tunnel pathfinding.
+- **Follow-up:** extend companion route planning and task return; add mainland destinations and understandable route cues; migrate legacy echo/song-shard progression as tangible musical development. Separate actual browser findings from inferred suggestions. Do not represent agents as recruited human players.

@@ -133,7 +133,12 @@ export function caveLighting(shared, island, profile) {
 		{
 			// the glowing places nearby, and the faint ever-present glow
 			vec3 cvN = cvWorldN(normal);
-			vec3 add = vec3(0.0);
+			vec3 add = vec3(0.0), sheen = vec3(0.0);
+			vec3 cvV = normalize(cameraPosition - vCvW);
+			float cvRough = 1.0;
+			#ifdef STANDARD
+				cvRough = clamp(roughnessFactor, 0.08, 1.0);
+			#endif
 			for (int i = 0; i < ${FAKE}; i++) {
 				vec4 P = uCvFakeP[i];
 				if (P.w <= 0.0) continue;
@@ -143,8 +148,14 @@ export function caveLighting(shared, island, profile) {
 				att = att * att / (1.0 + d * d * 0.05);
 				float nl = clamp(dot(cvN, L / max(d, 1e-3)) * 0.7 + 0.3, 0.0, 1.0);
 				add += uCvFakeC[i] * att * nl;
+				// Local glows must also reveal wet stone, ice and crystal facets. Reuse
+				// this light's attenuation; a bounded lobe adds no lights or shadows.
+				vec3 H = normalize(L / max(d, 1e-3) + cvV);
+				float glint = pow(max(dot(cvN, H), 0.0), mix(96.0, 8.0, cvRough));
+				sheen += uCvFakeC[i] * att * glint * max(dot(cvN, L / max(d, 1e-3)), 0.0) * (1.0 - cvRough) * 0.18;
 			}
 			reflectedLight.directDiffuse += diffuseColor.rgb * (add * cvOcc + uCvAmb * (1.0 - cvSun) * (0.4 + 0.6 * cvOcc));
+			reflectedLight.directSpecular += sheen * cvOcc;
 			// sunlight down the shaft (the sun's own direction is ignored: it falls straight in)
 			reflectedLight.directDiffuse += diffuseColor.rgb * uCvSunC * cvShaftK * clamp(cvN.y * 0.6 + 0.5, 0.0, 1.0) * 1.6;
 		}`;
@@ -286,7 +297,7 @@ export function rockMaterial(L, profile, opts = {}) {
 					float colony = smoothstep(0.62, 0.85, texture2D(uDetail, vCvW.xz * 0.011 + vCvW.y * 0.004).b * 0.7 + 0.3 * h1 + 0.2 * (1.0 - up));
 					float speck = step(0.93, rH(cell)) * (1.0 - smoothstep(0.03, 0.11, length(fract(vCvW * 7.0) - 0.5)));
 					float breathe = 0.6 + 0.4 * sin(uTime * (0.4 + rH(cell + 3.0)) + rH(cell + 9.0) * 6.28) + uBass * 0.3;
-					totalEmissiveRadiance += uGlowC * speck * colony * breathe * dark * uGlowK * 0.9 * (0.4 + 0.6 * smoothstep(-0.2, -0.8, up));
+					totalEmissiveRadiance += uGlowC * speck * colony * breathe * dark * uGlowK * 0.9 * (0.4 + 0.6 * (1.0 - smoothstep(-0.8, -0.2, up)));
 					// a faint haze of the same glow where the colonies are thick
 					totalEmissiveRadiance += uGlowC * colony * dark * uGlowK * 0.008;
 					// hot veins in the rock of a volcanic world
@@ -388,7 +399,7 @@ export function shaftMaterial(L) {
 				// brighter toward the beam's core as seen from here, rays shifting slowly
 				vec3 V = normalize(cameraPosition - vW);
 				float ray = 0.65 + 0.35 * sin(vU.x * 31.4 + uTime * 0.3) * sin(vU.x * 12.6 - uTime * 0.17);
-				float a = smoothstep(0.0, 0.25, vU.y) * smoothstep(1.0, 0.85, vU.y) * ray * uK * 0.05 * pow(abs(dot(normalize(vN), V)), 2.0);
+				float a = smoothstep(0.0, 0.25, vU.y) * (1.0 - smoothstep(0.85, 1.0, vU.y)) * ray * uK * 0.05 * pow(abs(dot(normalize(vN), V)), 2.0);
 				gl_FragColor = vec4(uSunC * a, 1.0);
 			}`,
 		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
@@ -408,13 +419,13 @@ export function glowPointsMaterial(shared, color, size, opts = {}) {
 				gl_Position = projectionMatrix * mv;
 				float d = -mv.z;
 				gl_PointSize = clamp(uSize * uPx * 300.0 / d, 1.0, 24.0);
-				vA = (0.55 + 0.45 * sin(uTime * (0.6 + aR) + aR * 60.0)) * smoothstep(90.0, 30.0, d);
+				vA = (0.55 + 0.45 * sin(uTime * (0.6 + aR) + aR * 60.0)) * (1.0 - smoothstep(30.0, 90.0, d));
 				vR = aR;
 			}`,
 		fragmentShader: `uniform vec3 uC; varying float vA; varying float vR;
 			void main(){
 				float r = length(gl_PointCoord - 0.5);
-				float a = smoothstep(0.5, 0.0, r);
+				float a = (1.0 - smoothstep(0.0, 0.5, r));
 				a = a * a * vA;
 				gl_FragColor = vec4(uC * a * (1.5 + vR), 1.0);
 			}`,

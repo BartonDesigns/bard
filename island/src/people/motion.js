@@ -543,5 +543,5 @@ export function createMotion(P, groundAt) {
 	// through once (or round and round, for a looping one); act(null): let it go
 	const act = (name, u) => { const X = S.act; if (!name) { X.name = null; X.auto = false; return; } if (X.name !== name) X.u = u ?? 0; X.name = name; X.auto = u === undefined; if (u !== undefined) X.u = u; X.once = false; };
 	const play = (name, dur = 1, once = false) => { const X = S.act; X.name = name; X.u = 0; X.dur = dur; X.auto = true; X.once = once; };
-	return { S, update, gesture, setPose, feel, sit, stand, hold, act, play, poses: POSES, want: S.want, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
+	return { S, update, gesture, setPose, feel, sit, stand, hold, act, play, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
 }

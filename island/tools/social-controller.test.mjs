@@ -68,3 +68,14 @@ test('nearby scouting skips a blocked closer route and refuses when all routes a
   assert.equal(h.api.scoutNearby(actor,[nearer,further]),null);
  }finally{h.dispose();}
 });
+
+test('cave scout requires a complete clear route and matching target level',()=>{
+ const h=harness();try {
+  const r=h.resident();h.world.island.heightAt=()=>60;h.world.island.underFloor=()=>2;h.world.island.underClear=x=>x<5;
+  assert.match(h.api.command(r,'scout nearby',{target:{x:10,z:0,y:2,under:true}}),/blocked/);assert.equal(r.mode,'idle');
+  h.world.island.underClear=()=>true;
+  assert.match(h.api.command(r,'scout nearby',{target:{x:10,z:0,y:60}}),/blocked/);assert.equal(r.mode,'idle');
+  assert.match(h.api.command(r,'scout nearby',{target:{x:10,z:0,y:2,under:true,name:'the echo hall'}}),/scout the echo hall/);
+  assert.equal(r.task.target.y,2);
+ }finally{h.dispose();}
+});

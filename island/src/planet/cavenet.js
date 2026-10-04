@@ -555,6 +555,7 @@ export function* meshChunk(field, ox, oy, oz, S, v) {
 		const k = (c * CN + b) * CN + a;
 		cval[k] = field.solid(ox + (a * Q - 1) * v, oy + (b * Q - 1) * v, oz + (c * Q - 1) * v);
 		ckind[k] = out.kind;
+		if (a === CN - 1 && b === CN - 1) yield 0;
 	}
 	// per coarse cell: 0 = measure, 1 = deep rock, 2 = deep air
 	const far = Q * v * 1.9, cfar = new Uint8Array(CC * CC * CC);
@@ -610,7 +611,7 @@ export function* meshChunk(field, ox, oy, oz, S, v) {
 			P[nP * 3] = ox + (a - 1 + sx / m) * v; P[nP * 3 + 1] = oy + (b - 1 + sy / m) * v; P[nP * 3 + 2] = oz + (c - 1 + sz / m) * v;
 			K[nP++] = kk;
 		}
-		if (c % 8 === 7) yield 0;
+		yield 0;
 	}
 	// the faces: one quad per crossing edge this chunk owns (the ground only in a mouth)
 	let idx = new Uint32Array(6 * 4096), nI = 0;
@@ -629,7 +630,7 @@ export function* meshChunk(field, ox, oy, oz, S, v) {
 			if ((val[k0 + M] < 0) !== s0) quad(CV(a - 1, b, c - 1), CV(a, b, c - 1), CV(a, b, c), CV(a - 1, b, c), s0, s0 ? kind[k0 + M] : kind[k0]);
 			if ((val[k0 + MM] < 0) !== s0) quad(CV(a - 1, b - 1, c), CV(a, b - 1, c), CV(a, b, c), CV(a - 1, b, c), !s0, s0 ? kind[k0 + MM] : kind[k0]);
 		}
-		if (c % 8 === 7) yield 0;
+		yield 0;
 	}
 	if (!nI) return null;
 	// keep only the vertices the faces use

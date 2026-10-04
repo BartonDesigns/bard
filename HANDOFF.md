@@ -18,6 +18,8 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Seamless caves (4 October Pacific):** `docs/seamless-caves-progress.md` tracks native surface/cave integration, verification and remaining legacy gaps; `docs/cave-migration-inventory.md` preserves 27 categories. Street-agent observations are in `docs/street-walking-playtest.md`. The cave release candidate passes the actual faceplate door, controller round trip, saved musical rewards, local companion movement and shader/phone-UI gates; release PR deployment evidence determines live status. Do not claim full deep-cave or mainland coverage from the generated-island release.
+
 - **NPC dialogue/archive (4 October Pacific):** `docs/npc-dialogue-archive-progress.md` records per-NPC transcript isolation, searchable full history and tone settings. BR-006 explicitly requires future universal world progress; current local NPC/quest saves are not shared multiplayer state. Preserve private conversations and do not claim backend synchronization without two-client evidence.
 
 - **Conversational quests and Floodgate (3 October Pacific):** See `docs/conversational-quests-progress.md` for provider/deployment boundaries and verified gameplay. The owner now prioritizes persistent world development as rewards, with roughly day-long propagation to specify. The canonical running build queue is `docs/build-requests.md`, maintained under `agents/floodgate.md`. Keep legacy content/saves compatible; do not equate queue intake or generated prose with a shipped world change.

@@ -18,7 +18,8 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 	function hitAt(ndcX, ndcY) {
 		v2.set(ndcX, ndcY);
 		ray.setFromCamera(v2, camera);
-		const hits = ray.intersectObjects(pickables(), false);
+		const visible = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
+		const hits = ray.intersectObjects(pickables().filter(visible), false);
 		return hits.length ? hits[0] : null;
 	}
 
@@ -26,6 +27,7 @@ export function createMusic(shared, scene, camera, canvas, pickables, active) {
 	// across that object (see pulse.js), tinted by what it is made of
 	const box = new THREE.Box3(), m4 = new THREE.Matrix4(), origin = new THREE.Vector3();
 	function ripple(hit, kind) {
+		hit.object?.userData.onCaveStrike?.(hit);
 		const col = { wood: 0xffc98a, stone: 0xa8c8ff, crystal: 0x9ffff0, soft: 0xbfff9a }[kind] || 0xffffff;
 		let reach = 6, org = null;
 		const o = hit.object;

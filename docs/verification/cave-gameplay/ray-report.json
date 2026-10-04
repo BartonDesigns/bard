@@ -1,0 +1,60 @@
+[
+  {
+    "note": 0,
+    "matched": true,
+    "debug": [
+      {
+        "j": 0,
+        "hit": "",
+        "material": "crystal",
+        "visible": true,
+        "root": true,
+        "group": true
+      }
+    ]
+  },
+  {
+    "note": 1,
+    "matched": true,
+    "debug": [
+      {
+        "j": 0,
+        "hit": "",
+        "material": "crystal",
+        "visible": true,
+        "root": true,
+        "group": true
+      }
+    ]
+  },
+  {
+    "note": 2,
+    "matched": true,
+    "debug": [
+      {
+        "j": 0,
+        "hit": "",
+        "material": "crystal",
+        "visible": true,
+        "root": true,
+        "group": true
+      },
+      {
+        "j": 1,
+        "hit": "",
+        "material": "crystal",
+        "visible": true,
+        "root": true,
+        "group": true
+      },
+      {
+        "j": 2,
+        "hit": "",
+        "material": "crystal",
+        "visible": true,
+        "root": true,
+        "group": true
+      }
+    ]
+  }
+]

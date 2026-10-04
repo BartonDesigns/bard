@@ -18,11 +18,22 @@ export function safeSocialStep(island, from, to, player = null) {
  const floor = island.extraFloor?.(to.x, to.z, from.y + 1) ?? -1e9;
  const y = under ?? player?.floorAt?.(to.x,to.z,from.y) ?? Math.max(base, floor);
  if (!Number.isFinite(y) || (under == null && base < .35 && floor < -1e8 && y < .35) || Math.abs(y - from.y) > .6) return null;
+ if (under != null && island.underClear && !island.underClear(to.x,y,to.z,1.68,.35)) return null;
  const q = new THREE.Vector3(to.x, y + 1.68, to.z);
  if(player?.pushOut) player.pushOut(q);
  else if(under != null) island.underPush?.(q,y);
  else island.extraPush?.(q, y);
- if (Math.hypot(q.x - to.x, q.z - to.z) > .04) return null;
+ const overlap = Math.hypot(q.x - to.x, q.z - to.z);
+ if (overlap > .04) {
+  // A seated/ambient resident may begin slightly inside a prop's safety margin.
+  // Permit walking out only while penetration decreases; never snap the body.
+  const origin = new THREE.Vector3(from.x,from.y+1.68,from.z);
+  if(player?.pushOut) player.pushOut(origin);
+  else if(island.underFloor?.(from.x,from.z,from.y)!=null) island.underPush?.(origin,from.y);
+  else island.extraPush?.(origin,from.y);
+  const previous = Math.hypot(origin.x-from.x,origin.z-from.z);
+  if (previous <= .04 || overlap >= previous - 1e-7) return null;
+ }
  return { x: to.x, y, z: to.z };
 }
 
@@ -54,9 +65,11 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
  function remove(p) { persist(p); actors.delete(p.socialId); p.active = false; freeBody(p.P); }
  function setup(p, record) {
   if(group.parent!==scene) scene.add(group);
+  p.socialOwned=true; p.caveMeta=record.persona?.caveMeta || p.caveMeta; if(p.caveMeta)p.P.caveMeta=p.caveMeta;
   p.socialId = p.residentId = record.id; p.persona = record.persona; p.active = true; p.busy = true;
   p.lastPosition=positionFor(W(),p.M.S.pos);
   p.source = 'resident'; p.detachForSocial = null; p.P.job = record.persona?.job || p.P.job;
+  p.M.setGround?.((x,z) => ground(x,z,p.M.S.pos.y));
   p.M.stand(); p.M.setPose('rest'); p.M.S.sitK.v = 0; p.M.want.speed = 0;
   group.add(p.P.root); fadePerson(p.P, 1); actors.set(record.id, p); return p;
  }
@@ -88,11 +101,18 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
   p.M.want.speed = distance > 1.8 ? speed : 0; if (distance > .01) p.M.want.heading = Math.atan2(dx,dz);
   // Damped heading may still point at a wall: validate actual motion afterwards too.
   const probe = {x:start.x+Math.sin(S.heading)*speed*dt,z:start.z+Math.cos(S.heading)*speed*dt};
-  if (!safeSocialStep(W().island,start,probe,W().player)) { p.M.want.speed=0; S.speed.v=0; p.blocked=(p.blocked||0)+dt; }
+  let obstructed = p.M.want.speed > 0 && !safeSocialStep(W().island,start,probe,W().player);
+  if (obstructed) { p.M.want.speed=0; S.speed.v=0; S.speed.dv=0; }
   p.M.update(dt,t,camera.position);
-  const accepted = safeSocialStep(W().island,start,S.pos,W().player);
-  if (!accepted) { p.M.place(start.x,start.y,start.z,S.heading); p.blocked=(p.blocked||0)+dt; }
-  else { if (p.M.want.speed > 0) p.blocked=0; }
+  const moved = Math.hypot(S.pos.x-start.x,S.pos.z-start.z)>1e-9;
+  const accepted = moved ? safeSocialStep(W().island,start,S.pos,W().player) : {y:start.y};
+  if (!accepted) {
+   // Retain the completed turn when translation is blocked. Resetting motion
+   // here would pin a resident inside an existing prop margin forever.
+   S.pos.copy(start); p.P.root.position.copy(start); S.speed.v=0; S.speed.dv=0; obstructed=true;
+  } else { S.pos.y=accepted.y; p.P.root.position.y=accepted.y; }
+  if (obstructed) p.blocked=(p.blocked||0)+dt;
+  else if (moved || speed===0) p.blocked=0;
   return distance;
  }
  function update(dt,t,enabled=true) {
@@ -112,7 +132,7 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
    const records=state.list(key());
    for(const ambient of [...(people?.pool||[]),...talkers()].slice(0,60)) {
     if(ambient.socialId || ambient.engaged || !ambient.active || !ambient.detachForSocial) continue;
-    const resident=records.find(r=>r.dna?.seed===ambient.P.dna.seed && (()=>{const q=worldPosition(W(),r.position);return q && Math.hypot(q.x-ambient.M.S.pos.x,q.z-ambient.M.S.pos.z)<35;})());
+    const resident=records.find(r=>(ambient.caveMeta?.id && r.persona?.caveMeta?.id===ambient.caveMeta.id) || r.dna?.seed===ambient.P.dna.seed && (()=>{const q=worldPosition(W(),r.position);return q && Math.hypot(q.x-ambient.M.S.pos.x,q.z-ambient.M.S.pos.z)<35;})());
     if(!resident) continue;
     if(ambient.detachForSocial()) { ambient.active=false; freeBody(ambient.P); }
    }

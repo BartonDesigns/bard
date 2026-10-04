@@ -90,9 +90,9 @@ export function createGuide(mount, api) {
 	// ---------- where things are ----------
 	function targets() {
 		const W = api.world(), out = [];
-		for (const [n, lat, lon, fact] of LANDMARKS) out.push({ name: n, ...toWorld(lat, lon), fact, kind: 'landmark' });
-		for (const z of ZONES) out.push({ name: z[0], ...toWorld(z[1], z[2]), fact: z[3], kind: 'area' });
-		for (const p of PLACES) out.push({ name: p[0], ...toWorld(p[1], p[2]), fact: p[3], kind: p[5] ? 'neighbourhood' : 'town' });
+		if (W?.body?.earth || W?.bayArea || W?.globe) for (const [n, lat, lon, fact] of LANDMARKS) out.push({ name: n, ...toWorld(lat, lon), fact, kind: 'landmark' });
+		if (W?.body?.earth || W?.bayArea || W?.globe) for (const z of ZONES) out.push({ name: z[0], ...toWorld(z[1], z[2]), fact: z[3], kind: 'area' });
+		if (W?.body?.earth || W?.bayArea || W?.globe) for (const p of PLACES) out.push({ name: p[0], ...toWorld(p[1], p[2]), fact: p[3], kind: p[5] ? 'neighbourhood' : 'town' });
 		if (W) {
 			const I = W.island, B = I.village.bay;
 			out.push({ name: 'the village', x: I.village.x, z: I.village.z, fact: 'the fishing village on the island', kind: 'island' });
@@ -101,6 +101,7 @@ export function createGuide(mount, api) {
 			if (B) out.push({ name: 'the volcanic vent', x: B.x, z: B.z, fact: 'a live vent erupting embers in the heart of the drowned crater', kind: 'island', under: true });
 			if (W.magma?.tube) { const t = W.magma.tube[Math.floor(W.magma.tube.length / 2)]; out.push({ name: 'the lava tube', x: t.x, z: t.z, y: t.y + 1.5, fact: 'a rock tunnel carrying a molten stream from the vent', kind: 'island', under: true }); }
 			(W.caverns?.tunnels || []).forEach((t, i) => { const m = t[Math.floor(t.length / 2)]; out.push({ name: `sea cave ${i + 1}`, x: t[0].x, z: t[0].z, y: t[0].y + 2, fact: 'a swim-through lava cave with glowing walls', kind: 'island', under: true, mid: m }); });
+			(W.underworld?.entrances || []).forEach((e, i) => out.push({ ...e, caveEntrance: i, kind: 'island', fact: 'a walkable hillside mouth into this world’s connected underground; walk down the tunnel and return by the same route' }));
 			if (W.whale?.whale?.position) out.push({ name: 'the whale', x: W.whale.whale.position.x, z: W.whale.whale.position.z, fact: 'a humpback in the bay', kind: 'island' });
 			const home = store.get('crysis-home', null);
 			if (home) out.push({ name: home.name || 'home', ...toWorld(home.lat, home.lon), fact: 'your home', kind: 'home' });
@@ -111,6 +112,7 @@ export function createGuide(mount, api) {
 		const q = norm(name).replace(/^(the|to) /, '');
 		if (!q) return null;
 		const all = targets();
+		if (/^(?:cave|caves|nearest cave|cave entrance)$/.test(q)) return all.filter(t => t.caveEntrance !== undefined).sort((a,b) => Math.hypot(a.x-api.camera.position.x,a.z-api.camera.position.z)-Math.hypot(b.x-api.camera.position.x,b.z-api.camera.position.z))[0] || null;
 		let best = null, score = 0;
 		for (const t of all) {
 			const n = norm(t.name).replace(/^the /, '');
@@ -131,7 +133,7 @@ export function createGuide(mount, api) {
 		const P = W.player.state, hours = W.sky.state.hours;
 		const near = targets().filter((t) => t.kind !== 'neighbourhood').map((t) => ({ ...t, d: Math.hypot(t.x - cam.x, t.z - cam.z) })).sort((a, b) => a.d - b.d).slice(0, 6);
 		return {
-			place: onIsland ? 'the island (in the Gulf of the Farallones, 25 km west of the Golden Gate)' : where ? `${where.name} (${where.sub})` : 'the Bay Area',
+			place: (W.underworld?.inside() || 0) > .35 ? 'the connected caves beneath '+(api.shared.planet?.name || 'this world') : onIsland ? (W.bayArea || W.globe ? 'the island (in the Gulf of the Farallones, 25 km west of the Golden Gate)' : api.shared.planet?.name || 'the island') : where ? `${where.name} (${where.sub})` : 'the open world',
 			onIsland, underwater: cam.y < 0 && g < 0, depth: Math.max(0, -cam.y), height: Math.round(cam.y - Math.max(g, 0)), flying: !!P.flying, diving: !!P.diving, boat: !!W.boat?.boarded?.(),
 			time: `${Math.floor(hours)}:${String(Math.floor((hours % 1) * 60)).padStart(2, '0')}`, night: hours < 6 || hours > 19.5, wind: +(api.shared.uWind.value).toFixed(2),
 			facing: dirTo(-Math.sin(P.yaw), -Math.cos(P.yaw)),
@@ -144,6 +146,8 @@ export function createGuide(mount, api) {
 	// ---------- quests people give you, and the places you discover ----------
 	const quests = store.get('crysis-quests', []);
 	const found = store.get('crysis-places', {});
+	const savedCaveVisits = store.get('crysis-cave-visits-v1', {});
+	const caveVisits = savedCaveVisits && typeof savedCaveVisits === 'object' && !Array.isArray(savedCaveVisits) ? savedCaveVisits : {};
 	const QUEST_RE = /\[\[\s*quest\s*:\s*([^\]]+)\]\]/gi;
 	function giveQuest(placeName, from) {
 		const t = find(placeName);
@@ -166,7 +170,7 @@ export function createGuide(mount, api) {
 		if (!W || !bodyKey) return { bodyKey, targets: [], npcs: [] };
 		const cam = api.camera.position;
 		const places = targets().filter(t => !t.under && t.name !== 'the whale' && (t.kind === 'island' || W.globe || W.bayArea?.loaded()))
-			.map(t => ({ ...t, id: 'place-' + norm(t.name).replace(/ /g, '-'), bodyKey, y: W.player.floorAt(t.x,t.z,W.island.heightAt(t.x,t.z)), radius: 14 }))
+			.map(t => ({ ...t, id: 'place-' + norm(t.name).replace(/ /g, '-'), bodyKey, y: t.caveEntrance !== undefined ? t.y : W.player.floorAt(t.x,t.z,W.island.heightAt(t.x,t.z)), radius: t.caveEntrance !== undefined ? 6 : 14 }))
 			.filter(t => Number.isFinite(t.y) && t.y >= .3 && Math.hypot(t.x-cam.x,t.z-cam.z) < 5000)
 			.sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z)).slice(0,10);
 		const residents = S.state.list(bodyKey);
@@ -259,6 +263,12 @@ export function createGuide(mount, api) {
 		for (const r of api.social?.state.list(questWorld.bodyKey) || []) if (r.task?.status==='completed' && r.task.targetId && Number.isFinite(r.task.completedAt)) {
 			for(const q of stories.event({id:r.task.id,type:'scout',bodyKey:questWorld.bodyKey,npcId:residentKey(r.id),targetId:r.task.targetId,taskId:r.task.id,status:'completed',completedAt:r.task.completedAt})) questChanged(q);
 		}
+		if ((W.underworld?.inside() || 0) > .55 && !P.flying && questWorld.bodyKey && !caveVisits[questWorld.bodyKey]) {
+			caveVisits[questWorld.bodyKey] = Date.now();
+			const keys = Object.keys(caveVisits); if (keys.length > 128) delete caveVisits[keys[0]];
+			store.set('crysis-cave-visits-v1', caveVisits);
+			api.hint('Journal: explored this world’s underground. Tap the resonant stones to restore its lights.', 5000);
+		}
 		const near = (lat, lon, r) => { const p = toWorld(lat, lon); return Math.hypot(cam.x - p.x, cam.z - p.z) < r; };
 		const B = W.island.village.bay;
 		const hit = (id) => { if (journal[id]) return; journal[id] = Date.now(); store.set('crysis-journal', journal); const q = QUESTS.find((x) => x[0] === id); api.hint('Journal: ' + q[1] + ' ✓', 3500); say(`${q[1]}: done.`, 'note'); };
@@ -317,6 +327,10 @@ export function createGuide(mount, api) {
 		const s = snapshot(), q = norm(text);
 		if (!s) return 'The world is still waking up.';
 		let m;
+		if (/\b(cave|caves|underground|cavern)\b/.test(q) && !/^(take me|go|fly|bring me|teleport me|travel)/.test(q)) {
+			const t = find('nearest cave'), cam = api.camera.position;
+			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Tap the three resonant stones in an alcove to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
+		}
 		if ((m = q.match(/^(?:take me|go|fly|bring me|teleport me|travel)(?: to)? (.+)$/))) { const t = find(m[1]); return t ? `Let's go to ${t.name}. [[go: ${t.name}]]` : `I don't know a place called "${m[1]}". Try a city, a landmark, or something on the island like "the vent".`; }
 		if ((m = q.match(/(?:make it|set (?:the )?time(?: to)?|skip to) (night|midnight|sunset|sunrise|dawn|noon|morning|evening|\d+)/))) { const h = { night: 22.5, midnight: 0, sunset: 18.6, sunrise: 6.2, dawn: 5.8, noon: 12, morning: 9, evening: 19.5 }[m[1]] ?? +m[1]; return `As you wish. [[time: ${h}]]`; }
 		if (/where am i|where are we/.test(q)) return `You're at ${s.place}${s.underwater ? `, ${Math.round(s.depth)} m under water` : s.height > 20 ? `, ${s.height} m up` : ''}. Nearby: ${s.near.slice(0, 3).map((n) => `${n.name} (${n.dist} ${n.dir})`).join(', ')}.`;
@@ -668,6 +682,26 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			}
 		}
 		if (stories.status().error) say(stories.status().error,'note');
+		say('EXPLORATION', 'note');
+		for (const q of QUESTS.filter(q => !q[2] || find(q[2]))) say(`${journal[q[0]] ? '✓' : '○'} ${q[1]}`, 'note');
+		const caves = el('button', btnCss, 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
+	}
+	function showCaves() {
+		endTalk(); resetView('journal'); show(true);
+		const W = api.world(), cam = api.camera.position;
+		say('CAVE EXPLORATION', 'note');
+		say('Walk through a hillside mouth into the underground. Play the three resonant stones in an alcove to restore guiding lights. You can walk back to the surface at any time.', 'guide');
+		const caves = targets().filter(t => t.caveEntrance !== undefined).sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z));
+		if (!caves.length) say('There are no mapped land-cave entrances on this surface.', 'note');
+		for (const t of caves) {
+			say(`${t.name} · ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}`, 'guide');
+			const face = el('button', btnCss, 'Look toward '+t.name);
+			face.onclick = () => { const P = W.player.state; P.yaw = Math.atan2(-(t.x-P.pos.x),-(t.z-P.pos.z)); P.pitch = -.08; show(false); api.hint(`${t.name}: follow this bearing to the hillside mouth.`, 5000); };
+			log.append(face);
+		}
+		if (caveVisits[api.social?.bodyKey()]) say('✓ You have explored this world’s underground.', 'note');
+		const stats = W?.underworld?.elements?.stats();
+		if (stats) say(`${stats.completed} of ${stats.sites} resonance alcoves restored. ${stats.saveError || 'Progress is saved on this device.'}`, 'note');
 	}
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;
@@ -759,5 +793,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
+	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
 }

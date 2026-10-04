@@ -13,10 +13,11 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		if (!W || !p?.P?.dna || !p.M?.S?.pos) return null;
 		let record = p.residentId && state.get(p.residentId);
 		if (record && record.bodyKey !== bodyKey()) record = null;
-		const position = positionFor(W, p.M.S.pos);
+		const position = positionFor(W, p.M.S.pos), caveMeta=p.caveMeta || p.P.caveMeta;
+		if(caveMeta) p.P.caveMeta=caveMeta;
 		record = state.meet(record ? { id: record.id, bodyKey: bodyKey() } : {
-			bodyKey: bodyKey(), home: position, position, dna: p.P.dna,
-			persona: personaFor(p.P, where), source: 'ambient',
+			id:caveMeta?.id, bodyKey: bodyKey(), home: position, position, dna: p.P.dna,
+			persona: personaFor(p.P, where), source: caveMeta ? 'cave' : 'ambient',
 		});
 		if (!record) return null;
 		actors.adopt(p, record);
@@ -25,14 +26,15 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 	function scoutNearby(p, candidates = []) {
 		const W = world(), origin = p?.M?.S?.pos;
 		if (!W?.island || !origin) return null;
-		const options = candidates.filter(q => !q.under && Math.hypot(q.x-origin.x,q.z-origin.z) >= 4 && Math.hypot(q.x-origin.x,q.z-origin.z) <= 120)
+		const underground=W.island.underFloor?.(origin.x,origin.z,origin.y)!=null;
+		const options = candidates.filter(q => (!q.under || underground) && Math.hypot(q.x-origin.x,q.z-origin.z) >= 4 && Math.hypot(q.x-origin.x,q.z-origin.z) <= 120)
 			.sort((a,b) => Math.hypot(a.x-origin.x,a.z-origin.z)-Math.hypot(b.x-origin.x,b.z-origin.z));
 		for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; options.push({x:origin.x+Math.cos(a)*12,z:origin.z+Math.sin(a)*12,name:'the nearby clearing'}); }
 		for (const target of options) {
 			const n = Math.ceil(Math.hypot(target.x-origin.x,target.z-origin.z)/0.3);
 			let at = {x:origin.x,y:origin.y,z:origin.z};
 			for (let i = 1; i <= n && at; i++) at = safeSocialStep(W.island, at, {x:origin.x+(target.x-origin.x)*i/n,z:origin.z+(target.z-origin.z)*i/n}, W.player);
-			if (at) return target;
+			if (at && (!Number.isFinite(target.y) || Math.abs(at.y-target.y)<3)) return target;
 		}
 		return null;
 	}
@@ -67,8 +69,14 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 			if (!origin || !W?.island?.heightAt || !Number.isFinite(target.x) || !Number.isFinite(target.z)) return 'I cannot locate a safe route there. Choose another nearby place.';
 			const distance = Math.hypot(target.x - origin.x, target.z - origin.z);
 			if (!Number.isFinite(distance) || distance > 180 || distance < 3) return 'Choose a place between 3 and 180 metres away. I can scout a local route and return with a report.';
-			const y = W.island.heightAt(target.x, target.z);
-			if (!Number.isFinite(y) || y < 0.3 || target.under) return 'I need a reachable place on dry ground to scout.';
+			const underground=W.island.underFloor?.(origin.x,origin.z,origin.y)!=null;
+			let y = W.island.heightAt(target.x, target.z);
+			if (underground) {
+				const steps=Math.ceil(distance/.3); let at=origin;
+				for(let i=1;i<=steps && at;i++) at=safeSocialStep(W.island,at,{x:origin.x+(target.x-origin.x)*i/steps,z:origin.z+(target.z-origin.z)*i/steps},W.player);
+				if(!at || Number.isFinite(target.y) && Math.abs(at.y-target.y)>3) return 'That passage is blocked. I need a walkable route with room to stand.';
+				y=at.y;
+			} else if (!Number.isFinite(y) || y < 0.3 || target.under) return 'I need a reachable place on dry ground to scout.';
 			state.setMode(current.id, 'scout', { id: `scout:${Date.now()}`, type: 'scout', status: 'outbound',
 				target: positionFor(W, { x: target.x, y, z: target.z }), label: target.name || 'the nearby area' });
 			return result(`I'll scout ${target.name || 'the nearby area'}, then return to my home area. Close the conversation so I can set off; ask me for a report when I get back.`);

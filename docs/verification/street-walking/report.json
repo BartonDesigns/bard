@@ -1,0 +1,109 @@
+{
+  "before": [
+    -275.58679308183514,
+    6.708963638992962,
+    -470.330327512709
+  ],
+  "after": [
+    -320.2448364036508,
+    6.966854962546594,
+    -444.546994179368
+  ],
+  "distance": 51.56731153595369,
+  "village": {
+    "score": 6.128526438588889,
+    "x": -275.58679308183514,
+    "z": -477.330327512709,
+    "th": 4.1887902047863905,
+    "coast": {
+      "x": -305.58679308183514,
+      "z": -529.2918517397753
+    },
+    "seaDir": {
+      "x": -0.5000000000000004,
+      "z": -0.8660254037844384
+    },
+    "bay": {
+      "x": -398.1033017295416,
+      "z": -689.5351452564881,
+      "r": 191.03301729541272,
+      "caldera": true
+    }
+  },
+  "cavernTunnelCount": 4,
+  "guideSnapshot": {
+    "place": "the island (in the Gulf of the Farallones, 25 km west of the Golden Gate)",
+    "onIsland": true,
+    "underwater": false,
+    "depth": 0,
+    "height": 2,
+    "flying": false,
+    "diving": false,
+    "boat": false,
+    "time": "13:00",
+    "night": false,
+    "wind": 0.51,
+    "facing": "southwest",
+    "near": [
+      {
+        "name": "the village",
+        "dist": "60 m",
+        "dir": "northeast",
+        "fact": "the fishing village on the island"
+      },
+      {
+        "name": "the lava tube",
+        "dist": "230 m",
+        "dir": "north",
+        "fact": "a rock tunnel carrying a molten stream from the vent"
+      },
+      {
+        "name": "the reef",
+        "dist": "250 m",
+        "dir": "north",
+        "fact": "coral heads on the rim of the drowned crater"
+      },
+      {
+        "name": "the volcanic vent",
+        "dist": "260 m",
+        "dir": "north",
+        "fact": "a live vent erupting embers in the heart of the drowned crater"
+      },
+      {
+        "name": "sea cave 2",
+        "dist": "270 m",
+        "dir": "north",
+        "fact": "a swim-through lava cave with glowing walls"
+      },
+      {
+        "name": "sea cave 1",
+        "dist": "330 m",
+        "dir": "northwest",
+        "fact": "a swim-through lava cave with glowing walls"
+      }
+    ],
+    "done": [],
+    "todo": [
+      "Pick up a shell on the beach",
+      "Climb to the top of the island",
+      "Dive the reef in the bay",
+      "Find the volcanic vent in the heart of the bay",
+      "Swim through the lava tube",
+      "Swim through a sea cave",
+      "Get close to the humpback whale",
+      "Take the village boat out",
+      "See the Milky Way at night",
+      "Cross the Golden Gate Bridge",
+      "Stand on Alcatraz",
+      "Reach downtown San Francisco",
+      "Stand on the summit of Mount Diablo"
+    ],
+    "land": "A rain-soaked, sheltered, young volcanic island.",
+    "sea": "A gin-clear, warm caldera reef shaped by plankton blooms and a living volcanic vent."
+  },
+  "quests": [],
+  "activeAdults": 0,
+  "questText": "BARD\nMAESTRO\nDNB\nSYNTHWAVE\nSPARKLE\nSOUL\nGAS\nHYPHY\nDANCEHALL\nGLITCHPOP\nKAWAII\nBREW\n\u266b LVL. 99 BARD\nTAP\n120\n\u25b2\n\u25bc\nBPM\n\u29c9\nKEY\nC\nC#\nD\nD#\nE\nF\nF#\nG\nG#\nA\nA#\nB\nC\n\u25be\n\u25ce LOOP\nMAP\nVILLAGE (Major)\nBATTLE (Min Pent)\nFOREST (Dorian)\nPALACE (Harm Min)\nDUNGEON (Phr Dom)\nSKY (Lydian)\nBLUES (Blues)\nTAVERN (Mixolydian)\nCAVE (Phrygian)\nCASTLE (Minor)\nTEMPLE (Hung Min)\nENIGMA (Enigmatic)\nVILLAGE (Major)\n\u25be\nBEAT\nQUEST MARCH\nFIELD THEME\nTOWN THEME\nDUNGEON CRAWL\nBOSS BATTLE\nFINAL BATTLE\nQUEST MARCH\n\u25be\nLEAD 1\n\u25b2 CHIPTUNE\n\u25b2 FLUTE\n\u25c6 ORGAN\n\u25c6 STRINGS\n\u25bc SAW-BASS\nFOLK-HARP\nWOOD-RECORDER\nOCARINA\nGLASS-PLUCK\nAIR-CHOIR\nROYAL-REED\n\u25b2 CHIPTUNE\n\u25be\n\u2212\n0\n+\nLEAD 2\n\u25b2 CHIPTUNE\n\u25b2 FLUTE\n\u25c6 ORGAN\n\u25c6 STRINGS\n\u25bc SAW-BASS\nFOLK-HARP\nWOOD-RECORDER\nOCARINA\nGLASS-PLUCK\nAIR-CHOIR\nROYAL-REED\n\u25b2 FLUTE\n\u25be\n\u2212\n0\n+\nLEAD 3\n\u25b2 CHIPTUNE\n\u25b2 FLUTE\n\u25c6 ORGAN\n\u25c6 STRINGS\n\u25bc SAW-BASS\nFOLK-HARP\nWOOD-RECORDER\nOCARINA\nGLASS-PLUCK\nAIR-CHOIR\nROYAL-REED\n\u25b2 FLUTE\n\u25be\n\u2212\n0\n+\nLOOP\n32\nQNT\nSOFT\nCHORDS\nVORTEX\nBEAT LOOP\nBUILD\nARP\n\u22ef\nCOMPOSE\n\u221e HOLD\n\u27f3 LOOPS\nFX \u25be\nSTUDIO\nCOLLAB\n+\n\u266a ROLL\nPEAK GUARD -3.0 dB\nMASTER \u00b7 ON\nLEVEL 99 BARD\nTAP TO ENABLE SOUND\nthen press any key to play\n\u221e\n\u2197\nVERSE\n\u25be\nLEAD 1 (Q-P)\n\ud83c\udfb9 PIANO\nQ\nW\nE\nR\nT\nY\nU\nI\nO\nP\n[\n]\n\\\nLEAD 2 (A-L + ;'\u200b,.)\n\u21ea\nA\nS\nD\nF\nG\nH\nJ\nK\nL\n;\n'\n\u23ce\nLEAD 3 (\u21e7 Z-/ \u21e7)\n\u21e7\nZ\nX\nC\nV\nB\nN\nM\n,\n.\n/\n\u21e7\n\u266a\nSTART\n\ud83e\udd41\nSELECT\nDJ\nDECK\nREC\n.WAV\n?\nSAVE\nLOAD\nRESET\nCLR\n4/4\n3/4\n2/4\n6/8\n5/4\n7/8\n12/8\n4/4\n\u25be\n\u2669\nThe red marker mirrors the live master output ceiling shown by Peak Guard. It is not a limit on this effect\u2019s value.\nCOLLAB MODE\n\u00d7\nCOLLAB: offline\nJam together in real time. Everyone hears the same loop, played locally on each device. Network latency is real \u2014 same Wi-Fi feels tightest.\nStart / Join\n\u2295 HOST A NEW JAM (public)\n\u2295 HOST PRIVATE JAM\nJOIN\nLive Notes\nShare your live playing with the room. Remote notes carry real network delay \u2014 \u201cBar\u201d mode snaps them to the downbeat so it feels intentional.\nOFF\nIMMEDIATE\nBAR-SYNC\nPublic Jams\n\u27f3 REFRESH LIST\nServer\nSET SERVER\n\u2708\nWASD to walk, drag to look, Space to jump, F to fly. \u2600 for the sky.\n\u25c0 Bard\n\u2600\nTHE GUIDE\nGuide only (no model)\n\u2699\n\u2715\nPeople\nQuests\nConversations\nSTORY QUESTS\nAsk someone nearby for an adventure. They can suggest a story rooted in this world.\n\ud83c\udf99\n\ud83d\udd08\n\u27a4",
+  "errors": [],
+  "npcAttempt": "Inconclusive: no active eligible adult after movement; no dialogue tested."
+}

@@ -1,0 +1,135 @@
+{
+  "initial": {
+    "position": [
+      6.51271344512247,
+      8.651308103305544,
+      705.9447272981156
+    ],
+    "stats": {
+      "elements": {
+        "sites": 2,
+        "stones": 6,
+        "bats": 0,
+        "completed": 0,
+        "saveError": "",
+        "disposed": false
+      },
+      "queued": 0,
+      "generating": 0,
+      "openMouths": 0,
+      "pickables": 8,
+      "streamBudgetMs": 5,
+      "chunks": 263,
+      "built": 0,
+      "meshes": 0,
+      "visible": 0,
+      "tris": 0,
+      "spikes": 1110,
+      "crystals": 231,
+      "worms": 2200,
+      "glows": 42,
+      "spots": 173
+    },
+    "entrances": [
+      {
+        "x": -53.92251522117283,
+        "z": -130.18257547705423,
+        "y": 96.75349897146373,
+        "yaw": -2.385202177888422,
+        "name": "The Frost Door"
+      },
+      {
+        "x": 344.54518518247653,
+        "z": -104.86146000563156,
+        "y": 108.46116699476639,
+        "yaw": 2.60118155579898,
+        "name": "Blue Hollow"
+      }
+    ]
+  },
+  "entranceText": "BARD\nMAESTRO\nDNB\nSYNTHWAVE\nSPARKLE\nSOUL\nGAS\nHYPHY\nDANCEHALL\nGLITCHPOP\nKAWAII\nBREW\n♫ LVL. 99 BARD\nTAP\n120\n▲\n▼\nBPM\n⧉\nKEY\nC\nC#\nD\nD#\nE\nF\nF#\nG\nG#\nA\nA#\nB\nC\n▾\n◎ LOOP\nMAP\nVILLAGE (Major)\nBATTLE (Min Pent)\nFOREST (Dorian)\nPALACE (Harm Min)\nDUNGEON (Phr Dom)\nSKY (Lydian)\nBLUES (Blues)\nTAVERN (Mixolydian)\nCAVE (Phrygian)\nCASTLE (Minor)\nTEMPLE (Hung Min)\nENIGMA (Enigmatic)\nVILLAGE (Major)\n▾\nBEAT\nQUEST MARCH\nFIELD THEME\nTOWN THEME\nDUNGEON CRAWL\nBOSS BATTLE\nFINAL BATTLE\nQUEST MARCH\n▾\nLEAD 1\n▲ CHIPTUNE\n▲ FLUTE\n◆ ORGAN\n◆ STRINGS\n▼ SAW-BASS\nFOLK-HARP\nWOOD-RECORDER\nOCARINA\nGLASS-PLUCK\nAIR-CHOIR\nROYAL-REED\n▲ CHIPTUNE\n▾\n−\n0\n+\nLEAD 2\n▲ CHIPTUNE\n▲ FLUTE\n◆ ORGAN\n◆ STRINGS\n▼ SAW-BASS\nFOLK-HARP\nWOOD-RECORDER\nOCARINA\nGLASS-PLUCK\nAIR-CHOIR\nROYAL-REED\n▲ FLUTE\n▾\n−\n0\n+\nLEAD 3\n▲ CHIPTUNE\n▲ FLUTE\n◆ ORGAN\n◆ STRINGS\n▼ SAW-BASS\nFOLK-HARP\nWOOD-RECORDER\nOCARINA\nGLASS-PLUCK\nAIR-CHOIR\nROYAL-REED\n▲ FLUTE\n▾\n−\n0\n+\nLOOP\n32\nQNT\nSOFT\nCHORDS\nVORTEX\nBEAT LOOP\nBUILD\nARP\n⋯\nCOMPOSE\n∞ HOLD\n⟳ LOOPS\nFX ▾\nSTUDIO\nCOLLAB\n+\n♪ ROLL\nPEAK GUARD -3.0 dB\nMASTER · ON\nLEVEL 99 BARD\nTAP TO ENABLE SOUND\nthen press any key to play\n∞\n↗\nVERSE\n▾\nLEAD 1 (Q-P)\n🎹 PIANO\nQ\nW\nE\nR\nT\nY\nU\nI\nO\nP\n[\n]\n\\\nLEAD 2 (A-L + ;'​,.)\n⇪\nA\nS\nD\nF\nG\nH\nJ\nK\nL\n;\n'\n⏎\nLEAD 3 (⇧ Z-/ ⇧)\n⇧\nZ\nX\nC\nV\nB\nN\nM\n,\n.\n/\n⇧\n♪\nSTART\n🥁\nSELECT\nDJ\nDECK\nREC\n.WAV\n?\nSAVE\nLOAD\nRESET\nCLR\n4/4\n3/4\n2/4\n6/8\n5/4\n7/8\n12/8\n4/4\n▾\n♩\nThe red marker mirrors the live master output ceiling shown by Peak Guard. It is not a limit on this effect’s value.\nCOLLAB MODE\n×\nCOLLAB: offline\nJam together in real time. Everyone hears the same loop, played locally on each device. Network latency is real — same Wi-Fi feels tightest.\nStart / Join\n⊕ HOST A NEW JAM (public)\n⊕ HOST PRIVATE JAM\nJOIN\nLive Notes\nShare your live playing with the room. Remote notes carry real network delay — “Bar” mode snaps them to the downbeat so it feels intentional.\nOFF\nIMMEDIATE\nBAR-SYNC\nPublic Jams\n⟳ REFRESH LIST\nServer\nSET SERVER\n✈\nWASD to walk, drag to look, Space to jump, F to fly. ☀ for the sky.\n◀ Bard\n☀\nTHE GUIDE\nGuide only (no model)\n⚙\n✕\nPeople\nQuests\nConversations\nCAVE EXPLORATION\nWalk through a hillside mouth into the underground. Play the three resonant stones in an alcove to restore guiding lights. You can walk back to the surface at any time.\nThe Frost Door · 840 m north\nLook toward The Frost Door\nBlue Hollow · 880 m northeast\nLook toward Blue Hollow\n0 of 2 resonance alcoves restored. Progress is saved on this device.\n🎙\n🔈\n➤",
+  "directions": "SAW-BASS\nFOLK-HARP\nWOOD-RECORDER\nOCARINA\nGLASS-PLUCK\nAIR-CHOIR\nROYAL-REED\n▲ FLUTE\n▾\n−\n0\n+\nLOOP\n32\nQNT\nSOFT\nCHORDS\nVORTEX\nBEAT LOOP\nBUILD\nARP\n⋯\nCOMPOSE\n∞ HOLD\n⟳ LOOPS\nFX ▾\nSTUDIO\nCOLLAB\n+\n♪ ROLL\nPEAK GUARD -3.0 dB\nMASTER · ON\nLEVEL 99 BARD\nTAP TO ENABLE SOUND\nthen press any key to play\n∞\n↗\nVERSE\n▾\nLEAD 1 (Q-P)\n🎹 PIANO\nQ\nW\nE\nR\nT\nY\nU\nI\nO\nP\n[\n]\n\\\nLEAD 2 (A-L + ;'​,.)\n⇪\nA\nS\nD\nF\nG\nH\nJ\nK\nL\n;\n'\n⏎\nLEAD 3 (⇧ Z-/ ⇧)\n⇧\nZ\nX\nC\nV\nB\nN\nM\n,\n.\n/\n⇧\n♪\nSTART\n🥁\nSELECT\nDJ\nDECK\nREC\n.WAV\n?\nSAVE\nLOAD\nRESET\nCLR\n4/4\n3/4\n2/4\n6/8\n5/4\n7/8\n12/8\n4/4\n▾\n♩\nThe red marker mirrors the live master output ceiling shown by Peak Guard. It is not a limit on this effect’s value.\nCOLLAB MODE\n×\nCOLLAB: offline\nJam together in real time. Everyone hears the same loop, played locally on each device. Network latency is real — same Wi-Fi feels tightest.\nStart / Join\n⊕ HOST A NEW JAM (public)\n⊕ HOST PRIVATE JAM\nJOIN\nLive Notes\nShare your live playing with the room. Remote notes carry real network delay — “Bar” mode snaps them to the downbeat so it feels intentional.\nOFF\nIMMEDIATE\nBAR-SYNC\nPublic Jams\n⟳ REFRESH LIST\nServer\nSET SERVER\n✈\nThe Frost Door: follow this bearing to the hillside mouth.\n◀ Bard\n☀\nTHE GUIDE\nGuide only (no model)\n⚙\n✕\nPeople\nQuests\nConversations\nWhere is the nearest cave?\nThe Frost Door is 840 m north. Walk into its hillside mouth and follow the sloping passage. Tap the three resonant stones in an alcove to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.\n🎙\n🔈\n➤",
+  "resonance": {
+    "before": {
+      "sites": 2,
+      "stones": 6,
+      "bats": 0,
+      "completed": 0,
+      "saveError": "",
+      "disposed": false
+    },
+    "after": {
+      "sites": 2,
+      "stones": 6,
+      "bats": 0,
+      "completed": 1,
+      "saveError": "",
+      "disposed": false
+    },
+    "id": "2:347:60",
+    "position": [
+      348.8163440770107,
+      40.9409734701219,
+      57.13670918960967
+    ],
+    "saved": [
+      [
+        "crysis-cave-resonance-v2:[\"body\",\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"ICE\\\"]\",1337,\"ICE\"]",
+        "{\"version\":1,\"sites\":{\"2:347:60\":7,\"3:167:-158\":0}}"
+      ]
+    ]
+  },
+  "restored": {
+    "sites": 2,
+    "stones": 6,
+    "bats": 0,
+    "completed": 1,
+    "saveError": "",
+    "disposed": false
+  },
+  "village": {
+    "x": 337.2810248753523,
+    "y": 17.831799449728308,
+    "z": -164.67875658045511
+  },
+  "npc": {
+    "id": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"ICE\\\"]\",\"cave\",\"cave:1337:33728,-16468:0\"]",
+    "role": "worker",
+    "lore": [
+      "the beam over the fourth walkway is soft. i have told them twice.",
+      "we quarry only what the wall offers. take more and the ceiling remembers.",
+      "the lamps want trimming every third day or they smoke the whole terrace.",
+      "i have laid plank in nine towns and this rock is the strangest yet."
+    ],
+    "history": [
+      {
+        "role": "user",
+        "content": "Tell me the stories of this cave.",
+        "at": 1791135692387
+      },
+      {
+        "role": "assistant",
+        "content": "I have laid plank in nine towns and this rock is the strangest yet.",
+        "at": 1791135692395
+      }
+    ],
+    "adopted": true,
+    "follow": {
+      "mode": "follow",
+      "start": [
+        340.8147161692766,
+        17.93377036761415,
+        -162.58474099652832
+      ],
+      "end": [
+        340.8147161692766,
+        17.93377036761415,
+        -162.58474099652832
+      ],
+      "floor": 17.93337154621608,
+      "clear": true
+    }
+  },
+  "errors": [],
+  "limits": "Runtime API positioning used for isolated interactions; not a complete walked journey, human study, live LLM quality test or performance benchmark."
+}

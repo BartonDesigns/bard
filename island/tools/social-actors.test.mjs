@@ -45,7 +45,7 @@ test('dungeon floor overrides surface and uses dungeon walls only',()=>{
  const island={heightAt:()=>50,underFloor:()=>-12,extraPush:()=>surfacePush++,underPush:q=>{underPush++;if(q.x>.1)q.x=.1;}};
  assert.deepEqual(safeSocialStep(island,{x:0,y:-12,z:0},{x:.02,z:0}),{x:.02,y:-12,z:0});
  assert.equal(safeSocialStep(island,{x:0,y:-12,z:0},{x:.2,z:0}),null);
- assert.equal(surfacePush,0); assert.equal(underPush,2);
+ assert.equal(surfacePush,0); assert.equal(underPush,3);
  const player={floorAt:()=>3,pushOut:q=>{q.x+=1;}};
  assert.equal(safeSocialStep({heightAt:()=>3},{x:0,y:3,z:0},{x:.02,z:0},player),null);
 });
@@ -78,4 +78,44 @@ test('flush after Earth rebase preserves movement newer than the save interval',
  const latest=positionFor(world,S.pos);assert.notEqual(latest.lon,record.position.lon);
  setFrame(48,8);rt.flush();assert.ok(Math.abs(record.position.lon-latest.lon)<1e-9);assert.ok(Math.abs(record.position.lat-latest.lat)<1e-9);
  rt.dispose();bayFrame();
+});
+
+test('cave followers reject low ceilings and keep the underground floor',()=>{
+ const from={x:0,y:3,z:0}, to={x:.08,z:0};
+ const island={heightAt:()=>80,underFloor:()=>3.1,underClear:()=>false};
+ assert.equal(safeSocialStep(island,from,to),null);
+ island.underClear=(x,y,z,h,r)=>y===3.1&&h===1.68&&r===.35;
+ assert.deepEqual(safeSocialStep(island,from,to),{x:.08,y:3.1,z:0});
+});
+
+test('adopted motion uses a current-height ground provider across cave and surface',()=>{
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
+ const island={heightAt:()=>80,underFloor:(x,z,y)=>y<20?3:null};
+ const state={setPosition(){},flush(){}};
+ const rt=createSocialActors({scene,camera,world:{island},state,bodyKey:'cave'});
+ let sample;
+ const p={P:{root:new THREE.Group(),dna:{seed:1}},M:{S:{pos:new THREE.Vector3(0,3,0),sitK:{v:0}},want:{},setGround(fn){sample=fn;},stand(){},setPose(){}},detachForSocial:()=>true};
+ rt.adopt(p,{id:'cave-person',persona:{}});
+ assert.equal(sample(0,0),3);p.M.S.pos.y=80;assert.equal(sample(0,0),80);rt.dispose();
+});
+
+ test('a resident can gradually escape an existing prop overlap but never deepen it',()=>{
+ const island={heightAt:()=>2,extraPush:q=>{if(q.x<.2)q.x=.2;}};
+ assert.deepEqual(safeSocialStep(island,{x:0,y:2,z:0},{x:.01,z:0}),{x:.01,y:2,z:0});
+ assert.equal(safeSocialStep(island,{x:0,y:2,z:0},{x:-.01,z:0}),null);
+ assert.equal(safeSocialStep(island,{x:0,y:2,z:0},{x:0,z:.01}),null);
+ assert.equal(safeSocialStep(island,{x:.3,y:2,z:0},{x:.1,z:0}),null);
+ });
+
+test('an overlapped resident can rotate in place before walking out',()=>{
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();camera.position.set(6,3.68,0);
+ const record={id:'turn',mode:'follow',position:{x:0,y:2,z:0},dna:{seed:7},persona:{}};
+ const state={get:()=>record,list:()=>[record],alarmFor:()=>({level:0}),setMode:(id,mode)=>{record.mode=mode;},setPosition(){},flush(){}};
+ const S={pos:new THREE.Vector3(0,2,0),sitK:{v:0},speed:{v:0,dv:0},heading:-Math.PI/2,look:{}},want={};let resets=0;
+ const M={S,want,stand(){},setPose(){},update(dt){S.heading+=Math.max(-.08,Math.min(.08,want.heading-S.heading));S.pos.x+=Math.sin(S.heading)*want.speed*dt;S.pos.z+=Math.cos(S.heading)*want.speed*dt;},place(){resets++;}};
+ const p={P:{root:new THREE.Group(),dna:{seed:7}},M,detachForSocial:()=>true};
+ const world={island:{heightAt:()=>2,extraPush:q=>{if(q.x<.2)q.x=.2;}}};
+ const rt=createSocialActors({scene,camera,state,world,bodyKey:'turn'});rt.adopt(p,record);
+ for(let i=0;i<140;i++)rt.update(.05,i*.05,true);
+ assert.equal(record.mode,'follow');assert.ok(S.pos.x>3);assert.equal(resets,0);rt.dispose();
 });

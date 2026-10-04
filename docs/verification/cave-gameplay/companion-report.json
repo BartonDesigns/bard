@@ -1,0 +1,139 @@
+{
+  "id": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"ICE\\\"]\",\"cave\",\"cave:1337:33728,-16468:0\"]",
+  "role": "worker",
+  "lore": [
+    "the beam over the fourth walkway is soft. i have told them twice.",
+    "we quarry only what the wall offers. take more and the ceiling remembers.",
+    "the lamps want trimming every third day or they smoke the whole terrace.",
+    "i have laid plank in nine towns and this rock is the strangest yet."
+  ],
+  "history": [
+    {
+      "role": "user",
+      "content": "Tell me the stories of this cave.",
+      "at": 1791137039970
+    },
+    {
+      "role": "assistant",
+      "content": "I have laid plank in nine towns and this rock is the strangest yet.",
+      "at": 1791137039980
+    }
+  ],
+  "adopted": true,
+  "facingVerified": true,
+  "follow": {
+    "mode": "follow",
+    "start": [
+      340.8147161692766,
+      17.93378382354623,
+      -162.58474099652832
+    ],
+    "target": {
+      "x": 346.35799336434434,
+      "y": 17.699126755047473,
+      "z": -164.88084159071886
+    },
+    "end": [
+      345.0881021443315,
+      17.885848995725908,
+      -164.35338874583803
+    ],
+    "travelled": 4.625174623800969,
+    "maxStep": 0.02500976645734362,
+    "frames": [
+      {
+        "t": 0,
+        "pos": [
+          340.8147161692766,
+          17.93378382354623,
+          -162.58474099652832
+        ],
+        "blocked": 0.016666666666666666,
+        "speed": 0,
+        "engaged": false,
+        "heading": -0.16760859936198647,
+        "wantHeading": 1.9634954084936196
+      },
+      {
+        "t": 1,
+        "pos": [
+          341.1529036631737,
+          17.925449011295164,
+          -162.7194885208011
+        ],
+        "blocked": 0,
+        "speed": 1.289040895800459,
+        "engaged": false,
+        "heading": 1.96140337361966,
+        "wantHeading": 1.964358571962515
+      },
+      {
+        "t": 2,
+        "pos": [
+          342.50553361414444,
+          17.900730469249545,
+          -163.28071230285175
+        ],
+        "blocked": 0,
+        "speed": 1.499463827021752,
+        "engaged": false,
+        "heading": 1.9644648703153045,
+        "wantHeading": 1.9644672572346302
+      },
+      {
+        "t": 3,
+        "pos": [
+          343.8907207365891,
+          17.901328277533516,
+          -163.8560530536713
+        ],
+        "blocked": 0,
+        "speed": 1.4999991410497036,
+        "engaged": false,
+        "heading": 1.9644673939908976,
+        "wantHeading": 1.9644673970005113
+      },
+      {
+        "t": 4,
+        "pos": [
+          345.0356671089138,
+          17.8885352192967,
+          -164.33160970825875
+        ],
+        "blocked": 0,
+        "speed": 0.32675445539376513,
+        "engaged": false,
+        "heading": 1.964467397304815,
+        "wantHeading": 1.9644673973115123
+      },
+      {
+        "t": 5,
+        "pos": [
+          345.08797679666503,
+          17.885850783691993,
+          -164.35333668233667
+        ],
+        "blocked": 0,
+        "speed": 0.0009054377661768321,
+        "engaged": false,
+        "heading": 1.9644673973116509,
+        "wantHeading": 1.96446739731164
+      },
+      {
+        "t": 6,
+        "pos": [
+          345.0881019469182,
+          17.88584899842953,
+          -164.3533886638419
+        ],
+        "blocked": 0,
+        "speed": 0.0000014797861670422302,
+        "engaged": false,
+        "heading": 1.9644673973116473,
+        "wantHeading": 1.964467397311629
+      }
+    ],
+    "floor": 17.88584899561849,
+    "clear": true
+  }
+}

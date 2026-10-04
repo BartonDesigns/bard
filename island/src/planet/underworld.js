@@ -16,6 +16,7 @@ import { buildRuins } from './caveruins.js';
 import { createCaveVillage } from './cavevillage.js';
 import { soundBus, noise } from '../world/soundbus.js';
 import { createDinosaurs } from './dinosaurs.js';
+import { createCaveElements } from './cave-elements.js';
 
 const EYE = 1.68;
 const CHUNK = 24;
@@ -38,11 +39,11 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	shared.uCave ||= { value: 0 };
 	for (const v of shared.uHoles.value) v.set(0, 0, 0, 0);
 	// (the plan may have been made earlier, to keep the plants out of the mouths: planCaves)
-	const plan = opts.plan || planCaves(island, profile);
+	const plan = opts.plan === undefined ? planCaves(island, profile) : opts.plan;
 	// the wild worlds' dinosaurs walk the ground above (planet/dinosaurs.js): made with the underworld,
 	// which every other world gets, so they share its frame, its tap list and its clearing up
-	const dinos = createDinosaurs(island, shared, scene, camera, profile, { isPhone });
-	const none = { update: (dt, t) => dinos?.update(dt, t), floor: () => null, push() {}, inside: () => 0, fog: () => [0.02, 0.022, 0.026], entrances: [], spots: [], go: () => 'no caves on this world', dispose: () => dinos?.dispose(), plan: null, pickables: dinos?.pickables || [], dinosaurs: dinos };
+	const dinos = opts.dinosaurs === false ? null : createDinosaurs(island, shared, scene, camera, profile, { isPhone });
+	const none = { update: (dt, t) => dinos?.update(dt, t), floor: () => null, clearBody: () => true, push() {}, inside: () => 0, fog: () => [0.02, 0.022, 0.026], entrances: [], spots: [], go: () => 'no caves on this world', dispose: () => dinos?.dispose(), plan: null, pickables: dinos?.pickables || [], dinosaurs: dinos };
 	if (!plan || !plan.entrances.length) return none;
 	const { field, chambers, tunnels, entrances, shaft } = plan;
 	const H = island.heightAt;
@@ -53,6 +54,11 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	const group = new THREE.Group();
 	group.name = 'underworld';
 	scene.add(group);
+	const pickables = [...(dinos?.pickables || [])];
+	const playable = new Set(pickables);
+	function registerPickables() {
+		group.traverse((o) => { if (o.isMesh && o.userData.material175 && !playable.has(o)) { playable.add(o); pickables.push(o); } });
+	}
 	const L = caveLighting(shared, island, profile);
 
 	// the ground opens at each mouth (and over the sinkhole), once the rock there is made
@@ -61,7 +67,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	const holes = plan.holes;
 	const openHoles = () => {
 		const cam = camera.position, all = [];
-		for (const h of holes) all.push({ h, ready: chunks.every((c) => c.state === 2 || !c.mouth || Math.hypot(c.x - h.x, c.z - h.z) > 30) });
+		for (const h of holes) all.push({ h, ready: openingChunks.get(h).every((c) => c.state === 2) });
 		for (const h of shared.moreHoles || []) all.push({ h, ready: true });
 		if (all.length > 4) all.sort((a, b) => Math.hypot(a.h.x - cam.x, a.h.z - cam.z) - Math.hypot(b.h.x - cam.x, b.h.z - cam.z));
 		for (let i = 0; i < 4; i++) { const o = all[i]; if (o) shared.uHoles.value[i].set(o.h.x, o.h.z, o.ready ? o.h.r : 0, 0); else shared.uHoles.value[i].set(0, 0, 0, 0); }
@@ -76,6 +82,8 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	for (const c of chunks) {
 		c.mouth = mouthPts.some((m) => Math.hypot(c.x - m.x, c.z - m.z) < 52 && Math.abs(c.y - m.y) < 40);
 	}
+	// The same readiness decision opens the rendered terrain and admits walking.
+	const openingChunks = new Map(holes.map((h) => [h, chunks.filter((c) => c.mouth && Math.hypot(c.x - h.x, c.z - h.z) < h.r + CHUNK * 1.5)]));
 	function finish(c, m) {
 		c.state = 2; c.gen = null;
 		if (!m) return;
@@ -90,6 +98,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		mesh.userData.material175 = 'stone';
 		group.add(mesh);
 		c.mesh = mesh;
+		playable.add(mesh); pickables.push(mesh);
 	}
 	function buildNow(c) {
 		const gen = c.gen || meshChunk(field, c.i * CHUNK, c.j * CHUNK, c.k * CHUNK, CHUNK, V);
@@ -101,6 +110,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	for (const c of chunks) c.mouth = c.mouth && mouthPts.some((m) => Math.hypot(c.x - m.x, c.z - m.z) < 30) ? 2 : c.mouth ? 1 : 0;
 	let queue = [], queueT = 0, lastDeep = null;
 	const lastCam = new THREE.Vector3(1e9, 0, 0);
+	const streamPriority = (c) => c.d - (c.d < 65 ? 2000 : c.mouth && c.d < 180 ? 1000 : 0);
 	function stream(dt, deep) {
 		const cam = camera.position;
 		queueT -= dt;
@@ -109,8 +119,15 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 			lastCam.copy(cam); lastDeep = deep;
 			queueT = 0.4;
 			for (const c of chunks) c.d = Math.hypot(c.x - cam.x, (c.y - cam.y) * 1.3, c.z - cam.z);
-			const reach = deep ? (isPhone ? 110 : 150) : 0;
-			queue = chunks.filter((c) => c.state < 2 && (c.d < reach || (c.mouth && c.d < 260) || (c.mouth === 2 && c.d < 700))).sort((a, b) => (a.mouth === 2 ? a.d - 1000 : a.d) - (b.mouth === 2 ? b.d - 1000 : b.d));
+			const approaching = mouthPts.some((m) => Math.hypot(m.x - cam.x, m.z - cam.z) < 160);
+			const reach = deep || approaching ? (isPhone ? 130 : 170) : 0;
+			// Release distant GPU geometry and unfinished generators. A distance margin
+			// beyond prefetch prevents rebuild churn at a chunk boundary.
+			for (const c of chunks) if (c.d > (c.mouth ? 850 : (isPhone ? 210 : 270))) {
+				if (c.mesh) { group.remove(c.mesh); c.mesh.geometry.dispose(); playable.delete(c.mesh); const at = pickables.indexOf(c.mesh); if (at >= 0) pickables.splice(at, 1); c.mesh = null; c.state = 0; }
+				if (c.gen) { c.gen.return?.(); c.gen = null; c.state = 0; }
+			}
+			queue = chunks.filter((c) => c.state < 2 && (c.d < reach || (c.mouth && c.d < 260) || (c.mouth === 2 && c.d < 700))).sort((a, b) => streamPriority(a) - streamPriority(b));
 			openHoles();
 			// what is drawn: all near when down here; up top only round the mouths
 			for (const c of chunks) if (c.mesh) c.mesh.visible = deep ? c.d < (isPhone ? 100 : 135) : c.mouth && c.d < 420;
@@ -121,7 +138,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 			c.gen ||= meshChunk(field, c.i * CHUNK, c.j * CHUNK, c.k * CHUNK, CHUNK, V);
 			c.state = 1;
 			const s = c.gen.next();
-			if (s.done) { finish(c, s.value); queue.shift(); if (c.mesh) c.mesh.visible = true; }
+			if (s.done) { finish(c, s.value); queue.shift(); if (c.mesh) c.mesh.visible = true; openHoles(); }
 		}
 	}
 
@@ -509,7 +526,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	}
 
 	// ---------- the ruins and the village ----------
-	const ctx = { group, L, profile, civ, field, shared, camera, rng: r, isPhone, rockFloor, rockRoof, rockNormal, addGlow, props, scene, glowC, crystalC, H, plan };
+	const ctx = { island, group, L, profile, civ, field, shared, camera, rng: r, isPhone, rockFloor, rockRoof, rockNormal, addGlow, props, scene, glowC, crystalC, H, plan };
 	// (built as you come near, a little each frame)
 	let ruins = null, village = null;
 	const lazy = [];
@@ -522,7 +539,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 			L2.gen ||= L2.make();
 			while (all || performance.now() - t0 < (isPhone ? 4 : 6)) {
 				const s = L2.gen.next();
-				if (s.done) { L2.built = true; L2.done(s.value); break; }
+				if (s.done) { L2.built = true; L2.done(s.value); registerPickables(); break; }
 			}
 			if (!all) return;
 		}
@@ -617,6 +634,7 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		stream(dt, inK > 0.02 || chambers.some((c) => Math.hypot(c.x - cam.x, c.z - cam.z) < 80 && cam.y < c.fy + c.h + 20));
 		group.visible = nearAny || inK > 0;
 		if (!group.visible) { headlamp.intensity = 0; keyLight.intensity = 0; sound(0, dt); return; }
+		elements.update(dt, t);
 		// daylight down the shaft follows the sun
 		const sunUp = smoothstep(-0.05, 0.3, shared.uSunDir.value.y);
 		L.U.uCvSunC.value.copy(shared.uSunColor.value).multiplyScalar(sunUp * 1.4);
@@ -665,6 +683,9 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	// the floor under (x, z) when (x, y, z) is in the caves (or at a mouth), else null
 	function floor(x, z, y) {
 		if (!field.near(x, z)) return null;
+		// Until the mouth's mesh exists the surface is visibly solid. Keep the
+		// player's feet on that surface too; underground occupants may still exit.
+		if (y >= H(x, z) - 3 && field.inHole(x, z) && !shared.uHoles.value.some((h) => h.z > 0 && Math.hypot(x - h.x, z - h.y) < h.z)) return null;
 		const hole = field.inHole(x, z, 1.5);
 		let y0 = y + 0.6;
 		if (field.cave(x, y0, z) >= 0 && !hole) {
@@ -676,6 +697,16 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		if (g == null) return null;
 		for (const p of props) if (p.floor) { const f = p.floor(x, z, y); if (f != null && f > g) g = f; }
 		return g;
+	}
+	// A conservative capsule sample for companions choosing a passage. This only
+	// checks natural rock; callers still apply ordinary prop/actor collisions.
+	function clearBody(x, footY, z, height = 1.68, radius = 0.35) {
+		if (![x, footY, z, height, radius].every(Number.isFinite) || height <= 0 || radius < 0) return false;
+		if (!field.near(x, z)) return true;
+		for (const y of [footY + Math.min(radius, height / 2), footY + height / 2, footY + height]) {
+			for (const [dx, dz] of [[0, 0], [radius, 0], [-radius, 0], [0, radius], [0, -radius]]) if (field.solid(x + dx, y, z + dz) > 0) return false;
+		}
+		return true;
 	}
 	// keep a body (eye at p) out of the rock and the things built in it
 	function push(p, footY) {
@@ -719,17 +750,21 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 	}
 	function dispose() {
 		dinos?.dispose();
+		elements.dispose();
 		scene.remove(group);
 		group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => m.dispose()); });
 		village?.dispose();
 		for (const v of shared.uHoles.value) v.set(0, 0, 0, 0);
 		shared.uCave.value = 0;
+		pickables.length = 0; playable.clear();
 		if (snd) { try { snd.out.disconnect(); snd.room.stop(); } catch { /* already stopped */ } snd = null; }
 	}
+	const elements = createCaveElements({ plan, group, shared, profile, seed: island.seed, bodyKey: opts.bodyKey, camera, floor: rockFloor, isPhone, hint: opts.hint });
+	registerPickables();
 	const api = {
-		update, floor, push, go, dispose, entrances: list, spots,
-		pickables: [...(crystalIM ? [crystalIM] : []), ...(dinos?.pickables || [])],
-		dinosaurs: dinos,
+		update, floor, clearBody, push, go, dispose, entrances: list, spots,
+		pickables,
+		dinosaurs: dinos, elements,
 		inside: () => inK,
 		// for others building underground: a glowing place to light the rock, and the lighting
 		addGlow, lighting: L, openHoles,
@@ -741,7 +776,8 @@ export function createUnderworld(island, shared, scene, camera, profile, opts = 
 		// after moving the camera by hand: take the new depth at once
 		settle: () => { snapK = true; },
 		// what it costs, for looking into it
-		stats: () => ({ chunks: chunks.length, built: chunks.filter((c) => c.state === 2).length, meshes: chunks.filter((c) => c.mesh).length, visible: chunks.filter((c) => c.mesh?.visible).length, tris: chunks.reduce((s, c) => s + (c.mesh?.visible ? c.mesh.geometry.index.count / 3 : 0), 0), spikes: spikes.length, crystals: crystals.length, worms: worms.length / 3, glows: glows.length, spots: spots.length }),
+		ready: (i = 0) => { const e = entrances[i]; return !!e && shared.uHoles.value.some((h) => h.z > 0 && Math.hypot(e.x - h.x, e.z - h.y) < h.z); },
+		stats: () => ({ elements: elements.stats(), queued: queue.length, generating: chunks.filter((c) => c.gen).length, openMouths: shared.uHoles.value.filter((h) => h.z > 0).length, pickables: pickables.length, streamBudgetMs: isPhone ? 3 : 5, chunks: chunks.length, built: chunks.filter((c) => c.state === 2).length, meshes: chunks.filter((c) => c.mesh).length, visible: chunks.filter((c) => c.mesh?.visible).length, tris: chunks.reduce((s, c) => s + (c.mesh?.visible ? c.mesh.geometry.index.count / 3 : 0), 0), spikes: spikes.length, crystals: crystals.length, worms: worms.length / 3, glows: glows.length, spots: spots.length }),
 		extraInside: null,
 	};
 	return api;

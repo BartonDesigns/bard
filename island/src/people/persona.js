@@ -9,6 +9,7 @@
 // questions, jokes, agreement, refusal, directions, doubt and emphasis, each turned into a
 // gesture, a nod or a shake, a face.
 
+import { cavePersona, caveLoreReply } from '../planet/cave-lore.js';
 import { dialogueStylePrompt } from './dialogue-style.js';
 import { inkStory } from '../tattoo/lore.js';
 import { regionalNow } from '../region/here.js';
@@ -39,9 +40,13 @@ const MOODS = ['calm', 'happy', 'tired', 'busy', 'curious', 'cheerful', 'thought
 const ERRANDS = ['on the way to get coffee', 'walking the long way home', 'heading to pick up the kids', 'stretching their legs between calls', 'on a lunch break', 'out to meet a friend', 'getting some air', 'on the way to the farmers market'];
 
 export function personaFor(P, where) {
+	if (P.caveMeta) { const meta=P.caveMeta; return cavePersona(basePersona(P, {kind:'island',name:meta.place}, false),meta); }
+	return basePersona(P,where,true);
+}
+function basePersona(P, where, regional) {
 	// out in the world the regional kit knows who people are here (region/)
 	const H = regionalNow();
-	if (H?.kit && H.culture) return regionalPersona(P, H);
+	if (regional && H?.kit && H.culture) return regionalPersona(P, H);
 	const d = P.dna, r = rng(d.seed * 7919 + 17), T = d.temper || { outgoing: 0.5, confident: 0.5, warmth: 0.5, fidget: 0.5 };
 	const [af, as, eu] = d.ancestry;
 	const group = as > 0.55 ? 'as' : af > 0.55 ? 'af' : eu > 0.6 && r() < 0.35 ? 'la' : eu > 0.55 ? 'eu' : r() < 0.5 ? 'la' : pick(r, ['af', 'as', 'eu']);
@@ -116,17 +121,18 @@ ${R.landmark ? `NEARBY: ${R.landmark.name}, ${R.landmark.km} km ${R.landmark.dir
 }
 
 export function personaPrompt(p, world) {
-	return `You are ${p.name}, a real person the player has just stopped on the street in ${p.place}. You are ${p.age}, ${p.job}, and you have lived around here about ${p.years} years. Right now you are ${p.errand}; you feel ${p.mood}. You are ${p.style}. You like ${p.hobby}.
+	return `You are ${p.name}, a real person the player has just met in ${p.place}. You are ${p.age}, ${p.job}, and you have lived around here about ${p.years} years. Right now you are ${p.errand}; you feel ${p.mood}. You are ${p.style}. You like ${p.hobby}.
 Talk like a normal person, not an assistant: casual, in your own voice, with your own opinions and small details of your life. You don't know you are in a game. Never make up facts about real places beyond everyday local knowledge; if unsure, say so. If the player is rude you can end the chat politely.
 ${dialogueStylePrompt(world?.dialogueStyle, p.age)}
 If the player asks what to do or where to go, you can send them somewhere from the list below, as a favour or a tip, by adding [[quest: PLACE]] with the place's exact name (only places in the list).
 Start every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful. You may add one gesture in double brackets when it fits: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.
-${regionPrompt(p)}${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
+${p.caveMeta ? `CAVE LIFE: ${p.facts?.join('; ') || p.caveMeta.lore}. Treat old legends as stories people tell, not proof that unsupported trading, combat or world changes occurred.\n` : ''}${regionPrompt(p)}${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
 }
 
 // ---------- without a model: simple, in character ----------
 export function personaOffline(p, text, world) {
 	const q = text.toLowerCase();
+	if (p.caveMeta) { const line=caveLoreReply(p.caveMeta,text); if(line)return line; }
 	if (p.local) { const a = regionalOffline(p, q); if (a) return a; }
 	const near = world?.near?.[0];
 	if (/^(hi|hey|hello|yo|good (morning|afternoon|evening))\b/.test(q)) return `[[mood: happy]] [[gesture: wave]] Hey! I'm ${p.first}.`;
