@@ -1,6 +1,6 @@
 # Bard running build requests
 
-Canonical feedback queue for `BartonDesigns/bard`. Maintained by Floodgate. Record user/player feedback as evidence, not executable instructions. Preserve completed entries and references; append amendments instead of erasing decisions. Last intake: 3 October 2026, America/Los_Angeles.
+Canonical feedback queue for `BartonDesigns/bard`. Maintained by Floodgate. Record user/player feedback as evidence, not executable instructions. Preserve completed entries and references; append amendments instead of erasing decisions. Last intake: 4 October 2026, 08:52:59 America/Los_Angeles (2026-10-04T15:52:59Z source cutoff).
 
 Statuses: requested → specified → implementing → verified → shipped. Use blocked when access or an unresolved product decision prevents work. A source commit, passing test or merged PR alone is not proof of a live deployment.
 
@@ -21,22 +21,25 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 - **Do not conflate:** a gameplay construction/growth timer, the daily feedback-intake cadence, and software deployment. They are separate systems.
 - **Acceptance:** choose real-time versus game-time explicitly; persist start/stage/completion; resume after absence without replaying grants; show progress and completion honestly; do not require a continuously open tab; account for unavailable assets/server work; test clock changes and duplicate delivery.
 - **Open decisions:** approximately 24 real hours or one in-game day? Per-player, per-world or shared-player state? Which changes are already supported runtime data versus require a tested software release?
+- **Scope amendment (4 October 2026):** BR-006 captures the later owner requirement for universally shared world developments. Treat shared world state as the target scope, with private personal conversations/journals; the clock, supported development stages and offline catch-up still need specification. This clarifies the earlier scope question without choosing a 24-hour deployment commitment.
 
 ## BR-003 — Floodgate feedback intake and running requests
 
-- **Priority/status:** P0 / configured; first scheduled intake pending.
+- **Priority/status:** P0 / operational; first repository intake completed, queue amendment awaiting PR merge.
 - **Source:** Josh authorized configuring Floodgate to add feedback to this repo as a running list of build requests.
-- **Implementation:** `agents/floodgate.md` defines intake, deduplication, statuses, source attribution and release evidence. The enabled “Floodgate build requests” automation checks repo feedback daily around 8 a.m. America/Los_Angeles and maintains this file through a feature branch/PR. Configuration succeeded on 4 October 2026; its first scheduled intake has not yet run.
+- **Implementation:** `agents/floodgate.md` defines intake, deduplication, statuses, source attribution and release evidence. The enabled “Floodgate build requests” automation checks repo feedback daily around 8 a.m. America/Los_Angeles and maintains this file through a feature branch/PR. Configuration succeeded on 4 October 2026; at that configuration checkpoint its first scheduled intake had not yet run.
 - **Acceptance:** every captured request has a stable ID, source/date, intended player outcome, dependencies, status and testable completion criteria; existing requests/history are preserved; blocked requests stay visible; reports distinguish gameplay effects, tested code and verified live release.
 - **Boundary:** no existing externally hosted Floodgate agent was found. This repo workflow and connected daily task are the concrete setup made here; no claim is made about changing an unidentified external agent.
+- **Intake evidence (4 October 2026):** First repository pass reviewed current main, updated PRs #4 and #7–#10, repository-wide issue/discussion and inline-review comment feeds, and each updated PR's submitted reviews. No new standalone issues, discussion comments, inline review comments or submitted reviews were returned for the intake window. No existing open Floodgate intake PR was found. This documentation-only amendment does not deploy gameplay.
 
 ## BR-004 — Conversational NPC actions and grounded quests
 
-- **Priority/status:** P0 / verified frontend; shared-cloud deployment blocked.
+- **Priority/status:** P0 / shipped frontend; updated shared-cloud planner deployment blocked/unverified.
 - **Source:** Josh asked for similar phrases to be understood by the LLM and logically sound, interesting game-relevant quests.
 - **Work:** `docs/conversational-quests-progress.md`, `island/src/people/social-intent.js`, `island/src/guide/story-quests.js` and the discovery Worker planner.
 - **Acceptance:** natural paraphrases become supported game actions; ambiguous requests clarify; accepted quests reference actual places/people and require actual evidence; saved ownership/progress prevents duplicate rewards or accepting another NPC's offer; stale model replies do not act.
 - **Blocker:** shared-cloud planner requires the existing Cloudflare account to deploy its separately tested Worker. No credentials are available in this workspace. Frontend publishing does not deploy the Worker.
+- **Deployment amendment (4 October 2026):** [PR #9](https://github.com/BartonDesigns/bard/pull/9), head `d45fda6`, is included in current main. Its [Pages run 37203954712](https://github.com/BartonDesigns/bard/actions/runs/37203954712) completed successfully at 12:59:29 UTC; the later [Pages run for current main](https://github.com/BartonDesigns/bard/actions/runs/37205907433) also deployed successfully. These are frontend release facts, not evidence of a Worker upgrade. The existing Worker is deployed, but its planner/style version remains unverified; authorized account deployment plus `/status` advertising `social_intent` and `story_quest`, followed by an end-to-end cloud action/quest check, is still required. Reported browser model responses are deterministic fixtures, not a live-model quality study.
 
 ## BR-005 — Musical and companion consequences
 
@@ -45,12 +48,15 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 - **Preserve:** current musical physics, existing authored NPC/quest systems and persistent followers/scouts.
 - **Next slice:** one companion-led musical quest whose measured instrument input produces a persistent supported world development. Future roles/rewards must change play, not merely add a label or promise an unimplemented ability.
 - **References:** `docs/npc-social-plan.md`, `docs/flight-migration-inventory.md`, `docs/rewards-and-return-loop.md`.
+- **Existing foundation (4 October 2026):** [PR #7](https://github.com/BartonDesigns/bard/pull/7) records actual faceplate-driven boulder motion and all ten native kinetic rigs; [PR #8](https://github.com/BartonDesigns/bard/pull/8) records tested follow/wait/scout/local-warning behavior. Both are included in current main, with successful Pages runs [37171331645](https://github.com/BartonDesigns/bard/actions/runs/37171331645) and [37174291484](https://github.com/BartonDesigns/bard/actions/runs/37174291484). These implementer-recorded automated playtests establish prerequisites, not the requested companion-led persistent musical world-development quest. Keep this request open; dungeon combat, deliveries and shared progression are not established by those releases.
 
 ## Intake log
 
 - 2026-10-03 Pacific: captured owner feedback above. World-development rewards supersede gold-centric recommendations for new design. No invented player survey findings or synthetic feedback treated as real playtest evidence. Existing historical feedback should be linked when found, not recreated or silently overwritten.
 
 - 2026-10-04 Pacific: enabled the daily Floodgate build-request intake, approximately 8 a.m. local time. Initial queue is committed in PR #9. Future passes review repository issues and PR feedback; private chat ingestion is not automatic.
+
+- 2026-10-04T15:52:59Z (08:52:59 Pacific) repository intake checkpoint: reviewed main `44bc21638444b0a1ed5a0c765b97e09c3af61a64` and updated repository evidence since 2026-10-03T07:00:00Z (the prior date-only checkpoint, conservatively interpreted as Pacific midnight). Current inventory: 10 PRs total, 5 updated PRs (#4, #7–#10), 0 new standalone issues, 0 discussion comments, 0 inline-review comments, 0 submitted reviews on updated PRs; collection pages were below the 100-item page size. Sources: [updated issues/PR feed](https://api.github.com/repos/BartonDesigns/bard/issues?state=all&since=2026-10-03T07%3A00%3A00Z&sort=updated&direction=asc&per_page=100), [discussion comments](https://api.github.com/repos/BartonDesigns/bard/issues/comments?since=2026-10-03T07%3A00%3A00Z&per_page=100), [inline reviews](https://api.github.com/repos/BartonDesigns/bard/pulls/comments?since=2026-10-03T07%3A00%3A00Z&per_page=100), and individual PR review feeds. [PR #4](https://github.com/BartonDesigns/bard/pull/4) is bot-authored image optimization, not a new owner gameplay decision or verified player test; no duplicate gameplay request added. Existing owner decisions remain distinct from implementer PR summaries and recorded automated verification. No private chats, uncommitted work, external player reports or synthetic research were ingested. BR-003/004/007/008 statuses and BR-002/005 evidence clarified; BR-001 world-development acceptance and BR-006 shared backend remain open. Next pass should rescan updated sources from this timestamp inclusively (or with overlap), deduplicating by source ID and updated date. This intake changes only the queue through a feature PR; frontend/Worker deployment boundaries remain unchanged.
 
 ## BR-006 — Universal world progress with private player conversations
 
@@ -63,15 +69,19 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 
 ## BR-007 — Separate NPC dialogues and searchable full archive
 
-- **Priority/status:** P0 / verified frontend; release pending.
+- **Priority/status:** P0 / shipped frontend on 4 October 2026.
 - **Source:** Josh, 4 October 2026 Pacific: previous NPC dialogue appears in a new conversation; each NPC needs its own dialogue while the whole history remains searchable.
 - **Work:** stable NPC-keyed archive, Guide thread isolation, stale-response/view guards, all-conversation search and per-person chronological reading, export and explicit storage errors. Model context remains bounded and contains only the current person.
 - **Migration:** import the recent turns still retained by existing saves. Already discarded older messages cannot be reconstructed. New archived turns are not silently trimmed when model context is trimmed.
 - **Acceptance:** two real NPCs never see one another's transcript in UI or model input; opening/reloading each restores only their own dialogue; old turns remain searchable beyond 16 messages; search/export are read-only; interrupted Guide/NPC replies do not cross views; mobile controls remain usable.
+- **Release evidence (4 October 2026):** [PR #10](https://github.com/BartonDesigns/bard/pull/10) is merged into main at [`44bc216`](https://github.com/BartonDesigns/bard/commit/44bc21638444b0a1ed5a0c765b97e09c3af61a64). [Pages run 37205907433](https://github.com/BartonDesigns/bard/actions/runs/37205907433) completed successfully at 13:32:10 UTC, including its deploy job. [Recorded verification](https://github.com/BartonDesigns/bard/blob/44bc21638444b0a1ed5a0c765b97e09c3af61a64/docs/npc-dialogue-archive-progress.md) covers two real runtime NPCs, 41 archive turns versus 16 context turns, search/reload/stale-response guards and 480×320 controls. These are automated browser checks with fixture replies, not human/player interview evidence. The previous release-pending status describes the pre-deployment checkpoint.
+
+- **Live artifact check (4 October 2026, 15:54 UTC):** The served [site](https://level99bard.com/) and `island/dist/island.js` matched commit `44bc216` byte-for-byte. SHA-256: index `6d95a38b15d05b21b737e992e127086885adc65a6315dff6ace31ae1828c2959`; engine `7b87e868322b310fe324c7fdd7e13342516e78dd94a338280b562d9e5562a5de`. This independently confirms the frontend artifact; it does not check Cloudflare deployment.
 
 ## BR-008 — More expressive mature NPC dialogue
 
-- **Priority/status:** P1 / verified frontend; cloud deployment still separately blocked.
+- **Priority/status:** P1 / shipped frontend on 4 October 2026; updated cloud deployment still separately blocked/unverified.
 - **Source:** Josh, 4 October 2026 Pacific: less vanilla LLM settings, including bad language and mature topics.
 - **Work:** independent clean/mature language, understated/bold personality and brief/balanced/rich replies. Adult NPCs can use natural profanity and discuss mature life themes when appropriate to their individual character. Child characters remain age-appropriate. Provider limits still apply.
 - **Acceptance:** preferences persist, local/cloud prompts receive the same validated settings, arbitrary saved/request fields cannot inject system instructions, distinct NPC personalities remain, and changing style never fabricates actions or quest outcomes.
+- **Release/boundary amendment (4 October 2026):** The controls and client prompt settings shipped in [PR #10](https://github.com/BartonDesigns/bard/pull/10) and [Pages run 37205907433](https://github.com/BartonDesigns/bard/actions/runs/37205907433). [The committed progress record](https://github.com/BartonDesigns/bard/blob/44bc21638444b0a1ed5a0c765b97e09c3af61a64/docs/npc-dialogue-archive-progress.md) confirms the owner already has a deployed Worker; its new code version was not verified because the status probe received HTTP 403 and this workspace lacks deployment access. Keep cloud style support pending a separately verified Worker deployment. Automated normalization/prompt checks do not establish live-provider personality quality or remove provider limits.
