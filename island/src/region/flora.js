@@ -116,7 +116,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 				if (counts[form] >= meshes[form].instanceMatrix.count) continue;
 				const lat = (i0 + a + r()) * dl, lon = (j0 + b + r()) * dn;
 				const dx = (lon - ll.lon) * 111000 * Math.cos(ll.lat * Math.PI / 180), dz = -(lat - ll.lat) * 111000, px = cx + dx, pz = cz + dz;
-				if (Math.hypot(dx, dz) > R || wet(px, pz) || blocked(px, pz, form === 'grass' || form === 'fern' ? 1 : 3)) continue;
+				if (Math.hypot(dx, dz) > R || wet(px, pz) || blocked(px, pz, form === 'grass' || form === 'fern' ? 1 : Math.max(3, size * 0.45))) continue;
 				const y = ground(px, pz), e = 3, s = Math.max(Math.abs(ground(px + e, pz) - y), Math.abs(ground(px, pz + e) - y)) / e;
 				if (s > 0.8) continue;
 				const sz = size * (0.6 + r() * 0.7);

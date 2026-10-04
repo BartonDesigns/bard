@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import { Geo } from './geo.js';
 import { STRUCTURES, basePalette } from './structures.js';
-import { plan, blockLots, BLOCK, SIZES } from './layout.js';
+import { plan, blockLots, BLOCK, SIZES, denseStreetDistance, lotGround } from './layout.js';
 import { KITS } from './kits.js';
 
 const CELL = 120, VCELL = 240;
@@ -59,7 +59,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	const sites = new Map();            // key -> site
 	const queue = [];                   // [site, i, j]
 	const stats = { built: 0, ms: 0, cells: 0, lots: 0, tris: 0 };
-	let epoch = -1, job = null;
+	let epoch = -1, job = null, occupancyVersion = 0;
 
 	// ---------- a site ----------
 	// desc: { key, kind, lat, lon, kit (kit id), pop, name, regionId, culture, palette, opts, lots? }
@@ -72,12 +72,12 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		sites.set(s.key, s);
 		return s;
 	}
-	function place(s) { const p = toXZ(s.lat, s.lon); s.x = p.x; s.z = p.z; s.group.position.set(p.x, 0, p.z); }
+	function place(s) { const p = toXZ(s.lat, s.lon); s.x = p.x; s.z = p.z; s.group.position.set(p.x, 0, p.z); s.roadEpoch = -1; }
 	function drop(s) {
 		for (const c of s.cells.values()) freeCell(c);
 		s.cells.clear();
 		group.remove(s.group);
-		sites.delete(s.key);
+		sites.delete(s.key); occupancyVersion++;
 	}
 	// the plan: lots, lanes, square, fields (a dense quarter only its streets; its blocks come later)
 	function planSite(s) {
@@ -102,7 +102,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		for (const L of P.lots) R = Math.max(R, Math.hypot(L.x, L.z) + 30);
 		for (const f of P.fields) R = Math.max(R, Math.hypot(f.x, f.z) + Math.max(f.w, f.d));
 		P.reach = P.dense ? P.R + 60 : R;
-		s.planned = P;
+		s.planned = P; occupancyVersion++;
 		stats.lots += P.lots.length;
 	}
 	// the lots in one cell of a site
@@ -138,15 +138,16 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			const r = rng((s.seed ^ Math.imul(Math.round(L.x * 10), 73856093) ^ Math.imul(Math.round(L.z * 10), 19349663)) >>> 0);
 			const fn = L.build || STRUCTURES[L.type];
 			if (!fn) continue;
-			// the ground under the lot: its middle, not lower than a little above its lowest corner
-			const ex = s.x + L.x, ez = s.z + L.z, hw = L.w / 2, hd = L.d / 2;
-			let lo = ground(ex, ez), mid = lo;
-			for (const [a, b] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]]) { const c = Math.cos(L.rot), sn = Math.sin(L.rot); lo = Math.min(lo, ground(ex + a * c + b * sn, ez - a * sn + b * c)); }
-			const y = Math.max(lo + 0.05, Math.min(mid, lo + 0.6));
+			const terrainLot = { ...L, x: s.x + L.x, z: s.z + L.z };
+			const foundation = L.role === 'house' ? lotGround(terrainLot, ground, wet) : null;
+			if (L.role === 'house' && !foundation) continue;
+			const y = foundation?.y ?? ground(terrainLot.x, terrainLot.z);
+
 			const B = { G, glow, smoke: [], solid: [], lights: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense };
 			const rot = L.rot + Math.PI;
 			G.frame(L.x, y, L.z, rot); glow.frame(L.x, y, L.z, rot);
 			const pal = basePalette(s.palette, kit, r, opts);
+			if (foundation && foundation.hi - foundation.lo > 0.12) G.box(0, foundation.lo - y - 0.25, 0, L.w, y - foundation.lo + 0.3, L.d, pal.stone);
 			try { fn(B, { w: L.w, d: L.d }, pal, r); } catch (e) { console.warn('[regional] ' + L.type, e); }
 			const cs = Math.cos(rot), sn = Math.sin(rot), toS = (a, b) => [L.x + a * cs + b * sn, L.z - a * sn + b * cs];
 			const h = (SIZES[L.type]?.[0] || 4) > 12 ? 14 : 8;
@@ -223,8 +224,8 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			let c = null, k = 0;
 			if (dense) {
 				const lx = x * dense.cs - z * dense.sn, lz = x * dense.sn + z * dense.cs, B = dense.B;
-				const fx = Math.abs(((lx % B) + B) % B - B / 2), fz = Math.abs(((lz % B) + B) % B - B / 2);
-				if (Math.hypot(x, z) < dense.R + 20) { const e = B / 2 - Math.min(fx, fz); c = e < dense.street / 2 + 0.5 ? cPath : cPlaza; k = 0.92; }
+				const e = denseStreetDistance(lx, lz, B);
+				if (Math.hypot(x, z) < dense.R + 20) { c = e < dense.street / 2 + 0.5 ? cPath : cPlaza; k = 0.92; }
 			}
 			for (const f of fields) {
 				const dx = x - f.x, dz = z - f.z, u = dx * Math.cos(f.rot) - dz * Math.sin(f.rot), v = dx * Math.sin(f.rot) + dz * Math.cos(f.rot);
@@ -324,8 +325,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		for (const s of sites.values()) {
 			if (!s.cells.size || Math.abs(p.x - s.x) > 4000 || Math.abs(p.z - s.z) > 4000) continue;
 			const lx = p.x - s.x, lz = p.z - s.z, C = s.cells.get(Math.floor(lx / s.cell) + ',' + Math.floor(lz / s.cell));
-			const list = C ? C.solids : null;
-			if (!list) continue;
+			const list = C?.solids || [];
 			for (const b of edgeSolids(s, lx, lz, list)) {
 				if (footY > b.y0 + b.h || footY < b.y0 - 2) continue;
 				const cx = Math.cos(b.rot), cz = Math.sin(b.rot), dx = p.x - s.x - b.x, dz = p.z - s.z - b.z;
@@ -333,7 +333,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 				const u = dx * cx - dz * cz, v = dx * cz + dz * cx, r = 0.3;
 				const ou = b.w / 2 + r - Math.abs(u), ov = b.d / 2 + r - Math.abs(v);
 				if (ou <= 0 || ov <= 0) continue;
-				if (ou < ov) { const sg = Math.sign(u) * ou; p.x += cx * sg; p.z -= cz * sg; } else { const sg = Math.sign(v) * ov; p.x += cz * sg; p.z += cx * sg; }
+				if (ou < ov) { const sg = (Math.sign(u) || 1) * ou; p.x += cx * sg; p.z -= cz * sg; } else { const sg = (Math.sign(v) || 1) * ov; p.x += cz * sg; p.z += cx * sg; }
 			}
 		}
 	}
@@ -345,20 +345,86 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		return out;
 	}
 	// is a point in (or within m of) a building of a place round you?
-	function blocked(x, z, m = 2) {
+	function blocked(x, z, m = 2, includeRoads = false) {
 		for (const s of sites.values()) {
-			if (!s.cells.size || Math.abs(x - s.x) > 4000 || Math.abs(z - s.z) > 4000) continue;
-			const lx = x - s.x, lz = z - s.z, C = s.cells.get(Math.floor(lx / s.cell) + ',' + Math.floor(lz / s.cell));
-			if (!C) continue;
-			for (const b of edgeSolids(s, lx, lz, C.solids)) { const cx = Math.cos(b.rot), cz = Math.sin(b.rot), dx = lx - b.x, dz = lz - b.z, u = dx * cx - dz * cz, v = dx * cz + dz * cx; if (Math.abs(u) < b.w / 2 + m && Math.abs(v) < b.d / 2 + m) return true; }
-			for (const L of s.planned?.byCell?.get(Math.floor(lx / s.cell) + ',' + Math.floor(lz / s.cell)) || []) if (Math.hypot(lx - L.x, lz - L.z) < Math.hypot(L.w, L.d) / 2 + m) return true;
+			const P = s.planned;
+			if (!P || Math.hypot(x - s.x, z - s.z) > P.reach + m + 40) continue;
+			const lx = x - s.x, lz = z - s.z;
+			// Reserve the planned roads and footprints before their meshes stream in.
+			// Otherwise foliage generated first survives inside the later buildings.
+			if (includeRoads && P.dense) {
+				const cs = Math.cos(P.ax), sn = Math.sin(P.ax), street = kitOf(s).build.layout === 'souk' ? 5 : 9;
+				if (Math.hypot(lx, lz) < P.R + m && denseStreetDistance(lx * cs - lz * sn, lx * sn + lz * cs, P.block) < street / 2 + m) return true;
+			} else if (includeRoads) for (const path of P.paths) for (let k = 0; k + 1 < path.pts.length; k++) {
+				const a = path.pts[k], b = path.pts[k + 1], dx = b[0] - a[0], dz = b[1] - a[1], len = dx * dx + dz * dz;
+				const t = len ? Math.max(0, Math.min(1, ((lx - a[0]) * dx + (lz - a[1]) * dz) / len)) : 0;
+				if (Math.hypot(lx - a[0] - dx * t, lz - a[1] - dz * t) < path.w / 2 + m) return true;
+			}
+			const i = Math.floor(lx / s.cell), j = Math.floor(lz / s.cell);
+			for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const L of cellLots(s, i + a, j + b)) {
+				const cs = Math.cos(L.rot), sn = Math.sin(L.rot), dx = lx - L.x, dz = lz - L.z;
+				if (Math.abs(dx * cs - dz * sn) < L.w / 2 + m && Math.abs(dx * sn + dz * cs) < L.d / 2 + m) return true;
+			}
 		}
+
 		return false;
 	}
 	// the places to be near a point: spots for people (seats, stalls, doorsteps)
 	function spotsNear(x, z, r) {
 		const out = [];
 		for (const s of sites.values()) for (const C of s.cells.values()) for (const q of C.spots) { const wx = s.x + q.x, wz = s.z + q.z; if (Math.abs(wx - x) < r && Math.abs(wz - z) < r) out.push({ ...q, x: wx, z: wz, site: s }); }
+		return out;
+	}
+	// Native local streets share the road registry used by highways, traffic and driving.
+	// Keep arrays stable until the floating coordinate frame changes.
+	function roadTowns() {
+		const out = [];
+		for (const s of sites.values()) {
+			if (s.kind !== 'town' || !s.key.startsWith('town:') || !s.planned) continue;
+			if (s.roadEpoch !== F.epoch) {
+				const P = s.planned, paths = P.paths.slice();
+				if (P.dense) {
+					const cs = Math.cos(P.ax), sn = Math.sin(P.ax), R = P.R, B = P.block;
+					const point = (x, z) => [x * cs + z * sn, -x * sn + z * cs];
+					for (let n = Math.ceil(-R / B - 0.5); (n + 0.5) * B < R; n++) {
+						const q = (n + 0.5) * B, end = Math.sqrt(R * R - q * q);
+						const w = kitOf(s).build.layout === 'souk' ? 5 : 9;
+						// Driving turns only at road endpoints. Split both grid directions at
+						// the exact same rotated intersection coordinates.
+						const cuts = [-end];
+						for (let k = Math.ceil(-end / B - 0.5); (k + 0.5) * B < end; k++) if ((k + 0.5) * B > -end + 0.01) cuts.push((k + 0.5) * B);
+						cuts.push(end);
+						for (let k = 0; k + 1 < cuts.length; k++) {
+							paths.push({ pts: [point(q, cuts[k]), point(q, cuts[k + 1])], w }, { pts: [point(cuts[k], q), point(cuts[k + 1], q)], w });
+						}
+					}
+				}
+				const roads = [];
+				for (const path of paths) {
+					let run = [], lastHeight = null;
+					const flush = () => {
+						if (run.length >= 4) {
+							let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+							for (let k = 0; k < run.length; k += 2) { x0 = Math.min(x0, run[k]); x1 = Math.max(x1, run[k]); z0 = Math.min(z0, run[k + 1]); z1 = Math.max(z1, run[k + 1]); }
+							roads.push({ pts: new Float32Array(run), box: [x0, z0, x1, z1], cls: path.w >= 5 ? 'residential' : 'footway', drive: path.w >= 5, w: path.w, name: s.name, end0: true, end1: true, bridge: false, divided: false, oneway: false });
+						}
+						run = []; lastHeight = null;
+					};
+					for (let k = 0; k + 1 < path.pts.length; k++) {
+						const a = path.pts[k], b = path.pts[k + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]), count = Math.max(1, Math.ceil(len / 12));
+						for (let q = k ? 1 : 0; q <= count; q++) {
+							const x = s.x + (q === count ? b[0] : a[0] + (b[0] - a[0]) * q / count), z = s.z + (q === count ? b[1] : a[1] + (b[1] - a[1]) * q / count), y = ground(x, z);
+							if (!Number.isFinite(y) || wet(x, z) || (lastHeight !== null && Math.abs(y - lastHeight) > len / count * 0.28)) { flush(); continue; }
+							run.push(x, z); lastHeight = y;
+						}
+					}
+					flush();
+				}
+				s.roadTown = { id: s.key.slice(5), x: s.x, z: s.z, r: P.R || P.reach, roads };
+				s.roadEpoch = F.epoch;
+			}
+			out.push(s.roadTown);
+		}
 		return out;
 	}
 	// the site you are in or nearest to (and how far)
@@ -368,5 +434,5 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		return best ? { site: best, d: Math.max(0, bd) } : null;
 	}
 	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); groundMat.dispose(); smokeMat.dispose(); }
-	return { add, sites, update, push, blocked, spotsNear, nearest, dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
+	return { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, roadTowns, spotsNear, nearest, dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
 }

@@ -89,9 +89,10 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 ## BR-009 · Native surface-connected procedural caves
 
 - **Source:** owner request, 4 October 2026; legacy build and current source audited.
-- **Priority/status:** P0 / verified generated-island release candidate; publication pending.
+- **Priority/status:** P0 / generated-island cave release shipped; deeper legacy and mainland work remain open.
 - **Request:** carry the rich historical caves into Crysis, walk naturally from surface to underground and back without loading screen or separate route, with different procedural systems per planet.
 - **Current deliverable:** generated Earth-island/planet cave mouths, readiness/collision agreement, bounded rock streaming, musical cave objects, persistent resonance lights, stable cave NPC lore and conversation, journal/entrance guidance.
+- **Release evidence (4 October 2026):** [PR #12](https://github.com/BartonDesigns/bard/pull/12), commit `b56bf077`, and successful [Pages run 37223202101](https://github.com/BartonDesigns/bard/actions/runs/37223202101). Served index/engine hashes matched the commit. A live 390×844 browser check entered through the actual Caves button and walked surface → village → surface with the same scene, URL and audio context, no loader and no page/shader errors. This closes the generated-island release slice, not every preservation obligation.
 - **Acceptance:** actual controller walk from outside through a mouth and back with unchanged scene/camera/player/audio/URL; no loader/shader error; saved environmental reward returns; headroom/walls respected; multiple profile seeds tested.
 - **Visual requirement (owner, 4 October 2026):** strong local visual fidelity without breaking seamless play or device budgets. Wet rock, ice and crystals now catch nearby cave glow; existing procedural detail and biome palettes remain. Validate compiled shaders and phone controls, and do not substitute software-rendered functional checks for native-device FPS evidence.
 - **Preservation:** docs/cave-migration-inventory.md records the remaining depth/core/trials, water/geode/torch, echo/shard and civic mechanics. Keep legacy archive intact. Mainland cave coverage needs distinct real-terrain siting and carving work. Shared world rewards require BR-006.
@@ -103,3 +104,22 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 - **Findings:** exploration goals were hidden by a story-only journal; cave targets needed real mouth identity; companions need navigable cave routes; rewards should leave visible world changes.
 - **Verification amendment (4 October 2026):** a real runtime cave resident followed 4.625 m on a sampled reachable route, with bounded movement and valid cave floor/headroom; see docs/verification/cave-gameplay/companion-report.json. This supersedes the original zero-movement probe and does not establish arbitrary tunnel pathfinding.
 - **Follow-up:** extend companion route planning and task return; add mainland destinations and understandable route cues; migrate legacy echo/song-shard progression as tangible musical development. Separate actual browser findings from inferred suggestions. Do not represent agents as recruited human players.
+
+
+## BR-011 · Connected streets and highways beyond the Bay
+
+- **Source:** owner, 4 October 2026, 11:21 Pacific: streets and interconnected long highways appear absent outside the Bay Area.
+- **Priority/status:** P0 / verified release candidate; frontend deployment evidence will be recorded in the release PR.
+- **Player outcome:** towns outside the Bay have visible local streets connected to usable intercity roads, including when approaching a highway midway between cities.
+- **Dependencies:** regional settlement street data, globe route streaming, road-source registration, shared terrain grading and floating-frame handling.
+- **Acceptance:** representative non-Bay cities expose connected street/highway segments; approaching a route midpoint loads it; ribbons agree with player/driving ground; town joins update after asynchronous growth; sources survive rebase and release on unload; caches stay bounded; no implausible long open-ocean roads. Procedural connectivity does not claim exact real-world highway mapping.
+- **Evidence/status:** concrete source defects and the final browser results are tracked in docs/world-expansion-progress.md. No player interview or universal-coverage claim is inferred from automated samples.
+
+## BR-012 · Correct regional homes in East Asia
+
+- **Source:** same owner request, 4 October 2026: far Eastern homes not generating properly; continue the world-expansion work.
+- **Priority/status:** P0 / verified release candidate; frontend deployment evidence will be recorded in the release PR.
+- **Player outcome:** regional homes render consistently, stand on appropriate dry ground, retain their regional architecture and leave streets clear.
+- **Dependencies:** regional block layout, rotated building footprints, wet/slope checks, foundation placement and cell streaming.
+- **Acceptance:** representative East Asian towns render finite visible geometry; dense streets align between blocks; houses avoid water and unsuitable slopes; uphill walls are not buried; regional roof/facade details remain; streamed cells and collision stay aligned after returning/rebasing.
+- **Evidence/status:** Kyoto and Beijing rendered with finite grounded homes, shared street intersections and cleared tree/plant exclusions. Eight housing regressions and actual street-level browser checks pass; see docs/world-expansion-progress.md. This does not claim an exhaustive worldwide visual audit.

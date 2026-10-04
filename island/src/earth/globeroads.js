@@ -24,6 +24,7 @@
 import * as THREE from 'three';
 import { cities as atlasCities, atlasReady } from './atlas.js';
 import { F, toXZ, toLL } from './globeframe.js';
+import { BERM_U, BERM_GLSL } from '../bay/berms.js';
 
 const KM = 111.2;
 const REG = 20000;            // m: the roads made round you
@@ -35,7 +36,15 @@ const STEP = 20;
 
 // the Bay's survey: its own roads there (bay/*)
 const inBay = (lat, lon) => lat > 36.93 && lat < 38.87 && lon > -123.6 && lon < -121.45;
-const kmBetween = (a, b) => { const c = Math.cos((a.lat + b.lat) / 2 * Math.PI / 180); return Math.hypot((a.lon - b.lon) * c, a.lat - b.lat) * KM; };
+const wrapLon = (d) => ((d + 540) % 360 + 360) % 360 - 180;
+const kmBetween = (a, b) => { const c = Math.cos((a.lat + b.lat) / 2 * Math.PI / 180); return Math.hypot(wrapLon(a.lon - b.lon) * c, a.lat - b.lat) * KM; };
+// Prioritise the corridor, not only its cities: landing halfway along a long road must stream it.
+export function roadCorridorDistance(p, L) {
+	const c = Math.cos(p.lat * Math.PI / 180), ax = wrapLon(L.a.lon - p.lon) * c, ay = L.a.lat - p.lat;
+	const dx = wrapLon(L.b.lon - L.a.lon) * c, dy = L.b.lat - L.a.lat;
+	const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
+	return Math.hypot(ax + dx * t, ay + dy * t) * KM;
+}
 
 // a small binary heap of cell indices keyed by an array
 function heap(key) {
@@ -70,10 +79,10 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		const C = atlasCities().filter((c) => !inBay(c.lat, c.lon));
 		nodes = C.map((c, i) => ({ i, id: c.id, name: c.name, lat: c.lat, lon: c.lon, pop: c.pop | 0, links: [] }));
 		const cell = new Map(), key = (a, b) => a + ',' + b;
-		for (const n of nodes) { const k = key(Math.floor(n.lat / 5), Math.floor(n.lon / 5)); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(n); }
+		for (const n of nodes) { const k = key(Math.floor(n.lat / 5), Math.floor((n.lon + 180) / 5)); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(n); }
 		const near = (n, km) => {
-			const out = [], r = Math.ceil(km / 550) + 1;
-			for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (const m of cell.get(key(Math.floor(n.lat / 5) + a, Math.floor(n.lon / 5) + b)) || []) if (m !== n) { const d = kmBetween(n, m); if (d < km) out.push([m, d]); }
+			const out = [], r = Math.ceil(km / 550) + 1, rx = Math.min(36, Math.ceil(km / (550 * Math.max(0.1, Math.cos(n.lat * Math.PI / 180)))) + 1);
+			for (let a = -r; a <= r; a++) for (let b = -rx; b <= rx; b++) for (const m of cell.get(key(Math.floor(n.lat / 5) + a, ((Math.floor((n.lon + 180) / 5) + b) % 72 + 72) % 72)) || []) if (m !== n) { const d = kmBetween(n, m); if (d < km) out.push([m, d]); }
 			return out;
 		};
 		const links2 = [];
@@ -85,7 +94,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 				// a third place nearer to both: the road goes by way of it
 				let block = false;
 				for (const [c, dc] of cand) if (c !== b && dc < d && kmBetween(b, c) < d) { block = true; break; }
-				if (!block && d < 450) links2.push({ id: links2.length, a, b, km: d, ...(Math.min(a.pop, b.pop) >= 2 && d > 25 ? MOTORWAY : MAIN) });
+				if (!block && d > 0.01 && d < 450) links2.push({ id: links2.length, a, b, km: d, ...(Math.min(a.pop, b.pop) >= 2 && d > 25 ? MOTORWAY : MAIN) });
 			}
 			if (performance.now() - t0 > 4) { yield; t0 = performance.now(); }
 		}
@@ -170,13 +179,21 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		}
 		if (Math.hypot(R[R.length - 1][0] - ex, R[R.length - 1][1] - ey) > 1) R.push([ex, ey]);
 		const lat = new Float64Array(R.length), lon = new Float64Array(R.length);
-		R.forEach(([x, y], q) => { lat[q] = L.a.lat + y / kz; lon[q] = L.a.lon + x / kx; });
+		// Recheck the actual smoothed route; corners must not cut across open sea.
+		wetRun = 0;
+		for (let q = 0; q < R.length; q++) {
+			const [x, y] = R[q]; lat[q] = L.a.lat + y / kz; lon[q] = L.a.lon + x / kx;
+			const h = height.atLL(lat[q], lon[q]);
+			wetRun = height.out.land < 0 || h < 0.3 ? wetRun + (q ? Math.hypot(x - R[q - 1][0], y - R[q - 1][1]) : 0) : 0;
+			if (wetRun > 2500) return 'none';
+			if ((q & 63) === 0 && performance.now() - s0 > 3) { yield; s0 = performance.now(); }
+		}
 		return { lat, lon };
 	}
 
 	// ---------- the roads round you, in the frame's metres ----------
 	const grid = new Map(), CELL = 400;
-	let built = [], at = null, epoch = -1, townNow = null, making = null, version = 0;
+	let built = [], at = null, epoch = -1, townNow = [], making = null, version = 0, townKey = '';
 	const pieceCache = new Map();
 	function near(kind, x, z, rad, out) {
 		if (kind !== 'roads' || !built.length) return;
@@ -206,6 +223,18 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		for (let k = 0; k < pts.length; k += 2) { mnx = Math.min(mnx, pts[k]); mxx = Math.max(mxx, pts[k]); mnz = Math.min(mnz, pts[k + 1]); mxz = Math.max(mxz, pts[k + 1]); }
 		return { cls: L.cls, name, w: L.w, pts, drive: true, walked: false, bridge: false, end0: false, end1: false, link: false, divided: L.cls === 'motorway', oneway, rural: true, globe: true, box: [mnx, mnz, mxx, mxz], ...extra };
 	};
+	function connector(from, to) {
+		const length = Math.hypot(to[0] - from[0], to[1] - from[1]), n = Math.max(1, Math.ceil(length / STEP));
+		const pts = new Float32Array((n + 1) * 2);
+		let previous;
+		for (let i = 0; i <= n; i++) {
+			const x = from[0] + (to[0] - from[0]) * i / n, z = from[1] + (to[1] - from[1]) * i / n;
+			const h = groundAt(x, z), ll = toLL(x, z); height.atLL(ll.lat, ll.lon);
+			if (!Number.isFinite(h) || h < 0.3 || height.out.land < 0 || (i && Math.abs(h - previous) > length / n * 0.25)) return null;
+			pts[i * 2] = x; pts[i * 2 + 1] = z; previous = h;
+		}
+		return pts;
+	}
 	function* make(cx, cz) {
 		const t0 = performance.now();
 		let s0 = t0, work = 0;
@@ -224,19 +253,21 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 			let q0 = 0, q1 = n - 1;
 			const joins = [];
 			for (const [end, node] of [[0, L.a], [1, L.b]]) {
-				if (!townNow || townNow.id !== node.id) continue;
-				const T = townNow, reach = T.r * 0.9;
+				const T = townNow.find((t) => t.id === node.id);
+				if (!T?.roads?.length) continue;
+				const reach = T.r * 0.9, previous0 = q0, previous1 = q1;
 				if (end === 0) { while (q0 < q1 && Math.hypot(P[q0 * 2] - T.x, P[q0 * 2 + 1] - T.z) < reach) q0++; } else { while (q1 > q0 && Math.hypot(P[q1 * 2] - T.x, P[q1 * 2 + 1] - T.z) < reach) q1--; }
 				const q = end === 0 ? q0 : q1, px = P[q * 2], pz = P[q * 2 + 1];
-				let best = null, bd = 600;
+				let best = null, bd = Math.max(600, T.r);
 				for (const r of T.roads) {
 					if (!r.pts || r.pts.length < 4 || r.cls === 'service' || /path|track|footway|steps/.test(r.cls || '')) continue;
-					for (const k of [0, r.pts.length - 2]) { const d = Math.hypot(r.pts[k] - px, r.pts[k + 1] - pz); if (d < bd) { bd = d; best = [r.pts[k], r.pts[k + 1]]; } }
+					for (const k of [0, r.pts.length - 2]) { const d = Math.hypot(r.pts[k] - px, r.pts[k + 1] - pz); if (d < bd) { const to = [r.pts[k], r.pts[k + 1]], pts = connector([px, pz], to); if (pts) { bd = d; best = pts; } } }
 				}
-				if (best) joins.push({ end, from: [px, pz], to: best });
+				if (best) joins.push(best);
+				else { q0 = previous0; q1 = previous1; }
 			}
 			const base = P.subarray(q0 * 2, q1 * 2 + 2);
-			const key = L.id + ':' + F.epoch + ':' + q0 + ':' + q1;
+			const key = L.id + ':' + F.epoch + ':' + q0 + ':' + q1 + ':' + townKey;
 			let pieces = pieceCache.get(key);
 			if (!pieces) {
 				pieces = [];
@@ -251,7 +282,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 						pieces.push(road(L, pts, L.cls === 'motorway', name));
 					}
 				}
-				for (const J of joins) pieces.push(road(MAIN, new Float32Array(J.end === 0 ? [J.to[0], J.to[1], J.from[0], J.from[1]] : [J.from[0], J.from[1], J.to[0], J.to[1]]), false, `${L.a.name} – ${L.b.name}`, { cls: 'primary', w: 8 }));
+				for (const pts of joins) pieces.push(road(MAIN, pts, false, `${L.a.name} – ${L.b.name}`, { cls: 'primary', w: 8, link: true }));
 				pieceCache.set(key, pieces);
 			}
 			for (const r of pieces) if (r.box[2] > cx - REG && r.box[0] < cx + REG && r.box[3] > cz - REG && r.box[1] < cz + REG) out.push(r);
@@ -261,18 +292,15 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		const pos = [], uv = [], idx = [];
 		for (const r of out) {
 			const p = r.pts, n = p.length / 2, hw = r.w / 2, v0 = pos.length / 3;
-			// the road's own profile, as the grading has it (berms.js: the ground on the centre line
-			// smoothed over about 40 m either way)
-			const H = new Float32Array(n);
-			for (let q = 0; q < n; q++) H[q] = groundAt(p[q * 2], p[q * 2 + 1]);
-			for (let pass = 0; pass < 2; pass++) { const c = H.slice(); for (let q = 0; q < n; q++) { let a = 0, k = 0; for (let j = Math.max(0, q - 2); j <= Math.min(n - 1, q + 2); j++) { a += c[j]; k++; } H[q] = a / k; } }
+			// Sample each edge on ungraded terrain. The shared berm texture applies the same
+			// grading as the player and terrain, including after it updates while standing still.
 			let s = 0;
 			for (let q = 0; q < n; q++) {
 				const a = Math.max(0, q - 1), b = Math.min(n - 1, q + 1);
 				let dx = p[b * 2] - p[a * 2], dz = p[b * 2 + 1] - p[a * 2 + 1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
 				if (q) s += Math.hypot(p[q * 2] - p[q * 2 - 2], p[q * 2 + 1] - p[q * 2 - 1]);
-				const y = H[q] + 0.12;
-				pos.push(p[q * 2] - dz * hw, y, p[q * 2 + 1] + dx * hw, p[q * 2] + dz * hw, y, p[q * 2 + 1] - dx * hw);
+				const lx = p[q * 2] - dz * hw, lz = p[q * 2 + 1] + dx * hw, rx = p[q * 2] + dz * hw, rz = p[q * 2 + 1] - dx * hw;
+				pos.push(lx, groundAt(lx, lz) + 0.12, lz, rx, groundAt(rx, rz) + 0.12, rz);
 				uv.push(-1, s, 1, s);
 				if (q) { const k = v0 + q * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
 			}
@@ -291,16 +319,16 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		mesh.geometry.dispose(); mesh.geometry = geo;
 		stats.pieces = out.length; stats.buildMs = Math.max(stats.buildMs, Math.round(work + performance.now() - s0));
 		// (keep only this epoch's pieces)
-		for (const k of pieceCache.keys()) if (!k.includes(':' + F.epoch + ':')) pieceCache.delete(k);
+		for (const k of pieceCache.keys()) if (!k.includes(':' + F.epoch + ':') || !routes.has(Number(k.split(':')[0]))) pieceCache.delete(k);
 	}
 
 	// ---------- drawn ----------
 	const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 	mat.onBeforeCompile = (sh) => {
-		sh.vertexShader = 'attribute vec2 aRoad; varying vec2 vRoad;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+		Object.assign(sh.uniforms, BERM_U);
+		sh.vertexShader = 'attribute vec2 aRoad; varying vec2 vRoad;\n' + BERM_GLSL + '\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
 			vRoad = aRoad;
-			// (lifted a little more with distance, over the ground's coarser far rings)
-			transformed.y += 0.0012 * length((modelMatrix * vec4(position, 1.0)).xyz - cameraPosition);`);
+			transformed.y += bermDelta(position.xz);`);
 		sh.fragmentShader = 'varying vec2 vRoad;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 			{
 				float a = abs(vRoad.x), fw = fwidth(vRoad.x) * 1.5;
@@ -311,7 +339,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 				diffuseColor.rgb = c;
 			}`);
 	};
-	mat.customProgramCacheKey = () => 'globeroads1';
+	mat.customProgramCacheKey = () => 'globeroads2';
 	const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
 	mesh.frustumCulled = false; mesh.receiveShadow = true;
 	group.add(mesh);
@@ -330,20 +358,27 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 			const W = data.win, lonW0 = -180 + W.gi0 / 10, latW1 = 90 - W.gj0 / 10;
 			const inWin = (p) => { const dl = ((((p.lon - lonW0) % 360) + 360) % 360); return dl > 0.3 && dl < 25.3 && p.lat < latW1 - 0.3 && p.lat > latW1 - 25.3; };
 			queue.length = 0;
+			const candidates = [];
 			for (const L of links) {
-				if (routes.has(L.id)) continue;
-				const d = Math.min(kmBetween(ll, L.a), kmBetween(ll, L.b));
-				if (d < ROUTE_KM && inWin(L.a) && inWin(L.b)) queue.push([d, L]);
+				const d = roadCorridorDistance(ll, L);
+				if (d < ROUTE_KM && inWin(L.a) && inWin(L.b)) candidates.push([d, L]);
 			}
-			queue.sort((p, q) => p[0] - q[0]);
+			candidates.sort((p, q) => p[0] - q[0]);
+			// Budget the queue as well as the cache: otherwise a stationary dense region
+			// repeatedly computes and evicts the next-farthest road every two seconds.
+			const selected = candidates.slice(0, isPhone ? 24 : 48), keep = new Set(selected.map((p) => p[1].id));
+			for (const id of routes.keys()) if (!keep.has(id)) routes.delete(id);
+			if (job && !keep.has(job.L.id)) job = null;
+			for (const p of selected) if (!routes.has(p[1].id) && job?.L.id !== p[1].id) queue.push(p);
 		}
 		// (a route for somewhere you have since left is dropped, and found again if you come back)
-		if (job && Math.min(kmBetween(ll, job.L.a), kmBetween(ll, job.L.b)) > ROUTE_KM * 1.5) job = null;
+		if (job && roadCorridorDistance(ll, job.L) > ROUTE_KM * 1.5) job = null;
 		if (!job && queue.length && !data.win.moving) { const L = queue.shift()[1]; job = { L, it: route(L) }; }
 		if (job) step(job);
 		// the roads round you made again when you have come far, the frame moved, a town came or went, or a route arrived
-		const tk = town ? town.id : null;
-		if (tk !== (townNow ? townNow.id : null)) { townNow = town; at = null; }
+		const nextTowns = Array.isArray(town) ? town : town ? [town] : [];
+		const tk = nextTowns.map((t) => t.id + ':' + t.roads.length).join('|');
+		if (tk !== townKey || nextTowns.some((t, i) => t.roads !== townNow[i]?.roads)) { townNow = nextTowns; townKey = tk; pieceCache.clear(); at = null; making = null; }
 		if (!making && (!at || epoch !== F.epoch || Math.hypot(x - at[0], z - at[1]) > REBUILD)) { at = [x, z]; epoch = F.epoch; making = make(x, z); }
 		if (making) { const t0 = performance.now(); while (performance.now() - t0 < (isPhone ? 2 : 4)) if (making.next().done) { making = null; break; } }
 	}
@@ -353,13 +388,13 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		return r.done;
 	}
 	// the frame moved: what is standing is in the old metres, so it goes at once (and is made again)
-	function reframe() { grid.clear(); built = []; making = null; at = null; mesh.geometry.dispose(); mesh.geometry = new THREE.BufferGeometry(); }
+	function reframe() { pieceCache.clear(); scanT = 0; queue.length = 0; job = null; grid.clear(); built = []; making = null; at = null; mesh.geometry.dispose(); mesh.geometry = new THREE.BufferGeometry(); }
 	// everything near you finished now, in one go (tests, and a jump)
 	function settle(cam) {
 		if (!links) { if (!build && atlasReady()) build = network(); while (build && !build.next().done); build = null; }
 		if (cam && links) {
 			const ll = toLL(cam.position.x, cam.position.z);
-			const near = links.filter((L) => !routes.has(L.id) && Math.min(kmBetween(ll, L.a), kmBetween(ll, L.b)) < 90).sort((a, b) => Math.min(kmBetween(ll, a.a), kmBetween(ll, a.b)) - Math.min(kmBetween(ll, b.a), kmBetween(ll, b.b))).slice(0, 8);
+			const near = links.filter((L) => !routes.has(L.id) && roadCorridorDistance(ll, L) < 90).sort((a, b) => roadCorridorDistance(ll, a) - roadCorridorDistance(ll, b)).slice(0, 8);
 			for (const L of near) { const J = { L, it: route(L) }; while (!step(J)); }
 			if (job) while (!step(job));
 			at = null; making = make(cam.position.x, cam.position.z); epoch = F.epoch; at = [cam.position.x, cam.position.z];
@@ -380,6 +415,7 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 		}
 		return false;
 	}
-	const info = () => ({ ...stats, near: built.length, queue: queue.length, routing: job ? `${job.L.a.name} – ${job.L.b.name}` : null });
-	return { update, near, onRoad, version: () => version, reframe, settle, info, group, links: () => links, routes };
+	const info = () => ({ ...stats, near: built.length, queue: queue.length, cachedRoutes: routes.size, cachedPieces: pieceCache.size, routing: job ? `${job.L.a.name} – ${job.L.b.name}` : null });
+	const dispose = () => { build = job = making = null; queue.length = 0; routes.clear(); pieceCache.clear(); grid.clear(); built = []; scene.remove(group); mesh.geometry.dispose(); mat.dispose(); };
+	return { update, near, onRoad, dispose, version: () => version, reframe, settle, info, group, links: () => links, routes };
 }

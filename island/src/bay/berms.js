@@ -50,7 +50,7 @@ export function createBerms(real, groundAt) {
 	const tex = new THREE.DataTexture(half, N, N, THREE.RGFormat, THREE.HalfFloatType);
 	tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
 	BERM_U.uBerm.value = tex;
-	let cx = 1e9, cz = 1e9;
+	let cx = 1e9, cz = 1e9, roadVersion = '';
 	const tread = new Float32Array(TN * TN), treadW = new Float32Array(TN * TN), thalf = new Uint16Array(TN * TN);
 	const ttex = new THREE.DataTexture(thalf, TN, TN, THREE.RedFormat, THREE.HalfFloatType);
 	ttex.magFilter = ttex.minFilter = THREE.LinearFilter; ttex.generateMipmaps = false;
@@ -173,11 +173,14 @@ export function createBerms(real, groundAt) {
 	function update(camera) {
 		if (!real?.loaded()) return;
 		const x = camera.position.x, z = camera.position.z;
-		if (camera.position.y > 3000 || !real.inside(x, z)) { BERM_U.uBermR.value.w = 0; BERM_U.uTreadR.value.w = 0; cx = tx = 1e9; return; }
-		if (Math.hypot(x - cx, z - cz) > 100) rebuild(x, z);
+		const rv = real.version() + ':' + (real.sourceVersion?.() || '');
+		const changed = rv !== roadVersion; roadVersion = rv;
+		const hasRoad = real.inside(x, z) || real.near('roads', x, z, SIZE * 0.75).some((r) => r.drive);
+		if (camera.position.y - groundAt(x, z) > 3000 || !hasRoad) { BERM_U.uBermR.value.w = 0; BERM_U.uTreadR.value.w = 0; cx = tx = 1e9; return; }
+		if (changed || Math.hypot(x - cx, z - cz) > 100) rebuild(x, z);
 		// (the trails only matter underfoot: off them when flying high)
 		if (camera.position.y - groundAt(x, z) > 120) { BERM_U.uTreadR.value.w = 0; tx = 1e9; }
-		else if (Math.hypot(x - tx, z - tz) > 24) rebuildTread(x, z);
+		else if (changed || Math.hypot(x - tx, z - tz) > 24) rebuildTread(x, z);
 	}
 	return { update, apply, profile };
 }

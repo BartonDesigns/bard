@@ -179,12 +179,19 @@ export function plan(kit, { r, H, wet, size = 0, centre = true, spread = null })
 // buildings in the middle blocks, souk lanes along the main streets
 export function blockLots(kit, S, bx, bz, rnd) {
 	const B = kit.build, souk = B.layout === 'souk', P = souk ? 46 : 52, street = souk ? 5 : 9;
-	const cs = Math.cos(S.ax), sn = Math.sin(S.ax), out = [];
-	const cxl = bx * P, czl = bz * P, inner = P - street;
+	const cs = Math.cos(S.ax), sn = Math.sin(S.ax), out = [], occupied = [];
+	const cxl = bx * P, czl = bz * P, inner = P - street - (souk ? 1 : 4); // shop signs and eaves stay above the sidewalk
 	const r = rnd((bx * 73856093) ^ (bz * 19349663) ^ S.seed);
 	const toS = (x, z) => [x * cs + z * sn, -x * sn + z * cs];
 	if (Math.hypot(cxl, czl) > S.R + P) return out;
-	const add = (type, lx, lz, rot, role, w, d) => { const [x, z] = toS(cxl + lx, czl + lz); out.push({ type, x, z, rot: rot + S.ax, w, d, role }); };
+	const add = (type, lx, lz, rot, role, w, d) => {
+		// Unequal-depth shopfronts on adjoining sides must not occupy the same corner.
+		const hx = (Math.abs(Math.cos(rot)) * w + Math.abs(Math.sin(rot)) * d) / 2;
+		const hz = (Math.abs(Math.sin(rot)) * w + Math.abs(Math.cos(rot)) * d) / 2;
+		if (role === 'house' && occupied.some((q) => Math.abs(lx - q.x) < hx + q.hx + 0.15 && Math.abs(lz - q.z) < hz + q.hz + 0.15)) return;
+		if (role === 'house') occupied.push({ x: lx, z: lz, hx, hz });
+		const [x, z] = toS(cxl + lx, czl + lz); out.push({ type, x, z, rot: rot + S.ax, w, d, role });
+	};
 	// the middle: the great mosque and the tea house, or the temple and its pagoda, in a square
 	if (bx === 0 && bz === 0) { add(B.centre[0], 0, 0, Math.PI, 'centre', ...(SIZES[B.centre[0]] || [20, 20])); if (B.centre[1]) add(B.centre[1], inner / 2 - 6, -inner / 2 + 6, 0, 'centre', ...(SIZES[B.centre[1]] || [10, 10])); return out; }
 	// the souk's covered street runs out along the main axis
@@ -211,3 +218,24 @@ export function blockLots(kit, S, bx, bz, rnd) {
 	return out;
 }
 
+
+// The street lies halfway between block centres, not through the middle of the homes.
+export function denseStreetDistance(x, z, block) {
+	const half = (v) => Math.abs(((v % block) + block) % block - block / 2);
+	return Math.min(half(x), half(z));
+}
+
+// Sample the whole rotated footprint. Dense quarters need the same water/cliff checks
+// as villages; a high-corner foundation prevents uphill walls disappearing into ground.
+export function lotGround(L, ground, wet = () => false) {
+	const cs = Math.cos(L.rot), sn = Math.sin(L.rot), heights = [];
+	for (const u of [-0.5, 0, 0.5]) for (const v of [-0.5, 0, 0.5]) {
+		const x = L.x + u * L.w * cs + v * L.d * sn, z = L.z - u * L.w * sn + v * L.d * cs;
+		const y = ground(x, z);
+		if (!Number.isFinite(y) || wet(x, z)) return null;
+		heights.push(y);
+	}
+	const lo = Math.min(...heights), hi = Math.max(...heights);
+	if (hi - lo > Math.min(3, Math.hypot(L.w, L.d) * 0.28)) return null;
+	return { lo, hi, y: hi + 0.03 };
+}

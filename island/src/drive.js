@@ -20,7 +20,7 @@ import { loadRapier, createCarPhysics } from './vehicles/physics.js';
 
 const SPEED = { motorway: 29, trunk: 24, primary: 20, secondary: 17, tertiary: 15, residential: 11, unclassified: 12, living_street: 7, service: 6, unknown: 8, track: 5, path: 3, footway: 2.4, cycleway: 5, steps: 1.4, pedestrian: 2.4, grid: 11 };
 const TRAIL = new Set(['track', 'path', 'footway', 'cycleway', 'steps', 'pedestrian']);
-const ONE_WAY = (r) => !!(r.divided || r.link || r.cls === 'motorway');
+const ONE_WAY = (r) => typeof r.oneway === 'boolean' ? r.oneway : !!(r.divided || r.link || r.cls === 'motorway');
 
 function lengthOf(p) { let L = 0; for (let i = 2; i < p.length; i += 2) L += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]); return L; }
 // position and unit direction at distance s along a polyline [x, z, x, z, ...]

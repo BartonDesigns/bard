@@ -18,6 +18,8 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Regional homes and roads (4 October Pacific):** `docs/world-expansion-progress.md` tracks BR-011/012: grounded East Asian homes, streets aligned between regional blocks, connected highways beyond the Bay, and bounded road streaming/terrain grading. Preserve the live cave release and verify actual rendered towns before reporting worldwide coverage.
+
 - **Seamless caves (4 October Pacific):** `docs/seamless-caves-progress.md` tracks native surface/cave integration, verification and remaining legacy gaps; `docs/cave-migration-inventory.md` preserves 27 categories. Street-agent observations are in `docs/street-walking-playtest.md`. The cave release candidate passes the actual faceplate door, controller round trip, saved musical rewards, local companion movement and shader/phone-UI gates; release PR deployment evidence determines live status. Do not claim full deep-cave or mainland coverage from the generated-island release.
 
 - **NPC dialogue/archive (4 October Pacific):** `docs/npc-dialogue-archive-progress.md` records per-NPC transcript isolation, searchable full history and tone settings. BR-006 explicitly requires future universal world progress; current local NPC/quest saves are not shared multiplayer state. Preserve private conversations and do not claim backend synchronization without two-client evidence.
