@@ -51,3 +51,27 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 - 2026-10-03 Pacific: captured owner feedback above. World-development rewards supersede gold-centric recommendations for new design. No invented player survey findings or synthetic feedback treated as real playtest evidence. Existing historical feedback should be linked when found, not recreated or silently overwritten.
 
 - 2026-10-04 Pacific: enabled the daily Floodgate build-request intake, approximately 8 a.m. local time. Initial queue is committed in PR #9. Future passes review repository issues and PR feedback; private chat ingestion is not automatic.
+
+## BR-006 — Universal world progress with private player conversations
+
+- **Priority/status:** P0 / requested; shared backend not implemented or deployed.
+- **Source:** Josh, 4 October 2026 Pacific: “Progress will be shared universally with all other players, correct?”
+- **Requirement:** tangible world developments and their stages should have one authoritative shared state, visible to all players visiting the same world. The current browser-local NPC/quest saves do NOT provide this.
+- **Privacy/scope:** player dialogue archives and personal memories remain private. Shared outcomes can credit aggregate contributions without publishing conversation transcripts. Specify how personal quest journals observe shared completion.
+- **Acceptance:** two independent clients contribute to and observe the same world project; atomic/idempotent completion; reconnect/offline catch-up; stable world/project/resident IDs; versioned events with conflict rules; server-owned progression timestamps; cached clients cannot overwrite newer progress; personal chat is never included in public world events.
+- **Dependencies:** authenticated or otherwise abuse-resistant contribution API, canonical world-state storage, supported world-effect adapters, backend deployment access and save migration. A localStorage flag, daily intake or static website deployment is not multiplayer synchronization.
+
+## BR-007 — Separate NPC dialogues and searchable full archive
+
+- **Priority/status:** P0 / verified frontend; release pending.
+- **Source:** Josh, 4 October 2026 Pacific: previous NPC dialogue appears in a new conversation; each NPC needs its own dialogue while the whole history remains searchable.
+- **Work:** stable NPC-keyed archive, Guide thread isolation, stale-response/view guards, all-conversation search and per-person chronological reading, export and explicit storage errors. Model context remains bounded and contains only the current person.
+- **Migration:** import the recent turns still retained by existing saves. Already discarded older messages cannot be reconstructed. New archived turns are not silently trimmed when model context is trimmed.
+- **Acceptance:** two real NPCs never see one another's transcript in UI or model input; opening/reloading each restores only their own dialogue; old turns remain searchable beyond 16 messages; search/export are read-only; interrupted Guide/NPC replies do not cross views; mobile controls remain usable.
+
+## BR-008 — More expressive mature NPC dialogue
+
+- **Priority/status:** P1 / verified frontend; cloud deployment still separately blocked.
+- **Source:** Josh, 4 October 2026 Pacific: less vanilla LLM settings, including bad language and mature topics.
+- **Work:** independent clean/mature language, understated/bold personality and brief/balanced/rich replies. Adult NPCs can use natural profanity and discuss mature life themes when appropriate to their individual character. Child characters remain age-appropriate. Provider limits still apply.
+- **Acceptance:** preferences persist, local/cloud prompts receive the same validated settings, arbitrary saved/request fields cannot inject system instructions, distinct NPC personalities remain, and changing style never fabricates actions or quest outcomes.

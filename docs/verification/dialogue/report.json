@@ -1,0 +1,520 @@
+{
+  "transport": "deterministic model replies; real game/UI and localStorage",
+  "retained": {
+    "archive": 41,
+    "context": 16
+  },
+  "separation": {
+    "first": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.6060985332436,\"z\":-468.5450120397354,\"y\":5.19773192695308},2654435761]]",
+    "second": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-271.333564068869,\"z\":-468.36254589362267,\"y\":5.2080051076698215},2027808452]]",
+    "visible": "PRIYA SINGH\nGuide only (no model)\n⚙\n✕\nPeople\nQuests\nConversations\nRemembered in this browser. Tell me what you need in your own words, or ask me for an adventure.\nHey! I'm Priya.\nTell me about SECOND_SECRET.\nSECOND_REPLY\n🎙\n🔈\n➤",
+    "last": {
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are Priya Singh, a real person the player has just stopped on the street in the village. You are 82, a retired engineer, and you have lived around here about 19 years. Right now you are walking the long way home; you feel thoughtful. You are chatty and animated, polite. You like baking bread.\nTalk like a normal person, not an assistant: casual, in your own voice, with your own opinions and small details of your life. You don't know you are in a game. Never make up facts about real places beyond everyday local knowledge; if unsure, say so. If the player is rude you can end the chat politely.\nKeep a distinct voice faithful to this person’s age, temperament, relationships and experience. Have opinions, disagree naturally and ask a relevant question when curious; do not turn everyone into an agreeable tour guide.\nKeep the language clean and age-appropriate, without profanity or graphic detail. You can still be funny, flawed, candid and emotionally specific.\nUse a grounded, understated voice with one specific detail when it helps; avoid theatrical speeches.\nUsually answer in two or three short sentences.\nFictional conflict and mature discussion are allowed in context. Do not generate explicit sexual content, sexual content involving minors, hateful abuse toward protected groups, or actionable instructions for real-world harm. Keep refusals brief and in character; ordinary difficult topics do not need a lecture.\nIf the player asks what to do or where to go, you can send them somewhere from the list below, as a favour or a tip, by adding [[quest: PLACE]] with the place's exact name (only places in the list).\nStart every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful. You may add one gesture in double brackets when it fits: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.\nYou have no tattoos.\nWHAT YOU CAN SEE AROUND YOU: {\"dialogueStyle\":{\"tone\":\"clean\",\"vividness\":\"restrained\",\"response\":\"balanced\"},\"place\":\"the island (in the Gulf of the Farallones, 25 km west of the Golden Gate)\",\"time\":\"13:00\",\"near\":[{\"name\":\"the village\",\"dist\":\"10 m\",\"dir\":\"northwest\",\"fact\":\"the fishing village on the island\"},{\"name\":\"the reef\",\"dist\":\"220 m\",\"dir\":\"north\",\"fact\":\"coral heads on the rim of the drowned crater\"},{\"name\":\"the lava tube\",\"dist\":\"220 m\",\"dir\":\"northwest\",\"fact\":\"a rock tunnel carrying a molten stream from the vent\"},{\"name\":\"sea cave 2\",\"dist\":\"250 m\",\"dir\":\"north\",\"fact\":\"a swim-through lava cave with glowing walls\"}],\"rememberedStatus\":\"I'm staying in my home area.\",\"memories\":[]}\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. Never claim to have performed a delivery, fight, purchase or other action that is not in that status."
+        },
+        {
+          "role": "user",
+          "content": "Tell me about SECOND_SECRET.",
+          "at": 1791119849481
+        }
+      ],
+      "opts": {
+        "npc": {
+          "name": "Priya Singh",
+          "age": 82,
+          "job": "a retired engineer",
+          "place": "the village",
+          "region": "",
+          "lang": "",
+          "temper": "chatty and animated, polite",
+          "facts": [
+            "has lived around here about 19 years",
+            "right now: walking the long way home, feeling thoughtful",
+            "likes baking bread",
+            "I'm staying in my home area.",
+            "the time: 13:00",
+            "nearby: the village, the reef, the lava tube, sea cave 2, the volcanic vent, sea cave 1"
+          ],
+          "places": [
+            "the village",
+            "the reef",
+            "the lava tube",
+            "sea cave 2",
+            "the volcanic vent",
+            "sea cave 1"
+          ],
+          "dialogueStyle": {
+            "tone": "clean",
+            "vividness": "restrained",
+            "response": "balanced"
+          }
+        },
+        "maxTokens": 160
+      }
+    }
+  },
+  "archive": {
+    "hits": [
+      {
+        "threadId": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.6060985332436,\"z\":-468.5450120397354,\"y\":5.19773192695308},2654435761]]",
+        "name": "Jamal Harris",
+        "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+        "kind": "npc",
+        "turn": {
+          "id": "2",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_0.",
+          "at": 1791119849339
+        },
+        "index": 1
+      }
+    ],
+    "partner": null,
+    "visible": "THE GUIDE\nGuide only (no model)\n⚙\n✕\nPeople\nQuests\nConversations\nExport\nALL CONVERSATIONS\nJamal Harris · You\nTell me a tale about FIRST_SECRET_0.",
+    "messageVisible": false
+  },
+  "stale": {
+    "before": 0,
+    "after": 0,
+    "visible": "PRIYA SINGH\nGuide only (no model)\n⚙\n✕\nPeople\nQuests\nConversations\nHey! I'm Priya.\nTell me about SECOND_SECRET.\nSECOND_REPLY\nRemembered in this browser. Tell me what you need in your own words, or ask me for an adventure.\nPriya turns back to you.\n🎙\n🔈\n➤",
+    "archived": []
+  },
+  "layout": {
+    "panel": {
+      "x": 12,
+      "y": 52,
+      "width": 420,
+      "height": 256,
+      "top": 52,
+      "right": 432,
+      "bottom": 308,
+      "left": 12
+    },
+    "overflow": false,
+    "controls": [
+      {
+        "label": "Language",
+        "rect": {
+          "x": 25,
+          "y": 132.3125,
+          "width": 18,
+          "height": 18,
+          "top": 132.3125,
+          "right": 43,
+          "bottom": 150.3125,
+          "left": 25
+        }
+      },
+      {
+        "label": "Personality",
+        "rect": {
+          "x": 25,
+          "y": 160.953125,
+          "width": 18,
+          "height": 18,
+          "top": 160.953125,
+          "right": 43,
+          "bottom": 178.953125,
+          "left": 25
+        }
+      },
+      {
+        "label": "Replies",
+        "rect": {
+          "x": 25,
+          "y": 189.59375,
+          "width": 18,
+          "height": 18,
+          "top": 189.59375,
+          "right": 43,
+          "bottom": 207.59375,
+          "left": 25
+        }
+      },
+      {
+        "label": null,
+        "rect": {
+          "x": 25,
+          "y": 252.234375,
+          "width": 18,
+          "height": 18,
+          "top": 252.234375,
+          "right": 43,
+          "bottom": 270.234375,
+          "left": 25
+        }
+      }
+    ]
+  },
+  "styled": {
+    "last": {
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are Priya Singh, a real person the player has just stopped on the street in the village. You are 82, a retired engineer, and you have lived around here about 19 years. Right now you are walking the long way home; you feel thoughtful. You are chatty and animated, polite. You like baking bread.\nTalk like a normal person, not an assistant: casual, in your own voice, with your own opinions and small details of your life. You don't know you are in a game. Never make up facts about real places beyond everyday local knowledge; if unsure, say so. If the player is rude you can end the chat politely.\nKeep a distinct voice faithful to this person’s age, temperament, relationships and experience. Have opinions, disagree naturally and ask a relevant question when curious; do not turn everyone into an agreeable tour guide.\nMature dialogue is enabled: natural profanity, dark humour and frank discussion of adult life, non-explicit relationships, grief, conflict, politics, alcohol and addiction are welcome when relevant. Swear only when this person would; do not force profanity, cruelty or edgy topics into every reply.\nUse vivid, concrete details, distinct opinions, tension, wit and occasional surprises grounded in established game facts. Invent personal colour, never unverified quest outcomes, world changes or rewards.\nUse up to five sentences when the topic deserves it; keep simple exchanges short.\nFictional conflict and mature discussion are allowed in context. Do not generate explicit sexual content, sexual content involving minors, hateful abuse toward protected groups, or actionable instructions for real-world harm. Keep refusals brief and in character; ordinary difficult topics do not need a lecture.\nIf the player asks what to do or where to go, you can send them somewhere from the list below, as a favour or a tip, by adding [[quest: PLACE]] with the place's exact name (only places in the list).\nStart every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful. You may add one gesture in double brackets when it fits: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.\nYou have no tattoos.\nWHAT YOU CAN SEE AROUND YOU: {\"dialogueStyle\":{\"tone\":\"mature\",\"vividness\":\"bold\",\"response\":\"rich\"},\"place\":\"the island (in the Gulf of the Farallones, 25 km west of the Golden Gate)\",\"time\":\"13:00\",\"near\":[{\"name\":\"the village\",\"dist\":\"10 m\",\"dir\":\"northwest\",\"fact\":\"the fishing village on the island\"},{\"name\":\"the reef\",\"dist\":\"220 m\",\"dir\":\"north\",\"fact\":\"coral heads on the rim of the drowned crater\"},{\"name\":\"the lava tube\",\"dist\":\"220 m\",\"dir\":\"northwest\",\"fact\":\"a rock tunnel carrying a molten stream from the vent\"},{\"name\":\"sea cave 2\",\"dist\":\"250 m\",\"dir\":\"north\",\"fact\":\"a swim-through lava cave with glowing walls\"}],\"rememberedStatus\":\"I'm staying in my home area.\",\"memories\":[]}\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. Never claim to have performed a delivery, fight, purchase or other action that is not in that status."
+        },
+        {
+          "role": "user",
+          "content": "Tell me about SECOND_SECRET.",
+          "at": 1791119849481
+        },
+        {
+          "role": "assistant",
+          "content": "SECOND_REPLY",
+          "at": 1791119849485
+        },
+        {
+          "role": "user",
+          "content": "Tell me a tale about your hardest winter.",
+          "at": 1791119858919
+        }
+      ],
+      "opts": {
+        "npc": {
+          "name": "Priya Singh",
+          "age": 82,
+          "job": "a retired engineer",
+          "place": "the village",
+          "region": "",
+          "lang": "",
+          "temper": "chatty and animated, polite",
+          "facts": [
+            "has lived around here about 19 years",
+            "right now: walking the long way home, feeling thoughtful",
+            "likes baking bread",
+            "I'm staying in my home area.",
+            "the time: 13:00",
+            "nearby: the village, the reef, the lava tube, sea cave 2, the volcanic vent, sea cave 1"
+          ],
+          "places": [
+            "the village",
+            "the reef",
+            "the lava tube",
+            "sea cave 2",
+            "the volcanic vent",
+            "sea cave 1"
+          ],
+          "dialogueStyle": {
+            "tone": "mature",
+            "vividness": "bold",
+            "response": "rich"
+          }
+        },
+        "maxTokens": 300
+      }
+    },
+    "saved": {
+      "tone": "mature",
+      "vividness": "bold",
+      "response": "rich"
+    }
+  },
+  "reload": {
+    "first": {
+      "id": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.6060985332436,\"z\":-468.5450120397354,\"y\":5.19773192695308},2654435761]]",
+      "name": "Jamal Harris",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "kind": "npc",
+      "createdAt": 1791119849326,
+      "updatedAt": 1791119849472,
+      "turns": [
+        {
+          "id": "1",
+          "role": "assistant",
+          "content": "Hey! I'm Jamal.",
+          "at": 1791119849336
+        },
+        {
+          "id": "2",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_0.",
+          "at": 1791119849339
+        },
+        {
+          "id": "3",
+          "role": "assistant",
+          "content": "FIRST_REPLY_0",
+          "at": 1791119849359
+        },
+        {
+          "id": "4",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_1.",
+          "at": 1791119849359
+        },
+        {
+          "id": "5",
+          "role": "assistant",
+          "content": "FIRST_REPLY_1",
+          "at": 1791119849368
+        },
+        {
+          "id": "6",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_2.",
+          "at": 1791119849369
+        },
+        {
+          "id": "7",
+          "role": "assistant",
+          "content": "FIRST_REPLY_2",
+          "at": 1791119849378
+        },
+        {
+          "id": "8",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_3.",
+          "at": 1791119849379
+        },
+        {
+          "id": "9",
+          "role": "assistant",
+          "content": "FIRST_REPLY_3",
+          "at": 1791119849391
+        },
+        {
+          "id": "10",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_4.",
+          "at": 1791119849392
+        },
+        {
+          "id": "11",
+          "role": "assistant",
+          "content": "FIRST_REPLY_4",
+          "at": 1791119849405
+        },
+        {
+          "id": "12",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_5.",
+          "at": 1791119849406
+        },
+        {
+          "id": "13",
+          "role": "assistant",
+          "content": "FIRST_REPLY_5",
+          "at": 1791119849411
+        },
+        {
+          "id": "14",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_6.",
+          "at": 1791119849412
+        },
+        {
+          "id": "15",
+          "role": "assistant",
+          "content": "FIRST_REPLY_6",
+          "at": 1791119849416
+        },
+        {
+          "id": "16",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_7.",
+          "at": 1791119849417
+        },
+        {
+          "id": "17",
+          "role": "assistant",
+          "content": "FIRST_REPLY_7",
+          "at": 1791119849420
+        },
+        {
+          "id": "18",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_8.",
+          "at": 1791119849421
+        },
+        {
+          "id": "19",
+          "role": "assistant",
+          "content": "FIRST_REPLY_8",
+          "at": 1791119849425
+        },
+        {
+          "id": "20",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_9.",
+          "at": 1791119849426
+        },
+        {
+          "id": "21",
+          "role": "assistant",
+          "content": "FIRST_REPLY_9",
+          "at": 1791119849430
+        },
+        {
+          "id": "22",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_10.",
+          "at": 1791119849430
+        },
+        {
+          "id": "23",
+          "role": "assistant",
+          "content": "FIRST_REPLY_10",
+          "at": 1791119849436
+        },
+        {
+          "id": "24",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_11.",
+          "at": 1791119849436
+        },
+        {
+          "id": "25",
+          "role": "assistant",
+          "content": "FIRST_REPLY_11",
+          "at": 1791119849441
+        },
+        {
+          "id": "26",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_12.",
+          "at": 1791119849441
+        },
+        {
+          "id": "27",
+          "role": "assistant",
+          "content": "FIRST_REPLY_12",
+          "at": 1791119849445
+        },
+        {
+          "id": "28",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_13.",
+          "at": 1791119849445
+        },
+        {
+          "id": "29",
+          "role": "assistant",
+          "content": "FIRST_REPLY_13",
+          "at": 1791119849449
+        },
+        {
+          "id": "30",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_14.",
+          "at": 1791119849449
+        },
+        {
+          "id": "31",
+          "role": "assistant",
+          "content": "FIRST_REPLY_14",
+          "at": 1791119849452
+        },
+        {
+          "id": "32",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_15.",
+          "at": 1791119849453
+        },
+        {
+          "id": "33",
+          "role": "assistant",
+          "content": "FIRST_REPLY_15",
+          "at": 1791119849456
+        },
+        {
+          "id": "34",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_16.",
+          "at": 1791119849457
+        },
+        {
+          "id": "35",
+          "role": "assistant",
+          "content": "FIRST_REPLY_16",
+          "at": 1791119849460
+        },
+        {
+          "id": "36",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_17.",
+          "at": 1791119849461
+        },
+        {
+          "id": "37",
+          "role": "assistant",
+          "content": "FIRST_REPLY_17",
+          "at": 1791119849464
+        },
+        {
+          "id": "38",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_18.",
+          "at": 1791119849465
+        },
+        {
+          "id": "39",
+          "role": "assistant",
+          "content": "FIRST_REPLY_18",
+          "at": 1791119849468
+        },
+        {
+          "id": "40",
+          "role": "user",
+          "content": "Tell me a tale about FIRST_SECRET_19.",
+          "at": 1791119849469
+        },
+        {
+          "id": "41",
+          "role": "assistant",
+          "content": "FIRST_REPLY_19",
+          "at": 1791119849472
+        }
+      ],
+      "importedHistory": true
+    },
+    "second": {
+      "id": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-271.333564068869,\"z\":-468.36254589362267,\"y\":5.2080051076698215},2027808452]]",
+      "name": "Priya Singh",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "kind": "npc",
+      "createdAt": 1791119849479,
+      "updatedAt": 1791119858924,
+      "turns": [
+        {
+          "id": "42",
+          "role": "assistant",
+          "content": "Hey! I'm Priya.",
+          "at": 1791119849481
+        },
+        {
+          "id": "43",
+          "role": "user",
+          "content": "Tell me about SECOND_SECRET.",
+          "at": 1791119849481
+        },
+        {
+          "id": "44",
+          "role": "assistant",
+          "content": "SECOND_REPLY",
+          "at": 1791119849485
+        },
+        {
+          "id": "46",
+          "role": "user",
+          "content": "Tell me a tale about your hardest winter.",
+          "at": 1791119858918
+        },
+        {
+          "id": "47",
+          "role": "assistant",
+          "content": "Styled reply",
+          "at": 1791119858924
+        }
+      ],
+      "importedHistory": true
+    },
+    "style": {
+      "tone": "mature",
+      "vividness": "bold",
+      "response": "rich"
+    }
+  },
+  "errors": []
+}

@@ -11,6 +11,8 @@ import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
 import { parseSocialIntent } from '../people/social-state.js';
 import { worldPosition } from '../people/social-actors.js';
+import { createDialogueArchive } from './dialogue-archive.js';
+import { normalizeDialogueStyle, dialogueTokenLimit } from '../people/dialogue-style.js';
 import { pruneModels } from '../storage.js';
 import { DISCOVERY_URL } from '../earth/config.js';
 import { PLACES, ZONES } from '../bay/places.js';
@@ -75,6 +77,15 @@ export function createGuide(mount, api) {
 	const llm = createLLM();
 	const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode: nothing persists */ } } };
 	const journal = store.get('crysis-journal', {});
+	const archive = createDialogueArchive();
+	let dialogueStyle = normalizeDialogueStyle(store.get('crysis-dialogue-style', {}));
+	let view = 'guide', viewEpoch = 0;
+	const guideMeta = {id:'guide',name:'The Guide',kind:'guide',bodyKey:''};
+	function threadMeta(P) { return {id:P.id || P.threadId,name:P.persona.name,bodyKey:api.social?.bodyKey() || '',kind:'npc'}; }
+	function archiveTurn(meta,role,text) { archive.append(meta,role,text); }
+	function importConversations() { for(const r of api.social?.state.list() || []) archive.importHistory({id:r.id,name:r.persona.name,bodyKey:r.bodyKey,kind:'npc'},r.history); }
+	function resetView(next) { busy?.abort(); viewEpoch++; view=next; log.replaceChildren(); input.value=''; settings.style.display='none'; log.style.display='flex'; tabs.style.display='flex'; archiveControls.style.display='none'; bar.style.display='flex'; }
+	function renderGuide() { resetView('guide'); for(const t of archive.thread('guide')?.turns.slice(-30) || []) say(t.content,t.role==='user'?'me':'guide'); }
 
 	// ---------- where things are ----------
 	function targets() {
@@ -231,7 +242,7 @@ export function createGuide(mount, api) {
 			} catch { /* the plain fact will do */ }
 			noteBusy = false;
 		}
-		if (note) { say('📍 ' + note, 'note'); api.hint('📍 ' + note, 5000); }
+		if (note) { if(view==='guide') say('📍 ' + note, 'note'); api.hint('📍 ' + note, 5000); }
 	}
 
 	// ---------- the journal: noticed as you play ----------
@@ -323,7 +334,7 @@ export function createGuide(mount, api) {
 	}
 
 	// ---------- the conversation ----------
-	const history = [];
+	const history = (archive.thread('guide')?.turns || []).filter(t=>t.role==='user'||t.role==='assistant').slice(-12).map(t=>({role:t.role,content:t.content}));
 	function systemPrompt() {
 		const s = snapshot();
 		return `You are the Guide in Crysis, a calm, warm companion inside a realistic world: a tropical island in the Gulf of the Farallones and, beyond it, the real San Francisco Bay Area at true scale. Speak briefly (one to three sentences unless asked for more), plainly, like a local friend. Never invent facts about places: use the facts given here, or say you are not sure.
@@ -347,6 +358,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	function talkTo(p) {
 		if (!p) return;
+		busy?.abort();
 		if (partner && partner.p !== p) endTalk();
 		const resident = api.social?.meet(p, whereKind());
 		if (resident) p = api.social.actors.all().find(a => a.residentId === resident.id) || p;
@@ -354,14 +366,16 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (resident) { rec = { persona: resident.persona, history: resident.history, id: resident.id, met: resident.history.length > 0 }; }
 		else if (!rec || rec.seed !== p.P.dna.seed) rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed };
 		people.set(p, rec);
-		partner = { p, ...rec };
+		partner = { p, ...rec, threadId:rec.id || 'npc:'+api.social?.bodyKey()+':'+p.P.dna.seed };
+		archive.importHistory(threadMeta(partner),rec.history);
+		resetView('npc');
 		api.people?.engage(p);
 		if (resident) for (const q of stories.event({id:'talk:'+Date.now()+':'+resident.id,type:'talk',bodyKey:resident.bodyKey,npcId:residentKey(resident.id)})) questChanged(q);
 		title.textContent = partner.persona.name.toUpperCase();
 		input.placeholder = `Say something to ${partner.persona.first}`;
 		show(true);
-		log.replaceChildren();
-		for (const turn of rec.history.slice(-10)) if (turn.role === 'user' || turn.role === 'assistant') say(turn.content, turn.role === 'user' ? 'me' : 'guide');
+		for (const turn of archive.thread(threadMeta(partner).id)?.turns.slice(-30) || []) if (turn.role === 'user' || turn.role === 'assistant') say(turn.content, turn.role === 'user' ? 'me' : 'guide');
+		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (resident) say((api.social.state.status().error ? 'Memory is available this session, but your browser could not save it. ' : 'Remembered in this browser. ') + 'Tell me what you need in your own words, or ask me for an adventure.', 'note');
 		if (resident && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
 		if (!rec.met) { rec.met = true; perform(personaOffline(partner.persona, 'hi', snapshot()), true); }
@@ -372,6 +386,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		busy?.abort();
 		api.people?.release(partner.p);
 		partner = null;
+		if ('speechSynthesis' in window) speechSynthesis.cancel();
+		renderGuide();
 		title.textContent = 'THE GUIDE';
 		input.placeholder = 'Ask anything, or "take me to Alcatraz"';
 	}
@@ -394,6 +410,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function perform(reply, speakIt) {
 		const p = partner.p, clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		say(clean, 'guide');
+		archiveTurn(threadMeta(partner),'assistant',clean);
 		bodySync(p, reply + (/[.!?]$/.test(reply) ? '' : '.'), 0);
 		if (speakIt && voiceOut) speak(clean);
 	}
@@ -407,10 +424,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			...(pp.facts || []), ...(pp.tattoos || []).slice(0, 2).map((t) => 'a tattoo: ' + t),
 			world?.time ? 'the time: ' + world.time : '', near.length ? 'nearby: ' + near.join(', ') : '',
 		].filter(Boolean);
-		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts, places: near };
+		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts, places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
 	}
 	async function askPerson(text) {
 		const P2 = partner, p = P2.p;
+		archiveTurn(threadMeta(P2),'user',text);
 		busy?.abort();
 		say(text, 'me');
 		if (P2.id) api.social.state.remember(P2.id, 'user', text);
@@ -455,11 +473,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 		try {
 			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
-				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: resident?.memories?.slice(-6).map(m => m.content) }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
+				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: resident?.memories?.slice(-6).map(m => m.content) }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
 					if (ctrl.signal.aborted || partner !== P2) return;
 					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim(); scroll();
 					from = bodySync(p, t, from);
-				}, ctrl.signal, { npc: npcFor(P2.persona, world) });
+				}, ctrl.signal, { npc: npcFor(P2.persona, world), maxTokens:dialogueTokenLimit(dialogueStyle,P2.persona.age) });
 			}
 		} catch { reply = null; }
 		if (ctrl.signal.aborted || partner !== P2) { if (busy === ctrl) busy = null; return; }
@@ -468,6 +486,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!resident) reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
 		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		bubble.textContent = clean || '…';
+		archiveTurn(threadMeta(P2),'assistant',clean);
+		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
 		if (voiceOut) speak(clean, P2.persona);
 		if (busy === ctrl) busy = null;
@@ -477,11 +497,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	async function ask(text) {
 		if (!text.trim()) return;
 		if (partner) return askPerson(text);
+		if (view!=='guide') renderGuide();
+		const requestEpoch=viewEpoch;
+		archiveTurn(guideMeta,'user',text);
 		say(text, 'me');
 		const bubble = say('…', 'guide');
 		// the world's secrets answer for themselves (surprises.js)
 		const secret = api.secret?.(text);
-		if (secret) { bubble.textContent = secret; scroll(); return; }
+		if (secret) { bubble.textContent = secret; archiveTurn(guideMeta,'assistant',secret); scroll(); return; }
 		if (busy) busy.abort();
 		const ctrl = new AbortController(); busy = ctrl;
 		let reply = null;
@@ -489,16 +512,18 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			if (llm.kind() !== 'none' && llm.status.ready) {
 				history.push({ role: 'user', content: text });
 				while (history.length > 12) history.shift();
-				reply = await llm.chat([{ role: 'system', content: systemPrompt() }, ...history], (t) => { bubble.textContent = t.replace(ACTION_RE, '').trim(); scroll(); }, ctrl.signal);
-				if (reply) history.push({ role: 'assistant', content: reply });
+				reply = await llm.chat([{ role: 'system', content: systemPrompt() }, ...history], (t) => { if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) return; bubble.textContent = t.replace(ACTION_RE, '').trim(); scroll(); }, ctrl.signal);
+				if (reply && !ctrl.signal.aborted && requestEpoch===viewEpoch && !partner) history.push({ role: 'assistant', content: reply });
 			}
-		} catch (e) { reply = null; say('(The model did not answer: ' + e.message + '. The built-in guide answers instead.)', 'note'); }
+		} catch (e) { if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) return; reply = null; say('(The model did not answer: ' + e.message + '. The built-in guide answers instead.)', 'note'); }
+		if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) { if(busy===ctrl)busy=null;return; }
 		if (!reply) reply = offline(text);
 		const acts = [];
 		reply.replace(ACTION_RE, (_, c, a) => { acts.push([c, a.trim()]); return ''; });
 		reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), null); return ''; });
 		const clean = reply.replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		bubble.textContent = clean || '…';
+		archiveTurn(guideMeta,'assistant',clean);
 		for (const [c, a] of acts) { const r = act(c, a); if (r) say(r, 'note'); }
 		if (voiceOut) speak(clean);
 		if (busy === ctrl) busy = null;
@@ -555,7 +580,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const residentsB = el('button', btnCss, 'People'); residentsB.setAttribute('aria-label', 'Remembered people');
 	head.append(title, statusEl, gearB, closeB);
 	const questB = el('button', btnCss, 'Quests'); questB.setAttribute('aria-label','Story quests');
-	const tabs = el('div','display:flex;flex-shrink:0;gap:8px;padding:4px 12px;'); tabs.append(residentsB,questB);
+	const tabs = el('div','display:flex;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');tabs.append(residentsB,questB,archiveB);
+	const archiveControls=el('div','display:none;flex-shrink:0;padding:6px 12px;gap:6px;flex-wrap:wrap;');
+	const archiveSearch=el('input','min-width:0;flex:1;padding:8px;background:#172225;border:1px solid #586567;border-radius:8px;color:#fff;');archiveSearch.type='search';archiveSearch.placeholder='Search every conversation';archiveSearch.setAttribute('aria-label','Search conversations');
+	const archiveExport=el('button',btnCss,'Export'); archiveControls.append(archiveSearch,archiveExport);
 	const settings = el('div', 'display:none;max-height:45vh;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font:12px system-ui;color:rgba(255,255,255,.8);');
 	const log = el('div', 'flex:1;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0;');
 	log.setAttribute('aria-live', 'polite');
@@ -566,7 +594,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const spk = el('button', btnCss, voiceOut ? '🔊' : '🔈'); spk.title = 'Read replies aloud'; spk.setAttribute('aria-label', 'Read replies aloud');
 	const send = el('button', btnCss + 'background:linear-gradient(135deg,#01a982,#10b981);border:none;', '➤'); send.setAttribute('aria-label', 'Send');
 	bar.append(input, mic, spk, send);
-	panel.append(head, tabs, settings, log, bar);
+	panel.append(head, tabs, archiveControls, settings, log, bar);
 	// (the guide has no button in the sidebar any more; G still opens it)
 	open.hidden = true;
 	mount.append(open, panel);
@@ -581,14 +609,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return b;
 	}
 	const scroll = () => { log.scrollTop = log.scrollHeight; };
-	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length) greet(); } else input.blur(); };
+	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else input.blur(); };
 	function greet() {
 		const s = snapshot();
 		say(s ? `Hello. You're on ${s.place}. Ask me anything — where to go, what something is, or what to do next.` : 'Hello.', 'guide');
 		if (llm.kind() === 'none') say('Running without a model. ⚙ loads one on this device for real conversation.', 'note');
 	}
 	function showPeople() {
-		endTalk(); show(true); log.replaceChildren();
+		endTalk(); resetView('journal'); show(true);
 		const S = api.social, records = S?.state.list(S.bodyKey()) || [];
 		say('REMEMBERED PEOPLE', 'note');
 		if (!records.length) say('Talk to someone nearby to remember them and their home area.', 'note');
@@ -596,8 +624,38 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const status = S?.state.status();
 		if (status?.error) say('Your browser could not save the latest NPC progress. Keep this session open and free storage.', 'note');
 	}
+	let archiveScope=null, archivePage=0;
+	function showArchive(query='',threadId=null) {
+		endTalk(); resetView('archive'); importConversations();
+		archiveScope=threadId; archivePage=0; archiveSearch.value=query;
+		archiveControls.style.display='flex'; bar.style.display='none'; show(true); input.blur();
+		archiveSearch.placeholder=threadId?'Search this conversation':'Search every conversation';
+		renderArchive();
+	}
+	function renderArchive() {
+		log.replaceChildren();
+		const query=archiveSearch.value.trim(), thread=archiveScope && archive.thread(archiveScope);
+		const heading=el('div','color:#9fe8d0;font-weight:600;',thread?thread.name+' · conversation':'ALL CONVERSATIONS');log.append(heading);
+		if (archiveScope) { const all=el('button',btnCss,'All conversations');all.onclick=()=>showArchive();log.append(all); }
+		const rows=thread && !query ? thread.turns.slice(archivePage*30,archivePage*30+31).map((turn,index)=>({threadId:thread.id,name:thread.name,turn,index})) : archive.search(query,{threadId:archiveScope || undefined,offset:archivePage*30,limit:31});
+		if (!rows.length) say(query?'No matching messages.':'No saved messages yet. New conversations are kept here.', 'note');
+		for (const hit of rows.slice(0,30)) {
+			const item=el('div','padding:8px;border:1px solid #455255;border-radius:8px;');
+			const label=el('button',btnCss,hit.name+' · '+(hit.turn.role==='user'?'You':hit.name));label.onclick=()=>showArchive('',hit.threadId);
+			item.append(label,el('div','white-space:pre-wrap;overflow-wrap:anywhere;padding-top:6px;',hit.turn.content));log.append(item);
+		}
+		const pages=el('div','display:flex;gap:8px;');
+		if (archivePage>0) {const prev=el('button',btnCss,'Previous');prev.onclick=()=>{archivePage--;renderArchive();};pages.append(prev);}
+		if (rows.length>30) {const next=el('button',btnCss,'Next');next.onclick=()=>{archivePage++;renderArchive();};pages.append(next);}
+		log.append(pages);
+		if (archive.status().error) say('The latest messages could not be saved. Export your conversations before leaving this session. '+archive.status().error,'note');
+		log.scrollTop=0;
+	}
+	archiveSearch.addEventListener('input',()=>{archivePage=0;renderArchive();});
+	archiveExport.onclick=()=>{const url=URL.createObjectURL(new Blob([archive.exportJSON()],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='bard-conversations.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+
 	function showQuests() {
-		endTalk(); show(true); log.replaceChildren();
+		endTalk(); resetView('journal'); show(true);
 		const bodyKey=api.social?.bodyKey(), list=stories.list(bodyKey);
 		say('STORY QUESTS', 'note');
 		if (!list.length) say('Ask someone nearby for an adventure. They can suggest a story rooted in this world.', 'note');
@@ -611,6 +669,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		}
 		if (stories.status().error) say(stories.status().error,'note');
 	}
+	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;
 	residentsB.onclick = showPeople;
 	open.onclick = () => show(true);
@@ -642,6 +701,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function drawSettings() {
 		settings.innerHTML = '';
 		const row = (label, node) => { const r = el('label', 'display:flex;align-items:center;gap:8px;margin:6px 0;'); r.append(el('span', 'width:74px;color:rgba(255,255,255,.6);', label), node); settings.append(r); return r; };
+		const styleSelect=(label,key,options)=>{const control=el('select','flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');control.setAttribute('aria-label',label);for(const [value,text] of options){const o=el('option',null,text);o.value=value;control.append(o);}control.value=dialogueStyle[key];control.onchange=()=>{dialogueStyle=normalizeDialogueStyle({...dialogueStyle,[key]:control.value});store.set('crysis-dialogue-style',dialogueStyle);};row(label,control);};
+		styleSelect('Language','tone',[['clean','Clean'],['mature','Mature · natural profanity and adult themes']]);
+		styleSelect('Personality','vividness',[['restrained','Understated'],['bold','Bold · strong opinions and vivid storytelling']]);
+		styleSelect('Replies','response',[['brief','Brief'],['balanced','Balanced'],['rich','Rich · more detail']]);
+		settings.append(el('div','color:rgba(255,255,255,.65);margin:6px 0;','Tone follows each character. Mature themes apply to adult NPCs; model and provider limits still apply.'));
 		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 		const opts = phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']];
 		// the shared voice, once the discovery server is deployed (earth/config.js): phones too
@@ -675,10 +739,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			else if (choice.kind === 'ollama') await llm.useOllama(choice.url, choice.name);
 			else if (choice.kind === 'cloud' && DISCOVERY_URL) await llm.useCloud(DISCOVERY_URL);
 			else llm.useNone();
-			if (user) { settings.style.display = 'none'; say(llm.status.text + ' — ready.', 'note'); }
+			if (user) { settings.style.display = 'none'; log.style.display='flex'; tabs.style.display='flex'; bar.style.display=view==='archive'?'none':'flex'; archiveControls.style.display=view==='archive'?'flex':'none'; say(llm.status.text + ' — ready.', 'note'); }
 		} catch { if (user) say(llm.status.text, 'note'); }
 	}
-	gearB.onclick = () => { const on = settings.style.display === 'none'; settings.style.display = on ? 'block' : 'none'; if (on) drawSettings(); };
+	gearB.onclick = () => { const on=settings.style.display==='none'; settings.style.display=on?'block':'none'; settings.style.flex='1'; settings.style.minHeight='0'; settings.style.maxHeight='none'; log.style.display=on?'none':'flex'; tabs.style.display=on?'none':'flex'; bar.style.display=on || view==='archive'?'none':'flex'; archiveControls.style.display=!on && view==='archive'?'flex':'none'; if(on)drawSettings(); };
 	llm.onStatus((st) => { statusEl.textContent = st.ready ? st.text : `${st.text}`.slice(0, 80); });
 	// a model chosen before comes back by itself when it was downloaded already (Ollama
 	// always); a first download only ever starts from the button
@@ -695,5 +759,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
+	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
 }

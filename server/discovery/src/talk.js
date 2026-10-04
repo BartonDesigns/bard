@@ -8,6 +8,8 @@
 //                  history: [{ role: 'user' | 'assistant', content }] }
 //             -> { reply, neurons } or 429 / 503 (the game then answers with its own lines)
 
+import { normalizeDialogueStyle, dialogueStylePrompt } from '../../../island/src/people/dialogue-style.js';
+
 const str = (v, n) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f]+/g, ' ').trim().slice(0, n) : '');
 
 // the person as the game describes them, cut to size and to plain words
@@ -21,6 +23,7 @@ export function npcOf(body) {
 		// places they may send the player to (the game's quest tag only takes these)
 		places: (Array.isArray(n.places) ? n.places : []).slice(0, 6).map((f) => str(f, 60)).filter(Boolean),
 	};
+	npc.dialogueStyle = normalizeDialogueStyle(n.dialogueStyle, npc.age);
 	if (!npc.name) return { error: 'no name' };
 	const history = (Array.isArray(body.history) ? body.history : []).slice(-8)
 		.filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
@@ -37,10 +40,11 @@ export function talkSystem(npc) {
 		npc.temper ? `Your manner: ${npc.temper}.` : '',
 		npc.lang ? `You may greet in ${npc.lang} now and then, always making the meaning clear.` : '',
 		npc.facts.length ? 'What you know and care about:\n- ' + npc.facts.join('\n- ') : '',
-		'Speak as yourself, warmly and plainly, in one to three short sentences. Talk about your life, your work, the place, its weather, food, landmarks and stories, and the road onward.',
+		'Speak as yourself about your life, your work, the place, its weather, food, landmarks and stories, and the road onward.',
+		dialogueStylePrompt(npc.dialogueStyle, npc.age),
 		'Never say you are an AI or a character. Keep to what this person would know.',
 		'Your words do not execute actions. Only describe a task as accepted, underway or complete when the supplied game facts explicitly say so. Do not invent movement, deliveries, warnings, quest progress, rewards or world changes; unsupported requests receive an honest in-character explanation.',
-		'Never give instructions for weapons, drugs or anything that could hurt someone; nothing sexual; nothing about harming children. Do not mock any culture, faith or people, and do not put on an accent.',
+		'Do not put on a stereotyped accent. Personal disagreements and criticism of ideas can be expressed without dehumanizing people.',
 		'If asked for something you would not do, say no kindly, in character, and change the subject.',
 		'Start every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful; you may add one gesture: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.',
 		npc.places.length ? `If they ask where to go, you can send them to one of these, by adding [[quest: PLACE]] with its exact name: ${npc.places.join('; ')}.` : '',

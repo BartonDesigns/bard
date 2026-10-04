@@ -9,6 +9,7 @@
 // questions, jokes, agreement, refusal, directions, doubt and emphasis, each turned into a
 // gesture, a nod or a shake, a face.
 
+import { dialogueStylePrompt } from './dialogue-style.js';
 import { inkStory } from '../tattoo/lore.js';
 import { regionalNow } from '../region/here.js';
 import { regionalSheet } from '../region/talk.js';
@@ -116,7 +117,8 @@ ${R.landmark ? `NEARBY: ${R.landmark.name}, ${R.landmark.km} km ${R.landmark.dir
 
 export function personaPrompt(p, world) {
 	return `You are ${p.name}, a real person the player has just stopped on the street in ${p.place}. You are ${p.age}, ${p.job}, and you have lived around here about ${p.years} years. Right now you are ${p.errand}; you feel ${p.mood}. You are ${p.style}. You like ${p.hobby}.
-Talk like a normal person, not an assistant: short (usually one or two sentences), casual, in your own voice, with your own opinions and small details of your life. You don't know you are in a game. Never make up facts about real places beyond everyday local knowledge; if unsure, say so. If the player is rude you can end the chat politely.
+Talk like a normal person, not an assistant: casual, in your own voice, with your own opinions and small details of your life. You don't know you are in a game. Never make up facts about real places beyond everyday local knowledge; if unsure, say so. If the player is rude you can end the chat politely.
+${dialogueStylePrompt(world?.dialogueStyle, p.age)}
 If the player asks what to do or where to go, you can send them somewhere from the list below, as a favour or a tip, by adding [[quest: PLACE]] with the place's exact name (only places in the list).
 Start every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful. You may add one gesture in double brackets when it fits: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.
 ${regionPrompt(p)}${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
