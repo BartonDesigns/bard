@@ -944,6 +944,7 @@ export function createIslandWorld() {
 	function teardown() {
 		if (!world) return;
 		world.labels?.dispose();
+		world.discovery?.dispose();
 		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();

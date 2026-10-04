@@ -1,0 +1,229 @@
+{
+  "info": {
+    "main": true,
+    "cafe": true,
+    "cove": true,
+    "faith": true,
+    "pond": [
+      -9.850000000000001,
+      -1.9000000000000004,
+      6.121071428571429
+    ],
+    "fronts": 6,
+    "floors": 120,
+    "colliders": 348,
+    "geometryMeshes": 52,
+    "grove": {
+      "trees": 5,
+      "vertices": 10890,
+      "triangles": 7380,
+      "colliders": 93,
+      "materials": 3
+    },
+    "groveTrees": 5,
+    "materials": [
+      "discovery-grove-bark",
+      "discovery-grove-foliage",
+      "discovery-grove-earth"
+    ],
+    "mappedBuildings": 53,
+    "real": {
+      "live": [
+        "t/4_20",
+        "sausalito",
+        "t/5_21"
+      ],
+      "ms": [
+        64,
+        21,
+        0
+      ],
+      "pending": 0,
+      "failed": [],
+      "version": 3,
+      "quiet": 0,
+      "late": 0,
+      "cancelled": 0,
+      "disposed": false,
+      "cam": [
+        8220,
+        -8331
+      ],
+      "comp": [
+        937,
+        1001,
+        8
+      ]
+    }
+  },
+  "walking": {
+    "doors": [
+      {
+        "steps": 3,
+        "rise": 0.14294802976436718,
+        "maxRise": 0.1429480297643675,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 3,
+        "rise": 0.17403114187660584,
+        "maxRise": 0.17403114187660584,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 4,
+        "rise": 0.1675750832363596,
+        "maxRise": 0.16757508323636028,
+        "maxPush": 0,
+        "samples": 84
+      },
+      {
+        "steps": 4,
+        "rise": 0.1667219758953713,
+        "maxRise": 0.16672197589537152,
+        "maxPush": 0,
+        "samples": 84
+      },
+      {
+        "steps": 4,
+        "rise": 0.16375857117397086,
+        "maxRise": 0.16375857117397086,
+        "maxPush": 0,
+        "samples": 84
+      },
+      {
+        "steps": 4,
+        "rise": 0.15782414852830895,
+        "maxRise": 0.15786093084118136,
+        "maxPush": 0,
+        "samples": 84
+      },
+      {
+        "steps": 3,
+        "rise": 0.10863264670477306,
+        "maxRise": 0.10863264670477335,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 3,
+        "rise": 0.10312300664075913,
+        "maxRise": 0.10312300664075913,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 3,
+        "rise": 0.1151425521061477,
+        "maxRise": 0.11514255210614799,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 5,
+        "rise": 0.15621105224980436,
+        "maxRise": 0.1564521210700267,
+        "maxPush": 0,
+        "samples": 90
+      },
+      {
+        "steps": 5,
+        "rise": 0.15729102662669323,
+        "maxRise": 0.1575602284799844,
+        "maxPush": 0,
+        "samples": 90
+      },
+      {
+        "steps": 5,
+        "rise": 0.15722943274028472,
+        "maxRise": 0.15756411594969677,
+        "maxPush": 0,
+        "samples": 90
+      },
+      {
+        "steps": 3,
+        "rise": 0.1158018075471207,
+        "maxRise": 0.115801807547121,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 3,
+        "rise": 0.14494680613288433,
+        "maxRise": 0.1449468061328849,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 3,
+        "rise": 0.15612364880066565,
+        "maxRise": 0.15612364880066565,
+        "maxPush": 0,
+        "samples": 78
+      },
+      {
+        "steps": 5,
+        "rise": 0.13907055842814967,
+        "maxRise": 0.13925697175625462,
+        "maxPush": 0,
+        "samples": 90
+      },
+      {
+        "steps": 4,
+        "rise": 0.1684755385277763,
+        "maxRise": 0.16867848531200735,
+        "maxPush": 0,
+        "samples": 84
+      },
+      {
+        "steps": 4,
+        "rise": 0.16417042379715086,
+        "maxRise": 0.16438592270500063,
+        "maxPush": 0,
+        "samples": 84
+      }
+    ],
+    "faithFloors": 39
+  },
+  "stream": {
+    "baseline": {
+      "geometries": 496,
+      "textures": 111
+    },
+    "cycles": [
+      {
+        "geometriesDisposed": 53,
+        "memory": {
+          "geometries": 496,
+          "textures": 111
+        }
+      },
+      {
+        "geometriesDisposed": 53,
+        "memory": {
+          "geometries": 496,
+          "textures": 111
+        }
+      }
+    ]
+  },
+  "terminal": {
+    "materialsDisposedOnce": 48,
+    "unmounted": true
+  },
+  "gpu": {
+    "lost": false,
+    "failed": 0,
+    "draw": {
+      "frame": 40,
+      "calls": 148,
+      "triangles": 1242840,
+      "points": 18480,
+      "lines": 132
+    }
+  },
+  "errors": [],
+  "warnings": []
+}

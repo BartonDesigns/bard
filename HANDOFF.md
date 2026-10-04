@@ -18,6 +18,18 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Museum photo pass (3 October 2026):** The five supplied Fort Baker photographs now
+  guide the existing museum: warm cream clapboard with consistent board spacing, red
+  roofs, brown shutters, green enamel lamps, broad porch rails, light porch canopies,
+  stroller frames/wheels/hoods and signal flags. The original mapped footprints, indoor
+  exhibits, cafe, Lookout Cove and Faith remain. Ground-following entrance stairs use
+  the player floor model, and porch openings remain clear. A deterministic coastal
+  cypress grove adds spreading limbs, roots and shaded earth in three material batches,
+  avoiding mapped buildings and roads. Museum geometry and grove materials release on
+  streaming unload; terminal disposal also releases its persistent materials/textures.
+  Validation and screenshots: `docs/discovery-museum-validation.md`.
+
+
 - **HUD follow-up (3 October 2026):** Location banners now have one owner. Late bridge
   initialization updates the existing banner instead of creating an abandoned duplicate;
   world teardown removes it. Names fade ten real seconds after area entry, including
@@ -26,8 +38,7 @@ shipped work). Before doing anything:
   The same multiplier applies on the surface and in orbit; legacy boolean boost callers
   still map to 1×/3×. Regression sources: `flight-hud.test.mjs`, `flight-hud-browser.cjs`
   and the updated three-trip orbital test (now tests 3×, 6× and 9×).
-  Museum inspiration images mentioned by the owner were not attached in this turn;
-  no image-based museum changes have been inferred or made.
+  The follow-up museum photos have now been received and used; see the museum pass below.
 
 
 - **Completion pass (3 October 2026, same draft branch):** All ten authored kinetic rig

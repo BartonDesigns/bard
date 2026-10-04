@@ -18,6 +18,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { toWorld } from './geo.js';
 import { buildFaith } from '../world/boatmodel.js';
+import { museumPorch, museumStroller, museumFlagpole } from './discovery-details.js';
+import { buildDiscoveryGrove } from './discovery-grove.js';
 
 export const CAMPUS = { ...toWorld(37.83560, -122.47660), r: 72 };
 export const inCampus = (x, z) => Math.hypot(x - CAMPUS.x, z - CAMPUS.z) < CAMPUS.r;
@@ -28,7 +30,7 @@ const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; r
 function clapboard() {
 	const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
 	const g = cv.getContext('2d');
-	g.fillStyle = '#f1efe8'; g.fillRect(0, 0, 256, 256);
+	g.fillStyle = '#e4e1c9'; g.fillRect(0, 0, 256, 256);
 	for (let y = 0; y < 256; y += 16) { g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, y + 13, 256, 3); g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(0, y, 256, 2); }
 	const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
 	return t;
@@ -57,25 +59,29 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 	const M = (c, rough = 0.75, extra = {}) => new THREE.MeshStandardMaterial({ color: new THREE.Color(c), roughness: rough, ...extra });
 	const siding = clapboard();
 	const mat = {
-		wall: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8 }), inWall: M('#f6f1e4', 0.9, { emissive: new THREE.Color('#6b665c') }), trim: M('#f7f6f2', 0.6), roof: M('#8a3b2c', 0.8), door: M('#4f6b5a', 0.6), glass: M('#6f8796', 0.1, { metalness: 0.55 }),
+		wall: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8 }), inWall: M('#f6f1e4', 0.9, { emissive: new THREE.Color('#6b665c') }), trim: M('#f7f6f2', 0.6), roof: M('#a04b3e', 0.8), door: M('#4f6b5a', 0.6), glass: M('#6f8796', 0.1, { metalness: 0.55 }),
 		porch: M('#7a7064', 0.85), floor: M('#b98f5f', 0.6), rubber: M('#3a8fbf', 0.95), pond: M('#3aa0d8', 0.1, { metalness: 0.2 }), reed: M('#5f8a3a', 0.8), wood: M('#8a6440', 0.8), plush: M('#f5c518', 0.7), plush2: M('#e8452c', 0.7),
 		easel: M('#c9a67a', 0.7), paint: [M('#e8452c', 0.4), M('#f5a623', 0.4), M('#3fae49', 0.4), M('#1d8fd1', 0.4), M('#8e44ad', 0.4)], net: M('#2a2a2a', 0.6), slide: M('#f5a623', 0.35), book: M('#1d8fd1', 0.6),
 		orange: M('#c0362c', 0.55, { metalness: 0.25 }), sand: M('#d9c7a0', 0.95), rock: M('#6d655a', 0.95, { flatShading: true }), counter: M('#6b4a2e', 0.6), steel: M('#9aa0a4', 0.4, { metalness: 0.6 }),
 		cloth: [M('#2c3e50'), M('#e8452c'), M('#1d8fd1'), M('#3fae49'), M('#f5a623'), M('#8e44ad'), M('#eeeeee')], skin: [M('#e0b494'), M('#c68e6a'), M('#8d5a3b'), M('#f0cfb0')],
+		shutter: M('#574638'), enamel: M('#79a393'), canvas: M('#ece9d9'), rugPink: M('#d85c8a', 0.9), rugBlue: M('#5aa0d0', 0.9),
+		flags: ['#bf392e', '#e8b634', '#367caf', '#efeee4'].map(c => M(c, 0.85, { side: THREE.DoubleSide })),
 		signFace: new THREE.MeshStandardMaterial({ map: museumSign(), roughness: 0.6 }),
-		roofD: M('#8a3b2c', 0.8, { side: THREE.DoubleSide }), wallD: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8, side: THREE.DoubleSide }),
+		roofD: M('#a04b3e', 0.8, { side: THREE.DoubleSide }), wallD: new THREE.MeshStandardMaterial({ map: siding, roughness: 0.8, side: THREE.DoubleSide }),
 		vault: M('#f8f5ec', 0.9, { side: THREE.DoubleSide, emissive: new THREE.Color('#77736a') }), shade: M('#2f4f4a', 0.5, { side: THREE.DoubleSide }), bulb: M('#fff3d6', 0.4, { emissive: new THREE.Color('#ffe2a8'), emissiveIntensity: 1.4 }),
 	};
-	let built = null;
+	let built = null, disposed = false;
 	const g = (x, z) => bay.heightAt(x, z);
 	const inFrame = (F, lx, lz) => { const ca = Math.cos(F.a), sa = Math.sin(F.a); return { x: F.x + ca * lx - sa * lz, z: F.z + sa * lx + ca * lz }; };
 
 	function build() {
-		const B = { group: new THREE.Group(), col: [], floors: [], fronts: [] };
-		const parts = new Map(), add = (m, geo) => { if (!parts.has(m)) parts.set(m, []); parts.get(m).push(geo.index ? geo.toNonIndexed() : geo); };
+		const B = { group: new THREE.Group(), col: [], floors: [], fronts: [], entrances: [] };
+		const parts = new Map(), add = (m, geo) => { if (!parts.has(m)) parts.set(m, []); if (geo.index) { const plain = geo.toNonIndexed(); geo.dispose(); parts.get(m).push(plain); } else parts.get(m).push(geo); };
 		// a box in a building's frame; solid ones go in the collision list (world space, oriented)
 		const boxIn = (Fr, m, w, h, d, x = 0, y = 0, z = 0, solid = false) => {
-			const geo = new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z); geo.applyMatrix4(Fr.m); add(m, geo);
+			const geo = new THREE.BoxGeometry(w, h, d);
+			if (m === mat.wall) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, (uv.getY(i) * h + y) / 2.88); }
+			geo.translate(x, y + h / 2, z); geo.applyMatrix4(Fr.m); add(m, geo);
 			if (solid) B.col.push({ F: Fr, x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, y0: Fr.y + y, y1: Fr.y + y + h });
 		};
 		const frameAt = (x, z, a, y) => ({ x, z, a, y, m: new THREE.Matrix4().makeRotationY(-a).setPosition(x, y, z) });
@@ -109,6 +115,9 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 				for (let k = -hw + 2; k < hw - 1.5; k += 2.6) for (const wy of H > 5 ? [1.0, 4.6] : [1.0]) {
 					if (side > 0 && doors.some((dx) => Math.abs(dx - k) < 1.6) && wy < 2) continue;
 					boxIn(F, mat.glass, 1.0, 1.7, 0.06, k, wy, zz + side * (T / 2 + 0.01)); boxIn(F, mat.trim, 1.2, 0.12, 0.1, k, wy - 0.06, zz + side * (T / 2 + 0.04)); boxIn(F, mat.trim, 1.2, 0.12, 0.1, k, wy + 1.72, zz + side * (T / 2 + 0.04));
+					for (const sx of [-1, 1]) { boxIn(F, mat.trim, 0.075, 1.7, 0.1, k + sx * 0.54, wy, zz + side * (T / 2 + 0.05)); boxIn(F, mat.shutter, 0.32, 1.85, 0.08, k + sx * 0.78, wy - 0.05, zz + side * (T / 2 + 0.02)); }
+					boxIn(F, mat.trim, 1.0, 0.045, 0.11, k, wy + 0.85, zz + side * (T / 2 + 0.06));
+					boxIn(F, mat.trim, 0.04, 1.7, 0.11, k, wy, zz + side * (T / 2 + 0.06));
 				}
 			}
 			// the upper floor and the ceiling (inside, the ground floor is one open hall)
@@ -156,10 +165,10 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			boxIn(F, mat.porch, W, 0.25, pd, 0, -0.25, pz);
 			B.floors.push({ F, x0: -hw, x1: hw, z0: zc + hd, z1: zc + hd + pd, y: y0 });
 			B.fronts.push({ F, w: W - 2, z: zc + hd + pd });
-			for (let k = -hw + 0.2; k <= hw - 0.1; k += W / Math.max(3, Math.round(W / 3.2))) boxIn(F, mat.trim, 0.18, H > 5 ? 6.6 : 3.4, 0.18, k, 0, zc + hd + pd - 0.15);
+			for (let k = -hw + 0.2; k <= hw - 0.1; k += W / Math.max(3, Math.round(W / 3.2))) if (!doors.some(dx => Math.abs(dx - k) < 1.1)) boxIn(F, mat.trim, 0.18, H > 5 ? 6.6 : 3.4, 0.18, k, 0, zc + hd + pd - 0.15);
 			if (H > 5) { boxIn(F, mat.porch, W, 0.2, pd, 0, 3.4, pz); for (let k = -hw; k < hw; k += 0.18) boxIn(F, mat.trim, 0.05, 0.9, 0.05, k, 3.6, zc + hd + pd - 0.15); boxIn(F, mat.trim, W, 0.08, 0.12, 0, 4.5, zc + hd + pd - 0.15); }
-			boxIn(F, mat.roof, W + 0.3, 0.15, pd + 0.2, 0, H > 5 ? 6.6 : 3.4, pz);
-			for (let k = -hw; k < hw; k += 0.2) if (!doors.some((dx) => Math.abs(dx - k) < 1.1)) boxIn(F, mat.trim, 0.05, 0.85, 0.05, k, 0, zc + hd + pd - 0.12);
+			boxIn(F, mat.canvas, W + 0.3, 0.15, pd + 0.2, 0, H > 5 ? 6.6 : 3.4, pz);
+			museumPorch({ B, F, W, H, hd, zc, doors, mat, boxIn, add, ground: g, inFrame });
 
 			// ---------- inside ----------
 			const ix0 = -hw + 0.6, ix1 = hw - 0.6, iz0 = zc - hd + 0.6, iz1 = zc + hd - 1.4, iw = ix1 - ix0;
@@ -183,7 +192,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 				for (let k = 0; k < 7; k++) boxIn(F, mat.net, 0.03, 1.4, 2.2, dx + 1.15, 0, tz, false), boxIn(F, mat.net, 2.2, 0.03, 0.03, dx, 0.2 * k, tz - 1.15);
 				{ const sl = new THREE.BoxGeometry(0.6, 0.05, 2.6).rotateX(-0.55).translate(dx, 0.75, tz + 2.1); sl.applyMatrix4(F.m); add(mat.slide, sl); }
 				for (let k = 0; k < 8; k++) boxIn(F, mat.book, 0.25, 0.3, 0.08, ix1 - 0.6, 0.4 + (k % 4) * 0.35, iz1 - 2 + Math.floor(k / 4) * 0.4);
-				boxIn(F, M('#d85c8a', 0.9), 2, 0.3, 1.2, ix1 - 1.6, 0, iz1 - 1.2);
+				boxIn(F, mat.rugPink, 2, 0.3, 1.2, ix1 - 1.6, 0, iz1 - 1.2);
 				// the front desk by the middle door
 				boxIn(F, mat.counter, 2.6, 1.05, 0.7, 0, 0, iz1 - 1.2, true);
 				B.main = { F, ix0, ix1, iz0, iz1, pond: [tx, tz, Math.min(iw / 7, (iz1 - iz0) / 2.4) * 1.45] };
@@ -193,11 +202,11 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 				// along the back, the children's pictures on the walls, a rug to sit on for a story
 				for (let x2 = ix0 + 1.6; x2 < ix1 - 1.4; x2 += 3.2) for (let z2 = iz0 + 1.8; z2 < iz1 - 1.8; z2 += 2.6) {
 					boxIn(F, mat.wood, 1.6, 0.05, 0.8, x2, 0.55, z2, true);
-					for (const [sx, sz] of [[-0.5, -0.65], [0.5, -0.65], [-0.5, 0.65], [0.5, 0.65]]) boxIn(F, mat.paint[(Math.round(x2 + z2) + sx * 2 + 5) % 5 | 0], 0.3, 0.32, 0.3, x2 + sx, 0, z2 + sz);
+					for (const [sx, sz] of [[-0.5, -0.65], [0.5, -0.65], [-0.5, 0.65], [0.5, 0.65]]) boxIn(F, mat.paint[((Math.round(x2 + z2) + sx * 2) % 5 + 5) % 5 | 0], 0.3, 0.32, 0.3, x2 + sx, 0, z2 + sz);
 				}
-				for (let x2 = ix0 + 0.6; x2 < ix1 - 0.8; x2 += 1.4) { boxIn(F, mat.wood, 1.2, 1.4, 0.4, x2 + 0.6, 0, iz0 - 0.3, true); for (let k = 0; k < 3; k++) boxIn(F, mat.paint[(k + Math.round(x2)) % 5 | 0], 0.3, 0.22, 0.3, x2 + 0.25 + k * 0.35, 1.4, iz0 - 0.3); }
-				for (let x2 = ix0 + 1; x2 < ix1 - 1; x2 += 1.8) boxIn(F, mat.paint[Math.round(x2) % 5 | 0], 0.7, 0.5, 0.02, x2, 1.4, iz0 - 0.52);
-				boxIn(F, M('#5aa0d0', 0.9), 2.4, 0.02, 1.8, ix1 - 1.6, 0, iz1 - 1.3);
+				for (let x2 = ix0 + 0.6; x2 < ix1 - 0.8; x2 += 1.4) { boxIn(F, mat.wood, 1.2, 1.4, 0.4, x2 + 0.6, 0, iz0 - 0.3, true); for (let k = 0; k < 3; k++) boxIn(F, mat.paint[((k + Math.round(x2)) % 5 + 5) % 5 | 0], 0.3, 0.22, 0.3, x2 + 0.25 + k * 0.35, 1.4, iz0 - 0.3); }
+				for (let x2 = ix0 + 1; x2 < ix1 - 1; x2 += 1.8) boxIn(F, mat.paint[(Math.round(x2) % 5 + 5) % 5 | 0], 0.7, 0.5, 0.02, x2, 1.4, iz0 - 0.52);
+				boxIn(F, mat.rugBlue, 2.4, 0.02, 1.8, ix1 - 1.6, 0, iz1 - 1.3);
 			}
 			if (cafe) {
 				boxIn(F, mat.counter, iw * 0.6, 1.05, 0.7, 0, 0, iz0 + 1.2, true);
@@ -215,8 +224,21 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			B.sign = { F };
 			boxIn(F, mat.trim, 0.2, 2.6, 0.2, -2.1, 0, 0); boxIn(F, mat.trim, 0.2, 2.6, 0.2, 2.1, 0, 0);
 			const sg = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.4, 0.12), [mat.trim, mat.trim, mat.trim, mat.trim, mat.signFace, mat.trim]); sg.applyMatrix4(F.m); sg.position.y += 1.9; B.group.add(sg);
-			for (let k = 0; k < 6; k++) { boxIn(F, mat.steel, 0.9, 0.03, 0.55, 3.6 + (k % 3) * 1.1, 0.5, Math.floor(k / 3) * 1.2); boxIn(F, mat.cloth[k % 7], 0.7, 0.45, 0.5, 3.6 + (k % 3) * 1.1, 0.55, Math.floor(k / 3) * 1.2); }
+			museumFlagpole({ F, mat, boxIn, add });
+			for (let k = 0; k < 5; k++) museumStroller({ F, x: 3.6 + k * 0.85, z: 0.8, mat, boxIn, add, color: k % 2 ? 0 : 6 });
 		}
+
+		// Trees follow the supplied grove photographs, outside mapped walls and paths.
+		const roads = real.near('roads', CAMPUS.x, CAMPUS.z, CAMPUS.r + 30);
+		const blocked = (x, z, radius) => roads.some(road => {
+			for (let i = 0; i + 3 < road.pts.length; i += 2) {
+				const ax = road.pts[i], az = road.pts[i + 1], dx = road.pts[i + 2] - ax, dz = road.pts[i + 3] - az;
+				const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+				if (Math.hypot(x - ax - dx * t, z - az - dz * t) < road.w / 2 + radius) return true;
+			}
+			return false;
+		});
+		B.grove = buildDiscoveryGrove({ add, frameAt, collisions: B.col, bay, boxes, campus: CAMPUS, cove: COVE, isPhone, blocked });
 
 		// ---------- Lookout Cove ----------
 		{
@@ -254,7 +276,7 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 			for (let k = 0; k < 8; k++) { const a = k / 8 * 6.283, geo = new THREE.CylinderGeometry(0.03, 0.03, 5.2, 4).rotateZ(0.9).rotateY(-a).translate(-4 + Math.cos(a) * 1.9, 2.1, 12 + Math.sin(a) * 1.9); geo.applyMatrix4(F.m); add(mat.net, geo); }
 			boxIn(F, mat.steel, 0.12, 4.4, 0.12, -4, 0, 12);
 		}
-		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); mesh.castShadow = !isPhone && m !== mat.glass; mesh.receiveShadow = true; B.group.add(mesh); }
+		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); mesh.castShadow = !isPhone && m !== mat.glass; mesh.receiveShadow = true; B.group.add(mesh); for (const geo of list) geo.dispose(); }
 		root.add(B.group);
 		built = B;
 	}
@@ -281,9 +303,24 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		return { n: Math.round(24 * k), kids: 0.5, areas };
 	}
 	function update(dt, camera) {
+		if (disposed) return;
 		const d = Math.hypot(camera.position.x - CAMPUS.x, camera.position.z - CAMPUS.z);
 		if (!built && d < 900 && bay.loaded() && real?.loaded() && real.near('boxes', CAMPUS.x, CAMPUS.z, 60).length) { try { build(); } catch (e) { console.warn('discovery museum', e); built = { group: new THREE.Group(), col: [], floors: [], fronts: [] }; } }
-		if (built && d > 1600) { built.group.traverse((o) => o.geometry?.dispose()); root.remove(built.group); built = null; }
+		if (built && d > 1600) unload();
+	}
+	function unload() {
+		if (!built) return;
+		built.group.traverse(o => o.geometry?.dispose());
+		built.grove?.dispose();
+		root.remove(built.group); built = null;
+	}
+	function dispose() {
+		if (disposed) return;
+		disposed = true; unload();
+		const materials = new Set(Object.values(mat).flat()), textures = new Set([siding]);
+		for (const m of materials) { if (m.map) textures.add(m.map); m.dispose(); }
+		for (const texture of textures) texture.dispose();
+		root.removeFromParent();
 	}
 	const toLocal = (F, x, z) => { const dx = x - F.x, dz = z - F.z, ca = Math.cos(F.a), sa = Math.sin(F.a); return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
 	// the floors inside, the porches, the little bridge's deck and the boat
@@ -314,5 +351,5 @@ export function createDiscovery(scene, bay, real, { isPhone = false } = {}) {
 		if (Math.hypot(pos.x - COVE.x, pos.z - COVE.z) < 32) return 'cove';
 		return inCampus(pos.x, pos.z) ? 'campus' : null;
 	}
-	return { group: root, update, floor, push, where, busy, venue, get built() { return built; } };
+	return { group: root, update, floor, push, where, busy, venue, dispose, get built() { return built; } };
 }
