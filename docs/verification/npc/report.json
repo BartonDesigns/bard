@@ -1,0 +1,532 @@
+{
+  "met": {
+    "id": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.50751323509786,\"z\":-469.0967921053587,\"y\":5.171419397915868},2654435761]]",
+    "dna": "{\"seed\":2654435761,\"sex\":0.8293774975230918,\"male\":true,\"ancestry\":[0.8504207809314429,0.019664355293548538,0.12991486377500847],\"age\":31.993874800149392,\"height\":1.8083424861670219,\"muscle\":0.4637808380648494,\"weight\":0.56982365755672,\"tone\":1.0047922192839907,\"warmth\":0.44667777977883816,\"hair\":\"short01\",\"hairColour\":[0.035,0.026,0.02],\"outfit\":{\"top\":[0.2,0.45,0.42],\"bottom\":[0.06,0.06,0.07],\"shoes\":[0.45,0.45,0.46],\"sleeves\":\"short\",\"jacket\":null,\"legs\":\"long\",\"fabricTop\":\"knit\"},\"gait\":{\"stride\":0.9502741616591811,\"bounce\":1.0690825851168484,\"armSwing\":0.7913009506650268,\"posture\":-0.005639659706503153,\"pace\":1.4608031156891956},\"temper\":{\"outgoing\":0.7322223614901304,\"confident\":0.17643796931952238,\"warmth\":0.4610548915807158,\"fidget\":0.39136235346086323},\"greyShift\":-0.7253618650138378,\"style\":{\"gen\":\"millennial\",\"top\":{\"kind\":\"sweat\",\"col\":\"#b4b5b3\",\"acc\":\"#b4b5b3\",\"pat\":\"rib\",\"fit\":\"regular\",\"sleeves\":\"long\"},\"outer\":null,\"bottom\":{\"kind\":\"shorts\",\"col\":\"#8d9095\",\"pat\":\"plain\",\"legs\":\"shorts\",\"fit\":\"regular\"},\"shoes\":{\"kind\":\"runner\",\"col\":\"#1f2a44\",\"acc\":\"#9aa58a\",\"sole\":\"#f3f2ee\"},\"acc\":[{\"kind\":\"cap\",\"col\":\"#36383c\",\"acc\":\"#9aa58a\"}],\"look\":\"mono\",\"printKind\":2,\"hair\":{\"dyed\":null,\"buzz\":false,\"bun\":false,\"volume\":1,\"scarf\":false,\"cut\":\"fade\",\"recede\":0.11967712305253556,\"thin\":0,\"part\":1,\"fresh\":false}},\"styleSig\":\"{\\\"top\\\":[0.2,0.45,0.42],\\\"bottom\\\":[0.06,0.06,0.07],\\\"shoes\\\":[0.45,0.45,0.46],\\\"sleeves\\\":\\\"short\\\",\\\"jacket\\\":null,\\\"legs\\\":\\\"long\\\",\\\"fabricTop\\\":\\\"knit\\\"}\",\"face\":{\"nose-width\":0.02227743081748486,\"nose-length\":-0.15939899065997448,\"nose-depth\":-0.09923977749422191,\"nose-hump\":-0.24210142365773207,\"nose-tip\":0.11373560074367559,\"nostrils\":0.004225139142945408,\"nose-curve\":-0.08427301794989034,\"nose-height\":-0.1534567830909509,\"nose-volume\":-0.05115850225556642,\"nose-flare\":-0.022697745258919894,\"nose-point\":0.0898553199134767,\"chin-out\":0.06003553373855538,\"chin-width\":0.11110698120435698,\"chin-height\":0.032978641970548776,\"jaw\":0.24134603772312402,\"jaw-out\":-0.1278390873922035,\"chin-cleft\":0,\"cheekbones\":0.029627104736864567,\"cheeks\":0.15502512038219718,\"cheek-inner\":0.15417093196883797,\"forehead\":-0.15780505057191474,\"forehead-height\":-0.05046693701762705,\"temples\":-0.06676477211527526,\"brow-ridge\":0.12412797876168041,\"brow-angle\":0.053922512498684225,\"mouth-width\":-0.21041257055941967,\"mouth-height\":0.11064587483415379,\"lower-lip\":-0.20272160932421684,\"upper-lip\":0.11745914537459612,\"cupids-bow\":-0.16874863662524145,\"mouth-corners\":0.03806845258455723,\"mouth-out\":-0.08191324853687547,\"philtrum\":-0.09812650968320666,\"eye-size\":-0.02100922342506237,\"eye-spacing\":-0.11403876542462967,\"eye-height\":-0.040234044846147295,\"eye-tilt\":0.12481340538710353,\"eye-open\":-0.05610050924587994,\"eye-bags\":-0.12059115276788361,\"eye-fold\":0.25636598349781703,\"ear-size\":-0.574103690776974,\"ear-out\":0.5914924866985529,\"ear-lobe\":-0.286480592074804,\"head-fat\":0.36582225102572064,\"neck-width\":0.4697380951140076,\"head-heart\":0.22785019396105782,\"head-square\":0.008226271835155785},\"iris\":0}",
+    "home": {
+      "x": -270.50751323509786,
+      "z": -469.0967921053587,
+      "y": 5.171419397915868
+    },
+    "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+    "name": "Jamal Harris",
+    "poolRemaining": 10,
+    "info": {
+      "active": 1,
+      "max": 4,
+      "loading": false,
+      "bindings": [
+        "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.50751323509786,\"z\":-469.0967921053587,\"y\":5.171419397915868},2654435761]]"
+      ]
+    }
+  },
+  "follow": {
+    "mode": "follow",
+    "moved": 9.637205392710348,
+    "remaining": 1.3702482013698314,
+    "waiting": "wait",
+    "waitDrift": 9.87028143116419e-10,
+    "history": [
+      {
+        "role": "user",
+        "content": "follow me",
+        "at": 1791083081723
+      },
+      {
+        "role": "assistant",
+        "content": "I'll follow you on foot. Close the conversation and lead the way; ask me to wait or head home whenever you like.",
+        "at": 1791083081729
+      },
+      {
+        "role": "user",
+        "content": "wait here",
+        "at": 1791083081775
+      },
+      {
+        "role": "assistant",
+        "content": "I'll wait here for you.",
+        "at": 1791083081778
+      }
+    ]
+  },
+  "warning": {
+    "alarm": 0.6499945833333333,
+    "nearMove": 1.0411052098042402,
+    "farMove": 0,
+    "cleared": 0,
+    "calmDrift": 0
+  },
+  "scout": {
+    "namedOutcome": {
+      "status": "blocked",
+      "report": "The route is obstructed. Waiting safely.",
+      "closest": 4.561630541009451
+    },
+    "target": {
+      "x": -259.1518555747122,
+      "z": -470.33109657017087,
+      "y": 5.51434868302196
+    },
+    "label": "the nearby clearing",
+    "closest": 1.557338443671993,
+    "returning": true,
+    "maxTravel": 10.462982987011044,
+    "final": {
+      "id": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.50751323509786,\"z\":-469.0967921053587,\"y\":5.171419397915868},2654435761]]",
+      "version": 1,
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "source": "ambient",
+      "dna": {
+        "seed": 2654435761,
+        "sex": 0.8293774975230918,
+        "male": true,
+        "ancestry": [
+          0.8504207809314429,
+          0.019664355293548538,
+          0.12991486377500847
+        ],
+        "age": 31.993874800149392,
+        "height": 1.8083424861670219,
+        "muscle": 0.4637808380648494,
+        "weight": 0.56982365755672,
+        "tone": 1.0047922192839907,
+        "warmth": 0.44667777977883816,
+        "hair": "short01",
+        "hairColour": [
+          0.035,
+          0.026,
+          0.02
+        ],
+        "outfit": {
+          "top": [
+            0.2,
+            0.45,
+            0.42
+          ],
+          "bottom": [
+            0.06,
+            0.06,
+            0.07
+          ],
+          "shoes": [
+            0.45,
+            0.45,
+            0.46
+          ],
+          "sleeves": "short",
+          "jacket": null,
+          "legs": "long",
+          "fabricTop": "knit"
+        },
+        "gait": {
+          "stride": 0.9502741616591811,
+          "bounce": 1.0690825851168484,
+          "armSwing": 0.7913009506650268,
+          "posture": -0.005639659706503153,
+          "pace": 1.4608031156891956
+        },
+        "temper": {
+          "outgoing": 0.7322223614901304,
+          "confident": 0.17643796931952238,
+          "warmth": 0.4610548915807158,
+          "fidget": 0.39136235346086323
+        },
+        "greyShift": -0.7253618650138378,
+        "style": {
+          "gen": "millennial",
+          "top": {
+            "kind": "sweat",
+            "col": "#b4b5b3",
+            "acc": "#b4b5b3",
+            "pat": "rib",
+            "fit": "regular",
+            "sleeves": "long"
+          },
+          "outer": null,
+          "bottom": {
+            "kind": "shorts",
+            "col": "#8d9095",
+            "pat": "plain",
+            "legs": "shorts",
+            "fit": "regular"
+          },
+          "shoes": {
+            "kind": "runner",
+            "col": "#1f2a44",
+            "acc": "#9aa58a",
+            "sole": "#f3f2ee"
+          },
+          "acc": [
+            {
+              "kind": "cap",
+              "col": "#36383c",
+              "acc": "#9aa58a"
+            }
+          ],
+          "look": "mono",
+          "printKind": 2,
+          "hair": {
+            "dyed": null,
+            "buzz": false,
+            "bun": false,
+            "volume": 1,
+            "scarf": false,
+            "cut": "fade",
+            "recede": 0.11967712305253556,
+            "thin": 0,
+            "part": 1,
+            "fresh": false
+          }
+        },
+        "styleSig": "{\"top\":[0.2,0.45,0.42],\"bottom\":[0.06,0.06,0.07],\"shoes\":[0.45,0.45,0.46],\"sleeves\":\"short\",\"jacket\":null,\"legs\":\"long\",\"fabricTop\":\"knit\"}",
+        "face": {
+          "nose-width": 0.02227743081748486,
+          "nose-length": -0.15939899065997448,
+          "nose-depth": -0.09923977749422191,
+          "nose-hump": -0.24210142365773207,
+          "nose-tip": 0.11373560074367559,
+          "nostrils": 0.004225139142945408,
+          "nose-curve": -0.08427301794989034,
+          "nose-height": -0.1534567830909509,
+          "nose-volume": -0.05115850225556642,
+          "nose-flare": -0.022697745258919894,
+          "nose-point": 0.0898553199134767,
+          "chin-out": 0.06003553373855538,
+          "chin-width": 0.11110698120435698,
+          "chin-height": 0.032978641970548776,
+          "jaw": 0.24134603772312402,
+          "jaw-out": -0.1278390873922035,
+          "chin-cleft": 0,
+          "cheekbones": 0.029627104736864567,
+          "cheeks": 0.15502512038219718,
+          "cheek-inner": 0.15417093196883797,
+          "forehead": -0.15780505057191474,
+          "forehead-height": -0.05046693701762705,
+          "temples": -0.06676477211527526,
+          "brow-ridge": 0.12412797876168041,
+          "brow-angle": 0.053922512498684225,
+          "mouth-width": -0.21041257055941967,
+          "mouth-height": 0.11064587483415379,
+          "lower-lip": -0.20272160932421684,
+          "upper-lip": 0.11745914537459612,
+          "cupids-bow": -0.16874863662524145,
+          "mouth-corners": 0.03806845258455723,
+          "mouth-out": -0.08191324853687547,
+          "philtrum": -0.09812650968320666,
+          "eye-size": -0.02100922342506237,
+          "eye-spacing": -0.11403876542462967,
+          "eye-height": -0.040234044846147295,
+          "eye-tilt": 0.12481340538710353,
+          "eye-open": -0.05610050924587994,
+          "eye-bags": -0.12059115276788361,
+          "eye-fold": 0.25636598349781703,
+          "ear-size": -0.574103690776974,
+          "ear-out": 0.5914924866985529,
+          "ear-lobe": -0.286480592074804,
+          "head-fat": 0.36582225102572064,
+          "neck-width": 0.4697380951140076,
+          "head-heart": 0.22785019396105782,
+          "head-square": 0.008226271835155785
+        },
+        "iris": 0
+      },
+      "persona": {
+        "name": "Jamal Harris",
+        "first": "Jamal",
+        "age": 32,
+        "job": "mending nets",
+        "place": "the village",
+        "kind": "island",
+        "years": 19,
+        "mood": "happy",
+        "errand": "getting some air",
+        "style": "chatty and animated, polite, a bit shy",
+        "temper": {
+          "outgoing": 0.7322223614901304,
+          "confident": 0.17643796931952238,
+          "warmth": 0.4610548915807158,
+          "fidget": 0.39136235346086323
+        },
+        "tattoos": [],
+        "hobby": "hiking Mount Diablo"
+      },
+      "home": {
+        "x": -270.50751323509786,
+        "z": -469.0967921053587,
+        "y": 5.171419397915868
+      },
+      "position": {
+        "x": -266.19889373634214,
+        "z": -469.41347143636585,
+        "y": 5.365087702680602
+      },
+      "history": [
+        {
+          "role": "event",
+          "content": "You agreed to warn the nearby residents.",
+          "at": 1791083081812
+        },
+        {
+          "role": "assistant",
+          "content": "I'll warn the people nearby. The warning stays in this area.",
+          "at": 1791083081812
+        },
+        {
+          "role": "user",
+          "content": "calm the villagers",
+          "at": 1791083081823
+        },
+        {
+          "role": "event",
+          "content": "You gave the local all clear.",
+          "at": 1791083081826
+        },
+        {
+          "role": "assistant",
+          "content": "I'll reassure the people nearby. Let's help everyone settle down.",
+          "at": 1791083081826
+        },
+        {
+          "role": "user",
+          "content": "go home",
+          "at": 1791083081841
+        },
+        {
+          "role": "assistant",
+          "content": "I'll head back to the place where we met.",
+          "at": 1791083081842
+        },
+        {
+          "role": "event",
+          "content": "Returned home.",
+          "at": 1791083081860
+        },
+        {
+          "role": "user",
+          "content": "scout the village",
+          "at": 1791083081927
+        },
+        {
+          "role": "assistant",
+          "content": "I'll scout the village, then return to my home area. Close the conversation so I can set off; ask me for a report when I get back.",
+          "at": 1791083081929
+        },
+        {
+          "role": "user",
+          "content": "go home",
+          "at": 1791083081969
+        },
+        {
+          "role": "assistant",
+          "content": "I'll head back to the place where we met.",
+          "at": 1791083081971
+        },
+        {
+          "role": "event",
+          "content": "Returned home.",
+          "at": 1791083081980
+        },
+        {
+          "role": "user",
+          "content": "scout nearby",
+          "at": 1791083082054
+        },
+        {
+          "role": "assistant",
+          "content": "I'll scout the nearby clearing, then return to my home area. Close the conversation so I can set off; ask me for a report when I get back.",
+          "at": 1791083082055
+        },
+        {
+          "role": "event",
+          "content": "Scouted the destination and returned home.",
+          "at": 1791083082086
+        }
+      ],
+      "memories": [
+        {
+          "role": "event",
+          "content": "You agreed to warn the nearby residents.",
+          "at": 1791083081812
+        },
+        {
+          "role": "event",
+          "content": "You gave the local all clear.",
+          "at": 1791083081826
+        },
+        {
+          "role": "event",
+          "content": "Returned home.",
+          "at": 1791083081860
+        },
+        {
+          "role": "event",
+          "content": "Returned home.",
+          "at": 1791083081980
+        },
+        {
+          "role": "event",
+          "content": "Scouted the destination and returned home.",
+          "at": 1791083082086
+        }
+      ],
+      "mode": "wait",
+      "task": {
+        "id": "scout:1791083082055",
+        "type": "scout",
+        "status": "completed",
+        "target": {
+          "x": -259.1518555747122,
+          "z": -470.33109657017087,
+          "y": 5.51434868302196
+        },
+        "label": "the nearby clearing",
+        "report": "Scouted the destination and returned home."
+      },
+      "firstMet": 1791083081701,
+      "lastMet": 1791083082049,
+      "metCount": 7,
+      "lastWarning": 1791083081812
+    },
+    "homeDistance": 1.7537183846293773
+  },
+  "reload": {
+    "id": "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.50751323509786,\"z\":-469.0967921053587,\"y\":5.171419397915868},2654435761]]",
+    "dna": "{\"seed\":2654435761,\"sex\":0.8293774975230918,\"male\":true,\"ancestry\":[0.8504207809314429,0.019664355293548538,0.12991486377500847],\"age\":31.993874800149392,\"height\":1.8083424861670219,\"muscle\":0.4637808380648494,\"weight\":0.56982365755672,\"tone\":1.0047922192839907,\"warmth\":0.44667777977883816,\"hair\":\"short01\",\"hairColour\":[0.035,0.026,0.02],\"outfit\":{\"top\":[0.2,0.45,0.42],\"bottom\":[0.06,0.06,0.07],\"shoes\":[0.45,0.45,0.46],\"sleeves\":\"short\",\"jacket\":null,\"legs\":\"long\",\"fabricTop\":\"knit\"},\"gait\":{\"stride\":0.9502741616591811,\"bounce\":1.0690825851168484,\"armSwing\":0.7913009506650268,\"posture\":-0.005639659706503153,\"pace\":1.4608031156891956},\"temper\":{\"outgoing\":0.7322223614901304,\"confident\":0.17643796931952238,\"warmth\":0.4610548915807158,\"fidget\":0.39136235346086323},\"greyShift\":-0.7253618650138378,\"style\":{\"gen\":\"millennial\",\"top\":{\"kind\":\"sweat\",\"col\":\"#b4b5b3\",\"acc\":\"#b4b5b3\",\"pat\":\"rib\",\"fit\":\"regular\",\"sleeves\":\"long\"},\"outer\":null,\"bottom\":{\"kind\":\"shorts\",\"col\":\"#8d9095\",\"pat\":\"plain\",\"legs\":\"shorts\",\"fit\":\"regular\"},\"shoes\":{\"kind\":\"runner\",\"col\":\"#1f2a44\",\"acc\":\"#9aa58a\",\"sole\":\"#f3f2ee\"},\"acc\":[{\"kind\":\"cap\",\"col\":\"#36383c\",\"acc\":\"#9aa58a\"}],\"look\":\"mono\",\"printKind\":2,\"hair\":{\"dyed\":null,\"buzz\":false,\"bun\":false,\"volume\":1,\"scarf\":false,\"cut\":\"fade\",\"recede\":0.11967712305253556,\"thin\":0,\"part\":1,\"fresh\":false}},\"styleSig\":\"{\\\"top\\\":[0.2,0.45,0.42],\\\"bottom\\\":[0.06,0.06,0.07],\\\"shoes\\\":[0.45,0.45,0.46],\\\"sleeves\\\":\\\"short\\\",\\\"jacket\\\":null,\\\"legs\\\":\\\"long\\\",\\\"fabricTop\\\":\\\"knit\\\"}\",\"face\":{\"nose-width\":0.02227743081748486,\"nose-length\":-0.15939899065997448,\"nose-depth\":-0.09923977749422191,\"nose-hump\":-0.24210142365773207,\"nose-tip\":0.11373560074367559,\"nostrils\":0.004225139142945408,\"nose-curve\":-0.08427301794989034,\"nose-height\":-0.1534567830909509,\"nose-volume\":-0.05115850225556642,\"nose-flare\":-0.022697745258919894,\"nose-point\":0.0898553199134767,\"chin-out\":0.06003553373855538,\"chin-width\":0.11110698120435698,\"chin-height\":0.032978641970548776,\"jaw\":0.24134603772312402,\"jaw-out\":-0.1278390873922035,\"chin-cleft\":0,\"cheekbones\":0.029627104736864567,\"cheeks\":0.15502512038219718,\"cheek-inner\":0.15417093196883797,\"forehead\":-0.15780505057191474,\"forehead-height\":-0.05046693701762705,\"temples\":-0.06676477211527526,\"brow-ridge\":0.12412797876168041,\"brow-angle\":0.053922512498684225,\"mouth-width\":-0.21041257055941967,\"mouth-height\":0.11064587483415379,\"lower-lip\":-0.20272160932421684,\"upper-lip\":0.11745914537459612,\"cupids-bow\":-0.16874863662524145,\"mouth-corners\":0.03806845258455723,\"mouth-out\":-0.08191324853687547,\"philtrum\":-0.09812650968320666,\"eye-size\":-0.02100922342506237,\"eye-spacing\":-0.11403876542462967,\"eye-height\":-0.040234044846147295,\"eye-tilt\":0.12481340538710353,\"eye-open\":-0.05610050924587994,\"eye-bags\":-0.12059115276788361,\"eye-fold\":0.25636598349781703,\"ear-size\":-0.574103690776974,\"ear-out\":0.5914924866985529,\"ear-lobe\":-0.286480592074804,\"head-fat\":0.36582225102572064,\"neck-width\":0.4697380951140076,\"head-heart\":0.22785019396105782,\"head-square\":0.008226271835155785},\"iris\":0}",
+    "home": {
+      "x": -270.50751323509786,
+      "z": -469.0967921053587,
+      "y": 5.171419397915868
+    },
+    "history": [
+      {
+        "role": "user",
+        "content": "calm the villagers",
+        "at": 1791083081823
+      },
+      {
+        "role": "event",
+        "content": "You gave the local all clear.",
+        "at": 1791083081826
+      },
+      {
+        "role": "assistant",
+        "content": "I'll reassure the people nearby. Let's help everyone settle down.",
+        "at": 1791083081826
+      },
+      {
+        "role": "user",
+        "content": "go home",
+        "at": 1791083081841
+      },
+      {
+        "role": "assistant",
+        "content": "I'll head back to the place where we met.",
+        "at": 1791083081842
+      },
+      {
+        "role": "event",
+        "content": "Returned home.",
+        "at": 1791083081860
+      },
+      {
+        "role": "user",
+        "content": "scout the village",
+        "at": 1791083081927
+      },
+      {
+        "role": "assistant",
+        "content": "I'll scout the village, then return to my home area. Close the conversation so I can set off; ask me for a report when I get back.",
+        "at": 1791083081929
+      },
+      {
+        "role": "user",
+        "content": "go home",
+        "at": 1791083081969
+      },
+      {
+        "role": "assistant",
+        "content": "I'll head back to the place where we met.",
+        "at": 1791083081971
+      },
+      {
+        "role": "event",
+        "content": "Returned home.",
+        "at": 1791083081980
+      },
+      {
+        "role": "user",
+        "content": "scout nearby",
+        "at": 1791083082054
+      },
+      {
+        "role": "assistant",
+        "content": "I'll scout the nearby clearing, then return to my home area. Close the conversation so I can set off; ask me for a report when I get back.",
+        "at": 1791083082055
+      },
+      {
+        "role": "event",
+        "content": "Scouted the destination and returned home.",
+        "at": 1791083082086
+      },
+      {
+        "role": "user",
+        "content": "report",
+        "at": 1791083082091
+      },
+      {
+        "role": "assistant",
+        "content": "Scouted the destination and returned home.",
+        "at": 1791083082093
+      }
+    ],
+    "task": {
+      "id": "scout:1791083082055",
+      "type": "scout",
+      "status": "completed",
+      "target": {
+        "x": -259.1518555747122,
+        "z": -470.33109657017087,
+        "y": 5.51434868302196
+      },
+      "label": "the nearby clearing",
+      "report": "Scouted the destination and returned home."
+    },
+    "mode": "wait",
+    "info": {
+      "active": 1,
+      "max": 4,
+      "loading": false,
+      "bindings": [
+        "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.50751323509786,\"z\":-469.0967921053587,\"y\":5.171419397915868},2654435761]]"
+      ]
+    }
+  },
+  "streamed": {
+    "disposed": 6,
+    "total": 6
+  },
+  "restored": {
+    "differentBody": true,
+    "dna": "{\"seed\":2654435761,\"sex\":0.8293774975230918,\"male\":true,\"ancestry\":[0.8504207809314429,0.019664355293548538,0.12991486377500847],\"age\":31.993874800149392,\"height\":1.8083424861670219,\"muscle\":0.4637808380648494,\"weight\":0.56982365755672,\"tone\":1.0047922192839907,\"warmth\":0.44667777977883816,\"hair\":\"short01\",\"hairColour\":[0.035,0.026,0.02],\"outfit\":{\"top\":[0.2,0.45,0.42],\"bottom\":[0.06,0.06,0.07],\"shoes\":[0.45,0.45,0.46],\"sleeves\":\"short\",\"jacket\":null,\"legs\":\"long\",\"fabricTop\":\"knit\"},\"gait\":{\"stride\":0.9502741616591811,\"bounce\":1.0690825851168484,\"armSwing\":0.7913009506650268,\"posture\":-0.005639659706503153,\"pace\":1.4608031156891956},\"temper\":{\"outgoing\":0.7322223614901304,\"confident\":0.17643796931952238,\"warmth\":0.4610548915807158,\"fidget\":0.39136235346086323},\"greyShift\":-0.7253618650138378,\"style\":{\"gen\":\"millennial\",\"top\":{\"kind\":\"sweat\",\"col\":\"#b4b5b3\",\"acc\":\"#b4b5b3\",\"pat\":\"rib\",\"fit\":\"regular\",\"sleeves\":\"long\"},\"outer\":null,\"bottom\":{\"kind\":\"shorts\",\"col\":\"#8d9095\",\"pat\":\"plain\",\"legs\":\"shorts\",\"fit\":\"regular\"},\"shoes\":{\"kind\":\"runner\",\"col\":\"#1f2a44\",\"acc\":\"#9aa58a\",\"sole\":\"#f3f2ee\"},\"acc\":[{\"kind\":\"cap\",\"col\":\"#36383c\",\"acc\":\"#9aa58a\"}],\"look\":\"mono\",\"printKind\":2,\"hair\":{\"dyed\":null,\"buzz\":false,\"bun\":false,\"volume\":1,\"scarf\":false,\"cut\":\"fade\",\"recede\":0.11967712305253556,\"thin\":0,\"part\":1,\"fresh\":false}},\"styleSig\":\"{\\\"top\\\":[0.2,0.45,0.42],\\\"bottom\\\":[0.06,0.06,0.07],\\\"shoes\\\":[0.45,0.45,0.46],\\\"sleeves\\\":\\\"short\\\",\\\"jacket\\\":null,\\\"legs\\\":\\\"long\\\",\\\"fabricTop\\\":\\\"knit\\\"}\",\"face\":{\"nose-width\":0.02227743081748486,\"nose-length\":-0.15939899065997448,\"nose-depth\":-0.09923977749422191,\"nose-hump\":-0.24210142365773207,\"nose-tip\":0.11373560074367559,\"nostrils\":0.004225139142945408,\"nose-curve\":-0.08427301794989034,\"nose-height\":-0.1534567830909509,\"nose-volume\":-0.05115850225556642,\"nose-flare\":-0.022697745258919894,\"nose-point\":0.0898553199134767,\"chin-out\":0.06003553373855538,\"chin-width\":0.11110698120435698,\"chin-height\":0.032978641970548776,\"jaw\":0.24134603772312402,\"jaw-out\":-0.1278390873922035,\"chin-cleft\":0,\"cheekbones\":0.029627104736864567,\"cheeks\":0.15502512038219718,\"cheek-inner\":0.15417093196883797,\"forehead\":-0.15780505057191474,\"forehead-height\":-0.05046693701762705,\"temples\":-0.06676477211527526,\"brow-ridge\":0.12412797876168041,\"brow-angle\":0.053922512498684225,\"mouth-width\":-0.21041257055941967,\"mouth-height\":0.11064587483415379,\"lower-lip\":-0.20272160932421684,\"upper-lip\":0.11745914537459612,\"cupids-bow\":-0.16874863662524145,\"mouth-corners\":0.03806845258455723,\"mouth-out\":-0.08191324853687547,\"philtrum\":-0.09812650968320666,\"eye-size\":-0.02100922342506237,\"eye-spacing\":-0.11403876542462967,\"eye-height\":-0.040234044846147295,\"eye-tilt\":0.12481340538710353,\"eye-open\":-0.05610050924587994,\"eye-bags\":-0.12059115276788361,\"eye-fold\":0.25636598349781703,\"ear-size\":-0.574103690776974,\"ear-out\":0.5914924866985529,\"ear-lobe\":-0.286480592074804,\"head-fat\":0.36582225102572064,\"neck-width\":0.4697380951140076,\"head-heart\":0.22785019396105782,\"head-square\":0.008226271835155785},\"iris\":0}",
+    "info": {
+      "active": 1,
+      "max": 4,
+      "loading": false,
+      "bindings": [
+        "[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.50751323509786,\"z\":-469.0967921053587,\"y\":5.171419397915868},2654435761]]"
+      ]
+    },
+    "recordCount": 1
+  },
+  "budget": {
+    "attempted": 5,
+    "max": 4,
+    "activeBeforeReset": 4,
+    "activeAfterReset": 0,
+    "savedCount": 6
+  },
+  "gpu": {
+    "lost": false,
+    "failed": 0
+  },
+  "errors": []
+}

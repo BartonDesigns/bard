@@ -44,3 +44,27 @@ test('party capacity and canceled scout reports cannot claim fresh completion', 
   h.api.state.setMode(r.id,'scout',{report:'Old report'});h.api.command(r,'cancel');assert.equal(r.task,null);assert.match(h.api.describe(r),/waiting/);
  }finally{h.dispose();}
 });
+test('warning and all-clear return accepted replies and disclose unsaved local state', () => {
+ for(const fail of [false,true]) {
+  const h=harness({fail});try {
+   const r=h.resident(), warned=h.api.command(r,'warn the other villagers');
+   assert.match(warned,/warn the people nearby/);
+   assert.equal(/could not save/.test(warned),fail);
+   assert.ok(h.api.state.alarmFor(r.bodyKey,r.position).level>0);
+   const calmed=h.api.command(r,'calm everyone down');
+   assert.match(calmed,/reassure the people nearby/);
+   assert.equal(/could not save/.test(calmed),fail);
+   assert.equal(h.api.state.alarmFor(r.bodyKey,r.position).level,0);
+  }finally{h.dispose();}
+ }
+});
+test('nearby scouting skips a blocked closer route and refuses when all routes are blocked', () => {
+ const h=harness();try {
+  h.resident();const actor=h.api.actors.all()[0];
+  const nearer={x:5,z:0,name:'blocked'},further={x:0,z:10,name:'clear'};
+  h.world.island.extraPush=q=>{if(q.x>1)q.x+=1;};
+  assert.equal(h.api.scoutNearby(actor,[nearer,further]),further);
+  h.world.island.extraPush=q=>{q.x+=1;};
+  assert.equal(h.api.scoutNearby(actor,[nearer,further]),null);
+ }finally{h.dispose();}
+});

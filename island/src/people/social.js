@@ -1,7 +1,7 @@
 // The action boundary between conversation, saved residents and streamed bodies.
 // Dialogue models describe outcomes; only these validated player requests change state.
 import { createSocialState, parseSocialIntent } from './social-state.js';
-import { createSocialActors, positionFor, worldPosition } from './social-actors.js';
+import { createSocialActors, positionFor, worldPosition, safeSocialStep } from './social-actors.js';
 import { personaFor } from './persona.js';
 
 export function createNpcSocial({ scene, world, camera, people, isPhone, hint }) {
@@ -21,6 +21,20 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		if (!record) return null;
 		actors.adopt(p, record);
 		return record;
+	}
+	function scoutNearby(p, candidates = []) {
+		const W = world(), origin = p?.M?.S?.pos;
+		if (!W?.island || !origin) return null;
+		const options = candidates.filter(q => !q.under && Math.hypot(q.x-origin.x,q.z-origin.z) >= 4 && Math.hypot(q.x-origin.x,q.z-origin.z) <= 120)
+			.sort((a,b) => Math.hypot(a.x-origin.x,a.z-origin.z)-Math.hypot(b.x-origin.x,b.z-origin.z));
+		for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; options.push({x:origin.x+Math.cos(a)*12,z:origin.z+Math.sin(a)*12,name:'the nearby clearing'}); }
+		for (const target of options) {
+			const n = Math.ceil(Math.hypot(target.x-origin.x,target.z-origin.z)/0.3);
+			let at = {x:origin.x,y:origin.y,z:origin.z};
+			for (let i = 1; i <= n && at; i++) at = safeSocialStep(W.island, at, {x:origin.x+(target.x-origin.x)*i/n,z:origin.z+(target.z-origin.z)*i/n}, W.player);
+			if (at) return target;
+		}
+		return null;
 	}
 	function command(record, text, { target = null, quest = null } = {}) {
 		const intent = parseSocialIntent(text);
@@ -72,7 +86,7 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		const modes = { idle: 'staying in my home area', follow: 'following you', wait: 'waiting here', home: 'heading home', scout: `scouting ${r.task?.label || 'nearby'}`, quest: `travelling with you for ${r.task?.title || 'our quest'}` };
 		return `I'm ${modes[r.mode] || 'here'}.${r.task?.status === 'blocked' ? ' The route is blocked, so I am waiting safely.' : ''}`;
 	}
-	return { state, actors, meet, command, describe, bodyKey, positionFor,
+	return { state, actors, meet, command, scoutNearby, describe, bodyKey, positionFor,
 		update(dt, time, enabled) { state.tick(); actors.update(dt, time, enabled); },
 		reset() { actors.reset(); state.flush(); },
 		flush() { actors.flush(); },

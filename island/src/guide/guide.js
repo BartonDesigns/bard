@@ -340,9 +340,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			const named = text.match(/(?:scout|check out|investigate)\s+(.+?)[.!?]*$/i)?.[1]?.trim().replace(/[, ]*please$/i, '').trim();
 			let target = named && !/^(nearby|ahead|around here|the area)$/i.test(named.trim()) ? find(named) : null;
 			if (!named || /^(nearby|ahead|around here|the area)$/i.test(named.trim())) {
-				const pos = p.M.S.pos;
-				target = targets().filter(q => !q.under && Math.hypot(q.x - pos.x, q.z - pos.z) >= 4 && Math.hypot(q.x - pos.x, q.z - pos.z) <= 120).sort((a,b) => Math.hypot(a.x-pos.x,a.z-pos.z)-Math.hypot(b.x-pos.x,b.z-pos.z))[0];
-				if (!target) target = { x: pos.x + 14, z: pos.z + 8, name: 'the nearby clearing' };
+				target = api.social.scoutNearby(p, targets());
 			}
 			reply = api.social.command(resident, text, { target, quest: quests.find(q => !q.done) });
 		}
@@ -440,17 +438,17 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	open.title = 'Talk to the guide (G)'; open.setAttribute('aria-label', 'Talk to the guide');
 	const panel = el('div', 'position:absolute;left:calc(12px + env(safe-area-inset-left));bottom:calc(12px + env(safe-area-inset-bottom));width:min(420px,calc(100vw - 24px));max-height:min(62vh,560px);display:none;flex-direction:column;border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(10,14,18,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 20px 60px rgba(0,0,0,.6);color:#f2f5f4;font:14px/1.45 system-ui;z-index:5;');
 	panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'The Guide');
-	const head = el('div', 'display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);');
-	const title = el('div', 'flex:1;font:600 13px system-ui;letter-spacing:.06em;color:#9fe8d0;', 'THE GUIDE');
+	const head = el('div', 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);');
+	const title = el('div', 'flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13px system-ui;letter-spacing:.06em;color:#9fe8d0;', 'THE GUIDE');
 	const statusEl = el('div', 'font:11px system-ui;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;');
 	const gearB = el('button', btnCss, '⚙'); gearB.title = 'Model settings'; gearB.setAttribute('aria-label', 'Model settings');
 	const closeB = el('button', btnCss, '✕'); closeB.setAttribute('aria-label', 'Close the guide');
 	const residentsB = el('button', btnCss, 'People'); residentsB.setAttribute('aria-label', 'Remembered people');
 	head.append(title, statusEl, residentsB, gearB, closeB);
 	const settings = el('div', 'display:none;max-height:45vh;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font:12px system-ui;color:rgba(255,255,255,.8);');
-	const log = el('div', 'flex:1;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:120px;');
+	const log = el('div', 'flex:1;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0;');
 	log.setAttribute('aria-live', 'polite');
-	const bar = el('div', 'display:flex;gap:6px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);');
+	const bar = el('div', 'flex-shrink:0;display:flex;gap:6px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);');
 	const input = el('input', 'flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:14px system-ui;outline:none;');
 	input.placeholder = 'Ask anything, or "take me to Alcatraz"'; input.setAttribute('aria-label', 'Message the guide');
 	const mic = el('button', btnCss, '🎙'); mic.title = 'Speak'; mic.setAttribute('aria-label', 'Speak to the guide');
@@ -485,7 +483,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!records.length) say('Talk to someone nearby to remember them and their home area.', 'note');
 		for (const r of records) say(`${r.persona.name} · ${r.persona.place || 'Met nearby'}\n${S.describe(r)}`, 'note');
 		const status = S?.state.status();
-		if (status?.error || status?.saved === false) say('Your browser could not save the latest NPC progress. Keep this session open and free storage.', 'note');
+		if (status?.error) say('Your browser could not save the latest NPC progress. Keep this session open and free storage.', 'note');
 	}
 	residentsB.onclick = showPeople;
 	open.onclick = () => show(true);
