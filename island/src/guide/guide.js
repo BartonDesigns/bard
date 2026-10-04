@@ -12,7 +12,10 @@ import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js
 import { parseSocialIntent } from '../people/social-state.js';
 import { worldPosition } from '../people/social-actors.js';
 import { createDialogueArchive } from './dialogue-archive.js';
-import { normalizeDialogueStyle, dialogueTokenLimit } from '../people/dialogue-style.js';
+import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
+import { chooseGuideModel } from './preferences.js';
+import { travelRequest, resolveTravel } from './travel.js';
+import { loadAtlas, atlasReady, cities, regions } from '../earth/atlas.js';
 import { pruneModels } from '../storage.js';
 import { DISCOVERY_URL } from '../earth/config.js';
 import { PLACES, ZONES } from '../bay/places.js';
@@ -75,6 +78,9 @@ const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, '
 export function createGuide(mount, api) {
 	// api: { world(), camera, shared, hint(text) }
 	const llm = createLLM();
+	// The atlas is intentionally lazy, but starting its small data module here means a
+	// global request can become a real destination while the player is still talking.
+	loadAtlas().catch(() => {});
 	const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode: nothing persists */ } } };
 	const journal = store.get('crysis-journal', {});
 	const archive = createDialogueArchive();
@@ -120,7 +126,13 @@ export function createGuide(mount, api) {
 			if (s && t.kind === 'landmark') s += 5;
 			if (s > score) { score = s; best = t; }
 		}
-		return best;
+		if (best) return best;
+		const resolved = resolveTravel(name, { cities: atlasReady() ? cities() : [], regions: atlasReady() ? regions() : [], local: all });
+		if (resolved.kind !== 'destination' || !resolved.place) return null;
+		const p = resolved.place;
+		return Number.isFinite(p.lat) && Number.isFinite(p.lon)
+			? { ...p, kind: 'global', global: true, broad: !!resolved.broad, region: resolved.region || p.regionName || p.country }
+			: p;
 	}
 
 	// ---------- the world, described ----------
@@ -302,6 +314,10 @@ export function createGuide(mount, api) {
 	// ---------- acting in the world ----------
 	function goTo(t) {
 		const W = api.world(), P = W.player.state;
+		if (t.global && Number.isFinite(t.lat) && Number.isFinite(t.lon)) {
+			const result = api.goTo?.(t.lat, t.lon, t.broad ? 1200 : 700);
+			return typeof result === 'string' && /Earth only|not ready/i.test(result) ? result : null;
+		}
 		if (!W.bayArea?.loaded() && Math.max(Math.abs(t.x), Math.abs(t.z)) > W.island.half) return 'The Bay Area is still loading. Ask again in a moment.';
 		const g = W.island.heightAt(t.x, t.z);
 		if (t.under) { P.flying = false; P.diving = true; P.pos.set(t.x - 6, t.y ?? Math.max(g + 2, -6), t.z - 6); }
@@ -331,6 +347,18 @@ export function createGuide(mount, api) {
 			const t = find('nearest cave'), cam = api.camera.position;
 			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Tap the three resonant stones in an alcove to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
 		}
+		const travel = travelRequest(text);
+		if (travel) {
+			const resolved = resolveTravel(travel, { cities: atlasReady() ? cities() : [], regions: atlasReady() ? regions() : [], local: targets() });
+			if (resolved.kind === 'destination' && resolved.place) {
+				const t = Number.isFinite(resolved.place.lat) && Number.isFinite(resolved.place.lon)
+					? { ...resolved.place, kind: 'global', global: true, broad: !!resolved.broad, region: resolved.region || resolved.place.regionName || resolved.place.country }
+					: resolved.place;
+				const lead = resolved.broad && resolved.region ? `${resolved.region.replace(/^the\s+/i, '')} is broad, so I’ll start you in ${t.name}.` : `Let’s go to ${t.name}.`;
+				return `${lead} [[go: ${t.name}]]`;
+			}
+			if (resolved.kind === 'clarify') return resolved.message;
+		}
 		if ((m = q.match(/^(?:take me|go|fly|bring me|teleport me|travel)(?: to)? (.+)$/))) { const t = find(m[1]); return t ? `Let's go to ${t.name}. [[go: ${t.name}]]` : `I don't know a place called "${m[1]}". Try a city, a landmark, or something on the island like "the vent".`; }
 		if ((m = q.match(/(?:make it|set (?:the )?time(?: to)?|skip to) (night|midnight|sunset|sunrise|dawn|noon|morning|evening|\d+)/))) { const h = { night: 22.5, midnight: 0, sunset: 18.6, sunrise: 6.2, dawn: 5.8, noon: 12, morning: 9, evening: 19.5 }[m[1]] ?? +m[1]; return `As you wish. [[time: ${h}]]`; }
 		if (/where am i|where are we/.test(q)) return `You're at ${s.place}${s.underwater ? `, ${Math.round(s.depth)} m under water` : s.height > 20 ? `, ${s.height} m up` : ''}. Nearby: ${s.near.slice(0, 3).map((n) => `${n.name} (${n.dist} ${n.dir})`).join(', ')}.`;
@@ -351,9 +379,9 @@ export function createGuide(mount, api) {
 	const history = (archive.thread('guide')?.turns || []).filter(t=>t.role==='user'||t.role==='assistant').slice(-12).map(t=>({role:t.role,content:t.content}));
 	function systemPrompt() {
 		const s = snapshot();
-		return `You are the Guide in Crysis, a calm, warm companion inside a realistic world: a tropical island in the Gulf of the Farallones and, beyond it, the real San Francisco Bay Area at true scale. Speak briefly (one to three sentences unless asked for more), plainly, like a local friend. Never invent facts about places: use the facts given here, or say you are not sure.
+		return `You are the Guide in Crysis, a calm, warm companion inside a realistic world: a tropical island in the Gulf of the Farallones and, beyond it, the real San Francisco Bay Area at true scale. ${dialogueStylePrompt(dialogueStyle, 32)} Speak briefly unless asked for more, plainly, like a local friend. Never invent facts about places: use the facts given here, or say you are not sure.
 You can act in the world by writing a command in double brackets at the end of your reply:
-[[go: PLACE]] takes the player there (any town, landmark, area, or: the vent, the lava tube, sea cave 1, the reef, the village, the island peak, the whale, home).
+[[go: PLACE]] takes the player there (any town, landmark, area, or: the vent, the lava tube, sea cave 1, the reef, the village, the island peak, the whale, home). Understand natural paraphrases such as “take me east toward Japan”, “bring us over to the Far East”, “head somewhere snowy”, or “I want to see Kyoto”. Broad regions resolve to an authored atlas city and should be named as the starting point; do not invent coordinates.
 [[time: HOUR]] sets the hour (0-24). [[fly: on]] or [[fly: off]]. [[face: PLACE]] turns the player toward a place. [[wind: 0-1.5]].
 Only use a command when the player asks for it or clearly agrees. Suggest things to do from the player's journal. To add something to the player's journal, write [[quest: PLACE]].
 THE WORLD NOW: ${JSON.stringify(s)}`;
@@ -719,17 +747,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	// loads by itself in the background on first launch and is cached from then on; phones
 	// get the smallest. Choosing "Built-in guide" in ⚙ turns it off for good.
 	const phone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
-	const autoId = phone ? 'SmolLM2-360M-Instruct-q4f16_1-MLC' : 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
-	let saved = store.get('crysis-guide-model', null);
-	// the page died while the model was working last time: people use the simple replies
-	// until you turn the model back on (⚙)
-	if (crashedBefore()) { saved = { kind: 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2' }; store.set('crysis-guide-model', saved); setTimeout(() => say('The on-device voices stopped last time (the device ran short of memory), so people are using simple replies. You can turn the model back on in ⚙.', 'note'), 4000); }
-	// a phone that had the larger model by default moves to the small one
-	if (saved?.kind === 'webllm' && phone && saved.id === 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' && saved.auto !== false) saved.id = autoId;
-	// phones never load a model: it shares the GPU and the page's memory with the world, and
-	// crashed the page; people there use the built-in replies
-	// (a phone keeps the shared voice if it was chosen: nothing runs on the device)
-	const choice = phone ? (saved?.kind === 'cloud' && DISCOVERY_URL ? saved : { kind: 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2' }) : saved || { kind: hasWebGPU() && !navigator.connection?.saveData ? 'webllm' : 'none', id: autoId, url: 'http://localhost:11434', name: 'llama3.2', auto: true };
+	const saved = store.get('crysis-guide-model', null);
+	const offlineMode = /(?:^|[?&])offline(?:=1|&|$)/i.test(location.search || '');
+	// Defaults are chosen for this run. A deliberate saved provider is preserved, while a
+	// prior GPU failure or offline link cannot erase the player's preference.
+	const choice = chooseGuideModel(saved, { cloudURL: DISCOVERY_URL, phone, webGPU: hasWebGPU(), crashed: crashedBefore(), offline: offlineMode });
+	if (crashedBefore() && choice.kind === 'none' && (!saved || saved.auto === true)) setTimeout(() => say('The on-device voice stopped last time, so the built-in guide is active for this run. You can choose another voice in ⚙.', 'note'), 4000);
 	// the phone keeps only the voice it uses (after the world has loaded)
 	if (phone) setTimeout(() => { pruneModels('(none)').then((b) => { if (b > 5e7) say(`Freed ${(b / 1e9).toFixed(2)} GB on this device: removed a voice model no longer in use.`, 'note'); }).catch(() => {}); }, 20000);
 	function drawSettings() {
