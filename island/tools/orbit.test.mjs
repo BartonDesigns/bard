@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createOrbitFrame, ORBIT, musicThrust } from '../src/space/frame.js';
+import { createOrbitFrame, ORBIT, MOON, musicThrust } from '../src/space/frame.js';
 
 const player = (x = 1832.4, z = -5491.2) => ({ pos: new THREE.Vector3(x, ORBIT.start, z), vel: new THREE.Vector3(12, -1400, -35), yaw: .6, pitch: -.3, roll: 0 });
 const near = (a, b, epsilon = 1e-6) => assert.ok(Math.abs(a - b) < epsilon, `${a} != ${b}`);
@@ -69,4 +69,18 @@ test('a high speed descent re-enters before the surface, including a large frame
 		assert.ok(f.altitude(P.pos) < h);
 	}
 	assert.equal(crossed, true); assert.ok(P.pos.y > 0 && P.pos.y < 500);
+});
+
+test('the Moon has a curved collision surface and a stable crater mapping', () => {
+	const P = player(), f = createOrbitFrame(); f.capture(P);
+	const moon = f.moonCenter(new THREE.Vector3());
+	P.pos.copy(moon).add(new THREE.Vector3(0, MOON.radius - 40, 0)); P.vel.set(0, -40, 3);
+	assert.ok(f.moonAltitude(P.pos) < 0);
+	assert.equal(f.surface(P.pos, P.vel), true);
+	near(f.moonAltitude(P.pos), 1.8, 1e-5);
+	assert.ok(P.vel.dot(P.pos.clone().sub(moon).normalize()) >= -1e-9);
+	const b = f.moonBasis(P.pos), map = f.mapPoint(P.pos);
+	near(b.normal.length(), 1); near(b.east.length(), 1); near(b.north.length(), 1);
+	near(b.east.dot(b.north), 0, 1e-6); assert.ok(Number.isFinite(map.x) && Number.isFinite(map.y));
+	assert.equal(f.info(P.pos).moon.landed, true);
 });
