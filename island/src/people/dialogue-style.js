@@ -1,14 +1,14 @@
 // Bounded player preferences shared by local voices and the cloud endpoint. Never accept
 // arbitrary system instructions from a saved setting or a request body.
-export const DEFAULT_DIALOGUE_STYLE = Object.freeze({ tone: 'clean', vividness: 'restrained', response: 'balanced' });
+export const DEFAULT_DIALOGUE_STYLE = Object.freeze({ tone: 'mature', vividness: 'bold', response: 'rich' });
 
 export function normalizeDialogueStyle(value, age) {
 	const v = value && typeof value === 'object' ? value : {};
 	const child = Number.isFinite(Number(age)) && Number(age) < 18;
 	return {
-		tone: !child && v.tone === 'mature' ? 'mature' : 'clean',
-		vividness: v.vividness === 'bold' ? 'bold' : 'restrained',
-		response: ['brief', 'balanced', 'rich'].includes(v.response) ? v.response : 'balanced',
+		tone: child ? 'clean' : ['clean', 'mature'].includes(v.tone) ? v.tone : DEFAULT_DIALOGUE_STYLE.tone,
+		vividness: ['restrained', 'bold'].includes(v.vividness) ? v.vividness : DEFAULT_DIALOGUE_STYLE.vividness,
+		response: ['brief', 'balanced', 'rich'].includes(v.response) ? v.response : DEFAULT_DIALOGUE_STYLE.response,
 	};
 }
 
