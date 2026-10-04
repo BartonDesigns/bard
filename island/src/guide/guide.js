@@ -265,18 +265,26 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function talkTo(p) {
 		if (!p) return;
 		if (partner && partner.p !== p) endTalk();
+		const resident = api.social?.meet(p, whereKind());
+		if (resident) p = api.social.actors.all().find(a => a.residentId === resident.id) || p;
 		let rec = people.get(p);
-		if (!rec) { rec = { persona: personaFor(p.P, whereKind()), history: [] }; people.set(p, rec); }
+		if (resident) { rec = { persona: resident.persona, history: resident.history, id: resident.id, met: resident.history.length > 0 }; }
+		else if (!rec || rec.seed !== p.P.dna.seed) rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed };
+		people.set(p, rec);
 		partner = { p, ...rec };
 		api.people?.engage(p);
 		title.textContent = partner.persona.name.toUpperCase();
 		input.placeholder = `Say something to ${partner.persona.first}`;
 		show(true);
+		log.replaceChildren();
+		for (const turn of rec.history.slice(-10)) if (turn.role === 'user' || turn.role === 'assistant') say(turn.content, turn.role === 'user' ? 'me' : 'guide');
+		if (resident) say((api.social.state.status().error ? 'Memory is available this session, but your browser could not save it. ' : 'Remembered in this browser. ') + 'Try: follow me, wait here, warn the villagers, scout nearby, or join my quest.', 'note');
 		if (!rec.met) { rec.met = true; perform(personaOffline(partner.persona, 'hi', snapshot()), true); }
 		else say(`${partner.persona.first} turns back to you.`, 'note');
 	}
 	function endTalk() {
 		if (!partner) return;
+		busy?.abort();
 		api.people?.release(partner.p);
 		partner = null;
 		title.textContent = 'THE GUIDE';
@@ -310,6 +318,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const near = (world?.near || []).slice(0, 6).map((n) => (typeof n === 'string' ? n : n?.name)).filter(Boolean);
 		const facts = [
 			`has lived around here about ${pp.years} years`, `right now: ${pp.errand}, feeling ${pp.mood}`, `likes ${pp.hobby}`,
+			...(partner?.id ? [api.social.describe(api.social.state.get(partner.id)), ...(api.social.state.get(partner.id)?.memories || []).slice(-6).map(m => m.content)] : []),
 			...(pp.facts || []), ...(pp.tattoos || []).slice(0, 2).map((t) => 'a tattoo: ' + t),
 			world?.time ? 'the time: ' + world.time : '', near.length ? 'nearby: ' + near.join(', ') : '',
 		].filter(Boolean);
@@ -317,27 +326,42 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	async function askPerson(text) {
 		const P2 = partner, p = P2.p;
+		busy?.abort();
 		say(text, 'me');
+		if (P2.id) api.social.state.remember(P2.id, 'user', text);
+		else { P2.history.push({ role: 'user', content: text }); while (P2.history.length > 10) P2.history.shift(); }
 		const bubble = say('…', 'guide');
 		const ctrl = new AbortController(); busy = ctrl;
 		let reply = null, from = 0;
 		const world = snapshot();
+		const resident = P2.id && api.social?.state.get(P2.id);
+		if (resident) {
+			api.social.state.setPosition(resident.id, api.social.positionFor(api.world(), p.M.S.pos));
+			const named = text.match(/(?:scout|check out|investigate)\s+(.+?)[.!?]*$/i)?.[1]?.trim().replace(/[, ]*please$/i, '').trim();
+			let target = named && !/^(nearby|ahead|around here|the area)$/i.test(named.trim()) ? find(named) : null;
+			if (!named || /^(nearby|ahead|around here|the area)$/i.test(named.trim())) {
+				const pos = p.M.S.pos;
+				target = targets().filter(q => !q.under && Math.hypot(q.x - pos.x, q.z - pos.z) >= 4 && Math.hypot(q.x - pos.x, q.z - pos.z) <= 120).sort((a,b) => Math.hypot(a.x-pos.x,a.z-pos.z)-Math.hypot(b.x-pos.x,b.z-pos.z))[0];
+				if (!target) target = { x: pos.x + 14, z: pos.z + 8, name: 'the nearby clearing' };
+			}
+			reply = api.social.command(resident, text, { target, quest: quests.find(q => !q.done) });
+		}
 		try {
-			if (llm.kind() !== 'none' && llm.status.ready) {
-				P2.history.push({ role: 'user', content: text });
-				while (P2.history.length > 10) P2.history.shift();
-				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { place: world?.place, time: world?.time, near: world?.near?.slice(0, 4) }) }, ...P2.history], (t) => {
+			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
+				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: resident?.memories?.slice(-6).map(m => m.content) }) + '\nOnly describe your current saved status as fact. Physical requests are handled by the game. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
+					if (ctrl.signal.aborted || partner !== P2) return;
 					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim(); scroll();
 					from = bodySync(p, t, from);
 				}, ctrl.signal, { npc: npcFor(P2.persona, world) });
-				if (reply) P2.history.push({ role: 'assistant', content: reply });
 			}
 		} catch { reply = null; }
+		if (ctrl.signal.aborted || partner !== P2) { if (busy === ctrl) busy = null; return; }
 		if (!reply) { reply = personaOffline(P2.persona, text, world); from = 0; }
 		bodySync(p, reply + (/[.!?]$/.test(reply.trim()) ? '' : '.'), from);
 		reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
 		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		bubble.textContent = clean || '…';
+		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
 		if (voiceOut) speak(clean, P2.persona);
 		if (busy === ctrl) busy = null;
 		scroll();
@@ -421,7 +445,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const statusEl = el('div', 'font:11px system-ui;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;');
 	const gearB = el('button', btnCss, '⚙'); gearB.title = 'Model settings'; gearB.setAttribute('aria-label', 'Model settings');
 	const closeB = el('button', btnCss, '✕'); closeB.setAttribute('aria-label', 'Close the guide');
-	head.append(title, statusEl, gearB, closeB);
+	const residentsB = el('button', btnCss, 'People'); residentsB.setAttribute('aria-label', 'Remembered people');
+	head.append(title, statusEl, residentsB, gearB, closeB);
 	const settings = el('div', 'display:none;max-height:45vh;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font:12px system-ui;color:rgba(255,255,255,.8);');
 	const log = el('div', 'flex:1;overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:120px;');
 	log.setAttribute('aria-live', 'polite');
@@ -453,6 +478,16 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		say(s ? `Hello. You're on ${s.place}. Ask me anything — where to go, what something is, or what to do next.` : 'Hello.', 'guide');
 		if (llm.kind() === 'none') say('Running without a model. ⚙ loads one on this device for real conversation.', 'note');
 	}
+	function showPeople() {
+		endTalk(); show(true); log.replaceChildren();
+		const S = api.social, records = S?.state.list(S.bodyKey()) || [];
+		say('REMEMBERED PEOPLE', 'note');
+		if (!records.length) say('Talk to someone nearby to remember them and their home area.', 'note');
+		for (const r of records) say(`${r.persona.name} · ${r.persona.place || 'Met nearby'}\n${S.describe(r)}`, 'note');
+		const status = S?.state.status();
+		if (status?.error || status?.saved === false) say('Your browser could not save the latest NPC progress. Keep this session open and free storage.', 'note');
+	}
+	residentsB.onclick = showPeople;
 	open.onclick = () => show(true);
 	closeB.onclick = () => { endTalk(); show(false); };
 	send.onclick = () => { const t = input.value; input.value = ''; ask(t); };
@@ -535,5 +570,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
+	return { update: watch, ask, act, snapshot, show, showPeople, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
 }

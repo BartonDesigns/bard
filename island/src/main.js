@@ -106,6 +106,7 @@ import { createGuide } from './guide/guide.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
 import { createPeople } from './people/people.js';
+import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createRagdolls } from './people/ragdoll.js';
 import { createImpacts } from './vehicles/impact.js';
@@ -519,6 +520,10 @@ export function createIslandWorld() {
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	guideApi.people = people;
+	const social = createNpcSocial({ scene, world: () => world, camera, people, isPhone, hint });
+	guideApi.social = social;
+	HOOKS.social = social;
+	addEventListener('pagehide', () => social.flush());
 	// the world's audio: footsteps, the room's sound, the places' ambience (audio/*.js)
 	const worldAudio = createWorldAudio({ getWorld: () => world, camera, people, busy: () => arcade.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.boardwalk?.riding?.(), planet: () => shared.planet });
 	HOOKS.audio = worldAudio;
@@ -943,6 +948,8 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		guide.endTalk();
+		social.reset();
 		world.labels?.dispose();
 		world.discovery?.dispose();
 		world.kinetic?.dispose();
@@ -1214,6 +1221,7 @@ export function createIslandWorld() {
 		W.orbit?.updateHud();
 		worldAir(1 - (W.orbit?.blend() || 0));
 		if (W.orbit?.space()) {
+			social.update(0, time, false);
 			W.labels?.hide();
 			W.globe?.regional?.pause();
 			W.kinetic?.silence();
@@ -1408,6 +1416,7 @@ export function createIslandWorld() {
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
 		people.demo(dt, time, camera.position);
 		ghost.update(dt, time, camera, sk.night);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, hours: W.sky.state.hours });
@@ -1496,6 +1505,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		social.update(0, time, false); social.flush();
 		world?.labels?.hide();
 		world?.globe?.regional?.pause();
 		world?.kinetic?.silence();
@@ -1727,6 +1737,7 @@ if (typeof window !== 'undefined') {
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
+		social: () => HOOKS.social,
 		// the child in the woods (people/ghost.js): very rare; this calls her now
 		ghost: (at) => HOOKS.ghost?.(at),
 		ghostInfo: () => HOOKS.ghostInfo?.(),

@@ -288,5 +288,5 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		s.jumpQueued = true;
 		return 'jump';
 	}
-	return { state: s, update, input, dispose, jump, floorAt, clearInput, cycleBoost };
+	return { state: s, update, input, dispose, jump, floorAt, pushOut, clearInput, cycleBoost };
 }

@@ -27,7 +27,7 @@ const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                
 // a list of { P, M, active } like the walkers here
 const TALKERS = new Set();
 export function addTalkers(fn) { TALKERS.add(fn); return () => TALKERS.delete(fn); }
-function talkers() { const out = []; for (const f of TALKERS) { try { for (const p of f()) out.push(p); } catch { /* a system gone */ } } return out; }
+export function talkers() { const out = []; for (const f of TALKERS) { try { for (const p of f()) out.push(p); } catch { /* a system gone */ } } return out; }
 
 export function createPeople(scene, world, camera = null) {
 	const group = new THREE.Group();
@@ -598,6 +598,17 @@ export function createPeople(scene, world, camera = null) {
 			const P = buildPerson(A, d);
 			const M = motionFor(P);
 			const p = { P, M, active: false, role: 'walk', dressKey: c.key };
+			p.detachForSocial = () => {
+				const i = pool.indexOf(p); if (i < 0) return false;
+				pool.splice(i, 1);
+				if (p.route?.seat) p.route.seat.taken = false;
+				if (p.partner) p.partner.partner = null;
+				for (const other of pool) { if (other.fam === p) other.fam = null; if (other.route?.parent === p) { other.route = null; other.active = false; other.P.root.visible = false; } if (other.spouse === p) other.spouse = null; }
+				if (p.rod) { p.rod.removeFromParent(); p.rod = null; }
+				M.hold('L', false); M.hold('R', false); M.S.onStep = null;
+				p.fam = p.partner = p.route = null; p.leaving = false;
+				return true;
+			};
 			// each footfall, for the street sound
 			M.S.onStep = (at, sp) => { if (p.active && steps.length < 64) steps.push({ x: at.x, z: at.z, k: Math.min(1.5, 0.5 + sp * 0.5) }); };
 			pool.push(p);

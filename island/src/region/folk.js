@@ -73,7 +73,16 @@ export function createFolk(scene, { settlements, ground, wet = () => false, onIc
 			P.root.visible = false;
 			group.add(P.root);
 			P.job = communityJob(here, task, r); P.errand = null;
-			bodies.push({ P, M, key: keyNow(), busy: false, task, active: true });
+			const b = { P, M, key: keyNow(), busy: false, task, active: true };
+			b.detachForSocial = () => {
+				const i = bodies.indexOf(b); if (i < 0) return false;
+				bodies.splice(i, 1);
+				if (b.other) { b.other.other = null; b.other.task = 'sit'; }
+				if (b.rod) { b.rod.removeFromParent(); b.rod = null; }
+				b.other = b.route = b.spot = null;
+				return true;
+			};
+			bodies.push(b);
 		} catch (e) { console.warn('[regional folk]', e); } finally { building = false; }
 	}
 	function free(b) { group.remove(b.P.root); b.P.root.traverse((o) => { o.geometry?.dispose?.(); }); }

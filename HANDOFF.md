@@ -18,6 +18,16 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Persistent NPC work (4 October 2026):** Branch `codex/persistent-npc-social` adds
+  separate saved identities and actor streaming, conversation history, a People journal,
+  validated follow/wait/home/scout/quest-companion commands and bounded local warnings.
+  Existing world discovery and quest saves remain intact. Development checkpoints and
+  exact validation status live in `docs/npc-social-progress.md`; the broader social design
+  and deferred dungeon/inventory/music integrations are in `docs/npc-social-plan.md`.
+  Do not equate logical warning spread with physical messenger delivery, or a travelling
+  quest companion with implemented dungeon combat. Saves currently belong to this browser.
+
+
 - **Museum photo pass (3 October 2026):** The five supplied Fort Baker photographs now
   guide the existing museum: warm cream clapboard with consistent board spacing, red
   roofs, brown shutters, green enamel lamps, broad porch rails, light porch canopies,
