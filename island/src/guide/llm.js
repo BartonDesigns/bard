@@ -31,10 +31,16 @@ const guard = (on) => { try { if (on) localStorage.setItem(GUARD, String(Date.no
 export const crashedBefore = () => crashed;
 export const onPhone = () => PHONE;
 
+// A conservative estimate leaves room for the chat template and complete JSON output.
+export function planningFitsContext(messages, maxTokens, contextSize = 2048) {
+	const input = messages.reduce((n, m) => n + Math.ceil(String(m.content || '').length / 2.5) + 16, 64);
+	return input + maxTokens <= contextSize;
+}
+
 export function hasWebGPU() { return typeof navigator !== 'undefined' && !!navigator.gpu; }
 
 export function createLLM() {
-	let busy = false, kind = 'none', engine = null, loading = null, model = '', ollama = { url: 'http://localhost:11434', model: 'llama3.2' }, cloud = '';
+	let busy = false, kind = 'none', engine = null, loading = null, model = '', ollama = { url: 'http://localhost:11434', model: 'llama3.2' }, cloud = '', cloudPlanning = [];
 	const status = { text: 'Guide only (no model)', ready: true, progress: 1 };
 	const listeners = new Set();
 	const emit = () => { for (const f of listeners) f(status); };
@@ -49,7 +55,7 @@ export function createLLM() {
 			guard(true);
 			engine = await webllm.CreateMLCEngine(id, {
 				initProgressCallback: (p) => { status.progress = p.progress ?? 0; status.text = p.text || 'Loading…'; emit(); },
-			}, PHONE ? { context_window_size: 1024 } : { context_window_size: 2048 });
+			}, { context_window_size: 2048 });
 			guard(false);
 			status.ready = true; status.progress = 1; status.text = `On this device: ${id.split('-q4')[0]}`; emit();
 		})();
@@ -71,12 +77,13 @@ export function createLLM() {
 		}
 	}
 	async function useCloud(url) {
-		kind = 'cloud'; cloud = String(url || '').replace(/\/$/, '');
+		kind = 'cloud'; cloud = String(url || '').replace(/\/$/, ''); cloudPlanning = [];
 		status.ready = false; status.text = 'Reaching the shared voice…'; emit();
 		try {
 			const r = await fetch(cloud + '/status');
 			if (!r.ok) throw Error('status ' + r.status);
 			const j = await r.json();
+			cloudPlanning = Array.isArray(j.planning) ? j.planning.filter((k) => k === 'social_intent' || k === 'story_quest') : [];
 			status.ready = true; status.progress = 1; status.text = j.talk && j.talk.left <= 0 ? 'Shared voice: resting until tomorrow (people use their own lines)' : 'Shared voice (free, in the cloud)'; emit();
 		} catch (e) {
 			status.text = 'The shared voice is not reachable; people use their own lines.'; emit();
@@ -94,15 +101,19 @@ export function createLLM() {
 		return run;
 	}
 	async function chatNow(messages, onToken, signal, opts = {}) {
-		const temperature = opts.temperature ?? 0.6, cap = Math.min(opts.maxTokens ?? 320, 512);
+		if (signal?.aborted) throw new DOMException('Conversation cancelled', 'AbortError');
+		const planning = opts.planning && ['social_intent', 'story_quest'].includes(opts.planning.kind) ? opts.planning : null;
+		const temperature = opts.temperature ?? 0.6, cap = Math.min(opts.maxTokens ?? (planning ? 700 : 320), planning ? 900 : 512);
 		if (kind === 'webllm') {
 			if (loading) await loading;
+			if (signal?.aborted) throw new DOMException('Conversation cancelled', 'AbortError');
 			if (!engine) throw Error('The model is not loaded.');
 			busy = true; guard(true);
 			try {
 				// (on a phone the conversation is trimmed to fit the short memory)
 				const msgs = PHONE && messages.length > 5 ? [messages[0], ...messages.slice(-4)] : messages;
-				const stream = await engine.chat.completions.create({ messages: msgs, stream: true, temperature, max_tokens: PHONE ? Math.min(cap, 160) : cap, ...(opts.json ? { response_format: { type: 'json_object' } } : {}) });
+				if (PHONE && planning && !planningFitsContext(msgs, cap)) return null;
+				const stream = await engine.chat.completions.create({ messages: msgs, stream: true, temperature, max_tokens: PHONE && !planning ? Math.min(cap, 160) : cap, ...(opts.json ? { response_format: { type: 'json_object' } } : {}) });
 				let text = '';
 				for await (const c of stream) { if (signal?.aborted) { engine.interruptGenerate?.(); break; } const d = c.choices?.[0]?.delta?.content || ''; if (d) { text += d; onToken(text); } }
 				return text;
@@ -110,9 +121,11 @@ export function createLLM() {
 		}
 		if (kind === 'cloud') {
 			// people only (opts.npc: who they are, from guide.js); anything else answers built in
-			if (!opts.npc) return null;
+			if (!opts.npc || (planning && !cloudPlanning.includes(planning.kind))) return null;
 			const history = messages.filter((m) => m.role === 'user' || m.role === 'assistant').slice(-8).map((m) => ({ role: m.role, content: String(m.content).slice(0, 400) }));
-			const r = await fetch(cloud + '/talk', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ npc: opts.npc, history }) });
+			const body = JSON.stringify({ npc: opts.npc, history, ...(planning ? { planning: { kind: planning.kind, context: planning.context } } : {}) });
+			if (body.length > 6144) return null;
+			const r = await fetch(cloud + '/talk', { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body });
 			if (!r.ok) return null;
 			const j = await r.json();
 			if (!j.reply) return null;
@@ -138,5 +151,5 @@ export function createLLM() {
 		}
 		return null;
 	}
-	return { useWebLLM, useOllama, useCloud, useNone, chat, status, busy: () => busy, kind: () => kind, model: () => model, ollama: () => ({ ...ollama }), onStatus: (f) => { listeners.add(f); f(status); return () => listeners.delete(f); } };
+	return { useWebLLM, useOllama, useCloud, useNone, chat, status, busy: () => busy, kind: () => kind, supportsPlanning: (mode = 'social_intent') => kind === 'webllm' || kind === 'ollama' || (kind === 'cloud' && cloudPlanning.includes(mode)), model: () => model, ollama: () => ({ ...ollama }), onStatus: (f) => { listeners.add(f); f(status); return () => listeners.delete(f); } };
 }

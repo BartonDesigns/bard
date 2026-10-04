@@ -133,7 +133,7 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
    const d=move(p,target,speed,dt,t); p.P.lod?.(p.M.S.pos.distanceTo(camera.position));
    if(!p.engaged && !alarm.level && d<1.8 && (r.mode==='home'||r.mode==='scout')) {
     if(r.mode==='scout' && r.task?.target) { state.setMode(r.id,'home',{...r.task,status:'returning',report:'Reached the scouting point; returning home.'}); }
-    else { const task=r.task?{...r.task,status:'completed',report:'Scouted the destination and returned home.'}:null; state.setMode(r.id,'wait',task); state.remember?.(r.id,'system',task?.report||'Returned home.'); hint(`${r.persona?.name||'Your companion'} arrived.`); }
+    else { const task=r.task?{...r.task,status:'completed',completedAt:Date.now(),report:'Scouted the destination and returned home.'}:null; state.setMode(r.id,'wait',task); state.remember?.(r.id,'system',task?.report||'Returned home.'); hint(`${r.persona?.name||'Your companion'} arrived.`); }
    }
    if(!p.engaged && p.blocked>8 && speed>0) { state.setMode(r.id,'wait',r.task?{...r.task,status:'blocked',report:'The route is obstructed. Waiting safely.'}:null); hint(`${r.persona?.name||'Your companion'} is waiting at an obstacle.`); p.blocked=0; }
    p.lastPosition=positionFor(W(),S.pos);

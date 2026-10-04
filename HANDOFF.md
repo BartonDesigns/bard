@@ -18,6 +18,8 @@ shipped work). Before doing anything:
 
 ### Open threads
 
+- **Conversational quests and Floodgate (3 October Pacific):** See `docs/conversational-quests-progress.md` for provider/deployment boundaries and verified gameplay. The owner now prioritizes persistent world development as rewards, with roughly day-long propagation to specify. The canonical running build queue is `docs/build-requests.md`, maintained under `agents/floodgate.md`. Keep legacy content/saves compatible; do not equate queue intake or generated prose with a shipped world change.
+
 - **Persistent NPC work (4 October 2026):** Branch `codex/persistent-npc-social` adds
   separate saved identities and actor streaming, conversation history, a People journal,
   validated follow/wait/home/scout/quest-companion commands and bounded local warnings.

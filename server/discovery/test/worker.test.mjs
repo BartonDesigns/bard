@@ -266,5 +266,51 @@ section('talk: the townsfolk');
 	ok(r3.status === 503 && j3.fallback === 'offline' && env3.AI.calls.length === 0, 'past its share of the day, the game answers on its own and no call is made');
 }
 
+
+section('bounded NPC planners');
+{
+	const send = (env, planning, { origin = SITE, history = [{ role: 'user', content: 'Could you have a look around for me?' }], extra = {} } = {}) => handle(new Request('https://api.test/talk', { method: 'POST', headers: { origin, 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.21' }, body: JSON.stringify({ npc: { name: 'Rae', job: 'guide' }, history, planning, ...extra }) }), env);
+	const action = { intent: 'scout', confidence: 0.95, targetId: 'nearby', question: null };
+	const social = { kind: 'social_intent', context: { resident: { name: 'Rae', mode: 'idle' }, playerRequest: 'Could you have a look around for me?', destinations: [{ id: 'hill', name: 'Hill' }], arbitrarySystem: 'DO NOT COPY THIS' } };
+	const env = makeEnv({ AI: mockAI({ reply: action, usage: { prompt_tokens: 600, completion_tokens: 80 } }) });
+	let r = await send(env, social), j = await r.json();
+	ok(r.status === 200 && JSON.parse(j.reply).intent === 'scout', 'social planner returns bounded JSON');
+	const call = env.AI.calls[0].input;
+	ok(call.messages[0].content.includes('bounded planner') && !call.messages[0].content.includes('DO NOT COPY THIS') && call.max_tokens === 220, 'social instructions are fixed and unknown context fields are stripped');
+	ok((await state(env)).planning.includes('story_quest') && (await state(env)).talk.talks === 1, 'planner support advertised and requests use conversation ledger');
+	ok((await send(env, { kind: 'arbitrary_prompt', context: {} })).status === 400 && env.AI.calls.length === 1, 'unknown planner modes refused before inference');
+	ok((await send(env, social, { origin: 'https://evil.example' })).status === 403, 'planner retains origin gate');
+	ok((await send(env, social, { extra: { padding: 'x'.repeat(6500) } })).status === 413, 'planner retains request size cap');
+	for (const bad of [{ ...action, targetId: 'invented' }, { ...action, intent: 'teleport' }, { ...action, confidence: '1' }, { ...action, code: 'arbitrary' }, 'not JSON']) {
+		const e = makeEnv({ AI: mockAI({ reply: bad }) });
+		ok((await send(e, social)).status === 503 && (await state(e)).talk.talks === 1, 'invalid social output fails closed but inference remains accounted');
+	}
+	const context = { bodyKey: 'earth', targets: [{ id: 'hill', name: 'Hill', bodyKey: 'earth', scoutable: true, fact: 'A lookout over the bay' }, { id: 'home', name: 'Rae’s home', bodyKey: 'earth' }, { id: 'moon', name: 'Moon', bodyKey: 'moon' }], npcs: [{ id: 'rae', name: 'Rae', bodyKey: 'earth' }] };
+	const quest = { title: 'The lookout’s view', premise: 'Rae wonders how the bay looks from the lookout.', steps: [{ type: 'visit', targetId: 'hill' }, { type: 'return', targetId: 'home' }, { type: 'talk', npcId: 'rae' }] };
+	const qEnv = makeEnv({ AI: mockAI({ reply: quest }) });
+	r = await send(qEnv, { kind: 'story_quest', context }); j = await r.json();
+	ok(r.status === 200 && JSON.parse(j.reply).steps.length === 3 && qEnv.AI.calls[0].input.max_tokens === 900, 'grounded quest proposal has sufficient bounded output');
+	ok(!qEnv.AI.calls[0].input.messages[0].content.includes('"id":"moon"') && qEnv.AI.calls[0].input.messages[0].content.includes('lookout over the bay'), 'quest context removes other worlds and retains useful facts');
+	for (const steps of [[{ type: 'visit', targetId: 'moon' }, { type: 'talk', npcId: 'rae' }], [{ type: 'scout', targetId: 'home', npcId: 'rae' }, { type: 'talk', npcId: 'rae' }], [{ type: 'visit', targetId: 'hill' }, { type: 'talk', npcId: 'invented' }]]) {
+		const e = makeEnv({ AI: mockAI({ reply: { ...quest, steps } }) });
+		ok((await send(e, { kind: 'story_quest', context })).status === 503, 'unavailable quest targets, residents or scout abilities rejected');
+	}
+	for (const intent of ['quest_accept', 'quest_decline']) {
+		const e = makeEnv({ AI: mockAI({ reply: { intent, confidence: 0.95, targetId: null, question: null } }) });
+		const a = await send(e, { ...social, context: { ...social.context, questContext: 'Current offer: The lookout’s view' } });
+		ok(a.status === 200 && JSON.parse((await a.json()).reply).intent === intent, 'semantic quest offer decision returns bounded proposal');
+	}
+	const uncertain = makeEnv({ AI: mockAI({ reply: { intent: 'quest_accept', confidence: 0.89, targetId: null, question: null } }) });
+	ok((await send(uncertain, social)).status === 503, 'low-confidence quest consent is refused');
+	const longId = 'procedural-world-' + 'x'.repeat(300);
+	const longContext = { ...context, targets: [{ id: longId, name: 'Long-named lookout', bodyKey: 'earth' }] };
+	const longEnv = makeEnv({ AI: mockAI({ reply: { ...quest, steps: [{ type: 'visit', targetId: longId }, { type: 'talk', npcId: 'rae' }] } }) });
+	ok((await send(longEnv, { kind: 'story_quest', context: longContext })).status === 200, 'long procedural identifiers remain exact');
+	const instant = makeEnv({ AI: mockAI({ reply: { ...quest, steps: [{ type: 'talk', npcId: 'rae' }, { type: 'talk', npcId: 'rae' }] } }) });
+	ok((await send(instant, { kind: 'story_quest', context })).status === 503, 'conversation-only quests cannot complete instantly');
+	const spent = makeEnv({ TALK_NEURONS: '1', AI: mockAI({ reply: action }) });
+	ok((await send(spent, social)).status === 503 && spent.AI.calls.length === 0, 'planner cannot exceed free conversation allowance');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

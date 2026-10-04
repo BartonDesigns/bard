@@ -1,0 +1,420 @@
+{
+  "transport": "deterministic model-response mock; real game integration",
+  "follow": {
+    "mode": "follow",
+    "calls": [
+      "social_intent"
+    ],
+    "alarm": 0
+  },
+  "scout": {
+    "mode": "scout",
+    "calls": [
+      "social_intent",
+      "social_intent"
+    ],
+    "alarm": 0
+  },
+  "warn": {
+    "mode": "wait",
+    "calls": [
+      "social_intent",
+      "social_intent",
+      "social_intent"
+    ],
+    "alarm": 0.6499945833333333
+  },
+  "clarification": {
+    "mode": "wait",
+    "calls": [
+      "social_intent",
+      "social_intent",
+      "social_intent",
+      "social_intent"
+    ],
+    "alarm": 0
+  },
+  "interrupted": true,
+  "offered": {
+    "title": "The view beyond home",
+    "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+    "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+    "steps": [
+      {
+        "type": "visit",
+        "targetId": "place-the-island-peak",
+        "targetName": "the island peak"
+      },
+      {
+        "type": "return",
+        "targetId": "home:person-1eto4ocxlfl7x",
+        "targetName": "Jamal's meeting place"
+      },
+      {
+        "type": "talk",
+        "npcId": "person-1eto4ocxlfl7x",
+        "npcName": "Jamal Harris"
+      }
+    ],
+    "offeredBy": "person-1eto4ocxlfl7x",
+    "id": "story-njggds-1",
+    "status": "offered",
+    "cursor": 0,
+    "offeredAt": 1791087773703,
+    "acceptedAt": null,
+    "finishedAt": null,
+    "evidence": []
+  },
+  "evidence": [
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-island-peak",
+          "targetName": "the island peak"
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-1eto4ocxlfl7x",
+      "id": "story-njggds-1",
+      "status": "active",
+      "cursor": 0,
+      "offeredAt": 1791087773703,
+      "acceptedAt": 1791087773709,
+      "finishedAt": null,
+      "evidence": []
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-island-peak",
+          "targetName": "the island peak"
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-1eto4ocxlfl7x",
+      "id": "story-njggds-1",
+      "status": "active",
+      "cursor": 0,
+      "offeredAt": 1791087773703,
+      "acceptedAt": 1791087773709,
+      "finishedAt": null,
+      "evidence": []
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-island-peak",
+          "targetName": "the island peak"
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-1eto4ocxlfl7x",
+      "id": "story-njggds-1",
+      "status": "active",
+      "cursor": 0,
+      "offeredAt": 1791087773703,
+      "acceptedAt": 1791087773709,
+      "finishedAt": null,
+      "evidence": []
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-island-peak",
+          "targetName": "the island peak",
+          "completedAt": 1791087773720
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-1eto4ocxlfl7x",
+      "id": "story-njggds-1",
+      "status": "active",
+      "cursor": 1,
+      "offeredAt": 1791087773703,
+      "acceptedAt": 1791087773709,
+      "finishedAt": null,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-island-peak",
+          "at": 1791087773720
+        }
+      ]
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-island-peak",
+          "targetName": "the island peak",
+          "completedAt": 1791087773720
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-1eto4ocxlfl7x",
+      "id": "story-njggds-1",
+      "status": "active",
+      "cursor": 1,
+      "offeredAt": 1791087773703,
+      "acceptedAt": 1791087773709,
+      "finishedAt": null,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-island-peak",
+          "at": 1791087773720
+        }
+      ]
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-island-peak",
+          "targetName": "the island peak",
+          "completedAt": 1791087773720
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "targetName": "Jamal's meeting place",
+          "completedAt": 1791087773726
+        },
+        {
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-1eto4ocxlfl7x",
+      "id": "story-njggds-1",
+      "status": "active",
+      "cursor": 2,
+      "offeredAt": 1791087773703,
+      "acceptedAt": 1791087773709,
+      "finishedAt": null,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-island-peak",
+          "at": 1791087773720
+        },
+        {
+          "type": "presence",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "at": 1791087773726
+        }
+      ]
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-island-peak",
+          "targetName": "the island peak",
+          "completedAt": 1791087773720
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "targetName": "Jamal's meeting place",
+          "completedAt": 1791087773726
+        },
+        {
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "npcName": "Jamal Harris",
+          "completedAt": 1791087773726
+        }
+      ],
+      "offeredBy": "person-1eto4ocxlfl7x",
+      "id": "story-njggds-1",
+      "status": "complete",
+      "cursor": 3,
+      "offeredAt": 1791087773703,
+      "acceptedAt": 1791087773709,
+      "finishedAt": 1791087773726,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-island-peak",
+          "at": 1791087773720
+        },
+        {
+          "type": "presence",
+          "targetId": "home:person-1eto4ocxlfl7x",
+          "at": 1791087773726
+        },
+        {
+          "id": "talk:1791087773726:[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.60132421625764,\"z\":-468.6376311581709,\"y\":5.194433629492828},2654435761]]",
+          "type": "talk",
+          "npcId": "person-1eto4ocxlfl7x",
+          "at": 1791087773726
+        }
+      ]
+    }
+  ],
+  "bounds": [
+    {
+      "text": "✕",
+      "rect": {
+        "x": 379,
+        "y": 63,
+        "width": 40,
+        "height": 40,
+        "top": 63,
+        "right": 419,
+        "bottom": 103,
+        "left": 379
+      }
+    },
+    {
+      "text": "Quests",
+      "rect": {
+        "x": 104.859375,
+        "y": 118,
+        "width": 72.828125,
+        "height": 40,
+        "top": 118,
+        "right": 177.6875,
+        "bottom": 158,
+        "left": 104.859375
+      }
+    }
+  ],
+  "restored": {
+    "title": "The view beyond home",
+    "premise": "Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+    "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+    "steps": [
+      {
+        "type": "visit",
+        "targetId": "place-the-island-peak",
+        "targetName": "the island peak",
+        "completedAt": 1791087773720
+      },
+      {
+        "type": "return",
+        "targetId": "home:person-1eto4ocxlfl7x",
+        "targetName": "Jamal's meeting place",
+        "completedAt": 1791087773726
+      },
+      {
+        "type": "talk",
+        "npcId": "person-1eto4ocxlfl7x",
+        "npcName": "Jamal Harris",
+        "completedAt": 1791087773726
+      }
+    ],
+    "offeredBy": "person-1eto4ocxlfl7x",
+    "id": "story-njggds-1",
+    "status": "complete",
+    "cursor": 3,
+    "offeredAt": 1791087773703,
+    "acceptedAt": 1791087773709,
+    "finishedAt": 1791087773726,
+    "evidence": [
+      {
+        "type": "presence",
+        "targetId": "place-the-island-peak",
+        "at": 1791087773720
+      },
+      {
+        "type": "presence",
+        "targetId": "home:person-1eto4ocxlfl7x",
+        "at": 1791087773726
+      },
+      {
+        "id": "talk:1791087773726:[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":-270.60132421625764,\"z\":-468.6376311581709,\"y\":5.194433629492828},2654435761]]",
+        "type": "talk",
+        "npcId": "person-1eto4ocxlfl7x",
+        "at": 1791087773726
+      }
+    ]
+  },
+  "completionMemory": [
+    {
+      "role": "event",
+      "content": "You and the traveller completed \"The view beyond home\" together. Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "at": 1791087773726
+    }
+  ],
+  "restoredMemory": [
+    {
+      "role": "event",
+      "content": "You and the traveller completed \"The view beyond home\" together. Compare the view at the island peak with the meeting place, then tell Jamal Harris what caught your attention.",
+      "at": 1791087773726
+    }
+  ],
+  "errors": []
+}

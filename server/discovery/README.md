@@ -105,3 +105,29 @@ No KV namespace or D1 database needs creating. The Durable Objects hold everythi
 - **Keep the account on the Workers Free plan.** On Free, going over any limit returns an error; nothing can be billed. On Workers Paid ($5 a month), usage past the included amounts would be billed. The Neuron ceiling still holds, but the plan itself costs money.
 - **The free allowance is shared per account.** It is 10,000 Neurons a day across the whole account, resetting at 00:00 UTC. Other Workers AI use on the same account counts against it, so the default ceiling of 8,000 leaves some room.
 - **Choose free models only.** Some models (e.g. kimi-k2.6, glm-5.2) now require Workers Paid and return 403 on Free. Don't switch `MODEL` to one of them.
+
+### Conversational actions and quest proposals
+
+`POST /talk` also accepts an optional `planning: {kind, context}` alongside the existing
+`npc` and `history`. Kinds are `social_intent` and `story_quest`; `GET /status` advertises
+those supported by this deployed Worker in `planning`. The client does not send a system
+prompt and never attempts a planning call against an older Worker without this capability.
+
+The server constructs fixed instructions, whitelists bounded context fields, and validates
+returned JSON against actual supplied destination and resident identifiers. Social proposals
+select from the supported actions; quest proposals contain two to four visit, return, talk,
+or completed-scout objectives. Neither endpoint executes an action or marks an objective
+complete. The game independently checks current state, requests explicit quest acceptance,
+and advances objectives only from observed game evidence.
+
+Planner calls keep the existing 6,144-character request limit, allowed-origin check, hourly
+conversation rate limit, and free daily conversation allowance. Social output is capped at
+220 tokens and a quest at 900; the full prompt and these output caps are reserved in the
+same ledger before inference. Malformed or unavailable model output returns the offline
+fallback, and an inference that ran is still accounted for. No model or pricing changes
+are required.
+
+Frontend deployment does not deploy this Worker. Run `npm test`, `npm run check`, then
+`npm run deploy` from this directory using the owner's existing Cloudflare login. Verify
+`/status` advertises both planning kinds after deployment. The game retains the player's
+existing model selection; this update does not automatically enable cloud conversation.

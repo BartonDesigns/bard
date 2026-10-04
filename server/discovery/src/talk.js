@@ -39,6 +39,7 @@ export function talkSystem(npc) {
 		npc.facts.length ? 'What you know and care about:\n- ' + npc.facts.join('\n- ') : '',
 		'Speak as yourself, warmly and plainly, in one to three short sentences. Talk about your life, your work, the place, its weather, food, landmarks and stories, and the road onward.',
 		'Never say you are an AI or a character. Keep to what this person would know.',
+		'Your words do not execute actions. Only describe a task as accepted, underway or complete when the supplied game facts explicitly say so. Do not invent movement, deliveries, warnings, quest progress, rewards or world changes; unsupported requests receive an honest in-character explanation.',
 		'Never give instructions for weapons, drugs or anything that could hurt someone; nothing sexual; nothing about harming children. Do not mock any culture, faith or people, and do not put on an accent.',
 		'If asked for something you would not do, say no kindly, in character, and change the subject.',
 		'Start every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful; you may add one gesture: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.',

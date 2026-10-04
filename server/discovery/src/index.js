@@ -18,6 +18,7 @@ import { Ledger } from './ledger.js';
 import { placeOf, citiesByPop, requestFor } from './place.js';
 import { settings, worstCase, talkSettings, ask } from './ai.js';
 import { npcOf, talkSystem } from './talk.js';
+import { planningOf, planningSystem, planningReply, PLANNING_KINDS } from './planning.js';
 
 export { BriefStore, Ledger };
 
@@ -89,27 +90,31 @@ export async function handle(request, env) {
 		try { body = JSON.parse(text); } catch { return reply({ error: 'bad json' }, 400, H); }
 		const T = npcOf(body);
 		if (T.error) return reply({ error: T.error }, 400, H);
+		T.planning = planningOf(body.planning);
+		if (T.planning?.error) return reply({ error: T.planning.error }, 400, H);
 		return talk(env, T, await who(request, env), H);
 	}
 
 	if (request.method === 'GET' && url.pathname === '/status') {
 		const r = await ledger(env).fetch('https://ledger/state');
-		return reply(await r.json(), 200, H, { 'cache-control': 'no-store' });
+		return reply({ ...await r.json(), planning: PLANNING_KINDS }, 200, H, { 'cache-control': 'no-store' });
 	}
 	return reply({ error: 'not found' }, 404, H);
 }
 
 // one townsperson's reply: the worst it could cost reserved first, what it did cost settled after
 async function talk(env, T, player, H) {
-	const S = talkSettings(env), system = talkSystem(T.npc);
+	const S = talkSettings(env);
+	if (T.planning) S.maxTokens = T.planning.kind === 'story_quest' ? 900 : 220;
+	const system = T.planning ? planningSystem(T.planning) + '\nAddressed NPC data: ' + JSON.stringify(T.npc) : talkSystem(T.npc);
 	const req = { system, user: T.history.map((m) => m.content).join('\n') };
 	const worst = worstCase(req, S);
 	const L = ledger(env);
 	const res = await (await L.fetch('https://ledger/reserve', { method: 'POST', body: JSON.stringify({ kind: 'talk', who: player, neurons: worst }) })).json();
 	if (!res.ok) return reply({ error: res.reason, fallback: 'offline' }, res.reason === 'rate' ? 429 : 503, H, { 'cache-control': 'no-store' });
-	const out = await ask(env.AI, req, S, { json: false, messages: T.history, temperature: 0.75 });
+	const out = await ask(env.AI, req, S, { json: false, messages: T.history, temperature: T.planning ? (T.planning.kind === 'story_quest' ? 0.65 : 0.1) : 0.75 });
 	await L.fetch('https://ledger/settle', { method: 'POST', body: JSON.stringify({ kind: 'talk', day: res.day, reserved: res.reserved, used: out.neurons, exhausted: out.exhausted }) });
-	const said = typeof out.value === 'string' ? out.value.trim().slice(0, 600) : '';
+	const said = T.planning ? planningReply(out.value, T.planning) : typeof out.value === 'string' ? out.value.trim().slice(0, 600) : '';
 	if (!said) return reply({ error: out.error || 'no reply', fallback: 'offline' }, 503, H, { 'cache-control': 'no-store' });
 	return reply({ reply: said, neurons: out.neurons }, 200, H, { 'cache-control': 'no-store' });
 }
