@@ -13,13 +13,16 @@ Do not remove the legacy engine until its active features have verified replacem
 ## Controls and return position
 
 - `F` / the flight button enables flight; WASD / joystick moves where you look.
-- Space / ⇡ climbs; C / ⇣ descends toward the departure planet. Shift and ×3 boost
-  remain available. Releasing movement eases velocity to zero.
+- Space / ⇡ climbs; C / ⇣ descends toward the departure planet. Shift and the ×1 / ×3 /
+  ×6 / ×9 booster cycle remain available. Releasing movement eases velocity to zero.
 - The rocket starts a continuous climb, with no cinematic. Steering, looking,
   pressing a movement key, clicking the rocket again, or losing focus cancels it.
 - At 12 km the local ground frame and precise departure coordinates are captured.
   Orbital rendering blends in over 12–60 km; above 60 km ground rendering and streaming
   stop while the same player keeps running. Space is labelled above 100 km.
+- The ×1 / ×3 / ×6 / ×9 booster control remains visible and usable after the orbital
+  renderer takes over. `B` and the touch button use the same cycle, and music adds only
+  a bounded thrust response.
 - A return from another side rebases the orbital coordinate frame above 95 km,
   carrying camera orientation, velocity, the moon, sun, stars and globe together.
   The retained ground patch remains at the original departure coordinates. Radial
@@ -66,11 +69,21 @@ benchmark. It checks held keyboard input in space, launch-assist cancellation, t
 release, repeated exact-coordinate return, the same world/context, analyser response,
 no transition loading overlay, and page/shader errors.
 
+The orbital unit test also exercises lunar surface clamping and tangent-map stability.
+The browser smoke confirms the booster control remains visible in space, Gargantua
+renders as a distant landmark, the Moon reaches a zero-clipping crater surface, and
+the lunar pass compiles without a failed WebGL program.
+
 Native iPhone/Safari performance, long sessions, and visual continuity across every
 biome remain device/acceptance checks. The orbital globe is a coarse rendering level;
 the ground is still a retained local patch, not a fully spherical terrain mesh.
-The native orbital pass currently includes the departure planet, moon, sun and stars;
-the legacy universe's other systems remain on the galaxy route.
+The native orbital pass includes the departure planet, moon, sun, stars and a visible
+Gargantua beacon. The authored Schwarzschild renderer remains the primary black-hole
+pass, with a small camera-facing emissive fallback so the landmark stays discoverable
+when the reference pass is outside a player's initial bearing. Descending into the
+Moon clamps to its curved surface and switches to a procedural local crater view; the
+same player controller remains active for surface exploration. The legacy universe's
+other systems remain on the galaxy route.
 
 ## Body identity and physical music response
 
