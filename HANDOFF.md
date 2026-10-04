@@ -4,6 +4,22 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Release checkpoint (4 October 2026)
+
+The current branch `codex/guide-general-travel-defaults` carries the next playable
+space/guide pass. The Guide now understands broad conversational travel requests such as
+“take me toward the Far East”, resolves them to authored atlas cities while the atlas is
+still loading, and keeps deliberate model/provider choices across temporary offline or GPU
+failure conditions. Mature, bold, rich dialogue is the default for adult NPCs and the Guide;
+child NPCs remain age-gated. Orbital HUD controls stay live through ascent, boosters cycle
+1×/3×/6×/9×, Gargantua is a distant camera-relative landmark, and the Moon clamps to a
+walkable procedural crater surface with a music-reactive sky. Focused Guide, orbit, cave,
+social, atlas/road, and Gargantua checks pass; Chromium smoke confirms no loading overlay,
+shader error, or WebGL context loss during Earth return, booster cycling, Gargantua view,
+and lunar landing. The generated `index.html` and `island/dist/island.js` are kept in sync
+with the source. This checkpoint is ready for a feature-branch PR; Cloudflare Worker
+deployment remains a separate authorized step.
+
 ## Start here (handoff, 1 October 2026)
 
 This round paused at the end of a weekly budget, about four days before it resets. **The live
