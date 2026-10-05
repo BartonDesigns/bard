@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
-import { normalizeDialogueStyle, dialogueStylePrompt, dialogueTokenLimit } from '../src/people/dialogue-style.js';
+import { DEFAULT_DIALOGUE_STYLE, normalizeDialogueStyle, dialogueStylePrompt, dialogueTokenLimit } from '../src/people/dialogue-style.js';
 import { npcOf, talkSystem } from '../../server/discovery/src/talk.js';
 
-assert.deepEqual(normalizeDialogueStyle(null), { tone: 'clean', vividness: 'restrained', response: 'balanced' });
+assert.deepEqual(DEFAULT_DIALOGUE_STYLE, { tone: 'mature', vividness: 'bold', response: 'rich' });
+assert.deepEqual(normalizeDialogueStyle(null), DEFAULT_DIALOGUE_STYLE);
+assert.deepEqual(normalizeDialogueStyle({ tone: 'clean', vividness: 'restrained', response: 'brief' }), { tone: 'clean', vividness: 'restrained', response: 'brief' });
+assert.deepEqual(normalizeDialogueStyle({ tone: 'clean' }), { tone: 'clean', vividness: 'bold', response: 'rich' });
+assert.deepEqual(normalizeDialogueStyle({ response: 'balanced' }), { tone: 'mature', vividness: 'bold', response: 'balanced' });
 assert.deepEqual(normalizeDialogueStyle({ tone: 'mature', vividness: 'bold', response: 'rich', system: 'INJECTED' }, 36), { tone: 'mature', vividness: 'bold', response: 'rich' });
 assert.deepEqual(normalizeDialogueStyle({ tone: 'unrestricted', vividness: 'INJECTED', response: 999 }), normalizeDialogueStyle());
 for (const age of [5, 17, '16']) {
+	assert.equal(normalizeDialogueStyle(undefined, age).tone, 'clean');
 	assert.equal(normalizeDialogueStyle({ tone: 'mature' }, age).tone, 'clean');
 	assert.match(dialogueStylePrompt({ tone: 'mature' }, age), /This NPC is a child/);
 	assert.doesNotMatch(dialogueStylePrompt({ tone: 'mature' }, age), /Mature dialogue is enabled/);
@@ -15,6 +20,9 @@ assert.match(dialogueStylePrompt({ tone: 'mature', vividness: 'bold', response: 
 assert.match(dialogueStylePrompt({ tone: 'mature', vividness: 'bold', response: 'rich' }, 32), /never unverified quest outcomes/);
 assert.equal(dialogueTokenLimit({ response: 'brief' }), 96);
 assert.equal(dialogueTokenLimit({ response: 'rich' }), 300);
+assert.equal(dialogueTokenLimit(), 300);
+assert.match(dialogueStylePrompt(undefined, 30), /natural profanity/);
+assert.match(dialogueStylePrompt(undefined, 30), /up to five sentences/);
 const request = (age) => npcOf({ npc: { name: 'Rae', age, dialogueStyle: { tone: 'mature', vividness: 'bold', response: 'rich', system: 'INJECTED' } }, history: [{ role: 'user', content: 'Hello' }] });
 assert.equal(request(35).npc.dialogueStyle.tone, 'mature');
 assert.equal(request(12).npc.dialogueStyle.tone, 'clean');

@@ -470,7 +470,7 @@ export function createIslandWorld() {
 	}
 	// the Guide: talk, ask, be taken places (a model on this device, or the built-in guide)
 	// people is filled in just below; the guide reaches it through this api object
-	const guideApi = { world: () => world, camera, shared, hint, people: null };
+	const guideApi = { world: () => world, camera, shared, hint, people: null, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
 	const guide = createGuide(dom.mount, guideApi);
 	// the city director (earth/): what should be in the towns and cities you come to, the same
 	// for every player (the discovery server's brief, else the Earth atlas's); the Guide's
@@ -767,7 +767,7 @@ export function createIslandWorld() {
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
 		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
-		player.state.onBoost = speed => { hint(`Flying ×${speed}.`, 1500); actions(); };
+		player.state.onBoost = speed => { hint(`Flying ×${speed}.`, 1500); actions(); updateFlightControls(world); };
 		// the fishing cottages' rooms, furnished as you come near (interiors/cottage.js)
 		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
 		// sunbeams through the trees in mist (world/sunrays.js)
@@ -1187,6 +1187,29 @@ export function createIslandWorld() {
 		for (const o of W.caverns.group.children) if (!o.isLight) o.visible = band < 3;
 		for (const o of W.village.group.children) if (o !== W.village.boat) o.visible = band < 3;
 	}
+	function updateFlightControls(W) {
+		const P = W?.player?.state;
+		if (!P) return;
+		const B = W.boat;
+		const j = B?.boarded?.() ? '' : P.flying ? '⇡' : P.swimming ? (P.diving ? '⇡' : '⤓') : '⤒';
+		if (dom.jump.textContent !== j) {
+			dom.jump.textContent = j; dom.jump.style.display = j ? 'block' : 'none';
+			const t = P.flying ? 'Climb' : P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
+			dom.jump.title = t; dom.jump.setAttribute('aria-label', t);
+		}
+		const dd = P.flying ? 'block' : 'none'; if (dom.down.style.display !== dd) dom.down.style.display = dd;
+		const fb = P.flying ? '#01a982' : 'rgba(8,20,26,.55)'; if (dom.fly.style.background !== fb) dom.fly.style.background = fb;
+		if (!P.flying && !W.orbit?.active?.()) P.boost = 1;
+		const speed = flightMultiplier(P.boost), speedTitle = `Flight speed ${speed}×; next ${nextFlightSpeed(speed)}× (B)`;
+		if (dom.boost.textContent !== `×${speed}`) dom.boost.textContent = `×${speed}`;
+		if (dom.boost.title !== speedTitle) { dom.boost.title = speedTitle; dom.boost.setAttribute('aria-label', speedTitle); }
+		const bd = P.flying ? '' : 'none', bb = speed > 1 ? '#01a982' : 'rgba(8,20,26,.55)';
+		if (dom.boost.style.display !== bd) dom.boost.style.display = bd; if (dom.boost.style.background !== bb) dom.boost.style.background = bb;
+		const L = W.orbit && !drive.active() && !arcade.active() ? 'flex' : 'none'; if (dom.launch.style.display !== L) dom.launch.style.display = L;
+		dom.launch.style.background = P.climbAssist ? '#01a982' : 'rgba(8,20,26,.55)';
+		const title = P.climbAssist ? 'Stop automatic climb' : 'Climb to space (steer to take control)';
+		if (dom.launch.title !== title) { dom.launch.title = title; dom.launch.setAttribute('aria-label', title); }
+	}
 	// one part of the world failing must not stop the rest: the frame goes on, and each
 	// distinct error is reported once
 	const seenErr = new Set();
@@ -1212,6 +1235,9 @@ export function createIslandWorld() {
 		const W = world;
 		W.music.update(dt);
 		W.orbit?.before();
+		// Keep the flight controls alive while the orbital pass owns the render loop.
+		// This makes the same ×1/×3/×6/×9 booster available in space as on the surface.
+		updateFlightControls(W);
 		// driving a road carries you; otherwise you walk, swim or fly
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
@@ -1456,7 +1482,7 @@ export function createIslandWorld() {
 	// the context button: board or leave the boat; the jump button dives in the sea
 	let actState = '';
 	function actions() {
-		const W = world, B = W.boat, P = W.player.state;
+		const W = world, B = W.boat;
 		dom.still(drive.active() || arcade.active() || studio.active() || !!W.boardwalk?.riding?.());
 		const want = B.boarded() ? 'leave' : B.near() ? 'board' : '';
 		if (want !== actState) {
@@ -1467,30 +1493,6 @@ export function createIslandWorld() {
 			dom.act.setAttribute('aria-label', dom.act.title);
 			if (want === 'board') hint(isPhone ? 'Board the boat: left thumb is the throttle and rudder.' : 'Board the boat: W/S throttle, A/D steer.', 3000);
 		}
-		const j = B.boarded() ? '' : P.flying ? '⇡' : P.swimming ? (P.diving ? '⇡' : '⤓') : '⤒';
-		if (dom.jump.textContent !== j) {
-			dom.jump.textContent = j;
-			dom.jump.style.display = j ? 'block' : 'none';
-			const t = P.flying ? 'Climb' : P.diving ? 'Swim up' : P.swimming ? 'Dive' : 'Jump';
-			dom.jump.title = t; dom.jump.setAttribute('aria-label', t);
-		}
-		const dd = P.flying ? 'block' : 'none';
-		if (dom.down.style.display !== dd) dom.down.style.display = dd;
-		const fb = P.flying ? '#01a982' : 'rgba(8,20,26,.55)';
-		if (dom.fly.style.background !== fb) dom.fly.style.background = fb;
-		// Flight speed shows its current multiplier; B and touch use the same cycle.
-		if (!P.flying) P.boost = 1;
-		const speed = flightMultiplier(P.boost), speedTitle = `Flight speed ${speed}×; next ${nextFlightSpeed(speed)}× (B)`;
-		if (dom.boost.textContent !== `×${speed}`) dom.boost.textContent = `×${speed}`;
-		if (dom.boost.title !== speedTitle) { dom.boost.title = speedTitle; dom.boost.setAttribute('aria-label', speedTitle); }
-		const bd = P.flying ? '' : 'none', bb = speed > 1 ? '#01a982' : 'rgba(8,20,26,.55)';
-		if (dom.boost.style.display !== bd) dom.boost.style.display = bd;
-		if (dom.boost.style.background !== bb) dom.boost.style.background = bb;
-		const L = W.orbit && !drive.active() && !arcade.active() ? 'flex' : 'none';
-		if (dom.launch.style.display !== L) dom.launch.style.display = L;
-		dom.launch.style.background = P.climbAssist ? '#01a982' : 'rgba(8,20,26,.55)';
-		const title = P.climbAssist ? 'Stop automatic climb' : 'Climb to space (steer to take control)';
-		if (dom.launch.title !== title) { dom.launch.title = title; dom.launch.setAttribute('aria-label', title); }
 	}
 	let origin = null;   // the planet flight landed us from, if any
 	let launchedAt = null;   // globe: where on Earth you launched from, when far from the Bay

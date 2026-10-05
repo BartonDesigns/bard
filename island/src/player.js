@@ -183,6 +183,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			const k = Math.min(1, dt * 3);
 			s.vel.x += (tx - s.vel.x) * k; s.vel.y += (ty - s.vel.y) * k; s.vel.z += (tz - s.vel.z) * k;
 			s.pos.addScaledVector(s.vel, dt);
+			// Orbital bodies (currently the authored Moon) own a curved surface
+			// collider. It clamps a descent to the ground and removes only inward
+			// velocity, so lateral steering and crater exploration remain live.
+			s.orbit?.surface?.(s.pos, s.vel);
 			const floor = s.orbit?.high() ? -Infinity : Math.max(floorAt(s.pos.x, s.pos.z, s.pos.y) , 0) + 1.2;
 			if (s.pos.y < floor) { s.pos.y = floor; s.vel.y = Math.max(0, s.vel.y); }
 			// a ceiling above the land, so Mt Diablo can be flown over (out over the globe, earth/globe.js,

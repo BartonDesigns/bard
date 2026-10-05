@@ -14,10 +14,11 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	bearing.style.cssText = 'position:absolute;pointer-events:none;display:none;color:#a5f6e2;font:12px system-ui;text-align:center;text-shadow:0 1px 5px #000;transform:translate(-50%,-50%);';
 	bearing.textContent = '◇\nDeparture';
 	dom.mount.append(hud, bearing);
-	let wasSpace = false, text = '', disposed = false;
+	let wasSpace = false, text = '', disposed = false, moonLanded = false, moonOrigin = null;
 	const controls = {
 		speed: (run, boost, agl) => frame.speed(P.pos, run, boost, agl) * musicThrust(shared.uBass.value, shared.uPulse.value),
 		up: (out) => frame.up(P.pos, out),
+		surface: (pos, vel) => frame.surface(pos, vel),
 		high: () => !!frame.anchor && frame.altitude(P.pos) > ORBIT.start,
 	};
 	P.orbit = controls;
@@ -34,6 +35,12 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	function after(dt = 1 / 60) {
 		if (!P.flying || P.locked) return;
 		if (frame.update(P)) hint('Returning to your departure area. You have control.', 3500);
+		const mi = frame.info(P.pos).moon;
+		if (mi.landed && !moonLanded) {
+			moonLanded = true; moonOrigin = frame.mapPoint(P.pos).clone();
+			hint('Lunar surface. The crater rim is east of your landing site. Steer to explore; C descends only in flight.', 5000);
+		}
+		if (!mi.landed && moonLanded && mi.altitude > 80) { moonLanded = false; moonOrigin = null; hint('Leaving the lunar surface.', 3000); }
 		if (frame.altitude(P.pos) < ORBIT.end && P.roll) P.roll *= Math.exp(-Math.max(0, dt) * 1.5);
 		if (frame.anchor && frame.altitude(P.pos) < ORBIT.start * .65) {
 			frame.reset(); wasSpace = false;
@@ -47,8 +54,8 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		hud.style.display = on ? 'block' : 'none';
 		bearing.style.display = on ? 'block' : 'none';
 		if (!on) return;
-		const phase = h >= 100000 ? 'SPACE' : 'ATMOSPHERE';
-		const next = `${phase} · ${(h / 1000).toFixed(h < 1e6 ? 1 : 0)} km\n${Math.round(P.vel.length()).toLocaleString()} m/s`;
+		const phase = moonLanded ? 'LUNAR SURFACE · CRATER' : h >= 100000 ? 'SPACE' : 'ATMOSPHERE';
+		const next = moonLanded ? `${phase}\n${Math.round(P.vel.length()).toLocaleString()} m/s` : `${phase} · ${(h / 1000).toFixed(h < 1e6 ? 1 : 0)} km\n${Math.round(P.vel.length()).toLocaleString()} m/s`;
 		if (text !== next) { text = next; hud.textContent = next; }
 		if (h >= 100000 && !wasSpace) { wasSpace = true; hint('Space. C / ⇣ descends toward the planet. WASD / joystick still steers.', 5000); }
 		// Point toward the planet above orbit; near the ground, toward the exact saved exit.
@@ -67,9 +74,9 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		active: () => !!frame.anchor,
 		blend: () => frame.blend(P.pos),
 		space: () => !!frame.anchor && frame.blend(P.pos) >= 1,
-		render: (time) => { if (!disposed) view.render(frame, P, camera, time); },
-		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), radius, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
-		cancel: () => { frame.reset(); P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; },
-		dispose() { disposed = true; delete P.orbit; hud.remove(); bearing.remove(); view.dispose(); },
+		render: (time) => { if (!disposed) view.render(frame, P, camera, time, { moonLanded, moonOrigin }); },
+		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), radius, moonLanded, gargantuaVisible: !!view.gargantua?.visible, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
+		cancel: () => { frame.reset(); moonLanded = false; moonOrigin = null; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; },
+		dispose() { disposed = true; moonLanded = false; moonOrigin = null; delete P.orbit; hud.remove(); bearing.remove(); view.dispose(); },
 	};
 }
