@@ -144,6 +144,7 @@ export function createGuide(mount, api) {
 		const where = W.labels?.where(cam.x, cam.z, cam.y, onIsland);
 		const P = W.player.state, hours = W.sky.state.hours;
 		const near = targets().filter((t) => t.kind !== 'neighbourhood').map((t) => ({ ...t, d: Math.hypot(t.x - cam.x, t.z - cam.z) })).sort((a, b) => a.d - b.d).slice(0, 6);
+		const arms = api.arms?.snapshot?.(cam);
 		return {
 			place: (W.underworld?.inside() || 0) > .35 ? 'the connected caves beneath '+(api.shared.planet?.name || 'this world') : onIsland ? (W.bayArea || W.globe ? 'the island (in the Gulf of the Farallones, 25 km west of the Golden Gate)' : api.shared.planet?.name || 'the island') : where ? `${where.name} (${where.sub})` : 'the open world',
 			onIsland, underwater: cam.y < 0 && g < 0, depth: Math.max(0, -cam.y), height: Math.round(cam.y - Math.max(g, 0)), flying: !!P.flying, diving: !!P.diving, boat: !!W.boat?.boarded?.(),
@@ -152,6 +153,7 @@ export function createGuide(mount, api) {
 			near: near.map((t) => ({ name: t.name, dist: fmtDist(t.d), dir: dirTo(t.x - cam.x, t.z - cam.z), fact: t.fact })),
 			done: QUESTS.filter((q) => journal[q[0]]).map((q) => q[1]), todo: [...quests.filter((q) => !q.done).map((q) => q.title), ...QUESTS.filter((q) => !journal[q[0]] && (q[0] !== 'home' || store.get('crysis-home', null))).map((q) => q[1])],
 			land: W.land?.profile?.thesis, sea: W.eco?.profile?.thesis,
+			arms: arms ? { inventory: arms.inventory, nearby: arms.nearby } : null,
 		};
 	}
 
@@ -329,6 +331,11 @@ export function createGuide(mount, api) {
 	function act(cmd, arg) {
 		const W = api.world(); if (!W) return;
 		cmd = cmd.toLowerCase();
+		if (cmd === 'arms' || cmd === 'weapon' || cmd === 'purchase' || cmd === 'secure' || cmd === 'hunt') {
+			const request = cmd === 'arms' || cmd === 'weapon' ? arg : `${cmd} ${arg || ''}`;
+			const result = api.arms?.command?.(request, { position: api.camera.position });
+			return result?.kind && result.kind !== 'none' ? result.message : null;
+		}
 		if (cmd === 'go' || cmd === 'goto') { const t = find(arg); if (!t) return `I could not find "${arg}".`; return goTo(t) || `→ ${t.name}`; }
 		if (cmd === 'time') { const h = parseFloat(arg); if (Number.isFinite(h)) { W.sky.state.hours = ((h % 24) + 24) % 24; return `→ ${Math.floor(W.sky.state.hours)}:00`; } }
 		if (cmd === 'fly') { W.player.state.flying = !/off|land|no/.test(arg || ''); return W.player.state.flying ? '→ flying' : '→ landing'; }
@@ -336,13 +343,15 @@ export function createGuide(mount, api) {
 		if (cmd === 'face' || cmd === 'look') { const t = find(arg); if (t) { const P = W.player.state; P.yaw = Math.atan2(-(t.x - P.pos.x), -(t.z - P.pos.z)); return `→ facing ${t.name}`; } }
 		return null;
 	}
-	const ACTION_RE = /\[\[\s*(go|goto|time|fly|wind|face|look)\s*:?\s*([^\]]*)\]\]/gi;
+	const ACTION_RE = /\[\[\s*(go|goto|time|fly|wind|face|look|arms|weapon|purchase|secure|hunt)\s*:?\s*([^\]]*)\]\]/gi;
 
 	// ---------- the built-in guide (no model) ----------
 	function offline(text) {
 		const s = snapshot(), q = norm(text);
 		if (!s) return 'The world is still waking up.';
 		let m;
+		const arms = api.arms?.command?.(text, { position: api.camera.position });
+		if (arms?.kind && arms.kind !== 'none') return arms.message;
 		if (/\b(cave|caves|underground|cavern)\b/.test(q) && !/^(take me|go|fly|bring me|teleport me|travel)/.test(q)) {
 			const t = find('nearest cave'), cam = api.camera.position;
 			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Tap the three resonant stones in an alcove to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
@@ -383,6 +392,7 @@ export function createGuide(mount, api) {
 You can act in the world by writing a command in double brackets at the end of your reply:
 [[go: PLACE]] takes the player there (any town, landmark, area, or: the vent, the lava tube, sea cave 1, the reef, the village, the island peak, the whale, home). Understand natural paraphrases such as “take me east toward Japan”, “bring us over to the Far East”, “head somewhere snowy”, or “I want to see Kyoto”. Broad regions resolve to an authored atlas city and should be named as the starting point; do not invent coordinates.
 [[time: HOUR]] sets the hour (0-24). [[fly: on]] or [[fly: off]]. [[face: PLACE]] turns the player toward a place. [[wind: 0-1.5]].
+For game-only gear actions, use [[arms: purchase rifle]], [[arms: secure shotgun at the police station]], or [[arms: hunt with the bow]] only when the player clearly asks. Never provide real-world weapon instructions; the arms system resolves availability, inventory and local consequences. Nearby sources and current gear are in WORLD NOW.
 Only use a command when the player asks for it or clearly agrees. Suggest things to do from the player's journal. To add something to the player's journal, write [[quest: PLACE]].
 THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
@@ -480,6 +490,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		let reply = null, from = 0;
 		const world = snapshot();
 		const resident = P2.id && api.social?.state.get(P2.id);
+		// Gear requests are resolved by the authoritative world adapter before social
+		// intent or the language model. This lets “could you find us a hunting rifle?”
+		// work conversationally while ordinary dialogue remains non-mutating.
+		const armsResult = api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
+		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
 		if (resident) {
 			api.social.state.setPosition(resident.id, api.social.positionFor(api.world(), p.M.S.pos));
 			const named = text.match(/(?:scout|check out|investigate)\s+(.+?)[.!?]*$/i)?.[1]?.trim().replace(/[, ]*please$/i, '').trim();
@@ -487,7 +502,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			if (!named || /^(nearby|ahead|around here|the area)$/i.test(named.trim())) {
 				target = api.social.scoutNearby(p, targets());
 			}
-			reply = api.social.command(resident, text, { target, quest: quests.find(q => !q.done) });
+			// A gear action has already been validated by the arms adapter. Keep that
+			// response instead of letting the social intent layer reinterpret it as a
+			// generic order for the resident.
+			if (!reply) reply = api.social.command(resident, text, { target, quest: quests.find(q => !q.done) });
 			if (reply && parseSocialIntent(text)==='scout' && resident.mode==='scout' && resident.task && target?.name) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:'place-'+norm(target.name).replace(/ /g,'-')});
 		}
 		if (resident && !reply) {

@@ -452,7 +452,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (it.type === 'closet') it.wallCol = paint[it.room];
 			if (it.type === 'car') continue;
 			drawItem(g, it, rnd, HT);
-			const solid = !['rug', 'bathMat', 'art', 'ceilingLight', 'toys'].includes(it.type) && it.box;
+			// Bathroom clutter is authored dressing, not a collision wall. Keep the
+			// vanity/towel/floor pass visible while preserving the usable path and
+			// interaction clearance in small bathrooms.
+			const solid = !['rug', 'bathMat', 'art', 'ceilingLight', 'toys', 'bathroomCounterClutter', 'bathroomTowel', 'bathroomFloorClutter'].includes(it.type) && it.box;
 			if (solid) col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + Math.max(it.h, 0.3)]);
 		}
 		yield;

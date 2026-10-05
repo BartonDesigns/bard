@@ -509,6 +509,61 @@ export function drawItem(g, it, rnd, H) {
 			break;
 		}
 		case 'toys': for (let i = 0; i < 6; i++) { const x = (rnd() - 0.5) * w, z = (rnd() - 0.5) * d, s = 0.06 + rnd() * 0.1; if (rnd() < 0.5) g.box('gloss', x - s, 0, z - s, x + s, s * 1.6, z + s, lin(pick(ACCENT, rnd()))); else g.sphere('gloss', x, s, z, s, s, s, lin(pick(ACCENT, rnd())), 8); } break;
+		case 'bathroomCounterClutter': {
+			// One low-poly draw item carries the whole vanity story: toiletries, a cup,
+			// and a washcloth.  Keeping it batched matters on phone builds.
+			const s = it.scale || 1, n = 2 + Math.floor((it.style + it.v * 3) % 3), depth = Math.max(0.08, d * 0.42);
+			const bottles = [[0.26, 0.5, 0.74], [0.82, 0.69, 0.28], [0.25, 0.5, 0.65], [0.9, 0.78, 0.32]];
+			for (let i = 0; i < n; i++) {
+				const q = n === 1 ? 0 : i / (n - 1), x = -W2 * 0.72 + q * W2 * 1.44, z = (i % 2 ? 0.06 : -0.04) * s;
+				const r = (0.035 + (i % 2) * 0.012) * s, bh = (0.13 + (i % 3) * 0.035) * s, bc = lin(bottles[(i + it.style) % bottles.length]);
+				g.cyl('gloss', x, 0, z, r, bh, bc, 8);
+				g.cyl('matte', x, bh, z, r * 0.72, 0.025 * s, lin([0.76, 0.74, 0.68]), 6);
+				if (i === 0 || (it.style === 2 && i === n - 1)) g.box('matte', x - r * 0.8, bh * 0.42, z + r * 0.82, x + r * 0.8, bh * 0.52, z + r * 0.9, WHITE);
+			}
+			// A toothbrush cup and a folded, slightly displaced washcloth sell the mess.
+			const cupX = W2 * 0.62, cupZ = depth * 0.25;
+			g.cyl('gloss', cupX, 0, cupZ, 0.055 * s, 0.16 * s, lin([0.78, 0.82, 0.83]), 8, 'y', true, 0.06 * s);
+			for (let i = 0; i < 2; i++) g.cyl('matte', cupX + (i - 0.5) * 0.025, 0.13 * s, cupZ, 0.008, 0.13 * s, lin([0.9, 0.72, 0.38]), 5);
+			g.box('fabric', -W2 * 0.74, 0, -depth * 0.44, -W2 * 0.12, 0.025 * s, depth * 0.44, lin(pick(FABRIC, it.v * 5 % 1)));
+			break;
+		}
+		case 'bathroomTowel': {
+			const s = it.scale || 1, wet = it.wet ? lin([0.34, 0.46, 0.52]) : lin(pick(FABRIC, it.v * 7 % 1));
+			// The rail is deliberately shallow; the towel is wall-mounted and never
+			// narrows the walkable floor in front of the fixtures.
+			g.box('metal', -W2 * 0.85, h - 0.1 * s, -D2, W2 * 0.85, h - 0.07 * s, D2, STEEL);
+			const strips = 3;
+			for (let i = 0; i < strips; i++) {
+				const x0 = -W2 * 0.82 + i * (w * 0.82 / strips), x1 = x0 + w * 0.29, sag = (i === 1 ? 0.07 : 0.015) * s;
+				g.box('fabric', x0, 0.15 * s + sag, -D2 * 0.4, x1, h - 0.12 * s - sag, D2 * 0.4, wet);
+			}
+			g.box('fabric', -W2 * 0.78, 0.13 * s, -D2 * 0.43, W2 * 0.8, 0.17 * s, D2 * 0.43, wet.map((c) => c * 0.8));
+			break;
+		}
+		case 'bathroomFloorClutter': {
+			const s = it.scale || 1, variant = it.variant || 0;
+			if (variant !== 1) {
+				// A half-full laundry basket with linens spilling over the rim.
+				const br = Math.min(W2 * 0.72, D2 * 0.72);
+				g.cyl('matte', -W2 * 0.18, 0, 0.02, br, 0.4 * s, lin([0.7, 0.63, 0.53]), 9, 'y', true, br * 1.06);
+				g.cyl('metal', -W2 * 0.18, 0.39 * s, 0.02, br * 1.04, 0.018 * s, lin([0.45, 0.42, 0.38]), 9);
+				for (let i = 0; i < 2; i++) {
+					const x = -W2 * 0.18 + (i - 0.5) * br * 0.7, z = 0.02 + (i ? 0.05 : -0.03);
+					g.sphere('fabric', x, 0.42 * s, z, br * 0.55, 0.1 * s, br * 0.42, lin(pick(FABRIC, it.v * (i + 2) % 1)), 8);
+				}
+			}
+			// Open cleaner bottle / spare roll: one or two silhouettes only, bounded on
+			// purpose so a messy home remains cheap to stream.
+			if (variant !== 0) {
+				const x = W2 * 0.42, z = -D2 * 0.28, r = Math.min(0.09, W2 * 0.22);
+				g.box('matte', x - r, 0, z - r, x + r, 0.28 * s, z + r, lin([0.75, 0.82, 0.72]));
+				g.box('gloss', x - r * 0.5, 0.28 * s, z - r * 0.35, x + r * 0.5, 0.32 * s, z + r * 0.35, lin([0.82, 0.86, 0.78]));
+				g.cyl('matte', x, 0.32 * s, z, r * 0.38, 0.08 * s, lin([0.76, 0.76, 0.68]), 6);
+			}
+			g.box('fabric', -W2 * 0.72, 0.02, D2 * 0.2, -W2 * 0.18, 0.07 * s, D2 * 0.5, lin(pick(FABRIC, it.v * 11 % 1)));
+			break;
+		}
 		case 'laundryBasket': g.cyl('matte', 0, 0, 0, 0.2, 0.42, lin([0.8, 0.72, 0.58]), 10, 'y', true, 0.22); g.sphere('fabric', 0, 0.42, 0, 0.18, 0.08, 0.16, lin(pick(ACCENT, rnd())), 8); break;
 		case 'tub': {
 			const k = 'gloss', c = WHITE;

@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { useAtlasData } from '../src/earth/atlas.js';
 import { setFrame, F, toXZ } from '../src/earth/globeframe.js';
-import { createGlobeRoads, roadCorridorDistance } from '../src/earth/globeroads.js';
+import { createGlobeRoads, localRoadTownId, roadCorridorDistance } from '../src/earth/globeroads.js';
 import { createBerms, BERM_U } from '../src/bay/berms.js';
 
-function fixture(cities, water = () => false) {
+function fixture(cities, water = () => false, extraPlaces = () => []) {
  useAtlasData({ REGIONS: [{id:'test',name:'Test land',box:[-85,-180,85,180]}], CITIES:cities });
  setFrame(35, 135);
  const height = { out:{land:1}, atLL(lat,lon) { this.out.land = water(lat,lon) ? -1 : 1; return this.out.land > 0 ? 100 : -10; } };
  const scene = new THREE.Scene(), data = {win:{gi0:3022,gj0:422,N:256,ready:true,moving:null}};
- const roads = createGlobeRoads({scene,height,data,groundAt:()=>100,isPhone:false});
+ const roads = createGlobeRoads({scene,height,data,groundAt:()=>100,isPhone:false,extraPlaces});
  const cam = {position:new THREE.Vector3(F.fx,100,F.fz)};
  return {roads,cam,scene};
 }
@@ -21,6 +21,30 @@ test('highway midpoint and dateline use corridor distance instead of distance to
  assert.equal(roadCorridorDistance({lat:35,lon:135},L),0);
  assert.ok(roadCorridorDistance({lat:36,lon:135},L)>100);
  assert.equal(roadCorridorDistance({lat:0,lon:180},{a:{lat:0,lon:179},b:{lat:0,lon:-179}}),0);
+});
+
+test('procedural settlements outside the inner Bay join the same deterministic road graph',()=> {
+ const extras = [
+  {id:'bay-town:west',name:'Westmere',lat:35.01,lon:134.98,pop:2},
+  {id:'bay-town:east',name:'Eastmere',lat:35.01,lon:135.04,pop:2},
+ ];
+ const {roads,cam}=fixture(['Atlas city|35|135.10|3'],()=>false,()=>extras);
+ roads.settle(cam);
+ const links=roads.links();
+ assert.ok(links.some((L)=>L.a.id==='bay-town:west'||L.b.id==='bay-town:west'),'west procedural town is in the network');
+ assert.ok(links.some((L)=>L.a.id==='bay-town:east'||L.b.id==='bay-town:east'),'east procedural town is in the network');
+ assert.ok(links.some((L)=>[L.a.id,L.b.id].includes('bay-town:west')&&[L.a.id,L.b.id].includes('bay-town:east')),'nearby procedural towns receive a connecting road');
+ const out=[]; roads.near('roads',cam.position.x,cam.position.z,20000,out);
+ assert.ok(out.some((r)=>r.name.includes('Westmere')||r.name.includes('Eastmere')));
+ roads.dispose();
+});
+
+test('generated town road identity survives renaming and catalogue reordering',()=> {
+ const town={x:1234.4,z:-5678.6,name:'Old name'};
+ const id=localRoadTownId(town);
+ town.name='New name';
+ assert.equal(localRoadTownId(town),id);
+ assert.equal(localRoadTownId(town),localRoadTownId({x:1234.4,z:-5678.6,name:'Another name'}));
 });
 
 test('continuous streamed motorway pieces share endpoints and terrain clearance',()=> {
