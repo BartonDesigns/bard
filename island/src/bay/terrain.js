@@ -484,11 +484,30 @@ export function createBayArea(shared, scene, island, BU) {
 				{
 					// light: grass that goes gold with the season, woods, rock on the steeps, sand by the water
 					vec3 n = normalize(vBN); float slope = 1.0 - n.y, h = vBH;
+					float dist = length(vViewPosition);
 					float n1 = fbm3(vBW * 0.0025), n2 = vn(vBW * 0.05);
 					vec3 c = mix(vec3(0.24, 0.30, 0.13), vec3(0.50, 0.42, 0.24), clamp(uSeason * 0.8 + n1 * 0.4 - 0.1, 0.0, 1.0));
 					c = mix(c, vec3(0.20, 0.27, 0.15), smoothstep(0.5, 0.7, n1) * 0.6);
 					c = mix(c, vec3(0.46, 0.43, 0.39), smoothstep(0.35, 0.7, slope));
 					c = mix(vec3(0.70, 0.65, 0.50), c, smoothstep(0.5, 4.0, h));
+					// The phone-safe shader used to stop here, leaving the first few metres as a
+					// single beige colour. Keep the expensive height loops out of this path, but
+					// retain the close-up treatment: a broad leaf/soil mottle, a small mineral
+					// grain, and a little photo loam only when its asset has arrived. The fades
+					// follow screen derivatives so they settle instead of shimmering on a phone.
+					float nearK = 1.0 - smoothstep(18.0, 105.0, dist);
+					float px = length(fwidth(vBW));
+					float grainK = nearK * (1.0 - smoothstep(0.12, 0.34, px));
+					float micro = mix(0.5, vn(vBW * 1.15 + 6.4), grainK);
+					float clod = mix(0.5, fbm3(vBW * 0.045 - 2.0), nearK * 0.8);
+					float duff = smoothstep(0.5, 0.76, fbm3(vBW * 0.009 + 4.2)) * (1.0 - smoothstep(0.2, 0.55, slope));
+					vec3 soil = mix(vec3(0.12, 0.095, 0.055), vec3(0.26, 0.20, 0.10), clod);
+					c = mix(c, soil, duff * nearK * 0.42);
+					c *= 0.88 + 0.24 * micro + 0.08 * clod;
+					if (uGroundK > 0.5) {
+						float photoL = 0.9 + (dot(texture2D(uLoam, vBW * 0.35).rgb, vec3(0.299, 0.587, 0.114)) - 0.5) * 0.82;
+						c *= mix(1.0, photoL / 0.9, grainK * 0.32);
+					}
 					diffuseColor.rgb = c * (0.85 + 0.3 * n2) * (1.0 - uWet * 0.3);
 				}
 				#else

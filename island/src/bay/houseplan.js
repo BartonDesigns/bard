@@ -53,6 +53,26 @@ function rng(seed) {
 }
 export const houseSeed = (M) => (Math.imul(Math.round(M.x * 2) | 0, 73856093) ^ Math.imul(Math.round(M.z * 2) | 0, 19349663)) >>> 0;
 
+// Bathrooms are not uniformly spotless: the same house should keep the same lived-in
+// state on every visit, while roughly three quarters of homes get a visible, bounded
+// clutter pass.  Keep this hash independent of the plan RNG so adding a prop cannot
+// reshuffle rooms or furniture elsewhere in the house.
+function mix32(n) {
+	n = Math.imul(n ^ (n >>> 16), 0x45d9f3b) >>> 0;
+	n = Math.imul(n ^ (n >>> 16), 0x45d9f3b) >>> 0;
+	return (n ^ (n >>> 16)) >>> 0;
+}
+export function bathroomMessProfile(seed) {
+	const h = mix32((seed ^ 0x7f4a7c15) >>> 0);
+	return {
+		enabled: h / 4294967296 < 0.75,
+		// Enough variation to avoid a repeated kit, but deliberately bounded for phones.
+		intensity: 0.68 + ((h >>> 8) & 255) / 255 * 0.32,
+		style: h % 3,
+		seed: h,
+	};
+}
+
 const PUBLIC = new Set(['entry', 'hall', 'living', 'dining', 'kitchen', 'family']);
 const BEDS = new Set(['master', 'bed']);
 // how two rooms meet: no wall at all, a wide cased opening, or (when needed) a door
@@ -929,7 +949,8 @@ export function planHouse(grp, opt = {}) {
 		}
 	}
 
-	const plan = { M, ca, sa, rects, X, Z, nx, nz, occ, labels, rooms, walls, conns, door, garage, stairs, up, gSide, cellAt, onLevel, rnd, seed: houseSeed(M) };
+	const seed = houseSeed(M), bathroomMess = bathroomMessProfile(seed);
+	const plan = { M, ca, sa, rects, X, Z, nx, nz, occ, labels, rooms, walls, conns, door, garage, stairs, up, gSide, cellAt, onLevel, rnd, seed, bathroomMess };
 	plan.items = furnish(plan);
 	return plan;
 }
@@ -1040,6 +1061,47 @@ function furnish(plan) {
 		const bb = (() => { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const k of room.cells) { const i = k % nx, j = Math.floor(k / nx); a = Math.min(a, X[i]); c = Math.max(c, X[i + 1]); b = Math.min(b, Z[j]); d = Math.max(d, Z[j + 1]); } return [a, b, c, d]; })();
 		const bw = bb[2] - bb[0], bd = bb[3] - bb[1];
 		const t = room.type;
+		// A small, deterministic lived-in pass for bathrooms.  Surface clutter sits on a
+		// fixture, the towel is wall-mounted, and the one floor cluster is placed through
+		// the same inside/hit checks as every other piece of furniture.  That keeps doors,
+		// fixtures and the usable path clear even in the smallest powder rooms.
+		const addBathroomClutter = ({ surface, towel, sink }) => {
+			const mess = plan.bathroomMess;
+			if (!mess?.enabled) return;
+			const h = mix32(mess.seed ^ Math.imul(room.id + 1, 0x9e3779b9));
+			const scale = Math.max(0.72, Math.min(1.16, mess.intensity * (0.9 + ((h >>> 12) & 255) / 255 * 0.2)));
+			const v = (h >>> 1) / 2147483648;
+			if (surface) {
+				const sw = Math.min(Math.max(0.34, surface.w - 0.18), 0.78) * scale;
+				const sd = Math.min(0.34, Math.max(0.24, surface.d * 0.62)) * scale;
+				const hw = surface.rot % 2 ? sd / 2 : sw / 2, hd = surface.rot % 2 ? sw / 2 : sd / 2;
+				const box = [surface.x - hw, surface.z - hd, surface.x + hw, surface.z + hd];
+				placed.push(box);
+				items.push({ type: 'bathroomCounterClutter', room: room.id, level: room.level, y: y0 + 0.87, x: surface.x, z: surface.z, rot: surface.rot, w: sw, d: sd, h: 0.3 * scale, box, v, scale, style: mess.style });
+			}
+			// The towel is allowed to fail placement in a tiny or fully occupied room; the
+			// floor cluster still gives that bathroom its messy read.
+			if (towel || sink) {
+				const tw = Math.min(0.78, Math.max(0.48, (towel?.w || sink?.w || 0.7) * 0.7)) * scale;
+				const td = 0.07;
+				const hung = against('bathroomTowel', tw, td, 1.08 * scale, { clear: 0.06, score: (s) => (s.ext ? 0 : 0.35) + (s.e - s.s) * 0.04 });
+				if (hung) { hung.scale = scale; hung.wet = mess.style === 1 || v > 0.6; hung.style = mess.style; }
+			}
+			const fw = Math.min(0.76, Math.max(0.42, Math.min(bw, bd) * 0.27)) * scale;
+			const fd = Math.min(0.58, Math.max(0.34, Math.min(bw, bd) * 0.2)) * scale;
+			const candidates = [
+				[bb[0] + fw * 0.72, bb[1] + fd * 0.72, 0], [bb[2] - fw * 0.72, bb[1] + fd * 0.72, 0],
+				[bb[0] + fw * 0.72, bb[3] - fd * 0.72, 0], [bb[2] - fw * 0.72, bb[3] - fd * 0.72, 0],
+				[room.cx, bb[1] + fd * 0.85, 0], [room.cx, bb[3] - fd * 0.85, 0],
+			];
+			const start = h % candidates.length;
+			for (let k = 0; k < candidates.length; k++) {
+				const [x, z, rot] = candidates[(start + k) % candidates.length];
+				const floor = standing('bathroomFloorClutter', x, z, fw, fd, 0.58 * scale, rot, 0.035);
+				if (!floor) continue;
+				floor.scale = scale; floor.variant = (mess.style + (h >>> 20)) % 3; floor.style = mess.style; break;
+			}
+		};
 		const light = (kind = 'flush') => items.push({ type: 'ceilingLight', kind, room: room.id, level: room.level, y: y0, x: room.cx, z: room.cz, rot: 0, w: 0.35, d: 0.35, h: 0, v: rnd() });
 		const art = (n) => { for (let k = 0; k < n; k++) against('art', 0.5 + rnd() * 0.5, 0.03, 0.01, { clear: 0, side: (s) => !s.ext || rnd() < 0.3 }); };
 		if (t === 'living') {
@@ -1141,14 +1203,16 @@ function furnish(plan) {
 			art(t === 'master' ? 2 : 1); light(t === 'master' ? 'fan' : 'flush');
 		} else if (t === 'bath' || t === 'mbath') {
 			const tub = against(t === 'mbath' && bw > 2.4 && bd > 2.4 ? 'shower' : 'tub', t === 'mbath' ? 1.2 : 1.52, t === 'mbath' ? 1.0 : 0.78, 1.95, { clear: 0.5, corner: true, score: (s) => -(s.e - s.s) * 0.2 });
-			against('vanity', t === 'mbath' ? Math.min(1.8, bw - 0.6, 1.8) : 1.0, 0.56, 0.86, { clear: 0.6, noWindow: true, long: true });
+			const vanity = against('vanity', t === 'mbath' ? Math.min(1.8, bw - 0.6, 1.8) : 1.0, 0.56, 0.86, { clear: 0.6, noWindow: true, long: true });
 			against('toilet', 0.45, 0.72, 0.78, { clear: 0.5 });
 			if (t === 'mbath' && tub?.type === 'shower') against('tub', 1.52, 0.8, 0.6, { clear: 0.5 });
 			against('bathMat', 0.8, 0.5, 0.01, { clear: 0 });
+			addBathroomClutter({ surface: vanity, towel: tub || vanity, sink: vanity });
 			light('bar');
 		} else if (t === 'powder') {
-			against('pedestalSink', 0.5, 0.45, 0.85, { clear: 0.5, noWindow: true });
+			const sink = against('pedestalSink', 0.5, 0.45, 0.85, { clear: 0.5, noWindow: true });
 			against('toilet', 0.45, 0.72, 0.78, { clear: 0.5 });
+			addBathroomClutter({ surface: sink, sink });
 			light('bar');
 		} else if (t === 'laundry') {
 			against('washer', 0.68, 0.7, 0.95, { clear: 0.7 });

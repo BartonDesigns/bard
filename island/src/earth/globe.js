@@ -24,7 +24,7 @@ import { createGlobeHeight, anchorUniforms, GLOBE_U } from './globeheight.js';
 import { createGlobeTerrain, SEAM_A, SEAM_B } from './globeterrain.js';
 import { createGlobeTrees } from './globetrees.js';
 import { createGlobeTowns } from './globetowns.js';
-import { createGlobeRoads } from './globeroads.js';
+import { createGlobeRoads, localRoadTownId } from './globeroads.js';
 import { BAY_DETAIL_U, BAY_DETAIL_AMP } from './baydetail.js';
 import { loadAtlas, atlasReady, regionAt, palette, citiesNear } from './atlas.js';
 import { setFarGround } from '../bay/terrain.js';
@@ -68,7 +68,15 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 
 	// ---------- the roads between the places (globeroads.js), found by the real city's near() ----------
 	let leftSide = false, sourced = null;
-	const roads = createGlobeRoads({ scene, height, data, groundAt: (x, z) => bay.heightAt(x, z), isPhone, left: () => leftSide });
+	const roads = createGlobeRoads({ scene, height, data, groundAt: (x, z) => bay.heightAt(x, z), isPhone, left: () => leftSide,
+		extraPlaces: () => {
+			if (!F.bay) return [];
+			return (bay.towns || []).map((t) => {
+				const ll = toLL(t.x, t.z);
+				return { id: localRoadTownId(t), name: t.name, lat: ll.lat, lon: ll.lon, pop: t.big ? 3 : 2 };
+			});
+		},
+	});
 
 	// ---------- the woods and the towns ----------
 	const inBayWild = (x, z) => { if (!F.bay) return false; const ll = toLL(x, z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM + 10; };
@@ -242,8 +250,11 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		if (real?.addSource && sourced !== real) { sourced?.removeSource?.(roads); sourced?.removeSource?.(regionalRoads); real.addSource(roads); real.addSource(regionalRoads); sourced = real; }
 		const nextRoadTowns = regional.settlements.roadTowns();
 		if (nextRoadTowns.length !== regionalRoadTowns.length || nextRoadTowns.some((t, i) => t !== regionalRoadTowns[i])) { regionalRoadTowns = nextRoadTowns; regionalRoadVersion++; }
-		const A = towns.civ().active();
-		roads.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...(A?.region ? [{ id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] }] : [])]);
+		const A = towns.civ().active(), B = world()?.civ?.active();
+		const activeTownRoads = [];
+		if (A?.region) activeTownRoads.push({ id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] });
+		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, roads: B.region.roads || [] });
+		roads.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads]);
 		const ms = performance.now() - t0;
 		stats.updateMs += (ms - stats.updateMs) * 0.05; stats.maxMs = Math.max(stats.maxMs * 0.995, ms);
 	}

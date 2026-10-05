@@ -126,6 +126,7 @@ import { createOrbitalFlight } from './space/flight.js';
 import { worldBody, sameBody } from './space/body.js';
 import { createKinetic } from './music/kinetic.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
+import { createArmsRuntime } from './crysis/arms-runtime.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -470,7 +471,11 @@ export function createIslandWorld() {
 	}
 	// the Guide: talk, ask, be taken places (a model on this device, or the built-in guide)
 	// people is filled in just below; the guide reaches it through this api object
-	const guideApi = { world: () => world, camera, shared, hint, people: null, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
+	// Arms/world-sites are injected as pure data. The adapter keeps all inventory
+	// mutations in one place for the Guide, NPC conversations and the Crysis console.
+	const arms = createArmsRuntime({ world: () => world, sites: (W) => W?.worldSites || W?.sites || [], startingCredits: 1000, hint: (t, ms) => hint(t, ms, 1) });
+	HOOKS.arms = arms;
+	const guideApi = { world: () => world, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
 	const guide = createGuide(dom.mount, guideApi);
 	// the city director (earth/): what should be in the towns and cities you come to, the same
 	// for every player (the discovery server's brief, else the Earth atlas's); the Guide's
@@ -766,7 +771,28 @@ export function createIslandWorld() {
 		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });
 		const music = createMusic(shared, scene, camera, dom.canvas, () => pick.concat(world?.underworld?.pickables || []), () => running && visible);
 		music.register();
-		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, bayArea: null, bridge: null, labels: null };
+		world = { island, sky, weather, terrain, ocean, grass, turf, litter, vegetation, village, distant, fauna, player, music, boat, whale, shells, underwater, sealife, magma, caverns, reef, eco, fish, inverts, land, landFauna, arms, bayArea: null, bridge: null, labels: null };
+		// Equipment sources are data-facing first.  Generated shops are added as they stream
+		// in; the small island board keeps the conversational loop playable before Earth has
+		// finished loading.  These records do not imply a shared backend or real-world site
+		// layout.  The authoritative multiplayer inventory remains a separate dependency.
+		world.worldSites = () => {
+			const anchor = world.village?.footprints?.find((f) => !f.fence && !f.pier) || world.island.spawn || { x: 0, z: 0 };
+			const out = [
+				{ id: 'island-ranger-camp', name: 'Island ranger camp', kind: 'outfitter', x: anchor.x + 12, z: anchor.z + 8, actions: ['purchase', 'hunt'], virtual: true },
+				{ id: 'island-supermarket', name: 'Village supermarket', kind: 'supermarket', x: anchor.x + 28, z: anchor.z + 12, actions: ['purchase'], virtual: true },
+				{ id: 'island-home-supply', name: 'Village home-supply store', kind: 'home-supply', x: anchor.x - 26, z: anchor.z + 10, actions: ['purchase'], virtual: true },
+				{ id: 'island-community-market', name: 'Community player exchange', kind: 'player-vendor', x: anchor.x - 18, z: anchor.z - 12, actions: ['purchase'], virtual: true },
+				{ id: 'island-trader', name: 'Travelling NPC trader', kind: 'npc-vendor', x: anchor.x + 4, z: anchor.z - 20, actions: ['purchase', 'hunt'], virtual: true },
+				{ id: 'island-police-cache', name: 'Civic police-station recovery cache', kind: 'police', x: anchor.x - 92, z: anchor.z - 82, actions: ['secure'], virtual: true },
+			];
+			for (const B of world.commercial?.list?.() || []) {
+				if (B.type !== 'shop') continue;
+				const id = `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
+				out.push({ id, name: 'Neighbourhood supermarket', kind: 'supermarket', x: B.x, z: B.z, y: B.y, actions: ['purchase'], source: 'generated-commercial' });
+			}
+			return out;
+		};
 		player.state.onBoost = speed => { hint(`Flying ×${speed}.`, 1500); actions(); updateFlightControls(world); };
 		// the fishing cottages' rooms, furnished as you come near (interiors/cottage.js)
 		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
@@ -1233,6 +1259,7 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		stepWind(dt, shared);
 		const W = world;
+		W.arms?.update(dt, camera.position);
 		W.music.update(dt);
 		W.orbit?.before();
 		// Keep the flight controls alive while the orbital pass owns the render loop.
@@ -1745,6 +1772,9 @@ if (typeof window !== 'undefined') {
 		get kinetic() { return HOOKS.kinetic; },
 		body: () => window.L99Island?.world?.()?.body,
 		orbit: () => window.L99Island?.world?.()?.orbit?.info(),
+		// game-only hunting, home-defense and supply state. Crysis.arms() reads the
+		// current inventory/nearby sources; pass a natural request to execute it.
+		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,

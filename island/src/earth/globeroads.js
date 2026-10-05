@@ -46,6 +46,13 @@ export function roadCorridorDistance(p, L) {
 	return Math.hypot(ax + dx * t, ay + dy * t) * KM;
 }
 
+// Keep a generated town's road-network identity tied to its seeded position rather than
+// its display name or catalogue index. This lets the streamed Crysis town join the same
+// inter-town road at both ends after the player returns to it.
+export function localRoadTownId(t) {
+	return `bay-town:${Math.round(Number(t?.x) || 0)}:${Math.round(Number(t?.z) || 0)}`;
+}
+
 // a small binary heap of cell indices keyed by an array
 function heap(key) {
 	const a = [];
@@ -64,11 +71,11 @@ function heap(key) {
 	};
 }
 
-export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left = () => false }) {
+export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left = () => false, extraPlaces = () => [] }) {
 	const group = new THREE.Group();
 	group.name = 'globe roads';
 	scene.add(group);
-	let nodes = null, links = null, build = null;
+	let nodes = null, links = null, build = null, extraKey = '';
 	const routes = new Map();         // link id -> { lat: Float64Array, lon: Float64Array } | 'none'
 	const queue = [];
 	let job = null;
@@ -76,7 +83,22 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 
 	// ---------- the network ----------
 	function* network() {
-		const C = atlasCities().filter((c) => !inBay(c.lat, c.lon));
+		// The atlas is the long-distance backbone. The optional procedural places are the
+		// settlements the Crysis town generator has seeded beyond the inner Bay survey. They
+		// use the same graph and route solver, so a generated home town is not an isolated
+		// island of streets when the player drives out of the mapped core.
+		const atlas = atlasCities().filter((c) => !inBay(c.lat, c.lon));
+		const seen = new Set(atlas.map((c) => c.id));
+		const procedural = (typeof extraPlaces === 'function' ? extraPlaces() : extraPlaces || [])
+			.filter((c) => Number.isFinite(c?.lat) && Number.isFinite(c?.lon))
+			.map((c, i) => {
+				const id = String(c.id || `procedural-${Math.round(c.lat * 1000)}-${Math.round(c.lon * 1000)}-${i}`);
+				if (seen.has(id)) return null;
+				seen.add(id);
+				return { ...c, id, name: c.name || 'Unnamed settlement', pop: Number.isFinite(c.pop) ? c.pop | 0 : 2 };
+			})
+			.filter(Boolean);
+		const C = [...atlas, ...procedural];
 		nodes = C.map((c, i) => ({ i, id: c.id, name: c.name, lat: c.lat, lon: c.lon, pop: c.pop | 0, links: [] }));
 		const cell = new Map(), key = (a, b) => a + ',' + b;
 		for (const n of nodes) { const k = key(Math.floor(n.lat / 5), Math.floor((n.lon + 180) / 5)); if (!cell.has(k)) cell.set(k, []); cell.get(k).push(n); }
@@ -346,10 +368,25 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 
 	// ---------- each frame ----------
 	let scanT = 0;
+	const placesKey = () => (typeof extraPlaces === 'function' ? extraPlaces() : extraPlaces || [])
+		.filter((c) => Number.isFinite(c?.lat) && Number.isFinite(c?.lon))
+		.map((c, i) => `${c.id || i}:${Math.round(c.lat * 1000)}:${Math.round(c.lon * 1000)}`).join('|');
 	function update(dt, cam, on, town) {
 		group.visible = on;
 		if (!on) return;
-		if (!links) { if (!build && atlasReady()) build = network(); if (build) { const t0 = performance.now(); while (performance.now() - t0 < 4) if (build.next().done) { build = null; break; } } return; }
+		// Bay towns are created after the globe starts streaming. Rebuild the bounded graph
+		// once their deterministic catalogue appears, without rebuilding every frame.
+		const pk = placesKey();
+		if (links && pk !== extraKey) {
+			nodes = links = build = null; extraKey = pk; routes.clear(); queue.length = 0; job = null;
+			pieceCache.clear(); grid.clear(); built = []; making = null; at = null;
+			mesh.geometry.dispose(); mesh.geometry = new THREE.BufferGeometry();
+		}
+		if (!links) {
+			if (!build && atlasReady()) { extraKey = pk; build = network(); }
+			if (build) { const t0 = performance.now(); while (performance.now() - t0 < 4) if (build.next().done) { build = null; break; } }
+			return;
+		}
 		const x = cam.position.x, z = cam.position.z, ll = toLL(x, z);
 		// the links near you still to be found on the ground (the window must hold both ends)
 		scanT -= dt;
