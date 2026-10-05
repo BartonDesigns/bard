@@ -6,12 +6,12 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 
 ## BR-001 — Tangible world development as the primary reward
 
-- **Priority/status:** P0 / requested.
+- **Priority/status:** P0 / implementing; a bounded private-preview world-project ledger is shipped in the frontend, while visible renderer/NPC adapters and the authoritative shared backend remain open.
 - **Source:** Josh, 3 October 2026: “gold doesn’t make sense” and rewards should be “actual tangible change and development to the world.”
 - **Decision:** New reward design should prioritize persistent, visible and useful changes to the world. Existing medieval gold saves/content remain compatible until a deliberate migration is designed; do not delete four months of prior content.
 - **Examples to specify:** repair a path/bridge; restore a garden/ecosystem; help open a gathering place; support an NPC starting a useful activity; musical actions develop a place or its behavior. These are candidate build requests, not implemented rewards.
 - **Acceptance:** one end-to-end quest grants a real observable/useful world change; it survives reload, streaming, orbit return and appropriate world revisits; NPC dialogue recognizes it; grants are idempotent; cancellation/retry cannot duplicate or erase progress; performance stays bounded.
-- **Dependencies:** supported world-change registry, save schema/migration, ownership/scope, actual rendering/physics adapters and completion ledger.
+- **Dependencies:** supported world-change registry, save schema/migration, ownership/scope, actual rendering/physics adapters and completion ledger. `docs/world-development-rewards.md` records the shipped private-preview contract; it intentionally does not claim universal multiplayer.
 
 ## BR-002 — Gradual propagation over roughly a day
 
@@ -60,14 +60,16 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 
 - 2026-10-04T20:21:43-07:00 (03:21:43Z on 5 October) owner-request intake: added BR-013 for fictional hunting/defensive tools, player/NPC/supermarket acquisition, risk-based police-station theft and deterministic lived-in bathroom variation. The request is recorded as requested/specification only; no weapon system, crime simulation, interior decoration or deployment work is claimed. No duplicate request was found in the existing queue. The safety boundary intentionally excludes real-world weapon construction/procurement and police-security tactics. Dependencies include BR-006 shared state and BR-004/005 NPC/quest systems. Source is this owner conversation; no private external chats, player studies or agent playtests were ingested.
 
+- 2026-10-05T03:53:19Z release reconciliation: [PR #15](https://github.com/BartonDesigns/bard/pull/15) merged to `main` at [`27e8b42`](https://github.com/BartonDesigns/bard/commit/27e8b42e156c9229e4cae37e7164ba0611566dba). It includes the fictional equipment/bathroom slice, close-range ground treatment, outer-Bay procedural road connectors, the private-preview tangible-world reward seam and the tested world-progress provider boundary. The GitHub Pages deployment for this exact commit, [run 37261209561](https://github.com/BartonDesigns/bard/actions/runs/37261209561), completed successfully. BR-013 is now shipped frontend with shared-state and live browser/device validation still open; BR-006 is specified rather than multiplayer-shipped. The Cloudflare Worker and credentials were not changed. Direct public-site browser verification was unavailable in this workspace, so no stronger live-play claim is recorded.
+
 ## BR-006 — Universal world progress with private player conversations
 
-- **Priority/status:** P0 / requested; shared backend not implemented or deployed.
+- **Priority/status:** P0 / specified; a tested client/provider seam is shipped, but the authoritative Worker endpoint is not implemented or deployed.
 - **Source:** Josh, 4 October 2026 Pacific: “Progress will be shared universally with all other players, correct?”
 - **Requirement:** tangible world developments and their stages should have one authoritative shared state, visible to all players visiting the same world. The current browser-local NPC/quest saves do NOT provide this.
 - **Privacy/scope:** player dialogue archives and personal memories remain private. Shared outcomes can credit aggregate contributions without publishing conversation transcripts. Specify how personal quest journals observe shared completion.
 - **Acceptance:** two independent clients contribute to and observe the same world project; atomic/idempotent completion; reconnect/offline catch-up; stable world/project/resident IDs; versioned events with conflict rules; server-owned progression timestamps; cached clients cannot overwrite newer progress; personal chat is never included in public world events.
-- **Dependencies:** authenticated or otherwise abuse-resistant contribution API, canonical world-state storage, supported world-effect adapters, backend deployment access and save migration. A localStorage flag, daily intake or static website deployment is not multiplayer synchronization.
+- **Dependencies:** authenticated or otherwise abuse-resistant contribution API, canonical world-state storage, supported world-effect adapters, backend deployment access and save migration. `docs/world-progress-sync.md` defines the versioned public-event boundary, offline outbox and privacy rules. A localStorage flag, daily intake or static website deployment is not multiplayer synchronization.
 
 ## BR-007 — Separate NPC dialogues and searchable full archive
 
@@ -111,29 +113,29 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 ## BR-011 · Connected streets and highways beyond the Bay
 
 - **Source:** owner, 4 October 2026, 11:21 Pacific: streets and interconnected long highways appear absent outside the Bay Area.
-- **Priority/status:** P0 / verified release candidate; frontend deployment evidence will be recorded in the release PR.
+- **Priority/status:** P0 / shipped frontend; automated road/ground regressions and the Pages deployment are verified, with broader device coverage still open.
 - **Player outcome:** towns outside the Bay have visible local streets connected to usable intercity roads, including when approaching a highway midway between cities.
 - **Dependencies:** regional settlement street data, globe route streaming, road-source registration, shared terrain grading and floating-frame handling.
 - **Acceptance:** representative non-Bay cities expose connected street/highway segments; approaching a route midpoint loads it; ribbons agree with player/driving ground; town joins update after asynchronous growth; sources survive rebase and release on unload; caches stay bounded; no implausible long open-ocean roads. Procedural connectivity does not claim exact real-world highway mapping.
-- **Evidence/status:** concrete source defects and the final browser results are tracked in docs/world-expansion-progress.md. No player interview or universal-coverage claim is inferred from automated samples.
+- **Evidence/status:** concrete source defects and the automated source regressions are tracked in docs/world-expansion-progress.md and PR #15. Pages run 37261209561 deployed the merged frontend. No player interview, native-device FPS result or universal-coverage claim is inferred from automated samples.
 
 ## BR-012 · Correct regional homes in East Asia
 
 - **Source:** same owner request, 4 October 2026: far Eastern homes not generating properly; continue the world-expansion work.
-- **Priority/status:** P0 / verified release candidate; frontend deployment evidence will be recorded in the release PR.
+- **Priority/status:** P0 / shipped frontend sample; regional housing regressions and the Pages deployment are verified, with broader worldwide visual coverage still open.
 - **Player outcome:** regional homes render consistently, stand on appropriate dry ground, retain their regional architecture and leave streets clear.
 - **Dependencies:** regional block layout, rotated building footprints, wet/slope checks, foundation placement and cell streaming.
 - **Acceptance:** representative East Asian towns render finite visible geometry; dense streets align between blocks; houses avoid water and unsuitable slopes; uphill walls are not buried; regional roof/facade details remain; streamed cells and collision stay aligned after returning/rebasing.
-- **Evidence/status:** Kyoto and Beijing rendered with finite grounded homes, shared street intersections and cleared tree/plant exclusions. Eight housing regressions and actual street-level browser checks pass; see docs/world-expansion-progress.md. This does not claim an exhaustive worldwide visual audit.
+- **Evidence/status:** Kyoto and Beijing rendered with finite grounded homes, shared street intersections and cleared tree/plant exclusions. Eight housing regressions and actual street-level browser checks pass; the merged frontend is included in Pages run 37261209561. This does not claim an exhaustive worldwide visual audit.
 
 ## BR-013 · Fictional hunting, defensive tools and lived-in homes
 
 - **Source:** Josh, 4 October 2026, 20:21 Pacific: requests rifles/weapons for hunting and home defense; acquisition through police-station theft, other players, NPCs and supermarkets; supermarkets should also carry barracks/home supplies; 75% of houses should have noticeably messier bathrooms.
-- **Priority/status:** P1 / implementing; the source slice and focused regression suite are complete locally, with live frontend release pending. The Worker is unchanged.
+- **Priority/status:** P1 / shipped frontend; the source slice, focused regression suite and Pages deployment are complete. The Worker is unchanged.
 - **Intended player outcome:** hunting, household preparation and defensive scenarios should create meaningful choices in a persistent world. Fictional ranged tools and ordinary household/barracks supplies should have understandable regional inventories and multiple player/NPC commerce paths. Police-station acquisition is a high-risk, explicit game event rather than a guaranteed supply loop. House interiors should feel inhabited: a deterministic 75% of generated houses have varied bathroom clutter/mess, while the remaining 25% stay clean or ordinary for contrast.
 - **Safety and gameplay boundaries:** use an invented, game-only weapon taxonomy with no real brands, calibers, construction, procurement or real-world police-security guidance. Model theft as abstracted alarms, witnesses, access state, response and reputation/heat; do not expose real station layouts or tactics. Keep hunting and home-defense consequences bounded to the fictional simulation, with authored rules for safe zones, wildlife, NPC surrender/flee behavior and persistent crime state. Supermarket inventories may cover fictional low-tier tools and general household supplies; stronger items remain gated by authored vendors, quests, licenses or world state rather than appearing universally. Avoid graphic bathroom content; mess is environmental storytelling and must not block traversal or essential interactions.
 - **Dependencies:** shared authoritative inventory/trade and crime state (BR-006); conversational NPC commerce/quests (BR-004/005); item, durability, ammunition/resource and save schemas; player-to-player trading with abuse-resistant validation; police-station and supermarket building tags; wildlife/hunting interactions; procedural interior placement, navigation/collision budgets and streaming cleanup; deterministic house-seed decoration; mature-content preferences where dialogue references crime or hunting.
-- **Evidence/status:** `arms`, `arms-runtime`, site-catalog and bathroom-clutter regressions pass; the production island build and `git diff --check` pass. The runtime persists its inventory repository, validates stock/ownership/price/duplicate theft attempts, and keeps police-station acquisition abstracted. Browser smoke could not run in this workspace because the Playwright Chromium executable is not installed; no live deployment is claimed until the Pages release is verified. Universal shared state remains a BR-006 dependency.
+- **Evidence/status:** `arms`, `arms-runtime`, site-catalog and bathroom-clutter regressions pass; the production island build and `git diff --check` pass. The runtime persists its inventory repository, validates stock/ownership/price/duplicate theft attempts, and keeps police-station acquisition abstracted. Pages run 37261209561 deployed the merged frontend at 27e8b42. Browser smoke could not run in this workspace because the Playwright Chromium executable is unavailable, so native-device fidelity remains open. Universal shared state remains a BR-006 dependency.
 - **Acceptance:**
   1. A test world exposes at least one complete hunting loop and one defensive scenario using fictional items, with authored rules for acquisition, use, loss, repair/replenishment and persistence.
   2. Player trade, NPC purchase/sale and supermarket supply paths validate ownership, stock, price and shared-state updates atomically; reconnecting or reloading cannot duplicate items or currency-equivalent rewards.
