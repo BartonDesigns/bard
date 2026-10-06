@@ -14,7 +14,7 @@
 // and out at the edge (world/lodfade.js); made only for the forms the kit grows.
 
 import * as THREE from 'three';
-import { hardwood, conifer, shrub, palm, banana, fern, swayMaterial, Builder, tube, card, V } from '../world/vegetation.js';
+import { hardwood, shrub, palm, banana, fern, swayMaterial, Builder, tube, strip, card, V } from '../world/vegetation.js';
 import * as TX from '../world/textures.js';
 import { addLodFade } from '../world/lodfade.js';
 import { mulberry32 } from '../noise.js';
@@ -197,9 +197,10 @@ function emergent(seed, far) {
 function eucalypt(seed, far) {
 	const r = mulberry32(seed), wood = new Builder(), leaf = new Builder(), H = 36 * (0.85 + r() * 0.3), R0 = H * 0.014;
 	const la = r() * 6.283, lean = H * 0.03 * r(), fork = V(Math.cos(la) * lean, H * (0.42 + r() * 0.1), Math.sin(la) * lean);
-	const w0 = wood.c.length;
-	tube(wood, [V(0, -0.4, 0), V(0, H * 0.02, 0), V(fork.x * 0.2, H * 0.15, fork.z * 0.2), V(fork.x * 0.6, H * 0.35, fork.z * 0.6), fork], [R0 * 1.7, R0 * 1.25, R0, R0 * 0.85, R0 * 0.62], far ? 5 : 9, new THREE.Color(1, 1, 1), (t) => t * 0.06);
-	// the crown leans off to one side; the limbs climb steeply into it
+	// a slight taper and a sinuous lean up to the fork
+	const w0 = wood.c.length, wob = r() * 6.283, path = [], rad = [];
+	for (let k = 0; k <= 8; k++) { const t = k / 8, sw = Math.sin(t * 7 + wob) * H * 0.008 * Math.sin(t * Math.PI); path.push(V(fork.x * t * t + sw, k ? fork.y * t : -0.4, fork.z * t * t + Math.cos(t * 5 + wob) * H * 0.006 * Math.sin(t * Math.PI))); rad.push(R0 * (1.25 - 0.6 * t + 0.5 * Math.exp(-t * 18))); }
+	tube(wood, path, rad, far ? 5 : 10, new THREE.Color(1, 1, 1), (t) => t * 0.06);
 	const ca = r() * 6.283, cOff = V(Math.cos(ca), 0, Math.sin(ca)).multiplyScalar(H * 0.06), W = H * (0.24 + r() * 0.06), c = fork.clone().add(cOff).add(V(0, H * 0.25, 0)), list = [];
 	const nL = far ? 3 : 4 + Math.floor(r() * 2);
 	for (let i = 0; i < nL; i++) {
@@ -216,15 +217,28 @@ function eucalypt(seed, far) {
 		}
 	}
 	// the bark: smooth, in peeled patches (painted on the trunk and limbs as they stand)
+	const sock = r() < 0.5 ? H * (0.08 + r() * 0.2) : 0;
 	for (let i = w0; i < wood.c.length; i += 3) {
 		const v = i, x = wood.p[v], y = wood.p[v + 1], z = wood.p[v + 2];
 		if (wood.c[i] < 0.9) continue;
-		const n = Math.sin(y * 1.3 + Math.sin(x * 4.1 + z * 3.3) * 2.5) + Math.sin(y * 3.1 + x * 6 - z * 5) * 0.7, low = Math.max(0, 1 - y / (H * 0.18));
-		const C = n > 0.5 ? [0.7, 0.46, 0.34] : n > -0.4 ? [0.68, 0.64, 0.55] : [0.47, 0.47, 0.45];
-		// (the foot keeps its rough grey-brown stocking of old bark)
-		wood.c[i] = C[0] * (1 - low) + 0.42 * low; wood.c[i + 1] = C[1] * (1 - low) + 0.38 * low; wood.c[i + 2] = C[2] * (1 - low) + 0.34 * low;
+		const n = Math.sin(y * 1.7 + Math.sin(x * 9.1 + z * 7.3) * 2.5 + seed) + Math.sin(y * 4.3 + x * 13 - z * 11) * 0.8 + Math.sin(y * 0.6 - z * 5) * 0.5;
+		const C = n > 0.9 ? [0.72, 0.44, 0.3] : n > 0.25 ? [0.64, 0.6, 0.5] : n > -0.5 ? [0.5, 0.52, 0.36] : n > -1.1 ? [0.44, 0.44, 0.42] : [0.6, 0.55, 0.46];
+		// (some keep a rough dark stocking of old bark up the lower trunk)
+		const low = Math.min(1, Math.max(0, (sock - y) / (H * 0.05)));
+		wood.c[i] = C[0] * (1 - low) + 0.3 * low; wood.c[i + 1] = C[1] * (1 - low) + 0.26 * low; wood.c[i + 2] = C[2] * (1 - low) + 0.22 * low;
 	}
 	if (!far) {
+		// strips of bark peeling off the trunk, curling away at their foot
+		for (let k = 0; k < 10; k++) {
+			const t = 0.08 + r() * 0.8, q = Math.min(7, Math.floor(t * 8)), o = path[q].clone().lerp(path[q + 1], t * 8 - q), a = r() * 6.283, L = H * (0.03 + r() * 0.05), w = R0 * (0.5 + r() * 0.6), rr = rad[q] * 1.04;
+			const dir = V(Math.cos(a), 0, Math.sin(a)), side = V(-dir.z, 0, dir.x), dark = r() < 0.5;
+			const col = dark ? { r: 0.4, g: 0.3, b: 0.22 } : { r: 0.74, g: 0.52, b: 0.38 }, ids = [];
+			for (let m = 0; m <= 3; m++) {
+				const u = m / 3, curl = u * u * L * 0.35, c0 = o.clone().add(dir.clone().multiplyScalar(rr + curl)).add(V(0, -L * u, 0));
+				for (const sd of [-1, 1]) ids.push(wood.vert(c0.clone().add(side.clone().multiplyScalar(sd * w * (1 - u * 0.4))), dir, [sd * 0.5 + 0.5, u], col, 0.05 + u * 0.3));
+			}
+			for (let m = 0; m < 3; m++) { const a0 = ids[m * 2], a1 = ids[m * 2 + 1], b0 = ids[m * 2 + 2], b1 = ids[m * 2 + 3]; wood.tri(a0, b0, a1); wood.tri(a1, b0, b1); wood.tri(a0, a1, b0); wood.tri(a1, b1, b0); }
+		}
 		// ribbons of shed bark hanging at the fork
 		for (let k = 0; k < 5; k++) {
 			const a = r() * 6.283, o = fork.clone().add(V(Math.cos(a) * R0 * 0.7, -r() * H * 0.04, Math.sin(a) * R0 * 0.7)), L = H * (0.06 + r() * 0.08);
