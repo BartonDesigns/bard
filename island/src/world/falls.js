@@ -22,7 +22,7 @@ export function createFalls({ world } = {}) {
 			let top = p.y + 1;
 			while (top < p.y + 24 && (!F?.solid || F.solid(x, top + 0.5, z) < 0)) top += 0.5;
 			if (top - p.y < 3 || top >= p.y + 24) continue;
-			out.push({ x, y: p.y, z, lx: x, ly: top - 0.3, lz: z, drop: top - 0.3 - p.y, w: 0.5 + p.r * 0.06, cave: true });
+			out.push({ x, y: p.y, z, lx: x, ly: top - 0.3, lz: z, drop: top - 0.3 - p.y, w: 0.5 + p.r * 0.06, cave: true, cx: c.x, cz: c.z });
 		}
 		return out;
 	}

@@ -10,7 +10,7 @@ const groundAt = (x, z) => { const p = toLL(x, z); return height.atLL(p.lat, p.l
 const scene = new THREE.Scene();
 let lanes = null;
 const S = createSettlements({ scene, ground: groundAt, wet: () => false, toXZ, F: (await import('./globeframe.js')).F, lanes: { keepOff: (x, z, m) => lanes.keepOff(x, z, m), gridAt: (x, z) => lanes.gridAt(x, z), onRoad: (x, z, m) => lanes.onRoad(x, z, m) } });
-lanes = createGlobeLanes({ scene, height, groundAt, isPhone: false, highways: { near() {}, onRoad: () => false }, settlements: S });
+lanes = createGlobeLanes({ scene, height, groundAt, isPhone: false, highways: { near(k, x, z, r, out) { if (process.env.HW) out.push({ pts: new Float32Array([FAR.x - 5000, FAR.z + 300, FAR.x + 5000, FAR.z + 300]), w: 8 }); }, onRoad: () => false }, settlements: S });
 console.log('survey', surveyAt(lat, lon)?.id);
 // a few farms and villages round the point
 for (let k = 0; k < 8; k++) {

@@ -309,6 +309,10 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 
 	// ---- the hiss of the spray and the rush of falling water, quiet, from what is near
 	let snd = null;
+	function stop() {
+		if (snd) for (const g of [snd.hiss, snd.rush]) { g.src.stop(); g.disconnect(); }
+		snd = null;
+	}
 	function sound(hiss, rush) {
 		const bus = soundBus();
 		if (!bus) return;
@@ -318,8 +322,10 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 				const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = qv;
 				const g = ctx.createGain(); g.gain.value = 0;
 				s.connect(fl).connect(g).connect(bus.out); s.start();
+				g.src = s;
 				return g;
 			};
+			stop();
 			snd = { ctx, hiss: mk('white', 'highpass', 4200, 0.6), rush: mk('pink', 'lowpass', 1400, 0.5) };
 		}
 		snd.hiss.gain.setTargetAtTime(Math.min(0.02, hiss), snd.ctx.currentTime, 0.4);
@@ -370,7 +376,11 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 
 		// the falls in reach, sized by their drop and their width
 		fallT -= dt;
-		if (fallT < 0) { fallT = 1.5; fallList = high ? [] : falls.near(cam.x, cam.z, 260); }
+		if (fallT < 0) {
+			fallT = 1.5;
+			if (fallK.size > 64) fallK.clear();
+			fallList = high ? [] : falls.near(cam.x, cam.z, 260);
+		}
 		const fl = fallList.map((f) => ({ f, d: Math.hypot(f.x - cam.x, f.z - cam.z, f.y - cam.y) })).sort((a, b) => a.d - b.d);
 		for (let s = 0; s < NF && s < fl.length; s++) {
 			const { f, d } = fl[s], b = (SLOTS - NF + s) * 5;
@@ -392,7 +402,7 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 		scene.remove(group);
 		for (const m of [drops, mist, wet]) { m.geometry.dispose(); m.material.dispose(); }
 		puff.dispose();
-		if (snd) { snd.hiss.gain.value = 0; snd.rush.gain.value = 0; snd.hiss.disconnect(); snd.rush.disconnect(); }
+		stop();
 	}
 	return {
 		group, update, dispose,
