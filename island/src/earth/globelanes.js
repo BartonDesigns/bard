@@ -72,7 +72,7 @@ export function gridSnap(lat, lon, half = 280) {
 }
 
 // the surfaces: 0 marked asphalt, 1 plain asphalt, 2 gravel, 3 dirt
-const GRAVEL = [0.42, 0.39, 0.34], DIRT = [0.42, 0.34, 0.25];
+const GRAVEL = [0.36, 0.33, 0.29], DIRT = [0.42, 0.34, 0.25];
 // the kits whose lanes are earth, not metalled
 const EARTH = /^(steppe|savanna|sahel|desert|outback|jungle|polar|station|himalaya|andes|island|kraal|camp)$/;
 const PAVED = /^(village|alpine|mediterranean|eastvillage|snow|eastcity|southcity|bazaar)$/;
