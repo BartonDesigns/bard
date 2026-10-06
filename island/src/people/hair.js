@@ -94,7 +94,7 @@ export function skullOf(A, p, P) {
 // the lowest a root may sit (above the eyes, m) all round the head, by the angle from the
 // front (deg): the forehead, the temples, the sideburns, over the ears, the nape
 const LINE = [[0, 0.064], [30, 0.058], [48, 0.036], [62, 0.018], [74, -0.012], [82, -0.032], [88, 0.0], [96, 0.03], [112, 0.024], [128, -0.02], [150, -0.058], [180, -0.072]];
-function hairline(deg) {
+export function hairline(deg) {
 	for (let i = 1; i < LINE.length; i++) if (deg <= LINE[i][0]) { const [a, y0] = LINE[i - 1], [b, y1] = LINE[i]; return y0 + (y1 - y0) * (deg - a) / (b - a); }
 	return LINE[LINE.length - 1][1];
 }

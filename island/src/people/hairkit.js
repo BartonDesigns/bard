@@ -13,6 +13,7 @@
 // the face, so its soft edges stay soft.
 
 import * as THREE from 'three';
+import { hairline } from './hair.js';
 
 const DIR = new URL('../assets/people/hair/', import.meta.url).href;
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -239,15 +240,24 @@ function offFace(FF, K, V, o, out) {
 
 // a style tied onto this body (p: its vertices; vol scales how far the hair stands off the
 // head): the ties' own vertices, and the offset, scaled as the body is
-function styleChunk(A, P, p, St, kind, vol, fadeY = -99) {
+function styleChunk(A, P, p, St, kind, vol, fadeY = -99, coily = false) {
 	const { nv, refs, wts, off, den, sref } = St, F = fixed(A, St, kind);
 	const sc = [0, 1, 2].map((a) => { const [i, j] = sref[a]; return (i === j ? P._S : Math.abs(p[i * 3 + a] - p[j * 3 + a]) / den[a]) * vol / 40000; });
 	const V = new Float32Array(nv * 3), K = P.skull, d = new THREE.Vector3(), FF = kind === 0 && faceFront(P, p);
+	const sd = ((P.dna?.seed ?? 0) % 1000) * 0.37;
 	for (let v = 0; v < nv; v++) {
 		let x = 0, y = 0, z = 0;
 		for (let k = 0; k < 3; k++) { const r = refs[v * 3 + k] * 3, w = wts[v * 3 + k]; x += w * p[r]; y += w * p[r + 1]; z += w * p[r + 2]; }
 		// (down a fade the hair lies closer, thinning into the painted crop)
-		const k = fadeY > -9 ? 0.35 + 0.65 * sm(fadeY - 0.035, fadeY + 0.02, y) : 1;
+		let k = fadeY > -9 ? 0.35 + 0.65 * sm(fadeY - 0.035, fadeY + 0.02, y) : 1;
+		// (coily hair grows from the scalp: close and dense at the hairline, rounding out
+		// above it into the mass, its outline a little uneven)
+		if (coily) {
+			d.set(x - K.c.x, y - K.c.y, z - K.c.z);
+			const up = sm(-0.004, 0.05, y - K.eyeY - hairline(Math.abs(Math.atan2(d.x, d.z)) * 180 / Math.PI));
+			d.normalize();
+			k *= (0.2 + 0.8 * up) * (1 + 0.09 * up * Math.sin(d.x * 5.1 + d.y * 3.3 + sd) * Math.sin(d.z * 4.3 - d.x * 2.7 + sd * 1.7));
+		}
 		V[v * 3] = x + off[v * 3] * sc[0] * k; V[v * 3 + 1] = y + off[v * 3 + 1] * sc[1] * k; V[v * 3 + 2] = z + off[v * 3 + 2] * sc[2] * k;
 		// never inside the head: out to its surface (this head's own, all round) and a little
 		// more; hair on the brow sits in front of the skin
@@ -395,7 +405,7 @@ function shellChunk(A, P, p, kind, rnd) {
 export function hairGeometry(A, P, p, style, beard, rnd) {
 	if (!A.ride) A.ride = A.bones.map((b) => RIDE.has(b.name));
 	const parts = [];
-	if (style) parts.push(styleChunk(A, P, p, styleNow(style.id), 0, style.vol, style.fadeY));
+	if (style) parts.push(styleChunk(A, P, p, styleNow(style.id), 0, style.vol, style.fadeY, STYLES[style.id] === 'coily'));
 	if (beard?.asset) parts.push(styleChunk(A, P, p, styleNow(beard.kind), 1, 1));
 	else if (beard && SHELLS[beard.kind]) parts.push(shellChunk(A, P, p, beard.kind, rnd));
 	const C = parts.filter(Boolean);

@@ -14,6 +14,17 @@ import { skyEnv, withCarSky, carGlassMaterial } from '../bay/cars.js';
 // which kinds have a model, and its files (near, and for the middle distance)
 export const MODEL_KINDS = { sports: ['sports.glb', 'sports-mid.glb'], crossover: ['crossover.glb', 'crossover-mid.glb'], delivery: ['delivery.glb', 'delivery-mid.glb'], bus: ['bus.glb', 'bus.glb'] };
 const url = (f) => new URL(`../assets/vehicles/${f}`, import.meta.url).href;
+// a phone keeps the models' textures at half size (a quarter of the memory)
+const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+function halve(t) {
+	const im = t?.image;
+	if (!PHONE || !im || im.width <= 512) return;
+	const cv = document.createElement('canvas');
+	cv.width = im.width >> 1; cv.height = im.height >> 1;
+	cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+	im.close?.();
+	t.image = cv; t.needsUpdate = true;
+}
 
 let loader = null;
 function gltf() {
@@ -117,6 +128,7 @@ function part(key, e) {
 	const gs = e.gs;
 	const geo = gs.length > 1 ? mergeGeometries(gs) || gs[0] : gs[0];
 	const n = e.mat.name;
+	for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) halve(e.mat[k]);
 	const role = n === 'paint' ? 'paint' : n === 'glass' ? 'glass' : n === 'lamp' ? 'lamp' : 'solid';
 	let mat;
 	if (role === 'paint') mat = paintMaterial(e.mat.map);
