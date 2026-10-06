@@ -95,10 +95,15 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 	// the terrain's own wooded mask at a point (see globeterrain.js's colours)
 	function woodAt(lat, lon, h, slope, cell) {
 		const cp = Math.cos(lat * RAD), p = [EARTH_R * cp * Math.cos(lon * RAD), EARTH_R * cp * Math.sin(lon * RAD), EARTH_R * Math.sin(lat * RAD)];
-		const m4 = 16 / S0, m6 = 64 / S0;
-		const pM = vn3(p[0] * m4, p[1] * m4, p[2] * m4, 23), pS = vn3(p[0] * m6, p[1] * m6, p[2] * m6, 37);
-		const air = cell.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * cell.E) / 1000;       // (as the terrain's, globeterrain.js)
-		return { k: sst(0.44, 0.56, cell.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, slope)), air };
+		const m2 = 4 / S0, m4 = 16 / S0, m6 = 64 / S0;
+		const pB = vn3(p[0] * m2, p[1] * m2, p[2] * m2, 11), pM = vn3(p[0] * m4, p[1] * m4, p[2] * m4, 23), pS = vn3(p[0] * m6, p[1] * m6, p[2] * m6, 37);
+		// (the cells read between, their edges wandering, as the terrain reads them)
+		const c = data.smoothAt(lat, lon, (pB - 0.5) * 0.8, (pM - 0.5) * 0.15);
+		const air = c.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * cell.E) / 1000;       // (as the terrain's, globeterrain.js)
+		// thinner where the land is farmed (its slope as the terrain has it, 1 - the normal's up)
+		const s1 = 1 - 1 / Math.hypot(1, slope);
+		const farmable = Math.max(sst(350, 550, c.RAIN) * sst(3, 9, c.TEMP), sst(150, 260, c.RAIN) * (1 - sst(300, 600, h)) * sst(12, 16, c.TEMP) * 0.75) * (1 - sst(0.06, 0.16, s1)) * (1 - sst(1200, 2200, h));
+		return { k: sst(0.44, 0.56, c.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * 0.12) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, s1)), air };
 	}
 	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide
 	function* lay(cx, cz, R, step, out, tierName) {

@@ -313,19 +313,19 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 						// underside of the cloud, which it melts into
 						float core = smoothstep(0.25, 0.85, vn(vec2(azS * 9.0 + S.x * 0.0007, 1.3)));
 						float shafts = 0.35 + 0.65 * vn(vec2(azS * 55.0 + S.x * 0.001, 3.0)) * (0.65 + 0.35 * vn(vec2(azS * 190.0, 7.0)));
-						float side = 1.0 - smoothstep(0.45, 1.0, pd / S.z);
+						float side = 1.0 - smoothstep(0.6, 1.0, pd / S.z);
 						float ragged = top * (0.85 + 0.25 * vn(vec2(azS * 90.0, 11.0)));
 						// down to the ground, its foot frayed where the last drops dry out
 						float fall = smoothstep(ragged * 1.08, ragged * 0.7, tanE) * smoothstep(-0.02, 0.012 * (0.6 + 0.8 * vn(vec2(azS * 120.0, 5.0))), tanE);
 						// fine streaks, long and upright, drifting slowly down
-						float streak = 0.62 + 0.38 * vn(vec2(azS * 1400.0, tanE * 6.0 + uTime * 0.6)) * vn(vec2(azS * 520.0, tanE * 2.0 - uTime * 0.25));
-						float dens = thick * fall * side * mix(shafts, 1.0, core * 0.6) * (0.55 + 0.45 * core);
+						float streak = 0.72 + 0.28 * vn(vec2(azS * 1400.0, tanE * 6.0 + uTime * 0.6)) * vn(vec2(azS * 520.0, tanE * 2.0 - uTime * 0.25));
+						float dens = thick * fall * side * (0.6 + 0.4 * mix(shafts, 1.0, core * 0.6)) * (0.7 + 0.3 * core);
 						float veil = dens * streak * smoothstep(42000.0, 7000.0, tin);
 						// blue-grey, the sky behind showing through where it is thin; low down it melts
 						// into the haze the far land stands in
-						vec3 veilC = mix(vec3(0.26, 0.30, 0.37), uSkyHor * 0.75, 0.35 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.85 + 0.3 * streak);
+						vec3 veilC = mix(vec3(0.21, 0.24, 0.30), uSkyHor * 0.7, 0.18 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.85 + 0.3 * streak);
 						veilC = mix(veilC, uFogCol, (1.0 - smoothstep(0.0, 0.05, tanE)) * 0.55);
-						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.45, 0.0, 0.88));
+						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 2.1, 0.0, 0.9));
 					}
 					rainLine += thick * below * 2.2;
 				}
