@@ -136,7 +136,7 @@ vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dor
 		col = mix(col, vec3(0.03, 0.055, 0.02) * (0.7 + 0.6 * mix(0.5, vn(vec2(ea / 3.0, 5.0)), 1.0 - smoothstep(1.0, 3.0, px))), gLine(dB, 1.5 + 1.5 * vn(vec2(ea / 30.0, 9.0)), px) * gap);
 	} else if (er < hedgeP + 0.3) {
 		float tk = gLine(abs(dB - 4.5), 1.6, px) * (1.0 - 0.6 * gLine(abs(dB - 4.5), 0.35, px));
-		col = mix(col, soil * 1.5 + 0.02, tk); bare = mix(bare, 1.0, tk);
+		col = mix(col, soil * 1.25 + vec3(0.03, 0.025, 0.015), tk); bare = mix(bare, 1.0, tk);
 	}
 	// far off: the patchwork's average, calm
 	float far = smoothstep(30.0, 110.0, px);
@@ -348,6 +348,9 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 				}`)
 				.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += gCityGlow;');
 			sh.fragmentShader = 'vec3 gCityGlow = vec3(0.0);\n' + sh.fragmentShader;
+			// (the comments left out of what the driver is handed: a smaller program to compile)
+			sh.vertexShader = sh.vertexShader.replace(/[ \t]*\/\/[^\n]*/g, '');
+			sh.fragmentShader = sh.fragmentShader.replace(/[ \t]*\/\/[^\n]*/g, '');
 		};
 		m.customProgramCacheKey = () => 'globeground2';
 		m.userData.own = own;
