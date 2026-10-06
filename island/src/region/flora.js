@@ -196,11 +196,11 @@ function emergent(seed, far) {
 // holding a high, open, lopsided crown of drooping blue-grey clumps, a dead tip or two
 function eucalypt(seed, far) {
 	const r = mulberry32(seed), wood = new Builder(), leaf = new Builder(), H = 36 * (0.85 + r() * 0.3), R0 = H * 0.014;
-	const la = r() * 6.283, lean = H * 0.03 * r(), fork = V(Math.cos(la) * lean, H * (0.55 + r() * 0.1), Math.sin(la) * lean);
+	const la = r() * 6.283, lean = H * 0.03 * r(), fork = V(Math.cos(la) * lean, H * (0.42 + r() * 0.1), Math.sin(la) * lean);
 	const w0 = wood.c.length;
 	tube(wood, [V(0, -0.4, 0), V(0, H * 0.02, 0), V(fork.x * 0.2, H * 0.15, fork.z * 0.2), V(fork.x * 0.6, H * 0.35, fork.z * 0.6), fork], [R0 * 1.7, R0 * 1.25, R0, R0 * 0.85, R0 * 0.62], far ? 5 : 9, new THREE.Color(1, 1, 1), (t) => t * 0.06);
 	// the crown leans off to one side; the limbs climb steeply into it
-	const ca = r() * 6.283, cOff = V(Math.cos(ca), 0, Math.sin(ca)).multiplyScalar(H * 0.06), W = H * (0.2 + r() * 0.06), c = fork.clone().add(cOff).add(V(0, H * 0.22, 0)), list = [];
+	const ca = r() * 6.283, cOff = V(Math.cos(ca), 0, Math.sin(ca)).multiplyScalar(H * 0.06), W = H * (0.24 + r() * 0.06), c = fork.clone().add(cOff).add(V(0, H * 0.25, 0)), list = [];
 	const nL = far ? 3 : 4 + Math.floor(r() * 2);
 	for (let i = 0; i < nL; i++) {
 		const a = i / nL * 6.283 + r() * 0.7, L = H * (0.22 + r() * 0.12);
@@ -209,8 +209,8 @@ function eucalypt(seed, far) {
 		// a dead tip: a bare grey spar standing out past the leaves
 		if (i === 0 || r() < 0.2) tube(wood, [e.clone(), e.clone().add(V(Math.cos(a) * L * 0.15, L * 0.3, Math.sin(a) * L * 0.15))], [R0 * 0.1, R0 * 0.03], 3, new THREE.Color(0.62, 0.6, 0.58), () => 0.6);
 		else list.push({ c: e.clone().add(V(0, -H * 0.02, 0)), rad: W * (0.32 + r() * 0.12) });
-		if (!far) for (let k = 0; k < 2; k++) {
-			const b2 = a + (r() - 0.5) * 2, e2 = m.clone().lerp(e, 0.3 + r() * 0.4).add(V(Math.cos(b2) * W * 0.5, H * 0.05, Math.sin(b2) * W * 0.5));
+		if (!far) for (let k = 0; k < 3; k++) {
+			const b2 = a + (r() - 0.5) * 2.4, e2 = m.clone().lerp(e, 0.3 + r() * 0.4).add(V(Math.cos(b2) * W * 0.5, H * 0.05, Math.sin(b2) * W * 0.5));
 			tube(wood, [m.clone().lerp(e, 0.3), e2], [R0 * 0.18, R0 * 0.05], 3, new THREE.Color(1, 1, 1), () => 0.6);
 			list.push({ c: e2, rad: W * (0.25 + r() * 0.1) });
 		}
@@ -219,8 +219,8 @@ function eucalypt(seed, far) {
 	for (let i = w0; i < wood.c.length; i += 3) {
 		const v = i, x = wood.p[v], y = wood.p[v + 1], z = wood.p[v + 2];
 		if (wood.c[i] < 0.9) continue;
-		const n = Math.sin(y * 0.9 + Math.sin(x * 4.1 + z * 3.3) * 2) + Math.sin(y * 2.3 + x * 6 - z * 5) * 0.6, low = Math.max(0, 1 - y / (H * 0.18));
-		const C = n > 0.6 ? [0.8, 0.55, 0.42] : n > -0.3 ? [0.8, 0.76, 0.67] : [0.58, 0.58, 0.55];
+		const n = Math.sin(y * 1.3 + Math.sin(x * 4.1 + z * 3.3) * 2.5) + Math.sin(y * 3.1 + x * 6 - z * 5) * 0.7, low = Math.max(0, 1 - y / (H * 0.18));
+		const C = n > 0.5 ? [0.7, 0.46, 0.34] : n > -0.4 ? [0.68, 0.64, 0.55] : [0.47, 0.47, 0.45];
 		// (the foot keeps its rough grey-brown stocking of old bark)
 		wood.c[i] = C[0] * (1 - low) + 0.42 * low; wood.c[i + 1] = C[1] * (1 - low) + 0.38 * low; wood.c[i + 2] = C[2] * (1 - low) + 0.34 * low;
 	}
@@ -239,7 +239,7 @@ function eucalypt(seed, far) {
 		}
 	}
 	// the leaves: few cards to a clump, hanging below its centre, so the sky shows through
-	const per = far ? 3 : 6, size = far ? 4.4 : 3;
+	const per = far ? 4 : 9, size = far ? 4.4 : 3;
 	for (const cl of list) for (let i = 0; i < per; i++) {
 		const p = cl.c.clone().add(V((r() - 0.5) * 2 * cl.rad, -r() * cl.rad * 0.9 + cl.rad * 0.2, (r() - 0.5) * 2 * cl.rad));
 		const sh = 0.6 + 0.4 * r();
