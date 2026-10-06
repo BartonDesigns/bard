@@ -50,6 +50,7 @@ import { createEarthWater } from './bay/earthwater.js';
 import { createWater } from './bay/water.js';
 import { planWaters } from './planet/waters.js';
 import { createTidepools } from './bay/tidepools.js';
+import { createSaltPonds } from './bay/saltponds.js';
 import { createBeaches } from './bay/beaches.js';
 import { createParkKit } from './bay/parkkit.js';
 import { createDiscovery } from './bay/discovery.js';
@@ -908,6 +909,8 @@ export function createIslandWorld() {
 			bayArea.waterName = (x, z) => world?.water?.nameAt(x, z) ?? null;
 			// tide pools on the Pacific shore: Fitzgerald, Pillar Point, Duxbury Reef
 			world.tidepools = createTidepools(scene, bayArea, shared, { isPhone });
+			// the South Bay's salt ponds, levees and marsh, round the Dumbarton Bridge
+			world.saltPonds = createSaltPonds(scene, bayArea, shared, { isPhone });
 			// the beaches down Highway 1: lots, restrooms, camps and fires, surf, the lighthouse
 			world.beaches = createBeaches(scene, bayArea, world.real, shared, { isPhone });
 			// the parks furnished as their agencies furnish them: signs, kiosks, tables, playgrounds, courts
@@ -964,6 +967,7 @@ export function createIslandWorld() {
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
 				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y), world.lake?.floor?.(x, z, y) ?? -1e9, world.parks?.floor?.(x, z, y) ?? -1e9);
 				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); world.beaches.push?.(p, footY); world.parks?.push?.(p, footY); };
+				{ const of = island.extraFloor, P = world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
@@ -1443,6 +1447,7 @@ export function createIslandWorld() {
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
 		W.spray?.update(dt, camera);
+		W.saltPonds?.update(dt, time, camera);
 		if (W.tidepools) {
 			W.tidepools.update(dt, time, camera);
 			// arriving on a reef: what to look for

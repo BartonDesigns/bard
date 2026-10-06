@@ -10185,7 +10185,7 @@ varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying 
 					c *= mix(1.0, 0.55 + 0.9 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
 					if (any(isnan(c)) || any(isinf(c))) c = vec3(0.3);
 					diffuseColor.rgb = c;
-					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(fract(h / 500.0), snowK, forest) : vec3(farmP, bare, rockK);
+					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(fract(h / 500.0), snowK, forest) : uGDebug < 4.5 ? vec3(farmP, urb, rockK) : vec3(0.35);
 				}`).replace("#include <normal_fragment_maps>",`#include <normal_fragment_maps>
 				{
 					// the relief finer than the grid round you, as a bump (as the Bay's ground has it)

@@ -40,8 +40,6 @@ float gfN(int k, uint s){
 	float e = gfH(i + ivec3(0, 0, 1), s), g = gfH(i + ivec3(1, 0, 1), s), h = gfH(i + ivec3(0, 1, 1), s), q = gfH(i + ivec3(1, 1, 1), s);
 	return mix(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), mix(mix(e, g, u.x), mix(h, q, u.x), u.y), u.z);
 }
-// the cell of the lattice a point is in, as a number (the towns' blocks)
-float gfCell(int k, uint s){ float m = float(1 << k); vec3 t = uGF0 * m + vGP * m; return gfH(uGI0 * (1 << k) + ivec3(floor(t)), s); }
 vec3 gLin(vec3 c){ return pow(c, vec3(2.2)); }
 uniform sampler2D uGLoam, uGMoss, uGRock, uGSand; uniform vec4 uGPhK, uGFd; uniform ivec2 uGFdI; uniform int uGN2, uGN3;
 float gDetL = 0.5;
@@ -303,14 +301,20 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					}
 					urb *= (1.0 - smoothstep(0.25, 0.45, slope)) * step(0.0, vGC.x);
 					if (urb > 0.01) {
-						float blk = gfCell(7, 71u), street = 1.0 - smoothstep(0.02, 0.06, min(fract(vGW.x / 110.0), fract(vGW.z / 110.0)));
-						vec3 built = mix(vec3(0.22, 0.21, 0.2), vec3(0.4, 0.37, 0.33), blk) * (1.0 - street * 0.45);
+						// blocks of the survey's 100 m: a street round each, and in it lots of lawn, trees and
+						// roofs, more paved and roofed the denser the town
+						vec2 sb = fract(gM(0) * 0.25), se = min(sb, 1.0 - sb);
+						float blk = gfH(ivec3(gQI >> 2, 7), 71u), street = gLine(min(se.x, se.y) * 100.0, 5.0, px);
+						float dense = smoothstep(0.3, 0.9, urb + (blk - 0.5) * 0.3), nkB = 1.0 - smoothstep(2.0, 6.0, px);
+						float roof = mix(0.25 + 0.35 * dense, smoothstep(0.5, 0.58, vn(gM(2)) + dense * 0.25), nkB);
+						vec3 yard = mix(mix(grass, vec3(0.03, 0.05, 0.025), mix(0.3, smoothstep(0.6, 0.72, vn(gM(1) + 2.0)), nkB) * (1.0 - dense) * 0.8), vec3(0.24, 0.23, 0.22), dense * 0.6);
+						vec3 built = mix(mix(yard, mix(vec3(0.2, 0.19, 0.18), vec3(0.3, 0.17, 0.11), blk), roof), vec3(0.07, 0.07, 0.075), street);
 						// A city's broad footprint is only a distant land-use hint. Keep the actual
 						// forest floor and snow: Manaus's 18 km footprint must not pave the jungle.
 						// Constructed streets and buildings draw their own surfaces above this ground.
 						float builtK = smoothstep(0.08, 0.5, urb) * (1.0 - forest) * (1.0 - snowK);
 						c = mix(c, built, builtK * (1.0 - smoothstep(20000.0, 60000.0, dist) * 0.5));
-						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk + street * 0.5)) * 0.35;
+						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk + street)) * 0.35;
 					}
 					// close by: the photographs' grain (loam on the soil, moss in the grass, sand, the rock on
 					// the three planes), on the survey's lattice so it stays put when the frame moves
@@ -322,7 +326,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					c *= mix(1.0, 0.55 + 0.9 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
 					if (any(isnan(c)) || any(isinf(c))) c = vec3(0.3);
 					diffuseColor.rgb = c;
-					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(fract(h / 500.0), snowK, forest) : vec3(farmP, bare, rockK);
+					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(fract(h / 500.0), snowK, forest) : uGDebug < 4.5 ? vec3(farmP, urb, rockK) : vec3(0.35);
 				}`)
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 				{
