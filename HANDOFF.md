@@ -4,6 +4,40 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Release (6 October 2026)
+
+- **Live ground fix (iPhone, Dougherty Valley):**
+  - The camera could skim into fences and house walls in fast low flight, so the ground looked see-through with straight walls below.
+  - `player.js` now keeps the flying and walking floor above both the walked ground and the drawn ground. The margin rises with speed: 1.2 m at ×1, about 4 m at ×6.
+  - Phone road maps keep their edge ramps two texels wide (`realcity.js`).
+  - Not yet seen on a real iPhone.
+- **Graphics:** High is the default, phones included, and is remembered (`l99-quality`). The light ground (`world/gpulite.js`) is used only after a graphics loss while the Bay ground builds, and for 3 days (`l99-gpu-lite3`). Pressing High clears that and reloads into the full ground.
+- **Far rain and storms** (`world/sky.js`, `world/weather.js`):
+  - Shower cells are 1.6–4.2 km across.
+  - A storm spreads a dark, uneven cloud deck about three times wider than its rain, and dims the sky toward it down to the horizon.
+  - The rain shaft keeps an even width, leans with the wind and fades at its edges.
+- **Time speed:** a real-time step between paused and 0.1× (`sky.state.real`).
+- **South Bay salt ponds** (`bay/saltponds.js`, `bay/saltpondmap.js`):
+  - 98 ponds traced from the height survey, in crimson, rose, salmon, teal or white crust, with walkable levees and pylons.
+  - A marsh of mudflat, cordgrass, pickleweed (red from August to November) and gumplant.
+  - The ponds lower the Bay height textures; these are re-uploaded whole.
+- **Outside the Bay:**
+  - **Local roads** (`earth/globelanes.js`): section-line grids in the Midwest and Central Valley, lanes between villages, drives to houses. They are drivable and stay visible from the air.
+  - **Ground** (`earth/globeterrain.js`): fields with crops and rows on flat valley land only, and grass that is gold in summer and fall, green in winter and spring (`uGDry`).
+  - **Regional trees** (`region/flora.js`): rebuilt on the Bay's leafy vegetation in place of the low-poly shapes, including eucalyptus windbreaks and groves, and snowy spruce.
+- **Sprinklers and falling water** (`world/spray.js`, `world/sprinklers.js`, `world/falls.js`):
+  - Droplet streaks with rainbow colour, mist and wet lawns.
+  - House timers: a fixed 20% of houses water at sunrise, another 20% at 3 am.
+  - Spray and mist at creek cascades and cave falls.
+  - A head-to-head layout per lot with zones is in progress, paused; notes are in the landscaping work.
+- **Next on the list:**
+  - phone memory budget;
+  - hair refinement (show the user before shipping);
+  - street-level gaps (Castro Valley, Moraga, Richmond/El Cerrito, Novato, south of Mountain View);
+  - regional dress and talk fixes;
+  - the trail saw-tooth;
+  - sky latitude on the globe.
+
 ## Release checkpoint (4 October 2026)
 
 The current branch `codex/guide-general-travel-defaults` carries the next playable
