@@ -103,63 +103,36 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 			prev = [i0, i1];
 		}
 	}
-	// the brows: hairs on the skin along each brow's line (the base mesh's, on the brow bone),
-	// groomed: a blunt head by the nose, an arch about two-thirds out, a tapered tail. At the
-	// head the hairs stand up and out; along the arch and the tail they lie flat along it, the
-	// upper ones combed down and the lower ones up, so the edges are clean. Each person has
-	// their own shape (browShape); the grey share of the hairs (grey) drawn grey
+	// the brows: short hairs lying on the skin along each brow's arch, thick at the inner
+	// end and thinning to the tail; inner hairs stand up, the rest sweep outward; the grey
+	// share of them (grey) drawn grey
 	const B = F.brow, n0 = new THREE.Vector3(), n1 = new THREE.Vector3(), cx = (eyeC[0].x + eyeC[1].x) / 2;
-	const sh = browShape(P.dna, rnd), up = new THREE.Vector3(0, 1, 0), tan = new THREE.Vector3(), dir = new THREE.Vector3(), sv = new THREE.Vector3();
+	// (a woman's finer than a man's)
+	const fine = P.dna.male ? 1 : 0.82, dens = (0.7 + rnd() * 0.6) * fine, thick = (0.8 + rnd() * 0.45) * fine;
 	// the skin round the brows (its vertices and normals, in a fine grid), so that every
 	// hair lies on it, a hair's width out, whatever the brow ridge's shape
 	const onSkin = skinNear(A, p, B);
-	const hair = (root, n, dir0, len, from, j, h) => {
-		const kind = grey && hash(j * 131 + h) < grey ? 4 : 2, wid = sh.wid * S;
-		dir.copy(dir0).addScaledVector(n, -dir0.dot(n)).normalize();
-		const tip = root.clone().addScaledVector(dir, len).addScaledVector(n, 0.0005);
-		onSkin(root, 0.0005); onSkin(tip, 0.0007);
-		sv.crossVectors(n, dir).normalize().multiplyScalar(wid / 2);
-		const a0 = vert(root.x - sv.x, root.y - sv.y, root.z - sv.z, 0, 0, kind, from), a1 = vert(root.x + sv.x, root.y + sv.y, root.z + sv.z, 1, 0, kind, from);
-		const b0 = vert(tip.x - sv.x, tip.y - sv.y, tip.z - sv.z, 0, 1, kind, from), b1 = vert(tip.x + sv.x, tip.y + sv.y, tip.z + sv.z, 1, 1, kind, from);
-		I.push(a0, a1, b1, a0, b1, b0);
-	};
-	const heads = [];
 	for (let j = 0; j + 2 < B.length; j += 2) {
 		const va = B[j], vb = B[j + 2], ta = B[j + 1] / 65535, tb = B[j + 3] / 65535;
 		if (tb < ta) continue;
-		// (the line lifted into the arch)
-		const a = new THREE.Vector3(...at(va)).addScaledVector(up, sh.arch(ta) * S), b = new THREE.Vector3(...at(vb)).addScaledVector(up, sh.arch(tb) * S), side = Math.sign(a.x - cx) || 1;
+		const a = new THREE.Vector3(...at(va)), b = new THREE.Vector3(...at(vb)), side = Math.sign(a.x - cx) || 1;
 		normalOf(va, n0); normalOf(vb, n1);
-		if (ta === 0) heads.push({ a: a.clone(), n: n0.clone(), v: va });
-		// (along the brow: outward, rising or falling with its line)
-		const L = a.distanceTo(b);
-		tan.set(side, clamp((b.y - a.y) / (Math.abs(b.x - a.x) || 1e-4), -0.6, 0.6), 0).normalize();
-		const count = Math.round(L * sh.width((ta + tb) / 2) * sh.dens * 1.4e6);
+		const count = Math.round(54 * dens * (1.15 - ta * 0.5));
 		for (let h = 0; h < count; h++) {
-			const f = rnd(), t = ta + (tb - ta) * f, n = n0.clone().lerp(n1, f).normalize(), w = sh.width(t) * S;
-			// (across the brow: -1 its lower edge, 1 its upper; the head rounded off)
-			const y = (rnd() * 2 - 1) * (t < 0.06 ? 0.7 + 0.3 * t / 0.06 : 1);
-			const root = a.clone().lerp(b, f).addScaledVector(up, y * w / 2);
-			// up and out at the head, flat along the line beyond it, combed in to the middle
-			const k = Math.min(1, t / 0.28), comb = -y * 0.22 * (1 - sh.feather);
-			const lift = (1 - k) * 1.0 + sh.feather * 0.4 * (1 - t) + comb + (rnd() - 0.5) * (0.22 + sh.feather * 0.3);
-			const d0 = tan.clone().multiplyScalar(Math.cos(lift)).addScaledVector(up, Math.sin(lift));
-			// (with the years, a wiry one now and then)
-			const wiry = rnd() < sh.wiry;
-			const len = (0.004 + rnd() * 0.0025) * (1 - 0.3 * t) * (1 - 0.3 * (1 - k)) * (wiry ? 1.8 : 1) * S;
-			if (wiry) d0.addScaledVector(up, (rnd() - 0.3) * 0.8);
-			hair(root, n, d0, len, f < 0.5 ? va : vb, j, h);
-		}
-	}
-	// one in a hundred: the two brows joined by a few fine hairs over the nose
-	if (sh.joined && heads.length === 2) {
-		const [L0, L1] = heads, n = L0.n.clone().add(L1.n).normalize();
-		for (let h = 0; h < 46; h++) {
-			const f = rnd(), q = 1 - Math.abs(f - 0.5) * 2;
-			if (rnd() < q * 0.45) continue;
-			const root = L0.a.clone().lerp(L1.a, f).addScaledVector(up, (rnd() - 0.5) * sh.width(0) * 0.7 * S);
-			const d0 = up.clone().multiplyScalar(0.8).add(new THREE.Vector3(Math.sign(f - 0.5) * 0.5, 0, 0));
-			hair(root, n, d0, (0.003 + rnd() * 0.002) * S, f < 0.5 ? L0.v : L1.v, 999, h);
+			const f = rnd(), t = ta + (tb - ta) * f, n = n0.clone().lerp(n1, f).normalize();
+			const band = (0.0075 * (1 - t) + 0.0028 * t) * thick * S;
+			const root = a.clone().lerp(b, f).add(new THREE.Vector3(0, (rnd() - 0.45) * band, 0)).addScaledVector(n, 0.0005);
+			const ang = THREE.MathUtils.lerp(1.3, -0.35, Math.min(1, t * 1.25)) + (rnd() - 0.5) * 0.45;
+			const dir = new THREE.Vector3(Math.cos(ang) * side, Math.sin(ang), 0);
+			dir.addScaledVector(n, -dir.dot(n)).normalize();
+			const len = (0.005 + rnd() * 0.004) * S, wid = 0.0014 * S, kind = grey && hash(j * 131 + h) < grey ? 4 : 2;
+			const tip = root.clone().addScaledVector(dir, len).addScaledVector(n, 0.0006);
+			onSkin(root, 0.0006); onSkin(tip, 0.0008);
+			const sv = new THREE.Vector3().crossVectors(n, dir).normalize().multiplyScalar(wid / 2);
+			const from = f < 0.5 ? va : vb;
+			const a0 = vert(root.x - sv.x, root.y - sv.y, root.z - sv.z, 0, 0, kind, from), a1 = vert(root.x + sv.x, root.y + sv.y, root.z + sv.z, 1, 0, kind, from);
+			const b0 = vert(tip.x - sv.x, tip.y - sv.y, tip.z - sv.z, 0, 1, kind, from), b1 = vert(tip.x + sv.x, tip.y + sv.y, tip.z + sv.z, 1, 1, kind, from);
+			I.push(a0, a1, b1, a0, b1, b0);
 		}
 	}
 	const g = new THREE.BufferGeometry();
@@ -181,41 +154,6 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 }
 
 const hash = (x) => { const s = Math.sin(x * 12.9898) * 43758.5453; return s - Math.floor(s); };
-
-// brow shapes: [name, arch (m, at its peak), the peak (along it), the head's width and the
-// tail's (m), density, feathering, weight for women, for men]
-const BROWS = [
-	['straight', 0.0008, 0.68, 0.0064, 0.0022, 1, 0, 1, 2],
-	['soft arch', 0.0018, 0.66, 0.0062, 0.002, 1, 0, 1.4, 1.2],
-	['high arch', 0.003, 0.62, 0.0058, 0.0017, 1.05, 0, 1, 0.2],
-	['full', 0.0016, 0.66, 0.0082, 0.003, 1.25, 0.1, 0.7, 1.5],
-	['thin', 0.002, 0.64, 0.0042, 0.0014, 1.1, 0, 1, 0.3],
-	['feathered', 0.0017, 0.66, 0.0068, 0.0024, 0.9, 0.5, 1, 1],
-];
-// a person's brows: a shape (fuller with dark, coarse hair, finer with fair), their own
-// width and arch, a man's flatter and wider; sparser and a little wiry with age; one in a
-// hundred joined
-function browShape(d, rnd) {
-	const top = Math.max(...d.hairColour), dark = 1 - Math.min(1, top / 0.45);
-	const wts = BROWS.map((b) => (d.male ? b[8] : b[7]) * (b[0] === 'full' ? 0.5 + dark : b[0] === 'thin' ? 1.4 - dark * 0.8 : 1));
-	let x = rnd() * wts.reduce((a, b) => a + b, 0), k = 0;
-	while (k < BROWS.length - 1 && (x -= wts[k]) > 0) k++;
-	const [name, arch0, peak0, head0, tail0, dens0, feather] = BROWS[k];
-	const wk = (0.85 + rnd() * 0.3) * (d.male ? 1.12 : 1), ak = (0.8 + rnd() * 0.4) * (d.male ? 0.6 : 1), peak = peak0 + (rnd() - 0.5) * 0.08;
-	const old = clamp01((d.age - 55) / 30);
-	const head = head0 * wk, tail = tail0 * wk, arch = arch0 * ak;
-	const seed = Math.imul((d.seed ?? 0) ^ 0x51b2, 2654435761) >>> 0;
-	return {
-		name, feather, dens: dens0 * (1 - old * 0.35), wiry: old * (d.male ? 0.07 : 0.03), wid: d.male ? 0.001 : 0.0009, joined: seed % 100 === 7,
-		// (rising to the peak, falling more steeply to the tail)
-		arch: (t) => arch * (t < peak ? Math.sin(t / peak * Math.PI / 2) : Math.cos((t - peak) / (1 - peak) * Math.PI / 2) * 1.05 - 0.05),
-		// (full from the head to past the middle, then tapering to the tail)
-		width: (t) => head + (tail - head) * smooth(0.3, 1, t),
-	};
-}
-const clamp01 = (x) => Math.max(0, Math.min(1, x));
-const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
-const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
 // a point kept a little out from the skin near the given vertices (off: how far, m): the
 // skin's vertices there with their normals, bucketed; each point is set against the nearest

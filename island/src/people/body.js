@@ -493,11 +493,10 @@ function faceMorphs(A, g, S) {
 	}
 }
 
-// brows: the hair's natural colour (a dye leaves them be), a shade darker (a woman's less
-// so, by how hers grow); going grey hair by hair on the head's own curve, some years behind it
+// brows: the hair's natural colour (a dye leaves them be), a shade darker; going grey hair
+// by hair on the head's own curve, some years behind it
 function browOf(d) {
-	const k = d.male ? 0.68 : 0.72 + 0.22 * rng(d.seed ^ 0xb40f)();
-	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * k));
+	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * 0.6));
 	const g = greyOf(d, 12);
 	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
 }
