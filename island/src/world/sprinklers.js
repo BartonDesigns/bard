@@ -152,6 +152,18 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 
 	const ground = (x, z) => { const I = world()?.island; return I ? (I.drawnAt || I.heightAt)(x, z) : 0; };
 	const wet = (x, z) => !!world()?.water?.inWater?.(x, z);
+	// where a head may stand: in the earth only, never in a street, a sidewalk, a roof or water
+	// (its spot and a hand's breadth round it, on the land map where there is one)
+	function earth(x, z) {
+		if (wet(x, z)) return false;
+		const real = world()?.real;
+		if (!real?.landAt) return true;
+		for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) {
+			const L = real.landAt(x + dx, z + dz);
+			if (L && (L.road > 0.05 || L.roof > 0.05)) return false;
+		}
+		return true;
+	}
 	// a park's grass: on the land map, and nothing paved, roofed or wet on it
 	function turf(x, z) {
 		const real = world()?.real;
@@ -312,7 +324,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 		const zoneOf = (kind, name) => { let z = zones.find((q) => q.name === name); if (!z) zones.push(z = { name, kind, heads: 0, min: 0 }); return zones.indexOf(z); };
 		const add = (lx, lz, a0, arc, R, noz, kind, zone) => {
 			const [x, z] = toW(lx, lz);
-			if (wet(x, z)) return null;
+			if (!earth(x, z)) return null;
 			const h = head(x, z, kind, a0 + M.a, arc, R, r, noz);
 			h.zone = zone; h.lx = lx; h.lz = lz;
 			heads.push(h); zones[zone].heads++;
@@ -558,7 +570,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 			const win = Y.win;
 			for (const h of Y.heads) {
 				// (looked at again on each rescan: the map's finer layers may have come in since)
-				if (!h.y) { h.y = ground(h.x, h.z) + 0.1; h.ok = Y.kind === 'park' ? turf(h.x, h.z) : !wet(h.x, h.z); }
+				if (!h.y) { h.y = ground(h.x, h.z) + 0.1; h.ok = Y.kind === 'park' ? turf(h.x, h.z) : earth(h.x, h.z); }
 				if (!h.ok) continue;
 				let on = force ? 1 : 0, w = force ? 1 : 0;
 				if (win) {
