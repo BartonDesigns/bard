@@ -85,7 +85,7 @@ void main(){
 	if (e0.w < 1.5) {
 		// the ribs of the nozzle: jets, with gaps between
 		float jets = max(3.0, floor(e1.y * 6.0));
-		az = e1.x + e1.y * (floor(h1(n + 3.3) * jets) + 0.5 + (h1(n + 6.1) - 0.5) * 0.55) / jets;
+		az = e1.x + e1.y * (floor(h1(n + 3.3) * jets) + 0.5 + (h1(n + 6.1) - 0.5) * 0.2) / jets;
 	} else if (e0.w < 2.5) {
 		// a rotor: where it pointed when this drop left it, stepping round and swinging back
 		float ph = fract((uTime - age) / e3.x + e3.y), s;
@@ -100,13 +100,14 @@ void main(){
 	vec3 v = Vt + (v0 - Vt) * ex;
 	// the stream breaking up, and the fine drops tumbling in the air
 	vec3 jit = vec3(h1(n + 7.0), h1(n + 8.0), h1(n + 9.0)) - 0.5;
-	p += jit * (pour ? 0.25 : 1.1) * age * smoothstep(0.0, 0.5, age);
-	v += vec3(sin(uTime * 9.0 + n), sin(uTime * 7.3 + n * 1.3), cos(uTime * 8.1 + n * 0.7)) * (0.4 + 1.8 * aSeed.z);
+	float brk = age / T;
+	p += jit * (pour ? 0.25 : 0.7) * age * brk;
+	v += vec3(sin(uTime * 9.0 + n), sin(uTime * 7.3 + n * 1.3), cos(uTime * 8.1 + n * 0.7)) * (0.2 + 1.4 * aSeed.z) * brk;
 	// the streak: its path through the exposure, a quad turned to face you
 	vec3 toC = cameraPosition - p; float dist = length(toC);
 	vec3 dir = normalize(v), side = normalize(cross(toC, dir));
-	float px = uPx * dist, wid = max(0.0016, px);
-	vec3 w = p - dir * (length(v) * 0.014 + wid) * position.y + side * position.x * wid;
+	float small = aSeed.z, px = uPx * dist * 0.6, wid = max(0.0008, px);
+	vec3 w = p - dir * (length(v) * mix(0.012, 0.005, small) + wid) * position.y + side * position.x * wid;
 	gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
 	// the light: forward scatter (backlit glitter), the bow's colour by angle, the sky's fill
 	vec3 vd = -toC / dist;
@@ -114,11 +115,11 @@ void main(){
 	float hg = 0.12 * (1.0 - 0.49) / pow(1.49 - 1.4 * c, 1.5);
 	float ang = degrees(acos(clamp(-c, -1.0, 1.0)));
 	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.55 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb * smoothstep(30.0, 38.0, ang);
-	float glint = step(0.86, h1(n * 1.7 + floor(uTime * 14.0 + aSeed.y * 5.0)));
+	float glint = step(0.93, h1(n * 1.7 + floor(uTime * 14.0 + aSeed.y * 5.0)));
 	float sun = max(e2.w, 0.0);
 	vCol = uSunC * sun * (bow * bow * 1.0 + vec3(0.025 + hg * (0.12 + 1.6 * glint))) + uAmb * 0.18 + vec3(0.03, 0.04, 0.05) * max(-e2.w, 0.0);
 	// (far, a drop is less than a pixel: its light spread thin)
-	vCol *= e4.x * clamp(0.0022 / wid, 0.25, 1.0) * smoothstep(0.0, 0.12, age) * (1.0 - smoothstep(0.92, 1.0, age / T)) * smoothstep(0.3, 1.2, dist);
+	vCol *= e4.x * clamp(0.0016 / wid, 0.2, 1.0) * mix(1.0, 0.35, small) * mix(1.0, 0.4, brk) * smoothstep(0.0, 0.04, age) * (1.0 - smoothstep(0.92, 1.0, brk)) * smoothstep(0.3, 1.2, dist);
 }`;
 const DROP_FRAG = /* glsl */`
 varying vec3 vCol; varying float vX;
@@ -151,15 +152,15 @@ void main(){
 		c = e0.xyz + vec3(cos(ra) * rr, R * 0.15 + a * L * mix(0.25, 0.7, r3) * min(R, 4.0) * 0.3, sin(ra) * rr);
 		size = R * mix(0.5, 1.5, a);
 	} else {
-		float az = e1.x + e1.y * r1, rr = e2.y * mix(0.3, 1.0, sqrt(r2));
-		c = e0.xyz + vec3(cos(az) * rr, 0.3 + r3 * 1.1 + a * 0.4, sin(az) * rr);
+		float az = e1.x + e1.y * r1, rr = e2.y * mix(0.15, 1.0, r2);
+		c = e0.xyz + vec3(cos(az) * rr, 0.25 + 1.6 * r2 * (1.0 - r2) * e2.y * 0.25 + r3 * 0.4 + a * 0.3, sin(az) * rr);
 		size = mix(1.3, 2.8, r3) * (0.7 + 0.5 * a);
 	}
 	c.xz += wv * a * L * 0.6;
 	vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
 	vW = c + (right * position.x + up * position.y) * size * 0.5;
 	float dist = length(c - cameraPosition);
-	vA = sin(3.1416 * a) * e4.y * e4.x * (fall ? 0.18 : 0.12) * smoothstep(0.6, 3.0, dist);
+	vA = sin(3.1416 * a) * e4.y * e4.x * (fall ? 0.18 : 0.2) * smoothstep(0.6, 3.0, dist);
 	gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);
 }`;
 const MIST_FRAG = /* glsl */`
@@ -232,7 +233,7 @@ function puffTexture() {
 
 export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 	const NS = isPhone ? 5 : 10, NF = isPhone ? 2 : 4, ND = isPhone ? 6 : DECALS;
-	const DS = isPhone ? 450 : 1300, DF = isPhone ? 900 : 2200, MS = isPhone ? 8 : 14, MF = isPhone ? 18 : 36;
+	const DS = isPhone ? 450 : 1300, DF = isPhone ? 900 : 2200, MS = isPhone ? 12 : 22, MF = isPhone ? 18 : 36;
 	const group = new THREE.Group();
 	group.name = 'spray';
 	scene.add(group);
