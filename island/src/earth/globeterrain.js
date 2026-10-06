@@ -121,7 +121,7 @@ vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dor
 		col = soil * (0.7 + 0.25 * id3); rowA = 0.6; rowP = 0.9; bare = 1.0;
 	} else {
 		// grass for hay and grazing, mown in stripes; some of it watered alfalfa, green whatever the season
-		col = mix(grass * (0.85 + 0.35 * id3), vec3(0.06, 0.12, 0.028), step(0.55, id3) * (1.0 - dorm)); rowA = 0.16; rowP = 9.0;
+		col = mix(grass * (0.85 + 0.35 * id3), vec3(0.06, 0.12, 0.028), step(0.55, id3) * (1.0 - dorm)); rowA = 0.1; rowP = 9.0;
 	}
 	// the rows and furrows, gone to their average where a pixel holds several
 	col *= 1.0 + rowA * (abs(fract(across / rowP) - 0.5) * 2.0 - 0.5) * (1.0 - smoothstep(0.2, 0.45, fw / rowP));
@@ -244,8 +244,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// the desert: pale ground with scrub dotted over it, crests where the atlas has dunes
 					float arid = 1.0 - smoothstep(180.0, 420.0, rain);
 					vec3 dsr = mix(gA, vec3(0.5, 0.42, 0.3), 0.3) * (0.88 + 0.24 * m1) * mix(1.0, 0.8 + 0.35 * smoothstep(0.6, 0.95, 1.0 - abs(2.0 * gq(1, 45u) - 1.0)), t2.r);
-					float scrub = mix(0.25, smoothstep(0.62, 0.74, vn(gM(3) + 7.0)), nk3) * (1.0 - t2.r) * (0.5 + m2);
-					c = mix(c, mix(dsr, vec3(0.06, 0.065, 0.045), scrub * 0.6), arid * (1.0 - bare * 0.3));
+					float scrub = mix(0.22, smoothstep(0.56, 0.8, vn(gM(3) + 7.0) * 0.75 + vn(gM(5) + 1.0) * 0.25), nk3) * (1.0 - t2.r) * (0.5 + m2);
+					c = mix(c, mix(dsr * mix(vec3(1.0), vec3(1.08, 1.0, 0.88), m2), vec3(0.12, 0.12, 0.08), scrub * 0.45), arid * (1.0 - bare * 0.3));
 					// the air up here: the atlas's warmth is the place's lived-in ground, taken as halfway up
 					// the region's mean height (plus 400 m), cooled 6.5 C a km above it (Tuolumne near 0,
 					// Denver near 10)
@@ -270,7 +270,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					wood = mix(wood, vec3(0.035, 0.085, 0.02), smoothstep(20.0, 26.0, temp));
 					float ck = 1.0 - smoothstep(2.5, 7.0, px);
 					wood *= (0.75 + 0.5 * mix(0.5, vn(gM(1)), ck)) * (1.0 - 0.45 * mix(0.3, smoothstep(0.6, 0.8, vn(gM(2) + 4.0)), ck)) * (0.85 + 0.3 * m1);
-					float floorK = 1.0 - smoothstep(150.0, 450.0, dist);
+					float floorK = 1.0 - smoothstep(1500.0, 2400.0, dist);          // (where the trees stand drawn)
 					wood = mix(wood, mix(vec3(0.05, 0.035, 0.02), vec3(0.03, 0.045, 0.018), m1) * (0.75 + 0.5 * tus), floorK);
 					c = mix(c, wood, forest);
 					bare = mix(bare, 0.7, forest * floorK);
@@ -306,8 +306,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 						vec2 sb = fract(gM(0) * 0.25), se = min(sb, 1.0 - sb);
 						float blk = gfH(ivec3(gQI >> 2, 7), 71u), street = gLine(min(se.x, se.y) * 100.0, 5.0, px);
 						float dense = smoothstep(0.3, 0.9, urb + (blk - 0.5) * 0.3), nkB = 1.0 - smoothstep(2.0, 6.0, px);
-						float roof = mix(0.25 + 0.35 * dense, smoothstep(0.5, 0.58, vn(gM(2)) + dense * 0.25), nkB);
-						vec3 yard = mix(mix(grass, vec3(0.03, 0.05, 0.025), mix(0.3, smoothstep(0.6, 0.72, vn(gM(1) + 2.0)), nkB) * (1.0 - dense) * 0.8), vec3(0.24, 0.23, 0.22), dense * 0.6);
+						float roof = mix(0.15 + 0.4 * dense, smoothstep(0.5, 0.58, vn(gM(2)) + dense * 0.25), nkB);
+						vec3 yard = mix(mix(grass, vec3(0.03, 0.05, 0.025), mix(0.45, smoothstep(0.52, 0.68, vn(gM(1) + 2.0)), nkB) * (1.0 - dense) * 0.85), vec3(0.24, 0.23, 0.22), dense * 0.6);
 						vec3 built = mix(mix(yard, mix(vec3(0.2, 0.19, 0.18), vec3(0.3, 0.17, 0.11), blk), roof), vec3(0.07, 0.07, 0.075), street);
 						// A city's broad footprint is only a distant land-use hint. Keep the actual
 						// forest floor and snow: Manaus's 18 km footprint must not pave the jungle.
