@@ -262,8 +262,8 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		if (A?.region) activeTownRoads.push({ id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] });
 		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, roads: B.region.roads || [] });
 		roads.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads]);
-		// the local roads; the towns' own streets take over inside them
-		lanes.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...towns.towns, ...(F.bay ? bay.towns || [] : [])].filter((t) => Number.isFinite(t.r)));
+		// the local roads; the streets of a town grown here take over inside it
+		lanes.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads].filter((t) => Number.isFinite(t.r)));
 		const ms = performance.now() - t0;
 		stats.updateMs += (ms - stats.updateMs) * 0.05; stats.maxMs = Math.max(stats.maxMs * 0.995, ms);
 	}

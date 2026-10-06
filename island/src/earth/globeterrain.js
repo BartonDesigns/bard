@@ -120,8 +120,8 @@ vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dor
 		// turned soil, in furrows
 		col = soil * (0.7 + 0.25 * id3); rowA = 0.6; rowP = 0.9; bare = 1.0;
 	} else {
-		// grass for hay and grazing, mown in stripes
-		col = grass * (0.85 + 0.35 * id3); rowA = 0.16; rowP = 9.0;
+		// grass for hay and grazing, mown in stripes; some of it watered alfalfa, green whatever the season
+		col = mix(grass * (0.85 + 0.35 * id3), vec3(0.06, 0.12, 0.028), step(0.55, id3) * (1.0 - dorm)); rowA = 0.16; rowP = 9.0;
 	}
 	// the rows and furrows, gone to their average where a pixel holds several
 	col *= 1.0 + rowA * (abs(fract(across / rowP) - 0.5) * 2.0 - 0.5) * (1.0 - smoothstep(0.2, 0.45, fw / rowP));

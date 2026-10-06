@@ -25,8 +25,10 @@ import * as THREE from 'three';
 import { F, toXZ, toLL } from './globeframe.js';
 import { BERM_U, BERM_GLSL } from '../bay/berms.js';
 
-const MILE = 1609.344, KZ = 110996, RAD = Math.PI / 180;
-const BAND = 34;              // miles between correction lines
+// (the survey is laid on the ground's own lattice, globeterrain.js: its 800 m blocks from
+// -90, -180, the east ones measured at the middle of a 4-degree band, so the roads run along
+// the blocks' edges where the ground draws its hedges and tracks; a 'mile' is two blocks)
+const MILE = 1600, KZ = 111320, RAD = Math.PI / 180, LAT0 = -90, LON0 = -180;
 const STEP = 8;               // m between a ribbon's stations
 const TILE = 3;               // miles a tile (the farm roads' tiles are a mile)
 const inBay = (lat, lon) => lat > 36.93 && lat < 38.87 && lon > -123.6 && lon < -121.45;
@@ -40,15 +42,16 @@ export function surveyAt(lat, lon) {
 	return null;
 }
 const dLatOf = (G) => MILE / G.sub / KZ;
-const bandOf = (a, G) => Math.floor(a / (BAND * G.sub));
-const dLonOf = (band, G) => MILE / G.sub / (111320 * Math.cos((band + 0.5) * BAND * MILE / KZ * RAD));
+// (the band of 4 degrees a line is in: the lines jog where the bands meet, as at a correction line)
+const bandOf = (a, G) => Math.round((LAT0 + a * dLatOf(G)) / 4);
+const dLonOf = (band, G) => MILE / G.sub / (111320 * Math.cos(band * 4 * RAD));
 const hash = (a, b, k) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(k, 1274126177); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 
 // a section line's segment: 'n' runs north from line a to a+1 at column b; 'e' runs east
 // along line a from column b to b+1 (both in the band of line a)
 function segEnds(G, dir, a, b) {
 	const dLat = dLatOf(G), dl = dLonOf(bandOf(a, G), G);
-	return dir === 'n' ? [a * dLat, b * dl, (a + 1) * dLat, b * dl] : [a * dLat, b * dl, a * dLat, (b + 1) * dl];
+	return dir === 'n' ? [LAT0 + a * dLat, LON0 + b * dl, LAT0 + (a + 1) * dLat, LON0 + b * dl] : [LAT0 + a * dLat, LON0 + b * dl, LAT0 + a * dLat, LON0 + (b + 1) * dl];
 }
 
 // Snap a farm to the nearest mile line, along it far enough from the crossroads that its
@@ -56,16 +59,16 @@ function segEnds(G, dir, a, b) {
 export function gridSnap(lat, lon, half = 280) {
 	const G = surveyAt(lat, lon);
 	if (!G) return null;
-	const dLat = MILE / KZ, aM = Math.floor(lat / dLat), aR = Math.round(lat / dLat);
-	const dlS = dLonOf(bandOf(aM * G.sub, G), G) * G.sub, bM = Math.round(lon / dlS);
+	const la = lat - LAT0, lo = lon - LON0, dLat = MILE / KZ, aM = Math.floor(la / dLat), aR = Math.round(la / dLat);
+	const dlS = dLonOf(bandOf(aM * G.sub, G), G) * G.sub, bM = Math.round(lo / dlS);
 	const kx = 111320 * Math.cos(lat * RAD);
-	const dNS = Math.abs(lon - bM * dlS) * kx, dEW = Math.abs(lat - aR * dLat) * KZ;
+	const dNS = Math.abs(lo - bM * dlS) * kx, dEW = Math.abs(la - aR * dLat) * KZ;
 	if (dNS < dEW) {
 		const mid = (aM + 0.5) * dLat, lim = half / KZ;
-		return { lat: mid + Math.max(-lim, Math.min(lim, lat - mid)), lon: bM * dlS, axis: 0 };
+		return { lat: LAT0 + mid + Math.max(-lim, Math.min(lim, la - mid)), lon: LON0 + bM * dlS, axis: 0 };
 	}
-	const dlE = dLonOf(bandOf(aR * G.sub, G), G) * G.sub, bE = Math.floor(lon / dlE), mid = (bE + 0.5) * dlE, lim = half / kx;
-	return { lat: aR * dLat, lon: mid + Math.max(-lim, Math.min(lim, lon - mid)), axis: Math.PI / 2 };
+	const dlE = dLonOf(bandOf(aR * G.sub, G), G) * G.sub, bE = Math.floor(lo / dlE), mid = (bE + 0.5) * dlE, lim = half / kx;
+	return { lat: LAT0 + aR * dLat, lon: LON0 + mid + Math.max(-lim, Math.min(lim, lo - mid)), axis: Math.PI / 2 };
 }
 
 // the surfaces: 0 marked asphalt, 1 plain asphalt, 2 gravel, 3 dirt
@@ -82,15 +85,21 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 	const stats = { tiles: 0, links: 0, routed: 0, sites: 0, verts: 0, buildMs: 0, routeMs: 0 };
 
 	// ---------- the drawn ribbons ----------
-	const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+	// (far off a road is held to about a pixel and a half wide, a little see-through, rather than
+	// thinning to nothing and shimmering: uLanePx is a pixel's size per metre away)
+	const laneU = { uLanePx: { value: 0.0016 } };
+	const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, side: THREE.DoubleSide, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
 	mat.onBeforeCompile = (sh) => {
-		Object.assign(sh.uniforms, BERM_U);
-		sh.vertexShader = 'attribute vec3 aRoad; attribute vec4 aKind; varying vec3 vRoad; varying vec4 vKind;\n' + BERM_GLSL + '\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+		Object.assign(sh.uniforms, BERM_U, laneU);
+		sh.vertexShader = 'attribute vec3 aRoad; attribute vec4 aKind; attribute vec2 aSide; uniform float uLanePx; varying vec3 vRoad; varying vec4 vKind; varying float vGrow;\n' + BERM_GLSL + '\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
 			vRoad = aRoad; vKind = aKind;
-			transformed.y += bermDelta(position.xz);`);
-		sh.fragmentShader = 'varying vec3 vRoad; varying vec4 vKind;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+			float dist = distance(cameraPosition, position), hw = max(length(aSide), 0.5);
+			vGrow = clamp(0.9 * dist * uLanePx / hw, 1.0, 8.0);
+			transformed.xz += aSide * (vGrow - 1.0);
+			transformed.y += bermDelta(position.xz) + dist * 4e-4;`);
+		sh.fragmentShader = 'varying vec3 vRoad; varying vec4 vKind; varying float vGrow;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 			{
-				float a = abs(vRoad.x), fw = fwidth(vRoad.x) * 1.5, k = vKind.w;
+				float a = abs(vRoad.x), fw = fwidth(vRoad.x) * 1.5, k = vKind.w, far = smoothstep(1.0, 3.0, vGrow);
 				float n = fract(sin(dot(floor(vRoad.xy * vec2(5.0, 0.8)), vec2(12.9898, 78.233))) * 43758.5453);
 				vec3 c = vKind.rgb * (0.86 + 0.28 * n);
 				if (k < 0.5) {
@@ -101,6 +110,8 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 					float mid = (1.0 - smoothstep(0.015, 0.03, a)) * step(0.55, fract(vRoad.y / 12.0)) * step(9.0, min(vRoad.y, vRoad.z)) * fade;
 					c = mix(c, vec3(0.62, 0.61, 0.57), edge * 0.85);
 					c = mix(c, vec3(0.78, 0.6, 0.12), mid * 0.9);
+					// the gravel shoulders (gone when far: the dark line is what reads)
+					c = mix(c, vec3(0.45, 0.42, 0.36) * (0.86 + 0.28 * n), smoothstep(0.93, 0.95, a) * (1.0 - far));
 				} else if (k > 1.5) {
 					// the wheel ruts, and on a track the grass between them; a soft verge
 					c *= 1.0 - 0.16 * smoothstep(0.2, 0.0, abs(a - 0.5));
@@ -108,9 +119,10 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 					c = mix(c, c * 0.8 + vec3(0.03, 0.05, 0.0), smoothstep(0.75, 1.0, a));
 				}
 				diffuseColor.rgb = c;
+				diffuseColor.a = mix(1.0, 0.7, far) * (1.0 - smoothstep(0.7, 1.0, a) * far * 0.6);
 			}`);
 	};
-	mat.customProgramCacheKey = () => 'globelanes1';
+	mat.customProgramCacheKey = () => 'globelanes2';
 
 	// one road's ribbon added to a builder: stations every STEP metres, each vertex on the ground
 	function ribbon(B, pts, w, kind, tint, step = STEP) {
@@ -133,23 +145,25 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 			for (const u of across) {
 				const x = S[i * 2] - dz * hw * u, z = S[i * 2 + 1] + dx * hw * u;
 				B.pos.push(x, groundAt(x, z) + lift, z);
+				B.side.push(-dz * hw * u, dx * hw * u);
 				B.road.push(u, acc[i], total - acc[i]);
 				B.kind.push(tint[0], tint[1], tint[2], kind);
 			}
 			if (i) for (let c = 0; c + 1 < na; c++) { const p = v0 + (i - 1) * na + c, q = p + na; B.idx.push(p, q, p + 1, p + 1, q, q + 1); }
 		}
 	}
-	const builder = () => ({ pos: [], road: [], kind: [], idx: [] });
+	const builder = () => ({ pos: [], road: [], kind: [], side: [], idx: [] });
 	function meshOf(B) {
 		if (!B.idx.length) return null;
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.Float32BufferAttribute(B.pos, 3));
 		g.setAttribute('aRoad', new THREE.Float32BufferAttribute(B.road, 3));
 		g.setAttribute('aKind', new THREE.Float32BufferAttribute(B.kind, 4));
+		g.setAttribute('aSide', new THREE.Float32BufferAttribute(B.side, 2));
 		g.setIndex(B.pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(B.idx, 1) : new THREE.Uint16BufferAttribute(B.idx, 1));
 		g.computeVertexNormals();
 		g.computeBoundingSphere();
-		g.boundingSphere.radius += 4;
+		g.boundingSphere.radius += 40;
 		const M = new THREE.Mesh(g, mat);
 		M.receiveShadow = true;
 		group.add(M);
@@ -203,8 +217,8 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 		const [la0, lo0, la1, lo1] = segEnds(G, dir, a, b), line = dir === 'n' ? b : a, cross = dir === 'n' ? a : b;
 		const mile = line % G.sub === 0, half = line % (G.sub / 2 || 1) === 0, L = Math.floor(line / G.sub), h0 = hash(line, cross, dir === 'n' ? 7 : 11);
 		let sty;
-		if (G === PLSS) sty = ((L % 6) + 6) % 6 === 3 || hash(line, 0, 5) < 0.08 ? { cls: 'tertiary', w: 7, kind: 0, tint: [0.1, 0.1, 0.105] } : { cls: 'unclassified', w: 6, kind: 2, tint: GRAVEL };
-		else sty = mile ? { cls: 'tertiary', w: 7, kind: 0, tint: [0.1, 0.1, 0.105] } : half ? { cls: 'unclassified', w: 5, kind: 2, tint: GRAVEL, minor: true } : { cls: 'track', w: 3.5, kind: 3, tint: DIRT, minor: true };
+		if (G === PLSS) sty = ((L % 6) + 6) % 6 === 3 || hash(line, 0, 5) < 0.08 ? { cls: 'tertiary', w: 7, kind: 0, tint: [0.075, 0.075, 0.08] } : { cls: 'unclassified', w: 6, kind: 2, tint: GRAVEL };
+		else sty = mile ? { cls: 'tertiary', w: 7, kind: 0, tint: [0.075, 0.075, 0.08] } : half ? { cls: 'unclassified', w: 5, kind: 2, tint: GRAVEL, minor: true } : { cls: 'track', w: 3.5, kind: 3, tint: DIRT, minor: true };
 		const present = G === PLSS ? h0 > 0.05 : mile || (half ? h0 < 0.7 : h0 < 0.45);
 		S = { key, G, dir, a, b, ok: false, ...sty, ends: [la0, lo0, la1, lo1] };
 		const name = G === PLSS ? (dir === 'n' ? `${((L % 300) + 300) % 300} Avenue` : `${((L % 300) + 300) % 300} Street`) : (dir === 'n' ? `Road ${((L % 200) + 200) % 200}` : `Avenue ${((L % 200) + 200) % 200}`);
@@ -227,12 +241,12 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 	function gridAt(x, z) {
 		const ll = toLL(x, z), G = surveyAt(ll.lat, ll.lon);
 		if (!G) return null;
-		const dLat = dLatOf(G), a = Math.floor(ll.lat / dLat), dl = dLonOf(bandOf(a, G), G);
+		const la = ll.lat - LAT0, lo = ll.lon - LON0, dLat = dLatOf(G), a = Math.floor(la / dLat), dl = dLonOf(bandOf(a, G), G);
 		const kx = 111320 * Math.cos(ll.lat * RAD);
 		let best = null;
 		const consider = (S, t, d) => { if (S.ok && (!best || d < best.d)) best = { S, t, d }; };
-		for (const b of [Math.floor(ll.lon / dl), Math.ceil(ll.lon / dl)]) consider(segInfo(G, 'n', a, b), (ll.lat / dLat) - a, Math.abs(ll.lon - b * dl) * kx);
-		for (const aa of [Math.floor(ll.lat / dLat), Math.ceil(ll.lat / dLat)]) { const d2 = dLonOf(bandOf(aa, G), G), b = Math.floor(ll.lon / d2); consider(segInfo(G, 'e', aa, b), ll.lon / d2 - b, Math.abs(ll.lat - aa * dLat) * KZ); }
+		for (const b of [Math.floor(lo / dl), Math.ceil(lo / dl)]) consider(segInfo(G, 'n', a, b), la / dLat - a, Math.abs(lo - b * dl) * kx);
+		for (const aa of [Math.floor(la / dLat), Math.ceil(la / dLat)]) { const d2 = dLonOf(bandOf(aa, G), G), b = Math.floor(lo / d2); consider(segInfo(G, 'e', aa, b), lo / d2 - b, Math.abs(la - aa * dLat) * KZ); }
 		return best;
 	}
 	// is a point within m of a road's edge (the survey's and the highways', for the lots)
@@ -271,11 +285,11 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 		const t0 = performance.now();
 		let s0 = t0, work = 0;
 		const G = T.G, dLat = dLatOf(G), B = builder(), list = [];
-		for (let a = Math.floor(T.lat0 / dLat) - 1; a <= Math.ceil(T.lat1 / dLat) + 1; a++) {
+		for (let a = Math.floor((T.lat0 - LAT0) / dLat) - 1; a <= Math.ceil((T.lat1 - LAT0) / dLat) + 1; a++) {
 			const dl = dLonOf(bandOf(a, G), G);
-			for (let b = Math.floor(T.lon0 / dl) - 1; b <= Math.ceil(T.lon1 / dl) + 1; b++) {
+			for (let b = Math.floor((T.lon0 - LON0) / dl) - 1; b <= Math.ceil((T.lon1 - LON0) / dl) + 1; b++) {
 				for (const dir of ['n', 'e']) {
-					const mLat = dir === 'n' ? (a + 0.5) * dLat : a * dLat, mLon = dir === 'n' ? b * dl : (b + 0.5) * dl;
+					const mLat = LAT0 + (dir === 'n' ? a + 0.5 : a) * dLat, mLon = LON0 + (dir === 'n' ? b : b + 0.5) * dl;
 					if (mLat < T.lat0 || mLat >= T.lat1 || mLon < T.lon0 || mLon >= T.lon1) continue;
 					const S = segInfo(G, dir, a, b);
 					if (!S.ok || !S.minor !== !T.minor) continue;
@@ -542,6 +556,7 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 		group.visible = on;
 		if (!on) return;
 		const x = cam.position.x, z = cam.position.z, t0 = performance.now();
+		if (cam.fov) laneU.uLanePx.value = 2 * Math.tan(cam.fov * RAD / 2) / Math.max(300, typeof innerHeight === 'number' ? innerHeight : 800);
 		if (scanEpoch !== F.epoch) reframe();
 		if (zoneNow) zoneList = zoneNow;
 		scanT -= dt;
