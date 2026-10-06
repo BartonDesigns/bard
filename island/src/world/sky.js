@@ -293,6 +293,12 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					vec4 S = uShowers[i];
 					if (S.w < 0.01) continue;
 					float tc = dot(S.xy, hd), pd = length(S.xy - hd * tc);
+					// the whole stretch of sky toward a far storm goes dark, well past its rain:
+					// deepest low down under its cloud, fading up the sky and off to either side
+					float topG = 1500.0 / max(tc - S.z * 0.5, 300.0);
+					float gloomB = S.w * (1.0 - smoothstep(S.z * 0.6, S.z * 3.4, pd)) * smoothstep(0.0, S.z, tc) * smoothstep(60000.0, 9000.0, tc)
+						* smoothstep(-0.03, 0.0, tanE) * (1.0 - smoothstep(topG * 0.8, topG * 3.0, tanE));
+					col = mix(col, vec3(0.24, 0.27, 0.32) * (1.0 - uNight * 0.95), gloomB * 0.5);
 					float sr = S.z * 1.35;                                      // its veil spreads past the cell
 					if (pd >= sr || tc + sr < 0.0) continue;
 					float half_ = sqrt(sr * sr - pd * pd), tin = max(tc - half_, 30.0), tout = tc + half_;
@@ -303,10 +309,6 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					// standing in it, the rain round you is the streaks and the grey (below); the
 					// curtain is for showers seen from outside
 					bool inside = tc - half_ < 0.0;
-					// the whole stretch of sky under a far storm goes dark, well past its rain
-					float gloomB = S.w * (1.0 - smoothstep(S.z * 0.8, S.z * 3.2, pd)) * step(0.0, tc) * smoothstep(60000.0, 9000.0, tc)
-						* smoothstep(-0.03, 0.0, tanE) * (1.0 - smoothstep(top * 1.2, top * 5.0, tanE));
-					col = mix(col, vec3(0.24, 0.27, 0.32) * (1.0 - uNight * 0.95), gloomB * 0.5);
 					if (!inside) {
 						float az = atan(hd.y, hd.x);
 						// it leans downwind: the foot has drifted further along than the top, by as much
@@ -330,7 +332,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 						float veil = dens * streak * smoothstep(42000.0, 7000.0, tin);
 						// blue-grey, the sky behind showing through where it is thin; low down it melts
 						// into the haze the far land stands in
-						vec3 veilC = mix(vec3(0.21, 0.24, 0.30), uSkyHor * 0.7, 0.18 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.85 + 0.3 * streak);
+						vec3 veilC = mix(vec3(0.18, 0.2, 0.25), uSkyHor * 0.7, 0.18 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.85 + 0.3 * streak);
 						veilC = mix(veilC, uFogCol, (1.0 - smoothstep(0.0, 0.05, tanE)) * 0.55);
 						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 2.1, 0.0, 0.9));
 					}
