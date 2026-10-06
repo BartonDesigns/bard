@@ -116,9 +116,9 @@ void main(){
 	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.55 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb;
 	float glint = step(0.86, h1(n * 1.7 + floor(uTime * 14.0 + aSeed.y * 5.0)));
 	float sun = max(e2.w, 0.0);
-	vCol = uSunC * sun * (bow * bow * 2.4 + vec3(0.03 + hg * (0.5 + 4.0 * glint))) + uAmb * 0.1 + vec3(0.03, 0.04, 0.05) * max(-e2.w, 0.0);
+	vCol = uSunC * sun * (bow * bow * 2.4 + vec3(0.08 + hg * (0.5 + 4.0 * glint))) + uAmb * 0.4 + vec3(0.03, 0.04, 0.05) * max(-e2.w, 0.0);
 	// (far, a drop is less than a pixel: its light spread thin)
-	vCol *= e4.x * clamp(0.0022 / wid, 0.12, 1.0) * smoothstep(0.0, 0.06, age) * (1.0 - smoothstep(0.92, 1.0, age / T)) * smoothstep(0.3, 1.2, dist);
+	vCol *= e4.x * clamp(0.0022 / wid, 0.25, 1.0) * smoothstep(0.0, 0.06, age) * (1.0 - smoothstep(0.92, 1.0, age / T)) * smoothstep(0.3, 1.2, dist);
 }`;
 const DROP_FRAG = /* glsl */`
 varying vec3 vCol; varying float vX;
