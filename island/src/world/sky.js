@@ -30,7 +30,7 @@ float fbm5(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ s += a 
 // the showers' hold on a point of the cloud plane (xz metres from you)
 float showerAt(vec2 xz){
 	float sh = 0.0;
-	for (int i = 0; i < 4; i++) { vec4 S = uShowers[i]; sh = max(sh, S.w * (1.0 - smoothstep(S.z * 0.7, S.z * 1.7, length(xz - S.xy)))); }
+	for (int i = 0; i < 4; i++) { vec4 S = uShowers[i]; sh = max(sh, S.w * (1.0 - smoothstep(S.z * 0.9, S.z * 2.8, length(xz - S.xy)))); }
 	return sh;
 }
 // density (0-1) and the lumpy field under it, for a direction d
@@ -43,9 +43,10 @@ float cumulus(vec3 d, float cloud, float time, out float base, out float sh){
 	cp += warp * 0.7;
 	base = fbm5(cp * 0.9) * 0.6 + fbm5(cp * 0.32 + 11.0) * 0.55;
 	sh = showerAt(d.xz / max(d.y, 0.02) * 1500.0);
-	base += sh * 0.55;
+	base += sh * 0.8;
 	float cover = mix(0.8, 0.3, cloud);
-	return smoothstep(cover, cover + 0.12, base) * smoothstep(0.01, 0.2, d.y);
+	// a storm's deck stays solid down to the horizon, where fair clouds thin out
+	return smoothstep(cover, cover + 0.12, base) * mix(smoothstep(0.01, 0.2, d.y), smoothstep(0.0, 0.03, d.y), clamp(sh * 1.6, 0.0, 1.0));
 }
 `;
 
@@ -273,8 +274,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					float cover = mix(0.8, 0.3, uCloud);
 					// bright sunlit tops, cool grey-blue bases: a cloud with volume, not a smear
 					vec3 shade = mix(vec3(0.46, 0.52, 0.64), vec3(1.08), smoothstep(0.1, 1.0, lit)) * (0.85 + 0.25 * smoothstep(cover, cover + 0.35, base));
-					// rain clouds: slate grey and heavy
-					shade *= mix(1.0, 0.3, clamp(sh * 1.5, 0.0, 1.0)) * (1.0 - uGloom * 0.45);
+					// rain clouds: slate grey and heavy, darker and lighter masses through the deck
+					float heavy = mix(0.38, 0.14, smoothstep(0.5, 1.1, base - sh * 0.4));
+					shade *= mix(1.0, heavy, clamp(sh * 1.4, 0.0, 1.0)) * (1.0 - uGloom * 0.45);
 					// at night the clouds are dark shapes against the stars, rimmed faintly by moonlight
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
 					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh);
@@ -297,10 +299,14 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					if (tout < 30.0) continue;
 					float top = 1500.0 / tin;                                      // the cloud base, seen from here
 					float below = smoothstep(top * 1.08, top * 0.8, tanE) * smoothstep(-0.03, 0.0, tanE);
-					float thick = clamp((tout - tin) / 2500.0, 0.0, 1.0) * S.w;
+					float thick = clamp((tout - tin) / 1200.0, 0.0, 1.0) * S.w;
 					// standing in it, the rain round you is the streaks and the grey (below); the
 					// curtain is for showers seen from outside
 					bool inside = tc - half_ < 0.0;
+					// the whole stretch of sky under a far storm goes dark, well past its rain
+					float gloomB = S.w * (1.0 - smoothstep(S.z * 0.8, S.z * 3.2, pd)) * step(0.0, tc) * smoothstep(60000.0, 9000.0, tc)
+						* smoothstep(-0.03, 0.0, tanE) * (1.0 - smoothstep(top * 1.2, top * 5.0, tanE));
+					col = mix(col, vec3(0.24, 0.27, 0.32) * (1.0 - uNight * 0.95), gloomB * 0.5);
 					if (!inside) {
 						float az = atan(hd.y, hd.x);
 						// it leans downwind: the foot has drifted further along than the top, by as much
@@ -314,7 +320,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 						// underside of the cloud, which it melts into
 						float core = smoothstep(0.25, 0.85, vn(vec2(azS * 9.0 + S.x * 0.0007, 1.3)));
 						float shafts = 0.35 + 0.65 * vn(vec2(azS * 55.0 + S.x * 0.001, 3.0)) * (0.65 + 0.35 * vn(vec2(azS * 190.0, 7.0)));
-						float side = pow(1.0 - smoothstep(0.15, 1.0, pd / sr), 1.6);
+						float side = 1.0 - smoothstep(0.7, 1.0, pd / sr);
 						float ragged = top * (0.85 + 0.25 * vn(vec2(azS * 90.0, 11.0)));
 						// down to the ground, its foot frayed where the last drops dry out
 						float fall = smoothstep(ragged * 1.08, ragged * 0.7, tanE) * smoothstep(-0.02, 0.012 * (0.6 + 0.8 * vn(vec2(azS * 120.0, 5.0))), tanE);

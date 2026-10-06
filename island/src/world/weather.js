@@ -279,7 +279,7 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 		const want = Math.round(S.showerRate * 4);
 		if (S.cells.filter((c) => !c.pinned).length < want && Math.random() < dt * 0.05) {
 			const up = 7000 + Math.random() * 6000, side = (Math.random() - 0.5) * 9000;
-			S.cells.push({ x: px - wd.x * up - wd.y * side, z: pz - wd.y * up + wd.x * side, r: 900 + Math.random() * 1500, I: 0, peak: 0.45 + Math.random() * 0.55 * (0.6 + S.showerRate * 0.4), age: 0, life: 900 + Math.random() * 900 });
+			S.cells.push({ x: px - wd.x * up - wd.y * side, z: pz - wd.y * up + wd.x * side, r: 1600 + Math.random() * 2600, I: 0, peak: 0.45 + Math.random() * 0.55 * (0.6 + S.showerRate * 0.4), age: 0, life: 900 + Math.random() * 900 });
 		}
 		let here = 0, strongest = null;
 		for (let i = S.cells.length - 1; i >= 0; i--) {
