@@ -29,6 +29,9 @@ import { soundBus, noise } from './soundbus.js';
 import { createSprinklers } from './sprinklers.js';
 import { createFalls } from './falls.js';
 
+// a head's kind, as the yards give it: a fan (spray, strip, bubbler) or a rotor's stream;
+// its arc start, arc, radius, speed and elevation are its own (world/sprinklers.js)
+const KIND = { 1: 1, 2: 2, spray: 1, strip: 1, bubbler: 1, rotor: 2 };
 const SLOTS = 16;               // the shader's emitter slots (sprinklers first, then falls)
 const DECALS = 12;
 
@@ -154,13 +157,13 @@ void main(){
 	} else {
 		float az = e1.x + e1.y * r1, rr = e2.y * mix(0.15, 1.0, r2);
 		c = e0.xyz + vec3(cos(az) * rr, 0.25 + 1.6 * r2 * (1.0 - r2) * e2.y * 0.25 + r3 * 0.4 + a * 0.3, sin(az) * rr);
-		size = mix(1.3, 2.8, r3) * (0.7 + 0.5 * a);
+		size = mix(0.9, 2.0, r3) * (0.7 + 0.5 * a);
 	}
 	c.xz += wv * a * L * 0.6;
 	vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
 	vW = c + (right * position.x + up * position.y) * size * 0.5;
 	float dist = length(c - cameraPosition);
-	vA = sin(3.1416 * a) * e4.y * e4.x * (fall ? 0.18 : 0.2) * smoothstep(0.6, 3.0, dist);
+	vA = sin(3.1416 * a) * e4.y * e4.x * (fall ? 0.18 : 0.08) * smoothstep(0.6, 3.0, dist);
 	gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);
 }`;
 const MIST_FRAG = /* glsl */`
@@ -176,7 +179,7 @@ void main(){
 	float ang = degrees(acos(clamp(-c, -1.0, 1.0)));
 	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.6 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb * smoothstep(30.0, 38.0, ang);
 	float sun = max(vL, 0.0);
-	vec3 col = uSunC * sun * (0.12 + hg * 1.3 + bow * bow * 3.0) + uAmb * 0.7 + vec3(0.05, 0.06, 0.07) * max(-vL, 0.0);
+	vec3 col = uSunC * sun * (0.12 + hg * 0.7 + bow * bow * 2.0) + uAmb * 0.7 + vec3(0.05, 0.06, 0.07) * max(-vL, 0.0);
 	gl_FragColor = vec4(col, a);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -355,10 +358,12 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 		const run = list.filter((h) => h.k > 0.01 && h.d < 140).sort((a, b) => a.d - b.d);
 		for (let s = 0; s < NS && s < run.length; s++) {
 			const h = run[s], b = s * 5, nearK = 1 - THREE.MathUtils.smoothstep(h.d, 48, 62);
-			E[b].set(h.x, h.y, h.z, h.kind);
-			E[b + 1].set(h.a0, h.arc, h.sp, h.el);
+			E[b].set(h.x, h.y, h.z, KIND[h.kind] ?? 1);
+			// (a head that does not say its throw gets one for its radius)
+			const el = h.el ?? 0.45, sp = h.sp ?? Math.min(11, Math.max(5.5, Math.sqrt(h.R * 9.81 / Math.sin(2 * el)) * 1.12));
+			E[b + 1].set(h.a0, h.arc, sp, el);
 			E[b + 2].set(h.y - 0.1, h.R, nearK * q, 1);
-			E[b + 3].set(h.period, h.ph, 0, 0);
+			E[b + 3].set(h.period || 30, h.ph || 0, 0, 0);
 			E[b + 4].set(h.k, (1 - THREE.MathUtils.smoothstep(h.d, 100, 140)) * (h.kind === 2 ? 0.8 : 1), 0, 0);
 			hiss += h.k * 0.02 / (1 + (h.d / 6) ** 2);
 		}
