@@ -326,7 +326,11 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			REAL_U.uRealMap.value = comp.tex;
 			REAL_U.uRealR.value.set(comp.x0, comp.z0, comp.step, 1);
 			REAL_U.uRealB.value.set(comp.x0, comp.z0, comp.x0 + comp.w * comp.step, comp.z0 + comp.h * comp.step);
-		} else REAL_U.uRealR.value.w = 0;
+		} else {
+			// (and the map let go: a disposed texture still bound is uploaded again, and never freed)
+			REAL_U.uRealMap.value = EMPTY_MAPS[3];
+			REAL_U.uRealR.value.w = 0;
+		}
 	}
 	// the boxes the shader keeps the procedural grid off: the loaded regions' and the grown
 	// towns', those side by side merged, the nearest in the slots
