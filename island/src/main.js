@@ -1096,7 +1096,10 @@ export function createIslandWorld() {
 		const S = world.sky.state;
 		const fmtH = (h) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 		const t = slider(p, 'Time of day', 0, 23.99, 0.05, () => S.hours, (v) => { S.hours = v; }, fmtH);
-		slider(p, 'Time speed', 0, 4, 0.1, () => S.speed, (v) => { S.speed = v; }, (v) => v === 0 ? 'paused' : v.toFixed(1) + '×');
+		// steps: paused, real time, then 0.1× to 4× of the game clock
+		slider(p, 'Time speed', 0, 41, 1, () => S.real ? 1 : S.speed === 0 ? 0 : Math.round(S.speed * 10) + 1,
+			(v) => { S.real = v === 1; S.speed = v === 0 ? 0 : v === 1 ? 1 : (v - 1) / 10; },
+			(v) => v === 0 ? 'paused' : v === 1 ? 'real time' : ((v - 1) / 10).toFixed(1) + '×');
 		// the weather: follow the clock, or hold it; moving a slider holds that one thing
 		const WX = world.weather;
 		const wrow = css(document.createElement('div'), 'display:flex;gap:4px;margin:4px 0 8px;');

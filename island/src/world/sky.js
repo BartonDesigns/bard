@@ -565,7 +565,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 	scene.add(hemi);
 	scene.fog = new THREE.FogExp2(0xa9c4dc, 0.00026);
 
-	const state = { hours: shared.startHours ?? 10.5, speed: 1 };
+	const state = { hours: shared.startHours ?? 10.5, speed: 1, real: false };
 	const tmpA = new THREE.Color(), tmpB = new THREE.Color(), tmpC = new THREE.Color();
 	// the weather drives the clouds, rain, bows and lightning in the sky (weather.js)
 	let weather = null;
@@ -584,7 +584,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		if (d.getDate() !== SUN.date || d.getMonth() !== SUN.month || d.getFullYear() !== SUN.year) { SUN = solarDate(d); state.sun = SUN; }
 		if (lat !== SUN.lat) Object.assign(SUN, solarTimes(lat, SUN.dec, SUN.noon));
 		// daylight hours pass slowly (~9 real minutes), night quickly (~2.5)
-		state.hours = advanceSolarClock(state.hours, dt, state.speed, SUN);
+		// (real time: one game hour to the real hour, day or night)
+		state.hours = state.real ? (state.hours + dt / 3600) % 24 : advanceSolarClock(state.hours, dt, state.speed, SUN);
 		// where the sun is: east is +x, north -z, up +y
 		const sd = solarDirection(SUN.lat, SUN.dec, state.hours, SUN.noon, shared.uSunDir.value);
 		const elev = sd.y;
