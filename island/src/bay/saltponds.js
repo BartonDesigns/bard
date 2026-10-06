@@ -179,7 +179,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 	function pondMaterial(rim) {
 		// (the rim drawn over the brine; the brine itself held well above the ground, not pushed back,
 		// which at a low angle would put it behind)
-		const m = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, envMapIntensity: 0.25, polygonOffset: rim, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+		const m = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, envMapIntensity: 0.12, polygonOffset: rim, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, { uTime, uSkyHor });
 			sh.vertexShader = 'attribute vec3 aCol; attribute vec4 aPond; varying vec3 vSC; varying vec4 vSP; varying vec2 vSW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvSC = aCol; vSP = aPond; vSW = (modelMatrix * vec4(position, 1.0)).xz;');
@@ -187,8 +187,8 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 				.replace('#include <color_fragment>', `
 					vec2 sw = mod(vSW, 4096.0);
 					float n1 = spN(sw / 256.0 + vSP.y * 13.0), n2 = spN(sw / 64.0 + vSP.y * 7.0), n3 = spN(sw / 8.0);
-					vec3 sc = vSC * (0.84 + 0.28 * n1 + 0.08 * n2);
-					sc = mix(sc, sc * 0.55 + vec3(0.4, 0.33, 0.33), smoothstep(0.58, 0.85, n1 * 0.7 + n2 * 0.3) * 0.5);
+					vec3 sc = vSC * (0.8 + 0.24 * n1 + 0.08 * n2);
+					sc = mix(sc, sc * 0.6 + vec3(0.32, 0.24, 0.25), smoothstep(0.6, 0.85, n1 * 0.7 + n2 * 0.3) * 0.35);
 					if (vSP.x > 0.5) {
 						float st = sin(dot(sw, vec2(cos(vSP.z), sin(vSP.z))) * 0.9);
 						sc = mix(vSC, vec3(0.86, 0.83, 0.77), n2 * 0.4) * (0.92 + 0.04 * st + 0.08 * n3);
@@ -526,7 +526,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 		let t0 = performance.now();
 		const i0 = Math.floor((cx - R) / sp), i1 = Math.ceil((cx + R) / sp), j0 = Math.floor((cz - R) / sp), j1 = Math.ceil((cz + R) / sp);
 		for (let j = j0; j <= j1; j++) {
-			if (performance.now() - t0 > 4) { yield; t0 = performance.now(); }
+			if (performance.now() - t0 > 6) { show(n); yield; t0 = performance.now(); }
 			for (let i = i0; i <= i1; i++) {
 				const r1 = ih(i, j), r2 = ih(i + 7, j - 3), x = (i + r1) * sp, z = (j + r2) * sp;
 				if ((x - cx) ** 2 + (z - cz) ** 2 > R * R) continue;
@@ -550,6 +550,10 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 				}
 			}
 		}
+		show(n);
+	}
+	// (what is laid so far, shown)
+	function show(n) {
 		for (let k = 0; k < 4; k++) { kinds[k].count = n[k]; kinds[k].instanceMatrix.needsUpdate = true; kinds[k].instanceColor.needsUpdate = true; }
 		S.plants = n.reduce((a, b) => a + b, 0);
 	}
@@ -602,8 +606,8 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 		// the plants round you on the ground, laid again as you go
 		const low = c.y - Math.max(0, marshAt(c.x, c.z) ?? 0) < 220;
 		for (const k of kinds) k.visible = low;
-		if (job) { if (job.next().done) job = null; }
-		else if (low && (!plantAt || Math.hypot(c.x - plantAt.x, c.z - plantAt.z) > 35)) { plantAt = { x: c.x, z: c.z }; job = plant(c.x, c.z); }
+		if (low && (!plantAt || Math.hypot(c.x - plantAt.x, c.z - plantAt.z) > 35)) { plantAt = { x: c.x, z: c.z }; job = plant(c.x, c.z); }
+		if (job && job.next().done) job = null;
 	}
 
 	return {
