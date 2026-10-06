@@ -271,7 +271,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float ck = 1.0 - smoothstep(2.5, 7.0, px);
 					wood *= (0.75 + 0.5 * mix(0.5, vn(gM(1)), ck)) * (1.0 - 0.45 * mix(0.3, smoothstep(0.6, 0.8, vn(gM(2) + 4.0)), ck)) * (0.85 + 0.3 * m1);
 					float floorK = 1.0 - smoothstep(1500.0, 2400.0, dist);          // (where the trees stand drawn)
-					wood = mix(wood, mix(vec3(0.05, 0.035, 0.02), vec3(0.03, 0.045, 0.018), m1) * (0.75 + 0.5 * tus), floorK);
+					wood = mix(wood, mix(wood * 1.15, vec3(0.05, 0.036, 0.02), 0.25 + 0.4 * m1) * (0.75 + 0.5 * tus), floorK);
 					c = mix(c, wood, forest);
 					bare = mix(bare, 0.7, forest * floorK);
 					// and the shade of the scattered trees in open woodland
