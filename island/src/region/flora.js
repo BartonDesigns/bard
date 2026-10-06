@@ -23,7 +23,7 @@ import { mulberry32 } from '../noise.js';
 const FORM = {
 	spruce: ['conifer', '#2e4a32', 14], pine: ['conifer', '#36502e', 13], larch: ['conifer', '#5a7a3a', 14], juniper: ['shrub', '#3a5236', 2.5], cypress: ['column', '#2e4430', 12],
 	birch: ['broad', '#7a9a48', 11, 'weeping'], oak: ['broad', '#4e6a32', 13, 'oak'], lime: ['broad', '#58783a', 13, 'round'], apple: ['broad', '#5a7a3a', 5, 'oak'], maple: ['broad', '#5a7a32', 9, 'round'], cottonwood: ['broad', '#6a8a3a', 15, 'round'],
-	neem: ['broad', '#4a6e2e', 10, 'round'], mango: ['broad', '#365a26', 11, 'oak'], citrus: ['broad', '#3e6a2e', 4, 'oak'], planetree: ['broad', '#5a7838', 15, 'round'], eucalyptus: ['broad', '#7a8a6a', 16, 'layered'], gum: ['broad', '#7a8a6a', 12, 'layered'],
+	neem: ['broad', '#4a6e2e', 10, 'round'], mango: ['broad', '#365a26', 11, 'oak'], citrus: ['broad', '#3e6a2e', 4, 'oak'], planetree: ['broad', '#5a7838', 15, 'round'], eucalyptus: ['eucalypt', '#6e8478', 36], gum: ['eucalypt', '#72866e', 22],
 	breadfruit: ['broad', '#3e6a2a', 10, 'oak'], olive: ['broad', '#7a8a62', 5, 'oak'], blossom: ['broad', '#5a7a3a', 7, 'oak'], banyan: ['banyan', '#3a5a26', 16], baobab: ['baobab', '#5a6a32', 14],
 	datepalm: ['palm', '#5a7a3a', 13], coconut: ['palm', '#4a7a32', 15], palm: ['palm', '#4a7a32', 9], acacia: ['flattop', '#5a6a2e', 7], emergent: ['emergent', '#3a5a26', 38],
 	bamboo: ['bamboo', '#6a8a3a', 9], banana: ['banana', '#4a8a32', 4], fern: ['fern', '#3a6a2a', 1.2], liana: ['fern', '#3a6a2a', 1.6], tea: ['shrub', '#2e5a26', 1],
@@ -35,9 +35,9 @@ const FORM = {
 	greens: ['shrub', '#4a7a32', 0.9],
 };
 // the colour each form's leaves are built in: a kit colour of this is no tint at all
-const REF = { conifer: '#36502e', column: '#36502e', palm: '#4a7a32', banana: '#4a8a32', fern: '#3a6a2a', grass: '#9a9a5a', shrub: '#4a6a32', cactus: '#4a6a3a' };
+const REF = { eucalypt: '#6e8478', conifer: '#36502e', column: '#36502e', palm: '#4a7a32', banana: '#4a8a32', fern: '#3a6a2a', grass: '#9a9a5a', shrub: '#4a6a32', cactus: '#4a6a3a' };
 // forms with a far tier (the rest are small, and simply fade out where they stop mattering)
-const TALL = new Set(['broad', 'conifer', 'column', 'palm', 'flattop', 'baobab', 'banyan', 'emergent', 'bamboo']);
+const TALL = new Set(['broad', 'eucalypt', 'conifer', 'column', 'palm', 'flattop', 'baobab', 'banyan', 'emergent', 'bamboo']);
 const LOW = new Set(['grass', 'fern']);
 
 // ---------- the forms Builder makes here ----------
@@ -191,6 +191,62 @@ function emergent(seed, far) {
 	clumps(leaf, list, c, W, far ? 3 : 8, far ? 6 : 4, r, [0.95, 1, 0.9]);
 	return [wood.geometry(), leaf.geometry()];
 }
+// a eucalyptus (a blue gum): a tall straight pale column in patches of cream, grey and salmon
+// where the bark has peeled, ribbons of shed bark hanging at the forks, a few steep limbs
+// holding a high, open, lopsided crown of drooping blue-grey clumps, a dead tip or two
+function eucalypt(seed, far) {
+	const r = mulberry32(seed), wood = new Builder(), leaf = new Builder(), H = 36 * (0.85 + r() * 0.3), R0 = H * 0.014;
+	const la = r() * 6.283, lean = H * 0.03 * r(), fork = V(Math.cos(la) * lean, H * (0.55 + r() * 0.1), Math.sin(la) * lean);
+	const w0 = wood.c.length;
+	tube(wood, [V(0, -0.4, 0), V(0, H * 0.02, 0), V(fork.x * 0.2, H * 0.15, fork.z * 0.2), V(fork.x * 0.6, H * 0.35, fork.z * 0.6), fork], [R0 * 1.7, R0 * 1.25, R0, R0 * 0.85, R0 * 0.62], far ? 5 : 9, new THREE.Color(1, 1, 1), (t) => t * 0.06);
+	// the crown leans off to one side; the limbs climb steeply into it
+	const ca = r() * 6.283, cOff = V(Math.cos(ca), 0, Math.sin(ca)).multiplyScalar(H * 0.06), W = H * (0.2 + r() * 0.06), c = fork.clone().add(cOff).add(V(0, H * 0.22, 0)), list = [];
+	const nL = far ? 3 : 4 + Math.floor(r() * 2);
+	for (let i = 0; i < nL; i++) {
+		const a = i / nL * 6.283 + r() * 0.7, L = H * (0.22 + r() * 0.12);
+		const e = fork.clone().add(cOff.clone().multiplyScalar(0.8)).add(V(Math.cos(a) * L * 0.55, L * (0.75 + r() * 0.3), Math.sin(a) * L * 0.55)), m = fork.clone().lerp(e, 0.45).add(V(0, L * 0.05, 0));
+		tube(wood, [fork.clone(), m, e], [R0 * 0.5, R0 * 0.32, R0 * 0.1], far ? 3 : 5, new THREE.Color(1, 1, 1), (t) => 0.1 + t * 0.4);
+		// a dead tip: a bare grey spar standing out past the leaves
+		if (i === 0 || r() < 0.2) tube(wood, [e.clone(), e.clone().add(V(Math.cos(a) * L * 0.15, L * 0.3, Math.sin(a) * L * 0.15))], [R0 * 0.1, R0 * 0.03], 3, new THREE.Color(0.62, 0.6, 0.58), () => 0.6);
+		else list.push({ c: e.clone().add(V(0, -H * 0.02, 0)), rad: W * (0.32 + r() * 0.12) });
+		if (!far) for (let k = 0; k < 2; k++) {
+			const b2 = a + (r() - 0.5) * 2, e2 = m.clone().lerp(e, 0.3 + r() * 0.4).add(V(Math.cos(b2) * W * 0.5, H * 0.05, Math.sin(b2) * W * 0.5));
+			tube(wood, [m.clone().lerp(e, 0.3), e2], [R0 * 0.18, R0 * 0.05], 3, new THREE.Color(1, 1, 1), () => 0.6);
+			list.push({ c: e2, rad: W * (0.25 + r() * 0.1) });
+		}
+	}
+	// the bark: smooth, in peeled patches (painted on the trunk and limbs as they stand)
+	for (let i = w0; i < wood.c.length; i += 3) {
+		const v = i, x = wood.p[v], y = wood.p[v + 1], z = wood.p[v + 2];
+		if (wood.c[i] < 0.9) continue;
+		const n = Math.sin(y * 0.9 + Math.sin(x * 4.1 + z * 3.3) * 2) + Math.sin(y * 2.3 + x * 6 - z * 5) * 0.6, low = Math.max(0, 1 - y / (H * 0.18));
+		const C = n > 0.6 ? [0.8, 0.55, 0.42] : n > -0.3 ? [0.8, 0.76, 0.67] : [0.58, 0.58, 0.55];
+		// (the foot keeps its rough grey-brown stocking of old bark)
+		wood.c[i] = C[0] * (1 - low) + 0.42 * low; wood.c[i + 1] = C[1] * (1 - low) + 0.38 * low; wood.c[i + 2] = C[2] * (1 - low) + 0.34 * low;
+	}
+	if (!far) {
+		// ribbons of shed bark hanging at the fork
+		for (let k = 0; k < 5; k++) {
+			const a = r() * 6.283, o = fork.clone().add(V(Math.cos(a) * R0 * 0.7, -r() * H * 0.04, Math.sin(a) * R0 * 0.7)), L = H * (0.06 + r() * 0.08);
+			tube(wood, [o, o.clone().add(V(Math.cos(a) * 0.15, -L * 0.5, Math.sin(a) * 0.15)), o.clone().add(V(Math.cos(a) * 0.1, -L, Math.sin(a) * 0.1))], [0.06, 0.05, 0.02], 3, new THREE.Color(0.48, 0.36, 0.26), (t) => 0.2 + t * 0.6);
+		}
+		// strips of it lying in the litter round the foot
+		for (let k = 0; k < 7; k++) {
+			const a = r() * 6.283, d = R0 * 2 + r() * H * 0.08, o = V(Math.cos(a) * d, 0.05, Math.sin(a) * d), b2 = r() * 3.14, dx = Math.cos(b2) * (0.8 + r()), dz = Math.sin(b2) * (0.8 + r()), w = 0.07;
+			const col = r() < 0.5 ? { r: 0.55, g: 0.42, b: 0.32 } : { r: 0.78, g: 0.72, b: 0.62 }, n = V(0, 1, 0);
+			const ids = [[-dx - dz * w, -dz + dx * w], [dx - dz * w, dz + dx * w], [dx + dz * w, dz - dx * w], [-dx + dz * w, -dz - dx * w]].map(([px, pz], q) => wood.vert(V(o.x + px, 0.05, o.z + pz), n, [q & 1, q >> 1], col, 0));
+			wood.tri(ids[0], ids[2], ids[1]); wood.tri(ids[0], ids[3], ids[2]); wood.tri(ids[0], ids[1], ids[2]); wood.tri(ids[0], ids[2], ids[3]);
+		}
+	}
+	// the leaves: few cards to a clump, hanging below its centre, so the sky shows through
+	const per = far ? 3 : 6, size = far ? 4.4 : 3;
+	for (const cl of list) for (let i = 0; i < per; i++) {
+		const p = cl.c.clone().add(V((r() - 0.5) * 2 * cl.rad, -r() * cl.rad * 0.9 + cl.rad * 0.2, (r() - 0.5) * 2 * cl.rad));
+		const sh = 0.6 + 0.4 * r();
+		card(leaf, p, size * (0.75 + r() * 0.5), r, leafC(sh, [0.9, 0.8, 1.6]), 0.9 + 0.3 * r(), c, V((r() - 0.5) * 0.6, 0.5, (r() - 0.5) * 0.6).normalize());
+	}
+	return [wood.geometry(), leaf.geometry()];
+}
 // a clump of bamboo: thin green culms arching out from one root mass, feathered with sprays of leaves
 function bamboo(seed, far) {
 	const r = mulberry32(seed), culms = new Builder(), leaf = new Builder(), H = 9 * (0.9 + r() * 0.2), n = 12 + Math.floor(r() * 6);
@@ -253,8 +309,9 @@ function cactus(seed, kind) {
 function build(key, seed, far, mid, snow) {
 	const [form, sub] = key.split(':');
 	switch (form) {
-		case 'broad': return { parts: hardwood(seed, far, mid, { height: 10, crown: sub, bark: [1, 1, 1], leaf: [1, 1.04, 0.92] }).parts, mats: ['bark', 'leaf'] };
-		case 'conifer': return { parts: conifer(seed, far, mid, { height: 18, bark: [0.82, 0.74, 0.68], leaf: [0.85, 1, 0.85], snow }).parts, mats: ['bark', 'leaf'] };
+		case 'broad': return { parts: hardwood(seed, false, far || mid, { height: 10, crown: sub, bark: [1, 1, 1], leaf: [1, 1.04, 0.92] }).parts, mats: ['bark', 'leaf'] };
+		case 'conifer': return { parts: conifer(seed, false, far || mid, { height: 18, bark: [0.82, 0.74, 0.68], leaf: [0.85, 1, 0.85], snow }).parts, mats: ['bark', 'leaf'] };
+		case 'eucalypt': return { parts: eucalypt(seed, far), mats: ['stem', 'leaf'] };
 		case 'column': return { parts: cypress(seed, far), mats: ['bark', 'leaf'] };
 		case 'palm': return { parts: palm(seed, far, { height: sub === 'date' ? 11 : 9, lean: sub === 'date' ? 0 : 0.8, frondTint: sub === 'date' ? [1.05, 0.95, 0.9] : [1, 1, 1], fronds: sub === 'date' ? 18 : 14 }).parts, mats: ['palmbark', 'frond'] };
 		case 'flattop': return { parts: acacia(seed, far), mats: ['bark', 'leaf'] };
@@ -387,10 +444,16 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 			for (const im of T) { im.setMatrixAt(k, M4); if (im.instanceColor) col.toArray(im.instanceColor.array, k * 3); }
 		}
 	}
-	function layout(cx, cz, kit, C, culture) {
+	function layout(cx, cz, kit, C, culture, veg) {
 		counts.clear();
 		const snow = (C?.snow || 0) > 0.5;
-		const flora = kit.flora || [], tot = flora.reduce((a, b) => a + b[1], 0), dens = DENS[kit.id] ?? 0.8;
+		let flora = kit.flora || [];
+		// where the atlas has gum trees (Australia, California's planted groves, the Andes and the
+		// Ethiopian highlands), eucalyptus grows among the kit's own, the more the earlier it is named
+		const vegL = typeof veg === 'string' ? veg.split('|') : veg || [], ei = vegL.findIndex((w) => /eucalypt|\bgum\b/i.test(w));
+		const tot0 = flora.reduce((a, b) => a + b[1], 0);
+		if (ei >= 0 && tot0 && !flora.some(([w]) => FORM[w]?.[0] === 'eucalypt')) flora = [...flora, ['eucalyptus', tot0 * 0.6 / (ei + 1) ** 2]];
+		const tot = flora.reduce((a, b) => a + b[1], 0), dens = DENS[kit.id] ?? 0.8;
 		const S16 = 16, K = Math.ceil(R / S16), ll = toLL(cx, cz);
 		const dl = S16 / 111000, dn = S16 / (111000 * Math.max(0.05, Math.cos(ll.lat * Math.PI / 180)));
 		const i0 = Math.floor(ll.lat / dl), j0 = Math.floor(ll.lon / dn);
@@ -421,6 +484,27 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 				used.add(v.key);
 			}
 		}
+		// windbreaks: rows of blue gums along the section lines of the farmland, a half-mile apart
+		// (a stretch here, a gap there), standing off the road that runs along the line
+		if (vegL.some((w) => /windbreak/i.test(w))) {
+			const v = variantOf('eucalypt', kit.id), mLat = 111000, mLon = 111000 * Math.cos(ll.lat * Math.PI / 180);
+			for (const ax of [0, 1]) {
+				const across = ax ? mLat : mLon, along = ax ? mLon : mLat, c0 = ax ? ll.lat : ll.lon, a0 = ax ? ll.lon : ll.lat, dc = 805 / across, da = 7 / along;
+				for (let L = Math.ceil((c0 - R / across) / dc); L <= Math.floor((c0 + R / across) / dc); L++) {
+					const off = (L * dc - c0) * across + 11;
+					for (let k = Math.ceil((a0 - R / along) / da); k <= Math.floor((a0 + R / along) / da); k++) {
+						let h = (Math.imul(L, 73856093) ^ Math.imul(Math.floor(k / 57), 19349663) ^ Math.imul(ax + 7, 83492791)) >>> 0;
+						if (h % 100 > 38) continue;
+						h = (Math.imul(h ^ k, 2654435761) ^ (h >>> 13)) >>> 0;
+						const j1 = (h & 255) / 255, j2 = ((h >>> 8) & 255) / 255, ad = (k * da - a0) * along + (j1 - 0.5) * 3;
+						const dx = ax ? ad : off + (j2 - 0.5) * 2, dz = ax ? -(off + (j2 - 0.5) * 2) : -ad, d = Math.hypot(dx, dz), px = cx + dx, pz = cz + dz;
+						if (d > R || wet(px, pz) || blocked(px, pz, 4)) continue;
+						put(v, Math.floor(j1 * v.models.length), d, px, ground(px, pz) - 0.1, pz, j2 * 6.283, 26 + j1 * 16, 'eucalyptus', FORM.eucalyptus[1], C, culture, j2);
+					}
+				}
+			}
+			used.add(v.key);
+		}
 		// the villages' own great trees, where they stand
 		for (const T of extra?.() || []) {
 			const F = FORM[T.word], d = Math.hypot(T.x - cx, T.z - cz);
@@ -441,13 +525,13 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 			}
 		}
 	}
-	function update(cam, { kit, climate, culture, on = true, epoch = 0 }) {
+	function update(cam, { kit, climate, culture, veg = null, on = true, epoch = 0 }) {
 		group.visible = on && !!kit;
 		if (!group.visible) { at = null; return; }
 		const x = cam.position.x, z = cam.position.z, key = kit.id + ':' + climate?.season + ':' + (climate?.snow > 0.5) + ':' + epoch;
 		if (!at || Math.hypot(x - at[0], z - at[1]) > 60 || at[2] !== key) {
 			at = [x, z, key];
-			layout(x, z, kit, climate, culture);
+			layout(x, z, kit, climate, culture, veg);
 		}
 	}
 	function dispose() {

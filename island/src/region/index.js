@@ -266,7 +266,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 		S.update(dt, cam, { night, wind });
 		folk.update(dt, time, cam);
 		ice.update(dt, cam, { month: env.month, night, cover: here.wx?.cover ?? 0.4, lat: ll.lat, on: true, epoch: F.epoch });
-		flora.update(cam, { kit: here.on ? here.kit : null, climate: here.climate, culture: here.culture?.key, on: here.on, epoch: F.epoch + ':' + S.version() + ':' + S.treesVersion() + ':' + (roads?.version() || 0) });
+		flora.update(cam, { kit: here.on ? here.kit : null, climate: here.climate, culture: here.culture?.key, veg: here.region?.veg, on: here.on, epoch: here.regionId + ':' + F.epoch + ':' + S.version() + ':' + S.treesVersion() + ':' + (roads?.version() || 0) });
 		air.update(dt, cam, { kit: here.kit, climate: here.climate, wx: here.wx, night, on: here.on, fog: scene.fog, wind });
 		const W = globe.world?.(), hours = W?.sky?.state?.hours ?? 12;
 		const churchy = /church|orthodox/.test(here.culture?.faith || '') && /village|alpine|mediterranean|snow|andes|island|farm/.test(here.kit?.id || '');
