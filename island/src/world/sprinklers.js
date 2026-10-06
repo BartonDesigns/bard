@@ -155,7 +155,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				const home = world().village.footprints.find((q) => !q.fence && q.x === f.x && q.z === f.z);
 				const back = -f.fzB - (home ? home.d / 2 : 3) - 0.6;
 				if (back > 1.5) add(0, f.fzB + 0.5, 0, Math.PI, Math.min(4, back), 1);
-				yards.set(key, { x: f.x, z: f.z, heads, timer: houseTimer(key), zones: Math.max(...heads.map((h) => h.zone)) + 1 });
+				yards.set(key, { x: f.x, z: f.z, heads, timer: houseTimer(key), zones: Math.max(...heads.map((h) => h.zone)) + 1, village: true });
 			}
 			out.push(key);
 		}
@@ -211,7 +211,9 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 			if (!Y) continue;
 			const runs = Y.runs || timerRuns(Y.timer, rise);
 			for (const h of Y.heads) {
-				if (!h.y) h.y = ground(h.x, h.z) + 0.1;
+				// (looked at again on each rescan: the map's finer layers may have come in since)
+				if (!h.y) { h.y = ground(h.x, h.z) + 0.1; h.ok = Y.village || lawn(h.x, h.z, Y.park); }
+				if (!h.ok) continue;
 				let on = force ? 1 : 0, wet = force ? 1 : 0;
 				for (const [s, e] of runs) {
 					const d = e - s, z0 = s + d * h.zone / Y.zones, z1 = s + d * (h.zone + 1) / Y.zones;
