@@ -133,7 +133,7 @@ vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dor
 	float ea = (ex ? b.y : b.x) * 800.0, er = gfH(eid, 121u);
 	if (er < hedgeP) {
 		float gap = smoothstep(0.28, 0.38, vn(vec2(ea / 40.0, er * 300.0)));
-		col = mix(col, vec3(0.022, 0.04, 0.016) * (0.7 + 0.6 * mix(0.5, vn(vec2(ea / 3.0, 5.0)), 1.0 - smoothstep(1.0, 3.0, px))), gLine(dB, 2.5 + 2.0 * vn(vec2(ea / 30.0, 9.0)), px) * gap);
+		col = mix(col, vec3(0.03, 0.055, 0.02) * (0.7 + 0.6 * mix(0.5, vn(vec2(ea / 3.0, 5.0)), 1.0 - smoothstep(1.0, 3.0, px))), gLine(dB, 1.5 + 1.5 * vn(vec2(ea / 30.0, 9.0)), px) * gap);
 	} else if (er < hedgeP + 0.3) {
 		float tk = gLine(abs(dB - 4.5), 1.6, px) * (1.0 - 0.6 * gLine(abs(dB - 4.5), 0.35, px));
 		col = mix(col, soil * 1.5 + 0.02, tk); bare = mix(bare, 1.0, tk);

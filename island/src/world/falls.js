@@ -2,14 +2,15 @@
 // - the creeks' cascades and chutes, and a stream's last drop into a lake below it
 //   (bay/water.js: the real Bay Area's and a planet's streams alike);
 // - in a wet world's caves, water spilling from a crack in the vault into a chamber's pool
-//   (the falling water itself drawn as spray: there is nothing else to show it).
+//   (the falling water itself drawn as spray: there is nothing else to show it);
+// - a realm's watermill, the water pouring off the paddles of its turning wheel.
 // Each fall: its foot { x, y, z }, its lip { lx, ly, lz }, its drop and its width, and
 // whether it is under ground.
 
 const DEG = Math.PI / 180;
 
 export function createFalls({ world } = {}) {
-	let caves = null, cavePlan = null;
+	let caves = null, cavePlan = null, mill = null;
 
 	// a cave's falls, worked out once: one over some of the chambers' water pools
 	function caveFalls(plan) {
@@ -34,6 +35,11 @@ export function createFalls({ world } = {}) {
 		const plan = W.underworld?.plan;
 		if (plan !== cavePlan) { cavePlan = plan; caves = plan ? caveFalls(plan) : []; }
 		for (const f of caves) if (Math.hypot(f.x - x, f.z - z) < r) out.push(f);
+		const M = W.medieval?.realm?.watermill?.wheel;
+		if (M) {
+			if (mill?.M !== M) mill = { M, x: M.x, y: M.y, z: M.z, lx: M.x + Math.sin(M.yaw) * 0.6, ly: M.y + 3.4, lz: M.z + Math.cos(M.yaw) * 0.6, drop: 3.4, w: 1.2 };
+			if (Math.hypot(M.x - x, M.z - z) < r) out.push(mill);
+		}
 		return out;
 	}
 	return { near, caves: () => caves || [] };
