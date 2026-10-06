@@ -5,9 +5,12 @@
 // parks, playing fields and golf courses get big rotors on a loose grid, where the map
 // says grass. The fishing village's fenced yards get a few small heads too.
 //
-// Each yard keeps its own seeded schedule: most run early in the morning, some around
-// sunset, a few late in the evening, the front zone and then the back. So at any hour
-// only some yards are on. After a run the grass stays wet for a couple of hours.
+// Each yard keeps its own seeded timer. A fifth of the houses water at sunrise (the real
+// sunrise for the day), another fifth at three in the morning, the rest never on their
+// own; a run is 15-30 minutes, the starts a few minutes apart from house to house, the
+// front zone and then the back. The parks' rotors run before dawn, a few late at night.
+// After a run the grass stays wet and dries over a couple of hours. The timer is a
+// window on the clock, not an instant, so it holds at any speed the clock runs.
 // What they look like is world/spray.js.
 
 import { mainOf } from '../bay/houseplan.js';
@@ -21,18 +24,23 @@ function rng(seed) {
 }
 const keyOf = (x, z) => (Math.imul(Math.round(x * 2) | 0, 73856093) ^ Math.imul(Math.round(z * 2) | 0, 19349663)) >>> 0;
 
-// a yard's runs, in hours: [start, end] (the end may pass midnight)
-function schedule(r, park) {
+// a park's runs, in hours: [start, end] (the end may pass midnight)
+function parkRuns(r) {
 	const runs = [];
-	if (park) {
-		if (r() < 0.8) { const s = 3.5 + r() * 3; runs.push([s, s + 0.8 + r() * 1.2]); }
-		if (r() < 0.35) { const s = 20.5 + r() * 2.5; runs.push([s, s + 0.6 + r() * 0.8]); }
-		return runs;
-	}
-	if (r() < 0.72) { const s = 4.5 + r() * 3.5; runs.push([s, s + 0.5 + r() * 0.9]); }
-	if (r() < 0.42) { const s = 18 + r() * 2.6; runs.push([s, s + 0.4 + r() * 0.7]); }
-	if (r() < 0.12) { const s = 21 + r() * 2; runs.push([s, s + 0.4 + r() * 0.4]); }
+	if (r() < 0.8) { const s = 3.5 + r() * 3; runs.push([s, s + 0.8 + r() * 1.2]); }
+	if (r() < 0.35) { const s = 20.5 + r() * 2.5; runs.push([s, s + 0.6 + r() * 0.8]); }
 	return runs;
+}
+// a house's timer, from its own seed: at sunrise (1 in 5), at 3 am (1 in 5) or never;
+// 15-30 minutes, started a few minutes off the hour
+function houseTimer(key) {
+	const r = rng(key ^ 0x7133e5), u = r();
+	return { at: u < 0.2 ? 'rise' : u < 0.4 ? 3 : null, off: r() * 0.2, len: 0.25 + r() * 0.25 };
+}
+function timerRuns(T, rise) {
+	if (T.at == null) return [];
+	const s = (T.at === 'rise' ? rise : T.at) + T.off;
+	return [[s, s + T.len]];
 }
 // hours since a time of day, 0..24
 const since = (h, s) => ((h - s) % 24 + 24) % 24;
@@ -100,7 +108,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				add(hw - 0.4, -hd - 0.6, 1, -Math.PI / 2, Math.PI / 2, R, 1);
 			}
 		}
-		yards.set(key, heads.length ? { x: M.x, z: M.z, heads, runs: schedule(r, false), zones: Math.max(...heads.map((h) => h.zone)) + 1 } : null);
+		yards.set(key, heads.length ? { x: M.x, z: M.z, heads, timer: houseTimer(key), zones: Math.max(...heads.map((h) => h.zone)) + 1 } : null);
 		return key;
 	}
 
@@ -121,7 +129,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				h.zone = 0;
 				// (neighbours on one controller: their runs much the same)
 				const rz = rng((Math.imul(i >> 2, 7919) ^ Math.imul(j >> 2, 104729)) >>> 0);
-				Y = { x, z, heads: [h], runs: schedule(rz, true), zones: 1, park: true };
+				Y = { x, z, heads: [h], runs: parkRuns(rz), zones: 1, park: true };
 			}
 		}
 		yards.set(key, Y);
@@ -144,7 +152,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				add(-f.fx + 0.5, f.fzF - 0.6, -Math.PI / 2, Math.PI / 2, R, 0);
 				add(f.fx - 0.5, f.fzF - 0.6, -Math.PI, Math.PI / 2, R, 0);
 				add(0, f.fzB + 0.5, 0, Math.PI, Math.min(4, -f.fzB - 1), 1);
-				yards.set(key, r() < 0.7 ? { x: f.x, z: f.z, heads, runs: schedule(r, false), zones: 2 } : null);
+				yards.set(key, { x: f.x, z: f.z, heads, timer: houseTimer(key), zones: 2 });
 			}
 			out.push(key);
 		}
@@ -188,19 +196,25 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 	}
 
 	// the heads in reach with what they are doing at this hour: on (0/1) and how wet their grass is
-	function heads(cam, hours, dt, force, rain) {
+	let lastH = null;
+	function heads(cam, hours, dt, force, rain, rise = 6) {
 		scan(cam, dt);
+		// (how far the clock ran since the last frame; a jump of the clock is not a run)
+		const run = lastH == null ? 0 : since(hours, lastH), step = run < 2 ? run : 0;
+		lastH = hours;
 		const out = [];
 		for (const k of live) {
 			const Y = yards.get(k);
 			if (!Y) continue;
+			const runs = Y.runs || timerRuns(Y.timer, rise);
 			for (const h of Y.heads) {
 				if (!h.y) h.y = ground(h.x, h.z) + 0.1;
 				let on = force ? 1 : 0, wet = force ? 1 : 0;
-				for (const [s, e] of Y.runs) {
+				for (const [s, e] of runs) {
 					const d = e - s, z0 = s + d * h.zone / Y.zones, z1 = s + d * (h.zone + 1) / Y.zones;
 					const a = since(hours, z0);
-					if (a < z1 - z0) { if (!rain) on = 1; wet = Math.max(wet, Math.min(1, 0.3 + a * 3)); }
+					// (on in its window, or if the clock ran right past its start since the last frame)
+					if (a < z1 - z0 || a <= step) { if (!rain) on = 1; wet = Math.max(wet, Math.min(1, 0.3 + Math.min(a, z1 - z0) * 6)); }
 					else wet = Math.max(wet, 1 - (a - (z1 - z0)) / 2.5);
 				}
 				h.on = on;

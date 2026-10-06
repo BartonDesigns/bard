@@ -342,7 +342,7 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 
 		// the sprinklers in reach, nearest first; the drops near, mist only further
 		const rain = (shared.uWet?.value || 0) > 0.3;
-		const list = high ? [] : sprinklers.heads(camera, hours, dt, force, rain);
+		const list = high ? [] : sprinklers.heads(camera, hours, dt, force, rain, W.sky?.state?.sun?.rise ?? 6);
 		for (const h of list) { h.k += ((h.on ? 1 : 0) - h.k) * Math.min(1, dt * 1.5); h.d = Math.hypot(h.x - cam.x, h.z - cam.z, h.y - cam.y); }
 		last = list;
 		const run = list.filter((h) => h.k > 0.01 && h.d < 140).sort((a, b) => a.d - b.d);
