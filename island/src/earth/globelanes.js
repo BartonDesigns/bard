@@ -28,7 +28,7 @@ import { BERM_U, BERM_GLSL } from '../bay/berms.js';
 const MILE = 1609.344, KZ = 110996, RAD = Math.PI / 180;
 const BAND = 34;              // miles between correction lines
 const STEP = 8;               // m between a ribbon's stations
-const TILE = 3;               // miles a tile
+const TILE = 3;               // miles a tile (the farm roads' tiles are a mile)
 const inBay = (lat, lon) => lat > 36.93 && lat < 38.87 && lon > -123.6 && lon < -121.45;
 
 // the two survey grids: the Midwest's mile sections, the valley's quarter-mile blocks
@@ -78,7 +78,7 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 	const group = new THREE.Group();
 	group.name = 'globe lanes';
 	scene.add(group);
-	const LOAD = isPhone ? 3500 : 6000, NEAR = isPhone ? 1800 : 3000, LINK_R = isPhone ? 3000 : 4500;
+	const LOAD = isPhone ? 3500 : 5500, NEAR = isPhone ? 1500 : 2400, LINK_R = isPhone ? 3000 : 4500;
 	const stats = { tiles: 0, links: 0, routed: 0, sites: 0, verts: 0, buildMs: 0, routeMs: 0 };
 
 	// ---------- the drawn ribbons ----------
@@ -95,10 +95,12 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 				vec3 c = vKind.rgb * (0.86 + 0.28 * n);
 				if (k < 0.5) {
 					// edge lines, a dashed centre line (none in the junctions)
-					float edge = smoothstep(0.84 - fw, 0.86, a) * (1.0 - smoothstep(0.91, 0.93 + fw, a));
-					float mid = (1.0 - smoothstep(0.03, 0.05 + fw, a)) * step(0.45, fract(vRoad.y / 10.0)) * step(9.0, min(vRoad.y, vRoad.z));
+					// (thin lines: faded rather than widened when far off)
+					float fade = clamp(0.05 / max(fw, 1e-4), 0.0, 1.0);
+					float edge = smoothstep(0.86, 0.88, a) * (1.0 - smoothstep(0.91, 0.93, a)) * fade;
+					float mid = (1.0 - smoothstep(0.015, 0.03, a)) * step(0.55, fract(vRoad.y / 12.0)) * step(9.0, min(vRoad.y, vRoad.z)) * fade;
 					c = mix(c, vec3(0.62, 0.61, 0.57), edge * 0.85);
-					c = mix(c, vec3(0.72, 0.58, 0.2), mid * 0.9);
+					c = mix(c, vec3(0.78, 0.6, 0.12), mid * 0.9);
 				} else if (k > 1.5) {
 					// the wheel ruts, and on a track the grass between them; a soft verge
 					c *= 1.0 - 0.16 * smoothstep(0.2, 0.0, abs(a - 0.5));
@@ -119,7 +121,7 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 			const ax = pts[k * 2], az = pts[k * 2 + 1], bx = pts[k * 2 + 2], bz = pts[k * 2 + 3], L = Math.hypot(bx - ax, bz - az), m = Math.max(1, Math.ceil(L / step));
 			for (let q = k ? 1 : 0; q <= m; q++) S.push(ax + (bx - ax) * q / m, az + (bz - az) * q / m);
 		}
-		const m = S.length / 2, hw = w / 2, across = w > 4.6 && step <= STEP ? [-1, 0, 1] : [-1, 1], na = across.length;
+		const m = S.length / 2, hw = w / 2, across = w >= 6 && step <= STEP ? [-1, 0, 1] : [-1, 1], na = across.length;
 		// (the narrower surfaces a little lower, so where two meet the bigger road is on top)
 		const lift = 0.04 + (3 - kind) * 0.008;
 		const acc = [0];
@@ -202,7 +204,7 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 		const mile = line % G.sub === 0, half = line % (G.sub / 2 || 1) === 0, L = Math.floor(line / G.sub), h0 = hash(line, cross, dir === 'n' ? 7 : 11);
 		let sty;
 		if (G === PLSS) sty = ((L % 6) + 6) % 6 === 3 || hash(line, 0, 5) < 0.08 ? { cls: 'tertiary', w: 7, kind: 0, tint: [0.1, 0.1, 0.105] } : { cls: 'unclassified', w: 6, kind: 2, tint: GRAVEL };
-		else sty = mile ? { cls: 'tertiary', w: 7, kind: 0, tint: [0.1, 0.1, 0.105] } : half ? { cls: 'unclassified', w: 5, kind: 2, tint: GRAVEL } : { cls: 'track', w: 3.5, kind: 3, tint: DIRT, minor: true };
+		else sty = mile ? { cls: 'tertiary', w: 7, kind: 0, tint: [0.1, 0.1, 0.105] } : half ? { cls: 'unclassified', w: 5, kind: 2, tint: GRAVEL, minor: true } : { cls: 'track', w: 3.5, kind: 3, tint: DIRT, minor: true };
 		const present = G === PLSS ? h0 > 0.05 : mile || (half ? h0 < 0.7 : h0 < 0.45);
 		S = { key, G, dir, a, b, ok: false, ...sty, ends: [la0, lo0, la1, lo1] };
 		const name = G === PLSS ? (dir === 'n' ? `${((L % 300) + 300) % 300} Avenue` : `${((L % 300) + 300) % 300} Street`) : (dir === 'n' ? `Road ${((L % 200) + 200) % 200}` : `Avenue ${((L % 200) + 200) % 200}`);
@@ -225,12 +227,12 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 	function gridAt(x, z) {
 		const ll = toLL(x, z), G = surveyAt(ll.lat, ll.lon);
 		if (!G) return null;
-		const dLat = dLatOf(G), a = Math.floor(ll.lat / dLat), dl = dLonOf(bandOf(a, G), G), aR = Math.round(ll.lat / dLat), dlR = dLonOf(bandOf(aR, G), G);
+		const dLat = dLatOf(G), a = Math.floor(ll.lat / dLat), dl = dLonOf(bandOf(a, G), G);
 		const kx = 111320 * Math.cos(ll.lat * RAD);
 		let best = null;
 		const consider = (S, t, d) => { if (S.ok && (!best || d < best.d)) best = { S, t, d }; };
 		for (const b of [Math.floor(ll.lon / dl), Math.ceil(ll.lon / dl)]) consider(segInfo(G, 'n', a, b), (ll.lat / dLat) - a, Math.abs(ll.lon - b * dl) * kx);
-		for (const aa of [Math.floor(ll.lat / dLat), Math.ceil(ll.lat / dLat)]) { const d2 = aa === aR ? dlR : dLonOf(bandOf(aa, G), G), b = Math.floor(ll.lon / d2); consider(segInfo(G, 'e', aa, b), ll.lon / d2 - b, Math.abs(ll.lat - aa * dLat) * KZ); }
+		for (const aa of [Math.floor(ll.lat / dLat), Math.ceil(ll.lat / dLat)]) { const d2 = dLonOf(bandOf(aa, G), G), b = Math.floor(ll.lon / d2); consider(segInfo(G, 'e', aa, b), ll.lon / d2 - b, Math.abs(ll.lat - aa * dLat) * KZ); }
 		return best;
 	}
 	// is a point within m of a road's edge (the survey's and the highways', for the lots)
@@ -276,7 +278,7 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 					const mLat = dir === 'n' ? (a + 0.5) * dLat : a * dLat, mLon = dir === 'n' ? b * dl : (b + 0.5) * dl;
 					if (mLat < T.lat0 || mLat >= T.lat1 || mLon < T.lon0 || mLon >= T.lon1) continue;
 					const S = segInfo(G, dir, a, b);
-					if (!S.ok || (S.minor && !T.near)) continue;
+					if (!S.ok || !S.minor !== !T.minor) continue;
 					list.push(S);
 				}
 			}
@@ -303,21 +305,24 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 	function scanTiles(x, z) {
 		const ll = toLL(x, z), G = surveyAt(ll.lat, ll.lon) || surveyAt(ll.lat + 0.05, ll.lon) || surveyAt(ll.lat - 0.05, ll.lon) || surveyAt(ll.lat, ll.lon + 0.06) || surveyAt(ll.lat, ll.lon - 0.06);
 		const want = [];
-		if (G) {
-			// (a row of tiles is as wide in longitude as 3 miles at its own latitude)
-			const TL = TILE * MILE / KZ, ri = Math.ceil(LOAD / (TILE * MILE)) + 1, ti = Math.floor(ll.lat / TL);
+		// tiles of n miles out to maxD: the main roads in 3-mile tiles, the valley's farm roads
+		// in 1-mile tiles near you only
+		const add = (n, minor, maxD) => {
+			// (a row of tiles is as wide in longitude as n miles at its own latitude)
+			const TL = n * MILE / KZ, ri = Math.ceil(maxD / (n * MILE)) + 1, ti = Math.floor(ll.lat / TL);
 			for (let i = ti - ri; i <= ti + ri; i++) {
-				const TLon = Math.round(TILE * MILE / (111320 * Math.cos((i + 0.5) * TL * RAD)) * 1000) / 1000, tj = Math.floor(ll.lon / TLon);
+				const TLon = Math.round(n * MILE / (111320 * Math.cos((i + 0.5) * TL * RAD)) * 1e4) / 1e4, tj = Math.floor(ll.lon / TLon);
 				for (let j = tj - ri; j <= tj + ri; j++) {
-					const lat0 = i * TL, lon0 = j * TLon, mid = toXZ(lat0 + TL / 2, lon0 + TLon / 2), d = Math.hypot(mid.x - x, mid.z - z) - TILE * MILE * 0.7;
-					if (d > LOAD) continue;
+					const lat0 = i * TL, lon0 = j * TLon, mid = toXZ(lat0 + TL / 2, lon0 + TLon / 2), d = Math.hypot(mid.x - x, mid.z - z) - n * MILE * 0.7;
+					if (d > maxD) continue;
 					const Gt = surveyAt(lat0 + TL / 2, lon0 + TLon / 2);
-					if (!Gt) continue;
-					const nearT = d < NEAR, zk = zoneList.filter((t) => Math.abs(t.x - mid.x) < t.r + TILE * MILE && Math.abs(t.z - mid.z) < t.r + TILE * MILE).map((t) => Math.round(t.x) + ':' + Math.round(t.r)).join('|');
-					want.push({ key: Gt.id + ':' + i + ':' + j + ':' + (nearT ? 1 : 0) + ':' + zk, G: Gt, lat0, lat1: lat0 + TL, lon0, lon1: lon0 + TLon, near: nearT, d });
+					if (!Gt || (minor && Gt.sub === 1)) continue;
+					const nearT = d < NEAR, zk = zoneList.filter((t) => Math.abs(t.x - mid.x) < t.r + n * MILE && Math.abs(t.z - mid.z) < t.r + n * MILE).map((t) => Math.round(t.x) + ':' + Math.round(t.r)).join('|');
+					want.push({ key: Gt.id + ':' + n + ':' + i + ':' + j + ':' + (nearT ? 1 : 0) + ':' + zk, G: Gt, lat0, lat1: lat0 + TL, lon0, lon1: lon0 + TLon, near: nearT, minor, d });
 				}
 			}
-		}
+		};
+		if (G) { add(TILE, false, LOAD); add(1, true, NEAR); }
 		const keep = new Set(want.map((w) => w.key));
 		for (const [k, T] of tiles) if (!keep.has(k)) { freeTile(T); tiles.delete(k); if (tileJob?.T === T) tileJob = null; }
 		want.sort((p, q) => p.d - q.d);
@@ -392,11 +397,11 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 	function anchorFor(x, z, reach) {
 		let best = null;
 		const g = gridAt(x, z);
-		if (g && g.d < reach && !zoned(x, z)) {
-			const [x0, z0, x1, z1] = segXZ(g.S), P = toLL(x, z);
-			// (the foot of the perpendicular on the line)
+		if (g && g.d < reach) {
+			const [x0, z0, x1, z1] = segXZ(g.S);
+			// (the foot of the perpendicular on the line, if the line is drawn there)
 			const dx = x1 - x0, dz = z1 - z0, t = Math.max(0.02, Math.min(0.98, ((x - x0) * dx + (z - z0) * dz) / (dx * dx + dz * dz || 1)));
-			best = { x: x0 + dx * t, z: z0 + dz * t, d: g.d, S: g.S, t, lat: P.lat };
+			if (!zoned(x0 + dx * t, z0 + dz * t)) best = { x: x0 + dx * t, z: z0 + dz * t, d: g.d, S: g.S, t };
 		}
 		tmp.length = 0;
 		highways?.near('roads', x, z, reach, tmp);
