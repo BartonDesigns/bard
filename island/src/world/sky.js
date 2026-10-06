@@ -291,8 +291,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					vec4 S = uShowers[i];
 					if (S.w < 0.01) continue;
 					float tc = dot(S.xy, hd), pd = length(S.xy - hd * tc);
-					if (pd >= S.z || tc + S.z < 0.0) continue;
-					float half_ = sqrt(S.z * S.z - pd * pd), tin = max(tc - half_, 30.0), tout = tc + half_;
+					float sr = S.z * 1.35;                                      // its veil spreads past the cell
+					if (pd >= sr || tc + sr < 0.0) continue;
+					float half_ = sqrt(sr * sr - pd * pd), tin = max(tc - half_, 30.0), tout = tc + half_;
 					if (tout < 30.0) continue;
 					float top = 1500.0 / tin;                                      // the cloud base, seen from here
 					float below = smoothstep(top * 1.08, top * 0.8, tanE) * smoothstep(-0.03, 0.0, tanE);
@@ -313,7 +314,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 						// underside of the cloud, which it melts into
 						float core = smoothstep(0.25, 0.85, vn(vec2(azS * 9.0 + S.x * 0.0007, 1.3)));
 						float shafts = 0.35 + 0.65 * vn(vec2(azS * 55.0 + S.x * 0.001, 3.0)) * (0.65 + 0.35 * vn(vec2(azS * 190.0, 7.0)));
-						float side = 1.0 - smoothstep(0.6, 1.0, pd / S.z);
+						float side = pow(1.0 - smoothstep(0.15, 1.0, pd / sr), 1.6);
 						float ragged = top * (0.85 + 0.25 * vn(vec2(azS * 90.0, 11.0)));
 						// down to the ground, its foot frayed where the last drops dry out
 						float fall = smoothstep(ragged * 1.08, ragged * 0.7, tanE) * smoothstep(-0.02, 0.012 * (0.6 + 0.8 * vn(vec2(azS * 120.0, 5.0))), tanE);
