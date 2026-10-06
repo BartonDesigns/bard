@@ -326,7 +326,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					c *= mix(1.0, 0.55 + 0.9 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
 					if (any(isnan(c)) || any(isinf(c))) c = vec3(0.3);
 					diffuseColor.rgb = c;
-					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(fract(h / 500.0), snowK, forest) : uGDebug < 4.5 ? vec3(farmP, urb, rockK) : vec3(0.35);
+					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(clamp(vGC.x + 0.5, 0.0, 1.0), vGC.y, fract(vGC.z / 50.0)) : uGDebug < 4.5 ? vec3(farmP, urb, rockK) : uGDebug < 5.5 ? vec3(slope * 20.0, bare, gold) : uGDebug < 6.5 ? vec3(fract(h / 20.0), snowK, shore) : vec3(0.35);
 				}`)
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 				{

@@ -305,7 +305,6 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 	const sprinklers = createSprinklers({ world, isPhone });
 	const falls = createFalls({ world });
 	let force = false, q = 1, fallList = [], fallT = 0, last = [];
-	const fallK = new Map();
 
 	// ---- the hiss of the spray and the rush of falling water, quiet, from what is near
 	let snd = null;
@@ -378,7 +377,6 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 		fallT -= dt;
 		if (fallT < 0) {
 			fallT = 1.5;
-			if (fallK.size > 64) fallK.clear();
 			fallList = high ? [] : falls.near(cam.x, cam.z, 260);
 		}
 		const fl = fallList.map((f) => ({ f, d: Math.hypot(f.x - cam.x, f.z - cam.z, f.y - cam.y) })).sort((a, b) => a.d - b.d);
@@ -386,13 +384,11 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 			const { f, d } = fl[s], b = (SLOTS - NF + s) * 5;
 			const R = THREE.MathUtils.clamp(0.6 + f.drop * 0.35 + f.w * 0.15, 0.8, 8);
 			const hard = Math.hypot(f.x - f.lx, f.z - f.lz) < f.drop * 1.5;
-			const k = Math.min(1, (fallK.get(f) || 0) + dt * 0.5);
-			fallK.set(f, k);
 			E[b].set(f.x, f.y + 0.05, f.z, 3);
 			E[b + 1].set(Math.max(0.4, f.w * (f.cave ? 1 : 0.8)), 0, THREE.MathUtils.clamp(Math.sqrt(19.6 * f.drop) * 0.4, 1.5, 7), 0.8);
 			E[b + 2].set(f.y, R, (1 - THREE.MathUtils.smoothstep(d, 70, 100)) * q, f.cave ? -1 : 1);
 			E[b + 3].set(f.lx, f.ly, f.lz, f.cave || hard ? 0.4 : 0);
-			E[b + 4].set(k, 1 - THREE.MathUtils.smoothstep(d, 180, 260), 0, 0);
+			E[b + 4].set(1, 1 - THREE.MathUtils.smoothstep(d, 180, 260), 0, 0);
 			rush += 0.05 * Math.min(1, R / 4) / (1 + (d / 12) ** 2);
 		}
 		sound(hiss, rush);
