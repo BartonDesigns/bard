@@ -167,8 +167,9 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 				const q = j * Lv.W + i;
 				if (t < Lv.v[q] / 20 - 1000) { Lv.v[q] = Math.round((t + 1000) * 20); D[q] = THREE.DataUtils.toHalfFloat(t); rows.add(j); }
 			}
-			for (const j of rows) tex.addUpdateRange(j * Lv.W * 4, Lv.W * 4);
-			if (rows.size) tex.needsUpdate = true;
+			// (the whole map sent again: a map not yet on the GPU sent as only these rows would
+			// leave the rest of it empty, the seabed at the surface)
+			if (rows.size) { tex.clearUpdateRanges(); tex.needsUpdate = true; }
 		}
 	}
 
