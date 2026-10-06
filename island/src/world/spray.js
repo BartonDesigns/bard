@@ -104,7 +104,7 @@ void main(){
 	v += vec3(sin(uTime * 9.0 + n), sin(uTime * 7.3 + n * 1.3), cos(uTime * 8.1 + n * 0.7)) * (0.4 + 1.8 * aSeed.z);
 	// the streak: its path through the exposure, a quad turned to face you
 	vec3 toC = cameraPosition - p; float dist = length(toC);
-	vec3 dir = normalize(v), side = normalize(cross(dir, toC));
+	vec3 dir = normalize(v), side = normalize(cross(toC, dir));
 	float px = uPx * dist, wid = max(0.0016, px);
 	vec3 w = p - dir * (length(v) * 0.024 + wid) * position.y + side * position.x * wid;
 	gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
@@ -305,6 +305,7 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 	const sprinklers = createSprinklers({ world, isPhone });
 	const falls = createFalls({ world });
 	let force = false, q = 1, fallList = [], fallT = 0, last = [];
+	const fallAt = { x: 1e9, z: 1e9 };
 
 	// ---- the hiss of the spray and the rush of falling water, quiet, from what is near
 	let snd = null;
@@ -375,8 +376,8 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 
 		// the falls in reach, sized by their drop and their width
 		fallT -= dt;
-		if (fallT < 0) {
-			fallT = 1.5;
+		if (fallT < 0 || Math.hypot(cam.x - fallAt.x, cam.z - fallAt.z) > 40) {
+			fallT = 1.5; fallAt.x = cam.x; fallAt.z = cam.z;
 			fallList = high ? [] : falls.near(cam.x, cam.z, 260);
 		}
 		const fl = fallList.map((f) => ({ f, d: Math.hypot(f.x - cam.x, f.z - cam.z, f.y - cam.y) })).sort((a, b) => a.d - b.d);
