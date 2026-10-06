@@ -147,7 +147,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 	const yards = new Map();        // key -> a yard: { x, z, heads, zones, timer | win } (null: nothing to water there)
 	const live = [];                // the yards in reach
 	const out = [];                 // the heads in reach, handed on each frame
-	let scanX = 1e9, scanZ = 1e9, scanT = 0, queue = [];
+	let scanX = 1e9, scanZ = 1e9, scanT = 0, queue = [], realV = null;
 	const REACH = 140;
 
 	const ground = (x, z) => { const I = world()?.island; return I ? (I.drawnAt || I.heightAt)(x, z) : 0; };
@@ -224,7 +224,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 		if (yards.has(key)) return key;
 		const W = world(), real = W?.real;
 		// (a gridded house where the map has houses of its own, by the seam: not watered twice)
-		if (proc && real?.loaded?.() && real.near('boxes', M.x, M.z, 25).some((b) => b.kind <= 4 && Math.hypot(b.x - M.x, b.z - M.z) < 25)) { yards.set(key, null); return key; }
+		if (proc && (real?.inside?.(M.x, M.z) || (real?.loaded?.() && real.near('boxes', M.x, M.z, 25).some((b) => b.kind <= 4 && Math.hypot(b.x - M.x, b.z - M.z) < 25)))) return null;
 		const r = rng(key ^ 0x5eed5);
 		const ca = Math.cos(M.a), sa = Math.sin(M.a), hw = M.w / 2, hd = M.d / 2;
 		const toW = (lx, lz) => [M.x + ca * lx - sa * lz, M.z + sa * lx + ca * lz];
@@ -388,7 +388,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 		const dv = drives[0], valve = toW(dv ? (dv[0] > 0 ? dv[0] - 0.6 : dv[2] + 0.6) : xl + 0.6, hd + 0.6);
 		const ctrl = toW(dv ? (dv[0] + dv[2]) / 2 : xl, hd);
 
-		const Y = heads.length ? { x: M.x, z: M.z, kind: 'house', heads, zones, timer: houseTimer(key), front: frontIs, back: backIs, fault, valve, ctrl, lot: [lotL, rear, lotR, hd + deep], lawns: lawns.map((l) => ({ zone: l.zone, where: l.where, pts: [toW(l.q[0], l.q[1]), toW(l.q[2], l.q[1]), toW(l.q[2], l.q[3]), toW(l.q[0], l.q[3])] })), a: M.a, win: null, rise: null } : null;
+		const Y = heads.length ? { x: M.x, z: M.z, kind: 'house', heads, zones, timer: houseTimer(key), front: frontIs, back: backIs, fault, valve, ctrl, lot: [lotL, rear, lotR, hd + deep], lawns: lawns.map((l) => ({ zone: l.zone, where: l.where, pts: [toW(l.q[0], l.q[1]), toW(l.q[2], l.q[1]), toW(l.q[2], l.q[3]), toW(l.q[0], l.q[3])] })), a: M.a, proc, win: null, rise: null } : null;
 		if (Y) for (const h of heads) h.yard = Y;
 		yards.set(key, Y);
 		return key;
@@ -495,6 +495,12 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 	function scan(cam, dt) {
 		const x = cam.position.x, z = cam.position.z;
 		scanT -= dt;
+		// (the mapped streets came in or went: the gridded houses they replace let go, and all looked at again)
+		const ver = world()?.real?.version?.() ?? 0;
+		if (ver !== realV) {
+			realV = ver; scanX = 1e9;
+			for (const [k, Y] of yards) if (!Y || Y.proc) yards.delete(k);
+		}
 		if (Math.hypot(x - scanX, z - scanZ) > 15 || scanT < 0) {
 			scanX = x; scanZ = z; scanT = 4;
 			const W = world(), keys = villageYards(x, z);
