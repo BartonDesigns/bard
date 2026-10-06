@@ -72,7 +72,7 @@ export function gridSnap(lat, lon, half = 280) {
 }
 
 // the surfaces: 0 marked asphalt, 1 plain asphalt, 2 gravel, 3 dirt
-const GRAVEL = [0.36, 0.33, 0.29], DIRT = [0.42, 0.34, 0.25];
+const GRAVEL = [0.3, 0.28, 0.24], DIRT = [0.42, 0.34, 0.25];
 // the kits whose lanes are earth, not metalled
 const EARTH = /^(steppe|savanna|sahel|desert|outback|jungle|polar|station|himalaya|andes|island|kraal|camp)$/;
 const PAVED = /^(village|alpine|mediterranean|eastvillage|snow|eastcity|southcity|bazaar)$/;
@@ -119,7 +119,7 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 					c = mix(c, c * 0.8 + vec3(0.03, 0.05, 0.0), smoothstep(0.75, 1.0, a));
 				}
 				diffuseColor.rgb = c;
-				diffuseColor.a = mix(1.0, 0.7, far) * (1.0 - smoothstep(0.7, 1.0, a) * far * 0.6);
+				diffuseColor.a = mix(1.0, 0.85, far) * (1.0 - smoothstep(0.7, 1.0, a) * far * 0.6);
 			}`);
 	};
 	mat.customProgramCacheKey = () => 'globelanes2';
