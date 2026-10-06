@@ -510,7 +510,7 @@ const FRAG = /* glsl */`
 		// are finer than a pixel, the mix of them
 		if (uSalt.x > 0.0) {
 			float s = clamp(uSalt.x * (0.8 + 0.45 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))) + uSalt.x * uSalt.x * 0.3, 0.0, 1.0);
-			float gk = fract(g * 23.0 + vHK.z * 7.0), fw = length(fwidth(vMapUv * 512.0));
+			float gk = fract(g * 14.0 + vHK.z * 7.0), fw = length(fwidth(vMapUv * 512.0));
 			float pick = mix(1.0 - smoothstep(s - 0.06, s + 0.06, gk), s, smoothstep(1.2, 3.0, fw));
 			col = mix(col, uGrey * (0.85 + g * 0.3), pick * 0.92);
 		}
