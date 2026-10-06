@@ -88,6 +88,58 @@ function ribbed(b, path, rad, sides, ribs, color) {
 	for (let k = 0; k < rings.length - 1; k++) for (let s = 0; s < sides; s++) { const a = rings[k][s], bb = rings[k][s + 1], c = rings[k + 1][s], dd = rings[k + 1][s + 1]; b.tri(a, c, bb); b.tri(bb, c, dd); }
 }
 
+// snow lying along a spray: a narrower white band just above it
+function snowOn(b, pts, widths, lift) {
+	strip(b, pts.map((p, k) => p.clone().add(V(0, lift * (0.6 + 0.4 * Math.sin(k / (pts.length - 1) * Math.PI)), 0))), widths.map((w, k) => w * 0.48 * (k ? 1 : 0.3)), 0.25, { r: 0.92, g: 0.94, b: 0.98 }, { r: 0.86, g: 0.9, b: 0.96 }, 0.3, 0.8, 1);
+}
+// a spruce (and a fir, a larch): a straight trunk inside a dense narrow spire of whorled limbs,
+// longest at the foot and shortening to the leader, each a drooping spray of dark needles
+export function spruce(seed, far, snow) {
+	const r = mulberry32(seed), trunk = new Builder(), b = new Builder(), sn = new Builder(), H = 16 * (0.9 + r() * 0.2), R0 = H * 0.013;
+	tube(trunk, [V(0, -0.3, 0), V(0, H * 0.03, 0), V(0, H * 0.5, 0), V(0, H, 0)], [R0 * 1.6, R0, R0 * 0.55, 0.02], far ? 4 : 7, BARK, (t) => t * 0.1);
+	const nW = far ? 9 : 16, per = far ? 5 : 6, base = 0.03 + r() * 0.04, segs = far ? 2 : 3;
+	for (let w = 0; w < nW; w++) {
+		const t = w / (nW - 1), y = H * (base + (0.97 - base) * t), L = H * 0.26 * Math.pow(1 - t, 0.95) + 0.35, a0 = r() * 6.283;
+		for (let i = 0; i < per; i++) {
+			const a = a0 + i / per * 6.283 + (r() - 0.5) * 0.5, dir = V(Math.cos(a), 0, Math.sin(a)), droop = 0.18 + 0.12 * (1 - t), pts = [], widths = [];
+			for (let k = 0; k <= segs; k++) { const u = k / segs, d = L * u; pts.push(dir.clone().multiplyScalar(R0 * 0.5 + d).add(V(0, y - droop * d * u * 1.2 + d * 0.08, 0))); widths.push(L * (1.05 + 0.25 * r()) * Math.sin(Math.min(1, 0.25 + u) * Math.PI * 0.85) + 0.25); }
+			const sh = 0.55 + 0.45 * t;
+			strip(b, pts, widths, 0.35, { r: 0.09 * sh, g: 0.15 * sh, b: 0.1 * sh }, { r: 0.15 * sh, g: 0.23 * sh, b: 0.14 * sh }, 0.2 + 0.4 * t, 0.6 + 0.4 * t, 0.75);
+			if (snow && (!far || i % 2 === 0)) snowOn(sn, pts, widths, 0.12 + L * 0.03);
+		}
+	}
+	// the leader: a short upright spike of needles
+	for (let i = 0; i < 3; i++) { const a = i * 2.1, pts = [V(0, H * 0.94, 0), V(Math.cos(a) * 0.08, H * 0.98, Math.sin(a) * 0.08), V(Math.cos(a) * 0.05, H * 1.02, Math.sin(a) * 0.05)]; strip(b, pts, [0.4, 0.3, 0.05], 0.1, { r: 0.08, g: 0.13, b: 0.09 }, { r: 0.12, g: 0.18, b: 0.12 }, 0.8, 1, 0.5); }
+	return snow ? [trunk.geometry(), b.geometry(), sn.geometry()] : [trunk.geometry(), b.geometry()];
+}
+// a Scots pine: a tall bare trunk, grey-brown at the foot and red-orange up high, a few
+// limbs climbing into a high flat-topped crown of needle tufts
+export function pine(seed, far, snow) {
+	const r = mulberry32(seed), trunk = new Builder(), b = new Builder(), sn = new Builder(), H = 20 * (0.9 + r() * 0.2), R0 = H * 0.014;
+	const la = r() * 6.283, lean = H * 0.03 * r(), top = V(Math.cos(la) * lean, H * 0.8, Math.sin(la) * lean), w0 = trunk.c.length;
+	tube(trunk, [V(0, -0.3, 0), V(0, H * 0.03, 0), V(top.x * 0.3, H * 0.4, top.z * 0.3), V(top.x * 0.7, H * 0.65, top.z * 0.7), top], [R0 * 1.5, R0, R0 * 0.85, R0 * 0.7, R0 * 0.4], far ? 4 : 7, new THREE.Color(1, 1, 1), (t) => t * 0.08);
+	const tufts = [], nL = far ? 5 : 8;
+	for (let i = 0; i < nL; i++) {
+		const a = i / nL * 6.283 + r() * 0.5, o = top.clone().lerp(V(top.x * 0.75, H * 0.62, top.z * 0.75), r()), d = H * (0.12 + r() * 0.1);
+		const e = o.clone().add(V(Math.cos(a) * d, H * (0.06 + r() * 0.08), Math.sin(a) * d)).setY(Math.min(H * 0.92, o.y + H * (0.06 + r() * 0.08)));
+		tube(trunk, [o, o.clone().lerp(e, 0.5).add(V(0, H * 0.02, 0)), e], [R0 * 0.35, R0 * 0.22, R0 * 0.08], far ? 3 : 4, new THREE.Color(1, 1, 1), (t) => 0.1 + t * 0.4);
+		tufts.push(e, o.clone().lerp(e, 0.55).add(V(0, H * 0.025, 0)));
+	}
+	tufts.push(top.clone().add(V(0, H * 0.08, 0)));
+	// the bark: grey-brown and furrowed below, thin flaking orange up in the crown
+	for (let i = w0; i < trunk.c.length; i += 3) { const k = Math.min(1, Math.max(0, (trunk.p[i + 1] - H * 0.3) / (H * 0.3))); trunk.c[i] = 0.58 + 0.42 * k; trunk.c[i + 1] = 0.5 + 0.08 * k; trunk.c[i + 2] = 0.44 - 0.08 * k; }
+	const n = far ? 4 : 9, L = far ? 2.6 : 1.7;
+	for (const c of tufts) {
+		for (let i = 0; i < n; i++) {
+			const a = i / n * 6.283 + r() * 0.4, el = 0.15 + r() * 0.5, dir = V(Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)), pts = [], widths = [];
+			for (let k = 0; k <= 2; k++) { const u = k / 2; pts.push(c.clone().add(dir.clone().multiplyScalar(L * u)).add(V(0, -0.25 * u * u * L, 0))); widths.push(L * 0.7 * Math.sin(Math.min(1, 0.25 + u) * Math.PI * 0.8) + 0.1); }
+			const sh = 0.7 + 0.3 * r();
+			strip(b, pts, widths, 0.3, { r: 0.1 * sh, g: 0.16 * sh, b: 0.09 * sh }, { r: 0.15 * sh, g: 0.22 * sh, b: 0.12 * sh }, 0.5, 0.9, 0.8);
+		}
+		if (snow) for (let i = 0; i < (far ? 1 : 3); i++) { const a = r() * 6.283, d = V(Math.cos(a), 0, Math.sin(a)); snowOn(sn, [c.clone().sub(d.clone().multiplyScalar(L * 0.6)), c.clone(), c.clone().add(d.clone().multiplyScalar(L * 0.6))], [L, L * 1.2, L], 0.25); }
+	}
+	return snow ? [trunk.geometry(), b.geometry(), sn.geometry()] : [trunk.geometry(), b.geometry()];
+}
 // a cypress: a short trunk inside a dense dark spindle of foliage
 function cypress(seed, far) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder(), H = 12 * (0.9 + r() * 0.2), W = H * (0.09 + r() * 0.03);
@@ -199,7 +251,8 @@ function eucalypt(seed, far) {
 	const la = r() * 6.283, lean = H * 0.03 * r(), fork = V(Math.cos(la) * lean, H * (0.42 + r() * 0.1), Math.sin(la) * lean);
 	// a slight taper and a sinuous lean up to the fork
 	const w0 = wood.c.length, wob = r() * 6.283, path = [], rad = [];
-	for (let k = 0; k <= 8; k++) { const t = k / 8, sw = Math.sin(t * 7 + wob) * H * 0.008 * Math.sin(t * Math.PI); path.push(V(fork.x * t * t + sw, k ? fork.y * t : -0.4, fork.z * t * t + Math.cos(t * 5 + wob) * H * 0.006 * Math.sin(t * Math.PI))); rad.push(R0 * (1.25 - 0.6 * t + 0.5 * Math.exp(-t * 18))); }
+	const nR = far ? 8 : 28;
+	for (let k = 0; k <= nR; k++) { const t = k / nR, sw = Math.sin(t * 7 + wob) * H * 0.008 * Math.sin(t * Math.PI); path.push(V(fork.x * t * t + sw, k ? fork.y * t : -0.4, fork.z * t * t + Math.cos(t * 5 + wob) * H * 0.006 * Math.sin(t * Math.PI))); rad.push(R0 * (1.25 - 0.6 * t + 0.5 * Math.exp(-t * 18))); }
 	tube(wood, path, rad, far ? 5 : 10, new THREE.Color(1, 1, 1), (t) => t * 0.06);
 	const ca = r() * 6.283, cOff = V(Math.cos(ca), 0, Math.sin(ca)).multiplyScalar(H * 0.06), W = H * (0.24 + r() * 0.06), c = fork.clone().add(cOff).add(V(0, H * 0.25, 0)), list = [];
 	const nL = far ? 3 : 4 + Math.floor(r() * 2);
@@ -222,19 +275,19 @@ function eucalypt(seed, far) {
 		const v = i, x = wood.p[v], y = wood.p[v + 1], z = wood.p[v + 2];
 		if (wood.c[i] < 0.9) continue;
 		const n = Math.sin(y * 1.7 + Math.sin(x * 9.1 + z * 7.3) * 2.5 + seed) + Math.sin(y * 4.3 + x * 13 - z * 11) * 0.8 + Math.sin(y * 0.6 - z * 5) * 0.5;
-		const C = n > 0.9 ? [0.72, 0.44, 0.3] : n > 0.25 ? [0.64, 0.6, 0.5] : n > -0.5 ? [0.5, 0.52, 0.36] : n > -1.1 ? [0.44, 0.44, 0.42] : [0.6, 0.55, 0.46];
+		const C = n > 0.9 ? [0.55, 0.24, 0.12] : n > 0.25 ? [0.52, 0.47, 0.32] : n > -0.5 ? [0.24, 0.26, 0.12] : n > -1.1 ? [0.2, 0.2, 0.19] : [0.42, 0.36, 0.25];
 		// (some keep a rough dark stocking of old bark up the lower trunk)
 		const low = Math.min(1, Math.max(0, (sock - y) / (H * 0.05)));
-		wood.c[i] = C[0] * (1 - low) + 0.3 * low; wood.c[i + 1] = C[1] * (1 - low) + 0.26 * low; wood.c[i + 2] = C[2] * (1 - low) + 0.22 * low;
+		wood.c[i] = C[0] * (1 - low) + 0.1 * low; wood.c[i + 1] = C[1] * (1 - low) + 0.08 * low; wood.c[i + 2] = C[2] * (1 - low) + 0.06 * low;
 	}
 	if (!far) {
 		// strips of bark peeling off the trunk, curling away at their foot
-		for (let k = 0; k < 10; k++) {
-			const t = 0.08 + r() * 0.8, q = Math.min(7, Math.floor(t * 8)), o = path[q].clone().lerp(path[q + 1], t * 8 - q), a = r() * 6.283, L = H * (0.03 + r() * 0.05), w = R0 * (0.5 + r() * 0.6), rr = rad[q] * 1.04;
+		for (let k = 0; k < 18; k++) {
+			const t = 0.08 + r() * 0.85, q = Math.min(nR - 1, Math.floor(t * nR)), o = path[q].clone().lerp(path[q + 1], t * nR - q), a = r() * 6.283, L = H * (0.02 + r() * 0.03), w = R0 * (0.12 + r() * 0.2), rr = rad[q] * 1.02;
 			const dir = V(Math.cos(a), 0, Math.sin(a)), side = V(-dir.z, 0, dir.x), dark = r() < 0.5;
-			const col = dark ? { r: 0.4, g: 0.3, b: 0.22 } : { r: 0.74, g: 0.52, b: 0.38 }, ids = [];
+			const col = dark ? { r: 0.3, g: 0.22, b: 0.16 } : { r: 0.58, g: 0.38, b: 0.26 }, ids = [];
 			for (let m = 0; m <= 3; m++) {
-				const u = m / 3, curl = u * u * L * 0.35, c0 = o.clone().add(dir.clone().multiplyScalar(rr + curl)).add(V(0, -L * u, 0));
+				const u = m / 3, curl = u * u * L * 0.15, c0 = o.clone().add(dir.clone().multiplyScalar(rr + curl)).add(V(0, -L * u, 0));
 				for (const sd of [-1, 1]) ids.push(wood.vert(c0.clone().add(side.clone().multiplyScalar(sd * w * (1 - u * 0.4))), dir, [sd * 0.5 + 0.5, u], col, 0.05 + u * 0.3));
 			}
 			for (let m = 0; m < 3; m++) { const a0 = ids[m * 2], a1 = ids[m * 2 + 1], b0 = ids[m * 2 + 2], b1 = ids[m * 2 + 3]; wood.tri(a0, b0, a1); wood.tri(a1, b0, b1); wood.tri(a0, a1, b0); wood.tri(a1, b1, b0); }
@@ -324,7 +377,7 @@ function build(key, seed, far, mid, snow) {
 	const [form, sub] = key.split(':');
 	switch (form) {
 		case 'broad': return { parts: hardwood(seed, false, far || mid, { height: 10, crown: sub, bark: [1, 1, 1], leaf: [1, 1.04, 0.92] }).parts, mats: ['bark', 'leaf'] };
-		case 'conifer': return { parts: conifer(seed, false, far || mid, { height: 18, bark: [0.82, 0.74, 0.68], leaf: [0.85, 1, 0.85], snow }).parts, mats: ['bark', 'leaf'] };
+		case 'conifer': return { parts: (sub === 'pine' ? pine : spruce)(seed, far || mid, snow), mats: ['bark', 'needle', 'snow'] };
 		case 'eucalypt': return { parts: eucalypt(seed, far), mats: ['stem', 'leaf'] };
 		case 'column': return { parts: cypress(seed, far), mats: ['bark', 'leaf'] };
 		case 'palm': return { parts: palm(seed, far, { height: sub === 'date' ? 11 : 9, lean: sub === 'date' ? 0 : 0.8, frondTint: sub === 'date' ? [1.05, 0.95, 0.9] : [1, 1, 1], fronds: sub === 'date' ? 18 : 14 }).parts, mats: ['palmbark', 'frond'] };
@@ -341,7 +394,7 @@ function build(key, seed, far, mid, snow) {
 	}
 	return null;
 }
-const TINTED = new Set(['leaf', 'frond', 'banana', 'fern', 'grass', 'cactus']);
+const TINTED = new Set(['leaf', 'needle', 'frond', 'banana', 'fern', 'grass', 'cactus']);
 
 // the season's colour on a tree: blossom in spring, gold and red in autumn, bare in winter
 function seasonal(word, base, C, culture) {
@@ -390,6 +443,8 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 		frond: () => [{ map: texOf('frond'), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75 }, 1],
 		banana: () => [{ map: texOf('banana'), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6 }, 1.2],
 		fern: () => [{ map: texOf('fern'), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }, 1.2],
+		needle: () => [{ map: texOf('fern'), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.85 }, 0.6],
+		snow: () => [{ side: THREE.DoubleSide, roughness: 0.9 }, 0.6],
 		grass: () => [{ map: texOf('grass'), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.9 }, 1.2],
 	};
 	const mats = new Map();
@@ -434,7 +489,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 		for (const m of v.models) for (const t of [m.near, m.far]) if (t) for (const im of t) { group.remove(im); im.geometry.dispose(); im.dispose(); }
 		variants.delete(v.key);
 	}
-	const keyOf = (word, form, sub, snow) => form === 'broad' ? 'broad:' + (sub || 'round') : form === 'conifer' ? (snow ? 'conifer:snow' : 'conifer') : form === 'palm' ? (word === 'datepalm' ? 'palm:date' : 'palm:coco') : form === 'cactus' ? 'cactus:' + (sub || 'saguaro') : form;
+	const keyOf = (word, form, sub, snow) => form === 'broad' ? 'broad:' + (sub || 'round') : form === 'conifer' ? 'conifer:' + (word === 'pine' ? 'pine' : 'spruce') + (snow ? ':snow' : '') : form === 'palm' ? (word === 'datepalm' ? 'palm:date' : 'palm:coco') : form === 'cactus' ? 'cactus:' + (sub || 'saguaro') : form;
 
 	let at = null;
 	const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), SC = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), TC = new THREE.Color();

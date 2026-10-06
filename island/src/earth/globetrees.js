@@ -12,13 +12,14 @@
 // at a time as you move, and simply shifted when the frame does.
 
 import * as THREE from 'three';
-import { hardwood, conifer, shrub, swayMaterial, Builder, tube, strip, V } from '../world/vegetation.js';
+import { hardwood, shrub, swayMaterial, Builder, tube, strip, V } from '../world/vegetation.js';
 import * as TX from '../world/textures.js';
 import { addLodFade } from '../world/lodfade.js';
 import { mulberry32 } from '../noise.js';
 import { F, toXZ, RAD, EARTH_R, lonRaw } from './globeframe.js';
 import { vn3, S0 } from './globeheight.js';
 import { today } from '../calendar.js';
+import { spruce } from '../region/flora.js';
 
 const FORMS = ['broad', 'conifer', 'palm', 'bush'];
 const WORDS = [
@@ -47,7 +48,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 	const group = new THREE.Group();
 	group.name = 'globe trees';
 	scene.add(group);
-	const leafTex = TX.leafCluster(), barkT = TX.woodBark(); barkT.repeat.set(2, 3);
+	const leafTex = TX.leafCluster(), needleTex = TX.fernFrond(), barkT = TX.woodBark(); barkT.repeat.set(2, 3);
 	const NEAR = isPhone ? 260 : 380, FAR = isPhone ? 1300 : 2400;
 	const BAND = { near: [-2, -1, NEAR - 40, NEAR], far: [NEAR - 40, NEAR, FAR - 300, FAR] };
 	const CAP = isPhone ? { near: 1500, far: 5000 } : { near: 3500, far: 14000 };
@@ -58,12 +59,13 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 	};
 	const geo = {
 		broad: { near: hardwood(7101, false, true, G.broad), far: hardwood(7101, true, false, G.broad) },
-		conifer: { near: conifer(7117, false, true, G.conifer), far: conifer(7117, true, false, G.conifer) },
+		// (the same spire of drooping needle sprays as the region's own, flora.js, at a forest conifer's height)
+		conifer: (() => { const k = G.conifer.height / 16, sz = (parts) => ({ parts: parts.map((g) => g.scale(k, k, k)), height: G.conifer.height }); return { near: sz(spruce(7117, false, false)), far: sz(spruce(7117, true, false)) }; })(),
 		palm: { near: palmTree(7131), far: palmTree(7131) },
 		bush: { near: shrub(7151), far: shrub(7151) },
 	};
-	function tier(parts, cap, band, shadow) {
-		const mats = [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
+	function tier(parts, cap, band, shadow, leafMap = leafTex) {
+		const mats = [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafMap, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
 		for (const M of mats) addLodFade(M.material, 'uniform', band);
 		return parts.map((g, n) => {
 			const im = new THREE.InstancedMesh(g, mats[n].material, cap);
@@ -75,7 +77,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 		});
 	}
 	const T = {};
-	for (const f of FORMS) T[f] = { near: tier(geo[f].near.parts, CAP.near, BAND.near, !isPhone), far: tier(geo[f].far.parts, CAP.far, BAND.far, false), H: geo[f].near.height };
+	for (const f of FORMS) { const map = f === 'conifer' ? needleTex : leafTex; T[f] = { near: tier(geo[f].near.parts, CAP.near, BAND.near, !isPhone, map), far: tier(geo[f].far.parts, CAP.far, BAND.far, false, map), H: geo[f].near.height }; }
 
 	// ---------- where and what ----------
 	let mix = { broad: 1, conifer: 0, palm: 0, bush: 0 }, mixAt = null;
