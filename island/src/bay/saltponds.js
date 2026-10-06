@@ -177,7 +177,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 	// the brine: its own colour, a drift of paler water across it, ripples catching the sun,
 	// the sky in it low down; or dry crust, scraped in stripes. Pale salt along the levees.
 	function pondMaterial(rim) {
-		const m = new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0, polygonOffset: true, polygonOffsetFactor: rim ? -1 : 1, polygonOffsetUnits: rim ? -2 : 2 });
+		const m = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, envMapIntensity: 0.25, polygonOffset: true, polygonOffsetFactor: rim ? -1 : 1, polygonOffsetUnits: rim ? -2 : 2 });
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, { uTime, uSkyHor });
 			sh.vertexShader = 'attribute vec3 aCol; attribute vec4 aPond; varying vec3 vSC; varying vec4 vSP; varying vec2 vSW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvSC = aCol; vSP = aPond; vSW = (modelMatrix * vec4(position, 1.0)).xz;');
@@ -193,15 +193,15 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 					}
 					sc = mix(sc, vec3(0.86, 0.84, 0.8), smoothstep(0.4, 0.95, vSP.w + (n3 - 0.5) * 0.35));
 					diffuseColor.rgb = sc;`)
-				.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(0.16, 0.95, max(vSP.x, vSP.w * 0.6));')
+				.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(0.42, 0.95, max(vSP.x, vSP.w * 0.6));')
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 					if (vSP.x < 0.5) {
 						float ra = spN(sw * 0.5 + vec2(uTime * 0.5, uTime * 0.3)), rb = spN(sw * 0.5 + vec2(17.0 - uTime * 0.35, 5.0 + uTime * 0.45));
-						normal = normalize(normal + (viewMatrix * vec4(ra - 0.5, 0.0, rb - 0.5, 0.0)).xyz * 0.3);
+						normal = normalize(normal + (viewMatrix * vec4(ra - 0.5, 0.0, rb - 0.5, 0.0)).xyz * 0.5);
 					}`)
 				.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 					{ float fr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 5.0);
-					  totalEmissiveRadiance += uSkyHor * fr * 0.45 * (1.0 - vSP.x) * (1.0 - vSP.w); }`);
+					  totalEmissiveRadiance += uSkyHor * fr * 0.12 * (1.0 - vSP.x) * (1.0 - vSP.w); }`);
 		};
 		m.customProgramCacheKey = () => 'saltpond';
 		return m;
@@ -219,26 +219,26 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 				vec2 mw = mod(vMW, 4096.0);
 				float m1 = spN(mw / 64.0), m2 = spN(mw / 16.0), m3 = spN(mw / 4.0), m4 = spN(mw);
 				if (vMa.y < 0.2 + 0.6 * spN(mw / 128.0 + 3.0)) discard;
-				float mh = vMa.x + (m1 - 0.5) * 0.36 + (m2 - 0.5) * 0.12;
+				float mh = vMa.x + (m1 - 0.5) * 0.24 + (m2 - 0.5) * 0.08;
 				// the channels: branching lines of wet mud and water through the flats
 				float ch = 1.0 - abs(2.0 * spN(mw / 32.0 + vec2(m2, m1) * 1.5) - 1.0);
-				mh -= smoothstep(0.86, 0.97, ch) * 0.3;
+				mh -= smoothstep(0.88, 0.97, ch) * 0.4;
 				vec3 mud = mix(vec3(0.12, 0.1, 0.08), vec3(0.19, 0.16, 0.12), m2) * (0.85 + 0.25 * m4);
 				mud = mix(mud, vec3(0.24, 0.22, 0.09), smoothstep(0.5, 0.8, m1) * 0.35);
 				vec3 water = mix(vec3(0.04, 0.1, 0.16), vec3(0.06, 0.13, 0.17), m2);
-				vec3 cord = mix(vec3(0.11, 0.25, 0.04), vec3(0.17, 0.33, 0.06), m3) * (0.8 + 0.3 * m4);
+				vec3 cord = mix(vec3(0.08, 0.16, 0.035), vec3(0.12, 0.22, 0.05), m3) * (0.8 + 0.3 * m4);
 				cord = mix(cord, mix(vec3(0.4, 0.33, 0.16), vec3(0.5, 0.42, 0.22), m3), uMarsh.y);
 				float red = smoothstep(0.42, 0.62, spN(mw / 24.0 + 9.0) * 0.7 + m3 * 0.3) * (0.25 + 0.75 * uMarsh.x);
-				vec3 pick = mix(mix(vec3(0.16, 0.24, 0.06), vec3(0.24, 0.29, 0.08), m4), mix(vec3(0.36, 0.06, 0.05), vec3(0.5, 0.12, 0.1), m4), red);
+				vec3 pick = mix(mix(vec3(0.11, 0.15, 0.045), vec3(0.16, 0.19, 0.06), m4), mix(vec3(0.26, 0.05, 0.04), vec3(0.36, 0.09, 0.07), m4), red);
 				vec3 up = mix(vec3(0.28, 0.32, 0.17), vec3(0.42, 0.38, 0.22), uSeason * 0.7) * (0.85 + 0.3 * m3);
 				up = mix(up, vec3(0.1, 0.16, 0.06), smoothstep(0.7, 0.8, m3 * 0.6 + m4 * 0.4) * 0.8);
 				up = mix(up, vec3(0.75, 0.6, 0.06), smoothstep(0.86, 0.9, m4) * smoothstep(0.6, 0.75, m3) * (1.0 - uSeason * 0.5));
-				float wetK = 1.0 - smoothstep(0.02, 0.1, mh);
-				vec3 mc = mix(water, mud, smoothstep(-0.02, 0.08, mh));
-				mc = mix(mc, cord, smoothstep(0.24, 0.32, mh));
-				mc = mix(mc, pick, smoothstep(0.58, 0.68, mh));
+				float wetK = 1.0 - smoothstep(-0.04, 0.04, mh);
+				vec3 mc = mix(water, mud, smoothstep(-0.06, 0.0, mh));
+				mc = mix(mc, cord, smoothstep(0.14, 0.2, mh));
+				mc = mix(mc, pick, smoothstep(0.3, 0.38, mh));
 				mc = mix(mc, up, smoothstep(1.2, 1.35, mh));
-				float mudK = 1.0 - smoothstep(0.2, 0.3, mh);
+				float mudK = 1.0 - smoothstep(0.12, 0.2, mh);
 				diffuseColor.rgb = mc;`)
 			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mix(0.9, mix(0.32, 0.12, wetK), mudK);')
 			.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
@@ -452,7 +452,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 		root.add(im);
 		const wg = new THREE.BufferGeometry();
 		wg.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3));
-		root.add(new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: 0x3a3a3c })));
+		root.add(new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: 0x77797c })));
 		S.pylons = at.length;
 	}
 	function mergeAll(parts) {
@@ -529,14 +529,14 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 				const r1 = ih(i, j), r2 = ih(i + 7, j - 3), x = (i + r1) * sp, z = (j + r2) * sp;
 				if ((x - cx) ** 2 + (z - cz) ** 2 > R * R) continue;
 				const h0 = marshAt(x, z);
-				if (h0 === null || h0 < 0.1 || h0 > 1.9 || pondAt(x, z) || !inPoly(marsh, x, z)) continue;
-				const mh = h0 + (vn(x / 64, z / 64) - 0.5) * 0.36 + (vn(x / 16, z / 16) - 0.5) * 0.12, y = bay.heightAt(x, z) + 0.05;
-				if (mh > 0.3 && mh < 0.62) {
+				if (h0 === null || h0 < 0.0 || h0 > 1.9 || pondAt(x, z) || !inPoly(marsh, x, z)) continue;
+				const mh = h0 + (vn(x / 64, z / 64) - 0.5) * 0.24 + (vn(x / 16, z / 16) - 0.5) * 0.08, y = bay.heightAt(x, z) + 0.05;
+				if (mh > 0.17 && mh < 0.34) {
 					// cordgrass: dense, bright green, to a metre and more; straw in winter
 					const g = 0.75 + r1 * 0.4;
 					col.setRGB(0.32 + 0.5 * straw, 0.62 - 0.1 * straw, 0.12 + 0.18 * straw);
 					put(0, x, y - 0.05, z, 0.8 + r2 * 0.5, 0.8 + r1 * 0.5, col.r * g, col.g * g, col.b * g);
-				} else if (mh >= 0.62 && mh < 1.25 && r1 < 0.7) {
+				} else if (mh >= 0.34 && mh < 1.25 && r1 < 0.7) {
 					// pickleweed: green, the tips red in late summer and fall, in patches
 					const rk = (vn(x / 24 + 9, z / 24) * 0.7 + vn(x / 4, z / 4) * 0.3 > 0.52 ? 1 : 0) * (0.25 + 0.75 * red);
 					col.setRGB(0.22 + 0.4 * rk, 0.3 - 0.2 * rk, 0.08 + 0.02 * rk);
