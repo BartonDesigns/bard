@@ -29,7 +29,9 @@ export function createGlobeData() {
 	let backP = planes(), backL = layers();
 	const tex = rgba.map((a, i) => {
 		const t = new THREE.DataTexture(a, NW, NW, THREE.RGBAFormat, i === 0 ? THREE.FloatType : THREE.UnsignedByteType);
-		t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
+		// (the climate and colours, 2 to 4, read smoothly by the ground's fragments: no 11 km squares;
+		// the heights read their texels exactly whatever the filter)
+		t.minFilter = t.magFilter = i >= 2 ? THREE.LinearFilter : THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
 		return t;
 	});
 	// (the window: its first cell's global indices, and where the anchor falls in it)
@@ -147,6 +149,16 @@ export function createGlobeData() {
 		for (const p of PLANES) o[p] = P[p][k];
 		return o;
 	}
+	// tree cover, warmth and rain read between the cells as the ground's fragments read them
+	// (globeterrain.js), ox and oy cells off: the trees grow where the ground is painted wooded
+	function smoothAt(lat, lon, ox = 0, oy = 0) {
+		const lonW0 = -180 + win.gi0 / RES, latW1 = 90 - win.gj0 / RES;
+		const x = Math.max(0, Math.min(NW - 1.001, ((((lon - lonW0) % 360) + 360) % 360) * RES - 0.5 + ox)), y = Math.max(0, Math.min(NW - 1.001, (latW1 - lat) * RES - 0.5 + oy));
+		const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, k = j * NW + i;
+		const bil = (f) => (f(k) * (1 - u) + f(k + 1) * u) * (1 - v) + (f(k + NW) * (1 - u) + f(k + NW + 1) * u) * v;
+		const r = bil((q) => Math.sqrt(P.RAIN[q]));          // (the textures hold the rain's root)
+		return { TREES: bil((q) => P.TREES[q]), TEMP: bil((q) => P.TEMP[q]), RAIN: r * r };
+	}
 	const bytes = () => [...tiles.values()].reduce((a, v) => a + (v.px ? v.px.length : 0), 0) + NW * NW * (4 * PLANES.length + 16 + 16) * 2;
-	return { win, tex, follow, cover, anchor, cellAt, stats, bytes, tiles };
+	return { win, tex, follow, cover, anchor, cellAt, smoothAt, stats, bytes, tiles };
 }
