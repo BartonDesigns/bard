@@ -302,19 +302,30 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					bool inside = tc - half_ < 0.0;
 					if (!inside) {
 						float az = atan(hd.y, hd.x);
-						// no box: the shafts thicken and thin across it, it frays at its sides, and its
-						// top is the ragged underside of the cloud
-						float shafts = 0.55 + 0.45 * vn(vec2(az * 55.0 + S.x * 0.001, 3.0)) * (0.7 + 0.3 * vn(vec2(az * 190.0, 7.0)));
-						float side = 1.0 - smoothstep(0.55, 1.0, pd / S.z);
-						float ragged = top * (0.8 + 0.3 * vn(vec2(az * 90.0, 11.0)));
-						float fall = smoothstep(ragged * 1.05, ragged * 0.55, tanE) * smoothstep(-0.03, 0.0, tanE);
-						float streak = 0.7 + 0.3 * vn(vec2(az * 700.0, tanE * 30.0 + uTime * 1.5));
-						float veil = thick * fall * shafts * side * streak * smoothstep(40000.0, 8000.0, tin);
-						// slate grey under the cloud, a little lighter where the sun gets under the edge;
-						// low down it fades into the haze the far land stands in
-						vec3 veilC = mix(vec3(0.17, 0.19, 0.23), uSkyHor * 0.6, 0.2) * (1.0 - uNight * 0.95) * (0.8 + 0.4 * streak);
-						veilC = mix(veilC, uFogCol, (1.0 - smoothstep(0.0, 0.06, tanE)) * 0.7);
-						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.3, 0.0, 0.85));
+						// it leans downwind: the foot has drifted further along than the top, by as much
+						// as the wind crosses the line of sight (some 600 m at the ground)
+						vec2 wd = normalize(uWindDir + vec2(1e-4));
+						float crossW = wd.y * hd.x - wd.x * hd.y;
+						float h01 = clamp(tanE / max(top, 1e-4), 0.0, 1.0);
+						float azS = az + crossW * (1.0 - h01) * 600.0 / tin;
+						// no box: a heavy core and lighter veils beside it (broad cells), the shafts
+						// thickening and thinning within, fraying at its sides; its top the ragged
+						// underside of the cloud, which it melts into
+						float core = smoothstep(0.25, 0.85, vn(vec2(azS * 9.0 + S.x * 0.0007, 1.3)));
+						float shafts = 0.35 + 0.65 * vn(vec2(azS * 55.0 + S.x * 0.001, 3.0)) * (0.65 + 0.35 * vn(vec2(azS * 190.0, 7.0)));
+						float side = 1.0 - smoothstep(0.45, 1.0, pd / S.z);
+						float ragged = top * (0.85 + 0.25 * vn(vec2(azS * 90.0, 11.0)));
+						// down to the ground, its foot frayed where the last drops dry out
+						float fall = smoothstep(ragged * 1.08, ragged * 0.7, tanE) * smoothstep(-0.02, 0.012 * (0.6 + 0.8 * vn(vec2(azS * 120.0, 5.0))), tanE);
+						// fine streaks, long and upright, drifting slowly down
+						float streak = 0.62 + 0.38 * vn(vec2(azS * 1400.0, tanE * 6.0 + uTime * 0.6)) * vn(vec2(azS * 520.0, tanE * 2.0 - uTime * 0.25));
+						float dens = thick * fall * side * mix(shafts, 1.0, core * 0.6) * (0.55 + 0.45 * core);
+						float veil = dens * streak * smoothstep(42000.0, 7000.0, tin);
+						// blue-grey, the sky behind showing through where it is thin; low down it melts
+						// into the haze the far land stands in
+						vec3 veilC = mix(vec3(0.26, 0.30, 0.37), uSkyHor * 0.75, 0.35 * (1.0 - core)) * (1.0 - uNight * 0.95) * (0.85 + 0.3 * streak);
+						veilC = mix(veilC, uFogCol, (1.0 - smoothstep(0.0, 0.05, tanE)) * 0.55);
+						col = mix(col, veilC + vec3(0.6, 0.65, 0.75) * uFlash, clamp(veil * 1.45, 0.0, 0.88));
 					}
 					rainLine += thick * below * 2.2;
 				}

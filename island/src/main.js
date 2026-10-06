@@ -374,7 +374,8 @@ export function createIslandWorld() {
 		lost = true;
 		// remembered, so the next load starts somewhere safe; and what was being built, for the console
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
-		preferLite();
+		// (the light ground only when it was the ground being built: a loss elsewhere is no reason)
+		if (/uBayOn/.test(linking.what)) preferLite();
 		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent());
 		hint('The graphics were reset. Restoring…', 6000, 3);
 		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
