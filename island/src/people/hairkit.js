@@ -245,6 +245,7 @@ function styleChunk(A, P, p, St, kind, vol, fadeY = -99, coily = false) {
 	const sc = [0, 1, 2].map((a) => { const [i, j] = sref[a]; return (i === j ? P._S : Math.abs(p[i * 3 + a] - p[j * 3 + a]) / den[a]) * vol / 40000; });
 	const V = new Float32Array(nv * 3), K = P.skull, d = new THREE.Vector3(), FF = kind === 0 && faceFront(P, p);
 	const sd = ((P.dna?.seed ?? 0) % 1000) * 0.37;
+	const low = coily ? new Uint8Array(nv) : null;
 	for (let v = 0; v < nv; v++) {
 		let x = 0, y = 0, z = 0;
 		for (let k = 0; k < 3; k++) { const r = refs[v * 3 + k] * 3, w = wts[v * 3 + k]; x += w * p[r]; y += w * p[r + 1]; z += w * p[r + 2]; }
@@ -254,7 +255,8 @@ function styleChunk(A, P, p, St, kind, vol, fadeY = -99, coily = false) {
 		// above it into the mass, its outline a little uneven)
 		if (coily) {
 			d.set(x - K.c.x, y - K.c.y, z - K.c.z);
-			const up = sm(-0.004, 0.05, y - K.eyeY - hairline(Math.abs(Math.atan2(d.x, d.z)) * 180 / Math.PI));
+			const deg = Math.abs(Math.atan2(d.x, d.z)) * 180 / Math.PI, h = y - K.eyeY - hairline(deg), up = sm(-0.004, 0.05, h);
+			if (h < -0.004 && deg < 110) low[v] = 1;
 			d.normalize();
 			k *= (0.2 + 0.8 * up) * (1 + 0.09 * up * Math.sin(d.x * 5.1 + d.y * 3.3 + sd) * Math.sin(d.z * 4.3 - d.x * 2.7 + sd * 1.7));
 		}
@@ -301,7 +303,14 @@ function styleChunk(A, P, p, St, kind, vol, fadeY = -99, coily = false) {
 		}
 		for (let v = 0; v < nv; v++) { V[v * 3] += D[v * 2]; V[v * 3 + 2] += D[v * 2 + 1]; }
 	}
-	return { ...F, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
+	// (and none of it hanging over the brow and the temples: it starts at the hairline)
+	let I = F.I;
+	if (low) {
+		const keep = [];
+		for (let i = 0; i < I.length; i += 3) if (!(low[I[i]] && low[I[i + 1]] && low[I[i + 2]])) keep.push(I[i], I[i + 1], I[i + 2]);
+		I = keep;
+	}
+	return { ...F, I, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
 }
 
 // ---------- the beard's zones on the face ----------
