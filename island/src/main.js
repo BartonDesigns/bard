@@ -56,7 +56,7 @@ import { createParkKit } from './bay/parkkit.js';
 import { createDiscovery } from './bay/discovery.js';
 import { createShaderWarm } from './world/shaderwarm.js';
 import { captureResources } from './world/resources.js';
-import { preferLite } from './world/gpulite.js';
+import { preferLite, clearLite, GPU_LITE } from './world/gpulite.js';
 import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
@@ -456,7 +456,10 @@ export function createIslandWorld() {
 		shared.prints.needsUpdate = true;
 	}
 
-	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'auto';
+	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'high';
+	// the graphics setting: high unless this device was set otherwise (phones too)
+	try { quality = localStorage.getItem('l99-quality') || 'high'; } catch { /* private mode */ }
+	applyQuality(true);
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
 	const state = { seed: null };
@@ -1139,7 +1142,18 @@ export function createIslandWorld() {
 		for (const mode of ['auto', 'high', 'low']) {
 			const b = css(document.createElement('button'), 'flex:1;min-height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:' + (quality === mode ? '#01a982' : 'transparent') + ';color:#fff;font:12px system-ui;');
 			b.textContent = mode.toUpperCase();
-			b.onclick = () => { quality = mode; applyQuality(true); buildPanel(); };
+			b.onclick = () => {
+				quality = mode;
+				try { localStorage.setItem('l99-quality', mode); } catch { /* private mode */ }
+				// high on a device left on the light ground (after a graphics loss): try the full one again
+				if (mode === 'high' && GPU_LITE) {
+					clearLite();
+					const u = new URL(location.href); u.searchParams.delete('lite');
+					location.replace(u.href);
+					return;
+				}
+				applyQuality(true); buildPanel();
+			};
 			q.appendChild(b);
 		}
 		p.appendChild(q);

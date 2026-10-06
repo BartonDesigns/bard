@@ -16,3 +16,5 @@ export const LITE_V = half ? half !== 'v' : GPU_LITE;
 export const LITE_F = half ? half !== 'f' : GPU_LITE;
 // remembered when the graphics are lost, for the next load
 export const preferLite = () => store('l99-gpu-lite3', String(Date.now()));
+// "high" chosen again: forget the light ground and try the full one (main.js reloads)
+export const clearLite = () => store('l99-gpu-lite3', null);
