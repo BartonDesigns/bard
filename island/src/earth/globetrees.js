@@ -102,7 +102,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 		const air = c.TEMP - 6.5 * Math.max(0, h - 400 - 0.5 * cell.E) / 1000;       // (as the terrain's, globeterrain.js)
 		// thinner where the land is farmed (its slope as the terrain has it, 1 - the normal's up)
 		const s1 = 1 - 1 / Math.hypot(1, slope);
-		const farmable = Math.max(sst(350, 550, c.RAIN) * sst(3, 9, c.TEMP), sst(150, 260, c.RAIN) * (1 - sst(300, 600, h)) * sst(12, 16, c.TEMP) * 0.75) * (1 - sst(0.06, 0.16, s1)) * (1 - sst(1200, 2200, h));
+		const farmable = Math.max(sst(380, 560, c.RAIN) * sst(3, 9, c.TEMP) * (1 - (1 - sst(650, 850, c.RAIN)) * Math.max(sst(0.3, 0.45, c.TREES), sst(12, 15, c.TEMP) * sst(250, 450, h))), sst(150, 260, c.RAIN) * (1 - sst(300, 600, h)) * sst(12, 16, c.TEMP) * 0.75) * (1 - sst(0.004, 0.012, s1)) * (1 - sst(1200, 2200, h));
 		return { k: sst(0.44, 0.56, c.TREES + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * 0.12) * sst(-4.5, -2, air) * (1 - sst(0.55, 0.85, s1)), air };
 	}
 	// one grid of the latitude and longitude: rows `step` metres apart, each row's cells as wide

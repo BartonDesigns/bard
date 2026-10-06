@@ -21,6 +21,7 @@ import { BERM_U, BERM_GLSL } from '../bay/berms.js';
 import { GLOBE_GLSL, OCT } from './globeheight.js';
 import { photoUniform } from '../world/photomats.js';
 import { RAD } from './globeframe.js';
+import { today } from '../calendar.js';
 
 export const SEAM_A = 3000, SEAM_B = 25000;     // m past the Bay's survey: the Bay's ground stops, the globe's is whole
 const CITIES = 12;
@@ -29,7 +30,7 @@ const PH = [photoUniform('loam', { colour: true, mean: 0.5, contrast: 1.1 }), ph
 
 const FRAG_GLSL = /* glsl */`
 uniform highp sampler2D uGT2, uGT3, uGT4; uniform vec4 uGWin; uniform ivec3 uGI0; uniform vec3 uGF0; uniform vec2 uGSeam; uniform float uGBay, uGNight;
-uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason;
+uniform vec4 uGHole; uniform vec4 uGCity[${CITIES}]; uniform float uGIsl, uGDebug, uGSeason, uGDry;
 varying vec3 vGW; varying vec3 vGN; varying vec3 vGP; varying vec4 vGC; varying vec2 vGCC; varying float vGE;
 float gfH(ivec3 p, uint s){ uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u) ^ (uint(p.z) * 2246822519u) ^ s; h = (h ^ (h >> 13u)) * 1274126177u; h ^= h >> 16u; return float(h >> 8u) / 16777216.0; }
 // value noise on the sphere at 8192 / 2^k metres (the same lattice as the relief)
@@ -109,19 +110,19 @@ vec3 gFarm(float farmP, float orch, vec3 soil, vec3 grass, float ripe, float dor
 	} else if (id < 0.32) {
 		// row crops, the soil showing between the rows; bare till they're planted
 		col = mix(mix(vec3(0.045, 0.095, 0.022), vec3(0.09, 0.14, 0.035), id3), soil, dorm * 0.85);
-		rowA = 0.55; rowP = 0.76; bare = 0.35 + dorm * 0.5;
+		rowA = 0.28; rowP = 0.76; bare = 0.35 + dorm * 0.5;
 	} else if (id < 0.6) {
 		// grain: green in the spring, gold by summer, some already cut to stubble; the combine's swaths
 		col = mix(vec3(0.085, 0.13, 0.035), vec3(0.36, 0.27, 0.1), ripe);
 		col = mix(mix(col, vec3(0.3, 0.25, 0.15), step(id3, ripe - 0.5) * 0.9), soil * 1.1, dorm * 0.6);
-		rowA = 0.22; rowP = 4.5; bare = 0.15 + dorm * 0.5;
-		col *= 1.0 - 0.35 * gLine(abs(fract(across / 24.0) - 0.5) * 24.0, 0.25, fw);       // the sprayer's tramlines
+		rowA = 0.1; rowP = 4.5; bare = 0.15 + dorm * 0.5;
+		col *= 1.0 - 0.2 * gLine(abs(fract(across / 24.0) - 0.5) * 24.0, 0.25, fw);       // the sprayer's tramlines
 	} else if (id < 0.76) {
 		// turned soil, in furrows
-		col = soil * (0.7 + 0.25 * id3); rowA = 0.6; rowP = 0.9; bare = 1.0;
+		col = soil * (0.7 + 0.25 * id3); rowA = 0.32; rowP = 0.9; bare = 1.0;
 	} else {
 		// grass for hay and grazing, mown in stripes; some of it watered alfalfa, green whatever the season
-		col = mix(grass * (0.85 + 0.35 * id3), vec3(0.06, 0.12, 0.028), step(0.55, id3) * (1.0 - dorm)); rowA = 0.1; rowP = 9.0;
+		col = mix(grass * (0.85 + 0.35 * id3), vec3(0.06, 0.12, 0.028), step(0.55, id3) * (1.0 - dorm)); rowA = 0.05; rowP = 9.0;
 	}
 	// the rows and furrows, gone to their average where a pixel holds several
 	col *= 1.0 + rowA * (abs(fract(across / rowP) - 0.5) * 2.0 - 0.5) * (1.0 - smoothstep(0.2, 0.45, fw / rowP));
@@ -157,7 +158,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		uGLoam: PH[0][0], uGMoss: PH[1][0], uGRock: PH[2][0], uGSand: PH[3][0], uGPhK: { value: new THREE.Vector4() },
 		uGFd: { value: new THREE.Vector4() }, uGFdI: { value: new THREE.Vector2() },
 		// (the photos' reads, in loops the compiler can't unroll: twice and on three planes, once on a phone)
-		uGN2: { value: isPhone ? 1 : 2 }, uGN3: { value: isPhone ? 1 : 3 },
+		uGN2: { value: isPhone ? 1 : 2 }, uGDry: { value: 0 }, uGN3: { value: isPhone ? 1 : 3 },
 	};
 	function material(grid, oct, hole) {
 		const m = new THREE.MeshStandardMaterial({ roughness: 0.93, metalness: 0 });
@@ -228,8 +229,8 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float nk3 = 1.0 - smoothstep(0.6, 1.8, px), nk1 = 1.0 - smoothstep(0.15, 0.5, px);
 					float tus = mix(0.5, vn(gM(3)), nk3) * 0.5 + m1 * 0.3 + mix(0.5, vn(gM(5) + 3.0), nk1) * 0.2;
 					vec3 c = mix(gA, gB, smoothstep(0.3, 0.7, pB * 0.5 + pM * 0.3 + m2 * 0.2));
-					// the grass greener where it rains; straw in a dry summer, dull in a cold winter
-					float gold = (1.0 - smoothstep(350.0, 900.0, rain)) * smoothstep(-3.0, 4.0, uGSeason + (pM - 0.5) * 4.0);
+					// the grass greener where it rains; straw through a dry place's summer and fall, dull in a cold winter
+					float gold = (1.0 - smoothstep(350.0, 900.0, rain)) * smoothstep(-0.35, 0.35, uGDry + (pM - 0.5) * 0.4);
 					float dorm = 1.0 - smoothstep(-3.0, 6.0, temp + uGSeason + (pM - 0.5) * 2.0);
 					c = mix(c, c * vec3(0.8, 1.02, 0.7), smoothstep(500.0, 1300.0, rain) * 0.5);
 					c = mix(c, vec3(0.34, 0.25, 0.1) * (0.85 + 0.3 * pS), gold * 0.5);
@@ -250,11 +251,12 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					// the region's mean height (plus 400 m), cooled 6.5 C a km above it (Tuolumne near 0,
 					// Denver near 10)
 					float air = temp - 6.5 * max(0.0, h - 400.0 - 0.5 * vGE) / 1000.0;
-					// farmland: rain-fed where it is wet and warm enough, watered in the warm dry valleys; on
-					// gentle ground below the high country. Trees up to the tree line, not on cliffs, and
-					// thinner where the land is farmed (as globetrees.js grows them)
-					float farmable = max(smoothstep(350.0, 550.0, rain) * smoothstep(3.0, 9.0, temp), smoothstep(150.0, 260.0, rain) * (1.0 - smoothstep(300.0, 600.0, h)) * smoothstep(12.0, 16.0, temp) * 0.75)
-						* (1.0 - smoothstep(0.06, 0.16, slope)) * (1.0 - smoothstep(1200.0, 2200.0, h));
+					// farmland: rain-fed where it is wet and warm enough (not in the warm dry foothills, nor
+					// among their oaks), watered on the warm dry valley floors; only on the flat. Trees up to
+					// the tree line, not on cliffs, and thinner where the land is farmed (as globetrees.js
+					// grows them)
+					float farmable = max(smoothstep(380.0, 560.0, rain) * smoothstep(3.0, 9.0, temp) * (1.0 - (1.0 - smoothstep(650.0, 850.0, rain)) * max(smoothstep(0.3, 0.45, trees), smoothstep(12.0, 15.0, temp) * smoothstep(250.0, 450.0, h))),
+						smoothstep(150.0, 260.0, rain) * (1.0 - smoothstep(300.0, 600.0, h)) * smoothstep(12.0, 16.0, temp) * 0.75) * (1.0 - smoothstep(0.004, 0.012, slope)) * (1.0 - smoothstep(1200.0, 2200.0, h));
 					float forest = smoothstep(0.44, 0.56, trees + (pM - 0.5) * 0.7 + (pS - 0.5) * 0.35 - farmable * 0.12) * smoothstep(-4.5, -2.0, air) * (1.0 - smoothstep(0.55, 0.85, slope));
 					float farmP = farmable * (1.0 - forest) * (1.0 - smoothstep(0.55, 0.8, trees)) * smoothstep(0.15, 0.45, pB * 0.7 + m2 * 0.3 + 0.1);
 					vec2 fq = fwidth(vec2(vGW.x, -vGW.z) * uGFd.zw) * 25.0;
@@ -326,7 +328,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					c *= mix(1.0, 0.55 + 0.9 * gDetL, 1.0 - smoothstep(0.08, 0.5, px));
 					if (any(isnan(c)) || any(isinf(c))) c = vec3(0.3);
 					diffuseColor.rgb = c;
-					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(clamp(vGC.x + 0.5, 0.0, 1.0), vGC.y, fract(vGC.z / 50.0)) : uGDebug < 4.5 ? vec3(farmP, urb, rockK) : uGDebug < 5.5 ? vec3(slope * 20.0, bare, gold) : uGDebug < 6.5 ? vec3(fract(h / 20.0), snowK, shore) : vec3(0.35);
+					if (uGDebug > 0.5) diffuseColor.rgb = uGDebug < 1.5 ? t3.rgb : uGDebug < 2.5 ? vec3(t3.a, t4.a, t2.a) : uGDebug < 3.5 ? vec3(farmP, urb, rockK) : vec3(0.35);
 				}`)
 				.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 				{
@@ -395,6 +397,9 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		common.uGBay.value = bay ? 1 : 0;
 		common.uGF.value.set(F.fx, F.fz);
 		common.uGNight.value = night;
+		// how far into a dry place's dry season (1 late summer, -1 late winter; turned round in the south)
+		const day = today(), mo = day.getMonth() + (day.getDate() - 1) / 30;
+		common.uGDry.value = Math.cos(2 * Math.PI * (mo - 8) / 12) * (F.lat < 0 ? -1 : 1);
 		common.uGPhK.value.set(PH[0][1].value, PH[1][1].value, PH[2][1].value, PH[3][1].value);
 		// the fields' survey lattice: 25 m units east and north of (-180, -90), the east ones
 		// measured at the middle of a 4-degree band of latitude (so it holds still as the frame
