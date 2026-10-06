@@ -44,7 +44,7 @@ const SMOKE_FS = /* glsl */`
 	uniform vec3 uCol; varying float vA;
 	void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.1, length(d)) * vA * 0.32; if (a < 0.01) discard; gl_FragColor = vec4(uCol, a); }`;
 
-export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F }) {
+export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F, lanes = null }) {
 	const group = new THREE.Group();
 	group.name = 'regional settlements';
 	scene.add(group);
@@ -86,8 +86,13 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		const H = (x, z) => ground(s.x + x, s.z + z) - y0, W = (x, z) => wet(s.x + x, s.z + z);
 		let P;
 		if (s.lots) P = { lots: s.lots, paths: s.paths || [], plazas: s.plazas || [], fields: [], R: 80 };
-		else P = plan(kit, { r, H, wet: W, size: Math.max(0, s.pop), spread: s.spread });
+		else P = plan(kit, { r, H, wet: W, size: Math.max(0, s.pop), spread: s.spread, axis: s.align?.axis ?? null, avoid: lanes ? (x, z, m) => lanes.keepOff(s.x + x, s.z + z, m) : null });
 		P.seed = s.seed;
+		// a farm on a section line: its road is the survey's (earth/globelanes.js), all along it
+		if (s.align && lanes && P.paths[0]) {
+			const p = P.paths[0].pts, on = (q) => { const g = lanes.gridAt(s.x + q[0], s.z + q[1]); return g && g.d < 2; };
+			P.paths[0].grid = P.onGrid = on(p[0]) && on(p[p.length - 1]) && on(p[p.length >> 1]);
+		}
 		// the real landmarks near it keep their ground: no house of this place stands on them
 		P.holes = [];
 		if (s.kind !== 'real') for (const o of sites.values()) if (o.kind === 'real' && o.clear > 0) { const dx = o.x - s.x, dz = o.z - s.z; if (Math.hypot(dx, dz) < (P.R || 400) + o.clear + 800) P.holes.push([dx, dz, o.clear]); }
@@ -208,6 +213,8 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		const x0 = i * C0, z0 = j * C0;
 		// which features reach this cell
 		const near = (x, z, r) => x + r > x0 && x - r < x0 + C0 && z + r > z0 && z - r < z0 + C0;
+		// (the lanes and drives are drawn on the ground as roads, earth/globelanes.js: the paint
+		// keeps off them, and off the roads from outside)
 		const segs = [];
 		for (const p of P.paths) for (let k = 0; k + 1 < p.pts.length; k++) { const [ax, az] = p.pts[k], [bx, bz] = p.pts[k + 1]; if (near((ax + bx) / 2, (az + bz) / 2, Math.hypot(bx - ax, bz - az) / 2 + p.w)) segs.push([ax, az, bx, bz, p.w / 2]); }
 		const plazas = P.plazas.filter((q) => near(q.x, q.z, Math.max(q.w, q.d)));
@@ -237,11 +244,11 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			}
 			for (const L of lots) { const d = Math.hypot(x - L.x, z - L.z) - Math.hypot(L.w, L.d) / 2; if (d < 4) { const kk = 0.5 * Math.min(1, (4 - d) / 3); if (kk > k * 0.9) { c = cYard; k = Math.max(k, kk); } } }
 			for (const q of plazas) { const dx = x - q.x, dz = z - q.z, u = dx * Math.cos(q.rot) - dz * Math.sin(q.rot), v = dx * Math.sin(q.rot) + dz * Math.cos(q.rot); if (Math.abs(u) < q.w / 2 && Math.abs(v) < q.d / 2) { c = cPlaza; k = 0.9; } }
-			for (const [ax, az, bx, bz, hw] of segs) {
+			if (c) for (const [ax, az, bx, bz, hw] of segs) {
 				const dx = bx - ax, dz = bz - az, L = dx * dx + dz * dz, t = L ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L)) : 0;
-				const d = Math.hypot(x - ax - dx * t, z - az - dz * t);
-				if (d < hw + 1) { const kk = 0.88 * Math.min(1, (hw + 1 - d) / 1.5); if (kk > k * 0.8) { c = cPath; k = Math.max(k, kk); } }
+				if (Math.hypot(x - ax - dx * t, z - az - dz * t) < hw + 1.5) { c = null; break; }
 			}
+			if (c && lanes?.onRoad(s.x + x, s.z + z, 1.5)) c = null;
 			const o = (b * (N + 1) + a) * 4;
 			if (c) { vert[o] = c[0]; vert[o + 1] = c[1]; vert[o + 2] = c[2]; vert[o + 3] = k; }
 		}

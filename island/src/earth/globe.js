@@ -9,6 +9,7 @@
 //   globetrees.js    the woods and bushes of the place
 //   globetowns.js    the atlas's real towns and cities, grown by the town generator
 //   globeroads.js    the highways and main roads between them, driven like any mapped road
+//   globelanes.js    the county roads, lanes and drives that join the homes to them
 //   baydetail.js     the same relief on the Bay's real ground, finer than its survey
 //
 // This module runs them: it keeps the coarse window round you, moves the frame when you go far
@@ -25,6 +26,7 @@ import { createGlobeTerrain, SEAM_A, SEAM_B } from './globeterrain.js';
 import { createGlobeTrees } from './globetrees.js';
 import { createGlobeTowns } from './globetowns.js';
 import { createGlobeRoads, localRoadTownId } from './globeroads.js';
+import { createGlobeLanes } from './globelanes.js';
 import { BAY_DETAIL_U, BAY_DETAIL_AMP } from './baydetail.js';
 import { loadAtlas, atlasReady, regionAt, palette, citiesNear } from './atlas.js';
 import { setFarGround } from '../bay/terrain.js';
@@ -80,7 +82,9 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 
 	// ---------- the woods and the towns ----------
 	const inBayWild = (x, z) => { if (!F.bay) return false; const ll = toLL(x, z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM + 10; };
-	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !regional.settlements.vegetationBlocked(x, z, 8) });
+	// (the local roads come after the places they join: until then nothing is on them)
+	let lanes = null;
+	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !lanes?.onRoad(x, z, 5) && !regional.settlements.vegetationBlocked(x, z, 8) });
 	// a city the Bay already has: its towns' map, a mapped region, or one of its generated towns
 	// (a generated town where the atlas has a real one gives way to it)
 	function bayHas(x, z, r) {
@@ -106,7 +110,10 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	// the regional kit (region/): the look, the buildings, the people and the sounds of the place;
 	// it builds the towns it claims itself, and the town generator leaves those to it
 	const heightRef = { height, world };
-	const regional = createRegional({ scene, island, globe: heightRef, hint, isPhone, F, toLL, toXZ, bayKm, bayWildKm: BAY_WILD_KM, roads });
+	const allRoads = { onRoad: (x, z, m) => roads.onRoad(x, z, m) || !!lanes?.onRoad(x, z, m), version: () => roads.version() * 1000 + (lanes?.version() || 0) };
+	const laneRef = { keepOff: (x, z, m) => !!lanes?.keepOff(x, z, m), gridAt: (x, z) => lanes?.gridAt(x, z) || null, onRoad: (x, z, m) => !!lanes?.onRoad(x, z, m) };
+	const regional = createRegional({ scene, island, globe: heightRef, hint, isPhone, F, toLL, toXZ, bayKm, bayWildKm: BAY_WILD_KM, roads: allRoads, lanes: laneRef });
+	lanes = createGlobeLanes({ scene, height, groundAt: (x, z) => bay.heightAt(x, z), isPhone, highways: roads, settlements: regional.settlements });
 	// Regional settlements paint their own streets; publish those same streets to driving,
 	// grading and intercity routing so claimed cities are not disconnected islands.
 	let regionalRoadTowns = [], regionalRoadVersion = 0;
@@ -171,7 +178,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		data.anchor(); anchorUniforms(data.U, data.win);
 		trees.shift(dx, dz);
 		towns.reset();
-		roads.reframe();
+		roads.reframe(); lanes.reframe();
 		stats.rebases++; stats.lastRebase = performance.now();
 		return { dx, dz };
 	}
@@ -187,7 +194,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	function place(lat, lon) {
 		if (bayKm(lat, lon) < BAY_BACK_KM) { if (!F.bay) { bayFrame(); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); } }
 		else { setFrame(lat, lon); data.anchor(); anchorUniforms(data.U, data.win); towns.reset(); }
-		roads.reframe();
+		roads.reframe(); lanes.reframe();
 		const p = toXZ(lat, lon);
 		// (a jump out of the window: nothing is drawn or placed from the old one meanwhile)
 		const gi = Math.floor((lon + 180) * 10), gj = Math.floor((90 - lat) * 10), W = data.win;
@@ -242,12 +249,12 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 			}
 		}
 		const steady = data.win.ready && !data.win.moving;
-		trees.update(cam, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + regional.settlements.version());
+		trees.update(cam, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version());
 		if (steady) towns.update(cam);
 		if (data.win.ready) regional.update(dt, cam, { night, out: !F.bay || out > SEAM_A - 3000, wind: shared.uWindDir ? { x: shared.uWindDir.value.x * (0.3 + (shared.uWind?.value || 0.5)), y: shared.uWindDir.value.y * (0.3 + (shared.uWind?.value || 0.5)) } : null });
 		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
 		const real = world()?.real;
-		if (real?.addSource && sourced !== real) { sourced?.removeSource?.(roads); sourced?.removeSource?.(regionalRoads); real.addSource(roads); real.addSource(regionalRoads); sourced = real; }
+		if (real?.addSource && sourced !== real) { for (const S of [roads, regionalRoads, lanes]) { sourced?.removeSource?.(S); real.addSource(S); } sourced = real; }
 		const nextRoadTowns = regional.settlements.roadTowns();
 		if (nextRoadTowns.length !== regionalRoadTowns.length || nextRoadTowns.some((t, i) => t !== regionalRoadTowns[i])) { regionalRoadTowns = nextRoadTowns; regionalRoadVersion++; }
 		const A = towns.civ().active(), B = world()?.civ?.active();
@@ -255,6 +262,8 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		if (A?.region) activeTownRoads.push({ id: A.town.city.id, x: A.town.x, z: A.town.z, r: A.town.r, roads: A.region.roads || [] });
 		if (B?.region) activeTownRoads.push({ id: localRoadTownId(B.town), x: B.town.x, z: B.town.z, r: B.town.r, roads: B.region.roads || [] });
 		roads.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...regionalRoadTowns, ...activeTownRoads]);
+		// the local roads; the towns' own streets take over inside them
+		lanes.update(dt, cam, steady && (!F.bay || out > SEAM_A), [...towns.towns, ...(F.bay ? bay.towns || [] : [])].filter((t) => Number.isFinite(t.r)));
 		const ms = performance.now() - t0;
 		stats.updateMs += (ms - stats.updateMs) * 0.05; stats.maxMs = Math.max(stats.maxMs * 0.995, ms);
 	}
@@ -264,7 +273,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const ll = toLL(camera.position.x, camera.position.z);
 		return {
 			at: `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)}`, frame: F.bay ? 'the Bay\'s' : `floating at ${F.lat.toFixed(3)}, ${F.lon.toFixed(3)}`, rebases: stats.rebases,
-			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(), regional: regional.info(),
+			ground: Math.round(height.at(camera.position.x, camera.position.z)), region: regionId, towns: towns.info(), trees: trees.count(), roads: roads.info(), lanes: lanes.info(), regional: regional.info(),
 			window: { cell0: [data.win.gi0, data.win.gj0], tiles: data.stats.tiles, composeMs: data.stats.composeMs, decodeMs: Math.round(data.stats.decodeMs), mb: Math.round(data.bytes() / 1e5) / 10 },
 			ms: { mean: Math.round(stats.updateMs * 100) / 100, peak: Math.round(stats.maxMs * 10) / 10 },
 		};
@@ -275,16 +284,16 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		regional.dispose();
 		delete bay.farWhere;
 		GLOBE_U.uGOn.value = 0;
-		sourced?.removeSource?.(roads); sourced?.removeSource?.(regionalRoads);
+		for (const S of [roads, regionalRoads, lanes]) sourced?.removeSource?.(S);
 		BAY_DETAIL_U.uBDAmp.value = 0;
 		delete island.flyCeiling;
 		if (!F.bay) bayFrame();
 		towns.reset();
-		roads.dispose();
+		roads.dispose(); lanes.dispose();
 		for (const g of [terrain.group, trees.group]) { scene.remove(g); g.traverse((o) => { o.geometry?.dispose?.(); }); }
 		for (const t of data.tex) t.dispose();
 	}
 	// finish what is being laid out now, in one go (tests, and after a jump)
-	function settle() { trees.settle(); towns.civ().flush(); roads.settle(camera); }
-	return { update, place, info, dispose, settle, roads, toLL, toXZ, height, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
+	function settle() { trees.settle(); towns.civ().flush(); roads.settle(camera); lanes.settle(camera); }
+	return { update, place, info, dispose, settle, roads, lanes, toLL, toXZ, height, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
 }

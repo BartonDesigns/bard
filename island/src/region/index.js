@@ -24,6 +24,7 @@ import { REAL, REAL_BUILD, loreFor, shrineOf } from './landmarks.js';
 import { climateNow } from './climate.js';
 import { here } from './here.js';
 import { today } from '../calendar.js';
+import { gridSnap } from '../earth/globelanes.js';
 
 const rng = (seed) => { let s = (seed >>> 0) || 1; return () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 const hash2 = (a, b, k) => (Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 19349663) ^ Math.imul(k, 83492791)) >>> 0;
@@ -38,11 +39,11 @@ const CLAIM_MAX = { polar: 2, station: 2, snow: 0, alpine: 1, himalaya: 2, andes
 // how far round a real landmark the generated places keep clear (m), by its builder
 const CLEAR = { pyramid: 170, palace: 160, khmer: 170, stupamound: 90, registan: 90, potala: 200, colosseum: 110, monolith: 2000, mausoleum: 90, goldtemple: 90, roundtemple: 60, greektemple: 60, rockfacade: 60, sails: 110, greatwall: 0, torii: 30 };
 
-export function createRegional({ scene, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null }) {
+export function createRegional({ scene, island, globe, hint = () => {}, isPhone = false, F, toLL, toXZ, bayKm, bayWildKm = 180, roads = null, lanes = null }) {
 	const height = globe.height;
 	const ground = (x, z) => island.heightAt(x, z);
 	const wet = (x, z) => { const h = height.at(x, z); return h < 0.4 || height.out.land <= 0; };
-	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, F });
+	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, F, lanes });
 	const ice = createIce(scene, { height, toXZ, toLL, isPhone });
 	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m), isPhone, toLL });
 	const air = createAir(scene, { isPhone });
@@ -75,13 +76,13 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 		if (f === 'orthodox' && (k === 'village' || k === 'snow')) return /^as\.caucasus/.test(id) ? 'church-stone' : 'church-wood';
 		return null;
 	}
-	function addSettlement(key, kind, lat, lon, K, at, { pop = -1, name = '', char = '' } = {}) {
+	function addSettlement(key, kind, lat, lon, K, at, { pop = -1, name = '', char = '', align = null } = {}) {
 		const kit = K.kit, C = K.culture, centre = centreFor(kit, C, pop, at.id);
 		let k2 = centre ? { ...kit, build: { ...kit.build, centre: [centre, ...kit.build.centre.slice(1)] } } : kit;
 		// a research station is its modules and its huts (the Antarctic's, Ny-Ålesund, Resolute)
 		if (K.id === 'polar' && /research|station/i.test(char + ' ' + name)) k2 = { ...k2, build: { ...k2.build, houses: [['station', 4], ['arctic', 1.5], ['shed', 1.5]], centre: ['hall'], props: [['fueltank', 3], ['sledge', 1], ['shed', 1]] } };
 		const ex = toXZ(lat, lon), elev = ground(ex.x, ex.z), C2 = climateNow(at, env.month, elev);
-		return S.add({ key, kind, lat, lon, kit: kit.id, kitObj: k2, pop, name, regionId: at.id, culture: C, palette: palette(at.id), opts: optsFor(at, K), env: { snow: C2.snow }, kitId: kit.id });
+		return S.add({ key, kind, lat, lon, kit: kit.id, kitObj: k2, pop, name, regionId: at.id, culture: C, palette: palette(at.id), opts: optsFor(at, K), env: { snow: C2.snow }, kitId: kit.id, align });
 	}
 	// the real towns the kit builds itself
 	function claims(city) {
@@ -150,7 +151,9 @@ export function createRegional({ scene, island, globe, hint = () => {}, isPhone 
 			const KH = kitHere(vl, vn, -1, h);
 			if (!KH?.at.land || !/^(farm|village|mediterranean|southasia|eastvillage|alpine|savanna|sahel)$/.test(KH.K.id) || (KH.at.mix.rain || 0) < 300) continue;
 			const farmKit = KH.K.id === 'farm' ? KITS.farm : { ...KH.K.kit, build: { ...KH.K.kit.build, count: [1, 3], spread: 50, fields: KH.K.kit.build.fields || 'strip' } };
-			addSettlement('farm:' + i + ':' + j, 'farm', vl, vn, { ...KH.K, kit: farmKit, id: KH.K.id }, KH.at, { pop: -1 });
+			// where the land was surveyed in squares, the farms string out along the section roads
+			const g = KH.K.id === 'farm' ? gridSnap(vl, vn) : null;
+			addSettlement('farm:' + i + ':' + j, 'farm', g ? g.lat : vl, g ? g.lon : vn, { ...KH.K, kit: farmKit, id: KH.K.id }, KH.at, { pop: -1, align: g ? { axis: g.axis } : null });
 		}
 		// the landmarks of the place's stories
 		const LG = 0.1, li = Math.floor(lat / LG), lj = Math.floor(lon / (LG / cosL));

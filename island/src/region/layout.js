@@ -44,13 +44,15 @@ function waterSide(wet, R) {
 	return best === null ? null : { a: best, d: bd };
 }
 
-export function plan(kit, { r, H, wet, size = 0, centre = true, spread = null }) {
+export function plan(kit, { r, H, wet, size = 0, centre = true, spread = null, axis = null, avoid = null }) {
 	const B = kit.build, lots = [], paths = [], plazas = [], fields = [];
 	const [n0, n1] = B.count, n = Math.round(n0 + (n1 - n0) * Math.min(1, size / 2 + r() * 0.5)), R = spread || B.spread * (0.8 + size * 0.25);
 	const put = (type, x, z, rot, role = 'house') => {
 		const [w, d] = sizeOf(type, r);
 		if (wet(x, z) || !clear(lots, x, z, w, d, role === 'prop' ? 0.8 : 2.2)) return null;
 		if (slopeAt(H, x, z).s > (role === 'prop' ? 0.45 : 0.32)) return null;
+		// (not on a road from outside: the survey's section lines, the highways)
+		if (avoid && avoid(x, z, Math.hypot(w, d) / 2 + (role === 'prop' ? 0.5 : 1.5))) return null;
 		const L = { type, x, z, rot, w, d, role };
 		lots.push(L);
 		return L;
@@ -58,7 +60,7 @@ export function plan(kit, { r, H, wet, size = 0, centre = true, spread = null })
 	const house = () => wpick(r, B.houses);
 	const props = (k) => { for (let i = 0; i < k; i++) { const L = lots[Math.floor(r() * lots.length)]; if (!L || L.role !== 'house') continue; const a = r() * Math.PI * 2, d = Math.hypot(L.w, L.d) / 2 + 2 + r() * 3; put(wpick(r, B.props), L.x + Math.sin(a) * d, L.z + Math.cos(a) * d, L.rot + (r() - 0.5) * 0.6, 'prop'); } };
 	const W = kit.build.layout;
-	let ax = r() * Math.PI;                 // the place's own bearing
+	let ax = axis ?? r() * Math.PI;         // the place's own bearing (a farm on a section line, the line's)
 	const water = waterSide(wet, R * 1.4);
 
 	if (W === 'harbour' || W === 'shore' || W === 'river') {
@@ -158,6 +160,7 @@ export function plan(kit, { r, H, wet, size = 0, centre = true, spread = null })
 		for (let i = 0; i < n * 4 && lots.length < n; i++) { const a = r() * Math.PI * 2, d = 10 + r() * R; put(house(), Math.sin(a) * d, Math.cos(a) * d, a + Math.PI); }
 	}
 	props(Math.round(n * 0.8));
+	access(lots, paths, ax, R, W);
 	// the fields round the place
 	const F = B.fields;
 	if (F && W !== 'farms') {
@@ -172,6 +175,44 @@ export function plan(kit, { r, H, wet, size = 0, centre = true, spread = null })
 		}
 	}
 	return { lots, paths, plazas, fields, ax, R };
+}
+
+// The way in to every house: a track out from the middle where the place has no lane, then
+// a drive from each door that stands back from the lanes (along the shortest way to one, or
+// to a drive already made), unless it would cross a neighbour. Close-built places only get
+// the short ones; a farm's drive may run a long way across its fields.
+function access(lots, paths, ax, R, W) {
+	if (!lots.length) return;
+	const none = !paths.length;
+	if (none) paths.push({ pts: [[0, 0], [Math.sin(ax) * (R + 40), Math.cos(ax) * (R + 40)]], w: 3 });
+	const far = none || W === 'farms' || W === 'slope' || W === 'hill' || W === 'kraal' ? 160 : 45;
+	const lanes = paths.slice(), drives = [];
+	const hits = (ax0, az0, bx, bz) => {
+		for (const M of lots) {
+			if (M.role === 'prop') continue;
+			const cs = Math.cos(M.rot), sn = Math.sin(M.rot);
+			for (let k = 0; k <= 8; k++) {
+				const x = ax0 + (bx - ax0) * k / 8 - M.x, z = az0 + (bz - az0) * k / 8 - M.z;
+				if (Math.abs(x * cs - z * sn) < M.w / 2 + 1 && Math.abs(x * sn + z * cs) < M.d / 2 + 1) return true;
+			}
+		}
+		return false;
+	};
+	for (const L of lots) {
+		if (L.role !== 'house' && L.role !== 'centre') continue;
+		const fx = Math.sin(L.rot), fz = Math.cos(L.rot), dx = L.x + fx * (L.d / 2 + 1.5), dz = L.z + fz * (L.d / 2 + 1.5);
+		let best = null, bd = far;
+		for (const p of [...lanes, ...drives]) for (let k = 0; k + 1 < p.pts.length; k++) {
+			const [ax0, az0] = p.pts[k], [bx, bz] = p.pts[k + 1], ex = bx - ax0, ez = bz - az0, l2 = ex * ex + ez * ez || 1;
+			const t = Math.max(0, Math.min(1, ((dx - ax0) * ex + (dz - az0) * ez) / l2)), qx = ax0 + ex * t, qz = az0 + ez * t, d = Math.hypot(qx - dx, qz - dz);
+			if (d < bd) { bd = d; best = [qx, qz, p.w || 3]; }
+		}
+		// (a door right on the lane needs none)
+		if (!best || bd < best[2] / 2 + 3) continue;
+		if (hits(dx, dz, best[0], best[1])) continue;
+		drives.push({ pts: [[dx, dz], [best[0], best[1]]], w: 3, drive: true });
+	}
+	paths.push(...drives);
 }
 
 // the lots of one block of a dense quarter (bx, bz: the block's grid index), in the
