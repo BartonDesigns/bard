@@ -127,6 +127,22 @@ function layStrip(q, put) {
 	}
 }
 
+// a valve feeds a dozen sprays or eight rotors: a zone with more is split, left and right
+function split(zones, heads) {
+	for (let i = 0; i < zones.length; i++) {
+		const Z = zones[i], lim = PER[Z.kind];
+		if (!lim || Z.heads <= lim) continue;
+		const mine = heads.filter((h) => h.zone === i).sort((p, q) => p.lx - q.lx), n = Math.ceil(mine.length / lim);
+		for (let k = 1; k < n; k++) {
+			zones.splice(i + k, 0, { name: Z.name + ' ' + (k + 1), kind: Z.kind, heads: 0, min: 0 });
+			for (const h of heads) if (h.zone > i + k - 1) h.zone++;
+			for (const h of mine.slice(Math.round(k * mine.length / n), Math.round((k + 1) * mine.length / n))) h.zone = i + k;
+		}
+		for (let k = 0; k < n; k++) zones[i + k].heads = heads.filter((h) => h.zone === i + k).length;
+		i += n - 1;
+	}
+}
+
 export function createSprinklers({ world, isPhone = false } = {}) {
 	const yards = new Map();        // key -> a yard: { x, z, heads, zones, timer | win } (null: nothing to water there)
 	const live = [];                // the yards in reach
@@ -190,8 +206,11 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 		const [gx, gz] = toGrid(px, pz, U.a, U.s), [hx, hz] = toGrid(px + fx, pz + fz, U.a, U.s), dgz = hz - gz;
 		if (Math.abs(dgz) < 0.7 || Math.abs(hx - gx) > 0.7) return null;
 		const j = Math.floor(gz / BZ), Z0 = j * BZ + ST + 2.5, IZ = BZ - ST - 5;
-		const t = ((dgz < 0 ? Z0 : Z0 + IZ) - gz) / dgz;
-		return t >= 0 && t < 30 ? { front: t, half: IZ / 2 } : null;
+		const edge = dgz < 0 ? Z0 : Z0 + IZ;
+		// (the suburbs' grid is warped: walked out to the edge a step or two)
+		let t = (edge - gz) / dgz;
+		for (let k = 0; k < 3; k++) t += (edge - toGrid(px + fx * t, pz + fz * t, U.a, U.s)[1]) / dgz;
+		return t >= 0 && t < 30 ? { front: t, half: IZ / 2 / Math.abs(dgz) } : null;
 	}
 
 	// ---- a house's yard, front and back
@@ -304,8 +323,20 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				if (where === 'front' && segs.length) {
 					for (const lx of [q[0] + 0.3, q[2] - 0.3]) { const t = ray(lx, q[1], 0, 1, q[3] - q[1]); if (t != null) q = [q[0], q[1], q[2], Math.min(q[3], q[1] + t - 0.05)]; }
 				}
+				// (and nothing on a street down the side or behind: a piece that runs onto one is cut back)
+				for (let pass = 0; pass < 2 && segs.length; pass++) {
+					const cutBy = [0, 0, 0, 0];
+					for (let lx = q[0] + 0.25; lx < q[2]; lx += 1) for (let lz = q[1] + 0.25; lz < q[3]; lz += 1) {
+						const [x, z] = toW(lx, lz);
+						if (!onStreet(segs, x, z)) continue;
+						const e = [lx - q[0], lz - q[1], q[2] - lx, q[3] - lz], k = e.indexOf(Math.min(...e));
+						cutBy[k] = Math.max(cutBy[k], e[k] + 0.6);
+					}
+					if (!cutBy.some(Boolean)) break;
+					q = [q[0] + cutBy[0], q[1] + cutBy[1], q[2] - cutBy[2], q[3] - cutBy[3]];
+				}
 				const w = q[2] - q[0], d = q[3] - q[1];
-				if (w < 0.9 || d < 0.9 || w * d < 2.5) { if (w * d > 0.5) beds.push(q); continue; }
+				if (w < 0.9 || d < 0.9 || w * d < 2.5) { if (w > 0 && d > 0 && w * d > 0.5) beds.push(q); continue; }
 				if (Math.min(w, d) < STRIP) {
 					if (Math.max(w, d) < 2.5) { beds.push(q); continue; }
 					const z = zoneOf('strip', where === 'front' ? 'strips' : 'back strips');
@@ -329,20 +360,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 		if (backIs === 'lawn' && back - bedB - rear > 2) water([lotL + EDGE, rear + 0.3, lotR - EDGE, back - bedB], holes, 'back');
 		if (beds.length || frontIs === 'xeriscape') zoneOf('drip', 'beds');
 
-		// (a valve feeds a dozen sprays or eight rotors: a zone with more is split, left and right)
-		for (let i = 0; i < zones.length; i++) {
-			const Z = zones[i], lim = PER[Z.kind];
-			if (!lim || Z.heads <= lim) continue;
-			const mine = heads.filter((h) => h.zone === i).sort((p, q) => p.lx - q.lx), n = Math.ceil(mine.length / lim);
-			for (let k = 1; k < n; k++) {
-				const Zk = { name: Z.name + ' ' + (k + 1), kind: Z.kind, heads: 0, min: 0 };
-				zones.splice(i + k, 0, Zk);
-				for (const h of heads) if (h.zone > i + k - 1) h.zone++;
-				for (const h of mine.slice(Math.round(k * mine.length / n), Math.round((k + 1) * mine.length / n))) h.zone = i + k;
-			}
-			for (let k = 0; k < n; k++) zones[i + k].heads = heads.filter((h) => h.zone === i + k).length;
-			i += n - 1;
-		}
+		split(zones, heads);
 		// the order a controller runs them: the front, the strips, the back, the beds
 		const rank = (Z) => (Z.kind === 'drip' ? 9 : Z.name.startsWith('front') ? 0 : Z.name === 'strips' ? 1 : Z.kind === 'rotor' ? 3 : 2);
 		const order = zones.map((Z, i) => i).sort((a, b) => rank(zones[a]) - rank(zones[b]) || a - b), to = order.map((i, k) => [i, k]);
@@ -450,14 +468,15 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				const home = fp.find((q) => !q.fence && q.x === f.x && q.z === f.z);
 				const hd = home ? home.d / 2 : 3;
 				const heads = [], zones = [{ name: 'front sprays', kind: 'spray', heads: 0, min: 0 }, { name: 'back sprays', kind: 'spray', heads: 0, min: 0 }];
-				const put = (zone) => (lx, lz, a0, arc, R) => { const [x, z] = at(lx, lz); const h = head(x, z, 1, a0 - f.face, arc, R, r, arc > 6 ? 'F' : arc > 3 ? 'H' : 'Q'); h.zone = zone; heads.push(h); zones[zone].heads++; };
+				const put = (zone) => (lx, lz, a0, arc, R) => { const [x, z] = at(lx, lz); const h = head(x, z, 1, a0 - f.face, arc, R, r, arc > 6 ? 'F' : arc > 3 ? 'H' : 'Q'); h.zone = zone; h.lx = lx; heads.push(h); zones[zone].heads++; };
 				const zf = hd + 1.6;
 				for (const q of [[-f.fx + EDGE, zf, -0.8, f.fzF - EDGE], [0.8, zf, f.fx - EDGE, f.fzF - EDGE]]) if (q[2] - q[0] > 1.5 && q[3] - q[1] > 1.5) layLawn(q, SPRAYS, put(0));
 				const qb = [-f.fx + EDGE, f.fzB + EDGE, f.fx - EDGE, -hd + 0.8];
 				if (qb[3] - qb[1] > 1.5) layLawn(qb, SPRAYS, put(1));
-				for (const Z of zones) Z.min = Math.round(6 + r() * 4);
 				// (a yard with no front lawn: its back the one zone)
 				if (!zones[0].heads) { zones.shift(); for (const h of heads) h.zone = 0; }
+				split(zones, heads);
+				for (const Z of zones) Z.min = Math.round(6 + r() * 4);
 				const Y = { x: f.x, z: f.z, kind: 'village', heads, zones, timer: houseTimer(key), win: null, rise: null };
 				for (const h of heads) h.yard = Y;
 				yards.set(key, heads.length ? Y : null);
