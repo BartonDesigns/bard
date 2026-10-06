@@ -134,7 +134,7 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 		// (along the brow: outward, rising or falling with its line)
 		const L = a.distanceTo(b);
 		tan.set(side, clamp((b.y - a.y) / (Math.abs(b.x - a.x) || 1e-4), -0.6, 0.6), 0).normalize();
-		const count = Math.round(L * sh.width((ta + tb) / 2) * sh.dens * 1.1e6);
+		const count = Math.round(L * sh.width((ta + tb) / 2) * sh.dens * 1.4e6);
 		for (let h = 0; h < count; h++) {
 			const f = rnd(), t = ta + (tb - ta) * f, n = n0.clone().lerp(n1, f).normalize(), w = sh.width(t) * S;
 			// (across the brow: -1 its lower edge, 1 its upper; the head rounded off)
