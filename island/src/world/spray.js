@@ -106,7 +106,7 @@ void main(){
 	vec3 toC = cameraPosition - p; float dist = length(toC);
 	vec3 dir = normalize(v), side = normalize(cross(toC, dir));
 	float px = uPx * dist, wid = max(0.0016, px);
-	vec3 w = p - dir * (length(v) * 0.024 + wid) * position.y + side * position.x * wid;
+	vec3 w = p - dir * (length(v) * 0.014 + wid) * position.y + side * position.x * wid;
 	gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
 	// the light: forward scatter (backlit glitter), the bow's colour by angle, the sky's fill
 	vec3 vd = -toC / dist;
@@ -116,9 +116,9 @@ void main(){
 	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.55 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb;
 	float glint = step(0.86, h1(n * 1.7 + floor(uTime * 14.0 + aSeed.y * 5.0)));
 	float sun = max(e2.w, 0.0);
-	vCol = uSunC * sun * (bow * bow * 2.4 + vec3(0.08 + hg * (0.5 + 4.0 * glint))) + uAmb * 0.4 + vec3(0.03, 0.04, 0.05) * max(-e2.w, 0.0);
+	vCol = uSunC * sun * (bow * bow * 1.0 + vec3(0.025 + hg * (0.12 + 1.6 * glint))) + uAmb * 0.18 + vec3(0.03, 0.04, 0.05) * max(-e2.w, 0.0);
 	// (far, a drop is less than a pixel: its light spread thin)
-	vCol *= e4.x * clamp(0.0022 / wid, 0.25, 1.0) * smoothstep(0.0, 0.06, age) * (1.0 - smoothstep(0.92, 1.0, age / T)) * smoothstep(0.3, 1.2, dist);
+	vCol *= e4.x * clamp(0.0022 / wid, 0.25, 1.0) * smoothstep(0.0, 0.12, age) * (1.0 - smoothstep(0.92, 1.0, age / T)) * smoothstep(0.3, 1.2, dist);
 }`;
 const DROP_FRAG = /* glsl */`
 varying vec3 vCol; varying float vX;
@@ -159,7 +159,7 @@ void main(){
 	vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
 	vW = c + (right * position.x + up * position.y) * size * 0.5;
 	float dist = length(c - cameraPosition);
-	vA = sin(3.1416 * a) * e4.y * e4.x * (fall ? 0.16 : 0.07) * smoothstep(0.6, 3.0, dist);
+	vA = sin(3.1416 * a) * e4.y * e4.x * (fall ? 0.18 : 0.12) * smoothstep(0.6, 3.0, dist);
 	gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);
 }`;
 const MIST_FRAG = /* glsl */`
@@ -175,7 +175,7 @@ void main(){
 	float ang = degrees(acos(clamp(-c, -1.0, 1.0)));
 	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.6 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb;
 	float sun = max(vL, 0.0);
-	vec3 col = uSunC * sun * (0.12 + hg * 1.3 + bow * bow * 3.0) + uAmb * 0.7 + vec3(0.02, 0.025, 0.03) * max(-vL, 0.0);
+	vec3 col = uSunC * sun * (0.12 + hg * 1.3 + bow * bow * 3.0) + uAmb * 0.7 + vec3(0.05, 0.06, 0.07) * max(-vL, 0.0);
 	gl_FragColor = vec4(col, a);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -232,7 +232,7 @@ function puffTexture() {
 
 export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 	const NS = isPhone ? 5 : 10, NF = isPhone ? 2 : 4, ND = isPhone ? 6 : DECALS;
-	const DS = isPhone ? 380 : 900, DF = isPhone ? 900 : 2200, MS = isPhone ? 8 : 14, MF = isPhone ? 18 : 36;
+	const DS = isPhone ? 450 : 1300, DF = isPhone ? 900 : 2200, MS = isPhone ? 8 : 14, MF = isPhone ? 18 : 36;
 	const group = new THREE.Group();
 	group.name = 'spray';
 	scene.add(group);

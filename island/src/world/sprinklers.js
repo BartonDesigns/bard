@@ -151,8 +151,11 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				const R = Math.min(5, f.fzF - 2);
 				add(-f.fx + 0.5, f.fzF - 0.6, -Math.PI / 2, Math.PI / 2, R, 0);
 				add(f.fx - 0.5, f.fzF - 0.6, -Math.PI, Math.PI / 2, R, 0);
-				add(0, f.fzB + 0.5, 0, Math.PI, Math.min(4, -f.fzB - 1), 1);
-				yards.set(key, { x: f.x, z: f.z, heads, timer: houseTimer(key), zones: 2 });
+				// (the back one only as far as the house's back wall)
+				const home = world().village.footprints.find((q) => !q.fence && q.x === f.x && q.z === f.z);
+				const back = -f.fzB - (home ? home.d / 2 : 3) - 0.6;
+				if (back > 1.5) add(0, f.fzB + 0.5, 0, Math.PI, Math.min(4, back), 1);
+				yards.set(key, { x: f.x, z: f.z, heads, timer: houseTimer(key), zones: Math.max(...heads.map((h) => h.zone)) + 1 });
 			}
 			out.push(key);
 		}
