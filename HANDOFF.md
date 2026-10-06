@@ -4,18 +4,31 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
-## Resume here (6 October 2026, evening)
+## Resume here (6 October 2026, night)
 
-- **Live:** main is at `23b99f7`, with everything in the release below plus the sprinkler layout. Sprinkler heads stand in the earth only (`earth()` in `world/sprinklers.js`).
-- **In progress on `claude/affectionate-heisenberg-3g4qv1`:**
-  - **Phone memory budget:** goal: stop iPhones losing graphics in the Bay. Notes are in `/tmp/claude-0/phonemem/`.
-  - **Hair refinement:** salt-and-pepper grey, no dark slabs, clean ears, opaque white beards, lighter brows. The look needs the owner's approval before it ships. Composites are in `/tmp/claude-0/hair/`.
+- **Live:** main is at `8ba8b81`. It includes:
+  - this week's world work;
+  - sprinklers;
+  - streets drawn on the light ground (`bay/terrain.js`, under GROUND_LITE_F);
+  - the phone memory budget, about 500 MB down to 255 MB, with the travel leak fixed;
+  - the hair fixes: salt-and-pepper grey, long-hair undersides, ears, white beards, the afro growing from the scalp.
+- **Brows:** reverted to the old version. The owner wants them filled in and dense, not arched and sparse. Redo them and show the owner before shipping.
+- **Next, in the owner's order:**
+  1. **Quests:**
+     - no hollow NPC promises: an agreed meeting becomes a real journal quest, with game time and its real-time equivalent;
+     - waypoints, a map pin and a direction hint;
+     - NPCs keep their appointments;
+     - gatherings and events run in the engine without the cloud.
+     - The Worker's quest planner (`server/discovery`) is not deployed; the owner must run `npm run deploy` with Cloudflare.
+  2. **Skin:** blotchy, too-bright oily T-zone highlights in some light (`people/` skin shader).
+  3. **Multiplayer:** see friends' avatars, follow-the-leader within a radius, quest together, host-synced world. Cloudflare Durable Objects (free tier).
+- **Teleport test** (iPhone profile, SR→SF→Kyoto→Newark→SR): no context loss, textures 102→137. Script: `/tmp/claude-0/roadsbug/tele.js`.
 - **Ship steps:**
-  1. In `/tmp/claude-0/ship`, fast-forward to the branch.
+  1. In `/tmp/claude-0/ship`, reset to the branch.
   2. Rebuild.
   3. Serve the folder on 8768 and run `node /tmp/claude-0/planet/smoke-ship.js`. It must show 0 errors and "samplers ok".
   4. `git push origin HEAD:main` (the owner allows this).
-- **Token budget:** the owner asks for fewer parallel agents and screenshots. Check with numbers first.
+- **Tokens:** the owner asks for fewer agents and screenshots. Check with numbers first.
 
 ## Release (6 October 2026)
 
