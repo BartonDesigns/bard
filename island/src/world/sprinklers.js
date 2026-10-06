@@ -180,18 +180,21 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 	}
 	const onStreet = (segs, x, z) => {
 		for (let i = 0; i < segs.length; i += 5) {
-			const ax = segs[i], az = segs[i + 1], dx = segs[i + 2] - ax, dz = segs[i + 3] - az, l2 = dx * dx + dz * dz || 1;
-			const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2));
-			if (Math.hypot(x - ax - dx * t, z - az - dz * t) < segs[i + 4]) return true;
+			const ax = segs[i], az = segs[i + 1], bx = segs[i + 2], bz = segs[i + 3], e = segs[i + 4];
+			// (far from this piece's box: not on it)
+			if (x < Math.min(ax, bx) - e || x > Math.max(ax, bx) + e || z < Math.min(az, bz) - e || z > Math.max(az, bz) + e) continue;
+			const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+			const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), px = x - ax - dx * t, pz = z - az - dz * t;
+			if (px * px + pz * pz < e * e) return true;
 		}
 		return false;
 	};
 	// how far from a point a ray goes before it meets a street's sidewalk (null: not within max)
 	function toStreet(segs, x, z, dx, dz, max) {
 		if (!segs.length) return null;
-		for (let t = 0; t <= max; t += 0.5) {
+		for (let t = 0; t <= max; t += 1) {
 			if (!onStreet(segs, x + dx * t, z + dz * t)) continue;
-			let s = Math.max(0, t - 0.5);
+			let s = Math.max(0, t - 1);
 			while (s < t && !onStreet(segs, x + dx * (s + 0.1), z + dz * (s + 0.1))) s += 0.1;
 			return s;
 		}
@@ -220,6 +223,8 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 		const key = keyOf(M.x, M.z);
 		if (yards.has(key)) return key;
 		const W = world(), real = W?.real;
+		// (a gridded house where the map has houses of its own, by the seam: not watered twice)
+		if (proc && real?.loaded?.() && real.near('boxes', M.x, M.z, 25).some((b) => b.kind <= 4 && Math.hypot(b.x - M.x, b.z - M.z) < 25)) { yards.set(key, null); return key; }
 		const r = rng(key ^ 0x5eed5);
 		const ca = Math.cos(M.a), sa = Math.sin(M.a), hw = M.w / 2, hd = M.d / 2;
 		const toW = (lx, lz) => [M.x + ca * lx - sa * lz, M.z + sa * lx + ca * lz];
@@ -326,7 +331,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 				// (and nothing on a street down the side or behind: a piece that runs onto one is cut back)
 				for (let pass = 0; pass < 2 && segs.length; pass++) {
 					const cutBy = [0, 0, 0, 0];
-					for (let lx = q[0] + 0.25; lx < q[2]; lx += 1) for (let lz = q[1] + 0.25; lz < q[3]; lz += 1) {
+					for (let lx = q[0] + 0.25; lx < q[2]; lx += 1.2) for (let lz = q[1] + 0.25; lz < q[3]; lz += 1.2) {
 						const [x, z] = toW(lx, lz);
 						if (!onStreet(segs, x, z)) continue;
 						const e = [lx - q[0], lz - q[1], q[2] - lx, q[3] - lz], k = e.indexOf(Math.min(...e));
@@ -455,11 +460,11 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 	}
 
 	// ---- the fishing village's fenced yards: the front lawn either side of the gate path, the back
-	function villageYards() {
+	function villageYards(cx, cz) {
 		const list = [];
 		const fp = world()?.village?.footprints || [];
 		for (const f of fp) {
-			if (!f.fence) continue;
+			if (!f.fence || Math.hypot(f.x - cx, f.z - cz) > REACH) continue;
 			const key = keyOf(f.x + 0.25, f.z);
 			if (!yards.has(key)) {
 				const r = rng(key);
@@ -492,7 +497,7 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 		scanT -= dt;
 		if (Math.hypot(x - scanX, z - scanZ) > 15 || scanT < 0) {
 			scanX = x; scanZ = z; scanT = 4;
-			const W = world(), keys = villageYards();
+			const W = world(), keys = villageYards(x, z);
 			queue = [];
 			if (W?.real?.loaded?.()) {
 				const seen = new Set();
@@ -505,7 +510,8 @@ export function createSprinklers({ world, isPhone = false } = {}) {
 					if (Math.hypot((i + (j & 1) * 0.5) * S - x, j * RZ - z) < REACH) queue.push(() => parkPoint(i, j));
 				}
 			}
-			for (const grp of W?.city?.procHomes?.(x, z, REACH) || []) queue.push(() => houseYard(grp, true));
+			// (a gridded house the mapped streets have taken the place of is not there)
+			for (const grp of W?.city?.procHomes?.(x, z, REACH) || []) if (!W.real?.inside?.(grp[0].x, grp[0].z)) queue.push(() => houseYard(grp, true));
 			// (the ground under the heads looked at again: it may have loaded since)
 			for (const k of live) for (const h of yards.get(k)?.heads || []) h.y = 0;
 			live.length = 0;
