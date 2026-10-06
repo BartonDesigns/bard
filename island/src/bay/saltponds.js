@@ -529,7 +529,9 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 			if (performance.now() - t0 > 6) { show(n); yield; t0 = performance.now(); }
 			for (let i = i0; i <= i1; i++) {
 				const r1 = ih(i, j), r2 = ih(i + 7, j - 3), x = (i + r1) * sp, z = (j + r2) * sp;
-				if ((x - cx) ** 2 + (z - cz) ** 2 > R * R) continue;
+				const d2 = (x - cx) ** 2 + (z - cz) ** 2;
+				// (thinner further off, so the ring is filled to its edge)
+				if (d2 > R * R || (d2 > 2500 && r2 < (Math.sqrt(d2) - 50) / (R - 40))) continue;
 				const h0 = marshAt(x, z);
 				if (h0 === null || h0 < 0.0 || h0 > 1.9 || pondAt(x, z) || !inPoly(marsh, x, z)) continue;
 				const mh = h0 + (vn(x / 64, z / 64) - 0.5) * 0.24 + (vn(x / 16, z / 16) - 0.5) * 0.08, y = bay.heightAt(x, z) + 0.05;
