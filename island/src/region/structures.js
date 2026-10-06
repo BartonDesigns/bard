@@ -5,10 +5,11 @@
 // place's palette (P: the atlas region's walls and roofs, the kit's woods and stones) so the
 // same kind of house is painted as the place paints it.
 //
-// Each builder: (B, L, P, r) where B = { G, glow, smoke: [], solid: [], lights: [] }:
+// Each builder: (B, L, P, r) where B = { G, glow, smoke: [], solid: [], lights: [], trees: [] }:
 // G the geometry, glow the lit things (windows at night, lanterns, signs), smoke the
 // chimneys' tops, solid the boxes you can't walk through ([x, z, w, d, rot] local), lights
-// the points that glow; L the lot { w, d }; P the palette; r the lot's random stream.
+// the points that glow, trees the great trees grown with the region's plants ([x, z, word,
+// size] local, flora.js); L the lot { w, d }; P the palette; r the lot's random stream.
 
 import { shade, mixc, col } from './geo.js';
 
@@ -881,7 +882,7 @@ S.canoe = (B, L, P, r) => {
 };
 // a jetty at the river's edge: planks on posts, out over the water
 S.landing = (B, L, P) => { const { G } = B, len = 14; for (let i = 0; i <= 4; i++) for (const s of [-1, 1]) G.cyl(s * 1.1, -2.5, -len / 2 + i * len / 4, 0.12, 0.12, 3.3, [0.38, 0.3, 0.22], { n: 6 }); G.slab(0, 0.6, 0, 2.6, len, 0.12, shade(P.wood, 0.85)); };
-S.garden = (B, L, P, r) => { const { G } = B; for (let i = 0; i < 4; i++) G.box(-3 + i * 2, 0, 0, 1.4, 0.25, 6, [0.32, 0.22, 0.14], { topc: [0.28, 0.42, 0.18] }); for (let i = 0; i < 9; i++) G.cone(-3 + (i % 4) * 2, 0.25, -2.4 + Math.floor(i / 4) * 2.2, 0.35, 0.9 + r() * 0.5, [0.25, 0.5, 0.2], 5); };
+S.garden = (B, L, P, r) => { const { G } = B; for (let i = 0; i < 4; i++) G.box(-3 + i * 2, 0, 0, 1.4, 0.25, 6, [0.32, 0.22, 0.14], { topc: [0.28, 0.42, 0.18] }); for (let i = 0; i < 9; i++) B.trees.push([-3 + (i % 4) * 2, -2.4 + Math.floor(i / 4) * 2.2, 'greens', 0.7 + r() * 0.4]); };
 S.line = (B, L, P, r) => { const { G } = B; for (const x of [-3, 3]) G.box(x, 0, 0, 0.08, 1.9, 0.08, [0.45, 0.36, 0.26]); G.beam(-3, 1.85, 0, 3, 1.85, 0, 0.02, [0.3, 0.3, 0.3]); for (let i = 0; i < 6; i++) G.sheet([[-2.5 + i * 0.9, 1.84, 0], [-1.9 + i * 0.9, 1.84, 0], [-1.9 + i * 0.9, 1.2 - r() * 0.3, 0], [-2.5 + i * 0.9, 1.2, 0]], pick(r, [[0.85, 0.2, 0.2], [0.95, 0.95, 0.92], [0.2, 0.4, 0.7], [0.95, 0.75, 0.2], [0.3, 0.6, 0.35], [0.8, 0.45, 0.65]])); };
 S.hammock = (B, L, P, r) => { const { G } = B, c = pick(r, [[0.85, 0.3, 0.2], [0.3, 0.5, 0.7], [0.9, 0.75, 0.3]]); for (const x of [-1.6, 1.6]) G.box(x, 0, 0, 0.12, 1.8, 0.12, [0.45, 0.36, 0.26]); G.sheet([[-1.5, 1.5, -0.4], [0, 0.7, -0.45], [0, 0.7, 0.45], [-1.5, 1.5, 0.4]], c).sheet([[0, 0.7, -0.45], [1.5, 1.5, -0.4], [1.5, 1.5, 0.4], [0, 0.7, 0.45]], c); };
 // a fale: a round-ended house open on all sides, posts round a raised stone floor, a high
@@ -1078,7 +1079,7 @@ S.mandir = (B, L, P, r) => {
 	void r;
 };
 // a banyan's platform (the tree itself is flora): a raised round seat where the village meets
-S.banyan = (B) => { B.G.cyl(0, 0, 0, 5, 5, 0.7, [0.75, 0.68, 0.58], { n: 14 }); B.G.cyl(0, 0.7, 0, 1.2, 1.1, 5, [0.45, 0.38, 0.3], { n: 10 }); B.G.dome(0, 5, 0, 9, [0.24, 0.38, 0.18], { k: 0.5, n: 12, rings: 4 }); solid(B, 0, 0, 2.4, 2.4); B.seat = [3.5, 0, Math.PI / 2]; B.seatY = 0.7; };
+S.banyan = (B) => { B.G.cyl(0, 0, 0, 5, 5, 0.7, [0.75, 0.68, 0.58], { n: 14 }); B.trees.push([0, 0, 'sacredfig', 18]); solid(B, 0, 0, 2.4, 2.4); B.seat = [3.5, 0, Math.PI / 2]; B.seatY = 0.7; };
 // a tea stall: a cart or a kiosk, a kettle on the stove, benches
 S.chai = (B, L, P, r) => {
 	const { G } = B, c = pick(r, [[0.2, 0.45, 0.6], [0.75, 0.25, 0.15], [0.85, 0.7, 0.25]]);
@@ -1139,8 +1140,8 @@ S.chapelrock = (B, L, P, r) => { S.passshrine(B, L, { ...P, shrine: 'chapel' }, 
 S.oldmine = (B) => { const { G } = B, w = [0.35, 0.28, 0.2]; G.box(0, 0, 3, 8, 5, 4, [0.45, 0.43, 0.4]); G.face([[-1.2, 0, 0.99], [1.2, 0, 0.99], [1.2, 2.4, 0.99], [-1.2, 2.4, 0.99]], DARK); for (const s of [-1, 1]) G.box(s * 1.35, 0, 0.8, 0.3, 2.6, 0.3, w); G.box(0, 2.6, 0.8, 3, 0.3, 0.3, w); for (let i = 0; i < 6; i++) G.box(0, 0.02, -1 - i * 1.2, 1.6, 0.08, 0.2, w); solid(B, 0, 3, 8, 4); };
 S.hermitage = (B, L, P, r) => { const { G } = B; G.box(0, -1, 0, 12, 6, 6, [0.5, 0.48, 0.45]); G.box(0, 0, -3.1, 4, 3, 0.4, [0.9, 0.88, 0.82]); G.face([[-0.6, 0, -3.31], [0.6, 0, -3.31], [0.6, 1.8, -3.31], [-0.6, 1.8, -3.31]], [0.55, 0.15, 0.1]); S.flagpole(B, L, P, r, 3, -4, 0); solid(B, 0, 0, 12, 6); };
 S.incaruin = (B, L, P, r) => { const { G } = B, c = [0.6, 0.58, 0.52]; for (let i = 0; i < 3; i++) G.box(0, -0.5 + i * 1.5, i * 3.5, 22, 1.6, 3.5, shade(c, 0.95)); for (let j = 0; j < 4; j++) { const x = -8 + j * 5.5; G.box(x, 4, 8, 4, 2.6, 0.8, c).box(x - 1.6, 4, 9.6, 0.8, 2.6, 3.2, c).box(x + 1.6, 4, 9.6, 0.8, 2.6, 3.2, c); G.face([[x - 0.45, 4.6, 7.59], [x + 0.45, 4.6, 7.59], [x + 0.35, 6, 7.59], [x - 0.35, 6, 7.59]], DARK); } solid(B, 0, 3.5, 22, 10.5); void r; };
-S.sacredtree = (B, L, P, r) => { const { G } = B; G.cyl(0, -0.5, 0, 2.8, 1.6, 9, [0.42, 0.36, 0.28], { n: 10 }); for (let i = 0; i < 8; i++) { const a = i / 8 * 6.28; G.beam(Math.cos(a) * 1.4, 6, Math.sin(a) * 1.4, Math.cos(a) * 4.5, 0, Math.sin(a) * 4.5, 0.35, [0.4, 0.34, 0.26]); } G.dome(0, 8, 0, 11, [0.2, 0.36, 0.16], { k: 0.55, n: 12, rings: 4 }); for (let i = 0; i < 10; i++) { const a = r() * 6.28; G.sheet([[Math.cos(a) * 2.2, 2.4, Math.sin(a) * 2.2], [Math.cos(a) * 2.3, 2.4, Math.sin(a) * 2.3 + 0.1], [Math.cos(a) * 2.3, 1.6, Math.sin(a) * 2.3 + 0.1], [Math.cos(a) * 2.2, 1.6, Math.sin(a) * 2.2]], pick(r, [[0.85, 0.15, 0.12], [0.95, 0.8, 0.2], [0.95, 0.95, 0.92]])); } solid(B, 0, 0, 4, 4); };
-S.baobab = (B, L, P) => { const { G } = B; G.cyl(0, -0.5, 0, 3.2, 2.2, 10, [0.6, 0.52, 0.45], { n: 12 }); for (let i = 0; i < 7; i++) { const a = i / 7 * 6.28; G.beam(0, 9, 0, Math.cos(a) * 5, 13, Math.sin(a) * 5, 0.5, [0.58, 0.5, 0.43]); } G.dome(0, 12, 0, 6, [0.32, 0.42, 0.2], { k: 0.35, n: 10, rings: 3 }); solid(B, 0, 0, 6, 6); void P; };
+S.sacredtree = (B, L, P, r) => { const { G } = B; B.trees.push([0, 0, 'sacredfig', 22]); for (let i = 0; i < 10; i++) { const a = r() * 6.28; G.sheet([[Math.cos(a) * 1.1, 2.4, Math.sin(a) * 1.1], [Math.cos(a) * 1.2, 2.4, Math.sin(a) * 1.2 + 0.1], [Math.cos(a) * 1.2, 1.6, Math.sin(a) * 1.2 + 0.1], [Math.cos(a) * 1.1, 1.6, Math.sin(a) * 1.1]], pick(r, [[0.85, 0.15, 0.12], [0.95, 0.8, 0.2], [0.95, 0.95, 0.92]])); } solid(B, 0, 0, 4, 4); };
+S.baobab = (B) => { B.trees.push([0, 0, 'oldbaobab', 18]); solid(B, 0, 0, 6, 6); };
 S.oldbore = (B, L, P, r) => { S.windmill(B, L, P, r); S.tank(B, L, P, r, 4, 0); };
 S.oldbridge = (B, L, P) => { const { G } = B, c = P.stone; G.box(0, -1, 0, 4, 1.2, 24, c); for (let i = 0; i < 3; i++) G.arch(0, -1, -8 + i * 8, 6, 4, 0.8, c, { r: Math.PI / 2 }); for (const s of [-1, 1]) G.box(s * 1.9, 0.2, 0, 0.3, 0.8, 24, c); };
 S.inuksukx = S.inuksuk;

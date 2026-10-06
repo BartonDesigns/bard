@@ -112,7 +112,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	const heightRef = { height, world };
 	const allRoads = { onRoad: (x, z, m) => roads.onRoad(x, z, m) || !!lanes?.onRoad(x, z, m), version: () => roads.version() * 1000 + (lanes?.version() || 0) };
 	const laneRef = { keepOff: (x, z, m) => !!lanes?.keepOff(x, z, m), gridAt: (x, z) => lanes?.gridAt(x, z) || null, onRoad: (x, z, m) => !!lanes?.onRoad(x, z, m) };
-	const regional = createRegional({ scene, island, globe: heightRef, hint, isPhone, F, toLL, toXZ, bayKm, bayWildKm: BAY_WILD_KM, roads: allRoads, lanes: laneRef });
+	const regional = createRegional({ scene, shared, island, globe: heightRef, hint, isPhone, F, toLL, toXZ, bayKm, bayWildKm: BAY_WILD_KM, roads: allRoads, lanes: laneRef });
 	lanes = createGlobeLanes({ scene, height, groundAt: (x, z) => bay.heightAt(x, z), isPhone, highways: roads, settlements: regional.settlements });
 	// Regional settlements paint their own streets; publish those same streets to driving,
 	// grading and intercity routing so claimed cities are not disconnected islands.

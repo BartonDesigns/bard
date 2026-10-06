@@ -109,7 +109,7 @@ export function card(b, center, size, rnd, color, sway, outwardFrom, normal) {
 // ---------- species ----------
 const BARK = new THREE.Color(0.62, 0.55, 0.47), PALM_BARK = new THREE.Color(0.86, 0.78, 0.66);
 
-function palm(seed, far, g = null) {
+export function palm(seed, far, g = null) {
 	const r = mulberry32(seed), trunk = new Builder(), crown = new Builder();
 	const H = g ? g.height * (0.85 + r() * 0.35) : 7.5 + r() * 3.5, lean = (g ? g.lean : 1.2) + r() * 2.2, la = r() * Math.PI * 2;
 	const FT = g ? g.frondTint : [1, 1, 1];
@@ -306,13 +306,18 @@ export function conifer(seed, far, mid, g = null) {
 			const sh = 0.45 + 0.55 * t;
 			card(crown, p, size * (0.8 + r() * 0.5) * (1 - t * 0.35), r, { r: 0.13 * sh * LT[0], g: 0.22 * sh * LT[1], b: 0.12 * sh * LT[2] }, 0.6 + 0.4 * t, o, V(dir.x * 0.5, 0.8, dir.z * 0.5).normalize());
 		}
+		// winter: snow lying along the top of the limb
+		if (g?.snow) for (let k = 0; k < (far ? 1 : 3); k++) {
+			const p = o.clone().lerp(e, 0.35 + k * 0.25).add(V((r() - 0.5) * 0.6, 0.35, (r() - 0.5) * 0.6)), w = 0.8 + 0.15 * r();
+			card(crown, p, size * 0.85 * (1 - t * 0.3), r, { r: w, g: w * 1.02, b: w * 1.08 }, 0.5 + 0.4 * t, o, V(0, 1, 0));
+		}
 	}
 	// the leader at the very top
 	for (let k = 0; k < (far ? 1 : 3); k++) card(crown, V(0, H * (0.97 + k * 0.015), 0), size * 0.7, r, { r: 0.12 * LT[0], g: 0.2 * LT[1], b: 0.11 * LT[2] }, 1, V(0, H * 0.8, 0));
 	return { parts: [trunk.geometry(), crown.geometry()], height: H };
 }
 
-function banana(seed) {
+export function banana(seed) {
 	// a banana grows as a clump: a swollen corm at the ground, the main stem, a few
 	// suckers coming up around it, and old leaves hanging brown down the stems
 	const r = mulberry32(seed), stem = new Builder(), leaves = new Builder();

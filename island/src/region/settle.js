@@ -59,7 +59,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	const sites = new Map();            // key -> site
 	const queue = [];                   // [site, i, j]
 	const stats = { built: 0, ms: 0, cells: 0, lots: 0, tris: 0 };
-	let epoch = -1, job = null, occupancyVersion = 0;
+	let epoch = -1, job = null, occupancyVersion = 0, treesVersion = 0;
 
 	// ---------- a site ----------
 	// desc: { key, kind, lat, lon, kit (kit id), pop, name, regionId, culture, palette, opts, lots? }
@@ -136,7 +136,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	function* buildCell(s, i, j) {
 		let tWork = 0, tLast = performance.now();
 		const kit = kitOf(s), lots = cellLots(s, i, j);
-		const G = new Geo(), glow = new Geo(), smoke = [], solids = [], spots = [], lights = [];
+		const G = new Geo(), glow = new Geo(), smoke = [], solids = [], spots = [], lights = [], trees = [];
 		G.seed = glow.seed = (s.seed ^ (i * 92821 + j * 68917)) >>> 0 || 1;
 		const opts = { ...(s.opts || {}), snow: snowOf(s) };
 		for (const L of lots) {
@@ -148,7 +148,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			if (L.role === 'house' && !foundation) continue;
 			const y = foundation?.y ?? ground(terrainLot.x, terrainLot.z);
 
-			const B = { G, glow, smoke: [], solid: [], lights: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense };
+			const B = { G, glow, smoke: [], solid: [], lights: [], trees: [], seat: null, seats: null, seatY: 0, lite: !!s.planned.dense };
 			const rot = L.rot + Math.PI;
 			G.frame(L.x, y, L.z, rot); glow.frame(L.x, y, L.z, rot);
 			const pal = basePalette(s.palette, kit, r, opts);
@@ -159,6 +159,8 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 			for (const [a, b, w, d, rr] of B.solid) { const [x, z] = toS(a, b); solids.push({ x, z, w, d, rot: rot + (rr || 0), y0: y - 1, h: h + 2 }); }
 			for (const [a, yy, b] of B.smoke) { const [x, z] = toS(a, b); if (((Math.abs(x * 7.1 + z * 3.3) | 0) % 100) / 100 < kit.smoke + 0.15) smoke.push(x, y + yy, z); }
 			for (const [a, yy, b] of B.lights) { const [x, z] = toS(a, b); lights.push([x, y + yy, z]); }
+			// (a great tree the lot keeps is grown with the region's plants, flora.js)
+			for (const [a, b, word, size] of B.trees) { const [x, z] = toS(a, b); trees.push({ x, z, word, size, yaw: rot + a }); }
 			const seats = B.seats || (B.seat ? [B.seat] : []);
 			for (const [a, b, yaw] of seats) { const [x, z] = toS(a, b); spots.push({ x, z, y: y + (B.seatY || 0), yaw: yaw + rot, kind: L.type, role: L.role }); }
 			if (L.role === 'house' || L.role === 'centre') { const [x, z] = toS(0, -L.d / 2 - 1.6); spots.push({ x, z, y: ground(s.x + x, s.z + z), yaw: rot + Math.PI, kind: 'door', role: L.role, lot: L.type }); }
@@ -180,7 +182,8 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 				G.frame(x, y - 0.35, z, f.rot); G.box(0, 0, 0, 6.2, 0.75, 0.45, wall, { r: 0 });
 			}
 		}
-		const C = { i, j, mesh: null, glow: null, ground: null, smoke: null, solids, spots, lights };
+		const C = { i, j, mesh: null, glow: null, ground: null, smoke: null, solids, spots, lights, trees };
+		if (trees.length) treesVersion++;
 		if (G.count()) { C.mesh = new THREE.Mesh(G.geometry(), mat); C.mesh.castShadow = !isPhone; C.mesh.receiveShadow = true; s.group.add(C.mesh); stats.tris += G.count() / 3; }
 		if (glow.count()) { C.glow = new THREE.Mesh(glow.geometry(), glowMat); s.group.add(C.glow); }
 		C.ground = paintCell(s, i, j, kit);
@@ -201,6 +204,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 	}
 	function freeCell(C) {
 		for (const m of [C.mesh, C.glow, C.ground, C.smoke]) if (m) { m.geometry.dispose(); m.parent?.remove(m); }
+		if (C.trees.length) treesVersion++;
 		stats.cells--;
 	}
 
@@ -441,5 +445,7 @@ export function createSettlements({ scene, ground, wet, isPhone = false, toXZ, F
 		return best ? { site: best, d: Math.max(0, bd) } : null;
 	}
 	function dispose() { for (const s of [...sites.values()]) drop(s); scene.remove(group); mat.dispose(); glowMat.dispose(); groundMat.dispose(); smokeMat.dispose(); }
-	return { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, roadTowns, spotsNear, nearest, dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
+	// the great trees of the built cells, where they stand now
+	function trees() { const out = []; for (const s of sites.values()) for (const C of s.cells.values()) for (const T of C.trees) out.push({ ...T, x: s.x + T.x, z: s.z + T.z }); return out; }
+	return { add, sites, update, push, blocked, vegetationBlocked: (x, z, m) => blocked(x, z, m, true), version: () => occupancyVersion, trees, treesVersion: () => treesVersion, roadTowns, spotsNear, nearest, dispose, group, info: () => ({ sites: sites.size, cells: stats.cells, built: stats.built, lots: stats.lots, queue: queue.length, msPerCell: Math.round(stats.ms * 10) / 10, ktris: Math.round(stats.tris / 1000) }), CELL };
 }
