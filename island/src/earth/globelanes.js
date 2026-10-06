@@ -69,7 +69,7 @@ export function gridSnap(lat, lon, half = 280) {
 }
 
 // the surfaces: 0 marked asphalt, 1 plain asphalt, 2 gravel, 3 dirt
-const GRAVEL = [0.5, 0.47, 0.41], DIRT = [0.46, 0.38, 0.28];
+const GRAVEL = [0.42, 0.39, 0.34], DIRT = [0.42, 0.34, 0.25];
 // the kits whose lanes are earth, not metalled
 const EARTH = /^(steppe|savanna|sahel|desert|outback|jungle|polar|station|himalaya|andes|island|kraal|camp)$/;
 const PAVED = /^(village|alpine|mediterranean|eastvillage|snow|eastcity|southcity|bazaar)$/;
@@ -594,6 +594,8 @@ export function createGlobeLanes({ scene, height, groundAt, isPhone, highways, s
 	function settle(cam) {
 		if (!cam) return;
 		for (let k = 0; k < 400; k++) {
+			// (the lanes planned again each round, for the places just drawn)
+			planT = 0;
 			update(0.6, cam, true);
 			while (tileJob && !tileJob.it.next().done);
 			tileJob = null;

@@ -33,3 +33,5 @@ console.log('roads near', out.length, JSON.stringify(cls));
 let ends = 0, met = 0;
 for (const r of out) for (const k of [0, r.pts.length - 2]) { ends++; if (out.some((q) => q !== r && [0, q.pts.length - 2].some((j) => Math.hypot(q.pts[j] - r.pts[k], q.pts[j + 1] - r.pts[k + 1]) < 2.5))) met++; }
 console.log('ends', ends, 'joined', met);
+for (let k = 0; k < 10; k++) S.update(0.6, cam, { budget: 2000 });
+console.log('cells', JSON.stringify(S.info()), [...S.sites.values()].map((s) => s.key + ':' + s.cells.size + ':' + Math.round(Math.hypot(s.x - cam.position.x, s.z - cam.position.z))).join(' '));

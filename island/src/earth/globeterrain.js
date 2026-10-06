@@ -40,6 +40,8 @@ float gfN(int k, uint s){
 	float e = gfH(i + ivec3(0, 0, 1), s), g = gfH(i + ivec3(1, 0, 1), s), h = gfH(i + ivec3(0, 1, 1), s), q = gfH(i + ivec3(1, 1, 1), s);
 	return mix(mix(mix(a, b, u.x), mix(c, d, u.x), u.y), mix(mix(e, g, u.x), mix(h, q, u.x), u.y), u.z);
 }
+// the cell of the lattice a point is in, as a number (the towns' blocks)
+float gfCell(int k, uint s){ float m = float(1 << k); vec3 t = uGF0 * m + vGP * m; return gfH(uGI0 * (1 << k) + ivec3(floor(t)), s); }
 vec3 gLin(vec3 c){ return pow(c, vec3(2.2)); }
 uniform sampler2D uGLoam, uGMoss, uGRock, uGSand; uniform vec4 uGPhK, uGFd; uniform ivec2 uGFdI; uniform int uGN2, uGN3;
 float gDetL = 0.5;
