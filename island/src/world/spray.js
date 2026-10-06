@@ -67,7 +67,7 @@ void main(){
 		az = atan(d.y, d.x) + (r2 - 0.5) * 0.6; sp = 0.4 + r2 * 0.9; el = -0.3; k = 0.12;
 	} else {
 		// thrown back out of the foot
-		float a = r3 * 6.2832, rr = e2.y * 0.3 * sqrt(r1);
+		float a = r3 * 6.2832, rr = e2.y * 0.45 * sqrt(r1);
 		o += vec3(cos(a) * rr, 0.0, sin(a) * rr);
 		sp = e1.z * mix(0.25, 1.0, r2 * r2); el = mix(0.35, 1.35, h1(n + 4.1)); az = a + (h1(n + 5.3) - 0.5);
 	}
@@ -113,7 +113,7 @@ void main(){
 	float c = dot(vd, uSunDir);
 	float hg = 0.12 * (1.0 - 0.49) / pow(1.49 - 1.4 * c, 1.5);
 	float ang = degrees(acos(clamp(-c, -1.0, 1.0)));
-	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.55 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb;
+	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.55 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb * smoothstep(30.0, 38.0, ang);
 	float glint = step(0.86, h1(n * 1.7 + floor(uTime * 14.0 + aSeed.y * 5.0)));
 	float sun = max(e2.w, 0.0);
 	vCol = uSunC * sun * (bow * bow * 1.0 + vec3(0.025 + hg * (0.12 + 1.6 * glint))) + uAmb * 0.18 + vec3(0.03, 0.04, 0.05) * max(-e2.w, 0.0);
@@ -173,7 +173,7 @@ void main(){
 	float c = dot(vd, uSunDir);
 	float hg = 0.12 * (1.0 - 0.36) / pow(1.36 - 1.2 * c, 1.5);
 	float ang = degrees(acos(clamp(-c, -1.0, 1.0)));
-	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.6 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb;
+	vec3 bow = texture2D(uBow, vec2(clamp((42.0 + (ang - 42.0) * 0.6 - 25.0) / 35.0, 0.0, 1.0), uRow)).rgb * smoothstep(30.0, 38.0, ang);
 	float sun = max(vL, 0.0);
 	vec3 col = uSunC * sun * (0.12 + hg * 1.3 + bow * bow * 3.0) + uAmb * 0.7 + vec3(0.05, 0.06, 0.07) * max(-vL, 0.0);
 	gl_FragColor = vec4(col, a);
@@ -372,6 +372,14 @@ export function createSpray(scene, shared, { isPhone = false, world } = {}) {
 			const d = wetOf.indexOf(null);
 			wetOf[d] = h; drape(d, h);
 		}
+		// (and the blade grass over it, where there is any: world/grass.js)
+		const WS = shared.uWetS?.value || [];
+		WS.forEach((v, k) => {
+			const h = wetList[k];
+			if (!h) return v.set(0, 0, 1, 0);
+			const ac = h.a0 + h.arc / 2, off = h.arc > 6.2 ? 0 : h.R * 0.45;
+			v.set(h.x + Math.cos(ac) * off, h.z + Math.sin(ac) * off, h.arc > 6.2 ? h.R : h.R * 0.75, h.wet * (1 - THREE.MathUtils.smoothstep(h.d, 50, 70)));
+		});
 		for (let d = 0; d < DECALS; d++) { const h = wetOf[d]; D[d].set(h ? h.wet * (1 - THREE.MathUtils.smoothstep(h.d, 60, 80)) : 0, h ? h.R * 1.05 : 1, 0, 0); }
 
 		// the falls in reach, sized by their drop and their width
