@@ -105,6 +105,12 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		}
 		return g;
 	}
+	// the floor as drawn too: where the ground mesh spans a dip finer than its grid, the drawn
+	// surface stands above the walked one, and a camera under it sees through the ground
+	function seenFloorAt(x, z, y) {
+		const g = floorAt(x, z, y);
+		return island.drawnAt && island.underFloor?.(x, z, y) == null ? Math.max(g, island.drawnAt(x, z)) : g;
+	}
 	function pushOut(p) {
 		// in a cave: only its walls (the village, trees and rocks overhead are not here)
 		if (island.underFloor?.(p.x, p.z, p.y - EYE) != null) { island.underPush?.(p, p.y - EYE); return; }
@@ -187,7 +193,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			// collider. It clamps a descent to the ground and removes only inward
 			// velocity, so lateral steering and crater exploration remain live.
 			s.orbit?.surface?.(s.pos, s.vel);
-			const floor = s.orbit?.high() ? -Infinity : Math.max(floorAt(s.pos.x, s.pos.z, s.pos.y) , 0) + 1.2;
+			// (fast and low, the floor rises with the speed: at x6 you skim over the fences and
+			// banks rather than through them at eye height)
+			const lift0 = 1.2 + Math.min(4, Math.max(0, Math.hypot(s.vel.x, s.vel.z) - 16) * 0.05);
+			const floor = s.orbit?.high() ? -Infinity : Math.max(seenFloorAt(s.pos.x, s.pos.z, s.pos.y), 0) + lift0;
 			if (s.pos.y < floor) { s.pos.y = floor; s.vel.y = Math.max(0, s.vel.y); }
 			// a ceiling above the land, so Mt Diablo can be flown over (out over the globe, earth/globe.js,
 			// a cruising height: the speed above grows with it, so a continent is minutes away)
@@ -210,7 +219,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (gNext - Math.max(gNow, s.pos.y - EYE) < 0.55 * Math.max(dt * 60, 1) || s.swimming) { s.pos.x = nx; s.pos.z = nz; }
 		else { s.vel.x *= 0.2; s.vel.z *= 0.2; }
 		pushOut(s.pos);
-		const ground = floorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
+		const ground = seenFloorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
 		const river = island.waterAt?.(s.pos.x, s.pos.z) ?? null;
 		const surface = Math.max(waveHeight(island, s.pos.x, s.pos.z, t, shared.uWave?.value ?? 1), river ?? -1e9);

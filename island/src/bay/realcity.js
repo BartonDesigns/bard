@@ -557,7 +557,9 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	function drawRoadMap(M, cx, cz) {
 		M.x = cx; M.z = cz;
 		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
-		const B = builder(M.ramp), Y = builder(M.ramp), Lb = builder(1.8), fine = !!M.paint;
+		// (a phone's maps are half the size: the ramps keep two texels, or the edges stair-step)
+		const ramp = M.ramp * (isPhone ? 2 : 1);
+		const B = builder(ramp), Y = builder(ramp), Lb = builder(1.8), fine = !!M.paint;
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
 		for (const r of near('roads', cx, cz, SIZE * 0.72)) {
 			// (a road added by hand is driven, not painted: where it runs through a mapped region the
