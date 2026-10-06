@@ -105,7 +105,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 		let cx = 0, cz = 0;
 		for (const p of rings[0].r) { cx += p.x; cz += p.z; }
 		cx /= rings[0].r.length; cz /= rings[0].r.length;
-		S.ponds.push({ id: i, level: lvl / 100, rings, cx, cz, area: Math.abs(rings[0].a) });
+		S.ponds.push({ id: i, level: Math.max(1.2, lvl / 100), rings, cx, cz, area: Math.abs(rings[0].a) });
 	}
 
 	// which pond holds a point: a 20 m raster over the whole reach (0 for none)
@@ -156,11 +156,11 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
 				const x = Lv.x0 + i * st, z = Lv.zN + j * st;
 				let P = pondAt(x, z), t;
-				if (P) t = P.level - 0.35;
+				if (P) t = Math.max(0.05, P.level - 2.5);
 				else {
-					// (just outside a pond: no higher than its brine, so the ground between doesn't show through it)
+					// (just outside a pond: under its brine, so the ground between doesn't show through it)
 					let lo = 1e9;
-					for (let a = 0; a < 8; a++) { const Q = pondAt(x + Math.cos(a * 0.785) * st, z + Math.sin(a * 0.785) * st); if (Q) lo = Math.min(lo, Q.level + 0.05); }
+					for (let a = 0; a < 8; a++) { const Q = pondAt(x + Math.cos(a * 0.785) * st, z + Math.sin(a * 0.785) * st); if (Q) lo = Math.min(lo, Q.level - 0.4); }
 					if (lo > 1e8) continue;
 					t = lo;
 				}
@@ -177,7 +177,9 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 	// the brine: its own colour, a drift of paler water across it, ripples catching the sun,
 	// the sky in it low down; or dry crust, scraped in stripes. Pale salt along the levees.
 	function pondMaterial(rim) {
-		const m = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, envMapIntensity: 0.25, polygonOffset: true, polygonOffsetFactor: rim ? -1 : 1, polygonOffsetUnits: rim ? -2 : 2 });
+		// (the rim drawn over the brine; the brine itself held well above the ground, not pushed back,
+		// which at a low angle would put it behind)
+		const m = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, envMapIntensity: 0.25, polygonOffset: rim, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, { uTime, uSkyHor });
 			sh.vertexShader = 'attribute vec3 aCol; attribute vec4 aPond; varying vec3 vSC; varying vec4 vSP; varying vec2 vSW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvSC = aCol; vSP = aPond; vSW = (modelMatrix * vec4(position, 1.0)).xz;');
@@ -225,11 +227,11 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 				mh -= smoothstep(0.88, 0.97, ch) * 0.4;
 				vec3 mud = mix(vec3(0.12, 0.1, 0.08), vec3(0.19, 0.16, 0.12), m2) * (0.85 + 0.25 * m4);
 				mud = mix(mud, vec3(0.24, 0.22, 0.09), smoothstep(0.5, 0.8, m1) * 0.35);
-				vec3 water = mix(vec3(0.04, 0.1, 0.16), vec3(0.06, 0.13, 0.17), m2);
+				vec3 water = mix(vec3(0.05, 0.1, 0.12), vec3(0.07, 0.12, 0.13), m2);
 				vec3 cord = mix(vec3(0.08, 0.16, 0.035), vec3(0.12, 0.22, 0.05), m3) * (0.8 + 0.3 * m4);
 				cord = mix(cord, mix(vec3(0.4, 0.33, 0.16), vec3(0.5, 0.42, 0.22), m3), uMarsh.y);
-				float red = smoothstep(0.42, 0.62, spN(mw / 24.0 + 9.0) * 0.7 + m3 * 0.3) * (0.25 + 0.75 * uMarsh.x);
-				vec3 pick = mix(mix(vec3(0.11, 0.15, 0.045), vec3(0.16, 0.19, 0.06), m4), mix(vec3(0.26, 0.05, 0.04), vec3(0.36, 0.09, 0.07), m4), red);
+				float red = smoothstep(0.45, 0.65, spN(mw / 96.0 + 9.0) * 0.6 + m1 * 0.25 + m3 * 0.15) * (0.2 + 0.6 * uMarsh.x);
+				vec3 pick = mix(mix(vec3(0.11, 0.15, 0.045), vec3(0.16, 0.19, 0.06), m4), mix(vec3(0.2, 0.06, 0.045), vec3(0.28, 0.09, 0.06), m4), red);
 				vec3 up = mix(vec3(0.28, 0.32, 0.17), vec3(0.42, 0.38, 0.22), uSeason * 0.7) * (0.85 + 0.3 * m3);
 				up = mix(up, vec3(0.1, 0.16, 0.06), smoothstep(0.7, 0.8, m3 * 0.6 + m4 * 0.4) * 0.8);
 				up = mix(up, vec3(0.75, 0.6, 0.06), smoothstep(0.86, 0.9, m4) * smoothstep(0.6, 0.75, m3) * (1.0 - uSeason * 0.5));
@@ -378,7 +380,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 			H[k] = h;
 			const inside = inPoly(marsh, x, z) && !pondAt(x, z);
 			// (strongest mid-marsh, fading out above the upland edge and into the bay)
-			E[k] = inside ? Math.min(1, Math.max(0, (h + 0.35) / 0.25)) * Math.min(1, Math.max(0, (1.9 - h) / 0.5)) : 0;
+			E[k] = inside ? Math.min(1, Math.max(0, (h + 0.12) / 0.2)) * Math.min(1, Math.max(0, (1.9 - h) / 0.5)) : 0;
 		}
 		for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
 			const k = j * nx + i, e = [k, k + 1, k + nx, k + nx + 1];
@@ -538,7 +540,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 					put(0, x, y - 0.05, z, 0.8 + r2 * 0.5, 0.8 + r1 * 0.5, col.r * g, col.g * g, col.b * g);
 				} else if (mh >= 0.34 && mh < 1.25 && r1 < 0.7) {
 					// pickleweed: green, the tips red in late summer and fall, in patches
-					const rk = (vn(x / 24 + 9, z / 24) * 0.7 + vn(x / 4, z / 4) * 0.3 > 0.52 ? 1 : 0) * (0.25 + 0.75 * red);
+					const rk = (vn(x / 96 + 9, z / 96) * 0.6 + vn(x / 64, z / 64) * 0.25 + vn(x / 4, z / 4) * 0.15 > 0.55 ? 1 : 0) * (0.2 + 0.6 * red);
 					col.setRGB(0.22 + 0.4 * rk, 0.3 - 0.2 * rk, 0.08 + 0.02 * rk);
 					put(1, x, y - 0.06, z, 0.6 + r2 * 0.5, 0.7 + r1 * 0.6, col.r, col.g, col.b);
 				} else if (mh >= 1.25) {
