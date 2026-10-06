@@ -508,6 +508,22 @@ export function createBayArea(shared, scene, island, BU) {
 						float photoL = 0.9 + (dot(texture2D(uLoam, vBW * 0.35).rgb, vec3(0.299, 0.587, 0.114)) - 0.5) * 0.82;
 						c *= mix(1.0, photoL / 0.9, grainK * 0.32);
 					}
+					// the streets, even here: asphalt, sidewalks and drives, trails and their lines, from
+					// the same road maps the full ground reads (texture reads only, no height work)
+					{
+						vec2 ru = (vBW - uRoadR.xy) / uRoadR.z, ru2 = (vBW - uRoadR2.xy) / uRoadR2.z;
+						float e1 = uRoadR.w * smoothstep(0.0, 0.08, min(min(ru.x, ru.y), min(1.0 - ru.x, 1.0 - ru.y)));
+						float e2 = uRoadR2.w * smoothstep(0.0, 0.05, min(min(ru2.x, ru2.y), min(1.0 - ru2.x, 1.0 - ru2.y)));
+						vec4 D1 = texture2D(uRoadMap, clamp(ru, 0.0, 1.0)), D2 = texture2D(uRoadMap2, clamp(ru2, 0.0, 1.0));
+						vec4 f1 = max(fwidth(D1) * 0.75, vec4(0.004)), f2 = max(fwidth(D2) * 0.75, vec4(0.004));
+						vec4 RM = mix(smoothstep(0.5 - f2, 0.5 + f2, D2) * e2, smoothstep(0.5 - f1, 0.5 + f1, D1), e1);
+						float Y1 = texture2D(uPaintMap, clamp(ru, 0.0, 1.0)).r, fy = max(fwidth(Y1) * 0.75, 0.004);
+						c = mix(c, mix(vec3(0.56, 0.42, 0.3), vec3(0.66, 0.52, 0.38), micro), RM.b);
+						c = mix(c, mix(vec3(0.6, 0.59, 0.55), vec3(0.7, 0.69, 0.65), micro), RM.g);
+						c = mix(c, mix(vec3(0.16, 0.16, 0.17), vec3(0.24, 0.24, 0.25), micro), RM.r);
+						c = mix(c, vec3(0.82), RM.a * e1 * RM.r);
+						c = mix(c, vec3(0.78, 0.62, 0.16), smoothstep(0.5 - fy, 0.5 + fy, Y1) * e1 * RM.r);
+					}
 					diffuseColor.rgb = c * (0.85 + 0.3 * n2) * (1.0 - uWet * 0.3);
 				}
 				#else
