@@ -27,6 +27,15 @@ const SKINS = {
 	young_african_female: 'human-young_african_female-2c0f99940e.webp', young_african_male: 'human-young_african_male-8b9e87bf3a.webp',
 };
 
+// a phone keeps the skins at half size (a quarter of the memory; a face is small on its screen)
+const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+function halve(im) {
+	if (!im || im.width <= 512) return im;
+	const cv = document.createElement('canvas');
+	cv.width = im.width >> 1; cv.height = im.height >> 1;
+	cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+	return cv;
+}
 const decode = (s, Type) => { const a = Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); return new Type(a.buffer); };
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
 export function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -54,7 +63,7 @@ export function loadPeopleAssets() {
 		};
 		for (const [n, s] of Object.entries(D.targets)) A.targets[n] = decode(s, Int16Array);
 		const loader = new THREE.TextureLoader();
-		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; ok(t); }, undefined, no));
+		const load = (f, srgb) => new Promise((ok, no) => loader.load(TEX(f), (t) => { t.flipY = false; t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.anisotropy = 4; if (PHONE) t.image = halve(t.image); ok(t); }, undefined, no));
 		await Promise.all(Object.entries(SKINS).map(async ([k, f]) => { A.tex[k] = await load(f, true); }));
 		A.fabric = fabricTextures();
 		A.faces = await faces;
@@ -405,6 +414,8 @@ function hairUp(A, P) {
 		U.uGrey.value.copy(cols.grey);
 		U.uSalt.value.set(cols.salt, cols.beardSalt, styleNow(W.style?.id)?.grain === 0 ? 0 : 1, 0);
 		U.uHC.value.copy(P.skull.c); U.uFace.value.set(P.skull.eyeY, P.skull.eyeZ);
+		const [l0, l1] = P.lobes;
+		if (l0 && l1) U.uEar.value.set((Math.abs(l0.x - P.skull.c.x) + Math.abs(l1.x - P.skull.c.x)) / 2, (l0.y + l1.y) / 2, (l0.z + l1.z) / 2, 1);
 		U.uSpec.value.set(SHINE[STYLES[W.style?.id]] ?? 1, 0.2);
 		U.uClip.value.set(capY, W.style?.fade ? W.style.fadeY : -99, W.style?.thin || 0, 0);
 		return m;
@@ -482,10 +493,11 @@ function faceMorphs(A, g, S) {
 	}
 }
 
-// brows: the hair's natural colour (a dye leaves them be), a shade darker; going grey hair
-// by hair on the head's own curve, some years behind it
+// brows: the hair's natural colour (a dye leaves them be), a shade darker (a woman's less
+// so, by how hers grow); going grey hair by hair on the head's own curve, some years behind it
 function browOf(d) {
-	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * 0.6));
+	const k = d.male ? 0.6 : 0.72 + 0.22 * rng(d.seed ^ 0xb40f)();
+	const top = Math.max(...d.hairColour), col = new THREE.Color(...d.hairColour.map((c) => c * Math.min(1, 0.5 / top) * k));
 	const g = greyOf(d, 12);
 	return { col, grey: g, greyCol: GREY.clone().lerp(WHITE, clamp((g - 0.85) / 0.15)) };
 }

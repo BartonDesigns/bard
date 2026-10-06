@@ -426,7 +426,7 @@ export function createFlora(scene, { ground, wet, blocked, isPhone = false, toLL
 	const R = isPhone ? 200 : 300, NEAR = isPhone ? 80 : 130;
 	// how far each small form is drawn (m), and how many of each part one mesh holds
 	const REACH = { grass: isPhone ? 60 : 90, fern: isPhone ? 60 : 90, banana: isPhone ? 80 : 160, shrub: isPhone ? 150 : 220, cactus: R };
-	const CAP = isPhone ? { near: 260, far: 500, low: 700 } : { near: 700, far: 1300, low: 1800 };
+	const CAP = isPhone ? { near: 200, far: 400, low: 550 } : { near: 700, far: 1300, low: 1800 };
 	const SEEDS = isPhone ? 1 : 2;
 
 	// ---------- materials, made as first wanted ----------

@@ -4,6 +4,19 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Resume here (6 October 2026, evening)
+
+- **Live:** main is at `23b99f7`, with everything in the release below plus the sprinkler layout. Sprinkler heads stand in the earth only (`earth()` in `world/sprinklers.js`).
+- **In progress on `claude/affectionate-heisenberg-3g4qv1`:**
+  - **Phone memory budget:** goal: stop iPhones losing graphics in the Bay. Notes are in `/tmp/claude-0/phonemem/`.
+  - **Hair refinement:** salt-and-pepper grey, no dark slabs, clean ears, opaque white beards, lighter brows. The look needs the owner's approval before it ships. Composites are in `/tmp/claude-0/hair/`.
+- **Ship steps:**
+  1. In `/tmp/claude-0/ship`, fast-forward to the branch.
+  2. Rebuild.
+  3. Serve the folder on 8768 and run `node /tmp/claude-0/planet/smoke-ship.js`. It must show 0 errors and "samplers ok".
+  4. `git push origin HEAD:main` (the owner allows this).
+- **Token budget:** the owner asks for fewer parallel agents and screenshots. Check with numbers first.
+
 ## Release (6 October 2026)
 
 - **Live ground fix (iPhone, Dougherty Valley):**

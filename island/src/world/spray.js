@@ -235,8 +235,8 @@ function puffTexture() {
 }
 
 export function createSpray(scene, shared, { isPhone = false, world } = {}) {
-	const NS = isPhone ? 5 : 10, NF = isPhone ? 2 : 4, ND = isPhone ? 6 : DECALS;
-	const DS = isPhone ? 450 : 1300, DF = isPhone ? 900 : 2200, MS = isPhone ? 12 : 22, MF = isPhone ? 18 : 36;
+	const NS = isPhone ? 4 : 10, NF = isPhone ? 2 : 4, ND = isPhone ? 6 : DECALS;
+	const DS = isPhone ? 380 : 1300, DF = isPhone ? 900 : 2200, MS = isPhone ? 12 : 22, MF = isPhone ? 18 : 36;
 	const group = new THREE.Group();
 	group.name = 'spray';
 	scene.add(group);

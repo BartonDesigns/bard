@@ -37,9 +37,11 @@ export const GREENS = [
 	[37.7960, -122.4050, 150, 130],            // (a placeholder kept small: Portsmouth Square)
 	[37.8070, -122.4330, 350, 110],            // the Marina Green
 ].map(([lat, lon, rx, rz]) => ({ ...toWorld(lat, lon), rx, rz }));
+const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 // how many mapped regions the ground shader tells from the procedural world at once: the
-// loaded ones nearest you (tiles side by side are merged into one box first)
-export const REAL_SLOTS = 16;
+// loaded ones nearest you (tiles side by side are merged into one box first; a phone loads
+// fewer, and its ground shader is smaller for it)
+export const REAL_SLOTS = PHONE ? 10 : 16;
 const SLOTS = Array.from({ length: REAL_SLOTS }, (v, i) => i);
 const NOWHERE = () => new THREE.Vector4(1e9, 1e9, -1e9, -1e9);
 export const REAL_U = {
@@ -94,11 +96,10 @@ export const realCovered = (x, z, m = 60) => inMapped(x, z) && inMapped(x - m, z
 export { REAL_TALL };
 const DRIVE = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'unknown']);
 const WALKED = new Set(['secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);   // sidewalks both sides
-const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 // a region is fetched when you come this near its edge and dropped when you are this far
 // (the buildings stand to 2 km, the trees a little further); a change this near you is
-// news to everything built round you (version())
-const LOAD = PHONE ? 2500 : 3000, DROP = PHONE ? 3600 : 4500, NEWS = 2600;
+// news to everything built round you (version()); a phone keeps less of the map in memory
+const LOAD = PHONE ? 2000 : 3000, DROP = PHONE ? 2800 : 4500, NEWS = 2600;
 // the coarse maps round you are drawn into one, at most this many texels a side
 const COMP = PHONE ? 1024 : 2048;
 
@@ -601,6 +602,8 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		render(M.rt, [B.mesh()], SIZE);
 		if (M.paint) render(M.paint, [Lb.mesh(), Y.mesh()], SIZE);
 		renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
+		// (the shapes are drawn: let them go now, not at the next redraw; they run to tens of MB)
+		for (const m of [...scene2.children]) { scene2.remove(m); m.geometry.dispose(); }
 		M.u[0].value = M.rt.texture;
 		M.u[1].value.set(x0, z0, SIZE, 1);
 		if (M.paint) M.u[2].value = M.paint.texture;

@@ -11,6 +11,8 @@
 import * as THREE from 'three';
 
 const BASE = new URL('../../textures/', import.meta.url);
+// a phone cuts its swatches at half the size (a quarter of the memory)
+const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 const images = new Map();
 // the house atlases are not made yet (ASSET_PROMPTS_HOUSES.md): don't ask the server for them;
 // set this true when textures/houses/ is added
@@ -47,7 +49,7 @@ export function swatch(path, grid, cell, opt = {}) {
 	let p = tiles.get(key);
 	if (p) return p;
 	p = image(path).then((im) => {
-		const S = opt.size || 512, inset = 6;
+		const S = opt.size || (PHONE ? 256 : 512), inset = 6;
 		const cw = im.width / grid[0], ch = im.height / grid[1];
 		const cv = document.createElement('canvas');
 		cv.width = cv.height = S;
@@ -78,7 +80,7 @@ export function swatch(path, grid, cell, opt = {}) {
 		if (opt.normal) {
 			const N = document.createElement('canvas');
 			N.width = N.height = S;
-			const ng = N.getContext('2d'), nd = ng.createImageData(S, S), st = opt.normal;
+			const ng = N.getContext('2d'), nd = ng.createImageData(S, S), st = opt.normal * S / 512;      // (the same relief at any size)
 			const h = (x, y) => L[((y + S) % S) * S + ((x + S) % S)];
 			for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
 				const dx = (h(x - 1, y) - h(x + 1, y)) * st, dy = (h(x, y - 1) - h(x, y + 1)) * st, l = Math.hypot(dx, dy, 1), j = (y * S + x) * 4;

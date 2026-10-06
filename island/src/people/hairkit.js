@@ -171,8 +171,14 @@ function fixed(A, St, kind) {
 		}
 		if (!tw) { SI[v * 4] = head; SW[v * 4] = 1; } else for (let q = 0; q < 4; q++) SW[v * 4 + q] /= tw;
 		for (let c = 0; c < 3; c++) { N[v * 3 + c] = tn[v * 8 + 4 + c] / 127; T[v * 3 + c] = tn[v * 8 + c] / 127; }
+		// (hair hanging below the jaw faces out, not down at the ground: else it lies in its
+		// own shade, a dark slab)
+		if (hk < 1) {
+			const ny = N[v * 3 + 1], my = ny + (Math.max(ny, 0.1) - ny) * (1 - hk), l = Math.hypot(N[v * 3], my, N[v * 3 + 2]) || 1;
+			N[v * 3] /= l; N[v * 3 + 1] = my / l; N[v * 3 + 2] /= l;
+		}
 		UV[v * 2] = uv[v * 2] / 65535; UV[v * 2 + 1] = uv[v * 2 + 1] / 65535;
-		K[v * 3] = root[v] / 255; K[v * 3 + 1] = kind; K[v * 3 + 2] = 1;
+		K[v * 3] = root[v] / 255; K[v * 3 + 1] = kind;
 	}
 	// a beard opens and smiles with the mouth
 	let M = null;
@@ -190,6 +196,8 @@ function fixed(A, St, kind) {
 	for (let i = 0; i < St.idx.length; i += 3) { const a = find(St.idx[i]); up[find(St.idx[i + 1])] = a; up[find(St.idx[i + 2])] = a; }
 	const piece = new Int32Array(nv), nbs = Array.from({ length: nv }, () => new Set());
 	for (let v = 0; v < nv; v++) piece[v] = find(v);
+	// (each card its own seed, so cards that share the texture do not grey alike)
+	for (let v = 0; v < nv; v++) K[v * 3 + 2] = (Math.imul(piece[v] + 1, 2654435761) >>> 0) / 4294967296;
 	for (let i = 0; i < St.idx.length; i += 3) for (let j = 0; j < 3; j++) { const a = St.idx[i + j], b = St.idx[i + (j + 1) % 3]; nbs[a].add(b); nbs[b].add(a); }
 	const nb0 = new Int32Array(nv + 1);
 	for (let v = 0; v < nv; v++) nb0[v + 1] = nb0[v] + nbs[v].size;
@@ -430,6 +438,7 @@ uniform vec4 uClip;
 uniform vec4 uSalt;
 uniform vec3 uHC;
 uniform vec2 uFace;
+uniform vec4 uEar;
 uniform vec2 uSpec;
 float hairSpec = 1.0;
 varying vec3 vHT;
@@ -495,9 +504,16 @@ const FRAG = /* glsl */`
 	vec3 col;
 	if (kind < 0.5) {
 		col = mix(uTip, uRoot, smoothstep(0.6, 1.0, vHK.x));
-		// salt and pepper: hairs gone grey among the rest, the temples well ahead of the
-		// crown while there are few
-		if (uSalt.x > 0.0) col = mix(col, uGrey * (0.85 + g * 0.3), step(hh(cell), clamp(uSalt.x * (0.5 + 1.2 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))) + uSalt.x * uSalt.x * 0.5, 0.0, 1.0)) * 0.9);
+		// salt and pepper: single hairs gone grey among the rest, the temples a little ahead
+		// of the crown while there are few. The grey ones follow the strands painted in the
+		// texture (by their shade, each card its own), whichever way they run; where they
+		// are finer than a pixel, the mix of them
+		if (uSalt.x > 0.0) {
+			float s = clamp(uSalt.x * (0.8 + 0.45 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))) + uSalt.x * uSalt.x * 0.3, 0.0, 1.0);
+			float gk = fract(g * 23.0 + vHK.z * 7.0), fw = length(fwidth(vMapUv * 512.0));
+			float pick = mix(1.0 - smoothstep(s - 0.06, s + 0.06, gk), s, smoothstep(1.2, 3.0, fw));
+			col = mix(col, uGrey * (0.85 + g * 0.3), pick * 0.92);
+		}
 		// cut away under a cap; tapered into the painted crop down a fade, each strand
 		// ending at its own height; thin at the crown
 		a *= 1.0 - smoothstep(uClip.x - 0.005, uClip.x + 0.004, vRest.y);
@@ -512,6 +528,14 @@ const FRAG = /* glsl */`
 			float e = hh(cell + 23.0) * 0.6 + 0.2;
 			a *= smoothstep(e - 0.03, e + 0.03, 1.0 - cl);
 		}
+		// the ears kept clear: nothing lying on them or on the skin just in front, where a
+		// stray strand would poke through (hair standing out over them stays)
+		if (uEar.w > 0.0) {
+			vec3 eq = vec3(abs(vRest.x - uHC.x), vRest.y, vRest.z) - uEar.xyz;
+			float ec = smoothstep(-0.02, -0.01, eq.z) * (1.0 - smoothstep(0.035, 0.045, eq.z)) * smoothstep(-0.015, -0.005, eq.y) * (1.0 - smoothstep(0.06, 0.07, eq.y)) * (1.0 - smoothstep(0.004, 0.012, eq.x));
+			float e = hh(cell + 37.0) * 0.6 + 0.2;
+			a *= smoothstep(e - 0.03, e + 0.03, 1.0 - ec);
+		}
 		if (uClip.z > 0.0) a *= 1.0 - uClip.z * 0.85 * smoothstep(0.8, 0.95, dot(normalize(vRest - uHC), normalize(vec3(0.1, 0.9, -0.45)))) * step(0.35, hh(floor(vMapUv * 200.0)));
 	} else {
 		col = uBeard.rgb * mix(1.0, 0.65, vHK.x);
@@ -522,6 +546,9 @@ const FRAG = /* glsl */`
 			float far = kind > 1.5 ? max(step(fract(kind), 0.01), smoothstep(0.2, 0.6, fwidth(vMapUv.x * 420.0))) : 0.0;
 			col = mix(col, uGrey, mix(step(hh(floor(vMapUv * vec2(420.0, 70.0)) + 5.0), s), s, far));
 		}
+		// (a light beard reads as a mass of hair, not a veil: more cover the lighter it is,
+		// the edges still soft)
+		a = 1.0 - pow(1.0 - clamp(a, 0.0, 1.0), 1.0 + 3.0 * smoothstep(0.1, 0.4, dot(col, vec3(0.3, 0.59, 0.11))));
 	}
 	diffuseColor.rgb = col * g * 2.0;
 	diffuseColor.a *= a;
@@ -539,7 +566,7 @@ export function kitMaterial(tex, beard = false) {
 		: new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide, alphaTest: 0.4, alphaToCoverage: true });
 	const U = {
 		uRoot: { value: new THREE.Color() }, uTip: { value: new THREE.Color() }, uGrey: { value: new THREE.Color() }, uBeard: { value: new THREE.Vector4(0, 0, 0, 1) },
-		uClip: { value: new THREE.Vector4(99, -99, 0, 0) }, uSpec: { value: new THREE.Vector2(1, 0.5) }, uSalt: { value: new THREE.Vector4(0, 0, 0, 0) }, uHC: { value: new THREE.Vector3() }, uFace: { value: new THREE.Vector2() },
+		uClip: { value: new THREE.Vector4(99, -99, 0, 0) }, uSpec: { value: new THREE.Vector2(1, 0.5) }, uSalt: { value: new THREE.Vector4(0, 0, 0, 0) }, uHC: { value: new THREE.Vector3() }, uFace: { value: new THREE.Vector2() }, uEar: { value: new THREE.Vector4() },
 	};
 	m.userData.U = U;
 	m.onBeforeCompile = (sh, r) => {
@@ -553,8 +580,11 @@ export function kitMaterial(tex, beard = false) {
 		sh.fragmentShader = (msaa || beard ? '' : '#undef ALPHA_TO_COVERAGE\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + LIGHT)
 			.replace('#include <map_fragment>', FRAG)
+			// (lit from either side as from outside: a card seen from within the hair is still
+			// hair, not a dark slab)
+			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal *= faceDirection;\nnonPerturbedNormal = normal;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-6' + (beard ? '-b' : msaa ? '' : '-c');
+	m.customProgramCacheKey = () => 'crysis-hairkit-7' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

@@ -503,7 +503,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 		return g;
 	})();
 	const plantM = new THREE.MeshStandardMaterial({ roughness: 0.85, vertexColors: true });
-	const CAP = isPhone ? [1600, 1400, 220, 900] : [4200, 3600, 600, 2400];
+	const CAP = isPhone ? [1200, 1000, 160, 650] : [4200, 3600, 600, 2400];
 	const kinds = [tuftG, matG, bushG, tuftG].map((g, i) => {
 		const m = new THREE.InstancedMesh(g, i === 1 ? new THREE.MeshStandardMaterial({ roughness: 0.75 }) : i === 2 ? plantM : tuftM, CAP[i]);
 		m.count = 0; m.frustumCulled = false;
@@ -513,7 +513,7 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 	});
 	let plantAt = null, job = null;
 	function* plant(cx, cz) {
-		const R = isPhone ? 90 : 140, sp = isPhone ? 2.6 : 2, n = [0, 0, 0, 0], col = new THREE.Color();
+		const R = isPhone ? 80 : 140, sp = isPhone ? 2.6 : 2, n = [0, 0, 0, 0], col = new THREE.Color();
 		const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
 		const red = uMarsh.value.x, straw = uMarsh.value.y, dry = REAL_U.uSeason.value;
 		const put = (k, x, y, z, sx, sy, r, g, b) => {
@@ -587,16 +587,18 @@ export function createSaltPonds(scene, bay, shared, { isPhone = false } = {}) {
 	// ---------- each frame ----------
 	bay.ready?.then(() => { S.ready = bay.loaded(); });
 	let tSeason = 0, builder = null;
+	// how near the ponds' middle they are seen (a phone sees them, and builds them, only nearer)
+	const SEEN = isPhone ? 9000 : 30000;
 	function update(dt, t, camera) {
+		const c = camera.position, far = Math.hypot(c.x - CX, c.z - CZ) - 16000;
 		if (!S.built) {
-			if (!S.ready) return;
+			if (!S.ready || (isPhone && far > SEEN + c.y * 4)) return;
 			// (a piece a frame)
 			builder = builder || (function* () { regrade(); yield; buildPonds(); yield; buildLevees(); yield; yield* buildMarsh(); buildPylons(); S.built = true; })();
 			builder.next();
 			return;
 		}
-		const c = camera.position, far = Math.hypot(c.x - CX, c.z - CZ) - 16000;
-		root.visible = far < 30000 + c.y * 4;
+		root.visible = far < SEEN + c.y * 4;
 		if (!root.visible) return;
 		tSeason -= dt;
 		if (tSeason <= 0) {

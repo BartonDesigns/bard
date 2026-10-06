@@ -49,9 +49,9 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 	group.name = 'globe trees';
 	scene.add(group);
 	const leafTex = TX.leafCluster(), needleTex = TX.fernFrond(), barkT = TX.woodBark(); barkT.repeat.set(2, 3);
-	const NEAR = isPhone ? 260 : 380, FAR = isPhone ? 1300 : 2400;
+	const NEAR = isPhone ? 260 : 380, FAR = isPhone ? 1150 : 2400;
 	const BAND = { near: [-2, -1, NEAR - 40, NEAR], far: [NEAR - 40, NEAR, FAR - 300, FAR] };
-	const CAP = isPhone ? { near: 1500, far: 5000 } : { near: 3500, far: 14000 };
+	const CAP = isPhone ? { near: 1100, far: 3800 } : { near: 3500, far: 14000 };
 	const G = {
 		broad: { height: 12, crown: 'round', bark: [1.05, 1, 0.95], leaf: [1, 1.05, 0.85] },
 		// (naturalist: grey-brown bark, a spruce's or fir's; the red bark is the coast redwood's alone)

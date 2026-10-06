@@ -40,7 +40,8 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	// The fleets (vehicles/fleet.js) draw them by distance: the real models and the cabins
 	// close by, coarser lofts further off, and only the nearer ones in the sun's shadow pass.
 	const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent);
-	const parkedFleet = createFleet(group, { cap: 1600, isPhone, night }), movingFleet = createFleet(group, { cap: 120, isPhone, night });
+	// (a phone holds fewer parked cars a kind: their instance buffers run to tens of MB)
+	const parkedFleet = createFleet(group, { cap: isPhone ? 800 : 1600, isPhone, night }), movingFleet = createFleet(group, { cap: 120, isPhone, night });
 	// The parked cars are placed into a plain store, then shared out between the levels as
 	// you move. Each has an id (kind and place) that the owners (vehicles/life.js) use, and a
 	// car whose owner has driven it off is hidden from its space until they are back.

@@ -104,11 +104,12 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 		}
 	}
 	// the brows: short hairs lying on the skin along each brow's arch, thick at the inner
-	// end and thinning to the tail; inner hairs stand up, the rest sweep outward; the grey
+	// end and thinning to the tail; inner hairs stand up (less on a woman), the rest sweep outward; the grey
 	// share of them (grey) drawn grey
 	const B = F.brow, n0 = new THREE.Vector3(), n1 = new THREE.Vector3(), cx = (eyeC[0].x + eyeC[1].x) / 2;
-	// (a woman's finer than a man's)
-	const fine = P.dna.male ? 1 : 0.82, dens = (0.7 + rnd() * 0.6) * fine, thick = (0.8 + rnd() * 0.45) * fine;
+	// (a woman's finer than a man's, and more varied: some full, most thin and tapering)
+	const man = P.dna.male, dens = man ? 0.7 + rnd() * 0.6 : 0.36 + rnd() * 0.44, thick = man ? 0.8 + rnd() * 0.45 : 0.45 + rnd() * 0.4;
+	const tail = man ? 1 : 0.55 + rnd() * 0.4, hw = man ? 0.0014 : 0.0011;
 	// the skin round the brows (its vertices and normals, in a fine grid), so that every
 	// hair lies on it, a hair's width out, whatever the brow ridge's shape
 	const onSkin = skinNear(A, p, B);
@@ -117,15 +118,15 @@ export function faceDetail(A, F, P, p, S, rnd, normalOf, grey = 0) {
 		if (tb < ta) continue;
 		const a = new THREE.Vector3(...at(va)), b = new THREE.Vector3(...at(vb)), side = Math.sign(a.x - cx) || 1;
 		normalOf(va, n0); normalOf(vb, n1);
-		const count = Math.round(54 * dens * (1.15 - ta * 0.5));
+		const count = Math.round(54 * dens * (1.15 - ta * (man ? 0.5 : 0.75)));
 		for (let h = 0; h < count; h++) {
 			const f = rnd(), t = ta + (tb - ta) * f, n = n0.clone().lerp(n1, f).normalize();
-			const band = (0.0075 * (1 - t) + 0.0028 * t) * thick * S;
+			const band = (0.0075 * (1 - t) + 0.0028 * t * tail) * thick * S;
 			const root = a.clone().lerp(b, f).add(new THREE.Vector3(0, (rnd() - 0.45) * band, 0)).addScaledVector(n, 0.0005);
-			const ang = THREE.MathUtils.lerp(1.3, -0.35, Math.min(1, t * 1.25)) + (rnd() - 0.5) * 0.45;
+			const ang = THREE.MathUtils.lerp(man ? 1.3 : 0.85, -0.35, Math.min(1, t * 1.25)) + (rnd() - 0.5) * 0.45;
 			const dir = new THREE.Vector3(Math.cos(ang) * side, Math.sin(ang), 0);
 			dir.addScaledVector(n, -dir.dot(n)).normalize();
-			const len = (0.005 + rnd() * 0.004) * S, wid = 0.0014 * S, kind = grey && hash(j * 131 + h) < grey ? 4 : 2;
+			const len = (0.005 + rnd() * 0.004) * S, wid = hw * S, kind = grey && hash(j * 131 + h) < grey ? 4 : 2;
 			const tip = root.clone().addScaledVector(dir, len).addScaledVector(n, 0.0006);
 			onSkin(root, 0.0006); onSkin(tip, 0.0008);
 			const sv = new THREE.Vector3().crossVectors(n, dir).normalize().multiplyScalar(wid / 2);
