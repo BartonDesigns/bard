@@ -552,6 +552,38 @@ export function createWater(scene, shared, opts = {}) {
 		return r && !r.L.ice[r.k] ? r.level : null;
 	}
 	function inWater(x, z) { return !!lakeAt(x, z) || !!riverAt(x, z, 1.2); }
+	// where a stream falls: a steep step in its bed (a cascade, a chute), or its last drop
+	// into a lake below; each { x, y, z } at its foot, { lx, ly, lz } at its lip (world/spray.js)
+	function fallsOf(T) {
+		if (T.falls) return T.falls;
+		const out = [];
+		for (const L of T.lines) {
+			if (L.conc) continue;
+			let last = -1e9;
+			for (let k = 0; k + 1 < L.n; k++) {
+				let j = k + 1;
+				while (j + 1 < L.n && L.s[j] - L.s[k] < 10) j++;
+				const run = Math.max(1, L.s[j] - L.s[k]), drop = L.lv[k] - L.lv[j];
+				if (drop < 0.8 || drop / run < 0.09 || L.s[j] - last < 30 || L.ice[j]) continue;
+				last = L.s[j];
+				out.push({ x: L.x[j], y: L.lv[j], z: L.z[j], lx: L.x[k], ly: L.lv[k], lz: L.z[k], drop, w: L.w[j] });
+				k = j;
+			}
+			const e = L.n - 1, M = e > 0 ? lakeAt(L.x[e], L.z[e]) : null;
+			if (M && !M.ice && L.lv[e - 1] - M.level > 0.8) out.push({ x: L.x[e], y: M.level, z: L.z[e], lx: L.x[e - 1], ly: L.lv[e - 1], lz: L.z[e - 1], drop: L.lv[e - 1] - M.level, w: L.w[e] });
+		}
+		if (T.built) T.falls = out;
+		return out;
+	}
+	function falls(x, z, r) {
+		if (!S.ready || lookU.value.x > 0.5) return [];
+		const out = [];
+		for (const T of S.tiles.values()) {
+			if (Math.max(Math.abs((T.i + 0.5) * TILE - x), Math.abs((T.j + 0.5) * TILE - z)) > TILE / 2 + r) continue;
+			for (const f of fallsOf(T)) if (Math.hypot(f.x - x, f.z - z) < r) out.push(f);
+		}
+		return out;
+	}
 
 	// ---------- a tile's ribbons of water, and the trees along its banks ----------
 	function* buildTile(T) {
@@ -1146,7 +1178,7 @@ export function createWater(scene, shared, opts = {}) {
 		return { ready: S.ready, lakes: S.lakes.length, lakeMeshes: S.lakes.filter((L) => L.mesh).length, tiles: S.tiles.size, built: S.stats.built, carved: atlas ? atlas.count() : 0, decks: decks.size, birds: flock.length, queue: S.jobs.length + (cur ? 1 : 0), longestMs: Math.round(S.stats.longest * 10) / 10, slowestStepMs: Math.round(S.stats.slowest * 10) / 10, spikes: S.stats.spikes, sources: sources.map((q) => q.name) };
 	}
 	return {
-		group: root, update, waterAt, inWater, nameAt, kindAt, floor, info, ready: () => S.ready,
+		group: root, update, waterAt, inWater, nameAt, kindAt, floor, info, falls, ready: () => S.ready,
 		riverAt: (x, z) => { const r = riverAt(x, z, 2); return r ? { name: r.L.name, level: r.level, width: r.hw * 2 } : null; },
 		hasRiver: (x, z) => !!riverAt(x, z, 2),
 		decks: () => [...decks.values()].map((D) => ({ x: D.x, z: D.z, own: D.own, span: D.span })),

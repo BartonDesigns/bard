@@ -12,6 +12,7 @@ import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
 import { createSunRays } from './world/sunrays.js';
+import { createSpray } from './world/spray.js';
 import { createVegetation } from './world/vegetation.js';
 import { createGrass } from './world/grass.js';
 import { createLitter } from './world/litter.js';
@@ -800,6 +801,9 @@ export function createIslandWorld() {
 		// sunbeams through the trees in mist (world/sunrays.js)
 		world.rays = createSunRays(scene, shared, renderer, { isPhone, sun: sky.sun, air: sky.uniforms.uAir });
 		world.rays.quality(quality);
+		// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
+		world.spray = createSpray(scene, shared, { isPhone, world: () => world });
+		world.spray.quality(quality);
 		if (waterPlan) {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
 			island.waterAt = (x, z) => world?.water?.waterAt(x, z) ?? null;
@@ -1004,6 +1008,7 @@ export function createIslandWorld() {
 		world.medieval?.dispose();
 		world.boardwalk?.destroy();
 		world.rays?.dispose();
+		world.spray?.dispose();
 		release();
 		while (scene.children.length) scene.remove(scene.children[0]);
 		renderer.renderLists.dispose();
@@ -1156,6 +1161,7 @@ export function createIslandWorld() {
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = quality !== 'low';
 		world?.rays?.quality(quality);
+		world?.spray?.quality(quality);
 		resize();
 	}
 
@@ -1433,6 +1439,7 @@ export function createIslandWorld() {
 		W.freeways?.update(camera);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
+		W.spray?.update(dt, camera);
 		if (W.tidepools) {
 			W.tidepools.update(dt, time, camera);
 			// arriving on a reef: what to look for
