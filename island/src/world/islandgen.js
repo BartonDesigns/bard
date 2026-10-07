@@ -104,7 +104,7 @@ export function generateIsland(params = {}) {
 			const basin = smoothstep(0.55, 0.7, nz.fbm(wx * 0.004 + 11, wz * 0.004 - 8, 3)) * 20 * inland;
 			return keep + Math.max(0, up + plateau + spire - basin);
 		}
-		if (kind === 'crater') {
+		if (kind === 'crater' || kind === 'lunar') {
 			// airless-looking ground pocked by craters with raised rims
 			let c = 0;
 			for (const q of craters) {
@@ -112,7 +112,7 @@ export function generateIsland(params = {}) {
 				if (d > 1.6) continue;
 				c += (d < 1 ? -(1 - d * d) * q.r * 0.25 : 0) + Math.exp(-Math.pow((d - 1) * 5, 2)) * q.r * 0.08;
 			}
-			return keep + Math.max(-2, up * 0.7 + c * inland);
+			return keep + Math.max(-2, up * (kind === 'lunar' ? 0.45 : 0.7) + c * inland);
 		}
 		return h;
 	}
@@ -120,6 +120,11 @@ export function generateIsland(params = {}) {
 	if (kind === 'crater') for (let i = 0; i < 16; i++) {
 		const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * R * 0.75;
 		craters.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 20 + Math.pow(rand(), 2) * 110 });
+	}
+	// the Moon: many more craters, from pits to a few broad basins
+	if (kind === 'lunar') for (let i = 0; i < 46; i++) {
+		const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * R * 0.85;
+		craters.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 12 + Math.pow(rand(), 2.6) * 230 });
 	}
 
 	const height = new Float32Array(N * N);
@@ -422,6 +427,6 @@ export function generateIsland(params = {}) {
 	return {
 		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn,
 		height, masks, heightAt, normalAt, maskAt, shapeAt: shape, coastAt, distToPath,
-		biome: params.biome || 'tropical',
+		biome: params.biome || 'tropical', gravity: params.profile?.gravity || 1,
 	};
 }

@@ -19,7 +19,7 @@ import { createLitter } from './world/litter.js';
 import { createVillage } from './world/village.js';
 import { createDistant } from './world/distant.js';
 import { createPlayer } from './player.js';
-import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
+import { flightMultiplier, nextFlightSpeed, speedLabel } from './flight-speed.js';
 import { createMusic } from './music.js';
 import { createFauna } from './fauna.js';
 import { createBoat } from './boat.js';
@@ -248,7 +248,7 @@ function buildDom() {
 	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
 	const fly = button('✈', 'Fly (F)', 'width:44px;font-size:18px;', 'mode 20');
-	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
+	const boost = button('×1', 'Cycle flight speed: 1×, 3×, 6×, 9×, and in space up to 100,000× (B)', 'width:44px;font-size:13px;display:none;', 'mode 21');
 	const down = button('⇣', 'Descend', 'width:64px;height:64px;border-radius:50%;font-size:22px;display:none;', 'big 20');
 	const shell = button('🐚', 'Pick up the shell (E)', 'display:none;', 'prompt 30');
 	const toss = button('Throw', 'Throw it (T)', 'display:none;');
@@ -883,7 +883,7 @@ export function createIslandWorld() {
 		state.biome = params.biome;
 		world.orbit = createOrbitalFlight({ renderer, camera, dom, world, earth, seed, profile, shared,
 			location: () => earth ? globeLL(camera.position.x, camera.position.z) : { lat: 0, lon: 0 },
-			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint,
+			sun: () => shared.uSunDir.value, departed: () => share.keep(true, true), hint, voyage,
 		});
 		// warm every shader once, behind the loading card, so turning your head never stalls
 		player.update(0, 0);
@@ -1278,8 +1278,8 @@ export function createIslandWorld() {
 		const dd = P.flying ? 'block' : 'none'; if (dom.down.style.display !== dd) dom.down.style.display = dd;
 		const fb = P.flying ? '#01a982' : 'rgba(8,20,26,.55)'; if (dom.fly.style.background !== fb) dom.fly.style.background = fb;
 		if (!P.flying && !W.orbit?.active?.()) P.boost = 1;
-		const speed = flightMultiplier(P.boost), speedTitle = `Flight speed ${speed}×; next ${nextFlightSpeed(speed)}× (B)`;
-		if (dom.boost.textContent !== `×${speed}`) dom.boost.textContent = `×${speed}`;
+		const speed = flightMultiplier(P.boost), speedTitle = `Flight speed ${speed}×; next ${nextFlightSpeed(speed, !!P.orbit?.deep?.())}× (B)`;
+		if (dom.boost.textContent !== speedLabel(speed)) dom.boost.textContent = speedLabel(speed);
 		if (dom.boost.title !== speedTitle) { dom.boost.title = speedTitle; dom.boost.setAttribute('aria-label', speedTitle); }
 		const bd = P.flying ? '' : 'none', bb = speed > 1 ? '#01a982' : 'rgba(8,20,26,.55)';
 		if (dom.boost.style.display !== bd) dom.boost.style.display = bd; if (dom.boost.style.background !== bb) dom.boost.style.background = bb;
@@ -1678,6 +1678,20 @@ export function createIslandWorld() {
 	dom.gear.onclick = (e) => { e.stopPropagation(); dom.panel.style.display = dom.panel.style.display === 'block' ? 'none' : 'block'; };
 	for (const el of [dom.back, dom.jump, dom.gear, dom.panel, dom.act, dom.launch, dom.fly, dom.boost, dom.down, dom.shell, dom.toss, dom.place]) for (const ev of ['pointerdown', 'touchstart', 'keydown']) el.addEventListener(ev, (e) => e.stopPropagation());
 
+	// A warp or a touchdown to another world: the same world build a flight landing uses.
+	// With dest.orbit the ship drops out that high above the new world's island.
+	async function voyage(dest) {
+		const params = dest.earth ? { seed: 1337, earth: true } : { seed: dest.seed, biome: dest.type, earth: false, origin: { seed: dest.seed, type: dest.type, id: `warp-${dest.type.toLowerCase()}`, earth: false } };
+		await api.open(params);
+		const P = world?.player.state;
+		if (!P) return false;
+		if (dest.orbit) {
+			P.flying = true; P.vel.set(0, 0, 0); P.pos.y = dest.orbit; P.pitch = -1.1; P.boost = 1;
+			camera.position.copy(P.pos);
+			hint(`${dest.name} below. Descend (C) to land, or warp on.`, 5000);
+		} else hint(world.island.gravity < 1 ? `${dest.name}: low gravity. Jump and see.` : `Landed on ${dest.name}.`, 5000);
+		return true;
+	}
 	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,

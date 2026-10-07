@@ -116,10 +116,16 @@ function agx(c, exposure, out) {
 function airOf(P) {
 	const t = P?.air?.tint;
 	if (!t || !P.air.mix) return new THREE.Vector4(1, 1, 1, 0);
+	// an airless world: the sky is dark even by day (the tint is not brightened)
+	if (P.airless) return new THREE.Vector4(t[0], t[1], t[2], P.air.mix);
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
 }
 export function createSky(scene, shared, renderer, { isPhone = false, latitude = () => BAY_LATITUDE } = {}) {
+	// The air uniform is made once per page; an airless world darkens it, and the next world
+	// with air gets the neutral value back.
+	const airR = cloudReflectU(shared).uAirR;
+	if (shared.planet?.airless) { airR.value.copy(airOf(shared.planet)); airR.dark = true; } else if (airR.dark) { airR.value.set(1, 1, 1, 0); airR.dark = false; }
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
 		uTime: shared.uTime, uNight: { value: 0 }, uCloud: { value: 0.62 }, uHigh: shared.uHigh,

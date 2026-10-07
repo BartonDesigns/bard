@@ -1139,4 +1139,4 @@ export function bridge(X, S) {
 }
 
 export const CIVS = { choir: CHOIR, lens: LENS, brood: BROOD, sun: SUN, glass: GLASS, forge: FORGE, grown: GROWN, grownOcean: GROWN_OCEAN, grownRing: GROWN_RING, tether: TETHER };
-export const CIV_OF = { MYSTICAL: 'choir', SINGULARITY: 'lens', TOXIC: 'brood', ARID: 'sun', ICE: 'glass', MAGMA: 'forge', TERRAN: 'grown', TROPICAL: 'grown', OCEAN: 'grownOcean', SHEPHERD: 'grownRing', GAS: 'tether', BARREN: 'tether', GAS_GIANT: 'tether' };
+export const CIV_OF = { MYSTICAL: 'choir', SINGULARITY: 'lens', TOXIC: 'brood', ARID: 'sun', ICE: 'glass', MAGMA: 'forge', TERRAN: 'grown', TROPICAL: 'grown', OCEAN: 'grownOcean', SHEPHERD: 'grownRing', GAS: 'tether', MOON: 'tether', BARREN: 'tether', GAS_GIANT: 'tether' };

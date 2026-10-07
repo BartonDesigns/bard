@@ -129,6 +129,21 @@ const TYPES = {
 		shrooms: ['glowcap'],
 		sky: { giant: true },
 	},
+	// Earth's Moon: grey regolith pocked by craters, no air, no life, a sixth of the weight.
+	// The low ground is dark mare dust rather than a sea.
+	MOON: {
+		name: 'the Moon',
+		ground: { grass: [0.46, 0.46, 0.45], sand: [0.58, 0.57, 0.55], rock: [0.36, 0.36, 0.36], soil: [0.40, 0.40, 0.39], mix: 1 },
+		leaf: { tint: [0.5, 0.5, 0.5], mix: 1 },
+		relief: 'lunar', coast: 1.4, grass: 0, trees: 0, snow: 0, glow: null,
+		water: { tint: [0.20, 0.20, 0.21], mix: 0.95 },
+		air: { tint: [0.06, 0.06, 0.075], mix: 1, haze: 0.25 },
+		flora: 'barren',
+		caves: { rock: [0.32, 0.32, 0.33], glow: [0.55, 0.75, 1.0], crystals: 0.4, lava: 0, ice: 0.2, water: 0 },
+		civ: { ruin: 'metal', village: 'dome', people: 'human' },
+		shrooms: ['glowcap'],
+		airless: true, gravity: 0.17,
+	},
 	// a green realm of rolling downs, woods and rivers, where people still build in stone:
 	// a castle on the high ground, a market town below it, mills, fields and hedgerows
 	MEDIEVAL: {
