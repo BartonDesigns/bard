@@ -112,7 +112,7 @@ export function corridor(X, F, z0, z1, y) {
 	const S = X.S, len = z1 - z0, mid = (z0 + z1) / 2;
 	const Fy = frame(F.x, y, F.z, F.yaw);
 	put(X, Fy, HULL, S.hull, cbox(3.2, 1.3, len, 0.15), 0, 0.65, mid);
-	glass(X, Fy, new THREE.CylinderGeometry(1.55, 1.55, len, 10, 1, true, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2), 0, 1.3, mid);
+	glass(X, Fy, new THREE.CylinderGeometry(1.55, 1.55, len, 10, 1, true, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), 0, 1.3, mid);
 	put(X, Fy, LAMP, S.window, box(0.2, 0.06, len * 0.92), 0, 1.33, mid, 0, 0, 0, 1, true);
 	const n = Math.max(1, Math.floor(len / 2.6));
 	for (let k = 0; k <= n; k++) put(X, Fy, HULL, S.trim, new THREE.TorusGeometry(1.6, 0.09, 4, 12, Math.PI), 0, 1.3, z0 + len * k / n, 0, 0, 0, 1, true);
@@ -203,8 +203,6 @@ export function port(X, p) {
 		put(X, Fq, LAMP, S.window, box(2.2, 0.8, 0.8), 0, 12, 0, 0, 0, 0, 1, true);
 		pool(X, q.x - sx * 6, q.z - sz * 6, p.y + 0.3, 20, S.window.map((v) => v * 0.7));
 	}
-	// the maglev station
-	station(X, frame(p.station.x, p.station.y, p.station.z, p.yaw));
 }
 
 // a lander standing on its pad: a faceted body, gold foil, four legs, its engine bell
@@ -213,7 +211,7 @@ function lander(X, F) {
 	put(X, F, HULL, S.hull, prism(8, 3.2, 2.2, 3.6), 0, 2.4, 0);
 	put(X, F, HULL, [0.85, 0.62, 0.22], prism(8, 3.4, 3.2, 1.4), 0, 1.4, 0);
 	put(X, F, WIN, S.hull, prism(8, 2.25, 2.0, 0.9), 0, 6.0, 0);
-	put(X, F, HULL, S.trim, lathe([[0.4, 0], [1.2, 1.1]], 12, false), 0, 0.3, 0, 0, Math.PI);
+	put(X, F, HULL, S.trim, lathe([[1.2, 0], [0.4, 1.1]], 12, false), 0, 0.3, 0);
 	for (let k = 0; k < 4; k++) {
 		const a = k / 4 * TAU + Math.PI / 4;
 		const top = F.p(Math.sin(a) * 3, 2.2, Math.cos(a) * 3), foot = F.p(Math.sin(a) * 5.4, 0.05, Math.cos(a) * 5.4);
@@ -229,8 +227,9 @@ export function station(X, F) {
 	const S = X.S;
 	put(X, F, PRINT, S.print, cbox(12, 5, 8, 0.4), 0, 2.5, 0);
 	put(X, F, WIN, S.hull, box(12.1, 1.6, 8.1), 0, 2.6, 0);
-	put(X, F, HULL, S.trim, box(16, 0.8, 9), 0, X.railH - 1.2, 0);
-	glass(X, F, new THREE.CylinderGeometry(4.6, 4.6, 16, 10, 1, true, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2), 0, X.railH - 0.8, 0, Math.PI / 2);
+	put(X, F, HULL, S.trim, box(9, 0.8, 16), 0, X.railH - 1.2, 0);
+	for (const z of [-7, 7]) for (const x of [-3.5, 3.5]) put(X, F, HULL, S.trim, box(0.4, X.railH - 1.6, 0.4), x, (X.railH - 1.6) / 2, z, 0, 0, 0, 1, true);
+	glass(X, F, new THREE.CylinderGeometry(4.6, 4.6, 16, 10, 1, true, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), 0, X.railH - 0.8, 0);
 	X.col.box(F.x, F.z, F.yaw, 6.2, 4.2, F.y + 5);
 }
 
@@ -280,10 +279,10 @@ export function relay(X, o) {
 		put(X, D, HULL, S.hull, lathe(prof, 20, false), 0, ys, 0, 0, -0.75);
 		const focus = D.p(0, ys + Math.cos(0.75) * f, -Math.sin(0.75) * f);
 		for (let k = 0; k < 3; k++) {
-			const a = k / 3 * TAU, rim = new THREE.Vector3(Math.sin(a) * R * 0.85, 0, Math.cos(a) * R * 0.85).applyAxisAngle(new THREE.Vector3(1, 0, 0), -0.75).applyAxisAngle(new THREE.Vector3(0, 1, 0), D.yaw);
-			X.K.add('shell', sweep([new THREE.Vector3(D.x + rim.x, D.y + ys + rim.y + R * 0.3, D.z + rim.z), focus], 0.07, 4, { seg: 1 }), { tint: S.trim, glow: HULL, near: true });
+			const a = k / 3 * TAU, rim = new THREE.Vector3(Math.sin(a) * R * 0.85, R * 0.33, Math.cos(a) * R * 0.85).applyAxisAngle(new THREE.Vector3(1, 0, 0), -0.75).applyAxisAngle(new THREE.Vector3(0, 1, 0), D.yaw);
+			X.K.add('shell', sweep([new THREE.Vector3(D.x + rim.x, D.y + ys + rim.y, D.z + rim.z), focus], 0.07, 4, { seg: 1 }), { tint: S.trim, glow: HULL, near: true });
 		}
-		X.K.add('shell', F.put(box(0.8, 0.8, 0.8)).translate(0, 0, 0).applyMatrix4(new THREE.Matrix4().makeTranslation(focus.x - F.x, focus.y - F.y, focus.z - F.z)), { tint: S.trim, glow: HULL });
+		X.K.add('shell', box(0.8, 0.8, 0.8).translate(focus.x, focus.y, focus.z), { tint: S.trim, glow: HULL });
 		X.col.disc(D.x, D.z, 1.8, D.y + ys);
 	}
 	put(X, F, PRINT, S.print, cbox(6, 3.2, 4, 0.3), 0, 1.6, -9);
@@ -321,7 +320,6 @@ export function solarFarm(X, s) {
 	}
 	put(X, F, PRINT, S.print, cbox(3, 1.8, 2, 0.2), (per / 2) * 7.5 + 2, 0.9, 0);
 	put(X, F, RUN, S.run, box(0.3, 0.3, 0.3), (per / 2) * 7.5 + 2, 1.95, 0, 0, 0, 0, 1, true);
-	X.col.disc(s.x, s.z, 0.1, s.y);
 }
 
 // ---------- the maglev ----------
@@ -368,8 +366,8 @@ export function trainGeometry(S) {
 		add(box(2.76, 0.18, 10.6).translate(0, 0.9, z), S.accent, HULL);
 		add(box(1.6, 0.12, 10).translate(0, 0.08, z), S.pad, LAMP);
 	}
-	add(blob(1.35, 1.25, 3.6, 8, 0).rotateX(Math.PI / 2).rotateX(-Math.PI).scale(1, 1, 1).translate(0, 1.4, 17.3), S.hull, HULL);
-	add(blob(1.35, 1.25, 3.6, 8, 0).rotateX(-Math.PI / 2).translate(0, 1.4, -17.3), S.hull, HULL);
+	add(blob(1.35, 3.6, 1.25, 8, 0).rotateX(Math.PI / 2).translate(0, 1.4, 16.8), S.hull, HULL);
+	add(blob(1.35, 3.6, 1.25, 8, 0).rotateX(-Math.PI / 2).translate(0, 1.4, -16.8), S.hull, HULL);
 	return merge(parts);
 }
 
