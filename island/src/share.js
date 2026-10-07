@@ -282,7 +282,11 @@ export function createShare(ctx) {
 				put(yOf(), true);
 				stage(0.4);
 				// (the land's height levels as they come in, then the bridge and the streets)
-				await until(() => { stage(w.bridge ? 0.67 : 0.4 + 0.25 * (w.bayArea.levels || []).filter(Boolean).length / LEVELS.length); return w.bayArea.loaded() && w.bridge && w.real?.loaded(); }, 180000);
+				await until(() => { stage(0.4 + 0.25 * (w.bayArea.levels || []).filter(Boolean).length / LEVELS.length); return w.bayArea.loaded() && w.bridge; }, 120000);
+				// (the streets round you: a while for them, then on in; a phone kept to its memory may
+				// never hold every block, and the rest stream in round you as ever)
+				const t0 = performance.now();
+				await until(() => { stage(0.67 + 0.03 * Math.min(1, (performance.now() - t0) / 20000)); return w.real?.loaded(); }, 20000);
 				stage(0.7);
 				const b = s.bld;
 				if (b?.k === 'tower' && b.key) {

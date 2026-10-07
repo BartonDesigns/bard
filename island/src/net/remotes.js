@@ -132,30 +132,44 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 			if (B) B.P.root.visible = want;
 			const veh = here ? vehicleFor(r, a.v || '') : vehicleFor(r, '');
 			if (!here) continue;
-			const feet = a[1] - EYE, heading = Math.atan2(-Math.sin(a.y), -Math.cos(a.y));
+			// what is shown eases after the samples, so a late or sparse one glides rather than jumps
+			// (a long way off, as after a Go to, it is there at once)
+			let V = r.show;
+			if (!V || Math.hypot(a[0] - V.x, a[2] - V.z) > 60 || Math.abs(a[1] - V.y) > 60) V = r.show = { x: a[0], y: a[1], z: a[2], yaw: a.y, sp: 0 };
+			else {
+				const k = 1 - Math.exp(-Math.min(dt, 0.1) * 9), ox = V.x, oz = V.z;
+				V.x += (a[0] - V.x) * k; V.y += (a[1] - V.y) * k; V.z += (a[2] - V.z) * k;
+				V.yaw += Math.atan2(Math.sin(a.y - V.yaw), Math.cos(a.y - V.yaw)) * k;
+				V.sp += (Math.hypot(V.x - ox, V.z - oz) / Math.max(dt, 1e-3) - V.sp) * Math.min(1, dt * 6);
+			}
+			const heading = Math.atan2(-Math.sin(V.yaw), -Math.cos(V.yaw)), g = ground(V.x, V.z);
+			// flying just over the ground (or hovering) reads as standing: only a real flight lies along its way
+			const low = a.a === 'fly' && Number.isFinite(g) && V.y - EYE - g < 2.5;
+			const fly = a.a === 'fly' && !low && V.sp > 3;
+			const feet = low ? g : V.y - EYE;
 			if (veh) {
 				veh.visible = r.d < near * 2;
-				veh.position.set(a[0], a.v === 'boat' ? Math.max(a[1] - 2.2, 0) : ground(a[0], a[2]), a[2]);
+				veh.position.set(V.x, a.v === 'boat' ? Math.max(V.y - 2.2, 0) : ground(V.x, V.z), V.z);
 				veh.rotation.set(0, heading, 0);
 			}
-			let top = a[1] + 0.55;
+			let top = feet + EYE + 0.55;
 			if (want && B) {
 				const M = B.M;
-				if (!B.placed) { M.place(a[0], feet, a[2], heading); B.placed = true; }
+				if (!B.placed) { M.place(V.x, feet, V.z, heading); B.placed = true; }
 				M.want.heading = heading;
-				M.want.speed = a.a === 'fly' || a.a === 'drive' || a.v ? 0 : Math.min(12, a.speed);
+				M.want.speed = a.a === 'drive' || a.v || (a.a === 'fly' && !low) ? 0 : Math.min(12, V.sp < 0.3 ? 0 : V.sp);
 				M.want.run = a.a === 'run' ? 1 : 0;
 				if (a.a === 'drive' || a.v) M.sit(0.5); else M.stand();
 				M.update(Math.min(dt, 0.05), time, cam);
-				M.S.pos.set(a[0], feet, a[2]);
+				M.S.pos.set(V.x, feet, V.z);
 				if (a.a === 'drive' || a.v === 'car') M.S.pos.y = (veh ? veh.position.y : feet) + 0.15;
 				B.P.root.position.copy(M.S.pos);
 				// flying and swimming: laid out along the way they go
-				if (a.a === 'fly') { B.P.root.position.y = a[1] - 1.0; B.P.root.rotation.set(1.25, heading, 0, 'YXZ'); top = a[1] + 0.2; }
-				else if (a.a === 'swim') { B.P.root.position.y = a[1] - 1.9; B.P.root.rotation.set(1.3, heading, 0, 'YXZ'); top = a[1] - 0.9; }
+				if (fly) { B.P.root.position.y = V.y - 1.0; B.P.root.rotation.set(1.25, heading, 0, 'YXZ'); top = V.y + 0.2; }
+				else if (a.a === 'swim') { B.P.root.position.y = V.y - 1.9; B.P.root.rotation.set(1.3, heading, 0, 'YXZ'); top = V.y - 0.9; }
 				B.P.lod?.(r.d);
 			}
-			r.tag.position.set(a[0], top + 0.35, a[2]);
+			r.tag.position.set(V.x, top + 0.35, V.z);
 		}
 	}
 	// a friend's tag on the screen near (px, py), for tapping
