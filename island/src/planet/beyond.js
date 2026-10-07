@@ -66,7 +66,7 @@ void main() {
 		wave += uRip[i].w * exp(-abs(rd - front) * 0.35) * exp(-age * 0.35) * (0.6 + 0.4 * sin(rd * 1.3 - age * 10.0));
 	}
 	vec3 ink = mix(vec3(0.55, 0.62, 1.0), vec3(1.0, 0.82, 0.45), uGold);
-	vec3 c = vec3(0.012, 0.010, 0.022) + ink * line * (0.35 + uMid * 1.2) + ink * max(wave, 0.0) * 0.45;
+	vec3 c = vec3(0.012, 0.010, 0.022) + ink * line * (0.8 + uMid * 1.2) + ink * max(wave, 0.0) * 0.45;
 	c += vec3(0.25, 0.2, 0.5) * exp(-r * 0.03) * (0.4 + uBass);
 	gl_FragColor = vec4(mix(c, uFog, 1.0 - exp(-dist * 0.0065)), 1.0);
 }`;
@@ -125,7 +125,7 @@ export function createBeyond({ renderer, scene: worldScene, camera, island, shar
 	add(new THREE.Mesh(new THREE.RingGeometry(3.6, 4.4, 48).rotateX(-Math.PI / 2), glowMat(0xffffff, 0.8))).position.set(O.x, Y0 + 0.05, O.z);
 	// the notes you play: pillars of light that stay
 	const MAXN = isPhone ? 96 : 160;
-	const pillars = add(new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.2, 1, 6, 1, true).translate(0, 0.5, 0), glowMat(0xffffff, 0.85), MAXN));
+	const pillars = add(new THREE.InstancedMesh(new THREE.CylinderGeometry(0.14, 0.14, 1, 6, 1, true).translate(0, 0.5, 0), glowMat(0xffffff, 0.85), MAXN));
 	pillars.count = 0; pillars.frustumCulled = false;
 	pillars.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 3), 3);
 	let noteN = 0;
@@ -308,7 +308,7 @@ export function createBeyond({ renderer, scene: worldScene, camera, island, shar
 	function playNote(f, t) {
 		const midi = 69 + 12 * Math.log2(f / 440), pc = ((Math.round(midi) % 12) + 12) % 12;
 		const fx0 = -Math.sin(P.yaw), fz0 = -Math.cos(P.yaw), j = noteN * 2.399;
-		const x = P.pos.x + fx0 * 3.5 + Math.cos(j) * 1.2, z = P.pos.z + fz0 * 3.5 + Math.sin(j) * 1.2;
+		const x = P.pos.x + fx0 * 7 + Math.cos(j) * 2, z = P.pos.z + fz0 * 7 + Math.sin(j) * 2;
 		const h = Math.max(1.5, 2 + (midi - 36) * 0.32);
 		m4.makeScale(1, h, 1).setPosition(x, Y0, z);
 		const i = noteN % MAXN;
