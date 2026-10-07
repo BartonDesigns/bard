@@ -123,6 +123,8 @@ import { waveHeight } from './world/ocean.js';
 import { createMushrooms } from './planet/mushrooms.js';
 import { createVolcano } from './planet/volcano.js';
 import { planAlien, createAlien } from './planet/alien.js';
+import { planColony } from './planet/colony/plan.js';
+import { createColony } from './planet/colony/colony.js';
 import { planRealm, planDungeons } from './planet/medieval/plan.js';
 import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
@@ -735,6 +737,9 @@ export function createIslandWorld() {
 		island.profileHaze = profile.air?.haze || 1;
 		// the ball fields above the village (or the world's own arena): the ground levelled under them before anything is made of it
 		const fieldPlan = planIslandFields(island, earth ? null : profile);
+		// an off-world colony (the Moon's, a volcanic or toxic world's): its ground levelled and its roads worn in now
+		const colonyPlan = earth ? null : planColony(island, profile, { avoid: fieldPlan.clear, isPhone });
+		if (colonyPlan) fieldPlan.clear.push(...colonyPlan.clear);
 		// a realm of castles and towns, where this world keeps one: sited now, the land shaped round it
 		const realmPlan = earth ? null : planRealm(island, profile, { fields: fieldPlan.clear, isPhone });
 		// the planet's second biome and its cold side, baked where the ground, plants and water can read it
@@ -762,14 +767,15 @@ export function createIslandWorld() {
 		scene.add(terrain, ocean, grass, turf);
 		// An airless world (the Moon) is bare regolith: its sea, village, grass, plants and animals
 		// are still made (the frame loop expects them) but held in a hidden group, out of reach.
-		const bare = profile.airless ? new THREE.Group() : null;
-		const stash = (make) => {
-			if (!bare) return make();
+		// (a world with no village, the hostile ones, holds just the village there)
+		const bare = profile.airless || profile.noVillage ? new THREE.Group() : null;
+		const stash = (make, always) => {
+			if (!bare || !profile.airless && !always) return make();
 			const had = new Set(scene.children), made = make();
 			for (const o of [...scene.children]) if (!had.has(o) && o !== bare) bare.add(o);
 			return made;
 		};
-		if (bare) { bare.visible = false; scene.add(bare); bare.add(ocean, grass, turf); }
+		if (bare) { bare.visible = false; scene.add(bare); if (profile.airless) bare.add(ocean, grass, turf); }
 		const litter = stash(() => createLitter(island, shared, scene, isPhone ? 0.6 : 1));
 		// Crysis: the land's plants and animals, grown from the seed
 		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
@@ -783,7 +789,7 @@ export function createIslandWorld() {
 		if (alienPlan) alienPlan.clear.push(...planDwellings(island, alienPlan));
 		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
-		const village = stash(() => createVillage(island, shared, scene));
+		const village = stash(() => createVillage(island, shared, scene), true);
 		if (bare) { village.footprints.length = 0; village.pickables.length = 0; }
 		vegetation.addContacts(village.footprints);
 		const distant = stash(() => createDistant(island, shared, scene));
@@ -802,7 +808,7 @@ export function createIslandWorld() {
 		const boat = stash(() => createBoat(island, village, player, camera, shared, scene));
 		const whale = stash(() => createWhale(island, shared, scene));
 		const shells = stash(() => createShells(island, shared, camera, scene, player, dom, hint));
-		if (bare) shells.update = () => {};
+		if (profile.airless) shells.update = () => {};
 		const magma = createMagma(island, shared, scene, camera);
 		const caverns = stash(() => createCaverns(island, shared, scene, camera, magma.tube || []));
 		const underwater = stash(() => createUnderwater(island, shared, scene, camera, player, [...(magma.tube || []), ...caverns.tunnels.flat(), ...caverns.arches.flat()]));
@@ -881,6 +887,12 @@ export function createIslandWorld() {
 			const of2 = island.extraFloor, op2 = island.extraPush;
 			island.extraFloor = (x, z, y) => Math.max(of2(x, z, y), dw.floor(x, z, y));
 			island.extraPush = (p, footY) => { op2(p, footY); dw.push(p, footY); };
+		}
+		if (colonyPlan) {
+			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
+			const of = island.extraFloor, op = island.extraPush;
+			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), cl.floor(x, z, y)) : cl.floor;
+			island.extraPush = op ? (p, footY) => { op(p, footY); cl.push(p, footY); } : cl.push;
 		}
 		// the realm: its castle, town and fields walked on and into; its dungeons reached before the caves
 		if (realmPlan) {
@@ -1055,6 +1067,7 @@ export function createIslandWorld() {
 		world.underworld?.dispose();
 		world.volcano?.dispose();
 		world.alien?.dispose();
+		world.colony?.dispose();
 		world.medieval?.dispose();
 		world.boardwalk?.destroy();
 		world.rays?.dispose();
@@ -1385,6 +1398,7 @@ export function createIslandWorld() {
 		W.magma.update(dt, time, under, surf);
 		W.volcano?.update(dt, time);
 		W.alien?.update(dt, time);
+		W.colony?.update(dt, time);
 		W.dwellings?.update(dt, camera.position);
 		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
@@ -1708,6 +1722,7 @@ export function createIslandWorld() {
 		await api.open(params);
 		const P = world?.player.state;
 		if (!P) return false;
+		if (dest.colony && world.colony?.port) { world.colony.go(); return true; }
 		if (dest.orbit) {
 			P.flying = true; P.vel.set(0, 0, 0); P.pos.y = dest.orbit; P.pitch = -1.1; P.boost = 1;
 			camera.position.copy(P.pos);

@@ -86,6 +86,8 @@ const TYPES = {
 		flora: 'ash',
 		caves: { rock: [0.14, 0.12, 0.11], glow: [1.0, 0.40, 0.10], crystals: 0.3, lava: 1, ice: 0, water: 0 },
 		civ: { ruin: 'basalt', village: 'bunker', people: 'human' },
+		// no clapboard fishing village here: what people built is sealed against the air (planet/colony/)
+		noVillage: true,
 		shrooms: ['emberfoot'],
 	},
 	TOXIC: {
@@ -99,6 +101,8 @@ const TYPES = {
 		flora: 'fungal',
 		caves: { rock: [0.28, 0.24, 0.30], glow: [0.60, 1.0, 0.25], crystals: 0.2, lava: 0, ice: 0, water: 1 },
 		civ: { ruin: 'rust', village: 'bunker', people: 'human' },
+		// no clapboard fishing village here: what people built is sealed against the air (planet/colony/)
+		noVillage: true,
 		shrooms: ['glowcap', 'amanita', 'veilhorn'],
 	},
 	MYSTICAL: {
@@ -126,6 +130,8 @@ const TYPES = {
 		flora: 'barren',
 		caves: { rock: [0.36, 0.35, 0.34], glow: [0.55, 0.85, 1.0], crystals: 0.8, lava: 0, ice: 0.3, water: 0.2 },
 		civ: { ruin: 'metal', village: 'dome', people: 'human' },
+		// no clapboard fishing village here: what people built is sealed against the air (planet/colony/)
+		noVillage: true,
 		shrooms: ['glowcap'],
 		sky: { giant: true },
 	},
@@ -162,7 +168,7 @@ const TYPES = {
 	},
 };
 TYPES.SHEPHERD = { ...TYPES.TERRAN, name: 'ringed world', sky: { rings: true } };
-TYPES.SINGULARITY = { ...TYPES.MYSTICAL, name: 'world by the dark star', air: { tint: [0.6, 0.55, 0.75], mix: 0.5, haze: 1.5 } };
+TYPES.SINGULARITY = { ...TYPES.MYSTICAL, name: 'world by the dark star', air: { tint: [0.6, 0.55, 0.75], mix: 0.5, haze: 1.5 }, noVillage: true };
 TYPES.BARREN = TYPES.GAS;
 TYPES.GAS_GIANT = TYPES.GAS;
 
