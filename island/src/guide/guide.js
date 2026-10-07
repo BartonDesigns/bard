@@ -252,6 +252,7 @@ export function createGuide(mount, api) {
 	// unsettled, so no promise is left hanging.
 	const book = () => api.social?.appointments;
 	let meetDraft = null, tracked = null;
+	const cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
 	const AFFIRM = /^(?:yes|yeah|yep|yup|sure|ok(?:ay)?|deal|sounds good|sounds great|perfect|great|it'?s a date|see you (?:then|there)|i'?ll be there|count me in|definitely|absolutely|works for me)\b/i;
 	const REFUSE = /^(?:no|nah|nope|can'?t|cannot|not (?:then|today|tonight)|maybe another time|another time|sorry)\b/i;
 	function meetPlace(phrases, p, resident) {
@@ -294,11 +295,11 @@ export function createGuide(mount, api) {
 		if (pending && AFFIRM.test(t) && !talksOfMeeting(t.replace(AFFIRM, ''))) {
 			const r = B.agree(pending.id); if (!r.ok) return null;
 			api.social.state.remember(resident.id, 'event', `You agreed to meet the traveller at ${pending.place.name} at ${formatClock(pending.due % 24)}.`); tracked = pending.id;
-			return { reply: `[[mood: happy]] [[gesture: nod]] Great. ${pending.place.name}, ${formatClock(pending.due % 24)}. I'll be there.`, note: meetNote(r.appointment) };
+			return { reply: `[[mood: happy]] [[gesture: nod]] Great. ${cap(pending.place.name)}, ${formatClock(pending.due % 24)}. I'll be there.`, note: meetNote(r.appointment) };
 		}
 		if (pending && REFUSE.test(t)) { B.cancel(pending.id); return { reply: '[[mood: calm]] [[gesture: shrug]] No worries. Another time.' }; }
 		const agreed = B.agreedWith(resident.id, resident.bodyKey);
-		if (agreed && /\b(when|where|what time)\b.*\b(meet|meeting|see you)\b/i.test(t)) return { reply: `[[mood: calm]] ${agreed.place.name}, ${formatClock(agreed.due % 24)}. Don't be late.`, note: `Meeting: ${meetWhen(agreed)}.` };
+		if (agreed && /\b(when|where|what time)\b.*\b(meet|meeting|see you)\b/i.test(t)) return { reply: `[[mood: calm]] ${cap(agreed.place.name)}, ${formatClock(agreed.due % 24)}. Don't be late.`, note: `Meeting: ${meetWhen(agreed)}.` };
 		if (agreed && /\b(cancel|call off|can'?t make)\b.*\b(meet|meeting|it|plans?)\b/i.test(t)) { B.cancel(agreed.id); api.social.state.remember(resident.id, 'event', `The traveller called off your meeting at ${agreed.place.name}.`); return { reply: '[[mood: sad]] Oh, okay. Some other time then.', note: 'Meeting cancelled.' }; }
 		const time = parseGameTime(t, W.sky.state.hours, sun);
 		// Finishing an arrangement begun a moment ago: "the pier" → "at six".
@@ -308,7 +309,7 @@ export function createGuide(mount, api) {
 				meetDraft = null;
 				const made = meetMake(resident, p, { place, time: when, by: 'player' });
 				if (made?.error) return { reply: made.error };
-				if (made) return { reply: `[[mood: happy]] [[gesture: nod]] ${place.name} at ${formatClock(made.appointment.due % 24)}. See you there.`, note: meetNote(made.appointment) };
+				if (made) return { reply: `[[mood: happy]] [[gesture: nod]] ${cap(place.name)} at ${formatClock(made.appointment.due % 24)}. See you there.`, note: meetNote(made.appointment) };
 			}
 		}
 		if (!talksOfMeeting(t)) return null;
@@ -322,7 +323,7 @@ export function createGuide(mount, api) {
 		}
 		const made = meetMake(resident, p, { place, time, by: 'player' });
 		if (made?.error) return { reply: made.error };
-		return made && { reply: `[[mood: happy]] [[gesture: nod]] ${place.name} at ${formatClock(made.appointment.due % 24)}. I'll be there.`, note: meetNote(made.appointment) };
+		return made && { reply: `[[mood: happy]] [[gesture: nod]] ${cap(place.name)} at ${formatClock(made.appointment.due % 24)}. I'll be there.`, note: meetNote(made.appointment) };
 	}
 	// What the resident said: a tagged or plainly worded suggestion becomes a real proposal.
 	function meetingFromReply(reply, text, resident, p) {
