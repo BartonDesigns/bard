@@ -116,10 +116,16 @@ function agx(c, exposure, out) {
 function airOf(P) {
 	const t = P?.air?.tint;
 	if (!t || !P.air.mix) return new THREE.Vector4(1, 1, 1, 0);
+	// an airless world: the sky is dark even by day (the tint is not brightened)
+	if (P.airless) return new THREE.Vector4(t[0], t[1], t[2], P.air.mix);
 	const l = t[0] * 0.299 + t[1] * 0.587 + t[2] * 0.114;
 	return new THREE.Vector4(t[0] / l, t[1] / l, t[2] / l, P.air.mix);
 }
 export function createSky(scene, shared, renderer, { isPhone = false, latitude = () => BAY_LATITUDE } = {}) {
+	// The air uniform is made once per page; an airless world darkens it, and the next world
+	// with air gets the neutral value back.
+	const airR = cloudReflectU(shared).uAirR;
+	if (shared.planet?.airless) { airR.value.copy(airOf(shared.planet)); airR.dark = true; } else if (airR.dark) { airR.value.set(1, 1, 1, 0); airR.dark = false; }
 	const uniforms = {
 		uSunDir: shared.uSunDir, uSunColor: shared.uSunColor, uSkyZen: shared.uSkyZen, uSkyHor: shared.uSkyHor,
 		uTime: shared.uTime, uNight: { value: 0 }, uCloud: { value: 0.62 }, uHigh: shared.uHigh,
@@ -132,7 +138,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		// another world's air: its sky and haze take this colour (rgb), this much (a)
 		uAir: cloudReflectU(shared).uAirR,
 		// a gas giant over its moon (xyz: where, w: its size); a ringed world's rings (on/off)
-		uGiant: { value: new THREE.Vector4(0.42, 0.33, -0.84, shared.planet?.sky?.giant ? 0.2 : 0) }, uRings: { value: shared.planet?.sky?.rings ? 1 : 0 },
+		uGiant: { value: shared.planet?.sky?.earth ? new THREE.Vector4(0.35, 0.62, -0.7, 0.05) : new THREE.Vector4(0.42, 0.33, -0.84, shared.planet?.sky?.giant ? 0.2 : 0) }, uRings: { value: shared.planet?.sky?.rings ? 1 : 0 }, uEarthSky: { value: shared.planet?.sky?.earth ? 1 : 0 },
 		uMeteor: { value: 0 },           // 1 on the nights of the great showers
 		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
 	};
@@ -141,7 +147,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -220,7 +226,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					}
 				}
 				// the gas giant: a banded ball lit on the sun's side, its night side faintly lit by its moons
-				if (uGiant.w > 0.0 && d.y > -0.05){
+				if (uGiant.w > 0.0 && uEarthSky < 0.5 && d.y > -0.05){
 					vec3 gc = normalize(uGiant.xyz);
 					float gd = acos(clamp(dot(d, gc), -1.0, 1.0)) / uGiant.w;
 					if (gd < 1.0){
@@ -376,6 +382,24 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 				col = mix(col, mix(uSkyHor, uFogCol, 0.7), smoothstep(0.02, -0.12, d.y));
 				col = mix(col, uFogCol, smoothstep(0.012, -0.03, d.y) * 0.9);
 				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uAir.rgb, uAir.a);
+				// no air: a black sky, the sun a hard white disc
+				if (uEarthSky > 0.5) col = vec3(0.003, 0.004, 0.007) + uSunColor * (smoothstep(0.9993, 0.9997, dot(d, uSunDir)) * 18.0 + pow(max(0.0, dot(d, uSunDir)), 400.0) * 0.4);
+				// Earth over the Moon: blue oceans, brown-green land, white cloud, lit on the sun's side
+				// (drawn after the airless darkening, so it keeps its colour in the black sky)
+				if (uEarthSky > 0.5){
+					vec3 ec = normalize(uGiant.xyz);
+					float ed = acos(clamp(dot(d, ec), -1.0, 1.0)) / uGiant.w;
+					if (ed < 1.0){
+						vec3 eu = normalize(cross(ec, vec3(0.2, 1.0, 0.1))), ev = cross(eu, ec);
+						vec2 q = vec2(dot(d - ec, eu), dot(d - ec, ev)) / sin(uGiant.w);
+						vec3 en = normalize(q.x * eu + q.y * ev - sqrt(max(0.0, 1.0 - dot(q, q))) * ec);
+						float land = smoothstep(0.55, 0.62, 0.5 + 0.25 * sin(q.x * 7.0 + 1.3) * sin(q.y * 5.0 + 0.4) + 0.25 * sin(q.x * 13.0 - q.y * 11.0));
+						float cloud = smoothstep(0.6, 0.8, 0.5 + 0.5 * sin(q.y * 17.0 + sin(q.x * 9.0) * 2.0) * sin(q.x * 6.0 + q.y * 3.0));
+						vec3 ecol = mix(mix(vec3(0.04, 0.12, 0.38), vec3(0.32, 0.36, 0.2), land), vec3(0.92, 0.94, 0.97), cloud);
+						float lit = clamp(dot(-en, uSunDir) * 1.2 + 0.08, 0.0, 1.0);
+						col = mix(col, ecol * (lit * 1.3 + 0.02) + vec3(0.1, 0.25, 0.6) * pow(ed, 6.0) * 0.4, smoothstep(1.0, 0.97, ed));
+					}
+				}
 				gl_FragColor = vec4(col, 1.0);
 				#include <tonemapping_fragment>
 				#include <colorspace_fragment>

@@ -69,21 +69,34 @@ benchmark. It checks held keyboard input in space, launch-assist cancellation, t
 release, repeated exact-coordinate return, the same world/context, analyser response,
 no transition loading overlay, and page/shader errors.
 
-The orbital unit test also exercises lunar surface clamping and tangent-map stability.
-The browser smoke confirms the booster control remains visible in space, Gargantua
-renders as a distant landmark, the Moon reaches a zero-clipping crater surface, and
-the lunar pass compiles without a failed WebGL program.
+The orbital unit test also covers the companion collider, the fixed Sun and Gargantua
+positions, and the deep-space gears with their approach guard.
 
 Native iPhone/Safari performance, long sessions, and visual continuity across every
 biome remain device/acceptance checks. The orbital globe is a coarse rendering level;
 the ground is still a retained local patch, not a fully spherical terrain mesh.
-The native orbital pass includes the departure planet, moon, sun, stars and a visible
-Gargantua beacon. The authored Schwarzschild renderer remains the primary black-hole
-pass, with a small camera-facing emissive fallback so the landmark stays discoverable
-when the reference pass is outside a player's initial bearing. Descending into the
-Moon clamps to its curved surface and switches to a procedural local crater view; the
-same player controller remains active for surface exploration. The legacy universe's
-other systems remain on the galaxy route.
+The native orbital pass includes the departure planet, its companion (Earth's Moon,
+the Moon's Earth, or a gas giant), the Sun, stars and Gargantua. All are fixed world
+positions in the orbital frame (`frame.js`: MOON, SUN, GARGANTUA); nothing is steered
+toward the view. The old camera-facing beacon (a red nine-lobed ring round a black
+core, eased onto the view centre) is gone; labelled markers (`nav.js`) mark the bodies
+and can be tapped to target one.
+
+- **Gears:** B cycles 1/3/6/9 near a world; above 100 km it carries on to ×100, ×1k,
+  ×10k and ×100k. The gear eases in proportion; speed toward a surface or safety shell
+  is held to three times the gap per second, so approaches slow exponentially.
+  Stars streak from about 250 km/s.
+- **Warp:** J or the ⤳ Warp button lists the home world, its companion, the Sun,
+  Gargantua and one world of every planet type. Local bodies: about 3.4 s of tunnel,
+  dropping out at a safe distance. Other worlds: the tunnel, then `voyage()` in
+  `main.js` builds the world through `api.open` and drops the ship 160 km above it.
+- **Moon:** a `MOON` profile (grey regolith, 46 craters, airless, 0.17 g). Descending
+  within 25 km of the Moon lands through the same world build. The Moon sits 150,000 km
+  out at its real radius, so it reads larger from Earth orbit.
+- **Sun and Gargantua:** heat haze, warning and shield readout inside 40 solar radii;
+  inside 8 (or 8 Rs of Gargantua, or a giant's cloud tops) the ship is eased back out.
+
+The legacy universe's other systems remain on the galaxy route.
 
 ## Body identity and physical music response
 

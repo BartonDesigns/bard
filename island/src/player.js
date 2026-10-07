@@ -30,7 +30,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		if (k === 'b' && !e.repeat && s.flying) { cycleBoost(); e.preventDefault(); return; }
 		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = false; keys.add(k); e.preventDefault(); }
 	}
-	function cycleBoost() { if (!s.flying) return 1; s.boost = nextFlightSpeed(s.boost); s.onBoost?.(s.boost); return s.boost; }
+	function cycleBoost() { if (!s.flying) return 1; s.boost = nextFlightSpeed(s.boost, !!s.orbit?.deep?.()); s.onBoost?.(s.boost); return s.boost; }
 	function keyUp(e) { keys.delete(e.key.toLowerCase()); }
 	let mouse = null;
 	function pDown(e) {
@@ -178,7 +178,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			// the higher you are, the faster: gently near the ground, then strongly (about
 			// 3x at 300 m, 8x at a kilometre); the selected boost on top
 			const hk = 1 + Math.max(0, agl - 40) / 120 + Math.max(0, agl - 250) / 140;
-			const fs = s.orbit ? s.orbit.speed(run, s.boost, agl) : (run ? 38 : 16) * hk * flightMultiplier(s.boost);
+			const fs = s.orbit ? s.orbit.speed(run, s.boost, agl) : (run ? 38 : 16) * hk * Math.min(9, flightMultiplier(s.boost));
 			flightQ.setFromEuler(flightE.set(s.pitch, s.yaw, s.roll || 0));
 			fwd.set(0, 0, -1).applyQuaternion(flightQ); right.set(1, 0, 0).applyQuaternion(flightQ);
 			const up = (keys.has(' ') || s.flyUp || s.climbAssist ? 1 : 0) - (keys.has('c') || s.flyDown ? 1 : 0);
@@ -243,7 +243,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			s.diving = false;
 			if ((keys.has(' ') || s.jumpQueued) && s.grounded) { s.vel.y = 5.2; s.grounded = false; }
 			s.jumpQueued = false;
-			s.vel.y -= 18 * dt;
+			s.vel.y -= 18 * (island.gravity || 1) * dt;
 			s.pos.y += s.vel.y * dt;
 			if (s.pos.y < ground + EYE) { s.pos.y = ground + EYE; s.vel.y = 0; s.grounded = true; }
 			else if (s.pos.y > ground + EYE + 0.05) s.grounded = false;

@@ -6,6 +6,14 @@ file-by-file map is in `island/README.md`.
 
 ## Resume here (7 October 2026)
 
+- **Space (on the branch):** see `island/ORBITAL-FLIGHT.md`.
+  - The black hole was pinned to the view: `space/view.js` eased Gargantua's bearing 94% onto the camera's forward ray whenever it was off-screen, and drew a camera-facing fallback disc (a nine-lobed red ring round a black core) with it. Those were the "red dots". Now the Sun, Gargantua and the Moon are fixed world positions (`frame.js`), with labelled, tappable markers (`space/nav.js`).
+  - B goes past ×9 in space: ×100, ×1k, ×10k, ×100k, eased, with a guard that slows approaches. Stars streak at speed. J or ⤳ Warp lists every destination.
+  - The Moon is a `MOON` world (`planet/profile.js`, relief `lunar`, 0.17 g, dark sky), landed on through `voyage()` → `api.open` in `main.js`. The old shader-only lunar patch is gone.
+  - The Sun: heat haze, a warning and shields, then a bounce back at 8 solar radii.
+  - The Moon is bare: its sea, village, grass, animals, sea caves, ball fields and alien works are held in a hidden group or not planned; no clouds, rain or birds (weather `airless`); black sky with Earth (sky.js `uEarthSky`).
+  - Tests: `island/tools/orbit.test.mjs`; headless `/tmp/claude-0/space/moon.cjs`, `space2.cjs`.
+
 - **One load into a saved spot (on the branch):** the faceplate's resume (and a shared `?at=` link) used to raise the default island, show it, jump you to the spot, then set the saved hour after the Bay finished loading.
   - Now `share.js` go() passes the spot to `api.open({ spot })` (`main.js`): one loading card, "Returning to <place>…" with a percentage, stays up over the build and the arrival.
   - The sky starts at the saved hour (`shared.startHours`), and the player is placed at the spot inside build(), so the Bay streams in round it, not round the island.

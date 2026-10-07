@@ -130,6 +130,8 @@ function fits(f, ok, H, range, step = 6) {
 // fields and the circles nothing is to grow in.
 export function planIslandFields(island, profile = null) {
 	REG.list.length = 0; REG.grid.clear();
+	// no ball fields on an airless world
+	if (profile?.airless) return { fields: [], clear: [] };
 	const theme = arenaTheme(profile);
 	const V = island.village || { x: 0, z: 0 }, H = island.heightAt;
 	const ok = (x, z) => {

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createOrbitFrame, ORBIT, MOON, musicThrust } from '../src/space/frame.js';
+import { createOrbitFrame, ORBIT, MOON, SUN, GARGANTUA, musicThrust } from '../src/space/frame.js';
+import { nextFlightSpeed } from '../src/flight-speed.js';
 
 const player = (x = 1832.4, z = -5491.2) => ({ pos: new THREE.Vector3(x, ORBIT.start, z), vel: new THREE.Vector3(12, -1400, -35), yaw: .6, pitch: -.3, roll: 0 });
 const near = (a, b, epsilon = 1e-6) => assert.ok(Math.abs(a - b) < epsilon, `${a} != ${b}`);
@@ -71,7 +72,7 @@ test('a high speed descent re-enters before the surface, including a large frame
 	assert.equal(crossed, true); assert.ok(P.pos.y > 0 && P.pos.y < 500);
 });
 
-test('the Moon has a curved collision surface and a stable crater mapping', () => {
+test('the Moon has a curved collision surface', () => {
 	const P = player(), f = createOrbitFrame(); f.capture(P);
 	const moon = f.moonCenter(new THREE.Vector3());
 	P.pos.copy(moon).add(new THREE.Vector3(0, MOON.radius - 40, 0)); P.vel.set(0, -40, 3);
@@ -79,8 +80,30 @@ test('the Moon has a curved collision surface and a stable crater mapping', () =
 	assert.equal(f.surface(P.pos, P.vel), true);
 	near(f.moonAltitude(P.pos), 1.8, 1e-5);
 	assert.ok(P.vel.dot(P.pos.clone().sub(moon).normalize()) >= -1e-9);
-	const b = f.moonBasis(P.pos), map = f.mapPoint(P.pos);
-	near(b.normal.length(), 1); near(b.east.length(), 1); near(b.north.length(), 1);
-	near(b.east.dot(b.north), 0, 1e-6); assert.ok(Number.isFinite(map.x) && Number.isFinite(map.y));
 	assert.equal(f.info(P.pos).moon.landed, true);
+});
+
+test('the Sun and Gargantua are fixed world positions that turn with the frame', () => {
+	const P = player(), f = createOrbitFrame(); f.capture(P); f.setSun(new THREE.Vector3(0, 1, 0));
+	const sun = f.sunCenter(), garg = f.gargCenter();
+	near(sun.distanceTo(f.center), SUN.distance, 1); near(garg.distanceTo(f.center), GARGANTUA.distance, 1);
+	// moving the ship does not move them
+	P.pos.set(5e8, 3e8, -2e8);
+	near(f.sunCenter().distanceTo(sun), 0, 1e-3); near(f.gargCenter().distanceTo(garg), 0, 1e-3);
+	near(MOON.radius / ORBIT.radius, 0.2726, 1e-3);
+});
+
+test('deep-space gears are tenfold but slow exponentially near a surface or the Sun', () => {
+	const P = player(), f = createOrbitFrame(); f.capture(P); f.setSun(new THREE.Vector3(0, 1, 0));
+	P.pos.y = 5e7;
+	const away = new THREE.Vector3(1, 0, 0);
+	const nine = f.speed(P.pos, false, 9, 0, away), hundred = f.speed(P.pos, false, 100, 0, away), top = f.speed(P.pos, false, 100000, 0, away);
+	assert.ok(hundred > nine * 4 && top > hundred);
+	P.pos.y = 200000;
+	const down = new THREE.Vector3(0, -1, 0), out = new THREE.Vector3(0, 1, 0).applyAxisAngle(new THREE.Vector3(1, 0, 0), .3);
+	assert.ok(f.speed(P.pos, false, 100000, 0, down) <= Math.max(f.speed(P.pos, false, 9), 200000 * 3) + 1e-6);
+	assert.ok(f.speed(P.pos, false, 100000, 0, out) > 1e8);
+	P.pos.copy(f.sunCenter()).add(new THREE.Vector3(SUN.radius * 1.5 + 1e6, 0, 0));
+	assert.ok(f.speed(P.pos, false, 100000, 0, new THREE.Vector3(-1, 0, 0)) <= 3e7);
+	assert.equal(nextFlightSpeed(9), 1); assert.equal(nextFlightSpeed(9, true), 100); assert.equal(nextFlightSpeed(100000, true), 1);
 });

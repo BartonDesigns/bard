@@ -25,7 +25,7 @@ const hh = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s
 const n1 = (x) => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hh(i) * (1 - u) + hh(i + 1) * u; };
 const ease = (v, t, k) => v + (t - v) * Math.min(1, k);
 
-export function createWeather(scene, shared, { isPhone = false } = {}) {
+export function createWeather(scene, shared, { isPhone = false, airless = false } = {}) {
 	const U = {
 		uCloudOff: { value: new THREE.Vector2() }, uCirrusOff: { value: new THREE.Vector2() }, uCirrus: { value: 0.3 },
 		uShowers: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 1, 0)) }, uRainHere: { value: 0 }, uGloom: { value: 0 },
@@ -115,7 +115,7 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1.4, 1.4, 1.4), tmp = new THREE.Vector3(), acc = new THREE.Vector3();
 	let flockC = new THREE.Vector3();
 	function stepBirds(dt, cam, wind, groundAt) {
-		const show = S.rainHere < 0.45 && cam.position.y - groundAt(cam.position.x, cam.position.z) < 300;
+		const show = !airless && S.rainHere < 0.45 && cam.position.y - groundAt(cam.position.x, cam.position.z) < 300;
 		birds.visible = show;
 		if (!show) { for (const b of B) b.placed = false; return; }
 		// the flock's home: ahead of you, 40-70 m up, and it slides downwind
@@ -257,6 +257,8 @@ export function createWeather(scene, shared, { isPhone = false } = {}) {
 		S.showerRate = ease(S.showerRate, tgt[1], k);
 		S.storm = ease(S.storm, tgt[3], k);
 		S.cirrus = ease(S.cirrus, S.mode === 'auto' ? THREE.MathUtils.smoothstep(n1(wt * 3.1 + 40), 0.35, 0.8) : S.mode === 'fair' ? 0.5 : 0.2, k);
+		// no air: no cloud, rain, storms or birds
+		if (airless) S.cover = S.showerRate = S.storm = S.cirrus = 0;
 		if (S.pin.wind === undefined) shared.uWind.value = ease(shared.uWind.value, tgt[2], dt * 0.03);
 		const W = shared.uWind.value + shared.uGust.value * 0.5, wd = shared.uWindDir.value;
 		// the wind at cloud height, in m/s, and the drift of the cloud field (1 unit ~ 940 m)
