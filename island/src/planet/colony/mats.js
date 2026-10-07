@@ -70,14 +70,31 @@ const LOOK = /* glsl */`
 	diffuseColor.rgb = cCol;
 `;
 
+// a colonist's stride: legs and arms swung from the hip and shoulder, a hop in low gravity
+const WALK_HEAD = /* glsl */`
+attribute float aLeg;
+attribute vec2 aPh;
+uniform float uTime, uHop;
+`;
+const WALK = /* glsl */`
+	float cSw = sin(uTime * 4.2 + aPh.x) * aPh.y;
+	if (aLeg != 0.0) {
+		float py = abs(aLeg) > 0.75 ? 0.86 : 1.45, an = cSw * 0.5 * sign(aLeg) * min(1.0, abs(aLeg) * 1.5);
+		vec3 ct = transformed - vec3(0.0, py, 0.0);
+		transformed = vec3(ct.x, ct.y * cos(an) - ct.z * sin(an), ct.y * sin(an) + ct.z * cos(an)) + vec3(0.0, py, 0.0);
+	}
+	transformed.y += abs(sin(uTime * 4.2 + aPh.x)) * uHop * aPh.y;
+`;
 // a kit material: lit, coloured per vertex, its look per vertex by aGlow
 export function shellMaterial(U, o = {}) {
 	const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0xffffff, roughness: o.rough ?? 0.78, metalness: o.metal ?? 0.05 });
 	if (o.env) m.envMap = o.env;
 	m.envMapIntensity = 0.35;
+	const hop = { value: o.hop || 0 };
 	m.onBeforeCompile = (sh) => {
-		Object.assign(sh.uniforms, U);
-		sh.vertexShader = HEAD_V + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+		Object.assign(sh.uniforms, U, { uHop: hop });
+		sh.vertexShader = HEAD_V + (o.walk ? WALK_HEAD : '') + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+			${o.walk ? WALK : ''}
 			vec4 cw = vec4(transformed, 1.0);
 			#ifdef USE_INSTANCING
 				cw = instanceMatrix * cw;
@@ -89,7 +106,7 @@ export function shellMaterial(U, o = {}) {
 			.replace('#include <color_fragment>', '#include <color_fragment>\n' + LOOK)
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += cEmC * cEm;');
 	};
-	m.customProgramCacheKey = () => 'colonyshell';
+	m.customProgramCacheKey = () => 'colonyshell' + (o.walk ? 'w' : '');
 	return m;
 }
 // the pressure glass: a dark, clear skin that takes the sky, warm from within by night
