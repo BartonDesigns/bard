@@ -5,8 +5,8 @@
 
 import { cleanCode } from './protocol.js';
 
-const FINAL = new Set([4000, 4404, 4409, 1008]);
-export const REASONS = { 4000: 'The host ended the room.', 4404: 'That room is not open (or has ended).', 4409: 'That room is full.', 4413: 'A message was too big.', 4429: 'Too many messages.', 4408: 'Timed out.', 1008: 'The room refused this player.' };
+const FINAL = new Set([4000, 4001, 4404, 4409, 1008]);
+export const REASONS = { 4000: 'The host ended the room.', 4001: 'This room was opened in another window.', 4404: 'That room is not open (or has ended).', 4409: 'That room is full.', 4413: 'A message was too big.', 4429: 'Too many messages.', 4408: 'Timed out.', 1008: 'The room refused this player.' };
 
 export function createRoomClient({ url, id, name, seed, WS = globalThis.WebSocket, on = () => {} }) {
 	let ws = null, code = '', tries = 0, timer = null, ping = null, want = false;

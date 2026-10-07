@@ -27,12 +27,14 @@ const SMALL = 'padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,
 const stop = (el) => { for (const ev of ['pointerdown', 'touchstart', 'keydown', 'wheel']) el.addEventListener(ev, (e) => e.stopPropagation()); return el; };
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 
+// one id a tab (kept over a reload), so two tabs in one browser are two players
 function myId() {
-	let id = store.get(ID_KEY);
+	let id = null;
+	try { id = sessionStorage.getItem(ID_KEY); } catch { /* private mode */ }
 	if (!/^[A-Za-z0-9_-]{8,40}$/.test(id || '')) {
 		const b = new Uint8Array(12); crypto.getRandomValues(b);
 		id = 'p' + [...b].map((x) => x.toString(36).padStart(2, '0')).join('').slice(0, 20);
-		store.set(ID_KEY, id);
+		try { sessionStorage.setItem(ID_KEY, id); } catch { /* this visit only */ }
 	}
 	return id;
 }
