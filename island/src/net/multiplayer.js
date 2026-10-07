@@ -73,7 +73,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 			for (const p of v.players) if (p.id !== id) remotes.add(p);
 			if (v.state) applyState(v.state);
 			for (const e of v.events || []) plan(e);
-			sent.spot = ''; sent.stateT = 0; sent.events.clear();
+			sent.spot = ''; sent.spotT = 0; sent.stateT = 0; sent.events.clear();
 			travelling?.(v);
 			drawPanel(); chipDraw();
 		} else if (t === 'join') { remotes.add(v); hint(`${v.name} joined.`, 2500, 1); drawPanel(); chipDraw(); }
@@ -139,23 +139,23 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (car) camera.getWorldDirection(look);
 		return { t: 'pose', p: [at.x, at.y, at.z], y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', w: worldKey() };
 	}
-	function sendAll(dt) {
+	// (timed by the clock, not by frames: a slow phone still keeps to the pace)
+	function sendAll() {
 		if (room.status !== 'on') return;
-		const p = pose();
-		sent.t += dt; sent.spotT += dt; sent.stateT -= dt;
+		const p = pose(), now = performance.now();
 		if (p) {
 			// about ten a second while moving; when still, only a change (pings keep you in)
 			const moved = Math.hypot(p.p[0] - sent.x, p.p[2] - sent.z) > 0.05 || Math.abs(p.p[1] - sent.y) > 0.05 || Math.abs(p.y - sent.yaw) > 0.03 || p.a !== sent.a;
-			if (moved && sent.t >= 0.1) { room.send(p); sent.t = 0; sent.x = p.p[0]; sent.z = p.p[2]; sent.y = p.p[1]; sent.yaw = p.y; sent.a = p.a; }
+			if (moved && now - sent.t >= 100) { room.send(p); sent.t = now; sent.x = p.p[0]; sent.z = p.p[2]; sent.y = p.p[1]; sent.yaw = p.y; sent.a = p.a; }
 		}
 		// where you are, for a friend's Go to (and a guest's arrival): every few seconds
-		if (sent.spotT > 4) {
-			sent.spotT = 0;
+		if (now - sent.spotT > 4000) {
+			sent.spotT = now;
 			const s = share.capture?.();
 			if (s) { s.by = name(); const c = pack(s); if (c !== sent.spot) { sent.spot = c; room.send({ t: 'spot', code: c }); } }
 		}
-		if (room.isHost() && sent.stateT <= 0) {
-			sent.stateT = 3;
+		if (room.isHost() && now >= sent.stateT) {
+			sent.stateT = now + 3000;
 			const w = W(), soc = social?.();
 			if (w?.sky) room.send({ t: 'state', s: { hours: w.sky.state.hours, speed: w.sky.state.speed, real: !!w.sky.state.real, clock: soc?.appointments?.clock?.() ?? null, weather: { mode: w.weather?.state.mode || 'auto', day: w.weather?.state.day || 0 } } });
 			hostPlans(soc);
@@ -247,7 +247,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		return new Promise((done) => {
 			let settled = false;
 			const finish = (v) => { if (!settled) { settled = true; travelling = null; done(v); } };
-			const give = setTimeout(() => finish(false), 15000);
+			const give = setTimeout(() => finish(false), 30000);
 			travelling = !travel ? null : async (welcome) => {
 				clearTimeout(give);
 				travelling = null;
@@ -255,7 +255,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 				if (hostId === id) { finish(true); return; }
 				// the host's spot: in the welcome, or soon after
 				let spot = welcome.players.find((p) => p.id === hostId)?.spot;
-				for (let i = 0; !spot && i < 30; i++) { await new Promise((r) => setTimeout(r, 200)); spot = room.players.get(hostId)?.spot; }
+				for (let i = 0; !spot && i < 100; i++) { await new Promise((r) => setTimeout(r, 200)); spot = room.players.get(hostId)?.spot; }
 				if (spot) await share.openAt(beside(spot));
 				else if (!W()) await enter({ seed: 1337, earth: true });
 				finish(true);
@@ -385,17 +385,16 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	drawMenu();
 
 	// ---------- each frame ----------
-	let slowT = 0;
+	let slowAt = 0;
 	function update(dt, time) {
 		if (room.status === 'off' && !remotes.list.size) return;
 		const w = W(), P = w?.player?.state;
 		if (pendingState && w?.sky) applyState(pendingState);
-		sendAll(dt);
+		sendAll();
 		remotes.update(dt, time, (p) => !!p && p.w === worldKey());
 		steer(dt);
-		slowT -= dt;
-		if (slowT <= 0) {
-			slowT = 1;
+		if (performance.now() >= slowAt) {
+			slowAt = performance.now() + 1000;
 			if (!room.isHost() && w?.sky && plans.size) {
 				syncPlans();
 				book.tick({ hours: w.sky.state.hours, bodyKey: 'mp', player: P ? { x: P.pos.x, z: P.pos.z } : null });
