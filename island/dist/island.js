@@ -6163,7 +6163,7 @@ vec3 cityGlow = vec3(0.0); float flatK = 0.0;
 						// (the land darkened as it wets toward the water, mud only at it, and a film
 						// of water glossing the last stretch)
 						float wk = clamp(wv.y, 0.0, 1.0);
-						c = mix(c * (1.0 - 0.38 * smoothstep(0.0, 0.6, wk)), mud, smoothstep(0.5, 1.0, wk));
+						c = mix(c, mud, smoothstep(0.55, 1.0, wk) * 0.8) * (1.0 - 0.45 * smoothstep(0.0, 0.7, wk));
 						wxPudA = max(wxPudA, smoothstep(0.7, 1.0, wk) * (1.0 - clamp(wv.y - 1.0, 0.0, 1.0)) * 0.55);
 						c = mix(c, conc, clamp(wv.y - 1.0, 0.0, 1.0));
 						flatK = max(flatK, clamp(wv.y - 1.0, 0.0, 1.0));
