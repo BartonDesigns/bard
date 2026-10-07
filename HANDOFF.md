@@ -6,49 +6,34 @@ file-by-file map is in `island/README.md`.
 
 ## Resume here (7 October 2026)
 
-- **Space (on the branch):** see `island/ORBITAL-FLIGHT.md`.
-  - The black hole was pinned to the view: `space/view.js` eased Gargantua's bearing 94% onto the camera's forward ray whenever it was off-screen, and drew a camera-facing fallback disc (a nine-lobed red ring round a black core) with it. Those were the "red dots". Now the Sun, Gargantua and the Moon are fixed world positions (`frame.js`), with labelled, tappable markers (`space/nav.js`).
-  - B goes past ×9 in space: ×100, ×1k, ×10k, ×100k, eased, with a guard that slows approaches. Stars streak at speed. J or ⤳ Warp lists every destination.
-  - The Moon is a `MOON` world (`planet/profile.js`, relief `lunar`, 0.17 g, dark sky), landed on through `voyage()` → `api.open` in `main.js`. The old shader-only lunar patch is gone.
-  - The Sun: heat haze, a warning and shields, then a bounce back at 8 solar radii.
-  - The Moon is bare: its sea, village, grass, animals, sea caves, ball fields and alien works are held in a hidden group or not planned; no clouds, rain or birds (weather `airless`); black sky with Earth (sky.js `uEarthSky`).
-  - Tests: `island/tools/orbit.test.mjs`; headless `/tmp/claude-0/space/moon.cjs`, `space2.cjs`.
-
-- **One load into a saved spot (on the branch):** the faceplate's resume (and a shared `?at=` link) used to raise the default island, show it, jump you to the spot, then set the saved hour after the Bay finished loading.
-  - Now `share.js` go() passes the spot to `api.open({ spot })` (`main.js`): one loading card, "Returning to <place>…" with a percentage, stays up over the build and the arrival.
-  - The sky starts at the saved hour (`shared.startHours`), and the player is placed at the spot inside build(), so the Bay streams in round it, not round the island.
-  - Nothing is drawn behind the card until the land, bridge and streets are in (about 3× faster in SwiftShader). Then the shaders are warmed and frames settle, and the card lifts once, with the saved hour set again.
-  - A fresh start (no save) is unchanged. Test: `/tmp/claude-0/resume/timeline.js` (`fresh`, `link`).
-
-- **Meetings people keep (quest item 1, on the branch, not yet live):**
-  - `people/appointments.js`:
-    - parses a spoken time ("6 pm", "7:30 tonight", "sunset", "tomorrow at noon", "in an hour");
-    - counts game days (the sky clock only wraps at 24 h);
-    - estimates the real-time equivalent by stepping `advanceSolarClock`, because days run slow and nights fast;
-    - keeps the saved book (`crysis-appointments-v1`): proposed → agreed → kept, missed or cancelled.
-  - **In conversation** (`guide/guide.js`, meetingReply / meetingFromReply):
-    - "meet me at the village at 6pm" becomes an agreed meeting. If only a place or only a time is given, the resident asks for the other, and a two-turn plan works.
-    - A resident's suggestion, either tagged `[[meet: PLACE @ TIME]]` or plainly worded, becomes a proposal. "Yes" agrees, "no" declines. A suggestion that answers the player's own invitation counts as agreed.
-    - Vague talk of meeting gets an honest note: nothing is settled until a place and time are agreed.
-    - Children decline.
-    - The cloud NPC is told, as a fact, to always name a place and a clock time.
-  - **The resident keeps it** (`social.js` keepAppointments, the `meet` mode in `social-actors.js`):
-    - sets off half a game hour early;
-    - is at the place by the hour, travelling there directly when out of the player's sight;
-    - waits until 1.5 game hours past;
-    - remembers whether you came; if you didn't, goes home.
-  - **The journal:** Quests has a MEETINGS section with game time, real-time equivalent, distance and bearing, and Show the way / Agree / Decline / Cancel buttons.
-  - **Waypoint** (`ui/waypoint.js`): a beam pin with a diamond on top at the place, plus a chip at the top of the screen with an arrow, distance and time; tapping the chip opens Quests. It marks the tracked or soonest meeting, otherwise the active story quest's next place.
-  - **Verified:**
-    - Node: `tools/appointments.test.mjs`, 6 tests.
-    - Headless TERRAN village (`/tmp/claude-0/meet/flow.js`; slow, about 0.25 fps): agree → chip → resident outbound → waiting at the place → kept, with the memory written.
-  - **Gatherings (on the branch):** "gather people for a concert at the park", "throw a party here at 9pm", "host a picnic", "round up folks for a meet-up".
-    - `people/gatherings.js`: request and kind (concert, party, picnic, meet-up), default time (7 pm, or an hour on when late), crowd size (6–25, phone caps), timetable, crowd layout. Plain data on the appointment (`a.gathering`), ready for a multiplayer sync.
-    - `appointments.js`: a gathering runs for an hour whether or not the player comes (go → due → joined → kept/missed); `mention()` marks the organiser's recap as said.
-    - `people/gathering-scene.js`: two instanced crowds (walking, standing) arrive over time; out of sight they are placed directly. They sway, nod to `music.performance.beat`, and raise their arms with the Bard's loudness. A concert has a stage with a drummer playing in time. They walk away at the end.
-    - `social.js` keepGathering: the organiser goes first, up to 4 (2 on a phone) remembered residents nearby join, all go home after; memories are written. `guide.js`: the reply, the journal row, the pin, and the recap the next time you talk.
-    - `crowd.js`: the region is packed into `position2.w`, so the shader stays within 16 vertex attributes. Before this, it failed to link on SwiftShader.
-    - Verified: `island/tools/gatherings.test.mjs` (7 tests); headless flow `/tmp/claude-0/gather/flow.js`.
+- **Live:** main is at `a50b1da`. It includes:
+  - meetings people keep (`people/appointments.js`) and gatherings (`people/gatherings.js`, `gathering-scene.js`);
+  - one-load resume into the saved spot and hour (`share.js` `go()`);
+  - space: Moon landing (MOON profile), the black hole fixed in the orbit frame, `space/nav.js` markers, gears ×9→×100k on B, warp on J or the Warp button, and the Sun pushing you back;
+  - the edges pass: water edges, interior corner shading, contact shadows (`bay/contact.js`), texture scale;
+  - the phone memory budget, streets drawn on the light ground, and High as the default graphics.
+- **Agents running on `claude/affectionate-heisenberg-3g4qv1`** (results land there):
+  1. **World expansion:** street-level Castro Valley, Moraga, Richmond/El Cerrito, Novato and south of Mountain View; then the trail saw-tooth, the globe sky latitude, and the regional talk fixes. Scratch in `/tmp/claude-0/expand/`.
+  2. **Skin:** blotchy, too-bright T-zone and sheen on NPC faces. Scratch in `/tmp/claude-0/skin/`.
+  3. **Multiplayer v1:** a Cloudflare Worker with Durable Objects and room codes (`?room=`), avatars with interpolation, Follow, host-synced time, weather, gatherings and meetings. Code and a deploy guide are in `server/multiplayer`. Scratch in `/tmp/claude-0/mp/`. The owner must deploy it.
+- **Discovery Worker:** the owner reports deploying the planner update. This sandbox can't reach workers.dev (proxy 403); check `/status` in a browser for `social_intent` and `story_quest`.
+- **Open items:**
+  - **Brows:** redo them filled in and dense, and show the owner first. The current brows are the old ones.
+  - **Edges:**
+    - a street before/after;
+    - contact shade for people, rocks, fences and logs;
+    - bevels on outside corners;
+    - the dashed line at the Half Moon Bay waterline;
+    - creek and lake banks near sea level coming out beach-tan.
+  - **Moon:** boulders and trails are still on the surface.
+- **Ship steps:**
+  1. In `/tmp/claude-0/ship`, `git fetch` and `reset --hard origin/<branch>`.
+  2. Check `merge-base --is-ancestor origin/main HEAD`.
+  3. Serve the folder on 8768 and run `node /tmp/claude-0/planet/smoke-ship.js`. It must show 0 errors and "samplers ok"; a screenshot timeout alone is fine.
+  4. `git push origin HEAD:main`. The owner allows deploying.
+  - **Gotcha:** never `pkill -f` a pattern that appears in your own command line; it kills the shell (exit 144).
+  - **To ship only part of the branch:** reset the ship tree to `origin/main`, then apply the specific commits' source diffs and rebuild.
+- **Tokens:** the owner asks for lean work: one or two agents at a time, numbers before screenshots, and they approve looks before shipping.
 
 ## Earlier resume note (6 October 2026, night)
 
@@ -105,7 +90,7 @@ file-by-file map is in `island/README.md`.
 - **Next on the list:**
   - phone memory budget;
   - hair refinement (show the user before shipping);
-  - street-level gaps (Castro Valley, Moraga, Richmond/El Cerrito, Novato, south of Mountain View);
+  - ~~street-level gaps~~ (done 7 October, see Resume here);
   - regional dress and talk fixes;
   - the trail saw-tooth;
   - sky latitude on the globe.
@@ -327,8 +312,8 @@ shipped work). Before doing anything:
   Check `/status` in a browser. Both models' Neuron prices in `server/discovery/wrangler.toml`
   were checked against the Workers AI pricing page (1 October 2026) and match. Next layer
   (agents with memory, shared happenings) is in `server/README.md`.
-- **Street-level Bay:** done and live (eight new areas, tiles streamed by distance). Gaps: Castro
-  Valley, Moraga, Richmond and El Cerrito, Novato, south of Mountain View. The place-name banner (`bay/labels.js`) now runs on the real
+- **Street-level Bay:** done and live (eight new areas, tiles streamed by distance). The gaps were
+  filled on 7 October (see Resume here). The place-name banner (`bay/labels.js`) now runs on the real
   clock, so it no longer lags behind and names a town already passed at low frame rates.
 - **Hair refinement** (asked for "next week"): see Known issues.
 - **Graphics lost on a device** (reported 1 October 2026, Safari): the game now recovers or says to
@@ -341,8 +326,8 @@ shipped work). Before doing anything:
   sun as the slope, with shadows on the ground, nothing to fix.
 - **Regional talk** re-checked in 8 places (Svalbard, Marrakesh, Istanbul, Kyoto, Manaus, Ulaanbaatar,
   Zermatt, Iqaluit). Fixed: harbour and ferry talk inland (a coast flag in `region/here.js`), Amazon
-  and Moroccan food. Still to look at: herders' clothes (skate shoes, chains), and big cities
-  described as villages (Kyoto, Marrakesh).
+  and Moroccan food. Herders everywhere now wear boots or sandals and no chain (`region/dress.js`,
+  7 October); Kyoto and Marrakesh are called cities (`region/community.js`, checked 7 October).
 
 ## What it is
 
@@ -534,8 +519,10 @@ own, or `index.html` for the full site.
 - **House plans:** 259 of 4050 test plans still flag small things (1 m² corners at hall
   junctions, a few 2.0–2.2 m living rooms or kitchens, doors against a stairwell).
 - **Fishing:** the float's final size was not seen in a test frame.
-- **Trails:** a faint saw-tooth where the ground mesh meets the trail's cut.
-- **Sky:** the sky is computed for the Bay's latitude even on the globe.
+- **Trails:** the faint saw-tooth where the ground mesh meets the trail's cut is softened (7 October:
+  the tread is averaged over the vertex spacing, `bay/berms.js`); not yet seen in a test frame.
+- **Sky:** follows the player's latitude on the globe (`main.js` passes `globeLL(...).lat` to
+  `createSky`; `tools/solar.test.mjs`).
 
 - **Mapped cities:** the terrain under Oakland's and Berkeley's hills and the Peninsula is the 60 m
   survey (only San Francisco has 15 m), so hillside houses there sit on coarse ground; the tiles
