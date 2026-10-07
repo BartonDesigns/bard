@@ -26,20 +26,15 @@ pointers are where each fix most likely starts.
    jump/dive button, and diving ends when you rise above the surface. Change: while swimming,
    pitching down past a threshold (about −20°) while moving forward starts the dive. Swimming
    under water already follows where you look.
-3. **Bend, Oregon "city blocks".** From a distance it looks like a town, but close up it is only
-   a coloured grid painted on the ground. That is the `urb` block pattern in the
-   `earth/globeterrain.js` shader ("blocks of the survey's 100 m"), with no buildings on it.
-   Either put real buildings on those blocks (procedural houses from `region/structures.js` /
-   `region/settle.js`, or baked Overture footprints for the larger towns), or fade the painted
-   grid out when you are close and low. Ask the owner which before building.
+3. **Bend, Oregon "city blocks". Done.** The owner chose real buildings, never fake grids. The globe ground no
+   longer paints streets (`earth/globeterrain.js`); its built-up tint shows only from 1.5 km out.
+   Streets and buildings come only from the town the generator grows. Bend is size 2 (1.7 km reach).
 4. **The flight approach needs the owner's review and approval.** Write up how flying works
    (height floors, speed tiers, how the ground streams in ahead of you, the arrival into towns) and
    show the owner before changing it. Do not ship flight changes without approval.
-5. **Detail centred under you.** The sharpest ground detail should be in a circle directly
-   beneath the player, not pushed out into the view ahead. Check how the globe's radial grids
-   (`radialGrid` in `world/terrain.js`, the near/mid/far rings in `earth/globeterrain.js`) and the
-   tree tiers (`earth/globetrees.js` near/far) are centred. Any look-ahead offset should become
-   zero, or small and only at speed. Confirm with the owner that this is what they meant.
+5. **Detail under you and ahead. Done.** The owner wants the sharp circle under the player and also cast
+   ahead. `earth/globe.js` leads the fine and mid ground rings and the near trees along the view:
+   0.6 of your height, between 40 and 450 m (trees at most 150 m), and none when looking straight down.
 6. **Cinematic automated motion.** Explore mode (`explore.js`) should feel epic: sweeping
    crane and drone moves, slow reveals over ridges and coasts, long glides at golden hour, cuts
    timed to the music. It already has shots (`dolly`, `orbit` …) and phrase cuts from
