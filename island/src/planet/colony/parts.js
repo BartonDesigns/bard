@@ -180,7 +180,7 @@ export function port(X, p) {
 			put(X, Fp, RUN, S.pad, box(0.35, 0.3, 0.35), Math.sin(a) * (d.r - 0.6), 1.0, Math.cos(a) * (d.r - 0.6), 0, 0, 0, 1, true);
 		}
 		// a blast wall of banked regolith behind it
-		put(X, Fp, REG, S.berm, lathe([[d.r + 2, -0.5], [d.r + 2.6, 2.6], [d.r + 4, 2.6], [d.r + 6, -0.5]], 24, true, Math.PI * 0.75, Math.PI * 0.5));
+		put(X, Fp, REG, S.berm, lathe([[d.r + 2, -0.5], [d.r + 2.6, 2.6], [d.r + 4, 2.6], [d.r + 6, -0.5]], 24, true, Math.PI * 1.75, Math.PI * 0.5));
 		pool(X, d.x, d.z, d.y + 0.9, d.r * 1.15, S.pad);
 		X.col.disc(d.x, d.z, d.r, d.y + 0.85);
 		if (i % 2 === 0) lander(X, frame(d.x, d.y + 0.85, d.z, p.yaw + i));
