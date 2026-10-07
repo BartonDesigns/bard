@@ -4,6 +4,58 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Owner feedback to work next (7 October 2026, after a context clear)
+
+The owner flew north from the Bay and noted these points. Nothing below is built yet. The code
+pointers are where each fix most likely starts.
+
+1. **Trees in the Pacific Northwest lakes and rivers.** Every lake has trees standing in the
+   water, and you can see them from under water. Trees at the edge of a natural lake are fine and
+   wanted. Water and land need a real shoreline between them.
+   - Cause: `earth/globetrees.js` `lay()` only skips a tree when the ground is below sea level
+     (`if (h < 1) continue;`). It never checks the lake mask. The terrain shader knows where lakes
+     are (`vGC.y` = `gLake`, `vGC.z` = `gLevel` in `earth/globeterrain.js`), but the CPU tree
+     placement does not.
+   - Fix: give the trees a lake and river test on the CPU: under water (`h < level - 0.3`), no
+     tree; a band a few metres above the level gets reeds, shrubs and the odd shoreline tree. The
+     terrain also needs a shoreline in the colour, a wet bank and a beach or reeds, like the coast's
+     `shore` term but for lake levels. The existing open item "creek and lake banks near sea level
+     coming out beach-tan" is the same work.
+2. **Diving by direction.** You should go under water by looking or steering down, not by
+   pressing a down-arrow or dive key. Today `player.js` `jump()` sets `s.diving` only from the
+   jump/dive button, and diving ends when you rise above the surface. Change: while swimming,
+   pitching down past a threshold (about −20°) while moving forward starts the dive. Swimming
+   under water already follows where you look.
+3. **Bend, Oregon "city blocks".** From a distance it looks like a town, but close up it is only
+   a coloured grid painted on the ground. That is the `urb` block pattern in the
+   `earth/globeterrain.js` shader ("blocks of the survey's 100 m"), with no buildings on it.
+   Either put real buildings on those blocks (procedural houses from `region/structures.js` /
+   `region/settle.js`, or baked Overture footprints for the larger towns), or fade the painted
+   grid out when you are close and low. Ask the owner which before building.
+4. **The flight approach needs the owner's review and approval.** Write up how flying works
+   (height floors, speed tiers, how the ground streams in ahead of you, the arrival into towns) and
+   show the owner before changing it. Do not ship flight changes without approval.
+5. **Detail centred under you.** The sharpest ground detail should be in a circle directly
+   beneath the player, not pushed out into the view ahead. Check how the globe's radial grids
+   (`radialGrid` in `world/terrain.js`, the near/mid/far rings in `earth/globeterrain.js`) and the
+   tree tiers (`earth/globetrees.js` near/far) are centred. Any look-ahead offset should become
+   zero, or small and only at speed. Confirm with the owner that this is what they meant.
+6. **Cinematic automated motion.** Explore mode (`explore.js`) should feel epic: sweeping
+   crane and drone moves, slow reveals over ridges and coasts, long glides at golden hour, cuts
+   timed to the music. It already has shots (`dolly`, `orbit` …) and phrase cuts from
+   `autoMusic.pulse()`. This pass is about the shots' quality: higher and wider establishing
+   shots, parallax past foreground, and easing that does not feel mechanical.
+7. **Enter Gargantua and the Sun.** The owner wants to fly into both. `space/flight.js`
+   `hazards()` now pushes you back with `startBounce()` at `SUN.safe` and `GARGANTUA.safe`, and
+   `space/frame.js` keeps their shells in `clearance()`.
+   - Gargantua: the inside of the black hole, with its event horizon at the centre, is already
+     designed (`runtime/gargantua228.mjs`, drawn in `space/view.js`). Replace the bounce with an
+     entry sequence through the disk and photon ring into that interior, and a way back out (a
+     warp or a timed return).
+   - The Sun: an entry through the corona and photosphere into a glowing interior, with the heat
+     warning kept as atmosphere instead of a wall, and a way back out.
+   - Show the owner the look before shipping.
+
 ## Resume here (7 October 2026)
 
 - **Multiplayer v1 (on the branch, not live until the owner deploys):** friends join the host's game and see each other.
