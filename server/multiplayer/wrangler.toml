@@ -1,0 +1,19 @@
+# The rooms server for Level 99 Bard (see README.md): friends playing together. Workers Free
+# plan only: a Worker and one SQLite-backed Durable Object class, with WebSockets.
+name = "l99-rooms"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# the Free plan only has SQLite-backed Durable Objects
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[vars]
+ALLOWED_ORIGINS = "https://level99bard.com,https://www.level99bard.com"
+ALLOW_LOCALHOST = "true"

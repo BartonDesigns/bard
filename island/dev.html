@@ -8,7 +8,9 @@ const w = window.L99IslandModule.island();
 // ?planet=MYSTICAL (or ARID, ICE, MAGMA, TOXIC, TERRAN, OCEAN, GAS…) opens another world
 const planet = q.get('planet');
 // ?at=<code>: a shared spot (share.js)
-if (q.get('at')) w.openAt(q.get('at'));
+// ?room=<code>: a friend's room (net/multiplayer.js)
+if (q.get('room')) w.joinRoom(q.get('room')).then((ok) => { if (!ok && !w.world()) w.open({ seed: 1337 }); });
+else if (q.get('at')) w.openAt(q.get('at'));
 else w.open(planet ? { seed: +(q.get('seed') || 4242), biome: planet, earth: false } : { seed: +(q.get('seed') || 1337) });
 </script>
 </body></html>
