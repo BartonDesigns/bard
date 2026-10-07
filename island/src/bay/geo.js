@@ -25,6 +25,7 @@ export const LEVELS = [
 	{ name: 'h7', lat: [37.43, 37.71], lon: [-122.53, -122.42], step: 12, zoom: 14 },          // the San Mateo coast: Pacifica, Devil's Slide, Moss Beach, Half Moon Bay
 	{ name: 'h8', lat: [37.87, 37.93], lon: [-122.735, -122.64], step: 10, zoom: 14 },         // Bolinas and Duxbury Reef
 	{ name: 'h9', lat: [37.08, 37.46], lon: [-122.46, -122.27], step: 16, zoom: 14, floor: -120 },          // Highway 1 south: the Ritz-Carlton's bluffs, San Gregorio, Pescadero, Pigeon Point, Año Nuevo
+	{ name: 'h10', lat: [38.02, 38.16], lon: [-122.65, -122.48], step: 15, zoom: 13 },         // Novato, mapped street by street (h1 stops short of its north end)
 ];
 // height encoding in the PNGs: v = (h + 1000) * 20 in R (high byte) and G (low byte)
 export const H_OFF = 1000, H_SCALE = 20;

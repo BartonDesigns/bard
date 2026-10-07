@@ -52,6 +52,11 @@ const LANDMARKS = [
 	['City Center Bishop Ranch', 37.7672, -121.9600, 'San Ramon\'s downtown: shops and a plaza under a long canopy'],
 	['San Ramon Central Park', 37.7650, -121.9522, 'lawns, the community center and the library'],
 	['Iron Horse Trail', 37.7687, -121.9640, 'the old Southern Pacific line, now a trail through the San Ramon Valley'],
+	['Lake Chabot', 37.7246, -122.1066, 'reservoir of 1875 in the hills above Castro Valley, ringed by a regional park'],
+	['Saint Mary\'s College', 37.8405, -122.1094, 'Mission-style campus of 1928 in the Moraga valley'],
+	['Rosie the Riveter Memorial', 37.9100, -122.3540, 'Richmond\'s Marina Bay, where Kaiser\'s shipyards built 747 ships in the Second World War'],
+	['Mission Santa Clara', 37.3491, -121.9420, 'mission church at the heart of Santa Clara University'],
+	['Hamilton Field', 38.0585, -122.5133, 'the old Army airfield at Novato, its Spanish-style hangars now homes and offices'],
 ];
 
 // the things there are to find: [id, title, how the world knows you did it]

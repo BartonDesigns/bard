@@ -173,6 +173,11 @@ export function regionalDress(r, d, kit, C, { cold = 0.3, role = 'walk', id = ''
 		default:
 			break;
 	}
+	// out with the animals: boots or sandals, nothing on a chain
+	if (role === 'herd') {
+		if (!/^(boot|sandal)$/.test(o.shoes?.kind || '')) boots(pick(r, ['#1b1b1d', '#33231c', '#7a5a44']));
+		o.acc = (o.acc || []).filter((a) => a.kind !== 'chain');
+	}
 	// (in the heat, the wardrobe's own jacket comes off; a robe or a shuka stays)
 	if (cold < 0.25 && o.outer && o.outer === own) o.outer = null;
 	if (cold < 0.2 && o.bottom?.kind === 'joggers') o.bottom = { kind: 'trousers', col: o.bottom.col, pat: 'plain', legs: 'long', fit: 'regular' };

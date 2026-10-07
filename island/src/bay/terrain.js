@@ -1071,7 +1071,7 @@ export function createBayArea(shared, scene, island, BU) {
 	ready.then(() => { if (!disposed) coast.start(); });
 	// the three finest surveys within reach of you go into the ground's three slots (the
 	// coarse whole-Bay level is always bound); chosen again when you have moved half a km
-	const MARGIN = [0, 1500, 500, 400, 400, 400, 400, 400, 400, 500], SLOTS = ['a', 'b', 'c'];
+	const MARGIN = [0, 1500, 500, 400, 400, 400, 400, 400, 400, 500, 400], SLOTS = ['a', 'b', 'c'];
 	let slotsAt = null;
 	function pickSlots(x, z) {
 		if (slotsAt && Math.hypot(x - slotsAt[0], z - slotsAt[1]) < 500) return;

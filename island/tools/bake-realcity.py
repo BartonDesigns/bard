@@ -405,6 +405,45 @@ for b in BOX: put('box', b[0], b[1], b)
 for p in DRIVES + WALKS: put('paths', p[0], p[1], p)
 for p in POOLS: put('pools', p[0], p[1], p)
 for t in TREES: put('trees', t[0], t[1], t)
+# the regions already held keep what they baked past their edges (a whole region keeps every
+# footprint it fetched): a road or building here that one of them already has is dropped
+def heldData(c):
+	base = f'assets/bayarea/real/{c[0]}'
+	H = json.load(open(base + '.json')); b = gzip.open(base + '.bin.gz').read()
+	U, (OX, OZ) = H['unit'], H['origin']
+	sh = ((H['geo'][1] if 'geo' in H else -122.78) - LON0) * KX
+	o, n = H['sections']['roads']; rs = []
+	for _ in range(n):
+		k = struct.unpack_from('<BBHH', b, o)[3]; v = struct.unpack_from('<' + 'h' * (2 * k), b, o + 6); o += 6 + 4 * k
+		if k > 1: rs.append(LineString([(v[2 * i] * U + OX + sh, v[2 * i + 1] * U + OZ) for i in range(k)]))
+	o, n = H['sections']['boxes']
+	bs = [boxPoly(v[0] * U + OX + sh, v[1] * U + OZ, v[2] / 20, v[3] / 20, v[4] / 10000) for v in (struct.unpack_from('<9h', b, o + k * 18) for k in range(n))]
+	return rs, bs
+def boxPoly(x, z, w, d, yaw):
+	c, s = math.cos(yaw), math.sin(yaw)
+	return Polygon([(x + c * u - s * v, z + s * u + c * v) for u, v in ((-w / 2, -d / 2), (w / 2, -d / 2), (w / 2, d / 2), (-w / 2, d / 2))])
+dropped = [0, 0]
+for c, P in zip(cells, parts):
+	near = [h for h in others if h[1] < c[3] + 0.002 and h[3] > c[1] - 0.002 and h[2] < c[4] + 0.002 and h[4] > c[2] - 0.002 and os.path.exists(f'assets/bayarea/real/{h[0]}.json')]
+	if not near: continue
+	HR, HB = [], []
+	for h in near:
+		rs, bs = heldData(h); HR += rs; HB += bs
+	if HR:
+		tr = STRtree(HR); keep = []
+		for r in P['roads']:
+			L = LineString(r['p'])
+			if any(L.hausdorff_distance(HR[k]) < 3 for k in tr.query(L.buffer(3))): dropped[0] += 1
+			else: keep.append(r)
+		P['roads'] = keep
+	if HB:
+		tb = STRtree(HB); keep = []
+		for v in P['box']:
+			B = boxPoly(*v[:5])
+			if any(B.intersection(HB[k]).area > 0.3 * min(B.area, HB[k].area) for k in tb.query(B)): dropped[1] += 1
+			else: keep.append(v)
+		P['box'] = keep
+print('dropped as already held: roads', dropped[0], 'boxes', dropped[1])
 mine, total = [], 0
 for c, (a, b, cc, d), P in zip(cells, WB, parts):
 	if len(P['box']) < 25 and len(P['roads']) < 25: continue           # open water, empty hills
