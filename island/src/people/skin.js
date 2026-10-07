@@ -2,7 +2,7 @@
 // the terminator warm and red, as it does through living flesh, most where the flesh is thin
 // (ears, the nose's wings, fingers), and shows through them lit from behind; the baked
 // shade of the folds (eye sockets, nostrils, under the chin, armpits, between the fingers,
-// the ears' curls) darkens what the sky and the bounce light reach; the T-zone shines and
+// the ears' curls) darkens what the sky and the bounce light reach; the T-zone has a soft sheen and
 // the cheeks stay matte; cheeks, nose and ears flush a little; and close up, pores and fine
 // lines break the highlight (not on phones). No textures beyond the skin's own map: the
 // baked shading rides a vertex attribute (skinx: ao, thin, oil, flush; face.js).
@@ -31,16 +31,28 @@ float sn3(vec3 x) {
 `;
 
 // light through the skin: after the usual diffuse and specular, the wrap's warm terminator
-// and light from behind through thin flesh
+// and light from behind through thin flesh. Highlights and the warm glow need strong direct
+// light: the sun's leak into shade (sky.js keeps a fifth of it) and the moon leave the skin matte
 const SSS = /* glsl */`
 void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
+	vec3 s0 = reflectedLight.directSpecular;
+#ifdef USE_SHEEN
+	vec3 h0 = sheenSpecularDirect;
+#endif
 	RE_Direct_Physical( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+	float k = smoothstep( 0.9, 2.6, dot( directLight.color, vec3( 0.2126, 0.7152, 0.0722 ) ) );
+	// (capped, so no spot outshines the skin's own colour)
+	reflectedLight.directSpecular = s0 + min( ( reflectedLight.directSpecular - s0 ) * k, directLight.color * 0.08 );
+#ifdef USE_SHEEN
+	sheenSpecularDirect = h0 + ( sheenSpecularDirect - h0 ) * k;
+#endif
 	float nl = dot( geometryNormal, directLight.direction );
-	vec3 w = vec3( 0.5, 0.2, 0.13 ) * ( 1.0 + vSkin.y * 1.2 ) * uSkin.x;
+	vec3 w = vec3( 0.3, 0.13, 0.09 ) * ( 1.0 + vSkin.y * 0.5 ) * uSkin.x;
 	vec3 wr = clamp( ( vec3( nl ) + w ) / ( 1.0 + w ), 0.0, 1.0 );
-	reflectedLight.directDiffuse += max( wr * wr * ( 3.0 - 2.0 * wr ) * 0.85 - vec3( saturate( nl ) ), 0.0 ) * directLight.color * BRDF_Lambert( material.diffuseColor );
+	float g = 0.3 + 0.7 * k;
+	reflectedLight.directDiffuse += g * max( wr * wr * ( 3.0 - 2.0 * wr ) * 0.85 - vec3( saturate( nl ) ), 0.0 ) * directLight.color * BRDF_Lambert( material.diffuseColor );
 	float back = pow( saturate( dot( geometryViewDir, -directLight.direction ) ), 3.0 ) * saturate( 0.3 - nl );
-	reflectedLight.directDiffuse += vSkin.y * back * directLight.color * material.diffuseColor * vec3( 1.0, 0.28, 0.14 ) * uSkin.x * 1.5;
+	reflectedLight.directDiffuse += k * vSkin.y * back * directLight.color * material.diffuseColor * vec3( 1.0, 0.4, 0.25 ) * uSkin.x * 0.8;
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Skin
@@ -48,7 +60,7 @@ void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryP
 
 export function skinMaterial(map, tint, age) {
 	// (the sheen is the skin's own colour, so it softens the edges without paling dark skin)
-	const m = new THREE.MeshPhysicalMaterial({ map, color: tint, roughness: 0.55, metalness: 0, ior: 1.4, specularIntensity: 0.7, sheen: 0.12, sheenRoughness: 0.7, sheenColor: tint.clone().multiplyScalar(0.45) });
+	const m = new THREE.MeshPhysicalMaterial({ map, color: tint, roughness: 0.6, metalness: 0, ior: 1.4, specularIntensity: 0.5, sheen: 0.05, sheenRoughness: 0.85, sheenColor: tint.clone().multiplyScalar(0.4) });
 	// a close crop of hair painted on the scalp (a buzz cut, or what shows under a cap)
 	const scalpU = { value: new THREE.Vector4(0, 0, 0, 0) };
 	// the shadow of a beard shaved or under a beard: its colour and how heavy
@@ -96,9 +108,10 @@ if (uVit.x > 0.5) {
 	diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.54, 0.46), smoothstep(t, t + 0.04, v) * (1.0 - smoothstep(0.2, 0.8, vScalp)));
 }`)
 			.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-// a slightly oilier T-zone and lips, matte cheeks (a sheen, not a shine: a broad bright patch
-// reads on dark skin as lost pigment); finer variation close up
-roughnessFactor = mix(0.58, 0.47, vSkin.z * uSkin.z) + (sn3(vBindP * 400.0) - 0.5) * 0.06;`)
+// a slightly oilier T-zone and lips, matte cheeks: a broad soft sheen, never a patch (on dark
+// skin a bright patch reads as lost pigment); a faint grain, gone before it could shimmer
+float rq = length( fwidth( vBindP * 120.0 ) );
+roughnessFactor = mix( 0.62, 0.54, smoothstep( 0.2, 0.9, vSkin.z ) * uSkin.z ) + ( sn3( vBindP * 120.0 ) - 0.5 ) * 0.03 * ( 1.0 - smoothstep( 0.2, 0.6, rq ) );`)
 			.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 #ifdef SKIN_PORES
 {
@@ -129,6 +142,6 @@ roughnessFactor = mix(0.58, 0.47, vSkin.z * uSkin.z) + (sn3(vBindP * 400.0) - 0.
 	reflectedLight.directSpecular *= mix(1.0, ao, 0.6);
 }`);
 	};
-	m.customProgramCacheKey = () => 'crysis-skin-5' + (isPhone ? '-lo' : '');
+	m.customProgramCacheKey = () => 'crysis-skin-6' + (isPhone ? '-lo' : '');
 	return m;
 }
