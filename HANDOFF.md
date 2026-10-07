@@ -31,6 +31,8 @@ file-by-file map is in `island/README.md`.
     - Remote players are not shown in third-person driving poses inside real car models.
     - No voice or chat.
 
+- **Explore mode (on the branch):** `island/src/explore.js`, O or the compass button in the mode group. A hands-free cruise in the current mode (walk/run with B, fly at the chosen tier, drive assist picking turns, space from body to body), steering by a wandering course weighed 4 times a second against slopes, water, walls, trees, trails, coasts and ridges. Turns auto music on without saving it (`auto(on, true)`), biases its energy and tempo by the tier (`bias`), and shifts key and queues a section on a new place (`shift`, `queue`); the camera cuts on phrases and eases on 4-bar lines from `autoMusic.pulse()`. HUD fades after 7 s; place names as a lower third (from `labels.where`). Esc, W/S, ↑/↓, Space, C or the stick held end it; `Crysis.explore()` reports distance, clearance, blocked count and shots. Test: `/tmp/claude-0/explore/run.cjs`.
+
 - **Street-level gaps filled (on the branch):** 125 new cells of the shared tile grid, baked with
   `tools/bake-realcity.py --tiles` from Overture 2026-09-23.0 (raw data in `/tmp/claude-0/expand/ov-*`):
   Castro Valley `cv` (10 tiles, 0.6 MB), Moraga and Canyon `moraga` (12, 0.8 MB), Richmond and
