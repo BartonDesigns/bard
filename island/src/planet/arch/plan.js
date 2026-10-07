@@ -288,8 +288,27 @@ export function planArch(island, profile, opts = {}) {
 		const score = Math.max(0, d - 300) * 0.01 + r();
 		if (!monolith || score < monolith.score) monolith = { x, z, score, y: H(x, z), h: 90 + r() * 60, yaw: Math.atan2(centre.x - x, centre.z - z) };
 	}
+	// the shore house: a white cube on a knoll over the water, a stair down to it
+	let shore = null;
+	for (let k = 0; k < 1500; k++) {
+		const a = r() * TAU, d = 60 + r() * 900, x = centre.x + Math.sin(a) * d, z = centre.z + Math.cos(a) * d, h = H(x, z);
+		if (h < 2.5 || h > 16 || !free(x, z, 24) || rough(H, x, z, 7) > 2.2 || villas.some((v) => Math.hypot(v.x - x, v.z - z) < 60)) continue;
+		let best = null;
+		for (let j = 0; j < 16; j++) {
+			const t = j / 16 * TAU;
+			for (let dd = 10; dd <= 44; dd += 3) if (H(x + Math.sin(t) * dd, z + Math.cos(t) * dd) < -0.3) { if (!best || dd < best.dd) best = { dd, t }; break; }
+		}
+		if (!best || best.dd < 12) continue;
+		const score = best.dd * 0.05 + d * 0.002 + rough(H, x, z, 7) + r() * 0.3;
+		if (!shore || score < shore.score) shore = { x, z, y: h, yaw: best.t, wd: best.dd, score, name: S.shore || 'The Shore House' };
+	}
+	if (shore) {
+		ease(island, shore.x, shore.z, 6, 8, shore.y);
+		bare(island, shore.x, shore.z, 8);
+		clear.push({ x: shore.x, z: shore.z, r: 12 });
+	}
 	let rad = 0;
 	for (const o of [...villas, ...towers]) rad = Math.max(rad, Math.hypot(o.x - centre.x, o.z - centre.z));
 	const mist = { base, top, cover: S.mist.cover, x: centre.x, z: centre.z, rad: Math.min(1000, rad + 300) };
-	return { style: S, seed: island.seed, name: S.name, centre, villas, towers, bridges, monolith, paths: paths.map((p) => p.pts), mist, clear, planMs: Math.round(performance.now() - t0) };
+	return { style: S, seed: island.seed, name: S.name, centre, villas, towers, bridges, monolith, shore, paths: paths.map((p) => p.pts), mist, clear, planMs: Math.round(performance.now() - t0) };
 }

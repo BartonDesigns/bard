@@ -73,7 +73,7 @@ void main(){
 	float g = texture2D(uHeight, (p + uHalf) / (2.0 * uHalf)).r;
 	float lift = glow * uDusk;
 	float a = min(1.0, cov * (1.0 + lift * 0.9) + lift * 0.12) * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
-	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.42;
+	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.5;
 	if (a < 0.004) discard;
 	gl_FragColor = vec4(mistC(vL, n, glow), a);
 	#include <tonemapping_fragment>

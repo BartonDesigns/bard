@@ -161,8 +161,9 @@ function cantilever(X, v) {
 	const zs0 = -B * 0.3, dd = O - zs0, zc = (zs0 + O) / 2;
 	K.add('shell', F.put(plate(W, dd, 0.75, round), 0, 0, zc), C);
 	const fc = F.p(0, 0, zc);
-	// (an oval floor walked as three boxes inside it)
-	for (const [kx, kz] of round ? [[0.95, 0.45], [0.76, 0.76], [0.45, 0.95]] : [[1, 1]]) X.col.box(fc.x, fc.z, v.yaw, W / 2 * kx, dd / 2 * kz, v.y, { site: X.site, solid: false });
+	// (an oval floor walked as boxes whose corners lie on it)
+	const cuts = round ? Array.from({ length: 8 }, (_, i) => (i + 0.5) / 8 * Math.PI / 2).map((t) => [Math.cos(t), Math.sin(t)]) : [[1, 1]];
+	for (const [kx, kz] of cuts) X.col.box(fc.x, fc.z, v.yaw, W / 2 * kx, dd / 2 * kz, v.y, { site: X.site, solid: false });
 	// the room, set back from the tip (the deck) and from the walkway along one side
 	const gw = W - 2.8, gx = -sd * 1.4, gz0 = zs0 + 0.4, gz1 = O - 4.8;
 	room(X, F, gw, gz1 - gz0, H1, gx, (gz0 + gz1) / 2, round);
@@ -404,6 +405,66 @@ function bridge(X, b) {
 	X.contacts.push({ x: A.x, z: A.z, r: 2.5, m: 3, k: 0.35 });
 }
 
+// the shore house: a white cube on its knoll, the upper floor slid back, a pink window and
+// round ones, a stair down to the water with lamps beside it, an umbrella pine behind
+function shoreHouse(X, L) {
+	const { K, S, H } = X, F = frame(L.x, L.y, L.z, L.yaw), C = { tint: S.concrete }, sea = X.sea;
+	K.add('shell', F.put(box(8, 4.4, 7), 0, 1.2, 0), C);
+	K.add('shell', F.put(box(6.4, 3.2, 5.6), 0.9, 5.0, -0.7), C);
+	K.add('shell', F.put(box(7.2, 0.3, 6.4), 0.9, 6.75, -0.5), C);
+	K.add('shell', F.put(box(8.4, 0.3, 7.4), 0, 3.55, 0.1), C);
+	K.add('shell', F.put(box(1.8, 1.6, 0.08), 1.6, 5.1, 2.12), { tint: S.winB, glow: G.lamp });
+	K.add('shell', F.put(box(1.1, 2.2, 0.08), -1.8, 1.1, 3.52), { tint: S.window, glow: G.lamp });
+	K.add('shell', F.put(box(2.4, 1.4, 0.08), 1.6, 1.8, 3.52), { tint: S.glazing, glow: G.glazing });
+	for (let k = 0; k < 3; k++) K.add('shell', F.put(new THREE.CylinderGeometry(0.42, 0.42, 0.1, 16).rotateZ(Math.PI / 2), 4.12, 5.0, -2.2 + k * 1.4), { tint: S.winV, glow: G.lamp });
+	X.col.box(L.x, L.z, L.yaw, 4.1, 3.6, L.y + 3.7, { site: X.site });
+	const up = F.p(0.9, 0, -0.7);
+	X.col.box(up.x, up.z, L.yaw, 3.3, 2.9, L.y + 6.9, { site: X.site, y0: L.y + 3.6 });
+	// the stair down the knoll to a landing on the water, its lamps
+	let last = null;
+	for (let z = 4.2; z <= L.wd + 1.5; z += 0.75) {
+		const p = F.p(-1.8, 0, z), g = Math.max(H(p.x, p.z), sea - 0.2);
+		K.add('shell', F.put(box(1.6, 0.6, 0.8), -1.8, g - L.y - 0.22, z), C);
+		last = { z, g };
+		if (g <= sea - 0.1) break;
+	}
+	if (last) {
+		K.add('shell', F.put(box(3.4, 0.4, 2.6), -1.8, sea + 0.25 - L.y, last.z + 1.6), { tint: S.timber, glow: G.timber });
+		for (const z of [4.6, (4.6 + last.z) / 2, last.z]) {
+			const p = F.p(-3.1, 0, z), g = Math.max(H(p.x, p.z), sea);
+			K.add('shell', F.put(new THREE.CylinderGeometry(0.06, 0.08, 2.8, 6), -3.1, g - L.y + 1.4, z), { tint: S.trim, glow: G.metal });
+			K.add('shell', F.put(box(0.3, 0.35, 0.3), -3.1, g - L.y + 2.95, z), { tint: S.lamp, glow: G.lamp });
+			X.dots.push({ x: p.x, y: g + 2.95, z: p.z, s: 0.9, c: S.lamp });
+		}
+		const w = F.p(0, 0, last.z + 3);
+		X.streaks.push({ x: w.x, z: w.z, y: sea + 0.06, w: 1.2, len: 70, c: S.winB });
+		const w2 = F.p(-3.1, 0, last.z + 1);
+		X.streaks.push({ x: w2.x, z: w2.z, y: sea + 0.06, w: 0.5, len: 45, c: S.lamp });
+		const w3 = F.p(1.6, 0, last.z + 2.5);
+		X.streaks.push({ x: w3.x, z: w3.z, y: sea + 0.06, w: 0.8, len: 60, c: S.winV });
+	}
+	// the umbrella pine
+	const t0 = F.p(5.5, 0, -4.5), g0 = H(t0.x, t0.z);
+	K.add('shell', sweep([new THREE.Vector3(t0.x, g0 - 0.5, t0.z), F.p(5.0, g0 - L.y + 4, -4.0), F.p(4.0, g0 - L.y + 8.5, -3.2)], (t) => 0.35 - t * 0.15, 6), { tint: [0.16, 0.10, 0.07], glow: G.timber });
+	const cr = F.p(4.0, g0 - L.y + 9.4, -3.2);
+	K.add('shell', blob(5.2, 1.7, 4.6, 8).translate(cr.x, cr.y, cr.z), { tint: [0.05, 0.10, 0.04], glow: G.planted });
+	X.contacts.push({ F, x0: -4.2, x1: 4.2, z0: -3.7, z1: 3.7, m: 3.5, k: 0.4, all: true });
+	const st = F.p(-1.8, 0, 5.2);
+	L.stand = { x: st.x, y: Math.max(H(st.x, st.z), sea) + 0.3, z: st.z, yaw: L.yaw + Math.PI };
+}
+// a white gabled cottage in the flowers, its doorway lit
+function cottage(X, x, z, yaw) {
+	const { K, H } = X, y = H(x, z), F = frame(x, y, z, yaw), C = { tint: [0.92, 0.9, 0.84] };
+	const tri = new THREE.Shape([new THREE.Vector2(-3.4, 0), new THREE.Vector2(3.4, 0), new THREE.Vector2(0, 2.6)]);
+	K.add('shell', F.put(box(6, 3.4, 8), 0, 1.2, 0), C);
+	K.add('shell', F.put(new THREE.ExtrudeGeometry(tri, { depth: 8.6, bevelEnabled: false }).translate(0, 0, -4.3), 0, 2.85, 0), { tint: [0.12, 0.12, 0.13] });
+	K.add('shell', F.put(new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-3, 0), new THREE.Vector2(3, 0), new THREE.Vector2(0, 2.3)]), { depth: 0.1, bevelEnabled: false }), 0, 2.9, 4.0), C);
+	K.add('shell', F.put(box(1.0, 2.0, 0.08), 1.6, 0.95, 4.02), { tint: [1.0, 0.45, 0.62], glow: G.lamp });
+	for (const sx of [-1.3, 0.1]) K.add('shell', F.put(box(0.8, 0.9, 0.06), sx, 1.9, 4.02), { tint: [0.2, 0.22, 0.26], glow: G.glazing });
+	X.col.box(x, z, yaw, 3, 4, y + 3.0, { site: X.site });
+	X.contacts.push({ F, x0: -3.1, x1: 3.1, z0: -4.1, z1: 4.1, m: 2.5, k: 0.35, all: true });
+}
+
 // the ground's contact shade: a draped grid round each footprint
 function contactGeometry(H, list) {
 	const pos = [], ks = [], idx = [];
@@ -451,7 +512,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	const r = mulberry32((plan.seed ^ 0xa1c4) >>> 0);
 	// the world's own stone, a little varied stone to stone (sRGB authored, made linear)
 	const rockC = new THREE.Color().setRGB(rk[0], rk[1], rk[2], THREE.SRGBColorSpace);
-	const X = { S, H, col, r, contacts: [], lifts: [], streaks: [], rockT: () => { const j = 0.85 + r() * 0.3; return [rockC.r * j, rockC.g * j, rockC.b * j]; } };
+	const X = { S, H, col, r, contacts: [], lifts: [], streaks: [], dots: [], sea: island.sea || 0, rockT: () => { const j = 0.85 + r() * 0.3; return [rockC.r * j, rockC.g * j, rockC.b * j]; } };
 	const sites = [], obs = [];
 	const site = (name, at, rad, far, make) => {
 		X.K = new Kit();
@@ -477,13 +538,9 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		// its light on the water below it
 		if (T.y < (island.sea || 0)) for (const q of o || []) X.streaks.push({ x: q.x, z: q.z, y: (island.sea || 0) + 0.06, w: q.r * 0.8, len: 160, c: S.glow });
 	}
+	if (plan.shore) site(plan.shore.name, plan.shore, 16, 3000, () => shoreHouse(X, plan.shore));
 	if (plan.monolith) site('The Monolith', plan.monolith, 8, Infinity, () => monolith(X, plan.monolith, island.sea || 0));
 	if (plan.bridges.length) site('Bridges', plan.centre, 600, 3400, () => { for (const b of plan.bridges) bridge(X, b); });
-	// the contact shade
-	const contactMat = contactMaterial();
-	const contact = new THREE.Mesh(contactGeometry(H, X.contacts), contactMat);
-	contact.renderOrder = 1; contact.name = 'arch:contact';
-	group.add(contact);
 	// the lifts and the craft, instanced in the shared material
 	const inst = (geo, n, name) => {
 		const m = new THREE.InstancedMesh(geo, mats.shell, Math.max(1, n));
@@ -525,13 +582,14 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	// the mist band, glowing from below where the towers stand in it
 	const mist = createMist(scene, shared, plan.mist, obs.slice(0, 12), { isPhone, seed: plan.seed, glow: S.glow });
 	// glowing flowers on the green near the houses, and hamlets' lamps on the slopes over the mist
-	const dots = [];
+	const dots = X.dots;
 	const grassy = (x, z) => island.maskAt ? island.maskAt(x, z, 3) : 1;
 	const nrm = (x, z) => island.normalAt ? island.normalAt(x, z).y : 1;
 	const fl = isPhone ? 500 : 1100;
 	for (let p = 0; p < (S.flowers || 0); p++) {
 		const v = plan.villas[p % plan.villas.length], a = v.yaw + Math.PI + (r() - 0.5) * 2.2, d = 25 + r() * 70;
 		const cx = v.x + Math.sin(a) * d, cz = v.z + Math.cos(a) * d, rx = 10 + r() * 18, rz = 8 + r() * 14, ra = r() * TAU;
+		if (p === 0 && grassy(cx, cz) > 0.2 && nrm(cx, cz) > 0.9) site('The Cottage', { x: cx, z: cz, y: H(cx, cz) }, 8, 2600, () => cottage(X, cx + rx * 0.6, cz, a + Math.PI));
 		for (let k = 0; k < fl; k++) {
 			const u = (r() + r() + r() - 1.5) * rx, w = (r() + r() + r() - 1.5) * rz;
 			const x = cx + u * Math.cos(ra) - w * Math.sin(ra), z = cz + u * Math.sin(ra) + w * Math.cos(ra);
@@ -550,6 +608,11 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		}
 	}
 	const glow = createGlow(scene, shared, { streaks: X.streaks, dots, renderer: opts.renderer });
+	// the contact shade
+	const contactMat = contactMaterial();
+	const contact = new THREE.Mesh(contactGeometry(H, X.contacts), contactMat);
+	contact.renderOrder = 1; contact.name = 'arch:contact';
+	group.add(contact);
 	// the settlement's name as you come in, then each house and tower's
 	const names = [{ name: plan.name, x: plan.centre.x, z: plan.centre.z, r: plan.mist.rad * 0.6, y: plan.mist.top, big: true }, ...sites.filter((s) => s.name !== 'Bridges').map((s) => ({ name: s.name, x: s.x, z: s.z, r: s.r + 20, y: s.y }))];
 	const buildMs = performance.now() - t0;
@@ -625,7 +688,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	function go(i = 0) {
 		const Pl = opts.player?.();
 		if (!Pl) return plan.name;
-		const all = [...plan.villas, ...plan.towers];
+		const all = [...plan.villas, ...plan.towers, ...(plan.shore ? [plan.shore] : [])];
 		const o = all[((i | 0) % all.length + all.length) % all.length];
 		const at = o.stand || { x: o.x + o.R * 0.3, y: o.roof, z: o.z, yaw: 0 };
 		Pl.flying = false; Pl.diving = false; Pl.vel?.set(0, 0, 0);
@@ -653,7 +716,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			villas: plan.villas.map((q) => ({ name: q.name, kind: q.kind, y: Math.round(q.y), under: Math.round(q.under), stand: q.stand && { x: +q.stand.x.toFixed(1), y: +q.stand.y.toFixed(2), z: +q.stand.z.toFixed(1) } })),
 			towers: plan.towers.map((T) => ({ name: T.name, base: Math.round(T.y), top: Math.round(T.roof || T.top), lobbies: T.lobbies.length })),
 			bridges: plan.bridges.length, mist: { base: Math.round(plan.mist.base), top: Math.round(plan.mist.top), layers: mist.layers, wisps: mist.wisps, obstacles: Math.min(12, obs.length), inside: +inMist.toFixed(2) },
-			lifts: X.lifts.length, craft: crafts.length, streaks: X.streaks.length, dots: dots.length, monolith: !!plan.monolith, colliders: col.all.length, meshes, tris: Math.round(tris), planMs: plan.planMs, buildMs: Math.round(buildMs),
+			lifts: X.lifts.length, craft: crafts.length, streaks: X.streaks.length, dots: dots.length, monolith: !!plan.monolith, shore: !!plan.shore, colliders: col.all.length, meshes, tris: Math.round(tris), planMs: plan.planMs, buildMs: Math.round(buildMs),
 		};
 	};
 	return { update, floor: col.floor, push: col.push, go, dispose, info, group, plan };
