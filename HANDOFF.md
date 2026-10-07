@@ -6,6 +6,12 @@ file-by-file map is in `island/README.md`.
 
 ## Resume here (7 October 2026)
 
+- **One load into a saved spot (on the branch):** the faceplate's resume (and a shared `?at=` link) used to raise the default island, show it, jump you to the spot, then set the saved hour after the Bay finished loading.
+  - Now `share.js` go() passes the spot to `api.open({ spot })` (`main.js`): one loading card, "Returning to <place>…" with a percentage, stays up over the build and the arrival.
+  - The sky starts at the saved hour (`shared.startHours`), and the player is placed at the spot inside build(), so the Bay streams in round it, not round the island.
+  - Nothing is drawn behind the card until the land, bridge and streets are in (about 3× faster in SwiftShader). Then the shaders are warmed and frames settle, and the card lifts once, with the saved hour set again.
+  - A fresh start (no save) is unchanged. Test: `/tmp/claude-0/resume/timeline.js` (`fresh`, `link`).
+
 - **Meetings people keep (quest item 1, on the branch, not yet live):**
   - `people/appointments.js`:
     - parses a spoken time ("6 pm", "7:30 tonight", "sunset", "tomorrow at noon", "in an hour");

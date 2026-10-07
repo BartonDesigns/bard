@@ -660,7 +660,7 @@ export function createIslandWorld() {
 	}
 	// share where you are, and homes to come back to (share.js): at the top of the menu
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
-	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => shaderWarm.all({ budget: 4000, progress }) });
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => { if (arrival) arrival.blind = false; return shaderWarm.all({ budget: 4000, progress }); } });
 	HOOKS.share = share;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
@@ -1548,7 +1548,8 @@ export function createIslandWorld() {
 		if (fovK !== 1 && !tick.fov0) tick.fov0 = camera.fov;
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
-		if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
+		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
+		if (arrival?.blind) { /* hidden */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
 		W.orbit?.render(time);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
@@ -1681,7 +1682,7 @@ export function createIslandWorld() {
 			origin = params.origin || (params.earth !== false ? EARTH_ORIGIN : null);
 			// a kept or shared spot: one loading card, with its name, until share.js has you there
 			if (params.spot) {
-				arrival = { label: params.spot.label || 'Arriving…' };
+				arrival = { label: params.spot.label || 'Arriving…', blind: true };
 				dom.loading.textContent = arrival.label;
 				dom.loading.style.display = 'flex';
 			}
