@@ -135,6 +135,8 @@ import { worldBody, sameBody } from './space/body.js';
 import { createKinetic } from './music/kinetic.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
+import { createFloaters } from './planet/floaters.js';
+import { createBeyond } from './planet/beyond.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -733,7 +735,7 @@ export function createIslandWorld() {
 		// what kind of world: its ground, air, plants and underground (Earth's island is tropical)
 		const profile = planetProfile(earth ? 'TROPICAL' : params.biome, seed);
 		shared.planet = profile;
-		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768, profile });
+		const island = generateIsland({ seed, biome: params.biome, resolution: isPhone ? 640 : 768, profile, land: earth ? 'island' : null });
 		island.profileHaze = profile.air?.haze || 1;
 		// the ball fields above the village (or the world's own arena): the ground levelled under them before anything is made of it
 		const fieldPlan = planIslandFields(island, earth ? null : profile);
@@ -889,6 +891,10 @@ export function createIslandWorld() {
 			island.extraFloor = (x, z, y) => Math.max(of2(x, z, y), dw.floor(x, z, y));
 			island.extraPush = (p, footY) => { op2(p, footY); dw.push(p, footY); };
 		}
+		// a mystical world's terraces hung in the air, walked on
+		if (island.floaters) { const fl = world.floaters = createFloaters(island, scene, profile), of = island.extraFloor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), fl.floor(x, z, y)) : fl.floor; }
+		// the world by the dark star: its Event Ring's sphere is a way beyond (planet/beyond.js)
+		if (profile.type === 'SINGULARITY' && alienPlan?.sites[0]?.kind === 'landmark') world.beyond = createBeyond({ renderer, scene, camera, island, shared, site: alienPlan.sites[0], player, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
 		if (colonyPlan) {
 			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
 			const of = island.extraFloor, op = island.extraPush;
@@ -1070,6 +1076,7 @@ export function createIslandWorld() {
 		world.alien?.dispose();
 		world.colony?.dispose();
 		world.medieval?.dispose();
+		world.beyond?.dispose();
 		world.boardwalk?.destroy();
 		world.rays?.dispose();
 		world.spray?.dispose();
@@ -1399,6 +1406,8 @@ export function createIslandWorld() {
 		W.magma.update(dt, time, under, surf);
 		W.volcano?.update(dt, time);
 		W.alien?.update(dt, time);
+		W.beyond?.update(dt, time);
+		W.floaters?.update(sk.night);
 		W.colony?.update(dt, time);
 		W.dwellings?.update(dt, camera.position);
 		W.medieval?.update(dt, time, sk);
@@ -1591,7 +1600,7 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
-		if (arrival?.blind) { /* hidden */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
+		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
 		W.orbit?.render(time);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
@@ -1724,6 +1733,7 @@ export function createIslandWorld() {
 		const P = world?.player.state;
 		if (!P) return false;
 		if (dest.colony && world.colony?.port) { world.colony.go(); return true; }
+		if (dest.beyond && world.beyond) { world.beyond.enter(true); return true; }
 		if (dest.orbit) {
 			P.flying = true; P.vel.set(0, 0, 0); P.pos.y = dest.orbit; P.pitch = -1.1; P.boost = 1;
 			camera.position.copy(P.pos);

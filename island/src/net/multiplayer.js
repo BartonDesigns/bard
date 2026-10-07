@@ -62,7 +62,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (chip) chip.style.top = 'calc(136px + env(safe-area-inset-top))';
 		return pin;
 	}
-	let pendingState = null, hostClock = null, following = null, manualT = 0, travelling = null, tracked = null;
+	let stopped = '', pendingState = null, hostClock = null, following = null, manualT = 0, travelling = null, tracked = null;
 	const room = createRoomClient({ url, id, name, seed, on: (t, v) => heard(t, v) });
 
 	// ---------- what the room says ----------
@@ -185,7 +185,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (!a || !Number.isFinite(a[0])) goTo(fid);
 		drawPanel();
 	}
-	function unfollow(msg) { if (!following) return; following = null; clearAuto(); if (msg) hint(msg, 3000, 1); drawPanel(); }
+	function unfollow(msg) { if (!following) return; following = null; stopped = msg || 'by hand'; clearAuto(); if (msg) hint(msg, 3000, 1); drawPanel(); }
 	function goTo(fid) {
 		const r = remotes.list.get(fid), w = W(), P = w?.player?.state, a = remotes.where(fid);
 		if (!r) return false;
@@ -390,7 +390,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		if (room.status === 'off' && !remotes.list.size) return;
 		const w = W(), P = w?.player?.state;
 		if (pendingState && w?.sky) applyState(pendingState);
-		sendAll();
+		try { sendAll(); } catch (e) { console.warn('[room] send', e); }
 		remotes.update(dt, time, (p) => !!p && p.w === worldKey());
 		steer(dt);
 		if (performance.now() >= slowAt) {
@@ -411,6 +411,6 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 
 	return {
 		available: true, update, reset, join, invite, leave, follow, unfollow, goTo,
-		info: () => ({ available: true, status: room.status, code: room.room(), host: room.host, you: id, isHost: room.isHost(), following, players: [...remotes.list.values()].map((r) => ({ id: r.id, name: r.name, d: +r.d.toFixed?.(2), at: r.at && Number.isFinite(r.at[0]) ? [r.at[0], r.at[1], r.at[2]] : null, body: !!r.body?.P.root.visible })), plans: [...plans.values()], book: book.list('mp'), crowd: crowd.info?.() }),
+		info: () => ({ available: true, status: room.status, code: room.room(), host: room.host, you: id, isHost: room.isHost(), following, stopped, players: [...remotes.list.values()].map((r) => ({ id: r.id, name: r.name, d: +r.d.toFixed?.(2), at: r.at && Number.isFinite(r.at[0]) ? [r.at[0], r.at[1], r.at[2]] : null, body: !!r.body?.P.root.visible })), plans: [...plans.values()], book: book.list('mp'), crowd: crowd.info?.() }),
 	};
 }

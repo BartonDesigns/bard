@@ -3,6 +3,7 @@
 // and worn paths that climb from the village into the hills.
 
 import { makeNoise, mulberry32, smoothstep, clamp, lerp } from '../noise.js';
+import { makeLandform } from './landforms.js';
 
 export const WORLD_SIZE = 2600;   // metres covered by the height map
 export const SEA_LEVEL = 0;
@@ -15,8 +16,12 @@ export function generateIsland(params = {}) {
 	const nz = makeNoise(seed);
 	// the world's kind shapes its land (see planet/profile.js): its coast's reach and its relief
 	const kind = params.profile?.relief || 'island';
-	const R = (760 + rand() * 90) * Math.min(1.15, params.profile?.coast || 1);
-	const peak = { x: (rand() - 0.5) * 360, z: (rand() - 0.5) * 360, h: 150 + rand() * 70, r: 430 + rand() * 80 };
+	let R = (760 + rand() * 90) * Math.min(1.15, params.profile?.coast || 1);
+	let peak = { x: (rand() - 0.5) * 360, z: (rand() - 0.5) * 360, h: 150 + rand() * 70, r: 430 + rand() * 80 };
+	// a world with a landfall of its own (world/landforms.js): not the island at all
+	const land = params.land || params.profile?.land || 'island';
+	const LF = land === 'island' || kind === 'lunar' ? null : makeLandform(land, { nz, rand, half });
+	if (LF) { R = LF.R; peak = LF.peak; }
 
 	function shape(x, z) {
 		const wx = x + (nz.fbm(x * 0.0015 + 3.1, z * 0.0015, 3) - 0.5) * 420;
@@ -35,6 +40,7 @@ export function generateIsland(params = {}) {
 	}
 	function natural(x, z) {
 		if (kind === 'lunar') return lunar(x, z);
+		if (LF) return { h: LF.height(x, z), t: 0.5, reef: 0 };
 		const t = shape(x, z);
 		let h = profile(t);
 		if (t > 1.6) return { h, t, reef: 0 };
@@ -168,7 +174,7 @@ export function generateIsland(params = {}) {
 
 	// The village: the gentlest stretch of coast, away from the peak.
 	let village = null;
-	for (let a = 0; a < 72; a++) {
+	if (!LF) for (let a = 0; a < 72; a++) {
 		const th = a / 72 * Math.PI * 2, dx = Math.cos(th), dz = Math.sin(th);
 		let coast = null;
 		for (let d = 200; d < 1400; d += 6) {
@@ -191,7 +197,7 @@ export function generateIsland(params = {}) {
 	// in a round cove and raise a wooded headland on each side, so from the beach the
 	// jungle wraps round you and the open sea is framed between the points.
 	// (the Moon has no sea, so no cove and no terrace)
-	if (kind !== 'lunar') {
+	if (kind !== 'lunar' && !LF) {
 		const d = village.seaDir, sd = { x: -d.z, z: d.x };
 		const Rb = 165 + rand() * 30;
 		// the cove bites into the land: its back beach lies well inland of the old shore,
@@ -305,18 +311,55 @@ export function generateIsland(params = {}) {
 		}
 	}
 
+	// a landform's own last touch (basalt columns), its great feature if it named none, and
+	// its landfall: the village by the water where there is water to be by, else on the land
+	if (LF) {
+		if (LF.post) for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const k = j * N + i; height[k] = LF.post(-half + i * cell, -half + j * cell, height[k]); }
+		if (!peak) {
+			let k0 = 0;
+			for (let j = N >> 3; j < N - (N >> 3); j++) for (let i = N >> 3; i < N - (N >> 3); i++) if (height[j * N + i] > height[k0]) k0 = j * N + i;
+			peak = { x: -half + (k0 % N) * cell, z: -half + Math.floor(k0 / N) * cell, h: height[k0], r: 300 };
+		}
+		village = landfall(LF.site(heightAt));
+	}
+	function landfall(st) {
+		const f = st.face;
+		let coast = null;
+		if (st.coastal) for (let dd = 0; dd < 600; dd += 4) if (heightAt(st.x + f.x * dd, st.z + f.z * dd) < 0.4) { coast = { x: st.x + f.x * dd, z: st.z + f.z * dd }; break; }
+		if (!coast) return { x: st.x, z: st.z, th: Math.atan2(f.z, f.x), coast: { x: st.x + f.x * 40, z: st.z + f.z * 40 }, seaDir: { x: f.x, z: f.z }, inland: true, bay: LF.bay || null };
+		const back = st.back || 55;
+		return { x: coast.x - f.x * back, z: coast.z - f.z * back, th: Math.atan2(f.z, f.x), coast, seaDir: { x: f.x, z: f.z }, bay: LF.bay || null };
+	}
+	// an inland landfall: a level green round it, easing back into the land
+	if (village.inland) {
+		const vr0 = 110;
+		let ym = 0;
+		for (let k = 0; k < 12; k++) ym += heightAt(village.x + Math.cos(k * 0.52) * 40, village.z + Math.sin(k * 0.52) * 40);
+		ym = Math.max(1.5, ym / 12);
+		for (let j = 0; j < N; j++) {
+			const z = -half + j * cell;
+			for (let i = 0; i < N; i++) {
+				const x = -half + i * cell, dd = Math.hypot(x - village.x, z - village.z);
+				if (dd > vr0) continue;
+				const w = smoothstep(vr0, vr0 * 0.45, dd), k = j * N + i;
+				height[k] = lerp(height[k], ym + (nz.fbm(x * 0.02, z * 0.02 + 9, 2) - 0.5) * 0.8, w);
+				masks[k * 4 + 1] = Math.max(masks[k * 4 + 1], Math.round(w * 255));
+			}
+		}
+	}
+
 	// Level the village terrace: rises gently inland from the beach.
 	// the village ground: an amphitheatre rising from the back beach of the cove,
 	// about one metre in fifteen, so the houses step up the slope and all look out
 	const vr = 150, bay = village.bay;
-	if (kind !== 'lunar') for (let j = 0; j < N; j++) {
+	if (kind !== 'lunar' && !village.inland) for (let j = 0; j < N; j++) {
 		const z = -half + j * cell;
 		for (let i = 0; i < N; i++) {
 			const x = -half + i * cell, k = j * N + i;
 			const d = Math.hypot(x - village.x, z - village.z);
 			if (d > vr) continue;
 			const w = smoothstep(vr, vr * 0.55, d);
-			const along = bay ? Math.hypot(x - bay.x, z - bay.z) - bay.r : (x - village.coast.x) * -village.seaDir.x + (z - village.coast.z) * -village.seaDir.z;
+			const along = bay && !LF ? Math.hypot(x - bay.x, z - bay.z) - bay.r : (x - village.coast.x) * -village.seaDir.x + (z - village.coast.z) * -village.seaDir.z;
 			if (height[k] < -0.6) continue;
 			const target = Math.max(0.35, 0.9 + Math.max(0, along) * 0.065 + (nz.fbm(x * 0.02, z * 0.02 + 9, 2) - 0.5) * 0.8);
 			height[k] = lerp(height[k], target, w * smoothstep(-0.6, 0.6, height[k]));
@@ -329,7 +372,7 @@ export function generateIsland(params = {}) {
 	const paths = [];
 	const side = { x: -village.seaDir.z, z: village.seaDir.x };
 	const lane = [];
-	if (village.bay) {
+	if (village.bay && !LF) {
 		// the lane follows the curve of the cove, a little above the beach
 		const b = village.bay, inl = Math.atan2(-village.seaDir.z, -village.seaDir.x);
 		for (let s = -9; s <= 9; s++) {
@@ -440,7 +483,7 @@ export function generateIsland(params = {}) {
 	const spawn = { x: sp.x, z: sp.z, yaw: Math.atan2(village.seaDir.x, village.seaDir.z) + Math.PI };
 
 	return {
-		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn, craters,
+		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn, craters: LF?.craters || craters, land, floaters: LF?.floaters || null,
 		height, masks, heightAt, normalAt, maskAt, shapeAt: shape, coastAt, distToPath,
 		biome: params.biome || 'tropical', gravity: params.profile?.gravity || 1,
 	};

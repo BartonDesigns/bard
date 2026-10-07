@@ -182,8 +182,11 @@ export function createVillage(island, shared, scene) {
 		pierParts.push(paint(place(new THREE.CylinderGeometry(0.14, 0.17, ph, 6), sx * (s > pier.len ? 3.8 : 1.2), deckY - ph / 2 + 0.3, s), [0.36, 0.30, 0.24]));
 	}
 	for (const sx of [-1, 1]) pierParts.push(paint(place(box(0.08, 0.08, pier.len), sx * 1.25, deckY + 0.9, pier.len / 2), [0.55, 0.48, 0.4]));
-	for (const g of pierParts) { if (!g.attributes.uv) continue; parts.wood.push(g.applyMatrix4(pierM)); }
-	footprints.push({ pier: true, x: pier.x, z: pier.z, face: seaAng, len: pier.len + 4, w: pier.w, y: deckY + 0.1 });
+	// (an inland landfall has no water to build out over: no pier, and no boat)
+	if (!v.inland) {
+		for (const g of pierParts) { if (!g.attributes.uv) continue; parts.wood.push(g.applyMatrix4(pierM)); }
+		footprints.push({ pier: true, x: pier.x, z: pier.z, face: seaAng, len: pier.len + 4, w: pier.w, y: deckY + 0.1 });
+	}
 
 	const tex = { siding: TX.siding(), roof: TX.roofing(), plank: TX.planks(), stone: TX.stoneBlocks() };
 	const mats = {
@@ -219,6 +222,7 @@ export function createVillage(island, shared, scene) {
 	boat.position.set(bx, 0, bz);
 	boat.rotation.y = seaAng + Math.PI / 2 + 0.2;
 	group.add(boat);
+	boat.visible = !v.inland;
 
 	scene.add(group);
 	const DAY_GLASS = new THREE.Color(0.26, 0.34, 0.42), LAMP_GLASS = new THREE.Color(0xffc47a);

@@ -96,7 +96,9 @@ export function createPeople(scene, world, camera = null) {
 		const onIsland = Math.max(Math.abs(cam.x), Math.abs(cam.z)) < W.island.half;
 		if (onIsland) {
 			const v = W.island.village, d = Math.hypot(cam.x - v.x, cam.z - v.z);
-			return { n: d < 260 ? Math.round(8 * (1 - night * 0.7)) : 0, kids: 0.3 * kidsAbout(hours), island: true, zone: 'island' };
+			// (no villagers where there is no village: the Moon, the hostile worlds)
+			const home = W.village?.footprints?.length > 0;
+			return { n: home && d < 260 ? Math.round(8 * (1 - night * 0.7)) : 0, kids: 0.3 * kidsAbout(hours), island: true, zone: 'island' };
 		}
 		// a place with its own visitors (the Discovery Museum): families, and where they go
 		// (the museum, a shop, restaurant or office you are in or at, a tower's floor)

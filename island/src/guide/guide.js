@@ -75,6 +75,8 @@ const QUESTS = [
 	['sf', 'Reach downtown San Francisco', 'Ferry Building'],
 	['diablo', 'Stand on the summit of Mount Diablo', 'Mount Diablo'],
 	['home', 'Go home', 'home'],
+	['beyond', 'Cross the dark star’s horizon'],
+	['chord', 'Gather the seven held voices beyond the horizon'],
 ];
 
 const COMPASS = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
@@ -454,6 +456,7 @@ export function createGuide(mount, api) {
 		if ((W.caverns?.tunnels || []).some((t) => t.some((q, i) => i > 3 && i < t.length - 4 && Math.hypot(cam.x - q.x, cam.z - q.z) < 3 && cam.y < 0))) hit('cave');
 		if (W.whale?.whale?.position && Math.hypot(cam.x - W.whale.whale.position.x, cam.z - W.whale.whale.position.z) < 60) hit('whale');
 		if (W.boat?.boarded?.()) hit('boat');
+		{ const BY = W.beyond?.state(); if (BY?.found) hit('beyond'); if (BY?.chord) hit('chord'); }
 		if ((hours < 5 || hours > 20.5) && cam.y > -0.5 && P.pitch > 0.5) hit('night');
 		if (W.bridge && W.bridge.deckFloor(cam.x, cam.z, cam.y) > -Infinity && !P.flying) hit('gate');
 		if (near(37.8267, -122.4230, 350) && g > 1 && cam.y - g < 5) hit('alcatraz');

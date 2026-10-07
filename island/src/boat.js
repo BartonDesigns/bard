@@ -35,6 +35,7 @@ export function createBoat(island, village, player, camera, shared, scene) {
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p3 = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
 
 	function near() {
+		if (!boat.visible) return false;
 		const p = player.state.pos;
 		return Math.hypot(p.x - s.x, p.z - s.z) < 9 && Math.abs(p.y - 1.6 - waveHeight(island, s.x, s.z, shared.uTime.value)) < 4;
 	}
