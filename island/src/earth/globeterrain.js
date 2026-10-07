@@ -386,7 +386,7 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 	group.add(lakes);
 
 	// place the rings round the camera; bayOut: how far past the Bay's survey the camera is (m)
-	function update(cam, F, { bay, bayOut, night, cities, on: may = true }) {
+	function update(cam, F, { bay, bayOut, night, cities, on: may = true, lead = null }) {
 		const on = data.win.ready && may;
 		U.uGOn.value = data.win.ready ? 1 : 0;            // (the sea reads the coasts from here too)
 		const x = cam.position.x, z = cam.position.z;
@@ -408,8 +408,10 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 		const band = 111320 * Math.cos(Math.round(F.lat / 4) * 4 * RAD), fu = (F.lon + 180) * band / 25, fv = (F.lat + 90) * 111320 / 25;
 		common.uGFdI.value.set(Math.floor(fu), Math.floor(fv));
 		common.uGFd.value.set(fu - Math.floor(fu), fv - Math.floor(fv), band / (25 * F.kx), 111320 / (25 * F.kz));
-		const nx = Math.round(x / 32) * 32, nz = Math.round(z / 32) * 32, fx = Math.round(x / 512) * 512, fz = Math.round(z / 512) * 512;
-		const mx = Math.round(x / 128) * 128, mz = Math.round(z / 128) * 128;
+		// (the fine rings' middles a little ahead of you, where you look: you stay well inside them)
+		const lx = lead ? lead.x : 0, lz = lead ? lead.z : 0;
+		const nx = Math.round((x + lx) / 32) * 32, nz = Math.round((z + lz) / 32) * 32, fx = Math.round(x / 512) * 512, fz = Math.round(z / 512) * 512;
+		const mx = Math.round((x + lx * 4) / 128) * 128, mz = Math.round((z + lz * 4) / 128) * 128;
 		near.position.set(nx, 0, nz); mid.position.set(mx, 0, mz); far.position.set(fx, 0, fz); lakes.position.set(fx, 0, fz);
 		midMat.userData.own.uGOff.value.set(mx - F.fx, mz - F.fz);
 		midMat.userData.own.uGHole.value.set(nx - F.fx, nz - F.fz, near.visible ? 1 : 0, NEAR[1] * 0.97);

@@ -204,6 +204,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 
 	// ---------- each frame ----------
 	let regionT = 0, regionId = null, veg = null, seasonT = 0;
+	const look = new THREE.Vector3(), lead = { x: 0, z: 0 }, treeAt = { position: new THREE.Vector3() };
 	const offMonth = onMonth(() => { seasonT = 0; });
 	// a guard: the camera and you are never left at a NaN (the frame moves, the jumps and the
 	// heights all feed them); if one ever turns up you go back to the last good place, once said
@@ -228,7 +229,13 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const moving = data.follow(ll.lat, ll.lon);
 		if (moving) moving.then(() => anchorUniforms(data.U, data.win)).catch(() => {});
 		const out = bayOut(x, z);
-		terrain.update(cam, F, { bay: F.bay, bayOut: out, night, cities: towns.lit(12), on: !F.bay || bay.loaded() });
+		// the sharpest ground and the near trees round you and cast ahead of you: their middles
+		// lead you along where you look, further the higher you are (none looking straight down)
+		cam.getWorldDirection(look);
+		const flat = Math.hypot(look.x, look.z), gy = bay.heightAt(x, z);
+		const ahead = flat > 0.2 ? Math.max(40, Math.min(450, (cam.position.y - (Number.isFinite(gy) ? gy : 0)) * 0.6)) : 0;
+		lead.x = ahead ? look.x / flat * ahead : 0; lead.z = ahead ? look.z / flat * ahead : 0;
+		terrain.update(cam, F, { bay: F.bay, bayOut: out, night, cities: towns.lit(12), on: !F.bay || bay.loaded(), lead });
 		// the place: its name as you come into it, its plants for the woods (every 2 s)
 		// the season here, once the window is in (and at once when another month is picked)
 		seasonT -= dt;
@@ -249,7 +256,9 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 			}
 		}
 		const steady = data.win.ready && !data.win.moving;
-		trees.update(cam, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version());
+		const tk = Math.min(1, 150 / (Math.hypot(lead.x, lead.z) || 1));
+		treeAt.position.set(x + lead.x * tk, 0, z + lead.z * tk);
+		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version());
 		if (steady) towns.update(cam);
 		if (data.win.ready) regional.update(dt, cam, { night, out: !F.bay || out > SEAM_A - 3000, wind: shared.uWindDir ? { x: shared.uWindDir.value.x * (0.3 + (shared.uWind?.value || 0.5)), y: shared.uWindDir.value.y * (0.3 + (shared.uWind?.value || 0.5)) } : null });
 		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
