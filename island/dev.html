@@ -11,6 +11,7 @@ const planet = q.get('planet');
 // ?room=<code>: a friend's room (net/multiplayer.js)
 if (q.get('room')) w.joinRoom(q.get('room')).then((ok) => { if (!ok && !w.world()) w.open({ seed: 1337 }); });
 else if (q.get('at')) w.openAt(q.get('at'));
+else if (q.get('room')) w.joinRoom(q.get('room'));
 else w.open(planet ? { seed: +(q.get('seed') || 4242), biome: planet, earth: false } : { seed: +(q.get('seed') || 1337) });
 </script>
 </body></html>

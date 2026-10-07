@@ -1,6 +1,6 @@
 // Where the rooms server is (server/multiplayer), e.g. 'https://l99-rooms.<account>.workers.dev'.
 // Empty until it is deployed: then there is no Invite or Join, and nothing connects.
-export const ROOMS_URL = '';
+export const ROOMS_URL = 'https://l99-rooms.joshbarton1921.workers.dev';
 
 // on a page served from this computer, ?rooms=http://localhost:8790 points at a local server
 // (only there: a link can never send a player's moves somewhere else)
