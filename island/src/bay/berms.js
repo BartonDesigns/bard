@@ -32,7 +32,13 @@ float treadDelta(vec2 w){
 	vec2 u = (w - uTreadR.xy) / uTreadR.z;
 	if (u.x <= 0.0 || u.y <= 0.0 || u.x >= 1.0 || u.y >= 1.0) return 0.0;
 	float edge = smoothstep(0.0, 0.15, min(min(u.x, u.y), min(1.0 - u.x, 1.0 - u.y)));
-	return textureLod(uTread, u, 0.0).r * edge;
+	// the ground's vertices are a metre or two apart a few metres off (terrain.js NEAR_*): read
+	// at one point, the cut's edge falls between them unevenly, a saw-tooth; averaged over the
+	// spacing round the vertex, it eases in instead
+	float d = max(length(w - uTreadR.xy - uTreadR.z * 0.5), 1.0);
+	vec2 o = vec2(60.0 * pow(d / 4000.0, 0.6667) / uTreadR.z, 0.0);
+	float h = textureLod(uTread, u, 0.0).r * 0.5 + (textureLod(uTread, u + o, 0.0).r + textureLod(uTread, u - o, 0.0).r + textureLod(uTread, u + o.yx, 0.0).r + textureLod(uTread, u - o.yx, 0.0).r) * 0.125;
+	return h * edge;
 }
 float bermDelta(vec2 w){
 	if (uBermR.w < 0.5) return 0.0;
