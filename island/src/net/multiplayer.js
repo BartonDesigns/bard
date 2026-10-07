@@ -142,7 +142,8 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	// (timed by the clock, not by frames: a slow phone still keeps to the pace)
 	function sendAll() {
 		if (room.status !== 'on') return;
-		const p = pose(), now = performance.now();
+		// (not while you are still arriving: you hang in the air behind the card meanwhile)
+		const p = share.busy?.() ? null : pose(), now = performance.now();
 		if (p) {
 			// about ten a second while moving; when still, only a change (pings keep you in)
 			const moved = Math.hypot(p.p[0] - sent.x, p.p[2] - sent.z) > 0.05 || Math.abs(p.p[1] - sent.y) > 0.05 || Math.abs(p.y - sent.yaw) > 0.03 || p.a !== sent.a;
