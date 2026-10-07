@@ -8,7 +8,7 @@
 // floor); the root is placed and turned in the world by the caller.
 
 import * as THREE from 'three';
-import { Builder, lin } from '../bay/housekit.js';
+import { Builder, lin, FLAT } from '../bay/housekit.js';
 import { carGeometry, carMaterial } from '../bay/cars.js';
 import { minusHoles } from './plan.js';
 import { drawAny, SOFT } from './kit.js';
@@ -24,6 +24,8 @@ const PAINT = {
 	plain: [[0.88, 0.88, 0.86], [0.82, 0.84, 0.82], [0.9, 0.88, 0.8]],
 };
 const WOODS = { victorian: [[0.42, 0.26, 0.16], [0.36, 0.22, 0.14], [0.5, 0.32, 0.2]], edwardian: [[0.55, 0.38, 0.24], [0.62, 0.45, 0.3]], sunset: [[0.72, 0.56, 0.38], [0.78, 0.62, 0.44]], mission: [[0.6, 0.42, 0.26], [0.7, 0.52, 0.34]], modern: [[0.66, 0.6, 0.55], [0.82, 0.74, 0.6]], plain: [[0.6, 0.5, 0.4]] };
+// the rooms given a small cove moulding at the ceiling
+const COVE = new Set(['living', 'dining', 'family', 'bed', 'master', 'den', 'office', 'hall', 'corridor', 'reading', 'library', 'chamber']);
 const DOORC = [[0.38, 0.14, 0.12], [0.14, 0.2, 0.3], [0.3, 0.2, 0.12], [0.16, 0.28, 0.2], [0.9, 0.88, 0.84], [0.1, 0.1, 0.12]];
 
 const carMats = new Map(), carGeos = {};
@@ -56,6 +58,7 @@ const levelOf = (P, y) => P.levels.reduce((b, L) => (Math.abs(L.y - y) < Math.ab
 export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	const L = P.levels[k], rnd = (() => { let a = (C.seed + k * 7919) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
 	const g = new Builder(), col = [], { style, wood, paint, lit, OUT } = C;
+	g.ao = true;
 	const WHITE = lin([0.94, 0.93, 0.9]), TRIM = lin(style === 'victorian' ? [0.93, 0.9, 0.84] : [0.95, 0.95, 0.93]);
 	const FT = { wood, tile: lin([0.88, 0.85, 0.8]), stone: lin([0.82, 0.8, 0.76]), concrete: lin([0.66, 0.65, 0.62]), carpet: lin([0.7, 0.66, 0.6]) };
 	const roomAt = (x, z) => { for (const id of L.rooms) { const r = P.rooms[id]; if (x > r.x0 - 0.02 && x < r.x1 + 0.02 && z > r.z0 - 0.02 && z < r.z1 + 0.02) return r; } return null; };
@@ -93,17 +96,26 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		const keyOf = (r, outside) => (outside ? 'stucco' : r ? (lit[r.id] ? 'paintLit' : 'paint') : 'paint');
 		const colOf = (r, outside) => (outside ? OUT : r ? paint[r.id] : WHITE);
 		const outP = w.kind === 'ext' && w.out > 0, outM = w.kind === 'ext' && w.out < 0;
-		const keyF = (f) => (f === across[0] ? keyOf(rp, outP) : f === across[1] ? keyOf(rm, outM) : f === 3 ? null : 'paint');
-		const colF = (f) => (f === across[0] ? colOf(rp, outP) : f === across[1] ? colOf(rm, outM) : WHITE);
-		if (w.axis === 'x') g.box(keyF, u0, y0, a0, u1, y1, a1, colF); else g.box(keyF, a0, y0, u0, a1, y1, u1, colF);
+		const keyF = (f) => (f === across[0] || f === across[1] ? null : f === 3 ? null : 'paint');
+		if (w.axis === 'x') g.box(keyF, u0, y0, a0, u1, y1, a1, WHITE); else g.box(keyF, a0, y0, u0, a1, y1, u1, WHITE);
 		col.push(w.axis === 'x' ? [u0, a0, u1, a1, y0, y1] : [a0, u0, a1, u1, y0, y1]);
-		// the baseboard, on the room sides
-		const fy = L.y;
-		if (y0 <= fy + 0.01) for (const [r, face, sgn] of [[rp, a1, 1], [rm, a0, -1]]) {
-			if (!r || r.type === 'garage' || r.type === 'warehouse' || r.type === 'parking') continue;
-			const f1 = face + sgn * 0.014;
-			if (w.axis === 'x') g.box('trim', u0, fy, Math.min(face, f1), u1, fy + 0.12, Math.max(face, f1), TRIM);
-			else g.box('trim', Math.min(face, f1), fy, u0, Math.max(face, f1), fy + 0.12, u1, TRIM);
+		const fy = L.y, yc = L.y + L.h;
+		// the faces: shaded inside where they meet the floor, the ceiling and the walls at the
+		// room's corners (the light about a room never reaches into them fully)
+		for (const [r, face, sgn, outside] of [[rp, a1, 1, outP], [rm, a0, -1, outM]]) {
+			const P = w.axis === 'x' ? (s, t) => [u0 + (u1 - u0) * s, y0 + (y1 - y0) * t, face] : (s, t) => [face, y0 + (y1 - y0) * t, u0 + (u1 - u0) * s];
+			const n = w.axis === 'x' ? [0, 0, sgn] : [sgn, 0, 0], uvf = w.axis === 'x' ? (p) => [p[0], p[1]] : (p) => [p[2], p[1]];
+			const inRoom = !outside && !!r, lu = u1 - u0, lh = y1 - y0;
+			const e = inRoom ? [Math.abs(u0 - w.s) < 0.005 ? 0.8 : 1, Math.abs(u1 - w.e) < 0.005 ? 0.8 : 1, y0 <= fy + 0.01 ? 0.7 : 1, y1 >= yc - 0.01 ? 0.78 : 1] : [1, 1, 1, 1];
+			g.panel(keyOf(r, outside), P, n, colOf(r, outside), uvf, e, [Math.min(0.45, 0.4 / lu), Math.min(0.45, 0.4 / lu), Math.min(0.45, 0.45 / lh), Math.min(0.45, 0.4 / lh)]);
+			if (!inRoom || r.type === 'garage' || r.type === 'warehouse' || r.type === 'parking') continue;
+			const bw = (y, h, t, c) => { const f1 = face + sgn * t; if (w.axis === 'x') g.box('trim', u0, y, Math.min(face, f1), u1, y + h, Math.max(face, f1), c); else g.box('trim', Math.min(face, f1), y, u0, Math.max(face, f1), y + h, u1, c); };
+			// the baseboard, its top stepped back (no hard box edge), on the room sides
+			if (y0 <= fy + 0.01) { bw(fy, 0.1, 0.016, TRIM); bw(fy + 0.1, 0.022, 0.009, TRIM); }
+			// a cove at the ceiling in the older houses' rooms (the parlours have their crown)
+			if (y1 >= yc - 0.01 && COVE.has(r.type) && style !== 'plain' && style !== 'modern' && !(style === 'victorian' && (r.type === 'living' || r.type === 'dining'))) {
+				bw(yc - 0.035, 0.035, 0.05, TRIM); bw(yc - 0.065, 0.03, 0.03, TRIM); bw(yc - 0.085, 0.02, 0.014, TRIM);
+			}
 		}
 	}
 	function dress(w, o, a0, a1) {
@@ -140,10 +152,17 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		for (const id of L.rooms) {
 			const r = P.rooms[id], fk = FLOOR[r.type] || 'wood', e = 0.06;
 			const R = { x0: r.x0 - e, z0: r.z0 - e, x1: r.x1 + e, z1: r.z1 + e };
-			for (const [x0, z0, x1, z1] of minusHoles(R, L.holes)) g.quad(fk, [x0, L.y, z0], [x1, L.y, z0], [x1, L.y, z1], [x0, L.y, z1], [0, 1, 0], FT[fk] || wood, [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
+			// (shaded along the walls, so the floor and ceiling meet them softly, not as a seam)
+			const flat = (key, y, n, c, holes, k, m) => {
+				for (const [x0, z0, x1, z1] of minusHoles(R, holes)) {
+					const at = (a, b) => (Math.abs(a - b) < 0.01 ? k : 1), lx = x1 - x0, lz = z1 - z0;
+					g.panel(key, (s, t) => [x0 + lx * s, y, z0 + lz * t], n, c, (p) => [p[0], p[2]], [at(x0, R.x0), at(x1, R.x1), at(z0, R.z0), at(z1, R.z1)], [Math.min(0.45, m / lx), Math.min(0.45, m / lx), Math.min(0.45, m / lz), Math.min(0.45, m / lz)]);
+				}
+			};
+			flat(fk, L.y, [0, 1, 0], FT[fk] || wood, L.holes, 0.72, 0.5);
 			const yc = L.y + L.h;
 			if (r.sky) continue;
-			for (const [x0, z0, x1, z1] of minusHoles(R, above ? above.holes : P.topHoles || [])) g.quad(lit[id] ? 'ceilingLit' : 'ceiling', [x0, yc, z0], [x1, yc, z0], [x1, yc, z1], [x0, yc, z1], [0, -1, 0], lin([0.95, 0.95, 0.93]), [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]);
+			flat(lit[id] ? 'ceilingLit' : 'ceiling', yc, [0, -1, 0], lin([0.95, 0.95, 0.93]), above ? above.holes : P.topHoles || [], 0.76, 0.45);
 		}
 		// the edges of the holes, between the ceiling below and this floor
 		for (const [x0, z0, x1, z1] of L.holes) {
@@ -223,7 +242,12 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		if (levelOf(P, it.y) !== k) continue;
 		if (++step % 14 === 0 || slow()) { yield; tY = performance.now(); }
 		if (it.type === 'car') { cars.push(it); continue; }
+		// each piece a shade of its own, so things side by side or stacked stay apart, and a
+		// soft shadow where it stands (on the floor, or the counter or table it sits on)
+		g.mul = 0.94 + ((it.v * 7.31) % 1) * 0.12;
 		drawAny(g, it, rnd);
+		g.mul = 1;
+		if (!FLAT.has(it.type)) g.under(it);
 		if (!SOFT.has(it.type) && it.box) col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + Math.max(it.h, 0.3)]);
 	}
 	yield;

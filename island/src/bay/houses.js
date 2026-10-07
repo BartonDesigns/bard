@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { planHouse, houseFloor, mainOf, HT, TW } from './houseplan.js';
-import { Builder, houseMaterials, drawItem, lin } from './housekit.js';
+import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
 import { occasions } from '../calendar.js';
 import { carGeometry, carMaterial } from './cars.js';
 import { NONE_IN } from '../world/lodfade.js';
@@ -446,12 +446,16 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		}
 
 		yield;
-		// furniture
+		// furniture: shaded at the foot, each a shade of its own, a soft shadow under it
+		g.ao = true;
 		for (const it of plan.items) {
 			if (++step % 12 === 0) yield;
 			if (it.type === 'closet') it.wallCol = paint[it.room];
 			if (it.type === 'car') continue;
+			g.mul = 0.94 + ((it.v * 7.31) % 1) * 0.12;
 			drawItem(g, it, rnd, HT);
+			g.mul = 1;
+			if (!FLAT.has(it.type)) g.under(it);
 			// Bathroom clutter is authored dressing, not a collision wall. Keep the
 			// vanity/towel/floor pass visible while preserving the usable path and
 			// interaction clearance in small bathrooms.

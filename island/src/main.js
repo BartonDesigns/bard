@@ -62,6 +62,7 @@ import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createInteriors } from './interiors/index.js';
+import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
 import { planDwellings, createDwellings } from './interiors/alien.js';
 import { createWildlife } from './bay/wildlife.js';
@@ -922,6 +923,8 @@ export function createIslandWorld() {
 			// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
 			world.interiors.addDoors(world.commercial);
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
+			// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
+			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone });
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
 			world.vehicles = createVehicles({ scene, world: () => world, camera, isPhone, people: () => people });
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
@@ -1475,6 +1478,7 @@ export function createIslandWorld() {
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
+		W.contact?.update(camera, dt);
 		W.vehicles?.update(dt, time);
 		ragdolls.update(dt);
 		W.berms?.update(camera);

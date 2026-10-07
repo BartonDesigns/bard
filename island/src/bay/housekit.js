@@ -15,9 +15,11 @@ export { lin };
 // the builder: boxes, cylinders and spheres, placed by a quarter-turn transform
 
 export class Builder {
-	constructor() { this.bufs = new Map(); this.rot = 0; this.o = [0, 0, 0]; }
+	// ao: shade each box's foot and underside and lift its top a little (the rooms' kit);
+	// mul: a brightness for whatever is drawn next (each piece of furniture its own)
+	constructor() { this.bufs = new Map(); this.rot = 0; this.o = [0, 0, 0]; this.ao = false; this.mul = 1; }
 	at(x, y, z, rot = 0) { this.o = [x, y, z]; this.rot = ((rot % 4) + 4) % 4; return this; }
-	buf(k) { let b = this.bufs.get(k); if (!b) this.bufs.set(k, b = { p: [], n: [], u: [], c: [] }); return b; }
+	buf(k) { let b = this.bufs.get(k); if (!b) this.bufs.set(k, b = { p: [], n: [], u: [], c: [], a: [] }); return b; }
 	tp(x, y, z) {
 		const [ox, oy, oz] = this.o;
 		switch (this.rot) {
@@ -35,8 +37,9 @@ export class Builder {
 			default: return [x, y, z];
 		}
 	}
-	// a triangle pair; corners in order round the face, normal n (local)
-	quad(k, a, b, c, d, n, col, uv) {
+	// a triangle pair; corners in order round the face, normal n (local); sh: each corner's
+	// shading (ambient occlusion: kept apart in the colour's alpha for the lit walls' glow)
+	quad(k, a, b, c, d, n, col, uv, sh = null) {
 		if (!k) return;
 		const B = this.buf(k), P = [a, b, c, d].map((p) => this.tp(...p)), N = this.tn(...n);
 		// wind them to face along n
@@ -44,7 +47,31 @@ export class Builder {
 		const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
 		const flip = cr[0] * N[0] + cr[1] * N[1] + cr[2] * N[2] < 0;
 		const order = flip ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3];
-		for (const i of order) { B.p.push(...P[i]); B.n.push(...N); B.u.push(...uv[i]); B.c.push(...col); }
+		const m = this.mul;
+		for (const i of order) {
+			const f = (sh ? sh[i] : 1) * m;
+			B.p.push(...P[i]); B.n.push(...N); B.u.push(...uv[i]); B.c.push(col[0] * f, col[1] * f, col[2] * f); B.a.push(sh ? sh[i] : 1);
+		}
+	}
+	// a face as a grid with its edges shaded: P(s, t) the point at s, t in 0..1; e the shading
+	// at the edges s = 0, s = 1, t = 0, t = 1 (1: none); w their widths (as fractions)
+	panel(k, P, n, col, uvf, e, w) {
+		const S = [0, ...(e[0] < 1 ? [w[0]] : []), ...(e[1] < 1 ? [1 - w[1]] : []), 1], T = [0, ...(e[2] < 1 ? [w[2]] : []), ...(e[3] < 1 ? [1 - w[3]] : []), 1];
+		const f = (s, t) => (s === 0 ? e[0] : s === 1 ? e[1] : 1) * (t === 0 ? e[2] : t === 1 ? e[3] : 1);
+		for (let j = 0; j + 1 < T.length; j++) for (let i = 0; i + 1 < S.length; i++) {
+			const C = [[S[i], T[j]], [S[i + 1], T[j]], [S[i + 1], T[j + 1]], [S[i], T[j + 1]]], Q = C.map(([s, t]) => P(s, t));
+			this.quad(k, ...Q, n, col, Q.map(uvf), C.map(([s, t]) => f(s, t)));
+		}
+	}
+	// a soft shadow where a thing stands on a surface: dark under it, fading out past its edges
+	shadow(x, y, z, w, d, k = 0.45, soft = 0.1) {
+		const xs = [x - w / 2 - soft, x - w / 2, x + w / 2, x + w / 2 + soft], zs = [z - d / 2 - soft, z - d / 2, z + d / 2, z + d / 2 + soft], m = this.mul;
+		this.mul = 1;
+		for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+			const C = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]];
+			this.quad('shade', ...C.map(([a, b]) => [xs[a], y, zs[b]]), [0, 1, 0], [1, 1, 1], C.map(() => [0, 0]), C.map(([a, b]) => (a % 3 && b % 3 ? k : 1)));
+		}
+		this.mul = m;
 	}
 	// an axis-aligned box; key: a material name, or f(face) -> name (or null to leave the
 	// face out); faces 0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z; col likewise may be f(face)
@@ -58,11 +85,14 @@ export class Builder {
 			[[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], (p) => [p[0], p[1]]],
 			[[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], (p) => [p[0], p[1]]],
 		];
+		// (shaded: darker toward the foot, most on a short thing, the underside dark, the top lit)
+		const kb = 0.66 + 0.3 * Math.min(1, Math.max(0, (y1 - y0 - 0.3) / 2.2));
 		for (let i = 0; i < 6; i++) {
 			const k = K(i);
 			if (!k) continue;
 			const [a, b, c, d, n, uvf] = f[i];
-			this.quad(k, a, b, c, d, n, C(i), [a, b, c, d].map(uvf));
+			const sh = !this.ao ? null : i === 2 ? [1.05, 1.05, 1.05, 1.05] : i === 3 ? [0.6, 0.6, 0.6, 0.6] : [a, b, c, d].map((p) => (p[1] === y0 ? kb : 1));
+			this.quad(k, a, b, c, d, n, C(i), [a, b, c, d].map(uvf), sh);
 		}
 	}
 	// a cylinder along an axis ('y' up, 'x' or 'z'), centred at (x, z) on that axis' base
@@ -74,13 +104,15 @@ export class Builder {
 		const Nn = (a) => { const c = Math.cos(a), s = Math.sin(a); return axis === 'y' ? [c, 0, s] : axis === 'x' ? [0, c, s] : [c, s, 0]; };
 		for (let i = 0; i < seg; i++) {
 			const a0 = i / seg * Math.PI * 2, a1 = (i + 1) / seg * Math.PI * 2, am = (a0 + a1) / 2;
-			this.quad(key, P(a0, 0, r), P(a1, 0, r), P(a1, h, r2), P(a0, h, r2), Nn(am), col, [[i / seg, 0], [(i + 1) / seg, 0], [(i + 1) / seg, h], [i / seg, h]]);
+			// (the texture in metres: round the side by the arc, across the caps flat)
+			this.quad(key, P(a0, 0, r), P(a1, 0, r), P(a1, h, r2), P(a0, h, r2), Nn(am), col, [[a0 * r, 0], [a1 * r, 0], [a1 * r, h], [a0 * r, h]], this.ao && axis === 'y' ? [0.7, 0.7, 1, 1] : null);
 			if (caps) {
 				const up = axis === 'y' ? [0, 1, 0] : axis === 'x' ? [1, 0, 0] : [0, 0, 1];
 				const c1 = axis === 'y' ? [x, y + h, z] : axis === 'x' ? [x + h, y, z] : [x, y, z + h];
 				const c0 = axis === 'y' ? [x, y, z] : axis === 'x' ? [x, y, z] : [x, y, z];
-				this.quad(key, c1, P(a0, h, r2), P(a1, h, r2), c1, up, col, [[0.5, 0.5], [0, 0], [1, 0], [0.5, 0.5]]);
-				this.quad(key, c0, P(a1, 0, r), P(a0, 0, r), c0, up.map((v) => -v), col, [[0.5, 0.5], [0, 0], [1, 0], [0.5, 0.5]]);
+				const cu = (q) => (axis === 'y' ? [q[0], q[2]] : axis === 'x' ? [q[2], q[1]] : [q[0], q[1]]);
+				this.quad(key, c1, P(a0, h, r2), P(a1, h, r2), c1, up, col, [c1, P(a0, h, r2), P(a1, h, r2), c1].map(cu));
+				this.quad(key, c0, P(a1, 0, r), P(a0, 0, r), c0, up.map((v) => -v), col, [c0, P(a1, 0, r), P(a0, 0, r), c0].map(cu));
 			}
 		}
 	}
@@ -93,7 +125,7 @@ export class Builder {
 		const sd = nz(cr(t, up)), u2 = nz(cr(sd, t));
 		const P = (e, i, j) => [0, 1, 2].map((k) => e[k] + sd[k] * a / 2 * i + u2[k] * b / 2 * j);
 		const faces = [[sd, [1, -1], [1, 1]], [sd.map((v) => -v), [-1, 1], [-1, -1]], [u2, [1, 1], [-1, 1]], [u2.map((v) => -v), [-1, -1], [1, -1]]];
-		for (const [n, [i0, j0], [i1, j1]] of faces) this.quad(key, P(p0, i0, j0), P(p1, i0, j0), P(p1, i1, j1), P(p0, i1, j1), n, col, [[0, 0], [L, 0], [L, 1], [0, 1]]);
+		for (const [n, [i0, j0], [i1, j1]] of faces) { const t = n === sd || n[0] === -sd[0] && n[1] === -sd[1] && n[2] === -sd[2] ? b : a; this.quad(key, P(p0, i0, j0), P(p1, i0, j0), P(p1, i1, j1), P(p0, i1, j1), n, col, [[0, 0], [L, 0], [L, t], [0, t]]); }
 	}
 	sphere(key, x, y, z, rx, ry, rz, col, seg = 8) {
 		const V = (i, j) => { const a = i / seg * Math.PI * 2, b = j / (seg / 2) * Math.PI - Math.PI / 2; return [Math.cos(a) * Math.cos(b), Math.sin(b), Math.sin(a) * Math.cos(b)]; };
@@ -101,8 +133,16 @@ export class Builder {
 			const q = [V(i, j), V(i + 1, j), V(i + 1, j + 1), V(i, j + 1)];
 			const m = q.reduce((s, v) => [s[0] + v[0], s[1] + v[1], s[2] + v[2]], [0, 0, 0]);
 			const L = Math.hypot(...m) || 1;
-			this.quad(key, ...q.map((v) => [x + v[0] * rx, y + v[1] * ry, z + v[2] * rz]), [m[0] / L, m[1] / L, m[2] / L], col, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+			// (each facet's texture laid flat on it, in metres)
+			const Q = q.map((v) => [x + v[0] * rx, y + v[1] * ry, z + v[2] * rz]), ax = Math.abs(m[0]), ay = Math.abs(m[1]), az = Math.abs(m[2]);
+			this.quad(key, ...Q, [m[0] / L, m[1] / L, m[2] / L], col, Q.map((p) => (ay >= ax && ay >= az ? [p[0], p[2]] : ax >= az ? [p[2], p[1]] : [p[0], p[1]])));
 		}
+	}
+	// a piece of furniture's shadow on the floor it stands on
+	under(it) {
+		if (!(it.w > 0.05 && it.d > 0.05)) return;
+		this.at(it.x, it.y + 0.004, it.z, it.rot || 0);
+		this.shadow(0, 0, 0, it.w, it.d, 0.5, Math.min(0.25, 0.06 + Math.max(it.w, it.d) * 0.06));
 	}
 	// the finished meshes, one per material
 	meshes(mats, shadows = true) {
@@ -113,7 +153,9 @@ export class Builder {
 			g.setAttribute('position', new THREE.Float32BufferAttribute(b.p, 3));
 			g.setAttribute('normal', new THREE.Float32BufferAttribute(b.n, 3));
 			g.setAttribute('uv', new THREE.Float32BufferAttribute(b.u, 2));
-			g.setAttribute('color', new THREE.Float32BufferAttribute(b.c, 3));
+			// (the lit walls keep their shading apart, in the alpha, to dim their glow by it too)
+			if (mats[k].vertexAlphas) { const c4 = new Float32Array(b.a.length * 4); for (let i = 0; i < b.a.length; i++) c4.set([b.c[i * 3], b.c[i * 3 + 1], b.c[i * 3 + 2], b.a[i]], i * 4); g.setAttribute('color', new THREE.BufferAttribute(c4, 4)); }
+			else g.setAttribute('color', new THREE.Float32BufferAttribute(b.c, 3));
 			g.computeBoundingSphere();
 			const m = new THREE.Mesh(g, mats[k]);
 			m.castShadow = shadows && !mats[k].transparent; m.receiveShadow = true;
@@ -123,6 +165,9 @@ export class Builder {
 		return out;
 	}
 }
+
+// the things that lie flat, hang or stand about loose, with no shadow of their own under them
+export const FLAT = new Set(['rug', 'bathMat', 'art', 'ceilingLight', 'crown', 'chandelier', 'mirror', 'blinds', 'curtains', 'toys', 'shower', 'bathroomTowel', 'bathroomFloorClutter', 'bathroomCounterClutter']);
 
 // ---------------------------------------------------------------------------------
 // materials, painted at load
@@ -267,14 +312,21 @@ export function houseMaterials(band, night) {
 	T.rug.wrapS = T.rug.wrapT = THREE.RepeatWrapping; T.rug.repeat.set(0.5, 0.6); T.rug.offset.set(0.5, 0.5);
 	const env = roomEnv();
 	const std = (o) => new THREE.MeshStandardMaterial({ vertexColors: true, ...o });
+	// the walls and ceilings: their glow (the light about the room) dimmed in the corners too,
+	// by the shading the builder keeps in the colour's alpha
+	const room = (o) => {
+		const m = std({ vertexAlphas: true, ...o });
+		m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR_ALPHA\ntotalEmissiveRadiance *= vColor.a;\n#endif'); };
+		return m;
+	};
 	const M = {
 		stucco: weatherStucco(std({ map: T.stucco, roughness: 0.95 })),
-		paint: std({ map: T.paint, roughness: 0.9, emissive: 0x22211e }),
+		paint: room({ map: T.paint, roughness: 0.9, emissive: 0x22211e }),
 		trim: std({ roughness: 0.42 }),
-		ceiling: std({ map: T.paint, roughness: 0.95, emissive: 0x4a4945 }),
+		ceiling: room({ map: T.paint, roughness: 0.95, emissive: 0x4a4945 }),
 		// the rooms with a light on after dark: walls and ceiling warm with it
-		paintLit: std({ map: T.paint, roughness: 0.9, emissive: 0xffc890 }),
-		ceilingLit: std({ map: T.paint, roughness: 0.95, emissive: 0xffd6a8 }),
+		paintLit: room({ map: T.paint, roughness: 0.9, emissive: 0xffc890 }),
+		ceilingLit: room({ map: T.paint, roughness: 0.95, emissive: 0xffd6a8 }),
 		wood: std({ map: T.wood, roughness: 0.45 }),
 		carpet: std({ map: T.carpet, roughness: 1 }),
 		tile: std({ map: T.tile, roughness: 0.3 }),
@@ -298,6 +350,9 @@ export function houseMaterials(band, night) {
 		// little coloured lights (the holidays' strings, a jack-o'-lantern's face): their own
 		// colour, dim by day, bright after dark
 		bulb: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
+		// soft contact shadows, laid over the floor or the table a thing stands on: they
+		// multiply what is under them, so they darken it by day and lamplight alike
+		shade: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4, fog: false, toneMapped: false }),
 	};
 	M.lamp.userData.night = true;
 	for (const m of Object.values(M)) addLodFade(m, 'uniform', band || [NONE_IN[0], NONE_IN[1], 36, 46]);
@@ -352,13 +407,16 @@ function books(g, x0, x1, y, z0, depth, rnd) {
 		g.box('matte', x, y, z0, Math.min(x1, x + t), y + h, z0 + depth * (0.7 + rnd() * 0.25), lin(pick(ACCENT.concat(FABRIC), rnd()).map((c) => c * (0.6 + rnd() * 0.5))));
 		x += t + 0.002;
 	}
+	if (g.ao) g.shadow((x0 + x1) / 2, y + 0.003, z0 + depth * 0.45, x1 - x0, depth * 0.85, 0.6, 0.04);
 }
 function tableLamp(g, x, y, z, rnd) {
+	if (g.ao) g.shadow(x, y + 0.003, z, 0.12, 0.12, 0.5, 0.06);
 	g.cyl('gloss', x, y, z, 0.07, 0.04, lin(pick(ACCENT, rnd())), 10);
 	g.cyl('metal', x, y + 0.04, z, 0.012, 0.3, STEEL, 6, 'y', false);
 	g.cyl('lamp', x, y + 0.28, z, 0.16, 0.2, lin([0.95, 0.92, 0.85]), 12, 'y', false, 0.11);
 }
 function plant(g, x, y, z, s, rnd) {
+	if (g.ao && y > 0.05) g.shadow(x, y + 0.003, z, 0.3 * s, 0.3 * s, 0.5, 0.06 * s);
 	g.cyl('matte', x, y, z, 0.16 * s, 0.32 * s, lin(rnd() < 0.5 ? [0.72, 0.42, 0.3] : [0.88, 0.87, 0.84]), 10, 'y', true, 0.19 * s);
 	const n = 5 + Math.floor(rnd() * 4);
 	for (let i = 0; i < n; i++) {

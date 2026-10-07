@@ -242,18 +242,18 @@ void main(){
 		float fleck = smoothstep(0.55, 0.8, gvn(vec2(along * 3.5 - uTime * speed * 2.0, across * 9.0) + 13.0));
 		fo = max(fo, rf * fleck * 0.55);
 	}
+	// a soft line of foam where a quick creek laps its banks (none on the still town water)
+	float side = nearK * smoothstep(0.5, 0.8, abs(vUv.x));
+	float lap = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.04, 0.14, depth)) * side * (1.0 - calm) * smoothstep(0.4, 0.75, gvn(u * vec2(1.4, 4.0) - vec2(uTime * speed, 0.0)));
+	fo = max(fo, lap * 0.45);
 	col = mix(col, vec3(0.85, 0.88, 0.86) * (1.0 - uNight * 0.8), clamp(fo, 0.0, 0.9));
-	// the edge: a gravel bar out of town, sand and mud in it, where the water thins to nothing
-	// (only along the sides: a shallow in the middle shows its stones through the water)
-	float edge = (1.0 - smoothstep(0.03, 0.16, depth)) * nearK * smoothstep(0.55, 0.85, abs(vUv.x));
-	vec3 grav = mix(vec3(0.3, 0.28, 0.24), bed, 0.6), silt = mix(vec3(0.3, 0.25, 0.18), vec3(0.46, 0.4, 0.3), gvn(u * 0.8));
-	col = mix(col, mix(grav, silt, town) * (1.0 - uNight * 0.85), edge * 0.7 * (1.0 - fo));
 	float a = clamp(0.3 + deepK * 0.62 + fres * 0.25 + fo, 0.0, 0.96);
-	a = mix(a, 0.94, max(bedK, edge * 0.8));
+	a = mix(a, 0.94, bedK);
 	gEdge = max(smoothstep(0.55, 1.0, abs(vUv.x)), 1.0 - smoothstep(0.0, 0.3, depth) * nearK - (1.0 - nearK));
 	gl_FragColor = worldLook(col, a, u, speed, fres, vT.z);
-	// (its edges soft where they meet the ground, and where they run up the bank)
-	gl_FragColor.a *= mix(1.0, smoothstep(0.0, 0.04, depth), nearK * smoothstep(0.5, 0.8, abs(vUv.x)));
+	// (the shallows along the sides clear to nothing over the wet bank, so no seam shows
+	// where the water meets the ground; the foam stays a little longer)
+	gl_FragColor.a *= mix(1.0, max(smoothstep(0.0, 0.2, depth), min(fo, 1.0) * smoothstep(0.0, 0.02, depth)), side);
 	gl_FragColor.a *= 1.0 - smoothstep(0.82, 1.0, abs(vUv.x));
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -289,12 +289,14 @@ void main(){
 	vec3 deep = uTint * (1.0 - uNight * 0.85);
 	vec3 col = mix(deep, skyIn(r, p) * mix(vec3(0.62, 0.86, 0.7), vec3(0.78, 0.88, 0.92), uTint.b * 4.0), fres);
 	col += uSunColor * (pow(max(dot(r, uSunDir), 0.0), 600.0) * 6.0 + pow(max(dot(r, uSunDir), 0.0), 40.0) * 0.12) * (1.0 - uNight);
-	// a lace of foam where the water laps the shore
-	float lace = (1.0 - smoothstep(0.0, 0.18, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2)) * nearK * step(0.0, depth);
-	col = mix(col, vec3(0.82, 0.84, 0.8) * (1.0 - uNight * 0.8), lace * 0.6);
+	// a lace of foam where the water laps the shore, thinning to nothing at the line itself
+	float lace = smoothstep(0.0, 0.03, depth) * (1.0 - smoothstep(0.05, 0.2, depth)) * smoothstep(0.45, 0.75, vn(pl * 1.7 + uTime * 0.2)) * nearK;
+	col = mix(col, vec3(0.82, 0.84, 0.8) * (1.0 - uNight * 0.8), lace * 0.5);
 	float a = clamp(0.3 + deepK * 0.66 + fres * 0.2 + lace * 0.4, 0.0, 0.97);
 	gEdge = (1.0 - smoothstep(0.0, 0.5, depth)) * nearK;
 	gl_FragColor = worldLook(col, a, pl, 0.2, fres, uIce);
+	// (the shallows clear to nothing over the wet shore, so no seam shows at the water's edge)
+	gl_FragColor.a *= mix(1.0, max(smoothstep(0.0, 0.25, depth), lace * smoothstep(0.0, 0.02, depth)), nearK * (1.0 - uIce));
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 	#include <fog_fragment>
@@ -773,7 +775,9 @@ export function createWater(scene, shared, opts = {}) {
 						if (tg < g) { const v = (tg - g) * (1 - sm(R - 8, R, d)); if (v < lo[q]) lo[q] = v; }
 						else { const v = Math.max(0, lv + 0.05 + (d - hw) * 0.5 - g) * (1 - sm(hw + 1.5, hw + 5, d)); if (v > hi[q]) hi[q] = v; }
 					}
-					kind[q] = Math.max(kind[q], 1 - sm(hw + 0.4, hw + 2.2, d));
+					// (the wet band: wide where the bank lies low, narrow up a steep cut bank)
+					const up = d < hw ? 0 : Math.min(g, lv - 0.06 + (d - hw) * (w < 6 ? 0.95 : 0.6)) - lv;
+					kind[q] = Math.max(kind[q], (1 - sm(hw + 0.3, hw + 4, d)) * (1 - sm(0.2, 0.9, up)));
 				}
 				if (performance.now() - t0 > 2.5) { yield; t0 = performance.now(); }
 			}
@@ -804,7 +808,8 @@ export function createWater(scene, shared, opts = {}) {
 					} else if (d < 10) {
 						const v = Math.max(0, L.level + 0.12 + d * (L.lip ?? 0.3) - g) * (1 - sm(4, 10, d));
 						if (v > hi[q]) hi[q] = v;
-						kind[q] = Math.max(kind[q], 1 - sm(0.5, 3, d));
+						const up = Math.max(g, L.level + 0.12 + d * (L.lip ?? 0.3)) - L.level;
+						kind[q] = Math.max(kind[q], (1 - sm(0.3, 5, d)) * (1 - sm(0.25, 1.1, up)));
 					}
 				}
 				if (performance.now() - t0 > 2.5) { yield; t0 = performance.now(); }
