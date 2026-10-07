@@ -734,7 +734,7 @@ export function createIslandWorld() {
 		// the planet's second biome and its cold side, baked where the ground, plants and water can read it
 		island.biomes = createBiomes(island, profile);
 		// its streams and lakes (or ice, or lava), carved before its plants, caves and ruins are planned
-		const waterPlan = earth ? null : await planWaters(island, profile, { clear: [...fieldPlan.clear, ...(realmPlan?.clear || [])], realm: realmPlan });
+		const waterPlan = earth || profile.airless ? null : await planWaters(island, profile, { clear: [...fieldPlan.clear, ...(realmPlan?.clear || [])], realm: realmPlan });
 		if (waterPlan) island.inWater = waterPlan.inWater;
 		(shared.uBiome ||= { value: null }).value = island.biomes.tex;
 		shared.biHalf = island.half;
@@ -743,7 +743,7 @@ export function createIslandWorld() {
 		const sky = createSky(scene, shared, renderer, { isPhone, latitude: () => earth && world?.globe ? globeLL(camera.position.x, camera.position.z).lat : 37.8 });
 		try { if (localStorage.getItem('l99-conlines')) sky.lines(true); } catch { /* private mode */ }
 		// weather: showers, cirrus, the rainbow's rain, lightning, all on the one wind
-		const weather = createWeather(scene, shared, { isPhone });
+		const weather = createWeather(scene, shared, { isPhone, airless: !!profile.airless });
 		sky.attach(weather);
 		const terrain = createTerrain(island, shared);
 		// the real Bay Area round the island: its heights are shared with the sea
@@ -754,7 +754,17 @@ export function createIslandWorld() {
 		const grass = createGrass(island, shared, isPhone ? 15000 : 30000, isPhone ? 90 : 124, { width: 0.5, seed: 99 });
 		const turf = createGrass(island, shared, isPhone ? 11000 : 18000, 20, { width: 0.34, height: 0.8, seed: 7 });
 		scene.add(terrain, ocean, grass, turf);
-		const litter = createLitter(island, shared, scene, isPhone ? 0.6 : 1);
+		// An airless world (the Moon) is bare regolith: its sea, village, grass, plants and animals
+		// are still made (the frame loop expects them) but held in a hidden group, out of reach.
+		const bare = profile.airless ? new THREE.Group() : null;
+		const stash = (make) => {
+			if (!bare) return make();
+			const had = new Set(scene.children), made = make();
+			for (const o of [...scene.children]) if (!had.has(o) && o !== bare) bare.add(o);
+			return made;
+		};
+		if (bare) { bare.visible = false; scene.add(bare); bare.add(ocean, grass, turf); }
+		const litter = stash(() => createLitter(island, shared, scene, isPhone ? 0.6 : 1));
 		// Crysis: the land's plants and animals, grown from the seed
 		const land = buildLandEcology(island.seed, { crowns: { boreal: ['columnar'], ash: ['columnar'], barren: ['columnar'], desert: ['umbrella', 'round'] }[profile.flora] });
 		// a planet's caves are planned first, so nothing grows in their mouths
@@ -762,16 +772,17 @@ export function createIslandWorld() {
 		// ...and the realm's dungeons dug down to meet them
 		if (realmPlan) planDungeons(realmPlan, island, cavePlan, makeField);
 		// the works of whoever built here before: sited now, so nothing grows on them
-		const alienPlan = earth || realmPlan?.noAliens ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: [...fieldPlan.clear, ...(realmPlan?.clear || [])], isPhone });
+		const alienPlan = earth || realmPlan?.noAliens || profile.airless ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: [...fieldPlan.clear, ...(realmPlan?.clear || [])], isPhone });
 		// (and the dwellings of whoever built them: interiors/alien.js)
 		if (alienPlan) alienPlan.clear.push(...planDwellings(island, alienPlan));
 		island.noPlant = [...(cavePlan?.holes || []), ...fieldPlan.clear, ...(alienPlan?.clear || []), ...(realmPlan?.clear || [])];
 		const vegetation = createVegetation(island, shared, scene, land);
-		const village = createVillage(island, shared, scene);
+		const village = stash(() => createVillage(island, shared, scene));
+		if (bare) { village.footprints.length = 0; village.pickables.length = 0; }
 		vegetation.addContacts(village.footprints);
-		const distant = createDistant(island, shared, scene);
-		const fauna = createFauna(island, shared, scene);
-		const landFauna = createLandFauna(land, island, shared, scene, camera, vegetation);
+		const distant = stash(() => createDistant(island, shared, scene));
+		const fauna = stash(() => createFauna(island, shared, scene));
+		const landFauna = stash(() => createLandFauna(land, island, shared, scene, camera, vegetation));
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
 		// arriving at a kept or shared spot: start there, so what streams in first is that place
@@ -782,18 +793,19 @@ export function createIslandWorld() {
 			P.yaw = sp.yaw || 0; P.pitch = sp.pitch || 0; P.flying = true;
 			camera.position.copy(P.pos);
 		}
-		const boat = createBoat(island, village, player, camera, shared, scene);
-		const whale = createWhale(island, shared, scene);
-		const shells = createShells(island, shared, camera, scene, player, dom, hint);
+		const boat = stash(() => createBoat(island, village, player, camera, shared, scene));
+		const whale = stash(() => createWhale(island, shared, scene));
+		const shells = stash(() => createShells(island, shared, camera, scene, player, dom, hint));
+		if (bare) shells.update = () => {};
 		const magma = createMagma(island, shared, scene, camera);
-		const caverns = createCaverns(island, shared, scene, camera, magma.tube);
-		const underwater = createUnderwater(island, shared, scene, camera, player, [...magma.tube, ...caverns.tunnels.flat(), ...caverns.arches.flat()]);
+		const caverns = stash(() => createCaverns(island, shared, scene, camera, magma.tube || []));
+		const underwater = stash(() => createUnderwater(island, shared, scene, camera, player, [...(magma.tube || []), ...caverns.tunnels.flat(), ...caverns.arches.flat()]));
 		// Crysis: the sea's food web and species, grown from the seed
 		const eco = buildEcology(island.seed, { volcanism: 0.8 });
-		const reef = createReef(island, shared, scene, [...magma.tube, ...caverns.tunnels.flat(), ...caverns.arches.flat()], eco);
-		const sealife = createSealife(island, shared, scene, camera, reef.bommies);
-		const fish = createFish(eco, island, shared, scene, camera, reef.bommies);
-		const inverts = createInverts(eco, island, shared, scene, camera, reef.bommies);
+		const reef = stash(() => createReef(island, shared, scene, [...(magma.tube || []), ...caverns.tunnels.flat(), ...caverns.arches.flat()], eco));
+		const sealife = stash(() => createSealife(island, shared, scene, camera, reef.bommies));
+		const fish = stash(() => createFish(eco, island, shared, scene, camera, reef.bommies));
+		const inverts = stash(() => createInverts(eco, island, shared, scene, camera, reef.bommies));
 		const pick = [...vegetation.pickables, ...village.pickables];
 		// the reef's corals and the sea's creatures ring too (tagged by what they are made of)
 		for (const g of [reef.group, sealife.group]) g?.traverse((o) => { if (o.isInstancedMesh && o.userData.material175) pick.push(o); });

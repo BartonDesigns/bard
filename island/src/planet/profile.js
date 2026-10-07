@@ -142,7 +142,7 @@ const TYPES = {
 		caves: { rock: [0.32, 0.32, 0.33], glow: [0.55, 0.75, 1.0], crystals: 0.4, lava: 0, ice: 0.2, water: 0 },
 		civ: { ruin: 'metal', village: 'dome', people: 'human' },
 		shrooms: ['glowcap'],
-		airless: true, gravity: 0.17,
+		airless: true, gravity: 0.17, sky: { earth: true },
 	},
 	// a green realm of rolling downs, woods and rivers, where people still build in stone:
 	// a castle on the high ground, a market town below it, mills, fields and hedgerows

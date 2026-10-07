@@ -11,7 +11,7 @@ file-by-file map is in `island/README.md`.
   - B goes past ×9 in space: ×100, ×1k, ×10k, ×100k, eased, with a guard that slows approaches. Stars streak at speed. J or ⤳ Warp lists every destination.
   - The Moon is a `MOON` world (`planet/profile.js`, relief `lunar`, 0.17 g, dark sky), landed on through `voyage()` → `api.open` in `main.js`. The old shader-only lunar patch is gone.
   - The Sun: heat haze, a warning and shields, then a bounce back at 8 solar radii.
-  - Still open: the Moon keeps the usual island village, birds, clouds and grey "sea".
+  - The Moon is bare: its sea, village, grass, animals, sea caves, ball fields and alien works are held in a hidden group or not planned; no clouds, rain or birds (weather `airless`); black sky with Earth (sky.js `uEarthSky`).
   - Tests: `island/tools/orbit.test.mjs`; headless `/tmp/claude-0/space/moon.cjs`, `space2.cjs`.
 
 - **One load into a saved spot (on the branch):** the faceplate's resume (and a shared `?at=` link) used to raise the default island, show it, jump you to the spot, then set the saved hour after the Bay finished loading.

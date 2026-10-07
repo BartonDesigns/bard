@@ -34,6 +34,7 @@ export function generateIsland(params = {}) {
 		return lerp(-38, -95, smoothstep(1.45, 2.1, t));
 	}
 	function natural(x, z) {
+		if (kind === 'lunar') return lunar(x, z);
 		const t = shape(x, z);
 		let h = profile(t);
 		if (t > 1.6) return { h, t, reef: 0 };
@@ -104,7 +105,7 @@ export function generateIsland(params = {}) {
 			const basin = smoothstep(0.55, 0.7, nz.fbm(wx * 0.004 + 11, wz * 0.004 - 8, 3)) * 20 * inland;
 			return keep + Math.max(0, up + plateau + spire - basin);
 		}
-		if (kind === 'crater' || kind === 'lunar') {
+		if (kind === 'crater') {
 			// airless-looking ground pocked by craters with raised rims
 			let c = 0;
 			for (const q of craters) {
@@ -112,7 +113,7 @@ export function generateIsland(params = {}) {
 				if (d > 1.6) continue;
 				c += (d < 1 ? -(1 - d * d) * q.r * 0.25 : 0) + Math.exp(-Math.pow((d - 1) * 5, 2)) * q.r * 0.08;
 			}
-			return keep + Math.max(-2, up * (kind === 'lunar' ? 0.45 : 0.7) + c * inland);
+			return keep + Math.max(-2, up * 0.7 + c * inland);
 		}
 		return h;
 	}
@@ -121,12 +122,25 @@ export function generateIsland(params = {}) {
 		const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * R * 0.75;
 		craters.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 20 + Math.pow(rand(), 2) * 110 });
 	}
-	// the Moon: many more craters, from pits to a few broad basins
-	if (kind === 'lunar') for (let i = 0; i < 46; i++) {
-		const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * R * 0.85;
+	// the Moon: no sea and no coast, regolith to the edge of the map, pocked by craters
+	// from pits to a few broad basins, with low rolling ground and one worn massif
+	if (kind === 'lunar') for (let i = 0; i < 70; i++) {
+		const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * half * 0.95;
 		craters.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 12 + Math.pow(rand(), 2.6) * 230 });
 	}
 
+	function lunar(x, z) {
+		// (well above the sea line everywhere, so no beach, wet sand or shore forms)
+		const rolling = (nz.fbm(x * 0.0021, z * 0.0021, 4) - 0.45) * 16 + nz.ridged(x * 0.0055 + 40, z * 0.0055 - 12, 4) * 6;
+		const dp = Math.hypot(x - peak.x, z - peak.z) / peak.r;
+		let c = 0;
+		for (const q of craters) {
+			const d = Math.hypot(x - q.x, z - q.z) / q.r;
+			if (d > 1.6) continue;
+			c += (d < 1 ? -(1 - d * d) * q.r * 0.22 : 0) + Math.exp(-Math.pow((d - 1) * 5, 2)) * q.r * 0.08;
+		}
+		return { h: Math.max(16, 32 + rolling + Math.pow(Math.max(0, 1 - dp), 1.7) * peak.h * 0.35 + c), t: 0.4, reef: 0 };
+	}
 	const height = new Float32Array(N * N);
 	const tmap = new Float32Array(N * N);
 	const masks = new Uint8Array(N * N * 4);   // r: path, g: village, b: reef, a: wild growth
@@ -176,7 +190,8 @@ export function generateIsland(params = {}) {
 	// The bay: the village sits at the back of a sheltered inlet. Scoop the coast out
 	// in a round cove and raise a wooded headland on each side, so from the beach the
 	// jungle wraps round you and the open sea is framed between the points.
-	{
+	// (the Moon has no sea, so no cove and no terrace)
+	if (kind !== 'lunar') {
 		const d = village.seaDir, sd = { x: -d.z, z: d.x };
 		const Rb = 165 + rand() * 30;
 		// the cove bites into the land: its back beach lies well inland of the old shore,
@@ -294,7 +309,7 @@ export function generateIsland(params = {}) {
 	// the village ground: an amphitheatre rising from the back beach of the cove,
 	// about one metre in fifteen, so the houses step up the slope and all look out
 	const vr = 150, bay = village.bay;
-	for (let j = 0; j < N; j++) {
+	if (kind !== 'lunar') for (let j = 0; j < N; j++) {
 		const z = -half + j * cell;
 		for (let i = 0; i < N; i++) {
 			const x = -half + i * cell, k = j * N + i;
