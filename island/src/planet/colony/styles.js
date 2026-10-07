@@ -13,6 +13,7 @@
 //   mine      a mining rig on a crater rim (or the nearest high ground)
 //   dish      comms dishes on the high ground
 //   pipes     glowing coolant runs between the works; stacks scrubber stacks venting
+// minH: the lowest ground it builds on, metres over the sea (a volcanic world's low plains are lava)
 // colours are linear rgb; light colours are the window glow, the running lights, the pads'
 
 export const COLONY = {
@@ -32,6 +33,7 @@ export const COLONY = {
 		hull: [0.22, 0.21, 0.21], trim: [0.62, 0.60, 0.56], print: [0.17, 0.16, 0.16], berm: [0.14, 0.13, 0.13],
 		accent: [0.90, 0.30, 0.08], glass: [0.20, 0.30, 0.36],
 		window: [1.0, 0.72, 0.42], run: [1.0, 0.45, 0.10], pad: [0.30, 0.95, 1.0], pipe: [0.25, 0.95, 1.0],
+		minH: 16,
 	},
 	TOXIC: {
 		name: 'Clearsky Spires', port: 'Clearsky Landing',

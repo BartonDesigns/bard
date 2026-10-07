@@ -83,7 +83,7 @@ export function planColony(island, profile, opts = {}) {
 	const isPhone = !!opts.isPhone, P = { ...S.parts };
 	if (isPhone) { P.habs = Math.min(P.habs, 4); P.walkers = Math.ceil(P.walkers / 2); P.rovers = Math.min(P.rovers, 3); P.solar = Math.min(P.solar, 2); }
 	const r = mulberry32((island.seed ^ 0xc0101e5) >>> 0);
-	const H = island.heightAt, half = island.half, sea = (island.sea || 0) + 4;
+	const H = island.heightAt, half = island.half, sea = (island.sea || 0) + (S.minH ?? 4);
 	const avoid = [...(opts.avoid || [])];
 	const V = island.village;
 	if (V && !profile.airless && !profile.noVillage) avoid.push({ x: V.x, z: V.z, r: 140 });
