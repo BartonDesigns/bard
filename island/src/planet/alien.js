@@ -193,7 +193,7 @@ export function planAlien(island, profile, avoid = {}) {
 }
 
 // ---------- what you walk on and into ----------
-function colliders() {
+export function colliders() {
 	const CELL = 48, grid = new Map(), all = [];
 	const key = (i, j) => i * 73856093 ^ j * 19349663;
 	const put = (e, x, z, r) => {

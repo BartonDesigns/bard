@@ -440,7 +440,7 @@ export function generateIsland(params = {}) {
 	const spawn = { x: sp.x, z: sp.z, yaw: Math.atan2(village.seaDir.x, village.seaDir.z) + Math.PI };
 
 	return {
-		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn,
+		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn, craters,
 		height, masks, heightAt, normalAt, maskAt, shapeAt: shape, coastAt, distToPath,
 		biome: params.biome || 'tropical', gravity: params.profile?.gravity || 1,
 	};

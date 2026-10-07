@@ -592,6 +592,9 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 	// soft-edged, and never black: skylight still reaches into shade
 	sun.shadow.radius = 4;
 	sun.shadow.intensity = 0.78;
+	// no air: nothing scatters light into the shade, so shadows are hard-edged and near black
+	const vacuum = !!shared.planet?.airless;
+	if (vacuum) sun.shadow.radius = 1;
 	scene.add(sun, sun.target);
 	const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x5a5230, 0.9);
 	scene.add(hemi);
@@ -646,7 +649,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		// there is no direct sun at all, only the grey light from everywhere)
 		const overcast = W ? THREE.MathUtils.smoothstep(W.cover ?? 0, 0.6, 0.95) : 0;
 		const sunVis = Math.min(W ? W.sunVis : 1, 1 - overcast * 0.85);
-		sun.shadow.intensity = 0.78 * (0.12 + 0.88 * sunVis);
+		sun.shadow.intensity = vacuum ? 0.96 : 0.78 * (0.12 + 0.88 * sunVis);
 		if (night < 0.5) {
 			sun.color.copy(sunCol);
 			sun.intensity = (3.4 * dayK + 0.4 * setK) * (0.25 + 0.75 * sunVis);
@@ -667,6 +670,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		// light bounced off warm sand and sunlit leaves fills the shade with gold, not grey
 		hemi.groundColor.setRGB(0.46, 0.36, 0.18).multiplyScalar(0.3 + 0.7 * dayK);
 		hemi.intensity = (0.25 + 0.9 * dayK) * (1 - gl * 0.3) * (1 + overcast * 0.35 * dayK) + (W?.flash || 0) * 2.5;
+		// (in vacuum only the grey ground's bounce fills the shade)
+		if (vacuum) { hemi.groundColor.setRGB(0.4, 0.4, 0.4); hemi.intensity *= 0.3; }
 		shared.uAmbient.value.copy(hemi.color).multiplyScalar(0.35 * hemi.intensity + 0.02);
 		// haze: blue by day so far land stacks up in layers
 		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
