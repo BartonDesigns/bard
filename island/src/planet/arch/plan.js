@@ -99,7 +99,7 @@ export function planArch(island, profile, opts = {}) {
 	const avoid = [...(opts.avoid || [])];
 	const V = island.village;
 	if (V && !profile.noVillage) avoid.push({ x: V.x, z: V.z, r: 150 });
-	for (const rd of opts.roads || []) for (let k = 0; k < rd.length; k += 3) avoid.push({ x: rd[k].x, z: rd[k].z, r: 10 });
+	for (const rd of opts.roads || []) for (let k = 0; k < rd.pts.length; k += 3) avoid.push({ x: rd.pts[k].x, z: rd.pts[k].z, r: 10 });
 	const free = (x, z, pad) => Math.hypot(x, z) < half * 0.78 && !avoid.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad);
 
 	// ---------- the cliff edges ----------
@@ -149,7 +149,7 @@ export function planArch(island, profile, opts = {}) {
 		const kind = S.kinds[villas.length % S.kinds.length];
 		const v = {
 			kind, x: c.x, z: c.z, y: c.y + 0.15, yaw: Math.atan2(c.dx, c.dz), under: c.under, drop: c.drop,
-			W: 11 + r() * 6, B: 9 + r() * 5, O: 10 + r() * 7, two: r() < 0.55, pool: r() < 0.6, turn: (r() - 0.5) * 0.5, side: r() < 0.5 ? -1 : 1,
+			W: 11 + r() * 6, B: 9 + r() * 5, O: 10 + r() * 7, two: r() < 0.55, pool: r() < 0.6, domes: r() < S.domes, turn: (r() - 0.5) * 0.5, side: r() < 0.5 ? -1 : 1,
 			name: names.shift() || 'Cliff House',
 		};
 		// the floor of the gorge below it
@@ -192,7 +192,7 @@ export function planArch(island, profile, opts = {}) {
 			avoid.push({ x: best.x, z: best.z, r: R + 12 });
 		}
 		const tall = S.tall[0] + r() * (S.tall[1] - S.tall[0]);
-		towers.push({ x: best.x, z: best.z, y: y - 2, R, top: Math.max(top + tall, y + 70), twist: (r() < 0.5 ? -1 : 1) * (0.6 + r() * 1.2), name: tNames.shift() || 'Tower', lobbies: [], sea: S.towerAt === 'sea' });
+		towers.push({ x: best.x, z: best.z, y: y - 2, R, top: Math.max(top + tall, y + 70), twist: (r() < 0.5 ? -1 : 1) * (0.6 + r() * 1.2), name: tNames.shift() || 'Tower', lobbies: [], sea: S.towerAt === 'sea', kind: S.towerKinds[towers.length % S.towerKinds.length] });
 	}
 
 	// ---------- the bridges ----------
@@ -224,6 +224,7 @@ export function planArch(island, profile, opts = {}) {
 			opts2.push({ d, a, b });
 		}
 		for (const T of towers) {
+			if (T.kind !== 'spire') continue;
 			const a = villas[i], d = Math.hypot(a.x - T.x, a.z - T.z);
 			if (d < 35 || d > 150 || a.y > T.top - 20 || a.y < T.y + 12) continue;
 			opts2.push({ d: d * 0.8, a, T });
@@ -276,8 +277,19 @@ export function planArch(island, profile, opts = {}) {
 		wear(island, pts, 2.6);
 		paths.push({ ends: [a, best.b], pts });
 	}
+	// the monolith: a lone black slab out on the water, in sight of the houses
+	let monolith = null;
+	for (let k = 0; k < 900; k++) {
+		const a = r() * TAU, d = 160 + r() * 1200, x = centre.x + Math.sin(a) * d, z = centre.z + Math.cos(a) * d;
+		if (Math.hypot(x, z) > half * 0.92 || H(x, z) > sea - 4 || towers.some((T) => Math.hypot(T.x - x, T.z - z) < 90)) continue;
+		let sh = -Infinity;
+		for (let j = 0; j < 8; j++) sh = Math.max(sh, H(x + Math.cos(j) * 30, z + Math.sin(j) * 30));
+		if (sh > sea - 1) continue;
+		const score = Math.max(0, d - 300) * 0.01 + r();
+		if (!monolith || score < monolith.score) monolith = { x, z, score, y: H(x, z), h: 90 + r() * 60, yaw: Math.atan2(centre.x - x, centre.z - z) };
+	}
 	let rad = 0;
 	for (const o of [...villas, ...towers]) rad = Math.max(rad, Math.hypot(o.x - centre.x, o.z - centre.z));
 	const mist = { base, top, cover: S.mist.cover, x: centre.x, z: centre.z, rad: Math.min(1000, rad + 300) };
-	return { style: S, seed: island.seed, name: S.name, centre, villas, towers, bridges, paths: paths.map((p) => p.pts), mist, clear, planMs: Math.round(performance.now() - t0) };
+	return { style: S, seed: island.seed, name: S.name, centre, villas, towers, bridges, monolith, paths: paths.map((p) => p.pts), mist, clear, planMs: Math.round(performance.now() - t0) };
 }

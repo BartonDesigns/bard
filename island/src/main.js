@@ -125,6 +125,8 @@ import { createVolcano } from './planet/volcano.js';
 import { planAlien, createAlien } from './planet/alien.js';
 import { planColony } from './planet/colony/plan.js';
 import { createColony } from './planet/colony/colony.js';
+import { planArch } from './planet/arch/plan.js';
+import { createArch } from './planet/arch/arch.js';
 import { planRealm, planDungeons } from './planet/medieval/plan.js';
 import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
@@ -744,6 +746,9 @@ export function createIslandWorld() {
 		if (colonyPlan) fieldPlan.clear.push(...colonyPlan.clear);
 		// a realm of castles and towns, where this world keeps one: sited now, the land shaped round it
 		const realmPlan = earth ? null : planRealm(island, profile, { fields: fieldPlan.clear, isPhone });
+		// a cliff settlement (planet/arch/): its houses seated on the cliff tops and its paths worn in now
+		const archPlan = earth ? null : planArch(island, profile, { avoid: [...fieldPlan.clear, ...(realmPlan?.clear || [])], roads: realmPlan?.roads, isPhone });
+		if (archPlan) fieldPlan.clear.push(...archPlan.clear);
 		// the planet's second biome and its cold side, baked where the ground, plants and water can read it
 		island.biomes = createBiomes(island, profile);
 		// its streams and lakes (or ice, or lava), carved before its plants, caves and ruins are planned
@@ -900,6 +905,13 @@ export function createIslandWorld() {
 			const of = island.extraFloor, op = island.extraPush;
 			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), cl.floor(x, z, y)) : cl.floor;
 			island.extraPush = op ? (p, footY) => { op(p, footY); cl.push(p, footY); } : cl.push;
+		}
+		// the cliff settlement: its decks, terraces, bridges and roofs walked on, its walls walked into
+		if (archPlan) {
+			const ar = world.arch = createArch(island, shared, scene, camera, profile, archPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
+			const of = island.extraFloor, op = island.extraPush;
+			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), ar.floor(x, z, y)) : ar.floor;
+			island.extraPush = op ? (p, footY) => { op(p, footY); ar.push(p, footY); } : ar.push;
 		}
 		// the realm: its castle, town and fields walked on and into; its dungeons reached before the caves
 		if (realmPlan) {
@@ -1075,6 +1087,7 @@ export function createIslandWorld() {
 		world.volcano?.dispose();
 		world.alien?.dispose();
 		world.colony?.dispose();
+		world.arch?.dispose();
 		world.medieval?.dispose();
 		world.beyond?.dispose();
 		world.boardwalk?.destroy();
@@ -1409,6 +1422,7 @@ export function createIslandWorld() {
 		W.beyond?.update(dt, time);
 		W.floaters?.update(sk.night);
 		W.colony?.update(dt, time);
+		W.arch?.update(dt, time);
 		W.dwellings?.update(dt, camera.position);
 		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
@@ -1932,6 +1946,9 @@ if (typeof window !== 'undefined') {
 		// an off-world colony (planet/colony/): Crysis.colony() tells of it, Crysis.colonyGo() lands at its spaceport
 		colony: () => window.L99Island?.world?.()?.colony?.info() || null,
 		colonyGo: () => window.L99Island?.world?.()?.colony?.go() || 'no colony on this world',
+		// a cliff settlement (planet/arch/): Crysis.arch() tells of it, Crysis.archGo(i) stands you on house i's deck (then the towers)
+		arch: () => window.L99Island?.world?.()?.arch?.info() || null,
+		archGo: (i = 0) => window.L99Island?.world?.()?.arch?.go(i) || 'no cliff settlement on this world',
 		// a realm of castles (planet/medieval/): Crysis.medieval() tells of it, Crysis.medieval('castle')
 		// goes to look (castle, realm, gate, keep, wall, town, square, chapel, windmill, bridge, barrow…);
 		// Crysis.quests() lists its quests; Crysis.dungeon(i) goes down into one ('stair', 'last' or

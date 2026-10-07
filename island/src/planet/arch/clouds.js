@@ -19,14 +19,14 @@ uniform vec2 uOff, uWd;
 uniform vec4 uObs[12];
 uniform vec3 uC, uSunC, uHor, uWarm;
 uniform vec2 uBand;
-uniform float uCov, uHalf, uNight, uTime, uK, uLit;
+uniform float uCov, uHalf, uNight, uTime, uK, uLit, uDusk;
 `;
 // the sky's light on it: sunlit above, cooler beneath, dark by night with the windows warm in it
 const SHADE = /* glsl */`
 vec3 mistC(float up, float n, float glow){
-	vec3 c = mix(uHor * 0.72, uSunC * 0.9 + uHor * 0.3, (0.45 + 0.55 * up) * uLit) * (0.82 + 0.25 * n);
+	vec3 c = mix(uHor * 0.6, uSunC * 0.9 + uHor * 0.35, (0.3 + 0.7 * up) * uLit) * (0.55 + 0.7 * n * (0.4 + 0.6 * up));
 	c = mix(c, uHor * 0.1 + vec3(0.015, 0.02, 0.035), uNight * 0.88);
-	return c + uWarm * glow * uNight * 0.55;
+	return c + uWarm * glow * uDusk * (1.4 - up * 0.6);
 }
 `;
 
@@ -64,15 +64,16 @@ void main(){
 		float b0 = sign(b) * sqrt(max(0.0, b * b - R * R * e * 1.2));
 		b0 += sin(s / R * 0.9 - uTime * 0.5 + o.x) * R * 0.55 * step(0.0, s) * exp(-s / (R * 7.0)) * exp(-b * b / (R * R * 2.5));
 		q += ac * (b0 - b);
-		hole *= smoothstep(R * 1.02, R * 1.8, r);
+		hole *= smoothstep(R * 0.98, R * 1.35, r);
 		glow += o.w * exp(-r / (R * 2.2));
 	}
 	float n = mF((q - uOff) * 0.0055 + vL * 1.7);
 	float mid = 1.0 - abs(vL * 2.0 - 1.0);
-	float cov = smoothstep(uCov, uCov + 0.26, n + mid * 0.12 - 0.04);
+	float cov = smoothstep(uCov, uCov + 0.16, n + mid * 0.14 - 0.05 - (1.0 - mid) * 0.08);
 	float g = texture2D(uHeight, (p + uHalf) / (2.0 * uHalf)).r;
-	float a = cov * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
-	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.4;
+	float lift = glow * uDusk;
+	float a = min(1.0, cov * (1.0 + lift * 0.9) + lift * 0.12) * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
+	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.42;
 	if (a < 0.004) discard;
 	gl_FragColor = vec4(mistC(vL, n, glow), a);
 	#include <tonemapping_fragment>
@@ -138,7 +139,7 @@ const mF = (x, y) => mN(x, y) * 0.53 + mN(x * 2.07 + 3.1, y * 2.07 + 3.1) * 0.27
 const sm = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // M: the plan's mist { base, top, cover, x, z, rad }; obs: [{ x, z, r, light, tower }]
-export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1 } = {}) {
+export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, glow = [1.0, 0.45, 0.65] } = {}) {
 	const group = new THREE.Group();
 	group.name = 'arch:mist';
 	const wd = shared.uWindDir?.value || new THREE.Vector2(1, 0);
@@ -146,7 +147,7 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1 } 
 		uOff: { value: new THREE.Vector2() }, uWd: { value: new THREE.Vector2(wd.x, wd.y) },
 		uObs: { value: Array.from({ length: 12 }, (_, i) => { const o = obs[i]; return o ? new THREE.Vector4(o.x, o.z, o.r, o.light) : new THREE.Vector4(); }) },
 		uC: { value: new THREE.Vector3(M.x, M.z, M.rad) }, uBand: { value: new THREE.Vector2(M.base, M.top) }, uSunC: { value: new THREE.Color(1, 1, 1) }, uHor: { value: new THREE.Color(0.7, 0.75, 0.8) },
-		uWarm: { value: new THREE.Color(1.0, 0.7, 0.4) }, uCov: { value: M.cover }, uHalf: { value: shared.biHalf || 1300 },
+		uWarm: { value: new THREE.Color(...glow) }, uDusk: { value: 0 }, uCov: { value: M.cover }, uHalf: { value: shared.biHalf || 1300 },
 		uNight: { value: 0 }, uTime: shared.uTime, uK: { value: 1 }, uLit: { value: 1 }, uFlow: { value: 0 },
 		uHeight: { value: shared.heightTex },
 	};
@@ -217,6 +218,8 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1 } 
 		U.uOff.value.addScaledVector(U.uWd.value, v * dt);
 		U.uFlow.value += v * dt;
 		U.uNight.value = night;
+		// the works' light in it from dusk on
+		U.uDusk.value = Math.min(1, 0.25 + night * 1.2);
 		if (shared.uSunColor) sun.copy(shared.uSunColor.value);
 		if (shared.uSkyHor) hor.copy(shared.uSkyHor.value);
 		U.uSunC.value.copy(sun); U.uHor.value.copy(hor);

@@ -1,7 +1,8 @@
 // The cliff settlements' materials. Nearly all of it is one lit material, its look chosen
 // per vertex by aGlow (the kit's attribute), so a house is a draw call or two:
 //   0 white concrete: board-formed, a fine grain, a little weathering low down
-//   1 glazing: dark glass that takes the sky, its mullions, warm panes lit by night
+//   1 glazing: dark glass that takes the sky, its mullions, panes lit by dusk and night in
+//     warm white, pink or violet (the towers' grids)
 //   2 rock: strata and grain in the world's own stone (the collars where the works meet the cliff)
 //   3 timber: soffits and decks in warm slats
 //   4 planted: the green roofs and planters, a mottle of growth
@@ -21,7 +22,7 @@ varying float vAG;
 `;
 const HEAD_F = /* glsl */`
 uniform float uTime, uNight, uLampK;
-uniform vec3 uWinC;
+uniform vec3 uWinC, uWinB, uWinV;
 varying vec3 vAW;
 varying vec3 vAN;
 varying float vAG;
@@ -40,14 +41,14 @@ const LOOK = /* glsl */`
 		aCol *= (0.95 + 0.06 * aN(fp * 1.7)) * (1.0 - board * 0.05);
 		aRough = 0.72;
 	} else if (vAG < 1.5) {
-		vec2 q = vec2(fp.x / 1.6, fp.y / 3.4);
+		vec2 q = vec2(fp.x / 1.8, fp.y / 3.5);
 		vec2 f = fract(q), id = floor(q);
-		float mull = 1.0 - step(0.05, f.x) * step(f.x, 0.95) * step(0.04, f.y) * step(f.y, 0.96);
-		float lit = step(0.35, aH(vec3(id, 7.0)));
-		aCol = mix(aCol, vec3(0.62, 0.62, 0.6), mull * (1.0 - aFar * 0.8));
-		aRough = mix(0.05, 0.5, mull); aMetal = mix(0.9, 0.3, mull);
-		aEm = (1.0 - mull) * lit * uNight * 1.5 * (0.7 + 0.6 * aH(vec3(id, 3.0)));
-		aEmC = uWinC;
+		float mull = 1.0 - step(0.1, f.x) * step(f.x, 0.9) * step(0.14, f.y) * step(f.y, 0.86);
+		float lit = step(0.45, aH(vec3(id, 7.0))), hue = aH(vec3(id, 11.0));
+		aCol = mix(aCol, aCol * 1.8 + 0.06, mull * (1.0 - aFar * 0.8));
+		aRough = mix(0.1, 0.5, mull); aMetal = mix(0.6, 0.3, mull);
+		aEm = (1.0 - mull) * lit * uNight * 0.75 * (0.45 + 0.8 * aH(vec3(id, 3.0)));
+		aEmC = hue < 0.5 ? uWinC : hue < 0.78 ? uWinB : uWinV;
 	} else if (vAG < 2.5) {
 		float y = vAW.y + aN(fp * 0.25) * 2.0;
 		float lay = fract(y * 0.7);
@@ -116,5 +117,5 @@ export function contactMaterial() {
 	});
 }
 export function archUniforms(shared, S) {
-	return { uTime: shared.uTime, uNight: { value: 0 }, uLampK: { value: 1 }, uWinC: { value: new THREE.Color(...S.window) } };
+	return { uTime: shared.uTime, uNight: { value: 0 }, uLampK: { value: 1 }, uWinC: { value: new THREE.Color(...S.window) }, uWinB: { value: new THREE.Color(...S.winB) }, uWinV: { value: new THREE.Color(...S.winV) } };
 }

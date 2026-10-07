@@ -1,0 +1,660 @@
+// A cliff settlement, built from its plan (plan.js): houses hung off the escarpments on
+// struts sunk in the face (or stepping down it in terraces), towers rising from the valley
+// floor through the mist band (clouds.js), bridges across the gaps. Each house is merged into
+// a mesh or two of the one shared material (mats.js) and dropped by distance; where the works
+// meet the land, stone collars and a soft contact shade blend them in. Lifts run up the
+// towers, craft fly between them, and by night the glazing, the soffits and the mist glow.
+// Decks, terraces, bridges and roofs are floors; walls and balustrades are walked into.
+
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { Kit, skyEnvironment, frame, box, cbox, strut, sweep, lathe, ring, prism, blob } from '../alienkit.js';
+import { colliders } from '../alien.js';
+import { mulberry32 } from '../../noise.js';
+import { archMaterial, railGlass, contactMaterial, archUniforms } from './mats.js';
+import { createMist } from './clouds.js';
+import { createGlow } from './glow.js';
+import { local } from './plan.js';
+
+const TAU = Math.PI * 2;
+// the material's looks (mats.js)
+const G = { concrete: 0, glazing: 1, rock: 2, timber: 3, planted: 4, lamp: 5, beacon: 6, water: 7, metal: 8 };
+const m4 = new THREE.Matrix4(), eu = new THREE.Euler();
+
+// ---------- shapes ----------
+// a plate's outline in plan: a rounded rectangle, or an oval
+function outline(w, d, round, cr) {
+	const s = new THREE.Shape();
+	if (round) s.absellipse(0, 0, w / 2, d / 2, 0, TAU, false, 0);
+	else {
+		const r = Math.min(cr ?? Math.min(w, d) * 0.22, w / 2 - 0.01, d / 2 - 0.01), x0 = -w / 2, x1 = w / 2, z0 = -d / 2, z1 = d / 2;
+		s.moveTo(x0 + r, z0); s.lineTo(x1 - r, z0); s.absarc(x1 - r, z0 + r, r, -Math.PI / 2, 0);
+		s.lineTo(x1, z1 - r); s.absarc(x1 - r, z1 - r, r, 0, Math.PI / 2);
+		s.lineTo(x0 + r, z1); s.absarc(x0 + r, z1 - r, r, Math.PI / 2, Math.PI);
+		s.lineTo(x0, z0 + r); s.absarc(x0 + r, z0 + r, r, Math.PI, Math.PI * 1.5);
+	}
+	return s;
+}
+// a plate t thick, its top at y = 0
+function plate(w, d, t, round, cr) {
+	const g = new THREE.ExtrudeGeometry(outline(w, d, round, cr), { depth: t, bevelEnabled: false, curveSegments: round ? 28 : 4 });
+	return g.rotateX(Math.PI / 2);
+}
+// a beam from a to b, w across and t deep, kept level across
+function plank(a, b, w, t) {
+	const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, len = Math.hypot(dx, dy, dz);
+	const g = box(w, t, len);
+	g.applyMatrix4(m4.makeRotationFromEuler(eu.set(-Math.atan2(dy, Math.hypot(dx, dz)), Math.atan2(dx, dz), 0, 'YXZ')));
+	return g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+}
+// a broken stone: an icosahedron pushed about, the same way at shared corners
+function stone(rx, ry, rz, seed) {
+	const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position;
+	for (let i = 0; i < p.count; i++) {
+		const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+		const h = Math.sin(Math.round(x * 50) * 12.99 + Math.round(y * 50) * 78.23 + Math.round(z * 50) * 37.72 + seed) * 43758.55;
+		const k = 0.78 + (h - Math.floor(h)) * 0.42;
+		p.setXYZ(i, x * k * rx, y * k * ry, z * k * rz);
+	}
+	g.computeVertexNormals();
+	return g;
+}
+// geometry tagged for the shared material outside a kit (the instanced lifts and craft)
+function paint(g, tint, glow) {
+	if (g.index) g = g.toNonIndexed();
+	for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+	const n = g.attributes.position.count, c = new Float32Array(n * 3);
+	for (let i = 0; i < n; i++) c.set(tint, i * 3);
+	g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+	g.setAttribute('aGlow', new THREE.BufferAttribute(new Float32Array(n).fill(glow), 1));
+	return g;
+}
+// the outline's points on the open side (z over `from`), inset, in the frame's plan
+function edge(w, d, round, inset, zc, from) {
+	const pts = outline(w - inset * 2, d - inset * 2, round).getPoints(round ? 40 : 4);
+	const out = [];
+	let started = false;
+	for (let i = 0; i < pts.length * 2 && out.length < pts.length; i++) {
+		const p = pts[i % pts.length], z = p.y + zc, inside = z > from;
+		if (inside) { started = true; out.push({ x: p.x, z }); } else if (started) break;
+	}
+	return out;
+}
+
+// ---------- the pieces ----------
+// a glass balustrade along a run of plan points in frame F at height y (with its light strip under)
+function rail(X, F, pts, y, o = {}) {
+	for (let i = 0; i < pts.length - 1; i++) {
+		const a = F.p(pts[i].x, y, pts[i].z), b = F.p(pts[i + 1].x, y, pts[i + 1].z);
+		if (a.distanceTo(b) < 0.05) continue;
+		const lift = (v, dy) => v.clone().setY(v.y + dy);
+		X.K.add('glass', plank(lift(a, 0.55), lift(b, 0.55), 0.04, 1.05), { near: true });
+		X.K.add('shell', plank(lift(a, 1.1), lift(b, 1.1), 0.07, 0.06), { tint: X.S.trim, glow: G.metal, near: true });
+		if (o.strip !== false) X.K.add('shell', plank(lift(a, -(o.under || 0.8)), lift(b, -(o.under || 0.8)), 0.14, 0.3), { tint: X.S.band, glow: G.lamp });
+		X.col.seg({ x: a.x, z: a.z }, { x: b.x, z: b.z }, 0.12, y + 1.1, X.site, y - 0.6);
+	}
+}
+// stones round a foot where a member meets the rock
+function collar(X, p, s) {
+	for (let k = 0; k < 3; k++) {
+		const a = X.r() * TAU, d = s * (0.3 + X.r() * 0.5);
+		X.K.add('shell', stone(s * (0.8 + X.r() * 0.5), s * (0.6 + X.r() * 0.4), s * (0.8 + X.r() * 0.5), X.r() * 100).translate(p.x + Math.cos(a) * d, p.y - s * 0.2 + X.r() * s * 0.3, p.z + Math.sin(a) * d), { tint: X.rockT(), glow: G.rock });
+	}
+}
+// a long stone from a foot back into the face: the member is seen to bear on rock, however
+// the face is drawn far off
+function buttress(X, F, p) {
+	const g = stone(1.9 + X.r() * 0.6, 2.6 + X.r(), 5 + X.r() * 1.5, X.r() * 100);
+	g.applyMatrix4(m4.makeRotationFromEuler(eu.set(-0.5, F.yaw, 0, 'YXZ')));
+	X.K.add('shell', g.translate(p.x - Math.sin(F.yaw) * 3, p.y - 1.2, p.z - Math.cos(F.yaw) * 3), { tint: X.rockT(), glow: G.rock });
+}
+// the ground under the edge of the lip, stone filled up to the floor's underside
+function lipStones(X, F, v, xs, z) {
+	for (const lx of xs) {
+		const p = F.p(lx, 0, z), g = X.H(p.x, p.z), gap = v.y - 0.75 - g;
+		if (gap < 0.3) continue;
+		const s = Math.min(6, gap + 1.2);
+		X.K.add('shell', stone(2.4 + X.r(), s * 0.6, 2.0 + X.r() * 0.8, X.r() * 100).translate(p.x, g + s * 0.35 - 0.6, p.z), { tint: X.rockT(), glow: G.rock });
+	}
+}
+// the house's back: a low mass set into the top, its plinth in stone and its roof grown over
+function backMass(X, F, v, bw, z0, z1, H1) {
+	const { K, S } = X, C = { tint: S.concrete }, zc = (z0 + z1) / 2, d = z1 - z0;
+	K.add('shell', F.put(cbox(bw, H1 + 2, d, 0.25), 0, (H1 + 2) / 2 - 2, zc), C);
+	K.add('shell', F.put(box(bw + 0.08, 1.7, d * 0.72), 0, 1.5, zc), { tint: S.glazing, glow: G.glazing });
+	K.add('shell', F.put(box(bw + 0.7, 1.3, d + 0.7), 0, -1.05, zc), { tint: X.rockT(), glow: G.rock });
+	K.add('shell', F.put(box(bw - 0.7, 0.4, d - 0.7), 0, H1 + 0.2, zc), { tint: S.planted, glow: G.planted });
+	// the retro-futurist complex: a dome and a drum on the roof, red lights on their tops
+	if (v.domes) {
+		const r = Math.min(bw, d) * 0.3, dx = bw * 0.22, rd = 1.4 + X.r() * 0.8, hd = 7 + X.r() * 6, cx = -dx - r * 0.2, cz = z0 + rd + 0.6;
+		K.add('shell', F.put(blob(r, r * 0.85, r, 12, 0), dx, H1 + 0.4, zc), C);
+		K.add('shell', F.put(box(0.35, 0.35, 0.35), dx, H1 + 0.4 + r * 0.85, zc), { tint: S.beacon, glow: G.beacon });
+		K.add('shell', F.put(lathe([[0.01, 0], [rd, 0], [rd, hd], [rd * 0.96, hd + 0.2], [0.01, hd + 0.25]], 18, false), cx, H1 + 0.4, cz), C);
+		K.add('shell', F.put(ring(rd + 0.02, 0.1, 0.9, 18), cx, H1 + 0.4 + hd - 2.2, cz), { tint: S.glazing, glow: G.glazing });
+		K.add('shell', F.put(blob(rd, rd * 0.7, rd, 10, 0), cx, H1 + 0.65 + hd, cz), C);
+		K.add('shell', F.put(box(0.3, 0.3, 0.3), cx, H1 + 0.7 + hd + rd * 0.7, cz), { tint: S.beacon, glow: G.beacon });
+	}
+	const c = F.p(0, 0, zc);
+	X.col.box(c.x, c.z, F.yaw, bw / 2, d / 2, v.y + H1 + 0.4, { site: X.site });
+	X.contacts.push({ F, x0: -bw / 2 - 0.4, x1: bw / 2 + 0.4, z0: z0 - 0.4, z1: Math.min(0, z1), m: 4.5, k: 0.42 });
+}
+// a glazed room with its overhanging roof plate and timber soffit, downlights under the eave
+function room(X, F, w, d, h, x, zc, round, roofOver = 1.2) {
+	const { K, S } = X, C = { tint: S.concrete };
+	K.add('shell', F.put(plate(w, d, h, round), x, h, zc), { tint: S.glazing, glow: G.glazing });
+	K.add('shell', F.put(plate(w + roofOver * 2, d + roofOver * 2, 0.5, round), x, h + 0.5, zc + roofOver * 0.3), C);
+	K.add('shell', F.put(plate(w + roofOver * 2 - 0.1, d + roofOver * 2 - 0.1, 0.04, round), x, h, zc + roofOver * 0.3), { tint: S.timber, glow: G.timber });
+	for (const p of edge(w + roofOver, d + roofOver, round, 0, zc + roofOver * 0.3, -1e9).filter((q, i) => i % (round ? 4 : 1) === 0)) {
+		K.add('shell', F.put(box(0.3, 0.05, 0.3), x + p.x, h - 0.06, p.z), { tint: S.lamp, glow: G.lamp, near: true });
+	}
+	const c = F.p(x, 0, zc);
+	X.col.box(c.x, c.z, F.yaw, w / 2, d / 2, F.y + h + 0.5, { site: X.site, y0: F.y });
+}
+
+// a house cantilevered out over the drop: a glass room on a floor plate held by struts and a
+// swept root grown from the face below, a deck and a pool at its tip
+function cantilever(X, v) {
+	const { K, S, H } = X, F = frame(v.x, v.y, v.z, v.yaw), sd = v.side, W = v.W, B = v.B, O = v.O, H1 = 3.6, round = S.round;
+	const C = { tint: S.concrete };
+	backMass(X, F, v, W * 0.82, -B, -B * 0.25, H1);
+	// the floor plate, out over the edge
+	const zs0 = -B * 0.3, dd = O - zs0, zc = (zs0 + O) / 2;
+	K.add('shell', F.put(plate(W, dd, 0.75, round), 0, 0, zc), C);
+	const fc = F.p(0, 0, zc);
+	// (an oval floor walked as three boxes inside it)
+	for (const [kx, kz] of round ? [[0.95, 0.45], [0.76, 0.76], [0.45, 0.95]] : [[1, 1]]) X.col.box(fc.x, fc.z, v.yaw, W / 2 * kx, dd / 2 * kz, v.y, { site: X.site, solid: false });
+	// the room, set back from the tip (the deck) and from the walkway along one side
+	const gw = W - 2.8, gx = -sd * 1.4, gz0 = zs0 + 0.4, gz1 = O - 4.8;
+	room(X, F, gw, gz1 - gz0, H1, gx, (gz0 + gz1) / 2, round);
+	// a second room on its roof, turned off the first's line
+	if (v.two) {
+		const F2 = F.sub(gx, H1 + 0.5, (gz0 + gz1) / 2 - (gz1 - gz0) * 0.12, v.turn);
+		room(X, F2, gw * 0.78, (gz1 - gz0) * 0.62, 3.2, 0, 0, round, 1.6);
+	}
+	// the pool across the tip, its far edge the plate's
+	if (v.pool) K.add('shell', F.put(box(W * 0.62, 0.12, 2.8), -sd * W * 0.12, 0.04, O - 2.1), { tint: [0.10, 0.36, 0.42], glow: G.water });
+	// the balustrade round the open side, the light strip under the plate's edge
+	rail(X, F, edge(W, dd, round, 0.14, zc, 0.4), v.y);
+	// the struts: a V each side down to the face, and the swept root from deep in it
+	const foot = (lx, need, from) => {
+		for (let lz = from; lz <= O + 8; lz += 0.75) { const p = F.p(lx, 0, lz), g = H(p.x, p.z); if (v.y - g >= need) return { lz, y: g - v.y - 0.9 }; }
+		return null;
+	};
+	const feet = [];
+	for (const lx of [-W / 2 + 1.3, W / 2 - 1.3]) {
+		const f = foot(lx * 1.12, 7, 1);
+		if (!f) continue;
+		const ft = F.p(lx * 1.12, f.y, f.lz);
+		K.add('shell', strut(F.p(lx, -0.75, O * 0.8), ft, 0.6, 0.85, true), C);
+		K.add('shell', strut(F.p(lx, -0.75, O * 0.32), ft, 0.45, 0.65, true), C);
+		feet.push(ft);
+	}
+	const f = foot(0, Math.min(18, v.under * 0.8), 2);
+	if (f) {
+		const a = F.p(0, -0.6, O * 0.55), c = F.p(0, f.y, f.lz), m = F.p(0, f.y * 0.55, (O * 0.55 + f.lz) / 2 + 2.5);
+		K.add('shell', sweep([a, m, c], (t) => 1.05 - 0.3 * Math.sin(t * Math.PI) + Math.pow(t, 5) * 1.3, 10), C);
+		feet.push(c);
+	}
+	// and the complex's slim column straight down the face from the tip
+	if (v.domes) {
+		const lx = -sd * W * 0.22, p = F.p(lx, 0, O * 0.7), g = H(p.x, p.z);
+		if (v.y - g > 6 && v.y - g < 90) {
+			K.add('shell', F.put(lathe([[0.8, g - v.y - 1], [0.75, -0.7]], 12, false), lx, 0, O * 0.7), C);
+			feet.push(F.p(lx, g - v.y - 0.5, O * 0.7));
+		}
+	}
+	for (const p of feet) { collar(X, p, 1.8); buttress(X, F, p); }
+	lipStones(X, F, v, [-W / 2 + 1.5, 0, W / 2 - 1.5], 0.9);
+	const st = F.p(sd * W * 0.25, 0, zc + dd * 0.375);
+	v.stand = { x: st.x, y: v.y, z: st.z, yaw: v.yaw + Math.PI };
+	return { x: fc.x, z: fc.z, r: W * 0.42, foot: feet.length ? Math.min(...feet.map((p) => p.y)) : v.y - 10 };
+}
+
+// a house stepping down the face: floors set into the rock one under another, each a
+// planted terrace out over the next, stairs down the side
+function terraces(X, v) {
+	const { K, S, H } = X, F = frame(v.x, v.y, v.z, v.yaw), sd = v.side, W = v.W, B = v.B * 0.8, D = 6.5, H1 = 3.15, C = { tint: S.concrete };
+	backMass(X, F, v, W * 0.7, -B, -1.5, 3.4);
+	const levels = [];
+	for (let k = 0; k < 4; k++) {
+		const y = -k * 3.9;
+		if (k > 0 && v.under < k * 3.9 + 4) break;
+		let lz = null;
+		for (let z = -1; z <= 22; z += 0.5) {
+			let hi = -1e9;
+			for (const lx of [-W / 2, 0, W / 2]) { const p = F.p(lx, 0, z); hi = Math.max(hi, H(p.x, p.z)); }
+			if (hi <= v.y + y - 0.4) { lz = z; break; }
+		}
+		if (lz == null || k > 0 && lz - levels[k - 1].lz > D) break;
+		levels.push({ y, lz: k ? Math.max(lz, levels[k - 1].lz) : lz });
+	}
+	for (let k = 0; k < levels.length; k++) {
+		const L = levels[k], ext = k > 0 ? 5.6 : 0, w = W + ext, x = sd * ext / 2, z0 = L.lz - 3.5, z1 = L.lz + D, zc = (z0 + z1) / 2;
+		const T = F.sub(0, L.y, 0);
+		K.add('shell', T.put(plate(w, z1 - z0, 0.6, false, 0.6), x, 0, zc), C);
+		const pc = T.p(x, 0, zc);
+		X.col.box(pc.x, pc.z, v.yaw, w / 2, (z1 - z0) / 2, v.y + L.y, { site: X.site, solid: false });
+		// its room, under the terrace above (the top one's under its own roof)
+		const rz0 = k ? z0 + 0.2 : -B * 0.5, rz1 = z1 - 2.8;
+		room(X, T, W - 1.2, rz1 - rz0, H1, 0, (rz0 + rz1) / 2, false, 0.6);
+		// the planter and the glass along its front; the open side has the stair
+		K.add('shell', T.put(box(w - 1.2, 0.55, 0.7), x, 0.27, z1 - 0.5), { tint: S.planted, glow: G.planted });
+		rail(X, T, [{ x: -sd * (W / 2 - 0.15), z: L.lz }, { x: -sd * (W / 2 - 0.15), z: z1 - 0.14 }, { x: x + sd * (w / 2 - 0.15), z: z1 - 0.14 }], v.y + L.y, { under: 0.7 });
+		// stone where the plate's ends meet the face
+		for (const sx of [-1, 1]) { const p = T.p(sx === sd ? x + sd * w / 2 : -sd * W / 2, -0.4, L.lz - 1); collar(X, p, 1.6); }
+		if (k === 0 && v.pool) K.add('shell', T.put(box(W * 0.5, 0.12, 2.4), -sd * W * 0.2, 0.04, z1 - 2.3), { tint: [0.10, 0.36, 0.42], glow: G.water });
+		// the stair down to the next: along the face, over the next terrace's wider end
+		const N = levels[k + 1];
+		if (N) {
+			const zs = L.lz + D - 1.3, a = F.p(sd * (W / 2 - 0.6), L.y, zs), b = F.p(sd * (W / 2 + 4.6), N.y, zs), n = 7;
+			for (let i = 0; i < n; i++) {
+				const p = a.clone().lerp(b, (i + 0.5) / n);
+				K.add('shell', plank(p.clone().addScaledVector(b.clone().sub(a).setY(0).normalize(), -0.4).setY(p.y - 0.12), p.clone().addScaledVector(b.clone().sub(a).setY(0).normalize(), 0.4).setY(p.y - 0.12), 1.4, 0.22), C);
+			}
+			const yawS = v.yaw + sd * Math.PI / 2, len = Math.hypot(b.x - a.x, b.z - a.z);
+			X.col.ramp(a.x, a.z, yawS, 0.75, 0, len, a.y, b.y, X.site);
+			const off = (p) => F.p(0, 0, 0) && p.clone().add(new THREE.Vector3(Math.sin(v.yaw), 0, Math.cos(v.yaw)).multiplyScalar(0.75));
+			X.K.add('glass', plank(off(a).setY(a.y + 0.55), off(b).setY(b.y + 0.55), 0.04, 1.05), { near: true });
+		}
+	}
+	// a root swept from deep in the face up under the lowest terrace
+	const low = levels[levels.length - 1];
+	if (low) {
+		for (let lz = low.lz + 1; lz <= low.lz + 16; lz += 0.75) {
+			const p = F.p(0, 0, lz), g = H(p.x, p.z);
+			if (v.y + low.y - g < 9) continue;
+			const a = F.p(0, low.y - 0.5, low.lz + D * 0.6), c = F.p(0, g - v.y - 0.9, lz), m = F.p(0, (low.y + g - v.y) / 2, (low.lz + D * 0.6 + lz) / 2 + 2);
+			K.add('shell', sweep([a, m, c], (t) => 0.9 - 0.25 * Math.sin(t * Math.PI) + Math.pow(t, 5) * 1.1, 10), C);
+			collar(X, c, 1.7);
+			buttress(X, F, c);
+			break;
+		}
+	}
+	lipStones(X, F, v, [-W / 2 + 1.5, W / 2 - 1.5], 0.6);
+	const L = low || { y: 0, lz: 0 }, st = F.p(-sd * W * 0.2, L.y, L.lz + D - 1.4);
+	v.stand = { x: st.x, y: v.y + L.y, z: st.z, yaw: v.yaw + Math.PI };
+	const fc = F.p(0, 0, (L.lz + D) / 2);
+	return { x: fc.x, z: fc.z, r: W * 0.4, foot: v.y + L.y - 8 };
+}
+
+// a tower: a flared root grown from the ground, a glazed body, floor plates turning as they
+// rise, a halo and mast at the crown, a lift up its side, lobbies where the bridges meet it
+function tower(X, T) {
+	const { K, S } = X, C = { tint: S.slab.map((c) => c * 3) }, F = frame(T.x, T.y, T.z, X.r() * TAU);
+	const R = T.R, root = 14, h = T.top - T.y, n = Math.max(6, Math.floor((h - root - 6) / 4.2)), body = n * 4.2;
+	const taper = (t) => 1 - 0.28 * t + 0.1 * Math.sin(t * Math.PI);
+	K.add('shell', F.put(lathe([[R * 2.1, -7], [R * 1.75, 0], [R * 1.32, 4], [R * 1.06, 9], [R * taper(0) * 0.98, root]], 28, false)), C);
+	if (!T.sea) {
+		for (let k = 0; k < 10; k++) {
+			const a = k / 10 * TAU + X.r() * 0.4, p = F.p(Math.cos(a) * R * 2.0, 0, Math.sin(a) * R * 2.0);
+			K.add('shell', stone(2 + X.r() * 2, 1.2 + X.r() * 1.4, 2 + X.r() * 2, X.r() * 100).translate(p.x, X.H(p.x, p.z) + 0.2, p.z), { tint: X.rockT(), glow: G.rock });
+		}
+		X.contacts.push({ x: T.x, z: T.z, r: R * 2.0, m: 7, k: 0.5 });
+	}
+	const prof = [];
+	for (let i = 0; i <= 10; i++) { const t = i / 10; prof.push([R * taper(t) * 0.86, root + t * body]); }
+	K.add('shell', F.put(lathe(prof, 20, false)), { tint: S.slab, glow: G.glazing });
+	K.add('shell', F.put(box(0.4, body, 0.3), R * taper(0.5) * 0.86 + 0.05, root + body / 2, 0), { tint: S.strip, glow: G.lamp });
+	for (let i = 0; i <= n; i++) {
+		const t = i / n, y = root + i * 4.2, rr = R * taper(t), big = i % 6 === 0 || i === n;
+		K.add('shell', F.put(plate(rr * 2.2, rr * 1.75, big ? 0.75 : 0.4, S.round), 0, y + (big ? 0.35 : 0), 0, T.twist * t), C);
+		if (big) K.add('shell', F.put(ring(rr * 0.84, 0.18, 0.08, 24), 0, y - 0.55, 0), { tint: S.lamp, glow: G.lamp });
+	}
+	// the crown: a halo on four struts, a mast with its beacon
+	const yt = root + body, rt = R * taper(1);
+	K.add('shell', F.put(ring(rt * 1.2, 0.9, 1.1, 40), 0, yt + 7, 0), C);
+	K.add('shell', F.put(ring(rt * 1.2, 0.3, 0.12, 40), 0, yt + 6.92, 0), { tint: S.lamp, glow: G.lamp });
+	for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + T.twist; K.add('shell', strut(F.p(Math.cos(a) * rt * 0.7, yt + 0.4, Math.sin(a) * rt * 0.7), F.p(Math.cos(a) * rt * 1.2, yt + 7.4, Math.sin(a) * rt * 1.2), 0.35, 0.35), { tint: S.trim, glow: G.metal }); }
+	K.add('shell', F.put(prism(6, 0.55, 0.06, 24), 0, yt, 0), { tint: S.trim, glow: G.metal });
+	K.add('shell', F.put(box(0.6, 0.6, 0.6), 0, yt + 24.2, 0), { tint: S.beacon, glow: G.beacon });
+	for (let k = 0; k < 4; k++) { const a = k / 4 * TAU; K.add('shell', F.put(box(0.4, 0.4, 0.4), Math.cos(a) * rt * 0.9, yt + 0.6, Math.sin(a) * rt * 0.9), { tint: S.beacon, glow: G.beacon }); }
+	X.col.disc(T.x, T.z, R * 0.92, T.y + yt + 0.4, { site: X.site });
+	T.roof = T.y + yt;
+	// the lift's track standing off the side, braced back to the plates
+	const lx = R * 1.32 + 1.2, top = F.p(lx, yt - 2, 0), bot = F.p(lx, root - 1, 0);
+	K.add('shell', strut(bot, top, 0.3, 0.6), { tint: S.trim, glow: G.metal });
+	for (let y = root + 8; y < yt - 2; y += 24) K.add('shell', strut(F.p(R * taper((y - root) / body) * 0.86, y, 0), F.p(lx, y, 0), 0.25, 0.25), { tint: S.trim, glow: G.metal });
+	const out = F.p(lx + 1.25, 0, 0);
+	X.lifts.push({ x: out.x, z: out.z, y0: T.y + root + 0.5, y1: T.y + yt - 4, yaw: F.yaw, y: T.y + root + 0.5, dir: 1, wait: X.r() * 8 });
+	// lobbies where a bridge comes in: a wider plate, railed but for the bridge's gap
+	for (const L of T.lobbies) {
+		const ly = L.y - T.y, t = Math.max(0, Math.min(1, (ly - root) / body)), rr = R * taper(t), r1 = rr * 1.1 + 4;
+		K.add('shell', plate(r1 * 2, r1 * 2, 0.6, true).translate(T.x, L.y, T.z), C);
+		const pts = [];
+		for (let k = 0; k <= 36; k++) {
+			const a = L.a + 0.35 + k / 36 * (TAU - 0.7);
+			pts.push({ x: Math.sin(a) * (r1 - 0.15), z: Math.cos(a) * (r1 - 0.15) });
+		}
+		rail(X, frame(T.x, 0, T.z, 0), pts, L.y, { under: 0.7 });
+		X.col.ring(T.x, T.z, rr * 0.86, r1, L.y, 0, TAU, X.site);
+	}
+	return [{ x: T.x, z: T.z, r: R * 0.95, light: 1, tower: true }];
+}
+
+// a cluster of dark slab towers: podiums sunk in the ground, bodies all window grid, a light
+// strip up an edge, red lights at the roof corners, an antenna on the tallest
+function slabs(X, T) {
+	const { K, S } = X, D = { tint: S.slab.map((c) => c * 1.6) }, F = frame(T.x, T.y, T.z, X.r() * TAU), h = T.top - T.y, n = 2 + Math.floor(X.r() * 3), out = [];
+	let tallest = null;
+	for (let i = 0; i < n; i++) {
+		const w = 12 + X.r() * 10, d = 8 + X.r() * 5, hh = h * (i === 0 ? 1 : 0.45 + X.r() * 0.4);
+		const a = i * 2.1 + X.r(), off = i ? T.R * (1.1 + X.r() * 0.7) + 6 : 0, B = F.sub(Math.cos(a) * off, 0, Math.sin(a) * off, (X.r() - 0.5) * 0.3);
+		K.add('shell', B.put(box(w + 2.4, 9, d + 2.4), 0, 2.5, 0), D);
+		K.add('shell', B.put(box(w, hh - 7, d), 0, 7 + (hh - 7) / 2, 0), { tint: S.slab, glow: G.glazing });
+		K.add('shell', B.put(box(w + 0.6, 1.2, d + 0.6), 0, hh + 0.6, 0), D);
+		if (i !== 1) K.add('shell', B.put(box(0.5, hh - 7, 0.3), (w / 2 - 0.25) * (i ? -1 : 1), 7 + (hh - 7) / 2, d / 2 + 0.12), { tint: S.strip, glow: G.lamp });
+		for (const sx of [-1, 1]) K.add('shell', B.put(box(0.5, 0.5, 0.5), sx * (w / 2 - 0.4), hh + 1.45, d / 2 - 0.4), { tint: S.beacon, glow: G.beacon });
+		const c = B.p(0, 0, 0);
+		X.col.box(c.x, c.z, B.yaw, w / 2 + 1.2, d / 2 + 1.2, T.y + hh + 1.2, { site: X.site });
+		if (!T.sea) X.contacts.push({ F: B, x0: -w / 2 - 1.2, x1: w / 2 + 1.2, z0: -d / 2 - 1.2, z1: d / 2 + 1.2, m: 6, k: 0.45, all: true });
+		out.push({ x: c.x, z: c.z, r: Math.max(w, d) * 0.55, light: i ? 0.7 : 1, tower: true });
+		if (!i) tallest = { B, hh };
+	}
+	K.add('shell', tallest.B.put(prism(6, 0.45, 0.05, 26), 0, tallest.hh + 1.2, 0), { tint: S.trim, glow: G.metal });
+	K.add('shell', tallest.B.put(box(0.5, 0.5, 0.5), 0, tallest.hh + 27.4, 0), { tint: S.beacon, glow: G.beacon });
+	if (!T.sea) for (const o of out) for (let k = 0; k < 4; k++) {
+		const a = X.r() * TAU, p = { x: o.x + Math.cos(a) * o.r * 1.5, z: o.z + Math.sin(a) * o.r * 1.5 };
+		K.add('shell', stone(2 + X.r() * 2, 1.2 + X.r(), 2 + X.r() * 2, X.r() * 100).translate(p.x, X.H(p.x, p.z) + 0.2, p.z), { tint: X.rockT(), glow: G.rock });
+	}
+	T.roof = T.y + tallest.hh + 1.2;
+	const st = tallest.B.p(0, tallest.hh + 1.2, 0);
+	T.stand = { x: st.x, y: st.y, z: st.z, yaw: 0 };
+	return out;
+}
+
+// the monolith: a thin black slab out on the water, one line of light up its face
+function monolith(X, M, sea) {
+	const { K, S } = X, F = frame(M.x, sea, M.z, M.yaw), deep = sea - M.y + 2;
+	K.add('shell', F.put(box(5.5, M.h + deep, 1.4), 0, (M.h - deep) / 2, 0), { tint: [0.015, 0.015, 0.02], glow: G.metal });
+	K.add('shell', F.put(box(0.32, M.h - 1, 0.1), 0, M.h / 2, 0.72), { tint: S.strip, glow: G.lamp });
+	K.add('shell', F.put(box(0.4, 0.4, 0.4), 0, M.h + 0.2, 0), { tint: S.beacon, glow: G.beacon });
+	X.col.box(M.x, M.z, M.yaw, 2.75, 0.7, sea + M.h, { site: X.site });
+	const f = F.p(0, 0, 0.8);
+	X.streaks.push({ x: f.x, z: f.z, y: sea + 0.06, w: 1.6, len: 220, c: S.strip });
+}
+
+// a bridge across a gap: a slender deck arched a little, a fish-belly truss under it,
+// glass along both sides and a light line at its edges
+function bridge(X, b) {
+	const { K, S } = X, A = b.a, B = b.b, w = b.w, L = Math.hypot(B.x - A.x, B.z - A.z), n = Math.max(6, Math.ceil(L / 6));
+	const yaw = Math.atan2(B.x - A.x, B.z - A.z), c = Math.cos(yaw), s = Math.sin(yaw);
+	const pt = (t, dy = 0, side = 0) => new THREE.Vector3(A.x + (B.x - A.x) * t + side * c, A.y + (B.y - A.y) * t + Math.sin(t * Math.PI) * L * 0.02 + dy, A.z + (B.z - A.z) * t - side * s);
+	for (let k = 0; k < n; k++) {
+		const t0 = k / n, t1 = (k + 1) / n, p0 = pt(t0), p1 = pt(t1);
+		K.add('shell', plank(pt(t0, -0.25), pt(t1, -0.25), w, 0.45), { tint: S.concrete });
+		K.add('shell', plank(pt(t0, 0.0), pt(t1, 0.0), w - 0.5, 0.06), { tint: S.timber, glow: G.timber });
+		X.col.ramp(p0.x, p0.z, yaw, w / 2, 0, Math.hypot(p1.x - p0.x, p1.z - p0.z), p0.y, p1.y, X.site);
+		for (const sd of [-1, 1]) {
+			const a = pt(t0, 0, sd * (w / 2 - 0.1)), e = pt(t1, 0, sd * (w / 2 - 0.1));
+			K.add('glass', plank(a.clone().setY(a.y + 0.55), e.clone().setY(e.y + 0.55), 0.04, 1.05), { near: true });
+			K.add('shell', plank(a.clone().setY(a.y + 1.1), e.clone().setY(e.y + 1.1), 0.07, 0.06), { tint: S.trim, glow: G.metal, near: true });
+			K.add('shell', plank(a.clone().setY(a.y - 0.52), e.clone().setY(e.y - 0.52), 0.08, 0.05), { tint: S.lamp, glow: G.lamp });
+			X.col.seg(a, e, 0.12, Math.max(a.y, e.y) + 1.1, X.site, Math.min(a.y, e.y) - 0.4);
+			// the hanger down to the belly chord
+			if (k > 0) K.add('shell', strut(pt(t0, -0.45, sd * (w / 2 - 0.25)), pt(t0, -0.5 - Math.sin(t0 * Math.PI) * L * 0.05, sd * (w / 2 - 0.25)), 0.12, 0.12), { tint: S.trim, glow: G.metal, near: true });
+		}
+	}
+	for (const sd of [-1, 1]) {
+		const pts = [];
+		for (let k = 0; k <= 10; k++) { const t = k / 10; pts.push(pt(t, -0.5 - Math.sin(t * Math.PI) * L * 0.05, sd * (w / 2 - 0.25))); }
+		K.add('shell', sweep(pts, 0.22, 8), { tint: S.trim, glow: G.metal });
+	}
+	// where it lands on the cliff top: stone under its end
+	collar(X, pt(0, -1.2), 1.6);
+	X.contacts.push({ x: A.x, z: A.z, r: 2.5, m: 3, k: 0.35 });
+}
+
+// the ground's contact shade: a draped grid round each footprint
+function contactGeometry(H, list) {
+	const pos = [], ks = [], idx = [];
+	const sm = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+	for (const c of list) {
+		const step = 1.5, F = c.F;
+		const x0 = F ? c.x0 - c.m : -c.r - c.m, x1 = F ? c.x1 + c.m : c.r + c.m, z0 = F ? c.z0 - c.m : -c.r - c.m, z1 = F ? c.z1 + c.m * (c.all ? 1 : 0.3) : c.r + c.m;
+		const nx = Math.ceil((x1 - x0) / step), nz = Math.ceil((z1 - z0) / step), base = pos.length / 3;
+		for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+			const lx = x0 + (x1 - x0) * i / nx, lz = z0 + (z1 - z0) * j / nz;
+			let x, z, d;
+			if (F) { const p = F.p(lx, 0, lz); x = p.x; z = p.z; d = Math.hypot(Math.max(c.x0 - lx, 0, lx - c.x1), Math.max(c.z0 - lz, 0, lz - c.z1)); }
+			else { x = c.x + lx; z = c.z + lz; d = Math.max(0, Math.hypot(lx, lz) - c.r); }
+			pos.push(x, H(x, z) + 0.12, z);
+			ks.push(c.k * sm(c.m, 0, d) * (F && lz > 0 && !c.all ? 0 : 1));
+		}
+		for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+			const a = base + j * (nx + 1) + i, b = a + 1, d = a + nx + 1, e = d + 1;
+			idx.push(a, d, b, b, d, e);
+		}
+	}
+	const g = new THREE.BufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+	g.setAttribute('aK', new THREE.Float32BufferAttribute(ks, 1));
+	g.setIndex(idx);
+	g.computeBoundingSphere();
+	return g;
+}
+
+export function createArch(island, shared, scene, camera, profile, plan, opts = {}) {
+	const none = { update() {}, floor: () => -Infinity, push() {}, go: () => 'no cliff settlement on this world', dispose() {}, info: () => null };
+	if (!plan) return none;
+	const t0 = performance.now();
+	const S = plan.style, isPhone = !!opts.isPhone;
+	const H = (x, z) => island.heightAt(x, z);
+	const group = new THREE.Group();
+	group.name = 'arch';
+	scene.add(group);
+	const U = archUniforms(shared, S);
+	const air = profile?.air?.tint || [0.55, 0.62, 0.72], rk = profile?.ground?.rock || [0.42, 0.40, 0.37];
+	const envRT = skyEnvironment(opts.renderer, air.map((v) => v * 0.5), air.map((v) => v * 0.9), rk.map((v) => v * 0.5));
+	const env = envRT?.texture || null;
+	const mats = { shell: archMaterial(U, { env }), glass: railGlass({ env }) };
+	const col = colliders();
+	const r = mulberry32((plan.seed ^ 0xa1c4) >>> 0);
+	// the world's own stone, a little varied stone to stone (sRGB authored, made linear)
+	const rockC = new THREE.Color().setRGB(rk[0], rk[1], rk[2], THREE.SRGBColorSpace);
+	const X = { S, H, col, r, contacts: [], lifts: [], streaks: [], rockT: () => { const j = 0.85 + r() * 0.3; return [rockC.r * j, rockC.g * j, rockC.b * j]; } };
+	const sites = [], obs = [];
+	const site = (name, at, rad, far, make) => {
+		X.K = new Kit();
+		X.site = sites.length;
+		let made = null;
+		try { made = make(); } catch (err) { console.error('[arch] ' + name, err); return null; }
+		const g = new THREE.Group();
+		g.name = 'arch:' + name;
+		const meshes = X.K.build(mats, g, far === Infinity);
+		group.add(g);
+		sites.push({ name, x: at.x, z: at.z, y: at.y, r: rad, g, meshes, far, nearD: 320 });
+		return made;
+	};
+	for (const v of plan.villas) {
+		const o = site(v.name, v, v.W + v.O, 3400, () => (v.kind === 'terraces' ? terraces : cantilever)(X, v));
+		if (o && o.foot < plan.mist.top) obs.push({ x: o.x, z: o.z, r: o.r, light: 0.5 });
+		// a house over the water: its underside band laid on the sea in a streak
+		if (o && v.foot < (island.sea || 0) + 1) X.streaks.push({ x: o.x, z: o.z, y: (island.sea || 0) + 0.06, w: v.W * 0.4, len: 120, c: S.band });
+	}
+	for (const T of plan.towers) {
+		const o = site(T.name, { x: T.x, z: T.z, y: T.y }, T.R * 3, Infinity, () => (T.kind === 'slabs' ? slabs : tower)(X, T));
+		if (o) obs.unshift(...o);
+		// its light on the water below it
+		if (T.y < (island.sea || 0)) for (const q of o || []) X.streaks.push({ x: q.x, z: q.z, y: (island.sea || 0) + 0.06, w: q.r * 0.8, len: 160, c: S.glow });
+	}
+	if (plan.monolith) site('The Monolith', plan.monolith, 8, Infinity, () => monolith(X, plan.monolith, island.sea || 0));
+	if (plan.bridges.length) site('Bridges', plan.centre, 600, 3400, () => { for (const b of plan.bridges) bridge(X, b); });
+	// the contact shade
+	const contactMat = contactMaterial();
+	const contact = new THREE.Mesh(contactGeometry(H, X.contacts), contactMat);
+	contact.renderOrder = 1; contact.name = 'arch:contact';
+	group.add(contact);
+	// the lifts and the craft, instanced in the shared material
+	const inst = (geo, n, name) => {
+		const m = new THREE.InstancedMesh(geo, mats.shell, Math.max(1, n));
+		m.count = n; m.castShadow = true; m.name = 'arch:' + name; m.frustumCulled = false;
+		m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+		group.add(m);
+		return m;
+	};
+	const liftGeo = mergeGeometries([
+		paint(lathe([[0.01, -0.2], [1.15, 0], [1.25, 0.3], [1.25, 2.6], [1.1, 2.9], [0.01, 3.0]], 12, false), S.glazing, G.glazing),
+		paint(new THREE.CylinderGeometry(1.3, 1.3, 0.25, 12).translate(0, -0.1, 0), S.concrete, G.concrete),
+		paint(new THREE.CylinderGeometry(1.3, 1.3, 0.1, 12).translate(0, 2.98, 0), S.lamp, G.lamp),
+	]);
+	const lifts = inst(liftGeo, X.lifts.length, 'lifts');
+	const craftGeo = mergeGeometries([
+		paint(lathe([[0.01, -0.7], [1.3, -0.45], [1.9, 0], [1.3, 0.35], [0.01, 0.5]], 16, false).scale(1, 1, 2.3), S.concrete, G.concrete),
+		paint(lathe([[0.01, 0.25], [0.9, 0.3], [0.7, 0.85], [0.01, 1.0]], 12, false).scale(1, 1, 1.6).translate(0, 0, 0.6), S.glazing, G.glazing),
+		paint(new THREE.TorusGeometry(1.7, 0.06, 4, 24).rotateX(Math.PI / 2).scale(1, 1, 2.2), S.lamp, G.lamp),
+		paint(new THREE.BoxGeometry(0.25, 0.25, 0.25).translate(0, 0.55, -3.6), S.beacon, G.beacon),
+	]);
+	const crafts = [];
+	const nC = isPhone ? Math.ceil(S.craft / 2) : S.craft;
+	const hi = plan.mist.top + 14;
+	for (let i = 0; i < nC && plan.towers.length; i++) {
+		const pts = [];
+		const T0 = plan.towers[i % plan.towers.length];
+		const stops = [T0, ...plan.villas.filter((v, k) => (k + i) % 3 === 0).slice(0, 2), plan.towers[(i + 1) % plan.towers.length]];
+		for (const q of stops) {
+			const a = r() * TAU, d = q.R ? q.R * 3 + 10 : 26;
+			const y = q.R ? hi + r() * Math.max(10, (q.top - hi) * 0.8) : Math.max(hi, q.y + 18 + r() * 14);
+			const p = q.R ? { x: q.x + Math.sin(a) * d, z: q.z + Math.cos(a) * d } : { x: q.x + Math.sin(q.yaw) * (q.O + 30), z: q.z + Math.cos(q.yaw) * (q.O + 30) };
+			pts.push(new THREE.Vector3(p.x, Math.max(y, H(p.x, p.z) + 25), p.z));
+		}
+		if (pts.length < 3) pts.push(new THREE.Vector3(plan.centre.x, hi + 30, plan.centre.z));
+		const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+		crafts.push({ curve, len: curve.getLength(), u: r(), v: 14 + r() * 8 });
+	}
+	const craftMesh = inst(craftGeo, crafts.length, 'craft');
+	// the mist band, glowing from below where the towers stand in it
+	const mist = createMist(scene, shared, plan.mist, obs.slice(0, 12), { isPhone, seed: plan.seed, glow: S.glow });
+	// glowing flowers on the green near the houses, and hamlets' lamps on the slopes over the mist
+	const dots = [];
+	const grassy = (x, z) => island.maskAt ? island.maskAt(x, z, 3) : 1;
+	const nrm = (x, z) => island.normalAt ? island.normalAt(x, z).y : 1;
+	const fl = isPhone ? 500 : 1100;
+	for (let p = 0; p < (S.flowers || 0); p++) {
+		const v = plan.villas[p % plan.villas.length], a = v.yaw + Math.PI + (r() - 0.5) * 2.2, d = 25 + r() * 70;
+		const cx = v.x + Math.sin(a) * d, cz = v.z + Math.cos(a) * d, rx = 10 + r() * 18, rz = 8 + r() * 14, ra = r() * TAU;
+		for (let k = 0; k < fl; k++) {
+			const u = (r() + r() + r() - 1.5) * rx, w = (r() + r() + r() - 1.5) * rz;
+			const x = cx + u * Math.cos(ra) - w * Math.sin(ra), z = cz + u * Math.sin(ra) + w * Math.cos(ra);
+			if (grassy(x, z) < 0.25 || nrm(x, z) < 0.85) continue;
+			const h = r();
+			dots.push({ x, y: H(x, z) + 0.22, z, s: 0.16 + r() * 0.08, c: h < 0.55 ? [1.0, 0.28, 0.68] : h < 0.85 ? [0.78, 0.25, 1.0] : [1.0, 0.75, 0.9] });
+		}
+	}
+	for (let k = 0, n = 0; k < 400 && n < (isPhone ? 14 : 28); k++) {
+		const a = r() * TAU, d = 120 + r() * plan.mist.rad * 0.8, cx = plan.centre.x + Math.sin(a) * d, cz = plan.centre.z + Math.cos(a) * d, h = H(cx, cz);
+		if (h < plan.mist.top + 6 || h > plan.mist.top + 140 || nrm(cx, cz) < 0.6 || plan.villas.some((v) => Math.hypot(v.x - cx, v.z - cz) < 40)) continue;
+		n++;
+		for (let j = 0; j < 8; j++) {
+			const x = cx + (r() - 0.5) * 30, z = cz + (r() - 0.5) * 30;
+			dots.push({ x, y: H(x, z) + 1.2, z, s: 0.5 + r() * 0.3, c: r() < 0.7 ? [1.0, 0.78, 0.5] : S.winB });
+		}
+	}
+	const glow = createGlow(scene, shared, { streaks: X.streaks, dots, renderer: opts.renderer });
+	// the settlement's name as you come in, then each house and tower's
+	const names = [{ name: plan.name, x: plan.centre.x, z: plan.centre.z, r: plan.mist.rad * 0.6, y: plan.mist.top, big: true }, ...sites.filter((s) => s.name !== 'Bridges').map((s) => ({ name: s.name, x: s.x, z: s.z, r: s.r + 20, y: s.y }))];
+	const buildMs = performance.now() - t0;
+
+	const q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ'), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), tg = new THREE.Vector3(), mx = new THREE.Matrix4();
+	const seen = new Set();
+	let lookT = 0, inMist = 0;
+	// dusk and blue hour here turn violet: the sky's air tint (sky.js uAirR) leans to it as the
+	// sun goes down, and is given back as it was when the world goes
+	const airU = shared.uAirR, air0 = airU?.value.clone(), vio = new THREE.Vector3(...(S.dusk || [0.66, 0.42, 1.0]));
+	vio.multiplyScalar(1 / (vio.x * 0.299 + vio.y * 0.587 + vio.z * 0.114));
+	function update(dt) {
+		const cam = camera.position, cx = cam.x, cz = cam.z;
+		const sy = shared.uSunDir.value.y, night = 1 - THREE.MathUtils.smoothstep(sy, -0.12, 0.1);
+		U.uNight.value = night;
+		U.uLampK.value = 0.6 + night * 1.8;
+		if (airU) {
+			const k = 0.62 * (1 - THREE.MathUtils.smoothstep(sy, -0.04, 0.3)), a = air0.w;
+			airU.value.set(a > 0 ? air0.x + (vio.x - air0.x) * k : vio.x, a > 0 ? air0.y + (vio.y - air0.y) * k : vio.y, a > 0 ? air0.z + (vio.z - air0.z) * k : vio.z, a + (1 - a) * k);
+		}
+		for (const G of sites) {
+			const d = Math.hypot(cx - G.x, cz - G.z) - G.r, vis = d < G.far;
+			if (G.g.visible !== vis) G.g.visible = vis;
+			if (vis) for (const m of G.meshes) if (m.userData.near) m.visible = d < G.nearD;
+		}
+		const near = Math.hypot(cx - plan.centre.x, cz - plan.centre.z) < plan.mist.rad + 2200;
+		lifts.visible = craftMesh.visible = near;
+		inMist = mist.update(dt, camera, night);
+		glow.update(night);
+		if (!near) return;
+		// the lifts: up, a wait at the top, down, a wait at the foot
+		for (let i = 0; i < X.lifts.length; i++) {
+			const L = X.lifts[i];
+			if (L.wait > 0) L.wait -= dt;
+			else {
+				const run = L.y1 - L.y0, at = L.dir > 0 ? L.y - L.y0 : L.y1 - L.y, sp = 1.5 + Math.min(1, at / 12, (run - at) / 12) * 6;
+				L.y += L.dir * Math.max(1.2, sp) * dt;
+				if (L.y >= L.y1 || L.y <= L.y0) { L.y = Math.max(L.y0, Math.min(L.y1, L.y)); L.dir *= -1; L.wait = 6 + (i % 3) * 3; }
+			}
+			e.set(0, L.yaw, 0); q.setFromEuler(e);
+			mx.compose(v.set(L.x, L.y, L.z), q, one); lifts.setMatrixAt(i, mx);
+		}
+		lifts.instanceMatrix.needsUpdate = true;
+		// the craft round their loops, banking into the turns
+		for (let i = 0; i < crafts.length; i++) {
+			const C = crafts[i];
+			C.u = (C.u + C.v * dt / C.len) % 1;
+			C.curve.getPointAt(C.u, v);
+			C.curve.getTangentAt(C.u, tg);
+			const yaw = Math.atan2(tg.x, tg.z), pitch = -Math.asin(Math.max(-1, Math.min(1, tg.y)));
+			C.curve.getTangentAt((C.u + 0.01) % 1, one);
+			const turn = Math.atan2(one.x, one.z) - yaw, bank = Math.atan2(Math.sin(turn), Math.cos(turn)) * -6;
+			one.set(1, 1, 1);
+			e.set(pitch, yaw, Math.max(-0.5, Math.min(0.5, bank))); q.setFromEuler(e);
+			mx.compose(v, q, one); craftMesh.setMatrixAt(i, mx);
+		}
+		craftMesh.instanceMatrix.needsUpdate = true;
+		// arriving: the settlement's name, then each place's
+		lookT += dt;
+		if (lookT > 0.5 && opts.hint) {
+			lookT = 0;
+			for (const N of names) {
+				if (seen.has(N.name)) continue;
+				if (Math.hypot(cx - N.x, cz - N.z) < N.r && cam.y < N.y + (N.big ? 400 : 90)) {
+					seen.add(N.name);
+					opts.hint(N.big ? `${N.name}\n${profile.name.replace(/^\w/, (c) => c.toUpperCase())}` : `${N.name}\n${plan.name}`, 5000);
+					break;
+				}
+			}
+		}
+	}
+	// stand on a house's deck out over the drop (or a tower's roof), looking out
+	function go(i = 0) {
+		const Pl = opts.player?.();
+		if (!Pl) return plan.name;
+		const all = [...plan.villas, ...plan.towers];
+		const o = all[((i | 0) % all.length + all.length) % all.length];
+		const at = o.stand || { x: o.x + o.R * 0.3, y: o.roof, z: o.z, yaw: 0 };
+		Pl.flying = false; Pl.diving = false; Pl.vel?.set(0, 0, 0);
+		Pl.pos.set(at.x, at.y + 1.7, at.z);
+		Pl.yaw = at.yaw; Pl.pitch = -0.08;
+		camera.position.copy(Pl.pos);
+		seen.add(o.name);
+		opts.hint?.(`${o.name}\n${plan.name}`, 5000);
+		return o.name;
+	}
+	function dispose() {
+		if (airU) airU.value.copy(air0);
+		envRT?.dispose();
+		for (const m of [mats.shell, mats.glass, contactMat]) m.dispose();
+		group.traverse((o) => o.geometry?.dispose());
+		mist.dispose();
+		glow.dispose();
+		scene.remove(group);
+	}
+	const info = () => {
+		let tris = 0, meshes = 0;
+		group.traverse((o) => { if (o.isMesh) { meshes++; tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1); } });
+		return {
+			name: plan.name, centre: { x: Math.round(plan.centre.x), z: Math.round(plan.centre.z) },
+			villas: plan.villas.map((q) => ({ name: q.name, kind: q.kind, y: Math.round(q.y), under: Math.round(q.under), stand: q.stand && { x: +q.stand.x.toFixed(1), y: +q.stand.y.toFixed(2), z: +q.stand.z.toFixed(1) } })),
+			towers: plan.towers.map((T) => ({ name: T.name, base: Math.round(T.y), top: Math.round(T.roof || T.top), lobbies: T.lobbies.length })),
+			bridges: plan.bridges.length, mist: { base: Math.round(plan.mist.base), top: Math.round(plan.mist.top), layers: mist.layers, wisps: mist.wisps, obstacles: Math.min(12, obs.length), inside: +inMist.toFixed(2) },
+			lifts: X.lifts.length, craft: crafts.length, streaks: X.streaks.length, dots: dots.length, monolith: !!plan.monolith, colliders: col.all.length, meshes, tris: Math.round(tris), planMs: plan.planMs, buildMs: Math.round(buildMs),
+		};
+	};
+	return { update, floor: col.floor, push: col.push, go, dispose, info, group, plan };
+}
