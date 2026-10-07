@@ -69,9 +69,11 @@ function bake(A, k, kind, CELL) {
 	g.setAttribute('position', new THREE.BufferAttribute(pos2, 3)); g.computeVertexNormals();
 	const n2 = g.attributes.normal.clone();
 	g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.computeVertexNormals();
-	g.setAttribute('position2', new THREE.BufferAttribute(pos2, 3));
+	// the second pose carries the colour region in w: one attribute fewer, inside the 16 a phone allows
+	const p2 = new Float32Array(acc.length * 4);
+	for (let i = 0; i < acc.length; i++) { p2[i * 4] = pos2[i * 3]; p2[i * 4 + 1] = pos2[i * 3 + 1]; p2[i * 4 + 2] = pos2[i * 3 + 2]; p2[i * 4 + 3] = reg[i]; }
+	g.setAttribute('position2', new THREE.BufferAttribute(p2, 4));
 	g.setAttribute('normal2', n2);
-	g.setAttribute('region', new THREE.BufferAttribute(reg, 1));
 	g.computeBoundingSphere();
 	g.boundingSphere.radius += 1;
 	P.root.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
@@ -87,7 +89,7 @@ function material() {
 		sh.uniforms.uTime = U.uTime;
 		sh.vertexShader = sh.vertexShader
 			.replace('#include <common>', `#include <common>
-attribute vec3 position2; attribute vec3 normal2; attribute float region;
+attribute vec4 position2; attribute vec3 normal2;
 attribute vec3 iSkin; attribute vec3 iTop; attribute vec3 iOuter; attribute vec3 iBottom; attribute vec3 iShoes; attribute vec3 iHair; attribute vec3 iAnim;
 uniform float uTime; varying vec3 vCrowd; float cw;`)
 			.replace('#include <beginnormal_vertex>', `// the pose between the two: a cheer that rises and falls, or the walk's stride
@@ -96,12 +98,12 @@ vec3 objectNormal = normalize(mix(normal, normal2, cw));
 #ifdef USE_TANGENT
 vec3 objectTangent = vec3( tangent.xyz );
 #endif`)
-			.replace('#include <begin_vertex>', `vec3 transformed = mix(position, position2, cw);
-int rg = int(region + 0.5);
+			.replace('#include <begin_vertex>', `vec3 transformed = mix(position, position2.xyz, cw);
+int rg = int(position2.w + 0.5);
 vCrowd = rg == 0 ? iSkin : rg == 1 ? iTop : rg == 2 ? iOuter : rg == 3 ? iBottom : rg == 4 ? iShoes : iHair;`);
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vCrowd;').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= vCrowd;');
 	};
-	mat.customProgramCacheKey = () => 'crysis-crowd-1';
+	mat.customProgramCacheKey = () => 'crysis-crowd-2';
 	return mat;
 }
 
@@ -168,7 +170,7 @@ export function createCrowd(n, { kind = 'seat', place: where = 'suburb', seed = 
 		get count() { return n; },
 		ready: () => made >= SHAPES.length,
 		// where one sits or walks: position, facing (the body's +z), scale (0 hides it)
-		place(i, x, y, z, yaw, scale = 1) { place[i] = [x, y, z, yaw, scale]; put(i); },
+		place(i, x, y, z, yaw, scale = 1) { const p = place[i] || (place[i] = [0, 0, 0, 0, 1]); p[0] = x; p[1] = y; p[2] = z; p[3] = yaw; p[4] = scale; put(i); },
 		// how much they cheer (0 sat still .. 1 on their feet): the same for all, each in their own time
 		cheer(k) { for (const m of meshes) { const a = m.geometry.attributes.iAnim; for (let j = 0; j < a.count; j++) if (a.getZ(j) < 0.5) a.setY(j, k * (0.4 + ((j * 37) % 10) / 16)); a.needsUpdate = true; } },
 		update(t) { U.uTime.value = t; grow(); },

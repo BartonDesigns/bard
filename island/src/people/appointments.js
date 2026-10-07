@@ -5,6 +5,7 @@
 // the globe, x/z elsewhere), so a rebased Earth frame never moves a meeting.
 import { advanceSolarClock } from '../world/solar.js';
 import { socialDistance } from './social-state.js';
+import { ARRIVE, HOURS, validGathering } from './gatherings.js';
 
 export const APPOINTMENT_KEY = 'crysis-appointments-v1';
 // The resident turns up a little early and waits a while past the hour.
@@ -105,7 +106,7 @@ export function formatReal(seconds) {
 // ---------- the saved book of meetings ----------
 function validSave(d) {
 	if (!d || d.version !== 1 || !finite(d.day) || !Array.isArray(d.list) || d.list.length > 40) return false;
-	return d.list.every(a => a && typeof a.id === 'string' && typeof a.bodyKey === 'string' && typeof a.npcId === 'string' && STATUS.has(a.status) && finite(a.due) && a.place && savedPos(a.place.pos));
+	return d.list.every(a => a && typeof a.id === 'string' && typeof a.bodyKey === 'string' && typeof a.npcId === 'string' && STATUS.has(a.status) && finite(a.due) && a.place && savedPos(a.place.pos) && (!a.gathering || validGathering(a.gathering)));
 }
 
 export function createAppointments({ storage, now = Date.now } = {}) {
@@ -126,9 +127,9 @@ export function createAppointments({ storage, now = Date.now } = {}) {
 		if (before !== null && hours < before - 12) { data.day++; save(); }
 		data.hours = hours;
 	}
-	function make({ bodyKey, npcId, npcName, place, hours, delta, by = 'player', status = by === 'player' ? 'agreed' : 'proposed' }) {
+	function make({ bodyKey, npcId, npcName, place, hours, delta, by = 'player', status = by === 'player' ? 'agreed' : 'proposed', gathering = null }) {
 		const pos = savedPos(place?.pos);
-		if (!bodyKey || !npcId || !pos || !finite(delta) || !STATUS.has(status)) return { ok: false, error: 'That meeting has no place or time.' };
+		if (!bodyKey || !npcId || !pos || !finite(delta) || !STATUS.has(status) || (gathering && !validGathering(gathering))) return { ok: false, error: 'That meeting has no place or time.' };
 		setHours(hours ?? data.hours ?? 0);
 		// One standing arrangement per person: a new plan replaces the old one.
 		for (const a of data.list) if (a.npcId === npcId && a.bodyKey === bodyKey && ['proposed', 'agreed'].includes(a.status)) { a.status = 'cancelled'; a.endedAt = now(); }
@@ -136,6 +137,7 @@ export function createAppointments({ storage, now = Date.now } = {}) {
 		const a = { id: `meet-${++data.seq}`, bodyKey, npcId, npcName: String(npcName || 'Someone').slice(0, 80), by, status,
 			place: { name: String(place.name || 'here').slice(0, 100), pos, radius: Math.max(6, Math.min(40, place.radius || 12)) },
 			due: clock() + delta, madeAt: now(), endedAt: null, npcArrived: false };
+		if (gathering) { a.gathering = { ...gathering }; a.place.radius = Math.max(a.place.radius, 20); }
 		data.list.push(a); save();
 		return { ok: true, appointment: copy(a) };
 	}
@@ -159,6 +161,7 @@ export function createAppointments({ storage, now = Date.now } = {}) {
 		let dirty = false;
 		for (const a of data.list) {
 			if (!open(a) || a.bodyKey !== bodyKey) continue;
+			if (a.gathering && a.status === 'agreed') { if (tickGathering(a, t, player, lead, out)) dirty = true; continue; }
 			if (a.status === 'proposed') { if (t > a.due) { a.status = 'cancelled'; a.endedAt = now(); dirty = true; out.push({ type: 'expired', appointment: copy(a) }); } continue; }
 			if (!a.npcGoing && t >= a.due - EARLY - lead) { a.npcGoing = true; dirty = true; out.push({ type: 'go', appointment: copy(a) }); }
 			if (!a.npcArrived && t >= a.due - EARLY) { a.npcArrived = true; dirty = true; out.push({ type: 'due', appointment: copy(a) }); }
@@ -169,7 +172,20 @@ export function createAppointments({ storage, now = Date.now } = {}) {
 		if (dirty) save();
 		return out;
 	}
-	return { make, agree: id => set(id, 'agreed'), cancel: id => set(id, 'cancelled'), list, pendingFrom, agreedWith, tick, clock, setHours,
+	// A gathering happens whether or not the player comes: the organiser sets off first, the
+	// crowd follows, and after an hour it ends, remembered as attended or missed.
+	function tickGathering(a, t, player, lead, out) {
+		const n = out.length, end = a.due + HOURS;
+		if (!a.npcGoing && t >= a.due - ARRIVE - lead) { a.npcGoing = true; out.push({ type: 'go', appointment: copy(a) }); }
+		if (!a.npcArrived && t >= a.due - ARRIVE) { a.npcArrived = true; out.push({ type: 'due', appointment: copy(a) }); }
+		const here = player && socialDistance(player, a.place.pos) <= a.place.radius;
+		if (here && !a.playerCame && t >= a.due - ARRIVE && t <= end) { a.playerCame = true; out.push({ type: 'joined', appointment: copy(a) }); }
+		if (t > end) { a.status = a.playerCame ? 'kept' : 'missed'; a.endedAt = now(); out.push({ type: a.status, appointment: copy(a) }); }
+		return out.length > n;
+	}
+	/** The organiser has told the player how it went. */
+	function mention(id) { const a = data.list.find(a => a.id === id); if (a && !a.mentioned) { a.mentioned = true; save(); } }
+	return { make, mention, agree: id => set(id, 'agreed'), cancel: id => set(id, 'cancelled'), list, pendingFrom, agreedWith, tick, clock, setHours,
 		status: () => ({ error, day: data.day, open: data.list.filter(open).length }) };
 }
 

@@ -37,7 +37,7 @@ export function safeSocialStep(island, from, to, player = null) {
  return { x: to.x, y, z: to.z };
 }
 
-function freeBody(P) {
+export function freeBody(P) {
  // Eyes and accessories share materials; textures and eye geometry belong to assets.
  P.hairWant = null; // invalidate deferred hair-kit completion for this released body
  const sharedGeo = new Set((P.eyes || []).map(e => e.geometry));

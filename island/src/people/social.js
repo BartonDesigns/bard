@@ -1,9 +1,10 @@
 // The action boundary between conversation, saved residents and streamed bodies.
 // Dialogue models describe outcomes; only these validated player requests change state.
-import { createSocialState, parseSocialIntent } from './social-state.js';
+import { createSocialState, parseSocialIntent, socialDistance } from './social-state.js';
 import { createSocialActors, positionFor, worldPosition, safeSocialStep } from './social-actors.js';
 import { personaFor } from './persona.js';
 import { createAppointments, formatClock } from './appointments.js';
+import { createGatheringScene } from './gathering-scene.js';
 
 export function createNpcSocial({ scene, world, camera, people, isPhone, hint }) {
 	const state = createSocialState();
@@ -11,6 +12,7 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 	const actors = createSocialActors({ scene, world, camera, state, people, isPhone, hint, bodyKey });
 	const appointments = createAppointments();
 	const listeners = new Set();
+	const gatherings = createGatheringScene({ scene, world, camera, book: appointments, bodyKey });
 	// Agreed meetings move residents: they set off ahead of time, are at the place by the
 	// hour (out of sight they travel there directly), and remember whether you came.
 	function keepAppointments() {
@@ -18,15 +20,12 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		if (!W || !Number.isFinite(hours)) return;
 		const events = appointments.tick({ hours, bodyKey: bodyKey(), player: positionFor(W, camera.position) });
 		for (const e of events) {
+			if (e.appointment.gathering) { keepGathering(W, e); for (const fn of listeners) fn(e); continue; }
 			const a = e.appointment, r = state.get(a.npcId), name = r?.persona?.first || a.npcName;
 			const actor = actors.all().find(p => p.residentId === a.npcId && p.active);
 			const task = { id: a.id, type: 'meet', status: 'outbound', target: a.place.pos, label: a.place.name, due: a.due };
 			if (r && e.type === 'go' && !['follow', 'quest'].includes(r.mode)) state.setMode(r.id, 'meet', task);
-			if (r && e.type === 'due' && !['follow', 'quest'].includes(r.mode)) {
-				const q = worldPosition(W, a.place.pos), far = !actor || actor.M.S.pos.distanceTo(camera.position) > 60;
-				if (far) { state.setMode(r.id, 'meet', { ...task, status: 'waiting' }); state.setPosition(r.id, a.place.pos); if (actor && q) actor.M.place(q.x, q.y, q.z, actor.M.S.heading); }
-				else if (r.mode !== 'meet') state.setMode(r.id, 'meet', task);
-			}
+			if (r && e.type === 'due' && !['follow', 'quest'].includes(r.mode)) arrive(W, r, a, task, actor);
 			if (r && e.type === 'kept') {
 				state.remember(r.id, 'event', `The traveller met you at ${a.place.name} at ${formatClock(a.due % 24)}, as you had agreed.`);
 				if (r.mode === 'meet') state.setMode(r.id, 'wait', null);
@@ -38,6 +37,41 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 				hint(`You missed your meeting with ${name} at ${a.place.name}.`, 5000);
 			}
 			for (const fn of listeners) fn(e);
+		}
+	}
+	// at the place by the hour: out of the player's sight a resident travels there directly
+	function arrive(W, r, a, task, actor) {
+		const q = worldPosition(W, task.target), far = !actor || actor.M.S.pos.distanceTo(camera.position) > 60;
+		if (far) { state.setMode(r.id, 'meet', { ...task, status: 'waiting' }); state.setPosition(r.id, task.target); if (actor && q) actor.M.place(q.x, q.y, q.z, actor.M.S.heading); }
+		else if (r.mode !== 'meet') state.setMode(r.id, 'meet', task);
+	}
+	// A gathering: the organiser goes first, a few other residents living nearby come too
+	// (the crowd itself is drawn by gathering-scene.js), and it ends whether or not you came.
+	function keepGathering(W, e) {
+		const a = e.appointment, g = a.gathering, what = `the ${g.title.toLowerCase()} at ${a.place.name}`;
+		const r = state.get(a.npcId), name = r?.persona?.first || a.npcName;
+		const free = x => x && !['follow', 'quest', 'scout'].includes(x.mode) && !(x.mode === 'meet' && x.task?.id !== a.id);
+		const center = worldPosition(W, a.place.pos);
+		const spot = (k) => { if (!center || !k) return a.place.pos; const ang = k * 2.1; return positionFor(W, { x: center.x + Math.sin(ang) * 3, y: center.y, z: center.z + Math.cos(ang) * 3 }); };
+		const guests = () => state.list(bodyKey()).filter(x => x.id !== a.npcId && x.mode === 'meet' && x.task?.id === a.id);
+		if (e.type === 'go') {
+			if (free(r)) state.setMode(r.id, 'meet', { id: a.id, type: 'gathering', status: 'outbound', target: a.place.pos, label: what, due: a.due });
+			const near = state.list(bodyKey()).filter(x => x.id !== a.npcId && free(x) && x.mode !== 'meet' && (x.dna?.age ?? 18) >= 12 && x.position && socialDistance(x.position, a.place.pos) < 300).slice(0, isPhone ? 2 : 4);
+			near.forEach((x, k) => state.setMode(x.id, 'meet', { id: a.id, type: 'gathering', status: 'outbound', target: spot(k + 1), label: what, due: a.due }));
+		}
+		if (e.type === 'due') {
+			for (const x of [r, ...guests()]) if (x && x.mode === 'meet' && x.task?.id === a.id) arrive(W, x, a, x.task, actors.all().find(p => p.residentId === x.id && p.active));
+		}
+		if (e.type === 'joined') {
+			if (r) state.remember(r.id, 'event', `The traveller came to ${what} you organised.`);
+			hint(`You joined ${what}. Play your Bard and the crowd will move to it.`, 6000);
+		}
+		if (e.type === 'kept' || e.type === 'missed') {
+			if (r) state.remember(r.id, 'event', e.type === 'kept'
+				? `You held ${what} at ${formatClock(a.due % 24)} and the traveller came. It went well.`
+				: `You held ${what} at ${formatClock(a.due % 24)}. It went ahead without the traveller, who never came.`);
+			for (const x of [r, ...guests()]) if (x && x.mode === 'meet' && x.task?.id === a.id) state.setMode(x.id, 'home', null);
+			hint(e.type === 'kept' ? `The ${g.title.toLowerCase()} is over. People are heading home.` : `${name}'s ${g.title.toLowerCase()} at ${a.place.name} went ahead without you.`, 5000);
 		}
 	}
 	function meet(p, where) {
@@ -123,14 +157,15 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 	function result(text) { return state.status().error ? `${text} This browser could not save the change; it lasts only for this session.` : text; }
 	function describe(r) {
 		if (r.task?.report) return r.task.report;
+		if (r.mode === 'meet' && r.task?.type === 'gathering') return r.task?.status === 'waiting' ? `I'm at ${r.task.label}. Come and join us.` : `I'm on my way to ${r.task.label}.`;
 		if (r.mode === 'meet') return r.task?.status === 'waiting' ? `I'm waiting for you at ${r.task.label}, as we agreed.` : `I'm on my way to ${r.task?.label || 'our meeting'} to meet you.`;
 		const modes = { idle: 'staying in my home area', follow: 'following you', wait: 'waiting here', home: 'heading home', scout: `scouting ${r.task?.label || 'nearby'}`, quest: `travelling with you for ${r.task?.title || 'our quest'}` };
 		return `I'm ${modes[r.mode] || 'here'}.${r.task?.status === 'blocked' ? ' The route is blocked, so I am waiting safely.' : ''}`;
 	}
-	return { state, actors, appointments, meet, command, scoutNearby, describe, bodyKey, positionFor,
+	return { state, actors, appointments, gatherings, isPhone: !!isPhone, meet, command, scoutNearby, describe, bodyKey, positionFor,
 		onAppointment(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-		update(dt, time, enabled) { state.tick(); keepAppointments(); actors.update(dt, time, enabled); },
-		reset() { actors.reset(); state.flush(); },
+		update(dt, time, enabled) { state.tick(); keepAppointments(); actors.update(dt, time, enabled); gatherings.update(dt, time, enabled); },
+		reset() { actors.reset(); gatherings.dispose(); state.flush(); },
 		flush() { actors.flush(); },
 	};
 }

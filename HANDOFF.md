@@ -28,7 +28,13 @@ file-by-file map is in `island/README.md`.
   - **Verified:**
     - Node: `tools/appointments.test.mjs`, 6 tests.
     - Headless TERRAN village (`/tmp/claude-0/meet/flow.js`; slow, about 0.25 fps): agree → chip → resident outbound → waiting at the place → kept, with the memory written.
-  - **Still to do in quests:** gatherings and events run in the engine without the cloud.
+  - **Gatherings (on the branch):** "gather people for a concert at the park", "throw a party here at 9pm", "host a picnic", "round up folks for a meet-up".
+    - `people/gatherings.js`: request and kind (concert, party, picnic, meet-up), default time (7 pm, or an hour on when late), crowd size (6–25, phone caps), timetable, crowd layout. Plain data on the appointment (`a.gathering`), ready for a multiplayer sync.
+    - `appointments.js`: a gathering runs for an hour whether or not the player comes (go → due → joined → kept/missed); `mention()` marks the organiser's recap as said.
+    - `people/gathering-scene.js`: two instanced crowds (walking, standing) arrive over time; out of sight they are placed directly. They sway, nod to `music.performance.beat`, and raise their arms with the Bard's loudness. A concert has a stage with a drummer playing in time. They walk away at the end.
+    - `social.js` keepGathering: the organiser goes first, up to 4 (2 on a phone) remembered residents nearby join, all go home after; memories are written. `guide.js`: the reply, the journal row, the pin, and the recap the next time you talk.
+    - `crowd.js`: the region is packed into `position2.w`, so the shader stays within 16 vertex attributes. Before this, it failed to link on SwiftShader.
+    - Verified: `island/tools/gatherings.test.mjs` (7 tests); headless flow `/tmp/claude-0/gather/flow.js`.
 
 ## Earlier resume note (6 October 2026, night)
 

@@ -12,6 +12,7 @@ import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js
 import { parseSocialIntent } from '../people/social-state.js';
 import { worldPosition } from '../people/social-actors.js';
 import { parseGameTime, realSecondsFor, formatClock, formatReal, talksOfMeeting, placePhrases, MEET_TAG_RE, EARLY, GRACE } from '../people/appointments.js';
+import { gatherRequest, defaultGatherTime, makeGathering, HOURS as GATHER_HOURS } from '../people/gatherings.js';
 import { createDialogueArchive } from './dialogue-archive.js';
 import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
 import { chooseGuideModel } from './preferences.js';
@@ -283,9 +284,42 @@ export function createGuide(mount, api) {
 		return { appointment: a };
 	}
 	function meetNote(a) {
+		if (a.gathering) return `📍 Added to Quests: ${gatherTitle(a)} · ${meetWhen(a).replace(/ \((.*)\)$/, ' · $1')}. A pin marks the place.`;
 		return a.status === 'agreed'
 			? `📍 Added to Quests: meet ${a.npcName.split(' ')[0]} at ${a.place.name}, ${meetWhen(a)}. A pin marks the place.`
 			: `${a.npcName.split(' ')[0]} suggests ${a.place.name}, ${meetWhen(a)}. Say yes to put it in your Quests, or no.`;
+	}
+	// ---------- gatherings: "gather people for a concert at the park" ----------
+	// The resident agrees and the game makes it real: a saved gathering (journal, pin) that
+	// the resident and a crowd of townsfolk attend at the time, with or without the player.
+	const gatherTitle = a => `${a.gathering.title} at ${a.place.name}`;
+	function gatheringReply(text, resident, p) {
+		const B = book(), W = api.world(); if (!B || !W || !resident) return null;
+		const ask = gatherRequest(text); if (!ask) return null;
+		if ((resident.dna?.age ?? resident.persona?.age ?? 18) < 18) return { reply: "[[mood: thoughtful]] I'm too young to organise that. Ask one of the grown-ups." };
+		const hours = W.sky.state.hours, phrases = placePhrases(text);
+		const place = meetPlace(phrases, p, resident) || meetPlace(['here'], p, resident);
+		if (!place) return { reply: '[[mood: thoughtful]] Where should we hold it? Name a place nearby.' };
+		const time = parseGameTime(text, hours, W.sky.state.sun) || defaultGatherTime(hours);
+		const seed = (Math.floor(Math.random() * 1e9) ^ resident.id.length * 7919) >>> 0;
+		const gathering = makeGathering({ kind: ask.kind, placeName: place.name, phone: !!api.social.isPhone, seed });
+		const r = B.make({ bodyKey: resident.bodyKey, npcId: resident.id, npcName: resident.persona.name, place, hours, delta: time.delta, by: 'player', gathering });
+		if (!r.ok) return { reply: `[[mood: sad]] ${r.error}` };
+		const a = r.appointment, what = `${a.gathering.title.toLowerCase()} at ${a.place.name}`;
+		api.social.state.remember(resident.id, 'event', `The traveller asked you to gather people for a ${what} at ${formatClock(a.due % 24)}. You agreed to organise it.`);
+		tracked = a.id;
+		const unknown = phrases.length && !phrases.includes('here') && /^this spot/.test(place.name) ? `I don't know ${phrases[0]}, so let's hold it here. ` : '';
+		return { reply: `[[mood: happy]] [[gesture: nod]] ${unknown}A ${what}? Yes! I'll round people up. ${formatClock(a.due % 24)}, be there.`, note: meetNote(a) };
+	}
+	// After a gathering the organiser tells the player how it went, once.
+	function gatheringRecap(resident) {
+		const B = book(); if (!B || !resident) return null;
+		const a = B.list(resident.bodyKey).filter(x => x.gathering && x.npcId === resident.id && !x.mentioned && (x.status === 'kept' || x.status === 'missed')).at(-1);
+		if (!a) return null;
+		B.mention(a.id);
+		const what = `${a.gathering.title.toLowerCase()} at ${a.place.name}`;
+		return a.status === 'kept' ? `[[mood: happy]] Thanks for coming to the ${what}. People are still talking about it.`
+			: `[[mood: sad]] We held the ${what} without you. A shame you missed it; it was a good one.`;
 	}
 	// What the player said: agreeing to a suggestion, or arranging a meeting themselves.
 	function meetingReply(text, resident, p) {
@@ -299,8 +333,8 @@ export function createGuide(mount, api) {
 		}
 		if (pending && REFUSE.test(t)) { B.cancel(pending.id); return { reply: '[[mood: calm]] [[gesture: shrug]] No worries. Another time.' }; }
 		const agreed = B.agreedWith(resident.id, resident.bodyKey);
-		if (agreed && /\b(when|where|what time)\b.*\b(meet|meeting|see you)\b/i.test(t)) return { reply: `[[mood: calm]] ${cap(agreed.place.name)}, ${formatClock(agreed.due % 24)}. Don't be late.`, note: `Meeting: ${meetWhen(agreed)}.` };
-		if (agreed && /\b(cancel|call off|can'?t make)\b.*\b(meet|meeting|it|plans?)\b/i.test(t)) { B.cancel(agreed.id); api.social.state.remember(resident.id, 'event', `The traveller called off your meeting at ${agreed.place.name}.`); return { reply: '[[mood: sad]] Oh, okay. Some other time then.', note: 'Meeting cancelled.' }; }
+		if (agreed && /\b(when|where|what time)\b.*\b(meet|meeting|see you|concert|party|picnic|meet-?up|gathering)\b/i.test(t)) return { reply: `[[mood: calm]] ${cap(agreed.place.name)}, ${formatClock(agreed.due % 24)}. Don't be late.`, note: `Meeting: ${meetWhen(agreed)}.` };
+		if (agreed && /\b(cancel|call off|can'?t make)\b.*\b(meet|meeting|it|plans?|concert|party|picnic|meet-?up|gathering)\b/i.test(t)) { B.cancel(agreed.id); api.social.state.remember(resident.id, 'event', `The traveller called off your meeting at ${agreed.place.name}.`); return { reply: '[[mood: sad]] Oh, okay. Some other time then.', note: 'Meeting cancelled.' }; }
 		const time = parseGameTime(t, W.sky.state.hours, sun);
 		// Finishing an arrangement begun a moment ago: "the pier" → "at six".
 		if (meetDraft?.residentId === resident.id && performance.now() - meetDraft.at < 120000) {
@@ -354,6 +388,7 @@ export function createGuide(mount, api) {
 		if (a) {
 			const q = worldPosition(W, a.place.pos); if (!q) return null;
 			const now = B.clock(S.hours), late = now > a.due + EARLY;
+			if (a.gathering) return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
 			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
 		}
 		const quest = stories.list(key).find(q => q.status === 'active' && ['visit', 'return'].includes(q.steps[q.cursor]?.type));
@@ -552,6 +587,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (resident && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
 		if (!rec.met) { rec.met = true; perform(personaOffline(partner.persona, 'hi', snapshot()), true); }
 		else say(`${partner.persona.first} turns back to you.`, 'note');
+		const recap = resident && gatheringRecap(resident);
+		if (recap) perform(recap, true);
 	}
 	function endTalk() {
 		if (!partner) return;
@@ -595,8 +632,9 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			...(partner?.id ? [api.social.describe(api.social.state.get(partner.id)), ...(api.social.state.get(partner.id)?.memories || []).slice(-6).map(m => m.content)] : []),
 			...(pp.facts || []), ...(pp.tattoos || []).slice(0, 2).map((t) => 'a tattoo: ' + t),
 			world?.time ? 'the time: ' + world.time : '', near.length ? 'nearby: ' + near.join(', ') : '',
-			...(partner?.id && api.social.appointments?.agreedWith(partner.id, api.social.bodyKey()) ? [(a => `has agreed to meet the player at ${a.place.name} at ${formatClock(a.due % 24)}`)(api.social.appointments.agreedWith(partner.id, api.social.bodyKey()))] : []),
+			...(partner?.id && api.social.appointments?.agreedWith(partner.id, api.social.bodyKey()) ? [(a => a.gathering ? `is hosting a ${a.gathering.title.toLowerCase()} at ${a.place.name} at ${formatClock(a.due % 24)} and has invited the player` : `has agreed to meet the player at ${a.place.name} at ${formatClock(a.due % 24)}`)(api.social.appointments.agreedWith(partner.id, api.social.bodyKey()))] : []),
 			'when arranging to meet, always names one exact place and a clock time, never a vague promise',
+			'when asked to gather people, or to host a concert, party, picnic or meet-up, the game organises it for real',
 		].filter(Boolean);
 		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts, places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
 	}
@@ -632,7 +670,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		}
 		let meetNoteText = null, meetHandled = false;
 		if (resident && !reply) {
-			const meet = meetingReply(text, resident, p);
+			const meet = gatheringReply(text, resident, p) || meetingReply(text, resident, p);
 			if (meet) { reply = meet.reply; meetNoteText = meet.note || null; meetHandled = true; }
 		}
 		if (resident && !reply) {
@@ -853,7 +891,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			for (const a of meetings) {
 				const q=worldPosition(W,a.place.pos), far=q?` · ${fmtDist(Math.hypot(q.x-cam.x,q.z-cam.z))} ${dirTo(q.x-cam.x,q.z-cam.z)}`:'';
 				const state=a.status==='agreed'?(a.id===tracked || (!tracked && a===openM.filter(x=>x.status==='agreed').at(-1))?'◆ MARKED':'AGREED'):a.status==='proposed'?'SUGGESTED':a.status==='kept'?'✓ KEPT':'MISSED';
-				say(`${state} · Meet ${a.npcName} at ${a.place.name}\n${a.status==='agreed'||a.status==='proposed'?meetWhen(a)+far:formatClock(a.due%24)}`, a.status==='agreed'||a.status==='proposed'?'guide':'note');
+				say(a.gathering ? `${a.status==='kept'?'✓ ATTENDED':state} · ${gatherTitle(a)} · hosted by ${a.npcName}\n${a.status==='agreed'?meetWhen(a).replace(/ \((.*)\)$/, ' · $1')+far:formatClock(a.due%24)}` : `${state} · Meet ${a.npcName} at ${a.place.name}\n${a.status==='agreed'||a.status==='proposed'?meetWhen(a)+far:formatClock(a.due%24)}`, a.status==='agreed'||a.status==='proposed'?'guide':'note');
 				if (a.status==='agreed'||a.status==='proposed') {
 					const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
 					if (a.status==='proposed') { const ok=el('button',btnCss,'Agree'); ok.onclick=()=>{ if(book().agree(a.id).ok){ tracked=a.id; api.social.state.remember(a.npcId,'event',`You agreed to meet the traveller at ${a.place.name} at ${formatClock(a.due%24)}.`);} showQuests(); }; row.append(ok); }
