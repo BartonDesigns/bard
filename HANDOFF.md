@@ -6,6 +6,47 @@ file-by-file map is in `island/README.md`.
 
 ## Resume here (7 October 2026)
 
+- **Multiplayer v1 (on the branch, not live until the owner deploys):** friends join the host's game and see each other.
+  - **Server:** `server/multiplayer` is a second Worker, `l99-rooms` (Workers Free: one SQLite Durable Object per room, WebSockets with hibernation). The deploy steps are in `server/multiplayer/README.md`: `npm install`, `npm test`, `npm run deploy`, then put the address in `island/src/net/config.js` (`ROOMS_URL`) and rebuild. While it is empty, there is no Invite or Join, nothing connects, and `?room=` links just open the game.
+  - **Wire format:** `island/src/net/protocol.js`, shared by the game and the server, which cleans every message. Only poses, spots, the hour and weather, and the plain facts of the host's meetings ever travel; no dialogue.
+  - **Limits:** 8 a room, 2 KB a message, 20 messages a second (bursts of 40), 30 s silence drops a player, empty rooms kept 30 min.
+  - **Host:** if the host leaves, the longest-present player takes over; the owner gets the seat back on return. **End room** closes the room for everyone.
+  - **Client (`island/src/net/`):**
+    - `client.js`: connection, with reconnect and backoff.
+    - `remotes.js`: MakeHuman bodies from each player's `l99-me` seed, 150 ms interpolation, name tags, a simple car or boat. Bodies for the nearest 7 within 260 m (3 within 140 m on a phone); further away, only a tag.
+    - `follow.js`: follow within 4.5 m. It steers through `player.state.auto`, so you can still look around. Nudging is fine; 1.5 s of your own movement ends it. More than 150 m away, you are put beside the leader.
+    - `multiplayer.js`: glue and UI:
+      - 👥 Invite friends and Join (room code) at the top of the 📍 places menu;
+      - a room chip at the top left;
+      - a player list with Follow and Go to;
+      - tap a friend in the world for Follow or Go to.
+    - Guests take the host's hour, clock speed and weather (mode and weather day). The host's meetings and gatherings come as a read-only "The host's plans" list in the room panel, with a pin, and a gathering's crowd plays from its seed in a guest-only appointment book. The guest's own journal and `guide.js` are not touched.
+  - **Joining:** `?room=CODE` (in `index.html` and `dev.html`) calls `joinRoom`, then waits for the host's spot code and arrives through `share.openAt`, the one-load resume path, 3 m behind the host.
+  - **Tests:**
+    - `cd server/multiplayer && npm test`: 58 checks.
+    - `node island/tools/multiplayer.test.mjs`: 21 checks.
+    - Headless two-page run against `wrangler dev`: `/tmp/claude-0/mp/two.cjs`.
+  - **Not yet:**
+    - The plans are not in the Quests journal.
+    - Remote players are not shown in third-person driving poses inside real car models.
+    - No voice or chat.
+
+- **Street-level gaps filled (on the branch):** 125 new cells of the shared tile grid, baked with
+  `tools/bake-realcity.py --tiles` from Overture 2026-09-23.0 (raw data in `/tmp/claude-0/expand/ov-*`):
+  Castro Valley `cv` (10 tiles, 0.6 MB), Moraga and Canyon `moraga` (12, 0.8 MB), Richmond and
+  El Cerrito `rich` (23, 4.4 MB), Novato `novato` (24, 2.1 MB), Sunnyvale and Santa Clara `svl`
+  (25, 6.3 MB), Santa Clara, north San Jose and Milpitas `sjn` (31, 7.5 MB). Tiles median 90 KB,
+  max 579 KB (the older ones: 199 / 656 KB).
+  - The bake now drops a road or building that a neighbouring region already holds (whole regions
+    keep footprints past their edges); seam check `/tmp/claude-0/expand/seam.py <area>`: 0 duplicate
+    roads or buildings at the seams.
+  - Terrain: a 15 m level `h10` over Novato (h1 stopped at 38.12); the water bake's Novato tiles and
+    lakes were redone against it and merged (`/tmp/claude-0/expand/watermerge.py`), the rest of the
+    water kept as it was (a full rebake no longer reproduces it byte for byte elsewhere).
+  - Banners and the Guide: Canyon, Point Richmond, Alviso, Berryessa, Hamilton, Ignacio and Marinwood;
+    Lake Chabot, Saint Mary's College, the Rosie the Riveter Memorial and Mission Santa Clara as areas;
+    five Guide landmarks.
+
 - **Live:** main is at `a50b1da`. It includes:
   - meetings people keep (`people/appointments.js`) and gatherings (`people/gatherings.js`, `gathering-scene.js`);
   - one-load resume into the saved spot and hour (`share.js` `go()`);
