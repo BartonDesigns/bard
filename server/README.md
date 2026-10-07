@@ -8,6 +8,9 @@ a card on file, and it never spends past the free daily allowance.
 The game works without it. Until it is deployed, places use the atlas's own briefs and people
 answer with their built-in lines, so nothing breaks while you set it up.
 
+A second Worker, `server/multiplayer` (`l99-rooms`), runs the multiplayer rooms: friends joining
+the host's game. It is deployed on its own; see `server/multiplayer/README.md`.
+
 ## What it does
 
 | Route | What |

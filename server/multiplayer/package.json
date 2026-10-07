@@ -1,0 +1,15 @@
+{
+  "name": "l99-rooms",
+  "private": true,
+  "type": "module",
+  "description": "Multiplayer rooms for Level 99 Bard: presence, poses and the host's world, one Durable Object per room",
+  "scripts": {
+    "test": "node test/room.test.mjs",
+    "dev": "wrangler dev --port 8790",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/check"
+  },
+  "devDependencies": {
+    "wrangler": "^4.143.0"
+  }
+}

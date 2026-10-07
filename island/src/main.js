@@ -125,6 +125,7 @@ import { planAlien, createAlien } from './planet/alien.js';
 import { planRealm, planDungeons } from './planet/medieval/plan.js';
 import { createMedieval } from './planet/medieval/realm.js';
 import { createShare } from './share.js';
+import { createMultiplayer } from './net/multiplayer.js';
 import { createWorldAudio } from './audio/audio.js';
 import { createOrbitalFlight } from './space/flight.js';
 import { worldBody, sameBody } from './space/body.js';
@@ -663,6 +664,8 @@ export function createIslandWorld() {
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
 	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => { if (arrival) arrival.blind = false; return shaderWarm.all({ budget: 4000, progress }); } });
 	HOOKS.share = share;
+	// friends in a room (net/): nothing at all until a rooms server is set in net/config.js
+	const multiplayer = HOOKS.multiplayer = createMultiplayer({ scene, camera, world: () => world, state, share, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, menu: tpMenu, canvas: dom.canvas, isPhone, drive, social: () => social, enter: (p) => api.open(p) });
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
@@ -1023,6 +1026,7 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		HOOKS.multiplayer?.reset();
 		guide.endTalk();
 		social.reset();
 		world.labels?.dispose();
@@ -1487,6 +1491,7 @@ export function createIslandWorld() {
 		sunGlare(dt);
 		watchTeleport();
 		share.update(dt);
+		multiplayer.update(dt, time);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -1737,6 +1742,8 @@ export function createIslandWorld() {
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
 		openAt: (code) => share.openAt(code),
+		// ?room=CODE: join a friend's room and go to them (net/multiplayer.js)
+		joinRoom: (code) => multiplayer.join(code),
 		// back to the last place you were (after a crash or a reload); false if there is none
 		resume: () => { const c = share.resumeCode(); return c ? share.openAt(c, { resume: true }) : false; },
 		// flight's landing builds the world here first, out of sight, so Journey's own clock
@@ -1930,6 +1937,8 @@ if (typeof window !== 'undefined') {
 		// share where you are: Crysis.share() (a link and a line of text), Crysis.share({ silent: true, from: 'Sam' })
 		share: (opts) => HOOKS.share?.share(opts),
 		openAt: (code) => HOOKS.share?.openAt(code),
+		// friends: Crysis.rooms() how the room stands; .invite(), .join(code), .follow(id), .leave()
+		rooms: Object.assign(() => HOOKS.multiplayer?.info(), { invite: () => HOOKS.multiplayer?.invite?.(), join: (c) => HOOKS.multiplayer?.join(c), follow: (id) => HOOKS.multiplayer?.follow?.(id), goTo: (id) => HOOKS.multiplayer?.goTo?.(id), leave: () => HOOKS.multiplayer?.leave?.() }),
 		// homes kept in this browser: Crysis.homes.list(), .add(name), .go(i or id), .rename(id, name), .remove(id)
 		homes: { list: () => HOOKS.share?.homes(), add: (name) => HOOKS.share?.addHome(name), go: (i) => HOOKS.share?.goHome(i), rename: (id, n) => HOOKS.share?.renameHome(id, n), remove: (id) => HOOKS.share?.removeHome(id), here: () => HOOKS.share?.building(window.L99Island?.world?.()?.player.state.pos, true) },
 		// (a home set by lat/lon here still works: it joins the homes list)
