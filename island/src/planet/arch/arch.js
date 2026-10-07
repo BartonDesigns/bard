@@ -367,11 +367,10 @@ function slabs(X, T) {
 function monolith(X, M, sea) {
 	const { K, S } = X, F = frame(M.x, sea, M.z, M.yaw), deep = sea - M.y + 2;
 	K.add('shell', F.put(box(5.5, M.h + deep, 1.4), 0, (M.h - deep) / 2, 0), { tint: [0.015, 0.015, 0.02], glow: G.metal });
-	K.add('shell', F.put(box(0.32, M.h - 1, 0.1), 0, M.h / 2, 0.72), { tint: S.strip, glow: G.lamp });
+	for (const sz of [-1, 1]) K.add('shell', F.put(box(0.32, M.h - 1, 0.1), 0, M.h / 2, sz * 0.72), { tint: S.strip, glow: G.lamp });
 	K.add('shell', F.put(box(0.4, 0.4, 0.4), 0, M.h + 0.2, 0), { tint: S.beacon, glow: G.beacon });
 	X.col.box(M.x, M.z, M.yaw, 2.75, 0.7, sea + M.h, { site: X.site });
-	const f = F.p(0, 0, 0.8);
-	X.streaks.push({ x: f.x, z: f.z, y: sea + 0.06, w: 1.6, len: 220, c: S.strip });
+	X.streaks.push({ x: M.x, z: M.z, y: sea + 0.06, w: 1.6, len: 220, c: S.strip });
 }
 
 // a bridge across a gap: a slender deck arched a little, a fish-belly truss under it,
