@@ -211,6 +211,8 @@ void main(){
 		vec3 stone = mix(mix(vec3(0.22, 0.2, 0.17), vec3(0.46, 0.42, 0.35), id), vec3(0.4, 0.3, 0.2), step(0.8, id) * 0.6);
 		bed = mix(bed, stone * (0.55 + 0.45 * smoothstep(0.75, 0.25, f1)), 1.0 - smoothstep(0.1, 0.3, px));
 	}
+	// (at the sides the bed goes dark with the wet ground it runs into)
+	bed = mix(bed, vec3(0.13, 0.11, 0.08), (1.0 - smoothstep(0.04, 0.3, depth)) * smoothstep(0.5, 0.8, abs(vUv.x)));
 	vec3 seen = bed * exp(-max(depth, 0.0) * vec3(2.2, 1.2, 1.1)) * (1.0 - uNight * 0.85);
 	vec3 body = mix(deep, seen, bedK);
 	// the hills and trees round it darker in the still water's reflection
@@ -802,14 +804,19 @@ export function createWater(scene, shared, opts = {}) {
 					while (c < xs.length && xs[c] < x) c++;
 					const inside = c % 2 === 1, d = E.length ? near(x, z) : 1e9, q = b * W1 + a, g = B(a, b);
 					if (inside) {
-						const v = Math.min(0, L.level - Math.min(Dmax, 0.5 + d * sl) - g);
+						// (shallow at the shore, so the water thins over its bed there)
+						const v = Math.min(0, L.level - Math.min(Dmax, 0.08 + d * sl) - g);
 						if (v < lo[q]) lo[q] = v;
 						kind[q] = Math.max(kind[q], 1);
 					} else if (d < 10) {
-						const v = Math.max(0, L.level + 0.12 + d * (L.lip ?? 0.3) - g) * (1 - sm(4, 10, d));
+						// the land brought to the water: raised where it lies under it, cut back a
+						// little where it stands just above it (a steep shore is left as it is)
+						let v = (L.level + 0.1 + d * (L.lip ?? 0.3) - g) * (1 - sm(4, 10, d));
+						if (v < 0) v *= 1 - sm(1.5, 3, -v);
 						if (v > hi[q]) hi[q] = v;
-						const up = Math.max(g, L.level + 0.12 + d * (L.lip ?? 0.3)) - L.level;
-						kind[q] = Math.max(kind[q], (1 - sm(0.3, 5, d)) * (1 - sm(0.25, 1.1, up)));
+						if (v < lo[q]) lo[q] = v;
+						const up = g + v - L.level;
+						kind[q] = Math.max(kind[q], (1 - sm(0.3, 5, d)) * (1 - sm(0.5, 2, up)));
 					}
 				}
 				if (performance.now() - t0 > 2.5) { yield; t0 = performance.now(); }
