@@ -5,8 +5,9 @@
 
 import * as THREE from 'three';
 import { worldBody, sameBody } from './space/body.js';
-import { toWorld, toLatLon } from './bay/geo.js';
+import { toWorld, toLatLon, LEVELS } from './bay/geo.js';
 import { toLL, bayKm } from './earth/globeframe.js';
+import { BAY_WILD_KM } from './earth/globe.js';
 import { atlasReady, citiesNear, regionAt } from './earth/atlas.js';
 import { PLACES, ZONES } from './bay/places.js';
 
@@ -247,16 +248,27 @@ export function createShare(ctx) {
 	// ---------- going to a spot (across worlds if need be) ----------
 	const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 	async function until(fn, ms) { const t0 = performance.now(); while (performance.now() - t0 < ms) { try { if (fn()) return true; } catch { /* not ready */ } await sleep(200); } return false; }
-	async function go(s, { msg = '', time = false } = {}) {
+	// coming in from the faceplate (or a link): one loading card with the place's name, the world
+	// built straight at the spot with the spot's hour, lifted once you are there and it is drawn
+	async function go(s, { msg = '', time = false, label = '' } = {}) {
 		if (busy || !s) return false;
 		busy = true;
 		try {
 			const st = ctx.state;
 			let w = W();
 			const same = w && sameBody(st.body, worldBody({ earth: s.earth, seed: s.seed, biome: s.type, origin: s.origin, body: s.body }));
-			if (!same || !ctx.visible()) await ctx.enter(s.earth ? { seed: s.seed, earth: true } : { seed: s.seed, biome: s.type, earth: false, origin: s.origin || null, body: s.body });
+			if (!same || !ctx.visible()) {
+				const far = s.earth && s.lat != null && bayKm(s.lat, s.lon) > BAY_WILD_KM;
+				const spot = { label: `${label || 'Going to'} ${s.earth ? describe(s).place : worldName(s)}…`, hours: time ? s.hours : null, x: far ? null : s.x, y: s.y, z: far ? null : s.z, yaw: s.yaw, pitch: s.pitch };
+				await ctx.enter(s.earth ? { seed: s.seed, earth: true, spot } : { seed: s.seed, biome: s.type, earth: false, origin: s.origin || null, body: s.body, spot });
+			}
 			w = W();
 			if (!w) return false;
+			// (the hour before anything else, so it is never seen late)
+			if (time && Number.isFinite(s.hours) && w.sky?.state) w.sky.state.hours = s.hours;
+			const covered = !!ctx.covered?.();
+			const stage = (k) => { if (covered) ctx.arriving(k); };
+			stage(0.3);
 			// the globe: a place far off moves the frame there first (earth/globe.js)
 			if (s.earth && s.lat != null && w.globe) { const p = w.globe.place(s.lat, s.lon); s.x = p.x; s.z = p.z; await p.ready; }
 			ctx.beforeMove?.();
@@ -266,9 +278,12 @@ export function createShare(ctx) {
 			const yOf = () => (s.y != null ? s.y : w.island.heightAt(s.x, s.z) + (s.agl || 60));
 			if (w.bayArea) {
 				// Earth: hover there while the land, the streets and the building come in
-				hint('Finding the spot…', 60000, 2);
+				if (!covered) hint('Finding the spot…', 60000, 2);
 				put(yOf(), true);
-				await until(() => w.bayArea.loaded() && w.bridge && w.real?.loaded(), 180000);
+				stage(0.4);
+				// (the land's height levels as they come in, then the bridge and the streets)
+				await until(() => { stage(w.bridge ? 0.67 : 0.4 + 0.25 * (w.bayArea.levels || []).filter(Boolean).length / LEVELS.length); return w.bayArea.loaded() && w.bridge && w.real?.loaded(); }, 180000);
+				stage(0.7);
 				const b = s.bld;
 				if (b?.k === 'tower' && b.key) {
 					// a tower is found from the street, then the floor is built
@@ -295,11 +310,35 @@ export function createShare(ctx) {
 			// and keep it there while the tower settles in around you
 			keep = tb ? { key: tb.key, i: tb.i, y: yOf(), t: 20 } : null;
 			w.underworld?.settle?.();
-			if (time && Number.isFinite(s.hours) && w.sky?.state) w.sky.state.hours = s.hours;
+			if (covered && W() === w) {
+				// what streamed in round you: its shaders built, then a few frames to settle, all
+				// still behind the card; held where you were saved meanwhile
+				await ctx.warm?.((k) => stage(0.7 + k * 0.25));
+				await settle(() => put(yOf(), !!s.fly));
+				stage(1);
+				if (W() !== w) return false;
+				put(yOf(), !!s.fly);
+				// (the clock ran on behind the card: the hour you left)
+				if (time && Number.isFinite(s.hours) && w.sky?.state) w.sky.state.hours = s.hours;
+			}
 			const d = describe(s);
 			hint(msg && !msg.includes(d.place) ? `${msg}\n${d.place}` : msg || d.place, 6000, 2);
 			return true;
-		} finally { busy = false; }
+		} finally { busy = false; ctx.arrived?.(); }
+	}
+	// frames running smoothly again (a dozen under 70 ms), or eight seconds, whichever is first
+	function settle(hold) {
+		return new Promise((done) => {
+			const t0 = performance.now();
+			let last = t0, calm = 0;
+			const watch = (now) => {
+				hold();
+				calm = now - last < 70 ? calm + 1 : 0;
+				last = now;
+				if ((calm >= 12 && now - t0 > 600) || now - t0 > 8000) done(); else requestAnimationFrame(watch);
+			};
+			requestAnimationFrame(watch);
+		});
 	}
 	async function openAt(code, opts = {}) {
 		const s = unpack(code);
@@ -310,8 +349,8 @@ export function createShare(ctx) {
 			hint('That link has no place in it, so here is the island.', 4000, 2);
 			return false;
 		}
-		if (opts.resume) return go(s, { msg: 'Back where you left off.', time: true });
-		return go(s, { msg: s.by ? `You're where ${s.by} was.` : 'You\'re where your friend was.', time: true });
+		if (opts.resume) return go(s, { msg: 'Back where you left off.', time: true, label: 'Returning to' });
+		return go(s, { msg: s.by ? `You're where ${s.by} was.` : 'You\'re where your friend was.', time: true, label: 'Going to' });
 	}
 
 	// ---------- carrying on: where you are is kept every few seconds (and as the page

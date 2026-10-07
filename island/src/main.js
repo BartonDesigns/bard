@@ -262,7 +262,7 @@ function buildDom() {
 	// (the hint rides on top of the prompts, so it never covers one)
 	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
 	hint.dataset.hud = 'prompt 99';
-	const loading = css(document.createElement('div'), 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
+	const loading = css(document.createElement('div'), 'position:absolute;inset:0;z-index:30;display:flex;white-space:pre-line;text-align:center;padding:24px;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
 	loading.textContent = 'Raising the island…';
 	// (beside the rail, stopping short of the thumb buttons, as the places and games menus do)
 	const panel = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(300px,78vw);box-sizing:border-box;padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;');
@@ -660,7 +660,7 @@ export function createIslandWorld() {
 	}
 	// share where you are, and homes to come back to (share.js): at the top of the menu
 	const openTp = () => { share.refresh(); for (const b of tpPlaces) b.style.display = world?.bayArea ? '' : 'none'; tpMenu.style.display = 'flex'; };
-	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; } });
+	const share = createShare({ world: () => world, state, shared, camera, scene, hint, mount: dom.mount, menu: tpMenu, places: PLACES_TP, origin: () => origin, visible: () => visible, enter: (p) => api.open(p), beforeMove: () => { world?.labels?.hide(); world?.kinetic?.clear(); world?.orbit?.cancel(); fishing.drop(); drive.stop(); tpMenu.style.display = 'none'; }, openMenu: openTp, closeMenu: () => { tpMenu.style.display = 'none'; }, arriving, arrived, covered: () => !!arrival, warm: (progress) => shaderWarm.all({ budget: 4000, progress }) });
 	HOOKS.share = share;
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	function watchTeleport() {
@@ -702,6 +702,15 @@ export function createIslandWorld() {
 		if (talkTarget) talkBtn.textContent = isPhone ? '💬 Talk' : '💬 Talk (Enter)';
 	}
 
+	// the loading card over a whole arrival (api.open with a spot, lifted by share.js)
+	let arrival = null;
+	function arriving(k) { if (arrival) dom.loading.textContent = `${arrival.label}\n${Math.round(Math.min(1, k) * 100)}%`; }
+	function arrived() {
+		if (!arrival) return;
+		arrival = null;
+		dom.loading.style.display = 'none';
+		dom.loading.textContent = 'Raising the island…';
+	}
 	async function build(params) {
 		const seed = (params.seed >>> 0) || 1337;
 		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
@@ -764,6 +773,14 @@ export function createIslandWorld() {
 		const landFauna = createLandFauna(land, island, shared, scene, camera, vegetation);
 		const player = createPlayer(island, village, vegetation, camera, dom, shared);
 		player.state.active = true;
+		// arriving at a kept or shared spot: start there, so what streams in first is that place
+		const sp = params.spot;
+		if (sp && Number.isFinite(sp.x) && Number.isFinite(sp.z)) {
+			const P = player.state;
+			P.pos.set(sp.x, Number.isFinite(sp.y) ? sp.y : island.heightAt(sp.x, sp.z) + 60, sp.z);
+			P.yaw = sp.yaw || 0; P.pitch = sp.pitch || 0; P.flying = true;
+			camera.position.copy(P.pos);
+		}
 		const boat = createBoat(island, village, player, camera, shared, scene);
 		const whale = createWhale(island, shared, scene);
 		const shells = createShells(island, shared, camera, scene, player, dom, hint);
@@ -874,8 +891,8 @@ export function createIslandWorld() {
 		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
 		litter.update(camera);
 		// (shown as soon as the first few seconds of it are done; the rest is built in play)
-		await shaderWarm.all({ budget: 2500, progress: (k) => { dom.loading.textContent = `Raising the island… ${Math.round(k * 100)}%`; } });
-		dom.loading.textContent = 'Raising the island…';
+		await shaderWarm.all({ budget: 2500, progress: (k) => { if (arrival) arriving(k * 0.3); else dom.loading.textContent = `Raising the island… ${Math.round(k * 100)}%`; } });
+		if (!arrival) dom.loading.textContent = 'Raising the island…';
 		// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 		// for everything: the island's own map on the island, the real land beyond it
 		if (earth) {
@@ -984,7 +1001,7 @@ export function createIslandWorld() {
 			});
 			const w0 = world;
 		}
-		dom.loading.style.display = 'none';
+		if (!arrival) dom.loading.style.display = 'none';
 		buildPanel();
 		return world;
 	}
@@ -1662,8 +1679,18 @@ export function createIslandWorld() {
 		async open(params = {}) {
 			// on Earth the ship waits in orbit: ⇪ always has somewhere to go
 			origin = params.origin || (params.earth !== false ? EARTH_ORIGIN : null);
+			// a kept or shared spot: one loading card, with its name, until share.js has you there
+			if (params.spot) {
+				arrival = { label: params.spot.label || 'Arriving…' };
+				dom.loading.textContent = arrival.label;
+				dom.loading.style.display = 'flex';
+			}
+			// (the sky starts at the spot's hour)
+			const hours = params.spot?.hours;
+			shared.startHours = Number.isFinite(hours) ? hours : 10.5;
 			show();
 			await build(params);
+			if (Number.isFinite(hours) && world?.sky) world.sky.state.hours = hours;
 			if (params.earth !== false && params.at) HOOKS.goTo(params.at.lat, params.at.lon);      // globe: straight to a place
 			api.link();
 			hint(isPhone ? 'Left thumb to walk, right thumb to look. ✈ to fly, ☀ for the sky.' : 'WASD to walk, drag to look, Space to jump, F to fly. ☀ for the sky.');
