@@ -3,6 +3,7 @@ import { createOrbitFrame, ORBIT, MOON, SUN, GARGANTUA, companionOf, musicThrust
 import { createOrbitView } from './view.js';
 import { createNav, distanceLabel, speedReadout } from './nav.js';
 import { flightMultiplier, speedLabel } from '../flight-speed.js';
+import { COLONY } from '../planet/colony/styles.js';
 import { planetProfile } from '../planet/profile.js';
 
 // Worlds the warp list reaches beyond this one; each lands through the usual world build.
@@ -52,6 +53,8 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	function destinations() {
 		const near = bodies().map((b) => ({ ...b, note: distanceLabel(b.distance) }));
 		const far = [];
+		// the Moon's colony: warp straight down to its spaceport
+		far.push({ id: 'w-COLONY', name: `Moon: ${COLONY.MOON.name}`, note: 'spaceport', remote: { type: 'MOON', seed: 1969, colony: true } });
 		if (!earth && type !== 'MOON') far.push({ id: 'w-EARTH', name: 'Earth', note: 'land', remote: { earth: true } });
 		if (!earth && type !== 'MOON') far.push({ id: 'w-MOON', name: 'The Moon', note: 'land', remote: { type: 'MOON', seed: 1969 } });
 		WORLDS.forEach((t, i) => { if (t !== type) far.push({ id: `w-${t}`, name: title(planetProfile(t).name), note: t.toLowerCase(), remote: { type: t, seed: 4242 + i * 1013 } }); });

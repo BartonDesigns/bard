@@ -128,7 +128,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	// ---------- what this player sends ----------
 	const sent = { t: 0, x: 1e9, z: 0, y: 0, yaw: 0, a: '', spotT: 0, spot: '', stateT: 0, events: new Map() };
 	const look = new THREE.Vector3();
-	function worldKey() { return state.earth ? 'earth' : `${state.biome || 'world'}:${state.seed}`; }
+	function worldKey() { return state.earth ? 'earth' : 'w' + state.seed; }
 	function pose() {
 		const w = W(), P = w?.player?.state;
 		if (!P) return null;

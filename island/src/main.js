@@ -1919,6 +1919,9 @@ if (typeof window !== 'undefined') {
 		// the alien works (planet/alien.js): Crysis.alien() lists the sites, Crysis.alienGo(i) takes you to look at one
 		alien: () => window.L99Island?.world?.()?.alien?.sites || [],
 		alienGo: (i = 0) => window.L99Island?.world?.()?.alien?.go(i) || 'no alien works on this world',
+		// an off-world colony (planet/colony/): Crysis.colony() tells of it, Crysis.colonyGo() lands at its spaceport
+		colony: () => window.L99Island?.world?.()?.colony?.info() || null,
+		colonyGo: () => window.L99Island?.world?.()?.colony?.go() || 'no colony on this world',
 		// a realm of castles (planet/medieval/): Crysis.medieval() tells of it, Crysis.medieval('castle')
 		// goes to look (castle, realm, gate, keep, wall, town, square, chapel, windmill, bridge, barrow…);
 		// Crysis.quests() lists its quests; Crysis.dungeon(i) goes down into one ('stair', 'last' or
