@@ -226,6 +226,8 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		face: (id) => { const b = bodies().find((q) => q.id === id); if (!b) return false; const d = b.pos.sub(P.pos).normalize(); P.yaw = Math.atan2(-d.x, -d.z); P.pitch = Math.asin(d.y); P.roll = 0; return true; },
 		warp: (id) => { const d = destinations().find((q) => q.id === id); if (d) warpTo(d); return !!d; },
 		destinations: () => destinations().map(({ id, name, note }) => ({ id, name, note })),
+		// the bodies round the ship, where they are now (explore.js steers by them)
+		bodies,
 		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), gear, boost: P.boost, radius, type, companion: companion.name, warping: !!warp, warpTime: warp?.t ?? 0, bouncing: !!bounce, landing, heat, target: nav.target, gargantuaVisible: !!view.gargantua?.visible, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
 		cancel: () => { frame.reset(); warp = bounce = null; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
 		dispose() { disposed = true; removeEventListener('keydown', onKey, true); delete P.orbit; hud.remove(); bearing.remove(); nav.dispose(); view.dispose(); },

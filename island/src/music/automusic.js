@@ -40,7 +40,7 @@ export function createAutoMusic(opts) {
 	const S = {
 		on: !!saved.on, level: Number.isFinite(saved.level) ? clamp(saved.level, 0, 1) : 0.7, log: false,
 		playing: false, bpm: 0, stepMs: 125, barAt: 0, step: 16, bar: null, serial: 0, mood: null, game: null, face: null,
-		pcs: null, safety: 1, skipped: 0, manualUntil: 0, manualDrumUntil: 0, lastKey: '', counts: [], info: null, sections: [],
+		pcs: null, safety: 1, skipped: 0, bars: 0, shift: 0, bias: null, manualUntil: 0, manualDrumUntil: 0, lastKey: '', counts: [], info: null, sections: [],
 	};
 	const composer = createComposer((Math.random() * 1e9) >>> 0);
 	const live = new Map();          // voice id -> { role, timer }
@@ -184,6 +184,9 @@ export function createAutoMusic(opts) {
 		const W = opts.world();
 		const g = sense(W, opts);
 		const M = adapt(g);
+		// a steer from outside (explore.js): more energy and pace with the speed
+		const b = S.bias;
+		if (b) { M.energy = clamp(M.energy + b.energy, 0.05, 1); M.tempoK = clamp(M.tempoK * b.tempo, 0.7, 1.25); M.drums = clamp(M.drums * (1 + b.energy * 0.5), 0, 1.3); }
 		S.game = g; S.mood = M;
 		// a big change asks the form for a new section
 		const key = g.place + ':' + g.move + ':' + g.volcano + ':' + (g.trip > 0);
@@ -229,6 +232,7 @@ export function createAutoMusic(opts) {
 		else S.safety = Math.min(1, S.safety + 0.03);
 		const out = composer.bar(M, pcs, F.face, locked ? null : F.beat);
 		S.info = out.info;
+		S.bars++;
 		if (out.info.fresh) { S.sections.push({ name: out.info.section, at: Math.round(performance.now()) }); if (S.sections.length > 40) S.sections.shift(); }
 		if (S.log) console.log('[automusic]', out.info.section, out.info.bar + 1 + '/' + out.info.of, 'chord', out.info.chord, 'bpm', Math.round(S.bpm), (F.face || '') + ' ' + NAMES[((F.root % 12) + 12) % 12] + ' ' + (F.scaleId || F.scale), 'arc', out.info.arc, S.game ? S.game.place + '/' + S.game.move : '');
 		const swing = clamp((F.swing || 0) + M.swingAdd, 0, 0.6);
@@ -241,12 +245,12 @@ export function createAutoMusic(opts) {
 		const B = S.bar, ms = S.stepMs;
 		for (const e of B.byStep[i]) {
 			if (e.drum) { drum(e.name, e.vel); continue; }
-			const dur = e.dur * ms * 0.95;
-			noteOn(e.role, e.semi, dur, e.vel);
+			const dur = e.dur * ms * 0.95, semi = e.semi + S.shift;
+			noteOn(e.role, semi, dur, e.vel);
 			// echoes in caves, under water, on a trip: the note again, softer, a dotted eighth on
 			if (B.echo > 0.2 && (e.role === 'mel' || e.role === 'counter')) {
-				later(() => noteOn(e.role === 'mel' ? 'counter' : e.role, e.semi, dur * 0.8, e.vel * 0.42 * B.echo), ms * 3);
-				if (B.echo > 0.5) later(() => noteOn('arp', e.semi + 12, dur * 0.6, e.vel * 0.2 * B.echo), ms * 6);
+				later(() => noteOn(e.role === 'mel' ? 'counter' : e.role, semi, dur * 0.8, e.vel * 0.42 * B.echo), ms * 3);
+				if (B.echo > 0.5) later(() => noteOn('arp', semi + 12, dur * 0.6, e.vel * 0.2 * B.echo), ms * 6);
 			}
 		}
 	}
@@ -280,9 +284,10 @@ export function createAutoMusic(opts) {
 		loopT = setTimeout(loop, clamp(next - performance.now() - 1, 1, 250));
 	}
 
-	function auto(on) {
+	// (passing: turned on or off for a while by something else, not kept for the next visit)
+	function auto(on, passing) {
 		S.on = on === undefined ? !S.on : !!on;
-		save({ on: S.on, level: S.level });
+		if (!passing) save({ on: S.on, level: S.level });
 		clearTimeout(loopT); loopT = 0;
 		if (S.on) loop();
 		else { S.playing = false; silence(); }
@@ -364,7 +369,18 @@ export function createAutoMusic(opts) {
 		return null;
 	}
 
+	// the bar clock for others (explore.js), filled in place: no garbage each frame
+	const P = { playing: false, at: 0, stepMs: 125, bars: 0, bar: 0, of: 0, section: '', fresh: false, energy: 0 };
+	function pulse() {
+		P.playing = S.playing && !!S.bar;
+		if (!P.playing) return P;
+		P.at = S.bar.at; P.stepMs = S.stepMs; P.bars = S.bars;
+		P.bar = S.info?.bar || 0; P.of = S.info?.of || 0; P.section = S.info?.section || ''; P.fresh = !!S.info?.fresh;
+		P.energy = S.mood?.energy || 0;
+		return P;
+	}
+
 	sync();
 	if (S.on) loop();
-	return { auto, state, panel, clock, log: (on) => { S.log = on === undefined ? !S.log : !!on; return S.log; }, queue: (to, urgent) => composer.queue(to, urgent), level: (v) => { if (v !== undefined) { S.level = clamp(+v, 0, 1); save({ on: S.on, level: S.level }); } return S.level; } };
+	return { auto, state, pulse, on: () => S.on, bias: (b) => { S.bias = b || null; }, shift: (n) => { if (n !== undefined) S.shift = Math.round(clamp(+n || 0, -7, 7)); return S.shift; }, panel, clock, log: (on) => { S.log = on === undefined ? !S.log : !!on; return S.log; }, queue: (to, urgent) => composer.queue(to, urgent), level: (v) => { if (v !== undefined) { S.level = clamp(+v, 0, 1); save({ on: S.on, level: S.level }); } return S.level; } };
 }
