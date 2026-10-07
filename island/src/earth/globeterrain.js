@@ -303,20 +303,21 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					}
 					urb *= (1.0 - smoothstep(0.25, 0.45, slope)) * step(0.0, vGC.x);
 					if (urb > 0.01) {
-						// blocks of the survey's 100 m: a street round each, and in it lots of lawn, trees and
-						// roofs, more paved and roofed the denser the town
-						vec2 sb = fract(gM(0) * 0.25), se = min(sb, 1.0 - sb);
-						float blk = gfH(ivec3(gQI >> 2, 7), 71u), street = gLine(min(se.x, se.y) * 100.0, 5.0, px);
+						// lawn, trees and roofs in patches of the survey's 100 m, more paved and roofed the
+						// denser the town (no painted streets: a street is only where a town is grown)
+						float blk = gfH(ivec3(gQI >> 2, 7), 71u);
 						float dense = smoothstep(0.3, 0.9, urb + (blk - 0.5) * 0.3), nkB = 1.0 - smoothstep(2.0, 6.0, px);
 						float roof = mix(0.15 + 0.4 * dense, smoothstep(0.5, 0.58, vn(gM(2)) + dense * 0.25), nkB);
 						vec3 yard = mix(mix(grass, vec3(0.03, 0.05, 0.025), mix(0.45, smoothstep(0.52, 0.68, vn(gM(1) + 2.0)), nkB) * (1.0 - dense) * 0.85), vec3(0.24, 0.23, 0.22), dense * 0.6);
-						vec3 built = mix(mix(yard, mix(vec3(0.2, 0.19, 0.18), vec3(0.3, 0.17, 0.11), blk), roof), vec3(0.07, 0.07, 0.075), street);
+						vec3 built = mix(yard, mix(vec3(0.2, 0.19, 0.18), vec3(0.3, 0.17, 0.11), blk), roof);
 						// A city's broad footprint is only a distant land-use hint. Keep the actual
 						// forest floor and snow: Manaus's 18 km footprint must not pave the jungle.
 						// Constructed streets and buildings draw their own surfaces above this ground.
-						float builtK = smoothstep(0.08, 0.5, urb) * (1.0 - forest) * (1.0 - snowK);
+						// (and only from afar: near you a painted grid with no buildings on it reads as fake, so
+						// it fades to the land, and the town grown here draws its real streets and buildings)
+						float builtK = smoothstep(0.08, 0.5, urb) * (1.0 - forest) * (1.0 - snowK) * smoothstep(1500.0, 4000.0, dist);
 						c = mix(c, built, builtK * (1.0 - smoothstep(20000.0, 60000.0, dist) * 0.5));
-						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk + street)) * 0.35;
+						gCityGlow = vec3(1.0, 0.72, 0.4) * uGNight * smoothstep(0.1, 0.6, urb) * (0.25 + 0.75 * step(0.55, blk)) * 0.35;
 					}
 					// close by: the photographs' grain (loam on the soil, moss in the grass, sand, the rock on
 					// the three planes), on the survey's lattice so it stays put when the frame moves

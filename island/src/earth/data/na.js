@@ -882,7 +882,7 @@ export const CITIES = [
 	'Tacoma|47.2529|-122.4443|2|Port city under Mount Rainier|Museum of Glass',
 	'Spokane|47.6588|-117.426|2|River city with falls through downtown|Spokane Falls',
 	'Portland|45.5152|-122.6784|3|City of roses, bridges, bikes and food carts|Steel Bridge;International Rose Test Garden;Powell\'s Books',
-	'Bend|44.0582|-121.3153|1|High-desert outdoor town|Mount Bachelor;Deschutes River',
+	'Bend|44.0582|-121.3153|2|High-desert outdoor town|Mount Bachelor;Deschutes River',
 	'Eugene|44.0521|-123.0868|2|Green college town|Hayward Field',
 	'Astoria|46.1879|-123.8313|0|River-mouth port of Victorians and a long bridge|Astoria-Megler Bridge;Astoria Column',
 	'Cannon Beach|45.8918|-123.9615|0|Beach village beside a sea stack|Haystack Rock',
