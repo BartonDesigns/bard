@@ -174,9 +174,9 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		C.seen = n;
 		C.age = (C.age || 0) + Math.max(1, n - prev);
 		if (!C.shot) { pick(now, n, true, at); return; }
-		if (C.age < 4) return;
-		if (fresh || Math.floor(n / 8) > Math.floor(prev / 8)) pick(now, n, true, at);
-		else if (Math.floor(n / 4) > Math.floor(prev / 4)) pick(now, n, false, at);
+		// (a cut on a phrase or a new section; an eased move on the bars between)
+		if (C.age >= 4 && (fresh || Math.floor(n / 8) > Math.floor(prev / 8))) pick(now, n, true, at);
+		else if (C.age >= 3 && Math.floor(n / 4) > Math.floor(prev / 4)) pick(now, n, false, at);
 	}
 	function pick(now, n, cut, at) {
 		const list = C.list;
