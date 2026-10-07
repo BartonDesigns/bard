@@ -80,6 +80,7 @@ import { createEdgelands } from './bay/edgelands.js';
 import { createDrive } from './drive.js';
 import { createVehicles } from './vehicles/index.js';
 import { createAutoMusic } from './music/automusic.js';
+import { createExplore } from './explore.js';
 import { today, onMonth, monthPicked, pickMonth } from './calendar.js';
 import { createTattooStudio } from './tattoo/studio.js';
 
@@ -533,6 +534,8 @@ export function createIslandWorld() {
 	// auto music: a generative score on the faceplate's own instruments (music/automusic.js)
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
+	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
+	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	guideApi.people = people;
@@ -1329,6 +1332,7 @@ export function createIslandWorld() {
 		// Keep the flight controls alive while the orbital pass owns the render loop.
 		// This makes the same ×1/×3/×6/×9 booster available in space as on the surface.
 		updateFlightControls(W);
+		explore.steer(dt);
 		// driving a road carries you; otherwise you walk, swim or fly
 		// (a minigame has the screen and the camera while it runs)
 		if (arcade.active()) drive.stop();
@@ -1347,12 +1351,14 @@ export function createIslandWorld() {
 			// The same input state and faceplate analyser continue on every frame.
 			dom.veil.style.opacity = '0'; glare.style.opacity = '0';
 			actions();
+			explore.shoot(dt);
 			W.orbit.render(time);
 			return;
 		}
 		you.update(dt, time);
 		// a director's camera (trailer/): posed after the player moves, before anything reads it
 		HOOKS.cine?.(camera, dt, time);
+		explore.shoot(dt);
 		W.fields?.update(dt, camera);
 		arcade.update(dt, time, !W.boat?.boarded?.() && !W.boardwalk?.riding());
 		stampPrints(W.player.state);
@@ -1557,6 +1563,7 @@ export function createIslandWorld() {
 			W.natureSound.update(dt, camera, { company, wind: shared.uWind?.value, gust: shared.uGust?.value, night: sk.night, hours: W.sky.state.hours, month: today().getMonth() + 1, fog: wx.gloom || 0, under, islandHalf: W.island.half, pond, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, town: U ? Math.max(0, (U.u - 0.1) / 0.5) : 0 });
 		}
 		W.labels?.update(camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
+		if (!explore.on()) W.labels?.update(camera.position, Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) < W.island.half);
 		// a mushroom eaten: sizes swell and shrink (the field of view, from where it stood), and
 		// the frame is drawn through its effect; sober, it draws nothing and the frame is as ever
 		W.shrooms?.update(dt, time);
@@ -1955,6 +1962,8 @@ if (typeof window !== 'undefined') {
 		ride: (name = 'dipper') => window.L99Island?.world?.()?.boardwalk?.rideNow(name) ?? 'No Boardwalk on this world.',
 		// the minigames: Crysis.arcade.start('bowling'), .stop(), .games()
 		get arcade() { return HOOKS.arcade; },
+		// explore: Crysis.explore() how it stands, .start(), .stop()
+		explore: Object.assign(() => HOOKS.explore?.info(), { start: () => HOOKS.explore?.start(), stop: () => HOOKS.explore?.stop() }),
 		// auto music: Crysis.music.auto(true), .state(), .log(true), .level(0.5), .queue('chorus')
 		music: { auto: (on) => HOOKS.autoMusic?.auto(on), state: () => HOOKS.autoMusic?.state(), log: (on) => HOOKS.autoMusic?.log(on), level: (v) => HOOKS.autoMusic?.level(v), queue: (to, now) => HOOKS.autoMusic?.queue(to, now) },
 		surprisesDbg: () => { const S = HOOKS.surprises; return S ? { busy: S.fw.busy(), n: S.fw.count(), ...S.fw.dbg() } : 'none'; },
