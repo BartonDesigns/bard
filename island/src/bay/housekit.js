@@ -142,7 +142,7 @@ export class Builder {
 	under(it) {
 		if (!(it.w > 0.05 && it.d > 0.05)) return;
 		this.at(it.x, it.y + 0.004, it.z, it.rot || 0);
-		this.shadow(0, 0, 0, it.w, it.d, 0.5, Math.min(0.25, 0.06 + Math.max(it.w, it.d) * 0.06));
+		this.shadow(0, 0, 0, it.w, it.d, 0.4, Math.min(0.3, 0.08 + Math.max(it.w, it.d) * 0.08));
 	}
 	// the finished meshes, one per material
 	meshes(mats, shadows = true) {

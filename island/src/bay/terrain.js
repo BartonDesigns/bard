@@ -734,7 +734,7 @@ export function createBayArea(shared, scene, island, BU) {
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
 					c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h));
 					// the sand the waves wet: darker, and glossy with the film they leave
-					float wetS = (1.0 - smoothstep(0.2, 1.2, h + (vn(vBW * 0.05) - 0.5) * 0.4)) * step(-0.5, h) * (1.0 - smoothstep(0.08, 0.25, slope));
+					float wetS = (1.0 - smoothstep(0.1, 0.8, h + (vn(vBW * 0.05) - 0.5) * 0.3)) * step(-0.5, h) * (1.0 - smoothstep(0.08, 0.25, slope));
 					c *= 1.0 - wetS * 0.22;
 					// the coast's cliffs, coves, lip, links and farms
 					if (uCsRow.w > 0.5 && csD < 5000.0) c = coastSide(c, vBW, h, slope, csD, smoothstep(0.03, 0.08, T.r), dist, n2, n3);
@@ -997,7 +997,7 @@ export function createBayArea(shared, scene, island, BU) {
 						// of water glossing the last stretch)
 						float wk = clamp(wv.y, 0.0, 1.0);
 						c = mix(c, mud, smoothstep(0.55, 1.0, wk) * 0.8) * (1.0 - 0.45 * smoothstep(0.0, 0.7, wk));
-						wxPudA = max(wxPudA, smoothstep(0.7, 1.0, wk) * (1.0 - clamp(wv.y - 1.0, 0.0, 1.0)) * 0.55);
+						wxPudA = max(wxPudA, smoothstep(0.85, 1.0, wk) * (1.0 - clamp(wv.y - 1.0, 0.0, 1.0)) * 0.3);
 						c = mix(c, conc, clamp(wv.y - 1.0, 0.0, 1.0));
 						flatK = max(flatK, clamp(wv.y - 1.0, 0.0, 1.0));
 					}
@@ -1027,7 +1027,7 @@ export function createBayArea(shared, scene, island, BU) {
 						c *= mix(1.0, dL / 0.9, gk * 0.55);
 					}
 					// standing water: dark, and glossy as glass (below)
-					wxPud = max(wxPud * (1.0 - flatK), max(wxPudA, wetS * 0.4));
+					wxPud = max(wxPud * (1.0 - flatK), max(wxPudA, wetS * 0.3));
 					c *= 1.0 - wxPud * 0.45;
 					diffuseColor.rgb = c * (0.88 + 0.24 * n3) * (1.0 - uWet * 0.3);
 				}

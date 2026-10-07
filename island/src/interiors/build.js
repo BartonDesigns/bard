@@ -106,8 +106,8 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 			const P = w.axis === 'x' ? (s, t) => [u0 + (u1 - u0) * s, y0 + (y1 - y0) * t, face] : (s, t) => [face, y0 + (y1 - y0) * t, u0 + (u1 - u0) * s];
 			const n = w.axis === 'x' ? [0, 0, sgn] : [sgn, 0, 0], uvf = w.axis === 'x' ? (p) => [p[0], p[1]] : (p) => [p[2], p[1]];
 			const inRoom = !outside && !!r, lu = u1 - u0, lh = y1 - y0;
-			const e = inRoom ? [Math.abs(u0 - w.s) < 0.005 ? 0.8 : 1, Math.abs(u1 - w.e) < 0.005 ? 0.8 : 1, y0 <= fy + 0.01 ? 0.7 : 1, y1 >= yc - 0.01 ? 0.78 : 1] : [1, 1, 1, 1];
-			g.panel(keyOf(r, outside), P, n, colOf(r, outside), uvf, e, [Math.min(0.45, 0.4 / lu), Math.min(0.45, 0.4 / lu), Math.min(0.45, 0.45 / lh), Math.min(0.45, 0.4 / lh)]);
+			const e = inRoom ? [Math.abs(u0 - w.s) < 0.005 ? 0.74 : 1, Math.abs(u1 - w.e) < 0.005 ? 0.74 : 1, y0 <= fy + 0.01 ? 0.64 : 1, y1 >= yc - 0.01 ? 0.7 : 1] : [1, 1, 1, 1];
+			g.panel(keyOf(r, outside), P, n, colOf(r, outside), uvf, e, [Math.min(0.45, 0.5 / lu), Math.min(0.45, 0.5 / lu), Math.min(0.45, 0.55 / lh), Math.min(0.45, 0.5 / lh)]);
 			if (!inRoom || r.type === 'garage' || r.type === 'warehouse' || r.type === 'parking') continue;
 			const bw = (y, h, t, c) => { const f1 = face + sgn * t; if (w.axis === 'x') g.box('trim', u0, y, Math.min(face, f1), u1, y + h, Math.max(face, f1), c); else g.box('trim', Math.min(face, f1), y, u0, Math.max(face, f1), y + h, u1, c); };
 			// the baseboard, its top stepped back (no hard box edge), on the room sides
@@ -159,10 +159,10 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 					g.panel(key, (s, t) => [x0 + lx * s, y, z0 + lz * t], n, c, (p) => [p[0], p[2]], [at(x0, R.x0), at(x1, R.x1), at(z0, R.z0), at(z1, R.z1)], [Math.min(0.45, m / lx), Math.min(0.45, m / lx), Math.min(0.45, m / lz), Math.min(0.45, m / lz)]);
 				}
 			};
-			flat(fk, L.y, [0, 1, 0], FT[fk] || wood, L.holes, 0.72, 0.5);
+			flat(fk, L.y, [0, 1, 0], FT[fk] || wood, L.holes, 0.64, 0.6);
 			const yc = L.y + L.h;
 			if (r.sky) continue;
-			flat(lit[id] ? 'ceilingLit' : 'ceiling', yc, [0, -1, 0], lin([0.95, 0.95, 0.93]), above ? above.holes : P.topHoles || [], 0.76, 0.45);
+			flat(lit[id] ? 'ceilingLit' : 'ceiling', yc, [0, -1, 0], lin([0.95, 0.95, 0.93]), above ? above.holes : P.topHoles || [], 0.68, 0.55);
 		}
 		// the edges of the holes, between the ceiling below and this floor
 		for (const [x0, z0, x1, z1] of L.holes) {
