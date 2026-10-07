@@ -112,7 +112,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		H.prevMusic = music.on(); H.prevThird = !!you.state.third;
 		if (!H.prevMusic) music.auto(true, true);
 		music.bias(BIAS);
-		C.shot = null; C.lastBars = -1; C.bars = 0; C.yaw = H.heading; C.spin = 0; C.lift = 0; C.punch = 0; C.kind = '';
+		C.shot = null; C.lastBars = -1; C.seen = null; C.bars = 0; C.yaw = H.heading; C.spin = 0; C.lift = 0; C.punch = 0; C.kind = '';
 		C.off.copy(camera.position).sub(P.pos); C.lookOff.set(-Math.sin(P.yaw) * 4, 0, -Math.cos(P.yaw) * 4);
 		S.dist = 0; S.minAgl = S.minCam = Infinity; S.blocked = 0; S.frames = 0; S.shots.length = 0;
 		lastX = P.pos.x; lastZ = P.pos.z; lastY = P.pos.y;
@@ -167,12 +167,16 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		}
 		if (now - C.clockAt >= C.barMs) { C.clockAt = now; C.barAt = now; bar(now, ++C.bars, false, now); }
 	}
+	// (bars counted from the last one seen: a slow frame may step over several)
 	function bar(now, n, fresh, at) {
 		C.punch = 1;
-		C.age = (C.age || 0) + 1;
+		const prev = C.seen ?? n - 1;
+		C.seen = n;
+		C.age = (C.age || 0) + Math.max(1, n - prev);
 		if (!C.shot) { pick(now, n, true, at); return; }
-		if ((fresh || n % 8 === 0) && C.age >= 4) pick(now, n, true, at);
-		else if (n % 4 === 0 && C.age >= 4) pick(now, n, false, at);
+		if (C.age < 4) return;
+		if (fresh || Math.floor(n / 8) > Math.floor(prev / 8)) pick(now, n, true, at);
+		else if (Math.floor(n / 4) > Math.floor(prev / 4)) pick(now, n, false, at);
 	}
 	function pick(now, n, cut, at) {
 		const list = C.list;
