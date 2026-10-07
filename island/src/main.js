@@ -809,6 +809,7 @@ export function createIslandWorld() {
 		const whale = stash(() => createWhale(island, shared, scene));
 		const shells = stash(() => createShells(island, shared, camera, scene, player, dom, hint));
 		if (profile.airless) shells.update = () => {};
+		if (bare) boat.near = () => false;
 		const magma = createMagma(island, shared, scene, camera);
 		const caverns = stash(() => createCaverns(island, shared, scene, camera, magma.tube || []));
 		const underwater = stash(() => createUnderwater(island, shared, scene, camera, player, [...(magma.tube || []), ...caverns.tunnels.flat(), ...caverns.arches.flat()]));
