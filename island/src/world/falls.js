@@ -10,7 +10,7 @@
 const DEG = Math.PI / 180;
 
 export function createFalls({ world } = {}) {
-	let caves = null, cavePlan = null, mill = null;
+	let caves = [], cavePlan = null, mill = null;
 
 	// a cave's falls, worked out once: one over some of the chambers' water pools
 	function caveFalls(plan) {
