@@ -253,10 +253,10 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	function go() {
 		const p = plan.port || hb, Pl = opts.player?.();
 		if (!Pl) return plan.name;
-		const F = frame(p.x, p.y, p.z, p.yaw || 0), at = F.p(0, 0, -(p.r || 30) * 0.5);
+		const F = frame(p.x, p.y, p.z, p.yaw || 0), at = F.p(-(p.r || 30) * 0.3, 0, -(p.r || 30) * 0.7);
 		Pl.flying = false; Pl.diving = false; Pl.vel?.set(0, 0, 0);
 		Pl.pos.set(at.x, floorAt(at.x, at.z, p.y) + 1.7, at.z);
-		const to = plan.port ? plan.port.tower : hb;
+		const to = plan.port ? plan.port.pads[0] : hb;
 		Pl.yaw = Math.atan2(-(to.x - at.x), -(to.z - at.z));
 		Pl.pitch = 0.12;
 		camera.position.copy(Pl.pos);

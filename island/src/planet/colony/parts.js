@@ -167,7 +167,7 @@ export function tower(X, F, h) {
 export function port(X, p) {
 	const S = X.S, F = frame(p.x, p.y, p.z, p.yaw);
 	// the apron: sintered regolith slabs
-	put(X, F, HULL, S.print.map((v) => v * 1.12), cbox(p.r * 2.2, 0.4, p.r * 1.7, 0.2), 0, 0.0, 0);
+	put(X, F, HULL, S.print.map((v) => v * 1.12), cbox(p.r * 2.2, 2.4, p.r * 1.7, 0.2), 0, -1.0, 0);
 	X.col.box(p.x, p.z, p.yaw, p.r * 1.1, p.r * 0.85, p.y + 0.2);
 	for (const [i, d] of p.pads.entries()) {
 		const Fp = frame(d.x, d.y, d.z, p.yaw);

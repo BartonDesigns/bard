@@ -37,6 +37,18 @@ function wear(I, pts, w) {
 		}
 	}
 }
+// trodden ground: no wild growth (grass) and the path's packed surface
+function trodden(I, x, z, r) {
+	const { N, cell, half, masks } = I;
+	for (let j = Math.max(0, Math.floor((z - r + half) / cell)); j <= Math.min(N - 1, Math.ceil((z + r + half) / cell)); j++) {
+		for (let i = Math.max(0, Math.floor((x - r + half) / cell)); i <= Math.min(N - 1, Math.ceil((x + r + half) / cell)); i++) {
+			const w = smoothstep(r, r - 8, Math.hypot(-half + i * cell - x, -half + j * cell - z)), k = (j * N + i) * 4;
+			if (w <= 0) continue;
+			masks[k + 3] = Math.round(masks[k + 3] * (1 - w));
+			masks[k] = Math.max(masks[k], Math.round(w * 150));
+		}
+	}
+}
 // the ground's spread over a disc: how far from level it is
 function rough(H, x, z, r) {
 	const c = H(x, z);
@@ -124,7 +136,7 @@ export function planColony(island, profile, opts = {}) {
 	if (port) {
 		port.y = H(port.x, port.z);
 		port.r = apron;
-		level(island, port.x, port.z, apron, 26, port.y);
+		level(island, port.x, port.z, apron * 1.45, 26, port.y);
 		avoid.push({ x: port.x, z: port.z, r: apron + 10 });
 		// pads in a row across the line to the hub; the tower and the station on the hub's side
 		const c = Math.cos(port.yaw), s = Math.sin(port.yaw);
@@ -222,7 +234,8 @@ export function planColony(island, profile, opts = {}) {
 		rail.push([port.station, hs].map((p) => ({ x: p.x, z: p.z })));
 		if (far) { const h2 = gate(far); rail.push([h2, { x: far.x + Math.sin(far.yaw) * (far.r + 8), z: far.z + Math.cos(far.yaw) * (far.r + 8) }]); }
 	}
-	// keep the plants (where any grow) off it all
+	// keep the plants (where any grow) off it all, and the grass: the ground there is trodden bare
 	const clear = [{ x: hub.x, z: hub.z, r: hub.r + 10 }, ...(port ? [{ x: port.x, z: port.z, r: port.r + 6 }] : []), ...outposts.map((o) => ({ x: o.x, z: o.z, r: o.r + 6 })), ...solar.map((o) => ({ x: o.x, z: o.z, r: o.r + 4 }))];
+	for (const c of clear) trodden(island, c.x, c.z, c.r);
 	return { style: S, parts: P, seed: island.seed, hub, port, outposts, solar, roads, rail, clear, name: S.name };
 }
