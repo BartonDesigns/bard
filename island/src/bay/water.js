@@ -198,7 +198,8 @@ void main(){
 	vec3 deep = mix(mix(vec3(0.03, 0.055, 0.045), vec3(0.045, 0.04, 0.03), town), vec3(0.05, 0.06, 0.035), foamK) * (1.0 - uNight * 0.85);
 	// the bed seen through the shallows: rounded cobbles, the light fading with depth
 	float px = length(fwidth(u));
-	float bedK = clear * nearK * (1.0 - smoothstep(0.1, 0.3, px)) * exp(-max(depth, 0.0) * 1.3);
+	// (not out at the sides: there the water clears over the wet bank itself)
+	float bedK = clear * nearK * (1.0 - smoothstep(0.1, 0.3, px)) * exp(-max(depth, 0.0) * 1.3) * (1.0 - smoothstep(0.55, 0.9, abs(vUv.x)));
 	vec3 bed = vec3(0.34, 0.31, 0.25);
 	if (bedK > 0.01) {
 		vec2 bp = u * 3.1, bi = floor(bp);
@@ -211,8 +212,6 @@ void main(){
 		vec3 stone = mix(mix(vec3(0.22, 0.2, 0.17), vec3(0.46, 0.42, 0.35), id), vec3(0.4, 0.3, 0.2), step(0.8, id) * 0.6);
 		bed = mix(bed, stone * (0.55 + 0.45 * smoothstep(0.75, 0.25, f1)), 1.0 - smoothstep(0.1, 0.3, px));
 	}
-	// (at the sides the bed goes dark with the wet ground it runs into)
-	bed = mix(bed, vec3(0.13, 0.11, 0.08), (1.0 - smoothstep(0.04, 0.3, depth)) * smoothstep(0.5, 0.8, abs(vUv.x)));
 	vec3 seen = bed * exp(-max(depth, 0.0) * vec3(2.2, 1.2, 1.1)) * (1.0 - uNight * 0.85);
 	vec3 body = mix(deep, seen, bedK);
 	// the hills and trees round it darker in the still water's reflection
