@@ -16,7 +16,7 @@ file-by-file map is in `island/README.md`.
   1. **World expansion:** street-level Castro Valley, Moraga, Richmond/El Cerrito, Novato and south of Mountain View; then the trail saw-tooth, the globe sky latitude, and the regional talk fixes. Scratch in `/tmp/claude-0/expand/`.
   2. **Skin:** blotchy, too-bright T-zone and sheen on NPC faces. Scratch in `/tmp/claude-0/skin/`.
   3. **Multiplayer v1:** a Cloudflare Worker with Durable Objects and room codes (`?room=`), avatars with interpolation, Follow, host-synced time, weather, gatherings and meetings. Code and a deploy guide are in `server/multiplayer`. Scratch in `/tmp/claude-0/mp/`. The owner must deploy it.
-- **Discovery Worker:** the owner reports deploying the planner update. This sandbox can't reach workers.dev (proxy 403); check `/status` in a browser for `social_intent` and `story_quest`.
+- **Discovery Worker:** the planner update is deployed and confirmed live by the owner (7 Oct): the cloud voice now plans real quests and social intents. This sandbox can't reach workers.dev (proxy 403).
 - **Open items:**
   - **Brows:** redo them filled in and dense, and show the owner first. The current brows are the old ones.
   - **Edges:**
