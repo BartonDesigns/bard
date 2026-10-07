@@ -8022,7 +8022,7 @@ void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryP
 	sheenSpecularDirect = h0 + ( sheenSpecularDirect - h0 ) * k;
 #endif
 	float nl = dot( geometryNormal, directLight.direction );
-	vec3 w = vec3( 0.36, 0.16, 0.11 ) * ( 1.0 + vSkin.y ) * uSkin.x;
+	vec3 w = vec3( 0.3, 0.13, 0.09 ) * ( 1.0 + vSkin.y * 0.5 ) * uSkin.x;
 	vec3 wr = clamp( ( vec3( nl ) + w ) / ( 1.0 + w ), 0.0, 1.0 );
 	float g = 0.3 + 0.7 * k;
 	reflectedLight.directDiffuse += g * max( wr * wr * ( 3.0 - 2.0 * wr ) * 0.85 - vec3( saturate( nl ) ), 0.0 ) * directLight.color * BRDF_Lambert( material.diffuseColor );
