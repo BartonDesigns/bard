@@ -11,6 +11,8 @@ import { flightMultiplier } from './flight-speed.js';
 const EYE = 1.68;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+// the ground under a point (flying, the sea's surface is the floor)
+const gnd = (I, fly, x, z) => Math.max(I.heightAt(x, z), fly ? 0 : -1e9);
 // the headings weighed at each look ahead, either side of the one you are on
 const OFFS = [-1.25, -0.8, -0.45, -0.2, 0, 0.2, 0.45, 0.8, 1.25];
 const WALK_D = [4, 9, 16, 26];
@@ -103,10 +105,10 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		if (W.boat?.boarded?.()) { hint('Explore cruises on foot, flying, on the road and in space; not from the boat.', 3000); return false; }
 		if (drive.active() && drive.state.mode === 'free') drive.setMode('assist');
 		if (drive.active() && drive.state.mode === 'free') { hint('No road here for Explore to follow.', 2500); return false; }
-		H.on = true;
+		H.on = true; H.mode = '';
 		H.heading = H.target = H.base = P.yaw; H.rate = 0; H.ph = Math.random() * 6; H.pitch = P.pitch; H.roll = 0;
 		H.look = H.lookP = 0; H.setYaw = H.setPitch = null; H.thinkAt = 0; H.flyY = P.pos.y; H.region = ''; H.cand = ''; H.regionAt = 0; H.body = null; H.lastBody = '';
-		H.stuckAt = performance.now(); H.stuckX = P.pos.x; H.stuckZ = P.pos.z; H.turnAt = performance.now() + 6000;
+		H.stuckAt = 0; H.stuckX = P.pos.x; H.stuckZ = P.pos.z; H.turnAt = performance.now() + 6000;
 		H.prevMusic = music.on(); H.prevThird = !!you.state.third;
 		if (!H.prevMusic) music.auto(true, true);
 		music.bias(BIAS);
@@ -246,10 +248,12 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 			H.pitch += (-0.06 - H.pitch) * Math.min(1, dt);
 			P.pitch = H.pitch;
 			// stuck against something: turn well away
-			if (now - H.stuckAt > 1600) {
-				const moved = Math.hypot(P.pos.x - H.stuckX, P.pos.z - H.stuckZ), expect = (H.run ? 10 : 5.2) * (now - H.stuckAt) / 1000;
+			// (counted in game time: a slow frame is not a wall)
+			H.stuckAt += dt;
+			if (H.stuckAt > 1.6) {
+				const moved = Math.hypot(P.pos.x - H.stuckX, P.pos.z - H.stuckZ), expect = (P.swimming ? 2.2 : H.run ? 10 : 5.2) * H.stuckAt;
 				if (moved < expect * 0.25) { S.blocked++; H.base = H.heading + (Math.random() < 0.5 ? -1 : 1) * (1.4 + Math.random()); H.target = H.base; }
-				H.stuckAt = now; H.stuckX = P.pos.x; H.stuckZ = P.pos.z;
+				H.stuckAt = 0; H.stuckX = P.pos.x; H.stuckZ = P.pos.z;
 			}
 		}
 	}
@@ -300,7 +304,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 					const d = WALK_D[i], px = x + dx * d, pz = z + dz * d, g = I.heightAt(px, pz), k = 1 - i * 0.18;
 					const slope = (g - gp) / (d - dp);
 					if (slope > 0.5) s -= 3 * k; else if (slope < -0.8) s -= 2.5 * k;
-					if (wet(px, pz)) s -= (P.swimming ? -1.5 : 4) * k;
+					if (wet(px, pz)) s -= (P.swimming ? 0.5 : 4) * k; else if (P.swimming) s += 0.8 * k;
 					if (boxes) for (const b of boxes) if (Math.hypot(px - b.x, pz - b.z) < Math.max(b.w, b.d) * 0.45 + 1.5) { s -= 3 * k; break; }
 					if (i < 2 && trees) for (const o of trees) if (Math.hypot(px - o.x, pz - o.z) < o.r + 1.2) { s -= 1.4 * k; break; }
 					gp = g; dp = d;
@@ -408,11 +412,10 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		BIAS.energy = 0.05 + 0.25 * tk; BIAS.tempo = 1 + 0.1 * tk;
 		if (H.mode !== 'space') region(now, W, P);
 		if (now - H.hudAt > 7000 && !mount.classList.contains('l99-xhide')) mount.classList.add('l99-xhide');
-		if (!C.shot) return;
+		if (!C.shot) pick(now, -1, true, C.barAt || now);
 		if (H.mode === 'space') { shootSpace(dt, now, P); return; }
 		const fly = H.mode === 'fly', I = W.island;
-		const ground = (x, z) => Math.max(I.heightAt(x, z), fly ? 0 : -1e9);
-		if (fly) S.minAgl = Math.min(S.minAgl, P.pos.y - ground(P.pos.x, P.pos.z));
+		if (fly) S.minAgl = Math.min(S.minAgl, P.pos.y - gnd(I, fly, P.pos.x, P.pos.z));
 		// the subject: your feet (or the car's wheels), or the point you fly through
 		const feet = H.mode === 'drive' ? P.pos.y - (drive.state.onTrail ? 1.65 : 1.45) : P.swimming ? P.pos.y - 0.4 : P.pos.y - EYE;
 		const sy = fly ? P.pos.y : feet;
@@ -420,15 +423,15 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		const sh = C.shot;
 		// your body in the shot, on foot; not in your own eyes
 		you.state.third = !fly && H.mode === 'walk' && !sh.pov;
-		if (you.state.third) avatar.ready?.();
+		if (you.state.third && !avatar.me) avatar.ready();
 		C.yaw += wrap(H.heading - C.yaw) * Math.min(1, dt * (fly ? 0.9 : 1.3));
 		C.spin += (sh.spin || 0) * dt;
 		const e = C.energy, ph = ((now - C.barAt) / C.barMs) % 1;
 		if (sh.pov) {
-			camera.position.set(P.pos.x, H.mode === 'walk' ? P.pos.y : P.pos.y, P.pos.z);
+			camera.position.copy(P.pos);
 			camera.rotation.set((fly ? P.pitch : -0.04) + H.lookP, H.heading + H.look, (fly ? H.roll : 0) + Math.sin(ph * Math.PI * 2) * 0.006 * e, 'YXZ');
 			C.off.set(0, P.pos.y - sy, 0); C.lookOff.set(-Math.sin(H.heading) * 4 * scale, P.pos.y - sy, -Math.cos(H.heading) * 4 * scale);
-			track(camera.position.y - ground(camera.position.x, camera.position.z));
+			track(camera.position.y - gnd(I, fly, camera.position.x, camera.position.z));
 			return;
 		}
 		// where the shot wants the camera, round the subject's eased heading
@@ -445,10 +448,10 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		const cx = P.pos.x + C.off.x + fz * -sw, cz = P.pos.z + C.off.z - fx * -sw;
 		let cy = sy + C.off.y;
 		// never under the ground (nor behind a hill from the subject: lifted until clear)
-		const gmin = ground(cx, cz) + (fly ? Math.max(4, 0.12 * scale) : 0.35);
+		const gmin = gnd(I, fly, cx, cz) + (fly ? Math.max(4, 0.12 * scale) : 0.35);
 		if (cy < gmin) cy = gmin;
 		let hidden = false;
-		for (let i = 1; i <= 3; i++) { const u = i / 4; if (ground(P.pos.x + (cx - P.pos.x) * u, P.pos.z + (cz - P.pos.z) * u) > sy + (cy - sy) * u + 0.3) hidden = true; }
+		for (let i = 1; i <= 3; i++) { const u = i / 4; if (gnd(I, fly, P.pos.x + (cx - P.pos.x) * u, P.pos.z + (cz - P.pos.z) * u) > sy + (cy - sy) * u + 0.3) hidden = true; }
 		C.lift = hidden ? Math.min(C.lift + dt * 4 * scale, 25 * scale) : Math.max(0, C.lift - dt * 1.2 * scale);
 		camera.position.set(cx, cy, cz);
 		F.set(P.pos.x + C.lookOff.x, sy + C.lookOff.y, P.pos.z + C.lookOff.z);
@@ -456,7 +459,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		camera.lookAt(F);
 		// a whisper of roll: the bank in flight, breathing on foot
 		camera.rotateZ((fly ? H.roll * 0.5 : 0) + Math.sin(now * 0.00041) * 0.008);
-		track(cy - ground(cx, cz));
+		track(cy - gnd(I, fly, cx, cz));
 	}
 	function track(clear) { S.minCam = Math.min(S.minCam, clear); }
 	// in space there is no ship to film: the shots are where you look as you cruise
@@ -475,7 +478,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		// your own look on top
 		if (H.look || H.lookP) { V.crossVectors(DIR, UP).normalize(); DIR.addScaledVector(V, -Math.sin(H.look)).addScaledVector(UP, Math.sin(H.lookP)).normalize(); }
 		if (P.orbit?.up) P.orbit.up(V2); else V2.set(0, 1, 0);
-		M4.lookAt(ORIGIN, V.copy(DIR).negate(), V2);
+		M4.lookAt(ORIGIN, DIR, V2);
 		Q.setFromRotationMatrix(M4);
 		QZ.setFromAxisAngle(ZAX, (sh.id === 'drift' ? Math.sin(now * 0.0001) * 0.12 : 0) + Math.sin(((now - C.barAt) / C.barMs) * Math.PI * 2) * 0.004 * e);
 		Q.multiply(QZ);
