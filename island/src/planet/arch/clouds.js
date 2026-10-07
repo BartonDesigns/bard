@@ -26,6 +26,7 @@ const SHADE = /* glsl */`
 vec3 mistC(float up, float n, float glow){
 	vec3 c = mix(uHor * 0.6, uSunC * 0.9 + uHor * 0.35, (0.3 + 0.7 * up) * uLit) * (0.55 + 0.7 * n * (0.4 + 0.6 * up));
 	c = mix(c, uHor * 0.1 + vec3(0.015, 0.02, 0.035), uNight * 0.88);
+	c = mix(c, uWarm * dot(c, vec3(0.3, 0.5, 0.2)) * 1.2, 0.22 * uDusk);
 	return c + uWarm * glow * uDusk * (1.4 - up * 0.6);
 }
 `;
@@ -70,7 +71,9 @@ void main(){
 	float n = mF((q - uOff) * 0.0055 + vL * 1.7);
 	float mid = 1.0 - abs(vL * 2.0 - 1.0);
 	float cov = smoothstep(uCov, uCov + 0.16, n + mid * 0.14 - 0.05 - (1.0 - mid) * 0.08);
-	float g = texture2D(uHeight, (p + uHalf) / (2.0 * uHalf)).r;
+	// the ground under it, read between the height map's texels (it is stored unfiltered)
+	vec2 hs = vec2(textureSize(uHeight, 0)), hu = (p + uHalf) / (2.0 * uHalf) * (hs - 1.0), hf = fract(hu), h0 = (floor(hu) + 0.5) / hs;
+	float g = mix(mix(texture2D(uHeight, h0).r, texture2D(uHeight, h0 + vec2(1.0, 0.0) / hs).r, hf.x), mix(texture2D(uHeight, h0 + vec2(0.0, 1.0) / hs).r, texture2D(uHeight, h0 + 1.0 / hs).r, hf.x), hf.y);
 	float lift = glow * uDusk;
 	float a = min(1.0, cov * (1.0 + lift * 0.9) + lift * 0.12) * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
 	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.5;
