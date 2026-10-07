@@ -87,7 +87,7 @@ export function planColony(island, profile, opts = {}) {
 	const avoid = [...(opts.avoid || [])];
 	const V = island.village;
 	if (V && !profile.airless && !profile.noVillage) avoid.push({ x: V.x, z: V.z, r: 140 });
-	const free = (x, z, pad) => Math.hypot(x, z) < half * 0.88 && !avoid.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad) && H(x, z) > sea;
+	const free = (x, z, pad, lo = sea) => Math.hypot(x, z) < half * 0.88 && !avoid.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + pad) && H(x, z) > lo;
 	// no village here: its worn trails go with it (the roads below are the colony's own)
 	if (profile.airless || profile.noVillage) for (let k = 0; k < island.masks.length; k += 4) island.masks[k] = island.masks[k + 1] = 0;
 	const peak = island.peak;
@@ -126,15 +126,16 @@ export function planColony(island, profile, opts = {}) {
 	let port = null;
 	const nPads = P.pads;
 	const apron = 18 + nPads * 16;
-	for (let k = 0; k < 64; k++) {
-		const a = r() * TAU, d = (hub.crater ? hub.crater.r * 1.25 : hub.r) + apron + 30 + r() * 220;
+	for (let k = 0; k < 160; k++) {
+		const a = r() * TAU, d = (hub.crater ? hub.crater.r * 1.25 : hub.r) + apron + 30 + r() * (k < 64 ? 220 : 420);
 		const x = hub.x + Math.sin(a) * d, z = hub.z + Math.cos(a) * d;
-		if (!free(x, z, apron) || cone(x, z)) continue;
-		const score = rough(H, x, z, apron) * 2 + d * 0.02;
+		// (the pads may stand on a raised platform: low ground is let in a little)
+		if (!free(x, z, apron, sea - 8) || cone(x, z)) continue;
+		const score = rough(H, x, z, apron) * 2 + d * 0.02 + Math.max(0, sea - H(x, z)) * 3;
 		if (!port || score < port.score) port = { x, z, score, yaw: a };
 	}
 	if (port) {
-		port.y = H(port.x, port.z);
+		port.y = Math.max(H(port.x, port.z), sea);
 		port.r = apron;
 		level(island, port.x, port.z, apron * 1.45, 26, port.y);
 		avoid.push({ x: port.x, z: port.z, r: apron + 10 });
