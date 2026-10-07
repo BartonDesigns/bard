@@ -162,7 +162,7 @@ function cantilever(X, v) {
 	K.add('shell', F.put(plate(W, dd, 0.75, round), 0, 0, zc), C);
 	const fc = F.p(0, 0, zc);
 	// (an oval floor walked as boxes whose corners lie on it)
-	const cuts = round ? Array.from({ length: 8 }, (_, i) => (i + 0.5) / 8 * Math.PI / 2).map((t) => [Math.cos(t), Math.sin(t)]) : [[1, 1]];
+	const cuts = round ? Array.from({ length: 10 }, (_, i) => (i + 0.5) / 10 * Math.PI / 2).map((t) => [Math.cos(t) * 1.03, Math.sin(t) * 1.03]) : [[1, 1]];
 	for (const [kx, kz] of cuts) X.col.box(fc.x, fc.z, v.yaw, W / 2 * kx, dd / 2 * kz, v.y, { site: X.site, solid: false });
 	// the room, set back from the tip (the deck) and from the walkway along one side
 	const gw = W - 2.8, gx = -sd * 1.4, gz0 = zs0 + 0.4, gz1 = O - 4.8;
@@ -206,7 +206,7 @@ function cantilever(X, v) {
 	}
 	for (const p of feet) { collar(X, p, 1.8); buttress(X, F, p); }
 	lipStones(X, F, v, [-W / 2 + 1.5, 0, W / 2 - 1.5], 0.9);
-	const st = F.p(sd * W * 0.25, 0, zc + dd * 0.375);
+	const st = F.p(sd * W * 0.2, 0, zc + dd * 0.3);
 	v.stand = { x: st.x, y: v.y, z: st.z, yaw: v.yaw + Math.PI };
 	return { x: fc.x, z: fc.z, r: W * 0.42, foot: feet.length ? Math.min(...feet.map((p) => p.y)) : v.y - 10 };
 }
