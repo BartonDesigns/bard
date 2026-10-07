@@ -105,6 +105,7 @@ import { createDirector } from './earth/director.js';
 import { createGlobe, BAY_WILD_KM } from './earth/globe.js';
 import { toLL as globeLL, bayKm, F as globeF } from './earth/globeframe.js';
 import { createGuide } from './guide/guide.js';
+import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers } from './people/people.js';
@@ -483,6 +484,9 @@ export function createIslandWorld() {
 	HOOKS.arms = arms;
 	const guideApi = { world: () => world, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
 	const guide = createGuide(dom.mount, guideApi);
+	// the pin and direction chip for the meeting or quest place the guide is tracking
+	const waypoint = guideApi.waypoint = createWaypoint({ scene, camera, mount: dom.mount, onTap: () => guide.showQuests() });
+	HOOKS.waypoint = waypoint;
 	// the city director (earth/): what should be in the towns and cities you come to, the same
 	// for every player (the discovery server's brief, else the Earth atlas's); the Guide's
 	// model is passed only for the dev flag in earth/config.js
@@ -1303,7 +1307,7 @@ export function createIslandWorld() {
 		W.orbit?.updateHud();
 		worldAir(1 - (W.orbit?.blend() || 0));
 		if (W.orbit?.space()) {
-			social.update(0, time, false);
+			social.update(0, time, false); waypoint.update(0, time, false);
 			W.labels?.hide();
 			W.globe?.regional?.pause();
 			W.kinetic?.silence();
@@ -1503,6 +1507,7 @@ export function createIslandWorld() {
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
+		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
 		people.demo(dt, time, camera.position);
 		ghost.update(dt, time, camera, sk.night);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, hours: W.sky.state.hours });

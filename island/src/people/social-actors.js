@@ -148,6 +148,8 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
     if(r.mode==='follow'||r.mode==='quest') { target=camera.position; speed=target.distanceTo(S.pos)>7?2.8:1.5; if(Math.abs(target.y-S.pos.y)>5) speed=0; }
     if(r.mode==='home') { target=worldPosition(W(),r.home)||S.pos; speed=1.4; }
     if(r.mode==='scout') { target=worldPosition(W(),r.task?.target)||S.pos; speed=1.8; }
+    // on the way to an agreed meeting: walk there, then wait on the spot
+    if(r.mode==='meet') { target=worldPosition(W(),r.task?.target)||S.pos; speed=r.task?.status==='waiting'?0:1.7; }
     if(alarm.level>.2 && r.mode!=='follow' && r.mode!=='quest') { const source=worldPosition(W(),alarm.position); const a=source?Math.atan2(S.pos.x-source.x,S.pos.z-source.z):(p.P.dna.seed%628)/100; target={x:S.pos.x+Math.sin(a)*6,z:S.pos.z+Math.cos(a)*6}; speed=1.5+alarm.level; S.look.target=camera.position; }
    }
    const d=move(p,target,speed,dt,t); p.P.lod?.(p.M.S.pos.distanceTo(camera.position));
@@ -155,6 +157,9 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
     if(r.mode==='scout' && r.task?.target) { state.setMode(r.id,'home',{...r.task,status:'returning',report:'Reached the scouting point; returning home.'}); }
     else { const task=r.task?{...r.task,status:'completed',completedAt:Date.now(),report:'Scouted the destination and returned home.'}:null; state.setMode(r.id,'wait',task); state.remember?.(r.id,'system',task?.report||'Returned home.'); hint(`${r.persona?.name||'Your companion'} arrived.`); }
    }
+   if(!p.engaged && r.mode==='meet' && r.task?.status!=='waiting' && d<2.5) state.setMode(r.id,'meet',{...r.task,status:'waiting'});
+   // a resident walking to a meeting who meets a wall out of the player's sight goes round it
+   if(!p.engaged && r.mode==='meet' && p.blocked>4 && S.pos.distanceTo(camera.position)>45) { const q=worldPosition(W(),r.task?.target); if(q){ p.M.place(q.x,ground(q.x,q.z,q.y),q.z,S.heading); p.blocked=0; state.setMode(r.id,'meet',{...r.task,status:'waiting'}); } }
    if(!p.engaged && p.blocked>8 && speed>0) { state.setMode(r.id,'wait',r.task?{...r.task,status:'blocked',report:'The route is obstructed. Waiting safely.'}:null); hint(`${r.persona?.name||'Your companion'} is waiting at an obstacle.`); p.blocked=0; }
    p.lastPosition=positionFor(W(),S.pos);
    if(saveT>2) persist(p);

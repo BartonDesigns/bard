@@ -3,11 +3,43 @@
 import { createSocialState, parseSocialIntent } from './social-state.js';
 import { createSocialActors, positionFor, worldPosition, safeSocialStep } from './social-actors.js';
 import { personaFor } from './persona.js';
+import { createAppointments, formatClock } from './appointments.js';
 
 export function createNpcSocial({ scene, world, camera, people, isPhone, hint }) {
 	const state = createSocialState();
 	const bodyKey = () => world()?.body?.key || '';
 	const actors = createSocialActors({ scene, world, camera, state, people, isPhone, hint, bodyKey });
+	const appointments = createAppointments();
+	const listeners = new Set();
+	// Agreed meetings move residents: they set off ahead of time, are at the place by the
+	// hour (out of sight they travel there directly), and remember whether you came.
+	function keepAppointments() {
+		const W = world(), hours = W?.sky?.state?.hours;
+		if (!W || !Number.isFinite(hours)) return;
+		const events = appointments.tick({ hours, bodyKey: bodyKey(), player: positionFor(W, camera.position) });
+		for (const e of events) {
+			const a = e.appointment, r = state.get(a.npcId), name = r?.persona?.first || a.npcName;
+			const actor = actors.all().find(p => p.residentId === a.npcId && p.active);
+			const task = { id: a.id, type: 'meet', status: 'outbound', target: a.place.pos, label: a.place.name, due: a.due };
+			if (r && e.type === 'go' && !['follow', 'quest'].includes(r.mode)) state.setMode(r.id, 'meet', task);
+			if (r && e.type === 'due' && !['follow', 'quest'].includes(r.mode)) {
+				const q = worldPosition(W, a.place.pos), far = !actor || actor.M.S.pos.distanceTo(camera.position) > 60;
+				if (far) { state.setMode(r.id, 'meet', { ...task, status: 'waiting' }); state.setPosition(r.id, a.place.pos); if (actor && q) actor.M.place(q.x, q.y, q.z, actor.M.S.heading); }
+				else if (r.mode !== 'meet') state.setMode(r.id, 'meet', task);
+			}
+			if (r && e.type === 'kept') {
+				state.remember(r.id, 'event', `The traveller met you at ${a.place.name} at ${formatClock(a.due % 24)}, as you had agreed.`);
+				if (r.mode === 'meet') state.setMode(r.id, 'wait', null);
+				hint(`${name} is here: you kept your meeting at ${a.place.name}.`, 5000);
+			}
+			if (r && e.type === 'missed') {
+				state.remember(r.id, 'event', `You waited for the traveller at ${a.place.name} at ${formatClock(a.due % 24)}, but they never came. You went home.`);
+				if (r.mode === 'meet') state.setMode(r.id, 'home', null);
+				hint(`You missed your meeting with ${name} at ${a.place.name}.`, 5000);
+			}
+			for (const fn of listeners) fn(e);
+		}
+	}
 	function meet(p, where) {
 		const W = world();
 		if (!W || !p?.P?.dna || !p.M?.S?.pos) return null;
@@ -91,11 +123,13 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 	function result(text) { return state.status().error ? `${text} This browser could not save the change; it lasts only for this session.` : text; }
 	function describe(r) {
 		if (r.task?.report) return r.task.report;
+		if (r.mode === 'meet') return r.task?.status === 'waiting' ? `I'm waiting for you at ${r.task.label}, as we agreed.` : `I'm on my way to ${r.task?.label || 'our meeting'} to meet you.`;
 		const modes = { idle: 'staying in my home area', follow: 'following you', wait: 'waiting here', home: 'heading home', scout: `scouting ${r.task?.label || 'nearby'}`, quest: `travelling with you for ${r.task?.title || 'our quest'}` };
 		return `I'm ${modes[r.mode] || 'here'}.${r.task?.status === 'blocked' ? ' The route is blocked, so I am waiting safely.' : ''}`;
 	}
-	return { state, actors, meet, command, scoutNearby, describe, bodyKey, positionFor,
-		update(dt, time, enabled) { state.tick(); actors.update(dt, time, enabled); },
+	return { state, actors, appointments, meet, command, scoutNearby, describe, bodyKey, positionFor,
+		onAppointment(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+		update(dt, time, enabled) { state.tick(); keepAppointments(); actors.update(dt, time, enabled); },
 		reset() { actors.reset(); state.flush(); },
 		flush() { actors.flush(); },
 	};

@@ -11,6 +11,7 @@ import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
 import { parseSocialIntent } from '../people/social-state.js';
 import { worldPosition } from '../people/social-actors.js';
+import { parseGameTime, realSecondsFor, formatClock, formatReal, talksOfMeeting, placePhrases, MEET_TAG_RE, EARLY, GRACE } from '../people/appointments.js';
 import { createDialogueArchive } from './dialogue-archive.js';
 import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
 import { chooseGuideModel } from './preferences.js';
@@ -245,6 +246,123 @@ export function createGuide(mount, api) {
 		return null;
 	}
 
+	// ---------- meetings: an arrangement made in conversation is kept by the game ----------
+	// A resident never agrees to meet in words alone. A named place and time become a saved
+	// appointment (journal, pin, the resident walking there); anything vaguer is said to be
+	// unsettled, so no promise is left hanging.
+	const book = () => api.social?.appointments;
+	let meetDraft = null, tracked = null;
+	const AFFIRM = /^(?:yes|yeah|yep|yup|sure|ok(?:ay)?|deal|sounds good|sounds great|perfect|great|it'?s a date|see you (?:then|there)|i'?ll be there|count me in|definitely|absolutely|works for me)\b/i;
+	const REFUSE = /^(?:no|nah|nope|can'?t|cannot|not (?:then|today|tonight)|maybe another time|another time|sorry)\b/i;
+	function meetPlace(phrases, p, resident) {
+		const W = api.world(); if (!W || !p) return null;
+		const at = (x, z, name, radius = 12) => { const y = W.player.floorAt?.(x, z, W.island.heightAt(x, z)) ?? W.island.heightAt(x, z); return Number.isFinite(y) && y > 0.2 ? { name, x, y, z, radius, pos: api.social.positionFor(W, { x, y, z }) } : null; };
+		for (const ph of phrases) {
+			if (ph === 'here') { const near = snapshot()?.near?.[0]?.name; return at(p.M.S.pos.x, p.M.S.pos.z, near ? `this spot near ${near}` : 'this spot', 10); }
+			if (ph === 'npc-home') { const h = worldPosition(W, resident?.home); if (h) return at(h.x, h.z, `${resident.persona.first}'s place`, 10); continue; }
+			const t = find(ph);
+			if (t && !t.under && Math.hypot(t.x - p.M.S.pos.x, t.z - p.M.S.pos.z) < 8000) return at(t.x, t.z, t.name, t.caveEntrance !== undefined ? 6 : 14);
+		}
+		return null;
+	}
+	function meetWhen(a) {
+		const B = book(), S = api.world()?.sky?.state; if (!B || !S) return '';
+		const now = B.clock(S.hours), day = Math.floor(a.due / 24) - Math.floor(now / 24);
+		const real = formatReal(realSecondsFor(a.due - now, S.hours, S));
+		return `${formatClock(a.due % 24)} ${day <= 0 ? 'today' : day === 1 ? 'tomorrow' : `in ${day} days`}${a.due > now ? ` (${real} from now)` : ''}`;
+	}
+	function meetMake(resident, p, { place, time, by }) {
+		const W = api.world(), B = book();
+		if (!W || !B || !place || !time) return null;
+		if ((resident.dna?.age ?? resident.persona?.age ?? 18) < 18) return { error: "[[mood: thoughtful]] I'd have to ask my parents first. Maybe we just hang out around here?" };
+		const r = B.make({ bodyKey: resident.bodyKey, npcId: resident.id, npcName: resident.persona.name, place, hours: W.sky.state.hours, delta: time.delta, by });
+		if (!r.ok) return { error: r.error };
+		const a = r.appointment;
+		if (a.status === 'agreed') { api.social.state.remember(resident.id, 'event', `You agreed to meet the traveller at ${a.place.name} at ${formatClock(a.due % 24)}.`); tracked = a.id; }
+		return { appointment: a };
+	}
+	function meetNote(a) {
+		return a.status === 'agreed'
+			? `📍 Added to Quests: meet ${a.npcName.split(' ')[0]} at ${a.place.name}, ${meetWhen(a)}. A pin marks the place.`
+			: `${a.npcName.split(' ')[0]} suggests ${a.place.name}, ${meetWhen(a)}. Say yes to put it in your Quests, or no.`;
+	}
+	// What the player said: agreeing to a suggestion, or arranging a meeting themselves.
+	function meetingReply(text, resident, p) {
+		const B = book(), W = api.world(); if (!B || !W || !resident) return null;
+		const t = text.trim(), sun = W.sky.state.sun;
+		const pending = B.pendingFrom(resident.id, resident.bodyKey);
+		if (pending && AFFIRM.test(t) && !talksOfMeeting(t.replace(AFFIRM, ''))) {
+			const r = B.agree(pending.id); if (!r.ok) return null;
+			api.social.state.remember(resident.id, 'event', `You agreed to meet the traveller at ${pending.place.name} at ${formatClock(pending.due % 24)}.`); tracked = pending.id;
+			return { reply: `[[mood: happy]] [[gesture: nod]] Great. ${pending.place.name}, ${formatClock(pending.due % 24)}. I'll be there.`, note: meetNote(r.appointment) };
+		}
+		if (pending && REFUSE.test(t)) { B.cancel(pending.id); return { reply: '[[mood: calm]] [[gesture: shrug]] No worries. Another time.' }; }
+		const agreed = B.agreedWith(resident.id, resident.bodyKey);
+		if (agreed && /\b(when|where|what time)\b.*\b(meet|meeting|see you)\b/i.test(t)) return { reply: `[[mood: calm]] ${agreed.place.name}, ${formatClock(agreed.due % 24)}. Don't be late.`, note: `Meeting: ${meetWhen(agreed)}.` };
+		if (agreed && /\b(cancel|call off|can'?t make)\b.*\b(meet|meeting|it|plans?)\b/i.test(t)) { B.cancel(agreed.id); api.social.state.remember(resident.id, 'event', `The traveller called off your meeting at ${agreed.place.name}.`); return { reply: '[[mood: sad]] Oh, okay. Some other time then.', note: 'Meeting cancelled.' }; }
+		const time = parseGameTime(t, W.sky.state.hours, sun);
+		// Finishing an arrangement begun a moment ago: "the pier" → "at six".
+		if (meetDraft?.residentId === resident.id && performance.now() - meetDraft.at < 120000) {
+			const place = meetDraft.place || meetPlace(placePhrases(t), p, resident), when = meetDraft.time || time;
+			if (place && when) {
+				meetDraft = null;
+				const made = meetMake(resident, p, { place, time: when, by: 'player' });
+				if (made?.error) return { reply: made.error };
+				if (made) return { reply: `[[mood: happy]] [[gesture: nod]] ${place.name} at ${formatClock(made.appointment.due % 24)}. See you there.`, note: meetNote(made.appointment) };
+			}
+		}
+		if (!talksOfMeeting(t)) return null;
+		const place = meetPlace(placePhrases(t), p, resident);
+		if (!place && !time) return null; // "let's meet up sometime": the conversation goes on
+		if (!time) { meetDraft = { residentId: resident.id, place, at: performance.now() }; return { reply: `[[mood: happy]] Sure, ${place.name}. What time? Something like 6 pm, or sunset.` }; }
+		if (!place) {
+			meetDraft = { residentId: resident.id, time, at: performance.now() };
+			const named = t.match(/\b(sunset|dusk|sunrise|dawn)\b/i)?.[1];
+			return { reply: `[[mood: thoughtful]] ${named ? `${named[0].toUpperCase() + named.slice(1).toLowerCase()}, so about ${formatClock(time.hours)}` : formatClock(time.hours)} works. Where? Here, or somewhere you can name?` };
+		}
+		const made = meetMake(resident, p, { place, time, by: 'player' });
+		if (made?.error) return { reply: made.error };
+		return made && { reply: `[[mood: happy]] [[gesture: nod]] ${place.name} at ${formatClock(made.appointment.due % 24)}. I'll be there.`, note: meetNote(made.appointment) };
+	}
+	// What the resident said: a tagged or plainly worded suggestion becomes a real proposal.
+	function meetingFromReply(reply, text, resident, p) {
+		const B = book(), W = api.world(); if (!B || !W || !resident) return null;
+		const sun = W.sky.state.sun, hours = W.sky.state.hours;
+		let place = null, time = null;
+		for (const m of reply.matchAll(MEET_TAG_RE)) { place = meetPlace([...placePhrases('at ' + m[1], 'npc'), m[1]], p, resident); time = parseGameTime('at ' + m[2], hours, sun) || parseGameTime(m[2], hours, sun); if (place && time) break; }
+		const spoken = reply.replace(MEET_TAG_RE, '').replace(TAG_RE, '');
+		if (!(place && time) && talksOfMeeting(spoken)) {
+			time = time || parseGameTime(spoken, hours, sun) || parseGameTime(text, hours, sun);
+			place = place || meetPlace(placePhrases(spoken, 'npc'), p, resident) || meetPlace(placePhrases(text), p, resident);
+			if (time && !place) place = meetPlace(['here'], p, resident);
+		}
+		if (place && time) {
+			// The player asked to meet and the resident named the place and time: that is agreement.
+			const made = meetMake(resident, p, { place, time, by: talksOfMeeting(text) ? 'player' : 'npc' });
+			return made?.appointment ? meetNote(made.appointment) : null;
+		}
+		if (talksOfMeeting(spoken) && !B.agreedWith(resident.id, resident.bodyKey)) return `Nothing is settled yet. Agree a place and a time with ${resident.persona.first} to put it in your Quests.`;
+		return null;
+	}
+	// The journal's marker: the meeting you are tracking, else the soonest, else a quest's next place.
+	function waypointMark() {
+		const W = api.world(), S = W?.sky?.state, B = book(), key = api.social?.bodyKey();
+		if (!W || !S || !key) return null;
+		const open = (B?.list(key) || []).filter(a => a.status === 'agreed').sort((a, b) => a.due - b.due);
+		const a = open.find(x => x.id === tracked) || open[0];
+		if (a) {
+			const q = worldPosition(W, a.place.pos); if (!q) return null;
+			const now = B.clock(S.hours), late = now > a.due + EARLY;
+			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
+		}
+		const quest = stories.list(key).find(q => q.status === 'active' && ['visit', 'return'].includes(q.steps[q.cursor]?.type));
+		if (quest) {
+			const t = storyContext().targets.find(t => t.id === quest.steps[quest.cursor].targetId);
+			if (t) return { x: t.x, y: t.y, z: t.z, radius: t.radius, title: `${quest.steps[quest.cursor].type === 'return' ? 'Return to' : 'Explore'} ${t.name}`, detail: quest.title };
+		}
+		return null;
+	}
+
 	let noteBusy = false, lastNote = 0;
 	async function discover(name, sub) {
 		if (!name || found[name]) return;
@@ -271,6 +389,7 @@ export function createGuide(mount, api) {
 		tick = 0;
 		const W = api.world(); if (!W) return;
 		const cam = api.camera.position, P = W.player.state, g = W.island.heightAt(cam.x, cam.z), hours = W.sky.state.hours;
+		api.waypoint?.set(waypointMark());
 		const questWorld=storyContext();
 		for (const q of stories.list(questWorld.bodyKey)) if(q.status==='complete') questChanged(q,false);
 		for (const q of stories.update({bodyKey:questWorld.bodyKey,position:cam,targets:questWorld.targets})) questChanged(q);
@@ -475,6 +594,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			...(partner?.id ? [api.social.describe(api.social.state.get(partner.id)), ...(api.social.state.get(partner.id)?.memories || []).slice(-6).map(m => m.content)] : []),
 			...(pp.facts || []), ...(pp.tattoos || []).slice(0, 2).map((t) => 'a tattoo: ' + t),
 			world?.time ? 'the time: ' + world.time : '', near.length ? 'nearby: ' + near.join(', ') : '',
+			...(partner?.id && api.social.appointments?.agreedWith(partner.id, api.social.bodyKey()) ? [(a => `has agreed to meet the player at ${a.place.name} at ${formatClock(a.due % 24)}`)(api.social.appointments.agreedWith(partner.id, api.social.bodyKey()))] : []),
+			'when arranging to meet, always names one exact place and a clock time, never a vague promise',
 		].filter(Boolean);
 		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts, places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
 	}
@@ -508,6 +629,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			if (!reply) reply = api.social.command(resident, text, { target, quest: quests.find(q => !q.done) });
 			if (reply && parseSocialIntent(text)==='scout' && resident.mode==='scout' && resident.task && target?.name) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:'place-'+norm(target.name).replace(/ /g,'-')});
 		}
+		let meetNoteText = null, meetHandled = false;
+		if (resident && !reply) {
+			const meet = meetingReply(text, resident, p);
+			if (meet) { reply = meet.reply; meetNoteText = meet.note || null; meetHandled = true; }
+		}
 		if (resident && !reply) {
 			reply = storyReply(text);
 			if (!reply) {
@@ -533,9 +659,9 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 		try {
 			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
-				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: resident?.memories?.slice(-6).map(m => m.content) }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
+				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: resident?.memories?.slice(-6).map(m => m.content) }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
 					if (ctrl.signal.aborted || partner !== P2) return;
-					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim(); scroll();
+					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').replace(/\[\[\s*meet[^\]]*$/i, '').trim(); scroll();
 					from = bodySync(p, t, from);
 				}, ctrl.signal, { npc: npcFor(P2.persona, world), maxTokens:dialogueTokenLimit(dialogueStyle,P2.persona.age) });
 			}
@@ -544,15 +670,17 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!reply) { reply = personaOffline(P2.persona, text, world); from = 0; }
 		bodySync(p, reply + (/[.!?]$/.test(reply.trim()) ? '' : '.'), from);
 		if (!resident) reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
-		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
+		if (resident && !meetHandled) meetNoteText = meetingFromReply(reply, text, resident, p);
+		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').trim();
 		bubble.textContent = clean || '…';
+		if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
 		archiveTurn(threadMeta(P2),'assistant',clean);
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
 		if (voiceOut) speak(clean, P2.persona);
 		if (busy === ctrl) busy = null;
 		scroll();
-		if (/\b(bye|goodbye|take care|see you)\b/i.test(text)) setTimeout(() => { if (partner === P2) { endTalk(); show(false); } }, 1800);
+		if (/\b(bye|goodbye|take care|see you)\b/i.test(text)) setTimeout(() => { if (partner === P2) { endTalk(); show(false); } }, meetNoteText ? 4000 : 1800);
 	}
 	async function ask(text) {
 		if (!text.trim()) return;
@@ -717,6 +845,24 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function showQuests() {
 		endTalk(); resetView('journal'); show(true);
 		const bodyKey=api.social?.bodyKey(), list=stories.list(bodyKey);
+		const meetings=(book()?.list(bodyKey) || []).filter(a=>a.status!=='cancelled').sort((a,b)=>b.due-a.due).slice(0,8), openM=meetings.filter(a=>a.status==='agreed'||a.status==='proposed');
+		if (meetings.length) {
+			say('MEETINGS', 'note');
+			const cam=api.camera.position, W=api.world();
+			for (const a of meetings) {
+				const q=worldPosition(W,a.place.pos), far=q?` · ${fmtDist(Math.hypot(q.x-cam.x,q.z-cam.z))} ${dirTo(q.x-cam.x,q.z-cam.z)}`:'';
+				const state=a.status==='agreed'?(a.id===tracked || (!tracked && a===openM.filter(x=>x.status==='agreed').at(-1))?'◆ MARKED':'AGREED'):a.status==='proposed'?'SUGGESTED':a.status==='kept'?'✓ KEPT':'MISSED';
+				say(`${state} · Meet ${a.npcName} at ${a.place.name}\n${a.status==='agreed'||a.status==='proposed'?meetWhen(a)+far:formatClock(a.due%24)}`, a.status==='agreed'||a.status==='proposed'?'guide':'note');
+				if (a.status==='agreed'||a.status==='proposed') {
+					const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+					if (a.status==='proposed') { const ok=el('button',btnCss,'Agree'); ok.onclick=()=>{ if(book().agree(a.id).ok){ tracked=a.id; api.social.state.remember(a.npcId,'event',`You agreed to meet the traveller at ${a.place.name} at ${formatClock(a.due%24)}.`);} showQuests(); }; row.append(ok); }
+					else { const mark=el('button',btnCss,'Show the way'); mark.onclick=()=>{ tracked=a.id; api.waypoint?.set(waypointMark()); if(q && W){ const P=W.player.state; P.yaw=Math.atan2(-(q.x-P.pos.x),-(q.z-P.pos.z)); } show(false); api.hint(`Follow the pin to ${a.place.name}.`,4000); }; row.append(mark); }
+					const no=el('button',btnCss,a.status==='proposed'?'Decline':'Cancel'); no.onclick=()=>{ book().cancel(a.id); if(a.status==='agreed') api.social.state.remember(a.npcId,'event',`The traveller called off your meeting at ${a.place.name}.`); showQuests(); }; row.append(no);
+					log.append(row);
+				}
+			}
+			if (book().status().error) say(book().status().error,'note');
+		}
 		say('STORY QUESTS', 'note');
 		if (!list.length) say('Ask someone nearby for an adventure. They can suggest a story rooted in this world.', 'note');
 		for (const q of list.slice().reverse()) {
@@ -834,5 +980,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find };
+	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }

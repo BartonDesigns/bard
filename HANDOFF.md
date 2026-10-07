@@ -4,7 +4,33 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
-## Resume here (6 October 2026, night)
+## Resume here (7 October 2026)
+
+- **Meetings people keep (quest item 1, on the branch, not yet live):**
+  - `people/appointments.js`:
+    - parses a spoken time ("6 pm", "7:30 tonight", "sunset", "tomorrow at noon", "in an hour");
+    - counts game days (the sky clock only wraps at 24 h);
+    - estimates the real-time equivalent by stepping `advanceSolarClock`, because days run slow and nights fast;
+    - keeps the saved book (`crysis-appointments-v1`): proposed → agreed → kept, missed or cancelled.
+  - **In conversation** (`guide/guide.js`, meetingReply / meetingFromReply):
+    - "meet me at the village at 6pm" becomes an agreed meeting. If only a place or only a time is given, the resident asks for the other, and a two-turn plan works.
+    - A resident's suggestion, either tagged `[[meet: PLACE @ TIME]]` or plainly worded, becomes a proposal. "Yes" agrees, "no" declines. A suggestion that answers the player's own invitation counts as agreed.
+    - Vague talk of meeting gets an honest note: nothing is settled until a place and time are agreed.
+    - Children decline.
+    - The cloud NPC is told, as a fact, to always name a place and a clock time.
+  - **The resident keeps it** (`social.js` keepAppointments, the `meet` mode in `social-actors.js`):
+    - sets off half a game hour early;
+    - is at the place by the hour, travelling there directly when out of the player's sight;
+    - waits until 1.5 game hours past;
+    - remembers whether you came; if you didn't, goes home.
+  - **The journal:** Quests has a MEETINGS section with game time, real-time equivalent, distance and bearing, and Show the way / Agree / Decline / Cancel buttons.
+  - **Waypoint** (`ui/waypoint.js`): a beam pin with a diamond on top at the place, plus a chip at the top of the screen with an arrow, distance and time; tapping the chip opens Quests. It marks the tracked or soonest meeting, otherwise the active story quest's next place.
+  - **Verified:**
+    - Node: `tools/appointments.test.mjs`, 6 tests.
+    - Headless TERRAN village (`/tmp/claude-0/meet/flow.js`; slow, about 0.25 fps): agree → chip → resident outbound → waiting at the place → kept, with the memory written.
+  - **Still to do in quests:** gatherings and events run in the engine without the cloud.
+
+## Earlier resume note (6 October 2026, night)
 
 - **Live:** main is at `8ba8b81`. It includes:
   - this week's world work;
