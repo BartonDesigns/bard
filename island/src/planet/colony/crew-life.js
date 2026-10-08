@@ -12,18 +12,15 @@ import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA, rng } from '../../people/body.js';
 import { hairFor } from '../../people/wardrobe.js';
 import { createMotion } from '../../people/motion.js';
-import { paint } from '../../people/garment.js';
 import { addTalkers } from '../../people/people.js';
 import { freeBody } from '../../people/social-actors.js';
 import { frame } from '../alienkit.js';
 import { markTexture } from '../medieval/quests.js';
 import { CAST, placeFor, activity } from './crew.js';
+import { fitSuit, wear, keepHair, dropSuit, suitPaint } from './suit.js';
 
 const TAU = Math.PI * 2, RING = 13.6, DOME = 15;
 const hash = (s) => s.split('').reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261) >>> 0;
-// a coverall of the trade's colour, or the same cut in suit white with the colour as trim
-// (the legs greyed with the dust of the EVA)
-const coverall = (col, suit) => ({ gen: 'alien', top: { kind: 'suit', col: suit ? '#e6e6e2' : col, acc: suit ? col : '#d8d8d4', pat: 'block', fit: 'fitted', sleeves: 'long', fab: 'tech' }, outer: null, bottom: { kind: 'suit', col: suit ? '#cfc9bd' : col, acc: suit ? col : '#d8d8d4', pat: 'plain', legs: 'long', fit: 'regular', fab: 'tech' }, shoes: { kind: 'boot', col: suit ? '#cfcfca' : '#3a3d42', sole: '#1b1b1d' }, acc: [] });
 // how they walk the rooms: lane points (local x, share of the module's length) clear of the furniture
 const LANES = { lounge: [[0, 0.3], [1.85, 0.36], [1.85, 0.62]], workshop: [[0.9, 0.2]], mess: [[0.5, 0.15]], med: [[0.3, 0.15]] };
 
@@ -34,10 +31,16 @@ export function planCrew(X, plan, floor) {
 	const at = (M, lx, t, yaw) => { const p = M.frame.p(lx, 0, M.d0 + M.L * t); return { x: p.x, z: p.z, y: M.y + 0.4, mod: M.i, yaw: yaw ?? M.a }; };
 	const claim = (room) => { const s = X.spots.find((q) => q.room === room && !q.taken); if (!s) return null; s.taken = true; return { x: s.x, z: s.z, y: s.y, mod: s.mod ?? 'dome', yaw: s.yaw }; };
 	const F = frame(h.x, h.y, h.z, h.yaw);
-	const work = {};
+	const work = {}, work2 = {};
+	// outside on the regolith, on the ground
+	const out = (x, z, tag, yaw = 0) => ({ x, z, y: floor(x, z, X.H(x, z) + 2), mod: 'out:' + tag, yaw });
 	for (const c of CAST) {
 		let p = null;
-		if (c.at === 'dome') { const q = F.p(0.9, 0, 5.4); p = { x: q.x, z: q.z, y: h.y, mod: 'dome', yaw: h.yaw + Math.PI }; }
+		if (c.at === 'solar' && plan.solar?.length) { const s = plan.solar[0], s2 = plan.solar[1] || s; p = out(s.x + 4, s.z, 'hub'); work2[c.id] = out(s2.x - 4, s2.z + 3, 'hub'); }
+		else if (c.at === 'pads' && plan.port) { const pd = plan.port.pads[0], st = plan.port.station; p = out(pd.x + 9, pd.z + 3, 'port'); work2[c.id] = out(st.x + 6, st.z + 6, 'port'); }
+		else if (c.at === 'airlock' && X.doors.length > 2) { const a = X.doors[1], b = X.doors[2]; p = out(a.x + Math.sin(a.a) * 6, a.z + Math.cos(a.a) * 6, 'hub', a.a); work2[c.id] = out(b.x + Math.sin(b.a) * 6, b.z + Math.cos(b.a) * 6, 'hub', b.a); }
+		else if (c.at === 'radiators' && X.radiators.length) { const a = X.radiators[0], b = X.radiators[X.radiators.length - 1]; p = out(a.x + 2.5, a.z + 2.5, 'hub'); work2[c.id] = out(b.x + 2.5, b.z - 2.5, 'hub'); }
+		else if (c.at === 'dome') { const q = F.p(0.9, 0, 5.4); p = { x: q.x, z: q.z, y: h.y, mod: 'dome', yaw: h.yaw + Math.PI }; }
 		else if (c.at === 'farm') p = claim('farm');
 		else if (c.at === 'mess' && mod('mess')) { const M = mod('mess'); p = at(M, 1.25, (1.6 + (M.L * 0.7 - 2.2) * 0.45) / M.L, M.a + Math.PI / 2); }
 		else if (['med', 'workshop', 'depot'].includes(c.at)) p = claim(c.at);
@@ -59,7 +62,7 @@ export function planCrew(X, plan, floor) {
 	}
 	// the earthrise watch: the lounge's windowed end
 	const watch = Lg ? at(Lg, 0, 0.8) : null;
-	return { hub: h, work, seats, watch, lounge: Lg?.i ?? null };
+	return { hub: h, work, work2, seats, watch, lounge: Lg?.i ?? null };
 }
 
 export function createCrew(X, C, o) {
@@ -70,16 +73,11 @@ export function createCrew(X, C, o) {
 	const h = C.hub, mods = X.rooms.modules;
 	const LIMIT = isPhone ? 4 : 8, BUILD = isPhone ? 60 : 85, FREE = BUILD + 50;
 	let A = null, failed = false, building = false, clock = 0, t = 0;
-	// the helmet, the collar and the pack: shared shapes and materials
-	const glass = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.3, depthWrite: false });
-	const shell = new THREE.MeshStandardMaterial({ color: 0xe8e8e4, roughness: 0.55 });
-	const dark = new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.6 });
-	const ball = new THREE.SphereGeometry(1, 20, 14), cap = new THREE.SphereGeometry(1, 16, 10, Math.PI * 1.12, Math.PI * 0.76, 0, Math.PI * 0.62), torus = new THREE.TorusGeometry(1, 0.22, 8, 20).rotateX(Math.PI / 2), pack = new THREE.BoxGeometry(0.34, 0.46, 0.17), pipe = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6);
 	const markTex = { offer: markTexture('offer'), ready: markTexture('ready') };
 	const markMat = { offer: new THREE.SpriteMaterial({ map: markTex.offer, depthTest: false, transparent: true }), ready: new THREE.SpriteMaterial({ map: markTex.ready, depthTest: false, transparent: true }) };
 
 	// ---------- everyone, logically, always ----------
-	const folk = CAST.filter((c) => C.work[c.id]).map((c, j) => ({ c, id: c.id, j, name: c.name, built: false, P: null, M: null, pos: { ...C.work[c.id] }, place: null, route: [], goal: null, active: true, engaged: false, speakUntil: 0, hold: false, mark: null, suited: null, t: 0, P0: null }));
+	const folk = CAST.filter((c) => C.work[c.id]).map((c, j) => ({ c, id: c.id, j, name: c.name, built: false, P: null, M: null, pos: { ...C.work[c.id] }, place: null, route: [], goal: null, active: true, engaged: false, speakUntil: 0, hold: false, mark: null, dress: null, fresh: 0, pause: 0, leg: 0, t: 0 }));
 	const byId = Object.fromEntries(folk.map((f) => [f.id, f]));
 	const inside = (p) => X.vol.some((v) => {
 		if (p.y < v.y0 || p.y > v.y1) return false;
@@ -135,6 +133,7 @@ export function createCrew(X, C, o) {
 		const from = f.pos, to = g.p, za = zone(from), zb = zone(to);
 		if (!seen(f)) { f.route = []; f.pos = { ...to }; if (f.built) f.M.place(to.x, to.y, to.z, to.yaw ?? 0); return; }
 		if (za === 'hub' && zb === 'hub') f.route = hubRoute(from, to);
+		else if (za === zb) f.route = [{ ...to }];
 		else if (za === 'hub') {
 			// leaving the hub: out through the nearest airlock, and gone over the regolith
 			const k = typeof from.mod === 'number' ? from.mod : 0, d = X.doors[k];
@@ -151,42 +150,35 @@ export function createCrew(X, C, o) {
 		try {
 			A = A || await loadPeopleAssets();
 			const c = f.c, seed = (hash(c.id) ^ (plan.seed || 0)) >>> 0;
-			const d = personDNA(seed, { age: c.age, ancestry: c.anc, style: coverall(c.col, false) });
+			const d = personDNA(seed, { age: c.age, ancestry: c.anc, style: suitPaint(c.col, 'under') });
 			const male = c.sex === 'm', r = rng(seed ^ 0xc0ffee);
 			d.male = male; d.sex = male ? 0.85 : 0.12;
 			d.height = (male ? 1.76 : 1.64) + (r() - 0.5) * 0.1;
 			d.hair = male ? (c.age > 50 && r() < 0.3 ? null : r() < 0.5 ? 'short01' : 'short02') : r() < 0.5 ? 'ponytail01' : 'short02';
 			d.style.hair = hairFor(rng(seed ^ 0x57a1e), d, d.style);
+			if (c.hair) { d.style.hair.cut = c.hair; d.style.hair.buzz = false; d.style.hair.thin = 0; d.style.hair.scarf = false; }
 			const P = buildPerson(A, d);
 			const M = createMotion(P, (x, z) => floor(x, z, P.root.position.y));
 			M.place(f.pos.x, f.pos.y, f.pos.z, f.pos.yaw ?? 0);
 			M.setPose('rest');
-			f.P = P; f.M = M; f.built = true; f.suited = null;
-			f.gear = suitGear(P);
+			f.P = P; f.M = M; f.built = true; f.dress = null;
+			f.gear = fitSuit(P, { name: c.name, role: c.role || c.job.replace(/^the /, '').split(/[ ,]/)[0], col: c.col }, o.env);
 			group.add(P.root);
 		} catch (e) { failed = true; console.warn('[colony] crew', e); }
 		building = false;
 	}
-	function suitGear(P) {
-		const s = P.height / 1.7, head = P.bones[P.map.head], neck = P.bones[P.map.neck01] || head, back = P.bones[P.map.spine01] || P.bones[0];
-		const helmet = new THREE.Group(); helmet.position.set(0, 0.1 * s, 0.015);
-		const bubble = new THREE.Mesh(ball, glass); bubble.scale.setScalar(0.19 * s); bubble.renderOrder = 4;
-		const shellB = new THREE.Mesh(cap, shell); shellB.scale.setScalar(0.195 * s);
-		helmet.add(bubble, shellB);
-		const collar = new THREE.Mesh(torus, shell); collar.scale.set(0.12 * s, 0.12 * s, 0.12 * s); collar.position.set(0, 0.0, 0.0);
-		const pk = new THREE.Mesh(pack, shell); pk.position.set(0, 0.22 * s, -0.2 * s); pk.castShadow = true;
-		const hose = new THREE.Mesh(pipe, dark); hose.position.set(0.12 * s, 0.25 * s, -0.12 * s); hose.rotation.x = 0.7;
-		head.add(helmet); neck.add(collar); back.add(pk, hose);
-		return [helmet, collar, pk, hose];
-	}
-	function suit(f, on) {
-		if (f.suited === on) return;
-		f.suited = on;
-		for (const m of f.gear) m.visible = on;
-		paint(f.P.clothMat, coverall(f.c.col, on));
+	// dressed for where they are: suited outside, just in (the helmet carried), or down to the
+	// undergarment; a moment's pause at the airlock as they change
+	function dress(f, out) {
+		const state = f.force || (out ? 'eva' : f.fresh > 0 ? 'fresh' : 'under');
+		keepHair(f.P, state);
+		if (f.dress === state) return;
+		if (f.dress && (f.dress === 'eva') !== out) { f.pause = 1.6; f.M.gesture(out ? 'think' : 'open'); }
+		f.dress = state;
+		wear(f.P, f.gear, f.c, state);
 	}
 	function drop(f) {
-		for (const m of f.gear || []) m.removeFromParent();
+		if (f.gear) dropSuit(f.gear);
 		if (f.markS) { f.markS.removeFromParent(); f.markS = null; }
 		freeBody(f.P);
 		f.P = f.M = null; f.built = false; f.gear = null;
@@ -233,6 +225,10 @@ export function createCrew(X, C, o) {
 				M.setPose(speaking ? 'rest' : 'listen');
 				f.t -= dt;
 				if (!speaking && f.t < 0) { f.t = 3 + Math.random() * 5; if (Math.random() < 0.5) M.gesture('nod'); }
+			} else if (f.pause > 0) {
+				// at the airlock: helmet on and sealed, or off and the suit opened
+				f.pause -= dt;
+				M.want.speed = 0;
 			} else if (f.route.length) {
 				const q = f.route[0];
 				if (q.jump) {
@@ -253,7 +249,11 @@ export function createCrew(X, C, o) {
 				if (f.goal?.yaw !== undefined && f.t < 0) { M.want.heading = f.goal.yaw; }
 				S.look.target = d < 5 ? cam : null;
 				f.t -= dt;
-				if (f.t < 0) {
+				if (f.t < 0 && f.c.patrol && f.place === 'work' && C.work2[f.id]) {
+					// the surface crew walk their round: one end of it, a while there, the other
+					f.leg ^= 1; f.t = 8 + Math.random() * 8;
+					f.route = [{ ...(f.leg ? C.work2[f.id] : C.work[f.id]) }];
+				} else if (f.t < 0) {
 					f.t = 5 + Math.random() * 7;
 					if (d < 7) { M.want.heading = Math.atan2(cam.x - S.pos.x, cam.z - S.pos.z); M.gesture(['wave', 'nod', 'open'][Math.floor(Math.random() * 3)]); }
 					else if (f.place === 'work') M.gesture(['think', 'explain', 'point'][Math.floor(Math.random() * 3)]);
@@ -264,13 +264,20 @@ export function createCrew(X, C, o) {
 			f.pos = { x: S.pos.x, y: S.pos.y, z: S.pos.z, mod: f.goal?.mod ?? f.pos.mod, yaw: S.heading };
 			const on = d < 160;
 			f.P.root.visible = on;
-			if (on) suit(f, !inside({ x: S.pos.x, y: S.pos.y + 0.3, z: S.pos.z }));
+			if (on) {
+				const out = !inside({ x: S.pos.x, y: S.pos.y + 0.3, z: S.pos.z });
+				if (f.dress === 'eva' && !out) f.fresh = 45;
+				f.fresh = out ? 0 : Math.max(0, f.fresh - dt);
+				dress(f, out);
+				// the low-gravity lope: a hop in each stride when suited and walking
+				if (out && S.speed?.v > 0.3) f.P.root.position.y += Math.abs(Math.sin(t * 5.2 + f.j)) * 0.07;
+			}
 			// the mark over the head: something to ask (!), or to hear (?)
 			const mk = f.engaged ? null : f.mark;
 			if (mk && !f.markS) { f.markS = new THREE.Sprite(markMat[mk]); f.markS.scale.setScalar(0.42); f.markS.renderOrder = 6; f.P.root.add(f.markS); }
 			if (f.markS) {
 				if (!mk) { f.markS.removeFromParent(); f.markS = null; }
-				else { f.markS.material = markMat[mk]; f.markS.position.set(0, f.P.height + (f.suited ? 0.55 : 0.4) + Math.sin(t * 2) * 0.04, 0); }
+				else { f.markS.material = markMat[mk]; f.markS.position.set(0, f.P.height + (f.dress === 'eva' ? 0.55 : 0.4) + Math.sin(t * 2) * 0.04, 0); }
 			}
 		}
 	}
@@ -278,10 +285,11 @@ export function createCrew(X, C, o) {
 		stopTalk();
 		for (const f of folk) if (f.built) drop(f);
 		scene.remove(group);
-		for (const g of [ball, cap, torus, pack, pipe]) g.dispose();
-		for (const m of [glass, shell, dark, markMat.offer, markMat.ready]) m.dispose();
+		for (const m of [markMat.offer, markMat.ready]) m.dispose();
 		markTex.offer.dispose(); markTex.ready.dispose();
 	}
-	const info = () => folk.map((f) => ({ id: f.id, name: f.name, place: f.place, built: f.built, suited: f.suited, mark: f.mark, walking: f.route.length, x: Math.round(f.pos.x * 10) / 10, y: Math.round(f.pos.y * 10) / 10, z: Math.round(f.pos.z * 10) / 10 }));
-	return { update, dispose, folk, byId, info, state: () => ({ assets: !!A, building, failed }), where: (id) => byId[id]?.pos || null, place: (id) => byId[id]?.place || null };
+	const info = () => folk.map((f) => ({ id: f.id, name: f.name, place: f.place, built: f.built, dress: f.dress, mark: f.mark, walking: f.route.length, x: Math.round(f.pos.x * 10) / 10, y: Math.round(f.pos.y * 10) / 10, z: Math.round(f.pos.z * 10) / 10 }));
+	// (for a look in tests: dress someone as if outside, just in, or at work)
+	const look = (id, state) => { const f = byId[id]; if (f) f.force = state || null; return !!f; };
+	return { update, dispose, folk, byId, info, look, state: () => ({ assets: !!A, building, failed }), where: (id) => byId[id]?.pos || null, place: (id) => byId[id]?.place || null };
 }

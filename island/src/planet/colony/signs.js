@@ -6,6 +6,7 @@
 //   sign   dark plate, pale stencil        ok    green status plate
 //   warn   yellow and black                screen a dark screen, lines of small type
 //   crate  a stencil on a crate's face     red   an emergency plate
+//   patch  a crew patch on a suit's arm
 
 import * as THREE from 'three';
 
@@ -24,7 +25,7 @@ function canvas() {
 }
 const STYLE = {
 	sign: ['#2b2f33', '#e8e2d0', 'bold 30px'], ok: ['#163a24', '#8ff0a8', 'bold 28px'], warn: ['#e0b020', '#141414', 'bold 30px'],
-	screen: ['#0b1a26', '#9fe8d0', '18px'], crate: ['#c9c2ae', '#1a1a1a', 'bold 26px'], red: ['#a3241c', '#fff1e8', 'bold 28px'],
+	screen: ['#0b1a26', '#9fe8d0', '18px'], crate: ['#c9c2ae', '#1a1a1a', 'bold 26px'], red: ['#a3241c', '#fff1e8', 'bold 28px'], patch: ['#22325a', '#f3e7c4', 'bold 26px'],
 };
 // the cell for a text (lines split on |), drawn once
 function cell(kind, text) {

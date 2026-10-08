@@ -5,7 +5,7 @@ import { ARMS_CATALOG } from '../src/gameplay/arms.js';
 import { makeGathering, validGathering, crowdLayout } from '../src/people/gatherings.js';
 
 test('a named adult crew with the roles the colony needs', () => {
-	assert.ok(CAST.length >= 10 && CAST.length <= 14);
+	assert.ok(CAST.length >= 10 && CAST.length <= 16);
 	for (const role of ['director', 'traffic', 'hydro', 'medic', 'foreman', 'mechanic', 'relay', 'astronomer', 'cook', 'historian']) assert.ok(byId[role], role);
 	for (const c of CAST) {
 		assert.ok(c.age >= 18, c.id);

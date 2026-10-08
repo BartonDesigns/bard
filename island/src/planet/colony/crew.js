@@ -5,91 +5,121 @@
 // (colonyOffline), where their day puts them (placeFor), and how an errand moves on
 // (QUESTS, step). crew-life.js gives them bodies; errands.js runs the errands.
 
-// ancestry: the body's three targets [African, Asian, European]; colours are the coverall's
+// ancestry: the body's three targets [African, Asian, European]; colours are the coverall's;
+// role: the patch on the arm; hair: a cut chosen for them (people/hair.js CUTS)
 export const CAST = [
 	{
-		id: 'director', name: 'Helena Varga', age: 56, sex: 'f', anc: [0.04, 0.06, 0.9], job: 'the colony director', at: 'dome', shift: 'day', col: '#2f4f7a', years: 9,
+		id: 'director', role: 'Director', hair: 'bob', name: 'Helena Varga', age: 56, sex: 'f', anc: [0.04, 0.06, 0.9], job: 'the colony director', at: 'dome', shift: 'day', col: '#2f4f7a', years: 9,
 		style: 'calm and dry-humoured, plain-spoken, listens before she answers',
 		bio: 'ran a polar research station before the Moon; signs every airlock log herself; keeps a pressed edelweiss in her logbook',
 		hobby: 'chess by delayed post with her brother on Earth',
 		lines: ['Every gram up here was flown or dug. We waste nothing, including people\'s time.', 'The dome farm is the best room on the Moon. Do not tell Omar I said so.', 'Nine years. You stop noticing the quiet, then one day you notice it again.'],
 	},
 	{
-		id: 'traffic', name: 'Tomas Reyes', age: 41, sex: 'm', anc: [0.14, 0.12, 0.74], job: 'the traffic controller in the spaceport tower', at: 'cab', shift: 'day', col: '#5a5f68', years: 5,
+		id: 'traffic', role: 'Traffic', name: 'Tomas Reyes', age: 41, sex: 'm', anc: [0.14, 0.12, 0.74], job: 'the traffic controller in the spaceport tower', at: 'cab', shift: 'day', col: '#5a5f68', years: 5,
 		style: 'quick, precise, a little restless; talks in callsigns when busy',
 		bio: 'flew cargo landers for six years; now sequences every landing, rover and maglev run from the tower',
 		hobby: 'building model gliders that cannot fly here',
 		lines: ['Two landers due before supper and a rover that will not answer its radio. A normal day.', 'Need a ride out? I can have a rover at the airlock in a minute.', 'From the tower you can watch the whole colony breathe: lights on, lights off.'],
 	},
 	{
-		id: 'hydro', name: 'Priya Raman', age: 34, sex: 'f', anc: [0.12, 0.78, 0.1], job: 'the hydroponics lead', at: 'farm', shift: 'day', col: '#2f6b46', years: 4,
+		id: 'hydro', role: 'Hydroponics', hair: 'long', name: 'Priya Raman', age: 34, sex: 'f', anc: [0.12, 0.78, 0.1], job: 'the hydroponics lead', at: 'farm', shift: 'day', col: '#2f6b46', years: 4,
 		style: 'warm, enthusiastic, explains with her hands',
 		bio: 'a plant scientist who grows the colony\'s greens under the dome; names her lettuce trays after rivers',
 		hobby: 'breeding a dwarf tomato that likes low gravity',
 		lines: ['Smell that? Basil. Best smell on the Moon.', 'The beds give us greens and a third of our oxygen on a good day.', 'Plants grow taller here and lean toward the lamps like they are listening.'],
 	},
 	{
-		id: 'medic', name: 'Samuel Adeyemi', age: 47, sex: 'm', anc: [0.9, 0.02, 0.08], job: 'the colony medic', at: 'med', shift: 'day', col: '#2c7a74', years: 6,
+		id: 'medic', role: 'Medic', hair: 'locs', name: 'Samuel Adeyemi', age: 47, sex: 'm', anc: [0.9, 0.02, 0.08], job: 'the colony medic', at: 'med', shift: 'day', col: '#2c7a74', years: 6,
 		style: 'gentle, unhurried, asks how you slept before anything else',
 		bio: 'an emergency doctor who came for a year and stayed; studies what the dust does to lungs',
 		hobby: 'running laps of the dome ring before breakfast',
 		lines: ['Drink water. Everyone up here is a little dehydrated and a little proud.', 'Lunar dust is sharp as glass. It gets into everything, including people.', 'Low gravity is kind to knees and cruel to bones. Exercise, every day.'],
 	},
 	{
-		id: 'foreman', name: 'Ruth Kowalski', age: 52, sex: 'f', anc: [0.03, 0.04, 0.93], job: 'the mine foreman at Copernicus Deep Mine', at: 'mine', shift: 'out', col: '#8a5a24', years: 7,
+		id: 'foreman', role: 'Mining', hair: 'short', name: 'Ruth Kowalski', age: 52, sex: 'f', anc: [0.03, 0.04, 0.93], job: 'the mine foreman at Copernicus Deep Mine', at: 'mine', shift: 'out', col: '#8a5a24', years: 7,
 		style: 'blunt, practical, laughs loudly over the radio',
 		bio: 'ran open-cut mines on Earth; now digs ice-bearing regolith at Copernicus for water and oxygen',
 		hobby: 'collecting a pebble from every crater she has stood in',
 		lines: ['Ice in the regolith means water, and water means air and fuel. That is why we dig.', 'Mind the hopper. It does not care who you are.', 'Copernicus is young as craters go. Only eight hundred million years.'],
 	},
 	{
-		id: 'mechanic', name: 'Diego Ferreira', age: 29, sex: 'm', anc: [0.2, 0.08, 0.72], job: 'the rover mechanic', at: 'workshop', shift: 'day', col: '#b5651d', years: 2,
+		id: 'mechanic', role: 'Rovers', name: 'Diego Ferreira', age: 29, sex: 'm', anc: [0.2, 0.08, 0.72], job: 'the rover mechanic', at: 'workshop', shift: 'day', col: '#b5651d', years: 2,
 		style: 'cheerful, talkative, always has grease on one cheek',
 		bio: 'keeps the colony\'s rovers running; can rebuild a wheel hub in the time it takes to boil water',
 		hobby: 'teaching himself the guitar from a manual',
 		lines: ['Dust in the bearings, always dust in the bearings.', 'Rover Four pulls left. Rover Four has always pulled left. I love Rover Four.', 'Out there a flat tyre is a long walk. In here it is twenty minutes and a coffee.'],
 	},
 	{
-		id: 'relay', name: 'Anika Holm', age: 31, sex: 'f', anc: [0.02, 0.03, 0.95], job: 'the relay engineer at Far Side Relay', at: 'relay', shift: 'out', col: '#3b6fb0', years: 3,
+		id: 'relay', role: 'Comms', hair: 'braids', name: 'Anika Holm', age: 31, sex: 'f', anc: [0.02, 0.03, 0.95], job: 'the relay engineer at Far Side Relay', at: 'relay', shift: 'out', col: '#3b6fb0', years: 3,
 		style: 'focused, wry, a bit shy until she trusts you',
 		bio: 'keeps the Far Side Relay talking: the only link to the observatory and the deep sites over the horizon',
 		hobby: 'listening to the radio quiet of the far side',
 		lines: ['The far side is the quietest place in the solar system for radio. Earth cannot shout over the horizon.', 'Every packet from the deep sites comes through my dishes.', 'If the relay sneezes, half the colony goes deaf.'],
 	},
 	{
-		id: 'astronomer', name: 'Kenji Mori', age: 44, sex: 'm', anc: [0.04, 0.9, 0.06], job: 'the astronomer at Daedalus Observatory', at: 'observatory', shift: 'night', col: '#3c3c6e', years: 6,
+		id: 'astronomer', role: 'Astronomy', name: 'Kenji Mori', age: 44, sex: 'm', anc: [0.04, 0.9, 0.06], job: 'the astronomer at Daedalus Observatory', at: 'observatory', shift: 'night', col: '#3c3c6e', years: 6,
 		style: 'soft-spoken, precise, drifts into stories about the sky',
 		bio: 'runs the Daedalus dish and telescope; sleeps through the day and works the long night',
 		hobby: 'calligraphy, slowly, with a brush he brought from home',
 		lines: ['No air, no twinkle. The stars just stand there and let you look.', 'The dish listens to the early universe. Mostly it hears patience.', 'I sleep while you work, and watch while you sleep. We share the colony in shifts.'],
 	},
 	{
-		id: 'cook', name: 'Omar Haddad', age: 50, sex: 'm', anc: [0.1, 0.12, 0.78], job: 'the cook who runs the mess', at: 'mess', shift: 'mess', col: '#7a2f2f', years: 8,
+		id: 'cook', role: 'Galley', name: 'Omar Haddad', age: 50, sex: 'm', anc: [0.1, 0.12, 0.78], job: 'the cook who runs the mess', at: 'mess', shift: 'mess', col: '#7a2f2f', years: 8,
 		style: 'big-hearted, teasing, judges people by how they eat',
 		bio: 'trained in hotel kitchens; cooks for the whole colony from the dome\'s greens, the stores and a lot of spice',
 		hobby: 'keeping a sourdough starter alive on the Moon',
 		lines: ['Lentils tonight, and flatbread, and if Priya is kind, fresh herbs.', 'Food tastes flat up here, so I cook loud.', 'Sit, eat. Nobody talks business at my tables until they have had soup.'],
 	},
 	{
-		id: 'historian', name: 'Lucía Ortega', age: 61, sex: 'f', anc: [0.08, 0.06, 0.86], job: 'the colony historian, keeper of First Landing Plaza', at: 'plaza', shift: 'out', col: '#6b4c7a', years: 10,
+		id: 'historian', role: 'History', hair: 'bun', name: 'Lucía Ortega', age: 61, sex: 'f', anc: [0.08, 0.06, 0.86], job: 'the colony historian, keeper of First Landing Plaza', at: 'plaza', shift: 'out', col: '#6b4c7a', years: 10,
 		style: 'thoughtful, generous, tells history as if it happened to friends',
 		bio: 'records the colony\'s story; guards the first bootprints under the plaza rail; knew the Kestrel\'s crew',
 		hobby: 'interviewing everyone, eventually',
 		lines: ['Those bootprints will outlast every one of us. No wind, no rain.', 'History up here is short and close. I knew most of it by name.', 'The plinth is empty on purpose. We have not agreed what should stand there yet.'],
 	},
 	{
-		id: 'quartermaster', name: 'Hannah Brandt', age: 38, sex: 'f', anc: [0.03, 0.04, 0.93], job: 'the quartermaster at the supply depot', at: 'depot', shift: 'day', col: '#5c6b2f', years: 4,
+		id: 'quartermaster', role: 'Stores', hair: 'pony', name: 'Hannah Brandt', age: 38, sex: 'f', anc: [0.03, 0.04, 0.93], job: 'the quartermaster at the supply depot', at: 'depot', shift: 'day', col: '#5c6b2f', years: 4,
 		style: 'organised, brisk, secretly sentimental',
 		bio: 'knows where every bolt, ration pack and oxygen candle in the colony is; logs everything twice',
 		hobby: 'crosswords, in pencil, so the stores can reuse the paper',
 		lines: ['Sign for it, then take it. That is the rule.', 'We are fourteen days of food from trouble, always. So we keep forty.', 'If it is not on my list, it is not on the Moon.'],
 	},
 	{
-		id: 'shelter', name: 'Yusuf Demir', age: 45, sex: 'm', anc: [0.08, 0.1, 0.82], job: 'the radiation safety officer who keeps Storm Shelter Four', at: 'shelter', shift: 'out', col: '#6e6e2a', years: 5,
+		id: 'shelter', role: 'Rad Safety', name: 'Yusuf Demir', age: 45, sex: 'm', anc: [0.08, 0.1, 0.82], job: 'the radiation safety officer who keeps Storm Shelter Four', at: 'shelter', shift: 'out', col: '#6e6e2a', years: 5,
 		style: 'steady, careful, finds calm in checklists',
 		bio: 'watches the Sun for storms and keeps the shelters stocked; once kept twelve people cheerful for three days underground',
 		hobby: 'board games, especially the long ones',
 		lines: ['When the Sun flares we have about twenty minutes. Everyone knows the way to a shelter.', 'Two metres of regolith over your head is the best umbrella there is.', 'I check the shelter stores every week. Nobody thanks me until they need them.'],
+	},
+	// the surface crew: out on the regolith most of the day, the colony's crowd outside
+	{
+		id: 'eva1', role: 'EVA', hair: 'afro', name: 'Amara Nwosu', age: 33, sex: 'f', anc: [0.9, 0.03, 0.07], job: 'an EVA technician on the solar farm', at: 'solar', patrol: true, shift: 'day', col: '#c05a2a', years: 3,
+		style: 'bright, quick to laugh, unflappable outside',
+		bio: 'keeps the solar rows clean and tracking; spends more hours suited than anyone in the colony',
+		hobby: 'drawing the shadows of the panels at different hours',
+		lines: ['Dust on a panel is ten percent of your power gone. So we brush. A lot.', 'Out here you learn to walk like a kangaroo with good manners.', 'Every row follows the Sun. I follow the rows.'],
+	},
+	{
+		id: 'eva2', role: 'Cargo', name: 'Mateus Lima', age: 27, sex: 'm', anc: [0.25, 0.05, 0.7], job: 'a cargo handler on the spaceport pads', at: 'pads', patrol: true, shift: 'day', col: '#7a6a2a', years: 1,
+		style: 'eager, chatty, new enough to still be amazed',
+		bio: 'unloads the landers and walks the cargo sleds to the depot; a year on the Moon and still grinning',
+		hobby: 'counting how many landings he has seen',
+		lines: ['Lander came in this morning with forty crates. Thirty-nine were food.', 'The pads are hot after a landing. Give them an hour.', 'I still look up at Earth every time I step out. Every time.'],
+	},
+	{
+		id: 'eva3', role: 'Surface Ops', hair: 'pony', name: 'Ingrid Solberg', age: 39, sex: 'f', anc: [0.02, 0.03, 0.95], job: 'surface operations lead', at: 'airlock', patrol: true, shift: 'day', col: '#3a6a7a', years: 5,
+		style: 'calm, watchful, counts heads without seeming to',
+		bio: 'signs every EVA in and out at the airlocks and walks the hull checks round the hub',
+		hobby: 'cross-country skiing, back home, which she misses',
+		lines: ['Buddy check before the outer door. Every time, no exceptions.', 'The berms take a beating from micrometeorites. We patch them weekly.', 'If you are going out, tell me where and when you will be back.'],
+	},
+	{
+		id: 'eva4', role: 'Maintenance', name: 'Wen Zhao', age: 36, sex: 'm', anc: [0.03, 0.92, 0.05], job: 'a maintenance technician on the radiators', at: 'radiators', patrol: true, shift: 'day', col: '#4a4a6e', years: 4,
+		style: 'quiet, dry, precise with tools',
+		bio: 'keeps the radiator fins turned edge-on to the Sun and the coolant loops tight',
+		hobby: 'repairing old watches, slowly',
+		lines: ['Heat is the hard part up here. No air to carry it away.', 'Edge-on to the Sun, always. The fins are fussy.', 'A small leak in a coolant loop is a big day for me.'],
 	},
 ];
 export const byId = Object.fromEntries(CAST.map((c) => [c.id, c]));
@@ -110,7 +140,7 @@ export function placeFor(c, hours, hold = false) {
 	if (inH(h, 19, 22)) return 'lounge';
 	return 'work';
 }
-const WORK = { dome: 'checking the dome\'s air and the farm\'s numbers', cab: 'on shift in the traffic control tower', farm: 'tending the growing beds under the dome', med: 'on shift in the med bay', mine: 'on shift out at Copernicus Deep Mine', workshop: 'elbow-deep in a rover in the workshop', relay: 'out at Far Side Relay, tuning the dishes', observatory: 'on the night watch at Daedalus Observatory', mess: 'cooking in the mess', plaza: 'out at First Landing Plaza', depot: 'counting stores in the supply depot', shelter: 'checking the stores at Storm Shelter Four' };
+const WORK = { solar: 'brushing dust off the solar rows', pads: 'working cargo on the spaceport pads', airlock: 'on the hull checks round the hub', radiators: 'tending the radiator fins', dome: 'checking the dome\'s air and the farm\'s numbers', cab: 'on shift in the traffic control tower', farm: 'tending the growing beds under the dome', med: 'on shift in the med bay', mine: 'on shift out at Copernicus Deep Mine', workshop: 'elbow-deep in a rover in the workshop', relay: 'out at Far Side Relay, tuning the dishes', observatory: 'on the night watch at Daedalus Observatory', mess: 'cooking in the mess', plaza: 'out at First Landing Plaza', depot: 'counting stores in the supply depot', shelter: 'checking the stores at Storm Shelter Four' };
 // what they are doing now, in a few words
 export function activity(c, place) {
 	if (place === 'work') return WORK[c.at] || 'at work';

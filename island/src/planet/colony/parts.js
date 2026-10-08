@@ -527,7 +527,7 @@ export function plaza(X, o) {
 		put(X, F, LAMP, S.window, box(0.34, 0.18, 0.34), Math.sin(a) * 13.5, 1.5, Math.cos(a) * 13.5, 0, 0, 0, 1, true);
 		pool(X, F.p(Math.sin(a) * 13.5, 0, Math.cos(a) * 13.5).x, F.p(Math.sin(a) * 13.5, 0, Math.cos(a) * 13.5).z, o.y + 0.5, 6, S.window);
 	}
-	X.col.disc(o.x, o.z, 15, o.y + 0.45, { solid: false });
+	X.col.disc(o.x, o.z, 15, o.y + 0.65, { solid: false });
 	const pl = F.p(0, 0, -9);
 	X.col.box(pl.x, pl.z, o.yaw, 0.8, 0.8, o.y + 1.6);
 	label(X, F, 'sign', 'FIRST LANDING|THE FIRST BOOTPRINTS', 0, 1.42, -8.25, 0, 0.95, 0.42);
@@ -640,42 +640,6 @@ export function roverGeometry(S) {
 	for (const x of [-0.8, 0.8]) add(box(0.4, 0.2, 0.1).translate(x, 1.15, 2.12), S.window, LAMP);
 	add(box(0.3, 0.3, 0.3).translate(0, 2.9, -0.2), S.run, RUN);
 	add(box(0.06, 1.4, 0.06).translate(0.8, 3.3, -1.2), S.trim, HULL);
-	return merge(parts);
-}
-
-// a colonist in a pressure suit (origin at the feet); aLeg swings the legs and arms
-export function suitGeometry(S) {
-	const parts = [];
-	const add = (g, tint, mode, leg = 0) => { const p = paint(g, tint, mode); p.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count).fill(leg), 1)); parts.push(p); };
-	const white = [0.9, 0.9, 0.88];
-	add(cbox(0.56, 0.72, 0.4, 0.08).translate(0, 1.22, 0), white, HULL);
-	add(cbox(0.5, 0.62, 0.26, 0.06).translate(0, 1.26, -0.32), S.trim, HULL);
-	add(new THREE.SphereGeometry(0.21, 10, 8).translate(0, 1.76, 0.02), white, HULL);
-	add(new THREE.SphereGeometry(0.17, 10, 6, -1.2, 2.4, 0.9, 1.3).translate(0, 1.76, 0.08), [0.95, 0.66, 0.2], HULL);
-	add(box(0.12, 0.08, 0.04).translate(0, 1.42, 0.21), S.window, LAMP);
-	for (const s of [-1, 1]) {
-		add(cbox(0.2, 0.86, 0.22, 0.05).translate(s * 0.14, 0.43, 0), white, HULL, s);
-		add(box(0.21, 0.1, 0.3).translate(s * 0.14, 0.05, 0.04), S.trim, HULL, s);
-		add(cbox(0.15, 0.62, 0.16, 0.04).translate(s * 0.37, 1.18, 0), white, HULL, -s * 0.5);
-		add(box(0.16, 0.06, 0.17).translate(s * 0.37, 1.32, 0), S.accent, HULL, -s * 0.5);
-	}
-	return merge(parts);
-}
-
-// one of the crew indoors, out of the suit: a coverall, a face, short hair (origin at the feet)
-export function crewGeometry(S, k = 0) {
-	const parts = [];
-	const add = (g, tint, mode, leg = 0) => { const p = paint(g, tint, mode); p.setAttribute('aLeg', new THREE.BufferAttribute(new Float32Array(p.attributes.position.count).fill(leg), 1)); parts.push(p); };
-	const suit = [[0.30, 0.38, 0.48], [0.55, 0.30, 0.20], [0.30, 0.42, 0.34]][k % 3], skin = [[0.80, 0.62, 0.50], [0.52, 0.36, 0.26], [0.92, 0.76, 0.64]][k % 3];
-	add(cbox(0.44, 0.62, 0.26, 0.06).translate(0, 1.2, 0), suit, HULL);
-	add(box(0.46, 0.06, 0.28).translate(0, 1.36, 0), S.accent, HULL);
-	add(new THREE.SphereGeometry(0.12, 10, 8).scale(1, 1.15, 1).translate(0, 1.66, 0), skin, HULL);
-	add(new THREE.SphereGeometry(0.128, 10, 6, 0, TAU, 0, 1.4).translate(0, 1.69, -0.01), [0.12, 0.09, 0.07], HULL);
-	for (const sd of [-1, 1]) {
-		add(cbox(0.17, 0.86, 0.19, 0.04).translate(sd * 0.11, 0.43, 0), suit, HULL, sd);
-		add(box(0.17, 0.08, 0.26).translate(sd * 0.11, 0.04, 0.03), [0.1, 0.1, 0.11], HULL, sd);
-		add(cbox(0.12, 0.58, 0.13, 0.03).translate(sd * 0.29, 1.18, 0), suit, HULL, -sd * 0.5);
-	}
 	return merge(parts);
 }
 
