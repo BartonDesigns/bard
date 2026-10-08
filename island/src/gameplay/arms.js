@@ -43,7 +43,6 @@ export const TRANSACTION_KINDS = Object.freeze({
 export const SELL_BACK = 0.5;
 // the most of one item, and of credits, a player-to-player trade can carry
 export const TRADE_MAX_ITEMS = 12;
-export const TRADE_MAX_QUANTITY = 999;
 export const TRADE_MAX_CREDITS = 1000000;
 
 const SOURCE_PRICE_FACTOR = Object.freeze({
