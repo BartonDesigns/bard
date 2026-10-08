@@ -477,7 +477,7 @@ function mossback(k, F) {
 	k.add(block(0.016, 0.17, 0.042, 0.008, 0.003), RUBBER, -0.38, 0.04, 0);
 	sling(k, [-0.33, -0.026], [0.5, 0.08], 0.1);
 	// the scout scope sits forward, over the guard
-	scope(k, F, 0.27, 0.43, 0.168, 0.14, 0x39ff88);
+	scope(k, F, 0.27, 0.43, 0.186, 0.14, 0x39ff88);
 }
 // the Warden: a compact guard carbine, angular plates, a reflex sight, and in place of a muzzle
 // a ringed emitter that ends an encounter with a flash
@@ -634,7 +634,7 @@ const HANDLE = (y = 0, r = 0.012) => ({ c: v3(0, y, 0), r, a: v3(0, -1, 0), t: v
 // kind: 'long' (two hands, carried at the ready), 'one' (hangs in one hand), level: kept upright
 export const HOLDS = {
 	'aurora-trail-rifle': { kind: 'long', R: PISTOL, L: fore(0.42, 0.112, 0.036), sight: [-0.069, 0.198, 0.08], zoom: 1.9 },
-	'mossback-scout-rifle': { kind: 'long', R: PISTOL, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.168, 0.2], zoom: 1.5 },
+	'mossback-scout-rifle': { kind: 'long', R: PISTOL, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 1.5 },
 	'warden-spark-carbine': { kind: 'long', R: PISTOL, L: fore(0.22, 0.1, 0.036), sight: [0.04, 0.205, 0.22], zoom: 1.25 },
 	'reedline-hunting-bow': { kind: 'bow', side: 'L', L: { c: v3(0, 0, 0), r: 0.026, a: v3(0.3, 0, -1), t: v3(0, 1, 0) } },
 	'hunting-net': { kind: 'one', R: SHAFT(0, 0.018) },
