@@ -55,9 +55,10 @@ export function rills(x, z) {
 }
 const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 // the amplitude from its masks: inS in the survey (0..1), sl the survey's slope, base the
-// ground, urban the town map's density, wet the water's carve, fine a fine survey's share
-export function detailAmp(inS, sl, base, urban, wet, fine) {
-	return BAY_DETAIL_U.uBDAmp.value * (0.25 + 1.6 * Math.min(sl, 0.6)) * inS * sst(3, 25, base) * (1 - sst(0.03, 0.2, urban)) * (1 - sst(0.05, 0.6, Math.abs(wet))) * (1 - fine * 0.75);
+// ground, urban how built up it is, fine a fine survey's share. (Not the creeks' carving:
+// that comes and goes as you do, and the ground must not; it sets its own heights anyway.)
+export function detailAmp(inS, sl, base, urban, fine) {
+	return BAY_DETAIL_U.uBDAmp.value * (0.25 + 1.6 * Math.min(sl, 0.6)) * inS * sst(3, 25, base) * (1 - sst(0.03, 0.2, urban)) * (1 - fine * 0.75);
 }
 
 export const BAY_DETAIL_GLSL = /* glsl */`
@@ -89,12 +90,12 @@ float bdFine(vec2 w){
 	if (uRc.w > 0.0 && uRc.z <= 16.0) k = max(k, bIn(uBc, uRc, w, uRc.w));
 	return k;
 }
-float bayDetail(vec2 w, float base, float wet){
+float bayDetail(vec2 w, float base){
 	if (uBDAmp <= 0.0 || base < 3.0) return 0.0;
 	float inS = bIn(uB0, uR0, w, 3000.0);
 	if (inS <= 0.0) return 0.0;
 	float g0 = bLevel(uB0, uR0, w), sl = length(vec2(bLevel(uB0, uR0, w + vec2(40.0, 0.0)) - g0, bLevel(uB0, uR0, w + vec2(0.0, 40.0)) - g0)) / 40.0;
-	float a = uBDAmp * (0.25 + 1.6 * min(sl, 0.6)) * inS * smoothstep(3.0, 25.0, base) * (1.0 - smoothstep(0.03, 0.2, bdUrban(w))) * (1.0 - smoothstep(0.05, 0.6, abs(wet))) * (1.0 - bdFine(w) * 0.75);
+	float a = uBDAmp * (0.25 + 1.6 * min(sl, 0.6)) * inS * smoothstep(3.0, 25.0, base) * (1.0 - smoothstep(0.03, 0.2, bdUrban(w))) * (1.0 - bdFine(w) * 0.75);
 	return a > 0.0 ? bdRills(w) * a : 0.0;
 }
 `;

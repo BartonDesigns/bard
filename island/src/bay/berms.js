@@ -50,8 +50,29 @@ float bermDelta(vec2 w){
 	return d.r * edge + treadDelta(w);
 }`;
 
-export function createBerms(real, groundAt) {
-	const delta = new Float32Array(N * N), weight = new Float32Array(N * N);
+// The buildings keep the ground as surveyed: they were stood on it (city.js, houses.js,
+// commercial.js), so neither a road's grading nor a creek's carving reaches under one.
+// Into out (a grid of n x n points, the first at x0, z0, cell metres apart), how much each
+// point lies under the buildings: 1 within pad metres of the walls, easing to 0 over ease more.
+export function underBuildings(boxes, x0, z0, cell, n, out, pad = 1, ease = 4) {
+	for (const b of boxes) {
+		const ca = Math.cos(b.a), sa = Math.sin(b.a), hw = b.w / 2 + pad, hd = b.d / 2 + pad, r = Math.hypot(hw, hd) + ease;
+		const i0 = Math.max(0, Math.floor((b.x - r - x0) / cell)), i1 = Math.min(n - 1, Math.ceil((b.x + r - x0) / cell));
+		const j0 = Math.max(0, Math.floor((b.z - r - z0) / cell)), j1 = Math.min(n - 1, Math.ceil((b.z + r - z0) / cell));
+		for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+			const px = x0 + i * cell - b.x, pz = z0 + j * cell - b.z;
+			const d = Math.hypot(Math.max(0, Math.abs(px * ca + pz * sa) - hw), Math.max(0, Math.abs(pz * ca - px * sa) - hd));
+			if (d >= ease) continue;
+			const t = d / ease, k = j * n + i, v = 1 - t * t * (3 - 2 * t);
+			if (v > out[k]) out[k] = v;
+		}
+	}
+}
+
+// (groundAt: the ground as it stands; profileAt, what a road's grade is worked out from: the
+// ground that stays put, so the grade is the same whenever it is worked out)
+export function createBerms(real, groundAt, profileAt = groundAt) {
+	const delta = new Float32Array(N * N), weight = new Float32Array(N * N), under = new Float32Array(N * N);
 	const half = new Uint16Array(N * N * 2);
 	const tex = new THREE.DataTexture(half, N, N, THREE.RGFormat, THREE.HalfFloatType);
 	tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
@@ -74,7 +95,7 @@ export function createBerms(real, groundAt) {
 			const s = Math.min(L, k * STEP);
 			while (seg < acc.length - 2 && acc[seg + 1] < s) seg++;
 			const t = acc[seg + 1] > acc[seg] ? (s - acc[seg]) / (acc[seg + 1] - acc[seg]) : 0;
-			h[k] = groundAt(p[seg * 2] + (p[seg * 2 + 2] - p[seg * 2]) * t, p[seg * 2 + 1] + (p[seg * 2 + 3] - p[seg * 2 + 1]) * t);
+			h[k] = profileAt(p[seg * 2] + (p[seg * 2 + 2] - p[seg * 2]) * t, p[seg * 2 + 1] + (p[seg * 2 + 3] - p[seg * 2 + 1]) * t);
 		}
 		for (let pass = 0; pass < 3; pass++) {
 			const c = h.slice();
@@ -114,6 +135,9 @@ export function createBerms(real, groundAt) {
 				}
 			}
 		}
+		under.fill(0);
+		underBuildings(real.near('boxes', x, z, SIZE * 0.75), x0 + CELL / 2, z0 + CELL / 2, CELL, N, under);
+		for (let k = 0; k < N * N; k++) weight[k] *= 1 - under[k];
 		for (let k = 0; k < N * N; k++) { half[k * 2] = THREE.DataUtils.toHalfFloat(delta[k] * weight[k]); half[k * 2 + 1] = THREE.DataUtils.toHalfFloat(weight[k]); }
 		tex.needsUpdate = true;
 		BERM_U.uBermR.value.set(x0, z0, SIZE, 1);

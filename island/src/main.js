@@ -1006,7 +1006,7 @@ export function createIslandWorld() {
 			world.edge = createEdgelands(scene, { bay: bayNear, real: world.real, city: world.city, world: () => world, shared, isPhone });
 			// roads graded like real ones, with berms: the ground walked and driven on is the
 			// ground as drawn
-			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z));
+			world.berms = createBerms(world.real, (x, z) => bayArea.heightAt(x, z), (x, z) => bayArea.fixedAt(x, z));
 			const own = island.heightAt, berms = world.berms;
 			island.heightAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : berms.apply(x, z, bayArea.heightAt(x, z));
 			// (the ground as the GPU draws it, where people stand: bay/terrain.js)

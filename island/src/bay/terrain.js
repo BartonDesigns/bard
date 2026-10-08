@@ -358,7 +358,7 @@ export function createBayArea(shared, scene, island, BU) {
 		return smooth(0, 1, Math.min(1, Math.max(0, d / m)));
 	}
 	// the ground as surveyed, the levels blended (and the globe's past the survey); sv holds
-	// what groundAt's relief needs to know of it
+	// what fixedAt's relief needs to know of it
 	const sv = { e0: 0, inS: 0, fine: 0 };
 	function surveyAt(x, z) {
 		if (!levels[0]) return -60;
@@ -377,20 +377,23 @@ export function createBayArea(shared, scene, island, BU) {
 		sv.e0 = e0; sv.inS = inS; sv.fine = fine;
 		return h;
 	}
-	// the ground as walked; heightAt adds the cliffs steepened near you (coastside.js)
-	function groundAt(x, z) {
+	// the ground as it always is, wherever you are: the survey, the relief and the rivers'
+	// carving (not what is worked out round you as you come: the creeks' channels, water.js,
+	// and the cliffs, coastside.js)
+	function fixedAt(x, z) {
 		if (!levels[0]) return -60;
 		let h = surveyAt(x, z);
 		const { e0, inS, fine } = sv, L0 = levels[0];
 		// the engine's relief finer than the survey (earth/baydetail.js), none where anything is built
-		const wet = waterDelta(x, z);
 		if (inS > 0 && h >= 3 && BAY_DETAIL_U.uBDAmp.value > 0) {
 			const sl = Math.hypot(levelH(L0, x + 40, z) - e0, levelH(L0, x, z + 40) - e0) / 40;
-			const a = detailAmp(inS, sl, h, Math.max(urbanBil(x, z), builtAt(x, z)), wet, fine);
+			const a = detailAmp(inS, sl, h, Math.max(urbanBil(x, z), builtAt(x, z)), fine);
 			if (a > 0) h += rills(x, z) * a;
 		}
-		return h + carveDelta(x, z) + wet;
+		return h + carveDelta(x, z);
 	}
+	// the ground as walked; heightAt adds the cliffs steepened near you (coastside.js)
+	const groundAt = (x, z) => fixedAt(x, z) + waterDelta(x, z);
 	const heightAt = (x, z) => groundAt(x, z) + cliffDelta(x, z);
 
 	// ---------- loading ----------
@@ -454,7 +457,7 @@ export function createBayArea(shared, scene, island, BU) {
 		const U2 = { uC: { value: new THREE.Vector2() }, uHoleC: { value: new THREE.Vector2() }, uHole: { value: hole ? 1 : 0 }, uIslHalf: { value: island.half - 10 }, uN4: { value: 4 }, uN8: { value: 8 } };
 		m.onBeforeCompile = (sh) => {
 			Object.assign(sh.uniforms, BU, U2, REAL_U, BERM_U, CARVE_U, WC_U, WOODS_U, COAST_U, BAY_DETAIL_U, BSEAM_U, { uSunDir: shared.uSunDir, uUrban, uUR, uNightB, uTime: shared.uTime, uWet: shared.uWet || { value: 0 }, uLoam: LOAM[0], uTrailK: LOAM[1], uGroundK: LOAM[1] });
-			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); vec2 wc = wcAt(w); return b + (bdK > 0.0 ? bayDetail(w, b, wc.r) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wc.r * wvK : 0.0); }\n' + sh.vertexShader
+			sh.vertexShader = (LITE_V ? '#define GROUND_LITE_V\n' : '') + 'uniform int uN4, uN8;\n' + (hole ? '#define CLIFF(w) 0.0\n' : '#define CLIFF(w) cliffDelta(w)\n') + 'uniform vec2 uC; uniform float uHole;\nvarying vec2 vBW; varying float vBH; varying vec3 vBN; varying vec3 vCurv; varying float vBOut;\n' + BAY_GLSL + BERM_GLSL + CARVE_GLSL + WC_GLSL + COAST_VGLSL + BAY_DETAIL_GLSL + '\nfloat cvK = 1.0, wvK = 1.0, bdK = 1.0;\nfloat gradedHeight(vec2 w){ float b = bayHeight(w); return b + (bdK > 0.0 ? bayDetail(w, b) * bdK : 0.0) + CLIFF(w) + bermDelta(w) + (cvK > 0.0 ? carveAt(w).r * cvK : 0.0) + (wvK > 0.0 ? wcAt(w).r * wvK : 0.0); }\n' + sh.vertexShader
 				.replace('#include <beginnormal_vertex>', `
 					vec2 bw = position.xz + uC;
 					// (the river's channel carved finer than the survey, carve.js: near you, where the
@@ -1153,5 +1156,5 @@ export function createBayArea(shared, scene, island, BU) {
 		levels.fill(null);
 		BU.uBayOn.value = 0;
 	}
-	return { group, update, dispose, heightAt, drawnAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
+	return { group, update, dispose, heightAt, fixedAt, drawnAt, baseHeightAt: (x, z) => heightAt(x, z) - carveDelta(x, z), urbanAt, ready, coast, towns, loaded: () => BU.uBayOn.value > 0.5, levels };
 }
