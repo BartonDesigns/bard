@@ -39,6 +39,8 @@ export const tierOf = (t) => TIERS[int(t, 0, 4, 0)];
 // experience needed to go from this level to the next
 export const xpNeed = (level) => 60 * level;
 const statMult = (l, t) => (1 + 0.07 * (l - 1)) * STAT_TIER[t];
+// the same growth as one number for an instance (combat/weapons.js scales its numbers by it)
+export const statScale = (inst) => statMult(int(inst?.l, 1, MAX_LEVEL, 1), int(inst?.t, 0, 4, 0));
 
 // an instance, cleaned (null when it is not one)
 export function cleanInstance(x, known = () => true) {

@@ -260,6 +260,13 @@ const ITEMS = [
 		consumable: true,
 		heatRisk: 4,
 	},
+	// ammunition boxes for the field arms (combat/weapons.js): a box opens into its rounds at a reload
+	...[
+		['trail-rifle-box', 'Trail Rifle Cartridge Box', 'A box of game rounds for the Aurora Trail Rifle.', 28],
+		['scout-rifle-box', 'Scout Rifle Cartridge Box', 'A box of game rounds for the Mossback Scout Rifle.', 24],
+		['spark-cell-pack', 'Spark Cell Pack', 'Charge cells for the Warden Spark Carbine.', 32],
+		['reed-arrow-quiver', 'Reedline Arrow Quiver', 'A quiver of arrows for the Reedline Hunting Bow.', 16],
+	].map(([id, name, use, basePrice]) => ({ id, name, kind: 'ammo', fictional: true, activities: [ACTIVITIES.HUNTING, ACTIVITIES.HOME_DEFENSE], use, sources: { 'player-market': 'purchase', 'npc-trader': 'purchase', supermarket: 'purchase' }, marketTradable: true, basePrice, weight: 1, slot: 'utility', stackable: true, consumable: true, heatRisk: 0 })),
 	// the Moon colony's errand things (planet/colony/errands.js): carried, handed over, never sold
 	...[
 		['relay-transceiver-board', 'Relay Transceiver Board', 'A spare transceiver board for the Far Side Relay, signed out of the colony depot.'],
