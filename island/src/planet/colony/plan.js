@@ -247,8 +247,12 @@ export function planColony(island, profile, opts = {}) {
 		const out = (p) => Math.max(Math.abs(p.x), Math.abs(p.z)) > half + 600;
 		S.outer.forEach(([kind, name], i) => {
 			const ang = hub.yaw + 0.4 + i / S.outer.length * TAU + (r() - 0.5) * 0.5;
-			let d = 1900 + r() * 2400, p = { x: hub.x + Math.sin(ang) * d, z: hub.z + Math.cos(ang) * d };
+			// (the maglev's far terminals, the mine and the relay, out past the old horizon)
+			const line = kind === 'mine' || kind === 'relay';
+			let d = line ? 9200 + r() * 2200 : 1900 + r() * 2400, p = { x: hub.x + Math.sin(ang) * d, z: hub.z + Math.cos(ang) * d };
 			while (!out(p) && d < 9000) { d += 300; p = { x: hub.x + Math.sin(ang) * d, z: hub.z + Math.cos(ang) * d }; }
+			// (never down in a hollow under the zero line: the view there is taken for the sea)
+			for (let k = 0; k < 40 && H(p.x, p.z) < 4; k++) { d += 160; p = { x: hub.x + Math.sin(ang) * d, z: hub.z + Math.cos(ang) * d }; }
 			if (kind === 'mine' || kind === 'observatory') {
 				const cs = farCraters(p.x, p.z).filter((c) => c.r > 220).sort((u, v) => Math.hypot(u.x - p.x, u.z - p.z) - Math.hypot(v.x - p.x, v.z - p.z));
 				for (const c of cs) {
@@ -259,9 +263,12 @@ export function planColony(island, profile, opts = {}) {
 			// the highest point of its footprint, so nothing it stands on floats
 			let y = -1e9;
 			for (let k = 0; k < 9; k++) y = Math.max(y, H(p.x + (k ? Math.sin(k) * 9 : 0), p.z + (k ? Math.cos(k) * 9 : 0)));
-			outer.push({ kind, name, x: p.x, z: p.z, y: H(p.x, p.z) * 0.5 + y * 0.5, r: 18, yaw: Math.atan2(hub.x - p.x, hub.z - p.z), far: true });
+			outer.push({ kind, name, x: p.x, z: p.z, y: H(p.x, p.z) * 0.5 + y * 0.5, r: 18, yaw: Math.atan2(hub.x - p.x, hub.z - p.z), far: true, line });
 		});
-		for (const o of outer) tracks.push(route(H, gate(o), { x: o.x + Math.sin(o.yaw) * 24, z: o.z + Math.cos(o.yaw) * 24 }));
+		// the long maglev lines out to them replace the short one to the near mine
+		if (rail.length > 1) rail.length = 1;
+		for (const o of outer) if (o.line) rail.push(Object.assign([gate(o), { x: o.x + Math.sin(o.yaw) * 46, z: o.z + Math.cos(o.yaw) * 46 }], { to: o.name }));
+		for (const o of outer) if (!o.line) tracks.push(route(H, gate(o), { x: o.x + Math.sin(o.yaw) * 24, z: o.z + Math.cos(o.yaw) * 24 }));
 		for (const t of tracks) wear(island, t, 4);
 	}
 	for (const c of clear) trodden(island, c.x, c.z, c.r);

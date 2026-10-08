@@ -16,6 +16,8 @@ import { COLONY } from './styles.js';
 import { planCrew, createCrew } from './crew-life.js';
 import { createErrands } from './errands.js';
 import { personaOf, byId } from './crew.js';
+import { signMesh, disposeSigns } from './signs.js';
+import { createRide, speedAt, cabGroup } from './maglev.js';
 
 const TAU = Math.PI * 2;
 const BUILD = { mine, relay, scrubbers, wreck, plaza, observatory, shelter };
@@ -41,10 +43,13 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	const sites = [];
 	const site = (name, at, r, far, make) => {
 		X.K = new Kit();
+		X.sg = [];
 		try { make(); } catch (err) { console.error('[colony] ' + name, err); return; }
 		const g = new THREE.Group();
 		g.name = 'colony:' + name;
 		const meshes = X.K.build(mats, g, far === Infinity);
+		const sm = signMesh(X.sg);
+		if (sm) { sm.userData.near = true; g.add(sm); meshes.push(sm); }
 		group.add(g);
 		sites.push({ name, x: at.x, z: at.z, y: at.y, r, g, meshes, far, nearD: 380 });
 	};
@@ -73,7 +78,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		mesh.castShadow = mesh.receiveShadow = true;
 		mesh.name = 'colony:train';
 		group.add(mesh);
-		trains.push({ path, cum, len: cum[cum.length - 1], s: X.r() * cum[cum.length - 1], dir: 1, wait: 0, mesh });
+		trains.push({ path, cum, len: cum[cum.length - 1], s: X.r() * cum[cum.length - 1], dir: 1, wait: 0, mesh, to: line.to || null, name: `Line ${i + 1}` });
 	}
 	// coolant runs along the roads (the volcanic worlds' colonies), lifted on low trestles
 	if (P.pipes) site('Coolant lines', hb, 600, Infinity, () => {
@@ -183,7 +188,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		const P0 = camera.position, list = [];
 		list.push({ name: plan.name, x: hb.x, z: hb.z, y: hb.y, main: true, r: hb.r });
 		if (plan.port) list.push({ name: plan.port.name, x: plan.port.x, z: plan.port.z, y: plan.port.y, main: true, rail: plan.rail.length > 0, r: plan.port.r, port: true });
-		for (const o of [...plan.outposts, ...(plan.outer || [])]) list.push({ name: o.name, x: o.x, z: o.z, y: o.y, far: !!o.far, rail: !o.far && plan.rail.some((l) => Math.hypot(l[1].x - o.x, l[1].z - o.z) < 60), r: o.r, yaw: o.yaw });
+		for (const o of [...plan.outposts, ...(plan.outer || [])]) list.push({ name: o.name, x: o.x, z: o.z, y: o.y, far: !!o.far, rail: plan.rail.some((l) => Math.hypot(l[1].x - o.x, l[1].z - o.z) < 80), r: o.r, yaw: o.yaw });
 		for (const s of list) s.dist = Math.hypot(s.x - P0.x, s.z - P0.z);
 		return list;
 	};
@@ -201,7 +206,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		resident: (id, now) => ({ id: 'colony:' + id, source: 'colony', persona: personaOf(byId[id], { colony: plan.name, now, quest: errands?.questLine(id), news: errands?.news() }) }),
 	}) : null;
 	errands = crew ? createErrands({
-		plan, X, C: crewPlan, crew, camera, isPhone, mount: opts.mount, isTouch: opts.isTouch, hint: opts.hint, arms: opts.arms, social: opts.social, world: opts.world, player: opts.player,
+		plan, X, C: crewPlan, crew, camera, scene: group, isPhone, mount: opts.mount, isTouch: opts.isTouch, hint: opts.hint, arms: opts.arms, social: opts.social, world: opts.world, player: opts.player,
 		ride: (name) => { const i = siteList().findIndex((q) => q.name === name); if (i >= 0) life.ride(i); }, terminalNear: () => !!life.terminal(),
 	}) : null;
 	// a point along a polyline by distance, and its heading
@@ -257,7 +262,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		// the trains: along the line, easing into each station, a pause, back
 		for (const T of trains) {
 			if (T.wait > 0) { T.wait -= dt; continue; }
-			const edge = Math.min(T.s, T.len - T.s), sp = 4 + Math.min(1, edge / 120) * 26;
+			const edge = Math.min(T.s, T.len - T.s), sp = T.len > 2000 ? speedAt(edge, edge * 2 + 1) : 4 + Math.min(1, edge / 120) * 26;
 			T.s += T.dir * sp * dt;
 			if (T.s <= 0 || T.s >= T.len) { T.s = Math.max(0, Math.min(T.len, T.s)); T.dir *= -1; T.wait = 6; }
 			const c = Math.max(18, Math.min(T.len - 18, T.s));
@@ -265,6 +270,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 			T.mesh.position.set(pt.x, pt.y, pt.z);
 			T.mesh.rotation.set(-pt.pitch, pt.yaw, 0, 'YXZ');
 		}
+		ride.update(dt);
 		interiors.update(dt);
 		life.update(dt);
 		crew?.update(dt);
@@ -340,10 +346,23 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		opts.hint?.(`${plan.port ? plan.port.name : plan.name}\n${plan.name}`, 5000);
 		return plan.name;
 	}
+	// the maglev: from the hub out along a long line, or from its far station home
+	const ride = createRide({ camera, mount: opts.mount, hint: opts.hint, player: opts.player, scene: group, mesh: trains.length ? cabGroup(new THREE.Mesh(trainGeometry(S), mats.shell), mats.shell) : null });
+	function rideTo(s) {
+		const P0 = camera.position;
+		for (const T of trains) {
+			if (!T.to) continue;
+			const b = T.path[T.path.length - 1];
+			if (s.name === T.to) { ride.start(T, 1, s.name, () => goTo(s, true)); return true; }
+			if (s.main && !s.port && Math.hypot(P0.x - b.x, P0.z - b.z) < 400) { ride.start(T, -1, s.name, () => goTo(s, true)); return true; }
+		}
+		return false;
+	}
 	// arrive at any site: on open ground before it, looking at it (the hub: outside an airlock)
-	function goTo(s) {
+	function goTo(s, direct = false) {
 		const Pl = opts.player?.();
 		if (!s || !Pl) return null;
+		if (!direct && !ride.riding() && rideTo(s)) return s.name;
 		if (s.port) return go();
 		let at;
 		if (s.main && X.doors.length) { const d = X.doors[0]; at = { x: d.x + Math.sin(d.a) * 6, z: d.z + Math.cos(d.a) * 6 }; }
@@ -364,6 +383,8 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		life.dispose();
 		crew?.dispose();
 		errands?.dispose();
+		ride.dispose();
+		disposeSigns();
 		for (const m of [mats.shell, mats.glass, mats.air, walkMat, crewMat, roomMat, poolMat, plumeMat]) m?.dispose();
 		group.traverse((o) => o.geometry?.dispose());
 		scene.remove(group);
@@ -375,5 +396,5 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	};
 	const portAt = plan.port ? { name: `${profile.name.replace(/^the /, '').replace(/^\w/, (c) => c.toUpperCase())}: ${plan.name}`, x: plan.port.x, z: plan.port.z, y: plan.port.y } : null;
 	const crewApi = errands ? { mark: errands.mark, journal: errands.journal, errands, people: crew } : null;
-	return { crew: crewApi, update, floor: col.floor, push, go, goTo, sites: siteList, life, interiors, rooms: X.rooms, lifts: X.lifts, airlocks: X.airlocks, terminals: X.terminals, dispose, info, group, port: portAt };
+	return { crew: crewApi, ride, update, floor: col.floor, push, go, goTo, sites: siteList, life, interiors, rooms: X.rooms, lifts: X.lifts, airlocks: X.airlocks, terminals: X.terminals, dispose, info, group, port: portAt };
 }

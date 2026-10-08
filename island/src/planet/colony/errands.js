@@ -12,6 +12,7 @@
 import { CAST, byId, QUESTS, ITEMS, NEWS, REACT, stateOf, stepOf, step, errandFor, offerable, holds, inWindow } from './crew.js';
 import { makeGathering, gatheringStage } from '../../people/gatherings.js';
 import { formatClock, formatReal, realSecondsFor } from '../../people/appointments.js';
+import * as THREE from 'three';
 import { frame } from '../alienkit.js';
 
 const YES = /^(yes|yeah|yep|sure|ok(ay)?|of course|absolutely|i('| wi)ll (do it|go|come|help|be there)|count me in|happy to|on my way|deal)\b/i;
@@ -40,6 +41,16 @@ export function createErrands(o) {
 	const outer = (kind) => (plan.outer || []).find((q) => q.kind === kind) || null;
 	const terminal = (key) => X.terminals.find((T) => (key === 'depot' ? T.kind === 'depot' : outer(key) && T.name === outer(key).name + ' terminal')) || null;
 	const wreck = outer('wreck'), wreckAt = wreck ? frame(wreck.x, wreck.y, wreck.z, wreck.yaw).p(0, 0, 2) : null;
+	// what the errands show out there: the relay's fault light (red, blinking, until the
+	// board is in), the Kestrel's recorder beacon (blinking amber till it is taken)
+	const lamps = new THREE.Group();
+	lamps.name = 'colony:errand-lamps';
+	o.scene?.add(lamps);
+	const lampGeo = new THREE.SphereGeometry(0.09, 10, 8);
+	const lamp = (p, c) => { const m = new THREE.Mesh(lampGeo, new THREE.MeshBasicMaterial({ color: c })); m.position.copy(p); lamps.add(m); return m; };
+	const relayO = outer('relay');
+	const fault = relayO ? lamp(frame(relayO.x, relayO.y, relayO.z, relayO.yaw).p(0.7, 2.3, -6.9), 0xff2a1a) : null;
+	const beacon = wreckAt ? lamp(new THREE.Vector3(wreckAt.x + 0.5, wreck.y + 0.35, wreckAt.z + 0.4), 0xffa020) : null;
 	function placeOf(st) {
 		if (!st) return null;
 		const who = st.to || st.by;
@@ -225,8 +236,12 @@ export function createErrands(o) {
 	}
 
 	// ---------- each moment ----------
-	let clock = 0;
+	let clock = 0, blink = 0;
 	function update(dt) {
+		blink += dt;
+		const fixed = stateOf(S, 'relay').s === 'done' || ['report'].includes(stepOf(S, 'relay')?.id);
+		if (fault) { fault.material.color.setHex(fixed ? 0x30ff60 : 0xff2a1a); fault.visible = fixed || Math.sin(blink * 6) > 0; }
+		if (beacon) beacon.visible = stateOf(S, 'kestrel').s === 'none' || stepOf(S, 'kestrel')?.id === 'find' ? Math.sin(blink * 4) > 0.3 : false;
 		clock -= dt;
 		if (clock > 0) return;
 		clock = 0.3;
@@ -287,7 +302,11 @@ export function createErrands(o) {
 		if (stage !== 'arriving' && stage !== 'on') return false;
 		return ['historian', 'director', 'cook', 'hydro', 'medic', 'quartermaster', 'mechanic'].slice(0, isPhone ? 4 : 7).includes(id) && !holds(S, id);
 	}
-	function dispose() { if (doBtn) { removeEventListener('keydown', onKey); doBtn.remove(); } }
+	function dispose() {
+		if (doBtn) { removeEventListener('keydown', onKey); doBtn.remove(); }
+		lamps.removeFromParent(); lampGeo.dispose();
+		for (const m of lamps.children) m.material.dispose();
+	}
 	return {
 		S, talkOpen, talkReply, buttons, act, update, mark, journal, news, questLine, watching, dispose,
 		holds: (id) => holds(S, id),

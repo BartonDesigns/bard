@@ -8,6 +8,9 @@
 import * as THREE from 'three';
 import { Kit, frame, box, cbox, prism, blob, ring } from '../alienkit.js';
 import { inward, roverGeometry } from './parts.js';
+import { signMesh, at as sign } from './signs.js';
+import { CAST } from './crew.js';
+import { CROPS } from './farm.js';
 
 const TAU = Math.PI * 2;
 const HULL = 0, PRINT = 1, LAMP = 5;
@@ -35,7 +38,7 @@ export function createColonyInteriors(X, o) {
 
 	// ---------- the rooms ----------
 	function build(key) {
-		const K = new Kit(), extra = [];
+		const K = new Kit(), extra = [], sg = [];
 		const put = (F, tint, mode, g, lx = 0, ly = 0, lz = 0, ry = 0, rx = 0) => K.add('room', F.put(g, lx, ly, lz, ry, rx), { tint, glow: mode });
 		const R = X.rooms;
 		if (key === 'hub') {
@@ -46,14 +49,20 @@ export function createColonyInteriors(X, o) {
 				put(F, WHITE, HULL, new THREE.CylinderGeometry(0.9, 0.9, 2.4, 14), Math.sin(a) * 12.2, 1.2, Math.cos(a) * 12.2);
 				put(F, [0.3, 0.6, 0.9], LAMP, box(0.1, 1.6, 0.05), Math.sin(a) * 11.28, 1.3, Math.cos(a) * 11.28, a);
 			}
-			for (const M of R.modules) room(M, put, extra);
+			for (const M of R.modules) { room(M, put, extra); detail(M, put, sg); }
+			// the farm's bays named at their outer ends, the dome's own sign by its terminal
+			for (let i = 0; i < 8; i++) { const a = d.yaw + (i + 0.5) / 8 * TAU, Fb = frame(d.x, d.y, d.z, a); sg.push(sign(Fb, 'sign', `BAY ${i + 1}|${{ lettuce: 'LETTUCE · NFT', tomato: 'TOMATO · TRELLIS', strawberry: 'STRAWBERRY TOWERS', wheat: 'DWARF WHEAT', herbs: 'HERBS · BASIL', pepper: 'PEPPERS', soy: 'SOYBEAN', greens: 'LEAFY GREENS' }[CROPS[i]]}`, 0, 2.55, 10.62, 0, 0.9)); }
+			sg.push(sign(F, 'sign', 'HYDROPONICS|DECK 0 · DOME', 0, 2.9, 3.45, 0, 1.4));
+			sg.push(sign(F, 'screen', 'FARM LOG  P.RAMAN|O2 yield   31%  of colony|H2O loop   98.7% recovered|BAY 5 basil  READY · to mess|BAY 4 wheat  day 52 of 70', 0, 1.9, 3.42, 0, 0.95));
 			for (const T of R.towers) lounge(T, put);
 		}
-		if (key === 'cab' && R.cab) control(R.cab, put, extra);
+		if (key === 'cab' && R.cab) { control(R.cab, put, extra); const C = R.cab, F = frame(C.x, C.y, C.z, C.yaw); sg.push(sign(F, 'screen', 'TRAFFIC  T.REYES|MAGLEV L1 PORT-HUB    ON TIME|MAGLEV L2 COPERNICUS  ON TIME|MAGLEV L3 FAR SIDE    ON TIME|ROVERS 5/5 · LANDERS 2 DUE', 0, C.cab + 1.7, -4.2, 0, 1.0)); }
 		const g = new THREE.Group();
 		g.name = 'colony:rooms:' + key;
 		for (const m of K.build(mats, g, true)) { m.castShadow = false; m.receiveShadow = false; }
 		for (const m of extra) g.add(m);
+		const sm = signMesh(sg);
+		if (sm) g.add(sm);
 		group.add(g);
 		return g;
 	}
@@ -143,6 +152,67 @@ export function createColonyInteriors(X, o) {
 		}
 		// a screen and a console by the door in every room
 		put(F, SCREEN[M.i % 3], LAMP, box(0.05, 0.45, 0.7), -2.3, D + 1.6, z1 - 1.6);
+	}
+	// what makes a module lived in: its name over the door, the airlock's state, a log on the
+	// door screen, gauges, the emergency locker, cable runs along the ceiling, the door seals;
+	// and by its role a roster, a menu, spare suits, labelled crates, names on the bunks
+	const ROOM = { mess: 'MESS', quarters: 'QUARTERS', med: 'MED BAY', workshop: 'WORKSHOP', lounge: 'OBSERVATION LOUNGE', depot: 'SUPPLY DEPOT' };
+	const LOG = {
+		mess: 'GALLEY  O.HADDAD|breakfast 06:00 lunch 12:00|supper 18:00 · lentils, flatbread|basil soup if BAY 5 delivers',
+		quarters: 'QUARTERS|lights down 22:00|quiet hours 22:00-06:00|K.MORI sleeps days: hush',
+		med: 'MED BAY  S.ADEYEMI|dust exposure study wk 31|need: fresh core, Copernicus|bone density checks Thu',
+		workshop: 'WORKSHOP  D.FERREIRA|ROVER 4 hub bearing: dust|ROVER 2 ready · ROVER 5 ready|suit 3 visor scratched',
+		lounge: 'OBSERVATION LOUNGE|earthrise watch: ask L.ORTEGA|the Kestrel 6th anniversary|no food near the glass',
+		depot: 'STORES  H.BRANDT|food 40 days · O2 candles 220|relay boards: 1 spare|sign for it, then take it',
+	};
+	const CRATES = ['FAR SIDE RELAY|ANTENNA FEED ASSY', 'COPERNICUS|DRILL BITS x12', 'DAEDALUS|CRYO COOLANT', 'SHELTER 4|RATIONS 30 DAY', 'MED BAY|FILTER MASKS x40', 'COPERNICUS|CORE TUBES x20', 'FAR SIDE RELAY|TX BOARD SPARE', 'HYDROPONICS|NUTRIENT B'];
+	function detail(M, put, sg) {
+		const F = M.frame, z0 = M.d0, z1 = M.z1, L = M.L, D = 0.4, n = M.i + 1;
+		const zz = (t) => z0 + 1.6 + (L * 0.7 - 2.2) * t;
+		sg.push(sign(F, 'sign', `DECK 1 · ${ROOM[M.role]}|MODULE ${n}`, 0, D + 2.75, z0 + 0.2, 0, 1.3));
+		sg.push(sign(F, 'ok', `AIRLOCK ${n}|PRESSURISED`, 1.25, D + 2.2, z1 - 0.2, Math.PI, 0.7));
+		sg.push(sign(F, 'screen', LOG[M.role], -2.27, D + 1.6, z1 - 1.6, Math.PI / 2, 0.7));
+		// the gauges by the door: oxygen and water
+		for (const [k, t] of [[0, 'O2  20.9%'], [1, 'H2O  88%']]) {
+			put(F, [0.15, 0.16, 0.17], HULL, new THREE.CylinderGeometry(0.13, 0.13, 0.05, 16).rotateZ(Math.PI / 2), -2.33, D + 2.15, z1 - 2.5 - k * 0.4);
+			sg.push(sign(F, 'screen', t, -2.3, D + 2.15, z1 - 2.5 - k * 0.4, Math.PI / 2, 0.24, 0.12));
+		}
+		// the emergency locker at the airlock end
+		put(F, [0.66, 0.12, 0.1], HULL, cbox(0.35, 1.2, 0.6, 0.03), 2.2, D + 0.9, z1 - 0.9);
+		sg.push(sign(F, 'red', 'EMERGENCY|O2 · SUIT PATCH', 2.02, D + 1.2, z1 - 0.9, -Math.PI / 2, 0.5));
+		// cable runs along the ceiling, in trays
+		for (const sx of [-1.25, 1.25]) {
+			put(F, [0.3, 0.31, 0.33], HULL, box(0.22, 0.05, L * 0.7 - 0.6), sx, 4.42, z0 + L * 0.35);
+			for (const [dx, c] of [[-0.06, [0.7, 0.2, 0.15]], [0, [0.15, 0.15, 0.16]], [0.06, [0.2, 0.35, 0.7]]]) put(F, c, HULL, new THREE.CylinderGeometry(0.022, 0.022, L * 0.7 - 0.7, 5).rotateX(Math.PI / 2), sx + dx, 4.47, z0 + L * 0.35);
+		}
+		// the door seals: dark gaskets round both hatches
+		for (const z of [z0 + 0.12, z1 - 0.12]) put(F, [0.06, 0.06, 0.06], HULL, box(1.85, 0.08, 0.06), 0, D + 2.3, z);
+		const role = M.role;
+		if (role === 'mess') {
+			sg.push(sign(F, 'screen', 'TODAY|lentils · flatbread|dome basil soup|sourdough (Omar\'s)', 2.39, D + 1.7, zz(0.3), -Math.PI / 2, 1.3));
+			sg.push(sign(F, 'screen', 'DUTY ROSTER|' + CAST.slice(0, 6).map((c) => c.name.split(' ')[0].toUpperCase().padEnd(8) + ' ' + c.shift).join('  ') + '|' + CAST.slice(6).map((c) => c.name.split(' ')[0].toUpperCase().padEnd(8) + ' ' + c.shift).join('  '), 2.39, D + 1.7, zz(0.65), -Math.PI / 2, 1.3));
+		} else if (role === 'workshop') {
+			// spare suits on their rack, a little dusty at the knees
+			put(F, [0.3, 0.31, 0.33], HULL, box(0.08, 0.08, 2.6), -2.05, D + 2.05, zz(0.12));
+			for (let k = 0; k < 3; k++) {
+				const z = zz(0.12) - 0.85 + k * 0.85;
+				put(F, [0.9, 0.9, 0.88], HULL, cbox(0.42, 0.62, 0.26, 0.06), -2.0, D + 1.45, z);
+				put(F, [0.82, 0.78, 0.7], HULL, cbox(0.38, 0.75, 0.22, 0.06), -2.0, D + 0.75, z);
+				put(F, [0.85, 0.9, 0.95], HULL, new THREE.SphereGeometry(0.17, 10, 8), -2.0, D + 1.95, z);
+				put(F, [0.9, 0.55, 0.12], HULL, box(0.44, 0.06, 0.28), -2.0, D + 1.6, z);
+			}
+			sg.push(sign(F, 'warn', 'EVA SUITS|CHECK SEALS', -2.3, D + 2.55, zz(0.12), Math.PI / 2, 0.8));
+			sg.push(sign(F, 'sign', 'TOOL WALL|RETURN WHAT YOU TAKE', 2.4, D + 2.45, zz(0.25), -Math.PI / 2, 1.0));
+		} else if (role === 'depot') {
+			for (let k = 0; k < 4; k++) for (const sx of [-1, 1]) sg.push(sign(F, 'crate', CRATES[(k * 2 + (sx > 0)) % CRATES.length], sx * 1.74, D + 0.32, zz(0.05 + k * 0.24) - 0.35, sx > 0 ? -Math.PI / 2 : Math.PI / 2, 0.42));
+			sg.push(sign(F, 'warn', 'SIGN FOR IT|THEN TAKE IT', 0, D + 2.3, zz(0.92) + 1.2, Math.PI, 0.9));
+		} else if (role === 'quarters') {
+			CAST.forEach((c, j) => { const side = j % 2 ? 1 : -1, k = (j >> 1); if (z0 + 2.2 + k * 2.4 > z0 + L * 0.65) return; sg.push(sign(F, 'sign', c.name.toUpperCase(), side * 1.35, D + 1.0, z0 + 2.2 + k * 2.4, side > 0 ? -Math.PI / 2 : Math.PI / 2, 0.42)); });
+		} else if (role === 'lounge') {
+			sg.push(sign(F, 'screen', 'EARTHRISE WATCH|from the windowed end|the Kestrel, remembered|all off-shift crew welcome', 0, D + 1.8, zz(0.08) + 0.04, 0, 1.6));
+		} else if (role === 'med') {
+			sg.push(sign(F, 'red', 'MED BAY|DUST? RINSE EYES HERE', 2.07, D + 2.0, zz(0.4), -Math.PI / 2, 0.8));
+		}
 	}
 	// the tower's lobby and lift, and its lounge up behind the window band
 	function lounge(T, put) {

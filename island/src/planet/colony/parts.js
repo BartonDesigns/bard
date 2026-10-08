@@ -7,6 +7,20 @@
 
 import * as THREE from 'three';
 import { lathe, prism, box, cbox, ring, sweep, geodesic, geoPanes, blob, frame } from '../alienkit.js';
+import { farmBay } from './farm.js';
+import { at as sign } from './signs.js';
+// lettering for the site being built (colony.js gathers X.sg into one mesh per site)
+const label = (X, ...a) => { X.sg?.push(sign(...a)); };
+// bootprints pressed round a point: pairs of dark little ovals wandering out and back
+function prints(X, x, z, y, n, R) {
+	const S = X.S;
+	for (let k = 0; k < n; k++) {
+		const a = X.r() * TAU, d = 1.5 + Math.sqrt(X.r()) * R, px = x + Math.sin(a) * d, pz = z + Math.cos(a) * d, yaw = X.r() * TAU;
+		X.K.add('shell', frame(px, Math.max(y, X.H(px, pz)) + 0.02, pz, yaw).put(cbox(0.12, 0.025, 0.28, 0.02)), { tint: S.berm.map((v) => v * 0.5), glow: REG, near: true });
+	}
+}
+// dust drifted against something's foot
+const drift = (X, F, lx, lz, w, d, ry = 0) => put(X, F, REG, X.S.berm.map((v) => v * 1.05), blob(w, 0.35, d, 8, 0), lx, -0.1, lz, ry, 0, 0, 1, true);
 
 const TAU = Math.PI * 2;
 const HULL = 0, PRINT = 1, WIN = 2, REG = 3, LAMP = 5, RUN = 6, COOL = 7;
@@ -64,10 +78,9 @@ export function hub(X, h) {
 	// the farm under the dome: growing beds on the floor in rings, violet lamps over them, a printed core
 	for (let i = 0; i < 8; i++) {
 		const a = h.yaw + (i + 0.5) / 8 * TAU, Fb = frame(h.x, h.y, h.z, a);
-		put(X, Fb, PRINT, S.print, cbox(1.8, 0.75, 4.6, 0.15), 0, 0.37, 8.4);
-		put(X, Fb, HULL, [0.16, 0.42, 0.14], cbox(1.6, 0.3, 4.4, 0.1), 0, 0.85, 8.4);
-		put(X, Fb, LAMP, [0.9, 0.35, 1.0], box(0.2, 0.08, 4.2), 0, 3.0, 8.4, 0, 0, 0, 1, true);
-		put(X, Fb, HULL, S.trim, box(0.08, 2.2, 0.08), 0, 1.9, 8.4 + 2.1, 0, 0, 0, 1, true);
+		// (a real crop in each bay: farm.js)
+		if (P.dome === 'glass') farmBay(X, Fb, i, 8.4, X.r, S);
+		else { put(X, Fb, PRINT, S.print, cbox(1.8, 0.75, 4.6, 0.15), 0, 0.37, 8.4); put(X, Fb, HULL, [0.16, 0.42, 0.14], cbox(1.6, 0.3, 4.4, 0.1), 0, 0.85, 8.4); put(X, Fb, LAMP, [0.9, 0.35, 1.0], box(0.2, 0.08, 4.2), 0, 3.0, 8.4, 0, 0, 0, 1, true); }
 		const c = Fb.p(0, 0, 8.4);
 		X.col.box(c.x, c.z, a, 0.95, 2.35, h.y + 1.0, { floor: false });
 		X.spots.push({ x: Fb.p(1.4, 0, 8.4).x, z: Fb.p(1.4, 0, 8.4).z, y: h.y, yaw: a - Math.PI / 2, room: 'farm' });
@@ -110,6 +123,8 @@ export function hub(X, h) {
 		pool(X, door.x, door.z, h.y, 7, S.window);
 		X.doors.push({ x: door.x, z: door.z, a, inner: M.p(0, 0, z1 - 1.5), lock: M.p(0, 0, z1 + 3.4) });
 		X.airlocks.push({ x: lock.x, z: lock.z, yaw: a, hw: 1.3, hd: 1.6, y: h.y });
+		prints(X, door.x, door.z, h.y, X.det > 0.8 ? 70 : 35, 7);
+		label(X, M, 'sign', `AIRLOCK ${i + 1}|${ROLES[i % ROLES.length].toUpperCase()}`, 0, 3.75, z1 + 3.36, 0, 1.0);
 		// walls: the room's sides and bulkheads, the berm's foot, the airlock's sides; the deck
 		const W = (x0, z0, x1, z1b, top, hw = 0.15) => X.col.seg(M.p(x0, 0, z0), M.p(x1, 0, z1b), hw, h.y + top, undefined, h.y - 1);
 		W(-2.55, d0, -2.55, z1, 5.2); W(2.55, d0, 2.55, z1, 5.2);
@@ -362,6 +377,20 @@ export function mine(X, o) {
 	X.col.disc(o.x, o.z, 5, o.y + h + 3);
 	const hp = F.p(9, 0, 0);
 	X.col.box(hp.x, hp.z, o.yaw, 3.2, 3.2, o.y + 8);
+	if (o.far) {
+		// the core racks: sealed tubes of regolith in their cradles, waiting for the haul
+		for (let rk = 0; rk < 2; rk++) {
+			const lz = 8.2 + rk * 1.6;
+			put(X, F, HULL, S.trim, box(2.4, 0.08, 0.6), 5.2, 0.9, lz);
+			put(X, F, HULL, S.trim, box(2.4, 0.08, 0.6), 5.2, 0.4, lz);
+			for (const sx of [-1.15, 1.15]) put(X, F, HULL, S.trim, box(0.08, 1.0, 0.6), 5.2 + sx, 0.5, lz);
+			for (let k = 0; k < 6; k++) for (const y of [0.52, 1.02]) put(X, F, HULL, k % 3 ? [0.75, 0.75, 0.72] : [0.9, 0.5, 0.12], new THREE.CylinderGeometry(0.07, 0.07, 0.55, 8).rotateX(Math.PI / 2), 4.25 + k * 0.38, y, lz);
+		}
+		label(X, F, 'warn', 'CORE RACK|SEALED SAMPLES', 5.2, 1.5, 7.85, Math.PI, 1.0);
+		label(X, F, 'sign', 'COPERNICUS DEEP MINE|R.KOWALSKI · FACE 3', 9, 4.3, 3.05, 0, 1.6);
+		for (const [lx, lz] of [[-4, 4.6], [4.4, -4.4], [12, 3.2]]) drift(X, F, lx, lz, 1.4, 0.8);
+		prints(X, F.p(3, 0, 10).x, F.p(3, 0, 10).z, o.y, 50, 7);
+	}
 }
 
 // comms: dishes on their pedestals turned up to the sky (on the Moon, toward Earth)
@@ -377,6 +406,16 @@ export function relay(X, o) {
 	put(X, F, RUN, S.run, box(0.4, 0.4, 0.4), 0, 3.6, -9, 0, 0, 0, 1, true);
 	const q = F.p(0, 0, -9);
 	X.col.box(q.x, q.z, o.yaw, 3, 2, o.y + 3.2);
+	if (o.far) {
+		// the transceiver bay: its access panel swung open, the cards inside, the fault plate
+		put(X, F, HULL, [0.1, 0.11, 0.12], box(1.4, 1.4, 0.1), 1.6, 1.4, -6.98);
+		for (let k = 0; k < 6; k++) put(X, F, HULL, k === 3 ? [0.5, 0.15, 0.1] : [0.2, 0.45, 0.25], box(0.06, 1.1, 0.3), 1.1 + k * 0.2, 1.4, -6.92);
+		put(X, F, HULL, S.hull, box(1.4, 1.4, 0.06), 2.95, 1.4, -6.35, -1.9);
+		label(X, F, 'warn', 'RX CHAIN 2|ACCESS PANEL', 1.6, 2.35, -6.9, 0, 1.0);
+		label(X, F, 'sign', 'FAR SIDE RELAY|A.HOLM · CH 1-6', -1.6, 2.6, -6.94, 0, 1.2);
+		for (const [lx, lz] of [[-3.2, -6.8], [3.2, -11], [0, -11.2]]) drift(X, F, lx, lz, 1.2, 0.7);
+		prints(X, F.p(0, 0, -4).x, F.p(0, 0, -4).z, o.y, 40, 6);
+	}
 	X.terminals.push({ x: F.p(0, 0, -6.5).x, z: F.p(0, 0, -6.5).z, y: o.y, kind: 'map', name: o.name + ' terminal' });
 }
 // a dish of radius R on its pedestal, turned up to the sky
@@ -430,7 +469,7 @@ export function solarFarm(X, s) {
 
 // ---------- out past the land (the Moon's far sites) ----------
 // a footing for ground that was never levelled: a slab sunk deep enough to meet it all round
-export function footing(X, F, w, d) { put(X, F, PRINT, X.S.print, cbox(w, 4, d, 0.3), 0, -1.75, 0); }
+export function footing(X, F, w, d) { put(X, F, PRINT, X.S.print, cbox(w, 4, d, 0.3), 0, -1.75, 0); X.col.box(F.x, F.z, F.yaw, w / 2, d / 2, F.y + 0.25, { solid: false }); }
 // a lander that came down hard: on its side, half dug in, its legs and panels strewn back
 // along the furrow it ploughed, a beacon still blinking for whoever comes
 export function wreck(X, o) {
@@ -449,6 +488,15 @@ export function wreck(X, o) {
 	for (const lz of [-9, -17]) X.K.add('shell', sweep([F.p(-2, 0.2, lz), F.p(1.5, 0.3, lz - 4)], 0.16, 5, { seg: 1 }), { tint: S.trim, glow: HULL });
 	put(X, F, RUN, [1.0, 0.65, 0.1], box(0.4, 0.4, 0.4), 1.5, 2.2, 3, 0, 0, 0, 1, true);
 	X.col.disc(B.x, B.z, 3.6, o.y + 3);
+	// the debris field fanned out past the gouge: panels, a bent strut, a wheel, a tank
+	for (let k = 0; k < 40; k++) {
+		const lx = (X.r() - 0.5) * (10 + k * 0.6), lz = -6 - X.r() * 44, sz = 0.2 + X.r() * 0.9;
+		const tint = X.r() < 0.5 ? S.hull.map((v) => v * 0.55) : X.r() < 0.5 ? [0.6, 0.44, 0.15] : [0.25, 0.25, 0.27];
+		put(X, F, HULL, tint, k % 4 === 0 ? new THREE.CylinderGeometry(sz * 0.3, sz * 0.3, sz * 1.4, 7) : k % 4 === 1 ? box(0.08, 0.08, sz * 2.4) : cbox(sz * 1.3, 0.06, sz, 0.02), lx, 0.08, lz, X.r() * TAU, (X.r() - 0.5) * 0.9, (X.r() - 0.5) * 0.9, 1, true);
+	}
+	for (const [lx, lz] of [[-3, 4], [3.5, 1], [0, -4]]) drift(X, F, lx, lz, 1.3, 0.8);
+	label(X, F, 'warn', 'KESTREL · DO NOT|REMOVE · HISTORIC SITE', -6, 0.9, 6, 0, 1.3);
+	put(X, F, HULL, S.trim, box(0.12, 1.2, 0.12), -6, 0.4, 5.95);
 }
 // where people first stood here: a hexagonal plaza round the old landing site, a low rail
 // round the trodden ground, the bootprints kept under it, a plinth with nothing on it
@@ -482,6 +530,7 @@ export function plaza(X, o) {
 	X.col.disc(o.x, o.z, 15, o.y + 0.45, { solid: false });
 	const pl = F.p(0, 0, -9);
 	X.col.box(pl.x, pl.z, o.yaw, 0.8, 0.8, o.y + 1.6);
+	label(X, F, 'sign', 'FIRST LANDING|THE FIRST BOOTPRINTS', 0, 1.42, -8.25, 0, 0.95, 0.42);
 }
 // an observatory on a crater rim: a great dish, a domed telescope with its slit open, a hut
 export function observatory(X, o) {
@@ -500,6 +549,15 @@ export function observatory(X, o) {
 	const hp = F.p(2, 0, -9);
 	X.col.box(hp.x, hp.z, o.yaw, 3, 2, o.y + 3);
 	X.terminals.push({ x: F.p(2, 0, -6.6).x, z: F.p(2, 0, -6.6).z, y: o.y, kind: 'map', name: o.name + ' terminal' });
+	// the dish's drive housing: the azimuth gear ring and its motor box, the hatch open
+	put(X, F, HULL, S.trim, ring(2.4, 0.35, 0.5, 24), -8, 0.2, 0);
+	for (let k = 0; k < 24; k++) { const a = k / 24 * TAU; put(X, F, HULL, [0.35, 0.35, 0.36], box(0.12, 0.45, 0.2), -8 + Math.sin(a) * 2.6, 0.45, Math.cos(a) * 2.6, a); }
+	put(X, F, HULL, S.accent, cbox(1.6, 1.3, 1.2, 0.08), -4.8, 0.65, 1.8);
+	put(X, F, HULL, [0.1, 0.11, 0.12], box(0.9, 0.7, 0.05), -4.8, 0.7, 2.42);
+	label(X, F, 'warn', 'AZ DRIVE|HAND CRANK INSIDE', -4.8, 1.55, 2.43, 0, 0.9);
+	label(X, F, 'sign', 'DAEDALUS OBSERVATORY|K.MORI · NIGHT WATCH', 2, 3.4, -6.98, 0, 1.6);
+	for (const [lx, lz] of [[5, 4], [-1, -11], [12, -2]]) drift(X, F, lx, lz, 1.2, 0.7);
+	prints(X, F.p(2, 0, -5).x, F.p(2, 0, -5).z, o.y, 40, 6);
 }
 // a radiation shelter: a printed vault under a deep berm, a door, stores, a solar mast
 export function shelter(X, o) {
@@ -516,18 +574,21 @@ export function shelter(X, o) {
 	put(X, F, RUN, S.run, box(0.3, 0.3, 0.3), 0, 5.6, 0, 0, 0, 0, 1, true);
 	X.col.box(o.x, o.z, o.yaw, 7, 7.2, o.y + 5);
 	X.terminals.push({ x: F.p(1.6, 0, 9.4).x, z: F.p(1.6, 0, 9.4).z, y: o.y, kind: 'map', name: o.name + ' terminal' });
+	label(X, F, 'warn', 'STORM SHELTER 4|SOLAR FLARE: GET IN', 0, 3.45, 8.32, 0, 1.6);
+	prints(X, F.p(0, 0, 11).x, F.p(0, 0, 11).z, o.y, 35, 5);
 }
 
 // ---------- the maglev ----------
 // the guideway on its pylons, a few metres over the ground's highs, eased level between
 export function railLine(X, pts) {
 	const S = X.S, H = X.H, a = pts[0], b = pts[1];
-	const L = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(2, Math.ceil(L / 6));
+	// (the long lines out past the horizon in longer spans, on pylons every sixty metres)
+	const L = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(2, Math.ceil(L / (L > 1500 ? 20 : 6)));
 	const raw = [];
 	for (let i = 0; i <= n; i++) {
 		const t = i / n, x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t;
 		let g = -1e9;
-		for (const o of [-12, -6, 0, 6, 12]) g = Math.max(g, H(x + (b.x - a.x) / L * o, z + (b.z - a.z) / L * o));
+		for (const o of L > 1500 ? [-24, -12, 0, 12, 24] : [-12, -6, 0, 6, 12]) g = Math.max(g, H(x + (b.x - a.x) / L * o, z + (b.z - a.z) / L * o));
 		raw.push({ x, z, g: H(x, z), y: g + X.railH });
 	}
 	// (ends at the stations' deck height)

@@ -94,3 +94,14 @@ test('the earthrise watch is a small valid gathering, close round its spot', () 
 	const L = crowdLayout('watch', g.size, g.seed);
 	for (let i = 0; i < g.size; i++) assert.ok(Math.hypot(L[i * 3], L[i * 3 + 1]) < 1.8);
 });
+
+test('the maglev eases up to about 300 km/h, cruises, and brakes into the station', async () => {
+	const { speedAt } = await import('../src/planet/colony/maglev.js');
+	const len = 11000;
+	assert.ok(speedAt(0, len) < 5);
+	assert.ok(Math.abs(speedAt(len / 2, len) * 3.6 - 299) < 2);
+	assert.ok(speedAt(len - 1, len) < 5);
+	let s = 0, t = 0;
+	while (s < len && t < 1000) { s += speedAt(s, len) * 0.25; t += 0.25; }
+	assert.ok(t > 120 && t < 200, `ride takes ${t} s`);
+});

@@ -22,7 +22,8 @@ import { CAST, placeFor, activity } from './crew.js';
 const TAU = Math.PI * 2, RING = 13.6, DOME = 15;
 const hash = (s) => s.split('').reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261) >>> 0;
 // a coverall of the trade's colour, or the same cut in suit white with the colour as trim
-const coverall = (col, suit) => ({ gen: 'alien', top: { kind: 'suit', col: suit ? '#e6e6e2' : col, acc: suit ? col : '#d8d8d4', pat: 'block', fit: 'fitted', sleeves: 'long', fab: 'tech' }, outer: null, bottom: { kind: 'suit', col: suit ? '#e2e2de' : col, acc: suit ? col : '#d8d8d4', pat: 'plain', legs: 'long', fit: 'regular', fab: 'tech' }, shoes: { kind: 'boot', col: suit ? '#cfcfca' : '#3a3d42', sole: '#1b1b1d' }, acc: [] });
+// (the legs greyed with the dust of the EVA)
+const coverall = (col, suit) => ({ gen: 'alien', top: { kind: 'suit', col: suit ? '#e6e6e2' : col, acc: suit ? col : '#d8d8d4', pat: 'block', fit: 'fitted', sleeves: 'long', fab: 'tech' }, outer: null, bottom: { kind: 'suit', col: suit ? '#cfc9bd' : col, acc: suit ? col : '#d8d8d4', pat: 'plain', legs: 'long', fit: 'regular', fab: 'tech' }, shoes: { kind: 'boot', col: suit ? '#cfcfca' : '#3a3d42', sole: '#1b1b1d' }, acc: [] });
 // how they walk the rooms: lane points (local x, share of the module's length) clear of the furniture
 const LANES = { lounge: [[0, 0.3], [1.85, 0.36], [1.85, 0.62]], workshop: [[0.9, 0.2]], mess: [[0.5, 0.15]], med: [[0.3, 0.15]] };
 
@@ -70,10 +71,10 @@ export function createCrew(X, C, o) {
 	const LIMIT = isPhone ? 4 : 8, BUILD = isPhone ? 60 : 85, FREE = BUILD + 50;
 	let A = null, failed = false, building = false, clock = 0, t = 0;
 	// the helmet, the collar and the pack: shared shapes and materials
-	const glass = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.22, depthWrite: false });
+	const glass = new THREE.MeshStandardMaterial({ color: 0xcfe6ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.3, depthWrite: false });
 	const shell = new THREE.MeshStandardMaterial({ color: 0xe8e8e4, roughness: 0.55 });
 	const dark = new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.6 });
-	const ball = new THREE.SphereGeometry(1, 20, 14), torus = new THREE.TorusGeometry(1, 0.22, 8, 20).rotateX(Math.PI / 2), pack = new THREE.BoxGeometry(0.34, 0.46, 0.17), pipe = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6);
+	const ball = new THREE.SphereGeometry(1, 20, 14), cap = new THREE.SphereGeometry(1, 16, 10, Math.PI * 1.12, Math.PI * 0.76, 0, Math.PI * 0.62), torus = new THREE.TorusGeometry(1, 0.22, 8, 20).rotateX(Math.PI / 2), pack = new THREE.BoxGeometry(0.34, 0.46, 0.17), pipe = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6);
 	const markTex = { offer: markTexture('offer'), ready: markTexture('ready') };
 	const markMat = { offer: new THREE.SpriteMaterial({ map: markTex.offer, depthTest: false, transparent: true }), ready: new THREE.SpriteMaterial({ map: markTex.ready, depthTest: false, transparent: true }) };
 
@@ -168,9 +169,12 @@ export function createCrew(X, C, o) {
 	}
 	function suitGear(P) {
 		const s = P.height / 1.7, head = P.bones[P.map.head], neck = P.bones[P.map.neck01] || head, back = P.bones[P.map.spine01] || P.bones[0];
-		const helmet = new THREE.Mesh(ball, glass); helmet.scale.setScalar(0.19 * s); helmet.position.set(0, 0.1 * s, 0.015); helmet.renderOrder = 4;
+		const helmet = new THREE.Group(); helmet.position.set(0, 0.1 * s, 0.015);
+		const bubble = new THREE.Mesh(ball, glass); bubble.scale.setScalar(0.19 * s); bubble.renderOrder = 4;
+		const shellB = new THREE.Mesh(cap, shell); shellB.scale.setScalar(0.195 * s);
+		helmet.add(bubble, shellB);
 		const collar = new THREE.Mesh(torus, shell); collar.scale.set(0.12 * s, 0.12 * s, 0.12 * s); collar.position.set(0, 0.0, 0.0);
-		const pk = new THREE.Mesh(pack, shell); pk.position.set(0, 0.02, -0.2 * s); pk.castShadow = true;
+		const pk = new THREE.Mesh(pack, shell); pk.position.set(0, 0.22 * s, -0.2 * s); pk.castShadow = true;
 		const hose = new THREE.Mesh(pipe, dark); hose.position.set(0.12 * s, 0.25 * s, -0.12 * s); hose.rotation.x = 0.7;
 		head.add(helmet); neck.add(collar); back.add(pk, hose);
 		return [helmet, collar, pk, hose];
@@ -274,7 +278,7 @@ export function createCrew(X, C, o) {
 		stopTalk();
 		for (const f of folk) if (f.built) drop(f);
 		scene.remove(group);
-		for (const g of [ball, torus, pack, pipe]) g.dispose();
+		for (const g of [ball, cap, torus, pack, pipe]) g.dispose();
 		for (const m of [glass, shell, dark, markMat.offer, markMat.ready]) m.dispose();
 		markTex.offer.dispose(); markTex.ready.dispose();
 	}

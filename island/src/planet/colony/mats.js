@@ -8,11 +8,13 @@
 //   5 self-lit: lamps, grow lights, a rover's headlights
 //   6 running lights: blinking, each to its own beat
 //   7 coolant: a glow running along the pipe
+//   8 living: leaves, fruit and roots, as painted, a little brighter where light comes through
 // Small shader, no loops: phones and Apple GPUs run it as they do the rest.
 
 import * as THREE from 'three';
 
 const HEAD_V = /* glsl */`
+uniform float uCurve;
 attribute float aGlow;
 varying vec3 vCW;
 varying vec3 vCN;
@@ -63,6 +65,8 @@ const LOOK = /* glsl */`
 		float ph = cH(floor(vCW * 0.25)) * 6.2831;
 		float b = smoothstep(0.82, 0.9, sin(uTime * 2.4 + ph));
 		cEm = (0.15 + b * 2.5) * uLampK; cEmC = cCol; cCol *= 0.25;
+	} else if (vCG > 7.5) {
+		cCol *= 0.9 + 0.2 * cH(floor(vCW * 9.0));
 	} else {
 		float f = 0.55 + 0.45 * sin(dot(vCW, vec3(0.7, 0.2, 0.5)) * 0.6 - uTime * 2.2);
 		cEm = f * (0.6 + uNight * 0.9); cEmC = cCol; cCol *= 0.3;
@@ -76,6 +80,9 @@ attribute float aLeg;
 attribute vec2 aPh;
 uniform float uTime, uHop;
 `;
+// the ground falls away with the curve of a small world (world/terrain.js does the same)
+const CURVE = `
+			transformed.y -= uCurve * dot(vCW.xz - cameraPosition.xz, vCW.xz - cameraPosition.xz) / 3.47e6;`;
 const WALK = /* glsl */`
 	float cSw = sin(uTime * 4.2 + aPh.x) * aPh.y;
 	if (aLeg != 0.0) {
@@ -105,7 +112,7 @@ export function shellMaterial(U, o = {}) {
 			#endif
 			vCW = (modelMatrix * cw).xyz;
 			vCN = normalize(mat3(modelMatrix) * objectNormal);
-			vCG = aGlow;`);
+			vCG = aGlow;${CURVE}`);
 		sh.fragmentShader = HEAD_F + sh.fragmentShader
 			.replace('#include <color_fragment>', '#include <color_fragment>\n' + LOOK)
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += cEmC * cEm;' + (o.inside ? ROOM : ''));
@@ -128,5 +135,5 @@ export function poolMaterial(U) {
 }
 // the shared uniforms (colony.js sets them each frame)
 export function colonyUniforms(shared, S) {
-	return { uTime: shared.uTime, uNight: { value: 0 }, uLampK: { value: 1 }, uWinC: { value: new THREE.Color(...S.window) } };
+	return { uTime: shared.uTime, uNight: { value: 0 }, uLampK: { value: 1 }, uWinC: { value: new THREE.Color(...S.window) }, uCurve: { value: S.hard ? 1 : 0 } };
 }
