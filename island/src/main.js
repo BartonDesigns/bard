@@ -1620,7 +1620,7 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
-		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); }
+		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); }
 		W.orbit?.render(time);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
@@ -1956,6 +1956,8 @@ if (typeof window !== 'undefined') {
 		// a cliff settlement (planet/arch/): Crysis.arch() tells of it, Crysis.archGo(i) stands you on house i's deck (then the towers)
 		arch: () => window.L99Island?.world?.()?.arch?.info() || null,
 		archGo: (i = 0) => window.L99Island?.world?.()?.arch?.go(i) || 'no cliff settlement on this world',
+		// the settlements' glow: 'on', 'off' (phones start off), or a threshold 0..1
+		archGlow: (v) => window.L99Island?.world?.()?.arch?.glow?.(v) ?? 'no cliff settlement on this world',
 		// a realm of castles (planet/medieval/): Crysis.medieval() tells of it, Crysis.medieval('castle')
 		// goes to look (castle, realm, gate, keep, wall, town, square, chapel, windmill, bridge, barrow…);
 		// Crysis.quests() lists its quests; Crysis.dungeon(i) goes down into one ('stair', 'last' or

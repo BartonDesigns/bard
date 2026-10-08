@@ -16,6 +16,7 @@ import { createMist } from './clouds.js';
 import { createGlow } from './glow.js';
 import { towerPlan, housePlan, frame as roomFrame } from './rooms.js';
 import { createInteriors } from './interiors.js';
+import { createBloom } from './bloom.js';
 
 const TAU = Math.PI * 2;
 // the material's looks (mats.js)
@@ -690,6 +691,8 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	const buildings = shells.map((o) => (o.house ? housePlan(o) : towerPlan(o)));
 	for (const B of buildings) { const hl = hulls.get(B.name); if (hl?.length) B.hull = hl; }
 	const In = createInteriors(scene, shared, buildings, { isPhone, env, hint: opts.hint, settlement: plan.name, player: opts.player });
+	const bloom = opts.renderer ? createBloom(opts.renderer, { isPhone }) : null;
+	let glowK = 0;
 	// the lifts and the craft, instanced in the shared material
 	const inst = (geo, n, name) => {
 		const m = new THREE.InstancedMesh(geo, mats.shell, Math.max(1, n));
@@ -796,6 +799,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			duskU.value.set(k * 0.92, b, 0, 0);
 			// (a darker exposure at this dusk: the sky sets it each frame, before this)
 			if (opts.renderer) opts.renderer.toneMappingExposure *= 1 - 0.38 * k;
+			glowK = Math.max(k, night);
 			const sd = shared.uSunDir.value, a = Math.atan2(sd.x, sd.z) + 0.45;
 			moonU.value.set(Math.sin(a) * 0.9, 0.42, Math.cos(a) * 0.9, k);
 		}
@@ -884,6 +888,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		mist.dispose();
 		glow.dispose();
 		In.dispose();
+		bloom?.dispose();
 		scene.remove(group);
 	}
 	const info = () => {
@@ -899,5 +904,10 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	};
 	const floor = (x, z, y) => Math.max(col.floor(x, z, y), In.floor(x, z, y));
 	const push = (p, footY) => { col.push(p, footY); In.push(p, footY); };
-	return { update, floor, push, go, dispose, info, group, plan, interiors: In };
+	// the glow after the frame (main.js, after the sunbeams): near the settlement, at dusk and by night, and in its rooms
+	const post = () => {
+		const p = camera.position, near = Math.hypot(p.x - plan.centre.x, p.z - plan.centre.z) < plan.mist.rad + 2500;
+		bloom?.post(near ? (In.indoors() ? 0.75 : glowK) : 0);
+	};
+	return { update, floor, push, go, dispose, info, group, plan, interiors: In, post, glow: (v) => bloom?.control(v) ?? 'no glow here' };
 }
