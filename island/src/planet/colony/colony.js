@@ -128,15 +128,15 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		const P3 = [];
 		for (const rd of plan.tracks) for (let k = 0; k < rd.length - 1; k++) {
 			const a = rd[k], b = rd[k + 1], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1, nx = dz / l, nz = -dx / l;
-			for (const off of [-0.9, 0.9]) {
-				const q = [[a, off - 0.3], [a, off + 0.3], [b, off - 0.3], [b, off + 0.3]].map(([p, o2]) => { const x = p.x + nx * o2, z = p.z + nz * o2; return [x, H(x, z) + 0.06, z]; });
+			for (const off of [-0.85, 0.85]) {
+				const q = [[a, off - 0.22], [a, off + 0.22], [b, off - 0.22], [b, off + 0.22]].map(([p, o2]) => { const x = p.x + nx * o2, z = p.z + nz * o2; return [x, H(x, z) + 0.06, z]; });
 				P3.push(...q[0], ...q[2], ...q[1], ...q[1], ...q[2], ...q[3]);
 			}
 		}
 		const g = new THREE.BufferGeometry();
 		g.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3));
 		g.computeVertexNormals();
-		const c = S.berm.map((v2) => v2 * 0.62);
+		const c = S.berm.map((v2) => v2 * 0.38);
 		const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(c[0], c[1], c[2]), roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }));
 		m.receiveShadow = true; m.name = 'colony:tracks';
 		group.add(m);
