@@ -39,7 +39,7 @@ function leviathan(ctx, B) {
 	const head = headAt(0, new THREE.Vector3());
 	for (let i = 0; i < N * 6; i++) trail.push(headAt(-i * 0.02, new THREE.Vector3()));
 	B.parts = () => {
-		const out = segs.map((s, i) => ({ type: 'sphere', c: s.p, r: s.r * 0.95, part: 'body' }));
+		const out = segs.map((s) => ({ type: 'sphere', c: s.p, r: s.r * 0.95, part: 'body' }));
 		out.push({ type: 'sphere', c: eye.position, r: 0.55, part: 'eye' }, { type: 'sphere', c: heart.position, r: 0.9, part: 'heart' });
 		return out;
 	};
@@ -120,7 +120,7 @@ function walker(ctx, B) {
 		return out;
 	};
 	B.surface = 'machine';
-	B.attack = (name, step, k) => {
+	B.attack = (name, step) => {
 		const me = ctx.eye();
 		if (name === 'mortar') {
 			if (step === 'telegraph-start') { B.marks = []; for (let i = 0; i < 5 + B.mc.M.phase * 2; i++) { const x = me.x + rnd(-7, 7), z = me.z + rnd(-7, 7), y = ctx.ground(x, z, me.y); B.marks.push({ x, y, z }); ctx.fx.ring(x, y, z, 3.5, 1.8 + 2.2, 0xff5a2a, true); } }

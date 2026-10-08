@@ -24,7 +24,7 @@ import { createCars } from './cars.js';
 import { createFireField } from './fire.js';
 import { createBoss } from './bosses.js';
 import { BOSSES } from './boss-defs.js';
-import { createRelations, FACTIONS, PLAYER, factionsFor } from './factions.js';
+import { createRelations, FACTIONS, PLAYER } from './factions.js';
 import { createMorality } from './morality.js';
 import { createCompass } from './compass.js';
 
