@@ -1177,5 +1177,8 @@ export function createVegetation(island, shared, scene, flora = null) {
 		}
 		if (lastX < 1e8) stream({ position: { x: lastX, z: lastZ } }, true);
 	};
-	return { group, stream, react, pickables, obstacles, species, cells, eco, addContacts };
+	// the boulders drawn round you, and a strike that makes one jump (main.js: the strike prompt)
+	const boulders = () => resonanceBindings;
+	function kick(it, k = 0.6) { const r = it.resonance ||= { y: 0, v: 0 }; r.v += Math.max(0, Math.min(1, k)) * 3.2; }
+	return { group, stream, react, pickables, obstacles, species, cells, eco, addContacts, boulders, kick };
 }

@@ -196,17 +196,17 @@ uniform float uTime;
 uniform vec3 uHor;
 varying vec2 vUv;
 varying vec4 vS;
-${NOISE}
 void main(){
 	vec2 q = vUv;
 	float d = 0.0, sd = vS.x * 37.0;
 	for (int i = 0; i < 7; i++) {
-		float fi = float(i), hx = mH(vec2(sd, fi)), hy = mH(vec2(fi, sd));
+		float fi = float(i), hx = fract(sin(sd + fi * 12.9898) * 43758.5453), hy = fract(sin(sd * 1.7 + fi * 78.233) * 43758.5453);
 		vec2 c = vec2((hx - 0.5) * 1.3, -0.55 + hy * 0.55 * (1.0 - abs(hx - 0.5) * 1.4) + (i == 0 ? 0.45 : 0.0));
-		float r = 0.26 + mH(vec2(sd + 3.0, fi)) * 0.22 + (i == 0 ? 0.12 : 0.0);
+		float r = 0.26 + fract(sin(sd * 2.3 + fi * 39.71) * 43758.5453) * 0.22 + (i == 0 ? 0.12 : 0.0);
 		d = max(d, smoothstep(r, r * 0.45, length((q - c) * vec2(1.0, 1.15))));
 	}
-	float n = mF(q * 3.2 + vS.x * 11.0 + uTime * 0.004);
+	// (smooth folds from waves, not a hash: at this size a hash speckles)
+	float n = 0.5 + 0.22 * sin(q.x * 6.3 + vS.x * 20.0) * sin(q.y * 5.1 + vS.x * 13.0) + 0.16 * sin(q.x * 13.7 - q.y * 9.1 + vS.x * 31.0);
 	d *= smoothstep(0.25, 0.6, d + n * 0.45 - 0.2) * smoothstep(-0.78, -0.62, q.y);
 	float a = d * uSkyDusk.x * vS.y;
 	if (a < 0.01) discard;

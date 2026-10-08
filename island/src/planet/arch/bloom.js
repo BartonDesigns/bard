@@ -9,7 +9,7 @@ import * as THREE from 'three';
 const VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
 export function createBloom(renderer, { isPhone = false } = {}) {
-	const U = { uSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uDir: { value: new THREE.Vector2() }, uK: { value: 1 }, uThr: { value: 0.62 } };
+	const U = { uSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uDir: { value: new THREE.Vector2() }, uK: { value: 1 }, uThr: { value: 0.6 } };
 	const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
 	quad.frustumCulled = false;
 	const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -20,8 +20,9 @@ export function createBloom(renderer, { isPhone = false } = {}) {
 		uniform sampler2D uSrc; uniform vec2 uTexel; uniform float uThr; varying vec2 vUv;
 		vec3 tap(vec2 o){
 			vec3 c = texture2D(uSrc, vUv + o * uTexel).rgb;
-			float m = max(c.r, max(c.g, c.b)), s = m - min(c.r, min(c.g, c.b));
-			return c * smoothstep(uThr, 1.0, m + s * 0.25);
+			// (by brightness, not by the strongest channel: a magenta sky is bright red but not light)
+			float l = dot(c, vec3(0.3, 0.55, 0.15));
+			return c * smoothstep(uThr, uThr + 0.3, l);
 		}
 		void main(){ gl_FragColor = vec4((tap(vec2(-1.5, -1.5)) + tap(vec2(1.5, -1.5)) + tap(vec2(-1.5, 1.5)) + tap(vec2(1.5, 1.5))) * 0.25, 1.0); }`);
 	const blur = mat(/* glsl */`
@@ -36,6 +37,8 @@ export function createBloom(renderer, { isPhone = false } = {}) {
 	const comp = mat(/* glsl */`
 		uniform sampler2D uSrc; uniform float uK; varying vec2 vUv;
 		void main(){ vec3 c = texture2D(uSrc, vUv).rgb * uK; gl_FragColor = vec4(c, 1.0); }`, { transparent: true, blending: THREE.AdditiveBlending });
+	// (compiled now, not on the first frame it is wanted)
+	for (const m of [bright, blur, comp]) { quad.material = m; try { renderer.compile(scene, cam); } catch { /* compiled when first drawn */ } }
 	let fb = null, rtA = null, rtB = null;
 	const size = new THREE.Vector2();
 	function targets() {
@@ -66,7 +69,7 @@ export function createBloom(renderer, { isPhone = false } = {}) {
 			U.uDir.value.set(s, 0); pass(blur, rtA.texture, rtB);
 			U.uDir.value.set(0, s); pass(blur, rtB.texture, rtA);
 		}
-		U.uK.value = k * 1.6;
+		U.uK.value = k * 0.9;
 		pass(comp, rtA.texture, prev);
 		renderer.autoClear = auto;
 	}

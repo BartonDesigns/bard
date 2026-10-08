@@ -117,6 +117,7 @@ export function createGuide(mount, api) {
 			if (W.magma?.tube) { const t = W.magma.tube[Math.floor(W.magma.tube.length / 2)]; out.push({ name: 'the lava tube', x: t.x, z: t.z, y: t.y + 1.5, fact: 'a rock tunnel carrying a molten stream from the vent', kind: 'island', under: true }); }
 			(W.caverns?.tunnels || []).forEach((t, i) => { const m = t[Math.floor(t.length / 2)]; out.push({ name: `sea cave ${i + 1}`, x: t[0].x, z: t[0].z, y: t[0].y + 2, fact: 'a swim-through lava cave with glowing walls', kind: 'island', under: true, mid: m }); });
 			(W.underworld?.entrances || []).forEach((e, i) => out.push({ ...e, caveEntrance: i, kind: 'island', fact: 'a walkable hillside mouth into this world’s connected underground; walk down the tunnel and return by the same route' }));
+			if (W.deep?.gate) out.push({ name: 'The Deep Gate', x: W.deep.gate.x, z: W.deep.gate.z, kind: 'island', fact: 'a ring of five singing stones round a sealed shaft; play back the phrase the ring answers with and a rope goes down into a cave with no known bottom' });
 			if (W.whale?.whale?.position) out.push({ name: 'the whale', x: W.whale.whale.position.x, z: W.whale.whale.position.z, fact: 'a humpback in the bay', kind: 'island' });
 			// an off-world colony's sites (planet/colony/)
 			for (const s of W.colony?.sites?.() || []) out.push({ name: s.name, x: s.x, z: s.z, y: s.y, fact: s.far ? 'an outpost of the colony, out along the rover tracks' : 'part of the colony', kind: 'colony' });
@@ -522,7 +523,7 @@ export function createGuide(mount, api) {
 		if (arms?.kind && arms.kind !== 'none') return arms.message;
 		if (/\b(cave|caves|underground|cavern)\b/.test(q) && !/^(take me|go|fly|bring me|teleport me|travel)/.test(q)) {
 			const t = find('nearest cave'), cam = api.camera.position;
-			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Tap the three resonant stones in an alcove to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
+			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Strike the three resonant stones in an alcove (look at one and press E, or tap it) to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
 		}
 		const travel = travelRequest(text);
 		if (travel) {
@@ -964,7 +965,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		endTalk(); resetView('journal'); show(true);
 		const W = api.world(), cam = api.camera.position;
 		say('CAVE EXPLORATION', 'note');
-		say('Walk through a hillside mouth into the underground. Play the three resonant stones in an alcove to restore guiding lights. You can walk back to the surface at any time.', 'guide');
+		say('Walk through a hillside mouth into the underground. Strike the three resonant stones in an alcove (look at one and press E, or tap it) to restore guiding lights. You can walk back to the surface at any time.', 'guide');
 		const caves = targets().filter(t => t.caveEntrance !== undefined).sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z));
 		if (!caves.length) say('There are no mapped land-cave entrances on this surface.', 'note');
 		for (const t of caves) {
@@ -976,6 +977,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (caveVisits[api.social?.bodyKey()]) say('✓ You have explored this world’s underground.', 'note');
 		const stats = W?.underworld?.elements?.stats();
 		if (stats) say(`${stats.completed} of ${stats.sites} resonance alcoves restored. ${stats.saveError || 'Progress is saved on this device.'}`, 'note');
+		const deep = W?.deep?.info();
+		if (deep) say(deep.open ? `The Deep Gate is open. Deepest reached: ${deep.deepest} m; ${deep.waystones} waystone${deep.waystones === 1 ? '' : 's'} touched; ${deep.alcoves} deep alcove${deep.alcoves === 1 ? '' : 's'} restored.` : 'The Deep Gate is sealed: strike one of its five stones, listen, and play the phrase back.', 'note');
 	}
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;

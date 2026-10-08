@@ -736,6 +736,16 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	}
 	const craftMesh = inst(craftGeo, crafts.length, 'craft');
 	// the doors' glass leaves, two to a doorway
+	// an open door shows the room behind it: a quad over the doorway drawn first, depth only, so
+	// the skin behind it is not drawn there and the room (drawn before it) shows through
+	const punchMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+	for (const D of X.doors) {
+		const m = new THREE.Mesh(new THREE.PlaneGeometry(D.w - 0.05, D.h - 0.05).translate(0, D.h / 2, 0), punchMat);
+		const p = D.F.p(0, 0, 0.06);
+		m.position.copy(p); m.rotation.y = D.F.yaw; m.renderOrder = -1; m.visible = false; m.name = 'arch:doorway';
+		group.add(m);
+		D.punch = m;
+	}
 	const doors = X.doors, leafMesh = inst(mergeGeometries([paint(new THREE.BoxGeometry(1, 1, 0.08).translate(0, 0.5, 0), S.slab.map((c) => c * 2), G.glazing), paint(new THREE.BoxGeometry(1, 0.03, 0.1).translate(0, 0.985, 0), S.trim, G.metal), paint(new THREE.BoxGeometry(0.03, 1, 0.1).translate(0.485, 0.5, 0), S.strip, G.lamp)]), doors.length * 2, 'doors');
 	// the mist band, glowing from below where the towers stand in it
 	const banks = (plan.cities || []).map((c) => ({ x: c.x, z: c.z, r: 75, y: (island.sea || 0) + 8, rise: 30, n: 14, size: 75 }));
@@ -840,8 +850,9 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			for (let i = 0; i < doors.length; i++) {
 				const D = doors[i], d = Math.hypot(pp.x - D.F.x, pp.z - D.F.z, (pp.y - 1.7) - D.F.y), t = d < 4.5 ? 1 : 0;
 				D.o += (t - D.o) * Math.min(1, dt * 3);
+				D.punch.visible = D.o > 0.04;
 				for (const k of [-1, 1]) {
-					const lx = k * (D.w / 4 + D.o * D.w * 0.47), p = D.F.p(lx, 0, -0.08);
+					const lx = k * (D.w / 4 + D.o * D.w * 0.47), p = D.F.p(lx, 0, 0.12);
 					e.set(0, D.F.yaw + (k < 0 ? Math.PI : 0), 0); q.setFromEuler(e);
 					mx.compose(p, q, tg.set(D.w / 2, D.h, 1)); leafMesh.setMatrixAt(i * 2 + (k > 0 ? 1 : 0), mx);
 				}
@@ -904,7 +915,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		duskU.value.set(0, 1, 0, 0);
 		moonU.value.w = 0;
 		envRT?.dispose();
-		for (const m of [mats.shell, mats.glass, contactMat]) m.dispose();
+		for (const m of [mats.shell, mats.glass, contactMat, punchMat]) m.dispose();
 		group.traverse((o) => o.geometry?.dispose());
 		mist.dispose();
 		heroes.dispose();
@@ -931,5 +942,5 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		const p = camera.position, near = Math.hypot(p.x - plan.centre.x, p.z - plan.centre.z) < plan.mist.rad + 2500;
 		bloom?.post(near ? (In.indoors() ? 0.75 : glowK) : 0);
 	};
-	return { update, floor, push, go, dispose, info, group, plan, interiors: In, post, glow: (v) => bloom?.control(v) ?? 'no glow here' };
+	return { update, floor, push, go, dispose, info, group, plan, interiors: In, doors: X.doors, post, glow: (v) => bloom?.control(v) ?? 'no glow here' };
 }

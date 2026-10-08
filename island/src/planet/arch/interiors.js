@@ -125,6 +125,8 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 		g.rotation.y = V.F.yaw;
 		g.name = 'arch:in:' + V.B.name + ':' + V.i;
 		const m = new THREE.Mesh(r.solid, mat);
+		// (drawn first: an open door's quad keeps the skin from covering it, arch.js)
+		m.renderOrder = -2;
 		m.name = 'arch:in:solid';
 		g.add(m);
 		if (r.glass) { const gm = new THREE.Mesh(r.glass, glass); gm.renderOrder = 6; gm.name = 'arch:in:glass'; g.add(gm); }
@@ -134,6 +136,7 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 			im.instanceMatrix.array.set(I.mats);
 			im.instanceMatrix.needsUpdate = true;
 			im.computeBoundingSphere();
+			im.renderOrder = -2;
 			g.add(im);
 		}
 		group.add(g);
@@ -265,7 +268,7 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 		if (!V.built) build(V);
 		// (a spot clear of the furniture and the pools: nudged along toward the view until it is)
 		const clear = (x, z) => !V.dyn.box.some((b) => Math.hypot(x - b.x, z - b.z) < Math.hypot(b.hw, b.hd) + 1.2) && !V.dyn.cuts.some((c) => inPiece(c.r != null ? { ...c, r: c.r + 1 } : { ...c, hw: c.hw + 1, hd: c.hd + 1 }, x, z));
-		if (!clear(at[0], at[1])) {
+		if (R.kind !== 'crown' && !clear(at[0], at[1])) {
 			// (else the clearest of a few spots near the room's near end, looking down it)
 			const c = [];
 			if (V.round) for (let k = 0; k < 16; k++) { const a = k / 16 * TAU, r = V.r * (k % 2 ? 0.55 : 0.75); c.push([Math.sin(a) * r, Math.cos(a) * r]); }
