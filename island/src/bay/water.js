@@ -25,6 +25,7 @@ import { BAY_GLSL } from './terrain.js';
 import { NOISE_GLSL, HEIGHT_GLSL } from '../world/terrain.js';
 import { WC_U, WC_GLSL, WT, WN, createCarveAtlas, setWaterHooks, grewTrees, waterDelta } from './watercarve.js';
 import { REAL_U } from './realcity.js';
+import { underBuildings } from './berms.js';
 import { DEEP, crossings, edgeDist, bounds } from './watersrc.js';
 import { waterfowl } from '../world/creatures.js';
 import { waterOf } from '../world/ocean.js';
@@ -871,11 +872,15 @@ export function createWater(scene, shared, opts = {}) {
 				}
 			}
 		}
+		// (nor under the buildings: berms.js)
+		const under = new Float32Array(N);
+		if (real?.near) underBuildings(real.near('boxes', X0 + WT / 2, Z0 + WT / 2, WT * 0.75), X0, Z0, ts, W1, under);
 		const draw = new Float32Array(N * 2), walk = new Float32Array(N);
 		let any = false;
 		for (let q = 0; q < N; q++) {
 			let v = lo[q] < -0.001 ? lo[q] : hi[q];
 			if (dam[q] > -1e8) { const b = Math.floor(q / W1), a = q - b * W1, g = B(a, b); if (dam[q] > g + v) v = dam[q] - g; }
+			v *= 1 - under[q];
 			draw[q * 2] = v; draw[q * 2 + 1] = kind[q];
 			walk[q] = walkZero[q] && v < 0 ? 0 : v;
 			if (v !== 0 || kind[q] > 0) any = true;
