@@ -4,6 +4,76 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Resume here (8 October 2026, late night)
+
+### What is live (main, level99bard.com)
+
+- **Live since the 7 October note:**
+  - multiplayer rooms, with glide smoothing and phone joins that no longer stall at 67%;
+  - the planet landfalls and the black-hole realm beyond the horizon;
+  - the Moon, Magma and Toxic colonies (first version);
+  - Bend and the globe towns, with no painted street grids;
+  - detail cast ahead of you;
+  - the Bay ground fix (`181e68c`): one height on every device, flat under buildings, all survey levels in before anything is placed.
+- **The rooms Worker** is live at `https://l99-rooms.joshbarton1921.workers.dev`, but it is the OLD server: it has no trade or combat messages yet.
+
+### On the branch only (`claude/affectionate-heisenberg-3g4qv1`), not shipped
+
+Every agent's work is committed in WIP snapshots. The latest is `30af168`; nothing is uncommitted. Several agents stopped at the account usage limit, so their last steps (mostly tests and screenshots) may be unfinished. Review images are in `/tmp/claude-0/…`; they are lost if the container restarts.
+
+| Area | State | Files (in island/src) | Owner decision |
+|---|---|---|---|
+| **Moon, part 2**: horizon (`world/lunarfar.js`), 6 outposts, colony interiors, a 16-person crew with talk and quests, a maglev to sites about 10 km out, hydroponic crops, lived-in signs, EVA suits on real bodies (`planet/colony/suit.js`), Ruth's clipping fix | Done. Then stopped mid-way on two follow-ups: lighting so dark skin reads fully indoors (before/after in /tmp/claude-0/moon-npc/skin/) and people anti-clipping | `planet/colony/*` (crew, crew-life, errands, farm, signs, maglev, suit, interiors…), `world/lunarfar.js`, `world/islandgen.js`, `world/terrain.js`, `world/sky.js`, hooks in `guide/guide.js`, `people/social.js`, `social-actors.js`, `persona.js`, `gatherings.js`, `gameplay/arms.js`, `main.js` | Approve after the skin fix (skin changes need the owner's eye) |
+| **Fabric detail** on all clothing (procedural weave per fabric) | Done | `people/garment.js` | Ships with the Moon |
+| **Gear v2 and trading**: item instances with levels and tiers, 12 items rebuilt, the gear sheet, Diablo-style trade window, shops, upgrade and combine | Done, 70 trade tests and 70 server tests pass | `gameplay/gear-levels.js`, `gameplay/arms.js`, `gameplay/trade.js`, `ui/gear.js`, `gear-look.js`, `gear-studio.js`, `trade-window.js`, `crysis/held-items.js`, `crysis/arms-runtime.js`, `net/*`, `people/motion.js` (`grip`), `server/multiplayer/*` | Needs the owner's server deploy, then ship |
+| **Smoother friends' motion** (120 ms delay, faster easing) | Done (`0a0ffa1`) | `net/remotes.js` | Ships with gear |
+| **Architecture**: cliff settlements on TERRAN, SHEPHERD, ICE and GAS; synthwave dusk; mist band; glow (`planet/arch/bloom.js`); grand procedural interiors (17 room kinds, lifts, sliding doors) | Finish pass done. Still short of the reference video on mist depth, clouds and glow; black frames were seen once in tests, cause unconfirmed | `planet/arch/*`, `world/sky.js`, `main.js` (the `W.arch?.post?.()` hook and `Crysis.archGlow`) | Ship as a first version, or one more mist and cloud pass? |
+| **Resonance stones and the Deep**: one strike system (E, tap or button), cave alcove payoff, surface boulders ring, Deep Gate phrase puzzle, endless cave with 6 depth bands, landmarks, waystones, lift and depth meter | Done. Then stopped mid-way moving the gate from open fields to the dead end of cave shafts (the island's passage under the summit, and the planets' tunnels) with a continuous descent | `planet/resonance.js`, `planet/deep.js`, `planet/deepfield.js`, `planet/cave-elements.js`, `world/vegetation.js`, `guide/guide.js`, `main.js` | Finish the gate move, then approve |
+| **Weapons art**: fix the upside-down hold, first-person viewmodel (arms and hands, sway, ADS), detailed fictional modern and future arms, tier finishes as skins, and a fire/reload/aim API for combat | In progress, stopped at the usage limit | `crysis/held-items.js` and its viewmodel files | Owner wants to see the designs before anything builds on them |
+| **Combat**: ammo and reload, hit detection, health and HUD, NPC reactions, factions, cars (damage, fire, a burnt shell), destructible props, arson, 3 mega bosses, multiplayer, morality compass | In progress, stopped at the usage limit | `combat/*` (new), small hooks elsewhere, `server/multiplayer/*` | Needs a server deploy too |
+| **Vehicles** z-fighting and intersections | In progress, stopped at the usage limit | car builders (`bay/cars.js` …) | Before/after review |
+| **Families**: teens (13–17), households and schedules, schools, food access and well-being | In progress, stopped at the usage limit | `people/households.js`, `schedules.js`, `food.js`, `teens.js` (new) | Review images |
+
+### The owner's standing rules for this work
+
+- **Combat** is M-rated (the owner, 8 October):
+  - **All minors are fully protected.** Children and teens (under 18) cannot be hit or harmed. In the lore this is "the Spark", a ward the young carry until they come of age. Enforce it with one `isMinor(person)` check in the hit filter, backed by a test. Trying to harm a minor only adds a large morality mark.
+  - **Allowed:** blood hit effects that fade, ragdolls, deaths.
+  - **Not allowed:** dismemberment, torture, sexual violence, and executing people who have surrendered or are restrained.
+  - **Factions** are fictional: gangs, militias, desert raiders, pirates, mercenaries, village militias, police and rangers. They have mixed membership; no real group names or symbols; never tied to an ethnicity, religion or nationality. They fight each other on their own.
+  - **The player** may attack anyone except minors, and arson works. People in encampments are ordinary civilians: never designated targets, never rewarded. Harming them is scored heavily.
+  - **Morality compass** (`combat/morality.js`): four axes (mercy, law, protection, honesty), one transparent scoring table, events logged with their context, and world reactions. It feeds the parked P5 morality page.
+  - **No** real-world weapon instructions or mechanism detail, and **no** real brands.
+- **Look changes** (skin, hair, faces, new looks) are shown to the owner before shipping.
+- **Moon people** are always real MakeHuman bodies, never blocky figures. Hair goes under the helmet (comms cap) and over the collar indoors.
+
+### To ship (selective, as always)
+
+1. Build a ship tree in `/tmp/claude-0/ship` from `origin/main`. Check out only the approved area's files from the branch. Take `main.js` hunks by hand, since it mixes every agent's lines. Rebuild, then run the smoke test (`/tmp/claude-0/planet/smoke-ship.js` against port 8768; it must print magma, terran and earth lines and samplers "ok"). Check `git merge-base --is-ancestor origin/main HEAD`, push to main, merge main back into the branch, and resolve `dist` and `index.html` conflicts by taking ours and rebuilding.
+2. **Server:** gear and trading and combat both change `server/multiplayer`, so the owner should deploy once after combat lands. The owner's commands, one line at a time:
+   ```
+   cd ~/bard-server
+   git pull origin claude/affectionate-heisenberg-3g4qv1
+   cd server/multiplayer
+   npm install
+   npm test
+   npx wrangler deploy
+   ```
+   For a fresh clone, run these first: `git clone https://github.com/bartondesigns/bard.git ~/bard-server`, then `cd ~/bard-server`, then `git checkout claude/affectionate-heisenberg-3g4qv1`. If the client ships before the server, trading says "Trading needs the rooms server update".
+
+### Restarting the stopped work
+
+The agents' sessions may not survive. Re-create each from the table above. Its brief is "finish what is in these files". Have each start with `git diff origin/main -- <its files>`, keep to its own files, commit with `git add <files>` (never `-A`), and never commit `dist`.
+
+**Run at most 3 or 4 agents at once.** Seven at once hit the account usage limit three times in a day.
+
+Order of value:
+1. Finish the Moon skin fix, then ship the Moon.
+2. Finish the Deep Gate move, then ship it.
+3. Weapons art: show the owner the designs.
+4. Combat.
+5. Then one server deploy, and ship gear plus combat.
+
 ## Owner feedback to work next (7 October 2026, after a context clear)
 
 The owner flew north from the Bay and noted these points. Nothing below is built yet. The code
