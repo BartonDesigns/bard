@@ -163,7 +163,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 				float h = max(d.y, 0.0);
 				vec3 col = mix(uSkyHor, uSkyZen, pow(h, 0.5));
 				// a world's own dusk: magenta at the horizon, violet, deep indigo overhead
-				if (uDusk.x > 0.0) col = mix(col, mix(mix(vec3(0.62, 0.22, 0.42), vec3(0.22, 0.1, 0.36), smoothstep(0.0, 0.22, h)), vec3(0.03, 0.03, 0.1), smoothstep(0.18, 0.75, h)) * uDusk.y, uDusk.x);
+				if (uDusk.x > 0.0) col = mix(col, mix(mix(vec3(0.78, 0.2, 0.42), vec3(0.24, 0.08, 0.4), smoothstep(0.0, 0.2, h)), vec3(0.015, 0.02, 0.085), smoothstep(0.14, 0.62, h)) * uDusk.y, uDusk.x);
 				float sd = max(dot(d, uSunDir), 0.0);
 				col += uSunColor * (pow(sd, 12.0) * 0.18 + pow(sd, 3.0) * 0.06) * (1.0 - uNight);
 				col += uSunColor * smoothstep(0.9993, 0.9997, sd) * 18.0 * (1.0 - uNight);
@@ -393,7 +393,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 				// haze the land fades into, so no bright line runs along where the land ends
 				col = mix(col, mix(uSkyHor, uFogCol, 0.7), smoothstep(0.02, -0.12, d.y));
 				col = mix(col, uFogCol, smoothstep(0.012, -0.03, d.y) * 0.9);
-				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uAir.rgb, uAir.a);
+				// (not under a world's own dusk, whose colours are its own)
+				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uAir.rgb, uAir.a * (1.0 - uDusk.x));
 				// no air: a black sky, the sun a hard white disc
 				if (uEarthSky > 0.5) col = vec3(0.003, 0.004, 0.007) + uSunColor * (smoothstep(0.9993, 0.9997, dot(d, uSunDir)) * 18.0 + pow(max(0.0, dot(d, uSunDir)), 400.0) * 0.4);
 				// Earth over the Moon: blue oceans, brown-green land, white cloud, lit on the sun's side
@@ -691,7 +692,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		const dk = uniforms.uDusk.value;
 		if (dk.x > 0) haze.lerp(tmpC.setRGB(0.5, 0.2, 0.4).multiplyScalar(dk.y), dk.x * 0.75);
 		const air = uniforms.uAir.value;
-		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w);
+		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w * (1 - dk.x));
 		renderer.toneMappingExposure = 1.15 + night * 0.15;
 		// The sky is tone mapped, but three.js mixes the fog in after the tone mapping, so a
 		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the
