@@ -51,29 +51,43 @@ pointers are where each fix most likely starts.
      warning kept as atmosphere instead of a wall, and a way back out.
    - Show the owner the look before shipping.
 
-## Gear, shops and trading (8 October 2026)
+## Gear, levels and trading (8 October 2026)
 
-- **Built (on the branch):** the 🎒 Gear sheet (rail button, the places menu, or I): credits, what
-  you carry with icons and the catalogue's description, Hold / Put away, the shops near you
-  (outfitters, ranger camps, traders, supermarkets; buy, and sell back at half price within 60 m),
-  and trading with a friend in your room.
-  - `island/src/ui/gear.js` (the sheet and the trade driver), `island/src/gameplay/trade.js` (the
-    pure trade state machine), `island/src/crysis/held-items.js` (stylised hand models and icons).
-  - `gameplay/arms.js` gained `sell` and `trade` transactions, `sellPrice` and `cleanTradeSide`;
-    `crysis/arms-runtime.js` gained `shops`, `shopSheet`, `buy`, `sell`, `hold`, `held`, `apply`, `applied`.
-  - The held item travels in the pose as `h` (`net/protocol.js`) and shows in friends' right hands
-    (`net/remotes.js`).
-  - Trades: any distance within the same room (the sheet shows how far, or "another world"). The
-    asker coordinates: both confirm the same version (`v.a.v.b`), the asker applies its side and
-    sends `commit`, the other applies its own and answers `done`. Every message is resent until
-    answered; each side's transaction id is `trade:<id>`, so nothing lands twice. If the other
-    side can no longer pay, it says `fail` and the asker applies `trade:<id>:undo`.
-  - **Server:** `trade` relay in `server/multiplayer/src/room.js` with a `trade-ack` to the
-    sender. **Not live until the owner redeploys** (steps in `server/multiplayer/README.md`).
-    Against the old server the game says "Trading needs the rooms server update." after 4 s.
-  - Tests: `node island/tools/trade.test.mjs`, `cd server/multiplayer && npm test`.
+- **Built (on the branch):** the 🎒 Gear sheet (rail button, the places menu, or I) and a trade
+  window between friends in a room.
+  - **Items are instances** (inventory version 2, `gameplay/arms.js`; version 1 saves migrate to
+    Common, level 1): each has an id, a level 1-10, a tier (Common, Fine, Superior, Masterwork,
+    Legendary) and experience. `gameplay/gear-levels.js` holds the stats (game numbers per item:
+    light radius, heal, accuracy, range …), value, upgrade cost, combining and experience.
+  - **Levelling up:** experience from carrying the held item on foot and from hunts
+    (`arms-runtime.js` `carry`, `train`); **Upgrade** at an outfitter, ranger camp or trader (credits
+    plus one Repair Roll); **Combine** two of the same item and tier into the next tier. Shops buy
+    back by level and tier. Transactions: `train` (not journaled), `upgrade`, `combine`, `sell` by uid.
+  - **Models** (`crysis/held-items.js`): turned and extruded shapes with canvas-drawn wood, leather,
+    brushed metal and canvas; the trim metal shows the tier, a polished inlay from level 4, a
+    glowing core from level 7, motes at Legendary; about 2-3.4k triangles each (low LOD for friends
+    and phones). Held in the right hand (the fingers close round it: `motion.js` `grip`) or low in
+    the first-person view. The fictional rifles are stylised, with no working parts.
+  - **Gear sheet** (`ui/gear.js`, look in `ui/gear-look.js`): slots with tier edges, level badges
+    and counts; an item's detail view with its model turning (`ui/gear-studio.js`, its own small
+    renderer, which also draws the slot thumbnails), level bar, stats with next-level values,
+    Hold, Upgrade, Combine and Sell.
+  - **Trade window** (`ui/trade-window.js`): your offer and theirs side by side (stacked on a
+    phone), coin stacks, your bag to drag or tap from, tooltips with stats and green/red
+    differences against what you hold, a big Accept per side that lights its panel, a flash when a
+    change clears them, and a 1.5 s hold once both accept (either can still cancel). Sounds through
+    `world/soundbus.js`.
+  - **Protocol:** trades name instances `{u, i, l, t, x}` (`net/protocol.js` `cleanTradeSide`);
+    the pose carries `h`, `hl`, `ht`; messages may be 3 KB. The asker commits after the hold
+    (`gameplay/trade.js` `tick` with `HOLD_MS`); each side applies its own side once as
+    `trade:<id>`, the very instances moving under their ids (a clash is renamed, never lost).
+  - **Server:** the `trade` relay and its `trade-ack` in `server/multiplayer/src/room.js`. **Not
+    live until the owner redeploys** (steps in `server/multiplayer/README.md`). Against the old
+    server the game says "Trading needs the rooms server update." after 4 s.
+  - Tests: `node island/tools/trade.test.mjs` (trades, levels, upgrades, combining, migration),
+    `cd server/multiplayer && npm test`.
 - **Left:** a player market (posting offers at the community exchange: `createPlayerOffer` exists,
-  no UI), the hand pose (the arm does not yet close round the item), and the plan below.
+  no screen), item Use actions (experience from use once they exist), and the plan below.
 
 ## Next weapons and gear steps: a plan (not built)
 
@@ -141,7 +155,7 @@ shelter encounter. 3. The hunting trail and tag. 4. The action poses and their m
 - **Multiplayer v1 (on the branch, not live until the owner deploys):** friends join the host's game and see each other.
   - **Server:** `server/multiplayer` is a second Worker, `l99-rooms` (Workers Free: one SQLite Durable Object per room, WebSockets with hibernation). The deploy steps are in `server/multiplayer/README.md`: `npm install`, `npm test`, `npm run deploy`, then put the address in `island/src/net/config.js` (`ROOMS_URL`) and rebuild. While it is empty, there is no Invite or Join, nothing connects, and `?room=` links just open the game.
   - **Wire format:** `island/src/net/protocol.js`, shared by the game and the server, which cleans every message. Only poses, spots, the hour and weather, and the plain facts of the host's meetings ever travel; no dialogue.
-  - **Limits:** 8 a room, 2 KB a message, 20 messages a second (bursts of 40), 30 s silence drops a player, empty rooms kept 30 min.
+  - **Limits:** 8 a room, 3 KB a message, 20 messages a second (bursts of 40), 30 s silence drops a player, empty rooms kept 30 min.
   - **Host:** if the host leaves, the longest-present player takes over; the owner gets the seat back on return. **End room** closes the room for everyone.
   - **Client (`island/src/net/`):**
     - `client.js`: connection, with reconnect and backoff.

@@ -606,7 +606,6 @@ function withQuantity(state, itemId, delta, seed = '', uid = null) {
 	}
 	return recount({ ...state, instances });
 }
-const dropEquipped = (state) => recount(state);
 
 function applyAccepted(state, tx, details = {}) {
 	const next = {

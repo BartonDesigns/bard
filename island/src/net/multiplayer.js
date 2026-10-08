@@ -141,8 +141,9 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		const sp = Math.hypot(P.vel.x, P.vel.z);
 		const a = car ? 'drive' : P.flying ? 'fly' : P.swimming ? 'swim' : sp > 6 ? 'run' : sp > 0.3 ? 'walk' : 'idle';
 		if (car) camera.getWorldDirection(look);
-		const h = gear?.held?.() || undefined;
-		return { t: 'pose', p: [at.x, at.y, at.z], y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', w: worldKey(), h };
+		// (the item in hand, its level and tier)
+		const H = gear?.held?.();
+		return { t: 'pose', p: [at.x, at.y, at.z], y: car ? Math.atan2(-look.x, -look.z) : P.yaw, a, v: car ? 'car' : boat ? 'boat' : '', w: worldKey(), h: H?.i, hl: H?.l, ht: H?.t };
 	}
 	// (timed by the clock, not by frames: a slow phone still keeps to the pace)
 	function sendAll() {
@@ -151,8 +152,8 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		const p = share.busy?.() ? null : pose(), now = performance.now();
 		if (p) {
 			// about ten a second while moving; when still, only a change (pings keep you in)
-			const moved = Math.hypot(p.p[0] - sent.x, p.p[2] - sent.z) > 0.05 || Math.abs(p.p[1] - sent.y) > 0.05 || Math.abs(p.y - sent.yaw) > 0.03 || p.a !== sent.a || (p.h || '') !== sent.h;
-			if (moved && now - sent.t >= 100) { room.send(p); sent.t = now; sent.x = p.p[0]; sent.z = p.p[2]; sent.y = p.p[1]; sent.yaw = p.y; sent.a = p.a; sent.h = p.h || ''; }
+			const moved = Math.hypot(p.p[0] - sent.x, p.p[2] - sent.z) > 0.05 || Math.abs(p.p[1] - sent.y) > 0.05 || Math.abs(p.y - sent.yaw) > 0.03 || p.a !== sent.a || `${p.h}${p.hl}${p.ht}` !== sent.h;
+			if (moved && now - sent.t >= 100) { room.send(p); sent.t = now; sent.x = p.p[0]; sent.z = p.p[2]; sent.y = p.p[1]; sent.yaw = p.y; sent.a = p.a; sent.h = `${p.h}${p.hl}${p.ht}`; }
 		}
 		// where you are, for a friend's Go to (and a guest's arrival): every few seconds
 		if (now - sent.spotT > 4000) {

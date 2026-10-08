@@ -2,7 +2,7 @@
 // they see as themselves, people/avatar.js), walked by the same motion rig as everyone
 // else's. Poses arrive about ten times a second and are played back about 150 ms late, so
 // there are always two to move between. A name tag floats over each. Far away, or past the
-// phone's few, a friend is only their tag. What they hold (the pose's h) is in their right hand.
+// phone's few, a friend is only their tag. What they hold (the pose's h, at its level and tier) is in their right hand.
 
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
@@ -172,9 +172,9 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 				B.P.lod?.(r.d);
 			}
 			if (r.pose?.h || r.hand) {
-				r.hand ||= createHand(group);
-				r.hand.set(r.pose?.h || null);
-				r.hand.follow(B?.P, heading, want && !!B && !a.v && a.a !== 'drive' && a.a !== 'swim' && !fly);
+				r.hand ||= createHand(group, { lod: 'low' });
+				r.hand.set(r.pose?.h || null, r.pose?.hl || 1, r.pose?.ht || 0);
+				r.hand.follow(B?.P, heading, want && !!B && !a.v && a.a !== 'drive' && a.a !== 'swim' && !fly, B?.M, time);
 			}
 			r.tag.position.set(V.x, top + 0.35, V.z);
 		}

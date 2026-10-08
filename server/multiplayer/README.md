@@ -84,6 +84,11 @@ The game can now trade gear between two friends in a room. The rooms server pass
 message to the one friend it is for (`trade` in `src/room.js`), checks its size and fields, and
 counts it in the same rate limit as everything else. Inventories stay in each player's browser.
 
+Gear has levels (1 to 10) and quality tiers (Common to Legendary), and every item is its own
+instance with an id, so a trade names exactly which items change hands, with their level and
+tier. The pose can carry the held item's level and tier too (`hl`, `ht`), so friends see its
+glow. A message may now be up to 3 KB, so a full offer of 12 items a side fits.
+
 Until the server is redeployed, the live one quietly drops trade messages. The game notices
 (no answer within 4 seconds) and says **"Trading needs the rooms server update."** Everything
 else keeps working.
@@ -100,7 +105,7 @@ npm install
 ```
 npm test
 ```
-(it should end `68 passed, 0 failed`)
+(it should end `70 passed, 0 failed`)
 ```
 npx wrangler deploy
 ```
@@ -132,7 +137,7 @@ You already have a Cloudflare account and Wrangler from the discovery server (se
    (Without it the limit still works, with a fixed salt.)
 3. **Check, then deploy:**
    ```
-   npm test          # offline checks: should end "68 passed, 0 failed"
+   npm test          # offline checks: should end "70 passed, 0 failed"
    npm run check     # a dry run of the deploy
    npm run deploy
    ```
