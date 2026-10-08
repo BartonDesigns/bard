@@ -370,7 +370,7 @@ function tower(X, T) {
 		}
 		return m - 0.5;
 	};
-	const sea = X.sea, y0 = T.sea ? sea + 2.5 : T.y + 2.45, doors = [], a0 = X.r() * TAU;
+	const sea = X.sea, y0 = T.sea ? sea + 2.5 : T.y + 2.8, doors = [], a0 = X.r() * TAU;
 	if (y0 < T.y + yt - 30) {
 		if (!T.sea) {
 			// the way in: a porch through the root's skirt, its doors lit
@@ -456,7 +456,7 @@ function slabRooms(X, T, B, w, d, hh) {
 	const sea = X.sea, H = X.H, top = T.y + hh + 0.9;
 	let g = -1e9;
 	for (const [u, v] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, 1], [0, -1]]) { const q = B.p(u * w / 2, 0, v * d / 2); g = Math.max(g, H(q.x, q.z)); }
-	const y0 = Math.max(g + 0.05, sea + 2.5, T.y + 0.5), doors = [], at = w * 0.22;
+	const y0 = Math.max(g + 0.4, sea + 2.5, T.y + 0.5), doors = [], at = w * 0.22;
 	if (top - y0 < 30) return;
 	if (!T.sea && g > sea + 1) {
 		doors.push({ y: y0, at, w: 3.4, h: 4.4, porch: 1.6, ext: true });
