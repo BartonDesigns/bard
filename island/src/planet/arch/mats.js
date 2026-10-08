@@ -123,3 +123,110 @@ export function contactMaterial() {
 export function archUniforms(shared, S) {
 	return { uTime: shared.uTime, uNight: { value: 0 }, uLampK: { value: 1 }, uWinC: { value: new THREE.Color(...S.window) }, uWinB: { value: new THREE.Color(...S.winB) }, uWinV: { value: new THREE.Color(...S.winV) } };
 }
+
+// ---------- the interiors ----------
+// One lit material for the rooms (furnish.js), its look per vertex by aGlow, the room's light
+// baked into aLit (the chandeliers', the lamps', the glow's: no real lights) and added as the
+// surface's own glow:
+//   0 plaster, panelled    1 polished stone in great tiles, brass inlaid    2 terrazzo
+//   3 brass                4 dark lacquer                                   5 velvet
+//   6 self-lit (lamps, light sculptures, strips)                            7 water
+//   8 glowing plants       9 books on their shelves                         10 a dome of stars
+//   11 leaves, unlit
+const IN_V = /* glsl */`
+attribute float aGlow;
+attribute vec3 aLit;
+varying vec3 vIW;
+varying vec3 vIN;
+varying float vIG;
+varying vec3 vIL;
+`;
+const IN_F = /* glsl */`
+uniform float uTime;
+uniform vec3 uBrass;
+varying vec3 vIW;
+varying vec3 vIN;
+varying float vIG;
+varying vec3 vIL;
+float iH(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float iN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(iH(vec3(i, 0.0)), iH(vec3(i + vec2(1.0, 0.0), 0.0)), f.x), mix(iH(vec3(i + vec2(0.0, 1.0), 0.0)), iH(vec3(i + vec2(1.0, 1.0), 0.0)), f.x), f.y); }
+float iEm = 0.0, iRough = 0.8, iMetal = 0.0;
+`;
+const IN_LOOK = /* glsl */`
+	vec3 inn = normalize(vIN), ia = abs(inn);
+	vec2 ip = ia.y > 0.7 ? vIW.xz : (ia.x > ia.z ? vIW.zy : vIW.xy);
+	vec3 ic = diffuseColor.rgb;
+	if (vIG < 0.5) {
+		float pn = smoothstep(0.47, 0.5, abs(fract(ip.x / 2.4) - 0.5)) * (1.0 - step(0.7, ia.y));
+		ic *= (0.94 + 0.08 * iN(ip * 0.8)) * (1.0 - pn * 0.25);
+		iRough = 0.8;
+	} else if (vIG < 1.5) {
+		vec2 t = ip / 3.0, f = fract(t);
+		float vein = smoothstep(0.93, 1.0, 1.0 - abs(sin((ip.x * 0.6 + ip.y * 0.35 + iN(ip * 0.4) * 3.5) * 1.4)));
+		float inlay = 1.0 - step(0.012, f.x) * step(f.x, 0.988) * step(0.012, f.y) * step(f.y, 0.988);
+		ic = mix(ic * (0.88 + 0.16 * iH(vec3(floor(t), 1.0))) * (1.0 - vein * 0.4) + vein * 0.06, uBrass * 0.8, inlay);
+		iRough = mix(0.1, 0.3, inlay); iMetal = inlay;
+	} else if (vIG < 2.5) {
+		float ch = step(0.78, iH(vec3(floor(ip * 11.0), 2.0)));
+		ic = mix(ic * (0.95 + 0.05 * iN(ip * 3.0)), ic * 0.45 + vec3(0.22, 0.16, 0.2) * iH(vec3(floor(ip * 11.0), 5.0)), ch);
+		iRough = 0.22;
+	} else if (vIG < 3.5) {
+		ic *= 0.9 + 0.1 * iN(ip * 6.0); iRough = 0.26; iMetal = 1.0;
+	} else if (vIG < 4.5) {
+		iRough = 0.08;
+	} else if (vIG < 5.5) {
+		float fr = 1.0 - abs(dot(inn, normalize(cameraPosition - vIW)));
+		ic *= 0.65 + 0.9 * fr * fr; iRough = 1.0;
+	} else if (vIG < 6.5) {
+		iEm = 1.6;
+	} else if (vIG < 7.5) {
+		float w = sin(vIW.x * 2.1 + uTime * 0.9) * sin(vIW.z * 1.7 - uTime * 0.7);
+		ic *= 0.8 + 0.2 * w; iRough = 0.03; iMetal = 0.3; iEm = 0.25;
+	} else if (vIG < 8.5) {
+		iEm = 0.55 + 0.35 * sin(uTime * 0.8 + iH(floor(vIW * 0.5)) * 6.28);
+	} else if (vIG < 9.5) {
+		float row = floor(ip.y / 0.42), u = ip.x * 13.0 + row * 7.31, id = floor(u);
+		float hb = 0.26 + 0.12 * iH(vec3(id, row, 3.0)), up = fract(ip.y / 0.42) * 0.42;
+		vec3 bk = mix(mix(vec3(0.32, 0.05, 0.08), vec3(0.06, 0.12, 0.22), step(0.35, iH(vec3(id, row, 1.0)))), vec3(0.5, 0.36, 0.18), step(0.75, iH(vec3(id, row, 2.0))));
+		float gap = step(hb, up) + (1.0 - step(0.06, fract(u)));
+		ic = mix(bk * (0.8 + 0.4 * iH(vec3(id, row, 4.0))), ic * 0.25, clamp(gap, 0.0, 1.0));
+		iRough = 0.7;
+	} else if (vIG < 10.5) {
+		float st = step(0.992, iH(floor(vIW * 2.3))) * (0.6 + 0.4 * sin(uTime * 1.3 + iH(floor(vIW * 2.3) + 1.0) * 6.28));
+		ic = mix(vec3(0.015, 0.012, 0.04), vec3(0.08, 0.03, 0.12), smoothstep(-1.0, 1.0, inn.y));
+		iEm = 1.0;
+		ic += vec3(0.9, 0.85, 1.0) * st * 3.0;
+	} else {
+		ic *= 0.8 + 0.3 * iN(ip * 2.0); iRough = 0.9;
+	}
+	diffuseColor.rgb = ic;
+`;
+export function interiorMaterial(U, o = {}) {
+	const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0xffffff, roughness: 0.8, metalness: 0 });
+	if (o.env) m.envMap = o.env;
+	m.envMapIntensity = 0.45;
+	m.onBeforeCompile = (sh) => {
+		Object.assign(sh.uniforms, U);
+		sh.vertexShader = IN_V + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+			vec4 iw = vec4(transformed, 1.0);
+			vec3 inrm = objectNormal;
+			#ifdef USE_INSTANCING
+				iw = instanceMatrix * iw;
+				inrm = mat3(instanceMatrix) * inrm;
+			#endif
+			vIW = (modelMatrix * iw).xyz;
+			vIN = normalize(mat3(modelMatrix) * inrm);
+			vIG = aGlow; vIL = aLit;`);
+		sh.fragmentShader = IN_F + sh.fragmentShader
+			.replace('#include <color_fragment>', '#include <color_fragment>\n' + IN_LOOK)
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = iRough;')
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = iMetal;')
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (vIL * (1.0 - iMetal * 0.6) + iEm);');
+	};
+	m.customProgramCacheKey = () => 'archinterior';
+	return m;
+}
+// the rooms' window glass: nearly clear, a little of the sky in it
+export function paneGlass(o = {}) {
+	return new THREE.MeshStandardMaterial({ color: new THREE.Color(0.55, 0.5, 0.62), transparent: true, opacity: 0.13, roughness: 0.04, metalness: 0.7, depthWrite: false, side: THREE.DoubleSide, envMap: o.env || null, envMapIntensity: 0.6 });
+}

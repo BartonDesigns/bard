@@ -95,12 +95,12 @@ export function layout(V) {
 			const a0 = i / N * TAU, a1 = (i + 1) / N * TAU, am = (a0 + a1) / 2;
 			const gap = V.gaps.find((g) => Math.abs(((am - g.a) % TAU + TAU + Math.PI) % TAU - Math.PI) < g.w / 2 / V.r);
 			const len = 2 * r * Math.sin((a1 - a0) / 2) + 0.12, x = Math.sin(am) * r * Math.cos(Math.PI / N), z = Math.cos(am) * r * Math.cos(Math.PI / N);
-			// (a chord's own x runs across the radius: its yaw is the bearing less a quarter turn)
-			const yaw = am - Math.PI / 2;
+			// (a chord's own x runs along the tangent: its yaw is the bearing)
+			const yaw = am;
 			if (!gap) L.walls.push({ x, z, len, t, yaw, y0: 0, y1: h, mode: 'glass' });
 			else if (gap.h < h - 0.2) L.walls.push({ x, z, len, t, yaw, y0: gap.h, y1: h, mode: 'lintel' });
 		}
-		for (const g of V.gaps) L.doors.push({ x: Math.sin(g.a) * (V.r - t / 2), z: Math.cos(g.a) * (V.r - t / 2), yaw: g.a - Math.PI / 2, a: g.a, w: g.w, h: g.h, porch: g.porch || 0, ext: !!g.ext, round: true });
+		for (const g of V.gaps) L.doors.push({ x: Math.sin(g.a) * (V.r - t / 2), z: Math.cos(g.a) * (V.r - t / 2), yaw: g.a, a: g.a, w: g.w, h: g.h, porch: g.porch || 0, ext: !!g.ext, round: true });
 	}
 	// the porches: a passage out through the building's skin to the ground, floored and walled
 	for (const D of L.doors) {
@@ -155,9 +155,14 @@ function stack(y0, y1, must, r, first, last) {
 	for (const tgt of pts) {
 		let y = ys[ys.length - 1];
 		const end = tgt === y1 ? last : 6;
-		while (tgt - y > 0.01) {
+		for (;;) {
 			const rem = tgt - y, h0 = ys.length === 1 ? first : (r() < 0.45 ? pick(grand, r) : pick(plain, r));
-			if (rem <= Math.max(h0, end) + 5.5) { if (tgt !== y1) ys.push(tgt); break; }
+			if (rem < h0 + end) {
+				// (no crown taller than it need be: a plain floor under it)
+				if (tgt === y1 && rem > end + 7) ys.push(y + rem - end);
+				if (tgt !== y1) ys.push(tgt);
+				break;
+			}
 			y += h0;
 			ys.push(y);
 		}
@@ -232,7 +237,9 @@ function roundMezz(V, r) {
 // there), doors [{ y, at | a, w, h, porch, ext }], top ('observatory' | 'crown'), seed }
 export function towerPlan(o) {
 	const r = mulberry32(o.seed >>> 0), D = decks(r), used = new Set();
-	const ys = stack(o.y0, o.y1, o.must || [], r, o.round ? 12 : 11 + r() * 4, o.round ? 15 : 13);
+	const must = [];
+	for (const m of [...(o.must || [])].sort((a, b) => a - b)) if (!must.length || m - must[must.length - 1] > 6) must.push(m);
+	const ys = stack(o.y0, o.y1, must, r, o.round ? 12 : 11 + r() * 4, o.round ? 15 : 13);
 	const B = { name: o.name, kind: o.kind, x: o.x, z: o.z, yaw: o.yaw, y0: o.y0, y1: o.y1, vols: [], seed: o.seed, reach: o.round ? o.r0 + 4 : Math.hypot(o.w, o.d) / 2 + 4 };
 	// the lift: a corner of the slab, the middle of the spire; open toward the rooms
 	const lift = o.round ? { x: 0, z: 0, s: 1.45, a: Math.floor(r() * 4) } : { x: -o.w / 2 + 2.3, z: -o.d / 2 + 2.3, s: 1.45, a: 0 };
@@ -240,7 +247,7 @@ export function towerPlan(o) {
 	const ti = Math.floor(r() * THEMES.length);
 	for (let i = 0; i < ys.length; i++) {
 		const y = ys[i], top = i === ys.length - 1, h = (top ? o.y1 : ys[i + 1]) - y - (top ? 0.3 : 0.45);
-		const V = { B, i, F: frame(o.x, y, o.z, o.yaw), round: !!o.round, h, bottom: i === 0, lift, theme: THEMES[(ti + i * 2 + (r() < 0.3 ? 1 : 0)) % THEMES.length], seed: (o.seed + i * 7919) >>> 0 };
+		const V = { B, i, F: frame(o.x, y, o.z, o.yaw), round: !!o.round, h, bottom: i === 0, top, lift, theme: THEMES[(ti + i * 2 + (r() < 0.3 ? 1 : 0)) % THEMES.length], seed: (o.seed + i * 7919) >>> 0 };
 		if (o.round) { V.r = o.radAt(y, y + h); V.gaps = []; } else { V.w = o.w; V.d = o.d; V.sides = { pz: { mode: 'glass', gaps: [] }, nz: { mode: 'glass', gaps: [] }, px: { mode: 'wall', gaps: [] }, nx: { mode: 'wall', gaps: [] } }; }
 		for (const d of o.doors || []) {
 			if (Math.abs(d.y - y) > 0.6) continue;
@@ -288,9 +295,11 @@ export function housePlan(o) {
 		const V = { B, i, F: q.F, round: false, w: q.w, d: q.d, h: q.h, sides: q.sides, bottom: true, theme: THEMES[(ti + (q.theme || 0)) % THEMES.length], seed: (o.seed + i * 7919) >>> 0, parts: [] };
 		const kind = q.kind;
 		V.rooms = [{ kind, name: named(kind, r, used), x0: -q.w / 2 + 0.3, x1: q.w / 2 - 0.3, z0: -q.d / 2 + 0.3, z1: q.d / 2 - 0.3, open: q.open }];
-		if (q.stairs) V.mezz = { y: 0, floors: [], rails: q.rails || [], stairs: q.stairs };
+		if (q.stairs || q.rails) V.mezz = { y: 0, floors: [], rails: q.rails || [], stairs: q.stairs || [] };
 		V.L = layout(V);
 		if (q.holes) V.L.holes.push(...q.holes);
+		// (a stair up through the ceiling)
+		if (q.ceil) V.L.ceilHoles = q.ceil;
 		B.vols.push(V);
 	}
 	return B;

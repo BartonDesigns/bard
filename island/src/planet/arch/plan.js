@@ -184,15 +184,17 @@ export function planArch(island, profile, opts = {}) {
 			if (!best || score < best.score) best = { x, z, score, h };
 		}
 		if (!best) continue;
-		const R = 8 + r() * 5;
+		// (a spire broad enough for grand rooms; a slab cluster's tallest sized here, its ground levelled)
+		const kind = S.towerKinds[towers.length % S.towerKinds.length], R = kind === 'spire' ? 11 + r() * 3.5 : 8 + r() * 5;
+		const sw = kind === 'slabs' ? 22 + r() * 8 : 0, sd = kind === 'slabs' ? 14 + r() * 5 : 0;
 		let y = best.h;
 		if (S.towerAt !== 'sea') {
 			for (let k = 0; k < 8; k++) y = Math.min(y, H(best.x + Math.cos(k) * R, best.z + Math.sin(k) * R));
-			ease(island, best.x, best.z, R * 1.3, 12, y + 0.4);
+			ease(island, best.x, best.z, Math.max(R * 1.3, Math.hypot(sw, sd) / 2 + 3), 12, y + 0.4);
 			avoid.push({ x: best.x, z: best.z, r: R + 12 });
 		}
 		const tall = S.tall[0] + r() * (S.tall[1] - S.tall[0]);
-		towers.push({ x: best.x, z: best.z, y: y - 2, R, top: Math.max(top + tall, y + 70), twist: (r() < 0.5 ? -1 : 1) * (0.6 + r() * 1.2), name: tNames.shift() || 'Tower', lobbies: [], sea: S.towerAt === 'sea', kind: S.towerKinds[towers.length % S.towerKinds.length] });
+		towers.push({ x: best.x, z: best.z, y: y - 2, R, top: Math.max(top + tall, y + 70), twist: (r() < 0.5 ? -1 : 1) * (0.6 + r() * 1.2), name: tNames.shift() || 'Tower', lobbies: [], sea: S.towerAt === 'sea', kind, sw, sd });
 	}
 
 	// ---------- the bridges ----------

@@ -265,7 +265,7 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 	scene.add(group);
 
 	const sun = new THREE.Color(), hor = new THREE.Color(), cc = new THREE.Color(), tc = new THREE.Color(), tc2 = new THREE.Color();
-	function update(dt, camera, night) {
+	function update(dt, camera, night, indoors = false) {
 		const w = shared.uWindDir?.value;
 		if (w) U.uWd.value.copy(w).normalize();
 		// the band drifts slower than the cloud aloft: a few metres a second
@@ -284,6 +284,8 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 		// in a band: the veil, as thick as the cloud is here
 		let inK = 0;
 		for (const B of M.bands) inK = Math.max(inK, sm(B.base - 2, B.base + 5, p.y) * (1 - sm(B.top - 5, B.top + 3, p.y)) * (1 - sm(M.rad * 0.55, M.rad * 0.9, d)));
+		// (not indoors: the rooms' glass keeps it out)
+		if (indoors) inK = 0;
 		if (inK > 0.01) {
 			const qx = (p.x - U.uOff.value.x) * 0.0055 + 0.85, qz = (p.z - U.uOff.value.y) * 0.0055 + 0.85;
 			const cov = sm(M.cover, M.cover + 0.26, mF(qx, qz) + 0.08);
