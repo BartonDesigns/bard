@@ -20,6 +20,7 @@ uniform vec4 uObs[12];
 uniform vec3 uC, uSunC, uHor, uWarm;
 uniform vec2 uBand;
 uniform float uCov, uHalf, uNight, uTime, uK, uLit, uDusk;
+uniform vec4 uSkyDusk;
 `;
 // the sky's light on it: sunlit above, cooler beneath, dark by night with the windows warm in it
 const SHADE = /* glsl */`
@@ -27,6 +28,8 @@ vec3 mistC(float up, float n, float glow){
 	vec3 c = mix(uHor * 0.85, uSunC * 0.9 + uHor * 0.35, (0.3 + 0.7 * up) * uLit) * (0.6 + 0.65 * n * (0.4 + 0.6 * up));
 	c = mix(c, uHor * 0.18 + vec3(0.02, 0.025, 0.045), uNight * 0.75);
 	c = mix(c, uWarm * dot(c, vec3(0.3, 0.5, 0.2)) * 1.2, 0.22 * uDusk);
+	// under the world's own dusk sky (sky.js uDusk): violet, pinker on the tops
+	c = mix(c, mix(vec3(0.3, 0.2, 0.42), vec3(0.62, 0.36, 0.6), up) * uSkyDusk.y * (0.7 + 0.5 * n), uSkyDusk.x * 0.85);
 	return c + uWarm * glow * uDusk * (1.4 - up * 0.6);
 }
 `;
@@ -79,7 +82,7 @@ void main(){
 	glow *= 1.0 - vB * 0.6;
 	vec2 nq = (q - uOff) * 0.0055 + vL * 1.7 + vB * 9.0;
 	float n = mF(nq), n2 = mF(nq + vec2(0.035, 0.05));
-	float mid = 1.0 - abs(vL * 2.0 - 1.0), cv = uCov + vB * 0.08;
+	float mid = 1.0 - abs(vL * 2.0 - 1.0), cv = uCov + vB * 0.13;
 	// breaks in it, wide lanes where the ground and the towers show through
 	float brk = smoothstep(0.27, 0.45, mN((q - uOff) * 0.0016 + vB * 5.0 + 11.0));
 	float cov = smoothstep(cv, cv + 0.16, n + mid * 0.14 - 0.05 - (1.0 - mid) * 0.08) * brk;
@@ -88,7 +91,7 @@ void main(){
 	float g = mix(mix(texture2D(uHeight, h0).r, texture2D(uHeight, h0 + vec2(1.0, 0.0) / hs).r, hf.x), mix(texture2D(uHeight, h0 + vec2(0.0, 1.0) / hs).r, texture2D(uHeight, h0 + 1.0 / hs).r, hf.x), hf.y);
 	float lift = glow * uDusk;
 	float a = min(1.0, cov * (1.0 + lift * 0.9) + lift * 0.12) * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
-	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.5;
+	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.34;
 	if (a < 0.004) discard;
 	// rolling tops: lit where the billow faces up out of the deck, shadowed in its folds
 	float relief = clamp((n - n2) * 7.0 + 0.5, 0.0, 1.0);
@@ -181,7 +184,7 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 		uC: { value: new THREE.Vector3(M.x, M.z, M.rad) }, uBand: { value: new THREE.Vector2(M.base, M.top) }, uSunC: { value: new THREE.Color(1, 1, 1) }, uHor: { value: new THREE.Color(0.7, 0.75, 0.8) },
 		uWarm: { value: new THREE.Color(...glow) }, uDusk: { value: 0 }, uCov: { value: M.cover }, uHalf: { value: shared.biHalf || 1300 },
 		uNight: { value: 0 }, uTime: shared.uTime, uK: { value: 1 }, uLit: { value: 1 }, uFlow: { value: 0 },
-		uHeight: { value: shared.heightTex },
+		uHeight: { value: shared.heightTex }, uSkyDusk: shared.uDuskSky || (shared.uDuskSky = { value: new THREE.Vector4(0, 1, 0, 0) }),
 	};
 	const fogU = THREE.UniformsUtils.clone(THREE.UniformsLib.fog);
 	const mat = (v, f) => new THREE.ShaderMaterial({ uniforms: { ...fogU, ...U }, vertexShader: v, fragmentShader: f, transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide });
@@ -288,6 +291,8 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 			tc.copy(sun).multiplyScalar(0.9).add(tc2.copy(hor).multiplyScalar(0.3));
 			cc.copy(hor).multiplyScalar(0.72).lerp(tc, 0.6 * U.uLit.value);
 			cc.lerp(tc.copy(hor).multiplyScalar(0.1), night * 0.88);
+			const sk = U.uSkyDusk.value;
+			cc.lerp(tc.setRGB(0.42, 0.28, 0.5).multiplyScalar(sk.y), sk.x * 0.85);
 			veilMat.color.copy(cc);
 			veil.visible = true;
 		} else veil.visible = false;
