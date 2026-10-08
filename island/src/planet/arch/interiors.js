@@ -243,7 +243,7 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 	// stand in building b, floor l, looking down the room (view: 'gallery' up on its gallery)
 	function inside(b, l = 0, view = '') {
 		const B = buildings[((b | 0) % buildings.length + buildings.length) % buildings.length];
-		const V = B.vols[Math.max(0, Math.min(B.vols.length - 1, l | 0))], R = V.rooms[0];
+		const V = B.vols[Math.max(0, Math.min(B.vols.length - 1, l | 0))], R = V.rooms[/^r\d/.test(view) ? Math.min(V.rooms.length - 1, +view[1]) : 0];
 		let at, to, y = 0;
 		if (view === 'gallery' && V.mezz?.floors?.length) {
 			const f = V.mezz.floors[0];

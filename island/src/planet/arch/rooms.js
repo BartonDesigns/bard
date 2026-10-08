@@ -160,7 +160,7 @@ function stack(y0, y1, must, r, first, last) {
 			if (rem < h0 + end) {
 				// (no crown taller than it need be: a plain floor under it)
 				if (tgt === y1 && rem > end + 7) ys.push(y + rem - end);
-				if (tgt !== y1) ys.push(tgt);
+				if (tgt !== y1) { if (rem > 19) ys.push(y + rem / 2); ys.push(tgt); }
 				break;
 			}
 			y += h0;

@@ -213,11 +213,11 @@ function floorGrid(B, x0, x1, z0, z1, y, holes, circles, look, tint, down = fals
 			const cs = [[ax, az], [bx2, az], [bx2, bz], [ax, bz]];
 			if (!cs.some(([x, z]) => x * x + z * z < clipR * clipR)) continue;
 			const [p0, p1, p2, p3] = cs.map(([x, z]) => { const l = Math.hypot(x, z); return l > clipR ? [x / l * clipR, z / l * clipR] : [x, z]; });
-			if (down) pos.push(p0[0], y, p0[1], p2[0], y, p2[1], p1[0], y, p1[1], p0[0], y, p0[1], p3[0], y, p3[1], p2[0], y, p2[1]);
+			if (!down) pos.push(p0[0], y, p0[1], p2[0], y, p2[1], p1[0], y, p1[1], p0[0], y, p0[1], p3[0], y, p3[1], p2[0], y, p2[1]);
 			else pos.push(p0[0], y, p0[1], p1[0], y, p1[1], p2[0], y, p2[1], p0[0], y, p0[1], p2[0], y, p2[1], p3[0], y, p3[1]);
 			continue;
 		}
-		if (down) pos.push(ax, y, az, bx2, y, bz, bx2, y, az, ax, y, az, ax, y, bz, bx2, y, bz);
+		if (!down) pos.push(ax, y, az, bx2, y, bz, bx2, y, az, ax, y, az, ax, y, bz, bx2, y, bz);
 		else pos.push(ax, y, az, bx2, y, az, bx2, y, bz, ax, y, az, bx2, y, bz, ax, y, bz);
 	}
 	for (const c of circles) ringIn(pos, c.x, c.z, c.r, c.r + 0.4, y, down);
