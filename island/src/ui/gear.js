@@ -11,6 +11,8 @@ import { ARMS_CATALOG, upgradePrice } from '../gameplay/arms.js';
 import { TIERS, MAX_LEVEL, UPGRADE_MATERIAL, canCombine, groupInstances, statsOf, xpNeed } from '../gameplay/gear-levels.js';
 import { OPEN, accept, cancel, editSide, finished, holdLeft, newTradeId, receive, relayed, startTrade, tick, tradeWhy, worthKeeping } from '../gameplay/trade.js';
 import { createHand } from '../crysis/held-items.js';
+import { createViewmodel } from '../crysis/viewmodel.js';
+import { ACTIONS as DEBUG_ACTIONS } from '../people/actions.js';
 import { createStudio } from './gear-studio.js';
 import { createTradeWindow } from './trade-window.js';
 import { bar, btn, coins, el, hideTip, nameOf, showTip, slot, sound, tierColor, tierName, tipContent, useStyle, xpFrac } from './gear-look.js';
@@ -32,9 +34,12 @@ export function describeSide(side) {
 	return parts.length ? parts.join(', ') : 'nothing';
 }
 
-export function createGear({ arms, multiplayer, mount, menu, button, hint, world, camera, scene, avatar, self, busy = () => false, isPhone = false }) {
+export function createGear({ arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false }) {
 	useStyle();
-	const hand = createHand(scene, { lod: isPhone ? 'low' : 'high' });
+	const hand = createHand(scene, { lod: 'low' });
+	const vm = createViewmodel({ camera, avatar, mount, canvas: renderer?.domElement || null, isPhone });
+	// (for checks: hold something without owning it, aim)
+	let preview = null;
 	const studio = createStudio();
 	const P = () => world()?.player?.state;
 	const where = () => { const p = P()?.pos; return p ? { x: p.x, y: p.y, z: p.z } : null; };
@@ -327,11 +332,12 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (railBtn.style.display !== d) railBtn.style.display = d;
 		if (!Ps && shown()) close();
 		// the item in hand: on your body in third person, low in the view in first
-		const H = arms.held();
+		const H = preview || arms.held();
 		hand.set(H?.i || null, H?.l || 1, H?.t || 0);
-		const me = avatar?.me;
-		if (self?.state?.third && me) hand.follow(me.P, Math.atan2(-Math.sin(Ps?.yaw || 0), -Math.cos(Ps?.yaw || 0)), on && !Ps.swimming, me.M, time);
-		else hand.view(camera, on && !Ps.swimming && !win.shown(), time);
+		const me = avatar?.me, third = !!(self?.state?.third && me);
+		if (third) hand.follow(me.P, Math.atan2(-Math.sin(Ps?.yaw || 0), -Math.cos(Ps?.yaw || 0)), on && !Ps.swimming, me.M, time);
+		else hand.hide();
+		if (Ps) vm.update(dt, H, Ps, on && !third && !Ps.swimming && !win.shown(), world(), time);
 		// carrying it about on foot is experience for it
 		if (Ps && H && on && !Ps.flying && !Ps.swimming) {
 			const metresWalked = last ? Math.hypot(Ps.pos.x - last.x, Ps.pos.z - last.z) : 0;
@@ -364,8 +370,12 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		held: () => arms.held(),
 		// beside each friend in the room panel and on their tag
 		actions: (r) => [['Trade', () => ask(r.id)]],
-		info: () => { const T = active(); return { open: shown(), view, item: itemUid, held: arms.held(), window: win.shown(), trade: T && { id: T.id, role: T.role, status: T.status, why: T.why, sides: T.sides, v: T.v, ok: T.ok, peer: T.peer, hold: holdLeft(T, Date.now()) }, kept: [...trades.values()].map((x) => ({ id: x.id, status: x.status })) }; },
+		info: () => { const T = active(); return { open: shown(), view, item: itemUid, held: arms.held(), viewmodel: vm.info(), window: win.shown(), trade: T && { id: T.id, role: T.role, status: T.status, why: T.why, sides: T.sides, v: T.v, ok: T.ok, peer: T.peer, hold: holdLeft(T, Date.now()) }, kept: [...trades.values()].map((x) => ({ id: x.id, status: x.status })) }; },
 		trade: ask, sheet, window: win.el, studio,
+		// the held item and your hands, drawn over the frame (main.js, after the world)
+		post: (renderer) => vm.render(renderer),
+		// Crysis.viewmodel({ hold: [id, level, tier], aim: true }): a look without owning it
+		viewmodel: (o = {}) => { if (o.debug) return { me: avatar?.me, hand, ACTIONS: DEBUG_ACTIONS }; if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) vm.aim(o.aim); const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
 	};
 	multiplayer?.link?.(api);
 	return api;

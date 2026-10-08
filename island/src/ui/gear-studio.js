@@ -36,7 +36,7 @@ export function createStudio() {
 		camera.lookAt(c);
 	}
 	function show(id, level, tier, size, turn) {
-		const m = itemModel(id, { level, tier, lod: 'high' });
+		const m = itemModel(id, { level, tier, lod: 'high', plain: true });
 		if (!m) return null;
 		m.scale.setScalar(1);
 		// (long items lie across the picture)
@@ -63,7 +63,7 @@ export function createStudio() {
 	function turntable(box, id, level = 1, tier = 0, size = 200) {
 		stop();
 		if (!ready()) return () => {};
-		const m = itemModel(id, { level, tier, lod: 'high' });
+		const m = itemModel(id, { level, tier, lod: 'high', plain: true });
 		if (!m) return () => {};
 		if (m.userData.long) m.rotation.z = -Math.PI / 5;
 		scene.add(m);

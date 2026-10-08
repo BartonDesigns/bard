@@ -680,7 +680,7 @@ export function createIslandWorld() {
 	const multiplayer = HOOKS.multiplayer = createMultiplayer({ scene, camera, world: () => world, state, share, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, menu: tpMenu, canvas: dom.canvas, isPhone, drive, social: () => social, enter: (p) => api.open(p) });
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
 	// your gear, shops and trading with friends (ui/gear.js)
-	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
+	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -1663,7 +1663,7 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
-		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); }
+		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
 		// hold 60 fps on phones by trading resolution, smoothly
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
@@ -1971,6 +1971,8 @@ if (typeof window !== 'undefined') {
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
 		gear: () => HOOKS.gear?.info(),
+		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
+		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,

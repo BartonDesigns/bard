@@ -161,6 +161,8 @@ export function hub(X, h) {
 			put(X, frame(q.x, h.y, q.z, a), HULL, S.trim, box(0.4, 3.2, 0.4), 0, 1.6, 0, 0, 0, 0, 1, true);
 		}
 		put(X, frame(p.x, h.y, p.z, a), PRINT, S.print, cbox(14, 0.8, 3, 0.2), 0, 0.2, 0);
+		// (its slab is stood on: a floor at its top, so no one sinks into it)
+		X.col.box(p.x, p.z, a, 7, 1.5, h.y + 0.6, { solid: false });
 	}
 	// lamp masts round the ring road
 	for (let k = 0; k < 10; k++) {
@@ -353,6 +355,7 @@ export function station(X, F) {
 export function mine(X, o) {
 	const S = X.S, F = frame(o.x, o.y, o.z, o.yaw), h = 24;
 	put(X, F, PRINT, S.print, cbox(11, 0.8, 11, 0.3), 0, 0.2, 0);
+	X.col.box(o.x, o.z, o.yaw, 5.5, 5.5, o.y + 0.6, { solid: false });
 	const legs = [[-4, -4], [4, -4], [4, 4], [-4, 4]];
 	for (const [x, z] of legs) X.K.add('shell', sweep([F.p(x, 0.5, z), F.p(x * 0.25, h, z * 0.25)], 0.28, 4, { seg: 1, flat: true }), { tint: S.accent, glow: HULL });
 	for (let l = 1; l < 5; l++) {
@@ -441,6 +444,7 @@ export function dish(X, D, R) {
 export function scrubbers(X, o) {
 	const S = X.S, F = frame(o.x, o.y, o.z, o.yaw), n = X.P.stacks;
 	put(X, F, PRINT, S.print, cbox(o.r * 1.6, 0.8, 12, 0.3), 0, 0.2, 0);
+	X.col.box(o.x, o.z, o.yaw, o.r * 0.8, 6, o.y + 0.6, { solid: false });
 	for (let i = 0; i < n; i++) {
 		const lx = (i - (n - 1) / 2) * (o.r * 1.4 / Math.max(1, n - 1)), h = 26 + X.r() * 16;
 		put(X, F, HULL, S.hull, prism(14, 2.8, 2.0, h), lx, 0, 0);

@@ -119,6 +119,11 @@ export const ACTIONS = {
 		[0, { L: arm({ abd: 0.08, flex: -0.3, bend: 0.25 }), R: arm({ abd: 0.08, flex: 0.35, bend: 0.45 }), fL: [0.09, 0, 0.3], fR: [-0.09, 0.06, -0.28], hp: [0.08, 0, 0, 0.03] }],
 		[1, { L: arm({ abd: 0.08, flex: 0.35, bend: 0.45 }), R: arm({ abd: 0.08, flex: -0.3, bend: 0.25 }), fL: [0.09, 0.06, -0.28], fR: [-0.09, 0, 0.3], hp: [-0.08, 0, 0, 0.03] }],
 	] },
+	// a long arm carried at the ready (crysis/held-items.js): the right hand on the grip at the
+	// hip, the left forward under the guard
+	carry: { loop: false, keys: [
+		[0, { L: arm({ abd: 0.22, flex: 0.62, roll: 0.95, bend: 1.15, pro: 0.9, wflex: 0.1, curl: 0.55 }), R: arm({ abd: 0.32, flex: 0.28, roll: 0.55, bend: 1.45, pro: 0.6, wflex: -0.1, curl: 0.6 }), sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }],
+	] },
 	// a wave (the keeper's hello, a spectator)
 	wave: { loop: true, keys: [
 		[0, { R: arm({ abd: 0.9, flex: 0.2, roll: -1.3, bend: 1.7, pro: 1.9, curl: 0.05 }) }],
