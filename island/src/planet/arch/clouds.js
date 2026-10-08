@@ -24,8 +24,8 @@ uniform float uCov, uHalf, uNight, uTime, uK, uLit, uDusk;
 // the sky's light on it: sunlit above, cooler beneath, dark by night with the windows warm in it
 const SHADE = /* glsl */`
 vec3 mistC(float up, float n, float glow){
-	vec3 c = mix(uHor * 0.6, uSunC * 0.9 + uHor * 0.35, (0.3 + 0.7 * up) * uLit) * (0.55 + 0.7 * n * (0.4 + 0.6 * up));
-	c = mix(c, uHor * 0.1 + vec3(0.015, 0.02, 0.035), uNight * 0.88);
+	vec3 c = mix(uHor * 0.85, uSunC * 0.9 + uHor * 0.35, (0.3 + 0.7 * up) * uLit) * (0.6 + 0.65 * n * (0.4 + 0.6 * up));
+	c = mix(c, uHor * 0.18 + vec3(0.02, 0.025, 0.045), uNight * 0.75);
 	c = mix(c, uWarm * dot(c, vec3(0.3, 0.5, 0.2)) * 1.2, 0.22 * uDusk);
 	return c + uWarm * glow * uDusk * (1.4 - up * 0.6);
 }
