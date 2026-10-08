@@ -32,13 +32,20 @@ vec3 mistC(float up, float n, float glow){
 `;
 
 const DECK_V = /* glsl */`
-attribute float aL;
+uniform vec2 uOff;
+attribute vec3 aL;
 varying vec3 vW;
 varying float vL;
+varying float vB;
 #include <fog_pars_vertex>
+${NOISE}
 void main(){
 	vec4 w = modelMatrix * vec4(position, 1.0);
-	vW = w.xyz; vL = aL;
+	// billows: the upper layers heaped and hollowed, drifting with the band
+	vec2 bq = w.xz - uOff;
+	float bl = mN(bq * 0.012) * 0.6 + mN(bq * 0.031 + 4.0) * 0.4;
+	w.y += (bl - 0.42) * aL.z * (0.25 + 0.75 * aL.x);
+	vW = w.xyz; vL = aL.x; vB = aL.y;
 	vec4 mvPosition = viewMatrix * w;
 	gl_Position = projectionMatrix * mvPosition;
 	#include <fog_vertex>
@@ -48,6 +55,7 @@ ${COMMON}
 uniform sampler2D uHeight;
 varying vec3 vW;
 varying float vL;
+varying float vB;
 #include <fog_pars_fragment>
 ${NOISE}
 ${SHADE}
@@ -68,9 +76,13 @@ void main(){
 		hole *= smoothstep(R * 0.98, R * 1.35, r);
 		glow += o.w * exp(-r / (R * 2.2));
 	}
-	float n = mF((q - uOff) * 0.0055 + vL * 1.7);
-	float mid = 1.0 - abs(vL * 2.0 - 1.0);
-	float cov = smoothstep(uCov, uCov + 0.16, n + mid * 0.14 - 0.05 - (1.0 - mid) * 0.08);
+	glow *= 1.0 - vB * 0.6;
+	vec2 nq = (q - uOff) * 0.0055 + vL * 1.7 + vB * 9.0;
+	float n = mF(nq), n2 = mF(nq + vec2(0.035, 0.05));
+	float mid = 1.0 - abs(vL * 2.0 - 1.0), cv = uCov + vB * 0.08;
+	// breaks in it, wide lanes where the ground and the towers show through
+	float brk = smoothstep(0.27, 0.45, mN((q - uOff) * 0.0016 + vB * 5.0 + 11.0));
+	float cov = smoothstep(cv, cv + 0.16, n + mid * 0.14 - 0.05 - (1.0 - mid) * 0.08) * brk;
 	// the ground under it, read between the height map's texels (it is stored unfiltered)
 	vec2 hs = vec2(textureSize(uHeight, 0)), hu = (p + uHalf) / (2.0 * uHalf) * (hs - 1.0), hf = fract(hu), h0 = (floor(hu) + 0.5) / hs;
 	float g = mix(mix(texture2D(uHeight, h0).r, texture2D(uHeight, h0 + vec2(1.0, 0.0) / hs).r, hf.x), mix(texture2D(uHeight, h0 + vec2(0.0, 1.0) / hs).r, texture2D(uHeight, h0 + 1.0 / hs).r, hf.x), hf.y);
@@ -78,7 +90,10 @@ void main(){
 	float a = min(1.0, cov * (1.0 + lift * 0.9) + lift * 0.12) * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
 	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.5;
 	if (a < 0.004) discard;
-	gl_FragColor = vec4(mistC(vL, n, glow), a);
+	// rolling tops: lit where the billow faces up out of the deck, shadowed in its folds
+	float relief = clamp((n - n2) * 7.0 + 0.5, 0.0, 1.0);
+	vec3 col = mistC(vL, n, glow) * (0.72 + 0.5 * relief * (0.3 + 0.7 * vL)) * (0.8 + 0.25 * smoothstep(cv, cv + 0.3, n));
+	gl_FragColor = vec4(col, a);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 	#include <fog_fragment>
@@ -96,16 +111,28 @@ varying float vUp;
 #include <fog_pars_vertex>
 void main(){
 	vec2 ac = vec2(-uWd.y, uWd.x);
-	float R = aT.z, L = R * 9.0;
-	float s = mod(aW.y + uFlow * (0.8 + 0.4 * fract(aT.w)), 2.0 * L) - L;
-	float e = exp(-s * s / (R * R * 5.0));
-	float bb = sign(aW.x) * sqrt(aW.x * aW.x + R * R * e * 1.2);
-	vec3 c = vec3(aT.x, aW.z, aT.y) + vec3(uWd.x, 0.0, uWd.y) * s + vec3(ac.x, 0.0, ac.y) * bb;
-	c.y += sin(uTime * 0.25 + aT.w * 6.0 + s * 0.04) * 2.5;
-	vec4 mvPosition = viewMatrix * vec4(c, 1.0);
-	mvPosition.xy += position.xy * aW.w * (0.85 + 0.5 * e);
-	vUv = position.xy * 2.0; vS = aT.w; vUp = clamp((aW.z - uBand.x) / (uBand.y - uBand.x), 0.0, 1.0);
-	vA = (1.0 - smoothstep(0.55, 1.0, abs(s) / L)) * smoothstep(6.0, 40.0, -mvPosition.z);
+	vec4 mvPosition;
+	if (aT.z < 0.0) {
+		// a wisp rising off the deck, drifting downwind, swelling and thinning away
+		float t = fract(uTime * 0.016 * (0.6 + fract(aT.w * 7.0)) + aW.y);
+		vec3 c = vec3(aT.x, aW.z - aT.z * t, aT.y) + vec3(uWd.x, 0.0, uWd.y) * t * 30.0;
+		mvPosition = viewMatrix * vec4(c, 1.0);
+		mvPosition.xy += position.xy * aW.w * (0.55 + t * 0.9);
+		vA = sin(t * 3.14159) * smoothstep(6.0, 40.0, -mvPosition.z);
+		vUp = 0.9;
+	} else {
+		float R = aT.z, L = R * 9.0;
+		float s = mod(aW.y + uFlow * (0.8 + 0.4 * fract(aT.w)), 2.0 * L) - L;
+		float e = exp(-s * s / (R * R * 5.0));
+		float bb = sign(aW.x) * sqrt(aW.x * aW.x + R * R * e * 1.2);
+		vec3 c = vec3(aT.x, aW.z, aT.y) + vec3(uWd.x, 0.0, uWd.y) * s + vec3(ac.x, 0.0, ac.y) * bb;
+		c.y += sin(uTime * 0.25 + aT.w * 6.0 + s * 0.04) * 2.5;
+		mvPosition = viewMatrix * vec4(c, 1.0);
+		mvPosition.xy += position.xy * aW.w * (0.85 + 0.5 * e);
+		vA = (1.0 - smoothstep(0.55, 1.0, abs(s) / L)) * smoothstep(6.0, 40.0, -mvPosition.z);
+		vUp = clamp((aW.z - uBand.x) / (uBand.y - uBand.x), 0.0, 1.0);
+	}
+	vUv = position.xy * 2.0; vS = aT.w;
 	gl_Position = projectionMatrix * mvPosition;
 	#include <fog_vertex>
 }`;
@@ -141,8 +168,10 @@ const mN = (x, y) => {
 const mF = (x, y) => mN(x, y) * 0.53 + mN(x * 2.07 + 3.1, y * 2.07 + 3.1) * 0.27 + mN(x * 4.3 - 1.7, y * 4.3 - 1.7) * 0.13 + mN(x * 8.9 + 5.3, y * 8.9 + 5.3) * 0.07;
 const sm = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-// M: the plan's mist { base, top, cover, x, z, rad }; obs: [{ x, z, r, light, tower }]
-export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, glow = [1.0, 0.45, 0.65] } = {}) {
+// M: the plan's mist { bands: [{ base, top, cover }], x, z, rad } (the first band the main
+// one); obs: [{ x, z, r, light, tower }]; banks: far mist round other things, of rising wisps
+// [{ x, z, r, y, rise, n, size }]
+export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, glow = [1.0, 0.45, 0.65], banks = [], heightAt = () => -1e9 } = {}) {
 	const group = new THREE.Group();
 	group.name = 'arch:mist';
 	const wd = shared.uWindDir?.value || new THREE.Vector2(1, 0);
@@ -156,12 +185,18 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 	};
 	const fogU = THREE.UniformsUtils.clone(THREE.UniformsLib.fog);
 	const mat = (v, f) => new THREE.ShaderMaterial({ uniforms: { ...fogU, ...U }, vertexShader: v, fragmentShader: f, transparent: true, depthWrite: false, fog: true, side: THREE.DoubleSide });
-	// the deck: thin layers through the band's depth, one draw
-	const nL = isPhone ? 4 : 7, geos = [];
-	for (let i = 0; i < nL; i++) {
-		const t = (i + 0.5) / nL, g = new THREE.CircleGeometry(M.rad, 56).rotateX(-Math.PI / 2).translate(M.x, M.base + (M.top - M.base) * t, M.z);
-		g.setAttribute('aL', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count).fill(t), 1));
-		geos.push(g);
+	// the decks: thin layers through each band's depth (fewer in the upper), one draw
+	const geos = [], seg = isPhone ? 30 : 52;
+	let nL = 0;
+	for (const [b, B] of M.bands.entries()) {
+		const n = Math.max(2, Math.round((isPhone ? 4 : 7) * (b ? 0.6 : 1)));
+		for (let i = 0; i < n; i++, nL++) {
+			const t = (i + 0.5) / n, g = new THREE.PlaneGeometry(M.rad * 2, M.rad * 2, seg, seg).rotateX(-Math.PI / 2).translate(M.x, B.base + (B.top - B.base) * t, M.z);
+			const a = new Float32Array(g.attributes.position.count * 3);
+			for (let k = 0; k < a.length; k += 3) { a[k] = t; a[k + 1] = b; a[k + 2] = (B.top - B.base) * 0.6; }
+			g.setAttribute('aL', new THREE.Float32BufferAttribute(a, 3));
+			geos.push(g);
+		}
 	}
 	const deckGeo = new THREE.BufferGeometry();
 	{
@@ -174,7 +209,7 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 			g.dispose();
 		}
 		deckGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-		deckGeo.setAttribute('aL', new THREE.Float32BufferAttribute(al, 1));
+		deckGeo.setAttribute('aL', new THREE.Float32BufferAttribute(al, 3));
 		deckGeo.setIndex(idx);
 	}
 	const deckMat = mat(DECK_V, DECK_F);
@@ -191,6 +226,20 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 			W.push((rnd() < 0.5 ? -1 : 1) * o.r * (0.3 + rnd() * 1.6), rnd() * 2 * L, M.base + (M.top - M.base) * (0.25 + rnd() * 0.9), o.r * (1.4 + rnd() * 1.6));
 			T.push(o.x, o.z, o.r, rnd());
 		}
+	}
+	// wisps rising off the deck where it lies over low ground, and the far banks
+	const H = heightAt;
+	for (let k = 0, n = 0; k < 400 && n < (isPhone ? 14 : 34); k++) {
+		const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * M.rad * 0.6, x = M.x + Math.sin(a) * d, z = M.z + Math.cos(a) * d;
+		if (H(x, z) > M.top - 6) continue;
+		n++;
+		W.push(0, rnd(), M.top - 5 - rnd() * 6, 14 + rnd() * 16);
+		T.push(x, z, -(18 + rnd() * 22), rnd());
+	}
+	for (const b of banks) for (let k = 0; k < (isPhone ? Math.ceil(b.n / 2) : b.n); k++) {
+		const a = rnd() * Math.PI * 2, d = b.r * (0.75 + rnd() * 0.5);
+		W.push(0, rnd(), b.y + (rnd() - 0.5) * b.size * 0.3, b.size * (0.7 + rnd() * 0.6));
+		T.push(b.x + Math.sin(a) * d, b.z + Math.cos(a) * d, -b.rise * (0.5 + rnd() * 0.5), rnd());
 	}
 	let wisps = null;
 	if (W.length) {
@@ -229,8 +278,9 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 		U.uLit.value = Math.max(0.15, Math.min(1, (shared.uSunDir?.value.y ?? 0.5) * 2 + 0.3));
 		const p = camera.position, d = Math.hypot(p.x - M.x, p.z - M.z);
 		group.visible = d < M.rad + 2500;
-		// in the band: the veil, as thick as the cloud is here
-		const inK = sm(M.base - 2, M.base + 5, p.y) * (1 - sm(M.top - 5, M.top + 3, p.y)) * (1 - sm(M.rad * 0.55, M.rad * 0.9, d));
+		// in a band: the veil, as thick as the cloud is here
+		let inK = 0;
+		for (const B of M.bands) inK = Math.max(inK, sm(B.base - 2, B.base + 5, p.y) * (1 - sm(B.top - 5, B.top + 3, p.y)) * (1 - sm(M.rad * 0.55, M.rad * 0.9, d)));
 		if (inK > 0.01) {
 			const qx = (p.x - U.uOff.value.x) * 0.0055 + 0.85, qz = (p.z - U.uOff.value.y) * 0.0055 + 0.85;
 			const cov = sm(M.cover, M.cover + 0.26, mF(qx, qz) + 0.08);

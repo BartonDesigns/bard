@@ -49,6 +49,10 @@ const LOOK = /* glsl */`
 		aRough = mix(0.14, 0.5, mull); aMetal = mix(0.4, 0.3, mull);
 		aEm = (1.0 - mull) * lit * uNight * 0.9 * (0.4 + 0.9 * aH(vec3(id, 3.0)));
 		aEmC = hue < 0.5 ? uWinC : hue < 0.78 ? uWinB : uWinV;
+		// far off, the grid is finer than a pixel: its average glow, not a shimmer
+		float aAvg = smoothstep(350.0, 900.0, length(cameraPosition - vAW));
+		aEm = mix(aEm, 0.45 * uNight * 0.9 * 0.85, aAvg);
+		aEmC = mix(aEmC, uWinC * 0.5 + uWinB * 0.3 + uWinV * 0.2, aAvg);
 	} else if (vAG < 2.5) {
 		float y = vAW.y + aN(fp * 0.25) * 2.0;
 		float lay = fract(y * 0.7);

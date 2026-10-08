@@ -464,6 +464,20 @@ function cottage(X, x, z, yaw) {
 	X.contacts.push({ F, x0: -3.1, x1: 3.1, z0: -4.1, z1: 4.1, m: 2.5, k: 0.35, all: true });
 }
 
+// a far city standing out of the cloud at the edge of sight: dark slabs, their windows, red
+// lights on the roofs, a strip or an antenna here and there
+function farCity(X, c) {
+	const { K, S } = X, rr = mulberry32(c.seed);
+	for (let i = 0; i < c.n; i++) {
+		const a = rr() * TAU, d = rr() * 60, w = 10 + rr() * 14, dd = 8 + rr() * 10, h = c.h * (0.4 + rr() * 0.6);
+		const F = frame(c.x + Math.sin(a) * d, c.y, c.z + Math.cos(a) * d, rr() * TAU);
+		K.add('shell', F.put(box(w, h, dd), 0, h / 2, 0), { tint: S.slab, glow: G.glazing });
+		K.add('shell', F.put(box(0.8, 0.8, 0.8), 0, h + 0.4, 0), { tint: S.beacon, glow: G.beacon });
+		if (rr() < 0.4) K.add('shell', F.put(box(0.7, h * 0.9, 0.3), w / 2 - 0.4, h * 0.5, dd / 2 + 0.15), { tint: S.strip, glow: G.lamp });
+		if (rr() < 0.3) K.add('shell', F.put(prism(6, 0.5, 0.05, 20), 0, h, 0), { tint: S.trim, glow: G.metal });
+	}
+}
+
 // the ground's contact shade: a draped grid round each footprint
 function contactGeometry(H, list) {
 	const pos = [], ks = [], idx = [];
@@ -537,6 +551,9 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		// its light on the water below it
 		if (T.y < (island.sea || 0)) for (const q of o || []) X.streaks.push({ x: q.x, z: q.z, y: (island.sea || 0) + 0.06, w: q.r * 0.8, len: 160, c: S.glow });
 	}
+	for (const [i, c] of (plan.cities || []).entries()) site('Far city ' + (i + 1), c, 80, Infinity, () => farCity(X, c));
+	const M = plan.mountain;
+	if (M?.tower) site(M.tower.name, M.tower, 30, Infinity, () => slabs(X, M.tower));
 	if (plan.shore) site(plan.shore.name, plan.shore, 16, 3000, () => shoreHouse(X, plan.shore));
 	if (plan.monolith) site('The Monolith', plan.monolith, 8, Infinity, () => monolith(X, plan.monolith, island.sea || 0));
 	if (plan.bridges.length) site('Bridges', plan.centre, 600, 3400, () => { for (const b of plan.bridges) bridge(X, b); });
@@ -579,7 +596,9 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	}
 	const craftMesh = inst(craftGeo, crafts.length, 'craft');
 	// the mist band, glowing from below where the towers stand in it
-	const mist = createMist(scene, shared, plan.mist, obs.slice(0, 12), { isPhone, seed: plan.seed, glow: S.glow });
+	const banks = (plan.cities || []).map((c) => ({ x: c.x, z: c.z, r: 75, y: (island.sea || 0) + 8, rise: 30, n: 14, size: 75 }));
+	if (M) banks.push({ x: M.x, z: M.z, r: M.r, y: M.y - 6, rise: 26, n: 28, size: 85 });
+	const mist = createMist(scene, shared, plan.mist, obs.slice(0, 12), { isPhone, seed: plan.seed, glow: S.glow, banks, heightAt: H });
 	// glowing flowers on the green near the houses, and hamlets' lamps on the slopes over the mist
 	const dots = X.dots;
 	const grassy = (x, z) => island.maskAt ? island.maskAt(x, z, 3) : 1;
@@ -606,6 +625,16 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			dots.push({ x, y: H(x, z) + 1.2, z, s: 0.5 + r() * 0.3, c: r() < 0.7 ? [1.0, 0.78, 0.5] : S.winB });
 		}
 	}
+	// the mountain's hamlets: lamps in clusters on its slopes over the cloud
+	if (M) for (let k = 0, n = 0; k < 300 && n < (isPhone ? 9 : 18); k++) {
+		const a = r() * TAU, d = M.r * (0.15 + r() * 0.9), cx = M.x + Math.sin(a) * d, cz = M.z + Math.cos(a) * d, h = H(cx, cz);
+		if (h < M.y + 8 || h > M.h - 8) continue;
+		n++;
+		for (let j = 0; j < 7; j++) {
+			const x = cx + (r() - 0.5) * 26, z = cz + (r() - 0.5) * 26;
+			dots.push({ x, y: H(x, z) + 1.2, z, s: 0.6 + r() * 0.3, c: r() < 0.75 ? [1.0, 0.8, 0.52] : S.winB });
+		}
+	}
 	const glow = createGlow(scene, shared, { streaks: X.streaks, dots, renderer: opts.renderer });
 	// the contact shade
 	const contactMat = contactMaterial();
@@ -619,18 +648,21 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	const q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ'), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), tg = new THREE.Vector3(), mx = new THREE.Matrix4();
 	const seen = new Set();
 	let lookT = 0, inMist = 0;
-	// dusk and blue hour here turn violet: the sky's air tint (sky.js uAirR) leans to it as the
-	// sun goes down, and is given back as it was when the world goes
-	const airU = shared.uAirR, air0 = airU?.value.clone(), vio = new THREE.Vector3(...(S.dusk || [0.66, 0.42, 1.0]));
-	vio.multiplyScalar(1 / (vio.x * 0.299 + vio.y * 0.587 + vio.z * 0.114));
+	// dusk and blue hour here are the world's own (sky.js uDusk): magenta at the horizon, violet,
+	// indigo overhead, the clouds lit pink from below, a crescent over the sunset; all of it
+	// handed back as the sky was when the world goes
+	const duskU = shared.uDuskSky || (shared.uDuskSky = { value: new THREE.Vector4(0, 1, 0, 0) });
+	const moonU = shared.uDuskMoon || (shared.uDuskMoon = { value: new THREE.Vector4(0, 0.5, -0.85, 0) });
 	function update(dt) {
 		const cam = camera.position, cx = cam.x, cz = cam.z;
 		const sy = shared.uSunDir.value.y, night = 1 - THREE.MathUtils.smoothstep(sy, -0.12, 0.1);
 		U.uNight.value = night;
 		U.uLampK.value = 0.6 + night * 1.8;
-		if (airU) {
-			const k = 0.62 * (1 - THREE.MathUtils.smoothstep(sy, -0.04, 0.3)), a = air0.w;
-			airU.value.set(a > 0 ? air0.x + (vio.x - air0.x) * k : vio.x, a > 0 ? air0.y + (vio.y - air0.y) * k : vio.y, a > 0 ? air0.z + (vio.z - air0.z) * k : vio.z, a + (1 - a) * k);
+		{
+			const k = 1 - THREE.MathUtils.smoothstep(sy, -0.03, 0.22), b = 0.3 + 0.7 * THREE.MathUtils.smoothstep(sy, -0.38, -0.06);
+			duskU.value.set(k * 0.92, b, 0, 0);
+			const sd = shared.uSunDir.value, a = Math.atan2(sd.x, sd.z) + 0.45;
+			moonU.value.set(Math.sin(a) * 0.9, 0.42, Math.cos(a) * 0.9, k);
 		}
 		for (const G of sites) {
 			const d = Math.hypot(cx - G.x, cz - G.z) - G.r, vis = d < G.far;
@@ -699,7 +731,8 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		return o.name;
 	}
 	function dispose() {
-		if (airU) airU.value.copy(air0);
+		duskU.value.set(0, 1, 0, 0);
+		moonU.value.w = 0;
 		envRT?.dispose();
 		for (const m of [mats.shell, mats.glass, contactMat]) m.dispose();
 		group.traverse((o) => o.geometry?.dispose());
@@ -715,7 +748,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			villas: plan.villas.map((q) => ({ name: q.name, kind: q.kind, y: Math.round(q.y), under: Math.round(q.under), stand: q.stand && { x: +q.stand.x.toFixed(1), y: +q.stand.y.toFixed(2), z: +q.stand.z.toFixed(1) } })),
 			towers: plan.towers.map((T) => ({ name: T.name, base: Math.round(T.y), top: Math.round(T.roof || T.top), lobbies: T.lobbies.length })),
 			bridges: plan.bridges.length, mist: { base: Math.round(plan.mist.base), top: Math.round(plan.mist.top), layers: mist.layers, wisps: mist.wisps, obstacles: Math.min(12, obs.length), inside: +inMist.toFixed(2) },
-			lifts: X.lifts.length, craft: crafts.length, streaks: X.streaks.length, dots: dots.length, monolith: !!plan.monolith, shore: !!plan.shore, colliders: col.all.length, meshes, tris: Math.round(tris), planMs: plan.planMs, buildMs: Math.round(buildMs),
+			lifts: X.lifts.length, craft: crafts.length, streaks: X.streaks.length, dots: dots.length, cities: (plan.cities || []).length, mountain: M ? { h: Math.round(M.h), cloud: Math.round(M.y), tower: !!M.tower } : null, bands: plan.mist.bands.map((b) => [Math.round(b.base), Math.round(b.top)]), monolith: !!plan.monolith, shore: !!plan.shore, colliders: col.all.length, meshes, tris: Math.round(tris), planMs: plan.planMs, buildMs: Math.round(buildMs),
 		};
 	};
 	return { update, floor: col.floor, push: col.push, go, dispose, info, group, plan };

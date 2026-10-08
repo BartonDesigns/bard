@@ -309,6 +309,41 @@ export function planArch(island, profile, opts = {}) {
 	}
 	let rad = 0;
 	for (const o of [...villas, ...towers]) rad = Math.max(rad, Math.hypot(o.x - centre.x, o.z - centre.z));
-	const mist = { base, top, cover: S.mist.cover, x: centre.x, z: centre.z, rad: Math.min(1000, rad + 300) };
-	return { style: S, seed: island.seed, name: S.name, centre, villas, towers, bridges, monolith, shore, paths: paths.map((p) => p.pts), mist, clear, planMs: Math.round(performance.now() - t0) };
+	// a second band higher up: just under the high houses' floors, or round the towers' middles
+	const upper = decks.filter((y) => y > top + 12);
+	const tt = towers.length ? Math.min(...towers.map((t) => t.top)) : top + 90;
+	let b2 = upper.length >= 2 ? { base: Math.min(...upper) - 16, top: Math.min(...upper) - 2 } : { base: top + (tt - top) * 0.5 - 8, top: top + (tt - top) * 0.5 + 8 };
+	b2 = { base: Math.max(b2.base, top + 14), top: Math.max(b2.top, Math.max(b2.base, top + 14) + 10), cover: S.mist.cover + 0.05 };
+	const mist = { base, top, cover: S.mist.cover, bands: [{ base, top, cover: S.mist.cover }, b2], x: centre.x, z: centre.z, rad: Math.min(1000, rad + 300) };
+	// far cities standing out of the cloud at the edge of sight
+	const cities = [];
+	for (let k = 0; k < 400 && cities.length < 3; k++) {
+		const a = r() * TAU, R = half * (0.8 + r() * 0.12), x = Math.cos(a) * R, z = Math.sin(a) * R;
+		if (Math.hypot(x - centre.x, z - centre.z) < 650 || cities.some((c) => Math.hypot(c.x - x, c.z - z) < 500)) continue;
+		const h = H(x, z);
+		if (h > sea + 2 && k < 300) continue;
+		cities.push({ x, z, y: Math.min(h, sea) - 3, n: 5 + Math.floor(r() * 5), h: 50 + r() * 90, seed: (r() * 1e9) >>> 0 });
+	}
+	// a mountain through the cloud: the highest ground within reach, mist round its flanks,
+	// hamlets' lamps on its slopes, a lit tower at its foot
+	let mountain = null;
+	for (let z = -half * 0.8; z <= half * 0.8; z += 40) for (let x = -half * 0.8; x <= half * 0.8; x += 40) {
+		const d = Math.hypot(x - centre.x, z - centre.z), h = H(x, z);
+		if (d < 250 || d > 1150 || h < top + 70 || villas.some((v) => Math.hypot(v.x - x, v.z - z) < 90)) continue;
+		if (!mountain || h > mountain.h) mountain = { x, z, h };
+	}
+	if (mountain) {
+		const M = mountain, y = top + (M.h - top) * 0.45;
+		let rr = 0;
+		for (let k = 0; k < 8; k++) { let d = 10; while (d < 600 && H(M.x + Math.cos(k * 0.785) * d, M.z + Math.sin(k * 0.785) * d) > y) d += 10; rr += d / 8; }
+		M.y = y; M.r = rr;
+		const a = Math.atan2(centre.x - M.x, centre.z - M.z);
+		let tw = null;
+		for (let k = 0; k < 40 && !tw; k++) {
+			const b = a + (r() - 0.5) * 2, d = rr * (1.1 + r() * 0.5), x = M.x + Math.sin(b) * d, z = M.z + Math.cos(b) * d, h = H(x, z);
+			if (h > sea + 1 && h < y - 10 && rough(H, x, z, 10) < 5 && free(x, z, 12)) tw = { x, z, y: h - 2, R: 8, top: y + 55 + r() * 30, twist: 0, name: 'Summit Light', lobbies: [], sea: false, kind: 'slabs' };
+		}
+		M.tower = tw;
+	}
+	return { style: S, seed: island.seed, name: S.name, centre, villas, towers, bridges, monolith, shore, cities, mountain, paths: paths.map((p) => p.pts), mist, clear, planMs: Math.round(performance.now() - t0) };
 }
