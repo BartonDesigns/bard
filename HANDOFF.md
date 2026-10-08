@@ -51,6 +51,91 @@ pointers are where each fix most likely starts.
      warning kept as atmosphere instead of a wall, and a way back out.
    - Show the owner the look before shipping.
 
+## Gear, shops and trading (8 October 2026)
+
+- **Built (on the branch):** the 🎒 Gear sheet (rail button, the places menu, or I): credits, what
+  you carry with icons and the catalogue's description, Hold / Put away, the shops near you
+  (outfitters, ranger camps, traders, supermarkets; buy, and sell back at half price within 60 m),
+  and trading with a friend in your room.
+  - `island/src/ui/gear.js` (the sheet and the trade driver), `island/src/gameplay/trade.js` (the
+    pure trade state machine), `island/src/crysis/held-items.js` (stylised hand models and icons).
+  - `gameplay/arms.js` gained `sell` and `trade` transactions, `sellPrice` and `cleanTradeSide`;
+    `crysis/arms-runtime.js` gained `shops`, `shopSheet`, `buy`, `sell`, `hold`, `held`, `apply`, `applied`.
+  - The held item travels in the pose as `h` (`net/protocol.js`) and shows in friends' right hands
+    (`net/remotes.js`).
+  - Trades: any distance within the same room (the sheet shows how far, or "another world"). The
+    asker coordinates: both confirm the same version (`v.a.v.b`), the asker applies its side and
+    sends `commit`, the other applies its own and answers `done`. Every message is resent until
+    answered; each side's transaction id is `trade:<id>`, so nothing lands twice. If the other
+    side can no longer pay, it says `fail` and the asker applies `trade:<id>:undo`.
+  - **Server:** `trade` relay in `server/multiplayer/src/room.js` with a `trade-ack` to the
+    sender. **Not live until the owner redeploys** (steps in `server/multiplayer/README.md`).
+    Against the old server the game says "Trading needs the rooms server update." after 4 s.
+  - Tests: `node island/tools/trade.test.mjs`, `cd server/multiplayer && npm test`.
+- **Left:** a player market (posting offers at the community exchange: `createPlayerOffer` exists,
+  no UI), the hand pose (the arm does not yet close round the item), and the plan below.
+
+## Next weapons and gear steps: a plan (not built)
+
+Everything stays a game abstraction: fictional items, encounters resolved by game rules, no
+real-world handling or instructions, nothing graphic. Theft and heat stay exactly as the core
+defines them.
+
+### 1. Using items
+- One **Use** button beside the held item (and the E key), shown when the item has a use here.
+  `applyInventoryTransaction` already has `use` with an activity; the runtime adds
+  `use(itemId, context)` that picks the activity from where you are (a hunt trail, your home, a
+  shelter) and returns a short game outcome.
+- Per kind, short and readable:
+  - **Camp lantern:** a soft point light (one, pooled, phones skip it at night under low quality)
+    that lights a cave or a shelter encounter.
+  - **Field medkit:** clears an "injured" state from an encounter (consumed).
+  - **Repair roll / door brace:** repair or secure a home object (consumed / placed).
+  - **Lantern alarm:** placed; it chimes and calls friendly townsfolk when an encounter starts nearby.
+  - **Signal flare:** a coloured light in the sky that friends in the room see (one `event`).
+  - **Hunting net / scent kit:** reveal or finish a tracking trail.
+- Placed items are world props with an id, saved in the inventory journal, so a reload keeps them.
+
+### 2. Hunting (game-only)
+- A **trail encounter**, not a shooting simulation. Starting a hunt (already `hunt` in the
+  runtime) lays a short trail of tracks and markers near the source using the existing fauna
+  (`landFauna`). Following it, the scent kit and the net reveal and finish steps.
+- The finish is a "tag" or "capture" moment: the animal is marked, calmly walks or runs off, and
+  you get a trophy card and credits. No wounds, no bodies, nothing graphic. The bow and the trail
+  rifles only change the range and the quiet of the tag.
+- Wildlife in protected or populated places is never a target; children and townsfolk never are.
+
+### 3. Home defence (game-only)
+- A **shelter encounter** at your home (Guide home or a cottage): at night a "prowler" event
+  (a shadowy, faceless figure, never a named townsperson, never a child) tests the home.
+- Prepared homes win without contact: door braces, lantern alarms and lanterns raise a "secured"
+  score; the alarm calls friendly neighbours; the guard items "deter", and the figure leaves.
+  The Warden Spark Carbine stays non-lethal, as the catalogue says: it ends the encounter with a
+  flash and the figure fleeing.
+- Friends in the room can help: the host's encounter is shared like gatherings (an `event`), and
+  each guest's preparations count.
+
+### 4. How combat would fit the existing bodies, poses and ragdolls
+- **Poses:** `people/motion.js` already plays held poses and keyed actions (`people/actions.js`:
+  pitch, bat, crouch, ready). Add a few game actions in the same form: `aim` (both arms raised,
+  for the bow and long items), `brace` (the item held across the body), `toss` (the net), and
+  `raise` (the lantern up). The held item rides the right wrist as it does now.
+- **Your body:** in third person (`people/self.js`), the action plays on your avatar; in first
+  person the view model in `crysis/held-items.js` tilts with the same action.
+- **Friends:** the pose's `a` gains these action names (validated in `protocol.js` like the walk
+  states), so friends see the same motion.
+- **Outcomes, not damage:** an encounter resolves by rules (preparation, item, skill, a roll),
+  like `resolveTheftAttempt`. A "stagger" on an encounter figure reuses `people/ragdoll.js`'s
+  `hit()` with a small push, as the shove (X) already does: a stumble and getting back up, never
+  injury. Ragdolls stay for falls and pushes, not for harm.
+- **Multiplayer:** each player stays the owner of their own state; the host decides an
+  encounter's outcome and shares it as an `event`, so everyone sees the same ending.
+
+### 5. Order of work
+1. Use button and the simple uses (lantern, medkit, repair, flare). 2. Placed home items and the
+shelter encounter. 3. The hunting trail and tag. 4. The action poses and their multiplayer field.
+5. A shared encounter in rooms.
+
 ## Resume here (7 October 2026)
 
 - **Multiplayer v1 (on the branch, not live until the owner deploys):** friends join the host's game and see each other.
