@@ -251,18 +251,19 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 			at = f.ring ? [Math.sin(f.a0 + 0.6) * (f.r1 - 1.2), Math.cos(f.a0 + 0.6) * (f.r1 - 1.2)] : [f.x - f.hw + 1.2, f.z];
 			to = [0, 0];
 		} else if (V.round) {
-			const a = (R.a0 + R.a1) / 2 + (V.rooms.length > 1 ? 0 : 0.6);
-			at = [Math.sin(a) * (V.r - 1.6), Math.cos(a) * (V.r - 1.6)];
-			to = [Math.sin(a + Math.PI * 0.75) * V.r * 0.6, Math.cos(a + Math.PI * 0.75) * V.r * 0.6];
+			// (round the ring at mid radius, looking on round it)
+			const span = ((R.a1 - R.a0) % TAU + TAU) % TAU || TAU, a = R.a0 + span * 0.12, rm = R.r0 + (R.r1 - R.r0) * 0.38;
+			at = [Math.sin(a) * rm, Math.cos(a) * rm];
+			to = [Math.sin(a + Math.min(span * 0.5, 1.6)) * rm, Math.cos(a + Math.min(span * 0.5, 1.6)) * rm];
 		} else {
 			const zc = (R.z0 + R.z1) / 2;
 			at = [R.x0 + 1.0, zc + (R.z1 - R.z0) * 0.22];
 			to = [R.x1, zc - (R.z1 - R.z0) * 0.1];
-			if (R.kind === 'living') { at = [0, R.z0 + 1.2]; to = [0, R.z1]; }
+			if (R.kind === 'living') { at = [R.x0 + 0.8, R.z0 + (R.z1 - R.z0) * 0.3]; to = [R.x1 - 1, R.z1]; }
 		}
 		const [wx, wz] = V.F.p(at[0], at[1]), [tx, tz] = V.F.p(to[0], to[1]);
 		if (!V.built) build(V);
-		return { x: wx, y: V.F.y + y, z: wz, yaw: Math.atan2(-(tx - wx), -(tz - wz)), name: `${opts.settlement} · ${R.name}`, building: B.name, kind: R.kind, h: +V.h.toFixed(1), level: V.i, levels: B.vols.length };
+		return { x: wx, y: V.F.y + y, z: wz, yaw: Math.atan2(-(tx - wx), -(tz - wz)), pitch: V.domeR ? 0.3 : 0.02, name: `${opts.settlement} · ${R.name}`, building: B.name, kind: R.kind, h: +V.h.toFixed(1), level: V.i, levels: B.vols.length };
 	}
 	const indoors = () => !!here;
 	function dispose() {

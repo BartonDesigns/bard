@@ -14,7 +14,6 @@ import { mulberry32 } from '../../noise.js';
 import { archMaterial, railGlass, contactMaterial, archUniforms } from './mats.js';
 import { createMist } from './clouds.js';
 import { createGlow } from './glow.js';
-import { local } from './plan.js';
 import { towerPlan, housePlan, frame as roomFrame } from './rooms.js';
 import { createInteriors } from './interiors.js';
 
@@ -181,6 +180,8 @@ function cantilever(X, v) {
 	room(X, F, gw, gz1 - gz0, H1, gx, (gz0 + gz1) / 2, round, 1.2, true);
 	{
 		// its rooms: the vestibule from the cliff top, opening into the hall over the drop
+		portal(X, F.sub((vx0 + vx1) / 2, 0, -B, Math.PI), 2.4, 2.8);
+		portal(X, F.sub(gx + sd * gw * 0.25, 0, gz1, 0), 2.2, 3.0);
 		const vc = F.p((vx0 + vx1) / 2, 0, -B * 0.625), hc = F.p(gx, 0, (gz0 + gz1) / 2), wall = (gaps = []) => ({ mode: 'wall', gaps }), glassS = (gaps = []) => ({ mode: 'glass', gaps });
 		X.shells.push({ house: true, name: v.name, kind: 'villa', x: v.x, z: v.z, reach: W + O, seed: (X.seed + X.site * 131) >>> 0, vols: [
 			{ F: roomFrame(vc.x, v.y, vc.z, v.yaw), w: vx1 - vx0, d: B * 0.75, h: 3.45, kind: 'vestibule', sides: { nz: wall([{ at: 0, w: 2.4, h: 2.8 }]), pz: { mode: 'open', gaps: [] }, px: wall(), nx: wall() } },
@@ -260,6 +261,7 @@ function terraces(X, v) {
 		const rz0 = k ? z0 + 0.2 : -B * 0.5, rz1 = z1 - 2.8;
 		room(X, T, W - 1.2, rz1 - rz0, H1, 0, (rz0 + rz1) / 2, false, 0.6, true);
 		const rc = T.p(0, 0, (rz0 + rz1) / 2);
+		portal(X, T.sub(-sd * (W - 1.2) * 0.2, 0, rz1, 0), 2, 2.7);
 		vols.push({ F: roomFrame(rc.x, v.y + L.y, rc.z, v.yaw), w: W - 1.2, d: rz1 - rz0, h: H1 - 0.06, kind: kinds[(k0 + k) % kinds.length], theme: k, sides: { pz: { mode: 'glass', gaps: [{ at: -sd * (W - 1.2) * 0.2, w: 2, h: 2.7 }] }, nz: { mode: 'wall', gaps: [] }, px: { mode: 'wall', gaps: [] }, nx: { mode: 'wall', gaps: [] } } });
 		// the planter and the glass along its front; the open side has the stair
 		K.add('shell', T.put(box(w - 1.2, 0.55, 0.7), x, 0.27, z1 - 0.5), { tint: S.planted, glow: G.planted });
@@ -856,7 +858,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			const [b, f, view] = i.split(':'), at = In.inside(+b, +f, view);
 			Pl.flying = false; Pl.diving = false; Pl.vel?.set(0, 0, 0);
 			Pl.pos.set(at.x, at.y + 1.7, at.z);
-			Pl.yaw = at.yaw; Pl.pitch = 0.02;
+			Pl.yaw = at.yaw; Pl.pitch = at.pitch;
 			camera.position.copy(Pl.pos);
 			return at;
 		}

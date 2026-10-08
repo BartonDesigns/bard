@@ -750,7 +750,7 @@ function bake(g, lights, amb) {
 		for (const L of lights) {
 			const dx = L.x - x, dy = L.y - y, dz = L.z - z, d = Math.hypot(dx, dy, dz) + 1e-3;
 			if (d > L.rad * 3) continue;
-			const f = L.k / (1 + (d / L.rad) * (d / L.rad) * 2) * (0.3 + 0.7 * Math.max(0, (dx * nx + dy * ny + dz * nz) / d));
+			const f = L.k * 0.6 / (1 + (d / L.rad) * (d / L.rad) * 3) * (0.2 + 0.8 * Math.max(0, (dx * nx + dy * ny + dz * nz) / d));
 			r += L.c[0] * f; gg += L.c[1] * f; b += L.c[2] * f;
 		}
 		c[i * 3] = Math.min(2, r); c[i * 3 + 1] = Math.min(2, gg); c[i * 3 + 2] = Math.min(2, b);
@@ -762,7 +762,7 @@ function litAt(x, y, z, lights, amb) {
 	for (const L of lights) {
 		const d = Math.hypot(L.x - x, L.y - y, L.z - z);
 		if (d > L.rad * 3) continue;
-		const f = L.k / (1 + (d / L.rad) * (d / L.rad) * 2) * 0.65;
+		const f = L.k * 0.6 / (1 + (d / L.rad) * (d / L.rad) * 3) * 0.6;
 		r += L.c[0] * f; g += L.c[1] * f; b += L.c[2] * f;
 	}
 	return [Math.min(2, r), Math.min(2, g), Math.min(2, b)];
@@ -783,7 +783,7 @@ export function buildVolume(V, phone) {
 	// the rooms first (they cut the floors), then the shell round them
 	for (const R of V.rooms) (FURN[R.kind] || FURN.lounge)(B, R, area(R, V), V);
 	shell(B, V, B.cuts);
-	const th = V.theme, amb = [th.warm[0] * 0.07 + 0.03, th.warm[1] * 0.07 + 0.02, th.warm[2] * 0.07 + 0.05];
+	const th = V.theme, amb = [th.warm[0] * 0.03 + 0.015, th.warm[1] * 0.03 + 0.01, th.warm[2] * 0.03 + 0.03];
 	const solid = mergeGeometries(B.parts);
 	for (const g of B.parts) g.dispose();
 	bake(solid, B.lights, amb);

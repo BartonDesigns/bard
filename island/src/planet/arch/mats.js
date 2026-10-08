@@ -204,7 +204,7 @@ const IN_LOOK = /* glsl */`
 export function interiorMaterial(U, o = {}) {
 	const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0xffffff, roughness: 0.8, metalness: 0 });
 	if (o.env) m.envMap = o.env;
-	m.envMapIntensity = 0.45;
+	m.envMapIntensity = 0.2;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U);
 		sh.vertexShader = IN_V + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -221,7 +221,9 @@ export function interiorMaterial(U, o = {}) {
 			.replace('#include <color_fragment>', '#include <color_fragment>\n' + IN_LOOK)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = iRough;')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = iMetal;')
-			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (vIL * (1.0 - iMetal * 0.6) + iEm);');
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (vIL * (1.0 - iMetal * 0.6) + iEm);')
+			// (the day outside reaches in only a little: the rooms are lit by their own light)
+			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n\treflectedLight.directDiffuse *= 0.3; reflectedLight.indirectDiffuse *= 0.4; reflectedLight.directSpecular *= 0.6;');
 	};
 	m.customProgramCacheKey = () => 'archinterior';
 	return m;
