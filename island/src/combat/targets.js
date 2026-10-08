@@ -4,18 +4,30 @@
 // never against the scene's meshes.
 //
 // The hit filter is the one gate every shot, blast and hit report passes through: children
-// (and the ghost child in the woods) are never targets of anything, protected people never
-// are, friends are only with the room's PvP setting on, and a side never hurts its own.
+// and teenagers, every minor (and the ghost child in the woods), are never harmed by anything, friends are only with the
+// room's PvP setting on, and a side never hurts its own.
+//
+// In the world's own lore the young carry the Spark until they come of age, a ward that turns harm aside: a shot
+// that meets a child stops in a shimmer (cast() reports it as a ward, never a hit), a blast
+// parts round them, and strike() never passes harm to them whatever asks.
 // Pure maths on {x, y, z} points: no three, no DOM.
 
-// a person who is a child: by the body's own flag or their age
-export const isChild = (P) => !!P && (!!P.dna?.child || (Number.isFinite(P.dna?.age) && P.dna.age < 18) || !!P.ghost);
+// a minor: anyone under 18 (a child or a teenager), by the person's age (on them or their DNA)
+// or the body's own child flag; the ghost child too. The one check for the Spark's ward.
+export function isMinor(P) {
+	if (!P) return false;
+	if (P.ghost || P.dna?.child || P.child || P.minor) return true;
+	const age = Number.isFinite(P.age) ? P.age : P.dna?.age;
+	return Number.isFinite(age) && age < 18;
+}
+
+// a target under the Spark's ward: a minor, by its flag or its body
+export const warded = (T) => !!T && (!!T.child || !!T.minor || !!T.ghost || (!!T.P && isMinor(T.P)));
 
 // may `shooter` strike `target`? rules: { pvp } (the room's setting)
 export function canHit(target, shooter = null, rules = {}) {
 	if (!target || target.removed) return false;
-	if (target.child || target.ghost || target.protected) return false;
-	if (target.P && isChild(target.P)) return false;
+	if (warded(target) || target.protected) return false;
 	if (shooter && target.id === shooter.id) return false;
 	if (target.kind === 'player' || target.kind === 'remote') {
 		if (!rules.pvp) return false;
@@ -112,12 +124,13 @@ export function createLayer() {
 		get: (id) => map.get(id) || null,
 		clear() { map.clear(); },
 		get size() { return map.size; },
-		// the nearest target a ray strikes within max, past the filter: { T, t, part, n, shape }
+		// the nearest target a ray strikes within max, past the filter: { T, t, part, n, shape },
+		// with ward: true when it is a warded child (the shot stops there, harmlessly)
 		cast(o, d, max, shooter = null, rules = {}) {
 			let best = null, bt = max;
 			for (const T of map.values()) {
-				const B = T.bound;
-				if (!B || !canHit(T, shooter, rules)) continue;
+				const B = T.bound, ward = warded(T);
+				if (!B || (!ward && !canHit(T, shooter, rules))) continue;
 				// (the bounding sphere first)
 				const bx = B.x - o.x, by = B.y - o.y, bz = B.z - o.z, along = bx * d.x + by * d.y + bz * d.z;
 				if (along < -B.r || along - B.r > bt) continue;
@@ -125,17 +138,20 @@ export function createLayer() {
 				if (ax * ax + ay * ay + az * az > B.r * B.r) continue;
 				for (const s of shapesOf(T)) {
 					const h = rayShape(o, d, s);
-					if (h && h.t < bt) { bt = h.t; best = { T, t: h.t, part: s.part || 'body', n: h.n, shape: s }; }
+					if (h && h.t < bt) { bt = h.t; best = { T, t: h.t, part: s.part || 'body', n: h.n, shape: s, ward }; }
 				}
 			}
 			return best;
 		},
 		// everything within r of a point, past the filter, with its distance to the nearest shape
-		within(c, r, shooter = null, rules = {}) {
+		// (wards: an array that is given the warded children inside r, to show the blast parting)
+		within(c, r, shooter = null, rules = {}, wards = null) {
 			const out = [];
 			for (const T of map.values()) {
 				const B = T.bound;
-				if (!B || !canHit(T, shooter, rules)) continue;
+				if (!B) continue;
+				if (warded(T)) { if (wards && Math.hypot(B.x - c.x, B.y - c.y, B.z - c.z) < r + B.r) wards.push(T); continue; }
+				if (!canHit(T, shooter, rules)) continue;
 				if (Math.hypot(B.x - c.x, B.y - c.y, B.z - c.z) > r + B.r) continue;
 				let best = Infinity, part = 'body';
 				for (const s of shapesOf(T)) {
@@ -147,4 +163,12 @@ export function createLayer() {
 			return out;
 		},
 	};
+}
+
+// harm passed to a target: the only door to a target's onHit. A warded child, or anything the
+// filter refuses, takes nothing: { ward: true } or { ignored: true }
+export function strike(T, blow, shooter = null, rules = {}) {
+	if (warded(T)) return { ward: true, dealt: 0 };
+	if (!canHit(T, shooter, rules) || typeof T.onHit !== 'function') return { ignored: true, dealt: 0 };
+	return T.onHit(blow) || { dealt: 0 };
 }

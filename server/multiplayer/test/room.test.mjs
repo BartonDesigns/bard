@@ -2,7 +2,7 @@
 // node test/room.test.mjs   (no network, no account)
 import { handle, Room } from '../src/index.js';
 import { CLOSE } from '../src/room.js';
-import { MAX_PLAYERS, BURST, MAX_BYTES, STALE_MS, cleanEvent, cleanPose, cleanState } from '../../../island/src/net/protocol.js';
+import { MAX_PLAYERS, BURST, MAX_BYTES, STALE_MS, cleanEvent, cleanPose, cleanState, cleanFx, cleanHit, cleanCombatState, cleanRules } from '../../../island/src/net/protocol.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('  FAIL', msg); } };
@@ -271,6 +271,48 @@ ok(cleanPose({ p: [1e9, 2, 3] }) === null, 'positions are bounded');
 ok(cleanState({ hours: 25.5 }).hours === 1.5, 'hours wrap');
 ok(cleanEvent({ id: 'x', place: { pos: {} }, due: 1 }) === null, 'an event needs a place');
 ok(cleanEvent({ id: 'x', place: { pos: { x: 1, z: 2 } }, due: 1, gathering: { kind: 'rave', size: 5, seed: 1 } }) === null, 'unknown gathering kinds are refused');
+
+// ---------- combat: shots seen, hits reported, the host's word, the room's rules ----------
+section('combat');
+{
+	const { R } = await makeRoom();
+	const host = await join(R, 'owner-aaaa'), g1 = await join(R, 'guest-bbbb'), g2 = await join(R, 'guest-cccc');
+	ok(host.of('welcome')[0].rules?.pvp === false, 'PvP is off when a room opens');
+	await say(R, g1, { t: 'fx', s: [[0, 1, 0, 10, 1, 0, 2, 1]] });
+	ok(g2.of('fx').length === 1 && host.of('fx').length === 1 && g1.of('fx').length === 0, 'shots go to everyone else');
+	ok(g2.of('fx')[0].id === 'guest-bbbb', 'with who fired them');
+	await say(R, g1, { t: 'fx', s: [[0, 0, 0, 5000, 0, 0]] });
+	ok(g2.of('fx').length === 1, 'an impossible streak is dropped');
+	await say(R, g1, { t: 'hit', id: 'boss:walker', d: 40, p: 'core' });
+	ok(host.of('hit').length === 1 && host.of('hit')[0].from === 'guest-bbbb' && g2.of('hit').length === 0, 'a hit on a shared thing goes to the host only');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20 });
+	ok(g2.of('hit').length === 0, 'no PvP hit passes while PvP is off');
+	await say(R, g1, { t: 'rules', r: { pvp: true } });
+	ok(!g2.of('rules').length, 'only the host sets the rules');
+	await say(R, host, { t: 'rules', r: { pvp: true } });
+	ok(g1.of('rules')[0]?.r.pvp === true && g2.of('rules')[0]?.r.pvp === true, 'the host turns PvP on for all');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20 });
+	ok(g2.of('hit').length === 1 && g2.of('hit')[0].from === 'guest-bbbb' && !g2.of('hit')[0].to, 'with PvP on, a hit reaches only its player');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-bbbb', d: 20 });
+	ok(g1.of('hit').length === 0, 'nobody hits themselves');
+	await say(R, g1, { t: 'cs', e: [['boss:walker', 10, 2, 0]] });
+	ok(g2.of('cs').length === 0, 'only the host speaks for shared things');
+	await say(R, host, { t: 'cs', e: [['boss:walker', 4000, 1, 0]], b: { id: 'boss:walker', kind: 'walker', x: 1, y: 2, z: 3 } });
+	ok(g1.of('cs')[0]?.e[0][1] === 4000 && g1.of('cs')[0].b.kind === 'walker', 'the host\'s word on a boss reaches the guests');
+	const late = await join(R, 'guest-dddd');
+	ok(late.of('welcome')[0].rules.pvp === true, 'a late joiner is told the rules');
+	await say(R, host, { t: 'rules', r: { pvp: 'yes' } });
+	ok(g1.of('rules').at(-1).r.pvp === false, 'anything but true is off');
+}
+section('combat cleaners');
+ok(cleanFx({ s: Array.from({ length: 9 }, () => [0, 0, 0, 1, 1, 1]) }) === null, 'at most 8 streaks a message');
+ok(cleanFx({ s: [[0, 0, 0, 1, 1, 'x']] }) === null, 'streaks are numbers');
+ok(cleanHit({ id: 'boss:walker', d: 9999 }) === null, 'damage is bounded');
+ok(cleanHit({ id: '<script>', d: 1 }) === null, 'ids are plain');
+ok(cleanHit({ id: 'x1', d: 5, p: 'spleen' }).p === 'body', 'unknown parts are the body');
+ok(cleanCombatState({ e: [['boss:x', 5, 99, 0]] }).e[0][2] === 0, 'phases are bounded');
+ok(cleanCombatState({ b: { id: 'boss:x', kind: 'dragon', x: 0, y: 0, z: 0 } }) === null, 'only the known bosses');
+ok(cleanRules({ pvp: 1 }).pvp === false && cleanRules({ pvp: true }).pvp === true, 'rules: PvP only when exactly true');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -5,7 +5,7 @@
 // (people/ragdoll.js), lies a while, and fades away; no blood, no wounds.
 
 import * as THREE from 'three';
-import { isChild, personShapes } from './targets.js';
+import { isMinor, personShapes } from './targets.js';
 import { createHealth, applyDamage } from './health.js';
 
 const CALLS = ['Get down!', 'Run!', 'Everyone, this way!', 'Somebody call the patrol!', 'Over there, go!', 'Keep low!'];
@@ -16,8 +16,9 @@ export function createCivilians(ctx) {
 	const known = new Map();                           // person -> { T, H, panic, ... }
 	let callT = 0;
 
-	// someone is protected from all of it: a child, or anyone the world marks so
-	const sheltered = (p) => isChild(p.P) || !!p.camp || p.route?.kind === 'camp';
+	// a minor, under the ward
+	const sheltered = (p) => isMinor(p.P);
+	const vulnerable = (p) => !!p.camp || p.route?.kind === 'camp' || (p.P.dna?.age || 30) > 75;
 
 	function stateOf(p) {
 		let s = known.get(p);
@@ -25,7 +26,9 @@ export function createCivilians(ctx) {
 			s = { p, panic: 0, from: { x: 0, z: 0 }, cower: 0, calm: false, dead: 0, H: null, T: null };
 			const id = 'pp' + (known.size + Math.floor(Math.random() * 1e6));
 			s.T = {
-				id, kind: 'person', faction: 'civ', P: p.P, bound: { x: 0, y: 0, z: 0, r: 1.2 },
+				id, kind: 'person', faction: p.village ? 'village' : 'civ', P: p.P, child: sheltered(p), bound: { x: 0, y: 0, z: 0, r: 1.2 },
+				name: sheltered(p) ? 'a young person' : vulnerable(p) ? 'a vulnerable bystander' : 'a bystander',
+				moral: () => ({ unarmed: true, fleeing: s.panic > 0 && !s.cower, vulnerable: vulnerable(p), villager: !!p.village, surrendered: s.hands > 0 }),
 				shapes: () => { const q = p.M.S.pos; return personShapes(q.x, q.y, q.z, p.P.height || 1.7, s.cower > 0 ? 0.6 : 0); },
 				surface: 'person',
 				onHit: (blow) => hit(s, blow),
@@ -40,6 +43,13 @@ export function createCivilians(ctx) {
 		const s = known.get(p);
 		if (!s) return false;
 		if (s.dead) return true;
+		if (s.hands > 0) {
+			// hands up, held up
+			s.hands -= dt;
+			p.M.want.speed = 0; p.M.act('cheer', 0.35);
+			if (s.hands <= 0) { p.M.act(null); s.panic = Math.max(s.panic, 8); }
+			return true;
+		}
 		if (s.panic <= 0) { p.override = null; p.M.act(null); return false; }
 		s.panic -= dt;
 		const M = p.M, at = M.S.pos;
@@ -80,6 +90,17 @@ export function createCivilians(ctx) {
 		}
 	}
 
+	// held up at gunpoint: hands up for a while; the first time, what they carry is handed over
+	function holdUp(p) {
+		const s = stateOf(p);
+		if (s.dead || sheltered(p)) return null;
+		const first = !s.robbed;
+		s.robbed = true; s.hands = 5; s.panic = 0;
+		p.override = override; p.engaged = false;
+		const rich = ((p.P.dna?.seed ?? 0) % 3) === 0;
+		return { first, credits: first ? (rich ? 80 + Math.floor(Math.random() * 160) : 5 + Math.floor(Math.random() * 25)) : 0, rich };
+	}
+
 	function hit(s, blow) {
 		const p = s.p;
 		if (s.dead || sheltered(p)) return null;
@@ -108,8 +129,8 @@ export function createCivilians(ctx) {
 		const pool = people()?.pool || [];
 		for (const p of pool) {
 			const s = known.get(p);
-			// put grown-ups near you in the layer (never a child)
-			const near = p.active && p.P.root.visible && !p.P.ragdoll && !sheltered(p) && Math.abs(p.M.S.pos.x - cam.x) < 120 && Math.abs(p.M.S.pos.z - cam.z) < 120;
+			// everyone near you in the layer (a child only to show the ward)
+			const near = p.active && p.P.root.visible && !p.P.ragdoll && Math.abs(p.M.S.pos.x - cam.x) < 120 && Math.abs(p.M.S.pos.z - cam.z) < 120;
 			if (near) {
 				const st = s || stateOf(p);
 				if (!st.dead) {
@@ -132,5 +153,5 @@ export function createCivilians(ctx) {
 		known.clear();
 	}
 	const info = () => { let panic = 0, dead = 0, inLayer = 0; for (const s of known.values()) { if (s.panic > 0) panic++; if (s.dead) dead++; if (layer.get(s.T.id)) inLayer++; } return { known: known.size, panic, dead, inLayer }; };
-	return { update, alarm, clear, info };
+	return { update, alarm, clear, info, holdUp, stateOf };
 }

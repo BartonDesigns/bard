@@ -129,3 +129,49 @@ export function cleanEvent(e) {
 	}
 	return o;
 }
+
+// ---------- combat (combat/net.js) ----------
+// shots seen by friends: up to 8 streaks [ax, ay, az, bx, by, bz, style], each end within a few
+// km of the other, style a tracer colour 0-7, and whether each ended on something (impact)
+export const FX_MAX = 8;
+export function cleanFx(m) {
+	if (!m || typeof m !== 'object' || !Array.isArray(m.s) || !m.s.length || m.s.length > FX_MAX) return null;
+	const s = [];
+	for (const q of m.s) {
+		if (!Array.isArray(q) || q.length < 6 || q.length > 8) return null;
+		const v = q.slice(0, 6);
+		if (!v.every((x) => num(x, 5e7))) return null;
+		if (Math.hypot(v[3] - v[0], v[4] - v[1], v[5] - v[2]) > 2000) return null;
+		s.push([...v.map(r2), Number.isInteger(q[6]) && q[6] >= 0 && q[6] <= 7 ? q[6] : 0, q[7] ? 1 : 0]);
+	}
+	return { s };
+}
+// a hit on something shared (a boss, a squad fighter: `id`), reported to the host; or, with `to`,
+// on another player (passed on only when the room allows PvP). d: damage 0-500
+export const HIT_PARTS = ['body', 'head', 'torso', 'limb', 'weak', 'eye', 'heart', 'core', 'legL', 'legR', 'podL', 'podR', 'wheel', 'plate'];
+const TARGET_RE = /^[A-Za-z0-9:_.-]{1,48}$/;
+export function cleanHit(m) {
+	if (!m || typeof m !== 'object' || !TARGET_RE.test(m.id || '') || !num(m.d, 500) || m.d < 0) return null;
+	const o = { id: m.id, d: r2(m.d), p: HIT_PARTS.includes(m.p) ? m.p : 'body' };
+	if (m.to !== undefined) { if (!ID_RE.test(m.to)) return null; o.to = m.to; }
+	if (['ballistic', 'energy', 'pierce', 'blast', 'fire', 'impact'].includes(m.k)) o.k = m.k;
+	if (ITEM_RE.test(m.w || '')) o.w = m.w;
+	return o;
+}
+// the host's word on shared things: [id, hp, phase, dead] (up to 24), and a boss's arrival
+export const CS_MAX = 24;
+export const BOSS_KINDS = ['leviathan', 'walker', 'gunship'];
+export function cleanCombatState(c) {
+	if (!c || typeof c !== 'object') return null;
+	const e = [];
+	for (const q of Array.isArray(c.e) ? c.e.slice(0, CS_MAX) : []) {
+		if (!Array.isArray(q) || !TARGET_RE.test(q[0] || '') || !num(q[1], 1e6)) continue;
+		e.push([q[0], Math.max(0, Math.round(q[1])), Number.isInteger(q[2]) && q[2] >= 0 && q[2] <= 9 ? q[2] : 0, q[3] ? 1 : 0]);
+	}
+	const o = { e };
+	const b = c.b;
+	if (b && BOSS_KINDS.includes(b.kind) && TARGET_RE.test(b.id || '') && num(b.x, 5e7) && num(b.y, 5e7) && num(b.z, 5e7)) o.b = { id: b.id, kind: b.kind, x: r2(b.x), y: r2(b.y), z: r2(b.z), w: str(b.w, 48) };
+	return e.length || o.b ? o : null;
+}
+// the room's rules, set by the host: PvP off unless turned on
+export const cleanRules = (r) => ({ pvp: !!(r && typeof r === 'object' && r.pvp === true) });

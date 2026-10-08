@@ -712,7 +712,7 @@ export function createPeople(scene, world, camera = null) {
 		for (const p of shown) { p.M.want.speed = p.walk ? 1.3 : 0; p.M.update(dt, t, cam); }
 	}
 	// a line of people dressed for a place and a thing to do, for looking at the clothes:
-	// specs [{ age, male, place, activity, seed }] (or clear it with an empty list)
+	// specs [{ age, male, place, activity, seed, style, hair }] (or clear it with an empty list)
 	const shown = [];
 	async function showcase(cam, heading, specs = [], { gap = 0.9, dist = 4.2, walk = false } = {}) {
 		await ensure();
@@ -722,9 +722,11 @@ export function createPeople(scene, world, camera = null) {
 			let d = null;
 			for (let tries = 0; tries < 40; tries++) {
 				const seed = ((q.seed ?? k * 7919 + 17) + tries * 104729) >>> 0;
-				d = personDNA(seed, { age: q.age, ctx: { place: q.place, activity: q.activity, hours: q.hours ?? 13, cold: q.cold } });
+				d = personDNA(seed, { age: q.age, style: q.style ? JSON.parse(JSON.stringify(q.style)) : undefined, ctx: { place: q.place, activity: q.activity, hours: q.hours ?? 13, cold: q.cold } });
 				if (q.male === undefined || d.male === q.male) break;
 			}
+			// (a cut asked for by name: people/hair.js CUTS)
+			if (q.hair && d.style) d.style.hair = { ...(d.style.hair || {}), cut: q.hair, buzz: false, thin: 0, scarf: false };
 			const P = buildPerson(A, d), M = motionFor(P);
 			const side = (k - (specs.length - 1) / 2) * gap;
 			const x = cam.x + Math.sin(heading) * dist + Math.cos(heading) * side, z = cam.z + Math.cos(heading) * dist - Math.sin(heading) * side;

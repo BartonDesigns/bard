@@ -300,7 +300,7 @@ export function garmentMaterial(A, o, cut, number = 0) {
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vBN = normal; vSlot = mod(slot, 10.0); vLimb = floor(slot / 10.0 + 0.01);');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL_HEAD)
-			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN); float gPx = length(fwidth(vBind));\n\n if (s == 0 && (vLimb < 0.5 ? vBind.y < uHem.x + 0.012 : vLimb < 1.5 && vBind.y < uHem.y + 0.012)) discard;\n if (s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) - 0.004 * fr; if (vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && vBind.y > uCutA.z - 0.3) { float e = abs(vBind.x) - 0.035 - max(0.0, uCutA.y - vBind.y) * 0.12; if (e < 0.0) discard; gCollar = max(gCollar, 1.0 - smoothstep(0.003, 0.008, e)); }\n diffuseColor.rgb *= garment(s, vBind, N) * (1.0 - gCollar * 0.14); vec2 wv = weave(int(gFab + 0.5), vBind, N, gPx); diffuseColor.rgb *= 1.0 + wv.y; gRough = clamp(gRough - wv.y * 0.5, 0.2, 1.0); gWeave = wv.x; }')
+			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN); float gPx = length(fwidth(vBind));\n\n if (s == 0 && (vLimb < 0.5 ? vBind.y < uHem.x + 0.012 : vLimb < 1.5 && vBind.y < uHem.y + 0.012)) discard;\n if (s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) - 0.004 * fr; if (vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && vBind.y > uCutA.z - 0.3) { float e = abs(vBind.x) - 0.035 - max(0.0, uCutA.y - vBind.y) * 0.12; if (e < 0.0) discard; gCollar = max(gCollar, 1.0 - smoothstep(0.003, 0.008, e)); }\n diffuseColor.rgb *= garment(s, vBind, N) * (1.0 - gCollar * 0.14); vec2 wv = weave(int(gFab + 0.5), vBind, N, gPx); diffuseColor.rgb *= 1.0 + wv.y;\n // where one layer hangs over another: a soft shadow just under its hem, no hard seam\n float hd = s == 2 && vLimb < 1.5 ? uHem.x - vBind.y : s == 0 && uEdge.w > 0.5 ? uEdge.x - vBind.y : -1.0; if (hd >= 0.0) diffuseColor.rgb *= 1.0 - 0.2 * (1.0 - smoothstep(0.0, 0.04, hd)); gRough = clamp(gRough - wv.y * 0.5, 0.2, 1.0); gWeave = wv.x; }')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = gRough; metalnessFactor = gMetal;')
 			.replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;', 'int fb = int(gFab + 0.5);\n\tvec3 mapN = (fb == 0 || fb == 4 || fb == 7 ? texture2D( uKnit, vNormalMapUv ) : fb == 1 ? texture2D( normalMap, vNormalMapUv ) : texture2D( uCanvas, vNormalMapUv )).xyz * 2.0 - 1.0;\n\tmapN.xy *= fb == 3 || fb == 5 || fb == 6 ? 0.3 : fb == 4 ? 1.6 : 1.0;')
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = folds(vBind, vLimb, int(vSlot + 0.5)) * 0.0017 * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))) + gWeave * 0.00035; vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
@@ -419,7 +419,7 @@ export function regions(o, cut) {
 }
 
 // how far each garment stands off the skin
-function offsets(o) {
+export function offsets(o) {
 	const T = o.top, J = o.outer, B = o.bottom, F = o.shoes;
 	// thin cloth a few millimetres off the skin, jeans close, knits a little looser; only a
 	// real puffer stands well off
@@ -435,6 +435,7 @@ export function clothGeometry(A, p, o, cut, R) {
 	const V = [], T = [], SI = [], SW = [], SL = [], I = [], key = new Map(), src = [];
 	const kinds = (tri) => { const k = { arm: 0, fore: 0, hand: 0, thigh: 0, shin: 0, foot: 0 }; for (const v of tri) { const q = part[v]; if (q === 1) k.arm++; else if (q === 2) k.fore++; else if (q === 3) k.hand++; else if (q === 4) k.thigh++; else if (q === 5) k.shin++; else if (q === 6) k.foot++; } return k; };
 	const tests = [R.top, R.outer, R.bottom, R.shoes];
+	const hideTop = !!o.outer && !o.outer.open, hideWaist = !!o.top && !o.top.tuck && !o.top.crop && o.bottom?.legs !== 'skirt';
 	const c = [0, 0, 0];
 	for (let i = 0; i < faces.length; i += 6) {
 		const tri = [faces[i], faces[i + 2], faces[i + 4]];
@@ -442,6 +443,9 @@ export function clothGeometry(A, p, o, cut, R) {
 		const k = kinds(tri);
 		for (let s = 0; s < 4; s++) {
 			if (!tests[s](c, tri, k)) continue;
+			// (what a closed layer over it hides wholly is left out: nothing under it to poke through)
+			if (s === 0 && hideTop && R.outer(c, tri, k, 0.04)) continue;
+			if (s === 2 && hideWaist && R.top(c, tri, k, 0.04)) continue;
 			for (let j = 0; j < 6; j += 2) {
 				const id = faces[i + j], u = faces[i + j + 1], k0 = (s * 32768 + id) * 32768 + u;
 				let q = key.get(k0);
@@ -516,6 +520,12 @@ export function clothGeometry(A, p, o, cut, R) {
 		K.set(K2);
 	}
 	for (const L of same.values()) { let k = 0; for (const i of L) k += K[i]; k /= L.length; for (const i of L) K[i] = k; }
+	// the layers in order where they lie over the same skin, each a little outside the one
+	// under it: trousers, then the top over them (or under them, tucked in), then the jacket
+	const order = tuck ? [0, 2, 1] : [2, 0, 1], layer = new Map();
+	for (let i = 0; i < P.count; i++) if (src[i] >= 0) { const id = src[i] % 32768, s = Math.floor(src[i] / 32768); if (s < 3) { let L = layer.get(id); if (!L) layer.set(id, L = [-1, -1, -1]); L[s] = Math.max(L[s], K[i]); } }
+	for (const L of layer.values()) { let below = -1; for (const s of order) { if (L[s] < 0) continue; if (below >= 0 && L[s] < below + 0.004) L[s] = below + 0.004; below = L[s]; } }
+	for (let i = 0; i < P.count; i++) if (src[i] >= 0) { const s = Math.floor(src[i] / 32768); if (s < 3) K[i] = Math.max(K[i], layer.get(src[i] % 32768)[s]); }
 	for (let i = 0; i < P.count; i++) if (src[i] >= 0) P.setXYZ(i, P.getX(i) + n.getX(i) * K[i], P.getY(i) + n.getY(i) * K[i] * 0.3, P.getZ(i) + n.getZ(i) * K[i]);
 	g.computeVertexNormals();
 	// smooth normals across the seams again, after the move

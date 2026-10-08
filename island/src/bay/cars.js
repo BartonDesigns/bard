@@ -96,19 +96,13 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	const halfW = (s) => { const u = Math.abs(s) / L2, e = S.plan; return S.W / 2 * Math.pow(Math.max(0, 1 - Math.pow(u, s > 0 ? e : e + 1)), 1 / e) * (1 - 0.02 * Math.max(0, s / L2)); };
 	// the fenders swell a little over each wheel
 	const flare = (s) => kind === 'bus' ? 0 : 1 - sm(S.wr + 0.12, S.wr + 0.5, Math.min(Math.abs(s - S.wz), Math.abs(s + S.wz)));
-	const P = [], E = [];
-	const ring = [];
-	for (let k = 0; k <= NS; k++) {
-		const u = -1 + 2 * k / NS, s = L2 * Math.sin(u * Math.PI / 2);
+	// the half section at s, from under the car round the side to the centre of the top: the
+	// floor tucked in, the side bulging to its widest halfway up, a rounded shoulder, then the
+	// glass leaning in (tumblehome) to a crowned roof, or the hood's and deck's crown
+	const sect = (s) => {
 		const b0 = bottom(s), bl = belt(s), tp = top(s), wb = halfW(s), h = bl - b0, f = 1 + 0.028 * flare(s);
 		const g = Math.min(1, Math.max(0, (tp - bl - 0.02) / Math.max(0.3, (S.box !== undefined ? S.cabH : S.H) - S.belt)));
 		const inBox = S.box !== undefined && s < S.box;
-		const glassHere = g > 0.15 && s > S.panel && !inBox ? 1 : 0;
-		const roofHere = S.box !== undefined ? tp > S.H - 0.05 || tp > S.cabH - 0.05 : s < S.rf + 0.01 && s > S.rr - 0.01;
-		const bed = S.bed !== undefined && s < S.bed ? 1 : 0;
-		// the half section, from under the car round the side to the centre of the top: the
-		// floor tucked in, the side bulging to its widest halfway up, a rounded shoulder, then
-		// the glass leaning in (tumblehome) to a crowned roof, or the hood's and deck's crown
 		const half = [[0, b0], [wb * 0.74, b0], [wb * 0.9, b0 + h * 0.03], [wb * 0.965 * f, b0 + h * 0.1], [wb * 0.99 * f, b0 + h * 0.24], [wb * f, b0 + h * 0.5],
 			[wb * 0.99 * f, b0 + h * 0.76], [wb * 0.972 * (1 + (f - 1) * 0.4), b0 + h * 0.92], [wb * 0.952, b0 + h * 0.975], [wb * 0.925, bl]];
 		const deck = [[wb * 0.915, bl + 0.006], [wb * 0.88, bl + 0.02], [wb * 0.78, bl + 0.034], [wb * 0.6, bl + 0.045], [wb * 0.4, bl + 0.051], [wb * 0.2, bl + 0.054], [0, bl + 0.055]];
@@ -116,6 +110,27 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 		const wg = wb * (0.86 + (tum - 0.72) * 0.45), wr = wb * tum;
 		const house = [[wg, bl + 0.025], [wg + (wr - wg) * 0.3 + wb * 0.012, bl + (tp - bl) * 0.4], [wg + (wr - wg) * 0.72 + wb * 0.006, bl + (tp - bl) * 0.78], [wr, tp - 0.075], [wr * 0.955, tp - 0.028], [wr * 0.75, tp - 0.006], [0, tp + 0.02]];
 		for (let n = 0; n < 7; n++) half.push([deck[n][0] + (house[n][0] - deck[n][0]) * g, deck[n][1] + (house[n][1] - deck[n][1]) * g]);
+		return { half, b0, bl, tp, wb, g, inBox };
+	};
+	// the room inside at s and height y: how far out from the centre the body's skin is (-1
+	// above the roof or under the floor), so that what goes inside can be kept inside
+	const room = (s, y) => {
+		const H = sect(s).half;
+		let x = -1;
+		for (let n = 1; n < H.length; n++) {
+			const [xa, ya] = H[n - 1], [xb, yb] = H[n];
+			if ((y - ya) * (y - yb) <= 0 && ya !== yb) x = Math.max(x, xa + (xb - xa) * (y - ya) / (yb - ya));
+		}
+		return x;
+	};
+	const P = [], E = [];
+	const ring = [];
+	for (let k = 0; k <= NS; k++) {
+		const u = -1 + 2 * k / NS, s = L2 * Math.sin(u * Math.PI / 2);
+		const { half, b0, bl, wb, g, inBox } = sect(s);
+		const glassHere = g > 0.15 && s > S.panel && !inBox ? 1 : 0;
+		const roofHere = S.box !== undefined ? top(s) > S.H - 0.05 || top(s) > S.cabH - 0.05 : s < S.rf + 0.01 && s > S.rr - 0.01;
+		const bed = S.bed !== undefined && s < S.bed ? 1 : 0;
 		// part per point: 0 paint, 1 the side glass (it ends at the C pillar), 1.3 the glass
 		// across the top (windshield and rear glass; between the two, the pillars), 4 the bed
 		const side = glassHere && s > S.rr - S.cp ? 1 : 0, over = glassHere && !roofHere ? 1.3 : 0;
@@ -142,7 +157,7 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 	body.setIndex(idx);
 	body.computeVertexNormals();
 	const parts = only === 'cabin' ? [] : [body.toNonIndexed()];
-	if (only === 'cabin') parts.push(...cabinGeometry(kind, S, belt, top, halfW));
+	if (only === 'cabin') parts.push(...cabinGeometry(kind, S, belt, top, halfW, room));
 	if (wheels && !only) for (const [x, y, z] of wheelHubs(kind)) parts.push(wheelGeometry(kind, WS).applyMatrix4(new THREE.Matrix4().makeScale(Math.sign(x), 1, 1).setPosition(x, y, z)));
 	if (cabin && !only) {
 		// the mirrors, on stalks at the foot of the A pillars
@@ -159,10 +174,14 @@ export function carGeometry(kind, NS = 48, WS = 20, opts = {}) {
 			const r = S.wr + 0.1, sx = Math.sign(x), x0 = Math.abs(x) - S.tw / 2 - 0.06;
 			const liner = new THREE.CylinderGeometry(r, r, S.W / 2 - x0 + 0.04, 14, 1, true, 0.08 * Math.PI, 0.84 * Math.PI).rotateZ(Math.PI / 2);
 			liner.translate(sx * (x0 + (S.W / 2 - x0) / 2), y, z);
+			// (its outer edge tucked just inside the skin, which narrows toward the nose and tail
+			// and under the sill: past it the liner stood out of the bumper and the sill)
+			const lp = liner.attributes.position;
+			for (let i = 0; i < lp.count; i++) if (Math.abs(lp.getX(i)) > x0 + 0.01) lp.setX(i, sx * Math.max(x0 + 0.01, Math.min(Math.abs(lp.getX(i)), room(lp.getZ(i), lp.getY(i)) - 0.006)));
 			parts.push(tag(liner, 8));
 			parts.push(tag(new THREE.CircleGeometry(r, 14, 0, Math.PI).rotateY(Math.PI / 2).translate(sx * x0, y, z), 8));
 		}
-		parts.push(...cabinGeometry(kind, S, belt, top, halfW));
+		parts.push(...cabinGeometry(kind, S, belt, top, halfW, room));
 	}
 	const g = mergeGeometries(parts);
 	// per point, for the shader: the axle's distance from the centre, the tyre's radius, the
@@ -264,9 +283,13 @@ function screen(w, h, type, M) {
 	g.setAttribute('aE', new THREE.BufferAttribute(a, 4));
 	return g.applyMatrix4(M);
 }
-function cabinGeometry(kind, S, belt, top, halfW) {
+function cabinGeometry(kind, S, belt, top, halfW, room) {
 	const out = [], L2 = S.L / 2, C = seatsOf(kind), big = kind === 'bus' || kind === 'truck';
 	const fl = S.clear + 0.1;
+	// whether these parts sit wholly inside the body, m clear of its skin; and to move them
+	// along d, a step at a time, until they do (what stood through the glass or the roof)
+	const inside = (gs, m) => gs.every((g) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) if (Math.abs(p.getX(i)) > room(p.getZ(i), p.getY(i)) - m) return false; return true; });
+	const tuck = (gs, d, m = 0.015, n = 14) => { for (let k = 0; k < n && !inside(gs, m); k++) for (const g of gs) g.translate(d[0], d[1], d[2]); return gs; };
 	// the floor, from the footwells back
 	out.push(tag(new THREE.PlaneGeometry(S.W * 0.8, Math.max(1, S.ws - (S.bed ?? S.rr ?? -L2))).rotateX(-Math.PI / 2).translate(0, fl + 0.02, (S.ws + (S.bed ?? S.rr)) / 2), 6));
 	C.seats.forEach(([x, y, z]) => {
@@ -274,11 +297,16 @@ function cabinGeometry(kind, S, belt, top, halfW) {
 		// own bolsters, and the head rest on two posts
 		out.push(rbox(0.44, 0.1, 0.46, 0.035, 6, M4(x, y - 0.045, z - 0.25)));
 		for (const sx of [-1, 1]) out.push(rbox(0.08, 0.08, 0.42, 0.03, 7, M4(x + sx * 0.2, y, z - 0.26)));
-		const H = M4(x, y, z - 0.5, -0.25), at = (lx, ly, lz) => H.clone().multiply(new THREE.Matrix4().makeTranslation(lx, ly, lz));
-		out.push(rbox(0.44, 0.56, 0.1, 0.035, 6, at(0, 0.3, -0.02)));
-		for (const sx of [-1, 1]) out.push(rbox(0.08, 0.48, 0.15, 0.03, 7, at(sx * 0.2, 0.28, 0.02)));
-		out.push(rbox(0.25, 0.16, 0.08, 0.03, 6, at(0, 0.7, -0.02)));
-		for (const sx of [-1, 1]) out.push(tag(new THREE.CylinderGeometry(0.007, 0.007, 0.1, 5).applyMatrix4(at(sx * 0.07, 0.6, -0.02)), 16));
+		// (more upright and a little shorter where the glass or the roof comes down close behind,
+		// as over the back seats of a fastback: the head rests stood out through the rear glass)
+		let back;
+		for (const [lean, k] of [[0.25, 1], [0.18, 1], [0.12, 1], [0.12, 0.92], [0.06, 0.92], [0.06, 0.85], [0.03, 0.8]]) {
+			const H = M4(x, y, z - 0.5, -lean), at = (lx, ly, lz) => H.clone().multiply(new THREE.Matrix4().makeTranslation(lx, ly * k, lz));
+			back = [rbox(0.44, 0.56 * k, 0.1, 0.035, 6, at(0, 0.3, -0.02)), rbox(0.25, 0.16, 0.08, 0.03, 6, at(0, 0.7, -0.02))];
+			for (const sx of [-1, 1]) back.push(rbox(0.08, 0.48 * k, 0.15, 0.03, 7, at(sx * 0.2, 0.28, 0.02)), tag(new THREE.CylinderGeometry(0.007, 0.007, 0.1, 5).applyMatrix4(at(sx * 0.07, 0.6, -0.02)), 16));
+			if (inside(back, 0.02)) break;
+		}
+		out.push(...back);
 		// the seat's base down to the floor
 		if (y - fl > 0.25) out.push(tag(new THREE.CylinderGeometry(0.16, 0.2, y - fl - 0.05, 6).translate(x, (y + fl) / 2 - 0.05, z - 0.2), 7));
 	});
@@ -297,16 +325,20 @@ function cabinGeometry(kind, S, belt, top, halfW) {
 	const dw = 2 * (halfW(zb) * 0.86 - 0.04);
 	const dash = new THREE.ExtrudeGeometry(pro, { depth: dw, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.012, bevelSegments: 2, curveSegments: 5 });
 	out.push(tag(dash.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, -dw / 2, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1)), 7));
-	// the gauges under their hood, facing you over the wheel
-	out.push(tag(new THREE.CylinderGeometry(0.16, 0.16, 0.16, 12, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.75, 1).translate(wx, b + 0.02, zb + 0.12), 7));
-	out.push(tag(new THREE.CircleGeometry(0.16, 12, 0, Math.PI).scale(1, 0.75, 1).translate(wx, b + 0.02, zb + 0.2), 7));
-	out.push(screen(0.28, 0.095, 0, M4(wx, b + 0.075, zb + 0.17, 0.3).multiply(new THREE.Matrix4().makeRotationY(Math.PI))));
+	// the gauges under their hood, facing you over the wheel (settled down and back until the
+	// hood is under the windshield, not out through the cowl)
+	out.push(...tuck([
+		tag(new THREE.CylinderGeometry(0.16, 0.16, 0.16, 12, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2).scale(1, 0.75, 1).translate(wx, b + 0.02, zb + 0.12), 7),
+		tag(new THREE.CircleGeometry(0.16, 12, 0, Math.PI).scale(1, 0.75, 1).translate(wx, b + 0.02, zb + 0.2), 7),
+		screen(0.28, 0.095, 0, M4(wx, b + 0.075, zb + 0.17, 0.3).multiply(new THREE.Matrix4().makeRotationY(Math.PI))),
+	], [0, -0.008, -0.005]));
 	// the vents across its face, and a bright strip under them
 	const faceZ = (y) => zb + (b - 0.07 - y) / 0.21 * 0.05 - 0.014;
 	for (const vx of [-(dw / 2 - 0.13), -0.19, 0.19, dw / 2 - 0.13]) out.push(rbox(0.15, 0.05, 0.02, 0.008, 13, M4(vx, b - 0.1, faceZ(b - 0.1))));
 	out.push(rbox(dw - 0.08, 0.012, 0.01, 0.004, 16, M4(0, b - 0.145, faceZ(b - 0.145))));
 	// the screen in the middle, standing on the dash
-	if (!big) out.push(screen(0.24, 0.14, 1, M4(0, b + 0.075, zb + 0.14, 0.18).multiply(new THREE.Matrix4().makeRotationY(Math.PI))), rbox(0.26, 0.16, 0.025, 0.008, 7, M4(0, b + 0.075, zb + 0.155, 0.18)));
+	// (its face 4 mm proud of the bezel, which no longer shows through it)
+	if (!big) out.push(...tuck([screen(0.24, 0.14, 1, M4(0, b + 0.075, zb + 0.138, 0.18).multiply(new THREE.Matrix4().makeRotationY(Math.PI))), rbox(0.26, 0.16, 0.025, 0.008, 7, M4(0, b + 0.075, zb + 0.155, 0.18))], [0, -0.008, -0.006]));
 	// the console between the front seats, down from the dash, and the gear selector
 	if (!big) {
 		const [, sy0, sz0] = C.seats[0];
@@ -320,16 +352,21 @@ function cabinGeometry(kind, S, belt, top, halfW) {
 	const R = big ? 0.24 : 0.185, W = [];
 	W.push([new THREE.TorusGeometry(R, 0.022, 8, 28), 7]);
 	W.push([new RoundedBoxGeometry(0.13, 0.1, 0.05, 1, 0.02).translate(0, -0.005, -0.02), 7]);
-	for (const s of [-1, 1]) W.push([new THREE.BoxGeometry(R - 0.07, 0.036, 0.016).translate(s * (0.065 + (R - 0.07) / 2), -0.012, -0.008), 16]);
+	// (the spokes run into the hub: their ends lay flush on its sides and flickered)
+	for (const s of [-1, 1]) W.push([new THREE.BoxGeometry(R - 0.06, 0.036, 0.016).translate(s * (0.055 + (R - 0.06) / 2), -0.012, -0.008), 16]);
 	W.push([new THREE.BoxGeometry(0.038, R - 0.055, 0.016).translate(0, -(0.05 + (R - 0.055) / 2), -0.008), 7]);
 	for (const [geo, pt] of W) out.push(tag(geo.rotateX(-0.45).translate(wx, wy, wz), pt));
 	out.push(tag(new THREE.CylinderGeometry(0.03, 0.045, 0.34, 8).rotateX(Math.PI / 2 - 0.45).translate(wx, wy - 0.07, wz + 0.16), 7));
 	// the mirror, hung from the glass just ahead of the roof
 	if (!big && S.box === undefined) {
-		const zm = Math.min(S.rf + 0.14, S.ws - 0.1), ym = top(zm) - 0.1;
-		out.push(rbox(0.23, 0.066, 0.03, 0.012, 7, M4(0, ym, zm)));
-		out.push(tag(new THREE.PlaneGeometry(0.21, 0.05).rotateY(Math.PI).translate(0, ym, zm - 0.016), 9));
-		out.push(tag(new THREE.CylinderGeometry(0.01, 0.014, 0.09, 5).translate(0, ym + 0.06, zm + 0.02), 7));
+		// (kept under the raked glass, its glass 4 mm proud of its face, and its stalk up to the
+		// glass and no further: it used to come out through the windshield)
+		const zm = Math.min(S.rf + 0.14, S.ws - 0.1), mir = tuck([rbox(0.23, 0.066, 0.03, 0.012, 7, M4(0, top(zm) - 0.1, zm)), tag(new THREE.PlaneGeometry(0.21, 0.05).rotateY(Math.PI).translate(0, top(zm) - 0.1, zm - 0.019), 9)], [0, -0.008, -0.004], 0.01);
+		mir[0].computeBoundingBox();
+		const mb = mir[0].boundingBox, zs = (mb.min.z + mb.max.z) / 2 + 0.01;
+		let yg = mb.max.y;
+		while (yg < S.H + 0.1 && room(zs + 0.015, yg + 0.002) > 0.02) yg += 0.002;
+		out.push(...mir, tag(new THREE.CylinderGeometry(0.01, 0.014, yg - mb.max.y + 0.01, 5).translate(0, (yg + mb.max.y) / 2 - 0.005, zs), 7));
 	}
 	return out;
 }

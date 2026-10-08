@@ -13,6 +13,7 @@
 // the face, so its soft edges stay soft.
 
 import * as THREE from 'three';
+import { CAPSULES } from './hair-collide.js';
 import { hairline } from './hair.js';
 
 const DIR = new URL('../assets/people/hair/', import.meta.url).href;
@@ -577,6 +578,8 @@ const FRAG = /* glsl */`
 let blank = null;
 // hair (tex: the style's texture) or a beard (beard: true; its texture, or none for one
 // grown from the skin)
+// hair inside a capsule is pushed out to its surface, along the way out from its axis
+const PUSH = `for (int i = 0; i < ${CAPSULES}; i++) { float r = uCapA[i].w; if (r <= 0.0) continue; vec3 a = uCapA[i].xyz, ab = uCapB[i] - a; float t = clamp(dot(transformed - a, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0); vec3 d = transformed - (a + ab * t); float l = length(d); if (l < r) transformed += d / max(l, 1e-4) * (r - l); }`;
 export function kitMaterial(tex, beard = false) {
 	if (!tex && !blank) { blank = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1); blank.needsUpdate = true; }
 	tex = tex || blank;
@@ -586,6 +589,8 @@ export function kitMaterial(tex, beard = false) {
 	const U = {
 		uRoot: { value: new THREE.Color() }, uTip: { value: new THREE.Color() }, uGrey: { value: new THREE.Color() }, uBeard: { value: new THREE.Vector4(0, 0, 0, 1) },
 		uClip: { value: new THREE.Vector4(99, -99, 0, 0) }, uSpec: { value: new THREE.Vector2(1, 0.5) }, uSalt: { value: new THREE.Vector4(0, 0, 0, 0) }, uHC: { value: new THREE.Vector3() }, uFace: { value: new THREE.Vector2() }, uEar: { value: new THREE.Vector4() },
+		// what the hair falls over: capsules round the neck, shoulders, back and arms (hair-collide.js)
+		uCapA: { value: Array.from({ length: CAPSULES }, () => new THREE.Vector4()) }, uCapB: { value: Array.from({ length: CAPSULES }, () => new THREE.Vector3()) },
 	};
 	m.userData.U = U;
 	m.onBeforeCompile = (sh, r) => {
@@ -593,7 +598,8 @@ export function kitMaterial(tex, beard = false) {
 		if (!ms && msaa) msaa = false;
 		if (!msaa && m.alphaToCoverage) m.alphaToCoverage = false;
 		Object.assign(sh.uniforms, U);
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 hairT;\nattribute vec3 hairK;\nvarying vec3 vHT;\nvarying vec3 vHK;\nvarying vec3 vRest;')
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\nattribute vec3 hairT;\nattribute vec3 hairK;\nvarying vec3 vHT;\nvarying vec3 vHK;\nvarying vec3 vRest;\nuniform vec4 uCapA[${CAPSULES}];\nuniform vec3 uCapB[${CAPSULES}];`)
+			.replace('#include <skinning_vertex>', `#include <skinning_vertex>\n${beard ? '' : PUSH}`)
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position; vHK = hairK;')
 			.replace('#include <skinnormal_vertex>', '#include <skinnormal_vertex>\nvec3 hT = hairT;\n#ifdef USE_SKINNING\nhT = (skinMatrix * vec4(hT, 0.0)).xyz;\n#endif\nvHT = normalize(normalMatrix * hT);');
 		sh.fragmentShader = (msaa || beard ? '' : '#undef ALPHA_TO_COVERAGE\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
@@ -604,6 +610,6 @@ export function kitMaterial(tex, beard = false) {
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal *= faceDirection;\nnonPerturbedNormal = normal;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-7' + (beard ? '-b' : msaa ? '' : '-c');
+	m.customProgramCacheKey = () => 'crysis-hairkit-8' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

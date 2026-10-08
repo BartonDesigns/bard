@@ -2,9 +2,10 @@
 // tracers and flying bolts (one instanced streak mesh each), sparks, embers, fire and flashes
 // (additive points), smoke and dust (soft points), debris and glass shards (small instanced
 // chips that bounce on the ground), marks on walls (an instanced decal of a chipped hole or a
-// scorch), and the bosses' warnings (rings on the ground, beams). No blood, no wounds: a person
-// struck shows a puff of dust and a spark at most. Lights are never added (that would recompile
-// every material in the scene); glow is drawn.
+// scorch), blood where a person is struck (a dark puff and a stain on the ground that fades;
+// nothing more), the Spark's shimmer round a warded child, and the bosses' warnings (rings on
+// the ground, beams). Lights are never added (that would recompile every material in the
+// scene); glow is drawn.
 
 import * as THREE from 'three';
 
@@ -122,6 +123,15 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		return instPool(g, decalMat, isPhone ? (u0 ? 16 : 64) : (u0 ? 32 : 160));
 	});
 	group.add(decalPools[0].mesh, decalPools[1].mesh);
+	// stains on the ground where someone was struck: they fade after a while
+	const bloodTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); for (let i = 0; i < 7; i++) { const r = 6 + Math.random() * 14, px = 32 + (Math.random() - 0.5) * 26, py = 32 + (Math.random() - 0.5) * 26, g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, 'rgba(70,6,8,0.9)'); g.addColorStop(0.7, 'rgba(60,4,6,0.6)'); g.addColorStop(1, 'rgba(50,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+	const blood = instPool(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: bloodTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), isPhone ? 16 : 40);
+	const bloodLife = new Float32Array(blood.n), bloodAt = [];
+	group.add(blood.mesh);
+	// the Spark: a shimmering shell round a warded child
+	const wardMat = new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+	const wards = [];
+	for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), wardMat.clone()); m.visible = false; group.add(m); wards.push({ m, life: 0 }); }
 
 	// warnings: rings on the ground and beams
 	const ringMat = new THREE.MeshBasicMaterial({ color: 0xff5a3a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
@@ -214,12 +224,31 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 		if (surf === 'metal' || surf === 'machine') { sparks(p, 9, N, 1, 0.8, 0.45, 7); if (n && surf === 'metal') decal(p, N, 0.12, 0); return; }
 		if (surf === 'glass') { glass(p, 5, 2.5, 0.12); sparks(p, 3, N, 0.8, 0.9, 1, 3); return; }
 		if (surf === 'crystal') { sparks(p, 10, N, 0.75, 0.55, 1, 6); glass(p, 3, 3, 0.15); return; }
-		if (surf === 'person') { dust(p, 3, 0.62, 0.6, 0.58, 0.25, 0.3); sparks(p, 2, N, 1, 0.9, 0.7, 2); return; }
+		if (surf === 'person') { bleed(p, N); return; }
 		if (surf === 'creature') { sparks(p, 6, N, 0.5, 1, 0.6, 4); dust(p, 2, 0.4, 0.45, 0.35, 0.3, 0.3); return; }
 		if (surf === 'wood') { debris(p, 3, 0x8a6a45, 3, 0.05); dust(p, 2, 0.6, 0.52, 0.4, 0.3); if (n) decal(p, N, 0.1, 0); return; }
 		if (surf === 'ground') { dust(p, 4, 0.5, 0.46, 0.4, 0.5, 1); debris(p, 2, 0x6a6258, 3, 0.04); return; }
 		dust(p, 3, 0.62, 0.6, 0.57, 0.35, 0.6); debris(p, 3, 0x9a958c, 3.5, 0.04); sparks(p, 2, N, 1, 0.85, 0.6, 3);
 		if (n) decal(p, N, 0.16, 0);
+	}
+	// a person struck: a dark red puff, and a stain on the ground below that fades
+	function bleed(p, n) {
+		for (let k = 0; k < 6; k++) smoke.emit(p.x, p.y, p.z, (Math.random() - 0.5) * 1.5 + (n?.x || 0), Math.random() * 0.8, (Math.random() - 0.5) * 1.5 + (n?.z || 0), 0.35 + Math.random() * 0.3, 0.06, 0.28, 0.35, 0.02, 0.03, 0.8, 3, 3);
+		const gy = ground(p.x, p.z);
+		if (!Number.isFinite(gy) || p.y - gy > 2.2) return;
+		const i = blood.slot();
+		bloodLife[i] = 40; bloodAt[i] = { x: p.x + (Math.random() - 0.5) * 0.4, y: gy + 0.025, z: p.z + (Math.random() - 0.5) * 0.4, s: 0.5 + Math.random() * 0.5, r: Math.random() * 6.283 };
+		const B = bloodAt[i];
+		_m.compose(_p.set(B.x, B.y, B.z), _q.setFromAxisAngle(_d.set(0, 1, 0), B.r), _s.setScalar(B.s));
+		blood.mesh.setMatrixAt(i, _m); blood.mesh.instanceMatrix.needsUpdate = true;
+	}
+	// the Spark turning harm aside: a shimmer round them and a burst of light where it struck
+	function ward(c, r = 0.9, at = null) {
+		const W = wards.find((w) => w.life <= 0) || wards[0];
+		W.life = 0.9; W.m.position.set(c.x, c.y, c.z); W.m.scale.setScalar(r); W.m.visible = true;
+		const q = at || c;
+		for (let k = 0; k < 14; k++) glow.emit(q.x, q.y, q.z, (Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4, 0.5 + Math.random() * 0.4, 0.08, 0.02, 0.65, 0.95, 1, 1, -1, 2);
+		glow.emit(q.x, q.y, q.z, 0, 0, 0, 0.25, 0.4, 1.2, 1, 0.92, 0.6, 0.9);
 	}
 	// a blast: a flash, a fireball, smoke, debris and a scorch on the ground under it
 	function explosion(p, r = 3, scorch = true) {
@@ -290,6 +319,20 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 			B.pool.mesh.setMatrixAt(B.i, _m);
 		}
 		if (moved) { chips.mesh.instanceMatrix.needsUpdate = true; shards.mesh.instanceMatrix.needsUpdate = true; }
+		let bl = false;
+		for (let i = 0; i < blood.n; i++) {
+			if (bloodLife[i] <= 0) continue;
+			bloodLife[i] -= dt;
+			if (bloodLife[i] < 4) { const B = bloodAt[i], k = Math.max(0, bloodLife[i] / 4); _m.compose(_p.set(B.x, B.y, B.z), _q.setFromAxisAngle(_d.set(0, 1, 0), B.r), _s.setScalar(B.s * k)); blood.mesh.setMatrixAt(i, k > 0 ? _m : HIDE); bl = true; }
+		}
+		if (bl) blood.mesh.instanceMatrix.needsUpdate = true;
+		for (const W of wards) {
+			if (W.life <= 0) continue;
+			W.life -= dt;
+			W.m.material.opacity = Math.max(0, W.life) * 0.5 * (0.7 + 0.3 * Math.sin(time * 40));
+			W.m.rotation.y += dt * 3;
+			if (W.life <= 0) W.m.visible = false;
+		}
 		for (const R of rings) {
 			if (R.life <= 0) continue;
 			R.life -= dt;
@@ -317,5 +360,5 @@ export function createFx({ isPhone = false, ground = () => -1e9 } = {}) {
 	}
 	// the points' size on screen follows the viewport's height
 	const resize = (h, fov) => { const k = h / (2 * Math.tan((fov * Math.PI) / 360)); glow.m.uniforms.scale.value = smoke.m.uniforms.scale.value = k; };
-	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, muzzle, ring, beam, setBeam, update, clear, resize, TRACER_COL };
+	return { group, tracer, held, place, free, sparks, dust, smokePuff, flame, debris, glass, decal, impact, explosion, muzzle, ring, beam, setBeam, bleed, ward, update, clear, resize, TRACER_COL };
 }

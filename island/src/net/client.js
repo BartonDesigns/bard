@@ -3,7 +3,7 @@
 // line drops. Callers get events: status, welcome, join, leave, pose, spot, state, event,
 // host, closed, trade (from one friend to you) and trade-ack (the server passed yours on).
 
-import { cleanCode, cleanTrade } from './protocol.js';
+import { cleanCode, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules } from './protocol.js';
 
 const FINAL = new Set([4000, 4001, 4404, 4409, 1008]);
 export const REASONS = { 4000: 'The host ended the room.', 4001: 'This room was opened in another window.', 4404: 'That room is not open (or has ended).', 4409: 'That room is full.', 4413: 'A message was too big.', 4429: 'Too many messages.', 4408: 'Timed out.', 1008: 'The room refused this player.' };
@@ -73,6 +73,11 @@ export function createRoomClient({ url, id, name, seed, WS = globalThis.WebSocke
 			case 'state': emit('state', m.s); break;
 			case 'event': emit('event', m.e); break;
 			case 'trade': { const c = cleanTrade(m); if (c && C.players.has(m.from)) emit('trade', { ...c, from: m.from }); break; }
+			// combat (combat/net.js): shots seen, hits reported, the host's word, the room's rules
+			case 'fx': { const f = cleanFx(m); if (f && C.players.has(m.id)) emit('fx', { id: m.id, ...f }); break; }
+			case 'hit': { const h = cleanHit(m); if (h && C.players.has(m.from)) emit('hit', { ...h, from: m.from }); break; }
+			case 'cs': { const c = cleanCombatState(m); if (c) emit('cs', c); break; }
+			case 'rules': emit('rules', cleanRules(m.r)); break;
 			case 'trade-ack': if (typeof m.id === 'string') emit('trade-ack', { id: m.id, op: m.op, there: m.there !== false }); break;
 		}
 	}

@@ -3,7 +3,7 @@
 // others. It uses the hibernation API, so a room whose players are standing still (their
 // pings answered without waking it) costs nothing while it waits.
 
-import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, ID_RE } from '../../../island/src/net/protocol.js';
+import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, ID_RE } from '../../../island/src/net/protocol.js';
 
 const SWEEP_MS = 15000;
 // close codes the game understands
@@ -48,7 +48,7 @@ export class Room {
 			if (this.meta && !this.meta.ended) return new Response('taken', { status: 409 });
 			if (!ID_RE.test(b.owner || '')) return new Response('bad owner', { status: 400 });
 			await this.state.storage.deleteAll?.();
-			this.meta = { code: String(b.code || ''), owner: b.owner, host: b.owner, created: Date.now(), emptySince: Date.now(), shared: null, events: [], ended: false };
+			this.meta = { code: String(b.code || ''), owner: b.owner, host: b.owner, created: Date.now(), emptySince: Date.now(), shared: null, events: [], ended: false, rules: { pvp: false } };
 			await this.save();
 			await this.state.storage.setAlarm(Date.now() + EMPTY_MS);
 			return Response.json({ code: this.meta.code });
@@ -79,7 +79,7 @@ export class Room {
 		if (meta.host !== a.id && (a.id === meta.owner || !others.some((s) => this.info(s).id === meta.host))) { meta.host = a.id; this.broadcast({ t: 'host', id: a.id }, ws); }
 		meta.emptySince = 0;
 		await this.save();
-		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events });
+		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false } });
 		this.broadcast({ t: 'join', player: this.player(ws) }, ws);
 		await this.state.storage.setAlarm(Date.now() + SWEEP_MS);
 	}
@@ -159,6 +159,43 @@ export class Room {
 				const { to: id, ...rest } = c;
 				if (to) this.send(to, { t: 'trade', from: a.id, ...rest });
 				this.send(ws, { t: 'trade-ack', id: c.id, op: c.op, to: id, there: !!to });
+				return;
+			}
+			case 'fx': {
+				// shots friends see: passed to everyone else
+				const f = cleanFx(m);
+				if (f) this.broadcast({ t: 'fx', id: a.id, ...f }, ws);
+				return;
+			}
+			case 'hit': {
+				const h = cleanHit(m);
+				if (!h) return;
+				const { to, ...rest } = h;
+				if (to) {
+					// on another player: only when the room has PvP on
+					if (!meta.rules?.pvp || to === a.id) return;
+					const s = this.sockets().find((x) => this.info(x).id === to);
+					if (s) this.send(s, { t: 'hit', from: a.id, ...rest });
+					return;
+				}
+				// on something shared: the host decides
+				if (host) return;
+				const hs = this.sockets().find((x) => this.info(x).id === meta.host);
+				if (hs) this.send(hs, { t: 'hit', from: a.id, ...rest });
+				return;
+			}
+			case 'cs': {
+				// the host's word on bosses and squads
+				if (!host) return;
+				const c = cleanCombatState(m);
+				if (c) this.broadcast({ t: 'cs', ...c }, ws);
+				return;
+			}
+			case 'rules': {
+				if (!host) return;
+				meta.rules = cleanRules(m.r);
+				await this.save();
+				this.broadcast({ t: 'rules', r: meta.rules });
 				return;
 			}
 			case 'host': {

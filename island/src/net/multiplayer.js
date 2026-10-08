@@ -67,10 +67,13 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	// the gear screen (ui/gear.js), once linked: the item in your hand, trades, and its buttons
 	// beside each friend
 	let gear = null;
+	// the fight (combat/combat.js): shots, hits and the host's word pass to it
+	let combat = null;
 
 	// ---------- what the room says ----------
 	function heard(t, v) {
 		try { gear?.heard(t, v); } catch (e) { console.warn('[room] gear', e); }
+		try { combat?.heard(t, v); } catch (e) { console.warn('[room] combat', e); }
 		if (t === 'status') { chipDraw(); if (v.why) hint(v.why, 4000, 1); if (v.status === 'off') { remotes.clear(); following = null; clearAuto(); } }
 		else if (t === 'welcome') {
 			remotes.clear();
@@ -351,6 +354,8 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 			}
 		}
 		const foot = document.createElement('div'); foot.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;';
+		// the room's PvP rule: the host's to set, off by default
+		if (combat) { const on = !!combat.rules().pvp; foot.append(room.isHost() ? button(`PvP: ${on ? 'on' : 'off'}`, () => { combat.setRules({ pvp: !on }); drawPanel(); }) : button(`PvP ${on ? 'on' : 'off'} (host's choice)`, () => {})); }
 		foot.append(button('Copy link', () => copy()), button(room.isHost() ? 'End room' : 'Leave', () => leave()));
 		panel.append(foot);
 	}
@@ -422,6 +427,9 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 		available: true, update, reset, join, invite, leave, follow, unfollow, goTo,
 		// for the gear screen: link it in, send it a message, and who is here and how far
 		link: (g) => { gear = g; drawPanel(); }, send: (m) => room.send(m), me: () => id, status: () => room.status,
+		linkCombat: (c) => { combat = c; }, isHost: () => room.isHost(), live: () => room.status === 'on',
+		// friends where they are (for shots that may strike them when the room allows it)
+		bodies: () => [...remotes.list.values()].filter((r) => r.at && Number.isFinite(r.at[0]) && r.d < 300).map((r) => ({ id: r.id, name: r.name, at: r.at })),
 		friend: (fid) => { const r = remotes.list.get(fid); return r ? { id: r.id, name: r.name, d: r.d, here: r.d < Infinity } : null; },
 		friends: () => [...remotes.list.values()].map((r) => ({ id: r.id, name: r.name, d: r.d, here: r.d < Infinity })),
 		info: () => ({ available: true, status: room.status, code: room.room(), host: room.host, you: id, isHost: room.isHost(), following, stopped, players: [...remotes.list.values()].map((r) => ({ id: r.id, name: r.name, d: +r.d.toFixed?.(2), at: r.at && Number.isFinite(r.at[0]) ? [r.at[0], r.at[1], r.at[2]] : null, body: !!r.body?.P.root.visible })), plans: [...plans.values()], book: book.list('mp'), crowd: crowd.info?.() }),
