@@ -43,8 +43,13 @@ export function cleanPose(p) {
 	if (VEHICLES.includes(p.v) && p.v) o.v = p.v;
 	if (num(p.s, 1e5)) o.s = r2(p.s);
 	o.w = str(p.w, 48);
-	// the item in their hand, if any (a game catalogue id, gameplay/arms.js)
-	if (ITEM_RE.test(p.h || '')) o.h = p.h;
+	// the item in their hand, if any (a game catalogue id, gameplay/arms.js), with its level
+	// (1-10) and quality tier (0-4), which friends see as its trim and glow
+	if (ITEM_RE.test(p.h || '')) {
+		o.h = p.h;
+		if (Number.isInteger(p.hl) && p.hl >= 1 && p.hl <= 10) o.hl = p.hl;
+		if (Number.isInteger(p.ht) && p.ht >= 0 && p.ht <= 4) o.ht = p.ht;
+	}
 	return o;
 }
 
@@ -54,12 +59,20 @@ const ITEM_RE = /^[a-z0-9-]{1,40}$/;
 const TRADE_ID_RE = /^[A-Za-z0-9_-]{6,40}$/;
 const KEY_RE = /^\d{1,6}\.\d{1,6}$/;
 const int = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
-// one side of an offer: credits and up to 12 items with counts
+// one side of an offer: credits and up to 12 item instances, each { u: its id, i: the item,
+// l: level 1-10, t: tier 0-4 (Common to Legendary), x: experience }, no id twice
+const UID_RE = /^[a-z0-9~-]{4,24}$/;
 export function cleanTradeSide(s) {
 	if (!s || typeof s !== 'object' || !int(s.credits ?? 0, 1e6)) return null;
-	const items = {}, it = s.items && typeof s.items === 'object' && !Array.isArray(s.items) ? Object.entries(s.items) : [];
-	if (it.length > 12) return null;
-	for (const [k, n] of it) { if (!ITEM_RE.test(k) || !int(n, 999)) return null; if (n) items[k] = n; }
+	const raw = s.items ?? [];
+	if (!Array.isArray(raw) || raw.length > 12) return null;
+	const items = [], seen = new Set();
+	for (const x of raw) {
+		if (!x || typeof x !== 'object' || !UID_RE.test(x.u || '') || !ITEM_RE.test(x.i || '') || seen.has(x.u)) return null;
+		if (!Number.isInteger(x.l) || x.l < 1 || x.l > 10 || !int(x.t, 4) || !int(x.x ?? 0, 1e6)) return null;
+		seen.add(x.u);
+		items.push({ u: x.u, i: x.i, l: x.l, t: x.t, x: x.x ?? 0 });
+	}
 	return { credits: s.credits ?? 0, items };
 }
 export function cleanTrade(m) {

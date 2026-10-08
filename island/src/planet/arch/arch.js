@@ -378,7 +378,10 @@ function tower(X, T) {
 			const r0 = radAt(y0, y0 + 10), rOut = R * 1.55, len = rOut - r0 + 0.4;
 			doors.push({ y: y0, a: a0, w: 3.4, h: 4.4, porch: len, ext: true });
 			const mid = (r0 + rOut) / 2;
-			K.add('shell', F.put(box(5.2, 6.0, len), Math.sin(a0) * mid, y0 - T.y + 2.9, Math.cos(a0) * mid, a0), C);
+			// (walls and a roof, open at its mouth)
+			const PF = F.sub(Math.sin(a0) * mid, y0 - T.y, Math.cos(a0) * mid, a0);
+			for (const sx of [-1, 1]) K.add('shell', PF.put(box(0.8, 6.0, len), sx * 2.2, 2.9, 0), C);
+			K.add('shell', PF.put(box(5.2, 1.2, len), 0, 5.3, 0), C);
 			portal(X, F.sub(Math.sin(a0) * (rOut + 0.42), y0 - T.y, Math.cos(a0) * (rOut + 0.42), a0), 3.4, 4.4);
 			// the skirt walked into but for the porch
 			for (let k = 0; k < 28; k++) {
@@ -431,14 +434,15 @@ function slabs(X, T) {
 	return out;
 }
 
-// a lit doorway on a building's skin: brass jambs and lintel round a curtain of glow (one-sided:
-// from inside it is not there), frame Fr at the door's foot facing out
+// a doorway on a building's skin: brass jambs and lintel, a light line at its foot, and a pair
+// of glass leaves that slide apart as you come to them (arch update), frame Fr at its foot facing out
 function portal(X, Fr, w, h) {
 	const { K, S } = X, M = { tint: S.trim, glow: G.metal };
 	for (const sx of [-1, 1]) K.add('shell', Fr.put(box(0.35, h + 0.35, 0.5), sx * (w / 2 + 0.17), (h + 0.35) / 2, 0), M);
 	K.add('shell', Fr.put(box(w + 0.7, 0.35, 0.5), 0, h + 0.17, 0), M);
-	K.add('shell', Fr.put(new THREE.PlaneGeometry(w, h).translate(0, h / 2, -0.1)), { tint: S.winB.map((c) => c * 0.45), glow: G.lamp });
 	K.add('shell', Fr.put(box(w + 0.7, 0.06, 0.3), 0, 0.03, 0.35), { tint: S.lamp, glow: G.lamp });
+	K.add('shell', Fr.put(box(w, 0.08, 0.1), 0, h - 0.05, 0.2), { tint: S.winB, glow: G.lamp });
+	X.doors.push({ F: Fr, w, h, o: 0 });
 }
 // a landing deck out from a building at y (for the towers standing in the sea or the cloud):
 // along bearing a in frame F, from r0 to r1, railed, a portal where it meets the skin at rs
@@ -652,7 +656,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	const r = mulberry32((plan.seed ^ 0xa1c4) >>> 0);
 	// the world's own stone, a little varied stone to stone (sRGB authored, made linear)
 	const rockC = new THREE.Color().setRGB(rk[0], rk[1], rk[2], THREE.SRGBColorSpace);
-	const X = { S, H, col, r, contacts: [], lifts: [], streaks: [], dots: [], sea: island.sea || 0, shells: [], seed: plan.seed >>> 0, mistTop: plan.mist.top, rockT: () => { const j = 0.85 + r() * 0.3; return [rockC.r * j, rockC.g * j, rockC.b * j]; } };
+	const X = { S, H, col, r, contacts: [], lifts: [], streaks: [], dots: [], doors: [], sea: island.sea || 0, shells: [], seed: plan.seed >>> 0, mistTop: plan.mist.top, rockT: () => { const j = 0.85 + r() * 0.3; return [rockC.r * j, rockC.g * j, rockC.b * j]; } };
 	const sites = [], obs = [];
 	const site = (name, at, rad, far, make) => {
 		X.K = new Kit();
@@ -731,6 +735,8 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		crafts.push({ curve, len: curve.getLength(), u: r(), v: 14 + r() * 8 });
 	}
 	const craftMesh = inst(craftGeo, crafts.length, 'craft');
+	// the doors' glass leaves, two to a doorway
+	const doors = X.doors, leafMesh = inst(mergeGeometries([paint(new THREE.BoxGeometry(1, 1, 0.08).translate(0, 0.5, 0), S.slab.map((c) => c * 2), G.glazing), paint(new THREE.BoxGeometry(1, 0.03, 0.1).translate(0, 0.985, 0), S.trim, G.metal), paint(new THREE.BoxGeometry(0.03, 1, 0.1).translate(0.485, 0.5, 0), S.strip, G.lamp)]), doors.length * 2, 'doors');
 	// the mist band, glowing from below where the towers stand in it
 	const banks = (plan.cities || []).map((c) => ({ x: c.x, z: c.z, r: 75, y: (island.sea || 0) + 8, rise: 30, n: 14, size: 75 }));
 	if (M) banks.push({ x: M.x, z: M.z, r: M.r, y: M.y - 6, rise: 26, n: 28, size: 85 });
@@ -810,7 +816,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			if (vis) for (const m of G.meshes) if (m.userData.near) m.visible = d < G.nearD;
 		}
 		const near = Math.hypot(cx - plan.centre.x, cz - plan.centre.z) < plan.mist.rad + 2200;
-		lifts.visible = craftMesh.visible = near;
+		lifts.visible = craftMesh.visible = leafMesh.visible = near;
 		In.update(dt, camera);
 		inMist = mist.update(dt, camera, night, In.indoors());
 		glow.update(night);
@@ -828,6 +834,20 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 			mx.compose(v.set(L.x, L.y, L.z), q, one); lifts.setMatrixAt(i, mx);
 		}
 		lifts.instanceMatrix.needsUpdate = true;
+		// the doors slide apart as you come (their leaves into the jambs)
+		{
+			const Pl = opts.player?.(), pp = Pl?.pos || cam;
+			for (let i = 0; i < doors.length; i++) {
+				const D = doors[i], d = Math.hypot(pp.x - D.F.x, pp.z - D.F.z, (pp.y - 1.7) - D.F.y), t = d < 4.5 ? 1 : 0;
+				D.o += (t - D.o) * Math.min(1, dt * 3);
+				for (const k of [-1, 1]) {
+					const lx = k * (D.w / 4 + D.o * D.w * 0.47), p = D.F.p(lx, 0, -0.08);
+					e.set(0, D.F.yaw + (k < 0 ? Math.PI : 0), 0); q.setFromEuler(e);
+					mx.compose(p, q, tg.set(D.w / 2, D.h, 1)); leafMesh.setMatrixAt(i * 2 + (k > 0 ? 1 : 0), mx);
+				}
+			}
+			leafMesh.instanceMatrix.needsUpdate = true;
+		}
 		// the craft round their loops, banking into the turns
 		for (let i = 0; i < crafts.length; i++) {
 			const C = crafts[i];
