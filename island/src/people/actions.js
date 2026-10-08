@@ -14,8 +14,8 @@ const smooth = (x) => x * x * (3 - 2 * x);
 // the hips; fL, fR: feet [x, y, z] or null for the walk's own; rt: [pitch, roll] of the whole
 // body; hd: [yaw, pitch, roll] }]
 // a long arm at the ready: both hands on it (tuned so the hands land on its grip and guard)
-const CARRY_R = arm({ abd: 0.32, flex: 0.28, roll: 0.55, bend: 1.45, pro: 0.6, wflex: -0.1, curl: 0.6 });
-const CARRY_L = arm({ abd: 0.22, flex: 0.62, roll: 0.95, bend: 1.15, pro: 0.9, wflex: 0.1, curl: 0.55 });
+const CARRY_R = arm({ abd: 0.57, flex: -0.117, roll: 0.947, bend: 1.45, pro: 0.6, wflex: -0.1, curl: 0.6 });
+const CARRY_L = arm({ abd: 0.073, flex: 0.62, roll: 0.803, bend: 0.753, pro: 1.065, wflex: 0.1, curl: 0.55 });
 const HANDS_SET = arm({ abd: 0.12, flex: 0.9, roll: 0.95, bend: 2.0, pro: 0.6, curl: 0.6 });
 export const ACTIONS = {
 	// a right-hander's pitch from the stretch: set, the leg kick, the stride, the arm whipping

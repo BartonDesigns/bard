@@ -19,7 +19,7 @@ import { fadePerson } from '../people/fade.js';
 import { createHealth, applyDamage, tickHealth } from './health.js';
 import { personShapes } from './targets.js';
 import { npcHand } from './weapon-view.js';
-import { FACTIONS, PLAYER } from './factions.js';
+import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
 
 // the bodies: people (dressed by faction), and the two that are not
 const BODY = {
@@ -35,14 +35,6 @@ const CALL = {
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const rnd = (a, b) => a + Math.random() * (b - a);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
-
-// a beaten fighter's choice (pure, for the tests): yield when badly hurt and outnumbered, more
-// readily when their side is not a fierce one; never machines or creatures
-export function shouldSurrender({ hpFrac, allies, enemies, aggression = 0.5, kind = 'gang' }, rand = Math.random) {
-	if (kind === 'machines' || kind === 'creatures' || hpFrac > 0.3 || enemies < 1) return false;
-	const odds = (0.25 + (enemies - allies) * 0.15) * (1.2 - aggression);
-	return rand() < Math.max(0, Math.min(0.85, odds));
-}
 
 // a faction's look: a fitted kit in its colours; the masked ones hide their faces
 function styleOf(fid) {

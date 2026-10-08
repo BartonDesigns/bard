@@ -48,6 +48,7 @@ export function createCars(ctx) {
 			return { dealt: 0 };
 		}
 		const r = applyDamage(S.H, blow);
+		if (blow.by) S.lastBy = blow.by;
 		// the driver gets out and runs at the first trouble
 		if (S.traffic && !S.fled) {
 			S.fled = true; S.ref.held = true;
@@ -63,7 +64,7 @@ export function createCars(ctx) {
 		const st = S.H.state !== 'ok' || f <= 0 ? 3 : f < 0.3 ? 2 : f < 0.65 ? 1 : 0;
 		if (st > S.stage) {
 			S.stage = st;
-			if (st === 3) { S.burnT = 6 + Math.random() * 3; ctx.ignite?.(S.id, S.x, S.z, 1, true); }
+			if (st === 3) { S.burnT = 6 + Math.random() * 3; ctx.ignite?.(S.id, S.x, S.z, 1, !!S.lastMine); }
 		}
 	}
 	// set alight (fire.js): it burns down to the blast

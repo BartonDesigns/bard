@@ -80,3 +80,11 @@ export function createRelations(saved = null) {
 export const factionsFor = (zone) => Object.entries(FACTIONS).filter(([, F]) => F.zones.includes(zone) && F.kind !== 'civilians').map(([id]) => id);
 // a colour pair for a faction's look
 export const colorsOf = (id) => FACTIONS[id]?.colors || ['#444', '#888'];
+
+// a beaten fighter's choice (pure, for the tests): yield when badly hurt and outnumbered, more
+// readily when their side is not a fierce one; never machines or creatures
+export function shouldSurrender({ hpFrac, allies, enemies, aggression = 0.5, kind = 'gang' }, rand = Math.random) {
+	if (kind === 'machines' || kind === 'creatures' || hpFrac > 0.3 || enemies < 1) return false;
+	const odds = (0.25 + (enemies - allies) * 0.15) * (1.2 - aggression);
+	return rand() < Math.max(0, Math.min(0.85, odds));
+}

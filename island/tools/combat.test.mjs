@@ -4,7 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WEAPONS, weaponStats, createWeaponState, trigger, stepWeapon, startReload, nextMode, modeOf, spreadNow, spreadDir, damageAt, drawRounds, reserveOf } from '../src/combat/weapons.js';
 import { createHealth, applyDamage, tickHealth, revive, PARTS } from '../src/combat/health.js';
-import { createLayer, canHit, isChild, personShapes, rayBox, rayCapsule } from '../src/combat/targets.js';
+import { createLayer, canHit, isMinor, warded, strike, personShapes, rayBox, rayCapsule } from '../src/combat/targets.js';
+import { createMorality, score, RULES, MODIFIERS } from '../src/combat/morality.js';
+import { createRelations, FACTIONS, PLAYER, shouldSurrender } from '../src/combat/factions.js';
+import { createFireField } from '../src/combat/fire.js';
 import { createWanted, offend, tickWanted, clearWanted, STARS } from '../src/combat/heat.js';
 import { createBossMachine } from '../src/combat/boss-machine.js';
 import { BOSSES } from '../src/combat/boss-defs.js';
@@ -113,38 +116,133 @@ test('health: armour soaks, the head takes more, regen after quiet, down versus 
 	assert.equal(applyDamage(foe, { amount: 40 }).killed, true);
 });
 
-test('children are never hit: not by shots, blasts, hit reports or anything else', () => {
+test('minors (children and teenagers) carry the Spark: no damage path reaches them', () => {
+	const kid = { dna: { child: true, age: 7 } }, teen = { dna: { age: 15 } }, adult = { dna: { age: 34 } }, eighteen = { dna: { age: 18 } };
+	assert.equal(isMinor(kid), true);
+	assert.equal(isMinor(teen), true);
+	assert.equal(isMinor({ age: 17 }), true, 'age on the person');
+	assert.equal(isMinor({ dna: { age: 13, teen: true } }), true, 'a teen group from the people system');
+	assert.equal(isMinor(adult), false);
+	assert.equal(isMinor(eighteen), false);
+	assert.equal(isMinor({ ghost: true, dna: {} }), true, 'the ghost child');
+	let harmed = 0;
+	const onHit = () => { harmed++; return { dealt: 1 }; };
 	const L = createLayer();
-	const child = { dna: { child: true, age: 7 } }, adult = { dna: { age: 34 } }, teen = { dna: { age: 15 } };
-	assert.equal(isChild(child), true);
-	assert.equal(isChild(teen), true);
-	assert.equal(isChild(adult), false);
-	assert.equal(isChild({ ghost: true, dna: {} }), true);
-	// a child standing in front of an adult: the shot passes through the child to the adult
-	L.add({ id: 'kid', kind: 'person', P: child, child: true, bound: { x: 0, y: 0.6, z: -5, r: 1 }, shapes: personShapes(0, 0, -5, 1.2) });
-	L.add({ id: 'kid2', kind: 'person', P: teen, bound: { x: 0, y: 0.8, z: -7, r: 1.2 }, shapes: personShapes(0, 0, -7, 1.6) });
-	L.add({ id: 'ghost', kind: 'person', ghost: true, P: { ghost: true, dna: { age: 7 } }, bound: { x: 0, y: 0.6, z: -8, r: 1 }, shapes: personShapes(0, 0, -8, 1.2) });
-	L.add({ id: 'adult', kind: 'person', P: adult, bound: { x: 0, y: 0.9, z: -10, r: 1.2 }, shapes: personShapes(0, 0, -10, 1.75) });
-	const hit = L.cast({ x: 0, y: 0.7, z: 0 }, { x: 0, y: 0, z: -1 }, 100, { id: 'me', kind: 'player' });
-	assert.equal(hit?.T.id, 'adult');
-	// even with the flag missing on the target, the body's own age decides
-	assert.equal(canHit({ id: 'x', kind: 'person', P: child }), false);
-	assert.equal(canHit({ id: 'x', kind: 'person', P: teen }), false);
-	// a blast beside them finds only the adult
-	const near = L.within({ x: 0, y: 0.7, z: -8 }, 5).map((h) => h.T.id);
+	// a teen standing in front of an adult: the shot stops at the teen in a shimmer, harmlessly
+	L.add({ id: 'teen', kind: 'person', P: teen, bound: { x: 0, y: 0.8, z: -5, r: 1.2 }, shapes: personShapes(0, 0, -5, 1.6), onHit });
+	L.add({ id: 'adult', kind: 'person', P: adult, bound: { x: 0, y: 0.9, z: -10, r: 1.2 }, shapes: personShapes(0, 0, -10, 1.75), onHit });
+	const shooter = { id: 'me', kind: 'player' };
+	const h = L.cast({ x: 0, y: 0.7, z: 0 }, { x: 0, y: 0, z: -1 }, 100, shooter);
+	assert.equal(h.T.id, 'teen');
+	assert.equal(h.ward, true);
+	assert.deepEqual(strike(h.T, { amount: 999, type: 'blast' }, shooter, { pvp: true }), { ward: true, dealt: 0 });
+	assert.equal(harmed, 0);
+	// the flag missing, the body's age decides; nothing can switch it off
+	for (const P of [kid, teen, { ghost: true }]) {
+		const T = { id: 'x', kind: 'person', P, onHit };
+		assert.equal(warded(T), true);
+		assert.equal(canHit(T, shooter, { pvp: true }), false);
+		assert.equal(canHit(T, { id: 'r', kind: 'hostile', faction: 'ashfang' }), false);
+		assert.equal(strike(T, { amount: 50 }, { id: 'r', kind: 'hostile', faction: 'ashfang' }).ward, true);
+	}
+	// a blast among them: only the adult is in the blast's list; the minors are its wards
+	L.add({ id: 'kid', kind: 'person', P: kid, bound: { x: 0, y: 0.6, z: -8, r: 1 }, shapes: personShapes(0, 0, -8, 1.2), onHit });
+	const wards = [];
+	const near = L.within({ x: 0, y: 0.7, z: -8 }, 6, null, {}, wards).map((x) => x.T.id);
 	assert.deepEqual(near, ['adult']);
-	// nothing else can switch it off: not PvP, not a faction, not a hostile shooter
-	assert.equal(canHit({ id: 'k', kind: 'person', child: true }, { id: 'raider', kind: 'hostile', faction: 'ashfang' }, { pvp: true }), false);
-	L.remove('adult');
-	assert.equal(L.cast({ x: 0, y: 0.7, z: 0 }, { x: 0, y: 0, z: -1 }, 100), null);
+	assert.deepEqual(wards.map((T) => T.id).sort(), ['kid', 'teen']);
+	for (const x of L.within({ x: 0, y: 0.7, z: -8 }, 6)) strike(x.T, { amount: 10 });
+	assert.equal(harmed, 1, 'only the adult was harmed');
+	// an adult is struck normally
+	assert.equal(strike(L.get('adult'), { amount: 5 }, shooter).dealt, 1);
 });
 
-test('PvP is off unless the room turns it on; a side never hurts its own; protected people are never targets', () => {
+test('the morality table: one place, context weighs it, the ledger keeps both you and the world', () => {
+	for (const [k, R] of Object.entries(RULES)) assert.ok(typeof R.line === 'string' && ['mercy', 'law', 'protect', 'honest'].every((a) => Number.isFinite(R[a])), k);
+	const plain = score('kill', {}), self = score('kill', { selfDefence: true, hostileTarget: true }), cruel = score('kill', { vulnerable: true, unarmed: true });
+	assert.ok(self.mercy > plain.mercy && self.mercy < 0, 'self-defence weighs far less');
+	assert.ok(cruel.protect < plain.protect * 2, 'harming the vulnerable and unarmed weighs much more');
+	assert.ok(score('kill-surrendered').mercy < score('kill').mercy * 5);
+	assert.ok(score('spare').mercy > 0);
+	assert.ok(score('arson', { occupied: true }).protect < score('arson', { empty: true }).protect);
+	assert.ok(score('steal', { poor: true }).honest < score('steal', { rich: true }).honest);
+	assert.ok(score('ward').protect <= -30);
+	assert.ok(score('defend-village').protect > 0 && score('raid-village').protect < 0);
+	assert.ok(score('kill', { lawTarget: true }).law < plain.law);
+	assert.equal(score('nonsense'), null);
+	assert.ok(Object.keys(MODIFIERS).includes('vulnerable'));
+	const mem = new Map(), store = { get: (k) => mem.get(k), set: (k, v) => mem.set(k, v) };
+	const M = createMorality({ store, now: () => 1 });
+	const e = M.record({ kind: 'raid-village', place: 'Hollow Creek', world: 'TERRAN:7', ctx: { witnessed: true } });
+	assert.ok(e.line.includes('Hollow Creek'));
+	assert.ok(M.me().protect < 0 && M.world('TERRAN:7').protect < 0);
+	assert.match(M.remembers('Hollow Creek'), /remembers what you did/);
+	const again = createMorality({ store });
+	assert.equal(again.me().deeds, 1, 'saved');
+	for (let i = 0; i < 12; i++) again.record({ kind: 'kill', ctx: { vulnerable: true, unarmed: true } });
+	assert.ok(again.reactions().bounty >= 1, 'the world sends bounty hunters');
+	assert.ok(again.reactions().priceK > 1, 'and charges more');
+});
+
+test('surrender: the badly hurt and outnumbered may yield; machines and creatures never do', () => {
+	const yes = () => 0, no = () => 0.99;
+	assert.equal(shouldSurrender({ hpFrac: 0.2, allies: 0, enemies: 2, aggression: 0.3, kind: 'gang' }, yes), true);
+	assert.equal(shouldSurrender({ hpFrac: 0.8, allies: 0, enemies: 2, kind: 'gang' }, yes), false, 'not while still strong');
+	assert.equal(shouldSurrender({ hpFrac: 0.1, allies: 0, enemies: 3, kind: 'machines' }, yes), false);
+	assert.equal(shouldSurrender({ hpFrac: 0.1, allies: 0, enemies: 3, kind: 'creatures' }, yes), false);
+	assert.equal(shouldSurrender({ hpFrac: 0.2, allies: 4, enemies: 1, aggression: 0.9, kind: 'raiders' }, no), false);
+	assert.ok(score('kill-surrendered').mercy < -20 && score('spare').mercy > 10, 'and what you do then is scored');
+});
+
+test('faction relations: old feuds, attacks sour, common enemies warm, time eases it back', () => {
+	const R = createRelations();
+	for (const id of Object.keys(FACTIONS)) assert.ok(FACTIONS[id].name && FACTIONS[id].colors.length === 2, id);
+	assert.equal(R.stance('ashfang', 'dunecutters'), 'hostile', 'raider against raider');
+	assert.equal(R.stance('copperline', 'glasshouse'), 'hostile', 'gang against gang');
+	assert.equal(R.stance('hearthguard', 'village'), 'allied');
+	assert.equal(R.stance(PLAYER, 'hearthguard'), 'allied');
+	R.attacked(PLAYER, 'village', 1);
+	assert.ok(R.get('village', PLAYER) < 40 - 20);
+	assert.ok(R.get('hearthguard', PLAYER) < 30, 'the village\'s friends sour too');
+	assert.ok(R.get('ashfang', PLAYER) > -60, 'its enemies warm a little');
+	R.helped(PLAYER, 'dunecutters', 3);
+	assert.ok(R.get(PLAYER, 'dunecutters') > -50);
+	const before = R.get('village', PLAYER);
+	R.drift(600);
+	assert.ok(R.get('village', PLAYER) > before, 'drifting back');
+	const S = createRelations(R.save());
+	assert.ok(Math.abs(S.get('village', PLAYER) - R.get('village', PLAYER)) < 0.2, 'saved');
+});
+
+test('fire spreads to neighbours within limits and never burns twice', () => {
+	const F = createFireField({ maxBurning: 3, maxChain: 2, radius: 14, life: 60, spreadRate: 5 });
+	// a street of buildings 10 m apart
+	const row = Array.from({ length: 12 }, (_, i) => ({ id: 'b' + i, x: i * 10, z: 0, fuel: 1 }));
+	const near = (x, z, r) => row.filter((b) => Math.hypot(b.x - x, b.z - z) < r);
+	assert.equal(F.ignite('b5', 50, 0), true);
+	let maxBurning = 0;
+	const touched = new Set(['b5']);
+	for (let t = 0; t < 400; t++) {
+		for (const e of F.tick(0.5, near, () => 0)) if (e.type === 'spread') touched.add(e.to);
+		maxBurning = Math.max(maxBurning, F.fires.size);
+	}
+	assert.ok(maxBurning <= 3, 'at most 3 at once');
+	assert.ok(touched.size > 1, 'it spread');
+	for (const id of touched) { const i = +id.slice(1); assert.ok(Math.abs(i - 5) <= 2, 'no further than 2 hops: ' + id); }
+	assert.equal(F.fires.size, 0, 'all burnt out');
+	assert.equal(F.ignite('b5', 50, 0), false, 'nothing burns twice');
+	const G = createFireField({ maxBurning: 2, life: 10 });
+	G.ignite('a', 0, 0); G.douse('a', 100);
+	G.tick(0.1);
+	assert.ok(!G.burning('a'), 'a crew can put it out');
+});
+
+test('PvP is off unless the room turns it on; a side never hurts its own; adults are all fair game', () => {
 	const friend = { id: 'p2', kind: 'remote' };
 	assert.equal(canHit(friend, { id: 'p1', kind: 'player' }, {}), false);
 	assert.equal(canHit(friend, { id: 'p1', kind: 'player' }, { pvp: true }), true);
 	assert.equal(canHit({ id: 'r2', kind: 'hostile', faction: 'ashfang' }, { id: 'r1', kind: 'hostile', faction: 'ashfang' }), false);
-	assert.equal(canHit({ id: 'c1', kind: 'person', protected: true }, { id: 'p1', kind: 'player' }), false);
+	assert.equal(canHit({ id: 'c1', kind: 'person', P: { dna: { age: 30 } } }, { id: 'p1', kind: 'player' }), true, 'any adult can be struck');
 });
 
 test('ray shapes: boxes turn with their yaw, capsules have caps', () => {
