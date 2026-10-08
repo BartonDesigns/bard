@@ -352,7 +352,10 @@ function handguard(k, F, x0, x1, y, h, w, hex) {
 // a long scope from x0 to x1 at height y, on two rings
 function scope(k, F, x0, x1, y, railY, reticle) {
 	const seg = k.hi ? 28 : 10, r = 0.0145;
-	k.add(turn([[0.0, x0 - 0.05], [0.02, x0 - 0.05], [0.021, x0 - 0.04], [0.0195, x0 - 0.012], [r, x0], [r, x1], [0.022, x1 + 0.04], [0.0265, x1 + 0.07], [0.0265, x1 + 0.082], [0.0, x1 + 0.082]], seg), OPTIC, 0, y, 0);
+	// an open tube, dark inside, so the eye sees through it to the glass
+	const outer = [[0.0185, x0 - 0.05], [0.0205, x0 - 0.05], [0.021, x0 - 0.04], [0.0195, x0 - 0.012], [r, x0], [r, x1], [0.022, x1 + 0.04], [0.0265, x1 + 0.07], [0.0265, x1 + 0.082], [0.0245, x1 + 0.082]];
+	k.add(turn(outer, seg), OPTIC, 0, y, 0);
+	k.add(turn(outer.map(([q, x]) => [q - 0.0015, x]).reverse(), seg), BLACK, 0, y, 0);
 	if (k.hi) { k.add(turn([[0.0205, x0 - 0.035], [0.0215, x0 - 0.035], [0.0215, x0 - 0.02], [0.0205, x0 - 0.02]], seg), KNURL, 0, y, 0); k.add(ring(0.0265, 0.0015, seg), F.trim, x1 + 0.082, y, 0, 0, Math.PI / 2); }
 	const mid = (x0 + x1) / 2;
 	k.add(tube(0.011, 0.011, 0.02, seg), KNURL, mid, y + 0.022, 0, 0, 0, Math.PI / 2);

@@ -818,9 +818,9 @@ export function createIslandWorld() {
 		const cavePlan = planCaves(island, profile);
 		// ...and the realm's dungeons dug down to meet them
 		if (realmPlan) planDungeons(realmPlan, island, cavePlan, makeField);
-		// the Deep Gate (planet/deep.js): a ring of singing stones over a shaft with no bottom
-		const deepPlan = earth || !cavePlan ? null : planDeep(island, { avoid: [...fieldPlan.clear, ...(realmPlan?.clear || [])], holes: cavePlan.holes });
-		if (deepPlan) fieldPlan.clear.push(deepPlan.clear);
+		// the Deep Gate (planet/deep.js): a carved hall at the end of a passage dug on toward the
+		// summit, a sealed shaft with no bottom in its floor
+		const deepPlan = cavePlan ? planDeep(island, cavePlan, makeField) : null;
 		// the works of whoever built here before: sited now, so nothing grows on them
 		const alienPlan = earth || realmPlan?.noAliens || profile.airless ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: [...fieldPlan.clear, ...(realmPlan?.clear || [])], isPhone });
 		// (and the dwellings of whoever built them: interiors/alien.js)
@@ -959,10 +959,9 @@ export function createIslandWorld() {
 		if (deepPlan && world.underworld?.lighting) {
 			const dp = world.deep = createDeep(island, shared, scene, camera, profile, { plan: deepPlan, underworld: world.underworld, isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, bodyKey: body.key });
 			if (dp) {
-				const uf = island.underFloor, up = island.underPush, op = island.extraPush;
+				const uf = island.underFloor, up = island.underPush;
 				island.underFloor = (x, z, y) => (dp.active() ? dp.floor(x, z, y) : uf?.(x, z, y) ?? null);
-				island.underPush = (p, footY) => { if (dp.active()) dp.push(p, footY); else up?.(p, footY); };
-				island.extraPush = op ? (p, footY) => { op(p, footY); dp.gatePush(p, footY); } : dp.gatePush;
+				island.underPush = (p, footY) => { if (dp.active()) dp.push(p, footY); else { up?.(p, footY); dp.gatePush(p, footY); } };
 			} else world.deep = null;
 		}
 		world.kinetic = createKinetic({ scene });

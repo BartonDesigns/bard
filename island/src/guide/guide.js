@@ -117,7 +117,9 @@ export function createGuide(mount, api) {
 			if (W.magma?.tube) { const t = W.magma.tube[Math.floor(W.magma.tube.length / 2)]; out.push({ name: 'the lava tube', x: t.x, z: t.z, y: t.y + 1.5, fact: 'a rock tunnel carrying a molten stream from the vent', kind: 'island', under: true }); }
 			(W.caverns?.tunnels || []).forEach((t, i) => { const m = t[Math.floor(t.length / 2)]; out.push({ name: `sea cave ${i + 1}`, x: t[0].x, z: t[0].z, y: t[0].y + 2, fact: 'a swim-through lava cave with glowing walls', kind: 'island', under: true, mid: m }); });
 			(W.underworld?.entrances || []).forEach((e, i) => out.push({ ...e, caveEntrance: i, kind: 'island', fact: 'a walkable hillside mouth into this world’s connected underground; walk down the tunnel and return by the same route' }));
-			if (W.deep?.gate) out.push({ name: 'The Deep Gate', x: W.deep.gate.x, z: W.deep.gate.z, kind: 'island', fact: 'a ring of five singing stones round a sealed shaft; play back the phrase the ring answers with and a rope goes down into a cave with no known bottom' });
+			// (reached through the caves: the way there is the mouth nearest it, then the passage on)
+			const dg = W.deep?.gate, dv = dg?.via;
+			if (dg) out.push({ name: 'The Deep Gate', x: dv ? dv.x : dg.x, z: dv ? dv.z : dg.z, y: dv?.y, kind: 'island', fact: `a carved hall at the far end of the caves beneath the summit, ${Math.round(Math.hypot(dg.x - (dv?.x ?? dg.x), dg.z - (dv?.z ?? dg.z)))} m on underground from ${dv ? dv.name : 'the nearest cave mouth'}: go in at the mouth and keep to the passage that runs on toward the summit. Five singing stones stand round a sealed shaft; play back their phrase and a rope goes down into a cave with no known bottom` });
 			if (W.whale?.whale?.position) out.push({ name: 'the whale', x: W.whale.whale.position.x, z: W.whale.whale.position.z, fact: 'a humpback in the bay', kind: 'island' });
 			// an off-world colony's sites (planet/colony/)
 			for (const s of W.colony?.sites?.() || []) out.push({ name: s.name, x: s.x, z: s.z, y: s.y, fact: s.far ? 'an outpost of the colony, out along the rover tracks' : 'part of the colony', kind: 'colony' });
@@ -978,7 +980,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const stats = W?.underworld?.elements?.stats();
 		if (stats) say(`${stats.completed} of ${stats.sites} resonance alcoves restored. ${stats.saveError || 'Progress is saved on this device.'}`, 'note');
 		const deep = W?.deep?.info();
-		if (deep) say(deep.open ? `The Deep Gate is open. Deepest reached: ${deep.deepest} m; ${deep.waystones} waystone${deep.waystones === 1 ? '' : 's'} touched; ${deep.alcoves} deep alcove${deep.alcoves === 1 ? '' : 's'} restored.` : 'The Deep Gate is sealed: strike one of its five stones, listen, and play the phrase back.', 'note');
+		if (deep) say(deep.open ? `The Deep Gate is open. Deepest reached: ${deep.deepest} m; ${deep.waystones} waystone${deep.waystones === 1 ? '' : 's'} touched; ${deep.alcoves} deep alcove${deep.alcoves === 1 ? '' : 's'} restored.` : `The Deep Gate is sealed. It lies at the end of the caves beneath the summit${W.deep.gate.via ? ', in from ' + W.deep.gate.via.name : ''}: strike one of its five stones, listen, and play the phrase back.`, 'note');
 	}
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;

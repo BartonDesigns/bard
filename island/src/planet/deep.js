@@ -1,14 +1,17 @@
-// The Deep Gate and the Deep below it. On the surface a ring of five singing stones stands
-// round a sealed shaft: strike one and the ring answers with a phrase of four notes; play
-// it back and the lid sinks away. A rope goes down into a cave with no bottom (deepfield.js),
-// made a cube at a time as you come to it and let go behind you, its stone, light and air
-// changing band by band as you go down. Waystones take you back up; the lift at the foot of
-// the rope takes you down again to the deepest one you have touched. What you reached and
-// what you restored is kept per world.
+// The Deep Gate and the Deep below it. At the far end of a passage in the caves, beneath
+// the summit, the way widens into a carved hall: old timbering at its mouth, lamps, worn
+// steps, and five banded singing stones standing round a great stone seal in the floor.
+// Strike one and the stones answer with a phrase of four notes; play it back and the seal
+// grinds down and away. A rope goes down the shaft beneath into a cave with no bottom
+// (deepfield.js), made a cube at a time as you come to it and let go behind you, its stone,
+// light and air changing band by band as you go down. Waystones take you back up to the
+// hall; the lift at the foot of the rope takes you down again to the deepest one you have
+// touched. What you reached and what you restored is kept per world.
 //
-// The Deep lies under the island, far below its caves, in a frame of its own: its rock is
-// placed at depth y = -D and the whole of it is lifted 512 m at a time (shift) so that what
-// is drawn and walked never goes deeper than about 800 m, however far down you are.
+// The Deep hangs from the hall: its top is the foot of a 60 m shaft straight under the seal.
+// Its rock is placed at depth y = -D in a frame of its own, and the whole of it is lifted
+// 512 m at a time (shift) so that what is drawn and walked never goes more than about 600 m
+// below the hall, however far down you are.
 
 import * as THREE from 'three';
 import { mulberry32, smoothstep, clamp } from '../noise.js';
@@ -16,41 +19,61 @@ import { meshChunk } from './cavenet.js';
 import { rockMaterial, crystalMaterial, waterMaterial, lavaMaterial } from './cavemat.js';
 import { BANDS, bandIndex, hueShift, makeDeepField, LM } from './deepfield.js';
 import { ring, phrase, knock, createRipples } from './resonance.js';
+import { soundBus } from '../world/soundbus.js';
 
 const EYE = 1.68;
 const CH = 24;
-const BASE = -260, STEP = 512;
+const STEP = 512, SHAFT = 60;
 const STONE_DEG = [0, 1, 2, 4, 5];
 
-// where the gate stands: level ground near where you arrive, well clear of the caves' mouths
-export function planDeep(island, { avoid = [], holes = [] } = {}) {
-	const H = island.heightAt, r = mulberry32((island.seed >>> 0) ^ 0xd33b9a7e);
-	const sp = island.spawn || { x: 0, z: 0 }, lim = island.half * 0.8;
-	let best = null, score = 1e9;
-	for (let i = 0; i < 500; i++) {
-		const near = i < 300, a = r() * Math.PI * 2, d = near ? 40 + r() * 260 : r() * lim;
-		const x = near ? sp.x + Math.cos(a) * d : (r() * 2 - 1) * lim, z = near ? sp.z + Math.sin(a) * d : (r() * 2 - 1) * lim;
-		if (Math.abs(x) > lim || Math.abs(z) > lim) continue;
-		const y = H(x, z);
-		if (!(y > 2.5)) continue;
-		let flat = 0;
-		for (let k = 0; k < 10; k++) { const b = k / 10 * Math.PI * 2; for (const rr of [4, 9]) flat = Math.max(flat, Math.abs(H(x + Math.cos(b) * rr, z + Math.sin(b) * rr) - y)); }
-		if (flat > 1.6) continue;
-		if (island.inWater?.(x, z)) continue;
-		if (holes.some((h) => Math.hypot(h.x - x, h.z - z) < h.r + 160)) continue;
-		if (avoid.some((c) => Math.hypot(c.x - x, c.z - z) < (c.r || 0) + 14)) continue;
-		const s = flat * 30 + Math.abs(Math.hypot(x - sp.x, z - sp.z) - 110) * (near ? 1 : 3);
-		if (s < score) { score = s; best = { x, z, y }; }
+// The gate's passage: a dead end dug on from the chamber nearest under the summit, sloping
+// gently down and widening at its end into the hall. Added to the caves' plan (and its rock
+// field made again) before anything is built from it, as the realm's dungeons are.
+export function planDeep(island, plan, makeField) {
+	if (!plan?.chambers?.length || !plan.field || !makeField) return null;
+	const H = island.heightAt, pk = island.peak || { x: 0, z: 0 }, field = plan.field;
+	const cands = plan.chambers.filter((c) => c.kind !== 'village').sort((a, b) => Math.hypot(a.x - pk.x, a.z - pk.z) - Math.hypot(b.x - pk.x, b.z - pk.z));
+	for (const c of cands.slice(0, 8)) {
+		const dPk = Math.hypot(pk.x - c.x, pk.z - c.z);
+		// toward the summit; if already under it, up the steepest rise of the hill
+		const e = 8, base = dPk > 30 ? Math.atan2(pk.z - c.z, pk.x - c.x) : Math.atan2(H(c.x, c.z + e) - H(c.x, c.z - e), H(c.x + e, c.z) - H(c.x - e, c.z));
+		for (const off of [0, 0.45, -0.45, 0.9, -0.9, 1.5, -1.5, 2.3, -2.3, Math.PI]) {
+			const a = base + off, dx = Math.cos(a), dz = Math.sin(a);
+			const rim = Math.min(c.rx, c.rz) * 0.45, len = off === 0 ? clamp(dPk - rim, 42, 72) : 50;
+			const n = Math.round(len / 3), pts = [];
+			let ok = true;
+			for (let i = 0; i <= n && ok; i++) {
+				const u = i / n, along = rim + u * len, side = Math.sin(u * 5 + off * 3) * 2.2 * u * (1 - u) * 4;
+				const x = c.x + dx * along - dz * side, z = c.z + dz * along + dx * side;
+				const hall = smoothstep(0.74, 1, u), w = 2.6 + hall * 4.4, h = 3.9 + hall * 5.6;
+				const y = c.fy - u * len * 0.1;
+				if (y < 3 || H(x, z) - (y + h) < 8) ok = false;
+				// a dead end: nothing else of the caves near it once it has left its chamber
+				if (along > rim + 12 && field.cave(x, y + h * 0.5, z) < w + 4) ok = false;
+				pts.push({ x, y, z, w, h });
+			}
+			if (!ok) continue;
+			const E = pts[n], P = pts[n - 1], ex = E.x - P.x, ez = E.z - P.z, el = Math.hypot(ex, ez) || 1;
+			plan.tunnels.push({ pts, mouth: false, amp: 0.7, gate: true });
+			plan.field = makeField({ chambers: plan.chambers, tunnels: plan.tunnels, shaft: plan.shaft, boulders: plan.boulders, H, n3: plan.n3, holes: plan.holes });
+			return { x: E.x - ex / el * 0.5, z: E.z - ez / el * 0.5, y: E.y, dir: { x: ex / el, z: ez / el }, pts, chamber: c };
+		}
 	}
-	return best && { ...best, clear: { x: best.x, z: best.z, r: 14 } };
+	return null;
 }
 
 export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	const { plan, underworld: UW, isPhone = false, hint, player, mount, bodyKey } = opts;
 	const L = UW?.lighting;
 	if (!plan || !L || !UW.addGlow) return null;
-	const H = island.heightAt;
-	const F = makeDeepField(island.seed >>> 0, { cx: plan.x, cz: plan.z, isPhone });
+	const gy = UW.floor(plan.x, plan.z, plan.y + 2) ?? plan.y, BASE = gy - SHAFT;
+	const dx0 = plan.dir.x, dz0 = plan.dir.z, side = { x: -dz0, z: dx0 };
+	// the Deep's way starts straight under the seal
+	const F0 = makeDeepField(island.seed >>> 0, { cx: 0, cz: 0 }), p00 = F0.path(0);
+	const F = makeDeepField(island.seed >>> 0, { cx: plan.x - p00.x, cz: plan.z - p00.z, isPhone, shaft: SHAFT });
+	const uwFloor = (x, z, y = gy + 2) => UW.floor(x, z, y) ?? gy;
+	// the way in, for the guide: the cave mouth nearest the hall
+	const via = (UW.entrances || []).reduce((b, e) => (!b || Math.hypot(e.x - plan.x, e.z - plan.z) < Math.hypot(b.x - plan.x, b.z - plan.z) ? e : b), null);
 
 	// ---------- what is kept ----------
 	const key = 'crysis-deep-v1:' + (bodyKey || 'seed:' + (island.seed >>> 0));
@@ -59,63 +82,92 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	let saveT = 0, dirty = false;
 	const save = () => { dirty = false; try { localStorage.setItem(key, JSON.stringify(saved)); return true; } catch { return false; } };
 
-	// ---------- the gate ----------
+	// ---------- the gate hall ----------
 	const gate = new THREE.Group();
 	gate.name = 'deep-gate';
 	scene.add(gate);
 	const glowC = new THREE.Color(0.55, 0.9, 1);
-	const groundRock = new THREE.Color().setRGB(...(profile.ground?.rock || [0.42, 0.4, 0.38]), THREE.SRGBColorSpace).multiplyScalar(0.45);
+	const cw = profile.caves || {};
+	const rockC = new THREE.Color(...(cw.rock || [0.3, 0.28, 0.26]));
+	const lit = (m, k) => L.lit(m, k);
 	const r0 = mulberry32((island.seed >>> 0) ^ 0x6a7e);
-	const stones = [], spin = r0() * Math.PI * 2;
-	const menhirGeo = new THREE.CylinderGeometry(0.42, 0.62, 1, 6);
+	const stoneM = lit(new THREE.MeshStandardMaterial({ color: rockC.clone().multiplyScalar(1.3), roughness: 0.8 }), 'gatestone');
+	const woodMat = lit(new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 0.9 }), 'gatewood');
+	const stones = [];
+	const menhirGeo = new THREE.CylinderGeometry(0.4, 0.58, 1, 6);
 	menhirGeo.translate(0, 0.5, 0);
+	const head = Math.atan2(dz0, dx0);
 	for (let i = 0; i < 5; i++) {
-		const a = spin + i / 5 * Math.PI * 2, x = plan.x + Math.cos(a) * 7.5, z = plan.z + Math.sin(a) * 7.5, y = H(x, z);
-		const h = 2.4 + i * 0.22;
-		const mat = new THREE.MeshStandardMaterial({ color: groundRock, roughness: 0.75, emissive: glowC, emissiveIntensity: 0.08 });
+		// in an arc round the far side of the seal, against the hall's walls
+		const a = head + (i - 2) * 0.62, x = plan.x + Math.cos(a) * 5, z = plan.z + Math.sin(a) * 5, y = uwFloor(x, z);
+		const h = 2.3 + [0, 0.35, 0.7, 0.35, 0][i] + i * 0.05;
+		const mat = lit(new THREE.MeshStandardMaterial({ color: rockC.clone().multiplyScalar(1.1), roughness: 0.6, emissive: glowC, emissiveIntensity: 0.06 }), 'gatemenhir');
 		const m = new THREE.Mesh(menhirGeo, mat);
-		m.position.set(x, y - 0.3, z); m.scale.set(1, h, 1); m.rotation.y = a;
+		m.position.set(x, y - 0.25, z); m.scale.set(1, h, 1); m.rotation.y = -a;
 		m.userData.material175 = 'stone';
-		// the bands of a singing stone
-		const band = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.05, 4, 16), new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: 0.35 }));
-		band.rotation.x = Math.PI / 2; band.position.set(x, y + h * 0.62, z);
-		gate.add(m, band);
-		stones.push({ i, m, band, x, z, y, h, flash: 0 });
+		const bands = [];
+		for (const f of [0.35, 0.62]) {
+			const band = new THREE.Mesh(new THREE.TorusGeometry(0.52 - f * 0.12, 0.045, 4, 16), new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: 0.35 }));
+			band.rotation.x = Math.PI / 2; band.position.set(x, y - 0.25 + h * f, z);
+			gate.add(band); bands.push(band);
+		}
+		gate.add(m);
+		stones.push({ i, m, bands, x, z, y, h, flash: 0 });
 	}
-	// the lid over the shaft, and the lights of the phrase round its rim
-	const gy = H(plan.x, plan.z);
-	const lid = new THREE.Mesh(new THREE.CylinderGeometry(3.1, 3.4, 0.6, 28), new THREE.MeshStandardMaterial({ color: groundRock.clone().multiplyScalar(0.8), roughness: 0.85, emissive: glowC, emissiveIntensity: 0.03 }));
-	lid.position.set(plan.x, gy + 0.15, plan.z);
-	const glyph = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.07, 4, 40), new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: 0.4 }));
-	glyph.rotation.x = Math.PI / 2; glyph.position.set(plan.x, gy + 0.5, plan.z);
+	// the seal: a great disc of carved stone, a ring of light, the four lights of the phrase
+	const dais = new THREE.Mesh(new THREE.TorusGeometry(3.25, 0.28, 6, 40), stoneM);
+	dais.rotation.x = Math.PI / 2; dais.position.set(plan.x, gy + 0.02, plan.z);
+	const lid = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.05, 0.34, 32), lit(new THREE.MeshStandardMaterial({ color: rockC.clone().multiplyScalar(0.9), roughness: 0.85, emissive: glowC, emissiveIntensity: 0.03 }), 'gatelid'));
+	lid.position.set(plan.x, gy - 0.12, plan.z);
+	const glyph = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.06, 4, 48), new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: 0.4 }));
+	glyph.rotation.x = Math.PI / 2; glyph.position.set(plan.x, gy + 0.07, plan.z);
 	const marks = [];
 	for (let i = 0; i < 4; i++) {
-		const a = i / 4 * Math.PI * 2 + spin, b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: 0.15 }));
-		b.position.set(plan.x + Math.cos(a) * 1.4, gy + 0.55, plan.z + Math.sin(a) * 1.4);
+		const a = head + Math.PI + (i - 1.5) * 0.5, b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), new THREE.MeshBasicMaterial({ color: glowC, transparent: true, opacity: 0.15 }));
+		b.position.set(plan.x + Math.cos(a) * 1.3, gy + 0.12, plan.z + Math.sin(a) * 1.3);
 		marks.push(b);
 	}
-	// the open shaft: dark, a glowing rim, a rope from a tripod
+	// the open shaft: dark, a glowing rim, a windlass and its rope going down to the Deep
 	const hole = new THREE.Group();
-	const dark = new THREE.Mesh(new THREE.CircleGeometry(3.1, 32), new THREE.MeshBasicMaterial({ color: 0x000000, polygonOffset: true, polygonOffsetFactor: -4 }));
-	dark.rotation.x = -Math.PI / 2; dark.position.set(plan.x, gy + 0.06, plan.z);
-	const rim = new THREE.Mesh(new THREE.TorusGeometry(3.15, 0.12, 6, 40), new THREE.MeshBasicMaterial({ color: glowC }));
-	rim.rotation.x = Math.PI / 2; rim.position.set(plan.x, gy + 0.08, plan.z);
-	const woodMat = new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 0.9 });
-	for (let i = 0; i < 3; i++) {
-		const a = i / 3 * Math.PI * 2 + spin, leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 4.4, 5), woodMat);
-		leg.position.set(plan.x + Math.cos(a) * 1.5, gy + 2, plan.z + Math.sin(a) * 1.5);
-		leg.lookAt(plan.x, gy + 4.2, plan.z); leg.rotateX(Math.PI / 2);
-		hole.add(leg);
+	const dark = new THREE.Mesh(new THREE.CircleGeometry(2.95, 32), new THREE.MeshBasicMaterial({ color: 0x000000, polygonOffset: true, polygonOffsetFactor: -4 }));
+	dark.rotation.x = -Math.PI / 2; dark.position.set(plan.x, gy + 0.03, plan.z);
+	const rim = new THREE.Mesh(new THREE.TorusGeometry(2.98, 0.07, 6, 40), new THREE.MeshBasicMaterial({ color: glowC }));
+	rim.rotation.x = Math.PI / 2; rim.position.set(plan.x, gy + 0.06, plan.z);
+	const post = new THREE.CylinderGeometry(0.11, 0.13, 3.6, 6);
+	for (const s of [-1, 1]) { const m = new THREE.Mesh(post, woodMat); m.position.set(plan.x + side.x * s * 3.4, gy + 1.8, plan.z + side.z * s * 3.4); hole.add(m); }
+	const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 7, 8), woodMat);
+	bar.position.set(plan.x, gy + 3.4, plan.z); bar.rotation.set(0, -Math.atan2(side.z, side.x), Math.PI / 2);
+	const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, SHAFT + 3.4, 4), new THREE.MeshStandardMaterial({ color: 0xc8b48a, roughness: 1 }));
+	rope.position.set(plan.x, gy + 3.4 - (SHAFT + 3.4) / 2, plan.z);
+	hole.add(dark, rim, bar, rope);
+	// the mouth of the hall: old timbering, a step or two worn into the floor, two lamps
+	const pts = plan.pts, mi = Math.round(pts.length * 0.62), M = pts[Math.min(pts.length - 2, mi)], Mn = pts[Math.min(pts.length - 1, mi + 1)];
+	const tdx = Mn.x - M.x, tdz = Mn.z - M.z, tl = Math.hypot(tdx, tdz) || 1, sx = -tdz / tl, sz = tdx / tl;
+	const lamps = [];
+	for (const [k, back] of [[0, 0], [1, -4]]) {
+		const cx = M.x + tdx / tl * back, cz = M.z + tdz / tl * back, cy = uwFloor(cx, cz, M.y + 2), w = M.w * 0.85;
+		for (const s of [-1, 1]) { const m = new THREE.Mesh(post, woodMat); m.scale.y = 1.05; m.position.set(cx + sx * s * w, cy + 1.8, cz + sz * s * w); gate.add(m); }
+		const lintel = new THREE.Mesh(new THREE.BoxGeometry(w * 2 + 0.6, 0.28, 0.32), woodMat);
+		lintel.position.set(cx, cy + 3.7, cz); lintel.rotation.y = -Math.atan2(sz, sx);
+		gate.add(lintel);
+		if (k === 0) for (const s of [-1, 1]) {
+			const lx = cx + sx * s * (w - 0.3), lz = cz + sz * s * (w - 0.3), ly = cy + 2.9;
+			const lamp = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 1), new THREE.MeshBasicMaterial({ color: 0xffc070 }));
+			lamp.position.set(lx, ly, lz); gate.add(lamp);
+			lamps.push(UW.addGlow(lx, ly, lz, 13, [1, 0.68, 0.38], 0.55, 0.25));
+		}
 	}
-	const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 9, 4), new THREE.MeshStandardMaterial({ color: 0xc8b48a, roughness: 1 }));
-	rope.position.set(plan.x, gy - 0.3, plan.z);
-	hole.add(dark, rim, rope);
-	gate.add(lid, glyph, ...marks, hole);
+	for (let i = 0; i < 3; i++) {
+		const t = (pts.length - 1) * 0.62 + 1.2 + i * 0.9, a = pts[Math.floor(t)], b = pts[Math.min(pts.length - 1, Math.floor(t) + 1)], f = t - Math.floor(t);
+		const x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f, y = uwFloor(x, z, a.y + 2);
+		const st = new THREE.Mesh(new THREE.BoxGeometry(a.w * 1.3, 0.16, 0.7), stoneM);
+		st.position.set(x, y + 0.02, z); st.rotation.y = -Math.atan2(sz, sx);
+		gate.add(st);
+	}
+	gate.add(dais, lid, glyph, ...marks, hole);
 	hole.visible = saved.open;
 	if (saved.open) { lid.visible = false; glyph.visible = false; for (const b of marks) b.visible = false; }
-	const gateLight = new THREE.PointLight(glowC, 0, 18, 1.6);
-	gateLight.position.set(plan.x, gy + 2.5, plan.z);
-	gate.add(gateLight);
+	const sealGlow = UW.addGlow(plan.x, gy + 2.2, plan.z, 14, [glowC.r, glowC.g, glowC.b], 0.2);
 	const surfaceRipples = createRipples(gate, 6);
 	// the call: four of the five, never the same twice running
 	const call = [];
@@ -134,7 +186,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		if (saved.open || puzzle.opening) return;
 		if (!puzzle.heard) {
 			puzzle.heard = true; puzzle.at = 0;
-			hint?.('The ring answers with a phrase of four. Strike the stones in the same order.', 6000);
+			hint?.('The stones answer with a phrase of four. Strike them in the same order.', 6000);
 			playCall(0.9);
 			return;
 		}
@@ -145,7 +197,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		} else {
 			puzzle.at = 0;
 			setTimeout(knock, 150);
-			if (performance.now() - puzzle.wrongAt > 4000) hint?.('Not that one. The ring plays its phrase again.', 3500);
+			if (performance.now() - puzzle.wrongAt > 4000) hint?.('Not that one. The stones play their phrase again.', 3500);
 			puzzle.wrongAt = performance.now();
 			playCall(1.1);
 		}
@@ -153,9 +205,22 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	function openGate() {
 		puzzle.opening = true;
 		setTimeout(() => phrase([0, 2, 4, 7, 9], 0.16, { vel: 0.55, dur: 2.8 }), 350);
-		surfaceRipples.spawn(tmpV.set(plan.x, gy + 0.1, plan.z), glowC, 22, 2.6);
+		grind();
+		surfaceRipples.spawn(tmpV.set(plan.x, gy + 0.1, plan.z), glowC, 16, 2.6);
 		saved.open = true; save();
-		hint?.('The Deep Gate opens. A rope goes down into the dark: there is no known bottom.', 6500);
+		hint?.('The seal grinds down and away. A rope hangs into the shaft beneath: there is no known bottom.', 6500);
+	}
+	// stone on stone: a long low grinding as the seal goes down
+	function grind() {
+		const S = soundBus();
+		if (!S) return;
+		const ctx = S.ctx, t = ctx.currentTime, src = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+		const n = ctx.sampleRate * 3, buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+		let v = 0;
+		for (let i = 0; i < n; i++) { v = v * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = v * (0.6 + 0.4 * Math.sin(i / ctx.sampleRate * 23)); }
+		src.buffer = buf; lp.type = 'lowpass'; lp.frequency.value = 320;
+		g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1.6, t + 0.4); g.gain.exponentialRampToValueAtTime(0.0001, t + 3);
+		src.connect(lp).connect(g).connect(S.out); src.start(t);
 	}
 
 	// ---------- the deep ----------
@@ -224,7 +289,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 			const R = Math.max(m.rx, m.rz) + 4;
 			add(m.ox - (m.kind === 'chasm' ? 28 : R), m.ox + (m.kind === 'chasm' ? 28 : R), m.y - (m.kind === 'chasm' ? 36 : 5), m.y + m.h + 5, m.oz - (m.kind === 'chasm' ? 28 : R), m.oz + (m.kind === 'chasm' ? 28 : R));
 		}
-		if (Dp < 60) { const p = F.path(0); add(p.x - 13, p.x + 13, -4, 32, p.z - 13, p.z + 13); }
+		if (Dp < 60) { const p = F.path(0); add(p.x - 13, p.x + 13, -4, 12, p.z - 13, p.z + 13); add(p.x - 4, p.x + 4, 0, SHAFT + 16, p.z - 4, p.z + 4); }
 		// only what is within reach of you
 		for (const k of out) {
 			const [i, j, kk] = k.split(',').map(Number);
@@ -512,8 +577,6 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	let landingTargets = [];
 	{
 		const p = F.path(0), y = F.floor(p.x, p.z, 3) ?? 0;
-		const rp = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 34, 4), rope.material);
-		rp.position.set(p.x, y + 17, p.z);
 		const cage = new THREE.Group();
 		const iron = new THREE.MeshStandardMaterial({ color: 0x3b3f44, roughness: 0.5, metalness: 0.6 });
 		L.lit(iron, 'deepiron');
@@ -523,9 +586,9 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		const chain = new THREE.Mesh(cylGeo, iron); chain.scale.set(0.05, 30, 0.05); chain.position.y = 17.6; cage.add(chain);
 		const [tx, tz] = F.tangent(0), cx = p.x - tz * 4.5, cz = p.z + tx * 4.5;
 		cage.position.set(cx, F.floor(cx, cz, 3) ?? y, cz);
-		landing.add(rp, cage);
+		landing.add(cage);
 		landingTargets = [
-			{ local: new THREE.Vector3(p.x, y + 1.3, p.z), r: 0.5, label: 'Climb the rope up', icon: '⬆', color: 0xffe2b0, reach: 3, act: () => leave() },
+			{ local: new THREE.Vector3(p.x, y + 1.3, p.z), r: 0.5, label: 'Climb the rope up', icon: '⬆', color: 0xffe2b0, reach: 3, act: () => climbUp() },
 			{ local: new THREE.Vector3(cx, cage.position.y + 1.3, cz), r: 1.1, label: 'Take the lift down', icon: '⬇', color: 0xaef0ff, reach: 3, act: () => {
 				const L1 = Math.max(-1, ...saved.ways);
 				if (L1 < 0) { hint?.('The lift goes down only as far as a waystone you have touched. Walk down and find one.', 5000); return; }
@@ -568,13 +631,16 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	const vp = new THREE.Vector3();
 	const floor = (x, z, y) => { const g = vFloor(x, z, y - shift); return g == null ? y - 100 : g + shift; };
 	const push = (p, footY) => { vp.set(p.x, p.y - shift, p.z); vPush(vp, footY - shift); p.x = vp.x; p.z = vp.z; };
-	// the gate's stones stand in the way on the surface
+	// in the hall: its stones stand in the way, and the open shaft is not walked into
 	function gatePush(p, footY) {
-		if (Math.abs(p.x - plan.x) > 12 || Math.abs(p.z - plan.z) > 12) return;
+		if (climb || Math.abs(p.x - plan.x) > 12 || Math.abs(p.z - plan.z) > 12 || Math.abs(footY - gy) > 4) return;
 		for (const s of stones) {
-			if (footY > s.y + s.h) continue;
-			const dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz), min = 0.95;
+			const dx = p.x - s.x, dz = p.z - s.z, d = Math.hypot(dx, dz), min = 0.9;
 			if (d < min && d > 1e-4) { p.x = s.x + dx / d * min; p.z = s.z + dz / d * min; }
+		}
+		if (saved.open) {
+			const dx = p.x - plan.x, dz = p.z - plan.z, d = Math.hypot(dx, dz), min = 3.1;
+			if (d < min) { const ux = d > 1e-4 ? dx / d : -dx0, uz = d > 1e-4 ? dz / d : -dz0; p.x = plan.x + ux * min; p.z = plan.z + uz * min; }
 		}
 	}
 
@@ -598,8 +664,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		const P = player?.();
 		if (!P) return 'no player';
 		const was = active;
-		active = true; group.visible = true;
-		if (!was) { prevInside = UW.extraInside; UW.extraInside = () => Math.max(prevInside?.() || 0, active ? 1 : 0); }
+		if (!was) activate();
 		const n = Math.max(0, Math.floor(Math.max(0, D) / STEP));
 		shift = BASE + STEP * n; group.position.y = shift; group.updateMatrixWorld(true);
 		let x, z, yaw;
@@ -617,22 +682,70 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		return `at ${Math.round(depth)} m`;
 	}
 	let prevInside = null;
-	function enter() { veilTo('Down the rope…', () => { placeAt(0); hint?.(`The Deep · ${BANDS[0].name}\nWaystones take you back up. Your deepest is ${Math.round(saved.deepest)} m.`, 6000); }); }
+	function activate() {
+		if (active) return;
+		active = true; group.visible = true;
+		prevInside = UW.extraInside; UW.extraInside = () => Math.max(prevInside?.() || 0, active ? 1 : 0);
+	}
+	// on the rope: down the shaft from the hall to the Deep's first chamber, or back up
+	let climb = null;
+	const ropeAt = () => ({ x: plan.x - dx0 * 0.55, z: plan.z - dz0 * 0.55 });
+	function climbDown() {
+		const P = player?.();
+		if (!P || climb || busy) return;
+		activate();
+		shift = BASE; group.position.y = shift; group.updateMatrixWorld(true);
+		const p0 = F.path(0), lf = F.floor(p0.x, p0.z, 3) ?? 0;
+		marksNear(0);
+		buildNear(new THREE.Vector3(p0.x, lf + EYE, p0.z), isPhone ? 26 : 34);
+		const at = ropeAt();
+		P.locked = true; P.flying = false; P.vel.set(0, 0, 0);
+		P.yaw = Math.atan2(-dx0, -dz0); P.pitch = -0.35;
+		climb = { up: false, t: 0, dur: 6.5, x: at.x, z: at.z, from: gy + EYE, to: lf + shift + EYE };
+		hint?.('Down the rope, hand under hand…', 3000);
+	}
+	function climbUp() {
+		const P = player?.();
+		if (!P || climb || busy) return;
+		const at = ropeAt();
+		P.locked = true; P.vel.set(0, 0, 0); P.pitch = 0.35;
+		climb = { up: true, t: 0, dur: 6.5, x: at.x, z: at.z, from: P.pos.y, to: gy + EYE };
+	}
+	function stepClimb(dt, P) {
+		climb.t = Math.min(1, climb.t + dt / climb.dur);
+		const k = smoothstep(0, 1, climb.t);
+		P.pos.set(climb.x, climb.from + (climb.to - climb.from) * k, climb.z);
+		P.vel.set(0, 0, 0);
+		camera.position.copy(P.pos);
+		camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ');
+		if (climb.t < 1) return;
+		const up = climb.up;
+		climb = null; P.locked = false;
+		if (up) { deactivate(); standInHall(P); hint?.('Back in the gate hall.', 2500); }
+		else {
+			lastSafe = { x: P.pos.x, y: P.pos.y - EYE - shift, z: P.pos.z };
+			// off the rope, a step onto the floor
+			const [tx, tz] = F.tangent(0);
+			P.pos.x += tx * 1.6; P.pos.z += tz * 1.6;
+			P.yaw = Math.atan2(-tx, -tz); P.pitch = -0.08;
+			hint?.(`The Deep · ${BANDS[0].name}\nWaystones take you back up to the hall. Your deepest is ${Math.round(saved.deepest)} m.`, 6000);
+		}
+	}
+	function standInHall(P, d = 4.4) {
+		const x = plan.x - dx0 * d, z = plan.z - dz0 * d;
+		P.flying = false; P.vel.set(0, 0, 0);
+		P.pos.set(x, uwFloor(x, z) + EYE, z);
+		P.yaw = Math.atan2(-(plan.x - x), -(plan.z - z)); P.pitch = -0.15;
+		camera.position.copy(P.pos);
+		UW.settle?.();
+	}
 	function leave() {
-		veilTo('Up into the light…', () => {
-			deactivate();
-			const P = player?.();
-			if (!P) return;
-			const a = spin + Math.PI / 5, x = plan.x + Math.cos(a) * 4.6, z = plan.z + Math.sin(a) * 4.6;
-			P.flying = false; P.vel.set(0, 0, 0);
-			P.pos.set(x, H(x, z) + EYE, z); P.yaw = Math.atan2(x - plan.x, z - plan.z); P.pitch = -0.05;
-			camera.position.copy(P.pos);
-			UW.settle?.();
-		});
+		veilTo('Up to the gate hall…', () => { deactivate(); const P = player?.(); if (P) standInHall(P); });
 	}
 	function deactivate() {
 		if (!active) return;
 		active = false; group.visible = false; meter.style.display = 'none';
+		if (climb) { climb = null; const P = player?.(); if (P) P.locked = false; }
 		UW.extraInside = prevInside; prevInside = null;
 		for (const c of chunks.values()) dropChunk(c);
 		chunks.clear();
@@ -667,39 +780,42 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		if (disposed) return;
 		t0 = t;
 		const P = player?.();
-		// the gate
-		const dg = Math.hypot(camera.position.x - plan.x, camera.position.z - plan.z);
-		gate.visible = dg < 600 && !active;
+		// the gate hall
+		const dg = Math.hypot(camera.position.x - plan.x, camera.position.y - gy, camera.position.z - plan.z);
+		gate.visible = dg < 160;
 		if (gate.visible) {
 			const band = shared.uBass?.value || 0;
 			for (const s of stones) {
 				s.flash *= Math.exp(-dt * 2.6);
-				s.m.material.emissiveIntensity = 0.08 + s.flash * 1.1 + (saved.open ? 0.25 : 0) + band * 0.1;
-				s.band.material.opacity = 0.3 + s.flash * 0.7;
+				s.m.material.emissiveIntensity = 0.06 + s.flash * 1.1 + (saved.open ? 0.22 : 0) + band * 0.1;
+				for (const b of s.bands) b.material.opacity = 0.3 + s.flash * 0.7;
 			}
 			if (puzzle.opening && puzzle.sink < 1) {
-				puzzle.sink = Math.min(1, puzzle.sink + dt / 3);
+				puzzle.sink = Math.min(1, puzzle.sink + dt / 3.2);
 				const k = smoothstep(0, 1, puzzle.sink);
-				lid.position.y = gy + 0.15 - k * 3.5; lid.rotation.y = k * 2.5;
+				lid.position.y = gy - 0.12 - k * 2.6; lid.rotation.y = k * 1.6;
 				glyph.material.opacity = 0.4 + Math.sin(k * Math.PI) * 0.6;
-				hole.visible = k > 0.2;
+				hole.visible = k > 0.15;
 				if (puzzle.sink >= 1) { lid.visible = false; glyph.visible = false; for (const b of marks) b.visible = false; }
 			}
 			marks.forEach((b, i) => { b.material.opacity = i < puzzle.at ? 0.95 : 0.15; });
 			rim.material.color.copy(glowC).multiplyScalar(0.6 + 0.4 * Math.sin(t * 1.7));
-			gateLight.intensity = saved.open ? 2.2 : puzzle.at * 0.6 + stones.reduce((a, s) => a + s.flash, 0) * 1.5;
-			if (dg < 24 && !puzzle.announced) { puzzle.announced = true; hint?.(saved.open ? 'The Deep Gate. The rope goes down into the Deep.' : 'The Deep Gate: five singing stones round a sealed shaft. Strike one and listen.', 6000); }
-			if (dg > 60) puzzle.announced = false;
+			// (the dark over the shaft only from above: from below the shaft is open)
+			dark.visible = !active;
+			sealGlow.k = saved.open ? 0.7 : 0.15 + puzzle.at * 0.12 + stones.reduce((a, s) => a + s.flash, 0) * 0.4;
+			if (dg < 16 && !active && !puzzle.announced) { puzzle.announced = true; hint?.(saved.open ? 'The Deep Gate. The rope goes down into the Deep.' : 'The Deep Gate: five singing stones round a great sealed stone. Strike one and listen.', 6000); }
+			if (dg > 40) puzzle.announced = false;
 			surfaceRipples.update(dt);
 		}
+		if (climb && P) stepClimb(dt, P);
 		backdrop.visible = active;
 		if (!active) return;
 		backdrop.position.copy(camera.position);
 		backdrop.material.color.copy(fogC);
 		// teleported away: the deep lets you go
-		if (P && (P.pos.y > BASE + 140 || Math.hypot(P.pos.x - plan.x, P.pos.z - plan.z) > 700)) { deactivate(); return; }
+		if (P && !climb && (P.pos.y > BASE + SHAFT + 20 || Math.hypot(P.pos.x - plan.x, P.pos.z - plan.z) > 700)) { deactivate(); return; }
 		// keep what is drawn within reach of the origin: lift the deep 512 m at a time
-		if (P) {
+		if (P && !climb) {
 			const real = P.pos.y - EYE;
 			let d = 0;
 			if (real < BASE - STEP - 40) d = STEP; else if (real > BASE + 40 && shift > BASE) d = -STEP;
@@ -732,7 +848,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		saveT -= dt;
 		if (dirty && saveT <= 0) { saveT = 2; save(); }
 		// a fall: from the bridge into the chasm, or out of the rock altogether
-		if (P) {
+		if (P && !climb) {
 			const foot = vc.y - EYE;
 			safeT -= dt;
 			if (P.grounded && safeT <= 0) { safeT = 0.5; const f = F.floor(vc.x, vc.z, foot + 0.5); if (f != null && Math.abs(f - foot) < 0.6) lastSafe = { x: vc.x, y: foot, z: vc.z }; }
@@ -750,13 +866,13 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	const romanOf = (n) => ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][(n - 1) % 10] + (n > 10 ? '·' + Math.ceil(n / 10) : '');
 
 	// ---------- what the strike prompt offers ----------
-	const gateTargets = stones.map((s) => ({ pos: new THREE.Vector3(s.x, s.y + s.h * 0.55, s.z), r: 0.75, mesh: s.m, color: 0xbff6ff, label: 'Strike the stone', icon: '🔔', reach: 3.4, act: () => strikeGate(s) }));
-	const descend = { pos: new THREE.Vector3(plan.x, gy + 1.2, plan.z), r: 2.4, label: 'Climb down into the Deep', icon: '⬇', color: 0xaef0ff, reach: 2.5, act: () => enter() };
+	const gateTargets = stones.map((s) => ({ pos: new THREE.Vector3(s.x, s.y + s.h * 0.55, s.z), r: 0.7, mesh: s.m, color: 0xbff6ff, label: 'Strike the stone', icon: '🔔', reach: 3.4, act: () => strikeGate(s) }));
+	const descend = { pos: new THREE.Vector3(plan.x, gy + 0.9, plan.z), r: 2.6, label: 'Climb down the rope into the Deep', icon: '⬇', color: 0xaef0ff, reach: 2.4, act: () => climbDown() };
 	const wp = new THREE.Vector3();
 	function targets() {
-		if (disposed || busy) return [];
+		if (disposed || busy || climb) return [];
 		if (!active) {
-			if (Math.hypot(camera.position.x - plan.x, camera.position.z - plan.z) > 14) return [];
+			if (Math.hypot(camera.position.x - plan.x, camera.position.y - gy - EYE, camera.position.z - plan.z) > 14) return [];
 			return saved.open && puzzle.sink >= 1 ? [...gateTargets, descend] : gateTargets;
 		}
 		const out = [];
@@ -774,6 +890,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		scene.remove(gate, group, backdrop);
 		backdrop.geometry.dispose(); backdrop.material.dispose();
 		gate.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); });
+		for (const g of [...lamps, sealGlow]) g.k = 0;
 		for (const m of mats.values()) m.dispose();
 		for (const m of propMats.values()) m.dispose();
 		for (const g of Object.values(propGeo)) g.dispose();
@@ -785,15 +902,17 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	}
 
 	return {
-		gate: { x: plan.x, z: plan.z, y: gy },
+		gate: { x: plan.x, z: plan.z, y: gy, via: via && { name: via.name, x: via.x, z: via.z, y: via.y } },
 		active: () => active,
 		inside: () => (active ? 1 : 0),
 		floor, push, gatePush, update, targets, dispose,
 		// for the guide and the tests
-		info: () => ({ open: saved.open, active, depth: Math.round(depth), deepest: saved.deepest, band: BANDS[bandIndex(depth)].name, waystones: saved.ways.length, alcoves: restored(), shift, chunks: chunks.size, meshes: [...chunks.values()].filter((c) => c.mesh).length, fine: [...chunks.values()].filter((c) => c.mesh && c.v === VF).length, tris: [...chunks.values()].reduce((s, c) => s + (c.mesh ? c.mesh.geometry.index.count / 3 : 0), 0), landmarks: [...built.values()].map((mk) => mk.m.kind + '@' + Math.round(mk.m.D)), heard: puzzle.heard, progress: puzzle.at, time: t0 }),
+		info: () => ({ open: saved.open, active, depth: Math.round(depth), deepest: saved.deepest, band: BANDS[bandIndex(depth)].name, waystones: saved.ways.length, alcoves: restored(), shift, chunks: chunks.size, meshes: [...chunks.values()].filter((c) => c.mesh).length, fine: [...chunks.values()].filter((c) => c.mesh && c.v === VF).length, tris: [...chunks.values()].reduce((s, c) => s + (c.mesh ? c.mesh.geometry.index.count / 3 : 0), 0), landmarks: [...built.values()].map((mk) => mk.m.kind + '@' + Math.round(mk.m.D)), heard: puzzle.heard, progress: puzzle.at, climbing: !!climb, gate: { x: Math.round(plan.x), y: Math.round(gy), z: Math.round(plan.z) }, time: t0 }),
 		// Crysis.deep('gate' | 'open' | depth): stand at the gate, open it, or go to a depth
 		go(where) {
-			if (where === 'gate') { deactivate(); const P = player?.(); if (!P) return 'no player'; const a = spin + Math.PI / 5, x = plan.x + Math.cos(a) * 11, z = plan.z + Math.sin(a) * 11; P.flying = false; P.vel.set(0, 0, 0); P.pos.set(x, H(x, z) + EYE, z); P.yaw = Math.atan2(x - plan.x, z - plan.z); P.pitch = -0.12; camera.position.copy(P.pos); return 'at the Deep Gate'; }
+			if (where === 'gate') { deactivate(); const P = player?.(); if (!P) return 'no player'; standInHall(P, 7); return 'in the gate hall'; }
+			if (where === 'down') { climbDown(); return 'climbing down'; }
+			if (where === 'up') { climbUp(); return 'climbing up'; }
 			if (where === 'open') { if (!saved.open) { puzzle.opening = true; puzzle.sink = 0.999; saved.open = true; save(); } return 'open'; }
 			const D = Math.max(0, +where || 0);
 			const L1 = Math.floor((D - 45) / LM), m = F.landmark(L1);

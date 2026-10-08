@@ -58,20 +58,28 @@ export function createBloom(renderer, { isPhone = false } = {}) {
 	function post(k) {
 		S.k = k;
 		if (!S.on || k < 0.02) return;
-		targets();
 		const prev = renderer.getRenderTarget(), auto = renderer.autoClear;
-		renderer.copyFramebufferToTexture(fb);
-		renderer.autoClear = false;
-		U.uTexel.value.set(1 / fb.image.width, 1 / fb.image.height);
-		pass(bright, fb, rtA);
-		U.uTexel.value.set(1 / rtA.width, 1 / rtA.height);
-		for (const s of [1, 2.6]) {
-			U.uDir.value.set(s, 0); pass(blur, rtA.texture, rtB);
-			U.uDir.value.set(0, s); pass(blur, rtB.texture, rtA);
+		// (whatever goes wrong, the frame is handed back as it was: never a target left bound)
+		try {
+			targets();
+			renderer.copyFramebufferToTexture(fb);
+			renderer.autoClear = false;
+			U.uTexel.value.set(1 / fb.image.width, 1 / fb.image.height);
+			pass(bright, fb, rtA);
+			U.uTexel.value.set(1 / rtA.width, 1 / rtA.height);
+			for (const s of [1, 2.6]) {
+				U.uDir.value.set(s, 0); pass(blur, rtA.texture, rtB);
+				U.uDir.value.set(0, s); pass(blur, rtB.texture, rtA);
+			}
+			U.uK.value = k * 0.9;
+			pass(comp, rtA.texture, prev);
+		} catch (err) {
+			S.on = false;
+			console.warn('[arch] glow off', err);
+		} finally {
+			renderer.setRenderTarget(prev);
+			renderer.autoClear = auto;
 		}
-		U.uK.value = k * 0.9;
-		pass(comp, rtA.texture, prev);
-		renderer.autoClear = auto;
 	}
 	// Crysis.archGlow(): on / off / a threshold
 	function control(v) {

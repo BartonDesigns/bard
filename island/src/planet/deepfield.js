@@ -32,7 +32,7 @@ export const LM = 130;          // metres of depth between landmarks
 const DROP = 11;                // metres of depth per radian of the winding: 69 m a turn
 const TURN = DROP * Math.PI * 2;
 
-export function makeDeepField(seed, { cx = 0, cz = 0, isPhone = false } = {}) {
+export function makeDeepField(seed, { cx = 0, cz = 0, isPhone = false, shaft = 40 } = {}) {
 	const n3 = makeNoise3((seed ^ 0xdee95eed) >>> 0);
 	const n1 = (t, o) => n3(t, o, 0.37);
 	// the gallery: its axis wanders, its radius breathes, its bore widens and narrows
@@ -99,7 +99,7 @@ export function makeDeepField(seed, { cx = 0, cz = 0, isPhone = false } = {}) {
 	function solid(x, y, z) {
 		out.kind = 0;
 		const D = -y;
-		if (D < -40) return 30;
+		if (D < -shaft - 18) return 30;
 		const geoK = smoothstep(2150, 2350, D);
 		let d = 1e9;
 		// the gallery: the turns above and below this point
@@ -145,11 +145,11 @@ export function makeDeepField(seed, { cx = 0, cz = 0, isPhone = false } = {}) {
 			for (const c of m.cols) e = Math.max(e, -(Math.hypot(x - c.x, z - c.z) - c.r));
 			d = Math.min(d, e);
 		}
-		// the landing under the gate: a round chamber with a shaft going up into the dark
+		// the landing under the gate: a round chamber, and the shaft up to the gate's floor
 		if (D < 40) {
 			const p = path(0), dx = x - p.x, dz = z - p.z, v = y;
 			const e = Math.max((Math.sqrt((dx / 11) ** 2 + (dz / 11) ** 2 + ((v - 3) / 7) ** 2) - 1) * 7, -v);
-			const shaftE = Math.max(Math.hypot(dx, dz) - 3, -v - 0.5, v - 40);
+			const shaftE = Math.max(Math.hypot(dx, dz) - 3, -v - 0.5, v - shaft - 14);
 			d = Math.min(d, e, shaftE);
 		}
 		if (d > 9) return d;
