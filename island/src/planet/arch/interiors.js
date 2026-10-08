@@ -255,15 +255,26 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 			const span = ((R.a1 - R.a0) % TAU + TAU) % TAU || TAU, a = R.a0 + span * 0.12, rm = R.r0 + (R.r1 - R.r0) * 0.38;
 			at = [Math.sin(a) * rm, Math.cos(a) * rm];
 			to = [Math.sin(a + Math.min(span * 0.5, 1.6)) * rm, Math.cos(a + Math.min(span * 0.5, 1.6)) * rm];
+			if (R.kind === 'crown') { at = [Math.sin(a) * (V.r - 1.5), Math.cos(a) * (V.r - 1.5)]; to = [0, 0]; }
 		} else {
 			const zc = (R.z0 + R.z1) / 2;
 			at = [R.x0 + 1.0, zc + (R.z1 - R.z0) * 0.22];
 			to = [R.x1, zc - (R.z1 - R.z0) * 0.1];
 			if (R.kind === 'living') { at = [R.x0 + 0.8, R.z0 + (R.z1 - R.z0) * 0.3]; to = [R.x1 - 1, R.z1]; }
 		}
-		const [wx, wz] = V.F.p(at[0], at[1]), [tx, tz] = V.F.p(to[0], to[1]);
 		if (!V.built) build(V);
-		return { x: wx, y: V.F.y + y, z: wz, yaw: Math.atan2(-(tx - wx), -(tz - wz)), pitch: V.domeR ? 0.3 : 0.02, name: `${opts.settlement} · ${R.name}`, building: B.name, kind: R.kind, h: +V.h.toFixed(1), level: V.i, levels: B.vols.length };
+		// (a spot clear of the furniture and the pools: nudged along toward the view until it is)
+		const clear = (x, z) => !V.dyn.box.some((b) => Math.hypot(x - b.x, z - b.z) < Math.hypot(b.hw, b.hd) + 1.2) && !V.dyn.cuts.some((c) => inPiece(c.r != null ? { ...c, r: c.r + 1 } : { ...c, hw: c.hw + 1, hd: c.hd + 1 }, x, z));
+		if (!clear(at[0], at[1])) {
+			// (else the clearest of a few spots near the room's near end, looking down it)
+			const c = [];
+			if (V.round) for (let k = 0; k < 16; k++) { const a = k / 16 * TAU, r = V.r * (k % 2 ? 0.55 : 0.75); c.push([Math.sin(a) * r, Math.cos(a) * r]); }
+			else for (const u of [0.05, 0.12, 0.2, 0.3]) for (const v of [0.5, 0.35, 0.65, 0.2, 0.8]) c.push([R.x0 + (R.x1 - R.x0) * u, R.z0 + (R.z1 - R.z0) * v]);
+			const k = c.findIndex(([x, z]) => clear(x, z));
+			if (k >= 0) { at = c[k]; to = V.round ? [-at[0] * 0.6, -at[1] * 0.6] : [R.x1, at[1] * 0.5]; }
+		}
+		const [wx, wz] = V.F.p(at[0], at[1]), [tx, tz] = V.F.p(to[0], to[1]);
+		return { x: wx, y: V.F.y + y, z: wz, yaw: Math.atan2(-(tx - wx), -(tz - wz)), pitch: V.domeR ? 0.55 : 0.02, name: `${opts.settlement} · ${R.name}`, building: B.name, kind: R.kind, h: +V.h.toFixed(1), level: V.i, levels: B.vols.length };
 	}
 	const indoors = () => !!here;
 	function dispose() {

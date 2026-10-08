@@ -163,7 +163,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 				float h = max(d.y, 0.0);
 				vec3 col = mix(uSkyHor, uSkyZen, pow(h, 0.5));
 				// a world's own dusk: magenta at the horizon, violet, deep indigo overhead
-				if (uDusk.x > 0.0) col = mix(col, mix(mix(vec3(0.78, 0.2, 0.42), vec3(0.24, 0.08, 0.4), smoothstep(0.0, 0.2, h)), vec3(0.015, 0.02, 0.085), smoothstep(0.14, 0.62, h)) * uDusk.y, uDusk.x);
+				if (uDusk.x > 0.0) col = mix(col, mix(mix(vec3(1.0, 0.12, 0.42), vec3(0.3, 0.04, 0.46), smoothstep(0.0, 0.16, h)), vec3(0.008, 0.01, 0.06), smoothstep(0.1, 0.5, h)) * uDusk.y, uDusk.x);
 				float sd = max(dot(d, uSunDir), 0.0);
 				col += uSunColor * (pow(sd, 12.0) * 0.18 + pow(sd, 3.0) * 0.06) * (1.0 - uNight);
 				col += uSunColor * smoothstep(0.9993, 0.9997, sd) * 18.0 * (1.0 - uNight);

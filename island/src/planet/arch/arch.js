@@ -794,6 +794,8 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		{
 			const k = 1 - THREE.MathUtils.smoothstep(sy, -0.03, 0.22), b = 0.3 + 0.7 * THREE.MathUtils.smoothstep(sy, -0.38, -0.06);
 			duskU.value.set(k * 0.92, b, 0, 0);
+			// (a darker exposure at this dusk: the sky sets it each frame, before this)
+			if (opts.renderer) opts.renderer.toneMappingExposure *= 1 - 0.38 * k;
 			const sd = shared.uSunDir.value, a = Math.atan2(sd.x, sd.z) + 0.45;
 			moonU.value.set(Math.sin(a) * 0.9, 0.42, Math.cos(a) * 0.9, k);
 		}

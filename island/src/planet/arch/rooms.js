@@ -33,12 +33,12 @@ export const KINDS = {
 // each floor's materials: stone, the floor's stone, walls, dark lacquer, velvet, metal, the
 // glow (pink or violet) and warm lamp light (linear rgb)
 export const THEMES = [
-	{ name: 'Rosewater', stone: [0.78, 0.66, 0.66], floor: [0.55, 0.42, 0.44], wall: [0.33, 0.24, 0.29], lacquer: [0.06, 0.025, 0.04], velvet: [0.40, 0.05, 0.18], metal: [1.0, 0.72, 0.45], glow: [1.0, 0.42, 0.68], warm: [1.0, 0.74, 0.5] },
-	{ name: 'Nocturne', stone: [0.22, 0.18, 0.28], floor: [0.13, 0.11, 0.17], wall: [0.14, 0.11, 0.19], lacquer: [0.02, 0.02, 0.035], velvet: [0.24, 0.06, 0.38], metal: [0.95, 0.76, 0.48], glow: [0.66, 0.42, 1.0], warm: [1.0, 0.7, 0.5] },
-	{ name: 'Ivory', stone: [0.86, 0.82, 0.74], floor: [0.68, 0.62, 0.54], wall: [0.52, 0.48, 0.42], lacquer: [0.05, 0.04, 0.035], velvet: [0.06, 0.22, 0.24], metal: [1.0, 0.78, 0.48], glow: [1.0, 0.55, 0.72], warm: [1.0, 0.8, 0.56] },
-	{ name: 'Obsidian', stone: [0.09, 0.08, 0.09], floor: [0.05, 0.045, 0.05], wall: [0.08, 0.06, 0.07], lacquer: [0.015, 0.01, 0.012], velvet: [0.45, 0.04, 0.12], metal: [1.0, 0.68, 0.4], glow: [1.0, 0.32, 0.55], warm: [1.0, 0.66, 0.42] },
-	{ name: 'Moonstone', stone: [0.62, 0.64, 0.72], floor: [0.42, 0.44, 0.52], wall: [0.29, 0.29, 0.36], lacquer: [0.03, 0.03, 0.05], velvet: [0.16, 0.10, 0.40], metal: [0.85, 0.84, 0.9], glow: [0.6, 0.55, 1.0], warm: [0.95, 0.85, 0.75] },
-	{ name: 'Ember', stone: [0.62, 0.40, 0.30], floor: [0.40, 0.24, 0.18], wall: [0.26, 0.14, 0.12], lacquer: [0.05, 0.02, 0.015], velvet: [0.50, 0.12, 0.06], metal: [1.0, 0.7, 0.4], glow: [1.0, 0.5, 0.4], warm: [1.0, 0.72, 0.45] },
+	{ name: 'Rosewater', stone: [0.78, 0.66, 0.66], floor: [0.25, 0.19, 0.20], wall: [0.33, 0.24, 0.29], lacquer: [0.06, 0.025, 0.04], velvet: [0.40, 0.05, 0.18], metal: [1.0, 0.72, 0.45], glow: [1.0, 0.42, 0.68], warm: [1.0, 0.74, 0.5] },
+	{ name: 'Nocturne', stone: [0.22, 0.18, 0.28], floor: [0.06, 0.05, 0.08], wall: [0.14, 0.11, 0.19], lacquer: [0.02, 0.02, 0.035], velvet: [0.24, 0.06, 0.38], metal: [0.95, 0.76, 0.48], glow: [0.66, 0.42, 1.0], warm: [1.0, 0.7, 0.5] },
+	{ name: 'Ivory', stone: [0.86, 0.82, 0.74], floor: [0.31, 0.28, 0.24], wall: [0.52, 0.48, 0.42], lacquer: [0.05, 0.04, 0.035], velvet: [0.06, 0.22, 0.24], metal: [1.0, 0.78, 0.48], glow: [1.0, 0.55, 0.72], warm: [1.0, 0.8, 0.56] },
+	{ name: 'Obsidian', stone: [0.09, 0.08, 0.09], floor: [0.02, 0.02, 0.02], wall: [0.08, 0.06, 0.07], lacquer: [0.015, 0.01, 0.012], velvet: [0.45, 0.04, 0.12], metal: [1.0, 0.68, 0.4], glow: [1.0, 0.32, 0.55], warm: [1.0, 0.66, 0.42] },
+	{ name: 'Moonstone', stone: [0.62, 0.64, 0.72], floor: [0.19, 0.20, 0.23], wall: [0.29, 0.29, 0.36], lacquer: [0.03, 0.03, 0.05], velvet: [0.16, 0.10, 0.40], metal: [0.85, 0.84, 0.9], glow: [0.6, 0.55, 1.0], warm: [0.95, 0.85, 0.75] },
+	{ name: 'Ember', stone: [0.62, 0.40, 0.30], floor: [0.18, 0.11, 0.08], wall: [0.26, 0.14, 0.12], lacquer: [0.05, 0.02, 0.015], velvet: [0.50, 0.12, 0.06], metal: [1.0, 0.7, 0.4], glow: [1.0, 0.5, 0.4], warm: [1.0, 0.72, 0.45] },
 ];
 
 // a frame: local x across, z along, y up from the floor; to the world and back

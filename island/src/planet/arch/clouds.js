@@ -29,8 +29,10 @@ vec3 mistC(float up, float n, float glow){
 	c = mix(c, uHor * 0.18 + vec3(0.02, 0.025, 0.045), uNight * 0.75);
 	c = mix(c, uWarm * dot(c, vec3(0.3, 0.5, 0.2)) * 1.2, 0.22 * uDusk);
 	// under the world's own dusk sky (sky.js uDusk): violet, pinker on the tops
-	c = mix(c, mix(vec3(0.15, 0.1, 0.25), vec3(0.46, 0.27, 0.5), up) * uSkyDusk.y * (0.6 + 0.7 * n), uSkyDusk.x * 0.9);
-	return c + uWarm * glow * uDusk * (1.4 - up * 0.6);
+	c = mix(c, mix(vec3(0.07, 0.025, 0.16), vec3(0.55, 0.16, 0.48), up * up) * uSkyDusk.y * (0.5 + 0.9 * n), uSkyDusk.x * 0.92);
+	// lit from below, pink, deepest under the tops
+	c += uWarm * (1.0 - up) * 0.12 * uSkyDusk.x * n;
+	return c + uWarm * glow * (uDusk + uSkyDusk.x * 0.8) * (2.6 - up * 1.2);
 }
 `;
 

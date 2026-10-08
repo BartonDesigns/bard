@@ -45,13 +45,13 @@ const LOOK = /* glsl */`
 		vec2 f = fract(q), id = floor(q);
 		float mull = 1.0 - step(0.1, f.x) * step(f.x, 0.9) * step(0.14, f.y) * step(f.y, 0.86);
 		float lit = step(0.45, aH(vec3(id, 7.0))), hue = aH(vec3(id, 11.0));
-		aCol = mix(aCol * 0.6, aCol * 1.8 + 0.05, mull * (1.0 - aFar * 0.8));
-		aRough = mix(0.14, 0.5, mull); aMetal = mix(0.4, 0.3, mull);
-		aEm = (1.0 - mull) * lit * uNight * 0.9 * (0.4 + 0.9 * aH(vec3(id, 3.0)));
+		aCol = mix(aCol * 0.25, aCol * 1.4 + 0.02, mull * (1.0 - aFar * 0.8));
+		aRough = mix(0.3, 0.5, mull); aMetal = mix(0.15, 0.3, mull);
+		aEm = (1.0 - mull) * lit * uNight * 2.4 * (0.4 + 0.9 * aH(vec3(id, 3.0)));
 		aEmC = hue < 0.5 ? uWinC : hue < 0.78 ? uWinB : uWinV;
 		// far off, the grid is finer than a pixel: its average glow, not a shimmer
 		float aAvg = smoothstep(350.0, 900.0, length(cameraPosition - vAW));
-		aEm = mix(aEm, 0.45 * uNight * 0.9 * 0.85, aAvg);
+		aEm = mix(aEm, 0.45 * uNight * 2.0, aAvg);
 		aEmC = mix(aEmC, uWinC * 0.5 + uWinB * 0.3 + uWinV * 0.2, aAvg);
 	} else if (vAG < 2.5) {
 		float y = vAW.y + aN(fp * 0.25) * 2.0;
@@ -67,7 +67,7 @@ const LOOK = /* glsl */`
 		aCol *= 0.7 + 0.6 * m;
 		aRough = 0.95;
 	} else if (vAG < 5.5) {
-		aEm = uLampK; aEmC = aCol; aCol *= 0.3;
+		aEm = uLampK * 1.6; aEmC = aCol; aCol *= 0.3;
 	} else if (vAG < 6.5) {
 		float ph = aH(floor(vAW * 0.2)) * 6.2831;
 		float b = smoothstep(0.8, 0.9, sin(uTime * 2.2 + ph));
@@ -192,10 +192,11 @@ const IN_LOOK = /* glsl */`
 		ic = mix(bk * (0.8 + 0.4 * iH(vec3(id, row, 4.0))), ic * 0.25, clamp(gap, 0.0, 1.0));
 		iRough = 0.7;
 	} else if (vIG < 10.5) {
-		float st = step(0.992, iH(floor(vIW * 2.3))) * (0.6 + 0.4 * sin(uTime * 1.3 + iH(floor(vIW * 2.3) + 1.0) * 6.28));
-		ic = mix(vec3(0.015, 0.012, 0.04), vec3(0.08, 0.03, 0.12), smoothstep(-1.0, 1.0, inn.y));
-		iEm = 1.0;
-		ic += vec3(0.9, 0.85, 1.0) * st * 3.0;
+		vec3 sc = floor(vIW * 4.0);
+		float st = step(0.965, iH(sc)) * (0.6 + 0.4 * sin(uTime * 1.3 + iH(sc + 1.0) * 6.28)) * smoothstep(0.5, 0.2, length(fract(vIW * 4.0) - 0.5));
+		ic = vec3(0.004, 0.003, 0.012);
+		iEm = 1.0; iRough = 1.0;
+		ic += vec3(0.9, 0.85, 1.0) * st * 6.0;
 	} else {
 		ic *= 0.8 + 0.3 * iN(ip * 2.0); iRough = 0.9;
 	}
@@ -223,7 +224,7 @@ export function interiorMaterial(U, o = {}) {
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = iMetal;')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * (vIL * (1.0 - iMetal * 0.6) + iEm);')
 			// (the day outside reaches in only a little: the rooms are lit by their own light)
-			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n\treflectedLight.directDiffuse *= 0.3; reflectedLight.indirectDiffuse *= 0.4; reflectedLight.directSpecular *= 0.6;');
+			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n\treflectedLight.directDiffuse *= 0.08; reflectedLight.indirectDiffuse *= 0.12; reflectedLight.directSpecular *= 0.3; reflectedLight.indirectSpecular *= 0.5;');
 	};
 	m.customProgramCacheKey = () => 'archinterior';
 	return m;

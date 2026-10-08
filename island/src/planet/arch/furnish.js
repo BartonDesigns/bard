@@ -484,7 +484,7 @@ const FURN = {
 	gallery(B, R, A, V) {
 		const th = B.th, h = V.h;
 		let k = 0;
-		for (const v of [0.25, 0.75]) row(B, A, v, 4, (x, z) => {
+		for (const v of [0.25, 0.75]) row(B, A, v, 2.8, (x, z) => {
 			const s = k++ % 5;
 			B.put('ped', () => P.pedestal(th), x, 0, z, A.inYaw(v));
 			B.put('sc' + s, () => P.sculpture(th, s), x, 0, z, A.inYaw(v));
@@ -500,6 +500,9 @@ const FURN = {
 			B.solid(x, z, w / 2, 0.2, yaw, 0, 3);
 		}, 0.15, 0.85);
 		for (const u of [0.25, 0.75]) { const [x, z] = A.at(u, 0.5); B.light(x, h - 1, z, th.warm, 0.6, 6); B.add(bx(0.12, 0.08, 4, x, h - 0.9, z, A.uYaw), LK.light, th.warm); }
+		// a great piece on the axis between the benches, and hanging light sculptures over the rows
+		for (const u of [0.35, 0.65]) { const [x, z] = A.at(u, 0.5); if (B.free(x, z, 1.2)) { B.add(bx(1.8, 0.5, 1.8, x, 0.25, z), LK.stone, th.stone); sculptureLight(B, x, 2.2, z, 2.2, u > 0.5 ? 1 : 0); B.solid(x, z, 1, 1, 0, 0, 3); } }
+		for (const v of [0.25, 0.75]) for (const u of [0.2, 0.5, 0.8]) { const [x, z] = A.at(u, v); B.add(cyl(0.02, 0.02, Math.max(0.5, h - 4.5), 3, x, h - (h - 4.5) / 2, z), LK.brass, th.metal).add(tor(0.6, 0.05, x, 4.4, z, 20), LK.light, th.glow); }
 	},
 	library(B, R, A, V) {
 		const th = B.th, h = V.h, top = V.mezz ? V.mezz.y : h, sh = Math.min(top - 0.6, 7.5);
@@ -750,7 +753,7 @@ function bake(g, lights, amb) {
 		for (const L of lights) {
 			const dx = L.x - x, dy = L.y - y, dz = L.z - z, d = Math.hypot(dx, dy, dz) + 1e-3;
 			if (d > L.rad * 3) continue;
-			const f = L.k * 0.6 / (1 + (d / L.rad) * (d / L.rad) * 3) * (0.2 + 0.8 * Math.max(0, (dx * nx + dy * ny + dz * nz) / d));
+			const f = L.k * 0.9 / (1 + (d / L.rad) * (d / L.rad) * 7) * (0.12 + 0.88 * Math.max(0, (dx * nx + dy * ny + dz * nz) / d));
 			r += L.c[0] * f; gg += L.c[1] * f; b += L.c[2] * f;
 		}
 		c[i * 3] = Math.min(2, r); c[i * 3 + 1] = Math.min(2, gg); c[i * 3 + 2] = Math.min(2, b);
@@ -762,7 +765,7 @@ function litAt(x, y, z, lights, amb) {
 	for (const L of lights) {
 		const d = Math.hypot(L.x - x, L.y - y, L.z - z);
 		if (d > L.rad * 3) continue;
-		const f = L.k * 0.6 / (1 + (d / L.rad) * (d / L.rad) * 3) * 0.6;
+		const f = L.k * 0.9 / (1 + (d / L.rad) * (d / L.rad) * 7) * 0.6;
 		r += L.c[0] * f; g += L.c[1] * f; b += L.c[2] * f;
 	}
 	return [Math.min(2, r), Math.min(2, g), Math.min(2, b)];
@@ -783,7 +786,12 @@ export function buildVolume(V, phone) {
 	// the rooms first (they cut the floors), then the shell round them
 	for (const R of V.rooms) (FURN[R.kind] || FURN.lounge)(B, R, area(R, V), V);
 	shell(B, V, B.cuts);
-	const th = V.theme, amb = [th.warm[0] * 0.03 + 0.015, th.warm[1] * 0.03 + 0.01, th.warm[2] * 0.03 + 0.03];
+	const th = V.theme, amb = [0.012, 0.008, 0.022];
+	// the dusk through the glass: pink and violet spilling in along each window wall
+	for (const W of V.L.walls) if (W.mode === 'glass' && W.len > 1.5) {
+		const ix = -W.x, iz = -W.z, il = Math.hypot(ix, iz) || 1;
+		B.lights.push({ x: W.x + ix / il * 1.2, y: 0.6, z: W.z + iz / il * 1.2, c: B.r() < 0.5 ? th.glow : [0.55, 0.35, 1.0], k: 0.45, rad: Math.max(2.5, W.len * 0.5) });
+	}
 	const solid = mergeGeometries(B.parts);
 	for (const g of B.parts) g.dispose();
 	bake(solid, B.lights, amb);
