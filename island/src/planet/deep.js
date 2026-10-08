@@ -50,6 +50,8 @@ export function planDeep(island, plan, makeField) {
 				const hall = smoothstep(0.74, 1, u), w = 2.6 + hall * 4.4, h = 3.9 + hall * 5.6;
 				const y = c.fy - u * Math.min(len, 90) * 0.1;
 				if (y < 3 || H(x, z) - (y + h) < 8) ok = false;
+				// the hall's vault and its rounded end keep a good roof of rock over them too
+				if (hall > 0) for (let k = 0; k < 10 && ok; k++) { const b = k / 10 * Math.PI * 2, rr = w + 5; if (H(x + Math.cos(b) * rr, z + Math.sin(b) * rr) - (y + h) < 10) ok = false; }
 				// a dead end: nothing else of the caves near it once it has left its chamber
 				if (along > rim + 12 && field.cave(x, y + h * 0.5, z) < w + 4) ok = false;
 				pts.push({ x, y, z, w, h });

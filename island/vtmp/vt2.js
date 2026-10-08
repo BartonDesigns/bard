@@ -33798,7 +33798,7 @@ var SPEC = {
   sports: { L: 4.45, W: 2, H: 1.17, belt: 0.78, ws: 0.72, rf: -0.12, rr: -0.8, rb: -1.85, wz: 1.42, nose: 0.24, clad: 0.08, clear: 0.2, wr: 0.36, hip: 0.36, sf: 0.35, doors: [0.62, -0.62, null], tumble: 0.66 },
   delivery: { L: 5.4, W: 2.05, H: 2.5, belt: 1.2, ws: 1.95, rf: 1.55, rr: -2.6, rb: -2.68, wz: 1.72, nose: 0.28, clad: 0.2, clear: 0.34, wr: 0.39, hip: 0.95, doors: [1.88, 0.95, -0.5], panel: 0.9, plan: 9, tumble: 0.94 },
   bus: { L: 11.2, W: 2.55, H: 3, belt: 1.2, ws: 5.3, rf: 5.1, rr: -5.35, rb: -5.5, wz: 2.9, nose: 0.02, clad: 0.3, clear: 0.34, wr: 0.49, hip: 1.25, doors: null, plan: 16, tumble: 0.97 },
-  truck: { L: 7, W: 2.4, H: 3.3, belt: 1.5, ws: 3.1, rf: 2.95, rr: -3.4, rb: -3.48, wz: 2.3, nose: 0.1, clad: 0.3, clear: 0.45, wr: 0.49, hip: 1.35, sf: 0.12, doors: [3, 2.2, null], panel: 2.12, box: 2.05, cabH: 2.75, plan: 12, tumble: 0.95 }
+  truck: { L: 7, W: 2.4, H: 3.3, belt: 1.5, ws: 3.1, rf: 2.8, rr: -3.4, rb: -3.48, wz: 2.3, nose: 0.1, clad: 0.3, clear: 0.45, wr: 0.49, hip: 1.35, sf: 0.12, doors: [3, 2.2, null], panel: 2.12, box: 2.05, cabH: 2.75, plan: 12, tumble: 0.95 }
 };
 var KINDS = Object.keys(SPEC);
 var sm = (a, b, x) => {
