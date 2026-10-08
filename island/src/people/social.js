@@ -81,11 +81,14 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		if (record && record.bodyKey !== bodyKey()) record = null;
 		const position = positionFor(W, p.M.S.pos), caveMeta=p.caveMeta || p.P.caveMeta;
 		if(caveMeta) p.P.caveMeta=caveMeta;
+		// a world's own named people (planet/colony/crew-life.js): a fixed id and who they are
+		const own = p.resident?.();
 		record = state.meet(record ? { id: record.id, bodyKey: bodyKey() } : {
-			id:caveMeta?.id, bodyKey: bodyKey(), home: position, position, dna: p.P.dna,
-			persona: personaFor(p.P, where), source: caveMeta ? 'cave' : 'ambient',
+			id: own?.id || caveMeta?.id, bodyKey: bodyKey(), home: position, position, dna: p.P.dna,
+			persona: own?.persona || personaFor(p.P, where), source: own ? own.source : caveMeta ? 'cave' : 'ambient',
 		});
 		if (!record) return null;
+		if (own) { record.persona = JSON.parse(JSON.stringify(own.persona)); record.dna = p.P.dna; }
 		actors.adopt(p, record);
 		return record;
 	}

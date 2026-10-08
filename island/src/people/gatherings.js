@@ -10,6 +10,8 @@ export const KINDS = {
 	party: { title: 'Party', few: 10, many: 18, phone: 10 },
 	picnic: { title: 'Picnic', few: 8, many: 12, phone: 8 },
 	meetup: { title: 'Meet-up', few: 8, many: 10, phone: 6 },
+	// a few people at a window for something in the sky (the Moon colony's earthrise)
+	watch: { title: 'Earthrise watch', few: 5, many: 6, phone: 4 },
 };
 const OPEN = /\b(park|plaza|square|beach|field|green|common|meadow|lawn|garden|gardens|stadium|pier|village|commons)\b/i;
 
@@ -81,6 +83,9 @@ export function crowdLayout(kind, n, seed = 1) {
 			x = Math.sin(a) * d; z = Math.cos(a) * d;
 		} else if (kind === 'picnic') {
 			const a = (i / n) * Math.PI * 2 + r() * 0.3, d = 2.6 + r() * 1.4 + (i % 2) * 0.8;
+			x = Math.sin(a) * d; z = Math.cos(a) * d;
+		} else if (kind === 'watch') {
+			const a = r() * Math.PI * 2, d = 0.4 + Math.sqrt(r()) * 0.9;
 			x = Math.sin(a) * d; z = Math.cos(a) * d;
 		} else if (kind === 'party') {
 			const a = r() * Math.PI * 2, d = 1.8 + Math.sqrt(r()) * 6;

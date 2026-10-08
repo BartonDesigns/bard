@@ -691,7 +691,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
 		if (W) haze.lerp(tmpC.setRGB(0.5, 0.53, 0.57).multiplyScalar(1 - night * 0.9), Math.min(1, W.rainHere * 0.6 + gl * 0.3));
 		const dk = uniforms.uDusk.value;
-		if (dk.x > 0) haze.lerp(tmpC.setRGB(0.5, 0.2, 0.4).multiplyScalar(dk.y), dk.x * 0.75);
+		if (dk.x > 0) haze.lerp(tmpC.setRGB(0.24, 0.07, 0.26).multiplyScalar(dk.y), dk.x * 0.85);
 		const air = uniforms.uAir.value;
 		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w * (1 - dk.x));
 		renderer.toneMappingExposure = 1.15 + night * 0.15;

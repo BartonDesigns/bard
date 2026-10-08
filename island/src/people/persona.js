@@ -16,6 +16,7 @@ import { regionalNow } from '../region/here.js';
 import { regionalSheet } from '../region/talk.js';
 import { communityFolk, communityJob } from '../region/community.js';
 import { nameFor } from '../region/cultures.js';
+import { colonyOffline } from '../planet/colony/crew.js';
 
 const rng = (seed) => { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
@@ -126,13 +127,14 @@ Talk like a normal person, not an assistant: casual, in your own voice, with you
 ${dialogueStylePrompt(world?.dialogueStyle, p.age)}
 If the player asks what to do or where to go, you can send them somewhere from the list below, as a favour or a tip, by adding [[quest: PLACE]] with the place's exact name (only places in the list).
 Start every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful. You may add one gesture in double brackets when it fits: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.
-${p.caveMeta ? `CAVE LIFE: ${p.facts?.join('; ') || p.caveMeta.lore}. Treat old legends as stories people tell, not proof that unsupported trading, combat or world changes occurred.\n` : ''}${regionPrompt(p)}${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
+${p.caveMeta ? `CAVE LIFE: ${p.facts?.join('; ') || p.caveMeta.lore}. Treat old legends as stories people tell, not proof that unsupported trading, combat or world changes occurred.\n` : ''}${regionPrompt(p)}${p.colony ? `YOUR LIFE HERE (the Moon colony): ${(p.facts || []).join('; ')}. You are an adult crew member at work; talk about the colony, your job and your day.\n` : ''}${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
 }
 
 // ---------- without a model: simple, in character ----------
 export function personaOffline(p, text, world) {
 	const q = text.toLowerCase();
 	if (p.caveMeta) { const line=caveLoreReply(p.caveMeta,text); if(line)return line; }
+	if (p.colony) { const line = colonyOffline(p, text); if (line) return line; }
 	if (p.local) { const a = regionalOffline(p, q); if (a) return a; }
 	const near = world?.near?.[0];
 	if (/^(hi|hey|hello|yo|good (morning|afternoon|evening))\b/.test(q)) return `[[mood: happy]] [[gesture: wave]] Hey! I'm ${p.first}.`;

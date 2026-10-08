@@ -29,10 +29,10 @@ vec3 mistC(float up, float n, float glow){
 	c = mix(c, uHor * 0.18 + vec3(0.02, 0.025, 0.045), uNight * 0.75);
 	c = mix(c, uWarm * dot(c, vec3(0.3, 0.5, 0.2)) * 1.2, 0.22 * uDusk);
 	// under the world's own dusk sky (sky.js uDusk): violet, pinker on the tops
-	c = mix(c, mix(vec3(0.07, 0.025, 0.16), vec3(0.55, 0.16, 0.48), up * up) * uSkyDusk.y * (0.5 + 0.9 * n), uSkyDusk.x * 0.92);
+	c = mix(c, mix(vec3(0.035, 0.01, 0.09), vec3(0.34, 0.07, 0.3), up * up) * uSkyDusk.y * (0.5 + 0.9 * n), uSkyDusk.x * 0.92);
 	// lit from below, pink, deepest under the tops
 	c += uWarm * (1.0 - up) * 0.12 * uSkyDusk.x * n;
-	return c + uWarm * glow * (uDusk + uSkyDusk.x * 0.8) * (2.6 - up * 1.2);
+	return c + uWarm * glow * (uDusk + uSkyDusk.x * 0.8) * (3.4 - up * 1.8);
 }
 `;
 
@@ -79,7 +79,9 @@ void main(){
 		b0 += sin(s / R * 0.9 - uTime * 0.5 + o.x) * R * 0.55 * step(0.0, s) * exp(-s / (R * 7.0)) * exp(-b * b / (R * R * 2.5));
 		q += ac * (b0 - b);
 		hole *= smoothstep(R * 0.98, R * 1.35, r);
-		glow += o.w * exp(-r / (R * 2.2));
+		// (close round the foot: a gaussian, so the far deck keeps its own dark)
+		float gr = r / (R * 2.4);
+		glow += o.w * exp(-gr * gr);
 	}
 	glow *= 1.0 - vB * 0.6;
 	vec2 nq = (q - uOff) * 0.0055 + vL * 1.7 + vB * 9.0;
@@ -92,7 +94,7 @@ void main(){
 	vec2 hs = vec2(textureSize(uHeight, 0)), hu = (p + uHalf) / (2.0 * uHalf) * (hs - 1.0), hf = fract(hu), h0 = (floor(hu) + 0.5) / hs;
 	float g = mix(mix(texture2D(uHeight, h0).r, texture2D(uHeight, h0 + vec2(1.0, 0.0) / hs).r, hf.x), mix(texture2D(uHeight, h0 + vec2(0.0, 1.0) / hs).r, texture2D(uHeight, h0 + 1.0 / hs).r, hf.x), hf.y);
 	float lift = glow * uDusk;
-	float a = min(1.0, cov * (1.0 + lift * 0.9) + lift * 0.12) * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
+	float a = min(1.0, cov * (1.0 + lift * 1.2) + lift * 0.3) * hole * smoothstep(0.0, 9.0, vW.y - g) * (1.0 - smoothstep(uC.z * 0.6, uC.z, length(p - uC.xy)));
 	a *= smoothstep(0.5, 8.0, abs(cameraPosition.y - vW.y)) * uK * 0.34;
 	if (a < 0.004) discard;
 	// rolling tops: lit where the billow faces up out of the deck, shadowed in its folds
@@ -101,7 +103,10 @@ void main(){
 	gl_FragColor = vec4(col, a);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
+	vec3 preFog = gl_FragColor.rgb;
 	#include <fog_fragment>
+	// (the haze takes less of it: its own colours carry to the distance)
+	gl_FragColor.rgb = mix(preFog, gl_FragColor.rgb, 0.45);
 }`;
 
 const WISP_V = /* glsl */`
@@ -154,10 +159,13 @@ void main(){
 	float n = mF(vUv * 1.3 + vS * 31.0 + uTime * 0.03);
 	float a = smoothstep(1.0, 0.15, length(vUv)) * smoothstep(0.25, 0.75, n) * vA * uK * 0.5;
 	if (a < 0.004) discard;
-	gl_FragColor = vec4(mistC(vUp, n, 0.6), a);
+	gl_FragColor = vec4(mistC(vUp, n, vUp < 0.85 ? 0.5 * (1.0 - vUp) : 0.05), a);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
+	vec3 preFog = gl_FragColor.rgb;
 	#include <fog_fragment>
+	// (the haze takes less of it: its own colours carry to the distance)
+	gl_FragColor.rgb = mix(preFog, gl_FragColor.rgb, 0.45);
 }`;
 
 // the same noise on the CPU, for the veil when you fly into it

@@ -405,25 +405,26 @@ function rug(B, x, z, w, d, yaw, tint) {
 	B.add(bx(w, 0.025, d, x, 0.045, z, yaw), LK.velvet, tint);
 	B.add(bx(w + 0.12, 0.02, d + 0.12, x, 0.04, z, yaw), LK.brass, B.th.metal);
 }
-// a reflecting pool sunk in the floor (its floor walked, shallow), its coping, its glow
+// a reflecting pool in a stone kerb (raised, not sunk: the ground under a ground floor would
+// show through a hole), its coping and its glow
 function pool(B, x, z, w, d, deep = 0.45) {
-	const th = B.th, hw = w / 2, hd = d / 2;
-	B.cuts.push({ x, z, hw, hd });
-	B.lows.push({ x, z, hw, hd, y: -deep });
-	B.add(bx(hw * 2, 0.04, hd * 2, x, -0.13, z), LK.water, [0.04, 0.08, 0.12]);
-	B.add(bx(hw * 2, 0.06, hd * 2, x, -deep - 0.03, z), LK.stone, th.stone);
+	const th = B.th, hw = w / 2, hd = d / 2, y = Math.min(0.42, 0.18 + deep * 0.25);
+	B.add(bx(hw * 2, 0.04, hd * 2, x, y, z), LK.water, [0.03, 0.06, 0.1]);
+	B.add(bx(hw * 2, 0.04, hd * 2, x, 0.06, z), LK.stone, th.lacquer);
 	for (const [ox, oz, ww, dd] of [[0, hd, hw * 2 + 0.8, 0.4], [0, -hd, hw * 2 + 0.8, 0.4], [hw, 0, 0.4, hd * 2], [-hw, 0, 0.4, hd * 2]]) {
-		B.add(bx(ww, 0.14 + deep, dd, x + ox, (0.14 - deep) / 2, z + oz), LK.stone, th.stone);
+		B.add(bx(ww, y + 0.12, dd, x + ox, (y + 0.12) / 2, z + oz), LK.stone, th.stone);
 	}
-	B.add(bx(hw * 2 - 0.1, 0.05, 0.06, x, -0.3, z + hd - 0.05), LK.light, th.glow);
-	B.light(x, 0.2, z, th.glow, 0.7, Math.max(hw, hd) + 2);
+	B.add(bx(hw * 2 - 0.1, 0.04, 0.06, x, y - 0.06, z + hd - 0.25), LK.light, th.glow);
+	B.lows.push({ x, z, hw: hw + 0.2, hd: hd + 0.2, y: y + 0.1 });
+	B.light(x, 0.6, z, th.glow, 0.8, Math.max(hw, hd) + 2);
 	B.avoid.push({ x, z, r: Math.hypot(hw, hd) + 0.3 });
 }
 // a sunken lounge: a round pit of velvet round a low table under a light
 function pit(B, x, z, r) {
-	const th = B.th;
-	B.cuts.push({ x, z, r });
-	B.lows.push({ x, z, r, y: -0.7 });
+	const th = B.th, up = B.V.bottom ? 0.75 : 0;
+	// (on a ground floor raised in a ring instead of sunk: the ground would show in it)
+	if (!up) { B.cuts.push({ x, z, r }); B.lows.push({ x, z, r, y: -0.7 }); } else B.lows.push({ x, z, r: r + 0.5, y: 0.05 });
+	const n0 = B.parts.length;
 	B.add(cyl(r, r, 0.06, 32, x, -0.73, z), LK.velvet, th.velvet.map((v) => v * 0.6));
 	B.add(new THREE.CylinderGeometry(r + 0.4, r + 0.4, 0.75, 40, 1, true).scale(-1, 1, 1).translate(x, -0.33, z), LK.stone, th.stone);
 	B.add(tor(r + 0.2, 0.22, x, 0.0, z, 40), LK.stone, th.stone);
@@ -431,6 +432,7 @@ function pit(B, x, z, r) {
 	B.add(tor(r - 0.45, 0.32, x, -0.45, z, 40).scale(1, 0.8, 1), LK.velvet, th.velvet);
 	B.add(cyl(r * 0.35, r * 0.35, 0.35, 24, x, -0.5, z), LK.lacquer, th.lacquer);
 	B.add(cyl(r * 0.37, r * 0.37, 0.03, 24, x, -0.32, z), LK.brass, th.metal);
+	if (up) for (let i = n0; i < B.parts.length; i++) B.parts[i].translate(0, up, 0);
 	B.light(x, 1.5, z, th.warm, 0.8, r + 2);
 	B.avoid.push({ x, z, r: r + 0.6 });
 }

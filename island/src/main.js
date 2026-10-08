@@ -904,7 +904,7 @@ export function createIslandWorld() {
 		// the world by the dark star: its Event Ring's sphere is a way beyond (planet/beyond.js)
 		if (profile.type === 'SINGULARITY' && alienPlan?.sites[0]?.kind === 'landmark') world.beyond = createBeyond({ renderer, scene, camera, island, shared, site: alienPlan.sites[0], player, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
 		if (colonyPlan) {
-			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, isTouch: matchMedia('(pointer: coarse)').matches });
+			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, isTouch: matchMedia('(pointer: coarse)').matches, arms, social: () => social, world: () => world });
 			const of = island.extraFloor, op = island.extraPush;
 			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), cl.floor(x, z, y)) : cl.floor;
 			island.extraPush = op ? (p, footY) => { op(p, footY); cl.push(p, footY); } : cl.push;

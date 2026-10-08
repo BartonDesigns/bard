@@ -52,13 +52,16 @@ export function createColonyLife(X, o) {
 	}
 	function render(T) {
 		let h = `<div style="font-weight:700;letter-spacing:.05em">${esc(T.name)}</div><div style="opacity:.7;font-size:12px">${esc(o.name)} · ${suited ? 'suit sealed' : 'shirt-sleeve'}</div>`;
+		// what an errand can do here (errands.js), first
+		const qb = o.errands?.()?.buttons(T) || [], qsite = o.errands?.()?.site();
+		if (qb.length) h += '<div style="margin:8px 0 2px;color:#e2bf6a">Errand</div>' + qb.map((b) => button(b.label, 'q:' + b.id, b.off)).join('');
 		if (T.kind === 'depot') {
 			h += '<div style="margin:8px 0 4px;opacity:.85">Stores for the crater runs. Take what you need.</div>';
 			for (const it of DEPOT) h += button(`${it.name}: ${it.note}${o.give ? '' : ' (stores open with the inventory)'}`, 'take:' + it.id, !o.give);
 		} else {
 			h += map();
 			h += `<div style="margin:6px 0 2px;opacity:.85">${T.kind === 'control' ? 'Traffic control: send a rover or the maglev out with you aboard.' : 'Ride out:'}</div>`;
-			o.sites().forEach((s, i) => { h += button(`${s.rail ? 'Maglev' : 'Rover'} to ${s.name}${s.dist ? ` · ${(s.dist / 1000).toFixed(1)} km` : ''}`, 'site:' + i); });
+			o.sites().forEach((s, i) => { h += button(`${s.name === qsite ? '★ ' : ''}${s.rail ? 'Maglev' : 'Rover'} to ${s.name}${s.dist ? ` · ${(s.dist / 1000).toFixed(1)} km` : ''}`, 'site:' + i); });
 		}
 		h += button('Close (E)', 'close');
 		panel.innerHTML = h;
@@ -66,15 +69,18 @@ export function createColonyLife(X, o) {
 			e.stopPropagation();
 			const [kind, id] = b.dataset.go.split(':');
 			if (kind === 'close') { toggle(); return; }
+			if (kind === 'q') { const said = o.errands?.()?.act(b.dataset.go.slice(2)); if (said) hint?.(said, 5000); render(T); return; }
 			if (kind === 'take') { const it = DEPOT.find((d) => d.id === id); if (it && o.give?.(it)) hint?.(`${it.name}: stowed.`, 2500); return; }
-			if (kind === 'site') {
-				const s = o.sites()[+id];
-				toggle();
-				suited = true; pressurised = false;
-				o.go(+id);
-				hint?.(`${s.rail ? 'The maglev' : 'A rover'} takes you out to ${s.name}. Suit sealed.`, 4500);
-			}
+			if (kind === 'site') { toggle(); ride(+id); }
 		});
+	}
+	// out to a site by rover or maglev, the suit sealed (a terminal, or the traffic controller)
+	function ride(i) {
+		const s = o.sites()[i];
+		if (!s) return;
+		suited = true; pressurised = false;
+		o.go(i);
+		hint?.(`${s.rail ? 'The maglev' : 'A rover'} takes you out to ${s.name}. Suit sealed.`, 4500);
 	}
 
 	// ---------- where you are ----------
@@ -132,5 +138,5 @@ export function createColonyLife(X, o) {
 	function dispose() {
 		if (mount) { removeEventListener('keydown', onKey); btn.remove(); panel.remove(); }
 	}
-	return { update, dispose, suited: () => suited, inside: () => pressurised, open: () => !!open, terminal: () => here?.name || null, toggle };
+	return { update, dispose, ride, suited: () => suited, inside: () => pressurised, open: () => !!open, terminal: () => here?.name || null, toggle };
 }
