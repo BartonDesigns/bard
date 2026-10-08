@@ -390,7 +390,11 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 				actor(V, memberSpec(m, place), at, bank ? h + Math.PI / 2 : h + Math.PI / 2 + (r() - 0.5) * 1.5, { role: bank ? 'line' : 'shopper', pose: k % 3 === 2 ? 'phone' : 'rest', carry: (bank ? k === 0 : k % 2) ? [['bag', 'R']] : [] });
 			}
 			V.bank = a.bank;
-		} else { root.remove(V.group); return 'unknown: school-run, dismissal, teens, groceries, dinner, foodbank, market'; }
+		} else if (kind === 'lineup') {
+			// for scale: a child, two teens and a grown-up side by side, facing you
+			const face = Math.atan2(cam.x - x, cam.z - z), sx = Math.cos(face), sz = -Math.sin(face);
+			[8, 13.5, 16.5, 38].forEach((age, k) => { const off = (k - 1.5) * 0.85; actor(V, { seed: V.seed + k * 104729, age, place, male: o.male ?? k % 2 === 0 }, [x + sx * off, z + sz * off], face, { role: 'lineup', pose: 'rest' }); });
+		} else { root.remove(V.group); return 'unknown: lineup, school-run, dismissal, teens, groceries, dinner, foodbank, market'; }
 		live.push(V);
 		return { kind, x: +x.toFixed(1), z: +z.toFixed(1), h: +h.toFixed(3), actors: V.actors.length, area: a.key, place, household: V.household ? describe(V.household) : null };
 	}
