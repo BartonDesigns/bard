@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createCaveElements } from '../src/planet/cave-elements.js';
+globalThis.addEventListener ||= () => {};
+globalThis.window ||= {};
+const { createCaveElements } = await import('../src/planet/cave-elements.js');
 const map = new Map();
 const storage = { getItem: k => map.get(k) || null, setItem: (k,v) => map.set(k,v) };
 const plan = { chambers: Array.from({length: 8}, (_, i) => ({ x: i*50, z: 0, fy: 2, h: 15, rx: 15, rz: 15, kind: 'hall', pools: [] })), field: { cave: (x,y) => y > 17 ? 1 : -4 } };

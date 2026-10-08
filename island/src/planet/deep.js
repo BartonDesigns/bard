@@ -18,7 +18,7 @@ import { mulberry32, smoothstep, clamp } from '../noise.js';
 import { meshChunk } from './cavenet.js';
 import { rockMaterial, crystalMaterial, waterMaterial, lavaMaterial } from './cavemat.js';
 import { BANDS, bandIndex, hueShift, makeDeepField, LM } from './deepfield.js';
-import { ring, phrase, knock, createRipples } from './resonance.js';
+import { ring, knock, createRipples } from './resonance.js';
 import { soundBus } from '../world/soundbus.js';
 
 const EYE = 1.68;
@@ -58,9 +58,14 @@ export function planDeep(island, plan, makeField) {
 			}
 			if (!ok) continue;
 			const E = pts[n], P = pts[n - 1], ex = E.x - P.x, ez = E.z - P.z, el = Math.hypot(ex, ez) || 1;
+			const x = E.x - ex / el * 0.5, z = E.z - ez / el * 0.5;
 			plan.tunnels.push({ pts, mouth: false, amp: 0.7, gate: true });
-			plan.field = makeField({ chambers: plan.chambers, tunnels: plan.tunnels, shaft: plan.shaft, boulders: plan.boulders, H, n3: plan.n3, holes: plan.holes });
-			return { x: E.x - ex / el * 0.5, z: E.z - ez / el * 0.5, y: E.y, dir: { x: ex / el, z: ez / el }, pts, chamber: c };
+			// Cut through the hall's floor before its mesh is built. This shaft has a roof;
+			// it must not open a new hole in the surface or inherit the daylight shaft.
+			const shaft = { x, z, r: 3.8, bottom: E.y - SHAFT - 4, top: E.y + 3, closed: true };
+			(plan.shafts ||= []).push(shaft);
+			plan.field = makeField({ chambers: plan.chambers, tunnels: plan.tunnels, shaft: plan.shaft, shafts: plan.shafts, boulders: plan.boulders, H, n3: plan.n3, holes: plan.holes });
+			return { x, z, y: E.y, dir: { x: ex / el, z: ez / el }, pts, chamber: c, shaft };
 		}
 	}
 	return null;
@@ -70,7 +75,8 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	const { plan, underworld: UW, isPhone = false, hint, player, mount, bodyKey } = opts;
 	const L = UW?.lighting;
 	if (!plan || !L || !UW.addGlow) return null;
-	const gy = UW.floor(plan.x, plan.z, plan.y + 2) ?? plan.y, BASE = gy - SHAFT;
+	// The floor below the seal now belongs to the shaft, not to the hall.
+	const gy = plan.y, BASE = gy - SHAFT;
 	const dx0 = plan.dir.x, dz0 = plan.dir.z, side = { x: -dz0, z: dx0 };
 	// the Deep's way starts straight under the seal
 	const F0 = makeDeepField(island.seed >>> 0, { cx: 0, cz: 0 }), p00 = F0.path(0);
@@ -81,6 +87,9 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 
 	// ---------- what is kept ----------
 	const key = 'crysis-deep-v1:' + (bodyKey || 'seed:' + (island.seed >>> 0));
+	const timers = new Set();
+	const later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); if (!disposed) fn(); }, ms); timers.add(id); return id; };
+	const phrase = (degrees, gap, options) => degrees.forEach((d, i) => later(() => ring(d, options), i * gap * 1000));
 	let saved = { v: 1, open: false, deepest: 0, ways: [], alcoves: {} };
 	try { const raw = localStorage.getItem(key); if (raw) { const s = JSON.parse(raw); if (s && s.v === 1) saved = { ...saved, ...s, ways: Array.isArray(s.ways) ? s.ways : [], alcoves: s.alcoves && typeof s.alcoves === 'object' ? s.alcoves : {} }; } } catch { /* private mode: this visit only */ }
 	let saveT = 0, dirty = false;
@@ -179,11 +188,12 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	const puzzle = { heard: false, at: 0, playing: 0, sink: saved.open ? 1 : 0, opening: false, announced: false, wrongAt: 0 };
 	function playCall(delay = 0.6) {
 		puzzle.playing = 1;
-		call.forEach((s, i) => setTimeout(() => { if (disposed) return; stones[s].flash = 1; ring(STONE_DEG[s], { vel: 0.5, dur: 1.4 }); surfaceRipples.spawn(new THREE.Vector3(stones[s].x, stones[s].y + 0.05, stones[s].z), glowC, 4); }, (delay + i * 0.55) * 1000));
-		setTimeout(() => { puzzle.playing = 0; }, (delay + call.length * 0.55) * 1000);
+		call.forEach((s, i) => later(() => { stones[s].flash = 1; ring(STONE_DEG[s], { vel: 0.5, dur: 1.4 }); surfaceRipples.spawn(new THREE.Vector3(stones[s].x, stones[s].y + 0.05, stones[s].z), glowC, 4); }, (delay + i * 0.55) * 1000));
+		later(() => { puzzle.playing = 0; }, (delay + call.length * 0.55) * 1000);
 	}
 	const tmpV = new THREE.Vector3();
 	function strikeGate(s) {
+		if (disposed || !s) return;
 		s.flash = 1;
 		ring(STONE_DEG[s.i], { vel: 0.6, dur: 1.8 });
 		surfaceRipples.spawn(tmpV.set(s.x, s.y + 0.05, s.z), glowC, 5);
@@ -200,7 +210,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 			if (puzzle.at === call.length) openGate();
 		} else {
 			puzzle.at = 0;
-			setTimeout(knock, 150);
+			later(knock, 150);
 			if (performance.now() - puzzle.wrongAt > 4000) hint?.('Not that one. The stones play their phrase again.', 3500);
 			puzzle.wrongAt = performance.now();
 			playCall(1.1);
@@ -208,7 +218,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	}
 	function openGate() {
 		puzzle.opening = true;
-		setTimeout(() => phrase([0, 2, 4, 7, 9], 0.16, { vel: 0.55, dur: 2.8 }), 350);
+		later(() => phrase([0, 2, 4, 7, 9], 0.16, { vel: 0.55, dur: 2.8 }), 350);
 		grind();
 		surfaceRipples.spawn(tmpV.set(plan.x, gy + 0.1, plan.z), glowC, 16, 2.6);
 		saved.open = true; save();
@@ -293,7 +303,9 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 			const R = Math.max(m.rx, m.rz) + 4;
 			add(m.ox - (m.kind === 'chasm' ? 28 : R), m.ox + (m.kind === 'chasm' ? 28 : R), m.y - (m.kind === 'chasm' ? 36 : 5), m.y + m.h + 5, m.oz - (m.kind === 'chasm' ? 28 : R), m.oz + (m.kind === 'chasm' ? 28 : R));
 		}
-		if (Dp < 60) { const p = F.path(0); add(p.x - 13, p.x + 13, -4, 12, p.z - 13, p.z + 13); add(p.x - 4, p.x + 4, 0, SHAFT + 16, p.z - 4, p.z + 4); }
+		// The upper cave draws the shaft's mouth. Stop this narrower lining below the
+		// hall so it cannot form a tube through the singing stones and the ceiling.
+		if (Dp < 60) { const p = F.path(0); add(p.x - 13, p.x + 13, -4, 12, p.z - 13, p.z + 13); add(p.x - 4, p.x + 4, 0, SHAFT - CH, p.z - 4, p.z + 4); }
 		// only what is within reach of you
 		for (const k of out) {
 			const [i, j, kk] = k.split(',').map(Number);
@@ -494,7 +506,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 			mk.pushes.push({ x, z, r: 0.6 });
 			mk.glows.push({ x, y: y + 2, z, r: 12, c: new THREE.Color(0.55, 0.9, 1), k: 0.5 });
 			mk.way = { x, y, z, mat, mesh: ws };
-			mk.targets.push({ local: new THREE.Vector3(x, y + 1.4, z), r: 0.8, mesh: ws, label: 'Return to the surface', icon: '⬆', color: 0xaef0ff, reach: 3, act: () => leave() });
+			mk.targets.push({ local: new THREE.Vector3(x, y + 1.4, z), r: 0.8, mesh: ws, label: 'Return to the gate hall', icon: '⬆', color: 0xaef0ff, reach: 3, act: () => leave() });
 		}
 		group.add(mk.group);
 		return mk;
@@ -554,7 +566,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		saved.alcoves[m.L] = site.mask; save();
 		if (site.mask === 7) {
 			site.reveal = 0;
-			setTimeout(() => phrase([0, 2, 4, 7], 0.18, { vel: 0.5, dur: 2.6 }), 420);
+			later(() => phrase([0, 2, 4, 7], 0.18, { vel: 0.5, dur: 2.6 }), 420);
 			ripples.spawn(tmpV.set(o.x, o.y + 0.06, o.z), col, 14, 2.4);
 			hint?.(`The chorus at ${Math.round(m.D)} m is restored. ${restored()} deep alcove${restored() === 1 ? '' : 's'} sing again.`, 5000);
 		} else hint?.(`Deep chorus: ${[1, 2, 4].filter((b) => site.mask & b).length}/3 stones tuned. Strike the others.`, 4000);
@@ -635,6 +647,8 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	const vp = new THREE.Vector3();
 	const floor = (x, z, y) => { const g = vFloor(x, z, y - shift); return g == null ? y - 100 : g + shift; };
 	const push = (p, footY) => { vp.set(p.x, p.y - shift, p.z); vPush(vp, footY - shift); p.x = vp.x; p.z = vp.z; };
+	// The seal is a floor until the rope takes over; the open rim is guarded by gatePush.
+	const gateFloor = (x, z, y) => y > gy - 1 && y < gy + 5 && Math.hypot(x - plan.x, z - plan.z) < 3.9 ? gy : null;
 	// in the hall: its stones stand in the way, and the open shaft is not walked into
 	function gatePush(p, footY) {
 		if (climb || Math.abs(p.x - plan.x) > 12 || Math.abs(p.z - plan.z) > 12 || Math.abs(footY - gy) > 4) return;
@@ -660,7 +674,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		if (busy) return;
 		busy = true;
 		veil.textContent = label; veil.style.opacity = '1';
-		setTimeout(() => { try { move(); } finally { setTimeout(() => { veil.style.opacity = '0'; busy = false; }, 350); } }, 320);
+		later(() => { try { move(); } finally { later(() => { veil.style.opacity = '0'; busy = false; }, 350); } }, 320);
 	}
 	let lastSafe = null, safeT = 0;
 	// stand at a depth on the way (at a landmark's waystone, if given)
@@ -696,24 +710,26 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	const ropeAt = () => ({ x: plan.x - dx0 * 0.55, z: plan.z - dz0 * 0.55 });
 	function climbDown() {
 		const P = player?.();
-		if (!P || climb || busy) return;
+		if (disposed || !P || climb || busy || !saved.open || puzzle.sink < 1) return false;
 		activate();
 		shift = BASE; group.position.y = shift; group.updateMatrixWorld(true);
 		const p0 = F.path(0), lf = F.floor(p0.x, p0.z, 3) ?? 0;
 		marksNear(0);
 		buildNear(new THREE.Vector3(p0.x, lf + EYE, p0.z), isPhone ? 26 : 34);
 		const at = ropeAt();
-		P.locked = true; P.flying = false; P.vel.set(0, 0, 0);
+		P.locked = true; P.flying = false; P.swimming = false; P.diving = false; P.vel.set(0, 0, 0);
 		P.yaw = Math.atan2(-dx0, -dz0); P.pitch = -0.35;
 		climb = { up: false, t: 0, dur: 6.5, x: at.x, z: at.z, from: gy + EYE, to: lf + shift + EYE };
 		hint?.('Down the rope, hand under hand…', 3000);
+		return true;
 	}
 	function climbUp() {
 		const P = player?.();
-		if (!P || climb || busy) return;
+		if (disposed || !P || climb || busy || !active || depth >= 40) return false;
 		const at = ropeAt();
 		P.locked = true; P.vel.set(0, 0, 0); P.pitch = 0.35;
 		climb = { up: true, t: 0, dur: 6.5, x: at.x, z: at.z, from: P.pos.y, to: gy + EYE };
+		return true;
 	}
 	function stepClimb(dt, P) {
 		climb.t = Math.min(1, climb.t + dt / climb.dur);
@@ -732,12 +748,14 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 			const [tx, tz] = F.tangent(0);
 			P.pos.x += tx * 1.6; P.pos.z += tz * 1.6;
 			P.yaw = Math.atan2(-tx, -tz); P.pitch = -0.08;
+			camera.position.copy(P.pos);
 			hint?.(`The Deep · ${BANDS[0].name}\nWaystones take you back up to the hall. Your deepest is ${Math.round(saved.deepest)} m.`, 6000);
 		}
 	}
 	function standInHall(P, d = 4.4) {
 		const x = plan.x - dx0 * d, z = plan.z - dz0 * d;
 		P.flying = false; P.vel.set(0, 0, 0);
+		P.swimming = false; P.diving = false;
 		P.pos.set(x, uwFloor(x, z) + EYE, z);
 		P.yaw = Math.atan2(-(plan.x - x), -(plan.z - z)); P.pitch = -0.15;
 		camera.position.copy(P.pos);
@@ -749,6 +767,7 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 	function deactivate() {
 		if (!active) return;
 		active = false; group.visible = false; meter.style.display = 'none';
+		backdrop.visible = false;
 		if (climb) { climb = null; const P = player?.(); if (P) P.locked = false; }
 		UW.extraInside = prevInside; prevInside = null;
 		for (const c of chunks.values()) dropChunk(c);
@@ -890,10 +909,16 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		if (disposed) return;
 		deactivate();
 		disposed = true;
+		for (const timer of timers) clearTimeout(timer);
+		timers.clear();
 		UW.fog = fogFn;
 		scene.remove(gate, group, backdrop);
 		backdrop.geometry.dispose(); backdrop.material.dispose();
-		gate.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); });
+		surfaceRipples.dispose();
+		const gateGeos = new Set(), gateMats = new Set();
+		gate.traverse((o) => { if (o.geometry) gateGeos.add(o.geometry); if (o.material) gateMats.add(o.material); });
+		for (const g of gateGeos) g.dispose();
+		for (const m of gateMats) m.dispose();
 		for (const g of [...lamps, sealGlow]) g.k = 0;
 		for (const m of mats.values()) m.dispose();
 		for (const m of propMats.values()) m.dispose();
@@ -909,14 +934,15 @@ export function createDeep(island, shared, scene, camera, profile, opts = {}) {
 		gate: { x: plan.x, z: plan.z, y: gy, via: via && { name: via.name, x: via.x, z: via.z, y: via.y } },
 		active: () => active,
 		inside: () => (active ? 1 : 0),
-		floor, push, gatePush, update, targets, dispose,
+		floor, push, gateFloor, gatePush, update, targets, dispose,
 		// for the guide and the tests
 		info: () => ({ open: saved.open, active, depth: Math.round(depth), deepest: saved.deepest, band: BANDS[bandIndex(depth)].name, waystones: saved.ways.length, alcoves: restored(), shift, chunks: chunks.size, meshes: [...chunks.values()].filter((c) => c.mesh).length, fine: [...chunks.values()].filter((c) => c.mesh && c.v === VF).length, tris: [...chunks.values()].reduce((s, c) => s + (c.mesh ? c.mesh.geometry.index.count / 3 : 0), 0), landmarks: [...built.values()].map((mk) => mk.m.kind + '@' + Math.round(mk.m.D)), heard: puzzle.heard, progress: puzzle.at, climbing: !!climb, gate: { x: Math.round(plan.x), y: Math.round(gy), z: Math.round(plan.z) }, time: t0 }),
 		// Crysis.deep('gate' | 'open' | depth): stand at the gate, open it, or go to a depth
 		go(where) {
+			if (disposed) return 'the Deep is closed';
 			if (where === 'gate') { deactivate(); const P = player?.(); if (!P) return 'no player'; standInHall(P, 7); return 'in the gate hall'; }
-			if (where === 'down') { climbDown(); return 'climbing down'; }
-			if (where === 'up') { climbUp(); return 'climbing up'; }
+			if (where === 'down') return climbDown() ? 'climbing down' : 'the rope is not ready';
+			if (where === 'up') return climbUp() ? 'climbing up' : 'return to the foot of the rope first';
 			if (where === 'open') { if (!saved.open) { puzzle.opening = true; puzzle.sink = 0.999; saved.open = true; save(); } return 'open'; }
 			const D = Math.max(0, +where || 0);
 			const L1 = Math.floor((D - 45) / LM), m = F.landmark(L1);

@@ -966,7 +966,7 @@ export function createIslandWorld() {
 			const dp = world.deep = createDeep(island, shared, scene, camera, profile, { plan: deepPlan, underworld: world.underworld, isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, bodyKey: body.key });
 			if (dp) {
 				const uf = island.underFloor, up = island.underPush;
-				island.underFloor = (x, z, y) => (dp.active() ? dp.floor(x, z, y) : uf?.(x, z, y) ?? null);
+				island.underFloor = (x, z, y) => (dp.active() ? dp.floor(x, z, y) : dp.gateFloor(x, z, y) ?? uf?.(x, z, y) ?? null);
 				island.underPush = (p, footY) => { if (dp.active()) dp.push(p, footY); else { up?.(p, footY); dp.gatePush(p, footY); } };
 			} else world.deep = null;
 		}

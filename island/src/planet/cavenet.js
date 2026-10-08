@@ -396,7 +396,7 @@ export function planCaves(island, profile) {
 // ---------- the field ----------
 function smin(a, b, k) { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; }
 
-export function makeField({ chambers, tunnels, shaft, boulders, H, n3, holes }) {
+export function makeField({ chambers, tunnels, shaft, shafts = [], boulders, H, n3, holes }) {
 	// primitives: tunnel segments, chambers, the shaft; each with a box for the lookup grid
 	const prims = [];
 	tunnels.forEach((t, ti) => {
@@ -412,7 +412,7 @@ export function makeField({ chambers, tunnels, shaft, boulders, H, n3, holes }) 
 		const pad = Math.max(c.rx, c.rz) + 6;
 		prims.push({ type: 1, grp: -1, c, amp: c.kind === 'village' ? 2.2 : 3.2, x0: c.x - pad, x1: c.x + pad, z0: c.z - pad, z1: c.z + pad, y0: c.fy - 4, y1: c.fy + c.h + 5 });
 	}
-	if (shaft) prims.push({ type: 2, grp: -2, s: shaft, amp: 0.8, x0: shaft.x - shaft.r - 6, x1: shaft.x + shaft.r + 6, z0: shaft.z - shaft.r - 6, z1: shaft.z + shaft.r + 6, y0: shaft.bottom - 4, y1: shaft.top + 8 });
+	for (const [i, s] of [...(shaft ? [shaft] : []), ...shafts].entries()) prims.push({ type: 2, grp: -2 - i, s, amp: s.closed ? 0.3 : 0.8, x0: s.x - s.r - 6, x1: s.x + s.r + 6, z0: s.z - s.r - 6, z1: s.z + s.r + 6, y0: s.bottom - 4, y1: s.top + 8 });
 	for (const b of boulders) {
 		const m = Math.max(b.rx, b.ry, b.rz) * 1.4 + 1;
 		b.cos = Math.cos(b.rot); b.sin = Math.sin(b.rot);
@@ -491,7 +491,8 @@ export function makeField({ chambers, tunnels, shaft, boulders, H, n3, holes }) 
 				const s = p.s, sx = x - s.x, sz = z - s.z;
 				v = Math.sqrt(sx * sx + sz * sz) - s.r * (1 + 0.35 * smoothstep(s.bottom + 6, s.bottom, y) + 0.25 * smoothstep(s.top - 6, s.top + 2, y));
 				if (s.bottom - y > v) v = s.bottom - y;
-				f = -99;
+				if (s.closed) v = Math.max(v, y - s.top);
+				f = s.closed ? s.bottom : -99;
 			}
 			if (v < best) { best = v; amp = p.amp; floor = f; out.prim = p; }
 			if (gd !== 99) d = d === 99 ? gd : smin(d, gd, 2.6);
