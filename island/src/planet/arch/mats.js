@@ -44,12 +44,12 @@ const LOOK = /* glsl */`
 		vec2 q = vec2(fp.x / 1.8, fp.y / 3.5);
 		vec2 f = fract(q), id = floor(q);
 		float mull = 1.0 - step(0.1, f.x) * step(f.x, 0.9) * step(0.14, f.y) * step(f.y, 0.86);
-		float lit = step(0.45, aH(vec3(id, 7.0))), hue = aH(vec3(id, 11.0));
+		float lit = step(0.38, aH(vec3(id, 7.0))), hue = aH(vec3(id, 11.0));
 		aCol = mix(aCol * 0.25, aCol * 1.4 + 0.02, mull * (1.0 - aFar * 0.8));
 		aRough = mix(0.3, 0.5, mull); aMetal = mix(0.15, 0.3, mull);
-		aEm = (1.0 - mull) * lit * uNight * 1.5 * (0.4 + 0.9 * aH(vec3(id, 3.0)));
+		aEm = (1.0 - mull) * lit * uNight * 2.0 * (0.4 + 0.9 * aH(vec3(id, 3.0)));
 		// (the pink and violet panes deepened, so they keep their colour bright)
-		aEmC = hue < 0.38 ? uWinC : hue < 0.72 ? pow(uWinB, vec3(1.8)) * 1.3 : pow(uWinV, vec3(1.8)) * 1.3;
+		aEmC = hue < 0.3 ? uWinC : hue < 0.66 ? pow(uWinB, vec3(1.8)) * 1.5 : pow(uWinV, vec3(1.8)) * 1.5;
 		// far off, the grid is finer than a pixel: its average glow, not a shimmer
 		float aAvg = smoothstep(350.0, 900.0, length(cameraPosition - vAW));
 		aEm = mix(aEm, 0.45 * uNight * 1.3, aAvg);

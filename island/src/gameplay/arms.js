@@ -6,7 +6,10 @@
 // ask for a hunting or home-defence action without turning the game into a
 // real-world weapons simulator.
 
-export const INVENTORY_VERSION = 1;
+import { MAX_LEVEL, UPGRADE_MATERIAL, canCombine, cleanInstance, combined, mintUid, trained, upgradeCost, valueFactor } from './gear-levels.js';
+
+// 2: every item owned is an instance with an id, a level and a quality tier (gameplay/gear-levels.js)
+export const INVENTORY_VERSION = 2;
 export const MAX_JOURNAL_ENTRIES = 512;
 
 export const ACTIVITIES = Object.freeze({
@@ -31,6 +34,9 @@ export const TRANSACTION_KINDS = Object.freeze({
 	COOL_HEAT: 'cool-heat',
 	SELL: 'sell',
 	TRADE: 'trade',
+	TRAIN: 'train',
+	UPGRADE: 'upgrade',
+	COMBINE: 'combine',
 });
 
 // what a shop pays back for an item it sells, as a share of its own price
@@ -351,26 +357,35 @@ export function quotePrice(itemId, sourceId = ACQUISITION_SOURCES.NPC_TRADER) {
 }
 
 // what a shop pays for one of an item it sells (null: it does not buy it)
-export function sellPrice(itemId, sourceId = ACQUISITION_SOURCES.NPC_TRADER) {
+// (an instance's level and tier raise it: see gear-levels.js valueFactor)
+export function sellPrice(itemId, sourceId = ACQUISITION_SOURCES.NPC_TRADER, inst = null) {
 	if (!ensureSourceItem(sourceId, itemId, 'purchase')) return null;
 	const price = quotePrice(itemId, sourceId);
-	return price == null ? null : Math.max(1, Math.floor(price * SELL_BACK));
+	return price == null ? null : Math.max(1, Math.floor(price * SELL_BACK * (inst ? valueFactor(inst) : 1)));
 }
+// what an outfitter charges to raise an instance one level (plus one upgrade material)
+export function upgradePrice(inst) {
+	const item = itemFor(inst?.i);
+	return item ? upgradeCost(inst, item.basePrice) : null;
+}
+const known = (id) => !!itemFor(id)?.marketTradable;
 
-// one side of a player-to-player trade, cleaned: credits and catalogue items with counts
-// (null when anything in it is not a real, tradable item or a sane amount)
+// one side of a player-to-player trade, cleaned: credits and up to 12 item instances, each
+// with its id, level and tier, in id order (null when anything in it is not a real, tradable
+// item, a sane amount, or an id given twice)
 export function cleanTradeSide(side) {
 	const s = side && typeof side === 'object' ? side : {};
 	const credits = integer(s.credits ?? 0, -1);
 	if (credits < 0 || credits > TRADE_MAX_CREDITS) return null;
-	const items = {};
-	const entries = Object.entries(s.items && typeof s.items === 'object' ? s.items : {});
-	if (entries.length > TRADE_MAX_ITEMS) return null;
-	for (const [itemId, value] of entries) {
-		const item = itemFor(itemId), quantity = integer(value, -1);
-		if (!item || !item.marketTradable || quantity < 0 || quantity > TRADE_MAX_QUANTITY) return null;
-		if (quantity) items[item.id] = quantity;
+	const raw = Array.isArray(s.items) ? s.items : [];
+	if (raw.length > TRADE_MAX_ITEMS) return null;
+	const items = [];
+	for (const x of raw) {
+		const inst = cleanInstance(x, known);
+		if (!inst || inst.l !== x.l || inst.t !== x.t || items.some((y) => y.u === inst.u)) return null;
+		items.push(inst);
 	}
+	items.sort((a, b) => (a.u < b.u ? -1 : 1));
 	return { credits, items };
 }
 
@@ -428,6 +443,8 @@ export function createInventoryState(ownerId, options = {}) {
 			if (quantity) items[itemId] = quantity;
 		}
 	}
+	const instances = {};
+	for (const [itemId, n] of Object.entries(items)) for (let k = 0; k < n; k++) { const u = mintUid(`${ownerId}:${options.updatedAt || 0}:${itemId}`, k); instances[u] = { u, i: itemId, l: 1, t: 0, x: 0 }; }
 	return {
 		version: INVENTORY_VERSION,
 		ownerId: String(ownerId || 'player'),
@@ -435,11 +452,26 @@ export function createInventoryState(ownerId, options = {}) {
 		credits: Math.max(0, integer(options.credits)),
 		heat: clamp(options.heat, 0, 100),
 		items,
+		instances,
+		hand: null,
 		equipped: {},
 		journal: [],
 		updatedAt: integer(options.updatedAt),
 	};
 }
+
+// the counts by item, from the instances
+function recount(state) {
+	const items = {};
+	for (const x of Object.values(state.instances)) items[x.i] = (items[x.i] || 0) + 1;
+	const hand = state.hand && state.instances[state.hand] ? state.hand : null;
+	const equipped = Object.fromEntries(Object.entries(state.equipped || {}).filter(([, itemId]) => items[itemId] > 0));
+	return { ...state, items, hand, equipped };
+}
+// one owned instance (null if not owned)
+export const instanceOf = (state, uid) => state?.instances?.[uid] || null;
+// the instances of one item, best first
+export const instancesOf = (state, itemId) => Object.values(state?.instances || {}).filter((x) => x.i === itemId).sort((a, b) => b.t - a.t || b.l - a.l || (a.u < b.u ? -1 : 1));
 
 function normalizeInventory(raw, ownerId = 'player') {
 	const source = raw && typeof raw === 'object' ? raw : {};
@@ -451,12 +483,21 @@ function normalizeInventory(raw, ownerId = 'player') {
 	});
 	normalized.version = INVENTORY_VERSION;
 	normalized.revision = Math.max(0, integer(source.revision));
+	// version 2 keeps instances; a version 1 save is migrated: its counts became Common, level 1
+	if (source.instances && typeof source.instances === 'object') {
+		normalized.instances = {};
+		for (const x of Object.values(source.instances)) { const inst = cleanInstance(x, (id) => !!itemFor(id)); if (inst) normalized.instances[inst.u] = inst; }
+	}
 	normalized.equipped = {};
 	if (source.equipped && typeof source.equipped === 'object') {
 		for (const [slot, itemId] of Object.entries(source.equipped)) {
-			if (itemFor(itemId) && normalized.items[itemId] > 0) normalized.equipped[String(slot)] = itemId;
+			if (itemFor(itemId)) normalized.equipped[String(slot)] = itemId;
 		}
 	}
+	normalized.hand = typeof source.hand === 'string' ? source.hand : null;
+	// (version 1 held an item by its kind: the best one of that kind now)
+	if (!normalized.hand && normalized.equipped.hand) normalized.hand = instancesOf(normalized, normalized.equipped.hand)[0]?.u || null;
+	Object.assign(normalized, recount(normalized));
 	normalized.journal = Array.isArray(source.journal)
 		? source.journal.filter((entry) => entry && typeof entry.id === 'string').slice(-MAX_JOURNAL_ENTRIES).map((entry) => clone(entry))
 		: [];
@@ -555,19 +596,18 @@ function quantityFor(state, itemId) {
 	return Math.max(0, integer(state.items?.[itemId]));
 }
 
-function withQuantity(state, itemId, delta) {
-	const items = { ...state.items };
-	const quantity = quantityFor(state, itemId) + delta;
-	if (quantity > 0) items[itemId] = quantity;
-	else delete items[itemId];
-	return { ...state, items };
+// more of an item (new instances, Common, level 1, their ids from the transaction's) or fewer
+// (the least valuable go first, the one in hand last, or exactly `uid` when given)
+function withQuantity(state, itemId, delta, seed = '', uid = null) {
+	const instances = { ...state.instances };
+	if (delta > 0) for (let k = 0; k < delta; k++) { let u = mintUid(`${seed}:${itemId}`, k); while (instances[u]) u = mintUid(u, k + 1); instances[u] = { u, i: itemId, l: 1, t: 0, x: 0 }; }
+	else if (delta < 0) {
+		const pick = uid && instances[uid]?.i === itemId ? [instances[uid]] : instancesOf(state, itemId).reverse().sort((a, b) => (a.u === state.hand) - (b.u === state.hand));
+		for (const x of pick.slice(0, -delta)) delete instances[x.u];
+	}
+	return recount({ ...state, instances });
 }
-
-// an item given away or sold is no longer held
-function dropEquipped(state) {
-	const equipped = Object.fromEntries(Object.entries(state.equipped || {}).filter(([, itemId]) => quantityFor(state, itemId) > 0));
-	return { ...state, equipped };
-}
+const dropEquipped = (state) => recount(state);
 
 function applyAccepted(state, tx, details = {}) {
 	const next = {
@@ -610,7 +650,7 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		if (offer && quantity > offer.quantity) return reject(state, tx, 'out-of-stock', 'That player offer does not have enough stock.');
 		const total = unitPrice * quantity;
 		if (state.credits < total) return reject(state, tx, 'insufficient-credits', 'The player does not have enough community credits.');
-		const next = withQuantity({ ...state, credits: state.credits - total }, item.id, quantity);
+		const next = withQuantity({ ...state, credits: state.credits - total }, item.id, quantity, id);
 		return applyAccepted(next, tx, { sourceId, itemId: item.id, quantity, total, currency: 'community-credits' });
 	}
 
@@ -623,21 +663,23 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		if (quantity !== 1) return reject(state, tx, 'theft-quantity', 'A recovery-cache attempt can secure one item per authored event.');
 		if (theftProofApplied(state, proof.attemptId)) return reject(state, tx, 'duplicate-theft-proof', 'That recovery-cache result has already been applied.');
 		if (!ensureSourceItem(tx.sourceId, item.id, 'theft')) return reject(state, tx, 'not-stealable', 'That item is not available from this recovery cache.');
-		const next = withQuantity({ ...state, heat: clamp(state.heat + clamp(proof.heatDelta, 0, 100), 0, 100) }, item.id, quantity);
+		const next = withQuantity({ ...state, heat: clamp(state.heat + clamp(proof.heatDelta, 0, 100), 0, 100) }, item.id, quantity, id);
 		return applyAccepted(next, tx, { sourceId: tx.sourceId, itemId: item.id, quantity, outcome: proof.outcome, heatDelta: clamp(proof.heatDelta, 0, 100), theftAttemptId: String(proof.attemptId) });
 	}
 
 	if (kind === TRANSACTION_KINDS.USE) {
 		if (!item || quantityFor(state, item.id) < quantity) return reject(state, tx, 'not-owned', 'The player does not have that item.');
 		if (!itemSupportsActivity(item.id, tx.activity)) return reject(state, tx, 'wrong-activity', 'That item does not support this activity.');
-		const next = item.consumable ? withQuantity(state, item.id, -quantity) : state;
+		const next = item.consumable ? withQuantity(state, item.id, -quantity, id, tx.uid) : state;
 		return applyAccepted(next, tx, { itemId: item.id, activity: tx.activity, quantity, consumed: item.consumable });
 	}
 
 	if (kind === TRANSACTION_KINDS.EQUIP) {
-		if (!item || quantityFor(state, item.id) < 1) return reject(state, tx, 'not-owned', 'The player does not have that item.');
-		const slot = String(tx.slot || item.slot || 'utility');
-		return applyAccepted({ ...state, equipped: { ...state.equipped, [slot]: item.id } }, tx, { itemId: item.id, slot });
+		// (a particular one by its uid, or the best of the kind)
+		const inst = tx.uid ? instanceOf(state, tx.uid) : item ? instancesOf(state, item.id)[0] : null;
+		if (!inst || (item && inst.i !== item.id)) return reject(state, tx, 'not-owned', 'The player does not have that item.');
+		const slot = String(tx.slot || itemFor(inst.i).slot || 'utility');
+		return applyAccepted({ ...state, equipped: { ...state.equipped, [slot]: inst.i }, hand: slot === 'hand' ? inst.u : state.hand }, tx, { itemId: inst.i, uid: inst.u, slot });
 	}
 
 	if (kind === TRANSACTION_KINDS.UNEQUIP) {
@@ -646,23 +688,24 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		const equipped = { ...state.equipped };
 		const itemId = equipped[slot];
 		delete equipped[slot];
-		return applyAccepted({ ...state, equipped }, tx, { itemId, slot });
+		return applyAccepted({ ...state, equipped, hand: slot === 'hand' ? null : state.hand }, tx, { itemId, slot });
 	}
 
 	if (kind === TRANSACTION_KINDS.DISCARD) {
 		if (!item || quantityFor(state, item.id) < quantity) return reject(state, tx, 'not-owned', 'The player does not have that item.');
-		const equipped = Object.fromEntries(Object.entries(state.equipped).filter(([, itemId]) => itemId !== item.id || quantityFor(state, item.id) > quantity));
-		return applyAccepted({ ...withQuantity(state, item.id, -quantity), equipped }, tx, { itemId: item.id, quantity });
+		return applyAccepted(withQuantity(state, item.id, -quantity, id, tx.uid), tx, { itemId: item.id, quantity });
 	}
 
 	if (kind === TRANSACTION_KINDS.SELL) {
 		if (!item || quantityFor(state, item.id) < quantity) return reject(state, tx, 'not-owned', 'The player does not have that item.');
 		const sourceId = String(tx.sourceId || '');
-		const unitPrice = sellPrice(item.id, sourceId);
+		const sold = tx.uid ? instanceOf(state, tx.uid) : null;
+		if (tx.uid && (!sold || sold.i !== item.id || quantity !== 1)) return reject(state, tx, 'not-owned', 'The player does not have that item.');
+		const unitPrice = sellPrice(item.id, sourceId, sold);
 		if (unitPrice == null) return reject(state, tx, 'not-bought', 'This place does not buy that item.');
 		if (tx.unitPrice !== undefined && integer(tx.unitPrice, -1) !== unitPrice) return reject(state, tx, 'price-mismatch', 'The buy-back price changed before this sale was applied.');
 		const total = unitPrice * quantity;
-		const next = dropEquipped(withQuantity({ ...state, credits: state.credits + total }, item.id, -quantity));
+		const next = withQuantity({ ...state, credits: state.credits + total }, item.id, -quantity, id, tx.uid);
 		return applyAccepted(next, tx, { sourceId, itemId: item.id, quantity, total, currency: 'community-credits' });
 	}
 
@@ -672,11 +715,47 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		const give = cleanTradeSide(tx.give), get = cleanTradeSide(tx.get);
 		if (!give || !get) return reject(state, tx, 'bad-trade', 'That trade has an item or amount the game does not know.');
 		if (state.credits < give.credits) return reject(state, tx, 'insufficient-credits', 'The player does not have enough community credits.');
-		for (const [itemId, n] of Object.entries(give.items)) if (quantityFor(state, itemId) < n) return reject(state, tx, 'not-owned', 'The player no longer has everything offered.');
-		let next = { ...state, credits: Math.min(Number.MAX_SAFE_INTEGER, state.credits - give.credits + get.credits) };
-		for (const [itemId, n] of Object.entries(give.items)) next = withQuantity(next, itemId, -n);
-		for (const [itemId, n] of Object.entries(get.items)) next = withQuantity(next, itemId, n);
-		return applyAccepted(dropEquipped(next), tx, { peer: String(tx.peer || '').slice(0, 40), give, get });
+		// what is given must be here, exactly as offered (the same id, level and tier)
+		for (const x of give.items) { const own = instanceOf(state, x.u); if (!own || own.i !== x.i || own.l !== x.l || own.t !== x.t) return reject(state, tx, 'not-owned', 'The player no longer has everything offered.'); }
+		const instances = { ...state.instances };
+		for (const x of give.items) delete instances[x.u];
+		// (an id already here, which only a mistake elsewhere could make, gets a new one: never lost)
+		for (const x of get.items) { let u = x.u; while (instances[u]) u = mintUid(`${id}:${u}`, 1); instances[u] = { ...x, u }; }
+		const next = recount({ ...state, instances, credits: Math.min(Number.MAX_SAFE_INTEGER, state.credits - give.credits + get.credits) });
+		return applyAccepted(next, tx, { peer: String(tx.peer || '').slice(0, 40), give: give.items.map((x) => x.u), get: get.items.map((x) => x.u), credits: get.credits - give.credits });
+	}
+
+	// experience from using or carrying an item (local and frequent: counted, not journaled)
+	if (kind === TRANSACTION_KINDS.TRAIN) {
+		const inst = instanceOf(state, tx.uid);
+		if (!inst) return reject(state, tx, 'not-owned', 'The player does not have that item.');
+		const next = recount({ ...state, instances: { ...state.instances, [inst.u]: trained(inst, clamp(tx.xp, 0, 1000)) }, revision: state.revision + 1, updatedAt: integer(tx.at, state.updatedAt) });
+		return { ok: true, state: next, receipt: receipt(id, kind, true, next.revision, { uid: inst.u, level: next.instances[inst.u].l }) };
+	}
+
+	// one level more at an outfitter, for credits and one upgrade material
+	if (kind === TRANSACTION_KINDS.UPGRADE) {
+		const inst = instanceOf(state, tx.uid);
+		if (!inst) return reject(state, tx, 'not-owned', 'The player does not have that item.');
+		if (inst.l >= MAX_LEVEL) return reject(state, tx, 'max-level', 'That item is already at its highest level.');
+		if (String(tx.sourceId || '') !== ACQUISITION_SOURCES.NPC_TRADER) return reject(state, tx, 'not-here', 'Upgrades are done at an outfitter.');
+		const cost = upgradePrice(inst);
+		if (tx.cost !== undefined && integer(tx.cost, -1) !== cost) return reject(state, tx, 'price-mismatch', 'The upgrade price changed.');
+		if (state.credits < cost) return reject(state, tx, 'insufficient-credits', 'The player does not have enough community credits.');
+		const material = instancesOf(state, UPGRADE_MATERIAL).reverse().find((x) => x.u !== inst.u && x.u !== state.hand) || instancesOf(state, UPGRADE_MATERIAL).find((x) => x.u !== inst.u);
+		if (!material) return reject(state, tx, 'no-material', 'An upgrade needs a Repair Roll as material.');
+		const instances = { ...state.instances, [inst.u]: { ...inst, l: inst.l + 1, x: 0 } };
+		delete instances[material.u];
+		return applyAccepted(recount({ ...state, credits: state.credits - cost, instances }), tx, { uid: inst.u, level: inst.l + 1, cost, material: material.u });
+	}
+
+	// two of a kind and tier become one of the next tier
+	if (kind === TRANSACTION_KINDS.COMBINE) {
+		const a = instanceOf(state, tx.uid), b = instanceOf(state, tx.with);
+		if (!canCombine(a, b)) return reject(state, tx, 'cannot-combine', 'Only two of the same item and tier combine, below Legendary.');
+		const instances = { ...state.instances, [a.u]: combined(a, b) };
+		delete instances[b.u];
+		return applyAccepted(recount({ ...state, instances, hand: state.hand === b.u ? a.u : state.hand }), tx, { uid: a.u, consumed: b.u, tier: a.t + 1 });
 	}
 
 	if (kind === TRANSACTION_KINDS.COOL_HEAT) {
@@ -718,6 +797,8 @@ export function inventorySummary(state) {
 		credits: normalized.credits,
 		heat: normalized.heat,
 		items: Object.entries(normalized.items).map(([itemId, quantity]) => ({ itemId, name: itemFor(itemId).name, quantity })),
+		instances: Object.values(normalized.instances).map((x) => ({ ...x })),
+		hand: normalized.hand,
 		equipped: { ...normalized.equipped },
 	};
 }

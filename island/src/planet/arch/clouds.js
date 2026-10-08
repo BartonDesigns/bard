@@ -32,12 +32,15 @@ vec3 mistC(float up, float n, float glow){
 	c = mix(c, mix(vec3(0.035, 0.01, 0.09), vec3(0.34, 0.07, 0.3), up * up) * uSkyDusk.y * (0.5 + 0.9 * n), uSkyDusk.x * 0.92);
 	// lit from below, pink, deepest under the tops
 	c += uWarm * (1.0 - up) * 0.12 * uSkyDusk.x * n;
+	// and white-pink billows where the towers' light catches them
+	c += vec3(1.0, 0.78, 0.9) * min(1.0, glow) * glow * 0.55 * uSkyDusk.x * (0.4 + 0.6 * n);
 	return c + uWarm * glow * (uDusk + uSkyDusk.x * 0.8) * (3.4 - up * 1.8);
 }
 `;
 
 const DECK_V = /* glsl */`
 uniform vec2 uOff;
+uniform vec4 uObs[12];
 attribute vec3 aL;
 varying vec3 vW;
 varying float vL;
@@ -50,6 +53,10 @@ void main(){
 	vec2 bq = w.xz - uOff;
 	float bl = mN(bq * 0.012) * 0.6 + mN(bq * 0.031 + 4.0) * 0.4;
 	w.y += (bl - 0.42) * aL.z * (0.25 + 0.75 * aL.x);
+	// heaped up round the towers' feet, rolling higher the nearer
+	float heap = 0.0;
+	for (int i = 0; i < 12; i++) { vec4 o = uObs[i]; if (o.z <= 0.0) continue; float r = length(w.xz - o.xy) / (o.z * 4.5); heap += o.w * exp(-r * r); }
+	w.y += min(1.6, heap) * aL.z * (0.5 + 0.9 * aL.x) * (0.75 + 0.5 * bl);
 	vW = w.xyz; vL = aL.x; vB = aL.y;
 	vec4 mvPosition = viewMatrix * w;
 	gl_Position = projectionMatrix * mvPosition;
@@ -80,8 +87,8 @@ void main(){
 		q += ac * (b0 - b);
 		hole *= smoothstep(R * 0.98, R * 1.35, r);
 		// (close round the foot: a gaussian, so the far deck keeps its own dark)
-		float gr = r / (R * 2.4);
-		glow += o.w * exp(-gr * gr);
+		float gr = r / (R * 2.6);
+		glow += o.w * (exp(-gr * gr) + 0.12 * exp(-r / (R * 7.0)));
 	}
 	glow *= 1.0 - vB * 0.6;
 	vec2 nq = (q - uOff) * 0.0055 + vL * 1.7 + vB * 9.0;
@@ -167,6 +174,71 @@ void main(){
 	// (the haze takes less of it: its own colours carry to the distance)
 	gl_FragColor.rgb = mix(preFog, gl_FragColor.rgb, 0.45);
 }`;
+
+// heaped cumulus far off round the settlement, standing over the horizon: billboards turned to
+// you about their upright, lobes of cloud on a flat base, lit pink from below at dusk, violet
+// and dark in their tops; only while the world's own dusk is on
+const HERO_V = /* glsl */`
+attribute vec4 aC;
+attribute vec4 aS;
+varying vec2 vUv;
+varying vec4 vS;
+void main(){
+	vec3 to = aC.xyz - cameraPosition;
+	vec3 right = normalize(vec3(-to.z, 0.0, to.x));
+	vec3 p = aC.xyz + right * position.x * aC.w + vec3(0.0, position.y * aC.w * 0.62, 0.0);
+	vUv = position.xy * 2.0; vS = aS;
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}`;
+const HERO_F = /* glsl */`
+uniform vec4 uSkyDusk;
+uniform float uTime;
+uniform vec3 uHor;
+varying vec2 vUv;
+varying vec4 vS;
+${NOISE}
+void main(){
+	vec2 q = vUv;
+	float d = 0.0, sd = vS.x * 37.0;
+	for (int i = 0; i < 7; i++) {
+		float fi = float(i), hx = mH(vec2(sd, fi)), hy = mH(vec2(fi, sd));
+		vec2 c = vec2((hx - 0.5) * 1.3, -0.55 + hy * 0.55 * (1.0 - abs(hx - 0.5) * 1.4) + (i == 0 ? 0.45 : 0.0));
+		float r = 0.26 + mH(vec2(sd + 3.0, fi)) * 0.22 + (i == 0 ? 0.12 : 0.0);
+		d = max(d, smoothstep(r, r * 0.45, length((q - c) * vec2(1.0, 1.15))));
+	}
+	float n = mF(q * 3.2 + vS.x * 11.0 + uTime * 0.004);
+	d *= smoothstep(0.25, 0.6, d + n * 0.45 - 0.2) * smoothstep(-0.78, -0.62, q.y);
+	float a = d * uSkyDusk.x * vS.y;
+	if (a < 0.01) discard;
+	float v = clamp((q.y + 0.7) / 1.5, 0.0, 1.0);
+	// the underside lit hot pink by the sun gone down, the heaped tops in violet shade
+	vec3 c = mix(vec3(1.0, 0.5, 0.68) * 1.15, vec3(0.2, 0.11, 0.32), smoothstep(0.08, 0.85, v - n * 0.25));
+	c = mix(c, uHor * 0.5, 0.15) * uSkyDusk.y;
+	gl_FragColor = vec4(c, a);
+	#include <tonemapping_fragment>
+	#include <colorspace_fragment>
+}`;
+export function createHeroes(scene, shared, centre, { isPhone = false, seed = 1, sea = 0 } = {}) {
+	let s = (seed ^ 0x77c1) >>> 0;
+	const rnd = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+	const n = isPhone ? 4 : 7, C = [], S = [];
+	for (let i = 0; i < n; i++) {
+		const a = (i + rnd() * 0.6) / n * Math.PI * 2, d = 4200 + rnd() * 2600, w = 1500 + rnd() * 1300;
+		C.push(centre.x + Math.sin(a) * d, sea + 260 + rnd() * 380 + w * 0.3, centre.z + Math.cos(a) * d, w);
+		S.push(rnd(), 0.75 + rnd() * 0.25, 0, 0);
+	}
+	const g = new THREE.InstancedBufferGeometry();
+	g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3));
+	g.setIndex([0, 1, 2, 0, 2, 3]);
+	g.setAttribute('aC', new THREE.InstancedBufferAttribute(new Float32Array(C), 4));
+	g.setAttribute('aS', new THREE.InstancedBufferAttribute(new Float32Array(S), 4));
+	g.instanceCount = n;
+	const U = { uSkyDusk: shared.uDuskSky || (shared.uDuskSky = { value: new THREE.Vector4(0, 1, 0, 0) }), uTime: shared.uTime, uHor: shared.uSkyHor || { value: new THREE.Color(0.5, 0.4, 0.6) } };
+	const m = new THREE.Mesh(g, new THREE.ShaderMaterial({ uniforms: U, vertexShader: HERO_V, fragmentShader: HERO_F, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+	m.frustumCulled = false; m.renderOrder = 2; m.name = 'arch:heroes';
+	scene.add(m);
+	return { mesh: m, dispose() { g.dispose(); m.material.dispose(); scene.remove(m); } };
+}
 
 // the same noise on the CPU, for the veil when you fly into it
 const fr = (v) => v - Math.floor(v);

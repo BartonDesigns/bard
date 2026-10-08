@@ -12,7 +12,7 @@ import { Kit, skyEnvironment, frame, box, cbox, strut, sweep, lathe, ring, prism
 import { colliders } from '../alien.js';
 import { mulberry32 } from '../../noise.js';
 import { archMaterial, railGlass, contactMaterial, archUniforms } from './mats.js';
-import { createMist } from './clouds.js';
+import { createMist, createHeroes } from './clouds.js';
 import { createGlow } from './glow.js';
 import { towerPlan, housePlan, frame as roomFrame } from './rooms.js';
 import { createInteriors } from './interiors.js';
@@ -735,6 +735,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 	const banks = (plan.cities || []).map((c) => ({ x: c.x, z: c.z, r: 75, y: (island.sea || 0) + 8, rise: 30, n: 14, size: 75 }));
 	if (M) banks.push({ x: M.x, z: M.z, r: M.r, y: M.y - 6, rise: 26, n: 28, size: 85 });
 	const mist = createMist(scene, shared, plan.mist, obs.slice(0, 12), { isPhone, seed: plan.seed, glow: S.glow, banks, heightAt: H });
+	const heroes = createHeroes(scene, shared, plan.centre, { isPhone, seed: plan.seed, sea: island.sea || 0 });
 	// glowing flowers on the green near the houses, and hamlets' lamps on the slopes over the mist
 	const dots = X.dots;
 	const grassy = (x, z) => island.maskAt ? island.maskAt(x, z, 3) : 1;
@@ -886,6 +887,7 @@ export function createArch(island, shared, scene, camera, profile, plan, opts = 
 		for (const m of [mats.shell, mats.glass, contactMat]) m.dispose();
 		group.traverse((o) => o.geometry?.dispose());
 		mist.dispose();
+		heroes.dispose();
 		glow.dispose();
 		In.dispose();
 		bloom?.dispose();
