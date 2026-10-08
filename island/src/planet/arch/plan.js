@@ -48,6 +48,16 @@ function bare(I, x, z, r) {
 		}
 	}
 }
+// paved under a floor: the path mask, which the grass (world/grass.js) never grows up through
+function pave(I, x, z, r) {
+	const { N, cell, half, masks } = I;
+	for (let j = Math.max(0, Math.floor((z - r + half) / cell)); j <= Math.min(N - 1, Math.ceil((z + r + half) / cell)); j++) {
+		for (let i = Math.max(0, Math.floor((x - r + half) / cell)); i <= Math.min(N - 1, Math.ceil((x + r + half) / cell)); i++) {
+			const v = Math.round(smoothstep(r, r - 2, Math.hypot(-half + i * cell - x, -half + j * cell - z)) * 200);
+			if (v > masks[(j * N + i) * 4]) masks[(j * N + i) * 4] = v;
+		}
+	}
+}
 // a footpath worn into the path mask
 function wear(I, pts, w) {
 	const { N, cell, half, masks } = I;
@@ -258,10 +268,13 @@ export function planArch(island, profile, opts = {}) {
 		seat(island, v, -v.W / 2 - 1, v.W / 2 + 1, -v.B - 1, 0, v.y - 0.12, 10);
 		const back = world(v, 0, -v.B / 2);
 		bare(island, back.x, back.z, Math.max(v.W, v.B) / 2 + 4);
+		// (and under the rooms out over the lip, and down a terraced house's face: no grass up through their floors)
+		for (const lz of v.kind === 'terraces' ? [2, 8, 14, 20] : [0, 4]) { const q = world(v, 0, lz); bare(island, q.x, q.z, v.W / 2 + 3); pave(island, q.x, q.z, v.W / 2); }
+		pave(island, back.x, back.z, Math.max(v.W, v.B) / 2);
 		clear.push({ x: back.x, z: back.z, r: Math.max(v.W, v.B) / 2 + 8 });
 		avoid.push({ x: v.x, z: v.z, r: 30 });
 	}
-	for (const T of towers) if (!T.sea) { bare(island, T.x, T.z, T.R + 4); clear.push({ x: T.x, z: T.z, r: T.R + 10 }); }
+	for (const T of towers) if (!T.sea) { const rr = Math.max(T.R * 1.6, Math.hypot(T.sw, T.sd) / 2 + 2); bare(island, T.x, T.z, rr + 4); pave(island, T.x, T.z, rr); clear.push({ x: T.x, z: T.z, r: rr + 10 }); }
 	// footpaths along the cliff tops between neighbouring houses
 	const paths = [];
 	for (let i = 0; i < villas.length; i++) {
@@ -307,6 +320,7 @@ export function planArch(island, profile, opts = {}) {
 	if (shore) {
 		ease(island, shore.x, shore.z, 6, 8, shore.y);
 		bare(island, shore.x, shore.z, 8);
+		pave(island, shore.x, shore.z, 5);
 		clear.push({ x: shore.x, z: shore.z, r: 12 });
 	}
 	let rad = 0;

@@ -16,14 +16,20 @@ import { cleanTradeSide, TRANSACTION_KINDS } from './arms.js';
 export const ACK_MS = 4000, SEEN_MS = 9000, RESEND_MS = 2500;
 // a finished trade is forgotten after this long
 export const KEEP_MS = 120000;
+// once both have confirmed, a short hold before the asker commits, in which either can still cancel
+export const HOLD_MS = 1500;
 export const OPEN = ['asking', 'invited', 'open'];
 
-const empty = () => ({ credits: 0, items: {} });
+const empty = () => ({ credits: 0, items: [] });
 const other = (role) => (role === 'a' ? 'b' : 'a');
 export const keyOf = (T) => `${T.v.a}.${T.v.b}`;
-const canon = (s) => JSON.stringify({ credits: s?.credits || 0, items: Object.keys(s?.items || {}).sort().map((k) => [k, s.items[k]]) });
+const canon = (s) => JSON.stringify({ credits: s?.credits || 0, items: [...(s?.items || [])].sort((a, b) => (a.u < b.u ? -1 : 1)).map((x) => [x.u, x.i, x.l, x.t]) });
 export const sameSides = (x, y) => !!x && !!y && canon(x.a) === canon(y.a) && canon(x.b) === canon(y.b);
-const copySides = (s) => ({ a: { credits: s.a.credits, items: { ...s.a.items } }, b: { credits: s.b.credits, items: { ...s.b.items } } });
+const copySide = (x) => ({ credits: x.credits, items: x.items.map((y) => ({ ...y })) });
+const copySides = (s) => ({ a: copySide(s.a), b: copySide(s.b) });
+const bothOk = (T) => T.ok.a === keyOf(T) && T.ok.b === keyOf(T);
+// seconds left of the hold (0 when not holding)
+export const holdLeft = (T, now) => (T?.sealAt && T.status === 'open' && bothOk(T) ? Math.max(0, T.sealAt - now) : 0);
 const out = (T, send = [], note = '') => ({ T, send, note });
 
 export function newTradeId(rand = Math.random) {
@@ -60,7 +66,7 @@ export function editSide(T, side, now = 0) {
 	if (!s) return out(T, [], 'bad');
 	if (canon(s) === canon(T.sides[T.role])) return out(T);
 	const v = { ...T.v, [T.role]: T.v[T.role] + 1 };
-	const N = { ...T, status: 'open', sides: { ...T.sides, [T.role]: s }, v, ok: { a: '', b: '' }, sentAt: now };
+	const N = { ...T, status: 'open', sides: { ...T.sides, [T.role]: s }, v, ok: { a: '', b: '' }, sealAt: 0, sentAt: now };
 	return out(N, [{ op: 'update', id: T.id, v: v[T.role], side: s }]);
 }
 
@@ -71,8 +77,8 @@ export function accept(T, ctx) {
 	let N = { ...T, status: 'open', ok: { ...T.ok, [T.role]: key }, sentAt: ctx.now || 0 };
 	if (T.role === 'b') N.prepared = { ...T.prepared, [key]: copySides(T.sides) };
 	const send = [{ op: 'accept', id: T.id, key, sides: copySides(T.sides) }];
-	if (N.role === 'a' && N.ok.b === key) return commit(N, ctx);
-	return out(N, send);
+	if (bothOk(N)) N.sealAt = (ctx.now || 0) + HOLD_MS;
+	return out(N, send, bothOk(N) ? 'sealing' : '');
 }
 
 // both confirmed one version: the asker applies its side and tells the other
@@ -114,12 +120,12 @@ export function receive(T, m, ctx) {
 			if (!OPEN.includes(T.status) || !(m.v > T.v[them])) return out(T);
 			const s = cleanTradeSide(m.side);
 			if (!s) return out(T);
-			return out({ ...T, status: T.status === 'asking' ? 'open' : T.status, sides: { ...T.sides, [them]: s }, v: { ...T.v, [them]: m.v }, ok: { a: '', b: '' } }, [], 'changed');
+			return out({ ...T, status: T.status === 'asking' ? 'open' : T.status, sides: { ...T.sides, [them]: s }, v: { ...T.v, [them]: m.v }, ok: { a: '', b: '' }, sealAt: 0 }, [], 'changed');
 		}
 		case 'accept': {
 			if (!OPEN.includes(T.status) || m.key !== keyOf(T) || !sameSides(m.sides, T.sides)) return out(T);
 			const N = { ...T, status: T.status === 'asking' ? 'open' : T.status, ok: { ...T.ok, [them]: m.key } };
-			if (N.role === 'a' && N.ok.a === m.key) return commit(N, ctx);
+			if (bothOk(N)) { N.sealAt = now + HOLD_MS; return out(N, [], 'sealing'); }
 			return out(N, [], 'accepted');
 		}
 		case 'commit': {
@@ -154,9 +160,11 @@ export function receive(T, m, ctx) {
 	return out(T);
 }
 
-// time passing: give up on a silent server or friend, and send again what may have been lost
-export function tick(T, now) {
+// time passing: give up on a silent server or friend, send again what may have been lost, and
+// (the asker) commit once the hold after both confirmed is over. ctx as for receive.
+export function tick(T, now, ctx = null) {
 	if (!T) return out(T);
+	if (T.role === 'a' && T.status === 'open' && T.sealAt && now >= T.sealAt && bothOk(T) && ctx) return commit(T, { ...ctx, now });
 	if (T.status === 'asking') {
 		if (!T.relayed && now - T.at > ACK_MS) return end(T, 'failed', 'server', now);
 		if (T.relayed && now - T.at > SEEN_MS) return end(T, 'failed', 'peer', now);

@@ -255,7 +255,7 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 			const span = ((R.a1 - R.a0) % TAU + TAU) % TAU || TAU, a = R.a0 + span * 0.12, rm = R.r0 + (R.r1 - R.r0) * 0.38;
 			at = [Math.sin(a) * rm, Math.cos(a) * rm];
 			to = [Math.sin(a + Math.min(span * 0.5, 1.6)) * rm, Math.cos(a + Math.min(span * 0.5, 1.6)) * rm];
-			if (R.kind === 'crown') { at = [Math.sin(a) * (V.r - 1.5), Math.cos(a) * (V.r - 1.5)]; to = [0, 0]; }
+			if (R.kind === 'crown') { at = [Math.sin(a) * 4.4, Math.cos(a) * 4.4]; to = [Math.sin(a) * V.r, Math.cos(a) * V.r]; }
 		} else {
 			const zc = (R.z0 + R.z1) / 2;
 			at = [R.x0 + 1.0, zc + (R.z1 - R.z0) * 0.22];
@@ -274,7 +274,7 @@ export function createInteriors(scene, shared, buildings, opts = {}) {
 			if (k >= 0) { at = c[k]; to = V.round ? [-at[0] * 0.6, -at[1] * 0.6] : [R.x1, at[1] * 0.5]; }
 		}
 		const [wx, wz] = V.F.p(at[0], at[1]), [tx, tz] = V.F.p(to[0], to[1]);
-		return { x: wx, y: V.F.y + y, z: wz, yaw: Math.atan2(-(tx - wx), -(tz - wz)), pitch: V.domeR ? 0.55 : 0.02, name: `${opts.settlement} · ${R.name}`, building: B.name, kind: R.kind, h: +V.h.toFixed(1), level: V.i, levels: B.vols.length };
+		return { x: wx, y: V.F.y + y, z: wz, yaw: Math.atan2(-(tx - wx), -(tz - wz)), pitch: V.domeR ? 0.42 : 0.02, name: `${opts.settlement} · ${R.name}`, building: B.name, kind: R.kind, h: +V.h.toFixed(1), level: V.i, levels: B.vols.length };
 	}
 	const indoors = () => !!here;
 	function dispose() {

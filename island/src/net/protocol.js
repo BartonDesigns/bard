@@ -6,7 +6,7 @@
 export const VERSION = 1;
 export const MAX_PLAYERS = 8;
 // one message's size, in characters
-export const MAX_BYTES = 2048;
+export const MAX_BYTES = 3072;
 // messages a second each player may send, and the burst allowed over it
 export const RATE = 20, BURST = 40;
 // silence (no message and no ping) that counts as gone

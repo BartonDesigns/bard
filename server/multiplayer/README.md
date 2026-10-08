@@ -44,7 +44,7 @@ or Join, nothing connects, and a `?room=` link just opens the game as usual.
   - An empty room is kept for 30 minutes so people can reconnect, then forgotten.
 - **Limits:**
   - 8 players a room;
-  - 2 KB a message;
+  - 3 KB a message (a full trade offer of 12 levelled items a side fits);
   - 20 messages a second per player, with bursts up to 40 (a flood closes that socket);
   - 20 new rooms an hour from one address.
 - **Trades:** a `trade` message names one player (`to`); only that player gets it, with who it

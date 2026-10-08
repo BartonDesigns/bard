@@ -143,6 +143,8 @@ section('host promotion');
 
 // ---------- trading ----------
 section('trading');
+const LAMP = { u: 'lamp-0001', i: 'camp-lantern', l: 3, t: 2, x: 40 };
+const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' + String(i).padStart(3, '0'), i: 'station-signal-flare', l: 10, t: 4, x: 999999 }));
 {
 	const { R } = await makeRoom();
 	const a = await join(R, 'owner-aaaa', 'Ann'), b = await join(R, 'guest-bbbb', 'Ben'), c = await join(R, 'third-cccc', 'Cat');
@@ -152,22 +154,27 @@ section('trading');
 	ok(!c.of('trade').length && !a.of('trade').length, 'no one else hears it, nor the sender');
 	const ack = a.of('trade-ack')[0];
 	ok(ack && ack.id === 'tr-123456' && ack.op === 'propose' && ack.there === true && ack.to === 'guest-bbbb', 'the sender is told it was passed on');
-	await say(R, b, { t: 'trade', op: 'update', id: 'tr-123456', to: 'owner-aaaa', v: 1, side: { credits: 50, items: { 'camp-lantern': 2 } } });
+	await say(R, b, { t: 'trade', op: 'update', id: 'tr-123456', to: 'owner-aaaa', v: 1, side: { credits: 50, items: [LAMP, { ...LAMP, u: 'lamp-0002', l: 9, t: 4 }] } });
 	const up = a.of('trade')[0];
-	ok(up?.side.credits === 50 && up.side.items['camp-lantern'] === 2 && up.v === 1, 'an offer travels with its credits and items');
-	await say(R, a, { t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: '0.1', sides: { a: { credits: 0, items: {} }, b: { credits: 50, items: { 'camp-lantern': 2 } } } });
+	ok(up?.side.credits === 50 && up.side.items.length === 2 && up.side.items[1].l === 9 && up.side.items[1].t === 4 && up.v === 1, 'an offer travels with its credits and item instances, levels and tiers');
+	await say(R, a, { t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: '0.1', sides: { a: { credits: 0, items: [] }, b: { credits: 50, items: [LAMP] } } });
 	ok(b.of('trade')[1]?.key === '0.1' && b.of('trade')[1].sides.b.credits === 50, 'a confirmation carries the version and both sides');
 	const n = b.of('trade').length;
 	for (const bad of [
 		{ t: 'trade', op: 'steal', id: 'tr-123456', to: 'guest-bbbb' },
 		{ t: 'trade', op: 'update', id: 'x', to: 'guest-bbbb' },
 		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: -5 } },
-		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: { 'Bad Item!': 1 } } },
-		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: Object.fromEntries(Array.from({ length: 13 }, (_, i) => ['item-' + i, 1])) } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, i: 'Bad Item!' }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: Array.from({ length: 13 }, (_, i) => ({ ...LAMP, u: 'lamp-' + i })) } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [LAMP, LAMP] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, l: 11 }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, t: 5 }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, u: 'BAD ID' }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: { 'camp-lantern': 1 } } },
 		{ t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: 'one' },
 		{ t: 'trade', op: 'propose', id: 'tr-123456' },
 	]) await say(R, a, bad);
-	ok(b.of('trade').length === n, 'bad trades are dropped: op, id, credits, items, too many, key, no one addressed');
+	ok(b.of('trade').length === n, 'bad trades are dropped: op, id, credits, item, too many, an id twice, level, tier, item id, the old count form, key, no one addressed');
 	const own = a.of('trade').length;
 	await say(R, a, { t: 'trade', op: 'propose', id: 'tr-999999', to: 'owner-aaaa' });
 	ok(a.of('trade').length === own && !a.of('trade-ack').some((x) => x.id === 'tr-999999'), 'not to yourself');
@@ -179,7 +186,14 @@ section('trading');
 	const x = await join(R2, 'owner-aaaa'), y = await join(R2, 'guest-bbbb');
 	for (let i = 0; i < BURST + 10; i++) await say(R2, x, { t: 'trade', op: 'update', id: 'tr-555555', to: 'guest-bbbb', v: i + 1, side: { credits: i } });
 	ok(y.of('trade').length <= BURST + 1, 'trades share the rate limit');
-	ok(MAX_BYTES >= JSON.stringify({ t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: '99.99', sides: { a: { credits: 999999, items: Object.fromEntries(Array.from({ length: 12 }, (_, i) => ['home-supply-kit-' + i, 999])) }, b: { credits: 999999, items: Object.fromEntries(Array.from({ length: 12 }, (_, i) => ['home-supply-kit-' + i, 999])) } } }).length, 'the largest trade message fits the size limit');
+	ok(MAX_BYTES >= JSON.stringify({ t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: '99.99', sides: { a: { credits: 999999, items: BIG }, b: { credits: 999999, items: BIG } } }).length, 'the largest trade message fits the size limit');
+	// the held item's level and tier ride the pose
+	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 7, ht: 4 });
+	const hp = b.of('pose').at(-1);
+	ok(hp?.h === 'camp-lantern' && hp.hl === 7 && hp.ht === 4, 'a held item passes with its level and tier');
+	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 70, ht: -1 });
+	const hq = b.of('pose').at(-1);
+	ok(hq?.h === 'camp-lantern' && !('hl' in hq) && !('ht' in hq), 'a bad level or tier is dropped');
 }
 
 // ---------- limits ----------
