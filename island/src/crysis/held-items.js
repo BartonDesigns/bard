@@ -733,7 +733,7 @@ export function triangles(o) { let n = 0; o.traverse((x) => { if (x.isMesh) n +=
 export function spinMotes(model, time) { const m = model?.getObjectByName('motes'); if (m) { m.rotation.x = time * 0.8; m.position.y = Math.sin(time * 1.3) * 0.01; } }
 
 // ---------- in a body's hands (third person: yours and your friends') ----------
-const _h = new THREE.Matrix4(), _h2 = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _o = new THREE.Vector3(), _o2 = new THREE.Vector3();
+const _h = new THREE.Matrix4(), _h2 = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _o = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 // the carry for a long arm (people/actions.js 'carry'), or nothing
 const CARRY = { long: 'carry', bow: null, one: null };
@@ -749,15 +749,51 @@ export function cellPath(u, out = new THREE.Vector3()) {
 // how a long arm tips toward the support hand through a reload (0..1)
 export const reloadTilt = (u) => Math.min(1, u / 0.15, (1 - u) / 0.12);
 
+// an arm reaching so its hand lies in frame Hd: two-bone (shoulder, elbow) with the elbow toward
+// pole, then the wrist turned to match (a body posed by people/motion.js; the next update redoes it)
+const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _ic = new THREE.Vector3(), _it = new THREE.Vector3(), _ip = new THREE.Vector3(), _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion(), _im = new THREE.Matrix4(), _im2 = new THREE.Matrix4();
+function turnWorld(bone, q) {
+	bone.parent.getWorldQuaternion(_iq2);
+	const inv = _iq2.clone().invert();
+	bone.quaternion.premultiply(_iq2).premultiply(q).premultiply(inv);
+	bone.updateMatrixWorld(true);
+}
+function setWorldRot(bone, q) {
+	bone.parent.getWorldQuaternion(_iq2);
+	bone.quaternion.copy(_iq2.invert().multiply(q));
+	bone.updateMatrixWorld(true);
+}
+// the support hand under a cell (the cell's own frame)
+export const CELL_HOLD = new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0)).setPosition(0.01, -0.03, 0);
+export function reach(P, side, Hd, pole) {
+	const bU = P.bones[P.map['upperarm01.' + side]], bL = P.bones[P.map['lowerarm01.' + side]], bW = P.bones[P.map['wrist.' + side]];
+	if (!bU || !bL || !bW || !handFrame(P, side, _im)) return false;
+	// where the wrist must be for the hand to lie in Hd
+	_im2.multiplyMatrices(Hd, _im.invert()).multiply(bW.matrixWorld);
+	_it.setFromMatrixPosition(_im2); _iq.setFromRotationMatrix(_im2);
+	const wq = _iq.clone();
+	const S0 = _ia.setFromMatrixPosition(bU.matrixWorld), E0 = _ib.setFromMatrixPosition(bL.matrixWorld), W0 = _ic.setFromMatrixPosition(bW.matrixWorld);
+	const a = E0.distanceTo(S0), b = W0.distanceTo(E0);
+	const toT = _ip.subVectors(_it, S0), d = THREE.MathUtils.clamp(toT.length(), Math.abs(a - b) + 1e-3, a + b - 1e-3), dir = toT.normalize().clone();
+	const pp = pole.clone().addScaledVector(dir, -pole.dot(dir)).normalize();
+	const x = (a * a - b * b + d * d) / (2 * d), y = Math.sqrt(Math.max(0, a * a - x * x));
+	const E2 = S0.clone().addScaledVector(dir, x).addScaledVector(pp, y);
+	turnWorld(bU, _iq.setFromUnitVectors(E0.sub(S0).normalize(), E2.sub(S0).normalize()));
+	const E1 = _ib.setFromMatrixPosition(bL.matrixWorld), W1 = _ic.setFromMatrixPosition(bW.matrixWorld);
+	turnWorld(bL, _iq.setFromUnitVectors(W1.sub(E1).normalize(), _ip.subVectors(_it, E1).normalize()));
+	setWorldRot(bW, wq);
+	return true;
+}
+
 export function createHand(scene, { lod = 'high' } = {}) {
-	let key = '', model = null, gripped = null, flash = null, kick = 0, reload = null, held = false;
-	const rel = new THREE.Matrix4(), cellV = new THREE.Vector3();
+	let key = '', model = null, gripped = null, flash = null, kick = 0, reload = null;
+	const cellV = new THREE.Vector3();
 	function set(id, level = 1, tier = 0) {
 		const k = id ? `${id}:${level}:${tier}` : '';
 		if (k === key) return;
 		if (model) model.parent?.remove(model);
 		key = k; model = id ? itemModel(id, { level, tier, lod }) : null;
-		reload = null; held = false;
+		reload = null;
 		if (model) { model.matrixAutoUpdate = false; scene.add(model); flash = createFlash(model); }
 	}
 	// let a body go: hands open, the carry ended
@@ -788,21 +824,13 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		if (!handFrame(P, side, _h)) { model.visible = false; return; }
 		// the item where the hand holds it
 		model.matrix.multiplyMatrices(_h, _inv.copy(G.m).invert());
-		if (H.kind === 'long' && reload && held) {
-			// mid-reload the support hand is away: kept as it lay in the grip hand
-			model.matrix.multiplyMatrices(_h, rel);
-		} else if (H.kind === 'long' && handFrame(P, 'L', _h2)) {
-			// both hands on it: the muzzle laid along the line from the grip to the support hand,
-			// rolled by the grip hand
-			_o.setFromMatrixPosition(_h); _o2.setFromMatrixPosition(_h2);
-			const v = _x.subVectors(_o2, _o).normalize(), vi = _y.subVectors(H.L.o, G.o).normalize();
-			const iq = new THREE.Quaternion().setFromUnitVectors(vi, new THREE.Vector3(1, 0, 0));
-			const thumb = _z.setFromMatrixColumn(_h, 1);
-			const up = thumb.addScaledVector(v, -thumb.dot(v)).normalize(), side3 = new THREE.Vector3().crossVectors(v, up);
-			const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(v, up, side3)).multiply(iq);
-			const pos = _o.clone().sub(G.o.clone().applyQuaternion(q));
-			model.matrix.compose(pos, q, _s.set(1, 1, 1));
-			rel.multiplyMatrices(_inv.copy(_h).invert(), model.matrix); held = true;
+		if (H.kind === 'long') {
+			// at the ready: the grip by the right hip, the muzzle ahead and low and a little across;
+			// both arms then reach for it
+			const k = P.height / 1.75, f = _x.set(Math.sin(heading), 0, Math.cos(heading)), l = _y.set(Math.cos(heading), 0, -Math.sin(heading));
+			const org = _o.copy(P.root.position).addScaledVector(l, -0.15 * k).addScaledVector(UP, 1.02 * k).addScaledVector(f, 0.24 * k);
+			const v = _z.copy(f).addScaledVector(l, 0.1).addScaledVector(UP, -0.3).normalize(), u = UP.clone().addScaledVector(v, -v.y).normalize();
+			model.matrix.makeBasis(v, u, new THREE.Vector3().crossVectors(v, u)).setPosition(org);
 		} else if (H.level) {
 			// a hanging thing stays upright, turned the way the hand points
 			const o = _o.setFromMatrixPosition(_h), f = _x.setFromMatrixColumn(_h, 1);
@@ -826,6 +854,13 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			const u = Math.min(1, reload.t / reload.T), at = cellPath(u, cellV);
 			if (cell) { cell.visible = !!at; if (at) cell.position.fromArray(cell.userData.home ||= cell.position.toArray()).add(at); }
 			if (u >= 1) { const d = reload.done; reload = null; d?.(); }
+		}
+		if (H.kind === 'long') {
+			const f = _x.set(Math.sin(heading), 0, Math.cos(heading)), l = _y.set(Math.cos(heading), 0, -Math.sin(heading));
+			reach(P, 'R', _h.multiplyMatrices(model.matrix, H.R.m), _z.copy(UP).multiplyScalar(-1).addScaledVector(l, -0.7).addScaledVector(f, -0.3));
+			if (reload && cell) { cell.updateMatrix(); _h.multiplyMatrices(model.matrix, cell.matrix).multiply(CELL_HOLD); }
+			else _h.multiplyMatrices(model.matrix, H.L.m);
+			reach(P, 'L', _h, _z.copy(UP).multiplyScalar(-1).addScaledVector(l, 0.5).addScaledVector(f, -0.2));
 		}
 		flash?.update(dt);
 		model.matrixWorldNeedsUpdate = true;

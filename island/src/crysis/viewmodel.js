@@ -40,7 +40,7 @@
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { cellPath, handFrame, itemModel, kitLight, kitMaterial, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
+import { CELL_HOLD, cellPath, handFrame, itemModel, kitLight, kitMaterial, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 
@@ -176,7 +176,6 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	// ---------- each frame ----------
 	const Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), V2 = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);
 	const camInv = new THREE.Quaternion(), hf = new THREE.Matrix4(), X = { L: new THREE.Matrix4(), R: new THREE.Matrix4() }, ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-	const CELL_HOLD = new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0)).setPosition(0.01, -0.03, 0);
 	const bp = new THREE.Vector3(), bq = new THREE.Quaternion(), bp2 = new THREE.Vector3(), bq2 = new THREE.Quaternion(), bs = new THREE.Vector3();
 	// a frame part way from A to B
 	function blend(out, A, B, k) { A.decompose(bp, bq, bs); B.decompose(bp2, bq2, bs); return out.compose(bp.lerp(bp2, k), bq.slerp(bq2, k), ONE); }

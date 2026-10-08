@@ -12,7 +12,6 @@ import { TIERS, MAX_LEVEL, UPGRADE_MATERIAL, canCombine, groupInstances, statsOf
 import { OPEN, accept, cancel, editSide, finished, holdLeft, newTradeId, receive, relayed, startTrade, tick, tradeWhy, worthKeeping } from '../gameplay/trade.js';
 import { createHand, weaponOf } from '../crysis/held-items.js';
 import { createViewmodel } from '../crysis/viewmodel.js';
-import { ACTIONS as DEBUG_ACTIONS } from '../people/actions.js';
 import { createStudio } from './gear-studio.js';
 import { createTradeWindow } from './trade-window.js';
 import { bar, btn, coins, el, hideTip, nameOf, showTip, slot, sound, tierColor, tierName, tipContent, useStyle, xpFrac } from './gear-look.js';
@@ -387,7 +386,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		// the held item and your hands, drawn over the frame (main.js, after the world)
 		post: (renderer) => vm.render(renderer),
 		// Crysis.viewmodel({ hold: [id, level, tier], aim: true }): a look without owning it
-		viewmodel: (o = {}) => { if (o.debug) return { me: avatar?.me, hand, ACTIONS: DEBUG_ACTIONS }; if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) vm.aim(o.aim); const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
+		viewmodel: (o = {}) => { if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) vm.aim(o.aim); const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
 	};
 	multiplayer?.link?.(api);
 	return api;
