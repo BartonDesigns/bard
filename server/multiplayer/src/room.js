@@ -3,7 +3,7 @@
 // others. It uses the hibernation API, so a room whose players are standing still (their
 // pings answered without waking it) costs nothing while it waits.
 
-import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, ID_RE } from '../../../island/src/net/protocol.js';
+import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, ID_RE } from '../../../island/src/net/protocol.js';
 
 const SWEEP_MS = 15000;
 // close codes the game understands
@@ -148,6 +148,17 @@ export class Room {
 				await this.save();
 				for (const s of this.sockets()) { s.serializeAttachment({ ...this.info(s), gone: true }); try { s.close(CLOSE.ended, 'the host ended the room'); } catch { /* gone */ } }
 				await this.state.storage.setAlarm(Date.now() + 1000);
+				return;
+			}
+			case 'trade': {
+				// a trade between two players: passed to the one it is for, and the sender told
+				// whether that one was here (so a game can tell an old server, which says nothing)
+				const c = cleanTrade(m);
+				if (!c || !c.to || c.to === a.id) return;
+				const to = this.sockets().find((s) => this.info(s).id === c.to);
+				const { to: id, ...rest } = c;
+				if (to) this.send(to, { t: 'trade', from: a.id, ...rest });
+				this.send(ws, { t: 'trade-ack', id: c.id, op: c.op, to: id, there: !!to });
 				return;
 			}
 			case 'host': {

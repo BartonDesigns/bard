@@ -6,6 +6,7 @@
 
 import { mulberry32, smoothstep, lerp } from '../../noise.js';
 import { colonyStyle } from './styles.js';
+import { farCraters } from '../../world/lunarfar.js';
 
 const TAU = Math.PI * 2;
 
@@ -60,7 +61,8 @@ function rough(H, x, z, r) {
 function route(H, a, b) {
 	const pts = [{ x: a.x, z: a.z }];
 	let x = a.x, z = a.z;
-	for (let n = 0; n < 220; n++) {
+	const steps = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 9 * 1.6) + 20;
+	for (let n = 0; n < steps; n++) {
 		const d = Math.hypot(b.x - x, b.z - z);
 		if (d < 12) break;
 		const to = Math.atan2(b.x - x, b.z - z);
@@ -237,6 +239,31 @@ export function planColony(island, profile, opts = {}) {
 	}
 	// keep the plants (where any grow) off it all, and the grass: the ground there is trodden bare
 	const clear = [{ x: hub.x, z: hub.z, r: hub.r + 10 }, ...(port ? [{ x: port.x, z: port.z, r: port.r + 6 }] : []), ...outposts.map((o) => ({ x: o.x, z: o.z, r: o.r + 6 })), ...solar.map((o) => ({ x: o.x, z: o.z, r: o.r + 4 }))];
+	// ---------- out past the land (the Moon runs on to the horizon) ----------
+	// a ring of far sites round the colony, the mine and observatory on great crater rims,
+	// rover tracks out to each
+	const outer = [], tracks = [];
+	if (island.far && S.outer) {
+		const out = (p) => Math.max(Math.abs(p.x), Math.abs(p.z)) > half + 600;
+		S.outer.forEach(([kind, name], i) => {
+			const ang = hub.yaw + 0.4 + i / S.outer.length * TAU + (r() - 0.5) * 0.5;
+			let d = 1900 + r() * 2400, p = { x: hub.x + Math.sin(ang) * d, z: hub.z + Math.cos(ang) * d };
+			while (!out(p) && d < 9000) { d += 300; p = { x: hub.x + Math.sin(ang) * d, z: hub.z + Math.cos(ang) * d }; }
+			if (kind === 'mine' || kind === 'observatory') {
+				const cs = farCraters(p.x, p.z).filter((c) => c.r > 220).sort((u, v) => Math.hypot(u.x - p.x, u.z - p.z) - Math.hypot(v.x - p.x, v.z - p.z));
+				for (const c of cs) {
+					const a2 = Math.atan2(hub.x - c.x, hub.z - c.z), q = { x: c.x + Math.sin(a2) * c.r * 1.0, z: c.z + Math.cos(a2) * c.r * 1.0 };
+					if (out(q) && !outer.some((o) => Math.hypot(o.x - q.x, o.z - q.z) < 500)) { p = q; break; }
+				}
+			}
+			// the highest point of its footprint, so nothing it stands on floats
+			let y = -1e9;
+			for (let k = 0; k < 9; k++) y = Math.max(y, H(p.x + (k ? Math.sin(k) * 9 : 0), p.z + (k ? Math.cos(k) * 9 : 0)));
+			outer.push({ kind, name, x: p.x, z: p.z, y: H(p.x, p.z) * 0.5 + y * 0.5, r: 18, yaw: Math.atan2(hub.x - p.x, hub.z - p.z), far: true });
+		});
+		for (const o of outer) tracks.push(route(H, gate(o), { x: o.x + Math.sin(o.yaw) * 24, z: o.z + Math.cos(o.yaw) * 24 }));
+		for (const t of tracks) wear(island, t, 4);
+	}
 	for (const c of clear) trodden(island, c.x, c.z, c.r);
-	return { style: S, parts: P, seed: island.seed, hub, port, outposts, solar, roads, rail, clear, name: S.name };
+	return { outer, tracks, style: S, parts: P, seed: island.seed, hub, port, outposts, solar, roads, rail, clear, name: S.name };
 }

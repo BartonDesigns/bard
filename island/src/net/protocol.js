@@ -43,6 +43,38 @@ export function cleanPose(p) {
 	if (VEHICLES.includes(p.v) && p.v) o.v = p.v;
 	if (num(p.s, 1e5)) o.s = r2(p.s);
 	o.w = str(p.w, 48);
+	// the item in their hand, if any (a game catalogue id, gameplay/arms.js)
+	if (ITEM_RE.test(p.h || '')) o.h = p.h;
+	return o;
+}
+
+// trading between two players (gameplay/trade.js): addressed to one, passed on to that one only
+export const TRADE_OPS = ['propose', 'seen', 'update', 'accept', 'commit', 'done', 'cancel', 'fail'];
+const ITEM_RE = /^[a-z0-9-]{1,40}$/;
+const TRADE_ID_RE = /^[A-Za-z0-9_-]{6,40}$/;
+const KEY_RE = /^\d{1,6}\.\d{1,6}$/;
+const int = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
+// one side of an offer: credits and up to 12 items with counts
+export function cleanTradeSide(s) {
+	if (!s || typeof s !== 'object' || !int(s.credits ?? 0, 1e6)) return null;
+	const items = {}, it = s.items && typeof s.items === 'object' && !Array.isArray(s.items) ? Object.entries(s.items) : [];
+	if (it.length > 12) return null;
+	for (const [k, n] of it) { if (!ITEM_RE.test(k) || !int(n, 999)) return null; if (n) items[k] = n; }
+	return { credits: s.credits ?? 0, items };
+}
+export function cleanTrade(m) {
+	if (!m || typeof m !== 'object' || !TRADE_OPS.includes(m.op) || !TRADE_ID_RE.test(m.id || '')) return null;
+	const o = { op: m.op, id: m.id };
+	if (m.to !== undefined) { if (!ID_RE.test(m.to)) return null; o.to = m.to; }
+	if (m.key !== undefined) { if (!KEY_RE.test(m.key)) return null; o.key = m.key; }
+	if (m.v !== undefined) { if (!int(m.v, 1e6)) return null; o.v = m.v; }
+	if (m.side !== undefined) { const s = cleanTradeSide(m.side); if (!s) return null; o.side = s; }
+	if (m.sides !== undefined) {
+		const a = cleanTradeSide(m.sides?.a), b = cleanTradeSide(m.sides?.b);
+		if (!a || !b) return null;
+		o.sides = { a, b };
+	}
+	if (m.why !== undefined) o.why = str(m.why, 20);
 	return o;
 }
 // a spot code (share.js pack): base64url, bounded

@@ -85,6 +85,10 @@ const WALK = /* glsl */`
 	}
 	transformed.y += abs(sin(uTime * 4.2 + aPh.x)) * uHop * aPh.y;
 `;
+// indoors: the ceiling strips' light on everything, more on what faces up (no lights added:
+// a new light would recompile every shader in the scene)
+const ROOM = `
+	totalEmissiveRadiance += diffuseColor.rgb * (0.42 + 0.3 * max(normalize(vCN).y, 0.0));`;
 // a kit material: lit, coloured per vertex, its look per vertex by aGlow
 export function shellMaterial(U, o = {}) {
 	const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0xffffff, roughness: o.rough ?? 0.78, metalness: o.metal ?? 0.05 });
@@ -104,9 +108,9 @@ export function shellMaterial(U, o = {}) {
 			vCG = aGlow;`);
 		sh.fragmentShader = HEAD_F + sh.fragmentShader
 			.replace('#include <color_fragment>', '#include <color_fragment>\n' + LOOK)
-			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += cEmC * cEm;');
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += cEmC * cEm;' + (o.inside ? ROOM : ''));
 	};
-	m.customProgramCacheKey = () => 'colonyshell' + (o.walk ? 'w' : '');
+	m.customProgramCacheKey = () => 'colonyshell' + (o.walk ? 'w' : '') + (o.inside ? 'i' : '');
 	return m;
 }
 // the pressure glass: a dark, clear skin that takes the sky, warm from within by night

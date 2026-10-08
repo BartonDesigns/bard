@@ -16,6 +16,7 @@ import {
 	listOffers,
 	resolveTheftAttempt,
 	inventorySummary,
+	sellPrice,
 } from '../gameplay/arms.js';
 import { normalizeSiteKind, resolveSiteAccess, siteDefinition } from '../world/site-catalog.js';
 
@@ -231,9 +232,53 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		if (parsed.kind === 'hunt') return hunt(source, item);
 		return result(false, parsed.kind, 'That arms action is not available here.');
 	}
+	// ---------- the gear screen: shops, the item in hand, and trades between players ----------
+	const SHOP_SOURCES = [ACQUISITION_SOURCES.NPC_TRADER, ACQUISITION_SOURCES.SUPERMARKET];
+	// the shops near a place (the outfitters, ranger camps, traders and supermarkets), nearest first
+	function shops(position = lastPosition) { return nearby(position).filter((source) => SHOP_SOURCES.includes(source.sourceId)); }
+	function shopFor(siteId, position) { return shops(position).find((source) => source.id === siteId) || allSources(position).find((source) => source.id === siteId && SHOP_SOURCES.includes(source.sourceId)) || null; }
+	// what a shop sells and what it would pay for what you have
+	function shopSheet(siteId, position = lastPosition) {
+		const source = shopFor(siteId, position);
+		if (!source) return null;
+		const offers = C.listOffers(source.sourceId).filter((offer) => offer.mode === 'purchase' && (!source.stockExplicit || !source.stock.length || source.stock.includes(offer.itemId)));
+		const buy = offers.map((offer) => ({ itemId: offer.itemId, name: offer.name, price: offer.unitPrice, owned: state.items?.[offer.itemId] || 0 }));
+		const sell = Object.entries(state.items || {}).map(([itemId, quantity]) => ({ itemId, name: findItem(itemId)?.name || itemId, quantity, price: sellPrice(itemId, source.sourceId) })).filter((row) => row.price != null);
+		return { id: source.id, name: source.name, kind: source.kind, sourceId: source.sourceId, distance: source.distance, credits: state.credits, buy, sell };
+	}
+	function buy(siteId, itemId, position = lastPosition) {
+		const source = shopFor(siteId, position), item = findItem(itemId);
+		if (!source || !item) return result(false, 'purchase', 'That is not for sale here.');
+		const out = purchase(source, item);
+		return out.ok ? result(true, 'purchase', `Bought ${item.name}.`, { receipt: out.receipt }) : result(false, 'purchase', out.receipt?.message || 'That purchase could not be completed.');
+	}
+	function sell(siteId, itemId, position = lastPosition) {
+		const source = shopFor(siteId, position), item = findItem(itemId);
+		if (!source || !item) return result(false, 'sell', 'This place does not buy that.');
+		const tx = { id: txId('sell', item.id, source.sourceId), kind: TRANSACTION_KINDS.SELL, sourceId: source.sourceId, itemId: item.id, quantity: 1, unitPrice: sellPrice(item.id, source.sourceId) ?? undefined };
+		const out = C.applyInventoryTransaction(state, tx, { expectedRevision: state.revision });
+		if (out.ok && !out.duplicate) save(out.state);
+		return out.ok ? result(true, 'sell', `Sold ${item.name} for ${out.receipt.total} credits.`, { receipt: out.receipt }) : result(false, 'sell', out.receipt?.message || 'That sale could not be completed.');
+	}
+	// the item in your hand (one at a time; null puts it away)
+	function hold(itemId) {
+		const tx = itemId ? { id: txId('equip', itemId, 'hand'), kind: TRANSACTION_KINDS.EQUIP, itemId, slot: 'hand' } : { id: txId('unequip', 'hand', 'hand'), kind: TRANSACTION_KINDS.UNEQUIP, slot: 'hand' };
+		if (!itemId && !state.equipped?.hand) return result(true, 'hold', null);
+		const out = C.applyInventoryTransaction(state, tx, { expectedRevision: state.revision });
+		if (out.ok && !out.duplicate) save(out.state);
+		return result(out.ok, 'hold', out.ok ? null : out.receipt?.message);
+	}
+	// one side of a trade with a friend (gameplay/trade.js builds it; its id makes it land once)
+	function apply(tx) {
+		const out = C.applyInventoryTransaction(state, tx);
+		if (out.ok && !out.duplicate) save(out.state);
+		return { ok: out.ok, duplicate: !!out.duplicate, message: out.receipt?.message || '' };
+	}
+	const applied = (id) => (state.journal || []).some((entry) => entry.id === id && entry.accepted !== false);
+
 	function command(text, context = {}) { return execute(parseArmsRequest(text), context); }
 	function update(dt = 0, position = null) { scanClock -= Math.max(0, +dt || 0); if (position && (scanClock <= 0 || !lastPosition || distance(position, lastPosition) > 8)) { scanClock = 0.5; nearby(position); } return lastNearby; }
-	return { catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), canAttemptTheft: (input) => C.canAttemptTheft(input) };
+	return { catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => state.equipped?.hand || null, apply, applied, canAttemptTheft: (input) => C.canAttemptTheft(input) };
 }
 
 export { ARMS_CATALOG, SOURCE_CATALOG };

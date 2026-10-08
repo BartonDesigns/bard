@@ -137,6 +137,7 @@ import { worldBody, sameBody } from './space/body.js';
 import { createKinetic } from './music/kinetic.js';
 import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
+import { createGear } from './ui/gear.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 
@@ -676,6 +677,8 @@ export function createIslandWorld() {
 	// friends in a room (net/): nothing at all until a rooms server is set in net/config.js
 	const multiplayer = HOOKS.multiplayer = createMultiplayer({ scene, camera, world: () => world, state, share, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, menu: tpMenu, canvas: dom.canvas, isPhone, drive, social: () => social, enter: (p) => api.open(p) });
 	tpBtn.addEventListener('click', (e) => { e.stopPropagation(); if (tpMenu.style.display === 'none') openTp(); else tpMenu.style.display = 'none'; });
+	// your gear, shops and trading with friends (ui/gear.js)
+	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active() });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -901,7 +904,7 @@ export function createIslandWorld() {
 		// the world by the dark star: its Event Ring's sphere is a way beyond (planet/beyond.js)
 		if (profile.type === 'SINGULARITY' && alienPlan?.sites[0]?.kind === 'landmark') world.beyond = createBeyond({ renderer, scene, camera, island, shared, site: alienPlan.sites[0], player, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
 		if (colonyPlan) {
-			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
+			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, isTouch: matchMedia('(pointer: coarse)').matches });
 			const of = island.extraFloor, op = island.extraPush;
 			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), cl.floor(x, z, y)) : cl.floor;
 			island.extraPush = op ? (p, footY) => { op(p, footY); cl.push(p, footY); } : cl.push;
@@ -1313,7 +1316,7 @@ export function createIslandWorld() {
 		if (band === islandReach.band) return;
 		islandReach.band = band;
 		for (const o of [W.grass, W.turf, ...W.litter.meshes]) o.visible = band < 1;
-		W.terrain.visible = band < 2;
+		W.terrain.visible = band < 2 || !!W.island.far;
 		if (W.underwater.group) W.underwater.group.visible = band < 3;
 		for (const o of W.caverns.group.children) if (!o.isLight) o.visible = band < 3;
 		for (const o of W.village.group.children) if (o !== W.village.boat) o.visible = band < 3;
@@ -1456,7 +1459,9 @@ export function createIslandWorld() {
 			scene.fog.density *= (1 + (wx.rainHere * 12 + wx.gloom * 1.5) * (1 - clearK * 0.8)) * (1 - clearK * 0.55);
 			// another world's air: dust, ash, spores, mist
 			scene.fog.density *= W.island.profileHaze || 1;
-			const far = THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+			// (the Moon's ground runs to its horizon in clear vacuum)
+			if (W.island.far) scene.fog.density = 0.000006;
+			const far = W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
@@ -1536,6 +1541,7 @@ export function createIslandWorld() {
 		watchTeleport();
 		share.update(dt);
 		multiplayer.update(dt, time);
+		gear.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -1921,6 +1927,7 @@ if (typeof window !== 'undefined') {
 		// game-only hunting, home-defense and supply state. Crysis.arms() reads the
 		// current inventory/nearby sources; pass a natural request to execute it.
 		arms: (request) => request == null ? HOOKS.arms?.info(window.L99Island?.world?.()?.player?.state?.pos) : HOOKS.arms?.command(request, { position: window.L99Island?.world?.()?.player?.state?.pos }),
+		gear: () => HOOKS.gear?.info(),
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,

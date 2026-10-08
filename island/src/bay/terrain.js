@@ -19,7 +19,7 @@ import { CARVE_U, CARVE_GLSL, carveDelta } from './carve.js';
 import { WC_U, WC_GLSL, waterDelta } from './watercarve.js';
 import { COAST_U, COAST_VGLSL, COAST_FGLSL, cliffDelta, createCoastside } from './coastside.js';
 import { WX_DEFS, WX_GLSL, STREET_GLSL } from './weathering.js';
-import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp } from '../earth/baydetail.js';
+import { BAY_DETAIL_U, BAY_DETAIL_GLSL, rills, detailAmp, builtAt, setBuilt } from '../earth/baydetail.js';
 import { LITE_V, LITE_F } from '../world/gpulite.js';
 
 // the globe past the survey (earth/globe.js): { ready(), at(x, z), seam: [a, b] (m past the
@@ -271,7 +271,7 @@ export function createBayArea(shared, scene, island, BU) {
 			const qx = (tx - L.x0) / L.step, qz = (tz - L.zN) / L.step;
 			const dOut = Math.hypot(Math.max(0, -qx, qx - (L.W - 1)), Math.max(0, -qz, qz - (L.H - 1))) * L.step;
 			if (dOut < 4000) continue;
-			const h = heightAt(tx, tz), sl = Math.abs(heightAt(tx + 400, tz) - heightAt(tx - 400, tz)) + Math.abs(heightAt(tx, tz + 400) - heightAt(tx, tz - 400));
+			const h = surveyAt(tx, tz), sl = Math.abs(surveyAt(tx + 400, tz) - surveyAt(tx - 400, tz)) + Math.abs(surveyAt(tx, tz + 400) - surveyAt(tx, tz - 400));
 			if (h < 3 || h > 420 || sl > 90) continue;
 			const r1 = bH01(gx * 11, gz * 17 + 5), r2 = bH01(gx + 91, gz - 37);
 			const name = (SYL[0][Math.floor(r1 * 16)] + ' ' + SYL[1][Math.floor(r2 * 20)] + SYL[2][Math.floor(bH01(gx - 5, gz + 9) * 20)]).trim();
@@ -305,7 +305,7 @@ export function createBayArea(shared, scene, island, BU) {
 		for (let j = 0; j < U.H; j++) for (let i = 0; i < U.W; i++) {
 			const x = U.x0 + (i + 0.5) * U.cell, z = U.zN + (j + 0.5) * U.cell, k = j * U.W + i;
 			if (dens[k] < 0.004) { data[k * 4 + 3] = STYLE.suburb * 40; continue; }                    // open country
-			const h = heightAt(x, z), hx = heightAt(x + 120, z), hz = heightAt(x, z + 120);
+			const h = surveyAt(x, z), hx = surveyAt(x + 120, z), hz = surveyAt(x, z + 120);
 			const slope = Math.hypot(hx - h, hz - h) / 120;
 			// towns climb gentle ground, not the mountains, cliffs or the water
 			let u = Math.min(1, dens[k] * 1.1) * (h > 0.6 ? 1 : 0) * (1 - smooth(0.12, 0.3, slope)) * (1 - smooth(220, 360, h));
@@ -357,8 +357,10 @@ export function createBayArea(shared, scene, island, BU) {
 		const d = Math.min(fx, L.W - 1 - fx, fz, L.H - 1 - fz) * L.step;
 		return smooth(0, 1, Math.min(1, Math.max(0, d / m)));
 	}
-	// the ground as surveyed; heightAt adds the cliffs steepened near you (coastside.js)
-	function groundAt(x, z) {
+	// the ground as surveyed, the levels blended (and the globe's past the survey); sv holds
+	// what groundAt's relief needs to know of it
+	const sv = { e0: 0, inS: 0, fine: 0 };
+	function surveyAt(x, z) {
 		if (!levels[0]) return -60;
 		const L0 = levels[0], e0 = levelH(L0, x, z);
 		const qx = (x - L0.x0) / L0.step, qz = (z - L0.zN) / L0.step;
@@ -372,11 +374,19 @@ export function createBayArea(shared, scene, island, BU) {
 		let fine = 0;
 		for (let i = 3; i < levels.length; i++) if (levels[i]) { const k = levelIn(levels[i], x, z, 400); if (k > 0) { h += (levelH(levels[i], x, z) - h) * k; if (levels[i].step <= 16) fine = Math.max(fine, k); } }
 		if (levels[2]?.step <= 16) fine = Math.max(fine, levelIn(levels[2], x, z, 500));
-		// the engine's relief finer than the survey (earth/baydetail.js)
+		sv.e0 = e0; sv.inS = inS; sv.fine = fine;
+		return h;
+	}
+	// the ground as walked; heightAt adds the cliffs steepened near you (coastside.js)
+	function groundAt(x, z) {
+		if (!levels[0]) return -60;
+		let h = surveyAt(x, z);
+		const { e0, inS, fine } = sv, L0 = levels[0];
+		// the engine's relief finer than the survey (earth/baydetail.js), none where anything is built
 		const wet = waterDelta(x, z);
 		if (inS > 0 && h >= 3 && BAY_DETAIL_U.uBDAmp.value > 0) {
 			const sl = Math.hypot(levelH(L0, x + 40, z) - e0, levelH(L0, x, z + 40) - e0) / 40;
-			const a = detailAmp(inS, sl, h, urbanBil(x, z), wet, fine);
+			const a = detailAmp(inS, sl, h, Math.max(urbanBil(x, z), builtAt(x, z)), wet, fine);
 			if (a > 0) h += rills(x, z) * a;
 		}
 		return h + carveDelta(x, z) + wet;
@@ -384,41 +394,56 @@ export function createBayArea(shared, scene, island, BU) {
 	const heightAt = (x, z) => groundAt(x, z) + cliffDelta(x, z);
 
 	// ---------- loading ----------
-	async function loadLevel(i) {
-		const L = LEVELS[i];
-		const url = new URL(`../assets/bayarea/${L.name}.png`, import.meta.url);
-		const response = await fetch(url, { signal: requests.signal });
-		if (!response.ok) throw new Error(`Bay height map: ${response.status}`);
-		const blob = await response.blob();
-		if (disposed) return;
+	// The ground goes in all at once: every survey level, the built mask and the town map,
+	// and only then is the Bay drawn and walked on. Put in a level at a time, the ground under
+	// a town moved by metres when its finer survey came (later on a phone than on a laptop),
+	// under buildings already standing on the coarser one; and the rills ran through the
+	// towns until their map was made. (Fetched together, decoded one at a time.)
+	const fetchBlob = (name) => fetch(new URL(`../assets/bayarea/${name}.png`, import.meta.url), { signal: requests.signal }).then((r) => { if (!r.ok) throw new Error(`Bay map ${name}: ${r.status}`); return r.blob(); });
+	async function pixels(blob) {
 		const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-		if (disposed) { bmp.close(); return; }
-		const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
-		const W = bmp.width, H = bmp.height;
-		let px;
+		const W = bmp.width, H = bmp.height, cv = document.createElement('canvas');
+		cv.width = W; cv.height = H;
 		try {
 			const cx = cv.getContext('2d', { willReadFrequently: true });
 			cx.drawImage(bmp, 0, 0);
-			px = cx.getImageData(0, 0, W, H).data;
+			return { px: cx.getImageData(0, 0, W, H).data, W, H };
 		} finally { bmp.close(); cv.width = cv.height = 0; }
+	}
+	function addLevel(i, { px, W, H }) {
+		const L = LEVELS[i];
 		const v = new Uint16Array(W * H), half = new Uint16Array(W * H);
 		for (let k = 0; k < W * H; k++) { v[k] = px[k * 4] * 256 + px[k * 4 + 1]; half[k] = THREE.DataUtils.toHalfFloat(v[k] / H_SCALE - H_OFF); }
 		const x0 = (L.lon[0] - LON0) * KX, zN = -(L.lat[1] - LAT0) * KZ;
-		levels[i] = { x0, zN, step: L.step, W, H, v, tex: null };
 		const tex = new THREE.DataTexture(half, W, H, THREE.RedFormat, THREE.HalfFloatType);
 		tex.minFilter = tex.magFilter = THREE.NearestFilter;
 		tex.needsUpdate = true;
-		levels[i].tex = tex;
+		levels[i] = { x0, zN, step: L.step, W, H, v, tex };
 		if (i === 0) { BU.uB0.value = tex; BU.uR0.value.set(x0, zN, L.step, 0); }
 		slotsAt = null;
-		if (i === 0) { BU.uBayOn.value = 1; await Promise.race([farG?.whenReady || Promise.resolve(), new Promise((ok) => setTimeout(ok, 8000))]); if (!disposed) buildUrban(); }
 	}
-	// the whole Bay Area coarse first, then the finer levels nearest the island first
-	const order = [0, ...LEVELS.map((L, i) => i).slice(1).sort((a, b) => {
-		const d = (L) => { const c = toWorld((L.lat[0] + L.lat[1]) / 2, (L.lon[0] + L.lon[1]) / 2); return Math.hypot(c.x, c.z); };
-		return d(LEVELS[a]) - d(LEVELS[b]);
-	})];
-	const ready = (async () => { for (const i of order) { if (disposed) return; try { await loadLevel(i); } catch (e) { if (!disposed) console.warn('bay level', i, e); } } })();
+	const ready = (async () => {
+		const miss = (what) => (e) => { if (!disposed) console.warn('bay map', what, e); return null; };
+		const blobs = LEVELS.map((L) => fetchBlob(L.name).catch(miss(L.name)));
+		const built = fetchBlob('built').catch(miss('built'));
+		// (the town map reads the globe's ground past the survey: wait for it, but not for ever)
+		const globe = Promise.race([farG?.whenReady || Promise.resolve(), new Promise((ok) => setTimeout(ok, 20000))]);
+		for (let i = 0; i < LEVELS.length; i++) {
+			const b = await blobs[i];
+			if (disposed) return;
+			if (b) { try { addLevel(i, await pixels(b)); } catch (e) { miss(LEVELS[i].name)(e); } }
+		}
+		const b = await built;
+		if (disposed) return;
+		if (b) {
+			try { const { px, W, H } = await pixels(b), d = new Uint8Array(W * H); for (let k = 0; k < W * H; k++) d[k] = px[k * 4]; setBuilt(d, W, H); } catch (e) { miss('built')(e); }
+		}
+		if (!levels[0]) return;
+		await globe;
+		if (disposed) return;
+		buildUrban();
+		BU.uBayOn.value = 1;
+	})();
 
 	// ---------- the ground ----------
 	const uUrban = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, uUR = { value: new THREE.Vector4(0, 0, 1, 0) };

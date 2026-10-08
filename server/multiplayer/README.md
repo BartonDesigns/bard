@@ -47,6 +47,9 @@ or Join, nothing connects, and a `?room=` link just opens the game as usual.
   - 2 KB a message;
   - 20 messages a second per player, with bursts up to 40 (a flood closes that socket);
   - 20 new rooms an hour from one address.
+- **Trades:** a `trade` message names one player (`to`); only that player gets it, with who it
+  is from. The sender hears back `trade-ack` (whether that player was here), which is how the
+  game tells an up-to-date server from an old one.
 - **Privacy:** what you say to townsfolk is never sent. The server cleans every message
   (`island/src/net/protocol.js`, shared by the game and the server), and only these fields can
   pass:
@@ -75,6 +78,40 @@ is roughly **25 room-hours of active play a day**, with more when people stand s
 If a day's allowance runs out, Cloudflare refuses new connections until 00:00 UTC. The game
 keeps working alone, and the chip says it is reconnecting. Nothing is ever billed.
 
+## Update: trading between players (needs a redeploy)
+
+The game can now trade gear between two friends in a room. The rooms server passes each trade
+message to the one friend it is for (`trade` in `src/room.js`), checks its size and fields, and
+counts it in the same rate limit as everything else. Inventories stay in each player's browser.
+
+Until the server is redeployed, the live one quietly drops trade messages. The game notices
+(no answer within 4 seconds) and says **"Trading needs the rooms server update."** Everything
+else keeps working.
+
+To update the live server, open Terminal and run these one at a time, from the repository's
+root folder:
+
+```
+cd server/multiplayer
+```
+```
+npm install
+```
+```
+npm test
+```
+(it should end `68 passed, 0 failed`)
+```
+npx wrangler deploy
+```
+
+If Wrangler asks you to log in, run `npx wrangler login`, then `npx wrangler deploy` again.
+Nothing in the game needs to change: the address stays the same. Rooms open during the deploy
+reconnect by themselves.
+
+To check: open `https://l99-rooms.joshbarton1921.workers.dev/status` (it shows `{"ok":true,...}`),
+then in two windows join one room, open 🎒 **Gear**, and tap **Trade** next to your friend.
+
 ## Setting it up
 
 You already have a Cloudflare account and Wrangler from the discovery server (see
@@ -95,7 +132,7 @@ You already have a Cloudflare account and Wrangler from the discovery server (se
    (Without it the limit still works, with a fixed salt.)
 3. **Check, then deploy:**
    ```
-   npm test          # offline checks: should end "58 passed, 0 failed"
+   npm test          # offline checks: should end "68 passed, 0 failed"
    npm run check     # a dry run of the deploy
    npm run deploy
    ```
@@ -131,5 +168,7 @@ served from localhost.
 
 - `npm test` here: rooms, presence, the host's world and events, host promotion, the limits,
   stale players and the Worker's routes. Runs in Node with stand-ins, offline.
+- `node island/tools/trade.test.mjs`: trading, two inventories over a wire that drops and
+  repeats messages (nothing is lost or made twice).
 - `node island/tools/multiplayer.test.mjs`: the client's follow steering, interpolation, and
   reconnect with backoff.
