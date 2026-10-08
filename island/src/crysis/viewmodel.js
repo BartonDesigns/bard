@@ -13,12 +13,36 @@
 // Aiming: hold the right mouse button, or tap the sight button on a touch screen. The sight
 // comes to the eye and the world's lens narrows (camera.zoom).
 //
+// ---------- the API, for the combat systems ----------
+// Crysis.weapon (ui/gear.js `weapon`) drives whatever you hold, in first or third person:
+//   fire()         -> true if it went off: the recoil (kick, rise, a side drift by the item's
+//                     pattern), the muzzle flash and its light, the vent sparks, the glow's surge
+//                     and the sound. False if not ready (changing, reloading, sprinting, faster
+//                     than the item's rate). Ammunition, hits and damage are the caller's.
+//   reload(done)   -> true if begun: the support hand takes the cell out (its own mesh) and seats
+//                     a fresh one over WEAPONS[id].reload seconds, with sounds; done() at the end.
+//   aim(on)        -> to the sights (the right mouse button and the touch button do the same).
+//   equip(id)      -> hold an item you own (an item id or an instance uid); holster() puts it
+//                     away. Either way the old one lowers out and the new one rises in.
+//   muzzle()       -> { position, direction, aim: { origin, direction } } in the world: where a
+//                     tracer starts as you see it, and the ray from the eye for hits.
+//   data(id)       -> crysis/held-items.js WEAPONS: rate (shots a second), mag (cell count),
+//                     reload (seconds), recoil { kick, rise, side[], recover }, flash ('flash' or
+//                     'pulse'), sounds { fire, dry, out, in, ready, equip, holster, aim }: cue
+//                     names for crysis/weapon-sound.js playCue(name, { distance }).
+//   state()        -> { held, third, reloading, aiming, ready }
+// Friends: createHand(...).fire(distance) and .reload(done, distance) (crysis/held-items.js)
+// play the same on a friend's body (net/remotes.js holds one per friend), with the 'reload'
+// action (people/actions.js) moving their support hand.
+//
 // Lit as the world is: the sun and the sky's light turned into the view's frame, the world's
 // reflections faded with the daylight, and a soft fill so nothing goes black at night.
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { handFrame, itemModel, kitLight, kitMaterial, kitTick, spinMotes, triangles } from './held-items.js';
+import { cellPath, handFrame, itemModel, kitLight, kitMaterial, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
+import { createFlash, createSparks } from './weapon-fx.js';
+import { playCue } from './weapon-sound.js';
 
 const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
 const SLEEVE_BONES = /^lowerarm0[12]\.(L|R)$/;
@@ -45,18 +69,25 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const cam = new THREE.PerspectiveCamera(52, 1, 0.01, 6);
 	const sun = new THREE.DirectionalLight(0xffffff, 2), hemi = new THREE.HemisphereLight(0xbfd8ff, 0x5a5230, 0.8), fill = new THREE.DirectionalLight(0xdfe8ff, 0.4);
 	fill.position.set(-0.6, 0.5, 0.8);
-	scene.add(sun, sun.target, hemi, fill);
+	// the light of a shot, dark between them
+	const shotLight = new THREE.PointLight(0xffc890, 0, 2.5, 2);
+	scene.add(sun, sun.target, hemi, fill, shotLight);
 	const rig = new THREE.Group();
 	scene.add(rig);
 	let env = null, envTried = false;
 
 	// ---------- the item ----------
-	const S = { key: '', want: '', id: null, model: null, equip: 0, ads: 0, aimHeld: false, aimTap: false, last: null, land: new Spring(14), lagX: new Spring(9), lagY: new Spring(9), lagR: new Spring(9), sprint: 0, air: 0, zoom: 1, shown: false, calls: 0, item: null };
+	const flash = createFlash(scene), sparks = createSparks(scene);
+	const kick = { z: new Spring(10), p: new Spring(10), y: new Spring(10), r: new Spring(10) };
+	const S = { shots: 0, lastShot: -9, reload: null, key: '', want: '', id: null, model: null, equip: 0, ads: 0, aimHeld: false, aimTap: false, last: null, land: new Spring(14), lagX: new Spring(9), lagY: new Spring(9), lagR: new Spring(9), sprint: 0, air: 0, zoom: 1, shown: false, calls: 0, item: null };
 	function swapIn(item) {
 		if (S.model) rig.remove(S.model);
 		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: isPhone ? 'low' : 'high' }) : null;
-		S.id = item?.i || null; S.key = S.want; S.item = item;
+		const was = S.id;
+		S.id = item?.i || null; S.key = S.want; S.item = item; S.reload = null;
 		if (S.model) { S.model.matrixAutoUpdate = false; rig.add(S.model); }
+		const W = weaponOf(S.id) || weaponOf(was);
+		if (W && S.id !== was) playCue(S.id ? W.sounds.equip : W.sounds.holster);
 	}
 
 	// ---------- your forearms and hands ----------
@@ -143,8 +174,12 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	}
 
 	// ---------- each frame ----------
-	const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), V2 = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);
+	const Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), V2 = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);
 	const camInv = new THREE.Quaternion(), hf = new THREE.Matrix4(), X = { L: new THREE.Matrix4(), R: new THREE.Matrix4() }, ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+	const CELL_HOLD = new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0)).setPosition(0.01, -0.03, 0);
+	const bp = new THREE.Vector3(), bq = new THREE.Quaternion(), bp2 = new THREE.Vector3(), bq2 = new THREE.Quaternion(), bs = new THREE.Vector3();
+	// a frame part way from A to B
+	function blend(out, A, B, k) { A.decompose(bp, bq, bs); B.decompose(bp2, bq2, bs); return out.compose(bp.lerp(bp2, k), bq.slerp(bq2, k), ONE); }
 	const handAt = new THREE.Matrix4(), tmp = new THREE.Matrix4(), tmp2 = new THREE.Matrix4(), F = { L: null, R: null };
 	// held: { i, l, t } or null; P: the player's state; on: first person and free to hold things
 	function update(dt, held, P, on, W, time) {
@@ -204,9 +239,29 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const sp = ease(S.sprint) * (1 - a), eq = 1 - ease(S.equip);
 		pos.x += -0.04 * sp + bx * still + lx * still; pos.y += -0.05 * sp - 0.28 * eq + (by + breath) * still + land * 0.6 + ly * still + S.air * 0.012;
 		pos.z += 0.03 * sp;
-		Q2.setFromEuler(E.set(-0.35 * sp - 0.9 * eq + breath * 2 + land * 1.5 + ly * 1.2, 0.55 * sp + lx * 2.2, 0.35 * sp + lr * still + bx * 1.5, 'YXZ'));
+		// used: the recoil's kick back, rise and drift, each settling on its spring
+		const kz = kick.z.to(0, dt), kp = kick.p.to(0, dt), ky = kick.y.to(0, dt), kr = kick.r.to(0, dt);
+		// reloading: tipped toward the support hand while the cell comes out and goes back in
+		const ru = S.reload ? Math.min(1, S.reload.t / S.reload.T) : 0, tilt = S.reload ? ease(clamp(reloadTilt(ru), 0, 1)) : 0;
+		pos.z += kz; pos.y += -0.02 * tilt + kp * 0.08; pos.x += -0.03 * tilt;
+		Q2.setFromEuler(E.set(-0.35 * sp - 0.9 * eq + breath * 2 + land * 1.5 + ly * 1.2 + kp + 0.22 * tilt, 0.55 * sp + lx * 2.2 + ky, 0.35 * sp + lr * still + bx * 1.5 + kr - 0.55 * tilt, 'YXZ'));
 		rot = Q2.multiply(rot);
 		S.model.matrix.compose(pos, rot, ONE);
+		const cell = S.model.getObjectByName('cell');
+		if (S.reload) {
+			const R2 = S.reload;
+			R2.t += dt;
+			const at = cellPath(ru, V2);
+			if (cell) { cell.visible = !!at; if (at) cell.position.fromArray(cell.userData.home ||= cell.position.toArray()).add(at); }
+			const Wr = weaponOf(id);
+			if (!R2.out && ru > 0.22) { R2.out = true; playCue(Wr.sounds.out); }
+			if (!R2.in && ru > 0.8) { R2.in = true; playCue(Wr.sounds.in); }
+			if (ru >= 1) { S.reload = null; playCue(Wr.sounds.ready); R2.done?.(); }
+		}
+		// the flash, its light, the vent sparks, the glow's surge, all fading
+		flash.update(dt); sparks.update(dt);
+		shotLight.intensity *= Math.exp(-dt * 30);
+		if (kitPulseNow() > 0) kitPulse(kitPulseNow() - dt * 6);
 		S.model.matrixWorldNeedsUpdate = true;
 		spinMotes(S.model, time); kitTick(time);
 		setZoom(1 + ((H.zoom || 1) - 1) * a);
@@ -225,6 +280,16 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				const G2 = H[side];
 				if (!G2 || !handFrame(me.P, side, hf)) { X[side] = null; continue; }
 				handAt.multiplyMatrices(S.model.matrix, G2.m);
+				if (side === 'L' && S.reload && cell) {
+					// the support hand leaves the guard, takes the cell out and brings a fresh one
+					const k = clamp(Math.min((ru - 0.14) / 0.08, (0.94 - ru) / 0.08), 0, 1);
+					if (k > 0) {
+						cell.updateMatrix();
+						tmp.multiplyMatrices(S.model.matrix, cell.matrix).multiply(CELL_HOLD);
+						if (!cell.visible) tmp.multiply(tmp2.makeTranslation(0, -0.25, 0));
+						blend(handAt, handAt, tmp, ease(k));
+					}
+				}
 				(X[side] ||= new THREE.Matrix4()).multiplyMatrices(handAt, tmp.copy(hf).invert());
 				// the forearm swung about the wrist to run back toward where the elbow would be
 				const e = vw['e' + side], ae = vw['a' + side] || e;
@@ -292,6 +357,45 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		}
 		return out;
 	}
-	const aimOverride = (on) => { S.aimTap = !!on; };
-	return { update, render, info, aim: aimOverride, state: S, get shown() { return S.shown; } };
+	// ---------- use ----------
+	const punch = (sp, peak) => { sp.dv += peak * sp.w * Math.E; };
+	function fire() {
+		const W = weaponOf(S.id), now = performance.now() / 1000;
+		if (!S.shown || !W || S.equip < 0.95 || S.reload || S.sprint > 0.5 || now - S.lastShot < 0.95 / W.rate) return false;
+		S.lastShot = now; S.shots++;
+		const r = W.recoil, side = r.side[S.shots % r.side.length], hold = 1 - S.ads * 0.45;
+		for (const k of Object.values(kick)) k.w = r.recover;
+		punch(kick.z, r.kick * hold); punch(kick.p, r.rise * hold); punch(kick.y, side * 2); punch(kick.r, side * 3);
+		const m = S.model.matrix, mz = V.set(W.muzzle[0], W.muzzle[1], 0).applyMatrix4(m);
+		if (W.flash) {
+			flash.sprite.position.copy(mz).add(V2.set(0, 0, -0.03));
+			flash.fire(W.flash, W.tint, W.size * (1 - S.ads * 0.4));
+			shotLight.color.set(W.tint); shotLight.position.copy(mz); shotLight.intensity = W.flash === 'pulse' ? 1.6 : 3;
+			kitPulse(W.flash === 'pulse' ? 1 : 0.5);
+		}
+		if (W.vent) sparks.emit(V.set(...W.vent).applyMatrix4(m), V2.set(0.6, 0.5, 0.25), W.flash === 'pulse' ? 5 : 8, W.flash === 'pulse' ? W.tint : 0xffc070);
+		playCue(W.sounds.fire);
+		return true;
+	}
+	function reload(done = null) {
+		const W = weaponOf(S.id);
+		if (!S.shown || !W || S.reload || S.equip < 0.95) return false;
+		S.reload = { t: 0, T: W.reload, done };
+		S.aimTap = false;
+		return true;
+	}
+	// where a shot leaves from and goes, in the world: the muzzle as you see it on screen (at its
+	// depth through the world's lens), heading for what the centre of the view is on
+	function muzzle(range = 60) {
+		const W = weaponOf(S.id);
+		if (!S.model || !W) return null;
+		const p = new THREE.Vector3(W.muzzle[0], W.muzzle[1], 0).applyMatrix4(S.model.matrix), d = p.length();
+		const ndc = p.clone().project(cam);
+		const position = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(camera).sub(camera.position).normalize().multiplyScalar(d).add(camera.position);
+		const aim = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+		const direction = aim.clone().multiplyScalar(range).add(camera.position).sub(position).normalize();
+		return { position, direction, aim: { origin: camera.position.clone(), direction: aim } };
+	}
+	const aimOverride = (on) => { if (!!on !== S.aimTap && weaponOf(S.id)) playCue(weaponOf(S.id).sounds.aim); S.aimTap = !!on; };
+	return { update, render, info, fire, reload, muzzle, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
 }

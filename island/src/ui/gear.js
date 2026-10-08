@@ -10,7 +10,7 @@
 import { ARMS_CATALOG, upgradePrice } from '../gameplay/arms.js';
 import { TIERS, MAX_LEVEL, UPGRADE_MATERIAL, canCombine, groupInstances, statsOf, xpNeed } from '../gameplay/gear-levels.js';
 import { OPEN, accept, cancel, editSide, finished, holdLeft, newTradeId, receive, relayed, startTrade, tick, tradeWhy, worthKeeping } from '../gameplay/trade.js';
-import { createHand } from '../crysis/held-items.js';
+import { createHand, weaponOf } from '../crysis/held-items.js';
 import { createViewmodel } from '../crysis/viewmodel.js';
 import { ACTIONS as DEBUG_ACTIONS } from '../people/actions.js';
 import { createStudio } from './gear-studio.js';
@@ -40,6 +40,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	const vm = createViewmodel({ camera, avatar, mount, canvas: renderer?.domElement || null, isPhone });
 	// (for checks: hold something without owning it, aim)
 	let preview = null;
+	const thirdNow = () => !!(self?.state?.third && avatar?.me);
 	const studio = createStudio();
 	const P = () => world()?.player?.state;
 	const where = () => { const p = P()?.pos; return p ? { x: p.x, y: p.y, z: p.z } : null; };
@@ -335,7 +336,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		const H = preview || arms.held();
 		hand.set(H?.i || null, H?.l || 1, H?.t || 0);
 		const me = avatar?.me, third = !!(self?.state?.third && me);
-		if (third) hand.follow(me.P, Math.atan2(-Math.sin(Ps?.yaw || 0), -Math.cos(Ps?.yaw || 0)), on && !Ps.swimming, me.M, time);
+		if (third) hand.follow(me.P, Math.atan2(-Math.sin(Ps?.yaw || 0), -Math.cos(Ps?.yaw || 0)), on && !Ps.swimming, me.M, time, dt);
 		else hand.hide();
 		if (Ps) vm.update(dt, H, Ps, on && !third && !Ps.swimming && !win.shown(), world(), time);
 		// carrying it about on foot is experience for it
@@ -372,6 +373,17 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		actions: (r) => [['Trade', () => ask(r.id)]],
 		info: () => { const T = active(); return { open: shown(), view, item: itemUid, held: arms.held(), viewmodel: vm.info(), window: win.shown(), trade: T && { id: T.id, role: T.role, status: T.status, why: T.why, sides: T.sides, v: T.v, ok: T.ok, peer: T.peer, hold: holdLeft(T, Date.now()) }, kept: [...trades.values()].map((x) => ({ id: x.id, status: x.status })) }; },
 		trade: ask, sheet, window: win.el, studio,
+		// the held item in use, for the combat systems (crysis/viewmodel.js documents it)
+		weapon: {
+			fire: () => (thirdNow() ? hand.fire(3) : vm.fire()),
+			reload: (done) => (thirdNow() ? hand.reload(done, 3) : vm.reload(done)),
+			aim: (on) => vm.aim(on),
+			equip: (id) => { preview = null; return arms.hold(id); },
+			holster: () => { preview = null; return arms.hold(null); },
+			muzzle: () => (thirdNow() ? hand.muzzle() : vm.muzzle()),
+			data: (id) => weaponOf(id || (preview || arms.held())?.i),
+			state: () => { const H = preview || arms.held(); return { held: H?.i || null, third: thirdNow(), reloading: thirdNow() ? hand.reloading : vm.reloading, aiming: vm.aiming, ready: !!H && (thirdNow() ? !hand.reloading : vm.shown && !vm.reloading) }; },
+		},
 		// the held item and your hands, drawn over the frame (main.js, after the world)
 		post: (renderer) => vm.render(renderer),
 		// Crysis.viewmodel({ hold: [id, level, tier], aim: true }): a look without owning it

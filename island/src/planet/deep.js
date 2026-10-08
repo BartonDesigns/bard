@@ -37,16 +37,18 @@ export function planDeep(island, plan, makeField) {
 		const dPk = Math.hypot(pk.x - c.x, pk.z - c.z);
 		// toward the summit; if already under it, up the steepest rise of the hill
 		const e = 8, base = dPk > 30 ? Math.atan2(pk.z - c.z, pk.x - c.x) : Math.atan2(H(c.x, c.z + e) - H(c.x, c.z - e), H(c.x + e, c.z) - H(c.x - e, c.z));
-		for (const off of [0, 0.45, -0.45, 0.9, -0.9, 1.5, -1.5, 2.3, -2.3, Math.PI]) {
+		// as far on toward the summit as the rock allows, a mine's length at most
+		const rim = Math.min(c.rx, c.rz) * 0.45, far = clamp(dPk - rim, 42, 170);
+		for (const [off, len] of [[0, far], [0, far * 0.7], [0, 72], [0.4, 60], [-0.4, 60], [0.9, 50], [-0.9, 50], [1.5, 46], [-1.5, 46], [2.3, 46], [-2.3, 46], [Math.PI, 46]]) {
+			if (len < 42) continue;
 			const a = base + off, dx = Math.cos(a), dz = Math.sin(a);
-			const rim = Math.min(c.rx, c.rz) * 0.45, len = off === 0 ? clamp(dPk - rim, 42, 72) : 50;
 			const n = Math.round(len / 3), pts = [];
 			let ok = true;
 			for (let i = 0; i <= n && ok; i++) {
 				const u = i / n, along = rim + u * len, side = Math.sin(u * 5 + off * 3) * 2.2 * u * (1 - u) * 4;
 				const x = c.x + dx * along - dz * side, z = c.z + dz * along + dx * side;
 				const hall = smoothstep(0.74, 1, u), w = 2.6 + hall * 4.4, h = 3.9 + hall * 5.6;
-				const y = c.fy - u * len * 0.1;
+				const y = c.fy - u * Math.min(len, 90) * 0.1;
 				if (y < 3 || H(x, z) - (y + h) < 8) ok = false;
 				// a dead end: nothing else of the caves near it once it has left its chamber
 				if (along > rim + 12 && field.cave(x, y + h * 0.5, z) < w + 4) ok = false;

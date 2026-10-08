@@ -355,6 +355,8 @@ export function createPeople(scene, world, camera = null) {
 		const M = p.M, S = M.S, R = p.route;
 		p.timer -= dt;
 		const pace = p.P.dna.gait.pace;
+		// (a fight nearby takes over: fleeing, cowering, fallen; combat/civilians.js)
+		if (p.override && p.override(p, dt, cam)) return;
 		if (p.engaged) {
 			// talking with you: stop, turn to face you, listen; speak while there is speech
 			const dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);

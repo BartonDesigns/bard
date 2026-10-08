@@ -23,6 +23,8 @@
 import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { TIERS } from '../gameplay/gear-levels.js';
+import { createFlash } from './weapon-fx.js';
+import { playCue } from './weapon-sound.js';
 
 // an icon for each item, for lists and slots
 export const ITEM_ICONS = {
@@ -107,7 +109,7 @@ function atlasTex() {
 
 // ---------- the one material: vertex colour, and surf = (roughness, metalness, tile + wear / 2,
 // glow) ----------
-const kitTime = { value: 0 };
+const kitTime = { value: 0 }, kitFire = { value: 0 };
 const kits = {};
 // plain: without the world's reflections (the gear screen's own little renderer)
 export function kitMaterial(plain = false) {
@@ -116,12 +118,13 @@ export function kitMaterial(plain = false) {
 	const kit = kits[key] = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 1 });
 	kit.onBeforeCompile = (sh) => {
 		sh.uniforms.kAtlas = { value: atlasTex() };
-		sh.uniforms.kTime = kitTime;
+		sh.uniforms.kTime = kitTime; sh.uniforms.kFire = kitFire;
 		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 surf;\nvarying vec4 vSurf;\nvarying vec2 vKuv;')
 			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSurf = surf; vKuv = uv;');
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 uniform sampler2D kAtlas;
 uniform float kTime;
+uniform float kFire;
 varying vec4 vSurf;
 varying vec2 vKuv;
 vec3 kBump(vec3 p, vec3 n, vec2 dh, float fd) {
@@ -146,23 +149,27 @@ vec3 kBump(vec3 p, vec3 n, vec2 dh, float fd) {
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix(vSurf.x * (0.85 + (kTx.a - 0.5) * 0.5), 0.32, kEdge);')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = mix(vSurf.y, 1.0, kEdge);')
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = kBump(-vViewPosition, normal, vec2(dFdx(kTx.a), dFdy(kTx.a)) * 1.6, faceDirection);')
-			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += vColor.rgb * vSurf.w * (0.88 + 0.12 * sin(kTime * 2.4 + vViewPosition.x * 9.0));');
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += vColor.rgb * vSurf.w * (0.88 + 0.12 * sin(kTime * 2.4 + vViewPosition.x * 9.0) + kFire * 2.5);');
 	};
 	kit.customProgramCacheKey = () => 'kit1';
 	return kit;
 }
 // the sight's glass: tinted, glinting, its reticle lit (one per reticle colour)
 const lensMats = {};
-function lensMaterial(hex, plain = false) {
-	const key = `${hex}:${plain}`;
+function lensMaterial(hex, plain = false, dot = false) {
+	const key = `${hex}:${dot}:${plain}`;
 	if (lensMats[key]) return lensMats[key];
 	if (hex == null) return (lensMats[key] = new THREE.MeshStandardMaterial({ color: 0x0d2a36, roughness: 0.03, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
-	const c = document.createElement('canvas'); c.width = c.height = 64;
+	// a scope's fine crosshair with heavier posts, or a reflex sight's dot
+	const c = document.createElement('canvas'); c.width = c.height = 128;
 	const g = c.getContext('2d');
 	g.strokeStyle = g.fillStyle = '#fff';
-	g.beginPath(); g.arc(32, 32, 2.6, 0, Math.PI * 2); g.fill();
-	g.lineWidth = 1.4; g.beginPath(); g.arc(32, 32, 13, 0, Math.PI * 2); g.stroke();
-	for (const [x, y] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { g.beginPath(); g.moveTo(32 + x * 17, 32 + y * 17); g.lineTo(32 + x * 23, 32 + y * 23); g.stroke(); }
+	if (dot) { g.beginPath(); g.arc(64, 64, 2.2, 0, Math.PI * 2); g.fill(); g.lineWidth = 0.8; g.beginPath(); g.arc(64, 64, 9, 0, Math.PI * 2); g.stroke(); }
+	else {
+		g.lineWidth = 0.7; g.beginPath(); g.moveTo(14, 64); g.lineTo(114, 64); g.moveTo(64, 14); g.lineTo(64, 114); g.stroke();
+		g.lineWidth = 3; for (const [x, y] of [[0, 1], [-1, 0], [1, 0]]) { g.beginPath(); g.moveTo(64 + x * 30, 64 + y * 30); g.lineTo(64 + x * 62, 64 + y * 62); g.stroke(); }
+		g.beginPath(); g.arc(64, 64, 1.6, 0, Math.PI * 2); g.fill();
+	}
 	const tex = new THREE.CanvasTexture(c);
 	const m = new THREE.MeshStandardMaterial({ color: 0x0d2a36, roughness: 0.04, metalness: 0.3, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, emissive: hex, emissiveIntensity: 2.4, emissiveMap: tex });
 	m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a = max(gl_FragColor.a, texture2D(emissiveMap, vEmissiveMapUv).g * 0.95);'); };
@@ -174,13 +181,19 @@ export function kitLight(envMap, k) {
 	for (const x of [m, ...lit]) { if (envMap && x.envMap !== envMap) { x.envMap = envMap; x.needsUpdate = true; } x.envMapIntensity = x === m ? k : k * 1.5; }
 }
 export const kitTick = (t) => { kitTime.value = t; };
+// the glow surging as an item is used (decays on its own in the hand's and the view's frames)
+export const kitPulse = (k) => { kitFire.value = Math.max(0, k); };
+export const kitPulseNow = () => kitFire.value;
 
 // ---------- building: parts, each with a surface, merged into one geometry ----------
 // a surface: colour, roughness, metalness, pattern, and how much its edges wear and it glows
 const S = (c, r, m, tile = T.plain, o = {}) => ({ c: new THREE.Color(c), r, m, tile, wear: o.wear || 0, glow: o.glow || 0, dens: o.dens || DENS[tile] });
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 class Kit {
-	constructor(hi) { this.hi = hi; this.parts = []; this.lens = []; }
+	constructor(hi) { this.hi = hi; this.body = this.parts = []; this.cellParts = []; this.cellAt = null; this.lens = []; }
+	// what follows goes into the swappable cell (its own mesh, for the reload), anchored at x, y
+	cell(x, y) { this.cellAt = [x, y, 0]; this.parts = this.cellParts; }
+	main() { this.parts = this.body; }
 	// a geometry with a surface, placed at x, y, z turned rx, ry, rz (and scaled)
 	add(geo, s, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sc = null) {
 		_m.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), sc ? _s.set(...sc) : _s.set(1, 1, 1));
@@ -211,14 +224,13 @@ class Kit {
 		if (!this.hi) return this.add(new THREE.CircleGeometry(r, 12), S(0x0c1c24, 0.08, 0.6), x, y, z, rx, ry, rz);
 		const g = new THREE.CircleGeometry(r, 28);
 		g.applyMatrix4(_m.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s.set(1, 1, 1)));
-		this.lens.push({ g, reticle });
+		this.lens.push({ g, reticle, dot: r < 0.017 });
 		return this;
 	}
 	build() {
-		const g = mergeGeometries(this.parts);
-		for (const p of this.parts) p.dispose();
-		g.computeBoundingSphere(); g.computeBoundingBox();
-		return { g, lens: this.lens };
+		const merge = (list) => { const g = mergeGeometries(list); for (const p of list) p.dispose(); g.computeBoundingSphere(); g.computeBoundingBox(); return g; };
+		const cell = this.cellParts.length ? merge(this.cellParts).translate(-this.cellAt[0], -this.cellAt[1], 0) : null;
+		return { g: merge(this.body), cell, cellAt: this.cellAt, lens: this.lens };
 	}
 }
 
@@ -392,10 +404,12 @@ function shroud(k, F, x0, x1, y, r, seg) {
 // the energy cell under the receiver: angled, with a window that glows with the core
 function cell(k, F, x, y, len, w) {
 	const s = poly([[x - 0.026, y], [x + 0.026, y], [x + 0.034, y - len], [x - 0.018, y - len - 0.004]], 0.005);
+	k.cell(x + 0.004, y - len);
 	k.add(slab(s, w, 0.002, 2, 2), F.alt);
 	k.add(block(0.008, len * 0.7, 0.0016, 0.001, 0.0005), F.core, x + 0.008, y - len * 0.48, w / 2 + 0.0003, 0, 0, 0.1);
 	k.add(block(0.008, len * 0.7, 0.0016, 0.001, 0.0005), F.core, x + 0.008, y - len * 0.48, -w / 2 - 0.0003, 0, 0, 0.1);
 	k.add(block(0.056, 0.008, w + 0.004, 0.003), RUBBER, x + 0.008, y - len - 0.002, 0, 0, 0, -0.08);
+	k.main();
 }
 // an inlay line in the tier's colour (from level 4) along a side
 function inlay(k, F, x0, x1, y, z) { if (F.inlay) for (const s of [-1, 1]) k.add(block(x1 - x0, 0.0026, 0.0012, 0.0008, 0.0004), F.inlay, (x0 + x1) / 2, y, s * z); }
@@ -643,6 +657,19 @@ for (const h of Object.values(HOLDS)) for (const s of ['R', 'L']) {
 }
 export const holdOf = (id) => HOLDS[id] || HOLDS['field-medkit'];
 
+// How each usable item presents when used (crysis/viewmodel.js): shots a second it can keep up,
+// the recoil (kick back, rise, the side drift shot by shot, how fast it settles), the cell's
+// count and swap time for the reload, the muzzle in item space, the flash, and its sound cues
+// (crysis/weapon-sound.js)
+const cues = (fire, ready = 'ready') => ({ fire, dry: 'dry', out: 'cell-out', in: 'cell-in', ready, equip: 'equip', holster: 'holster', aim: 'aim' });
+export const WEAPONS = {
+	'aurora-trail-rifle': { rate: 1.6, mag: 8, reload: 2.3, muzzle: [0.9, 0.112], vent: [0.06, 0.13, 0.03], flash: 'flash', tint: 0xffcf95, size: 0.16, recoil: { kick: 0.055, rise: 0.11, side: [0.012, -0.02, 0.016, -0.008, 0.02], recover: 9 }, sounds: cues('marksman') },
+	'mossback-scout-rifle': { rate: 1.1, mag: 5, reload: 2.0, muzzle: [0.764, 0.108], vent: [0.05, 0.12, 0.028], flash: 'flash', tint: 0xffd9a8, size: 0.14, recoil: { kick: 0.05, rise: 0.1, side: [-0.014, 0.01, -0.018, 0.012], recover: 9 }, sounds: cues('scout') },
+	'warden-spark-carbine': { rate: 6, mag: 24, reload: 1.7, muzzle: [0.401, 0.117], vent: [0.1, 0.1, 0.045], flash: 'pulse', tint: 0xffb347, size: 0.11, recoil: { kick: 0.018, rise: 0.028, side: [0.006, -0.004, 0.008, -0.007, 0.003, -0.006], recover: 14 }, sounds: cues('pulse', 'charge') },
+	'reedline-hunting-bow': { rate: 0.8, mag: 1, reload: 0.9, muzzle: [0.04, 0.02], flash: null, tint: 0xffffff, size: 0, recoil: { kick: 0.02, rise: 0.02, side: [0.004], recover: 8 }, sounds: { ...cues('bow'), out: 'aim', in: 'aim', ready: 'aim' } },
+};
+export const weaponOf = (id) => WEAPONS[id] || null;
+
 // a hand's frame off a body (people/body.js), as a matrix (columns a, t, n at the palm)
 const _w = new THREE.Vector3(), _k = new THREE.Vector3(), _i = new THREE.Vector3(), _l = new THREE.Vector3(), _a = new THREE.Vector3(), _t = new THREE.Vector3(), _n = new THREE.Vector3();
 export function handFrame(P, side, out = new THREE.Matrix4(), boneWorld = null) {
@@ -693,7 +720,8 @@ export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false
 	const body = new THREE.Mesh(B.g, kitMaterial(plain));
 	body.name = 'body';
 	g.add(body);
-	for (const L of B.lens) { const m = new THREE.Mesh(L.g, lensMaterial(L.reticle, plain)); m.renderOrder = 2; m.name = 'glass'; g.add(m); }
+	if (B.cell) { const c = new THREE.Mesh(B.cell, kitMaterial(plain)); c.name = 'cell'; c.position.set(...B.cellAt); g.add(c); }
+	for (const L of B.lens) { const m = new THREE.Mesh(L.g, lensMaterial(L.reticle, plain, L.dot)); m.renderOrder = 2; m.name = 'glass'; g.add(m); }
 	if (t === 4 && lod !== 'low') g.add(motes(t));
 	g.traverse((o) => { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; });
 	g.name = 'held:' + id;
@@ -709,14 +737,28 @@ const _h = new THREE.Matrix4(), _h2 = new THREE.Matrix4(), _inv = new THREE.Matr
 const UP = new THREE.Vector3(0, 1, 0);
 // the carry for a long arm (people/actions.js 'carry'), or nothing
 const CARRY = { long: 'carry', bow: null, one: null };
+// the cell's way out and back in over a reload's progress u (item space, from where it sits);
+// null while it is gone (out of view, a fresh one in hand)
+export function cellPath(u, out = new THREE.Vector3()) {
+	if (u < 0.22 || u >= 0.86) return out.set(0, 0, 0);
+	if (u < 0.42) { const k = (u - 0.22) / 0.2; return out.set(0.02 * k, -0.32 * k * k, -0.04 * k); }
+	if (u < 0.62) return null;
+	const k = 1 - (u - 0.62) / 0.24, e = k * k * (3 - 2 * k);
+	return out.set(0.01 * e, -0.22 * e, -0.05 * e);
+}
+// how a long arm tips toward the support hand through a reload (0..1)
+export const reloadTilt = (u) => Math.min(1, u / 0.15, (1 - u) / 0.12);
+
 export function createHand(scene, { lod = 'high' } = {}) {
-	let key = '', model = null, gripped = null;
+	let key = '', model = null, gripped = null, flash = null, kick = 0, reload = null, held = false;
+	const rel = new THREE.Matrix4(), cellV = new THREE.Vector3();
 	function set(id, level = 1, tier = 0) {
 		const k = id ? `${id}:${level}:${tier}` : '';
 		if (k === key) return;
 		if (model) model.parent?.remove(model);
 		key = k; model = id ? itemModel(id, { level, tier, lod }) : null;
-		if (model) { model.matrixAutoUpdate = false; scene.add(model); }
+		reload = null; held = false;
+		if (model) { model.matrixAutoUpdate = false; scene.add(model); flash = createFlash(model); }
 	}
 	// let a body go: hands open, the carry ended
 	function release() {
@@ -725,7 +767,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 	}
 	const hide = () => { if (model) model.visible = false; };
 	// P: a people/body.js person, Mo its motion (people/motion.js)
-	function follow(P, heading, visible = true, Mo = null, time = 0) {
+	function follow(P, heading, visible = true, Mo = null, time = 0, dt = 1 / 60) {
 		if (Mo !== gripped) release();
 		const H = model?.userData.hold, on = !!(model && visible && P && P.root.visible);
 		if (Mo) {
@@ -746,7 +788,10 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		if (!handFrame(P, side, _h)) { model.visible = false; return; }
 		// the item where the hand holds it
 		model.matrix.multiplyMatrices(_h, _inv.copy(G.m).invert());
-		if (H.kind === 'long' && handFrame(P, 'L', _h2)) {
+		if (H.kind === 'long' && reload && held) {
+			// mid-reload the support hand is away: kept as it lay in the grip hand
+			model.matrix.multiplyMatrices(_h, rel);
+		} else if (H.kind === 'long' && handFrame(P, 'L', _h2)) {
 			// both hands on it: the muzzle laid along the line from the grip to the support hand,
 			// rolled by the grip hand
 			_o.setFromMatrixPosition(_h); _o2.setFromMatrixPosition(_h2);
@@ -755,9 +800,9 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			const thumb = _z.setFromMatrixColumn(_h, 1);
 			const up = thumb.addScaledVector(v, -thumb.dot(v)).normalize(), side3 = new THREE.Vector3().crossVectors(v, up);
 			const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(v, up, side3)).multiply(iq);
-			// keep the item's own up near the thumb's
 			const pos = _o.clone().sub(G.o.clone().applyQuaternion(q));
 			model.matrix.compose(pos, q, _s.set(1, 1, 1));
+			rel.multiplyMatrices(_inv.copy(_h).invert(), model.matrix); held = true;
 		} else if (H.level) {
 			// a hanging thing stays upright, turned the way the hand points
 			const o = _o.setFromMatrixPosition(_h), f = _x.setFromMatrixColumn(_h, 1);
@@ -768,11 +813,50 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			const q = new THREE.Quaternion().setFromRotationMatrix(_h2.makeBasis(f, UP, r));
 			model.matrix.compose(o.sub(G.c.clone().applyQuaternion(q)), q, _s.set(1, 1, 1));
 		}
+		// used: a kick back and up, settling
+		if (kick > 0) {
+			const W = weaponOf(model.userData.id), k = kick / 0.14;
+			kick = Math.max(0, kick - dt);
+			if (W) model.matrix.multiply(_inv.makeRotationZ(W.recoil.rise * 1.5 * k)).multiply(_h2.makeTranslation(-W.recoil.kick * 1.5 * k, 0, 0));
+		}
+		// reloading: the cell out and a fresh one in
+		const cell = model.getObjectByName('cell');
+		if (reload) {
+			reload.t += dt;
+			const u = Math.min(1, reload.t / reload.T), at = cellPath(u, cellV);
+			if (cell) { cell.visible = !!at; if (at) cell.position.fromArray(cell.userData.home ||= cell.position.toArray()).add(at); }
+			if (u >= 1) { const d = reload.done; reload = null; d?.(); }
+		}
+		flash?.update(dt);
 		model.matrixWorldNeedsUpdate = true;
 		spinMotes(model, time);
 		kitTick(time);
 	}
 	function dispose() { release(); set(null); }
+	// used: the kick, the flash, its sound (distance: metres from whoever listens; null for silence)
+	function fire(distance = 3) {
+		const W = model && weaponOf(model.userData.id);
+		if (!W || reload) return false;
+		kick = 0.14;
+		if (W.flash) { const [x, y] = W.muzzle; flash.sprite.position.set(x + 0.03, y, 0); flash.fire(W.flash, W.tint, W.size * 1.6); }
+		if (distance != null) playCue(W.sounds.fire, { distance });
+		return true;
+	}
+	// a reload in the hands (the body's 'reload' action shows the support hand at work)
+	function reloadNow(done = null, distance = 3) {
+		const W = model && weaponOf(model.userData.id);
+		if (!W || reload) return false;
+		reload = { t: 0, T: W.reload, done };
+		gripped?.play?.('reload', W.reload, true);
+		if (distance != null) { playCue(W.sounds.out, { distance }); setTimeout(() => playCue(W.sounds.in, { distance }), W.reload * 700); }
+		return true;
+	}
+	// where it fires from and which way, in the world
+	function muzzle() {
+		const W = model?.visible && weaponOf(model.userData.id);
+		if (!W) return null;
+		return { position: new THREE.Vector3(W.muzzle[0], W.muzzle[1], 0).applyMatrix4(model.matrix), direction: new THREE.Vector3(1, 0, 0).transformDirection(model.matrix) };
+	}
 	// numbers for checks: the muzzle against the way the body faces, each palm against its grip
 	function info(P, heading) {
 		if (!model?.visible || !P) return null;
@@ -781,5 +865,5 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		for (const side of ['L', 'R']) if (H[side] && handFrame(P, side, _h2)) out['palm' + side + 'mm'] = +(_o.setFromMatrixPosition(_h2).distanceTo(H[side].o.clone().applyMatrix4(model.matrix)) * 1000).toFixed(1);
 		return out;
 	}
-	return { set, follow, release, hide, info, dispose, get model() { return model; } };
+	return { set, follow, release, hide, info, fire, reload: reloadNow, muzzle, dispose, get model() { return model; }, get reloading() { return !!reload; } };
 }

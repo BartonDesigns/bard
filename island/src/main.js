@@ -1972,6 +1972,8 @@ if (typeof window !== 'undefined') {
 		gear: () => HOOKS.gear?.info(),
 		// what you hold, in view: Crysis.viewmodel({ hold: ['aurora-trail-rifle', 7, 4], aim: true })
 		viewmodel: (o) => HOOKS.gear?.viewmodel(o),
+		// the held item in use: fire(), reload(done), aim(on), equip(id), holster(), muzzle(), data(), state()
+		get weapon() { return HOOKS.gear?.weapon; },
 		// your home on Earth: stored only in this browser, never published
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
