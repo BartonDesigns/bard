@@ -216,6 +216,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		const cx = camera.position.x, cz = camera.position.z;
 		const sy = shared.uSunDir.value.y, night = 1 - THREE.MathUtils.smoothstep(sy, -0.12, 0.1);
 		U.uNight.value = night;
+		light(dt, night);
 		U.uLampK.value = 0.7 + night * 1.6;
 		mats.glass.emissive.setRGB(S.window[0], S.window[1], S.window[2]).multiplyScalar(0.12 * night);
 		if (plumeMat) plumeMat.uniforms.uBeamK.value = 0.12 + night * 0.25;
@@ -275,6 +276,21 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 				}
 			}
 		}
+	}
+	// the light people are seen by where the sky gives none: in the pressurised rooms the
+	// strip lights' wash, warm and from above; outside, the regolith's bounce into the shade
+	// (the Moon's black sky adds no fill of its own). One light, its strength eased, so no
+	// shader recompiles as you go in and out.
+	const fill = new THREE.HemisphereLight(0xfff0e0, 0x9a948c, 0);
+	fill.name = 'colony:fill';
+	let fillOn = true;
+	group.add(fill);
+	function light(dt, night) {
+		const inside = life.inside(), sky = inside ? 1.0 : (0.06 + 0.3 * (1 - night)) * (S.hard ? 1 : 0.5);
+		if (inside) { fill.color.setRGB(1, 0.94, 0.86); fill.groundColor.setRGB(0.5, 0.48, 0.45); }
+		else { fill.color.setRGB(0.55, 0.55, 0.56); fill.groundColor.setRGB(0.75, 0.73, 0.7); }
+		const want = fillOn ? sky : 0;
+		fill.intensity += (want - fill.intensity) * Math.min(1, dt * 3);
 	}
 	// arrive at the spaceport: on the apron, the tower ahead
 	function go() {
@@ -341,5 +357,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	};
 	const portAt = plan.port ? { name: `${profile.name.replace(/^the /, '').replace(/^\w/, (c) => c.toUpperCase())}: ${plan.name}`, x: plan.port.x, z: plan.port.z, y: plan.port.y } : null;
 	const crewApi = errands ? { mark: errands.mark, journal: errands.journal, errands, people: crew } : null;
-	return { crew: crewApi, ride, update, floor: col.floor, push, go, goTo, sites: siteList, life, interiors, rooms: X.rooms, lifts: X.lifts, airlocks: X.airlocks, terminals: X.terminals, dispose, info, group, port: portAt };
+	// (for before-and-after looks: the fill and the crew's environment light on or off)
+	const lightFix = (on) => { fillOn = !!on; fill.intensity = on ? fill.intensity : 0; crew?.envLight(!!on); return on; };
+	return { crew: crewApi, ride, lightFix, update, floor: col.floor, push, go, goTo, sites: siteList, life, interiors, rooms: X.rooms, lifts: X.lifts, airlocks: X.airlocks, terminals: X.terminals, dispose, info, group, port: portAt };
 }

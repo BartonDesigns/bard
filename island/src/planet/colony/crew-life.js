@@ -162,6 +162,7 @@ export function createCrew(X, C, o) {
 			M.place(f.pos.x, f.pos.y, f.pos.z, f.pos.yaw ?? 0);
 			M.setPose('rest');
 			f.P = P; f.M = M; f.built = true; f.dress = null;
+			envLit(f);
 			f.gear = fitSuit(P, { name: c.name, role: c.role || c.job.replace(/^the /, '').split(/[ ,]/)[0], col: c.col }, o.env);
 			group.add(P.root);
 		} catch (e) { failed = true; console.warn('[colony] crew', e); }
@@ -176,6 +177,12 @@ export function createCrew(X, C, o) {
 		if (f.dress && (f.dress === 'eva') !== out) { f.pause = 1.6; f.M.gesture(out ? 'think' : 'open'); }
 		f.dress = state;
 		wear(f.P, f.gear, f.c, state);
+	}
+	// the colony's sky and ground on the skin and clothes as reflections: the sheen that gives
+	// every face its highlights and its shape where there is little direct light
+	let envOn = true;
+	function envLit(f) {
+		for (const m of [f.P.skinMat, f.P.clothMat]) { if (!m) continue; m.envMap = envOn ? o.env || null : null; m.envMapIntensity = m === f.P.skinMat ? 0.9 : 0.5; m.needsUpdate = true; }
 	}
 	function drop(f) {
 		if (f.gear) dropSuit(f.gear);
@@ -198,7 +205,7 @@ export function createCrew(X, C, o) {
 			clock = 1.5;
 			if (Number.isFinite(hours)) for (const f of folk) {
 				f.hold = !!o.holds?.(f.id);
-				if (f.engaged) continue;
+				if (f.engaged || f.pin) continue;
 				const g = goalFor(f, hours);
 				if (g.p && (g.key !== f.place || g.p !== f.goal) && !(f.route.length && f.goal === g.p)) setGoal(f, g);
 				f.mark = o.mark?.(f.id) || null;
@@ -290,6 +297,13 @@ export function createCrew(X, C, o) {
 	}
 	const info = () => folk.map((f) => ({ id: f.id, name: f.name, place: f.place, built: f.built, dress: f.dress, mark: f.mark, walking: f.route.length, x: Math.round(f.pos.x * 10) / 10, y: Math.round(f.pos.y * 10) / 10, z: Math.round(f.pos.z * 10) / 10 }));
 	// (for a look in tests: dress someone as if outside, just in, or at work)
-	const look = (id, state) => { const f = byId[id]; if (f) f.force = state || null; return !!f; };
-	return { update, dispose, folk, byId, info, look, state: () => ({ assets: !!A, building, failed }), where: (id) => byId[id]?.pos || null, place: (id) => byId[id]?.place || null };
+	const look = (id, state, at) => {
+		const f = byId[id];
+		if (!f) return false;
+		f.force = state || null;
+		// (and pinned to a spot, facing a way)
+		if (at && f.built) { f.pin = true; f.route = []; f.goal = { ...at }; f.pos = { ...at }; f.M.place(at.x, at.y, at.z, at.yaw); }
+		return true;
+	};
+	return { update, dispose, folk, byId, info, look, envLight: (on) => { envOn = on; for (const f of folk) if (f.built) envLit(f); }, state: () => ({ assets: !!A, building, failed }), where: (id) => byId[id]?.pos || null, place: (id) => byId[id]?.place || null };
 }
