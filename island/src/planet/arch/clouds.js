@@ -29,7 +29,7 @@ vec3 mistC(float up, float n, float glow){
 	c = mix(c, uHor * 0.18 + vec3(0.02, 0.025, 0.045), uNight * 0.75);
 	c = mix(c, uWarm * dot(c, vec3(0.3, 0.5, 0.2)) * 1.2, 0.22 * uDusk);
 	// under the world's own dusk sky (sky.js uDusk): violet, pinker on the tops
-	c = mix(c, mix(vec3(0.3, 0.2, 0.42), vec3(0.62, 0.36, 0.6), up) * uSkyDusk.y * (0.7 + 0.5 * n), uSkyDusk.x * 0.85);
+	c = mix(c, mix(vec3(0.15, 0.1, 0.25), vec3(0.46, 0.27, 0.5), up) * uSkyDusk.y * (0.6 + 0.7 * n), uSkyDusk.x * 0.9);
 	return c + uWarm * glow * uDusk * (1.4 - up * 0.6);
 }
 `;
@@ -95,7 +95,7 @@ void main(){
 	if (a < 0.004) discard;
 	// rolling tops: lit where the billow faces up out of the deck, shadowed in its folds
 	float relief = clamp((n - n2) * 7.0 + 0.5, 0.0, 1.0);
-	vec3 col = mistC(vL, n, glow) * (0.72 + 0.5 * relief * (0.3 + 0.7 * vL)) * (0.8 + 0.25 * smoothstep(cv, cv + 0.3, n));
+	vec3 col = mistC(vL, n, glow) * (0.5 + 0.95 * relief * (0.3 + 0.7 * vL)) * (0.75 + 0.35 * smoothstep(cv, cv + 0.3, n));
 	gl_FragColor = vec4(col, a);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>

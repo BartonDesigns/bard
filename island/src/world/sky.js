@@ -297,10 +297,11 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
 					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh);
 					// at a world's dusk the heaps are lit pink from below, violet in their tops
-					cloud = mix(cloud, mix(vec3(0.95, 0.38, 0.6), vec3(0.32, 0.22, 0.5), smoothstep(0.2, 1.0, lit)) * uDusk.y, uDusk.x * 0.85);
+					cloud = mix(cloud, mix(vec3(1.0, 0.4, 0.62), vec3(0.2, 0.13, 0.34), smoothstep(0.2, 1.0, lit)) * uDusk.y, uDusk.x * 0.9);
 					// lightning lights the cloud from inside
 					cloud += vec3(0.75, 0.8, 1.0) * uFlash * (0.5 + sh * 1.5);
-					col = mix(col, cloud, dens * 0.95);
+					// (at a world's dusk the thin cloud thins away: heaps in a clear sky)
+					col = mix(col, cloud, dens * 0.95 * (1.0 - uDusk.x * 0.6 * (1.0 - smoothstep(0.35, 0.85, dens))));
 				}
 				// showers far off: curtains of rain hanging under their clouds; the rain the
 				// rainbow needs (how much of it lies along this line of sight)
