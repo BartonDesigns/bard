@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 
-const CW = 256, CH = 128, COLS = 4, ROWS = 16;
+const CW = 256, CH = 128, COLS = 8, ROWS = 16;     // 128 cells: every sign, tape and patch in the colony
 let atlas = null, mat = null;
 const cells = new Map();
 function canvas() {
@@ -89,4 +89,5 @@ export function signMesh(list) {
 }
 // a frame's local point and turn as a lettering item (F from alienkit frame: local +z faces yaw 0)
 export const at = (F, kind, text, lx, ly, lz, ry, w, h) => { const p = F.p(lx, ly, lz); return { kind, text, x: p.x, y: p.y, z: p.z, yaw: F.yaw + ry, w, h }; };
+export const signCells = () => cells.size;
 export function disposeSigns() { mat?.dispose(); atlas?.tex.dispose(); mat = null; atlas = null; cells.clear(); }

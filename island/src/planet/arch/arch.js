@@ -371,7 +371,7 @@ function tower(X, T) {
 		}
 		return m - 0.5;
 	};
-	const sea = X.sea, y0 = T.sea ? sea + 2.5 : T.y + 2.8, doors = [], a0 = X.r() * TAU;
+	const sea = X.sea, y0 = T.sea ? sea + 2.5 : T.y + 3.2, doors = [], a0 = X.r() * TAU;
 	if (y0 < T.y + yt - 30) {
 		if (!T.sea) {
 			// the way in: a porch through the root's skirt, its doors lit
@@ -409,9 +409,12 @@ function slabs(X, T) {
 		// (the first, the tallest, is broad enough for grand rooms: the plan sized it and levelled its ground)
 		const w = i === 0 && T.sw ? T.sw : 12 + X.r() * 10, d = i === 0 && T.sd ? T.sd : 8 + X.r() * 5, hh = h * (i === 0 ? 1 : 0.45 + X.r() * 0.4);
 		const a = i * 2.1 + X.r(), off = i ? T.R * (1.1 + X.r() * 0.7) + 6 : 0, B = F.sub(Math.cos(a) * off, 0, Math.sin(a) * off, (X.r() - 0.5) * 0.3);
-		K.add('shell', B.put(box(w + 2.4, 9, d + 2.4), 0, 2.5, 0), D);
-		K.add('shell', B.put(box(w, hh - 7, d), 0, 7 + (hh - 7) / 2, 0), { tint: S.slab, glow: G.glazing });
-		K.add('shell', B.put(box(w + 0.6, 1.2, d + 0.6), 0, hh + 0.6, 0), D);
+		// (the one with rooms: its podium, body and cap are its hull, hidden from inside, where the body's
+		// underside would cut across the entrance hall)
+		const hk = i === 0 && T.sw ? 'hull' : 'shell';
+		K.add(hk, B.put(box(w + 2.4, 9, d + 2.4), 0, 2.5, 0), D);
+		K.add(hk, B.put(box(w, hh - 7, d), 0, 7 + (hh - 7) / 2, 0), { tint: S.slab, glow: G.glazing });
+		K.add(hk, B.put(box(w + 0.6, 1.2, d + 0.6), 0, hh + 0.6, 0), D);
 		if (i !== 1) K.add('shell', B.put(box(0.5, hh - 7, 0.3), (w / 2 - 0.25) * (i ? -1 : 1), 7 + (hh - 7) / 2, d / 2 + 0.12), { tint: S.strip, glow: G.lamp });
 		for (const sx of [-1, 1]) K.add('shell', B.put(box(0.5, 0.5, 0.5), sx * (w / 2 - 0.4), hh + 1.45, d / 2 - 0.4), { tint: S.beacon, glow: G.beacon });
 		const c = B.p(0, 0, 0);
@@ -461,7 +464,7 @@ function slabRooms(X, T, B, w, d, hh) {
 	const sea = X.sea, H = X.H, top = T.y + hh + 0.9;
 	let g = -1e9;
 	for (const [u, v] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, 1], [0, -1]]) { const q = B.p(u * w / 2, 0, v * d / 2); g = Math.max(g, H(q.x, q.z)); }
-	const y0 = Math.max(g + 0.4, sea + 2.5, T.y + 0.5), doors = [], at = w * 0.22;
+	const y0 = Math.max(g + 0.8, sea + 2.5, T.y + 0.5), doors = [], at = w * 0.22;
 	if (top - y0 < 30) return;
 	if (!T.sea && g > sea + 1) {
 		doors.push({ y: y0, at, w: 3.4, h: 4.4, porch: 1.6, ext: true });
