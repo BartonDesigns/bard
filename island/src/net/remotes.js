@@ -10,7 +10,7 @@ import { createMotion } from '../people/motion.js';
 import { carGeometry } from '../bay/cars.js';
 import { createHand } from '../crysis/held-items.js';
 
-const EYE = 1.68, DELAY = 0.15, KEEP = 1.2;
+const EYE = 1.68, DELAY = 0.12, KEEP = 1.2;
 
 // where a buffer of timed poses puts someone at time t (seconds): between the two either side,
 // or a little past the last one, then held
@@ -139,7 +139,7 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 			let V = r.show;
 			if (!V || Math.hypot(a[0] - V.x, a[2] - V.z) > 60 || Math.abs(a[1] - V.y) > 60) V = r.show = { x: a[0], y: a[1], z: a[2], yaw: a.y, sp: 0 };
 			else {
-				const k = 1 - Math.exp(-Math.min(dt, 0.1) * 9), ox = V.x, oz = V.z;
+				const k = 1 - Math.exp(-Math.min(dt, 0.1) * 16), ox = V.x, oz = V.z;
 				V.x += (a[0] - V.x) * k; V.y += (a[1] - V.y) * k; V.z += (a[2] - V.z) * k;
 				V.yaw += Math.atan2(Math.sin(a.y - V.yaw), Math.cos(a.y - V.yaw)) * k;
 				V.sp += (Math.hypot(V.x - ox, V.z - oz) / Math.max(dt, 1e-3) - V.sp) * Math.min(1, dt * 6);
