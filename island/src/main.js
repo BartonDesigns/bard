@@ -44,6 +44,7 @@ import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
 import { createHouses } from './bay/houses.js';
+import { createFamilyLife } from './people/family-life.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
@@ -550,6 +551,8 @@ export function createIslandWorld() {
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	guideApi.people = people;
+	// households, their days and their food, and the moments of it you see (people/family-life.js)
+	const families = HOOKS.families = createFamilyLife({ scene, world: () => world, camera, people, isPhone, morality: () => HOOKS.morality || null });
 	const social = createNpcSocial({ scene, world: () => world, camera, people, isPhone, hint });
 	addTalkers(() => world?.underworld?.village?.()?.folk.filter(p => !p.socialOwned && p.P.root.visible) || []);
 	guideApi.social = social;
@@ -1640,6 +1643,7 @@ export function createIslandWorld() {
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
 		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
 		people.demo(dt, time, camera.position);
@@ -1982,6 +1986,8 @@ if (typeof window !== 'undefined') {
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
 		social: () => HOOKS.social,
+		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
+		families: () => HOOKS.families,
 		// the child in the woods (people/ghost.js): very rare; this calls her now
 		ghost: (at) => HOOKS.ghost?.(at),
 		ghostInfo: () => HOOKS.ghostInfo?.(),

@@ -20,8 +20,6 @@ export const slotOf = (h) => Math.max(0, Math.min(N - 1, Math.floor((((h % 24) +
 export const hourOf = (s) => s * SLOT;
 // places a child counts as looked after by the place itself
 export const MINDED = new Set(['school', 'club', 'daycare', 'helper', 'bus']);
-// places that are someone's own (not where the house is together)
-const AWAY = new Set(['work', 'school', 'club', 'daycare', 'helper', 'bus', 'job']);
 
 const fill = (a, from, to, v) => { const s0 = slotOf(from), s1 = to >= 24 ? N : slotOf(to); for (let s = s0; s < s1; s++) a[s] = v; };
 const isWeekend = (day) => day === 0 || day === 6;
@@ -145,7 +143,8 @@ function cover(h, plan) {
 		}
 		return out;
 	};
-	const set = (id, s0, s1, where, what) => { for (let s = s0; s < s1; s++) { if (where) at[id][s] = where; if (what) act[id][s] = what; } };
+	// (the night stays asleep, wherever it is spent)
+	const set = (id, s0, s1, where, what) => { for (let s = s0; s < s1; s++) { if (where) at[id][s] = where; if (what && (act[id][s] !== 'sleep' || where === 'transit')) act[id][s] = what; } };
 	const note = (o) => plan.notes.push(o);
 	const kids = minorsOf(h);
 	// (minding one can leave another: so round them all again until nobody is alone)

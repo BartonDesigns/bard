@@ -154,7 +154,7 @@ export function makeHousehold(seed, home = null, opts = {}) {
 	}
 	h.income = h.members.reduce((a, m) => a + (m.job?.pay || 0), 0);
 	// a little support for older people and those without work (pensions, benefits)
-	h.income += h.members.filter((m) => m.age >= 67).length * 420 + (h.income === 0 ? 260 * Math.max(1, h.members.filter((m) => m.age >= 18).length) : 0);
+	h.income += h.members.filter((m) => m.age >= 67).length * 420 + (h.members.every((m) => m.age < 18 || !m.job) ? 260 * Math.max(1, h.members.filter((m) => m.age >= 18 && m.age < 67).length) : 0);
 	h.size = h.members.length;
 	return h;
 }

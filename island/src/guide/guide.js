@@ -810,6 +810,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			v = pool[(d?.seed ?? 0) % pool.length];
 			u.pitch = d ? (d.male ? 0.9 : 1.1) - (d.age - 40) * 0.004 : 1;
 			u.rate = 0.95 + (who.temper?.outgoing ?? 0.5) * 0.15;
+			// (a teen's own voice: teens.js voiceFor)
+			if (who.voice) { u.pitch = who.voice.pitch; u.rate = who.voice.rate; }
 		}
 		if (v) u.voice = v;
 		speechSynthesis.speak(u);

@@ -257,10 +257,12 @@ export function teenPersona(base, d) {
 export function teenPrompt(p) {
 	return `YOU ARE A TEENAGER (${p.age}, ${p.job}, at ${p.school}). Talk like an ordinary, good-natured teen: school, homework, friends, sport, music, games, your family and chores, your plans after school. Keep it everyday and wholesome; if anything turns to romance, dating, violence or anything an adult stranger should not ask a minor, politely change the subject or say you need to get going. Never give out where you live.\n`;
 }
+// what a stranger has no business asking a minor: they politely leave it
+export const TEEN_GUARD = /\b(date|dating|girlfriend|boyfriend|kiss|cute|sexy|hot|address|where do you live|home alone|alone|meet me|come with me|your number)\b/;
 // without a model: simple, in character
 export function teenOffline(p, q) {
 	const r = rng((p.age * 97 + q.length * 13) >>> 0);
-	if (/\b(date|dating|girlfriend|boyfriend|kiss|cute|sexy|hot|address|where do you live|alone)\b/.test(q)) return `[[mood: thoughtful]] [[gesture: shake]] Uh, I'm good. I should get going, actually.`;
+	if (TEEN_GUARD.test(q)) return `[[mood: thoughtful]] [[gesture: shake]] Uh, I'm good. I should get going, actually.`;
 	if (/^(hi|hey|hello|yo|sup|good (morning|afternoon|evening))\b/.test(q)) return `[[mood: happy]] [[gesture: wave]] ${pick(r, ['Hey.', 'Hi!', 'Oh, hey.', 'Sup.'])} I'm ${p.first}.`;
 	if (/how old|your age/.test(q)) return `[[mood: calm]] ${p.age}. ${p.job[0].toUpperCase() + p.job.slice(1)}.`;
 	if (/school|class|grade|homework|teacher|study/.test(q)) return `[[mood: ${p.mood === 'tired' ? 'calm' : 'amused'}]] [[gesture: shrug]] ${pick(r, [`${p.school[0].toUpperCase() + p.school.slice(1)}'s okay. Too much homework.`, 'We have a chem test Friday. Not ready.', 'Lunch is the best part, honestly. The school meals got better this year.', 'My math teacher is actually really good.'])}`;

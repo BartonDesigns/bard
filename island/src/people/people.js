@@ -12,12 +12,13 @@ import { loadPeopleAssets, buildPerson, personDNA, rng } from './body.js';
 import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
-import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE } from './flow.js';
+import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE, isWeekend } from './flow.js';
 import { fadePerson } from './fade.js';
 import { regionalNow } from '../region/here.js';
 import { regionalDress } from '../region/dress.js';
 import { ancestryFor } from '../region/cultures.js';
 import { coldOf } from '../region/climate.js';
+import { makeTeen, teensAbout, teenStyle, UNIFORM_CULTURES } from './teens.js';
 
 const MAX = 26, KIDS = 12, NEAR = 70;
 const steps = [];
@@ -250,7 +251,7 @@ export function createPeople(scene, world, camera = null) {
 	// a family: a child joins a grown-up already about (one already with children who want
 	// another, or a new one), at their side holding hands if small, the third running on
 	// ahead; or sits with them at their table. A second grown-up can join them too.
-	const headOk = (o, cam) => o.active && !o.leaving && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z) && !o.P.dna.child && !o.engaged && !o.fam && o.role !== 'jog' && o.M.S.pos.distanceTo(cam) < NEAR && (o.route?.kind !== 'seat' || !!seatNear(o.route));
+	const headOk = (o, cam) => o.active && !o.leaving && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z) && !o.P.dna.child && !o.P.dna.minor && !o.engaged && !o.fam && o.role !== 'jog' && o.M.S.pos.distanceTo(cam) < NEAR && (o.route?.kind !== 'seat' || !!seatNear(o.route));
 	// the free seat nearest a family's own (the same table, or the next one)
 	function seatNear(R) {
 		let best = null, bd = 1.7;
@@ -374,7 +375,7 @@ export function createPeople(scene, world, camera = null) {
 		if (p.role === 'chat') {
 			// find someone close to talk to, or wait for them to come
 			if (!p.partner) {
-				for (const o of pool) if (o !== p && o.active && !o.P.dna.child && o.route?.kind !== 'seat' && o.route?.kind !== 'follow' && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
+				for (const o of pool) if (o !== p && o.active && !o.P.dna.child && !!o.P.dna.minor === !!p.P.dna.minor && o.route?.kind !== 'seat' && o.route?.kind !== 'follow' && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
 			}
 			if (p.partner) {
 				const o = p.partner.M.S.pos, d = o.distanceTo(S.pos);
@@ -568,6 +569,8 @@ export function createPeople(scene, world, camera = null) {
 	}
 	// an outfit for the context: the wardrobe's, or the region's own out in the world
 	function outfitFor(r, d, c) {
+		// a teen: teenage clothes, the school uniform on a school day where schools wear one (teens.js)
+		if (d.teen) { const h = world()?.sky?.state?.hours ?? 13; return teenStyle(r, d, { cold: c.cold, wet: c.wet, uniform: !!c.H && UNIFORM_CULTURES.has(c.H.culture?.key) && !isWeekend() && h > 7 && h < 16.5 }); }
 		if (!c.H) return dressFor(r, d, c);
 		const { outfit, head } = regionalDress(r, d, c.H.kit, c.H.culture, { cold: c.cold, role: c.activity === 'sit' ? 'sit' : 'walk', id: c.H.regionId });
 		outfit.gen = outfit.gen || 'x'; outfit.headScarf = head.scarf;
@@ -589,7 +592,7 @@ export function createPeople(scene, world, camera = null) {
 
 	// ---------- the loop ----------
 	let building = false;
-	async function grow(kid = false) {
+	async function grow(kid = false, teen = false) {
 		if (building || !A) return;
 		building = true;
 		try {
@@ -597,8 +600,10 @@ export function createPeople(scene, world, camera = null) {
 			const r = rng(seed ^ 0xc41d);
 			const c = wearCtx(lastCam, lastNeed, 'walk');
 			const anc = c.H ? ancestryFor(c.H.culture, rng(seed ^ 0xa11), c.H.kit.build?.dense ? 0.15 : 0.06) : undefined;
-			const d = personDNA(seed, kid ? { age: 3 + r() * 8, ctx: c, ancestry: anc } : { ctx: c, ancestry: anc });
-			if (c.H && !kid) { const o = outfitFor(rng(seed ^ 0x57a1e), d, c); o.hair = d.style.hair; o.printKind = d.style.printKind; if (o.headScarf) o.hair = { ...o.hair, scarf: o.headScarf }; d.style = o; d.styleSig = JSON.stringify(d.outfit); }
+			let d = personDNA(seed, kid ? { age: 3 + r() * 8, ctx: c, ancestry: anc } : teen ? { age: 18, ctx: c, ancestry: anc } : { ctx: c, ancestry: anc });
+			// a teenager: the grown-up body taken back to thirteen to seventeen (teens.js)
+			if (teen) { d = makeTeen(d, undefined, { cold: c.cold, wet: c.wet }); }
+			if (c.H && !kid && !teen) { const o = outfitFor(rng(seed ^ 0x57a1e), d, c); o.hair = d.style.hair; o.printKind = d.style.printKind; if (o.headScarf) o.hair = { ...o.hair, scarf: o.headScarf }; d.style = o; d.styleSig = JSON.stringify(d.outfit); }
 			const P = buildPerson(A, d);
 			const M = motionFor(P);
 			const p = { P, M, active: false, role: 'walk', dressKey: c.key };
@@ -635,7 +640,10 @@ export function createPeople(scene, world, camera = null) {
 		// build the families together: a child's body whenever the children lag the grown-ups
 		const wantA = na > 0 && adultPool.length < Math.min(MAX, na + 2) && adultPool.filter((p) => p.active).length < na;
 		const wantK = nk > 0 && kidPool.length < Math.min(KIDS, nk + 1) && kidPool.length / nk < Math.max(0.3, adultPool.length / Math.max(1, na));
-		if (wantK && adultPool.length) grow(true); else if (wantA) grow(false);
+		// teens among the grown-ups' bodies: as many as the hour and the place have about
+		const hrs = world()?.sky?.state?.hours ?? 13, teenShare = need.n ? teensAbout(hrs, need.zone || 'neighbourhood', isWeekend()) : 0;
+		const teensBuilt = adultPool.filter((p) => p.P.dna.teen).length;
+		if (wantK && adultPool.length) grow(true); else if (wantA) grow(false, teensBuilt < Math.round(Math.min(MAX, na + 2) * teenShare));
 		let active = 0, kids = 0;
 		const drop = (p) => {
 			if (p.rod) p.rod.visible = false;
@@ -679,10 +687,11 @@ export function createPeople(scene, world, camera = null) {
 			// grown-ups and children by turns, so families form as the place fills
 			turn = !turn;
 			if (active < na && (kids >= nk || turn || !active)) {
-				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child);
+				const teensOut = pool.filter((p) => p.active && p.P.dna.teen).length;
+				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child && (!p.P.dna.teen || teensOut < Math.ceil(na * teenShare)));
 				// a second grown-up for a family, or someone new
 				const F = pool.find((o) => o.active && !o.leaving && o.kids > 0 && o.spouseWant && !o.spouse && !o.engaged && o.M.S.pos.distanceTo(cam) < NEAR && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z));
-				if (idle && F) { seedN++; if (castCompanion(idle, F)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } else F.spouseWant = false; }
+				if (idle && F && !idle.P.dna.minor) { seedN++; if (castCompanion(idle, F)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } else F.spouseWant = false; }
 				else if (idle) { seedN++; if (cast(idle, cam, need.island, need.C, need.venue)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } }
 			} else {
 				const idle = kidPool.find((p) => !p.active);

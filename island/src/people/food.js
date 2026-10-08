@@ -100,10 +100,13 @@ function mealPlan(r, tight = false) {
 // how well they're eating, from the pantry: quality (0..1) and food security
 export function assess(h) {
 	const F = h.food, P = F.pantry;
-	const days = Math.min(P.staples, P.fresh + P.protein + P.staples * 0.4);
-	F.quality = clamp(0.2 + 0.45 * clamp(P.fresh / 3) + 0.25 * clamp(P.protein / 3) + 0.1 * clamp(P.staples / 4));
-	const afford = F.budget / (F.need * (F.reach || 1));
-	F.security = days >= 2.5 && afford >= 0.95 ? 'secure' : days >= 1 && afford >= 0.7 ? 'tight' : 'short';
+	// (each kind in days of the whole house's meals: enough food is the staples, good food
+	// the fresh and the protein beside them)
+	const days = P.staples;
+	F.quality = clamp(0.2 + 0.45 * clamp(P.fresh / 2) + 0.25 * clamp(P.protein / 2) + 0.1 * clamp(P.staples / 3));
+	const afford = (F.budget + (F.gift || 0)) / (F.need * (F.reach || 1));
+	// (a full cupboard is security this week, whatever the budget)
+	F.security = days >= 2 && afford >= 0.95 ? 'secure' : (days >= 1 && afford >= 0.7) || days >= 3 ? 'tight' : 'short';
 	return F;
 }
 
@@ -113,7 +116,7 @@ export function assess(h) {
 // how they are: well-being follows how they ate, how they slept and how worried they are.
 export function liveDay(h, plan, day = 1) {
 	const F = h.food, P = F.pantry, M = mouths(h) || 1;
-	if (day === 1) { F.spent = 0; F.week++; F.plan = mealPlan(rng((h.seed ^ F.week * 7919) >>> 0), F.security !== 'secure'); }
+	if (day === 1) { F.spent = 0; F.gift = 0; F.week++; F.plan = mealPlan(rng((h.seed ^ F.week * 7919) >>> 0), F.security !== 'secure'); }
 	const school = day !== 0 && day !== 6 && F.access.includes('school');
 	const kids = minorsOf(h).filter((m) => m.school);
 	// what the house eats from its own kitchen today, in house-days (school meals take the
@@ -121,9 +124,9 @@ export function liveDay(h, plan, day = 1) {
 	let eat = 1 - (school ? kids.length / M * 0.55 : 0) - (h.unhoused && F.access.includes('kitchen') ? 0.45 : 0);
 	eat = clamp(eat, 0.2, 1);
 	const take = (k, v) => { const g = Math.min(P[k], v); P[k] -= g; return g; };
-	const got = take('fresh', eat * 0.45) + take('protein', eat * 0.3) + take('staples', eat * 0.35);
+	const got = take('fresh', eat) * 0.4 + take('protein', eat) * 0.3 + take('staples', eat) * 0.3;
 	// (what the school or the kitchen gave them is eaten in full)
-	const ate = eat * clamp(got / (eat * 1.1)) + (1 - eat);
+	const ate = eat * clamp(got / eat) + (1 - eat);
 	P.fresh *= 0.9;                       // greens wilt, bread goes stale
 	if (F.garden) P.fresh += 0.35;
 	// shopping: on the house's shop days, the cheapest good source they can reach
@@ -157,7 +160,7 @@ export function buy(h, day = 1, credits = null) {
 // food arriving: days of meals, split by what the source has
 export function stock(h, days, S = SOURCES.supermarket) {
 	const P = h.food.pantry;
-	P.fresh += days * S.fresh * 0.9; P.protein += days * S.protein * 0.8; P.staples += days * 1.1;
+	P.fresh += days * S.fresh; P.protein += days * S.protein; P.staples += days;
 	assess(h);
 }
 // a free source: the food bank's bags, the kitchen's meals
@@ -247,6 +250,7 @@ export function helpStock(h, credits) {
 	const days = Math.min(7, credits / per);
 	if (days <= 0) return 0;
 	stock(h, days, SOURCES.supermarket);
+	F.gift = (F.gift || 0) + credits;
 	// they eat better from today; the worry eases
 	feel(h, null, 1);
 	return Math.round(days * per);
