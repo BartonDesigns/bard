@@ -18,6 +18,7 @@ import { frame } from '../alienkit.js';
 import { markTexture } from '../medieval/quests.js';
 import { CAST, placeFor, activity } from './crew.js';
 import { fitSuit, wear, keepHair, dropSuit, suitPaint } from './suit.js';
+import { constrainCrew } from './crew-space.js';
 
 const TAU = Math.PI * 2, RING = 13.6, DOME = 15;
 const hash = (s) => s.split('').reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261) >>> 0;
@@ -72,7 +73,7 @@ export function createCrew(X, C, o) {
 	scene.add(group);
 	const h = C.hub, mods = X.rooms.modules;
 	const LIMIT = isPhone ? 4 : 8, BUILD = isPhone ? 60 : 85, FREE = BUILD + 50;
-	let A = null, failed = false, building = false, clock = 0, t = 0;
+	let A = null, failed = false, building = false, disposed = false, clock = 0, t = 0;
 	const markTex = { offer: markTexture('offer'), ready: markTexture('ready') };
 	const markMat = { offer: new THREE.SpriteMaterial({ map: markTex.offer, depthTest: false, transparent: true }), ready: new THREE.SpriteMaterial({ map: markTex.ready, depthTest: false, transparent: true }) };
 
@@ -130,7 +131,10 @@ export function createCrew(X, C, o) {
 	function setGoal(f, g) {
 		f.place = g.key;
 		f.goal = g.p;
-		const from = f.pos, to = g.p, za = zone(from), zb = zone(to);
+		const from = f.pos, to = { ...g.p }, za = zone(from), zb = zone(to);
+		// A roster point can sit just inside a table's margin. Walk to its clear edge,
+		// rather than pressing into the table forever trying to reach the old point.
+		for (let i = 0; i < 3; i++) o.push?.(to, to.y);
 		if (!seen(f)) { f.route = []; f.pos = { ...to }; if (f.built) f.M.place(to.x, to.y, to.z, to.yaw ?? 0); return; }
 		if (za === 'hub' && zb === 'hub') f.route = hubRoute(from, to);
 		else if (za === zb) f.route = [{ ...to }];
@@ -149,6 +153,7 @@ export function createCrew(X, C, o) {
 		building = true;
 		try {
 			A = A || await loadPeopleAssets();
+			if (disposed) return;
 			const c = f.c, seed = (hash(c.id) ^ (plan.seed || 0)) >>> 0;
 			const d = personDNA(seed, { age: c.age, ancestry: c.anc, style: suitPaint(c.col, 'under') });
 			const male = c.sex === 'm', r = rng(seed ^ 0xc0ffee);
@@ -158,15 +163,17 @@ export function createCrew(X, C, o) {
 			d.style.hair = hairFor(rng(seed ^ 0x57a1e), d, d.style);
 			if (c.hair) { d.style.hair.cut = c.hair; d.style.hair.buzz = false; d.style.hair.thin = 0; d.style.hair.scarf = false; }
 			const P = buildPerson(A, d);
-			const M = createMotion(P, (x, z) => floor(x, z, P.root.position.y));
+			const M = createMotion(P, (x, z) => floor(x, z, P.root.position.y), {
+				constrain: (p, dt) => constrainCrew(p, f, folk, o.push, dt),
+			});
 			M.place(f.pos.x, f.pos.y, f.pos.z, f.pos.yaw ?? 0);
 			M.setPose('rest');
 			f.P = P; f.M = M; f.built = true; f.dress = null;
 			envLit(f);
 			f.gear = fitSuit(P, { name: c.name, role: c.role || c.job.replace(/^the /, '').split(/[ ,]/)[0], col: c.col }, o.env);
 			group.add(P.root);
-		} catch (e) { failed = true; console.warn('[colony] crew', e); }
-		building = false;
+		} catch (e) { if (f.built) drop(f); failed = true; console.warn('[colony] crew', e); }
+		finally { building = false; }
 	}
 	// dressed for where they are: suited outside, just in (the helmet carried), or down to the
 	// undergarment; a moment's pause at the airlock as they change
@@ -177,12 +184,14 @@ export function createCrew(X, C, o) {
 		if (f.dress && (f.dress === 'eva') !== out) { f.pause = 1.6; f.M.gesture(out ? 'think' : 'open'); }
 		f.dress = state;
 		wear(f.P, f.gear, f.c, state);
+		envLit(f);
 	}
 	// the colony's sky and ground on the skin and clothes as reflections: the sheen that gives
 	// every face its highlights and its shape where there is little direct light
 	let envOn = true;
 	function envLit(f) {
-		for (const m of [f.P.skinMat, f.P.clothMat]) { if (!m) continue; m.envMap = envOn ? o.env || null : null; m.envMapIntensity = m === f.P.skinMat ? 0.9 : 0.5; m.needsUpdate = true; }
+		const env = envOn ? (inside(f.M.S.pos) ? o.roomEnv || o.env : o.env) || null : null;
+		for (const m of [f.P.skinMat, f.P.clothMat]) { if (!m) continue; if (m.envMap !== env) { m.envMap = env; m.needsUpdate = true; } m.envMapIntensity = m === f.P.skinMat ? 0.9 : 0.5; }
 	}
 	function drop(f) {
 		if (f.gear) dropSuit(f.gear);
@@ -197,6 +206,7 @@ export function createCrew(X, C, o) {
 	}
 
 	function update(dt) {
+		if (disposed) return;
 		t += dt; clock -= dt;
 		const hours = o.hours?.();
 		const cam = camera.position;
@@ -246,7 +256,7 @@ export function createCrew(X, C, o) {
 				}
 				const dx = q.x - S.pos.x, dz = q.z - S.pos.z, dd = Math.hypot(dx, dz);
 				M.want.heading = Math.atan2(dx, dz);
-				M.want.speed = 1.15;
+				M.want.speed = Math.min(1.15, dd * 1.8);
 				S.look.target = d < 5 ? cam : null;
 				M.setPose('rest');
 				if (dd < 0.45 || (f.route.length > 1 && dd < 0.8)) f.route.shift();
@@ -289,6 +299,7 @@ export function createCrew(X, C, o) {
 		}
 	}
 	function dispose() {
+		disposed = true;
 		stopTalk();
 		for (const f of folk) if (f.built) drop(f);
 		scene.remove(group);

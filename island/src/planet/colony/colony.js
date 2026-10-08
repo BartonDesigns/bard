@@ -33,6 +33,8 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	const air = profile?.air?.tint || [0.1, 0.1, 0.12], rock = profile?.ground?.rock || [0.3, 0.3, 0.3];
 	const envRT = skyEnvironment(opts.renderer, air.map((v) => v * 0.3), air.map((v) => v * 0.6), rock.map((v) => v * 0.4));
 	const env = envRT?.texture || null;
+	// Interior reflections come from the lit ceiling and walls, not the black lunar sky.
+	const roomEnvRT = S === COLONY.MOON && !opts.noCrew ? skyEnvironment(opts.renderer, [0.58, 0.55, 0.5], [0.26, 0.25, 0.23], [0.12, 0.11, 0.1]) : null;
 	const mats = { shell: shellMaterial(U, { env }), glass: glassMaterial({ color: S.glass, env }), air: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 1, 0.45) }) };
 	const roomMat = shellMaterial(U, { inside: true });
 	const col = colliders();
@@ -168,7 +170,8 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	const floorAt = (x, z, y) => Math.max(H(x, z), col.floor(x, z, y + 1.5));
 	// the named crew, and the errands they have for you
 	const crew = crewPlan ? createCrew(X, crewPlan, {
-		camera, scene, isPhone, plan, floor: floorAt, env, hours: () => opts.world?.()?.sky?.state?.hours,
+		camera, scene, isPhone, plan, floor: floorAt, env, roomEnv: roomEnvRT?.texture,
+		push: (p, y) => { col.push(p, y); interiors.push(p, y); }, hours: () => opts.world?.()?.sky?.state?.hours,
 		holds: (id) => errands?.holds(id), mark: (id) => errands?.markFor(id), watching: (id) => errands?.watching(id),
 		talkOpen: (id) => errands?.talkOpen(id), talkReply: (id, text) => errands?.talkReply(id, text),
 		resident: (id, now) => ({ id: 'colony:' + id, source: 'colony', persona: personaOf(byId[id], { colony: plan.name, now, quest: errands?.questLine(id), news: errands?.news() }) }),
@@ -216,7 +219,6 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		const cx = camera.position.x, cz = camera.position.z;
 		const sy = shared.uSunDir.value.y, night = 1 - THREE.MathUtils.smoothstep(sy, -0.12, 0.1);
 		U.uNight.value = night;
-		light(dt, night);
 		U.uLampK.value = 0.7 + night * 1.6;
 		mats.glass.emissive.setRGB(S.window[0], S.window[1], S.window[2]).multiplyScalar(0.12 * night);
 		if (plumeMat) plumeMat.uniforms.uBeamK.value = 0.12 + night * 0.25;
@@ -242,6 +244,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		ride.update(dt);
 		interiors.update(dt);
 		life.update(dt);
+		light(dt, night);
 		crew?.update(dt);
 		errands?.update(dt);
 		// the rovers along the roads and tracks
@@ -340,6 +343,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	const push = (p, footY) => { col.push(p, footY); interiors.push(p, footY); };
 	function dispose() {
 		envRT?.dispose();
+		roomEnvRT?.dispose();
 		interiors.dispose();
 		life.dispose();
 		crew?.dispose();
