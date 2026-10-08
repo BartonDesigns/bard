@@ -29,7 +29,16 @@ export const TRANSACTION_KINDS = Object.freeze({
 	UNEQUIP: 'unequip',
 	DISCARD: 'discard',
 	COOL_HEAT: 'cool-heat',
+	SELL: 'sell',
+	TRADE: 'trade',
 });
+
+// what a shop pays back for an item it sells, as a share of its own price
+export const SELL_BACK = 0.5;
+// the most of one item, and of credits, a player-to-player trade can carry
+export const TRADE_MAX_ITEMS = 12;
+export const TRADE_MAX_QUANTITY = 999;
+export const TRADE_MAX_CREDITS = 1000000;
 
 const SOURCE_PRICE_FACTOR = Object.freeze({
 	[ACQUISITION_SOURCES.PLAYER_MARKET]: 1,
@@ -334,6 +343,30 @@ export function quotePrice(itemId, sourceId = ACQUISITION_SOURCES.NPC_TRADER) {
 	return Math.max(1, Math.round(item.basePrice * SOURCE_PRICE_FACTOR[sourceId]));
 }
 
+// what a shop pays for one of an item it sells (null: it does not buy it)
+export function sellPrice(itemId, sourceId = ACQUISITION_SOURCES.NPC_TRADER) {
+	if (!ensureSourceItem(sourceId, itemId, 'purchase')) return null;
+	const price = quotePrice(itemId, sourceId);
+	return price == null ? null : Math.max(1, Math.floor(price * SELL_BACK));
+}
+
+// one side of a player-to-player trade, cleaned: credits and catalogue items with counts
+// (null when anything in it is not a real, tradable item or a sane amount)
+export function cleanTradeSide(side) {
+	const s = side && typeof side === 'object' ? side : {};
+	const credits = integer(s.credits ?? 0, -1);
+	if (credits < 0 || credits > TRADE_MAX_CREDITS) return null;
+	const items = {};
+	const entries = Object.entries(s.items && typeof s.items === 'object' ? s.items : {});
+	if (entries.length > TRADE_MAX_ITEMS) return null;
+	for (const [itemId, value] of entries) {
+		const item = itemFor(itemId), quantity = integer(value, -1);
+		if (!item || !item.marketTradable || quantity < 0 || quantity > TRADE_MAX_QUANTITY) return null;
+		if (quantity) items[item.id] = quantity;
+	}
+	return { credits, items };
+}
+
 export function listOffers(sourceId, options = {}) {
 	const source = sourceFor(sourceId);
 	if (!source) return [];
@@ -523,6 +556,12 @@ function withQuantity(state, itemId, delta) {
 	return { ...state, items };
 }
 
+// an item given away or sold is no longer held
+function dropEquipped(state) {
+	const equipped = Object.fromEntries(Object.entries(state.equipped || {}).filter(([, itemId]) => quantityFor(state, itemId) > 0));
+	return { ...state, equipped };
+}
+
 function applyAccepted(state, tx, details = {}) {
 	const next = {
 		...state,
@@ -607,6 +646,30 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		if (!item || quantityFor(state, item.id) < quantity) return reject(state, tx, 'not-owned', 'The player does not have that item.');
 		const equipped = Object.fromEntries(Object.entries(state.equipped).filter(([, itemId]) => itemId !== item.id || quantityFor(state, item.id) > quantity));
 		return applyAccepted({ ...withQuantity(state, item.id, -quantity), equipped }, tx, { itemId: item.id, quantity });
+	}
+
+	if (kind === TRANSACTION_KINDS.SELL) {
+		if (!item || quantityFor(state, item.id) < quantity) return reject(state, tx, 'not-owned', 'The player does not have that item.');
+		const sourceId = String(tx.sourceId || '');
+		const unitPrice = sellPrice(item.id, sourceId);
+		if (unitPrice == null) return reject(state, tx, 'not-bought', 'This place does not buy that item.');
+		if (tx.unitPrice !== undefined && integer(tx.unitPrice, -1) !== unitPrice) return reject(state, tx, 'price-mismatch', 'The buy-back price changed before this sale was applied.');
+		const total = unitPrice * quantity;
+		const next = dropEquipped(withQuantity({ ...state, credits: state.credits + total }, item.id, -quantity));
+		return applyAccepted(next, tx, { sourceId, itemId: item.id, quantity, total, currency: 'community-credits' });
+	}
+
+	// one player's own side of a trade with another: what they give goes, what they get
+	// comes, all at once or not at all (the other player applies their own side)
+	if (kind === TRANSACTION_KINDS.TRADE) {
+		const give = cleanTradeSide(tx.give), get = cleanTradeSide(tx.get);
+		if (!give || !get) return reject(state, tx, 'bad-trade', 'That trade has an item or amount the game does not know.');
+		if (state.credits < give.credits) return reject(state, tx, 'insufficient-credits', 'The player does not have enough community credits.');
+		for (const [itemId, n] of Object.entries(give.items)) if (quantityFor(state, itemId) < n) return reject(state, tx, 'not-owned', 'The player no longer has everything offered.');
+		let next = { ...state, credits: Math.min(Number.MAX_SAFE_INTEGER, state.credits - give.credits + get.credits) };
+		for (const [itemId, n] of Object.entries(give.items)) next = withQuantity(next, itemId, -n);
+		for (const [itemId, n] of Object.entries(get.items)) next = withQuantity(next, itemId, n);
+		return applyAccepted(dropEquipped(next), tx, { peer: String(tx.peer || '').slice(0, 40), give, get });
 	}
 
 	if (kind === TRANSACTION_KINDS.COOL_HEAT) {
