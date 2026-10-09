@@ -10,7 +10,9 @@
 // at someone close holds them up.
 
 import * as THREE from 'three';
-import { WEAPONS, weaponStats, createWeaponState, trigger, stepWeapon, startReload, nextMode, modeOf, spreadNow, spreadDir, damageAt, reserveOf, drawRounds } from './weapons.js';
+import { WEAPONS, weaponStats, createWeaponState, trigger, cancelTrigger, cancelReload, completeReload, isBow, bowPower, stepWeapon, startReload, nextMode, modeOf, spreadNow, spreadDir, damageAt, reserveOf, drawRounds } from './weapons.js';
+import { createBowArrow } from '../crysis/bow-visual.js';
+import { kitMaterial } from '../crysis/held-items.js';
 import { createHealth, applyDamage, tickHealth, revive } from './health.js';
 import { createLayer, canHit, warded, strike, rayBox, rayCapsule, personShapes } from './targets.js';
 import { createWanted, offend, tickWanted, clearWanted, responseFor } from './heat.js';
@@ -114,6 +116,22 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	const fireMeta = new Map();
 	const bosses = new Map();
 	const projectiles = [];
+	// Share the held arrow's lit geometry. The bounded pool never allocates per frame.
+	let arrowTemplate = null;
+	const arrowPool = [], arrowAxis = new THREE.Vector3(1, 0, 0), arrowDir = new THREE.Vector3();
+	function arrowMesh() {
+		const free = arrowPool.find((m) => !m.visible);
+		if (free) { free.visible = true; return free; }
+		if (arrowPool.length >= (isPhone ? 8 : 16)) return null;
+		arrowTemplate ||= createBowArrow(kitMaterial(), isPhone);
+		const m = arrowTemplate.clone(); m.name = 'flight-arrow'; m.frustumCulled = false;
+		group.add(m); arrowPool.push(m); return m;
+	}
+	function placeArrow(p) {
+		arrowDir.copy(p.vel).normalize();
+		p.arrowMesh.position.copy(p.pos).addScaledVector(arrowDir, -0.745);
+		p.arrowMesh.quaternion.setFromUnitVectors(arrowAxis, arrowDir);
+	}
 	let journal = load('l99-combat-journal', []);
 	let worldKey = '', worldT = 0, directorT = 25, bountyT = 200, policeT = 0, wardMarkT = 0, sparkLineT = 0, shake = 0;
 
@@ -130,9 +148,9 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	function held() { const H = arms?.held?.(); return H && WEAPONS[H.i] ? H : null; }
 	function weaponNow() {
 		const H = held();
-		if (!H) { if (Wp) { ammo.mags[Wp.uid] = Wp.mag; saveAmmo(); } Wp = null; return null; }
+		if (!H) { if (Wp) { cancelInput(); ammo.mags[Wp.uid] = Wp.mag; saveAmmo(); } Wp = null; return null; }
 		if (!Wp || Wp.uid !== H.u || Wp.S.k !== weaponStats(H).k) {
-			if (Wp) ammo.mags[Wp.uid] = Wp.mag;
+			if (Wp) { cancelInput(); ammo.mags[Wp.uid] = Wp.mag; }
 			const data = view.data(H.i);
 			Wp = createWeaponState(H, ammo.mags[H.u] ?? null, data);
 			// two magazines to start with, once for each kind of weapon
@@ -149,10 +167,16 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		if (!w || w.reloading > 0 || me.ko) return false;
 		const R = reserve(w);
 		if (R <= 0 || w.mag >= w.S.mag) { if (R <= 0) hint('No ammo for this. Ammo boxes are sold at shops and outfitters.', 3000); return false; }
-		const viewTook = view.reload(() => { if (w.reloading > 0) w.reloading = 1e-6; });
-		startReload(w, R, viewTook ? w.S.reload + 1.5 : w.S.reload);
-		if (viewTook) w.reloading = w.S.reload + 1.5;
+		if (!startReload(w, R)) return false;
+		const serial = w.reloadSerial;
+		const viewTook = view.reload(() => { if (Wp === w && !isBow(w)) completeReload(w, serial); });
+		if (viewTook && !isBow(w) && w.reloading > 1e-6) w.reloadDur = w.reloading = w.S.reload + 1.5;
+		syncBow(w);
 		return true;
+	}
+	function syncBow(w) {
+		if (!isBow(w)) return;
+		view.bow({ draw: w.draw, loaded: w.mag > 0, nock: w.reloading > 0 ? Math.max(0, Math.min(1, 1 - w.reloading / w.reloadDur)) : w.mag > 0 ? 1 : 0 });
 	}
 	// the rounds loaded came off the loose ones, opening boxes as needed
 	function took(w, n) {
@@ -164,11 +188,21 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 
 	// ---------- input ----------
 	let mouseDown = false, touchFire = false;
+	function cancelInput() {
+		mouseDown = touchFire = false;
+		if (Wp) { cancelTrigger(Wp); cancelReload(Wp); }
+		view.cancel();
+		if (Wp) syncBow(Wp);
+		hud.btns.Fire?.classList.remove('on');
+	}
 	const canvas = mount.querySelector('canvas');
 	const typing = () => /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || window._KEYS_PLAY_ON;
 	addEventListener('pointerdown', (e) => { if (e.button === 0 && e.pointerType === 'mouse' && (!canvas || e.target === canvas) && active()) mouseDown = true; });
-	addEventListener('pointerup', (e) => { if (e.button === 0) mouseDown = false; });
-	addEventListener('blur', () => { mouseDown = touchFire = false; });
+	addEventListener('pointerup', (e) => { if (e.button === 0) { if (!active() || me.ko) cancelInput(); else mouseDown = false; } });
+	addEventListener('pointercancel', cancelInput);
+	addEventListener('blur', cancelInput);
+	document.addEventListener('visibilitychange', () => { if (document.hidden) cancelInput(); });
+	canvas?.addEventListener('pointerleave', () => { if (mouseDown) cancelInput(); });
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || typing() || !active()) return;
 		const k = e.key.toLowerCase();
@@ -178,15 +212,16 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	});
 	const B = hud.btns;
 	if (B.Fire) {
-		B.Fire.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); touchFire = true; B.Fire.classList.add('on'); });
-		for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) B.Fire.addEventListener(ev, () => { touchFire = false; B.Fire.classList.remove('on'); });
+		B.Fire.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); if (!active() || me.ko) return; touchFire = true; B.Fire.classList.add('on'); });
+		B.Fire.addEventListener('pointerup', () => { if (!active() || me.ko) cancelInput(); else { touchFire = false; B.Fire.classList.remove('on'); } });
+		for (const ev of ['pointercancel', 'pointerleave']) B.Fire.addEventListener(ev, cancelInput);
 		B.Reload.addEventListener('pointerdown', (e) => { e.stopPropagation(); reload(); });
 		B.Mode.addEventListener('pointerdown', (e) => { e.stopPropagation(); const w = weaponNow(); if (w) nextMode(w); });
 		for (const b of Object.values(B)) b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 	}
 	function active() {
 		const p = P();
-		return !!p && !typing() && !document.hidden && !gear?.()?.busy?.() && !arms?.locked?.() && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none';
+		return !!p && !typing() && !document.hidden && !gear?.()?.busy?.() && !arms?.locked?.() && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none' && !(menu && menu.style.display && menu.style.display !== 'none');
 	}
 
 	// ---------- shots ----------
@@ -275,7 +310,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		return n;
 	}
 
-	function fireShot(w) {
+	function fireShot(w, charge = 1) {
 		const S = w.S, ads = view.state()?.aiming ? 1 : 0;
 		const m = view.muzzle(S.range);
 		const o = m.aim.origin, aim = m.aim.direction;
@@ -285,7 +320,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		me.firing = 1.5;
 		if (S.projectile) {
 			const to = new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, 80));
-			projectile({ from, to, speed: S.projectile.speed, drop: S.projectile.drop, dmg: S.dmg, type: S.type, owner: ME, style: S.tracer, splash: S.projectile.splash, life: S.projectile.life, arrow: S.id === 'reedline-hunting-bow' });
+			const power = isBow(w) ? bowPower(charge) : { speed: 1, damage: 1 };
+			projectile({ from, to, direction: isBow(w) ? dir : null, speed: S.projectile.speed * power.speed, drop: S.projectile.drop, dmg: S.dmg * power.damage, type: S.type, owner: ME, style: S.tracer, splash: S.projectile.splash, life: S.projectile.life, arrow: isBow(w) });
 			net.fx(from, to, S.tracer, 0);
 		} else {
 			const hit = firstHit(o, dir, S.range);
@@ -305,9 +341,13 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		const from = o.from.clone ? o.from.clone() : new THREE.Vector3(o.from.x, o.from.y, o.from.z);
 		const to = o.to.clone ? o.to.clone() : new THREE.Vector3(o.to.x, o.to.y, o.to.z);
 		const dist = from.distanceTo(to) || 1, tof = dist / o.speed;
-		// aimed to arrive at `to`, allowing for the drop
-		const vel = to.clone().sub(from).divideScalar(tof); vel.y += 0.5 * (o.drop || 0) * tof;
-		const p = { ...o, pos: from, vel, life: o.life || 4, streak: fx.held(o.style ?? 0, o.arrow ? 0.02 : o.missile ? 0.18 : o.style === 2 ? 0.07 : 0.06), len: o.arrow ? 0.8 : o.missile ? 1.4 : 1.2 };
+		// Arrows leave along the sight direction and drop naturally. Other projectiles
+		// retain their existing trajectory compensation.
+		const vel = o.direction ? o.direction.clone().normalize().multiplyScalar(o.speed) : to.clone().sub(from).divideScalar(tof);
+		if (!o.arrow) vel.y += 0.5 * (o.drop || 0) * tof;
+		const mesh = o.arrow ? arrowMesh() : null;
+		const p = { ...o, pos: from, vel, life: o.life || 4, arrowMesh: mesh, streak: mesh ? null : fx.held(o.style ?? 0, o.arrow ? 0.02 : o.missile ? 0.18 : o.style === 2 ? 0.07 : 0.06), len: o.arrow ? 0.8 : o.missile ? 1.4 : 1.2 };
+		if (mesh) placeArrow(p);
 		projectiles.push(p);
 		if (projectiles.length > 60) endProjectile(projectiles[0], null);
 		return p;
@@ -315,7 +355,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	function endProjectile(p, at) {
 		const i = projectiles.indexOf(p);
 		if (i >= 0) projectiles.splice(i, 1);
-		fx.free(p.streak);
+		if (p.arrowMesh) p.arrowMesh.visible = false;
+		if (p.streak != null) fx.free(p.streak);
 		if (p.T) layer.remove(p.T.id);
 		if (at && p.splash > 0) blast(at, p.splash, p.dmg * 0.6, p.owner, null, p.type);
 	}
@@ -348,7 +389,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 			}
 			p.pos.addScaledVector(p.vel, dt);
 			if (p.T) { p.T.bound.x = p.pos.x; p.T.bound.y = p.pos.y; p.T.bound.z = p.pos.z; }
-			fx.place(p.streak, p.pos.x - dir.x * p.len, p.pos.y - dir.y * p.len, p.pos.z - dir.z * p.len, dir.x, dir.y, dir.z, p.len);
+			if (p.arrowMesh) placeArrow(p);
+			else fx.place(p.streak, p.pos.x - dir.x * p.len, p.pos.y - dir.y * p.len, p.pos.z - dir.z * p.len, dir.x, dir.y, dir.z, p.len);
 			if (p.flare && Math.random() < 0.8) fx.flame(p.pos, 0.3);
 		}
 	}
@@ -397,6 +439,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		if (r.downed) knockout(blow);
 	}
 	function knockout() {
+		cancelInput();
 		me.ko = 6;
 		const p = P();
 		if (p) p.locked = true;
@@ -760,8 +803,11 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	let lastWorld = null, saveT = 0;
 	function reset() {
 		saveAmmo();
-		mouseDown = touchFire = false; if (Wp) { trigger(Wp, false); Wp.reloading = 0; }
+		cancelInput();
 		view.aim(false);
+		for (const p of [...projectiles]) endProjectile(p, null);
+		for (const m of arrowPool) m.removeFromParent();
+		arrowPool.length = 0; arrowTemplate?.geometry.dispose(); arrowTemplate = null;
 		squads.clear(); props.clearTag(); cars.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); heatMap.clear(); fx.clear();
 		for (const B0 of bosses.values()) B0.dispose();
 		bosses.clear(); projectiles.length = 0; me.crumbs.length = 0; me.lastPos = null;
@@ -796,20 +842,21 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		const wpn = active() && !me.ko ? weaponNow() : null;
 		if (wpn) {
 			trigger(wpn, mouseDown || touchFire);
+			syncBow(wpn);
 			const ads = view.state()?.aiming ? 1 : 0;
 			const before = wpn.mag;
-			const r = stepWeapon(wpn, dt, { reserve: reserve(wpn), ads });
+			const r = stepWeapon(wpn, dt, { reserve: reserve(wpn), ads, accept: () => view.fire() !== false });
 			if (r.loaded) took(wpn, r.loaded);
 			for (let i = 0; i < r.fired; i++) {
-				const shown = view.fire();
-				if (shown === false) { wpn.mag++; continue; }
-				fireShot(wpn);
+				fireShot(wpn, r.charge);
 				// the aim climbs with each shot and settles back (the view kicks the weapon itself)
 				p.pitch = Math.min(1.35, p.pitch + r.kick[0] / Math.max(1, r.fired)); p.yaw += r.kick[1] / Math.max(1, r.fired);
 			}
 			if (r.empty && before === 0 && (mouseDown || touchFire)) { if (reserve(wpn) > 0) reload(); mouseDown = touchFire = false; }
+			if (isBow(wpn) && r.fired && reserve(wpn) > 0) reload();
+			syncBow(wpn);
 			if (r.fired || r.loaded) saveAmmo();
-		} else { mouseDown = touchFire = false; if (Wp) trigger(Wp, false); }
+		} else { cancelInput(); }
 		if (shake > 0) { shake = Math.max(0, shake - dt * 2); camera.rotation.x += (Math.random() - 0.5) * shake * 0.02; camera.rotation.y += (Math.random() - 0.5) * shake * 0.02; }
 		holdUps(dt);
 		const cam = camera.position;
@@ -836,7 +883,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 			aiming: !!view.state()?.aiming,
 			spread: wpn ? Math.tan(spreadNow(wpn, view.state()?.aiming ? 1 : 0, Math.min(1, me.speed / 5))) * fovPx : 6,
 			health: me.H,
-			weapon: wpn && { name: wpn.S.name, mag: wpn.mag, max: wpn.S.mag, reserve: reserve(wpn), mode: modeOf(wpn), modes: wpn.S.modes.length, reloading: wpn.reloading > 0 },
+			weapon: wpn && { name: wpn.S.name, mag: wpn.mag, max: wpn.S.mag, reserve: reserve(wpn), mode: modeOf(wpn), modes: wpn.S.modes.length, reloading: wpn.reloading > 0, bow: isBow(wpn), draw: wpn.draw, drawing: wpn.drawing },
 			boss: boss && { name: boss.def.name, phase: boss.mc.M.phaseName, frac: boss.mc.frac(), notches: boss.def.phases.slice(1).map((q) => q.at) },
 			stars: isEarth() ? wanted.stars : 0,
 		});
@@ -850,7 +897,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		update, reset, heard, group, layer, fx, morality, relations, compass,
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
-		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
+		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
 		// Crysis.combat.spawn('ashfang', 3, { raid }) / ('rogue') / ('gloom') / ('patrol') / ('fire')
 		spawn: (fid = 'ashfang', n = 3, o = {}) => { const s = spotAhead(o.d ?? 25, (o.d ?? 25) + 10) || { x: eye().x + 20, z: eye().z }; return squads.squad(fid, s.x, s.z, n, o).then((sq) => sq.id); },
 		fight: (a = 'ashfang', b = 'dunecutters', n = 3, d = 30) => { const s = spotAhead(d, d + 5); if (!s) return null; squads.squad(a, s.x - 8, s.z, n, {}); squads.squad(b, s.x + 8, s.z + 3, n, {}); return 'fight'; },
