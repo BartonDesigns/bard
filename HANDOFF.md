@@ -4,6 +4,38 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Live release and armament review (9 October 2026 UTC)
+
+- **Moon/Deep is live:** `main` commit `42bced7a3ab89a20aaae34beb2b49853d19eda6e`.
+  GitHub Pages run `37877283504` succeeded. Production HTML references engine hash
+  `0956a97800`, matching the release build. The release was selective from `181e68c`.
+  This merge brings main back into the WIP branch, preserving all unfinished areas.
+- Gear/trading, combat, architecture, families and vehicle WIP are still branch-only.
+  No rooms Worker deployment occurred. The main release uses the colony's local ledger
+  with inventory v1, and tests its item/reward persistence. This branch keeps inventory v2.
+- The owner requested actual armament and other held-item review exports before further art
+  work. Baseline is checkpoint `eec57ca`; `held-items.js` has 12 dedicated models (four
+  armaments, eight utilities). Four ammo and four Moon errand catalog entries have no model.
+- Exported: 12-item overview; three-angle armament and utility sheets; five-tier comparison;
+  transparent 48-frame sprite atlas and JSON; 68 individual PNGs; self-contained WebGL viewer.
+  These are current geometry/materials, not generated concept art. `island/tools/held-review-entry.mjs`
+  is the reusable rendering entry. Full review metrics and source map are in
+  `docs/held-items-review-2026-10-09.md`.
+- Material defect confirmed: interpolating a whole-number `vSurf.z` can put canvas tile 13
+  just below 13; `floor` selects film tile 12. A render-only diagnostic using a small tile
+  tolerance and clamped wear removes medkit/repair-roll patches. The diagnostic is separate;
+  no held-item model or shader edits have been applied to this branch for the review.
+- AAA assessment: not approved. Prioritize material defect, missing models, opaque net,
+  utility construction detail, realistic material scale, then in-hand/equip/aim/reload checks.
+  Static exports do not establish grip correctness, animation quality or device performance.
+- Chromium 153 is now available from the npm renderer package in this session; 68 isolated
+  asset views rendered without reported shader/page errors. The full Moon/Deep gameplay
+  and phone walkthrough remains outstanding. Earlier Chromium-download blockers below
+  describe the prior checkpoint, not current isolated asset-render capability.
+
+Next: owner design review of these exact assets, then a focused art pass. Keep combat and
+server changes separate until their existing handoff checks are met.
+
 ## Continuation checkpoint (8 October 2026, from `9d3f040`)
 
 Continued the first two priorities below on `claude/affectionate-heisenberg-3g4qv1`.

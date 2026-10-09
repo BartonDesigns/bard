@@ -67,7 +67,7 @@ export function createErrands(o) {
 	}
 
 	// ---------- what you carry ----------
-	const arms = () => o.arms || null;
+	const arms = () => typeof o.arms?.apply === 'function' && typeof o.arms?.hold === 'function' ? o.arms : null;
 	const has = (item) => (arms()?.state().items?.[item] || 0) > 0 || (S.items[item] || 0) > 0;
 	function give(item, qid) {
 		const A = arms();
@@ -274,6 +274,7 @@ export function createErrands(o) {
 	// the errands for the guide's journal
 	function journal() {
 		const list = [];
+		if (!arms() && S.credits) list.push({ text: `Colony credit balance: ${S.credits} (saved here until the inventory update).`, active: false });
 		for (const [qid, Q] of Object.entries(QUESTS)) {
 			const st = stateOf(S, qid);
 			if (st.s === 'none') { if (offerable(S, qid) && Q.main === 1) list.push({ text: `○ ${Q.title}\nAsk ${byId[Q.giver].name} (${byId[Q.giver].job}).`, active: false }); continue; }
