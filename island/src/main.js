@@ -8,6 +8,7 @@ import { planetProfile } from './planet/profile.js';
 import * as THREE from 'three';
 import { generateIsland } from './world/islandgen.js';
 import { createTerrain, makeHeightTexture, makeMaskTexture } from './world/terrain.js';
+import { updateIslandReach } from './world/surfacevisibility.js';
 import { createOcean } from './world/ocean.js';
 import { createSky } from './world/sky.js';
 import { createWeather } from './world/weather.js';
@@ -1158,7 +1159,6 @@ export function createIslandWorld() {
 		shared.heightTex = shared.maskTex = null;
 		shared.uBiome.value = null;
 		world = null;
-		islandReach.band = undefined;
 	}
 
 	function placeKinetic(kind) {
@@ -1358,25 +1358,6 @@ export function createIslandWorld() {
 		const gx = 100 - sx, gy = 100 - sy;
 		glare.style.background = `radial-gradient(circle at ${sx}% ${sy}%, rgba(255,236,190,.85) 0, rgba(255,200,110,.45) 6%, rgba(255,170,70,.18) 22%, rgba(255,150,60,0) 55%), radial-gradient(circle at ${(sx + gx) / 2}% ${(sy + gy) / 2}%, rgba(255,210,140,.10) 0, rgba(255,210,140,0) 4%), radial-gradient(circle at ${gx}% ${gy}%, rgba(170,255,210,.10) 0, rgba(170,255,210,.05) 2.5%, rgba(170,255,210,0) 5%)`;
 	}
-	// Out over the Bay Area the island's close-up layers have nothing to show, yet each would
-	// still cost its full vertex work every frame: the grass, turf, pebbles and island ground
-	// are carpets centred on the camera, whose heights and masks clamp to open sea past the
-	// island's edge, and the village, caves and kelp are below a pixel kilometres off. Each is
-	// left out once the camera is past its reach. (Only meshes are switched: taking a light
-	// out of the scene would recompile every lit shader, and the village boat may be out
-	// sailing with you.)
-	function islandReach(W) {
-		const off = Math.max(Math.abs(camera.position.x), Math.abs(camera.position.z)) - W.island.half;
-		// the carpets reach under 100 m; the ground's grid 2.2 km each way (3.1 to its corners)
-		const band = off < 150 ? 0 : off < 3300 ? 1 : off < 6000 ? 2 : 3;
-		if (band === islandReach.band) return;
-		islandReach.band = band;
-		for (const o of [W.grass, W.turf, ...W.litter.meshes]) o.visible = band < 1;
-		W.terrain.visible = band < 2 || !!W.island.far;
-		if (W.underwater.group) W.underwater.group.visible = band < 3;
-		for (const o of W.caverns.group.children) if (!o.isLight) o.visible = band < 3;
-		for (const o of W.village.group.children) if (o !== W.village.boat) o.visible = band < 3;
-	}
 	function updateFlightControls(W) {
 		const P = W?.player?.state;
 		if (!P) return;
@@ -1528,7 +1509,7 @@ export function createIslandWorld() {
 		const cavePlan = W.underworld?.plan;
 		const vista = cavePlan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
 		const open = (caveK < 0.9 || !!vista) && !W.deep?.active();
-		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
+		if (W.underworld) for (const o of [W.ocean, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
 			W.sky.hemi.intensity *= dim; W.sky.sun.intensity *= dim * dim;
@@ -1553,7 +1534,7 @@ export function createIslandWorld() {
 		for (const o of [W.terrain, W.ocean, W.grass, W.turf]) o.userData.update(camera);
 		seaView(W, camera, dt, open);
 		W.litter.update(camera);
-		islandReach(W);
+		updateIslandReach(W, camera, open);
 		W.vegetation.stream(camera, false);
 		W.vegetation.react(dt, camera.position);
 		if (W.kineticEpoch !== W.globe?.frame?.epoch) { W.kinetic.clear(); W.kineticEpoch = W.globe?.frame?.epoch; }

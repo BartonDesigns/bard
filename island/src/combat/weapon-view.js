@@ -21,10 +21,12 @@ export function createWeaponView({ gear = () => null, camera }) {
 	return {
 		get ready() { return !!api(); },
 		// a shot shown: true, false (refused: not ready) or null (no view to ask)
-		fire() { const a = api(); if (!a?.fire) return null; const r = call(a, 'fire'); return r === undefined ? null : !!r; },
+		fire() { const a = api(); if (!a?.fire) return null; return call(a, 'fire') === true; },
 		// a reload: true when the view took it and will call done; false when it refused; null without a view
 		reload(done) { const a = api(); if (!a?.reload) return null; const r = call(a, 'reload', done); return r === undefined ? null : !!r; },
 		aim: (on) => call(api(), 'aim', on),
+		bow: (state) => call(api(), 'bow', state),
+		cancel: () => call(api(), 'cancel'),
 		state: () => call(api(), 'state') || null,
 		data: (id) => call(api(), 'data', id) || null,
 		// where the shot starts (for the streak) and the line it is aimed down (for the hit)

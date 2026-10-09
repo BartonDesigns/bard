@@ -1,0 +1,208 @@
+{
+  "states": [
+    {
+      "id": "aurora-trail-rifle",
+      "phone": false,
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        41,
+        36,
+        57,
+        255
+      ],
+      "triangles": 16992,
+      "forwardFrames": 1,
+      "rearFrames": 1,
+      "active": true,
+      "aiming": true,
+      "item": "aurora-trail-rifle",
+      "sizes": {
+        "forward": 384,
+        "rear": 128
+      },
+      "lenses": 2,
+      "targets": 2
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "phone": false,
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        203,
+        200,
+        185,
+        255
+      ],
+      "triangles": 10208,
+      "forwardFrames": 1,
+      "rearFrames": 1,
+      "active": true,
+      "aiming": true,
+      "item": "mossback-scout-rifle",
+      "sizes": {
+        "forward": 384,
+        "rear": 128
+      },
+      "lenses": 2,
+      "targets": 2
+    },
+    {
+      "id": "warden-spark-carbine",
+      "phone": false,
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        131,
+        138,
+        140,
+        255
+      ],
+      "triangles": 10080,
+      "forwardFrames": 0,
+      "rearFrames": 1,
+      "active": true,
+      "aiming": true,
+      "item": "warden-spark-carbine",
+      "sizes": {
+        "forward": 384,
+        "rear": 128
+      },
+      "lenses": 1,
+      "targets": 1
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "phone": true,
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        41,
+        36,
+        57,
+        255
+      ],
+      "triangles": 3756,
+      "forwardFrames": 1,
+      "rearFrames": 1,
+      "active": true,
+      "aiming": true,
+      "item": "aurora-trail-rifle",
+      "sizes": {
+        "forward": 256,
+        "rear": 64
+      },
+      "lenses": 2,
+      "targets": 2
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "phone": true,
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        203,
+        200,
+        185,
+        255
+      ],
+      "triangles": 3028,
+      "forwardFrames": 1,
+      "rearFrames": 1,
+      "active": true,
+      "aiming": true,
+      "item": "mossback-scout-rifle",
+      "sizes": {
+        "forward": 256,
+        "rear": 64
+      },
+      "lenses": 2,
+      "targets": 2
+    },
+    {
+      "id": "warden-spark-carbine",
+      "phone": true,
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        131,
+        138,
+        140,
+        255
+      ],
+      "triangles": 2924,
+      "forwardFrames": 0,
+      "rearFrames": 1,
+      "active": true,
+      "aiming": true,
+      "item": "warden-spark-carbine",
+      "sizes": {
+        "forward": 256,
+        "rear": 64
+      },
+      "lenses": 1,
+      "targets": 1
+    }
+  ],
+  "reflection": {
+    "red": {
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        41,
+        36,
+        57,
+        255
+      ],
+      "triangles": 16992,
+      "forwardFrames": 2,
+      "rearFrames": 2,
+      "active": true,
+      "aiming": true,
+      "item": "aurora-trail-rifle",
+      "sizes": {
+        "forward": 384,
+        "rear": 128
+      },
+      "lenses": 2,
+      "targets": 2
+    },
+    "blue": {
+      "restored": true,
+      "glError": 0,
+      "pixels": [
+        10,
+        37,
+        77,
+        255
+      ],
+      "triangles": 16992,
+      "forwardFrames": 3,
+      "rearFrames": 3,
+      "active": true,
+      "aiming": true,
+      "item": "aurora-trail-rifle",
+      "sizes": {
+        "forward": 384,
+        "rear": 128
+      },
+      "lenses": 2,
+      "targets": 2
+    }
+  },
+  "reset": {
+    "forwardFrames": 3,
+    "rearFrames": 3,
+    "active": false,
+    "aiming": false,
+    "item": null,
+    "sizes": {
+      "forward": 384,
+      "rear": 128
+    },
+    "lenses": 0,
+    "targets": 0
+  },
+  "errors": []
+}

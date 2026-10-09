@@ -4,7 +4,18 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Armaments and terrain repair (9 October 2026 UTC)
+
+Release contents: finite-island ground visibility now composes distance and cave state every frame, with shader clipping at the map boundary. Guns have fuller contextual geometry and world-reactive scope optics. Bow grip, flexible limbs/string, draw/release/nocking and pooled physical arrows are integrated.
+
+Verification: 29 bow/combat tests, 2 bow geometry tests and 11 terrain/resource tests pass. Desktop review frames cover gun carry/aim and bow draw states. Six optics/detail combinations passed actual rear-scene color response, forward captures and renderer-state restoration without shader errors. Production input harness closed before boot; native input and physical iPhone/Safari confirmation remain outstanding. The software Pacific render confirms hidden island terrain, but does not reproduce the original Safari ridges. Do not claim those device-specific symptoms conclusively resolved or all items AAA-approved. See docs/*pass-2026-10-09.md and docs/terrain-ocean-boundary-fix-2026-10-09.md.
+
 ## Architecture mist continuation (9 October 2026 UTC)
+
+**Live:** main `fee0d2e9979555341080ae9197f7b757fdc205b4`; GitHub Pages run
+`37935280621` succeeded. The public HTML references `39b12f62f6`, and the downloaded
+engine matches the SHA-256 below. This checkpoint carries the release back into the
+development branch while preserving its old scratch previews there only.
 
 After publishing the core handoff, completed the next building duty: the camera veil now
 follows the mist's billowed bands, tower openings, clear lanes and terrain clearance. It

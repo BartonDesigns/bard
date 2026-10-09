@@ -43,8 +43,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { CELL_HOLD, cellPath, handFrame, itemModel, kitLight, kitMaterial, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
+import { createScopeOptics } from './scope-optics.js';
 
-const ARM_BONES = /^(upperarm0[12]|lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
+const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
 const SLEEVE_BONES = /^(upperarm0[12]|lowerarm0[12])\.(L|R)$/;
 const ease = (x) => x * x * (3 - 2 * x);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -55,12 +56,17 @@ class Spring { constructor(w = 12) { this.v = 0; this.dv = 0; this.w = w; } to(x
 // where each kind of thing sits in view: position (camera space, metres), then yaw, pitch, roll
 const VIEW = {
 	long: { p: [0.135, -0.265, -0.34], r: [0.085, 0.03, -0.06], eR: [0.3, -0.55, 0.05], eL: [-0.12, -0.5, -0.12], aR: [0.2, -0.4, 0.08], aL: [-0.14, -0.38, -0.05] },
-	bow: { p: [-0.14, -0.1, -0.45], r: [0.0, 0.0, 0.32], eL: [-0.35, -0.4, -0.05] },
+	bow: { p: [-.11, -.18, -.90], r: [0, 0, .16], eR: [.38, -.32, .05], aR: [.48, -.19, -.12], eL: [-.35, -.4, .05], aL: [-.34, -.28, .08] },
 	one: { p: [0.17, -0.2, -0.38], r: [-0.25, 0.0, 0.0], eR: [0.3, -0.5, -0.05] },
 	shaft: { p: [0.17, -0.22, -0.38], r: [-0.15, -0.65, 0.0], eR: [0.3, -0.5, 0.0] },
 	lantern: { p: [0.15, -0.1, -0.4], r: [-0.3, 0.0, 0.0], eR: [0.28, -0.45, -0.1] },
 };
-const viewOf = (id, H) => H.kind === 'long' ? VIEW.long : H.kind === 'bow' ? VIEW.bow : /lantern/.test(id) ? VIEW.lantern : H.R?.t?.y > 0.9 ? VIEW.shaft : VIEW.one;
+const GUN_VIEW = {
+	'aurora-trail-rifle': { ...VIEW.long, p: [.18, -.245, -.45], r: [.20, .035, -.055] },
+	'mossback-scout-rifle': { ...VIEW.long, p: [.17, -.235, -.46], r: [.18, .025, -.045] },
+	'warden-spark-carbine': { ...VIEW.long, p: [.18, -.23, -.43], r: [.23, .03, -.07] },
+};
+const viewOf = (id, H) => H.kind === 'long' ? (GUN_VIEW[id] || VIEW.long) : H.kind === 'bow' ? VIEW.bow : /lantern/.test(id) ? VIEW.lantern : H.R?.t?.y > 0.9 ? VIEW.shaft : VIEW.one;
 // the item's x (forward) to the view's -z, its y up, its z to the right
 const BASE = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0)));
 
@@ -74,18 +80,20 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	scene.add(sun, sun.target, hemi, fill, shotLight);
 	const rig = new THREE.Group();
 	scene.add(rig);
-	let env = null, envTried = false;
+	let env = null, envTried = false, optics = null, opticsWorld = null;
+	let bowState = { draw: 0, loaded: true, nock: 1 };
 
 	// ---------- the item ----------
 	const flash = createFlash(scene), sparks = createSparks(scene);
 	const kick = { z: new Spring(10), p: new Spring(10), y: new Spring(10), r: new Spring(10) };
 	const S = { shots: 0, lastShot: -9, reload: null, key: '', want: '', id: null, model: null, equip: 0, ads: 0, aimHeld: false, aimTap: false, last: null, land: new Spring(14), lagX: new Spring(9), lagY: new Spring(9), lagR: new Spring(9), sprint: 0, air: 0, zoom: 1, shown: false, calls: 0, item: null };
 	function swapIn(item) {
-		if (S.model) rig.remove(S.model);
-		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: isPhone ? 'low' : 'high' }) : null;
+		optics?.reset();
+		if (S.model) { S.model.userData.bow?.dispose(); rig.remove(S.model); }
+		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: isPhone ? 'low' : 'high', optics: true }) : null;
 		const was = S.id;
 		S.id = item?.i || null; S.key = S.want; S.item = item; S.reload = null;
-		if (S.model) { S.model.matrixAutoUpdate = false; rig.add(S.model); }
+		if (S.model) { S.model.matrixAutoUpdate = false; S.model.userData.bow?.set(bowState); rig.add(S.model); }
 		const W = weaponOf(S.id) || weaponOf(was);
 		if (W && S.id !== was) playCue(S.id ? W.sounds.equip : W.sounds.holster);
 	}
@@ -184,7 +192,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	// held: { i, l, t } or null; P: the player's state; on: first person and free to hold things
 	function update(dt, held, P, on, W, time) {
 		const want = held && on ? `${held.i}:${held.l}:${held.t}` : '';
-		S.want = want;
+		S.want = want; S.opticsTime = time;
 		// changing what you hold: the old one lowered out, the new one raised in
 		if (S.key !== want) {
 			S.equip = Math.max(0, S.equip - dt / 0.22);
@@ -192,10 +200,11 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		} else if (S.model) S.equip = Math.min(1, S.equip + dt / 0.38);
 		S.shown = !!S.model && on;
 		if (aimBtn) { const d = S.shown && longHeld() ? 'flex' : 'none'; if (aimBtn.style.display !== d) aimBtn.style.display = d; if (d === 'none') S.aimTap = false; }
-		if (!S.shown) { setZoom(1); S.ads = 0; return; }
+		if (!S.shown) { optics?.reset(); setZoom(1); S.ads = 0; return; }
 		if (!arms && avatar?.me) arms = buildArms(avatar.me);
 		else if (!arms && avatar && !S.asked) { S.asked = true; avatar.ready?.(); }
 		const H = S.model.userData.hold, id = S.id;
+		S.model.userData.bow?.step(dt);
 
 		// the motion of you: how fast, turning, in the air, sprinting
 		const speed = Math.hypot(P.vel.x, P.vel.z), G = P.gait || { phase: 0, count: 0 };
@@ -235,7 +244,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			pos.lerp(adsPos, a);
 			rot = hipQ.clone().slerp(BASE, a);
 		}
-		if (H.kind === 'bow' && a > 0) { pos.lerp(V2.set(-0.07, -0.08, -0.52), a); rot = hipQ.clone().slerp(BASE, a); }
+		if (H.kind === 'bow' && a > 0) { pos.lerp(V2.set(.10, -.14, -.90), a); rot = hipQ.clone().slerp(BASE, a); }
 		// sprinting: lowered and turned across; changing: lowered out of view
 		const sp = ease(S.sprint) * (1 - a), eq = 1 - ease(S.equip);
 		pos.x += -0.04 * sp + bx * still + lx * still; pos.y += -0.05 * sp - 0.28 * eq + (by + breath) * still + land * 0.6 + ly * still + S.air * 0.012;
@@ -274,13 +283,13 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			const carry = H.kind === 'long';
 			if (carry && (!name || name === 'carry')) { if (name !== 'carry') Mo.act('carry', 0); }
 			else if (!carry && name === 'carry') Mo.act(null);
-			Mo.grip('R', H.R ? 1 : 0); Mo.grip('L', H.L ? 1 : 0);
+			Mo.grip('R', H.R ? (H.kind === 'bow' ? .68 : 1) : 0); Mo.grip('L', H.L ? 1 : 0);
 			if (!me.P.root.visible) Mo.update(dt, time, null);
 			me.P.root.updateMatrixWorld(true);
 			for (const side of ['L', 'R']) {
 				const G2 = H[side];
 				if (!G2 || !handFrame(me.P, side, hf)) { X[side] = null; continue; }
-				handAt.multiplyMatrices(S.model.matrix, G2.m);
+				handAt.multiplyMatrices(S.model.matrix, side === 'R' && H.kind === 'bow' ? S.model.userData.bow.right : G2.m);
 				if (side === 'L' && S.reload && cell) {
 					// the support hand leaves the guard, takes the cell out and brings a fresh one
 					const k = clamp(Math.min((ru - 0.14) / 0.08, (0.94 - ru) / 0.08), 0, 1);
@@ -329,12 +338,17 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		kitLight(env, 0.12 + day * 0.75);
 	}
 	// drawn over the frame: the depth cleared, the item and hands in their own lens
-	function render(renderer) {
+	function render(renderer, worldScene = null) {
 		if (!S.shown || !S.model) return;
 		if (!env && !envTried) {
 			envTried = true;
 			try { const pm = new THREE.PMREMGenerator(renderer); env = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); } catch { env = null; }
 		}
+		if (worldScene && opticsWorld !== worldScene) {
+			optics?.dispose(); opticsWorld = worldScene;
+			optics = createScopeOptics({ renderer, scene: worldScene, camera, phone: isPhone });
+		}
+		optics?.update({ item: S.model, aiming: S.ads, active: S.shown, time: S.opticsTime });
 		cam.updateProjectionMatrix();
 		const auto = renderer.autoClear;
 		renderer.autoClear = false;
@@ -353,11 +367,13 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (arms) for (const side of ['L', 'R']) {
 			const G = H[side];
 			if (!G || !handFrame(arms.me.P, side, hf, (i) => arms.bones[i].matrixWorld)) continue;
-			const want = new THREE.Matrix4().multiplyMatrices(m, G.m);
+			const want = new THREE.Matrix4().multiplyMatrices(m, side === 'R' && H.kind === 'bow' ? S.model.userData.bow.right : G.m);
 			const p = new THREE.Vector3().setFromMatrixPosition(hf), q = new THREE.Vector3().setFromMatrixPosition(want);
 			out['palm' + side + 'mm'] = +(p.distanceTo(q) * 1000).toFixed(1);
 			if (targets[side]) out['contact' + side + 'mm'] = +(p.distanceTo(q.setFromMatrixPosition(targets[side])) * 1000).toFixed(1);
 		}
+		if (S.model.userData.bow) out.bow = S.model.userData.bow.info();
+		out.optics = optics?.diagnostics() || null;
 		return out;
 	}
 	// ---------- use ----------
@@ -366,6 +382,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const W = weaponOf(S.id), now = performance.now() / 1000;
 		if (!S.shown || !W || S.equip < 0.95 || S.reload || S.sprint > 0.5 || now - S.lastShot < 0.95 / W.rate) return false;
 		S.lastShot = now; S.shots++;
+		S.model.userData.bow?.fire();
 		const r = W.recoil, side = r.side[S.shots % r.side.length], hold = 1 - S.ads * 0.45;
 		for (const k of Object.values(kick)) k.w = r.recover;
 		punch(kick.z, r.kick * hold); punch(kick.p, r.rise * hold); punch(kick.y, side * 2); punch(kick.r, side * 3);
@@ -392,13 +409,19 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	function muzzle(range = 60) {
 		const W = weaponOf(S.id);
 		if (!S.model || !W) return null;
-		const p = new THREE.Vector3(W.muzzle[0], W.muzzle[1], 0).applyMatrix4(S.model.matrix), d = p.length();
+		const p = (S.model.userData.bow?.tip.clone() || new THREE.Vector3(W.muzzle[0], W.muzzle[1], 0)).applyMatrix4(S.model.matrix), d = p.length();
 		const ndc = p.clone().project(cam);
 		const position = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(camera).sub(camera.position).normalize().multiplyScalar(d).add(camera.position);
 		const aim = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
 		const direction = aim.clone().multiplyScalar(range).add(camera.position).sub(position).normalize();
 		return { position, direction, aim: { origin: camera.position.clone(), direction: aim } };
 	}
+	function bow(next) { bowState = { ...bowState, ...next }; S.model?.userData.bow?.set(bowState); }
+	function cancel() {
+		S.reload = null; bowState.draw = 0; S.model?.userData.bow?.cancel();
+		const cell = S.model?.getObjectByName('cell');
+		if (cell) { cell.visible = true; if (cell.userData.home) cell.position.fromArray(cell.userData.home); }
+	}
 	const aimOverride = (on) => { if (!!on !== S.aimTap && weaponOf(S.id)) playCue(weaponOf(S.id).sounds.aim); S.aimTap = !!on; };
-	return { update, render, info, fire, reload, muzzle, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
+	return { update, render, info, fire, reload, cancel, bow, muzzle, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
 }

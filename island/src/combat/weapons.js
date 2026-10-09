@@ -7,6 +7,11 @@
 import { statScale } from '../gameplay/gear-levels.js';
 
 export const FIRE_MODES = ['semi', 'burst', 'auto'];
+export const BOW_ID = 'reedline-hunting-bow';
+export const BOW_DRAW_SECONDS = 0.85;
+export const BOW_MIN_DRAW = 0.2;
+export const isBow = (W) => W?.S?.id === BOW_ID;
+export const bowPower = (q) => { q = Math.max(0, Math.min(1, q)); return { damage: 0.35 + 0.65 * q * q, speed: 0.45 + 0.55 * q }; };
 
 // the arms at level 1, Common. rpm: shots a minute; spread and recoil in radians; range in
 // metres; reload in seconds; a projectile flies (speed m/s, drop m/s², splash radius)
@@ -36,8 +41,8 @@ export function weaponStats(inst, view = null) {
 		spread: W.spread / (0.6 + 0.4 * k),
 		range: Math.round(W.range * (0.75 + 0.25 * k)),
 		falloff: Math.round(W.falloff * (0.75 + 0.25 * k)),
-		mag: Math.max(1, Math.round(W.mag * (1 + (k - 1) * 0.3))),
-		reload: Math.round(W.reload / (0.8 + 0.2 * k) * 100) / 100,
+		mag: inst.i === BOW_ID ? 1 : Math.max(1, Math.round(W.mag * (1 + (k - 1) * 0.3))),
+		reload: inst.i === BOW_ID ? 0.9 : Math.round(W.reload / (0.8 + 0.2 * k) * 100) / 100,
 		interval: 60 / W.rpm,
 	};
 }
@@ -53,26 +58,43 @@ export function damageAt(S, d) {
 export function createWeaponState(inst, loaded = null, view = null) {
 	const S = weaponStats(inst, view);
 	if (!S) return null;
-	return { S, uid: inst.u, mag: loaded == null ? S.mag : Math.max(0, Math.min(S.mag, loaded | 0)), mode: 0, cool: 0, burstLeft: 0, held: false, pulled: false, reloading: 0, reloadDur: 0, bloom: 0, shots: 0 };
+	return { S, uid: inst.u, mag: loaded == null ? S.mag : Math.max(0, Math.min(S.mag, loaded | 0)), mode: 0, cool: 0, burstLeft: 0, held: false, pulled: false, reloading: 0, reloadDur: 0, reloadSerial: 0, bloom: 0, shots: 0, draw: 0, drawing: false, released: 0 };
 }
 export const modeOf = (W) => W.S.modes[W.mode % W.S.modes.length];
 export function nextMode(W) { W.mode = (W.mode + 1) % W.S.modes.length; W.burstLeft = 0; return modeOf(W); }
 
 // the trigger: pressed (true) or let go (false); a press is remembered until it is spent
 export function trigger(W, down) {
+	if (isBow(W)) {
+		if (down && !W.held) {
+			W.pulled = true;
+			W.drawing = W.mag > 0 && W.reloading <= 0 && W.cool <= 0;
+			W.draw = 0;
+		} else if (!down && W.held) {
+			W.released = W.drawing ? W.draw : 0;
+			W.drawing = false;
+		}
+		W.held = !!down;
+		return;
+	}
 	if (down && !W.held) W.pulled = true;
 	W.held = !!down;
 	if (!down && modeOf(W) !== 'burst') W.burstLeft = 0;
 }
+// Cancelling a gesture is not releasing an arrow. Use this for menus, blur and travel.
+export function cancelTrigger(W) { W.held = W.pulled = W.drawing = false; W.burstLeft = 0; W.draw = W.released = 0; }
 
 // a reload: only with rounds to load and room for them; dur from the view's animation, if any
 export function startReload(W, reserve, dur = null) {
 	if (W.reloading > 0 || W.mag >= W.S.mag || reserve <= 0) return false;
 	W.reloadDur = W.reloading = Math.max(0.2, Number.isFinite(dur) && dur > 0 ? dur : W.S.reload);
+	W.reloadSerial++;
+	if (isBow(W)) cancelTrigger(W);
 	W.burstLeft = 0;
 	return true;
 }
-export const cancelReload = (W) => { W.reloading = 0; };
+export const cancelReload = (W) => { W.reloading = 0; W.reloadSerial++; };
+export const completeReload = (W, serial) => { if (W.reloadSerial !== serial || W.reloading <= 0) return false; W.reloading = 1e-6; return true; };
 
 // how wide the shots go now: the weapon's own, opened by moving and by firing (bloom), closed
 // by aiming down the sights (ads 0..1)
@@ -84,8 +106,9 @@ export function spreadNow(W, ads = 0, moving = 0) {
 // one step: { fired: shots this step, kick: [pitch, yaw] for the view, loaded: rounds moved
 // from the reserve into the magazine (the caller takes them off the reserve), empty: tried to
 // fire with nothing in the magazine }
-export function stepWeapon(W, dt, { reserve = 0, ads = 0, rand = Math.random } = {}) {
-	const S = W.S, out = { fired: 0, kick: [0, 0], loaded: 0, empty: false, reloaded: false };
+export function stepWeapon(W, dt, { reserve = 0, ads = 0, rand = Math.random, accept = () => true } = {}) {
+	const S = W.S, out = { fired: 0, kick: [0, 0], loaded: 0, empty: false, reloaded: false, charge: 1 };
+	dt = Math.max(0, Number.isFinite(dt) ? dt : 0);
 	W.cool = Math.max(0, W.cool - dt);
 	W.bloom = Math.max(0, W.bloom - dt * (0.006 + W.bloom * 2.5));
 	if (W.reloading > 0) {
@@ -98,6 +121,23 @@ export function stepWeapon(W, dt, { reserve = 0, ads = 0, rand = Math.random } =
 		W.pulled = false;
 		return out;
 	}
+	if (isBow(W)) {
+		if (W.drawing && W.held) W.draw = Math.min(1, W.draw + dt / BOW_DRAW_SECONDS);
+		out.empty = W.pulled && W.mag <= 0;
+		W.pulled = false;
+		const charge = W.released;
+		W.released = 0;
+		if (!W.drawing && !W.held) W.draw = 0;
+		if (charge < BOW_MIN_DRAW || W.mag <= 0 || W.cool > 1e-9) return out;
+		// An unavailable/throwing renderer must never consume an arrow or advance cooldown.
+		try { if (accept(charge) === false) return out; } catch { return out; }
+		// The bow's firing cycle is draw + nock, with only a short release recovery.
+		W.mag--; W.shots++; W.cool = Math.min(S.interval, 0.12);
+		out.fired = 1; out.charge = charge;
+		out.kick[0] = S.kick[0] * charge / Math.sqrt(S.k);
+		out.kick[1] = S.kick[1] * charge * (rand() * 2 - 1);
+		return out;
+	}
 	const mode = modeOf(W);
 	// (several shots can fall in one long frame; never more than four)
 	for (let guard = 0; guard < 4 && W.cool <= 1e-9; guard++) {
@@ -108,6 +148,7 @@ export function stepWeapon(W, dt, { reserve = 0, ads = 0, rand = Math.random } =
 		W.pulled = false;
 		if (!want) break;
 		if (W.mag <= 0) { out.empty = true; W.burstLeft = 0; break; }
+		try { if (accept(1) === false) break; } catch { break; }
 		W.mag--; W.shots++; out.fired++;
 		if (W.burstLeft > 0) W.burstLeft--;
 		const burstGap = mode === 'burst' && W.burstLeft === 0 ? S.interval * 2.5 : 0;

@@ -393,6 +393,8 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		weapon: {
 			fire: () => (thirdNow() ? hand.fire(3) : vm.fire()),
 			reload: (done) => (thirdNow() ? hand.reload(done, 3) : vm.reload(done)),
+			bow: (state) => { hand.bow?.(state); vm.bow?.(state); },
+			cancel: () => { hand.cancel?.(); vm.cancel?.(); },
 			aim: setAim,
 			equip: (id) => { preview = null; return arms.hold(id); },
 			holster: () => { preview = null; return arms.hold(null); },
@@ -401,7 +403,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 			state: () => { const H = preview || arms.held(); return { held: H?.i || null, third: thirdNow(), reloading: thirdNow() ? hand.reloading : vm.reloading, aiming: thirdNow() ? hand.aiming : vm.aiming, ready: !!H && (thirdNow() ? !hand.reloading : vm.shown && !vm.reloading) }; },
 		},
 		// the held item and your hands, drawn over the frame (main.js, after the world)
-		post: (renderer) => vm.render(renderer),
+		post: (renderer) => vm.render(renderer, scene),
 		// Crysis.viewmodel({ hold: [id, level, tier], aim: true }): a look without owning it
 		viewmodel: (o = {}) => { if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) setAim(o.aim); const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
 	};

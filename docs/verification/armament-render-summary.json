@@ -1,0 +1,130 @@
+{
+  "date": "2026-10-09",
+  "kind": "production model preview",
+  "desktopFrames": 20,
+  "viewport": [
+    1200,
+    800
+  ],
+  "models": [
+    "aurora-trail-rifle",
+    "mossback-scout-rifle",
+    "warden-spark-carbine",
+    "reedline-hunting-bow"
+  ],
+  "views": [
+    "first",
+    "third"
+  ],
+  "gunPoses": [
+    "carry",
+    "aim"
+  ],
+  "bowPoses": [
+    "ready",
+    "half-draw",
+    "full-draw",
+    "released"
+  ],
+  "checks": {
+    "capturedFrameContactLimitMm": 3,
+    "initialBowFitsPassed": 27,
+    "finalBowFitsConfirmed": false,
+    "mobileVisualPassConfirmed": false,
+    "fullBrowserErrorGateConfirmed": false
+  },
+  "visualReview": [
+    "Gun receiver and handguard volume readable in held view.",
+    "Live scoped forward scene visible through lens.",
+    "Bow drawing palm no longer faces camera.",
+    "First-person elbow skin wedge removed.",
+    "Third-person drawing hand is clear of head silhouette."
+  ],
+  "limitations": [
+    "Mobile follow-up browser context did not complete in this runtime.",
+    "Final full error and 27-fit gates did not produce a completion report; do not claim these passed.",
+    "Review is an art pass, not an AAA quality certification."
+  ],
+  "files": [
+    {
+      "name": "desktop-first-aurora-trail-rifle-aim.png",
+      "sha256": "9cf297f378f01beff550b40a5c9cd59399b14e792cf868278e047cb92c2754d5"
+    },
+    {
+      "name": "desktop-first-aurora-trail-rifle-carry.png",
+      "sha256": "4a1c99f54b1dd843740cbcc0f75fd255362bee47b046cf56a3775fc8907cdc78"
+    },
+    {
+      "name": "desktop-first-bow-full-draw.png",
+      "sha256": "f9e93bc9f9eba3065f9e15db7c08493c8469d7f87fa3ad17516e4fdb562c54e7"
+    },
+    {
+      "name": "desktop-first-bow-half-draw.png",
+      "sha256": "d21f50ebf26f65d452ed8ab5fbbed59a1bf3b7088bde8056942cdeb7b3d56b4b"
+    },
+    {
+      "name": "desktop-first-bow-ready.png",
+      "sha256": "c4af7e5487a69a713aaa9ad1e34d2d5c30805c33918bc76ea932f1c5145513e3"
+    },
+    {
+      "name": "desktop-first-bow-released.png",
+      "sha256": "2ee800d96be46fa19434e371d1c484f9287fdabe4032c90434a94e208b70df8d"
+    },
+    {
+      "name": "desktop-first-mossback-scout-rifle-aim.png",
+      "sha256": "44635fa488ba5d8f0c6950f177f4e011fd27213ece62a58aaadd6afe50e76eeb"
+    },
+    {
+      "name": "desktop-first-mossback-scout-rifle-carry.png",
+      "sha256": "77448fdf033b876cb4fe098c07f8da4231fab8cb68db9a4f6a9cf38e2015ef97"
+    },
+    {
+      "name": "desktop-first-warden-spark-carbine-aim.png",
+      "sha256": "02c192c1672e934a0f0491f3e879b860bbe67cd811f035c167d231aab4ccd459"
+    },
+    {
+      "name": "desktop-first-warden-spark-carbine-carry.png",
+      "sha256": "6d486ccfbc06aed93334461d39c64db10817b07d022f5a9abd9327fdb613ec4d"
+    },
+    {
+      "name": "desktop-third-aurora-trail-rifle-aim.png",
+      "sha256": "7d86d60d55ea0786083478990392f1dac9cb2ab80c7d59023e976f0d1cdcdaa4"
+    },
+    {
+      "name": "desktop-third-aurora-trail-rifle-carry.png",
+      "sha256": "ac3a475d649df58d0dbe1274477322a4405fb11ed6c3e0d6c0718f15e512a151"
+    },
+    {
+      "name": "desktop-third-bow-full-draw.png",
+      "sha256": "743512a1307eb0d42422f96f58a0f7e57f77cacf7c41338bba813f2c8cc38915"
+    },
+    {
+      "name": "desktop-third-bow-half-draw.png",
+      "sha256": "e4fd5e2ddd1d843c3690dbfea5e0a4257a557e5dcdce17690bfdf2bad21aecd7"
+    },
+    {
+      "name": "desktop-third-bow-ready.png",
+      "sha256": "82b9ca56f9f8e0294077b12e500f742f8e9bbe3dd3688c9ea1f2442b4cc28b26"
+    },
+    {
+      "name": "desktop-third-bow-released.png",
+      "sha256": "d0f3eca29f1a2c8c0e50a9886e1e22c74dad303e220a142e9b772540ebaaa2db"
+    },
+    {
+      "name": "desktop-third-mossback-scout-rifle-aim.png",
+      "sha256": "30d64b2d3204921f35eb30263759d257de17e12a258d29ad1e37e67b48205267"
+    },
+    {
+      "name": "desktop-third-mossback-scout-rifle-carry.png",
+      "sha256": "ca5bbec1af7afcc9bcae6edf215b03c83584c875de185b3fd02303b037e9747a"
+    },
+    {
+      "name": "desktop-third-warden-spark-carbine-aim.png",
+      "sha256": "0b4d3e07e52ae550decf5dde539e330ecaa23699e02eca64c4dbfbaa13d3965b"
+    },
+    {
+      "name": "desktop-third-warden-spark-carbine-carry.png",
+      "sha256": "25f3093faf8237a33e66960daa8a64c81993409dfb82b135d200cd884a22956e"
+    }
+  ]
+}

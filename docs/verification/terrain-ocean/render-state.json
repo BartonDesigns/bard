@@ -1,0 +1,576 @@
+{
+  "half": 1300,
+  "terrain": false,
+  "pos": [
+    4840.421697972352,
+    600,
+    665.9760000000252
+  ],
+  "children": [
+    {
+      "name": "waypoint",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Points"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "PerspectiveCamera"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Line"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Mesh"
+    },
+    {
+      "name": "people",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "family-life",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "remembered residents",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Points"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Points"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Points"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "LineSegments"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "DirectionalLight"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Object3D"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "HemisphereLight"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "terrain",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "ocean",
+      "visible": true,
+      "type": "Mesh"
+    },
+    {
+      "name": "grass",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "grass",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "litter-pebbles",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "litter-leaves",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "litter-shells",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "vegetation",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "village",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "distant",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Points"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Points"
+    },
+    {
+      "name": "crysis-land-fauna",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Mesh"
+    },
+    {
+      "name": "whale",
+      "visible": true,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Points"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Points"
+    },
+    {
+      "name": "magma",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "caverns",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "underwater",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Points"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "reef",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "sealife",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "crysis-fish",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "crysis-inverts",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "cottage-interiors",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "sunrays",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "sunmotes",
+      "visible": false,
+      "type": "Points"
+    },
+    {
+      "name": "spray",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "underworld",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "mushrooms",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "sportsfields",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "deep-gate",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "deep",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "bayarea",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "globe",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "globe roads",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "globe trees",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "regional settlements",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "regional ice",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "regional plants",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "regional air",
+      "visible": false,
+      "type": "Points"
+    },
+    {
+      "name": "regional folk",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "globe lanes",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "bay-city",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "wild-ground",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "forest-logs",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "forest-limbs",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "forest-stumps",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "forest-snags",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "houses",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "PointLight"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "PointLight"
+    },
+    {
+      "name": "commercial",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "towers",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "interiors",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "PointLight"
+    },
+    {
+      "name": "street-life",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "ground-contact",
+      "visible": false,
+      "type": "Mesh"
+    },
+    {
+      "name": "car-people",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "freeways",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "lakes",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "water",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "tidepools",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "saltponds",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "beaches",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "parkkit",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "discovery-museum",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "boardwalk",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "sanlorenzo",
+      "visible": false,
+      "type": "Group"
+    },
+    {
+      "name": "wildlife",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "edgelands",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "edge-camps",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "golden-gate",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "bay-landmarks",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "bay-roads",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "mt-diablo",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Group"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Mesh"
+    },
+    {
+      "name": "",
+      "visible": true,
+      "type": "Group"
+    }
+  ]
+}

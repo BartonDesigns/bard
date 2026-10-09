@@ -135,7 +135,12 @@ export function createHud({ mount, touch = false }) {
 				aN.textContent = W.mag; aR.textContent = `/ ${W.reserve}`;
 				aW.textContent = `${W.name}${W.modes > 1 ? ' · ' + W.mode : ''}`;
 				ammo.classList.toggle('low', W.mag <= Math.ceil(W.max * 0.25));
-				aRl.textContent = W.reloading ? 'Reloading…' : W.mag === 0 ? (W.reserve ? (touch ? 'Tap R to reload' : 'Press R to reload') : 'No ammo · buy a box at a shop') : '';
+				aRl.textContent = W.reloading ? (W.bow ? 'Nocking…' : 'Reloading…') : W.mag === 0 ? (W.reserve ? (touch ? 'Tap R to reload' : 'Press R to reload') : W.bow ? 'No arrows · visit an outfitter' : 'No ammo · buy a box at a shop') : W.bow ? (W.drawing ? `Release · ${Math.round(W.draw * 100)}% draw` : 'Hold to draw · release to shoot') : '';
+				if (btns.Fire) {
+					const label = W.bow ? (W.reloading ? 'Nocking' : W.drawing ? 'Release' : 'Draw') : 'Fire';
+					if (btns.Fire.getAttribute('aria-label') !== label) { btns.Fire.textContent = label; btns.Fire.setAttribute('aria-label', label); }
+					btns.Fire.style.opacity = W.reloading || !W.mag ? '0.55' : '1';
+				}
 				if (btns.Mode) { btns.Mode.textContent = W.mode.toUpperCase(); btns.Mode.style.display = vis && W.modes > 1 ? 'flex' : 'none'; }
 			}
 			if (btns.Fire) { const on = vis && !!W; btns.Fire.style.display = btns.Reload.style.display = on ? 'flex' : 'none'; if (!on && btns.Mode) btns.Mode.style.display = 'none'; }
