@@ -196,6 +196,7 @@ export function createTerrain(island, shared) {
 				vW = transformed;`);
 		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `
+				${far ? '' : 'if (max(abs(vW.x), abs(vW.z)) > uHalf) discard;'}
 				holeCut(vW.xz);
 				plBegin(vW.xz);
 				vec2 muv = (vW.xz + uHalf) / (uHalf * 2.0);
@@ -399,7 +400,7 @@ export function createTerrain(island, shared) {
 					normal = normalize(normal + (viewMatrix * vec4(tilt, 0.0)).xyz);
 				}`);
 	};
-	mat.customProgramCacheKey = () => 'island-terrain';
+	mat.customProgramCacheKey = () => 'island-terrain-' + (far ? 'far' : 'bounded');
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.frustumCulled = false;
 	mesh.receiveShadow = true;
