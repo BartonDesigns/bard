@@ -4,7 +4,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { createPicnicJam } from '../src/encounters/picnic-jam.js';
 import { kitLight, kitTick } from '../src/crysis/held-items.js';
 import { createPicnicAudio } from '../src/encounters/picnic-audio.js';
-import { shotOnBeat } from '../src/encounters/picnic-plan.js';
+import { shotOnBeat, picnicActivity } from '../src/encounters/picnic-plan.js';
 import { playCue } from '../src/crysis/weapon-sound.js';
 import { peopleAssetsNow } from '../src/people/body.js';
 const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
@@ -34,13 +34,13 @@ window.preview={picnic,scene,camera,renderer,frame,
   const pending=p.summon({x:8,z:0});p.clear();resolve(peopleAssetsNow());const result=await pending;p.dispose();
   return !result&&scene.children.length===before;
  },
- async audioPreview(){
-  // Offline export of the SAME synth/cues, aligned with a four-second capture starting at t=3.
-  const ctx=new OfflineAudioContext(2,48000*4,48000),out=ctx.createGain();out.connect(ctx.destination);
+ async audioPreview({start=3,duration=4}={}){
+  // Offline export of the same synth/cues, aligned with the requested review capture.
+  const ctx=new OfflineAudioContext(2,Math.ceil(48000*duration),48000),out=ctx.createGain();out.connect(ctx.destination);
   const previous=window._masterClip;window._masterClip=out;let t=0;
   Object.defineProperty(ctx,'currentTime',{configurable:true,get:()=>t});Object.defineProperty(ctx,'state',{configurable:true,get:()=> 'running'});
   const music=createPicnicAudio(),distance=Math.hypot(4.9,5.7),level=(1-distance/44)**2;
-  try {for(let beat=10;beat<=22;beat++){t=beat*30/96-3;music.beat(beat,level,0,false);if(shotOnBeat(beat,2))playCue('scout',{distance,gain:.6});if(shotOnBeat(beat,3))playCue('pulse',{distance,gain:.6});}}
+  try {for(let beat=Math.ceil(start*96/30);beat<(start+duration)*96/30;beat++){t=beat*30/96-start;music.beat(beat,level,0,false);for(const [i,cue] of [[2,'scout'],[3,'pulse']])if(shotOnBeat(beat,i)&&['seated','stand'].includes(picnicActivity(t+start,i)))playCue(cue,{distance,gain:.6});}}
   finally {delete ctx.currentTime;delete ctx.state;window._masterClip=previous;}
   const b=await ctx.startRendering(),wav=new ArrayBuffer(44+b.length*4),v=new DataView(wav),str=(at,s)=>{for(let i=0;i<s.length;i++)v.setUint8(at+i,s.charCodeAt(i));};
   str(0,'RIFF');v.setUint32(4,wav.byteLength-8,true);str(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,2,true);v.setUint32(24,48000,true);v.setUint32(28,192000,true);v.setUint16(32,4,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,wav.byteLength-44,true);

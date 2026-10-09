@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PICNIC,CAST,eligiblePicnic,picnicGround,findPicnicSpot,picnicDue,shotOnBeat,picnicSeats} from './picnic-plan.js';
+import {PICNIC,CAST,eligiblePicnic,picnicGround,findPicnicSpot,picnicDue,shotOnBeat,picnicSeats,picnicActivity,FLOOR_POSES} from './picnic-plan.js';
+test('floor poses vary, and each friend takes a separate turn to stretch their legs',()=>{
+ assert.equal(FLOOR_POSES.length,CAST.length);
+ assert.ok(FLOOR_POSES.some(p=>p.lean>.2));assert.ok(FLOOR_POSES.some(p=>p.roll<-.2));assert.ok(FLOOR_POSES.some(p=>p.roll>.2));
+ for(let t=0;t<256;t+=.25)assert.ok(CAST.filter((_,i)=>picnicActivity(t,i)!=='seated').length<=1);
+ for(let i=0;i<CAST.length;i++){
+  const states=new Set(Array.from({length:1280},(_,n)=>picnicActivity(n/10,i)));
+  for(const s of ['seated','rise','shuffle-out','stand','shuffle-back','settle'])assert.ok(states.has(s));
+ }
+});
 test('eight friends have separate seats with room for their bodies and feet',()=>{
  const seats=picnicSeats();assert.equal(CAST.length,8);assert.equal(seats.length,CAST.length);
  for(let i=0;i<seats.length;i++)for(let j=i+1;j<seats.length;j++)assert.ok(Math.hypot(seats[i].x-seats[j].x,seats[i].z-seats[j].z)>1.6);

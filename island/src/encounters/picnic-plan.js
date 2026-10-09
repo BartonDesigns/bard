@@ -11,6 +11,30 @@ export const CAST = Object.freeze([
  { name: 'Viktor', age: 45, role: 'listen', color: [0.24, 0.18, 0.29] },
 ]);
 export const PICNIC_ARMS = Object.freeze(['mossback-scout-rifle', 'warden-spark-carbine', 'aurora-trail-rifle']);
+export const FLOOR_HEIGHT = .045;
+const crossed = { L: [-.18, 0, .38, -1.0], R: [.18, 0, .48, 1.0] };
+const openKnees = { L: [1,.08,.25], R: [-1,.08,.25] };
+export const FLOOR_POSES = Object.freeze([
+ {name:'slouched',feet:crossed,knees:openKnees,lean:.27,roll:.05},
+ {name:'cross-legged',feet:crossed,knees:openKnees,lean:.10,roll:-.10},
+ {name:'one knee up',feet:{L:[.18,0,.56,-.25],R:[.12,0,.35,.9]},knees:{L:[.3,1,.4],R:[-1,.05,.3]},lean:.16,roll:.03},
+ {name:'loose cross-legged',feet:{L:[-.13,0,.47,-.8],R:[.16,0,.34,1.0]},knees:openKnees,lean:.13,roll:-.12},
+ {name:'slouched to the side',feet:crossed,knees:openKnees,lean:.25,roll:.20},
+ {name:'knees relaxed',feet:{L:[.20,0,.60,-.2],R:[-.22,0,.55,.2]},knees:{L:[.6,.5,1],R:[-.6,.5,1]},lean:.22,roll:.02},
+ {name:'leaning left',feet:crossed,knees:openKnees,lean:-.08,roll:-.30,support:'L'},
+ {name:'leaning right',feet:{L:[-.20,0,.38,-.9],R:[.16,0,.47,.9]},knees:openKnees,lean:-.04,roll:.30,support:'R'},
+]);
+// One friend stretches their legs at a time. Long pauses keep this a relaxed gathering.
+export function picnicActivity(elapsed, index) {
+ const t=((elapsed-12-index*14)%128+128)%128;
+ if(t<2)return 'rise';
+ if(t<4.5)return 'shuffle-out';
+ if(t<6)return 'stand';
+ if(t<9)return 'shuffle-back';
+ if(t<10)return 'turn';
+ if(t<12)return 'settle';
+ return 'seated';
+}
 // Half-beats, deliberately loose percussion. Each friend's turn has its own pause.
 export function shotOnBeat(beat, performer) {
  const n = ((beat % 32) + 32) % 32;

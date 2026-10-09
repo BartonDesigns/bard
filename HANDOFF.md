@@ -13,14 +13,24 @@ friends laughing/listening, and two friends using different existing
 armament models as comic percussion. They lift the guns, fire skyward, recoil and settle;
 the music keeps going. A nearby button lets the player clap along.
 
+The owner's next correction is implemented: **everyone starts sitting on the floor**, not
+on stools. The larger rug holds folded-leg poses, a raised knee, slouches and supported
+left/right leans. Friends occasionally rise, shuffle a few steps, return and sit back down.
+Held items follow the actual torso/hand height; shots pause during transitions and walking.
+`people/motion.js` has an optional floor-pose layer and sit easing rate. Ordinary chairs and
+walking retain their defaults. Local movement stays in the clear patch and avoids the
+player and other picnic guests. No chairs remain in the picnic props.
+
 Source: `island/src/encounters/`, with world/collision/debug hooks in `main.js`.
 `Crysis.picnic()` inspects it; `await Crysis.picnicGo({x, z})` tries a valid daytime patch.
 The encounter owns its props, people, sounds and cancellation guards. It does not dispatch
 combat or network events. It respects a saved cooldown and clears on travel/world changes.
 
-Build, five rule tests and twelve rendered browser checks passed; zero page/shader errors
-in the eight-person review. Seats are distributed around the full circle without overlap.
-An updated PNG shows all eight; the earlier video shows the initial four-person version.
+Build, six encounter rule tests, eleven resident regression tests and sixteen rendered
+browser checks passed; zero page/shader errors in the floor-seating review. Checks now
+include floor height, varied poses, real stepping, return/settle, foot contact and shot
+suppression while moving. New PNG/video exports show all eight on the floor and a complete
+stand/shuffle/return cycle. Earlier previews with chairs are superseded.
 Details and reproducible review tools are documented in
 `docs/off-duty-orchestra-2026-10-09.md`.
 

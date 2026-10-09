@@ -27,16 +27,8 @@ function rugTexture() {
 export function picnicProps(seats) {
  const g=new THREE.Group();g.name='Off-Duty Orchestra picnic';
  const rug=mat(0xffffff,.98);rug.map=rugTexture();
- add(g,new THREE.BoxGeometry(3.1,.035,2.8),rug,0,.025,0);
- const seam=mat(0xd4b783),wood=mat(0x765337),dark=mat(0x292f29),ceramic=mat(0xe2d9bb,.36),glass=mat(0x326355,.24,.2);
- const cushions=[0x576758,0x7f5c45,0x596b79,0x7f765c].map(c=>mat(c));
- for(let i=0;i<seats.length;i++) {
-  const s=seats[i],stool=new THREE.Group();stool.position.set(s.x,0,s.z);stool.rotation.y=s.yaw;g.add(stool);
-  const fabric=cushions[i%cushions.length];
-  add(stool,new THREE.CylinderGeometry(.26,.27,.075,24),fabric,0,.34,0);
-  add(stool,new THREE.TorusGeometry(.253,.004,5,30),seam,0,.378,0).rotation.x=Math.PI/2;
-  for(const a of [-1,1])for(const b of [-1,1])add(stool,new THREE.CylinderGeometry(.018,.022,.3,8),wood,a*.16,.15,b*.16);
- }
+ add(g,new THREE.BoxGeometry(6.2,.018,6.2),rug,0,.018,0);
+ const wood=mat(0x765337),dark=mat(0x292f29),ceramic=mat(0xe2d9bb,.36),glass=mat(0x326355,.24,.2);
  // Low serving board, bread, fruit, bowls, cups, thermos and a folded cloth.
  add(g,new THREE.BoxGeometry(1.1,.045,.58),wood,0,.075,0);
  const bread=mat(0xc59a5d),fruit=mat(0x80352c);

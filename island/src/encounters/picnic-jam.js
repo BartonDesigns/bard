@@ -49,7 +49,9 @@ export function createPicnicJam({scene,world,camera,profile,mount,isPhone=false,
    const seats=picnicSeats();D.props=picnicProps(seats);D.props.position.set(place.x,place.y,place.z);scene.add(D.props);
    for(let i=0;i<CAST.length;i++) {
     if(dead||token!==generation||world()!==W||D.epoch!==W.globe?.frame?.epoch){if(active===D)clear();return false;}
-    D.actors.push(createPicnicPerformer(A,i,seats[i],place,D.variant,scene,scene.environment,isPhone));
+    const occupied=(p,who)=>D.actors.some((a,j)=>j!==who&&Math.hypot(p.x-a.M.S.pos.x,p.z-a.M.S.pos.z)<1.0)||Math.abs(camera.position.y-p.y)<2.2&&Math.hypot(p.x-camera.position.x,p.z-camera.position.z)<.85;
+    D.actors.push(createPicnicPerformer(A,i,seats[i],place,D.variant,scene,scene.environment,isPhone,occupied));
+    D.actors[i].update(1/60,0,camera.position,0,0);
     await new Promise(resolve=>requestAnimationFrame(resolve));
    }
    if(token!==generation||world()!==W){if(active===D)clear();return false;}
@@ -73,7 +75,7 @@ export function createPicnicJam({scene,world,camera,profile,mount,isPhone=false,
    if(near&&!D.announced){D.announced=true;hint('Off-Duty Orchestra\nThree strings, two very enthusiastic percussionists.',6000);}
    const bpm=Math.max(76,Math.min(116,W.music?.performance?.bpm||96));
    D.clock+=Math.min(dt,.1)*bpm/30;
-   for(const actor of D.actors)actor.update(Math.min(dt,.1),time,camera.position,D.clock);
+   for(const actor of D.actors)actor.update(Math.min(dt,.1),time,camera.position,D.clock,D.elapsed);
    const beat=Math.floor(D.clock);
    if(beat!==D.beat) {
     D.beat=beat;
@@ -92,5 +94,5 @@ export function createPicnicJam({scene,world,camera,profile,mount,isPhone=false,
   const D=active;if(!D?.ready||D.W!==world()||Math.abs(footY-D.at.y)>1)return;
   for(const a of D.actors){const q=a.M.S.pos,dx=p.x-q.x,dz=p.z-q.z,d=Math.hypot(dx,dz),r=.57;if(d<r){const k=(r-d)/(d||1);p.x+=d?dx*k:r;p.z+=dz*k;}}
  }
- return {update,summon,clear,pause,push,dispose(){clear();dead=true;button.remove();},inspect:()=>({active:!!active,ready:!!active?.ready,at:active?.at,joined:!!active?.joined,beat:active?.beat,actors:active?.actors.map(a=>a.inspect())||[],...audio.inspect()})};
+ return {update,summon,clear,pause,push,dispose(){clear();dead=true;button.remove();},inspect:()=>({active:!!active,ready:!!active?.ready,at:active?.at,elapsed:active?.elapsed,joined:!!active?.joined,beat:active?.beat,actors:active?.actors.map(a=>a.inspect())||[],...audio.inspect()})};
 }

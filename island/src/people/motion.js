@@ -94,7 +94,7 @@ const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.
 const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
 const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
-export function createMotion(P, groundAt, { constrain } = {}) {
+export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}) {
 	const { bones, map, rest, dna } = P;
 	const H = (n) => rest.heads[map[n]];
 	const g = dna.gait;
@@ -114,8 +114,9 @@ export function createMotion(P, groundAt, { constrain } = {}) {
 		arms: { L: armSprings(), R: armSprings() },
 		headOv: { yaw: 0, pitch: 0, roll: 0 }, headYawS: new Spring(0, 3), headPitchS: new Spring(0, 3), headRollS: new Spring(0, 2),
 		joyS: new Spring(0, 1.2), browS: new Spring(0, 2),
-		// sitting: how far down into a seat (0 standing .. 1 seated), and the seat's height
-		sitK: new Spring(0, 2.2), sitWant: 0, seatH: 0.46,
+		// sitting: how far down into a seat (0 standing .. 1 seated), and the seat's height.
+		// Optional floorPose adds folded feet/knee poles and torso lean only while seated.
+		sitK: new Spring(0, sitFrequency), sitWant: 0, seatH: 0.46, floorPose: null,
 		// a hand held by someone walking alongside, by side
 		hold: { L: false, R: false },
 		// a hand closed round something carried (ui/gear.js), by side: 0 open .. 1 a fist
@@ -287,20 +288,21 @@ export function createMotion(P, groundAt, { constrain } = {}) {
 		}
 
 		// seated: the feet set down a little ahead of the seat, flat
-		const sitK = clamp(S.sitK.to(S.sitWant, dt), 0, 1);
+		const sitK = clamp(S.sitK.to(S.sitWant, dt), 0, 1), floorPose = S.floorPose;
 		if (sitK > 0.001) {
 			const c = Math.cos(S.heading), sn = Math.sin(S.heading);
 			// (a child on a grown-up's chair: the shins hang straight down, the feet off the floor)
 			const hang = S.pos.y + S.seatH + 0.07 - shinLen;
 			for (const f of feet) {
-				const lx = f.leg.side * hipHalf * 1.1;
-				let lz = h * 0.25;
+				const placed = floorPose?.feet?.[f.leg.name], scale = h / 1.75;
+				const lx = placed ? placed[0] * scale : f.leg.side * hipHalf * 1.1;
+				let lz = placed ? placed[2] * scale : h * 0.25;
 				_v2.set(S.pos.x + lx * c + lz * sn, 0, S.pos.z - lx * sn + lz * c);
 				const floor = groundAt(_v2.x, _v2.z), dangle = hang > floor + ankleH;
 				if (dangle) { lz = thighLen * 0.92; _v2.set(S.pos.x + lx * c + lz * sn, 0, S.pos.z - lx * sn + lz * c); }
 				_v2.y = floor;
 				f.gy += (_v2.y - f.gy) * sitK;
-				_v2.y = dangle ? hang : floor + ankleH;
+				_v2.y = dangle ? hang : floor + ankleH + (placed?.[1] || 0) * scale;
 				f.ankle.lerp(_v2, sitK); f.pitch = f.pitch * (1 - sitK) + (dangle ? 0.35 * sitK : 0);
 				if (sitK > 0.5) { f.leg.lock.set(_v2.x, f.gy, _v2.z); f.leg.planted = true; f.leg.inSwing = false; }
 			}
@@ -331,7 +333,7 @@ export function createMotion(P, groundAt, { constrain } = {}) {
 		if (S.shiftNext <= 0) { S.shiftSide = -S.shiftSide; S.shiftNext = 3 + Math.random() * 9 * (1 - (dna.temper?.fidget ?? 0.5) * 0.6); }
 		const idleSway = (1 - amp) * (S.shiftSide * (0.016 + S.mood * 0.012) + Math.sin(S.shiftT * 0.35 + S.mood * 5) * 0.006);
 		const sway = S.sway.to(Math.sin(S.phase * TAU) * 0.02 * amp * (1 - run * 0.6) + idleSway, dt);
-		const lean = S.lean.to(-0.06 * sitK + g.posture + 0.03 * amp + 0.14 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
+		const lean = S.lean.to((-0.06 + (floorPose?.lean || 0)) * sitK + g.posture + 0.03 * amp + 0.14 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
 		const turnLean = S.turnLean.to(clamp(-turnRate * speed * 0.05, -0.12, 0.12), dt);
 		// the pelvis turns the leading hip forward (most at each heel strike) and drops a little
 		// on the side of the swinging leg
@@ -381,6 +383,7 @@ export function createMotion(P, groundAt, { constrain } = {}) {
 			// the knee points where the foot does, straight ahead but for the slight toe-out
 			const toeOut = pelvisYaw * 0.3 + f.leg.side * 0.1 + (hpo ? hpo[0] * aw * 0.8 : 0);
 			const kneeHint = new THREE.Vector3(f.leg.side * 0.02, 0, 1).applyAxisAngle(Y, toeOut * 0.6).normalize();
+			if (floorPose?.knees?.[s]) kneeHint.lerp(new THREE.Vector3(...floorPose.knees[s]).normalize(), sitK).normalize();
 			const bend = kneeHint.addScaledVector(dir, -kneeHint.dot(dir)).normalize();
 			const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist);
 			const knee = hip.clone().addScaledVector(dir, cosA * l1).addScaledVector(bend, Math.sqrt(Math.max(0, 1 - cosA * cosA)) * l1);
@@ -389,7 +392,8 @@ export function createMotion(P, groundAt, { constrain } = {}) {
 			setWorld(iT, frameQ(rT, knee.clone().sub(hip), bend, new THREE.Quaternion()), worldQ[rootI]);
 			setWorld(iS, frameQ(rS, ankle.clone().sub(knee), bend, new THREE.Quaternion()), worldQ[iT]);
 			// the foot: forward (toes a little out), pitched through the roll-over
-			setWorld(iF, _q.setFromAxisAngle(Y, toeOut).multiply(_q2.setFromAxisAngle(AX, f.pitch)).clone(), worldQ[iS]);
+			const footYaw = toeOut * (1 - (floorPose ? sitK : 0)) + (floorPose?.feet?.[s]?.[3] || 0) * sitK;
+			setWorld(iF, _q.setFromAxisAngle(Y, footYaw).multiply(_q2.setFromAxisAngle(AX, f.pitch)).clone(), worldQ[iS]);
 		}
 
 		// ---- spine: counter-rotation, lean, breath ----
@@ -399,6 +403,7 @@ export function createMotion(P, groundAt, { constrain } = {}) {
 		const bph = S.breath % 1, br = (bph < 0.4 ? Math.sin(bph / 0.4 * Math.PI / 2) : Math.cos((bph - 0.4) / 0.6 * Math.PI / 2)) * 2 - 1, brA = 1 + (1 - amp) * 0.8;
 		const counter = -pelvisYaw * 1.6;
 		const sp = X.has.sp ? X.v.sp.map((v) => v * aw) : [0, 0, 0];
+		sp[2] += (floorPose?.roll || 0) * sitK;
 		setLocal(map.spine04, _q.setFromEuler(_e.set(lean * 0.25 + sp[1] * 0.3, counter * 0.3 + sp[0] * 0.3, -pelvisRoll * 0.5 + sp[2] * 0.3)), worldQ[rootI]);
 		setLocal(map.spine02, _q.setFromEuler(_e.set(lean * 0.2 + br * 0.014 * brA + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.3 + sp[2] * 0.35)), worldQ[map.spine04]);
 		setLocal(map.spine01, _q.setFromEuler(_e.set(lean * 0.15 - br * 0.015 * brA + sp[1] * 0.35, counter * 0.35 + sp[0] * 0.35, -pelvisRoll * 0.2 + sp[2] * 0.35)), worldQ[map.spine02]);
@@ -410,7 +415,8 @@ export function createMotion(P, groundAt, { constrain } = {}) {
 		let ty = L.idleYaw, tp = L.idlePitch;
 		const tgt = L.target || (cam && cam.distanceTo(S.pos) < 7 ? cam : null);
 		if (tgt) {
-			const dx = tgt.x - S.pos.x, dz = tgt.z - S.pos.z, dy = tgt.y - (S.pos.y + P.height * 0.93);
+			const eyeHeight = P.height * 0.93 - (floorPose ? hipStand - hipY : 0);
+			const dx = tgt.x - S.pos.x, dz = tgt.z - S.pos.z, dy = tgt.y - (S.pos.y + eyeHeight);
 			const rel = wrap(Math.atan2(dx, dz) - heading);
 			if (Math.abs(rel) < 1.8) { ty = clamp(rel, -1.2, 1.2); tp = clamp(-Math.atan2(dy, Math.hypot(dx, dz)), -0.5, 0.5); }
 		}

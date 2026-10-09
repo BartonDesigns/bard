@@ -34,6 +34,21 @@ const checks=await page.evaluate(async()=>{
  p.pause();passed.push(assert('Pause silences music and interaction',p.inspect().voices===0&&!p.inspect().joined&&button.hidden));
  const at=p.inspect().at,q={x:at.x+Math.SQRT1_2*2.4,z:at.z+Math.SQRT1_2*2.4};p.push(q,at.y);
  passed.push(assert('Seated bodies block walking',Math.hypot(q.x-at.x-Math.SQRT1_2*2.4,q.z-at.z-Math.SQRT1_2*2.4)>.5));
+ passed.push(assert('All eight begin on the rug with varied floor poses',s.actors.every(a=>a.hipY>.08&&a.hipY<.25)&&new Set(s.actors.map(a=>a.pose)).size>=5));
+ const home=s.actors[0].position;let furthest=0,highest=0,previous=home,largestStep=0,feetAbove=true;
+ while(p.inspect().elapsed<25.5){
+  preview.frame(1/30,false);const people=p.inspect().actors,a=people[0];
+  furthest=Math.max(furthest,Math.hypot(a.position[0]-home[0],a.position[2]-home[2]));highest=Math.max(highest,a.hipY);
+  largestStep=Math.max(largestStep,Math.hypot(a.position[0]-previous[0],a.position[2]-previous[2]));previous=a.position;
+  feetAbove&&=people.every(v=>v.feet.every(h=>Number.isFinite(h)&&h>.025));
+ }
+ let returned=p.inspect().actors[0];
+ passed.push(assert('A friend stands, takes real steps and returns without teleporting',highest>.65&&furthest>.3&&largestStep<.04));
+ passed.push(assert('Feet remain above the rug and the friend settles back on the floor',feetAbove&&returned.hipY<.25&&returned.seated>.98&&Math.hypot(returned.position[0]-home[0],returned.position[2]-home[2])<.1));
+ while(p.inspect().elapsed<40.1)preview.frame(1/30,false);
+ const beforeMove=p.inspect().actors[2].shots;
+ while(p.inspect().elapsed<44.3)preview.frame(1/30,false);
+ passed.push(assert('A shooter pauses firing while rising and shuffling',p.inspect().actors[2].shots===beforeMove));
  preview.world().globe.frame.epoch++;preview.frame(.1,false);passed.push(assert('Origin shift clears scene and sound',!p.inspect().active&&p.inspect().voices===0));
  passed.push(assert('Can summon again after cleanup',await p.summon({x:0,z:0})));
  preview.replaceWorld();preview.frame(.1,false);passed.push(assert('Changing worlds clears the encounter',!p.inspect().active));
