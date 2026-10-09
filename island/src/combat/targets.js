@@ -22,12 +22,14 @@ export function isMinor(P) {
 }
 
 // a target under the Spark's ward: a minor, by its flag or its body
-export const warded = (T) => !!T && (!!T.child || !!T.minor || !!T.ghost || (!!T.P && isMinor(T.P)));
+export const warded = (T) => !!T && (isMinor(T) || (!!T.P && isMinor(T.P)));
+// Surrender and restraint stay protected at this shared gate, including remote hit reports.
+export const surrendered = (T) => !!T && !!(T.surrendered || T.restrained || T.P?.surrendered || T.P?.restrained || T.ref?.surrendered || T.ref?.restrained);
 
 // may `shooter` strike `target`? rules: { pvp } (the room's setting)
 export function canHit(target, shooter = null, rules = {}) {
 	if (!target || target.removed) return false;
-	if (warded(target) || target.protected) return false;
+	if (warded(target) || target.protected || surrendered(target)) return false;
 	if (shooter && target.id === shooter.id) return false;
 	if (target.kind === 'player' || target.kind === 'remote') {
 		if (!rules.pvp) return false;

@@ -23,7 +23,7 @@ export const OPEN = ['asking', 'invited', 'open'];
 const empty = () => ({ credits: 0, items: [] });
 const other = (role) => (role === 'a' ? 'b' : 'a');
 export const keyOf = (T) => `${T.v.a}.${T.v.b}`;
-const canon = (s) => JSON.stringify({ credits: s?.credits || 0, items: [...(s?.items || [])].sort((a, b) => (a.u < b.u ? -1 : 1)).map((x) => [x.u, x.i, x.l, x.t]) });
+const canon = (s) => JSON.stringify({ credits: s?.credits || 0, items: [...(s?.items || [])].sort((a, b) => (a.u < b.u ? -1 : 1)).map((x) => [x.u, x.i, x.l, x.t, x.x]) });
 export const sameSides = (x, y) => !!x && !!y && canon(x.a) === canon(y.a) && canon(x.b) === canon(y.b);
 const copySide = (x) => ({ credits: x.credits, items: x.items.map((y) => ({ ...y })) });
 const copySides = (s) => ({ a: copySide(s.a), b: copySide(s.b) });

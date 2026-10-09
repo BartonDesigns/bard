@@ -2,6 +2,7 @@
 // node test/room.test.mjs   (no network, no account)
 import { handle, Room } from '../src/index.js';
 import { CLOSE } from '../src/room.js';
+import { createCombatGuard } from '../src/combat-guard.js';
 import { MAX_PLAYERS, BURST, MAX_BYTES, STALE_MS, cleanEvent, cleanPose, cleanState, cleanFx, cleanHit, cleanCombatState, cleanRules } from '../../../island/src/net/protocol.js';
 
 let pass = 0, fail = 0;
@@ -278,27 +279,42 @@ section('combat');
 	const { R } = await makeRoom();
 	const host = await join(R, 'owner-aaaa'), g1 = await join(R, 'guest-bbbb'), g2 = await join(R, 'guest-cccc');
 	ok(host.of('welcome')[0].rules?.pvp === false, 'PvP is off when a room opens');
+	for (const [i, ws] of [host, g1, g2].entries()) await say(R, ws, { t: 'pose', p: [i * 3, 1, 0], w: 'earth', h: 'aurora-trail-rifle', hl: 1, ht: 0 });
+	await say(R, host, { t: 'cs', e: [['boss:walker', 4000, 0, 0]], b: { id: 'boss:walker', kind: 'walker', x: 20, y: 0, z: 0, w: 'earth' } });
+	g1.sent = g1.sent.filter((m) => m.t !== 'cs'); g2.sent = g2.sent.filter((m) => m.t !== 'cs');
 	await say(R, g1, { t: 'fx', s: [[0, 1, 0, 10, 1, 0, 2, 1]] });
 	ok(g2.of('fx').length === 1 && host.of('fx').length === 1 && g1.of('fx').length === 0, 'shots go to everyone else');
 	ok(g2.of('fx')[0].id === 'guest-bbbb', 'with who fired them');
 	await say(R, g1, { t: 'fx', s: [[0, 0, 0, 5000, 0, 0]] });
 	ok(g2.of('fx').length === 1, 'an impossible streak is dropped');
-	await say(R, g1, { t: 'hit', id: 'boss:walker', d: 40, p: 'core' });
+	await say(R, g1, { t: 'hit', id: 'boss:walker', d: 40, p: 'core', w: 'aurora-trail-rifle' });
 	ok(host.of('hit').length === 1 && host.of('hit')[0].from === 'guest-bbbb' && g2.of('hit').length === 0, 'a hit on a shared thing goes to the host only');
-	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20 });
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
 	ok(g2.of('hit').length === 0, 'no PvP hit passes while PvP is off');
 	await say(R, g1, { t: 'rules', r: { pvp: true } });
 	ok(!g2.of('rules').length, 'only the host sets the rules');
 	await say(R, host, { t: 'rules', r: { pvp: true } });
 	ok(g1.of('rules')[0]?.r.pvp === true && g2.of('rules')[0]?.r.pvp === true, 'the host turns PvP on for all');
-	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20 });
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
 	ok(g2.of('hit').length === 1 && g2.of('hit')[0].from === 'guest-bbbb' && !g2.of('hit')[0].to, 'with PvP on, a hit reaches only its player');
-	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-bbbb', d: 20 });
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-bbbb', d: 20, w: 'aurora-trail-rifle' });
 	ok(g1.of('hit').length === 0, 'nobody hits themselves');
 	await say(R, g1, { t: 'cs', e: [['boss:walker', 10, 2, 0]] });
 	ok(g2.of('cs').length === 0, 'only the host speaks for shared things');
-	await say(R, host, { t: 'cs', e: [['boss:walker', 4000, 1, 0]], b: { id: 'boss:walker', kind: 'walker', x: 1, y: 2, z: 3 } });
+	await say(R, host, { t: 'cs', e: [['boss:walker', 4000, 1, 0]], b: { id: 'boss:walker', kind: 'walker', x: 1, y: 2, z: 3, w: 'earth' } });
 	ok(g1.of('cs')[0]?.e[0][1] === 4000 && g1.of('cs')[0].b.kind === 'walker', 'the host\'s word on a boss reaches the guests');
+	await say(R, g2, { t: 'pose', p: [6, 1, 0], w: 'moon', h: 'aurora-trail-rifle' });
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 1, 'hits cannot cross worlds');
+	await say(R, g1, { t: 'fx', s: [[3, 1, 0, 10, 1, 0]] });
+	ok(g2.of('fx').length === 1, 'shot effects cannot cross worlds');
+	await say(R, g2, { t: 'pose', p: [6, 1, 0], w: 'earth', h: 'aurora-trail-rifle' });
+	await say(R, g1, { t: 'hit', id: 'boss:walker', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 1, 'a player report cannot name a shared boss as its victim');
+	await say(R, g1, { t: 'hit', id: 'rp:guest-cccc', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').at(-1)?.id === 'me' && g2.of('hit').length === 2, 'remote target ids normalize for the recipient');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 500, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 2, 'damage above the server weapon budget is refused');
 	const late = await join(R, 'guest-dddd');
 	ok(late.of('welcome')[0].rules.pvp === true, 'a late joiner is told the rules');
 	await say(R, host, { t: 'rules', r: { pvp: 'yes' } });
@@ -313,6 +329,26 @@ ok(cleanHit({ id: 'x1', d: 5, p: 'spleen' }).p === 'body', 'unknown parts are th
 ok(cleanCombatState({ e: [['boss:x', 5, 99, 0]] }).e[0][2] === 0, 'phases are bounded');
 ok(cleanCombatState({ b: { id: 'boss:x', kind: 'dragon', x: 0, y: 0, z: 0 } }) === null, 'only the known bosses');
 ok(cleanRules({ pvp: 1 }).pvp === false && cleanRules({ pvp: true }).pvp === true, 'rules: PvP only when exactly true');
+
+
+section('combat authority');
+{
+ let now = 1000;
+ const guard = createCombatGuard(() => now);
+ const source = { w: 'earth', p: [0, 1.7, 0], h: 'aurora-trail-rifle', hl: 1, ht: 0 };
+ const target = { w: 'earth', p: [10, 1.7, 0] };
+ const hit = { w: source.h, d: 58, p: 'torso', k: 'ballistic' };
+ ok(!guard.accept('p', { ...hit, w: 'mossback-scout-rifle' }, source, target, true), 'declared item must match the held pose');
+ ok(!guard.accept('p', hit, source, { ...target, w: 'moon' }, true), 'a hit needs the same world');
+ ok(!guard.accept('p', hit, source, { ...target, p: [1000, 0, 0] }, true), 'weapon range is enforced');
+ ok(!guard.accept('p', { ...hit, k: 'fire' }, source, target, true), 'damage type must match the equipped item');
+ ok(!guard.accept('p', { ...hit, p: 'weak' }, source, target, true), 'a player has no boss weak-point multiplier');
+ ok(guard.accept('p', hit, source, target, true), 'valid report consumes a weapon damage budget');
+ guard.accept('p', hit, source, target, true); guard.accept('p', hit, source, target, true); guard.accept('p', hit, source, target, true);
+ ok(!guard.accept('p', hit, source, target, true), 'repeated reports cannot exceed the firing-rate budget');
+ now += 1000;
+ ok(guard.accept('p', hit, source, target, true), 'the rate budget recovers with elapsed time');
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

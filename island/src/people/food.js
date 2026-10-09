@@ -246,6 +246,7 @@ export function recordDeed(morality, kind, d = {}, pending = null) {
 
 // the player stocks a family's kitchen with `credits`: a week's good food at most
 export function helpStock(h, credits) {
+	if (!Number.isFinite(credits) || credits <= 0 || !h?.food) return 0;
 	const F = h.food, per = mouths(h) * DAY_COST * F.price;
 	const days = Math.min(7, credits / per);
 	if (days <= 0) return 0;
@@ -257,10 +258,25 @@ export function helpStock(h, credits) {
 }
 // a food bank's stock (days of a family's food it can give out), and what a gift adds
 export function makeFoodBank(id, at = null) { return { id, at, kind: 'foodbank', stock: 40, served: 0 }; }
-export function donate(bank, credits, price = 1) { const days = credits / (4 * DAY_COST * price); bank.stock += days; return +days.toFixed(1); }
+export function donate(bank, credits, price = 1) { if (!Number.isFinite(credits) || credits <= 0 || !Number.isFinite(price) || price <= 0) return 0; const days = credits / (4 * DAY_COST * price); bank.stock += days; return +days.toFixed(1); }
+// Donations supplement the ordinary food-bank service. One stock unit feeds four adult
+// portions for a day; recipients are ordered by need, regardless of housing status.
+export function serveFoodBank(bank, households = []) {
+	if (!bank || !Number.isFinite(bank.stock) || bank.stock <= 0) return 0;
+	let served = 0;
+	for (const h of households.filter(h => h.food && h.food.security !== 'secure').sort((a, b) => a.food.pantry.staples - b.food.pantry.staples)) {
+		const portions = mouths(h), days = Math.min(2, Math.max(0, 3 - h.food.pantry.staples), bank.stock * 4 / portions);
+		if (!(days > 0)) continue;
+		stock(h, days, SOURCES.foodbank); feel(h, null, 1);
+		const used = days * portions / 4; bank.stock = Math.max(0, bank.stock - used); served += used;
+	}
+	bank.served = (bank.served || 0) + served;
+	return served;
+}
 // a community garden: funded, it feeds the houses round it fresh food every day
 export function makeGarden(id, at = null) { return { id, at, kind: 'garden', funded: 0, plots: 0 }; }
 export function fundGarden(g, credits, households = []) {
+	if (!Number.isFinite(credits) || credits <= 0) return g.plots;
 	g.funded += credits;
 	g.plots = Math.min(24, Math.floor(g.funded / 60));
 	// the nearest houses get a plot each
@@ -270,6 +286,7 @@ export function fundGarden(g, credits, households = []) {
 }
 // fish or game brought in for a village: kilograms to days of protein, shared out
 export function feedVillage(households, kg) {
+	if (!Number.isFinite(kg) || kg <= 0) return 0;
 	const days = kg / 0.25;                                 // a quarter kilo a person a day
 	const M = households.reduce((a, h) => a + mouths(h), 0) || 1;
 	// (each house its share: the same days of meals for every house, whatever its size)

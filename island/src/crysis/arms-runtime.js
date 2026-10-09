@@ -146,6 +146,12 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	const C = core || { ARMS_CATALOG, SOURCE_CATALOG, TRANSACTION_KINDS, ACTIVITIES, applyInventoryTransaction, canAttemptTheft, createInventoryRepository, createInventoryState, getItem, listOffers, resolveTheftAttempt, inventorySummary };
 	const repository = C.createInventoryRepository({ storage: browserStorage(), key: storageKey, ownerId });
 	let state = repository.load();
+	let tradeLocks = new Set();
+	function transact(tx, options) {
+		if (tradeLocks.size && ![...tradeLocks].some((id) => tx.id === `trade:${id}` || tx.id === `trade:${id}:undo`)) return { ok: false, state, receipt: { message: 'Finish the pending trade before changing gear or spending credits.' } };
+		return C.applyInventoryTransaction(state, tx, options);
+	}
+	function lockTrades(ids = []) { tradeLocks = new Set(ids); }
 	if (!state.updatedAt && startingCredits > 0) { state = C.createInventoryState(ownerId, { credits: startingCredits }); repository.save(state); }
 	let lastNearby = [], lastPosition = null, scanClock = 0, sequence = 0;
 	function rawSites(position = null) {
@@ -201,7 +207,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	}
 	function purchase(source, item) {
 		const offer = offerFor(source, item.id), tx = { id: txId('purchase', item.id, source.sourceId), kind: TRANSACTION_KINDS.PURCHASE, sourceId: source.sourceId, itemId: item.id, quantity: 1, ...(offer ? { unitPrice: offer.unitPrice, offer } : {}) };
-		const out = C.applyInventoryTransaction(state, tx, { expectedRevision: state.revision }); if (out.ok && !out.duplicate) save(out.state); return out;
+		const out = transact(tx, { expectedRevision: state.revision }); if (out.ok && !out.duplicate) save(out.state); return out;
 	}
 	function secure(source, item, context) {
 		if (source.sourceId !== ACQUISITION_SOURCES.POLICE_STATION) return result(false, 'secure', `${source.name} has no recoverable secure cache in the current world.`);
@@ -212,7 +218,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 			if (heatDelta) save({ ...state, heat: Math.min(100, state.heat + heatDelta), updatedAt: now() });
 			return result(false, 'secure', `The attempt failed and the local alert state changed: ${attempt.outcome}.`, { outcome: attempt.outcome, heatDelta });
 		}
-		const tx = { id: txId('steal', item.id, source.sourceId), kind: TRANSACTION_KINDS.STEAL, sourceId: source.sourceId, itemId: item.id, quantity: 1, theftProof: attempt.proof }, out = C.applyInventoryTransaction(state, tx, { expectedRevision: state.revision });
+		const tx = { id: txId('steal', item.id, source.sourceId), kind: TRANSACTION_KINDS.STEAL, sourceId: source.sourceId, itemId: item.id, quantity: 1, theftProof: attempt.proof }, out = transact(tx, { expectedRevision: state.revision });
 		if (out.ok && !out.duplicate) save(out.state);
 		return out.ok ? result(true, 'secure', `Secured ${item.name} from ${source.name}. Local heat rose by ${attempt.heatDelta}; consequences remain in the world state.`, { outcome: attempt.outcome, receipt: out.receipt }) : result(false, 'secure', out.receipt?.message || 'The cache would not open.');
 	}
@@ -226,6 +232,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		const message = `Hunt started with ${item.name} near ${source.name}. Follow the marked trail and return when the encounter is complete.`; hint(message, 4500); return result(true, 'hunt', message, { hunt: entry });
 	}
 	function execute(request, context = {}) {
+		if (tradeLocks.size) return result(false, 'trade', 'Finish the pending trade before changing gear or spending credits.');
 		const parsed = typeof request === 'string' ? parseArmsRequest(request) : request || { kind: 'none' }; if (!parsed || parsed.kind === 'none') return result(false, 'none', null);
 		const source = nearestSource(parsed, context.position || lastPosition);
 		if (parsed.kind === 'describe') return result(true, 'describe', source ? `Nearby: ${source.name}. Ask to buy, secure, or hunt and I will use its authored game rules.` : 'No equipment source is nearby. Ask me for a supermarket, outfitter, police station or player market.');
@@ -234,7 +241,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		if (!item) return result(false, parsed.kind, 'That piece of gear is not in the game catalog. Try a rifle, carbine, bow or home supplies.');
 		// Generated sites without a stock override use the gameplay core's authored
 		// source offers. Explicit world stock remains authoritative for dynamic vendors.
-		if (source.stockExplicit && source.stock.length && !source.stock.includes(item.id) && parsed.kind !== 'hunt') return result(false, parsed.kind, `${source.name} does not list ${item.name}.`);
+		if (source.stockExplicit && !source.stock.includes(item.id) && parsed.kind !== 'hunt') return result(false, parsed.kind, `${source.name} does not list ${item.name}.`);
 		if (parsed.kind === 'purchase') { const out = purchase(source, item); return out.ok ? result(true, parsed.kind, `Purchased ${item.name} from ${source.name}. It is now in your persistent gear.`, { receipt: out.receipt }) : result(false, parsed.kind, out.receipt?.message || 'That purchase could not be completed.', { receipt: out.receipt }); }
 		if (parsed.kind === 'secure') return secure(source, item, context);
 		if (parsed.kind === 'hunt') return hunt(source, item);
@@ -249,7 +256,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	function shopSheet(siteId, position = lastPosition) {
 		const source = shopFor(siteId, position);
 		if (!source) return null;
-		const offers = C.listOffers(source.sourceId).filter((offer) => offer.mode === 'purchase' && (!source.stockExplicit || !source.stock.length || source.stock.includes(offer.itemId)));
+		const offers = C.listOffers(source.sourceId).filter((offer) => offer.mode === 'purchase' && (!source.stockExplicit || source.stock.includes(offer.itemId)));
 		const buy = offers.map((offer) => ({ itemId: offer.itemId, name: offer.name, price: offer.unitPrice, owned: state.items?.[offer.itemId] || 0 }));
 		const sell = Object.values(state.instances || {}).map((x) => ({ uid: x.u, itemId: x.i, l: x.l, t: x.t, name: findItem(x.i)?.name || x.i, price: sellPrice(x.i, source.sourceId, x) })).filter((row) => row.price != null).sort((a, b) => b.price - a.price);
 		const upgrades = source.sourceId === ACQUISITION_SOURCES.NPC_TRADER;
@@ -257,7 +264,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	}
 	function buy(siteId, itemId, position = lastPosition) {
 		const source = shopFor(siteId, position), item = findItem(itemId);
-		if (!source || !item) return result(false, 'purchase', 'That is not for sale here.');
+		if (!source || !item || (source.stockExplicit && !source.stock.includes(itemId))) return result(false, 'purchase', 'That is not for sale here.');
 		const out = purchase(source, item);
 		return out.ok ? result(true, 'purchase', `Bought ${item.name}.`, { receipt: out.receipt }) : result(false, 'purchase', out.receipt?.message || 'That purchase could not be completed.');
 	}
@@ -267,7 +274,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		const source = shopFor(siteId, position), item = inst && findItem(inst.i);
 		if (!source || !item) return result(false, 'sell', 'This place does not buy that.');
 		const tx = { id: txId('sell', item.id, source.sourceId), kind: TRANSACTION_KINDS.SELL, sourceId: source.sourceId, itemId: item.id, uid: inst.u, quantity: 1, unitPrice: sellPrice(item.id, source.sourceId, inst) ?? undefined };
-		const out = C.applyInventoryTransaction(state, tx, { expectedRevision: state.revision });
+		const out = transact(tx, { expectedRevision: state.revision });
 		if (out.ok && !out.duplicate) save(out.state);
 		return out.ok ? result(true, 'sell', `Sold ${item.name} for ${out.receipt.total} credits.`, { receipt: out.receipt }) : result(false, 'sell', out.receipt?.message || 'That sale could not be completed.');
 	}
@@ -277,22 +284,28 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 		if (which && !inst) return result(false, 'hold', 'You do not have that.');
 		const tx = inst ? { id: txId('equip', inst.i, 'hand'), kind: TRANSACTION_KINDS.EQUIP, uid: inst.u, slot: 'hand' } : { id: txId('unequip', 'hand', 'hand'), kind: TRANSACTION_KINDS.UNEQUIP, slot: 'hand' };
 		if (!inst && !state.equipped?.hand) return result(true, 'hold', null);
-		const out = C.applyInventoryTransaction(state, tx, { expectedRevision: state.revision });
+		const out = transact(tx, { expectedRevision: state.revision });
 		if (out.ok && !out.duplicate) save(out.state);
 		return result(out.ok, 'hold', out.ok ? null : out.receipt?.message);
 	}
 	// one side of a trade with a friend (gameplay/trade.js builds it; its id makes it land once)
 	function apply(tx) {
-		const out = C.applyInventoryTransaction(state, tx);
+		const out = transact(tx);
 		if (out.ok && !out.duplicate) save(out.state);
 		return { ok: out.ok, duplicate: !!out.duplicate, message: out.receipt?.message || '' };
+	}
+	// Food and community actions spend the same wallet as shops and gear.
+	function spendCredits(amount, context = {}) {
+		if (!Number.isInteger(amount) || amount < 0 || amount > 1e6) return false;
+		if (!amount) return true;
+		return apply({ id: context.id || txId('community', 'credits', context.kind), kind: TRANSACTION_KINDS.TRADE, peer: 'community', give: { credits: amount, items: [] }, get: { credits: 0, items: [] } }).ok;
 	}
 	// one level more for an item, at an outfitter near you
 	function upgrade(uid, siteId, position = lastPosition) {
 		const inst = state.instances?.[uid], source = shopFor(siteId, position);
 		if (!inst || !canUpgrade(inst)) return result(false, 'upgrade', inst ? 'That is already at its highest level.' : 'You do not have that.');
 		if (source?.sourceId !== ACQUISITION_SOURCES.NPC_TRADER) return result(false, 'upgrade', 'Upgrades are done at an outfitter, a ranger camp or a trader.');
-		const out = C.applyInventoryTransaction(state, { id: txId('upgrade', inst.i, source.sourceId), kind: TRANSACTION_KINDS.UPGRADE, uid, sourceId: source.sourceId, cost: upgradePrice(inst) }, { expectedRevision: state.revision });
+		const out = transact({ id: txId('upgrade', inst.i, source.sourceId), kind: TRANSACTION_KINDS.UPGRADE, uid, sourceId: source.sourceId, cost: upgradePrice(inst) }, { expectedRevision: state.revision });
 		if (out.ok && !out.duplicate) save(out.state);
 		return out.ok ? result(true, 'upgrade', `${findItem(inst.i).name} is level ${inst.l + 1} now.`, { receipt: out.receipt }) : result(false, 'upgrade', out.receipt?.message || 'That upgrade could not be done.');
 	}
@@ -300,7 +313,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	function combine(uid, other) {
 		const a = state.instances?.[uid], b = state.instances?.[other];
 		if (!canCombine(a, b)) return result(false, 'combine', 'Only two of the same item and tier combine, below Legendary.');
-		const out = C.applyInventoryTransaction(state, { id: txId('combine', a.i, 'self'), kind: TRANSACTION_KINDS.COMBINE, uid, with: other }, { expectedRevision: state.revision });
+		const out = transact({ id: txId('combine', a.i, 'self'), kind: TRANSACTION_KINDS.COMBINE, uid, with: other }, { expectedRevision: state.revision });
 		if (out.ok && !out.duplicate) save(out.state);
 		return out.ok ? result(true, 'combine', `${findItem(a.i).name} is ${['Common', 'Fine', 'Superior', 'Masterwork', 'Legendary'][a.t + 1]} now.`) : result(false, 'combine', out.receipt?.message || 'Those would not combine.');
 	}
@@ -309,7 +322,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	function train(uid, xp) {
 		if (!state.instances?.[uid]) return;
 		const before = state.instances[uid].l;
-		const out = C.applyInventoryTransaction(state, { id: txId('train', state.instances[uid].i, 'xp'), kind: TRANSACTION_KINDS.TRAIN, uid, xp, at: now() });
+		const out = transact({ id: txId('train', state.instances[uid].i, 'xp'), kind: TRANSACTION_KINDS.TRAIN, uid, xp, at: now() });
 		if (!out.ok) return;
 		save(out.state);
 		if (out.state.instances[uid].l > before) hint(`${findItem(out.state.instances[uid].i).name} reached level ${out.state.instances[uid].l}.`, 3500);
@@ -327,7 +340,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 
 	function command(text, context = {}) { return execute(parseArmsRequest(text), context); }
 	function update(dt = 0, position = null) { scanClock -= Math.max(0, +dt || 0); if (position && (scanClock <= 0 || !lastPosition || distance(position, lastPosition) > 8)) { scanClock = 0.5; nearby(position); } return lastNearby; }
-	return { catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), upgrade, combine, train, carry, apply, applied, canAttemptTheft: (input) => C.canAttemptTheft(input) };
+	return { catalog: () => catalogEntries().map(copy), state: () => copy(state), nearby, sources: () => allSources(lastPosition).map(copy), info, snapshot: info, parse: parseArmsRequest, command, execute, update, offers: (sourceId) => C.listOffers(sourceId), shops, shopSheet, buy, sell, hold, held: () => (state.hand && state.instances?.[state.hand] ? { ...state.instances[state.hand] } : null), upgrade, combine, train, carry, apply, applied, spendCredits, lockTrades, locked: () => tradeLocks.size > 0, canAttemptTheft: (input) => C.canAttemptTheft(input) };
 }
 
 export { ARMS_CATALOG, SOURCE_CATALOG };

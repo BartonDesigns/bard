@@ -31,6 +31,7 @@ export function createWeaponView({ gear = () => null, camera }) {
 		muzzle(range = 60) {
 			const m = call(api(), 'muzzle', range);
 			if (m?.position && m?.aim?.direction) return m;
+			if (m?.position && m?.direction) { camera.getWorldDirection(_v); return { ...m, aim: { origin: camera.position.clone(), direction: _v.clone() } }; }
 			camera.getWorldDirection(_v);
 			_r.set(1, 0, 0).applyQuaternion(camera.quaternion); _u.set(0, 1, 0).applyQuaternion(camera.quaternion);
 			const position = camera.position.clone().addScaledVector(_v, 0.7).addScaledVector(_r, 0.13).addScaledVector(_u, -0.13);

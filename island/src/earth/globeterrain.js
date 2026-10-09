@@ -288,9 +288,16 @@ export function createGlobeTerrain({ scene, data, BU, isPhone }) {
 					float lying = 1.0 - smoothstep(-3.0, 0.5, air + uGSeason + (pM - 0.5) * 2.5 + (pS - 0.5) * 2.0);
 					float snowK = max(keep, lying) * (1.0 - smoothstep(0.4, 0.65, slope));
 					c = mix(c, vec3(0.86, 0.88, 0.92), snowK);
-					// the shore: sand on the gentle ground just above the water
+					// Ocean beaches and inland banks use their own materials. Lake banks stay
+					// damp soil/gravel with a grassy upper edge, not a tan ocean beach.
+					float inland = smoothstep(0.35, 0.65, vGC.y) * step(1.0, vGC.z);
 					float shore = (1.0 - smoothstep(0.0, 0.035, vGC.x)) * (1.0 - smoothstep(vGC.z + 2.0, vGC.z + 6.0, h)) * (1.0 - smoothstep(0.12, 0.3, slope));
-					c = mix(c, mix(vec3(0.62, 0.56, 0.42), gA, 0.3), shore * step(0.0, vGC.x - 0.0));
+					c = mix(c, mix(vec3(0.62, 0.56, 0.42), gA, 0.3), shore * step(0.0, vGC.x) * (1.0 - inland));
+					float bankHeight = h - vGC.z;
+					float bank = inland * (1.0 - smoothstep(0.7, 4.0, bankHeight)) * (1.0 - smoothstep(0.16, 0.45, slope));
+					vec3 bankSoil = mix(soil * 0.65, rock * 0.6, smoothstep(0.45, 0.8, m1));
+					vec3 bankGrass = mix(grass * vec3(0.65, 0.9, 0.65), bankSoil, 0.2);
+					c = mix(c, mix(bankSoil, bankGrass, smoothstep(0.2, 2.5, bankHeight)), bank * (1.0 - snowK));
 					// under water: the bed darkens
 					c = mix(c, c * vec3(0.5, 0.6, 0.6), (1.0 - smoothstep(vGC.z - 6.0, vGC.z, h)));
 					// the towns and cities round you: built ground, and their lights after dark

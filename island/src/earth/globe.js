@@ -80,11 +80,23 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		},
 	});
 
+	// The CPU uses the same mask, elevation and 30 cm bed clearance as the lake shader.
+	// Return the nearby lake level on the dry bank as well for shoreline vegetation.
+	function lakeLevel(x, z) {
+		if (!data.win.ready || bayOut(x, z) <= SEAM_A) return null;
+		height.at(x, z);
+		return height.out.lake >= 0.5 && height.out.level >= 1 ? height.out.level : null;
+	}
+	function waterAt(x, z) {
+		const level = lakeLevel(x, z);
+		return level != null && height.out.h <= level - 0.3 ? level : null;
+	}
+
 	// ---------- the woods and the towns ----------
 	const inBayWild = (x, z) => { if (!F.bay) return false; const ll = toLL(x, z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM + 10; };
 	// (the local roads come after the places they join: until then nothing is on them)
 	let lanes = null;
-	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !lanes?.onRoad(x, z, 5) && !regional.settlements.vegetationBlocked(x, z, 8) });
+	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), waterLevel: (x, z) => world()?.water?.waterAt(x, z) ?? lakeLevel(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !lanes?.onRoad(x, z, 5) && !regional.settlements.vegetationBlocked(x, z, 8) });
 	// a city the Bay already has: its towns' map, a mapped region, or one of its generated towns
 	// (a generated town where the atlas has a real one gives way to it)
 	function bayHas(x, z, r) {
@@ -304,5 +316,5 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	}
 	// finish what is being laid out now, in one go (tests, and after a jump)
 	function settle() { trees.settle(); towns.civ().flush(); roads.settle(camera); lanes.settle(camera); }
-	return { update, place, info, dispose, settle, roads, lanes, toLL, toXZ, height, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
+	return { update, place, info, dispose, settle, roads, lanes, toLL, toXZ, height, waterAt, data, terrain, trees, towns, regional, whenReady, frame: F, bayOut };
 }

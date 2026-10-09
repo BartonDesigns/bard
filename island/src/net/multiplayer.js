@@ -424,7 +424,7 @@ export function createMultiplayer({ scene, camera, world, state, share, hint, mo
 	function reset() { remotes.detach(); crowd.dispose(); clearAuto(); pin?.dispose(); pin = null; }
 
 	return {
-		available: true, update, reset, join, invite, leave, follow, unfollow, goTo,
+		available: true, update, reset, join, invite, leave, follow, unfollow, goTo, worldKey,
 		// for the gear screen: link it in, send it a message, and who is here and how far
 		link: (g) => { gear = g; drawPanel(); }, send: (m) => room.send(m), me: () => id, status: () => room.status,
 		linkCombat: (c) => { combat = c; }, isHost: () => room.isHost(), live: () => room.status === 'on',

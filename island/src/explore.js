@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { flightMultiplier } from './flight-speed.js';
+import { shotFrame } from './explore-shots.js';
 
 const EYE = 1.68;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -27,6 +28,12 @@ const WALK = [
 	{ id: 'orbit', a: 0, d: 5.5, h: 2, lh: 1.2, ahead: 0, spin: 0.14, w: 2 },
 	{ id: 'lead', a: 2.8, d: 5.5, h: 1.5, lh: 1.3, ahead: 0, spin: 0, w: 1.5 },
 	{ id: 'wide', a: 0.9, d: 16, h: 5, lh: 1, ahead: 3, spin: 0, w: 1.5 },
+	{ id: 'establish', a: .7, d: 28, h: 16, lh: 1, ahead: 8, spin: .012, w: 2,
+		end: { a: 1, d: 34, h: 20, ahead: 12 } },
+	{ id: 'crane', a: 1.2, d: 8, h: 2, lh: 1.2, ahead: 2, spin: 0, w: 2,
+		end: { a: .7, d: 16, h: 12, ahead: 6 } },
+	{ id: 'reveal', a: 1.5, d: 11, h: 1.3, lh: 1.2, ahead: 3, spin: 0, w: 1.5,
+		end: { a: 1.1, d: 15, h: 6, lh: 2, ahead: 9 } },
 	{ id: 'pov', pov: true, w: 1 },
 ];
 // flying there is no body: the shots look ahead along the way (in units of the speed's scale)
@@ -37,6 +44,10 @@ const FLY = [
 	{ id: 'low', a: 0.6, d: 0.6, h: -0.35, lh: -0.3, ahead: 4, spin: 0, w: 1.5 },
 	{ id: 'side', a: 1.4, d: 1, h: 0.2, lh: -0.25, ahead: 3, spin: 0, w: 1.5 },
 	{ id: 'orbit', a: 0, d: 1, h: 0.5, lh: -0.3, ahead: 0.6, spin: 0.1, w: 1 },
+	{ id: 'establish', a: .7, d: 2.2, h: 1.5, lh: -.5, ahead: 5, spin: .01, w: 2,
+		end: { a: 1, d: 2.8, h: 2, ahead: 7 } },
+	{ id: 'crane', a: 1.4, d: 1, h: .15, lh: -.3, ahead: 3, spin: 0, w: 2,
+		end: { a: .8, d: 1.8, h: 1.5, ahead: 5 } },
 ];
 const SPACE = [{ id: 'ahead', w: 2 }, { id: 'gaze', w: 3 }, { id: 'side', w: 1.5 }, { id: 'drift', w: 1.5 }];
 // a new place: the music moves to another key (semitones over the faceplate's root) and section
@@ -174,6 +185,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		C.seen = n;
 		C.age = (C.age || 0) + Math.max(1, n - prev);
 		if (!C.shot) { pick(now, n, true, at); return; }
+		if (C.shot.end && now - C.shotAt < Math.max(12000, C.barMs * 4)) return;
 		// (a cut on a phrase or a new section; an eased move on the bars between)
 		if (C.age >= 4 && (fresh || Math.floor(n / 8) > Math.floor(prev / 8))) pick(now, n, true, at);
 		else if (C.age >= 3 && Math.floor(n / 4) > Math.floor(prev / 4)) pick(now, n, false, at);
@@ -187,7 +199,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		// (into or out of the eyes is always a cut)
 		const pov = next.pov || C.shot?.pov;
 		C.cut = cut || !!pov || !C.shot;
-		C.shot = next; C.age = 0; C.spin = 0;
+		C.shot = next; C.age = 0; C.spin = 0; C.shotAt = now;
 		if (S.shots.length < 400) S.shots.push({ shot: next.id, cut: C.cut, bar: n, ms: Math.round(now - at), mode: C.kind });
 	}
 
@@ -425,6 +437,7 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 		const sy = fly ? P.pos.y : feet;
 		const scale = fly ? clamp(Math.hypot(P.vel.x, P.vel.z) * 0.9, 14, 600) : H.mode === 'drive' && !drive.state.onTrail ? 1.7 : 1;
 		const sh = C.shot;
+		const frame = shotFrame(sh, now - C.shotAt, Math.max(12000, C.barMs * 4));
 		// your body in the shot, on foot; not in your own eyes
 		you.state.third = !fly && H.mode === 'walk' && !sh.pov;
 		if (you.state.third && !avatar.me) avatar.ready();
@@ -439,11 +452,11 @@ export function createExplore({ world, camera, drive, music, you, avatar, mount,
 			return;
 		}
 		// where the shot wants the camera, round the subject's eased heading
-		const th = C.yaw + (sh.a || 0) + C.spin + H.look * 0.8, bx = Math.sin(th), bz = Math.cos(th);
-		const d = sh.d * scale * (1 - 0.05 * C.punch * (0.5 + e)), h = sh.h * scale + C.lift;
+		const th = C.yaw + frame.a + C.spin + H.look * 0.8, bx = Math.sin(th), bz = Math.cos(th);
+		const d = frame.d * scale, h = frame.h * scale + C.lift;
 		V.set(bx * d, h, bz * d);
 		const fx = -Math.sin(C.yaw), fz = -Math.cos(C.yaw);
-		V2.set(fx * sh.ahead * scale, sh.lh * scale + H.lookP * 3 * scale, fz * sh.ahead * scale);
+		V2.set(fx * frame.ahead * scale, frame.lh * scale + H.lookP * 3 * scale, fz * frame.ahead * scale);
 		const k = C.cut ? 1 : 1 - Math.exp(-dt * 0.7);
 		C.off.lerp(V, k); C.lookOff.lerp(V2, k);
 		C.cut = false;

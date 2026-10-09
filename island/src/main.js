@@ -553,7 +553,10 @@ export function createIslandWorld() {
 	const people = createPeople(scene, () => world, camera);
 	guideApi.people = people;
 	// households, their days and their food, and the moments of it you see (people/family-life.js)
-	const families = HOOKS.families = createFamilyLife({ scene, world: () => world, camera, people, isPhone, morality: () => HOOKS.morality || null });
+	const families = HOOKS.families = createFamilyLife({ scene, world: () => world, camera, people, isPhone, mount: dom.mount, hint,
+		wallet: { credits: () => arms.state().credits, spend: c => arms.spendCredits(c, { reason: 'community-aid' }) },
+		releaseBody: P => ragdolls.release(P), morality: () => HOOKS.morality || null });
+	addTalkers(() => families.actors().filter(p => p.active && p.P.root.visible));
 	const social = createNpcSocial({ scene, world: () => world, camera, people, isPhone, hint });
 	addTalkers(() => world?.underworld?.village?.()?.folk.filter(p => !p.socialOwned && p.P.root.visible) || []);
 	guideApi.social = social;
@@ -690,7 +693,7 @@ export function createIslandWorld() {
 	// your gear, shops and trading with friends (ui/gear.js)
 	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
-	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => people, ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -1059,7 +1062,7 @@ export function createIslandWorld() {
 			// (the ground as the GPU draws it, where people stand: bay/terrain.js)
 			island.drawnAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.drawnAt(x, z, island.heightAt);
 			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
-			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? world?.water?.waterAt(x, z) ?? null;
+			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? world?.water?.waterAt(x, z) ?? world?.globe?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
@@ -1112,6 +1115,9 @@ export function createIslandWorld() {
 	function teardown() {
 		if (!world) return;
 		picnic.clear();
+		HOOKS.combat?.reset();
+		HOOKS.gear?.suspend();
+		families.clear();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
 		social.reset();
@@ -1718,6 +1724,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		world?.orbit?.pause?.();
 		picnic.pause();
 		social.update(0, time, false); social.flush();
 		world?.labels?.hide();
@@ -1809,9 +1816,9 @@ export function createIslandWorld() {
 		const params = dest.earth ? { seed: 1337, earth: true } : { seed: dest.seed, biome: dest.type, earth: false, origin: { seed: dest.seed, type: dest.type, id: `warp-${dest.type.toLowerCase()}`, earth: false } };
 		await api.open(params);
 		const P = world?.player.state;
-		if (!P) return false;
+		if (!P || !visible || !sameBody(state.body, worldBody(params))) return false;
 		if (dest.colony && world.colony?.port) { world.colony.go(); return true; }
-		if (dest.beyond && world.beyond) { world.beyond.enter(true); return true; }
+		if (dest.beyond) { if (!world.beyond) return false; world.beyond.enter(true); return true; }
 		if (dest.orbit) {
 			P.flying = true; P.vel.set(0, 0, 0); P.pos.y = dest.orbit; P.pitch = -1.1; P.boost = 1;
 			camera.position.copy(P.pos);
@@ -1843,6 +1850,9 @@ export function createIslandWorld() {
 			return true;
 		},
 		close() {
+			HOOKS.combat?.reset();
+			HOOKS.gear?.suspend();
+			families.clear();
 			hide();
 			window.L99IslandDoor?.closed?.();
 		},

@@ -20,6 +20,7 @@ import { F, toXZ, RAD, EARTH_R, lonRaw } from './globeframe.js';
 import { vn3, S0 } from './globeheight.js';
 import { today } from '../calendar.js';
 import { spruce } from '../region/flora.js';
+import { shoreVegetation } from './shore.js';
 
 const FORMS = ['broad', 'conifer', 'palm', 'bush'];
 const WORDS = [
@@ -44,7 +45,7 @@ function palmTree(seed) {
 	return { parts: [trunk.geometry(), b.geometry()], height: H + 1 };
 }
 
-export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allowed }) {
+export function createGlobeTrees({ scene, shared, data, heightAt, waterLevel = () => null, isPhone, allowed }) {
 	const group = new THREE.Group();
 	group.name = 'globe trees';
 	scene.add(group);
@@ -127,6 +128,8 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 				if (cell.TREES < 0.05 && cell.RAIN < 150) continue;
 				const h = heightAt(p.x, p.z);
 				if (h < 1) continue;
+				const bank = shoreVegetation(h, waterLevel(p.x, p.z), hash(row, col, 97));
+				if (bank === 'none') continue;
 				const e = step * 0.5, slope = Math.hypot(heightAt(p.x + e, p.z) - h, heightAt(p.x, p.z + e) - h) / e;
 				const W = woodAt(la, lo, h, slope, cell);
 				// wooded ground: trees; open ground: a few bushes and the odd tree
@@ -144,6 +147,7 @@ export function createGlobeTrees({ scene, shared, data, heightAt, isPhone, allow
 				if ((q -= wC) < 0) form = 'conifer'; else if ((q -= wP) < 0) form = 'palm'; else if ((q -= wB) < 0) form = 'bush'; else form = 'broad';
 				// (naturalist: a lone tree on dry open ground is a juniper or a pinyon, not an oak)
 				if (open && dry > 0.5 && form === 'broad' && !mix.treeless) form = 'conifer';
+				if (bank === 'bush') form = 'bush';
 				const s = form === 'bush' ? 0.8 + hash(row, col, 23) * 0.9 : (0.65 + hash(row, col, 29) * 0.6) * (1 - sst(-1, -4, W.air) * 0.4) * (open && dry > 0.5 ? 0.3 : 1);
 				out.push({ x: p.x, y: h - 0.2, z: p.z, s, a: hash(row, col, 31) * 6.283, form, t: hash(row, col, 37), la });
 				if (++n % 60 === 0) yield;

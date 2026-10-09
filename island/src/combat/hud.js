@@ -15,7 +15,7 @@ const CSS = `
 .cb-dmg{position:absolute;left:50%;top:50%;width:0;height:0}
 .cb-dmg i{position:absolute;left:-34px;top:-118px;width:68px;height:22px;border-radius:50% 50% 0 0/100% 100% 0 0;border-top:4px solid rgba(255,90,60,.9);opacity:0;transform-origin:34px 118px;filter:drop-shadow(0 0 4px rgba(255,60,30,.7))}
 .cb-edge{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(150,30,20,.55) 100%);transition:opacity .25s}
-.cb-hp{position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + 22px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);opacity:0;transition:opacity .4s}
+.cb-hp{position:absolute;left:50%;bottom:calc(var(--l99-low,88px) + 86px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(260px,52vw);opacity:0;transition:opacity .4s}
 .cb-bar{height:5px;border-radius:3px;background:rgba(10,16,20,.55);overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
 .cb-bar>div{height:100%;width:100%;transform-origin:left;transition:transform .12s}
 .cb-hp .cb-arm{height:3px;margin-bottom:3px}.cb-hp .cb-arm>div{background:#7fc8ff}.cb-hp .cb-life>div{background:linear-gradient(90deg,#4fe0a8,#b8f5d6)}
@@ -102,6 +102,7 @@ export function createHud({ mount, touch = false }) {
 		// once a frame: S = { show, spread (px), health: { hp, max, armour, armourMax }, weapon: {
 		// name, mag, reserve, mode, reloading }, boss: { name, phase, frac, notches }, stars, ko }
 		update(dt, S) {
+			root.style.display = S.show ? '' : 'none';
 			const vis = S.show && !S.ko;
 			cross.style.opacity = vis && S.weapon && !S.aiming ? '1' : vis && S.weapon ? '0.35' : '0';
 			const g = Math.max(3, Math.min(60, S.spread || 4));

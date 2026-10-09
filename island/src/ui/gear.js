@@ -44,6 +44,16 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	const P = () => world()?.player?.state;
 	const where = () => { const p = P()?.pos; return p ? { x: p.x, y: p.y, z: p.z } : null; };
 	const near = (sh) => !!sh && (!Number.isFinite(sh.distance) || sh.distance <= SHOP_REACH);
+	let thirdAimHeld = false, thirdAimTap = false;
+	const canvas = renderer?.domElement;
+	const setAim = (on) => { thirdAimTap = !!on; hand.aim(on); vm.aim(on); };
+	addEventListener('pointerdown', (e) => { if (e.button === 2 && e.target === canvas && thirdNow() && !busy() && !shown() && !win.shown()) { thirdAimHeld = true; e.preventDefault(); } });
+	addEventListener('pointerup', (e) => { if (e.button === 2) thirdAimHeld = false; });
+	addEventListener('blur', () => { thirdAimHeld = false; });
+	addEventListener('contextmenu', (e) => { if (e.target === canvas && thirdNow() && weaponOf((preview || arms.held())?.i)) e.preventDefault(); });
+	const thirdAimBtn = (isPhone || globalThis.matchMedia?.('(pointer: coarse)')?.matches) ? button('Aim', 'Aim held item', 'display:none;', 'thumb mode 20') : null;
+	if (thirdAimBtn) { stopAll(thirdAimBtn); thirdAimBtn.onclick = () => setAim(!thirdAimTap); mount.appendChild(thirdAimBtn); }
+
 
 	// ---------- the sheet ----------
 	const sheet = stopAll(el('div', 'g99-frame'));
@@ -235,7 +245,9 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	let activeId = null, invite = null;
 	const active = () => (activeId && trades.get(activeId)) || null;
 	try { for (const T of JSON.parse(store.get(KEEP_KEY) || '[]')) if (T?.id && Array.isArray(T.sides?.a?.items)) trades.set(T.id, T); } catch { /* none kept */ }
-	function keep() { const now = Date.now(); store.set(KEEP_KEY, JSON.stringify([...trades.values()].filter((T) => worthKeeping(T, now)))); }
+	let keptSig = null;
+	function keep() { const now = Date.now(), kept = [...trades.values()].filter((T) => worthKeeping(T, now)), sig = JSON.stringify(kept); if (sig === keptSig) return; keptSig = sig; store.set(KEEP_KEY, sig); arms.lockTrades?.(kept.map((T) => T.id)); }
+	keep();
 	const send = (T, list) => { for (const m of list || []) multiplayer.send({ t: 'trade', to: T.peer, ...m }); };
 	const ctxFor = (peer) => ({ now: Date.now(), apply: (tx) => arms.apply(tx), applied: (id) => arms.applied(id), peer, peerName: multiplayer.friend(peer)?.name || '' });
 	// a step of a trade: kept, its messages sent, and its outcome said
@@ -335,6 +347,10 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		const H = preview || arms.held();
 		hand.set(H?.i || null, H?.l || 1, H?.t || 0);
 		const me = avatar?.me, third = !!(self?.state?.third && me);
+		const canAim = third && on && !shown() && !win.shown() && !Ps.swimming && !arms.locked?.() && !!weaponOf(H?.i);
+		if (!third || !on) thirdAimHeld = thirdAimTap = false;
+		hand.aim(canAim && (thirdAimHeld || thirdAimTap)); hand.aimPitch(Ps?.pitch || 0);
+		if (thirdAimBtn) { thirdAimBtn.style.display = canAim ? 'flex' : 'none'; thirdAimBtn.setAttribute('aria-pressed', String(thirdAimHeld || thirdAimTap)); }
 		if (third) hand.follow(me.P, Math.atan2(-Math.sin(Ps?.yaw || 0), -Math.cos(Ps?.yaw || 0)), on && !Ps.swimming, me.M, time, dt);
 		else hand.hide();
 		if (Ps) vm.update(dt, H, Ps, on && !third && !Ps.swimming && !win.shown(), world(), time);
@@ -356,6 +372,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 			const res = tick(X, now, ctxFor(X.peer));
 			if (res.T !== X) step(res);
 		}
+		keep();
 		drawTrade();
 		// the sheet, redrawn when what it shows changes (never under a finger in a field)
 		if (shown()) {
@@ -366,7 +383,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	}
 
 	const api = {
-		update, open, close, heard,
+		update, open, close, heard, suspend: () => { close(); win.close(); thirdAimHeld = thirdAimTap = false; hand.dispose(); vm.aim(false); if (P()) vm.update(0, null, P(), false, world(), performance.now() / 1000); if (thirdAimBtn) thirdAimBtn.style.display = 'none'; }, busy: () => shown() || win.shown(),
 		held: () => arms.held(),
 		// beside each friend in the room panel and on their tag
 		actions: (r) => [['Trade', () => ask(r.id)]],
@@ -376,17 +393,17 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		weapon: {
 			fire: () => (thirdNow() ? hand.fire(3) : vm.fire()),
 			reload: (done) => (thirdNow() ? hand.reload(done, 3) : vm.reload(done)),
-			aim: (on) => vm.aim(on),
+			aim: setAim,
 			equip: (id) => { preview = null; return arms.hold(id); },
 			holster: () => { preview = null; return arms.hold(null); },
 			muzzle: () => (thirdNow() ? hand.muzzle() : vm.muzzle()),
 			data: (id) => weaponOf(id || (preview || arms.held())?.i),
-			state: () => { const H = preview || arms.held(); return { held: H?.i || null, third: thirdNow(), reloading: thirdNow() ? hand.reloading : vm.reloading, aiming: vm.aiming, ready: !!H && (thirdNow() ? !hand.reloading : vm.shown && !vm.reloading) }; },
+			state: () => { const H = preview || arms.held(); return { held: H?.i || null, third: thirdNow(), reloading: thirdNow() ? hand.reloading : vm.reloading, aiming: thirdNow() ? hand.aiming : vm.aiming, ready: !!H && (thirdNow() ? !hand.reloading : vm.shown && !vm.reloading) }; },
 		},
 		// the held item and your hands, drawn over the frame (main.js, after the world)
 		post: (renderer) => vm.render(renderer),
 		// Crysis.viewmodel({ hold: [id, level, tier], aim: true }): a look without owning it
-		viewmodel: (o = {}) => { if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) vm.aim(o.aim); const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
+		viewmodel: (o = {}) => { if (o.hold !== undefined) preview = o.hold ? { i: o.hold[0], l: o.hold[1] || 1, t: o.hold[2] || 0 } : null; if (o.aim !== undefined) setAim(o.aim); const me = avatar?.me, yaw = P()?.yaw || 0; return { ...vm.info(), third: me && self?.state?.third ? hand.info(me.P, Math.atan2(-Math.sin(yaw), -Math.cos(yaw))) : null }; },
 	};
 	multiplayer?.link?.(api);
 	return api;

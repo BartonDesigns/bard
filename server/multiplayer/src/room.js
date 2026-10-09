@@ -5,6 +5,8 @@
 
 import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, ID_RE } from '../../../island/src/net/protocol.js';
 
+import { createCombatGuard } from './combat-guard.js';
+
 const SWEEP_MS = 15000;
 // close codes the game understands
 export const CLOSE = { ended: 4000, replaced: 4001, noRoom: 4404, stale: 4408, full: 4409, tooBig: 4413, tooFast: 4429 };
@@ -19,6 +21,8 @@ export class Room {
 		this.seen = new Map();
 		this.bucket = new Map();
 		this.poses = new Map();
+		this.combat = new Map();
+		this.combatGuard = createCombatGuard();
 		this.spots = new Map();
 		this.wokeAt = Date.now();
 		try { state.setWebSocketAutoResponse?.(new globalThis.WebSocketRequestResponsePair('ping', 'pong')); } catch { /* not in tests */ }
@@ -164,7 +168,9 @@ export class Room {
 			case 'fx': {
 				// shots friends see: passed to everyone else
 				const f = cleanFx(m);
-				if (f) this.broadcast({ t: 'fx', id: a.id, ...f }, ws);
+				const pose = this.poses.get(a.id);
+				if (!f || !pose?.w || f.s.some((q) => Math.hypot(q[0] - pose.p[0], q[1] - pose.p[1], q[2] - pose.p[2]) > 20)) return;
+				for (const s of this.sockets()) if (s !== ws && this.poses.get(this.info(s).id)?.w === pose.w) this.send(s, { t: 'fx', id: a.id, ...f });
 				return;
 			}
 			case 'hit': {
@@ -173,13 +179,16 @@ export class Room {
 				const { to, ...rest } = h;
 				if (to) {
 					// on another player: only when the room has PvP on
-					if (!meta.rules?.pvp || to === a.id) return;
+					if (!meta.rules?.pvp || to === a.id || (h.id !== 'me' && h.id !== 'rp:' + to)) return;
+					if (!this.combatGuard.accept(a.id, h, this.poses.get(a.id), this.poses.get(to), true)) return;
 					const s = this.sockets().find((x) => this.info(x).id === to);
-					if (s) this.send(s, { t: 'hit', from: a.id, ...rest });
+					if (s) this.send(s, { t: 'hit', from: a.id, ...rest, id: 'me' });
 					return;
 				}
 				// on something shared: the host decides
 				if (host) return;
+				const boss = this.combat.get(h.id);
+				if (!boss || boss.dead || !this.combatGuard.accept(a.id, h, this.poses.get(a.id), { w: boss.w, p: [boss.x, boss.y, boss.z], radius: 45 })) return;
 				const hs = this.sockets().find((x) => this.info(x).id === meta.host);
 				if (hs) this.send(hs, { t: 'hit', from: a.id, ...rest });
 				return;
@@ -188,7 +197,14 @@ export class Room {
 				// the host's word on bosses and squads
 				if (!host) return;
 				const c = cleanCombatState(m);
-				if (c) this.broadcast({ t: 'cs', ...c }, ws);
+				const pose = this.poses.get(a.id);
+				if (!c || !pose?.w || (c.b && c.b.w !== pose.w)) return;
+				if (c.b) {
+					if (this.combat.size >= 24 && !this.combat.has(c.b.id)) this.combat.delete(this.combat.keys().next().value);
+					this.combat.set(c.b.id, { ...c.b, dead: false });
+				}
+				for (const [id, , , dead] of c.e) { const b = this.combat.get(id); if (b) b.dead = !!dead; }
+				for (const s of this.sockets()) if (s !== ws && this.poses.get(this.info(s).id)?.w === pose.w) this.send(s, { t: 'cs', ...c });
 				return;
 			}
 			case 'rules': {
@@ -218,7 +234,7 @@ export class Room {
 		if (!a || a.gone) return;
 		ws.serializeAttachment({ ...a, gone: true });
 		try { ws.close(1000, 'bye'); } catch { /* already */ }
-		this.poses.delete(a.id); this.spots.delete(a.id); this.seen.delete(a.id); this.bucket.delete(a.id);
+		this.poses.delete(a.id); this.spots.delete(a.id); this.seen.delete(a.id); this.bucket.delete(a.id); this.combatGuard.clear(a.id);
 		const meta = await this.load();
 		if (!meta || meta.ended) return;
 		this.broadcast({ t: 'leave', id: a.id });

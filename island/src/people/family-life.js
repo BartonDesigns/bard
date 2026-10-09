@@ -21,13 +21,16 @@ import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
 import { createMotion } from './motion.js';
 import { fadePerson } from './fade.js';
 import { makeTeen } from './teens.js';
-import { makeHousehold, makeHouseholds, describe, minorsOf, rng } from './households.js';
+import { makeHousehold, makeHouseholds, describe, minorsOf, schoolOf, stageOf, rng } from './households.js';
 import { planDay, whereAt } from './schedules.js';
-import { foodFor, liveDay, questsFor, recordDeed, helpStock, donate, makeFoodBank, makeGarden, fundGarden, feedVillage, cookFor, summary, storyOf, wellOf, mannerOf, ACCESS } from './food.js';
+import { foodFor, liveDay, questsFor, recordDeed, helpStock, donate, serveFoodBank, makeFoodBank, makeGarden, fundGarden, feedVillage, cookFor, summary, storyOf, wellOf, mannerOf, ACCESS } from './food.js';
 import { placeAt } from './wardrobe.js';
 import { soundBus } from '../world/soundbus.js';
 import { today } from '../calendar.js';
-import { freeBody } from './social-actors.js';
+import { freeBody, safeSocialStep } from './social-actors.js';
+import { F as globeFrame } from '../earth/globeframe.js';
+import { createFamilyAid } from './family-aid.js';
+import { diningSeats } from './family-layout.js';
 
 const CELL = 300, NEAR = 160;
 const hash = (a, b) => { let h = Math.imul(Math.floor(a) | 0, 374761393) ^ Math.imul(Math.floor(b) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -131,12 +134,22 @@ function windowRoom(W, D) {
 	return g;
 }
 
-export function createFamilyLife({ scene, world, camera, people = null, isPhone = false, morality = () => null, wallet = null }) {
+export function createFamilyLife({ scene, world, camera, people = null, isPhone = false, morality = () => null, wallet = null, mount = null, hint = () => {}, loadAssets = loadPeopleAssets, releaseBody = () => {} }) {
 	const root = new THREE.Group(); root.name = 'family-life';
 	scene.add(root);
 	const W = () => world();
 	const CAP = isPhone ? 5 : 12;
-	let A = null, loading = null;
+	let A = null, loading = null, dead = false, generation = 0, staging = false;
+	let lastWorld = world(), epoch = globeFrame.epoch;
+	const aid = createFamilyAid({ mount, help, hint });
+	let saved = {};
+	try { const data = JSON.parse(localStorage.getItem('l99-family-life-v1') || '{}'); if (data && typeof data === 'object' && !Array.isArray(data)) saved = data; } catch { /* private mode */ }
+	function scope() { return `${W()?.body?.key || 'earth'}:${W()?.globe ? `${globeFrame.lat.toFixed(4)},${globeFrame.lon.toFixed(4)}` : 'local'}`; }
+	function persist(a) {
+		saved[a.saveKey] = { bank: a.bank, garden: a.garden, homes: Object.fromEntries(a.households.filter(h => h.food).map(h => [h.id, { food: { ...h.food, history: h.food.history.slice(-7) }, well: h.well }])) };
+		const entries = Object.entries(saved); if (entries.length > 32) saved = Object.fromEntries(entries.slice(-32));
+		try { localStorage.setItem('l99-family-life-v1', JSON.stringify(saved)); } catch { /* private mode */ }
+	}
 	const areas = new Map();
 	const pending = [];                       // food deeds the compass does not know yet
 	const banks = new Map(), gardens = new Map();
@@ -146,7 +159,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	const purse = wallet || (() => {
 		let n = 250;
 		try { n = +(localStorage.getItem('l99-food-credits') ?? 250); } catch { /* private mode */ }
-		return { credits: () => n, spend: (c) => { if (c > n) return false; n -= c; try { localStorage.setItem('l99-food-credits', String(n)); } catch { /* private mode */ } return true; } };
+		if (!Number.isFinite(n) || n < 0) n = 250;
+		return { credits: () => n, spend: (c) => { if (!Number.isSafeInteger(c) || c <= 0 || c > n) return false; n -= c; try { localStorage.setItem('l99-food-credits', String(n)); } catch { /* private mode */ } return true; } };
 	})();
 
 	const hours = () => W()?.sky?.state?.hours ?? 13;
@@ -174,13 +188,20 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		const H = makeHouseholds(seed, homes, { camps, rural: place === 'rural' || onIsland });
 		const access = desert ? ACCESS['food-desert'] : onIsland ? ACCESS.island : ACCESS[place] || ACCESS.suburb;
 		for (const h of H) foodFor(h, place, { access });
-		a = { key, i, j, cx, cz, place, desert, households: H, bank: null, garden: null, plans: new Map(), planDay: -1 };
+		a = { key, saveKey: `${scope()}:${key}`, i, j, cx, cz, place, desert, households: H, bank: null, garden: null, plans: new Map(), planDay: -1 };
 		a.bank = banks.get(key) || makeFoodBank('bank-' + key, { x: cx, z: cz }); banks.set(key, a.bank);
 		a.garden = gardens.get(key) || makeGarden('garden-' + key, { x: cx, z: cz }); gardens.set(key, a.garden);
 		// a few days lived already, so the houses are where their lives have them
-		for (let d = 0; d < 7; d++) { const wd = (day + d + 1) % 7; for (const h of H) liveDay(h, planDay(h, wd), wd); }
+		const prior = saved[a.saveKey];
+		if (prior?.bank && Number.isFinite(prior.bank.stock)) Object.assign(a.bank, prior.bank);
+		if (prior?.garden && Number.isFinite(prior.garden.funded)) Object.assign(a.garden, prior.garden);
+		for (const h of H) {
+			const old = prior?.homes?.[h.id];
+			if (old?.food?.pantry && Object.values(old.food.pantry).every(v => Number.isFinite(v) && v >= 0)) { h.food = old.food; h.well = old.well || h.well; }
+			else for (let d = 0; d < 7; d++) { const wd = (day + d + 1) % 7; liveDay(h, planDay(h, wd), wd); }
+		}
 		areas.set(key, a);
-		if (areas.size > 16) { const first = areas.keys().next().value; areas.delete(first); }
+		if (areas.size > 16) { const first = areas.keys().next().value; persist(areas.get(first)); areas.delete(first); banks.delete(first); gardens.delete(first); }
 		return a;
 	}
 	function plansOf(a) {
@@ -191,24 +212,36 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	// a new day: every house round you lives it
 	function newDay() {
 		day = (day + 1) % 7;
-		for (const a of areas.values()) for (const h of a.households) liveDay(h, planDay(h, day), day);
+		for (const a of areas.values()) {
+			for (const h of a.households) liveDay(h, planDay(h, day), day);
+			// Donated food reaches the most food-insecure neighbours each day.
+			serveFoodBank(a.bank, a.households); persist(a);
+		}
 	}
 
 	// ---------- a home for everyone walking about ----------
 	// each person on the street (people.js) gets a household: one of the area's whose member
 	// fits (their age and sex, and out at this hour), or one of their own
+	function manner(p) {
+		const home = p.P.home, d = p.P.dna;
+		if (!home || !d.gait) return;
+		const man = mannerOf(home.household.well?.[home.member.id]);
+		d.gait.basePace ??= d.gait.pace; d.gait.basePosture ??= d.gait.posture || 0;
+		d.gait.pace = d.gait.basePace * man.pace; d.gait.posture = d.gait.basePosture + man.slump * .5;
+	}
 	function adopt() {
 		const pool = people?.pool;
 		if (!pool) return;
 		const h = hours();
 		for (const p of pool) {
-			if (!p.active || p.demo !== undefined || p.P.home) continue;
+			if (!p.active || p.demo !== undefined) continue;
+			if (p.P.home) { manner(p); continue; }
 			const d = p.P.dna, a = areaAt(p.M.S.pos.x, p.M.S.pos.z), plans = plansOf(a);
 			let best = null;
 			for (const hh of a.households) {
 				if (hh.taken >= hh.members.length) continue;
 				for (const m of hh.members) {
-					if (m.embodied || m.male !== d.male || Math.abs(m.age - d.age) > 5) continue;
+					if (m.embodied || m.male !== d.male || (m.age < 18) !== (d.age < 18) || Math.abs(m.age - d.age) > 5) continue;
 					const w = whereAt(plans.get(hh.id), m.id, h);
 					if (w.at === 'home' && w.act === 'sleep') continue;
 					best = [hh, m]; break;
@@ -217,35 +250,40 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			}
 			if (!best) {
 				const hh = makeHousehold(d.seed ^ 0x40e, null, d.child || d.teen ? { kind: 'two-parent' } : {});
-				foodFor(hh, a.place, { access: a.desert ? ACCESS['food-desert'] : undefined });
 				let m = hh.members.reduce((q, x) => (Math.abs(x.age - d.age) < Math.abs(q.age - d.age) ? x : q), hh.members[0]);
-				m.age = d.age; m.male = d.male;
+				m.age = d.age; m.male = d.male; m.stage = stageOf(d.age); m.school = schoolOf(d.age); m.minor = d.age < 18;
+				if (m.minor) { m.role = d.age < 13 ? 'child' : 'teen'; m.job = null; }
+				foodFor(hh, a.place, { access: a.desert ? ACCESS['food-desert'] : undefined });
+				a.households.push(hh);
 				best = [hh, m];
 			}
 			const [hh, m] = best;
 			m.embodied = true; hh.taken = (hh.taken || 0) + 1;
 			p.P.home = { household: hh, member: m, area: a.key };
 			// how they are shows in their step
-			const man = mannerOf(hh.well?.[m.id]);
-			if (d.gait) { d.gait.basePace ??= d.gait.pace; d.gait.pace = d.gait.basePace * man.pace; d.gait.posture = (d.gait.posture || 0) + man.slump * 0.5; }
+			manner(p);
 			if (p.persona) p.persona = null;
 		}
 	}
 
 	// ---------- bodies for a moment ----------
-	async function assets() { if (A) return A; loading ||= loadPeopleAssets().then((x) => (A = x)).catch(() => null); return loading; }
+	async function assets() { if (A) return A; loading ||= loadAssets().then((x) => (A = x)).catch(() => null).finally(() => { loading = null; }); return loading; }
 	function body(spec) {
 		const ctx = { hours: hours(), place: spec.place || 'suburb', activity: 'walk' };
 		const teen = spec.age >= 13 && spec.age < 18;
 		let d = personDNA(spec.seed >>> 0, { age: teen ? 18 : spec.age, ancestry: spec.ancestry, ctx });
-		if (spec.male !== undefined && d.male !== spec.male) { d = personDNA((spec.seed ^ 0x9e3779b9) >>> 0, { age: teen ? 18 : spec.age, ancestry: spec.ancestry, ctx }); }
+		for (let k = 1; spec.male !== undefined && d.male !== spec.male && k < 64; k++) d = personDNA((spec.seed + Math.imul(k, 0x9e3779b9)) >>> 0, { age: teen ? 18 : spec.age, ancestry: spec.ancestry, ctx });
 		if (teen) makeTeen(d, spec.age, { cold: 0.35, uniform: spec.uniform, sport: spec.sport, school: spec.school });
 		if (spec.style) { const keep = d.style; d.style = { ...spec.style, hair: keep.hair, printKind: keep.printKind, acc: [...(spec.style.acc || [])] }; d.styleSig = JSON.stringify(d.outfit); }
 		if (spec.acc) d.style.acc = [...(d.style.acc || []), ...spec.acc];
+		if (spec.dinner) d.style.acc = (d.style.acc || []).filter(q => q.kind !== 'backpack');
 		const P = buildPerson(A, d);
-		const Mo = createMotion(P, (x, z) => ground(x, z));
+		const Mo = createMotion(P, (x, z) => ground(x, z), { constrain(to, from) {
+			const safe = safeSocialStep(W().island, from, to, W()?.player);
+			if (safe) to.set(safe.x, safe.y, safe.z); else to.copy(from);
+		} });
 		root.add(P.root);
-		return { P, M: Mo, spec, props: [], fade: 0 };
+		return { P, M: Mo, spec, props: [], fade: 0, active: true, source: 'family' };
 	}
 	function attach(a, kind, side = 'R') {
 		const g = carried(kind);
@@ -273,6 +311,10 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	function actor(V, spec, at, heading, o = {}) {
 		if (V.actors.length >= CAP) return null;
 		const a = body(spec);
+		if (spec.member) for (const area of areas.values()) {
+			const household = area.households.find(h => h.members.includes(spec.member));
+			if (household) { a.P.home = { household, member: spec.member, area: area.key }; a.camp = !!household.unhoused; manner(a); break; }
+		}
 		a.M.place(at[0], o.y ?? ground(at[0], at[1]), at[1], heading);
 		Object.assign(a, o);
 		// (on a floor of its own: the room's, a house's)
@@ -284,7 +326,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		V.actors.push(a);
 		return a;
 	}
-	const memberSpec = (m, place, extra = {}) => ({ seed: m.seed, age: Math.max(2.5, m.age), male: m.male, ancestry: m.ancestry, place, ...extra });
+	const memberSpec = (m, place, extra = {}) => ({ seed: m.seed, age: m.age, male: m.male, ancestry: m.ancestry, member: m, place, ...extra });
 	function family(a, want = (h) => minorsOf(h).some((m) => m.age < 11), r = Math.random) {
 		const L = a.households.filter(want);
 		return L.length ? L[Math.floor(r() * L.length)] : null;
@@ -292,8 +334,13 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	const HIVIS_STYLE = { gen: 'x', top: { kind: 'longsleeve', col: '#1f2a44', pat: 'plain', fit: 'regular', sleeves: 'long' }, outer: { kind: 'pufferVest', col: HIVIS, acc: '#c9ccd0', pat: 'block', fit: 'regular', sleeves: 'none', open: false, fab: 'nylon' }, bottom: { kind: 'trousers', col: '#1f2a44', pat: 'plain', legs: 'long', fit: 'straight' }, shoes: { kind: 'runner', col: '#1b1b1d', sole: '#1b1b1d' }, acc: [{ kind: 'cap', col: HIVIS, acc: '#1b1b1d' }] };
 
 	async function stage(kind, o = {}) {
+		if (dead || !W()?.island) return 'unavailable';
+		const token = ++generation, stageWorld = W(), stageEpoch = globeFrame.epoch; staging = true;
 		await assets();
+		if (dead || token !== generation || stageWorld !== W() || stageEpoch !== globeFrame.epoch) return 'cancelled';
+		staging = false;
 		if (!A) return 'people assets failed';
+		if (root.parent !== scene) scene.add(root);
 		const cam = camera.position, w = W(), P = w?.player?.state;
 		const yaw = o.heading ?? (P ? P.yaw + Math.PI : 0);
 		const dist = o.dist ?? 9;
@@ -309,7 +356,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 				if (away < 0) h += Math.PI;
 			}
 		}
-		clear();
+		clear(null, false);
 		const V = { kind, x, z, h, group: new THREE.Group(), actors: [], t: 0, seed: (o.seed ?? Math.floor(x * 13 + z * 7)) >>> 0 };
 		root.add(V.group);
 		const a = areaAt(x, z), r = rng(V.seed), F = frameOf(x, z, h), y0 = ground(x, z), place = a.place;
@@ -323,9 +370,11 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			const g = actor(V, { seed: V.seed ^ 0x6a1d, age: 58 + r() * 10, male: r() < 0.5, place, style: HIVIS_STYLE }, F(0, -2.2), h - Math.PI / 2, { role: 'guard', carry: [['stop', 'R']], pose: 'rest' });
 			if (g) g.M.S.look.target = new THREE.Vector3(...[F(-6, 0)[0], y0 + 1.4, F(-6, 0)[1]]);
 			// families walking up (or out), the parents with the little ones by the hand
+			const usedHomes = new Set();
 			for (let k = 0; k < 4 && V.actors.length < CAP - 1; k++) {
-				const hh = family(a, (q) => minorsOf(q).some((m) => m.age >= 4 && m.age < 11), r);
+				const hh = family(a, (q) => !usedHomes.has(q.id) && minorsOf(q).some((m) => m.age >= 4 && m.age < 11), r);
 				if (!hh) break;
+				usedHomes.add(hh.id);
 				const kid = minorsOf(hh).find((m) => m.age >= 4 && m.age < 11), par = hh.members.find((m) => m.age >= 18) || hh.members[0];
 				const f0 = out ? 2.5 - k * 0.4 : -10 - k * 4.5, s0 = out ? 3 : 0.4;
 				const pa = actor(V, memberSpec(par, place), F(f0, s0), out ? h + Math.PI : h, { role: 'parent', path: out ? [F(2.5, 0.4), F(-30, 0.4)] : [F(1.2, 0.4), F(2, 2.6)], wait: out ? 4 + k * 3 : k * 1.2, speed: 1.15 });
@@ -352,26 +401,26 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			V.household = hh;
 		} else if (kind === 'dinner') {
 			const hh = o.household || family(a, (q) => q.members.length >= 3 && !q.unhoused, r) || a.households[0];
-			const n = Math.min(hh.members.length, isPhone ? 4 : 6);
+			const diners = hh.members.filter(m => m.age >= 2.5);
+			const real = !o.room && realTable(x, z);
+			const seats = real ? diningSeats(real.it) : null;
+			const n = Math.min(diners.length, isPhone ? 4 : 6, seats?.length ?? 6);
 			// a real house's dining table if one is built near (bay/houses.js), else a room
 			// with its window to the street
-			const T = dinnerTable(n);
-			const real = !o.room && realTable(x, z);
+			const T = real ? null : dinnerTable(n);
 			// a point of the table's frame in the world, and a heading
 			const lw = (px, pz, py, th, q) => ({ x: px + q.x * Math.cos(th) + q.z * Math.sin(th), z: pz - q.x * Math.sin(th) + q.z * Math.cos(th), y: py, heading: q.heading + th });
 			let seat;
 			if (real) {
-				const th = real.it.rot ? 0 : Math.PI / 2;
-				real.house.root.add(T.g); T.g.position.set(real.it.x, real.it.y, real.it.z); T.g.rotation.y = th; V.table = T.g;
-				T.g.updateMatrixWorld(true);
-				seat = (q) => { const v = new THREE.Vector3(q.x, 0, q.z); T.g.localToWorld(v); const e = new THREE.Euler().setFromQuaternion(T.g.getWorldQuaternion(new THREE.Quaternion()), 'YXZ'); return { x: v.x, z: v.z, y: v.y, heading: q.heading + e.y }; };
+				real.house.root.updateMatrixWorld(true);
+				seat = (q) => { const v = new THREE.Vector3(q.x, q.y, q.z); real.house.root.localToWorld(v); const e = new THREE.Euler().setFromQuaternion(real.house.root.getWorldQuaternion(new THREE.Quaternion()), 'YXZ'); return { x: v.x, z: v.z, y: v.y, heading: q.heading + e.y }; };
 			} else {
 				put(windowRoom(5, 4), 0, 0, 0, y0);
 				const [tx, tz] = F(-0.3, 0);
 				put(T.g, -0.3, 0, Math.PI / 2, y0);
 				seat = (q) => lw(tx, tz, y0, h + Math.PI / 2, q);
 			}
-			hh.members.slice(0, n).forEach((m, k) => { const q = seat(T.seats[k]); actor(V, memberSpec(m, place), [q.x, q.z], q.heading, { role: 'diner', sit: 0.47, pose: 'table', y: q.y, talky: true }); });
+			diners.slice(0, n).forEach((m, k) => { const q = seat((seats || T.seats)[k]); actor(V, memberSpec(m, place, { dinner: true, school: false }), [q.x, q.z], q.heading, { role: 'diner', sit: real ? 0.52 : 0.47, pose: 'table', y: q.y, talky: true }); });
 			V.household = hh;
 		} else if (kind === 'foodbank' || kind === 'market') {
 			const bank = kind === 'foodbank';
@@ -395,6 +444,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			const face = Math.atan2(cam.x - x, cam.z - z), sx = Math.cos(face), sz = -Math.sin(face);
 			[8, 13.5, 16.5, 38].forEach((age, k) => { const off = (k - 1.5) * 0.85; actor(V, { seed: V.seed + k * 104729, age, place, male: o.male ?? k % 2 === 0 }, [x + sx * off, z + sz * off], face, { role: 'lineup', pose: 'rest' }); });
 		} else { root.remove(V.group); return 'unknown: lineup, school-run, dismissal, teens, groceries, dinner, foodbank, market'; }
+		for (const a of V.actors) { a.M.update(1 / 60, 0, cam); placeProps(a, 0); }
 		live.push(V);
 		return { kind, x: +x.toFixed(1), z: +z.toFixed(1), h: +h.toFixed(3), actors: V.actors.length, area: a.key, place, household: V.household ? describe(V.household) : null };
 	}
@@ -412,14 +462,17 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		if (!best) return null;
 		return best;
 	}
-	function clear(kind = null) {
+	function clear(kind = null, cancel = true) {
+		if (cancel) { generation++; staging = false; }
+		aid.update(null, 0);
+		const freeProps = (g) => { g.traverse(q => { q.geometry?.dispose(); for (const m of [].concat(q.material || [])) if (!Object.values(M).includes(m)) { m.map?.dispose(); m.dispose(); } }); g.removeFromParent(); };
 		// (a table set in a real house goes with the moment)
-		for (const V of live) if ((!kind || V.kind === kind) && V.table) V.table.removeFromParent();
+		for (const V of live) if ((!kind || V.kind === kind) && V.table) freeProps(V.table);
 		for (let i = live.length - 1; i >= 0; i--) {
 			const V = live[i];
 			if (kind && V.kind !== kind) continue;
-			for (const a of V.actors) { root.remove(a.P.root); for (const q of a.props) root.remove(q.g); freeBody(a.P); }
-			V.group.removeFromParent();
+			for (const a of V.actors) { a.active = false; releaseBody(a.P); for (const q of a.props) freeProps(q.g); freeBody(a.P); }
+			freeProps(V.group);
 			live.splice(i, 1);
 		}
 	}
@@ -437,6 +490,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 
 	function steer(V, a, dt) {
 		const S = a.M.S;
+		if (a.override && a.override(a, dt, camera.position)) { a.M.stand(); return; }
+		if (a.engaged) { a.M.want.speed = 0; S.look.target = camera.position; return; }
 		if (a.follow) {
 			const L = a.follow.M.S, hh = L.heading, tx = L.pos.x + Math.cos(hh) * a.side, tz = L.pos.z - Math.sin(hh) * a.side;
 			const ex = tx - S.pos.x, ez = tz - S.pos.z, d = Math.hypot(ex, ez), pv = Math.max(0, L.speed.v);
@@ -448,7 +503,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			return;
 		}
 		if (a.path) {
-			if ((a.wait -= dt) > 0) { a.M.want.speed = 0; return; }
+			if ((a.wait = (a.wait || 0) - dt) > 0) { a.M.want.speed = 0; return; }
 			a.leg ??= 0;
 			const p = a.path[a.leg];
 			if (!p) { a.M.want.speed = 0; return; }
@@ -476,7 +531,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	}
 	function auto() {
 		const h = hours(), wk = day === 0 || day === 6, cam = camera.position, w = W();
-		if (!w || cam.y - ground(cam.x, cam.z) > 60) return;
+		if (!w || staging || cam.y - ground(cam.x, cam.z) > 60) return;
 		// (only where people live: the Bay's towns and the island's village, not the far worlds)
 		if (!w.bayArea?.urbanAt && !w.village?.footprints?.length) return;
 		if (live.length) {
@@ -501,8 +556,16 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 
 	// ---------- each frame ----------
 	function update(dt, t, enabled = true) {
+		if (dead) return;
+		if (W() !== lastWorld || globeFrame.epoch !== epoch) {
+			for (const a of areas.values()) persist(a);
+			clear(); areas.clear(); banks.clear(); gardens.clear();
+			for (const p of people?.pool || []) if (p.P.home) { p.P.home.member.embodied = false; delete p.P.home; }
+			lastWorld = W(); epoch = globeFrame.epoch; lastH = null; scanT = 0;
+		}
+		enabled = enabled && !!W()?.island && !W()?.underworld?.inside?.() && !W()?.deep?.active?.() && !W()?.player?.state?.flying;
 		root.visible = enabled;
-		if (!enabled || !W()?.island) return;
+		if (!enabled) { clear(); return; }
 		const h = hours();
 		if (lastH !== null && h < lastH - 12) newDay();
 		lastH = h;
@@ -518,13 +581,18 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		if ((scanT -= dt) < 0) { scanT = 2.5; if (!live.some((q) => !q.auto)) auto(); }
 		if ((adoptT -= dt) < 0) { adoptT = 1; adopt(); }
 		const cam = camera.position;
+		const near = live.find(V => ['foodbank', 'market', 'groceries', 'dinner'].includes(V.kind) && Math.hypot(V.x - cam.x, V.z - cam.z) < 10 && Math.abs(ground(V.x, V.z) - cam.y) < 6);
+		aid.update(near || null, purse.credits());
 		for (const V of live) {
 			V.t += dt;
 			for (const a of V.actors) {
+				if (!a.active) continue;
+				if (a.leaving) { a.fade = Math.max(0, a.fade - dt / 6); fadePerson(a.P, a.fade); if (a.fade <= 0) { a.active = false; a.P.root.visible = false; for (const q of a.props) q.g.visible = false; } }
+				if (a.P.ragdoll || !a.active) { for (const q of a.props) q.g.visible = false; continue; }
 				steer(V, a, dt);
 				if (a.talky) { a.M.S.talk = Math.sin(t * 0.8 + a.P.dna.seed) > 0.5 ? 1 : 0; }
 				a.M.update(dt, t, cam);
-				a.fade = Math.min(1, a.fade + dt * 1.5); fadePerson(a.P, a.fade);
+				if (!a.leaving) { a.fade = Math.min(1, a.fade + dt * 1.5); fadePerson(a.P, a.fade); }
 				a.P.lod?.(Math.hypot(a.M.S.pos.x - cam.x, a.M.S.pos.z - cam.z));
 				placeProps(a, t);
 			}
@@ -533,8 +601,8 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 
 	// ---------- the player's part ----------
 	const here = () => areaAt(camera.position.x, camera.position.z);
-	function pay(c) { return c > 0 && purse.spend(c); }
-	const deed = (kind, d) => recordDeed(morality(), kind, d, pending);
+	function pay(c) { return Number.isSafeInteger(c) && c > 0 && c <= 1000000 && purse.spend(c); }
+	const deed = (kind, d) => { persist(here()); return recordDeed(morality(), kind, d, pending); };
 	function help(kind, arg = {}) {
 		const a = here(), name = a.place === 'island' ? 'the village' : 'the neighbourhood';
 		if (kind === 'stock') {
@@ -545,10 +613,10 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			deed('feed-family', { target: `a family (${describe(hh)})`, place: name });
 			return `You stocked the kitchen of ${describe(hh)}: ${used} credits of good food. ${storyOf(hh, null, 1)}`;
 		}
-		if (kind === 'donate') { const c = Math.round(arg.credits ?? 50); if (!pay(c)) return 'Not enough credits.'; const d = donate(a.bank, c); deed('food-bank', { place: name }); return `The food bank thanks you: ${d} more days of food for a family of four.`; }
+		if (kind === 'donate') { const c = Math.round(arg.credits ?? 50); if (!pay(c)) return 'Not enough credits.'; const d = donate(a.bank, c); serveFoodBank(a.bank, a.households); deed('food-bank', { place: name }); return `The food bank thanks you: ${d} more days of food for a family of four.`; }
 		if (kind === 'garden') { const c = Math.round(arg.credits ?? 300); if (!pay(c)) return 'Not enough credits.'; const n = fundGarden(a.garden, c, a.households); deed('community-garden', { place: name }); return `The community garden has ${n} plots now; the houses round it eat fresh from it.`; }
 		if (kind === 'cook') { const c = Math.round(arg.credits ?? 60); if (!pay(c)) return 'Not enough credits.'; const dish = cookFor(arg.gathering || null, c); deed('cook-gathering', { place: arg.place || name }); return `You cooked ${dish} for everyone.`; }
-		if (kind === 'catch') { const days = feedVillage(a.households, +arg.kg || 5); deed('feed-village', { place: name }); return `${arg.kg || 5} kg brought in: about ${days} meals shared out round ${name}.`; }
+		if (kind === 'catch') { if (!Number.isFinite(arg.kg) || arg.kg <= 0 || arg.kg > 1000) return 'Bring a measured catch first.'; const days = feedVillage(a.households, arg.kg); deed('feed-village', { place: name }); return `${arg.kg || 5} kg brought in: about ${days} meals shared out round ${name}.`; }
 		return 'help(kind): stock, donate, garden, cook, catch';
 	}
 	function info() {
@@ -563,5 +631,6 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 		const plan = plansOf(a).get(hh.id);
 		return { id: hh.id, kind: hh.kind, describe: describe(hh), members: hh.members.map((m) => ({ id: m.id, role: m.role, age: m.age, job: m.job?.kind || null, school: m.school, now: whereAt(plan, m.id, hours()) })), notes: plan.notes, food: { budget: hh.food.budget, need: hh.food.need, security: hh.food.security, quality: +hh.food.quality.toFixed(2), plan: hh.food.plan }, well: +wellOf(hh).toFixed(2), story: storyOf(hh) };
 	}
-	return { update, stage, clear, info, household, help, quests: () => questsFor(here().households, here().place === 'island' ? 'the village' : 'the community centre'), pending: () => pending.slice(), areaAt, group: root, bell };
+	function dispose() { if (dead) return; for (const a of areas.values()) persist(a); clear(); dead = true; aid.dispose(); root.removeFromParent(); }
+	return { update, stage, clear, dispose, actors: () => root.visible ? live.flatMap(V => V.actors) : [], info, household, help, quests: () => questsFor(here().households, here().place === 'island' ? 'the village' : 'the community centre'), pending: () => pending.slice(), areaAt, group: root, bell };
 }

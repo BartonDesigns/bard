@@ -58,6 +58,18 @@ export function unfight(geo, lift = 0.002, near = 0.0025) {
 		return u > 0.01 && w > 0.01 && u + w < 0.99;
 	};
 	const mid = (t) => { const o = t * 13; return [(tri[o] + tri[o + 3] + tri[o + 6]) / 3, (tri[o + 1] + tri[o + 4] + tri[o + 7]) / 3, (tri[o + 2] + tri[o + 5] + tri[o + 8]) / 3]; };
+	// Exporters may rotate a triangle's index order. It is still the same face,
+	// not a trim layer to lift away from the body.
+	const sameFace = (a, b) => {
+		for (let shift = 0; shift < 3; shift++) {
+			let same = true;
+			for (let c = 0; c < 3 && same; c++) for (let k = 0; k < 3; k++) {
+				if (Math.abs(tri[a * 13 + c * 3 + k] - tri[b * 13 + ((c + shift) % 3) * 3 + k]) >= 1e-4) { same = false; break; }
+			}
+			if (same) return true;
+		}
+		return false;
+	};
 	const up = new Uint8Array(n), drop = new Uint8Array(n), pairs = [];
 	for (let t = 0; t < n; t++) {
 		if (tri[t * 13 + 12] <= 0 || drop[t]) continue;
@@ -71,8 +83,7 @@ export function unfight(geo, lift = 0.002, near = 0.0025) {
 			if (!inside(t, cs) && !inside(s, ct)) continue;
 			const sep = tri[o + 9] * cs[0] + tri[o + 10] * cs[1] + tri[o + 11] * cs[2] - dt;
 			if (Math.abs(sep) > near) continue;
-			let same = Math.abs(sep) < 1e-4;
-			for (let k = 0; same && k < 9; k++) same = Math.abs(tri[o + k] - tri[q + k]) < 1e-4;
+			const same = Math.abs(sep) < 1e-4 && sameFace(t, s);
 			if (same) { drop[s] = 1; continue; }
 			// the outer one is the layer; level with each other, the smaller
 			const top = Math.abs(sep) > 1e-4 ? (sep > 0 ? s : t) : tri[q + 12] < tri[o + 12] ? s : t;
@@ -107,5 +118,7 @@ export function unfight(geo, lift = 0.002, near = 0.0025) {
 		geo.setAttribute(nm, new THREE.BufferAttribute(a, A.itemSize, A.normalized));
 	});
 	geo.setIndex(idx);
+	geo.computeBoundingBox();
+	geo.computeBoundingSphere();
 	return { lifted, dropped };
 }

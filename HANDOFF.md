@@ -4,6 +4,40 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Handoff completion release (9 October 2026 UTC)
+
+The owner explicitly authorized finishing the current handoff with agents and publishing
+it live. This supersedes the earlier request to pause new looks for a separate approval.
+The scope is the current release table plus the open shoreline, diving, cinematic Explore
+and native Sun/Gargantua entry requests, not the parked future roadmap.
+
+- **Gear and held items:** all 20 inventory entries now have models, icons and explicit
+  grips. The canvas/film atlas interpolation defect is fixed. The hunting net has real
+  openings at both LODs. See `docs/held-items-completion-2026-10-09.md`.
+- **Worlds:** lake/river vegetation rejects submerged roots, raised lakes supply swimming
+  levels, inland banks retain their own materials, downward steering starts a dive,
+  Explore has wider establishing/crane/reveal shots, and duplicate car faces are removed.
+  See `docs/world-finish-2026-10-09.md`.
+- **Families:** real staged bodies, household aid through the common wallet and morality,
+  existing dining chairs, saved food/bank/garden state, and cancellation/resource cleanup
+  through travel and close. See `docs/families-finish-2026-10-09.md`.
+- **Combat/rooms:** surrender/restraint and minor protection, corrected PvP recipient
+  routing, saved ammunition, transaction locking, world-scoped relay validation, pooled
+  resource teardown and sound-bus routing. The final combat and transport verification
+  record accompanies this release.
+- **Off-Duty Orchestra:** the eight-person floor-seated encounter is included, with
+  varied relaxed poses, occasional standing/shuffling and comic upward firing.
+
+Production release verification and exact live commit are recorded below when deployment
+completes. This checkout's generated engine is being rebuilt for that release. The rooms
+Worker source is tested locally but production deployment requires the owner's authenticated
+Cloudflare session; this environment has no deployment credentials or configured workflow.
+Do not report that Worker as deployed until its production capability check succeeds.
+
+Earlier checkpoints below are retained as history. Their branch-only/missing-feature
+statements describe those checkpoints, not the completed source above. Real-phone timing
+and an AAA art-quality sign-off are not established by software-renderer checks.
+
 ## Off-Duty Orchestra checkpoint (9 October 2026 UTC)
 
 The owner supplied a picnic music video and clarified that the casual **gunfire into the

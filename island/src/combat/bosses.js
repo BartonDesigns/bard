@@ -296,5 +296,11 @@ export function createBoss(ctx, kind, center, { id = 'boss:' + kind, rand = Math
 		if (B.mc.M.phase !== was) event({ type: 'phase', phase, name: def.phases[phase].name });
 		if (dead && !B.dead) event({ type: 'dead' });
 	}
-	return Object.assign(B, { update, sync, damage, info: () => ({ id, kind, name: def.name, hp: Math.round(B.mc.M.hp), max: def.hp, phase: B.mc.M.phase, phaseName: B.mc.M.phaseName, state: B.mc.M.state, attack: B.mc.M.attack, dead: B.dead, at: [B.focus().x, B.focus().y, B.focus().z].map(Math.round), weak: Object.fromEntries(Object.entries(B.mc.M.weak).map(([k, w]) => [k, { open: B.mc.isOpen(k), broken: w.broken }])) }) });
+	function dispose() {
+		B.dead = true; ctx.layer.remove(id); B.group.removeFromParent();
+		const resources = new Set();
+		B.group.traverse((o) => { if (o.geometry) resources.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) resources.add(m); });
+		for (const r of resources) r.dispose();
+	}
+	return Object.assign(B, { update, sync, damage, dispose, info: () => ({ id, kind, name: def.name, hp: Math.round(B.mc.M.hp), max: def.hp, phase: B.mc.M.phase, phaseName: B.mc.M.phaseName, state: B.mc.M.state, attack: B.mc.M.attack, dead: B.dead, at: [B.focus().x, B.focus().y, B.focus().z].map(Math.round), weak: Object.fromEntries(Object.entries(B.mc.M.weak).map(([k, w]) => [k, { open: B.mc.isOpen(k), broken: w.broken }])) }) });
 }

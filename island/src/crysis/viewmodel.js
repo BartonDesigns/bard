@@ -7,8 +7,8 @@
 // lowered while you sprint, and lowered out and raised in when you change what you hold. Your
 // hands are then put on it: your own body (people/avatar.js) is posed in its carry
 // (people/actions.js), each hand is read off it with the arm above it, and that arm is moved
-// so the hand lands on the item's grip (crysis/held-items.js HOLDS). Only the forearms and hands
-// are drawn, as one skinned mesh with the skin's own material, and a sleeve over each forearm.
+// so the hand lands on the item's grip (crysis/held-items.js HOLDS). The arms and hands
+// are drawn as one skinned mesh with the skin's own material, and a sleeve over each forearm.
 //
 // Aiming: hold the right mouse button, or tap the sight button on a touch screen. The sight
 // comes to the eye and the world's lens narrows (camera.zoom).
@@ -44,8 +44,8 @@ import { CELL_HOLD, cellPath, handFrame, itemModel, kitLight, kitMaterial, kitPu
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 
-const ARM_BONES = /^(lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
-const SLEEVE_BONES = /^lowerarm0[12]\.(L|R)$/;
+const ARM_BONES = /^(upperarm0[12]|lowerarm0[12]|wrist|finger\d-\d|metacarpal\d)\.(L|R)$/;
+const SLEEVE_BONES = /^(upperarm0[12]|lowerarm0[12])\.(L|R)$/;
 const ease = (x) => x * x * (3 - 2 * x);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -119,34 +119,34 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		// in the kit's woven cloth
 		let sleeve = null;
 		if (sl.length) {
-			const pos = g0.attributes.position, nor = g0.attributes.normal, used = [...new Set(sl)], map = new Map();
-			const wristOf = { L: P.map['wrist.L'], R: P.map['wrist.R'] }, elbowOf = { L: P.map['lowerarm01.L'], R: P.map['lowerarm01.R'] };
-			const hp = (i) => new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(P.skeleton.boneInverses[i]).invert());
-			const W = { L: hp(wristOf.L), R: hp(wristOf.R) }, E = { L: hp(elbowOf.L), R: hp(elbowOf.R) };
-			const p = [], n = [], s4 = [], w4 = [], col = [], surf = [], uv = [];
-			const c = new THREE.Color(0x3b4436);
-			for (const v of used) {
-				const x = new THREE.Vector3().fromBufferAttribute(pos, v), side = x.x > 0 ? 'L' : 'R', d = W[side].clone().sub(E[side]);
-				const u = clamp(x.clone().sub(E[side]).dot(d) / d.lengthSq(), 0, 1);
-				if (u > 0.82) continue;
-				const nn = new THREE.Vector3().fromBufferAttribute(nor, v);
-				x.addScaledVector(nn, 0.004 + 0.003 * (1 - u));
-				map.set(v, p.length / 3);
-				p.push(x.x, x.y, x.z); n.push(nn.x, nn.y, nn.z);
-				for (let k = 0; k < 4; k++) { s4.push(si.getComponent(v, k)); w4.push(sw.getComponent(v, k)); }
-				col.push(c.r, c.g, c.b); surf.push(0.9, 0, 5 + 0.1, 0); uv.push(x.x * 28, x.y * 28 + x.z * 28);
+			// A continuous cloth tube follows each real forearm's bind frame. Cropping
+			// skin triangles by their strongest bone left open, pointed ends in view.
+			// The sleeve continues past the elbow and out of the lens, with a round cuff.
+			const p = [], n = [], s4 = [], w4 = [], col = [], surf = [], uv = [], ix = [];
+			const colour = new THREE.Color(0x3b4436), rings = 12, radial = 16, scale = me.P.height / 1.75;
+			const bindPosition = i => new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(P.skeleton.boneInverses[i]).invert());
+			for (const side of ['L', 'R']) {
+				const lower = P.map['lowerarm01.' + side], twist = P.map['lowerarm02.' + side], wrist = P.map['wrist.' + side];
+				const elbow = bindPosition(lower), hand = bindPosition(wrist), axis = hand.clone().sub(elbow), length = axis.length(); axis.normalize();
+				const u = new THREE.Vector3(0, 0, 1).cross(axis).normalize(), v = new THREE.Vector3().crossVectors(axis, u), offset = p.length / 3;
+				for (let ring = 0; ring <= rings; ring++) {
+					const along = .82 - ring / rings * 2.2, center = elbow.clone().addScaledVector(axis, along * length);
+					const radius = (.035 + .026 * Math.min(1, (1 - along) / 1.5) + (ring === 0 ? .003 : 0)) * scale;
+					for (let j = 0; j <= radial; j++) {
+						const angle = j / radial * Math.PI * 2, normal = u.clone().multiplyScalar(Math.cos(angle)).addScaledVector(v, Math.sin(angle)), at = center.clone().addScaledVector(normal, radius);
+						p.push(at.x, at.y, at.z); n.push(normal.x, normal.y, normal.z);
+						const weight = clamp(along, 0, 1); s4.push(lower, twist, 0, 0); w4.push(1 - weight, weight, 0, 0);
+						col.push(colour.r, colour.g, colour.b); surf.push(.9, 0, 5.1, 0); uv.push(j / radial * 8, ring / rings * 18);
+						if (ring < rings && j < radial) { const k = offset + ring * (radial + 1) + j; ix.push(k, k + radial + 1, k + 1, k + 1, k + radial + 1, k + radial + 2); }
+					}
+				}
 			}
-			const ix = [];
-			for (let i = 0; i < sl.length; i += 3) if (map.has(sl[i]) && map.has(sl[i + 1]) && map.has(sl[i + 2])) ix.push(map.get(sl[i]), map.get(sl[i + 1]), map.get(sl[i + 2]));
-			if (ix.length) {
-				const sg = new THREE.BufferGeometry();
-				sg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); sg.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
-				sg.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(s4, 4)); sg.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w4, 4));
-				sg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); sg.setAttribute('surf', new THREE.Float32BufferAttribute(surf, 4)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-				sg.setIndex(ix);
-				sleeve = new THREE.SkinnedMesh(sg, kitMaterial());
-				sleeve.bindMode = 'detached'; sleeve.bind(skel, new THREE.Matrix4()); sleeve.frustumCulled = false;
-			}
+			const sg = new THREE.BufferGeometry();
+			sg.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); sg.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
+			sg.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(s4, 4)); sg.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w4, 4));
+			sg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); sg.setAttribute('surf', new THREE.Float32BufferAttribute(surf, 4)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+			sg.setIndex(ix); sleeve = new THREE.SkinnedMesh(sg, kitMaterial());
+			sleeve.bindMode = 'detached'; sleeve.bind(skel, new THREE.Matrix4()); sleeve.frustumCulled = false;
 		}
 		const group = new THREE.Group();
 		group.add(skin);
@@ -157,7 +157,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	}
 
 	// ---------- input: aim ----------
-	const longHeld = () => S.model?.userData.hold?.kind === 'long';
+	const longHeld = () => ['long', 'bow'].includes(S.model?.userData.hold?.kind);
 	addEventListener('pointerdown', (e) => { if (e.button === 2 && e.target === canvas && longHeld()) { S.aimHeld = true; e.preventDefault(); } });
 	addEventListener('pointerup', (e) => { if (e.button === 2) S.aimHeld = false; });
 	addEventListener('contextmenu', (e) => { if (e.target === canvas && longHeld() && S.shown) e.preventDefault(); });
@@ -179,6 +179,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const bp = new THREE.Vector3(), bq = new THREE.Quaternion(), bp2 = new THREE.Vector3(), bq2 = new THREE.Quaternion(), bs = new THREE.Vector3();
 	// a frame part way from A to B
 	function blend(out, A, B, k) { A.decompose(bp, bq, bs); B.decompose(bp2, bq2, bs); return out.compose(bp.lerp(bp2, k), bq.slerp(bq2, k), ONE); }
+	const targets = { L: null, R: null };
 	const handAt = new THREE.Matrix4(), tmp = new THREE.Matrix4(), tmp2 = new THREE.Matrix4(), F = { L: null, R: null };
 	// held: { i, l, t } or null; P: the player's state; on: first person and free to hold things
 	function update(dt, held, P, on, W, time) {
@@ -200,7 +201,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const speed = Math.hypot(P.vel.x, P.vel.z), G = P.gait || { phase: 0, count: 0 };
 		const sprint = P.run && speed > 4.2 && P.grounded;
 		S.sprint += ((sprint ? 1 : 0) - S.sprint) * Math.min(1, dt * 7);
-		const aim = (S.aimHeld || S.aimTap) && H.kind === 'long' && S.sprint < 0.3 && S.equip > 0.9;
+		const aim = (S.aimHeld || S.aimTap) && ['long', 'bow'].includes(H.kind) && !S.reload && S.sprint < 0.3 && S.equip > 0.9;
 		S.ads += ((aim ? 1 : 0) - S.ads) * Math.min(1, dt * 9);
 		const a = ease(clamp(S.ads, 0, 1)), still = 1 - a * 0.88;
 		const L = S.last || { yaw: P.yaw, pitch: P.pitch, grounded: P.grounded, vy: 0 };
@@ -222,7 +223,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		// (narrow screens: a wider lens so it stays in view)
 		cam.fov = clamp(THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(31)) / Math.max(0.3, cam.aspect))), 50, 78) * (1 - a * 0.12);
 		const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect;
-		const px = Math.min(vw.p[0], Math.abs(vw.p[2]) * halfW * 0.62) * Math.sign(vw.p[0]);
+		const px = Math.min(Math.abs(vw.p[0]), Math.abs(vw.p[2]) * halfW * 0.62) * Math.sign(vw.p[0]);
 		const hip = V.set(px, vw.p[1], vw.p[2]);
 		Q.copy(BASE);
 		Q2.setFromEuler(E.set(vw.r[1], vw.r[0], vw.r[2], 'YXZ'));
@@ -234,6 +235,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			pos.lerp(adsPos, a);
 			rot = hipQ.clone().slerp(BASE, a);
 		}
+		if (H.kind === 'bow' && a > 0) { pos.lerp(V2.set(-0.07, -0.08, -0.52), a); rot = hipQ.clone().slerp(BASE, a); }
 		// sprinting: lowered and turned across; changing: lowered out of view
 		const sp = ease(S.sprint) * (1 - a), eq = 1 - ease(S.equip);
 		pos.x += -0.04 * sp + bx * still + lx * still; pos.y += -0.05 * sp - 0.28 * eq + (by + breath) * still + land * 0.6 + ly * still + S.air * 0.012;
@@ -263,7 +265,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (kitPulseNow() > 0) kitPulse(kitPulseNow() - dt * 6);
 		S.model.matrixWorldNeedsUpdate = true;
 		spinMotes(S.model, time); kitTick(time);
-		setZoom(1 + ((H.zoom || 1) - 1) * a);
+		setZoom(1 + ((H.zoom || (H.kind === 'bow' ? 1.18 : 1)) - 1) * a);
 
 		// your hands on it
 		if (arms) {
@@ -289,6 +291,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 						blend(handAt, handAt, tmp, ease(k));
 					}
 				}
+				(targets[side] ||= new THREE.Matrix4()).copy(handAt);
 				(X[side] ||= new THREE.Matrix4()).multiplyMatrices(handAt, tmp.copy(hf).invert());
 				// the forearm swung about the wrist to run back toward where the elbow would be
 				const e = vw['e' + side], ae = vw['a' + side] || e;
@@ -353,6 +356,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			const want = new THREE.Matrix4().multiplyMatrices(m, G.m);
 			const p = new THREE.Vector3().setFromMatrixPosition(hf), q = new THREE.Vector3().setFromMatrixPosition(want);
 			out['palm' + side + 'mm'] = +(p.distanceTo(q) * 1000).toFixed(1);
+			if (targets[side]) out['contact' + side + 'mm'] = +(p.distanceTo(q.setFromMatrixPosition(targets[side])) * 1000).toFixed(1);
 		}
 		return out;
 	}

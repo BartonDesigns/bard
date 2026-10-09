@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeHousehold, makeHouseholds, KINDS, minorsOf, mouths, describe } from '../src/people/households.js';
 import { planDay, coverageGaps, whereAt, N, MINDED } from '../src/people/schedules.js';
-import { foodFor, liveDay, helpStock, wellOf, storyOf, questsFor, recordDeed, FOOD_DEEDS, feedVillage, fundGarden, makeGarden, donate, makeFoodBank, ACCESS, COLONY_FOOD } from '../src/people/food.js';
+import { foodFor, liveDay, helpStock, wellOf, storyOf, questsFor, recordDeed, FOOD_DEEDS, feedVillage, fundGarden, makeGarden, donate, makeFoodBank, serveFoodBank, assess, ACCESS, COLONY_FOOD } from '../src/people/food.js';
 import { makeTeen, isTeen, isTeenAge, growthOf, teenHeight, teenStyle, teenActivity, teensAbout, teenPersona, teenOffline, voiceFor } from '../src/people/teens.js';
 import { isMinor } from '../src/combat/targets.js';
+import { diningSeats } from '../src/people/family-layout.js';
 
 const many = (n, f = (i) => makeHousehold(i * 7919 + 3)) => Array.from({ length: n }, (_, i) => f(i));
 
@@ -129,4 +130,32 @@ test('teens: their age, their bodies, their clothes, their lives; and the ward',
 	assert.equal(p.age, 15); assert.ok(p.minor && /grade/.test(p.job));
 	assert.match(teenOffline(p, 'want to go on a date'), /get going/);
 	assert.ok(voiceFor(d).pitch > 0.9);
+});
+
+test('donated food reaches neighbours and invalid gifts cannot corrupt their pantry', () => {
+	const H = many(8); for (const h of H) { foodFor(h); h.food.pantry = { staples: 0, fresh: 0, protein: 0 }; assess(h); }
+	const bank = makeFoodBank('finite'); bank.stock = 0;
+	const before = structuredClone(H[0].food);
+	for (const bad of [NaN, Infinity, -50, 0]) { assert.equal(helpStock(H[0], bad), 0); assert.equal(donate(bank, bad), 0); assert.equal(feedVillage(H, bad), 0); }
+	assert.deepEqual(H[0].food, before);
+	donate(bank, 88); const available = bank.stock;
+	const served = serveFoodBank(bank, H);
+	assert.ok(served > 0 && served <= available);
+	assert.ok(bank.stock >= 0 && H.some(h => h.food.pantry.staples > 0));
+	assert.ok(Math.abs(bank.served + bank.stock - available) < 1e-9);
+	assert.equal(serveFoodBank({ stock: 0 }, H), 0);
+});
+
+test('family dinners use the house dining chairs at every table orientation', () => {
+	for (let rot = 0; rot < 4; rot++) {
+		const it = { x: 4, y: 2, z: 8, w: 1.8, d: 1, chairs: 6, rot };
+		const seats = diningSeats(it); assert.equal(seats.length, 6);
+		for (const q of seats) {
+			const angle = rot * Math.PI / 2, dx = q.x - it.x, dz = q.z - it.z;
+			const localX = dx * Math.cos(angle) - dz * Math.sin(angle), localZ = dx * Math.sin(angle) + dz * Math.cos(angle);
+			assert.ok(Math.abs(Math.abs(localZ) - .62) < 1e-9);
+			assert.ok(Math.abs(localX) < .61); assert.equal(q.y, it.y);
+			assert.ok(Math.sin(q.heading) * -dx + Math.cos(q.heading) * -dz > 0, 'chair faces the table');
+		}
+	}
 });

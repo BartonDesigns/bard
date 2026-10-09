@@ -721,7 +721,7 @@ export function applyInventoryTransaction(inputState, transaction, options = {})
 		if (!give || !get) return reject(state, tx, 'bad-trade', 'That trade has an item or amount the game does not know.');
 		if (state.credits < give.credits) return reject(state, tx, 'insufficient-credits', 'The player does not have enough community credits.');
 		// what is given must be here, exactly as offered (the same id, level and tier)
-		for (const x of give.items) { const own = instanceOf(state, x.u); if (!own || own.i !== x.i || own.l !== x.l || own.t !== x.t) return reject(state, tx, 'not-owned', 'The player no longer has everything offered.'); }
+		for (const x of give.items) { const own = instanceOf(state, x.u); if (!own || own.i !== x.i || own.l !== x.l || own.t !== x.t || own.x !== x.x) return reject(state, tx, 'not-owned', 'The player no longer has everything offered.'); }
 		const instances = { ...state.instances };
 		for (const x of give.items) delete instances[x.u];
 		// (an id already here, which only a mistake elsewhere could make, gets a new one: never lost)

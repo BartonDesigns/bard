@@ -318,3 +318,26 @@ test('a breakable weak point can force the next phase', () => {
 	assert.ok(r.events.some((e) => e.type === 'phase' && e.phase === 1));
 	assert.ok(B.M.hp > 900);
 });
+
+test('surrender and restraint block shots, blasts and direct remote-style hits', () => {
+	let hits = 0;
+	for (const flags of [{ surrendered: true }, { restrained: true }, { ref: { surrendered: 5 } }, { P: { restrained: true } }]) {
+		const T = { id: 'protected', kind: 'person', bound: { x: 0, y: 1, z: -4, r: 1.3 }, shapes: personShapes(0, 0, -4), onHit: () => { hits++; }, ...flags };
+		const L = createLayer(); L.add(T);
+		assert.equal(canHit(T, { kind: 'remote' }, { pvp: true }), false);
+		assert.equal(L.cast({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: -1 }, 10), null);
+		assert.deepEqual(L.within({ x: 0, y: 1, z: -4 }, 8), []);
+		assert.equal(strike(T, { amount: 500 }, { kind: 'remote' }, { pvp: true }).ignored, true);
+	}
+	assert.equal(hits, 0);
+	assert.equal(warded({ age: 17 }), true, 'target age is sufficient without a body wrapper');
+});
+
+test('family food deeds are recorded by the same saved morality ledger', () => {
+	const M = createMorality();
+	for (const kind of ['feed-family', 'food-bank', 'community-garden', 'cook-gathering', 'feed-village', 'protect-school-run', 'help-parent']) {
+		assert.ok(M.record({ kind, place: 'Bay', target: 'a family' }));
+	}
+	assert.equal(M.me().deeds, 7);
+	assert.ok(M.me().protect > 0 && M.me().mercy > 0);
+});

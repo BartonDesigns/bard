@@ -6,7 +6,7 @@
 // gangs over a corner, raiders against raiders. Each squad has a little sense: they hear
 // gunfire and call it out, take cover by crates and rocks, one pins a target down while others
 // flank, they reload, fall back when hurt, and a beaten fighter may throw down their weapon and
-// surrender (what you do then is yours, and the morality compass weighs it).
+// surrender, after which they are protected and can leave the fight.
 //
 // Few at once (fewer on a phone); bodies are pooled and reused. A person struck down goes limp
 // (people/ragdoll.js) and fades; a drone drops and bursts; a crawler curls up and sinks away.
@@ -117,7 +117,8 @@ export function createSquads(ctx) {
 	const list = [];
 	const pools = { person: [], drone: [], crawler: [] };
 	const squads = new Map();
-	let A = null, loading = null, nextId = 1;
+	let A = null, loading = null, nextId = 1, epoch = 0;
+	const pending = new Set();
 	const assets = () => { if (A) return Promise.resolve(A); if (!loading) loading = loadPeopleAssets().then((a) => (A = a)); return loading; };
 
 	// people are made one a frame, in the background, and kept for the next squad of their side
@@ -125,7 +126,8 @@ export function createSquads(ctx) {
 	function personBody(fid, seed) {
 		const free = pools.person.find((b) => !b.used && b.fid === fid);
 		if (free) { free.used = true; return Promise.resolve(free); }
-		return new Promise((res) => queue.push(() => {
+		return new Promise((res) => {
+			const job = () => {
 			const F = FACTIONS[fid] || {};
 			const d = personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid) });
 			const P = buildPerson(A, d);
@@ -134,50 +136,60 @@ export function createSquads(ctx) {
 			group.add(P.root);
 			pools.person.push(b);
 			res(b);
-		}));
+			};
+			job.cancel = () => res(null);
+			queue.push(job);
+		});
 	}
 
 	// one at (x, z) of a faction, in a squad
 	async function spawn(fid, x, z, squad, opts = {}) {
-		if (alive().length >= MAX) return null;
-		const F = FACTIONS[fid] || {}, kind = fid === 'rogue' ? 'drone' : fid === 'gloom' ? 'crawler' : 'person';
-		const B = BODY[kind];
-		const id = opts.id || `h${fid.slice(0, 2)}${nextId++}`;
-		const h = {
-			id, fid, F, kind, B, squad, crew: fid === 'fire',
-			H: createHealth({ max: (F.hp || 100) * (opts.hpK || 1), armour: opts.armour ?? F.armour ?? 0, soak: 0.5, resist: B.resist || {} }),
-			pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
-			losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
-			provoked: false, shotAtPlayer: 0, surrendered: 0, task: opts.task || null,
-		};
-		h.pos.y = ctx.ground(x, z, opts.y ?? ctx.eye().y);
-		if (kind === 'person') {
-			await assets();
-			const b = await personBody(fid, (Math.random() * 1e9) >>> 0);
-			if (h.gone) { b.used = false; return null; }
-			h.body = b;
-			if (b.P.ragdoll) ctx.ragdolls.release(b.P);
-			b.P.root.visible = true; fadePerson(b.P, 1);
-			b.M.act(null); b.M.place(x, h.pos.y, z, h.yaw);
-		} else {
-			const pool = pools[kind];
-			let m = pool.find((q) => !q.userData.used);
-			if (!m) { m = kind === 'drone' ? droneMesh() : crawlerMesh(); pool.push(m); group.add(m); }
-			m.userData.used = true; m.visible = true; m.scale.setScalar(1); m.rotation.set(0, h.yaw, 0);
-			h.mesh = m;
-			if (kind === 'drone') h.pos.y += h.hover;
-		}
-		h.T = {
-			id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: 1.4 }, name: F.name ? `a ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
-			surface: B.surface, shapes: () => shapesOf(h), ref: h,
-			onHit: (blow) => hit(h, blow),
-			moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
-		};
-		if (h.crew) { h.T.faction = 'civ'; h.T.name = 'a firefighter'; }
-		layer.add(h.T);
-		list.push(h);
-		if (squad) squad.members.push(h);
-		return h;
+		if (alive().length + pending.size >= MAX) return null;
+		const generation = epoch, reservation = {};
+		pending.add(reservation);
+		try {
+			const F = FACTIONS[fid] || {}, kind = fid === 'rogue' ? 'drone' : fid === 'gloom' ? 'crawler' : 'person';
+			const B = BODY[kind];
+			const id = opts.id || `h${fid.slice(0, 2)}${nextId++}`;
+			const h = {
+				id, fid, F, kind, B, squad, crew: fid === 'fire',
+				H: createHealth({ max: (F.hp || 100) * (opts.hpK || 1), armour: opts.armour ?? F.armour ?? 0, soak: 0.5, resist: B.resist || {} }),
+				pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
+				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
+				provoked: false, shotAtPlayer: 0, surrendered: 0, task: opts.task || null,
+			};
+			h.pos.y = ctx.ground(x, z, opts.y ?? ctx.eye().y);
+			if (kind === 'person') {
+				await assets();
+				if (generation !== epoch) return null;
+				const b = await personBody(fid, (Math.random() * 1e9) >>> 0);
+				if (!b) return null;
+				if (h.gone || generation !== epoch) { b.used = false; b.P.root.visible = false; b.hand?.hide(); return null; }
+				h.body = b;
+				if (b.P.ragdoll) ctx.ragdolls.release(b.P);
+				b.P.root.visible = true; fadePerson(b.P, 1);
+				b.M.act(null); b.M.place(x, h.pos.y, z, h.yaw);
+			} else {
+				const pool = pools[kind];
+				let m = pool.find((q) => !q.userData.used);
+				if (!m) { m = kind === 'drone' ? droneMesh() : crawlerMesh(); pool.push(m); group.add(m); }
+				m.userData.used = true; m.visible = true; m.scale.setScalar(1); m.rotation.set(0, h.yaw, 0);
+				h.mesh = m;
+				if (kind === 'drone') h.pos.y += h.hover;
+			}
+			h.T = {
+				id, kind: 'hostile', faction: fid, bound: { x, y: h.pos.y + 1, z, r: 1.4 }, name: F.name ? `a ${F.name.replace(/s$/, '')} fighter` : 'a fighter',
+				get surrendered() { return h.surrendered > 0 || h.fleeing; },
+				surface: B.surface, shapes: () => shapesOf(h), ref: h,
+				onHit: (blow) => hit(h, blow),
+				moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
+			};
+			if (h.crew) { h.T.faction = 'civ'; h.T.name = 'a firefighter'; }
+			layer.add(h.T);
+			list.push(h);
+			if (squad) squad.members.push(h);
+			return h;
+		} finally { pending.delete(reservation); }
 	}
 	function shapesOf(h) {
 		const p = h.pos;
@@ -191,7 +203,7 @@ export function createSquads(ctx) {
 	const alive = () => list.filter((h) => !h.dead);
 
 	function hit(h, blow) {
-		if (h.dead) return null;
+		if (h.dead || h.surrendered || h.fleeing || h.restrained) return null;
 		const r = applyDamage(h.H, blow);
 		const by = blow.by;
 		if (by) {
@@ -528,7 +540,7 @@ export function createSquads(ctx) {
 		}
 		return Promise.all(out).then(() => sq);
 	}
-	function clear() { for (const h of [...list]) release(h); squads.clear(); }
+	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); }
 	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: MAX, squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
 	return { group, update, squad, spawn, hear, clear, info, alive, list, release, surrender };
 }

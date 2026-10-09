@@ -8,11 +8,14 @@
 // The world answers from these: greetings and prices, faction standing, bounty hunters, songs
 // and graffiti, and places that remember ("The village remembers what you did").
 
+import { FOOD_DEEDS } from '../people/food.js';
+
 export const AXES = ['mercy', 'law', 'protect', 'honest'];
 export const AXIS_NAMES = { mercy: ['Cruel', 'Merciful'], law: ['Outlaw', 'Lawful'], protect: ['Predator', 'Protector'], honest: ['Deceitful', 'Honest'] };
 
 // the deeds: points on each axis, and a line for the journal ({target}, {place})
 export const RULES = Object.freeze({
+	...FOOD_DEEDS,
 	kill: { mercy: -4, law: -6, protect: -3, honest: 0, line: 'Killed {target}' },
 	hurt: { mercy: -1, law: -2, protect: -1, honest: 0, line: 'Wounded {target}' },
 	'kill-surrendered': { mercy: -30, law: -15, protect: -12, honest: -5, line: 'Killed {target}, who had surrendered' },

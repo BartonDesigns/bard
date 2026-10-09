@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { WEAPONS, weaponStats, createWeaponState, trigger, stepWeapon, startReload, nextMode, modeOf, spreadNow, spreadDir, damageAt, reserveOf, drawRounds } from './weapons.js';
 import { createHealth, applyDamage, tickHealth, revive } from './health.js';
-import { createLayer, strike, rayBox, rayCapsule, personShapes } from './targets.js';
+import { createLayer, canHit, warded, strike, rayBox, rayCapsule, personShapes } from './targets.js';
 import { createWanted, offend, tickWanted, clearWanted, responseFor } from './heat.js';
 import { createFx } from './fx.js';
 import { createHud } from './hud.js';
@@ -27,6 +27,7 @@ import { BOSSES } from './boss-defs.js';
 import { createRelations, FACTIONS, PLAYER } from './factions.js';
 import { createMorality } from './morality.js';
 import { createCompass } from './compass.js';
+import { soundBus } from '../world/soundbus.js';
 
 const EYE = 1.68;
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private */ } } };
@@ -124,7 +125,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 
 	// ---------- your weapon ----------
 	const ammo = load('l99-combat-ammo', { mags: {}, loose: {}, starter: {} });
-	const saveAmmo = () => store.set('l99-combat-ammo', JSON.stringify(ammo));
+	const saveAmmo = () => { if (Wp) ammo.mags[Wp.uid] = Wp.mag; store.set('l99-combat-ammo', JSON.stringify(ammo)); };
 	let Wp = null;
 	function held() { const H = arms?.held?.(); return H && WEAPONS[H.i] ? H : null; }
 	function weaponNow() {
@@ -143,6 +144,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	const boxes = (id) => arms?.state?.()?.items?.[WEAPONS[id]?.box] || 0;
 	const reserve = (w) => reserveOf(ammo.loose[w.S.id] || 0, boxes(w.S.id), w.S);
 	function reload() {
+		if (!active()) return false;
 		const w = weaponNow();
 		if (!w || w.reloading > 0 || me.ko) return false;
 		const R = reserve(w);
@@ -184,7 +186,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	}
 	function active() {
 		const p = P();
-		return !!p && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none';
+		return !!p && !typing() && !document.hidden && !gear?.()?.busy?.() && !arms?.locked?.() && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none';
 	}
 
 	// ---------- shots ----------
@@ -210,10 +212,12 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	}
 	// harm to a target, by its rules: shared things on a guest go to the host
 	function deal(T, blow, mine) {
+		if (warded(T)) return { ward: true, dealt: 0 };
+		if (!canHit(T, blow.by || null, rules)) return { ignored: true, dealt: 0 };
 		const before = T.moral?.();
 		let r;
 		if (T.shared && !host()) { net.hit(T.id, blow); r = { dealt: blow.amount, remote: true }; }
-		else if (T.kind === 'remote') { net.hit(T.id, blow, T.peer); r = { dealt: blow.amount }; }
+		else if (T.kind === 'remote') { net.hit('me', blow, T.peer); r = { dealt: blow.amount }; }
 		else r = strike(T, blow, blow.by || null, rules);
 		if (!r || r.ignored) return r;
 		if (mine) yours(T, r, blow, before);
@@ -240,7 +244,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		ctx.unseen = !ctx.witnessed;
 		const fac = T.faction, F = FACTIONS[fac];
 		if (T.kind === 'boss') { if (r.killed) morality.record({ kind: 'boss-slain', target: T.name, world: worldKey, place: placeName() }); return; }
-		if (T.kind === 'car') { ctx.markCar?.(T.id); return; }
+		if (T.kind === 'car') { const car = cars.state.get(T.id); if (car) car.lastMine = true; return; }
 		if (T.kind === 'prop') { if (r.killed && isEarth()) offend(wanted, 'prop', ctx.witnessed); return; }
 		if (fac && fac !== 'world' && FACTIONS[fac]) relations.attacked(PLAYER, fac, r.killed ? 1 : 0.25);
 		const lawful = !!F?.lawful;
@@ -336,6 +340,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 			if (hit) {
 				const at = p.pos.clone().addScaledVector(dir, hit.t);
 				if (hit.me) { hurtPlayer({ amount: p.dmg, type: p.type, part: 'torso', src: p.from || p.pos.clone(), by: p.owner }); fx.impact(at, null, 'energy', true); }
+				else if (hit.ward) { spark(hit.T, at, p.owner); }
 				else if (p.flare) { flareLands(at, hit); }
 				else landShot(hit, p.pos, dir, p.owner, p.dmg, p.type);
 				endProjectile(p, hit.ward ? null : at);
@@ -528,7 +533,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		heat: (id, x, z, fuel, amount) => { if (fuel) { const h = (heatMap.get(id) || 0) + amount; heatMap.set(id, h); if (h > 60) ignite(id, x, z, fuel, true); } },
 		friendsNear: () => (multiplayer?.bodies?.() || []).filter((r) => Math.hypot(r.at[0] - eye().x, r.at[2] - eye().z) < 40).length,
 		spawnSquad: (fid, x, z, n, o) => squads.squad(fid, x, z, n, o),
-		onSurrender: (h) => { if (Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 60) hint(`${h.F.name}: one of them throws down their weapon and surrenders. Spare them, or not.`, 4000, 1); },
+		onSurrender: (h) => { if (Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 60) hint(`${h.F.name}: one of them throws down their weapon and surrenders. They are out of the fight.`, 4000, 1); },
 		onSpared: (h, d) => { if (d < 50) morality.record({ kind: 'spare', target: h.T.name, faction: h.fid, place: placeName(), world: worldKey }); },
 		onPhase: (B0) => net.boss(B0, true),
 		onBossDown: (B0) => bossDown(B0),
@@ -646,7 +651,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	// ---------- hold-ups ----------
 	let aimT = 0, aimAt = null;
 	function holdUps(dt) {
-		if (!view.state()?.aiming || !held()) { aimT = 0; aimAt = null; return; }
+		if (!active() || me.ko || !view.state()?.aiming || !held()) { aimT = 0; aimAt = null; return; }
 		camera.getWorldDirection(_v);
 		const hit = layer.cast(camera.position, _v, 10, ME, rules);
 		const T = hit && !hit.ward && hit.T.kind === 'person' ? hit.T : null;
@@ -674,7 +679,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		hit(id, blow, to = null) {
 			if (!multiplayer?.live?.()) return;
 			const k = (to || '') + '|' + id + '|' + blow.part;
-			const h = this.hits.get(k) || { id, to, p: blow.part, d: 0, k: blow.type };
+			const h = this.hits.get(k) || { id, to, p: blow.part, d: 0, k: blow.type, w: held()?.i };
 			h.d += blow.amount; this.hits.set(k, h);
 		},
 		boss(B0, now = false, at = null) { if (!multiplayer?.live?.() || !host()) return; if (now) this.csT = 0; if (at) this.bossAt = { id: B0.id, kind: B0.kind, x: at.x, y: at.y, z: at.z, w: worldKey }; },
@@ -685,7 +690,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 				this.outT = 0.15;
 				if (this.out.length) multiplayer.send({ t: 'fx', s: this.out.splice(0, 8) });
 				let n = 0;
-				for (const [k, h] of this.hits) { if (n++ >= 3) break; this.hits.delete(k); multiplayer.send({ t: 'hit', id: h.id, d: Math.min(500, Math.round(h.d * 100) / 100), p: h.p, k: h.k, ...(h.to ? { to: h.to } : {}) }); }
+				for (const [k, h] of this.hits) { if (n++ >= 3) break; this.hits.delete(k); multiplayer.send({ t: 'hit', id: h.id, d: Math.min(500, Math.round(h.d * 100) / 100), p: h.p, k: h.k, w: h.w, ...(h.to ? { to: h.to } : {}) }); }
 			}
 			// the host's word on bosses, four times a second
 			if (host() && this.csT <= 0 && bosses.size) {
@@ -697,6 +702,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		},
 	};
 	function heard(t, v) {
+		if (t === 'closed' || (t === 'status' && v.status !== 'on')) { rules.pvp = false; net.out.length = 0; net.hits.clear(); return; }
 		if (t === 'welcome') { Object.assign(rules, v.rules || { pvp: false }); return; }
 		if (t === 'rules') { Object.assign(rules, v); hint(`PvP is ${rules.pvp ? 'on' : 'off'} in this room.`, 2500, 1); return; }
 		if (t === 'fx') { for (const q of v.s) { const a = { x: q[0], y: q[1], z: q[2] }, b = { x: q[3], y: q[4], z: q[5] }; fx.tracer(a, b, q[6]); fx.muzzle(a, _v.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize(), q[6]); if (q[7]) fx.impact(b, null, 'stone'); } return; }
@@ -729,14 +735,16 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	}
 
 	// ---------- sound: a few small synthesised cues ----------
-	let AC = null;
+	const sounding = new Set();
 	function sound(kind, at = null) {
 		try {
 			if (at && Math.hypot(at.x - eye().x, at.z - eye().z) > 120) return;
-			AC ||= new (window.AudioContext || window.webkitAudioContext)();
-			if (AC.state !== 'running') return;
+			const bus = soundBus(); if (!bus) return;
+			const AC = bus.ctx;
 			const t = AC.currentTime, g = AC.createGain(), o = AC.createOscillator();
-			g.connect(AC.destination);
+			g.connect(bus.out);
+			sounding.add(o);
+			o.onended = () => { sounding.delete(o); o.disconnect(); g.disconnect(); };
 			const far = at ? Math.max(0.15, 1 - Math.hypot(at.x - eye().x, at.z - eye().z) / 120) : 1;
 			if (kind === 'chime') { o.type = 'sine'; o.frequency.setValueAtTime(1318, t); o.frequency.setValueAtTime(1760, t + 0.09); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18 * far, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9); }
 			else if (kind === 'boom') { o.type = 'sine'; o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(30, t + 0.6); g.gain.setValueAtTime(0.5 * far, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8); }
@@ -750,19 +758,30 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 
 	// ---------- each frame ----------
 	let lastWorld = null, saveT = 0;
+	function reset() {
+		saveAmmo();
+		mouseDown = touchFire = false; if (Wp) { trigger(Wp, false); Wp.reloading = 0; }
+		view.aim(false);
+		squads.clear(); props.clearTag(); cars.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); heatMap.clear(); fx.clear();
+		for (const B0 of bosses.values()) B0.dispose();
+		bosses.clear(); projectiles.length = 0; me.crumbs.length = 0; me.lastPos = null;
+		net.out.length = 0; net.hits.clear(); remotes.clear(); hurtOnce.clear(); layer.clear();
+		for (const node of sounding) { try { node.stop(); } catch { /* already ended */ } }
+		sounding.clear();
+		if (me.ko) { if (P()) P().locked = false; me.ko = 0; revive(me.H, 0.7); }
+		group.removeFromParent(); lastWorld = null;
+		hud.update(0, { show: false, stars: 0 });
+	}
 	function update(dt) {
 		const w = W(), p = P();
-		if (!w || !p) return;
-		if (group.parent !== scene) scene.add(group);
+		if (!w || !p) { if (lastWorld) reset(); return; }
 		// a new world: start clean
 		if (w !== lastWorld) {
-			lastWorld = w; worldT = 0; directorT = 30;
-			worldKey = `${shared.planet?.type || 'EARTH'}:${w.body?.key || w.seed || ''}`;
-			squads.clear(); props.clearTag(); cars.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); fx.clear();
-			for (const B0 of bosses.values()) { group.remove(B0.group); layer.remove(B0.id); }
-			bosses.clear(); projectiles.length = 0; me.crumbs.length = 0;
+			reset(); lastWorld = w; worldT = 0; directorT = 30;
+			worldKey = multiplayer?.worldKey?.() || `${shared.planet?.type || 'EARTH'}:${w.body?.key || w.seed || ''}`;
 			if (!isEarth()) clearWanted(wanted);
 		}
+		if (group.parent !== scene) scene.add(group);
 		worldT += dt; wardMarkT -= dt; sparkLineT -= dt;
 		fx.resize(innerHeight, camera.fov / (camera.zoom || 1));
 		// you: speed, and a trail of safe spots to wake at
@@ -789,7 +808,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 				p.pitch = Math.min(1.35, p.pitch + r.kick[0] / Math.max(1, r.fired)); p.yaw += r.kick[1] / Math.max(1, r.fired);
 			}
 			if (r.empty && before === 0 && (mouseDown || touchFire)) { if (reserve(wpn) > 0) reload(); mouseDown = touchFire = false; }
-		} else if (Wp) trigger(Wp, false);
+			if (r.fired || r.loaded) saveAmmo();
+		} else { mouseDown = touchFire = false; if (Wp) trigger(Wp, false); }
 		if (shake > 0) { shake = Math.max(0, shake - dt * 2); camera.rotation.x += (Math.random() - 0.5) * shake * 0.02; camera.rotation.y += (Math.random() - 0.5) * shake * 0.02; }
 		holdUps(dt);
 		const cam = camera.position;
@@ -798,7 +818,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		cars.update(dt, pos);
 		stepProjectiles(dt);
 		stepFire(dt);
-		for (const [id, B0] of bosses) if (!B0.update(dt)) { group.remove(B0.group); layer.remove(id); bosses.delete(id); }
+		for (const [id, B0] of bosses) if (!B0.update(dt)) { B0.dispose(); bosses.delete(id); }
 		bossDirector();
 		director(dt);
 		stepRemotes();
@@ -827,7 +847,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 
 	// ---------- for the console and the tests ----------
 	const api = {
-		update, heard, group, layer, fx, morality, relations, compass,
+		update, reset, heard, group, layer, fx, morality, relations, compass,
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
@@ -852,7 +872,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		compassOpen: (on = true) => compass.toggle(on),
 		// for the tests: a weapon in hand (owned and held)
 		arm: (id = 'warden-spark-carbine', l = 5, t = 2) => { const u = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(0, 20); arms?.apply?.({ id: `give-${u}`, kind: 'trade', peer: 'test', give: { credits: 0, items: [] }, get: { credits: 0, items: [{ u, i: id, l, t, x: 0 }] } }); arms?.hold?.(u); return arms?.held?.(); },
-		clear: () => { squads.clear(); props.clearTag(); for (const B0 of bosses.values()) { group.remove(B0.group); layer.remove(B0.id); } bosses.clear(); return 'cleared'; },
+		clear: () => { squads.clear(); props.clearTag(); for (const B0 of bosses.values()) B0.dispose(); bosses.clear(); return 'cleared'; },
 		lore: 'The young carry the Spark until they come of age: no harm reaches them. Bullets turn aside in a shimmer, fire and wheels part round them.',
 	};
 	return api;

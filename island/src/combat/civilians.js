@@ -31,6 +31,7 @@ export function createCivilians(ctx) {
 				moral: () => ({ unarmed: true, fleeing: s.panic > 0 && !s.cower, vulnerable: vulnerable(p), villager: !!p.village, surrendered: s.hands > 0 }),
 				shapes: () => { const q = p.M.S.pos; return personShapes(q.x, q.y, q.z, p.P.height || 1.7, s.cower > 0 ? 0.6 : 0); },
 				surface: 'person',
+				get surrendered() { return s.hands > 0; },
 				onHit: (blow) => hit(s, blow),
 			};
 			known.set(p, s);
@@ -93,7 +94,7 @@ export function createCivilians(ctx) {
 	// held up at gunpoint: hands up for a while; the first time, what they carry is handed over
 	function holdUp(p) {
 		const s = stateOf(p);
-		if (s.dead || sheltered(p)) return null;
+		if (s.dead || sheltered(p) || s.hands > 0 || p.P.restrained) return null;
 		const first = !s.robbed;
 		s.robbed = true; s.hands = 5; s.panic = 0;
 		p.override = override; p.engaged = false;
@@ -103,7 +104,7 @@ export function createCivilians(ctx) {
 
 	function hit(s, blow) {
 		const p = s.p;
-		if (s.dead || sheltered(p)) return null;
+		if (s.dead || sheltered(p) || s.hands > 0 || p.P.restrained) return null;
 		s.H ||= createHealth({ max: 100 });
 		const r = applyDamage(s.H, blow);
 		const q = p.M.S.pos;
@@ -127,6 +128,12 @@ export function createCivilians(ctx) {
 	function update(dt, cam) {
 		callT -= dt;
 		const pool = people()?.pool || [];
+		const present = new Set(pool);
+		for (const [p, s] of known) if (!present.has(p)) {
+			layer.remove(s.T.id); p.override = null;
+			if (s.dead && p.P.ragdoll) ragdolls.release(p.P);
+			known.delete(p);
+		}
 		for (const p of pool) {
 			const s = known.get(p);
 			// everyone near you in the layer (a child only to show the ward)
