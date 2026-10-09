@@ -4,9 +4,28 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Architecture mist continuation (9 October 2026 UTC)
+
+After publishing the core handoff, completed the next building duty: the camera veil now
+follows the mist's billowed bands, tower openings, clear lanes and terrain clearance. It
+interpolates the actual 30-segment phone and 52-segment desktop mesh triangles. Exterior
+cloud shaders, colors, bloom, meshes and layer counts are preserved. Hidden/indoor veils
+clear their opacity instead of retaining stale fog.
+
+Five focused tests pass. Ten rendered before/after pairs pass on TERRAN and GAS using an
+explicit mobile Safari user agent and 640×420 touch viewport: clear opacity 0, dense cloud
+retained, unchanged outside images and no page/shader/GL or local asset errors. The restored
+production build matches the earlier desktop-verified build byte for byte: engine key
+`39b12f62f6`, SHA-256 `508952955d1266750a79d16be5937b053d2376ed59bd8def8131e20a95e2a26d`.
+See `docs/architecture-mist-2026-10-09.md` and its verification images. CPU/GPU sine-hash
+precision remains approximate; emulation does not establish physical-device frame rate.
+
+The remaining deployment dependency is the owner-authenticated rooms Worker update described
+below. The parked future roadmap is separate from this completed handoff and building pass.
+
 ## Handoff completion release (9 October 2026 UTC)
 
-**Live:** main `994aee9ff2116c8d843b24f5e517de0c63584835`; GitHub Pages run
+**Core handoff published:** main `994aee9ff2116c8d843b24f5e517de0c63584835`; GitHub Pages run
 `37921816973` succeeded. Production HTML references `2babcc429c`, and the downloaded engine
 matches the verified SHA-256 below. Main is carried back into the development branch;
 its old `island/vtmp/` previews remain on that branch only.
@@ -47,9 +66,8 @@ credentials or configured workflow. The client reports the old server's trade li
 do not report online trading/PvP as upgraded until `/status.features` includes `trade-v2`,
 `combat-v1` and `combat-guard-v1`. Deploy once with the owner-run commands in the server README.
 
-After this release, resume the remaining architecture polish with cloud immersion: align
-the camera's mist density with rendered billowing bands, tower openings and ground clearance.
-The two bands, dusk gradient and tested bloom already exist; preserve those behaviors.
+The subsequent architecture mist pass is recorded above. The two bands, dusk gradient and
+tested bloom remain intact.
 
 Earlier checkpoints below are retained as history. Their branch-only/missing-feature
 statements describe those checkpoints, not the completed source above. Real-phone timing
