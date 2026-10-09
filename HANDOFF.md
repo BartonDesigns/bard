@@ -4,6 +4,41 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Continuation checkpoint (8 October 2026, from `9d3f040`)
+
+Continued the first two priorities below on `claude/affectionate-heisenberg-3g4qv1`.
+The previous WIP areas are preserved. This checkpoint is **branch work, not a live release**;
+no main or Worker deployment was made. Details and exact checks are in
+`docs/world-continuation-2026-10-08.md`.
+
+- **Moon crew (`503c058`):** motion now applies the colony's wall/furniture constraints and
+  nearby crew spacing before the rig plants its feet. Roster destinations inside furniture
+  margins resolve to the clear edge, and walkers slow near their next point. Pending body
+  loads cannot build into a disposed world. A separate, shared interior reflection map lights
+  crew skin and clothes indoors without changing their pigmentation; outside uses the existing
+  lunar environment. The reflection map releases with the colony. **Lighting is a candidate
+  awaiting rendered review**, and the full scheduled walking routes still need a visual pass.
+- **Deep Gate (`83acc51`):** the new underground hall now has a real shaft through its floor.
+  The closed seal supplies the walking floor, the open rim keeps walkers out until they use
+  the rope, and the Deep's inner lining stops below the hall. Continuous down/up travel,
+  camera alignment on landing, control unlocking, immediate backdrop removal, and delayed
+  return cancellation on disposal have regression coverage. Waystones say “Return to the
+  gate hall,” matching their destination. Existing gate progress keeps its save key.
+- **Verified:** production build; changed-source syntax and whitespace checks; 53 Node test
+  entries covering Moon crew, collision, Deep travel, native caves, resident movement,
+  trading, combat rules and families; the trade entry reports 70 internal checks. Rooms
+  server tests report 92 passed. The native cave-elements test now sets up its browser audio
+  globals before importing the new resonance module.
+- **Still required before shipping:** actual rendered Moon skin/room walkthrough and Deep
+  gate/puzzle/rope checks, the full world/shader smoke, and owner review of the visual changes.
+  This container has no Chromium binary and its Playwright download returned “Site
+  Unavailable.” ESLint is not installed or cached, so no ESLint pass is claimed. These are
+  validation gaps, not approvals to skip the release gates.
+
+Next: complete those rendered checks, then proceed to the weapons design review, combat
+integration and the single owner-run rooms Worker deployment described below. Do not treat
+the rules tests as end-to-end combat or two-client multiplayer verification.
+
 ## Resume here (8 October 2026, late night)
 
 ### What is live (main, level99bard.com)
