@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PICNIC,CAST,eligiblePicnic,picnicGround,findPicnicSpot,picnicDue,shotOnBeat} from './picnic-plan.js';
+import {PICNIC,CAST,eligiblePicnic,picnicGround,findPicnicSpot,picnicDue,shotOnBeat,picnicSeats} from './picnic-plan.js';
+test('eight friends have separate seats with room for their bodies and feet',()=>{
+ const seats=picnicSeats();assert.equal(CAST.length,8);assert.equal(seats.length,CAST.length);
+ for(let i=0;i<seats.length;i++)for(let j=i+1;j<seats.length;j++)assert.ok(Math.hypot(seats[i].x-seats[j].x,seats[i].z-seats[j].z)>1.6);
+ assert.equal(CAST.filter(c=>c.role==='strings').length,3);
+ assert.equal(CAST.filter(c=>c.role==='sky-shot').length,2);
+});
 test('daytime walking encounter excludes travel and cave modes',()=>{
  const base={type:'EARTH',hours:14};assert.equal(eligiblePicnic(base),true);
  for(const patch of [{type:'MOON'},{hours:19},{hours:9},{flying:true},{submerged:true},{underground:true},{busy:true}])assert.equal(eligiblePicnic({...base,...patch}),false);

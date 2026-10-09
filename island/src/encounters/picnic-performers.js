@@ -18,7 +18,7 @@ export function skywardFrame(heading, origin, kick = 0, out = new THREE.Matrix4(
 }
 export function createPicnicPerformer(A, i, seat, at, variant, scene, environment, low = false) {
  const cast = CAST[i];let d, seed = 0x715c + i * 391;
- // Keep the reference's adult male quartet, using the existing body/wardrobe system.
+ // Eight adult friends, using the existing body/wardrobe system on every device.
  do {d = personDNA(seed++,{age:cast.age});} while(!d.male);
  d.outfit = {...d.outfit,top:cast.color,bottom:[.13,.16,.18],shoes:[.12,.095,.075],sleeves:i===1?'short':'long',jacket:null,legs:'long',fabricTop:'knit'};
  const P = buildPerson(A,d), M = createMotion(P,()=>at.y);
@@ -26,16 +26,21 @@ export function createPicnicPerformer(A, i, seat, at, variant, scene, environmen
  P.root.traverse(light);P.relit=light;scene.add(P.root);
  M.place(at.x+seat.x,at.y,at.z+seat.z,seat.yaw);M.sit(.38,true);M.setPose('lap');M.feel('joy',.65);
  M.S.look.target = new THREE.Vector3(at.x,at.y+.9,at.z);
- const gun = cast.role==='sky-shot', id = gun ? PICNIC_ARMS[(variant+i-2)%PICNIC_ARMS.length] : null;
- const held = gun ? itemModel(id,{lod:low?'low':'high'}) : folkInstrument(i===1);
- held.matrixAutoUpdate=false;scene.add(held);
+ const gun = cast.role==='sky-shot', strings = cast.role==='strings', id = gun ? PICNIC_ARMS[(variant+i-2)%PICNIC_ARMS.length] : null;
+ const held = gun ? itemModel(id,{lod:low?'low':'high'}) : strings ? folkInstrument(i===1) : null;
+ if(held){held.matrixAutoUpdate=false;scene.add(held);}
  const flash = gun ? createFlash(held) : null, W=weaponOf(id), H=gun?holdOf(id):null;
  if(flash)flash.sprite.position.set(W.muzzle[0],W.muzzle[1],0);
- M.grip('R',gun?1:.25);M.grip('L',gun?1:.65);
- let recoil=0, shots=0, lift=0;
+ M.grip('R',gun?1:strings?.25:0);M.grip('L',gun?1:strings?.65:0);
+ if(cast.role==='listen')M.setPose('listen');
+ let recoil=0, shots=0, lift=0, phrase=-1;
  const frame=new THREE.Matrix4(),target=new THREE.Matrix4(),pole=new THREE.Vector3(),org=new THREE.Vector3(),q=new THREE.Quaternion(),scl=new THREE.Vector3(1,1,1);
  function update(dt,time,cam,halfBeat=0) {
+  if(cast.role==='clap')M.act('clap',halfBeat/4+.5);
+  const nextPhrase=Math.floor(halfBeat/16);
+  if(nextPhrase!==phrase){phrase=nextPhrase;M.feel('joy',.6);if(cast.role==='laugh')M.gesture('laugh');else if(cast.role==='listen')M.gesture('nod');}
   M.update(dt,time,cam);P.lod?.(cam.distanceTo(P.root.position));P.root.updateMatrixWorld(true);
+  if(!held)return;
   const k=P.height/1.75, heading=seat.yaw, f=new THREE.Vector3(Math.sin(heading),0,Math.cos(heading)),l=new THREE.Vector3(Math.cos(heading),0,-Math.sin(heading));
   org.copy(M.S.pos).addScaledVector(UP,.86*k).addScaledVector(f,.27*k);
   if(gun) {
@@ -57,7 +62,7 @@ export function createPicnicPerformer(A, i, seat, at, variant, scene, environmen
    else {
     handFrame(P,side,target);
     // A continuous strum, and a fretting hand at the neck. Keep wrist orientation from the seated pose.
-    const p=new THREE.Vector3(side==='L'?0:.03,side==='L'?.4:-.025+Math.sin(time*12)*.035,.075).applyMatrix4(frame);
+    const p=new THREE.Vector3(side==='L'?0:.03,side==='L'?.4:-.025+Math.sin(time*12+i*.77)*.035,.075).applyMatrix4(frame);
     target.setPosition(p);
    }
    reach(P,side,target,pole);
@@ -72,6 +77,6 @@ export function createPicnicPerformer(A, i, seat, at, variant, scene, environmen
   return true;
  }
  return {P,M,held,update,fire,inspect:()=>({name:cast.name,age:cast.age,role:cast.role,item:id,shots,muzzleY:gun?new THREE.Vector3().setFromMatrixColumn(held.matrixWorld,0).normalize().y:null}),
-  dispose(){freeBody(P);if(gun){flash.sprite.material.dispose();held.removeFromParent();}else disposePicnicProps(held);},
+  dispose(){freeBody(P);if(gun){flash.sprite.material.dispose();held.removeFromParent();}else if(held)disposePicnicProps(held);},
  };
 }

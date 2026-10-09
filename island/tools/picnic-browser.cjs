@@ -24,8 +24,8 @@ const fs=require('node:fs/promises'),http=require('node:http'),path=require('nod
 const checks=await page.evaluate(async()=>{
  const assert=(k,b)=>{if(!b)throw new Error(k);return k;},passed=[];
  const p=preview.picnic;passed.push(assert('Cancelled asynchronous load cannot add actors',await preview.checkCancellation()));
- let s=p.inspect();passed.push(assert('Four adult performers, two distinct armaments',s.ready&&s.actors.length===4&&s.actors.every(a=>a.age>=18)&&new Set(s.actors.filter(a=>a.item).map(a=>a.item)).size===2));
- passed.push(assert('Both shooters fired; muzzles point upward',s.actors.slice(2).every(a=>a.shots>0&&a.muzzleY>.9)));
+ let s=p.inspect();passed.push(assert('Eight adult performers, two distinct armaments',s.ready&&s.actors.length===8&&s.actors.every(a=>a.age>=18)&&new Set(s.actors.filter(a=>a.item).map(a=>a.item)).size===2));
+ passed.push(assert('Both shooters fired; muzzles point upward',s.actors.filter(a=>a.role==='sky-shot').every(a=>a.shots>0&&a.muzzleY>.9)));
  preview.view(-3,4,5);preview.frame(.1,false);
  const button=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('rhythm'));button.click();
  passed.push(assert('Nearby rhythm interaction toggles',p.inspect().joined));

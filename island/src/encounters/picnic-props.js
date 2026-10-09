@@ -29,9 +29,10 @@ export function picnicProps(seats) {
  const rug=mat(0xffffff,.98);rug.map=rugTexture();
  add(g,new THREE.BoxGeometry(3.1,.035,2.8),rug,0,.025,0);
  const seam=mat(0xd4b783),wood=mat(0x765337),dark=mat(0x292f29),ceramic=mat(0xe2d9bb,.36),glass=mat(0x326355,.24,.2);
+ const cushions=[0x576758,0x7f5c45,0x596b79,0x7f765c].map(c=>mat(c));
  for(let i=0;i<seats.length;i++) {
   const s=seats[i],stool=new THREE.Group();stool.position.set(s.x,0,s.z);stool.rotation.y=s.yaw;g.add(stool);
-  const fabric=mat([0x576758,0x7f5c45,0x596b79,0x7f765c][i]);
+  const fabric=cushions[i%cushions.length];
   add(stool,new THREE.CylinderGeometry(.26,.27,.075,24),fabric,0,.34,0);
   add(stool,new THREE.TorusGeometry(.253,.004,5,30),seam,0,.378,0).rotation.x=Math.PI/2;
   for(const a of [-1,1])for(const b of [-1,1])add(stool,new THREE.CylinderGeometry(.018,.022,.3,8),wood,a*.16,.15,b*.16);
@@ -41,7 +42,7 @@ export function picnicProps(seats) {
  const bread=mat(0xc59a5d),fruit=mat(0x80352c);
  for(let i=0;i<4;i++){const m=add(g,new THREE.SphereGeometry(.09,14,8),bread,-.28+i*.12,.14,-.08);m.scale.set(1,.47,.68);}
  for(let i=0;i<7;i++)add(g,new THREE.SphereGeometry(.034,10,8),fruit,.24+(i%3)*.06,.12+Math.floor(i/3)*.026,.1+(i%2)*.06);
- for(const [x,z] of [[-.67,.28],[.68,.22],[.1,-.5],[-.55,-.48]]){
+ for(const [x,z] of [[-.67,.28],[.68,.22],[.1,-.5],[-.55,-.48],[-1.1,.55],[.3,.7],[.55,-.8],[-.3,-.9]].slice(0,seats.length)){
   add(g,new THREE.CylinderGeometry(.058,.043,.09,18,1,true),ceramic,x,.12,z);
   add(g,new THREE.CircleGeometry(.045,18),mat(0x502f14,.2),x,.158,z).rotation.x=-Math.PI/2;
  }

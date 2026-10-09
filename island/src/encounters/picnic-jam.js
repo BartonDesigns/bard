@@ -70,7 +70,7 @@ export function createPicnicJam({scene,world,camera,profile,mount,isPhone=false,
    if(!D.ready)return;
    const near=distance<8;button.hidden=!near;
    if(!near&&D.joined)pause();
-   if(near&&!D.announced){D.announced=true;hint('Off-Duty Orchestra\nTwo strings, two very enthusiastic percussionists.',6000);}
+   if(near&&!D.announced){D.announced=true;hint('Off-Duty Orchestra\nThree strings, two very enthusiastic percussionists.',6000);}
    const bpm=Math.max(76,Math.min(116,W.music?.performance?.bpm||96));
    D.clock+=Math.min(dt,.1)*bpm/30;
    for(const actor of D.actors)actor.update(Math.min(dt,.1),time,camera.position,D.clock);

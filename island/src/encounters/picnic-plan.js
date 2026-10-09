@@ -5,6 +5,10 @@ export const CAST = Object.freeze([
  { name: 'Lev', age: 36, role: 'strings', color: [0.40, 0.15, 0.075] },
  { name: 'Sasha', age: 47, role: 'sky-shot', color: [0.69, 0.71, 0.62] },
  { name: 'Nikolai', age: 53, role: 'sky-shot', color: [0.28, 0.43, 0.34] },
+ { name: 'Yuri', age: 39, role: 'strings', color: [0.15, 0.20, 0.31] },
+ { name: 'Pavel', age: 32, role: 'clap', color: [0.44, 0.23, 0.15] },
+ { name: 'Oleg', age: 58, role: 'laugh', color: [0.36, 0.39, 0.25] },
+ { name: 'Viktor', age: 45, role: 'listen', color: [0.24, 0.18, 0.29] },
 ]);
 export const PICNIC_ARMS = Object.freeze(['mossback-scout-rifle', 'warden-spark-carbine', 'aurora-trail-rifle']);
 // Half-beats, deliberately loose percussion. Each friend's turn has its own pause.
@@ -34,8 +38,8 @@ export function findPicnicSpot(cam, yaw, heightAt, blocked, random = Math.random
  }
  return null;
 }
-export const picnicSeats = (count = 4) => Array.from({ length: count }, (_, i) => {
- const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+export const picnicSeats = (count = CAST.length) => Array.from({ length: count }, (_, i) => {
+ const a = (i / count) * Math.PI * 2 + Math.PI / 4;
  return { x: Math.sin(a) * 2.4, z: Math.cos(a) * 2.4, yaw: a + Math.PI };
 });
 export function picnicDue(elapsed, lastAt, now, random = Math.random) {

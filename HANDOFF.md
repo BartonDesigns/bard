@@ -7,8 +7,9 @@ file-by-file map is in `island/README.md`.
 ## Off-Duty Orchestra checkpoint (9 October 2026 UTC)
 
 The owner supplied a picnic music video and clarified that the casual **gunfire into the
-air** is its central joke. Added a rare daytime ambient encounter with four seated adult
-MakeHuman performers, two string instruments and two friends using different existing
+air** is its central joke. After the owner's first review, expanded the encounter to eight
+seated adult MakeHuman performers on every device: three string players, a clapper, two
+friends laughing/listening, and two friends using different existing
 armament models as comic percussion. They lift the guns, fire skyward, recoil and settle;
 the music keeps going. A nearby button lets the player clap along.
 
@@ -17,9 +18,10 @@ Source: `island/src/encounters/`, with world/collision/debug hooks in `main.js`.
 The encounter owns its props, people, sounds and cancellation guards. It does not dispatch
 combat or network events. It respects a saved cooldown and clears on travel/world changes.
 
-Build, four rule tests and twelve rendered browser checks passed; zero page/shader errors
-in the encounter review. A short video with sound and a PNG show the actual models in a
-neutral staging clearing. Details and reproducible review tools are documented in
+Build, five rule tests and twelve rendered browser checks passed; zero page/shader errors
+in the eight-person review. Seats are distributed around the full circle without overlap.
+An updated PNG shows all eight; the earlier video shows the initial four-person version.
+Details and reproducible review tools are documented in
 `docs/off-duty-orchestra-2026-10-09.md`.
 
 **Branch source only.** New looks need the owner's review before a selective live release.

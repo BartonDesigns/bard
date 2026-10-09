@@ -6,17 +6,19 @@ central joke. The encounter uses original synthesized music, not the reference r
 
 ## Implemented
 
-- Four adult MakeHuman performers: Misha and Lev on two folk string instruments, Sasha
-  and Nikolai adding staggered sky shots. They keep sitting and playing through the noise.
+- Eight adult MakeHuman performers on desktop and mobile: Misha, Lev and Yuri play strings;
+  Sasha and Nikolai add staggered sky shots; Pavel claps, Oleg laughs and Viktor listens
+  and nods. Eight separate seats and cups surround the rug. Music continues through the shots.
 - Two distinct held models per occurrence, rotating through the existing Mossback,
   Warden and Aurora. Shared model caches stay intact. Both hands use the existing IK;
   the weapons lift, flash at their real muzzle points, recoil and settle.
 - Original plucked-string phrase follows the world's BPM within a relaxed range.
   Existing weapon sound cues provide the comic percussion. All audio uses the world bus.
 - A woven picnic rug, stools, food board, cups, thermos and bag. Static geometry batches
-  by material. The review scene fell from 239 to 107 draw calls after batching; its total
-  262,792 triangles includes all four people and the review background, not the whole game.
-- A nearby **Join the rhythm** button adds clapping, without taking over the camera.
+  by material. The eight-person review uses 167 draw calls and 500,140 triangles including
+  people and review scenery, not the whole game. The initial quartet used 107 calls.
+- A nearby **Join the rhythm** button adds the player's claps to Pavel's quiet beat,
+  without taking over the camera.
 - Nine percent chance per eligible walking minute, a saved 30-minute cooldown per world,
   daytime 10:00–19:00, Earth/Tropical/Terran. Siting tests a seven-metre footprint for
   slope, obstacles, roads and water, behind a shoulder 28–40 metres away. The performance
@@ -38,7 +40,8 @@ central joke. The encounter uses original synthesized music, not the reference r
 - `island/tools/picnic-preview-entry.mjs` renders the actual production encounter in a
   neutral clearing. Bundle it to `island/dist/picnic-preview.js` and serve the repository
   root so body textures and rigs resolve. Its camera and frame controls support exports.
-- Exported review: four-second H.264/AAC clip plus PNG. Audio export uses the same music
+- Updated eight-person PNG exported after the owner's request to grow the group. The
+  earlier four-second H.264/AAC clip and PNG show the initial quartet. Audio export uses the same music
   and weapon cue functions, scheduled to match the captured animation. The clearing's
   plain trees and ground are staging scenery, not a replacement for the game's forest.
 
@@ -46,10 +49,10 @@ central joke. The encounter uses original synthesized music, not the reference r
 
 - `npm --prefix island run build`: passed. Generated engine/index files are not included
   in this source checkpoint, following the branch handoff rule. Rebuild before running it.
-- `node --test island/src/encounters/picnic-plan.test.mjs`: four tests passed for mode gates,
-  full-footprint rejection, cooldown/chance and staggered firing cadence.
+- `node --test island/src/encounters/picnic-plan.test.mjs`: five tests passed for eight
+  separated seats, mode gates, full-footprint rejection, cooldown/chance and firing cadence.
 - `node island/tools/picnic-browser.cjs`: twelve checks passed in Chromium 153, with zero
-  page/shader errors. Checks cover four adults, distinct weapons, shots and upward muzzle
+  page/shader errors. Checks cover eight adults, distinct weapons, shots and upward muzzle
   direction, rhythm interaction, audio output/pause, body collision, origin/world/distance
   teardown, repeat creation, button disposal and cancelled asynchronous loading.
   The script requires Playwright and the bundled preview. `CHROME_EXECUTABLE`,

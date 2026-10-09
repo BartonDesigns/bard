@@ -22,7 +22,7 @@ export function createPicnicAudio() {
   beat(n, level, pan, joined) {
    note(MELODY[n % MELODY.length], .045 * level, pan);
    if (n % 2 === 0) {const bass = n % 16 < 8 ? 50 : 57;note(bass,.036*level,pan);note(bass+7,.018*level,pan);}
-   if (joined && n % 4 === 2) note(0,.055*level,pan,true);
+   if (n % 4 === 2) note(0,(joined?.07:.023)*level,pan,true);
   },
   silence() {for(const v of [...voices]) {v.s.onended=null;try{v.s.stop();}catch{}v.s.disconnect();v.f.disconnect();v.g.disconnect();v.p.disconnect();}voices.clear();},
   inspect: () => ({voices:voices.size}),
