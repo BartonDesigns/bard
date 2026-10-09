@@ -116,6 +116,7 @@ import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers } from './people/people.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
+import { createPicnicJam } from './encounters/picnic-jam.js';
 import { createRagdolls } from './people/ragdoll.js';
 import { createImpacts } from './vehicles/impact.js';
 import { createCarjack } from './vehicles/carjack.js';
@@ -565,6 +566,9 @@ export function createIslandWorld() {
 	const ghost = createGhost(scene, { world: () => world, mount: dom.mount, canvas: dom.canvas, hush: (k) => world?.natureSound?.hush?.(k) });
 	HOOKS.ghost = (at) => ghost.summon(camera, at);
 	HOOKS.ghostInfo = () => ghost.inspect();
+	const picnic = createPicnicJam({ scene, world: () => world, camera, profile: () => shared.planet, mount: dom.mount, isPhone, hint,
+		busy: () => arcade.active() || drive.active() || !!world?.boat?.boarded?.() || !!world?.orbit?.active?.() });
+	HOOKS.picnic = picnic;
 	// the sculpted animals in a row in front of you (a look at them: Crysis.creatures())
 	HOOKS.creatures = () => {
 		const P = world.player.state, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
@@ -1088,7 +1092,7 @@ export function createIslandWorld() {
 				// ...and in and out of the houses, up their stairs
 				const diablo = world.diablo, houses = world.houses, fwy = world.freeways, pools = world.tidepools;
 				island.extraFloor = (x, z, y) => Math.max(bridge.deckFloor(x, z, y), diablo.floor(x, z, y), houses.floor(x, z, y), fwy.floor(x, z, y), pools.floor(x, z, y), world.landmarks.floor(x, z, y), world.beaches.floor(x, z, y), world.commercial.floor(x, z, y), world.discovery.floor(x, z, y), world.towers.floor(x, z, y), world.boardwalk.floor(x, z, y), world.lake?.floor?.(x, z, y) ?? -1e9, world.parks?.floor?.(x, z, y) ?? -1e9);
-				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); world.beaches.push?.(p, footY); world.parks?.push?.(p, footY); };
+				island.extraPush = (p, footY) => { diablo.push(p, footY); houses.push(p, footY); world.commercial.push(p, footY); world.discovery.push(p, footY); world.towers.push(p, footY); world.boardwalk.push(p, footY); world.landmarks.push(p, footY); bayArea.coast?.push?.(p, footY); world.lake?.push(p, footY, world.player.state.flying); world.fields.push(p, footY); world.beaches.push?.(p, footY); world.parks?.push?.(p, footY); picnic.push(p, footY); };
 				{ const of = island.extraFloor, P = world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
@@ -1099,6 +1103,7 @@ export function createIslandWorld() {
 			});
 			const w0 = world;
 		}
+		{ const previousPush = island.extraPush; island.extraPush = (p, footY) => { previousPush?.(p, footY); picnic.push(p, footY); }; }
 		if (!arrival) dom.loading.style.display = 'none';
 		buildPanel();
 		return world;
@@ -1106,6 +1111,7 @@ export function createIslandWorld() {
 
 	function teardown() {
 		if (!world) return;
+		picnic.clear();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
 		social.reset();
@@ -1648,6 +1654,7 @@ export function createIslandWorld() {
 		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
 		people.demo(dt, time, camera.position);
 		ghost.update(dt, time, camera, sk.night);
+		picnic.update(dt, time, visible);
 		W.citySound?.update(dt, camera, { night: sk.night, cars: W.street?.cars, people: people.pool, steps: people.steps, player: W.player.state, under, islandHalf: W.island.half, indoors: !!W.weather.state.sheltered, rain: wx.rainHere || 0, hours: W.sky.state.hours });
 		// (your footsteps keep the music's time: player.js)
 		if (!W.player.state.beat) W.player.state.beat = () => autoMusic.clock();
@@ -1711,6 +1718,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		picnic.pause();
 		social.update(0, time, false); social.flush();
 		world?.labels?.hide();
 		world?.globe?.regional?.pause();
@@ -1991,6 +1999,9 @@ if (typeof window !== 'undefined') {
 		// the child in the woods (people/ghost.js): very rare; this calls her now
 		ghost: (at) => HOOKS.ghost?.(at),
 		ghostInfo: () => HOOKS.ghostInfo?.(),
+		// Rare daytime picnic: actual held armaments as comic sky-shot percussion.
+		picnic: () => HOOKS.picnic?.inspect(),
+		picnicGo: (at) => HOOKS.picnic?.summon(at),
 		// the mushrooms (planet/mushrooms.js): Crysis.trip('psilocybe'), or from a moment in
 		// (seconds in): Crysis.trip('amanita', 90); Crysis.tripInfo() tells where it is
 		trip: (kind, at) => window.L99Island?.world?.()?.shrooms?.eat(kind, at != null ? { at: +at } : undefined),
