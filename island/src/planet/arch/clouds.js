@@ -8,6 +8,7 @@
 // Lit by the sky; by night it takes the windows' light near the works.
 
 import * as THREE from 'three';
+import { mistDensity } from './cloud-field.js';
 
 const NOISE = /* glsl */`
 float mH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -240,19 +241,6 @@ export function createHeroes(scene, shared, centre, { isPhone = false, seed = 1,
 	return { mesh: m, dispose() { g.dispose(); m.material.dispose(); scene.remove(m); } };
 }
 
-// the same noise on the CPU, for the veil when you fly into it
-const fr = (v) => v - Math.floor(v);
-const mH = (x, y) => fr(Math.sin(x * 127.1 + y * 311.7) * 43758.5453);
-const mN = (x, y) => {
-	const ix = Math.floor(x), iy = Math.floor(y);
-	let fx = x - ix, fy = y - iy;
-	fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
-	const a = mH(ix, iy), b = mH(ix + 1, iy), c = mH(ix, iy + 1), d = mH(ix + 1, iy + 1);
-	return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
-};
-const mF = (x, y) => mN(x, y) * 0.53 + mN(x * 2.07 + 3.1, y * 2.07 + 3.1) * 0.27 + mN(x * 4.3 - 1.7, y * 4.3 - 1.7) * 0.13 + mN(x * 8.9 + 5.3, y * 8.9 + 5.3) * 0.07;
-const sm = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-
 // M: the plan's mist { bands: [{ base, top, cover }], x, z, rad } (the first band the main
 // one); obs: [{ x, z, r, light, tower }]; banks: far mist round other things, of rising wisps
 // [{ x, z, r, y, rise, n, size }]
@@ -364,14 +352,9 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 		const p = camera.position, d = Math.hypot(p.x - M.x, p.z - M.z);
 		group.visible = d < M.rad + 2500;
 		// in a band: the veil, as thick as the cloud is here
-		let inK = 0;
-		for (const B of M.bands) inK = Math.max(inK, sm(B.base - 2, B.base + 5, p.y) * (1 - sm(B.top - 5, B.top + 3, p.y)) * (1 - sm(M.rad * 0.55, M.rad * 0.9, d)));
-		// (not indoors: the rooms' glass keeps it out)
-		if (indoors) inK = 0;
+		const inK = mistDensity(p, M, obs, { off: U.uOff.value, wind: U.uWd.value, time: U.uTime.value, dusk: U.uDusk.value, ground: H(p.x, p.z), indoors, segments: seg });
 		if (inK > 0.01) {
-			const qx = (p.x - U.uOff.value.x) * 0.0055 + 0.85, qz = (p.z - U.uOff.value.y) * 0.0055 + 0.85;
-			const cov = sm(M.cover, M.cover + 0.26, mF(qx, qz) + 0.08);
-			veilMat.opacity = inK * (0.25 + 0.6 * cov);
+			veilMat.opacity = inK * 0.85;
 			tc.copy(sun).multiplyScalar(0.9).add(tc2.copy(hor).multiplyScalar(0.3));
 			cc.copy(hor).multiplyScalar(0.72).lerp(tc, 0.6 * U.uLit.value);
 			cc.lerp(tc.copy(hor).multiplyScalar(0.1), night * 0.88);
@@ -379,7 +362,7 @@ export function createMist(scene, shared, M, obs, { isPhone = false, seed = 1, g
 			cc.lerp(tc.setRGB(0.42, 0.28, 0.5).multiplyScalar(sk.y), sk.x * 0.85);
 			veilMat.color.copy(cc);
 			veil.visible = true;
-		} else veil.visible = false;
+		} else { veil.visible = false; veilMat.opacity = 0; }
 		return inK;
 	}
 	function dispose() {
