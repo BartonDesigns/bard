@@ -6,6 +6,11 @@ file-by-file map is in `island/README.md`.
 
 ## Handoff completion release (9 October 2026 UTC)
 
+**Live:** main `994aee9ff2116c8d843b24f5e517de0c63584835`; GitHub Pages run
+`37921816973` succeeded. Production HTML references `2babcc429c`, and the downloaded engine
+matches the verified SHA-256 below. Main is carried back into the development branch;
+its old `island/vtmp/` previews remain on that branch only.
+
 The owner explicitly authorized finishing the current handoff with agents and publishing
 it live. This supersedes the earlier request to pause new looks for a separate approval.
 The scope is the current release table plus the open shoreline, diving, cinematic Explore

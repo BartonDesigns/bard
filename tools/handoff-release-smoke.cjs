@@ -2,8 +2,8 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const fs=require('node:fs/promises'),http=require('node:http'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
-	const skyOnly=process.env.BARD_QA_SCOPE==='sky',deepOnly=process.env.BARD_QA_SCOPE==='deep';
-	const root=path.resolve(__dirname,'..'),out=(process.env.BARD_QA_OUT||'/tmp/bard-handoff-smoke')+(skyOnly?'-sky':deepOnly?'-deep':'');await fs.mkdir(out,{recursive:true});
+	const skyOnly=process.env.BARD_QA_SCOPE==='sky',deepOnly=process.env.BARD_QA_SCOPE==='deep',heldOnly=process.env.BARD_QA_SCOPE==='held';
+	const root=path.resolve(__dirname,'..'),out=(process.env.BARD_QA_OUT||'/tmp/bard-handoff-smoke')+(skyOnly?'-sky':deepOnly?'-deep':heldOnly?'-held':'');await fs.mkdir(out,{recursive:true});
 	const server=http.createServer(async(req,res)=>{try{
 		const p=new URL(req.url,'http://local').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));if(!f.startsWith(root+path.sep))throw Error('path');
 		res.setHeader('Content-Type',f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':'application/octet-stream');res.end(await fs.readFile(f));
@@ -23,6 +23,7 @@ const fs=require('node:fs/promises'),http=require('node:http'),path=require('nod
 			assert.equal(result.lost,false);assert.ok(result.lit,name+' is not black');assert.ok(result.programs.every(p=>p.runnable&&p.samplers<=32&&p.stages.every(n=>n<=16)));report.worlds.push({name,...result});await page.screenshot({path:out+'/'+name+'.png',timeout:300000});console.log('RENDERED',name,JSON.stringify(result.render));
 		};
 		await page.goto('http://127.0.0.1:'+server.address().port+'/?offline&safe',{waitUntil:'domcontentloaded'});console.log('Faceplate loaded');
+		if(heldOnly){await page.evaluate(async()=>{const a=await L99IslandDoor.engine();await a.open({seed:2281969,biome:'SINGULARITY',earth:false});Crysis.music.auto(false);window._KEYS_PLAY_ON=false;Crysis.combat.ambient(false);const b=a.world().beyond;b.enter(true);for(let i=0;i<40;i++)b.update(.1,i*.1);const p=a.world().player.state;a.camera().position.copy(p.pos);a.camera().rotation.set(p.pitch,p.yaw,0,'YXZ');});await sample('gargantua-held-note',true);assert.deepEqual(report.errors,[]);assert.deepEqual(report.requests.filter(r=>!r.url.endsWith('/favicon.ico')),[]);report.passed=true;return;}
 		if(!deepOnly){
 		await page.evaluate(async()=>{const a=await L99IslandDoor.engine();await a.open({seed:1337,earth:true});Crysis.music.auto(false);window._KEYS_PLAY_ON=false;Crysis.combat.ambient(false);});
 		if(!skyOnly)await sample('earth-island');
