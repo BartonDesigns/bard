@@ -46,8 +46,10 @@ introduce the parked hunting/shelter roadmap or claim AAA art or physical-device
   firing (24→23), R reload (reserve 48→47), right-mouse sights, I-menu fire/reload suppression,
   close during person loading, reopening cached gear, and travelling during person loading.
   Chromium software WebGL reported zero page/shader errors and healthy context/programs.
-  The reusable check also includes third-person input and explicit HUD visibility checks.
-  Root's final coordinated run verifies the final art/build together.
+  The final coordinated production run passed all nine gates, including P-toggle into
+  third person with right-mouse aiming, explicit hidden HUD on close, and nonoverlapping
+  health/ammo rows at 640×420. Evidence is in `docs/verification/combat-gameplay/`.
+  Tested engine cache version: `2babcc429c`.
 
 ## Release integration and boundary
 

@@ -28,11 +28,23 @@ and native Sun/Gargantua entry requests, not the parked future roadmap.
 - **Off-Duty Orchestra:** the eight-person floor-seated encounter is included, with
   varied relaxed poses, occasional standing/shuffling and comic upward firing.
 
-Production release verification and exact live commit are recorded below when deployment
-completes. This checkout's generated engine is being rebuilt for that release. The rooms
-Worker source is tested locally but production deployment requires the owner's authenticated
-Cloudflare session; this environment has no deployment credentials or configured workflow.
-Do not report that Worker as deployed until its production capability check succeeds.
+The production build is reproducible from a clean main-based release checkout: engine URL
+key `2babcc429c`, SHA-256 `b88798a98269b232a49e63cc0487b7526707e305a68d80b07ee59c9dfb69d637`.
+All nine real-input combat gates passed. Thirteen full-world views passed with no page,
+shader or local asset errors and at most 16 samplers per shader stage. This includes Moon
+room skin lighting, the Deep phrase puzzle and complete rope round trip, and the native
+Gargantua voyage into the Held Note and back to the Event Ring. See the release evidence
+in `docs/verification/combat-gameplay/` and the full-world verification record.
+
+The rooms Worker source is tested with two real local clients, but production deployment
+requires the owner's authenticated Cloudflare session. This environment has no deployment
+credentials or configured workflow. The client reports the old server's trade limitation;
+do not report online trading/PvP as upgraded until `/status.features` includes `trade-v2`,
+`combat-v1` and `combat-guard-v1`. Deploy once with the owner-run commands in the server README.
+
+After this release, resume the remaining architecture polish with cloud immersion: align
+the camera's mist density with rendered billowing bands, tower openings and ground clearance.
+The two bands, dusk gradient and tested bloom already exist; preserve those behaviors.
 
 Earlier checkpoints below are retained as history. Their branch-only/missing-feature
 statements describe those checkpoints, not the completed source above. Real-phone timing
