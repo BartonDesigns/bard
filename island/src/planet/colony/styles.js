@@ -25,6 +25,8 @@ export const COLONY = {
 		accent: [0.95, 0.55, 0.12], glass: [0.55, 0.68, 0.80],
 		window: [1.0, 0.80, 0.52], run: [1.0, 0.18, 0.12], pad: [0.35, 0.85, 1.0],
 		hard: true,
+		// out past the land, on toward the horizon
+		outer: [['mine', 'Copernicus Deep Mine'], ['relay', 'Far Side Relay'], ['wreck', 'Wreck of the Kestrel'], ['plaza', 'First Landing Plaza'], ['observatory', 'Daedalus Observatory'], ['shelter', 'Storm Shelter Four']],
 	},
 	MAGMA: {
 		name: 'Basalt Hold', port: 'Basalt Hold Pads',

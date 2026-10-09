@@ -30,6 +30,8 @@ import { createSealife } from './sealife.js';
 import { createMagma } from './magma.js';
 import { createCaverns } from './caverns.js';
 import { createUnderworld } from './planet/underworld.js';
+import { createDeep, planDeep } from './planet/deep.js';
+import { createStriker, createRipples, ring } from './planet/resonance.js';
 import { planCaves, makeField } from './planet/cavenet.js';
 import { createReef } from './reef.js';
 import { buildEcology, describe } from './crysis/ecology.js';
@@ -681,6 +683,29 @@ export function createIslandWorld() {
 		if (tpBtn.style.display !== d) tpBtn.style.display = d;
 		if (!on && tpMenu.style.display !== 'none') tpMenu.style.display = 'none';
 	}
+	// the singing stones (planet/resonance.js): look at one within reach and strike it, by the
+	// button, E, or a click or tap on the stone; the caves' alcoves, the Deep Gate and the
+	// Deep's own, and the boulders that bob with the music
+	const striker = HOOKS.striker = createStriker({ camera, mount: dom.mount, button, isPhone, canvas: dom.canvas, shared });
+	const strikeRipples = createRipples(scene, 6);
+	striker.add(() => world?.underworld?.elements?.targets?.());
+	striker.add(() => world?.deep?.targets?.());
+	striker.add(() => {
+		const W = world, B = W?.vegetation?.boulders?.();
+		if (!B?.length || (W.underworld?.inside?.() || 0) > 0.5 || W.deep?.active()) return null;
+		const out = [], seen = new Set(), cam = camera.position;
+		for (const { it } of B) {
+			if (seen.has(it) || Math.hypot(it.x - cam.x, it.z - cam.z) > 6 + it.scale) continue;
+			seen.add(it);
+			const lift = it.resonance?.y || 0;
+			out.push({ pos: new THREE.Vector3(it.x, it.y + lift + it.scale * 0.45, it.z), r: it.scale * 0.85, label: 'Strike the boulder', icon: '🔔', reach: 2.6, color: 0xffe7b8, act: () => {
+				W.vegetation.kick(it, 0.8);
+				ring([0, 1, 2, 4, 5][Math.abs(Math.floor(it.x * 7 + it.z * 13)) % 5] - 7, { vel: 0.55, dur: 1.8, bell: true });
+				strikeRipples.spawn(new THREE.Vector3(it.x, it.y + lift + 0.05, it.z), 0xffe7b8, 4 + it.scale * 2);
+			} });
+		}
+		return out;
+	});
 	// doors within reach: a button, or E
 	const doorBtn = button('🚪 Open', 'Open the door (E)', 'display:none;', 'prompt 60');
 	dom.mount.appendChild(doorBtn);
@@ -785,6 +810,9 @@ export function createIslandWorld() {
 		const cavePlan = planCaves(island, profile);
 		// ...and the realm's dungeons dug down to meet them
 		if (realmPlan) planDungeons(realmPlan, island, cavePlan, makeField);
+		// the Deep Gate (planet/deep.js): a carved hall at the end of a passage dug on toward the
+		// summit, a sealed shaft with no bottom in its floor
+		const deepPlan = cavePlan ? planDeep(island, cavePlan, makeField) : null;
 		// the works of whoever built here before: sited now, so nothing grows on them
 		const alienPlan = earth || realmPlan?.noAliens || profile.airless ? null : planAlien(island, profile, { holes: cavePlan?.holes, fields: [...fieldPlan.clear, ...(realmPlan?.clear || [])], isPhone });
 		// (and the dwellings of whoever built them: interiors/alien.js)
@@ -896,7 +924,7 @@ export function createIslandWorld() {
 		// the world by the dark star: its Event Ring's sphere is a way beyond (planet/beyond.js)
 		if (profile.type === 'SINGULARITY' && alienPlan?.sites[0]?.kind === 'landmark') world.beyond = createBeyond({ renderer, scene, camera, island, shared, site: alienPlan.sites[0], player, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, isPhone });
 		if (colonyPlan) {
-			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state });
+			const cl = world.colony = createColony(island, shared, scene, camera, profile, colonyPlan, { isPhone, renderer, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, isTouch: matchMedia('(pointer: coarse)').matches, arms, social: () => social, world: () => world });
 			const of = island.extraFloor, op = island.extraPush;
 			island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), cl.floor(x, z, y)) : cl.floor;
 			island.extraPush = op ? (p, footY) => { op(p, footY); cl.push(p, footY); } : cl.push;
@@ -912,6 +940,15 @@ export function createIslandWorld() {
 		}
 		// (the bridges where the realm's roads cross the streams are floors)
 		if (waterPlan?.source.decks.length) { const of = island.extraFloor, wf = world.water.floor; island.extraFloor = of ? (x, z, y) => Math.max(of(x, z, y), wf(x, z, y)) : wf; }
+		// the Deep: walked in its own frame, ahead of the caves and dungeons while you are down there
+		if (deepPlan && world.underworld?.lighting) {
+			const dp = world.deep = createDeep(island, shared, scene, camera, profile, { plan: deepPlan, underworld: world.underworld, isPhone, hint: (t, ms) => hint(t, ms, 1), player: () => world?.player.state, mount: dom.mount, bodyKey: body.key });
+			if (dp) {
+				const uf = island.underFloor, up = island.underPush;
+				island.underFloor = (x, z, y) => (dp.active() ? dp.floor(x, z, y) : dp.gateFloor(x, z, y) ?? uf?.(x, z, y) ?? null);
+				island.underPush = (p, footY) => { if (dp.active()) dp.push(p, footY); else { up?.(p, footY); dp.gatePush(p, footY); } };
+			} else world.deep = null;
+		}
 		world.kinetic = createKinetic({ scene });
 		world.kineticEpoch = world.globe?.frame?.epoch;
 		state.body = world.body = body;
@@ -1071,6 +1108,7 @@ export function createIslandWorld() {
 		world.cottages?.dispose();
 		world.shells?.dispose();
 		world.shrooms?.dispose();
+		world.deep?.dispose();
 		world.underworld?.dispose();
 		world.volcano?.dispose();
 		world.alien?.dispose();
@@ -1300,7 +1338,7 @@ export function createIslandWorld() {
 		if (band === islandReach.band) return;
 		islandReach.band = band;
 		for (const o of [W.grass, W.turf, ...W.litter.meshes]) o.visible = band < 1;
-		W.terrain.visible = band < 2;
+		W.terrain.visible = band < 2 || !!W.island.far;
 		if (W.underwater.group) W.underwater.group.visible = band < 3;
 		for (const o of W.caverns.group.children) if (!o.isLight) o.visible = band < 3;
 		for (const o of W.village.group.children) if (o !== W.village.boat) o.visible = band < 3;
@@ -1397,7 +1435,8 @@ export function createIslandWorld() {
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
 		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
-		const under = camera.position.y < surf - 0.05;
+		// (the Deep lies far under the sea's level, but it is dry rock)
+		const under = camera.position.y < surf - 0.05 && !W.deep?.active();
 		// seen from below the sea is a ceiling: it must not hide what glows beneath it
 		W.ocean.material.depthWrite = !under;
 		// ...and it is drawn before everything under it, so glows and embers show through
@@ -1413,6 +1452,7 @@ export function createIslandWorld() {
 		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
 		W.underworld?.update(dt, time);
+		W.deep?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
 		const bay = W.island.village.bay;
 		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40;
@@ -1442,7 +1482,9 @@ export function createIslandWorld() {
 			scene.fog.density *= (1 + (wx.rainHere * 12 + wx.gloom * 1.5) * (1 - clearK * 0.8)) * (1 - clearK * 0.55);
 			// another world's air: dust, ash, spores, mist
 			scene.fog.density *= W.island.profileHaze || 1;
-			const far = THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+			// (the Moon's ground runs to its horizon in clear vacuum)
+			if (W.island.far) scene.fog.density = 0.000006;
+			const far = W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
@@ -1450,7 +1492,7 @@ export function createIslandWorld() {
 		// Keep the surface visible through mouths and skylights, even from deep shade.
 		const cavePlan = W.underworld?.plan;
 		const vista = cavePlan?.holes.some(h => Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < h.r + 80);
-		const open = caveK < 0.9 || !!vista;
+		const open = (caveK < 0.9 || !!vista) && !W.deep?.active();
 		if (W.underworld) for (const o of [W.terrain, W.ocean, W.grass, W.turf, W.vegetation.group, W.distant?.group, W.alien?.group]) { const v = open && (o !== W.ocean || seaLook.on); if (o && o.visible !== v) o.visible = v; }
 		if (caveK > 0) {
 			const dim = 1 - caveK * 0.96;
@@ -1518,6 +1560,8 @@ export function createIslandWorld() {
 		indoorK += ((W.houses?.inside(camera.position) || W.interiors?.inside(camera.position) ? 1 : 0) - indoorK) * Math.min(1, dt * 1.2);
 		renderer.toneMappingExposure *= 1 + indoorK * (0.15 + 0.4 * sk.dayK);
 		watchDoor(dt);
+		striker.update(dt, scene, !W.player.state.flying && !arcade.active() && dom.mount.style.display !== 'none');
+		strikeRipples.update(dt);
 		sunGlare(dt);
 		watchTeleport();
 		share.update(dt);
@@ -1924,6 +1968,11 @@ if (typeof window !== 'undefined') {
 		interiors: () => window.L99Island?.world?.()?.interiors?.info() ?? 'none here',
 		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
+		// the Deep (planet/deep.js): Crysis.deep() tells of it; Crysis.deepGo('gate'), ('open') or a depth in metres
+		deep: () => window.L99Island?.world?.()?.deep?.info() || 'no Deep Gate on this world',
+		deepGo: (where = 'gate') => window.L99Island?.world?.()?.deep?.go(where) || 'no Deep Gate on this world',
+		// what the strike prompt is offering now (planet/resonance.js)
+		striking: () => { const t = HOOKS.striker?.current(); return t ? { label: t.label, at: t.pos.toArray().map((v) => Math.round(v * 10) / 10) } : null; },
 		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
 		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),
 		// the alien works (planet/alien.js): Crysis.alien() lists the sites, Crysis.alienGo(i) takes you to look at one

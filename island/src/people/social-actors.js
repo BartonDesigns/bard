@@ -126,7 +126,8 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
   if(scan<=0) {
    scan=1;
    for(const p of [...actors.values()]) if(!p.engaged && p.M.S.pos.distanceTo(camera.position)>180) remove(p);
-   const candidates=state.list(key()).filter(r=>!actors.has(r.id)).map(r=>({r,q:worldPosition(W(),r.position)})).filter(v=>v.q && Math.hypot(v.q.x-camera.position.x,v.q.z-camera.position.z)<130).sort((a,b)=>Math.hypot(a.q.x-camera.position.x,a.q.z-camera.position.z)-Math.hypot(b.q.x-camera.position.x,b.q.z-camera.position.z));
+   // (a colony's named crew keep bodies of their own: planet/colony/crew-life.js)
+   const candidates=state.list(key()).filter(r=>!actors.has(r.id) && r.source!=='colony').map(r=>({r,q:worldPosition(W(),r.position)})).filter(v=>v.q && Math.hypot(v.q.x-camera.position.x,v.q.z-camera.position.z)<130).sort((a,b)=>Math.hypot(a.q.x-camera.position.x,a.q.z-camera.position.z)-Math.hypot(b.q.x-camera.position.x,b.q.z-camera.position.z));
    // A fresh crowd pool can repeat a procedural seed after reload. Remove that
    // incarnation: its outfit/position can differ, so restore from saved DNA instead.
    const records=state.list(key());

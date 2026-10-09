@@ -94,7 +94,7 @@ const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.
 const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
 const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
-export function createMotion(P, groundAt) {
+export function createMotion(P, groundAt, { constrain } = {}) {
 	const { bones, map, rest, dna } = P;
 	const H = (n) => rest.heads[map[n]];
 	const g = dna.gait;
@@ -224,6 +224,7 @@ export function createMotion(P, groundAt) {
 		S.heading = heading;
 		// the body moves at the smoothed speed along the smoothed heading
 		S.pos.x += Math.sin(heading) * speed * dt; S.pos.z += Math.cos(heading) * speed * dt;
+		constrain?.(S.pos, dt);
 		const run = clamp(S.run.to(S.want.run, dt), 0, 1);
 		// gait from speed, as people really walk: a stride (two steps) of about 0.83 of the height
 		// at an easy 1.3 m/s, lengthening and quickening together as the pace picks up; the feet

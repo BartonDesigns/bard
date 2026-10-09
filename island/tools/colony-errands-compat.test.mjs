@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createErrands } from '../src/planet/colony/errands.js';
+import { QUESTS } from '../src/planet/colony/crew.js';
+
+test('colony errands complete and persist with the live inventory v1 API', () => {
+ const saves = new Map();
+ globalThis.localStorage = { getItem: k => saves.get(k) || null, setItem: (k,v) => saves.set(k,v) };
+ const options = { plan: { seed: 4242, name: 'Tranquility', outer: [] }, X: { terminals: [] }, crew: { where: () => null }, arms: { state: () => ({ items: {}, credits: 0 }) } };
+ const e = createErrands(options);
+ e.debug.accept('relay');
+ assert.ok(e.act('relay:draw'));
+ assert.equal(e.S.items['relay-transceiver-board'], 1);
+ e.dispose();
+ const reload = createErrands(options);
+ assert.equal(reload.S.items['relay-transceiver-board'], 1);
+ assert.ok(reload.act('relay:fit'));
+ assert.equal(reload.S.items['relay-transceiver-board'], 0);
+ const response = reload.talkOpen('relay');
+ assert.ok(response.choices?.length);
+ response.choices[0].fn();
+ assert.equal(reload.info().relay.s, 'done');
+ assert.equal(reload.S.credits, QUESTS.relay.reward.credits);
+ assert.ok(reload.journal().list.some(x => x.text.includes('Colony credit balance: 120')));
+ reload.dispose();
+ const final = createErrands(options);
+ assert.equal(final.S.credits, 120);
+ assert.equal(final.act('relay:draw'), null);
+ assert.equal(final.act('relay:fit'), null);
+ final.dispose();
+});

@@ -246,6 +246,13 @@ const ITEMS = [
 		consumable: true,
 		heatRisk: 4,
 	},
+	// the Moon colony's errand things (planet/colony/errands.js): carried, handed over, never sold
+	...[
+		['relay-transceiver-board', 'Relay Transceiver Board', 'A spare transceiver board for the Far Side Relay, signed out of the colony depot.'],
+		['kestrel-flight-recorder', 'Kestrel Flight Recorder', 'The orange flight recorder from the Wreck of the Kestrel, still blinking.'],
+		['regolith-core-sample', 'Sealed Regolith Core', 'A metre of fresh regolith from the Copernicus face, sealed on site for the med bay.'],
+		['hydroponic-harvest-crate', 'Harvest Crate', 'Basil and lettuces from the dome farm, on their way to the mess.'],
+	].map(([id, name, use]) => ({ id, name, kind: 'errand', fictional: true, activities: [], use, sources: {}, marketTradable: true, basePrice: 0, weight: 1, slot: 'hand', stackable: false, consumable: false, heatRisk: 0 })),
 ];
 
 export const ARMS_CATALOG = freeze(Object.fromEntries(ITEMS.map((item) => [item.id, item])));

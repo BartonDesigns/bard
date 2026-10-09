@@ -4,19 +4,24 @@
 
 import * as THREE from 'three';
 import { groundDetail } from './textures.js';
+import { FAR_GLSL } from './lunarfar.js';
 
-export function radialGrid(segments, radius, power) {
-	// a square grid whose spacing grows with distance from the centre
+export function radialGrid(segments, radius, power, extra = 0, far = 0) {
+	// a square grid whose spacing grows with distance from the centre (and, with extra
+	// rings, on out to far: the airless worlds' horizon)
 	const g = new THREE.BufferGeometry();
-	const n = segments + 1, pos = new Float32Array(n * n * 3), idx = [];
+	const m = segments + 2 * extra, n = m + 1, pos = new Float32Array(n * n * 3), idx = [];
+	const at = (i) => {
+		const u = (i - extra) / segments * 2 - 1, a = Math.abs(u);
+		return Math.sign(u) * (a <= 1 ? Math.pow(a, power) * radius : radius + (far - radius) * Math.pow((a - 1) * segments / (2 * extra), 2.2));
+	};
 	for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-		const u = i / segments * 2 - 1, v = j / segments * 2 - 1;
 		const k = (j * n + i) * 3;
-		pos[k] = Math.sign(u) * Math.pow(Math.abs(u), power) * radius;
+		pos[k] = at(i);
 		pos[k + 1] = 0;
-		pos[k + 2] = Math.sign(v) * Math.pow(Math.abs(v), power) * radius;
+		pos[k + 2] = at(j);
 	}
-	for (let j = 0; j < segments; j++) for (let i = 0; i < segments; i++) {
+	for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) {
 		const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
 		idx.push(a, c, b, b, c, d);
 	}
@@ -158,7 +163,9 @@ export function planetUniforms(shared) {
 }
 
 export function createTerrain(island, shared) {
-	const geo = radialGrid(320, 2200, 2.3);
+	// (the Moon's ground runs on to the horizon: world/lunarfar.js)
+	const far = !!island.far;
+	const geo = far ? radialGrid(320, 2200, 2.3, 28, 32000) : radialGrid(320, 2200, 2.3);
 	const mat = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
 	const detail = groundDetail();
 	const uniforms = {
@@ -172,19 +179,20 @@ export function createTerrain(island, shared) {
 	};
 	mat.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, uniforms);
-		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + sh.vertexShader
+		sh.vertexShader = 'uniform vec2 uCenter;\nvarying vec3 vW;\nvarying vec3 vWN;\n' + HEIGHT_GLSL + '\n' + (far ? FAR_GLSL + '\nfloat groundH(vec2 w){ return farBlend(heightAt(w), w); }\n' : '#define groundH heightAt\n') + sh.vertexShader
 			.replace('#include <beginnormal_vertex>', `
 				vec2 wxz = position.xz + uCenter;
 				// the normal is taken over the grid's own spacing where that is wider than a height
 				// cell: sampled finer, far off, the height map aliases into rows of stair-steps
 				vec2 gsp = 2.3 * 2200.0 * pow(max(abs(position.xz) / 2200.0, vec2(1e-4)), vec2(1.3 / 2.3)) * (2.0 / 320.0);
-				float e = max(uCell, max(gsp.x, gsp.y) * 0.6);
-				float hL = heightAt(wxz - vec2(e, 0.0)), hR = heightAt(wxz + vec2(e, 0.0));
-				float hD = heightAt(wxz - vec2(0.0, e)), hU = heightAt(wxz + vec2(0.0, e));
+				float e = max(max(uCell, max(gsp.x, gsp.y) * 0.6), (max(abs(position.x), abs(position.z)) - 2200.0) * 0.04);
+				float hL = groundH(wxz - vec2(e, 0.0)), hR = groundH(wxz + vec2(e, 0.0));
+				float hD = groundH(wxz - vec2(0.0, e)), hU = groundH(wxz + vec2(0.0, e));
 				vec3 objectNormal = normalize(vec3(hL - hR, 2.0 * e, hD - hU));
 				vWN = objectNormal;`)
 			.replace('#include <begin_vertex>', `
-				vec3 transformed = vec3(wxz.x, heightAt(wxz), wxz.y);
+				vec3 transformed = vec3(wxz.x, groundH(wxz), wxz.y);
+				${far ? '// the ground falls away with the curve of a small world, so the horizon is a line\n\t\t\t\ttransformed.y -= dot(position.xz, position.xz) / 3.47e6;' : ''}
 				vW = transformed;`);
 		sh.fragmentShader = 'uniform sampler2D uMasks, uDetail, uPrints; uniform vec4 uDetailM; uniform vec3 uPrintsO, uSunDir2; float gMoonGlint = 0.0; float gSparkle = 0.0; float gDetailB = 0.0; float gSnowW = 0.0; uniform vec3 uBay; uniform float uHalf, uTime, uWet, uWave;\n' + PLANET_GLSL + HOLE_GLSL + '\nvarying vec3 vW;\nvarying vec3 vWN;\nfloat gDetailH;\n' + OCC_GLSL + '\n' + NOISE_GLSL + '\n' + SWASH_GLSL + '\n' + sh.fragmentShader
 			.replace('#include <map_fragment>', `

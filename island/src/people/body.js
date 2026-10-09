@@ -11,12 +11,13 @@
 import * as THREE from 'three';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
-import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial } from './garment.js';
+import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
 import { fadePerson } from './fade.js';
 import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
+import { hairCapsules, poseCapsules } from './hair-collide.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -360,7 +361,7 @@ function dress(A, P, o) {
 	// the necklines, cut smooth (the cage's triangles would leave them ragged)
 	const T0 = o.top, scoop = T0 && (T0.kind === 'crop' || T0.kind === 'tank' || (T0.kind === 'tee' && o.gen === 'z')) ? 0.045 : 0;
 	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.02, cut.neck - 0.02, scoop, 0);
-	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, 0);
+	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, o.outer ? 1 : 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	// caps, glasses, headphones, bags: one more mesh
@@ -423,7 +424,13 @@ function hairUp(A, P) {
 	const has = (id) => !id || styleNow(id);
 	if (W.style?.fade) W.style.fadeY = P.skull.eyeY + 0.062 - (1 - W.style.fade) * 0.04;
 	// the hair: the real style, or the procedural cut while it comes
-	if (W.style && has(W.style.id)) P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+	if (W.style && has(W.style.id)) {
+		P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+		// it falls over the collar and the shoulders, not through them (hair-collide.js)
+		const o = P.outfit || {}, off = offsets(o), caps = hairCapsules(P, o, Math.max(off.top, off.outer));
+		const hair = P.hair;
+		hair.onBeforeRender = () => poseCapsules(P, caps, hair.material.userData.U, hair);
+	}
 	else if (W.cut) {
 		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
 		// (grey coming in evenly, root to tip)

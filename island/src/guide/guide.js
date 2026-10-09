@@ -117,7 +117,12 @@ export function createGuide(mount, api) {
 			if (W.magma?.tube) { const t = W.magma.tube[Math.floor(W.magma.tube.length / 2)]; out.push({ name: 'the lava tube', x: t.x, z: t.z, y: t.y + 1.5, fact: 'a rock tunnel carrying a molten stream from the vent', kind: 'island', under: true }); }
 			(W.caverns?.tunnels || []).forEach((t, i) => { const m = t[Math.floor(t.length / 2)]; out.push({ name: `sea cave ${i + 1}`, x: t[0].x, z: t[0].z, y: t[0].y + 2, fact: 'a swim-through lava cave with glowing walls', kind: 'island', under: true, mid: m }); });
 			(W.underworld?.entrances || []).forEach((e, i) => out.push({ ...e, caveEntrance: i, kind: 'island', fact: 'a walkable hillside mouth into this world’s connected underground; walk down the tunnel and return by the same route' }));
+			// (reached through the caves: the way there is the mouth nearest it, then the passage on)
+			const dg = W.deep?.gate, dv = dg?.via;
+			if (dg) out.push({ name: 'The Deep Gate', x: dv ? dv.x : dg.x, z: dv ? dv.z : dg.z, y: dv?.y, kind: 'island', fact: `a carved hall at the far end of the caves beneath the summit, ${Math.round(Math.hypot(dg.x - (dv?.x ?? dg.x), dg.z - (dv?.z ?? dg.z)))} m on underground from ${dv ? dv.name : 'the nearest cave mouth'}: go in at the mouth and keep to the passage that runs on toward the summit. Five singing stones stand round a sealed shaft; play back their phrase and a rope goes down into a cave with no known bottom` });
 			if (W.whale?.whale?.position) out.push({ name: 'the whale', x: W.whale.whale.position.x, z: W.whale.whale.position.z, fact: 'a humpback in the bay', kind: 'island' });
+			// an off-world colony's sites (planet/colony/)
+			for (const s of W.colony?.sites?.() || []) out.push({ name: s.name, x: s.x, z: s.z, y: s.y, fact: s.far ? 'an outpost of the colony, out along the rover tracks' : 'part of the colony', kind: 'colony' });
 			const home = store.get('crysis-home', null);
 			if (home) out.push({ name: home.name || 'home', ...toWorld(home.lat, home.lon), fact: 'your home', kind: 'home' });
 		}
@@ -398,6 +403,9 @@ export function createGuide(mount, api) {
 			if (a.gathering) return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
 			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
 		}
+		// a world's own errands (planet/colony/errands.js)
+		const own = W.colony?.crew?.mark?.();
+		if (own) return own;
 		const quest = stories.list(key).find(q => q.status === 'active' && ['visit', 'return'].includes(q.steps[q.cursor]?.type));
 		if (quest) {
 			const t = storyContext().targets.find(t => t.id === quest.steps[quest.cursor].targetId);
@@ -517,7 +525,7 @@ export function createGuide(mount, api) {
 		if (arms?.kind && arms.kind !== 'none') return arms.message;
 		if (/\b(cave|caves|underground|cavern)\b/.test(q) && !/^(take me|go|fly|bring me|teleport me|travel)/.test(q)) {
 			const t = find('nearest cave'), cam = api.camera.position;
-			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Tap the three resonant stones in an alcove to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
+			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Strike the three resonant stones in an alcove (look at one and press E, or tap it) to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
 		}
 		const travel = travelRequest(text);
 		if (travel) {
@@ -597,6 +605,23 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		else say(`${partner.persona.first} turns back to you.`, 'note');
 		const recap = resident && gatheringRecap(resident);
 		if (recap) perform(recap, true);
+		offer(p.talk?.open?.());
+	}
+	// a world's own people can have more to say and to offer (planet/colony/errands.js):
+	// a line, a note, and choices that answer with the next of the same
+	function offer(o) {
+		if (!o || !partner) return;
+		const P2 = partner;
+		if (o.say) { perform(o.say, true); if (P2.id) api.social.state.remember(P2.id, 'assistant', o.say.replace(TAG_RE, '').trim()); }
+		if (o.note) say(o.note, 'note');
+		if (!o.choices?.length) return;
+		const row = el('div', 'display:flex;gap:8px;flex-wrap:wrap;');
+		for (const c of o.choices) {
+			const b = el('button', btnCss, c.label);
+			b.onclick = () => { row.remove(); if (partner !== P2) return; say(c.label, 'me'); archiveTurn(threadMeta(P2), 'user', c.label); offer(c.fn?.()); };
+			row.append(b);
+		}
+		log.append(row); scroll();
 	}
 	function endTalk() {
 		if (!partner) return;
@@ -661,7 +686,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		// Gear requests are resolved by the authoritative world adapter before social
 		// intent or the language model. This lets “could you find us a hunting rifle?”
 		// work conversationally while ordinary dialogue remains non-mutating.
-		const armsResult = api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
+		// a world's own people answer their own errands first (planet/colony/errands.js)
+		const own = p.talk?.reply?.(text);
+		if (own?.say) reply = own.say;
+		const armsResult = reply ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
 		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
 		if (resident) {
 			api.social.state.setPosition(resident.id, api.social.positionFor(api.world(), p.M.S.pos));
@@ -721,6 +749,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').trim();
 		bubble.textContent = clean || '…';
 		if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
+		if (own && (own.note || own.choices)) offer({ ...own, say: null });
 		archiveTurn(threadMeta(P2),'assistant',clean);
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
@@ -910,6 +939,15 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			}
 			if (book().status().error) say(book().status().error,'note');
 		}
+		const own = api.world()?.colony?.crew?.journal?.();
+		if (own) {
+			say(own.title, 'note');
+			for (const e of own.list) {
+				say(e.text, e.active ? 'guide' : 'note');
+				if (e.track) { const b = el('button', btnCss, 'Show the way'); b.onclick = () => { e.track(); api.waypoint?.set(waypointMark()); show(false); }; log.append(b); }
+			}
+			for (const l of own.log) say(l, 'note');
+		}
 		say('STORY QUESTS', 'note');
 		if (!list.length) say('Ask someone nearby for an adventure. They can suggest a story rooted in this world.', 'note');
 		for (const q of list.slice().reverse()) {
@@ -929,7 +967,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		endTalk(); resetView('journal'); show(true);
 		const W = api.world(), cam = api.camera.position;
 		say('CAVE EXPLORATION', 'note');
-		say('Walk through a hillside mouth into the underground. Play the three resonant stones in an alcove to restore guiding lights. You can walk back to the surface at any time.', 'guide');
+		say('Walk through a hillside mouth into the underground. Strike the three resonant stones in an alcove (look at one and press E, or tap it) to restore guiding lights. You can walk back to the surface at any time.', 'guide');
 		const caves = targets().filter(t => t.caveEntrance !== undefined).sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z));
 		if (!caves.length) say('There are no mapped land-cave entrances on this surface.', 'note');
 		for (const t of caves) {
@@ -941,6 +979,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (caveVisits[api.social?.bodyKey()]) say('✓ You have explored this world’s underground.', 'note');
 		const stats = W?.underworld?.elements?.stats();
 		if (stats) say(`${stats.completed} of ${stats.sites} resonance alcoves restored. ${stats.saveError || 'Progress is saved on this device.'}`, 'note');
+		const deep = W?.deep?.info();
+		if (deep) say(deep.open ? `The Deep Gate is open. Deepest reached: ${deep.deepest} m; ${deep.waystones} waystone${deep.waystones === 1 ? '' : 's'} touched; ${deep.alcoves} deep alcove${deep.alcoves === 1 ? '' : 's'} restored.` : `The Deep Gate is sealed. It lies at the end of the caves beneath the summit${W.deep.gate.via ? ', in from ' + W.deep.gate.via.name : ''}: strike one of its five stones, listen, and play the phrase back.`, 'note');
 	}
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;

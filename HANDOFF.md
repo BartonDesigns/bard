@@ -4,6 +4,35 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Release checkpoint (9 October 2026 UTC)
+
+The owner authorized “Push it live” after the Moon/Deep continuation. This release is
+a selective tree based on live `181e68c`, sourced from feature checkpoint `eec57ca`.
+Only Moon part 2, its fabric/hair fixes, resonance stones and the Deep are included.
+Combat, gear v2/trading, architecture, families and vehicle WIP remain on the feature branch.
+No rooms Worker deployment is needed or performed for this release.
+
+- Moon: 16 named crew, interiors, six outposts, maglev, hydroponics, errands, EVA suits,
+  continuous lunar horizon, crew wall/furniture/peer constraints and indoor reflected light.
+- Deep: underground gate hall, sealed/open shaft, phrase puzzle, continuous rope travel,
+  waystones and cleanup on departure. Gate progress retains its save key.
+- Live inventory remains v1. Colony errands use their existing per-world saved ledger
+  until the gear API ships. The journal exposes the saved colony credit balance. A regression
+  test completes the relay errand, reloads it and checks item removal and reward persistence.
+- Verified: production build and 43 Node test entries covering colony plans, crew, errands,
+  Deep topology and travel, cave streaming/elements, social actors, gatherings and live arms.
+  Syntax and whitespace checks pass. The earlier feature checkpoint separately passed
+  53 client test entries and 92 rooms server tests; these are not rendered gameplay checks.
+- Release limitation: local Chromium is unavailable, its download failed, and the old
+  `/tmp/claude-0/planet/smoke-ship.js` is absent. Full rendered Moon/Deep walkthrough,
+  skin review, shader and phone smoke remain outstanding. Owner authorization to release
+  is recorded above; do not report those visual checks as passed. Verify Pages and the
+  deployed bundle after pushing, and record actual browser observations separately.
+
+Next handoff duties: rendered Moon/Deep review; show the weapon designs before building
+on them; finish combat and its protected-minor checks; then the single owner-run rooms
+Worker deployment. See the feature branch HANDOFF for the full WIP inventory.
+
 ## Owner feedback to work next (7 October 2026, after a context clear)
 
 The owner flew north from the Bay and noted these points. Nothing below is built yet. The code
