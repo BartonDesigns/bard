@@ -25,6 +25,8 @@ import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/Buff
 import { TIERS } from '../gameplay/gear-levels.js';
 import { createFlash } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
+import { attachScopeGlass } from './scope-optics.js';
+import { createBowVisual } from './bow-visual.js';
 
 // an icon for each item, for lists and slots
 export const ITEM_ICONS = {
@@ -75,7 +77,7 @@ const TILES = [
 		return [(dir ? 0.4 : 0.6) + sheen * 0.08, 0.5 + (dir ? 0.06 : -0.06) + sheen * 0.08];
 	},
 	(u, v) => { const w = v + 0.07 * Math.sin(u * Math.PI * 4 + 3 * Math.sin(v * Math.PI * 2)) + 0.05 * fbm(u, v, 3, 3, 9); const s = Math.sin(w * Math.PI * 2 * 11 + 1.5 * Math.sin(u * Math.PI * 6)); return [0.5 + s * 0.15, 0.5 + s * 0.05]; },
-	(u, v) => { const a = fbm(u, v, 4, 4, 10), b = fbm(u, v, 5, 5, 20); return [a > 0.56 ? 0.3 : b > 0.57 ? 0.7 : 0.5, 0.5]; },
+	(u, v) => { const a = fbm(u, v, 4, 4, 10), b = fbm(u, v, 5, 5, 20); return [a > 0.56 ? 0.43 : b > 0.57 ? 0.55 : 0.49, 0.5]; },
 	(u, v) => { const tri = (x) => Math.abs(fract(x) - 0.5) * 2, r = Math.min(tri(u * 24 + v * 24), tri(u * 24 - v * 24)); return [0.42 + r * 0.14, 0.2 + r * 0.7]; },
 	(u, v) => {
 		// a hex grid's lines
@@ -121,14 +123,15 @@ export function kitMaterial(plain = false) {
 	kit.onBeforeCompile = (sh) => {
 		sh.uniforms.kAtlas = { value: atlasTex() };
 		sh.uniforms.kTime = kitTime; sh.uniforms.kFire = kitFire;
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 surf;\nvarying vec4 vSurf;\nvarying vec2 vKuv;')
-			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSurf = surf; vKuv = uv;');
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 surf;\nvarying vec4 vSurf;\nvarying vec2 vKuv;\nvarying vec3 vKpos;')
+			.replace('#include <uv_vertex>', '#include <uv_vertex>\nvSurf = surf; vKuv = uv; vKpos = position;');
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 uniform sampler2D kAtlas;
 uniform float kTime;
 uniform float kFire;
 varying vec4 vSurf;
 varying vec2 vKuv;
+varying vec3 vKpos;
 vec3 kBump(vec3 p, vec3 n, vec2 dh, float fd) {
 	vec3 sx = normalize(dFdx(p)), sy = normalize(dFdy(p)), r1 = cross(sy, n), r2 = cross(n, sx);
 	float det = dot(sx, r1) * fd;
@@ -142,7 +145,9 @@ vec3 kBump(vec3 p, vec3 n, vec2 dh, float fd) {
 	diffuseColor.rgb *= kTx.rgb * 2.0;
 	vec3 kN = normalize(vNormal);
 	float kCurv = length(fwidth(kN)) / max(length(fwidth(vViewPosition)), 1e-5);
-	float kEdge = kWear * smoothstep(110.0, 360.0, kCurv) * smoothstep(0.3, 0.7, kTx.a + 0.2);
+	// Stable item-space wear, broken into occasional contact scuffs instead of chrome edges.
+	float kScuff = smoothstep(0.3, 0.78, 0.5 + 0.24 * sin(dot(vKpos, vec3(137.0, 91.0, 63.0))) + 0.26 * sin(dot(vKpos, vec3(41.0, 109.0, 173.0))));
+	float kEdge = kWear * smoothstep(110.0, 360.0, kCurv) * kScuff;
 	if (abs(kTile - 12.0) < 0.5) {
 		float ndv = abs(dot(kN, normalize(vViewPosition)));
 		vec3 film = 0.5 + 0.5 * cos(6.2832 * (ndv * 1.4 + kTx.r * 1.2 + vec3(0.0, 0.33, 0.67)));
@@ -151,10 +156,10 @@ vec3 kBump(vec3 p, vec3 n, vec2 dh, float fd) {
 	diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.62, 0.6), kEdge);`)
 			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix(vSurf.x * (0.85 + (kTx.a - 0.5) * 0.5), 0.32, kEdge);')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = mix(vSurf.y, 1.0, kEdge);')
-			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = kBump(-vViewPosition, normal, vec2(dFdx(kTx.a), dFdy(kTx.a)) * 1.6, faceDirection);')
+			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = kBump(-vViewPosition, normal, vec2(dFdx(kTx.a), dFdy(kTx.a)) * 0.3, faceDirection);')
 			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += vColor.rgb * vSurf.w * (0.88 + 0.12 * sin(kTime * 2.4 + vViewPosition.x * 9.0) + kFire * 2.5);');
 	};
-	kit.customProgramCacheKey = () => 'kit2';
+	kit.customProgramCacheKey = () => 'kit3-contact-wear';
 	return kit;
 }
 // the sight's glass: tinted, glinting, its reticle lit (one per reticle colour)
@@ -162,20 +167,20 @@ const lensMats = {};
 function lensMaterial(hex, plain = false, dot = false) {
 	const key = `${hex}:${dot}:${plain}`;
 	if (lensMats[key]) return lensMats[key];
-	if (hex == null) return (lensMats[key] = new THREE.MeshStandardMaterial({ color: 0x0d2a36, roughness: 0.03, metalness: 0.4, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
-	// a scope's fine crosshair with heavier posts, or a reflex sight's dot
-	const c = document.createElement('canvas'); c.width = c.height = 128;
-	const g = c.getContext('2d');
-	g.strokeStyle = g.fillStyle = '#fff';
-	if (dot) { g.beginPath(); g.arc(64, 64, 2.2, 0, Math.PI * 2); g.fill(); g.lineWidth = 0.8; g.beginPath(); g.arc(64, 64, 9, 0, Math.PI * 2); g.stroke(); }
-	else {
-		g.lineWidth = 0.7; g.beginPath(); g.moveTo(14, 64); g.lineTo(114, 64); g.moveTo(64, 14); g.lineTo(64, 114); g.stroke();
-		g.lineWidth = 3; for (const [x, y] of [[0, 1], [-1, 0], [1, 0]]) { g.beginPath(); g.moveTo(64 + x * 30, 64 + y * 30); g.lineTo(64 + x * 62, 64 + y * 62); g.stroke(); }
-		g.beginPath(); g.arc(64, 64, 1.6, 0, Math.PI * 2); g.fill();
+	let tex = null;
+	if (hex != null) {
+		const c = document.createElement('canvas'); c.width = c.height = 256;
+		const g = c.getContext('2d'); g.scale(2, 2); g.strokeStyle = g.fillStyle = '#fff';
+		if (dot) { g.beginPath(); g.arc(64, 64, 1.3, 0, Math.PI * 2); g.fill(); }
+		else {
+			g.lineWidth = 0.4; g.beginPath(); g.moveTo(14, 64); g.lineTo(114, 64); g.moveTo(64, 14); g.lineTo(64, 114); g.stroke();
+			g.lineWidth = 1.2; for (const [x, y] of [[0, 1], [-1, 0], [1, 0]]) { g.beginPath(); g.moveTo(64 + x * 30, 64 + y * 30); g.lineTo(64 + x * 62, 64 + y * 62); g.stroke(); }
+			g.beginPath(); g.arc(64, 64, 0.8, 0, Math.PI * 2); g.fill();
+		}
+		tex = new THREE.CanvasTexture(c);
 	}
-	const tex = new THREE.CanvasTexture(c);
-	const m = new THREE.MeshStandardMaterial({ color: 0x0d2a36, roughness: 0.04, metalness: 0.3, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, emissive: hex, emissiveIntensity: 2.4, emissiveMap: tex });
-	m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n\tgl_FragColor.a = max(gl_FragColor.a, texture2D(emissiveMap, vEmissiveMapUv).g * 0.95);'); };
+	const m = new THREE.MeshStandardMaterial({ color: 0x294d56, roughness: 0.06, metalness: 0.24, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide, emissive: hex ?? 0x000000, emissiveIntensity: 0.85, emissiveMap: tex });
+	attachScopeGlass(m, { dot, rear: hex != null });
 	return (lensMats[key] = m);
 }
 // the world's light on held things: reflections fade with the daylight (crysis/viewmodel.js)
@@ -193,7 +198,7 @@ export const kitPulseNow = () => kitFire.value;
 const S = (c, r, m, tile = T.plain, o = {}) => ({ c: new THREE.Color(c), r, m, tile, wear: o.wear || 0, glow: o.glow || 0, dens: o.dens || DENS[tile] });
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 class Kit {
-	constructor(hi) { this.hi = hi; this.body = this.parts = []; this.cellParts = []; this.cellAt = null; this.lens = []; }
+	constructor(hi, optics = false) { this.hi = hi; this.optics = optics; this.body = this.parts = []; this.cellParts = []; this.cellAt = null; this.lens = []; }
 	// what follows goes into the swappable cell (its own mesh, for the reload), anchored at x, y
 	cell(x, y) { this.cellAt = [x, y, 0]; this.parts = this.cellParts; }
 	main() { this.parts = this.body; }
@@ -224,8 +229,8 @@ class Kit {
 	}
 	// a sight's glass (its own see-through material up close; an opaque dark disc far off)
 	glass(r, x, y, z, rx, ry, rz, reticle = 0xff3b30) {
-		if (!this.hi) return this.add(new THREE.CircleGeometry(r, 12), S(0x0c1c24, 0.08, 0.6), x, y, z, rx, ry, rz);
-		const g = new THREE.CircleGeometry(r, 28);
+		if (!this.hi && !this.optics) return this.add(new THREE.CircleGeometry(r, 12), S(0x0c1c24, 0.08, 0.6), x, y, z, rx, ry, rz);
+		const g = new THREE.CircleGeometry(r, this.hi ? 28 : 16);
 		g.applyMatrix4(_m.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s.set(1, 1, 1)));
 		this.lens.push({ g, reticle, dot: r < 0.017 });
 		return this;
@@ -426,6 +431,25 @@ function display(k, F, x, y, z, w = 0.032) {
 }
 function screws(k, pts, z) { if (k.hi) for (const [x, y] of pts) for (const s of [-1, 1]) k.add(tube(0.0028, 0.0028, 0.002, 6), STEEL, x, y, s * z, 0, Math.PI / 2, 0); }
 
+// Exterior hardware is kept in the merged body. Recesses are dark gasket layers;
+// smaller plates sit above them, so grazing world light reads real depth.
+function sidePanel(k, F, x, y, z, w, h) {
+	for (const sign of [-1, 1]) {
+		k.add(block(w + 0.005, h + 0.005, 0.0015, 0.003, 0.0005), BLACK, x, y, sign * z);
+		k.add(block(w, h, 0.0022, 0.003, 0.0007), F.alt, x, y, sign * (z + 0.0016));
+		if (k.hi) for (const dx of [-1, 1]) {
+			k.add(tube(0.0035, 0.0035, 0.0015, 8), F.trim, x + dx * (w / 2 - 0.006), y, sign * (z + 0.003), 0, Math.PI / 2);
+			k.add(block(0.003, 0.0008, 0.0006, 0.0002, 0.0001), BLACK, x + dx * (w / 2 - 0.006), y, sign * (z + 0.004));
+		}
+	}
+}
+function pressurePad(k, x, y, z, w) {
+	if (!k.hi) return;
+	for (const sign of [-1, 1]) {
+		k.add(block(w, 0.018, 0.003, 0.004), GRIP, x, y, sign * z);
+		for (let i = 0; i < 5; i++) k.add(block(0.0012, 0.012, 0.0008, 0.0003, 0.0002), RUBBER, x - w * 0.32 + i * w * 0.16, y, sign * (z + 0.0018));
+	}
+}
 // the Aurora: a long marksman's trail rifle, skeleton stock, vented guard, a scope, a shroud
 function aurora(k, F) {
 	const seg = k.hi ? 24 : 10;
@@ -452,6 +476,15 @@ function aurora(k, F) {
 	if (k.hi) for (const x of [-0.26, -0.16]) k.add(tube(0.004, 0.004, 0.012, 8), STEEL, x, 0.14, 0, 0, 0, Math.PI / 2);
 	k.add(block(0.016, 0.19, 0.04, 0.008, 0.003), RUBBER, -0.385, 0.054, 0);
 	sling(k, [-0.34, -0.012], [0.55, 0.074], 0.12);
+	sidePanel(k, F, 0.048, 0.118, 0.028, 0.105, 0.029);
+	pressurePad(k, 0.32, 0.111, 0.031, 0.072);
+	if (k.hi) {
+		for (const sign of [-1, 1]) {
+			k.add(block(0.106, 0.011, 0.002, 0.002), GRIP, -0.214, 0.151, sign * 0.016);
+			k.add(block(0.028, 0.007, 0.003, 0.002), F.trim, -0.115, 0.116, sign * 0.019);
+			k.add(block(0.062, 0.004, 0.002, 0.001), BLACK, 0.128, 0.077, sign * 0.027);
+		}
+	}
 	scope(k, F, -0.02, 0.24, 0.198, 0.152, 0xff3b30);
 }
 // the Mossback: a lighter scout rifle, one-piece thumbhole stock in the finish's second colour,
@@ -480,6 +513,13 @@ function mossback(k, F) {
 	k.add(block(0.016, 0.17, 0.042, 0.008, 0.003), RUBBER, -0.38, 0.04, 0);
 	sling(k, [-0.33, -0.026], [0.5, 0.08], 0.1);
 	// the scout scope sits forward, over the guard
+	sidePanel(k, F, 0.123, 0.117, 0.024, 0.105, 0.023);
+	pressurePad(k, 0.333, 0.109, 0.0265, 0.086);
+	k.add(block(0.125, 0.016, 0.032, 0.006), GRIP, -0.247, 0.119, 0);
+	if (k.hi) for (const sign of [-1, 1]) {
+		k.add(block(0.068, 0.012, 0.0025, 0.004), F.trim, -0.29, 0.061, sign * 0.021);
+		k.add(tube(0.004, 0.004, 0.002, 8), STEEL, -0.29, 0.061, sign * 0.023, 0, Math.PI / 2);
+	}
 	scope(k, F, 0.27, 0.43, 0.186, 0.14, 0x39ff88);
 }
 // the Warden: a compact guard carbine, angular plates, a reflex sight, and in place of a muzzle
@@ -515,6 +555,14 @@ function warden(k, F) {
 	k.add(slab(poly([[-0.29, 0.16], [-0.27, 0.16], [-0.27, 0.04], [-0.29, 0.0]], 0.008), 0.042, 0.003, 2), F.alt);
 	k.add(block(0.012, 0.17, 0.044, 0.006), RUBBER, -0.296, 0.078, 0);
 	sling(k, [-0.28, 0.02], [0.28, 0.07], 0.09);
+	sidePanel(k, F, -0.035, 0.1, 0.029, 0.066, 0.029);
+	pressurePad(k, 0.248, 0.143, 0.0315, 0.056);
+	if (k.hi) {
+		// Cell protection straps and textured cheek cover identify the compact energy tool.
+		for (const x of [0.043, 0.155]) k.add(block(0.012, 0.034, 0.02, 0.003), F.trim, x, 0.085, 0.034);
+		k.add(block(0.092, 0.018, 0.03, 0.005), GRIP, -0.22, 0.142, 0);
+		for (const x of [-0.12, -0.25]) k.add(block(0.012, 0.025, 0.022, 0.003), F.alt, x, 0.135, 0);
+	}
 	reflex(k, F, 0.04, 0.17, 0.205, 0xffb347);
 }
 const RIFLES = { 'aurora-trail-rifle': aurora, 'mossback-scout-rifle': mossback, 'warden-spark-carbine': warden };
@@ -528,15 +576,11 @@ function bow(k, F) {
 	k.add(slab(riser, 0.026, 0.003, 2, 3), F.main);
 	k.add(slab(rrect(0.05, 0.075, 0.018), 0.034, 0.004, 2, 4), GRIP);
 	if (F.inlay) for (const s of [-1, 1]) k.add(block(0.004, 0.24, 0.0012, 0.0008, 0.0004), F.inlay, 0.004, 0, s * 0.0136);
-	for (const sy of [1, -1]) {
-		const pts = [[0, 0.19, -0.004], [0, 0.32, 0.02], [0, 0.46, 0.04], [0, 0.58, 0.02], [0, 0.66, -0.03]].map(([x, y, z]) => [z, y * sy, x]);
-		k.add(strap(pts, 0.03, 0.009, k.hi ? 24 : 8, new THREE.Vector3(0, 0, 1)), F.alt);
-		k.add(block(0.02, 0.03, 0.03, 0.006), F.trim, -0.004, 0.205 * sy, 0);
-		k.add(ring(0.006, 0.002, 8), F.trim, -0.03, 0.66 * sy, 0, 0, Math.PI / 2);
-		if (k.hi) k.add(block(0.004, 0.05, 0.0012), F.core, 0.012, 0.42 * sy, 0.016);
+	// Flexible limbs and string are independent meshes driven by the draw rig.
+	for (const sy of [-1, 1]) {
+		k.add(block(.025, .036, .034, .006), F.trim, -.004, .205 * sy, 0);
+		if (k.hi) for (const z of [-.018, .018]) k.add(tube(.006, .006, .0025, 8), STEEL, -.002, .205 * sy, z, 0, Math.PI / 2);
 	}
-	const sp = new THREE.CylinderGeometry(0.0012, 0.0012, 1.3, 4);
-	k.add(sp, S(0xe9e2cf, 0.8, 0), -0.035, 0, 0, 0, 0, 0.0);
 	k.add(tube(0.007, 0.009, 0.2, seg), F.trim, 0.12, -0.03, 0);
 	k.add(tube(0.016, 0.016, 0.03, seg), RUBBER, 0.235, -0.03, 0);
 	if (k.hi) { k.add(block(0.016, 0.004, 0.012, 0.001), STEEL, 0.02, 0.05, -0.016); k.add(ring(0.008, 0.0015, 10), F.core, 0.03, 0.06, 0.0, 0, Math.PI / 2); }
@@ -738,7 +782,7 @@ export const HOLDS = {
 	'aurora-trail-rifle': { kind: 'long', R: PISTOL, L: fore(0.42, 0.112, 0.036), sight: [-0.069, 0.198, 0.08], zoom: 1.9 },
 	'mossback-scout-rifle': { kind: 'long', R: PISTOL, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 1.5 },
 	'warden-spark-carbine': { kind: 'long', R: PISTOL, L: fore(0.22, 0.1, 0.036), sight: [0.04, 0.205, 0.22], zoom: 1.25 },
-	'reedline-hunting-bow': { kind: 'bow', side: 'L', L: { c: v3(0, 0, 0), r: 0.026, a: v3(0.3, 0, -1), t: v3(0, 1, 0) } },
+	'reedline-hunting-bow': { kind: 'bow', side: 'L', L: { c: v3(0, 0, 0), r: .026, a: v3(.3, 0, -1), t: v3(0, 1, 0) }, R: { c: v3(-.14, .056, -.025), r: .026, a: v3(.12, 0, -1), t: v3(0, 1, 0) } },
 	'hunting-net': { kind: 'one', R: SHAFT(0, 0.018) },
 	'door-brace': { kind: 'one', R: SHAFT(0, 0.04) },
 	'station-signal-flare': { kind: 'one', R: SHAFT(0, 0.022) },
@@ -813,20 +857,22 @@ function motes(t, n = 14) {
 	return p;
 }
 const cache = new Map();
-function built(id, t, band, lod) {
-	const key = `${id}:${t}:${band}:${lod}`;
+function built(id, t, band, lod, optics = false) {
+	const key = `${id}:${t}:${band}:${lod}:${optics}`;
 	if (!cache.has(key)) {
-		const k = new Kit(lod !== 'low');
-		BUILD[id](k, finish(t, band));
+		const k = new Kit(lod !== 'low', optics);
+		const F = finish(t, band);
+		if (RIFLES[id]) for (const key of ['main', 'alt', 'trim', 'wild']) F[key] = { ...F[key], wear: F[key].wear * 0.55 };
+		BUILD[id](k, F);
 		cache.set(key, k.build());
 	}
 	return cache.get(key);
 }
 // a fresh copy (sharing geometry and materials) of an item at a level and tier, or null
-export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false } = {}) {
+export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false, optics = false } = {}) {
 	if (!BUILD[id]) return null;
 	const t = Math.max(0, Math.min(4, tier | 0)), l = Math.max(1, Math.min(10, level | 0)), band = l >= 7 ? 2 : l >= 4 ? 1 : 0;
-	const B = built(id, t, band, lod), g = new THREE.Group();
+	const B = built(id, t, band, lod, optics), g = new THREE.Group();
 	const body = new THREE.Mesh(B.g, kitMaterial(plain));
 	body.name = 'body';
 	g.add(body);
@@ -836,6 +882,7 @@ export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false
 	g.traverse((o) => { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; });
 	g.name = 'held:' + id;
 	g.userData = { id, long: holdOf(id).kind === 'long', tier: t, level: l, hold: holdOf(id) };
+	if (id === 'reedline-hunting-bow') g.userData.bow = createBowVisual(g, kitMaterial(plain), { low: lod === 'low', colour: finish(t, band).alt.c });
 	return g;
 }
 // triangles in a model, for budgets
@@ -898,6 +945,7 @@ export function reach(P, side, Hd, pole) {
 export function createHand(scene, { lod = 'high' } = {}) {
 	let key = '', model = null, gripped = null, flash = null, kick = 0, reload = null;
 	let aimHeld = false, aimBlend = 0, pitch = 0;
+	let bowState = { draw: 0, loaded: true, nock: 1 };
 	const contacts = { L: new THREE.Matrix4(), R: new THREE.Matrix4() };
 	const fitLocal = { L: new THREE.Matrix4(), R: new THREE.Matrix4() }, fitBounds = {};
 	const fitFrame = new THREE.Matrix4(), fitWrist = new THREE.Matrix4(), fitShoulder = new THREE.Vector3(), fitElbow = new THREE.Vector3(), fitPoint = new THREE.Vector3(), fitDelta = new THREE.Vector3(), fitOrigin = new THREE.Vector3();
@@ -905,10 +953,10 @@ export function createHand(scene, { lod = 'high' } = {}) {
 	function set(id, level = 1, tier = 0) {
 		const k = id ? `${id}:${level}:${tier}` : '';
 		if (k === key) return;
-		if (model) model.parent?.remove(model);
+		if (model) { model.userData.bow?.dispose(); model.parent?.remove(model); }
 		key = k; model = id ? itemModel(id, { level, tier, lod }) : null;
 		reload = null; aimBlend = 0;
-		if (model) { model.matrixAutoUpdate = false; scene.add(model); flash = createFlash(model); }
+		if (model) { model.matrixAutoUpdate = false; model.userData.bow?.set(bowState); scene.add(model); flash = createFlash(model); }
 	}
 	// let a body go: hands open, the carry ended
 	function release() {
@@ -923,7 +971,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		if (Mo) {
 			gripped = Mo;
 			const side = H?.side || 'R';
-			Mo.grip?.('R', on && side === 'R' ? 1 : 0);
+			Mo.grip?.('R', on && (side === 'R' || H?.kind === 'bow') ? 1 : 0);
 			Mo.grip?.('L', on && (H?.L) ? 1 : 0);
 			const want = on ? CARRY[H.kind] : null, name = Mo.S.act.name;
 			if (want && (!name || name === want)) { if (name !== want) Mo.act(want, 0); }
@@ -934,6 +982,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		if (model.parent !== scene) scene.add(model);
 		model.visible = on;
 		if (!on) return;
+		model.userData.bow?.step(dt);
 		P.root.updateMatrixWorld(true);
 		const side = H.side || 'R', G = H[side];
 		if (!handFrame(P, side, _h)) { model.visible = false; return; }
@@ -944,7 +993,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 			// both arms then reach for it
 			const k = P.height / 1.75, f = _x.set(Math.sin(heading), 0, Math.cos(heading)), l = _y.set(Math.cos(heading), 0, -Math.sin(heading));
 			const bow = H.kind === 'bow', a = aimBlend, angle = -0.29 + (pitch + 0.29) * a;
-			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? 0.18 : -0.15) * k).addScaledVector(UP, (1.02 + 0.34 * a) * k).addScaledVector(f, (0.24 + 0.05 * a) * k);
+			const org = _o.copy(P.root.position).addScaledVector(l, (bow ? .12 - .24 * a : -.15) * k).addScaledVector(UP, (1.02 + (bow ? .49 : .34) * a) * k).addScaledVector(f, (.24 + (bow ? .31 : .05) * a) * k);
 			const v = _z.copy(f).multiplyScalar(Math.cos(angle)).addScaledVector(l, 0.1 * (1 - a)).addScaledVector(UP, Math.sin(angle)).normalize(), u = UP.clone().addScaledVector(v, -v.y).normalize();
 			model.matrix.makeBasis(v, u, new THREE.Vector3().crossVectors(v, u)).setPosition(org);
 		} else if (H.level) {
@@ -975,21 +1024,29 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		// actual arm reach by translating the whole item, preserving its shape and grips.
 		// An unreachable support target formerly left the palm 15–30 cm behind the guard.
 		if (H.kind === 'long' || H.kind === 'bow') {
-			const sides = H.kind === 'long' ? ['R', 'L'] : ['L'];
+			const sides = ['R', 'L'];
 			for (const sd of sides) {
 				const upper = P.bones[P.map['upperarm01.' + sd]], lower = P.bones[P.map['lowerarm01.' + sd]], wrist = P.bones[P.map['wrist.' + sd]];
 				fitShoulder.setFromMatrixPosition(upper.matrixWorld); fitElbow.setFromMatrixPosition(lower.matrixWorld); fitPoint.setFromMatrixPosition(wrist.matrixWorld);
 				fitBounds[sd] ||= { center: new THREE.Vector3(), radius: 0 };
 				fitBounds[sd].center.copy(fitShoulder); fitBounds[sd].radius = fitShoulder.distanceTo(fitElbow) + fitElbow.distanceTo(fitPoint) - .012;
 				if (sd === 'L' && reload && cell) { cell.updateMatrix(); fitLocal[sd].multiplyMatrices(cell.matrix, CELL_HOLD); }
-				else fitLocal[sd].copy(H[sd].m);
+				else fitLocal[sd].copy(sd === 'R' && H.kind === 'bow' ? model.userData.bow.right : H[sd].m);
 				handFrame(P, sd, fitFrame);
 				fitLocal[sd].multiply(fitFrame.invert()).multiply(wrist.matrixWorld);
 			}
-			for (let pass = 0; pass < 6; pass++) for (const sd of sides) {
+			for (let pass = 0; pass < 12; pass++) for (const sd of sides) {
 				fitWrist.multiplyMatrices(model.matrix, fitLocal[sd]); fitPoint.setFromMatrixPosition(fitWrist);
-				const { center, radius } = fitBounds[sd], distance = fitDelta.subVectors(fitPoint, center).length();
-				if (distance > radius) { fitOrigin.setFromMatrixPosition(model.matrix).addScaledVector(fitDelta, (radius - distance) / distance); model.matrix.setPosition(fitOrigin); }
+				const { center, radius } = fitBounds[sd];
+				fitDelta.subVectors(fitPoint, center);
+				let fitRadius = radius;
+				if (H.kind === 'bow' && aimBlend > .5) {
+					// Keep the arrow in its chosen cheek-side lane while fitting short arms.
+					const lane = _x.set(Math.cos(heading), 0, -Math.sin(heading)), across = fitDelta.dot(lane);
+					fitDelta.addScaledVector(lane, -across); fitRadius = Math.sqrt(Math.max(.001, radius * radius - across * across));
+				}
+				const distance = fitDelta.length();
+				if (distance > fitRadius) { fitOrigin.setFromMatrixPosition(model.matrix).addScaledVector(fitDelta, (fitRadius - distance) / distance); model.matrix.setPosition(fitOrigin); }
 			}
 		}
 		if (H.kind === 'long') {
@@ -1003,6 +1060,9 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		if (H.kind === 'bow') {
 			contacts.L.multiplyMatrices(model.matrix, H.L.m);
 			reach(P, 'L', contacts.L, new THREE.Vector3(Math.cos(heading), -1, -Math.sin(heading)));
+			contacts.R.multiplyMatrices(model.matrix, model.userData.bow.right);
+			// The drawing elbow stays out beside the head, avoiding a wrist behind the neck.
+			reach(P, 'R', contacts.R, new THREE.Vector3(-Math.cos(heading), .08, Math.sin(heading)));
 		}
 		flash?.update(dt);
 		model.matrixWorldNeedsUpdate = true;
@@ -1015,6 +1075,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		const W = model && weaponOf(model.userData.id);
 		if (!W || reload) return false;
 		kick = 0.14;
+		model.userData.bow?.fire();
 		if (W.flash) { const [x, y] = W.muzzle; flash.sprite.position.set(x + 0.03, y, 0); flash.fire(W.flash, W.tint, W.size * 1.6); }
 		if (distance != null) playCue(W.sounds.fire, { distance });
 		return true;
@@ -1024,7 +1085,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		const W = model && weaponOf(model.userData.id);
 		if (!W || reload) return false;
 		reload = { t: 0, T: W.reload, done };
-		gripped?.play?.('reload', W.reload, true);
+		if (!model.userData.bow) gripped?.play?.('reload', W.reload, true);
 		if (distance != null) { playCue(W.sounds.out, { distance }); setTimeout(() => playCue(W.sounds.in, { distance }), W.reload * 700); }
 		return true;
 	}
@@ -1032,16 +1093,23 @@ export function createHand(scene, { lod = 'high' } = {}) {
 	function muzzle() {
 		const W = model?.visible && weaponOf(model.userData.id);
 		if (!W) return null;
-		return { position: new THREE.Vector3(W.muzzle[0], W.muzzle[1], 0).applyMatrix4(model.matrix), direction: new THREE.Vector3(1, 0, 0).transformDirection(model.matrix) };
+		return { position: (model.userData.bow?.tip.clone() || new THREE.Vector3(W.muzzle[0], W.muzzle[1], 0)).applyMatrix4(model.matrix), direction: (model.userData.bow?.direction.clone() || new THREE.Vector3(1, 0, 0)).transformDirection(model.matrix) };
 	}
 	// numbers for checks: the muzzle against the way the body faces, each palm against its grip
 	function info(P, heading) {
 		if (!model?.visible || !P) return null;
 		const H = model.userData.hold, f = new THREE.Vector3(1, 0, 0).transformDirection(model.matrix), r3 = (x) => +x.toFixed(3);
 		const out = { id: model.userData.id, aiming: aimBlend > .5, muzzle: f.toArray().map(r3), muzzleDotAhead: r3(f.x * Math.sin(heading) + f.z * Math.cos(heading)), up: r3(new THREE.Vector3(0, 1, 0).transformDirection(model.matrix).y) };
-		for (const side of ['L', 'R']) if (H[side] && handFrame(P, side, _h2)) out['palm' + side + 'mm'] = +(_o.setFromMatrixPosition(_h2).distanceTo(H[side].o.clone().applyMatrix4(model.matrix)) * 1000).toFixed(1);
+		for (const side of ['L', 'R']) if (H[side] && handFrame(P, side, _h2)) out['palm' + side + 'mm'] = +(_o.setFromMatrixPosition(_h2).distanceTo((side === 'R' && H.kind === 'bow' ? new THREE.Vector3().setFromMatrixPosition(model.userData.bow.right) : H[side].o.clone()).applyMatrix4(model.matrix)) * 1000).toFixed(1);
 		for (const side of ['L', 'R']) if (H[side] && handFrame(P, side, _h2) && (H.kind === 'long' || H.kind === 'bow')) out['contact' + side + 'mm'] = +(_o.setFromMatrixPosition(_h2).distanceTo(new THREE.Vector3().setFromMatrixPosition(contacts[side])) * 1000).toFixed(1);
+		if (model.userData.bow) out.bow = model.userData.bow.info();
 		return out;
 	}
-	return { set, follow, release, hide, info, fire, aim: on => { aimHeld = !!on; }, aimPitch: v => { pitch = THREE.MathUtils.clamp(Number(v) || 0, -.8, .8); }, get aiming() { return aimBlend > .5; }, reload: reloadNow, muzzle, dispose, get model() { return model; }, get reloading() { return !!reload; } };
+	function bow(next) { bowState = { ...bowState, ...next }; model?.userData.bow?.set(bowState); }
+	function cancel() {
+		reload = null; bowState.draw = 0; model?.userData.bow?.cancel();
+		const cell = model?.getObjectByName('cell');
+		if (cell) { cell.visible = true; if (cell.userData.home) cell.position.fromArray(cell.userData.home); }
+	}
+	return { set, follow, release, hide, info, fire, bow, cancel, aim: on => { aimHeld = !!on; }, aimPitch: v => { pitch = THREE.MathUtils.clamp(Number(v) || 0, -.8, .8); }, get aiming() { return aimBlend > .5; }, reload: reloadNow, muzzle, dispose, get model() { return model; }, get reloading() { return !!reload; } };
 }
