@@ -6,6 +6,11 @@ file-by-file map is in `island/README.md`.
 
 ## Architecture mist continuation (9 October 2026 UTC)
 
+**Live:** main `fee0d2e9979555341080ae9197f7b757fdc205b4`; GitHub Pages run
+`37935280621` succeeded. The public HTML references `39b12f62f6`, and the downloaded
+engine matches the SHA-256 below. This checkpoint carries the release back into the
+development branch while preserving its old scratch previews there only.
+
 After publishing the core handoff, completed the next building duty: the camera veil now
 follows the mist's billowed bands, tower openings, clear lanes and terrain clearance. It
 interpolates the actual 30-segment phone and 52-segment desktop mesh triangles. Exterior
