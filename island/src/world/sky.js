@@ -140,6 +140,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		// a gas giant over its moon (xyz: where, w: its size); a ringed world's rings (on/off)
 		uGiant: { value: shared.planet?.sky?.earth ? new THREE.Vector4(0.35, 0.62, -0.7, 0.05) : new THREE.Vector4(0.42, 0.33, -0.84, shared.planet?.sky?.giant ? 0.2 : 0) }, uRings: { value: shared.planet?.sky?.rings ? 1 : 0 }, uEarthSky: { value: shared.planet?.sky?.earth ? 1 : 0 },
 		uMeteor: { value: 0 },           // 1 on the nights of the great showers
+		// a world's own dusk (planet/arch/: x how much, y how bright) and its crescent moon (xyz where, w on)
+		uDusk: shared.uDuskSky || (shared.uDuskSky = { value: new THREE.Vector4(0, 1, 0, 0) }), uDuskMoon: shared.uDuskMoon || (shared.uDuskMoon = { value: new THREE.Vector4(0, 0.5, -0.85, 0) }),
 		uBow: { value: null }, uBowK: { value: 0 }, uBowDrop: { value: 0.5 }, uMoonBowK: { value: 0 }, uBowScale: { value: 1.614 },
 	};
 	const dome = new THREE.Mesh(new THREE.SphereGeometry(12000, 48, 24), new THREE.ShaderMaterial({
@@ -147,7 +149,7 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
 		fragmentShader: /* glsl */`
 			uniform vec3 uSunDir, uSunColor, uSkyZen, uSkyHor; uniform float uTime, uNight, uCloud, uHigh, uGlow; uniform mat3 uW2E, uE2G;
-			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt; uniform sampler2D uBow;
+			uniform vec2 uCirrusOff, uWindDir; uniform vec3 uFogCol; uniform vec4 uAir, uGiant; uniform float uRings, uEarthSky; uniform float uMeteor, uCirrus, uRainHere, uGloom, uFlash, uBowK, uBowDrop, uMoonBowK, uBowScale; uniform vec4 uBolt, uDusk, uDuskMoon; uniform sampler2D uBow;
 			varying vec3 vDir;
 			${NOISE_GLSL}
 			${CLOUD_GLSL}
@@ -160,6 +162,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 				vec3 d = normalize(vDir);
 				float h = max(d.y, 0.0);
 				vec3 col = mix(uSkyHor, uSkyZen, pow(h, 0.5));
+				// a world's own dusk: magenta at the horizon, violet, deep indigo overhead
+				if (uDusk.x > 0.0) col = mix(col, mix(mix(vec3(1.0, 0.12, 0.42), vec3(0.3, 0.04, 0.46), smoothstep(0.0, 0.16, h)), vec3(0.008, 0.01, 0.06), smoothstep(0.1, 0.5, h)) * uDusk.y, uDusk.x);
 				float sd = max(dot(d, uSunDir), 0.0);
 				col += uSunColor * (pow(sd, 12.0) * 0.18 + pow(sd, 3.0) * 0.06) * (1.0 - uNight);
 				col += uSunColor * smoothstep(0.9993, 0.9997, sd) * 18.0 * (1.0 - uNight);
@@ -256,7 +260,13 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 				if (uNight > 0.01 && d.y > 0.0){
 					// the moon, opposite the sun
 					float md = max(dot(d, -uSunDir), 0.0);
-					col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.9994, 0.9997, md) * 2.5 + pow(md, 60.0) * 0.08) * uNight;
+					col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.9994, 0.9997, md) * 2.5 + pow(md, 60.0) * 0.08) * uNight * (1.0 - uDuskMoon.w);
+				}
+				// the dusk's crescent: a lit disc less the same disc a little higher, and its glow
+				if (uDuskMoon.w > 0.0){
+					vec3 mo = normalize(uDuskMoon.xyz);
+					float c1 = smoothstep(0.99985, 0.99991, dot(d, mo)), c2 = smoothstep(0.99983, 0.99989, dot(d, normalize(mo + vec3(0.0, 0.0075, 0.0))));
+					col += vec3(0.9, 0.88, 1.0) * (c1 * (1.0 - c2) * 3.0 + pow(max(dot(d, mo), 0.0), 900.0) * 0.12) * uDuskMoon.w;
 				}
 				// cirrus: thin, fibrous, far above, combed out along the wind; it catches the
 				// colour of a low sun and keeps it after sunset
@@ -286,9 +296,12 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 					// at night the clouds are dark shapes against the stars, rimmed faintly by moonlight
 					vec3 cloud = shade * mix(vec3(1.0), uSunColor * 0.9, 0.35) * (1.0 - uNight * 0.975) + uSkyHor * 0.12;
 					cloud += uSunColor * pow(sd, 6.0) * 0.5 * (1.0 - uNight) * (1.0 - sh);
+					// at a world's dusk the heaps are lit pink from below, violet in their tops
+					cloud = mix(cloud, mix(vec3(1.0, 0.4, 0.62), vec3(0.2, 0.13, 0.34), smoothstep(0.2, 1.0, lit)) * uDusk.y, uDusk.x * 0.9);
 					// lightning lights the cloud from inside
 					cloud += vec3(0.75, 0.8, 1.0) * uFlash * (0.5 + sh * 1.5);
-					col = mix(col, cloud, dens * 0.95);
+					// (at a world's dusk the thin cloud thins away: heaps in a clear sky)
+					col = mix(col, cloud, dens * 0.95 * (1.0 - uDusk.x * 0.6 * (1.0 - smoothstep(0.35, 0.85, dens))));
 				}
 				// showers far off: curtains of rain hanging under their clouds; the rain the
 				// rainbow needs (how much of it lies along this line of sight)
@@ -381,7 +394,8 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 				// haze the land fades into, so no bright line runs along where the land ends
 				col = mix(col, mix(uSkyHor, uFogCol, 0.7), smoothstep(0.02, -0.12, d.y));
 				col = mix(col, uFogCol, smoothstep(0.012, -0.03, d.y) * 0.9);
-				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uAir.rgb, uAir.a);
+				// (not under a world's own dusk, whose colours are its own)
+				col = mix(col, dot(col, vec3(0.299, 0.587, 0.114)) * uAir.rgb, uAir.a * (1.0 - uDusk.x));
 				// no air: a black sky, the sun a hard white disc
 				if (uEarthSky > 0.5) col = vec3(0.003, 0.004, 0.007) + uSunColor * (smoothstep(0.9993, 0.9997, dot(d, uSunDir)) * 18.0 + pow(max(0.0, dot(d, uSunDir)), 400.0) * 0.4);
 				// Earth over the Moon: blue oceans, brown-green land, white cloud, lit on the sun's side
@@ -676,8 +690,10 @@ export function createSky(scene, shared, renderer, { isPhone = false, latitude =
 		// haze: blue by day so far land stacks up in layers
 		const haze = uniforms.uFogCol.value.copy(tmpB).lerp(tmpA, 0.12);
 		if (W) haze.lerp(tmpC.setRGB(0.5, 0.53, 0.57).multiplyScalar(1 - night * 0.9), Math.min(1, W.rainHere * 0.6 + gl * 0.3));
+		const dk = uniforms.uDusk.value;
+		if (dk.x > 0) haze.lerp(tmpC.setRGB(0.24, 0.07, 0.26).multiplyScalar(dk.y), dk.x * 0.85);
 		const air = uniforms.uAir.value;
-		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w);
+		if (air.w > 0) haze.lerp(tmpC.setRGB(air.x, air.y, air.z).multiplyScalar(haze.r * 0.299 + haze.g * 0.587 + haze.b * 0.114), air.w * (1 - dk.x));
 		renderer.toneMappingExposure = 1.15 + night * 0.15;
 		// The sky is tone mapped, but three.js mixes the fog in after the tone mapping, so a
 		// fully fogged hill came out the raw haze colour: a pale cyan much brighter than the

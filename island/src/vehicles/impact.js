@@ -5,10 +5,11 @@
 
 import * as THREE from 'three';
 import { specOf } from '../bay/cars.js';
+import { isMinor } from '../combat/targets.js';
 
 const TALL = { suv: 1, pickup: 1, van: 1, delivery: 1, truck: 1, bus: 1 };
 
-export function createImpacts({ people, ragdolls }) {
+export function createImpacts({ people, ragdolls, ward = null }) {
 	const vel = new THREE.Vector3(), pt = new THREE.Vector3();
 	// car: { kind, x, y, z, yaw, vx, vz, mass }
 	function strike(car) {
@@ -27,6 +28,8 @@ export function createImpacts({ people, ragdolls }) {
 			// (only what the car is moving into: its front going forward, its back reversing)
 			const along = car.vx * fx + car.vz * fz;
 			if (Math.sign(lon) !== Math.sign(along) && Math.abs(lon) < hz - 0.6) continue;
+			// the young carry the Spark (combat/targets.js): the car parts round them
+			if (isMinor(P)) { if (!p.warded || p.warded < performance.now()) { p.warded = performance.now() + 1500; ward?.(p, car); } continue; }
 			const tall = TALL[car.kind];
 			vel.set(car.vx, 0, car.vz);
 			pt.set(pos.x, pos.y + (tall ? 0.95 : 0.55), pos.z);

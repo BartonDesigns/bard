@@ -1,6 +1,9 @@
 // node island/tools/multiplayer.test.mjs: the multiplayer client's pure parts (no browser)
 import { followStep, besideOf, RADIUS } from '../src/net/follow.js';
-import { sample } from '../src/net/remotes.js';
+// The render module imports the sound bus; initialize only its browser event boundary.
+globalThis.addEventListener ||= () => {};
+globalThis.window ||= globalThis;
+const { sample } = await import('../src/net/remotes.js');
 import { createRoomClient } from '../src/net/client.js';
 
 let pass = 0, fail = 0;

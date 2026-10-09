@@ -4,34 +4,223 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
-## Release checkpoint (9 October 2026 UTC)
+## Handoff completion release (9 October 2026 UTC)
 
-The owner authorized “Push it live” after the Moon/Deep continuation. This release is
-a selective tree based on live `181e68c`, sourced from feature checkpoint `eec57ca`.
-Only Moon part 2, its fabric/hair fixes, resonance stones and the Deep are included.
-Combat, gear v2/trading, architecture, families and vehicle WIP remain on the feature branch.
-No rooms Worker deployment is needed or performed for this release.
+The owner explicitly authorized finishing the current handoff with agents and publishing
+it live. This supersedes the earlier request to pause new looks for a separate approval.
+The scope is the current release table plus the open shoreline, diving, cinematic Explore
+and native Sun/Gargantua entry requests, not the parked future roadmap.
 
-- Moon: 16 named crew, interiors, six outposts, maglev, hydroponics, errands, EVA suits,
-  continuous lunar horizon, crew wall/furniture/peer constraints and indoor reflected light.
-- Deep: underground gate hall, sealed/open shaft, phrase puzzle, continuous rope travel,
-  waystones and cleanup on departure. Gate progress retains its save key.
-- Live inventory remains v1. Colony errands use their existing per-world saved ledger
-  until the gear API ships. The journal exposes the saved colony credit balance. A regression
-  test completes the relay errand, reloads it and checks item removal and reward persistence.
-- Verified: production build and 43 Node test entries covering colony plans, crew, errands,
-  Deep topology and travel, cave streaming/elements, social actors, gatherings and live arms.
-  Syntax and whitespace checks pass. The earlier feature checkpoint separately passed
-  53 client test entries and 92 rooms server tests; these are not rendered gameplay checks.
-- Release limitation: local Chromium is unavailable, its download failed, and the old
-  `/tmp/claude-0/planet/smoke-ship.js` is absent. Full rendered Moon/Deep walkthrough,
-  skin review, shader and phone smoke remain outstanding. Owner authorization to release
-  is recorded above; do not report those visual checks as passed. Verify Pages and the
-  deployed bundle after pushing, and record actual browser observations separately.
+- **Gear and held items:** all 20 inventory entries now have models, icons and explicit
+  grips. The canvas/film atlas interpolation defect is fixed. The hunting net has real
+  openings at both LODs. See `docs/held-items-completion-2026-10-09.md`.
+- **Worlds:** lake/river vegetation rejects submerged roots, raised lakes supply swimming
+  levels, inland banks retain their own materials, downward steering starts a dive,
+  Explore has wider establishing/crane/reveal shots, and duplicate car faces are removed.
+  See `docs/world-finish-2026-10-09.md`.
+- **Families:** real staged bodies, household aid through the common wallet and morality,
+  existing dining chairs, saved food/bank/garden state, and cancellation/resource cleanup
+  through travel and close. See `docs/families-finish-2026-10-09.md`.
+- **Combat/rooms:** surrender/restraint and minor protection, corrected PvP recipient
+  routing, saved ammunition, transaction locking, world-scoped relay validation, pooled
+  resource teardown and sound-bus routing. The final combat and transport verification
+  record accompanies this release.
+- **Off-Duty Orchestra:** the eight-person floor-seated encounter is included, with
+  varied relaxed poses, occasional standing/shuffling and comic upward firing.
 
-Next handoff duties: rendered Moon/Deep review; show the weapon designs before building
-on them; finish combat and its protected-minor checks; then the single owner-run rooms
-Worker deployment. See the feature branch HANDOFF for the full WIP inventory.
+The production build is reproducible from a clean main-based release checkout: engine URL
+key `2babcc429c`, SHA-256 `b88798a98269b232a49e63cc0487b7526707e305a68d80b07ee59c9dfb69d637`.
+All nine real-input combat gates passed. Thirteen full-world views passed with no page,
+shader or local asset errors and at most 16 samplers per shader stage. This includes Moon
+room skin lighting, the Deep phrase puzzle and complete rope round trip, and the native
+Gargantua voyage into the Held Note and back to the Event Ring. See the release evidence
+in `docs/verification/combat-gameplay/` and the full-world verification record.
+
+The rooms Worker source is tested with two real local clients, but production deployment
+requires the owner's authenticated Cloudflare session. This environment has no deployment
+credentials or configured workflow. The client reports the old server's trade limitation;
+do not report online trading/PvP as upgraded until `/status.features` includes `trade-v2`,
+`combat-v1` and `combat-guard-v1`. Deploy once with the owner-run commands in the server README.
+
+After this release, resume the remaining architecture polish with cloud immersion: align
+the camera's mist density with rendered billowing bands, tower openings and ground clearance.
+The two bands, dusk gradient and tested bloom already exist; preserve those behaviors.
+
+Earlier checkpoints below are retained as history. Their branch-only/missing-feature
+statements describe those checkpoints, not the completed source above. Real-phone timing
+and an AAA art-quality sign-off are not established by software-renderer checks.
+
+## Off-Duty Orchestra checkpoint (9 October 2026 UTC)
+
+The owner supplied a picnic music video and clarified that the casual **gunfire into the
+air** is its central joke. After the owner's first review, expanded the encounter to eight
+seated adult MakeHuman performers on every device: three string players, a clapper, two
+friends laughing/listening, and two friends using different existing
+armament models as comic percussion. They lift the guns, fire skyward, recoil and settle;
+the music keeps going. A nearby button lets the player clap along.
+
+The owner's next correction is implemented: **everyone starts sitting on the floor**, not
+on stools. The larger rug holds folded-leg poses, a raised knee, slouches and supported
+left/right leans. Friends occasionally rise, shuffle a few steps, return and sit back down.
+Held items follow the actual torso/hand height; shots pause during transitions and walking.
+`people/motion.js` has an optional floor-pose layer and sit easing rate. Ordinary chairs and
+walking retain their defaults. Local movement stays in the clear patch and avoids the
+player and other picnic guests. No chairs remain in the picnic props.
+
+Source: `island/src/encounters/`, with world/collision/debug hooks in `main.js`.
+`Crysis.picnic()` inspects it; `await Crysis.picnicGo({x, z})` tries a valid daytime patch.
+The encounter owns its props, people, sounds and cancellation guards. It does not dispatch
+combat or network events. It respects a saved cooldown and clears on travel/world changes.
+
+Build, six encounter rule tests, eleven resident regression tests and sixteen rendered
+browser checks passed; zero page/shader errors in the floor-seating review. Checks now
+include floor height, varied poses, real stepping, return/settle, foot contact and shot
+suppression while moving. New PNG/video exports show all eight on the floor and a complete
+stand/shuffle/return cycle. Earlier previews with chairs are superseded.
+Details and reproducible review tools are documented in
+`docs/off-duty-orchestra-2026-10-09.md`.
+
+**Branch source only.** New looks need the owner's review before a selective live release.
+The staging review is not an AAA sign-off or a full-world/real-phone walkthrough. Existing
+held-item art defects remain open. Rebuild this source checkout before running it; generated
+engine/index files are intentionally left at the prior branch checkpoint.
+
+## Live release and armament review (9 October 2026 UTC)
+
+- **Moon/Deep is live:** `main` commit `42bced7a3ab89a20aaae34beb2b49853d19eda6e`.
+  GitHub Pages run `37877283504` succeeded. Production HTML references engine hash
+  `0956a97800`, matching the release build. The release was selective from `181e68c`.
+  This merge brings main back into the WIP branch, preserving all unfinished areas.
+- Gear/trading, combat, architecture, families and vehicle WIP are still branch-only.
+  No rooms Worker deployment occurred. The main release uses the colony's local ledger
+  with inventory v1, and tests its item/reward persistence. This branch keeps inventory v2.
+- The owner requested actual armament and other held-item review exports before further art
+  work. Baseline is checkpoint `eec57ca`; `held-items.js` has 12 dedicated models (four
+  armaments, eight utilities). Four ammo and four Moon errand catalog entries have no model.
+- Exported: 12-item overview; three-angle armament and utility sheets; five-tier comparison;
+  transparent 48-frame sprite atlas and JSON; 68 individual PNGs; self-contained WebGL viewer.
+  These are current geometry/materials, not generated concept art. `island/tools/held-review-entry.mjs`
+  is the reusable rendering entry. Full review metrics and source map are in
+  `docs/held-items-review-2026-10-09.md`.
+- Material defect confirmed: interpolating a whole-number `vSurf.z` can put canvas tile 13
+  just below 13; `floor` selects film tile 12. A render-only diagnostic using a small tile
+  tolerance and clamped wear removes medkit/repair-roll patches. The diagnostic is separate;
+  no held-item model or shader edits have been applied to this branch for the review.
+- AAA assessment: not approved. Prioritize material defect, missing models, opaque net,
+  utility construction detail, realistic material scale, then in-hand/equip/aim/reload checks.
+  Static exports do not establish grip correctness, animation quality or device performance.
+- Chromium 153 is now available from the npm renderer package in this session; 68 isolated
+  asset views rendered without reported shader/page errors. The full Moon/Deep gameplay
+  and phone walkthrough remains outstanding. Earlier Chromium-download blockers below
+  describe the prior checkpoint, not current isolated asset-render capability.
+
+Next: owner design review of these exact assets, then a focused art pass. Keep combat and
+server changes separate until their existing handoff checks are met.
+
+## Continuation checkpoint (8 October 2026, from `9d3f040`)
+
+Continued the first two priorities below on `claude/affectionate-heisenberg-3g4qv1`.
+The previous WIP areas are preserved. This checkpoint is **branch work, not a live release**;
+no main or Worker deployment was made. Details and exact checks are in
+`docs/world-continuation-2026-10-08.md`.
+
+- **Moon crew (`503c058`):** motion now applies the colony's wall/furniture constraints and
+  nearby crew spacing before the rig plants its feet. Roster destinations inside furniture
+  margins resolve to the clear edge, and walkers slow near their next point. Pending body
+  loads cannot build into a disposed world. A separate, shared interior reflection map lights
+  crew skin and clothes indoors without changing their pigmentation; outside uses the existing
+  lunar environment. The reflection map releases with the colony. **Lighting is a candidate
+  awaiting rendered review**, and the full scheduled walking routes still need a visual pass.
+- **Deep Gate (`83acc51`):** the new underground hall now has a real shaft through its floor.
+  The closed seal supplies the walking floor, the open rim keeps walkers out until they use
+  the rope, and the Deep's inner lining stops below the hall. Continuous down/up travel,
+  camera alignment on landing, control unlocking, immediate backdrop removal, and delayed
+  return cancellation on disposal have regression coverage. Waystones say “Return to the
+  gate hall,” matching their destination. Existing gate progress keeps its save key.
+- **Verified:** production build; changed-source syntax and whitespace checks; 53 Node test
+  entries covering Moon crew, collision, Deep travel, native caves, resident movement,
+  trading, combat rules and families; the trade entry reports 70 internal checks. Rooms
+  server tests report 92 passed. The native cave-elements test now sets up its browser audio
+  globals before importing the new resonance module.
+- **Still required before shipping:** actual rendered Moon skin/room walkthrough and Deep
+  gate/puzzle/rope checks, the full world/shader smoke, and owner review of the visual changes.
+  This container has no Chromium binary and its Playwright download returned “Site
+  Unavailable.” ESLint is not installed or cached, so no ESLint pass is claimed. These are
+  validation gaps, not approvals to skip the release gates.
+
+Next: complete those rendered checks, then proceed to the weapons design review, combat
+integration and the single owner-run rooms Worker deployment described below. Do not treat
+the rules tests as end-to-end combat or two-client multiplayer verification.
+
+## Resume here (8 October 2026, late night)
+
+### What is live (main, level99bard.com)
+
+- **Live since the 7 October note:**
+  - multiplayer rooms, with glide smoothing and phone joins that no longer stall at 67%;
+  - the planet landfalls and the black-hole realm beyond the horizon;
+  - the Moon, Magma and Toxic colonies (first version);
+  - Bend and the globe towns, with no painted street grids;
+  - detail cast ahead of you;
+  - the Bay ground fix (`181e68c`): one height on every device, flat under buildings, all survey levels in before anything is placed.
+- **The rooms Worker** is live at `https://l99-rooms.joshbarton1921.workers.dev`, but it is the OLD server: it has no trade or combat messages yet.
+
+### On the branch only (`claude/affectionate-heisenberg-3g4qv1`), not shipped
+
+Every agent's work is committed in WIP snapshots. The latest is `30af168`; nothing is uncommitted. Several agents stopped at the account usage limit, so their last steps (mostly tests and screenshots) may be unfinished. Review images are in `/tmp/claude-0/…`; they are lost if the container restarts.
+
+| Area | State | Files (in island/src) | Owner decision |
+|---|---|---|---|
+| **Moon, part 2**: horizon (`world/lunarfar.js`), 6 outposts, colony interiors, a 16-person crew with talk and quests, a maglev to sites about 10 km out, hydroponic crops, lived-in signs, EVA suits on real bodies (`planet/colony/suit.js`), Ruth's clipping fix | Done. Then stopped mid-way on two follow-ups: lighting so dark skin reads fully indoors (before/after in /tmp/claude-0/moon-npc/skin/) and people anti-clipping | `planet/colony/*` (crew, crew-life, errands, farm, signs, maglev, suit, interiors…), `world/lunarfar.js`, `world/islandgen.js`, `world/terrain.js`, `world/sky.js`, hooks in `guide/guide.js`, `people/social.js`, `social-actors.js`, `persona.js`, `gatherings.js`, `gameplay/arms.js`, `main.js` | Approve after the skin fix (skin changes need the owner's eye) |
+| **Fabric detail** on all clothing (procedural weave per fabric) | Done | `people/garment.js` | Ships with the Moon |
+| **Gear v2 and trading**: item instances with levels and tiers, 12 items rebuilt, the gear sheet, Diablo-style trade window, shops, upgrade and combine | Done, 70 trade tests and 70 server tests pass | `gameplay/gear-levels.js`, `gameplay/arms.js`, `gameplay/trade.js`, `ui/gear.js`, `gear-look.js`, `gear-studio.js`, `trade-window.js`, `crysis/held-items.js`, `crysis/arms-runtime.js`, `net/*`, `people/motion.js` (`grip`), `server/multiplayer/*` | Needs the owner's server deploy, then ship |
+| **Smoother friends' motion** (120 ms delay, faster easing) | Done (`0a0ffa1`) | `net/remotes.js` | Ships with gear |
+| **Architecture**: cliff settlements on TERRAN, SHEPHERD, ICE and GAS; synthwave dusk; mist band; glow (`planet/arch/bloom.js`); grand procedural interiors (17 room kinds, lifts, sliding doors) | Finish pass done. Still short of the reference video on mist depth, clouds and glow; black frames were seen once in tests, cause unconfirmed | `planet/arch/*`, `world/sky.js`, `main.js` (the `W.arch?.post?.()` hook and `Crysis.archGlow`) | Ship as a first version, or one more mist and cloud pass? |
+| **Resonance stones and the Deep**: one strike system (E, tap or button), cave alcove payoff, surface boulders ring, Deep Gate phrase puzzle, endless cave with 6 depth bands, landmarks, waystones, lift and depth meter | Done. Then stopped mid-way moving the gate from open fields to the dead end of cave shafts (the island's passage under the summit, and the planets' tunnels) with a continuous descent | `planet/resonance.js`, `planet/deep.js`, `planet/deepfield.js`, `planet/cave-elements.js`, `world/vegetation.js`, `guide/guide.js`, `main.js` | Finish the gate move, then approve |
+| **Weapons art**: fix the upside-down hold, first-person viewmodel (arms and hands, sway, ADS), detailed fictional modern and future arms, tier finishes as skins, and a fire/reload/aim API for combat | In progress, stopped at the usage limit | `crysis/held-items.js` and its viewmodel files | Owner wants to see the designs before anything builds on them |
+| **Combat**: ammo and reload, hit detection, health and HUD, NPC reactions, factions, cars (damage, fire, a burnt shell), destructible props, arson, 3 mega bosses, multiplayer, morality compass | In progress, stopped at the usage limit | `combat/*` (new), small hooks elsewhere, `server/multiplayer/*` | Needs a server deploy too |
+| **Vehicles** z-fighting and intersections | In progress, stopped at the usage limit | car builders (`bay/cars.js` …) | Before/after review |
+| **Families**: teens (13–17), households and schedules, schools, food access and well-being | In progress, stopped at the usage limit | `people/households.js`, `schedules.js`, `food.js`, `teens.js` (new) | Review images |
+
+### The owner's standing rules for this work
+
+- **Combat** is M-rated (the owner, 8 October):
+  - **All minors are fully protected.** Children and teens (under 18) cannot be hit or harmed. In the lore this is "the Spark", a ward the young carry until they come of age. Enforce it with one `isMinor(person)` check in the hit filter, backed by a test. Trying to harm a minor only adds a large morality mark.
+  - **Allowed:** blood hit effects that fade, ragdolls, deaths.
+  - **Not allowed:** dismemberment, torture, sexual violence, and executing people who have surrendered or are restrained.
+  - **Factions** are fictional: gangs, militias, desert raiders, pirates, mercenaries, village militias, police and rangers. They have mixed membership; no real group names or symbols; never tied to an ethnicity, religion or nationality. They fight each other on their own.
+  - **The player** may attack anyone except minors, and arson works. People in encampments are ordinary civilians: never designated targets, never rewarded. Harming them is scored heavily.
+  - **Morality compass** (`combat/morality.js`): four axes (mercy, law, protection, honesty), one transparent scoring table, events logged with their context, and world reactions. It feeds the parked P5 morality page.
+  - **No** real-world weapon instructions or mechanism detail, and **no** real brands.
+- **Look changes** (skin, hair, faces, new looks) are shown to the owner before shipping.
+- **Moon people** are always real MakeHuman bodies, never blocky figures. Hair goes under the helmet (comms cap) and over the collar indoors.
+
+### To ship (selective, as always)
+
+1. Build a ship tree in `/tmp/claude-0/ship` from `origin/main`. Check out only the approved area's files from the branch. Take `main.js` hunks by hand, since it mixes every agent's lines. Rebuild, then run the smoke test (`/tmp/claude-0/planet/smoke-ship.js` against port 8768; it must print magma, terran and earth lines and samplers "ok"). Check `git merge-base --is-ancestor origin/main HEAD`, push to main, merge main back into the branch, and resolve `dist` and `index.html` conflicts by taking ours and rebuilding.
+2. **Server:** gear and trading and combat both change `server/multiplayer`, so the owner should deploy once after combat lands. The owner's commands, one line at a time:
+   ```
+   cd ~/bard-server
+   git pull origin claude/affectionate-heisenberg-3g4qv1
+   cd server/multiplayer
+   npm install
+   npm test
+   npx wrangler deploy
+   ```
+   For a fresh clone, run these first: `git clone https://github.com/bartondesigns/bard.git ~/bard-server`, then `cd ~/bard-server`, then `git checkout claude/affectionate-heisenberg-3g4qv1`. If the client ships before the server, trading says "Trading needs the rooms server update".
+
+### Restarting the stopped work
+
+The agents' sessions may not survive. Re-create each from the table above. Its brief is "finish what is in these files". Have each start with `git diff origin/main -- <its files>`, keep to its own files, commit with `git add <files>` (never `-A`), and never commit `dist`.
+
+**Run at most 3 or 4 agents at once.** Seven at once hit the account usage limit three times in a day.
+
+Order of value:
+1. Finish the Moon skin fix, then ship the Moon.
+2. Finish the Deep Gate move, then ship it.
+3. Weapons art: show the owner the designs.
+4. Combat.
+5. Then one server deploy, and ship gear plus combat.
 
 ## Owner feedback to work next (7 October 2026, after a context clear)
 
@@ -80,12 +269,111 @@ pointers are where each fix most likely starts.
      warning kept as atmosphere instead of a wall, and a way back out.
    - Show the owner the look before shipping.
 
+## Gear, levels and trading (8 October 2026)
+
+- **Built (on the branch):** the 🎒 Gear sheet (rail button, the places menu, or I) and a trade
+  window between friends in a room.
+  - **Items are instances** (inventory version 2, `gameplay/arms.js`; version 1 saves migrate to
+    Common, level 1): each has an id, a level 1-10, a tier (Common, Fine, Superior, Masterwork,
+    Legendary) and experience. `gameplay/gear-levels.js` holds the stats (game numbers per item:
+    light radius, heal, accuracy, range …), value, upgrade cost, combining and experience.
+  - **Levelling up:** experience from carrying the held item on foot and from hunts
+    (`arms-runtime.js` `carry`, `train`); **Upgrade** at an outfitter, ranger camp or trader (credits
+    plus one Repair Roll); **Combine** two of the same item and tier into the next tier. Shops buy
+    back by level and tier. Transactions: `train` (not journaled), `upgrade`, `combine`, `sell` by uid.
+  - **Models** (`crysis/held-items.js`): turned and extruded shapes with canvas-drawn wood, leather,
+    brushed metal and canvas; the trim metal shows the tier, a polished inlay from level 4, a
+    glowing core from level 7, motes at Legendary; about 2-3.4k triangles each (low LOD for friends
+    and phones). Held in the right hand (the fingers close round it: `motion.js` `grip`) or low in
+    the first-person view. The fictional rifles are stylised, with no working parts.
+  - **Gear sheet** (`ui/gear.js`, look in `ui/gear-look.js`): slots with tier edges, level badges
+    and counts; an item's detail view with its model turning (`ui/gear-studio.js`, its own small
+    renderer, which also draws the slot thumbnails), level bar, stats with next-level values,
+    Hold, Upgrade, Combine and Sell.
+  - **Trade window** (`ui/trade-window.js`): your offer and theirs side by side (stacked on a
+    phone), coin stacks, your bag to drag or tap from, tooltips with stats and green/red
+    differences against what you hold, a big Accept per side that lights its panel, a flash when a
+    change clears them, and a 1.5 s hold once both accept (either can still cancel). Sounds through
+    `world/soundbus.js`.
+  - **Protocol:** trades name instances `{u, i, l, t, x}` (`net/protocol.js` `cleanTradeSide`);
+    the pose carries `h`, `hl`, `ht`; messages may be 3 KB. The asker commits after the hold
+    (`gameplay/trade.js` `tick` with `HOLD_MS`); each side applies its own side once as
+    `trade:<id>`, the very instances moving under their ids (a clash is renamed, never lost).
+  - **Server:** the `trade` relay and its `trade-ack` in `server/multiplayer/src/room.js`. **Not
+    live until the owner redeploys** (steps in `server/multiplayer/README.md`). Against the old
+    server the game says "Trading needs the rooms server update." after 4 s.
+  - Tests: `node island/tools/trade.test.mjs` (trades, levels, upgrades, combining, migration),
+    `cd server/multiplayer && npm test`.
+- **Left:** a player market (posting offers at the community exchange: `createPlayerOffer` exists,
+  no screen), item Use actions (experience from use once they exist), and the plan below.
+
+## Next weapons and gear steps: a plan (not built)
+
+Everything stays a game abstraction: fictional items, encounters resolved by game rules, no
+real-world handling or instructions, nothing graphic. Theft and heat stay exactly as the core
+defines them.
+
+### 1. Using items
+- One **Use** button beside the held item (and the E key), shown when the item has a use here.
+  `applyInventoryTransaction` already has `use` with an activity; the runtime adds
+  `use(itemId, context)` that picks the activity from where you are (a hunt trail, your home, a
+  shelter) and returns a short game outcome.
+- Per kind, short and readable:
+  - **Camp lantern:** a soft point light (one, pooled, phones skip it at night under low quality)
+    that lights a cave or a shelter encounter.
+  - **Field medkit:** clears an "injured" state from an encounter (consumed).
+  - **Repair roll / door brace:** repair or secure a home object (consumed / placed).
+  - **Lantern alarm:** placed; it chimes and calls friendly townsfolk when an encounter starts nearby.
+  - **Signal flare:** a coloured light in the sky that friends in the room see (one `event`).
+  - **Hunting net / scent kit:** reveal or finish a tracking trail.
+- Placed items are world props with an id, saved in the inventory journal, so a reload keeps them.
+
+### 2. Hunting (game-only)
+- A **trail encounter**, not a shooting simulation. Starting a hunt (already `hunt` in the
+  runtime) lays a short trail of tracks and markers near the source using the existing fauna
+  (`landFauna`). Following it, the scent kit and the net reveal and finish steps.
+- The finish is a "tag" or "capture" moment: the animal is marked, calmly walks or runs off, and
+  you get a trophy card and credits. No wounds, no bodies, nothing graphic. The bow and the trail
+  rifles only change the range and the quiet of the tag.
+- Wildlife in protected or populated places is never a target; children and townsfolk never are.
+
+### 3. Home defence (game-only)
+- A **shelter encounter** at your home (Guide home or a cottage): at night a "prowler" event
+  (a shadowy, faceless figure, never a named townsperson, never a child) tests the home.
+- Prepared homes win without contact: door braces, lantern alarms and lanterns raise a "secured"
+  score; the alarm calls friendly neighbours; the guard items "deter", and the figure leaves.
+  The Warden Spark Carbine stays non-lethal, as the catalogue says: it ends the encounter with a
+  flash and the figure fleeing.
+- Friends in the room can help: the host's encounter is shared like gatherings (an `event`), and
+  each guest's preparations count.
+
+### 4. How combat would fit the existing bodies, poses and ragdolls
+- **Poses:** `people/motion.js` already plays held poses and keyed actions (`people/actions.js`:
+  pitch, bat, crouch, ready). Add a few game actions in the same form: `aim` (both arms raised,
+  for the bow and long items), `brace` (the item held across the body), `toss` (the net), and
+  `raise` (the lantern up). The held item rides the right wrist as it does now.
+- **Your body:** in third person (`people/self.js`), the action plays on your avatar; in first
+  person the view model in `crysis/held-items.js` tilts with the same action.
+- **Friends:** the pose's `a` gains these action names (validated in `protocol.js` like the walk
+  states), so friends see the same motion.
+- **Outcomes, not damage:** an encounter resolves by rules (preparation, item, skill, a roll),
+  like `resolveTheftAttempt`. A "stagger" on an encounter figure reuses `people/ragdoll.js`'s
+  `hit()` with a small push, as the shove (X) already does: a stumble and getting back up, never
+  injury. Ragdolls stay for falls and pushes, not for harm.
+- **Multiplayer:** each player stays the owner of their own state; the host decides an
+  encounter's outcome and shares it as an `event`, so everyone sees the same ending.
+
+### 5. Order of work
+1. Use button and the simple uses (lantern, medkit, repair, flare). 2. Placed home items and the
+shelter encounter. 3. The hunting trail and tag. 4. The action poses and their multiplayer field.
+5. A shared encounter in rooms.
+
 ## Resume here (7 October 2026)
 
 - **Multiplayer v1 (on the branch, not live until the owner deploys):** friends join the host's game and see each other.
   - **Server:** `server/multiplayer` is a second Worker, `l99-rooms` (Workers Free: one SQLite Durable Object per room, WebSockets with hibernation). The deploy steps are in `server/multiplayer/README.md`: `npm install`, `npm test`, `npm run deploy`, then put the address in `island/src/net/config.js` (`ROOMS_URL`) and rebuild. While it is empty, there is no Invite or Join, nothing connects, and `?room=` links just open the game.
   - **Wire format:** `island/src/net/protocol.js`, shared by the game and the server, which cleans every message. Only poses, spots, the hour and weather, and the plain facts of the host's meetings ever travel; no dialogue.
-  - **Limits:** 8 a room, 2 KB a message, 20 messages a second (bursts of 40), 30 s silence drops a player, empty rooms kept 30 min.
+  - **Limits:** 8 a room, 3 KB a message, 20 messages a second (bursts of 40), 30 s silence drops a player, empty rooms kept 30 min.
   - **Host:** if the host leaves, the longest-present player takes over; the owner gets the seat back on return. **End room** closes the room for everyone.
   - **Client (`island/src/net/`):**
     - `client.js`: connection, with reconnect and backoff.
@@ -113,7 +401,16 @@ pointers are where each fix most likely starts.
   - `styles.js` (per-world parts, materials and lights: MOON, MAGMA, TOXIC), `plan.js` (sites the hub in a crater floor or the flattest ground, the spaceport, outposts, solar farms; levels them into the height map and wears the roads into the path mask), `parts.js` (domes, berm-buried modules, glass corridors, printed/shielded towers and sealed spires, pads, control tower, landers, mine rig, dishes, scrubber stacks, maglev), `mats.js` (one lit material, its look per vertex: plates, printed strata, night windows, regolith, solar cells, lamps, blinking running lights, coolant flow), `colony.js` (build, LOD, instanced solar/fins/rovers/suited colonists, trains, night lights, arrival names, `go()`).
   - Moon: Tranquility Colony; MAGMA: Basalt Hold (coolant lines, heat-shield towers); TOXIC: Clearsky Spires (spires, scrubber field). Warp list: "Moon: Tranquility Colony" lands at its spaceport. `Crysis.colony()` / `Crysis.colonyGo()`.
   - Hostile worlds (MAGMA, TOXIC, SINGULARITY, GAS/BARREN) now hide the clapboard fishing village (`profile.noVillage`), no villagers spawn where there is no village, and the Moon's vacuum light is hard (shadow radius 1, little fill).
-  - Not yet: ICE (subsurface entrances, drilling rigs), an enterable habitat interior, suits from the people system.
+  - **The Moon to the horizon:** `world/lunarfar.js` is one relief function written twice (JS and GLSL, the same sine-free hash): rolling mare, highland ridges, craters of two size classes (the big ones with central peaks). `islandgen.js` `heightAt` blends into it past `island.half` (so you walk on what is drawn); `terrain.js` adds 28 outer rings to the ground grid out to 32 km and a curvature drop; `main.js` keeps the ground visible out there, thins the fog and pushes the far plane to 40 km (`island.far`).
+  - **Far sites** (`styles.js` `outer`, `parts.js` far-site builders): Copernicus Deep Mine and Daedalus Observatory on great crater rims, Far Side Relay, Wreck of the Kestrel, First Landing Plaza (bootprints, an empty plinth), Storm Shelter Four; dark rover tracks out to each, rovers on them, names on arrival.
+  - **Interiors:** every hub shell is walkable (`parts.js`: dome ring wall with doorways, hollow corridors, open modules with bulkheads and doors, airlocks; their walls are colliders). `interiors.js` furnishes them when near (dome farm, mess, quarters, med bay, workshop with a rover, lounge, supply depot, the tower lounge, the control room) with an indoor-lit material, and lets go when far. `life.js`: lifts (stand on the glowing pad), airlocks that cycle with a suit-up/suit-down note, terminals (E or the button) with the colony map and rides out to any site; the depot lists stores and hands them to `opts.give` once the inventory exposes one (the hook). Crew work indoors out of their suits; some walk out through the airlocks and come out suited.
+  - Not yet: ICE, suits from the people system.
+
+- **Cliff settlements (on the branch, `island/src/planet/arch/`):** an advanced people's settlement grown into the cliffs of TERRAN (Verdance), SHEPHERD (Ringfall Terraces), ICE (Glasshollow) and GAS (Stratos Reach); art direction from the owner's dusk/synthwave reference (violet dusk, dark towers with pink/violet/warm window grids in a fog sea lit from below, a lone monolith, the white cliff complex, the lakeside cube house, glowing flower fields).
+  - `styles.js` (per-world counts, kinds, colours), `plan.js` (scans the heightfield for cliff lips with a level top and air under them, picks the densest cluster, seats each house's back into the top with a blend that never touches the face, towers on the valley floor or in the cloud sea, bridges where the gap is clear, contour footpaths, the mist band's height from the gorge floors, a monolith out at sea, a shore house on a knoll by the water), `arch.js` (cantilever houses on V struts and a swept root sunk in the face with stone collars and buttresses, terraced houses stepping down the face with stairs, domes and drums on some backs, slab-tower clusters and turning spires with lifts, bridges, the shore house, the cottage; colliders, LOD, lifts, craft, arrival names, `go()`, a violet lean of the sky's air tint at dusk restored on dispose), `mats.js` (one lit material, look per vertex: concrete, glazing with mixed-colour lit panes, rock, timber, planted, lamps, beacons, pool water, metal; plus balustrade glass and a multiplied contact shade), `clouds.js` (the mist band: thin layers whose noise is read upstream of each tower so it parts round them and meanders in their lee, glowing pink from the works at dusk; wisps streaming round the towers; a veil when you fly into it), `glow.js` (light streaks on the water turned toward you; additive points for flowers and hamlet lamps).
+  - **Interiors (task 2):** `rooms.js` plans each building's floors (towers: a stack of seeded floor heights 6–20 m, lift core, rooms along one axis parted by portal walls, grand floors with a gallery and stair; houses: vestibule + hall over the drop, terrace suites, the shore house's two rooms), `furnish.js` builds a floor's shell and furnishing (instanced kit, per-floor theme, light baked to vertices), `interiors.js` walks them (extraFloor/extraPush via `arch.floor/push`, lifts, room names, builds ±1–2 floors near you and disposes on leaving, hides a spire's hull while inside). `Crysis.archGo('b:f')` stands you inside building b floor f (`'b:f:gallery'`, `'b:f:r1'`). Dusk sky: `sky.js` uDusk gradient/clouds/no air tint at dusk.
+  - Wired in `main.js` after the realm plan (its clear goes into `fieldPlan.clear`), built after the colony with the extraFloor/extraPush chain. `Crysis.arch()` tells of it; `Crysis.archGo(i)` stands you on house i's deck over the drop (then the towers, then the shore house).
+  - Rough: the mist band is one height per settlement (houses higher up stand clear of it); the sky's dusk tint is a single-hue lean, not a true violet-to-magenta gradient; no people on the decks; MYSTICAL and TROPICAL are not hosts yet.
 
 - **Street-level gaps filled (on the branch):** 125 new cells of the shared tile grid, baked with
   `tools/bake-realcity.py --tiles` from Overture 2026-09-23.0 (raw data in `/tmp/claude-0/expand/ov-*`):

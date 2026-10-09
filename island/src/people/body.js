@@ -224,7 +224,9 @@ export function buildPerson(A, d) {
 	const { D, targets, unit } = A;
 	// the shape: ancestry x sex x age, then muscle and weight
 	const p = Float32Array.from(A.base, (x) => x * unit);
-	const ageW = [['young', d.age < 16 ? 0 : 1 - clamp((d.age - 25) / 60)], ['old', d.age < 16 ? 0 : clamp((d.age - 25) / 60)], ['child', d.age < 16 ? 1 : 0]];
+	// (a teen is part way from the child shape to the young one: d.growth, teens.js)
+	const grown = d.growth ?? (d.age < 16 ? 0 : 1);
+	const ageW = [['young', grown * (1 - clamp((d.age - 25) / 60))], ['old', grown * clamp((d.age - 25) / 60)], ['child', 1 - grown]];
 	for (let a = 0; a < 3; a++) for (const [sx, w] of [['female', 1 - d.sex], ['male', d.sex]]) for (const [ag, wa] of ageW) {
 		if (!wa) continue;
 		const t = targets[['african', 'asian', 'caucasian'][a] + '-' + sx + '-' + ag], k = d.ancestry[a] * w * wa * unit;

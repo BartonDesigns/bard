@@ -10,7 +10,7 @@ varying vec2 vUv;
 uniform mat3 uCamera, uGeography, uStars;
 uniform vec3 uHome, uMoon, uSun, uLand, uSea, uAir, uGlow, uCloudColor;
 uniform float uRadius, uBlend, uAspect, uTan, uEarth, uMapReady, uSeed, uTime;
-uniform float uSnow, uCoast, uMoonRadius, uGiant, uSunCos, uHeat, uWarp, uAtmos;
+uniform float uSnow, uCoast, uMoonRadius, uGiant, uSunCos, uHeat, uWarp, uAtmos, uSolarDepth;
 uniform sampler2D uMap;
 uniform vec4 uMusic, uStreak;
 float hash(vec3 p) { p = fract(p * .1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
@@ -109,6 +109,16 @@ void main() {
 		}
 	}
 	col=mix(col,vec3(1.,.42,.12)*(.4+.6*sun),uHeat*.32);
+	// The retained stellar-interior treatment, confined to the native Sun's real
+	// orbital position. It cannot wash over surface planets at their local origin.
+	if(uSolarDepth>0.) {
+		vec3 p=ray*3.4; float t=uTime*.11;
+		float f=noise(p+vec3(0.,t,0.))*.55+noise(p*2.1-vec3(t,0.,t*.6))*.28+noise(p*4.3+vec3(t*1.7,t,0.))*.17;
+		float fil=pow(1.-abs(sin(f*16.+p.y*2.+t)),8.);
+		vec3 plasma=mix(vec3(.22,.018,.002),vec3(1.8,.73,.15),smoothstep(.3,.78,f));
+		plasma+=vec3(1.7,.9,.38)*fil*(.3+uMusic.x*.3);
+		col=mix(col,plasma,uSolarDepth);
+	}
 	if(uWarp>0.) col=tunnel(ray,col);
 	gl_FragColor=vec4(col,uBlend);
 	#include <tonemapping_fragment>
@@ -131,7 +141,7 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 		uAir: { value: new THREE.Color(.12, .35, .7) }, uGlow: { value: new THREE.Color().fromArray(earth ? [0, 0, 0] : profile?.glow || [0, 0, 0]) },
 		uSnow: { value: profile?.snow || 0 }, uCoast: { value: airless ? .05 : profile?.type === 'OCEAN' ? .66 : profile?.type === 'ARID' || profile?.type === 'MAGMA' ? .3 : .51 },
 		uMoonRadius: { value: companion.radius / 1000 }, uGiant: { value: companion.kind === 'giant' ? 1 : companion.kind === 'earth' ? 2 : 0 },
-		uSunCos: { value: .99999 }, uHeat: { value: 0 }, uWarp: { value: 0 }, uAtmos: { value: airless ? 0 : 1 },
+		uSunCos: { value: .99999 }, uHeat: { value: 0 }, uWarp: { value: 0 }, uAtmos: { value: airless ? 0 : 1 }, uSolarDepth: { value: 0 },
 		uMusic: { value: new THREE.Vector4() }, uStreak: { value: new THREE.Vector4(0, 0, -1, 0) },
 	};
 	if (!earth && profile?.water?.tint) uniforms.uSea.value.fromArray(profile.water.tint).convertSRGBToLinear();
@@ -177,6 +187,7 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 		uniforms.uSun.value.copy(spot).normalize();
 		uniforms.uSunCos.value = Math.cos(Math.asin(Math.min(.9, 6.96e8 / sunDistance)));
 		uniforms.uHeat.value = fx.heat || 0; uniforms.uWarp.value = fx.warp || 0;
+		uniforms.uSolarDepth.value = Math.max(0, Math.min(1, (6.96e8 * 1.06 - sunDistance) / (6.96e8 * .14)));
 		uniforms.uStreak.value.set(0, 0, -1, fx.streak || 0);
 		if (fx.heading) uniforms.uStreak.value.set(fx.heading.x, fx.heading.y, fx.heading.z, fx.streak || 0);
 		rot4.makeRotationFromQuaternion(frame.rotation); inv.setFromMatrix4(rot4).transpose();
@@ -187,10 +198,12 @@ export function createOrbitView({ renderer, earth, seed, radius, profile, shared
 		uniforms.uMusic.value.set(shared.uBass.value, shared.uMid.value, shared.uHigh.value, shared.uPulse.value);
 		const clear = renderer.autoClear;
 		try { renderer.autoClear = k >= 1; renderer.render(scene, camera); } finally { renderer.autoClear = clear; }
-		if (k >= .98 && (fx.warp || 0) < .5) {
+		if (k >= .98 && (fx.warp || 0) < .5 && uniforms.uSolarDepth.value < .99) {
 			// Frame positions are metres; this pass is kilometres from the camera.
 			gargantua.position.copy(frame.gargCenter(spot)).sub(player.pos).multiplyScalar(.001);
 			gargantua.visible = true;
+			gargantua.userData.gargMat.uniforms.uTime.value = time;
+			gargantua.userData.gargMat.uniforms.uBass.value = shared.uBass.value;
 			gargCamera.position.set(0, 0, 0); gargCamera.quaternion.copy(sourceCamera.quaternion); gargCamera.fov = sourceCamera.fov; gargCamera.aspect = sourceCamera.aspect; gargCamera.updateProjectionMatrix(); gargCamera.updateMatrixWorld(true);
 			const passClear = renderer.autoClear; try { renderer.autoClear = false; renderer.render(gargScene, gargCamera); } finally { renderer.autoClear = passClear; }
 		} else gargantua.visible = false;

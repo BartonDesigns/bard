@@ -2,14 +2,15 @@
 // they see as themselves, people/avatar.js), walked by the same motion rig as everyone
 // else's. Poses arrive about ten times a second and are played back about 150 ms late, so
 // there are always two to move between. A name tag floats over each. Far away, or past the
-// phone's few, a friend is only their tag.
+// phone's few, a friend is only their tag. What they hold (the pose's h, at its level and tier) is in their right hand.
 
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
 import { createMotion } from '../people/motion.js';
 import { carGeometry } from '../bay/cars.js';
+import { createHand } from '../crysis/held-items.js';
 
-const EYE = 1.68, DELAY = 0.15, KEEP = 1.2;
+const EYE = 1.68, DELAY = 0.12, KEEP = 1.2;
 
 // where a buffer of timed poses puts someone at time t (seconds): between the two either side,
 // or a little past the last one, then held
@@ -77,6 +78,7 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 		group.remove(r.tag); r.tag.material.map.dispose(); r.tag.material.dispose();
 		if (r.body) group.remove(r.body.P.root);
 		if (r.vehicle) group.remove(r.vehicle);
+		r.hand?.dispose();
 		list.delete(id);
 	}
 	function clear() { for (const id of [...list.keys()]) remove(id); }
@@ -131,13 +133,13 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 			const B = r.body;
 			if (B) B.P.root.visible = want;
 			const veh = here ? vehicleFor(r, a.v || '') : vehicleFor(r, '');
-			if (!here) continue;
+			if (!here) { r.hand?.set(null); continue; }
 			// what is shown eases after the samples, so a late or sparse one glides rather than jumps
 			// (a long way off, as after a Go to, it is there at once)
 			let V = r.show;
 			if (!V || Math.hypot(a[0] - V.x, a[2] - V.z) > 60 || Math.abs(a[1] - V.y) > 60) V = r.show = { x: a[0], y: a[1], z: a[2], yaw: a.y, sp: 0 };
 			else {
-				const k = 1 - Math.exp(-Math.min(dt, 0.1) * 9), ox = V.x, oz = V.z;
+				const k = 1 - Math.exp(-Math.min(dt, 0.1) * 16), ox = V.x, oz = V.z;
 				V.x += (a[0] - V.x) * k; V.y += (a[1] - V.y) * k; V.z += (a[2] - V.z) * k;
 				V.yaw += Math.atan2(Math.sin(a.y - V.yaw), Math.cos(a.y - V.yaw)) * k;
 				V.sp += (Math.hypot(V.x - ox, V.z - oz) / Math.max(dt, 1e-3) - V.sp) * Math.min(1, dt * 6);
@@ -168,6 +170,11 @@ export function createRemotes({ scene, camera, world, isPhone }) {
 				if (fly) { B.P.root.position.y = V.y - 1.0; B.P.root.rotation.set(1.25, heading, 0, 'YXZ'); top = V.y + 0.2; }
 				else if (a.a === 'swim') { B.P.root.position.y = V.y - 1.9; B.P.root.rotation.set(1.3, heading, 0, 'YXZ'); top = V.y - 0.9; }
 				B.P.lod?.(r.d);
+			}
+			if (r.pose?.h || r.hand) {
+				r.hand ||= createHand(group, { lod: 'low' });
+				r.hand.set(r.pose?.h || null, r.pose?.hl || 1, r.pose?.ht || 0);
+				r.hand.follow(B?.P, heading, want && !!B && !a.v && a.a !== 'drive' && a.a !== 'swim' && !fly, B?.M, time);
 			}
 			r.tag.position.set(V.x, top + 0.35, V.z);
 		}

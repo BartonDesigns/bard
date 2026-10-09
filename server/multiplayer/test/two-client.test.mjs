@@ -1,0 +1,93 @@
+// Two actual game RoomClients over WebSockets through Wrangler's local Durable Objects.
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import WebSocket from 'ws';
+import { createRoomClient } from '../../../island/src/net/client.js';
+import { createInventoryState, applyInventoryTransaction, instancesOf } from '../../../island/src/gameplay/arms.js';
+import { startTrade, editSide, accept, receive, tick, HOLD_MS } from '../../../island/src/gameplay/trade.js';
+import { createHealth, applyDamage } from '../../../island/src/combat/health.js';
+const root = fileURLToPath(new URL('../', import.meta.url)), ORIGIN = 'http://localhost:8768';
+const probe = createServer(); await new Promise((r) => probe.listen(0, '127.0.0.1', r));
+const port = probe.address().port; await new Promise((r) => probe.close(r));
+const url = `http://127.0.0.1:${port}`, temp = await mkdtemp(join(tmpdir(), 'bard-rooms-check-'));
+let log = '', checks = 0;
+const worker = spawn(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'dev', '--local', '--ip', '127.0.0.1', '--port', String(port), '--persist-to', temp, '--log-level', 'error'], { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
+for (const stream of [worker.stdout, worker.stderr]) stream.on('data', (s) => { log = (log + s).slice(-5000); });
+const wait = async (fn, label, timeout = 12000) => { const end = Date.now() + timeout; while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 20)); } throw new Error(`Timed out: ${label}\n${log}`); };
+const check = (value, label) => { assert.ok(value, label); checks++; };
+const nativeFetch = globalThis.fetch, players = [];
+class GameSocket extends WebSocket { constructor(address) { super(address, { headers: { origin: ORIGIN } }); } }
+function player(id, credits, initialItems) {
+ const P = { id, inv: createInventoryState(id, { credits, initialItems }), T: null, events: [], hp: createHealth(), rules: { pvp: false } };
+ P.ctx = (peer) => ({ peer, now: Date.now(), apply: (tx) => { const r = applyInventoryTransaction(P.inv, tx); if (r.ok) P.inv = r.state; return r; }, applied: (id) => P.inv.journal.some((e) => e.id === id) });
+ P.step = (r) => { P.T = r.T; for (const m of r.send) P.client.send({ t: 'trade', to: P.T.peer, ...m }); };
+ P.client = createRoomClient({ url, id, name: () => id, seed: 42, WS: GameSocket, on(t, v) {
+  P.events.push({ t, v });
+  if (t === 'welcome') P.rules = v.rules;
+  if (t === 'rules') P.rules = v;
+  if (t === 'trade') P.step(receive(P.T, v, P.ctx(v.from)));
+  if (t === 'hit' && v.id === 'me' && P.rules.pvp) applyDamage(P.hp, { amount: v.d, part: v.p, type: v.k });
+ } });
+ P.of = (t) => P.events.filter((e) => e.t === t).map((e) => e.v);
+ players.push(P); return P;
+}
+try {
+ await wait(async () => { try { return (await nativeFetch(url + '/status')).ok; } catch { return false; } }, 'Worker boot', 30000);
+ const status = await (await nativeFetch(url + '/status')).json();
+ check(status.features?.includes('combat-guard-v1'), 'built Worker advertises combat validation');
+ globalThis.fetch = (input, init = {}) => nativeFetch(input, { ...init, headers: { ...init.headers, origin: ORIGIN } });
+ const A = player('owner-aaaa', 200, { 'camp-lantern': 1 }), B = player('guest-bbbb', 100, { 'field-medkit': 1 });
+ const code = await A.client.create();
+ A.client.join(code); await wait(() => A.client.status === 'on', 'host joins');
+ B.client.join(code); await wait(() => B.client.status === 'on' && A.client.players.has(B.id), 'guest joins');
+ check(A.client.isHost() && !B.client.isHost(), 'two clients agree on host');
+ const pose = (P, w = 'earth', x = 0) => P.client.send({ t: 'pose', p: [x, 1.68, 0], w, y: 0, h: 'aurora-trail-rifle', hl: 1, ht: 0 });
+ pose(A); pose(B, 'earth', 4); await wait(() => A.of('pose').length && B.of('pose').length, 'poses arrive');
+ check(B.client.players.get(A.id).pose.h === 'aurora-trail-rifle', 'held gear reaches other client');
+ A.step(startTrade({ id: 'trade-live-001', peer: B.id, now: Date.now() }));
+ await wait(() => A.T?.status === 'open' && B.T?.status === 'invited', 'trade invite');
+ A.step(editSide(A.T, { credits: 25, items: instancesOf(A.inv, 'camp-lantern') }));
+ B.step(editSide(B.T, { credits: 0, items: instancesOf(B.inv, 'field-medkit') }));
+ await wait(() => A.T.v.b === 1 && B.T.v.a === 1, 'offers arrive');
+ A.step(accept(A.T, A.ctx(B.id))); B.step(accept(B.T, B.ctx(A.id)));
+ await wait(() => A.T.sealAt > 0 && B.T.sealAt > 0, 'both accept exact offer');
+ A.step(tick(A.T, Date.now() + HOLD_MS + 1, A.ctx(B.id)));
+ await wait(() => A.T.status === 'done' && B.T.status === 'done', 'trade commits');
+ check(A.inv.credits === 175 && B.inv.credits === 125 && A.inv.items['field-medkit'] === 1 && B.inv.items['camp-lantern'] === 1, 'inventory transfers over real WebSockets');
+ const after = JSON.stringify([A.inv.instances, A.inv.credits, B.inv.instances, B.inv.credits]);
+ A.client.send({ t: 'trade', to: B.id, op: 'commit', id: A.T.id, key: A.T.committed.key, sides: A.T.committed.sides });
+ await wait(() => A.of('trade').filter((m) => m.op === 'done').length === 2, 'duplicate commit acknowledged');
+ check(JSON.stringify([A.inv.instances, A.inv.credits, B.inv.instances, B.inv.credits]) === after, 'duplicate packet does not duplicate inventory');
+ const hit = () => A.client.send({ t: 'hit', id: 'rp:' + B.id, to: B.id, d: 20, p: 'torso', k: 'ballistic', w: 'aurora-trail-rifle' });
+ hit(); A.client.send({ t: 'rules', r: { pvp: true } });
+ await wait(() => A.rules.pvp && B.rules.pvp, 'host enables PvP');
+ check(B.hp.hp === 100, 'PvP-off hit does no damage');
+ hit(); await wait(() => B.hp.hp === 80, 'guarded player hit');
+ check(B.of('hit')[0].id === 'me', 'recipient receives its canonical player target');
+ B.client.send({ t: 'rules', r: { pvp: false } }); pose(B, 'moon', 4);
+ await wait(() => A.client.players.get(B.id).pose.w === 'moon', 'guest changes world');
+ hit(); A.client.send({ t: 'fx', s: [[0, 1.68, 0, 4, 1.68, 0, 0, 1]] });
+ A.client.send({ t: 'rules', r: { pvp: true } });
+ await wait(() => B.of('rules').length === 2, 'ordered packet barrier');
+ check(B.hp.hp === 80 && B.of('fx').length === 0, 'hits and effects stay on their world');
+ check(B.rules.pvp, 'guest cannot change room rules');
+ pose(B, 'earth', 4); await wait(() => A.client.players.get(B.id).pose.w === 'earth', 'guest returns');
+ A.client.send({ t: 'cs', e: [['boss:walker', 4000, 0, 0]], b: { id: 'boss:walker', kind: 'walker', x: 20, y: 0, z: 0, w: 'earth' } });
+ await wait(() => B.of('cs').length === 1, 'host boss state');
+ B.client.send({ t: 'hit', id: 'boss:walker', d: 40, p: 'core', k: 'ballistic', w: 'aurora-trail-rifle' });
+ await wait(() => A.of('hit').length === 1, 'boss hit goes to host');
+ check(A.of('hit')[0].id === 'boss:walker', 'host receives shared damage decision');
+ A.client.leave(); await wait(() => B.client.isHost(), 'host promotion');
+ check(B.client.status === 'on', 'remaining client takes over');
+ console.log(`two-client Worker integration: ${checks} passed, 0 failed`);
+} finally {
+ globalThis.fetch = nativeFetch; for (const P of players) P.client.leave();
+ worker.kill('SIGTERM'); await Promise.race([new Promise((r) => worker.once('exit', r)), new Promise((r) => setTimeout(r, 2500))]);
+ if (worker.exitCode === null) worker.kill('SIGKILL');
+ await rm(temp, { recursive: true, force: true });
+}

@@ -18,7 +18,7 @@ or Join, nothing connects, and a `?room=` link just opens the game as usual.
 
 | Route | What |
 |---|---|
-| `GET /status` | `{ ok, version, maxPlayers }`. |
+| `GET /status` | `{ ok, version, maxPlayers, features }`. |
 | `POST /rooms` | `{ id }` → `{ code }`: a new room, owned by that player. |
 | `GET /rooms/:code/ws?id=&name=&seed=` | Joins the room by WebSocket. |
 
@@ -44,17 +44,22 @@ or Join, nothing connects, and a `?room=` link just opens the game as usual.
   - An empty room is kept for 30 minutes so people can reconnect, then forgotten.
 - **Limits:**
   - 8 players a room;
-  - 2 KB a message;
+  - 3 KB a message (a full trade offer of 12 levelled items a side fits);
   - 20 messages a second per player, with bursts up to 40 (a flood closes that socket);
   - 20 new rooms an hour from one address.
+- **Trades:** a `trade` message names one player (`to`); only that player gets it, with who it
+  is from. The sender hears back `trade-ack` (whether that player was here), which is how the
+  game tells an up-to-date server from an old one.
 - **Privacy:** what you say to townsfolk is never sent. The server cleans every message
   (`island/src/net/protocol.js`, shared by the game and the server), and only these fields can
   pass:
-  - poses;
+  - poses, including the visible held item and its level and tier;
   - spots;
   - the hour and weather;
   - the plain facts of a meeting: the resident's name, the place, the time, and a gathering's
-    kind, size and seed.
+    kind, size and seed;
+  - direct trade offers and protocol acknowledgements;
+  - room PvP rules, bounded hit reports, shot effects and host-announced boss states.
 
   Room making is limited by a salted hash of the address, kept in memory only.
 - **Origins:** only the game's own site may make or join rooms (`ALLOWED_ORIGINS`). Localhost
@@ -74,6 +79,63 @@ is roughly **25 room-hours of active play a day**, with more when people stand s
 
 If a day's allowance runs out, Cloudflare refuses new connections until 00:00 UTC. The game
 keeps working alone, and the chip says it is reconnecting. Nothing is ever billed.
+
+## Gear and combat feature release
+
+The game can now trade gear between two friends in a room. The rooms server passes each trade
+message to the one friend it is for (`trade` in `src/room.js`), checks its size and fields, and
+counts it in the same rate limit as everything else. Inventories stay in each player's browser.
+
+Gear has levels (1 to 10) and quality tiers (Common to Legendary), and every item is its own
+instance with an id, so a trade names exactly which items change hands, with their level and
+tier. The pose can carry the held item's level and tier too (`hl`, `ht`), so friends see its
+glow. A message may now be up to 3 KB, so a full offer of 12 items a side fits.
+
+A server without `trade-v2` in `/status.features` quietly drops trade messages. The game notices
+(no answer within 4 seconds) and says **"Trading needs the rooms server update."** Everything
+else keeps working.
+
+To update the live server, open Terminal and run these one at a time, from the repository's
+root folder:
+
+```
+cd server/multiplayer
+```
+```
+npm install
+```
+```
+npm test
+```
+(it should end `105 passed, 0 failed`)
+```
+npx wrangler deploy
+```
+
+If Wrangler asks you to log in, run `npx wrangler login`, then `npx wrangler deploy` again.
+Nothing in the game needs to change: the address stays the same. Rooms open during the deploy
+reconnect by themselves.
+
+To check: open `https://l99-rooms.joshbarton1921.workers.dev/status` (it shows `{"ok":true,...}`),
+then in two windows join one room, open 🎒 **Gear**, and tap **Trade** next to your friend.
+
+## Combat validation
+
+The host chooses the room's PvP rule, which defaults off. The server enforces it before
+forwarding player hits. It checks the same world, the declared held game item, range,
+damage type, valid player body parts and a per-player firing-rate damage allowance. Player
+reports normalize to the recipient's own `me` target. Shared boss hits are sent only to the
+host after the host has announced that boss; guests cannot publish boss state or change
+room rules. Shot effects stay on the sender's world and begin near its last pose.
+
+The client applies the shared minor/surrender/restraint protection gate before local or
+network damage. Server checks bound the existing account-free game protocol; inventories,
+item ownership, personal morality and ambient NPC simulation remain local browser state.
+This is not an account-backed inventory or a fully server-simulated world.
+
+After deployment, `/status.features` must contain `trade-v2`, `combat-v1` and
+`combat-guard-v1`. The URL does not change. Use the two-client check below before publishing
+the matching client build.
 
 ## Setting it up
 
@@ -95,7 +157,7 @@ You already have a Cloudflare account and Wrangler from the discovery server (se
    (Without it the limit still works, with a fixed salt.)
 3. **Check, then deploy:**
    ```
-   npm test          # offline checks: should end "58 passed, 0 failed"
+   npm test          # offline checks: should end "105 passed, 0 failed"
    npm run check     # a dry run of the deploy
    npm run deploy
    ```
@@ -131,5 +193,20 @@ served from localhost.
 
 - `npm test` here: rooms, presence, the host's world and events, host promotion, the limits,
   stale players and the Worker's routes. Runs in Node with stand-ins, offline.
+- `node island/tools/trade.test.mjs`: trading, two inventories over a wire that drops and
+  repeats messages (nothing is lost or made twice).
 - `node island/tools/multiplayer.test.mjs`: the client's follow steering, interpolation, and
   reconnect with backoff.
+
+### Real two-client integration
+
+`npm run test:integration` boots the actual bundled Worker in Wrangler's local Durable
+Object runtime and connects two real game RoomClients over WebSockets. Eleven checks cover
+joining, held gear, item/credit exchange, repeated commits, PvP on/off with health damage,
+world isolation, host-only rules, shared boss routing and host promotion. It creates a
+temporary local store and removes it after the test; it never touches the live Worker.
+
+The 9 October 2026 container run passed using a loopback-only OS interface discovery shim
+because the container does not expose `os.networkInterfaces()`. No game, network message,
+Durable Object or WebSocket behavior was substituted. `npm run check` also passed the
+production Worker dry-run bundle.

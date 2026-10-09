@@ -45,15 +45,14 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius, companio
 	// World positions of the far bodies, in the same metres as the player.
 	function sunCenter(out = new THREE.Vector3()) { return out.copy(sunDir).multiplyScalar(SUN.distance).applyQuaternion(rotation).add(center); }
 	function gargCenter(out = new THREE.Vector3()) { return out.copy(GARG_DIR).multiplyScalar(GARGANTUA.distance).applyQuaternion(rotation).add(center); }
-	// Free space before the nearest surface, for the speed guard. The Sun and Gargantua
-	// count from just outside them, so a fast approach still reaches their safety shells
-	// (where the flight bounces the ship back) instead of crawling up to them.
+	// Only solid ground blocks flight. The Sun and Gargantua remain traversable; their
+	// approach speed below resolves the corona and photon ring without adding a wall.
 	// With a heading, only what lies along that course counts, so leaving a planet
 	// is fast and only an approach slows.
 	const oc = new THREE.Vector3();
 	function clearance(pos, dir) {
 		if (!anchor) return Infinity;
-		const shells = [[center, radius], [moonCenter(), companion.radius], [sunCenter(spot), SUN.radius * 1.5], [gargCenter(new THREE.Vector3()), GARGANTUA.rs * 3]];
+		const shells = [[center, radius], [moonCenter(), companion.radius]];
 		let free = Infinity;
 		for (const [c, r] of shells) {
 			oc.copy(c).sub(pos);
@@ -64,6 +63,17 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius, companio
 			if (t > 0 && miss < r * r * 1.21) free = Math.min(free, t - Math.sqrt(Math.max(0, r * r - miss)));
 		}
 		return Math.max(0, free);
+	}
+	function stellarSpeed(pos, dir) {
+		if (!anchor) return Infinity;
+		let cap = Infinity;
+		for (const [c, r, edge] of [[sunCenter(), SUN.radius, 2], [gargCenter(), GARGANTUA.rs, 1.12]]) {
+			oc.copy(c).sub(pos); const d = oc.length();
+			// Full speed when heading away outside the visible entry region.
+			if (dir && oc.dot(dir) < 0 && d > r * edge) continue;
+			cap = Math.min(cap, r * .04 + Math.max(0, d - r * edge) * .9);
+		}
+		return cap;
 	}
 	function up(pos, out) {
 		if (anchor && moonAltitude(pos) < 220000 * companion.radius / MOON.radius) return out.copy(pos).sub(moonCenter()).normalize();
@@ -85,10 +95,10 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius, companio
 		const base = (Math.min(1800, ground) + Math.max(0, h - ORBIT.end) * 0.085) * (run ? 2.375 : 1);
 		const low = Math.min(3e7, base * Math.min(9, mult));
 		// Up to ×9 the guard only bites on a close approach, so a descent onto the Moon cannot skip through it.
-		if (mult <= 9) return Math.min(low, Math.max(1000, clearance(pos, dir) * 3));
+		if (mult <= 9) return Math.min(low, Math.max(1000, clearance(pos, dir) * 3), stellarSpeed(pos, dir));
 		// The deep-space gears: at most three times the free space ahead each second, so
 		// an approach slows exponentially instead of tunnelling through a planet or the Sun.
-		return Math.max(low, Math.min(base * mult, 3e7 * mult / 9, clearance(pos, dir) * 3));
+		return Math.min(stellarSpeed(pos, dir), Math.max(low, Math.min(base * mult, 3e7 * mult / 9, clearance(pos, dir) * 3)));
 	}
 	function update(P) {
 		if (!anchor) return false;
@@ -120,7 +130,7 @@ export function createOrbitFrame({ earth = true, radius = ORBIT.radius, companio
 		if (inward < 0) vel.addScaledVector(moonNormal, -inward);
 		return true;
 	}
-	return { center, rotation, companion, capture, altitude, blend, up, speed, update, reset, setSun, sunCenter, gargCenter, clearance, moonCenter, moonAltitude, surface,
+	return { center, rotation, companion, capture, altitude, blend, up, speed, update, reset, setSun, sunCenter, gargCenter, clearance, stellarSpeed, moonCenter, moonAltitude, surface,
 		get anchor() { return anchor; },
 		info: (pos) => ({ earth, altitude: altitude(pos), blend: blend(pos), anchor: anchor && { ...anchor }, entries, returning: outward, moon: { altitude: moonAltitude(pos), landed: moonAltitude(pos) < 8 }, sun: anchor ? pos.distanceTo(sunCenter(spot)) : Infinity, gargantua: anchor ? pos.distanceTo(gargCenter(spot)) : Infinity }),
 	};

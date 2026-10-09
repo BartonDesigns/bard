@@ -17,6 +17,9 @@ import { regionalSheet } from '../region/talk.js';
 import { communityFolk, communityJob } from '../region/community.js';
 import { nameFor } from '../region/cultures.js';
 import { colonyOffline } from '../planet/colony/crew.js';
+import { teenPersona, teenPrompt, teenOffline, TEEN_GUARD } from './teens.js';
+import { storyOf, homeLifeOf } from './food.js';
+import { describe } from './households.js';
 
 const rng = (seed) => { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
@@ -42,8 +45,17 @@ const ERRANDS = ['on the way to get coffee', 'walking the long way home', 'headi
 
 export function personaFor(P, where) {
 	if (P.caveMeta) { const meta=P.caveMeta; return cavePersona(basePersona(P, {kind:'island',name:meta.place}, false),meta); }
-	return basePersona(P,where,true);
+	return withHome(P, basePersona(P, where, true));
 }
+// a teen's own sheet (teens.js), and their home: the household they live in and how it's
+// eating (family-life.js gives the body its P.home; households.js, food.js)
+function withHome(P, p) {
+	if (P.dna?.teen) p = teenPersona(p, P.dna);
+	const H = P.home;
+	if (H?.household?.food) { p.homeLife = homeLifeOf(H.household, H.member, describe); p.homeStory = () => storyOf(H.household, H.member); p.family = H.household.kind; }
+	return p;
+}
+const FAMILY_RE = /\b(food|eat|eating|groceries|dinner|cook|cooking|family|kids|children|money|prices|help|need anything|school)\b/;
 function basePersona(P, where, regional) {
 	// out in the world the regional kit knows who people are here (region/)
 	const H = regionalNow();
@@ -127,7 +139,7 @@ Talk like a normal person, not an assistant: casual, in your own voice, with you
 ${dialogueStylePrompt(world?.dialogueStyle, p.age)}
 If the player asks what to do or where to go, you can send them somewhere from the list below, as a favour or a tip, by adding [[quest: PLACE]] with the place's exact name (only places in the list).
 Start every reply with your mood in double brackets, one of: happy, calm, surprised, sad, annoyed, amused, thoughtful. You may add one gesture in double brackets when it fits: wave, nod, shake, shrug, point, laugh, think, open, explain, emphatic, bow. Example: [[mood: amused]] [[gesture: laugh]] Ha, not today.
-${p.caveMeta ? `CAVE LIFE: ${p.facts?.join('; ') || p.caveMeta.lore}. Treat old legends as stories people tell, not proof that unsupported trading, combat or world changes occurred.\n` : ''}${regionPrompt(p)}${p.colony ? `YOUR LIFE HERE (the Moon colony): ${(p.facts || []).join('; ')}. You are an adult crew member at work; talk about the colony, your job and your day.\n` : ''}${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
+${p.teen ? teenPrompt(p) : ''}${p.homeLife ? `YOUR HOME LIFE: ${p.homeLife}.\n` : ''}${p.caveMeta ? `CAVE LIFE: ${p.facts?.join('; ') || p.caveMeta.lore}. Treat old legends as stories people tell, not proof that unsupported trading, combat or world changes occurred.\n` : ''}${regionPrompt(p)}${p.colony ? `YOUR LIFE HERE (the Moon colony): ${(p.facts || []).join('; ')}. You are an adult crew member at work; talk about the colony, your job and your day.\n` : ''}${p.tattoos?.length ? `YOUR TATTOOS (you know their stories; talk about them only if asked or it comes up naturally): ${p.tattoos.join('; ')}.\n` : 'You have no tattoos.\n'}WHAT YOU CAN SEE AROUND YOU: ${JSON.stringify(world)}`;
 }
 
 // ---------- without a model: simple, in character ----------
@@ -135,6 +147,8 @@ export function personaOffline(p, text, world) {
 	const q = text.toLowerCase();
 	if (p.caveMeta) { const line=caveLoreReply(p.caveMeta,text); if(line)return line; }
 	if (p.colony) { const line = colonyOffline(p, text); if (line) return line; }
+	if (p.homeStory && FAMILY_RE.test(q) && !(p.teen && TEEN_GUARD.test(q))) return `[[mood: thoughtful]] [[gesture: explain]] ${p.homeStory()}`;
+	if (p.teen) return teenOffline(p, q);
 	if (p.local) { const a = regionalOffline(p, q); if (a) return a; }
 	const near = world?.near?.[0];
 	if (/^(hi|hey|hello|yo|good (morning|afternoon|evening))\b/.test(q)) return `[[mood: happy]] [[gesture: wave]] Hey! I'm ${p.first}.`;

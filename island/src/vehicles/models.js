@@ -10,9 +10,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { skyEnv, withCarSky, carGlassMaterial } from '../bay/cars.js';
+import { unfight, layerOffset } from './layers.js';
 
 // which kinds have a model, and its files (near, and for the middle distance)
 export const MODEL_KINDS = { sports: ['sports.glb', 'sports-mid.glb'], crossover: ['crossover.glb', 'crossover-mid.glb'], delivery: ['delivery.glb', 'delivery-mid.glb'], bus: ['bus.glb', 'bus.glb'] };
+// the models with layers laid on their own panels or faces given twice (vehicles/layers.js):
+// the crossover's (7 dm2 of them) and the bus's chrome (13 m2, nearly all twice over)
+const LAYERED = { crossover: true, bus: true };
 const url = (f) => new URL(`../assets/vehicles/${f}`, import.meta.url).href;
 // a phone keeps the models' textures at half size (a quarter of the memory)
 const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
@@ -73,16 +77,16 @@ export function wantModel(kind, lod = 'near') {
 	const K = kits[kind] || (kits[kind] = {});
 	if (!K[lod]) {
 		K[lod] = { ready: false };
-		gltf().loadAsync(url(files[lod === 'near' ? 0 : 1])).then((g) => { Object.assign(K[lod], takeApart(g.scene, lod), { ready: true }); }).catch((e) => { K[lod].failed = true; console.warn('[vehicles] model', kind, e); });
+		gltf().loadAsync(url(files[lod === 'near' ? 0 : 1])).then((g) => { Object.assign(K[lod], takeApart(g.scene, lod, LAYERED[kind]), { ready: true }); }).catch((e) => { K[lod].failed = true; console.warn('[vehicles] model', kind, e); });
 	}
 	return K[lod].ready ? K[lod] : null;
 }
 export function modelsReady() { return Object.entries(kits).map(([k, K]) => k + ':' + Object.keys(K).filter((l) => K[l].ready).join('/')).join(' '); }
 
 // one geometry per material for the body; the wheels on their own
-function takeApart(scene, lod) {
+function takeApart(scene, lod, layered) {
 	scene.updateMatrixWorld(true);
-	const body = new Map(), wheels = { L: new Map(), R: new Map() }, hubs = [];
+	const body = new Map(), wheels = { L: new Map(), R: new Map(), RL: new Map(), RR: new Map() }, hubs = [];
 	let tris = 0;
 	scene.traverse((o) => {
 		if (!o.isMesh) return;
@@ -105,28 +109,31 @@ function takeApart(scene, lod) {
 		if (wheel && lod === 'near') {
 			const side = /L$/.test(wheel.name) ? 'L' : 'R', front = /^wheelF/.test(wheel.name);
 			if (!hubs.some((h) => h.name === wheel.name)) hubs.push({ name: wheel.name, p: wheel.getWorldPosition(new THREE.Vector3()) });
-			if (!front) return;                                               // (the front wheels stand for the back ones)
 			// in the wheel's own frame, its hub at the origin
 			// (by the hub's place only: the node's own scale is the mesh's quantization)
 			const hub = wheel.getWorldPosition(new THREE.Vector3());
 			g.applyMatrix4(new THREE.Matrix4().makeTranslation(-hub.x, -hub.y, -hub.z).multiply(o.matrixWorld));
-			add(wheels[side], mat, g);
+			// (the back wheels their own: the sports car's are bigger and narrower, and the front ones
+			// put on its back hubs stood well out of the arches)
+			add(wheels[(front ? '' : 'R') + side], mat, g);
 		} else {
 			g.applyMatrix4(o.matrixWorld);
 			add(body, mat, g);
 		}
 	});
-	const parts = [...body.entries()].map(([m, gs]) => part(m, gs));
-	const wparts = { L: [...wheels.L.entries()].map(([m, gs]) => part(m, gs)), R: [...wheels.R.entries()].map(([m, gs]) => part(m, gs)) };
+	const parts = [...body.entries()].map(([m, gs]) => part(m, gs, layered));
+	const wparts = {};
+	for (const [k, w] of Object.entries(wheels)) wparts[k] = [...w.entries()].map(([m, gs]) => part(m, gs));
 	const box = new THREE.Box3();
 	for (const p of parts) { p.geo.computeBoundingBox(); box.union(p.geo.boundingBox); }
 	hubs.sort((a, b) => ['wheelFL', 'wheelFR', 'wheelRL', 'wheelRR'].indexOf(a.name) - ['wheelFL', 'wheelFR', 'wheelRL', 'wheelRR'].indexOf(b.name));
 	return { parts, wheels: wparts, hubs: hubs.map((h) => h.p.toArray()), box, tris: Math.round(tris) };
 }
 const add = (map, mat, g) => { const k = mat.name + '|' + (g.attributes.color ? 'c' : '') + (g.attributes.uv ? 'u' : ''); let e = map.get(k); if (!e) map.set(k, e = { mat, gs: [] }); e.gs.push(g); };
-function part(key, e) {
+function part(key, e, layered = false) {
 	const gs = e.gs;
 	const geo = gs.length > 1 ? mergeGeometries(gs) || gs[0] : gs[0];
+	if (layered) unfight(geo);
 	const n = e.mat.name;
 	for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) halve(e.mat[k]);
 	const role = n === 'paint' ? 'paint' : n === 'glass' ? 'glass' : n === 'lamp' ? 'lamp' : 'solid';
@@ -135,6 +142,9 @@ function part(key, e) {
 	else if (role === 'glass') mat = glassMat();
 	else if (role === 'lamp') mat = lampMaterial();
 	else { mat = e.mat; mat.envMap = skyEnv(); mat.envMapIntensity = 0.6; if (geo.attributes.color) mat.vertexColors = true; }
+	// (the trim over the paint, the chrome over that, the lamps and the glass on top: where one
+	// material's faces lie on another's, the upper drawn a hair nearer)
+	layerOffset(mat, role, n);
 	geo.computeBoundingSphere();
 	return { geo, mat, role };
 }

@@ -45,3 +45,40 @@ test('unsupported source actions fail closed without changing inventory', () => 
 });
 
 console.log('Crysis arms runtime: canonical catalog, dynamic source discovery, conversational actions and fail-closed state passed.');
+
+test('community food spends the gear wallet once and cannot overdraw it', () => {
+	const arms = createArmsRuntime({ startingCredits: 100, storageKey: 'test-community' });
+	assert.equal(arms.spendCredits(40, { id: 'food-once' }), true);
+	assert.equal(arms.state().credits, 60);
+	assert.equal(arms.spendCredits(40, { id: 'food-once' }), true);
+	assert.equal(arms.state().credits, 60);
+	for (const n of [61, -1, 0.5, NaN, Infinity]) assert.equal(arms.spendCredits(n), false);
+	assert.equal(arms.state().credits, 60);
+});
+
+test('an explicitly empty vendor stock cannot be bought through either entry point', () => {
+	const arms = createArmsRuntime({ sites: () => [{ id: 'sold-out', kind: 'supermarket', x: 0, z: 0, stock: [] }], startingCredits: 1000 });
+	arms.nearby({ x: 0, z: 0 });
+	assert.deepEqual(arms.shopSheet('sold-out').buy, []);
+	assert.equal(arms.buy('sold-out', 'camp-lantern').ok, false);
+	assert.equal(arms.command('Buy a lantern at the supermarket').ok, false);
+	assert.equal(arms.state().credits, 1000);
+});
+
+test('prepared trades reserve the wallet and gear until commit or rollback resolves', () => {
+ const arms = createArmsRuntime({ startingCredits: 100, sites: () => [{ id: 'store', kind: 'supermarket', x: 0, z: 0 }] });
+ arms.nearby({ x: 0, z: 0 });
+ arms.lockTrades(['trade-pending']);
+ assert.equal(arms.locked(), true);
+ assert.equal(arms.spendCredits(10), false);
+ assert.equal(arms.buy('store', 'camp-lantern').ok, false);
+ const committed = arms.apply({ id: 'trade:trade-pending', kind: 'trade', give: { credits: 20, items: [] }, get: { credits: 0, items: [] } });
+ assert.equal(committed.ok, true);
+ assert.equal(arms.state().credits, 80);
+ assert.equal(arms.spendCredits(10), false);
+ assert.equal(arms.apply({ id: 'trade:trade-pending:undo', kind: 'trade', give: { credits: 0, items: [] }, get: { credits: 20, items: [] } }).ok, true);
+ arms.lockTrades([]);
+ assert.equal(arms.locked(), false);
+ assert.equal(arms.spendCredits(10), true);
+ assert.equal(arms.state().credits, 90);
+});
