@@ -1,0 +1,70 @@
+{
+  "worlds": [],
+  "errors": [],
+  "requests": [],
+  "method": "Production bundle; gate teleport/open; accelerated six-and-a-half-second rope descent; real W key held while running 120 player/deep updates of 1/60 second; signed-distance field samples at eye and torso.",
+  "before": {
+    "pos": [
+      345.7783733584381,
+      -8.534137362512505,
+      -224.21500249827304
+    ],
+    "yaw": 3.14149663637282,
+    "pitch": -0.08,
+    "locked": false,
+    "solidEye": -1.4391111485475512,
+    "solidTorso": -0.9677258152576743,
+    "path": {
+      "x": 345.23461711728004,
+      "z": -225.89662390184682,
+      "y": 0
+    },
+    "tangent": [
+      -9.60172168257847e-05,
+      0.999999995390347
+    ],
+    "shift": -9.742527357868369
+  },
+  "after": {
+    "pos": [
+      345.77734565416057,
+      -10.943824862512512,
+      -213.5116692142407
+    ],
+    "locked": false,
+    "solidEye": -2.1054493400132306,
+    "solidTorso": -1.1644050304636717,
+    "info": {
+      "open": true,
+      "active": true,
+      "depth": 3,
+      "deepest": 2,
+      "band": "Damp limestone",
+      "waystones": 0,
+      "alcoves": 0,
+      "shift": -9.742527357868369,
+      "chunks": 48,
+      "meshes": 34,
+      "fine": 9,
+      "tris": 14098,
+      "landmarks": [
+        "hall@72"
+      ],
+      "heard": false,
+      "progress": 0,
+      "climbing": false,
+      "gate": {
+        "x": 345,
+        "y": 50,
+        "z": -226
+      },
+      "time": 0.31659999999999944
+    }
+  },
+  "distance": 10.70333333337099,
+  "passed": true,
+  "bundle": {
+    "cacheVersion": "2babcc429c",
+    "sha256": "b88798a98269b232a49e63cc0487b7526707e305a68d80b07ee59c9dfb69d637"
+  }
+}
