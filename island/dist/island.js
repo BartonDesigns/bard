@@ -12226,9 +12226,10 @@ void main(){
 precision highp float;
 varying vec2 vUv;
 uniform mat3 uCamera, uGeography, uStars;
-uniform vec3 uHome, uMoon, uSun, uLand, uSea, uAir, uGlow, uCloudColor;
+uniform vec3 uHome, uMoon, uSun, uLand, uRock, uSand, uSea, uAir, uGlow, uCloudColor;
 uniform float uRadius, uBlend, uAspect, uTan, uEarth, uMapReady, uSeed, uTime;
 uniform float uSnow, uCoast, uMoonRadius, uGiant, uSunCos, uHeat, uWarp, uAtmos, uSolarDepth;
+uniform float uLiquid, uDetail;
 uniform sampler2D uMap;
 uniform vec4 uMusic, uStreak;
 float hash(vec3 p) { p = fract(p * .1031); p += dot(p, p.yzx + 33.33); return fract((p.x + p.y) * p.z); }
@@ -12279,25 +12280,54 @@ vec3 tunnel(vec3 ray, vec3 col) {
 	t*=smoothstep(-.2,.3,c);
 	return mix(col,t,uWarp*smoothstep(.0,.08,r+.04));
 }
-vec3 ground(vec3 n) {
+// Geographic coordinates keep detail attached to the planet during frame rebasing.
+// The cloud shell and its surface shadow share one drifting weather field.
+float cloudField(vec3 g) {
+	vec3 p=g*24.+vec3(uTime*.001,0.,0.);
+	float fronts=fbm(p+uSeed*.13);
+	float cells=noise(p*3.1+fronts*2.);
+	return smoothstep(.56,.75,fronts+cells*.035)*uAtmos;
+}
+float relief(vec3 g) {
+	return 1.-abs(fbm(g*24.+uSeed)*2.-1.);
+}
+vec3 ground(vec3 n, vec3 ray) {
 	vec3 g=uGeography*n;
 	float continents=fbm(g*3.7+uSeed);
-	vec3 color=mix(uSea,uLand,smoothstep(uCoast-.03,uCoast+.03,continents));
-	if(uEarth<.5) color=mix(color,vec3(.77,.84,.9),uSnow*smoothstep(.15,.6,abs(g.y)+continents*.4));
+	float land=smoothstep(uCoast-.03,uCoast+.03,continents);
+	float ridge=relief(g), regional=fbm(g*18.+uSeed);
+	// Fade frequencies that become smaller than a pixel; no sparkling at distance.
+	float footprint=max(length(dFdx(g)),length(dFdy(g)));
+	float fine=1.-smoothstep(.002,.009,footprint);
+	vec3 terrain=mix(uLand*.78,uLand*1.17,regional);
+	terrain=mix(terrain,uRock,smoothstep(.78,.96,ridge)*fine*.38);
+	terrain=mix(terrain,uSand,(1.-smoothstep(uCoast+.015,uCoast+.065,continents))*.6);
+	vec3 sea=uSea*mix(.72,1.18,smoothstep(uCoast-.2,uCoast,continents));
+	vec3 color=mix(sea,terrain,land);
+	float snow=uSnow*smoothstep(.15,.6,abs(g.y)+continents*.4);
+	if(uEarth<.5) color=mix(color,vec3(.77,.84,.9),snow*land);
 	if(uEarth>.5 && uMapReady>.5) {
 		vec2 uv=vec2(atan(g.z,g.x)/6.2831853+.5,asin(clamp(g.y,-1.,1.))/3.14159265+.5);
 		vec4 terrain=texture2D(uMap,uv);
 		color=terrain.rgb;
+		land=terrain.a;
 		float detail=fbm(g*550.)*.65+fbm(g*1700.)*.35;
-		color*=mix(1.,.77+detail*.5,terrain.a);
+		color*=mix(1.,.77+detail*.5,terrain.a*(1.-smoothstep(.0002,.002,footprint)));
 		color=mix(color,color*vec3(.76,.85,.66),terrain.a*.18*smoothstep(.3,.7,fbm(g*90.)));
 	}
-	float cloud=smoothstep(.56,.72,fbm(g*24.+vec3(uTime*.001,0.,0.)))*uAtmos;
-	color=mix(color,uCloudColor,cloud*.78);
 	// airless worlds: crater-pocked grey
 	color*=mix(.72+.5*fbm(g*80.),1.,uAtmos);
-	float day=dot(n,uSun), light=.015+max(0.,day)*1.18;
-	return color*light+uGlow*pow(max(0.,1.-abs(continents-.51)*26.),5.)*(.2+uMusic.x*.3);
+	float day=dot(n,uSun), reliefLight=1.;
+	if(uEarth<.5 && uDetail>.5) {
+		vec3 lightTangent=uGeography*(uSun-n*day);
+		reliefLight=clamp(1.+(ridge-relief(normalize(g+lightTangent*.003)))*2.,.8,1.15);
+	}
+	float shadow=cloudField(normalize(g+(uGeography*uSun)*.006));
+	float light=.015+max(0.,day)*1.18*mix(1.,reliefLight,land*fine)*(1.-shadow*.24);
+	vec3 halfway=normalize(uSun-ray);
+	float glint=pow(max(0.,dot(n,halfway)),180.)*smoothstep(0.,.15,day);
+	vec3 lit=color*light+vec3(1.,.88,.66)*glint*(1.-land)*uLiquid*.55;
+	return lit+uGlow*pow(max(0.,1.-abs(continents-.51)*26.),5.)*(.2+uMusic.x*.3);
 }
 void main() {
 	vec2 xy=(vUv*2.-1.)*vec2(uAspect,1.);
@@ -12312,7 +12342,22 @@ void main() {
 	vec2 m=hit(ray,uMoon,uMoonRadius);
 	if(m.x>0.) { nearest=m.x; vec3 n=normalize(ray*m.x-uMoon); vec3 surface=uGiant>1.5?mix(vec3(.08,.2,.45),vec3(.85,.88,.9),smoothstep(.55,.7,fbm(n*9.))):mix(vec3(.42,.43,.46)*(.75+.5*fbm(n*26.)),mix(vec3(.62,.42,.25),vec3(.86,.73,.53),.5+.5*sin(n.y*70.+fbm(n*12.)*5.)),uGiant); col=surface*(.055+max(0.,dot(n,uSun)))*(.65+.5*fbm(n*40.)); }
 	vec2 h=hit(ray,uHome,uRadius);
-	if(h.x>0. && h.x<nearest) { nearest=h.x; col=ground(normalize(ray*h.x-uHome)); }
+	if(h.x>0. && h.x<nearest) { nearest=h.x; col=ground(normalize(ray*h.x-uHome),ray); }
+	// A separate shell gives clouds parallax, a raised limb and a day/night edge.
+	// A nearer companion must occlude the shell as well as the solid planet.
+	if(uAtmos>.0) {
+		vec2 clouds=hit(ray,uHome,uRadius+9.);
+		float cloudHit=clouds.x>0.?clouds.x:clouds.y;
+		if(cloudHit>0. && cloudHit<nearest) {
+			vec3 n=normalize(ray*cloudHit-uHome), g=uGeography*n;
+			float cover=cloudField(g), day=dot(n,uSun);
+			float grazing=1.-abs(dot(n,ray));
+			float opacity=clamp(cover*(.78+grazing*.2),0.,.95);
+			vec3 cloudLight=uCloudColor*(.025+max(0.,day)*1.1);
+			cloudLight+=vec3(.32,.10,.035)*exp(-abs(day)*18.)*cover;
+			col=mix(col,cloudLight,opacity);
+		}
+	}
 	vec2 air=hit(ray,uHome,uRadius+85.);
 	if(air.y>0.) {
 		float a=max(0.,air.x), b=min(air.y,nearest), density=0.;
@@ -12341,7 +12386,7 @@ void main() {
 	gl_FragColor=vec4(col,uBlend);
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
-}`;function Rie({renderer:o,earth:e,seed:t,radius:n,profile:a,shared:s,companion:r}){let i=new cr,l=new ep,c=new Sn(new Uint8Array([30,65,110,255]),1,1);c.needsUpdate=!0;let u=!!a?.airless,f={uCamera:{value:new Jn},uGeography:{value:new Jn},uStars:{value:new Jn},uHome:{value:new Ce},uMoon:{value:new Ce},uSun:{value:new Ce(.3,.8,-.4).normalize()},uRadius:{value:n/1e3},uBlend:{value:0},uAspect:{value:1},uTan:{value:.7},uEarth:{value:e?1:0},uMapReady:{value:0},uMap:{value:c},uSeed:{value:t%1e4/100},uTime:{value:0},uLand:{value:new At().fromArray(a?.ground?.grass||[.34,.48,.2]).convertSRGBToLinear()},uSea:{value:new At("#163458")},uCloudColor:{value:new At().fromArray(a?.type==="MAGMA"?[.28,.23,.2]:[.9,.92,.96]).convertSRGBToLinear()},uAir:{value:new At(.12,.35,.7)},uGlow:{value:new At().fromArray(e?[0,0,0]:a?.glow||[0,0,0])},uSnow:{value:a?.snow||0},uCoast:{value:u?.05:a?.type==="OCEAN"?.66:a?.type==="ARID"||a?.type==="MAGMA"?.3:.51},uMoonRadius:{value:r.radius/1e3},uGiant:{value:r.kind==="giant"?1:r.kind==="earth"?2:0},uSunCos:{value:.99999},uHeat:{value:0},uWarp:{value:0},uAtmos:{value:u?0:1},uSolarDepth:{value:0},uMusic:{value:new To},uStreak:{value:new To(0,0,-1,0)}};!e&&a?.water?.tint&&f.uSea.value.fromArray(a.water.tint).convertSRGBToLinear(),!e&&a?.air?.tint&&f.uAir.value.lerp(new At().fromArray(a.air.tint).multiplyScalar(.45),a.air.mix);let h=new an({uniforms:f,vertexShader:"varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}",fragmentShader:z9e,transparent:!0,depthTest:!1,depthWrite:!1}),d=new kt(new Vo(2,2),h);d.frustumCulled=!1,i.add(d);let g=new cr,b=new zs(60,1,.01,1e12),p=zie(fo,18e3,{mobile:/iPhone|iPad|Android|Mobile/i.test(globalThis.navigator?.userAgent||"")});p.userData.gargMat.depthTest=!1,p.visible=!1,g.add(p);let y=!1,m=null;e&&new Dc().load(new URL(`../assets/orbit-earth.png?v=${l8}`,import.meta.url).href,A=>{if(y){A.dispose();return}m=A,A.colorSpace=Bo,A.wrapS=Xn,f.uMap.value=A,f.uMapReady.value=1},void 0,()=>{}),o.compile(i,l),o.compile(g,b);let x=new Jn,w=new Dt,v=new Ce(.3,.8,-.4).normalize(),k=new Ce,M=new Jn;function E(A=0,z=0,I){let B=A*Math.PI/180,F=z*Math.PI/180;M.set(-Math.sin(F),Math.cos(B)*Math.cos(F),Math.sin(B)*Math.cos(F),0,Math.sin(B),-Math.cos(B),Math.cos(F),Math.cos(B)*Math.sin(F),Math.sin(B)*Math.sin(F)),I&&v.copy(I).normalize()}function T(A,z,I,B,F={}){let R=A.blend(z.pos);if(R<=0)return;f.uBlend.value=R,f.uHome.value.copy(A.center).sub(z.pos).multiplyScalar(.001),f.uMoon.value.copy(A.moonCenter(k)).sub(z.pos).multiplyScalar(.001),A.sunCenter(k).sub(z.pos);let P=k.length();f.uSun.value.copy(k).normalize(),f.uSunCos.value=Math.cos(Math.asin(Math.min(.9,696e6/P))),f.uHeat.value=F.heat||0,f.uWarp.value=F.warp||0,f.uSolarDepth.value=Math.max(0,Math.min(1,(696e6*1.06-P)/(696e6*.14))),f.uStreak.value.set(0,0,-1,F.streak||0),F.heading&&f.uStreak.value.set(F.heading.x,F.heading.y,F.heading.z,F.streak||0),w.makeRotationFromQuaternion(A.rotation),x.setFromMatrix4(w).transpose(),f.uGeography.value.copy(M).multiply(x),f.uStars.value.copy(x),w.makeRotationFromQuaternion(I.quaternion),f.uCamera.value.setFromMatrix4(w),f.uAspect.value=I.aspect,f.uTan.value=Math.tan(I.fov*Math.PI/360),f.uTime.value=B,f.uMusic.value.set(s.uBass.value,s.uMid.value,s.uHigh.value,s.uPulse.value);let G=o.autoClear;try{o.autoClear=R>=1,o.render(i,l)}finally{o.autoClear=G}if(R>=.98&&(F.warp||0)<.5&&f.uSolarDepth.value<.99){p.position.copy(A.gargCenter(k)).sub(z.pos).multiplyScalar(.001),p.visible=!0,p.userData.gargMat.uniforms.uTime.value=B,p.userData.gargMat.uniforms.uBass.value=s.uBass.value,b.position.set(0,0,0),b.quaternion.copy(I.quaternion),b.fov=I.fov,b.aspect=I.aspect,b.updateProjectionMatrix(),b.updateMatrixWorld(!0);let C=o.autoClear;try{o.autoClear=!1,o.render(g,b)}finally{o.autoClear=C}}else p.visible=!1}return{anchor:E,render:T,uniforms:f,gargantua:p,dispose(){y=!0,d.geometry.dispose(),h.dispose(),m?.dispose(),c.dispose(),p.userData.gargMat.dispose(),p.userData.gargBillboard.geometry.dispose()}}}function oE(o){return o<1e4?`${Math.round(o).toLocaleString()} m`:o<1e7?`${Math.round(o/1e3).toLocaleString()} km`:o<15e9?`${(o/1e9).toFixed(o<1e9?2:1)} M km`:`${(o/1496e8).toFixed(2)} AU`}function Sie(o){if(o<1e4)return`${Math.round(o).toLocaleString()} m/s`;let e=o/299792458;return`${Math.round(o/1e3).toLocaleString()} km/s${e>=.01?` \xB7 ${e<10?e.toFixed(2):Math.round(e).toLocaleString()} c`:""}`}var R9e="position:absolute;display:none;transform:translate(-50%,-50%);color:#a5f6e2;font:12px system-ui;text-align:center;white-space:pre;text-shadow:0 1px 5px #000;cursor:pointer;pointer-events:auto;padding:4px 6px;",S9e="position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(112px + env(safe-area-inset-top));max-height:calc(100% - 140px);overflow:auto;display:none;min-width:220px;background:rgba(6,16,22,.86);border:1px solid rgba(165,246,226,.35);border-radius:10px;padding:8px;color:#eafaf6;font:13px system-ui;pointer-events:auto;";function Cie({mount:o,isTouch:e,onWarp:t,onTarget:n}){let a=new Map,s=new Ce,r=new Ce,i=null,l=!1,c=[],u=0,f=document.createElement("button");f.style.cssText="position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));display:none;padding:9px 13px;border-radius:22px;border:1px solid rgba(165,246,226,.5);background:rgba(8,20,26,.7);color:#eafaf6;font:600 13px system-ui;pointer-events:auto;",f.textContent=e?"\u2933 Warp":"\u2933 Warp (J)",f.title="Warp to a planet, moon, the Sun or the black hole (J)";let h=document.createElement("div");h.style.cssText=S9e,h.dataset.warpPanel="",o.append(f,h);for(let x of[f,h])for(let w of["pointerdown","touchstart"])x.addEventListener(w,v=>v.stopPropagation());f.addEventListener("click",x=>{x.stopPropagation(),p()});function d(x){let w=a.get(x);return w||(w=document.createElement("div"),w.style.cssText=R9e,w.dataset.navMark=x,w.addEventListener("pointerdown",v=>{v.stopPropagation(),i=x,n?.(x)}),o.append(w),a.set(x,w)),w}function g(x,w,v){let k=new Set;for(let M of w){let E=d(M.id);if(k.add(M.id),!v){E.style.display="none";continue}s.copy(M.pos).sub(x.position).applyQuaternion(x.quaternion.clone().invert());let T=s.z>0;r.copy(M.pos).project(x);let A=!T&&Math.abs(r.x)<1&&Math.abs(r.y)<1,z=M.id===i;if(!A&&!z){E.style.display="none";continue}let I=r.x*.5+.5,B=.5-r.y*.5,F="\u25C7";if(!A){let P=Math.atan2(-s.y,s.x);I=.5+Math.cos(P)*.44,B=.5+Math.sin(P)*.4,F=Math.abs(Math.cos(P))>Math.abs(Math.sin(P))?Math.cos(P)>0?"\u2192":"\u2190":Math.sin(P)>0?"\u2193":"\u2191"}E.style.display="block",E.style.left=`${Math.min(.94,Math.max(.06,I))*100}%`,E.style.top=`${Math.min(.9,Math.max(.1,B))*100}%`,E.style.color=z?"#ffe9a8":"#a5f6e2";let R=`${F}
+}`;function Rie({renderer:o,earth:e,seed:t,radius:n,profile:a,shared:s,companion:r}){let i=new cr,l=new ep,c=new Sn(new Uint8Array([30,65,110,255]),1,1);c.needsUpdate=!0;let u=!!a?.airless,f={uCamera:{value:new Jn},uGeography:{value:new Jn},uStars:{value:new Jn},uHome:{value:new Ce},uMoon:{value:new Ce},uSun:{value:new Ce(.3,.8,-.4).normalize()},uRadius:{value:n/1e3},uBlend:{value:0},uAspect:{value:1},uTan:{value:.7},uEarth:{value:e?1:0},uMapReady:{value:0},uMap:{value:c},uSeed:{value:t%1e4/100},uTime:{value:0},uLand:{value:new At().fromArray(a?.ground?.grass||[.34,.48,.2]).convertSRGBToLinear()},uSea:{value:new At("#163458")},uRock:{value:new At().fromArray(a?.ground?.rock||[.44,.41,.37]).convertSRGBToLinear()},uSand:{value:new At().fromArray(a?.ground?.sand||[.88,.78,.58]).convertSRGBToLinear()},uLiquid:{value:u||a?.land==="clouddeck"||["MAGMA","ARID","ICE"].includes(a?.type)?0:1},uDetail:{value:/iPhone|iPad|Android|Mobile/i.test(globalThis.navigator?.userAgent||"")?0:1},uCloudColor:{value:new At().fromArray(a?.type==="MAGMA"?[.28,.23,.2]:[.9,.92,.96]).convertSRGBToLinear()},uAir:{value:new At(.12,.35,.7)},uGlow:{value:new At().fromArray(e?[0,0,0]:a?.glow||[0,0,0])},uSnow:{value:a?.snow||0},uCoast:{value:u?.05:a?.type==="OCEAN"?.66:a?.type==="ARID"||a?.type==="MAGMA"?.3:.51},uMoonRadius:{value:r.radius/1e3},uGiant:{value:r.kind==="giant"?1:r.kind==="earth"?2:0},uSunCos:{value:.99999},uHeat:{value:0},uWarp:{value:0},uAtmos:{value:u?0:1},uSolarDepth:{value:0},uMusic:{value:new To},uStreak:{value:new To(0,0,-1,0)}};!e&&a?.water?.tint&&f.uSea.value.fromArray(a.water.tint).convertSRGBToLinear(),!e&&a?.air?.tint&&f.uAir.value.lerp(new At().fromArray(a.air.tint).multiplyScalar(.45),a.air.mix);let h=new an({uniforms:f,vertexShader:"varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}",fragmentShader:z9e,transparent:!0,depthTest:!1,depthWrite:!1}),d=new kt(new Vo(2,2),h);d.frustumCulled=!1,i.add(d);let g=new cr,b=new zs(60,1,.01,1e12),p=zie(fo,18e3,{mobile:/iPhone|iPad|Android|Mobile/i.test(globalThis.navigator?.userAgent||"")});p.userData.gargMat.depthTest=!1,p.visible=!1,g.add(p);let y=!1,m=null;e&&new Dc().load(new URL(`../assets/orbit-earth.png?v=${l8}`,import.meta.url).href,A=>{if(y){A.dispose();return}m=A,A.colorSpace=Bo,A.wrapS=Xn,f.uMap.value=A,f.uMapReady.value=1},void 0,()=>{}),o.compile(i,l),o.compile(g,b);let x=new Jn,w=new Dt,v=new Ce(.3,.8,-.4).normalize(),k=new Ce,M=new Jn;function E(A=0,z=0,I){let B=A*Math.PI/180,F=z*Math.PI/180;M.set(-Math.sin(F),Math.cos(B)*Math.cos(F),Math.sin(B)*Math.cos(F),0,Math.sin(B),-Math.cos(B),Math.cos(F),Math.cos(B)*Math.sin(F),Math.sin(B)*Math.sin(F)),I&&v.copy(I).normalize()}function T(A,z,I,B,F={}){let R=A.blend(z.pos);if(R<=0)return;f.uBlend.value=R,f.uHome.value.copy(A.center).sub(z.pos).multiplyScalar(.001),f.uMoon.value.copy(A.moonCenter(k)).sub(z.pos).multiplyScalar(.001),A.sunCenter(k).sub(z.pos);let P=k.length();f.uSun.value.copy(k).normalize(),f.uSunCos.value=Math.cos(Math.asin(Math.min(.9,696e6/P))),f.uHeat.value=F.heat||0,f.uWarp.value=F.warp||0,f.uSolarDepth.value=Math.max(0,Math.min(1,(696e6*1.06-P)/(696e6*.14))),f.uStreak.value.set(0,0,-1,F.streak||0),F.heading&&f.uStreak.value.set(F.heading.x,F.heading.y,F.heading.z,F.streak||0),w.makeRotationFromQuaternion(A.rotation),x.setFromMatrix4(w).transpose(),f.uGeography.value.copy(M).multiply(x),f.uStars.value.copy(x),w.makeRotationFromQuaternion(I.quaternion),f.uCamera.value.setFromMatrix4(w),f.uAspect.value=I.aspect,f.uTan.value=Math.tan(I.fov*Math.PI/360),f.uTime.value=B,f.uMusic.value.set(s.uBass.value,s.uMid.value,s.uHigh.value,s.uPulse.value);let G=o.autoClear;try{o.autoClear=R>=1,o.render(i,l)}finally{o.autoClear=G}if(R>=.98&&(F.warp||0)<.5&&f.uSolarDepth.value<.99){p.position.copy(A.gargCenter(k)).sub(z.pos).multiplyScalar(.001),p.visible=!0,p.userData.gargMat.uniforms.uTime.value=B,p.userData.gargMat.uniforms.uBass.value=s.uBass.value,b.position.set(0,0,0),b.quaternion.copy(I.quaternion),b.fov=I.fov,b.aspect=I.aspect,b.updateProjectionMatrix(),b.updateMatrixWorld(!0);let C=o.autoClear;try{o.autoClear=!1,o.render(g,b)}finally{o.autoClear=C}}else p.visible=!1}return{anchor:E,render:T,uniforms:f,gargantua:p,dispose(){y=!0,d.geometry.dispose(),h.dispose(),m?.dispose(),c.dispose(),p.userData.gargMat.dispose(),p.userData.gargBillboard.geometry.dispose()}}}function oE(o){return o<1e4?`${Math.round(o).toLocaleString()} m`:o<1e7?`${Math.round(o/1e3).toLocaleString()} km`:o<15e9?`${(o/1e9).toFixed(o<1e9?2:1)} M km`:`${(o/1496e8).toFixed(2)} AU`}function Sie(o){if(o<1e4)return`${Math.round(o).toLocaleString()} m/s`;let e=o/299792458;return`${Math.round(o/1e3).toLocaleString()} km/s${e>=.01?` \xB7 ${e<10?e.toFixed(2):Math.round(e).toLocaleString()} c`:""}`}var R9e="position:absolute;display:none;transform:translate(-50%,-50%);color:#a5f6e2;font:12px system-ui;text-align:center;white-space:pre;text-shadow:0 1px 5px #000;cursor:pointer;pointer-events:auto;padding:4px 6px;",S9e="position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(112px + env(safe-area-inset-top));max-height:calc(100% - 140px);overflow:auto;display:none;min-width:220px;background:rgba(6,16,22,.86);border:1px solid rgba(165,246,226,.35);border-radius:10px;padding:8px;color:#eafaf6;font:13px system-ui;pointer-events:auto;";function Cie({mount:o,isTouch:e,onWarp:t,onTarget:n}){let a=new Map,s=new Ce,r=new Ce,i=null,l=!1,c=[],u=0,f=document.createElement("button");f.style.cssText="position:absolute;right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));display:none;padding:9px 13px;border-radius:22px;border:1px solid rgba(165,246,226,.5);background:rgba(8,20,26,.7);color:#eafaf6;font:600 13px system-ui;pointer-events:auto;",f.textContent=e?"\u2933 Warp":"\u2933 Warp (J)",f.title="Warp to a planet, moon, the Sun or the black hole (J)";let h=document.createElement("div");h.style.cssText=S9e,h.dataset.warpPanel="",o.append(f,h);for(let x of[f,h])for(let w of["pointerdown","touchstart"])x.addEventListener(w,v=>v.stopPropagation());f.addEventListener("click",x=>{x.stopPropagation(),p()});function d(x){let w=a.get(x);return w||(w=document.createElement("div"),w.style.cssText=R9e,w.dataset.navMark=x,w.addEventListener("pointerdown",v=>{v.stopPropagation(),i=x,n?.(x)}),o.append(w),a.set(x,w)),w}function g(x,w,v){let k=new Set;for(let M of w){let E=d(M.id);if(k.add(M.id),!v){E.style.display="none";continue}s.copy(M.pos).sub(x.position).applyQuaternion(x.quaternion.clone().invert());let T=s.z>0;r.copy(M.pos).project(x);let A=!T&&Math.abs(r.x)<1&&Math.abs(r.y)<1,z=M.id===i;if(!A&&!z){E.style.display="none";continue}let I=r.x*.5+.5,B=.5-r.y*.5,F="\u25C7";if(!A){let P=Math.atan2(-s.y,s.x);I=.5+Math.cos(P)*.44,B=.5+Math.sin(P)*.4,F=Math.abs(Math.cos(P))>Math.abs(Math.sin(P))?Math.cos(P)>0?"\u2192":"\u2190":Math.sin(P)>0?"\u2193":"\u2191"}E.style.display="block",E.style.left=`${Math.min(.94,Math.max(.06,I))*100}%`,E.style.top=`${Math.min(.9,Math.max(.1,B))*100}%`,E.style.color=z?"#ffe9a8":"#a5f6e2";let R=`${F}
 ${M.name}
 ${oE(M.distance)}`;E.textContent!==R&&(E.textContent=R)}for(let[M,E]of a)k.has(M)||(E.style.display="none")}function b(){h.textContent="";let x=document.createElement("div");x.style.cssText="font-weight:600;letter-spacing:.08em;margin:2px 4px 6px;color:#a5f6e2;",x.textContent=e?"WARP TO":"WARP TO \xB7 1\u20139, \u2191\u2193 Enter, Esc",h.append(x),c.forEach((w,v)=>{let k=document.createElement("button");k.style.cssText=`display:flex;justify-content:space-between;gap:12px;width:100%;padding:7px 8px;margin:1px 0;border:0;border-radius:6px;font:13px system-ui;text-align:left;cursor:pointer;color:#eafaf6;background:${v===u?"rgba(1,169,130,.55)":"transparent"};`;let M=document.createElement("span");M.textContent=`${v<9?`${v+1}. `:v===9?"0. ":""}${w.name}`;let E=document.createElement("span");E.style.opacity=".7",E.textContent=w.note,k.append(M,E),k.addEventListener("click",T=>{T.stopPropagation(),y(v)}),h.append(k)})}function p(x){l=!l,l&&(c=x||t("list")||[],u=Math.max(0,c.findIndex(w=>w.id===i)),b()),h.style.display=l?"block":"none"}function y(x){let w=c[x];w&&(l=!1,h.style.display="none",i=w.id,t("go",w))}function m(x){if(!l)return!1;let w=x.key;return w==="Escape"?(p(),!0):w==="ArrowDown"||w==="ArrowUp"?(u=(u+(w==="ArrowDown"?1:c.length-1))%c.length,b(),!0):w==="Enter"?(y(u),!0):/^[0-9]$/.test(w)?(y(w==="0"?9:+w-1),!0):!1}return{update:g,toggle:p,key:m,engage:y,get open(){return l},get target(){return i},set target(x){i=x},showButton(x){let w=x?"block":"none";f.style.display!==w&&(f.style.display=w),!x&&l&&p()},dispose(){f.remove(),h.remove();for(let x of a.values())x.remove();a.clear()}}}var Hie="l99-beyond",I1=2400,nE=380,C9e=[0,2,4,6,7,9,11],m2=(o,e,t)=>{let n=Math.max(0,Math.min(1,(t-o)/(e-o)));return n*n*(3-2*n)},_w=()=>{try{return JSON.parse(localStorage.getItem(Hie)||"null")}catch{return null}},Pie=o=>{try{localStorage.setItem(Hie,JSON.stringify(o))}catch{}},Iie=()=>!!_w()?.found,jG=()=>_w()?.seed,P9e=`varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,H9e=`

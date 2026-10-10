@@ -4,6 +4,10 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Planet flight vistas continuation
+
+Added profile-based orbital land/rock/coast variation, restrained ridge shading, liquid-water sun glints and a separate raised cloud shell with drifting shadows and terminator lighting. Earth keeps its mapped geography. Screen-space fading controls distant fine detail; phone mode skips the extra relief sample. See `docs/flight-vistas-pass.md` for scope and reproducible verification: 9 movement tests and 18 production-material render cases passed. Native device performance and exact globe-to-local terrain matching are not established.
+
 ## Armaments and terrain repair (9 October 2026 UTC)
 
 Release contents: finite-island ground visibility now composes distance and cave state every frame, with shader clipping at the map boundary. Guns have fuller contextual geometry and world-reactive scope optics. Bow grip, flexible limbs/string, draw/release/nocking and pooled physical arrows are integrated.
