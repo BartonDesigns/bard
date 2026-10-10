@@ -119,7 +119,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (held) hr.append(btn('Put away', () => { arms.hold(null); draw(); }));
 		sheet.append(hr, label('Carrying'));
 		const list = Object.values(s.instances || {});
-		if (!list.length) sheet.append(note('Nothing yet. Outfitters, ranger camps and supermarkets sell gear.'));
+		if (!list.length) sheet.append(note('Buy weapons at an outfitter or ranger camp, or recover equipment beside fallen armed fighters. Approach and press E, or tap Take.'));
 		else {
 			const g = el('div', 'g99-grid'); g.style.setProperty('--cols', '5'); g.style.setProperty('--slot', '56px');
 			for (const G of groupInstances(list)) {
@@ -130,6 +130,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 			sheet.append(g);
 		}
 		sheet.append(label('Shops nearby'));
+		sheet.append(note('Buy ammunition with your weapon. Two matching weapons of the same quality can be combined into the next rank. Recovered gear keeps its level and quality.'));
 		const shops = shopsHere();
 		if (!shops.length) sheet.append(note('No shops nearby.'));
 		for (const sh of shops.slice(0, 6)) { const b = btn(`🏪 ${sh.name}${Number.isFinite(sh.distance) ? ' · ' + metres(sh.distance) : ''}`, () => open('shop', sh.id), 'quiet'); b.style.textAlign = 'left'; sheet.append(b); }

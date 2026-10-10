@@ -4,6 +4,10 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Fallen-fighter recovery continuation
+
+Production squad deaths now leave recoverable detailed weapons with the fighter's displayed level and rank, plus matching ammunition. Approach and look toward the weapon: E takes, Shift+E equips; touch has both actions. Atomic saved inventory transfer, duplicate protection, blocked/remote pickup rejection, longer nearby body retention and bounded drop cleanup are integrated. Gear explains acquisition. See `docs/field-recovery-pass.md` and `docs/verification/field-recovery/` for the desktop/touch production-combat fixture and remaining quality work. Unclaimed loot is local to the world visit; shared loot and native-device timing are not established.
+
 ## Ranked armament detail continuation
 
 Twenty named chassis variants across the three guns and bow follow existing quality tiers. New ranks add real rounded shells, stock supports, braces and bow fittings; gear inspection names the variant. Detailed player-held models now remain active on phones in first and third person, with continuous sleeves restored. See `docs/armament-ranks-pass.md` and its render/pose evidence. Native-device frame time and final art approval remain open.

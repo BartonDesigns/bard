@@ -1,0 +1,45 @@
+Arms: fictional catalog, player/NPC/supermarket/police acquisition, guarded theft heat, activity use, equip, idempotent persistence passed.
+✔ island/tools/arms.test.mjs (66.283229ms)
+✔ every bow tier has exactly one arrow, including stale saved magazines and view overrides (1.282212ms)
+✔ hold reaches full draw without spending ammunition; release fires only once (0.340703ms)
+✔ short taps let down; the minimum usable draw releases a partial-power arrow (0.977643ms)
+✔ cancellation never becomes an arrow release, including a queued release (0.235135ms)
+✔ a refused or throwing view spends no arrow and advances no shot/cooldown (0.270728ms)
+✔ nocking transfers one reserve arrow once after .9 seconds and allows the next draw (0.235675ms)
+✔ nocking cannot duplicate arrows through repeated reload or stale animation callbacks (0.17948ms)
+✔ the final arrow fires and an empty bow cannot draw, fire or reload without reserve (0.143326ms)
+✔ holding through nock cannot auto-fire or start an accidental draw (0.193351ms)
+✔ gun fire acceptance prevents ammunition loss and preserves its automatic cadence (0.365832ms)
+✔ view bridge distinguishes absent view from refused/undefined/throwing implementations (39.828862ms)
+✔ every weapon has a box in the catalogue that the shops sell (1.627122ms)
+✔ level and tier raise damage, accuracy, range, magazine and reload speed (0.456398ms)
+✔ semi fires once a press, auto keeps firing at its rate, burst fires its count (1.083292ms)
+✔ an empty magazine fires nothing; reload moves rounds from the reserve on time (0.542908ms)
+✔ aiming down the sights tightens the spread; moving and firing open it (0.368375ms)
+✔ health: armour soaks, the head takes more, regen after quiet, down versus dead (0.593094ms)
+✔ minors (children and teenagers) carry the Spark: no damage path reaches them (2.113325ms)
+✔ the morality table: one place, context weighs it, the ledger keeps both you and the world (2.052343ms)
+✔ surrender: the badly hurt and outnumbered may yield; machines and creatures never do (0.413853ms)
+✔ faction relations: old feuds, attacks sour, common enemies warm, time eases it back (1.126167ms)
+✔ fire spreads to neighbours within limits and never burns twice (1.856287ms)
+✔ PvP is off unless the room turns it on; a side never hurts its own; adults are all fair game (0.257518ms)
+✔ ray shapes: boxes turn with their yaw, capsules have caps (1.630637ms)
+✔ wanted: offences make stars, shots alone stop at two, out of sight it ebbs, knocked out it clears (0.477309ms)
+✔ boss machines: telegraph before every attack, phases by health, untouchable while changing, weak points (3.474066ms)
+✔ a breakable weak point can force the next phase (0.301003ms)
+✔ surrender and restraint block shots, blasts and direct remote-style hits (0.367023ms)
+✔ family food deeds are recorded by the same saved morality ledger (0.207813ms)
+✔ every armament rank recovers exact level, quality and matching ammunition (7.557479ms)
+✔ a death can produce only one drop and a drop can be collected only once (0.279821ms)
+✔ failed inventory transaction retains both weapon and ammunition for retry (0.216486ms)
+✔ walls, distance and facing prevent selection; taking rechecks walls and distance (0.322326ms)
+✔ no weapon drops for living, unarmed, surrendered, crew, drones or animals (0.23839ms)
+✔ loot survives body removal, is bounded, and nearby drops do not expire during inspection (0.335045ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 134.11475

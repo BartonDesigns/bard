@@ -166,6 +166,9 @@ export function createSquads(ctx) {
 				if (!b) return null;
 				if (h.gone || generation !== epoch) { b.used = false; b.P.root.visible = false; b.hand?.hide(); return null; }
 				h.body = b;
+				// Preserve the exact weapon represented by this pooled body's hand model.
+				const held = b.hand?.model?.userData;
+				h.loadout = held ? { i: F.gun, l: held.level, t: held.tier, x: 0 } : null;
 				if (b.P.ragdoll) ctx.ragdolls.release(b.P);
 				b.P.root.visible = true; fadePerson(b.P, 1);
 				b.M.act(null); b.M.place(x, h.pos.y, z, h.yaw);
@@ -412,7 +415,11 @@ export function createSquads(ctx) {
 	function fading(h, dt) {
 		h.deadT += dt;
 		if (h.body) {
-			if (h.deadT > 10) { const k = 1 - (h.deadT - 10) / 2; fadePerson(h.body.P, k); if (k <= 0) release(h); }
+			// Keep recent nearby fighters long enough to inspect their equipment. Older
+			// bodies fade independently of drops, with at most twelve retained nearby.
+			const recent = list.filter((q) => q.dead && q.body).slice(-12).includes(h);
+			const keep = recent && Math.hypot(h.pos.x - ctx.eye().x, h.pos.z - ctx.eye().z) < 40 ? 60 : 10;
+			if (h.deadT > keep) { const k = 1 - (h.deadT - keep) / 2; fadePerson(h.body.P, k); if (k <= 0) release(h); }
 		} else if (h.kind === 'drone') {
 			h.vy = (h.vy || 0) - 9.8 * dt; h.pos.y += h.vy * dt;
 			const gy = ctx.ground(h.pos.x, h.pos.z, h.pos.y + 1);

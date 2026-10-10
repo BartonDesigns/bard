@@ -21,6 +21,7 @@ import { createHud } from './hud.js';
 import { createWeaponView } from './weapon-view.js';
 import { createCivilians } from './civilians.js';
 import { createSquads } from './ai-squads.js';
+import { createLootView } from './loot-view.js';
 import { createProps } from './props.js';
 import { createCars } from './cars.js';
 import { createFireField } from './fire.js';
@@ -562,6 +563,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	}
 
 	// ---------- the townsfolk, the squads, cars, props ----------
+	const recovery = createLootView({ group, mount, arms, camera, eye, blocked, ground, active: () => active() && !me.ko && !P()?.flying && !P()?.locked, hint, sound, touch });
 	const ctx = {
 		layer, fx, isPhone, relations, ragdolls, people, world: W, ground, eye, blocked, call, hud,
 		me: () => ({ speed: me.speed, grounded: !!P()?.grounded || !!W()?.deep?.active?.(), vel: me.vel }),
@@ -577,6 +579,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		friendsNear: () => (multiplayer?.bodies?.() || []).filter((r) => Math.hypot(r.at[0] - eye().x, r.at[2] - eye().z) < 40).length,
 		spawnSquad: (fid, x, z, n, o) => squads.squad(fid, x, z, n, o),
 		onSurrender: (h) => { if (Math.hypot(h.pos.x - eye().x, h.pos.z - eye().z) < 60) hint(`${h.F.name}: one of them throws down their weapon and surrenders. They are out of the fight.`, 4000, 1); },
+		onDeath: (h) => recovery.add(h),
 		onSpared: (h, d) => { if (d < 50) morality.record({ kind: 'spare', target: h.T.name, faction: h.fid, place: placeName(), world: worldKey }); },
 		onPhase: (B0) => net.boss(B0, true),
 		onBossDown: (B0) => bossDown(B0),
@@ -808,7 +811,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		for (const p of [...projectiles]) endProjectile(p, null);
 		for (const m of arrowPool) m.removeFromParent();
 		arrowPool.length = 0; arrowTemplate?.geometry.dispose(); arrowTemplate = null;
-		squads.clear(); props.clearTag(); cars.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); heatMap.clear(); fx.clear();
+		squads.clear(); recovery.clear(); props.clearTag(); cars.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); heatMap.clear(); fx.clear();
 		for (const B0 of bosses.values()) B0.dispose();
 		bosses.clear(); projectiles.length = 0; me.crumbs.length = 0; me.lastPos = null;
 		net.out.length = 0; net.hits.clear(); remotes.clear(); hurtOnce.clear(); layer.clear();
@@ -862,6 +865,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		const cam = camera.position;
 		civilians.update(dt, cam);
 		squads.update(dt);
+		recovery.update(dt);
 		cars.update(dt, pos);
 		stepProjectiles(dt);
 		stepFire(dt);
@@ -894,7 +898,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 
 	// ---------- for the console and the tests ----------
 	const api = {
-		update, reset, heard, group, layer, fx, morality, relations, compass,
+		update, reset, heard, group, layer, fx, morality, relations, compass, recovery,
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
@@ -919,7 +923,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		compassOpen: (on = true) => compass.toggle(on),
 		// for the tests: a weapon in hand (owned and held)
 		arm: (id = 'warden-spark-carbine', l = 5, t = 2) => { const u = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(0, 20); arms?.apply?.({ id: `give-${u}`, kind: 'trade', peer: 'test', give: { credits: 0, items: [] }, get: { credits: 0, items: [{ u, i: id, l, t, x: 0 }] } }); arms?.hold?.(u); return arms?.held?.(); },
-		clear: () => { squads.clear(); props.clearTag(); for (const B0 of bosses.values()) B0.dispose(); bosses.clear(); return 'cleared'; },
+		clear: () => { squads.clear(); recovery.clear(); props.clearTag(); for (const B0 of bosses.values()) B0.dispose(); bosses.clear(); return 'cleared'; },
 		lore: 'The young carry the Spark until they come of age: no harm reaches them. Bullets turn aside in a shimmer, fire and wheels part round them.',
 	};
 	return api;

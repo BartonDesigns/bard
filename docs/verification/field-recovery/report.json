@@ -1,0 +1,497 @@
+{
+  "method": "Production combat, squad death, Rapier ragdoll, recovery UI and inventory in Chromium software WebGL; flat fixture terrain. Touch emulation, not physical-device performance.",
+  "states": [
+    {
+      "phone": false,
+      "killed": {
+        "expected": {
+          "i": "aurora-trail-rifle",
+          "l": 4,
+          "t": 1,
+          "x": 0
+        },
+        "result": {
+          "dealt": 9965,
+          "absorbed": 35,
+          "killed": true,
+          "downed": false,
+          "ignored": false
+        },
+        "loot": {
+          "count": 1,
+          "selected": "l8cmb3vrf1",
+          "drops": [
+            {
+              "id": "l8cmb3vrf1",
+              "pos": {
+                "x": 23.80311299070971,
+                "y": 0.25,
+                "z": 1.2247254725682086
+              },
+              "weapon": {
+                "u": "l8cmb3vrf1",
+                "i": "aurora-trail-rifle",
+                "l": 4,
+                "t": 1,
+                "x": 0
+              }
+            }
+          ]
+        },
+        "dead": true,
+        "ragdoll": {
+          "ready": true,
+          "live": 1,
+          "max": 4,
+          "err": null,
+          "pelvis": [
+            26.09,
+            0.17,
+            0.97
+          ],
+          "head": [
+            26.13,
+            0.1,
+            1.1
+          ],
+          "thigh": [
+            0.49,
+            0.63,
+            0.45,
+            -0.4
+          ]
+        }
+      },
+      "second": {
+        "expected": {
+          "i": "warden-spark-carbine",
+          "l": 2,
+          "t": 1,
+          "x": 0
+        },
+        "result": {
+          "dealt": 9975,
+          "absorbed": 25,
+          "killed": true,
+          "downed": false,
+          "ignored": false
+        },
+        "loot": {
+          "count": 1,
+          "selected": "lmzvm7pd11",
+          "drops": [
+            {
+              "id": "lmzvm7pd11",
+              "pos": {
+                "x": 25.130879048239734,
+                "y": 0.25,
+                "z": 1.0697378024477338
+              },
+              "weapon": {
+                "u": "lmzvm7pd11",
+                "i": "warden-spark-carbine",
+                "l": 2,
+                "t": 1,
+                "x": 0
+              }
+            }
+          ]
+        },
+        "dead": true,
+        "ragdoll": {
+          "ready": true,
+          "live": 1,
+          "max": 4,
+          "err": null,
+          "pelvis": [
+            27.53,
+            0.15,
+            0.81
+          ],
+          "head": [
+            27.55,
+            0.09,
+            1.13
+          ],
+          "thigh": [
+            0.23,
+            0.78,
+            -0.09,
+            -0.58
+          ]
+        }
+      },
+      "final": {
+        "inventory": {
+          "version": 2,
+          "ownerId": "player",
+          "revision": 4,
+          "credits": 0,
+          "heat": 0,
+          "items": {
+            "aurora-trail-rifle": 1,
+            "trail-rifle-box": 1,
+            "warden-spark-carbine": 1,
+            "spark-cell-pack": 1
+          },
+          "instances": {
+            "l8cmb3vrf1": {
+              "u": "l8cmb3vrf1",
+              "i": "aurora-trail-rifle",
+              "l": 4,
+              "t": 1,
+              "x": 0
+            },
+            "l8cmb3vrf1a": {
+              "u": "l8cmb3vrf1a",
+              "i": "trail-rifle-box",
+              "l": 1,
+              "t": 0,
+              "x": 0
+            },
+            "lmzvm7pd11": {
+              "u": "lmzvm7pd11",
+              "i": "warden-spark-carbine",
+              "l": 2,
+              "t": 1,
+              "x": 0
+            },
+            "lmzvm7pd11a": {
+              "u": "lmzvm7pd11a",
+              "i": "spark-cell-pack",
+              "l": 1,
+              "t": 0,
+              "x": 0
+            }
+          },
+          "hand": "lmzvm7pd11",
+          "equipped": {
+            "hand": "warden-spark-carbine"
+          },
+          "journal": [
+            {
+              "id": "recovery:l8cmb3vrf1",
+              "kind": "trade",
+              "accepted": true,
+              "revision": 1,
+              "peer": "field-recovery",
+              "give": [],
+              "get": [
+                "l8cmb3vrf1",
+                "l8cmb3vrf1a"
+              ],
+              "credits": 0
+            },
+            {
+              "id": "arms:krjpzy:1791654690971:1:equip:aurora-trail-rifle:hand",
+              "kind": "equip",
+              "accepted": true,
+              "revision": 2,
+              "itemId": "aurora-trail-rifle",
+              "uid": "l8cmb3vrf1",
+              "slot": "hand"
+            },
+            {
+              "id": "recovery:lmzvm7pd11",
+              "kind": "trade",
+              "accepted": true,
+              "revision": 3,
+              "peer": "field-recovery",
+              "give": [],
+              "get": [
+                "lmzvm7pd11",
+                "lmzvm7pd11a"
+              ],
+              "credits": 0
+            },
+            {
+              "id": "arms:21yway:1791654696932:1:equip:warden-spark-carbine:hand",
+              "kind": "equip",
+              "accepted": true,
+              "revision": 4,
+              "itemId": "warden-spark-carbine",
+              "uid": "lmzvm7pd11",
+              "slot": "hand"
+            }
+          ],
+          "updatedAt": 0
+        },
+        "held": {
+          "u": "lmzvm7pd11",
+          "i": "warden-spark-carbine",
+          "l": 2,
+          "t": 1,
+          "x": 0
+        },
+        "loot": {
+          "count": 0,
+          "selected": null,
+          "drops": []
+        },
+        "messages": [
+          "Warden Spark Carbine + ammunition recovered. Equipped."
+        ],
+        "laterInteractions": 0,
+        "render": {
+          "calls": 26,
+          "triangles": 46242
+        },
+        "shaderOK": true,
+        "glError": 0
+      },
+      "bounds": {
+        "x": 460,
+        "y": 498.75,
+        "width": 360,
+        "height": 193.25
+      }
+    },
+    {
+      "phone": true,
+      "killed": {
+        "expected": {
+          "i": "aurora-trail-rifle",
+          "l": 4,
+          "t": 2,
+          "x": 0
+        },
+        "result": {
+          "dealt": 9965,
+          "absorbed": 35,
+          "killed": true,
+          "downed": false,
+          "ignored": false
+        },
+        "loot": {
+          "count": 1,
+          "selected": "lt9aa4y8i1",
+          "drops": [
+            {
+              "id": "lt9aa4y8i1",
+              "pos": {
+                "x": 22.206010711600726,
+                "y": 0.25,
+                "z": 3.1624286483765145
+              },
+              "weapon": {
+                "u": "lt9aa4y8i1",
+                "i": "aurora-trail-rifle",
+                "l": 4,
+                "t": 2,
+                "x": 0
+              }
+            }
+          ]
+        },
+        "dead": true,
+        "ragdoll": {
+          "ready": true,
+          "live": 1,
+          "max": 2,
+          "err": null,
+          "pelvis": [
+            24.13,
+            0.16,
+            3.35
+          ],
+          "head": [
+            24.26,
+            0.11,
+            3.17
+          ],
+          "thigh": [
+            -0.47,
+            0.3,
+            0.81,
+            0.19
+          ]
+        }
+      },
+      "second": {
+        "expected": {
+          "i": "warden-spark-carbine",
+          "l": 2,
+          "t": 0,
+          "x": 0
+        },
+        "result": {
+          "dealt": 9975,
+          "absorbed": 25,
+          "killed": true,
+          "downed": false,
+          "ignored": false
+        },
+        "loot": {
+          "count": 1,
+          "selected": "l9xpjxod61",
+          "drops": [
+            {
+              "id": "l9xpjxod61",
+              "pos": {
+                "x": 23.67837494215639,
+                "y": 0.25,
+                "z": 2.377803673292553
+              },
+              "weapon": {
+                "u": "l9xpjxod61",
+                "i": "warden-spark-carbine",
+                "l": 2,
+                "t": 0,
+                "x": 0
+              }
+            }
+          ]
+        },
+        "dead": true,
+        "ragdoll": {
+          "ready": true,
+          "live": 1,
+          "max": 2,
+          "err": null,
+          "pelvis": [
+            25.82,
+            0.19,
+            2.14
+          ],
+          "head": [
+            26.03,
+            0.13,
+            2.34
+          ],
+          "thigh": [
+            0.63,
+            0.3,
+            0.25,
+            -0.67
+          ]
+        }
+      },
+      "final": {
+        "inventory": {
+          "version": 2,
+          "ownerId": "player",
+          "revision": 4,
+          "credits": 0,
+          "heat": 0,
+          "items": {
+            "aurora-trail-rifle": 1,
+            "trail-rifle-box": 1,
+            "warden-spark-carbine": 1,
+            "spark-cell-pack": 1
+          },
+          "instances": {
+            "lt9aa4y8i1": {
+              "u": "lt9aa4y8i1",
+              "i": "aurora-trail-rifle",
+              "l": 4,
+              "t": 2,
+              "x": 0
+            },
+            "lt9aa4y8i1a": {
+              "u": "lt9aa4y8i1a",
+              "i": "trail-rifle-box",
+              "l": 1,
+              "t": 0,
+              "x": 0
+            },
+            "l9xpjxod61": {
+              "u": "l9xpjxod61",
+              "i": "warden-spark-carbine",
+              "l": 2,
+              "t": 0,
+              "x": 0
+            },
+            "l9xpjxod61a": {
+              "u": "l9xpjxod61a",
+              "i": "spark-cell-pack",
+              "l": 1,
+              "t": 0,
+              "x": 0
+            }
+          },
+          "hand": "l9xpjxod61",
+          "equipped": {
+            "hand": "warden-spark-carbine"
+          },
+          "journal": [
+            {
+              "id": "recovery:lt9aa4y8i1",
+              "kind": "trade",
+              "accepted": true,
+              "revision": 1,
+              "peer": "field-recovery",
+              "give": [],
+              "get": [
+                "lt9aa4y8i1",
+                "lt9aa4y8i1a"
+              ],
+              "credits": 0
+            },
+            {
+              "id": "arms:m6k7qw:1791654701770:1:equip:aurora-trail-rifle:hand",
+              "kind": "equip",
+              "accepted": true,
+              "revision": 2,
+              "itemId": "aurora-trail-rifle",
+              "uid": "lt9aa4y8i1",
+              "slot": "hand"
+            },
+            {
+              "id": "recovery:l9xpjxod61",
+              "kind": "trade",
+              "accepted": true,
+              "revision": 3,
+              "peer": "field-recovery",
+              "give": [],
+              "get": [
+                "l9xpjxod61",
+                "l9xpjxod61a"
+              ],
+              "credits": 0
+            },
+            {
+              "id": "arms:1tt015:1791654705842:1:equip:warden-spark-carbine:hand",
+              "kind": "equip",
+              "accepted": true,
+              "revision": 4,
+              "itemId": "warden-spark-carbine",
+              "uid": "l9xpjxod61",
+              "slot": "hand"
+            }
+          ],
+          "updatedAt": 0
+        },
+        "held": {
+          "u": "l9xpjxod61",
+          "i": "warden-spark-carbine",
+          "l": 2,
+          "t": 0,
+          "x": 0
+        },
+        "loot": {
+          "count": 0,
+          "selected": null,
+          "drops": []
+        },
+        "messages": [
+          "Warden Spark Carbine + ammunition recovered. Equipped."
+        ],
+        "laterInteractions": 0,
+        "render": {
+          "calls": 22,
+          "triangles": 42178
+        },
+        "shaderOK": true,
+        "glError": 0
+      },
+      "bounds": {
+        "x": 16,
+        "y": 542.75,
+        "width": 358,
+        "height": 193.25
+      }
+    }
+  ],
+  "errors": [],
+  "passed": true
+}
