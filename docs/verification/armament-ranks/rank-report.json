@@ -1,0 +1,612 @@
+{
+  "states": [
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "high",
+      "tier": 0,
+      "calls": 6,
+      "triangles": 21548,
+      "variant": {
+        "rank": 0,
+        "name": "Field",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 63492
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "high",
+      "tier": 1,
+      "calls": 6,
+      "triangles": 22400,
+      "variant": {
+        "rank": 1,
+        "name": "Ranger",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 66048
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "high",
+      "tier": 2,
+      "calls": 6,
+      "triangles": 23968,
+      "variant": {
+        "rank": 2,
+        "name": "Pathfinder",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 70752
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "high",
+      "tier": 3,
+      "calls": 6,
+      "triangles": 24856,
+      "variant": {
+        "rank": 3,
+        "name": "Vanguard",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 73416
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "high",
+      "tier": 4,
+      "calls": 7,
+      "triangles": 26168,
+      "variant": {
+        "rank": 4,
+        "name": "Sunward",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 77352
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "low",
+      "tier": 0,
+      "calls": 2,
+      "triangles": 5220,
+      "variant": {
+        "rank": 0,
+        "name": "Field",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 14844
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "low",
+      "tier": 1,
+      "calls": 2,
+      "triangles": 6024,
+      "variant": {
+        "rank": 1,
+        "name": "Ranger",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 17256
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "low",
+      "tier": 2,
+      "calls": 2,
+      "triangles": 6616,
+      "variant": {
+        "rank": 2,
+        "name": "Pathfinder",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 19032
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "low",
+      "tier": 3,
+      "calls": 2,
+      "triangles": 7328,
+      "variant": {
+        "rank": 3,
+        "name": "Vanguard",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 21168
+    },
+    {
+      "id": "aurora-trail-rifle",
+      "lod": "low",
+      "tier": 4,
+      "calls": 2,
+      "triangles": 8304,
+      "variant": {
+        "rank": 4,
+        "name": "Sunward",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 24096
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "high",
+      "tier": 0,
+      "calls": 6,
+      "triangles": 14116,
+      "variant": {
+        "rank": 0,
+        "name": "Trail",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 41196
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "high",
+      "tier": 1,
+      "calls": 6,
+      "triangles": 14968,
+      "variant": {
+        "rank": 1,
+        "name": "Tracker",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 43752
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "high",
+      "tier": 2,
+      "calls": 6,
+      "triangles": 16536,
+      "variant": {
+        "rank": 2,
+        "name": "Outrider",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 48456
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "high",
+      "tier": 3,
+      "calls": 6,
+      "triangles": 17424,
+      "variant": {
+        "rank": 3,
+        "name": "Wayfinder",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 51120
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "high",
+      "tier": 4,
+      "calls": 7,
+      "triangles": 18736,
+      "variant": {
+        "rank": 4,
+        "name": "Elderwood",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 55056
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "low",
+      "tier": 0,
+      "calls": 2,
+      "triangles": 4364,
+      "variant": {
+        "rank": 0,
+        "name": "Trail",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 12276
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "low",
+      "tier": 1,
+      "calls": 2,
+      "triangles": 5168,
+      "variant": {
+        "rank": 1,
+        "name": "Tracker",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 14688
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "low",
+      "tier": 2,
+      "calls": 2,
+      "triangles": 5760,
+      "variant": {
+        "rank": 2,
+        "name": "Outrider",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 16464
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "low",
+      "tier": 3,
+      "calls": 2,
+      "triangles": 6472,
+      "variant": {
+        "rank": 3,
+        "name": "Wayfinder",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 18600
+    },
+    {
+      "id": "mossback-scout-rifle",
+      "lod": "low",
+      "tier": 4,
+      "calls": 2,
+      "triangles": 7448,
+      "variant": {
+        "rank": 4,
+        "name": "Elderwood",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 21528
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "high",
+      "tier": 0,
+      "calls": 4,
+      "triangles": 12976,
+      "variant": {
+        "rank": 0,
+        "name": "Patrol",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 37944
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "high",
+      "tier": 1,
+      "calls": 4,
+      "triangles": 13828,
+      "variant": {
+        "rank": 1,
+        "name": "Watchkeeper",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 40500
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "high",
+      "tier": 2,
+      "calls": 4,
+      "triangles": 15396,
+      "variant": {
+        "rank": 2,
+        "name": "Sentinel",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 45204
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "high",
+      "tier": 3,
+      "calls": 4,
+      "triangles": 16284,
+      "variant": {
+        "rank": 3,
+        "name": "Bastion",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 47868
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "high",
+      "tier": 4,
+      "calls": 5,
+      "triangles": 17596,
+      "variant": {
+        "rank": 4,
+        "name": "Citadel",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 51804
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "low",
+      "tier": 0,
+      "calls": 2,
+      "triangles": 3908,
+      "variant": {
+        "rank": 0,
+        "name": "Patrol",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 10908
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "low",
+      "tier": 1,
+      "calls": 2,
+      "triangles": 4712,
+      "variant": {
+        "rank": 1,
+        "name": "Watchkeeper",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 13320
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "low",
+      "tier": 2,
+      "calls": 2,
+      "triangles": 5304,
+      "variant": {
+        "rank": 2,
+        "name": "Sentinel",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 15096
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "low",
+      "tier": 3,
+      "calls": 2,
+      "triangles": 6016,
+      "variant": {
+        "rank": 3,
+        "name": "Bastion",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 17232
+    },
+    {
+      "id": "warden-spark-carbine",
+      "lod": "low",
+      "tier": 4,
+      "calls": 2,
+      "triangles": 6992,
+      "variant": {
+        "rank": 4,
+        "name": "Citadel",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 20160
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "high",
+      "tier": 0,
+      "calls": 7,
+      "triangles": 2760,
+      "variant": {
+        "rank": 0,
+        "name": "Reed",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 6348
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "high",
+      "tier": 1,
+      "calls": 7,
+      "triangles": 3704,
+      "variant": {
+        "rank": 1,
+        "name": "Grove",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 9180
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "high",
+      "tier": 2,
+      "calls": 7,
+      "triangles": 3896,
+      "variant": {
+        "rank": 2,
+        "name": "Windrunner",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 9756
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "high",
+      "tier": 3,
+      "calls": 7,
+      "triangles": 4280,
+      "variant": {
+        "rank": 3,
+        "name": "Moonstring",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 10908
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "high",
+      "tier": 4,
+      "calls": 8,
+      "triangles": 4656,
+      "variant": {
+        "rank": 4,
+        "name": "Dawnbound",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 12036
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "low",
+      "tier": 0,
+      "calls": 7,
+      "triangles": 1704,
+      "variant": {
+        "rank": 0,
+        "name": "Reed",
+        "mark": 1
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 4152
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "low",
+      "tier": 1,
+      "calls": 7,
+      "triangles": 2648,
+      "variant": {
+        "rank": 1,
+        "name": "Grove",
+        "mark": 2
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 6984
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "low",
+      "tier": 2,
+      "calls": 7,
+      "triangles": 2732,
+      "variant": {
+        "rank": 2,
+        "name": "Windrunner",
+        "mark": 3
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 7236
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "low",
+      "tier": 3,
+      "calls": 7,
+      "triangles": 2912,
+      "variant": {
+        "rank": 3,
+        "name": "Moonstring",
+        "mark": 4
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 7776
+    },
+    {
+      "id": "reedline-hunting-bow",
+      "lod": "low",
+      "tier": 4,
+      "calls": 7,
+      "triangles": 3180,
+      "variant": {
+        "rank": 4,
+        "name": "Dawnbound",
+        "mark": 5
+      },
+      "shaderOK": true,
+      "glError": 0,
+      "vertices": 8580
+    }
+  ],
+  "errors": [],
+  "method": "Production itemModel, Chromium software WebGL. Not a physical-device performance benchmark.",
+  "checks": [
+    "All 20 catalog items have finite high/low geometry, explicit grips and icons",
+    "Net leaves 78% of sampled bag area open",
+    "All 16 surface tiles and both wear endpoints remain stable across three oblique angles"
+  ],
+  "passed": true
+}

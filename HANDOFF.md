@@ -4,6 +4,12 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Ranked armament detail continuation
+
+Twenty named chassis variants across the three guns and bow follow existing quality tiers. New ranks add real rounded shells, stock supports, braces and bow fittings; gear inspection names the variant. Detailed player-held models now remain active on phones in first and third person, with continuous sleeves restored. See `docs/armament-ranks-pass.md` and its render/pose evidence. Native-device frame time and final art approval remain open.
+
+The preceding flight-vista update is live as `95dc755df253f3e71f30abdd365718f018d9c87c`, Pages run `38023531953` succeeded, and its live engine SHA-256 matched `21af356f6e7756cb47f3561958b56f903c66e735ca53e85f89c6f0f6ad5ea091`.
+
 ## Planet flight vistas continuation
 
 Added profile-based orbital land/rock/coast variation, restrained ridge shading, liquid-water sun glints and a separate raised cloud shell with drifting shadows and terminator lighting. Earth keeps its mapped geography. Screen-space fading controls distant fine detail; phone mode skips the extra relief sample. See `docs/flight-vistas-pass.md` for scope and reproducible verification: 9 movement tests and 18 production-material render cases passed. Native device performance and exact globe-to-local terrain matching are not established.

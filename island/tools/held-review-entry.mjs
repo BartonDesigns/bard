@@ -15,13 +15,13 @@ const rim=new THREE.DirectionalLight(0x9fd8ff,.8);rim.position.set(-2,1,-1);
 scene.add(key,rim,new THREE.AmbientLight(0xffffff,.25));
 const camera=new THREE.OrthographicCamera(-1,1,1,-1,.001,100);
 const ids=Object.keys(ITEM_ICONS);let current=null;
-function stats(id,lod='high'){
- const m=itemModel(id,{lod,plain:true}),box=new THREE.Box3().setFromObject(m),size=box.getSize(new THREE.Vector3());
+function stats(id,lod='high',tier=0,level=1){
+ const m=itemModel(id,{lod,tier,level,plain:true}),box=new THREE.Box3().setFromObject(m),size=box.getSize(new THREE.Vector3());
  let meshes=0,verts=0;m.traverse(o=>{if(o.isMesh){meshes++;verts+=o.geometry.attributes.position.count;}});
  return {id,name:ARMS_CATALOG[id].name,triangles:triangles(m),meshes,vertices:verts,dimensionsMetres:size.toArray()};
 }
 function render({id=ids[0],view='three-quarter',tier=0,level=1,lod='high',width=1200,height=800,background=null,wireframe=false,turn=null}={}){
- if(current)scene.remove(current);
+ if(current){current.userData.bow?.dispose();scene.remove(current);}
  const model=current=itemModel(id,{tier,level,lod,plain:true});scene.add(model);
  model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3());
@@ -37,7 +37,7 @@ function render({id=ids[0],view='three-quarter',tier=0,level=1,lod='high',width=
  renderer.setSize(width,height,false); renderer.setClearColor(background===null?0:background,background===null?0:1);
  model.traverse(o=>{if(o.isMesh)o.material.wireframe=wireframe;});
  kitTick(0);renderer.render(scene,camera);
- return {png:renderer.domElement.toDataURL('image/png'),calls:renderer.info.render.calls,triangles:renderer.info.render.triangles};
+ return {png:renderer.domElement.toDataURL('image/png'),calls:renderer.info.render.calls,triangles:renderer.info.render.triangles, variant:model.userData.variant, shaderOK:renderer.info.programs.every(p=>p.diagnostics?.runnable!==false), glError:renderer.getContext().getError(), vertices:model.getObjectByName('body').geometry.attributes.position.count};
 }
 function validate(){
  const check=(ok,message)=>{if(!ok)throw new Error(message);},checks=[];

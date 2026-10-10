@@ -90,7 +90,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	function swapIn(item) {
 		optics?.reset();
 		if (S.model) { S.model.userData.bow?.dispose(); rig.remove(S.model); }
-		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: isPhone ? 'low' : 'high', optics: true }) : null;
+		S.model = item ? itemModel(item.i, { level: item.l, tier: item.t, lod: 'high', optics: true }) : null;
 		const was = S.id;
 		S.id = item?.i || null; S.key = S.want; S.item = item; S.reload = null;
 		if (S.model) { S.model.matrixAutoUpdate = false; S.model.userData.bow?.set(bowState); rig.add(S.model); }
@@ -158,10 +158,10 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		}
 		const group = new THREE.Group();
 		group.add(skin);
-		if (sleeve && !isPhone) group.add(sleeve);
+		if (sleeve) group.add(sleeve);
 		scene.add(group);
 		const side = names.map((n) => (n.endsWith('.L') ? 'L' : 'R')), fore = names.map((n) => !/^(wrist|finger|metacarpal)/.test(n));
-		return { me, group, skin, sleeve, bones, side, fore, tris: tri.length / 3 };
+		return { me, group, skin, sleeve, bones, side, fore, tris: tri.length / 3 + (sleeve?.geometry.index.count || 0) / 3 };
 	}
 
 	// ---------- input: aim ----------
@@ -363,7 +363,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (!S.model) return { held: null };
 		const H = S.model.userData.hold, m = S.model.matrix;
 		const fwd = new THREE.Vector3(1, 0, 0).transformDirection(m), up = new THREE.Vector3(0, 1, 0).transformDirection(m);
-		const out = { held: S.id, ads: +S.ads.toFixed(2), equip: +S.equip.toFixed(2), zoom: +S.zoom.toFixed(2), fov: +cam.fov.toFixed(1), muzzleDotForward: +fwd.dot(new THREE.Vector3(0, 0, -1)).toFixed(3), upDotUp: +up.dot(new THREE.Vector3(0, 1, 0)).toFixed(3), sight: H.sight ? new THREE.Vector3(H.sight[0], H.sight[1], 0).applyMatrix4(m).toArray().map((x) => +x.toFixed(3)) : null, grip: new THREE.Vector3().setFromMatrixPosition(m).toArray().map((x) => +x.toFixed(3)), tris: triangles(S.model), armTris: arms?.tris || 0, calls: S.calls, arms: !!arms };
+		const out = { held: S.id, variant: S.model.userData.variant, ads: +S.ads.toFixed(2), equip: +S.equip.toFixed(2), zoom: +S.zoom.toFixed(2), fov: +cam.fov.toFixed(1), muzzleDotForward: +fwd.dot(new THREE.Vector3(0, 0, -1)).toFixed(3), upDotUp: +up.dot(new THREE.Vector3(0, 1, 0)).toFixed(3), sight: H.sight ? new THREE.Vector3(H.sight[0], H.sight[1], 0).applyMatrix4(m).toArray().map((x) => +x.toFixed(3)) : null, grip: new THREE.Vector3().setFromMatrixPosition(m).toArray().map((x) => +x.toFixed(3)), tris: triangles(S.model), armTris: arms?.tris || 0, calls: S.calls, arms: !!arms };
 		if (arms) for (const side of ['L', 'R']) {
 			const G = H[side];
 			if (!G || !handFrame(arms.me.P, side, hf, (i) => arms.bones[i].matrixWorld)) continue;

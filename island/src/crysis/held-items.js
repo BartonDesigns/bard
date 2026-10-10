@@ -18,11 +18,12 @@
 //
 // Item space: x forward (the muzzle), y up, z to the item's right; the right hand's grip at the
 // origin. HOLDS says where each hand closes on an item; handFrame() reads a hand off a body.
-// lod 'low' (third person, friends, phones) drops the small parts and halves the segments.
+// lod 'low' is for distant/third-person items; the equipped first-person item stays detailed.
 
 import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { TIERS } from '../gameplay/gear-levels.js';
+import { armamentVariant } from '../gameplay/armament-variants.js';
 import { createFlash } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
 import { attachScopeGlass } from './scope-optics.js';
@@ -371,7 +372,7 @@ function handguard(k, F, x0, x1, y, h, w, hex) {
 }
 // a long scope from x0 to x1 at height y, on two rings
 function scope(k, F, x0, x1, y, railY, reticle) {
-	const seg = k.hi ? 28 : 10, r = 0.0145;
+	const seg = k.hi ? 40 : 16, r = 0.0145;
 	// an open tube, dark inside, so the eye sees through it to the glass
 	const outer = [[0.0185, x0 - 0.05], [0.0205, x0 - 0.05], [0.021, x0 - 0.04], [0.0195, x0 - 0.012], [r, x0], [r, x1], [0.022, x1 + 0.04], [0.0265, x1 + 0.07], [0.0265, x1 + 0.082], [0.0245, x1 + 0.082]];
 	k.add(turn(outer, seg), OPTIC, 0, y, 0);
@@ -452,7 +453,7 @@ function pressurePad(k, x, y, z, w) {
 }
 // the Aurora: a long marksman's trail rifle, skeleton stock, vented guard, a scope, a shroud
 function aurora(k, F) {
-	const seg = k.hi ? 24 : 10;
+	const seg = k.hi ? 36 : 14;
 	pistolGrip(k); guard(k, 0.015, F);
 	k.add(slab(poly([[-0.08, 0.046], [0.17, 0.046], [0.185, 0.07], [0.185, 0.096], [-0.08, 0.096]], 0.004), 0.05, 0.002, 2), F.main);
 	k.add(slab(poly([[-0.08, 0.096], [0.2, 0.096], [0.2, 0.138], [0.19, 0.144], [-0.07, 0.144], [-0.08, 0.134]], 0.004), 0.054, 0.0022, 2), F.main);
@@ -490,7 +491,7 @@ function aurora(k, F) {
 // the Mossback: a lighter scout rifle, one-piece thumbhole stock in the finish's second colour,
 // a round guard with knurled bands, a long scout scope out front, a short brake
 function mossback(k, F) {
-	const seg = k.hi ? 24 : 10;
+	const seg = k.hi ? 36 : 14;
 	const stock = poly([[0.17, 0.05], [0.17, 0.092], [-0.06, 0.1], [-0.3, 0.112], [-0.34, 0.124], [-0.37, 0.124], [-0.372, -0.04], [-0.35, -0.046], [-0.24, 0.0], [-0.06, -0.075], [-0.03, -0.086], [0.006, -0.074], [0.03, 0.045]], 0.008);
 	stock.holes.push(hole([[-0.07, 0.07], [-0.21, 0.08], [-0.27, 0.06], [-0.2, 0.03], [-0.058, -0.03], [-0.035, 0.03]].reverse(), 0.012));
 	k.add(slab(stock, 0.036, 0.004, k.hi ? 3 : 1, 3), F.wild);
@@ -525,7 +526,7 @@ function mossback(k, F) {
 // the Warden: a compact guard carbine, angular plates, a reflex sight, and in place of a muzzle
 // a ringed emitter that ends an encounter with a flash
 function warden(k, F) {
-	const seg = k.hi ? 24 : 10;
+	const seg = k.hi ? 36 : 14;
 	pistolGrip(k); guard(k, 0.015, F);
 	k.add(slab(poly([[-0.09, 0.046], [0.2, 0.046], [0.26, 0.07], [0.32, 0.084], [0.32, 0.15], [0.12, 0.162], [-0.06, 0.158], [-0.09, 0.14]], 0.008), 0.056, 0.0025, 2, 2), F.main);
 	if (k.hi) {
@@ -566,6 +567,69 @@ function warden(k, F) {
 	reflex(k, F, 0.04, 0.17, 0.205, 0xffb347);
 }
 const RIFLES = { 'aurora-trail-rifle': aurora, 'mossback-scout-rifle': mossback, 'warden-spark-carbine': warden };
+
+// External fictional chassis upgrades, merged into the body rather than separate
+// draw calls. Keep the grip, sight axis, muzzle and animated cell travel untouched.
+function rankedChassis(k, F, id) {
+	const rank = F.t, seg = k.hi ? 32 : 14;
+	if (id === 'reedline-hunting-bow') {
+		// A rounded grip saddle and layered limb pockets give even the field bow depth.
+		for (const sy of [-1, 1]) {
+			k.add(slab(rrect(.032, .058, .009), .038, .003, k.hi ? 3 : 1, 5), F.alt, -.002, sy * .174, 0);
+			if (rank >= 1) for (const sign of [-1, 1]) k.add(slab(rrect(.022, .042, .006), .003, .0008, 2, 4), F.trim, 0, sy * .173, sign * .021);
+		}
+		if (rank >= 2) {
+			// Counterweight stack is forward and below the arrow's flight lane.
+			for (let n = 0; n < rank - 1; n++) k.add(turn([[.012,.16+n*.018],[.019,.163+n*.018],[.019,.174+n*.018],[.012,.177+n*.018]], seg), n % 2 ? F.trim : F.alt, 0, -.03, 0);
+		}
+		if (rank >= 3) {
+			for (const sign of [-1, 1]) k.add(strap([[.005,-.13,sign*.02],[.018,-.09,sign*.028],[.02,-.055,sign*.02]], .012, .006, k.hi ? 12 : 6), F.alt);
+		}
+		if (rank >= 4) for (const sy of [-1,1]) k.add(slab(poly([[-.014,0],[0,.023],[.014,0],[0,-.023]],.003),.004,.001,2),F.trim,0,sy*.126,.023);
+		return;
+	}
+	const scout = id === 'mossback-scout-rifle', compact = id === 'warden-spark-carbine';
+	const receiverX = compact ? -.025 : .035, receiverY = scout ? .111 : compact ? .113 : .121;
+	const skin = scout ? .025 : compact ? .031 : .029;
+	// Rounded shoulder fairings create real highlights in the player's oblique view.
+	for (const sign of [-1, 1]) {
+		k.add(slab(rrect(.092, .021, .009), .009, .002, k.hi ? 3 : 1, k.hi ? 6 : 3), F.main, receiverX, receiverY + .015, sign * skin);
+		k.add(slab(rrect(.068, .011, .004), .002, .0006, 2, 4), F.trim, receiverX, receiverY + .018, sign * (skin + .005));
+	}
+	const stockX = compact ? -.214 : scout ? -.265 : -.245;
+	const stockY = compact ? .124 : scout ? .099 : .124;
+	const cheek = poly([[-.062,-.019],[.052,-.013],[.066,.005],[.048,.021],[-.054,.024],[-.07,.011]],.008);
+	k.add(slab(cheek,.043,.003,k.hi ? 3 : 1,5),F.alt,stockX,stockY,0);
+	if (!rank) return;
+	// Fine: reinforced stock collars, a raised cheek pad and readable rank studs.
+	k.add(slab(rrect(.10,.014,.006),.042,.002,2,5),GRIP,stockX,stockY+.025,0);
+	for (const sign of [-1,1]) {
+		k.add(slab(rrect(.031,.041,.008),.005,.001,2,4),F.trim,stockX-.035,stockY-.004,sign*.024);
+		for(let n=0;n<rank;n++) k.add(tube(.0024,.0024,.0015,k.hi?12:6),F.trim,receiverX-.028+n*.013,receiverY-.004,sign*(skin+.002),0,Math.PI/2);
+	}
+	if (rank < 2) return;
+	// Superior: sculpted fore-end shells, with actual openings, not black decals.
+	const x = compact ? .256 : scout ? .455 : .535, y = compact ? .119 : scout ? .108 : .112;
+	const width = compact ? .071 : .085, depth = compact ? .035 : .029;
+	const shell = rrect(width,.046,.012);
+	shell.holes.push(slotPath(width*.56,.012,0,.003));
+	for(const sign of [-1,1]) k.add(slab(shell,.006,.0012,k.hi?3:1,k.hi?6:3),F.alt,x,y,sign*depth);
+	if(rank < 3) return;
+	// Masterwork: broad lower bracing and upper trim, clear of the sight aperture.
+	for(const sign of [-1,1]) {
+		k.add(strap([[x-.038,y-.015,sign*depth],[x-.016,y-.026,sign*(depth+.006)],[x+.034,y-.019,sign*depth]],.012,.006,k.hi?14:6),F.trim);
+		k.add(slab(rrect(.062,.012,.005),.004,.001,2,5),F.trim,stockX+.012,stockY+.003,sign*.025);
+	}
+	if(rank < 4) return;
+	// Legendary: a second floating-edge shell supported by visible spacers.
+	// Restrained trim keeps the receiver and rubber readable against the gold finish.
+	for(const sign of [-1,1]) {
+		const crest = poly([[-.026,0],[-.012,.015],[.024,.01],[.03,-.007],[-.017,-.012]],.003);
+		k.add(slab(crest,.004,.001,2,4),F.alt,stockX,stockY-.011,sign*.031);
+		for(const dx of [-.018,.018]) k.add(tube(.0035,.0035,.01,seg),F.trim,stockX+dx,stockY-.012,sign*.026,0,Math.PI/2);
+		k.add(slab(rrect(width*.75,.008,.003),.003,.0007,2,4),F.trim,x,y+.019,sign*(depth+.005));
+	}
+}
 
 // ---------- the rest of the kit, at the same finish ----------
 // a take-down recurve: a machined riser with cut-outs, laminated limbs, a stabiliser
@@ -864,6 +928,7 @@ function built(id, t, band, lod, optics = false) {
 		const F = finish(t, band);
 		if (RIFLES[id]) for (const key of ['main', 'alt', 'trim', 'wild']) F[key] = { ...F[key], wear: F[key].wear * 0.55 };
 		BUILD[id](k, F);
+		if (armamentVariant(id, t)) rankedChassis(k, F, id);
 		cache.set(key, k.build());
 	}
 	return cache.get(key);
@@ -881,7 +946,7 @@ export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false
 	if (t === 4 && lod !== 'low') g.add(motes(t));
 	g.traverse((o) => { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; });
 	g.name = 'held:' + id;
-	g.userData = { id, long: holdOf(id).kind === 'long', tier: t, level: l, hold: holdOf(id) };
+	g.userData = { id, long: holdOf(id).kind === 'long', tier: t, level: l, hold: holdOf(id), variant: armamentVariant(id, t) };
 	if (id === 'reedline-hunting-bow') g.userData.bow = createBowVisual(g, kitMaterial(plain), { low: lod === 'low', colour: finish(t, band).alt.c });
 	return g;
 }

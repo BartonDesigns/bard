@@ -21,8 +21,8 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
  const port = server.address().port;
  const runtime = process.env.CHROMIUM_RUNTIME || '/tmp/bard-browser-runtime';
- const Sparticuz = (await import(process.env.SPARTICUZ_MODULE || '/workspace/scratch/5c8900291977/arms-render-runtime/node_modules/@sparticuz/chromium/build/index.js')).default;
- const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_EXECUTABLE || path.join(runtime, 'chromium'), args: Sparticuz.args, env: { ...process.env, LD_LIBRARY_PATH: runtime, FONTCONFIG_PATH: path.join(runtime, 'fonts') } });
+ const chromeArgs = process.env.SPARTICUZ_MODULE ? (await import(process.env.SPARTICUZ_MODULE)).default.args : ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+ const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_EXECUTABLE || path.join(runtime, 'chromium'), args: chromeArgs, env: { ...process.env, LD_LIBRARY_PATH: runtime, FONTCONFIG_PATH: path.join(runtime, 'fonts') } });
  const keepalive = await browser.newPage();
  const records = [], fits = [], errors = [];
  function validate(info, name) {
@@ -41,7 +41,7 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
    for (const mode of ['first', 'third']) {
     for (const id of (process.env.ARMAMENT_GUNS === '0' ? [] : ['aurora-trail-rifle', 'mossback-scout-rifle', 'warden-spark-carbine'])) {
      for (const pose of ['carry', 'aim']) {
-      await page.evaluate(({ id, mode, pose }) => { weaponReview.select(id, mode); if (mode === 'third') weaponReview.close(); weaponReview.aim(pose === 'aim'); for (let i=0;i<70;i++) weaponReview.frame(1/60, false); weaponReview.frame(); }, { id, mode, pose });
+      await page.evaluate(({ id, mode, pose, tier }) => { weaponReview.select(id, mode, tier, 7); if (mode === 'third') weaponReview.close(); weaponReview.aim(pose === 'aim'); for (let i=0;i<70;i++) weaponReview.frame(1/60, false); weaponReview.frame(); }, { id, mode, pose, tier: Number(process.env.ARMAMENT_TIER || 0) });
       if (mode === 'first') await page.waitForFunction(() => { weaponReview.frame(); return weaponReview.info().arms; }, null, { timeout: 30000 });
       const name = `${device}-${mode}-${id}-${pose}`;
       const info = await page.evaluate(() => weaponReview.info()); validate(info, name);
@@ -49,13 +49,13 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
      }
     }
     for (const pose of (process.env.ARMAMENT_BOW === '0' ? [] : ['ready', 'half-draw', 'full-draw', 'released'])) {
-     await page.evaluate(({ mode, pose }) => {
-      weaponReview.select('reedline-hunting-bow', mode); if (mode === 'third') weaponReview.close(); weaponReview.aim(true);
+     await page.evaluate(({ mode, pose, tier }) => {
+      weaponReview.select('reedline-hunting-bow', mode, tier, 7); if (mode === 'third') weaponReview.close(); weaponReview.aim(true);
       weaponReview.bow({ draw: pose === 'ready' ? 0 : pose === 'half-draw' ? .5 : 1, loaded: true, nock: 1 });
       for (let i=0;i<70;i++) weaponReview.frame(1/60, false);
       if (pose === 'released') { weaponReview.fire(); weaponReview.bow({ draw: 0, loaded: false, nock: 0 }); for (let i=0;i<6;i++) weaponReview.frame(1/60,false); }
       weaponReview.frame();
-     }, { mode, pose });
+     }, { mode, pose, tier: Number(process.env.ARMAMENT_TIER || 0) });
      const name = `${device}-${mode}-bow-${pose}`, info = await page.evaluate(() => weaponReview.info()); validate(info,name);
      if (mode === 'third' && pose === 'full-draw') { info.rig = await page.evaluate(() => weaponReview.rig()); console.log(JSON.stringify({ name, rig: info.rig })); }
      assert.ok(info.bow, name + ': missing bow diagnostics');

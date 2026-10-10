@@ -1,3 +1,4 @@
+import { armamentVariant } from '../gameplay/armament-variants.js';
 // Your gear: what you carry (gameplay/arms.js, kept in this browser), each item with its level and
 // quality tier, the item in your hand, the shops near you (buy, sell back, upgrade at an
 // outfitter), combining two of a kind into a better one, and trading with a friend in your room
@@ -35,7 +36,7 @@ export function describeSide(side) {
 
 export function createGear({ arms, multiplayer, mount, menu, button, hint, world, camera, scene, renderer = null, avatar, self, busy = () => false, isPhone = false }) {
 	useStyle();
-	const hand = createHand(scene, { lod: 'low' });
+	const hand = createHand(scene, { lod: 'high' });
 	const vm = createViewmodel({ camera, avatar, mount, canvas: renderer?.domElement || null, isPhone });
 	// (for checks: hold something without owning it, aim)
 	let preview = null;
@@ -152,7 +153,10 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		const item = ARMS_CATALOG[x.i], T = TIERS[x.t];
 		sheet.append(head(nameOf(x.i), () => open('gear')));
 		const sub = el('div', '', `${T.name} · Level ${x.l}${x.l >= MAX_LEVEL ? ' (max)' : ''}`); sub.style.cssText = `color:${T.color};font:600 13px system-ui;text-shadow:0 0 ${4 + T.glow * 10}px ${T.color}55;`;
-		sheet.append(sub, el('div', 'g99-rule'));
+		sheet.append(sub);
+		const variant = armamentVariant(x.i, x.t);
+		if (variant) sheet.append(el('div', '', `${variant.name} · Mark ${variant.mark}`));
+		sheet.append(el('div', 'g99-rule'));
 		const box = el('div'); box.style.cssText = `border-radius:12px;background:radial-gradient(circle at 50% 45%,${T.color}22,rgba(0,0,0,.35) 70%);box-shadow:inset 0 0 30px rgba(0,0,0,.7);min-height:200px;display:flex;align-items:center;justify-content:center;`;
 		sheet.append(box);
 		stopSpin = studio.turntable(box, x.i, x.l, x.t, 200);

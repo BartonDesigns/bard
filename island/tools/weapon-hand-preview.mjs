@@ -18,7 +18,7 @@ const assets = await loadPeopleAssets(), dna = personDNA(9172, { age: 37 });
 const P = buildPerson(assets, dna), M = createMotion(P, () => 0); M.place(0, 0, 0, Math.PI); scene.add(P.root);
 P.root.traverse(o => { for (const m of [o.material].flat().filter(Boolean)) if ('envMap' in m) { m.envMap = env.texture; m.envMapIntensity = .65; } });
 const phoneTier = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-const me = { P, M }, vm = createViewmodel({ camera, avatar: { me }, mount: document.body, canvas: renderer.domElement, isPhone: phoneTier }), hand = createHand(scene, { lod: phoneTier ? 'low' : 'high' });
+const me = { P, M }, vm = createViewmodel({ camera, avatar: { me }, mount: document.body, canvas: renderer.domElement, isPhone: phoneTier }), hand = createHand(scene, { lod: 'high' });
 const state = { pos: new T.Vector3(), vel: new T.Vector3(), yaw: 0, pitch: 0, grounded: true }, world = { sky: { sun, hemi } };
 let time = 0, held = null, third = false;
 Object.defineProperty(performance, 'now', { configurable: true, value: () => time * 1000 });
@@ -29,8 +29,8 @@ function frame(dt = 1 / 60, render = true) {
 	vm.update(dt, held, state, !third, world, time);
 	if (render) { renderer.render(scene, camera); if (!third) vm.render(renderer, scene); }
 }
-function select(id, mode) {
-	state.pitch = 0; held = { i: id, l: 1, t: 0 }; third = mode === 'third'; hand.set(id); vm.aim(false); hand.aim?.(false);
+function select(id, mode, tier = 0, level = 1) {
+	state.pitch = 0; held = { i: id, l: level, t: tier }; third = mode === 'third'; hand.set(id, level, tier); vm.aim(false); hand.aim?.(false);
 	M.act(null); camera.zoom = 1;
 	if (third) { camera.position.set(1.6, 1.5, -2.6); camera.lookAt(0, 1.15, 0); }
 	else { camera.position.set(0, 1.68, 0); camera.rotation.set(0, 0, 0); }

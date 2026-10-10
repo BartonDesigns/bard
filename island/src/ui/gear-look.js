@@ -1,3 +1,4 @@
+import { armamentVariant } from '../gameplay/armament-variants.js';
 // The look shared by the gear screen and the trade window (ui/gear.js, ui/trade-window.js): a
 // dark frame with brass trim and inner shadows, item slots with a tier-coloured edge and glow, a
 // level badge and a stack count, tooltips with stats and their differences, coin stacks, and
@@ -90,6 +91,8 @@ export function tipContent(inst, vs = null, vsLabel = '') {
 	const d = el('div');
 	const nm = el('b', '', nameOf(inst.i)); nm.style.color = tierColor(inst.t);
 	d.append(nm, el('div', '', `${tierName(inst.t)} · Level ${inst.l}${inst.l < MAX_LEVEL ? ` (${inst.x}/${xpNeed(inst.l)} xp)` : ' (max)'}`));
+	const variant = armamentVariant(inst.i, inst.t);
+	if (variant) d.append(el('div', '', `${variant.name} · Mark ${variant.mark}`));
 	const rows = vs ? compareStats(vs, inst) : statsOf(inst).map((r) => ({ ...r, b: r.value, delta: 0 }));
 	for (const r of rows) {
 		const line = el('div', '', `${r.label}: ${fmt(r.b, r.unit)}`);
