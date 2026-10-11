@@ -70,11 +70,12 @@ function character(seed, options={}) {
  hand.release();scene.remove(P.root);
  const d=personDNA(seed,{age:options.age||37});
  for(const k of ['height','weight','muscle','male'])if(options[k]!==undefined)d[k]=options[k];
+ if(options.male!==undefined)d.sex=options.male?.9:.1;
  if(options.outfit){d.style={...d.style,...options.outfit,acc:[]};d.styleSig=null;}
  if(options.hair){d.hair='short01';d.style.hair=typeof options.hair==='string'?{cut:options.hair}:options.hair;}
  P=buildPerson(assets,d);M=createMotion(P,()=>0);M.place(0,0,0,Math.PI);scene.add(P.root);me.P=P;me.M=M;
  weaponReview.P=P;weaponReview.M=M;
- return {gait:M.S.signature,outfit:P.outfit};
+ return {gait:M.S.signature,outfit:P.outfit,sex:d.sex,male:d.male};
 }
 window.weaponReview = { character, select, frame, aim, fire: () => third ? hand.fire(null) : vm.fire(), reload: () => third ? hand.reload(null, null) : vm.reload(),
 	rig: () => ({ model: hand.model?.matrix.toArray(), bones: Object.fromEntries(['head', 'neck01', 'upperarm01.L', 'upperarm01.R', 'wrist.L', 'wrist.R'].map(name => [name, new T.Vector3().setFromMatrixPosition(P.bones[P.map[name]].matrixWorld).toArray()])) }),

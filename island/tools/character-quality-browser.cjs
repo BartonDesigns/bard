@@ -67,6 +67,13 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
      weightError=Math.max(weightError,Math.abs(sum-1));
     }
     if(!g.attributes.position.array.every(Number.isFinite))throw Error('Invalid cloth geometry');
+    const hg=P.hair.geometry,hn=hg.attributes.normal,ht=hg.attributes.hairT;
+    let frameLengthError=0,frameDot=0;
+    for(let i=0;i<hn.count;i++){
+     const n=[hn.getX(i),hn.getY(i),hn.getZ(i)],t=[ht.getX(i),ht.getY(i),ht.getZ(i)];
+     frameLengthError=Math.max(frameLengthError,Math.abs(Math.hypot(...n)-1),Math.abs(Math.hypot(...t)-1));
+     frameDot=Math.max(frameDot,Math.abs(n.reduce((s,x,j)=>s+x*t[j],0)));
+    }
     r.camera.position.set(.7,P.height*.81,-1.65);r.camera.lookAt(0,P.height*.70,0);r.frame();
     const U=P.hair.material.userData.U;
     let guidePeak=0,distinct=false;
@@ -75,9 +82,9 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
      guidePeak=Math.max(guidePeak,...U.uHairGuides.value.map(v=>v.length()));
      distinct ||= new Set(U.uHairGuides.value.map(v=>v.toArray().map(x=>x.toFixed(5)).join(','))).size>1;
     }
-    r.frame();return {cut:P.cut,tailoring:g.userData.tailoring,vertices:sw.count,triangles:g.index.count/3,weightError,guidePeak,distinct,programs:r.failed()};
+    r.frame();return {sex:P.dna.sex,cut:P.cut,tailoring:g.userData.tailoring,vertices:sw.count,triangles:g.index.count/3,hairTriangles:hg.index.count/3,frameLengthError,frameDot,weightError,guidePeak,distinct,programs:r.failed()};
    });
-   assert.ok(detail.weightError<.00001,JSON.stringify(detail));assert.ok(detail.vertices<12000);assert.ok(detail.tailoring.edgeSegments>0);assert.ok(detail.guidePeak>0&&detail.guidePeak<=.03001);assert.ok(detail.distinct);assert.equal(detail.programs,0);
+   assert.equal(detail.sex,male?.9:.1);assert.ok(detail.weightError<.00001,JSON.stringify(detail));assert.ok(detail.vertices<22000);assert.ok(detail.tailoring.edgeSegments>0);assert.ok(detail.tailoring.refinement.maxOffset<=.004001);assert.ok(detail.frameLengthError<.00001&&detail.frameDot<.00001);assert.ok(detail.guidePeak>0&&detail.guidePeak<=.03001);assert.ok(detail.distinct);assert.equal(detail.programs,0);
    await p.screenshot({path:path.join(OUT,`wardrobe-${label}.png`)});
    await p.evaluate(()=>{const r=weaponReview;r.M.sit(.46);for(let i=0;i<100;i++)r.frame(1/60,false);r.camera.position.set(1.3,r.P.height*.55,-1.55);r.camera.lookAt(0,r.P.height*.50,0);r.frame();});
    await p.screenshot({path:path.join(OUT,`wardrobe-${label}-seated.png`)});

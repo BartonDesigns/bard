@@ -1,5 +1,20 @@
 # Level 99 Bard: handoff notes
 
+## Shoulder, sleeve and groom refinement (11 October 2026)
+
+Loose tops now retain arm influences across the shoulder. Cuffs use planes perpendicular
+to each person's arm bones, including the skin-coverage test and trim colouring. One bounded
+curved subdivision pass rounds upper garments before their edges are finished. Hair lighting
+frames are rebuilt on the fitted groom, and grey strands keep their colour along their length.
+The review fixture now sets the actual body sex parameter when selecting male/female outfits.
+See `docs/character-geometry-pass.md` for the release checks and remaining art work.
+
+The owner has now deployed the rooms Worker. Both production `/status` endpoints pass the
+read-only verifier: discovery exposes `social_intent` and `story_quest`; rooms exposes
+`trade-v2`, `combat-v1`, and `combat-guard-v1`, with the live site's CORS origin accepted.
+The root rooms URL returning `{"error":"not found"}` is expected; `/status` is the health route.
+Production two-client gameplay and physical iPhone performance remain separate checks.
+
 ## Character construction continuation and Worker verification (11 October 2026)
 
 Garments now have shaped torso panels, actual cut edges with rolled returns, cleaner fabric
@@ -8,11 +23,9 @@ uses the dressed torso. Hair has four damped guide responses driven by head turn
 teleport resets, two body-collision projection passes and restrained backlighting. See
 `docs/character-tailoring-pass.md` for checks, screenshots and remaining art limits.
 
-The live discovery Worker is confirmed current for both planning modes. The live rooms
-Worker still lacks all three trade/combat capability flags. `node server/verify-workers.mjs`
-performs a read-only check; the rooms source passes 105 tests, but needs the owner's
-authenticated `wrangler deploy` from `server/multiplayer`. A local CLI update does not ship
-the Worker. No Worker deployment is claimed by this character release.
+At the time of this earlier pass, rooms lacked the capability flags. The owner subsequently
+deployed it; see the verified current status above. `node server/verify-workers.mjs` performs
+a read-only check, without deployment or model inference.
 
 ## Character pose and appearance (11 October 2026)
 

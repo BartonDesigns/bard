@@ -3,6 +3,61 @@ import * as THREE from 'three';
 const clamp = (x) => Math.max(0, Math.min(1, x));
 const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
 
+export function sleeveDistance(v, sleeve, cut) {
+ const plane=cut.sleevePlanes[v[0]>=0?'L':'R'][sleeve||'short'];
+ return plane[3]-plane[0]*v[0]-plane[1]*v[1]-plane[2]*v[2];
+}
+
+// Blend bone identities, not their numeric indices. Shared by curved surface samples
+// and cut edges so a new vertex follows the same skeleton as its neighbours.
+function blendWeights(a, b, t, v) {
+ const weights = new Map();
+ for (const [q, scale] of [[a, 1-t], [b, t]]) for (let j=0; j<4; j++) weights.set(q.skinIndex[j], (weights.get(q.skinIndex[j]) || 0) + q.skinWeight[j] * scale);
+ const top = [...weights].sort((a,b)=>b[1]-a[1]).slice(0,4), total = top.reduce((a,b)=>a+b[1],0) || 1;
+ v.skinIndex = [0,0,0,0]; v.skinWeight = [0,0,0,0];
+ top.forEach(([id,w],j)=>{v.skinIndex[j]=id;v.skinWeight[j]=w/total;});
+}
+
+// One curved split of upper garments, at dressing time. Hermite edge midpoints round
+// the cage's shoulders without shrinking the cloth back into the skin. The displacement
+// is limited to 4 mm; trousers/shoes and the original vertices stay in place. UV seams
+// use the same endpoint positions/normals, so their new positions still coincide.
+export function refineGarmentSurface(g) {
+ const names = Object.keys(g.attributes), rows = [], indices = [], cache = new Map();
+ const at = i => Object.fromEntries(names.map(k => [k, Array.from({length:g.attributes[k].itemSize}, (_,j)=>g.attributes[k].array[i*g.attributes[k].itemSize+j])]));
+ const source = Array.from({length:g.attributes.position.count}, (_,i)=>at(i));
+ const put = (key, v) => { if(!cache.has(key)){cache.set(key,rows.length);rows.push(v);}return cache.get(key); };
+ const original = (i,s) => put(`v${i}s${s}`,{...source[i],slot:[s]});
+ let added=0, maxOffset=0;
+ function midpoint(i,j,s) {
+  const key=`e${Math.min(i,j)}:${Math.max(i,j)}s${s}`;
+  if(cache.has(key))return cache.get(key);
+  const a=source[i],b=source[j],v={};
+  for(const k of names)v[k]=a[k].map((x,q)=>(x+b[k][q])*.5);
+  blendWeights(a,b,.5,v);v.slot=[s];
+  const n0=new THREE.Vector3(...a.normal).normalize(),n1=new THREE.Vector3(...b.normal).normalize();
+  const edge=new THREE.Vector3(...b.position).sub(new THREE.Vector3(...a.position));
+  const off=n0.clone().multiplyScalar(edge.dot(n0)).addScaledVector(n1,-edge.dot(n1)).multiplyScalar(.125);
+  const normal=n0.clone().add(n1).normalize();
+  // Concave edges retain their clearance rather than rounding inward into a body.
+  const inward=off.dot(normal);if(inward<0)off.addScaledVector(normal,-inward);
+  off.clampLength(0,Math.min(.004,edge.length()*.12));maxOffset=Math.max(maxOffset,off.length());
+  v.position=v.position.map((x,q)=>x+off.getComponent(q));v.normal=normal.toArray();
+  added++;return put(key,v);
+ }
+ const ix=g.index.array;
+ for(let i=0;i<ix.length;i+=3){
+  const [a,b,c]=[ix[i],ix[i+1],ix[i+2]],s=source[c].slot[0];
+  const A=original(a,s),B=original(b,s),C=original(c,s);
+  if(Math.round(s)%10>=2){indices.push(A,B,C);continue;}
+  const ab=midpoint(a,b,s),bc=midpoint(b,c,s),ca=midpoint(c,a,s);
+  indices.push(A,ab,ca,ab,B,bc,ca,bc,C,ab,bc,ca);
+ }
+ const out=new THREE.BufferGeometry();
+ for(const name of names){const Type=name==='skinIndex'?Uint16Array:Float32Array;out.setAttribute(name,new THREE.BufferAttribute(new Type(rows.flatMap(v=>v[name])),g.attributes[name].itemSize));}
+ out.setIndex(indices);out.userData.refinement={addedVertices:added,maxOffset};g.dispose();return out;
+}
+
 // A woven top bridges the hollows of a torso rather than following every skin normal.
 // Fit the front/back panels to a rounded cross section; retain shoulders and armholes.
 // All movement is outward, and stretch garments keep their original body fit.
@@ -43,11 +98,7 @@ export function finishGarmentEdges(g, o, cut, R) {
   const key = a.key < b.key ? `${a.key}:${b.key}:${t.toFixed(7)}` : `${b.key}:${a.key}:${(1-t).toFixed(7)}`;
   const v = { key, trim: [0] };
   for (const k of names) v[k] = a[k].map((x, j) => x + (b[k][j] - x) * t);
-  const weights = new Map();
-  for (const [q, scale] of [[a, 1-t], [b, t]]) for (let j=0; j<4; j++) weights.set(q.skinIndex[j], (weights.get(q.skinIndex[j]) || 0) + q.skinWeight[j] * scale);
-  const top = [...weights].sort((a,b)=>b[1]-a[1]).slice(0,4), total = top.reduce((a,b)=>a+b[1],0) || 1;
-  v.skinIndex = [0,0,0,0]; v.skinWeight = [0,0,0,0];
-  top.forEach(([id,w],j)=>{v.skinIndex[j]=id;v.skinWeight[j]=w/total;});
+  blendWeights(a,b,t,v);
   return v;
  }
  const put = (v) => { if (!cache.has(v.key)) { cache.set(v.key, rows.length); rows.push(v); } return cache.get(v.key); };
@@ -61,7 +112,6 @@ export function finishGarmentEdges(g, o, cut, R) {
   }
   return out;
  }
- const sleeveEnd = g => ({none:cut.shoulder,cap:cut.shoulder-.07,short:cut.elbow+.1,elbow:cut.elbow,long:cut.wrist})[g?.sleeves || 'short'];
  const ix = g.index.array;
  for (let i=0;i<ix.length;i+=3) {
   let poly = [at(ix[i]),at(ix[i+1]),at(ix[i+2])];
@@ -77,7 +127,7 @@ export function finishGarmentEdges(g, o, cut, R) {
      const fr=smooth((v[2]+.04)/.035), scoop=s===0?(item.kind==='tank'?.045:item.kind==='crop'?.025:0):0;
      return cut.neck-.005-scoop*fr+.035*smooth(Math.abs(v[0])/.09)-.004*fr-v[1];
     });
-   } else if (limb===1) cuts.push(v=>v[1]-sleeveEnd(item)-.012);
+   } else if (limb===1) cuts.push(v=>sleeveDistance(v,item.sleeves,cut));
   } else if (s===2 && limb===2 && R.legEnd<5) cuts.push(v=>v[1]-R.legEnd-.012);
   for (const f of cuts) { poly=clip(poly,f); if (poly.length<3) break; }
   if (poly.length<3) continue;
@@ -114,6 +164,6 @@ export function finishGarmentEdges(g, o, cut, R) {
   const size=name==='trim'?1:g.attributes[name].itemSize, Type=name==='skinIndex'?Uint16Array:Float32Array;
   out.setAttribute(name,new THREE.BufferAttribute(new Type(rows.flatMap(v=>v[name])),size));
  }
- out.setIndex(indices);out.computeBoundingSphere();out.userData.tailoring={edgeSegments:rims.size,vertices:rows.length};
+ out.setIndex(indices);out.computeBoundingSphere();out.userData.tailoring={edgeSegments:rims.size,vertices:rows.length,refinement:g.userData.refinement};
  g.dispose();return out;
 }

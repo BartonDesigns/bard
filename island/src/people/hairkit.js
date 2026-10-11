@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { CAPSULES } from './hair-collide.js';
 import { guideUniform } from './hair-motion.js';
+import { fittedHairFrame } from './hair-frame.js';
 import { hairline } from './hair.js';
 
 const DIR = new URL('../assets/people/hair/', import.meta.url).href;
@@ -312,7 +313,8 @@ function styleChunk(A, P, p, St, kind, vol, fadeY = -99, coily = false) {
 		for (let i = 0; i < I.length; i += 3) if (!(low[I[i]] && low[I[i + 1]] && low[I[i + 2]])) keep.push(I[i], I[i + 1], I[i + 2]);
 		I = keep;
 	}
-	return { ...F, I, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
+	const frame = kind === 0 ? fittedHairFrame(V, { ...F, I }, St.grain, K) : {};
+	return { ...F, ...frame, I, n: nv, V, M: F.M && F.M.map((d) => d.map((x) => x * P._S)) };
 }
 
 // ---------- the beard's zones on the face ----------
@@ -533,8 +535,11 @@ const FRAG = /* glsl */`
 		// are finer than a pixel, the mix of them
 		if (uSalt.x > 0.0) {
 			float s = clamp(uSalt.x * (0.8 + 0.45 * smoothstep(0.45, 0.85, abs(normalize(vRest - uHC).x))) + uSalt.x * uSalt.x * 0.3, 0.0, 1.0);
-			float gk = fract(g * 14.0 + vHK.z * 7.0), fw = length(fwidth(vMapUv * 512.0));
-			float pick = mix(1.0 - smoothstep(s - 0.06, s + 0.06, gk), s, smoothstep(1.2, 3.0, fw));
+			// A grey hair keeps its colour along its length. Texture luminance varies
+			// along a strand, so using it as an ID produced flashing white speckles.
+			float across = (uSalt.z > 0.5 ? vMapUv.x : vMapUv.y) * 420.0;
+			float gk = hh(vec2(floor(across), floor(vHK.z * 4096.0)));
+			float pick = mix(1.0 - smoothstep(s - 0.025, s + 0.025, gk), s, smoothstep(0.35, 1.2, fwidth(across)));
 			col = mix(col, uGrey * (0.85 + g * 0.3), pick * 0.92);
 		}
 		// cut away under a cap; tapered into the painted crop down a fade, each strand
@@ -614,6 +619,6 @@ export function kitMaterial(tex, beard = false) {
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal *= faceDirection;\nnonPerturbedNormal = normal;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-10' + (beard ? '-b' : msaa ? '' : '-c');
+	m.customProgramCacheKey = () => 'crysis-hairkit-11' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

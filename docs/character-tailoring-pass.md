@@ -31,7 +31,8 @@ less extreme texture contrast. The original groom assets remain in use.
 
 The production MakeHuman browser harness covers 54 rifle fits across three sizes, aiming
 and carry pitches, walking/fire/reload, plus cotton, fleece, open layered jackets and stretch
-outfits on male/female characters. It renders standing/seated states, checks finite geometry,
+outfits with male/female wardrobe selections. The later geometry pass fixes the fixture to
+set `dna.sex` as well as `dna.male`, and reruns these checks on the intended body shapes. It renders standing/seated states, checks finite geometry,
 normalized skin weights, edge construction, bounded non-uniform hair guide motion and shader
 errors. It runs in desktop and phone-emulated Chromium. Reports and sample renders are in
 `docs/verification/character-tailoring/`.
@@ -43,12 +44,11 @@ The production build and `git diff --check` are also release gates.
 ## Live Worker verification
 
 `node server/verify-workers.mjs` reads both deployed status endpoints and checks the site's
-CORS access and expected capabilities. It never deploys or calls inference. The 11 October
-check confirms discovery exposes `social_intent` and `story_quest`. Rooms still returns
-`{ok:true,version:1,maxPlayers:8}` without `trade-v2`, `combat-v1` or `combat-guard-v1`.
-Updating the Wrangler CLI does not deploy that Worker. The multiplayer source passes its
-105 tests but still requires deployment from the owner's authenticated computer. Follow
-`server/multiplayer/README.md`. This session has no Cloudflare deployment credentials.
+CORS access and expected capabilities. It never deploys or calls inference. Initially rooms
+lacked the three capability flags; after the owner's deployment, the 11 October 20:44 UTC
+check confirms both services pass. Discovery exposes `social_intent` and `story_quest`;
+rooms exposes `trade-v2`, `combat-v1` and `combat-guard-v1`. The source passed its 105 tests
+in this earlier release. No Cloudflare credentials or Worker deployment were used here.
 
 ## Remaining art and simulation work
 
