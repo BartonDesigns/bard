@@ -231,7 +231,9 @@ export function createGuide(mount, api) {
 		if (q.status!=='complete') return;
 		if(q.reward && !q.rewardPaid) {const paid=stories.claimReward(q.id,q.bodyKey,tx=>api.arms?.apply(tx)); if(paid.ok && !paid.already) api.hint(`Quest reward: ${paid.credits} credits added to your inventory.`,4500);else if(!paid.ok && announce) api.hint(`Quest complete. ${paid.error}`,6000);}
 		const resident=api.social?.state.list(q.bodyKey).find(r=>residentKey(r.id)===q.offeredBy);
-		if (!resident || resident.storyCompletions?.includes(q.id)) return;
+		if (!resident) return;
+		api.multiplayer?.reportQuest?.(q,resident);
+		if (resident.storyCompletions?.includes(q.id)) return;
 		resident.storyCompletions=[...(resident.storyCompletions || []),q.id].slice(-64);
 		api.social.state.remember(resident.id,'event',`You and the traveller completed "${q.title}" together. ${q.premise}`);
 	}
@@ -609,6 +611,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (resident) say((api.social.state.status().error ? 'Memory is available this session, but your browser could not save it. ' : 'Remembered in this browser. ') + 'Tell me what you need in your own words, or ask me for an adventure.', 'note');
 		if (resident && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
+		if(resident)for(const q of stories.list(resident.bodyKey).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident.id)))api.multiplayer?.reportQuest?.(q,resident);
 		const awareness=personContext(p,resident), opening=contextualOpening(awareness);
 		rec.met=true; perform(opening,true);
 		if(resident) api.social.state.remember(resident.id,'assistant',opening);

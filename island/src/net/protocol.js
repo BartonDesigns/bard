@@ -43,6 +43,8 @@ export function cleanPose(p) {
 	if (VEHICLES.includes(p.v) && p.v) o.v = p.v;
 	if (num(p.s, 1e5)) o.s = r2(p.s);
 	o.w = str(p.w, 48);
+	// Geographic location survives Earth's floating/rebased render frame.
+	if (o.w === 'earth' && Array.isArray(p.g) && p.g.length === 2 && num(p.g[0],90) && num(p.g[1],180)) o.g=p.g.map(v=>Math.round(v*1e7)/1e7);
 	// the item in their hand, if any (a game catalogue id, gameplay/arms.js), with its level
 	// (1-10) and quality tier (0-4), which friends see as its trim and glow
 	if (ITEM_RE.test(p.h || '')) {

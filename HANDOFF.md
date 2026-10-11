@@ -1,3 +1,14 @@
+## Shared room reputation continuation (11 October 2026)
+
+See `docs/shared-reputation-pass.md`. The room protocol and client now support bounded
+durable public incidents and quest-completion recognition, with actual player attribution,
+world/geographical/floor limits, reconnect snapshots and host handoff. Old rooms servers
+remain compatible; the capability is gated by the welcome's `reputation-v1` flag.
+Cloudflare credentials are absent here. Publish the client, but do not call shared memory
+live until the owner deploys `server/multiplayer` and `/status` advertises the capability.
+The read-only verifier now checks it. This is room-scoped reported activity, not a fully
+server-simulated NPC population or account-backed reputation.
+
 ## City life, witnessed incidents, paid conversation quests and building handoff
 
 See `docs/city-life-and-building-transitions.md`. New workplace actor roles drive desk

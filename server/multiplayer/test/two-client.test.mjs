@@ -1,33 +1,30 @@
 // Two actual game RoomClients over WebSockets through Wrangler's local Durable Objects.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { createRoomClient } from '../../../island/src/net/client.js';
 import { createInventoryState, applyInventoryTransaction, instancesOf } from '../../../island/src/gameplay/arms.js';
 import { startTrade, editSide, accept, receive, tick, HOLD_MS } from '../../../island/src/gameplay/trade.js';
 import { createHealth, applyDamage } from '../../../island/src/combat/health.js';
-const root = fileURLToPath(new URL('../', import.meta.url)), ORIGIN = 'http://localhost:8768';
-const probe = createServer(); await new Promise((r) => probe.listen(0, '127.0.0.1', r));
-const port = probe.address().port; await new Promise((r) => probe.close(r));
-const url = `http://127.0.0.1:${port}`, temp = await mkdtemp(join(tmpdir(), 'bard-rooms-check-'));
-let log = '', checks = 0;
-const worker = spawn(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'dev', '--local', '--ip', '127.0.0.1', '--port', String(port), '--persist-to', temp, '--log-level', 'error'], { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
-for (const stream of [worker.stdout, worker.stderr]) stream.on('data', (s) => { log = (log + s).slice(-5000); });
-const wait = async (fn, label, timeout = 12000) => { const end = Date.now() + timeout; while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 20)); } throw new Error(`Timed out: ${label}\n${log}`); };
+import { createReputationMemory } from '../../../island/src/net/reputation.js';
+import { awarenessContext } from '../../../island/src/people/world-awareness.js';
+import { startLocalRooms } from './local-worker.mjs';
+const ORIGIN = 'http://localhost:8768', local=await startLocalRooms(), url=local.url;
+let checks=0;
+const wait = async (fn, label, timeout = 12000) => { const end = Date.now() + timeout; while (Date.now() < end) { if (await fn()) return; await new Promise(r=>setTimeout(r,20)); } throw new Error(`Timed out: ${label}`); };
 const check = (value, label) => { assert.ok(value, label); checks++; };
 const nativeFetch = globalThis.fetch, players = [];
 class GameSocket extends WebSocket { constructor(address) { super(address, { headers: { origin: ORIGIN } }); } }
 function player(id, credits, initialItems) {
  const P = { id, inv: createInventoryState(id, { credits, initialItems }), T: null, events: [], hp: createHealth(), rules: { pvp: false } };
+ P.reputation=createReputationMemory({me:id});
  P.ctx = (peer) => ({ peer, now: Date.now(), apply: (tx) => { const r = applyInventoryTransaction(P.inv, tx); if (r.ok) P.inv = r.state; return r; }, applied: (id) => P.inv.journal.some((e) => e.id === id) });
  P.step = (r) => { P.T = r.T; for (const m of r.send) P.client.send({ t: 'trade', to: P.T.peer, ...m }); };
  P.client = createRoomClient({ url, id, name: () => id, seed: 42, WS: GameSocket, on(t, v) {
   P.events.push({ t, v });
+  if(t==='welcome')P.reputation.reset(v);
+  if(t==='reputation')P.reputation.receive(v.e);
+  if(t==='reputation-snapshot')v.forEach(e=>P.reputation.receive(e));
+  if(t==='status' && v.status!=='on')P.reputation.reset();
   if (t === 'welcome') P.rules = v.rules;
   if (t === 'rules') P.rules = v;
   if (t === 'trade') P.step(receive(P.T, v, P.ctx(v.from)));
@@ -37,16 +34,17 @@ function player(id, credits, initialItems) {
  players.push(P); return P;
 }
 try {
- await wait(async () => { try { return (await nativeFetch(url + '/status')).ok; } catch { return false; } }, 'Worker boot', 30000);
+ await wait(async () => { try { return (await nativeFetch(url + '/status',{signal:AbortSignal.timeout(1500)})).ok; } catch { return false; } }, 'Worker boot', 30000);
  const status = await (await nativeFetch(url + '/status')).json();
  check(status.features?.includes('combat-guard-v1'), 'built Worker advertises combat validation');
+ check(status.features?.includes('reputation-v1'), 'built Worker advertises shared reputation');
  globalThis.fetch = (input, init = {}) => nativeFetch(input, { ...init, headers: { ...init.headers, origin: ORIGIN } });
  const A = player('owner-aaaa', 200, { 'camp-lantern': 1 }), B = player('guest-bbbb', 100, { 'field-medkit': 1 });
  const code = await A.client.create();
  A.client.join(code); await wait(() => A.client.status === 'on', 'host joins');
  B.client.join(code); await wait(() => B.client.status === 'on' && A.client.players.has(B.id), 'guest joins');
  check(A.client.isHost() && !B.client.isHost(), 'two clients agree on host');
- const pose = (P, w = 'earth', x = 0) => P.client.send({ t: 'pose', p: [x, 1.68, 0], w, y: 0, h: 'aurora-trail-rifle', hl: 1, ht: 0 });
+ const pose = (P, w = 'earth', x = 0) => P.client.send({ t: 'pose', p: [x, 1.68, 0], g:w==='earth'?[37.77,-122.42+x/88000]:undefined, w, y: 0, h: 'aurora-trail-rifle', hl: 1, ht: 0 });
  pose(A); pose(B, 'earth', 4); await wait(() => A.of('pose').length && B.of('pose').length, 'poses arrive');
  check(B.client.players.get(A.id).pose.h === 'aurora-trail-rifle', 'held gear reaches other client');
  A.step(startTrade({ id: 'trade-live-001', peer: B.id, now: Date.now() }));
@@ -82,12 +80,28 @@ try {
  B.client.send({ t: 'hit', id: 'boss:walker', d: 40, p: 'core', k: 'ballistic', w: 'aurora-trail-rifle' });
  await wait(() => A.of('hit').length === 1, 'boss hit goes to host');
  check(A.of('hit')[0].id === 'boss:walker', 'host receives shared damage decision');
+ const at={w:'earth',p:[4,0,0],g:[37.77,-122.42+4/88000]};
+ B.client.send({t:'pose',...at,p:[4,1.68,0],a:'drive',v:'car'});
+ B.client.send({t:'reputation',e:{...at,id:'incident-driving-001',kind:'vehicle-impact',actor:A.id,history:['private text']}});
+ await wait(()=>A.reputation.context(at).reports.some(e=>e.kind==='vehicle-impact'),'crime reaches the other player');
+ const guilty=awarenessContext(B.reputation.context(at)), innocent=awarenessContext(A.reputation.context(at));
+ check(guilty.reported?.actor===B.id && !innocent.reported && innocent.afraid,'same incident blames the driver, never the innocent friend');
+ const C=player('late-cccc',0,{});C.client.join(code);
+ await wait(()=>C.reputation.context(at).reports.some(e=>e.kind==='vehicle-impact'),'late join recovers room memory');
+ check(!JSON.stringify(C.of('reputation-snapshot')).includes('private text'),'private dialogue fields never reach other clients');
+ const quest={...at,id:'quest:story-proof-1',kind:'quest-complete',npc:'npc-000042'};
+ A.client.send({t:'reputation',e:quest});
+ await wait(()=>A.reputation.context(at).sharedCompleted===1,'completed work recorded for its actual player');
+ check(C.reputation.context(at).sharedCompleted===0,'another player cannot inherit quest recognition');
+ B.client.leave();B.client.join(code);
+ await wait(()=>B.client.status==='on' && B.reputation.context(at).reports.some(e=>e.kind==='vehicle-impact'),'reconnect restores own crime');
+ check(awarenessContext(B.reputation.context(at)).reported?.actor===B.id,'reconnecting does not erase accountability');
+ C.client.leave();await wait(()=>!A.client.players.has(C.id),'late player leaves');
  A.client.leave(); await wait(() => B.client.isHost(), 'host promotion');
  check(B.client.status === 'on', 'remaining client takes over');
+ check(awarenessContext(B.reputation.context(at)).reported?.actor===B.id,'host changes preserve shared memory');
  console.log(`two-client Worker integration: ${checks} passed, 0 failed`);
 } finally {
  globalThis.fetch = nativeFetch; for (const P of players) P.client.leave();
- worker.kill('SIGTERM'); await Promise.race([new Promise((r) => worker.once('exit', r)), new Promise((r) => setTimeout(r, 2500))]);
- if (worker.exitCode === null) worker.kill('SIGKILL');
- await rm(temp, { recursive: true, force: true });
+ await local.dispose();
 }

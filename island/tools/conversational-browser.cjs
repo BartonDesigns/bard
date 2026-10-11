@@ -15,8 +15,9 @@ const out = process.env.BARD_CONVERSATION_OUT || '/tmp/bard-conversational-qa';
   const api=await L99IslandDoor.engine(); await api.open({seed:1337,earth:false,biome:'TROPICAL'}); Crysis.music.auto(false); window._KEYS_PLAY_ON=false;
   const W=api.world(),v=W.island.village,p=W.player.state; p.pos.set(v.x,W.island.heightAt(v.x,v.z)+1.7,v.z+7);p.vel.set(0,0,0);p.flying=true;api.camera().position.copy(p.pos);W.sky.state.speed=0;W.sky.state.hours=13;
  });};
- await page.goto((process.env.BARD_URL||'http://127.0.0.1:8766')+'/?offline&safe',{waitUntil:'domcontentloaded'});await boot();
+ await page.goto((process.env.BARD_URL||'http://127.0.0.1:8766')+'/?offline&safe'+(process.env.BARD_ROOMS_URL?'&rooms='+encodeURIComponent(process.env.BARD_ROOMS_URL):''),{waitUntil:'domcontentloaded'});await boot();console.log('Game booted');
  await page.waitForFunction(()=>L99Island.people.pool.filter(p=>p.active&&!p.P.dna.child&&p.detachForSocial).length>=2);
+ console.log('NPC bodies ready');
  await page.evaluate(()=>{
   const api=L99Island;api.close();api.dom.mount.style.display='block';
   const actor=api.people.pool.find(p=>p.active&&!p.P.dna.child&&p.detachForSocial);api.camera().position.copy(actor.M.S.pos);api.camera().position.y+=1.7;api.guide.talkTo(actor);
@@ -75,6 +76,36 @@ const out = process.env.BARD_CONVERSATION_OUT || '/tmp/bard-conversational-qa';
  });assert.deepEqual(evidence.map(q=>q.cursor),[0,0,0,1,1,2,3]);assert.equal(evidence.at(-1).status,'complete');
  const completionMemory=await page.evaluate(()=>{const g=L99Island.guide;g.update(1.1);g.update(1.1);return Crysis.social().state.get(qa.id).memories.filter(m=>m.content.includes('completed')&&m.content.includes(qa.quest.title));});assert.equal(completionMemory.length,1);
  const paidCredits=await page.evaluate(()=>Crysis.arms().credits);assert.equal(paidCredits-startingCredits,offered.reward.credits);
+ console.log('Quest evidence and payment verified');
+ let sharedMemory=null;
+ if(process.env.BARD_ROOMS_URL){
+  assert.ok(await page.evaluate(()=>Crysis.rooms.invite()));
+  await page.getByRole('button',{name:'Done',exact:true}).click();
+  await page.waitForFunction(()=>Crysis.rooms().status==='on' && Crysis.rooms().reputation.supported,null,{timeout:15000});console.log('Joined reputation room');
+  await page.evaluate(()=>{const api=L99Island;api.world().player.state.pos.copy(api.camera().position);api.guide.talkTo(qa.actor);});
+  await page.waitForFunction(()=>Crysis.rooms().reputation.records>0,null,{timeout:15000});console.log('Quest completion shared');
+  await page.evaluate(url=>{
+   qa.remoteMessages=[];qa.remote=new WebSocket(url.replace(/^http/,'ws')+'/rooms/'+Crysis.rooms().code+'/ws?id=driver-2222&name=Driver&seed=42');
+   qa.remote.onmessage=e=>{if(e.data!=='pong')qa.remoteMessages.push(JSON.parse(e.data));};
+  },process.env.BARD_ROOMS_URL);
+  await page.waitForFunction(()=>qa.remoteMessages.some(e=>e.t==='welcome'),null,{timeout:15000});
+  await page.evaluate(()=>{
+   const p=qa.actor.M.S.pos,at={w:'w1337',p:[p.x,p.y,p.z]};
+   qa.remote.send(JSON.stringify({t:'pose',...at,p:[p.x,p.y+1.68,p.z],a:'drive',v:'car'}));
+   qa.remote.send(JSON.stringify({t:'reputation',e:{...at,id:'incident-browser-car',kind:'vehicle-impact',actor:Crysis.rooms().you}}));
+  });
+  await page.waitForFunction(()=>Crysis.combat.perception(qa.actor).reports?.some(e=>e.kind==='vehicle-impact'),null,{timeout:15000});console.log('Remote incident received');
+  sharedMemory=await page.evaluate(async()=>{
+   L99Island.guide.talkTo(qa.actor);const before=L99Island.guide.stories.list().length;await L99Island.guide.ask('got any work');
+   return {room:Crysis.rooms(),perception:Crysis.combat.perception(qa.actor),reply:Crysis.social().state.get(qa.id).history.at(-1).content,noQuest:L99Island.guide.stories.list().length===before,remote:qa.remoteMessages};
+  });
+  assert.ok(sharedMemory.noQuest);assert.ok(sharedMemory.perception.reports.some(e=>e.actorId==='driver-2222'));
+  assert.doesNotMatch(sharedMemory.reply,/you just drove|saw you|reports about you/i);assert.match(sharedMemory.reply,/scared|frightened|happening|attacking|trouble/i);
+  assert.ok(sharedMemory.remote.flatMap(e=>e.records||[]).some(e=>e.kind==='quest-complete'));
+  await page.screenshot({path:`${out}/shared-memory.png`});
+  await page.evaluate(()=>{qa.remote.close();Crysis.rooms.leave();});
+  assert.equal(await page.evaluate(()=>Crysis.rooms().reputation.records),0);
+ }
  const residentId=await page.evaluate(()=>qa.id);
  await page.evaluate(()=>L99Island.guide.showQuests());
  await page.screenshot({path:`${out}/quests.png`});
@@ -85,7 +116,7 @@ const out = process.env.BARD_CONVERSATION_OUT || '/tmp/bard-conversational-qa';
  assert.equal(await page.evaluate(()=>Crysis.arms().credits),paidCredits);
  const restored=await page.evaluate(id=>L99Island.guide.stories.list().find(q=>q.id===id),offered.id);assert.equal(restored.status,'complete');assert.equal(restored.evidence.length,3);
  const restoredMemory=await page.evaluate(({id,title})=>{const g=L99Island.guide;g.update(1.1);g.update(1.1);return Crysis.social().state.get(id).memories.filter(m=>m.content.includes('completed')&&m.content.includes(title));},{id:residentId,title:offered.title});assert.equal(restoredMemory.length,1);assert.deepEqual(restoredMemory,completionMemory);
- assert.deepEqual(errors,[]);fs.writeFileSync(`${out}/report.json`,JSON.stringify({transport:'deterministic model-response mock; real game integration',startingCredits,paidCredits,fear,follow,scout,warn,clarification,interrupted,offered,evidence,bounds,restored,completionMemory,restoredMemory,errors},null,2));
+ assert.deepEqual(errors,[]);fs.writeFileSync(`${out}/report.json`,JSON.stringify({transport:'deterministic model-response mock; real game integration',sharedMemory,startingCredits,paidCredits,fear,follow,scout,warn,clarification,interrupted,offered,evidence,bounds,restored,completionMemory,restoredMemory,errors},null,2));
  console.log('Conversational model-response integration and real quest evidence passed',JSON.stringify({out,quest:offered.id,cursors:evidence.map(q=>q.cursor),restored:restored.status,bounds}));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

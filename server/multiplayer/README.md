@@ -1,5 +1,29 @@
 # The rooms server (multiplayer, Cloudflare free plan)
 
+## Shared reputation update
+
+The new client uses `reputation-v1` to share public crime reports and completed-work
+recognition. Deploy this Worker to activate it; the Pages client safely retains local
+behavior on an older server. Run from anywhere inside the Bard checkout:
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+git pull --ff-only
+npm --prefix server/multiplayer ci
+npm --prefix server/multiplayer run deploy
+node server/verify-workers.mjs
+```
+
+`/status.features` must include `reputation-v1`. No discovery redeploy is needed.
+See `../../docs/shared-reputation-pass.md` for bounds, authority and checks. Only public
+event kinds, location, player identity and an opaque NPC/completion key are shared;
+dialogue, quest prose and wallet contents remain private. The room stores up to 96 facts,
+16 per actor, and restores them on reconnect. This is not a globally persistent economy.
+
+`npm run test:integration` runs the production Worker in workerd through Miniflare,
+including real WebSocket clients. `node test/conversation.test.mjs` also needs Playwright
+and Chromium and exercises the actual game dialogue against that Worker.
+
 `server/multiplayer` is a second small Cloudflare Worker, `l99-rooms`. It lets friends play
 together. The host taps **Invite friends** and gets a six-letter room code and a link
 (`https://level99bard.com/?room=CODE`). Friends who open the link land where the host is, and
