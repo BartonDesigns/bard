@@ -1,0 +1,18 @@
+{
+  "method": "Production loading UI and faceplate entry, Chromium keyboard/mouse, emulated touch and responsive viewport checks; not native Safari.",
+  "checks": [
+    "desktop: guarded load, story navigation, focus, readiness, input restoration",
+    "phone: guarded load, story navigation, focus, readiness, input restoration",
+    "small-phone: guarded load, story navigation, focus, readiness, input restoration",
+    "landscape: guarded load, story navigation, focus, readiness, input restoration",
+    "short-landscape: guarded load, story navigation, focus, readiness, input restoration",
+    "failed task retries and cannot enable entry early",
+    "late completion after Back cannot reopen the screen",
+    "reduced motion disables automatic scene movement and progress animation",
+    "image failures never block readiness or entry",
+    "production faceplate import failure reaches the cinematic recovery screen",
+    "real bundled Moon world renders before readiness; input waits for entry and resumes afterwards"
+  ],
+  "errors": [],
+  "passed": true
+}

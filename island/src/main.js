@@ -2,6 +2,7 @@
 // third world beside the caves and space flight, sharing the faceplate's
 // music, keyboard, play surfaces and Journey transfers.
 
+import '../../loading-screen.js';
 import { createBiomes } from './planet/biomes.js';
 import { scrollable } from './ui/scroll.js';
 import { planetProfile } from './planet/profile.js';
@@ -297,8 +298,8 @@ function buildDom() {
 	// (the hint rides on top of the prompts, so it never covers one)
 	const hint = css(document.createElement('div'), 'padding:8px 14px;border-radius:12px;background:rgba(8,20,26,.5);color:#eafaf6;font:13px system-ui;pointer-events:none;transition:opacity .6s;text-align:center;white-space:pre-line;');
 	hint.dataset.hud = 'prompt 99';
-	const loading = css(document.createElement('div'), 'position:absolute;inset:0;z-index:30;display:flex;white-space:pre-line;text-align:center;padding:24px;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,#10333a,#050b10);color:#d9f4ee;font:15px system-ui;letter-spacing:.04em;');
-	loading.textContent = 'Raising the island…';
+	const loading = document.createElement('div');
+	loading.hidden = true; // Kept for integrations; the shared loading screen owns presentation.
 	// (beside the rail, stopping short of the thumb buttons, as the places and games menus do)
 	const panel = css(document.createElement('div'), 'position:absolute;right:calc(var(--l99-menu-r, 64px) + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));width:min(300px,78vw);box-sizing:border-box;padding:14px;border-radius:14px;background:rgba(8,20,26,.82);border:1px solid rgba(255,255,255,.18);color:#e6f6f2;font:13px system-ui;display:none;max-height:calc(100% - 64px - var(--l99-low, 88px) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;touch-action:pan-y;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5;');
 	const set = (k, v) => { if (mount.style.getPropertyValue(k) !== v) mount.style.setProperty(k, v); };
@@ -569,7 +570,7 @@ export function createIslandWorld() {
 	const autoMusic = createAutoMusic({ world: () => world, camera, shared, drive, arcade, mount: dom.mount, active: () => running && visible });
 	HOOKS.autoMusic = autoMusic;
 	// explore: a hands-free cruise filmed to the auto music (O, explore.js)
-	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
 	guideApi.people = people;
@@ -714,7 +715,7 @@ export function createIslandWorld() {
 	// your gear, shops and trading with friends (ui/gear.js)
 	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
-	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -778,15 +779,20 @@ export function createIslandWorld() {
 	}
 
 	// the loading card over a whole arrival (api.open with a spot, lifted by share.js)
-	let arrival = null;
-	function arriving(k) { if (arrival) dom.loading.textContent = `${arrival.label}\n${Math.round(Math.min(1, k) * 100)}%`; }
+	let arrival = null, building = false, buildPromise = null;
+	function arriving(k) { if (arrival) window.L99Loading.stage(k < .3 ? 'Lighting the world' : k < .67 ? 'Finding your place' : k < .95 ? 'Preparing the surroundings' : 'Settling your arrival'); }
 	function arrived() {
 		if (!arrival) return;
 		arrival = null;
-		dom.loading.style.display = 'none';
-		dom.loading.textContent = 'Raising the island…';
+		window.L99Loading.stage('Your place is ready');
 	}
-	async function build(params) {
+	function build(params) {
+		if (buildPromise) return buildPromise;
+		building = true;
+		buildPromise = buildWorld(params).catch(error => { teardown(); throw error; }).finally(() => { building = false; buildPromise = null; });
+		return buildPromise;
+	}
+	async function buildWorld(params) {
 		const seed = (params.seed >>> 0) || 1337;
 		// Earth: the island in the Gulf of the Farallones with the real Bay Area round it.
 		// Other worlds flight lands on are their own islands, alone in their seas.
@@ -794,7 +800,7 @@ export function createIslandWorld() {
 		const body = worldBody(params);
 		if (world && sameBody(state.body, body)) return world;
 		if (world) teardown();
-		dom.loading.style.display = 'flex';
+		window.L99Loading.stage('Shaping the landscape');
 		await new Promise((r) => requestAnimationFrame(r));
 		// what kind of world: its ground, air, plants and underground (Earth's island is tropical)
 		const profile = planetProfile(earth ? 'TROPICAL' : params.biome, seed);
@@ -1015,8 +1021,9 @@ export function createIslandWorld() {
 		for (const o of [terrain, ocean, grass, turf]) o.userData.update?.(camera);
 		litter.update(camera);
 		// (shown as soon as the first few seconds of it are done; the rest is built in play)
-		await shaderWarm.all({ budget: 2500, progress: (k) => { if (arrival) arriving(k * 0.3); else dom.loading.textContent = `Raising the island… ${Math.round(k * 100)}%`; } });
-		if (!arrival) dom.loading.textContent = 'Raising the island…';
+		window.L99Loading.stage('Lighting the world');
+		await shaderWarm.all({ budget: 2500, progress: (k) => { if (arrival) arriving(k * 0.3); } });
+		window.L99Loading.stage('Preparing the surroundings');
 		// the Bay Area streams in behind the island (on Earth); once its heights are here, one height
 		// for everything: the island's own map on the island, the real land beyond it
 		if (earth) {
@@ -1128,7 +1135,7 @@ export function createIslandWorld() {
 			const w0 = world;
 		}
 		{ const previousPush = island.extraPush; island.extraPush = (p, footY) => { previousPush?.(p, footY); picnic.push(p, footY); }; }
-		if (!arrival) dom.loading.style.display = 'none';
+		window.L99Loading.stage('Settling your arrival');
 		buildPanel();
 		return world;
 	}
@@ -1416,7 +1423,8 @@ export function createIslandWorld() {
 	function tick(now) {
 		const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
 		last = now;
-		if (!visible || !world || document.hidden || lost) { world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
+		if (building || !visible || !world || document.hidden || lost) { world?.kinetic?.silence(); world?.globe?.regional?.pause(); return; }
+		if (window.L99Loading.active() && !arrival) return;
 		// on a phone the world holds still while someone thinks of a reply: the model and
 		// the world share the GPU and the page's memory
 		if (isPhone && guide.llm?.busy?.()) return;
@@ -1430,10 +1438,11 @@ export function createIslandWorld() {
 		// Keep the flight controls alive while the orbital pass owns the render loop.
 		// This makes the same ×1/×3/×6/×9 booster available in space as on the surface.
 		updateFlightControls(W);
-		explore.steer(dt);
+		if (!window.L99Loading.active()) explore.steer(dt);
 		// driving a road carries you; otherwise you walk, swim or fly
 		// (a minigame has the screen and the camera while it runs)
-		if (arcade.active()) drive.stop();
+		if (window.L99Loading.active()) { W.player.clearInput(); drive.stop(); }
+		else if (arcade.active()) drive.stop();
 		else if (W.boardwalk?.ride(dt, time)) drive.stop();
 		else if (studio.active()) { /* in the chair: the studio holds the camera */ }
 		else if (!carjack.update(dt, time) && !drive.update(dt)) W.player.update(dt, time);
@@ -1603,9 +1612,9 @@ export function createIslandWorld() {
 		share.update(dt);
 		multiplayer.update(dt, time);
 		gear.update(dt);
-		combat.update(dt);
+		if (!window.L99Loading.active()) combat.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
-		if (visible && !arcade.active() && !W.orbit?.active()) share.keep();
+		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
 		W.contact?.update(camera, dt);
 		W.vehicles?.update(dt, time);
@@ -1830,14 +1839,17 @@ export function createIslandWorld() {
 	const worldOf = (planet) => ({ ...planet, seed: (planet.seed >>> 0) || hashString(String(planet.id || 'island')), biome: planet.type || 'tropical', earth: planet.earth === true });
 	const api = {
 		T: THREE, REALM,
-		async open(params = {}) {
+		open(params = {}) {
+			const enter = () => api.enter(params);
+			return !visible || !world ? window.L99Loading.run(enter, { exit: () => api.close() }) : enter();
+		},
+		async enter(params = {}) {
 			// on Earth the ship waits in orbit: ⇪ always has somewhere to go
 			origin = params.origin || (params.earth !== false ? EARTH_ORIGIN : null);
 			// a kept or shared spot: one loading card, with its name, until share.js has you there
 			if (params.spot) {
 				arrival = { label: params.spot.label || 'Arriving…', blind: true };
-				dom.loading.textContent = arrival.label;
-				dom.loading.style.display = 'flex';
+				window.L99Loading.stage(arrival.label);
 			}
 			// (the sky starts at the spot's hour)
 			const hours = params.spot?.hours;
@@ -1847,6 +1859,11 @@ export function createIslandWorld() {
 			if (Number.isFinite(hours) && world?.sky) world.sky.state.hours = hours;
 			if (params.earth !== false && params.at) HOOKS.goTo(params.at.lat, params.at.lon);      // globe: straight to a place
 			api.link();
+			if (!arrival) {
+				world.player.update(0, time);
+				renderer.render(scene, camera);
+				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
+			}
 			hint(isPhone ? 'Left thumb to walk, right thumb to look. ✈ to fly, ☀ for the sky.' : 'WASD to walk, drag to look, Space to jump, F to fly. ☀ for the sky.');
 			return true;
 		},
@@ -1862,11 +1879,11 @@ export function createIslandWorld() {
 		autoWalk: () => visible && running && !!drive.auto?.(),
 		world: () => world,
 		// open straight at a shared spot (?at=... from index.html); a bad link opens as usual
-		openAt: (code) => share.openAt(code),
+		openAt: (code) => window.L99Loading.run(() => share.openAt(code), { exit: () => api.close() }),
 		// ?room=CODE: join a friend's room and go to them (net/multiplayer.js)
 		joinRoom: (code) => multiplayer.join(code),
 		// back to the last place you were (after a crash or a reload); false if there is none
-		resume: () => { const c = share.resumeCode(); return c ? share.openAt(c, { resume: true }) : false; },
+		resume: () => { const c = share.resumeCode(); return c ? window.L99Loading.run(() => share.openAt(c, { resume: true }), { exit: () => api.close() }) : false; },
 		// flight's landing builds the world here first, out of sight, so Journey's own clock
 		// only covers the hand-over (a slow phone building the Bay Area outran it, and the
 		// failed passage left you on the old flight surface)

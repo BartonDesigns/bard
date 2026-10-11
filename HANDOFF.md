@@ -1,5 +1,9 @@
 # Level 99 Bard: handoff notes
 
+## Cinematic loading screens (11 October 2026)
+
+The `codex/cinematic-loading` feature branch adds screenshot-led loading before the engine download, actual preparation phases, mechanic hints, responsive layouts and guarded entry with retry/back controls. It preserves native seamless travel. Build and browser checks cover five viewport sizes, input release, recovery and a real bundled Moon-world entry; physical Safari remains unverified. See `docs/cinematic-loading.md` and `docs/verification/cinematic-loading/` for previews and provenance. This is a feature-branch review checkpoint, not a live deployment or Worker change.
+
 ## Character pose and appearance (11 October 2026)
 
 Rifle fit now combines body clearance with hand reach and a sliding support grip. Per-seed walking signatures vary cadence, asymmetry, step width and upper-body motion. Procedural coil/afro fallbacks gain shaped guide locks and rounded follower strands; all hair gains bounded secondary movement. Garments have larger fit allowances, torso drape, folds, moving hems and corrected necklines. See `docs/character-quality-pass.md` and its verification directory for research, checks and limits. This remains browser geometry/secondary motion, not film-grade hair/cloth simulation.
