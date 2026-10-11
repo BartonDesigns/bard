@@ -4,6 +4,10 @@ How the project fits together, how to work on it and ship it safely, what has be
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
 
+## Field contracts and encounter progression
+
+Opt-in Field contracts now provide an uncontested first-weapon cache, guarded supply recovery and a two-wave relay, with bearing/distance objectives, return-to-rally payment and saved progression. Role-based flankers, marksmen and suppressors have different kits and combat behavior. Caches open with detailed trays/lids, pickups lift toward the player with a first-person support-hand gesture, and layered handling/radio/reward audio uses the world bus. Cache recovery and payment have stable transaction IDs across retries; surrender clears guards. See `docs/field-contracts-pass.md` and `docs/verification/field-contracts/`. Physical-device timing, broad terrain/navigation balance and server-authoritative missions remain open.
+
 ## Fallen-fighter recovery continuation
 
 Production squad deaths now leave recoverable detailed weapons with the fighter's displayed level and rank, plus matching ammunition. Approach and look toward the weapon: E takes, Shift+E equips; touch has both actions. Atomic saved inventory transfer, duplicate protection, blocked/remote pickup rejection, longer nearby body retention and bounded drop cleanup are integrated. Gear explains acquisition. See `docs/field-recovery-pass.md` and `docs/verification/field-recovery/` for the desktop/touch production-combat fixture and remaining quality work. Unclaimed loot is local to the world visit; shared loot and native-device timing are not established.

@@ -20,6 +20,7 @@ import { createHealth, applyDamage, tickHealth } from './health.js';
 import { personShapes } from './targets.js';
 import { npcHand } from './weapon-view.js';
 import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
+import { FIELD_ROLES } from './field-contracts.js';
 
 // the bodies: people (dressed by faction), and the two that are not
 const BODY = {
@@ -148,11 +149,13 @@ export function createSquads(ctx) {
 		const generation = epoch, reservation = {};
 		pending.add(reservation);
 		try {
-			const F = FACTIONS[fid] || {}, kind = fid === 'rogue' ? 'drone' : fid === 'gloom' ? 'crawler' : 'person';
-			const B = BODY[kind];
+			const kind = fid === 'rogue' ? 'drone' : fid === 'gloom' ? 'crawler' : 'person';
+			const specialty = kind === 'person' ? FIELD_ROLES[opts.specialty] : null;
+			const F = { ...(FACTIONS[fid] || {}), ...(specialty ? { gun: specialty.gun, hp: specialty.hp, armour: specialty.armour, acc: specialty.acc } : {}) };
+			const B = { ...BODY[kind], ...(specialty || {}) };
 			const id = opts.id || `h${fid.slice(0, 2)}${nextId++}`;
 			const h = {
-				id, fid, F, kind, B, squad, crew: fid === 'fire',
+				id, fid, F, kind, B, squad, specialty, crew: fid === 'fire',
 				H: createHealth({ max: (F.hp || 100) * (opts.hpK || 1), armour: opts.armour ?? F.armour ?? 0, soak: 0.5, resist: B.resist || {} }),
 				pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
 				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
@@ -166,6 +169,8 @@ export function createSquads(ctx) {
 				if (!b) return null;
 				if (h.gone || generation !== epoch) { b.used = false; b.P.root.visible = false; b.hand?.hide(); return null; }
 				h.body = b;
+				// Pooled bodies may have served another role: always restore this spawn's kit.
+				if (b.hand && F.gun) b.hand.set(F.gun, opts.level || 2 + (b.P.dna.seed % 4 || 0), opts.tier ?? (specialty ? 1 : b.P.dna.seed % 3 || 0));
 				// Preserve the exact weapon represented by this pooled body's hand model.
 				const held = b.hand?.model?.userData;
 				h.loadout = held ? { i: F.gun, l: held.level, t: held.tier, x: 0 } : null;
@@ -188,6 +193,7 @@ export function createSquads(ctx) {
 				moral: () => ({ hostileTarget: h.alert > 0 && !h.surrendered && (h.provoked || relations.hostile(fid, PLAYER) || (h.target?.id === 'me')), selfDefence: h.shotAtPlayer > 0, surrendered: h.surrendered > 0, fleeing: h.role === 'fallback', lawTarget: !!F.lawful, unarmed: h.crew }),
 			};
 			if (h.crew) { h.T.faction = 'civ'; h.T.name = 'a firefighter'; }
+			else if (specialty) h.T.name = `${F.name} ${specialty.name.toLowerCase()}`;
 			layer.add(h.T);
 			list.push(h);
 			if (squad) squad.members.push(h);
@@ -272,7 +278,7 @@ export function createSquads(ctx) {
 		for (const m of mem) {
 			if (m.dead || m.alert || m.crew) continue;
 			m.alert = 1; m.fireT = rnd(0.7, 1.4); m.goalT = 0;
-			m.role = m.kind === 'drone' ? 'orbit' : m.kind === 'crawler' ? 'rush' : k === 0 ? 'suppress' : k % 2 ? 'flank' : 'assault';
+			m.role = m.specialty?.tactic || (m.kind === 'drone' ? 'orbit' : m.kind === 'crawler' ? 'rush' : k === 0 ? 'suppress' : k % 2 ? 'flank' : 'assault');
 			m.flankSide = k % 4 < 2 ? 1 : -1;
 			k++;
 		}
@@ -318,6 +324,7 @@ export function createSquads(ctx) {
 		else if (h.role === 'flank') { R = rnd(14, 20); ang = h.flankSide * rnd(0.9, 1.3); }
 		else if (h.role === 'assault') R = rnd(8, 13);
 		else if (h.role === 'fallback') R = rnd(32, 42);
+		if (h.specialty && h.role !== 'fallback') R = rnd(...h.specialty.distance);
 		const c = Math.cos(ang), s = Math.sin(ang);
 		let gx = at.x + (ux * c - uz * s) * R, gz = at.z + (ux * s + uz * c) * R;
 		const cover = ctx.coverNear?.(gx, gz, 9);
@@ -348,10 +355,10 @@ export function createSquads(ctx) {
 			return;
 		}
 		// a burst: each round a chance to hit, by distance, the target's movement, their role
-		if (h.burst <= 0) h.burst = Math.round(rnd(...B.burst)) * (h.role === 'suppress' ? 2 : 1);
+		if (h.burst <= 0) h.burst = Math.round(rnd(...B.burst)) * (h.role === 'suppress' && !h.specialty ? 2 : 1);
 		h.burst--; h.mag--;
 		const moving = atMe ? Math.min(1, (ctx.me().speed || 0) / 6) : 0.3;
-		const pHit = (h.F.acc || 0.4) * Math.max(0.15, 1 - dist / (B.range * 1.1)) * (1 - 0.5 * moving) * (h.role === 'suppress' ? 0.6 : 1) * (atMe ? ctx.coverK?.() ?? 1 : 1);
+		const pHit = (h.F.acc || 0.4) * Math.max(0.15, 1 - dist / (B.range * 1.1)) * (1 - 0.5 * moving) * (h.role === 'suppress' && h.specialty?.name !== 'Marksman' ? 0.6 : 1) * (atMe ? ctx.coverK?.() ?? 1 : 1);
 		const hitIt = Math.random() < pHit;
 		const to = to0.clone().add(_v.set(0, atMe ? -0.35 : 0, 0));
 		if (!hitIt) to.add(_v.set(rnd(-1, 1), rnd(-0.6, 0.8), rnd(-1, 1)).multiplyScalar(0.8 + dist * 0.03));
@@ -543,7 +550,7 @@ export function createSquads(ctx) {
 		const out = [];
 		for (let i = 0; i < n; i++) {
 			const a = (i / n) * 6.283 + Math.random(), r = opts.spread ?? (fid === 'rogue' ? 6 : 3 + Math.random() * 3);
-			out.push(spawn(fid, x + Math.cos(a) * r, z + Math.sin(a) * r, sq, { ...opts, id: opts.ids?.[i] }).then((h) => { if (h && opts.alert) alertSquad(h, ctx.eye()); return h; }));
+			out.push(spawn(fid, x + Math.cos(a) * r, z + Math.sin(a) * r, sq, { ...opts, specialty: opts.roles?.[i] || opts.specialty, id: opts.ids?.[i] }).then((h) => { if (h && opts.alert) alertSquad(h, ctx.eye()); return h; }));
 		}
 		return Promise.all(out).then(() => sq);
 	}

@@ -119,7 +119,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 		if (held) hr.append(btn('Put away', () => { arms.hold(null); draw(); }));
 		sheet.append(hr, label('Carrying'));
 		const list = Object.values(s.instances || {});
-		if (!list.length) sheet.append(note('Buy weapons at an outfitter or ranger camp, or recover equipment beside fallen armed fighters. Approach and press E, or tap Take.'));
+		if (!list.length) sheet.append(note('Start Field contracts on open Terran or arid ground for a first weapon cache. You can also buy at outfitters or recover fallen fighters’ equipment with E or Take.'));
 		else {
 			const g = el('div', 'g99-grid'); g.style.setProperty('--cols', '5'); g.style.setProperty('--slot', '56px');
 			for (const G of groupInstances(list)) {
@@ -400,6 +400,7 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 			reload: (done) => (thirdNow() ? hand.reload(done, 3) : vm.reload(done)),
 			bow: (state) => { hand.bow?.(state); vm.bow?.(state); },
 			cancel: () => { hand.cancel?.(); vm.cancel?.(); },
+			pickup: () => { hand.cancel?.(); vm.pickup(); },
 			aim: setAim,
 			equip: (id) => { preview = null; return arms.hold(id); },
 			holster: () => { preview = null; return arms.hold(null); },

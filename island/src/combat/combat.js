@@ -22,6 +22,8 @@ import { createWeaponView } from './weapon-view.js';
 import { createCivilians } from './civilians.js';
 import { createSquads } from './ai-squads.js';
 import { createLootView } from './loot-view.js';
+import { createContracts } from './contracts-view.js';
+import { createFieldAudio } from './field-audio.js';
 import { createProps } from './props.js';
 import { createCars } from './cars.js';
 import { createFireField } from './fire.js';
@@ -563,7 +565,10 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	}
 
 	// ---------- the townsfolk, the squads, cars, props ----------
-	const recovery = createLootView({ group, mount, arms, camera, eye, blocked, ground, active: () => active() && !me.ko && !P()?.flying && !P()?.locked, hint, sound, touch });
+	const fieldAudio = createFieldAudio();
+	const fieldActive = () => active() && !me.ko && !P()?.flying && !P()?.locked;
+	const recovery = createLootView({ group, mount, arms, camera, eye, blocked, ground, active: fieldActive, hint, sound: fieldAudio.play, touch,
+		onPickup: () => { cancelInput(); gear?.()?.weapon?.pickup?.(); }, onCollected: (source) => contracts.recovered(source) });
 	const ctx = {
 		layer, fx, isPhone, relations, ragdolls, people, world: W, ground, eye, blocked, call, hud,
 		me: () => ({ speed: me.speed, grounded: !!P()?.grounded || !!W()?.deep?.active?.(), vel: me.vel }),
@@ -588,6 +593,15 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	function buildingCover(x, z, r) { const b = boxesNear(x, z, r).find((q) => q.w > 2); return b ? { x: b.x, z: b.z, r: Math.max(b.w, b.d) / 2 } : null; }
 	const civilians = createCivilians(ctx);
 	const squads = createSquads(ctx);
+	const contracts = createContracts({ group, mount, arms, squads, recovery, eye, camera, ground, hint, audio: fieldAudio, store, active: fieldActive, down: () => me.ko > 0,
+		eligible: () => !W()?.deep?.active?.() && (isEarth() ? zone() === 'earth-rural' : ['TERRAN', 'ARID'].includes(shared.planet?.type || 'TERRAN')),
+		site: () => {
+			for (let k = 0; k < 8; k++) {
+				const s = spotAhead(35, 60); if (!s || boxesNear(s.x, s.z, 16).length) continue;
+				if ([[-10, 0], [10, 0], [0, -10], [0, 10]].some(([x, z]) => Math.abs(ground(s.x + x, s.z + z, s.y + 2) - s.y) > 2.5)) continue;
+				return s;
+			} return null;
+		} });
 	const props = createProps(ctx);
 	const cars = createCars(ctx);
 	group.add(squads.group, props.group, cars.group);
@@ -653,6 +667,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 			const a = P().yaw + Math.PI + rnd(-1.2, 1.2), d = rnd(dmin, dmax);
 			const x = e.x - Math.sin(a + Math.PI) * d, z = e.z - Math.cos(a + Math.PI) * d;
 			const g = ground(x, z, e.y);
+			if (!Number.isFinite(g)) continue;
 			if (!W()?.deep?.active?.() && g < 0.6) continue;
 			if (Math.abs(g - (e.y - EYE)) > 25) continue;
 			return { x, z, y: g };
@@ -671,7 +686,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		}
 		// contract hunters, for a bounty
 		if (bountyT <= 0) { bountyT = rnd(240, 400); const b = morality.reactions().bounty; if (b > 0 && settings.ambient) { const s = spotAhead(50, 80); if (s) { squads.squad('halcyon', s.x, s.z, 1 + b, { alert: true }); call('Halcyon Contractors: Target located. Collecting the bounty.', ''); } } }
-		if (!settings.ambient || directorT > 0) return;
+		if (!settings.ambient || directorT > 0 || contracts.info().mission) return;
 		directorT = rnd(70, 130);
 		if (squads.info().squads.length >= (isPhone ? 2 : 3)) return;
 		const z = zone(), s = spotAhead(z === 'deep' ? 18 : 70, z === 'deep' ? 30 : 110);
@@ -811,7 +826,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		for (const p of [...projectiles]) endProjectile(p, null);
 		for (const m of arrowPool) m.removeFromParent();
 		arrowPool.length = 0; arrowTemplate?.geometry.dispose(); arrowTemplate = null;
-		squads.clear(); recovery.clear(); props.clearTag(); cars.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); heatMap.clear(); fx.clear();
+		contracts.clear(); squads.clear(); recovery.clear(); fieldAudio.clear(); props.clearTag(); cars.clear(); civilians.clear(); fireField.clear(); fireMeta.clear(); heatMap.clear(); fx.clear();
 		for (const B0 of bosses.values()) B0.dispose();
 		bosses.clear(); projectiles.length = 0; me.crumbs.length = 0; me.lastPos = null;
 		net.out.length = 0; net.hits.clear(); remotes.clear(); hurtOnce.clear(); layer.clear();
@@ -842,7 +857,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		me.firing = Math.max(0, me.firing - dt);
 		if (me.ko > 0) { me.ko -= dt; if (me.ko <= 0) wake(); } else tickHealth(me.H, dt);
 		// your weapon
-		const wpn = active() && !me.ko ? weaponNow() : null;
+		const wpn = active() && !me.ko && !recovery.busy ? weaponNow() : null;
 		if (wpn) {
 			trigger(wpn, mouseDown || touchFire);
 			syncBow(wpn);
@@ -866,6 +881,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		civilians.update(dt, cam);
 		squads.update(dt);
 		recovery.update(dt);
+		contracts.update(dt);
 		cars.update(dt, pos);
 		stepProjectiles(dt);
 		stepFire(dt);
@@ -898,7 +914,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 
 	// ---------- for the console and the tests ----------
 	const api = {
-		update, reset, heard, group, layer, fx, morality, relations, compass, recovery,
+		update, reset, heard, group, layer, fx, morality, relations, compass, recovery, contracts, fieldAudio,
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
@@ -923,7 +939,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		compassOpen: (on = true) => compass.toggle(on),
 		// for the tests: a weapon in hand (owned and held)
 		arm: (id = 'warden-spark-carbine', l = 5, t = 2) => { const u = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(0, 20); arms?.apply?.({ id: `give-${u}`, kind: 'trade', peer: 'test', give: { credits: 0, items: [] }, get: { credits: 0, items: [{ u, i: id, l, t, x: 0 }] } }); arms?.hold?.(u); return arms?.held?.(); },
-		clear: () => { squads.clear(); recovery.clear(); props.clearTag(); for (const B0 of bosses.values()) B0.dispose(); bosses.clear(); return 'cleared'; },
+		clear: () => { contracts.clear(); squads.clear(); recovery.clear(); fieldAudio.clear(); props.clearTag(); for (const B0 of bosses.values()) B0.dispose(); bosses.clear(); return 'cleared'; },
 		lore: 'The young carry the Spark until they come of age: no harm reaches them. Bullets turn aside in a shimmer, fire and wheels part round them.',
 	};
 	return api;

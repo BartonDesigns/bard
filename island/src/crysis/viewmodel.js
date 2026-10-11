@@ -191,6 +191,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const handAt = new THREE.Matrix4(), tmp = new THREE.Matrix4(), tmp2 = new THREE.Matrix4(), F = { L: null, R: null };
 	// held: { i, l, t } or null; P: the player's state; on: first person and free to hold things
 	function update(dt, held, P, on, W, time) {
+		S.pickup = Math.max(0, (S.pickup || 0) - dt);
 		const want = held && on ? `${held.i}:${held.l}:${held.t}` : '';
 		S.want = want; S.opticsTime = time;
 		// changing what you hold: the old one lowered out, the new one raised in
@@ -210,7 +211,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const speed = Math.hypot(P.vel.x, P.vel.z), G = P.gait || { phase: 0, count: 0 };
 		const sprint = P.run && speed > 4.2 && P.grounded;
 		S.sprint += ((sprint ? 1 : 0) - S.sprint) * Math.min(1, dt * 7);
-		const aim = (S.aimHeld || S.aimTap) && ['long', 'bow'].includes(H.kind) && !S.reload && S.sprint < 0.3 && S.equip > 0.9;
+		const aim = (S.aimHeld || S.aimTap) && ['long', 'bow'].includes(H.kind) && !S.reload && !S.pickup && S.sprint < 0.3 && S.equip > 0.9;
 		S.ads += ((aim ? 1 : 0) - S.ads) * Math.min(1, dt * 9);
 		const a = ease(clamp(S.ads, 0, 1)), still = 1 - a * 0.88;
 		const L = S.last || { yaw: P.yaw, pitch: P.pitch, grounded: P.grounded, vy: 0 };
@@ -249,6 +250,9 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const sp = ease(S.sprint) * (1 - a), eq = 1 - ease(S.equip);
 		pos.x += -0.04 * sp + bx * still + lx * still; pos.y += -0.05 * sp - 0.28 * eq + (by + breath) * still + land * 0.6 + ly * still + S.air * 0.012;
 		pos.z += 0.03 * sp;
+		// A short gather gesture lowers the held item and frees the support hand.
+		const gather = Math.sin(Math.PI * Math.min(1, (S.pickup || 0) / .48));
+		pos.y -= .04 * gather; pos.z += .04 * gather;
 		// used: the recoil's kick back, rise and drift, each settling on its spring
 		const kz = kick.z.to(0, dt), kp = kick.p.to(0, dt), ky = kick.y.to(0, dt), kr = kick.r.to(0, dt);
 		// reloading: tipped toward the support hand while the cell comes out and goes back in
@@ -283,13 +287,14 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 			const carry = H.kind === 'long';
 			if (carry && (!name || name === 'carry')) { if (name !== 'carry') Mo.act('carry', 0); }
 			else if (!carry && name === 'carry') Mo.act(null);
-			Mo.grip('R', H.R ? (H.kind === 'bow' ? .68 : 1) : 0); Mo.grip('L', H.L ? 1 : 0);
+			Mo.grip('R', H.R ? (H.kind === 'bow' ? .68 : 1) : 0); Mo.grip('L', H.L ? 1 - gather * .65 : 0);
 			if (!me.P.root.visible) Mo.update(dt, time, null);
 			me.P.root.updateMatrixWorld(true);
 			for (const side of ['L', 'R']) {
 				const G2 = H[side];
 				if (!G2 || !handFrame(me.P, side, hf)) { X[side] = null; continue; }
 				handAt.multiplyMatrices(S.model.matrix, side === 'R' && H.kind === 'bow' ? S.model.userData.bow.right : G2.m);
+				if (side === 'L' && gather > 0) { handAt.elements[12] += .04 * gather; handAt.elements[13] += .18 * gather; handAt.elements[14] -= .22 * gather; }
 				if (side === 'L' && S.reload && cell) {
 					// the support hand leaves the guard, takes the cell out and brings a fresh one
 					const k = clamp(Math.min((ru - 0.14) / 0.08, (0.94 - ru) / 0.08), 0, 1);
@@ -380,7 +385,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const punch = (sp, peak) => { sp.dv += peak * sp.w * Math.E; };
 	function fire() {
 		const W = weaponOf(S.id), now = performance.now() / 1000;
-		if (!S.shown || !W || S.equip < 0.95 || S.reload || S.sprint > 0.5 || now - S.lastShot < 0.95 / W.rate) return false;
+		if (!S.shown || !W || S.equip < 0.95 || S.reload || S.pickup > 0 || S.sprint > 0.5 || now - S.lastShot < 0.95 / W.rate) return false;
 		S.lastShot = now; S.shots++;
 		S.model.userData.bow?.fire();
 		const r = W.recoil, side = r.side[S.shots % r.side.length], hold = 1 - S.ads * 0.45;
@@ -399,7 +404,7 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	}
 	function reload(done = null) {
 		const W = weaponOf(S.id);
-		if (!S.shown || !W || S.reload || S.equip < 0.95) return false;
+		if (!S.shown || !W || S.reload || S.pickup > 0 || S.equip < 0.95) return false;
 		S.reload = { t: 0, T: W.reload, done };
 		S.aimTap = false;
 		return true;
@@ -423,5 +428,5 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		if (cell) { cell.visible = true; if (cell.userData.home) cell.position.fromArray(cell.userData.home); }
 	}
 	const aimOverride = (on) => { if (!!on !== S.aimTap && weaponOf(S.id)) playCue(weaponOf(S.id).sounds.aim); S.aimTap = !!on; };
-	return { update, render, info, fire, reload, cancel, bow, muzzle, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
+	return { update, render, info, fire, reload, cancel, bow, muzzle, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
 }

@@ -38,6 +38,21 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
    page.on('console', m => { if (m.type() === 'error' && !/favicon/.test(m.text())) errors.push(device + ': ' + m.text()); });
    await page.goto('http://127.0.0.1:' + port + '/', { waitUntil: 'networkidle', timeout: 60000 });
    await page.waitForFunction(() => window.WEAPON_HAND_READY, null, { timeout: 120000 });
+   if (process.env.ARMAMENT_PICKUP === '1') {
+    for (const id of ['aurora-trail-rifle', 'mossback-scout-rifle', 'warden-spark-carbine', 'reedline-hunting-bow']) {
+     await page.evaluate(id => { weaponReview.select(id, 'first', 2, 7); }, id);
+     await page.waitForFunction(() => { weaponReview.frame(); return weaponReview.info().arms; });
+     const blocked = await page.evaluate(() => { weaponReview.vm.pickup(); for(let i=0;i<12;i++) weaponReview.frame(1/60,false); weaponReview.frame(); return {fire:weaponReview.fire(),reload:weaponReview.reload()}; });
+     assert.equal(blocked.fire,false); assert.equal(blocked.reload,false);
+     const info = await page.evaluate(() => weaponReview.info()); validate(info,device+' pickup '+id);
+     assert.ok(info.palmLmm > 60, 'support hand must visibly leave the grip');
+     if(id==='aurora-trail-rifle') await page.screenshot({path:path.join(OUT,device+'-pickup-gesture.png')});
+     await page.evaluate(() => { for(let i=0;i<40;i++) weaponReview.frame(1/60,false); weaponReview.frame(); });
+     const settled=await page.evaluate(()=>weaponReview.info()); validate(settled,device+' settled '+id); assert.ok(settled.palmLmm<3);
+     records.push({device,id,pose:'pickup',info,settled});
+    }
+    assert.equal(await page.evaluate(()=>weaponReview.failed()),0); continue;
+   }
    for (const mode of ['first', 'third']) {
     for (const id of (process.env.ARMAMENT_GUNS === '0' ? [] : ['aurora-trail-rifle', 'mossback-scout-rifle', 'warden-spark-carbine'])) {
      for (const pose of ['carry', 'aim']) {

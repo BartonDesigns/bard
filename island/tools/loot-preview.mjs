@@ -48,8 +48,14 @@ async function fallen(fid = 'ashfang') {
 window.review = {
 	fallen, frame, combat, arms,
 	state: () => ({ inventory: arms.state(), held: arms.held(), loot: combat.recovery.info(), messages, laterInteractions, render: { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }, shaderOK: renderer.info.programs.every((p) => p.diagnostics?.runnable !== false), glError: renderer.getContext().getError() }),
+	setupContracts() { if (timer) clearInterval(timer); timer = null; combat.clear(); world.island.heightAt = () => 1; floor.position.y = 1; pos.set(0, 2.68, 0); camera.rotation.set(0, 0, 0); frame(); },
+	contractState: () => ({ ...combat.contracts.info(), inventory: arms.state(), audio: combat.fieldAudio.info(), loot: combat.recovery.info() }),
+	contractMove(target = 'site', distance = 2) { const m = combat.contracts.info().mission, q = m[target]; pos.set(q.x, q.y + 1.68, q.z + distance); camera.position.copy(pos); camera.lookAt(q.x, q.y + .5, q.z); frame(); },
+	step(n = 1) { for (let i = 0; i < n; i++) frame(1 / 60, false); frame(); },
+	resolveGuards(spare = false) { for (const e of combat.contracts.info().enemies) { const t = combat.layer.get(e.id); if (!t) continue; if (spare) { t.ref.surrendered = 20; t.ref.noGun = true; } else t.onHit({ amount: 10000, type: 'ballistic', part: 'torso' }); } },
 	busy(on) { busy = on; frame(); },
 	move(dx = 0, dy = 0, dz = 0) { pos.add(new T.Vector3(dx, dy, dz)); frame(); },
 	lookAway() { camera.rotation.y += Math.PI; frame(); },
-	resume() { if (!timer) timer = setInterval(() => frame(), 16); },
+	resume(render = true) { if (!timer) timer = setInterval(() => frame(1 / 60, render), 16); },
+	pause() { if (timer) clearInterval(timer); timer = null; frame(); },
 };

@@ -1,0 +1,52 @@
+Arms: fictional catalog, player/NPC/supermarket/police acquisition, guarded theft heat, activity use, equip, idempotent persistence passed.
+✔ island/tools/arms.test.mjs (78.81606ms)
+✔ every bow tier has exactly one arrow, including stale saved magazines and view overrides (1.139257ms)
+✔ hold reaches full draw without spending ammunition; release fires only once (0.3783ms)
+✔ short taps let down; the minimum usable draw releases a partial-power arrow (0.714516ms)
+✔ cancellation never becomes an arrow release, including a queued release (0.213962ms)
+✔ a refused or throwing view spends no arrow and advances no shot/cooldown (0.262706ms)
+✔ nocking transfers one reserve arrow once after .9 seconds and allows the next draw (0.270928ms)
+✔ nocking cannot duplicate arrows through repeated reload or stale animation callbacks (0.49136ms)
+✔ the final arrow fires and an empty bow cannot draw, fire or reload without reserve (0.129335ms)
+✔ holding through nock cannot auto-fire or start an accidental draw (0.172981ms)
+✔ gun fire acceptance prevents ammunition loss and preserves its automatic cadence (0.687316ms)
+✔ view bridge distinguishes absent view from refused/undefined/throwing implementations (38.117034ms)
+✔ every weapon has a box in the catalogue that the shops sell (0.949912ms)
+✔ level and tier raise damage, accuracy, range, magazine and reload speed (1.673192ms)
+✔ semi fires once a press, auto keeps firing at its rate, burst fires its count (0.770861ms)
+✔ an empty magazine fires nothing; reload moves rounds from the reserve on time (0.399422ms)
+✔ aiming down the sights tightens the spread; moving and firing open it (0.366402ms)
+✔ health: armour soaks, the head takes more, regen after quiet, down versus dead (0.38465ms)
+✔ minors (children and teenagers) carry the Spark: no damage path reaches them (1.483926ms)
+✔ the morality table: one place, context weighs it, the ledger keeps both you and the world (1.628474ms)
+✔ surrender: the badly hurt and outnumbered may yield; machines and creatures never do (0.255846ms)
+✔ faction relations: old feuds, attacks sour, common enemies warm, time eases it back (0.729479ms)
+✔ fire spreads to neighbours within limits and never burns twice (1.713172ms)
+✔ PvP is off unless the room turns it on; a side never hurts its own; adults are all fair game (1.61848ms)
+✔ ray shapes: boxes turn with their yaw, capsules have caps (0.423999ms)
+✔ wanted: offences make stars, shots alone stop at two, out of sight it ebbs, knocked out it clears (1.12778ms)
+✔ boss machines: telegraph before every attack, phases by health, untouchable while changing, weak points (7.24589ms)
+✔ a breakable weak point can force the next phase (0.316117ms)
+✔ surrender and restraint block shots, blasts and direct remote-style hits (0.534776ms)
+✔ family food deeds are recorded by the same saved morality ledger (0.323337ms)
+✔ starter contract guarantees an uncontested first weapon; later contracts add roles, waves and ranks (1.283304ms)
+✔ travel, every wave, cache collection and return are mandatory before a reward (0.366372ms)
+✔ completion transaction retries cannot multiply credits or repair supplies (1.742756ms)
+✔ abandonment does not pay and cannot continue progression (0.218188ms)
+✔ cache transactions keep stable IDs across reacceptance and cannot grant two kits (0.903351ms)
+✔ roles have distinct real combat budgets and preferred distances (0.171789ms)
+✔ ordinary drop pressure cannot evict an active contract cache (0.80291ms)
+✔ every armament rank recovers exact level, quality and matching ammunition (7.514335ms)
+✔ a death can produce only one drop and a drop can be collected only once (0.193462ms)
+✔ failed inventory transaction retains both weapon and ammunition for retry (0.196597ms)
+✔ walls, distance and facing prevent selection; taking rechecks walls and distance (0.236476ms)
+✔ no weapon drops for living, unarmed, surrendered, crew, drones or animals (0.140742ms)
+✔ loot survives body removal, is bounded, and nearby drops do not expire during inspection (0.243707ms)
+ℹ tests 43
+ℹ suites 0
+ℹ pass 43
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 135.905632
