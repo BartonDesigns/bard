@@ -48,6 +48,7 @@ const root = path.resolve(__dirname, '../..'), out = process.env.CONTRACTS_OUT |
 				await p.evaluate(() => review.step(12)); await p.screenshot({ path: path.join(out, `${phone ? 'phone' : 'desktop'}-pickup-${n}.png`) });
 				if (n === 0) {
 					const owned = Object.keys(s.inventory.instances).length;
+					await panel.locator(':scope > button').click();
 					await panel.getByRole('button', { name: 'Abandon', exact: true }).click();
 					assert.equal((await p.evaluate(() => review.contractState())).inventory.credits, credits);
 					await p.reload(); await p.waitForFunction(() => window.review); await p.keyboard.press('Shift'); await p.evaluate(() => review.setupContracts());

@@ -1,5 +1,9 @@
 # Level 99 Bard: handoff notes
 
+## Mobile controls cleanup (11 October 2026 UTC)
+
+Touch utility and travel controls now live in a scrollable labeled More controls menu. Combat actions have independent, non-overlapping positions; health/ammo sit at the bottom center. Field contracts collapse to a compact launcher or active objective; tap the mission title for payment and Abandon. Production DOM/CSS and contract UI browser checks pass at 390×664, 320×568, 844×390, 844×320 and desktop 1280×800. See `island/tools/mobile-controls-browser.cjs` and `docs/verification/mobile-controls/`. These are Chromium touch-emulation layout checks, not a physical Safari gameplay run.
+
 ## Sunken terrain loading repair (11 October 2026 UTC)
 
 Road grading could cache the temporary -60 m survey loading height, leaving roads deep below buildings after the real terrain arrived. Grading now waits for Bay survey readiness, resets on terrain reload, and uses per-world profile caches. The forced loading-order GPU comparison produces a vertical trench before and removes it after, using real SF heights. Full and touch-lite checks, 19 regressions and the build pass. Reload existing sessions. See `docs/terrain-loading-fix.md` and `docs/verification/terrain-loading/`; the recorded saved location and physical Safari still need confirmation.

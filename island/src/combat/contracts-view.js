@@ -42,8 +42,9 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	let mission = null, cache = null, rally = null, members = [], pending = false, waveDelay = 0, epoch = 0, unlocked = false, dropId = null, expanded = false, elapsed = 0, message = '';
 	const panel = document.createElement('section'); panel.dataset.fieldContract = '';
 	panel.setAttribute('aria-label', 'Field contract');
-	panel.style.cssText = 'display:none;position:absolute;left:14px;top:88px;width:min(280px,calc(100% - 105px));padding:10px;box-sizing:border-box;border:1px solid #6b878b;border-radius:10px;background:#102129ed;color:#e8f1f0;font:12px/1.45 system-ui;z-index:5;';
-	const title = document.createElement('strong'), text = document.createElement('div'), buttons = document.createElement('div');
+	panel.style.cssText = 'display:none;position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));width:min(260px,calc(100% - 86px));max-height:calc(100% - 180px);overflow:auto;touch-action:pan-y;padding:10px;box-sizing:border-box;border:1px solid #6b878b;border-radius:10px;background:#102129ed;color:#e8f1f0;font:12px/1.45 system-ui;z-index:5;';
+	const title = document.createElement('button'), text = document.createElement('div'), buttons = document.createElement('div');
+	title.type = 'button'; title.style.cssText = 'border:0;background:none;color:inherit;font:600 12px system-ui;text-align:left;padding:0;min-height:32px;width:100%;cursor:pointer'; title.onclick = () => { expanded = !expanded; render(); };
 	text.style.cssText = 'margin:5px 0;white-space:pre-line'; buttons.style.cssText = 'display:flex;gap:6px';
 	const make = (label, action) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'min-height:40px;flex:1;border:1px solid #638a93;border-radius:6px;background:#23424b;color:#fff;cursor:pointer;font:600 12px system-ui;touch-action:manipulation'; b.onclick = action; buttons.append(b); return b; };
 	const accept = make('Field contracts', () => { if (!active()) return; if (!expanded) { expanded = true; render(); } else start(); });
@@ -64,7 +65,7 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 		mission = createFieldContract({ id, completed, site: at, rally: { x: p.x, y: ground(p.x, p.z, p.y), z: p.z } });
 		cache = cacheModel(mission.def.tier); cache.root.position.set(at.x, at.y, at.z); group.add(cache.root);
 		rally = new T.Mesh(new T.RingGeometry(1.2, 1.35, 64), new T.MeshBasicMaterial({ color: 0x78dbb2, side: T.DoubleSide, transparent: true, opacity: .8 })); rally.rotation.x = -Math.PI / 2; rally.position.set(p.x, mission.rally.y + .06, p.z); group.add(rally); rally.visible = false;
-		message = ''; expanded = true; audio.play('accept'); hint(`${mission.def.name}: follow the contract bearing to the supply cache.`, 4000, 1); render(); return true;
+		message = ''; expanded = false; audio.play('accept'); hint(`${mission.def.name}: follow the contract bearing to the supply cache.`, 4000, 1); render(); return true;
 	}
 	function spawnWave() {
 		if (!mission || pending || waveDelay > 0) return;
@@ -90,17 +91,19 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	function bearing(a) { const f = camera.getWorldDirection(new T.Vector3()), dx = a.x - eye().x, dz = a.z - eye().z; const angle = Math.atan2(f.x * dz - f.z * dx, f.x * dx + f.z * dz); return Math.abs(angle) < .5 ? 'Ahead' : Math.abs(angle) > 2.5 ? 'Behind' : angle > 0 ? 'Right' : 'Left'; }
 	function render() {
 		panel.style.display = active() && (mission || eligible()) ? 'block' : 'none';
+		title.setAttribute('aria-expanded', String(expanded));
 		if (!mission) {
+			title.style.display = expanded ? '' : 'none'; text.style.display = expanded ? '' : 'none';
 			const d = contractFor(completed); title.textContent = expanded ? d.name : 'Frontier fieldwork';
 			text.textContent = expanded ? `${d.brief}\nReward: ${d.credits} credits + repair supplies.\n${message}` : message;
 			accept.textContent = expanded ? 'Accept contract' : `Field contracts · ${completed} completed`; accept.style.display = ''; cancel.style.display = expanded ? '' : 'none'; cancel.textContent = 'Close'; return;
 		}
 		const m = mission, target = m.stage === 'return' ? m.rally : m.site;
-		title.textContent = m.def.name;
+		title.style.display = text.style.display = ''; title.textContent = `${m.def.name} ${expanded ? '▴' : '▾'}`;
 		const remaining = members.filter((h) => !h.dead && !h.surrendered && !h.fleeing && !h.restrained).length;
 		const objective = { travel: 'Locate the supply cache', secure: `Secure the cache · wave ${m.wave + 1}/${m.def.waves.length}${pending ? ' · incoming' : waveDelay > 0 ? ` · ${Math.ceil(waveDelay)}s` : ` · ${remaining} guards`}`, recover: 'Open cache: approach and take its weapon', return: 'Return to the rally marker' }[m.stage];
-		text.textContent = `${objective}\n${bearing(target)} · ${Math.round(distance(target))} m\nPayment: ${m.def.credits} credits + repair supplies`;
-		accept.style.display = 'none'; cancel.style.display = ''; cancel.textContent = 'Abandon';
+		text.textContent = `${objective}\n${bearing(target)} · ${Math.round(distance(target))} m${expanded ? `\nPayment: ${m.def.credits} credits + repair supplies` : ''}`;
+		accept.style.display = 'none'; cancel.style.display = expanded ? '' : 'none'; cancel.textContent = 'Abandon';
 	}
 	function update(dt) {
 		elapsed += dt;

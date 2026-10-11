@@ -237,6 +237,17 @@ const HUD_CSS = `
 #l99-island-mount.l99-touch .l99-joy:not(.held){left:calc(16px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));transform:scale(.8);transform-origin:0 100%;opacity:.5;}
 #l99-island-mount.l99-still .l99-joy:not(.held){display:none;}
 @media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}#l99-island-mount.l99-touch .l99-big:not([hidden])~:is(.l99-side,.l99-pill){margin-bottom:10px;}}
+#l99-island-mount.l99-touch .l99-rail{display:none;top:116px;bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 210px);overflow:auto;width:220px;padding:8px;box-sizing:border-box;background:#102129f5;border:1px solid #66818a;border-radius:12px;z-index:12;pointer-events:auto;touch-action:pan-y;direction:ltr;}
+#l99-island-mount.l99-touch.l99-tools-open .l99-rail{display:flex;flex-direction:column;gap:6px;}
+#l99-island-mount.l99-touch .l99-rail>button{width:100%;min-height:44px;gap:12px;justify-content:flex-start;padding:8px 10px;box-sizing:border-box;}
+#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:500 12px/1.25 system-ui;text-align:left;}
+#l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(100px + env(safe-area-inset-bottom))!important;}
+#l99-island-mount.l99-touch>button[aria-label="Aim"]{right:calc(92px + env(safe-area-inset-right))!important;bottom:calc(100px + env(safe-area-inset-bottom))!important;}
+#l99-island-mount.l99-touch .cb-btn[aria-label="Reload"]{right:calc(100px + env(safe-area-inset-right))!important;bottom:calc(160px + env(safe-area-inset-bottom))!important;}
+#l99-island-mount.l99-touch .cb-btn[aria-label="Mode"]{right:calc(100px + env(safe-area-inset-right))!important;bottom:calc(212px + env(safe-area-inset-bottom))!important;}
+#l99-island-mount.l99-touch .cb-hp{bottom:calc(92px + env(safe-area-inset-bottom));width:100px;}
+#l99-island-mount.l99-touch .cb-ammo{bottom:calc(24px + env(safe-area-inset-bottom));right:auto;left:50%;transform:translateX(-50%);text-align:center;max-width:140px;}
+#l99-island-mount.l99-touch .cb-ammo .w{font-size:9px;}
 `;
 
 function buildDom() {
@@ -258,7 +269,15 @@ function buildDom() {
 	const land = matchMedia(HUD_LAND);
 	const groups = { rail, big, side, pill, mode, prompt: prompts, left };
 	// (the modes join the rail on a short landscape screen)
-	const home = (g) => (g === 'mode' && land.matches ? rail : groups[g]);
+	const home = (g) => (g === 'mode' && (land.matches || mount.classList.contains('l99-touch')) ? rail : groups[g]);
+	const tools = button('•••', 'More controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));z-index:13;');
+	tools.hidden = !mount.classList.contains('l99-touch');
+	tools.setAttribute('aria-expanded', 'false'); tools.setAttribute('aria-controls', 'l99-controls-menu'); rail.id = 'l99-controls-menu';
+	const closeTools = () => { mount.classList.remove('l99-tools-open'); tools.setAttribute('aria-expanded', 'false'); };
+	tools.addEventListener('click', (e) => { e.stopPropagation(); const on = mount.classList.toggle('l99-tools-open'); tools.setAttribute('aria-expanded', String(on)); });
+	rail.addEventListener('click', (e) => { if (e.target.closest('button')) closeTools(); });
+	mount.addEventListener('pointerdown', (e) => { if (!rail.contains(e.target) && !tools.contains(e.target)) closeTools(); });
+	addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTools(); });
 	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));');
 	const jump = button('⤒', 'Jump', 'width:64px;height:64px;border-radius:50%;font-size:22px;', 'big 10');
 	const gear = button('☀', 'Sky and world settings', 'right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));');
@@ -299,6 +318,7 @@ function buildDom() {
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
+		if (to === rail) el.dataset.controlLabel = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
 		tidy();
 	};
 	new MutationObserver((list) => { for (const m of list) for (const el of m.addedNodes) if (el.nodeType === 1) dock(el); }).observe(mount, { childList: true });
@@ -313,7 +333,7 @@ function buildDom() {
 		set('--l99-left', `${ring ? 16 + 88 + 8 : 24}px`);
 		// (16 px between the thumb's stack and the rail: two groups, one column)
 		set('--l99-low', `${16 + thumb.offsetHeight + 16}px`);
-		set('--l99-menu-r', `${12 + rail.offsetWidth + 8}px`);
+		set('--l99-menu-r', mount.classList.contains('l99-touch') ? '12px' : `${12 + rail.offsetWidth + 8}px`);
 	};
 	// (a frame later: sizes set inside the observer's own call would loop it)
 	const ro = new ResizeObserver(() => requestAnimationFrame(fit));
@@ -324,7 +344,7 @@ function buildDom() {
 	});
 	// driving, a game, the tattoo chair: no resting joystick
 	const still = (on) => { if (mount.classList.contains('l99-still') !== on) { mount.classList.toggle('l99-still', on); fit(); } };
-	mount.append(style, canvas, veil, joy, rail, thumb, prompts, left, back, gear, fly, boost, jump, down, act, shell, pair, launch, hint, panel, loading);
+	mount.append(style, canvas, veil, joy, rail, thumb, prompts, left, back, gear, tools, fly, boost, jump, down, act, shell, pair, launch, hint, panel, loading);
 	document.body.appendChild(mount);
 	return { mount, canvas, joy, knob, back, jump, gear, fly, boost, down, act, shell, toss, place, launch, veil, hint, loading, panel, still };
 }
