@@ -1,0 +1,27 @@
+✔ phone-safe Bay ground keeps close-up texture and color treatment (0.771812ms)
+✔ close-up treatment fades before the phone shader reaches its distant ground (0.160582ms)
+✔ highway midpoint and dateline use corridor distance instead of distance to city (0.95569ms)
+✔ procedural settlements outside the inner Bay join the same deterministic road graph (14.867342ms)
+✔ generated town road identity survives renaming and catalogue reordering (0.164828ms)
+✔ continuous streamed motorway pieces share endpoints and terrain clearance (15.785285ms)
+✔ native regional streets are joined after arriving asynchronously (3.36481ms)
+✔ open sea is not replaced by a continent-spanning road (33.485396ms)
+✔ rural source roads grade outside city regions and refresh without moving (10.65235ms)
+✔ production drive graph can leave a regional street through a bidirectional highway connector (14.026895ms)
+✔ landing halfway along a long intercity corridor streams continuous road pieces (36.669353ms)
+✔ stationary dense regions stop routing once the bounded nearby cache is complete (80.203229ms)
+✔ finite island stays hidden on repeated Pacific, San Francisco and San Jose frames (0.945635ms)
+✔ cave descent and return compose with distance without needing a band change (0.183616ms)
+✔ lunar far terrain survives distance culling but still respects cave visibility (0.113651ms)
+✔ fixed scenery is hidden away from the island while its lights and sailing boat remain (0.110356ms)
+✔ roads arriving before the survey cannot cache the loading seabed (18.6028ms)
+✔ survey reload disables old deltas and rebuilds profiles at the same position (7.457977ms)
+✔ road objects cannot carry cached grades across world lifetimes (7.137064ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 337.887754

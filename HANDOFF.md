@@ -1,5 +1,9 @@
 # Level 99 Bard: handoff notes
 
+## Sunken terrain loading repair (11 October 2026 UTC)
+
+Road grading could cache the temporary -60 m survey loading height, leaving roads deep below buildings after the real terrain arrived. Grading now waits for Bay survey readiness, resets on terrain reload, and uses per-world profile caches. The forced loading-order GPU comparison produces a vertical trench before and removes it after, using real SF heights. Full and touch-lite checks, 19 regressions and the build pass. Reload existing sessions. See `docs/terrain-loading-fix.md` and `docs/verification/terrain-loading/`; the recorded saved location and physical Safari still need confirmation.
+
 How the project fits together, how to work on it and ship it safely, what has been built so
 far, and where it is heading. Read this before changing anything; the island engine's own
 file-by-file map is in `island/README.md`.
