@@ -137,6 +137,10 @@ After deployment, `/status.features` must contain `trade-v2`, `combat-v1` and
 `combat-guard-v1`. The URL does not change. Use the two-client check below before publishing
 the matching client build.
 
+From the repository root, `node server/verify-workers.mjs` checks both production Workers
+and prints any missing capabilities. It exits nonzero if either service needs an update or
+cannot be verified. It only reads `/status`; it does not deploy or use model inference.
+
 ## Setting it up
 
 You already have a Cloudflare account and Wrangler from the discovery server (see

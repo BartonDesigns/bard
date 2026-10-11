@@ -357,6 +357,14 @@ function dress(A, P, o) {
 	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
+	// Held items use the dressed torso's actual rest bounds, not bare-skin allowances.
+	const cp = clothGeo.attributes.position, cs = clothGeo.attributes.slot;
+	const envelope = { front: cut.frontZ, back: cut.backZ, width: Math.max(cut.waistX, cut.shoulderX * .92) };
+	for (let i=0;i<cp.count;i++) if (cs.getX(i)<2 && cp.getY(i)>cut.waist-.06 && cp.getY(i)<cut.shoulder) {
+		envelope.front=Math.max(envelope.front,cp.getZ(i));envelope.back=Math.min(envelope.back,cp.getZ(i));
+		envelope.width=Math.max(envelope.width,Math.abs(cp.getX(i)));
+	}
+	P.heldTorso = envelope;
 	if (!P.clothMat) P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0);
 	else paint(P.clothMat, o);
 	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;

@@ -71,7 +71,7 @@ function character(seed, options={}) {
  const d=personDNA(seed,{age:options.age||37});
  for(const k of ['height','weight','muscle','male'])if(options[k]!==undefined)d[k]=options[k];
  if(options.outfit){d.style={...d.style,...options.outfit,acc:[]};d.styleSig=null;}
- if(options.hair){d.hair='short01';d.style.hair={cut:options.hair};}
+ if(options.hair){d.hair='short01';d.style.hair=typeof options.hair==='string'?{cut:options.hair}:options.hair;}
  P=buildPerson(assets,d);M=createMotion(P,()=>0);M.place(0,0,0,Math.PI);scene.add(P.root);me.P=P;me.M=M;
  weaponReview.P=P;weaponReview.M=M;
  return {gait:M.S.signature,outfit:P.outfit};

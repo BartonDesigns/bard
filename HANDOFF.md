@@ -1,5 +1,19 @@
 # Level 99 Bard: handoff notes
 
+## Character construction continuation and Worker verification (11 October 2026)
+
+Garments now have shaped torso panels, actual cut edges with rolled returns, cleaner fabric
+shading and finer stitches. Loose shirt weights avoid following the legs. Rifle clearance
+uses the dressed torso. Hair has four damped guide responses driven by head turns and movement,
+teleport resets, two body-collision projection passes and restrained backlighting. See
+`docs/character-tailoring-pass.md` for checks, screenshots and remaining art limits.
+
+The live discovery Worker is confirmed current for both planning modes. The live rooms
+Worker still lacks all three trade/combat capability flags. `node server/verify-workers.mjs`
+performs a read-only check; the rooms source passes 105 tests, but needs the owner's
+authenticated `wrangler deploy` from `server/multiplayer`. A local CLI update does not ship
+the Worker. No Worker deployment is claimed by this character release.
+
 ## Character pose and appearance (11 October 2026)
 
 Rifle fit now combines body clearance with hand reach and a sliding support grip. Per-seed walking signatures vary cadence, asymmetry, step width and upper-body motion. Procedural coil/afro fallbacks gain shaped guide locks and rounded follower strands; all hair gains bounded secondary movement. Garments have larger fit allowances, torso drape, folds, moving hems and corrected necklines. See `docs/character-quality-pass.md` and its verification directory for research, checks and limits. This remains browser geometry/secondary motion, not film-grade hair/cloth simulation.
