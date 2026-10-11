@@ -17,6 +17,7 @@
 
 import * as THREE from 'three';
 import { actionAt, ACTIONS } from './actions.js';
+import { gaitSignature, gaitDrift } from './gait.js';
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -97,11 +98,11 @@ const AX = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new T
 export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}) {
 	const { bones, map, rest, dna } = P;
 	const H = (n) => rest.heads[map[n]];
-	const g = dna.gait;
+	const g = dna.gait, signature = gaitSignature(dna.seed);
 	const S = {
 		pos: new THREE.Vector3(), heading: 0, want: { speed: 0, heading: 0, run: 0 },
 		speed: new Spring(0, 1.1), yaw: new Spring(0, 1.4), run: new Spring(0, 0.8),
-		phase: Math.random(), look: { target: null, yaw: new Spring(0, 2.2), pitch: new Spring(0, 2.2), eyeYaw: new Spring(0, 6), eyePitch: new Spring(0, 6), idleT: 0, idleYaw: 0, idlePitch: 0 },
+		phase: signature.phase, signature, look: { target: null, yaw: new Spring(0, 2.2), pitch: new Spring(0, 2.2), eyeYaw: new Spring(0, 6), eyePitch: new Spring(0, 6), idleT: 0, idleYaw: 0, idlePitch: 0 },
 		lean: new Spring(0, 1.5), turnLean: new Spring(0, 1.5), armL: new Spring(0, 2.5), armR: new Spring(0, 2.5), elbow: new Spring(0.3, 2),
 		hipY: new Spring(0, 3), sway: new Spring(0, 1.8), breath: Math.random() * 10, shiftT: Math.random() * 10, shiftSide: Math.random() < 0.5 ? -1 : 1, shiftNext: 2 + Math.random() * 6,
 		// the eyes' own small jumps (saccades), a few times a second
@@ -138,7 +139,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 	// off its toes, so that is where it pivots as the heel comes up)
 	const heelB = P.height * 0.03, ballF = P.height * 0.1;
 	// feet land nearly in line, each a little in from under its hip
-	const footX = hipHalf * 0.55;
+	const footX = hipHalf * 0.55 * signature.width;
 	// standing tall: the hips as high as the nearly straight legs reach
 	const hipStand = ankleH + Math.sqrt((legFull * 0.998) ** 2 - (hipHalf - footX) ** 2);
 	// each finger curls toward its palm
@@ -215,6 +216,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		return X;
 	}
 	function update(dt, t, cam) {
+		P.motionTime = t;
 		// (gone limp: the ragdoll moves the bones now, people/ragdoll.js)
 		if (P.ragdoll) return;
 		dt = Math.min(dt, 0.05);
@@ -233,8 +235,9 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		// at an easy 1.3 m/s, lengthening and quickening together as the pace picks up; the feet
 		// are down 62% of the cycle walking, much less running
 		const h = P.height;
-		const stride = h * 0.83 * Math.pow(Math.max(speed, 0.25) / 1.3, 0.42) * g.stride * (1 + run * 0.3);
-		const stanceF = 0.6 - 0.24 * run;
+		const drift = gaitDrift(signature, t);
+		const stride = h * 0.83 * Math.pow(Math.max(speed, 0.25) / 1.3, 0.42) * g.stride / (signature.cadence * (1 + drift)) * (1 + run * 0.3);
+		const stanceF = signature.stance - 0.24 * run;
 		// a foot touches down a little ahead of the hips and leaves well behind them (a step
 		// taken standing still sets it back under the hip)
 		const landZ = speed < 0.05 ? 0 : stride * stanceF * (0.36 + run * 0.1);
@@ -246,6 +249,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 			rate = need ? 1.4 : 0;
 		}
 		S.phase = (S.phase + rate * dt) % 1;
+		P.clothMat?.userData.U?.uClothMove?.value.set(t, speed, S.phase, turnRate);
 		const amp = smooth(speed / 0.9);
 		// how far the foot rolls: toes up at the heel strike, the heel peeling up before toe-off
 		const heelP = -0.24 * amp, toeP = (1.1 - 0.3 * run) * amp;
@@ -253,7 +257,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		// ---- feet: where each ankle goes (world) ----
 		const feet = [];
 		for (const leg of S.legs) {
-			const u = (S.phase + (leg.side < 0 ? 0.5 : 0)) % 1;
+			const u = (S.phase + (leg.side < 0 ? 0.5 + signature.asymmetry : 0)) % 1;
 			if (!leg.init) { nominal(leg, 0, leg.lock); leg.init = true; }
 			const ankle = new THREE.Vector3();
 			let pitch = 0, gy;
@@ -279,7 +283,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 				ankle.lerpVectors(a0, a1, k);
 				gy = groundAt(ankle.x, ankle.z);
 				// the swing clears the ground, the ankle highest early as the knee folds
-				const lift = h * (0.05 + 0.05 * run) * 6.75 * su * (1 - su) * (1 - su) * (rate && amp > 0.2 ? 1 : 0.5);
+				const lift = h * signature.lift * (0.05 + 0.05 * run) * 6.75 * su * (1 - su) * (1 - su) * (rate && amp > 0.2 ? 1 : 0.5);
 				ankle.y = Math.max(ankle.y, gy + ankleH * 0.9) + lift;
 				pitch = su < 0.45 ? toeP * (1 - smooth(su / 0.45)) : heelP * smooth((su - 0.45) / 0.55);
 				leg.lock.set(ankle.x, gy, ankle.z);
@@ -332,13 +336,13 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		S.shiftNext -= dt;
 		if (S.shiftNext <= 0) { S.shiftSide = -S.shiftSide; S.shiftNext = 3 + Math.random() * 9 * (1 - (dna.temper?.fidget ?? 0.5) * 0.6); }
 		const idleSway = (1 - amp) * (S.shiftSide * (0.016 + S.mood * 0.012) + Math.sin(S.shiftT * 0.35 + S.mood * 5) * 0.006);
-		const sway = S.sway.to(Math.sin(S.phase * TAU) * 0.02 * amp * (1 - run * 0.6) + idleSway, dt);
+		const sway = S.sway.to((Math.sin(S.phase * TAU) + drift * 2) * 0.02 * signature.sway * amp * (1 - run * 0.6) + idleSway, dt);
 		const lean = S.lean.to((-0.06 + (floorPose?.lean || 0)) * sitK + g.posture + 0.03 * amp + 0.14 * run + (dna.age > 70 ? 0.06 : 0) + (0.5 - (dna.temper?.confident ?? 0.5)) * 0.08 + (POSES[S.pose]?.lean || 0), dt);
 		const turnLean = S.turnLean.to(clamp(-turnRate * speed * 0.05, -0.12, 0.12), dt);
 		// the pelvis turns the leading hip forward (most at each heel strike) and drops a little
 		// on the side of the swinging leg
-		const pelvisYaw = -Math.cos(S.phase * TAU) * 0.07 * amp * (1 + run * 0.4);
-		const pelvisRoll = Math.cos(S.phase * TAU) * 0.035 * amp + idleSway * 1.2 + turnLean;
+		const pelvisYaw = -Math.cos(S.phase * TAU + signature.armLag) * 0.07 * signature.twist * amp * (1 + run * 0.4);
+		const pelvisRoll = Math.cos(S.phase * TAU) * 0.035 * signature.roll * amp + idleSway * 1.2 + turnLean;
 		// the hips: standing tall, a touch lower running; then no higher than the planted legs
 		// reach with the knee just soft, which makes the walk rise over each stance foot and
 		// dip as the weight passes from one to the other; running adds the flight

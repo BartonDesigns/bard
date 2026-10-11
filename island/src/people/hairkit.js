@@ -587,6 +587,7 @@ export function kitMaterial(tex, beard = false) {
 		? new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide, transparent: true, depthWrite: false })
 		: new THREE.MeshStandardMaterial({ map: tex, color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide, alphaTest: 0.4, alphaToCoverage: true });
 	const U = {
+		uHairMotion: { value: new THREE.Vector3() }, uHairTime: { value: 0 },
 		uRoot: { value: new THREE.Color() }, uTip: { value: new THREE.Color() }, uGrey: { value: new THREE.Color() }, uBeard: { value: new THREE.Vector4(0, 0, 0, 1) },
 		uClip: { value: new THREE.Vector4(99, -99, 0, 0) }, uSpec: { value: new THREE.Vector2(1, 0.5) }, uSalt: { value: new THREE.Vector4(0, 0, 0, 0) }, uHC: { value: new THREE.Vector3() }, uFace: { value: new THREE.Vector2() }, uEar: { value: new THREE.Vector4() },
 		// what the hair falls over: capsules round the neck, shoulders, back and arms (hair-collide.js)
@@ -598,9 +599,9 @@ export function kitMaterial(tex, beard = false) {
 		if (!ms && msaa) msaa = false;
 		if (!msaa && m.alphaToCoverage) m.alphaToCoverage = false;
 		Object.assign(sh.uniforms, U);
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\nattribute vec3 hairT;\nattribute vec3 hairK;\nvarying vec3 vHT;\nvarying vec3 vHK;\nvarying vec3 vRest;\nuniform vec4 uCapA[${CAPSULES}];\nuniform vec3 uCapB[${CAPSULES}];`)
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>\nattribute vec3 hairT;\nattribute vec3 hairK;\nvarying vec3 vHT;\nvarying vec3 vHK;\nvarying vec3 vRest;\nuniform vec3 uHairMotion;\nuniform float uHairTime;\nuniform vec4 uCapA[${CAPSULES}];\nuniform vec3 uCapB[${CAPSULES}];`)
 			.replace('#include <skinning_vertex>', `#include <skinning_vertex>\n${beard ? '' : PUSH}`)
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position; vHK = hairK;')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = position; vHK = hairK; float freeTip = pow(1.0 - hairK.x, 2.0); transformed += (uHairMotion + vec3(sin(uHairTime * 1.4 + hairK.z * 6.283), 0.0, cos(uHairTime * 1.1 + hairK.z * 6.283)) * 0.0015) * freeTip;')
 			.replace('#include <skinnormal_vertex>', '#include <skinnormal_vertex>\nvec3 hT = hairT;\n#ifdef USE_SKINNING\nhT = (skinMatrix * vec4(hT, 0.0)).xyz;\n#endif\nvHT = normalize(normalMatrix * hT);');
 		sh.fragmentShader = (msaa || beard ? '' : '#undef ALPHA_TO_COVERAGE\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + LIGHT)
@@ -610,6 +611,6 @@ export function kitMaterial(tex, beard = false) {
 			.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal *= faceDirection;\nnonPerturbedNormal = normal;')
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\nreflectedLight.indirectSpecular *= 0.2 * hairSpec * (1.0 - vHK.x * 0.6);\nreflectedLight.indirectDiffuse *= 1.0 - vHK.x * 0.35;');
 	};
-	m.customProgramCacheKey = () => 'crysis-hairkit-8' + (beard ? '-b' : msaa ? '' : '-c');
+	m.customProgramCacheKey = () => 'crysis-hairkit-9' + (beard ? '-b' : msaa ? '' : '-c');
 	return m;
 }

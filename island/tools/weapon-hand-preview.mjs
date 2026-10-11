@@ -15,7 +15,7 @@ const pm = new T.PMREMGenerator(renderer), env = pm.fromScene(new RoomEnvironmen
 const floor = new T.Mesh(new T.PlaneGeometry(100, 100), new T.MeshStandardMaterial({ color: 0x535d58, roughness: .9 })); floor.rotation.x = -Math.PI / 2; scene.add(floor);
 const camera = new T.PerspectiveCamera(52, innerWidth / innerHeight, .01, 100);
 const assets = await loadPeopleAssets(), dna = personDNA(9172, { age: 37 });
-const P = buildPerson(assets, dna), M = createMotion(P, () => 0); M.place(0, 0, 0, Math.PI); scene.add(P.root);
+let P = buildPerson(assets, dna), M = createMotion(P, () => 0); M.place(0, 0, 0, Math.PI); scene.add(P.root);
 P.root.traverse(o => { for (const m of [o.material].flat().filter(Boolean)) if ('envMap' in m) { m.envMap = env.texture; m.envMapIntensity = .65; } });
 const phoneTier = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 const me = { P, M }, vm = createViewmodel({ camera, avatar: { me }, mount: document.body, canvas: renderer.domElement, isPhone: phoneTier }), hand = createHand(scene, { lod: 'high' });
@@ -66,7 +66,17 @@ function sizes() {
 	}
 	holder.dispose(); return results;
 }
-window.weaponReview = { select, frame, aim, fire: () => third ? hand.fire(null) : vm.fire(), reload: () => third ? hand.reload(null, null) : vm.reload(),
+function character(seed, options={}) {
+ hand.release();scene.remove(P.root);
+ const d=personDNA(seed,{age:options.age||37});
+ for(const k of ['height','weight','muscle','male'])if(options[k]!==undefined)d[k]=options[k];
+ if(options.outfit){d.style={...d.style,...options.outfit,acc:[]};d.styleSig=null;}
+ if(options.hair){d.hair='short01';d.style.hair={cut:options.hair};}
+ P=buildPerson(assets,d);M=createMotion(P,()=>0);M.place(0,0,0,Math.PI);scene.add(P.root);me.P=P;me.M=M;
+ weaponReview.P=P;weaponReview.M=M;
+ return {gait:M.S.signature,outfit:P.outfit};
+}
+window.weaponReview = { character, select, frame, aim, fire: () => third ? hand.fire(null) : vm.fire(), reload: () => third ? hand.reload(null, null) : vm.reload(),
 	rig: () => ({ model: hand.model?.matrix.toArray(), bones: Object.fromEntries(['head', 'neck01', 'upperarm01.L', 'upperarm01.R', 'wrist.L', 'wrist.R'].map(name => [name, new T.Vector3().setFromMatrixPosition(P.bones[P.map[name]].matrixWorld).toArray()])) }),
  sizes, bowFits, bow, close, cancel: () => { vm.cancel?.(); hand.cancel?.(); },
 	info: () => third ? hand.info(P, Math.PI) : vm.info(), weapon: id => weaponOf(id),

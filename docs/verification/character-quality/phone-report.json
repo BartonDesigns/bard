@@ -1,0 +1,464 @@
+{
+  "generated": "2026-10-11T14:13:05.424Z",
+  "source": "Production createViewmodel/createHand using real MakeHuman rig",
+  "records": [
+    {
+      "name": "phone-first-aurora-trail-rifle-carry",
+      "device": "phone",
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "pose": "carry",
+      "info": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 0,
+          "name": "Field",
+          "mark": 1
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.979,
+        "upDotUp": 0.998,
+        "sight": [
+          0.206,
+          -0.05,
+          -0.378
+        ],
+        "grip": [
+          0.18,
+          -0.245,
+          -0.45
+        ],
+        "tris": 21492,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 2,
+          "active": true,
+          "aiming": false,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-first-aurora-trail-rifle-aim",
+      "device": "phone",
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "pose": "aim",
+      "info": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 0,
+          "name": "Field",
+          "mark": 1
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.9,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": [
+          0,
+          0,
+          -0.08
+        ],
+        "grip": [
+          0,
+          -0.198,
+          -0.149
+        ],
+        "tris": 21492,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 1,
+          "rearFrames": 4,
+          "active": true,
+          "aiming": true,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 2
+        }
+      }
+    },
+    {
+      "name": "phone-first-mossback-scout-rifle-carry",
+      "device": "phone",
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "pose": "carry",
+      "info": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 0,
+          "name": "Trail",
+          "mark": 1
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.984,
+        "upDotUp": 0.999,
+        "sight": [
+          0.14,
+          -0.046,
+          -0.675
+        ],
+        "grip": [
+          0.17,
+          -0.236,
+          -0.46
+        ],
+        "tris": 14060,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 1,
+          "rearFrames": 6,
+          "active": true,
+          "aiming": false,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-first-mossback-scout-rifle-aim",
+      "device": "phone",
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "pose": "aim",
+      "info": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 0,
+          "name": "Trail",
+          "mark": 1
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.5,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": [
+          0,
+          0.001,
+          -0.149
+        ],
+        "grip": [
+          0,
+          -0.186,
+          0.071
+        ],
+        "tris": 14060,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 8,
+          "active": true,
+          "aiming": true,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 2
+        }
+      }
+    },
+    {
+      "name": "phone-first-warden-spark-carbine-carry",
+      "device": "phone",
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "pose": "carry",
+      "info": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 0,
+          "name": "Patrol",
+          "mark": 1
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.973,
+        "upDotUp": 0.997,
+        "sight": [
+          0.186,
+          -0.026,
+          -0.467
+        ],
+        "grip": [
+          0.18,
+          -0.232,
+          -0.43
+        ],
+        "tris": 12948,
+        "armTris": 7724,
+        "calls": 6,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 10,
+          "active": true,
+          "aiming": false,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-first-warden-spark-carbine-aim",
+      "device": "phone",
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "pose": "aim",
+      "info": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 0,
+          "name": "Patrol",
+          "mark": 1
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.25,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": [
+          0,
+          0,
+          -0.219
+        ],
+        "grip": [
+          0,
+          -0.205,
+          -0.18
+        ],
+        "tris": 12948,
+        "armTris": 7724,
+        "calls": 6,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 12,
+          "active": true,
+          "aiming": true,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-third-aurora-trail-rifle-carry",
+      "device": "phone",
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "pose": "carry",
+      "info": {
+        "id": "aurora-trail-rifle",
+        "aiming": false,
+        "muzzle": [
+          -0.1,
+          -0.285,
+          -0.953
+        ],
+        "muzzleDotAhead": 0.953,
+        "up": 0.959,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "torsoPenetrationMm": 0,
+        "supportSlideMm": 250
+      }
+    },
+    {
+      "name": "phone-third-aurora-trail-rifle-aim",
+      "device": "phone",
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "pose": "aim",
+      "info": {
+        "id": "aurora-trail-rifle",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "torsoPenetrationMm": 0,
+        "supportSlideMm": 250
+      }
+    },
+    {
+      "name": "phone-third-mossback-scout-rifle-carry",
+      "device": "phone",
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "pose": "carry",
+      "info": {
+        "id": "mossback-scout-rifle",
+        "aiming": false,
+        "muzzle": [
+          -0.1,
+          -0.285,
+          -0.953
+        ],
+        "muzzleDotAhead": 0.953,
+        "up": 0.959,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "torsoPenetrationMm": 0,
+        "supportSlideMm": 190
+      }
+    },
+    {
+      "name": "phone-third-mossback-scout-rifle-aim",
+      "device": "phone",
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "pose": "aim",
+      "info": {
+        "id": "mossback-scout-rifle",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "torsoPenetrationMm": 0,
+        "supportSlideMm": 190
+      }
+    },
+    {
+      "name": "phone-third-warden-spark-carbine-carry",
+      "device": "phone",
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "pose": "carry",
+      "info": {
+        "id": "warden-spark-carbine",
+        "aiming": false,
+        "muzzle": [
+          -0.1,
+          -0.285,
+          -0.953
+        ],
+        "muzzleDotAhead": 0.953,
+        "up": 0.959,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "torsoPenetrationMm": 0,
+        "supportSlideMm": 50
+      }
+    },
+    {
+      "name": "phone-third-warden-spark-carbine-aim",
+      "device": "phone",
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "pose": "aim",
+      "info": {
+        "id": "warden-spark-carbine",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "torsoPenetrationMm": 0,
+        "supportSlideMm": 50
+      }
+    }
+  ],
+  "fits": [],
+  "errors": []
+}

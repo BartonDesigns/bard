@@ -280,7 +280,7 @@ vec3 garment(int s, vec3 P, vec3 N) {
 
 // the program is shared by every body; each body's material holds its own uniforms
 export function garmentMaterial(A, o, cut, number = 0) {
-	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, normalMap: A.fabric.twill, normalScale: new THREE.Vector2(0.35, 0.35), side: THREE.DoubleSide });
+	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, normalMap: A.fabric.twill, normalScale: new THREE.Vector2(0.16, 0.16), side: THREE.DoubleSide });
 	const U = {
 		uCol: { value: Array.from({ length: 16 }, () => new THREE.Color()) },
 		uPat: { value: Array.from({ length: 4 }, () => new THREE.Vector4()) },
@@ -290,23 +290,24 @@ export function garmentMaterial(A, o, cut, number = 0) {
 		uHem: { value: new THREE.Vector4(cut.waist, cut.wrist, cut.waist, cut.ankle) },
 		uNeck: { value: new THREE.Vector4(cut.neck, cut.neck, 0, 0) },
 		uEdge: { value: new THREE.Vector4(0, cut.shoulderX, 0, 0) },
+		uClothMove: { value: new THREE.Vector4() },
 		uKnit: { value: A.fabric.knit }, uCanvas: { value: A.fabric.canvas },
 	};
 	m.userData.U = U;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U);
 		sh.vertexShader = sh.vertexShader
-			.replace('#include <common>', '#include <common>\nattribute float slot;\nvarying vec3 vBind;\nvarying vec3 vBN;\nflat varying float vSlot;\nflat varying float vLimb;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vBN = normal; vSlot = mod(slot, 10.0); vLimb = floor(slot / 10.0 + 0.01);');
+			.replace('#include <common>', '#include <common>\nattribute float slot;\nattribute float drape;\nuniform vec4 uClothMove;\nvarying vec3 vBind;\nvarying vec3 vBN;\nflat varying float vSlot;\nflat varying float vLimb;')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vBN = normal; vSlot = mod(slot, 10.0); vLimb = floor(slot / 10.0 + 0.01); float flutter = sin(uClothMove.x * 2.8 + position.y * 15.0 + position.x * 8.0); transformed += normal * (1.0 + flutter) * drape * 0.002 * min(uClothMove.y, 2.0); transformed.x += sin(uClothMove.z * 6.283 + position.y * 4.0) * drape * 0.003 * min(uClothMove.y, 1.0);');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL_HEAD)
-			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN); float gPx = length(fwidth(vBind));\n\n if (s == 0 && (vLimb < 0.5 ? vBind.y < uHem.x + 0.012 : vLimb < 1.5 && vBind.y < uHem.y + 0.012)) discard;\n if (s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) - 0.004 * fr; if (vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && vBind.y > uCutA.z - 0.3) { float e = abs(vBind.x) - 0.035 - max(0.0, uCutA.y - vBind.y) * 0.12; if (e < 0.0) discard; gCollar = max(gCollar, 1.0 - smoothstep(0.003, 0.008, e)); }\n diffuseColor.rgb *= garment(s, vBind, N) * (1.0 - gCollar * 0.14); vec2 wv = weave(int(gFab + 0.5), vBind, N, gPx); diffuseColor.rgb *= 1.0 + wv.y;\n // where one layer hangs over another: a soft shadow just under its hem, no hard seam\n float hd = s == 2 && vLimb < 1.5 ? uHem.x - vBind.y : s == 0 && uEdge.w > 0.5 ? uEdge.x - vBind.y : -1.0; if (hd >= 0.0) diffuseColor.rgb *= 1.0 - 0.2 * (1.0 - smoothstep(0.0, 0.04, hd)); gRough = clamp(gRough - wv.y * 0.5, 0.2, 1.0); gWeave = wv.x; }')
+			.replace('#include <color_fragment>', '#include <color_fragment>\n{ int s = int(vSlot + 0.5); vec3 N = normalize(vBN); float gPx = length(fwidth(vBind));\n\n if (s == 0 && (vLimb < 0.5 ? vBind.y < uHem.x + 0.012 : vLimb < 1.5 && vBind.y < uHem.y + 0.012)) discard;\n if (s == 2 && vLimb > 1.5 && uHem.w < 5.0 && vBind.y < uHem.w + 0.012) discard;\n if (s == 1 && vLimb < 0.5 && vBind.y < uEdge.x + 0.012) discard;\n if (uEdge.z > 0.5 && s == 1 && (vLimb > 0.5 || abs(vBind.x) > uEdge.y - 0.03 + max(0.0, uCutA.y - 0.07 - vBind.y) * 1.5)) discard;\n if ((s == 0 || s == 1) && vLimb < 0.5) { float fr = smoothstep(-0.04, -0.005, vBind.z); float ny = (s == 0 ? uNeck.x - uNeck.z * fr : uNeck.y) + 0.035 * smoothstep(0.0, 0.09, abs(vBind.x)) - 0.004 * fr; if (vBind.y > ny) discard; gCollar = 1.0 - smoothstep(0.004, 0.011, ny - vBind.y); }\n if (s == 1 && uPat[1].z > 0.5 && vBind.z > uMisc.y && vBind.y > uCutA.z - 0.3) { float e = abs(vBind.x) - 0.035 - max(0.0, uCutA.y - vBind.y) * 0.12; if (e < 0.0) discard; gCollar = max(gCollar, 1.0 - smoothstep(0.003, 0.008, e)); }\n diffuseColor.rgb *= garment(s, vBind, N) * (1.0 - gCollar * 0.14); vec2 wv = weave(int(gFab + 0.5), vBind, N, gPx); diffuseColor.rgb *= 1.0 + wv.y;\n // where one layer hangs over another: a soft shadow just under its hem, no hard seam\n float hd = s == 2 && vLimb < 1.5 ? uHem.x - vBind.y : s == 0 && uEdge.w > 0.5 ? uEdge.x - vBind.y : -1.0; if (hd >= 0.0) diffuseColor.rgb *= 1.0 - 0.2 * (1.0 - smoothstep(0.0, 0.04, hd)); gRough = clamp(gRough - wv.y * 0.5, 0.2, 1.0); gWeave = wv.x; }')
 			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = gRough; metalnessFactor = gMetal;')
 			.replace('vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;', 'int fb = int(gFab + 0.5);\n\tvec3 mapN = (fb == 0 || fb == 4 || fb == 7 ? texture2D( uKnit, vNormalMapUv ) : fb == 1 ? texture2D( normalMap, vNormalMapUv ) : texture2D( uCanvas, vNormalMapUv )).xyz * 2.0 - 1.0;\n\tmapN.xy *= fb == 3 || fb == 5 || fb == 6 ? 0.3 : fb == 4 ? 1.6 : 1.0;')
-			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = folds(vBind, vLimb, int(vSlot + 0.5)) * 0.0017 * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))) + gWeave * 0.00035; vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
+			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = folds(vBind, vLimb, int(vSlot + 0.5)) * 0.0008 * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))) + gWeave * 0.00035; vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
 			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n{ int fb = int(gFab + 0.5); float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0); reflectedLight.indirectDiffuse += diffuseColor.rgb * rim * (fb == 0 || fb == 4 ? 0.5 : fb == 1 ? 0.15 : fb == 3 || fb == 8 ? 0.35 : 0.25); }');
 	};
-	m.customProgramCacheKey = () => 'crysis-garment-3';
+	m.customProgramCacheKey = () => 'crysis-garment-4';
 	paint(m, o);
 	return m;
 }
@@ -345,6 +346,7 @@ export function landmarks(A, p, heads, map, height) {
 	// the skull and the torso's front and back, from the vertices the head and spine carry
 	const n = A.ids.length / 4, hb = map.head;
 	const sk = { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9, z0: 1e9, z1: -1e9 };
+	let drapeFront = -1e9, drapeBack = 1e9;
 	let backZ = 1e9, frontZ = -1e9, hipX = 0, hipZ0 = 1e9, hipZ1 = -1e9, waistX = 0;
 	const part = partOf(A);
 	for (let v = 0; v < n; v++) {
@@ -353,10 +355,12 @@ export function landmarks(A, p, heads, map, height) {
 		const x = p[v * 3], y = p[v * 3 + 1], z = p[v * 3 + 2];
 		if (sum && hw / sum > 0.85) { sk.x0 = Math.min(sk.x0, x); sk.x1 = Math.max(sk.x1, x); sk.y0 = Math.min(sk.y0, y); sk.y1 = Math.max(sk.y1, y); sk.z0 = Math.min(sk.z0, z); sk.z1 = Math.max(sk.z1, z); }
 		if (part[v] !== 0) continue;
+		if(y>cut.waist && y<cut.shoulder && Math.abs(x)<cut.shoulderX*.85){drapeFront=Math.max(drapeFront,z);drapeBack=Math.min(drapeBack,z);}
 		if (Math.abs(y - cut.chest) < 0.03 && Math.abs(x) < 0.08) { backZ = Math.min(backZ, z); frontZ = Math.max(frontZ, z); }
 		if (Math.abs(y - (cut.hip - 0.04)) < 0.03) { hipX = Math.max(hipX, Math.abs(x)); hipZ0 = Math.min(hipZ0, z); hipZ1 = Math.max(hipZ1, z); }
 		if (Math.abs(y - cut.waist) < 0.03) waistX = Math.max(waistX, Math.abs(x));
 	}
+	cut.drapeFront = Number.isFinite(drapeFront) ? drapeFront : frontZ; cut.drapeBack = Number.isFinite(drapeBack) ? drapeBack : backZ;
 	cut.skull = sk; cut.backZ = backZ; cut.frontZ = frontZ; cut.hipX = hipX; cut.hipZ = [hipZ0, hipZ1]; cut.waistX = waistX;
 	return cut;
 }
@@ -388,8 +392,9 @@ export function regions(o, cut) {
 		if (g.onepiece) return !k.arm && !k.fore && !k.thigh && c[1] < cut.chest + 0.06 - m && c[1] > cut.hip - 0.1 + m;
 		if (!sleeveOK(g.sleeves || 'short', c, k, m)) return false;
 		if (k.thigh) return hem < cut.hip - 0.05 && c[1] > hem + m;
-		const scoop = (g.kind === 'crop' || g.kind === 'tank' || g.kind === 'tee' && o.gen === 'z') && c[2] > 0.02 ? 0.045 : 0;
-		return c[1] > hem + m && c[1] < cut.neck - scoop - m && !(g.sleeves === 'none' && Math.abs(c[0]) > cut.shoulderX - 0.02 && c[1] > cut.chest);
+		const scoop = (g.kind === 'tank' ? .045 : g.kind === 'crop' ? .025 : 0) * (c[2] > 0.02 ? 1 : 0);
+		const neckline = cut.neck + (m > 0 ? -.005 : .045) + .035 * Math.min(1, Math.abs(c[0]) / .09) - scoop;
+		return c[1] > hem + m && c[1] < neckline - m && !(g.sleeves === 'none' && Math.abs(c[0]) > cut.shoulderX - 0.02 && c[1] > cut.chest);
 	};
 	const legEnd = B ? ({ long: cut.ankle + (B.fit === 'wide' || B.fit === 'baggy' ? 0.005 : 0.02), capri: cut.knee - 0.17, bermuda: cut.knee - 0.03, jorts: cut.knee - 0.04, board: cut.knee + 0.01, shorts: cut.knee + 0.1, short: cut.knee + 0.2, bike: cut.knee + 0.07, knicker: cut.knee - 0.1, skirt: B.len === 'mini' ? cut.knee + 0.18 : 1e9, brief: cut.hip - 0.06 })[B.legs || 'long'] ?? cut.ankle : 0;
 	const rise = B && (B.fit === 'wide' || B.kind === 'skirt' || B.fit === 'baggy') ? 0.05 : 0.02;
@@ -421,9 +426,9 @@ export function regions(o, cut) {
 // how far each garment stands off the skin
 export function offsets(o) {
 	const T = o.top, J = o.outer, B = o.bottom, F = o.shoes;
-	// thin cloth a few millimetres off the skin, jeans close, knits a little looser; only a
+	// Real ease in the pattern, with distinct everyday, tailored and oversized fits; only a
 	// real puffer stands well off
-	const fitOff = (g) => !g ? 0.006 : g.fit === 'tight' ? 0.0025 : g.fit === 'fitted' || g.fit === 'slim' ? 0.004 : g.fit === 'straight' ? 0.006 : g.fit === 'oversized' ? 0.015 : g.fit === 'baggy' ? 0.013 : g.fit === 'wide' ? 0.008 : 0.007;
+	const fitOff = (g) => !g ? 0.006 : g.fit === 'tight' ? 0.004 : g.fit === 'fitted' || g.fit === 'slim' ? 0.012 : g.fit === 'straight' ? 0.022 : g.fit === 'oversized' ? 0.047 : g.fit === 'baggy' ? 0.042 : g.fit === 'wide' ? 0.032 : 0.028;
 	const top = fitOff(T) + (T?.kind === 'knit' || T?.kind === 'hoodie' || T?.kind === 'sweat' ? 0.003 : 0);
 	const puffy = J && J.pat === 'quilt' && /puffer|quilted/i.test(J.kind) ? (J.kind === 'puffer' ? 0.02 : 0.01) : J?.fab === 'fleece' ? 0.004 : 0;
 	return { top, outer: J ? Math.max(top, fitOff(J)) + 0.008 + puffy : 0, bottom: fitOff(B), shoes: F?.kind === 'chunky' ? 0.02 : F?.kind === 'boot' ? 0.014 : F?.kind === 'sandal' ? 0.004 : 0.012 };
@@ -504,6 +509,23 @@ export function clothGeometry(A, p, o, cut, R) {
 		}
 		if (s === 3 && o.shoes?.kind === 'chunky' && y < 0.04) k += 0.012;
 		if (s === 3 && y > cut.ankle + 0.02) k = 0.003;
+  const garment=[o.top,o.outer,o.bottom,o.shoes][s], limb=Math.floor(SL[i]/10);
+  if(s<3 && garment?.fit!=='tight') {
+   const x=P.getX(i), z=P.getZ(i), a=Math.atan2(x,z-(cut.frontZ+cut.backZ)/2);
+   const hem=s===0?R.topHem:s===1?R.outHem:R.legEnd;
+   const nearHem=Math.exp(-Math.pow((y-hem-.035)/.065,2));
+   const compression=s===2?Math.exp(-Math.pow((y-cut.knee)/.09,2)):limb===1?Math.exp(-Math.pow((y-cut.elbow)/.07,2)):Math.exp(-Math.pow((y-cut.waist)/.09,2));
+   k += (.5+.5*Math.sin(y*72+a*3.2))*compression*.008 + (1+Math.sin(a*9+y*4))*.004*nearHem;
+   if(s<2 && limb===0) {
+    const shoulder=Math.max(0,Math.min(1,(cut.neck-y)/.12));
+    k *= .25+.75*shoulder;
+    if(!garment.tuck && y<cut.chest && y>hem) {
+     const zc=(cut.drapeFront+cut.drapeBack)/2, rx=Math.max(cut.waistX,cut.shoulderX*.9), rz=(cut.drapeFront-cut.drapeBack)/2;
+     const ell=Math.hypot(x/rx,(z-zc)/rz), hang=Math.min(1,(cut.shoulder-.04-y)/.12);
+     if(ell>0 && ell<1) k+=Math.min(.1,(1-ell)*Math.max(rx,rz))*hang;
+    }
+   }
+  }
 		K[i] = k;
 	}
 	// the offsets smoothed over the neighbours (a few passes): no steps where one allowance
@@ -532,6 +554,12 @@ export function clothGeometry(A, p, o, cut, R) {
 	acc.clear();
 	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]) || [0, 0, 0]; a[0] += n.getX(i); a[1] += n.getY(i); a[2] += n.getZ(i); acc.set(src[i], a); }
 	for (let i = 0; i < src.length; i++) { if (src[i] < 0) continue; const a = acc.get(src[i]), l = Math.hypot(...a) || 1; n.setXYZ(i, a[0] / l, a[1] / l, a[2] / l); }
+ const drape=new Float32Array(P.count);
+ for(let i=0;i<P.count;i++) {
+  const s=SL[i]%10, garment=[o.top,o.outer,o.bottom,o.shoes][s], y=P.getY(i);
+  if(s<3 && garment?.fit!=='tight') { const hem=s===0?R.topHem:s===1?R.outHem:R.legEnd; drape[i]=Math.max(0,1-Math.abs(y-hem)/.22)*(garment?.tuck ? .5 : 1); }
+ }
+ g.setAttribute('drape',new THREE.BufferAttribute(drape,1));
 	g.computeBoundingSphere();
 	return g;
 }

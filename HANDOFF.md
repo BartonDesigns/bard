@@ -1,5 +1,9 @@
 # Level 99 Bard: handoff notes
 
+## Character pose and appearance (11 October 2026)
+
+Rifle fit now combines body clearance with hand reach and a sliding support grip. Per-seed walking signatures vary cadence, asymmetry, step width and upper-body motion. Procedural coil/afro fallbacks gain shaped guide locks and rounded follower strands; all hair gains bounded secondary movement. Garments have larger fit allowances, torso drape, folds, moving hems and corrected necklines. See `docs/character-quality-pass.md` and its verification directory for research, checks and limits. This remains browser geometry/secondary motion, not film-grade hair/cloth simulation.
+
 ## Mobile controls cleanup (11 October 2026 UTC)
 
 Touch utility and travel controls now live in a scrollable labeled More controls menu. Combat actions have independent, non-overlapping positions; health/ammo sit at the bottom center. Field contracts collapse to a compact launcher or active objective; tap the mission title for payment and Abandon. Production DOM/CSS and contract UI browser checks pass at 390×664, 320×568, 844×390, 844×320 and desktop 1280×800. See `island/tools/mobile-controls-browser.cjs` and `docs/verification/mobile-controls/`. These are Chromium touch-emulation layout checks, not a physical Safari gameplay run.

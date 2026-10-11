@@ -1007,6 +1007,28 @@ export function reach(P, side, Hd, pole) {
 	return true;
 }
 
+// Project the stock/receiver clear of the posed torso, including garment allowance.
+// Hand reach alone is insufficient: its shortest solution can put a rifle through a chest.
+const clearInv = new THREE.Matrix4(), clearPoint = new THREE.Vector3(), clearCenter = new THREE.Vector3();
+export function rifleTorsoClearance(P, matrix, heading, resolve = false) {
+ const c = P.cut; if (!c) return 0;
+ clearInv.copy(P.root.matrixWorld).invert();
+ clearCenter.setFromMatrixPosition(P.bones[P.map.spine01].matrixWorld).applyMatrix4(clearInv).sub(P.rest.heads[P.map.spine01]);
+ const zc = (c.frontZ + c.backZ) / 2 + clearCenter.z;
+ const rx = Math.max(c.shoulderX * .92, c.waistX) + .04, rz = (c.frontZ - c.backZ) / 2 + .04;
+ let push = 0;
+ for (let i=0;i<=16;i++) {
+  clearPoint.set(-.41 + i * .04, .085, 0).applyMatrix4(matrix).applyMatrix4(clearInv);
+  if(clearPoint.y<c.waist-.06+clearCenter.y || clearPoint.y>c.neck+.035+clearCenter.y)continue;
+  const z=(clearPoint.z-zc)/rz;
+  if(Math.abs(z)>=1)continue;
+  const edge=rx*Math.sqrt(1-z*z), x=clearPoint.x-clearCenter.x;
+  if(x>-edge && x<edge)push=Math.max(push,x+edge);
+ }
+ if(resolve && push>0){matrix.elements[12]-=Math.cos(heading)*(push+.003);matrix.elements[14]+=Math.sin(heading)*(push+.003);}
+ return push;
+}
+
 export function createHand(scene, { lod = 'high' } = {}) {
 	let key = '', model = null, gripped = null, flash = null, kick = 0, reload = null;
 	let aimHeld = false, aimBlend = 0, pitch = 0;
@@ -1014,7 +1036,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 	const contacts = { L: new THREE.Matrix4(), R: new THREE.Matrix4() };
 	const fitLocal = { L: new THREE.Matrix4(), R: new THREE.Matrix4() }, fitBounds = {};
 	const fitFrame = new THREE.Matrix4(), fitWrist = new THREE.Matrix4(), fitShoulder = new THREE.Vector3(), fitElbow = new THREE.Vector3(), fitPoint = new THREE.Vector3(), fitDelta = new THREE.Vector3(), fitOrigin = new THREE.Vector3();
-	const cellV = new THREE.Vector3();
+	const cellV = new THREE.Vector3(), supportHold = new THREE.Matrix4();
 	function set(id, level = 1, tier = 0) {
 		const k = id ? `${id}:${level}:${tier}` : '';
 		if (k === key) return;
@@ -1050,6 +1072,7 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		model.userData.bow?.step(dt);
 		P.root.updateMatrixWorld(true);
 		const side = H.side || 'R', G = H[side];
+		if (H.L) supportHold.copy(H.L.m);
 		if (!handFrame(P, side, _h)) { model.visible = false; return; }
 		// the item where the hand holds it
 		model.matrix.multiplyMatrices(_h, _inv.copy(G.m).invert());
@@ -1100,7 +1123,9 @@ export function createHand(scene, { lod = 'high' } = {}) {
 				handFrame(P, sd, fitFrame);
 				fitLocal[sd].multiply(fitFrame.invert()).multiply(wrist.matrixWorld);
 			}
-			for (let pass = 0; pass < 12; pass++) for (const sd of sides) {
+			for (let pass = 0; pass < 24; pass++) {
+			if (H.kind === 'long') rifleTorsoClearance(P, model.matrix, heading, true);
+			for (const sd of sides) {
 				fitWrist.multiplyMatrices(model.matrix, fitLocal[sd]); fitPoint.setFromMatrixPosition(fitWrist);
 				const { center, radius } = fitBounds[sd];
 				fitDelta.subVectors(fitPoint, center);
@@ -1111,14 +1136,20 @@ export function createHand(scene, { lod = 'high' } = {}) {
 					fitDelta.addScaledVector(lane, -across); fitRadius = Math.sqrt(Math.max(.001, radius * radius - across * across));
 				}
 				const distance = fitDelta.length();
+    if (H.kind === 'long' && sd === 'L' && !reload && distance > fitRadius && supportHold.elements[12] > .17) {
+     const slide=Math.min(.025, supportHold.elements[12]-.17);
+     supportHold.elements[12]-=slide; fitLocal.L.elements[12]-=slide; continue;
+    }
 				if (distance > fitRadius) { fitOrigin.setFromMatrixPosition(model.matrix).addScaledVector(fitDelta, (fitRadius - distance) / distance); model.matrix.setPosition(fitOrigin); }
 			}
+			}
+			if (H.kind === 'long') rifleTorsoClearance(P, model.matrix, heading, true);
 		}
 		if (H.kind === 'long') {
 			const f = _x.set(Math.sin(heading), 0, Math.cos(heading)), l = _y.set(Math.cos(heading), 0, -Math.sin(heading));
 			reach(P, 'R', contacts.R.multiplyMatrices(model.matrix, H.R.m), _z.copy(UP).multiplyScalar(-1).addScaledVector(l, -0.7).addScaledVector(f, -0.3));
 			if (reload && cell) { cell.updateMatrix(); _h.multiplyMatrices(model.matrix, cell.matrix).multiply(CELL_HOLD); }
-			else _h.multiplyMatrices(model.matrix, H.L.m);
+			else _h.multiplyMatrices(model.matrix, supportHold);
 			contacts.L.copy(_h);
 			reach(P, 'L', _h, _z.copy(UP).multiplyScalar(-1).addScaledVector(l, 0.5).addScaledVector(f, -0.2));
 		}
@@ -1165,8 +1196,9 @@ export function createHand(scene, { lod = 'high' } = {}) {
 		if (!model?.visible || !P) return null;
 		const H = model.userData.hold, f = new THREE.Vector3(1, 0, 0).transformDirection(model.matrix), r3 = (x) => +x.toFixed(3);
 		const out = { id: model.userData.id, aiming: aimBlend > .5, muzzle: f.toArray().map(r3), muzzleDotAhead: r3(f.x * Math.sin(heading) + f.z * Math.cos(heading)), up: r3(new THREE.Vector3(0, 1, 0).transformDirection(model.matrix).y) };
-		for (const side of ['L', 'R']) if (H[side] && handFrame(P, side, _h2)) out['palm' + side + 'mm'] = +(_o.setFromMatrixPosition(_h2).distanceTo((side === 'R' && H.kind === 'bow' ? new THREE.Vector3().setFromMatrixPosition(model.userData.bow.right) : H[side].o.clone()).applyMatrix4(model.matrix)) * 1000).toFixed(1);
+		for (const side of ['L', 'R']) if (H[side] && handFrame(P, side, _h2)) out['palm' + side + 'mm'] = +(_o.setFromMatrixPosition(_h2).distanceTo((side === 'R' && H.kind === 'bow' ? new THREE.Vector3().setFromMatrixPosition(model.userData.bow.right) : side === 'L' && H.kind === 'long' ? new THREE.Vector3().setFromMatrixPosition(supportHold) : H[side].o.clone()).applyMatrix4(model.matrix)) * 1000).toFixed(1);
 		for (const side of ['L', 'R']) if (H[side] && handFrame(P, side, _h2) && (H.kind === 'long' || H.kind === 'bow')) out['contact' + side + 'mm'] = +(_o.setFromMatrixPosition(_h2).distanceTo(new THREE.Vector3().setFromMatrixPosition(contacts[side])) * 1000).toFixed(1);
+		if (H.kind === 'long') { out.torsoPenetrationMm = +(rifleTorsoClearance(P, model.matrix, heading) * 1000).toFixed(1); out.supportSlideMm = +((H.L.m.elements[12] - supportHold.elements[12]) * 1000).toFixed(1); }
 		if (model.userData.bow) out.bow = model.userData.bow.info();
 		return out;
 	}

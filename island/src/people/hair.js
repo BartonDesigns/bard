@@ -336,6 +336,28 @@ export function buildHair(A, P, p, cutName, opts = {}) {
 			}
 		}
 	}
+ // Shaped guide locks with matching helical follower strands. Curvature belongs to
+ // geometry, so highlights and the silhouette retain the curl from every direction.
+ if(kind==='coil') {
+  const guides=low?65:100, followers=2, steps=low?22:28;
+  for(let i=0;i<guides;i++) {
+   const y=1-(i+.5)/guides*1.35, a=i*2.39996, rr=Math.sqrt(1-y*y);
+   const d=new THREE.Vector3(Math.sin(a)*rr,y,Math.cos(a)*rr), s=c.clone().addScaledVector(d,radius(d));
+   const deg=Math.abs(Math.atan2(d.x,d.z))*180/Math.PI;
+   if(s.y-eyeY<hairline(deg)+.004 || (cut.fade && deg>40 && s.y-eyeY<.065) || (opts.capY!==undefined && s.y-eyeY>opts.capY))continue;
+   const u=new THREE.Vector3().crossVectors(d,new THREE.Vector3(.13,-1,.07)).normalize(), v=new THREE.Vector3().crossVectors(d,u);
+   const len=(cut.lift+.018)*(.7+rnd()*.3), radiusCurl=.005+rnd()*.004, turns=2+rnd()*1.8, phase=rnd()*TAU;
+   for(let f=0;f<followers;f++) {
+    const path=[], spread=(f-(followers-1)/2)*.0011;
+    for(let j=0;j<=steps;j++) {
+     const t=j/steps, angle=phase+t*TAU*turns, amp=sm(0,.18,t)*(radiusCurl+spread);
+     const pt=s.clone().addScaledVector(d,.003+len*t).addScaledVector(u,Math.cos(angle)*amp).addScaledVector(v,Math.sin(angle)*amp);
+     pt.y-=t*t*.014;keepOut(pt,.0025);path.push(pt);
+    }
+    tube(path,.0008,.95,phase*5+i%19,6);
+   }
+  }
+ }
 	// the tie: a ponytail hanging from it, or a bun wound round it
 	if (cut.tie === 'pony') {
 		const n = low ? 8 : 16, L = 0.18 + rnd() * 0.12;
@@ -403,13 +425,13 @@ void RE_Direct_Hair( const in IncidentLight directLight, const in vec3 geometryP
 #define RE_Direct RE_Direct_Hair
 `;
 export function hairMaterial(root, tip) {
-	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide, alphaTest: 0.5 });
-	const U = { uRoot: { value: new THREE.Color(root) }, uTip: { value: new THREE.Color(tip) } };
+	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide, alphaTest: 0.4 });
+	const U = { uHairMotion: { value: new THREE.Vector3() }, uHairTime: { value: 0 }, uRoot: { value: new THREE.Color(root) }, uTip: { value: new THREE.Color(tip) } };
 	m.userData.U = U;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U);
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 hairT;\nattribute vec2 hairK;\nvarying vec3 vHT;\nvarying vec2 vHK;\nvarying vec2 vHUv;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHT = normalize(normalMatrix * hairT); vHK = hairK; vHUv = uv;');
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uHairMotion;\nuniform float uHairTime;\nattribute vec3 hairT;\nattribute vec2 hairK;\nvarying vec3 vHT;\nvarying vec2 vHK;\nvarying vec2 vHUv;')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHT = normalize(normalMatrix * hairT); vHK = hairK; vHUv = uv; transformed += (uHairMotion + vec3(sin(uHairTime * 1.4 + mod(hairK.y, 100.0)), 0.0, cos(uHairTime * 1.1 + mod(hairK.y, 100.0))) * 0.001) * uv.y * uv.y;');
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + LIGHT)
 			.replace('#include <color_fragment>', `#include <color_fragment>
@@ -440,6 +462,7 @@ export function hairMaterial(root, tip) {
 		// the strands, as fine shading along the lock
 		float strand = 0.5 + 0.25 * sin(vHUv.x * 57.0 + seed * 7.0) + 0.25 * sin(vHUv.x * 131.0 + seed * 3.0 + v * 4.0);
 		shade = (0.8 + 0.3 * hh(id * 1.7 + seed)) * mix(0.85 + 0.3 * strand, 1.0, far) * (0.85 + 0.15 * lock);
+		if (kind == 6) { a = 1.0; shade = 0.85 + 0.2 * hh(seed); }
 		if (kind == 4) {
 			// a patch of coils: little rings, denser in the inner shells, round-edged
 			vec2 q = vHUv * 7.0 + seed * 3.7;
@@ -448,6 +471,7 @@ export function hairMaterial(root, tip) {
 			float outer = fract(seed);
 			a = (1.0 - smoothstep(0.08, 0.16 - outer * 0.04, ring)) + (1.0 - outer) * 0.75;
 			a *= 1.0 - smoothstep(0.32, 0.5, length(vHUv - 0.5));
+			if (outer < 0.3) a = max(a, 0.9 * (1.0 - smoothstep(0.4, 0.5, length(vHUv - 0.5))));
 			shade = 0.75 + 0.5 * (1.0 - ring * 3.0);
 		}
 	}
@@ -457,6 +481,6 @@ export function hairMaterial(root, tip) {
 }`)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n{\n\t// (a round loc or braid catches the sky all over: less of it)\n\tfloat tk = floor(vHK.y / 100.0), tube = tk == 2.0 || tk == 3.0 ? 0.45 : 1.0;\n\treflectedLight.indirectSpecular *= 0.25 * vHK.x * tube;\n\treflectedLight.indirectDiffuse *= (0.6 + 0.4 * vHK.x) * mix(0.75, 1.0, tube);\n\treflectedLight.directSpecular *= tube;\n}');
 	};
-	m.customProgramCacheKey = () => 'crysis-hair-5';
+	m.customProgramCacheKey = () => 'crysis-hair-6';
 	return m;
 }

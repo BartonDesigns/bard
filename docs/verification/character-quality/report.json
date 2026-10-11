@@ -1,0 +1,1220 @@
+{
+  "poses": [
+    {
+      "seed": 9172,
+      "height": 1.5,
+      "weight": 0.3,
+      "rows": [
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        }
+      ]
+    },
+    {
+      "seed": 4217,
+      "height": 1.75,
+      "weight": 0.65,
+      "rows": [
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        }
+      ]
+    },
+    {
+      "seed": 711,
+      "height": 2,
+      "weight": 0.85,
+      "rows": [
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "aurora-trail-rifle",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 250
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "mossback-scout-rifle",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 190
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": -0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": 0,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": false,
+          "pitch": 0.45,
+          "muzzle": [
+            -0.1,
+            -0.285,
+            -0.953
+          ],
+          "muzzleDotAhead": 0.953,
+          "up": 0.959,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": -0.45,
+          "muzzle": [
+            0,
+            -0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": 0,
+          "muzzle": [
+            0,
+            0,
+            -1
+          ],
+          "muzzleDotAhead": 1,
+          "up": 1,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        },
+        {
+          "id": "warden-spark-carbine",
+          "aiming": true,
+          "pitch": 0.45,
+          "muzzle": [
+            0,
+            0.435,
+            -0.9
+          ],
+          "muzzleDotAhead": 0.9,
+          "up": 0.9,
+          "palmLmm": 0,
+          "palmRmm": 0,
+          "contactLmm": 0,
+          "contactRmm": 0,
+          "torsoPenetrationMm": 0,
+          "supportSlideMm": 50
+        }
+      ]
+    }
+  ],
+  "characters": [
+    {
+      "seed": 9172,
+      "triangles": 2072,
+      "clothVertices": 2700,
+      "signature": {
+        "cadence": 1.072852139705792,
+        "stance": 0.5743838019564281,
+        "width": 1.2095134886726737,
+        "sway": 1.1183201426640155,
+        "roll": 1.0009270609356462,
+        "twist": 0.6960318787023425,
+        "lift": 1.1008756974712015,
+        "asymmetry": -0.02083945042337291,
+        "armLag": -0.14643844276666643,
+        "phase": 0.5831111434381455,
+        "driftPhase": 1.9609780629503601,
+        "driftRate": 0.24789580933516847
+      },
+      "programs": 0,
+      "height": 1.5,
+      "hairMotion": [
+        0,
+        0,
+        0
+      ],
+      "hairTime": 0,
+      "gait": {
+        "cadence": 1.072852139705792,
+        "stance": 0.5743838019564281,
+        "width": 1.2095134886726737,
+        "sway": 1.1183201426640155,
+        "roll": 1.0009270609356462,
+        "twist": 0.6960318787023425,
+        "lift": 1.1008756974712015,
+        "asymmetry": -0.02083945042337291,
+        "armLag": -0.14643844276666643,
+        "phase": 0.5831111434381455,
+        "driftPhase": 1.9609780629503601,
+        "driftRate": 0.24789580933516847
+      },
+      "outfit": {
+        "gen": "millennial",
+        "top": {
+          "kind": "tee",
+          "col": "#a48459",
+          "fit": "regular",
+          "sleeves": "short"
+        },
+        "outer": null,
+        "bottom": {
+          "kind": "jeans",
+          "col": "#345065",
+          "fit": "regular",
+          "legs": "long"
+        },
+        "shoes": {
+          "kind": "boot",
+          "col": "#30231c"
+        },
+        "acc": [],
+        "look": "gorp",
+        "printKind": 8,
+        "hair": {
+          "cut": "coils"
+        }
+      }
+    },
+    {
+      "seed": 4217,
+      "triangles": 2148,
+      "clothVertices": 2698,
+      "signature": {
+        "cadence": 0.9289159321296029,
+        "stance": 0.5962457053153776,
+        "width": 0.9306738281436264,
+        "sway": 1.1464359179139136,
+        "roll": 1.1985500333015806,
+        "twist": 1.3659811127930879,
+        "lift": 1.1253131465055048,
+        "asymmetry": 0.01795660476665944,
+        "armLag": 0.022558453902602197,
+        "phase": 0.7063249382190406,
+        "driftPhase": 4.73662336090677,
+        "driftRate": 0.18799334067851306
+      },
+      "programs": 0,
+      "height": 1.75,
+      "hairMotion": [
+        0,
+        0,
+        0
+      ],
+      "hairTime": 0,
+      "gait": {
+        "cadence": 0.9289159321296029,
+        "stance": 0.5962457053153776,
+        "width": 0.9306738281436264,
+        "sway": 1.1464359179139136,
+        "roll": 1.1985500333015806,
+        "twist": 1.3659811127930879,
+        "lift": 1.1253131465055048,
+        "asymmetry": 0.01795660476665944,
+        "armLag": 0.022558453902602197,
+        "phase": 0.7063249382190406,
+        "driftPhase": 4.73662336090677,
+        "driftRate": 0.18799334067851306
+      },
+      "outfit": {
+        "gen": "millennial",
+        "top": {
+          "kind": "tee",
+          "col": "#a48459",
+          "fit": "oversized",
+          "sleeves": "short"
+        },
+        "outer": null,
+        "bottom": {
+          "kind": "jeans",
+          "col": "#345065",
+          "fit": "oversized",
+          "legs": "long"
+        },
+        "shoes": {
+          "kind": "boot",
+          "col": "#30231c"
+        },
+        "acc": [],
+        "look": "earthy",
+        "printKind": 7,
+        "hair": {
+          "cut": "afro"
+        }
+      }
+    },
+    {
+      "seed": 711,
+      "triangles": 5000,
+      "clothVertices": 2710,
+      "signature": {
+        "cadence": 0.8899095441983081,
+        "stance": 0.6331991573376581,
+        "width": 0.8674577452056109,
+        "sway": 1.2455311175435781,
+        "roll": 1.233390877523925,
+        "twist": 1.0526255905628203,
+        "lift": 1.0749929784797132,
+        "asymmetry": 0.020467252547387033,
+        "armLag": -0.1481280129402876,
+        "phase": 0.04625724721699953,
+        "driftPhase": 3.6473378565017938,
+        "driftRate": 0.25189104248303923
+      },
+      "programs": 0,
+      "height": 2,
+      "hairMotion": [
+        0,
+        0,
+        0
+      ],
+      "hairTime": 0,
+      "gait": {
+        "cadence": 0.8899095441983081,
+        "stance": 0.6331991573376581,
+        "width": 0.8674577452056109,
+        "sway": 1.2455311175435781,
+        "roll": 1.233390877523925,
+        "twist": 1.0526255905628203,
+        "lift": 1.0749929784797132,
+        "asymmetry": 0.020467252547387033,
+        "armLag": -0.1481280129402876,
+        "phase": 0.04625724721699953,
+        "driftPhase": 3.6473378565017938,
+        "driftRate": 0.25189104248303923
+      },
+      "outfit": {
+        "gen": "millennial",
+        "top": {
+          "kind": "tee",
+          "col": "#a48459",
+          "fit": "straight",
+          "sleeves": "short"
+        },
+        "outer": null,
+        "bottom": {
+          "kind": "jeans",
+          "col": "#345065",
+          "fit": "straight",
+          "legs": "long"
+        },
+        "shoes": {
+          "kind": "boot",
+          "col": "#30231c"
+        },
+        "acc": [],
+        "look": "earthy",
+        "printKind": 3,
+        "hair": {
+          "cut": "waves"
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "walking": {
+    "penetration": 0,
+    "contact": 0,
+    "signature": {
+      "cadence": 0.8899095441983081,
+      "stance": 0.6331991573376581,
+      "width": 0.8674577452056109,
+      "sway": 1.2455311175435781,
+      "roll": 1.233390877523925,
+      "twist": 1.0526255905628203,
+      "lift": 1.0749929784797132,
+      "asymmetry": 0.020467252547387033,
+      "armLag": -0.1481280129402876,
+      "phase": 0.04625724721699953,
+      "driftPhase": 3.6473378565017938,
+      "driftRate": 0.25189104248303923
+    }
+  },
+  "passed": true
+}
