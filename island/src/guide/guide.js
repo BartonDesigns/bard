@@ -6,6 +6,7 @@
 // the hour, put you in the air. A conversational model on your own device gives it
 // its voice; with no model it still answers from the world itself.
 
+import { awarenessContext, contextualOpening, contextualReply } from '../people/world-awareness.js';
 import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
 import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent, offlineSocialIntent } from '../people/social-intent.js';
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
@@ -201,6 +202,7 @@ export function createGuide(mount, api) {
 			.map(t => ({ ...t, id: 'place-' + norm(t.name).replace(/ /g, '-'), bodyKey, y: t.caveEntrance !== undefined ? t.y : W.player.floorAt(t.x,t.z,W.island.heightAt(t.x,t.z)), radius: t.caveEntrance !== undefined ? 6 : 14 }))
 			.filter(t => Number.isFinite(t.y) && t.y >= .3 && Math.hypot(t.x-cam.x,t.z-cam.z) < 5000)
 			.sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z)).slice(0,10);
+		places.unshift(...(W.towers?.questTargets?.() || []).map(t=>({...t,bodyKey})));
 		const residents = S.state.list(bodyKey);
 		const npcs = residents.map(r => ({ id: residentKey(r.id), name: r.persona.name, bodyKey }));
 		for (const r of residents) {
@@ -209,7 +211,7 @@ export function createGuide(mount, api) {
 		}
 		if (resident) { const actor=S.actors.all().find(p=>p.residentId===resident.id); if(actor) for(const t of places) t.scoutable=Math.hypot(t.x-actor.M.S.pos.x,t.z-actor.M.S.pos.z)<=180 && S.scoutNearby(actor,[t])?.id===t.id; }
 		const context = stories.context({ bodyKey, targets: places, npcs });
-		return { ...context, speaker: resident ? residentKey(resident.id) : null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
+		return { ...context, speaker: resident ? residentKey(resident.id) : null, workplace:resident?.workContext || null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
 	}
 	function questNotice(result) {
 		if (result?.ok === false) return result.error || 'That quest cannot be changed right now.';
@@ -227,14 +229,15 @@ export function createGuide(mount, api) {
 	function questChanged(q, announce=true) {
 		if (announce) api.hint(q.status==='complete'?`Quest complete: ${q.title}`:`Quest updated: ${q.title}`,3500);
 		if (q.status!=='complete') return;
+		if(q.reward && !q.rewardPaid) {const paid=stories.claimReward(q.id,q.bodyKey,tx=>api.arms?.apply(tx)); if(paid.ok && !paid.already) api.hint(`Quest reward: ${paid.credits} credits added to your inventory.`,4500);else if(!paid.ok && announce) api.hint(`Quest complete. ${paid.error}`,6000);}
 		const resident=api.social?.state.list(q.bodyKey).find(r=>residentKey(r.id)===q.offeredBy);
 		if (!resident || resident.storyCompletions?.includes(q.id)) return;
 		resident.storyCompletions=[...(resident.storyCompletions || []),q.id].slice(-64);
 		api.social.state.remember(resident.id,'event',`You and the traveller completed "${q.title}" together. ${q.premise}`);
 	}
 	function storySummary(q) {
-		const context = storyContext(), label = step => context.targets.find(t=>t.id===step.targetId)?.name || context.npcs.find(n=>n.id===step.npcId)?.name || 'the marked place';
-		return `${q.title}\n${q.premise}\n` + q.steps.map((s,i)=>`${i+1}. ${s.type==='talk'?'Speak to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
+		const context = storyContext(), label = step => context.targets.find(t=>t.id===step.targetId)?.name || context.npcs.find(n=>n.id===step.npcId)?.name || step.targetName || step.npcName || 'the marked place';
+		return `${q.title}\n${q.premise}\n${q.reward ? `Reward: ${q.reward.credits} inventory credits${q.rewardPaid?' · paid':q.status==='complete'?' · pending':' · on completion'}\n` : ''}` + q.steps.map((s,i)=>`${i+1}. ${s.type==='talk'?'Speak to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
 	}
 	async function offerStory(resident, text, signal) {
 		const context = storyContext(resident);
@@ -443,7 +446,7 @@ export function createGuide(mount, api) {
 		api.waypoint?.set(waypointMark());
 		const questWorld=storyContext();
 		for (const q of stories.list(questWorld.bodyKey)) if(q.status==='complete') questChanged(q,false);
-		for (const q of stories.update({bodyKey:questWorld.bodyKey,position:cam,targets:questWorld.targets})) questChanged(q);
+		for (const q of stories.update({bodyKey:questWorld.bodyKey,position:{x:cam.x,y:cam.y-1.7,z:cam.z},targets:questWorld.targets})) questChanged(q);
 		for (const r of api.social?.state.list(questWorld.bodyKey) || []) if (r.task?.status==='completed' && r.task.targetId && Number.isFinite(r.task.completedAt)) {
 			for(const q of stories.event({id:r.task.id,type:'scout',bodyKey:questWorld.bodyKey,npcId:residentKey(r.id),targetId:r.task.targetId,taskId:r.task.id,status:'completed',completedAt:r.task.completedAt})) questChanged(q);
 		}
@@ -579,6 +582,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const kind = L && (L.lu === 0 || L.lu >= 11) && (!U || U.u < 0.3) ? 'nature' : U && (U.s === 0 || U.d > 0.2) ? 'city' : 'suburb';
 		return { kind, name: w?.name || 'the Bay Area' };
 	}
+	function personContext(p=partner?.p,resident=partner?.id && api.social?.state.get(partner.id)) {
+		const completed=stories.list(api.social?.bodyKey()).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident?.id||'')).map(q=>q.title);
+		return awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+	}
+
 	function talkTo(p) {
 		if (!p) return;
 		busy?.abort();
@@ -593,7 +601,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		archive.importHistory(threadMeta(partner),rec.history);
 		resetView('npc');
 		api.people?.engage(p);
-		if (resident) for (const q of stories.event({id:'talk:'+Date.now()+':'+resident.id,type:'talk',bodyKey:resident.bodyKey,npcId:residentKey(resident.id)})) questChanged(q);
+		if (resident && !personContext(p,resident).afraid) for (const q of stories.event({id:'talk:'+Date.now()+':'+resident.id,type:'talk',bodyKey:resident.bodyKey,npcId:residentKey(resident.id)})) questChanged(q);
 		title.textContent = partner.persona.name.toUpperCase();
 		input.placeholder = `Say something to ${partner.persona.first}`;
 		show(true);
@@ -601,11 +609,13 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (resident) say((api.social.state.status().error ? 'Memory is available this session, but your browser could not save it. ' : 'Remembered in this browser. ') + 'Tell me what you need in your own words, or ask me for an adventure.', 'note');
 		if (resident && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
-		if (!rec.met) { rec.met = true; perform(personaOffline(partner.persona, 'hi', snapshot()), true); }
-		else say(`${partner.persona.first} turns back to you.`, 'note');
+		const awareness=personContext(p,resident), opening=contextualOpening(awareness);
+		rec.met=true; perform(opening,true);
+		if(resident) api.social.state.remember(resident.id,'assistant',opening);
+		if(awareness.afraid) {p.M.feel('surprise',.85);p.M.gesture('shake');}
 		const recap = resident && gatheringRecap(resident);
 		if (recap) perform(recap, true);
-		offer(p.talk?.open?.());
+		if(!awareness.afraid) offer(p.talk?.open?.());
 	}
 	// a world's own people can have more to say and to offer (planet/colony/errands.js):
 	// a line, a note, and choices that answer with the next of the same
@@ -661,6 +671,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function npcFor(pp, world) {
 		const near = (world?.near || []).slice(0, 6).map((n) => (typeof n === 'string' ? n : n?.name)).filter(Boolean);
 		const facts = [
+			...personContext().facts,
 			`has lived around here about ${pp.years} years`, `right now: ${pp.errand}, feeling ${pp.mood}`, `likes ${pp.hobby}`,
 			...(partner?.id ? [api.social.describe(api.social.state.get(partner.id)), ...(api.social.state.get(partner.id)?.memories || []).slice(-6).map(m => m.content)] : []),
 			...(pp.facts || []), ...(pp.tattoos || []).slice(0, 2).map((t) => 'a tattoo: ' + t),
@@ -669,7 +680,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			'when arranging to meet, always names one exact place and a clock time, never a vague promise',
 			'when asked to gather people, or to host a concert, party, picnic or meet-up, the game organises it for real',
 		].filter(Boolean);
-		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts, places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
+		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts:facts.slice(0,10), places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
 	}
 	async function askPerson(text) {
 		const P2 = partner, p = P2.p;
@@ -687,7 +698,9 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		// intent or the language model. This lets “could you find us a hunting rifle?”
 		// work conversationally while ordinary dialogue remains non-mutating.
 		// a world's own people answer their own errands first (planet/colony/errands.js)
-		const own = p.talk?.reply?.(text);
+		const awareness=personContext(p,resident);
+		if(awareness.afraid) reply=contextualReply(awareness,text);
+		const own = reply ? null : p.talk?.reply?.(text);
 		if (own?.say) reply = own.say;
 		const armsResult = reply ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
 		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
@@ -734,7 +747,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 		try {
 			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
-				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: resident?.memories?.slice(-6).map(m => m.content) }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
+				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: [...awareness.facts,...(resident?.memories?.slice(-3).map(m => m.content)||[])] }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
 					if (ctrl.signal.aborted || partner !== P2) return;
 					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').replace(/\[\[\s*meet[^\]]*$/i, '').trim(); scroll();
 					from = bodySync(p, t, from);
@@ -742,7 +755,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			}
 		} catch { reply = null; }
 		if (ctrl.signal.aborted || partner !== P2) { if (busy === ctrl) busy = null; return; }
-		if (!reply) { reply = personaOffline(P2.persona, text, world); from = 0; }
+		if (!reply) { reply = contextualReply(awareness,text) || personaOffline(P2.persona, text, world); from = 0; }
 		bodySync(p, reply + (/[.!?]$/.test(reply.trim()) ? '' : '.'), from);
 		if (!resident) reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
 		if (resident && !meetHandled) meetNoteText = meetingFromReply(reply, text, resident, p);

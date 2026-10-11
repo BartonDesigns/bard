@@ -4,6 +4,7 @@ import * as THREE from 'three';
 export function fitWorkplace(T, L, B) {
  const { box, cyl, chair, plant, sign, M } = B;
  const accent = M.art[(Math.floor(L.seed * 4) + (T.region === 'Japan' ? 3 : 0)) % 4];
+ const work=(role,group,side=0)=>({role,group:T.key+':'+L.n+':'+group,side,floor:L.n,program:L.program});
  const stats = { desks: 0, meetingSeats: 0, stores: 0, zones: L.zones.map(z => z.type) };
  const legs = (x, z, w, d, h) => { for (const sx of [-1,1]) for (const sz of [-1,1]) cyl(M.steel,x+sx*(w/2-.1),0,z+sz*(d/2-.1),.025,h,8); };
  const desk = (x,z,privateDesk=false) => {
@@ -16,7 +17,7 @@ export function fitWorkplace(T, L, B) {
   box(M.dark,x+.33,.77,z+.03,x+.44,.795,z+.17);
   box(accent,x-.6,.77,z+.02,x-.42,.8,z+.28);
   cyl(M.bed,x+.55,.77,z-.1,.04,.1,10);
-  chair(x,z+.86,0);stats.desks++;
+  chair(x,z+.86,0); B.seats.at(-1)[5]=work('office worker','desk:'+x+':'+z);stats.desks++;
  };
  const sofa=(x,z,w=2)=>{box(M.sofa,x-w/2,.1,z-.38,x+w/2,.46,z+.38,true);box(M.sofa,x-w/2,.46,z+.25,x+w/2,.88,z+.4);for(const s of [-1,1])box(M.sofa,x+s*w/2-.08,.35,z-.38,x+s*w/2+.08,.65,z+.38);B.seats.push([x,z,0,true,.48]);};
  const room=(r,label,opaque=false)=>{
@@ -51,7 +52,7 @@ export function fitWorkplace(T, L, B) {
    }else if(r.type==='meeting'){
     room(r,'Meeting / '+String(L.n).padStart(2,'0'));
     const tw=Math.min(w-2,5),td=Math.min(d-2.1,1.65);
-    if(tw>.8&&td>.5){box(M.oak,cx-tw/2,.73,cz-td/2,cx+tw/2,.79,cz+td/2,true);legs(cx,cz,tw,td,.73);for(let x=cx-tw/2+.45;x<cx+tw/2;x+=.85){chair(x,cz-td/2-.5,Math.PI);chair(x,cz+td/2+.5,0);stats.meetingSeats+=2;}}
+    if(tw>.8&&td>.5){box(M.oak,cx-tw/2,.73,cz-td/2,cx+tw/2,.79,cz+td/2,true);legs(cx,cz,tw,td,.73);for(let x=cx-tw/2+.45;x<cx+tw/2;x+=.85){chair(x,cz-td/2-.5,Math.PI);B.seats.at(-1)[5]=work('meeting colleague','meeting:'+cx,0);chair(x,cz+td/2+.5,0);B.seats.at(-1)[5]=work('meeting colleague','meeting:'+cx,1);stats.meetingSeats+=2;}}
     box(M.dark,cx-1.1,1.2,r.z0+.08,cx+1.1,2.45,r.z0+.15);
     box(M.screen,cx-1.04,1.26,r.z0+.15,cx+1.04,2.39,r.z0+.17);
     sign('PROJECT REVIEW',cx,1.8,r.z0+.18,1.7,.24);
@@ -90,10 +91,19 @@ export function fitWorkplace(T, L, B) {
     if(x1-x0<2.5)continue;
     const name=L.program==='Food court'?['Noodle kitchen','Bakery & coffee','Market grill','Tea counter'][j%4]:['FORM / home','PAPER / books','SIGNAL / tech','THREAD / apparel'][(j+Math.floor(L.seed*4))%4];
     stats.stores++;
+    const group='shop:'+side+':'+j;
+    // Cashier and customer face each other at a counter beside the entrance.
+    const counterX=side<0?x1:x0;
+    B.seats.push([counterX+side*.9,cz+.9,side<0?-Math.PI/2:Math.PI/2,false,0,work('vendor',group)]);
+    B.seats.push([counterX-side*1.2,cz+.9,side<0?Math.PI/2:-Math.PI/2,false,0,work('shopper',group)]);
     box(M.oak,x0,.005,z0,x1,.025,z1);
     box(M.wall,x0,0,z0,x1,Math.min(3.1,L.h-.4),z0+.1,true);
     const edge=side<0?x1:x0;
-    for(const [za,zb]of [[z0,cz-1],[cz+1,z1]])box(M.glass,edge-.04,0,za,edge+.04,2.6,zb,true);
+    for(const [za,zb]of [[z0,cz-2],[cz+2,z1]])box(M.glass,edge-.04,0,za,edge+.04,2.6,zb,true);
+    box(M.oak,edge-.26,0,cz+.3,edge+.26,.94,cz+1.5,true);
+    box(M.stone,edge-.29,.94,cz+.27,edge+.29,1.0,cz+1.53);
+    box(M.dark,edge-.16,1.0,cz+.8,edge+.16,1.07,cz+1.1);
+    box(M.screen,edge-.025,1.09,cz+.8,edge+.025,1.29,cz+1.1);
     box(accent,edge-.12,2.65,z0,edge+.12,3.1,z1);
     sign(name,edge-side*.13,2.87,cz,Math.min(4.4,depth-1),.38,side<0?Math.PI/2:-Math.PI/2);
     if(L.program==='Food court'){

@@ -9,7 +9,7 @@ import { isMinor } from '../combat/targets.js';
 
 const TALL = { suv: 1, pickup: 1, van: 1, delivery: 1, truck: 1, bus: 1 };
 
-export function createImpacts({ people, ragdolls, ward = null }) {
+export function createImpacts({ people, ragdolls, ward = null, onImpact = null }) {
 	const vel = new THREE.Vector3(), pt = new THREE.Vector3();
 	// car: { kind, x, y, z, yaw, vx, vz, mass }
 	function strike(car) {
@@ -21,7 +21,7 @@ export function createImpacts({ people, ragdolls, ward = null }) {
 		for (const p of people().pool || []) {
 			const P = p.P;
 			if (!P || P.ragdoll || !P.root.visible) continue;
-			const pos = p.M.S.pos, dx = pos.x - car.x, dz = pos.z - car.z;
+			const pos = p.M.S.pos; if(Math.abs(pos.y-car.y)>2.5) continue; const dx = pos.x - car.x, dz = pos.z - car.z;
 			if (Math.abs(dx) > 6 || Math.abs(dz) > 6) continue;
 			const lon = dx * fx + dz * fz, lat = dx * fz - dz * fx;
 			if (Math.abs(lon) > hz || Math.abs(lat) > hx) continue;
@@ -34,7 +34,7 @@ export function createImpacts({ people, ragdolls, ward = null }) {
 			vel.set(car.vx, 0, car.vz);
 			pt.set(pos.x, pos.y + (tall ? 0.95 : 0.55), pos.z);
 			ragdolls.hit(P, { point: pt.clone(), vel: vel.clone(), mass: car.mass, lift: tall ? 0.05 : 0.22 });
-			p.hit = true;
+			p.hit = true; onImpact?.(p,car);
 			n++;
 		}
 		return n;

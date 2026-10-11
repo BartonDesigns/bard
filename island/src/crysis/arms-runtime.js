@@ -146,13 +146,13 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	const C = core || { ARMS_CATALOG, SOURCE_CATALOG, TRANSACTION_KINDS, ACTIVITIES, applyInventoryTransaction, canAttemptTheft, createInventoryRepository, createInventoryState, getItem, listOffers, resolveTheftAttempt, inventorySummary };
 	const repository = C.createInventoryRepository({ storage: browserStorage(), key: storageKey, ownerId });
 	let state = repository.load();
-	let tradeLocks = new Set();
+	let tradeLocks = new Set(), inventorySavePending=false;
 	function transact(tx, options) {
 		if (tradeLocks.size && ![...tradeLocks].some((id) => tx.id === `trade:${id}` || tx.id === `trade:${id}:undo`)) return { ok: false, state, receipt: { message: 'Finish the pending trade before changing gear or spending credits.' } };
 		return C.applyInventoryTransaction(state, tx, options);
 	}
 	function lockTrades(ids = []) { tradeLocks = new Set(ids); }
-	if (!state.updatedAt && startingCredits > 0) { state = C.createInventoryState(ownerId, { credits: startingCredits }); repository.save(state); }
+	if (!state.updatedAt && !state.revision && !state.credits && !Object.keys(state.instances || {}).length && !(state.journal || []).length && startingCredits > 0) { state = C.createInventoryState(ownerId, { credits: startingCredits }); repository.save(state); }
 	let lastNearby = [], lastPosition = null, scanClock = 0, sequence = 0;
 	function rawSites(position = null) {
 		const W = typeof world === 'function' ? world() : world;
@@ -202,7 +202,7 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	function txId(kind, itemId, sourceId) { sequence = (sequence + 1) % 1000000; return `arms:${nonce}:${now()}:${sequence}:${kind}:${itemId || 'none'}:${sourceId || 'none'}`; }
 	function save(next) {
 		state = next;
-		try { repository.save(state); } catch { /* private mode or a transient storage failure */ }
+		try { repository.save(state); inventorySavePending=false; } catch { inventorySavePending=true; }
 		try { onChange(info(lastPosition)); } catch { /* observers do not break the world */ }
 	}
 	function purchase(source, item) {
@@ -290,9 +290,9 @@ export function createArmsRuntime({ world = () => null, sites = () => [], core =
 	}
 	// one side of a trade with a friend (gameplay/trade.js builds it; its id makes it land once)
 	function apply(tx) {
-		const out = transact(tx);
-		if (out.ok && !out.duplicate) save(out.state);
-		return { ok: out.ok, duplicate: !!out.duplicate, message: out.receipt?.message || '' };
+		const out = transact({...tx,at:tx.at ?? now()});
+		if(out.ok && (!out.duplicate || inventorySavePending)) save(out.duplicate?state:out.state);
+		return { ok: out.ok, persisted:!inventorySavePending, duplicate: !!out.duplicate, message: out.receipt?.message || '' };
 	}
 	// Food and community actions spend the same wallet as shops and gear.
 	function spendCredits(amount, context = {}) {

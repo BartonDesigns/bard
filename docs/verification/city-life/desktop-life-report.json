@@ -1,0 +1,455 @@
+{
+  "cases": [],
+  "errors": [],
+  "office": {
+    "roles": [
+      {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      }
+    ],
+    "targets": [
+      {
+        "id": "workplace:37.76000:-122.57000:33:0",
+        "name": "Lift directory, floor 33",
+        "x": -0.7,
+        "y": 130.25,
+        "z": -10.2,
+        "radius": 3,
+        "fact": "Conference centre. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:33:1",
+        "name": "Window-side circulation, floor 33",
+        "x": 0.7,
+        "y": 130.25,
+        "z": 16.7,
+        "radius": 3,
+        "fact": "Conference centre. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:33:2",
+        "name": "Project floor check, floor 33",
+        "x": -0.7,
+        "y": 130.25,
+        "z": 1,
+        "radius": 3,
+        "fact": "Conference centre. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:32:0",
+        "name": "Lift directory, floor 32",
+        "x": -0.7,
+        "y": 126.35,
+        "z": -10.2,
+        "radius": 3,
+        "fact": "Coworking. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:32:1",
+        "name": "Window-side circulation, floor 32",
+        "x": 0.7,
+        "y": 126.35,
+        "z": 16.7,
+        "radius": 3,
+        "fact": "Coworking. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:32:2",
+        "name": "Project floor check, floor 32",
+        "x": -0.7,
+        "y": 126.35,
+        "z": 1,
+        "radius": 3,
+        "fact": "Coworking. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:34:0",
+        "name": "Lift directory, floor 34",
+        "x": -0.7,
+        "y": 134.14999999999998,
+        "z": -10.2,
+        "radius": 3,
+        "fact": "Executive offices. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:34:1",
+        "name": "Window-side circulation, floor 34",
+        "x": 0.7,
+        "y": 134.14999999999998,
+        "z": 16.7,
+        "radius": 3,
+        "fact": "Executive offices. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.57000:34:2",
+        "name": "Project floor check, floor 34",
+        "x": -0.7,
+        "y": 134.14999999999998,
+        "z": 1,
+        "radius": 3,
+        "fact": "Executive offices. Walk to the marked station and report back to the person who asked."
+      }
+    ],
+    "venue": "office"
+  },
+  "typing": [
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      "pose": "table",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      "pose": "listen",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      "pose": "table",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "project review"
+      },
+      "pose": "listen",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    }
+  ],
+  "dispute": [
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "dispute"
+      },
+      "pose": "table",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "dispute"
+      },
+      "pose": "listen",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "dispute"
+      },
+      "pose": "table",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "meeting colleague",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "dispute"
+      },
+      "pose": "listen",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "taking a short break"
+      },
+      "pose": "lap",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "typing at a workstation"
+      },
+      "pose": "type",
+      "bag": false
+    },
+    {
+      "role": {
+        "role": "office worker",
+        "program": "Conference centre",
+        "floor": 33,
+        "activity": "reviewing documents"
+      },
+      "pose": "read",
+      "bag": false
+    }
+  ],
+  "mall": {
+    "roles": [
+      {
+        "role": "vendor",
+        "program": "Technology",
+        "floor": 2,
+        "activity": "browsing"
+      },
+      {
+        "role": "shopper",
+        "program": "Technology",
+        "floor": 2,
+        "activity": "browsing"
+      }
+    ],
+    "targets": [
+      {
+        "id": "workplace:37.76000:-122.56886:2:0",
+        "name": "West shop offers, floor 2",
+        "x": 90,
+        "y": 9.85,
+        "z": 10,
+        "radius": 3,
+        "fact": "Technology. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.56886:2:1",
+        "name": "East shop offers, floor 2",
+        "x": 110,
+        "y": 9.85,
+        "z": -10,
+        "radius": 3,
+        "fact": "Technology. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.56886:1:0",
+        "name": "West shop offers, floor 1",
+        "x": 90,
+        "y": 5.05,
+        "z": 10,
+        "radius": 3,
+        "fact": "Books & stationery. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.56886:1:1",
+        "name": "East shop offers, floor 1",
+        "x": 110,
+        "y": 5.05,
+        "z": -10,
+        "radius": 3,
+        "fact": "Books & stationery. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.56886:3:0",
+        "name": "West shop offers, floor 3",
+        "x": 90,
+        "y": 14.649999999999999,
+        "z": 10,
+        "radius": 3,
+        "fact": "Fashion. Walk to the marked station and report back to the person who asked."
+      },
+      {
+        "id": "workplace:37.76000:-122.56886:3:1",
+        "name": "East shop offers, floor 3",
+        "x": 110,
+        "y": 14.649999999999999,
+        "z": -10,
+        "radius": 3,
+        "fact": "Fashion. Walk to the marked station and report back to the person who asked."
+      }
+    ],
+    "venue": "retail"
+  },
+  "negotiation": [
+    {
+      "role": {
+        "role": "vendor",
+        "program": "Technology",
+        "floor": 2,
+        "activity": "negotiating a price"
+      },
+      "pose": "rest",
+      "bag": false,
+      "sales": 0,
+      "stock": 24
+    },
+    {
+      "role": {
+        "role": "shopper",
+        "program": "Technology",
+        "floor": 2,
+        "activity": "negotiating a price"
+      },
+      "pose": "listen",
+      "bag": false,
+      "sales": 0,
+      "stock": 24
+    }
+  ],
+  "purchase": [
+    {
+      "role": {
+        "role": "vendor",
+        "program": "Technology",
+        "floor": 2,
+        "activity": "buying"
+      },
+      "pose": "table",
+      "bag": false,
+      "sales": 1,
+      "stock": 23
+    },
+    {
+      "role": {
+        "role": "shopper",
+        "program": "Technology",
+        "floor": 2,
+        "activity": "buying"
+      },
+      "pose": "table",
+      "bag": true,
+      "sales": 1,
+      "stock": 23
+    }
+  ]
+}

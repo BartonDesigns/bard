@@ -12,7 +12,7 @@ import { planHouse, houseFloor, mainOf, HT, TW } from './houseplan.js';
 import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
 import { occasions } from '../calendar.js';
 import { carGeometry, carMaterial } from './cars.js';
-import { NONE_IN } from '../world/lodfade.js';
+import { NONE_IN, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
 
 // the rooms that sometimes have a raised (tray) ceiling
 const RAISE = new Set(['living', 'family', 'dining', 'master']);
@@ -26,9 +26,9 @@ const CAR_PAINT = [[0.92, 0.92, 0.9], [0.08, 0.08, 0.09], [0.45, 0.46, 0.48], [0
 export function createHouses(scene, bay, real, city, { isPhone = false, night = { value: 0 } } = {}) {
 	// the hand-over band: the near house fills in as the far block thins out
 	// (a narrow band: anything parked inside it stays half dissolved, so keep it to a couple of metres)
-	const band = isPhone ? [NONE_IN[0], NONE_IN[1], 27, 29.5] : [NONE_IN[0], NONE_IN[1], 40, 42.5];
+	const band = buildingBand(isPhone);
 	const BUILD_R = band[3] + 10, DROP_R = BUILD_R + 25, MAX = isPhone ? 6 : 12;
-	const M = houseMaterials(band);
+	const M = houseMaterials(band, undefined, 'building');
 	city?.setNearBand?.(band[2], band[3]);
 	const group = new THREE.Group();
 	group.name = 'houses';
@@ -476,6 +476,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			col.push([it.x - 0.95, it.z - 2.35, it.x + 0.95, it.z + 2.35, 0, 1.4]);
 		}
 		for (const D of doors) if (D.pivot.parent !== root) root.add(D.pivot);
+		grp.nearBorn=updateDetailClock();anchorBuilding(root, Mb.x, Mb.z,0,grp.nearBorn);
 		root.updateMatrixWorld(true);
 		group.add(root);
 		// the footprint at each level, for the floors that carry you
@@ -494,11 +495,13 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	let scanX = 1e9, scanZ = 1e9, cands = [], buildMs = 0, job = null;
 	const BUDGET = isPhone ? 3 : 4;
 	function update(cam, dt, nightK = 0) {
-		night.value = nightK;
+		updateDetailClock();night.value = nightK;
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
-		if ((!real?.loaded() && !city?.procHomes) || high) return;
+		if (high) { for (const [grp,h] of houses) if(h && grp.near) city?.setNear?.(grp,null); return; }
+		for (const [grp,h] of houses) if(h && !grp.near) city?.setNear?.(grp,[h.cx,h.cz]);
+		if (!real?.loaded() && !city?.procHomes) return;
 		// what is near, every few metres
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
 			scanX = x; scanZ = z;

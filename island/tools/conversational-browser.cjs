@@ -2,11 +2,11 @@
 // a live model's language quality: it tests proposals, validation and game evidence.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { chromium } = require('playwright');
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.env.BARD_CONVERSATION_OUT || '/tmp/bard-conversational-qa';
 (async () => {
  fs.mkdirSync(out, { recursive: true });
- const browser = await chromium.launch({headless:true,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--autoplay-policy=no-user-gesture-required']});
+ const browser = await chromium.launch({headless:true,executablePath:process.env.CHROME_EXECUTABLE,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--autoplay-policy=no-user-gesture-required']});
  try {
  const page = await browser.newPage({viewport:{width:480,height:320},hasTouch:true,deviceScaleFactor:1,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15'});
  page.setDefaultTimeout(300000);
@@ -53,6 +53,7 @@ const out = process.env.BARD_CONVERSATION_OUT || '/tmp/bard-conversational-qa';
   qa.release(JSON.stringify({intent:'follow',confidence:1,targetId:null,question:null}));await qa.pending;W.body=original;qa.defer=false;
  });
  assert.equal(await page.evaluate(()=>Crysis.social().state.get(qa.id).mode),'wait');
+ const startingCredits=await page.evaluate(()=>Crysis.arms().credits);
  const offered=await page.evaluate(async()=>{
   const g=L99Island.guide,r=Crysis.social().state.get(qa.id),ctx=g.storyContext(r),home=ctx.targets.find(t=>t.id.startsWith('home'));
   const target=ctx.targets.find(t=>!t.id.startsWith('home')&&Math.hypot(t.x-home.x,t.z-home.z)>t.radius+home.radius+5);
@@ -73,15 +74,18 @@ const out = process.env.BARD_CONVERSATION_OUT || '/tmp/bard-conversational-qa';
   g.talkTo(qa.actor);stages.push(find());return stages;
  });assert.deepEqual(evidence.map(q=>q.cursor),[0,0,0,1,1,2,3]);assert.equal(evidence.at(-1).status,'complete');
  const completionMemory=await page.evaluate(()=>{const g=L99Island.guide;g.update(1.1);g.update(1.1);return Crysis.social().state.get(qa.id).memories.filter(m=>m.content.includes('completed')&&m.content.includes(qa.quest.title));});assert.equal(completionMemory.length,1);
+ const paidCredits=await page.evaluate(()=>Crysis.arms().credits);assert.equal(paidCredits-startingCredits,offered.reward.credits);
  const residentId=await page.evaluate(()=>qa.id);
  await page.evaluate(()=>L99Island.guide.showQuests());
  await page.screenshot({path:`${out}/quests.png`});
  const bounds=await page.evaluate(()=>[...document.querySelectorAll('button')].filter(e=>(e.textContent.trim()==='Quests'||e.getAttribute('aria-label')==='Close the guide')&&e.getBoundingClientRect().width).map(e=>({text:e.textContent,rect:e.getBoundingClientRect().toJSON()})));
  for(const b of bounds)assert.ok(b.rect.x>=0&&b.rect.y>=0&&b.rect.right<=480.5&&b.rect.bottom<=320.5,JSON.stringify(b));
+ const fear=await page.evaluate(async()=>{Crysis.combat.vehicleImpact(qa.actor);L99Island.guide.talkTo(qa.actor);const before=L99Island.guide.stories.list().length;await L99Island.guide.ask('got any work');const r=Crysis.social().state.get(qa.id);return {last:r.history.at(-1).content,incidents:qa.actor.awarenessEvents,questsUnchanged:L99Island.guide.stories.list().length===before};});assert.match(fear.last,/drove into|what you did/);assert.ok(fear.questsUnchanged);
  await page.reload({waitUntil:'domcontentloaded'});await boot();
+ assert.equal(await page.evaluate(()=>Crysis.arms().credits),paidCredits);
  const restored=await page.evaluate(id=>L99Island.guide.stories.list().find(q=>q.id===id),offered.id);assert.equal(restored.status,'complete');assert.equal(restored.evidence.length,3);
  const restoredMemory=await page.evaluate(({id,title})=>{const g=L99Island.guide;g.update(1.1);g.update(1.1);return Crysis.social().state.get(id).memories.filter(m=>m.content.includes('completed')&&m.content.includes(title));},{id:residentId,title:offered.title});assert.equal(restoredMemory.length,1);assert.deepEqual(restoredMemory,completionMemory);
- assert.deepEqual(errors,[]);fs.writeFileSync(`${out}/report.json`,JSON.stringify({transport:'deterministic model-response mock; real game integration',follow,scout,warn,clarification,interrupted,offered,evidence,bounds,restored,completionMemory,restoredMemory,errors},null,2));
+ assert.deepEqual(errors,[]);fs.writeFileSync(`${out}/report.json`,JSON.stringify({transport:'deterministic model-response mock; real game integration',startingCredits,paidCredits,fear,follow,scout,warn,clarification,interrupted,offered,evidence,bounds,restored,completionMemory,restoredMemory,errors},null,2));
  console.log('Conversational model-response integration and real quest evidence passed',JSON.stringify({out,quest:offered.id,cursors:evidence.map(q=>q.cursor),restored:restored.status,bounds}));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

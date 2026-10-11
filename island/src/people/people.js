@@ -8,6 +8,7 @@
 // nothing stutters, and each is re-dressed and re-cast when it is handed to someone new.
 
 import * as THREE from 'three';
+import {workActor,disposeWorkplaceProps} from './workplace-life.js';
 import { loadPeopleAssets, buildPerson, personDNA, rng } from './body.js';
 import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
@@ -105,7 +106,7 @@ export function createPeople(scene, world, camera = null) {
 		// (the museum, a shop, restaurant or office you are in or at, a tower's floor)
 		let V = null, vz = null;
 		for (const [src, z] of [[W.towers, 'office'], [W.commercial, null], [W.discovery, null], [W.boardwalk, 'boardwalk']]) { V = src?.venue?.(cam, hours); if (V) { vz = z; break; } }
-		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 }, zone: vz || zoneOf(W.bayArea?.urbanAt(cam.x, cam.z)), sit: true };
+		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 }, zone: V.zone || vz || zoneOf(W.bayArea?.urbanAt(cam.x, cam.z)), sit: true };
 		const U = W.bayArea?.urbanAt(cam.x, cam.z);
 		// out on the trails: a few hikers by day
 		const real = W.real;
@@ -174,6 +175,7 @@ export function createPeople(scene, world, camera = null) {
 		const C = mood || { jog: 0.12, chat: 0.14, wait: 0.12 };
 		const x = r();
 		p.role = island ? (x < 0.25 ? 'chat' : x < 0.35 ? 'wait' : 'walk') : x < C.jog ? 'jog' : x < C.jog + C.chat ? 'chat' : x < C.jog + C.chat + C.wait ? 'wait' : 'walk';
+		disposeWorkplaceProps(p); p.workContext=null;p.workSpot=null;p.awarenessEvents=[];
 		p.talking = false; p.partner = null; p.timer = 5 + r() * 20;
 		// if children come along: how many, and whether a second grown-up does too
 		p.kids = 0; p.spouse = null; p.fam = null; p.famWant = r() < 0.45 ? 1 : r() < 0.75 ? 2 : 3; p.spouseWant = r() < 0.45;
@@ -190,8 +192,10 @@ export function createPeople(scene, world, camera = null) {
 			if (seated.length) {
 				const free = seated.flatMap((q) => q.seats.filter((st) => !st.taken && Math.hypot(st.x - cam.x, st.z - cam.z) < NEAR && Math.hypot(st.x - cam.x, st.z - cam.z) > 1.2 && !seen(st.x, st.y, st.z)));
 				if (!free.length) return false;
-				const st = free[Math.floor(r() * free.length)];
-				st.taken = true;
+				// Fill the other half of a scene before opening another desk or shop.
+				const paired=free.filter(st=>st.work && pool.some(a=>a.active && a.workSpot?.work?.group===st.work.group));
+				const choices=paired.length?paired:free; const st=choices[Math.floor(r()*choices.length)];
+				st.taken = true; p.workSpot=st;p.workContext=st.work ? {...st.work,activity:st.work.role} : null;
 				p.route = { kind: 'seat', seat: st, seats: seated.flatMap((q) => q.seats) };
 				p.role = 'wait'; p.timer = 1e9;
 				M.place(st.x, st.y, st.z, st.heading);
@@ -401,6 +405,7 @@ export function createPeople(scene, world, camera = null) {
 		if (R.kind === 'follow') { followParent(p, dt); return; }
 		if (R.kind === 'visit') { visit(p, dt, cam); return; }
 		if (R.kind === 'seat') {
+			if(workActor(p,performance.now()/1000,dt,cam,pool)) return;
 			// in their seat: facing the table, now and then a word and a gesture to whoever is across
 			M.want.speed = 0; M.want.heading = R.seat.heading;
 			p.gT = (p.gT || Math.random() * 6) - dt;
@@ -647,6 +652,7 @@ export function createPeople(scene, world, camera = null) {
 		let active = 0, kids = 0;
 		const drop = (p) => {
 			if (p.rod) p.rod.visible = false;
+			disposeWorkplaceProps(p);p.workSpot=null;p.workContext=null;
 			p.active = false; p.P.root.visible = false; p.leaving = false; p.fade = 0;
 			// out of the family: the grown-up lets go of the hand
 			if (p.fam) { const F = p.fam; if (p.P.dna.child) F.kids = Math.max(0, (F.kids || 1) - 1); else if (F.spouse === p) F.spouse = null; if (p.route?.kind === 'follow') p.route.parent.M.hold(p.route.theirs, false); p.fam = null; }
@@ -660,7 +666,7 @@ export function createPeople(scene, world, camera = null) {
 				const d = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z), kid = p.P.dna.child;
 				// family members go when their family does
 				const F = p.fam;
-				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && (d > NEAR * 1.25 || active >= na));
+				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && (d > NEAR * 1.25 || Math.abs(S.pos.y-cam.y)>6 || active >= na));
 				if (go && !p.leaving) { p.leaving = true; p.leaveT = 0; }
 				if (p.leaving) {
 					// going: gone once out of sight (or far off); faded out if you keep watching

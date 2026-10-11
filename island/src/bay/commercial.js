@@ -15,6 +15,7 @@
 // Everything in a building is merged per material, so each is a handful of draws.
 
 import * as THREE from 'three';
+import { addLodFade, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
 import { commercialStack } from '../interiors/workplace-plan.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
@@ -60,6 +61,7 @@ const KIDS_IN = { tattoo: 0, cafe: 0.14, restaurant: 0.2, shop: 0.16, office: 0,
 export const COMMERCIAL_TYPES = ['cafe', 'restaurant', 'shop', 'tattoo', 'office', 'arcade', 'bowling', 'cinema'];
 
 export function createCommercial(scene, bay, real, city, { isPhone = false } = {}) {
+	const band = buildingBand(isPhone);
 	const BUILD_R = isPhone ? 36 : 50, DROP_R = BUILD_R + 25, MAX = isPhone ? 3 : 6;
 	const group = new THREE.Group();
 	group.name = 'commercial';
@@ -75,6 +77,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		goods: [S(0xc0392b), S(0x2e86c1), S(0xf1c40f), S(0x27ae60), S(0x8e44ad), S(0xe67e22), S(0xecf0f1)],
 		skin: [S(0xe0b494), S(0xc68e6a), S(0x8d5a3b), S(0x5a3a26), S(0xf0cfb0)], cloth: [S(0x2c3e50), S(0x7f8c8d), S(0xa93226), S(0x1f618d), S(0x117a65), S(0xd4ac0d), S(0x6c3483), S(0xeeeeee)],
 	};
+	for (const m of Object.values(mats).flat()) addLodFade(m, 'building', band);
 	const FILL = [mats.wall, mats.walld, mats.ceil, mats.floorW, mats.floorT, mats.carpet, mats.lane, mats.wood, mats.white, mats.leather, mats.red, mats.seat, mats.steel, mats.food, mats.cup, mats.green, ...mats.goods, ...mats.skin, ...mats.cloth];
 	for (const m of FILL) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.1; }
 	const built = new Map();         // grp -> building
@@ -94,13 +97,14 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 
 		// the shell: the floor, three solid walls, the storefront (glass between mullions, the
 		// doorway open), the ceiling of light panels, the walls above and the roof
+		const outside = mats.wall.clone(); outside.color.setRGB(...(b.look?.wall || city?.buildingLook?.(b)?.wall || [.91,.89,.85]), THREE.SRGBColorSpace); outside.emissiveIntensity=0; addLodFade(outside, 'building', band);
 		const floorMat = type === 'office' ? mats.carpet : type === 'restaurant' || type === 'bowling' ? mats.floorW : type === 'cinema' ? mats.carpet : mats.floorT;
 		box(floorMat, -hw, -0.4, -hd, hw, 0, hd);
-		box(mats.wall, -hw, 0, -hd, hw, H, -hd + WALL, true);
-		box(mats.wall, -hw, 0, -hd, -hw + WALL, H, hd, true);
-		box(mats.wall, hw - WALL, 0, -hd, hw, H, hd, true);
+		box(outside, -hw, 0, -hd, hw, H, -hd + WALL, true);
+		box(outside, -hw, 0, -hd, -hw + WALL, H, hd, true);
+		box(outside, hw - WALL, 0, -hd, hw, H, hd, true);
 		const doorX = (b.door ?? 0.5) * (W - 4) - (hw - 2), dw = 1.9;
-		box(mats.wall, -hw, STORE, hd - WALL, hw, H, hd);
+		box(outside, -hw, STORE, hd - WALL, hw, H, hd);
 		box(mats.trim, -hw, 0, hd - WALL, hw, 0.35, hd, false);
 		for (const [a0, a1] of [[-hw, doorX - dw / 2], [doorX + dw / 2, hw]]) {
 			if (a1 - a0 < 0.1) continue;
@@ -277,10 +281,10 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// ---------- the building's people, by the hour ----------
 		const root = new THREE.Group();
 		for (const [mat, list] of parts) { const m = new THREE.Mesh(mergeGeometries(list), mat); m.receiveShadow = true; m.castShadow = !isPhone && mat !== mats.glass; root.add(m); }
-		// (a hair inside the block it replaces, so the two never fight while it dissolves)
-		root.position.set(b.x, floorY, b.z); root.rotation.y = -b.a; root.scale.set((W - 0.12) / W, 1, (D - 0.12) / D);
+		// Exactly the coarse footprint: complementary coverage prevents coplanar overlap.
+		root.position.set(b.x, floorY, b.z); root.rotation.y = -b.a; b.grp.nearBorn=updateDetailClock();anchorBuilding(root,b.x,b.z,Math.max(W,D)/2,b.grp.nearBorn);
 		group.add(root);
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => root.traverse((o) => o.geometry?.dispose()) };
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => {root.traverse((o) => o.geometry?.dispose()); outside.dispose();} };
 		return B;
 	}
 
@@ -316,14 +320,16 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 	// ---------- near you ----------
 	let scanX = 1e9, scanZ = 1e9, cands = [], cool = 0;
 	function update(cam, dt, hours, nightK) {
-		const x = cam.position.x, z = cam.position.z;
+		updateDetailClock();const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
 		mats.panel.emissiveIntensity = 0.7 + nightK * 0.6;
 		// the rooms are lit from their ceilings: a glow on everything inside, more after dark
 		// (no extra lights, so no shaders are rebuilt)
 		for (const m of FILL) m.emissiveIntensity = 0.1 + nightK * 0.28;
-		if ((!real?.loaded() && !city?.procBiz) || high) return;
+		if (high) { for (const [grp] of built) if(grp.near) city?.setNear?.(grp,null); return; }
+		for (const [grp,B] of built) if(!grp.near) city?.setNear?.(grp,[B.b.x,B.b.z]);
+		if (!real?.loaded() && !city?.procBiz) return;
 		if (Math.hypot(x - scanX, z - scanZ) > 6) {
 			scanX = x; scanZ = z;
 			cands = [];
@@ -345,7 +351,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		if (cool <= 0) for (const [, b] of cands) if (!built.has(b.grp)) {
 			let B = null;
 			try { B = build(b); } catch (e) { console.warn('commercial', e); }
-			if (B) { built.set(b.grp, B); city?.setNear?.(b.grp, [b.x, b.z]); }
+			if (B) { b.grp.detailRadius=Math.max(b.w,b.d)/2; built.set(b.grp, B); city?.setNear?.(b.grp, [b.x, b.z]); }
 			cool = 0.25;
 			break;
 		}

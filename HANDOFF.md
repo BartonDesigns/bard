@@ -1,3 +1,16 @@
+## City life, witnessed incidents, paid conversation quests and building handoff
+
+See `docs/city-life-and-building-transitions.md`. New workplace actor roles drive desk
+work, alternating meetings/disputes and paired shopping negotiations/sales. Dialogue
+uses current activities, saved completion history and attributed recent witnesses;
+vehicle impacts now trigger crime reactions, including remembered residents. Story
+quests have validated physical evidence and idempotent credit payments. The full-game
+reload test caught and fixed the old timestamp-free wallet reset. Coarse/detail building
+materials now share anchors, palette conversion, distance and readiness coverage.
+Source and browser checks are recorded in `docs/verification/city-life/`. No Worker
+change is required. Multiplayer observations use the already deployed combat protocol;
+shared server-side NPC memory is still future work. Do not claim physical Safari QA.
+
 # Level 99 Bard: handoff notes
 
 ## Commercial towers, malls and character contact (11 October 2026)

@@ -57,6 +57,7 @@ export const POSES = {
 	listen: { both: arm({ abd: 0.08, flex: 0.1, roll: 0.35, bend: 0.5, pro: 0.2, curl: 0.3 }), head: 0.08 },
 	// seated: hands in the lap, or forearms on a table
 	lap: { both: arm({ abd: 0.12, flex: 0.55, roll: 0.5, bend: 1.05, pro: 0.6, curl: 0.4 }), swing: 0 },
+	type: { both: arm({abd:.16,flex:.9,roll:.28,bend:1.42,pro:.9,curl:.25}),swing:0,look:.16 },
 	table: { both: arm({ abd: 0.2, flex: 0.85, roll: 0.35, bend: 1.45, pro: 0.9, curl: 0.3 }), swing: 0 },
 	// at the wheel: both hands up and forward on the rim, loosely closed
 	drive: { both: arm({ abd: 0.24, flex: 1.0, roll: 0.3, bend: 0.95, pro: 0.95, wflex: -0.1, curl: 0.75 }), swing: 0 },
@@ -481,6 +482,7 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 			for (const k of ARM_KEYS) A[k].w = actArm ? 7 * TAU : 2.4 * TAU;
 			for (const k of ARM_KEYS) P2[k] = A[k].to(tgt[k] + (k === 'flex' && gp ? (ov.beat || 0) * (lead ? 0.12 : 0.05) : 0), dt);
 			// (the swing itself goes on after the springs, which would only lag and damp it)
+			if(S.pose==='type' && !actArm){const tap=Math.sin(t*17+sx*1.7+dna.seed);P2.wflex+=tap*.07;P2.curl+=Math.max(0,tap)*.15;P2.flex+=Math.sin(t*2.1+sx)*.025;}
 			P2.flex += sw - 0.05 * amp * (POSES[S.pose]?.swing ?? 1); P2.bend += Math.max(0, sw) * 0.6 + 0.08 * amp;
 			const iC = map['clavicle.' + side], iSh = map['shoulder01.' + side], iU = map['upperarm01.' + side], iU2 = map['upperarm02.' + side], iL = map['lowerarm01.' + side], iL2 = map['lowerarm02.' + side], iW = map['wrist.' + side];
 			// the shoulder girdle: shrugs, breath, a confident person's shoulders back and down

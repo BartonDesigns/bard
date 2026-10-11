@@ -302,15 +302,16 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		const k = B.L.kind === 'office' ? crowd(ZONE.office, hours).k : B.L.kind === 'lobby' ? 0.3 + crowd(ZONE.office, hours).k * 0.5 : 0.35;
 		if (!B.spots) {
 			const ca = Math.cos(T.o.a), sa = Math.sin(T.o.a);
-			B.spots = B.seats.map(([x, z, yaw, sit, h = 0.46]) => {
+			B.spots = B.seats.map(([x, z, yaw, sit, h = 0.46,work]) => {
 				const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
-				return { x: T.o.x + ca * x - sa * z, z: T.o.z + sa * x + ca * z, y: B.L.y, h: sit ? h : 0, sit, heading: Math.atan2(fx * ca - fz * sa, fx * sa + fz * ca), taken: false, table: sit && B.L.kind === 'office' };
+				return { x: T.o.x + ca * x - sa * z, z: T.o.z + sa * x + ca * z, y: B.L.y, h: sit ? h : 0, sit, heading: Math.atan2(fx * ca - fz * sa, fx * sa + fz * ca), taken: false, work, table: sit && B.L.kind === 'office' };
 			});
+			const commerce=new Map(); for(const st of B.spots) if(st.work?.role==='vendor'||st.work?.role==='shopper'){const key=st.work.group;if(!commerce.has(key))commerce.set(key,{stock:24,sales:0,lastSale:-1});st.commerce=commerce.get(key);}
 		}
 		const n = Math.min(22, Math.round(B.spots.length * k * (B.L.kind === 'office' ? 0.6 : 0.5)));
 		// the homes have their families in; a few children pass through the lobby
 		const kids = B.L.kind === 'office' ? 0 : (B.L.kind === 'lobby' ? 0.08 : 0.3) * kidsAbout(hours);
-		return n ? { n, kids, areas: [{ w: 1, seats: B.spots }] } : null;
+		return n ? { n, kids: B.L.kind==='mall'?0:kids, zone:B.L.kind==='mall'?'retail':B.L.kind==='office'?'office':'neighbourhood', key:T.key+':'+B.L.n, areas: [{ w: 1, seats: B.spots }] } : null;
 	}
 	// where you stand in the tower you're at: which tower, which level (for homes and shared spots)
 	function here(pos) {
@@ -327,5 +328,14 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		loadAround(L);
 		return true;
 	}
-	return { group, update, floor, push, venue, here, raise, diagnostics:()=>T&&({type:T.type,region:T.region,levels:T.levels.map(L=>({n:L.n,y:L.y,h:L.h,kind:L.kind,program:L.program})),loaded:[...T.cache.values()].map(B=>({n:B.L.n,details:B.details,colliders:B.col.length})),slabs:T.structure.count}), key: () => T?.key || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
+	function questTargets() {
+		if(!T) return [];
+		const ll=toLL(T.o.x,T.o.z), key=`${ll.lat.toFixed(5)}:${ll.lon.toFixed(5)}`,ca=Math.cos(T.o.a),sa=Math.sin(T.o.a);
+		const out=[];
+		for(const B of T.cache.values()) {const L=B.L;if(!['office','mall'].includes(L.kind))continue;
+			const points=L.kind==='office'?[[-.7,T.coreZ+4,'Lift directory'],[.7,T.hd-2,'Window-side circulation'],[-.7,1,'Project floor check']]:[[-T.atrium.x1-2,T.atrium.z1-1,'West shop offers'],[T.atrium.x1+2,T.atrium.z0+1,'East shop offers']];
+			points.forEach(([x,z,name],i)=>out.push({id:`workplace:${key}:${L.n}:${i}`,name:`${name}, floor ${L.n}`,x:T.o.x+ca*x-sa*z,y:L.y,z:T.o.z+sa*x+ca*z,radius:3,fact:`${L.program}. Walk to the marked station and report back to the person who asked.`}));
+		}return out;
+	}
+	return { group, update, floor, questTargets, push, venue, here, raise, diagnostics:()=>T&&({type:T.type,region:T.region,levels:T.levels.map(L=>({n:L.n,y:L.y,h:L.h,kind:L.kind,program:L.program})),loaded:[...T.cache.values()].map(B=>({n:B.L.n,details:B.details,colliders:B.col.length})),slabs:T.structure.count}), key: () => T?.key || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
 }
