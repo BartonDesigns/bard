@@ -19,6 +19,7 @@ import { fadePerson } from './fade.js';
 import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
 import { hairCapsules, poseCapsules } from './hair-collide.js';
 import { hairMotion } from './hair-motion.js';
+import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -375,6 +376,7 @@ function dress(A, P, o) {
 	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, o.outer ? 1 : 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
+	else { const cloth=P.cloth,caps=clothCapsules(P); calibrateCloth(clothGeo,caps); cloth.userData.capsules=caps; cloth.onBeforeRender=()=>poseCloth(P,caps,P.clothMat.userData.U,cloth); }
 	// caps, glasses, headphones, bags: one more mesh
 	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;

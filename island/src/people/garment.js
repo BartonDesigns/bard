@@ -10,6 +10,7 @@
 // person keeps the draw calls down, and every program is shared.
 
 import * as THREE from 'three';
+import { CLOTH_CAPS, clothUniforms, CLOTH_CONTACT_GLSL } from './cloth-collide.js';
 import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance } from './garment-tailoring.js';
 
 // ---------- the painting ----------
@@ -294,13 +295,15 @@ export function garmentMaterial(A, o, cut, number = 0) {
 		uNeck: { value: new THREE.Vector4(cut.neck, cut.neck, 0, 0) },
 		uEdge: { value: new THREE.Vector4(0, cut.shoulderX, 0, 0) },
 		uClothMove: { value: new THREE.Vector4() },
+		...clothUniforms(),
 		uKnit: { value: A.fabric.knit }, uCanvas: { value: A.fabric.canvas },
 	};
 	m.userData.U = U;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U);
 		sh.vertexShader = sh.vertexShader
-			.replace('#include <common>', '#include <common>\nattribute float slot;\nattribute float drape;\nattribute float trim;\nattribute float cuff;\nvarying float vCuff;\nvarying float vTrim;\nuniform vec4 uClothMove;\nvarying vec3 vBind;\nvarying vec3 vBN;\nflat varying float vSlot;\nflat varying float vLimb;')
+			.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n'+CLOTH_CONTACT_GLSL)
+			.replace('#include <common>', `attribute float clothInset; uniform vec4 uClothA[${CLOTH_CAPS}]; uniform vec3 uClothB[${CLOTH_CAPS}];\n`+'#include <common>\nattribute float slot;\nattribute float drape;\nattribute float trim;\nattribute float cuff;\nvarying float vCuff;\nvarying float vTrim;\nuniform vec4 uClothMove;\nvarying vec3 vBind;\nvarying vec3 vBN;\nflat varying float vSlot;\nflat varying float vLimb;')
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vBN = normal; vTrim = trim; vCuff = cuff; vSlot = mod(slot, 10.0); vLimb = floor(slot / 10.0 + 0.01); float flutter = sin(uClothMove.x * 2.8 + position.y * 15.0 + position.x * 8.0); transformed += normal * (1.0 + flutter) * drape * 0.002 * min(uClothMove.y, 2.0); transformed.x += sin(uClothMove.z * 6.283 + position.y * 4.0) * drape * 0.003 * min(uClothMove.y, 1.0);');
 		sh.fragmentShader = sh.fragmentShader
 			.replace('#include <common>', '#include <common>\n' + GLSL_HEAD)
@@ -310,7 +313,7 @@ export function garmentMaterial(A, o, cut, number = 0) {
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = folds(vBind, vLimb, int(vSlot + 0.5)) * 0.00025 * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))) + gWeave * 0.00004; vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
 			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n{ int fb = int(gFab + 0.5); float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0); reflectedLight.indirectDiffuse += diffuseColor.rgb * rim * (fb == 0 || fb == 4 ? 0.5 : fb == 1 ? 0.15 : fb == 3 || fb == 8 ? 0.35 : 0.25); }');
 	};
-	m.customProgramCacheKey = () => 'crysis-garment-6';
+	m.customProgramCacheKey = () => 'crysis-garment-7';
 	paint(m, o);
 	return m;
 }

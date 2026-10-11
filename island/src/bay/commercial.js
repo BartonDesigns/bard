@@ -15,6 +15,7 @@
 // Everything in a building is merged per material, so each is a handful of draws.
 
 import * as THREE from 'three';
+import { commercialStack } from '../interiors/workplace-plan.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { inCampus } from './discovery.js';
@@ -327,7 +328,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			scanX = x; scanZ = z;
 			cands = [];
 			for (const b of real?.loaded() ? real.near('boxes', x, z, BUILD_R + 20) : []) {
-				if (!b.grp?.biz || inCampus(b.x, b.z)) continue;
+				if (!b.grp?.biz || commercialStack(b.kind,b.w,b.d,b.wallH) || inCampus(b.x, b.z)) continue;
 				const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2;
 				if (d < BUILD_R) cands.push([d, b]);
 			}

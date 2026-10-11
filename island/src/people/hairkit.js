@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { CAPSULES } from './hair-collide.js';
 import { guideUniform } from './hair-motion.js';
 import { fittedHairFrame } from './hair-frame.js';
+import { LONG_GROOMS, groomStyle, groomChunk } from './long-groom.js';
 import { hairline } from './hair.js';
 
 const DIR = new URL('../assets/people/hair/', import.meta.url).href;
@@ -25,6 +26,7 @@ const sm = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 
 // ---------- the styles ----------
 // how each grows: straight, wavy, curly or coily (for how much it shines)
 export const STYLES = {
+	cascade:'straight', 'cascade-wave':'wavy', 'cascade-side':'wavy',
 	short01: 'straight', short02: 'straight', short03: 'straight', short04: 'straight', grump: 'wavy', afro01: 'coily', puffs: 'coily',
 	bob01: 'straight', bob02: 'straight', shortdaisy: 'straight', curlybob: 'curly', wavybob: 'curly', katherine: 'straight', tousled: 'wavy',
 	long01: 'straight', hazel: 'straight', daisy: 'straight', adrienne: 'straight', hippy: 'straight', island: 'wavy', keylth: 'straight',
@@ -45,15 +47,15 @@ const FOR_CUT = {
 	pony: [['ponytail01', 3], ['braid01', 1]],
 	bob: [['bob01', 1.5], ['bob02', 1], ['shortdaisy', 1.5]],
 	lob: [['katherine', 1.2], ['shortdaisy', 1], ['tousled', 0.8], ['bob01', 0.5]],
-	long: [['long01', 1.5], ['hazel', 1.2], ['daisy', 1], ['adrienne', 1], ['hippy', 0.8], ['keylth', 0.6]],
-	waves: [['island', 1.5], ['tousled', 1.2]],
+	long: [['cascade', 3], ['cascade-side', 2], ['long01', .5], ['hazel', 1.2], ['daisy', 1], ['adrienne', 1], ['hippy', 0.8], ['keylth', 0.6]],
+	waves: [['cascade-wave', 3], ['island', 1], ['tousled', 1.2]],
 	pixie: [['short03', 2], ['bob02', 0.3, 0.8]],
 	fringe: [['bob02', 1.5], ['katherine', 1.2]],
 	slick: [['short02', 1, 0.8], ['short03', 1]],
 	thinning: [['short02', 1, 0.7], ['short04', 1, 0.7]],
 };
 // for men: the longer cuts in the styles that suit them
-const MAN = { long: [['keylth', 1.5], ['long01', 0.6], ['tousled', 1]], lob: [['tousled', 1.5], ['grump', 1]], waves: [['tousled', 1.5], ['grump', 0.5]], bun: [['keylth', 1]], curls: [['grump', 2], ['afro01', 1, 0.55]] };
+const MAN = { long: [['cascade', 2], ['cascade-wave', 2], ['keylth', 1.5], ['long01', 0.6], ['tousled', 1]], lob: [['tousled', 1.5], ['grump', 1]], waves: [['tousled', 1.5], ['grump', 0.5]], bun: [['keylth', 1]], curls: [['grump', 2], ['afro01', 1, 0.55]] };
 // curly and coily hair in the cuts that suit it
 const CURLY = { long: [['island', 1], ['tousled', 1]], bob: [['curlybob', 1.5], ['wavybob', 1]], lob: [['curlybob', 1], ['tousled', 1]], pony: [['puffs', 1], ['ponytail01', 1]], bun: [['puffs', 1.2], ['braidbun', 1], ['updo50s', 0.6]] };
 
@@ -99,6 +101,7 @@ export function loadStyle(id) {
 	if (c) return c.promise;
 	c = { data: null };
 	c.promise = (async () => {
+		if(LONG_GROOMS[id]) { c.data=groomStyle(id);return c.data; }
 		const res = await fetch(DIR + id + '.bin.gz');
 		if (!res.ok) throw Error('hair ' + id + ' ' + res.status);
 		const buf = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
@@ -418,7 +421,7 @@ function shellChunk(A, P, p, kind, rnd) {
 export function hairGeometry(A, P, p, style, beard, rnd) {
 	if (!A.ride) A.ride = A.bones.map((b) => RIDE.has(b.name));
 	const parts = [];
-	if (style) parts.push(styleChunk(A, P, p, styleNow(style.id), 0, style.vol, style.fadeY, STYLES[style.id] === 'coily'));
+	if (style) { const St=styleNow(style.id); parts.push(St.groom ? groomChunk(P,St.groom,style.vol) : styleChunk(A,P,p,St,0,style.vol,style.fadeY,STYLES[style.id]==='coily')); }
 	if (beard?.asset) parts.push(styleChunk(A, P, p, styleNow(beard.kind), 1, 1));
 	else if (beard && SHELLS[beard.kind]) parts.push(shellChunk(A, P, p, beard.kind, rnd));
 	const C = parts.filter(Boolean);

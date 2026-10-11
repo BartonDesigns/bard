@@ -1,21 +1,14 @@
-// Inside the towers. Walk up to any tall building (a downtown tower, a big office block) and
-// in through its glass front: a lobby of stone and glass, the reception desk, seating, and a
-// bank of elevators in the core at the back. Step up to them and the panel comes up: every
-// floor, the lobby, the roof. Each tower is offices or homes, by its own hash:
-//   office floors: open-plan desks with their screens and chairs, a glass meeting room, a
-//     kitchen by the core, the ceiling of light panels, people at work through the day;
-//   residential floors: one home to a floor, open living and dining, a kitchen island, the
-//     bedroom behind its wall; and at the top the penthouse, its ceilings twice as high;
-//   the roof: out onto it, a parapet round the edge, the city all round and below.
-// Every floor is glass all round, so what you see out of it is the real city from that
-// height. Only the floor you are on is built (and the lobby, while you are near); the
-// building's own block stays as it was outside.
-
+// Full-height structural floors with bounded, altitude-driven commercial fit-outs.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 
-const LOBBY = 6.2, STOREY = 3.9, WALL = 0.3;
+import { planWorkplace, levelBelow, floorAt, slabRects } from '../interiors/workplace-plan.js';
+import { fitWorkplace } from '../interiors/workplace-fitout.js';
+import { toLL } from '../earth/globeframe.js';
+
+const WALL = 0.3;
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 export function createTowers(scene, bay, city, { isPhone = false, mount, hint = () => {}, player }) {
@@ -42,30 +35,31 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		// the lobby floor level with the highest corner of the lot, a step up off the pavement
 		let g0 = -1e9;
 		for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) { const ca = Math.cos(o.a), sa = Math.sin(o.a), lx = sx * o.w / 2, lz = sz * o.d / 2; g0 = Math.max(g0, bay.heightAt(o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz)); }
-		const floor0 = g0 + 0.25, top = o.y + o.h, key = Math.round(o.x) + ':' + Math.round(o.z);
-		const r = hh(Math.round(o.x * 0.37), Math.round(o.z * 0.29)), home = r < 0.42;
-		const W = o.w, D = o.d, hw = W / 2 - WALL, hd = D / 2 - WALL;
-		const n = Math.max(1, Math.floor((top - floor0 - LOBBY - 1.2) / STOREY));
-		const levels = [{ n: 0, y: floor0, h: LOBBY, kind: 'lobby' }];
-		for (let i = 1; i <= n; i++) {
-			const pent = home && i === n && top - floor0 > 35;
-			levels.push({ n: i, y: floor0 + LOBBY + (i - 1) * STOREY, h: pent ? Math.min(STOREY * 2, top - (floor0 + LOBBY + (i - 1) * STOREY) - 0.4) : STOREY, kind: home ? (pent ? 'penthouse' : 'home') : 'office' });
-			if (pent) break;
-		}
-		levels.push({ n: 'R', y: top, h: 0, kind: 'roof' });
-		const coreW = Math.min(10, W * 0.42), coreD = Math.min(4.5, D * 0.22);
-		return { o, key, floor0, top, W, D, hw, hd, type: home ? 'home' : 'office', levels, coreW, coreD, coreZ: -hd + coreD, r };
+		return planWorkplace(o, g0 + 0.25, toLL(o.x, o.z));
 	}
 
 	// ---------- building one level ----------
 	function level(T, L) {
 		const { hw, hd, coreW, coreD } = T, parts = new Map(), col = [], seats = [];
-		const add = (m, g) => { if (!parts.has(m)) parts.set(m, []); parts.get(m).push(g.index ? g.toNonIndexed() : g); };
-		const box = (m, x0, y0, z0, x1, y1, z1, solid = false) => { add(m, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); if (solid) col.push([x0, z0, x1, z1, y0, y1]); };
+		const add = (m, g) => { if (!parts.has(m)) parts.set(m, []); if (g.index) { const source=g; g=g.toNonIndexed(); source.dispose(); } parts.get(m).push(g); };
+		const box = (m, x0, y0, z0, x1, y1, z1, solid = false) => { if(x1<=x0 || y1<=y0 || z1<=z0)return; add(m, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); if (solid) col.push([x0, z0, x1, z1, y0, y1]); };
 		const cyl = (m, x, y, z, r, h, seg = 12) => add(m, new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z));
+		const labels=[], sign=(text,x,y,z,w,h,yaw=0)=>labels.push({text,x,y,z,w,h,yaw});
+		let details = null;
 		const H = L.h, rnd = (() => { let k = 1; return () => hh(T.r * 97 + k++ * 0.37, (typeof L.n === 'number' ? L.n : 99) * 1.3); })();
-		const plant = (x, z) => { cyl(M.pot, x, 0, z, 0.3, 0.55); add(M.green, new THREE.SphereGeometry(0.55, 10, 8).scale(1, 1.3, 1).translate(x, 1.25, z)); col.push([x - 0.35, z - 0.35, x + 0.35, z + 0.35, 0, 1.2]); };
-		const chair = (x, z, yaw) => { box(M.dark, x - 0.24, 0.44, z - 0.24, x + 0.24, 0.5, z + 0.24); const bx = x + Math.sin(yaw) * 0.24, bz = z + Math.cos(yaw) * 0.24; box(M.dark, bx - (Math.abs(Math.cos(yaw)) * 0.22 + 0.02), 0.5, bz - (Math.abs(Math.sin(yaw)) * 0.22 + 0.02), bx + (Math.abs(Math.cos(yaw)) * 0.22 + 0.02), 1.0, bz + (Math.abs(Math.sin(yaw)) * 0.22 + 0.02)); cyl(M.steel, x, 0, z, 0.03, 0.44, 6); seats.push([x, z, yaw, true, 0.47]); };
+		const plant = (x,z) => {
+			cyl(M.pot,x,0,z,.27,.5,24);cyl(M.stoneD,x,.5,z,.245,.015,24);cyl(M.oak,x,.45,z,.027,.9,10);
+			for(let i=0;i<18;i++){const a=i*2.4,r=.12+(i%3)*.075,y=.72+(i%6)*.105;
+				add(M.green,new THREE.SphereGeometry(1,8,6).scale(.09,.22,.045).rotateZ(.75).rotateY(a).translate(x+Math.cos(a)*r,y,z+Math.sin(a)*r));}
+			col.push([x-.28,z-.28,x+.28,z+.28,0,.6]);
+		};
+		const chair = (x,z,yaw) => {
+			add(M.dark,new RoundedBoxGeometry(.48,.085,.46,2,.038).translate(x,.47,z));
+			add(M.sofa,new RoundedBoxGeometry(.44,.48,.085,2,.035).translate(0,.76,.23).rotateY(yaw).translate(x,0,z));
+			cyl(M.steel,x,.08,z,.028,.36,10);
+			for(let i=0;i<5;i++){const a=i*Math.PI*.4;box(M.dark,x+Math.cos(a)*.24-.045,.035,z+Math.sin(a)*.24-.045,x+Math.cos(a)*.24+.045,.09,z+Math.sin(a)*.24+.045);}
+			seats.push([x,z,yaw,true,.51]);
+		};
 
 		if (L.kind === 'roof') {
 			// the parapet round the edge, the stair and lift housing on the core
@@ -73,13 +67,21 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			for (const [x0, z0, x1, z1] of [[-hw - e, -hd - e, hw + e, -hd], [-hw - e, hd, hw + e, hd + e], [-hw - e, -hd, -hw, hd], [hw, -hd, hw + e, hd]]) box(M.stoneD, x0, 0, z0, x1, 1.1, z1, true);
 			box(M.stone, -coreW / 2, 0, T.coreZ - coreD, coreW / 2, 3.2, T.coreZ, true);
 			for (const dx of [-coreW / 3, 0, coreW / 3]) box(M.steel, dx - 0.55, 0, T.coreZ - 0.02, dx + 0.55, 2.2, T.coreZ + 0.04);
-			return finish(parts, col, seats, L);
+			return finish(parts, col, seats, L, labels, details);
 		}
 		// the floor, the ceiling, the glass all round
-		box(L.kind === 'lobby' ? M.stone : L.kind === 'office' ? M.carpet : M.oak, -hw - WALL, -0.3, -hd - WALL, hw + WALL, 0, hd + WALL);
-		box(M.ceil, -hw - WALL, H - 0.25, -hd - WALL, hw + WALL, H, hd + WALL);
-		for (let x = -hw + 1.8; x < hw - 1; x += 3.2) for (let z = -hd + 1.8; z < hd - 1; z += 3.2) box(M.panel, x - 0.5, H - 0.27, z - 0.5, x + 0.5, H - 0.25, z + 0.5);
-		const door = L.kind === 'lobby' ? 1.4 : 0;
+		const floorM=L.kind==='lobby'||L.kind==='mall'?M.stone:L.kind==='office'?M.carpet:M.oak;
+		for(const [x0,z0,x1,z1] of slabRects(T,L)) box(floorM,x0,-.16,z0,x1,0,z1);
+		const above=T.levels[T.levels.indexOf(L)+1];
+		for(const [x0,z0,x1,z1] of slabRects(T,above||L)) box(M.ceil,x0,H-.25,z0,x1,H,z1);
+		const step=Math.max(3.2,Math.sqrt(T.W*T.D/180));
+		for(let x=-hw+1.8;x<hw-1;x+=step)for(let z=-hd+1.8;z<hd-1;z+=step){
+			if(above?.holes.some(a=>x>a.x0-.6&&x<a.x1+.6&&z>a.z0-.6&&z<a.z1+.6))continue;
+			box(M.panel,x-.5,H-.27,z-.5,x+.5,H-.25,z+.5);
+		}
+		// Structure follows the same column grid on all storeys.
+		if(T.W>26 && T.D>26)for(const x of [-hw+1,hw-1])for(let z=-hd+5;z<hd-2;z+=8)box(M.stone,x-.24,0,z-.24,x+.24,H,z+.24,true);
+		const door=L.n===0?1.4:0;
 		const side = (x0, z0, x1, z1, gap) => {
 			// glass between mullions, a dark band at the floor and at the ceiling
 			const along = Math.abs(x1 - x0) > Math.abs(z1 - z0), len = along ? x1 - x0 : z1 - z0;
@@ -120,24 +122,8 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 				for (const dx of [-0.6, 0.6]) seats.push([x + dx, z, 0, true, 0.46]);
 				plant(x + sx * 1.8, z - 1.2);
 			}
-		} else if (L.kind === 'office') {
-			// rows of desks across the floor, a glass meeting room in the corner, the kitchen
-			const mx = ix1 - 5, mz = iz1 - 4;
-			for (let z = iz0 + 1.2; z < iz1 - 1.5; z += 3.4) for (let x = ix0 + 1; x < ix1 - 1.2; x += 1.7) {
-				if (x > mx - 1 && z > mz - 1) continue;
-				box(M.desk, x - 0.78, 0.72, z - 0.4, x + 0.78, 0.76, z + 0.4, true);
-				box(M.steel, x - 0.74, 0, z - 0.36, x - 0.7, 0.72, z + 0.36); box(M.steel, x + 0.7, 0, z - 0.36, x + 0.74, 0.72, z + 0.36);
-				box(M.screen, x - 0.3, 0.8, z - 0.32, x + 0.3, 1.18, z - 0.29); box(M.dark, x - 0.03, 0.76, z - 0.3, x + 0.03, 0.8, z - 0.24);
-				chair(x, z + 0.75, 0);
-			}
-			// (the meeting room: glass on two sides, a long table, chairs round it)
-			add(M.glass, new THREE.BoxGeometry(5, H - 0.3, 0.03).translate(mx + 2, (H - 0.3) / 2, mz - 1)); col.push([mx - 0.5, mz - 1.1, mx + 3.6, mz - 0.9, 0, H]);
-			add(M.glass, new THREE.BoxGeometry(0.03, H - 0.3, 5).translate(mx - 0.5, (H - 0.3) / 2, mz + 1.5)); col.push([mx - 0.6, mz - 1, mx - 0.4, mz + 2.6, 0, H]);
-			box(M.oak, mx + 0.4, 0.72, mz + 0.4, mx + 3.6, 0.77, mz + 2.2, true);
-			for (let x = mx + 0.8; x < mx + 3.5; x += 0.9) { chair(x, mz + 0.05, Math.PI); chair(x, mz + 2.55, 0); }
-			box(M.wall, -coreW / 2 - 4, 0, cz - 0.7, -coreW / 2 - 0.2, 0.92, cz, true); box(M.stoneD, -coreW / 2 - 4, 0.92, cz - 0.75, -coreW / 2 - 0.2, 0.96, cz + 0.02);
-			seats.push([-coreW / 2 - 2, cz + 0.6, Math.PI, false]);
-			plant(ix0 + 0.4, iz1 - 0.4); plant(ix1 - 0.4, iz0 + 0.4);
+		} else if (L.kind === 'office' || L.kind === 'mall') {
+			details=fitWorkplace(T,L,{box,cyl,chair,plant,sign,M,seats,add});
 		} else {
 			// a home: living by the windows, dining, the kitchen island by the core, the bedroom
 			// behind a wall to one side; the penthouse with a grand piano
@@ -159,16 +145,42 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			if (L.kind === 'penthouse') { box(M.piano, dx0 - 1, 0.7, lz - 1.6, dx0 + 1, 1.0, lz + 0.6, true); for (const [x, z] of [[dx0 - 0.8, lz - 1.4], [dx0 + 0.8, lz - 1.4], [dx0, lz + 0.4]]) box(M.piano, x - 0.05, 0, z - 0.05, x + 0.05, 0.7, z + 0.05); }
 			plant(ix0 + 0.4, hd - 1); plant(ix1 - 0.4, hd - 1);
 		}
-		return finish(parts, col, seats, L);
+		if(L.kind==='lobby') { sign(T.region+' / WORKPLACE',0,3.8,T.coreZ+.07,5,.5); sign('LIFTS  /  '+(T.levels.length-1)+' FLOORS',0,2.85,T.coreZ+.08,3.6,.3); }
+		return finish(parts, col, seats, L, labels, details);
 	}
-	function finish(parts, col, seats, L) {
+	function finish(parts, col, seats, L, labels=[], details=null) {
 		const g = new THREE.Group();
-		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); mesh.receiveShadow = true; mesh.castShadow = !isPhone && m !== M.glass; g.add(mesh); }
+		for (const [m, list] of parts) { const mesh = new THREE.Mesh(mergeGeometries(list), m); for(const geo of list)geo.dispose(); mesh.receiveShadow = true; mesh.castShadow = !isPhone && m !== M.glass; g.add(mesh); }
+		let labelMat=null;
+		if(labels.length){
+			const cv=document.createElement('canvas');cv.width=1024;cv.height=64*labels.length;
+			const ctx=cv.getContext('2d');ctx.fillStyle='#15292b';ctx.fillRect(0,0,cv.width,cv.height);ctx.font='500 35px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#e9f4ee';
+			const gs=[];
+			labels.forEach((q,i)=>{ctx.fillText(q.text,512,i*64+32,990);const geo=new THREE.PlaneGeometry(q.w,q.h);const uv=geo.attributes.uv;for(let v=0;v<uv.count;v++)uv.setY(v,1-(i+1-uv.getY(v))/labels.length);geo.rotateY(q.yaw).translate(q.x,q.y,q.z);gs.push(geo);});
+			const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
+			labelMat=new THREE.MeshBasicMaterial({map:tex});g.add(new THREE.Mesh(mergeGeometries(gs),labelMat));gs.forEach(q=>q.dispose());
+		}
 		const o = T.o;
 		g.position.set(o.x, L.y, o.z); g.rotation.y = -o.a;
 		group.add(g);
-		return { g, col, seats, L, dispose: () => g.traverse((q) => q.geometry?.dispose()) };
+		return { g, col, seats, L, details, dispose: () => {g.traverse((q) => q.geometry?.dispose());labelMat?.map.dispose();labelMat?.dispose();} };
 	}
+	function structure(T){
+		const geo=new THREE.BoxGeometry(1,1,1), count=T.levels.reduce((n,L)=>n+slabRects(T,L).length,0);
+		const mesh=new THREE.InstancedMesh(geo,M.stoneD,count), mat=new THREE.Matrix4(), pos=new THREE.Vector3(), q=new THREE.Quaternion(), scale=new THREE.Vector3();let i=0;
+		for(const L of T.levels)for(const [x0,z0,x1,z1]of slabRects(T,L))mesh.setMatrixAt(i++,mat.compose(pos.set((x0+x1)/2,L.y-T.floor0-.08,(z0+z1)/2),q,scale.set(x1-x0,.14,z1-z0)));
+		mesh.position.set(T.o.x,T.floor0,T.o.z);mesh.rotation.y=-T.o.a;mesh.receiveShadow=true;mesh.computeBoundingSphere();group.add(mesh);T.structure=mesh;T.cache=new Map();
+		city?.setDoor?.(T.o,[0,T.floor0-T.o.y,2.8]);
+	}
+	function loadAround(L){
+		if(!T||!L)return;
+		const at=T.levels.indexOf(L), desired=new Set([at]);
+		// Adjacent floors give atriums and flight approaches depth, bounded at three.
+		if(at>0)desired.add(at-1);if(at<T.levels.length-1)desired.add(at+1);
+		for(const [i,B]of T.cache)if(!desired.has(i)){group.remove(B.g);B.dispose();T.cache.delete(i);}
+		for(const i of desired)if(!T.cache.has(i))T.cache.set(i,level(T,T.levels[i]));
+	}
+
 	const local = (x, z) => { const o = T.o, dx = x - o.x, dz = z - o.z, ca = Math.cos(o.a), sa = Math.sin(o.a); return [ca * dx + sa * dz, -sa * dx + ca * dz]; };
 	const world = (lx, lz) => { const o = T.o, ca = Math.cos(o.a), sa = Math.sin(o.a); return [o.x + ca * lx - sa * lz, o.z + sa * lx + ca * lz]; };
 
@@ -182,7 +194,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	veil.style.cssText = 'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .35s;z-index:9;';
 	mount?.appendChild(veil);
 	let panelFor = null, busy = false;
-	const label = (L) => (L.kind === 'lobby' ? 'L · Lobby' : L.kind === 'roof' ? 'R · Roof' : `${L.n} · ${L.kind === 'office' ? 'Offices' : L.kind === 'penthouse' ? 'Penthouse' : 'Residence'}`);
+	const label = L => `${L.n===0?'G':L.n} · ${L.program}`;
 	function showPanel(cur) {
 		if (panelFor === T.key + ':' + cur.n) return;
 		panelFor = T.key + ':' + cur.n;
@@ -199,11 +211,11 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	function go(L) {
 		if (busy || !T) return;
 		busy = true;
+		const destination=T;
 		veil.style.opacity = '1';
 		setTimeout(() => {
-			if (T) {
-				if (T.up && T.up.L !== L) { group.remove(T.up.g); T.up.dispose(); T.up = null; }
-				if (L.kind !== 'lobby' && !T.up) T.up = level(T, L);
+			if (T===destination) {
+				loadAround(L);
 				// out of the doors in front of the middle elevator
 				const [x, z] = world(0, T.coreZ + 3.2), p = P();
 				p.pos.set(x, L.y + 1.7, z);
@@ -228,46 +240,42 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		scanT -= dt;
 		if (scanT < 0) {
 			scanT = 0.5;
-			// the tower you are at (or in)
-			const inT = T && (() => { const [lx, lz] = local(cam.x, cam.z); return Math.abs(lx) < T.W / 2 + 25 && Math.abs(lz) < T.D / 2 + 25 && cam.y < T.top + 30; })();
-			if (!inT) {
-				if (T) drop();
-				const near = city?.towersNear?.(cam.x, cam.z, 22) || [];
-				let best = null, bd = 1e9;
-				for (const o of near) { const d = Math.hypot(o.x - cam.x, o.z - cam.z) - Math.max(o.w, o.d) / 2; if (d < bd && cam.y - bay.heightAt(cam.x, cam.z) < 40) { bd = d; best = o; } }
-				if (best && bd < 22) { T = plan(best); T.lobby = level(T, T.levels[0]); }
+			// Prefer the building containing the camera, not a neighbour retained by a wide
+			// proximity band. This also handles direct upper-floor arrivals from flight.
+			const near=city?.towersNear?.(cam.x,cam.z,28)||[];
+			let best=null,bd=1e9;
+			for(const o of near){
+				if(cam.y>o.y+o.h+30||cam.y<o.y-10)continue;
+				const dx=cam.x-o.x,dz=cam.z-o.z,ca=Math.cos(o.a),sa=Math.sin(o.a);
+				const ex=Math.abs(ca*dx+sa*dz)-o.w/2,ez=Math.abs(-sa*dx+ca*dz)-o.d/2;
+				const d=ex<0&&ez<0?Math.max(ex,ez):Math.hypot(Math.max(0,ex),Math.max(0,ez));
+				if(d<bd){bd=d;best=o;}
 			}
+			const key=best&&Math.round(best.x)+':'+Math.round(best.z);
+			if(!best||bd>28){if(T)drop();}
+			else if(!T||T.key!==key){if(T)drop();T=plan(best);structure(T);loadAround(levelBelow(T,p.pos.y-1.7)||T.levels[0]);}
 		}
 		if (!T) { panel.style.display = 'none'; return; }
 		// at the elevators, on whichever level: the panel
 		const [lx, lz] = local(p.pos.x, p.pos.z), cur = levelAt(p.pos.y - 1.7);
+		loadAround(cur||T.levels[0]);
+		for(const B of T.cache.values())B.g.visible=T.type==='mall'||B.L===cur||Math.abs(lx)>T.hw||Math.abs(lz)>T.hd;
 		const atLift = cur && Math.abs(lx) < T.coreW / 2 + 0.3 && lz > T.coreZ && lz < T.coreZ + 2.4 && Math.abs(p.pos.y - 1.7 - cur.y) < 1;
 		if (atLift && !busy) showPanel(cur); else if (!busy) { panel.style.display = 'none'; panelFor = null; }
 	}
-	function levelAt(y) {
-		if (!T) return null;
-		let best = null;
-		for (const L of T.levels) if (y > L.y - 1.5 && (!best || L.y > best.y)) { if (L.kind === 'lobby' || T.up?.L === L) best = L; }
-		return best;
-	}
+	function levelAt(y) { return T ? levelBelow(T,y) : null; }
 	function drop() {
-		if (!T) return;
-		for (const B of [T.lobby, T.up]) if (B) { group.remove(B.g); B.dispose(); }
-		T = null; panel.style.display = 'none'; panelFor = null;
+		if(!T)return;
+		for(const B of T.cache.values()){group.remove(B.g);B.dispose();}
+		group.remove(T.structure);T.structure.geometry.dispose();city?.setDoor?.(T.o,null);
+		T=null;panel.style.display='none';panelFor=null;
 	}
-	// the floors: the lobby's, the one you rode up to, the roof
-	function floor(x, z, y) {
-		if (!T) return -1e9;
-		const [lx, lz] = local(x, z);
-		if (Math.abs(lx) > T.W / 2 || Math.abs(lz) > T.D / 2) return -1e9;
-		let best = -1e9;
-		for (const B of [T.lobby, T.up]) if (B && y > B.L.y - 1.2) best = Math.max(best, B.L.y);
-		return best;
-	}
+	function floor(x,z,y){if(!T)return -1e9;const [lx,lz]=local(x,z);return floorAt(T,lx,lz,y);}
+
 	function push(pos, footY) {
 		if (!T) return;
 		const R = 0.3;
-		for (const B of [T.lobby, T.up]) {
+		for (const B of T.cache.values()) {
 			if (!B || footY < B.L.y - 0.5 || footY > B.L.y + Math.max(2, B.L.h)) continue;
 			let [lx, lz] = local(pos.x, pos.z);
 			if (Math.abs(lx) > T.W / 2 + 1 || Math.abs(lz) > T.D / 2 + 1) continue;
@@ -287,7 +295,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	// who is here: people at the desks, on the sofas, behind the counters (people/people.js)
 	function venue(cam, hours) {
 		if (!T) return null;
-		const B = [T.up, T.lobby].find((q) => q && Math.abs(cam.y - 1.7 - q.L.y) < 2.5);
+		const B = [...T.cache.values()].find((q) => q && Math.abs(cam.y - 1.7 - q.L.y) < 2.5);
 		if (!B) return null;
 		const [lx, lz] = local(cam.x, cam.z);
 		if (Math.abs(lx) > T.W / 2 + 6 || Math.abs(lz) > T.D / 2 + 6) return null;
@@ -316,10 +324,8 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	function raise(i) {
 		const L = T?.levels[i];
 		if (!L) return false;
-		if (L.kind === 'lobby') return true;
-		if (T.up && T.up.L !== L) { group.remove(T.up.g); T.up.dispose(); T.up = null; }
-		if (!T.up) T.up = level(T, L);
+		loadAround(L);
 		return true;
 	}
-	return { group, update, floor, push, venue, here, raise, key: () => T?.key || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
+	return { group, update, floor, push, venue, here, raise, diagnostics:()=>T&&({type:T.type,region:T.region,levels:T.levels.map(L=>({n:L.n,y:L.y,h:L.h,kind:L.kind,program:L.program})),loaded:[...T.cache.values()].map(B=>({n:B.L.n,details:B.details,colliders:B.col.length})),slabs:T.structure.count}), key: () => T?.key || null, inside: () => !!T, levels: () => T?.levels.map(label) || [], go: (i) => { const L = T?.levels[i]; if (L) go(L); } };
 }

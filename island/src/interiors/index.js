@@ -47,11 +47,12 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (hA < 2.4) return null;
 		if (b) {
 			if (b.kind === 7) return 'school';
-			if (b.kind === 8 || b.kind === 11) return hA > 7 ? 'apt' : 'office';
+			if (b.kind === 8) return 'apt';
+			if (b.kind === 11) return 'office';
 			if (b.kind === 9) return 'warehouse';
 			if (b.kind === 10) return o.w * o.d > 10 ? 'shed' : null;
 			if (b.kind === 12) return 'parking';
-			if (b.kind === 5 || b.kind === 6) return b.kind === 6 ? 'store' : hA > 9 ? 'apt' : 'office';
+			if (b.kind === 5 || b.kind === 6) return b.kind === 6 ? 'store' : 'office';
 			return null;
 		}
 		const k = o.kind;
@@ -60,8 +61,8 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		if (k === K.industry) return 'warehouse';
 		if (k === K.garage) return 'garage2';
 		if (k === K.retail) return 'store';
-		if (k === K.office) return hA > 12 ? 'apt' : 'office';
-		if (k === K.tower) return 'apt';
+		if (k === K.office) return 'office';
+		if (k === K.tower) return 'office';
 		if (k === K.apt) return hA > 5 ? 'apt' : null;
 		return null;
 	}

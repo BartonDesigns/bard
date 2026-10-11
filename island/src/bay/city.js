@@ -9,6 +9,7 @@
 // rise on the horizon. At night the windows light up.
 
 import * as THREE from 'three';
+import { commercialStack } from '../interiors/workplace-plan.js';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { hardwood, conifer, shrub, fern, swayMaterial } from '../world/vegetation.js';
@@ -1704,7 +1705,7 @@ export function createCity(shared, scene, bay, real = null) {
 		const touch = (c, b) => { const ca = Math.cos(c.a), sa = Math.sin(c.a), dx = b.x - c.x, dz = b.z - c.z; return Math.abs(c.a - b.a) < 1e-3 && Math.abs(ca * dx + sa * dz) <= (c.w + b.w) / 2 + 0.4 && Math.abs(-sa * dx + ca * dz) <= (c.d + b.d) / 2 + 0.4; };
 		for (const o of list) {
 			if (o.src || (o.x - cx) ** 2 + (o.z - cz) ** 2 > R2) continue;
-			const house = Math.floor(o.kind) === KIND.house && o.kind > 1.005 && o.roof, biz = (o.kind === KIND.retail || (o.kind === KIND.office && o.h <= 20)) && o.w * o.d > 60 && o.w * o.d < 6000 && Math.min(o.w, o.d) > 6;
+			const house = Math.floor(o.kind) === KIND.house && o.kind > 1.005 && o.roof, biz = !commercialStack(o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0,o.w,o.d,o.h-1.2) && (o.kind === KIND.retail || (o.kind === KIND.office && o.h <= 20)) && o.w * o.d > 60 && o.w * o.d < 6000 && Math.min(o.w, o.d) > 6;
 			if (!house && !biz) continue;
 			// (a house boarded up or burnt out stays shut: no rooms built in it)
 			if (house && (o.cond === COND.boarded || o.cond === COND.burnt)) continue;
@@ -2000,7 +2001,7 @@ export function createCity(shared, scene, bay, real = null) {
 		uploadKit(list.kit);
 		kit2.upload(list.props);
 		// the tall ones, for going inside (bay/towers.js)
-		tallList = list.filter((o) => (o.kind === KIND.tower || (o.kind === KIND.office && o.h > 20)) && !o.roof && o.src?.kind !== 12 && !o.src?.grp?.biz && Math.min(o.w, o.d) > 12);
+		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
 		placeTrees(x, z);
 	}
 	return { lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };

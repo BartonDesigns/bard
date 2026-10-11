@@ -1,5 +1,17 @@
 # Level 99 Bard: handoff notes
 
+## Commercial towers, malls and character contact (11 October 2026)
+
+Commercial source identity now survives height classification. Offices and large retail
+anchors route to a full-height system with structural slabs on every storey, altitude-driven
+three-floor detail caching, a complete elevator directory, varied workplace programmes and
+regional profiles. Malls have atriums, shop units, food courts and walkable escalator treads.
+Generated modern downtowns can contain 45–74-storey towers. New original long-groom recipes
+and calibrated, bounded cloth/body contact are integrated. See
+`docs/workplaces-and-character-contact.md` for scope, evidence, architectural references
+and remaining limitations. In particular, cloth proxy overlap is reduced, not eliminated;
+this is not full cloth/self-collision or physical-device performance certification.
+
 ## Shoulder, sleeve and groom refinement (11 October 2026)
 
 Loose tops now retain arm influences across the shoulder. Cuffs use planes perpendicular

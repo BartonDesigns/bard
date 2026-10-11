@@ -2021,6 +2021,7 @@ if (typeof window !== 'undefined') {
 		// the buildings built inside round you (interiors/): Crysis.interiors() tells how they stand,
 		// Crysis.interiorGo('row') takes you to the front door of one ('shop', 'apt', 'warehouse'...)
 		interiors: () => window.L99Island?.world?.()?.interiors?.info() ?? 'none here',
+		workplace: () => window.L99Island?.world?.()?.towers?.diagnostics() ?? 'none here',
 		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
 		// the Deep (planet/deep.js): Crysis.deep() tells of it; Crysis.deepGo('gate'), ('open') or a depth in metres
