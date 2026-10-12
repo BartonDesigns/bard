@@ -104,7 +104,13 @@
     "zoom": 1.22
   }
 ];
-	let view, current = null, serial = 0, storyIndex = -1, imageSerial = 0, slowTimer, restore = [], previousFocus, backgroundObserver;
+	let view, current = null, serial = 0, storyIndex = -1, imageSerial = 0, slideTimer, paused = false, slowTimer, restore = [], previousFocus, backgroundObserver;
+	const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+	function rotation() {
+		clearInterval(slideTimer);
+		if (active() && !paused && !reduced.matches) slideTimer = setInterval(() => showStory(pickStory()), 10000);
+	}
+	reduced.addEventListener('change', rotation);
 	function element(tag, cls, text, parent) {
 		const el = document.createElement(tag); el.className = cls;
 		if (text) el.textContent = text;
@@ -148,6 +154,8 @@
 		const images = [element('img', '', '', art)]; images.forEach(img => { img.alt = ''; img.decoding = 'async'; });
 		const shell = element('div', 'bl-shell', '', root), top = element('header', 'bl-top', '', shell);
 		element('div', 'bl-brand', 'BARD', top);
+		const pause = element('button', 'bl-back', 'Pause', top); pause.type = 'button'; pause.setAttribute('aria-label', 'Pause slideshow');
+		pause.onclick = () => { paused = !paused; pause.textContent = paused ? 'Play' : 'Pause'; pause.setAttribute('aria-label', paused ? 'Play slideshow' : 'Pause slideshow'); rotation(); };
 		const back = element('button', 'bl-back', 'Back to Bard', top); back.type = 'button';
 		const content = element('div', 'bl-content', '', shell), hero = element('div', 'bl-hero', '', content);
 		const title = element('h1', '', '', hero), tip = element('p', 'bl-tip', '', hero);
@@ -156,7 +164,7 @@
 		const track = element('div', 'bl-track', '', state); track.setAttribute('aria-hidden', 'true'); element('div', 'bl-fill', '', track);
 		const sub = element('p', 'bl-sub', '', state);
 		const enter = element('button', 'bl-enter', 'Enter world', footer); enter.type = 'button'; enter.hidden = true;
-		view = { root, images, title, tip, status, sub, enter, back };
+		view = { root, pause, images, title, tip, status, sub, enter, back };
 		back.onclick = event => { event.stopPropagation(); if (!current) return; const session = current; session.cancelled = true; hide(); session.options.exit?.(); if (session.settled) current = null; };
 		enter.onclick = event => {
 			event.stopPropagation();
@@ -196,10 +204,11 @@
 		view.sub.textContent = '';
 		view.root.focus({ preventScroll: true }); window.dispatchEvent(new Event('blur'));
 		showStory(pickStory());
+		paused = false; view.pause.textContent = 'Pause'; view.pause.setAttribute('aria-label', 'Pause slideshow'); rotation();
 		clearTimeout(slowTimer); slowTimer = setTimeout(() => { if (active() && !current.settled) view.sub.textContent = 'First visits can take longer. Your world is still preparing.'; }, 25000);
 	}
 	function hide() {
-		clearTimeout(slowTimer); imageSerial++; backgroundObserver?.disconnect();
+		clearInterval(slideTimer); clearTimeout(slowTimer); imageSerial++; backgroundObserver?.disconnect();
 		view.root.hidden = true; restore.forEach(([el, inert]) => { el.inert = inert; }); restore = [];
 		window.dispatchEvent(new Event('blur')); previousFocus?.focus?.({ preventScroll: true });
 	}

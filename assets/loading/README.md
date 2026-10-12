@@ -29,3 +29,5 @@ Added ten distinct existing game captures. Each loading session picks one image 
 | `sun.webp` | `docs/verification/stellar-entry/Sun-interior.png` | Original 640×400 game capture, WebP quality 88. |
 | `streets.webp` | `docs/verification/world-expansion/beijing-street.png` | Original 800×500 game capture, WebP quality 88. |
 | `crew.webp` | `docs/verification/handoff-release/moon-crew-room.png` | Original 640×420 game capture, WebP quality 88. |
+
+12 October follow-up: automatic random rotation restored at ten-second intervals, with Pause/Play and reduced-motion support. No slide numbers or screenshot subtitles. The same 14 authentic assets remain in use.

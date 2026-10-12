@@ -49,7 +49,7 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 			await page.screenshot({ path: path.join(out, name + '.jpg'), quality:85, fullPage: true });
 			if (width < 651) await ready.tap(); else await ready.click(); assert.equal(await page.evaluate(() => L99Loading.active()), false);
 			assert.equal(await page.evaluate(() => enters), 1); await page.keyboard.press('w'); assert.equal(await page.evaluate(() => events), 1);
-			assert.equal(await page.locator('#game').evaluate(el => el.inert), false); pass(name + ': guarded static artwork, focus, readiness, input restoration');
+			assert.equal(await page.locator('#game').evaluate(el => el.inert), false); pass(name + ': guarded slideshow artwork, focus, readiness, input restoration');
 		}
 		const scenes = ['horizon','resonance','settlement','beyond','island','discovery','deep','interior','earth','terran','atmosphere','sun','streets','crew'];
 		for (const [name,width,height] of [['desktop',1440,900],['phone',390,844]]) {
@@ -64,17 +64,22 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 				await page.screenshot({path:path.join(out,`${name}-scene-${scenes[i]}.jpg`),quality:80});
 			}
 		}
-		pass('all 14 distinct captures load on desktop and phone with one short hint and no slideshow/captions');
+		pass('all 14 distinct captures load on desktop and phone with one short hint and no slide numbers/captions');
 		const selected=await page.locator('#bard-loading img').getAttribute('src');
 		await page.waitForTimeout(11000);
-		assert.equal(await page.locator('#bard-loading img').getAttribute('src'),selected);
+		assert.notEqual(await page.locator('#bard-loading img').getAttribute('src'),selected);
+		await page.getByRole('button',{name:'Pause slideshow',exact:true}).click();
+		const pausedImage=await page.locator('#bard-loading img').getAttribute('src');
+		await page.waitForTimeout(11000);
+		assert.equal(await page.locator('#bard-loading img').getAttribute('src'),pausedImage);
+		await page.getByRole('button',{name:'Play slideshow',exact:true}).click();
 		await page.evaluate(()=>finish(true));await page.getByRole('button',{name:'Enter world',exact:true}).click();
 		await page.evaluate(()=>{start();});await page.waitForFunction(()=>L99Loading.pending);
-		assert.notEqual(await page.locator('#bard-loading img').getAttribute('src'),selected);
+		assert.notEqual(await page.locator('#bard-loading img').getAttribute('src'),pausedImage);
 		const next=await page.locator('#bard-loading img').getAttribute('src');
 		await page.reload();await page.evaluate(()=>{Math.random=()=>.99;start();});
 		assert.notEqual(await page.locator('#bard-loading img').getAttribute('src'),next);
-		pass('one random image remains for the whole load; immediate repeats avoided on reopen and reload');
+		pass('random slideshow rotates, pauses and avoids immediate repeats on reopen/reload');
 		await page.goto(base + '/fixture'); await page.evaluate(() => { window.attempts = 0; L99Loading.run(async () => { if (++attempts === 1) throw Error('offline'); return true; }); });
 		await page.getByRole('button', { name: 'Try again', exact: true }).click(); await page.getByRole('button', { name: 'Enter world', exact: true }).waitFor();
 		assert.equal(await page.evaluate(() => attempts), 2); pass('failed task retries and cannot enable entry early');
@@ -115,6 +120,8 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 		pass('cancelled nested and queued tasks cannot run or deadlock a later door request');
 		await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto(base + '/fixture'); await page.evaluate(() => { start(); });
 		assert.equal(await page.locator('#bard-loading nav').count(), 0);
+		const reducedImage=await page.locator('#bard-loading img').getAttribute('src'); await page.waitForTimeout(11000);
+		assert.equal(await page.locator('#bard-loading img').getAttribute('src'),reducedImage);
 		assert.equal(await page.locator('.bl-fill').evaluate(el => getComputedStyle(el).animationName), 'none'); pass('reduced motion keeps static artwork and disables progress animation');
 		await page.route('**/assets/loading/*.webp', route => route.abort()); await page.reload(); await page.evaluate(() => { start(); }); await page.waitForFunction(() => typeof finish === 'function');
 		await page.evaluate(() => finish(true)); await page.getByRole('button', { name: 'Enter world', exact: true }).click(); pass('image failures never block readiness or entry');

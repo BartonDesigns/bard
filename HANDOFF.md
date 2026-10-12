@@ -1,3 +1,7 @@
+## Unnumbered slideshow restored (12 October 2026)
+
+The owner requested automatic slides again after the static-image release. The 14-image loader now starts randomly and chooses another image every ten seconds without immediate repeats. No slide numbers, screenshot subtitles or extra descriptive copy return. A compact Pause/Play button controls rotation; reduced-motion preferences keep artwork static. Hiding the loader clears its timer. Entry, retry and cancellation guards are unchanged. This supersedes the static-selection behavior below. No Worker change is required.
+
 ## Fourteen static random loading screens (12 October 2026)
 
 Owner correction: 14 authentic captures, one randomly selected per load, no slideshow. Immediate repeats are avoided where session storage is available. Removed screenshot subtitles, navigation/counts and verbose copy; retained one short title/hint, actual status and guarded entry/recovery. The existing cancellation/reentry semantics remain intact. Build and all 15 browser check groups pass, with 28 desktop/phone scene previews. See `docs/cinematic-loading.md` and `docs/verification/cinematic-loading/report.json`. This supersedes the earlier four-screen presentation; historical release notes below remain preserved. Frontend publication evidence belongs in the correction PR; no Worker deployment is required.

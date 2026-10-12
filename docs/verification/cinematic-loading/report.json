@@ -1,21 +1,20 @@
 {
   "method": "Production loading UI and faceplate entry, Chromium keyboard/mouse, emulated touch and responsive viewport checks; not native Safari.",
   "checks": [
-    "desktop: guarded static artwork, focus, readiness, input restoration",
-    "phone: guarded static artwork, focus, readiness, input restoration",
-    "small-phone: guarded static artwork, focus, readiness, input restoration",
-    "landscape: guarded static artwork, focus, readiness, input restoration",
-    "short-landscape: guarded static artwork, focus, readiness, input restoration",
-    "all 14 distinct captures load on desktop and phone with one short hint and no slideshow/captions",
-    "one random image remains for the whole load; immediate repeats avoided on reopen and reload",
+    "desktop: guarded slideshow artwork, focus, readiness, input restoration",
+    "phone: guarded slideshow artwork, focus, readiness, input restoration",
+    "small-phone: guarded slideshow artwork, focus, readiness, input restoration",
+    "landscape: guarded slideshow artwork, focus, readiness, input restoration",
+    "short-landscape: guarded slideshow artwork, focus, readiness, input restoration",
+    "all 14 distinct captures load on desktop and phone with one short hint and no slide numbers/captions",
+    "random slideshow rotates, pauses and avoids immediate repeats on reopen/reload",
     "failed task retries and cannot enable entry early",
     "late completion after Back cannot reopen the screen",
     "immediate reopen waits for cancelled success or failure and restores guarded entry",
     "cancelled nested and queued tasks cannot run or deadlock a later door request",
     "reduced motion keeps static artwork and disables progress animation",
     "image failures never block readiness or entry",
-    "production faceplate import failure reaches the cinematic recovery screen",
-    "real bundled Moon world renders before readiness; input waits for entry and resumes afterwards"
+    "production faceplate import failure reaches the cinematic recovery screen"
   ],
   "errors": [],
   "passed": true
