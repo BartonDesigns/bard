@@ -5,7 +5,7 @@
 // solid, deep water floats you on the swell.
 
 import * as THREE from 'three';
-import { waveHeight } from './world/ocean.js';
+import { waterContact } from './world/water-contact.js';
 import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 
 const EYE = 1.68;
@@ -239,11 +239,14 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		pushOut(s.pos);
 		const ground = seenFloorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
-		const river = island.waterAt?.(s.pos.x, s.pos.z) ?? null;
-		const surface = Math.max(waveHeight(island, s.pos.x, s.pos.z, t, shared.uWave?.value ?? 1), river ?? -1e9);
-		// (never in a cave: its pools are shallow)
-		s.swimming = island.underFloor?.(s.pos.x, s.pos.z, s.pos.y - EYE) == null && (ground < surface - 1.35 || (s.diving && ground < surface - 0.6));
-		s.surface = surface;
+		const contact = waterContact(island, s.pos, ground, t, shared.uWave?.value ?? 1, s.diving);
+		const surface = contact.surface;
+		const enteringWater = !s.swimming && contact.swimming;
+		s.swimming = contact.swimming;
+		// An underwater arrival starts at its actual depth, without being pulled up
+		// to a distant lake surface before the player has touched a control.
+		if (enteringWater && contact.under) s.diving = true;
+		s.surface = surface ?? -Infinity;
 		// Forward swimming follows the view under the surface once the player deliberately
 		// looks down. Start with downward velocity so the first frame cannot cancel the dive
 		// while the eye is still above water. Looking down while idle/backing up stays afloat.

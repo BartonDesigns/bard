@@ -67,9 +67,12 @@ export function createCarveAtlas(slots) {
 	WC_U.uWcAt.value.dispose(); WC_U.uWcIdx.value.dispose();
 	WC_U.uWcAt.value = tex; WC_U.uWcIdx.value = itex;
 	WC_U.uWcS.value.set(cols, rows, 0, 0);
+	WC_U.uWcR.value.w = 0;
+	C.water = C.trees = null;
 	const free = [...Array(slots).keys()].reverse(), h = THREE.DataUtils.toHalfFloat;
 	C.tiles.clear(); C.version++;
-	let ci = -1e9, cj = -1e9, dirty = false;
+	let ci = -1e9, cj = -1e9, dirty = false, disposed = false;
+	const owns = () => !disposed && WC_U.uWcAt.value === tex;
 	function reindex() {
 		idx.fill(0);
 		const i0 = ci - IDX / 2, j0 = cj - IDX / 2;
@@ -84,6 +87,7 @@ export function createCarveAtlas(slots) {
 		count: () => C.tiles.size,
 		// draw: [drop, kind] interleaved; walk: drop as walked
 		put(i, j, draw, walk) {
+			if (!owns()) return false;
 			let t = C.tiles.get(tkey(i, j));
 			if (!t) { if (!free.length) return false; t = { i, j, slot: free.pop(), walk }; C.tiles.set(tkey(i, j), t); }
 			t.walk = walk;
@@ -98,6 +102,7 @@ export function createCarveAtlas(slots) {
 			return true;
 		},
 		drop(i, j) {
+			if (!owns()) return;
 			const t = C.tiles.get(tkey(i, j));
 			if (!t) return;
 			C.tiles.delete(tkey(i, j)); free.push(t.slot); dirty = true; C.version++;
@@ -105,12 +110,23 @@ export function createCarveAtlas(slots) {
 		tiles: () => C.tiles.values(),
 		// the index follows you; the carving fades out at reach metres
 		centre(x, z, reach) {
+			if (!owns()) return;
 			const i = Math.floor(x / WT), j = Math.floor(z / WT);
 			if (Math.abs(i - ci) > 2 || Math.abs(j - cj) > 2) { ci = i; cj = j; dirty = true; }
 			if (dirty) reindex();
 			WC_U.uWcR.value.w = reach; WC_U.uWcS.value.z = x; WC_U.uWcS.value.w = z;
 		},
 		window: () => ({ i0: ci - IDX / 2, j0: cj - IDX / 2, n: IDX }),
+		dispose() {
+			if (disposed) return;
+			if (owns()) {
+				C.tiles.clear(); C.water = C.trees = null; C.version++; C.grow++;
+				WC_U.uWcR.value.w = 0;
+				WC_U.uWcS.value.set(1, 1, 0, 0);
+				WC_U.uWcAt.value = blankRG(); WC_U.uWcIdx.value = blankR();
+			}
+			disposed = true; tex.dispose(); itex.dispose();
+		},
 	};
 }
 

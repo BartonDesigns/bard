@@ -328,6 +328,7 @@ void main(){
 // townK (x, z) 0 wild .. 1 built up, trees (plant the banks), look { kind, tint, mix },
 // island (for its height map uniforms), skip (x, z): no bank trees there
 export function createWater(scene, shared, opts = {}) {
+	let disposed = false;
 	const { isPhone = false, heightAt, ground = null, real = null, sources = [], mode = 'bay', trees = mode === 'bay', look = null, island = null } = opts;
 	const townK = opts.townK || (() => 0);
 	const carve = mode === 'bay';
@@ -1111,6 +1112,7 @@ export function createWater(scene, shared, opts = {}) {
 	// (what took longest, for a look at a slow frame)
 	const spike = (what, s0) => { const d = performance.now() - s0; if (d > (S.stats.spikes[what] || 0)) S.stats.spikes[what] = Math.round(d * 10) / 10; };
 	function update(dt, t, cam, night = 0) {
+		if (disposed) return;
 		const f0 = performance.now();
 		uNight.value = night;
 		const x = cam.position.x, z = cam.position.z;
@@ -1195,6 +1197,16 @@ export function createWater(scene, shared, opts = {}) {
 	}
 	return {
 		group: root, update, waterAt, inWater, nameAt, kindAt, floor, info, falls, ready: () => S.ready,
+		dispose() {
+			if (disposed) return;
+			disposed = true; S.ready = false; job = cur = null;
+			for (const L of S.lakes) L.gridded = false;
+			S.lakes.length = 0; S.lakeGrid.clear(); S.tiles.clear(); S.jobs.length = 0; addQ.length = 0;
+			atlas?.dispose();
+			root.removeFromParent(); riverMat.dispose(); haloMat?.dispose();
+			for (const m of lakeMats.values()) m.dispose();
+			lakeMats.clear();
+		},
 		riverAt: (x, z) => { const r = riverAt(x, z, 2); return r ? { name: r.L.name, level: r.level, width: r.hw * 2 } : null; },
 		hasRiver: (x, z) => !!riverAt(x, z, 2),
 		decks: () => [...decks.values()].map((D) => ({ x: D.x, z: D.z, own: D.own, span: D.span })),

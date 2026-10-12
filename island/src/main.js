@@ -125,7 +125,7 @@ import { createCarjack } from './vehicles/carjack.js';
 import { createAvatar } from './people/avatar.js';
 import { createSelf } from './people/self.js';
 import * as CREATURES from './world/creatures.js';
-import { waveHeight } from './world/ocean.js';
+import { waterContact } from './world/water-contact.js';
 import { createMushrooms } from './planet/mushrooms.js';
 import { createVolcano } from './planet/volcano.js';
 import { planAlien, createAlien } from './planet/alien.js';
@@ -831,6 +831,10 @@ export function createIslandWorld() {
 		const body = worldBody(params);
 		if (world && sameBody(state.body, body)) return world;
 		if (world) teardown();
+		shared.uUnder.value = 0;
+		seaLook.t = 0; seaLook.on = true;
+		underwaterAudio(0, 1);
+		camera.near = .25; camera.far = 16000; camera.updateProjectionMatrix();
 		window.L99Loading.stage('Shaping the landscape');
 		await new Promise((r) => requestAnimationFrame(r));
 		// what kind of world: its ground, air, plants and underground (Earth's island is tropical)
@@ -966,7 +970,8 @@ export function createIslandWorld() {
 		world.spray.quality(quality);
 		if (waterPlan) {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
-			island.waterAt = (x, z) => world?.water?.waterAt(x, z) ?? null;
+			const water = world.water;
+			island.waterAt = (x, z) => water.waterAt(x, z);
 		}
 		// Every generated surface, including Earth's island, owns its underground in this scene.
 		{
@@ -1121,7 +1126,8 @@ export function createIslandWorld() {
 			// (the ground as the GPU draws it, where people stand: bay/terrain.js)
 			island.drawnAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.drawnAt(x, z, island.heightAt);
 			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
-			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? world?.water?.waterAt(x, z) ?? world?.globe?.waterAt(x, z) ?? null;
+			const waterWorld = world;
+			island.waterAt = (x, z) => waterWorld.boardwalk?.waterAt(x, z) ?? waterWorld.water?.waterAt(x, z) ?? waterWorld.globe?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
@@ -1193,6 +1199,7 @@ export function createIslandWorld() {
 			keepTextures: [shared.occ, shared.prints],
 		});
 		world.globe?.dispose();         // globe: the frame back to the Bay's, its hooks off
+		world.water?.dispose();
 		world.bayArea?.dispose();
 		world.real?.dispose();
 		drive.stop();
@@ -1511,15 +1518,16 @@ export function createIslandWorld() {
 		surprises.update(dt, sk, wx);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
-		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
+		const contact = waterContact(W.island, camera.position, W.player.floorAt(camera.position.x, camera.position.z, camera.position.y - 1.68), time, shared.uWave.value);
+		const surf = contact.surface ?? 0;
 		// (the Deep lies far under the sea's level, but it is dry rock)
-		const under = camera.position.y < surf - 0.05 && !W.deep?.active();
+		const under = contact.under && !W.deep?.active();
 		// seen from below the sea is a ceiling: it must not hide what glows beneath it
 		W.ocean.material.depthWrite = !under;
 		// ...and it is drawn before everything under it, so glows and embers show through
 		W.ocean.renderOrder = under ? -5 : 1;
 		W.underwater.update(dt, time, under, surf);
-		W.magma.update(dt, time, under, surf);
+		W.magma.update(dt, time, under, contact.sea ?? 0);
 		W.volcano?.update(dt, time);
 		W.alien?.update(dt, time);
 		W.beyond?.update(dt, time);
