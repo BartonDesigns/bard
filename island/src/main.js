@@ -248,9 +248,9 @@ const HUD_CSS = `
 #l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:56px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
 #l99-island-mount.l99-touch .l99-rail>button>svg{width:22px;min-width:22px;flex:none;}
 #l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 13px/1.3 system-ui;text-align:left;overflow-wrap:normal;}
-#l99-island-mount.l99-touch.l99-tools-open :is(.cb-btn,button[aria-label="Aim"]){visibility:hidden;}
-#l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(100px + env(safe-area-inset-bottom))!important;}
-#l99-island-mount.l99-touch>button[aria-label="Aim"]{right:calc(92px + env(safe-area-inset-right))!important;bottom:calc(100px + env(safe-area-inset-bottom))!important;}
+#l99-island-mount.l99-touch.l99-tools-open :is(.cb-btn,button:is([aria-label="Aim"],[aria-label="Aim held item"])){visibility:hidden;}
+#l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;width:80px!important;height:80px!important;}
+#l99-island-mount.l99-touch>button:is([aria-label="Aim"],[aria-label="Aim held item"]){right:calc(104px + env(safe-area-inset-right))!important;bottom:calc(88px + env(safe-area-inset-bottom))!important;width:64px!important;height:64px!important;touch-action:none!important;}
 #l99-island-mount.l99-touch .cb-btn[aria-label="Reload"]{right:calc(100px + env(safe-area-inset-right))!important;bottom:calc(160px + env(safe-area-inset-bottom))!important;}
 #l99-island-mount.l99-touch .cb-btn[aria-label="Mode"]{right:calc(100px + env(safe-area-inset-right))!important;bottom:calc(212px + env(safe-area-inset-bottom))!important;}
 #l99-island-mount.l99-touch .cb-hp{left:calc(16px + env(safe-area-inset-left));bottom:calc(174px + env(safe-area-inset-bottom));width:144px;transform:none;}
@@ -1463,6 +1463,8 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		stepWind(dt, shared);
 		const W = world;
+		W.player.state.inputBlocked = window.L99Loading.active() || arcade.active() || studio.active() || gear.busy() || dom.mount.classList.contains('l99-tools-open') || !!dom.mount.querySelector('[role="dialog"]:not([style*="display: none"]) input:focus');
+		if (W.player.state.inputBlocked) W.player.clearInput();
 		W.arms?.update(dt, camera.position);
 		W.music.update(dt);
 		W.orbit?.before();
@@ -1895,7 +1897,7 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			hint(isPhone ? 'Left thumb to walk, right thumb to look. ✈ to fly, ☀ for the sky.' : 'WASD to walk, drag to look, Space to jump, F to fly. ☀ for the sky.');
+			hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {
