@@ -1,3 +1,4 @@
+import {pauseWorkplaceRoutine} from './workplace-routine.js';
 // Crysis people in the world. A pool of real bodies (MakeHuman, see body.js) lives
 // round the player and is handed out to whoever is near: people walking the city's
 // sidewalks round their blocks and crossing at the corners, joggers, pairs stopped to
@@ -55,7 +56,7 @@ export function createPeople(scene, world, camera = null) {
 		return frustum.intersectsSphere(sphere);
 	};
 	const hiddenSpot = (x, z, cam) => { const d = Math.hypot(x - cam.x, z - cam.z); return d > 75 || !seen(x, ground(x, z), z, d); };
-	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined)); return M; };
+	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined), {constrain:pos=>P.workConstrain?.(pos)}); return M; };
 
 	async function ensure() {
 		if (A || failed) return;
@@ -190,7 +191,7 @@ export function createPeople(scene, world, camera = null) {
 			// a seat, or a place to stand (behind the counter, at the bar), free and in sight
 			const seated = venue.areas.filter((q) => q.seats);
 			if (seated.length) {
-				const free = seated.flatMap((q) => q.seats.filter((st) => !st.taken && Math.hypot(st.x - cam.x, st.z - cam.z) < NEAR && Math.hypot(st.x - cam.x, st.z - cam.z) > 1.2 && !seen(st.x, st.y, st.z)));
+				const free = seated.flatMap((q) => q.seats.filter((st) => !st.taken && !st.work?.routineOnly && Math.hypot(st.x - cam.x, st.z - cam.z) < NEAR && Math.hypot(st.x - cam.x, st.z - cam.z) > 1.2 && !seen(st.x, st.y, st.z)));
 				if (!free.length) return false;
 				// Fill the other half of a scene before opening another desk or shop.
 				const paired=free.filter(st=>st.work && pool.some(a=>a.active && a.workSpot?.work?.group===st.work.group));
@@ -361,12 +362,13 @@ export function createPeople(scene, world, camera = null) {
 		p.timer -= dt;
 		const pace = p.P.dna.gait.pace;
 		// (a fight nearby takes over: fleeing, cowering, fallen; combat/civilians.js)
-		if (p.override && p.override(p, dt, cam)) return;
+		if (p.override && p.override(p, dt, cam)) { pauseWorkplaceRoutine(p); return; }
 		if (p.engaged) {
+			pauseWorkplaceRoutine(p);
 			// talking with you: stop, turn to face you, listen; speak while there is speech
 			const dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
 			M.want.heading = Math.atan2(dx, dz);
-			M.want.speed = d > 2.4 ? 0.8 : 0;
+			M.want.speed = !p.workSpot && d > 2.4 ? 0.8 : 0;
 			S.look.target = cam;
 			const speaking = performance.now() < (p.speakUntil || 0);
 			S.talk = speaking ? 1 : 0;
@@ -680,7 +682,7 @@ export function createPeople(scene, world, camera = null) {
 				fadePerson(p.P, p.fade ?? 1);
 				steer(p, dt, cam);
 				p.M.update(dt, t, cam);
-				if (d < 150 && p.route?.kind !== 'seat') solid(p, dt, cam);
+				if (d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override))) solid(p, dt, cam);
 			}
 		}
 		// the doors of public buildings open for the people coming to them (interiors/index.js)

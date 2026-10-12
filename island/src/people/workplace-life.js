@@ -1,8 +1,9 @@
+import {stepWorkplaceRoutine,releaseWorkplaceRoutine,settleWorkplaceSale} from './workplace-routine.js';
 import * as THREE from 'three';
 const hash=s=>{let h=0;for(const c of String(s))h=Math.imul(h,31)+c.charCodeAt(0)|0;return h>>>0;};
 // Shared scene clock synchronizes the two sides of a negotiation or project review.
 export function workplaceActivity(meta,t,hasPartner=true) {
- const h=hash(meta.group || meta.program), cycle=Math.floor((t+h%31)/64), phase=(t+h%31)%64, side=meta.side||0;
+ const h=hash(meta.group || meta.program), clock=t+(meta.sceneClock?0:h%31), cycle=meta.sceneNumber??Math.floor(clock/64), phase=clock%64, side=meta.side||0;
  if(meta.role==='vendor'||meta.role==='shopper') {
   if(!hasPartner) return {activity:meta.role==='vendor'?'checking stock':'browsing',pose:meta.role==='vendor'?'read':'rest',talk:false};
   if(phase<13) return {activity:'browsing',pose:'rest',talk:false};
@@ -15,10 +16,14 @@ export function workplaceActivity(meta,t,hasPartner=true) {
   const talk=hasPartner && Math.floor(phase/4)%2===side;
   return {activity:dispute?'dispute':'project review',pose:talk?'table':'listen',talk,gesture:dispute?(talk?'emphatic':'shake'):(talk?'explain':'nod'),anger:dispute?.7:0,line:dispute?(side?'WE CANNOT PROMISE THAT DEADLINE!':'Then let’s agree on a schedule we can actually meet.'):(side?'Let’s check the figures before the client call.':'I’ll take the next action. Who is checking the estimate?')};
  }
+ if(meta.role==='refreshment')return {activity:'taking a refreshment break',pose:'rest',talk:false};
+ if(meta.role==='browse')return {activity:'comparing items on display',pose:'read',talk:false};
+ if(meta.role==='stock check')return {activity:'checking shelf stock',pose:'read',talk:false};
  if(meta.role==='office worker') return phase<40?{activity:'typing at a workstation',pose:'type',talk:false}:phase<50?{activity:'reviewing documents',pose:'read',talk:false}:{activity:'taking a short break',pose:'lap',talk:false};
  return {activity:'taking a break',pose:meta.sit?'lap':'rest',talk:false};
 }
 export function disposeWorkplaceProps(p) {
+ releaseWorkplaceRoutine(p);p.workBudget=null;p.workPurchases=0;
  for(const key of ['workBubble','shoppingBag']){const o=p[key];if(o){o.removeFromParent();o.geometry?.dispose();o.material?.map?.dispose();o.material?.dispose();p[key]=null;}}
 }
 function bubble(p,text) {
@@ -27,18 +32,35 @@ function bubble(p,text) {
  const o=p.workBubble,cv=o.material.map.image,g=cv.getContext('2d');g.clearRect(0,0,768,160);g.fillStyle='rgba(12,23,29,.88)';g.fillRect(4,4,760,152);g.font='28px sans-serif';g.fillStyle='#f5f0e3';g.textAlign='center';const words=text.split(' ');let rows=[],line='';for(const w of words){if(g.measureText(line+w).width>710){rows.push(line);line='';}line+=w+' ';}rows.push(line);rows.slice(0,3).forEach((r,i)=>g.fillText(r,384,45+i*38));o.material.map.needsUpdate=true;o.userData.text=text;
 }
 export function workActor(p,t,dt,cam,actors=[]) {
+ if(!p.engaged && !p.P.ragdoll && stepWorkplaceRoutine(p,dt,actors,cam))return true;
  const st=p.workSpot, meta=st?.work;
  if(!meta || p.engaged || p.P.ragdoll) {if(p.workBubble)p.workBubble.visible=false;return false;}
- const partner=actors.some(a=>a!==p && a.active && !a.engaged && !a.P.ragdoll && a.workSpot?.work?.group===meta.group && Math.abs(a.M.S.pos.y-p.M.S.pos.y)<2);
- let a=workplaceActivity(meta,t,partner); const M=p.M;
- if(st.commerce?.stock===0 && st.commerce.lastSale!==a.sale) a={activity:'checking sold-out stock',pose:'listen',talk:meta.role==='vendor',line:'That one has sold out. Let me check the next delivery.'};
+ const partner=actors.find(a=>a!==p && a.active && !a.engaged && !a.override && !a.workWalking && !a.P.ragdoll && a.workSpot?.work?.group===meta.group && (!['vendor','shopper'].includes(meta.role)||a.workSpot.work.role===(meta.role==='vendor'?'shopper':'vendor')) && Math.abs(a.M.S.pos.y-p.M.S.pos.y)<2 && Math.hypot(a.M.S.pos.x-p.M.S.pos.x,a.M.S.pos.z-p.M.S.pos.z)<4 && Math.hypot(a.M.S.pos.x-a.workSpot.x,a.M.S.pos.z-a.workSpot.z)<.3);
+ let clock=meta.role==='meeting colleague'?t:p.workRoutine?.elapsed??t;
+ const retail=meta.role==='vendor'||meta.role==='shopper',customer=meta.role==='shopper'?p:partner?.workSpot?.work?.role==='shopper'?partner:null;
+ const paired=!!partner && (!retail || (customer && (meta.role==='vendor'||partner.workSpot.work.role==='vendor')));
+ if(retail && st.commerce){
+  const c=st.commerce;
+  if(meta.role==='shopper' && paired){
+   if(c.customer!==p){c.customer=p;c.sceneTime=0;c.scene=(c.scene||0)+1;}
+   c.sceneTime=Math.min(63,(c.sceneTime||0)+Math.max(0,Math.min(.05,dt)));
+  }
+  clock=c.sceneTime||0;
+ }
+ let a=workplaceActivity(retail?{...meta,sceneClock:true,sceneNumber:st.commerce?.scene||0}:meta,clock,paired); const M=p.M;
+ if(retail && st.commerce && (a.sale!==undefined || a.activity==='purchase complete')){
+  const receipt=st.work.group+':'+st.commerce.scene;
+  if(st.commerce.lastReceipt!==receipt && meta.role==='shopper' && paired)settleWorkplaceSale(st.commerce,p,receipt);
+  if(st.commerce.lastReceipt!==receipt)a={activity:st.commerce.stock<=0?'checking sold-out stock':'declining a purchase',pose:'listen',talk:meta.role==='vendor',line:st.commerce.stock<=0?'That one has sold out. Let me check the next delivery.':'No problem. Take your time and have a look around.'};
+ }
+ if(meta.role==='vendor' && paired && st.commerce?.sceneTime<45 && p.workRoutine)p.workRoutine.wait=Math.max(2,p.workRoutine.wait);
+ if(retail && st.commerce?.sceneTime>=45 && p.workRoutine){p.workRoutine.wait=Math.min(p.workRoutine.wait,2);}
  p.workContext={role:meta.role,program:meta.program,floor:meta.floor,activity:a.activity};
- M.want.speed=0;M.want.heading=st.heading;M.setPose(a.pose);M.S.talk=a.talk?1:0;
+ M.want.speed=0;M.want.heading=st.heading;M.S.look.target=null;M.setPose(a.pose);M.S.talk=a.talk?1:0;
  if(st.sit)M.sit(st.h);else M.stand();
  p.workGestureT=(p.workGestureT||0)-dt;if(p.workGestureT<=0){p.workGestureT=3.2+(p.P.dna.seed%9)*.1;if(a.gesture)M.gesture(a.gesture);M.feel('anger',a.anger||0);}
- if(a.sale!==undefined && st.commerce && st.commerce.lastSale!==a.sale && st.commerce.stock>0){st.commerce.lastSale=a.sale;st.commerce.stock--;st.commerce.sales++;}
- if(a.bag && !p.shoppingBag){const geo=new THREE.BoxGeometry(.23,.3,.12,2,2,2),mat=new THREE.MeshStandardMaterial({color:0xb9976d,roughness:.9});const bag=p.shoppingBag=new THREE.Mesh(geo,mat);bag.position.set(-.32,.48,.1);p.P.root.add(bag);}
- if(p.shoppingBag)p.shoppingBag.visible=!!a.bag;
+ if((a.bag && p.workPurchases>0) && !p.shoppingBag){const geo=new THREE.BoxGeometry(.23,.3,.12,2,2,2),mat=new THREE.MeshStandardMaterial({color:0xb9976d,roughness:.9});const bag=p.shoppingBag=new THREE.Mesh(geo,mat);bag.position.set(-.32,.48,.1);p.P.root.add(bag);}
+ if(p.shoppingBag)p.shoppingBag.visible=p.workPurchases>0;
  const audible=actors.filter(q=>q.active && q.workSpot?.work && Math.abs(q.M.S.pos.y-cam.y)<4).sort((a,b)=>Math.hypot(a.M.S.pos.x-cam.x,a.M.S.pos.z-cam.z)-Math.hypot(b.M.S.pos.x-cam.x,b.M.S.pos.z-cam.z)).slice(0,2).includes(p);
  if(audible && a.talk && a.line && Math.hypot(cam.x-M.S.pos.x,cam.z-M.S.pos.z)<9 && Math.abs(cam.y-M.S.pos.y)<4){bubble(p,a.line);p.workBubble.visible=true;}else if(p.workBubble)p.workBubble.visible=false;
  return true;

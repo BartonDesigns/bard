@@ -1,3 +1,4 @@
+import { createWorkplaceNavigation } from '../people/workplace-navigation.js';
 // Full-height structural floors with bounded, altitude-driven commercial fit-outs.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -306,9 +307,15 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 				const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
 				return { x: T.o.x + ca * x - sa * z, z: T.o.z + sa * x + ca * z, y: B.L.y, h: sit ? h : 0, sit, heading: Math.atan2(fx * ca - fz * sa, fx * sa + fz * ca), taken: false, work, table: sit && B.L.kind === 'office' };
 			});
-			const commerce=new Map(); for(const st of B.spots) if(st.work?.role==='vendor'||st.work?.role==='shopper'){const key=st.work.group;if(!commerce.has(key))commerce.set(key,{stock:24,sales:0,lastSale:-1});st.commerce=commerce.get(key);}
+			const ox=T.o.x,oz=T.o.z;
+			const navigation=createWorkplaceNavigation({width:T.W,depth:T.D,solids:B.col,holes:T.atrium?[T.atrium]:B.L.holes,
+				toLocal:p=>({x:ca*(p.x-ox)+sa*(p.z-oz),z:-sa*(p.x-ox)+ca*(p.z-oz)}),
+				toWorld:p=>({x:ox+ca*p.x-sa*p.z,z:oz+sa*p.x+ca*p.z})});
+			navigation.spots=B.spots;
+			for(const st of B.spots)if(st.work)st.navigation=navigation;
+			const commerce=new Map(); for(const st of B.spots) if(st.work?.role==='vendor'||st.work?.role==='shopper'){const key=st.work.group;if(!commerce.has(key))commerce.set(key,{stock:24,sales:0,revenue:0,scene:0,sceneTime:0,lastReceipt:null});st.commerce=commerce.get(key);}
 		}
-		const n = Math.min(22, Math.round(B.spots.length * k * (B.L.kind === 'office' ? 0.6 : 0.5)));
+		const n = Math.min(22, Math.round(B.spots.filter(s=>!s.work?.routineOnly).length * k * (B.L.kind === 'office' ? 0.6 : 0.5)));
 		// the homes have their families in; a few children pass through the lobby
 		const kids = B.L.kind === 'office' ? 0 : (B.L.kind === 'lobby' ? 0.08 : 0.3) * kidsAbout(hours);
 		return n ? { n, kids: B.L.kind==='mall'?0:kids, zone:B.L.kind==='mall'?'retail':B.L.kind==='office'?'office':'neighbourhood', key:T.key+':'+B.L.n, areas: [{ w: 1, seats: B.spots }] } : null;

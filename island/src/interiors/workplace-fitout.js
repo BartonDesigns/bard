@@ -52,7 +52,7 @@ export function fitWorkplace(T, L, B) {
    }else if(r.type==='meeting'){
     room(r,'Meeting / '+String(L.n).padStart(2,'0'));
     const tw=Math.min(w-2,5),td=Math.min(d-2.1,1.65);
-    if(tw>.8&&td>.5){box(M.oak,cx-tw/2,.73,cz-td/2,cx+tw/2,.79,cz+td/2,true);legs(cx,cz,tw,td,.73);for(let x=cx-tw/2+.45;x<cx+tw/2;x+=.85){chair(x,cz-td/2-.5,Math.PI);B.seats.at(-1)[5]=work('meeting colleague','meeting:'+cx,0);chair(x,cz+td/2+.5,0);B.seats.at(-1)[5]=work('meeting colleague','meeting:'+cx,1);stats.meetingSeats+=2;}}
+    if(tw>.8&&td>.5){box(M.oak,cx-tw/2,.73,cz-td/2,cx+tw/2,.79,cz+td/2,true);legs(cx,cz,tw,td,.73);for(let x=cx-tw/2+.45;x<cx+tw/2;x+=.85){chair(x,cz-td/2-.5,Math.PI);B.seats.at(-1)[5]=work('meeting colleague','meeting:'+cx+':'+cz,0);chair(x,cz+td/2+.5,0);B.seats.at(-1)[5]=work('meeting colleague','meeting:'+cx+':'+cz,1);stats.meetingSeats+=2;}}
     box(M.dark,cx-1.1,1.2,r.z0+.08,cx+1.1,2.45,r.z0+.15);
     box(M.screen,cx-1.04,1.26,r.z0+.15,cx+1.04,2.39,r.z0+.17);
     sign('PROJECT REVIEW',cx,1.8,r.z0+.18,1.7,.24);
@@ -65,6 +65,7 @@ export function fitWorkplace(T, L, B) {
     }
    }else if(r.type==='pantry'){
     room(r,T.region==='Japan'?'Tea pantry / Print':'Pantry / Print',false);
+    B.seats.push([cx,r.z0+1.5,0,false,0,{...work('refreshment','pantry:'+cx+':'+cz),routineOnly:true}]);
     box(M.wall,r.x0+.2,0,r.z0+.2,r.x1-.2,.91,r.z0+.9,true);
     box(M.stoneD,r.x0+.18,.91,r.z0+.18,r.x1-.18,.96,r.z0+.93);
     box(M.dark,r.x0+.4,.96,r.z0+.35,r.x0+.9,1.4,r.z0+.75);
@@ -92,6 +93,8 @@ export function fitWorkplace(T, L, B) {
     const name=L.program==='Food court'?['Noodle kitchen','Bakery & coffee','Market grill','Tea counter'][j%4]:['FORM / home','PAPER / books','SIGNAL / tech','THREAD / apparel'][(j+Math.floor(L.seed*4))%4];
     stats.stores++;
     const group='shop:'+side+':'+j;
+    B.seats.push([side<0?x1-.95:x0+.95,cz-1,side<0?-Math.PI/2:Math.PI/2,false,0,{...work('stock check',group),routineOnly:true}]);
+    B.seats.push([side<0?x1-2:x0+2,cz-1,side<0?Math.PI/2:-Math.PI/2,false,0,{...work('browse',group),routineOnly:true}]);
     // Cashier and customer face each other at a counter beside the entrance.
     const counterX=side<0?x1:x0;
     B.seats.push([counterX+side*.9,cz+.9,side<0?-Math.PI/2:Math.PI/2,false,0,work('vendor',group)]);

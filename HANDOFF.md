@@ -1,3 +1,14 @@
+## Office and mall routines (11 October 2026 Pacific)
+
+See `docs/workplace-routines.md`. Workers now navigate to meetings and pantry breaks
+and return to their stations; shoppers browse shop interiors and return for checkout,
+while vendors check stock. Floor collision/atrium-aware paths, station reservations,
+conversation/danger suspension, limited customer budgets and single-payment sales are
+integrated. The production-rig fixture records complete cycles without navigation or
+shader errors. These remain local, same-floor routines, not shared commuting schedules.
+Discovery and rooms trading/combat are deployed; the newer `reputation-v1` flag is still
+missing in the read-only server check. This routine pass needs no Worker update.
+
 ## Shared room reputation continuation (11 October 2026)
 
 See `docs/shared-reputation-pass.md`. The room protocol and client now support bounded
