@@ -115,7 +115,8 @@ import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
-import { createPeople, addTalkers } from './people/people.js';
+import { createPeople, addTalkers, talkers } from './people/people.js';
+import { createChatter } from './people/chatter.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createPicnicJam } from './encounters/picnic-jam.js';
@@ -747,6 +748,8 @@ export function createIslandWorld() {
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	guideApi.combat=combat;
+	// people you pass notice you and say something, in their own voices (people/chatter.js)
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -1706,6 +1709,7 @@ export function createIslandWorld() {
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
 		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
@@ -2063,6 +2067,8 @@ if (typeof window !== 'undefined') {
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
 		social: () => HOOKS.social,
+		// what passers-by last said and when the next may speak: Crysis.chatter()
+		chatter: () => HOOKS.chatter?.info(),
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
 		families: () => HOOKS.families,
 		// the child in the woods (people/ghost.js): very rare; this calls her now

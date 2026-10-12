@@ -221,6 +221,11 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		// (gone limp: the ragdoll moves the bones now, people/ragdoll.js)
 		if (P.ragdoll) return;
 		dt = Math.min(dt, 0.05);
+		// a word in passing (people/chatter.js): the mouth moves and the eyes stay on who it was for
+		if (S.remark) {
+			if (performance.now() < S.remark.until) { S.talk = S.remark.speaking ? 1 : 0; S.look.target = S.remark.look; }
+			else { S.remark = null; S.talk = 0; S.look.target = null; }
+		}
 		const X = actionNow(dt), aw = X.w;
 		// ---- smoothed intentions ----
 		const speed = Math.max(0, S.speed.to(S.want.speed, dt));

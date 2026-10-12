@@ -14,6 +14,8 @@ async function model(id) {
 }
 let chain = Promise.resolve();
 self.onmessage = ({ data }) => {
+ // fetch and load the model ahead of the first line, without touching what is being said
+ if (data.type === 'warm') { model(current).then(() => send('ready', data.id), () => send('cold', data.id)); return; }
  if (data.type === 'ack') { if (data.id === current) { pendingAck?.(); pendingAck = null; } return; }
  current = data.id;
  pendingAck?.(); pendingAck = null;

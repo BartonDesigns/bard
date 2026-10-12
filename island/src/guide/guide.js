@@ -17,6 +17,7 @@ import { gatherRequest, defaultGatherTime, makeGathering, HOURS as GATHER_HOURS 
 import { createDialogueArchive } from './dialogue-archive.js';
 import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
 import { createLocalSpeech } from './local-speech.js';
+import { voiceShape } from '../people/chatter-lines.js';
 import { chooseGuideModel } from './preferences.js';
 import { travelRequest, resolveTravel } from './travel.js';
 import { loadAtlas, atlasReady, cities, regions } from '../earth/atlas.js';
@@ -821,12 +822,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	let speechStatus = '';
 	const localSpeech = createLocalSpeech({ onStatus: text => { speechStatus = text; speechStatusEl.textContent = text; }, fallback: deviceSpeak });
 	mount.addEventListener('pointerdown', () => { if (voiceOut && speechMode === 'local') localSpeech.unlock(); }, { capture: true });
+	// keyboard players never tap: the first key unlocks the voices too
+	addEventListener('keydown', () => { if (voiceOut && speechMode === 'local') localSpeech.unlock(); }, { capture: true, once: true });
 	function speak(t, who) {
 		if (!t) return;
 		if ('speechSynthesis' in window) speechSynthesis.cancel();
 		const dna = partner?.p?.P?.dna;
 		if (speechMode === 'device') deviceSpeak(t, who);
-		else localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || 1 });
+		else localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || 1, pitch: dna ? voiceShape(dna).pitch : 1 });
 	}
 	function deviceSpeak(t, who) {
 		if (!('speechSynthesis' in window) || !t) return;
@@ -1111,5 +1114,17 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
+	// the same voices for what people say in passing (people/chatter.js): never over a conversation
+	const voice = {
+		on: () => voiceOut, mode: () => speechMode, talking: () => !!partner || localSpeech.busy() && !voice.remarking,
+		remarking: false,
+		remark(text, dna, place) {
+			const ok = localSpeech.remark(text, { seed: dna.seed ?? 0, male: dna.male ?? true, ...voiceShape(dna) }, { ...place, done: (played) => { voice.remarking = false; place.done?.(played); } });
+			if (ok) voice.remarking = true;
+			return ok;
+		},
+		place: (p, f) => localSpeech.place(p, f),
+		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(),
+	};
+	return { voice, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }
