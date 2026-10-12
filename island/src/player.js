@@ -1,11 +1,11 @@
 // Walking, looking and swimming. Left thumb moves (a joystick that appears
 // where you touch), right thumb looks; WASD / arrows / Shift / Space and a
-// mouse drag on desktop. Keys stay with the faceplate while keyboard
+// captured mouse look on desktop. Keys stay with the faceplate while keyboard
 // performance is on. Porches and the pier are floors, walls/trunks/rocks are
 // solid, deep water floats you on the swell.
 
 import * as THREE from 'three';
-import { waveHeight } from './world/ocean.js';
+import { waterContact } from './world/water-contact.js';
 import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
 
 const EYE = 1.68;
@@ -23,9 +23,19 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 
 	// ---------- input ----------
 	const owns = (e) => e.target === dom.canvas;
+ const canLook = () => s.active && !s.inputBlocked && !dom.mount.inert && !window._KEYS_PLAY_ON && !document.hidden && !document.activeElement?.closest?.('input,textarea,select,[contenteditable]');
+ function look(dx, dy, sensitivity) { if (!canLook()) return; const scale = sensitivity / Math.max(1, camera.zoom || 1); s.yaw -= dx * scale; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch - dy * scale)); }
+ function releaseMouse() { if (document.pointerLockElement === dom.canvas) document.exitPointerLock(); }
+ function lockChanged() { if (document.pointerLockElement !== dom.canvas) clearInput(); }
+ function buttonLook(e) { look(e.detail.x, e.detail.y, .0042); }
+ function focusedUI(e) { if (e.target.closest?.('input,textarea,select,button,[contenteditable]')) releaseMouse(); }
+ document.addEventListener('pointerlockchange', lockChanged);
+ dom.mount.addEventListener('l99-look-delta', buttonLook);
+ dom.mount.addEventListener('focusin', focusedUI);
 	function keyDown(e) {
 		if (!s.active || window._KEYS_PLAY_ON || e.target.closest?.('input,textarea,[contenteditable]')) return;
 		const k = e.key.toLowerCase();
+		if (['escape','tab','g','i','k'].includes(k)) releaseMouse();
 		if (k === 'f' && !e.repeat) { if (!s.orbit?.high()) { s.flying = !s.flying; s.vel.y = 0; } s.climbAssist = false; s.onFly?.(s.flying); e.preventDefault(); return; }
 		if (k === 'b' && !e.repeat && s.flying) { cycleBoost(); e.preventDefault(); return; }
 		if (['w', 'a', 's', 'd', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(k)) { s.climbAssist = false; keys.add(k); e.preventDefault(); }
@@ -34,10 +44,16 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	function keyUp(e) { keys.delete(e.key.toLowerCase()); }
 	let mouse = null;
 	function pDown(e) {
-		if (!s.active || !owns(e)) return;
+		if (!canLook() || !owns(e)) return;
 		s.climbAssist = false;
 		const r = dom.canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-		if (e.pointerType === 'mouse') { mouse = { id: e.pointerId, x: e.clientX, y: e.clientY }; return; }
+		if (e.pointerType === 'mouse') {
+   if (document.pointerLockElement !== dom.canvas && e.button === 0 && dom.canvas.requestPointerLock) {
+    e.preventDefault();
+    try { dom.canvas.requestPointerLock()?.catch?.(() => {}); } catch {}
+   } else if (!dom.canvas.requestPointerLock) mouse = { id: e.pointerId, x: e.clientX, y: e.clientY };
+   return;
+  }
 		if (x < 0.42 && y > 0.35 && !touch.move) {
 			touch.move = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
 			// (the joystick leaves its rest, bottom left, for under the thumb)
@@ -47,8 +63,10 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		dom.canvas.setPointerCapture?.(e.pointerId);
 	}
 	function pMove(e) {
+		if (!canLook()) return;
+		if (e.pointerType === 'mouse' && document.pointerLockElement === dom.canvas) { look(e.movementX, e.movementY, .0022); return; }
 		if (mouse && e.pointerId === mouse.id) {
-			s.yaw -= (e.clientX - mouse.x) * 0.0042; s.pitch -= (e.clientY - mouse.y) * 0.0042;
+			look(e.clientX - mouse.x, e.clientY - mouse.y, .0022);
 			mouse.x = e.clientX; mouse.y = e.clientY;
 		} else if (touch.move && e.pointerId === touch.move.id) {
 			const dx = e.clientX - touch.move.ox, dy = e.clientY - touch.move.oy, l = Math.hypot(dx, dy), m = Math.min(1, l / 55);
@@ -57,7 +75,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			s.run = m > 0.95;
 		} else if (touch.look.has(e.pointerId)) {
 			const p = touch.look.get(e.pointerId);
-			s.yaw -= (e.clientX - p.x) * 0.0058; s.pitch -= (e.clientY - p.y) * 0.0058;
+			look(e.clientX - p.x, e.clientY - p.y, .0042);
 			p.x = e.clientX; p.y = e.clientY;
 		} else return;
 		s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch));
@@ -73,7 +91,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	addEventListener('keydown', keyDown); addEventListener('keyup', keyUp);
 	dom.canvas.addEventListener('pointerdown', pDown);
 	addEventListener('pointermove', pMove); addEventListener('pointerup', pUp); addEventListener('pointercancel', pUp);
-	function clearInput() { keys.clear(); mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.run = s.flyUp = s.flyDown = s.climbAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
+	function clearInput() { releaseMouse(); keys.clear(); mouse = null; touch.move = null; touch.look.clear(); joy.x = joy.y = 0; s.run = s.flyUp = s.flyDown = s.climbAssist = false; dom.joy.classList.remove('held'); dom.joy.style.left = dom.joy.style.top = ''; dom.knob.style.transform = ''; }
 	addEventListener('blur', clearInput);
 
 	// ---------- ground and walls ----------
@@ -221,11 +239,14 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		pushOut(s.pos);
 		const ground = seenFloorAt(s.pos.x, s.pos.z, s.pos.y - EYE);
 		// (the sea's surface, or a river's where one runs: bay/sanlorenzo.js)
-		const river = island.waterAt?.(s.pos.x, s.pos.z) ?? null;
-		const surface = Math.max(waveHeight(island, s.pos.x, s.pos.z, t, shared.uWave?.value ?? 1), river ?? -1e9);
-		// (never in a cave: its pools are shallow)
-		s.swimming = island.underFloor?.(s.pos.x, s.pos.z, s.pos.y - EYE) == null && (ground < surface - 1.35 || (s.diving && ground < surface - 0.6));
-		s.surface = surface;
+		const contact = waterContact(island, s.pos, ground, t, shared.uWave?.value ?? 1, s.diving);
+		const surface = contact.surface;
+		const enteringWater = !s.swimming && contact.swimming;
+		s.swimming = contact.swimming;
+		// An underwater arrival starts at its actual depth, without being pulled up
+		// to a distant lake surface before the player has touched a control.
+		if (enteringWater && contact.under) s.diving = true;
+		s.surface = surface ?? -Infinity;
 		// Forward swimming follows the view under the surface once the player deliberately
 		// looks down. Start with downward velocity so the first frame cannot cancel the dive
 		// while the eye is still above water. Looking down while idle/backing up stays afloat.
@@ -298,6 +319,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		return G;
 	}
 	function dispose() {
+		clearInput(); document.removeEventListener('pointerlockchange', lockChanged); dom.mount.removeEventListener('l99-look-delta', buttonLook); dom.mount.removeEventListener('focusin', focusedUI);
 		removeEventListener('keydown', keyDown); removeEventListener('keyup', keyUp);
 		removeEventListener('pointermove', pMove); removeEventListener('pointerup', pUp); removeEventListener('pointercancel', pUp);
 		removeEventListener('blur', clearInput); dom.canvas.removeEventListener('pointerdown', pDown);

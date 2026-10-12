@@ -1,3 +1,4 @@
+import { bindLookDrag } from './look-drag.js';
 // The fight, put together: your arms in use (combat/weapons.js rules, the view's look through
 // combat/weapon-view.js), shots cast into the combat layer (combat/targets.js) and against the
 // ground and buildings, projectiles, blasts, your health and the HUD, the townsfolk's reactions,
@@ -215,12 +216,13 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	}
 	const canvas = mount.querySelector('canvas');
 	const typing = () => /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || window._KEYS_PLAY_ON;
-	addEventListener('pointerdown', (e) => { if (e.button === 0 && e.pointerType === 'mouse' && (!canvas || e.target === canvas) && active()) mouseDown = true; });
+	addEventListener('pointerdown', (e) => { if (!e.defaultPrevented && e.button === 0 && e.pointerType === 'mouse' && (!canvas || e.target === canvas) && active() && (!canvas?.requestPointerLock || document.pointerLockElement === canvas)) mouseDown = true; });
 	addEventListener('pointerup', (e) => { if (e.button === 0) { if (!active() || me.ko) cancelInput(); else mouseDown = false; } });
 	addEventListener('pointercancel', cancelInput);
 	addEventListener('blur', cancelInput);
+	document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) cancelInput(); });
 	document.addEventListener('visibilitychange', () => { if (document.hidden) cancelInput(); });
-	canvas?.addEventListener('pointerleave', () => { if (mouseDown) cancelInput(); });
+	canvas?.addEventListener('pointerleave', () => { if (mouseDown && document.pointerLockElement !== canvas) cancelInput(); });
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || typing() || !active()) return;
 		const k = e.key.toLowerCase();
@@ -230,16 +232,14 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	});
 	const B = hud.btns;
 	if (B.Fire) {
-		B.Fire.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); if (!active() || me.ko) return; touchFire = true; B.Fire.classList.add('on'); });
-		B.Fire.addEventListener('pointerup', () => { if (!active() || me.ko) cancelInput(); else { touchFire = false; B.Fire.classList.remove('on'); } });
-		for (const ev of ['pointercancel', 'pointerleave']) B.Fire.addEventListener(ev, cancelInput);
+		bindLookDrag(B.Fire, mount, { start: () => { if (!active() || me.ko) return false; touchFire = true; B.Fire.classList.add('on'); }, end: () => { touchFire = false; B.Fire.classList.remove('on'); }, cancel: cancelInput });
 		B.Reload.addEventListener('pointerdown', (e) => { e.stopPropagation(); reload(); });
 		B.Mode.addEventListener('pointerdown', (e) => { e.stopPropagation(); const w = weaponNow(); if (w) nextMode(w); });
 		for (const b of Object.values(B)) b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 	}
 	function active() {
 		const p = P();
-		return !!p && !typing() && !document.hidden && !gear?.()?.busy?.() && !arms?.locked?.() && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none' && !(menu && menu.style.display && menu.style.display !== 'none');
+		return !!p && !typing() && !document.hidden && !mount.inert && !mount.classList.contains('l99-tools-open') && !gear?.()?.busy?.() && !arms?.locked?.() && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none' && !(menu && menu.style.display && menu.style.display !== 'none');
 	}
 
 	// ---------- shots ----------

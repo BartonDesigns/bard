@@ -487,6 +487,6 @@ export function generateIsland(params = {}) {
 	return {
 		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn, craters: LF?.craters || craters, far: kind === 'lunar', land, floaters: LF?.floaters || null,
 		height, masks, heightAt, normalAt, maskAt, shapeAt: shape, coastAt, distToPath,
-		biome: params.biome || 'tropical', gravity: params.profile?.gravity || 1,
+		biome: params.biome || 'tropical', gravity: params.profile?.gravity || 1, hasOcean: !params.profile?.airless,
 	};
 }

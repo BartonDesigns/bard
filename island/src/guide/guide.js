@@ -16,6 +16,7 @@ import { parseGameTime, realSecondsFor, formatClock, formatReal, talksOfMeeting,
 import { gatherRequest, defaultGatherTime, makeGathering, HOURS as GATHER_HOURS } from '../people/gatherings.js';
 import { createDialogueArchive } from './dialogue-archive.js';
 import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
+import { createLocalSpeech } from './local-speech.js';
 import { chooseGuideModel } from './preferences.js';
 import { travelRequest, resolveTravel } from './travel.js';
 import { loadAtlas, atlasReady, cities, regions } from '../earth/atlas.js';
@@ -637,6 +638,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		log.append(row); scroll();
 	}
 	function endTalk() {
+		localSpeech.cancel();
+		if ('speechSynthesis' in window) speechSynthesis.cancel();
 		if (!partner) return;
 		busy?.abort();
 		api.people?.release(partner.p);
@@ -776,6 +779,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	async function ask(text) {
 		if (!text.trim()) return;
+		localSpeech.cancel();
+		if ('speechSynthesis' in window) speechSynthesis.cancel();
 		if (partner) return askPerson(text);
 		if (view!=='guide') renderGuide();
 		const requestEpoch=viewEpoch;
@@ -811,8 +816,19 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 
 	// ---------- voice ----------
-	let voiceOut = store.get('crysis-guide-voice', false);
+	let voiceOut = store.get('crysis-guide-voice', true);
+	let speechMode = store.get('crysis-speech-mode', 'local');
+	let speechStatus = '';
+	const localSpeech = createLocalSpeech({ onStatus: text => { speechStatus = text; speechStatusEl.textContent = text; }, fallback: deviceSpeak });
+	mount.addEventListener('pointerdown', () => { if (voiceOut && speechMode === 'local') localSpeech.unlock(); }, { capture: true });
 	function speak(t, who) {
+		if (!t) return;
+		if ('speechSynthesis' in window) speechSynthesis.cancel();
+		const dna = partner?.p?.P?.dna;
+		if (speechMode === 'device') deviceSpeak(t, who);
+		else localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || 1 });
+	}
+	function deviceSpeak(t, who) {
 		if (!('speechSynthesis' in window) || !t) return;
 		speechSynthesis.cancel();
 		const u = new SpeechSynthesisUtterance(t);
@@ -857,6 +873,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const head = el('div', 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);');
 	const title = el('div', 'flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13px system-ui;letter-spacing:.06em;color:#9fe8d0;', 'THE GUIDE');
 	const statusEl = el('div', 'font:11px system-ui;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;');
+	const speechStatusEl = el('div', 'font:11px system-ui;color:#a5cfc0;padding:0 12px 6px;', speechStatus);
+	speechStatusEl.setAttribute('role', 'status');
 	const gearB = el('button', btnCss, '⚙'); gearB.title = 'Model settings'; gearB.setAttribute('aria-label', 'Model settings');
 	const closeB = el('button', btnCss, '✕'); closeB.setAttribute('aria-label', 'Close the guide');
 	const residentsB = el('button', btnCss, 'People'); residentsB.setAttribute('aria-label', 'Remembered people');
@@ -873,10 +891,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const input = el('input', 'flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:14px system-ui;outline:none;');
 	input.placeholder = 'Ask anything, or "take me to Alcatraz"'; input.setAttribute('aria-label', 'Message the guide');
 	const mic = el('button', btnCss, '🎙'); mic.title = 'Speak'; mic.setAttribute('aria-label', 'Speak to the guide');
-	const spk = el('button', btnCss, voiceOut ? '🔊' : '🔈'); spk.title = 'Read replies aloud'; spk.setAttribute('aria-label', 'Read replies aloud');
+	const spk = el('button', btnCss, voiceOut ? '🔊' : '🔈'); spk.setAttribute('aria-pressed', String(voiceOut)); spk.title = 'Read replies aloud'; spk.setAttribute('aria-label', 'Read replies aloud');
 	const send = el('button', btnCss + 'background:linear-gradient(135deg,#01a982,#10b981);border:none;', '➤'); send.setAttribute('aria-label', 'Send');
 	bar.append(input, mic, spk, send);
 	panel.append(head, tabs, archiveControls, settings, log, bar);
+	panel.append(speechStatusEl);
 	// (the guide has no button in the sidebar any more; G still opens it)
 	open.hidden = true;
 	mount.append(open, panel);
@@ -891,7 +910,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return b;
 	}
 	const scroll = () => { log.scrollTop = log.scrollHeight; };
-	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else input.blur(); };
+	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else { input.blur(); localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } };
 	function greet() {
 		const s = snapshot();
 		say(s ? `Hello. You're on ${s.place}. Ask me anything — where to go, what something is, or what to do next.` : 'Hello.', 'guide');
@@ -1008,7 +1027,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	send.onclick = () => { const t = input.value; input.value = ''; ask(t); };
 	input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { send.onclick(); } if (e.key === 'Escape') { endTalk(); show(false); } });
 	mic.onclick = listen;
-	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; if (!voiceOut && 'speechSynthesis' in window) speechSynthesis.cancel(); };
+	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; spk.setAttribute('aria-pressed', String(voiceOut)); if (!voiceOut) { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } else if (speechMode === 'local') localSpeech.unlock(); };
 	addEventListener('keydown', (e) => { if ((e.key === 'g' || e.key === 'G') && !window._KEYS_PLAY_ON && !e.metaKey && !e.ctrlKey && document.activeElement?.tagName !== 'INPUT' && mount.style.display !== 'none') { e.preventDefault(); show(panel.style.display === 'none'); } });
 
 	// settings: which model
@@ -1032,13 +1051,20 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		styleSelect('Personality','vividness',[['restrained','Understated'],['bold','Bold · strong opinions and vivid storytelling']]);
 		styleSelect('Replies','response',[['brief','Brief'],['balanced','Balanced'],['rich','Rich · more detail']]);
 		settings.append(el('div','color:rgba(255,255,255,.65);margin:6px 0;','Tone follows each character. Mature themes apply to adult NPCs; model and provider limits still apply.'));
+		const speechSelect = el('select', 'flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');
+		speechSelect.setAttribute('aria-label', 'Speech engine');
+		for (const [value, text] of [['local', 'Local neural voice'], ['device', 'Device voice']]) { const o = el('option', null, text); o.value = value; speechSelect.append(o); }
+		speechSelect.value = speechMode;
+		speechSelect.onchange = () => { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); speechMode = speechSelect.value; store.set('crysis-speech-mode', speechMode); speechStatusEl.textContent = ''; };
+		row('Speech', speechSelect);
+		settings.append(el('div', 'color:rgba(255,255,255,.6);margin:6px 0;', 'Local voices download about 100 MB once, then generate spoken replies on this device.'));
 		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 		const opts = phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']];
 		// the shared voice, once the discovery server is deployed (earth/config.js): phones too
 		if (DISCOVERY_URL) opts.push(['cloud', 'Free cloud voice (people only)']);
 		for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; sel.append(o); }
 		sel.value = choice.kind;
-		row('Voice', sel);
+		row('Dialogue', sel);
 		if (choice.kind === 'webllm') {
 			const m = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 			for (const x of WEBLLM_MODELS) { const o = el('option', null, x.label); o.value = x.id; m.append(o); }

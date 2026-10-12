@@ -1,3 +1,7 @@
+## October 12, 2026: local speech and control release
+
+Release recovery on top of `edf1b236`: local Kokoro speech in a background worker, visible touch quick actions, expanded controls grid, compact weapon HUD, and field-contract docking. The 14-image unnumbered loading slideshow remains intact. See `docs/local-speech-controls-2026-10-12.md` for behavior, limitations, and verification. No speech host or Worker redeploy is needed. Qwen TTS is not the active speech engine.
+
 ## Unnumbered slideshow restored (12 October 2026)
 
 The owner requested automatic slides again after the static-image release. The 14-image loader now starts randomly and chooses another image every ten seconds without immediate repeats. No slide numbers, screenshot subtitles or extra descriptive copy return. A compact Pause/Play button controls rotation; reduced-motion preferences keep artwork static. Hiding the loader clears its timer. Entry, retry and cancellation guards are unchanged. This supersedes the static-selection behavior below. No Worker change is required.

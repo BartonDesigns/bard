@@ -40,9 +40,9 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	try { const saved = JSON.parse(store.get('l99-field-contracts') || '{}'); completed = Math.max(0, Math.min(1000, saved.completed | 0)); recoveredBefore = !!saved.recovered; } catch {}
 	const save = () => store.set('l99-field-contracts', JSON.stringify({ completed, recovered: recoveredBefore }));
 	let mission = null, cache = null, rally = null, members = [], pending = false, waveDelay = 0, epoch = 0, unlocked = false, dropId = null, expanded = false, elapsed = 0, message = '';
-	const panel = document.createElement('section'); panel.dataset.fieldContract = '';
+	const panel = document.createElement('section'); panel.dataset.fieldContract = ''; panel.dataset.hud = 'left 50';
 	panel.setAttribute('aria-label', 'Field contract');
-	panel.style.cssText = 'display:none;position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));width:min(260px,calc(100% - 86px));max-height:calc(100% - 180px);overflow:auto;touch-action:pan-y;padding:10px;box-sizing:border-box;border:1px solid #6b878b;border-radius:10px;background:#102129ed;color:#e8f1f0;font:12px/1.45 system-ui;z-index:5;';
+	panel.style.cssText = 'display:none;position:absolute;left:calc(12px + env(safe-area-inset-left));top:calc(64px + env(safe-area-inset-top));width:min(260px,calc(100vw - 24px));max-width:100%;max-height:calc(100% - 180px);overflow:auto;touch-action:pan-y;padding:10px;box-sizing:border-box;border:1px solid #6b878b;border-radius:10px;background:#102129ed;color:#e8f1f0;font:12px/1.45 system-ui;z-index:5;';
 	const title = document.createElement('button'), text = document.createElement('div'), buttons = document.createElement('div');
 	title.type = 'button'; title.style.cssText = 'border:0;background:none;color:inherit;font:600 12px system-ui;text-align:left;padding:0;min-height:32px;width:100%;cursor:pointer'; title.onclick = () => { expanded = !expanded; render(); };
 	text.style.cssText = 'margin:5px 0;white-space:pre-line'; buttons.style.cssText = 'display:flex;gap:6px';

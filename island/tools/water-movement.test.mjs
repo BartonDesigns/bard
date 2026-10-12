@@ -4,16 +4,18 @@ import * as THREE from 'three';
 import { createPlayer } from '../src/player.js';
 import { shoreVegetation } from '../src/earth/shore.js';
 
-function swimmer({ ground = -8, level = 0, cave = false } = {}) {
+function swimmer({ ground = -8, level = 0, cave = false, hasOcean = true } = {}) {
 	const oldAdd = globalThis.addEventListener, oldRemove = globalThis.removeEventListener;
+	const oldDocument = globalThis.document;
 	globalThis.addEventListener = globalThis.removeEventListener = () => {};
 	const node = { addEventListener() {}, removeEventListener() {}, classList: { remove() {} }, style: {} };
+	globalThis.document = node;
 	let P;
 	try {
-		P = createPlayer({ spawn: { x: 0, z: 0, yaw: 0 }, heightAt: () => ground,
+		P = createPlayer({ spawn: { x: 0, z: 0, yaw: 0 }, heightAt: () => ground, hasOcean,
 			waterAt: () => level, underFloor: () => cave ? ground : null }, { footprints: [] },
-		{ obstacles: () => [] }, new THREE.PerspectiveCamera(), { canvas: node, joy: node, knob: node }, { uWave: { value: 0 } });
-	} finally { globalThis.addEventListener = oldAdd; globalThis.removeEventListener = oldRemove; }
+		{ obstacles: () => [] }, new THREE.PerspectiveCamera(), { mount: node, canvas: node, joy: node, knob: node }, { uWave: { value: 0 } });
+	} finally { globalThis.addEventListener = oldAdd; globalThis.removeEventListener = oldRemove; globalThis.document = oldDocument; }
 	P.state.pos.y = level + .35; P.state.swimming = !cave;
 	const step = seconds => { for (let n = 0; n < seconds * 60; n++) P.update(1 / 60, n / 60); };
 	return { P, S: P.state, step };
@@ -30,6 +32,27 @@ test('looking down and moving forward dives from sea and raised lake surfaces', 
 		S.pitch = .8; step(3);
 		assert.equal(S.diving, false); assert.ok(S.pos.y > level + .2);
 	}
+});
+
+test('a high arrival above sea or a mountain lake falls instead of swimming in the sky', () => {
+	for (const level of [0, 900]) {
+		const { S, step } = swimmer({ level, ground: level - 8 });
+		S.pos.y = level + 100; S.swimming = false; S.diving = true;
+		step(.5);
+		assert.equal(S.swimming, false); assert.equal(S.diving, false);
+		assert.ok(S.pos.y > level + 95, 'gravity, not attraction to the distant water surface');
+		assert.ok(S.vel.y < -8);
+	}
+});
+
+test('submerged arrivals keep their depth and dry worlds never acquire an invisible ocean', () => {
+	const { S, step } = swimmer({ level: 900, ground: 0 });
+	S.pos.y = 2; S.swimming = false; step(.1);
+	assert.equal(S.diving, true); assert.ok(S.pos.y < 2.1);
+	const dry = swimmer({ ground: -80, level: null, hasOcean: false });
+	dry.S.pos.y = -78.32; dry.S.swimming = false; dry.step(1);
+	assert.equal(dry.S.swimming, false); assert.equal(dry.S.diving, false);
+	assert.ok(Math.abs(dry.S.pos.y + 78.32) < .001);
 });
 
 test('idle, reversing and shallow looks keep the swimmer at the surface', () => {

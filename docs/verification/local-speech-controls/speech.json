@@ -1,0 +1,35 @@
+{
+  "played": [
+    {
+      "duration": 1.675,
+      "rms": 0.06736085095937003
+    },
+    {
+      "duration": 2.2,
+      "rms": 0.06710520628951848
+    },
+    {
+      "duration": 2.125,
+      "rms": 0.10084273654686324
+    }
+  ],
+  "fallbacks": [],
+  "status": "Preparing local voice…",
+  "errors": [],
+  "network": {
+    "onlyModelAndRuntimeDownloads": true,
+    "hosts": [
+      "127.0.0.1:37997",
+      "cdn.jsdelivr.net",
+      "huggingface.co",
+      "us.aws.cdn.hf.co"
+    ]
+  },
+  "checks": [
+    "two sentences including final text without punctuation",
+    "second reply with a different voice",
+    "cancelled reply does not play",
+    "non-silent generated PCM",
+    "no speech-server request"
+  ]
+}

@@ -29,6 +29,7 @@ export function createOcean(island, shared) {
 	// the real Bay Area's depths beyond the island (live objects, filled as they load)
 	if (shared.bayU) Object.assign(uniforms, shared.bayU, GLOBE_U);          // (and the globe's coasts past the survey: earth/globeheight.js)
 uniforms.uUnder = shared.uUnder;
+	uniforms.uWave = shared.uWave || uniforms.uWave;
 	// shared, live objects (not copies)
 	Object.assign(uniforms, {
 		uTime: shared.uTime, uSunDir: shared.uSunDir, uSunColor: shared.uSunColor,
@@ -158,6 +159,8 @@ uniforms.uUnder = shared.uUnder;
 			${WAVES}
 			#include <fog_pars_fragment>
 			void main(){
+				// Never draw the underside of the ocean through dry land or caves.
+				if (vFilm <= 0.0) discard;
 				vec3 V = normalize(cameraPosition - vW);
 				// ripples on top of the swell, fading with distance so the far sea stays calm
 				float dist = length(cameraPosition - vW);
