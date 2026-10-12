@@ -1,6 +1,6 @@
 # Claude conversation handoff: Level 99 Bard / "Crysis" engine
 
-Paste this file, or point a new chat at it, to continue the work from the long October 2026 build conversation. It was written on 12 October 2026 from GitHub `main` at `edf1b23`.
+Paste this file, or point a new chat at it, to continue the work from the long October 2026 build conversation. It was written on 12 October 2026 from GitHub `main` at `edf1b23` and updated the same evening at `c18412c`.
 
 - **Deeper detail:** `HANDOFF.md` has per-release notes, newest first, and `docs/*.md` has per-pass evidence.
 - **File-by-file map:** `island/README.md`.
@@ -52,7 +52,25 @@ Level 99 Bard is a music-and-world game at **level99bard.com**. It is a faceplat
 - **At most 3–4 agents at once.** Seven parallel agents hit the account usage limit three times in one day.
 - **Prefer numbers over screenshots.** Send review images to the owner rather than viewing them yourself.
 
-## 3. What is live now (`main` `edf1b23`, 12 October 2026)
+## 3. What is live now (`main` `c18412c`, 12 October 2026, evening)
+
+### Newest: three releases since the first version of this file
+- **Local speech and controls** (`d5017f6`, `docs/local-speech-controls-2026-10-12.md`):
+  - NPC and Guide replies are spoken by **Kokoro 82M**, running locally in a web worker (`guide/local-speech.js`, `local-speech-worker.js`). First use downloads about 100 MB of model data from jsDelivr and Hugging Face, which is then cached.
+  - The device voice is the fallback and can be chosen in Guide settings. No server, Worker or paid API is involved. Qwen TTS is not used.
+  - Touch players get visible Fly, Gear, Places and Controls buttons. Controls opens a two-column scrolling panel.
+  - The weapon HUD is smaller and sits in the lower left; field contracts dock into the left-hand layout.
+- **Shooter controls** (`9c4512d`, `docs/shooter-controls-2026-10-12.md`):
+  - **Phone:** bigger, separate Fire and Aim buttons. Hold Fire and drag the same finger to aim while shooting. Tap Aim to toggle the sights. Zoom scales look sensitivity.
+  - **Desktop:** click once to capture the mouse. Mouse-look works without dragging, left-click fires, right-click holds the sights, and Escape releases the cursor. R reloads and Z changes fire mode.
+  - New file `combat/look-drag.js`.
+- **Water transitions** (`c18412c`, `docs/water-transition-2026-10-12.md`):
+  - Fixes water appearing high above streets after visiting another planet, and swimming in mid-air. Swimming now needs contact with the local water surface.
+  - World teardown now releases the water jobs, meshes, shared carving atlas and hooks.
+  - Each world's water callbacks keep their own world, so leaving and re-entering can't mix them up.
+  - New file `world/water-contact.js`.
+
+### Everything before that
 
 Everything started in this conversation shipped, much of it in the 9 October "handoff completion" release. More has landed since: cinematic loading, workplaces and malls, character tailoring, field contracts, and shared reputation.
 
@@ -155,7 +173,11 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
     - shared loot (unclaimed loot is local to the visit);
     - physical-device timing;
     - boss tuning and live play.
-13. **Physical device QA everywhere:** almost all checks are Chromium software rendering. Real iPhone and Safari performance and look are unverified across the board.
+13. **Since the newest releases:**
+    - **Kokoro speech:** latency and memory on a real phone (the first-use download is about 100 MB) are unmeasured.
+    - **Fire-and-drag aiming and touch layouts:** emulated only, not tried on a real phone.
+    - **Water fix:** your original planet seed and save that showed the floating water weren't available, so the exact case is unconfirmed. Re-check it on device.
+14. **Physical device QA everywhere:** almost all checks are Chromium software rendering. Real iPhone and Safari performance and look are unverified across the board.
 
 ### Parked (do not start unless asked)
 - The game trailer (1080p60 with a 4K60 script).
@@ -188,12 +210,13 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
 - **Apple Metal shader-size limits:** keep the Bay ground shader small.
 - **The 16-sampler cap** applies per shader stage on Safari and phones.
 - **Headless speed:** town growth (`crysis/civ.js`) and water pumping happen a few ms per frame, so headless tests need `civ().flush()` or direct pumps to see results.
+- **Browser tests:** the newer test tools take `PLAYWRIGHT_MODULE` and `CHROME_EXECUTABLE` environment variables. Many areas now have checked-in browser checks (`island/tools/*-browser.cjs`, `tools/loading-handoff-browser.cjs`) and node tests (`node --test island/tools/*.test.mjs`); run the relevant ones before shipping.
 - **The stop hook** wants no uncommitted changes at the end of a turn. With agents running, snapshot with `git add -A -- island server index.html docs HANDOFF.md`, unstage `node_modules` and `.wrangler`, then commit and push to the branch.
 
 ## 7. Suggested next steps, in order
 
 1. Ask the owner which of section 4's decisions to take first: armament art review, the architecture look pass, or brows.
-2. Physical-device pass on iPhone and Safari: frame time, black frames, controls, and the loading slideshow.
+2. Physical-device pass on iPhone and Safari: frame time, black frames, the new fire-and-drag aiming and touch controls, Kokoro speech (download, latency, memory), the floating-water case after planet travel, and the loading slideshow.
 3. Owner deploys the rooms Worker for `reputation-v1`; then a live two-player test of trading, combat and PvP-off.
 4. Focused art pass on armaments, then brows, then the architecture mist and clouds (mist volume, volumetric cumulus, selective glow).
 5. Moon polish (suits, rover drive), Deep ambience, and the ground issues (Marin slots, carve range).
