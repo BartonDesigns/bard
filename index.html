@@ -3,7 +3,7 @@
 <head>
 <meta name="l99-build" content="226">
 <meta charset="UTF-8">
-<script src="./loading-screen.js?v=56dd51f71a"></script>
+<script src="./loading-screen.js?v=6becd90101"></script>
 <script>
 /* ?debug on the address: an on-screen console (phones have none), with a Copy button. Only
    errors, warnings and the game's own diagnostic lines; nothing is sent anywhere. */
@@ -3449,7 +3449,7 @@ async function flight(){if(root.__COCKPIT_ALIVE&&flightPrepared)return true;if(f
    await frame();const patched=await cachedPatch('flight',files[1],src=>{const out=root.L99Route223.patchFlight(root.L99MaterialsFlight191.patchFlight(root.L99Flight190.patchFlight(root.L99WorldHUD190.patchFlight(src))));return root.L99Dive227?root.L99Dive227.patch(out):out;});const url=URL.createObjectURL(new Blob([rewrite(patched,resolved)],{type:'text/javascript'}));urls.push(url);await import(url);if(!root.__COCKPIT_ALIVE)throw Error('The flight engine did not finish starting.');await root.L99Journey170.adapters.flight.boot();flightPrepared=true;return true;
   }catch(e){urls.forEach(url=>URL.revokeObjectURL(url));throw e;}
  })().catch(e=>{flightReady=null;root.__cockpitLoadError170=e.message||String(e);throw e;});return flightReady;}
-function openFlight(){return root.L99Loading.run(()=>flight(), {entry:true,scene:0,label:'Charting the stars',enter:()=>{document.getElementById('popout-btn')?.click();}});}
+function openFlight(){return root.L99Loading.run(()=>flight(), {entry:true,label:'Charting the stars',enter:()=>{document.getElementById('popout-btn')?.click();}});}
 root._loadCockpitNow=flight;
 document.addEventListener('click',e=>{if(!e.target?.closest?.('#popout-btn')||root.__COCKPIT_ALIVE&&flightPrepared)return;e.preventDefault();e.stopImmediatePropagation();openFlight();},true);
 root.L99Boot176={packed,cachedPatch,ensureWorld,core,show,hide,status,frame,flight,openFlight,get showing(){return wantsStatus;}};
@@ -29265,7 +29265,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=f4ee9a985e'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=5efbd59b53'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29273,7 +29273,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=f4ee9a985e'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=5efbd59b53'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }
@@ -29294,7 +29294,7 @@ root.L99CaveRail227={patch};
         return reveal(function (w) { return w.open(params || (q && /^\d+$/.test(q) ? { seed: +q, earth: false } : { seed: 1337, earth: true })); });
     }
     window.L99IslandDoor = { open: open, engine: engine, closed: function () {},
-        caves: function () { return reveal(function (w) { return w.exploreCaves(); }, { scene: 1, label: 'Opening the caverns' }); }
+        caves: function () { return reveal(function (w) { return w.exploreCaves(); }, { label: 'Opening the caverns' }); }
     };
     function addDoor() {
         if (window._ISLAND === false || document.getElementById('island-btn')) return;

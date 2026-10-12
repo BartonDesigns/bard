@@ -4,7 +4,7 @@
 
 The owner requested screenshot-led mobile and desktop loading, mechanic hints, cinematic treatment and protection from engaging before the game is prepared.
 
-## Player experience
+## Original player experience (superseded by the 14-screen correction below)
 
 - Four real captures introduce orbital travel, musical caves, conversational residents and hidden musical worlds. Restrained grading, vignette and grain keep them tied to the actual game. Asset provenance is in `assets/loading/README.md`.
 - The loading screen appears before the engine import, then names actual preparation phases: landscape, lighting, surroundings and arrival. It does not invent a percentage or impose a minimum wait.
@@ -63,3 +63,11 @@ A continuation review found that choosing Back during an unfinished load and imm
 All 13 cinematic browser check groups pass, including success/failure after cancellation, repeated cancellation, nested-call deadlock protection, responsive layouts, recovery and bundled Moon input/readiness. The earlier seven-view renderer gate remains applicable to this UI-only change. Full faceplate handoff evidence is recorded separately in `docs/verification/loading-handoff/` by `tools/loading-handoff-browser.cjs`. These checks use software Chromium and emulated touch, not native Safari or a hardware performance certification.
 
 The handoff test uses the current mobile **More controls → Fly** menu. The retired legacy cockpit button remains hidden; this continuation does not restore that old entry path or claim a legacy-flight playthrough. Run `node tools/loading-handoff-browser.cjs` for the actual desktop/phone door checks. Set `BARD_QA_IMAGES=1` only when world screenshots are needed.
+
+## Fourteen-screen correction, 12 October 2026
+
+The owner clarified that the loader must offer 14 screens selected randomly, rather than four screens rotating as a slideshow. The current implementation uses 14 distinct real game captures and chooses one per top-level loading session. The selected image stays fixed through preparation and readiness. Session storage avoids an immediate repeat on the next load or reload where storage is available. Nested preparation shares the selected image.
+
+Slideshow controls, page counts, screenshot subtitles, chapter labels and extra explanatory copy are removed. Each screen retains a short title, one hint of ten words or fewer, actual loading status and the relevant entry/recovery controls. Portrait framing preserves the recognizable planets and horizon. All 14 WebPs total 394,004 bytes; each session fetches only its chosen image. Source provenance is recorded in `assets/loading/README.md`.
+
+The build and all 15 browser check groups pass, including all 14 captures at desktop and phone sizes (28 scene previews), five responsive layouts, static selection/repeat avoidance, cancellation/reentry, recovery, and a real bundled Moon render with guarded input. `docs/verification/cinematic-loading/report.json` records no errors. These are Chromium responsive/touch emulation and software-WebGL checks, not physical Safari performance tests. Prior release/history evidence remains above. Publication evidence belongs in the correction PR. No Worker update is needed.

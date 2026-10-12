@@ -1,3 +1,7 @@
+## Fourteen static random loading screens (12 October 2026)
+
+Owner correction: 14 authentic captures, one randomly selected per load, no slideshow. Immediate repeats are avoided where session storage is available. Removed screenshot subtitles, navigation/counts and verbose copy; retained one short title/hint, actual status and guarded entry/recovery. The existing cancellation/reentry semantics remain intact. Build and all 15 browser check groups pass, with 28 desktop/phone scene previews. See `docs/cinematic-loading.md` and `docs/verification/cinematic-loading/report.json`. This supersedes the earlier four-screen presentation; historical release notes below remain preserved. Frontend publication evidence belongs in the correction PR; no Worker deployment is required.
+
 ## Cinematic loading continuation (12 October 2026)
 
 The original cinematic screens are live on `b60dd1d` with public-asset verification on PR #18. A follow-up fixes Back → immediate reopen while a build is unfinished: the new entry stays visible and waits for the cancelled build/cleanup, while nested cancelled work and discarded queued entries cannot deadlock or run. All 13 loader check groups pass. See `docs/cinematic-loading.md` and the full button-handoff evidence in `docs/verification/loading-handoff/`; release status belongs in the follow-up PR. No Worker update or new visual treatment is involved.

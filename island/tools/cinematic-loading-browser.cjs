@@ -35,9 +35,8 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 			await page.keyboard.press('w'); await page.keyboard.press('Space'); await page.keyboard.press('f');
 			assert.equal(await page.evaluate(() => events), 0);
 			await page.evaluate(() => document.getElementById('game').click()); assert.equal(await page.evaluate(() => events), 0);
-			await page.getByRole('button', { name: 'Next scene', exact: true }).click();
-			assert.match(await page.locator('#bard-loading h1').innerText(), /echo/);
-			await page.getByRole('button', { name: 'Previous scene', exact: true }).click();
+			assert.equal(await page.locator('#bard-loading nav').count(), 0);
+			assert.equal(await page.locator('#bard-loading .bl-caption').count(), 0);
 			await page.keyboard.press('Tab'); assert.equal(await page.evaluate(() => document.getElementById('bard-loading').contains(document.activeElement)), true);
 			await page.evaluate(() => finish(true)); await ready.waitFor({ state: 'visible' });
 			const bounds = await page.evaluate(() => {
@@ -50,16 +49,32 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 			await page.screenshot({ path: path.join(out, name + '.jpg'), quality:85, fullPage: true });
 			if (width < 651) await ready.tap(); else await ready.click(); assert.equal(await page.evaluate(() => L99Loading.active()), false);
 			assert.equal(await page.evaluate(() => enters), 1); await page.keyboard.press('w'); assert.equal(await page.evaluate(() => events), 1);
-			assert.equal(await page.locator('#game').evaluate(el => el.inert), false); pass(name + ': guarded load, story navigation, focus, readiness, input restoration');
+			assert.equal(await page.locator('#game').evaluate(el => el.inert), false); pass(name + ': guarded static artwork, focus, readiness, input restoration');
 		}
+		const scenes = ['horizon','resonance','settlement','beyond','island','discovery','deep','interior','earth','terran','atmosphere','sun','streets','crew'];
 		for (const [name,width,height] of [['desktop',1440,900],['phone',390,844]]) {
-			await page.setViewportSize({width,height}); await page.goto(base+'/fixture'); await page.evaluate(()=>{start();});
-			for (let i=0;i<4;i++) {
-				await page.waitForFunction(id=>[...document.querySelectorAll('#bard-loading img.loaded')].some(img=>img.src.includes(id+'.webp')&&getComputedStyle(img).opacity==='1'),['horizon','resonance','settlement','beyond'][i]);
-				await page.screenshot({path:path.join(out,`${name}-story-${i+1}.jpg`),quality:85});
-				await page.getByRole('button',{name:'Next scene',exact:true}).click();
+			await page.setViewportSize({width,height});
+			for (let i=0;i<scenes.length;i++) {
+				await page.goto(base+'/fixture');
+				await page.evaluate(i=>{sessionStorage.removeItem('bard-loading-last-scene');Math.random=()=> (i+.1)/14;start();},i);
+				await page.waitForFunction(id=>document.querySelector('#bard-loading img.loaded')?.src.includes(id+'.webp'),scenes[i]);
+				await page.waitForFunction(()=>getComputedStyle(document.querySelector('#bard-loading img')).opacity==='1');
+				assert.ok((await page.locator('#bard-loading .bl-tip').innerText()).split(/\s+/).length<=10);
+				assert.equal(await page.locator('#bard-loading nav, #bard-loading .bl-caption, #bard-loading h2').count(),0);
+				await page.screenshot({path:path.join(out,`${name}-scene-${scenes[i]}.jpg`),quality:80});
 			}
 		}
+		pass('all 14 distinct captures load on desktop and phone with one short hint and no slideshow/captions');
+		const selected=await page.locator('#bard-loading img').getAttribute('src');
+		await page.waitForTimeout(11000);
+		assert.equal(await page.locator('#bard-loading img').getAttribute('src'),selected);
+		await page.evaluate(()=>finish(true));await page.getByRole('button',{name:'Enter world',exact:true}).click();
+		await page.evaluate(()=>{start();});await page.waitForFunction(()=>L99Loading.pending);
+		assert.notEqual(await page.locator('#bard-loading img').getAttribute('src'),selected);
+		const next=await page.locator('#bard-loading img').getAttribute('src');
+		await page.reload();await page.evaluate(()=>{Math.random=()=>.99;start();});
+		assert.notEqual(await page.locator('#bard-loading img').getAttribute('src'),next);
+		pass('one random image remains for the whole load; immediate repeats avoided on reopen and reload');
 		await page.goto(base + '/fixture'); await page.evaluate(() => { window.attempts = 0; L99Loading.run(async () => { if (++attempts === 1) throw Error('offline'); return true; }); });
 		await page.getByRole('button', { name: 'Try again', exact: true }).click(); await page.getByRole('button', { name: 'Enter world', exact: true }).waitFor();
 		assert.equal(await page.evaluate(() => attempts), 2); pass('failed task retries and cannot enable entry early');
@@ -99,8 +114,8 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 		await page.getByRole('button', { name: 'Enter world', exact: true }).click();
 		pass('cancelled nested and queued tasks cannot run or deadlock a later door request');
 		await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto(base + '/fixture'); await page.evaluate(() => { start(); });
-		assert.equal(await page.getByRole('button', { name: 'Play scenes' }).isVisible(), false);
-		assert.equal(await page.locator('.bl-fill').evaluate(el => getComputedStyle(el).animationName), 'none'); pass('reduced motion disables automatic scene movement and progress animation');
+		assert.equal(await page.locator('#bard-loading nav').count(), 0);
+		assert.equal(await page.locator('.bl-fill').evaluate(el => getComputedStyle(el).animationName), 'none'); pass('reduced motion keeps static artwork and disables progress animation');
 		await page.route('**/assets/loading/*.webp', route => route.abort()); await page.reload(); await page.evaluate(() => { start(); }); await page.waitForFunction(() => typeof finish === 'function');
 		await page.evaluate(() => finish(true)); await page.getByRole('button', { name: 'Enter world', exact: true }).click(); pass('image failures never block readiness or entry');
 		// Real faceplate door, with its actual engine import held at the network boundary.
