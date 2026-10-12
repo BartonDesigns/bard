@@ -1,3 +1,7 @@
+## Cinematic loading continuation (12 October 2026)
+
+The original cinematic screens are live on `b60dd1d` with public-asset verification on PR #18. A follow-up fixes Back → immediate reopen while a build is unfinished: the new entry stays visible and waits for the cancelled build/cleanup, while nested cancelled work and discarded queued entries cannot deadlock or run. All 13 loader check groups pass. See `docs/cinematic-loading.md` and the full button-handoff evidence in `docs/verification/loading-handoff/`; release status belongs in the follow-up PR. No Worker update or new visual treatment is involved.
+
 ## Cinematic loading release integration (12 October 2026)
 
 The owner requested publication after finding the screens absent from the live site. PR #18 was integrated with current main `b15d343`, preserving the newer workplace, reputation and character updates. Release verification and deployment evidence belong in `docs/cinematic-loading.md`. No Worker update is required.

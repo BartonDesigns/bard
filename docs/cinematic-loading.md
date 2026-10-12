@@ -53,3 +53,13 @@ BARD_QA_SCOPE=loading node tools/handoff-release-smoke.cjs
 ```
 
 The smoke harness now dismisses the explicit entry screen before checking a rendered world. Engine SHA-256: `36d6b4281698d2fe25d305d4bd1fbd58f526ce7315a4b1d559a7cb7006d20bf8`. No Worker deployment is part of this release. Live deployment and public-asset verification are recorded on [PR #18](https://github.com/BartonDesigns/bard/pull/18).
+
+## Reopening after Back, 12 October 2026
+
+The original screenshot-led release is live as `b60dd1d0e1219f35b63492958396ff02d86b5faf`; Pages run [38241158332](https://github.com/BartonDesigns/bard/actions/runs/38241158332) succeeded and the public loader, engine and four images matched the tested bytes. Actual production desktop/phone entry checks displayed the artwork and navigation.
+
+A continuation review found that choosing Back during an unfinished load and immediately opening another door silently discarded the new request. Faceplate entry requests now identify themselves explicitly. A new request displays its guarded screen immediately and waits for cancelled work and cleanup before starting. Nested calls from cancelled work still stop instead of waiting on themselves. Cancelling several queued requests runs only the final surviving request. No new images, gameplay transitions or backend deployment are included.
+
+All 13 cinematic browser check groups pass, including success/failure after cancellation, repeated cancellation, nested-call deadlock protection, responsive layouts, recovery and bundled Moon input/readiness. The earlier seven-view renderer gate remains applicable to this UI-only change. Full faceplate handoff evidence is recorded separately in `docs/verification/loading-handoff/` by `tools/loading-handoff-browser.cjs`. These checks use software Chromium and emulated touch, not native Safari or a hardware performance certification.
+
+The handoff test uses the current mobile **More controls → Fly** menu. The retired legacy cockpit button remains hidden; this continuation does not restore that old entry path or claim a legacy-flight playthrough. Run `node tools/loading-handoff-browser.cjs` for the actual desktop/phone door checks. Set `BARD_QA_IMAGES=1` only when world screenshots are needed.

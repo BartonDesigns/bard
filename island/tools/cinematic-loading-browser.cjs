@@ -6,7 +6,7 @@ const checks = [], errors = [];
 const fixture = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/loading-screen.js"></script>
 <button id="game">Game input</button><script>window.events=0;window.exits=0;window.enters=0;
 addEventListener('keydown',()=>events++);document.getElementById('game').onclick=()=>events++;
-window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish=resolve;window.fail=reject;}),{exit:()=>exits++,enter:()=>enters++});</script>`;
+window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish=resolve;window.fail=reject;}),{entry:true,exit:()=>exits++,enter:()=>enters++});</script>`;
 (async () => {
 	await fs.mkdir(out, { recursive: true });
 	const server = http.createServer(async (req, res) => {
@@ -67,6 +67,37 @@ window.start=()=>L99Loading.run(()=>new Promise((resolve,reject)=>{window.finish
 		await page.evaluate(() => { start(); }); await page.waitForFunction(() => typeof finish === 'function');
 		await page.getByRole('button', { name: 'Back to Bard' }).click(); await page.evaluate(() => finish(true));
 		assert.equal(await page.evaluate(() => L99Loading.active()), false); pass('late completion after Back cannot reopen the screen');
+		// A new door request waits for cancelled work, including its cleanup, without disappearing.
+		for (const rejected of [false, true]) {
+			await page.goto(base + '/fixture'); await page.evaluate(() => { start(); });
+			await page.waitForFunction(() => typeof finish === 'function');
+			await page.getByRole('button', { name: 'Back to Bard' }).click();
+			await page.evaluate(() => {
+				window.order = []; window.oldExits = exits;
+				L99Loading.run(async () => { order.push('new'); return true; }, { entry: true, enter: () => enters++ });
+			});
+			assert.equal(await page.evaluate(() => L99Loading.active()), true);
+			assert.equal(await page.getByRole('button', { name: 'Enter world', exact: true }).isVisible(), false);
+			assert.deepEqual(await page.evaluate(() => order), []);
+			await page.evaluate(rejected => { if (rejected) fail(Error('cancelled request failed')); else finish(true); }, rejected);
+			await page.getByRole('button', { name: 'Enter world', exact: true }).waitFor();
+			assert.deepEqual(await page.evaluate(() => order), ['new']);
+			assert.equal(await page.evaluate(() => exits === oldExits + 1), true);
+			await page.getByRole('button', { name: 'Enter world', exact: true }).click();
+			assert.equal(await page.evaluate(() => enters), 1);
+		}
+		pass('immediate reopen waits for cancelled success or failure and restores guarded entry');
+		await page.goto(base + '/fixture'); await page.evaluate(() => { start(); });
+		await page.waitForFunction(() => typeof finish === 'function');
+		await page.getByRole('button', { name: 'Back to Bard' }).click();
+		assert.equal(await page.evaluate(() => L99Loading.run(() => { throw Error('cancelled nested work started'); })), false);
+		await page.evaluate(() => { window.reopens = 0; L99Loading.run(() => { reopens++; }, { entry: true }); });
+		await page.getByRole('button', { name: 'Back to Bard' }).click();
+		await page.evaluate(() => { L99Loading.run(() => { reopens += 10; }, { entry: true }); finish(true); });
+		await page.getByRole('button', { name: 'Enter world', exact: true }).waitFor();
+		assert.equal(await page.evaluate(() => reopens), 10);
+		await page.getByRole('button', { name: 'Enter world', exact: true }).click();
+		pass('cancelled nested and queued tasks cannot run or deadlock a later door request');
 		await page.emulateMedia({ reducedMotion: 'reduce' }); await page.goto(base + '/fixture'); await page.evaluate(() => { start(); });
 		assert.equal(await page.getByRole('button', { name: 'Play scenes' }).isVisible(), false);
 		assert.equal(await page.locator('.bl-fill').evaluate(el => getComputedStyle(el).animationName), 'none'); pass('reduced motion disables automatic scene movement and progress animation');

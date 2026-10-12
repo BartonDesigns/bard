@@ -128,28 +128,39 @@
 	async function run(task, options = {}) {
 		create();
 		// Nested engine/arrival work belongs to the door's existing loading session.
-		if (current && !current.settled) return current.cancelled ? false : task();
+		if (current && !current.settled && !current.cancelled) return task();
+		if (current && !current.settled && current.cancelled && !options.entry) return false;
+		// Reopening after Back must be visible, but cannot race the cancelled build.
+		const previous = current && !current.settled ? current.done : null;
 		if (active()) hide();
 		const session = current = { id: ++serial, task, options, settled: false, cancelled: false, paused: false };
+		session.done = new Promise(resolve => { session.finish = resolve; });
 		show(); stage(options.label || 'Opening your world');
 		try {
+			if (previous) await previous;
 			// Let the image/text paint before synchronous terrain construction begins.
 			await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+			if (session.cancelled) return false;
 			const result = await task();
 			if (current !== session) return result;
 			session.settled = true;
-			if (session.cancelled) { options.exit?.(); current = null; return result; }
+			if (session.cancelled) return result;
 			clearTimeout(slowTimer); view.root.dataset.state = 'ready'; view.status.textContent = 'Your world is ready'; view.counter.textContent = 'READY';
 			view.sub.textContent = 'Step in whenever you are ready.'; view.enter.hidden = false; view.enter.textContent = 'Enter world';
 			return result;
 		} catch (error) {
 			if (current !== session) return false;
 			session.settled = true; session.error = error;
-			if (session.cancelled) { options.exit?.(); current = null; return false; }
+			if (session.cancelled) return false;
 			clearTimeout(slowTimer); view.root.dataset.state = 'error'; view.status.textContent = 'The world could not finish loading'; view.counter.textContent = 'PAUSED';
 			view.sub.textContent = /graphics|webgl|context|renderer/i.test(String(error?.message)) ? 'Your browser could not prepare 3D graphics. Return to Bard, then reload this tab.' : 'Check your connection, then retry. You can also return to Bard.';
 			view.enter.hidden = false; view.enter.textContent = 'Try again';
 			console.warn('[world loading]', error); return false;
+		} finally {
+			session.settled = true;
+			try {
+				if (session.cancelled) { options.exit?.(); if (current === session) current = null; }
+			} finally { session.finish(); }
 		}
 	}
 	// Register before the faceplate or world attaches its keyboard/combat handlers.

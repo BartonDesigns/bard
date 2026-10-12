@@ -8,6 +8,8 @@
     "short-landscape: guarded load, story navigation, focus, readiness, input restoration",
     "failed task retries and cannot enable entry early",
     "late completion after Back cannot reopen the screen",
+    "immediate reopen waits for cancelled success or failure and restores guarded entry",
+    "cancelled nested and queued tasks cannot run or deadlock a later door request",
     "reduced motion disables automatic scene movement and progress animation",
     "image failures never block readiness or entry",
     "production faceplate import failure reaches the cinematic recovery screen",
