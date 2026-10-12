@@ -461,7 +461,7 @@ export function createIslandWorld() {
 	let pixelRatio = isPhone ? Math.min(maxRatio, 1.25) : maxRatio;
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
-	const scene = new THREE.Scene();
+	const scene = HOOKS.scene = new THREE.Scene();
 	const shaderWarm = createShaderWarm(renderer, scene, camera);
 
 	const shared = {
@@ -2069,6 +2069,8 @@ if (typeof window !== 'undefined') {
 		social: () => HOOKS.social,
 		// what passers-by last said and when the next may speak: Crysis.chatter()
 		chatter: () => HOOKS.chatter?.info(),
+		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
+		scene: () => HOOKS.scene,
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
 		families: () => HOOKS.families,
 		// the child in the woods (people/ghost.js): very rare; this calls her now
