@@ -1,0 +1,19 @@
+Crysis arms runtime: canonical catalog, dynamic source discovery, conversational actions and fail-closed state passed.
+✔ natural gear requests resolve to the canonical gameplay catalog (15.014659ms)
+✔ negations and ordinary weapon mentions do not mutate state (2.571121ms)
+✔ dynamic world-site functions expose streamed shops and stateful actions (10.903747ms)
+✔ unsupported source actions fail closed without changing inventory (0.733822ms)
+✔ community food spends the gear wallet once and cannot overdraw it (0.765124ms)
+✔ an explicitly empty vendor stock cannot be bought through either entry point (1.403473ms)
+✔ prepared trades reserve the wallet and gear until commit or rollback resolves (1.890727ms)
+✔ earned wallet survives runtime reload even for older timestamp-free saves (0.497828ms)
+Arms: fictional catalog, player/NPC/supermarket/police acquisition, guarded theft heat, activity use, equip, idempotent persistence passed.
+✔ island/tools/arms.test.mjs (125.497752ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 196.713056

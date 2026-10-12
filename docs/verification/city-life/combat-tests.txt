@@ -1,0 +1,26 @@
+✔ every weapon has a box in the catalogue that the shops sell (1.165932ms)
+✔ level and tier raise damage, accuracy, range, magazine and reload speed (0.353979ms)
+✔ semi fires once a press, auto keeps firing at its rate, burst fires its count (2.884616ms)
+✔ an empty magazine fires nothing; reload moves rounds from the reserve on time (0.724943ms)
+✔ aiming down the sights tightens the spread; moving and firing open it (0.752715ms)
+✔ health: armour soaks, the head takes more, regen after quiet, down versus dead (0.638949ms)
+✔ minors (children and teenagers) carry the Spark: no damage path reaches them (3.52011ms)
+✔ the morality table: one place, context weighs it, the ledger keeps both you and the world (2.50424ms)
+✔ surrender: the badly hurt and outnumbered may yield; machines and creatures never do (0.715697ms)
+✔ faction relations: old feuds, attacks sour, common enemies warm, time eases it back (1.709383ms)
+✔ fire spreads to neighbours within limits and never burns twice (4.010123ms)
+✔ PvP is off unless the room turns it on; a side never hurts its own; adults are all fair game (0.525113ms)
+✔ ray shapes: boxes turn with their yaw, capsules have caps (0.573577ms)
+✔ wanted: offences make stars, shots alone stop at two, out of sight it ebbs, knocked out it clears (0.565398ms)
+✔ boss machines: telegraph before every attack, phases by health, untouchable while changing, weak points (9.076991ms)
+✔ a breakable weak point can force the next phase (0.465931ms)
+✔ surrender and restraint block shots, blasts and direct remote-style hits (0.579513ms)
+✔ family food deeds are recorded by the same saved morality ledger (0.886843ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 163.715241

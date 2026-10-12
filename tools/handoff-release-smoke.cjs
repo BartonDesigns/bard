@@ -2,8 +2,8 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const fs=require('node:fs/promises'),http=require('node:http'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
-	const skyOnly=process.env.BARD_QA_SCOPE==='sky',deepOnly=process.env.BARD_QA_SCOPE==='deep',heldOnly=process.env.BARD_QA_SCOPE==='held';
-	const root=path.resolve(__dirname,'..'),out=(process.env.BARD_QA_OUT||'/tmp/bard-handoff-smoke')+(skyOnly?'-sky':deepOnly?'-deep':heldOnly?'-held':'');await fs.mkdir(out,{recursive:true});
+	const loadingOnly=process.env.BARD_QA_SCOPE==='loading',skyOnly=process.env.BARD_QA_SCOPE==='sky',deepOnly=process.env.BARD_QA_SCOPE==='deep',heldOnly=process.env.BARD_QA_SCOPE==='held';
+	const root=path.resolve(__dirname,'..'),out=(process.env.BARD_QA_OUT||'/tmp/bard-handoff-smoke')+(loadingOnly?'-loading':skyOnly?'-sky':deepOnly?'-deep':heldOnly?'-held':'');await fs.mkdir(out,{recursive:true});
 	const server=http.createServer(async(req,res)=>{try{
 		const p=new URL(req.url,'http://local').pathname,f=path.resolve(root,'.'+(p==='/'?'/index.html':p));if(!f.startsWith(root+path.sep))throw Error('path');
 		res.setHeader('Content-Type',f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':'application/octet-stream');res.end(await fs.readFile(f));
@@ -15,6 +15,8 @@ const fs=require('node:fs/promises'),http=require('node:http'),path=require('nod
 		page.on('pageerror',e=>{report.errors.push(e.message);console.log('PAGE ERROR',e.message);});page.on('console',m=>{if(m.type()==='error'&&!/favicon|Failed to load resource/.test(m.text())){report.errors.push(m.text());console.log('CONSOLE ERROR',m.text().slice(0,300));}});
 		page.on('response',r=>{if(r.status()>=400&&r.url().startsWith('http://127.0.0.1:'))report.requests.push({url:r.url(),status:r.status()});});
 		const sample=async (name,keepRunning=false)=>{
+			// World construction now finishes behind an explicit, guarded entry screen.
+			const enter=page.getByRole('button',{name:'Enter world',exact:true});if(await enter.isVisible())await enter.click();
 			const result=await page.evaluate(keepRunning=>{const a=L99Island,r=a.renderer(),s=a.scene(),c=a.camera(),w=a.world();if(!keepRunning)a.close();a.dom.mount.style.display='block';w.sky?.update(0,c.position);r.render(s,c);w.arch?.post?.(r,s,c);w.beyond?.render?.();const gl=r.getContext();gl.finish();
 				const samplerTypes=new Set([gl.SAMPLER_2D,gl.SAMPLER_CUBE,gl.SAMPLER_3D,gl.SAMPLER_2D_SHADOW,gl.SAMPLER_2D_ARRAY]);
 				const programs=r.info.programs.map(p=>{const active=[];for(let i=0;i<gl.getProgramParameter(p.program,gl.ACTIVE_UNIFORMS);i++){const u=gl.getActiveUniform(p.program,i);if(samplerTypes.has(u.type))active.push({name:u.name.replace(/\[0\]$/,''),size:u.size});}const stages=gl.getAttachedShaders(p.program).map(s=>{const source=gl.getShaderSource(s),decl=source.match(/uniform\s+(?:(?:lowp|mediump|highp)\s+)?\w*sampler\w*\s+[^;]+;/gi)||[];return active.reduce((n,u)=>n+(decl.some(d=>new RegExp('\\b'+u.name+'\\b').test(d))?u.size:0),0);});return {runnable:p.diagnostics?.runnable!==false,samplers:active.reduce((n,u)=>n+u.size,0),stages};});
@@ -34,9 +36,10 @@ const fs=require('node:fs/promises'),http=require('node:http'),path=require('nod
 		await page.evaluate(async()=>{await L99Island.open({seed:4242,biome:'TERRAN',earth:false});Crysis.music.auto(false);L99Island.world().sky.state.hours=18.5;Crysis.archGo(0);});await sample('terran-architecture');
 		await page.evaluate(()=>Crysis.archGo('0:0'));await sample('terran-interior');
 		await page.evaluate(async()=>{await L99Island.open({seed:4242,biome:'MOON',earth:false});Crysis.music.auto(false);Crysis.colonyGo();});await sample('moon-colony');
-		report.moonCrew=await page.evaluate(async()=>{const a=L99Island,w=a.world(),c=w.colony,crew=c.crew.people,f=crew.byId.medic,p=w.player.state,q={...f.pos};p.pos.set(q.x,q.y+1.68,q.z+2.3);p.yaw=0;p.pitch=-.05;a.camera().position.copy(p.pos);a.camera().rotation.set(p.pitch,p.yaw,0,'YXZ');
-			for(let i=0;i<180&&!f.built;i++){c.update(.1,i*.1);await new Promise(r=>setTimeout(r,10));}if(!f.built)throw Error('Moon medic failed to load');crew.look('medic','work',{...q,yaw:0});for(let i=0;i<40;i++)c.update(.1,20+i*.1);return {built:f.built,name:f.name,place:f.place,position:f.M.S.pos.toArray(),crew:crew.info()};});await sample('moon-crew-room');
+		if(!loadingOnly){report.moonCrew=await page.evaluate(async()=>{const a=L99Island,w=a.world(),c=w.colony,crew=c.crew.people,f=crew.byId.medic,p=w.player.state,q={...f.pos};p.pos.set(q.x,q.y+1.68,q.z+2.3);p.yaw=0;p.pitch=-.05;a.camera().position.copy(p.pos);a.camera().rotation.set(p.pitch,p.yaw,0,'YXZ');
+			for(let i=0;i<180&&!f.built;i++){c.update(.1,i*.1);await new Promise(r=>setTimeout(r,10));}if(!f.built)throw Error('Moon medic failed to load');crew.look('medic','work',{...q,yaw:0});for(let i=0;i<40;i++)c.update(.1,20+i*.1);return {built:f.built,name:f.name,place:f.place,position:f.M.S.pos.toArray(),crew:crew.info()};});await sample('moon-crew-room');}
 		await page.evaluate(async()=>{await L99Island.open({seed:4242,biome:'MAGMA',earth:false});Crysis.music.auto(false);});await sample('magma');
+		if(loadingOnly){assert.deepEqual(report.errors,[]);assert.deepEqual(report.requests.filter(r=>!r.url.endsWith('/favicon.ico')),[]);report.passed=true;return;}
 		}else await page.evaluate(()=>L99IslandDoor.engine());
 		await page.evaluate(async()=>{await L99Island.open({seed:1337,biome:'TROPICAL',earth:false});Crysis.music.auto(false);if(!L99Island.world().deep)throw Error('Known gate fixture missing');Crysis.deepGo('gate');await new Promise(requestAnimationFrame);});await sample('deep-gate',true);
 		await page.evaluate(()=>L99Island.world().deep.strikeStone(0));await page.waitForTimeout(3300);

@@ -72,11 +72,11 @@ export function createCivilians(ctx) {
 	}
 
 	// gunfire or a blast at (x, z) within r: everyone near reacts
-	function alarm(x, z, r = 22) {
+	function alarm(x, z, r = 22, y = null) {
 		for (const p of people()?.pool || []) {
 			if (!p.active || !p.P.root.visible || p.P.ragdoll) continue;
 			const q = p.M.S.pos, d = Math.hypot(q.x - x, q.z - z);
-			if (d > r) continue;
+			if (d > r || Number.isFinite(y) && Math.abs(q.y-y)>2.5) continue;
 			const s = stateOf(p);
 			if (s.dead) continue;
 			const fresh = s.panic <= 0;

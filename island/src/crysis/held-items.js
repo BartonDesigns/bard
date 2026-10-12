@@ -1014,15 +1014,16 @@ export function rifleTorsoClearance(P, matrix, heading, resolve = false) {
  const c = P.cut; if (!c) return 0;
  clearInv.copy(P.root.matrixWorld).invert();
  clearCenter.setFromMatrixPosition(P.bones[P.map.spine01].matrixWorld).applyMatrix4(clearInv).sub(P.rest.heads[P.map.spine01]);
- const zc = (c.frontZ + c.backZ) / 2 + clearCenter.z;
- const rx = Math.max(c.shoulderX * .92, c.waistX) + .04, rz = (c.frontZ - c.backZ) / 2 + .04;
+ const dressed=P.heldTorso, front=dressed?.front ?? c.frontZ, back=dressed?.back ?? c.backZ;
+ const zc = (front + back) / 2 + clearCenter.z;
+ const rx = (dressed?.width ?? Math.max(c.shoulderX * .92, c.waistX)) + .025, rz = (front - back) / 2 + .035;
  let push = 0;
  for (let i=0;i<=16;i++) {
   clearPoint.set(-.41 + i * .04, .085, 0).applyMatrix4(matrix).applyMatrix4(clearInv);
   if(clearPoint.y<c.waist-.06+clearCenter.y || clearPoint.y>c.neck+.035+clearCenter.y)continue;
   const z=(clearPoint.z-zc)/rz;
   if(Math.abs(z)>=1)continue;
-  const edge=rx*Math.sqrt(1-z*z), x=clearPoint.x-clearCenter.x;
+  const edge=rx*Math.pow(1-Math.pow(z,4),.25), x=clearPoint.x-clearCenter.x;
   if(x>-edge && x<edge)push=Math.max(push,x+edge);
  }
  if(resolve && push>0){matrix.elements[12]-=Math.cos(heading)*(push+.003);matrix.elements[14]+=Math.sin(heading)*(push+.003);}

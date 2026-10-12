@@ -41,3 +41,15 @@ Evidence is in `docs/verification/cinematic-loading/`:
 - Real bundled Moon world renders before readiness, stays still against keyboard input while covered, and accepts flight input after entry. No page errors or failed linked programs in that case.
 
 These are Chromium responsive/touch-emulation and software-WebGL checks, not native iPhone/Safari timing or a complete Earth/legacy-flight playthrough. The exact production-art rendering fixture is used for the refreshed orbital screenshot. No physical-device performance claim is made.
+
+## Release integration, 12 October 2026
+
+The owner requested live publication. Integrated with main `b15d343b8c1a6d400173df9c6f52c6ce5dd1bbc4`, preserving the newer NPC, workplace, reputation and character work. The same 11 loading-browser check groups passed after rebuilding.
+
+The release smoke also passed seven rendered views: Earth island, Bay Area, the wider globe at Bend, Terran exterior/interior, Moon colony and Magma. No page/shader errors, lost graphics context or failed local assets. The maximum linked-program sampler counts were 13 per shader stage and 21 combined. This is software Chromium evidence, not physical Safari timing. See `docs/verification/cinematic-release-loading/`.
+
+```sh
+BARD_QA_SCOPE=loading node tools/handoff-release-smoke.cjs
+```
+
+The smoke harness now dismisses the explicit entry screen before checking a rendered world. Engine SHA-256: `36d6b4281698d2fe25d305d4bd1fbd58f526ce7315a4b1d559a7cb7006d20bf8`. No Worker deployment is part of this release. Live deployment and public-asset verification are recorded on [PR #18](https://github.com/BartonDesigns/bard/pull/18).

@@ -1,8 +1,86 @@
+## Cinematic loading release integration (12 October 2026)
+
+The owner requested publication after finding the screens absent from the live site. PR #18 was integrated with current main `b15d343`, preserving the newer workplace, reputation and character updates. Release verification and deployment evidence belong in `docs/cinematic-loading.md`. No Worker update is required.
+
+## Office and mall routines (11 October 2026 Pacific)
+
+See `docs/workplace-routines.md`. Workers now navigate to meetings and pantry breaks
+and return to their stations; shoppers browse shop interiors and return for checkout,
+while vendors check stock. Floor collision/atrium-aware paths, station reservations,
+conversation/danger suspension, limited customer budgets and single-payment sales are
+integrated. The production-rig fixture records complete cycles without navigation or
+shader errors. These remain local, same-floor routines, not shared commuting schedules.
+Discovery and rooms trading/combat are deployed; the newer `reputation-v1` flag is still
+missing in the read-only server check. This routine pass needs no Worker update.
+
+## Shared room reputation continuation (11 October 2026)
+
+See `docs/shared-reputation-pass.md`. The room protocol and client now support bounded
+durable public incidents and quest-completion recognition, with actual player attribution,
+world/geographical/floor limits, reconnect snapshots and host handoff. Old rooms servers
+remain compatible; the capability is gated by the welcome's `reputation-v1` flag.
+Cloudflare credentials are absent here. Publish the client, but do not call shared memory
+live until the owner deploys `server/multiplayer` and `/status` advertises the capability.
+The read-only verifier now checks it. This is room-scoped reported activity, not a fully
+server-simulated NPC population or account-backed reputation.
+
+## City life, witnessed incidents, paid conversation quests and building handoff
+
+See `docs/city-life-and-building-transitions.md`. New workplace actor roles drive desk
+work, alternating meetings/disputes and paired shopping negotiations/sales. Dialogue
+uses current activities, saved completion history and attributed recent witnesses;
+vehicle impacts now trigger crime reactions, including remembered residents. Story
+quests have validated physical evidence and idempotent credit payments. The full-game
+reload test caught and fixed the old timestamp-free wallet reset. Coarse/detail building
+materials now share anchors, palette conversion, distance and readiness coverage.
+Source and browser checks are recorded in `docs/verification/city-life/`. No Worker
+change is required. Multiplayer observations use the already deployed combat protocol;
+shared server-side NPC memory is still future work. Do not claim physical Safari QA.
+
 # Level 99 Bard: handoff notes
 
 ## Cinematic loading screens (11 October 2026)
 
 The `codex/cinematic-loading` feature branch adds screenshot-led loading before the engine download, actual preparation phases, mechanic hints, responsive layouts and guarded entry with retry/back controls. It preserves native seamless travel. Build and browser checks cover five viewport sizes, input release, recovery and a real bundled Moon-world entry; physical Safari remains unverified. See `docs/cinematic-loading.md` and `docs/verification/cinematic-loading/` for previews and provenance. This is a feature-branch review checkpoint, not a live deployment or Worker change.
+
+## Commercial towers, malls and character contact (11 October 2026)
+
+Commercial source identity now survives height classification. Offices and large retail
+anchors route to a full-height system with structural slabs on every storey, altitude-driven
+three-floor detail caching, a complete elevator directory, varied workplace programmes and
+regional profiles. Malls have atriums, shop units, food courts and walkable escalator treads.
+Generated modern downtowns can contain 45–74-storey towers. New original long-groom recipes
+and calibrated, bounded cloth/body contact are integrated. See
+`docs/workplaces-and-character-contact.md` for scope, evidence, architectural references
+and remaining limitations. In particular, cloth proxy overlap is reduced, not eliminated;
+this is not full cloth/self-collision or physical-device performance certification.
+
+## Shoulder, sleeve and groom refinement (11 October 2026)
+
+Loose tops now retain arm influences across the shoulder. Cuffs use planes perpendicular
+to each person's arm bones, including the skin-coverage test and trim colouring. One bounded
+curved subdivision pass rounds upper garments before their edges are finished. Hair lighting
+frames are rebuilt on the fitted groom, and grey strands keep their colour along their length.
+The review fixture now sets the actual body sex parameter when selecting male/female outfits.
+See `docs/character-geometry-pass.md` for the release checks and remaining art work.
+
+The owner has now deployed the rooms Worker. Both production `/status` endpoints pass the
+read-only verifier: discovery exposes `social_intent` and `story_quest`; rooms exposes
+`trade-v2`, `combat-v1`, and `combat-guard-v1`, with the live site's CORS origin accepted.
+The root rooms URL returning `{"error":"not found"}` is expected; `/status` is the health route.
+Production two-client gameplay and physical iPhone performance remain separate checks.
+
+## Character construction continuation and Worker verification (11 October 2026)
+
+Garments now have shaped torso panels, actual cut edges with rolled returns, cleaner fabric
+shading and finer stitches. Loose shirt weights avoid following the legs. Rifle clearance
+uses the dressed torso. Hair has four damped guide responses driven by head turns and movement,
+teleport resets, two body-collision projection passes and restrained backlighting. See
+`docs/character-tailoring-pass.md` for checks, screenshots and remaining art limits.
+
+At the time of this earlier pass, rooms lacked the capability flags. The owner subsequently
+deployed it; see the verified current status above. `node server/verify-workers.mjs` performs
+a read-only check, without deployment or model inference.
 
 ## Character pose and appearance (11 October 2026)
 

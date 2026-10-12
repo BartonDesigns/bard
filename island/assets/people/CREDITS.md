@@ -70,3 +70,11 @@ baked; the files were taken from public copies of the same packs on GitHub
 `hair02.json` listing each asset's author, licence and page; TomasKlecer/mpfb_backup: the
 system hair and the CC0 beards; RavinMaddHatter/Madhatters-Table-Top-RPG-Mini-Maker: the
 scruffy beard), each file's own header naming its author and licence.
+
+## Original long-groom recipes (October 2026)
+
+`hair/long-grooms.json` and `src/people/long-groom.js` author three new curve-based
+long styles: Cascade, Cascade Wave and Cascade Side. Curved ribbon geometry and the
+strand-coverage atlas are generated from these original recipes, fitted to each head.
+They contain no third-party hair geometry or textures. Existing MakeHuman styles and
+their original credits remain available.

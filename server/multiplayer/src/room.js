@@ -6,6 +6,8 @@
 import { MAX_PLAYERS, MAX_BYTES, RATE, BURST, STALE_MS, EMPTY_MS, EVENTS_MAX, cleanPose, cleanSpot, cleanState, cleanEvent, cleanName, cleanLook, cleanTrade, cleanFx, cleanHit, cleanCombatState, cleanRules, ID_RE } from '../../../island/src/net/protocol.js';
 
 import { createCombatGuard } from './combat-guard.js';
+import { acceptReputation } from './reputation.js';
+import { REPUTATION_FEATURE, reputationAlive } from '../../../island/src/net/reputation.js';
 
 const SWEEP_MS = 15000;
 // close codes the game understands
@@ -83,9 +85,20 @@ export class Room {
 		if (meta.host !== a.id && (a.id === meta.owner || !others.some((s) => this.info(s).id === meta.host))) { meta.host = a.id; this.broadcast({ t: 'host', id: a.id }, ws); }
 		meta.emptySince = 0;
 		await this.save();
-		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false } });
+		const now=Date.now();
+		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE], now });
+		const memories=(meta.reputation||[]).filter(e=>reputationAlive(e,now));
+		for(let i=0;i<memories.length;i+=6)this.send(ws,{t:'reputation-snapshot',records:memories.slice(i,i+6)});
 		this.broadcast({ t: 'join', player: this.player(ws) }, ws);
 		await this.state.storage.setAlarm(Date.now() + SWEEP_MS);
+	}
+	async reputation(ws,raw) {
+		const actor=this.info(ws), pose=this.poses.get(actor.id);
+		const result=acceptReputation(this.meta,raw,actor,pose);
+		if(!result.ok)return;
+		if(result.duplicate){this.send(ws,{t:'reputation',e:result.record,live:false});return;}
+		await this.save();
+		this.broadcast({t:'reputation',e:result.record,live:true});
 	}
 	// the rate limit: a bucket per player that fills at RATE a second up to BURST
 	allow(id) {
@@ -165,12 +178,17 @@ export class Room {
 				this.send(ws, { t: 'trade-ack', id: c.id, op: c.op, to: id, there: !!to });
 				return;
 			}
+			case 'reputation': {
+				await this.reputation(ws,m.e);
+				return;
+			}
 			case 'fx': {
 				// shots friends see: passed to everyone else
 				const f = cleanFx(m);
 				const pose = this.poses.get(a.id);
 				if (!f || !pose?.w || f.s.some((q) => Math.hypot(q[0] - pose.p[0], q[1] - pose.p[1], q[2] - pose.p[2]) > 20)) return;
 				for (const s of this.sockets()) if (s !== ws && this.poses.get(this.info(s).id)?.w === pose.w) this.send(s, { t: 'fx', id: a.id, ...f });
+				await this.reputation(ws,{id:'shot:'+Date.now(),kind:'shots',w:pose.w,p:pose.p,g:pose.g});
 				return;
 			}
 			case 'hit': {

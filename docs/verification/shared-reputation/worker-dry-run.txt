@@ -1,0 +1,15 @@
+
+> check
+> wrangler deploy --dry-run --outdir .wrangler/check
+
+
+ ⛅️ wrangler 4.148.0
+────────────────────
+Total Upload: 32.18 KiB / gzip: 10.15 KiB
+Your Worker has access to the following bindings:
+Binding                                                               Resource                  
+env.ROOMS (Room)                                                      Durable Object            
+env.ALLOWED_ORIGINS ("https://level99bard.com,https://www.l...")      Environment Variable      
+env.ALLOW_LOCALHOST ("true")                                          Environment Variable      
+
+--dry-run: exiting now.

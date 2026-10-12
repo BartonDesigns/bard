@@ -1,0 +1,2365 @@
+{
+  "cases": [
+    {
+      "name": "office",
+      "type": "office",
+      "region": "Pacific coast",
+      "levels": [
+        {
+          "n": 0,
+          "y": 0.25,
+          "h": 5.2,
+          "kind": "lobby",
+          "program": "Reception & directory"
+        },
+        {
+          "n": 1,
+          "y": 5.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 2,
+          "y": 9.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 3,
+          "y": 13.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 4,
+          "y": 17.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 5,
+          "y": 21.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 6,
+          "y": 24.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 7,
+          "y": 28.849999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 8,
+          "y": 32.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 9,
+          "y": 36.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 10,
+          "y": 40.550000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 11,
+          "y": 44.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 12,
+          "y": 48.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 13,
+          "y": 52.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 14,
+          "y": 56.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 15,
+          "y": 60.050000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 16,
+          "y": 63.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 17,
+          "y": 67.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 18,
+          "y": 71.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 19,
+          "y": 75.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 20,
+          "y": 79.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 21,
+          "y": 83.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 22,
+          "y": 87.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 23,
+          "y": 91.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 24,
+          "y": 95.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 25,
+          "y": 99.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 26,
+          "y": 102.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 27,
+          "y": 106.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 28,
+          "y": 110.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 29,
+          "y": 114.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 30,
+          "y": 118.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 31,
+          "y": 122.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 32,
+          "y": 126.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 33,
+          "y": 130.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 34,
+          "y": 134.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 35,
+          "y": 138.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 36,
+          "y": 141.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 37,
+          "y": 145.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 38,
+          "y": 149.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 39,
+          "y": 153.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 40,
+          "y": 157.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 41,
+          "y": 161.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 42,
+          "y": 165.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 43,
+          "y": 169.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 44,
+          "y": 173.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 45,
+          "y": 177.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 46,
+          "y": 180.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 47,
+          "y": 184.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 48,
+          "y": 188.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 49,
+          "y": 192.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 50,
+          "y": 196.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 51,
+          "y": 200.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 52,
+          "y": 204.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 53,
+          "y": 208.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 54,
+          "y": 212.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 55,
+          "y": 216.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 56,
+          "y": 219.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 57,
+          "y": 223.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 58,
+          "y": 227.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 59,
+          "y": 231.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 60,
+          "y": 235.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 61,
+          "y": 239.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 62,
+          "y": 243.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 63,
+          "y": 247.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 64,
+          "y": 251.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 65,
+          "y": 255.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 66,
+          "y": 258.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 67,
+          "y": 262.84999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 68,
+          "y": 266.75,
+          "h": 3.9,
+          "kind": "home",
+          "program": "Guest apartments"
+        },
+        {
+          "n": 69,
+          "y": 270.65,
+          "h": 4.150000000000034,
+          "kind": "home",
+          "program": "Guest apartments"
+        },
+        {
+          "n": "R",
+          "y": 274.8,
+          "h": 0,
+          "kind": "roof",
+          "program": "Roof terrace"
+        }
+      ],
+      "loaded": [
+        {
+          "n": 30,
+          "details": {
+            "desks": 64,
+            "meetingSeats": 24,
+            "stores": 0,
+            "zones": [
+              "work",
+              "work",
+              "meeting",
+              "meeting",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 124
+        },
+        {
+          "n": 29,
+          "details": {
+            "desks": 42,
+            "meetingSeats": 12,
+            "stores": 0,
+            "zones": [
+              "work",
+              "private",
+              "focus",
+              "meeting",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 154
+        },
+        {
+          "n": 31,
+          "details": {
+            "desks": 69,
+            "meetingSeats": 12,
+            "stores": 0,
+            "zones": [
+              "work",
+              "work",
+              "focus",
+              "meeting",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 153
+        }
+      ],
+      "slabs": 71
+    },
+    {
+      "name": "conference",
+      "type": "office",
+      "region": "Pacific coast",
+      "levels": [
+        {
+          "n": 0,
+          "y": 0.25,
+          "h": 5.2,
+          "kind": "lobby",
+          "program": "Reception & directory"
+        },
+        {
+          "n": 1,
+          "y": 5.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 2,
+          "y": 9.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 3,
+          "y": 13.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 4,
+          "y": 17.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 5,
+          "y": 21.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 6,
+          "y": 24.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 7,
+          "y": 28.849999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 8,
+          "y": 32.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 9,
+          "y": 36.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 10,
+          "y": 40.550000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 11,
+          "y": 44.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 12,
+          "y": 48.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 13,
+          "y": 52.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 14,
+          "y": 56.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 15,
+          "y": 60.050000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 16,
+          "y": 63.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 17,
+          "y": 67.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 18,
+          "y": 71.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 19,
+          "y": 75.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 20,
+          "y": 79.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 21,
+          "y": 83.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 22,
+          "y": 87.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 23,
+          "y": 91.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 24,
+          "y": 95.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 25,
+          "y": 99.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 26,
+          "y": 102.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 27,
+          "y": 106.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 28,
+          "y": 110.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 29,
+          "y": 114.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 30,
+          "y": 118.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 31,
+          "y": 122.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 32,
+          "y": 126.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 33,
+          "y": 130.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 34,
+          "y": 134.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 35,
+          "y": 138.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 36,
+          "y": 141.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 37,
+          "y": 145.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 38,
+          "y": 149.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 39,
+          "y": 153.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 40,
+          "y": 157.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 41,
+          "y": 161.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 42,
+          "y": 165.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 43,
+          "y": 169.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 44,
+          "y": 173.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 45,
+          "y": 177.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 46,
+          "y": 180.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 47,
+          "y": 184.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 48,
+          "y": 188.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 49,
+          "y": 192.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 50,
+          "y": 196.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 51,
+          "y": 200.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 52,
+          "y": 204.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 53,
+          "y": 208.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 54,
+          "y": 212.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 55,
+          "y": 216.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 56,
+          "y": 219.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 57,
+          "y": 223.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 58,
+          "y": 227.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 59,
+          "y": 231.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 60,
+          "y": 235.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 61,
+          "y": 239.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 62,
+          "y": 243.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 63,
+          "y": 247.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 64,
+          "y": 251.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 65,
+          "y": 255.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 66,
+          "y": 258.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 67,
+          "y": 262.84999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 68,
+          "y": 266.75,
+          "h": 3.9,
+          "kind": "home",
+          "program": "Guest apartments"
+        },
+        {
+          "n": 69,
+          "y": 270.65,
+          "h": 4.150000000000034,
+          "kind": "home",
+          "program": "Guest apartments"
+        },
+        {
+          "n": "R",
+          "y": 274.8,
+          "h": 0,
+          "kind": "roof",
+          "program": "Roof terrace"
+        }
+      ],
+      "loaded": [
+        {
+          "n": 33,
+          "details": {
+            "desks": 32,
+            "meetingSeats": 36,
+            "stores": 0,
+            "zones": [
+              "work",
+              "meeting",
+              "meeting",
+              "meeting",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 96
+        },
+        {
+          "n": 32,
+          "details": {
+            "desks": 69,
+            "meetingSeats": 0,
+            "stores": 0,
+            "zones": [
+              "work",
+              "work",
+              "focus",
+              "lounge",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 160
+        },
+        {
+          "n": 34,
+          "details": {
+            "desks": 37,
+            "meetingSeats": 24,
+            "stores": 0,
+            "zones": [
+              "work",
+              "private",
+              "meeting",
+              "meeting",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 125
+        }
+      ],
+      "slabs": 71
+    },
+    {
+      "name": "top-floor",
+      "type": "office",
+      "region": "Pacific coast",
+      "levels": [
+        {
+          "n": 0,
+          "y": 0.25,
+          "h": 5.2,
+          "kind": "lobby",
+          "program": "Reception & directory"
+        },
+        {
+          "n": 1,
+          "y": 5.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 2,
+          "y": 9.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 3,
+          "y": 13.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 4,
+          "y": 17.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 5,
+          "y": 21.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 6,
+          "y": 24.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 7,
+          "y": 28.849999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 8,
+          "y": 32.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 9,
+          "y": 36.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 10,
+          "y": 40.550000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 11,
+          "y": 44.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 12,
+          "y": 48.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 13,
+          "y": 52.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 14,
+          "y": 56.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 15,
+          "y": 60.050000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 16,
+          "y": 63.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 17,
+          "y": 67.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 18,
+          "y": 71.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 19,
+          "y": 75.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 20,
+          "y": 79.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 21,
+          "y": 83.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 22,
+          "y": 87.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 23,
+          "y": 91.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 24,
+          "y": 95.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 25,
+          "y": 99.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 26,
+          "y": 102.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 27,
+          "y": 106.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 28,
+          "y": 110.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 29,
+          "y": 114.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 30,
+          "y": 118.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 31,
+          "y": 122.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 32,
+          "y": 126.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 33,
+          "y": 130.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 34,
+          "y": 134.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 35,
+          "y": 138.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 36,
+          "y": 141.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 37,
+          "y": 145.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 38,
+          "y": 149.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 39,
+          "y": 153.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 40,
+          "y": 157.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 41,
+          "y": 161.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 42,
+          "y": 165.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 43,
+          "y": 169.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 44,
+          "y": 173.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 45,
+          "y": 177.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 46,
+          "y": 180.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 47,
+          "y": 184.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 48,
+          "y": 188.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 49,
+          "y": 192.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 50,
+          "y": 196.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 51,
+          "y": 200.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 52,
+          "y": 204.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 53,
+          "y": 208.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 54,
+          "y": 212.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 55,
+          "y": 216.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 56,
+          "y": 219.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 57,
+          "y": 223.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 58,
+          "y": 227.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 59,
+          "y": 231.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 60,
+          "y": 235.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 61,
+          "y": 239.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 62,
+          "y": 243.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 63,
+          "y": 247.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 64,
+          "y": 251.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 65,
+          "y": 255.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 66,
+          "y": 258.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 67,
+          "y": 262.84999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 68,
+          "y": 266.75,
+          "h": 3.9,
+          "kind": "home",
+          "program": "Guest apartments"
+        },
+        {
+          "n": 69,
+          "y": 270.65,
+          "h": 4.150000000000034,
+          "kind": "home",
+          "program": "Guest apartments"
+        },
+        {
+          "n": "R",
+          "y": 274.8,
+          "h": 0,
+          "kind": "roof",
+          "program": "Roof terrace"
+        }
+      ],
+      "loaded": [
+        {
+          "n": 69,
+          "details": null,
+          "colliders": 23
+        },
+        {
+          "n": 68,
+          "details": null,
+          "colliders": 23
+        },
+        {
+          "n": "R",
+          "details": null,
+          "colliders": 5
+        }
+      ],
+      "slabs": 71
+    },
+    {
+      "name": "mall",
+      "type": "mall",
+      "region": "Pacific coast",
+      "levels": [
+        {
+          "n": 0,
+          "y": 0.25,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Design & home"
+        },
+        {
+          "n": 1,
+          "y": 5.05,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Books & stationery"
+        },
+        {
+          "n": 2,
+          "y": 9.85,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Technology"
+        },
+        {
+          "n": 3,
+          "y": 14.649999999999999,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Fashion"
+        },
+        {
+          "n": 4,
+          "y": 19.45,
+          "h": 4.850000000000001,
+          "kind": "mall",
+          "program": "Food court"
+        },
+        {
+          "n": "R",
+          "y": 24.3,
+          "h": 0,
+          "kind": "roof",
+          "program": "Roof terrace"
+        }
+      ],
+      "loaded": [
+        {
+          "n": 2,
+          "details": {
+            "desks": 0,
+            "meetingSeats": 0,
+            "stores": 10,
+            "zones": []
+          },
+          "colliders": 105
+        },
+        {
+          "n": 1,
+          "details": {
+            "desks": 0,
+            "meetingSeats": 0,
+            "stores": 10,
+            "zones": []
+          },
+          "colliders": 105
+        },
+        {
+          "n": 3,
+          "details": {
+            "desks": 0,
+            "meetingSeats": 0,
+            "stores": 10,
+            "zones": []
+          },
+          "colliders": 105
+        }
+      ],
+      "slabs": 18
+    },
+    {
+      "name": "food-court",
+      "type": "mall",
+      "region": "Pacific coast",
+      "levels": [
+        {
+          "n": 0,
+          "y": 0.25,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Design & home"
+        },
+        {
+          "n": 1,
+          "y": 5.05,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Books & stationery"
+        },
+        {
+          "n": 2,
+          "y": 9.85,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Technology"
+        },
+        {
+          "n": 3,
+          "y": 14.649999999999999,
+          "h": 4.8,
+          "kind": "mall",
+          "program": "Fashion"
+        },
+        {
+          "n": 4,
+          "y": 19.45,
+          "h": 4.850000000000001,
+          "kind": "mall",
+          "program": "Food court"
+        },
+        {
+          "n": "R",
+          "y": 24.3,
+          "h": 0,
+          "kind": "roof",
+          "program": "Roof terrace"
+        }
+      ],
+      "loaded": [
+        {
+          "n": 3,
+          "details": {
+            "desks": 0,
+            "meetingSeats": 0,
+            "stores": 10,
+            "zones": []
+          },
+          "colliders": 105
+        },
+        {
+          "n": 4,
+          "details": {
+            "desks": 0,
+            "meetingSeats": 0,
+            "stores": 10,
+            "zones": []
+          },
+          "colliders": 65
+        },
+        {
+          "n": "R",
+          "details": null,
+          "colliders": 5
+        }
+      ],
+      "slabs": 18
+    },
+    {
+      "name": "japan",
+      "type": "office",
+      "region": "Japan",
+      "levels": [
+        {
+          "n": 0,
+          "y": 0.25,
+          "h": 5.2,
+          "kind": "lobby",
+          "program": "Reception & directory"
+        },
+        {
+          "n": 1,
+          "y": 5.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 2,
+          "y": 9.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 3,
+          "y": 13.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 4,
+          "y": 17.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 5,
+          "y": 21.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 6,
+          "y": 24.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 7,
+          "y": 28.849999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 8,
+          "y": 32.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 9,
+          "y": 36.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 10,
+          "y": 40.550000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 11,
+          "y": 44.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 12,
+          "y": 48.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 13,
+          "y": 52.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 14,
+          "y": 56.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 15,
+          "y": 60.050000000000004,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 16,
+          "y": 63.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 17,
+          "y": 67.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 18,
+          "y": 71.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 19,
+          "y": 75.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 20,
+          "y": 79.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 21,
+          "y": 83.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 22,
+          "y": 87.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 23,
+          "y": 91.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 24,
+          "y": 95.15,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 25,
+          "y": 99.05,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 26,
+          "y": 102.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 27,
+          "y": 106.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 28,
+          "y": 110.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 29,
+          "y": 114.65,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 30,
+          "y": 118.55,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 31,
+          "y": 122.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 32,
+          "y": 126.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 33,
+          "y": 130.25,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 34,
+          "y": 134.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 35,
+          "y": 138.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 36,
+          "y": 141.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 37,
+          "y": 145.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 38,
+          "y": 149.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 39,
+          "y": 153.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 40,
+          "y": 157.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 41,
+          "y": 161.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 42,
+          "y": 165.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 43,
+          "y": 169.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 44,
+          "y": 173.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 45,
+          "y": 177.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 46,
+          "y": 180.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 47,
+          "y": 184.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 48,
+          "y": 188.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 49,
+          "y": 192.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 50,
+          "y": 196.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 51,
+          "y": 200.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 52,
+          "y": 204.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 53,
+          "y": 208.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 54,
+          "y": 212.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 55,
+          "y": 216.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 56,
+          "y": 219.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 57,
+          "y": 223.85,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 58,
+          "y": 227.74999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 59,
+          "y": 231.64999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 60,
+          "y": 235.54999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Sky commons"
+        },
+        {
+          "n": 61,
+          "y": 239.45,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 62,
+          "y": 243.35,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": 63,
+          "y": 247.24999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Client services"
+        },
+        {
+          "n": 64,
+          "y": 251.14999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Engineering"
+        },
+        {
+          "n": 65,
+          "y": 255.04999999999998,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Finance"
+        },
+        {
+          "n": 66,
+          "y": 258.95,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Coworking"
+        },
+        {
+          "n": 67,
+          "y": 262.84999999999997,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Conference centre"
+        },
+        {
+          "n": 68,
+          "y": 266.75,
+          "h": 3.9,
+          "kind": "office",
+          "program": "Executive offices"
+        },
+        {
+          "n": 69,
+          "y": 270.65,
+          "h": 4.150000000000034,
+          "kind": "office",
+          "program": "Product studio"
+        },
+        {
+          "n": "R",
+          "y": 274.8,
+          "h": 0,
+          "kind": "roof",
+          "program": "Roof terrace"
+        }
+      ],
+      "loaded": [
+        {
+          "n": 24,
+          "details": {
+            "desks": 77,
+            "meetingSeats": 0,
+            "stores": 0,
+            "zones": [
+              "work",
+              "work",
+              "focus",
+              "lounge",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 168
+        },
+        {
+          "n": 23,
+          "details": {
+            "desks": 77,
+            "meetingSeats": 12,
+            "stores": 0,
+            "zones": [
+              "work",
+              "work",
+              "focus",
+              "meeting",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 161
+        },
+        {
+          "n": 25,
+          "details": {
+            "desks": 41,
+            "meetingSeats": 24,
+            "stores": 0,
+            "zones": [
+              "work",
+              "meeting",
+              "focus",
+              "meeting",
+              "restroom",
+              "pantry"
+            ]
+          },
+          "colliders": 129
+        }
+      ],
+      "slabs": 71
+    }
+  ],
+  "errors": [],
+  "checks": {
+    "count": 71,
+    "geometries": 24,
+    "programs": 0
+  }
+}

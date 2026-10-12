@@ -256,7 +256,7 @@ export function furnish(P, only = -1) {
 			against('shelves', Math.min(2.2, bd - 1), 0.5, 1.9, { clear: 0.5, side: (s) => s.axis === 'z' });
 			against('bins', 1.4, 0.7, 1.1, { clear: 0.4 }); against('bikes', 1.7, 0.5, 1.0, { clear: 0.4 }); against('workbench', 1.5, 0.6, 0.92, { clear: 0.6 });
 			clutter(2); light('tube');
-		} else if (t === 'den' || t === 'office' || t === 'family') {
+		} else if (t === 'den' || (t === 'office' && P.use !== 'office') || t === 'family') {
 			if (t === 'family') { const so = against('sofa', 2.0, 0.92, 0.85, { long: true, clear: 1.2 }); if (so) { sitOn(so, 3); inFront(so, 'coffeeTable', 1.0, 0.55, 0.42, 0.45); } against('tvConsole', 1.5, 0.45, 0.55, { clear: 1.5 }); }
 			else { const dk = against('desk', 1.3, 0.6, 0.75, { clear: 0.9, score: (s) => (s.ext ? 1 : 0) }); if (dk) sitOn(dk, 1, 0.47, 0.55); }
 			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.6 }); against('armchair', 0.8, 0.8, 0.85, { corner: true, clear: 0.6 });

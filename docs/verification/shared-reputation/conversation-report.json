@@ -1,0 +1,635 @@
+{
+  "transport": "deterministic model-response mock; real game integration",
+  "sharedMemory": {
+    "room": {
+      "available": true,
+      "status": "on",
+      "code": "93HKH5",
+      "host": "p1y2b2l471e044s623e5o",
+      "you": "p1y2b2l471e044s623e5o",
+      "isHost": true,
+      "reputation": {
+        "supported": true,
+        "records": 2
+      },
+      "following": null,
+      "stopped": "",
+      "players": [
+        {
+          "id": "driver-2222",
+          "name": "Driver",
+          "d": null,
+          "at": null,
+          "body": false
+        }
+      ],
+      "plans": [],
+      "book": [],
+      "crowd": null
+    },
+    "perception": {
+      "reports": [
+        {
+          "id": "incident-browser-car",
+          "kind": "vehicle-impact",
+          "w": "w1337",
+          "p": [
+            3.17,
+            5.55,
+            -83.06
+          ],
+          "actor": "driver-2222",
+          "name": "Driver",
+          "at": 1791758265905,
+          "actorId": "driver-2222",
+          "actorName": "Driver",
+          "line": "drove a vehicle into a person",
+          "age": 94
+        }
+      ],
+      "sharedCompleted": 1,
+      "sharedIssuer": true,
+      "events": [
+        {
+          "id": "incident-1791758265910-1",
+          "at": 1791758265910,
+          "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+          "kind": "vehicle-impact",
+          "line": "drove a vehicle into a person",
+          "actorId": "driver-2222",
+          "actorName": "Driver"
+        }
+      ],
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "aimedAt": false,
+      "wanted": 0,
+      "injured": false,
+      "running": false
+    },
+    "reply": "Keep your voice down. Someone was attacking people nearby.",
+    "noQuest": true,
+    "remote": [
+      {
+        "t": "welcome",
+        "you": "driver-2222",
+        "host": "p1y2b2l471e044s623e5o",
+        "code": "93HKH5",
+        "players": [
+          {
+            "id": "driver-2222",
+            "name": "Driver",
+            "look": {
+              "seed": 42
+            },
+            "joined": 1791758265331,
+            "pose": null,
+            "spot": ""
+          },
+          {
+            "id": "p1y2b2l471e044s623e5o",
+            "name": "Player 1Y2",
+            "look": {
+              "seed": 7919
+            },
+            "joined": 1791758262051,
+            "pose": {
+              "p": [
+                3.17,
+                7.25,
+                -83.06
+              ],
+              "y": 0.58,
+              "a": "fly",
+              "w": "w1337"
+            },
+            "spot": ""
+          }
+        ],
+        "state": null,
+        "events": [],
+        "rules": {
+          "pvp": false
+        },
+        "features": [
+          "reputation-v1"
+        ],
+        "now": 1791758265331
+      },
+      {
+        "t": "reputation-snapshot",
+        "records": [
+          {
+            "id": "quest:story-s8hoot-1",
+            "kind": "quest-complete",
+            "w": "w1337",
+            "p": [
+              3.17,
+              5.55,
+              -83.06
+            ],
+            "npc": "npc-17wdrqp",
+            "actor": "p1y2b2l471e044s623e5o",
+            "name": "Player 1Y2",
+            "at": 1791758262618
+          }
+        ]
+      },
+      {
+        "t": "reputation",
+        "e": {
+          "id": "incident-browser-car",
+          "kind": "vehicle-impact",
+          "w": "w1337",
+          "p": [
+            3.17,
+            5.55,
+            -83.06
+          ],
+          "actor": "driver-2222",
+          "name": "Driver",
+          "at": 1791758265905
+        },
+        "live": true
+      }
+    ]
+  },
+  "startingCredits": 1000,
+  "paidCredits": 1280,
+  "fear": {
+    "last": "After what you did? People are scared. Give us space.",
+    "incidents": [
+      {
+        "id": "incident-1791758265910-1",
+        "at": 1791758265910,
+        "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+        "kind": "vehicle-impact",
+        "line": "drove a vehicle into a person",
+        "actorId": "driver-2222",
+        "actorName": "Driver"
+      },
+      {
+        "id": "incident-1791758341139-2",
+        "at": 1791758341139,
+        "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+        "kind": "vehicle-impact",
+        "line": "drove a vehicle into a person",
+        "actorId": "player",
+        "actorName": null
+      }
+    ],
+    "questsUnchanged": true
+  },
+  "follow": {
+    "mode": "follow",
+    "calls": [
+      "social_intent"
+    ],
+    "alarm": 0
+  },
+  "scout": {
+    "mode": "scout",
+    "calls": [
+      "social_intent",
+      "social_intent"
+    ],
+    "alarm": 0
+  },
+  "warn": {
+    "mode": "wait",
+    "calls": [
+      "social_intent",
+      "social_intent",
+      "social_intent"
+    ],
+    "alarm": 0.6499891666666667
+  },
+  "clarification": {
+    "mode": "wait",
+    "calls": [
+      "social_intent",
+      "social_intent",
+      "social_intent",
+      "social_intent"
+    ],
+    "alarm": 0
+  },
+  "interrupted": true,
+  "offered": {
+    "title": "The view beyond home",
+    "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+    "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+    "steps": [
+      {
+        "type": "visit",
+        "targetId": "place-the-village",
+        "targetName": "the village"
+      },
+      {
+        "type": "return",
+        "targetId": "home:person-kvt402itbwqk",
+        "targetName": "Jamal's meeting place"
+      },
+      {
+        "type": "talk",
+        "npcId": "person-kvt402itbwqk",
+        "npcName": "Jamal Harris"
+      }
+    ],
+    "offeredBy": "person-kvt402itbwqk",
+    "id": "story-s8hoot-1",
+    "status": "offered",
+    "cursor": 0,
+    "offeredAt": 1791758261841,
+    "acceptedAt": null,
+    "finishedAt": null,
+    "evidence": [],
+    "reward": {
+      "credits": 280
+    },
+    "rewardPaid": false
+  },
+  "evidence": [
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-village",
+          "targetName": "the village"
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-kvt402itbwqk",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-kvt402itbwqk",
+      "id": "story-s8hoot-1",
+      "status": "active",
+      "cursor": 0,
+      "offeredAt": 1791758261841,
+      "acceptedAt": 1791758261857,
+      "finishedAt": null,
+      "evidence": [],
+      "reward": {
+        "credits": 280
+      },
+      "rewardPaid": false
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-village",
+          "targetName": "the village"
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-kvt402itbwqk",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-kvt402itbwqk",
+      "id": "story-s8hoot-1",
+      "status": "active",
+      "cursor": 0,
+      "offeredAt": 1791758261841,
+      "acceptedAt": 1791758261857,
+      "finishedAt": null,
+      "evidence": [],
+      "reward": {
+        "credits": 280
+      },
+      "rewardPaid": false
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-village",
+          "targetName": "the village"
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-kvt402itbwqk",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-kvt402itbwqk",
+      "id": "story-s8hoot-1",
+      "status": "active",
+      "cursor": 0,
+      "offeredAt": 1791758261841,
+      "acceptedAt": 1791758261857,
+      "finishedAt": null,
+      "evidence": [],
+      "reward": {
+        "credits": 280
+      },
+      "rewardPaid": false
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-village",
+          "targetName": "the village",
+          "completedAt": 1791758261903
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-kvt402itbwqk",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-kvt402itbwqk",
+      "id": "story-s8hoot-1",
+      "status": "active",
+      "cursor": 1,
+      "offeredAt": 1791758261841,
+      "acceptedAt": 1791758261857,
+      "finishedAt": null,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-village",
+          "at": 1791758261903
+        }
+      ],
+      "reward": {
+        "credits": 280
+      },
+      "rewardPaid": false
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-village",
+          "targetName": "the village",
+          "completedAt": 1791758261903
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-kvt402itbwqk",
+          "targetName": "Jamal's meeting place"
+        },
+        {
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-kvt402itbwqk",
+      "id": "story-s8hoot-1",
+      "status": "active",
+      "cursor": 1,
+      "offeredAt": 1791758261841,
+      "acceptedAt": 1791758261857,
+      "finishedAt": null,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-village",
+          "at": 1791758261903
+        }
+      ],
+      "reward": {
+        "credits": 280
+      },
+      "rewardPaid": false
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-village",
+          "targetName": "the village",
+          "completedAt": 1791758261903
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-kvt402itbwqk",
+          "targetName": "Jamal's meeting place",
+          "completedAt": 1791758261937
+        },
+        {
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "npcName": "Jamal Harris"
+        }
+      ],
+      "offeredBy": "person-kvt402itbwqk",
+      "id": "story-s8hoot-1",
+      "status": "active",
+      "cursor": 2,
+      "offeredAt": 1791758261841,
+      "acceptedAt": 1791758261857,
+      "finishedAt": null,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-village",
+          "at": 1791758261903
+        },
+        {
+          "type": "presence",
+          "targetId": "home:person-kvt402itbwqk",
+          "at": 1791758261937
+        }
+      ],
+      "reward": {
+        "credits": 280
+      },
+      "rewardPaid": false
+    },
+    {
+      "title": "The view beyond home",
+      "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+      "steps": [
+        {
+          "type": "visit",
+          "targetId": "place-the-village",
+          "targetName": "the village",
+          "completedAt": 1791758261903
+        },
+        {
+          "type": "return",
+          "targetId": "home:person-kvt402itbwqk",
+          "targetName": "Jamal's meeting place",
+          "completedAt": 1791758261937
+        },
+        {
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "npcName": "Jamal Harris",
+          "completedAt": 1791758261937
+        }
+      ],
+      "offeredBy": "person-kvt402itbwqk",
+      "id": "story-s8hoot-1",
+      "status": "complete",
+      "cursor": 3,
+      "offeredAt": 1791758261841,
+      "acceptedAt": 1791758261857,
+      "finishedAt": 1791758261937,
+      "evidence": [
+        {
+          "type": "presence",
+          "targetId": "place-the-village",
+          "at": 1791758261903
+        },
+        {
+          "type": "presence",
+          "targetId": "home:person-kvt402itbwqk",
+          "at": 1791758261937
+        },
+        {
+          "id": "talk:1791758261937:[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":3.173471669545163,\"z\":-83.06143768708122,\"y\":5.546107603618766},2654435761]]",
+          "type": "talk",
+          "npcId": "person-kvt402itbwqk",
+          "at": 1791758261937
+        }
+      ],
+      "reward": {
+        "credits": 280
+      },
+      "rewardPaid": true
+    }
+  ],
+  "bounds": [
+    {
+      "text": "✕",
+      "rect": {
+        "x": 379,
+        "y": 63,
+        "width": 40,
+        "height": 40,
+        "top": 63,
+        "right": 419,
+        "bottom": 103,
+        "left": 379
+      }
+    },
+    {
+      "text": "Quests",
+      "rect": {
+        "x": 104.859375,
+        "y": 118,
+        "width": 72.828125,
+        "height": 40,
+        "top": 118,
+        "right": 177.6875,
+        "bottom": 158,
+        "left": 104.859375
+      }
+    }
+  ],
+  "restored": {
+    "title": "The view beyond home",
+    "premise": "Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+    "bodyKey": "[\"\",\"\",\"\",1337,\"TROPICAL\"]",
+    "steps": [
+      {
+        "type": "visit",
+        "targetId": "place-the-village",
+        "targetName": "the village",
+        "completedAt": 1791758261903
+      },
+      {
+        "type": "return",
+        "targetId": "home:person-kvt402itbwqk",
+        "targetName": "Jamal's meeting place",
+        "completedAt": 1791758261937
+      },
+      {
+        "type": "talk",
+        "npcId": "person-kvt402itbwqk",
+        "npcName": "Jamal Harris",
+        "completedAt": 1791758261937
+      }
+    ],
+    "offeredBy": "person-kvt402itbwqk",
+    "id": "story-s8hoot-1",
+    "status": "complete",
+    "cursor": 3,
+    "offeredAt": 1791758261841,
+    "acceptedAt": 1791758261857,
+    "finishedAt": 1791758261937,
+    "evidence": [
+      {
+        "type": "presence",
+        "targetId": "place-the-village",
+        "at": 1791758261903
+      },
+      {
+        "type": "presence",
+        "targetId": "home:person-kvt402itbwqk",
+        "at": 1791758261937
+      },
+      {
+        "id": "talk:1791758261937:[\"[\\\"\\\",\\\"\\\",\\\"\\\",1337,\\\"TROPICAL\\\"]\",\"ambient\",[{\"x\":3.173471669545163,\"z\":-83.06143768708122,\"y\":5.546107603618766},2654435761]]",
+        "type": "talk",
+        "npcId": "person-kvt402itbwqk",
+        "at": 1791758261937
+      }
+    ],
+    "reward": {
+      "credits": 280
+    },
+    "rewardPaid": true
+  },
+  "completionMemory": [
+    {
+      "role": "event",
+      "content": "You and the traveller completed \"The view beyond home\" together. Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "at": 1791758261940
+    }
+  ],
+  "restoredMemory": [
+    {
+      "role": "event",
+      "content": "You and the traveller completed \"The view beyond home\" together. Compare the view at the village with the meeting place, then tell Jamal Harris what caught your attention.",
+      "at": 1791758261940
+    }
+  ],
+  "errors": []
+}

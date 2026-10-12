@@ -24,14 +24,16 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
  const chromeArgs = process.env.SPARTICUZ_MODULE ? (await import(process.env.SPARTICUZ_MODULE)).default.args : ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_EXECUTABLE || path.join(runtime, 'chromium'), args: chromeArgs, env: { ...process.env, LD_LIBRARY_PATH: runtime, FONTCONFIG_PATH: path.join(runtime, 'fonts') } });
 
- const report={poses:[],characters:[],errors:[]};
+ const report={poses:[],characters:[],wardrobe:[],errors:[]};
  try {
-  const p=await browser.newPage({viewport:{width:1100,height:850}});
+  const phone=process.env.CHARACTER_DEVICE==='phone';
+  const p=await browser.newPage({viewport:phone?{width:390,height:664}:{width:1100,height:850},isMobile:phone,hasTouch:phone,userAgent:phone?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':undefined});
   p.on('pageerror',e=>{report.errors.push(e.message);console.log('PAGE',e.message)});p.on('console',m=>{if(m.type()==='error'){report.errors.push(m.text());console.log('CONSOLE',m.text().slice(0,400))}});
   await p.goto(`http://127.0.0.1:${port}/`);await p.waitForFunction(()=>window.WEAPON_HAND_READY,null,{timeout:120000});
   for(const [seed,height,weight,fit,hair] of [[9172,1.5,.3,'regular','coils'],[4217,1.75,.65,'oversized','afro'],[711,2,.85,'straight','waves']]) {
    const meta=await p.evaluate(({seed,height,weight,fit,hair})=>weaponReview.character(seed,{height,weight,hair,outfit:{top:{kind:'tee',col:'#a48459',fit,sleeves:'short'},outer:null,bottom:{kind:'jeans',col:'#345065',fit,legs:'long'},shoes:{kind:'boot',col:'#30231c'}}}),{seed,height,weight,fit,hair});
    await p.waitForFunction(()=>weaponReview.P.hair?.isSkinnedMesh,null,{timeout:30000});
+   if(process.env.CHARACTER_WARDROBE_ONLY) break;
    const rows=await p.evaluate(()=>{
     const r=weaponReview, out=[];
     for(const id of ['aurora-trail-rifle','mossback-scout-rifle','warden-spark-carbine'])for(const aiming of [false,true])for(const pitch of [-.45,0,.45]) {
@@ -48,8 +50,48 @@ const MIME = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'i
    await p.screenshot({path:path.join(OUT,`character-${seed}-hair-clothing.png`)});report.characters.push({seed,...detail,...meta});
    assert.equal(detail.programs,0);assert.ok(typeof detail.hairTime==='number' && Number.isFinite(detail.hairTime));assert.ok(detail.hairMotion.every(Number.isFinite));assert.ok(detail.triangles<60000);console.log('PASS character',seed,'18 rifle fits, groom and clothing render',detail.triangles);
   }
+  for(const [label,male,top,outer,hair] of [
+   ['cotton',false,{kind:'tee',col:'#c5ac8c',fit:'regular',sleeves:'short'},null,{style:'long01'}],
+   ['hoodie',true,{kind:'tee',col:'#8a9992',fit:'regular',sleeves:'short'},{kind:'hoodie',col:'#405b54',fit:'oversized',sleeves:'long',fab:'fleece'}, {style:'short04'}],
+   ['jacket',false,{kind:'tee',col:'#b8b4a1',fit:'regular',sleeves:'short'},{kind:'jacket',col:'#555865',fit:'regular',sleeves:'long',open:true}, {style:'island'}],
+   ['stretch',true,{kind:'tech',col:'#79625e',fit:'tight',sleeves:'long'},null,{style:'grump'}]
+  ]) {
+   await p.evaluate(({label,male,top,outer,hair})=>weaponReview.character(male?1278:4217,{male,height:male?1.85:1.68,hair,outfit:{top,outer,bottom:{kind:'jeans',col:'#324657',fit:'straight',legs:'long',pat:'denim'},shoes:{kind:'boot',col:'#302b26'}}}),{label,male,top,outer,hair});
+   await p.waitForFunction(()=>weaponReview.P.hair?.isSkinnedMesh,null,{timeout:30000});
+   const detail=await p.evaluate(()=>{
+    const r=weaponReview;r.select(null,'third');r.hand.hide();r.M.want.speed=0;
+    for(let i=0;i<90;i++)r.frame(1/60,false);
+    const P=r.P,g=P.cloth.geometry,sw=g.attributes.skinWeight,si=g.attributes.skinIndex;let weightError=0;
+    for(let i=0;i<sw.count;i++){
+     let sum=0;for(let j=0;j<4;j++){sum+=sw.array[i*4+j];if(si.array[i*4+j]>=P.bones.length)throw Error('Invalid garment bone');}
+     weightError=Math.max(weightError,Math.abs(sum-1));
+    }
+    if(!g.attributes.position.array.every(Number.isFinite))throw Error('Invalid cloth geometry');
+    const hg=P.hair.geometry,hn=hg.attributes.normal,ht=hg.attributes.hairT;
+    let frameLengthError=0,frameDot=0;
+    for(let i=0;i<hn.count;i++){
+     const n=[hn.getX(i),hn.getY(i),hn.getZ(i)],t=[ht.getX(i),ht.getY(i),ht.getZ(i)];
+     frameLengthError=Math.max(frameLengthError,Math.abs(Math.hypot(...n)-1),Math.abs(Math.hypot(...t)-1));
+     frameDot=Math.max(frameDot,Math.abs(n.reduce((s,x,j)=>s+x*t[j],0)));
+    }
+    r.camera.position.set(.7,P.height*.81,-1.65);r.camera.lookAt(0,P.height*.70,0);r.frame();
+    const U=P.hair.material.userData.U;
+    let guidePeak=0,distinct=false;
+    for(let i=0;i<30;i++){
+     P.bones[P.map.head].rotation.y+=.01;P.root.updateMatrixWorld(true);P.motionTime+=1/60;P.hair.onBeforeRender();
+     guidePeak=Math.max(guidePeak,...U.uHairGuides.value.map(v=>v.length()));
+     distinct ||= new Set(U.uHairGuides.value.map(v=>v.toArray().map(x=>x.toFixed(5)).join(','))).size>1;
+    }
+    r.frame();return {sex:P.dna.sex,cut:P.cut,tailoring:g.userData.tailoring,vertices:sw.count,triangles:g.index.count/3,hairTriangles:hg.index.count/3,frameLengthError,frameDot,weightError,guidePeak,distinct,programs:r.failed()};
+   });
+   assert.equal(detail.sex,male?.9:.1);assert.ok(detail.weightError<.00001,JSON.stringify(detail));assert.ok(detail.vertices<22000);assert.ok(detail.tailoring.edgeSegments>0);assert.ok(detail.tailoring.refinement.maxOffset<=.004001);assert.ok(detail.frameLengthError<.00001&&detail.frameDot<.00001);assert.ok(detail.guidePeak>0&&detail.guidePeak<=.03001);assert.ok(detail.distinct);assert.equal(detail.programs,0);
+   await p.screenshot({path:path.join(OUT,`wardrobe-${label}.png`)});
+   await p.evaluate(()=>{const r=weaponReview;r.M.sit(.46);for(let i=0;i<100;i++)r.frame(1/60,false);r.camera.position.set(1.3,r.P.height*.55,-1.55);r.camera.lookAt(0,r.P.height*.50,0);r.frame();});
+   await p.screenshot({path:path.join(OUT,`wardrobe-${label}-seated.png`)});
+   report.wardrobe.push({label,male,...detail});console.log('PASS wardrobe',label,detail.vertices,'vertices',detail.tailoring.edgeSegments,'finished edges');
+  }
   const walking=await p.evaluate(()=>{
-   const r=weaponReview;r.select('aurora-trail-rifle','third');r.aim(false);r.M.want.speed=1.4;
+   const r=weaponReview;r.M.stand();r.select('aurora-trail-rifle','third');r.aim(false);r.M.want.speed=1.4;
    let penetration=0,contact=0;
    for(let i=0;i<180;i++){if(i===30)r.fire();if(i===60)r.reload();r.frame(1/60,false);const s=r.info();penetration=Math.max(penetration,s.torsoPenetrationMm);contact=Math.max(contact,s.contactLmm,s.contactRmm);}
    return {penetration,contact,signature:r.M.S.signature};

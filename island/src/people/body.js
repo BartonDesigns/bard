@@ -19,6 +19,7 @@ import { fadePerson } from './fade.js';
 import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
 import { hairCapsules, poseCapsules } from './hair-collide.js';
 import { hairMotion } from './hair-motion.js';
+import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -357,6 +358,14 @@ function dress(A, P, o) {
 	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
+	// Held items use the dressed torso's actual rest bounds, not bare-skin allowances.
+	const cp = clothGeo.attributes.position, cs = clothGeo.attributes.slot;
+	const envelope = { front: cut.frontZ, back: cut.backZ, width: Math.max(cut.waistX, cut.shoulderX * .92) };
+	for (let i=0;i<cp.count;i++) if (cs.getX(i)<2 && cp.getY(i)>cut.waist-.06 && cp.getY(i)<cut.shoulder) {
+		envelope.front=Math.max(envelope.front,cp.getZ(i));envelope.back=Math.min(envelope.back,cp.getZ(i));
+		envelope.width=Math.max(envelope.width,Math.abs(cp.getX(i)));
+	}
+	P.heldTorso = envelope;
 	if (!P.clothMat) P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0);
 	else paint(P.clothMat, o);
 	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
@@ -367,6 +376,7 @@ function dress(A, P, o) {
 	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, o.outer ? 1 : 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
+	else { const cloth=P.cloth,caps=clothCapsules(P); calibrateCloth(clothGeo,caps); cloth.userData.capsules=caps; cloth.onBeforeRender=()=>poseCloth(P,caps,P.clothMat.userData.U,cloth); }
 	// caps, glasses, headphones, bags: one more mesh
 	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;

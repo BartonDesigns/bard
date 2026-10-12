@@ -20,6 +20,8 @@ const s = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); 
 // keep-range for a tier with an inner boundary [a0, a1] and outer [b0, b1] at distance d
 export function fadeRange(d, a0, a1, b0, b1) { return [1 - s(a0, a1, d), 1 - s(b0, b1, d)]; }
 
+export const detailClock={value:0};
+export const updateDetailClock=()=>detailClock.value=performance.now()/1000;
 const VERT_HEAD = 'varying vec2 vLodK;\n';
 const FRAG_HEAD = 'varying vec2 vLodK;\nfloat lodIgn(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }\n';
 const FRAG_CUT = '#include <clipping_planes_fragment>\n{ float hL = lodIgn(gl_FragCoord.xy); if (hL < vLodK.x || hL >= vLodK.y) discard; }';
@@ -30,7 +32,7 @@ export function addLodFade(material, mode, band = null) {
 	const uBand = { value: new THREE.Vector4(...(band || [NONE_IN[0], NONE_IN[1], NONE_OUT[0], NONE_OUT[1]])) };
 	material.onBeforeCompile = (sh, r) => {
 		if (prev) prev(sh, r);
-		const calc = mode === 'attribute' ? 'vLodK = aFade;' : `
+		const calc = mode === 'attribute' ? 'vLodK = aFade;' : mode === 'building' ? `float dL = max(0.0, length(aLodAnchor.xy - cameraPosition.xz) - aLodAnchor.z); vLodK = vec2(0.0, (1.0 - smoothstep(uLodBand.z, uLodBand.w, dL)) * smoothstep(0.0,.5,max(0.0,uDetailNow-aLodAnchor.w)));` : `
 			{
 				#ifdef USE_INSTANCING
 				vec2 ipL = (modelMatrix * instanceMatrix[3]).xz;
@@ -40,8 +42,9 @@ export function addLodFade(material, mode, band = null) {
 				float dL = length(ipL - cameraPosition.xz);
 				vLodK = vec2(1.0 - smoothstep(uLodBand.x, uLodBand.y, dL), 1.0 - smoothstep(uLodBand.z, uLodBand.w, dL));
 			}`;
-		if (mode === 'uniform') sh.uniforms.uLodBand = uBand;
-		sh.vertexShader = (mode === 'attribute' ? 'attribute vec2 aFade;\n' : 'uniform vec4 uLodBand;\n') + VERT_HEAD + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n' + calc);
+		if(mode==='building') sh.uniforms.uDetailNow=detailClock;
+		if (mode !== 'attribute') sh.uniforms.uLodBand = uBand;
+		sh.vertexShader = (mode === 'attribute' ? 'attribute vec2 aFade;\n' : (mode === 'building' ? 'attribute vec4 aLodAnchor; uniform float uDetailNow;\n' : '') + 'uniform vec4 uLodBand;\n') + VERT_HEAD + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n' + calc);
 		sh.fragmentShader = FRAG_HEAD + sh.fragmentShader.replace('#include <clipping_planes_fragment>', FRAG_CUT);
 	};
 	material.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|lodfade-' + mode;
@@ -49,3 +52,9 @@ export function addLodFade(material, mode, band = null) {
 	material.userData.lodBand = uBand;
 	return uBand;
 }
+
+// Every part, including hinged doors, uses its building's origin, not its mesh pivot.
+export function anchorBuilding(root, x, z, radius = 0, born = 0) {
+ root.traverse(o => { if (!o.isMesh || !o.geometry) return; const n=o.geometry.attributes.position.count, a=new Float32Array(n*4); for(let i=0;i<n;i++) a.set([x,z,radius,born],i*4); o.geometry.setAttribute('aLodAnchor',new THREE.BufferAttribute(a,4)); });
+}
+export const buildingBand = phone => phone ? [-2,-1,27,29.5] : [-2,-1,40,42.5];

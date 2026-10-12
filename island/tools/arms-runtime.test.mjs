@@ -82,3 +82,18 @@ test('prepared trades reserve the wallet and gear until commit or rollback resol
  assert.equal(arms.spendCredits(10), true);
  assert.equal(arms.state().credits, 90);
 });
+
+
+test('earned wallet survives runtime reload even for older timestamp-free saves',()=>{
+ const data=new Map(),original=globalThis.localStorage;
+ globalThis.localStorage={getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,String(v))};
+ try{
+  const a=createArmsRuntime({storageKey:'reward-test',startingCredits:1000});
+  assert.equal(a.apply({id:'earned',kind:'trade',give:{credits:0,items:[]},get:{credits:280,items:[]}}).ok,true);
+  assert.equal(a.state().credits,1280);
+  const raw=JSON.parse(data.get('reward-test'));raw.updatedAt=0;data.set('reward-test',JSON.stringify(raw));
+  const b=createArmsRuntime({storageKey:'reward-test',startingCredits:1000});assert.equal(b.state().credits,1280);
+  assert.equal(b.apply({id:'earned',kind:'trade',give:{credits:0,items:[]},get:{credits:280,items:[]}}).duplicate,true);
+  assert.equal(b.state().credits,1280);
+ }finally{if(original===undefined)delete globalThis.localStorage;else globalThis.localStorage=original;}
+});

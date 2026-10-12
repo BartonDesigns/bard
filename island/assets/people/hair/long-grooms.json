@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "author": "BartonDesigns / Bard procedural character system",
+  "description": "Original curve-groom recipes in head-relative metres. Rounded ribbon cross-sections, layered parting and tapered ends; generated after fitting to each person's skull.",
+  "styles": {
+    "cascade": {"name": "Long layered centre part", "length": 0.44, "wave": 0.006, "frequency": 2.2, "part": 0.0, "guides": 108, "layers": 3, "width": 0.026},
+    "cascade-wave": {"name": "Long loose waves", "length": 0.40, "wave": 0.023, "frequency": 2.6, "part": -0.018, "guides": 108, "layers": 3, "width": 0.029},
+    "cascade-side": {"name": "Side-part long layers", "length": 0.36, "wave": 0.012, "frequency": 1.9, "part": 0.026, "guides": 96, "layers": 3, "width": 0.027}
+  }
+}

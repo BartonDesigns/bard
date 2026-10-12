@@ -30,6 +30,7 @@ import { createFireField } from './fire.js';
 import { createBoss } from './bosses.js';
 import { BOSSES } from './boss-defs.js';
 import { createRelations, FACTIONS, PLAYER } from './factions.js';
+import { rememberIncident } from '../people/world-awareness.js';
 import { createMorality } from './morality.js';
 import { createCompass } from './compass.js';
 import { soundBus } from '../world/soundbus.js';
@@ -99,6 +100,20 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		_d.multiplyScalar(1 / L);
 		const h = worldHit(a, _d, L - 0.6);
 		return !!h;
+	}
+
+	let incidentSeq=0, lastShotNotice=0;
+	function notice(kind, at, line, actorId='player', actorName=null) {
+		if(!W()?.body?.key || !at) return;
+		const event={id:`incident-${Date.now()}-${++incidentSeq}`,at:Date.now(),bodyKey:W().body.key,kind,line,actorId,actorName};
+		for(const p of people?.()?.pool || []) {
+			const q=p.M?.S?.pos;
+			if(!p.active || !q || Math.hypot(q.x-at.x,q.z-at.z)>45 || Math.abs(q.y-(at.y??q.y))>6) continue;
+			// Sound carries locally; witnessing an assault also requires a clear sightline.
+			if(kind!=='shots' && blocked({x:q.x,y:q.y+1.5,z:q.z},{x:at.x,y:(at.y??q.y)+1,z:at.z})) continue;
+			rememberIncident(p,event);
+		}
+		multiplayer?.reportIncident?.(event,at);
 	}
 
 	// ---------- the pieces ----------
@@ -277,7 +292,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	// your deed, weighed (the morality compass), and how the world takes it
 	const hurtOnce = new Set();
 	function yours(T, r, blow, ctx0) {
-		if (r.dealt > 0) hud.hit(!!r.killed);
+		if (r.dealt > 0) { hud.hit(!!r.killed); if(T.kind==='person' && !ctx0?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
 		const ctx = { ...(ctx0 || {}), witnessed: witnesses(T.bound) > 0 };
 		ctx.unseen = !ctx.witnessed;
 		const fac = T.faction, F = FACTIONS[fac];
@@ -334,6 +349,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 			net.fx(from, end, S.tracer, hit ? 1 : 0);
 		}
 		const at = eye();
+		if(Date.now()-lastShotNotice>4000) {lastShotNotice=Date.now();notice('shots',at,'fired a weapon nearby');}
 		civilians.alarm(at.x, at.z, 30);
 		squads.hear(at.x, at.z, 70);
 		if (isEarth()) offend(wanted, 'shots', witnesses(at) > 0);
@@ -484,6 +500,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		fireMeta.set(id, { kind, x, z, b, occupied, t: 0, crew: false, mine, emit: 0 });
 		if (kind === 'car') cars.burn(id);
 		if (mine && kind !== 'ground') {
+			notice('arson',{x,y:ground(x,z),z},'set a fire');
 			morality.record({ kind: 'arson', target: kind === 'building' ? (occupied ? 'an occupied building' : 'an empty building') : kind === 'car' ? 'a car' : 'some stores', place: placeName(), world: worldKey, ctx: { occupied, empty: !occupied, witnessed: witnesses({ x, z }) > 0 } });
 			if (isEarth()) offend(wanted, 'car', true);
 		}
@@ -725,6 +742,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		const r = p && civilians.holdUp(p);
 		if (!r) return;
 		if (r.first && r.credits) {
+			notice('robbery',T.bound,'held someone up at gunpoint');
 			arms?.apply?.({ id: `rob-${Date.now().toString(36)}`, kind: 'trade', peer: 'held-up', give: { credits: 0, items: [] }, get: { credits: r.credits, items: [] } });
 			hint(`They raise their hands and hand over ${r.credits} credits.`, 2500, 1);
 			morality.record({ kind: 'robbery', target: T.name, place: placeName(), world: worldKey, ctx: { rich: r.rich, poor: !r.rich, witnessed: witnesses(T.bound) > 1, ...T.moral?.() } });
@@ -766,12 +784,19 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		if (t === 'closed' || (t === 'status' && v.status !== 'on')) { rules.pvp = false; net.out.length = 0; net.hits.clear(); return; }
 		if (t === 'welcome') { Object.assign(rules, v.rules || { pvp: false }); return; }
 		if (t === 'rules') { Object.assign(rules, v); hint(`PvP is ${rules.pvp ? 'on' : 'off'} in this room.`, 2500, 1); return; }
-		if (t === 'fx') { for (const q of v.s) { const a = { x: q[0], y: q[1], z: q[2] }, b = { x: q[3], y: q[4], z: q[5] }; fx.tracer(a, b, q[6]); fx.muzzle(a, _v.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize(), q[6]); if (q[7]) fx.impact(b, null, 'stone'); } return; }
+		if(t==='reputation') {
+			const e=v.e, at=multiplayer?.reputationPosition?.(e);
+			if(!v.live || !at || e.actor===multiplayer?.me?.() || e.kind==='quest-complete' || e.kind==='shots')return;
+			notice(e.kind,at,e.kind==='vehicle-impact'?'drove a vehicle into a person':e.kind==='robbery'?'held someone up at gunpoint':e.kind==='arson'?'set a fire':'attacked a person',e.actor,e.name);
+			civilians.alarm(at.x,at.z,35,at.y);return;
+		}
+		if (t === 'fx') { const q=v.s?.[0]; if(q) notice('shots',{x:q[0],y:q[1],z:q[2]},'fired a weapon nearby',v.id || 'remote',multiplayer?.friend?.(v.id)?.name || 'another player'); for (const q of v.s) { const a = { x: q[0], y: q[1], z: q[2] }, b = { x: q[3], y: q[4], z: q[5] }; fx.tracer(a, b, q[6]); fx.muzzle(a, _v.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize(), q[6]); if (q[7]) fx.impact(b, null, 'stone'); } return; }
 		if (t === 'hit') {
 			// on you (PvP), or a guest's hit on something shared, for the host to decide
 			if (v.id === 'me') { if (rules.pvp) { const r = remotes.get(v.from); hurtPlayer({ amount: v.d, type: v.k || 'ballistic', part: v.p, src: r ? { x: r.at[0], y: r.at[1], z: r.at[2] } : null, by: { id: 'rp:' + v.from, kind: 'remote' } }); } return; }
 			if (!host()) return;
 			const T = layer.get(v.id);
+			if (T?.kind==='person' && T.faction==='civ') notice('assault',T.bound,'attacked a civilian',v.from || 'remote','another player');
 			if (T) strike(T, { amount: v.d, type: v.k || 'ballistic', part: v.p, by: { id: 'rp:' + v.from, kind: 'remote', faction: PLAYER } }, { id: 'rp:' + v.from, kind: 'remote', faction: PLAYER }, rules);
 			return;
 		}
@@ -915,6 +940,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	// ---------- for the console and the tests ----------
 	const api = {
 		update, reset, heard, group, layer, fx, morality, relations, compass, recovery, contracts, fieldAudio,
+		perception: p => { const q=p?.M?.S?.pos, e=eye(); let aimedAt=false; if(q && view.state()?.aiming) { camera.getWorldDirection(_v); const dx=q.x-e.x,dz=q.z-e.z,d=Math.hypot(dx,dz); aimedAt=d<15 && d>.1 && (dx*_v.x+dz*_v.z)/d>.86; } return {...multiplayer?.reputationContext?.(p),events:p?.awarenessEvents || [],bodyKey:W()?.body?.key,aimedAt,wanted:isEarth()?wanted.stars:0,injured:me.H.hp<me.H.max*.45,running:me.speed>3}; },
+		vehicleImpact: p => { notice('vehicle-impact',p.M.S.pos,'drove a vehicle into a person'); morality.record({kind:'hurt',target:'a pedestrian struck by your vehicle',world:worldKey,place:placeName(),ctx:{unarmed:true,witnessed:true}}); if(isEarth()) offend(wanted,'hitCivilian',true); civilians.alarm(p.M.S.pos.x,p.M.S.pos.z,35,p.M.S.pos.y); },
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),

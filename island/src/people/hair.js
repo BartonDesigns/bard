@@ -13,6 +13,7 @@
 // a second in the hair's own colour, shifted along the strand). No textures.
 
 import * as THREE from 'three';
+import { guideUniform } from './hair-motion.js';
 
 const isPhone = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 const TAU = Math.PI * 2;
@@ -426,12 +427,12 @@ void RE_Direct_Hair( const in IncidentLight directLight, const in vec3 geometryP
 `;
 export function hairMaterial(root, tip) {
 	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide, alphaTest: 0.4 });
-	const U = { uHairMotion: { value: new THREE.Vector3() }, uHairTime: { value: 0 }, uRoot: { value: new THREE.Color(root) }, uTip: { value: new THREE.Color(tip) } };
+	const U = { uHairGuides: guideUniform(), uHairMotion: { value: new THREE.Vector3() }, uHairTime: { value: 0 }, uRoot: { value: new THREE.Color(root) }, uTip: { value: new THREE.Color(tip) } };
 	m.userData.U = U;
 	m.onBeforeCompile = (sh) => {
 		Object.assign(sh.uniforms, U);
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uHairMotion;\nuniform float uHairTime;\nattribute vec3 hairT;\nattribute vec2 hairK;\nvarying vec3 vHT;\nvarying vec2 vHK;\nvarying vec2 vHUv;')
-			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHT = normalize(normalMatrix * hairT); vHK = hairK; vHUv = uv; transformed += (uHairMotion + vec3(sin(uHairTime * 1.4 + mod(hairK.y, 100.0)), 0.0, cos(uHairTime * 1.1 + mod(hairK.y, 100.0))) * 0.001) * uv.y * uv.y;');
+		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uHairMotion;\nuniform vec3 uHairGuides[4];\nuniform float uHairTime;\nattribute vec3 hairT;\nattribute vec2 hairK;\nvarying vec3 vHT;\nvarying vec2 vHK;\nvarying vec2 vHUv;')
+			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHT = normalize(normalMatrix * hairT); vHK = hairK; vHUv = uv; int guide = int(mod(hairK.y, 4.0)); transformed += (uHairGuides[guide] + vec3(sin(uHairTime * 1.4 + mod(hairK.y, 100.0)), 0.0, cos(uHairTime * 1.1 + mod(hairK.y, 100.0))) * 0.001) * uv.y * uv.y;');
 		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + LIGHT)
 			.replace('#include <color_fragment>', `#include <color_fragment>
@@ -481,6 +482,6 @@ export function hairMaterial(root, tip) {
 }`)
 			.replace('#include <aomap_fragment>', '#include <aomap_fragment>\n{\n\t// (a round loc or braid catches the sky all over: less of it)\n\tfloat tk = floor(vHK.y / 100.0), tube = tk == 2.0 || tk == 3.0 ? 0.45 : 1.0;\n\treflectedLight.indirectSpecular *= 0.25 * vHK.x * tube;\n\treflectedLight.indirectDiffuse *= (0.6 + 0.4 * vHK.x) * mix(0.75, 1.0, tube);\n\treflectedLight.directSpecular *= tube;\n}');
 	};
-	m.customProgramCacheKey = () => 'crysis-hair-6';
+	m.customProgramCacheKey = () => 'crysis-hair-7';
 	return m;
 }

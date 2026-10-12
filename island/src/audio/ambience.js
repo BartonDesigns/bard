@@ -172,13 +172,13 @@ export function createAmbience() {
 	// ---------- the things that happen ----------
 	const every = (key, dt, mean) => { T[key] = (T[key] ?? Math.random() * mean) - dt; if (T[key] > 0) return false; T[key] = mean * (0.4 + Math.random() * 1.2); return true; };
 	function nearest(people, cam, test) {
-		let best = null, bd = 1e9;
+		let best = null, actor = null, bd = 1e9;
 		for (const p of people?.pool || []) {
 			if (!p.active || !test(p)) continue;
 			const q = p.M.S.pos, d = Math.hypot(q.x - cam.position.x, q.z - cam.position.z);
-			if (d < bd) { bd = d; best = q; }
+			if (Math.abs(q.y-cam.position.y)<4 && d < bd) { bd = d; best = q; actor=p; }
 		}
-		return best ? { q: best, d: bd } : null;
+		return best ? { q: best, d: bd, actor } : null;
 	}
 	// left/right of where you look, -1..1
 	function side(cam, x, z) {
@@ -230,7 +230,7 @@ export function createAmbience() {
 		// ---- one-shots ----
 		const pan = () => rnd(0.8);
 		// a few words from someone talking near you
-		if (talk > 0.05 && every('phrase', dt, 6 / (0.3 + talk)) && who && who.d < 14) shot(A, A.B.get('phrase' + pick(0, 6)), 0.05 * hush / (1 + (who.d / 5) ** 2), side(cam, who.q.x, who.q.z) * 0.8, { send: 0.6, lp: who.d > 6 ? 2600 : 0, kind: 'phrase', rate: k === 'caveVillage' ? 0.85 : 0.95 + Math.random() * 0.1 });
+		if (talk > 0.05 && every('phrase', dt, 6 / (0.3 + talk)) && who && who.d < 14) shot(A, A.B.get('phrase' + pick(0, 6)), (who.actor?.workContext?.activity==='dispute'?.11:.05) * hush / (1 + (who.d / 5) ** 2), side(cam, who.q.x, who.q.z) * 0.8, { send: 0.6, lp: who.d > 6 ? 2600 : 0, kind: 'phrase', rate: k === 'caveVillage' ? 0.85 : 0.95 + Math.random() * 0.1 });
 		// children laughing: where there are children, more at the beach, the park, the boardwalk
 		const kidsK = Math.min(1, (P.kids || 0) * 0.8 + ({ beach: 0.35, park: 0.45, boardwalk: 0.6, village: 0.25, museum: 0.5, mainstreet: 0.1, arcade: 0.3, bowling: 0.2 }[k] || 0) * busy * Math.min(1, P.kidsAbout ?? 1));
 		if (kidsK > 0.03 && every('laugh', dt, 16 / kidsK)) {

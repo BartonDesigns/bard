@@ -89,7 +89,10 @@ export function createNpcSocial({ scene, world, camera, people, isPhone, hint })
 		});
 		if (!record) return null;
 		if (own) { record.persona = JSON.parse(JSON.stringify(own.persona)); record.dna = p.P.dna; }
+		if(p.workContext) {record.workContext={...p.workContext};record.persona.job=p.workContext.role==='vendor'?'shop assistant':p.workContext.role==='shopper'?record.persona.job:p.workContext.role; record.persona.errand=p.workContext.activity || 'working';}
+		if(p.awarenessEvents?.length) record.awarenessEvents=p.awarenessEvents.slice(-8);
 		actors.adopt(p, record);
+		state.save();
 		return record;
 	}
 	function scoutNearby(p, candidates = []) {
