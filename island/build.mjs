@@ -7,8 +7,9 @@ const ctx = await esbuild.context({
 	sourcemap: watch ? 'inline' : false,
 	outfile: 'dist/island.js',
 });
-// the Earth atlas's facts (src/earth/data), a file of their own beside the engine, fetched only
-// when first asked for (src/earth/atlas.js loadAtlas)
+// Keep the module worker beside the bundled client that resolves its URL.
+await esbuild.build({ ...common, entryPoints: ['src/guide/local-speech-worker.js'], outfile: 'dist/local-speech-worker.js' });
+// The atlas is fetched separately only when requested.
 const atlas = await esbuild.context({ ...common, entryPoints: ['src/earth/data/index.js'], outfile: 'dist/earth-atlas.js' });
 // the driving physics (Rapier), loaded only when someone drives (src/vehicles/physics.js)
 {

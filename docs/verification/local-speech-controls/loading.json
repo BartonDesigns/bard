@@ -1,0 +1,64 @@
+{
+  "checks": [
+    {
+      "name": "desktop cold Play cancelled then immediate Caves entry",
+      "covered": {
+        "active": true,
+        "inert": true,
+        "calls": 747,
+        "contextLost": false,
+        "position": [
+          -253.7751248183438,
+          8.49482442683444,
+          -446.2829045672829
+        ],
+        "flying": false
+      }
+    },
+    {
+      "name": "desktop flight input after entry",
+      "passed": true
+    },
+    {
+      "name": "desktop reopen after cancellation",
+      "covered": {
+        "active": true,
+        "inert": true,
+        "calls": 253,
+        "contextLost": false,
+        "position": [
+          -253.7751248183438,
+          8.49482442683444,
+          -446.2829045672829
+        ],
+        "flying": true
+      }
+    },
+    {
+      "name": "retired legacy cockpit button remains hidden",
+      "hidden": true
+    },
+    {
+      "name": "phone cold Caves entry",
+      "covered": {
+        "active": true,
+        "inert": true,
+        "calls": 632,
+        "contextLost": false,
+        "position": [
+          -253.7751248183438,
+          8.49482442683444,
+          -446.2829045672829
+        ],
+        "flying": false
+      }
+    },
+    {
+      "name": "phone touch flight control after entry",
+      "passed": true
+    }
+  ],
+  "errors": [],
+  "method": "Actual faceplate buttons and production assets in software Chromium; desktop keyboard and emulated phone touch. No native-device performance claim.",
+  "passed": true
+}

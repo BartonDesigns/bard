@@ -1,0 +1,292 @@
+[
+  {
+    "width": 390,
+    "height": 664,
+    "touch": true,
+    "rects": [
+      {
+        "n": "Fire",
+        "x": 306,
+        "y": 492,
+        "w": 72,
+        "h": 72
+      },
+      {
+        "n": "Reload",
+        "x": 246,
+        "y": 460,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Mode",
+        "x": 246,
+        "y": 408,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Aim",
+        "x": 246,
+        "y": 512,
+        "w": 52,
+        "h": 52
+      },
+      {
+        "n": "Jump",
+        "x": 314,
+        "y": 584,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "n": "All controls",
+        "x": 324,
+        "y": 64,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Fly (F)",
+        "x": 144,
+        "y": 64,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Music",
+        "x": 282,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Sky and world settings",
+        "x": 334,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "menu": "selection, scrolling, outside dismissal and Escape passed"
+  },
+  {
+    "width": 844,
+    "height": 390,
+    "touch": true,
+    "rects": [
+      {
+        "n": "Fire",
+        "x": 760,
+        "y": 218,
+        "w": 72,
+        "h": 72
+      },
+      {
+        "n": "Reload",
+        "x": 700,
+        "y": 186,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Mode",
+        "x": 700,
+        "y": 134,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Aim",
+        "x": 700,
+        "y": 238,
+        "w": 52,
+        "h": 52
+      },
+      {
+        "n": "Jump",
+        "x": 768,
+        "y": 310,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "n": "All controls",
+        "x": 674,
+        "y": 12,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Fly (F)",
+        "x": 494,
+        "y": 12,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Music",
+        "x": 736,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Sky and world settings",
+        "x": 788,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "menu": "selection, scrolling, outside dismissal and Escape passed"
+  },
+  {
+    "width": 844,
+    "height": 320,
+    "touch": true,
+    "rects": [
+      {
+        "n": "Fire",
+        "x": 760,
+        "y": 148,
+        "w": 72,
+        "h": 72
+      },
+      {
+        "n": "Reload",
+        "x": 700,
+        "y": 116,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Mode",
+        "x": 700,
+        "y": 64,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Aim",
+        "x": 700,
+        "y": 168,
+        "w": 52,
+        "h": 52
+      },
+      {
+        "n": "Jump",
+        "x": 768,
+        "y": 240,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "n": "All controls",
+        "x": 674,
+        "y": 12,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Fly (F)",
+        "x": 494,
+        "y": 12,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Music",
+        "x": 736,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Sky and world settings",
+        "x": 788,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "menu": "selection, scrolling, outside dismissal and Escape passed"
+  },
+  {
+    "width": 320,
+    "height": 568,
+    "touch": true,
+    "rects": [
+      {
+        "n": "Fire",
+        "x": 236,
+        "y": 396,
+        "w": 72,
+        "h": 72
+      },
+      {
+        "n": "Reload",
+        "x": 176,
+        "y": 364,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Mode",
+        "x": 176,
+        "y": 312,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Aim",
+        "x": 176,
+        "y": 416,
+        "w": 52,
+        "h": 52
+      },
+      {
+        "n": "Jump",
+        "x": 244,
+        "y": 488,
+        "w": 64,
+        "h": 64
+      },
+      {
+        "n": "All controls",
+        "x": 254,
+        "y": 64,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Fly (F)",
+        "x": 74,
+        "y": 64,
+        "w": 54,
+        "h": 44
+      },
+      {
+        "n": "Music",
+        "x": 212,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      },
+      {
+        "n": "Sky and world settings",
+        "x": 264,
+        "y": 12,
+        "w": 44,
+        "h": 44
+      }
+    ],
+    "menu": "selection, scrolling, outside dismissal and Escape passed"
+  },
+  {
+    "width": 1280,
+    "height": 800,
+    "touch": false,
+    "desktopRail": true
+  }
+]

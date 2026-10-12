@@ -15,16 +15,16 @@ const hud = fs.readFileSync(path.join(root, 'island/src/combat/hud.js'), 'utf8')
   const context=await browser.newContext({viewport:{width,height},hasTouch:touch,isMobile:touch});
   const p=await context.newPage(); const errors=[]; p.on('pageerror',e=>errors.push(e.message));
   await p.setContent('<meta name="viewport" content="width=device-width,initial-scale=1">');
-  await p.addScriptTag({content:`const isPhone=${touch};\n${dom}\n${hud}\nwindow.ui=buildDom(); ui.mount.style.display='block'; ui.mount.style.background='#385048';ui.loading.remove();ui.hint.style.display='none';window.hud=createHud({mount:ui.mount,touch:${touch}});hud.update(1,{show:true,health:{hp:100,max:100,armour:30,armourMax:50},weapon:{name:'Aurora Trail Rifle',mag:8,reserve:30,max:30,mode:'auto',modes:2}});const aim=button('◎','Aim','width:52px;height:52px;border-radius:50%;z-index:6;');ui.mount.append(aim);const music=button('♫','Music','right:64px;top:12px;');ui.mount.append(music);for(const [i,label] of ['Inventory','Places','Guide','Games','Drive','Camera'].entries()){const b=button('◇',label,'','rail '+(40+i));b.onclick=()=>window.selected=label;ui.mount.append(b);}`});
+  await p.addScriptTag({content:`const isPhone=${touch};\n${dom}\n${hud}\nwindow.ui=buildDom(); ui.mount.style.display='block'; ui.mount.style.background='#385048';ui.loading.remove();ui.hint.style.display='none';window.hud=createHud({mount:ui.mount,touch:${touch}});hud.update(1,{show:true,health:{hp:100,max:100,armour:30,armourMax:50},weapon:{name:'Aurora Trail Rifle',mag:8,reserve:30,max:30,mode:'auto',modes:2}});const aim=button('◎','Aim','width:52px;height:52px;border-radius:50%;z-index:6;');ui.mount.append(aim);const music=button('♫','Music','right:64px;top:12px;');ui.mount.append(music);for(const [i,label] of ['Inventory','Places','Guide','Games','Drive','Camera'].entries()){const b=button('◇',label,'','rail '+(i===0?55:i===1?60:40+i));b.onclick=()=>window.selected=label;ui.mount.append(b);}`});
   await p.waitForTimeout(100);
-  const more=p.getByRole('button',{name:'More controls',exact:true});
+  const more=p.getByRole('button',{name:'All controls',exact:true});
   if(touch){
-   assert.equal(await p.getByRole('button',{name:'Fly (F)',exact:true}).isVisible(),false);
-   const rects=await p.evaluate(()=>['Fire','Reload','Mode','Aim','Jump','More controls','Music','Sky and world settings'].map(n=>{const r=document.querySelector(`[aria-label="${n}"]`).getBoundingClientRect();return {n,x:r.x,y:r.y,w:r.width,h:r.height};}));
+   assert.equal(await p.getByRole('button',{name:'Fly (F)',exact:true}).isVisible(),true);
+   const rects=await p.evaluate(()=>['Fire','Reload','Mode','Aim','Jump','All controls','Fly (F)','Music','Sky and world settings'].map(n=>{const r=document.querySelector(`[aria-label="${n}"]`).getBoundingClientRect();return {n,x:r.x,y:r.y,w:r.width,h:r.height};}));
    for(const a of rects){assert.ok(a.x>=0&&a.y>=0&&a.x+a.w<=width&&a.y+a.h<=height,JSON.stringify(a));for(const b of rects){if(a===b)continue;assert.ok(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y,`${a.n} overlaps ${b.n} at ${width}x${height}`);}}
    await p.screenshot({path:path.join(out,`${width}x${height}.png`)});
-   await more.click(); assert.equal(await more.getAttribute('aria-expanded'),'true');
-   await p.getByRole('button',{name:'Inventory',exact:true}).click(); assert.equal(await p.evaluate(()=>window.selected),'Inventory');assert.equal(await more.getAttribute('aria-expanded'),'false');
+   await more.click(); await p.screenshot({path:path.join(out,`${width}x${height}-controls.png`)}); assert.equal(await more.getAttribute('aria-expanded'),'true');
+   await p.getByRole('button',{name:'Games',exact:true}).click(); assert.equal(await p.evaluate(()=>window.selected),'Games');assert.equal(await more.getAttribute('aria-expanded'),'false');
    await more.click();await p.keyboard.press('Escape');assert.equal(await more.getAttribute('aria-expanded'),'false');
    await more.click();await p.mouse.click(160,20);assert.equal(await more.getAttribute('aria-expanded'),'false');
    await more.click();await p.getByRole('button',{name:'Camera',exact:true}).scrollIntoViewIfNeeded();await p.getByRole('button',{name:'Camera',exact:true}).click();assert.equal(await p.evaluate(()=>window.selected),'Camera');
@@ -33,13 +33,13 @@ const hud = fs.readFileSync(path.join(root, 'island/src/combat/hud.js'), 'utf8')
   await p.addScriptTag({content:contractCode});
   await p.evaluate(()=>{window.contracts=ContractModule.createContracts({mount:ui.mount,group:{add(){}},arms:{},squads:{release(){}},recovery:{},eye:()=>({x:0,y:1.68,z:0}),camera:{getWorldDirection:v=>v.set(0,0,-1)},ground:()=>0,site:()=>({x:30,y:0,z:0}),eligible:()=>true,active:()=>true,down:()=>false,hint(){},audio:{play(){}},store:{get:()=>null,set(){}}});contracts.update(0);});
   const panel=p.locator('[data-field-contract]');
-  assert.ok((await panel.boundingBox()).height<=66);
+  assert.ok((await panel.boundingBox()).height<=66,JSON.stringify(await panel.boundingBox()));
   await panel.getByRole('button',{name:/Field contracts/}).click();await panel.getByRole('button',{name:'Accept contract',exact:true}).click();
   assert.equal(await panel.getByRole('button',{name:'Abandon',exact:true}).isVisible(),false);
   assert.ok((await panel.boundingBox()).height<=120);
   await panel.locator(':scope > button').click();await panel.getByRole('button',{name:'Abandon',exact:true}).click();
   assert.equal(await p.evaluate(()=>contracts.info().mission),null);
-  assert.ok((await panel.boundingBox()).height<=66);
+  assert.ok((await panel.boundingBox()).height<=66,JSON.stringify(await panel.boundingBox()));
   await p.screenshot({path:path.join(out,`${width}x${height}.png`)});
   assert.deepEqual(errors,[]);await context.close();
  }
