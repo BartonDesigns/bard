@@ -1,0 +1,371 @@
+{
+  "cases": [],
+  "errors": [],
+  "officeStart": {
+    "time": 0.05,
+    "activities": [
+      "typing at a workstation",
+      "project review"
+    ],
+    "violations": 0,
+    "moved": 0,
+    "actors": [
+      {
+        "role": {
+          "role": "office worker",
+          "program": "Conference centre",
+          "floor": 33,
+          "activity": "typing at a workstation"
+        },
+        "trips": 0,
+        "walking": false,
+        "position": [
+          -18.9,
+          130.25,
+          -8.94
+        ],
+        "bag": false,
+        "nodes": 0
+      },
+      {
+        "role": {
+          "role": "meeting colleague",
+          "program": "Conference centre",
+          "floor": 33,
+          "activity": "project review"
+        },
+        "trips": 0,
+        "walking": false,
+        "position": [
+          8.599999999999998,
+          130.25,
+          -5.2749999999999995
+        ],
+        "bag": false,
+        "nodes": 0
+      },
+      {
+        "role": {
+          "role": "meeting colleague",
+          "program": "Conference centre",
+          "floor": 33,
+          "activity": "project review"
+        },
+        "trips": 0,
+        "walking": false,
+        "position": [
+          8.599999999999998,
+          130.25,
+          -2.625
+        ],
+        "bag": false,
+        "nodes": 0
+      }
+    ]
+  },
+  "office": {
+    "time": 180.0500000000067,
+    "activities": [
+      "typing at a workstation",
+      "project review",
+      "walking to a meeting",
+      "reviewing documents",
+      "taking a short break",
+      "dispute",
+      "walking to their workstation",
+      "walking to refreshment"
+    ],
+    "violations": 0,
+    "moved": 32.24004233025161,
+    "actors": [
+      {
+        "role": {
+          "role": "office worker",
+          "program": "Conference centre",
+          "floor": 33,
+          "activity": "typing at a workstation"
+        },
+        "trips": 2,
+        "walking": false,
+        "position": [
+          -18.87955826394216,
+          130.25,
+          -8.918334062028554
+        ],
+        "bag": false,
+        "nodes": 6384
+      },
+      {
+        "role": {
+          "role": "meeting colleague",
+          "group": "0:0:33:meeting:10.649999999999999:-3.9499999999999997",
+          "side": 0,
+          "floor": 33,
+          "program": "Conference centre",
+          "activity": "walking to refreshment"
+        },
+        "trips": 3,
+        "walking": true,
+        "position": [
+          0.7547528479128256,
+          130.25,
+          -8.997632540596026
+        ],
+        "bag": false,
+        "nodes": 6384
+      },
+      {
+        "role": {
+          "role": "meeting colleague",
+          "program": "Conference centre",
+          "floor": 33,
+          "activity": "project review"
+        },
+        "trips": 2,
+        "walking": false,
+        "position": [
+          8.640160704888212,
+          130.25,
+          -2.6250435062349284
+        ],
+        "bag": false,
+        "nodes": 6384
+      }
+    ]
+  },
+  "interruption": {
+    "before": 180.0500000000067,
+    "after": 180.0500000000067
+  },
+  "officeEnd": {
+    "time": 242.0500000000208,
+    "activities": [
+      "typing at a workstation",
+      "project review",
+      "walking to a meeting",
+      "reviewing documents",
+      "taking a short break",
+      "dispute",
+      "walking to their workstation",
+      "walking to refreshment",
+      "taking a refreshment break"
+    ],
+    "violations": 0,
+    "moved": 32.24004233025161,
+    "actors": [
+      {
+        "role": {
+          "role": "office worker",
+          "program": "Conference centre",
+          "floor": 33,
+          "activity": "typing at a workstation"
+        },
+        "trips": 2,
+        "walking": false,
+        "position": [
+          -18.87955826394216,
+          130.25,
+          -8.918334062028554
+        ],
+        "bag": false,
+        "nodes": 6384
+      },
+      {
+        "role": {
+          "role": "meeting colleague",
+          "group": "0:0:33:meeting:10.649999999999999:-3.9499999999999997",
+          "side": 0,
+          "floor": 33,
+          "program": "Conference centre",
+          "activity": "walking to a meeting"
+        },
+        "trips": 4,
+        "walking": true,
+        "position": [
+          0.773492360198827,
+          130.25,
+          -10.378448908113448
+        ],
+        "bag": false,
+        "nodes": 6384
+      },
+      {
+        "role": {
+          "role": "meeting colleague",
+          "program": "Conference centre",
+          "floor": 33,
+          "activity": "project review"
+        },
+        "trips": 2,
+        "walking": false,
+        "position": [
+          8.640160704888212,
+          130.25,
+          -2.6250435062349284
+        ],
+        "bag": false,
+        "nodes": 6384
+      }
+    ]
+  },
+  "mallStart": {
+    "time": 0.05,
+    "activities": [
+      "browsing"
+    ],
+    "violations": 0,
+    "moved": 0,
+    "actors": [
+      {
+        "role": {
+          "role": "vendor",
+          "program": "Technology",
+          "floor": 2,
+          "activity": "browsing"
+        },
+        "trips": 0,
+        "walking": false,
+        "position": [
+          86.9,
+          9.85,
+          -15.83
+        ],
+        "stock": 24,
+        "sales": 0,
+        "bag": false,
+        "nodes": 0
+      },
+      {
+        "role": {
+          "role": "shopper",
+          "program": "Technology",
+          "floor": 2,
+          "activity": "browsing"
+        },
+        "trips": 0,
+        "walking": false,
+        "position": [
+          89,
+          9.85,
+          -15.83
+        ],
+        "stock": 24,
+        "sales": 0,
+        "bag": false,
+        "nodes": 0
+      }
+    ]
+  },
+  "mall": {
+    "time": 40.04999999999986,
+    "activities": [
+      "browsing",
+      "negotiating a price",
+      "buying"
+    ],
+    "violations": 0,
+    "moved": 0,
+    "actors": [
+      {
+        "role": {
+          "role": "vendor",
+          "program": "Technology",
+          "floor": 2,
+          "activity": "buying"
+        },
+        "trips": 0,
+        "walking": false,
+        "position": [
+          86.9,
+          9.85,
+          -15.83
+        ],
+        "stock": 23,
+        "sales": 1,
+        "bag": false,
+        "nodes": 0
+      },
+      {
+        "role": {
+          "role": "shopper",
+          "program": "Technology",
+          "floor": 2,
+          "activity": "buying"
+        },
+        "trips": 0,
+        "walking": false,
+        "position": [
+          89,
+          9.85,
+          -15.83
+        ],
+        "stock": 23,
+        "sales": 1,
+        "budget": 48,
+        "bag": true,
+        "nodes": 0
+      }
+    ]
+  },
+  "mallEnd": {
+    "time": 220.05000000001579,
+    "activities": [
+      "browsing",
+      "negotiating a price",
+      "buying",
+      "purchase complete",
+      "walking to browse",
+      "walking to stock check",
+      "checking shelf stock",
+      "walking to their workstation",
+      "checking stock",
+      "comparing items on display",
+      "walking to their checkout"
+    ],
+    "violations": 0,
+    "moved": 31.16090043759401,
+    "actors": [
+      {
+        "role": {
+          "role": "stock check",
+          "program": "Technology",
+          "floor": 2,
+          "activity": "checking shelf stock"
+        },
+        "trips": 3,
+        "walking": false,
+        "position": [
+          86.85118480352858,
+          9.85,
+          -17.689770899965144
+        ],
+        "stock": 22,
+        "sales": 2,
+        "bag": false,
+        "nodes": 19200
+      },
+      {
+        "role": {
+          "role": "shopper",
+          "group": "100:0:2:shop:-1:0",
+          "side": 0,
+          "floor": 2,
+          "program": "Technology",
+          "activity": "walking to browse"
+        },
+        "trips": 3,
+        "walking": true,
+        "position": [
+          111.2230624913516,
+          9.85,
+          -6.667367205178149
+        ],
+        "stock": 22,
+        "sales": 2,
+        "budget": 36,
+        "bag": true,
+        "nodes": 19200
+      }
+    ]
+  }
+}

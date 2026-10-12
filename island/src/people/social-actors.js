@@ -1,5 +1,6 @@
 // Persistent identities own their bodies; crowd slots are detached, never pinned forever.
 import * as THREE from 'three';
+import {workActor,disposeWorkplaceProps} from './workplace-life.js';
 import { loadPeopleAssets, buildPerson } from './body.js';
 import { createMotion } from './motion.js';
 import { addTalkers, talkers } from './people.js';
@@ -61,10 +62,11 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
   for(const p of actors.values()) { const q=worldPosition(W(),p.lastPosition||state.get(p.socialId)?.position); if(q) p.M.place(q.x,q.y,q.z,p.M.S.heading); }
   epoch=F.epoch;
  }
- function persist(p) { syncFrame(); state.setPosition(p.socialId, positionFor(W(), p.M.S.pos)); }
- function remove(p) { persist(p); actors.delete(p.socialId); p.active = false; freeBody(p.P); }
+ function persist(p) { const r=state.get?.(p.socialId); if(r && p.awarenessEvents) r.awarenessEvents=p.awarenessEvents.slice(-8); syncFrame(); state.setPosition(p.socialId, positionFor(W(), p.M.S.pos)); }
+ function remove(p) { if(p.workSpot)p.workSpot.taken=false; disposeWorkplaceProps(p);persist(p); actors.delete(p.socialId); p.active = false; freeBody(p.P); }
  function setup(p, record) {
   if(group.parent!==scene) scene.add(group);
+  p.awarenessEvents=p.awarenessEvents || record.awarenessEvents || []; p.workContext=p.workContext || record.workContext || null;
   p.socialOwned=true; p.caveMeta=record.persona?.caveMeta || p.caveMeta; if(p.caveMeta)p.P.caveMeta=p.caveMeta;
   p.socialId = p.residentId = record.id; p.persona = record.persona; p.active = true; p.busy = true;
   p.lastPosition=positionFor(W(),p.M.S.pos);
@@ -79,6 +81,7 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
   if (!p?.detachForSocial) return null;
   if (actors.size >= max) { const old = [...actors.values()].filter(a => !a.engaged).sort((a,b) => b.M.S.pos.distanceTo(camera.position)-a.M.S.pos.distanceTo(camera.position))[0]; if (!old) return null; remove(old); }
   if (!p.detachForSocial()) return null;
+  if(p.workSpot)p.workSpot.taken=true;
   return setup(p, record);
  }
  async function restore(record) {
@@ -126,7 +129,8 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
   if(scan<=0) {
    scan=1;
    for(const p of [...actors.values()]) if(!p.engaged && p.M.S.pos.distanceTo(camera.position)>180) remove(p);
-   const candidates=state.list(key()).filter(r=>!actors.has(r.id)).map(r=>({r,q:worldPosition(W(),r.position)})).filter(v=>v.q && Math.hypot(v.q.x-camera.position.x,v.q.z-camera.position.z)<130).sort((a,b)=>Math.hypot(a.q.x-camera.position.x,a.q.z-camera.position.z)-Math.hypot(b.q.x-camera.position.x,b.q.z-camera.position.z));
+   // (a colony's named crew keep bodies of their own: planet/colony/crew-life.js)
+   const candidates=state.list(key()).filter(r=>!actors.has(r.id) && r.source!=='colony').map(r=>({r,q:worldPosition(W(),r.position)})).filter(v=>v.q && Math.hypot(v.q.x-camera.position.x,v.q.z-camera.position.z)<130).sort((a,b)=>Math.hypot(a.q.x-camera.position.x,a.q.z-camera.position.z)-Math.hypot(b.q.x-camera.position.x,b.q.z-camera.position.z));
    // A fresh crowd pool can repeat a procedural seed after reload. Remove that
    // incarnation: its outfit/position can differ, so restore from saved DNA instead.
    const records=state.list(key());
@@ -140,7 +144,9 @@ export function createSocialActors({ scene, world, camera, state, people, bodyKe
   }
   for(const p of actors.values()) {
    const r=state.get(p.socialId); if(!r) continue;
-   const S=p.M.S; let target=S.pos, speed=0;
+   const S=p.M.S; if(p.override && p.override(p,dt,camera.position)){if(p.workBubble)p.workBubble.visible=false;p.M.update(dt,t,camera.position);continue;} if(!p.engaged && r.mode==='idle' && p.workSpot && Math.hypot(S.pos.x-p.workSpot.x,S.pos.z-p.workSpot.z)<.8 && workActor(p,performance.now()/1000,dt,camera.position,[...actors.values(),...(people?.pool||[])])){p.M.update(dt,t,camera.position);continue;}
+   if(p.workBubble)p.workBubble.visible=false;
+   let target=S.pos, speed=0;
    const alarm=state.alarmFor(key(),positionFor(W(),S.pos));
    if(p.engaged) { S.look.target=camera.position; S.talk=(p.speakUntil||0)>performance.now()?1:0; p.M.want.heading=Math.atan2(camera.position.x-S.pos.x,camera.position.z-S.pos.z); }
    else {

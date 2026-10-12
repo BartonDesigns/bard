@@ -1,0 +1,343 @@
+{
+  "states": [
+    {
+      "phone": false,
+      "completed": 1,
+      "reward": 120,
+      "audio": {
+        "played": 2,
+        "voices": 5
+      },
+      "render": {
+        "calls": 11,
+        "triangles": 3738
+      }
+    },
+    {
+      "phone": false,
+      "contract": 1,
+      "wave": 0,
+      "roles": [
+        {
+          "role": "Flanker",
+          "tactic": "flank",
+          "speed": 4.7,
+          "burst": [
+            2,
+            3
+          ],
+          "range": 48,
+          "loadout": {
+            "i": "warden-spark-carbine",
+            "l": 4,
+            "t": 0,
+            "x": 0
+          },
+          "visibleWeapon": "warden-spark-carbine",
+          "armour": 10
+        },
+        {
+          "role": "Marksman",
+          "tactic": "suppress",
+          "speed": 2.8,
+          "burst": [
+            1,
+            1
+          ],
+          "range": 95,
+          "loadout": {
+            "i": "mossback-scout-rifle",
+            "l": 4,
+            "t": 0,
+            "x": 0
+          },
+          "visibleWeapon": "mossback-scout-rifle",
+          "armour": 15
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "completed": 2,
+      "reward": 240,
+      "audio": {
+        "played": 9,
+        "voices": 3
+      },
+      "render": {
+        "calls": 21,
+        "triangles": 55482
+      }
+    },
+    {
+      "phone": false,
+      "contract": 2,
+      "wave": 0,
+      "roles": [
+        {
+          "role": "Suppressor",
+          "tactic": "suppress",
+          "speed": 2.7,
+          "burst": [
+            3,
+            4
+          ],
+          "range": 65,
+          "loadout": {
+            "i": "aurora-trail-rifle",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "aurora-trail-rifle",
+          "armour": 50
+        },
+        {
+          "role": "Flanker",
+          "tactic": "flank",
+          "speed": 4.7,
+          "burst": [
+            2,
+            3
+          ],
+          "range": 48,
+          "loadout": {
+            "i": "warden-spark-carbine",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "warden-spark-carbine",
+          "armour": 10
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "contract": 2,
+      "wave": 1,
+      "roles": [
+        {
+          "role": "Marksman",
+          "tactic": "suppress",
+          "speed": 2.8,
+          "burst": [
+            1,
+            1
+          ],
+          "range": 95,
+          "loadout": {
+            "i": "mossback-scout-rifle",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "mossback-scout-rifle",
+          "armour": 15
+        },
+        {
+          "role": "Suppressor",
+          "tactic": "suppress",
+          "speed": 2.7,
+          "burst": [
+            3,
+            4
+          ],
+          "range": 65,
+          "loadout": {
+            "i": "aurora-trail-rifle",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "aurora-trail-rifle",
+          "armour": 50
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "completed": 3,
+      "reward": 420,
+      "audio": {
+        "played": 17,
+        "voices": 3
+      },
+      "render": {
+        "calls": 29,
+        "triangles": 100530
+      }
+    },
+    {
+      "phone": true,
+      "completed": 1,
+      "reward": 120,
+      "audio": {
+        "played": 2,
+        "voices": 5
+      },
+      "render": {
+        "calls": 11,
+        "triangles": 1682
+      }
+    },
+    {
+      "phone": true,
+      "contract": 1,
+      "wave": 0,
+      "roles": [
+        {
+          "role": "Flanker",
+          "tactic": "flank",
+          "speed": 4.7,
+          "burst": [
+            2,
+            3
+          ],
+          "range": 48,
+          "loadout": {
+            "i": "warden-spark-carbine",
+            "l": 4,
+            "t": 0,
+            "x": 0
+          },
+          "visibleWeapon": "warden-spark-carbine",
+          "armour": 10
+        },
+        {
+          "role": "Marksman",
+          "tactic": "suppress",
+          "speed": 2.8,
+          "burst": [
+            1,
+            1
+          ],
+          "range": 95,
+          "loadout": {
+            "i": "mossback-scout-rifle",
+            "l": 4,
+            "t": 0,
+            "x": 0
+          },
+          "visibleWeapon": "mossback-scout-rifle",
+          "armour": 15
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "completed": 2,
+      "reward": 240,
+      "audio": {
+        "played": 9,
+        "voices": 5
+      },
+      "render": {
+        "calls": 21,
+        "triangles": 53406
+      }
+    },
+    {
+      "phone": true,
+      "contract": 2,
+      "wave": 0,
+      "roles": [
+        {
+          "role": "Suppressor",
+          "tactic": "suppress",
+          "speed": 2.7,
+          "burst": [
+            3,
+            4
+          ],
+          "range": 65,
+          "loadout": {
+            "i": "aurora-trail-rifle",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "aurora-trail-rifle",
+          "armour": 50
+        },
+        {
+          "role": "Flanker",
+          "tactic": "flank",
+          "speed": 4.7,
+          "burst": [
+            2,
+            3
+          ],
+          "range": 48,
+          "loadout": {
+            "i": "warden-spark-carbine",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "warden-spark-carbine",
+          "armour": 10
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "contract": 2,
+      "wave": 1,
+      "roles": [
+        {
+          "role": "Marksman",
+          "tactic": "suppress",
+          "speed": 2.8,
+          "burst": [
+            1,
+            1
+          ],
+          "range": 95,
+          "loadout": {
+            "i": "mossback-scout-rifle",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "mossback-scout-rifle",
+          "armour": 15
+        },
+        {
+          "role": "Suppressor",
+          "tactic": "suppress",
+          "speed": 2.7,
+          "burst": [
+            3,
+            4
+          ],
+          "range": 65,
+          "loadout": {
+            "i": "aurora-trail-rifle",
+            "l": 6,
+            "t": 1,
+            "x": 0
+          },
+          "visibleWeapon": "aurora-trail-rifle",
+          "armour": 50
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "completed": 3,
+      "reward": 420,
+      "audio": {
+        "played": 17,
+        "voices": 5
+      },
+      "render": {
+        "calls": 27,
+        "triangles": 96844
+      }
+    }
+  ],
+  "errors": [],
+  "method": "Production combat, role AI, mission state, caches, recovery, Web Audio and saved inventory; controlled flat world, desktop and touch emulation.",
+  "passed": true
+}

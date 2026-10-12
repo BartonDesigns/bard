@@ -13,6 +13,9 @@ const smooth = (x) => x * x * (3 - 2 * x);
 // keys: [u, { L, R: arms; sp: [yaw, pitch, roll] of the chest; hp: [yaw, pitch, roll, drop] of
 // the hips; fL, fR: feet [x, y, z] or null for the walk's own; rt: [pitch, roll] of the whole
 // body; hd: [yaw, pitch, roll] }]
+// a long arm at the ready: both hands on it (tuned so the hands land on its grip and guard)
+const CARRY_R = arm({ abd: 0.57, flex: -0.117, roll: 0.947, bend: 1.45, pro: 0.6, wflex: -0.1, curl: 0.6 });
+const CARRY_L = arm({ abd: 0.073, flex: 0.62, roll: 0.803, bend: 0.753, pro: 1.065, wflex: 0.1, curl: 0.55 });
 const HANDS_SET = arm({ abd: 0.12, flex: 0.9, roll: 0.95, bend: 2.0, pro: 0.6, curl: 0.6 });
 export const ACTIONS = {
 	// a right-hander's pitch from the stretch: set, the leg kick, the stride, the arm whipping
@@ -118,6 +121,18 @@ export const ACTIONS = {
 	stride: { loop: false, keys: [
 		[0, { L: arm({ abd: 0.08, flex: -0.3, bend: 0.25 }), R: arm({ abd: 0.08, flex: 0.35, bend: 0.45 }), fL: [0.09, 0, 0.3], fR: [-0.09, 0.06, -0.28], hp: [0.08, 0, 0, 0.03] }],
 		[1, { L: arm({ abd: 0.08, flex: 0.35, bend: 0.45 }), R: arm({ abd: 0.08, flex: -0.3, bend: 0.25 }), fL: [0.09, 0.06, -0.28], fR: [-0.09, 0, 0.3], hp: [-0.08, 0, 0, 0.03] }],
+	] },
+	// a long arm carried at the ready (crysis/held-items.js): the right hand on the grip at the
+	// hip, the left forward under the guard
+	carry: { loop: false, keys: [[0, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }]] },
+	// its reload: the support hand down to the cell, away to a pouch at the hip, back, and up
+	// to the guard again
+	reload: { loop: false, keys: [
+		[0, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }],
+		[0.25, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
+		[0.5, { L: arm({ abd: 0.3, flex: -0.15, roll: 0.3, bend: 0.7, pro: 1.2, curl: 0.7 }), R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
+		[0.78, { L: { ...CARRY_L, flex: CARRY_L.flex - 0.2, bend: CARRY_L.bend + 0.35, roll: CARRY_L.roll + 0.15 }, R: { ...CARRY_R, roll: CARRY_R.roll + 0.15 }, sp: [0.15, 0.1, 0], hd: [-0.1, 0.2, 0] }],
+		[1, { L: CARRY_L, R: CARRY_R, sp: [0.1, 0.04, 0], hd: [-0.1, 0, 0] }],
 	] },
 	// a wave (the keeper's hello, a spectator)
 	wave: { loop: true, keys: [

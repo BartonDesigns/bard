@@ -31,11 +31,16 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	const homeName = earth ? 'Earth' : type === 'MOON' ? 'The Moon' : title(profile?.name || 'this world');
 	const nav = createNav({ mount: dom.mount, isTouch, onWarp: (what, d) => what === 'list' ? destinations() : warpTo(d), onTarget: (id) => { const d = destinations().find((q) => q.id === id); if (d) hint(`${d.name} targeted. ${isTouch ? 'Tap ⤳ Warp' : 'Press J'} to warp there.`, 3000); } });
 	let wasSpace = false, text = '', disposed = false, gear = 1, warp = null, bounce = null, landing = false, heat = 0, warned = '';
+	let passage = null, passageToken = 0, passageCooldown = 0, solarDepth = 0;
+	const leaveStar = document.createElement('button'); leaveStar.dataset.stellarExit = '';
+	leaveStar.textContent = 'Return to orbit'; leaveStar.style.cssText = 'display:none;position:absolute;top:110px;left:50%;transform:translateX(-50%);padding:10px 14px;background:#23180de8;color:#fff;border:1px solid #ddaf75;border-radius:18px;font:14px system-ui;pointer-events:auto;z-index:25';
+	for (const ev of ['pointerdown', 'touchstart', 'click']) leaveStar.addEventListener(ev,e=>e.stopPropagation());
+	leaveStar.addEventListener('click', exitStellar); dom.mount.append(leaveStar);
 	const spot = new THREE.Vector3(), heading = new THREE.Vector3(0, 0, -1);
 	const deep = () => !!frame.anchor && frame.altitude(P.pos) >= SPACE;
 	const course = () => P.vel.lengthSq() > 1 ? heading.copy(P.vel).normalize() : camera.getWorldDirection(heading);
 	const controls = {
-		speed: (run, boost, agl) => frame.speed(P.pos, run, frame.anchor ? gear : boost, agl, course()) * musicThrust(shared.uBass.value, shared.uPulse.value),
+		speed: (run, boost, agl) => passage ? 0 : frame.speed(P.pos, run, frame.anchor ? gear : boost, agl, course()) * musicThrust(shared.uBass.value, shared.uPulse.value),
 		up: (out) => frame.up(P.pos, out),
 		surface: (pos, vel) => frame.surface(pos, vel),
 		high: () => !!frame.anchor && frame.altitude(P.pos) > ORBIT.start,
@@ -73,7 +78,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	}
 	function warpTo(d) {
 		if (!deep()) { hint('Warp needs open space: climb above 100 km first.', 3500); return; }
-		if (warp || bounce || landing) return;
+		if (warp || bounce || landing || disposed) return;
 		const from = P.pos.clone();
 		const w = { d, t: 0, from, yaw: P.yaw, pitch: P.pitch, roll: P.roll || 0 };
 		if (d.remote) {
@@ -97,7 +102,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 			P.pos.addScaledVector(w.dir, 2e6 * dt * turn);
 			if (w.t > 2.4 && !w.sent) {
 				w.sent = true;
-				Promise.resolve(voyage?.({ ...w.d.remote, name: w.d.name, orbit: 160000 })).catch((err) => { console.warn('[warp]', err); hint('The warp could not reach that world.', 3500); warp = null; });
+				Promise.resolve(voyage?.({ ...w.d.remote, name: w.d.name, orbit: 160000 })).then(ok => { if (!disposed && warp === w && ok === false) { warp = null; hint('The warp could not reach that world.', 3500); } }).catch((err) => { if (disposed || warp !== w) return; console.warn('[warp]', err); hint('The warp could not reach that world.', 3500); warp = null; });
 			}
 			if (w.t > 12 && !disposed) { warp = null; hint('Still charting that world. Try the warp again.', 3500); }
 		} else {
@@ -117,7 +122,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		P.vel.copy(P.pos).sub(before).divideScalar(Math.max(dt, 1e-3));
 		if (warp) heading.copy(w.dir);
 	}
-	// A short, eased push back out to a safe distance from the Sun, the black hole or a giant.
+	// A gas companion has no ground; stars and horizons use the entry path below.
 	function startBounce(center, safe, message) {
 		const n = P.pos.clone().sub(center); if (n.lengthSq() < 1) n.set(0, 1, 0);
 		n.normalize();
@@ -125,22 +130,57 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		P.vel.set(0, 0, 0); if (P.boost > 9) P.boost = 9;
 		hint(message, 5000);
 	}
+	function stopPassage(restore = false) {
+		passageToken++;
+		if (passage) { if (restore) P.pos.copy(passage.from); P.locked = false; P.flying = true; P.vel.set(0, 0, 0); }
+		passage = null; landing = false; passageCooldown = 5;
+	}
+	function exitStellar() {
+		if (disposed) return;
+		stopPassage(true);
+		warpTo({ id: 'home', name: homeName });
+	}
+	function enterHorizon(center) {
+		if (landing || passage || passageCooldown > 0) return;
+		const outward = P.pos.clone().sub(center).normalize();
+		if (!outward.lengthSq()) outward.set(0, 1, 0);
+		passage = { center: center.clone(), from: P.pos.clone(), to: center.clone().addScaledVector(outward, GARGANTUA.rs * 1.08), t: 0, sent: false, token: ++passageToken };
+		P.locked = true; P.vel.set(0, 0, 0); P.flyUp = P.flyDown = P.climbAssist = false; landing = true;
+		hint('Crossing Gargantua’s photon ring. Beyond the horizon lies the Held Note. Return to orbit to turn back.', 6500);
+	}
+	function stepPassage(dt) {
+		const q = passage; q.t += dt;
+		P.pos.lerpVectors(q.from, q.to, smooth(0, 3.2, q.t));
+		const d = q.center.clone().sub(P.pos).normalize();
+		P.yaw = Math.atan2(-d.x, -d.z); P.pitch = Math.asin(d.y); P.roll *= Math.exp(-dt * 2);
+		if (q.t >= 3.2 && !q.sent) {
+			q.sent = true;
+			Promise.resolve(voyage?.({ type: 'SINGULARITY', seed: beyondSeed() || 2281969, name: 'Beyond Gargantua', beyond: true })).then(ok => {
+				if (disposed || q.token !== passageToken) return;
+				if (!ok) { stopPassage(true); hint('The horizon could not open. You have control; warp to return.', 4500); }
+			}).catch(err => {
+				if (disposed || q.token !== passageToken) return;
+				console.warn('[horizon]', err); stopPassage(true); hint('The horizon could not open. You have control; warp to return.', 4500);
+			});
+		}
+		if (q.t > 20 && passage === q && !disposed) { stopPassage(true); hint('The horizon is still forming. You have control.', 4500); }
+	}
 	function hazards() {
 		const sunAt = frame.sunCenter(spot), ds = P.pos.distanceTo(sunAt);
-		heat = smooth(SUN.heat, SUN.safe * 1.4, ds);
-		if (ds < SUN.safe) { startBounce(sunAt, SUN.safe, 'Heat shields at their limit. The ship pulls back to a safe distance from the Sun.'); return; }
-		if (heat > .05 && warned !== 'sun') { warned = 'sun'; hint('Approaching the Sun. Heat is rising; shields are holding.', 4000); }
+		heat = smooth(SUN.heat, SUN.radius * 1.4, ds);
+		solarDepth = Math.max(0, Math.min(1, (SUN.radius * 1.06 - ds) / (SUN.radius * .14)));
+		if (solarDepth > 0 && warned !== 'inside-sun') { warned = 'inside-sun'; hint('Inside the Sun. The shields hold through the molten light. Keep flying, or return to orbit.', 6500); }
+		else if (heat > .05 && solarDepth === 0 && warned !== 'sun') { warned = 'sun'; hint('Approaching the Sun. Heat is rising; shields are holding.', 4000); }
 		const g = frame.gargCenter(spot), dg = P.pos.distanceTo(g);
-		if (dg < GARGANTUA.safe) { startBounce(g, GARGANTUA.safe, 'Gargantua\'s tides are too strong. The ship pulls back to a safe distance.'); return; }
-		if (dg < GARGANTUA.safe * 4 && warned !== 'garg') { warned = 'garg'; hint('Tidal stress rising near Gargantua.', 3500); }
+		if (dg < GARGANTUA.rs * 1.8) { enterHorizon(g); return; }
+		if (dg < GARGANTUA.safe * 4 && warned !== 'garg') { warned = 'garg'; hint('Gargantua ahead. Fly through the disk and photon ring to cross the horizon.', 5000); }
 		if (heat <= .05 && dg > GARGANTUA.safe * 4) warned = '';
 		const ma = frame.moonAltitude(P.pos);
 		if (!companion.land && ma < companion.radius * .05) { startBounce(frame.moonCenter(spot), companion.radius, 'A gas giant has no surface to land on. Holding a safe distance.'); return; }
-		// touching down on the companion: the usual world landing, then you are on its ground
 		if (companion.land && ma < 25000 && !landing) {
-			landing = true;
+			landing = true; const token = ++passageToken;
 			hint(`Touching down on ${companion.name}…`, 4000);
-			Promise.resolve(voyage?.(companion.land === 'EARTH' ? { earth: true, name: 'Earth' } : { type: 'MOON', seed: earth ? 1969 : (seed ^ 0x6d6f6f6e) >>> 0, name: companion.name })).catch((err) => { console.warn('[landing]', err); landing = false; });
+			Promise.resolve(voyage?.(companion.land === 'EARTH' ? { earth: true, name: 'Earth' } : { type: 'MOON', seed: earth ? 1969 : (seed ^ 0x6d6f6f6e) >>> 0, name: companion.name })).then(ok => { if (!disposed && token === passageToken && ok === false) landing = false; }).catch((err) => { if (disposed || token !== passageToken) return; console.warn('[landing]', err); landing = false; });
 		}
 	}
 	function before() {
@@ -155,6 +195,9 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		if (controls.high()) P.flying = true;
 	}
 	function after(dt = 1 / 60) {
+		if (disposed) return;
+		passageCooldown = Math.max(0, passageCooldown - dt);
+		if (passage) { stepPassage(dt); camera.position.copy(P.pos); camera.rotation.set(P.pitch, P.yaw, P.roll || 0, 'YXZ'); return; }
 		if (!P.flying || P.locked) return;
 		// the booster gear eases between tiers in proportion, so ×1,000 to ×10,000 is a smooth surge
 		const want = flightMultiplier(P.boost);
@@ -168,7 +211,8 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 			if (frame.update(P)) hint('Returning to your departure area. You have control.', 3500);
 			// a hard limit on top of the guard: never close on a surface faster than three times the gap per second
 			const v = P.vel.length(), gap = v > 1 ? frame.clearance(P.pos, course()) * 3 : Infinity;
-			if (v > 1000 && v > gap) P.vel.multiplyScalar(Math.max(gap, 1000) / v);
+			const stellar = frame.stellarSpeed(P.pos, course());
+			if (v > 1000 && v > Math.min(gap, stellar)) P.vel.multiplyScalar(Math.max(Math.min(gap, stellar), 1000) / v);
 			hazards();
 			if (P.boost > 9 && !deep()) { P.boost = 9; gear = Math.min(gear, 9); hint('Booster back to ×9 near the planet.', 2500); }
 		}
@@ -182,14 +226,15 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	}
 	function updateHud() {
 		const h = frame.altitude(P.pos), on = !!frame.anchor;
+		leaveStar.style.display = on && (solarDepth > 0 || passage) && !warp ? 'block' : 'none';
 		hud.style.display = on ? 'block' : 'none';
 		bearing.style.display = on ? 'block' : 'none';
 		nav.showButton(on && h >= SPACE);
 		if (!on) { nav.update(camera, [], false); return; }
 		const v = P.vel.length();
-		const phase = warp ? `WARP → ${warp.d.name.toUpperCase()}` : h >= SPACE ? 'SPACE' : 'ATMOSPHERE';
+		const phase = passage ? 'CROSSING THE HORIZON' : warp ? `WARP → ${warp.d.name.toUpperCase()}` : solarDepth > 0 ? 'SOLAR INTERIOR' : h >= SPACE ? 'SPACE' : 'ATMOSPHERE';
 		const where = h < 1e7 ? `${(h / 1000).toFixed(h < 1e6 ? 1 : 0)} km` : distanceLabel(h);
-		const hazard = heat > .02 ? `\n☀ HEAT ${Math.round(heat * 100)}% · SHIELDS ${Math.round((1 - heat) * 100)}%` : '';
+		const hazard = heat > .02 ? `\n☀ HEAT ${Math.round(heat * 100)}% · SHIELDS HOLDING` : '';
 		const next = `${phase} · ${where}\n${speedLabel(flightMultiplier(P.boost))} · ${speedReadout(v)}${hazard}`;
 		if (text !== next) { text = next; hud.textContent = next; hud.style.color = heat > .5 ? '#ffc08a' : '#eafaf6'; }
 		if (h >= SPACE && !wasSpace) { wasSpace = true; hint(`Space. B: faster gears up to ×100k. ${isTouch ? '⤳ Warp' : 'J'}: warp to a moon, planet, the Sun or Gargantua. C descends.`, 6000); }
@@ -209,6 +254,7 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 	}
 	function onKey(e) {
 		if (!frame.anchor || window._KEYS_PLAY_ON || e.target?.closest?.('input,textarea,[contenteditable]')) return;
+		if (e.key === 'Escape' && (passage || solarDepth > 0)) { exitStellar(); e.preventDefault(); e.stopImmediatePropagation(); return; }
 		if (nav.key(e)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
 		if ((e.key === 'j' || e.key === 'J') && !e.repeat) {
 			e.preventDefault();
@@ -234,8 +280,10 @@ export function createOrbitalFlight({ renderer, camera, dom, world, earth, seed,
 		destinations: () => destinations().map(({ id, name, note }) => ({ id, name, note })),
 		// the bodies round the ship, where they are now (explore.js steers by them)
 		bodies,
-		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), gear, boost: P.boost, radius, type, companion: companion.name, warping: !!warp, warpTime: warp?.t ?? 0, bouncing: !!bounce, landing, heat, target: nav.target, gargantuaVisible: !!view.gargantua?.visible, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
-		cancel: () => { frame.reset(); warp = bounce = null; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
-		dispose() { disposed = true; removeEventListener('keydown', onKey, true); delete P.orbit; hud.remove(); bearing.remove(); nav.dispose(); view.dispose(); },
+		info: () => ({ ...frame.info(P.pos), speed: P.vel.length(), gear, boost: P.boost, radius, type, companion: companion.name, solarDepth, horizon: passage ? { time: passage.t, sent: passage.sent } : null, warping: !!warp, warpTime: warp?.t ?? 0, bouncing: !!bounce, landing, heat, target: nav.target, gargantuaVisible: !!view.gargantua?.visible, music: { bass: shared.uBass.value, mid: shared.uMid.value, high: shared.uHigh.value, thrust: musicThrust(shared.uBass.value, shared.uPulse.value) } }),
+		pause: () => { stopPassage(true); warp = bounce = null; P.vel.set(0, 0, 0); P.flyUp = P.flyDown = P.climbAssist = false; leaveStar.style.display = 'none'; },
+		cancel: () => { stopPassage(); solarDepth = heat = 0; leaveStar.style.display = 'none'; frame.reset(); warp = bounce = null; landing = false; P.roll = 0; P.climbAssist = false; hud.style.display = bearing.style.display = 'none'; nav.showButton(false); nav.update(camera, [], false); },
+		exitStellar,
+		dispose() { stopPassage(); disposed = true; leaveStar.remove(); removeEventListener('keydown', onKey, true); delete P.orbit; hud.remove(); bearing.remove(); nav.dispose(); view.dispose(); },
 	};
 }

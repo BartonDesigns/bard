@@ -85,7 +85,7 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 			q.setFromEuler(e);
 			w4.compose(v.fromArray(h), q, K || !right ? one : mir);
 			w4.premultiply(M);
-			if (K) { const parts = K.wheels[right ? 'R' : 'L']; if (parts.length) put(set(kind + 'mw' + (right ? 'R' : 'L'), parts.map((p) => [p.geo, p.mat, false]), false, cap * 2, cast), w4); }
+			if (K) { const w = (front || !K.wheels['R' + (right ? 'R' : 'L')]?.length ? '' : 'R') + (right ? 'R' : 'L'), parts = K.wheels[w]; if (parts.length) put(set(kind + 'mw' + w, parts.map((p) => [p.geo, p.mat, false]), false, cap * 2, cast), w4); }
 			else put(set(kind + 'lw', [[wheelGeo(kind), carMat, false]], false, cap * 4, cast), w4);
 		});
 	}

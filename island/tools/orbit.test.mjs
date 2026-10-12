@@ -107,3 +107,20 @@ test('deep-space gears are tenfold but slow exponentially near a surface or the 
 	assert.ok(f.speed(P.pos, false, 100000, 0, new THREE.Vector3(-1, 0, 0)) <= 3e7);
 	assert.equal(nextFlightSpeed(9), 1); assert.equal(nextFlightSpeed(9, true), 100); assert.equal(nextFlightSpeed(100000, true), 1);
 });
+
+test('stellar entry regions are traversable with finite controlled speed in both directions', () => {
+	const P = player(), f = createOrbitFrame(); f.capture(P);
+	for (const [at, radius] of [[f.sunCenter(), SUN.radius], [f.gargCenter(), GARGANTUA.rs]]) {
+		const inward = new THREE.Vector3(-1, 0, 0);
+		P.pos.copy(at).add(new THREE.Vector3(radius * 1.7, 0, 0));
+		for (let i = 0; i < 3000 && P.pos.x - at.x > radius * .8; i++) {
+			const speed = f.speed(P.pos, false, 100000, 0, inward);
+			assert.ok(Number.isFinite(speed) && speed > 1000 && speed < radius * 2);
+			P.pos.addScaledVector(inward, speed * .05);
+		}
+		assert.ok(P.pos.x - at.x < radius, 'the old safety shell no longer prevents entry');
+		const outward = inward.clone().negate();
+		for (let i = 0; i < 3000 && P.pos.x - at.x < radius * 2.1; i++) P.pos.addScaledVector(outward, f.speed(P.pos, false, 100000, 0, outward) * .05);
+		assert.ok(P.pos.x - at.x > radius * 2, 'pilot can leave without a teleport');
+	}
+});

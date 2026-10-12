@@ -847,7 +847,10 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 				const sx = (r() - 0.5) * (bw - tw - 16), sz2 = (r() - 0.5) * (bd - td - 16);
 				const [tx, tz] = at((a0 + a1) / 2 + sx, (b0 + b1) / 2 + sz2);
 				if (G.nearest(tx, tz, Math.hypot(tw, td) / 2 + 2)) continue;           // (never on a road)
-				const tall = older ? 12 + r() * 16 : 16 + Math.pow(r(), 1.5) * 100 * near;
+				let tall = older ? 12 + r() * 16 : 16 + Math.pow(r(), 1.5) * 100 * near;
+				// Select downtown landmarks can carry 45–74 occupied storeys.
+				const landmark = hashStr(Math.round(tx)+':'+Math.round(tz));
+				if (!older && near > .55 && tw > 28 && td > 26 && landmark % 7 === 0) tall = 5.2 + 3.9 * (44 + landmark % 30);
 				boxes.push({ x: tx, z: tz, w: tw, d: td, a: Math.atan2(sa, ca), wallH: tall, roofH: 0, kind: tall > 22 ? K.tower : K.office, hip: 0, door: 0.5 });
 				// a low block of shops along one side of the block
 				if (r() < 0.7) {
@@ -865,7 +868,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			const face = Math.atan2(-Bk * uz, -Bk * ux);
 			const aw = clamp(hw * 2 * 0.45, 40, 110), ad = clamp(hd * 2 * 0.38, 28, 60);
 			const [ax, az] = at(A * (hw - aw / 2 - 6), Bk * (hd - ad / 2 - 6));
-			boxes.push({ x: ax, z: az, w: aw, d: ad, a: face, wallH: 7.5 + r() * 2.5, roofH: 0, kind: K.retail, hip: 0, door: 0.5 });
+			boxes.push({ x: ax, z: az, w: aw, d: ad, a: face, wallH: (s.big ? 19.4 : 7.5) + r() * 2.5, roofH: 0, kind: K.retail, hip: 0, door: 0.5 });
 			let run = hw * 2 - aw - 18, a0 = A * (hw - aw - 6);
 			while (run > 16) {
 				const sw = clamp(14 + r() * 12, 14, run), sd2 = 18 + r() * 6;

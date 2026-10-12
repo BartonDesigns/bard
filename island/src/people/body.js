@@ -11,12 +11,15 @@
 import * as THREE from 'three';
 import { applyInk, inkFor, flashAtlas } from '../tattoo/skinink.js';
 import { dressFor, hairFor, fromFlat, climate } from './wardrobe.js';
-import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial } from './garment.js';
+import { garmentMaterial, paint, landmarks, partOf, regions, clothGeometry, accessoryGeometry, accessoryMaterial, offsets } from './garment.js';
 import { loadFaces, faceDNA, shapeFace, skinAttribute, faceDetail, detailMaterial, eyeGeometry, eyeMaterial, irisOf } from './face.js';
 import { skinMaterial } from './skin.js';
 import { buildHair, hairMaterial, cutOf, skullOf, scalpMask } from './hair.js';
 import { fadePerson } from './fade.js';
 import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMaterial, stubbleMask, SHELLS } from './hairkit.js';
+import { hairCapsules, poseCapsules } from './hair-collide.js';
+import { hairMotion } from './hair-motion.js';
+import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -223,7 +226,9 @@ export function buildPerson(A, d) {
 	const { D, targets, unit } = A;
 	// the shape: ancestry x sex x age, then muscle and weight
 	const p = Float32Array.from(A.base, (x) => x * unit);
-	const ageW = [['young', d.age < 16 ? 0 : 1 - clamp((d.age - 25) / 60)], ['old', d.age < 16 ? 0 : clamp((d.age - 25) / 60)], ['child', d.age < 16 ? 1 : 0]];
+	// (a teen is part way from the child shape to the young one: d.growth, teens.js)
+	const grown = d.growth ?? (d.age < 16 ? 0 : 1);
+	const ageW = [['young', grown * (1 - clamp((d.age - 25) / 60))], ['old', grown * clamp((d.age - 25) / 60)], ['child', 1 - grown]];
 	for (let a = 0; a < 3; a++) for (const [sx, w] of [['female', 1 - d.sex], ['male', d.sex]]) for (const [ag, wa] of ageW) {
 		if (!wa) continue;
 		const t = targets[['african', 'asian', 'caucasian'][a] + '-' + sx + '-' + ag], k = d.ancestry[a] * w * wa * unit;
@@ -353,16 +358,25 @@ function dress(A, P, o) {
 	hairUp(A, P);
 	// the clothes: one mesh, painted by garment
 	const clothGeo = clothGeometry(A, p, o, cut, R);
+	// Held items use the dressed torso's actual rest bounds, not bare-skin allowances.
+	const cp = clothGeo.attributes.position, cs = clothGeo.attributes.slot;
+	const envelope = { front: cut.frontZ, back: cut.backZ, width: Math.max(cut.waistX, cut.shoulderX * .92) };
+	for (let i=0;i<cp.count;i++) if (cs.getX(i)<2 && cp.getY(i)>cut.waist-.06 && cp.getY(i)<cut.shoulder) {
+		envelope.front=Math.max(envelope.front,cp.getZ(i));envelope.back=Math.min(envelope.back,cp.getZ(i));
+		envelope.width=Math.max(envelope.width,Math.abs(cp.getX(i)));
+	}
+	P.heldTorso = envelope;
 	if (!P.clothMat) P.clothMat = garmentMaterial(A, o, cut, o.top?.number || 0);
 	else paint(P.clothMat, o);
 	const sleeveEnd = { none: cut.shoulder, cap: cut.shoulder - 0.07, short: cut.elbow + 0.1, elbow: cut.elbow, long: cut.wrist }[o.top?.sleeves || 'short'] ?? cut.elbow;
 	P.clothMat.userData.U.uHem.value.set(R.topHem, sleeveEnd, cut.waist + 0.02, R.legEnd);
 	// the necklines, cut smooth (the cage's triangles would leave them ragged)
-	const T0 = o.top, scoop = T0 && (T0.kind === 'crop' || T0.kind === 'tank' || (T0.kind === 'tee' && o.gen === 'z')) ? 0.045 : 0;
-	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.02, cut.neck - 0.02, scoop, 0);
-	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, 0);
+	const T0 = o.top, scoop = T0 && T0.kind === 'tank' ? 0.045 : T0?.kind === 'crop' ? .025 : 0;
+	P.clothMat.userData.U.uNeck.value.set(cut.neck - 0.005, cut.neck - 0.005, scoop, 0);
+	P.clothMat.userData.U.uEdge.value.set(R.outHem, cut.shoulderX, o.outer?.sleeves === 'none' ? 1 : 0, o.outer ? 1 : 0);
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
+	else { const cloth=P.cloth,caps=clothCapsules(P); calibrateCloth(clothGeo,caps); cloth.userData.capsules=caps; cloth.onBeforeRender=()=>poseCloth(P,caps,P.clothMat.userData.U,cloth); }
 	// caps, glasses, headphones, bags: one more mesh
 	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
@@ -423,7 +437,14 @@ function hairUp(A, P) {
 	const has = (id) => !id || styleNow(id);
 	if (W.style?.fade) W.style.fadeY = P.skull.eyeY + 0.062 - (1 - W.style.fade) * 0.04;
 	// the hair: the real style, or the procedural cut while it comes
-	if (W.style && has(W.style.id)) P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+	if (W.style && has(W.style.id)) {
+		P.hair = skinned(hairGeometry(A, P, p, W.style, null, null), tune(kitMaterial(styleNow(W.style.id).tex)));
+		// it falls over the collar and the shoulders, not through them (hair-collide.js)
+		const o = P.outfit || {}, off = offsets(o), caps = hairCapsules(P, o, Math.max(off.top, off.outer));
+		const hair = P.hair;
+		const animate = hairMotion(P, hair, hair.material.userData.U);
+		hair.onBeforeRender = () => { animate(); poseCapsules(P, caps, hair.material.userData.U, hair); };
+	}
 	else if (W.cut) {
 		const g = buildHair(A, P, p, W.cut, { skull: P.skull, rnd: rng(d.seed ^ 0x4a17), capY: covers ? (hat.kind === 'beanie' ? 0.042 : 0.05) : undefined, recede: H.recede || 0, thin: H.thin || 0, partSide: H.part });
 		// (grey coming in evenly, root to tip)
@@ -433,6 +454,8 @@ function hairUp(A, P) {
 		hair.castShadow = true;
 		bones[map.head].add(hair);
 		P.hair = hair;
+		const animate = hairMotion(P, hair, hair.material.userData.U);
+		hair.onBeforeRender = () => animate();
 	}
 	// the beard: drawn after the face, blended
 	const bid = W.beard && (SHELLS[W.beard.kind] ? 'shells' : W.beard.kind);

@@ -239,11 +239,13 @@ export function buildFaith({ glass, beached = false } = {}) {
 	box(CX + 0.2, CH, cw, (-CX + 0.2) / 2, DF + CH / 2, CZ1, C.house);
 	box(CX - 0.95, CH, cw, (CX + 0.95) / 2, DF + CH / 2, CZ1, C.house);
 	box(0.75, CH - 1.95, cw, 0.575, DF + 1.95 + (CH - 1.95) / 2, CZ1, C.house);
-	// a window in a dark frame: glass set just proud of the wall, frame bars round it
-	function windowAt(cx, cy, cz, w, h, nx, nz) {
-		const g = new THREE.PlaneGeometry(w, h); g.rotateY(Math.atan2(nx, nz)); g.translate(cx + nx * 0.045, cy, cz + nz * 0.045);
+	// a window in a dark frame: glass set just proud of the wall (or of the door, out further),
+	// frame bars round it; the glass a few mm clear of the wall and of the bars' backs, which
+	// it used to lie flush with
+	function windowAt(cx, cy, cz, w, h, nx, nz, out = 0) {
+		const g = new THREE.PlaneGeometry(w, h); g.rotateY(Math.atan2(nx, nz)); g.translate(cx + nx * (0.043 + out), cy, cz + nz * (0.043 + out));
 		glassG.push(g.toNonIndexed());
-		const fx = Math.abs(nz) > 0.5 ? 1 : 0, fz = 1 - fx, t = 0.06, o = 0.06;
+		const fx = Math.abs(nz) > 0.5 ? 1 : 0, fz = 1 - fx, t = 0.06, o = 0.06 + out;
 		box(fx * (w + t) + fz * 0.03, t, fz * (w + t) + fx * 0.03, cx + nx * o, cy + h / 2, cz + nz * o, C.frame);
 		box(fx * (w + t) + fz * 0.03, t, fz * (w + t) + fx * 0.03, cx + nx * o, cy - h / 2, cz + nz * o, C.frame);
 		for (const e of [-1, 1]) box(fx * t + fz * 0.03, h, fz * t + fx * 0.03, cx + nx * o + fx * e * w / 2, cy, cz + nz * o + fz * e * w / 2, C.frame);
@@ -254,7 +256,7 @@ export function buildFaith({ glass, beached = false } = {}) {
 	windowAt(-CX, wy, 1.0, 0.5, 0.62, -1, 0);
 	// a door on the starboard side
 	box(0.03, 1.85, 0.62, CX + 0.045, DF + 0.95, 1.05, C.door);
-	windowAt(CX, DF + 1.45, 1.05, 0.34, 0.4, 1, 0);
+	windowAt(CX, DF + 1.45, 1.05, 0.34, 0.4, 1, 0, 0.022);
 	// the roof, a little overhang, the flying bridge on it
 	box(CX * 2 + 0.24, 0.1, CZ1 - CZ0 + 0.2, 0, CT + 0.05, (CZ0 + CZ1) / 2, C.house);
 	box(CX * 2 + 0.26, 0.04, CZ1 - CZ0 + 0.22, 0, CT, (CZ0 + CZ1) / 2, C.frame);

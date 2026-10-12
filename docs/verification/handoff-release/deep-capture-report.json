@@ -1,0 +1,3632 @@
+{
+  "worlds": [
+    {
+      "name": "deep-gate",
+      "lost": false,
+      "programs": [
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 7,
+          "stages": [
+            1,
+            6
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 6,
+          "stages": [
+            4,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 9,
+          "stages": [
+            8,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            1,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 6,
+          "stages": [
+            4,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 4,
+          "stages": [
+            0,
+            4
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        }
+      ],
+      "render": {
+        "frame": 52,
+        "calls": 125,
+        "triangles": 615690,
+        "points": 10649,
+        "lines": 2392
+      },
+      "memory": {
+        "geometries": 265,
+        "textures": 65
+      },
+      "lit": true,
+      "combat": {
+        "me": {
+          "hp": 100,
+          "max": 100,
+          "state": "ok",
+          "ko": 0
+        },
+        "weapon": null,
+        "layer": 0,
+        "wanted": {
+          "stars": 0,
+          "points": 0
+        },
+        "zone": "wild",
+        "squads": {
+          "alive": 0,
+          "fading": 0,
+          "max": 14,
+          "squads": [],
+          "bodies": 0,
+          "queue": 0
+        },
+        "civilians": {
+          "known": 0,
+          "panic": 0,
+          "dead": 0,
+          "inLayer": 0
+        },
+        "props": {
+          "props": 0,
+          "kinds": {}
+        },
+        "cars": {
+          "tracked": 0,
+          "damaged": [],
+          "wrecks": 0
+        },
+        "fires": [],
+        "burnt": 0,
+        "bosses": [],
+        "projectiles": 0,
+        "rules": {
+          "pvp": false
+        },
+        "ambient": true,
+        "morality": {
+          "me": {
+            "mercy": 0,
+            "law": 0,
+            "protect": 0,
+            "honest": 0,
+            "deeds": 0
+          },
+          "world": {
+            "mercy": 0,
+            "law": 0,
+            "protect": 0,
+            "honest": 0,
+            "deeds": 0
+          },
+          "title": "Unknown",
+          "reactions": {
+            "title": "Unknown",
+            "reputation": 0,
+            "bounty": 0,
+            "greet": [
+              "Morning.",
+              "Safe travels.",
+              "Watch yourself out there."
+            ],
+            "priceK": 1,
+            "song": "",
+            "graffiti": ""
+          },
+          "recent": [],
+          "places": 0
+        },
+        "journal": []
+      }
+    },
+    {
+      "name": "deep-bottom",
+      "lost": false,
+      "programs": [
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 7,
+          "stages": [
+            1,
+            6
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 6,
+          "stages": [
+            4,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 9,
+          "stages": [
+            8,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            1,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 6,
+          "stages": [
+            4,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 4,
+          "stages": [
+            0,
+            4
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        }
+      ],
+      "render": {
+        "frame": 85,
+        "calls": 78,
+        "triangles": 516156,
+        "points": 10709,
+        "lines": 2332
+      },
+      "memory": {
+        "geometries": 288,
+        "textures": 68
+      },
+      "lit": true,
+      "combat": {
+        "me": {
+          "hp": 100,
+          "max": 100,
+          "state": "ok",
+          "ko": 0
+        },
+        "weapon": null,
+        "layer": 0,
+        "wanted": {
+          "stars": 0,
+          "points": 0
+        },
+        "zone": "deep",
+        "squads": {
+          "alive": 0,
+          "fading": 0,
+          "max": 14,
+          "squads": [],
+          "bodies": 0,
+          "queue": 0
+        },
+        "civilians": {
+          "known": 0,
+          "panic": 0,
+          "dead": 0,
+          "inLayer": 0
+        },
+        "props": {
+          "props": 0,
+          "kinds": {}
+        },
+        "cars": {
+          "tracked": 0,
+          "damaged": [],
+          "wrecks": 0
+        },
+        "fires": [],
+        "burnt": 0,
+        "bosses": [],
+        "projectiles": 0,
+        "rules": {
+          "pvp": false
+        },
+        "ambient": true,
+        "morality": {
+          "me": {
+            "mercy": 0,
+            "law": 0,
+            "protect": 0,
+            "honest": 0,
+            "deeds": 0
+          },
+          "world": {
+            "mercy": 0,
+            "law": 0,
+            "protect": 0,
+            "honest": 0,
+            "deeds": 0
+          },
+          "title": "Unknown",
+          "reactions": {
+            "title": "Unknown",
+            "reputation": 0,
+            "bounty": 0,
+            "greet": [
+              "Morning.",
+              "Safe travels.",
+              "Watch yourself out there."
+            ],
+            "priceK": 1,
+            "song": "",
+            "graffiti": ""
+          },
+          "recent": [],
+          "places": 0
+        },
+        "journal": []
+      }
+    },
+    {
+      "name": "deep-return",
+      "lost": false,
+      "programs": [
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 7,
+          "stages": [
+            1,
+            6
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 6,
+          "stages": [
+            4,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            1,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 9,
+          "stages": [
+            8,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            1,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 6,
+          "stages": [
+            4,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 5,
+          "stages": [
+            4,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            1,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 4,
+          "stages": [
+            0,
+            4
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 3,
+          "stages": [
+            0,
+            3
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            1,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            1,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 2,
+          "stages": [
+            0,
+            2
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 0,
+          "stages": [
+            0,
+            0
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        },
+        {
+          "runnable": true,
+          "samplers": 1,
+          "stages": [
+            0,
+            1
+          ]
+        }
+      ],
+      "render": {
+        "frame": 105,
+        "calls": 122,
+        "triangles": 653619,
+        "points": 10709,
+        "lines": 2392
+      },
+      "memory": {
+        "geometries": 290,
+        "textures": 68
+      },
+      "lit": true,
+      "combat": {
+        "me": {
+          "hp": 100,
+          "max": 100,
+          "state": "ok",
+          "ko": 0
+        },
+        "weapon": null,
+        "layer": 0,
+        "wanted": {
+          "stars": 0,
+          "points": 0
+        },
+        "zone": "wild",
+        "squads": {
+          "alive": 0,
+          "fading": 0,
+          "max": 14,
+          "squads": [],
+          "bodies": 0,
+          "queue": 0
+        },
+        "civilians": {
+          "known": 0,
+          "panic": 0,
+          "dead": 0,
+          "inLayer": 0
+        },
+        "props": {
+          "props": 0,
+          "kinds": {}
+        },
+        "cars": {
+          "tracked": 0,
+          "damaged": [],
+          "wrecks": 0
+        },
+        "fires": [],
+        "burnt": 0,
+        "bosses": [],
+        "projectiles": 0,
+        "rules": {
+          "pvp": false
+        },
+        "ambient": true,
+        "morality": {
+          "me": {
+            "mercy": 0,
+            "law": 0,
+            "protect": 0,
+            "honest": 0,
+            "deeds": 0
+          },
+          "world": {
+            "mercy": 0,
+            "law": 0,
+            "protect": 0,
+            "honest": 0,
+            "deeds": 0
+          },
+          "title": "Unknown",
+          "reactions": {
+            "title": "Unknown",
+            "reputation": 0,
+            "bounty": 0,
+            "greet": [
+              "Morning.",
+              "Safe travels.",
+              "Watch yourself out there."
+            ],
+            "priceK": 1,
+            "song": "",
+            "graffiti": ""
+          },
+          "recent": [],
+          "places": 0
+        },
+        "journal": []
+      }
+    }
+  ],
+  "errors": [],
+  "requests": [],
+  "method": "Chromium software WebGL, 640x420 touch viewport; real production bundle and assets",
+  "deep": {
+    "open": true,
+    "active": false,
+    "depth": 0,
+    "deepest": 0,
+    "band": "Damp limestone",
+    "waystones": 0,
+    "alcoves": 0,
+    "shift": -9.742527357868369,
+    "chunks": 0,
+    "meshes": 0,
+    "fine": 0,
+    "tris": 0,
+    "landmarks": [],
+    "heard": true,
+    "progress": 4,
+    "climbing": false,
+    "gate": {
+      "x": 345,
+      "y": 50,
+      "z": -226
+    },
+    "time": 4.95
+  },
+  "descent": {
+    "result": "climbing down",
+    "open": true,
+    "active": true,
+    "depth": 0,
+    "deepest": 0,
+    "band": "Damp limestone",
+    "waystones": 0,
+    "alcoves": 0,
+    "shift": -9.742527357868369,
+    "chunks": 47,
+    "meshes": 32,
+    "fine": 7,
+    "tris": 12794,
+    "landmarks": [
+      "hall@72"
+    ],
+    "heard": true,
+    "progress": 4,
+    "climbing": false,
+    "gate": {
+      "x": 345,
+      "y": 50,
+      "z": -226
+    },
+    "time": 16.5
+  },
+  "ascent": {
+    "result": "climbing up",
+    "open": true,
+    "active": false,
+    "depth": 0,
+    "deepest": 0,
+    "band": "Damp limestone",
+    "waystones": 0,
+    "alcoves": 0,
+    "shift": -9.742527357868369,
+    "chunks": 0,
+    "meshes": 0,
+    "fine": 0,
+    "tris": 0,
+    "landmarks": [],
+    "heard": true,
+    "progress": 4,
+    "climbing": false,
+    "gate": {
+      "x": 345,
+      "y": 50,
+      "z": -226
+    },
+    "time": 26.5,
+    "locked": false
+  },
+  "passed": true
+}

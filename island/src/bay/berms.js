@@ -71,7 +71,12 @@ export function underBuildings(boxes, x0, z0, cell, n, out, pad = 1, ease = 4) {
 
 // (groundAt: the ground as it stands; profileAt, what a road's grade is worked out from: the
 // ground that stays put, so the grade is the same whenever it is worked out)
-export function createBerms(real, groundAt, profileAt = groundAt) {
+export function createBerms(real, groundAt, profileAt = groundAt, { ready = () => true } = {}) {
+	// Roads stream independently of the survey. Never cache its temporary -60 m
+	// loading height as a permanent road grade. Keep profiles local to this world,
+	// including when a road object survives a terrain reload.
+	let profiles = new WeakMap();
+	BERM_U.uBermR.value.w = BERM_U.uTreadR.value.w = 0;
 	const delta = new Float32Array(N * N), weight = new Float32Array(N * N), under = new Float32Array(N * N);
 	const half = new Uint16Array(N * N * 2);
 	const tex = new THREE.DataTexture(half, N, N, THREE.RGFormat, THREE.HalfFloatType);
@@ -86,7 +91,8 @@ export function createBerms(real, groundAt, profileAt = groundAt) {
 
 	// a road's profile: heights every STEP metres along it
 	function profile(r) {
-		if (r.bermP) return r.bermP;
+		if (!ready()) return null;
+		if (profiles.has(r)) return profiles.get(r);
 		const p = r.pts, acc = [0];
 		for (let i = 2; i < p.length; i += 2) acc.push(acc[acc.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]));
 		const L = acc[acc.length - 1], n = Math.max(2, Math.ceil(L / STEP) + 1), h = new Float32Array(n);
@@ -103,8 +109,9 @@ export function createBerms(real, groundAt, profileAt = groundAt) {
 		}
 		for (let i = 1; i < n; i++) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
 		for (let i = n - 2; i >= 0; i--) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
-		r.bermP = { h, acc };
-		return r.bermP;
+		const result = { h, acc };
+		profiles.set(r, result);
+		return result;
 	}
 	const hAt = (P, s) => { const f = Math.max(0, Math.min(P.h.length - 1, s / STEP)), i = Math.min(P.h.length - 2, Math.floor(f)), t = f - i; return P.h[i] * (1 - t) + P.h[i + 1] * t; };
 
@@ -201,6 +208,12 @@ export function createBerms(real, groundAt, profileAt = groundAt) {
 	}
 
 	function update(camera) {
+		if (!ready()) {
+			BERM_U.uBermR.value.w = BERM_U.uTreadR.value.w = 0;
+			profiles = new WeakMap();
+			cx = cz = tx = tz = 1e9; roadVersion = '';
+			return;
+		}
 		if (!real?.loaded()) return;
 		const x = camera.position.x, z = camera.position.z;
 		const rv = real.version() + ':' + (real.sourceVersion?.() || '');

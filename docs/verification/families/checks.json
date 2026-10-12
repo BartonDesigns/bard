@@ -1,0 +1,173 @@
+{
+  "checks": [
+    {
+      "name": "pending stage cancellation",
+      "ok": true
+    },
+    {
+      "name": "four real actors, child and teens protected",
+      "ok": true
+    },
+    {
+      "name": "household appearance follows requested sex",
+      "ok": true
+    },
+    {
+      "name": "teens actors finite and grounded",
+      "ok": true
+    },
+    {
+      "name": "school-run actors finite and grounded",
+      "ok": true
+    },
+    {
+      "name": "dinner actors finite and grounded",
+      "ok": true
+    },
+    {
+      "name": "foodbank actors finite and grounded",
+      "ok": true
+    },
+    {
+      "name": "nearby community aid visible",
+      "ok": true
+    },
+    {
+      "name": "aid spends shared wallet and records deed",
+      "ok": true
+    },
+    {
+      "name": "community garden persists after recreation",
+      "ok": true
+    },
+    {
+      "name": "world change removes stage actors",
+      "ok": true
+    },
+    {
+      "name": "family group reattaches after world scene cleanup",
+      "ok": true
+    },
+    {
+      "name": "origin change removes stale stage",
+      "ok": true
+    },
+    {
+      "name": "stage geometry released between gatherings",
+      "ok": true
+    },
+    {
+      "name": "real house dinner reuses existing chairs without duplicate furniture",
+      "ok": true
+    },
+    {
+      "name": "aid removed on disposal",
+      "ok": true
+    },
+    {
+      "name": "no renderer errors",
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "memory": {
+    "before": 3,
+    "after": 3
+  },
+  "lineup": {
+    "info": {
+      "area": "0,0",
+      "place": "rural",
+      "foodDesert": false,
+      "day": 4,
+      "hours": 16,
+      "food": {
+        "households": 28,
+        "secure": 27,
+        "tight": 1,
+        "short": 0,
+        "well": 0.8,
+        "adults": 55,
+        "minors": 23
+      },
+      "doing": {
+        "work": 23,
+        "after-school program": 1,
+        "daycare": 1,
+        "home": 44,
+        "basketball": 1,
+        "homework club": 2,
+        "school-bus": 2,
+        "robotics": 1,
+        "drama": 1,
+        "garden club": 1,
+        "dance": 1
+      },
+      "moments": [
+        {
+          "kind": "lineup",
+          "actors": 4,
+          "auto": false
+        }
+      ],
+      "bank": {
+        "stock": 40
+      },
+      "garden": 0,
+      "credits": 1000,
+      "pendingDeeds": 0,
+      "adopted": 0
+    },
+    "actors": [
+      {
+        "age": 8,
+        "male": true,
+        "specMale": true,
+        "minor": true,
+        "height": 1.209297996789217,
+        "x": -0.9867955564842342,
+        "y": 2,
+        "z": 0.8073781825780099,
+        "role": "lineup"
+      },
+      {
+        "age": 13.5,
+        "male": false,
+        "specMale": false,
+        "minor": true,
+        "height": 1.584913085288066,
+        "x": -0.3289318521614114,
+        "y": 2,
+        "z": 0.26912606085933666,
+        "role": "lineup"
+      },
+      {
+        "age": 16.5,
+        "male": true,
+        "specMale": true,
+        "minor": true,
+        "height": 1.6898733009743114,
+        "x": 0.3289318521614114,
+        "y": 2,
+        "z": -0.26912606085933666,
+        "role": "lineup"
+      },
+      {
+        "age": 38,
+        "male": false,
+        "specMale": false,
+        "minor": false,
+        "height": 1.6223783824542224,
+        "x": 0.9867955564842342,
+        "y": 2,
+        "z": -0.8073781825780099,
+        "role": "lineup"
+      }
+    ],
+    "credits": 1000,
+    "spent": 0,
+    "deeds": 0,
+    "calls": 25,
+    "geometries": 19
+  }
+}

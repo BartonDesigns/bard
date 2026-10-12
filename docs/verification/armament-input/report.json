@@ -1,0 +1,7 @@
+{
+  "checks": [],
+  "errors": [],
+  "method": "Production bundle, Playwright mouse/keyboard and trusted CDP touch events; mobile-tier Chromium software WebGL",
+  "bundleSha256": "3e7f81da3580cd64cecbc6e078643f2477b0ff60a662965e50bf9d63fa98ad49",
+  "failure": "page.goto: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:37737/?offline&safe&lite\", waiting until \"domcontentloaded\"\u001b[22m\n\n    at /workspace/scratch/5c8900291977/bard/tools/armament-input-smoke.cjs:33:16"
+}

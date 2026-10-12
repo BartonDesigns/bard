@@ -226,13 +226,20 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 		// (never in a cave: its pools are shallow)
 		s.swimming = island.underFloor?.(s.pos.x, s.pos.z, s.pos.y - EYE) == null && (ground < surface - 1.35 || (s.diving && ground < surface - 0.6));
 		s.surface = surface;
+		// Forward swimming follows the view under the surface once the player deliberately
+		// looks down. Start with downward velocity so the first frame cannot cancel the dive
+		// while the eye is still above water. Looking down while idle/backing up stays afloat.
+		if (s.swimming && !s.diving && mz < -0.15 && s.pitch < -Math.PI / 9 && !keys.has(' ')) {
+			s.diving = true;
+			s.vel.y = Math.min(s.vel.y, -0.8);
+		}
 		if (s.swimming && s.diving) {
 			// under water: swim where you look; the sea slowly lifts you when you stop
 			const climb = -mz * Math.sin(s.pitch) * speed + (keys.has(' ') ? 2.2 : 0);
 			s.vel.y += ((Math.abs(mz) > 0.05 || keys.has(' ') ? climb : 0.45) - s.vel.y) * Math.min(1, dt * 3);
 			s.pos.y += s.vel.y * dt;
 			if (s.pos.y < ground + 0.5) { s.pos.y = ground + 0.5; s.vel.y = Math.max(0, s.vel.y); }
-			if (s.pos.y > surface + 0.2) s.diving = false;
+			if (s.pos.y > surface + 0.2 && s.vel.y > 0) s.diving = false;
 			s.grounded = false;
 		} else if (s.swimming) {
 			s.diving = false;

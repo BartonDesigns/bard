@@ -1,0 +1,1370 @@
+{
+  "method": "Full production world, source preview bundle, fixed clock and camera; before substitutes only the previous in-cloud veil opacity/colour. Software WebGL, not physical-device timing.",
+  "worlds": [
+    {
+      "tier": "phone",
+      "biome": "TERRAN",
+      "meta": {
+        "plan": {
+          "base": 24.45680217524631,
+          "top": 48.45680217524631,
+          "cover": 0.36,
+          "bands": [
+            {
+              "base": 24.45680217524631,
+              "top": 48.45680217524631,
+              "cover": 0.36
+            },
+            {
+              "base": 62.45680217524631,
+              "top": 72.45680217524631,
+              "cover": 0.41
+            }
+          ],
+          "x": -481.61731656763493,
+          "z": 225.07612046748872,
+          "rad": 436.82105101189654
+        },
+        "arch": {
+          "name": "Verdance",
+          "centre": {
+            "x": -482,
+            "z": 225
+          },
+          "villas": [
+            {
+              "name": "Fern House",
+              "kind": "terraces",
+              "y": 62,
+              "under": 10,
+              "stand": {
+                "x": -496.6,
+                "y": 57.64,
+                "z": 213.4
+              }
+            },
+            {
+              "name": "The Green Shelf",
+              "kind": "cantilever",
+              "y": 66,
+              "under": 15,
+              "stand": {
+                "x": -407.5,
+                "y": 65.9,
+                "z": 225.3
+              }
+            },
+            {
+              "name": "Ridgeway",
+              "kind": "cantilever",
+              "y": 81,
+              "under": 15,
+              "stand": {
+                "x": -343.4,
+                "y": 81.09,
+                "z": 254.3
+              }
+            },
+            {
+              "name": "Kestrel House",
+              "kind": "terraces",
+              "y": 61,
+              "under": 12,
+              "stand": {
+                "x": -557.3,
+                "y": 55.99,
+                "z": 211.4
+              }
+            }
+          ],
+          "towers": [
+            {
+              "name": "Canopy Tower",
+              "base": 14,
+              "top": 112,
+              "lobbies": 0
+            },
+            {
+              "name": "The Trellis",
+              "base": 12,
+              "top": 131,
+              "lobbies": 2
+            }
+          ],
+          "bridges": 2,
+          "mist": {
+            "base": 24,
+            "top": 48,
+            "layers": 6,
+            "wisps": 73,
+            "obstacles": 4,
+            "inside": 0
+          },
+          "lifts": 1,
+          "craft": 2,
+          "streaks": 4,
+          "dots": 2759,
+          "cities": 3,
+          "mountain": {
+            "h": 212,
+            "cloud": 122,
+            "tower": true
+          },
+          "bands": [
+            [
+              24,
+              48
+            ],
+            [
+              62,
+              72
+            ]
+          ],
+          "interiors": {
+            "buildings": [
+              {
+                "name": "Fern House",
+                "kind": "terrace",
+                "floors": 2,
+                "rooms": 2
+              },
+              {
+                "name": "The Green Shelf",
+                "kind": "villa",
+                "floors": 2,
+                "rooms": 2
+              },
+              {
+                "name": "Ridgeway",
+                "kind": "villa",
+                "floors": 2,
+                "rooms": 2
+              },
+              {
+                "name": "Kestrel House",
+                "kind": "terrace",
+                "floors": 2,
+                "rooms": 2
+              },
+              {
+                "name": "Canopy Tower",
+                "kind": "slab",
+                "floors": 8,
+                "rooms": 13
+              },
+              {
+                "name": "The Trellis",
+                "kind": "spire",
+                "floors": 11,
+                "rooms": 18
+              },
+              {
+                "name": "Lakeshore House",
+                "kind": "shore",
+                "floors": 2,
+                "rooms": 2
+              }
+            ],
+            "built": 1,
+            "builds": 1,
+            "tris": 7244,
+            "here": null
+          },
+          "monolith": true,
+          "shore": true,
+          "colliders": 265,
+          "meshes": 45,
+          "tris": 53230,
+          "planMs": 51,
+          "buildMs": 156
+        },
+        "fixtures": [
+          {
+            "name": "band-1-clear",
+            "x": -568.9815267700143,
+            "y": 38.59582210844454,
+            "z": 6.665594961540478,
+            "target": [
+              -481.61731656763493,
+              47.59582210844454,
+              225.07612046748872
+            ],
+            "band": 0,
+            "opacity": 0.006161000024545152,
+            "old": 0.85
+          },
+          {
+            "name": "band-1-cloud",
+            "x": -539.8601233692211,
+            "y": 53.81049742312879,
+            "z": 152.27261196550597,
+            "target": [
+              -481.61731656763493,
+              62.81049742312879,
+              225.07612046748872
+            ],
+            "band": 0,
+            "opacity": 0.2148521164694054,
+            "old": 0
+          },
+          {
+            "name": "band-2-clear",
+            "x": -452.49591316684183,
+            "y": 67.47030325055835,
+            "z": 6.665594961540478,
+            "target": [
+              -481.61731656763493,
+              76.47030325055835,
+              225.07612046748872
+            ],
+            "band": 1,
+            "opacity": 0.0032845825792306095,
+            "old": 0.849992745490882
+          },
+          {
+            "name": "band-2-cloud",
+            "x": -336.0102995636694,
+            "y": 69.32054544751318,
+            "z": 152.27261196550597,
+            "target": [
+              -481.61731656763493,
+              78.32054544751318,
+              225.07612046748872
+            ],
+            "band": 1,
+            "opacity": 0.85,
+            "old": 0.7330961700421947
+          },
+          {
+            "name": "overview",
+            "x": -71.00552861645218,
+            "y": 282.1309066609566,
+            "z": 583.2693822972439,
+            "target": [
+              -481.61731656763493,
+              73.45680217524631,
+              225.07612046748872
+            ],
+            "opacity": 0,
+            "old": 0
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      },
+      "checks": [
+        {
+          "name": "band-1-clear",
+          "fixture": {
+            "name": "band-1-clear",
+            "x": -568.9815267700143,
+            "y": 38.59582210844454,
+            "z": 6.665594961540478,
+            "target": [
+              -481.61731656763493,
+              47.59582210844454,
+              225.07612046748872
+            ],
+            "band": 0,
+            "opacity": 0.006161000024545152,
+            "old": 0.85
+          },
+          "before": {
+            "position": [
+              -568.9815267700143,
+              38.59582210844454,
+              6.665594961540478
+            ],
+            "opacity": 0.85,
+            "visible": true,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 70,
+              "calls": 198,
+              "triangles": 1488448,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-1-clear-before.png",
+            "imageSha256": "5f5d1949ac989a6af5f6e2333ab4a9207a1622c69c5dd73d0c0476f0a0cfa211",
+            "retained": true
+          },
+          "after": {
+            "position": [
+              -568.9815267700143,
+              38.59582210844454,
+              6.665594961540478
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 71,
+              "calls": 197,
+              "triangles": 1488446,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-1-clear-after.png",
+            "imageSha256": "55ab841eef935df862c21460d00ef090ac96769c39d25bfba7f47e650a54fd4f",
+            "retained": true
+          }
+        },
+        {
+          "name": "band-1-cloud",
+          "fixture": {
+            "name": "band-1-cloud",
+            "x": -539.8601233692211,
+            "y": 53.81049742312879,
+            "z": 152.27261196550597,
+            "target": [
+              -481.61731656763493,
+              62.81049742312879,
+              225.07612046748872
+            ],
+            "band": 0,
+            "opacity": 0.2148521164694054,
+            "old": 0
+          },
+          "before": {
+            "position": [
+              -539.8601233692211,
+              53.81049742312879,
+              152.27261196550597
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0.2148521164694054,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 72,
+              "calls": 196,
+              "triangles": 1490894,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-1-cloud-before.png",
+            "imageSha256": "e6e7c880a653fd5febaa191b2bb2941729e0a26fdfc8591652aae3f395d0ac26",
+            "retained": false
+          },
+          "after": {
+            "position": [
+              -539.8601233692211,
+              53.81049742312879,
+              152.27261196550597
+            ],
+            "opacity": 0.2148521164694054,
+            "visible": true,
+            "production": {
+              "opacity": 0.2148521164694054,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 73,
+              "calls": 197,
+              "triangles": 1490896,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-1-cloud-after.png",
+            "imageSha256": "d883562fc3f7796f5a143b6054a9179a570b902f831cc8047b8db0363da3f9e6",
+            "retained": false
+          }
+        },
+        {
+          "name": "band-2-clear",
+          "fixture": {
+            "name": "band-2-clear",
+            "x": -452.49591316684183,
+            "y": 67.47030325055835,
+            "z": 6.665594961540478,
+            "target": [
+              -481.61731656763493,
+              76.47030325055835,
+              225.07612046748872
+            ],
+            "band": 1,
+            "opacity": 0.0032845825792306095,
+            "old": 0.849992745490882
+          },
+          "before": {
+            "position": [
+              -452.49591316684183,
+              67.47030325055835,
+              6.665594961540478
+            ],
+            "opacity": 0.849992745490882,
+            "visible": true,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 74,
+              "calls": 190,
+              "triangles": 1480232,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-2-clear-before.png",
+            "imageSha256": "318cd84d287b1597e1e3a44d5099c1bb60d901809571a9c725ee73a95f979fcb",
+            "retained": false
+          },
+          "after": {
+            "position": [
+              -452.49591316684183,
+              67.47030325055835,
+              6.665594961540478
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 75,
+              "calls": 189,
+              "triangles": 1480230,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-2-clear-after.png",
+            "imageSha256": "c57aed9eb5dbf2bc0ddc80acb9fc31b54c04926d0fc0c0d1d7c91252fe3a3c7f",
+            "retained": false
+          }
+        },
+        {
+          "name": "band-2-cloud",
+          "fixture": {
+            "name": "band-2-cloud",
+            "x": -336.0102995636694,
+            "y": 69.32054544751318,
+            "z": 152.27261196550597,
+            "target": [
+              -481.61731656763493,
+              78.32054544751318,
+              225.07612046748872
+            ],
+            "band": 1,
+            "opacity": 0.85,
+            "old": 0.7330961700421947
+          },
+          "before": {
+            "position": [
+              -336.0102995636694,
+              69.32054544751318,
+              152.27261196550597
+            ],
+            "opacity": 0.7330961700421947,
+            "visible": true,
+            "production": {
+              "opacity": 0.85,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 76,
+              "calls": 179,
+              "triangles": 1447084,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-2-cloud-before.png",
+            "imageSha256": "c245ed6d3059c457f006237cf4891329f79ba9a41a7d18013fd65ed0674eff58",
+            "retained": true
+          },
+          "after": {
+            "position": [
+              -336.0102995636694,
+              69.32054544751318,
+              152.27261196550597
+            ],
+            "opacity": 0.85,
+            "visible": true,
+            "production": {
+              "opacity": 0.85,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 77,
+              "calls": 179,
+              "triangles": 1447084,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-band-2-cloud-after.png",
+            "imageSha256": "ad5246664d036e830cb96a4db33d56245880737eea663379209bde1b7d7cf54c",
+            "retained": true
+          }
+        },
+        {
+          "name": "overview",
+          "fixture": {
+            "name": "overview",
+            "x": -71.00552861645218,
+            "y": 282.1309066609566,
+            "z": 583.2693822972439,
+            "target": [
+              -481.61731656763493,
+              73.45680217524631,
+              225.07612046748872
+            ],
+            "opacity": 0,
+            "old": 0
+          },
+          "before": {
+            "position": [
+              -71.00552861645218,
+              282.1309066609566,
+              583.2693822972439
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 78,
+              "calls": 195,
+              "triangles": 1467714,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-overview-before.png",
+            "imageSha256": "8379470a6ba887e952cc1b26ace7155790ccba7485164beb56a246e6fabc4bfd",
+            "retained": false
+          },
+          "after": {
+            "position": [
+              -71.00552861645218,
+              282.1309066609566,
+              583.2693822972439
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 79,
+              "calls": 195,
+              "triangles": 1467714,
+              "points": 9388,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-terran-overview-after.png",
+            "imageSha256": "8379470a6ba887e952cc1b26ace7155790ccba7485164beb56a246e6fabc4bfd",
+            "retained": false
+          }
+        }
+      ]
+    },
+    {
+      "tier": "phone",
+      "biome": "GAS",
+      "meta": {
+        "plan": {
+          "base": 1,
+          "top": 23,
+          "cover": 0.34,
+          "bands": [
+            {
+              "base": 1,
+              "top": 23,
+              "cover": 0.34
+            },
+            {
+              "base": 37,
+              "top": 47,
+              "cover": 0.39
+            }
+          ],
+          "x": 562.9238795325113,
+          "z": -241.6173165676349,
+          "rad": 486.52542611512
+        },
+        "arch": {
+          "name": "Stratos Reach",
+          "centre": {
+            "x": 563,
+            "z": -242
+          },
+          "villas": [
+            {
+              "name": "Cloudbreak House",
+              "kind": "cantilever",
+              "y": 15,
+              "under": 18,
+              "stand": {
+                "x": 581.9,
+                "y": 15.33,
+                "z": -242.6
+              }
+            },
+            {
+              "name": "The Brink",
+              "kind": "cantilever",
+              "y": 20,
+              "under": 20,
+              "stand": {
+                "x": 558.5,
+                "y": 20,
+                "z": -198.8
+              }
+            },
+            {
+              "name": "Updraught",
+              "kind": "terraces",
+              "y": 36,
+              "under": 27,
+              "stand": {
+                "x": 738.6,
+                "y": 22.37,
+                "z": -237.4
+              }
+            },
+            {
+              "name": "High Shelf",
+              "kind": "cantilever",
+              "y": 37,
+              "under": 26,
+              "stand": {
+                "x": 722,
+                "y": 37.36,
+                "z": -331.9
+              }
+            }
+          ],
+          "towers": [
+            {
+              "name": "Zenith Tower",
+              "base": -34,
+              "top": 140,
+              "lobbies": 0
+            },
+            {
+              "name": "Stratos One",
+              "base": -35,
+              "top": 104,
+              "lobbies": 0
+            },
+            {
+              "name": "The Column",
+              "base": -29,
+              "top": 115,
+              "lobbies": 0
+            }
+          ],
+          "bridges": 0,
+          "mist": {
+            "base": 1,
+            "top": 23,
+            "layers": 6,
+            "wisps": 103,
+            "obstacles": 12,
+            "inside": 0.25
+          },
+          "lifts": 1,
+          "craft": 2,
+          "streaks": 16,
+          "dots": 83,
+          "cities": 3,
+          "mountain": null,
+          "bands": [
+            [
+              1,
+              23
+            ],
+            [
+              37,
+              47
+            ]
+          ],
+          "interiors": {
+            "buildings": [
+              {
+                "name": "Cloudbreak House",
+                "kind": "villa",
+                "floors": 2,
+                "rooms": 2
+              },
+              {
+                "name": "The Brink",
+                "kind": "villa",
+                "floors": 2,
+                "rooms": 2
+              },
+              {
+                "name": "Updraught",
+                "kind": "terrace",
+                "floors": 4,
+                "rooms": 4
+              },
+              {
+                "name": "High Shelf",
+                "kind": "villa",
+                "floors": 2,
+                "rooms": 2
+              },
+              {
+                "name": "Zenith Tower",
+                "kind": "slab",
+                "floors": 14,
+                "rooms": 25
+              },
+              {
+                "name": "Stratos One",
+                "kind": "slab",
+                "floors": 10,
+                "rooms": 16
+              },
+              {
+                "name": "The Column",
+                "kind": "spire",
+                "floors": 11,
+                "rooms": 16
+              },
+              {
+                "name": "Rim House",
+                "kind": "shore",
+                "floors": 2,
+                "rooms": 2
+              }
+            ],
+            "built": 1,
+            "builds": 1,
+            "tris": 1948,
+            "here": null
+          },
+          "monolith": true,
+          "shore": true,
+          "colliders": 235,
+          "meshes": 45,
+          "tris": 44572,
+          "planMs": 28,
+          "buildMs": 97
+        },
+        "fixtures": [
+          {
+            "name": "band-1-clear",
+            "x": 579.1413937363486,
+            "y": 22.54587088283721,
+            "z": -128.09471714077358,
+            "target": [
+              562.9238795325113,
+              31.54587088283721,
+              -241.6173165676349
+            ],
+            "band": 0,
+            "opacity": 0.007001043122246614,
+            "old": 0.33854189642471294
+          },
+          {
+            "name": "band-1-cloud",
+            "x": 562.9238795325113,
+            "y": 12.887957475992392,
+            "z": -533.532572236707,
+            "target": [
+              562.9238795325113,
+              21.887957475992394,
+              -241.6173165676349
+            ],
+            "band": 0,
+            "opacity": 0.85,
+            "old": 0.7373930854038753
+          },
+          {
+            "name": "band-2-clear",
+            "x": 644.0114505516979,
+            "y": 42.00386089614595,
+            "z": -47.007146121586885,
+            "target": [
+              562.9238795325113,
+              51.00386089614595,
+              -241.6173165676349
+            ],
+            "band": 1,
+            "opacity": 0.0039419334962928106,
+            "old": 0.849999406259474
+          },
+          {
+            "name": "band-2-cloud",
+            "x": 335.87868067878856,
+            "y": 40.94276191813399,
+            "z": -403.79245860600827,
+            "target": [
+              562.9238795325113,
+              49.94276191813399,
+              -241.6173165676349
+            ],
+            "band": 1,
+            "opacity": 0.85,
+            "old": 0.25193027853583116
+          },
+          {
+            "name": "overview",
+            "x": 1020.257780080724,
+            "y": 280.5322045352576,
+            "z": 157.33353284676346,
+            "target": [
+              562.9238795325113,
+              48,
+              -241.6173165676349
+            ],
+            "opacity": 0,
+            "old": 0
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      },
+      "checks": [
+        {
+          "name": "band-1-clear",
+          "fixture": {
+            "name": "band-1-clear",
+            "x": 579.1413937363486,
+            "y": 22.54587088283721,
+            "z": -128.09471714077358,
+            "target": [
+              562.9238795325113,
+              31.54587088283721,
+              -241.6173165676349
+            ],
+            "band": 0,
+            "opacity": 0.007001043122246614,
+            "old": 0.33854189642471294
+          },
+          "before": {
+            "position": [
+              579.1413937363486,
+              22.54587088283721,
+              -128.09471714077358
+            ],
+            "opacity": 0.33854189642471294,
+            "visible": true,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 149,
+              "calls": 118,
+              "triangles": 855590,
+              "points": 6712,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-1-clear-before.png",
+            "imageSha256": "42026c43810c72a5bd14d8e7740f4aa8f6f25e51a4a52b05c7ff7b9d17572ef9",
+            "retained": false
+          },
+          "after": {
+            "position": [
+              579.1413937363486,
+              22.54587088283721,
+              -128.09471714077358
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 150,
+              "calls": 125,
+              "triangles": 867752,
+              "points": 6712,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-1-clear-after.png",
+            "imageSha256": "25857da0483f867b329cf35b0de243a1a2bb168de72c25efa5b737540cb8b763",
+            "retained": false
+          }
+        },
+        {
+          "name": "band-1-cloud",
+          "fixture": {
+            "name": "band-1-cloud",
+            "x": 562.9238795325113,
+            "y": 12.887957475992392,
+            "z": -533.532572236707,
+            "target": [
+              562.9238795325113,
+              21.887957475992394,
+              -241.6173165676349
+            ],
+            "band": 0,
+            "opacity": 0.85,
+            "old": 0.7373930854038753
+          },
+          "before": {
+            "position": [
+              562.9238795325113,
+              12.887957475992392,
+              -533.532572236707
+            ],
+            "opacity": 0.7373930854038753,
+            "visible": true,
+            "production": {
+              "opacity": 0.85,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 151,
+              "calls": 143,
+              "triangles": 876642,
+              "points": 6872,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-1-cloud-before.png",
+            "imageSha256": "b4d87de6def07718f299597196d6c3ec9f1a67949937b00b7916cf4559ee36c1",
+            "retained": true
+          },
+          "after": {
+            "position": [
+              562.9238795325113,
+              12.887957475992392,
+              -533.532572236707
+            ],
+            "opacity": 0.85,
+            "visible": true,
+            "production": {
+              "opacity": 0.85,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 152,
+              "calls": 143,
+              "triangles": 876642,
+              "points": 6872,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-1-cloud-after.png",
+            "imageSha256": "9c30276245ffc14c072925b4993b00159872d71c1c56ea768781d8b611f680b2",
+            "retained": true
+          }
+        },
+        {
+          "name": "band-2-clear",
+          "fixture": {
+            "name": "band-2-clear",
+            "x": 644.0114505516979,
+            "y": 42.00386089614595,
+            "z": -47.007146121586885,
+            "target": [
+              562.9238795325113,
+              51.00386089614595,
+              -241.6173165676349
+            ],
+            "band": 1,
+            "opacity": 0.0039419334962928106,
+            "old": 0.849999406259474
+          },
+          "before": {
+            "position": [
+              644.0114505516979,
+              42.00386089614595,
+              -47.007146121586885
+            ],
+            "opacity": 0.849999406259474,
+            "visible": true,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 153,
+              "calls": 123,
+              "triangles": 859086,
+              "points": 6712,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-2-clear-before.png",
+            "imageSha256": "35d3ddd5975126ca6a919d04c6a5f45ca18439e916fa2b943b8635f4b651d3fc",
+            "retained": true
+          },
+          "after": {
+            "position": [
+              644.0114505516979,
+              42.00386089614595,
+              -47.007146121586885
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 154,
+              "calls": 122,
+              "triangles": 859084,
+              "points": 6712,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-2-clear-after.png",
+            "imageSha256": "07a226378d07c0ee07063481832f58af749bcbdf9e010dd1cf392e267c477185",
+            "retained": true
+          }
+        },
+        {
+          "name": "band-2-cloud",
+          "fixture": {
+            "name": "band-2-cloud",
+            "x": 335.87868067878856,
+            "y": 40.94276191813399,
+            "z": -403.79245860600827,
+            "target": [
+              562.9238795325113,
+              49.94276191813399,
+              -241.6173165676349
+            ],
+            "band": 1,
+            "opacity": 0.85,
+            "old": 0.25193027853583116
+          },
+          "before": {
+            "position": [
+              335.87868067878856,
+              40.94276191813399,
+              -403.79245860600827
+            ],
+            "opacity": 0.25193027853583116,
+            "visible": true,
+            "production": {
+              "opacity": 0.85,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 155,
+              "calls": 124,
+              "triangles": 858600,
+              "points": 6872,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-2-cloud-before.png",
+            "imageSha256": "3fa8f2daa4d7f4cba3cafe2f4393eab168353044fc30b6a39cf682a74b8b9ec1",
+            "retained": false
+          },
+          "after": {
+            "position": [
+              335.87868067878856,
+              40.94276191813399,
+              -403.79245860600827
+            ],
+            "opacity": 0.85,
+            "visible": true,
+            "production": {
+              "opacity": 0.85,
+              "visible": true
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 156,
+              "calls": 124,
+              "triangles": 858600,
+              "points": 6872,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-band-2-cloud-after.png",
+            "imageSha256": "ee3e9c0ddcfcfe6ea2cf980618affe66a3419c750c8a3b40ac11845fba563eb1",
+            "retained": false
+          }
+        },
+        {
+          "name": "overview",
+          "fixture": {
+            "name": "overview",
+            "x": 1020.257780080724,
+            "y": 280.5322045352576,
+            "z": 157.33353284676346,
+            "target": [
+              562.9238795325113,
+              48,
+              -241.6173165676349
+            ],
+            "opacity": 0,
+            "old": 0
+          },
+          "before": {
+            "position": [
+              1020.257780080724,
+              280.5322045352576,
+              157.33353284676346
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 157,
+              "calls": 115,
+              "triangles": 853500,
+              "points": 6712,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-overview-before.png",
+            "imageSha256": "b1a5eb95554ea2e4d39980754889bb64e7a6e22114acd8793825dad3a472a9ce",
+            "retained": false
+          },
+          "after": {
+            "position": [
+              1020.257780080724,
+              280.5322045352576,
+              157.33353284676346
+            ],
+            "opacity": 0,
+            "visible": false,
+            "production": {
+              "opacity": 0,
+              "visible": false
+            },
+            "mesh": {
+              "meshes": 3,
+              "vertices": 5774,
+              "layers": 6,
+              "segments": 30,
+              "deckVertices": 5766
+            },
+            "draw": {
+              "frame": 158,
+              "calls": 115,
+              "triangles": 853500,
+              "points": 6712,
+              "lines": 132
+            },
+            "lost": false,
+            "glError": 0,
+            "shaderErrors": 0,
+            "lit": true,
+            "image": "phone-gas-overview-after.png",
+            "imageSha256": "b1a5eb95554ea2e4d39980754889bb64e7a6e22114acd8793825dad3a472a9ce",
+            "retained": false
+          }
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "requests": [],
+  "passed": true
+}

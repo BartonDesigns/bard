@@ -1,0 +1,924 @@
+{
+  "generated": "2026-10-10T19:05:25.569Z",
+  "source": "Production createViewmodel/createHand using real MakeHuman rig",
+  "records": [
+    {
+      "device": "desktop",
+      "id": "aurora-trail-rifle",
+      "pose": "pickup",
+      "info": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Pathfinder",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.979,
+        "upDotUp": 0.998,
+        "sight": [
+          0.206,
+          -0.088,
+          -0.338
+        ],
+        "grip": [
+          0.18,
+          -0.283,
+          -0.41
+        ],
+        "tris": 23912,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 1,
+          "active": true,
+          "aiming": false,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      },
+      "settled": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Pathfinder",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.979,
+        "upDotUp": 0.998,
+        "sight": [
+          0.206,
+          -0.05,
+          -0.378
+        ],
+        "grip": [
+          0.18,
+          -0.245,
+          -0.45
+        ],
+        "tris": 23912,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 2,
+          "active": true,
+          "aiming": false,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "device": "desktop",
+      "id": "mossback-scout-rifle",
+      "pose": "pickup",
+      "info": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Outrider",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.984,
+        "upDotUp": 0.999,
+        "sight": [
+          0.14,
+          -0.085,
+          -0.635
+        ],
+        "grip": [
+          0.17,
+          -0.276,
+          -0.42
+        ],
+        "tris": 16480,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 3,
+          "active": true,
+          "aiming": false,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      },
+      "settled": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Outrider",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.984,
+        "upDotUp": 0.999,
+        "sight": [
+          0.14,
+          -0.044,
+          -0.674
+        ],
+        "grip": [
+          0.17,
+          -0.235,
+          -0.46
+        ],
+        "tris": 16480,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 4,
+          "active": true,
+          "aiming": false,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "device": "desktop",
+      "id": "warden-spark-carbine",
+      "pose": "pickup",
+      "info": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 2,
+          "name": "Sentinel",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.973,
+        "upDotUp": 0.997,
+        "sight": [
+          0.186,
+          -0.062,
+          -0.426
+        ],
+        "grip": [
+          0.18,
+          -0.268,
+          -0.39
+        ],
+        "tris": 15368,
+        "armTris": 7724,
+        "calls": 6,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 5,
+          "active": true,
+          "aiming": false,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      },
+      "settled": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 2,
+          "name": "Sentinel",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.973,
+        "upDotUp": 0.997,
+        "sight": [
+          0.186,
+          -0.024,
+          -0.466
+        ],
+        "grip": [
+          0.18,
+          -0.23,
+          -0.43
+        ],
+        "tris": 15368,
+        "armTris": 7724,
+        "calls": 6,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 6,
+          "active": true,
+          "aiming": false,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "device": "desktop",
+      "id": "reedline-hunting-bow",
+      "pose": "pickup",
+      "info": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 2,
+          "name": "Windrunner",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 1,
+        "upDotUp": 0.987,
+        "sight": null,
+        "grip": [
+          -0.11,
+          -0.221,
+          -0.86
+        ],
+        "tris": 3896,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": 0,
+          "drawMeters": 0,
+          "loaded": true,
+          "nock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.17,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.8190625018674646e-13,
+          "stringTipErrorMm": 1.925777466157674e-13,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 6,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      },
+      "settled": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 2,
+          "name": "Windrunner",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 1,
+        "upDotUp": 0.987,
+        "sight": null,
+        "grip": [
+          -0.11,
+          -0.181,
+          -0.9
+        ],
+        "tris": 3896,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": 0,
+          "drawMeters": 0,
+          "loaded": true,
+          "nock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.17,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.8190625018674646e-13,
+          "stringTipErrorMm": 1.925777466157674e-13,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 6,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 384,
+            "rear": 128
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      }
+    },
+    {
+      "device": "phone",
+      "id": "aurora-trail-rifle",
+      "pose": "pickup",
+      "info": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Pathfinder",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.979,
+        "upDotUp": 0.998,
+        "sight": [
+          0.206,
+          -0.088,
+          -0.338
+        ],
+        "grip": [
+          0.18,
+          -0.283,
+          -0.41
+        ],
+        "tris": 23912,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 1,
+          "active": true,
+          "aiming": false,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      },
+      "settled": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Pathfinder",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.979,
+        "upDotUp": 0.998,
+        "sight": [
+          0.206,
+          -0.05,
+          -0.378
+        ],
+        "grip": [
+          0.18,
+          -0.245,
+          -0.45
+        ],
+        "tris": 23912,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 2,
+          "active": true,
+          "aiming": false,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "device": "phone",
+      "id": "mossback-scout-rifle",
+      "pose": "pickup",
+      "info": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Outrider",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.984,
+        "upDotUp": 0.999,
+        "sight": [
+          0.14,
+          -0.085,
+          -0.635
+        ],
+        "grip": [
+          0.17,
+          -0.276,
+          -0.42
+        ],
+        "tris": 16480,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 3,
+          "active": true,
+          "aiming": false,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      },
+      "settled": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 2,
+          "name": "Outrider",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.984,
+        "upDotUp": 0.999,
+        "sight": [
+          0.14,
+          -0.044,
+          -0.674
+        ],
+        "grip": [
+          0.17,
+          -0.235,
+          -0.46
+        ],
+        "tris": 16480,
+        "armTris": 7724,
+        "calls": 8,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 4,
+          "active": true,
+          "aiming": false,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "device": "phone",
+      "id": "warden-spark-carbine",
+      "pose": "pickup",
+      "info": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 2,
+          "name": "Sentinel",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.973,
+        "upDotUp": 0.997,
+        "sight": [
+          0.186,
+          -0.062,
+          -0.426
+        ],
+        "grip": [
+          0.18,
+          -0.268,
+          -0.39
+        ],
+        "tris": 15368,
+        "armTris": 7724,
+        "calls": 6,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 5,
+          "active": true,
+          "aiming": false,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      },
+      "settled": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 2,
+          "name": "Sentinel",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.973,
+        "upDotUp": 0.997,
+        "sight": [
+          0.186,
+          -0.024,
+          -0.466
+        ],
+        "grip": [
+          0.18,
+          -0.23,
+          -0.43
+        ],
+        "tris": 15368,
+        "armTris": 7724,
+        "calls": 6,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 6,
+          "active": true,
+          "aiming": false,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "device": "phone",
+      "id": "reedline-hunting-bow",
+      "pose": "pickup",
+      "info": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 2,
+          "name": "Windrunner",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 1,
+        "upDotUp": 0.987,
+        "sight": null,
+        "grip": [
+          -0.11,
+          -0.221,
+          -0.86
+        ],
+        "tris": 3896,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 283.7,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": 0,
+          "drawMeters": 0,
+          "loaded": true,
+          "nock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.17,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.8190625018674646e-13,
+          "stringTipErrorMm": 1.925777466157674e-13,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 6,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      },
+      "settled": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 2,
+          "name": "Windrunner",
+          "mark": 3
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 1,
+        "upDotUp": 0.987,
+        "sight": null,
+        "grip": [
+          -0.11,
+          -0.181,
+          -0.9
+        ],
+        "tris": 3896,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": 0,
+          "drawMeters": 0,
+          "loaded": true,
+          "nock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.17,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.8190625018674646e-13,
+          "stringTipErrorMm": 1.925777466157674e-13,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 6,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      }
+    }
+  ],
+  "fits": [],
+  "errors": []
+}

@@ -2,6 +2,7 @@
 // and roosting wildlife. No alternate scene, renderer, audio context, or timer.
 import * as THREE from 'three';
 import { mulberry32, clamp } from '../noise.js';
+import { ring, phrase, createRipples } from './resonance.js';
 
 export function createCaveElements({ plan, group, shared = {}, profile = {}, seed = 0, bodyKey, camera, floor, isPhone = false, hint, storage, onStrike } = {}) {
 	const root = new THREE.Group();
@@ -56,7 +57,7 @@ export function createCaveElements({ plan, group, shared = {}, profile = {}, see
 		}
 		if (!spot) continue;
 		const id = `${index}:${Math.round(c.x)}:${Math.round(c.z)}`;
-		const site = { id, name: `${variant} chorus`, ...spot, mask: Number.isInteger(saved[id]) ? saved[id] & 7 : 0, stones: [], beacons: [], light: null, flash: 0, lastStrike: -1, announced: false };
+		const site = { id, name: `${variant} chorus`, ...spot, mask: Number.isInteger(saved[id]) ? saved[id] & 7 : 0, stones: [], beacons: [], light: null, flash: 0, lastStrike: -1, lastAt: 0, announced: false, reveal: 1, burst: 0 };
 		const mat = ownMat(new THREE.MeshStandardMaterial({ color: new THREE.Color(...(cw.rock || [0.3, 0.28, 0.26])), roughness: cw.ice > 0.6 ? 0.25 : 0.8, emissive: color, emissiveIntensity: 0.1 }));
 		for (let i = 0; i < 3; i++) {
 			const x = spot.x + (i - 1) * 0.95, z = spot.z;
@@ -67,10 +68,11 @@ export function createCaveElements({ plan, group, shared = {}, profile = {}, see
 			stone.position.set(x, y + h / 2, z); stone.scale.y = h;
 			stone.userData.material175 = cw.ice > 0.6 || cw.crystals > 0.5 ? 'crystal' : 'stone';
 			stone.userData.caveResonator = { siteId: id, note: i, name: site.name };
-			stone.userData.onCaveStrike = hit => strike(hit);
+			// (the faceplate has already played this note: Play surfaces mode)
+			stone.userData.onCaveStrike = hit => strike(hit, { sounded: true });
 			const ringMat = ownMat(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25 }));
 			const ring = new THREE.Mesh(ringGeo, ringMat); ring.rotation.x = Math.PI / 2; ring.position.set(x, y + h + 0.06, z);
-			root.add(stone, ring); site.stones.push({ stone, ring, y: ring.position.y });
+			root.add(stone, ring); site.stones.push({ stone, ring, y: ring.position.y, h, ping: 0 });
 		}
 		if (site.stones.length !== 3) { for (const s of site.stones) { root.remove(s.stone, s.ring); } continue; }
 		// Completed choruses light their alcove and mark its approach. Beads are emissive,
@@ -86,10 +88,19 @@ export function createCaveElements({ plan, group, shared = {}, profile = {}, see
 		sites.push(site); pickables.push(...site.stones.map(s => s.stone));
 	}
 	const light = new THREE.PointLight(color, 0, 16, 1.5); root.add(light);
-	function strike(hit) {
+	const ripples = createRipples(root, 4), DEG = [0, 2, 4], wp = new THREE.Vector3();
+	function strike(hit, opts = {}) {
 		if (disposed || !hit?.object || !pickables.includes(hit.object)) return false;
 		const data = hit.object.userData.caveResonator, site = sites.find(s => s.id === data.siteId);
-		if (!site || (camera && camera.position.distanceTo(hit.object.position) > 10)) return false;
+		if (!site || (camera && camera.position.distanceTo(hit.object.getWorldPosition(wp)) > 10)) return false;
+		// the same strike may arrive twice (the prompt and Play surfaces): one note
+		const now = performance.now();
+		if (site.lastStrike === data.note && now - site.lastAt < 180) return true;
+		site.lastStrike = data.note; site.lastAt = now;
+		const o = site.stones[data.note];
+		if (!opts.sounded) ring(DEG[data.note] + (cw.ice > 0.6 ? 7 : 0), { vel: 0.6, dur: 2.2 });
+		o.ping = 1;
+		ripples.spawn(wp.set(o.stone.position.x, o.stone.position.y - o.h / 2 + 0.06, o.stone.position.z), color, 5);
 		// A held pointer can strike frequently; every note still plays in touchmusic,
 		// while progress, hints and storage writes happen only on a newly tuned stone.
 		site.flash = 1;
@@ -97,10 +108,27 @@ export function createCaveElements({ plan, group, shared = {}, profile = {}, see
 		if (!(site.mask & bit)) {
 			site.mask |= bit;
 			const persisted = save();
-			hint?.(site.mask === 7 ? `${site.name} restored. Its approach now glows.${persisted ? '' : ' ' + saveError}` : `${site.name}: ${[1, 2, 4].filter(b => site.mask & b).length}/3 stones tuned. Play the other stones.`, 5000);
+			if (site.mask === 7) {
+				// the alcove answers: the chord rises, the light runs out along the approach
+				site.reveal = 0; site.burst = 1;
+				setTimeout(() => !disposed && phrase([0, 2, 4, 7], 0.18, { vel: 0.5, dur: 2.6 }), 420);
+				ripples.spawn(wp.set(site.x, site.y + 0.06, site.z), color, 14, 2.4);
+			}
+			hint?.(site.mask === 7 ? `${site.name} restored. Its guiding lights wake along the way in.${persisted ? '' : ' ' + saveError}` : `${site.name}: ${[1, 2, 4].filter(b => site.mask & b).length}/3 stones tuned. Strike the others.`, 5000);
 			onStrike?.({ siteId: site.id, complete: site.mask === 7, persistent: persisted, tuned: site.mask });
 		}
 		return true;
+	}
+	// for the strike prompt (resonance.js): every stone, where it stands in the world
+	function targets() {
+		if (disposed || !root.visible || !group.visible) return [];
+		const out = [];
+		for (const s of sites) for (const o of s.stones) {
+			const pos = o.stone.getWorldPosition(new THREE.Vector3());
+			if (camera && camera.position.distanceToSquared(pos) > 100) continue;
+			out.push({ pos, r: 0.5 + o.h * 0.3, mesh: o.stone, color, label: 'Strike the stone', icon: '🔔', act: point => strike({ object: o.stone, point }) });
+		}
+		return out;
 	}
 	// Three instanced draws for a whole colony, with rigid wing hinges and bounded
 	// orbital paths. Never generate wildlife in hot lava chambers or frozen worlds.
@@ -136,15 +164,22 @@ export function createCaveElements({ plan, group, shared = {}, profile = {}, see
 			s.flash *= Math.exp(-dt * 3);
 			for (const [i, o] of s.stones.entries()) {
 				const tuned = !!(s.mask & (1 << i));
-				o.ring.material.opacity = tuned ? 0.7 + band * 0.3 : 0.18 + s.flash * 0.6;
-				o.ring.position.y = o.y + Math.sin(clock * 2 + i) * (0.012 + band * 0.07 + s.flash * 0.08);
-			}
-			for (const bead of s.beacons) bead.material.opacity = s.mask === 7 ? 0.75 + band * 0.25 : 0.06;
-			if (distance < 64 && !s.announced && s.mask !== 7) { s.announced = true; hint?.(`${s.name}: tap each of the three banded stones to light this alcove.`, 5500); }
+				o.ping *= Math.exp(-dt * 2.5);
+				o.ring.material.opacity = Math.min(1, (tuned ? 0.7 + band * 0.3 : 0.18 + s.flash * 0.6) + o.ping * 0.5);
+				o.ring.position.y = o.y + Math.sin(clock * 2 + i) * (0.012 + band * 0.07 + s.flash * 0.08) + o.ping * 0.25;
+				o.ring.scale.setScalar(1 + o.ping * 0.8);
+							}
+			// (one stone material per alcove)
+			if (s.stones[0]) s.stones[0].stone.material.emissiveIntensity = 0.1 + (s.mask === 7 ? 0.35 : 0) + s.flash * 0.6;
+			// once restored, the beads wake one after another from the stones outward
+			if (s.reveal < 1) s.reveal = Math.min(1, s.reveal + dt / 1.6);
+			s.burst *= Math.exp(-dt * 1.2);
+			for (const [j, bead] of s.beacons.entries()) bead.material.opacity = s.mask === 7 ? (s.reveal >= j / Math.max(1, s.beacons.length) ? 0.75 + band * 0.25 + s.burst * 0.25 : 0.06) : 0.06;
+			if (distance < 64 && !s.announced && s.mask !== 7) { s.announced = true; hint?.(`${s.name}: strike each of the three banded stones to light this alcove (look at one: E, or tap it).`, 5500); }
 			if (distance > 225) s.announced = false;
 			if ((s.mask === 7 || s.flash > 0.05) && distance < best) { best = distance; closest = s; }
 		}
-		light.intensity = closest && best < 1600 ? (closest.mask === 7 ? 3.2 : closest.flash * 2) * (1 + band * 0.15) : 0;
+		light.intensity = closest && best < 1600 ? (closest.mask === 7 ? 3.2 + closest.burst * 9 : closest.flash * 2) * (1 + band * 0.15) : 0;
 		if (closest) light.position.set(closest.x, closest.y + 2.2, closest.z);
 		for (const [i, b] of bats.entries()) {
 			const cycle = (clock + b.cycle) % 28, flying = cycle > 9;
@@ -162,15 +197,16 @@ export function createCaveElements({ plan, group, shared = {}, profile = {}, see
 			}
 		}
 		for (const mesh of [bodies, left, right]) mesh.instanceMatrix.needsUpdate = true;
+		ripples.update(dt);
 	}
 	function dispose() {
 		if (disposed) return;
-		disposed = true; group.remove(root); pickables.length = 0;
+		disposed = true; ripples.dispose(); group.remove(root); pickables.length = 0;
 		for (const geo of geometries) geo.dispose();
 		for (const mat of materials) mat.dispose();
 		for (const mesh of [bodies, left, right]) mesh.dispose();
 		root.clear();
 	}
 	update(0, 0);
-	return { root, pickables, strike, update, dispose, stats: () => ({ sites: sites.length, stones: pickables.length, bats: bats.length, completed: sites.filter(s => s.mask === 7).length, saveError, disposed }) };
+	return { root, pickables, strike, targets, update, dispose, stats: () => ({ sites: sites.length, stones: pickables.length, bats: bats.length, completed: sites.filter(s => s.mask === 7).length, saveError, disposed }) };
 }

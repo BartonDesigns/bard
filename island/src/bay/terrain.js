@@ -758,11 +758,12 @@ export function createBayArea(shared, scene, island, BU) {
 						c = mix(c, duff * (1.0 - 0.3 * duffK), duffK);
 					}
 					// sand at the water's edge, mud and sand under water
-					float beach = (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
+					float freshBank = clamp(wcAt(vBW).y, 0.0, 1.0);
+					float beach = (1.0 - freshBank) * (1.0 - smoothstep(1.2, 5.0, h)) * (1.0 - smoothstep(0.08, 0.25, slope)) * step(-0.5, h);
 					c = mix(c, vec3(0.8, 0.74, 0.6), beach);
 					c = mix(c, vec3(0.4, 0.38, 0.31), smoothstep(0.3, -1.5, h));
 					// the sand the waves wet: darker, and glossy with the film they leave
-					float wetS = (1.0 - smoothstep(0.1, 0.8, h + (vn(vBW * 0.05) - 0.5) * 0.3)) * step(-0.5, h) * (1.0 - smoothstep(0.08, 0.25, slope));
+					float wetS = (1.0 - freshBank) * (1.0 - smoothstep(0.1, 0.8, h + (vn(vBW * 0.05) - 0.5) * 0.3)) * step(-0.5, h) * (1.0 - smoothstep(0.08, 0.25, slope));
 					c *= 1.0 - wetS * 0.22;
 					// the coast's cliffs, coves, lip, links and farms
 					if (uCsRow.w > 0.5 && csD < 5000.0) c = coastSide(c, vBW, h, slope, csD, smoothstep(0.03, 0.08, T.r), dist, n2, n3);

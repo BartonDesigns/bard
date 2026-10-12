@@ -1,3 +1,4 @@
+import {pauseWorkplaceRoutine} from './workplace-routine.js';
 // Crysis people in the world. A pool of real bodies (MakeHuman, see body.js) lives
 // round the player and is handed out to whoever is near: people walking the city's
 // sidewalks round their blocks and crossing at the corners, joggers, pairs stopped to
@@ -8,16 +9,18 @@
 // nothing stutters, and each is re-dressed and re-cast when it is handed to someone new.
 
 import * as THREE from 'three';
+import {workActor,disposeWorkplaceProps} from './workplace-life.js';
 import { loadPeopleAssets, buildPerson, personDNA, rng } from './body.js';
 import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
-import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE } from './flow.js';
+import { crowd, zoneOf, ZONE, kidsAbout, KID_SHARE, isWeekend } from './flow.js';
 import { fadePerson } from './fade.js';
 import { regionalNow } from '../region/here.js';
 import { regionalDress } from '../region/dress.js';
 import { ancestryFor } from '../region/cultures.js';
 import { coldOf } from '../region/climate.js';
+import { makeTeen, teensAbout, teenStyle, UNIFORM_CULTURES } from './teens.js';
 
 const MAX = 26, KIDS = 12, NEAR = 70;
 const steps = [];
@@ -53,7 +56,7 @@ export function createPeople(scene, world, camera = null) {
 		return frustum.intersectsSphere(sphere);
 	};
 	const hiddenSpot = (x, z, cam) => { const d = Math.hypot(x - cam.x, z - cam.z); return d > 75 || !seen(x, ground(x, z), z, d); };
-	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined)); return M; };
+	const motionFor = (P) => { let M = null; M = createMotion(P, (x, z) => ground(x, z, M ? M.S.pos.y : undefined), {constrain:pos=>P.workConstrain?.(pos)}); return M; };
 
 	async function ensure() {
 		if (A || failed) return;
@@ -104,7 +107,7 @@ export function createPeople(scene, world, camera = null) {
 		// (the museum, a shop, restaurant or office you are in or at, a tower's floor)
 		let V = null, vz = null;
 		for (const [src, z] of [[W.towers, 'office'], [W.commercial, null], [W.discovery, null], [W.boardwalk, 'boardwalk']]) { V = src?.venue?.(cam, hours); if (V) { vz = z; break; } }
-		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 }, zone: vz || zoneOf(W.bayArea?.urbanAt(cam.x, cam.z)), sit: true };
+		if (V) return { n: V.n, kids: V.kids, venue: V, island: false, C: { jog: 0, chat: 0.12, wait: 0.2 }, zone: V.zone || vz || zoneOf(W.bayArea?.urbanAt(cam.x, cam.z)), sit: true };
 		const U = W.bayArea?.urbanAt(cam.x, cam.z);
 		// out on the trails: a few hikers by day
 		const real = W.real;
@@ -173,6 +176,7 @@ export function createPeople(scene, world, camera = null) {
 		const C = mood || { jog: 0.12, chat: 0.14, wait: 0.12 };
 		const x = r();
 		p.role = island ? (x < 0.25 ? 'chat' : x < 0.35 ? 'wait' : 'walk') : x < C.jog ? 'jog' : x < C.jog + C.chat ? 'chat' : x < C.jog + C.chat + C.wait ? 'wait' : 'walk';
+		disposeWorkplaceProps(p); p.workContext=null;p.workSpot=null;p.awarenessEvents=[];
 		p.talking = false; p.partner = null; p.timer = 5 + r() * 20;
 		// if children come along: how many, and whether a second grown-up does too
 		p.kids = 0; p.spouse = null; p.fam = null; p.famWant = r() < 0.45 ? 1 : r() < 0.75 ? 2 : 3; p.spouseWant = r() < 0.45;
@@ -187,10 +191,12 @@ export function createPeople(scene, world, camera = null) {
 			// a seat, or a place to stand (behind the counter, at the bar), free and in sight
 			const seated = venue.areas.filter((q) => q.seats);
 			if (seated.length) {
-				const free = seated.flatMap((q) => q.seats.filter((st) => !st.taken && Math.hypot(st.x - cam.x, st.z - cam.z) < NEAR && Math.hypot(st.x - cam.x, st.z - cam.z) > 1.2 && !seen(st.x, st.y, st.z)));
+				const free = seated.flatMap((q) => q.seats.filter((st) => !st.taken && !st.work?.routineOnly && Math.hypot(st.x - cam.x, st.z - cam.z) < NEAR && Math.hypot(st.x - cam.x, st.z - cam.z) > 1.2 && !seen(st.x, st.y, st.z)));
 				if (!free.length) return false;
-				const st = free[Math.floor(r() * free.length)];
-				st.taken = true;
+				// Fill the other half of a scene before opening another desk or shop.
+				const paired=free.filter(st=>st.work && pool.some(a=>a.active && a.workSpot?.work?.group===st.work.group));
+				const choices=paired.length?paired:free; const st=choices[Math.floor(r()*choices.length)];
+				st.taken = true; p.workSpot=st;p.workContext=st.work ? {...st.work,activity:st.work.role} : null;
 				p.route = { kind: 'seat', seat: st, seats: seated.flatMap((q) => q.seats) };
 				p.role = 'wait'; p.timer = 1e9;
 				M.place(st.x, st.y, st.z, st.heading);
@@ -250,7 +256,7 @@ export function createPeople(scene, world, camera = null) {
 	// a family: a child joins a grown-up already about (one already with children who want
 	// another, or a new one), at their side holding hands if small, the third running on
 	// ahead; or sits with them at their table. A second grown-up can join them too.
-	const headOk = (o, cam) => o.active && !o.leaving && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z) && !o.P.dna.child && !o.engaged && !o.fam && o.role !== 'jog' && o.M.S.pos.distanceTo(cam) < NEAR && (o.route?.kind !== 'seat' || !!seatNear(o.route));
+	const headOk = (o, cam) => o.active && !o.leaving && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z) && !o.P.dna.child && !o.P.dna.minor && !o.engaged && !o.fam && o.role !== 'jog' && o.M.S.pos.distanceTo(cam) < NEAR && (o.route?.kind !== 'seat' || !!seatNear(o.route));
 	// the free seat nearest a family's own (the same table, or the next one)
 	function seatNear(R) {
 		let best = null, bd = 1.7;
@@ -355,11 +361,14 @@ export function createPeople(scene, world, camera = null) {
 		const M = p.M, S = M.S, R = p.route;
 		p.timer -= dt;
 		const pace = p.P.dna.gait.pace;
+		// (a fight nearby takes over: fleeing, cowering, fallen; combat/civilians.js)
+		if (p.override && p.override(p, dt, cam)) { pauseWorkplaceRoutine(p); return; }
 		if (p.engaged) {
+			pauseWorkplaceRoutine(p);
 			// talking with you: stop, turn to face you, listen; speak while there is speech
 			const dx = cam.x - S.pos.x, dz = cam.z - S.pos.z, d = Math.hypot(dx, dz);
 			M.want.heading = Math.atan2(dx, dz);
-			M.want.speed = d > 2.4 ? 0.8 : 0;
+			M.want.speed = !p.workSpot && d > 2.4 ? 0.8 : 0;
 			S.look.target = cam;
 			const speaking = performance.now() < (p.speakUntil || 0);
 			S.talk = speaking ? 1 : 0;
@@ -372,7 +381,7 @@ export function createPeople(scene, world, camera = null) {
 		if (p.role === 'chat') {
 			// find someone close to talk to, or wait for them to come
 			if (!p.partner) {
-				for (const o of pool) if (o !== p && o.active && !o.P.dna.child && o.route?.kind !== 'seat' && o.route?.kind !== 'follow' && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
+				for (const o of pool) if (o !== p && o.active && !o.P.dna.child && !!o.P.dna.minor === !!p.P.dna.minor && o.route?.kind !== 'seat' && o.route?.kind !== 'follow' && !o.partner && o.role !== 'jog' && o.M.S.pos.distanceTo(S.pos) < 12) { p.partner = o; o.partner = p; o.role = 'chat'; break; }
 			}
 			if (p.partner) {
 				const o = p.partner.M.S.pos, d = o.distanceTo(S.pos);
@@ -398,6 +407,7 @@ export function createPeople(scene, world, camera = null) {
 		if (R.kind === 'follow') { followParent(p, dt); return; }
 		if (R.kind === 'visit') { visit(p, dt, cam); return; }
 		if (R.kind === 'seat') {
+			if(workActor(p,performance.now()/1000,dt,cam,pool)) return;
 			// in their seat: facing the table, now and then a word and a gesture to whoever is across
 			M.want.speed = 0; M.want.heading = R.seat.heading;
 			p.gT = (p.gT || Math.random() * 6) - dt;
@@ -566,6 +576,8 @@ export function createPeople(scene, world, camera = null) {
 	}
 	// an outfit for the context: the wardrobe's, or the region's own out in the world
 	function outfitFor(r, d, c) {
+		// a teen: teenage clothes, the school uniform on a school day where schools wear one (teens.js)
+		if (d.teen) { const h = world()?.sky?.state?.hours ?? 13; return teenStyle(r, d, { cold: c.cold, wet: c.wet, uniform: !!c.H && UNIFORM_CULTURES.has(c.H.culture?.key) && !isWeekend() && h > 7 && h < 16.5 }); }
 		if (!c.H) return dressFor(r, d, c);
 		const { outfit, head } = regionalDress(r, d, c.H.kit, c.H.culture, { cold: c.cold, role: c.activity === 'sit' ? 'sit' : 'walk', id: c.H.regionId });
 		outfit.gen = outfit.gen || 'x'; outfit.headScarf = head.scarf;
@@ -587,7 +599,7 @@ export function createPeople(scene, world, camera = null) {
 
 	// ---------- the loop ----------
 	let building = false;
-	async function grow(kid = false) {
+	async function grow(kid = false, teen = false) {
 		if (building || !A) return;
 		building = true;
 		try {
@@ -595,8 +607,10 @@ export function createPeople(scene, world, camera = null) {
 			const r = rng(seed ^ 0xc41d);
 			const c = wearCtx(lastCam, lastNeed, 'walk');
 			const anc = c.H ? ancestryFor(c.H.culture, rng(seed ^ 0xa11), c.H.kit.build?.dense ? 0.15 : 0.06) : undefined;
-			const d = personDNA(seed, kid ? { age: 3 + r() * 8, ctx: c, ancestry: anc } : { ctx: c, ancestry: anc });
-			if (c.H && !kid) { const o = outfitFor(rng(seed ^ 0x57a1e), d, c); o.hair = d.style.hair; o.printKind = d.style.printKind; if (o.headScarf) o.hair = { ...o.hair, scarf: o.headScarf }; d.style = o; d.styleSig = JSON.stringify(d.outfit); }
+			let d = personDNA(seed, kid ? { age: 3 + r() * 8, ctx: c, ancestry: anc } : teen ? { age: 18, ctx: c, ancestry: anc } : { ctx: c, ancestry: anc });
+			// a teenager: the grown-up body taken back to thirteen to seventeen (teens.js)
+			if (teen) { d = makeTeen(d, undefined, { cold: c.cold, wet: c.wet }); }
+			if (c.H && !kid && !teen) { const o = outfitFor(rng(seed ^ 0x57a1e), d, c); o.hair = d.style.hair; o.printKind = d.style.printKind; if (o.headScarf) o.hair = { ...o.hair, scarf: o.headScarf }; d.style = o; d.styleSig = JSON.stringify(d.outfit); }
 			const P = buildPerson(A, d);
 			const M = motionFor(P);
 			const p = { P, M, active: false, role: 'walk', dressKey: c.key };
@@ -633,10 +647,14 @@ export function createPeople(scene, world, camera = null) {
 		// build the families together: a child's body whenever the children lag the grown-ups
 		const wantA = na > 0 && adultPool.length < Math.min(MAX, na + 2) && adultPool.filter((p) => p.active).length < na;
 		const wantK = nk > 0 && kidPool.length < Math.min(KIDS, nk + 1) && kidPool.length / nk < Math.max(0.3, adultPool.length / Math.max(1, na));
-		if (wantK && adultPool.length) grow(true); else if (wantA) grow(false);
+		// teens among the grown-ups' bodies: as many as the hour and the place have about
+		const hrs = world()?.sky?.state?.hours ?? 13, teenShare = need.n ? teensAbout(hrs, need.zone || 'neighbourhood', isWeekend()) : 0;
+		const teensBuilt = adultPool.filter((p) => p.P.dna.teen).length;
+		if (wantK && adultPool.length) grow(true); else if (wantA) grow(false, teensBuilt < Math.round(Math.min(MAX, na + 2) * teenShare));
 		let active = 0, kids = 0;
 		const drop = (p) => {
 			if (p.rod) p.rod.visible = false;
+			disposeWorkplaceProps(p);p.workSpot=null;p.workContext=null;
 			p.active = false; p.P.root.visible = false; p.leaving = false; p.fade = 0;
 			// out of the family: the grown-up lets go of the hand
 			if (p.fam) { const F = p.fam; if (p.P.dna.child) F.kids = Math.max(0, (F.kids || 1) - 1); else if (F.spouse === p) F.spouse = null; if (p.route?.kind === 'follow') p.route.parent.M.hold(p.route.theirs, false); p.fam = null; }
@@ -650,7 +668,7 @@ export function createPeople(scene, world, camera = null) {
 				const d = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z), kid = p.P.dna.child;
 				// family members go when their family does
 				const F = p.fam;
-				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && (d > NEAR * 1.25 || active >= na));
+				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && (d > NEAR * 1.25 || Math.abs(S.pos.y-cam.y)>6 || active >= na));
 				if (go && !p.leaving) { p.leaving = true; p.leaveT = 0; }
 				if (p.leaving) {
 					// going: gone once out of sight (or far off); faded out if you keep watching
@@ -664,7 +682,7 @@ export function createPeople(scene, world, camera = null) {
 				fadePerson(p.P, p.fade ?? 1);
 				steer(p, dt, cam);
 				p.M.update(dt, t, cam);
-				if (d < 150 && p.route?.kind !== 'seat') solid(p, dt, cam);
+				if (d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override))) solid(p, dt, cam);
 			}
 		}
 		// the doors of public buildings open for the people coming to them (interiors/index.js)
@@ -677,10 +695,11 @@ export function createPeople(scene, world, camera = null) {
 			// grown-ups and children by turns, so families form as the place fills
 			turn = !turn;
 			if (active < na && (kids >= nk || turn || !active)) {
-				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child);
+				const teensOut = pool.filter((p) => p.active && p.P.dna.teen).length;
+				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child && (!p.P.dna.teen || teensOut < Math.ceil(na * teenShare)));
 				// a second grown-up for a family, or someone new
 				const F = pool.find((o) => o.active && !o.leaving && o.kids > 0 && o.spouseWant && !o.spouse && !o.engaged && o.M.S.pos.distanceTo(cam) < NEAR && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z));
-				if (idle && F) { seedN++; if (castCompanion(idle, F)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } else F.spouseWant = false; }
+				if (idle && F && !idle.P.dna.minor) { seedN++; if (castCompanion(idle, F)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } else F.spouseWant = false; }
 				else if (idle) { seedN++; if (cast(idle, cam, need.island, need.C, need.venue)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } }
 			} else {
 				const idle = kidPool.find((p) => !p.active);
@@ -710,7 +729,7 @@ export function createPeople(scene, world, camera = null) {
 		for (const p of shown) { p.M.want.speed = p.walk ? 1.3 : 0; p.M.update(dt, t, cam); }
 	}
 	// a line of people dressed for a place and a thing to do, for looking at the clothes:
-	// specs [{ age, male, place, activity, seed }] (or clear it with an empty list)
+	// specs [{ age, male, place, activity, seed, style, hair }] (or clear it with an empty list)
 	const shown = [];
 	async function showcase(cam, heading, specs = [], { gap = 0.9, dist = 4.2, walk = false } = {}) {
 		await ensure();
@@ -720,9 +739,11 @@ export function createPeople(scene, world, camera = null) {
 			let d = null;
 			for (let tries = 0; tries < 40; tries++) {
 				const seed = ((q.seed ?? k * 7919 + 17) + tries * 104729) >>> 0;
-				d = personDNA(seed, { age: q.age, ctx: { place: q.place, activity: q.activity, hours: q.hours ?? 13, cold: q.cold } });
+				d = personDNA(seed, { age: q.age, style: q.style ? JSON.parse(JSON.stringify(q.style)) : undefined, ctx: { place: q.place, activity: q.activity, hours: q.hours ?? 13, cold: q.cold } });
 				if (q.male === undefined || d.male === q.male) break;
 			}
+			// (a cut asked for by name: people/hair.js CUTS)
+			if (q.hair && d.style) d.style.hair = { ...(d.style.hair || {}), cut: q.hair, buzz: false, thin: 0, scarf: false };
 			const P = buildPerson(A, d), M = motionFor(P);
 			const side = (k - (specs.length - 1) / 2) * gap;
 			const x = cam.x + Math.sin(heading) * dist + Math.cos(heading) * side, z = cam.z + Math.cos(heading) * dist - Math.sin(heading) * side;

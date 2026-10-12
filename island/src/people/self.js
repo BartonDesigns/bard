@@ -6,11 +6,12 @@
 
 import * as THREE from 'three';
 import { specOf } from '../bay/cars.js';
+import { isMinor } from '../combat/targets.js';
 
 const EYE = 1.68;
 const IDLE = ['pockets', 'crossed', 'phone', 'hip', 'behind'];
 
-export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint }) {
+export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint, ward = null }) {
 	const S = { third: false, idle: 0, pose: 'rest', down: null };
 	const cam = new THREE.Vector3(), look = new THREE.Vector3(), v = new THREE.Vector3();
 	let shown = false;
@@ -93,6 +94,8 @@ export function createSelf({ world, camera, avatar, ragdolls, people, busy, hint
 		}
 		if (S.third && avatar.me) avatar.me.M.play('throw', 0.5);
 		if (!best) return;
+		// (the young carry the Spark: the shove turns aside, combat/targets.js)
+		if (isMinor(best.P)) { ward?.(best); return; }
 		// (your weight behind your hands, more at a run)
 		const pace = Math.hypot(P.vel.x, P.vel.z), push = 3.4 + pace * 0.8, s = best.M.S.pos;
 		ragdolls.hit(best.P, { vel: new THREE.Vector3(fx * push, 0.3, fz * push), mass: 80, point: new THREE.Vector3(s.x, s.y + 1.3, s.z), lift: 0 });

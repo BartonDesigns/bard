@@ -1,0 +1,19 @@
+✔ phone-safe Bay ground keeps close-up texture and color treatment (0.920089ms)
+✔ close-up treatment fades before the phone shader reaches its distant ground (0.254054ms)
+✔ finite island stays hidden on repeated Pacific, San Francisco and San Jose frames (1.654849ms)
+✔ cave descent and return compose with distance without needing a band change (0.368035ms)
+✔ lunar far terrain survives distance culling but still respects cave visibility (0.299833ms)
+✔ fixed scenery is hidden away from the island while its lights and sailing boat remain (0.350459ms)
+✔ world cleanup releases removed objects, hidden textures, instances and shadows once (3.409017ms)
+✔ shared skeletons and uniforms-only island maps are released (1.062193ms)
+✔ textures injected during shader compilation and reflection sources are evicted (0.906729ms)
+✔ world replacement cancels asynchronous shader warming and clears pending old objects (7.667397ms)
+✔ late photographic upgrades cannot resurrect disposed materials; retired maps remain owned (1.772656ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 193.483875

@@ -1,0 +1,180 @@
+{
+  "checks": [
+    {
+      "name": "real canvas input spends ammunition",
+      "data": {
+        "id": "warden-spark-carbine",
+        "mag": 23,
+        "reserve": 48,
+        "mode": "auto",
+        "reloading": false,
+        "dmg": 17
+      }
+    },
+    {
+      "name": "R reload consumes reserve and fills magazine",
+      "data": {
+        "id": "warden-spark-carbine",
+        "mag": 24,
+        "reserve": 47,
+        "mode": "auto",
+        "reloading": false,
+        "dmg": 17
+      }
+    },
+    {
+      "name": "health and ammo occupy separate rows",
+      "data": {
+        "hp": {
+          "x": 190,
+          "y": 297,
+          "width": 260,
+          "height": 5,
+          "top": 297,
+          "right": 450,
+          "bottom": 302,
+          "left": 190
+        },
+        "ammo": {
+          "x": 337.125,
+          "y": 313.8125,
+          "width": 218.875,
+          "height": 60.1875,
+          "top": 313.8125,
+          "right": 556,
+          "bottom": 374,
+          "left": 337.125
+        }
+      }
+    },
+    {
+      "name": "right mouse aims and releases sights"
+    },
+    {
+      "name": "P third-person view supports real right-mouse aiming"
+    },
+    {
+      "name": "gear menu suppresses held fire and reload",
+      "data": {
+        "mag": 23
+      }
+    },
+    {
+      "name": "close cancels asynchronous squad work and detaches combat",
+      "data": {
+        "info": {
+          "me": {
+            "hp": 100,
+            "max": 100,
+            "state": "ok",
+            "ko": 0
+          },
+          "weapon": {
+            "id": "warden-spark-carbine",
+            "mag": 23,
+            "reserve": 47,
+            "mode": "auto",
+            "reloading": false,
+            "dmg": 17
+          },
+          "layer": 0,
+          "wanted": {
+            "stars": 0,
+            "points": 0
+          },
+          "zone": "village",
+          "squads": {
+            "alive": 0,
+            "fading": 0,
+            "max": 14,
+            "squads": [],
+            "bodies": 0,
+            "queue": 0
+          },
+          "civilians": {
+            "known": 0,
+            "panic": 0,
+            "dead": 0,
+            "inLayer": 0
+          },
+          "props": {
+            "props": 0,
+            "kinds": {}
+          },
+          "cars": {
+            "tracked": 0,
+            "damaged": [],
+            "wrecks": 0
+          },
+          "fires": [],
+          "burnt": 0,
+          "bosses": [],
+          "projectiles": 0,
+          "rules": {
+            "pvp": false
+          },
+          "ambient": false,
+          "morality": {
+            "me": {
+              "mercy": 0,
+              "law": 0,
+              "protect": 0,
+              "honest": 0,
+              "deeds": 0
+            },
+            "world": {
+              "mercy": 0,
+              "law": 0,
+              "protect": 0,
+              "honest": 0,
+              "deeds": 0
+            },
+            "title": "Unknown",
+            "reactions": {
+              "title": "Unknown",
+              "reputation": 0,
+              "bounty": 0,
+              "greet": [
+                "Morning.",
+                "Safe travels.",
+                "Watch yourself out there."
+              ],
+              "priceK": 1,
+              "song": "",
+              "graffiti": ""
+            },
+            "recent": [],
+            "places": 0
+          },
+          "journal": []
+        },
+        "active": false,
+        "combatGroup": false,
+        "hud": [
+          "none"
+        ]
+      }
+    },
+    {
+      "name": "reopen restores the cached held model"
+    },
+    {
+      "name": "travel cancels old squad builds without breaking render resources",
+      "data": {
+        "alive": 0,
+        "fading": 0,
+        "max": 14,
+        "squads": [],
+        "bodies": 0,
+        "queue": 0
+      }
+    }
+  ],
+  "errors": [],
+  "method": "production bundle, real mouse/keyboard, Chromium software WebGL",
+  "passed": true,
+  "bundle": {
+    "cacheVersion": "2babcc429c",
+    "sha256": "b88798a98269b232a49e63cc0487b7526707e305a68d80b07ee59c9dfb69d637"
+  }
+}

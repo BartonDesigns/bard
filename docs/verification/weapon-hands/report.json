@@ -1,0 +1,1621 @@
+{
+  "report": [
+    {
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "held": "aurora-trail-rifle",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.996,
+      "upDotUp": 0.998,
+      "sight": [
+        0.153,
+        -0.068,
+        -0.266
+      ],
+      "grip": [
+        0.135,
+        -0.263,
+        -0.34
+      ],
+      "tris": 15064,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "held": "aurora-trail-rifle",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.9,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": [
+        0,
+        0,
+        -0.08
+      ],
+      "grip": [
+        0,
+        -0.198,
+        -0.149
+      ],
+      "tris": 15064,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "held": "aurora-trail-rifle",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.9,
+      "fov": 44,
+      "muzzleDotForward": 0.999,
+      "upDotUp": 0.999,
+      "sight": [
+        0.004,
+        0,
+        -0.06
+      ],
+      "grip": [
+        0,
+        -0.196,
+        -0.135
+      ],
+      "tris": 15064,
+      "armTris": 7020,
+      "calls": 10,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "held": "aurora-trail-rifle",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.957,
+      "upDotUp": 0.793,
+      "sight": [
+        0.223,
+        -0.149,
+        -0.234
+      ],
+      "grip": [
+        0.105,
+        -0.287,
+        -0.339
+      ],
+      "tris": 15064,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 368.4,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "held": "aurora-trail-rifle",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.996,
+      "upDotUp": 0.998,
+      "sight": [
+        0.153,
+        -0.069,
+        -0.266
+      ],
+      "grip": [
+        0.135,
+        -0.264,
+        -0.34
+      ],
+      "tris": 15064,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "held": "mossback-scout-rifle",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.996,
+      "upDotUp": 0.998,
+      "sight": [
+        0.128,
+        -0.075,
+        -0.556
+      ],
+      "grip": [
+        0.135,
+        -0.266,
+        -0.34
+      ],
+      "tris": 8516,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "held": "mossback-scout-rifle",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.5,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": [
+        0,
+        0,
+        -0.15
+      ],
+      "grip": [
+        0,
+        -0.186,
+        0.071
+      ],
+      "tris": 8516,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "held": "mossback-scout-rifle",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.5,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 0.999,
+      "sight": [
+        0.009,
+        0.008,
+        -0.132
+      ],
+      "grip": [
+        0,
+        -0.184,
+        0.084
+      ],
+      "tris": 8516,
+      "armTris": 7020,
+      "calls": 10,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "held": "mossback-scout-rifle",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.956,
+      "upDotUp": 0.792,
+      "sight": [
+        0.2,
+        -0.073,
+        -0.512
+      ],
+      "grip": [
+        0.105,
+        -0.284,
+        -0.339
+      ],
+      "tris": 8516,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 352.9,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "held": "mossback-scout-rifle",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.996,
+      "upDotUp": 0.998,
+      "sight": [
+        0.128,
+        -0.075,
+        -0.556
+      ],
+      "grip": [
+        0.135,
+        -0.267,
+        -0.34
+      ],
+      "tris": 8516,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "held": "warden-spark-carbine",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.996,
+      "upDotUp": 0.998,
+      "sight": [
+        0.144,
+        -0.058,
+        -0.374
+      ],
+      "grip": [
+        0.135,
+        -0.264,
+        -0.34
+      ],
+      "tris": 8332,
+      "armTris": 7020,
+      "calls": 6,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "held": "warden-spark-carbine",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.25,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": [
+        0,
+        0,
+        -0.22
+      ],
+      "grip": [
+        0,
+        -0.205,
+        -0.18
+      ],
+      "tris": 8332,
+      "armTris": 7020,
+      "calls": 6,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "held": "warden-spark-carbine",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.25,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": [
+        0.002,
+        0.001,
+        -0.213
+      ],
+      "grip": [
+        0,
+        -0.204,
+        -0.175
+      ],
+      "tris": 8332,
+      "armTris": 7020,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "held": "warden-spark-carbine",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.957,
+      "upDotUp": 0.793,
+      "sight": [
+        0.221,
+        -0.111,
+        -0.337
+      ],
+      "grip": [
+        0.105,
+        -0.285,
+        -0.34
+      ],
+      "tris": 8332,
+      "armTris": 7020,
+      "calls": 6,
+      "arms": true,
+      "palmLmm": 442.3,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "held": "warden-spark-carbine",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.996,
+      "upDotUp": 0.998,
+      "sight": [
+        0.144,
+        -0.058,
+        -0.374
+      ],
+      "grip": [
+        0.135,
+        -0.264,
+        -0.34
+      ],
+      "tris": 8332,
+      "armTris": 7020,
+      "calls": 6,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "held": "reedline-hunting-bow",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 1,
+      "upDotUp": 0.949,
+      "sight": null,
+      "grip": [
+        -0.14,
+        -0.1,
+        -0.45
+      ],
+      "tris": 1756,
+      "armTris": 7020,
+      "calls": 3,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "held": "reedline-hunting-bow",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.18,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": null,
+      "grip": [
+        -0.07,
+        -0.08,
+        -0.52
+      ],
+      "tris": 1756,
+      "armTris": 7020,
+      "calls": 3,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "held": "reedline-hunting-bow",
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.18,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": null,
+      "grip": [
+        -0.07,
+        -0.08,
+        -0.515
+      ],
+      "tris": 1756,
+      "armTris": 7020,
+      "calls": 3,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "held": "reedline-hunting-bow",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 0.976,
+      "upDotUp": 0.951,
+      "sight": null,
+      "grip": [
+        -0.17,
+        -0.121,
+        -0.45
+      ],
+      "tris": 1756,
+      "armTris": 7020,
+      "calls": 3,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "held": "reedline-hunting-bow",
+      "ads": 0,
+      "equip": 1,
+      "zoom": 1,
+      "fov": 50,
+      "muzzleDotForward": 1,
+      "upDotUp": 0.949,
+      "sight": null,
+      "grip": [
+        -0.14,
+        -0.101,
+        -0.45
+      ],
+      "tris": 1756,
+      "armTris": 7020,
+      "calls": 3,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "aiming": false,
+      "muzzle": [
+        -0.1,
+        -0.285,
+        -0.953
+      ],
+      "muzzleDotAhead": 0.953,
+      "up": 0.959,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.145,
+        -0.989
+      ],
+      "muzzleDotAhead": 0.989,
+      "up": 0.989,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "aiming": false,
+      "muzzle": [
+        -0.099,
+        -0.284,
+        -0.954
+      ],
+      "muzzleDotAhead": 0.954,
+      "up": 0.959,
+      "palmLmm": 374.7,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "aiming": false,
+      "muzzle": [
+        -0.1,
+        -0.285,
+        -0.953
+      ],
+      "muzzleDotAhead": 0.953,
+      "up": 0.959,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.132,
+        -0.991
+      ],
+      "muzzleDotAhead": 0.991,
+      "up": 0.991,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "aiming": false,
+      "muzzle": [
+        -0.099,
+        -0.284,
+        -0.954
+      ],
+      "muzzleDotAhead": 0.954,
+      "up": 0.959,
+      "palmLmm": 366.5,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "aiming": false,
+      "muzzle": [
+        -0.1,
+        -0.285,
+        -0.953
+      ],
+      "muzzleDotAhead": 0.953,
+      "up": 0.959,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.037,
+        -0.999
+      ],
+      "muzzleDotAhead": 0.999,
+      "up": 0.999,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "aiming": false,
+      "muzzle": [
+        -0.099,
+        -0.284,
+        -0.954
+      ],
+      "muzzleDotAhead": 0.954,
+      "up": 0.959,
+      "palmLmm": 442.3,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "stage": "carry",
+      "accepted": null,
+      "reloading": false,
+      "aiming": false,
+      "muzzle": [
+        -0.1,
+        -0.285,
+        -0.953
+      ],
+      "muzzleDotAhead": 0.953,
+      "up": 0.959,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "stage": "aim",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "stage": "fire",
+      "accepted": true,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.026,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "stage": "reload",
+      "accepted": true,
+      "reloading": true,
+      "aiming": false,
+      "muzzle": [
+        -0.099,
+        -0.284,
+        -0.954
+      ],
+      "muzzleDotAhead": 0.954,
+      "up": 0.959,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    },
+    {
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "stage": "ready",
+      "accepted": null,
+      "reloading": false,
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "failed": 0
+    }
+  ],
+  "sizes": [
+    {
+      "height": 1.5,
+      "pitch": -0.45,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0.45,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": -0.45,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0.45,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": -0.45,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0.45,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": -0.45,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 1.5,
+      "pitch": 0.45,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": -0.45,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0.45,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": -0.45,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0.45,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": -0.45,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0.45,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": -0.45,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 1.75,
+      "pitch": 0.45,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": -0.45,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0.45,
+      "id": "aurora-trail-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": -0.45,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0.45,
+      "id": "mossback-scout-rifle",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": -0.45,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0.45,
+      "id": "warden-spark-carbine",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "palmRmm": 0,
+      "contactLmm": 0,
+      "contactRmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": -0.45,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        -0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0,
+        -1
+      ],
+      "muzzleDotAhead": 1,
+      "up": 1,
+      "palmLmm": 0,
+      "contactLmm": 0
+    },
+    {
+      "height": 2,
+      "pitch": 0.45,
+      "id": "reedline-hunting-bow",
+      "aiming": true,
+      "muzzle": [
+        0,
+        0.435,
+        -0.9
+      ],
+      "muzzleDotAhead": 0.9,
+      "up": 0.9,
+      "palmLmm": 0,
+      "contactLmm": 0
+    }
+  ],
+  "errors": []
+}

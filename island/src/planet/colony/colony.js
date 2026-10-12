@@ -9,10 +9,17 @@ import { Kit, skyEnvironment, beamMaterial, beamGeo, frame, sweep, box } from '.
 import { colliders } from '../alien.js';
 import { mulberry32 } from '../../noise.js';
 import { shellMaterial, glassMaterial, poolMaterial, colonyUniforms } from './mats.js';
-import { hub, port, mine, relay, scrubbers, solarFarm, railLine, station, trainGeometry, roverGeometry, suitGeometry, panelGeometry, finGeometry } from './parts.js';
+import { hub, port, mine, relay, scrubbers, solarFarm, railLine, station, trainGeometry, roverGeometry, panelGeometry, finGeometry, wreck, plaza, observatory, shelter, footing } from './parts.js';
+import { createColonyInteriors } from './interiors.js';
+import { createColonyLife } from './life.js';
+import { COLONY } from './styles.js';
+import { planCrew, createCrew } from './crew-life.js';
+import { createErrands } from './errands.js';
+import { personaOf, byId } from './crew.js';
+import { signMesh, disposeSigns, signCells } from './signs.js';
+import { createRide, speedAt, cabGroup } from './maglev.js';
 
-const TAU = Math.PI * 2;
-const BUILD = { mine, relay, scrubbers };
+const BUILD = { mine, relay, scrubbers, wreck, plaza, observatory, shelter };
 
 export function createColony(island, shared, scene, camera, profile, plan, opts = {}) {
 	const none = { update() {}, floor: () => -Infinity, push() {}, go: () => 'no colony on this world', dispose() {}, info: () => null, port: null };
@@ -26,17 +33,23 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	const air = profile?.air?.tint || [0.1, 0.1, 0.12], rock = profile?.ground?.rock || [0.3, 0.3, 0.3];
 	const envRT = skyEnvironment(opts.renderer, air.map((v) => v * 0.3), air.map((v) => v * 0.6), rock.map((v) => v * 0.4));
 	const env = envRT?.texture || null;
-	const mats = { shell: shellMaterial(U, { env }), glass: glassMaterial({ color: S.glass, env }) };
-	const walkMat = shellMaterial(U, { walk: true, hop: profile?.gravity < 0.5 ? 0.22 : 0.04 });
+	// Interior reflections come from the lit ceiling and walls, not the black lunar sky.
+	const roomEnvRT = S === COLONY.MOON && !opts.noCrew ? skyEnvironment(opts.renderer, [0.58, 0.55, 0.5], [0.26, 0.25, 0.23], [0.12, 0.11, 0.1]) : null;
+	const mats = { shell: shellMaterial(U, { env }), glass: glassMaterial({ color: S.glass, env }), air: new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 1, 0.45) }) };
+	const roomMat = shellMaterial(U, { inside: true });
 	const col = colliders();
-	const X = { S, P, H, col, r: mulberry32((plan.seed ^ 0x5c1f1) >>> 0), det: isPhone ? 0.6 : 1, pools: [], plumes: [], panels: [], radiators: [], doors: [], railH: 6 };
+	const X = { S, P, H, col, r: mulberry32((plan.seed ^ 0x5c1f1) >>> 0), det: isPhone ? 0.6 : 1, pools: [], plumes: [], panels: [], radiators: [], doors: [], railH: 6,
+		rooms: { modules: [], towers: [], cab: null, dome: null }, vol: [], spots: [], terminals: [], lifts: [], airlocks: [] };
 	const sites = [];
 	const site = (name, at, r, far, make) => {
 		X.K = new Kit();
+		X.sg = [];
 		try { make(); } catch (err) { console.error('[colony] ' + name, err); return; }
 		const g = new THREE.Group();
 		g.name = 'colony:' + name;
 		const meshes = X.K.build(mats, g, far === Infinity);
+		const sm = signMesh(X.sg);
+		if (sm) { sm.userData.near = true; g.add(sm); meshes.push(sm); }
 		group.add(g);
 		sites.push({ name, x: at.x, z: at.z, y: at.y, r, g, meshes, far, nearD: 380 });
 	};
@@ -46,6 +59,8 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	if (plan.port) site(plan.port.name, plan.port, plan.port.r, 3200, () => port(X, plan.port));
 	for (const o of plan.outposts) site(o.name, o, o.r + 10, 2600, () => BUILD[o.kind](X, o));
 	for (const [i, s] of plan.solar.entries()) site('Solar farm ' + (i + 1), s, s.r, 2200, () => solarFarm(X, s));
+	// out past the land: the far sites, each on its own footing
+	for (const o of plan.outer || []) site(o.name, o, o.r + 30, 4800, () => { if (o.kind === 'mine' || o.kind === 'relay') footing(X, frame(o.x, o.y, o.z, o.yaw), 30, 30); BUILD[o.kind](X, o); });
 	// the maglev lines and their stations, and a train on each
 	const trains = [];
 	for (const [i, line] of plan.rail.entries()) {
@@ -63,7 +78,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		mesh.castShadow = mesh.receiveShadow = true;
 		mesh.name = 'colony:train';
 		group.add(mesh);
-		trains.push({ path, cum, len: cum[cum.length - 1], s: X.r() * cum[cum.length - 1], dir: 1, wait: 0, mesh });
+		trains.push({ path, cum, len: cum[cum.length - 1], s: X.r() * cum[cum.length - 1], dir: 1, wait: 0, mesh, to: line.to || null, name: `Line ${i + 1}` });
 	}
 	// coolant runs along the roads (the volcanic worlds' colonies), lifted on low trestles
 	if (P.pipes) site('Coolant lines', hb, 600, Infinity, () => {
@@ -108,36 +123,63 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	};
 	const panels = inst(panelGeometry(S), mats.shell, X.panels.length, 'solar');
 	const fins = inst(finGeometry(S), mats.shell, X.radiators.length, 'radiators');
-	const roads = plan.roads.filter((rd) => rd.length > 2).map((rd) => {
+	const poly = (rd) => {
 		const cum = [0];
 		for (let k = 1; k < rd.length; k++) cum.push(cum[k - 1] + Math.hypot(rd[k].x - rd[k - 1].x, rd[k].z - rd[k - 1].z));
 		return { pts: rd, cum, len: cum[cum.length - 1] };
-	});
+	};
+	const roads = [...plan.roads, ...(plan.tracks || [])].filter((rd) => rd.length > 2).map(poly);
 	const rovers = [];
-	for (let i = 0; i < (roads.length ? P.rovers : 0); i++) { const rd = roads[i % roads.length]; rovers.push({ rd, s: X.r() * rd.len, dir: X.r() < 0.5 ? 1 : -1, v: 5 + X.r() * 4, yaw: 0, wait: 0 }); }
+	for (let i = 0; i < (roads.length ? P.rovers + (plan.tracks?.length ? 3 : 0) : 0); i++) { const rd = roads[(i * 3) % roads.length]; rovers.push({ rd, s: X.r() * rd.len, dir: X.r() < 0.5 ? 1 : -1, v: 5 + X.r() * 4, yaw: 0, wait: 0 }); }
 	const roverMesh = inst(roverGeometry(S), mats.shell, rovers.length, 'rovers');
-	// colonists: out from the airlocks to their work and back, and about the spaceport
-	const walkers = [];
-	for (let i = 0; i < P.walkers; i++) {
-		let a, b;
-		if (plan.port && i % 3 === 2) {
-			const pd = plan.port.pads[i % plan.port.pads.length];
-			a = { x: plan.port.station.x, z: plan.port.station.z }; b = { x: pd.x + (X.r() - 0.5) * 8, z: pd.z + (X.r() - 0.5) * 8 };
-		} else if (X.doors.length) {
-			const d = X.doors[i % X.doors.length], ang = d.a + (X.r() - 0.5) * 1.6, L = 8 + X.r() * 16;
-			a = { x: d.x, z: d.z }; b = { x: d.x + Math.sin(ang) * L, z: d.z + Math.cos(ang) * L };
-		} else continue;
-		walkers.push({ a, b, t: X.r(), dir: 1, wait: X.r() * 3, v: 1.0 + X.r() * 0.4, ph: X.r() * TAU, yaw: 0 });
+	// the rover tracks out to the far sites: twin ruts pressed dark into the regolith
+	if (plan.tracks?.length) {
+		const P3 = [];
+		for (const rd of plan.tracks) for (let k = 0; k < rd.length - 1; k++) {
+			const a = rd[k], b = rd[k + 1], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1, nx = dz / l, nz = -dx / l;
+			for (const off of [-0.85, 0.85]) {
+				const q = [[a, off - 0.22], [a, off + 0.22], [b, off - 0.22], [b, off + 0.22]].map(([p, o2]) => { const x = p.x + nx * o2, z = p.z + nz * o2; return [x, H(x, z) + 0.06, z]; });
+				P3.push(...q[0], ...q[2], ...q[1], ...q[1], ...q[2], ...q[3]);
+			}
+		}
+		const g = new THREE.BufferGeometry();
+		g.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3));
+		g.computeVertexNormals();
+		const c = S.berm.map((v2) => v2 * 0.38);
+		const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: new THREE.Color(c[0], c[1], c[2]), roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }));
+		m.receiveShadow = true; m.name = 'colony:tracks';
+		group.add(m);
 	}
-	const suits = suitGeometry(S);
-	const ph = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, walkers.length) * 2), 2);
-	ph.setUsage(THREE.DynamicDrawUsage);
-	suits.setAttribute('aPh', ph);
-	const walkMesh = inst(suits, walkMat, walkers.length, 'colonists');
+	// people: the Moon's named crew, real bodies in their suits or out of them (crew-life.js)
+	const crewPlan = S === COLONY.MOON && !opts.noCrew ? planCrew(X, plan, (x, z, y) => Math.max(H(x, z), col.floor(x, z, y + 1.5))) : null;
+	// inside: the rooms, and what you do there
+	const interiors = createColonyInteriors(X, { S, camera, isPhone, group, roomMat, glassMat: mats.glass, terminals: X.terminals, windows: [] });
+	const siteList = () => {
+		const P0 = camera.position, list = [];
+		list.push({ name: plan.name, x: hb.x, z: hb.z, y: hb.y, main: true, r: hb.r });
+		if (plan.port) list.push({ name: plan.port.name, x: plan.port.x, z: plan.port.z, y: plan.port.y, main: true, rail: plan.rail.length > 0, r: plan.port.r, port: true });
+		for (const o of [...plan.outposts, ...(plan.outer || [])]) list.push({ name: o.name, x: o.x, z: o.z, y: o.y, far: !!o.far, rail: plan.rail.some((l) => Math.hypot(l[1].x - o.x, l[1].z - o.z) < 80), r: o.r, yaw: o.yaw });
+		for (const s of list) s.dist = Math.hypot(s.x - P0.x, s.z - P0.z);
+		return list;
+	};
+	let errands = null;
+	const life = createColonyLife(X, { errands: () => errands, camera, hint: opts.hint, mount: opts.mount, isTouch: opts.isTouch, airMat: mats.air, player: opts.player, terminals: X.terminals, name: plan.name, give: opts.give, sites: siteList, go: (i) => goTo(siteList()[i]) });
 	const buildMs = performance.now() - t0;
 
 	const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ'), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
 	const floorAt = (x, z, y) => Math.max(H(x, z), col.floor(x, z, y + 1.5));
+	// the named crew, and the errands they have for you
+	const crew = crewPlan ? createCrew(X, crewPlan, {
+		camera, scene, isPhone, plan, floor: floorAt, env, roomEnv: roomEnvRT?.texture,
+		push: (p, y) => { col.push(p, y); interiors.push(p, y); }, hours: () => opts.world?.()?.sky?.state?.hours,
+		holds: (id) => errands?.holds(id), mark: (id) => errands?.markFor(id), watching: (id) => errands?.watching(id),
+		talkOpen: (id) => errands?.talkOpen(id), talkReply: (id, text) => errands?.talkReply(id, text),
+		resident: (id, now) => ({ id: 'colony:' + id, source: 'colony', persona: personaOf(byId[id], { colony: plan.name, now, quest: errands?.questLine(id), news: errands?.news() }) }),
+	}) : null;
+	errands = crew ? createErrands({
+		plan, X, C: crewPlan, crew, camera, scene: group, isPhone, mount: opts.mount, isTouch: opts.isTouch, hint: opts.hint, arms: opts.arms, social: opts.social, world: opts.world, player: opts.player,
+		ride: (name) => { const i = siteList().findIndex((q) => q.name === name); if (i >= 0) life.ride(i); }, terminalNear: () => !!life.terminal(),
+	}) : null;
 	// a point along a polyline by distance, and its heading
 	const along = (pts, cum, s, out) => {
 		let k = 1;
@@ -151,7 +193,11 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	};
 	const pt = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };
 	let sunT = 1, lookT = 0;
-	const seen = new Set();
+	// the sites you have come to, kept in this browser per world
+	const SEEN = `crysis-colony-seen-${plan.seed}`;
+	let seen;
+	try { seen = new Set(JSON.parse(localStorage.getItem(SEEN) || '[]')); } catch { seen = new Set(); }
+	const saw = (name) => { if (seen.has(name)) return; seen.add(name); try { localStorage.setItem(SEEN, JSON.stringify([...seen])); } catch { /* storage off */ } };
 	function track(cx, cz) {
 		const sd = shared.uSunDir.value, az = Math.atan2(sd.x, sd.z), el = Math.asin(Math.max(-1, Math.min(1, sd.y)));
 		// panels face the sun (stowed flat by night); fins turn edge-on to it
@@ -187,7 +233,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		// the trains: along the line, easing into each station, a pause, back
 		for (const T of trains) {
 			if (T.wait > 0) { T.wait -= dt; continue; }
-			const edge = Math.min(T.s, T.len - T.s), sp = 4 + Math.min(1, edge / 120) * 26;
+			const edge = Math.min(T.s, T.len - T.s), sp = T.len > 2000 ? speedAt(edge, edge * 2 + 1) : 4 + Math.min(1, edge / 120) * 26;
 			T.s += T.dir * sp * dt;
 			if (T.s <= 0 || T.s >= T.len) { T.s = Math.max(0, Math.min(T.len, T.s)); T.dir *= -1; T.wait = 6; }
 			const c = Math.max(18, Math.min(T.len - 18, T.s));
@@ -195,10 +241,13 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 			T.mesh.position.set(pt.x, pt.y, pt.z);
 			T.mesh.rotation.set(-pt.pitch, pt.yaw, 0, 'YXZ');
 		}
-		// the rovers along the roads
-		const near = Math.hypot(cx - hb.x, cz - hb.z) < 2400;
-		roverMesh.visible = walkMesh.visible = near;
-		if (!near) return;
+		ride.update(dt);
+		interiors.update(dt);
+		life.update(dt);
+		light(dt, night);
+		crew?.update(dt);
+		errands?.update(dt);
+		// the rovers along the roads and tracks
 		for (let i = 0; i < rovers.length; i++) {
 			const R = rovers[i];
 			if (R.wait > 0) R.wait -= dt;
@@ -218,24 +267,6 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 			m4.compose(v.set(x, floorAt(x, z, H(x, z)), z), q, one); roverMesh.setMatrixAt(i, m4);
 		}
 		roverMesh.instanceMatrix.needsUpdate = true;
-		// the colonists: walk, stop a while, walk back
-		for (let i = 0; i < walkers.length; i++) {
-			const W = walkers[i];
-			let moving = 1;
-			if (W.wait > 0) { W.wait -= dt; moving = 0; } else {
-				const L = Math.max(1, Math.hypot(W.b.x - W.a.x, W.b.z - W.a.z));
-				W.t += W.dir * W.v * dt / L;
-				if (W.t <= 0 || W.t >= 1) { W.t = Math.max(0, Math.min(1, W.t)); W.dir *= -1; W.wait = 2 + (i % 4) * 1.5; }
-			}
-			const x = W.a.x + (W.b.x - W.a.x) * W.t, z = W.a.z + (W.b.z - W.a.z) * W.t;
-			const yaw = Math.atan2(W.b.x - W.a.x, W.b.z - W.a.z) + (W.dir < 0 ? Math.PI : 0);
-			let dy = yaw - W.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-			W.yaw += dy * Math.min(1, dt * 4);
-			e.set(0, W.yaw, 0); q.setFromEuler(e);
-			m4.compose(v.set(x, floorAt(x, z, H(x, z)), z), q, one); walkMesh.setMatrixAt(i, m4);
-			ph.setXY(i, W.ph, moving);
-		}
-		walkMesh.instanceMatrix.needsUpdate = ph.needsUpdate = true;
 		// arriving at a site: its name
 		lookT += dt;
 		if (lookT > 0.5 && opts.hint) {
@@ -243,11 +274,26 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 			for (const G of sites) {
 				if (seen.has(G.name) || G.far === Infinity) continue;
 				if (Math.hypot(cx - G.x, cz - G.z) < G.r + 30 && camera.position.y < G.y + 120) {
-					seen.add(G.name);
+					saw(G.name);
 					opts.hint(`${G.name}\n${profile.name.replace(/^\w/, (c) => c.toUpperCase())}`, 5000);
 				}
 			}
 		}
+	}
+	// the light people are seen by where the sky gives none: in the pressurised rooms the
+	// strip lights' wash, warm and from above; outside, the regolith's bounce into the shade
+	// (the Moon's black sky adds no fill of its own). One light, its strength eased, so no
+	// shader recompiles as you go in and out.
+	const fill = new THREE.HemisphereLight(0xfff0e0, 0x9a948c, 0);
+	fill.name = 'colony:fill';
+	let fillOn = true;
+	group.add(fill);
+	function light(dt, night) {
+		const inside = life.inside(), sky = inside ? 1.0 : (0.06 + 0.3 * (1 - night)) * (S.hard ? 1 : 0.5);
+		if (inside) { fill.color.setRGB(1, 0.94, 0.86); fill.groundColor.setRGB(0.5, 0.48, 0.45); }
+		else { fill.color.setRGB(0.55, 0.55, 0.56); fill.groundColor.setRGB(0.75, 0.73, 0.7); }
+		const want = fillOn ? sky : 0;
+		fill.intensity += (want - fill.intensity) * Math.min(1, dt * 3);
 	}
 	// arrive at the spaceport: on the apron, the tower ahead
 	function go() {
@@ -260,21 +306,62 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		Pl.yaw = Math.atan2(-(to.x - at.x), -(to.z - at.z));
 		Pl.pitch = 0.12;
 		camera.position.copy(Pl.pos);
-		seen.add(p.name || plan.name);
+		saw(p.name || plan.name);
 		opts.hint?.(`${plan.port ? plan.port.name : plan.name}\n${plan.name}`, 5000);
 		return plan.name;
 	}
+	// the maglev: from the hub out along a long line, or from its far station home
+	const ride = createRide({ camera, mount: opts.mount, hint: opts.hint, player: opts.player, scene: group, mesh: trains.length ? cabGroup(new THREE.Mesh(trainGeometry(S), mats.shell), mats.shell) : null });
+	function rideTo(s) {
+		const P0 = camera.position;
+		for (const T of trains) {
+			if (!T.to) continue;
+			const b = T.path[T.path.length - 1];
+			if (s.name === T.to) { ride.start(T, 1, s.name, () => goTo(s, true)); return true; }
+			if (s.main && !s.port && Math.hypot(P0.x - b.x, P0.z - b.z) < 400) { ride.start(T, -1, s.name, () => goTo(s, true)); return true; }
+		}
+		return false;
+	}
+	// arrive at any site: on open ground before it, looking at it (the hub: outside an airlock)
+	function goTo(s, direct = false) {
+		const Pl = opts.player?.();
+		if (!s || !Pl) return null;
+		if (!direct && !ride.riding() && rideTo(s)) return s.name;
+		if (s.port) return go();
+		let at;
+		if (s.main && X.doors.length) { const d = X.doors[0]; at = { x: d.x + Math.sin(d.a) * 6, z: d.z + Math.cos(d.a) * 6 }; }
+		else { const a = Math.atan2(hb.x - s.x, hb.z - s.z), d = (s.r || 15) + 18; at = { x: s.x + Math.sin(a) * d, z: s.z + Math.cos(a) * d }; }
+		Pl.flying = false; Pl.diving = false; Pl.vel?.set(0, 0, 0);
+		Pl.pos.set(at.x, floorAt(at.x, at.z, H(at.x, at.z) + 1) + 1.7, at.z);
+		Pl.yaw = Math.atan2(-(s.x - at.x), -(s.z - at.z));
+		Pl.pitch = 0.08;
+		camera.position.copy(Pl.pos);
+		saw(s.name);
+		opts.hint?.(`${s.name}\n${plan.name}`, 5000);
+		return s.name;
+	}
+	const push = (p, footY) => { col.push(p, footY); interiors.push(p, footY); };
 	function dispose() {
 		envRT?.dispose();
-		for (const m of [mats.shell, mats.glass, walkMat, poolMat, plumeMat]) m?.dispose();
+		roomEnvRT?.dispose();
+		interiors.dispose();
+		life.dispose();
+		crew?.dispose();
+		errands?.dispose();
+		ride.dispose();
+		disposeSigns();
+		for (const m of [mats.shell, mats.glass, mats.air, roomMat, poolMat, plumeMat]) m?.dispose();
 		group.traverse((o) => o.geometry?.dispose());
 		scene.remove(group);
 	}
 	const info = () => {
 		let tris = 0, meshes = 0;
 		group.traverse((o) => { if (o.isMesh) { meshes++; tris += o.geometry.attributes.position.count / 3 * (o.isInstancedMesh ? o.count : 1); } });
-		return { name: plan.name, hub: { x: Math.round(hb.x), y: Math.round(hb.y), z: Math.round(hb.z), r: Math.round(hb.r) }, sites: sites.map((s) => s.name), habs: P.habs, towers: P.towers, pads: plan.port?.pads.length || 0, outposts: plan.outposts.map((o) => o.kind), solar: X.panels.length, radiators: X.radiators.length, trains: trains.length, rovers: rovers.length, colonists: walkers.length, roads: plan.roads.length, meshes, tris: Math.round(tris), buildMs: Math.round(buildMs) };
+		return { name: plan.name, hub: { x: Math.round(hb.x), y: Math.round(hb.y), z: Math.round(hb.z), r: Math.round(hb.r) }, sites: sites.map((s) => s.name), habs: P.habs, towers: P.towers, pads: plan.port?.pads.length || 0, outposts: plan.outposts.map((o) => o.kind), solar: X.panels.length, radiators: X.radiators.length, trains: trains.length, rovers: rovers.length, colonists: crew?.folk.length || 0, roads: plan.roads.length, outer: (plan.outer || []).map((o) => o.name), tracks: plan.tracks?.length || 0, rooms: X.rooms.modules.map((m) => m.role), lifts: X.lifts.length, airlocks: X.airlocks.length, terminals: X.terminals.map((t) => t.name), interiors: interiors.info(), suited: life.suited(), signs: signCells(), crew: crew?.info() || null, errands: errands?.info() || null, seen: [...seen], meshes, tris: Math.round(tris), buildMs: Math.round(buildMs) };
 	};
 	const portAt = plan.port ? { name: `${profile.name.replace(/^the /, '').replace(/^\w/, (c) => c.toUpperCase())}: ${plan.name}`, x: plan.port.x, z: plan.port.z, y: plan.port.y } : null;
-	return { update, floor: col.floor, push: col.push, go, dispose, info, group, port: portAt };
+	const crewApi = errands ? { mark: errands.mark, journal: errands.journal, errands, people: crew } : null;
+	// (for before-and-after looks: the fill and the crew's environment light on or off)
+	const lightFix = (on) => { fillOn = !!on; fill.intensity = on ? fill.intensity : 0; crew?.envLight(!!on); return on; };
+	return { crew: crewApi, ride, lightFix, update, floor: col.floor, push, go, goTo, sites: siteList, life, interiors, rooms: X.rooms, lifts: X.lifts, airlocks: X.airlocks, terminals: X.terminals, dispose, info, group, port: portAt };
 }

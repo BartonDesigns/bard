@@ -2,7 +2,8 @@
 // node test/room.test.mjs   (no network, no account)
 import { handle, Room } from '../src/index.js';
 import { CLOSE } from '../src/room.js';
-import { MAX_PLAYERS, BURST, MAX_BYTES, STALE_MS, cleanEvent, cleanPose, cleanState } from '../../../island/src/net/protocol.js';
+import { createCombatGuard } from '../src/combat-guard.js';
+import { MAX_PLAYERS, BURST, MAX_BYTES, STALE_MS, cleanEvent, cleanPose, cleanState, cleanFx, cleanHit, cleanCombatState, cleanRules } from '../../../island/src/net/protocol.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('  FAIL', msg); } };
@@ -141,6 +142,61 @@ section('host promotion');
 	ok(!(await st.storage.get('meta')), 'and is forgotten');
 }
 
+// ---------- trading ----------
+section('trading');
+const LAMP = { u: 'lamp-0001', i: 'camp-lantern', l: 3, t: 2, x: 40 };
+const BIG = Array.from({ length: 12 }, (_, i) => ({ u: 'abcdefghijklmnopqrstu' + String(i).padStart(3, '0'), i: 'station-signal-flare', l: 10, t: 4, x: 999999 }));
+{
+	const { R } = await makeRoom();
+	const a = await join(R, 'owner-aaaa', 'Ann'), b = await join(R, 'guest-bbbb', 'Ben'), c = await join(R, 'third-cccc', 'Cat');
+	await say(R, a, { t: 'trade', op: 'propose', id: 'tr-123456', to: 'guest-bbbb', extra: 'dropped' });
+	const got = b.of('trade')[0];
+	ok(got && got.from === 'owner-aaaa' && got.op === 'propose' && got.id === 'tr-123456' && !('to' in got) && !('extra' in got), 'a trade reaches its one peer, from its sender, cleaned');
+	ok(!c.of('trade').length && !a.of('trade').length, 'no one else hears it, nor the sender');
+	const ack = a.of('trade-ack')[0];
+	ok(ack && ack.id === 'tr-123456' && ack.op === 'propose' && ack.there === true && ack.to === 'guest-bbbb', 'the sender is told it was passed on');
+	await say(R, b, { t: 'trade', op: 'update', id: 'tr-123456', to: 'owner-aaaa', v: 1, side: { credits: 50, items: [LAMP, { ...LAMP, u: 'lamp-0002', l: 9, t: 4 }] } });
+	const up = a.of('trade')[0];
+	ok(up?.side.credits === 50 && up.side.items.length === 2 && up.side.items[1].l === 9 && up.side.items[1].t === 4 && up.v === 1, 'an offer travels with its credits and item instances, levels and tiers');
+	await say(R, a, { t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: '0.1', sides: { a: { credits: 0, items: [] }, b: { credits: 50, items: [LAMP] } } });
+	ok(b.of('trade')[1]?.key === '0.1' && b.of('trade')[1].sides.b.credits === 50, 'a confirmation carries the version and both sides');
+	const n = b.of('trade').length;
+	for (const bad of [
+		{ t: 'trade', op: 'steal', id: 'tr-123456', to: 'guest-bbbb' },
+		{ t: 'trade', op: 'update', id: 'x', to: 'guest-bbbb' },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: -5 } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, i: 'Bad Item!' }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: Array.from({ length: 13 }, (_, i) => ({ ...LAMP, u: 'lamp-' + i })) } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [LAMP, LAMP] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, l: 11 }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, t: 5 }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: [{ ...LAMP, u: 'BAD ID' }] } },
+		{ t: 'trade', op: 'update', id: 'tr-123456', to: 'guest-bbbb', side: { credits: 1, items: { 'camp-lantern': 1 } } },
+		{ t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: 'one' },
+		{ t: 'trade', op: 'propose', id: 'tr-123456' },
+	]) await say(R, a, bad);
+	ok(b.of('trade').length === n, 'bad trades are dropped: op, id, credits, item, too many, an id twice, level, tier, item id, the old count form, key, no one addressed');
+	const own = a.of('trade').length;
+	await say(R, a, { t: 'trade', op: 'propose', id: 'tr-999999', to: 'owner-aaaa' });
+	ok(a.of('trade').length === own && !a.of('trade-ack').some((x) => x.id === 'tr-999999'), 'not to yourself');
+	await say(R, a, { t: 'trade', op: 'propose', id: 'tr-777777', to: 'gone-dddddd' });
+	const miss = a.of('trade-ack').find((x) => x.id === 'tr-777777');
+	ok(miss && miss.there === false, 'the sender hears when the peer is not here');
+	// the rate limit applies to trades too
+	const { R: R2 } = await makeRoom();
+	const x = await join(R2, 'owner-aaaa'), y = await join(R2, 'guest-bbbb');
+	for (let i = 0; i < BURST + 10; i++) await say(R2, x, { t: 'trade', op: 'update', id: 'tr-555555', to: 'guest-bbbb', v: i + 1, side: { credits: i } });
+	ok(y.of('trade').length <= BURST + 1, 'trades share the rate limit');
+	ok(MAX_BYTES >= JSON.stringify({ t: 'trade', op: 'accept', id: 'tr-123456', to: 'guest-bbbb', key: '99.99', sides: { a: { credits: 999999, items: BIG }, b: { credits: 999999, items: BIG } } }).length, 'the largest trade message fits the size limit');
+	// the held item's level and tier ride the pose
+	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 7, ht: 4 });
+	const hp = b.of('pose').at(-1);
+	ok(hp?.h === 'camp-lantern' && hp.hl === 7 && hp.ht === 4, 'a held item passes with its level and tier');
+	await say(R, a, { t: 'pose', p: [1, 2, 3], y: 0, a: 'idle', w: 'earth', h: 'camp-lantern', hl: 70, ht: -1 });
+	const hq = b.of('pose').at(-1);
+	ok(hq?.h === 'camp-lantern' && !('hl' in hq) && !('ht' in hq), 'a bad level or tier is dropped');
+}
+
 // ---------- limits ----------
 section('limits');
 {
@@ -216,6 +272,83 @@ ok(cleanPose({ p: [1e9, 2, 3] }) === null, 'positions are bounded');
 ok(cleanState({ hours: 25.5 }).hours === 1.5, 'hours wrap');
 ok(cleanEvent({ id: 'x', place: { pos: {} }, due: 1 }) === null, 'an event needs a place');
 ok(cleanEvent({ id: 'x', place: { pos: { x: 1, z: 2 } }, due: 1, gathering: { kind: 'rave', size: 5, seed: 1 } }) === null, 'unknown gathering kinds are refused');
+
+// ---------- combat: shots seen, hits reported, the host's word, the room's rules ----------
+section('combat');
+{
+	const { R } = await makeRoom();
+	const host = await join(R, 'owner-aaaa'), g1 = await join(R, 'guest-bbbb'), g2 = await join(R, 'guest-cccc');
+	ok(host.of('welcome')[0].rules?.pvp === false, 'PvP is off when a room opens');
+	for (const [i, ws] of [host, g1, g2].entries()) await say(R, ws, { t: 'pose', p: [i * 3, 1, 0], w: 'earth', h: 'aurora-trail-rifle', hl: 1, ht: 0 });
+	await say(R, host, { t: 'cs', e: [['boss:walker', 4000, 0, 0]], b: { id: 'boss:walker', kind: 'walker', x: 20, y: 0, z: 0, w: 'earth' } });
+	g1.sent = g1.sent.filter((m) => m.t !== 'cs'); g2.sent = g2.sent.filter((m) => m.t !== 'cs');
+	await say(R, g1, { t: 'fx', s: [[0, 1, 0, 10, 1, 0, 2, 1]] });
+	ok(g2.of('fx').length === 1 && host.of('fx').length === 1 && g1.of('fx').length === 0, 'shots go to everyone else');
+	ok(g2.of('fx')[0].id === 'guest-bbbb', 'with who fired them');
+	await say(R, g1, { t: 'fx', s: [[0, 0, 0, 5000, 0, 0]] });
+	ok(g2.of('fx').length === 1, 'an impossible streak is dropped');
+	await say(R, g1, { t: 'hit', id: 'boss:walker', d: 40, p: 'core', w: 'aurora-trail-rifle' });
+	ok(host.of('hit').length === 1 && host.of('hit')[0].from === 'guest-bbbb' && g2.of('hit').length === 0, 'a hit on a shared thing goes to the host only');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 0, 'no PvP hit passes while PvP is off');
+	await say(R, g1, { t: 'rules', r: { pvp: true } });
+	ok(!g2.of('rules').length, 'only the host sets the rules');
+	await say(R, host, { t: 'rules', r: { pvp: true } });
+	ok(g1.of('rules')[0]?.r.pvp === true && g2.of('rules')[0]?.r.pvp === true, 'the host turns PvP on for all');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 1 && g2.of('hit')[0].from === 'guest-bbbb' && !g2.of('hit')[0].to, 'with PvP on, a hit reaches only its player');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-bbbb', d: 20, w: 'aurora-trail-rifle' });
+	ok(g1.of('hit').length === 0, 'nobody hits themselves');
+	await say(R, g1, { t: 'cs', e: [['boss:walker', 10, 2, 0]] });
+	ok(g2.of('cs').length === 0, 'only the host speaks for shared things');
+	await say(R, host, { t: 'cs', e: [['boss:walker', 4000, 1, 0]], b: { id: 'boss:walker', kind: 'walker', x: 1, y: 2, z: 3, w: 'earth' } });
+	ok(g1.of('cs')[0]?.e[0][1] === 4000 && g1.of('cs')[0].b.kind === 'walker', 'the host\'s word on a boss reaches the guests');
+	await say(R, g2, { t: 'pose', p: [6, 1, 0], w: 'moon', h: 'aurora-trail-rifle' });
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 1, 'hits cannot cross worlds');
+	await say(R, g1, { t: 'fx', s: [[3, 1, 0, 10, 1, 0]] });
+	ok(g2.of('fx').length === 1, 'shot effects cannot cross worlds');
+	await say(R, g2, { t: 'pose', p: [6, 1, 0], w: 'earth', h: 'aurora-trail-rifle' });
+	await say(R, g1, { t: 'hit', id: 'boss:walker', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 1, 'a player report cannot name a shared boss as its victim');
+	await say(R, g1, { t: 'hit', id: 'rp:guest-cccc', to: 'guest-cccc', d: 20, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').at(-1)?.id === 'me' && g2.of('hit').length === 2, 'remote target ids normalize for the recipient');
+	await say(R, g1, { t: 'hit', id: 'me', to: 'guest-cccc', d: 500, w: 'aurora-trail-rifle' });
+	ok(g2.of('hit').length === 2, 'damage above the server weapon budget is refused');
+	const late = await join(R, 'guest-dddd');
+	ok(late.of('welcome')[0].rules.pvp === true, 'a late joiner is told the rules');
+	await say(R, host, { t: 'rules', r: { pvp: 'yes' } });
+	ok(g1.of('rules').at(-1).r.pvp === false, 'anything but true is off');
+}
+section('combat cleaners');
+ok(cleanFx({ s: Array.from({ length: 9 }, () => [0, 0, 0, 1, 1, 1]) }) === null, 'at most 8 streaks a message');
+ok(cleanFx({ s: [[0, 0, 0, 1, 1, 'x']] }) === null, 'streaks are numbers');
+ok(cleanHit({ id: 'boss:walker', d: 9999 }) === null, 'damage is bounded');
+ok(cleanHit({ id: '<script>', d: 1 }) === null, 'ids are plain');
+ok(cleanHit({ id: 'x1', d: 5, p: 'spleen' }).p === 'body', 'unknown parts are the body');
+ok(cleanCombatState({ e: [['boss:x', 5, 99, 0]] }).e[0][2] === 0, 'phases are bounded');
+ok(cleanCombatState({ b: { id: 'boss:x', kind: 'dragon', x: 0, y: 0, z: 0 } }) === null, 'only the known bosses');
+ok(cleanRules({ pvp: 1 }).pvp === false && cleanRules({ pvp: true }).pvp === true, 'rules: PvP only when exactly true');
+
+
+section('combat authority');
+{
+ let now = 1000;
+ const guard = createCombatGuard(() => now);
+ const source = { w: 'earth', p: [0, 1.7, 0], h: 'aurora-trail-rifle', hl: 1, ht: 0 };
+ const target = { w: 'earth', p: [10, 1.7, 0] };
+ const hit = { w: source.h, d: 58, p: 'torso', k: 'ballistic' };
+ ok(!guard.accept('p', { ...hit, w: 'mossback-scout-rifle' }, source, target, true), 'declared item must match the held pose');
+ ok(!guard.accept('p', hit, source, { ...target, w: 'moon' }, true), 'a hit needs the same world');
+ ok(!guard.accept('p', hit, source, { ...target, p: [1000, 0, 0] }, true), 'weapon range is enforced');
+ ok(!guard.accept('p', { ...hit, k: 'fire' }, source, target, true), 'damage type must match the equipped item');
+ ok(!guard.accept('p', { ...hit, p: 'weak' }, source, target, true), 'a player has no boss weak-point multiplier');
+ ok(guard.accept('p', hit, source, target, true), 'valid report consumes a weapon damage budget');
+ guard.accept('p', hit, source, target, true); guard.accept('p', hit, source, target, true); guard.accept('p', hit, source, target, true);
+ ok(!guard.accept('p', hit, source, target, true), 'repeated reports cannot exceed the firing-rate budget');
+ now += 1000;
+ ok(guard.accept('p', hit, source, target, true), 'the rate budget recovers with elapsed time');
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

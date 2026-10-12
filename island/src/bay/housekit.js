@@ -303,7 +303,7 @@ function roomEnv() {
 }
 
 // the materials a house is made of; the dissolve with the far building goes on each
-export function houseMaterials(band, night) {
+export function houseMaterials(band, night, fadeMode = 'uniform') {
 	const T = textures();
 	// texture scales: the builder's uvs are metres
 	const rep = (t, m) => { t.repeat.set(1 / m, 1 / m); };
@@ -355,7 +355,7 @@ export function houseMaterials(band, night) {
 		shade: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4, fog: false, toneMapped: false }),
 	};
 	M.lamp.userData.night = true;
-	for (const m of Object.values(M)) addLodFade(m, 'uniform', band || [NONE_IN[0], NONE_IN[1], 36, 46]);
+	for (const m of Object.values(M)) addLodFade(m, fadeMode, band || [NONE_IN[0], NONE_IN[1], 36, 46]);
 	// by night the lamps glow and the walls lose the daylight they had from the windows
 	// (seen from outside, with no lamps of its own to light it, a lit room glows brighter)
 	M.setNight = (k, indoors = false) => {

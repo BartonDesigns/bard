@@ -282,7 +282,7 @@ export function createShare(ctx) {
 				put(yOf(), true);
 				stage(0.4);
 				// (the land's height levels as they come in, then the bridge and the streets)
-				await until(() => { stage(0.4 + 0.25 * (w.bayArea.levels || []).filter(Boolean).length / LEVELS.length); return w.bayArea.loaded() && w.bridge; }, 120000);
+				if (!await until(() => { stage(0.4 + 0.25 * (w.bayArea.levels || []).filter(Boolean).length / LEVELS.length); return w.bayArea.loaded() && w.bridge; }, 120000)) throw new Error('The ground at your saved place is still unavailable.');
 				// (the streets round you: a while for them, then on in; a phone kept to its memory may
 				// never hold every block, and the rest stream in round you as ever)
 				const t0 = performance.now();

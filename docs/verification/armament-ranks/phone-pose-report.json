@@ -1,0 +1,1128 @@
+{
+  "generated": "2026-10-10T04:21:56.468Z",
+  "source": "Production createViewmodel/createHand using real MakeHuman rig",
+  "records": [
+    {
+      "name": "phone-first-aurora-trail-rifle-carry",
+      "device": "phone",
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "pose": "carry",
+      "info": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 4,
+          "name": "Sunward",
+          "mark": 5
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.979,
+        "upDotUp": 0.998,
+        "sight": [
+          0.206,
+          -0.05,
+          -0.378
+        ],
+        "grip": [
+          0.18,
+          -0.245,
+          -0.45
+        ],
+        "tris": 26112,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 0,
+          "rearFrames": 2,
+          "active": true,
+          "aiming": false,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-first-aurora-trail-rifle-aim",
+      "device": "phone",
+      "mode": "first",
+      "id": "aurora-trail-rifle",
+      "pose": "aim",
+      "info": {
+        "held": "aurora-trail-rifle",
+        "variant": {
+          "rank": 4,
+          "name": "Sunward",
+          "mark": 5
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.9,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": [
+          0,
+          0,
+          -0.08
+        ],
+        "grip": [
+          0,
+          -0.198,
+          -0.149
+        ],
+        "tris": 26112,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 1,
+          "rearFrames": 4,
+          "active": true,
+          "aiming": true,
+          "item": "aurora-trail-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 2
+        }
+      }
+    },
+    {
+      "name": "phone-first-mossback-scout-rifle-carry",
+      "device": "phone",
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "pose": "carry",
+      "info": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 4,
+          "name": "Elderwood",
+          "mark": 5
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.984,
+        "upDotUp": 0.999,
+        "sight": [
+          0.14,
+          -0.046,
+          -0.675
+        ],
+        "grip": [
+          0.17,
+          -0.236,
+          -0.46
+        ],
+        "tris": 18680,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 1,
+          "rearFrames": 6,
+          "active": true,
+          "aiming": false,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-first-mossback-scout-rifle-aim",
+      "device": "phone",
+      "mode": "first",
+      "id": "mossback-scout-rifle",
+      "pose": "aim",
+      "info": {
+        "held": "mossback-scout-rifle",
+        "variant": {
+          "rank": 4,
+          "name": "Elderwood",
+          "mark": 5
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.5,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": [
+          0,
+          0.001,
+          -0.149
+        ],
+        "grip": [
+          0,
+          -0.186,
+          0.071
+        ],
+        "tris": 18680,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 8,
+          "active": true,
+          "aiming": true,
+          "item": "mossback-scout-rifle",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 2,
+          "targets": 2
+        }
+      }
+    },
+    {
+      "name": "phone-first-warden-spark-carbine-carry",
+      "device": "phone",
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "pose": "carry",
+      "info": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 4,
+          "name": "Citadel",
+          "mark": 5
+        },
+        "ads": 0,
+        "equip": 1,
+        "zoom": 1,
+        "fov": 50,
+        "muzzleDotForward": 0.973,
+        "upDotUp": 0.997,
+        "sight": [
+          0.186,
+          -0.026,
+          -0.467
+        ],
+        "grip": [
+          0.18,
+          -0.232,
+          -0.43
+        ],
+        "tris": 17568,
+        "armTris": 7724,
+        "calls": 7,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 10,
+          "active": true,
+          "aiming": false,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-first-warden-spark-carbine-aim",
+      "device": "phone",
+      "mode": "first",
+      "id": "warden-spark-carbine",
+      "pose": "aim",
+      "info": {
+        "held": "warden-spark-carbine",
+        "variant": {
+          "rank": 4,
+          "name": "Citadel",
+          "mark": 5
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.25,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": [
+          0,
+          0,
+          -0.219
+        ],
+        "grip": [
+          0,
+          -0.205,
+          -0.18
+        ],
+        "tris": 17568,
+        "armTris": 7724,
+        "calls": 7,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 12,
+          "active": true,
+          "aiming": true,
+          "item": "warden-spark-carbine",
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 1,
+          "targets": 1
+        }
+      }
+    },
+    {
+      "name": "phone-first-bow-ready",
+      "device": "phone",
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "pose": "ready",
+      "info": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 4,
+          "name": "Dawnbound",
+          "mark": 5
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.18,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": null,
+        "grip": [
+          0.1,
+          -0.14,
+          -0.9
+        ],
+        "tris": 4656,
+        "armTris": 7724,
+        "calls": 10,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": 0,
+          "drawMeters": 0,
+          "loaded": true,
+          "nock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.17,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.8190625018674646e-13,
+          "stringTipErrorMm": 1.925777466157674e-13,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 12,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      }
+    },
+    {
+      "name": "phone-first-bow-half-draw",
+      "device": "phone",
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "pose": "half-draw",
+      "info": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 4,
+          "name": "Dawnbound",
+          "mark": 5
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.18,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": null,
+        "grip": [
+          0.1,
+          -0.14,
+          -0.9
+        ],
+        "tris": 4656,
+        "armTris": 7724,
+        "calls": 10,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0.5,
+          "visibleDraw": 0.49999999999999983,
+          "drawMeters": 0.13999999999999996,
+          "loaded": true,
+          "nock": [
+            -0.27999999999999997,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.27999999999999997,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.08499999999999996,
+              0.6335,
+              0
+            ],
+            [
+              -0.08499999999999996,
+              -0.6335,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.30999999999999994,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.9748438260743945e-13,
+          "stringTipErrorMm": 1.4008361993460573e-13,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 12,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      }
+    },
+    {
+      "name": "phone-first-bow-full-draw",
+      "device": "phone",
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "pose": "full-draw",
+      "info": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 4,
+          "name": "Dawnbound",
+          "mark": 5
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.18,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": null,
+        "grip": [
+          0.1,
+          -0.14,
+          -0.9
+        ],
+        "tris": 4656,
+        "armTris": 7724,
+        "calls": 10,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 1,
+          "visibleDraw": 0.9999999999999998,
+          "drawMeters": 0.27999999999999997,
+          "loaded": true,
+          "nock": [
+            -0.42,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.42,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.13999999999999996,
+              0.607,
+              0
+            ],
+            [
+              -0.13999999999999996,
+              -0.607,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.44999999999999996,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 7.384300342650184e-14,
+          "stringTipErrorMm": 5.5619465775679635e-14,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 12,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      }
+    },
+    {
+      "name": "phone-first-bow-released",
+      "device": "phone",
+      "mode": "first",
+      "id": "reedline-hunting-bow",
+      "pose": "released",
+      "info": {
+        "held": "reedline-hunting-bow",
+        "variant": {
+          "rank": 4,
+          "name": "Dawnbound",
+          "mark": 5
+        },
+        "ads": 1,
+        "equip": 1,
+        "zoom": 1.18,
+        "fov": 44,
+        "muzzleDotForward": 1,
+        "upDotUp": 1,
+        "sight": null,
+        "grip": [
+          0.1,
+          -0.139,
+          -0.892
+        ],
+        "tris": 4656,
+        "armTris": 7724,
+        "calls": 9,
+        "arms": true,
+        "palmLmm": 0,
+        "contactLmm": 0,
+        "palmRmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": -0.001848296080965484,
+          "drawMeters": 0,
+          "loaded": false,
+          "nock": [
+            -0.13948247709732967,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.26948247709732964,
+            -0.22400000000000003,
+            0.135
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.47247626978872925,
+            0.044,
+            0.022412781029926374
+          ],
+          "arrowVisible": false,
+          "nockProgress": 0,
+          "stringNockErrorMm": 8.287839975926826e-13,
+          "stringTipErrorMm": 8.338518202728838e-13,
+          "arrowRestErrorMm": 0
+        },
+        "optics": {
+          "forwardFrames": 2,
+          "rearFrames": 12,
+          "active": false,
+          "aiming": false,
+          "item": null,
+          "sizes": {
+            "forward": 256,
+            "rear": 64
+          },
+          "lenses": 0,
+          "targets": 0
+        }
+      }
+    },
+    {
+      "name": "phone-third-aurora-trail-rifle-carry",
+      "device": "phone",
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "pose": "carry",
+      "info": {
+        "id": "aurora-trail-rifle",
+        "aiming": false,
+        "muzzle": [
+          -0.1,
+          -0.285,
+          -0.953
+        ],
+        "muzzleDotAhead": 0.953,
+        "up": 0.959,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0
+      }
+    },
+    {
+      "name": "phone-third-aurora-trail-rifle-aim",
+      "device": "phone",
+      "mode": "third",
+      "id": "aurora-trail-rifle",
+      "pose": "aim",
+      "info": {
+        "id": "aurora-trail-rifle",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0
+      }
+    },
+    {
+      "name": "phone-third-mossback-scout-rifle-carry",
+      "device": "phone",
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "pose": "carry",
+      "info": {
+        "id": "mossback-scout-rifle",
+        "aiming": false,
+        "muzzle": [
+          -0.1,
+          -0.285,
+          -0.953
+        ],
+        "muzzleDotAhead": 0.953,
+        "up": 0.959,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0
+      }
+    },
+    {
+      "name": "phone-third-mossback-scout-rifle-aim",
+      "device": "phone",
+      "mode": "third",
+      "id": "mossback-scout-rifle",
+      "pose": "aim",
+      "info": {
+        "id": "mossback-scout-rifle",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0
+      }
+    },
+    {
+      "name": "phone-third-warden-spark-carbine-carry",
+      "device": "phone",
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "pose": "carry",
+      "info": {
+        "id": "warden-spark-carbine",
+        "aiming": false,
+        "muzzle": [
+          -0.1,
+          -0.285,
+          -0.953
+        ],
+        "muzzleDotAhead": 0.953,
+        "up": 0.959,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0
+      }
+    },
+    {
+      "name": "phone-third-warden-spark-carbine-aim",
+      "device": "phone",
+      "mode": "third",
+      "id": "warden-spark-carbine",
+      "pose": "aim",
+      "info": {
+        "id": "warden-spark-carbine",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0
+      }
+    },
+    {
+      "name": "phone-third-bow-ready",
+      "device": "phone",
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "pose": "ready",
+      "info": {
+        "id": "reedline-hunting-bow",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": 0,
+          "drawMeters": 0,
+          "loaded": true,
+          "nock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.14,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.17,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.8190625018674646e-13,
+          "stringTipErrorMm": 1.925777466157674e-13,
+          "arrowRestErrorMm": 0
+        }
+      }
+    },
+    {
+      "name": "phone-third-bow-half-draw",
+      "device": "phone",
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "pose": "half-draw",
+      "info": {
+        "id": "reedline-hunting-bow",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0.5,
+          "visibleDraw": 0.49999999999999983,
+          "drawMeters": 0.13999999999999996,
+          "loaded": true,
+          "nock": [
+            -0.27999999999999997,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.27999999999999997,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.08499999999999996,
+              0.6335,
+              0
+            ],
+            [
+              -0.08499999999999996,
+              -0.6335,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.30999999999999994,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 1.9748438260743945e-13,
+          "stringTipErrorMm": 1.4008361993460573e-13,
+          "arrowRestErrorMm": 0
+        }
+      }
+    },
+    {
+      "name": "phone-third-bow-full-draw",
+      "device": "phone",
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "pose": "full-draw",
+      "info": {
+        "id": "reedline-hunting-bow",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 1,
+          "visibleDraw": 0.9999999999999998,
+          "drawMeters": 0.27999999999999997,
+          "loaded": true,
+          "nock": [
+            -0.42,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.42,
+            0.056,
+            -0.025
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.13999999999999996,
+              0.607,
+              0
+            ],
+            [
+              -0.13999999999999996,
+              -0.607,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.44999999999999996,
+            0.044,
+            -0.0010000000000000009
+          ],
+          "arrowVisible": true,
+          "nockProgress": 1,
+          "stringNockErrorMm": 7.384300342650184e-14,
+          "stringTipErrorMm": 5.5619465775679635e-14,
+          "arrowRestErrorMm": 0
+        },
+        "rig": {
+          "model": [
+            -7.258519290282112e-7,
+            -0.0000021049705945498383,
+            -0.9999999999975212,
+            0,
+            -1.5278969666050458e-12,
+            0.9999999999977847,
+            -0.0000021049705945492844,
+            0,
+            0.9999999999997368,
+            -2.0194839173657902e-28,
+            -7.258519290298194e-7,
+            0,
+            0.19408856015898945,
+            1.4421862802121042,
+            -0.3175224576407012,
+            1
+          ],
+          "bones": {
+            "head": [
+              0.02228274864954961,
+              1.535415000770913,
+              -0.04682018718631607
+            ],
+            "neck01": [
+              0.017706098595250883,
+              1.4334456027931288,
+              -0.014027593833174808
+            ],
+            "upperarm01.L": [
+              -0.1477610088964525,
+              1.3453623875349,
+              -0.03578464427207395
+            ],
+            "upperarm01.R": [
+              0.18318054440865975,
+              1.345362809138253,
+              -0.0357304729140008
+            ],
+            "wrist.L": [
+              0.23516300844421384,
+              1.4421863896610776,
+              -0.26552699955764697
+            ],
+            "wrist.R": [
+              0.19853589572451746,
+              1.4861873439084192,
+              0.18780346655986496
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "phone-third-bow-released",
+      "device": "phone",
+      "mode": "third",
+      "id": "reedline-hunting-bow",
+      "pose": "released",
+      "info": {
+        "id": "reedline-hunting-bow",
+        "aiming": true,
+        "muzzle": [
+          0,
+          0.009,
+          -1
+        ],
+        "muzzleDotAhead": 1,
+        "up": 1,
+        "palmLmm": 0,
+        "palmRmm": 0,
+        "contactLmm": 0,
+        "contactRmm": 0,
+        "bow": {
+          "draw": 0,
+          "visibleDraw": -0.001848296080965484,
+          "drawMeters": 0,
+          "loaded": false,
+          "nock": [
+            -0.13948247709732967,
+            0.056,
+            -0.025
+          ],
+          "arrowNock": [
+            -0.26948247709732964,
+            -0.22400000000000003,
+            0.135
+          ],
+          "rest": [
+            0.018,
+            0.056,
+            -0.025
+          ],
+          "stringTips": [
+            [
+              -0.029999999999999992,
+              0.6599999999999999,
+              0
+            ],
+            [
+              -0.029999999999999992,
+              -0.6599999999999999,
+              0
+            ]
+          ],
+          "rightPalmTarget": [
+            -0.47247626978872925,
+            0.044,
+            0.022412781029926374
+          ],
+          "arrowVisible": false,
+          "nockProgress": 0,
+          "stringNockErrorMm": 8.287839975926826e-13,
+          "stringTipErrorMm": 8.338518202728838e-13,
+          "arrowRestErrorMm": 0
+        }
+      }
+    }
+  ],
+  "fits": [],
+  "errors": []
+}

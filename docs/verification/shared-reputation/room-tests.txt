@@ -1,0 +1,48 @@
+
+> test
+> node test/room.test.mjs && node --test test/reputation.test.mjs
+
+
+== rooms
+
+== presence
+
+== host state and events
+
+== host promotion
+
+== trading
+
+== limits
+
+== stale players and empty rooms
+
+== worker routes
+
+== cleaners
+
+== combat
+
+== combat cleaners
+
+== combat authority
+
+105 passed, 0 failed
+✔ only bounded public facts cross the wire; server binds identity and clock (3.66892ms)
+✔ crime guards require the matching world, nearby position and actual driving pose (0.735222ms)
+✔ geographic proximity survives different Earth render frames, excludes other continents (0.621984ms)
+✔ replays cannot refresh fear and floods cannot grow storage indefinitely (7.896324ms)
+✔ innocent players hear danger, only the responsible player gets blamed, fear overrides praise (2.330691ms)
+✔ memories are isolated by world, floor and area, and expire on the server clock (0.823065ms)
+✔ old servers and leaving a room preserve local behavior without retaining shared records (0.42735ms)
+✔ small packet latency differences do not silently discard a newly stamped event (0.374291ms)
+✔ completed work is attributed per player without sending the quest text or issuing rewards (1.167933ms)
+✔ durable reconstruction and a late join recover facts without replaying a live assault (13.945287ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 251.248343

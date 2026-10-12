@@ -1,0 +1,31 @@
+✔ every weapon has a box in the catalogue that the shops sell (3.121949ms)
+✔ level and tier raise damage, accuracy, range, magazine and reload speed (0.506932ms)
+✔ semi fires once a press, auto keeps firing at its rate, burst fires its count (1.422436ms)
+✔ an empty magazine fires nothing; reload moves rounds from the reserve on time (0.620293ms)
+✔ aiming down the sights tightens the spread; moving and firing open it (0.475699ms)
+✔ health: armour soaks, the head takes more, regen after quiet, down versus dead (0.605737ms)
+✔ minors (children and teenagers) carry the Spark: no damage path reaches them (2.650693ms)
+✔ the morality table: one place, context weighs it, the ledger keeps both you and the world (6.822984ms)
+✔ surrender: the badly hurt and outnumbered may yield; machines and creatures never do (0.422441ms)
+✔ faction relations: old feuds, attacks sour, common enemies warm, time eases it back (1.16389ms)
+✔ fire spreads to neighbours within limits and never burns twice (2.128375ms)
+✔ PvP is off unless the room turns it on; a side never hurts its own; adults are all fair game (1.89092ms)
+✔ ray shapes: boxes turn with their yaw, capsules have caps (0.744033ms)
+✔ wanted: offences make stars, shots alone stop at two, out of sight it ebbs, knocked out it clears (0.526809ms)
+✔ boss machines: telegraph before every attack, phases by health, untouchable while changing, weak points (5.772895ms)
+✔ a breakable weak point can force the next phase (0.340028ms)
+✔ surrender and restraint block shots, blasts and direct remote-style hits (0.551697ms)
+✔ family food deeds are recorded by the same saved morality ledger (0.748665ms)
+✔ vehicle witness overrides greeting, quest praise and an apology does not erase fear (4.895049ms)
+✔ other players are distinct, memories expire and do not cross worlds (0.414815ms)
+✔ openers vary without reading minds and armed intimidation takes priority (0.640837ms)
+✔ office work, disagreements and bilateral shopping have concrete states (1.705097ms)
+✔ quests pay the real inventory once after observed evidence, including reload/retry (15.169498ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 329.189442

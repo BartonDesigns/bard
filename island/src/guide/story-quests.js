@@ -2,6 +2,7 @@
 // Persistence is independent of scene objects and of the legacy exploration journal.
 export const STORY_QUEST_KEY = 'crysis-story-quests-v1';
 const TYPES = new Set(['visit', 'return', 'talk', 'scout']);
+export const storyReward = q => ({credits:100+q.steps.length*60});
 const PHASES = new Set(['offered', 'active', 'complete', 'cancelled']);
 const copy = value => JSON.parse(JSON.stringify(value));
 const label = (value, max = 160) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -63,6 +64,8 @@ function validSave(data) {
 	return data.quests.every(q => {
 		if (!q || !identifier(q.id) || ids.has(q.id) || !identifier(q.bodyKey) || !label(q.title) || !label(q.premise) || !PHASES.has(q.status) || !Number.isFinite(q.offeredAt) || !Array.isArray(q.steps) || q.steps.length < 2 || q.steps.length > 4 || !Number.isInteger(q.cursor) || q.cursor < 0 || q.cursor > q.steps.length) return false;
 		ids.add(q.id);
+		if (q.reward && (q.reward.credits !== storyReward(q).credits || Object.keys(q.reward).some(k=>k!=='credits'))) return false;
+		if (q.rewardPaid !== undefined && typeof q.rewardPaid !== 'boolean') return false;
 		if (q.offeredBy !== undefined && q.offeredBy !== null && !identifier(q.offeredBy)) return false;
 		if (q.status === 'active' && (q.cursor >= q.steps.length || !Number.isFinite(q.acceptedAt)) || q.status === 'offered' && (q.cursor !== 0 || q.acceptedAt !== null) || q.status === 'complete' && (q.cursor !== q.steps.length || !Number.isFinite(q.finishedAt) || !Number.isFinite(q.acceptedAt))) return false;
 		if (!Array.isArray(q.evidence) || q.evidence.length > 16 || q.evidence.some(e => !e || typeof e !== 'object' || !['presence', 'talk', 'scout'].includes(e.type) || !Number.isFinite(e.at))) return false;
@@ -89,6 +92,7 @@ export function createStoryQuests({ storage, now = Date.now } = {}) {
 	function list(bodyKey) { return copy(data.quests.filter(q => !bodyKey || q.bodyKey === bodyKey)); }
 	function context(input) { return { ...questContext(input), previous: list(input?.bodyKey).map(q => ({ title: q.title, status: q.status, steps: q.steps })) }; }
 	function propose(raw, input) {
+		if(blocked) return fail(error);
 		const validated = validateQuestPlan(raw, input);
 		if (!validated.ok) return validated;
 		const plan = validated.plan, fingerprint = signature(plan);
@@ -101,10 +105,12 @@ export function createStoryQuests({ storage, now = Date.now } = {}) {
 		}
 		const offeredBy = questContext(input).speaker;
 		const quest = { ...plan, offeredBy, id: `story-${hash(fingerprint)}-${++data.sequence}`, status: 'offered', cursor: 0, offeredAt: now(), acceptedAt: null, finishedAt: null, evidence: [] };
+		quest.reward=storyReward(quest); quest.rewardPaid=false;
 		data.quests.push(quest); data.seen.push(fingerprint); data.seen = data.seen.slice(-256); save();
 		return { ok: true, quest: copy(quest) };
 	}
 	function change(id, bodyKey, status) {
+		if(blocked) return fail(error);
 		const q = data.quests.find(q => q.id === id && q.bodyKey === bodyKey);
 		if (!q) return fail('That quest belongs to another world or is unavailable.');
 		if (status === 'active') {
@@ -123,20 +129,20 @@ export function createStoryQuests({ storage, now = Date.now } = {}) {
 		return copy(q);
 	}
 	function update({ bodyKey, position, targets = [] } = {}) {
-		if (!finitePosition(position)) return [];
+		if (blocked || !finitePosition(position)) return [];
 		const ctx = questContext({ bodyKey, targets }), changed = [];
 		for (const q of data.quests) {
 			if (q.status !== 'active' || q.bodyKey !== bodyKey) continue;
 			const step = q.steps[q.cursor];
 			if (!['visit', 'return'].includes(step.type)) continue;
 			const t = ctx.targets.find(t => t.id === step.targetId);
-			if (!t || Math.hypot(position.x - t.x, position.z - t.z) > t.radius || Math.abs(position.y - t.y) > Math.min(t.radius, 12)) continue;
+			if (!t || Math.hypot(position.x - t.x, position.z - t.z) > t.radius || Math.abs(position.y - t.y) > (t.id.startsWith('workplace:')?1.1:Math.min(t.radius, 12))) continue;
 			changed.push(advance(q, { type: 'presence', targetId: t.id, at: now() }));
 		}
 		if (changed.length) save(); return changed;
 	}
 	function event(e = {}) {
-		if (!e || !['talk', 'scout'].includes(e.type) || !label(e.id) || !e.bodyKey || !e.npcId) return [];
+		if (blocked || !e || !['talk', 'scout'].includes(e.type) || !label(e.id) || !e.bodyKey || !e.npcId) return [];
 		if (e.type === 'scout' && (!e.taskId || e.status !== 'completed' || !Number.isFinite(e.completedAt))) return [];
 		const changed = [];
 		for (const q of data.quests) {
@@ -148,7 +154,20 @@ export function createStoryQuests({ storage, now = Date.now } = {}) {
 		}
 		if (changed.length) save(); return changed;
 	}
-	return { context, propose, accept: (id, bodyKey) => change(id, bodyKey, 'active'), cancel: (id, bodyKey) => change(id, bodyKey, 'cancelled'), update, event, list, status: () => ({ error, blocked, quests: data.quests.length }), save };
+	function claimReward(id,bodyKey,pay) {
+		const q=data.quests.find(q=>q.id===id && q.bodyKey===bodyKey);
+		if(blocked || !q || q.status!=='complete' || !q.reward) return fail('No earned reward to claim.');
+		if(q.rewardPaid) return {ok:true,already:true,credits:q.reward.credits};
+		// Save earned evidence before paying. The inventory transaction is idempotent,
+		// so an interrupted second save can safely retry the same receipt.
+		if(!save()) return fail(error);
+		const receipt=pay?.({id:'story-reward:'+q.id,kind:'trade',peer:'story-quest',give:{credits:0,items:[]},get:{credits:q.reward.credits,items:[]}});
+		if(receipt?.persisted===false) return fail('Reward is pending until this browser can save your inventory.');
+		if(!receipt?.ok) return fail(receipt?.message || receipt?.receipt?.message || 'Reward pending. Finish the current trade and try again.');
+		q.rewardPaid=true;save(); return {ok:true,credits:q.reward.credits};
+	}
+
+	return { context, propose, claimReward, accept: (id, bodyKey) => change(id, bodyKey, 'active'), cancel: (id, bodyKey) => change(id, bodyKey, 'cancelled'), update, event, list, status: () => ({ error, blocked, quests: data.quests.length }), save };
 }
 
 // A grounded offer still exists when the model is unavailable. It goes through
@@ -172,7 +191,7 @@ export function fallbackQuest(input, { npcId, position } = {}) {
 			{ title: `The long way to ${first.name}`, purpose: `Take a deliberate detour through ${first.name}${second ? ` and ${second.name}` : ''}. ${npc ? `${npc.name} would like to hear which place you would show a new arrival first.` : 'Decide which place you would show a new arrival first.'}` },
 			{ title: `Two sides of this place`, purpose: `Look closely at ${first.name}${second ? `, then compare it with ${second.name}` : ''}. ${first.fact ? `Your starting clue: ${first.fact}. ` : ''}${npc ? `Return with a question for ${npc.name}, rather than a perfect answer.` : 'Keep one detail from each stop in mind.'}` },
 		];
-		const theme = themes[(prior.length + offset) % themes.length];
+		const theme = first.id.startsWith('workplace:') ? {title:`Site check: ${first.name}`,purpose:`${npc?.name || 'The floor team'} needs a second pair of eyes at ${first.name}${second ? ' and '+second.name : ''}. Visit the marked stations, then return and report in person. ${first.fact || ''}`} : themes[(prior.length + offset) % themes.length];
 		const plan = { title: theme.title, premise: theme.purpose, steps };
 		if (prior.some(q => JSON.stringify(q.steps.map(s => [s.type, s.targetId || '', s.npcId || ''])) === JSON.stringify(steps.map(s => [s.type, s.targetId || '', s.npcId || ''])))) continue;
 		if (validateQuestPlan(plan, ctx).ok) return plan;

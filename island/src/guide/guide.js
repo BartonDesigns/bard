@@ -6,6 +6,7 @@
 // the hour, put you in the air. A conversational model on your own device gives it
 // its voice; with no model it still answers from the world itself.
 
+import { awarenessContext, contextualOpening, contextualReply } from '../people/world-awareness.js';
 import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
 import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent, offlineSocialIntent } from '../people/social-intent.js';
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
@@ -117,7 +118,12 @@ export function createGuide(mount, api) {
 			if (W.magma?.tube) { const t = W.magma.tube[Math.floor(W.magma.tube.length / 2)]; out.push({ name: 'the lava tube', x: t.x, z: t.z, y: t.y + 1.5, fact: 'a rock tunnel carrying a molten stream from the vent', kind: 'island', under: true }); }
 			(W.caverns?.tunnels || []).forEach((t, i) => { const m = t[Math.floor(t.length / 2)]; out.push({ name: `sea cave ${i + 1}`, x: t[0].x, z: t[0].z, y: t[0].y + 2, fact: 'a swim-through lava cave with glowing walls', kind: 'island', under: true, mid: m }); });
 			(W.underworld?.entrances || []).forEach((e, i) => out.push({ ...e, caveEntrance: i, kind: 'island', fact: 'a walkable hillside mouth into this world’s connected underground; walk down the tunnel and return by the same route' }));
+			// (reached through the caves: the way there is the mouth nearest it, then the passage on)
+			const dg = W.deep?.gate, dv = dg?.via;
+			if (dg) out.push({ name: 'The Deep Gate', x: dv ? dv.x : dg.x, z: dv ? dv.z : dg.z, y: dv?.y, kind: 'island', fact: `a carved hall at the far end of the caves beneath the summit, ${Math.round(Math.hypot(dg.x - (dv?.x ?? dg.x), dg.z - (dv?.z ?? dg.z)))} m on underground from ${dv ? dv.name : 'the nearest cave mouth'}: go in at the mouth and keep to the passage that runs on toward the summit. Five singing stones stand round a sealed shaft; play back their phrase and a rope goes down into a cave with no known bottom` });
 			if (W.whale?.whale?.position) out.push({ name: 'the whale', x: W.whale.whale.position.x, z: W.whale.whale.position.z, fact: 'a humpback in the bay', kind: 'island' });
+			// an off-world colony's sites (planet/colony/)
+			for (const s of W.colony?.sites?.() || []) out.push({ name: s.name, x: s.x, z: s.z, y: s.y, fact: s.far ? 'an outpost of the colony, out along the rover tracks' : 'part of the colony', kind: 'colony' });
 			const home = store.get('crysis-home', null);
 			if (home) out.push({ name: home.name || 'home', ...toWorld(home.lat, home.lon), fact: 'your home', kind: 'home' });
 		}
@@ -196,6 +202,7 @@ export function createGuide(mount, api) {
 			.map(t => ({ ...t, id: 'place-' + norm(t.name).replace(/ /g, '-'), bodyKey, y: t.caveEntrance !== undefined ? t.y : W.player.floorAt(t.x,t.z,W.island.heightAt(t.x,t.z)), radius: t.caveEntrance !== undefined ? 6 : 14 }))
 			.filter(t => Number.isFinite(t.y) && t.y >= .3 && Math.hypot(t.x-cam.x,t.z-cam.z) < 5000)
 			.sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z)).slice(0,10);
+		places.unshift(...(W.towers?.questTargets?.() || []).map(t=>({...t,bodyKey})));
 		const residents = S.state.list(bodyKey);
 		const npcs = residents.map(r => ({ id: residentKey(r.id), name: r.persona.name, bodyKey }));
 		for (const r of residents) {
@@ -204,7 +211,7 @@ export function createGuide(mount, api) {
 		}
 		if (resident) { const actor=S.actors.all().find(p=>p.residentId===resident.id); if(actor) for(const t of places) t.scoutable=Math.hypot(t.x-actor.M.S.pos.x,t.z-actor.M.S.pos.z)<=180 && S.scoutNearby(actor,[t])?.id===t.id; }
 		const context = stories.context({ bodyKey, targets: places, npcs });
-		return { ...context, speaker: resident ? residentKey(resident.id) : null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
+		return { ...context, speaker: resident ? residentKey(resident.id) : null, workplace:resident?.workContext || null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
 	}
 	function questNotice(result) {
 		if (result?.ok === false) return result.error || 'That quest cannot be changed right now.';
@@ -222,14 +229,17 @@ export function createGuide(mount, api) {
 	function questChanged(q, announce=true) {
 		if (announce) api.hint(q.status==='complete'?`Quest complete: ${q.title}`:`Quest updated: ${q.title}`,3500);
 		if (q.status!=='complete') return;
+		if(q.reward && !q.rewardPaid) {const paid=stories.claimReward(q.id,q.bodyKey,tx=>api.arms?.apply(tx)); if(paid.ok && !paid.already) api.hint(`Quest reward: ${paid.credits} credits added to your inventory.`,4500);else if(!paid.ok && announce) api.hint(`Quest complete. ${paid.error}`,6000);}
 		const resident=api.social?.state.list(q.bodyKey).find(r=>residentKey(r.id)===q.offeredBy);
-		if (!resident || resident.storyCompletions?.includes(q.id)) return;
+		if (!resident) return;
+		api.multiplayer?.reportQuest?.(q,resident);
+		if (resident.storyCompletions?.includes(q.id)) return;
 		resident.storyCompletions=[...(resident.storyCompletions || []),q.id].slice(-64);
 		api.social.state.remember(resident.id,'event',`You and the traveller completed "${q.title}" together. ${q.premise}`);
 	}
 	function storySummary(q) {
-		const context = storyContext(), label = step => context.targets.find(t=>t.id===step.targetId)?.name || context.npcs.find(n=>n.id===step.npcId)?.name || 'the marked place';
-		return `${q.title}\n${q.premise}\n` + q.steps.map((s,i)=>`${i+1}. ${s.type==='talk'?'Speak to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
+		const context = storyContext(), label = step => context.targets.find(t=>t.id===step.targetId)?.name || context.npcs.find(n=>n.id===step.npcId)?.name || step.targetName || step.npcName || 'the marked place';
+		return `${q.title}\n${q.premise}\n${q.reward ? `Reward: ${q.reward.credits} inventory credits${q.rewardPaid?' · paid':q.status==='complete'?' · pending':' · on completion'}\n` : ''}` + q.steps.map((s,i)=>`${i+1}. ${s.type==='talk'?'Speak to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
 	}
 	async function offerStory(resident, text, signal) {
 		const context = storyContext(resident);
@@ -398,6 +408,9 @@ export function createGuide(mount, api) {
 			if (a.gathering) return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
 			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
 		}
+		// a world's own errands (planet/colony/errands.js)
+		const own = W.colony?.crew?.mark?.();
+		if (own) return own;
 		const quest = stories.list(key).find(q => q.status === 'active' && ['visit', 'return'].includes(q.steps[q.cursor]?.type));
 		if (quest) {
 			const t = storyContext().targets.find(t => t.id === quest.steps[quest.cursor].targetId);
@@ -435,7 +448,7 @@ export function createGuide(mount, api) {
 		api.waypoint?.set(waypointMark());
 		const questWorld=storyContext();
 		for (const q of stories.list(questWorld.bodyKey)) if(q.status==='complete') questChanged(q,false);
-		for (const q of stories.update({bodyKey:questWorld.bodyKey,position:cam,targets:questWorld.targets})) questChanged(q);
+		for (const q of stories.update({bodyKey:questWorld.bodyKey,position:{x:cam.x,y:cam.y-1.7,z:cam.z},targets:questWorld.targets})) questChanged(q);
 		for (const r of api.social?.state.list(questWorld.bodyKey) || []) if (r.task?.status==='completed' && r.task.targetId && Number.isFinite(r.task.completedAt)) {
 			for(const q of stories.event({id:r.task.id,type:'scout',bodyKey:questWorld.bodyKey,npcId:residentKey(r.id),targetId:r.task.targetId,taskId:r.task.id,status:'completed',completedAt:r.task.completedAt})) questChanged(q);
 		}
@@ -517,7 +530,7 @@ export function createGuide(mount, api) {
 		if (arms?.kind && arms.kind !== 'none') return arms.message;
 		if (/\b(cave|caves|underground|cavern)\b/.test(q) && !/^(take me|go|fly|bring me|teleport me|travel)/.test(q)) {
 			const t = find('nearest cave'), cam = api.camera.position;
-			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Tap the three resonant stones in an alcove to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
+			return t ? `${t.name} is ${fmtDist(Math.hypot(t.x-cam.x,t.z-cam.z))} ${dirTo(t.x-cam.x,t.z-cam.z)}. Walk into its hillside mouth and follow the sloping passage. Strike the three resonant stones in an alcove (look at one and press E, or tap it) to restore its guiding lights. The tunnel leads back to the surface; Quests lists the entrances.` : 'I have no mapped land-cave entrance on this surface yet.';
 		}
 		const travel = travelRequest(text);
 		if (travel) {
@@ -571,6 +584,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const kind = L && (L.lu === 0 || L.lu >= 11) && (!U || U.u < 0.3) ? 'nature' : U && (U.s === 0 || U.d > 0.2) ? 'city' : 'suburb';
 		return { kind, name: w?.name || 'the Bay Area' };
 	}
+	function personContext(p=partner?.p,resident=partner?.id && api.social?.state.get(partner.id)) {
+		const completed=stories.list(api.social?.bodyKey()).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident?.id||'')).map(q=>q.title);
+		return awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+	}
+
 	function talkTo(p) {
 		if (!p) return;
 		busy?.abort();
@@ -585,7 +603,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		archive.importHistory(threadMeta(partner),rec.history);
 		resetView('npc');
 		api.people?.engage(p);
-		if (resident) for (const q of stories.event({id:'talk:'+Date.now()+':'+resident.id,type:'talk',bodyKey:resident.bodyKey,npcId:residentKey(resident.id)})) questChanged(q);
+		if (resident && !personContext(p,resident).afraid) for (const q of stories.event({id:'talk:'+Date.now()+':'+resident.id,type:'talk',bodyKey:resident.bodyKey,npcId:residentKey(resident.id)})) questChanged(q);
 		title.textContent = partner.persona.name.toUpperCase();
 		input.placeholder = `Say something to ${partner.persona.first}`;
 		show(true);
@@ -593,10 +611,30 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (resident) say((api.social.state.status().error ? 'Memory is available this session, but your browser could not save it. ' : 'Remembered in this browser. ') + 'Tell me what you need in your own words, or ask me for an adventure.', 'note');
 		if (resident && llm.kind()==='cloud' && !llm.supportsPlanning?.()) say('This shared voice can chat, but flexible actions are not available yet. Common requests still work; an on-device model in ⚙ can interpret more.', 'note');
-		if (!rec.met) { rec.met = true; perform(personaOffline(partner.persona, 'hi', snapshot()), true); }
-		else say(`${partner.persona.first} turns back to you.`, 'note');
+		if(resident)for(const q of stories.list(resident.bodyKey).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident.id)))api.multiplayer?.reportQuest?.(q,resident);
+		const awareness=personContext(p,resident), opening=contextualOpening(awareness);
+		rec.met=true; perform(opening,true);
+		if(resident) api.social.state.remember(resident.id,'assistant',opening);
+		if(awareness.afraid) {p.M.feel('surprise',.85);p.M.gesture('shake');}
 		const recap = resident && gatheringRecap(resident);
 		if (recap) perform(recap, true);
+		if(!awareness.afraid) offer(p.talk?.open?.());
+	}
+	// a world's own people can have more to say and to offer (planet/colony/errands.js):
+	// a line, a note, and choices that answer with the next of the same
+	function offer(o) {
+		if (!o || !partner) return;
+		const P2 = partner;
+		if (o.say) { perform(o.say, true); if (P2.id) api.social.state.remember(P2.id, 'assistant', o.say.replace(TAG_RE, '').trim()); }
+		if (o.note) say(o.note, 'note');
+		if (!o.choices?.length) return;
+		const row = el('div', 'display:flex;gap:8px;flex-wrap:wrap;');
+		for (const c of o.choices) {
+			const b = el('button', btnCss, c.label);
+			b.onclick = () => { row.remove(); if (partner !== P2) return; say(c.label, 'me'); archiveTurn(threadMeta(P2), 'user', c.label); offer(c.fn?.()); };
+			row.append(b);
+		}
+		log.append(row); scroll();
 	}
 	function endTalk() {
 		if (!partner) return;
@@ -636,6 +674,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	function npcFor(pp, world) {
 		const near = (world?.near || []).slice(0, 6).map((n) => (typeof n === 'string' ? n : n?.name)).filter(Boolean);
 		const facts = [
+			...personContext().facts,
 			`has lived around here about ${pp.years} years`, `right now: ${pp.errand}, feeling ${pp.mood}`, `likes ${pp.hobby}`,
 			...(partner?.id ? [api.social.describe(api.social.state.get(partner.id)), ...(api.social.state.get(partner.id)?.memories || []).slice(-6).map(m => m.content)] : []),
 			...(pp.facts || []), ...(pp.tattoos || []).slice(0, 2).map((t) => 'a tattoo: ' + t),
@@ -644,7 +683,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			'when arranging to meet, always names one exact place and a clock time, never a vague promise',
 			'when asked to gather people, or to host a concert, party, picnic or meet-up, the game organises it for real',
 		].filter(Boolean);
-		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts, places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
+		return { name: pp.name, age: pp.age, job: pp.job, place: pp.place, region: pp.region || '', lang: pp.lang || '', temper: pp.style, facts:facts.slice(0,10), places: near, dialogueStyle:normalizeDialogueStyle(dialogueStyle,pp.age) };
 	}
 	async function askPerson(text) {
 		const P2 = partner, p = P2.p;
@@ -661,7 +700,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		// Gear requests are resolved by the authoritative world adapter before social
 		// intent or the language model. This lets “could you find us a hunting rifle?”
 		// work conversationally while ordinary dialogue remains non-mutating.
-		const armsResult = api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
+		// a world's own people answer their own errands first (planet/colony/errands.js)
+		const awareness=personContext(p,resident);
+		if(awareness.afraid) reply=contextualReply(awareness,text);
+		const own = reply ? null : p.talk?.reply?.(text);
+		if (own?.say) reply = own.say;
+		const armsResult = reply ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
 		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
 		if (resident) {
 			api.social.state.setPosition(resident.id, api.social.positionFor(api.world(), p.M.S.pos));
@@ -706,7 +750,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 		try {
 			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
-				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: resident?.memories?.slice(-6).map(m => m.content) }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
+				reply = await llm.chat([{ role: 'system', content: personaPrompt(P2.persona, { dialogueStyle, place: world?.place, time: world?.time, near: world?.near?.slice(0, 4), rememberedStatus: resident ? api.social.describe(resident) : null, memories: [...awareness.facts,...(resident?.memories?.slice(-3).map(m => m.content)||[])] }) + '\nOnly describe your current saved status as fact. Physical requests and structured quest offers are handled by the game. If a request could not be interpreted, ask one short clarifying question instead of agreeing to do it. Do not invent a quest or emit quest tags in ordinary dialogue. If you suggest meeting up later, name one place from the list (or here, or your place) and a clock time, and end with [[meet: PLACE @ TIME]], for example [[meet: the pier @ 6 pm]]; the player must still agree. Never promise to meet without a place and time. Never claim to have performed a delivery, fight, purchase or other action that is not in that status.' }, ...(resident ? api.social.state.get(P2.id).history : P2.history).filter(turn => turn.role === 'user' || turn.role === 'assistant')], (t) => {
 					if (ctrl.signal.aborted || partner !== P2) return;
 					bubble.textContent = t.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').replace(/\[\[\s*meet[^\]]*$/i, '').trim(); scroll();
 					from = bodySync(p, t, from);
@@ -714,13 +758,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			}
 		} catch { reply = null; }
 		if (ctrl.signal.aborted || partner !== P2) { if (busy === ctrl) busy = null; return; }
-		if (!reply) { reply = personaOffline(P2.persona, text, world); from = 0; }
+		if (!reply) { reply = contextualReply(awareness,text) || personaOffline(P2.persona, text, world); from = 0; }
 		bodySync(p, reply + (/[.!?]$/.test(reply.trim()) ? '' : '.'), from);
 		if (!resident) reply.replace(QUEST_RE, (_, pl) => { giveQuest(pl.trim(), P2.persona.first); return ''; });
 		if (resident && !meetHandled) meetNoteText = meetingFromReply(reply, text, resident, p);
 		const clean = reply.replace(TAG_RE, '').replace(ACTION_RE, '').replace(QUEST_RE, '').replace(MEET_TAG_RE, '').trim();
 		bubble.textContent = clean || '…';
 		if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
+		if (own && (own.note || own.choices)) offer({ ...own, say: null });
 		archiveTurn(threadMeta(P2),'assistant',clean);
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
@@ -781,6 +826,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			v = pool[(d?.seed ?? 0) % pool.length];
 			u.pitch = d ? (d.male ? 0.9 : 1.1) - (d.age - 40) * 0.004 : 1;
 			u.rate = 0.95 + (who.temper?.outgoing ?? 0.5) * 0.15;
+			// (a teen's own voice: teens.js voiceFor)
+			if (who.voice) { u.pitch = who.voice.pitch; u.rate = who.voice.rate; }
 		}
 		if (v) u.voice = v;
 		speechSynthesis.speak(u);
@@ -910,6 +957,15 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			}
 			if (book().status().error) say(book().status().error,'note');
 		}
+		const own = api.world()?.colony?.crew?.journal?.();
+		if (own) {
+			say(own.title, 'note');
+			for (const e of own.list) {
+				say(e.text, e.active ? 'guide' : 'note');
+				if (e.track) { const b = el('button', btnCss, 'Show the way'); b.onclick = () => { e.track(); api.waypoint?.set(waypointMark()); show(false); }; log.append(b); }
+			}
+			for (const l of own.log) say(l, 'note');
+		}
 		say('STORY QUESTS', 'note');
 		if (!list.length) say('Ask someone nearby for an adventure. They can suggest a story rooted in this world.', 'note');
 		for (const q of list.slice().reverse()) {
@@ -929,7 +985,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		endTalk(); resetView('journal'); show(true);
 		const W = api.world(), cam = api.camera.position;
 		say('CAVE EXPLORATION', 'note');
-		say('Walk through a hillside mouth into the underground. Play the three resonant stones in an alcove to restore guiding lights. You can walk back to the surface at any time.', 'guide');
+		say('Walk through a hillside mouth into the underground. Strike the three resonant stones in an alcove (look at one and press E, or tap it) to restore guiding lights. You can walk back to the surface at any time.', 'guide');
 		const caves = targets().filter(t => t.caveEntrance !== undefined).sort((a,b) => Math.hypot(a.x-cam.x,a.z-cam.z)-Math.hypot(b.x-cam.x,b.z-cam.z));
 		if (!caves.length) say('There are no mapped land-cave entrances on this surface.', 'note');
 		for (const t of caves) {
@@ -941,6 +997,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (caveVisits[api.social?.bodyKey()]) say('✓ You have explored this world’s underground.', 'note');
 		const stats = W?.underworld?.elements?.stats();
 		if (stats) say(`${stats.completed} of ${stats.sites} resonance alcoves restored. ${stats.saveError || 'Progress is saved on this device.'}`, 'note');
+		const deep = W?.deep?.info();
+		if (deep) say(deep.open ? `The Deep Gate is open. Deepest reached: ${deep.deepest} m; ${deep.waystones} waystone${deep.waystones === 1 ? '' : 's'} touched; ${deep.alcoves} deep alcove${deep.alcoves === 1 ? '' : 's'} restored.` : `The Deep Gate is sealed. It lies at the end of the caves beneath the summit${W.deep.gate.via ? ', in from ' + W.deep.gate.via.name : ''}: strike one of its five stones, listen, and play the phrase back.`, 'note');
 	}
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;

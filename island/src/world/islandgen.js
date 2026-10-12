@@ -3,6 +3,7 @@
 // and worn paths that climb from the village into the hills.
 
 import { makeNoise, mulberry32, smoothstep, clamp, lerp } from '../noise.js';
+import { farBlend } from './lunarfar.js';
 import { makeLandform } from './landforms.js';
 
 export const WORLD_SIZE = 2600;   // metres covered by the height map
@@ -170,7 +171,8 @@ export function generateIsland(params = {}) {
 		const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * N + i;
 		return (arr[k] * (1 - u) + arr[k + 1] * u) * (1 - v) + (arr[k + N] * (1 - u) + arr[k + N + 1] * u) * v;
 	}
-	const heightAt = (x, z) => sample(height, x, z);
+	// (the Moon goes on past the land's edge to the horizon: world/lunarfar.js)
+	const heightAt = kind === 'lunar' ? (x, z) => farBlend(sample(height, x, z), x, z, half) : (x, z) => sample(height, x, z);
 
 	// The village: the gentlest stretch of coast, away from the peak.
 	let village = null;
@@ -483,7 +485,7 @@ export function generateIsland(params = {}) {
 	const spawn = { x: sp.x, z: sp.z, yaw: Math.atan2(village.seaDir.x, village.seaDir.z) + Math.PI };
 
 	return {
-		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn, craters: LF?.craters || craters, land, floaters: LF?.floaters || null,
+		seed, N, size: S, cell, half, sea: SEA_LEVEL, R, peak, village, paths, spawn, craters: LF?.craters || craters, far: kind === 'lunar', land, floaters: LF?.floaters || null,
 		height, masks, heightAt, normalAt, maskAt, shapeAt: shape, coastAt, distToPath,
 		biome: params.biome || 'tropical', gravity: params.profile?.gravity || 1,
 	};

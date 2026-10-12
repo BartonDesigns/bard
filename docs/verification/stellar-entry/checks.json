@@ -1,0 +1,57 @@
+{
+  "checks": [
+    {
+      "name": "Sun old safety shell permits entry",
+      "ok": true
+    },
+    {
+      "name": "Solar interior active with heat and no hard bounce",
+      "ok": true
+    },
+    {
+      "name": "Solar return button visible",
+      "ok": true
+    },
+    {
+      "name": "Solar warp returns to home orbit and clears heat",
+      "ok": true
+    },
+    {
+      "name": "Gargantua old tidal shell permits entry",
+      "ok": true
+    },
+    {
+      "name": "Photon ring starts controlled horizon crossing",
+      "ok": true
+    },
+    {
+      "name": "Turning back cancels pending horizon entry",
+      "ok": true
+    },
+    {
+      "name": "Horizon opens existing Held Note realm",
+      "ok": true
+    },
+    {
+      "name": "Existing realm exit returns to the Event Ring",
+      "ok": true
+    },
+    {
+      "name": "Only one voyage request while loading",
+      "ok": true
+    },
+    {
+      "name": "Late rejected voyage cannot revive disposed crossing",
+      "ok": true
+    },
+    {
+      "name": "Disposed orbital buttons removed",
+      "ok": true
+    },
+    {
+      "name": "No shader or page errors",
+      "ok": true
+    }
+  ],
+  "errors": []
+}
