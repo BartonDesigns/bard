@@ -566,7 +566,9 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	// traffic downtown and on the arterials, two plain lines in the suburbs), a stop bar across
 	// the lane coming in, and the yellow domes of a curb ramp at either end of the crosswalk.
 	const CROSS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
+	let crossings = [];
 	function corners(all, x0, z0, B, Y) {
+		crossings = [];
 		const nodes = new Map(), nk = (x, z) => Math.round(x / 1.5) * 65536 + Math.round(z / 1.5);
 		for (const r of all) {
 			if (!r.drive || r.bridge || r.link || r.hand || !CROSS.has(r.cls) || !r.walked || !built(r)) continue;
@@ -595,6 +597,8 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 				// (a point a metres out along the leg and b across it, in the map's space)
 				const at = (a, b) => [n.x + ux * a + nx * b - x0, n.z + uz * a + nz * b - z0];
 				const c0 = reach + 0.8, c1 = c0 + 3;
+				// (each crosswalk, for whoever walks them: crosswalks.js)
+				crossings.push({ x: n.x + ux * (c0 + 1.5), z: n.z + uz * (c0 + 1.5), ux, uz, hw, city: big });
 				if (big) for (let b = -hw + 0.9; b <= hw - 0.6; b += 1.2) B.line([at(c0, b), at(c1, b)], 0.3, WHITE, false);
 				else for (const a of [c0, c1]) B.line([at(a, -hw + 0.3), at(a, hw - 0.3)], 0.15, WHITE, false);
 				// the stop bar across the lane coming in (the right of traffic heading for the corner)
@@ -729,5 +733,5 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 
 	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
 	// town came or went)
-	return { R, inside, near, update, dispose, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
+	return { R, inside, near, update, dispose, sidewalk, landAt, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
 }

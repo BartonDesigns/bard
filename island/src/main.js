@@ -52,6 +52,7 @@ import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
 import { createBridgeSound } from './bay/bridgesound.js';
+import { createCrosswalks } from './bay/crosswalks.js';
 import { createLake } from './bay/lake.js';
 import { createEarthWater } from './bay/earthwater.js';
 import { createWater } from './bay/water.js';
@@ -765,6 +766,8 @@ export function createIslandWorld() {
 	// today's three goals, paid as they are done (gameplay/daily.js)
 	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
 	const note = (kind, data) => daily.note(kind, data);
+	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
+	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
 	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note });
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
@@ -1708,6 +1711,7 @@ export function createIslandWorld() {
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		bridgeSound.update(dt);
+		crosswalks.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
 		W.spray?.update(dt, camera);
