@@ -735,7 +735,7 @@ export function createPeople(scene, world, camera = null) {
 	async function showcase(cam, heading, specs = [], { gap = 0.9, dist = 4.2, walk = false } = {}) {
 		await ensure();
 		if (!A) return 'assets failed';
-		for (const p of shown.splice(0)) { p.P.root.removeFromParent(); p.P.root.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
+		for (const p of shown.splice(0)) { p.P.root.removeFromParent(); p.P.root.traverse((o) => { if (o.isMesh && !o.geometry.userData.shared) o.geometry.dispose(); }); }
 		specs.forEach((q, k) => {
 			let d = null;
 			for (let tries = 0; tries < 40; tries++) {

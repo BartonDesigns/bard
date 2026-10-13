@@ -181,3 +181,88 @@ test('a car that will not start: fixed with a repair roll used beside it', async
 	assert.ok(T.paid.at(-1).get.credits >= 70);
 	assert.equal(inv.instances.r1, undefined, 'the roll is spent');
 });
+
+// ---- a lost dog ----
+// (the player walks toward a point at v m/s, a tenth of a second at a time, until done() or it is reached)
+function walker(T, R) {
+	return (x, z, v, done = () => false, max = 3000) => {
+		for (let i = 0; i < max && !done(); i++) {
+			const p = T.P.pos, dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz), s = Math.min(d, v * 0.1);
+			if (d > 0.05) p.set(p.x + (dx / d) * s, p.y, p.z + (dz / d) * s);
+			R.update(0.1);
+		}
+	};
+}
+const dogIn = (scene) => scene.children.some((o) => o.children?.some((c) => c.isSkinnedMesh));
+
+test('a lost dog: found where it ran, won over by walking up gently, led home, then off with its person', async () => {
+	const { createErrands } = await import('../src/people/errands.js');
+	const T = stage(), giver = T.body(2, -2), notes = [];
+	const R = createErrands(T.mk([giver], { note: (k, d) => notes.push([k, d]) }));
+	const walk = walker(T, R);
+	run(R, 1, 41);
+	const line = R.maybeAsk(giver, { force: true, want: 'pet' });
+	assert.equal(R.info().errand.kind, 'pet');
+	assert.match(line.text, /dog/); assert.doesNotMatch(line.text, /—/);
+	assert.match(R.info().errand.title, /dog/);
+	R.accept(); R.update(0.1);
+	assert.equal(R.info().errand.stage, 'search');
+	assert.ok(dogIn(T.scene), 'the dog is out there');
+	const drop = R.info().errand.drop, far = Math.hypot(drop[0] - 2, drop[2] + 2);
+	assert.ok(far >= 29 && far <= 91, `30 to 90 m off: ${far}`);
+	assert.equal(R.info().pet.phase, 'lost'); assert.match(R.info().pet.mood, /^sad/);
+	assert.equal(R.mark().radius, 16);
+	// running straight at it: it shies off, and is not won over
+	const at = () => R.info().pet.at;
+	T.P.pos.set(at()[0] + 9, 1.7, at()[1]);
+	walk(at()[0], at()[1], 6, () => Math.hypot(T.P.pos.x - at()[0], T.P.pos.z - at()[1]) < 2.5, 40);
+	assert.equal(R.info().errand.stage, 'search', 'not won over at a run');
+	assert.ok(T.hints.some((h) => /slowly/.test(h)));
+	// a gentle walk up and it trusts you
+	for (let k = 0; k < 6 && R.info().errand.stage === 'search'; k++) walk(at()[0], at()[1], 1, () => R.info().errand.stage !== 'search' || Math.hypot(T.P.pos.x - at()[0], T.P.pos.z - at()[1]) < 1.5, 300);
+	for (let k = 0; k < 30 && R.info().errand.stage === 'search'; k++) R.update(0.1);
+	assert.equal(R.info().errand.stage, 'lead');
+	assert.equal(R.info().pet.phase, 'follow');
+	assert.match(R.mark().title, /Bring/);
+	// home: it follows you all the way, and runs to them
+	walk(2.6, -1.2, 1.4, () => !R.info().errand);
+	for (let k = 0; k < 200 && R.info().errand; k++) R.update(0.1);
+	assert.equal(R.info().errand, null, 'brought home');
+	assert.ok(T.paid.at(-1).get.credits >= 60);
+	assert.deepEqual(T.deeds, ['favour']);
+	assert.deepEqual(notes.at(-1), ['favour', { kind: 'pet' }]);
+	assert.ok(T.said.some(([p, t]) => p === giver && /!/.test(t)), 'they are overjoyed');
+	assert.equal(R.info().pet.phase, 'reunion');
+	run(R, 0.1, 30);
+	assert.match(R.info().pet.mood, /^happy/);
+	run(R, 0.1, 60);
+	assert.equal(R.info().pet.phase, 'home');
+	assert.ok(!giver.held, 'their person is let go');
+	// walk away: the dog goes, cleanly
+	walk(120, 0, 30, () => !R.info().pet);
+	assert.equal(R.info().pet, null);
+	assert.ok(!dogIn(T.scene), 'disposed');
+});
+
+test('a dog left behind is lost again; giving up lets it wander off', async () => {
+	const { createErrands } = await import('../src/people/errands.js');
+	const T = stage(), giver = T.body(2, -2);
+	const R = createErrands(T.mk([giver]));
+	const walk = walker(T, R);
+	run(R, 1, 41);
+	R.maybeAsk(giver, { force: true, want: 'pet' }); R.accept(); R.update(0.1);
+	const at = () => R.info().pet.at;
+	T.P.pos.set(at()[0] + 8, 1.7, at()[1]);
+	for (let k = 0; k < 6 && R.info().errand.stage === 'search'; k++) walk(at()[0], at()[1], 1, () => R.info().errand.stage !== 'search' || Math.hypot(T.P.pos.x - at()[0], T.P.pos.z - at()[1]) < 1.5, 300);
+	for (let k = 0; k < 30 && R.info().errand.stage === 'search'; k++) R.update(0.1);
+	assert.equal(R.info().errand.stage, 'lead');
+	T.P.pos.set(at()[0] + 60, 1.7, at()[1]); R.update(0.1); R.update(0.1);
+	assert.equal(R.info().errand.stage, 'search', 'lost sight of you');
+	assert.equal(R.info().pet.phase, 'lost');
+	R.cancel();
+	assert.equal(R.info().errand, null);
+	assert.equal(R.info().pet.phase, 'leave');
+	walk(at()[0] + 200, at()[1], 30, () => !R.info().pet);
+	assert.equal(R.info().pet, null);
+	assert.ok(!dogIn(T.scene));
+});

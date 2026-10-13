@@ -13,6 +13,6 @@ export function fadePerson(P, k) {
 		m.opacity = on ? k : 1;
 	}
 	// (shown again by P.lod as they come near)
-	if (k < 0.6) { for (const e of P.eyes || []) e.visible = false; if (P.acc) P.acc.visible = false; if (P.detail) P.detail.visible = false; }
+	if (k < 0.6) { for (const e of P.eyes || []) e.visible = false; if (P.acc) P.acc.visible = false; for (const b of P.bags || []) b.mesh.visible = false; if (P.detail) P.detail.visible = false; }
 	P.root.visible = k > 0.01;
 }

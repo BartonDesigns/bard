@@ -153,6 +153,7 @@ export function dressFor(r, d, ctx = {}) {
 	const look = lookOf(d);
 	if (look && !o.night && chance(r, 0.85)) applyLook(r, o, office && (look === 'colour' || look === 'gorp') ? 'minimal' : look);
 	smallThings(r, d, o, { office });
+	carried(d, o, { place, act });
 	// the weather: over it all, a warm layer when it is cold, a shell in the rain
 	if (wet && !o.outer && chance(r, 0.7)) o.outer = { kind: 'shell', col: col(pick(r, gen === 'boomer' ? ['navy', 'red', 'teal', 'black'] : SHELL)), acc: col('black'), fit: 'regular', open: false, sleeves: 'long', pat: 'plain', fab: 'nylon' };
 	if (cold > 0.72 && !o.outer && chance(r, 0.8)) o.outer = gen === 'z' || gen === 'alpha' ? { kind: 'puffer', col: col(pick(r, gen === 'alpha' ? KID : ['black', 'cream', 'olive', 'chocolate', 'butter', 'cobalt', 'cherry', 'sage'])), fit: 'oversized', open: false, sleeves: 'long', pat: 'quilt', fab: 'nylon' } : { kind: 'quilted', col: col(pick(r, ['navy', 'olive', 'black', 'chocolate', 'camel'])), fit: 'regular', open: true, sleeves: 'long', pat: 'quilt', fab: 'nylon' };
@@ -194,6 +195,20 @@ function smallThings(r, d, o, { office }) {
 	if (!has('watch') && chance(r, (({ z: 0.12, millennial: 0.35, x: 0.5, boomer: 0.55 })[gen] ?? 0.2) + (office ? 0.2 : 0))) o.acc.push({ kind: 'watch', col: col(pick(r, ['black', 'chocolate', 'tan', 'charcoal'])), acc: metal, metal: chance(r, 0.35) });
 	if (!has('earrings') && chance(r, f ? 0.6 : gen === 'z' ? 0.18 : 0.05)) o.acc.push({ kind: 'earrings', hoop: f && chance(r, gen === 'z' || gen === 'millennial' ? 0.45 : 0.2), col: metal });
 	if (!has('chain') && chance(r, gen === 'z' ? 0.18 : gen === 'millennial' ? 0.08 : 0.03)) o.acc.push({ kind: 'chain', col: metal });
+}
+
+// what they have in hand from the shops: a paper or plastic bag, or a handbag (drawn from
+// their own seed, so nothing else about them changes)
+const KRAFT = ['#a77f55', '#b08a5e', '#f0ece2', '#c9b79a', '#4d6b58', '#2e3f5c', '#7a2f3b'], FILM = ['#f4f4f0', '#eef2f4', '#f3eedc', '#dfe9f0'];
+function carried(d, o, { place, act }) {
+	if (d.child || act !== 'walk' || o.acc.some((q) => q.kind === 'tote')) return;
+	let a = ((d.seed ?? 0) ^ 0x5b0a9) >>> 0;
+	const r = () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+	const city = place === 'sf' || place === 'oakland', k = r();
+	if (k < (city ? 0.16 : 0.08)) {
+		const paper = r() < 0.6;
+		o.acc.push({ kind: 'shopper', paper, fill: Math.floor(r() * 3), col: paper ? pick(r, KRAFT) : pick(r, FILM) });
+	} else if (k < (city ? 0.16 : 0.08) + (d.male ? 0.03 : 0.1) && !o.acc.some((q) => q.kind === 'backpack')) o.acc.push({ kind: 'handbag', col: col(pick(r, ['black', 'chocolate', 'tan', 'camel', 'burgundy', 'cream', 'olive'])) });
 }
 
 // a sleeve length for the day

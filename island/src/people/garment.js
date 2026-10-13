@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { CLOTH_CAPS, clothUniforms, CLOTH_CONTACT_GLSL } from './cloth-collide.js';
 import { drapePanels, refineGarmentSurface, finishGarmentEdges, sleeveDistance } from './garment-tailoring.js';
+import { patchKit } from './propkit.js';
 
 // ---------- the painting ----------
 // pattern ids (the shader's)
@@ -597,18 +598,21 @@ export function clothGeometry(A, p, o, cut, R) {
 // one geometry for all of them, each vertex bound whole to the bone it rides
 export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	const { map, heads, eyes } = P0;
-	const out = { pos: [], nor: [], col: [], si: [], gl: [] };
+	const out = { pos: [], nor: [], col: [], si: [], kit: [] };
 	const colour = new THREE.Color();
-	const put = (geo, bone, c, gloss = 0) => {
+	// (bone: a name, or a function of the height for a strap that runs down the body)
+	const put = (geo, bone, c, gloss = 0, fab = 0) => {
 		geo.computeVertexNormals();
 		const g = geo.index ? geo.toNonIndexed() : geo;
-		const pa = g.attributes.position, na = g.attributes.normal, bi = map[bone] ?? 0;
+		const pa = g.attributes.position, na = g.attributes.normal, bi = typeof bone === 'function' ? null : map[bone] ?? 0;
 		colour.set(c);
 		for (let i = 0; i < pa.count; i++) {
 			out.pos.push(pa.getX(i), pa.getY(i), pa.getZ(i)); out.nor.push(na.getX(i), na.getY(i), na.getZ(i));
-			out.col.push(colour.r, colour.g, colour.b); out.si.push(bi); out.gl.push(gloss);
+			out.col.push(colour.r, colour.g, colour.b); out.si.push(bi ?? map[bone(pa.getY(i))] ?? 0); out.kit.push(gloss, fab, 0);
 		}
 	};
+	// the straps of the bags they carry (bags.js fitted them to this body)
+	for (const f of P0.bags || []) for (const s of f.straps) put(s.geo, s.bone, s.col, s.gloss || 0, s.fab || 0);
 	const sk = cut.skull, cx = (sk.x0 + sk.x1) / 2, cz = (sk.z0 + sk.z1) / 2 - 0.005, rx = (sk.x1 - sk.x0) / 2, rz = (sk.z1 - sk.z0) / 2, top = sk.y1;
 	const eyeY = eyes ? (eyes[0].y + eyes[1].y) / 2 : top - 0.1, eyeZ = eyes ? Math.max(eyes[0].z, eyes[1].z) : sk.z1 - 0.03;
 	// a dome over the skull: from `from` (0 crown .. 1 the rim) down `deep` metres, a little proud of the hair
@@ -702,35 +706,6 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 			const band = new THREE.TorusGeometry(1, 0.035, 6, 20, Math.PI); band.scale(rx + 0.03, top - eyeY + 0.06, 0.35); band.translate(cx, eyeY - 0.02, cz - 0.01);
 			put(band, 'head', c, 0.4);
 			for (const s of [-1, 1]) { const cup = new THREE.CylinderGeometry(0.038, 0.038, 0.03, 16); cup.rotateZ(Math.PI / 2); cup.translate(cx + s * (rx + 0.018), eyeY - 0.03, cz - 0.01); put(cup, 'head', c, 0.4); }
-		} else if (q.kind === 'backpack') {
-			const w = q.slim ? 0.28 : 0.31, h = q.slim ? 0.4 : 0.44, d = q.slim ? 0.1 : 0.15;
-			const bag = new THREE.BoxGeometry(w, h, d, 2, 2, 2);
-			const pa = bag.attributes.position;
-			for (let i = 0; i < pa.count; i++) { const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i); pa.setXYZ(i, x * (1 - Math.abs(y / h) * 0.12), y, z * (z > 0 ? 1 : 0.6) * (1 - Math.abs(y / h) * 0.25)); }
-			bag.translate(0, cut.chest - 0.08, cut.backZ - d / 2 - 0.035);
-			put(bag, 'spine01', c);
-			const pocket = new THREE.BoxGeometry(w * 0.7, h * 0.35, 0.04); pocket.translate(0, cut.chest - 0.2, cut.backZ - d - 0.045); put(pocket, 'spine01', a2);
-			for (const s of [-1, 1]) {
-				const st = new THREE.BoxGeometry(0.045, 0.012, 0.3); st.rotateX(0.6); st.translate(s * 0.09, cut.shoulder + 0.03, (cut.backZ + cut.frontZ) / 2 - 0.02); put(st, 'spine01', '#1b1b1d');
-				const fr = new THREE.BoxGeometry(0.04, 0.26, 0.01); fr.translate(s * 0.1, cut.chest - 0.02, cut.frontZ + 0.028); put(fr, 'spine01', '#1b1b1d');
-			}
-		} else if (q.kind === 'tote') {
-			// carried in the left hand: the bag hangs from the fist
-			const w = heads[map['wrist.L']];
-			const bag = new THREE.BoxGeometry(0.06, 0.34, 0.32); bag.translate(w.x + 0.03, w.y - 0.27, w.z); put(bag, 'wrist.L', c);
-			const strap = new THREE.BoxGeometry(0.012, 0.1, 0.012); strap.translate(w.x + 0.03, w.y - 0.07, w.z + 0.06); put(strap, 'wrist.L', c);
-			const strap2 = strap.clone(); strap2.translate(0, 0, -0.12); put(strap2, 'wrist.L', c);
-			const print = new THREE.CircleGeometry(0.06, 12); print.rotateY(Math.PI / 2); print.translate(w.x + 0.061, w.y - 0.25, w.z); put(print, 'wrist.L', a2);
-		} else if (q.kind === 'crossbody') {
-			const bag = q.small ? new THREE.BoxGeometry(0.16, 0.1, 0.045) : new THREE.BoxGeometry(0.2, 0.12, 0.06); bag.translate(0.09, cut.waist - 0.02, cut.frontZ + 0.02); put(bag, 'spine04', c);
-			// the strap across the chest, from the right shoulder to the left hip
-			const s0 = new THREE.Vector3(-cut.shoulderX * 0.55, cut.shoulder + 0.05, (cut.backZ + cut.frontZ) / 2), s1 = new THREE.Vector3(-0.06, cut.chest, cut.frontZ + 0.02), s2 = new THREE.Vector3(0.12, cut.waist + 0.03, cut.frontZ + 0.01);
-			for (const [a, b, bone] of [[s0, s1, 'spine01'], [s1, s2, 'spine02']]) {
-				const L = a.distanceTo(b), st = new THREE.BoxGeometry(0.03, L, 0.008);
-				const qn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3().subVectors(b, a).normalize());
-				st.applyQuaternion(qn); st.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-				put(st, bone, '#1b1b1d');
-			}
 		} else if (q.kind === 'gloves' || q.kind === 'mitt') {
 			for (const s of q.kind === 'mitt' ? ['L'] : ['L', 'R']) {
 				const wi = map['wrist.' + s], w = heads[wi], dir = P0.rest.dirs[wi];
@@ -763,7 +738,7 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	g.setAttribute('position', new THREE.Float32BufferAttribute(out.pos, 3));
 	g.setAttribute('normal', new THREE.Float32BufferAttribute(out.nor, 3));
 	g.setAttribute('color', new THREE.Float32BufferAttribute(out.col, 3));
-	g.setAttribute('gloss', new THREE.Float32BufferAttribute(out.gl, 1));
+	g.setAttribute('kit', new THREE.Float32BufferAttribute(out.kit, 3));
 	const n = out.si.length, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
 	for (let i = 0; i < n; i++) { si[i * 4] = out.si[i]; sw[i * 4] = 1; }
 	g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4));
@@ -771,17 +746,11 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 	g.computeBoundingSphere();
 	return g;
 }
-// one material for every accessory of every person
+// one material for every accessory of every person (the bags' own, propkit.js, in white)
 let accMat = null;
 export function accessoryMaterial() {
 	if (accMat) return accMat;
-	accMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide });
-	accMat.onBeforeCompile = (sh) => {
-		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float gloss;\nvarying float vGloss;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGloss = gloss;');
-		sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vGloss;').replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = vGloss > 1.5 ? 0.24 : mix(0.8, 0.12, vGloss); metalnessFactor = vGloss > 1.5 ? 1.0 : vGloss * 0.3;');
-	};
-	accMat.customProgramCacheKey = () => 'crysis-acc-2';
+	accMat = patchKit(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }));
 	accMat.userData.shared = true;
 	return accMat;
 }
-
