@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { offerFor, lineFor, rewardFor, step, milestone, relativeDir } from './errands-core.js';
 import { rememberIncident } from './world-awareness.js';
+import { promoted } from '../gameplay/ranks.js';
 
 const OFFER_FOR = 15, OFFER_REACH = 12, PICK = 1.4, HAND = 2.3, AWAY = 220;
 const LIMIT = { search: 360, bring: 360, chase: 150, carry: 300 };
@@ -174,7 +175,8 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		const paid = arms()?.apply?.({ id: `favour:${E.giverName}:${Date.now()}`, kind: 'trade', peer: 'favour', give: { credits: 0, items: [] }, get: { credits, items: [] } });
 		morality()?.record?.({ kind: 'favour', target: E.giverName, world: worldKey(), place: placeName() });
 		tally.done++; save();
-		const m = milestone(tally.done);
+		const up = promoted('favours', tally.done - 1, tally.done);
+		const m = (up ? `You are now known as: ${up}.` : '') || milestone(tally.done);
 		hint(`${paid?.ok === false ? 'Favour done' : `+${credits} credits`}: ${E.title}.${m ? ' ' + m : ''}`, m ? 6000 : 3500);
 		end(null, 7);
 	}

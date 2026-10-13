@@ -4,6 +4,7 @@
 // and smooth ride. Their own voice in the car, a word if you drive like a maniac.
 import * as THREE from 'three';
 import { quote, settle, step, line } from './fares-core.js';
+import { promoted } from '../gameplay/ranks.js';
 
 const STORE = 'crysis-fares-v1';
 const BOARD = 7, ARRIVE = 16, SLOW = 2.5;
@@ -117,7 +118,8 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 			const paid = arms()?.apply?.({ id: `fare:${F.name}:${Date.now()}`, kind: 'trade', peer: 'fare', give: { credits: 0, items: [] }, get: { credits: S.total, items: [] } });
 			tally.rides++; tally.earned += S.total; if (S.stars === 5) tally.five++; save();
 			last = S;
-			hint(`${paid?.ok === false ? 'Fare' : `+${S.total} credits`} (fare ${S.fare}${S.tip ? `, tip ${S.tip}` : ''}) · ${'★'.repeat(S.stars)}${'☆'.repeat(5 - S.stars)}${tally.rides === 1 ? ' · your first fare' : tally.rides % 10 === 0 ? ` · ${tally.rides} fares` : ''}`, 5000);
+			const up = promoted('fares', tally.rides - 1, tally.rides);
+			hint(`${paid?.ok === false ? 'Fare' : `+${S.total} credits`} (fare ${S.fare}${S.tip ? `, tip ${S.tip}` : ''}) · ${'★'.repeat(S.stars)}${'☆'.repeat(5 - S.stars)}${up ? ` · Driver rank: ${up}` : ''}`, 5000);
 			endWith(body, 6);
 			return;
 		}

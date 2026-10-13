@@ -18,6 +18,7 @@ import { createDialogueArchive } from './dialogue-archive.js';
 import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
 import { createLocalSpeech } from './local-speech.js';
 import { voiceShape } from '../people/chatter-lines.js';
+import { rankOf } from '../gameplay/ranks.js';
 import { chooseGuideModel } from './preferences.js';
 import { travelRequest, resolveTravel } from './travel.js';
 import { loadAtlas, atlasReady, cities, regions } from '../earth/atlas.js';
@@ -896,7 +897,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const residentsB = el('button', btnCss, 'People'); residentsB.setAttribute('aria-label', 'Remembered people');
 	head.append(title, statusEl, gearB, closeB);
 	const questB = el('button', btnCss, 'Quests'); questB.setAttribute('aria-label','Story quests');
-	const tabs = el('div','display:flex;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');tabs.append(residentsB,questB,archiveB);
+	const tabs = el('div','display:flex;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');const storyB=el('button',btnCss,'Story');storyB.setAttribute('aria-label','Your story: standing, favours and fares');tabs.append(residentsB,questB,storyB,archiveB);
 	const archiveControls=el('div','display:none;flex-shrink:0;padding:6px 12px;gap:6px;flex-wrap:wrap;');
 	const archiveSearch=el('input','min-width:0;flex:1;padding:8px;background:#172225;border:1px solid #586567;border-radius:8px;color:#fff;');archiveSearch.type='search';archiveSearch.placeholder='Search every conversation';archiveSearch.setAttribute('aria-label','Search conversations');
 	const archiveExport=el('button',btnCss,'Export'); archiveControls.append(archiveSearch,archiveExport);
@@ -1016,6 +1017,28 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		for (const q of QUESTS.filter(q => !q[2] || find(q[2]))) say(`${journal[q[0]] ? '✓' : '○'} ${q[1]}`, 'note');
 		const caves = el('button', btnCss, 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
 	}
+	// your story so far: who the world takes you for, and what you have done for it
+	function showStory() {
+		endTalk(); resetView('story'); show(true);
+		const M = api.combat?.morality, R = M?.reactions?.(), me = M?.me?.() || {}, E = api.errands?.info?.() || {}, F = api.fares?.info?.() || {};
+		const bar = (k) => '▰'.repeat(Math.round(k * 10)) + '▱'.repeat(10 - Math.round(k * 10));
+		const rung = (ladder, count, what) => { const r = rankOf(ladder, count); return `${r.title} · ${count} ${what}${r.next ? `\n${bar(r.k)} ${r.next.at - count} more to ${r.next.title}` : '\nThe top of the ladder.'}`; };
+		say('WHO THEY SAY YOU ARE', 'note');
+		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Nobody knows your name yet'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
+		if (R?.song) say(R.song, 'note');
+		say('FAVOURS', 'note');
+		say(rung('favours', E.done || 0, 'done') + (E.kept ? `\nWallets kept: ${E.kept}` : ''), 'guide');
+		if (E.errand) {
+			say(`Under way: ${E.errand.title} (${E.errand.stage})`, 'guide');
+			const give = el('button', btnCss, 'Give up on it'); give.onclick = () => { api.errands.cancel(); showStory(); }; log.append(give);
+		}
+		say('FARES', 'note');
+		say(rung('fares', F.rides || 0, 'rides') + `\nEarned ${F.earned || 0} credits · ${F.five || 0} five-star rides`, 'guide');
+		if (F.fare) say(`In the car now: ${F.fare.name}${F.fare.place ? ' to ' + F.fare.place : ''} · fare ${F.fare.fare}`, 'guide');
+		const recent = M?.log?.(5) || [];
+		if (recent.length) { say('LATELY', 'note'); for (const e of recent.slice().reverse()) say(e.line + (e.place ? ` · ${e.place}` : ''), 'note'); }
+		log.scrollTop = 0;
+	}
 	function showCaves() {
 		endTalk(); resetView('journal'); show(true);
 		const W = api.world(), cam = api.camera.position;
@@ -1037,6 +1060,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;
+	storyB.onclick=showStory;
 	residentsB.onclick = showPeople;
 	open.onclick = () => show(true);
 	closeB.onclick = () => { endTalk(); show(false); };
@@ -1145,5 +1169,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!rec || rec.seed !== p.P.dna.seed) { rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed }; people.set(p, rec); }
 		return rec.persona;
 	}
-	return { voice, personaOf, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
+	return { voice, personaOf, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }
