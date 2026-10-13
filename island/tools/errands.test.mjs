@@ -143,3 +143,16 @@ test('a bag snatched: chase the thief, they drop it, give it back; or they get a
 	T.P.pos.set(0, 1.7, 0); assert.match(R2.snatch(), /bag back/); for (let k = 0; k < 520; k++) R2.update(0.1);
 	assert.equal(R2.info().errand, null); assert.match(R2.info().last, /escaped/);
 });
+
+test('asked in a conversation, someone can offer a favour and waits longer for an answer', async () => {
+	const { createErrands } = await import('../src/people/errands.js');
+	const T = stage(), giver = T.body(1, -1.5, { engaged: true });
+	const R = createErrands(T.mk([giver]));
+	const o = R.offerTo(giver);
+	assert.ok(o?.text && o.title);
+	assert.ok(R.asking(giver));
+	for (let k = 0; k < 40; k++) R.update(0.5);                     // twenty seconds of talking it over
+	assert.ok(R.asking(giver), 'still on offer');
+	R.accept(); R.update(0.1);
+	assert.notEqual(R.info().errand.stage, 'offered');
+});

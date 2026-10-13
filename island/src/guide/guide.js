@@ -718,6 +718,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const awareness=personContext(p,resident);
 		if(awareness.afraid) reply=contextualReply(awareness,text);
 		const own = reply ? null : p.talk?.reply?.(text);
+		// asked whether they need a hand: a favour of their own (people/errands.js), said yes to here
+		let favour = null;
+		if (!reply && !own && /\b(need (?:any )?help|can i help|any favou?rs?|anything i can do|help you with|do you need anything|need a hand)\b/i.test(text)) {
+			const o = api.errands?.offerTo?.(p);
+			if (o) { reply = o.text; favour = { choices: [{ label: "I'll do it", fn: () => { api.errands.accept(); return { say: '[[mood: happy]] [[gesture: nod]] Thank you! Really.' }; } }, { label: 'Not now', fn: () => { api.errands.cancel(); return { say: '[[mood: calm]] No problem. Thanks for asking.' }; } }] }; }
+		}
 		if (own?.say) reply = own.say;
 		const armsResult = reply ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
 		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
@@ -780,6 +786,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		bubble.textContent = clean || '…';
 		if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
 		if (own && (own.note || own.choices)) offer({ ...own, say: null });
+		if (favour) offer({ ...favour, say: null });
 		archiveTurn(threadMeta(P2),'assistant',clean);
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });

@@ -120,9 +120,9 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 
 	// ---------- asking ----------
 	// chatter asks whether this passer-by wants a favour instead of a word in passing
-	function maybeAsk(p, { afraid = false, force = false } = {}) {
-		if (E || (cool > 0 && !force) || afraid || !p || p.leaving || p.P.dna.child || p.P.dna.minor || p.role === 'jog' || p.engaged || p.override || p.held) return null;
-		if (driving() || world()?.player?.state?.flying) return null;
+	function maybeAsk(p, { afraid = false, force = false, talking = false } = {}) {
+		if (E || (cool > 0 && !force) || afraid || !p || p.leaving || p.P.dna.child || p.P.dna.minor || p.role === 'jog' || (!talking && (p.engaged || p.override)) || p.held) return null;
+		if (!talking && (driving() || world()?.player?.state?.flying)) return null;
 		if (!force && Math.random() > (tally.done < 2 ? 0.3 : 0.18)) return null;
 		const W = world(); if (!W) return null;
 		const me = pos(p), cam = camera.position, f = camera.getWorldDirection(_v);
@@ -140,7 +140,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		if (!offer) return null;
 		let drop = null;
 		if (offer.kind === 'lost') { drop = dropSpot(me); if (!drop) return null; }
-		E = { ...offer, stage: 'offered', giver: p, giverName: who.first, friendP: friend, drop, t: 0, from: { x: me.x, z: me.z }, centre: drop && { x: drop.x + (Math.random() - 0.5) * 9, y: drop.y, z: drop.z + (Math.random() - 0.5) * 9 } };
+		E = { ...offer, talking, stage: 'offered', giver: p, giverName: who.first, friendP: friend, drop, t: 0, from: { x: me.x, z: me.z }, centre: drop && { x: drop.x + (Math.random() - 0.5) * 9, y: drop.y, z: drop.z + (Math.random() - 0.5) * 9 } };
 		hold(p, 'stand');
 		if (friend) hold(friend, kind === 'catch' ? 'walk' : 'stand');
 		if (tally.done < 2) hint(isPhone ? `${who.first} is asking for help. Walk up and tap Help to say yes.` : `${who.first} is asking for help. Walk up and press Enter to say yes.`, 5000);
@@ -213,7 +213,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		if (lost(g) && E.stage !== 'chase' && E.stage !== 'carry') { go('lost-them'); return; }
 		if (f && lost(f) && (E.stage === 'chase' || E.stage === 'carry' || E.stage === 'offered')) { go('lost-them'); return; }
 		if (E.stage === 'offered') {
-			if (E.t > OFFER_FOR || flat(me, pos(g)) > OFFER_REACH + 4) go('decline');
+			if (E.t > (E.talking ? 90 : OFFER_FOR) || flat(me, pos(g)) > OFFER_REACH + 4) go('decline');
 			return;
 		}
 		if (E.stage === 'thief') {
@@ -303,8 +303,10 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		morality()?.record?.({ kind: 'stop-thief', target: E.giverName, world: worldKey(), place: placeName() });
 		note('thief', {});
 	}
+	// asked in a conversation whether they need anything: a favour of their own, or nothing
+	function offerTo(p) { const line = maybeAsk(p, { force: true, talking: true }); return line ? { text: line.text, title: E.title } : null; }
 	function cancel() { if (E) go(E.stage === 'offered' ? 'decline' : 'timeout'); }
 	function dispose() { if (E) { for (const p of [E.giver, E.friendP]) release(p); E = null; } for (const [p] of releaseAt) release(p); releaseAt = []; clearProp(); glintTex?.dispose(); glintTex = null; }
 	function info() { return { errand: E && { kind: E.kind, stage: E.stage, title: E.title, giver: E.giverName, friend: E.friend || null, t: Math.round(E.t), drop: E.drop && [E.drop.x, E.drop.y, E.drop.z].map((v) => Math.round(v * 10) / 10) }, cool: Math.round(cool), last: lastEnd, ...tally }; }
-	return { maybeAsk, askNearest, snatch: () => snatch(true), asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
+	return { maybeAsk, offerTo, askNearest, snatch: () => snatch(true), asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
 }
