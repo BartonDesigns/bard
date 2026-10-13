@@ -29,6 +29,8 @@ export const RULES = Object.freeze({
 	collateral: { mercy: -3, law: -3, protect: -5, honest: 0, line: 'Bystanders hurt in your fight' },
 	ward: { mercy: -25, law: -10, protect: -30, honest: 0, line: 'Raised a hand against a warded child' },
 	rescue: { mercy: 6, law: 2, protect: 10, honest: 0, line: 'Drove off those hurting {target}' },
+	favour: { mercy: 2, law: 1, protect: 2, honest: 2, line: 'Did {target} a favour' },
+	'kept-wallet': { mercy: -1, law: -3, protect: -1, honest: -8, line: "Kept {target}'s lost wallet" },
 	'boss-slain': { mercy: 0, law: 2, protect: 8, honest: 0, line: 'Brought down {target}' },
 });
 // context: multipliers on the negative (harm) side of a deed, or on all of it, from one table

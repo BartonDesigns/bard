@@ -118,6 +118,7 @@ import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers, talkers } from './people/people.js';
 import { createChatter } from './people/chatter.js';
+import { createErrands } from './people/errands.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createPicnicJam } from './encounters/picnic-jam.js';
@@ -639,7 +640,8 @@ export function createIslandWorld() {
 	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'display:none;', 'prompt 50');
 	dom.mount.appendChild(talkBtn);
 	let talkTarget = null, talkT = 0;
-	const talkNow = () => { if (talkTarget) guide.talkTo(talkTarget); };
+	// (someone asking a favour: the same control says yes to it, people/errands.js)
+	const talkNow = () => { if (!talkTarget) return; if (HOOKS.errands?.asking(talkTarget)) HOOKS.errands.accept(); else guide.talkTo(talkTarget); };
 	talkBtn.addEventListener('click', (e) => { e.stopPropagation(); talkNow(); });
 	for (const ev of ['pointerdown', 'touchstart']) talkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if (e.key === 'Enter' && talkTarget && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); talkNow(); } });
@@ -750,8 +752,12 @@ export function createIslandWorld() {
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	guideApi.combat=combat;
+	// the compass, for every system that records a deed (families' food deeds, favours)
+	HOOKS.morality = combat.morality;
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
-	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg });
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands });
+	// favours people ask of you as you pass (people/errands.js)
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '' });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -811,7 +817,7 @@ export function createIslandWorld() {
 		if (cur && P && cur.p.M.S.pos.distanceTo(camera.position) > 7) { guide.endTalk(); hint(`${cur.persona.first} goes back to what they were doing.`, 2500); }
 		talkTarget = P && !P.flying && !cur ? people.facing(camera.position, P.yaw) : null;
 		talkBtn.style.display = talkTarget ? '' : 'none';
-		if (talkTarget) talkBtn.textContent = isPhone ? '💬 Talk' : '💬 Talk (Enter)';
+		if (talkTarget) talkBtn.textContent = HOOKS.errands?.asking(talkTarget) ? (isPhone ? '🤝 Help' : '🤝 Help (Enter)') : isPhone ? '💬 Talk' : '💬 Talk (Enter)';
 	}
 
 	// the loading card over a whole arrival (api.open with a spot, lifted by share.js)
@@ -1188,6 +1194,7 @@ export function createIslandWorld() {
 		HOOKS.combat?.reset();
 		HOOKS.gear?.suspend();
 		families.clear();
+		HOOKS.errands?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
 		social.reset();
@@ -1722,6 +1729,7 @@ export function createIslandWorld() {
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
+		errands.update(dt);
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
 		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
@@ -2081,6 +2089,8 @@ if (typeof window !== 'undefined') {
 		social: () => HOOKS.social,
 		// what passers-by last said and when the next may speak: Crysis.chatter()
 		chatter: () => HOOKS.chatter?.info(),
+		// favours in passing: Crysis.errands() what is under way; .accept() / .cancel()
+		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
 		scene: () => HOOKS.scene,
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()

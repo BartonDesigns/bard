@@ -668,7 +668,8 @@ export function createPeople(scene, world, camera = null) {
 				const d = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z), kid = p.P.dna.child;
 				// family members go when their family does
 				const F = p.fam;
-				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && (d > NEAR * 1.25 || Math.abs(S.pos.y-cam.y)>6 || active >= na));
+				// (someone in a favour with you is kept until it is over: people/errands.js)
+				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && !p.held && (d > NEAR * 1.25 || Math.abs(S.pos.y-cam.y)>6 || active >= na));
 				if (go && !p.leaving) { p.leaving = true; p.leaveT = 0; }
 				if (p.leaving) {
 					// going: gone once out of sight (or far off); faded out if you keep watching

@@ -410,6 +410,9 @@ export function createGuide(mount, api) {
 			if (a.gathering) return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
 			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
 		}
+		// a favour under way for someone you passed (people/errands.js)
+		const fav = api.errands?.mark?.();
+		if (fav) return fav;
 		// a world's own errands (planet/colony/errands.js)
 		const own = W.colony?.crew?.mark?.();
 		if (own) return own;
@@ -588,7 +591,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	function personContext(p=partner?.p,resident=partner?.id && api.social?.state.get(partner.id)) {
 		const completed=stories.list(api.social?.bodyKey()).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident?.id||'')).map(q=>q.title);
-		return awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		const c=awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		// (a favour under way with this person: they know what they asked, errands.js)
+		const fav=api.errands?.factFor?.(p); if(fav) c.facts=[...c.facts,fav].slice(0,7);
+		return c;
 	}
 
 	function talkTo(p) {
@@ -1130,5 +1136,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		place: (p, f) => localSpeech.place(p, f),
 		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
 	};
-	return { voice, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
+	// the name and character a passer-by has, the same one a conversation with them will use
+	function personaOf(p) {
+		let rec = people.get(p);
+		if (!rec || rec.seed !== p.P.dna.seed) { rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed }; people.set(p, rec); }
+		return rec.persona;
+	}
+	return { voice, personaOf, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }
