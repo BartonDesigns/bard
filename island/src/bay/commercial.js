@@ -21,6 +21,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { inCampus } from './discovery.js';
 import { flashAtlas } from '../tattoo/skinink.js';
+import { shopScheme, seedAt } from './decor.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
 let SHEET = null;
@@ -77,9 +78,23 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		goods: [S(0xc0392b), S(0x2e86c1), S(0xf1c40f), S(0x27ae60), S(0x8e44ad), S(0xe67e22), S(0xecf0f1)],
 		skin: [S(0xe0b494), S(0xc68e6a), S(0x8d5a3b), S(0x5a3a26), S(0xf0cfb0)], cloth: [S(0x2c3e50), S(0x7f8c8d), S(0xa93226), S(0x1f618d), S(0x117a65), S(0xd4ac0d), S(0x6c3483), S(0xeeeeee)],
 	};
+	// the inside faces of the walls, painted: one material for every building, each wall its
+	// own colour in its vertices (so a painted room or an accent wall costs no draw of its own)
+	mats.lining = S(0xffffff, 0.9, { vertexColors: true });
+	mats.lining.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= vColor.rgb;'); };
+	mats.lining.customProgramCacheKey = () => 'lining';
 	for (const m of Object.values(mats).flat()) addLodFade(m, 'building', band);
-	const FILL = [mats.wall, mats.walld, mats.ceil, mats.floorW, mats.floorT, mats.carpet, mats.lane, mats.wood, mats.white, mats.leather, mats.red, mats.seat, mats.steel, mats.food, mats.cup, mats.green, ...mats.goods, ...mats.skin, ...mats.cloth];
+	const FILL = [mats.wall, mats.walld, mats.ceil, mats.floorW, mats.floorT, mats.carpet, mats.lane, mats.wood, mats.white, mats.leather, mats.red, mats.seat, mats.steel, mats.food, mats.cup, mats.green, mats.lining, ...mats.goods, ...mats.skin, ...mats.cloth];
 	for (const m of FILL) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.1; }
+	// the floors, desks and seats in a place's own colours (decor.js shopScheme): tinted copies
+	// of the shared materials, kept and shared by every place that asks for the same colour
+	const tints = new Map();
+	const tinted = (base, rgb) => {
+		const key = base.uuid + rgb.map((v) => v.toFixed(3)).join(',');
+		let m = tints.get(key);
+		if (!m) { m = base.clone(); m.color.setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace); m.emissive = m.color.clone(); m.emissiveIntensity = 0.1; addLodFade(m, 'building', band); FILL.push(m); tints.set(key, m); }
+		return m;
+	};
 	const built = new Map();         // grp -> building
 
 	// ---------- building one ----------
@@ -98,8 +113,17 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// the shell: the floor, three solid walls, the storefront (glass between mullions, the
 		// doorway open), the ceiling of light panels, the walls above and the roof
 		const outside = mats.wall.clone(); outside.color.setRGB(...(b.look?.wall || city?.buildingLook?.(b)?.wall || [.91,.89,.85]), THREE.SRGBColorSpace); outside.emissiveIntensity=0; addLodFade(outside, 'building', band);
-		const floorMat = type === 'office' ? mats.carpet : type === 'restaurant' || type === 'bowling' ? mats.floorW : type === 'cinema' ? mats.carpet : mats.floorT;
+		const sc = shopScheme(type, seedAt(b.x, b.z));
+		const floorMat = type === 'office' || type === 'cinema' ? tinted(mats.carpet, sc.carpet) : type === 'restaurant' ? tinted(mats.floorW, sc.wood) : type === 'bowling' ? mats.floorW : tinted(mats.floorT, sc.tile);
 		box(floorMat, -hw, -0.4, -hd, hw, 0, hd);
+		// the walls inside, painted, the back one sometimes in the place's colour
+		const lining = (x0, z0, x1, z1, rgb, h) => {
+			const g = new THREE.BoxGeometry(x1 - x0, h, z1 - z0).translate((x0 + x1) / 2, h / 2, (z0 + z1) / 2).toNonIndexed(), c = new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2], THREE.SRGBColorSpace), a = new Float32Array(g.attributes.position.count * 3);
+			for (let i = 0; i < a.length; i += 3) a.set([c.r, c.g, c.b], i);
+			g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+			add(mats.lining, g);
+		};
+		const desk = type === 'office' ? tinted(mats.white, sc.desk) : mats.white, sofa = type === 'office' ? tinted(mats.leather, sc.seat) : mats.leather;
 		box(outside, -hw, 0, -hd, hw, H, -hd + WALL, true);
 		box(outside, -hw, 0, -hd, -hw + WALL, H, hd, true);
 		box(outside, hw - WALL, 0, -hd, hw, H, hd, true);
@@ -123,6 +147,13 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			box(mats.ceil, -hw, CEIL, -hd, hw, CEIL + 0.12, hd);
 			for (let x = -hw + 2; x < hw - 1; x += 3) for (let z = -hd + 2; z < hd - 1; z += 3) box(type === 'cinema' && z < hd - 9 ? mats.ceil : mats.panel, x - 0.55, CEIL - 0.02, z - 0.55, x + 0.55, CEIL, z + 0.55);
 		} else openCeiling();
+		// (up to the ceiling, or the roof deck where it is open)
+		const lh = open ? H - 0.14 : CEIL + 0.1;
+		if (type !== 'bowling' && type !== 'cinema') {
+			lining(-hw + WALL, -hd + WALL, hw - WALL, -hd + WALL + 0.015, sc.accent || sc.wall, lh);
+			lining(-hw + WALL, -hd + WALL, -hw + WALL + 0.015, hd - WALL, sc.wall, lh);
+			lining(hw - WALL - 0.015, -hd + WALL, hw - WALL, hd - WALL, sc.wall, lh);
+		}
 		function openCeiling() {
 			const beam = (mat, x0, y0, x1, y1, z, t) => { const L = Math.hypot(x1 - x0, y1 - y0); add(mat, new THREE.BoxGeometry(L, t, t).rotateZ(Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2, z)); };
 			const top = H - 0.14, yb = Math.max(CEIL + 0.4, H - 1.9), span = W - 2 * WALL;
@@ -231,11 +262,11 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			for (let z = inside.z0 + 2.3; z < inside.z1 - 2.5; z += 2.6) seats.push([inside.x0 + 1 + rnd() * (iw - 2), z, rnd() * 6, false]);
 		} else if (type === 'office') {
 			// reception by the door, a sofa, then the desks
-			box(mats.white, doorX - 1.5, 0, inside.z1 - 3, doorX + 1.5, 1.1, inside.z1 - 2.3, true);
-			box(mats.leather, inside.x1 - 3, 0, inside.z1 - 1.4, inside.x1 - 0.8, 0.45, inside.z1 - 0.6); box(mats.leather, inside.x1 - 3, 0.45, inside.z1 - 0.6, inside.x1 - 0.8, 0.9, inside.z1 - 0.45);
+			box(desk, doorX - 1.5, 0, inside.z1 - 3, doorX + 1.5, 1.1, inside.z1 - 2.3, true);
+			box(sofa, inside.x1 - 3, 0, inside.z1 - 1.4, inside.x1 - 0.8, 0.45, inside.z1 - 0.6); box(sofa, inside.x1 - 3, 0.45, inside.z1 - 0.6, inside.x1 - 0.8, 0.9, inside.z1 - 0.45);
 			seats.push([doorX, inside.z1 - 3.5, 0, false]);
 			for (let z = inside.z0 + 1.2; z < inside.z1 - 5; z += 3) for (let x = inside.x0 + 1; x < inside.x1 - 1.6; x += 1.7) {
-				box(mats.white, x, 0.72, z, x + 1.5, 0.76, z + 0.75); box(mats.trim, x + 0.05, 0, z + 0.05, x + 0.1, 0.72, z + 0.7); box(mats.trim, x + 1.4, 0, z + 0.05, x + 1.45, 0.72, z + 0.7);
+				box(desk, x, 0.72, z, x + 1.5, 0.76, z + 0.75); box(mats.trim, x + 0.05, 0, z + 0.05, x + 0.1, 0.72, z + 0.7); box(mats.trim, x + 1.4, 0, z + 0.05, x + 1.45, 0.72, z + 0.7);
 				box(mats.screen, x + 0.45, 0.8, z + 0.12, x + 1.05, 1.18, z + 0.15);
 				box(mats.dark, x + 0.5, 0.42, z + 0.95, x + 1, 0.47, z + 1.4);
 				seats.push([x + 0.75, z + 1.2, Math.PI, true]);

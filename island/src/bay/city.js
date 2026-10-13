@@ -27,6 +27,7 @@ import { inWater, waterTreesNear, waterVersion } from './watercarve.js';
 import { inClearing, clearingVersion } from '../sportsfields.js';
 import { onLandmark } from './footprints.js';
 import { roofGeometry, roofDetail, ROOF } from './roofs.js';
+import { houseEra, exteriorLook, cityEra, seedAt } from './decor.js';
 import { createProps } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 
@@ -965,6 +966,7 @@ export function createCity(shared, scene, bay, real = null) {
 					const pop = !two && w > 11 && R(6) < 0.1, w1 = pop ? w * 0.56 : w;
 					const H = lot(list, a, style, pop ? hx - gs * (w - w1) / 2 : hx, at(hf + d / 2), w1, d, h, doorKind(KIND.house, pop ? Math.min(0.75, Math.max(0.25, door)) : door), col, roof, false, O);
 					if (!H) return;
+					H.era = remodel && R(10) < 0.4 ? 'modern' : cityEra(era, R(11));
 					const cnd = condFor(H, T.neglectK);
 					setCond(H, cnd);
 					if (pop) setCond(lot(list, a, style, hx + gs * w1 / 2, at(hf + d / 2 + 0.6), w - w1, d - 1.2, 6.4, KIND.house, col, { ...roof, hip: true, h: Math.min(w - w1, d) * 0.28 }, false, O), cnd);
@@ -993,6 +995,7 @@ export function createCity(shared, scene, bay, real = null) {
 					const O = { face, rot, pw: rot ? fromGrid(cx, at(hf + d / 2), a, style) : null };
 					const H = lot(list, a, style, cx, at(hf + d / 2), w, d, h, doorKind(KIND.house, door), col, { hip: big || r > 0.8, rot: r < 0.3 && !big, h: Math.min(w, d) * (0.42 + (R(6) - 0.5) * 0.2), col: rc, t: T.roofT, ov: 0.45 }, false, O);
 					if (!H) return;
+					H.era = R(10) < 0.82 ? 'prewar' : R(11) < 0.6 ? 'ranch' : 'split';
 					const cnd = condFor(H, T.neglectK);
 					setCond(H, cnd);
 					if (R(7) < 0.15) setCond(lot(list, a, style, cx + (R(2) - 0.5) * w * 0.3, at(hf + d + 2), Math.min(w * 0.6, 6), 4.2, 3.2, KIND.house, jit(col, R(7) * 5 % 1), { hip: false, rot: true, h: 1.2, col: rc, t: R(7) < 0.06 ? ROOF.metal : T.roofT, ov: 0.3 }, false, O), cnd);
@@ -1796,11 +1799,14 @@ export function createCity(shared, scene, bay, real = null) {
 	// the real city's buildings, pools and yard trees round (cx, cz)
 	// San Ramon's roofs from the air: mostly grey and charcoal concrete tile and composition
 	// shingle, some brown, a share of terracotta
-	// a house's colours, from where it stands
+	// a house's colours, from where it stands: its era's (decor.js; houses.js builds the near
+	// house from the same look), the tracts' roofs as they are from the air
 	function houseLook(b) {
 		const r = hash(Math.round(b.x / 9) * 3.7, Math.round(b.z / 9) * 1.9);
 		const r2 = hash(Math.round(b.x / 9) * 5.3 + 1, Math.round(b.z / 9) * 2.3 + 7);
-		return { r, r2, wall: jit(pick(r < 0.5 ? PAL.suburb : r < 0.75 ? PAL.ranch : PAL.seventies, r2), r), roof: pick(REAL_ROOF, hash(Math.round(b.x / 9) + 11, Math.round(b.z / 9) + 5)), garage: hash(Math.round(b.x / 9) * 7.7, 3) > 0.5 ? [0.93, 0.92, 0.88] : null };
+		const era = houseEra(b.x, b.z, { era: b.look?.era }), L = exteriorLook(era, seedAt(b.x, b.z));
+		if (era === 'tract') { L.roof = pick(REAL_ROOF, hash(Math.round(b.x / 9) + 11, Math.round(b.z / 9) + 5)); L.roofT = L.roof[0] > L.roof[2] * 1.4 ? ROOF.barrel : r2 < 0.6 ? ROOF.flatTile : ROOF.shingle; }
+		return { r, r2, ...L };
 	}
 	// a house built for real (at c) or given back (null): its blocks hand over, or come back
 	function setNear(grp, c) {
@@ -1848,7 +1854,7 @@ export function createCity(shared, scene, bay, real = null) {
 			if (!grp) {
 				if (house) {
 					const door = Math.min(1, Math.max(0, ((o.kind - 1) - 0.01) / 0.38));
-					grp = [{ x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, wallH: o.h - 1.2, roofH: o.roof.h, kind: 0, door, hip: o.roof.hip ? 1 : 0, look: { wall: o.col, roof: o.roof.col, garage: null } }];
+					grp = [{ x: o.x, z: o.z, w: o.w, d: o.d, a: o.a, wallH: o.h - 1.2, roofH: o.roof.h, kind: 0, door, hip: o.roof.hip ? 1 : 0, look: { wall: o.col, roof: o.roof.col, garage: null, era: o.era } }];
 					const [gi, gj] = [Math.floor(o.x / 24), Math.floor(o.z / 24)];
 					let hasG = false;
 					for (let j = gj - 1; j <= gj + 1 && grp.length < 4; j++) for (let i = gi - 1; i <= gi + 1 && grp.length < 4; i++) for (const g of gar.get(i + ',' + j) || []) {
@@ -1971,7 +1977,7 @@ export function createCity(shared, scene, bay, real = null) {
 			else { kind = KIND.industry; col = jit(pick(PAL.industry, r2), r); }
 			// (a tall block mapped as a garage or a shed is an office block: glazed, not a blank wall)
 			if ((kind === KIND.garage || kind === KIND.plain) && top - y > 9) { kind = KIND.office; col = jit(pick(PAL.office, r2), r); }
-			if (b.roofH > 0.1) roof = { hip: !!b.hip, h: b.roofH, col: rc };
+			if (b.roofH > 0.1) { roof = { hip: !!b.hip, h: b.roofH, col: rc }; if (home && look.roofT !== undefined) { roof.t = look.roofT; roof.trim = look.roofTrim; } }
 			if (b.kind >= 5) b.look = { wall: col, roof: rc };
 			const ro = { x: b.x, y, z: b.z, w: b.w, d: b.d, h: top - y, a: b.a, col, kind, roof, src: b, age: ageFor(STYLE.suburb, kind, b.x, b.z) };
 			list.push(ro);

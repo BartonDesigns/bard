@@ -8,7 +8,8 @@
 // walls, doors, railings, stairs and furniture are solid; the floors and stairs carry you.
 
 import * as THREE from 'three';
-import { planHouse, houseFloor, mainOf, HT, TW } from './houseplan.js';
+import { planHouse, houseFloor, mainOf, houseSeed, HT, TW } from './houseplan.js';
+import { houseEra, exteriorLook, householdDecor } from './decor.js';
 import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
 import { occasions } from '../calendar.js';
 import { carGeometry, carMaterial } from './cars.js';
@@ -18,9 +19,6 @@ import { NONE_IN, anchorBuilding, buildingBand, updateDetailClock } from '../wor
 const RAISE = new Set(['living', 'family', 'dining', 'master']);
 import { inCampus } from './discovery.js';
 
-const FLOOR = { living: 'wood', dining: 'wood', family: 'wood', office: 'wood', entry: 'tile', hall: 'wood', loft: 'carpet', kitchen: 'tile', bath: 'tile', mbath: 'tile', powder: 'tile', laundry: 'tile', bed: 'carpet', master: 'carpet', closet: 'carpet', garage: 'concrete' };
-const PAINTS = [[0.93, 0.91, 0.86], [0.9, 0.88, 0.82], [0.87, 0.85, 0.79], [0.94, 0.93, 0.9], [0.86, 0.84, 0.8]];
-const KIDS = [[0.74, 0.84, 0.9], [0.8, 0.88, 0.76], [0.93, 0.82, 0.84], [0.84, 0.8, 0.9], [0.95, 0.9, 0.72]];
 const CAR_PAINT = [[0.92, 0.92, 0.9], [0.08, 0.08, 0.09], [0.45, 0.46, 0.48], [0.7, 0.71, 0.72], [0.2, 0.28, 0.45], [0.55, 0.1, 0.1]];
 
 export function createHouses(scene, bay, real, city, { isPhone = false, night = { value: 0 } } = {}) {
@@ -58,14 +56,34 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const g = new Builder();
 		const col = [];                 // colliders: [x0, z0, x1, z1, y0, y1] in the house frame
 		const doors = [];
-		const look = Mb.look || city?.houseLook?.(Mb) || { wall: [0.88, 0.84, 0.76], roof: [0.3, 0.3, 0.32] };
-		const WALL = lin(look.wall), WHITE = lin([0.94, 0.93, 0.9]), TRIM = lin(rnd() < 0.8 ? [0.95, 0.94, 0.91] : [0.42, 0.36, 0.3]);
+		// when it was built and who lives there (decor.js): the outside its era's (the city's
+		// colours for it where the city gave them, so the far block hands over to the same
+		// house), the inside the household's
+		const seed = houseSeed(Mb), given = Mb.look || city?.houseLook?.(Mb);
+		const era = houseEra(Mb.x, Mb.z, { era: given?.era }), ext = exteriorLook(era, seed), dec = householdDecor(era, seed);
+		const look = { ...ext, ...(given || {}) };
+		if (!look.garage) look.garage = ext.garage;
+		const WALL = lin(look.wall), WHITE = lin([0.94, 0.93, 0.9]), TRIM = lin(dec.trim), TK = dec.trimKey;
+		const XT = lin(look.trim || ext.trim), FRAME = lin(look.frame || look.trim || ext.trim), EXT = look.siding != null ? 'siding' + look.siding : 'stucco';
 		const FOAM = lin(look.wall.map((c) => Math.min(1, c * 1.08 + 0.03)));
-		const paint = plan.rooms.map((r) => lin(r.type === 'garage' ? [0.82, 0.8, 0.76] : r.type === 'bed' && rnd() < 0.6 ? KIDS[Math.floor(rnd() * KIDS.length)] : PAINTS[Math.floor(rnd() * PAINTS.length)]));
+		// the surrounds of the windows and doors outside: foam on stucco, boards on wood, none
+		const SK = look.surround === 'stucco' ? 'stucco' : look.surround === 'none' ? null : 'trim', SC = SK === 'stucco' ? FOAM : XT;
 		const lv = (L) => (L ? HT.floor1 : 0);
 		// which rooms have a light on after dark
 		const lit = plan.rooms.map((r) => rnd() < (r.type === 'garage' || r.type === 'closet' ? 0.08 : r.level ? 0.45 : 0.6));
-		const wallKey = (room) => (lit[room] ? 'paintLit' : 'paint');
+		// each room's walls (paint, paper, panelling), and in some one wall picked out: the
+		// longest, fewest-opened one it has
+		const fin = plan.rooms.map((r) => { const f = dec.wall(r.type, r.id); return { key: f.key, col: lin(f.col) }; });
+		const acc = plan.rooms.map((r) => { const f = dec.accent(r.type, r.id); return f && { key: f.key, col: lin(f.col) }; });
+		const accW = plan.rooms.map(() => null), accS = plan.rooms.map(() => -1e9);
+		for (const w of plan.walls) for (const rm of w.kind === 'ext' ? [w.room] : [w.ra, w.rb]) {
+			if (!(rm >= 0) || !acc[rm]) continue;
+			const sc = w.e - w.s - w.open.length * 1.5;
+			if (sc > accS[rm]) { accS[rm] = sc; accW[rm] = w; }
+		}
+		const finOf = (room, w) => (acc[room] && accW[room] === w ? acc[room] : fin[room]);
+		const paint = fin.map((f) => f.col);
+		const wallKey = (room, w) => { const k = finOf(room, w).key; return !lit[room] ? k : k === 'paint' ? 'paintLit' : k.startsWith('paper') ? 'paperLit' + k.slice(5) : k; };
 		const root = new THREE.Group();
 		root.position.set(Mb.x, floorY, Mb.z);
 		root.rotation.y = -Mb.a;
@@ -81,8 +99,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			// which face shows what: the + side and the - side across the wall
 			const plusRoom = w.kind === 'ext' ? (w.inSide > 0 ? w.room : -1) : w.rb, minusRoom = w.kind === 'ext' ? (w.inSide < 0 ? w.room : -1) : w.ra;
 			const across = w.axis === 'x' ? [4, 5] : [0, 1];
-			const keyF = (f) => (f === across[0] ? (plusRoom >= 0 ? wallKey(plusRoom) : 'stucco') : f === across[1] ? (minusRoom >= 0 ? wallKey(minusRoom) : 'stucco') : f === 3 ? null : 'paint');
-			const colF = (f) => (f === across[0] ? (plusRoom >= 0 ? paint[plusRoom] : WALL) : f === across[1] ? (minusRoom >= 0 ? paint[minusRoom] : WALL) : WHITE);
+			const keyF = (f) => (f === across[0] ? (plusRoom >= 0 ? wallKey(plusRoom, w) : EXT) : f === across[1] ? (minusRoom >= 0 ? wallKey(minusRoom, w) : EXT) : f === 3 ? null : 'paint');
+			const colF = (f) => (f === across[0] ? (plusRoom >= 0 ? finOf(plusRoom, w).col : WALL) : f === across[1] ? (minusRoom >= 0 ? finOf(minusRoom, w).col : WALL) : WHITE);
 			const cuts = [w.s, w.e];
 			for (const o of w.open) cuts.push(Math.max(w.s, Math.min(w.e, o.s0)), Math.max(w.s, Math.min(w.e, o.s1)));
 			cuts.sort((p, q) => p - q);
@@ -99,12 +117,14 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			function piece(u0, u1, y0, y1) {
 				if (w.axis === 'x') g.box(keyF, u0, y0, a0, u1, y1, a1, colF); else g.box(keyF, a0, y0, u0, a1, y1, u1, colF);
 				col.push(w.axis === 'x' ? [u0, a0, u1, a1, y0, y1] : [a0, u0, a1, u1, y0, y1]);
-				// baseboards along the floor, on the room sides
-				if (y0 <= lv(L) + 0.01) for (const [room, face, sgn] of [[plusRoom, a1, 1], [minusRoom, a0, -1]]) {
+				// baseboards along the floor, on the room sides (tall in the old houses, a
+				// picture rail up the wall in some)
+				for (const [room, face, sgn] of [[plusRoom, a1, 1], [minusRoom, a0, -1]]) {
 					if (room < 0 || plan.rooms[room].type === 'garage') continue;
-					const f1 = face + sgn * 0.013, y = lv(L);
-					if (w.axis === 'x') g.box('trim', u0, y, Math.min(face, f1), u1, y + 0.09, Math.max(face, f1), TRIM);
-					else g.box('trim', Math.min(face, f1), y, u0, Math.max(face, f1), y + 0.09, u1, TRIM);
+					const f1 = face + sgn * 0.013, y = lv(L), yr = y + 2.12;
+					const band = (b0, b1, t) => { const f2 = face + sgn * t; if (w.axis === 'x') g.box(TK, u0, b0, Math.min(face, f2), u1, b1, Math.max(face, f2), TRIM); else g.box(TK, Math.min(face, f2), b0, u0, Math.max(face, f2), b1, u1, TRIM); };
+					if (y0 <= y + 0.01) band(y, y + dec.base, f1 - face);
+					if (dec.rail && y0 < yr && y1 > yr + 0.05) band(yr, yr + 0.045, sgn * 0.022);
 				}
 			}
 			// the openings' dressing
@@ -133,24 +153,33 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (o.type === 'window' || o.type === 'slider') {
 				// the frame, set back from the outside face, and the glass in it
 				const f0 = out + sgn * 0.03, f1 = out + sgn * 0.1, fw = 0.05;
-				wbox(w, 'trim', o.s0, o.s1, o.y0, o.y0 + fw, f0, f1, TRIM);
-				wbox(w, 'trim', o.s0, o.s1, o.y1 - fw, o.y1, f0, f1, TRIM);
-				wbox(w, 'trim', o.s0, o.s0 + fw, o.y0, o.y1, f0, f1, TRIM);
-				wbox(w, 'trim', o.s1 - fw, o.s1, o.y0, o.y1, f0, f1, TRIM);
+				wbox(w, 'trim', o.s0, o.s1, o.y0, o.y0 + fw, f0, f1, FRAME);
+				wbox(w, 'trim', o.s0, o.s1, o.y1 - fw, o.y1, f0, f1, FRAME);
+				wbox(w, 'trim', o.s0, o.s0 + fw, o.y0, o.y1, f0, f1, FRAME);
+				wbox(w, 'trim', o.s1 - fw, o.s1, o.y0, o.y1, f0, f1, FRAME);
 				const wide = o.s1 - o.s0 > 1.1 && o.type === 'window';
-				if (wide) wbox(w, 'trim', (o.s0 + o.s1) / 2 - 0.025, (o.s0 + o.s1) / 2 + 0.025, o.y0, o.y1, f0 - sgn * 0.01, f1 + sgn * 0.01, TRIM);
-				if (o.type === 'window' && o.y1 - o.y0 > 1.2 && !wide) wbox(w, 'trim', o.s0, o.s1, (o.y0 + o.y1) / 2 - 0.02, (o.y0 + o.y1) / 2 + 0.02, f0, f1, TRIM);
+				if (wide) wbox(w, 'trim', (o.s0 + o.s1) / 2 - 0.025, (o.s0 + o.s1) / 2 + 0.025, o.y0, o.y1, f0 - sgn * 0.01, f1 + sgn * 0.01, FRAME);
+				if (o.type === 'window' && o.y1 - o.y0 > 1.2 && !wide) wbox(w, 'trim', o.s0, o.s1, (o.y0 + o.y1) / 2 - 0.02, (o.y0 + o.y1) / 2 + 0.02, f0, f1, FRAME);
 				const gz = out + sgn * 0.065, g0 = o.type === 'slider' ? (o.s0 + o.s1) / 2 : o.s0 + fw;
 				wbox(w, o.frosted ? 'frost' : 'glass', g0, o.s1 - fw, o.y0 + fw, o.y1 - fw, gz - 0.003, gz + 0.003, WHITE);
+				// divided lites: the old houses' muntins, the tracts' grids
+				if (look.grilles && o.type === 'window' && !o.frosted) {
+					const W = o.s1 - o.s0, n = Math.max(2, Math.round(W / 0.4)), y0 = o.y0 + fw, y1 = o.y1 - fw, ym = (o.y0 + o.y1) / 2;
+					for (let k = 1; k < n; k++) { const u = o.s0 + W * k / n; if (!wide || Math.abs(u - (o.s0 + o.s1) / 2) > 0.05) wbox(w, 'trim', u - 0.012, u + 0.012, y0, y1, gz - 0.012, gz + 0.012, FRAME); }
+					for (const t of o.y1 - o.y0 > 1.2 ? [0.25, 0.75] : [0.5]) { const yy = o.y0 + (o.y1 - o.y0) * t; if (Math.abs(yy - ym) > 0.05 || o.y1 - o.y0 <= 1.2) wbox(w, 'trim', o.s0 + fw, o.s1 - fw, yy - 0.012, yy + 0.012, gz - 0.012, gz + 0.012, FRAME); }
+				}
 				const c0 = o.type === 'slider' ? (o.s0 + o.s1) / 2 : o.s0;
 				col.push(w.axis === 'x' ? [c0, Math.min(a0, a1), o.s1, Math.max(a0, a1), o.y0, o.y1] : [Math.min(a0, a1), c0, Math.max(a0, a1), o.s1, o.y0, o.y1]);
 				if (o.type === 'window') {
-					// outside: a sill and a foam surround; inside: a stool
-					wbox(w, 'stucco', o.s0 - 0.12, o.s1 + 0.12, o.y0 - 0.07, o.y0, out, out - sgn * 0.06, FOAM);
-					wbox(w, 'stucco', o.s0 - 0.1, o.s1 + 0.1, o.y1, o.y1 + 0.1, out, out - sgn * 0.025, FOAM);
-					wbox(w, 'stucco', o.s0 - 0.1, o.s0, o.y0, o.y1, out, out - sgn * 0.025, FOAM);
-					wbox(w, 'stucco', o.s1, o.s1 + 0.1, o.y0, o.y1, out, out - sgn * 0.025, FOAM);
-					wbox(w, 'trim', o.s0 - 0.04, o.s1 + 0.04, o.y0 - 0.02, o.y0 + 0.01, f1, inn + sgn * 0.04, TRIM);
+					// outside: a sill and a surround (foam on stucco, boards on wood siding); inside: a stool
+					if (SK) {
+						const ck = SK === 'trim' ? 0.035 : 0;
+						wbox(w, SK, o.s0 - 0.12, o.s1 + 0.12, o.y0 - 0.07, o.y0, out, out - sgn * 0.06, SC);
+						wbox(w, SK, o.s0 - 0.1 - ck, o.s1 + 0.1 + ck, o.y1, o.y1 + 0.1 + ck, out, out - sgn * 0.025, SC);
+						wbox(w, SK, o.s0 - 0.1 - ck, o.s0, o.y0, o.y1, out, out - sgn * 0.025, SC);
+						wbox(w, SK, o.s1, o.s1 + 0.1 + ck, o.y0, o.y1, out, out - sgn * 0.025, SC);
+					}
+					wbox(w, TK, o.s0 - 0.04, o.s1 + 0.04, o.y0 - 0.02, o.y0 + 0.01, f1, inn + sgn * 0.04, TRIM);
 					// blinds, some partly drawn
 					if (rnd() < 0.55) {
 						const k = 0.15 + rnd() * 0.75, bz = inn - sgn * 0.02;
@@ -160,7 +189,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				// curtains in the living rooms and bedrooms
 				const room = plan.rooms[w.room];
 				if (room && ['living', 'master', 'family', 'dining', 'bed'].includes(room.type) && rnd() < 0.5) {
-					const cc = lin([[0.85, 0.82, 0.74], [0.6, 0.62, 0.64], [0.45, 0.3, 0.25], [0.8, 0.8, 0.78]][Math.floor(rnd() * 4)]), cz0 = inn + sgn * 0.05, cz1 = inn + sgn * 0.13, top = Math.min(o.y1 + 0.2, lv(w.level) + (w.level ? HT.ceil1 - HT.floor1 : HT.ceil0) - 0.05);
+					const cc = lin(dec.curtains[Math.floor(rnd() * dec.curtains.length)]), cz0 = inn + sgn * 0.05, cz1 = inn + sgn * 0.13, top = Math.min(o.y1 + 0.2, lv(w.level) + (w.level ? HT.ceil1 - HT.floor1 : HT.ceil0) - 0.05);
 					wbox(w, 'fabric', o.s0 - 0.35, o.s0 + 0.05, lv(w.level) + 0.02, top, cz0, cz1, cc);
 					wbox(w, 'fabric', o.s1 - 0.05, o.s1 + 0.35, lv(w.level) + 0.02, top, cz0, cz1, cc);
 					wbox(w, 'metal', o.s0 - 0.4, o.s1 + 0.4, top + 0.02, top + 0.045, cz0 + sgn * 0.03, cz0 + sgn * 0.055, lin([0.2, 0.2, 0.2]));
@@ -175,9 +204,11 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 					if (room < 0) {
 						// outside the front door: a foam surround and a light
 						if (o.type === 'front') {
-							wbox(w, 'stucco', o.s0 - 0.14, o.s0, 0, o.y1 + 0.14, face, face + s2 * 0.03, FOAM);
-							wbox(w, 'stucco', o.s1, o.s1 + 0.14, 0, o.y1 + 0.14, face, face + s2 * 0.03, FOAM);
-							wbox(w, 'stucco', o.s0 - 0.14, o.s1 + 0.14, o.y1, o.y1 + 0.14, face, face + s2 * 0.03, FOAM);
+							if (SK) {
+								wbox(w, SK, o.s0 - 0.14, o.s0, 0, o.y1 + 0.14, face, face + s2 * 0.03, SC);
+								wbox(w, SK, o.s1, o.s1 + 0.14, 0, o.y1 + 0.14, face, face + s2 * 0.03, SC);
+								wbox(w, SK, o.s0 - 0.14, o.s1 + 0.14, o.y1, o.y1 + 0.14, face, face + s2 * 0.03, SC);
+							}
 							wbox(w, 'metal', o.s1 + 0.3, o.s1 + 0.46, 1.75, 2.05, face, face + s2 * 0.16, lin([0.12, 0.11, 0.1]));
 							wbox(w, 'lamp', o.s1 + 0.32, o.s1 + 0.44, 1.8, 2.0, face + s2 * 0.02, face + s2 * 0.14, lin([0.98, 0.9, 0.7]));
 							wbox(w, 'matte', o.s0 - 0.45, o.s0 - 0.2, 1.5, 1.62, face, face + s2 * 0.02, lin([0.12, 0.12, 0.12]));
@@ -186,17 +217,19 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 					}
 					if (plan.rooms[room].type === 'garage' && o.type !== 'door') continue;
 					const f1 = face + s2 * 0.015;
-					wbox(w, 'trim', o.s0 - cw, o.s0, lv(w.level), o.y1 + cw, face, f1, TRIM);
-					wbox(w, 'trim', o.s1, o.s1 + cw, lv(w.level), o.y1 + cw, face, f1, TRIM);
-					wbox(w, 'trim', o.s0 - cw, o.s1 + cw, o.y1, o.y1 + cw, face, f1, TRIM);
+					wbox(w, TK, o.s0 - cw, o.s0, lv(w.level), o.y1 + cw, face, f1, TRIM);
+					wbox(w, TK, o.s1, o.s1 + cw, lv(w.level), o.y1 + cw, face, f1, TRIM);
+					wbox(w, TK, o.s0 - cw, o.s1 + cw, o.y1, o.y1 + cw, face, f1, TRIM);
 				}
 				if (o.type === 'door' || o.type === 'front') doors.push(swingDoor(w, o, a0, a1));
 				return;
 			}
 			if (o.type === 'garage') {
-				wbox(w, 'stucco', o.s0 - 0.15, o.s0, 0, o.y1 + 0.15, out, out - sgn * 0.035, FOAM);
-				wbox(w, 'stucco', o.s1, o.s1 + 0.15, 0, o.y1 + 0.15, out, out - sgn * 0.035, FOAM);
-				wbox(w, 'stucco', o.s0 - 0.15, o.s1 + 0.15, o.y1, o.y1 + 0.15, out, out - sgn * 0.035, FOAM);
+				if (SK) {
+					wbox(w, SK, o.s0 - 0.15, o.s0, 0, o.y1 + 0.15, out, out - sgn * 0.035, SC);
+					wbox(w, SK, o.s1, o.s1 + 0.15, 0, o.y1 + 0.15, out, out - sgn * 0.035, SC);
+					wbox(w, SK, o.s0 - 0.15, o.s1 + 0.15, o.y1, o.y1 + 0.15, out, out - sgn * 0.035, SC);
+				}
 				doors.push(garageDoor(w, o, out, sgn));
 			}
 		}
@@ -226,8 +259,9 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			const mz = [-Math.sin(phi), -Math.cos(phi)], sideDir = w.axis === 'x' ? [0, swing] : [swing, 0];
 			const sign = mz[0] * sideDir[0] + mz[1] * sideDir[1] > 0 ? 1 : -1;
 			const b = new Builder();
-			const dc = front ? lin(pick3(rnd, [[0.42, 0.12, 0.1], [0.12, 0.18, 0.28], [0.36, 0.24, 0.15], [0.16, 0.22, 0.18], [0.9, 0.9, 0.86]])) : WHITE;
-			b.box(front ? 'door6' : 'door6', 0, 0, -t / 2, width - 0.04, h, t / 2, dc);
+			// the era's doors: its front door and colour, the household's inside
+			const dc = lin(front ? look.door || ext.door : dec.door.col);
+			b.box('door' + (front ? look.doorStyle ?? ext.doorStyle : dec.door.slot), 0, 0, -t / 2, width - 0.04, h, t / 2, dc);
 			// the knob, both sides
 			for (const sz of [-1, 1]) b.cyl('door6', width - 0.12, 0.98, sz * t / 2, 0.028, sz * 0.06, lin([0.72, 0.62, 0.4]), 8, 'z');
 			for (const m of b.meshes(M)) pivot.add(m);
@@ -252,7 +286,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			const leaf = new THREE.Group();
 			pivot.add(leaf);
 			const b = new Builder();
-			b.box('garage', -width / 2, -h, -0.03, width / 2, 0, 0.0, lin(look.garage || [0.93, 0.92, 0.88]));
+			b.box('garage' + (look.garageStyle ?? ext.garageStyle), -width / 2, -h, -0.03, width / 2, 0, 0.0, lin(look.garage));
 			for (const m of b.meshes(M)) leaf.add(m);
 			root.add(pivot);
 			const D = { kind: 'garage', pivot, leaf, open: 0, target: 0, level: 0, h,
@@ -270,8 +304,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			pivot.position.set(w.axis === 'x' ? o.s0 : gz + sgn * 0.035, o.y0, w.axis === 'x' ? gz + sgn * 0.035 : o.s0);
 			if (w.axis !== 'x') pivot.rotation.y = -Math.PI / 2;
 			const b = new Builder();
-			b.box('trim', 0, 0, -0.02, 0.05, h, 0.02, TRIM); b.box('trim', width - 0.05, 0, -0.02, width, h, 0.02, TRIM);
-			b.box('trim', 0, 0, -0.02, width, 0.06, 0.02, TRIM); b.box('trim', 0, h - 0.05, -0.02, width, h, 0.02, TRIM);
+			b.box('trim', 0, 0, -0.02, 0.05, h, 0.02, FRAME); b.box('trim', width - 0.05, 0, -0.02, width, h, 0.02, FRAME);
+			b.box('trim', 0, 0, -0.02, width, 0.06, 0.02, FRAME); b.box('trim', 0, h - 0.05, -0.02, width, h, 0.02, FRAME);
 			b.box('glass', 0.05, 0.06, -0.003, width - 0.05, h - 0.05, 0.003, WHITE);
 			b.box('metal', 0.07, 0.9, 0.02, 0.09, 1.2, 0.05, lin([0.3, 0.3, 0.3]));
 			for (const m of b.meshes(M)) pivot.add(m);
@@ -312,20 +346,21 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		const st = plan.stairs;
 		// (the well upstairs: over the flight, and on to the front wall where the entry below rises two storeys)
 		const inWell = (c) => { if (!st) return false; const [x, z] = cxz(c); return x > st.x0 && x < st.x1 && z > st.zt && z < (st.zw ?? st.zb); };
-		const FT = { wood: lin(pick3(rnd, [[0.78, 0.6, 0.42], [0.5, 0.36, 0.25], [0.66, 0.6, 0.55], [0.85, 0.72, 0.55]])), tile: lin(pick3(rnd, [[0.9, 0.86, 0.78], [0.75, 0.73, 0.7], [0.86, 0.8, 0.7]])), carpet: lin(pick3(rnd, [[0.78, 0.74, 0.66], [0.62, 0.62, 0.6], [0.7, 0.66, 0.6]])), concrete: lin([0.72, 0.71, 0.68]) };
+		// the floors, room by room (decor.js), and the wood of the stairs
+		const FT = { wood: lin(dec.wood) }, floorOf = rooms.map((rm) => { const f = dec.floor(rm.type, rm.level); return { key: f.key, col: lin(f.col) }; });
 		const upOver = (c) => plan.onLevel(c, 1);
 		for (const L of [0, 1]) {
 			const lab = labels[L], y = lv(L), yc = L ? HT.ceil1 : HT.ceil0;
 			for (const r of cellRects(L, (c) => (lab[c] >= 0 && !(L === 1 && inWell(c)) ? lab[c] : null))) {
-				const room = rooms[r.k], fk = L === 1 && room.type === 'hall' ? 'carpet' : FLOOR[room.type] || 'wood';
-				g.quad(fk, [r.x0, y, r.z0], [r.x1, y, r.z0], [r.x1, y, r.z1], [r.x0, y, r.z1], [0, 1, 0], FT[fk], [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]]);
+				const f = floorOf[r.k];
+				g.quad(f.key, [r.x0, y, r.z0], [r.x1, y, r.z0], [r.x1, y, r.z1], [r.x0, y, r.z1], [0, 1, 0], f.col, [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]]);
 			}
 			// raised (tray) ceilings in some living rooms, family rooms, dining rooms and main
 			// bedrooms with nothing over them: a soffit round the edge at the usual height, and the
 			// middle stepped up into the roof space, its step lit like a cove
 			const raised = new Map();
 			for (const rm of rooms) {
-				if (rm.level !== L || !RAISE.has(rm.type) || (rm.id * 7 + Math.floor(Math.abs(X[0]) * 13 + Math.abs(Z[0]) * 7)) % 10 >= 5) continue;
+				if (rm.level !== L || !RAISE.has(rm.type) || dec.era === 'prewar' || dec.era === 'ranch' || (rm.id * 7 + Math.floor(Math.abs(X[0]) * 13 + Math.abs(Z[0]) * 7)) % 10 >= 5) continue;
 				let i0 = 1e9, i1 = -1, j0 = 1e9, j1 = -1, n = 0, clear = true;
 				for (let c = 0; c < nx * nz; c++) if (lab[c] === rm.id) { const i = c % nx, j = Math.floor(c / nx); i0 = Math.min(i0, i); i1 = Math.max(i1, i); j0 = Math.min(j0, j); j1 = Math.max(j1, j); n++; if ((L === 0 && upOver(c)) || inWell(c)) clear = false; }
 				if (!clear || !n || n !== (i1 - i0 + 1) * (j1 - j0 + 1)) continue;
@@ -435,13 +470,13 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				if (cover) continue;
 				const e0 = s0 - 0.4, e1 = s1 + 0.4, o0 = pos + sgn * 0.38, o1 = pos + sgn * 0.42, q0 = pos + sgn * 0.42, q1 = pos + sgn * 0.55;
 				const bx = (k, a, b, c, d, y0, y1, cc) => (ax === 'z' ? g.box(k, a, y0, Math.min(c, d), b, y1, Math.max(c, d), cc) : g.box(k, Math.min(c, d), y0, a, Math.max(c, d), y1, b, cc));
-				bx('trim', e0, e1, o0, o1, y - 0.2, y + 0.02, TRIM);
-				bx('trim', e0, e1, q0, q1, y - 0.16, y - 0.01, TRIM);
+				bx('trim', e0, e1, o0, o1, y - 0.2, y + 0.02, XT);
+				bx('trim', e0, e1, q0, q1, y - 0.16, y - 0.01, XT);
 				// the soffit under the overhang
-				bx('stucco', s0, s1, pos, o0, y - 0.03, y - 0.01, FOAM);
+				bx(SK === 'stucco' ? 'stucco' : 'trim', s0, s1, pos, o0, y - 0.03, y - 0.01, SK === 'stucco' ? FOAM : XT);
 				if (eaveLights) for (let u = e0 + 0.15, n = 0; u < e1 - 0.1; u += 0.32, n++) bx('bulb', u - 0.03, u + 0.03, o1 + sgn * 0.01, o1 + sgn * 0.05, y - 0.27, y - 0.21, lin(eaveLights[n % eaveLights.length]));
 				const dp = s0 + 0.12;
-				if (ax === 'z') g.box('trim', dp, base + 0.2, Math.min(pos + sgn * 0.02, pos + sgn * 0.1), dp + 0.07, y - 0.12, Math.max(pos + sgn * 0.02, pos + sgn * 0.1), TRIM);
+				if (ax === 'z') g.box('trim', dp, base + 0.2, Math.min(pos + sgn * 0.02, pos + sgn * 0.1), dp + 0.07, y - 0.12, Math.max(pos + sgn * 0.02, pos + sgn * 0.1), XT);
 			}
 		}
 
@@ -452,6 +487,9 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (++step % 12 === 0) yield;
 			if (it.type === 'closet') it.wallCol = paint[it.room];
 			if (it.type === 'car') continue;
+			// the household's kitchen and its era's lights
+			if (it.type === 'counter' || it.type === 'island' || it.type === 'fridge') it.dec = dec;
+			if (it.type === 'ceilingLight') { it.kind = dec.fixture(plan.rooms[it.room]?.type || '', it.kind); it.fan = dec.fanWood; }
 			g.mul = 0.94 + ((it.v * 7.31) % 1) * 0.12;
 			drawItem(g, it, rnd, HT);
 			g.mul = 1;
@@ -651,4 +689,3 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	return { update, floor: floorAt, push, doorNear, inside, group, M, count: () => houses.size, houses, buildMs: () => buildMs, busy: () => !!job };
 }
 
-function pick3(rnd, l) { return l[Math.floor(rnd() * l.length)]; }
