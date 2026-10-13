@@ -1,3 +1,7 @@
+## October 13, 2026: gameplay loops
+
+Favours people ask in passing or in conversation (lost things, a friend to catch, something to carry, a car that will not start), bag-snatch incidents with a chase, fares while you drive (rush fares with a clock), a Use control for held items (medkits heal you or the hurt; repair rolls fix cars), today's three goals, ranks and a Story tab in the guide, passers-by who know your name, and Moon rovers that carry you over the ground instead of teleporting. See `docs/gameplay-loops-2026-10-13.md`.
+
 ## October 12, 2026 (evening): passing chatter and city surfaces
 
 People you pass now notice you and speak in their own local Kokoro voices, panned from where they stand, reacting to what you are doing and what they have seen; a conversation always wins. City surfaces that flickered through each other are fixed: tower floors and ceilings, tower floor plates at the facade, glazed doors, overlapping neighbour buildings and roof eaves, the far skyline copy of near towers, sunroom glass, and cliff-settlement rooms through their skins. New census tool `island/tools/zfight-browser.cjs`. See `docs/chatter-and-city-surfaces-2026-10-12.md`.

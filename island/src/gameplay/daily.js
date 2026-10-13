@@ -7,9 +7,11 @@ export const GOALS = Object.freeze([
 	{ id: 'lost1', text: 'Find something someone lost', kind: 'favour', test: (d) => d.kind === 'lost', need: 1, credits: 60 },
 	{ id: 'catch1', text: 'Catch a friend who left something behind', kind: 'favour', test: (d) => d.kind === 'catch', need: 1, credits: 60 },
 	{ id: 'pass1', text: 'Carry something to someone waiting', kind: 'favour', test: (d) => d.kind === 'pass', need: 1, credits: 50 },
+	{ id: 'repair1', text: 'Get someone\'s car running again', kind: 'favour', test: (d) => d.kind === 'repair', need: 1, credits: 90 },
 	{ id: 'thief1', text: 'Stop a bag thief', kind: 'thief', need: 1, credits: 120 },
 	{ id: 'fares3', text: 'Drive 3 fares', kind: 'fare', need: 3, credits: 100 },
 	{ id: 'five1', text: 'Earn a five-star ride', kind: 'fare', test: (d) => d.stars === 5, need: 1, credits: 90 },
+	{ id: 'rush1', text: 'Get a passenger in a hurry there on time', kind: 'fare', test: (d) => d.onTime === true, need: 1, credits: 100 },
 	{ id: 'long1', text: 'Drive a fare over a kilometre', kind: 'fare', test: (d) => d.metres >= 1000, need: 1, credits: 80 },
 	{ id: 'tend1', text: 'Patch up someone who is hurt', kind: 'tend', need: 1, credits: 90 },
 ]);

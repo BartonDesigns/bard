@@ -75,6 +75,15 @@ Level 99 Bard is a music-and-world game at **level99bard.com**. It is a faceplat
 - **City surfaces:** tower floors and ceilings, tower floor plates, glazed doors, overlapping neighbour buildings and roof eaves, the skyline copy of near towers, sunroom glass, and cliff-settlement rooms no longer flicker through each other. Census tool: `island/tools/zfight-browser.cjs` (`FAR=1` for depth-precision risk).
 - **Headless testing note:** the loading card waits for a tap on Enter world; until it is clicked the world never updates. The census tool and the smoke script now click it.
 
+### 13 October: gameplay loops (`a6eb413` onward, `docs/gameplay-loops-2026-10-13.md`)
+- **Favours** (`people/errands.js`): people ask in passing or when asked in conversation; lost items (a wallet can be kept), catch a friend, carry something, fix a car with a Repair Roll. People in a favour are held in the world (`p.held`).
+- **Bag snatch** incidents with a chase; witnesses remember.
+- **Fares** (`vehicles/fares.js`): hails while driving, fares, tips, stars, rush fares.
+- **Use** control for held items (`gameplay/item-use.js`): medkits, repair rolls.
+- **Today's goals** (`gameplay/daily.js`), **ranks** (`gameplay/ranks.js`), **Story** tab in the guide; chatter that knows your standing.
+- **Moon rovers** ride over the ground (`planet/colony/colony.js`).
+- `HOOKS.morality` is now set (families' food deeds used to only queue).
+
 ### Everything before that
 
 Everything started in this conversation shipped, much of it in the 9 October "handoff completion" release. More has landed since: cinematic loading, workplaces and malls, character tailoring, field contracts, and shared reputation.
@@ -185,6 +194,8 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
 14. **Physical device QA everywhere:** almost all checks are Chromium software rendering. Real iPhone and Safari performance and look are unverified across the board.
 
 15. **Chatter and surfaces (12 October evening):** real Kokoro voices in passing are unheard on a phone (model hosts blocked in the sandbox); the 100 MB download now also starts on the first remark; the island village has about 80 m² of floor layers 2.6 cm apart.
+
+16. **Gameplay loops (13 October):** fare drop-off and every loop are unchecked on a real phone; favours need people about (few at night); a lost-pet favour would need an animated dog (a look change for the owner first).
 
 ### Parked (do not start unless asked)
 - The game trailer (1080p60 with a 4K60 script).

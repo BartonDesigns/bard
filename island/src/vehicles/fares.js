@@ -118,7 +118,7 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 			const body = alight(car);
 			speak(body, F.rush ? (S.onTime ? 'ontime' : 'late') : 'thanks', { stars: S.stars });
 			const paid = arms()?.apply?.({ id: `fare:${F.name}:${Date.now()}`, kind: 'trade', peer: 'fare', give: { credits: 0, items: [] }, get: { credits: S.total, items: [] } });
-			tally.rides++; tally.earned += S.total; if (S.stars === 5) tally.five++; save(); note('fare', { stars: S.stars, metres: F.dest.metres });
+			tally.rides++; tally.earned += S.total; if (S.stars === 5) tally.five++; save(); note('fare', { stars: S.stars, metres: F.dest.metres, onTime: F.rush ? !!S.onTime : undefined });
 			last = S;
 			const up = promoted('fares', tally.rides - 1, tally.rides);
 			hint(`${paid?.ok === false ? 'Fare' : `+${S.total} credits`} (fare ${S.fare}${S.tip ? `, tip ${S.tip}` : ''}) · ${'★'.repeat(S.stars)}${'☆'.repeat(5 - S.stars)}${up ? ` · Driver rank: ${up}` : ''}`, 5000);
