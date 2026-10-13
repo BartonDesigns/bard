@@ -17,6 +17,7 @@ import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
 import { REAL_REGIONS, REAL_TALL } from './realtiles.js';
+import { footLifted } from './overpass.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -201,7 +202,8 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		o = S.pools[0];
 		for (let n = 0; n < S.pools[1]; n++, o += 10) {
 			const p = { x: dv.getInt16(o, true) * U + OX, z: dv.getInt16(o + 2, true) * U + OZ, w: dv.getInt16(o + 4, true) / 20, d: dv.getInt16(o + 6, true) / 20, a: dv.getInt16(o + 8, true) / 10000 };
-			if (inIb(p.x, p.z)) cellIn(G.grid, p.x, p.z).pools.push(p);
+			// (nothing domestic on Mt Diablo's summit: its buildings are dropped above, and their pools)
+			if (inIb(p.x, p.z) && Math.hypot(p.x - sm.x, p.z - sm.z) > 400) cellIn(G.grid, p.x, p.z).pools.push(p);
 		}
 		o = S.trees[0];
 		for (let n = 0; n < S.trees[1]; n++, o += 8) {
@@ -566,10 +568,13 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		const ramp = M.ramp * (isPhone ? 2 : 1);
 		const B = builder(ramp), Y = builder(ramp), Lb = builder(1.8), fine = !!M.paint;
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
-		for (const r of near('roads', cx, cz, SIZE * 0.72)) {
+		const all = near('roads', cx, cz, SIZE * 0.72), lanes = all.filter((q) => q.drive && !q.bridge);
+		for (const r of all) {
 			// (a road added by hand is driven, not painted: where it runs through a mapped region the
 			// mapped one is on the ground already)
 			if (r.hand) continue;
+			// (a footbridge over a street is its own deck, freeways.js)
+			if (r.bridge && footLifted(r, lanes)) continue;
 			const p = loc(r.pts), hw = r.w / 2;
 			if (r.cls === 'path' || r.cls === 'track') { B.line(p, hw, DIRT); continue; }
 			if (r.cls === 'footway' || r.cls === 'steps' || r.cls === 'pedestrian') { B.line(p, hw, CONC); continue; }

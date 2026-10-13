@@ -1,3 +1,7 @@
+## October 13, 2026 (evening): roads, overpasses, trees and pools
+
+Junctions are graded on one shared surface (pads every road is pinned to, eased vertical curves, overlapping roads blended), and the road-following car, the free car and people all stand on it. Overpasses clear only the roads that cross under them and ramp down along their approaches; town overpasses carry sidewalks; mapped footbridges over streets stand on their own caged decks. Trees keep off carriageways, sidewalks, drives, trails, turning circles and junction sight triangles. Pools need a level yard below 300 m on residential land; parks and courts need level blocks; nothing domestic on Mt Diablo's summit. See `docs/roads-and-realism-2026-10-13.md`.
+
 ## October 13, 2026: gameplay loops
 
 Favours people ask in passing or in conversation (lost things, a friend to catch, something to carry, a car that will not start), bag-snatch incidents with a chase, fares while you drive (rush fares with a clock), a Use control for held items (medkits heal you or the hurt; repair rolls fix cars), today's three goals, ranks and a Story tab in the guide, passers-by who know your name, and Moon rovers that carry you over the ground instead of teleporting. See `docs/gameplay-loops-2026-10-13.md`.

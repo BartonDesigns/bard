@@ -1124,7 +1124,7 @@ export function createIslandWorld() {
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
 			world.vehicles = createVehicles({ scene, world: () => world, camera, isPhone, people: () => people });
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
-			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone });
+			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone, roadAt: (r, x, z) => world.berms?.along(r, x, z) });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real, ponds: false });
 			// every other river, creek, lake and reservoir (bay/water.js)

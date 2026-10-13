@@ -61,14 +61,16 @@ export function createCarPhysics(R, kind, start, env) {
 	}
 	// the ground round the car: a height field, moved along as you go
 	const N = 48, CELL = 2.5;
-	let ground = null, gx = 1e9, gz = 1e9;
+	let ground = null, gx = 1e9, gz = 1e9, gy = 0;
 	const solids = [];
+	// (the floors are taken at the car's own height: an overpass's deck is the ground on it,
+	// and nothing to a car driving under it)
 	function regrid(cx, cz) {
-		gx = Math.round(cx / CELL) * CELL; gz = Math.round(cz / CELL) * CELL;
+		gx = Math.round(cx / CELL) * CELL; gz = Math.round(cz / CELL) * CELL; gy = body.translation().y;
 		const H = new Float32Array((N + 1) * (N + 1)), half = N * CELL / 2;
 		for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
 			const px = gx - half + j * CELL, pz = gz - half + i * CELL;
-			H[i + j * (N + 1)] = env.floorAt(px, pz, 1e4);
+			H[i + j * (N + 1)] = env.floorAt(px, pz, gy + 1.5);
 		}
 		if (ground) world.removeCollider(ground, false);
 		ground = world.createCollider(R.ColliderDesc.heightfield(N, N, H, { x: N * CELL, y: 1, z: N * CELL }).setTranslation(gx, 0, gz).setFriction(1));
@@ -110,7 +112,7 @@ export function createCarPhysics(R, kind, start, env) {
 	let steerNow = 0, acc = 0;
 	function step(dt) {
 		const p = body.translation();
-		if (Math.abs(p.x - gx) > 25 || Math.abs(p.z - gz) > 25) regrid(p.x, p.z);
+		if (Math.abs(p.x - gx) > 25 || Math.abs(p.z - gz) > 25 || Math.abs(p.y - gy) > 2) regrid(p.x, p.z);
 		cars(p.x, p.z);
 		acc += Math.min(dt, 0.1);
 		let n = 0;

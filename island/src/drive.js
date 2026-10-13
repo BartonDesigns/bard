@@ -397,18 +397,18 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const off = trail || E.oneway || E.w < 7 ? 0 : E.w * 0.22;
 		const hx = dx * D.dir, hz = dz * D.dir;
 		const [x, z] = onBridge(x0 - hz * off, z0 + hx * off);
-		// the road under you: its own smoothed profile (graded like a real road, never steeper
-		// than 25%, level across), bridges included
-		const road = profileAt(E, D.s);
-		// (never under the ground where the profile cuts through a hump more than a metre)
-		const floorY = Math.max(road, W.island.heightAt(x, z) - 1.0, W.island.extraFloor ? W.island.extraFloor(x, z, Math.max(D.y ?? road, road + 1.5) - 1) : -1e9);
+		// the road under you: the ground as graded for the roads (bay/berms.js), the same surface
+		// the people and the free-driving cars stand on, or the deck it runs on
+		const road = Math.max(W.island.heightAt(x, z), deckAt(E, D.s));
+		const floorY = Math.max(road, W.island.extraFloor ? W.island.extraFloor(x, z, Math.max(D.y ?? road, road + 1.5) - 1) : -1e9);
 		const eye = trail ? 1.65 : 1.45;                                      // a driver's eye, a walker's on a trail
 		D.y = D.y === null ? floorY + eye : D.y + (floorY + eye - D.y) * Math.min(1, dt * 8);
 		// face along the road, turning smoothly, and tilt with its grade
 		const want = Math.atan2(-hx, -hz);
 		let dyaw = want - D.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
 		D.yaw += dyaw * Math.min(1, dt * 4);
-		const grade = Math.max(-0.25, Math.min(0.25, (profileAt(E, D.s + D.dir * 8) - road) / 8));
+		const sa = Math.max(0, Math.min(E.L, D.s + D.dir * 8)), [ax, az] = onBridge(...at(E.pts, sa));
+		const grade = Math.max(-0.25, Math.min(0.25, (Math.max(W.island.heightAt(ax, az), deckAt(E, sa)) - road) / 8));
 		// free look: turn your head while the road carries you on (drag or mouse as ever);
 		// after a few seconds without looking about, your gaze drifts back to the road
 		if (D.lastYaw !== undefined) { const dl = Math.atan2(Math.sin(P.yaw - D.lastYaw), Math.cos(P.yaw - D.lastYaw)); if (Math.abs(dl) > 1e-4) { D.look += dl; D.lookT = performance.now(); } }
@@ -495,10 +495,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		for (const [kk, b] of Object.entries(arrows)) b.style.background = T[kk] ? '#01a982' : 'rgba(8,20,26,.55)';
 		return true;
 	}
-	// a road's height along it: the ground on its centre line every 5 m, smoothed over about
-	// 40 m (cut through the bumps, filled over the dips), then limited to a 25% grade both
-	// ways; kept on the road once worked out
-	const STEP = 5, MAXG = 0.25;
+	// the decks along a road are looked up every 5 m
+	const STEP = 5;
 	// the mapped line of the Golden Gate runs a little off the modelled deck: on the bridge,
 	// ride the deck (in its lanes, keeping right of the median)
 	function onBridge(x, z) {
@@ -509,26 +507,31 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const t2 = Math.sign(t || 1) * Math.min(Math.max(Math.abs(t), 2.5), 9);
 		return [B.centre.x + B.axis.x * s - B.axis.y * t2, B.centre.z + B.axis.y * s + B.axis.x * t2];
 	}
-	function profileAt(E, s) {
-		if (!E.prof) {
-			const n = Math.max(2, Math.ceil(E.L / STEP) + 1), h = new Float32Array(n);
-			// (on a bridge or an overpass the road is its deck: the Golden Gate's, a freeway's)
-			const W = world(), deck = new Float32Array(n).fill(-1e9);
+	// the deck under a road, where it runs on one (-1e9 where it doesn't): the Golden Gate's, a
+	// freeway overpass's and its ramps; worked out along the road once
+	function deckAt(E, s) {
+		if (!E.deck) {
+			const n = Math.max(2, Math.ceil(E.L / STEP) + 1);
+			const W = world(), deck = new Float32Array(n).fill(-1e9), over = !E.real || E.real.bridge, X = new Float32Array(n), Z = new Float32Array(n), h = new Float32Array(n);
 			for (let i = 0; i < n; i++) {
 				const [px, pz] = at(E.pts, Math.min(E.L, i * STEP)), [qx, qz] = onBridge(px, pz);
+				X[i] = qx; Z[i] = qz;
 				h[i] = W.island.heightAt(qx, qz);
-				deck[i] = Math.max(W.bridge ? W.bridge.deckFloor(qx, qz, 1e4) : -1e9, W.freeways ? W.freeways.floor(qx, qz, 1e4) : -1e9);
+				deck[i] = Math.max(W.bridge ? W.bridge.deckFloor(qx, qz, 1e4) : -1e9, W.freeways && over ? W.freeways.floor(qx, qz, 1e4) : -1e9);
 			}
-			for (let pass = 0; pass < 3; pass++) {
-				const c = h.slice();
-				for (let i = 0; i < n; i++) { let a = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += c[j]; k++; } h[i] = a / k; }
+			// a road leading onto an overpass climbs its ramp from the ground, followed from either
+			// end; a street passing under one never meets its deck
+			if (W.freeways && !over) for (const d of [1, -1]) {
+				let ref = h[d > 0 ? 0 : n - 1];
+				for (let i = d > 0 ? 0 : n - 1; i >= 0 && i < n; i += d) {
+					const f = W.freeways.floor(X[i], Z[i], ref + 1.5);
+					if (f > h[i] - 1) { deck[i] = Math.max(deck[i], f); ref = f; } else ref = h[i];
+				}
 			}
-			for (let i = 0; i < n; i++) if (deck[i] > -1e8) h[i] = deck[i] - 0.6 + 0.6;
-			for (let i = 1; i < n; i++) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
-			for (let i = n - 2; i >= 0; i--) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
-			E.prof = h;
+			E.deck = deck;
 		}
-		const h = E.prof, f = Math.max(0, Math.min(h.length - 1, s / STEP)), i = Math.min(h.length - 2, Math.floor(f)), t = f - i;
+		const h = E.deck, f = Math.max(0, Math.min(h.length - 1, s / STEP)), i = Math.min(h.length - 2, Math.floor(f)), t = f - i;
+		if (h[i] < -1e8 || h[i + 1] < -1e8) return t < 0.5 ? h[i] : h[i + 1];
 		return h[i] * (1 - t) + h[i + 1] * t;
 	}
 	// for tests: the choices at the end of the road you are on
