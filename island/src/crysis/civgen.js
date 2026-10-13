@@ -448,7 +448,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			let pick = null;
 			for (let tries = 0; tries < 6; tries++) {
 				const [x, z] = toW(B.u0 + SP * (0.2 + r() * 0.6), B.v0 + SP * (0.2 + r() * 0.6));
-				if (!dry(x, z) || slope(x, z) > 0.14 || inSite(x, z, Math.max(w, d) / 2 + 20) || G.nearest(x, z, Math.max(w, d) / 2 + 12)) continue;
+				// (level ground: across the whole park, not just at its middle)
+				if (!dry(x, z) || slope(x, z) > 0.14 || [[1, 1], [-1, 1], [1, -1], [-1, -1]].some(([u, v]) => Math.abs(H(x + u * w / 2, z + v * d / 2) - H(x, z)) > 3) || inSite(x, z, Math.max(w, d) / 2 + 20) || G.nearest(x, z, Math.max(w, d) / 2 + 12)) continue;
 				const bank = water ? water.near(x, z) : Infinity;
 				if (!pick || (bank < Math.max(w, d) * 0.7 && !(pick.bank < Math.max(w, d) * 0.7))) pick = { x, z, bank };
 				if (!water || bank < Math.max(w, d) * 0.7) break;
@@ -731,7 +732,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (kind !== K.garage && r() < 0.8) { const o = (door - 0.5) * (w - 2.5), wx = fx + ux * o, wz = fz + uz * o; paths.push({ ax: wx, az: wz, bx: wx - nx * (set + hw * 0.5), bz: wz - nz * (set + hw * 0.5), w: 1.2 }); }
 		// out back: a pool now and then, and the yard trees
 		const bx = x + nx * (d / 2 + 9.5), bz = z + nz * (d / 2 + 9.5);
-		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8)) {
+		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8) && slope(bx, bz) < 0.1) {
 			pools.push({ x: bx, z: bz, w: (4 + r() * 1.5) * (big ? 1.3 : 1), d: (8 + r() * 3) * (big ? 1.3 : 1), a: yaw + Math.PI / 2 + (r() - 0.5) * 0.2 });
 			claim(bx, bz, ux, uz, 3, 5);
 		}

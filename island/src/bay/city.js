@@ -802,9 +802,14 @@ export function createCity(shared, scene, bay, real = null) {
 				const U = bay.urbanAt(wx, wz);
 				if (U.u < 0.15 || U.s !== style || Math.abs(U.a - a) > 0.01) continue;
 				if (real?.inside(wx, wz) || (minH && realCovered(wx, wz))) continue;              // mapped for real (the far skyline's are REAL_TALL)
-				const parkBlock = hash(i * 3 + 7, j * 5 + 1) > 0.975 && U.d < 0.2;              // a park or a playground
 				const ground = bay.heightAt(wx, wz);
 				if (ground < 0.8) continue;
+				// how far the block falls corner to corner: the parks, courts and pools want level
+				// ground below the hills; a hillside block keeps to houses
+				let blo = ground, bhi = ground;
+				for (const [u, v] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const [x, z] = fromGrid((i + u) * BX, (j + v) * BZ, a, style), h = bay.heightAt(x, z); blo = Math.min(blo, h); bhi = Math.max(bhi, h); }
+				const level = (k) => bhi - blo < k && bhi < 300;
+				const parkBlock = hash(i * 3 + 7, j * 5 + 1) > 0.975 && U.d < 0.2 && level(2.5);              // a park or a playground
 				// not in a lake, a reservoir or a creek (bay/water.js)
 				if ([[0.5, 0.5], [0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]].some(([u, v]) => { const [x, z] = fromGrid((i + u) * BX, (j + v) * BZ, a, style); return inWater(x, z); })) continue;
 				// not on the ocean beach: low ground with the Pacific a block away is sand and dune
@@ -844,6 +849,8 @@ export function createCity(shared, scene, bay, real = null) {
 				if (minH > 0) continue;
 				const trees = list.trees || (list.trees = []);
 				// a tree in grid space: height, round or conical, crown colour
+				// a pool's deck in grid space on level ground below the hills (a hillside yard is lawn)
+				const flatYard = (gx, gz, w, d) => { let lo = 1e9, hi = -1e9; for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const [x, z] = fromGrid(gx + u * w / 2, gz + v * d / 2, a, style), h = bay.heightAt(x, z); lo = Math.min(lo, h); hi = Math.max(hi, h); } return hi - lo < 1.2 && hi < 300; };
 				const tree = (gx, gz, h, cone, r) => { const [x, z] = fromGrid(gx, gz, a, style), g = bay.heightAt(x, z); if (g > 0.8) trees.push({ x, y: g - 0.3, z, h, cone, col: cone ? jit([0.13, 0.21, 0.11], r) : jit(pick(PAL.crown, r), r) }); };
 				// paved ground: parking lots, yards, plazas
 				const pave = (gx, gz, w, d, kind = KIND.paved, col = [0.25, 0.25, 0.26], O = null) => lot(list, a, style, gx, gz, w, d, 0.25 - 1.2 + 1.35, kind, col, null, 0.9, O?.rot ? { rot: O.rot, pw: O.pw } : null);
@@ -913,9 +920,9 @@ export function createCity(shared, scene, bay, real = null) {
 						}
 						if (!cnd && R2(8) < 0.35) prop('bins', (gw > 0 ? dx0 + gs * (dw / 2 + 1.1) : lotX + 1.6), at(0.7), face);
 						if (R2(10) < 0.6) prop('cond', hx - gs * (w / 2 + 0.7), at(hf + d * 0.6), face);
-						if (room > 11 && R2(11) < (big ? 0.85 : c.pools)) {
+						const pl = big ? 12 : 8.5, pwd = big ? 5.5 : 4.2, pz = back + 3.2 + pwd / 2, px = hx + (R2(12) - 0.5) * Math.max(0, w - pl) * 0.8;
+						if (room > 11 && R2(11) < (big ? 0.85 : c.pools) && flatYard(px, at(pz), pl + 2.8, pwd + 2.8)) {
 							pool = true;
-							const pl = big ? 12 : 8.5, pwd = big ? 5.5 : 4.2, pz = back + 3.2 + pwd / 2, px = hx + (R2(12) - 0.5) * Math.max(0, w - pl) * 0.8;
 							lot(list, a, style, px, at(pz), pl + 2.8, pwd + 2.8, 0.36, KIND.plain, jit([0.8, 0.77, 0.7], R2(12)), null, false, { face, lift: -0.3 });
 							const PL = lot(list, a, style, px, at(pz), pl, pwd, 0, KIND.pool, [0.9, 0.89, 0.85], null, 0.9, { face });
 							if (PL) PL.dec = true;
@@ -1291,13 +1298,13 @@ export function createCity(shared, scene, bay, real = null) {
 				const neglectK = (sub ? 0.04 : 0.11) * (U.u < 0.45 ? 2.2 : 1);
 					// a block of garden apartments round a pool now and then (more toward the town centres)
 					const br = hash(i * 41 + 7, j * 43 + 11);
-					if (br < (sub ? 0.035 : 0.025) + U.d * 0.5 && IX > 80 && IZ > 55) { complex(); continue; }
+					if (br < (sub ? 0.035 : 0.025) + U.d * 0.5 && IX > 80 && IZ > 55 && level(3)) { complex(); continue; }
 					for (const side of [0, 1]) {
 						const fz = side ? Z0 + IZ : Z0, inw = side ? -1 : 1, face = side ? 's' : 'n', at = (m) => fz + inw * m;
 						// a row of townhouses along one side, or the neighbourhood's courts, dog park and garden
 						const sr = hash(i * 47 + side * 5, j * 53 + 3);
 						if (sr < (sub ? 0.045 : 0.03)) { townhouses(side, at, face, pick(wallsAll, sr * 13.1), roofs[0]); continue; }
-						if (sr < (sub ? 0.065 : 0.045)) { amenities(side, at, face); continue; }
+						if (sr < (sub ? 0.065 : 0.045) && level(2.5)) { amenities(side, at, face); continue; }
 						const len = IX - (sub ? 4 : 2);
 						for (let x = 0, k = 0; x < len - 6; k++) {
 							const r = hash(i * 131 + k * 7 + side, j * 17 + k), rw = hash(i * 71 + k * 13 + side * 3, j * 37 + k * 5);
@@ -1899,6 +1906,24 @@ export function createCity(shared, scene, bay, real = null) {
 		}
 		return out;
 	}
+	// a mapped pool only where one would be dug: a level yard below the hills, on land people
+	// live on (not a park, a school, a golf course or a nature reserve); worked out once
+	const POOL_LAND = new Set([0, 1, 11, 13]);
+	const HOME_LAND = new Set([1, 13]);
+	function poolOK(p) {
+		if (p.ok !== undefined) return p.ok;
+		const ca = Math.cos(p.a), sa = Math.sin(p.a);
+		let lo = 1e9, hi = -1e9;
+		for (const [u, v] of [[0, 0], [-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+			const lx = u * (p.w / 2 + 1), lz = v * (p.d / 2 + 1), h = bay.heightAt(p.x + ca * lx - sa * lz, p.z + sa * lx + ca * lz);
+			lo = Math.min(lo, h); hi = Math.max(hi, h);
+		}
+		const L = real.landAt?.(p.x, p.z);
+		const ok = hi < 300 && hi - lo < 1.2 && (!L || POOL_LAND.has(L.lu));
+		// (kept once the land map is in to say what the land is)
+		if (L) p.ok = ok;
+		return ok;
+	}
 	const REAL_ROOF = [[0.3, 0.31, 0.33], [0.24, 0.25, 0.27], [0.36, 0.36, 0.37], [0.4, 0.39, 0.38], [0.33, 0.3, 0.28], [0.42, 0.33, 0.27], [0.5, 0.3, 0.22], [0.46, 0.27, 0.2], [0.28, 0.29, 0.32], [0.38, 0.35, 0.33]];
 	// the life round a mapped (or grown) house, kept to its own footprint's frame: a car or two
 	// on the drive in front of the garage, the bins, the AC unit down the side, now and then
@@ -1985,12 +2010,13 @@ export function createCity(shared, scene, bay, real = null) {
 			// ones (the surveyed ones are left as they are)
 			if (b.gen && kind !== KIND.garage) setCond(ro, condFor(ro, isHome(b) ? 0.05 : 0.02));
 			if (b.grp && (ro.cond === COND.boarded || ro.cond === COND.burnt)) b.grp.shut = true;
-			if (home === b && (b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R) realYard(list, b, look, g, ro.cond);
+			// (the radio huts and ranger posts high on the wild ridges are nobody's home: no yard)
+			if (home === b && (b.x - cx) ** 2 + (b.z - cz) ** 2 < YARD_R * YARD_R && !(g > 600 && !HOME_LAND.has(real.landAt?.(b.x, b.z)?.lu))) realYard(list, b, look, g, ro.cond);
 			if (b.kind >= 5 && b.kind !== 10) grounds(list, trees, b.x, b.z, b.w, b.d, b.a, g, y, kind, b.x * 0.37 + b.z * 0.11);
 		}
 		for (const p of real.near('pools', cx, cz, Math.min(R, 900))) {
 			const g = bay.heightAt(p.x, p.z);
-			if (g > 0.5) list.push({ x: p.x, y: g - 0.9, z: p.z, w: p.w, d: p.d, h: 0.99, a: p.a, col: [0.9, 0.89, 0.85], kind: KIND.pool, roof: null });
+			if (g > 0.5 && poolOK(p)) list.push({ x: p.x, y: g - 0.9, z: p.z, w: p.w, d: p.d, h: 0.99, a: p.a, col: [0.9, 0.89, 0.85], kind: KIND.pool, roof: null });
 		}
 		wildLand(cx, cz, 1100, trees);
 		wildLand(cx, cz, 2700, trees, 22, 1100);          // beyond: a coarser, cheaper scatter for the far masses

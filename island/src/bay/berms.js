@@ -225,5 +225,19 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		if (camera.position.y - groundAt(x, z) > 120) { BERM_U.uTreadR.value.w = 0; tx = 1e9; }
 		else if (changed || Math.hypot(x - tx, z - tz) > 24) rebuildTread(x, z);
 	}
-	return { update, apply, profile };
+	// a road's graded height at its nearest point to (x, z), anywhere it runs (null until ready)
+	function along(r, x, z) {
+		if (!r.drive || SKIP.has(r.cls) || r.bridge || r.pts.length < 4) return null;
+		const P = profile(r);
+		if (!P) return null;
+		const p = r.pts;
+		let best = 1e18, bs = 0;
+		for (let i = 0; i + 3 < p.length; i += 2) {
+			const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l2 = dx * dx + dz * dz || 1;
+			const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), d = (x - ax - dx * t) ** 2 + (z - az - dz * t) ** 2;
+			if (d < best) { best = d; bs = P.acc[i / 2] + Math.sqrt(l2) * t; }
+		}
+		return hAt(P, bs);
+	}
+	return { update, apply, profile, along };
 }

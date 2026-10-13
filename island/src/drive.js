@@ -513,17 +513,27 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!E.prof) {
 			const n = Math.max(2, Math.ceil(E.L / STEP) + 1), h = new Float32Array(n);
 			// (on a bridge or an overpass the road is its deck: the Golden Gate's, a freeway's)
-			const W = world(), deck = new Float32Array(n).fill(-1e9);
+			const W = world(), deck = new Float32Array(n).fill(-1e9), over = !E.real || E.real.bridge, X = new Float32Array(n), Z = new Float32Array(n);
 			for (let i = 0; i < n; i++) {
 				const [px, pz] = at(E.pts, Math.min(E.L, i * STEP)), [qx, qz] = onBridge(px, pz);
+				X[i] = qx; Z[i] = qz;
 				h[i] = W.island.heightAt(qx, qz);
-				deck[i] = Math.max(W.bridge ? W.bridge.deckFloor(qx, qz, 1e4) : -1e9, W.freeways ? W.freeways.floor(qx, qz, 1e4) : -1e9);
+				deck[i] = Math.max(W.bridge ? W.bridge.deckFloor(qx, qz, 1e4) : -1e9, W.freeways && over ? W.freeways.floor(qx, qz, 1e4) : -1e9);
 			}
 			for (let pass = 0; pass < 3; pass++) {
 				const c = h.slice();
 				for (let i = 0; i < n; i++) { let a = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += c[j]; k++; } h[i] = a / k; }
 			}
-			for (let i = 0; i < n; i++) if (deck[i] > -1e8) h[i] = deck[i] - 0.6 + 0.6;
+			// a road leading onto an overpass climbs its ramp from the ground, followed from either
+			// end; a street passing under one never meets its deck
+			if (W.freeways && !over) for (const d of [1, -1]) {
+				let ref = h[d > 0 ? 0 : n - 1];
+				for (let i = d > 0 ? 0 : n - 1; i >= 0 && i < n; i += d) {
+					const f = W.freeways.floor(X[i], Z[i], ref + 1.5);
+					if (f > h[i] - 1) { deck[i] = Math.max(deck[i], f); ref = f; } else ref = h[i];
+				}
+			}
+			for (let i = 0; i < n; i++) if (deck[i] > -1e8) h[i] = deck[i];
 			for (let i = 1; i < n; i++) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
 			for (let i = n - 2; i >= 0; i--) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
 			E.prof = h;
