@@ -12,6 +12,7 @@ import { Builder, lin, FLAT } from '../bay/housekit.js';
 import { carGeometry, carMaterial } from '../bay/cars.js';
 import { minusHoles } from './plan.js';
 import { drawAny, SOFT } from './kit.js';
+import { householdDecor } from '../bay/decor.js';
 
 const FLOOR = { living: 'wood', dining: 'wood', family: 'wood', office: 'wood', den: 'wood', hall: 'wood', bed: 'wood', master: 'wood', corridor: 'wood', well: 'wood', lobby: 'stone', kitchen: 'tile', bath: 'tile', powder: 'tile', laundry: 'tile', garage: 'concrete', storage: 'concrete', warehouse: 'concrete', parking: 'concrete', shed: 'concrete', garage2: 'concrete', store: 'tile', shop: 'wood', classroom: 'tile', school: 'tile', market: 'stone', rotunda: 'stone', mezzanine: 'stone', exhibition: 'stone', towerLobby: 'stone', cellhouse: 'concrete', messhall: 'concrete', casemate: 'stone', courtyard: 'stone', arcade: 'tile', barn: 'concrete', reading: 'wood', library: 'wood', ballroom: 'wood', chamber: 'wood' };
 // the walls' colours by the building's style and the room
@@ -39,10 +40,21 @@ function carMat(c, night) {
 }
 const CAR_PAINT = [[0.92, 0.92, 0.9], [0.08, 0.08, 0.09], [0.45, 0.46, 0.48], [0.2, 0.28, 0.45], [0.55, 0.1, 0.1], [0.7, 0.71, 0.72]];
 
+// the homes' rooms dressed by their era (decor.js): the Victorians and Edwardians, the
+// Mission's flats and most of the Sunset's houses went up before the war
+const ERA_OF = { victorian: 'prewar', edwardian: 'prewar', mission: 'prewar', sunset: 'prewar', modern: 'modern' };
+const HOME = new Set(['living', 'dining', 'family', 'den', 'bed', 'master', 'kitchen', 'bath', 'powder', 'hall', 'office', 'reading', 'laundry']);
+
 // what the whole building shares: its colours, which rooms are lit
 export function prepare(P, { outside = [0.85, 0.82, 0.76], litShare = 0.6 } = {}) {
 	const rnd = P.rnd, style = PAINT[P.style] ? P.style : 'plain', pal = PAINT[style];
+	// a home's household: its rooms' walls and floors (each flat its own, by its seed)
+	const era = (P.use === 'row' || P.use === 'apt') && ERA_OF[style], seed = Math.floor(rnd() * 1e9);
+	const dec = era ? householdDecor(style === 'sunset' && seed % 10 < 3 ? 'ranch' : era, seed) : null;
+	const fin = P.rooms.map((r) => { if (!dec || !HOME.has(r.type)) return null; const f = dec.wall(r.type, r.id); return { key: f.key, col: lin(f.col) }; });
+	const floors = P.rooms.map((r) => { if (!dec || !HOME.has(r.type)) return null; const f = dec.floor(r.type, 0); return { key: f.key, col: lin(f.col) }; });
 	return {
+		fin, floors,
 		style, wood: lin(WOODS[style][Math.floor(rnd() * WOODS[style].length)]),
 		paint: P.rooms.map((r) => lin(r.type === 'garage' || r.type === 'storage' || r.type === 'warehouse' || r.type === 'parking' ? [0.8, 0.79, 0.76] : r.type === 'bath' || r.type === 'kitchen' || r.type === 'powder' ? [0.93, 0.92, 0.88] : pal[Math.floor(rnd() * pal.length)])),
 		lit: P.rooms.map((r) => rnd() < (r.type === 'garage' || r.type === 'storage' ? 0.15 : r.stairs || r.type === 'corridor' || r.type === 'lobby' || r.type === 'shop' ? 0.95 : litShare)),
@@ -93,8 +105,13 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		const at = (sgn) => { if (w.kind === 'ext' && sgn === w.out) return null; const p = w.pos + sgn * (w.t / 2 + 0.06); return w.axis === 'x' ? roomAt(um, p) : roomAt(p, um); };
 		const rp = at(1), rm = at(-1);
 		const across = w.axis === 'x' ? [4, 5] : [0, 1];
-		const keyOf = (r, outside) => (outside ? 'stucco' : r ? (lit[r.id] ? 'paintLit' : 'paint') : 'paint');
-		const colOf = (r, outside) => (outside ? OUT : r ? paint[r.id] : WHITE);
+		const keyOf = (r, outside) => {
+			if (outside) return 'stucco';
+			if (!r) return 'paint';
+			const k = C.fin?.[r.id]?.key || 'paint';
+			return !lit[r.id] ? k : k === 'paint' ? 'paintLit' : 'paperLit' + k.slice(5);
+		};
+		const colOf = (r, outside) => (outside ? OUT : r ? C.fin?.[r.id]?.col || paint[r.id] : WHITE);
 		const outP = w.kind === 'ext' && w.out > 0, outM = w.kind === 'ext' && w.out < 0;
 		const keyF = (f) => (f === across[0] || f === across[1] ? null : f === 3 ? null : 'paint');
 		if (w.axis === 'x') g.box(keyF, u0, y0, a0, u1, y1, a1, WHITE); else g.box(keyF, a0, y0, u0, a1, y1, u1, WHITE);
@@ -159,7 +176,8 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 					g.panel(key, (s, t) => [x0 + lx * s, y, z0 + lz * t], n, c, (p) => [p[0], p[2]], [at(x0, R.x0), at(x1, R.x1), at(z0, R.z0), at(z1, R.z1)], [Math.min(0.45, m / lx), Math.min(0.45, m / lx), Math.min(0.45, m / lz), Math.min(0.45, m / lz)]);
 				}
 			};
-			flat(fk, L.y, [0, 1, 0], FT[fk] || wood, L.holes, 0.64, 0.6);
+			const fl = C.floors?.[id];
+			flat(fl ? fl.key : fk, L.y, [0, 1, 0], fl ? fl.col : FT[fk] || wood, L.holes, 0.64, 0.6);
 			const yc = L.y + L.h;
 			if (r.sky) continue;
 			flat(lit[id] ? 'ceilingLit' : 'ceiling', yc, [0, -1, 0], lin([0.95, 0.95, 0.93]), above ? above.holes : P.topHoles || [], 0.68, 0.55);
