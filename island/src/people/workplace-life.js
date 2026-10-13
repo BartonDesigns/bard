@@ -1,5 +1,6 @@
 import {stepWorkplaceRoutine,releaseWorkplaceRoutine,settleWorkplaceSale} from './workplace-routine.js';
 import * as THREE from 'three';
+import {attachBag} from './bags.js';
 const hash=s=>{let h=0;for(const c of String(s))h=Math.imul(h,31)+c.charCodeAt(0)|0;return h>>>0;};
 // Shared scene clock synchronizes the two sides of a negotiation or project review.
 export function workplaceActivity(meta,t,hasPartner=true) {
@@ -24,7 +25,7 @@ export function workplaceActivity(meta,t,hasPartner=true) {
 }
 export function disposeWorkplaceProps(p) {
  releaseWorkplaceRoutine(p);p.workBudget=null;p.workPurchases=0;
- for(const key of ['workBubble','shoppingBag']){const o=p[key];if(o){o.removeFromParent();o.geometry?.dispose();o.material?.map?.dispose();o.material?.dispose();p[key]=null;}}
+ for(const key of ['workBubble','shoppingBag']){const o=p[key];if(o){o.removeFromParent();if(!o.geometry?.userData.shared)o.geometry?.dispose();if(!o.material?.userData.shared){o.material?.map?.dispose();o.material?.dispose();}p[key]=null;}}
 }
 function bubble(p,text) {
  if(p.workBubble?.userData.text===text) return;
@@ -59,7 +60,7 @@ export function workActor(p,t,dt,cam,actors=[]) {
  M.want.speed=0;M.want.heading=st.heading;M.S.look.target=null;M.setPose(a.pose);M.S.talk=a.talk?1:0;
  if(st.sit)M.sit(st.h);else M.stand();
  p.workGestureT=(p.workGestureT||0)-dt;if(p.workGestureT<=0){p.workGestureT=3.2+(p.P.dna.seed%9)*.1;if(a.gesture)M.gesture(a.gesture);M.feel('anger',a.anger||0);}
- if((a.bag && p.workPurchases>0) && !p.shoppingBag){const geo=new THREE.BoxGeometry(.23,.3,.12,2,2,2),mat=new THREE.MeshStandardMaterial({color:0xb9976d,roughness:.9});const bag=p.shoppingBag=new THREE.Mesh(geo,mat);bag.position.set(-.32,.48,.1);p.P.root.add(bag);}
+ if((a.bag && p.workPurchases>0) && !p.shoppingBag)p.shoppingBag=attachBag(p.P,{q:{kind:'shopper',paper:true,col:'#b08a5e'},bag:{kind:'paper',v:(p.P.dna.seed>>>0)%3},hand:'R',k:1,straps:[]}).mesh; // a paper bag of what they bought, in the other hand (bags.js)
  if(p.shoppingBag)p.shoppingBag.visible=p.workPurchases>0;
  const audible=actors.filter(q=>q.active && q.workSpot?.work && Math.abs(q.M.S.pos.y-cam.y)<4).sort((a,b)=>Math.hypot(a.M.S.pos.x-cam.x,a.M.S.pos.z-cam.z)-Math.hypot(b.M.S.pos.x-cam.x,b.M.S.pos.z-cam.z)).slice(0,2).includes(p);
  if(audible && a.talk && a.line && Math.hypot(cam.x-M.S.pos.x,cam.z-M.S.pos.z)<9 && Math.abs(cam.y-M.S.pos.y)<4){bubble(p,a.line);p.workBubble.visible=true;}else if(p.workBubble)p.workBubble.visible=false;

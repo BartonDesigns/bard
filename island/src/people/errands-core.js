@@ -5,6 +5,7 @@
 //   lost   something dropped nearby: search the marked patch, pick it up, bring it back
 //   catch  a friend just walked off without something: run after them and hand it over
 //   pass   someone waiting a little way off should have this: take it to them
+//   pet    their dog slipped its lead and is lost nearby: find it, win it over, lead it home
 // A wallet found can be kept instead of returned; the world notices which.
 
 const pick = (xs, n) => xs[Math.abs(Math.trunc(n)) % xs.length];
@@ -45,9 +46,10 @@ export function relativeDir(dx, dz, fx, fz) {
 
 // what someone asks: kind and words. who: { first, seed }; n: a counter for variety.
 // options: { friend: { first } } needed for catch and pass; kinds allowed.
-export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there', car = false } = {}) {
+// pet: { name, she, look } for a lost dog (the runtime has found it somewhere to be)
+export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there', car = false, pet = null } = {}) {
 	const s = (who.seed | 0) + n;
-	const can = kinds.filter((k) => k === 'lost' || (k === 'repair' ? car : friend));
+	const can = kinds.filter((k) => k === 'lost' || (k === 'repair' ? car : k === 'pet' ? pet : friend));
 	if (!can.length) return null;
 	const kind = pick(can, s * 7 + 3);
 	if (kind === 'lost') {
@@ -59,6 +61,15 @@ export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], f
 			`I cannot find ${it.mine} anywhere. I think I dropped ${id === 'keys' || id === 'glasses' ? 'them' : 'it'} back there. Would you mind looking?`,
 		], s);
 		return { kind, item: { id, ...it }, ask, title: `Find ${who.first || 'their'}${who.first ? "'s" : ''} ${it.name}` };
+	}
+	if (kind === 'pet') {
+		const { She, her } = pron(pet);
+		const ask = pick([
+			`Have you seen my dog? ${She} slipped ${her} lead and ran off. ${pet.name}, ${pet.look}. ${She} will be so frightened.`,
+			`Please, could you help me? My dog ${pet.name} pulled free and bolted, ${dir}. ${She} is ${pet.look}.`,
+			`Excuse me, I have lost my dog. ${pet.name}, ${pet.look}. ${She} got away from me just now. Could you help me find ${her}?`,
+		], s);
+		return { kind, item: { name: pet.name, the: pet.name, shape: null, pet }, ask, title: `Find ${who.first || 'their'}${who.first ? "'s" : ''} dog, ${pet.name}` };
 	}
 	if (kind === 'repair') {
 		const ask = pick([
@@ -81,12 +92,18 @@ export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], f
 	return { kind: 'pass', item: it, ask: it.ask(friend.first) + ` They are ${dir}.`, friend: friend.first, title: `Take ${it.the} to ${friend.first}` };
 }
 
+// she or he, for a dog
+const pron = (pet) => (pet?.she === false ? { She: 'He', her: 'his', him: 'him', girl: 'boy' } : { She: 'She', her: 'her', him: 'her', girl: 'girl' });
+
 // what they say when you say yes, when it is done, and the rest
 export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
+	const { She, him, girl } = pron(item.pet), dog = item.pet?.name || 'my dog';
 	const L = {
 		accept: kind === 'lost'
 			? [`Thank you! It should be somewhere over there.`, `You are a lifesaver. I will wait right here.`, `Thanks so much. I will keep looking on this side.`]
-			: kind === 'catch' ? [`Thank you! Quick, before they are gone!`, `Go, go! Thank you!`] : [`Thank you so much. Tell them it is from me.`, `You are the best. They are expecting it.`],
+			: kind === 'pet' ? [`Thank you! ${She} is scared, so go gently. Walk, do not run at ${him}.`, `Oh, thank you. ${She} comes to people who are calm with ${him}.`]
+				: kind === 'catch' ? [`Thank you! Quick, before they are gone!`, `Go, go! Thank you!`] : [`Thank you so much. Tell them it is from me.`, `You are the best. They are expecting it.`],
+		reunited: [`${dog}! Oh, come here, you silly thing! Thank you, thank you so much.`, `There you are! I was so worried. Thank you for bringing ${him} back to me.`, `${dog}! Good ${girl}! I cannot thank you enough. Please, take this.`],
 		found: [`Found ${item.the}.`],
 		returned: [`My ${item.name}! Oh, thank you. Here, take this, please.`, `You found ${item.id === 'keys' || item.id === 'glasses' ? 'them' : 'it'}! I owe you one. Here.`, `Thank you, really. Let me at least give you something for your trouble.`],
 		caught: [`Oh! ${item.name === 'bag' ? 'My bag' : 'That is mine'}! I did not even notice. Thank you!`, `Wait, ${item.the}? I would have been lost without it. Thanks!`, `Oh my gosh, thank you. You ran all this way?`],
@@ -104,28 +121,33 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 
 // credits for a favour, by kind and how far it took you (never a fortune: these are favours)
 export function rewardFor(kind, metres = 0) {
-	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : 30;
-	return Math.round(Math.min(140, base + Math.max(0, metres) * (kind === 'catch' ? 0.45 : 0.3)) / 5) * 5;
+	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'pet' ? 60 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : 30;
+	return Math.round(Math.min(140, base + Math.max(0, metres) * (kind === 'catch' ? 0.45 : kind === 'pet' ? 0.35 : 0.3)) / 5) * 5;
 }
 
 // The errand's own steps. State: { kind, stage, ... }; events move it on:
-//   accept, pickup (lost), reach (the giver or the friend), away (too far from it all), timeout.
+//   accept, pickup (lost), reach (the giver or the friend), away (too far from it all), timeout;
+//   a lost dog: befriend (it follows you now), strayed (it lost you again).
 // Returns the next state and what happened ({ done, kept, failed, say }).
-export const STAGES = Object.freeze({ offered: 'offered', search: 'search', bring: 'bring', chase: 'chase', carry: 'carry', done: 'done', failed: 'failed', kept: 'kept' });
+export const STAGES = Object.freeze({ offered: 'offered', search: 'search', bring: 'bring', lead: 'lead', chase: 'chase', carry: 'carry', done: 'done', failed: 'failed', kept: 'kept' });
 export function step(E, ev) {
 	if (!E || E.stage === 'done' || E.stage === 'failed' || E.stage === 'kept') return { E, out: null };
 	const at = (stage, out = null) => ({ E: { ...E, stage }, out });
 	switch (ev) {
-		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : 'carry', { say: 'accept' }) : { E, out: null };
+		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' || E.kind === 'pet' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : 'carry', { say: 'accept' }) : { E, out: null };
 		// a car that would not start: a repair roll used beside it
 		case 'fixed': return E.stage === 'fix' ? at('done', { done: true, say: 'fixed' }) : { E, out: null };
 		// a bag snatched: catch the thief, they drop it, pick it up, give it back
 		case 'catch-thief': return E.stage === 'thief' ? at('search', { say: 'dropped', thief: true }) : { E, out: null };
 		case 'escaped': return E.stage === 'thief' ? at('failed', { failed: true, say: 'escaped' }) : { E, out: null };
 		case 'decline': return E.stage === 'offered' ? at('failed', { declined: true }) : { E, out: null };
-		case 'pickup': return E.stage === 'search' ? at('bring', { say: 'found' }) : { E, out: null };
+		case 'pickup': return E.stage === 'search' && E.kind !== 'pet' ? at('bring', { say: 'found' }) : { E, out: null };
+		// a lost dog won over follows you; lose it and it is lost again
+		case 'befriend': return E.stage === 'search' && E.kind === 'pet' ? at('lead', { say: 'befriended' }) : { E, out: null };
+		case 'strayed': return E.stage === 'lead' ? at('search', { say: 'strayed' }) : { E, out: null };
 		case 'reach':
 			if (E.stage === 'bring') return at('done', { done: true, say: E.kind === 'snatch' ? 'recovered' : 'returned' });
+			if (E.stage === 'lead') return at('done', { done: true, say: 'reunited' });
 			if (E.stage === 'chase') return at('done', { done: true, say: 'caught' });
 			if (E.stage === 'carry') return at('done', { done: true, say: 'passed' });
 			return { E, out: null };

@@ -2114,12 +2114,12 @@ if (typeof window !== 'undefined') {
 		social: () => HOOKS.social,
 		// what passers-by last said and when the next may speak: Crysis.chatter()
 		chatter: () => HOOKS.chatter?.info(),
-		// favours in passing: Crysis.errands() what is under way; .accept() / .cancel()
+		// favours in passing: Crysis.errands() what is under way; .accept() / .cancel(); .pet() a lost dog now
 		// fares while you drive: Crysis.fares() the current one and your totals; .hail() someone ahead hails now
 		// today's goals: Crysis.daily()
 		daily: () => HOOKS.daily?.list(),
 		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
-		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
+		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), pet: () => HOOKS.errands?.petNow(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
 		scene: () => HOOKS.scene,
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
