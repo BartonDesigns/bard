@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { waterContact } from './world/water-contact.js';
 import { flightMultiplier, nextFlightSpeed } from './flight-speed.js';
+import { DEFAULT_AIM_SENSITIVITY } from './aim-sensitivity.js';
 
 const EYE = 1.68;
 
@@ -24,7 +25,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	// ---------- input ----------
 	const owns = (e) => e.target === dom.canvas;
  const canLook = () => s.active && !s.inputBlocked && !dom.mount.inert && !window._KEYS_PLAY_ON && !document.hidden && !document.activeElement?.closest?.('input,textarea,select,[contenteditable]');
- function look(dx, dy, sensitivity) { if (!canLook()) return; const scale = sensitivity / Math.max(1, camera.zoom || 1); s.yaw -= dx * scale; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch - dy * scale)); }
+ function look(dx, dy, sensitivity) { if (!canLook()) return; const scale = sensitivity * (shared.aimSensitivity ?? DEFAULT_AIM_SENSITIVITY) / Math.max(1, camera.zoom || 1); s.yaw -= dx * scale; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch - dy * scale)); }
  function releaseMouse() { if (document.pointerLockElement === dom.canvas) document.exitPointerLock(); }
  function lockChanged() { if (document.pointerLockElement !== dom.canvas) clearInput(); }
  function buttonLook(e) { look(e.detail.x, e.detail.y, .0042); }

@@ -21,6 +21,7 @@ import { createLitter } from './world/litter.js';
 import { createVillage } from './world/village.js';
 import { createDistant } from './world/distant.js';
 import { createPlayer } from './player.js';
+import { loadAimSensitivity, saveAimSensitivity } from './aim-sensitivity.js';
 import { flightMultiplier, nextFlightSpeed, speedLabel } from './flight-speed.js';
 import { createMusic } from './music.js';
 import { createFauna } from './fauna.js';
@@ -465,6 +466,7 @@ export function createIslandWorld() {
 	const shaderWarm = createShaderWarm(renderer, scene, camera);
 
 	const shared = {
+		aimSensitivity: loadAimSensitivity(),
 		uTime: { value: 0 }, uWet: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
 		uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.4) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
@@ -1255,6 +1257,16 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
+			() => Math.round(shared.aimSensitivity * 100),
+			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
+			(percent) => `${percent}%`);
+		aim.input.setAttribute('aria-label', 'Aim sensitivity');
+		aim.input.style.minHeight = '44px';
+		aim.input.style.touchAction = 'none';
+		const aimNote = css(document.createElement('div'), 'font-size:12px;opacity:.75;margin:-6px 0 12px;');
+		aimNote.textContent = 'Mouse and touch · Default 115%';
+		p.appendChild(aimNote);
 		if (origin) {
 			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
 			galaxy.textContent = 'Explore galaxy';
