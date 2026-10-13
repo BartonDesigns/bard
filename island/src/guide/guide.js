@@ -829,7 +829,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if ('speechSynthesis' in window) speechSynthesis.cancel();
 		const dna = partner?.p?.P?.dna;
 		if (speechMode === 'device') deviceSpeak(t, who);
-		else localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || 1, pitch: dna ? voiceShape(dna).pitch : 1 });
+		else {
+			// the same voice, pitch and pace the person has when they speak in passing
+			const shape = dna ? voiceShape(dna) : { pitch: 1, rate: 1 };
+			localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || shape.rate, pitch: shape.pitch });
+		}
 	}
 	function deviceSpeak(t, who) {
 		if (!('speechSynthesis' in window) || !t) return;

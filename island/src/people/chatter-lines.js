@@ -108,15 +108,41 @@ const RAIN_PAIRS = [
 	['It’s really coming down.', 'Let’s just wait it out under here.'],
 	['You brought an umbrella, right?', 'I thought you brought the umbrella.'],
 ];
-export function exchangeFor({ seed = 0, n = 0, hour = 12, rain = 0 } = {}) {
-	const pool = rain > 0.3 ? RAIN_PAIRS : partOfDay(hour) === 'late' || partOfDay(hour) === 'evening' ? [...NIGHT_PAIRS, ...PAIRS] : PAIRS;
+// at a table, over a meal or a coffee
+const TABLE_PAIRS = [
+	['How is yours?', 'Honestly? Better than last time.'],
+	['Should we get dessert?', 'We always say no and then we get dessert.'],
+	['This place got busy.', 'It always does around now.'],
+	['Okay, your turn. How was the trip?', 'Long. Good, but long.'],
+	['Do you want to split the check?', 'I got it. You got the last one.'],
+	['I think they changed the menu.', 'They took off the good soup. Criminal.'],
+];
+// at work: a desk, a counter, a meeting
+const WORK_PAIRS = [
+	['Did you see the email?', 'Which one? There are forty.'],
+	['Is the meeting still at three?', 'They moved it. Again.'],
+	['Can you look at this before it goes out?', 'Send it over. Give me ten minutes.'],
+	['Who has the numbers for this week?', 'I thought you had them.'],
+	['We are almost out of the blue ones.', 'I will put in an order today.'],
+	['Is the printer working?', 'Define working.'],
+	['Busy morning.', 'Tell me about it. No lunch yet.'],
+];
+const VENDOR_PAIRS = [
+	['Do you have this in another size?', 'Let me check in the back for you.'],
+	['Is this the final price?', 'For you, I can do a little better.'],
+	['Does this come with a warranty?', 'One year, parts and labor.'],
+];
+export function exchangeFor({ seed = 0, n = 0, hour = 12, rain = 0, work = null, seated = false } = {}) {
+	const pool = work ? (work === 'vendor' || work === 'shopper' ? VENDOR_PAIRS : WORK_PAIRS) : seated ? TABLE_PAIRS : rain > 0.3 ? RAIN_PAIRS : partOfDay(hour) === 'late' || partOfDay(hour) === 'evening' ? [...NIGHT_PAIRS, ...PAIRS] : PAIRS;
 	return pick(pool, (seed | 0) + (n | 0));
 }
 
 // how a voice is played for a body: a touch higher for the young, lower for the old, and
 // a little of each person's own so two people on one voice do not sound like twins
-export function voiceShape({ seed = 0, age = 35, male = true, teen = false } = {}) {
+export function voiceShape({ seed = 0, age = 35, male = true, teen = false, temper = null } = {}) {
 	const own = (((Math.abs(seed | 0) * 40503) % 1000) / 1000 - 0.5) * 0.06;
 	const age1 = teen || age < 19 ? 0.05 : age > 65 ? -0.04 : age > 50 ? -0.02 : 0;
-	return { pitch: Math.max(0.9, Math.min(1.12, 1 + age1 + own + (male ? 0 : 0.01))), rate: age > 68 ? 0.92 : teen ? 1.06 : 1 };
+	// (the outgoing talk a little quicker, the quiet a little slower)
+	const pace = 0.96 + (temper?.outgoing ?? 0.5) * 0.08;
+	return { pitch: Math.max(0.9, Math.min(1.12, 1 + age1 + own + (male ? 0 : 0.01))), rate: (age > 68 ? 0.92 : teen ? 1.06 : 1) * pace };
 }

@@ -104,3 +104,23 @@ test('a pair mid-conversation: you overhear one line each, in two voices', async
 	assert.notEqual(T.said[0].seed, T.said[1].seed);
 	assert.notEqual(a.M.S.remark?.look, T.camera.position, 'they look at each other, not at you');
 });
+
+test('people at work and at a table talk about their own business', () => {
+	const work = new Set(), table = new Set();
+	for (let n = 0; n < 12; n++) { work.add(exchangeFor({ n, work: 'office worker' })[0]); table.add(exchangeFor({ n, seated: true })[0]); }
+	assert.ok([...work].some((t) => /email|meeting|numbers|printer/i.test(t)));
+	assert.ok([...table].some((t) => /dessert|check|menu|trip/i.test(t)));
+	assert.match(exchangeFor({ n: 0, work: 'vendor' }).join(' '), /size|price|warranty|check/i);
+});
+
+test('two people at neighbouring desks are overheard as a pair', async () => {
+	const { createChatter } = await import('../src/people/chatter.js');
+	const T = stage();
+	const a = T.body(1.5, -2, 0, 0, { route: { kind: 'seat' }, workContext: { role: 'office worker' } }), b = T.body(2.7, -2, 0, 0, { route: { kind: 'seat' }, workContext: { role: 'office worker' } });
+	T.pool.push(a, b);
+	const C = createChatter({ mount: T.mount, camera: T.camera, world: T.world, people: { pool: T.pool }, talkers: () => [], voice: T.voice, combat: () => null, driving: () => false });
+	tick(C, T.camera, 0.25, 2);
+	await new Promise(r => setTimeout(r, 30));
+	assert.equal(T.said.length, 2);
+	assert.match(T.said.map((x) => x.text).join(' '), /email|meeting|look at this|numbers|blue ones|printer|morning/i);
+});

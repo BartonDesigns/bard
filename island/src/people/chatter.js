@@ -97,11 +97,12 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 	function remark(p, now) {
 		const aware = awareOf(p), scene = sceneNow();
 		said.set(p.P, now);
-		// a pair mid-conversation: you overhear them rather than being spoken to
-		const o = p.partner;
-		if (p.role === 'chat' && o && !busy(o) && !aware.afraid && o.M.S.pos.distanceTo(p.M.S.pos) < 2.2) {
+		// a pair mid-conversation (out walking, or across a table or a desk): you overhear them
+		// rather than being spoken to
+		const o = companion(p);
+		if (o && !aware.afraid) {
 			said.set(o.P, now);
-			const [a, b] = exchangeFor({ seed: p.P.dna.seed, n: n++, ...scene });
+			const [a, b] = exchangeFor({ seed: p.P.dna.seed, n: n++, ...scene, work: p.workContext || o.workContext ? (p.workContext || o.workContext).role || 'work' : null, seated: p.route?.kind === 'seat' });
 			const atP = head(p, new THREE.Vector3()), atO = head(o, new THREE.Vector3());
 			pending = p;
 			say(p, { text: a, gesture: 'explain' }, () => {
@@ -117,6 +118,18 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		if (!line) { finish(1); return; }
 		pending = p;
 		say(p, line, () => finish(line.text ? 7 + Math.random() * 7 : 2.5));
+	}
+	// who they are talking with: a walking partner, or someone sitting or working beside them
+	function companion(p) {
+		if (p.role === 'chat' && p.partner && !busy(p.partner) && p.partner.M.S.pos.distanceTo(p.M.S.pos) < 2.2) return p.partner;
+		if (p.route?.kind !== 'seat' && !p.workContext) return null;
+		let best = null, bd = 2.4;
+		for (const q of [...people.pool, ...talkers()]) {
+			if (q === p || busy(q) || q.P.dna.child || (q.route?.kind !== 'seat' && !q.workContext)) continue;
+			const d = q.M.S.pos.distanceTo(p.M.S.pos);
+			if (d < bd) { bd = d; best = q; }
+		}
+		return best;
 	}
 	function finish(rest) { pending = null; quietUntil = performance.now() + rest * 1000; }
 
