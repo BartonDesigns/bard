@@ -19,6 +19,7 @@ import { mulberry32 } from '../noise.js';
 import { Kit, alienUniforms, skinMaterial, glowMaterial, beamMaterial, beamGeo, auroraMaterial, curtainGeo, skyEnvironment } from './alienkit.js';
 import { CIVS, CIV_OF, nameFor, platform, bridge, baseOf, findRamp } from './aliencivs.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { worldOut } from '../world/soundbus.js';
 
 const TAU = Math.PI * 2;
 const KIND = { landmark: 'landmark', complex: 'complex', marker: 'small', gate: 'small', beacon: 'small', platform: 'small', bridge: 'small', stilt: 'small' };
@@ -367,7 +368,7 @@ export function createAlien(island, shared, scene, camera, profile, plan, opts =
 		const want = Math.max(0, 1 - Math.max(0, d - L.r) / 260) * (camera.position.y > -1 ? 1 : 0);
 		hum.k += (want - hum.k) * Math.min(1, dt * 0.8);
 		if (hum.k < 0.002 && !hum.nodes) return;
-		const bus = window._masterClip || window.leadBus227, ctx = bus?.context;
+		const bus = worldOut(), ctx = bus?.context;
 		if (!ctx || ctx.state !== 'running') return;
 		if (!hum.nodes || hum.nodes.ctx !== ctx) {
 			try {

@@ -1,4 +1,8 @@
 // Spoken audio is separate from the conversation model. No speech API or GPU host is used.
+// Voices play through the Bard's master (soundbus.js voiceBus: ahead of its peak guard, so
+// speech and music share one ceiling and one audio context); a context of its own stands in
+// before the Bard has made its audio.
+import { voiceBus } from '../world/soundbus.js';
 const FEMALE = ['af_heart', 'af_bella', 'af_nicole', 'af_sarah', 'af_aoede', 'af_kore', 'bf_emma'];
 const MALE = ['am_michael', 'am_fenrir', 'am_puck', 'bm_george', 'bm_fable'];
 export function speechChunks(text) {
@@ -39,6 +43,7 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {} } =
  const status = text => { if (!active?.remark || /unavailable/.test(text)) onStatus(text); };
  function unlock() {
   try {
+   if (voiceBus()) return true;
    const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
    if (!context && AC) context = new AC();
    if (context?.state === 'suspended') context.resume().catch(() => {});
@@ -74,21 +79,40 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {} } =
  // a line said in passing, from where the speaker stands: { at() -> {x,y,z}, audible() -> bool,
  // started(seconds), done(played) }. It never cuts into a conversation or another remark.
  function remark(text, who = {}, place = {}) {
-  if (!ready || active || unavailable || !context || context.state !== 'running' || !globalThis.Worker) return false;
+  const C = out()?.ctx;
+  if (!ready || active || unavailable || !C || C.state !== 'running' || !globalThis.Worker) return false;
   const chunks = speechChunks(text); if (!chunks.length) return false;
   request++;
   if (chunks.every((c) => made.has(keyOf(who, c)))) replay(request, chunks, who, place);
   else start(request, chunks, who, place);
   return true;
  }
+ // where to play: the Bard's voice bus, else our own context
+ function out() {
+  const V = voiceBus();
+  if (V) return { ctx: V.ctx, dest: V.out };
+  return context ? { ctx: context, dest: context.destination } : null;
+ }
+ // where you are listening from (kept), and the speaker placed relative to it: the shared
+ // context's listener is left alone, at the origin looking down -z
+ let ear = null;
+ function relative(q) {
+  if (!ear) return q;
+  const { p, f } = ear, h = Math.hypot(f.x, f.z) || 1, fx = f.x / h, fz = f.z / h;
+  const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z;
+  return { x: dx * -fz + dz * fx, y: dy, z: -(dx * fx + dz * fz) };
+ }
+ function aim(q, t) {
+  if (!panner || !q) return;
+  const r = relative(q);
+  if (panner.positionX) { panner.positionX.setTargetAtTime(r.x, t, .05); panner.positionY.setTargetAtTime(r.y, t, .05); panner.positionZ.setTargetAtTime(r.z, t, .05); }
+  else panner.setPosition(r.x, r.y, r.z);
+ }
  // where you are listening from, and where the remark is coming from, once a frame
  function place(p, f) {
-  if (!context || !p || !f) return;
-  const L = context.listener, t = context.currentTime;
-  if (L.positionX) { L.positionX.setTargetAtTime(p.x, t, .05); L.positionY.setTargetAtTime(p.y, t, .05); L.positionZ.setTargetAtTime(p.z, t, .05); L.forwardX.setTargetAtTime(f.x, t, .05); L.forwardY.setTargetAtTime(f.y, t, .05); L.forwardZ.setTargetAtTime(f.z, t, .05); L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0; }
-  else { L.setPosition?.(p.x, p.y, p.z); L.setOrientation?.(f.x, f.y, f.z, 0, 1, 0); }
-  const q = panner && active?.remark?.at?.();
-  if (q) { if (panner.positionX) { panner.positionX.setTargetAtTime(q.x, t, .05); panner.positionY.setTargetAtTime(q.y, t, .05); panner.positionZ.setTargetAtTime(q.z, t, .05); } else panner.setPosition(q.x, q.y, q.z); }
+  if (!p || !f) return;
+  ear = { p: { x: p.x, y: p.y, z: p.z }, f: { x: f.x, y: f.y, z: f.z } };
+  if (panner) aim(active?.remark?.at?.(), panner.context.currentTime);
  }
  function start(id, chunks, who, remarkPlace) {
   active = { chunks, who, completed: 0, remark: remarkPlace };
@@ -113,18 +137,20 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {} } =
  }
  // one piece of a line through the speakers: from where the speaker stands for a remark
  function play(samples, sampleRate, R, ended) {
-  const buffer = context.createBuffer(1, samples.length, sampleRate);
+  const O = out();
+  if (!O) { ended(); return; }
+  const C = O.ctx, buffer = C.createBuffer(1, samples.length, sampleRate);
   buffer.copyToChannel(samples, 0);
-  source = context.createBufferSource(); source.buffer = buffer;
+  source = C.createBufferSource(); source.buffer = buffer;
   // the person's own pitch; the rate given to the model already keeps the pace natural
   source.playbackRate.value = active.who.pitch || 1;
   if (R) {
-   panner = context.createPanner();
+   panner = C.createPanner();
    Object.assign(panner, { panningModel: COARSE ? 'equalpower' : 'HRTF', distanceModel: 'inverse', refDistance: 2.2, rolloffFactor: 1.15, maxDistance: 40 });
-   source.connect(panner).connect(context.destination);
-   const q = R.at?.(); if (q) { if (panner.positionX) { panner.positionX.value = q.x; panner.positionY.value = q.y; panner.positionZ.value = q.z; } else panner.setPosition(q.x, q.y, q.z); }
+   source.connect(panner).connect(O.dest);
+   const q = R.at?.(); if (q) { const r = relative(q); if (panner.positionX) { panner.positionX.value = r.x; panner.positionY.value = r.y; panner.positionZ.value = r.z; } else panner.setPosition(r.x, r.y, r.z); }
    R.started?.(buffer.duration / source.playbackRate.value);
-  } else source.connect(context.destination);
+  } else source.connect(O.dest);
   source.onended = () => { source?.disconnect(); source = null; panner?.disconnect(); panner = null; ended(); };
   source.start();
  }
@@ -166,7 +192,7 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {} } =
        active.completed = data.index + 1; arm();
        worker?.postMessage({ type: 'ack', id: messageId });
       });
-      if (context.state !== 'running') status('Tap the speaker to enable audio');
+      if (out()?.ctx.state !== 'running') status('Tap the speaker to enable audio');
      } catch { fail(); }
     };
    }

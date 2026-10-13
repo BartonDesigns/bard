@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
 import { createMotion } from './motion.js';
-import { noise } from '../world/soundbus.js';
+import { noise, worldOut } from '../world/soundbus.js';
 
 const CHANCE = 0.01, EVERY = 60, COOLDOWN = 20 * 60;
 
@@ -81,7 +81,7 @@ export function createGhost(scene, { world, mount, canvas, hush }) {
 	// ---------- the sound ----------
 	let ctx = null, S = null;
 	function sound() {
-		const bus = window._masterClip || window.leadBus227, c = bus && bus.context;
+		const bus = worldOut(), c = bus && bus.context;
 		if (!c || c.state !== 'running') return null;
 		if (ctx === c && S) return S;
 		ctx = c;

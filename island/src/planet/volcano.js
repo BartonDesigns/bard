@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { mulberry32, makeNoise } from '../noise.js';
 import { glow } from '../world/textures.js';
 import { bombGeometry } from '../arenas.js';
+import { worldOut } from '../world/soundbus.js';
 
 const RUMBLE = 8, ERUPT = 60, COOL = 120;
 const FLOWS = 12;
@@ -806,7 +807,7 @@ export function createVolcano(island, shared, scene, camera, profile, opts = {})
 	// ---------- sound: the low rumble, the bubbling lake, the roar ----------
 	const snd = { c: null, bus: null, rum: null, roar: null, nextBub: 0, srcs: [] };
 	function audio() {
-		const b = window._masterClip || window.leadBus227, c = b?.context;
+		const b = worldOut(), c = b?.context;
 		if (!c || c.state !== 'running') return null;
 		if (snd.c === c) return snd;
 		try {

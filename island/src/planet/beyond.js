@@ -19,7 +19,7 @@
 
 import * as THREE from 'three';
 import { mulberry32 } from '../noise.js';
-import { soundBus } from '../world/soundbus.js';
+import { soundBus, musicSend } from '../world/soundbus.js';
 
 const KEY = 'l99-beyond';
 const Y0 = 2400;          // the realm's floor, far above the world it hangs over
@@ -187,8 +187,8 @@ export function createBeyond({ renderer, scene: worldScene, camera, island, shar
 	// a send from the Bard's master: a wavering delay (the stretch) and a long held echo
 	let fx = null;
 	function fxNodes() {
-		const out = window._masterClip, ctx = out?.context;
-		if (!ctx || ctx.state !== 'running') return null;
+		const M = musicSend(), out = M?.from, ctx = M?.ctx;
+		if (!M) return null;
 		if (fx && fx.ctx === ctx) return fx;
 		try {
 			const g = (v) => { const n = ctx.createGain(); n.gain.value = v; return n; };
@@ -197,11 +197,11 @@ export function createBeyond({ renderer, scene: worldScene, camera, island, shar
 			const lfo = ctx.createOscillator(), depth = g(0);
 			lfo.frequency.value = 0.35; lfo.connect(depth); depth.connect(dl.delayTime); lfo.start();
 			const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
-			inp.connect(dl); dl.connect(lp); lp.connect(stretch); stretch.connect(ctx.destination);
+			inp.connect(dl); dl.connect(lp); lp.connect(stretch); stretch.connect(M.to);
 			const d1 = ctx.createDelay(2), d2 = ctx.createDelay(2), fb1 = g(0.74), fb2 = g(0.7), hl = ctx.createBiquadFilter();
 			d1.delayTime.value = 0.41; d2.delayTime.value = 0.67; hl.type = 'lowpass'; hl.frequency.value = 2600;
 			inp.connect(hl); hl.connect(d1); hl.connect(d2); d1.connect(fb1); fb1.connect(d2); d2.connect(fb2); fb2.connect(d1);
-			d1.connect(held); d2.connect(held); held.connect(ctx.destination);
+			d1.connect(held); d2.connect(held); held.connect(M.to);
 			out.connect(inp);
 			fx = { ctx, out, inp, stretch, held, dl, depth, lfo };
 		} catch { fx = null; }

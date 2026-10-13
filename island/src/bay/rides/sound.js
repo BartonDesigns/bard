@@ -3,10 +3,12 @@
 // crackle of their poles on the ceiling grid, and the band organ's notes. Everything goes
 // through one bus into the Bard's own output, and only once its sound is running.
 
+import { worldOut } from '../../world/soundbus.js';
+
 export function createSound() {
 	let ctx = null, bus = null, noise = null;
 	function get() {
-		const b = window._masterClip || window.leadBus227, c = b?.context;
+		const b = worldOut(), c = b?.context;
 		if (!c || c.state !== 'running') return null;
 		if (!bus || ctx !== c) {
 			ctx = c; noise = null;

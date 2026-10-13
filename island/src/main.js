@@ -1812,6 +1812,9 @@ export function createIslandWorld() {
 	function start() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
 	function show() {
 		visible = true;
+		// the music is worked out further ahead while the world draws (its frames can hold the
+		// page up longer than the faceplate's): index.html's L99Clock reads this
+		window._worldAudioLead = isPhone ? 0.2 : 0.15;
 		if (world) world.player.state.active = true;
 		dom.mount.style.display = 'block';
 		resize();
@@ -1820,6 +1823,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		window._worldAudioLead = undefined;
 		world?.orbit?.pause?.();
 		picnic.pause();
 		social.update(0, time, false); social.flush();

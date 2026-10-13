@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { SHROOMS } from './profile.js';
 import { mulberry32, smoothstep, clamp } from '../noise.js';
+import { musicSend } from '../world/soundbus.js';
 
 // seconds of play: onset, peak, coming down
 export const TIMES = {
@@ -815,8 +816,8 @@ export function createMushrooms(island, shared, scene, camera, profile, opts = {
 	// ---------- the music ----------
 	let A = null;
 	function audio(wet) {
-		const out = window._masterClip || window.leadBus227, c = out?.context;
-		if (!c || c.state !== 'running') return;
+		const M = musicSend(), out = M?.from, c = M?.ctx;
+		if (!M) return;
 		if (!A || A.c !== c) {
 			if (wet < 0.002) return;
 			try {
@@ -827,7 +828,7 @@ export function createMushrooms(island, shared, scene, camera, profile, opts = {
 				send.gain.value = 1; conv.buffer = ir; late.delayTime.value = 0.017; gain.gain.value = 0;
 				out.connect(send); send.connect(conv); conv.connect(split);
 				split.connect(merge, 0, 0); split.connect(late, 1); late.connect(merge, 0, 1);
-				merge.connect(gain); gain.connect(c.destination);
+				merge.connect(gain); gain.connect(M.to);
 				A = { c, out, send, gain };
 			} catch { A = null; return; }
 		}
