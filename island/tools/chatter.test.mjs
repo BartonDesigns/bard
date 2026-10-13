@@ -124,3 +124,11 @@ test('two people at neighbouring desks are overheard as a pair', async () => {
 	assert.equal(T.said.length, 2);
 	assert.match(T.said.map((x) => x.text).join(' '), /email|meeting|look at this|numbers|blue ones|printer|morning/i);
 });
+
+test('walking into someone gets a word even from the quiet ones', () => {
+	for (let n = 0; n < 20; n++) {
+		const r = remarkFor({ n, self: { outgoing: 0, warmth: 0 }, you: { bump: true, speed: 3 } });
+		assert.match(r.text, /excuse|sorry|careful|space|watch/i);
+	}
+	assert.match(remarkFor({ you: { bump: true, speed: 9 } }).text, /watch|careful|fire|slow|easy/i);
+});

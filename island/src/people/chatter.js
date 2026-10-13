@@ -9,7 +9,7 @@ const NOTICE = 11, SAY = 4.6, EARSHOT = 14;
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _h = new THREE.Vector3();
 
 export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone }) {
-	const said = new WeakMap();
+	const said = new WeakMap(), bumped = new WeakMap();
 	let checkT = 0, quietUntil = 0, pending = null, n = 0, last = null, speed = 0;
 	const lastPos = new THREE.Vector3().copy(camera.position);
 
@@ -81,6 +81,8 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			if (busy(p)) continue;
 			const S = p.M.S, dx = S.pos.x - cam.x, dz = S.pos.z - cam.z, d = Math.hypot(dx, dz);
 			if (d > NOTICE || Math.abs(S.pos.y + 1.6 - cam.y) > 3) continue;
+			// walked right into them: they say so, whatever they said before (once in a while)
+			if (d < 0.95 && speed > 1.2 && performance.now() - (bumped.get(p.P) || -1e9) > 20000) { p.bump = true; return p; }
 			const when = performance.now() - (said.get(p.P) || -1e9);
 			if (when < 150000) continue;
 			// the nearest the two of you will come in the next few seconds, at the pace you are going
@@ -114,7 +116,9 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			o.M.S.remark = { until: performance.now() + 9000, speaking: false, look: atP };
 			return;
 		}
-		const line = remarkFor({ seed: p.P.dna.seed, n: n++, self: selfOf(p), you: { speed, vehicle: driving(), aware }, scene });
+		const bump = !!p.bump; p.bump = false;
+		if (bump) bumped.set(p.P, now);
+		const line = remarkFor({ seed: p.P.dna.seed, n: n++, self: selfOf(p), you: { speed, vehicle: driving(), aware, bump }, scene });
 		if (!line) { finish(1); return; }
 		pending = p;
 		say(p, line, () => finish(line.text ? 7 + Math.random() * 7 : 2.5));
@@ -159,7 +163,7 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		if (!p) return;
 		// fear does not wait its turn; small talk does
 		const quietLeft = quietUntil - now;
-		if (quietLeft > 0 && !(quietLeft < 6000 && awareOf(p).afraid)) return;
+		if (quietLeft > 0 && !p.bump && !(quietLeft < 6000 && awareOf(p).afraid)) { p.bump = false; return; }
 		last = p;
 		remark(p, now);
 	}

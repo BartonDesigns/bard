@@ -35,6 +35,7 @@ const RAIN = ['Of course it rains the one day I leave the umbrella.', 'Ugh, I’
 const STORM = ['Whoa, that was close!', 'You should get inside, it’s getting bad out here.'];
 const LATE = ['Bit late to be wandering around, isn’t it?', 'Get home safe.', 'Can’t sleep either, huh?'];
 const STARTLED = ['Whoa! Watch it!', 'Hey, careful!', 'Jeez! Where’s the fire?', 'Woah, slow down!', 'Easy there!'];
+const BUMPED = ['Oh! Excuse me.', 'Oops, sorry.', 'Hey, careful.', 'Whoa, personal space!', 'Watch where you are going.'];
 const DRIVER = ['Hey! Slow down!', 'Whoa! This is a sidewalk!', 'Are you kidding me? Slow down!'];
 const HURT = ['Oh my gosh, are you okay? You’re bleeding.', 'Hey, you need a doctor.', 'You look hurt. Do you need help?'];
 const WORK = ['Back to it.', 'Busy, busy.', 'One more hour.', 'Hey. Don’t mind me.'];
@@ -61,6 +62,7 @@ export function remarkFor(ctx = {}) {
 	if (S.child) return (S.outgoing ?? 0.5) > 0.45 ? { text: pick(KID, n), gesture: 'wave', feel: { joy: 0.6 } } : null;
 	if (Y.vehicle && Y.speed > 6) return { text: pick(DRIVER, n), gesture: 'shake', feel: { surprise: 1, anger: 0.5 } };
 	if (c.injured || Y.injured) return { text: pick(HURT, n), gesture: 'open', feel: { surprise: 0.5, sad: 0.5 } };
+	if (Y.bump && !Y.vehicle) return { text: pick(Y.speed > 7.5 ? STARTLED : BUMPED, n), gesture: 'shrug', feel: { surprise: 0.9, anger: Y.speed > 7.5 ? 0.4 : 0.1 } };
 	if (Y.speed > 7.5 && !Y.vehicle) return { text: pick(STARTLED, n), gesture: 'shrug', feel: { surprise: 1 } };
 	if (S.role === 'jog') return { text: pick(JOGGER, n), gesture: null, feel: { joy: 0.2 } };
 	if (S.phone) return { text: pick(ON_PHONE, n), gesture: 'explain', feel: {} };
