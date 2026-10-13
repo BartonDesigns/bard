@@ -1,3 +1,7 @@
+## October 13, 2026 (late): streets that read as real
+
+Crosswalks, stop bars and curb-ramp domes at town junctions; walk signals that tick and a daily goal for crossing properly; people crossing together on the walk; overpass joints you hear; buses at their stops; dogs on leads; globe highways graded; mapped buildings set back off the street and sidewalk. See `docs/streets-alive-2026-10-13.md`.
+
 ## October 13, 2026 (evening): roads, overpasses, trees and pools
 
 Junctions are graded on one shared surface (pads every road is pinned to, eased vertical curves, overlapping roads blended), and the road-following car, the free car and people all stand on it. Overpasses clear only the roads that cross under them and ramp down along their approaches; town overpasses carry sidewalks; mapped footbridges over streets stand on their own caged decks. Trees keep off carriageways, sidewalks, drives, trails, turning circles and junction sight triangles. Pools need a level yard below 300 m on residential land; parks and courts need level blocks; nothing domestic on Mt Diablo's summit. See `docs/roads-and-realism-2026-10-13.md`.
