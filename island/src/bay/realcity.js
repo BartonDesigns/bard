@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
-import { groupBoxes } from './houseplan.js';
+import { groupBoxes, isHome } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
@@ -146,6 +146,62 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	let disposed = false, cancelled = 0;
 	let camX = 1e9, camZ = 1e9, late = 0;
 
+	// Buildings clear of the street: none standing in a carriageway or on its sidewalk (the
+	// mapped footprints and the drawn road widths don't always agree), and a home a little
+	// further back behind its front yard. Each house is moved whole, its wings and garage with
+	// it, straight away from the street (from two streets on a corner), by 3.5 m at most;
+	// returns the moves (in 50 m cells) so the drives and walks to them can follow.
+	const SET_MAX = 3.5;
+	function setBack(G) {
+		const seen = new Set(), moves = new Map(), near = [];
+		// (how far (x, z) is from a road's centre line, and the way out from it)
+		const away = (r, x, z) => {
+			const p = r.pts;
+			let best = 1e9, ox = 0, oz = 0;
+			for (let i = 0; i + 3 < p.length; i += 2) {
+				const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l2 = dx * dx + dz * dz || 1;
+				const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), qx = x - ax - dx * t, qz = z - az - dz * t, d = Math.hypot(qx, qz);
+				if (d < best) { best = d; const l = Math.sqrt(l2); ox = d > 0.01 ? qx / d : -dz / l; oz = d > 0.01 ? qz / d : dx / l; }
+			}
+			return [best, ox, oz];
+		};
+		for (const b of G.boxes) {
+			const grp = b.grp || [b];
+			if (seen.has(grp)) continue;
+			seen.add(grp);
+			const home = isHome(b);
+			let cx = 0, cz = 0, R = 0;
+			for (const q of grp) { cx += q.x / grp.length; cz += q.z / grp.length; }
+			for (const q of grp) R = Math.max(R, Math.hypot(q.x - cx, q.z - cz) + Math.hypot(q.w, q.d) / 2);
+			near.length = 0;
+			nearIn(G, 'roads', cx, cz, R + 16, near);
+			let px = 0, pz = 0;
+			for (const r of near) {
+				if (!r.drive || r.bridge || r.cls === 'motorway' || r.cls === 'trunk') continue;
+				const need = r.w / 2 + (r.walked ? 1.7 : 0.5) + (home ? 2.5 : 0.3);
+				if (cx < r.box[0] - need - R || cx > r.box[2] + need + R || cz < r.box[1] - need - R || cz > r.box[3] + need + R) continue;
+				if (away(r, cx, cz)[0] > need + R) continue;
+				// the deepest any corner or side of the house reaches into this street's room
+				let k = 0, ux = 0, uz = 0;
+				for (const q of grp) {
+					const ca = Math.cos(q.a), sa = Math.sin(q.a);
+					for (const [u, v] of [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]) {
+						const lx = u * q.w / 2, lz = v * q.d / 2, [d, ox, oz] = away(r, q.x + ca * lx - sa * lz, q.z + sa * lx + ca * lz);
+						if (need - d > k) { k = need - d; ux = ox; uz = oz; }
+					}
+				}
+				if (k > 0) { px += ux * k; pz += uz * k; }
+			}
+			const L = Math.hypot(px, pz);
+			if (L < 0.05) continue;
+			if (L > SET_MAX) { px *= SET_MAX / L; pz *= SET_MAX / L; }
+			for (const q of grp) { q.x += px; q.z += pz; }
+			// (in every cell the move's reach touches)
+			const m = { x: cx, z: cz, r: R + 4, px, pz };
+			for (let i = Math.floor((cx - m.r) / 50); i <= Math.floor((cx + m.r) / 50); i++) for (let j = Math.floor((cz - m.r) / 50); j <= Math.floor((cz + m.r) / 50); j++) { const k = i * 65536 + j; let c = moves.get(k); if (!c) moves.set(k, c = []); c.push(m); }
+		}
+		return moves;
+	}
 	async function load(i, signal) {
 		const name = NAMES[i], base = new URL(`../assets/bayarea/real/${name}`, import.meta.url).href;
 		const [H, bin, px] = await Promise.all([
@@ -193,10 +249,13 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		// a building's blocks, gathered into the house they make (houses.js builds them)
 		groupBoxes(G.boxes);
+		const moved = setBack(G);
 		for (const b of G.boxes) cellIn(G.grid, b.x, b.z).boxes.push(b);
 		o = S.paths[0];
 		for (let n = 0; n < S.paths[1]; n++, o += 10) {
 			const p = { ax: dv.getInt16(o, true) * U + OX, az: dv.getInt16(o + 2, true) * U + OZ, bx: dv.getInt16(o + 4, true) * U + OX, bz: dv.getInt16(o + 6, true) * U + OZ, w: dv.getInt16(o + 8, true) / 20 };
+			// (a drive or walk to a house set back goes on to its new front)
+			for (const e of ['a', 'b']) for (const m of moved.get(Math.floor(p[e + 'x'] / 50) * 65536 + Math.floor(p[e + 'z'] / 50)) || []) if (Math.hypot(p[e + 'x'] - m.x, p[e + 'z'] - m.z) < m.r) { p[e + 'x'] += m.px; p[e + 'z'] += m.pz; break; }
 			if (inIb(p.ax, p.az)) cellIn(G.grid, p.ax, p.az).paths.push(p);
 		}
 		o = S.pools[0];
