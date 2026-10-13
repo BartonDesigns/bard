@@ -119,6 +119,7 @@ import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers, talkers } from './people/people.js';
 import { createChatter } from './people/chatter.js';
 import { createErrands } from './people/errands.js';
+import { createFares } from './vehicles/fares.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createPicnicJam } from './encounters/picnic-jam.js';
@@ -758,6 +759,8 @@ export function createIslandWorld() {
 	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands });
 	// favours people ask of you as you pass (people/errands.js)
 	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '' });
+	// fares: people hail you while you drive (vehicles/fares.js)
+	const fares = guideApi.fares = HOOKS.fares = createFares({ camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), drive, arms: () => arms, hint: (t, ms) => hint(t, ms, 1), isPhone });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -1195,6 +1198,7 @@ export function createIslandWorld() {
 		HOOKS.gear?.suspend();
 		families.clear();
 		HOOKS.errands?.dispose();
+		HOOKS.fares?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
 		social.reset();
@@ -1730,6 +1734,7 @@ export function createIslandWorld() {
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 		errands.update(dt);
+		fares.update(dt);
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
 		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
@@ -2090,6 +2095,8 @@ if (typeof window !== 'undefined') {
 		// what passers-by last said and when the next may speak: Crysis.chatter()
 		chatter: () => HOOKS.chatter?.info(),
 		// favours in passing: Crysis.errands() what is under way; .accept() / .cancel()
+		// fares while you drive: Crysis.fares() the current one and your totals; .hail() someone ahead hails now
+		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
 		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
 		scene: () => HOOKS.scene,

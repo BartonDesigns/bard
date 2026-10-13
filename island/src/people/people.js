@@ -697,7 +697,7 @@ export function createPeople(scene, world, camera = null) {
 			turn = !turn;
 			if (active < na && (kids >= nk || turn || !active)) {
 				const teensOut = pool.filter((p) => p.active && p.P.dna.teen).length;
-				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child && (!p.P.dna.teen || teensOut < Math.ceil(na * teenShare)));
+				const idle = pool.find((p) => !p.active && !p.reserved && p.demo === undefined && !p.P.dna.child && (!p.P.dna.teen || teensOut < Math.ceil(na * teenShare)));
 				// a second grown-up for a family, or someone new
 				const F = pool.find((o) => o.active && !o.leaving && o.kids > 0 && o.spouseWant && !o.spouse && !o.engaged && o.M.S.pos.distanceTo(cam) < NEAR && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z));
 				if (idle && F && !idle.P.dna.minor) { seedN++; if (castCompanion(idle, F)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } else F.spouseWant = false; }

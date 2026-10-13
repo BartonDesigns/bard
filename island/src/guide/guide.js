@@ -410,6 +410,9 @@ export function createGuide(mount, api) {
 			if (a.gathering) return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
 			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
 		}
+		// a fare in the car, or someone hailing you (vehicles/fares.js)
+		const fare = api.fares?.mark?.();
+		if (fare) return fare;
 		// a favour under way for someone you passed (people/errands.js)
 		const fav = api.errands?.mark?.();
 		if (fav) return fav;
