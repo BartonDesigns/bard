@@ -11,6 +11,12 @@
 // Few at once (fewer on a phone); bodies are pooled and reused. A person struck down goes limp
 // (people/ragdoll.js) and fades; a drone drops and bursts; a crawler curls up and sinks away.
 // A fire crew (on Earth) walks to a fire and puts it out.
+//
+// A squad may hold a post (military/: a base's gate, a watchtower, a patrol loop inside the
+// fence, a checkpoint, a militia compound): it stands or walks its beat there, answers what it
+// sees, and is pulled back to the post when the fight strays too far from it. Sides that are
+// stationed are never made away from a post (ctx.mayStation). Each side dresses by its own
+// look (combat/outfits.js).
 
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
@@ -21,6 +27,7 @@ import { personShapes } from './targets.js';
 import { npcHand } from './weapon-view.js';
 import { FACTIONS, PLAYER, shouldSurrender } from './factions.js';
 import { FIELD_ROLES } from './field-contracts.js';
+import { outfitFor } from './outfits.js';
 
 // the bodies: people (dressed by faction), and the two that are not
 const BODY = {
@@ -32,20 +39,18 @@ const CALL = {
 	default: { contact: ['Contact!', 'There!', 'We have company!'], flank: ['Flanking left!', 'Going round!', 'Moving up!'], reload: ['Reloading!', 'Changing cells!'], down: ['Man down!', 'We lost one!'], pin: ['Keep them pinned!', 'Covering fire!'], give: ['Enough! I yield!', 'Don\'t shoot! I\'m done!'] },
 	law: { contact: ['Patrol! Drop your weapon!', 'Suspect sighted!', 'Hold it right there!'], flank: ['Moving to flank!', 'Cutting them off!'], reload: ['Reloading!'], down: ['Officer down!'], pin: ['Suppressing!', 'Stay in cover!'], give: ['I\'m down, I\'m down!'] },
 	villagers: { contact: ['Raiders! Protect the houses!', 'To the walls!'], flank: ['Round the back of the barn!'], reload: ['Arrows!'], down: ['They got Tam!'], pin: ['Keep their heads down!'], give: ['Mercy!'] },
+	police: { contact: ['Police! Drop it!', 'Show me your hands!', 'Suspect in sight!'], flank: ['Cover the back!', 'Cutting across!'], reload: ['Reloading!'], down: ['Officer down! Officer down!'], pin: ['Stay behind the car!', 'Hold them there!'], give: ['Okay! Okay! I\'m down!'] },
+	military: { contact: ['Contact front!', 'Hostiles, on me!', 'Halt! Halt!'], flank: ['Bounding left!', 'Second team, flank!'], reload: ['Changing mag!'], down: ['Man down! Medic!'], pin: ['Suppress, suppress!', 'Keep fire on them!'], give: ['Cease fire, I yield!'] },
+	invaders: { contact: ['Forward! Take the town!', 'Defenders ahead!'], flank: ['Round their side!'], reload: ['Reloading!'], down: ['We lost one!'], pin: ['Pin them down!'], give: ['Enough! We yield!'] },
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const rnd = (a, b) => a + Math.random() * (b - a);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
-// a faction's look: a fitted kit in its colours; the masked ones hide their faces
-function styleOf(fid) {
-	const F = FACTIONS[fid] || {}, [a, b] = F.colors || ['#444', '#999'];
-	const o = { gen: 'alien', top: { kind: 'suit', col: a, acc: b, pat: 'block', fit: 'fitted', sleeves: 'long', fab: 'tech' }, outer: null, bottom: { kind: 'suit', col: a, acc: b, pat: 'plain', legs: 'long', fit: 'regular', fab: 'twill' }, shoes: { kind: 'boot', col: '#18191b', sole: '#0e0e0e' }, acc: [] };
-	if (fid === 'fire') { o.top.col = o.bottom.col = '#c99a1a'; o.top.acc = o.bottom.acc = '#2a2a2a'; o.acc.push({ kind: 'helmet', col: '#d8a21a', visor: '#2a2a2a' }); return o; }
-	if (F.masked || F.kind === 'mercs' || F.kind === 'law') o.acc.push({ kind: 'helmet', col: F.kind === 'law' ? a : '#33373c', visor: F.kind === 'law' ? '#9fd8ff' : b });
-	else if (F.kind === 'gang') o.acc.push({ kind: Math.random() < 0.5 ? 'beanie' : 'cap', col: a });
-	else if (F.kind === 'militia' || F.kind === 'villagers') o.acc.push({ kind: 'cap', col: b });
-	return o;
+// a faction's look (combat/outfits.js), from the fighter's own seed
+function styleOf(fid, seed) {
+	const F = FACTIONS[fid] || {};
+	return outfitFor({ fid, kind: F.kind, colors: F.colors, masked: !!F.masked }, seed);
 }
 
 let K = null;
@@ -130,7 +135,7 @@ export function createSquads(ctx) {
 		return new Promise((res) => {
 			const job = () => {
 			const F = FACTIONS[fid] || {};
-			const d = personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid) });
+			const d = personDNA(seed, { age: 22 + (seed % 30), style: styleOf(fid, seed) });
 			const P = buildPerson(A, d);
 			if (F.masked) maskOn(P, F.colors?.[0] || '#ff7a2a');
 			const b = { P, M: createMotion(P, (x, z) => ctx.ground(x, z, P.root.position.y + 1.2)), fid, used: true, hand: F.gun ? npcHand(group, F.gun, 2 + (seed % 4), seed % 3) : null };
@@ -146,6 +151,8 @@ export function createSquads(ctx) {
 	// one at (x, z) of a faction, in a squad
 	async function spawn(fid, x, z, squad, opts = {}) {
 		if (alive().length + pending.size >= MAX) return null;
+		// (a stationed side only at a post: a base, a checkpoint, a compound)
+		if (FACTIONS[fid]?.stationed && ctx.mayStation && !ctx.mayStation(fid, x, z)) return null;
 		const generation = epoch, reservation = {};
 		pending.add(reservation);
 		try {
@@ -159,7 +166,7 @@ export function createSquads(ctx) {
 				H: createHealth({ max: (F.hp || 100) * (opts.hpK || 1), armour: opts.armour ?? F.armour ?? 0, soak: 0.5, resist: B.resist || {} }),
 				pos: new THREE.Vector3(x, 0, z), yaw: opts.yaw || 0, alert: 0, role: 'assault', goal: null, goalT: 0, fireT: rnd(0.6, 1.2), burst: 0, mag: 12,
 				losT: 0, los: false, target: null, targetT: 0, deadT: 0, hover: rnd(4, 7), ph: Math.random() * 10, home: { x, z }, body: null, mesh: null, leap: 0, spitT: rnd(2, 4),
-				provoked: false, shotAtPlayer: 0, surrendered: 0, task: opts.task || null,
+				provoked: false, shotAtPlayer: 0, surrendered: 0, task: opts.task || null, post: opts.post || squad?.post || null, slot: squad ? squad.members.length : 0,
 			};
 			h.pos.y = ctx.ground(x, z, opts.y ?? ctx.eye().y);
 			if (kind === 'person') {
@@ -298,7 +305,7 @@ export function createSquads(ctx) {
 		const F = h.F;
 		let best = null, bd = h.B.sight * (h.alert ? 1.8 : 1);
 		const dMe = Math.hypot(eye.x - h.pos.x, eye.z - h.pos.z);
-		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && ctx.wanted() > 0) || (F.kind === 'mercs' && ctx.bounty() > 0);
+		const hateMe = h.provoked || relations.hostile(h.fid, PLAYER) || (F.lawful && F.kind !== 'military' && ctx.wanted() > 0) || (F.kind === 'military' && (ctx.wanted() >= 3 || !!ctx.trespass?.(h))) || (F.kind === 'mercs' && ctx.bounty() > 0);
 		if (hateMe && !ctx.playerDown() && dMe < bd) { best = ME; bd = dMe; }
 		for (const o of list) {
 			if (o === h || o.dead || o.surrendered || o.crew || o.fid === h.fid || !relations.hostile(h.fid, o.fid)) continue;
@@ -363,7 +370,7 @@ export function createSquads(ctx) {
 		const to = to0.clone().add(_v.set(0, atMe ? -0.35 : 0, 0));
 		if (!hitIt) to.add(_v.set(rnd(-1, 1), rnd(-0.6, 0.8), rnd(-1, 1)).multiplyScalar(0.8 + dist * 0.03));
 		const dir = to.clone().sub(from).normalize();
-		const style = h.F.kind === 'law' ? 1 : h.F.gun === 'warden-spark-carbine' ? 2 : 4;
+		const style = h.F.kind === 'law' || h.F.kind === 'police' || h.F.kind === 'military' ? 1 : h.F.gun === 'warden-spark-carbine' ? 2 : 4;
 		// (what stands in the way takes it: a child's ward, cover, someone else)
 		const block = ctx.firstHit(from, dir, Math.min(B.range, dist + 30), h.T);
 		let end = hitIt ? to : from.clone().addScaledVector(dir, Math.min(B.range, dist + 30));
@@ -447,7 +454,16 @@ export function createSquads(ctx) {
 	function personStep(h, dt, d) {
 		const b = h.body, M = b.M, S = M.S, eye = ctx.eye();
 		h.pos.copy(S.pos);
-		if (h.alert && h.target) {
+		// held to a post: a fight that strays too far from it is let go, and they walk back
+		const P0 = h.post;
+		if (P0 && h.target && Math.hypot(posOf(h.target).x - P0.x, posOf(h.target).z - P0.z) > (P0.r || 40) * 2.5) { h.target = null; h.alert = 0.4; h.goal = null; }
+		if (h.alert && h.target && P0?.kind === 'tower') {
+			// up a watchtower: they hold the platform and fire from it
+			const at = posOf(h.target);
+			M.want.speed = 0; M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
+			S.look.target = h.target.id === 'me' ? eye : null;
+			if (h.los) shoot(h, dt); else h.fireT = Math.max(h.fireT, 0.3);
+		} else if (h.alert && h.target) {
 			const at = posOf(h.target).clone();
 			h.goalT -= dt;
 			if (!h.goal || h.goalT <= 0) chooseGoal(h, at);
@@ -459,15 +475,37 @@ export function createSquads(ctx) {
 			else h.fireT = Math.max(h.fireT, 0.3);
 		} else {
 			if (h.alert && !h.target) { h.alert = Math.max(0, h.alert - dt * 0.05); }
-			// a slow patrol about home, or on to a task (a raid's target)
+			// a slow patrol about home, or on to a task (a raid's target), or the post's beat
 			h.goalT -= dt;
-			if (h.goalT <= 0) { h.goalT = rnd(4, 9); const c = h.squad?.dest || h.home, a = Math.random() * 6.283; h.goal = { x: c.x + Math.cos(a) * 6, z: c.z + Math.sin(a) * 6 }; }
-			if (h.goal) walk(h, h.goal.x, h.goal.z, h.squad?.dest ? 2.6 : 1.1, h.squad?.dest ? 1 : 0);
+			if (P0 && !h.squad?.dest) postStep(h, P0, dt);
+			else {
+				if (h.goalT <= 0) { h.goalT = rnd(4, 9); const c = h.squad?.dest || h.home, a = Math.random() * 6.283; h.goal = { x: c.x + Math.cos(a) * 6, z: c.z + Math.sin(a) * 6 }; }
+				if (h.goal) walk(h, h.goal.x, h.goal.z, h.squad?.dest ? 2.6 : 1.1, h.squad?.dest ? 1 : 0);
+			}
 		}
 		h.yaw = S.heading;
 		M.update(dt, time, eye);
 		b.P.lod?.(d);
 		if (b.hand && !h.noGun) b.hand.follow(b.P, S.heading, d < 90, M, time);
+	}
+	// at a post: a loop walked at a steady pace (each one spaced along it), or a spot held
+	// facing out, with a look about now and then
+	function postStep(h, P0, dt) {
+		const M = h.body.M;
+		if (P0.loop?.length) {
+			const L = P0.loop, n = L.length;
+			if (h.leg === undefined) h.leg = (h.slot * Math.ceil(n / 2)) % n;
+			const [gx, gz] = L[h.leg];
+			if (walk(h, gx, gz, 1.3, 0) < 2.5) h.leg = (h.leg + 1) % n;
+			return;
+		}
+		const side = (h.slot % 2 ? 1 : -1) * Math.ceil(h.slot / 2) * 2.2, c = Math.cos(P0.yaw || 0), s = Math.sin(P0.yaw || 0);
+		const gx = P0.x + side * c, gz = P0.z - side * s;
+		if (walk(h, gx, gz, 1.4, 0) <= 1.2) {
+			h.lookT = (h.lookT || 0) - dt;
+			if (h.lookT <= 0) { h.lookT = rnd(3, 7); h.face = (P0.yaw || 0) + rnd(-0.7, 0.7); }
+			M.want.heading = h.face ?? P0.yaw ?? 0;
+		}
 	}
 	function yieldStep(h, dt, d) {
 		const M = h.body.M;
@@ -545,16 +583,16 @@ export function createSquads(ctx) {
 	// a squad of n of a faction round a point. opts: { alert, raid (attack civilians), dest
 	// (where to head), task (a fire for a crew), ids }
 	function squad(fid, x, z, n, opts = {}) {
-		const sq = { id: 's' + nextId++, fid, members: [], last: null, home: { x, z }, raid: !!opts.raid, dest: opts.dest || null };
+		const sq = { id: 's' + nextId++, fid, members: [], last: null, home: { x, z }, raid: !!opts.raid, dest: opts.dest || null, post: opts.post || null, tag: opts.tag || null };
 		squads.set(sq.id, sq);
 		const out = [];
 		for (let i = 0; i < n; i++) {
 			const a = (i / n) * 6.283 + Math.random(), r = opts.spread ?? (fid === 'rogue' ? 6 : 3 + Math.random() * 3);
-			out.push(spawn(fid, x + Math.cos(a) * r, z + Math.sin(a) * r, sq, { ...opts, specialty: opts.roles?.[i] || opts.specialty, id: opts.ids?.[i] }).then((h) => { if (h && opts.alert) alertSquad(h, ctx.eye()); return h; }));
+			out.push(spawn(fid, x + (opts.post?.kind === 'tower' ? 0 : Math.cos(a) * r), z + (opts.post?.kind === 'tower' ? 0 : Math.sin(a) * r), sq, { ...opts, specialty: opts.roles?.[i] || opts.specialty, id: opts.ids?.[i] }).then((h) => { if (h && opts.alert) alertSquad(h, ctx.eye()); return h; }));
 		}
 		return Promise.all(out).then(() => sq);
 	}
 	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); }
-	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: MAX, squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
-	return { group, update, squad, spawn, hear, clear, info, alive, list, release, surrender };
+	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: MAX, squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
+	return { group, update, squad, spawn, hear, clear, info, alive, list, release, surrender, squads };
 }
