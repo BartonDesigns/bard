@@ -571,19 +571,21 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		crossings = [];
 		const nodes = new Map(), nk = (x, z) => Math.round(x / 1.5) * 65536 + Math.round(z / 1.5);
 		for (const r of all) {
-			if (!r.drive || r.bridge || r.link || r.hand || !CROSS.has(r.cls) || !r.walked || !built(r)) continue;
-			const p = r.pts, m = p.length;
+			if (!r.drive || r.bridge || r.link || r.hand || !CROSS.has(r.cls) || !r.walked) continue;
+			const p = r.pts, m = p.length, b = built(r);
 			for (let i = 0; i < m; i += 2) {
 				const k = nk(p[i], p[i + 1]);
 				let n = nodes.get(k);
-				if (!n) nodes.set(k, n = { x: p[i], z: p[i + 1], legs: [] });
+				if (!n) nodes.set(k, n = { x: p[i], z: p[i + 1], legs: [], built: false });
+				n.built = n.built || b;
 				// the legs leaving this point: toward the next point, and back toward the last
 				if (i + 2 < m) n.legs.push({ r, j: i, d: 1 });
 				if (i > 0) n.legs.push({ r, j: i, d: -1 });
 			}
 		}
 		for (const n of nodes.values()) {
-			if (n.legs.length < 3) continue;
+			// (in town: one of its streets at least among built-up land)
+			if (n.legs.length < 3 || !n.built) continue;
 			const L = landAt(n.x, n.z), city = !!L && (L.lu === 7 || L.lu === 8);
 			for (const g of n.legs) {
 				const { r, j, d } = g, p = r.pts, hw = r.w / 2;
