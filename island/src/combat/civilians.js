@@ -160,5 +160,18 @@ export function createCivilians(ctx) {
 		known.clear();
 	}
 	const info = () => { let panic = 0, dead = 0, inLayer = 0; for (const s of known.values()) { if (s.panic > 0) panic++; if (s.dead) dead++; if (layer.get(s.T.id)) inLayer++; } return { known: known.size, panic, dead, inLayer }; };
-	return { update, alarm, clear, info, holdUp, stateOf };
+	// the hurt but still standing near (x, z), for a medkit (gameplay/item-use.js)
+	function woundedNear(x, z, r = 3) {
+		const out = [];
+		for (const [p, s] of known) if (s.H && !s.dead && s.H.hp < s.H.max && p.active && Math.hypot(p.M.S.pos.x - x, p.M.S.pos.z - z) < r) out.push({ p, hp: s.H.hp, max: s.H.max });
+		return out.sort((a, b) => a.hp / a.max - b.hp / b.max);
+	}
+	// patched up: whole again, and calmer
+	function tend(p) {
+		const s = known.get(p);
+		if (!s?.H || s.dead) return false;
+		s.H.hp = s.H.max; s.panic = Math.min(s.panic, 1.5); s.cower = 0; s.calm = true;
+		return true;
+	}
+	return { update, alarm, clear, info, holdUp, stateOf, woundedNear, tend };
 }

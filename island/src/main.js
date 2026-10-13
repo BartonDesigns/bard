@@ -120,6 +120,7 @@ import { createPeople, addTalkers, talkers } from './people/people.js';
 import { createChatter } from './people/chatter.js';
 import { createErrands } from './people/errands.js';
 import { createFares } from './vehicles/fares.js';
+import { createItemUse } from './gameplay/item-use.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createPicnicJam } from './encounters/picnic-jam.js';
@@ -759,6 +760,13 @@ export function createIslandWorld() {
 	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands });
 	// favours people ask of you as you pass (people/errands.js)
 	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '' });
+	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
+	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here' });
+	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
+	dom.mount.appendChild(useBtn);
+	useBtn.addEventListener('click', (e) => { e.stopPropagation(); itemUse.use(); });
+	for (const ev of ['pointerdown', 'touchstart']) useBtn.addEventListener(ev, (e) => e.stopPropagation());
+	addEventListener('keydown', (e) => { if ((e.key === 'u' || e.key === 'U') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA' && dom.mount.style.display !== 'none' && itemUse.usable()) { e.preventDefault(); itemUse.use(); } });
 	// fares: people hail you while you drive (vehicles/fares.js)
 	const fares = guideApi.fares = HOOKS.fares = createFares({ camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), drive, arms: () => arms, hint: (t, ms) => hint(t, ms, 1), isPhone });
 	function watchTeleport() {
@@ -820,6 +828,9 @@ export function createIslandWorld() {
 		if (cur && P && cur.p.M.S.pos.distanceTo(camera.position) > 7) { guide.endTalk(); hint(`${cur.persona.first} goes back to what they were doing.`, 2500); }
 		talkTarget = P && !P.flying && !cur ? people.facing(camera.position, P.yaw) : null;
 		talkBtn.style.display = talkTarget ? '' : 'none';
+		const U = HOOKS.itemUse?.usable(), showUse = !!U && !P?.flying && !drive.active();
+		useBtn.style.display = showUse ? '' : 'none';
+		if (showUse) useBtn.textContent = isPhone ? U.label : `${U.label} (U)`;
 		if (talkTarget) talkBtn.textContent = HOOKS.errands?.asking(talkTarget) ? (isPhone ? '🤝 Help' : '🤝 Help (Enter)') : isPhone ? '💬 Talk' : '💬 Talk (Enter)';
 	}
 
