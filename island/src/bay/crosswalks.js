@@ -6,6 +6,9 @@
 import { soundBus } from '../world/soundbus.js';
 
 const CYCLE = 40, WALK = 9, HEAR = 16;
+// whether a crosswalk's signal says walk now (each on its own cycle; the people waiting at
+// the curb ask this too, people/people.js); a crosswalk without a signal always lets you go
+export const walkNow = (c, t = performance.now() / 1000) => !c.city || (t + c.x * 0.37 + c.z * 0.11) % CYCLE < WALK;
 
 export function createCrosswalks({ world, note, driving }) {
 	let tick = null, tickCtx = null, nextTick = 0, clock = 0, on = null, side = 0;
@@ -36,7 +39,7 @@ export function createCrosswalks({ world, note, driving }) {
 		for (const c of list) { const d = Math.hypot(c.x - x, c.z - z); if (d < bd) { bd = d; best = c; } }
 		// the signal at the curb
 		if (best?.city && clock >= nextTick) {
-			const ph = (clock + (best.x * 0.37 + best.z * 0.11)) % CYCLE, walk = ph < WALK;
+			const walk = walkNow(best);
 			play(0.22 * (1 - bd / HEAR) * (walk ? 1 : 0.7));
 			nextTick = clock + (walk ? 0.1 : 1);
 		}
