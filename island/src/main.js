@@ -830,7 +830,8 @@ export function createIslandWorld() {
 		const P = world?.player.state, cur = guide.partner();
 		// walked away from someone you were talking with: the conversation ends
 		if (cur && P && cur.p.M.S.pos.distanceTo(camera.position) > 7) { guide.endTalk(); hint(`${cur.persona.first} goes back to what they were doing.`, 2500); }
-		talkTarget = P && !P.flying && !cur ? people.facing(camera.position, P.yaw) : null;
+		// (nobody to talk to from a moving maglev or rover)
+		talkTarget = P && !P.flying && !cur && !world?.colony?.riding?.() ? people.facing(camera.position, P.yaw) : null;
 		talkBtn.style.display = talkTarget ? '' : 'none';
 		const U = HOOKS.itemUse?.usable(), showUse = !!U && !P?.flying && !drive.active();
 		useBtn.style.display = showUse ? '' : 'none';

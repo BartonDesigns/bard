@@ -242,6 +242,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 			T.mesh.rotation.set(-pt.pitch, pt.yaw, 0, 'YXZ');
 		}
 		ride.update(dt);
+		rover.update(dt);
 		interiors.update(dt);
 		life.update(dt);
 		light(dt, night);
@@ -312,6 +313,28 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	}
 	// the maglev: from the hub out along a long line, or from its far station home
 	const ride = createRide({ camera, mount: opts.mount, hint: opts.hint, player: opts.player, scene: group, mesh: trains.length ? cabGroup(new THREE.Mesh(trainGeometry(S), mats.shell), mats.shell) : null });
+	// a rover across the ground to any site off the rails: a track over the terrain from where
+	// you are, curving a little, the cab riding it (no more stepping out of a door and arriving)
+	const rover = createRide({ camera, mount: opts.mount, hint: opts.hint, player: opts.player, scene: group, mesh: new THREE.Mesh(roverGeometry(S), mats.shell), kind: 'rover' });
+	function roverTo(s, at) {
+		const Pl = opts.player?.();
+		if (!Pl) return false;
+		// (from the hub, the rover waits outside its airlock, not in the corridor where you stand)
+		const door = X.doors[0], inHub = door && Math.hypot(Pl.pos.x - hb.x, Pl.pos.z - hb.z) < 150;
+		const a = inHub ? { x: door.x + Math.sin(door.a) * 8, z: door.z + Math.cos(door.a) * 8 } : { x: Pl.pos.x, z: Pl.pos.z }, dx = at.x - a.x, dz = at.z - a.z, d = Math.hypot(dx, dz);
+		if (d < 250) return false;
+		const n = Math.max(8, Math.ceil(d / 25)), bend = (Math.random() - 0.5) * Math.min(220, d * 0.12), nx = -dz / d, nz = dx / d;
+		const path = [], cum = [0];
+		for (let i = 0; i <= n; i++) {
+			const t = i / n, w = Math.sin(Math.PI * t) * bend, x = a.x + dx * t + nx * w, z = a.z + dz * t + nz * w;
+			path.push({ x, y: floorAt(x, z, H(x, z)) + 0.05, z });
+			if (i) cum.push(cum[i - 1] + Math.hypot(x - path[i - 1].x, z - path[i - 1].z));
+		}
+		// (the ground smoothed under the wheels, so the cab does not jolt at every crater rim)
+		for (let k = 0; k < 2; k++) for (let i = 1; i < path.length - 1; i++) path[i].y = Math.max(path[i].y, (path[i - 1].y + path[i].y * 2 + path[i + 1].y) / 4);
+		rover.start({ path, cum, len: cum[cum.length - 1], name: 'Rover' }, 1, s.name, () => goTo(s, true));
+		return true;
+	}
 	function rideTo(s) {
 		const P0 = camera.position;
 		for (const T of trains) {
@@ -326,11 +349,12 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	function goTo(s, direct = false) {
 		const Pl = opts.player?.();
 		if (!s || !Pl) return null;
-		if (!direct && !ride.riding() && rideTo(s)) return s.name;
+		if (!direct && !ride.riding() && !rover.riding() && rideTo(s)) return s.name;
 		if (s.port) return go();
 		let at;
 		if (s.main && X.doors.length) { const d = X.doors[0]; at = { x: d.x + Math.sin(d.a) * 6, z: d.z + Math.cos(d.a) * 6 }; }
 		else { const a = Math.atan2(hb.x - s.x, hb.z - s.z), d = (s.r || 15) + 18; at = { x: s.x + Math.sin(a) * d, z: s.z + Math.cos(a) * d }; }
+		if (!direct && !ride.riding() && !rover.riding() && roverTo(s, at)) return s.name;
 		Pl.flying = false; Pl.diving = false; Pl.vel?.set(0, 0, 0);
 		Pl.pos.set(at.x, floorAt(at.x, at.z, H(at.x, at.z) + 1) + 1.7, at.z);
 		Pl.yaw = Math.atan2(-(s.x - at.x), -(s.z - at.z));
@@ -348,7 +372,7 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 		life.dispose();
 		crew?.dispose();
 		errands?.dispose();
-		ride.dispose();
+		ride.dispose(); rover.dispose();
 		disposeSigns();
 		for (const m of [mats.shell, mats.glass, mats.air, roomMat, poolMat, plumeMat]) m?.dispose();
 		group.traverse((o) => o.geometry?.dispose());
@@ -363,5 +387,5 @@ export function createColony(island, shared, scene, camera, profile, plan, opts 
 	const crewApi = errands ? { mark: errands.mark, journal: errands.journal, errands, people: crew } : null;
 	// (for before-and-after looks: the fill and the crew's environment light on or off)
 	const lightFix = (on) => { fillOn = !!on; fill.intensity = on ? fill.intensity : 0; crew?.envLight(!!on); return on; };
-	return { crew: crewApi, ride, lightFix, update, floor: col.floor, push, go, goTo, sites: siteList, life, interiors, rooms: X.rooms, lifts: X.lifts, airlocks: X.airlocks, terminals: X.terminals, dispose, info, group, port: portAt };
+	return { crew: crewApi, ride, rover, riding: () => ride.riding() || rover.riding(), lightFix, update, floor: col.floor, push, go, goTo, sites: siteList, life, interiors, rooms: X.rooms, lifts: X.lifts, airlocks: X.airlocks, terminals: X.terminals, dispose, info, group, port: portAt };
 }
