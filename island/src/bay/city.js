@@ -1483,75 +1483,103 @@ export function createCity(shared, scene, bay, real = null) {
 	// larger, along whichever of its own sides overlaps least, leaving a hairline gap.
 	// Parts of one building (a house's wings and garage) are meant to overlap and stay.
 	// Only the drawn box changes (o.fit); the lot keeps its own place and size.
-	function apart(list) {
-		const G = new Map(), cell = 48, key = (i, j) => i * 73856093 ^ j * 19349663;
-		const boxes = list.filter((o) => o.w > 0.5 && o.d > 0.5 && o.h > 1.5);
-		for (const o of boxes) { o.fit = null; const k = key(Math.floor(o.x / cell), Math.floor(o.z / cell)); (G.get(k) || G.set(k, []).get(k)).push(o); }
-		const half = (o, ax, az) => (Math.abs(ax * Math.cos(o.a) + az * Math.sin(o.a)) * o.w + Math.abs(-ax * Math.sin(o.a) + az * Math.cos(o.a)) * o.d) / 2;
-		for (const A of boxes) {
-			const i0 = Math.floor(A.x / cell), j0 = Math.floor(A.z / cell);
-			for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const B of G.get(key(i0 + i, j0 + j)) || []) {
-				if (B === A || A.w * A.d > B.w * B.d || (A.w * A.d === B.w * B.d && A.x < B.x)) continue;     // A is the smaller of the pair
-				if (A.y >= B.y + B.h || B.y >= A.y + A.h) continue;
-				if (A.src?.grp && A.src.grp === B.src?.grp) { flush(A, B); continue; }
-				const dx = B.x - A.x, dz = B.z - A.z;
-				if (dx * dx + dz * dz > ((A.w + A.d + B.w + B.d) / 2) ** 2) continue;
-				// overlap along each of A's two axes, and along B's (no overlap on any: apart)
-				const F = A.fit || [A.x, A.z, A.w, A.d], ca = Math.cos(A.a), sa = Math.sin(A.a);
-				const axes = [[ca, sa, 0], [-sa, ca, 1], [Math.cos(B.a), Math.sin(B.a), -1], [-Math.sin(B.a), Math.cos(B.a), -1]];
-				let best = null, clear = false;
-				for (const [ax, az, which] of axes) {
-					const ha = which === 0 ? F[2] / 2 : which === 1 ? F[3] / 2 : half({ ...A, w: F[2], d: F[3] }, ax, az), hb = half(B, ax, az);
-					const c = (B.x - F[0]) * ax + (B.z - F[1]) * az, pen = ha + hb - Math.abs(c);
-					if (pen <= 0) { clear = true; break; }
-					if (which >= 0 && (!best || pen < best.pen)) best = { pen, which, side: Math.sign(c) || 1, ax, az };
+	function apart(list, cx = 0, cz = 0, R = 1e9) {
+		// (numbers in flat arrays, no objects made per pair: this runs over thousands of boxes
+		// each time the city round you is rebuilt, and a phone feels every allocation)
+		const boxes = [];
+		for (const o of list) { if (o.fit) o.fit = null; if (o.ovFit !== undefined) o.ovFit = undefined; if (o.w > 0.5 && o.d > 0.5 && o.h > 1.5 && Math.abs(o.x - cx) < R && Math.abs(o.z - cz) < R) boxes.push(o); }
+		const N = boxes.length;
+		const X = new Float64Array(N), Z = new Float64Array(N), Wd = new Float64Array(N), Dp = new Float64Array(N), C = new Float64Array(N), S = new Float64Array(N);
+		// a grid of small cells; a box goes in every cell its outline can reach, so a tower
+		// and the shop beside it meet however far apart their middles are
+		const G = new Map(), cell = 24, key = (i, j) => i * 73856093 ^ j * 19349663, seen = new Int32Array(N).fill(-1);
+		const span = (k, pad, f) => {
+			const r = (Wd[k] + Dp[k]) / 2 + pad, i0 = Math.floor((X[k] - r) / cell), i1 = Math.floor((X[k] + r) / cell), j0 = Math.floor((Z[k] - r) / cell), j1 = Math.floor((Z[k] + r) / cell);
+			for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) f(key(i, j));
+		};
+		for (let k = 0; k < N; k++) {
+			const o = boxes[k]; o.fit = null; o.ovFit = undefined;
+			X[k] = o.x; Z[k] = o.z; Wd[k] = o.w; Dp[k] = o.d; C[k] = Math.cos(o.a); S[k] = Math.sin(o.a);
+			span(k, 0, (g) => { let l = G.get(g); if (!l) G.set(g, l = []); l.push(k); });
+		}
+		// each other box near box a, once
+		let mark = 0;
+		const near = (a, pad, f) => { const m = ++mark; span(a, pad, (g) => { const l = G.get(g); if (l) for (const b of l) if (b !== a && seen[b] !== m) { seen[b] = m; f(b); } }); };
+		// half the width of box k seen along the direction (ax, az)
+		const half = (k, ax, az) => (Math.abs(ax * C[k] + az * S[k]) * Wd[k] + Math.abs(-ax * S[k] + az * C[k]) * Dp[k]) / 2;
+		const setFit = (k, x, z, w, d) => { X[k] = x; Z[k] = z; Wd[k] = w; Dp[k] = d; boxes[k].fit = [x, z, w, d]; };
+		const AX = [0, 0, 0, 0], AZ = [0, 0, 0, 0];
+		for (let a = 0; a < N; a++) {
+			const A = boxes[a];
+			near(a, 0, (b) => {
+				{
+					const B = boxes[b];
+					if (A.w * A.d > B.w * B.d || (A.w * A.d === B.w * B.d && A.x < B.x)) return;     // A is the smaller of the pair
+					if (A.y >= B.y + B.h || B.y >= A.y + A.h) return;
+					if (A.src?.grp && A.src.grp === B.src?.grp) { flush(a, b); return; }
+					const dx = X[b] - X[a], dz = Z[b] - Z[a], reach = (Wd[a] + Dp[a] + Wd[b] + Dp[b]) / 2;
+					if (dx * dx + dz * dz > reach * reach) return;
+					// overlap along each of A's two axes, and along B's (no overlap on any: apart)
+					AX[0] = C[a]; AZ[0] = S[a]; AX[1] = -S[a]; AZ[1] = C[a]; AX[2] = C[b]; AZ[2] = S[b]; AX[3] = -S[b]; AZ[3] = C[b];
+					let bestPen = 1e9, bestW = -1, bestSide = 1, clear = false;
+					for (let w = 0; w < 4; w++) {
+						const ax = AX[w], az = AZ[w], ha = w === 0 ? Wd[a] / 2 : w === 1 ? Dp[a] / 2 : half(a, ax, az);
+						const c = dx * ax + dz * az, pen = ha + half(b, ax, az) - Math.abs(c);
+						if (pen <= 0) { clear = true; break; }
+						if (w < 2 && pen < bestPen) { bestPen = pen; bestW = w; bestSide = Math.sign(c) || 1; }
+					}
+					if (clear || bestW < 0) return;
+					// trim A's side facing B by the overlap; leave it be if that would take too much
+					const size = bestW === 0 ? Wd[a] : Dp[a], cut = bestPen + 0.005;
+					if (cut > size * 0.45) return;
+					setFit(a, X[a] - AX[bestW] * bestSide * cut / 2, Z[a] - AZ[bestW] * bestSide * cut / 2, bestW === 0 ? Wd[a] - cut : Wd[a], bestW === 1 ? Dp[a] - cut : Dp[a]);
 				}
-				if (clear || !best) continue;
-				// trim A's side facing B by the overlap; leave it be if that would take too much
-				const size = best.which === 0 ? F[2] : F[3], cut = best.pen + 0.005;
-				if (cut > size * 0.45) continue;
-				const nw = best.which === 0 ? F[2] - cut : F[2], nd = best.which === 1 ? F[3] - cut : F[3];
-				A.fit = [F[0] - best.ax * best.side * cut / 2, F[1] - best.az * best.side * cut / 2, nw, nd];
-			}
+			});
 		}
 		// two parts of one building (a house and its wing) overlap on purpose, but where a front
 		// of the smaller lies within a hand's width of the larger's own front, the two run
 		// through each other: that front is set back to make a clear step
-		function flush(A, B) {
-			const turn = ((A.a - B.a) % (Math.PI / 2) + Math.PI / 2) % (Math.PI / 2);
+		function flush(a, b) {
+			const turn = ((boxes[a].a - boxes[b].a) % (Math.PI / 2) + Math.PI / 2) % (Math.PI / 2);
 			if (Math.min(turn, Math.PI / 2 - turn) > 0.02) return;
-			for (let which = 0; which < 2; which++) for (const side of [-1, 1]) {
-				const F = A.fit || [A.x, A.z, A.w, A.d], ca = Math.cos(A.a), sa = Math.sin(A.a);
-				const ax = which === 0 ? ca : -sa, az = which === 0 ? sa : ca, h = (which === 0 ? F[2] : F[3]) / 2;
-				const faceA = (F[0] * ax + F[1] * az) + side * h, faceB = (B.x * ax + B.z * az) + side * half(B, ax, az);
+			for (let w = 0; w < 2; w++) for (let side = -1; side <= 1; side += 2) {
+				const ax = w === 0 ? C[a] : -S[a], az = w === 0 ? S[a] : C[a], h = (w === 0 ? Wd[a] : Dp[a]) / 2;
+				const faceA = X[a] * ax + Z[a] * az + side * h, faceB = X[b] * ax + Z[b] * az + side * half(b, ax, az);
 				const off = (faceB - faceA) * side;
 				if (Math.abs(off) > 0.25) continue;
 				// (and the two fronts must share some width, or they only stand in line)
-				const px = which === 0 ? -sa : ca, pz = which === 0 ? ca : sa, hp = (which === 0 ? F[3] : F[2]) / 2;
-				if (Math.abs((B.x - F[0]) * px + (B.z - F[1]) * pz) > hp + half(B, px, pz) - 0.05) continue;
+				const px = w === 0 ? -S[a] : C[a], pz = w === 0 ? C[a] : S[a], hp = (w === 0 ? Dp[a] : Wd[a]) / 2;
+				if (Math.abs((X[b] - X[a]) * px + (Z[b] - Z[a]) * pz) > hp + half(b, px, pz) - 0.05) continue;
 				const cut = 0.3 - off;
 				if (cut > h) continue;
-				const nw = which === 0 ? F[2] - cut : F[2], nd = which === 1 ? F[3] - cut : F[3];
-				A.fit = [F[0] - ax * side * cut / 2, F[1] - az * side * cut / 2, nw, nd];
+				setFit(a, X[a] - ax * side * cut / 2, Z[a] - az * side * cut / 2, w === 0 ? Wd[a] - cut : Wd[a], w === 1 ? Dp[a] - cut : Dp[a]);
 			}
 		}
 		// A roof's eaves reach out past its walls; beside a taller wall (a house's two-storey
 		// wing, the shop next door) they ran into it and flickered along it. The overhang is
 		// kept short of the nearest taller wall.
-		for (const A of boxes) {
+		for (let a = 0; a < N; a++) {
+			const A = boxes[a];
 			if (!A.roof) continue;
-			const F = A.fit || [A.x, A.z, A.w, A.d], eave = A.y + A.h, i0 = Math.floor(F[0] / cell), j0 = Math.floor(F[1] / cell);
-			let room = A.roof.ov ?? 0.4;
-			for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const B of G.get(key(i0 + i, j0 + j)) || []) {
-				if (B === A || B.y + B.h < eave + 0.05 || B.y > eave + (A.roof.h || 1)) continue;
-				const BF = B.fit || [B.x, B.z, B.w, B.d], Bb = { ...B, x: BF[0], z: BF[1], w: BF[2], d: BF[3] }, Ab = { ...A, x: F[0], z: F[1], w: F[2], d: F[3] };
-				// the clear distance between the two outlines (the largest gap along any side)
-				let gap = -1e9;
-				for (const o of [Ab, Bb]) for (const [ax, az] of [[Math.cos(o.a), Math.sin(o.a)], [-Math.sin(o.a), Math.cos(o.a)]]) gap = Math.max(gap, Math.abs((Bb.x - Ab.x) * ax + (Bb.z - Ab.z) * az) - half(Ab, ax, az) - half(Bb, ax, az));
-				if (gap < room + 0.06) room = Math.max(0, gap - 0.06);
-			}
-			if (room < (A.roof.ov ?? 0.4)) A.ovFit = room;
-			else A.ovFit = undefined;
+			const eave = A.y + A.h, ov = A.roof.ov ?? 0.4;
+			let room = ov;
+			near(a, ov + 0.1, (b) => {
+				{
+					const B = boxes[b];
+					if (B.y + B.h < eave + 0.05 || B.y > eave + (A.roof.h || 1)) return;
+					const dx = X[b] - X[a], dz = Z[b] - Z[a], reach = (Wd[a] + Dp[a] + Wd[b] + Dp[b]) / 2 + room + 0.1;
+					if (dx * dx + dz * dz > reach * reach) return;
+					// the clear distance between the two outlines (the largest gap along any side)
+					let gap = -1e9;
+					for (let q = 0; q < 2; q++) for (let w = 0; w < 2; w++) {
+						const k = q ? b : a;
+						const ax = w === 0 ? C[k] : -S[k], az = w === 0 ? S[k] : C[k];
+						gap = Math.max(gap, Math.abs(dx * ax + dz * az) - half(a, ax, az) - half(b, ax, az));
+					}
+					if (gap < room + 0.06) room = Math.max(0, gap - 0.06);
+				}
+			});
+			if (room < ov) A.ovFit = room;
 		}
 	}
 	function upload(list, body, roofs) {
@@ -1673,7 +1701,7 @@ export function createCity(shared, scene, bay, real = null) {
 	// A tower near enough to be built is drawn by the near buildings; its far copy in the
 	// skyline would stand in the same place a few centimetres off and flicker through it
 	// (and cover its doorway and its rooms), so the skyline leaves those out.
-	let lastList = [];
+	let lastList = [], skySig = 0, skyN = -1;
 	function skylineBeside(list) {
 		lastList = list;
 		const G = new Map(), cell = 30, key = (x, z) => Math.floor(x / cell) + ',' + Math.floor(z / cell);
@@ -1686,6 +1714,11 @@ export function createCity(shared, scene, bay, real = null) {
 			return false;
 		};
 		const keep = G.size ? skyline.filter((t) => !drawn(t)) : skyline;
+		// (only sent to the graphics card again when the set changed: six thousand towers)
+		let sig = keep.length;
+		for (let k = 0; k < keep.length; k++) sig = (sig * 31 + Math.round(keep[k].x * 7 + keep[k].z * 13)) | 0;
+		if (sig === skySig && skyN === skyline.length) return;
+		skySig = sig; skyN = skyline.length;
 		keep.noGrounds = true;
 		upload(keep, skyMesh, null);
 	}
@@ -2103,7 +2136,8 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.length > CAP) { const t = list.trees, k = list.kit, pr = list.props; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; list.props = pr; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
 		procGroups(list, x, z);
-		apart(list);
+		// (a phone sorts out the nearer buildings only: the pass costs it a frame or two)
+		apart(list, x, z, PHONE ? 650 : 1e9);
 		upload(list, near, [hips, gables]);
 		skylineBeside(list);
 		indexLots(list);

@@ -52,7 +52,8 @@ self.onmessage = async ({ data }) => {
 		page.on('pageerror', e => errors.push(e.message));
 		if (process.env.DEBUG) { page.on('console', m => console.log('console', m.text())); page.on('requestfailed', q => console.log('failed', q.url(), q.failure()?.errorText)); }
 		await page.addInitScript(() => {
-			window.played = []; window.panners = [];
+			window.played = []; window.panners = []; window.speaks = 0;
+			const post = Worker.prototype.postMessage; Worker.prototype.postMessage = function (m, t) { if (m?.type === 'speak') speaks++; return post.call(this, m, t); };
 			const start = AudioBufferSourceNode.prototype.start;
 			AudioBufferSourceNode.prototype.start = function (...a) { const x = this.buffer?.getChannelData(0); played.push({ duration: this.buffer?.duration, rate: this.playbackRate.value, rms: x ? Math.sqrt(x.reduce((s, v) => s + v * v, 0) / x.length) : 0 }); return start.apply(this, a); };
 			const make = BaseAudioContext.prototype.createPanner;
@@ -84,6 +85,15 @@ self.onmessage = async ({ data }) => {
 		assert.deepEqual(r.pan[0], [3, 'HRTF']);
 		assert.ok(r.started > 0.3);
 
+		// the same person's same line again: replayed from memory, the worker never asked
+		const before0 = await page.evaluate(() => ({ speaks, played: played.length }));
+		await page.evaluate(() => { events.length = 0; const who = { seed: 4, male: false, ...shape({ seed: 4, age: 17, teen: true, male: false }) }; speech.remark('Morning! Lovely out, huh?', who, { at: () => ({ x: -2, y: 1.6, z: 0 }), audible: () => true, done: p => events.push(['again', p]) }); });
+		await page.waitForFunction(() => events.length, {}, { timeout: 60000 });
+		const after0 = await page.evaluate(() => ({ speaks, played: played.length, ev: events[0], cached: speech.cached() }));
+		assert.deepEqual(after0.ev, ['again', true]);
+		assert.equal(after0.speaks, before0.speaks, 'a repeated line went to the worker again');
+		assert.equal(after0.played, before0.played + 2);
+		assert.ok(after0.cached >= 2);
 		// a conversation is going: a remark is refused; a conversation line cuts a remark short
 		await page.evaluate(() => { events.length = 0; speech.speak('Let me tell you about the harbour, it is a long story.', { seed: 2 }); });
 		assert.equal(await page.evaluate(() => speech.remark('Hi!', { seed: 3 }, {})), false);

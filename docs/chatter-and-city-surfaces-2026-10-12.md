@@ -29,3 +29,11 @@ Found and checked with `island/tools/zfight-browser.cjs`, a census of every draw
 - **Cliff settlement rooms (`planet/arch/rooms.js`, `furnish.js`):** outer room walls stood exactly on the building skin, with pilasters and skirting proud of it; they now stand 14 cm inside (`INSET`), and wall pieces have no underside. TERRAN seed 77: about 280 m² of wall-skin fighting gone.
 - **Checked clean:** Bend (2.2 million triangles, nothing), the Moon colony (0.1 m²).
 - **Still open:** the island village has about 80 m² of floor-level surfaces 2.6 cm apart (all houses); a few 3-5 cm deck and glass layers in cliff settlements that only flicker beyond about 350 m; nothing has been looked at on a real phone.
+
+## iPhone hardening (12 October, late)
+
+- **Building separation pass (`bay/city.js` `apart`):** rewritten with flat arrays and a fine grid, no objects per pair: 300 ms to 45 ms per city rebuild for 13,000 boxes (desktop Node); on phones only buildings within 650 m are sorted out. The old version was a likely hitch every 300 m of travel on a phone.
+- **Skyline:** sent to the graphics card again only when the set of towers left out actually changed.
+- **Chatter on phones:** remarks use the local voices only once a conversation has loaded them (no 100 MB download or model load just from walking about); until then captions. Spoken remarks at most every 18-30 s on a phone. Nobody starts talking while the frame time is over 30 ms (34 ms on a computer). The listener only moves while a remark plays; the caption moves by transform and reads the page size once a second.
+- **Local voices:** made lines are kept (48 of them) and replayed without asking the worker again; touch screens get the cheap stereo pan instead of HRTF. On a touch screen, if making a line takes more than 1.6 times as long as saying it, twice running, the voices step aside for the device voice, and the device is remembered as slow until the local voices are chosen again in Guide settings.
+- **Checks:** chatter node tests 12/12; voice browser test now also proves a repeated line never reaches the worker; three worlds load clean as a desktop and as an emulated iPhone; San Ramon runs clean as an emulated iPhone. Real iPhone frame time still unmeasured.

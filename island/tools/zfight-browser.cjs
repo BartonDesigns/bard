@@ -115,7 +115,8 @@ function census([R, far]) {
 	await new Promise(r => server.listen(0, '127.0.0.1', r));
 	const browser = await chromium.launch({ executablePath: process.env.CHROME_EXECUTABLE, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 	try {
-		const page = await browser.newPage({ viewport: { width: 640, height: 480 } });
+		// PHONE=1: as an iPhone (touch, phone user agent), so the phone paths run
+		const page = await browser.newPage(process.env.PHONE ? { viewport: { width: 390, height: 844 }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', hasTouch: true, isMobile: true } : { viewport: { width: 640, height: 480 } });
 		const errors = []; page.on('pageerror', e => errors.push(e.message));
 		page.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0, 400)); });
 		await page.goto(`http://127.0.0.1:${server.address().port}/island/dev.html${query}`);

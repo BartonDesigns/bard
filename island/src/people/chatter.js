@@ -8,17 +8,17 @@ import { awarenessContext } from './world-awareness.js';
 const NOTICE = 11, SAY = 4.6, EARSHOT = 14;
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _h = new THREE.Vector3();
 
-export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone }) {
+export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone, frameMs = () => 16 }) {
 	const said = new WeakMap(), bumped = new WeakMap();
 	let checkT = 0, quietUntil = 0, pending = null, n = 0, last = null, speed = 0;
 	const lastPos = new THREE.Vector3().copy(camera.position);
 
 	// the words over the speaker's head, for anyone playing with the sound off
 	const cap = document.createElement('div');
-	cap.style.cssText = 'position:absolute;left:0;top:0;max-width:220px;padding:5px 10px;border-radius:10px;background:rgba(10,10,10,.68);border:1px solid rgba(255,255,255,.12);color:#fff;font:13px/1.35 -apple-system,system-ui,sans-serif;text-align:center;pointer-events:none;opacity:0;transition:opacity .35s;transform:translate(-50%,-100%);z-index:4;';
+	cap.style.cssText = 'position:absolute;left:0;top:0;will-change:transform;max-width:220px;padding:5px 10px;border-radius:10px;background:rgba(10,10,10,.68);border:1px solid rgba(255,255,255,.12);color:#fff;font:13px/1.35 -apple-system,system-ui,sans-serif;text-align:center;pointer-events:none;opacity:0;transition:opacity .35s;z-index:4;';
 	cap.setAttribute('aria-live', 'polite');
 	mount.appendChild(cap);
-	let capFor = null, capUntil = 0;
+	let capFor = null, capUntil = 0, capW = 1, capH = 1, sizeT = 0;
 	function caption(p, text, seconds) { if (!text) return; capFor = p; capUntil = performance.now() + Math.max(1.6, seconds) * 1000 + 500; cap.textContent = text; cap.style.opacity = '1'; }
 	function head(p, out) { const S = p.M.S; return out.set(S.pos.x, S.pos.y + (p.P.height || 1.7) * 0.93, S.pos.z); }
 
@@ -48,6 +48,10 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			begin(0.6 + line.text.length * 0.065);
 			return;
 		}
+		// On a phone the local voices are only used once a conversation has loaded them: their
+		// first download is about 100 MB and making a voice costs the processor the world needs.
+		// Until then a remark is its caption. A computer loads them in the background.
+		if (isPhone && !voice.ready()) { silent(); return; }
 		voice.warm();
 		const ok = voice.remark(line.text, dna, {
 			at: () => head(p, _h),
@@ -121,7 +125,7 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		const line = remarkFor({ seed: p.P.dna.seed, n: n++, self: selfOf(p), you: { speed, vehicle: driving(), aware, bump }, scene });
 		if (!line) { finish(1); return; }
 		pending = p;
-		say(p, line, () => finish(line.text ? 7 + Math.random() * 7 : 2.5));
+		say(p, line, () => finish(line.text ? (isPhone ? 18 : 7) + Math.random() * (isPhone ? 12 : 7) : 2.5));
 	}
 	// who they are talking with: a walking partner, or someone sitting or working beside them
 	function companion(p) {
@@ -145,13 +149,15 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		const vel = foot ? _v.set(P0.vel.x, 0, P0.vel.z) : _v.set(cam.x - lastPos.x, 0, cam.z - lastPos.z).multiplyScalar(1 / Math.max(dt, 1e-3));
 		speed += (Math.min(Math.hypot(vel.x, vel.z), 60) - speed) * Math.min(1, dt * 4);
 		lastPos.copy(cam);
-		voice.place(cam, camera.getWorldDirection(_f));
-		// the caption follows the speaker
+		// (the ear only moves while a remark is playing: nothing to do the rest of the time)
+		if (voice.remarking) voice.place(cam, camera.getWorldDirection(_f));
+		// the caption follows the speaker (the page size read once a second, not every frame)
+		if (now > sizeT) { sizeT = now + 1000; capW = mount.clientWidth; capH = mount.clientHeight; }
 		if (capFor) {
 			const S = capFor.M.S;
 			_f.set(S.pos.x, S.pos.y + (capFor.P.height || 1.7) + 0.35, S.pos.z).project(camera);
 			const vis = now < capUntil && _f.z < 1 && capFor.active;
-			if (vis) { cap.style.left = `${(_f.x * 0.5 + 0.5) * mount.clientWidth}px`; cap.style.top = `${(-_f.y * 0.5 + 0.5) * mount.clientHeight}px`; }
+			if (vis) cap.style.transform = `translate3d(${((_f.x * 0.5 + 0.5) * capW).toFixed(1)}px,${((-_f.y * 0.5 + 0.5) * capH).toFixed(1)}px,0) translate(-50%,-100%)`;
 			else { cap.style.opacity = '0'; capFor = null; }
 		}
 		checkT -= dt;
@@ -159,6 +165,8 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		checkT = isPhone ? 0.3 : 0.2;
 		const P = world()?.player?.state;
 		if (!P || P.flying || voice.talking()) return;
+		// the world is struggling to keep up: nobody starts talking until it recovers
+		if (frameMs() > (isPhone ? 30 : 34)) return;
 		const p = choose(cam, vel);
 		if (!p) return;
 		// fear does not wait its turn; small talk does

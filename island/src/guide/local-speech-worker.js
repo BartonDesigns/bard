@@ -29,11 +29,13 @@ self.onmessage = ({ data }) => {
    send('status', id, { text: 'Local voices ready' });
    for (let index = 0; index < chunks.length; index++) {
     if (id !== current) return;
+    const t0 = performance.now();
     const audio = await tts.generate(chunks[index], { voice, speed });
+    const ms = performance.now() - t0;
     if (id !== current) return;
     const samples = new Float32Array(audio.audio);
     const played = new Promise(resolve => { pendingAck = resolve; });
-    send('audio', id, { index, samples, sampleRate: audio.sampling_rate }, [samples.buffer]);
+    send('audio', id, { index, samples, sampleRate: audio.sampling_rate, ms }, [samples.buffer]);
     await played;
    }
    if (id === current) send('done', id);

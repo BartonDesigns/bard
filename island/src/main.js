@@ -751,7 +751,7 @@ export function createIslandWorld() {
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	guideApi.combat=combat;
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
-	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone });
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();

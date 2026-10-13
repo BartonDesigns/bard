@@ -1062,7 +1062,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		speechSelect.setAttribute('aria-label', 'Speech engine');
 		for (const [value, text] of [['local', 'Local neural voice'], ['device', 'Device voice']]) { const o = el('option', null, text); o.value = value; speechSelect.append(o); }
 		speechSelect.value = speechMode;
-		speechSelect.onchange = () => { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); speechMode = speechSelect.value; store.set('crysis-speech-mode', speechMode); speechStatusEl.textContent = ''; };
+		speechSelect.onchange = () => { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); speechMode = speechSelect.value; if (speechMode === 'local') localSpeech.retry(); store.set('crysis-speech-mode', speechMode); speechStatusEl.textContent = ''; };
 		row('Speech', speechSelect);
 		settings.append(el('div', 'color:rgba(255,255,255,.6);margin:6px 0;', 'Local voices download about 100 MB once, then generate spoken replies on this device.'));
 		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
@@ -1128,7 +1128,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			return ok;
 		},
 		place: (p, f) => localSpeech.place(p, f),
-		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(),
+		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
 	};
 	return { voice, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }
