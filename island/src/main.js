@@ -53,6 +53,7 @@ import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
 import { createBridgeSound } from './bay/bridgesound.js';
 import { createCrosswalks } from './bay/crosswalks.js';
+import { createDogWalkers } from './people/dogwalkers.js';
 import { createLake } from './bay/lake.js';
 import { createEarthWater } from './bay/earthwater.js';
 import { createWater } from './bay/water.js';
@@ -613,6 +614,8 @@ export function createIslandWorld() {
 	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
+	// some of them out with their dogs on a lead (people/dogwalkers.js)
+	const dogWalkers = createDogWalkers({ scene, people, world: () => world, isPhone });
 	guideApi.people = people;
 	// households, their days and their food, and the moments of it you see (people/family-life.js)
 	const families = HOOKS.families = createFamilyLife({ scene, world: () => world, camera, people, isPhone, mount: dom.mount, hint,
@@ -1756,6 +1759,7 @@ export function createIslandWorld() {
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		dogWalkers.update(dt, camera);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 		errands.update(dt);
 		fares.update(dt);
