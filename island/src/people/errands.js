@@ -4,6 +4,7 @@
 // inventory and a good deed on the compass. One errand at a time.
 import * as THREE from 'three';
 import { offerFor, lineFor, rewardFor, step, milestone, relativeDir } from './errands-core.js';
+import { rememberIncident } from './world-awareness.js';
 
 const OFFER_FOR = 15, OFFER_REACH = 12, PICK = 1.4, HAND = 2.3, AWAY = 220;
 const LIMIT = { search: 360, bring: 360, chase: 150, carry: 300 };
@@ -11,7 +12,7 @@ const STORE = 'crysis-favours-v1';
 const _v = new THREE.Vector3();
 
 export function createErrands({ scene, camera, world, people, chatter, persona, arms, morality, hint, driving, isPhone, worldKey = () => world()?.body?.key || 'here', placeName = () => '' }) {
-	let E = null, n = 0, cool = 40, prop = null, gT = 0, clock = 0;
+	let E = null, n = 0, cool = 40, prop = null, gT = 0, clock = 0, snatchCool = 120, snatchLook = 0;
 	let tally = { done: 0, kept: 0 };
 	try { tally = { ...tally, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; } catch { /* private mode */ }
 	const save = () => { try { localStorage.setItem(STORE, JSON.stringify(tally)); } catch { /* private mode */ } };
@@ -27,6 +28,18 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 			if (d < 16) { q.M.want.heading = Math.atan2(dx, dz); if (!S.remark) S.look.target = cam; }
 			else if (!S.remark) S.look.target = null;
 			q.M.setPose(q.idlePose || 'rest');
+			return true;
+		};
+		p.override = mine; p.heldBy = mine;
+	}
+	// a thief running off: away from you, turning aside from water and walls of nothing
+	function flee(p, speed) {
+		p.held = true; p.fleeBend = (Math.random() - 0.5) * 0.8;
+		const mine = (q, dt, cam) => {
+			const S = q.M.S;
+			let h = Math.atan2(S.pos.x - cam.x, S.pos.z - cam.z) + q.fleeBend;
+			if (groundAt(S.pos.x + Math.sin(h) * 3, S.pos.z + Math.cos(h) * 3) === null) { q.fleeBend += dt * 2.5; h += dt * 2.5; }
+			q.M.want.heading = h; q.M.want.speed = speed; q.M.want.run = 1; S.look.target = null;
 			return true;
 		};
 		p.override = mine; p.heldBy = mine;
@@ -83,6 +96,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		earbud: [['box', 0xf2f2f2, [0.018, 0.018, 0.03], [0, 0.009, 0]]],
 		ticket: [['box', 0xe7d26a, [0.14, 0.003, 0.06], [0, 0.002, 0]]],
 		scarf: [['box', 0xa8323a, [0.5, 0.02, 0.12], [0, 0.01, 0]]],
+		bag: [['box', 0x5a3a26, [0.34, 0.24, 0.12], [0, 0.12, 0]], ['torus', 0x3a261a, [0.11, 0.012], [0, 0.26, 0]]],
 	};
 	function placeProp(shape, at) {
 		const g = new THREE.Group(), geos = [];
@@ -141,15 +155,17 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		E = { ...r.E, giver: E.giver, friendP: E.friendP, t: 0 };
 		const o = r.out;
 		if (o.say === 'accept' && E.giver.active) chatter.say(E.giver, { text: lineFor('accept', { kind: E.kind, n }), gesture: 'nod', feel: { joy: 0.5 } }, null);
+		if (o.thief) dropBag();
 		if (o.say === 'found') { clearProp(); hint(`Found ${E.item.the}. Bring ${E.item.id === 'keys' || E.item.id === 'glasses' ? 'them' : 'it'} back to ${E.giverName}.`, 3500); }
 		if (o.done) finish(o.say);
+		else if (o.failed && E.kind === 'snatch') { const t = E.friendP; end(lineFor('escaped', { n }), 0); if (t) release(t); }
 		else if (o.kept) keep(o.cash);
 		else if (o.failed) end(o.say ? lineFor(o.say, {}) : null);
 		else if (o.declined) end(null);
 	}
 	function finish(say) {
-		const to = E.kind === 'lost' ? E.giver : E.friendP;
-		const metres = E.kind === 'lost' ? flat(E.drop, E.from) * 2 : flat(pos(to), E.from);
+		const to = E.kind === 'lost' || E.kind === 'snatch' ? E.giver : E.friendP;
+		const metres = E.kind === 'lost' || E.kind === 'snatch' ? flat(E.drop, E.from) * 2 : flat(pos(to), E.from);
 		const credits = rewardFor(E.kind, metres);
 		if (to?.active) {
 			chatter.say(to, { text: lineFor(say, { kind: E.kind, item: E.item, friend: E.giverName, n }), gesture: say === 'caught' ? 'laugh' : 'wave', feel: { joy: 1, surprise: say === 'caught' ? 0.6 : 0.2 } }, null);
@@ -187,7 +203,8 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		cool = Math.max(0, cool - dt); clock += dt;
 		if (releaseAt.length) releaseAt = releaseAt.filter(([p, t]) => { if (clock < t) return true; release(p); return false; });
 		if (prop) { gT += dt; prop.s.material.opacity = 0.55 + 0.45 * Math.max(0, Math.sin(gT * 3.1)); prop.s.scale.setScalar(0.35 + 0.2 * Math.max(0, Math.sin(gT * 3.1 + 1))); }
-		if (!E) return;
+		snatchCool = Math.max(0, snatchCool - dt);
+		if (!E) { if (cool <= 0 && snatchCool <= 0 && (snatchLook -= dt) < 0) { snatchLook = 5; if (Math.random() < 0.08) snatch(); } return; }
 		E.t += dt;
 		const me = feet(), g = E.giver, f = E.friendP;
 		// the people in it carried off by something else (a fight, a crowd thinning): it ends
@@ -195,6 +212,15 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		if (f && lost(f) && (E.stage === 'chase' || E.stage === 'carry' || E.stage === 'offered')) { go('lost-them'); return; }
 		if (E.stage === 'offered') {
 			if (E.t > OFFER_FOR || flat(me, pos(g)) > OFFER_REACH + 4) go('decline');
+			return;
+		}
+		if (E.stage === 'thief') {
+			const t = E.friendP;
+			// (brought down some other way, they drop it all the same; gone from the world, it is gone)
+			if (t?.P?.ragdoll) { go('catch-thief'); return; }
+			if (lost(t)) { go('escaped'); return; }
+			if (flat(me, pos(t)) < 2.1) go('catch-thief');
+			else if (E.t > 50 || flat(me, pos(t)) > 170) go('escaped');
 			return;
 		}
 		if (E.t > (LIMIT[E.stage] || 300)) { go('timeout'); return; }
@@ -221,6 +247,8 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	// the pin and the chip (guide.js asks every second)
 	function mark() {
 		if (!E || E.stage === 'offered') return null;
+		if (E.stage === 'thief') { const q = pos(E.friendP); return { x: q.x, y: q.y, z: q.z, radius: 2, title: 'Catch the thief', detail: `${E.giverName}'s bag` }; }
+		if (E.stage === 'search' && E.kind === 'snatch') return { ...E.drop, radius: 2, title: `Pick up ${E.giverName}'s bag`, detail: 'they dropped it' };
 		if (E.stage === 'search') return { ...E.centre, radius: 9, title: E.title, detail: 'search the marked patch' };
 		if (E.stage === 'bring') { const q = pos(E.giver); return { x: q.x, y: q.y, z: q.z, radius: 2, title: `Bring ${E.item.the} back to ${E.giverName}`, detail: E.item.cash ? 'or keep it' : 'they are waiting' }; }
 		const q = pos(E.friendP);
@@ -239,8 +267,41 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		if (line) chatter.say(q, line, null);
 		return line ? E.title : 'nobody near to ask';
 	}
+	// a bag snatched near you: one grown-up the victim, another runs off with it
+	function snatch(force = false) {
+		if (E || driving() || world()?.player?.state?.flying) return 'busy';
+		const c = feet(), ok = (q) => q.active && !q.leaving && !q.P.dna.child && !q.P.dna.minor && !q.engaged && !q.override && !q.held && q.demo === undefined && q.route?.kind !== 'seat' && !q.workSpot;
+		const near = people.pool.filter((q) => ok(q) && flat(pos(q), c) > 10 && flat(pos(q), c) < 40);
+		if (near.length < 2) return 'not enough people about';
+		const victim = near[0], thief = near.slice(1).sort((a, b) => flat(pos(a), pos(victim)) - flat(pos(b), pos(victim)))[0];
+		if (!force && flat(pos(thief), pos(victim)) > 25) return 'nobody close enough';
+		// the thief takes it: they are at the victim's side, then off
+		const v = pos(victim), side = Math.random() * 6.28;
+		thief.M.place(v.x + Math.cos(side) * 1.2, v.y, v.z + Math.sin(side) * 1.2, side);
+		const who = persona(victim);
+		E = { kind: 'snatch', stage: 'thief', giver: victim, giverName: who.first, friendP: thief, item: { name: 'bag', the: 'the bag', shape: 'bag' }, title: `Get ${who.first}'s bag back`, t: 0, from: { x: v.x, z: v.z } };
+		hold(victim, 'stand'); flee(thief, 5.4);
+		chatter.say(victim, { text: lineFor('snatched', { n: n++ }), gesture: 'point', feel: { surprise: 1, anger: 0.6 } }, null);
+		victim.M.S.feel.surprise = 1;
+		// everyone near saw it: they are shaken, and say so (world-awareness.js)
+		const key = world()?.body?.key, ev = { id: 'snatch:' + Date.now(), at: Date.now(), bodyKey: key, actorId: 'npc', actorName: 'a bag thief', kind: 'robbery', line: `snatched ${who.first}'s bag` };
+		if (key) for (const q of people.pool) if (q.active && q !== thief && flat(pos(q), v) < 40) rememberIncident(q, ev);
+		snatchCool = isPhone ? 300 : 240;
+		hint(`Someone just grabbed ${who.first}'s bag! Catch the thief.`, 4000);
+		return E.title;
+	}
+	function dropBag() {
+		const t = E.friendP, q = pos(t);
+		const y = groundAt(q.x, q.z) ?? q.y;
+		E.drop = { x: q.x, y, z: q.z };
+		prop = placeProp('bag', E.drop);
+		chatter.say(t, { text: lineFor('dropped', { n: n++ }), gesture: 'shrug', feel: { surprise: 1 } }, null);
+		flee(t, 6);
+		releaseAt.push([t, clock + 8]);
+		morality()?.record?.({ kind: 'stop-thief', target: E.giverName, world: worldKey(), place: placeName() });
+	}
 	function cancel() { if (E) go(E.stage === 'offered' ? 'decline' : 'timeout'); }
 	function dispose() { if (E) { for (const p of [E.giver, E.friendP]) release(p); E = null; } for (const [p] of releaseAt) release(p); releaseAt = []; clearProp(); glintTex?.dispose(); glintTex = null; }
 	function info() { return { errand: E && { kind: E.kind, stage: E.stage, title: E.title, giver: E.giverName, friend: E.friend || null, t: Math.round(E.t), drop: E.drop && [E.drop.x, E.drop.y, E.drop.z].map((v) => Math.round(v * 10) / 10) }, cool: Math.round(cool), last: lastEnd, ...tally }; }
-	return { maybeAsk, askNearest, asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
+	return { maybeAsk, askNearest, snatch: () => snatch(true), asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
 }

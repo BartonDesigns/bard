@@ -60,7 +60,7 @@ function stage() {
 	const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, 1, 0.1, 500);
 	camera.position.set(0, 1.7, 0); camera.lookAt(0, 1.7, -1); camera.updateMatrixWorld();
 	const P = { pos: new THREE.Vector3(0, 1.7, 0), flying: false };
-	const body = (x, z, extra = {}) => ({ active: true, role: 'walk', route: { kind: 'street' }, P: { dna: { seed: Math.round(x * 3 + z) }, root: { visible: true } }, M: { S: { pos: new THREE.Vector3(x, 0, z), remark: null, look: {}, feel: {}, speed: { v: 1 } }, want: {}, gesture() {}, setPose() {} }, ...extra });
+	const body = (x, z, extra = {}) => ({ active: true, role: 'walk', route: { kind: 'street' }, P: { dna: { seed: Math.round(x * 3 + z) }, root: { visible: true } }, M: { S: { pos: new THREE.Vector3(x, 0, z), remark: null, look: {}, feel: {}, speed: { v: 1 } }, want: {}, gesture() {}, setPose() {}, place(x2, y2, z2) { this.S.pos.set(x2, y2, z2); } }, ...extra });
 	const said = [], hints = [], paid = [], deeds = [];
 	const world = () => ({ player: { state: P, floorAt: (x, z, h) => h }, island: { heightAt: () => 2 }, body: { key: 'earth' } });
 	return { scene, camera, P, body, said, hints, paid, deeds, world, mk: (pool, o = {}) => ({ scene, camera, world, people: { pool, sidewalk: () => null }, chatter: { say: (p, l) => said.push([p, l.text]) }, persona: (p) => ({ first: 'N' + p.P.dna.seed }), arms: () => ({ apply: (tx) => (paid.push(tx), { ok: true }) }), morality: () => ({ record: (d) => deeds.push(d.kind) }), hint: (t) => hints.push(t), driving: () => false, isPhone: false, ...o }) };
@@ -117,4 +117,29 @@ test('a catch favour follows the friend; walking off ends it; fear and children 
 	run(R, 1, 61); Math.random = () => 0.01; R.maybeAsk(giver); Math.random = orig; R.accept(); R.update(0.1);
 	T.P.pos.set(800, 1.7, 0); R.update(0.1);
 	assert.equal(R.info().errand, null); assert.equal(T.paid.length, paid);
+});
+
+test('a bag snatched: chase the thief, they drop it, give it back; or they get away', async () => {
+	const { createErrands } = await import('../src/people/errands.js');
+	const T = stage(), victim = T.body(5, -12), thief = T.body(8, -15);
+	const R = createErrands(T.mk([victim, thief]));
+	const got = R.snatch(); assert.equal(got, "Get N3's bag back", got);
+	assert.ok(victim.held && thief.held);
+	assert.ok(victim.awarenessEvents?.length === 1 && !thief.awarenessEvents?.length, 'the people who saw it remember it, not the thief');
+	assert.match(R.mark().title, /thief/);
+	// the thief runs: their override steers them away
+	thief.override(thief, 0.1, T.camera.position); assert.ok(thief.M.want.speed > 5 && thief.M.want.run === 1);
+	T.P.pos.set(thief.M.S.pos.x, 1.7, thief.M.S.pos.z + 1); R.update(0.1);
+	assert.equal(R.info().errand.stage, 'search');
+	assert.ok(T.deeds.includes('stop-thief'));
+	assert.match(R.mark().title, /Pick up/);
+	const d = R.info().errand.drop; T.P.pos.set(d[0], d[1] + 1.7, d[2]); R.update(0.1);
+	assert.equal(R.info().errand.stage, 'bring');
+	T.P.pos.set(5, 1.7, -11); R.update(0.1);
+	assert.equal(R.info().errand, null);
+	assert.ok(T.paid.at(-1).get.credits >= 80);
+	// another, and the thief gets away
+	const R2 = createErrands(T.mk([T.body(5, -12), T.body(8, -15)]));
+	T.P.pos.set(0, 1.7, 0); assert.match(R2.snatch(), /bag back/); for (let k = 0; k < 520; k++) R2.update(0.1);
+	assert.equal(R2.info().errand, null); assert.match(R2.info().last, /escaped/);
 });

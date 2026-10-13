@@ -84,6 +84,10 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 		caught: [`Oh! ${item.name === 'bag' ? 'My bag' : 'That is mine'}! I did not even notice. Thank you!`, `Wait, ${item.the}? I would have been lost without it. Thanks!`, `Oh my gosh, thank you. You ran all this way?`],
 		passed: [`For me? From ${friend}? That is so kind. Thank you!`, `Oh, ${friend} sent this? Thank you for bringing it.`, `${friend} remembered! Thanks for carrying it over.`],
 		gaveUp: [`Never mind, I will manage. Thanks anyway.`],
+		snatched: [`Hey! Stop! That is my bag!`, `Thief! Somebody stop them!`, `No! My bag! Stop them, please!`],
+		dropped: [`Okay, okay! Take it!`, `Fine! Here! Just let me go!`, `Alright! I am dropping it!`],
+		escaped: [`They are gone. Thank you for trying.`, `Too late. Thanks for running after them, though.`],
+		recovered: [`My bag! Everything is still in it. Thank you, really. Please, take this.`, `You got it back! I cannot believe it. Here, for you.`],
 		kept: [],
 	}[event] || [''];
 	return pick(L, n);
@@ -91,7 +95,7 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 
 // credits for a favour, by kind and how far it took you (never a fortune: these are favours)
 export function rewardFor(kind, metres = 0) {
-	const base = kind === 'lost' ? 45 : kind === 'catch' ? 35 : 30;
+	const base = kind === 'snatch' ? 80 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : 30;
 	return Math.round(Math.min(140, base + Math.max(0, metres) * (kind === 'catch' ? 0.45 : 0.3)) / 5) * 5;
 }
 
@@ -104,10 +108,13 @@ export function step(E, ev) {
 	const at = (stage, out = null) => ({ E: { ...E, stage }, out });
 	switch (ev) {
 		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' ? 'search' : E.kind === 'catch' ? 'chase' : 'carry', { say: 'accept' }) : { E, out: null };
+		// a bag snatched: catch the thief, they drop it, pick it up, give it back
+		case 'catch-thief': return E.stage === 'thief' ? at('search', { say: 'dropped', thief: true }) : { E, out: null };
+		case 'escaped': return E.stage === 'thief' ? at('failed', { failed: true, say: 'escaped' }) : { E, out: null };
 		case 'decline': return E.stage === 'offered' ? at('failed', { declined: true }) : { E, out: null };
 		case 'pickup': return E.stage === 'search' ? at('bring', { say: 'found' }) : { E, out: null };
 		case 'reach':
-			if (E.stage === 'bring') return at('done', { done: true, say: 'returned' });
+			if (E.stage === 'bring') return at('done', { done: true, say: E.kind === 'snatch' ? 'recovered' : 'returned' });
 			if (E.stage === 'chase') return at('done', { done: true, say: 'caught' });
 			if (E.stage === 'carry') return at('done', { done: true, say: 'passed' });
 			return { E, out: null };
