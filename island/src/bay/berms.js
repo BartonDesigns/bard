@@ -94,9 +94,8 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 	// fitted to the stable ground over the junction, its grade held to PADG, PADR metres beyond
 	// the widest road meeting there. Every road meeting there is pinned to the pad's plane.
 	const JTOL = 3, PADG = 0.05, PADX = 2, AV = 15, AMAX = 1.5, KMAX = AMAX / (AV * AV);
-	let pads = [], padsKey = null;
+	let pads = [];
 	const lenOf = (p) => { const acc = [0]; for (let i = 2; i < p.length; i += 2) acc.push(acc[acc.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1])); return acc; };
-	function padAt(x, z) { for (const q of pads) if (Math.hypot(x - q.x, z - q.z) < JTOL + 0.5) return q; return null; }
 	function findPads(roads) {
 		const ends = [];
 		for (const r of roads) { const p = r.pts, n = p.length; ends.push({ r, x: p[0], z: p[1] }, { r, x: p[n - 2], z: p[n - 1] }); }

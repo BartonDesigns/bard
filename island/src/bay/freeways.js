@@ -282,7 +282,7 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 			// the ground under each point: the road it ramps down along, or the land under the span
 			const gnd = path.map((q) => { for (const t of took) if (distTo(t, q.x, q.z) < t.w / 2) return roadH(t, q.x, q.z); return H(q.x, q.z); });
 			// the height each point must clear: the lane under it, its clearance and the girder
-			const need = path.map((q, i) => {
+			const need = path.map((q) => {
 				let c = -1e9;
 				for (const l of under) if (near(l, q.x, q.z, 30) && distTo(l, q.x, q.z) < l.w / 2 + 3) c = Math.max(c, roadH(l, q.x, q.z) + (l.cls === 'motorway' || l.cls === 'trunk' ? 5.1 : l.cls === 'service' ? 4.2 : 4.6) + (foot ? 0.9 : 1.75));
 				return c;
