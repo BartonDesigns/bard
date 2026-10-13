@@ -71,6 +71,16 @@ function heap(key) {
 	};
 }
 
+// a polyline with points added so none is more than `step` metres from the next
+function dense(p, step) {
+	const out = [p[0], p[1]];
+	for (let i = 2; i < p.length; i += 2) {
+		const ax = p[i - 2], az = p[i - 1], bx = p[i], bz = p[i + 1], n = Math.ceil(Math.hypot(bx - ax, bz - az) / step);
+		for (let k = 1; k <= n; k++) out.push(ax + (bx - ax) * k / n, az + (bz - az) * k / n);
+	}
+	return out;
+}
+
 export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left = () => false, extraPlaces = () => [] }) {
 	const group = new THREE.Group();
 	group.name = 'globe roads';
@@ -310,10 +320,12 @@ export function createGlobeRoads({ scene, height, data, groundAt, isPhone, left 
 			for (const r of pieces) if (r.box[2] > cx - REG && r.box[0] < cx + REG && r.box[3] > cz - REG && r.box[1] < cz + REG) out.push(r);
 			if (performance.now() - s0 > 3) { work += performance.now() - s0; yield; s0 = performance.now(); }
 		}
-		// the ribbons: the road's own line on the ground, level across, 10 to 20 m a step
+		// the ribbons: the road's own line on the ground, level across, a vertex every 6 m at
+		// most (its points are 10 to 20 m apart: straight across that, the ribbon floated over
+		// the dips and sank into the rises)
 		const pos = [], uv = [], idx = [];
 		for (const r of out) {
-			const p = r.pts, n = p.length / 2, hw = r.w / 2, v0 = pos.length / 3;
+			const p = dense(r.pts, 6), n = p.length / 2, hw = r.w / 2, v0 = pos.length / 3;
 			// Sample each edge on ungraded terrain. The shared berm texture applies the same
 			// grading as the player and terrain, including after it updates while standing still.
 			let s = 0;
