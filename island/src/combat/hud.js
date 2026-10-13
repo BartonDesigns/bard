@@ -76,7 +76,8 @@ export function createHud({ mount, touch = false }) {
 	};
 	if (touch) {
 		mkBtn('Fire', '', 'right:calc(16px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 160px + env(safe-area-inset-bottom));width:72px;height:72px;');
-		btns.Fire.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>';
+		btns.Fire.title = 'Hold and drag to fire and aim'; btns.Fire.style.flexDirection = 'column'; btns.Fire.style.gap = '3px';
+		btns.Fire.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg><span style="font:600 10px system-ui">FIRE</span>';
 		mkBtn('Reload', 'R', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 176px + env(safe-area-inset-bottom));width:44px;height:44px;');
 		mkBtn('Mode', 'AUTO', 'right:calc(96px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 226px + env(safe-area-inset-bottom));width:44px;height:44px;font-size:9px;');
 	}

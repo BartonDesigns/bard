@@ -668,7 +668,8 @@ export function createPeople(scene, world, camera = null) {
 				const d = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z), kid = p.P.dna.child;
 				// family members go when their family does
 				const F = p.fam;
-				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && (d > NEAR * 1.25 || Math.abs(S.pos.y-cam.y)>6 || active >= na));
+				// (someone in a favour with you is kept until it is over: people/errands.js)
+				const go = F ? !F.active || (p.route?.kind === 'follow' && !p.route.parent.active) || (kid ? kids >= nk : active >= na) : kid || (!p.engaged && !p.held && (d > NEAR * 1.25 || Math.abs(S.pos.y-cam.y)>6 || active >= na));
 				if (go && !p.leaving) { p.leaving = true; p.leaveT = 0; }
 				if (p.leaving) {
 					// going: gone once out of sight (or far off); faded out if you keep watching
@@ -696,7 +697,7 @@ export function createPeople(scene, world, camera = null) {
 			turn = !turn;
 			if (active < na && (kids >= nk || turn || !active)) {
 				const teensOut = pool.filter((p) => p.active && p.P.dna.teen).length;
-				const idle = pool.find((p) => !p.active && p.demo === undefined && !p.P.dna.child && (!p.P.dna.teen || teensOut < Math.ceil(na * teenShare)));
+				const idle = pool.find((p) => !p.active && !p.reserved && p.demo === undefined && !p.P.dna.child && (!p.P.dna.teen || teensOut < Math.ceil(na * teenShare)));
 				// a second grown-up for a family, or someone new
 				const F = pool.find((o) => o.active && !o.leaving && o.kids > 0 && o.spouseWant && !o.spouse && !o.engaged && o.M.S.pos.distanceTo(cam) < NEAR && !seen(o.M.S.pos.x, o.M.S.pos.y, o.M.S.pos.z));
 				if (idle && F && !idle.P.dna.minor) { seedN++; if (castCompanion(idle, F)) { wear(idle, cam, need); idle.active = true; idle.fade = 0; fadePerson(idle.P, 0.02); } else F.spouseWant = false; }

@@ -1,3 +1,4 @@
+import { bindLookDrag } from '../combat/look-drag.js';
 import { armamentVariant } from '../gameplay/armament-variants.js';
 // Your gear: what you carry (gameplay/arms.js, kept in this browser), each item with its level and
 // quality tier, the item in your hand, the shops near you (buy, sell back, upgrade at an
@@ -48,12 +49,13 @@ export function createGear({ arms, multiplayer, mount, menu, button, hint, world
 	let thirdAimHeld = false, thirdAimTap = false;
 	const canvas = renderer?.domElement;
 	const setAim = (on) => { thirdAimTap = !!on; hand.aim(on); vm.aim(on); };
-	addEventListener('pointerdown', (e) => { if (e.button === 2 && e.target === canvas && thirdNow() && !busy() && !shown() && !win.shown()) { thirdAimHeld = true; e.preventDefault(); } });
+	addEventListener('pointerdown', (e) => { if (e.button === 2 && e.target === canvas && (!canvas.requestPointerLock || document.pointerLockElement === canvas) && thirdNow() && !busy() && !shown() && !win.shown()) { thirdAimHeld = true; e.preventDefault(); } });
 	addEventListener('pointerup', (e) => { if (e.button === 2) thirdAimHeld = false; });
-	addEventListener('blur', () => { thirdAimHeld = false; });
+	addEventListener('blur', () => { thirdAimHeld = thirdAimTap = false; });
+	document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) thirdAimHeld = false; });
 	addEventListener('contextmenu', (e) => { if (e.target === canvas && thirdNow() && weaponOf((preview || arms.held())?.i)) e.preventDefault(); });
 	const thirdAimBtn = (isPhone || globalThis.matchMedia?.('(pointer: coarse)')?.matches) ? button('Aim', 'Aim held item', 'display:none;', 'thumb mode 20') : null;
-	if (thirdAimBtn) { stopAll(thirdAimBtn); thirdAimBtn.onclick = () => setAim(!thirdAimTap); mount.appendChild(thirdAimBtn); }
+	if (thirdAimBtn) { stopAll(thirdAimBtn); bindLookDrag(thirdAimBtn, mount, { start: () => { if (mount.inert || busy() || shown()) return false; setAim(!thirdAimTap); } }); mount.appendChild(thirdAimBtn); }
 
 
 	// ---------- the sheet ----------

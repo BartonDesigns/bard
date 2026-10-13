@@ -536,5 +536,12 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	// following the road on its own (walking a trail, or the road steering): the hands are
 	// free, so the letter keys go to the music (index.html's keyboard asks this)
 	const auto = () => D.active && D.mode === 'assist';
-	return { update, start, stop, debugOptions, active: () => D.active, auto, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car };
+	// where the car is and how fast it goes (fares and anything else that rides along)
+	function carAt() {
+		if (!D.active) return null;
+		if (D.car) { const o = D.car.pose(); return { x: o.p[0], y: o.p[1], z: o.p[2], speed: Math.abs(o.speed) }; }
+		const P = world()?.player?.state;
+		return P ? { x: P.pos.x, y: P.pos.y - 1.68, z: P.pos.z, speed: Math.abs(D.v) } : null;
+	}
+	return { update, start, stop, debugOptions, carAt, active: () => D.active, auto, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car };
 }

@@ -252,9 +252,19 @@ function floorDisc(B, r0, r1, y, look, tint, down = false, n = 32) {
 	g.computeVertexNormals();
 	B.add(g, look, tint);
 }
+// a box without its underside (a wall's foot stands on the floor, and the building's skin
+// is below it: the two undersides lay in one plane and flickered seen from below)
+function footless(g) {
+	const G = g.groups.find((q) => q.materialIndex === 3);
+	if (!G || !g.index) return g;
+	const a = g.index.array, keep = [];
+	for (let i = 0; i < a.length; i++) if (i < G.start || i >= G.start + G.count) keep.push(a[i]);
+	g.setIndex(keep); g.clearGroups();
+	return g;
+}
 // a wall piece as the plan has it (rooms.js), drawn in its mode
 function wallPiece(B, W, h) {
-	const th = B.th, len = W.len, H = W.y1 - W.y0, at = (g) => { g.rotateY(W.yaw); return g.translate(W.x, 0, W.z); };
+	const th = B.th, len = W.len, H = W.y1 - W.y0, at = (g) => { footless(g); g.rotateY(W.yaw); return g.translate(W.x, 0, W.z); };
 	if (W.mode === 'glass' || W.mode === 'shaft') {
 		const sk = W.mode === 'shaft' ? 0.12 : 0.45, top = W.mode === 'shaft' ? 0 : Math.min(0.6, H * 0.1);
 		B.add(at(bx(len, sk, W.t + 0.04, 0, sk / 2, 0)), LK.stone, th.stone);

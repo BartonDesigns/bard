@@ -21,6 +21,7 @@ import { createLitter } from './world/litter.js';
 import { createVillage } from './world/village.js';
 import { createDistant } from './world/distant.js';
 import { createPlayer } from './player.js';
+import { loadAimSensitivity, saveAimSensitivity } from './aim-sensitivity.js';
 import { flightMultiplier, nextFlightSpeed, speedLabel } from './flight-speed.js';
 import { createMusic } from './music.js';
 import { createFauna } from './fauna.js';
@@ -115,7 +116,12 @@ import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
-import { createPeople, addTalkers } from './people/people.js';
+import { createPeople, addTalkers, talkers } from './people/people.js';
+import { createChatter } from './people/chatter.js';
+import { createErrands } from './people/errands.js';
+import { createFares } from './vehicles/fares.js';
+import { createItemUse } from './gameplay/item-use.js';
+import { createDaily } from './gameplay/daily.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createPicnicJam } from './encounters/picnic-jam.js';
@@ -125,7 +131,7 @@ import { createCarjack } from './vehicles/carjack.js';
 import { createAvatar } from './people/avatar.js';
 import { createSelf } from './people/self.js';
 import * as CREATURES from './world/creatures.js';
-import { waveHeight } from './world/ocean.js';
+import { waterContact } from './world/water-contact.js';
 import { createMushrooms } from './planet/mushrooms.js';
 import { createVolcano } from './planet/volcano.js';
 import { planAlien, createAlien } from './planet/alien.js';
@@ -238,17 +244,37 @@ const HUD_CSS = `
 #l99-island-mount.l99-touch .l99-joy:not(.held){left:calc(16px + env(safe-area-inset-left));bottom:calc(16px + env(safe-area-inset-bottom));transform:scale(.8);transform-origin:0 100%;opacity:.5;}
 #l99-island-mount.l99-still .l99-joy:not(.held){display:none;}
 @media ${HUD_LAND}{#l99-island-mount .l99-thumb,#l99-island-mount .l99-thumb>.l99-big{flex-direction:row-reverse;}#l99-island-mount.l99-touch .l99-big:not([hidden])~:is(.l99-side,.l99-pill){margin-bottom:10px;}}
-#l99-island-mount.l99-touch .l99-rail{display:none;top:116px;bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 210px);overflow:auto;width:220px;padding:8px;box-sizing:border-box;background:#102129f5;border:1px solid #66818a;border-radius:12px;z-index:12;pointer-events:auto;touch-action:pan-y;direction:ltr;}
-#l99-island-mount.l99-touch.l99-tools-open .l99-rail{display:flex;flex-direction:column;gap:6px;}
-#l99-island-mount.l99-touch .l99-rail>button{width:100%;min-height:44px;gap:12px;justify-content:flex-start;padding:8px 10px;box-sizing:border-box;}
-#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:500 12px/1.25 system-ui;text-align:left;}
-#l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(100px + env(safe-area-inset-bottom))!important;}
-#l99-island-mount.l99-touch>button[aria-label="Aim"]{right:calc(92px + env(safe-area-inset-right))!important;bottom:calc(100px + env(safe-area-inset-bottom))!important;}
+#l99-island-mount .l99-quick{display:none;}
+#l99-island-mount.l99-touch .l99-quick{position:absolute;top:calc(64px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));display:flex;gap:6px;z-index:14;}
+#l99-island-mount.l99-touch .l99-quick>button{position:relative!important;inset:auto!important;width:54px!important;min-height:48px;box-sizing:border-box;padding:5px!important;flex-direction:column;gap:2px;font-size:16px!important;}
+#l99-island-mount.l99-touch .l99-quick>button::after{content:attr(data-control-label);font:600 10px/1.1 system-ui;}
+#l99-island-mount.l99-touch .l99-left{top:calc(120px + env(safe-area-inset-top));max-width:calc(100% - 24px);}
+#l99-island-mount.l99-touch .l99-rail{display:none;top:calc(120px + env(safe-area-inset-top));bottom:auto;right:calc(12px + env(safe-area-inset-right));height:auto;max-height:calc(100% - 136px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;width:min(460px,calc(100% - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));padding:10px;box-sizing:border-box;background:#102129fa;border:1px solid #66818a;border-radius:14px;z-index:15;pointer-events:auto;touch-action:pan-y;overscroll-behavior:contain;direction:ltr;box-shadow:0 8px 30px #0008;}
+#l99-island-mount.l99-touch.l99-tools-open .l99-rail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-flow:row;grid-auto-columns:auto;gap:8px;align-content:start;}
+#l99-island-mount.l99-touch .l99-rail>button{width:100%!important;min-width:0;min-height:56px;height:auto!important;gap:10px;justify-content:flex-start!important;padding:10px!important;box-sizing:border-box;white-space:normal;}
+#l99-island-mount.l99-touch .l99-rail>button>svg{width:22px;min-width:22px;flex:none;}
+#l99-island-mount.l99-touch .l99-rail>button::after{content:attr(data-control-label);font:600 13px/1.3 system-ui;text-align:left;overflow-wrap:normal;}
+#l99-island-mount.l99-touch.l99-tools-open :is(.cb-btn,button:is([aria-label="Aim"],[aria-label="Aim held item"])){visibility:hidden;}
+#l99-island-mount.l99-touch .cb-btn[aria-label="Fire"],#l99-island-mount.l99-touch .cb-btn[aria-label="Draw"],#l99-island-mount.l99-touch .cb-btn[aria-label="Release"],#l99-island-mount.l99-touch .cb-btn[aria-label="Nocking"]{right:calc(12px + env(safe-area-inset-right))!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;width:80px!important;height:80px!important;}
+#l99-island-mount.l99-touch>button:is([aria-label="Aim"],[aria-label="Aim held item"]){right:calc(104px + env(safe-area-inset-right))!important;bottom:calc(88px + env(safe-area-inset-bottom))!important;width:64px!important;height:64px!important;touch-action:none!important;}
 #l99-island-mount.l99-touch .cb-btn[aria-label="Reload"]{right:calc(100px + env(safe-area-inset-right))!important;bottom:calc(160px + env(safe-area-inset-bottom))!important;}
 #l99-island-mount.l99-touch .cb-btn[aria-label="Mode"]{right:calc(100px + env(safe-area-inset-right))!important;bottom:calc(212px + env(safe-area-inset-bottom))!important;}
-#l99-island-mount.l99-touch .cb-hp{bottom:calc(92px + env(safe-area-inset-bottom));width:100px;}
-#l99-island-mount.l99-touch .cb-ammo{bottom:calc(24px + env(safe-area-inset-bottom));right:auto;left:50%;transform:translateX(-50%);text-align:center;max-width:140px;}
-#l99-island-mount.l99-touch .cb-ammo .w{font-size:9px;}
+#l99-island-mount.l99-touch .cb-hp{left:calc(16px + env(safe-area-inset-left));bottom:calc(174px + env(safe-area-inset-bottom));width:144px;transform:none;}
+#l99-island-mount.l99-touch .cb-ammo{bottom:calc(114px + env(safe-area-inset-bottom));left:calc(16px + env(safe-area-inset-left));right:auto;transform:none;text-align:left;max-width:160px;padding:6px 8px;border-radius:8px;background:#08141ab8;box-sizing:border-box;}
+#l99-island-mount.l99-touch .cb-ammo .n{font-size:22px;}
+#l99-island-mount.l99-touch .cb-ammo .r{font-size:12px;}
+#l99-island-mount.l99-touch .cb-ammo .w{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.3px;}
+#l99-island-mount.l99-touch .cb-ammo .rl:empty{display:none;}
+#l99-island-mount.l99-touch .l99-prompts{left:calc(112px + env(safe-area-inset-left));right:calc(88px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));}
+@media (orientation:landscape) and (max-height:540px){
+#l99-island-mount.l99-touch .l99-quick{top:calc(12px + env(safe-area-inset-top));right:calc(116px + env(safe-area-inset-right));}
+#l99-island-mount.l99-touch .l99-left{top:calc(64px + env(safe-area-inset-top));max-width:40%;}
+#l99-island-mount.l99-touch .l99-rail{top:calc(68px + env(safe-area-inset-top));max-height:calc(100% - 84px - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:min(460px,60%);}
+#l99-island-mount.l99-touch .cb-ammo{bottom:calc(12px + env(safe-area-inset-bottom));left:calc(116px + env(safe-area-inset-left));}
+#l99-island-mount.l99-touch .cb-hp{bottom:calc(74px + env(safe-area-inset-bottom));left:calc(124px + env(safe-area-inset-left));}
+#l99-island-mount.l99-touch .l99-prompts{left:calc(290px + env(safe-area-inset-left));right:calc(100px + env(safe-area-inset-right));}
+}
+
 `;
 
 function buildDom() {
@@ -265,18 +291,21 @@ function buildDom() {
 	const knob = css(document.createElement('div'), 'position:absolute;left:31px;top:31px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.45);');
 	joy.appendChild(knob);
 	const box = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
+	const quick = box('l99-quick');
 	const rail = box('l99-rail'), thumb = box('l99-thumb'), big = box('l99-big'), side = box('l99-side'), pill = box('l99-pill'), mode = box('l99-mode'), prompts = box('l99-prompts'), left = box('l99-left'), pair = box('l99-pair');
 	thumb.append(big, side, pill, mode);
 	const land = matchMedia(HUD_LAND);
 	const groups = { rail, big, side, pill, mode, prompt: prompts, left };
 	// (the modes join the rail on a short landscape screen)
 	const home = (g) => (g === 'mode' && (land.matches || mount.classList.contains('l99-touch')) ? rail : groups[g]);
-	const tools = button('•••', 'More controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));z-index:13;');
+	const tools = button('☷', 'All controls', 'right:calc(12px + env(safe-area-inset-right));top:calc(64px + env(safe-area-inset-top));z-index:13;');
+	tools.dataset.controlLabel = 'Controls'; tools.style.order = '999';
+	quick.appendChild(tools);
 	tools.hidden = !mount.classList.contains('l99-touch');
-	tools.setAttribute('aria-expanded', 'false'); tools.setAttribute('aria-controls', 'l99-controls-menu'); rail.id = 'l99-controls-menu';
-	const closeTools = () => { mount.classList.remove('l99-tools-open'); tools.setAttribute('aria-expanded', 'false'); };
-	tools.addEventListener('click', (e) => { e.stopPropagation(); const on = mount.classList.toggle('l99-tools-open'); tools.setAttribute('aria-expanded', String(on)); });
-	rail.addEventListener('click', (e) => { if (e.target.closest('button')) closeTools(); });
+	tools.setAttribute('aria-expanded', 'false'); tools.setAttribute('aria-controls', 'l99-controls-menu'); rail.id = 'l99-controls-menu'; rail.setAttribute('aria-label', 'World controls');
+	const closeTools = () => { mount.classList.remove('l99-tools-open'); tools.setAttribute('aria-expanded', 'false'); tools.dataset.controlLabel = 'Controls'; };
+	tools.addEventListener('click', (e) => { e.stopPropagation(); const on = mount.classList.toggle('l99-tools-open'); tools.setAttribute('aria-expanded', String(on)); tools.dataset.controlLabel = on ? 'Close' : 'Controls'; });
+	rail.addEventListener('click', (e) => { if (e.target.closest('button')) closeTools(); }, true);
 	mount.addEventListener('pointerdown', (e) => { if (!rail.contains(e.target) && !tools.contains(e.target)) closeTools(); });
 	addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTools(); });
 	const back = button('◀ Bard', 'Back to the Bard faceplate', 'left:calc(12px + env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));');
@@ -315,11 +344,17 @@ function buildDom() {
 	};
 	for (const g of [thumb, pair, rail]) new MutationObserver(tidy).observe(g, { subtree: true, attributes: true, attributeFilter: ['style'] });
 	const dock = (el) => {
-		const [g, n] = (el.dataset?.hud || '').split(' '), to = groups[g] && home(g);
+		const [g, n] = (el.dataset?.hud || '').split(' ');
+		const fast = mount.classList.contains('l99-touch') && ((g === 'mode' && n === '20') || (g === 'rail' && ['55', '60'].includes(n)));
+		const to = fast ? quick : groups[g] && home(g);
 		if (!to || el.parentNode === to) return;
 		el.style.order = n || '0';
 		to.appendChild(el);
-		if (to === rail) el.dataset.controlLabel = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
+		if (to === quick) el.dataset.controlLabel = g === 'mode' ? 'Fly' : n === '55' ? 'Gear' : 'Places';
+		else if (to === rail) {
+			const title = (el.getAttribute('aria-label') || el.title || '').replace(/\s*\([^)]*\)/g, '');
+			el.dataset.controlLabel = /^Explore/.test(title) ? 'Explore' : /^Cycle flight/.test(title) ? 'Flight speed' : /^Camera:/.test(title) ? 'Camera view' : title;
+		}
 		tidy();
 	};
 	new MutationObserver((list) => { for (const m of list) for (const el of m.addedNodes) if (el.nodeType === 1) dock(el); }).observe(mount, { childList: true });
@@ -328,7 +363,7 @@ function buildDom() {
 	// menus stop short of the thumb's groups
 	const fit = () => {
 		// (a short landscape screen: the rail can reach down beside a tall stack of prompts too)
-		const right = Math.max(12 + thumb.offsetWidth, land.matches ? 12 + rail.offsetWidth : 0) + 8;
+		const right = Math.max(12 + thumb.offsetWidth, land.matches && !mount.classList.contains('l99-touch') ? 12 + rail.offsetWidth : 0) + 8;
 		const ring = mount.classList.contains('l99-touch') && !mount.classList.contains('l99-still');
 		set('--l99-side', `${right}px`);
 		set('--l99-left', `${ring ? 16 + 88 + 8 : 24}px`);
@@ -345,7 +380,7 @@ function buildDom() {
 	});
 	// driving, a game, the tattoo chair: no resting joystick
 	const still = (on) => { if (mount.classList.contains('l99-still') !== on) { mount.classList.toggle('l99-still', on); fit(); } };
-	mount.append(style, canvas, veil, joy, rail, thumb, prompts, left, back, gear, tools, fly, boost, jump, down, act, shell, pair, launch, hint, panel, loading);
+	mount.append(style, canvas, veil, joy, rail, thumb, prompts, left, back, gear, quick, fly, boost, jump, down, act, shell, pair, launch, hint, panel, loading);
 	document.body.appendChild(mount);
 	return { mount, canvas, joy, knob, back, jump, gear, fly, boost, down, act, shell, toss, place, launch, veil, hint, loading, panel, still };
 }
@@ -431,10 +466,11 @@ export function createIslandWorld() {
 	let pixelRatio = isPhone ? Math.min(maxRatio, 1.25) : maxRatio;
 	renderer.setPixelRatio(pixelRatio);
 	const camera = new THREE.PerspectiveCamera(70, 1, 0.25, 16000);
-	const scene = new THREE.Scene();
+	const scene = HOOKS.scene = new THREE.Scene();
 	const shaderWarm = createShaderWarm(renderer, scene, camera);
 
 	const shared = {
+		aimSensitivity: loadAimSensitivity(),
 		uTime: { value: 0 }, uWet: { value: 0 }, uWind: { value: 0.5 }, uGust: { value: 0 }, uWindT: { value: 0 }, uWindDir: { value: new THREE.Vector2(0.93, 0.35) }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 }, uPulse: { value: 0 },
 		uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.4) }, uSunColor: { value: new THREE.Color(1, 0.95, 0.86) },
 		uSkyZen: { value: new THREE.Color() }, uSkyHor: { value: new THREE.Color() }, uAmbient: { value: new THREE.Color(0.3, 0.35, 0.4) },
@@ -607,7 +643,8 @@ export function createIslandWorld() {
 	const talkBtn = button('💬 Talk', 'Talk (Enter)', 'display:none;', 'prompt 50');
 	dom.mount.appendChild(talkBtn);
 	let talkTarget = null, talkT = 0;
-	const talkNow = () => { if (talkTarget) guide.talkTo(talkTarget); };
+	// (someone asking a favour: the same control says yes to it, people/errands.js)
+	const talkNow = () => { if (!talkTarget) return; if (HOOKS.errands?.asking(talkTarget)) HOOKS.errands.accept(); else guide.talkTo(talkTarget); };
 	talkBtn.addEventListener('click', (e) => { e.stopPropagation(); talkNow(); });
 	for (const ev of ['pointerdown', 'touchstart']) talkBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if (e.key === 'Enter' && talkTarget && document.activeElement?.tagName !== 'INPUT' && dom.mount.style.display !== 'none') { e.preventDefault(); talkNow(); } });
@@ -718,6 +755,24 @@ export function createIslandWorld() {
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	guideApi.combat=combat;
+	// the compass, for every system that records a deed (families' food deeds, favours)
+	HOOKS.morality = combat.morality;
+	// people you pass notice you and say something, in their own voices (people/chatter.js)
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands });
+	// today's three goals, paid as they are done (gameplay/daily.js)
+	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
+	const note = (kind, data) => daily.note(kind, data);
+	// favours people ask of you as you pass (people/errands.js)
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note });
+	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
+	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', note, errands: () => HOOKS.errands });
+	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
+	dom.mount.appendChild(useBtn);
+	useBtn.addEventListener('click', (e) => { e.stopPropagation(); itemUse.use(); });
+	for (const ev of ['pointerdown', 'touchstart']) useBtn.addEventListener(ev, (e) => e.stopPropagation());
+	addEventListener('keydown', (e) => { if ((e.key === 'u' || e.key === 'U') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA' && dom.mount.style.display !== 'none' && itemUse.usable()) { e.preventDefault(); itemUse.use(); } });
+	// fares: people hail you while you drive (vehicles/fares.js)
+	const fares = guideApi.fares = HOOKS.fares = createFares({ camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), drive, arms: () => arms, hint: (t, ms) => hint(t, ms, 1), isPhone, note });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -775,9 +830,13 @@ export function createIslandWorld() {
 		const P = world?.player.state, cur = guide.partner();
 		// walked away from someone you were talking with: the conversation ends
 		if (cur && P && cur.p.M.S.pos.distanceTo(camera.position) > 7) { guide.endTalk(); hint(`${cur.persona.first} goes back to what they were doing.`, 2500); }
-		talkTarget = P && !P.flying && !cur ? people.facing(camera.position, P.yaw) : null;
+		// (nobody to talk to from a moving maglev or rover)
+		talkTarget = P && !P.flying && !cur && !world?.colony?.riding?.() ? people.facing(camera.position, P.yaw) : null;
 		talkBtn.style.display = talkTarget ? '' : 'none';
-		if (talkTarget) talkBtn.textContent = isPhone ? '💬 Talk' : '💬 Talk (Enter)';
+		const U = HOOKS.itemUse?.usable(), showUse = !!U && !P?.flying && !drive.active();
+		useBtn.style.display = showUse ? '' : 'none';
+		if (showUse) useBtn.textContent = isPhone ? U.label : `${U.label} (U)`;
+		if (talkTarget) talkBtn.textContent = HOOKS.errands?.asking(talkTarget) ? (isPhone ? '🤝 Help' : '🤝 Help (Enter)') : isPhone ? '💬 Talk' : '💬 Talk (Enter)';
 	}
 
 	// the loading card over a whole arrival (api.open with a spot, lifted by share.js)
@@ -802,6 +861,10 @@ export function createIslandWorld() {
 		const body = worldBody(params);
 		if (world && sameBody(state.body, body)) return world;
 		if (world) teardown();
+		shared.uUnder.value = 0;
+		seaLook.t = 0; seaLook.on = true;
+		underwaterAudio(0, 1);
+		camera.near = .25; camera.far = 16000; camera.updateProjectionMatrix();
 		window.L99Loading.stage('Shaping the landscape');
 		await new Promise((r) => requestAnimationFrame(r));
 		// what kind of world: its ground, air, plants and underground (Earth's island is tropical)
@@ -937,7 +1000,8 @@ export function createIslandWorld() {
 		world.spray.quality(quality);
 		if (waterPlan) {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
-			island.waterAt = (x, z) => world?.water?.waterAt(x, z) ?? null;
+			const water = world.water;
+			island.waterAt = (x, z) => water.waterAt(x, z);
 		}
 		// Every generated surface, including Earth's island, owns its underground in this scene.
 		{
@@ -1092,7 +1156,8 @@ export function createIslandWorld() {
 			// (the ground as the GPU draws it, where people stand: bay/terrain.js)
 			island.drawnAt = (x, z) => (Math.max(Math.abs(x), Math.abs(z)) < island.half - 20 || !bayArea.loaded()) ? own(x, z) : bayArea.drawnAt(x, z, island.heightAt);
 			// (the San Lorenzo's water, to swim or wade: bay/sanlorenzo.js)
-			island.waterAt = (x, z) => world?.boardwalk?.waterAt(x, z) ?? world?.water?.waterAt(x, z) ?? world?.globe?.waterAt(x, z) ?? null;
+			const waterWorld = world;
+			island.waterAt = (x, z) => waterWorld.boardwalk?.waterAt(x, z) ?? waterWorld.water?.waterAt(x, z) ?? waterWorld.globe?.waterAt(x, z) ?? null;
 			bayArea.ready.then(() => {
 				if (world !== w0) return;
 				const bridge = createGoldenGate(shared, scene, bayArea.heightAt);
@@ -1148,6 +1213,8 @@ export function createIslandWorld() {
 		HOOKS.combat?.reset();
 		HOOKS.gear?.suspend();
 		families.clear();
+		HOOKS.errands?.dispose();
+		HOOKS.fares?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
 		social.reset();
@@ -1164,6 +1231,7 @@ export function createIslandWorld() {
 			keepTextures: [shared.occ, shared.prints],
 		});
 		world.globe?.dispose();         // globe: the frame back to the Bay's, its hooks off
+		world.water?.dispose();
 		world.bayArea?.dispose();
 		world.real?.dispose();
 		drive.stop();
@@ -1216,6 +1284,16 @@ export function createIslandWorld() {
 		const title = css(document.createElement('div'), 'font-weight:700;letter-spacing:.06em;margin-bottom:8px;');
 		title.textContent = 'SKY & WORLD';
 		p.appendChild(title);
+		const aim = slider(p, 'Aim sensitivity', 50, 200, 5,
+			() => Math.round(shared.aimSensitivity * 100),
+			(percent) => { shared.aimSensitivity = saveAimSensitivity(percent / 100); },
+			(percent) => `${percent}%`);
+		aim.input.setAttribute('aria-label', 'Aim sensitivity');
+		aim.input.style.minHeight = '44px';
+		aim.input.style.touchAction = 'none';
+		const aimNote = css(document.createElement('div'), 'font-size:12px;opacity:.75;margin:-6px 0 12px;');
+		aimNote.textContent = 'Mouse and touch · Default 115%';
+		p.appendChild(aimNote);
 		if (origin) {
 			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
 			galaxy.textContent = 'Explore galaxy';
@@ -1434,6 +1512,8 @@ export function createIslandWorld() {
 		shared.uTime.value = time;
 		stepWind(dt, shared);
 		const W = world;
+		W.player.state.inputBlocked = window.L99Loading.active() || arcade.active() || studio.active() || gear.busy() || dom.mount.classList.contains('l99-tools-open') || !!dom.mount.querySelector('[role="dialog"]:not([style*="display: none"]) input:focus');
+		if (W.player.state.inputBlocked) W.player.clearInput();
 		W.arms?.update(dt, camera.position);
 		W.music.update(dt);
 		W.orbit?.before();
@@ -1480,15 +1560,16 @@ export function createIslandWorld() {
 		surprises.update(dt, sk, wx);
 		W.whale.update(dt, time, shared.uBass.value, camera.position);
 		// below the surface: the sea closes in, blue-green and dim
-		const surf = waveHeight(W.island, camera.position.x, camera.position.z, time, shared.uWave.value);
+		const contact = waterContact(W.island, camera.position, W.player.floorAt(camera.position.x, camera.position.z, camera.position.y - 1.68), time, shared.uWave.value);
+		const surf = contact.surface ?? 0;
 		// (the Deep lies far under the sea's level, but it is dry rock)
-		const under = camera.position.y < surf - 0.05 && !W.deep?.active();
+		const under = contact.under && !W.deep?.active();
 		// seen from below the sea is a ceiling: it must not hide what glows beneath it
 		W.ocean.material.depthWrite = !under;
 		// ...and it is drawn before everything under it, so glows and embers show through
 		W.ocean.renderOrder = under ? -5 : 1;
 		W.underwater.update(dt, time, under, surf);
-		W.magma.update(dt, time, under, surf);
+		W.magma.update(dt, time, under, contact.sea ?? 0);
 		W.volcano?.update(dt, time);
 		W.alien?.update(dt, time);
 		W.beyond?.update(dt, time);
@@ -1667,6 +1748,9 @@ export function createIslandWorld() {
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
+		errands.update(dt);
+		fares.update(dt);
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
 		waypoint.update(dt, time, !W.orbit?.active() && !arcade.active());
@@ -1866,7 +1950,7 @@ export function createIslandWorld() {
 				renderer.render(scene, camera);
 				if (renderer.getContext().isContextLost()) throw new Error('Graphics were interrupted while preparing the world.');
 			}
-			hint(isPhone ? 'Left thumb to walk, right thumb to look. ✈ to fly, ☀ for the sky.' : 'WASD to walk, drag to look, Space to jump, F to fly. ☀ for the sky.');
+			hint(isPhone ? 'Left thumb moves. Drag the view or hold and drag Fire to aim. Tap Aim for sights. ✈ to fly.' : 'Click the world to capture the mouse. Move mouse to aim, left-click to fire, hold right-click for sights. Esc releases the cursor. WASD moves; R reloads.');
 			return true;
 		},
 		close() {
@@ -2024,6 +2108,16 @@ if (typeof window !== 'undefined') {
 		guide: () => window.L99Island?.guide,
 		people: () => window.L99Island?.people,
 		social: () => HOOKS.social,
+		// what passers-by last said and when the next may speak: Crysis.chatter()
+		chatter: () => HOOKS.chatter?.info(),
+		// favours in passing: Crysis.errands() what is under way; .accept() / .cancel()
+		// fares while you drive: Crysis.fares() the current one and your totals; .hail() someone ahead hails now
+		// today's goals: Crysis.daily()
+		daily: () => HOOKS.daily?.list(),
+		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
+		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
+		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
+		scene: () => HOOKS.scene,
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
 		families: () => HOOKS.families,
 		// the child in the woods (people/ghost.js): very rare; this calls her now

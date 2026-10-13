@@ -74,14 +74,17 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		const floorM=L.kind==='lobby'||L.kind==='mall'?M.stone:L.kind==='office'?M.carpet:M.oak;
 		for(const [x0,z0,x1,z1] of slabRects(T,L)) box(floorM,x0,-.16,z0,x1,0,z1);
 		const above=T.levels[T.levels.indexOf(L)+1];
-		for(const [x0,z0,x1,z1] of slabRects(T,above||L)) box(M.ceil,x0,H-.25,z0,x1,H,z1);
+		// (everything stops short of the floor above: the ceiling's top, the mullions and the
+		// band laid exactly on its top surface and flickered through the carpet up there)
+		const top=above?H-.18:H;
+		for(const [x0,z0,x1,z1] of slabRects(T,above||L)) box(M.ceil,x0,H-.25,z0,x1,top,z1);
 		const step=Math.max(3.2,Math.sqrt(T.W*T.D/180));
 		for(let x=-hw+1.8;x<hw-1;x+=step)for(let z=-hd+1.8;z<hd-1;z+=step){
 			if(above?.holes.some(a=>x>a.x0-.6&&x<a.x1+.6&&z>a.z0-.6&&z<a.z1+.6))continue;
 			box(M.panel,x-.5,H-.27,z-.5,x+.5,H-.25,z+.5);
 		}
 		// Structure follows the same column grid on all storeys.
-		if(T.W>26 && T.D>26)for(const x of [-hw+1,hw-1])for(let z=-hd+5;z<hd-2;z+=8)box(M.stone,x-.24,0,z-.24,x+.24,H,z+.24,true);
+		if(T.W>26 && T.D>26)for(const x of [-hw+1,hw-1])for(let z=-hd+5;z<hd-2;z+=8)box(M.stone,x-.24,0,z-.24,x+.24,top,z+.24,true);
 		const door=L.n===0?1.4:0;
 		const side = (x0, z0, x1, z1, gap) => {
 			// glass between mullions, a dark band at the floor and at the ceiling
@@ -95,9 +98,9 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			if (gap) { pane(a0, -gap); pane(gap, a0 + len); } else pane(a0, a0 + len);
 			for (let a = a0; a <= a0 + len + 0.01; a += Math.max(1.4, len / Math.max(1, Math.round(len / 1.6)))) {
 				if (gap && Math.abs(a) < gap) continue;
-				if (along) box(M.mull, a - 0.04, 0, z0 - 0.06, a + 0.04, H, z0 + 0.06); else box(M.mull, x0 - 0.06, 0, a - 0.04, x0 + 0.06, H, a + 0.04);
+				if (along) box(M.mull, a - 0.04, 0, z0 - 0.06, a + 0.04, top, z0 + 0.06); else box(M.mull, x0 - 0.06, 0, a - 0.04, x0 + 0.06, top, a + 0.04);
 			}
-			if (along) { box(M.mull, x0, 0, z0 - 0.08, x1, 0.3, z0 + 0.08); box(M.mull, x0, H - 0.3, z0 - 0.08, x1, H, z0 + 0.08); } else { box(M.mull, x0 - 0.08, 0, z0, x0 + 0.08, 0.3, z1); box(M.mull, x0 - 0.08, H - 0.3, z0, x0 + 0.08, H, z1); }
+			if (along) { box(M.mull, x0, 0, z0 - 0.08, x1, 0.3, z0 + 0.08); box(M.mull, x0, H - 0.3, z0 - 0.08, x1, top, z0 + 0.08); } else { box(M.mull, x0 - 0.08, 0, z0, x0 + 0.08, 0.3, z1); box(M.mull, x0 - 0.08, H - 0.3, z0, x0 + 0.08, top, z1); }
 		};
 		side(-hw, hd, hw, hd, door); side(-hw, -hd, hw, -hd, 0); side(-hw, -hd, -hw, hd, 0); side(hw, -hd, hw, hd, 0);
 		if (door) { box(M.mull, -door - 0.1, 0, hd - 0.1, -door, 2.9, hd + 0.1); box(M.mull, door, 0, hd - 0.1, door + 0.1, 2.9, hd + 0.1); box(M.mull, -door, 2.8, hd - 0.1, door, 2.95, hd + 0.1); }
@@ -169,7 +172,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	function structure(T){
 		const geo=new THREE.BoxGeometry(1,1,1), count=T.levels.reduce((n,L)=>n+slabRects(T,L).length,0);
 		const mesh=new THREE.InstancedMesh(geo,M.stoneD,count), mat=new THREE.Matrix4(), pos=new THREE.Vector3(), q=new THREE.Quaternion(), scale=new THREE.Vector3();let i=0;
-		for(const L of T.levels)for(const [x0,z0,x1,z1]of slabRects(T,L))mesh.setMatrixAt(i++,mat.compose(pos.set((x0+x1)/2,L.y-T.floor0-.08,(z0+z1)/2),q,scale.set(x1-x0,.14,z1-z0)));
+		for(const L of T.levels)for(const [x0,z0,x1,z1]of slabRects(T,L))mesh.setMatrixAt(i++,mat.compose(pos.set((x0+x1)/2,L.y-T.floor0-.08,(z0+z1)/2),q,scale.set(x1-x0-.1,.12,z1-z0-.1)));      // (inside the floor built over it near you, never flush with its edges)
 		mesh.position.set(T.o.x,T.floor0,T.o.z);mesh.rotation.y=-T.o.a;mesh.receiveShadow=true;mesh.computeBoundingSphere();group.add(mesh);T.structure=mesh;T.cache=new Map();
 		city?.setDoor?.(T.o,[0,T.floor0-T.o.y,2.8]);
 	}

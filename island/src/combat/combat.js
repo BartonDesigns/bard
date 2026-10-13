@@ -1,3 +1,4 @@
+import { bindLookDrag } from './look-drag.js';
 // The fight, put together: your arms in use (combat/weapons.js rules, the view's look through
 // combat/weapon-view.js), shots cast into the combat layer (combat/targets.js) and against the
 // ground and buildings, projectiles, blasts, your health and the HUD, the townsfolk's reactions,
@@ -215,12 +216,13 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	}
 	const canvas = mount.querySelector('canvas');
 	const typing = () => /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || window._KEYS_PLAY_ON;
-	addEventListener('pointerdown', (e) => { if (e.button === 0 && e.pointerType === 'mouse' && (!canvas || e.target === canvas) && active()) mouseDown = true; });
+	addEventListener('pointerdown', (e) => { if (!e.defaultPrevented && e.button === 0 && e.pointerType === 'mouse' && (!canvas || e.target === canvas) && active() && (!canvas?.requestPointerLock || document.pointerLockElement === canvas)) mouseDown = true; });
 	addEventListener('pointerup', (e) => { if (e.button === 0) { if (!active() || me.ko) cancelInput(); else mouseDown = false; } });
 	addEventListener('pointercancel', cancelInput);
 	addEventListener('blur', cancelInput);
+	document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) cancelInput(); });
 	document.addEventListener('visibilitychange', () => { if (document.hidden) cancelInput(); });
-	canvas?.addEventListener('pointerleave', () => { if (mouseDown) cancelInput(); });
+	canvas?.addEventListener('pointerleave', () => { if (mouseDown && document.pointerLockElement !== canvas) cancelInput(); });
 	addEventListener('keydown', (e) => {
 		if (e.repeat || e.metaKey || e.ctrlKey || typing() || !active()) return;
 		const k = e.key.toLowerCase();
@@ -230,16 +232,14 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 	});
 	const B = hud.btns;
 	if (B.Fire) {
-		B.Fire.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); if (!active() || me.ko) return; touchFire = true; B.Fire.classList.add('on'); });
-		B.Fire.addEventListener('pointerup', () => { if (!active() || me.ko) cancelInput(); else { touchFire = false; B.Fire.classList.remove('on'); } });
-		for (const ev of ['pointercancel', 'pointerleave']) B.Fire.addEventListener(ev, cancelInput);
+		bindLookDrag(B.Fire, mount, { start: () => { if (!active() || me.ko) return false; touchFire = true; B.Fire.classList.add('on'); }, end: () => { touchFire = false; B.Fire.classList.remove('on'); }, cancel: cancelInput });
 		B.Reload.addEventListener('pointerdown', (e) => { e.stopPropagation(); reload(); });
 		B.Mode.addEventListener('pointerdown', (e) => { e.stopPropagation(); const w = weaponNow(); if (w) nextMode(w); });
 		for (const b of Object.values(B)) b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
 	}
 	function active() {
 		const p = P();
-		return !!p && !typing() && !document.hidden && !gear?.()?.busy?.() && !arms?.locked?.() && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none' && !(menu && menu.style.display && menu.style.display !== 'none');
+		return !!p && !typing() && !document.hidden && !mount.inert && !mount.classList.contains('l99-tools-open') && !gear?.()?.busy?.() && !arms?.locked?.() && !busy() && !drive?.active?.() && !p.swimming && !W()?.orbit?.active?.() && mount.style.display !== 'none' && !(menu && menu.style.display && menu.style.display !== 'none');
 	}
 
 	// ---------- shots ----------
@@ -944,6 +944,12 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		vehicleImpact: p => { notice('vehicle-impact',p.M.S.pos,'drove a vehicle into a person'); morality.record({kind:'hurt',target:'a pedestrian struck by your vehicle',world:worldKey,place:placeName(),ctx:{unarmed:true,witnessed:true}}); if(isEarth()) offend(wanted,'hitCivilian',true); civilians.alarm(p.M.S.pos.x,p.M.S.pos.z,35,p.M.S.pos.y); },
 		// a young person a car would have struck: the Spark's shimmer
 		ward: (p) => { const q = p.M.S.pos; fx.ward({ x: q.x, y: q.y + 0.7, z: q.z }, 1, { x: q.x, y: q.y + 0.9, z: q.z }); sound('chime', q); },
+		worldKey: () => worldKey, placeName,
+		// a medkit's work (gameplay/item-use.js): you, or the hurt near you
+		mend: (n) => { const before = me.H.hp; if (me.ko > 0 || me.H.state !== 'ok') return 0; me.H.hp = Math.min(me.H.max, me.H.hp + Math.max(0, n)); return me.H.hp - before; },
+		hurt0: () => me.H.max - me.H.hp,
+		woundedNear: (x, z, r) => civilians.woundedNear(x, z, r),
+		tend: (p) => civilians.tend(p),
 		info: () => ({ me: { hp: Math.round(me.H.hp), max: me.H.max, state: me.H.state, ko: +me.ko.toFixed(1) }, weapon: Wp && { id: Wp.S.id, mag: Wp.mag, reserve: reserve(Wp), mode: modeOf(Wp), reloading: Wp.reloading > 0, dmg: Wp.S.dmg, draw: Wp.draw, drawing: Wp.drawing, shots: Wp.shots, cooldown: Wp.cool }, layer: layer.size, wanted: { stars: wanted.stars, points: Math.round(wanted.points) }, zone: W() ? zone() : null, squads: squads.info(), civilians: civilians.info(), props: props.info(), cars: cars.info(), fires: [...fireField.fires.values()].map((F) => ({ id: F.id, heat: +F.heat.toFixed(2), chain: F.chain })), burnt: fireField.burnt.size, bosses: [...bosses.values()].map((B0) => B0.info()), projectiles: projectiles.length, rules: { ...rules }, ambient: settings.ambient, morality: morality.info(worldKey), journal: journal.slice(-5) }),
 		// Crysis.combat.spawn('ashfang', 3, { raid }) / ('rogue') / ('gloom') / ('patrol') / ('fire')
 		spawn: (fid = 'ashfang', n = 3, o = {}) => { const s = spotAhead(o.d ?? 25, (o.d ?? 25) + 10) || { x: eye().x + 20, z: eye().z }; return squads.squad(fid, s.x, s.z, n, o).then((sq) => sq.id); },

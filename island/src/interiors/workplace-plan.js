@@ -76,10 +76,13 @@ export function levelBelow(T, y, allowance = 1.2) {
  for (let i = T.levels.length - 1; i >= 0; i--) if (y >= T.levels[i].y - allowance) return T.levels[i];
  return null;
 }
+// The floor plates stop just inside the facade: flush with it, their edges shared the
+// tower's outer face at every storey and flickered through it from the street.
+export const SLAB_INSET = .15;
 export function slabRects(T, L) {
- const a = L.holes[0];
- if (!a) return [[-T.W/2, -T.D/2, T.W/2, T.D/2]];
- return [[-T.W/2,-T.D/2,a.x0,T.D/2],[a.x1,-T.D/2,T.W/2,T.D/2],[a.x0,-T.D/2,a.x1,a.z0],[a.x0,a.z1,a.x1,T.D/2]];
+ const a = L.holes[0], X = T.W/2 - SLAB_INSET, Z = T.D/2 - SLAB_INSET;
+ if (!a) return [[-X, -Z, X, Z]];
+ return [[-X,-Z,a.x0,Z],[a.x1,-Z,X,Z],[a.x0,-Z,a.x1,a.z0],[a.x0,a.z1,a.x1,Z]];
 }
 export function floorAt(T, x, z, y) {
  if (Math.abs(x) > T.W/2 || Math.abs(z) > T.D/2) return -1e9;

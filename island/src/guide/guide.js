@@ -16,6 +16,9 @@ import { parseGameTime, realSecondsFor, formatClock, formatReal, talksOfMeeting,
 import { gatherRequest, defaultGatherTime, makeGathering, HOURS as GATHER_HOURS } from '../people/gatherings.js';
 import { createDialogueArchive } from './dialogue-archive.js';
 import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
+import { createLocalSpeech } from './local-speech.js';
+import { voiceShape } from '../people/chatter-lines.js';
+import { rankOf } from '../gameplay/ranks.js';
 import { chooseGuideModel } from './preferences.js';
 import { travelRequest, resolveTravel } from './travel.js';
 import { loadAtlas, atlasReady, cities, regions } from '../earth/atlas.js';
@@ -408,6 +411,12 @@ export function createGuide(mount, api) {
 			if (a.gathering) return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `${a.gathering.title} · ${a.place.name}`, detail: now > a.due ? `on now, until ${formatClock((a.due + GATHER_HOURS) % 24)}` : meetWhen(a) };
 			return { x: q.x, y: W.player.floorAt?.(q.x, q.z, W.island.heightAt(q.x, q.z)) ?? q.y, z: q.z, radius: a.place.radius, title: `Meet ${a.npcName.split(' ')[0]} · ${a.place.name}`, detail: late ? `waiting for you until ${formatClock((a.due + GRACE) % 24)}` : meetWhen(a) };
 		}
+		// a fare in the car, or someone hailing you (vehicles/fares.js)
+		const fare = api.fares?.mark?.();
+		if (fare) return fare;
+		// a favour under way for someone you passed (people/errands.js)
+		const fav = api.errands?.mark?.();
+		if (fav) return fav;
 		// a world's own errands (planet/colony/errands.js)
 		const own = W.colony?.crew?.mark?.();
 		if (own) return own;
@@ -586,7 +595,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	function personContext(p=partner?.p,resident=partner?.id && api.social?.state.get(partner.id)) {
 		const completed=stories.list(api.social?.bodyKey()).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident?.id||'')).map(q=>q.title);
-		return awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		const c=awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		// (a favour under way with this person: they know what they asked, errands.js)
+		const fav=api.errands?.factFor?.(p); if(fav) c.facts=[...c.facts,fav].slice(0,7);
+		return c;
 	}
 
 	function talkTo(p) {
@@ -637,6 +649,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		log.append(row); scroll();
 	}
 	function endTalk() {
+		localSpeech.cancel();
+		if ('speechSynthesis' in window) speechSynthesis.cancel();
 		if (!partner) return;
 		busy?.abort();
 		api.people?.release(partner.p);
@@ -704,6 +718,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const awareness=personContext(p,resident);
 		if(awareness.afraid) reply=contextualReply(awareness,text);
 		const own = reply ? null : p.talk?.reply?.(text);
+		// asked whether they need a hand: a favour of their own (people/errands.js), said yes to here
+		let favour = null;
+		if (!reply && !own && /\b(need (?:any )?help|can i help|any favou?rs?|anything i can do|help you with|do you need anything|need a hand)\b/i.test(text)) {
+			const o = api.errands?.offerTo?.(p);
+			if (o) { reply = o.text; favour = { choices: [{ label: "I'll do it", fn: () => { api.errands.accept(); return { say: '[[mood: happy]] [[gesture: nod]] Thank you! Really.' }; } }, { label: 'Not now', fn: () => { api.errands.cancel(); return { say: '[[mood: calm]] No problem. Thanks for asking.' }; } }] }; }
+		}
 		if (own?.say) reply = own.say;
 		const armsResult = reply ? null : api.arms?.command?.(text, { position: p.M.S.pos, speaker: P2.persona });
 		if (armsResult?.ok && armsResult.kind && armsResult.kind !== 'none') reply = armsResult.message;
@@ -766,6 +786,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		bubble.textContent = clean || '…';
 		if (meetNoteText) { say(meetNoteText, 'note'); if (meetNoteText.startsWith('📍')) api.hint(meetNoteText.replace(/ A pin marks the place\.$/, ''), 5000); }
 		if (own && (own.note || own.choices)) offer({ ...own, say: null });
+		if (favour) offer({ ...favour, say: null });
 		archiveTurn(threadMeta(P2),'assistant',clean);
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
@@ -776,6 +797,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	async function ask(text) {
 		if (!text.trim()) return;
+		localSpeech.cancel();
+		if ('speechSynthesis' in window) speechSynthesis.cancel();
 		if (partner) return askPerson(text);
 		if (view!=='guide') renderGuide();
 		const requestEpoch=viewEpoch;
@@ -811,8 +834,25 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 
 	// ---------- voice ----------
-	let voiceOut = store.get('crysis-guide-voice', false);
+	let voiceOut = store.get('crysis-guide-voice', true);
+	let speechMode = store.get('crysis-speech-mode', 'local');
+	let speechStatus = '';
+	const localSpeech = createLocalSpeech({ onStatus: text => { speechStatus = text; speechStatusEl.textContent = text; }, fallback: deviceSpeak });
+	mount.addEventListener('pointerdown', () => { if (voiceOut && speechMode === 'local') localSpeech.unlock(); }, { capture: true });
+	// keyboard players never tap: the first key unlocks the voices too
+	addEventListener('keydown', () => { if (voiceOut && speechMode === 'local') localSpeech.unlock(); }, { capture: true, once: true });
 	function speak(t, who) {
+		if (!t) return;
+		if ('speechSynthesis' in window) speechSynthesis.cancel();
+		const dna = partner?.p?.P?.dna;
+		if (speechMode === 'device') deviceSpeak(t, who);
+		else {
+			// the same voice, pitch and pace the person has when they speak in passing
+			const shape = dna ? voiceShape(dna) : { pitch: 1, rate: 1 };
+			localSpeech.speak(t, { ...who, seed: dna?.seed ?? 0, male: dna?.male ?? true, rate: who?.voice?.rate || shape.rate, pitch: shape.pitch });
+		}
+	}
+	function deviceSpeak(t, who) {
 		if (!('speechSynthesis' in window) || !t) return;
 		speechSynthesis.cancel();
 		const u = new SpeechSynthesisUtterance(t);
@@ -857,12 +897,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const head = el('div', 'flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);');
 	const title = el('div', 'flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13px system-ui;letter-spacing:.06em;color:#9fe8d0;', 'THE GUIDE');
 	const statusEl = el('div', 'font:11px system-ui;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px;');
+	const speechStatusEl = el('div', 'font:11px system-ui;color:#a5cfc0;padding:0 12px 6px;', speechStatus);
+	speechStatusEl.setAttribute('role', 'status');
 	const gearB = el('button', btnCss, '⚙'); gearB.title = 'Model settings'; gearB.setAttribute('aria-label', 'Model settings');
 	const closeB = el('button', btnCss, '✕'); closeB.setAttribute('aria-label', 'Close the guide');
 	const residentsB = el('button', btnCss, 'People'); residentsB.setAttribute('aria-label', 'Remembered people');
 	head.append(title, statusEl, gearB, closeB);
 	const questB = el('button', btnCss, 'Quests'); questB.setAttribute('aria-label','Story quests');
-	const tabs = el('div','display:flex;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');tabs.append(residentsB,questB,archiveB);
+	const tabs = el('div','display:flex;flex-shrink:0;gap:8px;padding:4px 12px;'); const archiveB=el('button',btnCss,'Conversations');archiveB.setAttribute('aria-label','Conversation archive');const storyB=el('button',btnCss,'Story');storyB.setAttribute('aria-label','Your story: standing, favours and fares');tabs.append(residentsB,questB,storyB,archiveB);
 	const archiveControls=el('div','display:none;flex-shrink:0;padding:6px 12px;gap:6px;flex-wrap:wrap;');
 	const archiveSearch=el('input','min-width:0;flex:1;padding:8px;background:#172225;border:1px solid #586567;border-radius:8px;color:#fff;');archiveSearch.type='search';archiveSearch.placeholder='Search every conversation';archiveSearch.setAttribute('aria-label','Search conversations');
 	const archiveExport=el('button',btnCss,'Export'); archiveControls.append(archiveSearch,archiveExport);
@@ -873,10 +915,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	const input = el('input', 'flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font:14px system-ui;outline:none;');
 	input.placeholder = 'Ask anything, or "take me to Alcatraz"'; input.setAttribute('aria-label', 'Message the guide');
 	const mic = el('button', btnCss, '🎙'); mic.title = 'Speak'; mic.setAttribute('aria-label', 'Speak to the guide');
-	const spk = el('button', btnCss, voiceOut ? '🔊' : '🔈'); spk.title = 'Read replies aloud'; spk.setAttribute('aria-label', 'Read replies aloud');
+	const spk = el('button', btnCss, voiceOut ? '🔊' : '🔈'); spk.setAttribute('aria-pressed', String(voiceOut)); spk.title = 'Read replies aloud'; spk.setAttribute('aria-label', 'Read replies aloud');
 	const send = el('button', btnCss + 'background:linear-gradient(135deg,#01a982,#10b981);border:none;', '➤'); send.setAttribute('aria-label', 'Send');
 	bar.append(input, mic, spk, send);
 	panel.append(head, tabs, archiveControls, settings, log, bar);
+	panel.append(speechStatusEl);
 	// (the guide has no button in the sidebar any more; G still opens it)
 	open.hidden = true;
 	mount.append(open, panel);
@@ -891,7 +934,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		return b;
 	}
 	const scroll = () => { log.scrollTop = log.scrollHeight; };
-	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else input.blur(); };
+	const show = (on) => { panel.style.display = on ? 'flex' : 'none'; open.style.display = 'none'; if (on) { setTimeout(() => input.focus(), 30); if (!log.children.length && view==='guide') greet(); } else { input.blur(); localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } };
 	function greet() {
 		const s = snapshot();
 		say(s ? `Hello. You're on ${s.place}. Ask me anything — where to go, what something is, or what to do next.` : 'Hello.', 'guide');
@@ -981,6 +1024,33 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		for (const q of QUESTS.filter(q => !q[2] || find(q[2]))) say(`${journal[q[0]] ? '✓' : '○'} ${q[1]}`, 'note');
 		const caves = el('button', btnCss, 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
 	}
+	// your story so far: who the world takes you for, and what you have done for it
+	function showStory() {
+		endTalk(); resetView('story'); show(true);
+		const M = api.combat?.morality, R = M?.reactions?.(), me = M?.me?.() || {}, E = api.errands?.info?.() || {}, F = api.fares?.info?.() || {};
+		const bar = (k) => '▰'.repeat(Math.round(k * 10)) + '▱'.repeat(10 - Math.round(k * 10));
+		const rung = (ladder, count, what) => { const r = rankOf(ladder, count); return `${r.title} · ${count} ${what}${r.next ? `\n${bar(r.k)} ${r.next.at - count} more to ${r.next.title}` : '\nThe top of the ladder.'}`; };
+		const D = api.daily?.list?.();
+		if (D) {
+			say(`TODAY · ${D.goals.filter((g) => g.done).length} of ${D.goals.length} done${D.bonus ? ' · bonus paid' : ''}`, 'note');
+			say(D.goals.map((g) => `${g.done ? '✓' : '○'} ${g.text}${g.need > 1 && !g.done ? ` (${g.got}/${g.need})` : ''} · ${g.credits} credits`).join('\n') + (D.bonus ? '' : '\nAll three: a bonus of 150 credits'), 'guide');
+		}
+		say('WHO THEY SAY YOU ARE', 'note');
+		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Nobody knows your name yet'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
+		if (R?.song) say(R.song, 'note');
+		say('FAVOURS', 'note');
+		say(rung('favours', E.done || 0, 'done') + (E.kept ? `\nWallets kept: ${E.kept}` : ''), 'guide');
+		if (E.errand) {
+			say(`Under way: ${E.errand.title} (${E.errand.stage})`, 'guide');
+			const give = el('button', btnCss, 'Give up on it'); give.onclick = () => { api.errands.cancel(); showStory(); }; log.append(give);
+		}
+		say('FARES', 'note');
+		say(rung('fares', F.rides || 0, 'rides') + `\nEarned ${F.earned || 0} credits · ${F.five || 0} five-star rides`, 'guide');
+		if (F.fare) say(`In the car now: ${F.fare.name}${F.fare.place ? ' to ' + F.fare.place : ''} · fare ${F.fare.fare}`, 'guide');
+		const recent = M?.log?.(5) || [];
+		if (recent.length) { say('LATELY', 'note'); for (const e of recent.slice().reverse()) say(e.line + (e.place ? ` · ${e.place}` : ''), 'note'); }
+		log.scrollTop = 0;
+	}
 	function showCaves() {
 		endTalk(); resetView('journal'); show(true);
 		const W = api.world(), cam = api.camera.position;
@@ -1002,13 +1072,14 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	archiveB.onclick=()=>showArchive();
 	questB.onclick=showQuests;
+	storyB.onclick=showStory;
 	residentsB.onclick = showPeople;
 	open.onclick = () => show(true);
 	closeB.onclick = () => { endTalk(); show(false); };
 	send.onclick = () => { const t = input.value; input.value = ''; ask(t); };
 	input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { send.onclick(); } if (e.key === 'Escape') { endTalk(); show(false); } });
 	mic.onclick = listen;
-	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; if (!voiceOut && 'speechSynthesis' in window) speechSynthesis.cancel(); };
+	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; spk.setAttribute('aria-pressed', String(voiceOut)); if (!voiceOut) { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } else if (speechMode === 'local') localSpeech.unlock(); };
 	addEventListener('keydown', (e) => { if ((e.key === 'g' || e.key === 'G') && !window._KEYS_PLAY_ON && !e.metaKey && !e.ctrlKey && document.activeElement?.tagName !== 'INPUT' && mount.style.display !== 'none') { e.preventDefault(); show(panel.style.display === 'none'); } });
 
 	// settings: which model
@@ -1032,13 +1103,20 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		styleSelect('Personality','vividness',[['restrained','Understated'],['bold','Bold · strong opinions and vivid storytelling']]);
 		styleSelect('Replies','response',[['brief','Brief'],['balanced','Balanced'],['rich','Rich · more detail']]);
 		settings.append(el('div','color:rgba(255,255,255,.65);margin:6px 0;','Tone follows each character. Mature themes apply to adult NPCs; model and provider limits still apply.'));
+		const speechSelect = el('select', 'flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');
+		speechSelect.setAttribute('aria-label', 'Speech engine');
+		for (const [value, text] of [['local', 'Local neural voice'], ['device', 'Device voice']]) { const o = el('option', null, text); o.value = value; speechSelect.append(o); }
+		speechSelect.value = speechMode;
+		speechSelect.onchange = () => { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); speechMode = speechSelect.value; if (speechMode === 'local') localSpeech.retry(); store.set('crysis-speech-mode', speechMode); speechStatusEl.textContent = ''; };
+		row('Speech', speechSelect);
+		settings.append(el('div', 'color:rgba(255,255,255,.6);margin:6px 0;', 'Local voices download about 100 MB once, then generate spoken replies on this device.'));
 		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 		const opts = phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']];
 		// the shared voice, once the discovery server is deployed (earth/config.js): phones too
 		if (DISCOVERY_URL) opts.push(['cloud', 'Free cloud voice (people only)']);
 		for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; sel.append(o); }
 		sel.value = choice.kind;
-		row('Voice', sel);
+		row('Dialogue', sel);
 		if (choice.kind === 'webllm') {
 			const m = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 			for (const x of WEBLLM_MODELS) { const o = el('option', null, x.label); o.value = x.id; m.append(o); }
@@ -1085,5 +1163,23 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	});
 	llm.onStatus((st) => { if (st.ready && llm.kind() === 'webllm') store.set('crysis-guide-loaded', true); });
 
-	return { update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
+	// the same voices for what people say in passing (people/chatter.js): never over a conversation
+	const voice = {
+		on: () => voiceOut, mode: () => speechMode, talking: () => !!partner || localSpeech.busy() && !voice.remarking,
+		remarking: false,
+		remark(text, dna, place) {
+			const ok = localSpeech.remark(text, { seed: dna.seed ?? 0, male: dna.male ?? true, ...voiceShape(dna) }, { ...place, done: (played) => { voice.remarking = false; place.done?.(played); } });
+			if (ok) voice.remarking = true;
+			return ok;
+		},
+		place: (p, f) => localSpeech.place(p, f),
+		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
+	};
+	// the name and character a passer-by has, the same one a conversation with them will use
+	function personaOf(p) {
+		let rec = people.get(p);
+		if (!rec || rec.seed !== p.P.dna.seed) { rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed }; people.set(p, rec); }
+		return rec.persona;
+	}
+	return { voice, personaOf, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }

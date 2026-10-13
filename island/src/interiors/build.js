@@ -223,8 +223,14 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		const pivot = new THREE.Group();
 		pivot.position.set(fo.s0 + 0.02, fo.y0, zc);
 		const b = new Builder(), dc = C.doorC;
-		b.box('door6', 0, 0, -t, width - 0.04, h, 0, dc);
-		if (P.use === 'shop' || P.use === 'apt' || width > 1.3) b.box('glass', 0.12, 0.9, -t - 0.001, width - 0.16, h - 0.2, 0.001, WHITE);
+		// a glazed door is a frame round its glass, the pane set in the middle of the leaf
+		// (a pane laid over a solid leaf a millimetre off its faces flickers through it)
+		if (P.use === 'shop' || P.use === 'apt' || width > 1.3) {
+			const gx0 = 0.12, gx1 = width - 0.16, gy0 = 0.9, gy1 = h - 0.2;
+			b.box('door6', 0, 0, -t, gx0, h, 0, dc); b.box('door6', gx1, 0, -t, width - 0.04, h, 0, dc);
+			b.box('door6', gx0, 0, -t, gx1, gy0, 0, dc); b.box('door6', gx0, gy1, -t, gx1, h, 0, dc);
+			b.box('glass', gx0, gy0, -t / 2 - 0.004, gx1, gy1, -t / 2 + 0.004, WHITE);
+		} else b.box('door6', 0, 0, -t, width - 0.04, h, 0, dc);
 		for (const sz of [-1, 1]) b.cyl('metal', width - 0.14, 1.0, -t / 2 + sz * t / 2, 0.028, sz * 0.06, lin([0.72, 0.62, 0.4]), 8, 'z');
 		for (const m of b.meshes(M)) pivot.add(m);
 		root.add(pivot);

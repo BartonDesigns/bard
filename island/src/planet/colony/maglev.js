@@ -36,7 +36,14 @@ function along(path, cum, s, out) {
 	return out;
 }
 
-export function createRide({ camera, mount, hint, player, scene, mesh }) {
+// The same ride for a rover across the ground (kind 'rover'): slower, the seat in the cab
+// behind the windscreen, its own words.
+const KINDS = {
+	maglev: { vmax: VMAX, acc: ACC, cab: CAB, seat: 1.95, icon: '🚄', name: 'Maglev', board: (to) => `Maglev to ${to}. Doors closing; please hold on.`, arrive: (to) => `${to}. Doors open. Mind the dust.` },
+	rover: { vmax: 22, acc: 1.6, cab: 0.6, seat: 2.25, icon: '🛞', name: 'Rover', board: (to) => `Rover to ${to}. Suit sealed; hold on over the rough ground.`, arrive: (to) => `${to}. The rover settles. Mind the dust.` },
+};
+export function createRide({ camera, mount, hint, player, scene, mesh, kind = 'maglev' }) {
+	const K = KINDS[kind] || KINDS.maglev;
 	let R = null;
 	const pt = { x: 0, y: 0, z: 0, yaw: 0 };
 	const car = mesh || null;
@@ -61,7 +68,7 @@ export function createRide({ camera, mount, hint, player, scene, mesh }) {
 		R = { line, dir, to, arrive, s: 0, len: line.len, said: 0, t: 0 };
 		const P = player();
 		if (P) { along(line.path, line.cum, dir > 0 ? 2 : line.len - 2, pt); P.yaw = dir > 0 ? pt.yaw + Math.PI : pt.yaw; P.pitch = -0.02; P.flying = false; }
-		hint?.(`Maglev to ${to}. Doors closing; please hold on.`, 4000);
+		hint?.(K.board(to), 4000);
 		if (bar) bar.style.display = 'flex';
 		if (car) car.visible = true;
 	}
@@ -69,34 +76,35 @@ export function createRide({ camera, mount, hint, player, scene, mesh }) {
 		if (!R) return false;
 		const P = player();
 		R.t += dt;
-		const v = speedAt(R.s, R.len);
+		const v = speedAt(R.s, R.len, K.vmax, K.acc);
 		R.s = Math.min(R.len, R.s + v * dt);
 		const s = R.dir > 0 ? R.s : R.len - R.s;
 		along(R.line.path, R.line.cum, s, pt);
 		const yaw = R.dir > 0 ? pt.yaw : pt.yaw + Math.PI;
 		// the train round you, your seat at the window of the lead car's cab
-		if (car) { car.position.set(pt.x - Math.sin(yaw) * CAB, pt.y, pt.z - Math.cos(yaw) * CAB); car.rotation.set(0, yaw, 0); }
+		if (car) { car.position.set(pt.x - Math.sin(yaw) * K.cab, pt.y, pt.z - Math.cos(yaw) * K.cab); car.rotation.set(0, yaw, 0); }
 		if (P) {
 			P.vel?.set(0, 0, 0); P.flying = false;
-			P.pos.set(pt.x, pt.y + 1.95, pt.z);
+			P.pos.set(pt.x, pt.y + K.seat, pt.z);
 			camera.position.copy(P.pos);
 		}
 		const kmh = Math.round(v * 3.6), left = R.len - R.s;
-		if (bar) bar.txt.textContent = `🚄 ${R.line.name || 'Maglev'} → ${R.to} · ${kmh} km/h · ${left > 1000 ? (left / 1000).toFixed(1) + ' km' : Math.round(left) + ' m'}`;
+		if (bar) bar.txt.textContent = `${K.icon} ${R.line.name || K.name} → ${R.to} · ${kmh} km/h · ${left > 1000 ? (left / 1000).toFixed(1) + ' km' : Math.round(left) + ' m'}`;
 		// the announcements
-		if (R.said === 0 && v > VMAX * 0.95) { R.said = 1; hint?.(`Now cruising at ${kmh} km/h. Arrival in about ${Math.max(1, Math.round(left / VMAX / 60 + 0.5))} min.`, 4000); }
-		if (R.said === 1 && R.s > R.len * 0.5) { R.said = 2; hint?.('Crossing the old horizon. Earth stays where it is; the colony drops behind the curve.', 4500); }
-		if (R.said === 2 && left < 900) { R.said = 3; hint?.(`Approaching ${R.to}. Please seal your suit.`, 3500); }
+		if (R.said === 0 && v > K.vmax * 0.95) { R.said = 1; hint?.(`Now cruising at ${kmh} km/h. Arrival in about ${Math.max(1, Math.round(left / K.vmax / 60 + 0.5))} min.`, 4000); }
+		if (kind === 'maglev' && R.said === 1 && R.s > R.len * 0.5) { R.said = 2; hint?.('Crossing the old horizon. Earth stays where it is; the colony drops behind the curve.', 4500); }
+		if (kind === 'rover' && R.said === 1 && R.s > R.len * 0.5) { R.said = 2; hint?.('Halfway. The wheels throw dust that falls like it is in no hurry.', 4500); }
+		if (R.said === 2 && left < 900) { R.said = 3; hint?.(`Approaching ${R.to}.${kind === 'maglev' ? ' Please seal your suit.' : ''}`, 3500); }
 		if (R.s >= R.len) {
 			const done = R;
 			R = null;
 			if (bar) bar.style.display = 'none';
 			if (car) car.visible = false;
 			done.arrive?.();
-			hint?.(`${done.to}. Doors open. Mind the dust.`, 4000);
+			hint?.(K.arrive(done.to), 4000);
 		}
 		return true;
 	}
 	function dispose() { if (mount) { removeEventListener('keydown', onKey); bar.remove(); } if (car) { car.removeFromParent(); car.userData.dispose?.(); } }
-	return { start, update, dispose, riding: () => !!R, info: () => (R ? { to: R.to, s: Math.round(R.s), len: Math.round(R.len), kmh: Math.round(speedAt(R.s, R.len) * 3.6) } : null) };
+	return { start, update, dispose, riding: () => !!R, info: () => (R ? { kind, to: R.to, s: Math.round(R.s), len: Math.round(R.len), kmh: Math.round(speedAt(R.s, R.len, K.vmax, K.acc) * 3.6) } : null) };
 }
