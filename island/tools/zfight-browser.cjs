@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '../..');
 const MIME = { '.js': 'text/javascript', '.html': 'text/html', '.json': 'application/json', '.wasm': 'application/wasm', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' };
 const query = process.argv[2] || '?planet=TERRAN&seed=77', radius = +(process.argv[3] || 220);
 
-function census(R) {
+function census([R, far]) {
 	const T = window.L99Island?.T || window.L99IslandModule?.island?.().T;
 	const scene = window.Crysis.scene(), P = window.Crysis.world().player.state.pos;
 	const at = window.ZF_AT || P;
@@ -23,7 +23,7 @@ function census(R) {
 		return (names.join('<') || o.type) + (ud ? ' {' + ud + '}' : '') + ' [' + (mt?.name || mt?.type || '?') + (mt?.color ? ' #' + mt.color.getHexString() : '') + (mt?.map ? ' map' : '') + ']';
 	};
 	const tris = new Map(), owners = [];
-	const e = new Float64Array(9), M = [], S = 0.035, Q = 0.04;
+	const S = far ? 0.3 : 0.035, Q = 0.04, cam = window.Crysis.world()?.player && window.L99Island?.camera || null, eye = window.ZF_EYE || null;
 	let counted = 0;
 	function addTri(owner, a, b, c) {
 		const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
@@ -57,7 +57,7 @@ function census(R) {
 			if (o.isInstancedMesh) { o.getMatrixAt(k, mi); mw.multiply(mi); }
 			const cs = g.boundingSphere.center.clone().applyMatrix4(mw);
 			if (Math.hypot(cs.x - at.x, cs.z - at.z) > R + g.boundingSphere.radius * 1.5) continue;
-			const owner = owners.length; owners.push({ label: label(o, o.material), offset, inst: o.isInstancedMesh ? k : -1, uuid: o.uuid, depthWrite: mats.some(m => m?.depthWrite !== false), transparent: mats.some(m => m?.transparent) });
+			const owner = owners.length; owners.push({ where: o.parent ? [o.parent.type, +o.parent.rotation.y.toFixed(3), o.parent.position.toArray().map(x => +x.toFixed(2))] : null, label: label(o, o.material), offset, inst: o.isInstancedMesh ? k : -1, uuid: o.uuid, depthWrite: mats.some(m => m?.depthWrite !== false), transparent: mats.some(m => m?.transparent) });
 			const triCount = (idx ? idx.count : pos.count) / 3;
 			if (triCount > 400000) continue;
 			const vert = (i) => { v.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(mw); return [v.x, v.y, v.z]; };
@@ -84,17 +84,21 @@ function census(R) {
 	}
 	const pairs = new Map(); let fights = 0, area = 0;
 	for (const L of tris.values()) {
-		if (L.length < 2 || L.length > 3000) continue;
+		if (L.length < 2 || L.length > 6000) continue;
 		for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
 			const A = L[i], B = L[j];
 			if (A.owner === B.owner) continue;
 			if (Math.abs(A.d - B.d) > S || A.n[0] * B.n[0] + A.n[1] * B.n[1] + A.n[2] * B.n[2] < 0.995) continue;
+			// far mode: only what the depth buffer cannot tell apart from where you stand
+			// (24-bit depth, near plane 0.25: resolution grows with the square of distance)
+			if (far) { const e = eye || P, dist = Math.hypot(A.c[0] - e.x, A.c[1] - (e.y ?? 0), A.c[2] - e.z), dz = dist * dist / (0.25 * 16777216); if (Math.abs(A.d - B.d) > Math.max(0.004, 3 * dz)) continue; }
 			const oa = owners[A.owner], ob = owners[B.owner];
 			if (!oa.depthWrite && !ob.depthWrite) continue;
 			if (oa.offset !== ob.offset) continue;
 			const s = overlap(A, B); if (s < 0.01) continue;
 			const k = [oa.label, ob.label].sort().join('  ~  ') + (oa.uuid === ob.uuid ? '  (same mesh, instances)' : '');
-			const r = pairs.get(k) || { pair: k, area: 0, tris: 0, gap: 0, at: A.c.map(Math.round), normal: A.n.map(x => +x.toFixed(2)) };
+			const r = pairs.get(k) || { pair: k, area: 0, tris: 0, gap: 0, at: A.c.map(Math.round), normal: A.n.map(x => +x.toFixed(2)), whereA: oa.where, whereB: ob.where, samples: [] };
+			if (r.samples.length < 4) r.samples.push({ a: A.c.map(x => +x.toFixed(2)), b: B.c.map(x => +x.toFixed(2)), s: +s.toFixed(2) });
 			r.area += s; r.tris++; r.gap = Math.max(r.gap, Math.abs(A.d - B.d)); pairs.set(k, r);
 			fights++; area += s;
 		}
@@ -113,8 +117,15 @@ function census(R) {
 	try {
 		const page = await browser.newPage({ viewport: { width: 640, height: 480 } });
 		const errors = []; page.on('pageerror', e => errors.push(e.message));
+		page.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0, 400)); });
 		await page.goto(`http://127.0.0.1:${server.address().port}/island/dev.html${query}`);
 		for (let i = 0; i < 180; i++) { await page.waitForTimeout(1000); if (await page.evaluate(() => !!window.Crysis?.world?.()?.player).catch(() => false)) break; }
+		// the loading card waits for a tap on Enter world; the world stands still until then
+		for (let i = 0; i < 240; i++) {
+			const entered = await page.evaluate(() => { if (!window.L99Loading?.active()) return true; const b = [...document.querySelectorAll('button')].find(x => !x.hidden && /^Enter world$/.test(x.textContent.trim())); b?.click(); return false; }).catch(() => false);
+			if (entered) break;
+			await page.waitForTimeout(1000);
+		}
 		if (process.env.GOTO) {
 			const [lat, lon] = process.env.GOTO.split(',').map(Number);
 			await page.evaluate(([a, b]) => window.Crysis.goTo(a, b, 2), [lat, lon]);
@@ -125,7 +136,8 @@ function census(R) {
 		await page.waitForTimeout(+(process.env.SETTLE || 40000));
 		await page.evaluate(() => window.Crysis.world()?.crysis?.civ?.()?.flush?.()).catch(() => {});
 		if (process.env.EVAL2) console.log('eval2', await page.evaluate(process.env.EVAL2));
-		const result = await page.evaluate(census, radius);
+		if (process.env.EYE) await page.evaluate((xyz) => { const [x, y, z] = xyz.split(',').map(Number); window.ZF_EYE = { x, y, z }; }, process.env.EYE);
+		const result = await page.evaluate(census, [radius, !!process.env.FAR]);
 		result.at = await page.evaluate(() => { const p = window.ZF_AT || window.Crysis.world().player.state.pos; return [Math.round(p.x), Math.round(p.z)]; });
 		result.errors = errors;
 		const out = process.env.ZF_OUT; if (out) fs.writeFileSync(out, JSON.stringify(result, null, 2));

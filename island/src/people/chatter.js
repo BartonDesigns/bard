@@ -122,10 +122,11 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 
 	function update(dt, on = true) {
 		const cam = camera.position, now = performance.now();
-		// how fast you are going, smoothed
-		const step = Math.hypot(cam.x - lastPos.x, cam.z - lastPos.z) / Math.max(dt, 1e-3);
-		speed += (Math.min(step, 60) - speed) * Math.min(1, dt * 4);
-		const vel = _v.set(cam.x - lastPos.x, 0, cam.z - lastPos.z).multiplyScalar(1 / Math.max(dt, 1e-3));
+		// how fast you are going: your own stride on foot (the camera sways and settles even
+		// when you stand still); in a car, how far the camera travelled
+		const P0 = world()?.player?.state, foot = P0?.vel && !driving();
+		const vel = foot ? _v.set(P0.vel.x, 0, P0.vel.z) : _v.set(cam.x - lastPos.x, 0, cam.z - lastPos.z).multiplyScalar(1 / Math.max(dt, 1e-3));
+		speed += (Math.min(Math.hypot(vel.x, vel.z), 60) - speed) * Math.min(1, dt * 4);
 		lastPos.copy(cam);
 		voice.place(cam, camera.getWorldDirection(_f));
 		// the caption follows the speaker

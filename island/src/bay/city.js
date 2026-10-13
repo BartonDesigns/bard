@@ -1471,11 +1471,88 @@ export function createCity(shared, scene, bay, real = null) {
 		let n = 0;
 		for (const [x, y, z, a, s] of acs) { if (n >= kit.ac.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.ac.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
 		kit.ac.count = n; n = 0;
-		for (const [x, y, z, a, w, h, d] of suns) { if (n >= kit.sunF.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); m4.compose(p.set(x, y, z), q, sc.set(w, h, d)); kit.sunF.setMatrixAt(n, m4); m4.compose(p.set(x, y + 0.33 * h, z), q, sc.set(w - 0.04, h * 0.67 - 0.02, d - 0.04)); kit.sunG.setMatrixAt(n++, m4); }
+		for (const [x, y, z, a, w, h, d] of suns) { if (n >= kit.sunF.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); m4.compose(p.set(x, y, z), q, sc.set(w, h, d)); kit.sunF.setMatrixAt(n, m4); m4.compose(p.set(x, y + 0.33 * h, z), q, sc.set(w - 0.16, h * 0.67 - 0.14, d - 0.16)); kit.sunG.setMatrixAt(n++, m4); }      // (the glass well inside its bars, or the two flicker from afar)
 		kit.sunF.count = kit.sunG.count = n; n = 0;
 		for (const [x, y, z, a, s] of lines) { if (n >= kit.line.instanceMatrix.count) break; q.setFromAxisAngle(Y, -a); kit.line.setMatrixAt(n++, m4.compose(p.set(x, y, z), q, sc.set(s, s, s))); }
 		kit.line.count = n;
 		for (const im of [kit.ac, kit.sunF, kit.sunG, kit.line]) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+	}
+	// Neighbouring buildings from the map often overlap by a metre or so (their outlines
+	// are fitted as boxes). Where they do, their fronts run a few centimetres apart through
+	// each other and flicker at any distance. The smaller one is drawn trimmed back off the
+	// larger, along whichever of its own sides overlaps least, leaving a hairline gap.
+	// Parts of one building (a house's wings and garage) are meant to overlap and stay.
+	// Only the drawn box changes (o.fit); the lot keeps its own place and size.
+	function apart(list) {
+		const G = new Map(), cell = 48, key = (i, j) => i * 73856093 ^ j * 19349663;
+		const boxes = list.filter((o) => o.w > 0.5 && o.d > 0.5 && o.h > 1.5);
+		for (const o of boxes) { o.fit = null; const k = key(Math.floor(o.x / cell), Math.floor(o.z / cell)); (G.get(k) || G.set(k, []).get(k)).push(o); }
+		const half = (o, ax, az) => (Math.abs(ax * Math.cos(o.a) + az * Math.sin(o.a)) * o.w + Math.abs(-ax * Math.sin(o.a) + az * Math.cos(o.a)) * o.d) / 2;
+		for (const A of boxes) {
+			const i0 = Math.floor(A.x / cell), j0 = Math.floor(A.z / cell);
+			for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const B of G.get(key(i0 + i, j0 + j)) || []) {
+				if (B === A || A.w * A.d > B.w * B.d || (A.w * A.d === B.w * B.d && A.x < B.x)) continue;     // A is the smaller of the pair
+				if (A.y >= B.y + B.h || B.y >= A.y + A.h) continue;
+				if (A.src?.grp && A.src.grp === B.src?.grp) { flush(A, B); continue; }
+				const dx = B.x - A.x, dz = B.z - A.z;
+				if (dx * dx + dz * dz > ((A.w + A.d + B.w + B.d) / 2) ** 2) continue;
+				// overlap along each of A's two axes, and along B's (no overlap on any: apart)
+				const F = A.fit || [A.x, A.z, A.w, A.d], ca = Math.cos(A.a), sa = Math.sin(A.a);
+				const axes = [[ca, sa, 0], [-sa, ca, 1], [Math.cos(B.a), Math.sin(B.a), -1], [-Math.sin(B.a), Math.cos(B.a), -1]];
+				let best = null, clear = false;
+				for (const [ax, az, which] of axes) {
+					const ha = which === 0 ? F[2] / 2 : which === 1 ? F[3] / 2 : half({ ...A, w: F[2], d: F[3] }, ax, az), hb = half(B, ax, az);
+					const c = (B.x - F[0]) * ax + (B.z - F[1]) * az, pen = ha + hb - Math.abs(c);
+					if (pen <= 0) { clear = true; break; }
+					if (which >= 0 && (!best || pen < best.pen)) best = { pen, which, side: Math.sign(c) || 1, ax, az };
+				}
+				if (clear || !best) continue;
+				// trim A's side facing B by the overlap; leave it be if that would take too much
+				const size = best.which === 0 ? F[2] : F[3], cut = best.pen + 0.005;
+				if (cut > size * 0.45) continue;
+				const nw = best.which === 0 ? F[2] - cut : F[2], nd = best.which === 1 ? F[3] - cut : F[3];
+				A.fit = [F[0] - best.ax * best.side * cut / 2, F[1] - best.az * best.side * cut / 2, nw, nd];
+			}
+		}
+		// two parts of one building (a house and its wing) overlap on purpose, but where a front
+		// of the smaller lies within a hand's width of the larger's own front, the two run
+		// through each other: that front is set back to make a clear step
+		function flush(A, B) {
+			const turn = ((A.a - B.a) % (Math.PI / 2) + Math.PI / 2) % (Math.PI / 2);
+			if (Math.min(turn, Math.PI / 2 - turn) > 0.02) return;
+			for (let which = 0; which < 2; which++) for (const side of [-1, 1]) {
+				const F = A.fit || [A.x, A.z, A.w, A.d], ca = Math.cos(A.a), sa = Math.sin(A.a);
+				const ax = which === 0 ? ca : -sa, az = which === 0 ? sa : ca, h = (which === 0 ? F[2] : F[3]) / 2;
+				const faceA = (F[0] * ax + F[1] * az) + side * h, faceB = (B.x * ax + B.z * az) + side * half(B, ax, az);
+				const off = (faceB - faceA) * side;
+				if (Math.abs(off) > 0.25) continue;
+				// (and the two fronts must share some width, or they only stand in line)
+				const px = which === 0 ? -sa : ca, pz = which === 0 ? ca : sa, hp = (which === 0 ? F[3] : F[2]) / 2;
+				if (Math.abs((B.x - F[0]) * px + (B.z - F[1]) * pz) > hp + half(B, px, pz) - 0.05) continue;
+				const cut = 0.3 - off;
+				if (cut > h) continue;
+				const nw = which === 0 ? F[2] - cut : F[2], nd = which === 1 ? F[3] - cut : F[3];
+				A.fit = [F[0] - ax * side * cut / 2, F[1] - az * side * cut / 2, nw, nd];
+			}
+		}
+		// A roof's eaves reach out past its walls; beside a taller wall (a house's two-storey
+		// wing, the shop next door) they ran into it and flickered along it. The overhang is
+		// kept short of the nearest taller wall.
+		for (const A of boxes) {
+			if (!A.roof) continue;
+			const F = A.fit || [A.x, A.z, A.w, A.d], eave = A.y + A.h, i0 = Math.floor(F[0] / cell), j0 = Math.floor(F[1] / cell);
+			let room = A.roof.ov ?? 0.4;
+			for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const B of G.get(key(i0 + i, j0 + j)) || []) {
+				if (B === A || B.y + B.h < eave + 0.05 || B.y > eave + (A.roof.h || 1)) continue;
+				const BF = B.fit || [B.x, B.z, B.w, B.d], Bb = { ...B, x: BF[0], z: BF[1], w: BF[2], d: BF[3] }, Ab = { ...A, x: F[0], z: F[1], w: F[2], d: F[3] };
+				// the clear distance between the two outlines (the largest gap along any side)
+				let gap = -1e9;
+				for (const o of [Ab, Bb]) for (const [ax, az] of [[Math.cos(o.a), Math.sin(o.a)], [-Math.sin(o.a), Math.cos(o.a)]]) gap = Math.max(gap, Math.abs((Bb.x - Ab.x) * ax + (Bb.z - Ab.z) * az) - half(Ab, ax, az) - half(Bb, ax, az));
+				if (gap < room + 0.06) room = Math.max(0, gap - 0.06);
+			}
+			if (room < (A.roof.ov ?? 0.4)) A.ovFit = room;
+			else A.ovFit = undefined;
+		}
 	}
 	function upload(list, body, roofs) {
 		let n = 0, nh = 0, ng = 0;
@@ -1484,7 +1561,9 @@ export function createCity(shared, scene, bay, real = null) {
 		if (roofs) slotOf = new Map();
 		for (const o of list) {
 			if (n >= body.instanceMatrix.count) break;
-			q.setFromAxisAngle(Y, -o.a); sc.set(o.w, o.h, o.d); p.set(o.x, o.y, o.z);
+			// (drawn at its fitted size where it overlapped a neighbour: apart() below)
+			const F = o.fit, ox = F ? F[0] : o.x, oz = F ? F[1] : o.z, ow = F ? F[2] : o.w, od = F ? F[3] : o.d;
+			q.setFromAxisAngle(Y, -o.a); sc.set(ow, o.h, od); p.set(ox, o.y, oz);
 			body.setMatrixAt(n, m4.compose(p, q, sc)); body.setColorAt(n, col.setRGB(o.col[0], o.col[1], o.col[2], THREE.SRGBColorSpace)); kinds.array[n] = o.kind; ages.array[n] = (o.age ?? 0.4) + 2 * (o.cond || 0);
 			births.array[n]=o.src?.grp?.nearBorn || 0;
 			const nc = o.src?.grp?.near, dr = roofs && !nc ? doors.get(lotKey(o)) : null;
@@ -1495,9 +1574,9 @@ export function createCity(shared, scene, bay, real = null) {
 			if (o.roof && roofs) {
 				const im = o.roof.hip ? roofs[0] : roofs[1], k = o.roof.hip ? nh++ : ng++;
 				if (k >= im.instanceMatrix.count) continue;
-				p.set(o.x, o.y + o.h, o.z);
-				const ov = o.roof.ov ?? 0.4, R = o.roof;
-				if (R.rot) { q.setFromAxisAngle(Y, -o.a + Math.PI / 2); sc.set(o.d + 2 * ov, R.h, o.w + 2 * ov); } else sc.set(o.w + 2 * ov, R.h, o.d + 2 * ov);
+				p.set(ox, o.y + o.h, oz);
+				const ov = o.ovFit ?? o.roof.ov ?? 0.4, R = o.roof;
+				if (R.rot) { q.setFromAxisAngle(Y, -o.a + Math.PI / 2); sc.set(od + 2 * ov, R.h, ow + 2 * ov); } else sc.set(ow + 2 * ov, R.h, od + 2 * ov);
 				im.setMatrixAt(k, m4.compose(p, q, sc)); im.setColorAt(k, col.setRGB(R.col[0], R.col[1], R.col[2], THREE.SRGBColorSpace));
 				// its covering (by colour where the lot didn't say: the reds are clay tile), trim,
 				// and condition (a run-down house's roof patched and sagging, a burnt one holed)
@@ -1589,7 +1668,26 @@ export function createCity(shared, scene, bay, real = null) {
 			if (g < 0.5 || onLandmark(x, z, Math.max(w, d) / 2)) continue;
 			skyline.push({ x, y: g - 1.2, z, w, d, h: h + 1.2, a, col: jit(pick(PAL.tower, hash(x, z)), hash(z, x)), kind: KIND.tower, roof: null });
 		}
-		upload(skyline, skyMesh, null);
+		skylineBeside(lastList);
+	}
+	// A tower near enough to be built is drawn by the near buildings; its far copy in the
+	// skyline would stand in the same place a few centimetres off and flicker through it
+	// (and cover its doorway and its rooms), so the skyline leaves those out.
+	let lastList = [];
+	function skylineBeside(list) {
+		lastList = list;
+		const G = new Map(), cell = 30, key = (x, z) => Math.floor(x / cell) + ',' + Math.floor(z / cell);
+		for (const o of list) if (o.h > 12 && o.w) (G.get(key(o.x, o.z)) || G.set(key(o.x, o.z), []).get(key(o.x, o.z))).push(o);
+		const drawn = (t) => {
+			for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) for (const o of G.get(key(t.x + i * cell, t.z + j * cell)) || []) {
+				const ca = Math.cos(o.a || 0), sa = Math.sin(o.a || 0), dx = t.x - o.x, dz = t.z - o.z;
+				if (Math.abs(ca * dx + sa * dz) < o.w / 2 && Math.abs(-sa * dx + ca * dz) < o.d / 2) return true;
+			}
+			return false;
+		};
+		const keep = G.size ? skyline.filter((t) => !drawn(t)) : skyline;
+		keep.noGrounds = true;
+		upload(keep, skyMesh, null);
 	}
 
 	// ---------- landmarks ----------
@@ -2005,7 +2103,9 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.length > CAP) { const t = list.trees, k = list.kit, pr = list.props; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; list.props = pr; }
 		if (list.trees && list.trees.length > TCAP) list.trees.sort((m, n) => d2(m) - d2(n));
 		procGroups(list, x, z);
+		apart(list);
 		upload(list, near, [hips, gables]);
+		skylineBeside(list);
 		indexLots(list);
 		uploadKit(list.kit);
 		kit2.upload(list.props);
@@ -2013,5 +2113,5 @@ export function createCity(shared, scene, bay, real = null) {
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
 		placeTrees(x, z);
 	}
-	return { lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }
