@@ -70,6 +70,11 @@ Level 99 Bard is a music-and-world game at **level99bard.com**. It is a faceplat
   - Each world's water callbacks keep their own world, so leaving and re-entering can't mix them up.
   - New file `world/water-contact.js`.
 
+### Later the same evening (`e1f5174` to `64afa91`, `docs/chatter-and-city-surfaces-2026-10-12.md`)
+- **Passing chatter** (`people/chatter.js`, `people/chatter-lines.js`): people you walk past react in their own Kokoro voices, panned in 3D, with captions; afraid if they saw you hurt someone; two people talking each say a line. `Crysis.chatter()`.
+- **City surfaces:** tower floors and ceilings, tower floor plates, glazed doors, overlapping neighbour buildings and roof eaves, the skyline copy of near towers, sunroom glass, and cliff-settlement rooms no longer flicker through each other. Census tool: `island/tools/zfight-browser.cjs` (`FAR=1` for depth-precision risk).
+- **Headless testing note:** the loading card waits for a tap on Enter world; until it is clicked the world never updates. The census tool and the smoke script now click it.
+
 ### Everything before that
 
 Everything started in this conversation shipped, much of it in the 9 October "handoff completion" release. More has landed since: cinematic loading, workplaces and malls, character tailoring, field contracts, and shared reputation.
@@ -178,6 +183,8 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
     - **Fire-and-drag aiming and touch layouts:** emulated only, not tried on a real phone.
     - **Water fix:** your original planet seed and save that showed the floating water weren't available, so the exact case is unconfirmed. Re-check it on device.
 14. **Physical device QA everywhere:** almost all checks are Chromium software rendering. Real iPhone and Safari performance and look are unverified across the board.
+
+15. **Chatter and surfaces (12 October evening):** real Kokoro voices in passing are unheard on a phone (model hosts blocked in the sandbox); the 100 MB download now also starts on the first remark; the island village has about 80 m² of floor layers 2.6 cm apart.
 
 ### Parked (do not start unless asked)
 - The game trailer (1080p60 with a 4K60 script).

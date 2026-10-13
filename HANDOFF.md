@@ -1,3 +1,7 @@
+## October 12, 2026 (evening): passing chatter and city surfaces
+
+People you pass now notice you and speak in their own local Kokoro voices, panned from where they stand, reacting to what you are doing and what they have seen; a conversation always wins. City surfaces that flickered through each other are fixed: tower floors and ceilings, tower floor plates at the facade, glazed doors, overlapping neighbour buildings and roof eaves, the far skyline copy of near towers, sunroom glass, and cliff-settlement rooms through their skins. New census tool `island/tools/zfight-browser.cjs`. See `docs/chatter-and-city-surfaces-2026-10-12.md`.
+
 ## October 12, 2026: local speech and control release
 
 Release recovery on top of `edf1b236`: local Kokoro speech in a background worker, visible touch quick actions, expanded controls grid, compact weapon HUD, and field-contract docking. The 14-image unnumbered loading slideshow remains intact. See `docs/local-speech-controls-2026-10-12.md` for behavior, limitations, and verification. No speech host or Worker redeploy is needed. Qwen TTS is not the active speech engine.
