@@ -561,6 +561,49 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		return r.built;
 	}
+	// The corners of a town's junctions, where three or more legs of street meet: a crosswalk
+	// across each leg just clear of the cross street's sidewalk (continental stripes along the
+	// traffic downtown and on the arterials, two plain lines in the suburbs), a stop bar across
+	// the lane coming in, and the yellow domes of a curb ramp at either end of the crosswalk.
+	const CROSS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
+	function corners(all, x0, z0, B, Y) {
+		const nodes = new Map(), nk = (x, z) => Math.round(x / 1.5) * 65536 + Math.round(z / 1.5);
+		for (const r of all) {
+			if (!r.drive || r.bridge || r.link || r.hand || !CROSS.has(r.cls) || !r.walked || !built(r)) continue;
+			const p = r.pts, m = p.length;
+			for (let i = 0; i < m; i += 2) {
+				const k = nk(p[i], p[i + 1]);
+				let n = nodes.get(k);
+				if (!n) nodes.set(k, n = { x: p[i], z: p[i + 1], legs: [] });
+				// the legs leaving this point: toward the next point, and back toward the last
+				if (i + 2 < m) n.legs.push({ r, j: i, d: 1 });
+				if (i > 0) n.legs.push({ r, j: i, d: -1 });
+			}
+		}
+		for (const n of nodes.values()) {
+			if (n.legs.length < 3) continue;
+			const L = landAt(n.x, n.z), city = !!L && (L.lu === 7 || L.lu === 8);
+			for (const g of n.legs) {
+				const { r, j, d } = g, p = r.pts, hw = r.w / 2;
+				// the cross streets' widest reach from the corner: their half-width and sidewalk
+				let reach = 0;
+				for (const o of n.legs) if (o.r !== r) reach = Math.max(reach, o.r.w / 2 + 1.7);
+				const qx = p[j + d * 2], qz = p[j + d * 2 + 1], len = Math.hypot(qx - n.x, qz - n.z);
+				if (len < reach + 9) continue;
+				const ux = (qx - n.x) / len, uz = (qz - n.z) / len, nx = -uz, nz = ux;
+				const big = city || r.cls === 'primary' || r.cls === 'secondary';
+				// (a point a metres out along the leg and b across it, in the map's space)
+				const at = (a, b) => [n.x + ux * a + nx * b - x0, n.z + uz * a + nz * b - z0];
+				const c0 = reach + 0.8, c1 = c0 + 3;
+				if (big) for (let b = -hw + 0.9; b <= hw - 0.6; b += 1.2) B.line([at(c0, b), at(c1, b)], 0.3, WHITE, false);
+				else for (const a of [c0, c1]) B.line([at(a, -hw + 0.3), at(a, hw - 0.3)], 0.15, WHITE, false);
+				// the stop bar across the lane coming in (the right of traffic heading for the corner)
+				if (!r.divided) B.line([at(c1 + 1.2, -hw + 0.4), at(c1 + 1.2, -0.25)], 0.22, WHITE, false);
+				// the curb ramps' domes, on the sidewalk either end of the crosswalk
+				for (const sd of [-1, 1]) Y.line([at(c0 + 0.6, sd * (hw + 0.45)), at(c1 - 0.6, sd * (hw + 0.45))], 0.45, YELLOW, false);
+			}
+		}
+	}
 	function drawRoadMap(M, cx, cz) {
 		M.x = cx; M.z = cz;
 		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
@@ -605,6 +648,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			if (surf === ASPH && r.drive && !r.bridge) wear(r, p, hw, Lb, Y);
 			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
+		if (fine) corners(all, x0, z0, B, Y);
 		// driveways and front walks
 		for (const q of near('paths', cx, cz, SIZE * 0.72)) B.line([[q.ax - x0, q.az - z0], [q.bx - x0, q.bz - z0]], q.w / 2, CONC, false);
 		const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();

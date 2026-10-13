@@ -51,6 +51,7 @@ import { createFamilyLife } from './people/family-life.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
+import { createBridgeSound } from './bay/bridgesound.js';
 import { createLake } from './bay/lake.js';
 import { createEarthWater } from './bay/earthwater.js';
 import { createWater } from './bay/water.js';
@@ -576,6 +577,8 @@ export function createIslandWorld() {
 	HOOKS.arcade = arcade;
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint, strike: (car) => HOOKS.impacts?.strike(car) || 0 });
+	// the overpasses' joints underfoot and overhead (bay/bridgesound.js)
+	const bridgeSound = createBridgeSound({ world: () => world, carAt: () => drive.carAt() });
 	HOOKS.drive = drive;
 	// anyone struck down or thrown: limp, weighed bodies (people/ragdoll.js)
 	const ragdolls = createRagdolls({ world: () => world, isPhone });
@@ -1704,6 +1707,7 @@ export function createIslandWorld() {
 		ragdolls.update(dt);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
+		bridgeSound.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
 		W.spray?.update(dt, camera);
