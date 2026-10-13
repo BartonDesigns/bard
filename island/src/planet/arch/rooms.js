@@ -70,6 +70,9 @@ function sideRun(L, a, b, along, at, yaw, t, h, mode, gaps) {
 	piece(u, b, 0, h, mode);
 }
 
+// how far the outer walls of a room stand inside the skin (more than half of the widest trim
+// on them, the pilasters, so nothing of a room reaches the outside)
+export const INSET = 0.14;
 // lay out a volume: its walls, its floors, its holes, its stairs and rails
 export function layout(V) {
 	const L = { walls: [], floors: [], holes: [], ramps: [], rails: [], doors: [] };
@@ -80,17 +83,20 @@ export function layout(V) {
 		// +z and -z run along x; +x and -x along z
 		const runX = (side, z) => sideRun(L, -hw, hw, (u) => ({ x: u, z }), z, 0, t, h, S[side].mode, S[side].mode === 'open' ? [] : S[side].gaps);
 		const runZ = (side, x) => sideRun(L, -hd, hd, (u) => ({ x, z: u }), x, Math.PI / 2, t, h, S[side].mode, S[side].mode === 'open' ? [] : S[side].gaps);
-		if (S.pz.mode !== 'open') runX('pz', hd - t / 2);
-		if (S.nz.mode !== 'open') runX('nz', -hd + t / 2);
-		if (S.px.mode !== 'open') runZ('px', hw - t / 2);
-		if (S.nx.mode !== 'open') runZ('nx', -hw + t / 2);
+		// the walls stand a little inside the building's skin: flush with it (and their
+		// pilasters and skirting proud of it) they showed through the outside in stripes
+		const e = INSET;
+		if (S.pz.mode !== 'open') runX('pz', hd - t / 2 - e);
+		if (S.nz.mode !== 'open') runX('nz', -hd + t / 2 + e);
+		if (S.px.mode !== 'open') runZ('px', hw - t / 2 - e);
+		if (S.nx.mode !== 'open') runZ('nx', -hw + t / 2 + e);
 		for (const k of ['pz', 'nz', 'px', 'nx']) for (const g of S[k].gaps) {
 			const on = k[1] === 'z', sg = k[0] === 'p' ? 1 : -1;
 			const x = on ? g.at : sg * (hw - t / 2), z = on ? sg * (hd - t / 2) : g.at;
 			L.doors.push({ x, z, yaw: on ? 0 : Math.PI / 2, out: sg, axis: on ? 'z' : 'x', w: g.w, h: g.h, porch: g.porch || 0, ext: !!g.ext });
 		}
 	} else {
-		const N = V.r > 9 ? 28 : 22, r = V.r - t / 2;
+		const N = V.r > 9 ? 28 : 22, r = V.r - t / 2 - INSET;
 		for (let i = 0; i < N; i++) {
 			const a0 = i / N * TAU, a1 = (i + 1) / N * TAU, am = (a0 + a1) / 2;
 			const gap = V.gaps.find((g) => Math.abs(((am - g.a) % TAU + TAU + Math.PI) % TAU - Math.PI) < g.w / 2 / V.r);
