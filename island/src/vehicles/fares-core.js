@@ -11,8 +11,16 @@ export function quote(metres) {
 // the time a fair driver needs (about 11 m/s through town, a margin for the lights)
 export const expected = (metres) => 25 + metres / 9;
 
-// paid at the kerb: the fare, and a tip for being quick and smooth (bumps and scrapes cost it)
-export function settle({ metres, seconds, hits = 0, scares = 0 }) {
+// in a hurry: they need to be there within this many seconds (a little tighter than fair)
+export const deadline = (metres) => Math.round(expected(metres) * 0.85);
+// paid at the kerb: the fare, and a tip for being quick and smooth (bumps and scrapes cost it).
+// In a hurry, they pay half again on time, and nothing over the fare if late; speed is forgiven.
+export function settle({ metres, seconds, hits = 0, scares = 0, rush = false }) {
+	if (rush) {
+		const fare = quote(metres), onTime = seconds <= deadline(metres), smooth = Math.max(0, 1 - hits * 0.35);
+		const tip = onTime ? Math.round(fare * (0.5 + 0.2 * smooth) / 5) * 5 : 0;
+		return { fare, tip, total: fare + tip, stars: onTime ? (hits ? 4 : 5) : hits > 1 ? 1 : 2, quick: onTime ? 1 : 0, smooth: +smooth.toFixed(2), onTime };
+	}
 	const fare = quote(metres), par = expected(metres);
 	const quick = seconds <= par ? 1 : Math.max(0, 1 - (seconds - par) / par);
 	const smooth = Math.max(0, 1 - hits * 0.35 - scares * 0.12);
@@ -35,6 +43,9 @@ export function step(F, ev) {
 export function line(kind, { n = 0, place = '', stars = 3 } = {}) {
 	const L = {
 		hail: ['Taxi! Over here!', 'Hey! Are you free?', 'Excuse me! Could you give me a ride?'],
+		rush: place ? [`I am so late. ${place}, as fast as you can, please!`, `${place}, and please hurry. I have a meeting in minutes.`] : ['I am really late. Follow the pin, fast as you can!'],
+		late: ['Well, I missed it. Thanks anyway.', 'Too late now. Never mind.'],
+		ontime: ['Made it! You are a lifesaver.', 'With a minute to spare. Thank you!'],
 		board: place ? [`Thanks for stopping. Could you take me to ${place}?`, `Oh, great. ${place}, please.`, `Perfect timing. I need to get to ${place}.`] : ['Thanks for stopping. Just follow the pin, please.', 'Oh, great. I will show you, it is where the pin is.'],
 		fast: ['Whoa. Maybe a little slower?', 'We are not in that much of a hurry!', 'Is this a race now?'],
 		hit: ['Ow! Careful!', 'Hey! Watch the road!', 'Was that a curb?', 'I felt that one.'],

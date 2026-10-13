@@ -7,6 +7,7 @@ import { statsOf } from './gear-levels.js';
 // what each usable item does, and what its control says
 export const USES = Object.freeze({
 	'field-medkit': { label: '🩹 Use medkit', xp: 30 },
+	'repair-roll': { label: '🧰 Use repair roll', xp: 30 },
 });
 
 // how much a medkit mends, from its own Heal stat at its level and tier
@@ -16,14 +17,15 @@ export function healOf(inst) {
 }
 
 // chooses what using an item does now: { kind: 'tend' | 'self' | 'none', why }
-export function plan(id, { wounded = [], hurt = 0 } = {}) {
+export function plan(id, { wounded = [], hurt = 0, favour = false } = {}) {
+	if (id === 'repair-roll') return favour ? { kind: 'favour' } : { kind: 'none', why: 'Nothing here needs fixing.' };
 	if (id !== 'field-medkit') return { kind: 'none', why: 'That has no use here.' };
 	if (wounded.length) return { kind: 'tend', who: wounded[0] };
 	if (hurt >= 1) return { kind: 'self' };
 	return { kind: 'none', why: 'Nobody here is hurt, you included.' };
 }
 
-export function createItemUse({ arms, combat, people, persona, camera, hint, chatter, morality, worldKey = () => 'here', note = () => {} }) {
+export function createItemUse({ arms, combat, people, persona, camera, hint, chatter, morality, worldKey = () => 'here', note = () => {}, errands = () => null }) {
 	let uses = 0;
 	function usable() {
 		const H = arms.held?.();
@@ -34,13 +36,14 @@ export function createItemUse({ arms, combat, people, persona, camera, hint, cha
 		if (!U) return false;
 		const C = combat(), cam = camera.position;
 		if (!C) return false;
-		const P = plan(U.inst.i, { wounded: C.woundedNear?.(cam.x, cam.z, 3) || [], hurt: C.hurt0?.() || 0 });
+		const P = plan(U.inst.i, { wounded: C.woundedNear?.(cam.x, cam.z, 3) || [], hurt: C.hurt0?.() || 0, favour: !!errands()?.needs?.(U.inst.i) });
 		if (P.kind === 'none') { hint(P.why, 2200); return false; }
 		const item = arms.catalog?.().find?.((x) => x.id === U.inst.i);
 		const r = arms.apply({ id: `use-${U.inst.u}-${Date.now().toString(36)}-${++uses}`, kind: 'use', itemId: U.inst.i, uid: U.inst.u, quantity: 1, activity: item?.activities?.[0] || 'home-defense' });
 		if (!r?.ok) { hint(r?.message || 'That could not be used.', 2200); return false; }
 		const amount = healOf(U.inst);
-		if (P.kind === 'tend') {
+		if (P.kind === 'favour') errands()?.useHere?.(U.inst.i);
+		else if (P.kind === 'tend') {
 			const p = P.who.p;
 			C.tend(p);
 			const who = persona(p)?.first || 'them';

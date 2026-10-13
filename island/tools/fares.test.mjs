@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { quote, settle, step, line, expected } from '../src/vehicles/fares-core.js';
+import { quote, settle, step, line, expected, deadline } from '../src/vehicles/fares-core.js';
 
 test('fares grow with the distance; tips reward quick, smooth driving', () => {
 	assert.ok(quote(400) < quote(1500));
@@ -71,4 +71,12 @@ test('stopping the car with a passenger lets them out unpaid', async () => {
 	T.driving.on = false; R.update(0.1);
 	assert.equal(R.info().fare, null); assert.equal(T.paid.length, 0);
 	assert.ok(p.active && !p.reserved);
+});
+
+test('a rush fare pays half again on time and nothing extra when late; speed is forgiven', () => {
+	const m = 1500;
+	const on = settle({ metres: m, seconds: 30, rush: true }), late = settle({ metres: m, seconds: 1e4, rush: true });
+	assert.ok(on.onTime && on.tip >= quote(m) * 0.5 - 5 && on.stars === 5);
+	assert.equal(late.tip, 0); assert.ok(!late.onTime);
+	assert.match(line('rush', { place: 'Danville' }), /Danville/);
 });

@@ -3,7 +3,7 @@
 // where they are going. Stop near it and they pay: the fare by the distance, a tip for a quick
 // and smooth ride. Their own voice in the car, a word if you drive like a maniac.
 import * as THREE from 'three';
-import { quote, settle, step, line } from './fares-core.js';
+import { quote, settle, step, line, deadline } from './fares-core.js';
 import { promoted } from '../gameplay/ranks.js';
 
 const STORE = 'crysis-fares-v1';
@@ -89,11 +89,13 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 		if (!dest) { go('leave'); return; }
 		const r = step(F, 'board');
 		const place = placeName(dest.x, dest.z, dest.y), here = placeName(car.x, car.z, car.y);
-		F = { ...r.F, p, dest, place: place && place !== here ? place : '', fare: quote(dest.metres), t: 0, hits: 0, scares: 0, chat: false, near: false, rider: rider(p, car) };
+		// one in four is in a hurry: a clock on the ride, and more for beating it
+		const rush = Math.random() < 0.25;
+		F = { ...r.F, p, dest, rush, due: rush ? deadline(dest.metres) : 0, place: place && place !== here ? place : '', fare: quote(dest.metres), t: 0, hits: 0, scares: 0, chat: false, near: false, rider: rider(p, car) };
 		// the body waits, unseen and kept, until they get out
 		p.reserved = true; p.active = false; p.P.root.visible = false;
-		speak(F.rider, 'board', { place: F.place });
-		hint(`${F.name}: ${F.place || 'the pin'} · ${(dest.metres / 1000).toFixed(1)} km · fare ${F.fare} credits`, 4000);
+		speak(F.rider, rush ? 'rush' : 'board', { place: F.place });
+		hint(`${F.name}: ${F.place || 'the pin'} · ${(dest.metres / 1000).toFixed(1)} km · fare ${F.fare} credits${rush ? ` · in a hurry: ${Math.floor(F.due / 60)}:${String(F.due % 60).padStart(2, '0')}` : ''}`, 4000);
 	}
 	// out at the kerb, where the car stopped
 	function alight(car) {
@@ -112,9 +114,9 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 		if (!r.out) return;
 		const o = r.out, p = F.p;
 		if (o.done) {
-			const S = settle({ metres: F.dest.metres, seconds: F.t, hits: F.hits, scares: F.scares });
+			const S = settle({ metres: F.dest.metres, seconds: F.t, hits: F.hits, scares: F.scares, rush: F.rush });
 			const body = alight(car);
-			speak(body, 'thanks', { stars: S.stars });
+			speak(body, F.rush ? (S.onTime ? 'ontime' : 'late') : 'thanks', { stars: S.stars });
 			const paid = arms()?.apply?.({ id: `fare:${F.name}:${Date.now()}`, kind: 'trade', peer: 'fare', give: { credits: 0, items: [] }, get: { credits: S.total, items: [] } });
 			tally.rides++; tally.earned += S.total; if (S.stars === 5) tally.five++; save(); note('fare', { stars: S.stars, metres: F.dest.metres });
 			last = S;
@@ -156,7 +158,8 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 		F.lastSpeed = car.speed;
 		// (a jolt: losing speed far faster than any brake does)
 		if (dv / Math.max(dt, 1e-3) > 25 && dv > 1.5 && hitCool <= 0) { F.hits++; hitCool = 2; speak(F.rider, 'hit'); }
-		if (car.speed > 24) { fastT += dt; if (fastT > 3 && fastCool <= 0) { F.scares++; fastCool = 25; speak(F.rider, 'fast'); } } else fastT = 0;
+		// (someone in a hurry does not mind the speed)
+		if (car.speed > 24 && !F.rush) { fastT += dt; if (fastT > 3 && fastCool <= 0) { F.scares++; fastCool = 25; speak(F.rider, 'fast'); } } else fastT = 0;
 		const d = flat(car, F.dest);
 		if (!F.chat && F.t > 30 && d > 250) { F.chat = true; speak(F.rider, 'chat'); }
 		if (!F.near && d < 90) { F.near = true; speak(F.rider, 'near'); }
@@ -168,10 +171,11 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 		if (!F) return null;
 		if (F.stage === 'hailing') { const q = F.p.M.S.pos; return { x: q.x, y: q.y, z: q.z, radius: 3, title: `Pick up ${F.name}`, detail: 'pull up beside them and stop' }; }
 		const q = F.dest;
-		return { x: q.x, y: q.y, z: q.z, radius: ARRIVE, title: `Drive ${F.name} to ${F.place || 'the pin'}`, detail: `fare ${F.fare} credits` };
+		const left = F.rush ? Math.max(0, Math.ceil(F.due - F.t)) : 0;
+		return { x: q.x, y: q.y, z: q.z, radius: ARRIVE, title: `Drive ${F.name} to ${F.place || 'the pin'}`, detail: F.rush ? (left ? `in a hurry · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} left` : 'late now') : `fare ${F.fare} credits` };
 	}
 	function dispose() { if (F) { if (F.p.reserved) { F.p.reserved = false; } release(F.p); F = null; } for (const [p] of releaseAt) release(p); releaseAt = []; }
-	function info() { const c = drive.carAt(); return { car: c && { x: Math.round(c.x), z: Math.round(c.z), speed: +c.speed.toFixed(1) }, fare: F && { stage: F.stage, name: F.name, place: F.place, fare: F.fare, t: Math.round(F.t), hits: F.hits || 0, metres: F.dest && Math.round(F.dest.metres) }, last, cool: Math.round(cool), ...tally }; }
+	function info() { const c = drive.carAt(); return { car: c && { x: Math.round(c.x), z: Math.round(c.z), speed: +c.speed.toFixed(1) }, fare: F && { stage: F.stage, name: F.name, place: F.place, fare: F.fare, rush: !!F.rush, due: F.due || 0, t: Math.round(F.t), hits: F.hits || 0, metres: F.dest && Math.round(F.dest.metres) }, last, cool: Math.round(cool), ...tally }; }
 	// (console and tests: someone ahead hails now)
 	function hailNow() { const car = drive.carAt(); if (!car) return 'drive first'; if (F) return 'already on a fare'; return hail(car) ? `${F.name} is hailing` : 'nobody ahead on the pavement'; }
 	return { update, mark, info, dispose, hailNow, active: () => !!F };

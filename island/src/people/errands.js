@@ -8,7 +8,7 @@ import { rememberIncident } from './world-awareness.js';
 import { promoted } from '../gameplay/ranks.js';
 
 const OFFER_FOR = 15, OFFER_REACH = 12, PICK = 1.4, HAND = 2.3, AWAY = 220;
-const LIMIT = { search: 360, bring: 360, chase: 150, carry: 300 };
+const LIMIT = { search: 360, bring: 360, chase: 150, carry: 300, fix: 480 };
 const STORE = 'crysis-favours-v1';
 const _v = new THREE.Vector3();
 
@@ -133,14 +133,17 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		const kinds = ['lost'], who = persona(p);
 		if (walking.length) kinds.push('catch');
 		if (waiting.length) kinds.push('pass');
+		// a parked car of theirs close by that will not start
+		const car = (W.street?.parkedNear?.(me.x, me.z, 25) || []).filter((c) => c.id && !String(c.id).startsWith('tr') && Math.hypot(c.x - me.x, c.z - me.z) > 3).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
+		if (car) kinds.push('repair');
 		const kind = kinds[(n + (p.P.dna.seed | 0)) % kinds.length];
 		const friend = kind === 'catch' ? walking[(n * 7) % walking.length] : kind === 'pass' ? waiting[(n * 5) % waiting.length] : null;
 		const dir = friend ? relativeDir(pos(friend).x - cam.x, pos(friend).z - cam.z, f.x, f.z) : 'over there';
-		const offer = offerFor({ who: { first: who.first, seed: p.P.dna.seed }, n: n++, kinds: [kind], friend: friend ? { first: persona(friend).first } : null, dir });
+		const offer = offerFor({ who: { first: who.first, seed: p.P.dna.seed }, n: n++, kinds: [kind], friend: friend ? { first: persona(friend).first } : null, dir, car: !!car });
 		if (!offer) return null;
 		let drop = null;
 		if (offer.kind === 'lost') { drop = dropSpot(me); if (!drop) return null; }
-		E = { ...offer, talking, stage: 'offered', giver: p, giverName: who.first, friendP: friend, drop, t: 0, from: { x: me.x, z: me.z }, centre: drop && { x: drop.x + (Math.random() - 0.5) * 9, y: drop.y, z: drop.z + (Math.random() - 0.5) * 9 } };
+		E = { ...offer, car: kind === 'repair' ? { x: car.x, y: car.y ?? me.y, z: car.z } : null, talking, stage: 'offered', giver: p, giverName: who.first, friendP: friend, drop, t: 0, from: { x: me.x, z: me.z }, centre: drop && { x: drop.x + (Math.random() - 0.5) * 9, y: drop.y, z: drop.z + (Math.random() - 0.5) * 9 } };
 		hold(p, 'stand');
 		if (friend) hold(friend, kind === 'catch' ? 'walk' : 'stand');
 		if (tally.done < 2) hint(isPhone ? `${who.first} is asking for help. Walk up and tap Help to say yes.` : `${who.first} is asking for help. Walk up and press Enter to say yes.`, 5000);
@@ -165,8 +168,8 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		else if (o.declined) end(null);
 	}
 	function finish(say) {
-		const to = E.kind === 'lost' || E.kind === 'snatch' ? E.giver : E.friendP;
-		const metres = E.kind === 'lost' || E.kind === 'snatch' ? flat(E.drop, E.from) * 2 : flat(pos(to), E.from);
+		const to = E.kind === 'lost' || E.kind === 'snatch' || E.kind === 'repair' ? E.giver : E.friendP;
+		const metres = E.kind === 'repair' ? 120 : E.kind === 'lost' || E.kind === 'snatch' ? flat(E.drop, E.from) * 2 : flat(pos(to), E.from);
 		const credits = rewardFor(E.kind, metres);
 		if (to?.active) {
 			chatter.say(to, { text: lineFor(say, { kind: E.kind, item: E.item, friend: E.giverName, n }), gesture: say === 'caught' ? 'laugh' : 'wave', feel: { joy: 1, surprise: say === 'caught' ? 0.6 : 0.2 } }, null);
@@ -232,6 +235,18 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 			else if (flat(me, E.from) > AWAY) go('away');
 			return;
 		}
+		if (E.stage === 'fix') {
+			if (flat(me, E.car) > AWAY) { go('away'); return; }
+			// beside the car with a repair roll in the bag: it comes to hand, ready to use
+			if (!E.handed && flat(me, E.car) < 4.5) {
+				E.handed = true;
+				const A = arms(), st = A?.state?.(), held = A?.held?.(), roll = st && Object.values(st.instances || {}).find((x) => x.i === 'repair-roll');
+				if (held?.i === 'repair-roll') hint(isPhone ? 'Tap Use to fix the car.' : 'Press U to fix the car.', 3000);
+				else if (roll) { A.hold?.(roll.u); hint(isPhone ? 'Your Repair Roll is in hand. Tap Use to fix the car.' : 'Your Repair Roll is in hand. Press U to fix the car.', 3500); }
+				else { E.handed = false; if (!E.told) { E.told = true; hint('You need a Repair Roll for this. Outfitters, traders and supermarkets sell them.', 4500); } }
+			}
+			return;
+		}
 		if (E.stage === 'bring') {
 			if (flat(me, pos(g)) < HAND) go('reach');
 			else if (flat(me, E.from) > AWAY) go('away');
@@ -249,6 +264,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	// the pin and the chip (guide.js asks every second)
 	function mark() {
 		if (!E || E.stage === 'offered') return null;
+		if (E.stage === 'fix') return { ...E.car, radius: 3, title: E.title, detail: 'use a Repair Roll beside it' };
 		if (E.stage === 'thief') { const q = pos(E.friendP); return { x: q.x, y: q.y, z: q.z, radius: 2, title: 'Catch the thief', detail: `${E.giverName}'s bag` }; }
 		if (E.stage === 'search' && E.kind === 'snatch') return { ...E.drop, radius: 2, title: `Pick up ${E.giverName}'s bag`, detail: 'they dropped it' };
 		if (E.stage === 'search') return { ...E.centre, radius: 9, title: E.title, detail: 'search the marked patch' };
@@ -305,8 +321,15 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	}
 	// asked in a conversation whether they need anything: a favour of their own, or nothing
 	function offerTo(p) { const line = maybeAsk(p, { force: true, talking: true }); return line ? { text: line.text, title: E.title } : null; }
+	// an item used where a favour needs it (gameplay/item-use.js asks first): true if it did
+	function useHere(itemId) {
+		if (!needs(itemId)) return false;
+		go('fixed');
+		return true;
+	}
+	function needs(itemId) { return E?.stage === 'fix' && itemId === 'repair-roll' && flat(feet(), E.car) < 4.5; }
 	function cancel() { if (E) go(E.stage === 'offered' ? 'decline' : 'timeout'); }
 	function dispose() { if (E) { for (const p of [E.giver, E.friendP]) release(p); E = null; } for (const [p] of releaseAt) release(p); releaseAt = []; clearProp(); glintTex?.dispose(); glintTex = null; }
 	function info() { return { errand: E && { kind: E.kind, stage: E.stage, title: E.title, giver: E.giverName, friend: E.friend || null, t: Math.round(E.t), drop: E.drop && [E.drop.x, E.drop.y, E.drop.z].map((v) => Math.round(v * 10) / 10) }, cool: Math.round(cool), last: lastEnd, ...tally }; }
-	return { maybeAsk, offerTo, askNearest, snatch: () => snatch(true), asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
+	return { maybeAsk, offerTo, useHere, needs, askNearest, snatch: () => snatch(true), asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
 }

@@ -45,9 +45,9 @@ export function relativeDir(dx, dz, fx, fz) {
 
 // what someone asks: kind and words. who: { first, seed }; n: a counter for variety.
 // options: { friend: { first } } needed for catch and pass; kinds allowed.
-export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there' } = {}) {
+export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there', car = false } = {}) {
 	const s = (who.seed | 0) + n;
-	const can = kinds.filter((k) => k === 'lost' || friend);
+	const can = kinds.filter((k) => k === 'lost' || (k === 'repair' ? car : friend));
 	if (!can.length) return null;
 	const kind = pick(can, s * 7 + 3);
 	if (kind === 'lost') {
@@ -59,6 +59,14 @@ export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], f
 			`I cannot find ${it.mine} anywhere. I think I dropped ${id === 'keys' || id === 'glasses' ? 'them' : 'it'} back there. Would you mind looking?`,
 		], s);
 		return { kind, item: { id, ...it }, ask, title: `Find ${who.first || 'their'}${who.first ? "'s" : ''} ${it.name}` };
+	}
+	if (kind === 'repair') {
+		const ask = pick([
+			`Excuse me, sorry. My car will not start, and I have no tools with me. If you have a repair roll, could you take a look?`,
+			`Do you know anything about cars? Mine just died, right there. A repair roll would probably do it, if you have one.`,
+			`Ugh, my car again. It will not start. If you have a repair roll, I would be so grateful. The shops sell them.`,
+		], s);
+		return { kind, item: { name: 'car', the: 'the car', shape: null }, ask, title: `Fix ${who.first || 'their'}${who.first ? "'s" : ''} car` };
 	}
 	if (kind === 'catch') {
 		const it = pick(CARRY, s * 11 + 5);
@@ -86,6 +94,7 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 		gaveUp: [`Never mind, I will manage. Thanks anyway.`],
 		snatched: [`Hey! Stop! That is my bag!`, `Thief! Somebody stop them!`, `No! My bag! Stop them, please!`],
 		dropped: [`Okay, okay! Take it!`, `Fine! Here! Just let me go!`, `Alright! I am dropping it!`],
+		fixed: [`It started! You are a genius. Here, please take this.`, `Listen to that engine! Thank you, honestly. Let me give you something.`, `It runs! I was going to be stuck here all day. Thank you.`],
 		escaped: [`They are gone. Thank you for trying.`, `Too late. Thanks for running after them, though.`],
 		recovered: [`My bag! Everything is still in it. Thank you, really. Please, take this.`, `You got it back! I cannot believe it. Here, for you.`],
 		kept: [],
@@ -95,7 +104,7 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 
 // credits for a favour, by kind and how far it took you (never a fortune: these are favours)
 export function rewardFor(kind, metres = 0) {
-	const base = kind === 'snatch' ? 80 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : 30;
+	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : 30;
 	return Math.round(Math.min(140, base + Math.max(0, metres) * (kind === 'catch' ? 0.45 : 0.3)) / 5) * 5;
 }
 
@@ -107,7 +116,9 @@ export function step(E, ev) {
 	if (!E || E.stage === 'done' || E.stage === 'failed' || E.stage === 'kept') return { E, out: null };
 	const at = (stage, out = null) => ({ E: { ...E, stage }, out });
 	switch (ev) {
-		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' ? 'search' : E.kind === 'catch' ? 'chase' : 'carry', { say: 'accept' }) : { E, out: null };
+		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : 'carry', { say: 'accept' }) : { E, out: null };
+		// a car that would not start: a repair roll used beside it
+		case 'fixed': return E.stage === 'fix' ? at('done', { done: true, say: 'fixed' }) : { E, out: null };
 		// a bag snatched: catch the thief, they drop it, pick it up, give it back
 		case 'catch-thief': return E.stage === 'thief' ? at('search', { say: 'dropped', thief: true }) : { E, out: null };
 		case 'escaped': return E.stage === 'thief' ? at('failed', { failed: true, say: 'escaped' }) : { E, out: null };

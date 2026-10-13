@@ -156,3 +156,28 @@ test('asked in a conversation, someone can offer a favour and waits longer for a
 	R.accept(); R.update(0.1);
 	assert.notEqual(R.info().errand.stage, 'offered');
 });
+
+test('a car that will not start: fixed with a repair roll used beside it', async () => {
+	const { createErrands } = await import('../src/people/errands.js');
+	const { createItemUse } = await import('../src/gameplay/item-use.js');
+	const T = stage(), giver = T.body(2, -2);
+	let hand = null;
+	const inv = { instances: { r1: { u: 'r1', i: 'repair-roll', l: 1, t: 0, x: 0 } } };
+	const arms = { state: () => inv, held: () => (hand ? inv.instances[hand] : null), hold: (u) => { hand = u; }, apply: (tx) => { if (tx.kind === 'use') delete inv.instances[tx.uid]; else T.paid.push(tx); return { ok: true }; }, catalog: () => [{ id: 'repair-roll', activities: ['home-defense'] }], train() {} };
+	const o = T.mk([giver]);
+	const W0 = o.world(); o.world = () => ({ ...W0, street: { parkedNear: () => [{ id: 'p7', kind: 'sedan', x: 12, y: 0, z: -4, yaw: 0 }] } });
+	o.arms = () => arms;
+	const R = createErrands(o);
+	let kinds = new Set();
+	for (let k = 0; k < 12 && !kinds.has('repair'); k++) { R.cancel(); run(R, 1, 61); R.offerTo(giver); kinds.add(R.info().errand?.kind); }
+	assert.ok(kinds.has('repair'));
+	R.accept(); R.update(0.1);
+	assert.equal(R.mark().detail, 'use a Repair Roll beside it');
+	T.P.pos.set(12, 1.7, -2); R.update(0.1);
+	assert.equal(hand, 'r1', 'the roll comes to hand beside the car');
+	const U = createItemUse({ arms, combat: () => ({ woundedNear: () => [], hurt0: () => 0 }), people: {}, persona: () => ({ first: 'N' }), camera: { position: T.P.pos }, hint() {}, chatter: null, morality: () => null, errands: () => R });
+	assert.ok(U.use());
+	assert.equal(R.info().errand, null);
+	assert.ok(T.paid.at(-1).get.credits >= 70);
+	assert.equal(inv.instances.r1, undefined, 'the roll is spent');
+});
