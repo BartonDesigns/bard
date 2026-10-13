@@ -41,6 +41,11 @@ const HURT = ['Oh my gosh, are you okay? You’re bleeding.', 'Hey, you need a d
 const WORK = ['Back to it.', 'Busy, busy.', 'One more hour.', 'Hey. Don’t mind me.'];
 const VENDOR = ['Take a look, no pressure!', 'Hi! Let me know if you need anything.'];
 const KID = ['Hi!', 'Hello!', 'Bye!'];
+// what people say once your name has got around (you.standing: { rep, favours, bounty, title })
+const KNOWN_GOOD = ['Hey, you are the one who helps people out around here, right?', 'Thanks for everything you do around here.', 'Oh, hi! My neighbour told me about you.', 'Good to see you around.', 'Somebody told me you helped them out. That was kind of you.'];
+const KNOWN_HERO = ['Hey! It is you! Everybody here knows your name.', 'Thank you. Seriously. For all of it.', 'Look who it is. Our local legend.'];
+const KNOWN_BAD = ['Keep walking.', 'We know what you did.', 'Don\'t start anything here.', 'Stay away from my family.'];
+const WANTED = ['Isn\'t that the one the patrol is after?', 'I am not getting involved.'];
 
 // fear: the same order of facts as contextualOpening
 function afraid(c, n) {
@@ -67,6 +72,12 @@ export function remarkFor(ctx = {}) {
 	if (S.role === 'jog') return { text: pick(JOGGER, n), gesture: null, feel: { joy: 0.2 } };
 	if (S.phone) return { text: pick(ON_PHONE, n), gesture: 'explain', feel: {} };
 	if (E.storm > 0.5) return { text: pick(STORM, n), gesture: 'point', feel: { surprise: 0.6 } };
+	// your name, good or bad, has got around: some say so
+	const K = Y.standing || {}, rk = ((n * 40503) >>> 0) % 100 / 100;
+	if (K.bounty >= 1 && rk < 0.35) return { text: pick(WANTED, n), gesture: 'shake', feel: { surprise: 0.4 } };
+	if ((K.rep ?? 0) < -30 && rk < 0.4) return { text: pick(KNOWN_BAD, n), gesture: 'shake', feel: { anger: 0.5 } };
+	if (((K.favours ?? 0) >= 40 || (K.rep ?? 0) > 60) && rk < 0.35) return { text: pick(KNOWN_HERO, n), gesture: 'wave', feel: { joy: 1 } };
+	if (((K.favours ?? 0) >= 5 || (K.rep ?? 0) > 30) && rk < 0.22) return { text: pick(KNOWN_GOOD, n), gesture: 'wave', feel: { joy: 0.8 } };
 	const out = S.outgoing ?? 0.5, warm = S.warmth ?? 0.5;
 	// most people just get on with their day: a quiet one nods, or does nothing at all
 	const r = ((n * 2654435761) >>> 0) / 4294967296;

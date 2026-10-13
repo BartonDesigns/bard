@@ -121,6 +121,7 @@ import { createChatter } from './people/chatter.js';
 import { createErrands } from './people/errands.js';
 import { createFares } from './vehicles/fares.js';
 import { createItemUse } from './gameplay/item-use.js';
+import { createDaily } from './gameplay/daily.js';
 import { createNpcSocial } from './people/social.js';
 import { createGhost } from './people/ghost.js';
 import { createPicnicJam } from './encounters/picnic-jam.js';
@@ -758,17 +759,20 @@ export function createIslandWorld() {
 	HOOKS.morality = combat.morality;
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
 	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands });
+	// today's three goals, paid as they are done (gameplay/daily.js)
+	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
+	const note = (kind, data) => daily.note(kind, data);
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '' });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note });
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
-	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here' });
+	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', note });
 	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
 	dom.mount.appendChild(useBtn);
 	useBtn.addEventListener('click', (e) => { e.stopPropagation(); itemUse.use(); });
 	for (const ev of ['pointerdown', 'touchstart']) useBtn.addEventListener(ev, (e) => e.stopPropagation());
 	addEventListener('keydown', (e) => { if ((e.key === 'u' || e.key === 'U') && !e.repeat && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA' && dom.mount.style.display !== 'none' && itemUse.usable()) { e.preventDefault(); itemUse.use(); } });
 	// fares: people hail you while you drive (vehicles/fares.js)
-	const fares = guideApi.fares = HOOKS.fares = createFares({ camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), drive, arms: () => arms, hint: (t, ms) => hint(t, ms, 1), isPhone });
+	const fares = guideApi.fares = HOOKS.fares = createFares({ camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), drive, arms: () => arms, hint: (t, ms) => hint(t, ms, 1), isPhone, note });
 	function watchTeleport() {
 		// (shown on every world, walking too: sharing and homes live in the menu)
 		const P = world?.player.state, on = !!P && !arcade.active();
@@ -2107,6 +2111,8 @@ if (typeof window !== 'undefined') {
 		chatter: () => HOOKS.chatter?.info(),
 		// favours in passing: Crysis.errands() what is under way; .accept() / .cancel()
 		// fares while you drive: Crysis.fares() the current one and your totals; .hail() someone ahead hails now
+		// today's goals: Crysis.daily()
+		daily: () => HOOKS.daily?.list(),
 		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
 		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)

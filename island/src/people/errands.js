@@ -12,7 +12,7 @@ const LIMIT = { search: 360, bring: 360, chase: 150, carry: 300 };
 const STORE = 'crysis-favours-v1';
 const _v = new THREE.Vector3();
 
-export function createErrands({ scene, camera, world, people, chatter, persona, arms, morality, hint, driving, isPhone, worldKey = () => world()?.body?.key || 'here', placeName = () => '' }) {
+export function createErrands({ scene, camera, world, people, chatter, persona, arms, morality, hint, driving, isPhone, worldKey = () => world()?.body?.key || 'here', placeName = () => '', note = () => {} }) {
 	let E = null, n = 0, cool = 40, prop = null, gT = 0, clock = 0, snatchCool = 120, snatchLook = 0;
 	let tally = { done: 0, kept: 0 };
 	try { tally = { ...tally, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; } catch { /* private mode */ }
@@ -174,7 +174,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		}
 		const paid = arms()?.apply?.({ id: `favour:${E.giverName}:${Date.now()}`, kind: 'trade', peer: 'favour', give: { credits: 0, items: [] }, get: { credits, items: [] } });
 		morality()?.record?.({ kind: 'favour', target: E.giverName, world: worldKey(), place: placeName() });
-		tally.done++; save();
+		tally.done++; save(); note('favour', { kind: E.kind });
 		const up = promoted('favours', tally.done - 1, tally.done);
 		const m = (up ? `You are now known as: ${up}.` : '') || milestone(tally.done);
 		hint(`${paid?.ok === false ? 'Favour done' : `+${credits} credits`}: ${E.title}.${m ? ' ' + m : ''}`, m ? 6000 : 3500);
@@ -301,6 +301,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		flee(t, 6);
 		releaseAt.push([t, clock + 8]);
 		morality()?.record?.({ kind: 'stop-thief', target: E.giverName, world: worldKey(), place: placeName() });
+		note('thief', {});
 	}
 	function cancel() { if (E) go(E.stage === 'offered' ? 'decline' : 'timeout'); }
 	function dispose() { if (E) { for (const p of [E.giver, E.friendP]) release(p); E = null; } for (const [p] of releaseAt) release(p); releaseAt = []; clearProp(); glintTex?.dispose(); glintTex = null; }

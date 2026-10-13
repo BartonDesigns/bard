@@ -10,7 +10,7 @@ const STORE = 'crysis-fares-v1';
 const BOARD = 7, ARRIVE = 16, SLOW = 2.5;
 const _f = new THREE.Vector3();
 
-export function createFares({ camera, world, people, chatter, persona, drive, arms, hint, isPhone }) {
+export function createFares({ camera, world, people, chatter, persona, drive, arms, hint, isPhone, note = () => {} }) {
 	let F = null, cool = 45, look = 0, n = 0, last = null, hitCool = 0, fastT = 0, fastCool = 0;
 	let tally = { rides: 0, earned: 0, five: 0 };
 	try { tally = { ...tally, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; } catch { /* private mode */ }
@@ -116,7 +116,7 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 			const body = alight(car);
 			speak(body, 'thanks', { stars: S.stars });
 			const paid = arms()?.apply?.({ id: `fare:${F.name}:${Date.now()}`, kind: 'trade', peer: 'fare', give: { credits: 0, items: [] }, get: { credits: S.total, items: [] } });
-			tally.rides++; tally.earned += S.total; if (S.stars === 5) tally.five++; save();
+			tally.rides++; tally.earned += S.total; if (S.stars === 5) tally.five++; save(); note('fare', { stars: S.stars, metres: F.dest.metres });
 			last = S;
 			const up = promoted('fares', tally.rides - 1, tally.rides);
 			hint(`${paid?.ok === false ? 'Fare' : `+${S.total} credits`} (fare ${S.fare}${S.tip ? `, tip ${S.tip}` : ''}) · ${'★'.repeat(S.stars)}${'☆'.repeat(5 - S.stars)}${up ? ` · Driver rank: ${up}` : ''}`, 5000);

@@ -132,3 +132,12 @@ test('walking into someone gets a word even from the quiet ones', () => {
 	}
 	assert.match(remarkFor({ you: { bump: true, speed: 9 } }).text, /watch|careful|fire|slow|easy/i);
 });
+
+test('once your name gets around, some people say so; the quiet majority still nod', () => {
+	const good = many({ self: { outgoing: 0.9, warmth: 0.5 }, you: { standing: { favours: 8 } } }, 300).filter((r) => r?.text && /helps|kind|Thanks for everything|neighbour|Good to see/.test(r.text)).length;
+	assert.ok(good > 10 && good < 120, `${good}`);
+	const bad = many({ self: { outgoing: 0.9 }, you: { standing: { rep: -50 } } }, 300).filter((r) => r?.text && /what you did|Keep walking|family|start anything/.test(r.text)).length;
+	assert.ok(bad > 10);
+	const none = many({ self: { outgoing: 0.9 }, you: { standing: { favours: 0, rep: 0 } } }, 300).filter((r) => r?.text && /helps people|what you did/.test(r.text)).length;
+	assert.equal(none, 0);
+});

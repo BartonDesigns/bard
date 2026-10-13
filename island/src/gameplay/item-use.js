@@ -23,7 +23,8 @@ export function plan(id, { wounded = [], hurt = 0 } = {}) {
 	return { kind: 'none', why: 'Nobody here is hurt, you included.' };
 }
 
-export function createItemUse({ arms, combat, people, persona, camera, hint, chatter, morality, worldKey = () => 'here' }) {
+export function createItemUse({ arms, combat, people, persona, camera, hint, chatter, morality, worldKey = () => 'here', note = () => {} }) {
+	let uses = 0;
 	function usable() {
 		const H = arms.held?.();
 		return H && USES[H.i] ? { inst: H, ...USES[H.i] } : null;
@@ -36,7 +37,7 @@ export function createItemUse({ arms, combat, people, persona, camera, hint, cha
 		const P = plan(U.inst.i, { wounded: C.woundedNear?.(cam.x, cam.z, 3) || [], hurt: C.hurt0?.() || 0 });
 		if (P.kind === 'none') { hint(P.why, 2200); return false; }
 		const item = arms.catalog?.().find?.((x) => x.id === U.inst.i);
-		const r = arms.apply({ id: `use-${U.inst.i}-${Date.now().toString(36)}`, kind: 'use', itemId: U.inst.i, uid: U.inst.u, quantity: 1, activity: item?.activities?.[0] || 'home-defense' });
+		const r = arms.apply({ id: `use-${U.inst.u}-${Date.now().toString(36)}-${++uses}`, kind: 'use', itemId: U.inst.i, uid: U.inst.u, quantity: 1, activity: item?.activities?.[0] || 'home-defense' });
 		if (!r?.ok) { hint(r?.message || 'That could not be used.', 2200); return false; }
 		const amount = healOf(U.inst);
 		if (P.kind === 'tend') {
@@ -45,6 +46,7 @@ export function createItemUse({ arms, combat, people, persona, camera, hint, cha
 			const who = persona(p)?.first || 'them';
 			chatter?.say?.(p, { text: ['Thank you. I thought that was it for me.', 'Oh, that is better. Thank you, really.', 'You stopped for me? Thank you.'][Math.floor(Math.random() * 3)], gesture: 'nod', feel: { joy: 0.6 } }, null);
 			morality()?.record?.({ kind: 'tend', target: who, world: worldKey() });
+			note('tend', {});
 			hint(`You patched up ${who}.`, 2500);
 		} else {
 			const got = C.mend(amount);

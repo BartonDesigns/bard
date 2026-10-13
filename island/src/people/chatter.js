@@ -9,6 +9,8 @@ const NOTICE = 11, SAY = 4.6, EARSHOT = 14;
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _h = new THREE.Vector3();
 
 export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone, frameMs = () => 16, errands = () => null }) {
+	// how the world takes you: the compass's standing and the favours you have done
+	const standing = () => { try { const R = combat()?.morality?.reactions?.(); return { rep: R?.reputation ?? 0, bounty: R?.bounty ?? 0, favours: errands()?.info?.()?.done ?? 0 }; } catch { return {}; } };
 	const said = new WeakMap(), bumped = new WeakMap();
 	let checkT = 0, quietUntil = 0, pending = null, n = 0, last = null, speed = 0;
 	const lastPos = new THREE.Vector3().copy(camera.position);
@@ -125,7 +127,7 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 		// now and then, instead of a word in passing, they ask you for a favour (errands.js)
 		const ask = !bump && errands()?.maybeAsk(p, { afraid: aware.afraid });
 		if (ask) { pending = p; say(p, ask, () => finish(isPhone ? 20 : 10)); return; }
-		const line = remarkFor({ seed: p.P.dna.seed, n: n++, self: selfOf(p), you: { speed, vehicle: driving(), aware, bump }, scene });
+		const line = remarkFor({ seed: p.P.dna.seed, n: n++, self: selfOf(p), you: { speed, vehicle: driving(), aware, bump, standing: standing() }, scene });
 		if (!line) { finish(1); return; }
 		pending = p;
 		say(p, line, () => finish(line.text ? (isPhone ? 18 : 7) + Math.random() * (isPhone ? 12 : 7) : 2.5));

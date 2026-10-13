@@ -1023,6 +1023,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const M = api.combat?.morality, R = M?.reactions?.(), me = M?.me?.() || {}, E = api.errands?.info?.() || {}, F = api.fares?.info?.() || {};
 		const bar = (k) => '▰'.repeat(Math.round(k * 10)) + '▱'.repeat(10 - Math.round(k * 10));
 		const rung = (ladder, count, what) => { const r = rankOf(ladder, count); return `${r.title} · ${count} ${what}${r.next ? `\n${bar(r.k)} ${r.next.at - count} more to ${r.next.title}` : '\nThe top of the ladder.'}`; };
+		const D = api.daily?.list?.();
+		if (D) {
+			say(`TODAY · ${D.goals.filter((g) => g.done).length} of ${D.goals.length} done${D.bonus ? ' · bonus paid' : ''}`, 'note');
+			say(D.goals.map((g) => `${g.done ? '✓' : '○'} ${g.text}${g.need > 1 && !g.done ? ` (${g.got}/${g.need})` : ''} · ${g.credits} credits`).join('\n') + (D.bonus ? '' : '\nAll three: a bonus of 150 credits'), 'guide');
+		}
 		say('WHO THEY SAY YOU ARE', 'note');
 		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Nobody knows your name yet'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
 		if (R?.song) say(R.song, 'note');
