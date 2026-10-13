@@ -566,6 +566,21 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	// traffic downtown and on the arterials, two plain lines in the suburbs), a stop bar across
 	// the lane coming in, and the yellow domes of a curb ramp at either end of the crosswalk.
 	const CROSS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
+	// the direction a street leaves point j heading d (+1 on along its points, -1 back),
+	// measured at distance a along it; null if it ends sooner than a + 9 m
+	function legAt(p, j, d, a) {
+		let got = 0;
+		for (let i = j; i + d * 2 >= 0 && i + d * 2 < p.length; i += d * 2) {
+			const ax = p[i], az = p[i + 1], bx = p[i + d * 2], bz = p[i + d * 2 + 1], l = Math.hypot(bx - ax, bz - az);
+			if (got + l >= a + 9) {
+				// (the crosswalk's own stretch: from where it starts to a little past it)
+				const ox = p[j], oz = p[j + 1], t = Math.min(1, Math.max(0, (a - got) / (l || 1))), cx = ax + (bx - ax) * t, cz = az + (bz - az) * t, L2 = Math.hypot(cx - ox, cz - oz);
+				return L2 > 1 ? [(cx - ox) / L2, (cz - oz) / L2] : [(bx - ax) / l, (bz - az) / l];
+			}
+			got += l;
+		}
+		return null;
+	}
 	let crossings = [];
 	function corners(all, x0, z0, B, Y) {
 		crossings = [];
@@ -592,9 +607,11 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 				// the cross streets' widest reach from the corner: their half-width and sidewalk
 				let reach = 0;
 				for (const o of n.legs) if (o.r !== r) reach = Math.max(reach, o.r.w / 2 + 1.7);
-				const qx = p[j + d * 2], qz = p[j + d * 2 + 1], len = Math.hypot(qx - n.x, qz - n.z);
-				if (len < reach + 9) continue;
-				const ux = (qx - n.x) / len, uz = (qz - n.z) / len, nx = -uz, nz = ux;
+				// the way the leg leaves, taken where its crosswalk will lie (its first points are
+				// often only a few metres apart)
+				const along = legAt(p, j, d, reach + 2.3);
+				if (!along) continue;
+				const [ux, uz] = along, nx = -uz, nz = ux;
 				const big = city || r.cls === 'primary' || r.cls === 'secondary';
 				// (a point a metres out along the leg and b across it, in the map's space)
 				const at = (a, b) => [n.x + ux * a + nx * b - x0, n.z + uz * a + nz * b - z0];
