@@ -987,6 +987,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const b of boxes) rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255);
 	// (anything else that came to stand in the water taken out of it)
 	if (water) for (const L of [boxes, pools, trees]) { const keep = L.filter((b) => !wet(b.x, b.z, (b.w && b.d ? Math.max(b.w, b.d) / 2 : 0) + 2)); L.length = 0; L.push(...keep); }
+	// (and no tree with its trunk in a street, whatever planted it)
+	{ const keep = trees.filter((t) => roadClear(t.x, t.z, 0.6)); trees.length = 0; trees.push(...keep); }
 	// the shop and office fronts get the brief's sign texts, in turn (b.sign; for whatever paints them)
 	const signs = Array.isArray(brief?.signs) ? brief.signs.filter((s) => typeof s === 'string' && s) : [];
 	if (signs.length) { let k = 0; for (const b of boxes) if (b.kind === K.retail || b.kind === K.office) b.sign = signs[k++ % signs.length]; }

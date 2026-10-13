@@ -89,39 +89,119 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 	BERM_U.uTread.value = ttex;
 	let tx = 1e9, tz = 1e9;
 
-	// a road's profile: heights every STEP metres along it
+	// The network graded together. Junctions: road ends within JTOL of each other (drive.js options() joins at 2.5 m), and a
+	// road end that lands on another road's carriageway (a T). Each gets one pad: a plane
+	// fitted to the stable ground over the junction, its grade held to PADG, PADR metres beyond
+	// the widest road meeting there. Every road meeting there is pinned to the pad's plane.
+	const JTOL = 3, PADG = 0.05, PADX = 2, AV = 15, AMAX = 1.5, KMAX = AMAX / (AV * AV);
+	let pads = [], padsKey = null;
+	const lenOf = (p) => { const acc = [0]; for (let i = 2; i < p.length; i += 2) acc.push(acc[acc.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1])); return acc; };
+	function padAt(x, z) { for (const q of pads) if (Math.hypot(x - q.x, z - q.z) < JTOL + 0.5) return q; return null; }
+	function findPads(roads) {
+		const ends = [];
+		for (const r of roads) { const p = r.pts, n = p.length; ends.push({ r, x: p[0], z: p[1] }, { r, x: p[n - 2], z: p[n - 1] }); }
+		const out = [];
+		for (const e of ends) {
+			let q = out.find((o) => Math.hypot(o.x - e.x, o.z - e.z) < JTOL);
+			if (!q) out.push(q = { x: e.x, z: e.z, roads: new Set(), hw: 0, n: 0, sx: 0, sz: 0 });
+			q.roads.add(e.r); q.hw = Math.max(q.hw, e.r.w / 2); q.n++; q.sx += e.x; q.sz += e.z;
+		}
+		// a road end on another road's side (a T without a shared node)
+		for (const q of out) for (const r of roads) {
+			if (q.roads.has(r)) continue;
+			const p = r.pts;
+			for (let i = 0; i + 3 < p.length; i += 2) {
+				const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((q.x - ax) * dx + (q.z - az) * dz) / l2));
+				if (Math.hypot(ax + dx * t - q.x, az + dz * t - q.z) < r.w / 2 + 0.5) { q.roads.add(r); q.hw = Math.max(q.hw, r.w / 2); break; }
+			}
+		}
+		const P = out.filter((q) => q.roads.size >= 2);
+		for (const q of P) {
+			q.x = q.sx / q.n; q.z = q.sz / q.n; q.r = q.hw + PADX;
+			// the ground's plane over the pad (least squares on a ring of samples), its grade held to PADG
+			let h0 = 0, gx = 0, gz = 0, m = 0;
+			for (let k = 0; k < 16; k++) for (const f of [0.35, 0.7, 1]) { const a = k / 16 * Math.PI * 2, ox = Math.cos(a) * q.r * f, oz = Math.sin(a) * q.r * f, h = profileAt(q.x + ox, q.z + oz); h0 += h; gx += h * ox; gz += h * oz; m++; }
+			h0 = (h0 + profileAt(q.x, q.z) * 4) / (m + 4);
+			let sxx = 0; for (let k = 0; k < 16; k++) for (const f of [0.35, 0.7, 1]) { const a = k / 16 * Math.PI * 2; sxx += (Math.cos(a) * q.r * f) ** 2; }
+			gx /= sxx; gz /= sxx;
+			const g = Math.hypot(gx, gz); if (g > PADG) { gx *= PADG / g; gz *= PADG / g; }
+			q.h = h0; q.gx = gx; q.gz = gz;
+		}
+		return P;
+	}
+	const padH = (q, x, z) => q.h + q.gx * (x - q.x) + q.gz * (z - q.z);
+	// a road's profile: heights every STEP metres along it; the ground smoothed with its ends
+	// extended straight on (odd reflection: a plane comes back as itself), pinned to the pads at
+	// either end, eased from the pad's grade into the road's own over a vertical curve, and its
+	// curvature held under AMAX at AV (a = v^2 h'')
 	function profile(r) {
 		if (!ready()) return null;
 		if (profiles.has(r)) return profiles.get(r);
-		const p = r.pts, acc = [0];
-		for (let i = 2; i < p.length; i += 2) acc.push(acc[acc.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]));
-		const L = acc[acc.length - 1], n = Math.max(2, Math.ceil(L / STEP) + 1), h = new Float32Array(n);
+		const p = r.pts, acc = lenOf(p);
+		const L = acc[acc.length - 1], n = Math.max(2, Math.ceil(L / STEP) + 1), h = new Float32Array(n), xs = new Float32Array(n), zs = new Float32Array(n);
 		let seg = 0;
 		for (let k = 0; k < n; k++) {
 			const s = Math.min(L, k * STEP);
 			while (seg < acc.length - 2 && acc[seg + 1] < s) seg++;
 			const t = acc[seg + 1] > acc[seg] ? (s - acc[seg]) / (acc[seg + 1] - acc[seg]) : 0;
-			h[k] = profileAt(p[seg * 2] + (p[seg * 2 + 2] - p[seg * 2]) * t, p[seg * 2 + 1] + (p[seg * 2 + 3] - p[seg * 2 + 1]) * t);
+			xs[k] = p[seg * 2] + (p[seg * 2 + 2] - p[seg * 2]) * t; zs[k] = p[seg * 2 + 1] + (p[seg * 2 + 3] - p[seg * 2 + 1]) * t;
+			h[k] = profileAt(xs[k], zs[k]);
 		}
+		const X = 12, ext = new Float32Array(n + 2 * X);
 		for (let pass = 0; pass < 3; pass++) {
-			const c = h.slice();
-			for (let i = 0; i < n; i++) { let a = 0, m = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += c[j]; m++; } h[i] = a / m; }
+			for (let i = 0; i < n; i++) ext[i + X] = h[i];
+			for (let i = 1; i <= X; i++) { ext[X - i] = 2 * h[0] - h[Math.min(n - 1, i)]; ext[X + n - 1 + i] = 2 * h[n - 1] - h[Math.max(0, n - 1 - i)]; }
+			for (let i = 0; i < n; i++) { let a = 0; for (let j = -4; j <= 4; j++) a += ext[i + X + j]; h[i] = a / 9; }
 		}
-		for (let i = 1; i < n; i++) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
-		for (let i = n - 2; i >= 0; i--) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
+		// pins: the pads at the ends (and any pad this road runs through: a T on its side)
+		const fixed = new Uint8Array(n), want = new Float32Array(n), wt = new Float32Array(n);
+		for (const q of pads) {
+			if (!q.roads.has(r)) continue;
+			// the stretch of this road within the pad, and the ease beyond it
+			for (let k = 0; k < n; k++) {
+				const d = Math.hypot(xs[k] - q.x, zs[k] - q.z);
+				if (d <= q.r) { fixed[k] = 1; want[k] = padH(q, xs[k], zs[k]); wt[k] = 1; continue; }
+				// the grade break at the pad's edge needs a vertical curve this long
+				const g0 = (h[Math.min(n - 1, k + 1)] - h[Math.max(0, k - 1)]) / (2 * STEP), Lvc = Math.max(10, Math.min(40, Math.abs(g0) / KMAX));
+				const u = (d - q.r) / Lvc;
+				if (u < 1) { const w = 1 - u * u * (3 - 2 * u); if (w > wt[k]) { wt[k] = w; want[k] = padH(q, xs[k], zs[k]); } }
+			}
+		}
+		for (let k = 0; k < n; k++) if (wt[k] > 0) h[k] = h[k] * (1 - wt[k]) + want[k] * wt[k];
+		// vertical curves: hold |h''| under KMAX, pads fixed; then the grade limit
+		const lim = KMAX * STEP * STEP;
+		for (let it = 0; it < 600; it++) {
+			let worst = 0;
+			for (let i = 1; i < n - 1; i++) {
+				if (fixed[i]) continue;
+				const d2 = h[i - 1] - 2 * h[i] + h[i + 1], ex = Math.abs(d2) - lim;
+				if (ex <= 0) continue;
+				worst = Math.max(worst, ex);
+				h[i] += Math.sign(d2) * ex * 0.5;           // (toward its neighbours' mean, just enough)
+			}
+			if (worst < 1e-3) break;
+		}
+		for (let i = 1; i < n; i++) if (!fixed[i]) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
+		for (let i = n - 2; i >= 0; i--) if (!fixed[i]) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
 		const result = { h, acc };
 		profiles.set(r, result);
 		return result;
 	}
 	const hAt = (P, s) => { const f = Math.max(0, Math.min(P.h.length - 1, s / STEP)), i = Math.min(P.h.length - 2, Math.floor(f)), t = f - i; return P.h[i] * (1 - t) + P.h[i + 1] * t; };
+	const num = new Float32Array(N * N), den = new Float32Array(N * N), mark = new Int32Array(N * N).fill(-1), bestD = new Float32Array(N * N), bestH = new Float32Array(N * N);
 
 	function rebuild(x, z) {
 		cx = x; cz = z;
 		const x0 = Math.floor((x - SIZE / 2) / CELL) * CELL, z0 = Math.floor((z - SIZE / 2) / CELL) * CELL;
-		delta.fill(0); weight.fill(0);
-		for (const r of real.near('roads', x, z, SIZE * 0.75)) {
-			if (!r.drive || SKIP.has(r.cls) || r.bridge || r.pts.length < 4) continue;
-			const P = profile(r), p = r.pts, hw = r.w / 2, reach = hw + BERM;
+		delta.fill(0); weight.fill(0); num.fill(0); den.fill(0);
+		const roads = real.near('roads', x, z, SIZE * 0.75).filter((r) => r.drive && !SKIP.has(r.cls) && !r.bridge && r.pts.length >= 4);
+		pads = findPads(roads); profiles = new WeakMap();
+		// every road's grade blended where they overlap (weights to the 4th: the nearer road leads),
+		// so two roads meeting never leave a step between them
+		let ri = 0;
+		for (const r of roads) {
+			const P = profile(r), p = r.pts, hw = r.w / 2, reach = hw + BERM, touched = [];
+			ri++;
 			for (let i = 0; i + 3 < p.length; i += 2) {
 				const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l2 = dx * dx + dz * dz;
 				if (l2 < 1e-4) continue;
@@ -133,15 +213,34 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 					const t = Math.max(0, Math.min(1, ((qx - ax) * dx + (qz - az) * dz) / l2));
 					const d = Math.hypot(qx - ax - dx * t, qz - az - dz * t);
 					if (d > reach) continue;
-					// level across the road, eased into the ground over the berm
-					const u = Math.max(0, (d - hw) / BERM), w = 1 - u * u * (3 - 2 * u);
 					const k = j * N + ii;
-					if (w <= weight[k]) continue;
-					weight[k] = w;
-					delta[k] = hAt(P, s0 + t * sl) - groundAt(qx, qz);
+					// (each road counts once per cell: its nearest piece)
+					if (mark[k] !== ri) { mark[k] = ri; bestD[k] = 1e9; touched.push(k); }
+					if (d < bestD[k]) { bestD[k] = d; bestH[k] = hAt(P, s0 + t * sl); }
 				}
 			}
+			for (const k of touched) {
+				const d = bestD[k], u = Math.max(0, (d - hw) / BERM), w = 1 - u * u * (3 - 2 * u);
+				if (w > weight[k]) weight[k] = w;
+				const w4 = (w * w * w * w + 1e-6) / (Math.max(0, d - hw * 0.5) + 0.5);
+				num[k] += w4 * bestH[k]; den[k] += w4;
+			}
 		}
+		// the pads: level (to PADG) discs, on top of the roads, eased out over the berm
+		for (const q of pads) {
+			const reach = q.r + BERM;
+			const i0 = Math.max(0, Math.floor((q.x - reach - x0) / CELL)), i1 = Math.min(N - 1, Math.ceil((q.x + reach - x0) / CELL));
+			const j0 = Math.max(0, Math.floor((q.z - reach - z0) / CELL)), j1 = Math.min(N - 1, Math.ceil((q.z + reach - z0) / CELL));
+			for (let j = j0; j <= j1; j++) for (let ii = i0; ii <= i1; ii++) {
+				const qx = x0 + (ii + 0.5) * CELL, qz = z0 + (j + 0.5) * CELL, d = Math.hypot(qx - q.x, qz - q.z);
+				if (d > reach) continue;
+				const u = Math.max(0, (d - q.r) / BERM), w = 1 - u * u * (3 - 2 * u), k = j * N + ii;
+				if (w > weight[k]) weight[k] = w;
+				const w4 = 50 * w * w * w * w;
+				num[k] += w4 * padH(q, qx, qz); den[k] += w4;
+			}
+		}
+		for (let k = 0; k < N * N; k++) if (den[k] > 0) { const ii = k % N, j = (k - ii) / N; delta[k] = num[k] / den[k] - groundAt(x0 + (ii + 0.5) * CELL, z0 + (j + 0.5) * CELL); }
 		under.fill(0);
 		underBuildings(real.near('boxes', x, z, SIZE * 0.75), x0 + CELL / 2, z0 + CELL / 2, CELL, N, under);
 		for (let k = 0; k < N * N; k++) weight[k] *= 1 - under[k];
@@ -225,7 +324,7 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		if (camera.position.y - groundAt(x, z) > 120) { BERM_U.uTreadR.value.w = 0; tx = 1e9; }
 		else if (changed || Math.hypot(x - tx, z - tz) > 24) rebuildTread(x, z);
 	}
-	// a road's graded height at its nearest point to (x, z), anywhere it runs (null until ready)
+	// a road's graded height at its nearest point to (x, z) (null until ready, or not graded)
 	function along(r, x, z) {
 		if (!r.drive || SKIP.has(r.cls) || r.bridge || r.pts.length < 4) return null;
 		const P = profile(r);
@@ -239,5 +338,5 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 		}
 		return hAt(P, bs);
 	}
-	return { update, apply, profile, along };
+	return { update, apply, profile, along, pads: () => pads };
 }

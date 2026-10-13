@@ -30,6 +30,7 @@ import { roofGeometry, roofDetail, ROOF } from './roofs.js';
 import { houseEra, exteriorLook, cityEra, seedAt } from './decor.js';
 import { createProps } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
+import { makeClearance } from './clearance.js';
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -779,7 +780,8 @@ export function createCity(shared, scene, bay, real = null) {
 		const every = big ? 9 : 12, sides = big ? [[w, d, 1], [w, d, -1], [d, w, 2], [d, w, -2]] : kind === KIND.office ? [[w, d, 1], [w, d, -1]] : [[w, d, 1]];
 		for (const [len, dep, sd] of sides) for (let t = -len / 2 + 3; t <= len / 2 - 3; t += every) {
 			if (Math.abs(sd) === 1 && sd > 0 && Math.abs(t) < Math.min(w / 2 - 1.5, 4 + w * 0.15) + 3) continue;     // the entrance kept clear
-			const off = dep / 2 + pad - 1.2, [tx, tz] = Math.abs(sd) === 1 ? P(t, Math.sign(sd) * off) : P(Math.sign(sd) * off, t);
+			// (out where its crown clears the wall; one that lands on the street is taken out later)
+			const off = dep / 2 + Math.max(pad + 0.6, 4), [tx, tz] = Math.abs(sd) === 1 ? P(t, Math.sign(sd) * off) : P(Math.sign(sd) * off, t);
 			const r = hash(tx * 0.7, tz * 1.3);
 			trees.push({ x: tx, y: g - 0.3, z: tz, h: 7 + r * 4, cone: false, col: jit(pick(PAL.crown, r), r) });
 		}
@@ -2147,6 +2149,9 @@ export function createCity(shared, scene, bay, real = null) {
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
 		// from points and lots; the land map knows where the pavement and the roofs are)
 		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
+		// ...nor on a carriageway, a sidewalk, a trail or a drive, nor in a junction's sight
+		// triangle, within reach (bay/clearance.js): the land map is too coarse for a trunk
+		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); list.trees = list.trees.filter((t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5)); }
 		// ...nor on a ball field (sportsfields.js)
 		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !onLandmark(t.x, t.z, 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
 		// ...nor inside a building (every one can be walked into now): a coarse grid of them
