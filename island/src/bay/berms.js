@@ -312,7 +312,9 @@ export function createBerms(real, groundAt, profileAt = groundAt, { ready = () =
 			cx = cz = tx = tz = 1e9; roadVersion = '';
 			return;
 		}
-		if (!real?.loaded()) return;
+		// (the globe's highways come from a source of their own: graded too, before any of the
+		// Bay's mapped regions has loaded)
+		if (!real?.loaded() && !real?.near?.('roads', camera.position.x, camera.position.z, 300).some((r) => r.drive)) return;
 		const x = camera.position.x, z = camera.position.z;
 		const rv = real.version() + ':' + (real.sourceVersion?.() || '');
 		const changed = rv !== roadVersion; roadVersion = rv;

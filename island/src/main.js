@@ -51,6 +51,9 @@ import { createFamilyLife } from './people/family-life.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
+import { createBridgeSound } from './bay/bridgesound.js';
+import { createCrosswalks } from './bay/crosswalks.js';
+import { createDogWalkers } from './people/dogwalkers.js';
 import { createLake } from './bay/lake.js';
 import { createEarthWater } from './bay/earthwater.js';
 import { createWater } from './bay/water.js';
@@ -576,6 +579,8 @@ export function createIslandWorld() {
 	HOOKS.arcade = arcade;
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint, strike: (car) => HOOKS.impacts?.strike(car) || 0 });
+	// the overpasses' joints underfoot and overhead (bay/bridgesound.js)
+	const bridgeSound = createBridgeSound({ world: () => world, carAt: () => drive.carAt() });
 	HOOKS.drive = drive;
 	// anyone struck down or thrown: limp, weighed bodies (people/ragdoll.js)
 	const ragdolls = createRagdolls({ world: () => world, isPhone });
@@ -609,6 +614,8 @@ export function createIslandWorld() {
 	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
+	// some of them out with their dogs on a lead (people/dogwalkers.js)
+	const dogWalkers = createDogWalkers({ scene, people, world: () => world, isPhone });
 	guideApi.people = people;
 	// households, their days and their food, and the moments of it you see (people/family-life.js)
 	const families = HOOKS.families = createFamilyLife({ scene, world: () => world, camera, people, isPhone, mount: dom.mount, hint,
@@ -762,6 +769,8 @@ export function createIslandWorld() {
 	// today's three goals, paid as they are done (gameplay/daily.js)
 	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
 	const note = (kind, data) => daily.note(kind, data);
+	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
+	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
 	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note });
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
@@ -1704,6 +1713,8 @@ export function createIslandWorld() {
 		ragdolls.update(dt);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
+		bridgeSound.update(dt);
+		crosswalks.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
 		W.spray?.update(dt, camera);
@@ -1748,6 +1759,7 @@ export function createIslandWorld() {
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		dogWalkers.update(dt, camera);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 		errands.update(dt);
 		fares.update(dt);
