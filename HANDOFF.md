@@ -1,3 +1,7 @@
+## October 14, 2026: buildings as things
+
+No building through another, a street or a landmark (the surveyed regions as they load, the grid each rebuild, the grown towns as they grow); service alleys behind rows of shops and downtown blocks with dumpsters and back doors (painted into the road map in the regions); curtain walls and shop fronts that crack, shatter, and can be run or driven through; vaulting through windows and over low walls; every building breakable (holes, partial and full collapse, Rapier debris, dust, persistent shells and rubble); crews that rebuild in stages over two to five game hours, held off while `structures.cataclysm(true)`. `Crysis.structures()`, `Crysis.demolish(x, z)`. All in `island/src/structures/`. See `docs/structures-2026-10-14.md`.
+
 ## October 13, 2026 (late): streets that read as real
 
 Crosswalks, stop bars and curb-ramp domes at town junctions; walk signals that tick and a daily goal for crossing properly; people crossing together on the walk; overpass joints you hear; buses at their stops; dogs on leads; globe highways graded; mapped buildings set back off the street and sidewalk. See `docs/streets-alive-2026-10-13.md`.
