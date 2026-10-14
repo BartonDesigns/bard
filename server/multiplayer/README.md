@@ -1,3 +1,7 @@
+## Persistent reputation update
+
+`SOULS` stores personal reputation separately from expiring rooms. Deploy this Worker after the persistent-reputation change is merged; retain both migrations in `wrangler.toml`. `/status.features` must include `persistent-reputation-v1`. The discovery Worker is separate and needs no deployment for this feature. See [the design, recovery instructions, cave ritual and verification limits](../../docs/persistent-reputation.md).
+
 # The rooms server (multiplayer, Cloudflare free plan)
 
 ## Shared reputation update

@@ -3,7 +3,7 @@
 // The guide decides what is marked; this only draws it.
 import * as THREE from 'three';
 
-export function createWaypoint({ scene, camera, mount, onTap = () => {} }) {
+export function createWaypoint({ scene, camera, mount, onTap = () => {}, top = 86 }) {
 	// ---------- the pin: a soft beam of light with a turning diamond on top ----------
 	const pin = new THREE.Group(); pin.name = 'waypoint'; pin.visible = false;
 	const beamMat = new THREE.MeshBasicMaterial({ color: 0x01a982, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
@@ -19,6 +19,7 @@ export function createWaypoint({ scene, camera, mount, onTap = () => {} }) {
 	const chip = document.createElement('button');
 	chip.type = 'button';
 	chip.style.cssText = 'position:absolute;left:50%;top:calc(86px + env(safe-area-inset-top));transform:translateX(-50%);display:none;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));min-height:44px;padding:6px 14px 6px 8px;border-radius:22px;border:1px solid rgba(1,169,130,.55);background:rgba(10,14,18,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f2f5f4;font:600 13px/1.25 system-ui;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.4);text-align:left;';
+	chip.style.top = `calc(${top}px + env(safe-area-inset-top))`;
 	const arrow = document.createElement('span');
 	arrow.style.cssText = 'flex-shrink:0;width:30px;height:30px;border-radius:50%;background:rgba(1,169,130,.22);display:flex;align-items:center;justify-content:center;transition:transform .15s linear;';
 	arrow.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="#5ff0c6" aria-hidden="true"><path d="M12 2 20 21l-8-4.5L4 21z"/></svg>';

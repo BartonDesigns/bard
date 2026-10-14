@@ -71,6 +71,8 @@ Statuses: requested → specified → implementing → verified → shipped. Use
 - **Acceptance:** two independent clients contribute to and observe the same world project; atomic/idempotent completion; reconnect/offline catch-up; stable world/project/resident IDs; versioned events with conflict rules; server-owned progression timestamps; cached clients cannot overwrite newer progress; personal chat is never included in public world events.
 - **Dependencies:** authenticated or otherwise abuse-resistant contribution API, canonical world-state storage, supported world-effect adapters, backend deployment access and save migration. `docs/world-progress-sync.md` defines the versioned public-event boundary, offline outbox and privacy rules. A localStorage flag, daily intake or static website deployment is not multiplayer synchronization.
 
+- **Owner amendment, 13 October 2026 Pacific:** personal reputation must never expire; cleansing a soul in the tunnel beneath Gargantua’s island is the only normal reset. The feature branch documented in [persistent-reputation.md](persistent-reputation.md) implements a durable personal ledger, recovery, shared attribution and a cave ritual. This is distinct from universally shared world-project authority. Local verification does not establish production Worker deployment or physical-phone acceptance. Earlier intake history and PR #17 remain separate and preserved.
+
 ## BR-007 — Separate NPC dialogues and searchable full archive
 
 - **Priority/status:** P0 / shipped frontend on 4 October 2026.

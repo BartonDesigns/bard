@@ -1,3 +1,7 @@
+## October 13, 2026: persistent reputation and the Quiet Well (feature branch)
+
+See `docs/persistent-reputation.md`. Personal standing now has a separate durable soul identity, an offline outbox, authenticated shared-room summaries, recovery keys and a non-expiring deed ledger. The only normal reset is the deliberate eight-second Quiet Well ritual in the seamless tunnel beneath Gargantua’s island. Cleansing preserves items, quests, conversations, regional society and world changes. The `SOULS` Durable Object migration must be deployed with the rooms Worker before cloud reputation or cleansing is live. Discovery is unchanged. Built on the merged street and NPC-disposition work; other contributors’ branches remain untouched. Verification and release limits are in the dedicated document.
+
 ## October 13, 2026 (late): streets that read as real
 
 Crosswalks, stop bars and curb-ramp domes at town junctions; walk signals that tick and a daily goal for crossing properly; people crossing together on the walk; overpass joints you hear; buses at their stops; dogs on leads; globe highways graded; mapped buildings set back off the street and sidewalk. See `docs/streets-alive-2026-10-13.md`.

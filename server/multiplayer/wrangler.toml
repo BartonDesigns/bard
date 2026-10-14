@@ -17,3 +17,12 @@ new_sqlite_classes = ["Room"]
 [vars]
 ALLOWED_ORIGINS = "https://level99bard.com,https://www.level99bard.com"
 ALLOW_LOCALHOST = "true"
+
+# Personal reputation is deliberately separate from expiring multiplayer rooms.
+[[durable_objects.bindings]]
+name = "SOULS"
+class_name = "Soul"
+
+[[migrations]]
+tag = "v2-souls"
+new_sqlite_classes = ["Soul"]

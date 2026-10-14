@@ -1,3 +1,5 @@
+import { createSoul } from './reputation/soul.js';
+import { createSoulWell } from './planet/soul-well.js';
 // Island engine, stage 1. Loaded by the Bard faceplate on demand; runs as a
 // third world beside the caves and space flight, sharing the faceplate's
 // music, keyboard, play surfaces and Journey transfers.
@@ -767,6 +769,8 @@ export function createIslandWorld() {
 	guideApi.combat=combat;
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
+	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
+	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
 	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
 	// today's three goals, paid as they are done (gameplay/daily.js)
@@ -1034,6 +1038,7 @@ export function createIslandWorld() {
 			island.underClear = world.underworld.clearBody;
 		}
 		// the mushrooms this world grows, and what they do to you
+		world.soulWell = createSoulWell({ world, profile, scene, camera, mount: dom.mount, shared, soul, hint: (t, ms) => hint(t, ms, 1), blocked: () => drive.active() || !visible || window.L99Loading.active() || !!world.beyond?.active?.() });
 		world.shrooms = createMushrooms(island, shared, scene, camera, profile, { isPhone, hint: (t, ms) => hint(t, ms, 1), mount: dom.mount, canvas: dom.canvas, player: () => world?.player.state, spots: () => world?.underworld?.spots || [], renderer, vegetation });
 		// a volcanic world's mountain: lava tubes, spouts, the crater's lake, and its eruptions
 		if (!earth && (profile.relief === 'volcano' || island.peak?.volcanic)) {
@@ -1264,6 +1269,7 @@ export function createIslandWorld() {
 		world.shells?.dispose();
 		world.shrooms?.dispose();
 		world.deep?.dispose();
+		world.soulWell?.dispose();
 		world.underworld?.dispose();
 		world.volcano?.dispose();
 		world.alien?.dispose();
@@ -1603,7 +1609,9 @@ export function createIslandWorld() {
 		W.dwellings?.update(dt, camera.position);
 		W.medieval?.update(dt, time, sk);
 		W.caverns.update(dt, time, under);
+		soul.update();
 		W.underworld?.update(dt, time);
+		W.soulWell?.update(dt, time);
 		W.deep?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
 		const bay = W.island.village.bay;
@@ -2174,6 +2182,7 @@ if (typeof window !== 'undefined') {
 		deepGo: (where = 'gate') => window.L99Island?.world?.()?.deep?.go(where) || 'no Deep Gate on this world',
 		// what the strike prompt is offering now (planet/resonance.js)
 		striking: () => { const t = HOOKS.striker?.current(); return t ? { label: t.label, at: t.pos.toArray().map((v) => Math.round(v * 10) / 10) } : null; },
+		reputation: () => ({ ...HOOKS.soul?.info(), ...HOOKS.morality?.info(), well: window.L99Island?.world()?.soulWell?.info() || null }),
 		caves: () => window.L99Island?.world?.()?.underworld?.entrances || [],
 		cave: (i = 0) => window.L99Island?.world?.()?.underworld?.go(i),
 		// the alien works (planet/alien.js): Crysis.alien() lists the sites, Crysis.alienGo(i) takes you to look at one

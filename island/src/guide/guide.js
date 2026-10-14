@@ -237,6 +237,7 @@ export function createGuide(mount, api) {
 		if (!resident) return;
 		api.multiplayer?.reportQuest?.(q,resident);
 		if (resident.storyCompletions?.includes(q.id)) return;
+		api.combat?.morality?.record({ id: 'quest:' + q.id, kind: 'favour', target: resident.persona.name, world: api.multiplayer?.worldKey?.() || q.bodyKey });
 		resident.storyCompletions=[...(resident.storyCompletions || []),q.id].slice(-64);
 		api.social.state.remember(resident.id,'event',`You and the traveller completed "${q.title}" together. ${q.premise}`);
 	}
@@ -1040,6 +1041,20 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		say('WHO THEY SAY YOU ARE', 'note');
 		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Nobody knows your name yet'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
 		if (R?.song) say(R.song, 'note');
+		const soul = api.soul, saved = soul?.info();
+		if (saved) {
+			say(saved.status === 'saved' && !saved.pending ? 'Reputation saved across visits and rooms.' : saved.savedLocally ? 'Reputation saved on this device. Cloud save pending.' : 'Reputation is not safely saved yet. Save your recovery key.', 'note');
+			if (saved.error) say(saved.error, 'note');
+			say('Your standing does not fade with time. To release it, fly to Gargantua’s island and walk into the soul tunnel to the Quiet Well.', 'note');
+			const copy = el('button', btnCss, 'Save soul recovery key');
+			copy.onclick = async () => { try { await navigator.clipboard.writeText(soul.recoveryKey()); say('Recovery key copied. Keep it private and safe. It restores this soul on another device.', 'note'); } catch { say('Clipboard unavailable. Use a browser with clipboard access to save your recovery key.', 'note'); } };
+			const restore = el('button', btnCss, 'Restore a saved soul');
+			restore.onclick = () => {
+				const input = el('input', 'padding:10px;color:#fff;background:#10252d;border:1px solid #777;border-radius:8px;'); input.type = 'password'; input.autocomplete = 'off'; input.placeholder = 'Private recovery key'; input.setAttribute('aria-label','Private soul recovery key');
+				const use = el('button', btnCss, 'Restore'); use.onclick = async () => { use.disabled = true; try { await soul.recover(input.value); input.value = ''; api.multiplayer?.linkSoul?.(soul); showStory(); } catch(e) { say(e.message, 'note'); use.disabled = false; } }; log.append(input, use);
+			};
+			log.append(copy, restore);
+		}
 		say('FAVOURS', 'note');
 		say(rung('favours', E.done || 0, 'done') + (E.kept ? `\nWallets kept: ${E.kept}` : ''), 'guide');
 		if (E.errand) {

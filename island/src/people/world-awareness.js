@@ -7,13 +7,17 @@ export function rememberIncident(actor, event) {
  if(prior.some(e=>e.id===event.id)) return;
  actor.awarenessEvents=[...prior,event].slice(-8);
 }
-export function awarenessContext({events=[],reports=[],sharedCompleted=0,sharedIssuer=false,bodyKey,now=Date.now(),aimedAt=false,wanted=0,injured=false,running=false,work=null,completed=[],known=false,visit=0,seed=0}={}) {
- const recent=(Array.isArray(events)?events:[]).filter(e=>e && e.bodyKey===bodyKey && now>=e.at && now-e.at<600000);
+export function awarenessContext({standing=null,cleansedAt=0,cleanseTimes={},nearbyStanding=[],events=[],reports=[],sharedCompleted=0,sharedIssuer=false,bodyKey,now=Date.now(),aimedAt=false,wanted=0,injured=false,running=false,work=null,completed=[],known=false,visit=0,seed=0}={}) {
+ const recent=(Array.isArray(events)?events:[]).filter(e=>e && e.bodyKey===bodyKey && now>=e.at && now-e.at<600000 && e.at>(e.actorId==='player'?cleansedAt:(cleanseTimes[e.actorId]||0)));
  const local=recent.filter(e=>e.actorId==='player'), harmful=local.filter(e=>HARM.has(e.kind)).at(-1);
  const danger=recent.filter(e=>now-e.at<90000).at(-1);
+ reports=reports.filter(e=>e.actorId!=='player' || e.at>cleansedAt);
  const reported=reports.filter(e=>e.actorId==='player' && HARM.has(e.kind)).at(-1), reportedDanger=reports.filter(e=>e.age<90000).at(-1);
  const afraid=aimedAt || wanted>=2 || !!harmful || !!danger || !!reported || !!reportedDanger;
  const facts=[];
+ if(standing?.reputation < -20) facts.push('This traveller has a lasting harmful reputation. Be wary without pretending to have witnessed the deeds. Time away does not erase their standing.');
+ else if(standing?.reputation > 20) facts.push('This traveller has a lasting reputation for helping people. Acknowledge it without inventing a personal encounter.');
+ for(const other of nearbyStanding.slice(0,2)) if(other.deeds>0 && Math.abs(other.reputation)>20) facts.push(`${other.name}, another player nearby, is known for ${other.reputation<0?'harmful':'helpful'} deeds. This is their standing, NOT the local traveller’s.`);
  if(harmful) facts.push(`Witnessed the player: ${harmful.line}. Still frightened; does not treat this as a friendly first meeting.`);
  else if(danger) facts.push(`Witnessed ${danger.actorId==='player'?'the player':danger.actorName || 'another player'}: ${danger.line}. Frightened by this nearby danger; do not blame the local player for someone else's act.`);
  if(reported && !harmful) facts.push(`Local reports identify the player: ${reported.line}. Afraid of the reported behavior; has NOT personally witnessed it. Never claim 'I saw you'.`);
@@ -26,7 +30,7 @@ export function awarenessContext({events=[],reports=[],sharedCompleted=0,sharedI
  if(work) facts.push(`Here: ${work.program || work.place || 'workplace'}, floor ${work.floor ?? 'ground'}. Role: ${work.role}. Activity: ${work.activity || work.role}.`);
  if(completed.length) facts.push(`This person remembers helping complete: ${completed.slice(-2).join('; ')}.`);
  if(known) facts.push('Has spoken with this traveller before; skip introductions and vary the opening.');
- return {recent,harmful,danger,reported,reportedDanger,sharedCompleted,sharedIssuer,afraid,aimedAt,wanted,injured,running,work,completed,known,visit,seed,facts:facts.slice(0,6)};
+ return {standing,cleansedAt,recent,harmful,danger,reported,reportedDanger,sharedCompleted,sharedIssuer,afraid,aimedAt,wanted,injured,running,work,completed,known,visit,seed,facts:facts.slice(0,6)};
 }
 export function contextualOpening(c={}) {
  const pick=xs=>xs[(Math.abs(c.seed|0)+(c.visit||0))%xs.length];
@@ -39,6 +43,8 @@ export function contextualOpening(c={}) {
  if(c.wanted>=2) return pick(['You’re the person the patrol is looking for. Please keep your distance.','I don’t want trouble. You should deal with the patrol first.']);
  if(c.danger) return pick(["Did you see that? I’m scared. We need to get somewhere safe.","Keep your voice down. Someone was attacking people nearby.","What is happening out there? Please, watch the exits."]);
  if(c.reportedDanger) return pick(["Have you heard what happened nearby? People are frightened.","I’ve heard reports of trouble. Let’s stay somewhere safe."]);
+ if(c.standing?.reputation < -20) return pick(['Your reputation has reached us. I’ll hear you out, but trust will take more than time.', 'People remember your deeds. What brings you here?']);
+ if(c.standing?.reputation > 20) return pick(['Word of your help has travelled. Good to have you here.', 'People speak well of what you’ve done. How can I help?']);
  if(c.completed?.length) return pick([`You came back. Thanks for finishing ${c.completed.at(-1)}.`,`That work you helped with made a difference. What’s next?`,`Good to see you again. We got ${c.completed.at(-1)} done.`]);
  if(c.sharedCompleted) return c.sharedIssuer ? pick(['Good to see you. Thanks for helping with the work here.','We got that job done together. What brings you back?']) : pick(['I heard you have been helping people around here. Thank you.','Word is you have been getting things done for people here. Need something?']);
  if(c.injured) return 'You look hurt. Are you able to get somewhere safe?';
