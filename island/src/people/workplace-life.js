@@ -3,8 +3,12 @@ import * as THREE from 'three';
 import {attachBag} from './bags.js';
 const hash=s=>{let h=0;for(const c of String(s))h=Math.imul(h,31)+c.charCodeAt(0)|0;return h>>>0;};
 // Shared scene clock synchronizes the two sides of a negotiation or project review.
+// other workplaces' roles (services/roles.js: doctors, nurses, officers, firefighters):
+// role -> (meta, phase 0..64, cycle, partnered) -> { activity, pose, talk, gesture, line }
+export const WORK_ROLES={};
 export function workplaceActivity(meta,t,hasPartner=true) {
  const h=hash(meta.group || meta.program), clock=t+(meta.sceneClock?0:h%31), cycle=meta.sceneNumber??Math.floor(clock/64), phase=clock%64, side=meta.side||0;
+ if(WORK_ROLES[meta.role])return WORK_ROLES[meta.role](meta,phase,cycle,hasPartner);
  if(meta.role==='vendor'||meta.role==='shopper') {
   if(!hasPartner) return {activity:meta.role==='vendor'?'checking stock':'browsing',pose:meta.role==='vendor'?'read':'rest',talk:false};
   if(phase<13) return {activity:'browsing',pose:'rest',talk:false};

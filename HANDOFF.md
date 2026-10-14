@@ -1,3 +1,7 @@
+## October 14, 2026: buildings as things
+
+No building through another, a street or a landmark (the surveyed regions as they load, the grid each rebuild, the grown towns as they grow); service alleys behind rows of shops and downtown blocks with dumpsters and back doors (painted into the road map in the regions); curtain walls and shop fronts that crack, shatter, and can be run or driven through; vaulting through windows and over low walls; every building breakable (holes, partial and full collapse, Rapier debris, dust, persistent shells and rubble); crews that rebuild in stages over two to five game hours, held off while `structures.cataclysm(true)`. `Crysis.structures()`, `Crysis.demolish(x, z)`. All in `island/src/structures/`. See `docs/structures-2026-10-14.md`.
+
 ## October 13, 2026 (late): streets that read as real
 
 Crosswalks, stop bars and curb-ramp domes at town junctions; walk signals that tick and a daily goal for crossing properly; people crossing together on the walk; overpass joints you hear; buses at their stops; dogs on leads; globe highways graded; mapped buildings set back off the street and sidewalk. See `docs/streets-alive-2026-10-13.md`.
@@ -9,6 +13,10 @@ People have dispositions of their own (four compass axes from their seed, leaned
 ## October 13, 2026 (night): military bases, police and fists
 
 No more roaming militias. Soldiers (Meridian Guard) are stationed at military bases sited across Earth (four original-named Bay sites and a seeded globe grid, placed only on open flat land away from towns), at their gates, watchtowers, patrol loops, armouries, flight lines and road checkpoints; militia keep to fixed compounds. Bases have a fence and gate, barracks, headquarters, armoury, motor pool, helipad, watchtowers and on air stations a lit, marked runway, hangars and a control tower, with tanks, armoured trucks, jeeps, helicopters and jets you can take (V; tank turret and cannon, jet take-off and landing, helicopter). Harbour Police answer crime and the wanted level in cruisers with light bars and sirens; the military answers gang wars, bosses and Ironvale Legion invasions with convoys and air support. Unarmed fists, shoves, grapples, bats and bottles, and street quarrels that escalate. Gangs dress urban, militias in camouflage or modern-militia kit. Interior builder and police station hooks are ready for the commander's buildings. See `docs/military-and-police-2026-10-13.md`.
+
+## October 13, 2026 (night): hospitals, police and fire stations, armories
+
+Every town gets its services from the shared engine (`island/src/services/`): a siting function picks civic blocks for hospitals, police and fire stations and armories, the same every visit, in the Bay's mapped and gridded towns and on the globe. Their rooms are built by the interiors (war room with a live map table, cache depots of real inventory items, barracks, cells, apparatus bay with the pole, emergency bays, theatre, pharmacy, wards), staffed by the hour through the workplace routines. Patients come by ambulance or on foot, are treated over time and discharged and billed (children never billed or refused); you are brought round at the nearest hospital. Ambulances and engines drive the streets with sirens; fires get an engine from the nearest station. `Crysis.services()`, `Crysis.serviceGo(kind, room)`, `Crysis.serviceCall()`. Hooks for the economy (siteFor), morality (hooks.charge) and security (buildWarRoom, buildDepot, buildBarracks, serviceSite, hooks.onLoot) work. See `docs/services-2026-10-13.md`.
 
 ## October 13, 2026 (evening): roads, overpasses, trees and pools
 
