@@ -31,6 +31,7 @@ import { houseEra, exteriorLook, cityEra, seedAt } from './decor.js';
 import { createProps } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
+import { createEconomyLayer } from '../economy/layer.js';
 import { settleLots } from '../structures/lots.js';        // structures: settled lots
 import { streetTrees, treeColour, autumnNow } from './streettrees.js';       // streets by era: their trees
 
@@ -600,6 +601,8 @@ export function createCity(shared, scene, bay, real = null) {
 	const hips = mk(hipG, roofMat, CAP, false), gables = mk(gableG, roofMat, CAP, false);
 	// the props of the lived-in streets and on the roofs (lotkit.js)
 	const kit2 = createProps(group, (m) => withRise(m, rise, 'kitrise'), PHONE);
+	// the businesses: their boards, awnings and what they put out front (economy/layer.js)
+	const economy = createEconomyLayer({ group, wrap: (m) => withRise(m, rise, 'signrise'), isPhone: PHONE, bay, real, KIND });
 	// what is on and about the buildings up close: the air conditioners on the flat roofs of
 	// the shops, offices and warehouses; a glass sunroom off the back of some houses, a
 	// clothesline in some back yards (see decorate)
@@ -983,6 +986,7 @@ export function createCity(shared, scene, bay, real = null) {
 					const H = lot(list, a, style, pop ? hx - gs * (w - w1) / 2 : hx, at(hf + d / 2), w1, d, h, doorKind(KIND.house, pop ? Math.min(0.75, Math.max(0.25, door)) : door), col, roof, false, O);
 					if (!H) return;
 					H.era = remodel && R(10) < 0.4 ? 'modern' : cityEra(era, R(11));
+					H.street = c.busy;
 					const cnd = condFor(H, T.neglectK);
 					setCond(H, cnd);
 					if (pop) setCond(lot(list, a, style, hx + gs * w1 / 2, at(hf + d / 2 + 0.6), w - w1, d - 1.2, 6.4, KIND.house, col, { ...roof, hip: true, h: Math.min(w - w1, d) * 0.28 }, false, O), cnd);
@@ -1012,6 +1016,7 @@ export function createCity(shared, scene, bay, real = null) {
 					const H = lot(list, a, style, cx, at(hf + d / 2), w, d, h, doorKind(KIND.house, door), col, { hip: big || r > 0.8, rot: r < 0.3 && !big, h: Math.min(w, d) * (0.42 + (R(6) - 0.5) * 0.2), col: rc, t: T.roofT, ov: 0.45 }, false, O);
 					if (!H) return;
 					H.era = R(10) < 0.82 ? 'prewar' : R(11) < 0.6 ? 'ranch' : 'split';
+					H.street = c.busy;
 					const cnd = condFor(H, T.neglectK);
 					setCond(H, cnd);
 					if (R(7) < 0.15) setCond(lot(list, a, style, cx + (R(2) - 0.5) * w * 0.3, at(hf + d + 2), Math.min(w * 0.6, 6), 4.2, 3.2, KIND.house, jit(col, R(7) * 5 % 1), { hip: false, rot: true, h: 1.2, col: rc, t: R(7) < 0.06 ? ROOF.metal : T.roofT, ov: 0.3 }, false, O), cnd);
@@ -1205,7 +1210,7 @@ export function createCity(shared, scene, bay, real = null) {
 							const o = lot(list, a, style, X0 + x + w / 2, at(0.6 + D / 2), w, D, h, KIND.shop, col, null, false, { face });
 							setCond(o, condFor(o, 0.02));
 							if (rr > 0.35) balconies(X0 + x + w / 2, at(0.6 + D / 2), w, D, face, fl, 3.3, [0.25, 0.25, 0.27], 2, 5.08, 0.85);
-							if (detail && hash(k, side + i) < 0.7) { const aw = hash(i + k, j * 9 + side); lot(list, a, style, X0 + x + w / 2, at(-0.2), w * 0.86, 1.6, 0.18, KIND.plain, aw < 0.3 ? [0.55, 0.12, 0.1] : aw < 0.6 ? [0.1, 0.3, 0.2] : [0.2, 0.2, 0.2], null, false, { face, lift: 3.0 }); }
+							if (detail && hash(k, side + i) < 0.7) { const aw = hash(i + k, j * 9 + side); if (o) o.awn = lot(list, a, style, X0 + x + w / 2, at(-0.2), w * 0.86, 1.6, 0.18, KIND.plain, aw < 0.3 ? [0.55, 0.12, 0.1] : aw < 0.6 ? [0.1, 0.3, 0.2] : [0.2, 0.2, 0.2], null, false, { face, lift: 3.0 }); }
 							x += w + (rr > 0.8 ? 4 : 0.02);
 						}
 						for (let t = 5; t < IX - 3; t += 10) tree(X0 + t, side ? Z0 + IZ + 1.6 : Z0 - 1.6, 7, false, hash(t, side + i));
@@ -1226,7 +1231,9 @@ export function createCity(shared, scene, bay, real = null) {
 					const r = hash(i * 17 + 1, j * 19 + 3);
 					if (hash(i * 23 + 5, j * 7 + 1) < 0.3 + U.d * 2) { mixedUse(); continue; }
 					pave(X0 + IX * 0.5, Z0 + IZ * 0.36, IX * 0.95, IZ * 0.62);
-					lot(list, a, style, X0 + IX * 0.5, Z0 + IZ * 0.84, IX * (0.7 + r * 0.2), 22, 7.4 + r * 2, KIND.retail, jit(pick(PAL.retail, r), r), null);
+					// (the shops face their parking: their fronts are toward -z, front = -1)
+					const st1 = lot(list, a, style, X0 + IX * 0.5, Z0 + IZ * 0.84, IX * (0.7 + r * 0.2), 22, 7.4 + r * 2, KIND.retail, jit(pick(PAL.retail, r), r), null);
+					if (st1) st1.front = -1;
 					if (r > 0.4) lot(list, a, style, X0 + IX * 0.18, Z0 + IZ * 0.18, 18, 14, 6.5, KIND.retail, jit(pick(PAL.retail, r * 3.7), r), null);
 					for (let k = 0; k < 5; k++) tree(X0 + IX * (0.1 + k * 0.2), Z0 + 3, 7, false, hash(i + k, j));
 					continue;
@@ -1278,7 +1285,8 @@ export function createCity(shared, scene, bay, real = null) {
 						if (shop && hash(k * 5 + side, i * 3 + j) < 0.75) {
 							const aw = hash(i + k, j * 9 + side);
 							const ac = aw < 0.25 ? [0.55, 0.12, 0.1] : aw < 0.45 ? [0.1, 0.3, 0.2] : aw < 0.6 ? [0.12, 0.18, 0.36] : aw < 0.75 ? [0.2, 0.2, 0.2] : aw < 0.88 ? [0.86, 0.6, 0.18] : [0.9, 0.88, 0.82];
-							lot(list, a, style, X0 + k * L + Lk / 2, out(0.8), Lk * 0.86, 1.6, 0.18, KIND.plain, ac, null, false, { face, lift: 3.0 });
+							const awo = lot(list, a, style, X0 + k * L + Lk / 2, out(0.8), Lk * 0.86, 1.6, 0.18, KIND.plain, ac, null, false, { face, lift: 3.0 });
+							if (so && awo) so.awn = awo;
 						}
 						// a street tree now and then (more in the Sunset and the Mission)
 						if (hash(k * 3 + side, i * 5 + j) < (dist === 'sunset' || dist === 'mission' ? 0.2 : 0.1)) tree(X0 + k * L + L / 2, side ? Z0 + IZ + 2.0 : Z0 - 2.0, 6 + r * 3, false, r);
@@ -1308,6 +1316,7 @@ export function createCity(shared, scene, bay, real = null) {
 					// a block of garden apartments round a pool now and then (more toward the town centres)
 					const br = hash(i * 41 + 7, j * 43 + 11);
 					if (br < (sub ? 0.035 : 0.025) + U.d * 0.5 && IX > 80 && IZ > 55 && level(3)) { complex(); continue; }
+					const im7 = ((i % 7) + 7) % 7, jm4 = ((j % 4) + 4) % 4, artNext = im7 === 1 ? 1 : im7 === 6 ? -1 : 0, collector = jm4 === 0 ? 0 : jm4 === 3 ? 1 : -1;
 					for (const side of [0, 1]) {
 						const fz = side ? Z0 + IZ : Z0, inw = side ? -1 : 1, face = side ? 's' : 'n', at = (m) => fz + inw * m;
 						// a row of townhouses along one side, or the neighbourhood's courts, dog park and garden
@@ -1329,7 +1338,10 @@ export function createCity(shared, scene, bay, real = null) {
 							x += Lw;
 							if (Lw < 6.5) break;
 							const corner = k === 0 || x >= len - 0.1;
-							const ctx = { lotX, Lw, side, face, at, r, rw, k, corner };
+							// how busy its street is, for the economy (economy/layer.js): a collector every
+							// fourth street, the corners, and most of all the corners on an arterial
+							const busy = (corner && (artNext === 1 ? k === 0 : artNext === -1 ? x >= len - 0.1 : false)) || collector === side ? 2 : corner ? 1 : 0;
+							const ctx = { lotX, Lw, side, face, at, r, rw, k, corner, busy };
 							if (kind === 'vacant') { vacant(ctx); continue; }
 							if (kind === 'plex') { fourplex(ctx, pick(wallsAll, r * 5.1)); continue; }
 							home(ctx, { sub, era, modern, eich, big: kind === 'estate', thin: kind === 'narrow', L, walls, wallsAll, roofs, roofsAll, roofT, neglectK, treeK, treeH });
@@ -1350,7 +1362,8 @@ export function createCity(shared, scene, bay, real = null) {
 					// a mall or big-box centre: the anchor at the back, parking all round
 					const r = r0;
 					pave(X0 + IX / 2, Z0 + IZ / 2, IX * 0.97, IZ * 0.97);
-					lot(list, a, style, X0 + IX / 2, Z0 + IZ * 0.72, IX * (0.55 + r * 0.3), IZ * 0.36, 9 + r * 5, KIND.retail, jit(pick(PAL.retail, r), r), null);
+					const anchor = lot(list, a, style, X0 + IX / 2, Z0 + IZ * 0.72, IX * (0.55 + r * 0.3), IZ * 0.36, 9 + r * 5, KIND.retail, jit(pick(PAL.retail, r), r), null);
+					if (anchor) anchor.front = -1;
 					if (r > 0.3) lot(list, a, style, X0 + IX * 0.2, Z0 + IZ * 0.18, 26, 18, 7, KIND.retail, jit(pick(PAL.retail, r * 2.3), r), null);
 					for (let k = 0; k < 6; k++) tree(X0 + IX * (0.1 + k * 0.16), Z0 + IZ * 0.45, 6, false, hash(k, i + j));
 				} else {
@@ -1971,7 +1984,7 @@ export function createCity(shared, scene, bay, real = null) {
 		if (list.trees) list.trees = list.trees.filter(out);
 		for (const k in list.props || {}) list.props[k] = list.props[k].filter((e) => !real.inside(e[0], e[2]));
 	}
-	function realBuildings(cx, cz, R, list) {
+	function realBuildings(cx, cz, R, list, wild = true) {
 		if (!real?.loaded()) return;
 		const trees = list.trees || (list.trees = []);
 		const floors = new Map();
@@ -2029,12 +2042,15 @@ export function createCity(shared, scene, bay, real = null) {
 			const g = bay.heightAt(p.x, p.z);
 			if (g > 0.5 && poolOK(p)) list.push({ x: p.x, y: g - 0.9, z: p.z, w: p.w, d: p.d, h: 0.99, a: p.a, col: [0.9, 0.89, 0.85], kind: KIND.pool, roof: null });
 		}
-		wildLand(cx, cz, 1100, trees);
-		wildLand(cx, cz, 2700, trees, 22, 1100);          // beyond: a coarser, cheaper scatter for the far masses
-		// the willows, sycamores and redwoods along the San Lorenzo (sanlorenzo.js)
-		for (const t of riverTreesNear(cx, cz, 2700)) trees.push(t);
-		// ...and along every other creek and river's wild banks (water.js)
-		for (const t of waterTreesNear(cx, cz, 2700)) trees.push(t);
+		// (out on the globe the wild land and its creeks are the globe's own: globetrees.js)
+		if (wild) {
+			wildLand(cx, cz, 1100, trees);
+			wildLand(cx, cz, 2700, trees, 22, 1100);          // beyond: a coarser, cheaper scatter for the far masses
+			// the willows, sycamores and redwoods along the San Lorenzo (sanlorenzo.js)
+			for (const t of riverTreesNear(cx, cz, 2700)) trees.push(t);
+			// ...and along every other creek and river's wild banks (water.js)
+			for (const t of waterTreesNear(cx, cz, 2700)) trees.push(t);
+		}
 		for (const t of real.near('trees', cx, cz, 2700)) {
 			const g = bay.heightAt(t.x, t.z), r = hash(t.x * 2.1, t.z * 1.3);
 			// (the open parkland on the wind-scoured bluffs by the ocean has no trees but in the draws)
@@ -2122,12 +2138,18 @@ export function createCity(shared, scene, bay, real = null) {
 	}
 
 	let lastX = 1e9, lastZ = 1e9, started = false, realSeen = false, realV = 0, genV = 0, clearV = -1, coastV = 0, carveV = -1, waterV = -1;
+	// a town grown by civgen.js near a point (anywhere on Earth)
+	const grownNear = (x, z) => !!real?.R?.regions?.some((G) => G.gen && x > G.bounds[0] - 2000 && z > G.bounds[1] - 2000 && x < G.bounds[2] + 2000 && z < G.bounds[3] + 2000);
 	function update(cam, nightK) {
-		if (!bay.loaded()) return;
+		// past the Bay only the grown towns are raised here (their streets, houses and businesses,
+		// as civ.js grows them anywhere on Earth); the Bay's grid, woods and skylines stay home
+		const globe = !bay.loaded();
+		if (globe && !grownNear(cam.position.x, cam.position.z)) return;
 		night.value = nightK;
+		economy.setNight(nightK);
 		// the landmark towers' glass: lit floors behind it after dark, not a black slab
 		glassM.emissive.setRGB(0.9, 0.78, 0.6).multiplyScalar(0.22 * nightK);
-		if (!started) { started = true; findSkylines(); landmarks(); bayBridge(); }
+		if (!started && !globe) { started = true; findSkylines(); landmarks(); bayBridge(); }
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y > 4000;
 		near.visible = hips.visible = gables.visible = farPts.visible = !high;
@@ -2139,7 +2161,7 @@ export function createCity(shared, scene, bay, real = null) {
 		if (waterVersion() !== waterV) { waterV = waterVersion(); lastX = 1e9; }                  // trees stood up along the creeks near you
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }          // a mapped region came or went near you
 		// a grown town arrived or went: it rises, and its towers join the skylines
-		if (real?.genVersion && real.genVersion() !== genV) { genV = real.genVersion(); skyline.length = 0; findSkylines(); if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }
+		if (real?.genVersion && real.genVersion() !== genV) { genV = real.genVersion(); lastX = 1e9; if (!globe) { skyline.length = 0; findSkylines(); } if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }
 		if (riseT0 >= 0) {
 			// the ring runs out at 700 m a second; no shadows from the buildings still underground
 			const front = (performance.now() - riseT0) / 1000 * 700;
@@ -2151,9 +2173,9 @@ export function createCity(shared, scene, bay, real = null) {
 		if (Math.hypot(x - lastX, z - lastZ) < 300) { if (!high && Math.hypot(x - treeX, z - treeZ) > 40) placeTrees(x, z); return; }                 // (MARGIN covers these 40 m)
 		lastX = x; lastZ = z;
 		const list = [];
-		fillBlocks(x, z, 1200, list);
+		if (!globe) fillBlocks(x, z, 1200, list);
 		clipMapped(list);
-		realBuildings(x, z, 2000, list);
+		realBuildings(x, z, 2000, list, !globe);
 		settleLots(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
 		decorate(list, x, z, 700);
 		// the streets' own trees by their era, in place of the map's plain rows (streettrees.js)
@@ -2180,6 +2202,8 @@ export function createCity(shared, scene, bay, real = null) {
 			};
 			if (list.trees && G.size) list.trees = list.trees.filter((t) => !inside(t));
 		}
+		// which buildings are businesses, and their signs and things out front (economy/layer.js)
+		economy.apply(list, x, z);
 		// if there is more than fits, keep the nearest
 		const d2 = (o) => (o.x - x) * (o.x - x) + (o.z - z) * (o.z - z);
 		if (list.length > CAP) { const t = list.trees, k = list.kit, pr = list.props; list.sort((m, n) => d2(m) - d2(n)); list.length = CAP; list.trees = t; list.kit = k; list.props = pr; }
@@ -2196,5 +2220,5 @@ export function createCity(shared, scene, bay, real = null) {
 		tallList = list.filter((o) => !o.roof && commercialStack(o.src?.kind ?? (o.kind === KIND.tower ? 11 : o.kind === KIND.office ? 5 : o.kind === KIND.retail ? 6 : 0),o.w,o.d,o.h-1.2));
 		placeTrees(x, z);
 	}
-	return { nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
+	return { economy, economyInfo: (x, z, r) => economy.info(x, z, r, lastList), nearList: () => lastList, lotsNear, lotKey, setDoor, procHomes: (x, z, r) => procNear(x, z, r, false).filter((g) => !inClearing(g[0].x, g[0].z, 0)), procBiz: (x, z, r) => procNear(x, z, r, true).map((g) => g[0]), KIND, towersNear: (x, z, r) => tallList.filter((o) => Math.hypot(o.x - x, o.z - z) < r + Math.max(o.w, o.d) / 2), kitCounts: () => ({ ac: kit.ac.count, sunrooms: kit.sunF.count, lines: kit.line.count }), update, group, fill: fillBlocks, houseLook, setNear, setNearBand: (a, b) => nearBand.value.set(a, b), treesAt: (x, z, r) => treeList.filter((t) => Math.abs(t.x - x) < r && Math.abs(t.z - z) < r), treesNear: (x, z, r) => treeList.filter((t) => Math.hypot(t.x - x, t.z - z) < r).map((t) => ({ h: +t.h.toFixed(1), cone: !!t.cone, sp: t.sp, shrub: !!t.shrub, fern: !!t.fern, src: t.src || '' })) };
 }

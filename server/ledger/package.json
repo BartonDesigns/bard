@@ -1,0 +1,15 @@
+{
+  "name": "l99-ledger",
+  "private": true,
+  "type": "module",
+  "description": "The town's money for Level 99 Bard: event deltas from clients settled once a day onto each account's deterministic baseline, one Durable Object",
+  "scripts": {
+    "test": "node --test test/ledger.test.mjs",
+    "dev": "wrangler dev --port 8792",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run --outdir .wrangler/check"
+  },
+  "devDependencies": {
+    "wrangler": "^4.143.0"
+  }
+}
