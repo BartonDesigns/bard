@@ -225,7 +225,8 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 				if (D.use !== 'house' || D.rural !== undefined) continue;
 				let n = -1;
 				for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) for (const Q of G.get(key(Math.floor(D.x / C) + i, Math.floor(D.z / C) + j)) || []) if ((Q.x - D.x) ** 2 + (Q.z - D.z) ** 2 < 6400) n++;
-				D.rural = n < 8; D.wild = D.rural && (D.wildN >= 3 || H(D.x, D.z) > 160);
+				// (a grown town's lots are a planned suburb's, sparse at its edge; the mapped estates are sparser)
+				D.rural = n < (D.o.src?.gen ? 5 : 8); D.wild = D.rural && (D.wildN >= 3 || H(D.x, D.z) > 160);
 				// (kept once its neighbours are surely all in the list)
 				const c = D.o.src?.econ;
 				if (c && Math.hypot(D.x - cx, D.z - cz) < 1500) { c.rural = D.rural; c.wild = D.wild; }
