@@ -150,7 +150,7 @@ function lamps(night) {
 	const m = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, vertexColors: true });
 	m.onBeforeCompile = (sh) => {
 		sh.uniforms.uNight = night;
-		sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * (0.15 + uNight * 3.2);');
+		sh.fragmentShader = 'uniform float uNight;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * (0.2 + uNight * 6.0);');
 	};
 	m.customProgramCacheKey = () => 'mil-lamp-1';
 	return m;
