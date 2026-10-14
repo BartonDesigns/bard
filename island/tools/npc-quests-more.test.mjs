@@ -46,7 +46,7 @@ test('bags are left in believable places: benches, shelters, cafe tables, doorst
 	assert.equal(spotWords({ kind: 'park', place: 'Central Park' }).left, 'on a bench in Central Park');
 	assert.equal(spotWords({ kind: 'table', venue: 'restaurant' }).off, 'off a restaurant table');
 	assert.match(bagQuest({ owner: { name: 'Ana' }, at: { x: 0, z: 0 }, where: { kind: 'shelter' } }).title, /Ana's bag, left at the bus shelter/);
-	for (const k of SPOT_KINDS) for (const w of Object.values(spotWords({ kind: k }))) assert.doesNotMatch(w, /—/);
+	for (const k of SPOT_KINDS) for (const w of Object.values(spotWords({ kind: k }))) assert.doesNotMatch(w, /\u2014/);
 	// a table inside: walked to through the door and back out, then handed over
 	const q = bagQuest({ owner: { id: 'npc:1', name: 'Ana' }, at: { x: 5, z: 5 }, where: { kind: 'table', venue: 'cafe' }, via: [{ x: 0, z: 0 }, { x: 1, z: 1 }] });
 	assert.deepEqual(q.steps.map((s) => s.do), ['go', 'go', 'pickup', 'go', 'go', 'deliver']);
@@ -118,7 +118,7 @@ test('a theft out of sight leaves a lead: the words, the book, the limits', asyn
 	assert.match(leadLine(L, 0), /^Someone grabbed a bag off a bench on the corner this morning\.$/);
 	assert.match(leadNote(L), /Ana's bag off a bench on the corner this morning in Oakland/);
 	assert.match(leadFact(L), /^Heard that someone took Ana's bag/);
-	for (let n = 0; n < 8; n++) assert.doesNotMatch(leadLine(L, n) + leadNote(L) + leadFact(L), /—/);
+	for (let n = 0; n < 8; n++) assert.doesNotMatch(leadLine(L, n) + leadNote(L) + leadFact(L), /\u2014/);
 	assert.deepEqual([3, 10, 14, 19, 23].map(whenOf), ['last night', 'this morning', 'this afternoon', 'this evening', 'tonight']);
 	// a book: a few open at a time, not two at once in a region, kept across a reload
 	let t = 1e6;
@@ -269,7 +269,7 @@ test('new kinds from the people side: each a descriptor with an honest and a bet
 	const giver = { id: 'npc:1', name: 'Ana', x: 0, z: 0 }, car = { x: 10, z: 0 }, drop = { x: 20, z: 5 };
 	const Q = Object.fromEntries(['groceries', 'pet', 'directions', 'jumpstart', 'fall'].map((k) => [k, favourQuest(k, { giver, car, drop, region: 'bay.sf', seed: 3, dest: 'the library' })]));
 	assert.match(Q.groceries.title, /carry the groceries/); assert.match(Q.directions.title, /the way to the library/); assert.match(Q.jumpstart.title, /Jump-start/); assert.match(Q.fall.title, /Help Ana up/);
-	for (const q of Object.values(Q)) { assert.ok(RULES[q.deeds.done]); assert.doesNotMatch(q.title, /—/); }
+	for (const q of Object.values(Q)) { assert.ok(RULES[q.deeds.done]); assert.doesNotMatch(q.title, /\u2014/); }
 	assert.deepEqual([Q.directions.deeds, Q.fall.deeds, Q.jumpstart.deeds], [{ done: 'give-directions', betray: 'mislead' }, { done: 'help-fallen', betray: 'rob-fallen' }, { done: 'favour', betray: 'pocket-cash' }]);
 	assert.ok(score('help-fallen').protect > 0 && score('rob-fallen').protect < 0 && score('mislead').honest < 0 && score('give-directions').honest > 0);
 	assert.equal(Q.directions.reward.credits, 0, 'nobody pays for the way');

@@ -46,7 +46,7 @@ export function leadLine(L, n = 0) {
 	return pick([core, `Did you hear? ${core}`, `${core} Keep an eye on your things.`, `${core} They say whoever did it is still around.`], n);
 }
 export function leadNote(L) {
-	const it = L.item?.name || 'bag', place = L.town ? ` in ${L.town}` : L.regionName ? ` in ${L.regionName}` : '';
+	const it = L.item?.name || 'bag', place = L.town ? ` in ${L.town}` : L.regionName ? ` ${/island/.test(L.regionName) ? 'on' : 'in'} ${L.regionName}` : '';
 	const how = L.kind === 'bag' ? `took ${L.owner.name}'s ${it} ${whereOf(L)}` : L.kind === 'favour.fall' ? `went through ${L.owner.name}'s pockets after a fall and took the ${it}` : `snatched ${L.owner.name}'s ${it} in the street`;
 	return `Someone ${how} ${L.when}${place}. The thief may still be about.`;
 }
@@ -77,6 +77,7 @@ export function createLeads({ store = null, now = () => Date.now(), key = 'l99-l
 		all: () => L.slice(),
 		get: (id) => L.find((x) => x.id === id) || null,
 		// where it happened, once you are there to see it
-		place(id, at) { const x = L.find((y) => y.id === id); if (x && at) { x.at = { x: at.x, z: at.z }; save(); } return x; },
+		// (a real bench or doorstep there: the words follow it from now on)
+		place(id, at) { const x = L.find((y) => y.id === id); if (x && at) { x.at = { x: at.x, z: at.z }; if (x.kind === 'bag' && at.kind) x.spot = { kind: at.kind, place: at.place, venue: at.venue }; save(); } return x; },
 	};
 }

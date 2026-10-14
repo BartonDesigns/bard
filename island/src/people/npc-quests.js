@@ -601,7 +601,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		const a = Math.random() * 6.28, d = 120 + Math.random() * 100;
 		let x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d;
 		try { const sw = people.sidewalk?.(x, z); if (sw) { x = sw[0]; z = sw[1]; } } catch { /* no streets */ }
-		return { x, z };
+		return { x, z, kind: 'sidewalk' };
 	}
 	function uncast() { if (!cast) return; dropProp(cast.prop); unkeep(cast.p); cast = null; }
 	function leadTick() {
