@@ -30,6 +30,7 @@ import { createResponder, stepResponder, park } from './responders.js';
 import { createSiren, radioBurst, monitorBeep } from './sound.js';
 import { mapTable, dutyScreen, roomSign } from './screens.js';
 import { createDepot, takeFrom, bringTo, restock, stockList } from './depots.js';
+import { buildWarRoom, buildDepot, buildBarracks } from './interiors.js';
 import { mintUid } from '../gameplay/gear-levels.js';
 import { ARMS_CATALOG } from '../gameplay/arms.js';
 import { BLOCKS, toGrid, fromGrid } from '../bay/styles.js';
@@ -659,7 +660,35 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 	}
 	// (every cell round you decided now: the console and the tests)
 	const decideNear = () => { const cam = camera.position; for (const kind of KINDS) for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (stale(A)) decide(A); return list().length; };
-	return { update, push, floor, info, go, decideNear, sites, revive, dispatchFire, injury, testCall, dispose, hooks, list, here: () => here(), admit: (kind, p) => nearest('hospital', camera.position.x, camera.position.z)?.ward.admit(p) };
+	// the military's buildings (src/military/ setInteriors): each builder takes their frame
+	// { origin, yaw, width, depth, height, floors, floorHeight }, has its rooms built by the
+	// interiors as you come near, and returns { site, push, floor, live, dispose }: push and
+	// floor make it walkable (the interiors' own, for this footprint only)
+	function militaryInteriors() {
+		const make = (kind, plan) => (f = {}) => {
+			const I = W()?.interiors, o = f.origin || {}, x = o.x ?? o[0] ?? 0, z = o.z ?? o[2] ?? 0, gy = o.y ?? o[1] ?? ground(x, z);
+			const w = f.width ?? 20, d = f.depth ?? 16, a = -(f.yaw ?? 0), key = `mil:${kind}:${Math.round(x)}:${Math.round(z)}`;
+			const S = serviceSite(key, plan, { x, z, a, w, d, f0: gy + 0.05 });
+			I?.addSite(S);
+			const inside = (px, pz, pad = 2) => { const ca = Math.cos(a), sa = Math.sin(a), dx = px - x, dz = pz - z; return Math.abs(ca * dx + sa * dz) < w / 2 + pad && Math.abs(-sa * dx + ca * dz) < d / 2 + pad; };
+			return {
+				site: S, live: () => !!S.live,
+				push: (pos, footY) => { if (S.live && inside(pos.x, pos.z)) I.push(pos, footY); },
+				floor: (px, pz, py) => (S.live && inside(px, pz, 0.5) ? I.floor(px, pz, py) : -1e9),
+				dispose: () => { S.ready = () => false; },
+			};
+		};
+		return { buildWarRoom: make('warRoom', buildWarRoom), buildDepot: make('depot', buildDepot), buildBarracks: make('barracks', buildBarracks) };
+	}
+	// where a police unit leaves from (src/military/ setStations): the nearest police station's
+	// garage door, facing the street; null when there is none within reach
+	function stationAt(x, z, max = 3000) {
+		const F = nearest('police', x, z, max);
+		if (!F) return null;
+		const fr = frameOf(F), bx = F.plan.bay ? (F.plan.bay.x0 + F.plan.bay.x1) / 2 : 0, [gx, gz] = fr.w(bx, F.D / 2 + 3);
+		return { name: F.name, x: gx, z: gz, y: ground(gx, gz), yaw: -F.a, station: { x: F.x, z: F.z } };
+	}
+	return { update, push, floor, info, go, decideNear, militaryInteriors, stationAt, sites, revive, dispatchFire, injury, testCall, dispose, hooks, list, here: () => here(), admit: (kind, p) => nearest('hospital', camera.position.x, camera.position.z)?.ward.admit(p) };
 }
 
 // a site for interiors.addSite round a plan of this module's (for another module's own

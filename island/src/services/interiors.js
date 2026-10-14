@@ -204,10 +204,14 @@ export function planArmory({ W, D }) {
 }
 
 // ---------------------------------------------------------------------------------
-// one room-kind at a time, for the military's own buildings (src/military/)
+// one room-kind at a time, for the military's own buildings (src/military/). A frame is
+// { W, D, door? } or the military's own { width, depth, height, ... } (services/index.js
+// militaryInteriors() places and builds one from its origin and yaw)
+const sizeOf = (f = {}) => ({ W: f.W ?? f.width ?? 20, D: f.D ?? f.depth ?? 16, door: f.door || null });
 
 // a command post: the guard post inside the door, the war room and its comms room behind
-export function buildWarRoom({ W, D, door = null }) {
+export function buildWarRoom(frame) {
+	const { W, D, door } = sizeOf(frame);
 	const P = planShell({
 		W, D, use: 'site', style: 'modern', door: door || { x: 0, w: 1.4, h: 2.4 }, levels: [{ y: 0, h: 3.8 }], top: 4.6,
 		layout: (K) => {
@@ -225,7 +229,8 @@ export function buildWarRoom({ W, D, door = null }) {
 	return P;
 }
 // a supply depot: one hall of racks, the quartermaster's cage by the door, a gate at the back
-export function buildDepot({ W, D, door = null }) {
+export function buildDepot(frame) {
+	const { W, D, door } = sizeOf(frame);
 	const P = planShell({
 		W, D, use: 'site', style: 'plain', door: door || { x: -W / 4, w: 1.2, h: 2.4 }, levels: [{ y: 0, h: 5.2 }], top: 5.8,
 		doors: [{ side: 'z-', u: 0, w: Math.min(4, W * 0.3), h: 4 }],
@@ -244,7 +249,8 @@ export function buildDepot({ W, D, door = null }) {
 	return P;
 }
 // quarters: the mess hall at the front, the bunk room, the gym, showers and lockers behind
-export function buildBarracks({ W, D, door = null }) {
+export function buildBarracks(frame) {
+	const { W, D, door } = sizeOf(frame);
 	const P = planShell({
 		W, D, use: 'site', style: 'modern', door: door || { x: 0, w: 1.4, h: 2.4 }, levels: [{ y: 0, h: 3.4 }], top: 4.2,
 		layout: (K) => {

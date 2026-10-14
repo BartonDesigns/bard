@@ -149,3 +149,11 @@ test('interiors: every plan is furnished with its posts, and every role has some
 	furnish(A, 0);
 	assert.ok(A.rooms.find((r) => r.type === 'warRoom').mapTable, 'the war room has its map table');
 });
+test('interiors: the military builders take their own frame shape', () => {
+	for (const f of [buildWarRoom, buildDepot, buildBarracks]) {
+		const P = f({ origin: { x: 10, y: 0, z: 5 }, yaw: 0.4, width: 24, depth: 18, height: 6, floors: 1, floorHeight: 4 });
+		assert.ok(Math.abs(P.W - 24) < 1e-9 && Math.abs(P.D - 18) < 1e-9);
+		furnish(P, 0);
+		assert.ok(P.seats.some((s) => s.work));
+	}
+});
