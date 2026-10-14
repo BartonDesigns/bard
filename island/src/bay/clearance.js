@@ -14,14 +14,15 @@ const C = 16, REACH = 6;                 // cell size; the widest crown a check 
 let routes = null;
 export function makeClearance(real, cx, cz, R) {
 	const cells = new Map(), key = (i, j) => i * 65536 + j;
-	// a piece: a segment and how far either side of its line is kept clear
-	const put = (ax, az, bx, bz, pad) => {
+	// a piece: a segment and how far either side of its line is kept clear (and for a street
+	// tree in a well at the kerb, how far: the carriageway alone, streettrees.js)
+	const put = (ax, az, bx, bz, pad, well = pad) => {
 		const m = pad + REACH;
 		for (let i = Math.floor((Math.min(ax, bx) - m) / C); i <= Math.floor((Math.max(ax, bx) + m) / C); i++) for (let j = Math.floor((Math.min(az, bz) - m) / C); j <= Math.floor((Math.max(az, bz) + m) / C); j++) {
 			const k = key(i, j);
 			let c = cells.get(k);
 			if (!c) cells.set(k, c = []);
-			c.push(ax, az, bx, bz, pad);
+			c.push(ax, az, bx, bz, pad, well);
 		}
 	};
 	const nodes = new Map(), nk = (x, z) => Math.round(x / 1.5) * 65536 + Math.round(z / 1.5);
@@ -29,7 +30,8 @@ export function makeClearance(real, cx, cz, R) {
 		const p = r.pts, hw = r.w / 2;
 		// (a town street's sidewalk is part of it; the 0.5 m beyond is the setback)
 		const pad = r.drive ? hw + (r.walked ? 1.7 : 0.3) + 0.5 : FOOT.has(r.cls) ? hw + 0.5 : hw + 0.3;
-		for (let i = 0; i + 3 < p.length; i += 2) put(p[i], p[i + 1], p[i + 2], p[i + 3], pad);
+		const well = r.drive && r.walked ? hw + 0.35 : pad;
+		for (let i = 0; i + 3 < p.length; i += 2) put(p[i], p[i + 1], p[i + 2], p[i + 3], pad, well);
 		if (r.end0) put(p[0], p[1], p[0], p[1], 14.7);
 		if (r.end1) put(p[p.length - 2], p[p.length - 1], p[p.length - 2], p[p.length - 1], 14.7);
 		if (!r.drive || r.bridge) continue;
@@ -53,14 +55,15 @@ export function makeClearance(real, cx, cz, R) {
 		if (realCovered(a.x, a.z) && realCovered(b.x, b.z)) continue;
 		put(a.x, a.z, b.x, b.z, 17);
 	}
-	// is a circle of radius r at (x, z) clear of all of it
-	function clear(x, z, r = 0.3) {
+	// is a circle of radius r at (x, z) clear of all of it (well: a street tree in a tree well,
+	// which may stand in the sidewalk)
+	function clear(x, z, r = 0.3, well = false) {
 		const c = cells.get(key(Math.floor(x / C), Math.floor(z / C)));
 		if (!c) return true;
-		for (let i = 0; i < c.length; i += 5) {
+		for (let i = 0; i < c.length; i += 6) {
 			const ax = c[i], az = c[i + 1], dx = c[i + 2] - ax, dz = c[i + 3] - az, l2 = dx * dx + dz * dz;
 			const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)) : 0;
-			if (Math.hypot(x - ax - dx * t, z - az - dz * t) < c[i + 4] + Math.min(r, REACH)) return false;
+			if (Math.hypot(x - ax - dx * t, z - az - dz * t) < c[i + (well ? 5 : 4)] + Math.min(r, REACH)) return false;
 		}
 		return true;
 	}

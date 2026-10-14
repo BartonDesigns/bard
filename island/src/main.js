@@ -52,6 +52,7 @@ import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
 import { createBridgeSound } from './bay/bridgesound.js';
+import { createStreets } from './bay/streets.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
 import { createLake } from './bay/lake.js';
@@ -781,7 +782,7 @@ export function createIslandWorld() {
 	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
 	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney, potholes: () => world?.streets });
 	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
 	// quests they do for each other with or without you (people/npc-quests.js)
 	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
@@ -1168,6 +1169,8 @@ export function createIslandWorld() {
 			HOOKS.military?.setInteriors(world.services.militaryInteriors());
 			HOOKS.military?.setStations((x, z) => world?.services?.stationAt(x, z));
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
+			// the streets by era and season: potholes and their crews, the trees' stakes and leaves, holiday lights, sprinklers (bay/streets.js)
+			world.streets = createStreets({ scene, camera, world: () => world, drive, isPhone, hint: (t, ms) => hint(t, ms, 1) });
 			// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
 			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone });
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
@@ -1290,6 +1293,7 @@ export function createIslandWorld() {
 		world.water?.dispose();
 		world.bayArea?.dispose();
 		world.real?.dispose();
+		world.streets?.dispose();
 		drive.stop();
 		world.player.dispose();
 		world.cottages?.dispose();
@@ -1765,6 +1769,7 @@ export function createIslandWorld() {
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		bridgeSound.update(dt);
+		W.streets?.update(dt, sk.night, W.sky.state.hours);
 		crosswalks.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
@@ -2184,6 +2189,9 @@ if (typeof window !== 'undefined') {
 		daily: () => HOOKS.daily?.list(),
 		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
 		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), pet: () => HOOKS.errands?.petNow(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
+		// the streets by era and season (bay/streets.js): Crysis.streets() the era here and the counts;
+		// .holes() the potholes round you; .report() the nearest to its crew; .crew() a crew to it now
+		streets: Object.assign(() => window.L99Island?.world?.()?.streets?.info(), { holes: (r) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; return p && W.streets?.potholes.around(p.x, p.z, r); }, report: () => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, h = p && W.streets?.nearest(p.x, p.z, 200); return h ? (W.streets.report(h), h.id) : 'no pothole near'; }, crew: () => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, h = p && W.streets?.potholes.nearest(p.x, p.z, 200); return h ? (W.streets.potholes.report(h), W.streets.crew.now(h), h) : 'no pothole near'; } }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
 		scene: () => HOOKS.scene,
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
