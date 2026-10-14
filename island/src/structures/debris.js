@@ -132,7 +132,7 @@ export function createDebris(scene, { isPhone = false, ground, solids = () => []
 	dust.onBeforeRender = (...args) => { const [r, , cam] = args; dm.uniforms.scale.value = r.getSize(V2).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360)); };
 	const V2 = new THREE.Vector2();
 	group.add(dust);
-	const D = Array.from({ length: DN }, () => ({ life: 0, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 1, s1: 3, c: 0.7 }));
+	const D = Array.from({ length: DN }, () => ({ life: 1, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s0: 1, s1: 3, c: 0.7 }));
 	let dn = 0;
 	// n puffs about (x, y, z) over a spread, k their size
 	function puff(x, y, z, n, spread = 2, k = 1, tint = 0.72) {

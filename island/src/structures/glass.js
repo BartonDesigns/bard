@@ -268,7 +268,8 @@ export function createGlass(ctx) {
 		upload();
 		return false;
 	}
-	function shatter(p, push = null) {
+	// (later: many at once, the panes put away and drawn again once, by the caller)
+	function shatter(p, push = null, later = false) {
 		if (p.gone) return false;
 		p.gone = true;
 		const area = p.w * p.h;
@@ -282,20 +283,23 @@ export function createGlass(ctx) {
 		store.put(p.id, rec);
 		ctx.damaged?.(p.id, rec);
 		if (p.plan) openPlan(p.plan);
-		panes = panes.filter((q) => q !== p);
 		byKey.delete(p.key);
-		upload();
+		if (!later) settle();
 		return true;
+	}
+	function settle() {
+		panes = panes.filter((q) => !q.gone);
+		upload();
 	}
 	// a blast: panes within r break, out to 2.4 r crack
 	function blast(at, r) {
 		let n = 0;
-		for (const p of panes.slice()) {
+		for (const p of panes) {
 			const d = Math.hypot(p.x - at.x, p.y - at.y, p.z - at.z);
-			if (d < r * 1.1) { shatter(p, [(p.x - at.x) / d * 6, 2, (p.z - at.z) / d * 6]); n++; }
+			if (d < r * 1.1) { shatter(p, [(p.x - at.x) / d * 6, 2, (p.z - at.z) / d * 6], true); n++; }
 			else if (d < r * 2.4 && !p.crack) { p.crack = [Math.random(), Math.random(), 0.6 + Math.random() * 0.4, Math.random() * 100]; n++; }
 		}
-		if (n) upload();
+		if (n) settle();
 		return n;
 	}
 	// a body or a car moving into the panes: (x, z) its middle, its half width across its
@@ -304,9 +308,9 @@ export function createGlass(ctx) {
 	function bodyInto(x, y0, y1, z, half, vx, vz, mass, reach = 0.6) {
 		const sp = Math.hypot(vx, vz);
 		if (sp < 2) return 0;
-		let n = 0;
-		for (const p of panes.slice()) {
-			if (Math.abs(p.x - x) > p.w + half + 3 || Math.abs(p.z - z) > p.w + half + 3) continue;
+		let n = 0, cracked = false;
+		for (const p of panes) {
+			if (p.gone || Math.abs(p.x - x) > p.w + half + 3 || Math.abs(p.z - z) > p.w + half + 3) continue;
 			const into = -(vx * p.nx + vz * p.nz);
 			if (into < 1.5) continue;
 			const dn = (x - p.x) * p.nx + (z - p.z) * p.nz;
@@ -317,9 +321,10 @@ export function createGlass(ctx) {
 			// (momentum against the pane's: a sprint breaks a shop front; a car at a walking pace
 			// cracks it, at a jog it is through)
 			const need = 420 + p.w * p.h * 60;
-			if (mass * into > need) { shatter(p, [vx * 0.6, 0.5, vz * 0.6]); n++; }
-			else if (mass * into > need * 0.45 && !p.crack) { strike(p, 0.5 + u / p.w, (y0 + 1 - (p.y - p.h / 2)) / p.h, 20); }
+			if (mass * into > need) { shatter(p, [vx * 0.6, 0.5, vz * 0.6], true); n++; }
+			else if (mass * into > need * 0.45 && !p.crack) { p.crack = [0.5 + u / p.w, Math.min(0.9, Math.max(0.1, (y0 + 1 - (p.y - p.h / 2)) / p.h)), 0.7, Math.random() * 100]; sounds.crack(p); cracked = true; }
 		}
+		if (n) settle(); else if (cracked) upload();
 		return n;
 	}
 
