@@ -19,6 +19,7 @@ import * as THREE from 'three';
 import { loadRapier, createCarPhysics } from '../vehicles/physics.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
+import { jetState, jetStep, heliState, heliStep } from './flight.js';
 
 // how each ground vehicle drives (vehicles/physics.js FEEL's fields)
 const FEEL = {
@@ -32,7 +33,7 @@ const NAMES = { tank: 'Tank', apc: 'Armoured truck', jeep: 'Jeep', truck: 'Cargo
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const G = 9.81;
-const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+const Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _m = new THREE.Matrix4();
 
 export function createMilDrive({ world, camera, combat, kit, group, hint, isPhone, mount }) {
@@ -52,10 +53,12 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 	// v: the parked vehicle ({ kind, x, y, z, yaw, scheme }); io: drive.js's { held, pedals, hud(text), strike(car), seat() (C: the seat's view) }
 	function board(v, io) {
 		const kind = v.kind, D = DIMS[kind], air = kind === 'jet' || kind === 'heli';
-		const mesh = vehicleMesh(kind, kit, SCHEMES[v.scheme] || SCHEMES.woodland);
+		const mesh = vehicleMesh(kind, kit, SCHEMES[v.scheme] || SCHEMES.woodland, { phone: isPhone });
 		group.add(mesh);
 		mesh.position.set(v.x, v.y, v.z); mesh.rotation.set(0, v.yaw, 0);
 		const S = { kind, mesh, car: null, loading: false, pos: new THREE.Vector3(v.x, v.y, v.z), q: new THREE.Quaternion().setFromAxisAngle(Y, v.yaw), yaw: v.yaw, spd: 0, vel: new THREE.Vector3(), throttle: 0, ground: true, gear: true, spin: 0, turret: 0, gun: 0, reload: 0, fire: 0, shells: [], camPos: null, dustT: 0, dead: false, alt: 0 };
+		// the aircraft's own state (military/flight.js)
+		const F = kind === 'jet' ? jetState(v.x, v.y, v.z, v.yaw) : kind === 'heli' ? heliState(v.x, v.y, v.z, v.yaw) : null;
 		const engine = engineSound(kind);
 		const P = W().player.state;
 		// fire: the left button on the view, Q, or the Fire button on a touch screen
@@ -143,8 +146,11 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 			if (_v.set(0, 1, 0).applyQuaternion(_q).y < 0.2 && Math.abs(o.speed) < 1) { S.flipT = (S.flipT || 0) + dt; if (S.flipT > 2) { C.reset(S.pos.x, S.pos.z, S.yaw); S.flipT = 0; } } else S.flipT = 0;
 			// anyone in the way is struck
 			if (io.strike) { const lv = C.body.linvel(); const n = io.strike({ kind: kind === 'jeep' ? 'suv' : 'truck', x: S.pos.x, y: S.pos.y, z: S.pos.z, yaw: S.yaw, vx: lv.x, vz: lv.z, mass: FEEL[kind].mass }); if (n && kind === 'jeep') C.body.setLinvel({ x: lv.x * 0.8, y: lv.y, z: lv.z * 0.8 }, true); }
+			// the tracks run with the ground (one side faster in a turn), the wheels roll and steer
+			const U = mesh.userData, wy = C.body.angvel().y;
+			if (kind === 'tank') U.pose?.({ track: [(o.speed - wy * D.W * 0.4) * dt, (o.speed + wy * D.W * 0.4) * dt] });
+			else U.pose?.({ roll: o.speed * dt, steer: C.ctl.steer * 0.5 * (1 - Math.min(0.6, Math.abs(o.speed) / 40)) });
 			// the turret follows your look; the gun its pitch
-			const U = mesh.userData;
 			if (U.turret) {
 				const want = wrap(P.yaw + Math.PI - S.yaw);
 				S.turret += clamp(wrap(want - S.turret), -0.7 * dt, 0.7 * dt);
@@ -155,7 +161,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 			S.reload = Math.max(0, S.reload - dt); S.fire = Math.max(0, S.fire - dt);
 			if (firing && kind === 'tank' && S.reload <= 0) {
 				U.gun.updateWorldMatrix(true, false);
-				const from = new THREE.Vector3(0, 0, 5.4).applyMatrix4(U.gun.matrixWorld), dir = new THREE.Vector3(0, 0, 1).transformDirection(U.gun.matrixWorld);
+				const from = new THREE.Vector3(0, 0, U.muzzle || 5.4).applyMatrix4(U.gun.matrixWorld), dir = new THREE.Vector3(0, 0, 1).transformDirection(U.gun.matrixWorld);
 				cannon(from, dir); S.reload = 3.6;
 			} else if (firing && kind !== 'tank' && kind !== 'truck' && S.fire <= 0) {
 				const from = S.pos.clone().add(_w.set(0, D.H + 0.3, 0)); gunfire(from, view(), 26, 0.02); S.fire = 0.1;
@@ -169,102 +175,51 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 			io.hud(`${NAMES[kind]} · ${Math.round(Math.abs(o.speed) * 3.6)} km/h${o.speed < -0.3 ? ' R' : ''}${kind === 'tank' ? (S.reload > 0 ? ` · loading ${S.reload.toFixed(1)} s` : ' · cannon ready') : ''}`);
 		}
 
-		// ---------- the jet ----------
+		// ---------- the jet (military/flight.js flies it) ----------
 		function jet(dt) {
 			const T = io.pedals;
-			const thr = (k('w') || T.straight ? 1 : 0) - (k('s') || T.back ? 1 : 0);
-			S.throttle = clamp(S.throttle + thr * dt * 0.6, 0, 1);
-			const ab = k('shift') && S.throttle > 0.9;
-			const pitchIn = (k('arrowup') || touch.up ? 1 : 0) - (k('arrowdown') || touch.down ? 1 : 0);
-			const rollIn = (k('d') || T.right ? 1 : 0) - (k('a') || T.left ? 1 : 0);
-			const yawIn = (k('arrowright') ? 1 : 0) - (k('arrowleft') ? 1 : 0);
-			const fwd = _v.copy(Z).applyQuaternion(S.q), left = new THREE.Vector3(1, 0, 0).applyQuaternion(S.q);
-			const g0 = floorAt(S.pos.x, S.pos.z, S.pos.y + 2);
-			S.alt = S.pos.y - g0;
-			const thrust = S.throttle * 125000 * (ab ? 1.6 : 1), brake = k(' ') ? 1 : 0;
-			const drag = 2.2 * S.spd * S.spd * (1 + brake * 1.5) + (S.ground ? (0.015 + brake * 0.5) * 13000 * G : 0);
-			S.spd = Math.max(0, S.spd + (thrust - drag - 13000 * G * fwd.y) / 13000 * dt);
-			const lift = clamp((S.spd - 58) / 32, 0, 1), auth = clamp(S.spd / 90, 0.12, 1);
-			if (S.ground) {
-				// on the wheels: steer with the nose wheel, rotate past flying speed
-				const steer = (rollIn + yawIn) * clamp(S.spd / 8, 0, 1) * 0.45 * (1 - lift * 0.7);
-				S.q.premultiply(_q.setFromAxisAngle(Y, -steer * dt));
-				const pitch = Math.asin(clamp(fwd.y, -1, 1)), wantPitch = pitchIn > 0 && S.spd > 62 ? 0.16 : 0;
-				S.q.multiply(_q.setFromAxisAngle(X, -(wantPitch - pitch) * Math.min(1, dt * 2)));
-				// (level the wings)
-				const bank = Math.asin(clamp(left.y, -1, 1)); S.q.multiply(_q.setFromAxisAngle(Z, -bank * Math.min(1, dt * 4)));
-				S.vel.copy(fwd).multiplyScalar(S.spd);
-				S.pos.addScaledVector(S.vel, dt); S.pos.y = g0;
-				if (lift >= 1 && fwd.y > 0.1) { S.ground = false; S.pos.y = g0 + 0.3; }
-			} else {
-				S.q.multiply(_q.setFromAxisAngle(X, -pitchIn * 1.1 * auth * dt));
-				S.q.multiply(_q.setFromAxisAngle(Z, rollIn * 2.6 * auth * dt));
-				S.q.multiply(_q.setFromAxisAngle(Y, -yawIn * 0.35 * auth * dt));
-				// banked, it turns
-				const bank = Math.asin(clamp(left.y, -0.99, 0.99));
-				S.q.premultiply(_q.setFromAxisAngle(Y, -G * Math.tan(clamp(bank, -1.3, 1.3)) / Math.max(45, S.spd) * lift * dt));
-				// too slow: the nose drops and it sinks
-				if (lift < 1) S.q.multiply(_q.setFromAxisAngle(X, (1 - lift) * 0.5 * dt));
-				S.vel.copy(fwd).multiplyScalar(S.spd); S.vel.y -= (1 - lift) * 22;
-				S.pos.addScaledVector(S.vel, dt);
-				S.gear = S.alt < 140 && S.spd < 130 ? true : S.alt > 40 ? false : S.gear;
-				if (S.pos.y <= g0 + 0.2) {
-					// touchdown: gently, wheels down, wings level, or it is a crash
-					const sink = -S.vel.y, bankNow = Math.abs(Math.asin(clamp(left.y, -1, 1)));
-					if (sink > 8 || bankNow > 0.4 || !S.gear || fwd.y < -0.2) return crash();
-					S.ground = true; S.pos.y = g0;
-					hint(sink < 3 ? 'Smooth touchdown.' : 'Down, firmly.', 1500, 1);
-				}
-			}
-			S.q.normalize();
+			const I = {
+				thr: (k('w') || T.straight ? 1 : 0) - (k('s') || T.back ? 1 : 0), ab: k('shift'),
+				pitch: (k('arrowup') || touch.up ? 1 : 0) - (k('arrowdown') || touch.down ? 1 : 0),
+				roll: (k('d') || T.right ? 1 : 0) - (k('a') || T.left ? 1 : 0),
+				yaw: (k('arrowright') ? 1 : 0) - (k('arrowleft') ? 1 : 0), brake: k(' '),
+			};
+			const ev = jetStep(F, I, dt, floorAt);
+			if (ev === 'crash') return crash();
+			if (ev === 'smooth' || ev === 'firm') hint(ev === 'smooth' ? 'Smooth touchdown.' : 'Down, firmly.', 1500, 1);
+			S.pos.copy(F.pos); S.q.copy(F.q); S.spd = F.spd; S.yaw = F.yaw; S.alt = F.alt; S.ground = F.ground; S.gear = F.gear; S.throttle = F.throttle; S.vel.copy(F.vel);
 			mesh.position.copy(S.pos); mesh.quaternion.copy(S.q);
-			if (mesh.userData.gear) mesh.userData.gear.visible = S.gear;
-			S.yaw = Math.atan2(fwd.x, fwd.z);
+			mesh.userData.pose?.({ surf: F.surf, gear: F.gearT, throttle: F.throttle, ab: F.ab ? 1 : 0, dt });
+			const fwd = _v.copy(Z).applyQuaternion(S.q);
 			S.fire = Math.max(0, S.fire - dt);
 			if (firing && S.fire <= 0) { const from = S.pos.clone().add(_w.copy(fwd).multiplyScalar(6)).add(_w.set(0, 2.2, 0)); gunfire(from, fwd.clone(), 30, 0.012); S.fire = 0.06; }
-			if (S.throttle > 0.5 && Math.random() < dt * (ab ? 30 : 8)) combat.fx.smokePuff(S.pos.clone().addScaledVector(fwd, -8.5).add(_w.set(0, 2.1, 0)), ab ? 0.05 : 0.5, ab ? 0.9 : 0.6, 0.6);
-			engine.set(S.throttle * (ab ? 1 : 0.85), S.throttle, 1);
+			if (F.throttle > 0.5 && Math.random() < dt * (F.ab ? 30 : 8)) combat.fx.smokePuff(S.pos.clone().addScaledVector(fwd, -8.5).add(_w.set(0, 2.1, 0)), F.ab ? 0.05 : 0.5, F.ab ? 0.9 : 0.6, 0.6);
+			engine.set(F.throttle * (F.ab ? 1 : 0.85), F.throttle, 1);
 			placeCamera(dt);
-			io.hud(`Jet · ${Math.round(S.spd * 3.6)} km/h · throttle ${Math.round(S.throttle * 100)}%${ab ? ' · afterburner' : ''} · ${S.ground ? 'on the ground' : `${Math.round(S.alt)} m`}${S.gear ? ' · gear down' : ''}`);
+			io.hud(`Jet · ${Math.round(S.spd * 3.6)} km/h · throttle ${Math.round(F.throttle * 100)}%${F.ab ? ' · afterburner' : ''} · ${S.ground ? 'on the ground' : `${Math.round(S.alt)} m`}${F.gearT > 0.98 ? ' · gear down' : F.gearT > 0.02 ? ' · gear moving' : ''}${F.surf.flap > 0.5 ? ' · flaps' : ''}`);
 		}
 
 		// ---------- the helicopter ----------
 		function heli(dt) {
 			const T = io.pedals;
-			S.spin = Math.min(1, S.spin + dt / 4);
-			const coll = (k('arrowup') || touch.up ? 1 : 0) - (k('arrowdown') || touch.down ? 1 : 0);
-			const fwdIn = (k('w') || T.straight ? 1 : 0) - (k('s') || T.back ? 1 : 0);
-			const yawIn = (k('a') || T.left ? 1 : 0) - (k('d') || T.right ? 1 : 0);
-			const side = (k('arrowleft') ? 1 : 0) - (k('arrowright') ? 1 : 0);
-			const g0 = floorAt(S.pos.x, S.pos.z, S.pos.y + 2);
-			S.alt = S.pos.y - g0;
-			const fast = k('shift') ? 1.6 : 1;
-			if (!S.ground || coll > 0) {
-				S.yaw += yawIn * 1.1 * dt;
-				const c = Math.cos(S.yaw), s = Math.sin(S.yaw);
-				const ax = (fwdIn * s + side * c) * 14 * fast, az = (fwdIn * c - side * s) * 14 * fast;
-				S.vel.x += (ax - S.vel.x * 0.35) * dt; S.vel.z += (az - S.vel.z * 0.35) * dt;
-				const wantVy = S.spin < 0.85 ? -2 : coll * 9 + (S.ground ? 0 : 0);
-				S.vel.y += (wantVy - S.vel.y) * Math.min(1, dt * 1.8);
-				if (S.spin >= 0.85 && coll > 0) S.ground = false;
-			}
-			S.pos.addScaledVector(S.vel, dt);
-			if (S.pos.y <= g0 + 0.05) {
-				if (!S.ground && S.vel.y < -7) return crash();
-				if (!S.ground) hint('Set down.', 1200, 1);
-				S.pos.y = g0; S.ground = true; S.vel.multiplyScalar(0.8); S.vel.y = 0;
-			}
-			// it leans into where it is going
-			const c = Math.cos(S.yaw), s = Math.sin(S.yaw), fv = S.vel.x * s + S.vel.z * c, sv = S.vel.x * c - S.vel.z * s;
-			S.q.setFromEuler(new THREE.Euler(S.ground ? 0 : clamp(fv * 0.012, -0.35, 0.35), S.yaw, S.ground ? 0 : clamp(-sv * 0.015, -0.4, 0.4), 'YXZ'));
+			const I = {
+				coll: (k('arrowup') || touch.up ? 1 : 0) - (k('arrowdown') || touch.down ? 1 : 0),
+				fwd: (k('w') || T.straight ? 1 : 0) - (k('s') || T.back ? 1 : 0),
+				turn: (k('a') || T.left ? 1 : 0) - (k('d') || T.right ? 1 : 0),
+				side: (k('arrowleft') ? 1 : 0) - (k('arrowright') ? 1 : 0), fast: k('shift'),
+			};
+			const ev = heliStep(F, I, dt, floorAt);
+			if (ev === 'crash') return crash();
+			if (ev === 'down') hint('Set down.', 1200, 1);
+			S.pos.copy(F.pos); S.q.copy(F.q); S.spd = F.spd; S.yaw = F.yaw; S.alt = F.alt; S.ground = F.ground; S.spin = F.spin; S.vel.copy(F.vel);
 			mesh.position.copy(S.pos); mesh.quaternion.copy(S.q);
 			const U = mesh.userData;
-			U.rotor.rotation.y += S.spin * dt * 28; U.tail.rotation.x += S.spin * dt * 60;
+			U.pose?.({ spin: F.spin, dt });
+			const g0 = S.pos.y - S.alt;
 			if (S.alt < 12 && S.spin > 0.6 && Math.random() < dt * 10) { const a = Math.random() * 6.283, r = 3 + Math.random() * 5; combat.fx.dust({ x: S.pos.x + Math.cos(a) * r, y: g0 + 0.3, z: S.pos.z + Math.sin(a) * r }, 2, 0.6, 0.56, 0.5, 1.2, 0.2); }
 			S.fire = Math.max(0, S.fire - dt);
 			if (firing && S.fire <= 0) { const from = S.pos.clone().add(_w.set(Math.sin(S.yaw) * 2.8, 0.7, Math.cos(S.yaw) * 2.8)); gunfire(from, view(), 24, 0.02); S.fire = 0.08; }
-			S.spd = Math.hypot(S.vel.x, S.vel.z);
-			engine.set(S.spin, 0.5 + coll * 0.3, 1);
+			engine.set(S.spin, 0.5 + I.coll * 0.3, 1);
 			placeCamera(dt);
 			io.hud(`Helicopter · ${Math.round(S.spd * 3.6)} km/h · ${S.ground ? (S.spin < 1 ? `rotor ${Math.round(S.spin * 100)}%` : 'on the ground') : `${Math.round(S.alt)} m`}`);
 		}
