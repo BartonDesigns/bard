@@ -101,8 +101,8 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	// by the sea or a bay: low ground with water close by on some side
 	function coastAt(x, z) {
 		const g0 = H(x, z);
-		if (g0 > 16) return false;
-		for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) if (H(x + dx * 170, z + dz * 170) < -0.6) return true;
+		if (g0 > 20) return false;
+		for (const k of [170, 380]) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) if (H(x + dx * k, z + dz * k) < -0.6) return true;
 		return false;
 	}
 	// the mapped streets near a point: the busiest it faces, whether two meet by it, a freeway near
@@ -172,16 +172,15 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			else if (b) { street = Math.max(R.busy, R.corner ? 1 : 0); const L = real?.landAt?.(o.x, o.z); if (L && L.lu === 7) street = 2; }
 			else street = o.street ?? 0;
 			// open country: few buildings about; the woods: wild land by it, or up in the hills
-			let rural = false, wild = false;
+			// open country and the woods' edge: for a gridded house from how built-up the town is
+			// there; for a mapped or grown one from how many neighbours it has (apply, below) and
+			// the wild land round it
+			let rural, wild, wildN = 0;
 			if (use === 'house') {
-				if (b && real?.landAt) {
-					let roofs = 0, wildN = 0;
-					// (a suburb's lots read as housing on the land map even where its roofs are sparse)
-					for (const [dx, dz] of [[60, 0], [-60, 0], [0, 60], [0, -60], [42, 42], [-42, 42], [42, -42], [-42, -42]]) { const L = real.landAt(o.x + dx, o.z + dz); if (L) { roofs += L.roof > 0.1 || L.lu === 1 || L.lu === 13 ? 1 : 0; if (L.lu === 0 || L.lu === 12 || L.lu === 11) wildN++; } }
-					rural = roofs <= 2; wild = rural && wildN >= 4;
-				} else { rural = U.u < 0.35; wild = rural && H(o.x, o.z) > 140; }
-			}
-			c = { street, coast: coastAt(o.x, o.z), rural, wild, highway: R.highway, down: U.d || (b?.site === 'downtown' ? 0.4 : 0) };
+				if (b && real?.landAt) { for (const [dx, dz] of [[60, 0], [-60, 0], [0, 60], [0, -60], [42, 42], [-42, 42], [42, -42], [-42, -42]]) { const L = real.landAt(o.x + dx, o.z + dz); if (L && (L.lu === 0 || L.lu === 12)) wildN++; } }
+				else { rural = U.u < 0.35; wild = rural && H(o.x, o.z) > 140; }
+			} else { rural = false; wild = false; }
+			c = { street, coast: coastAt(o.x, o.z), rural, wild, wildN, highway: R.highway, down: U.d || (b?.site === 'downtown' ? 0.4 : 0) };
 			if (b) b.econ = c; else { cache.set(key, c); if (cache.size > 60000) cache.clear(); }
 		}
 		let front = o.front ?? 1, face = front < 0 ? 1 : 0;
@@ -214,6 +213,21 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			if (seen.has(k)) continue;              // (a tower's setback crown is the same building)
 			seen.add(k);
 			descs.push(D);
+		}
+		// a mapped or grown house with few neighbours stands in open country (an estate, a farm, a
+		// cabin); with wild land round it too, at the edge of the woods
+		{
+			const G = new Map(), C = 40, key = (i, j) => i * 73856093 ^ j * 19349663;
+			for (const D of descs) if (D.use === 'house') { const k = key(Math.floor(D.x / C), Math.floor(D.z / C)); (G.get(k) || G.set(k, []).get(k)).push(D); }
+			for (const D of descs) {
+				if (D.use !== 'house' || D.rural !== undefined) continue;
+				let n = -1;
+				for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) for (const Q of G.get(key(Math.floor(D.x / C) + i, Math.floor(D.z / C) + j)) || []) if ((Q.x - D.x) ** 2 + (Q.z - D.z) ** 2 < 6400) n++;
+				D.rural = n < 6; D.wild = D.rural && (D.wildN >= 3 || H(D.x, D.z) > 160);
+				// (kept once its neighbours are surely all in the list)
+				const c = D.o.src?.econ;
+				if (c && Math.hypot(D.x - cx, D.z - cz) < 1500) { c.rural = D.rural; c.wild = D.wild; }
+			}
 		}
 		plan = planTown(descs, { locale: here });
 		// the homes, for the requests' customers (a door in front of each, the nearer ones)

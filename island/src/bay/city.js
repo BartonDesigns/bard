@@ -2152,7 +2152,7 @@ export function createCity(shared, scene, bay, real = null) {
 		if (waterVersion() !== waterV) { waterV = waterVersion(); lastX = 1e9; }                  // trees stood up along the creeks near you
 		if (real?.version && real.version() !== realV) { realV = real.version(); lastX = 1e9; }          // a mapped region came or went near you
 		// a grown town arrived or went: it rises, and its towers join the skylines
-		if (real?.genVersion && real.genVersion() !== genV) { genV = real.genVersion(); if (!globe) { skyline.length = 0; findSkylines(); } if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }
+		if (real?.genVersion && real.genVersion() !== genV) { genV = real.genVersion(); lastX = 1e9; if (!globe) { skyline.length = 0; findSkylines(); } if (realSeen) { riseT0 = performance.now(); rise.value.set(x, z, 0, 1); } }
 		if (riseT0 >= 0) {
 			// the ring runs out at 700 m a second; no shadows from the buildings still underground
 			const front = (performance.now() - riseT0) / 1000 * 700;
