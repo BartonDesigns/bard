@@ -17,9 +17,10 @@ import { gatherRequest, defaultGatherTime, makeGathering, HOURS as GATHER_HOURS 
 import { createDialogueArchive } from './dialogue-archive.js';
 import { normalizeDialogueStyle, dialogueTokenLimit, dialogueStylePrompt } from '../people/dialogue-style.js';
 import { createLocalSpeech } from './local-speech.js';
+import { deviceVoiceFor } from './local-speech-plan.js';
 import { voiceShape } from '../people/chatter-lines.js';
 import { rankOf } from '../gameplay/ranks.js';
-import { chooseGuideModel } from './preferences.js';
+import { chooseGuideModel, voiceMode, VOICE_MODES } from './preferences.js';
 import { travelRequest, resolveTravel } from './travel.js';
 import { loadAtlas, atlasReady, cities, regions } from '../earth/atlas.js';
 import { pruneModels } from '../storage.js';
@@ -837,12 +838,13 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 
 	// ---------- voice ----------
 	let voiceOut = store.get('crysis-guide-voice', true);
-	let speechMode = store.get('crysis-speech-mode', 'local');
+	// Voices: best available, device only, or local always (preferences.js voiceMode)
+	let speechMode = voiceMode(store.get('crysis-voices', null), store.get('crysis-speech-mode', null));
 	let speechStatus = '';
-	const localSpeech = createLocalSpeech({ onStatus: text => { speechStatus = text; speechStatusEl.textContent = text; }, fallback: deviceSpeak });
-	mount.addEventListener('pointerdown', () => { if (voiceOut && speechMode === 'local') localSpeech.unlock(); }, { capture: true });
+	const localSpeech = createLocalSpeech({ onStatus: text => { speechStatus = text; speechStatusEl.textContent = text; }, fallback: deviceSpeak, mode: () => speechMode });
+	mount.addEventListener('pointerdown', () => { if (voiceOut && speechMode !== 'device') localSpeech.unlock(); }, { capture: true });
 	// keyboard players never tap: the first key unlocks the voices too
-	addEventListener('keydown', () => { if (voiceOut && speechMode === 'local') localSpeech.unlock(); }, { capture: true, once: true });
+	addEventListener('keydown', () => { if (voiceOut && speechMode !== 'device') localSpeech.unlock(); }, { capture: true, once: true });
 	function speak(t, who) {
 		if (!t) return;
 		if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -861,13 +863,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		u.rate = 1.02; u.pitch = 1;
 		const all = speechSynthesis.getVoices().filter((x) => /^en/.test(x.lang));
 		let v = all.find((x) => /en[-_](US|GB)/.test(x.lang) && /natural|samantha|google|premium/i.test(x.name)) || all[0];
-		// a person gets a voice of their own: picked from their seed, pitched by age and build
-		if (who && all.length) {
-			const d = partner?.p?.P?.dna, fem = all.filter((x) => /female|samantha|victoria|karen|moira|tessa|zira|susan|fiona|allison|ava|serena/i.test(x.name)), mal = all.filter((x) => /male|daniel|alex|fred|david|mark|tom|oliver|aaron|rishi/i.test(x.name) && !/female/i.test(x.name));
-			const pool = d && !d.male ? (fem.length ? fem : all) : (mal.length ? mal : all);
-			v = pool[(d?.seed ?? 0) % pool.length];
-			u.pitch = d ? (d.male ? 0.9 : 1.1) - (d.age - 40) * 0.004 : 1;
-			u.rate = 0.95 + (who.temper?.outgoing ?? 0.5) * 0.15;
+		// a person gets a voice of their own: the nearest the device has to their local one, by
+		// sex and seed, pitched and paced like it (local-speech-plan.js)
+		const d = partner?.p?.P?.dna;
+		if (who && d && all.length) {
+			const near = deviceVoiceFor({ ...voiceShape(d), seed: d.seed ?? 0, male: d.male ?? true }, all);
+			v = near.voice; u.pitch = near.pitch; u.rate = near.rate;
 			// (a teen's own voice: teens.js voiceFor)
 			if (who.voice) { u.pitch = who.voice.pitch; u.rate = who.voice.rate; }
 		}
@@ -1081,7 +1082,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	send.onclick = () => { const t = input.value; input.value = ''; ask(t); };
 	input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { send.onclick(); } if (e.key === 'Escape') { endTalk(); show(false); } });
 	mic.onclick = listen;
-	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; spk.setAttribute('aria-pressed', String(voiceOut)); if (!voiceOut) { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } else if (speechMode === 'local') localSpeech.unlock(); };
+	spk.onclick = () => { voiceOut = !voiceOut; store.set('crysis-guide-voice', voiceOut); spk.textContent = voiceOut ? '🔊' : '🔈'; spk.setAttribute('aria-pressed', String(voiceOut)); if (!voiceOut) { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); } else if (speechMode !== 'device') localSpeech.unlock(); };
 	addEventListener('keydown', (e) => { if ((e.key === 'g' || e.key === 'G') && !window._KEYS_PLAY_ON && !e.metaKey && !e.ctrlKey && document.activeElement?.tagName !== 'INPUT' && mount.style.display !== 'none') { e.preventDefault(); show(panel.style.display === 'none'); } });
 
 	// settings: which model
@@ -1106,12 +1107,13 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		styleSelect('Replies','response',[['brief','Brief'],['balanced','Balanced'],['rich','Rich · more detail']]);
 		settings.append(el('div','color:rgba(255,255,255,.65);margin:6px 0;','Tone follows each character. Mature themes apply to adult NPCs; model and provider limits still apply.'));
 		const speechSelect = el('select', 'flex:1;min-width:0;padding:8px;background:#1a1a1a;color:#fff;border:1px solid #555;border-radius:8px;');
-		speechSelect.setAttribute('aria-label', 'Speech engine');
-		for (const [value, text] of [['local', 'Local neural voice'], ['device', 'Device voice']]) { const o = el('option', null, text); o.value = value; speechSelect.append(o); }
+		speechSelect.setAttribute('aria-label', 'Voices');
+		for (const [value, text] of VOICE_MODES) { const o = el('option', null, text); o.value = value; speechSelect.append(o); }
 		speechSelect.value = speechMode;
-		speechSelect.onchange = () => { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); speechMode = speechSelect.value; if (speechMode === 'local') localSpeech.retry(); store.set('crysis-speech-mode', speechMode); speechStatusEl.textContent = ''; };
-		row('Speech', speechSelect);
-		settings.append(el('div', 'color:rgba(255,255,255,.6);margin:6px 0;', 'Local voices download about 100 MB once, then generate spoken replies on this device.'));
+		// choosing again is also how a phone that could not hold the local voices tries once more
+		speechSelect.onchange = () => { localSpeech.cancel(); if ('speechSynthesis' in window) speechSynthesis.cancel(); speechMode = voiceMode(speechSelect.value); if (speechMode !== 'device') localSpeech.retry(); store.set('crysis-voices', speechMode); speechStatusEl.textContent = ''; };
+		row('Voices', speechSelect);
+		settings.append(el('div', 'color:rgba(255,255,255,.6);margin:6px 0;', 'Best available: common lines play from voices made ahead of time, other lines from the local voices (about 100 MB once; on a phone only after a few calm minutes) or the device voice. Local always loads the local voices on any device.'));
 		const sel = el('select', 'flex:1;padding:8px;border-radius:8px;background:#1a1a1a;color:#fff;border:1px solid rgba(255,255,255,.2);');
 		const opts = phone ? [['none', 'Built-in guide (models are off on phones)']] : [['none', 'Built-in guide (no model)'], ['webllm', 'On this device (WebGPU)'], ['ollama', 'Ollama on this computer']];
 		// the shared voice, once the discovery server is deployed (earth/config.js): phones too
@@ -1176,6 +1178,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		},
 		place: (p, f) => localSpeech.place(p, f),
 		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
+		// a phone loads the local voices only once the world has been calm a while
+		tick: (dt, state) => localSpeech.tick(dt, state),
+		// the device's nearest voice to a person's own, for the device-only setting
+		device: (dna) => deviceVoiceFor({ seed: dna.seed ?? 0, male: dna.male ?? true, ...voiceShape(dna) }, 'speechSynthesis' in window ? speechSynthesis.getVoices() : []),
 	};
 	// the name and character a passer-by has, the same one a conversation with them will use
 	function personaOf(p) {
