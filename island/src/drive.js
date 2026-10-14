@@ -12,6 +12,10 @@
 // steer, Space for the handbrake, C to look from behind. M (or the assist button) hands
 // the wheel back to the road: snapped to it, choosing only the turns, as before. Stop, and
 // the car stays where you left it.
+//
+// Beside one of the military's vehicles (a tank, an armoured truck, a jeep, a jet, a helicopter:
+// military/), V takes that instead, with these same keys and the pad (military/drive-mil.js adds
+// the turret, the cannon, the throttle and the flying); V again gets out once it has stopped.
 
 import * as THREE from 'three';
 import { BLOCKS, toGrid, fromGrid } from './bay/styles.js';
@@ -225,6 +229,9 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!W || D.active) return;
 		const P = W.player.state, Vh = W.vehicles;
 		if (W.boat?.boarded?.()) return;
+		// a military vehicle beside you, first
+		const mv = !given && W.military?.vehicleToEnter?.(P.pos.x, P.pos.z);
+		if (mv && boardMil(W, P, mv)) return;
 		// which car: the parked one beside you, yours where you left it, or a new one
 		const near = given || Vh?.carToEnter(P.pos.x, P.pos.z), mine = Vh?.mine.car;
 		D.from = null;
@@ -240,6 +247,17 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		labels();
 		if (D.mode === 'free') startPhysics();
 		hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. Assist lets the road steer. The road button stops.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'On the road: ← → pick the next turn (hold to turn round), ↑ straight on. The letter keys play music as you go. Space jumps off, Shift+arrow steps off, Esc stops.'), 4500);
+	}
+	function boardMil(W, P, v) {
+		D.mil = W.military.board(v, { held, pedals: D.pedals, hud: (t) => { hud.textContent = t; }, strike, seat: () => D.chase, looked: () => performance.now() - (D.lookT || 0) < 2500, stop: (force) => stop(force) });
+		if (!D.mil) return false;
+		W.military.take(v);
+		D.active = true; D.chase = false; P.locked = true; P.flying = false; P.vel.set(0, 0, 0); D.lastYaw = undefined;
+		P.yaw = v.yaw + Math.PI; P.pitch = -0.05;
+		pad.style.display = isPhone ? 'block' : 'none'; hud.style.display = 'block';
+		toggleBtn.style.background = '#01a982';
+		labels();
+		return true;
 	}
 	function startPhysics() {
 		const W = world(), f = D.from;
@@ -262,6 +280,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		};
 	}
 	function setMode(m) {
+		if (D.mil) return;
 		if (!D.active) { D.mode = m; return; }
 		const W = world(), mine = W?.vehicles?.mine.car;
 		if (m === 'assist') {
@@ -279,6 +298,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		labels();
 	}
 	function nextKind() {
+		if (D.mil) return;
 		const W = world(), mine = W?.vehicles?.mine.car;
 		if (D.car && Math.abs(D.car.pose().speed) > 1.5) { hint('Stop first to change cars.', 1500); return; }
 		D.kind = KINDS[(KINDS.indexOf(D.kind) + 1) % KINDS.length];
@@ -291,14 +311,31 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		modeBtn.textContent = D.mode === 'free' ? 'Assist' : 'Drive';
 		modeBtn.title = D.mode === 'free' ? 'Let the road steer (M)' : 'Drive it yourself (M)';
 		// (the camera only turns when you drive it yourself)
-		const cam = D.active && D.mode === 'free';
+		const cam = D.active && (D.mode === 'free' || !!D.mil);
+		if (D.mil) for (const b of [kindBtn, modeBtn, credBtn]) b.style.display = 'none';
 		camBtn.style.display = cam ? 'flex' : 'none';
 		camBtn.style.background = D.chase ? '#01a982' : 'rgba(8,20,26,.55)';
 		keys.style.display = cam && !isPhone ? 'block' : 'none';
 	}
-	function stop() {
+	// force: false when you asked (V, Esc, the button): a military vehicle on the move, or in the
+	// air, keeps you in it
+	function stop(force = true) {
 		if (!D.active) return;
 		const W = world(), P = W?.player.state, Vh = W?.vehicles, mine = Vh?.mine.car;
+		if (D.mil) {
+			if (!force && !D.mil.canLeave()) { hint(D.mil.kind === 'jet' || D.mil.kind === 'heli' ? 'Land and stop first.' : 'Stop first.', 1600); return; }
+			const r = D.mil.leave();
+			D.mil = null; D.active = false;
+			if (!r.wrecked) W?.military?.leave(r.kind, r.x, r.y, r.z, r.yaw, r.scheme);
+			if (P) {
+				const g = Math.max(W.island.heightAt(r.out.x, r.out.z), W.island.extraFloor ? W.island.extraFloor(r.out.x, r.out.z, r.y + 1) : -1e9);
+				P.pos.set(r.out.x, g + 1.68, r.out.z); P.locked = false; P.vel.set(0, 0, 0); camera.position.copy(P.pos);
+			}
+			pad.style.display = 'none'; hud.style.display = 'none'; keys.style.display = 'none';
+			for (const b of [kindBtn, modeBtn, credBtn, camBtn]) b.style.display = 'none';
+			toggleBtn.style.background = 'rgba(8,20,26,.55)';
+			return;
+		}
 		D.active = false;
 		D.car?.dispose(); D.car = null;
 		if (camera.near !== 0.25) { camera.near = 0.25; camera.updateProjectionMatrix(); }
@@ -319,15 +356,16 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		for (const b of [kindBtn, modeBtn, credBtn, camBtn]) b.style.display = 'none';
 		toggleBtn.style.background = 'rgba(8,20,26,.55)';
 	}
-	toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); D.active ? stop() : start(); });
+	toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); D.active ? stop(false) : start(); });
 	const held = new Set();
 	window.addEventListener('keydown', (e) => {
 		if (!mount.isConnected || mount.style.display === 'none' || e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
 		const k = e.key.toLowerCase();
-		if (k === 'v' && !e.repeat) { D.active ? stop() : start(); e.preventDefault(); return; }
-		if (k === 'escape' && D.active) { stop(); e.preventDefault(); return; }
+		if (k === 'v' && !e.repeat) { D.active ? stop(false) : start(); e.preventDefault(); return; }
+		if (k === 'escape' && D.active) { stop(false); e.preventDefault(); return; }
 		if (!D.active) return;
 		held.add(k);
+		if (D.mil) { if (!e.repeat && k === 'c') chase(); if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault(); return; }
 		if (!e.repeat && k === 'm') { setMode(D.mode === 'free' ? 'assist' : 'free'); e.preventDefault(); return; }
 		if (!e.repeat && k === 'n') { nextKind(); e.preventDefault(); return; }
 		if (!e.repeat && k === 'c') { chase(); e.preventDefault(); return; }
@@ -360,6 +398,13 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!D.active) return false;
 		const W = world();
 		if (!W) { stop(); return false; }
+		if (D.mil) {
+			// (looking about, for the aircraft's camera)
+			const P = W.player.state;
+			if (D.lastYaw !== undefined && Math.abs(Math.atan2(Math.sin(P.yaw - D.lastYaw), Math.cos(P.yaw - D.lastYaw))) > 1e-4) D.lookT = performance.now();
+			D.lastYaw = P.yaw;
+			return D.mil?.update(dt) ?? false;
+		}
 		if (D.mode === 'free') return drive(dt, W);
 		holdTurn();
 		const P = W.player.state, e = D.edge;
@@ -546,5 +591,5 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const P = world()?.player?.state;
 		return P ? { x: P.pos.x, y: P.pos.y - 1.68, z: P.pos.z, speed: Math.abs(D.v) } : null;
 	}
-	return { update, start, stop, debugOptions, carAt, active: () => D.active, auto, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car };
+	return { update, start, stop, debugOptions, carAt, active: () => D.active, auto, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car, military: () => D.mil };
 }

@@ -37,8 +37,9 @@ export function loadRapier() {
 
 // the car: kind, where (x, z, yaw), and the world to drive in
 // env: { heightAt(x, z), floorAt(x, z, y), boxes(x, z, r) -> [{x, z, w, d, a, h}], cars(x, z, r) -> [{x, y, z, yaw, kind}], push(p, footY) }
-export function createCarPhysics(R, kind, start, env) {
-	const S = specOf(kind), F = FEEL[kind] || FEEL.sedan;
+// custom: { spec, feel } for a vehicle that is not one of the cars (military/drive-mil.js)
+export function createCarPhysics(R, kind, start, env, custom = null) {
+	const S = custom?.spec || specOf(kind), F = custom?.feel || FEEL[kind] || FEEL.sedan;
 	const world = new R.World({ x: 0, y: -9.81, z: 0 });
 	world.timestep = 1 / 60;
 	// the body: a box a little inside the car's shape, heavy low down
