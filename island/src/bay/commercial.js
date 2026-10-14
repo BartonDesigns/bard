@@ -22,6 +22,7 @@ import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { inCampus } from './discovery.js';
 import { flashAtlas } from '../tattoo/skinink.js';
 import { shopScheme, seedAt } from './decor.js';
+import { lightInterior, releaseInterior, configureLighting } from '../interiors/lighting.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
 let SHEET = null;
@@ -37,6 +38,8 @@ function flashSheet() {
 }
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
+// the hours each keeps its lights on (interiors/lighting.js dims them the rest of the night)
+const HOURS = { cafe: [6, 20], restaurant: [10, 23.5], shop: [8, 21], office: [7, 20], arcade: [10, 24], bowling: [10, 24], cinema: [10, 24], tattoo: [11, 22] };
 
 // what a commercial block is, from its kind, size and where it stands (stable for a place)
 function typeOf(b) {
@@ -64,6 +67,7 @@ export const COMMERCIAL_TYPES = ['cafe', 'restaurant', 'shop', 'tattoo', 'office
 export function createCommercial(scene, bay, real, city, { isPhone = false } = {}) {
 	const band = buildingBand(isPhone);
 	const BUILD_R = isPhone ? 36 : 50, DROP_R = BUILD_R + 25, MAX = isPhone ? 3 : 6;
+	configureLighting({ isPhone });
 	const group = new THREE.Group();
 	group.name = 'commercial';
 	scene.add(group);
@@ -105,7 +109,7 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, 0]]) floorY = Math.max(floorY, bay.heightAt(b.x + ca * sx * b.w / 2 - sa * sz * b.d / 2, b.z + sa * sx * b.w / 2 + ca * sz * b.d / 2));
 		floorY += 0.12;
 		const W = b.w, D = b.d, H = Math.max(CEIL + 0.8, b.wallH - (floorY - bay.heightAt(b.x, b.z))), hw = W / 2, hd = D / 2;
-		const parts = new Map(), col = [];      // col: solid boxes [x0, z0, x1, z1, y0, y1] in the local frame
+		const parts = new Map(), col = [], glassCol = new Set();      // col: solid boxes [x0, z0, x1, z1, y0, y1] in the local frame
 		const add = (mat, g) => { if (!parts.has(mat)) parts.set(mat, []); parts.get(mat).push(g.index ? g.toNonIndexed() : g); };
 		const box = (mat, x0, y0, z0, x1, y1, z1, solid = false) => { add(mat, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); if (solid) col.push([x0, z0, x1, z1, y0, y1]); };
 		const cyl = (mat, x, y, z, r, h, seg = 10) => add(mat, new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z));
@@ -133,7 +137,8 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		for (const [a0, a1] of [[-hw, doorX - dw / 2], [doorX + dw / 2, hw]]) {
 			if (a1 - a0 < 0.1) continue;
 			add(mats.glass, new THREE.BoxGeometry(a1 - a0, STORE - 0.35, 0.03).translate((a0 + a1) / 2, 0.35 + (STORE - 0.35) / 2, hd - WALL / 2));
-			col.push([a0, hd - WALL, a1, hd, 0, STORE]);
+			const pane = [a0, hd - WALL, a1, hd, 0, STORE];
+			col.push(pane); glassCol.add(pane);
 			for (let x = a0; x <= a1 + 0.01; x += Math.max(1.2, (a1 - a0) / Math.max(1, Math.round((a1 - a0) / 2.4)))) box(mats.trim, x - 0.05, 0.35, hd - WALL, x + 0.05, STORE, hd);
 		}
 		box(mats.trim, doorX - dw / 2 - 0.08, 0, hd - WALL, doorX - dw / 2, STORE, hd); box(mats.trim, doorX + dw / 2, 0, hd - WALL, doorX + dw / 2 + 0.08, STORE, hd);
@@ -315,7 +320,13 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 		// Exactly the coarse footprint: complementary coverage prevents coplanar overlap.
 		root.position.set(b.x, floorY, b.z); root.rotation.y = -b.a; b.grp.nearBorn=updateDetailClock();anchorBuilding(root,b.x,b.z,Math.max(W,D)/2,b.grp.nearBorn);
 		group.add(root);
-		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => {root.traverse((o) => o.geometry?.dispose()); outside.dispose();} };
+		// lit by its own light panels, pendants, screens and signs (interiors/lighting.js)
+		lightInterior(root, {
+			id: 'biz:' + Math.round(b.x) + ':' + Math.round(b.z), occluders: col.filter((q) => !glassCol.has(q)), lamps: [mats.panel, mats.screen, mats.neon, mats.bigscreen],
+			exclude: [outside], levels: [[0, open ? H - 0.14 : CEIL]], bounds: [-hw, -hd, hw, hd], rooms: 1, roomOf: () => 0,
+			hours: HOURS[type], dust: type === 'restaurant' && open,
+		});
+		const B = { b, type, root, floorY, seats, col, hw, hd, doorX, lastH: -99, dispose: () => { releaseInterior(root); root.traverse((o) => o.geometry?.dispose()); outside.dispose(); } };
 		return B;
 	}
 

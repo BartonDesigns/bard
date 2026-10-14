@@ -432,16 +432,20 @@ export function pieceFixture(pc, { ceilings = [], centre = [0, 0], glow = [1, 0.
 	const f = { p: [...pc.p], c, on: true, piece: pc };
 	if (atCeiling) {
 		f.p[1] = pc.p[1] - sy / 2 - 0.02;
-		if (long > 0.6 && short < 0.4) { f.shape = 'tube'; f.axis = sx > sz ? [1, 0, 0] : [0, 0, 1]; f.len = long; f.I = Math.min(45, 10 + 18 * Math.min(long, 3)); }
-		else if (long > 0.5) { f.shape = 'panel'; f.n = [0, -1, 0]; f.w = sx; f.d = sz; f.I = Math.min(55, 30 * sx * sz + 10); }
-		else { f.shape = 'down'; f.n = [0, -1, 0]; f.I = Math.min(30, 10 + 14 * Math.sqrt(pc.area / 0.12)); }
+		// (as bright as a room's ceiling light is: about 300 lux on the floor under it at an
+		// ordinary height, more from the lights of a tall hall)
+		const tall = Math.min(3, Math.max(1, ((f.p[1] - lv[0]) / 2.5) ** 2));
+		if (long > 0.6 && short < 0.4) { f.shape = 'tube'; f.axis = sx > sz ? [1, 0, 0] : [0, 0, 1]; f.len = long; f.I = Math.min(22, 6 + 7 * Math.min(long, 3)); }
+		else if (long > 0.5) { f.shape = 'panel'; f.n = [0, -1, 0]; f.w = sx; f.d = sz; f.I = Math.min(26, 12 * sx * sz + 7); }
+		else { f.shape = 'down'; f.n = [0, -1, 0]; f.I = Math.min(16, 6 + 6 * Math.sqrt(pc.area / 0.12)); }
+		f.I *= tall;
 	} else if (flatV) {
 		// facing out from the wall it is on (toward the middle of the plan)
 		const ax = sx < sz ? 0 : 2, to = (ax === 0 ? centre[0] - pc.p[0] : centre[1] - pc.p[2]) >= 0 ? 1 : -1;
 		f.shape = 'panel'; f.n = ax === 0 ? [to, 0, 0] : [0, 0, to]; f.w = Math.max(sx, sz); f.d = sy;
 		f.I = Math.min(6, 0.6 + 7 * f.w * f.d) * Math.min(1, lum * 2);
 		f.screen = true;
-	} else { f.shape = 'point'; f.I = Math.min(12, 3 + 9 * Math.sqrt(pc.area / 0.3)); }
+	} else { f.shape = 'point'; f.I = Math.min(8, 2 + 5 * Math.sqrt(pc.area / 0.3)); }
 	f.I *= strength;
 	return f;
 }

@@ -81,6 +81,11 @@ function step(renderer, scene, camera, dt) {
 	if (scene?.isScene && S.scene !== scene) attach(scene, renderer);
 	// the bakes, a few milliseconds a frame
 	const t0 = performance.now();
+	// (the nearest building first, unless one is under way)
+	if (camera && S.queue.length > 1 && !S.queue[0].gen) {
+		const d = (H) => H.root.getWorldPosition(tmpP).distanceToSquared(camera.position);
+		S.queue.sort((a, b) => d(a) - d(b));
+	}
 	while (S.queue.length && performance.now() - t0 < S.budget) {
 		const H = S.queue[0];
 		if (!H.gen) { H.state = 'baking'; H.gen = job(H); }
@@ -386,7 +391,9 @@ function* job(H) {
 // positions (or normals) into the building's frame
 function rootSpace(A, rel, normal) {
 	const e = rel.elements;
-	if (e[0] === 1 && e[5] === 1 && e[10] === 1 && e[12] === 0 && e[13] === 0 && e[14] === 0 && e[1] === 0 && e[2] === 0 && e[4] === 0) return A;
+	// (a mesh in the building's own frame, to rounding: as it is)
+	const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+	if (e.every((v, i) => Math.abs(v - I[i]) < 1e-5)) return A;
 	const out = new Float32Array(A.length), v = new THREE.Vector3(), nm = normal ? new THREE.Matrix3().getNormalMatrix(rel) : null;
 	for (let i = 0; i < A.length; i += 3) {
 		v.set(A[i], A[i + 1], A[i + 2]);

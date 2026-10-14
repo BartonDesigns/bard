@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { Kit, M } from '../planet/medieval/kit.js';
+import { lightInterior, releaseInterior } from './lighting.js';
 
 const WOOD = [0.42, 0.3, 0.2], DARK = [0.25, 0.18, 0.12], PLASTER = [0.86, 0.82, 0.72], IRON = [0.16, 0.16, 0.17];
 
@@ -108,6 +109,10 @@ export function createMedievalInteriors({ group, mat, col, houses, isPhone = fal
 		mesh.receiveShadow = true;
 		mesh.matrixAutoUpdate = false;
 		group.add(mesh);
+		// lit by its hearth (interiors/lighting.js): the fire's glow across the floor, the room
+		// dark in its corners, the day only through the door and the little windows
+		const fire = k.w(-hw + 0.45, y0 + 0.55, hz);
+		lightInterior(mesh, { id: 'realm:' + Math.round(I.x) + ':' + Math.round(I.z), fixtures: [{ p: fire, c: [1, 0.52, 0.22], I: 7, shape: 'point', flicker: 2.3 }], levels: [[y0, y0 + H]], home: true });
 		// the door, hung on its hinge at the doorway's left
 		const dk = new Kit();
 		dk.box(0, 0, -0.06, I.door.w - 0.02, 2.02, 0, M.PLANK, [0.46, 0.34, 0.22]);
@@ -124,6 +129,7 @@ export function createMedievalInteriors({ group, mat, col, houses, isPhone = fal
 		return { b, mesh, pivot, solids: [...solids, doorSolid], doorSolid, open: 0, seats, ms, at: k.w(I.door.x, y0, d / 2) };
 	}
 	function drop(H) {
+		releaseInterior(H.mesh);
 		group.remove(H.mesh); group.remove(H.pivot);
 		H.mesh.geometry.dispose(); H.pivot.children[0].geometry.dispose();
 		for (const s of H.solids) s.off = true;

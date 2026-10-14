@@ -94,8 +94,11 @@ const WALK = /* glsl */`
 `;
 // indoors: the ceiling strips' light on everything, more on what faces up (no lights added:
 // a new light would recompile every shader in the scene)
+// (a room lit by interiors/lighting.js has its fixtures' light baked in instead)
 const ROOM = `
-	totalEmissiveRadiance += diffuseColor.rgb * (0.42 + 0.3 * max(normalize(vCN).y, 0.0));`;
+	#ifndef IBAKE
+	totalEmissiveRadiance += diffuseColor.rgb * (0.42 + 0.3 * max(normalize(vCN).y, 0.0));
+	#endif`;
 // a kit material: lit, coloured per vertex, its look per vertex by aGlow
 export function shellMaterial(U, o = {}) {
 	const m = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0xffffff, roughness: o.rough ?? 0.78, metalness: o.metal ?? 0.05 });

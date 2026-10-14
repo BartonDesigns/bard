@@ -14,6 +14,7 @@ import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
 import { occasions } from '../calendar.js';
 import { carGeometry, carMaterial } from './cars.js';
 import { NONE_IN, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
 
 // the rooms that sometimes have a raised (tray) ceiling
 const RAISE = new Set(['living', 'family', 'dining', 'master']);
@@ -32,8 +33,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	group.name = 'houses';
 	scene.add(group);
 	const houses = new Map();       // a house's block list (grp) -> the built house, or null if it has no plan
-	// after dark, real lamps in the lit rooms nearest you (a fixed few, so no shader rebuilds)
-	const lamps = [...Array(isPhone ? 2 : 4)].map(() => { const l = new THREE.PointLight(0xffc88a, 0, 7.5, 1.6); scene.add(l); return l; });
+	// (the rooms' light is the shared interior lighting's: interiors/lighting.js)
+	configureLighting({ isPhone });
 	const carMats = new Map();
 
 	// ---------------------------------------------------------------------------
@@ -517,12 +518,23 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 		grp.nearBorn=updateDetailClock();anchorBuilding(root, Mb.x, Mb.z,0,grp.nearBorn);
 		root.updateMatrixWorld(true);
 		group.add(root);
+		// its rooms lit by their own lamps and ceiling lights, the sky through its windows
+		const levels = [[0, HT.ceil0]];
+		if (plan.rooms.some((r) => r.level)) levels.push([HT.floor1, HT.ceil1]);
+		let bx0 = 1e9, bz0 = 1e9, bx1 = -1e9, bz1 = -1e9;
+		for (const r of plan.rects) { bx0 = Math.min(bx0, r.x0); bz0 = Math.min(bz0, r.z0); bx1 = Math.max(bx1, r.x1); bz1 = Math.max(bz1, r.z1); }
+		lightInterior(root, {
+			id: 'house:' + Math.round(Mb.x) + ':' + Math.round(Mb.z), occluders: col, levels, bounds: [bx0, bz0, bx1, bz1], home: true,
+			rooms: plan.rooms.length, roomOf: (x, y, z) => { const c = plan.cellAt(x, z); return c < 0 ? -1 : plan.labels?.[y > HT.floor1 - 0.2 ? 1 : 0]?.[c] ?? -1; },
+			litOf: (id) => !!lit[id], dust: (x, y, z, id) => plan.rooms[id]?.type === 'garage', exclude: ['stucco', 'siding'],
+		});
 		// the footprint at each level, for the floors that carry you
 		const lights = plan.rooms.filter((r) => r.cells.length && lit[r.id] && r.type !== 'closet').map((r) => [r.cx, (r.level ? HT.ceil1 : HT.ceil0) - 0.45, r.cz]);
 		return { grp, plan, root, floorY, base, col, doors, stoop, lights, M: Mb, ca, sa, cx: Mb.x, cz: Mb.z, r: Math.hypot(...plan.rects.reduce((m, q) => [Math.max(m[0], Math.abs(q.x0), Math.abs(q.x1)), Math.max(m[1], Math.abs(q.z0), Math.abs(q.z1))], [0, 0])) + 3 };
 	}
 
 	function dispose(h) {
+		releaseInterior(h.root);
 		group.remove(h.root);
 		h.root.traverse((o) => { if (o.isMesh && o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); });
 	}
@@ -534,6 +546,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 	const BUDGET = isPhone ? 3 : 4;
 	function update(cam, dt, nightK = 0) {
 		updateDetailClock();night.value = nightK;
+		lightingClock(nightK);
 		const x = cam.position.x, z = cam.position.z;
 		const high = cam.position.y - (bay.heightAt(x, z) || 0) > 120;
 		group.visible = !high;
@@ -581,18 +594,8 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			buildMs = job.ms;
 			job = null;
 		}
-		// the lamps go to the lit rooms nearest you
-		// (only in the house you are in: without shadows their light would pass through walls)
-		const here = nightK > 0.05 ? inside(cam.position) : null;
-		M.setNight(nightK, !!here);
-		if (here) {
-			const spots = [];
-			for (const h of [here.h]) {
-				for (const s2 of h.lights) { const [wx, wz] = toWorld(h, s2[0], s2[2]); spots.push([Math.hypot(wx - x, wz - z) + Math.abs(h.floorY + s2[1] - cam.position.y) * 2, wx, h.floorY + s2[1], wz]); }
-			}
-			spots.sort((p, q) => p[0] - q[0]);
-			lamps.forEach((l, i) => { const s2 = spots[i]; l.intensity = s2 ? nightK * 5 : 0; if (s2) l.position.set(s2[1], s2[2], s2[3]); });
-		} else for (const l of lamps) l.intensity = 0;
+		// (the glow of a lit room seen from outside; inside, the rooms' own light is baked in)
+		M.setNight(nightK, !!(nightK > 0.05 && inside(cam.position)));
 		// the doors swing
 		for (const h of houses.values()) {
 			if (!h) continue;
