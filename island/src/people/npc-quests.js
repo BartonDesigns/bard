@@ -28,13 +28,16 @@ import { lineFor } from './errands-core.js';
 import { toLatLon } from '../bay/geo.js';
 import { zoneOf } from './flow.js';
 import { regionalNow } from '../region/here.js';
+import { createPlaces, restOn, standAt } from './bag-spots.js';
 import { citiesNear } from '../earth/atlas.js';
 
 const NOTICE = 7, OWNER_BACK = 45, VISIBLE = 95, REACH = 1.4, STEP_MAX = 45, MEMORY = 600;
 
-export function createNpcQuests({ scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '' }) {
+export function createNpcQuests({ scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null }) {
 	const FAR_EVERY = isPhone ? 40 : 25, SCENES = isPhone ? 1 : 2, BAG_EVERY = isPhone ? [150, 240] : [70, 140], FAVOUR_EVERY = isPhone ? [150, 260] : [80, 160];
 	const sources = createSources();
+	// the benches, shelters, park seats, cafe tables and doorsteps about (people/bag-spots.js)
+	const spots = places || createPlaces({ world });
 	const scenes = [], memory = new Map(), cache = new Map(), considered = new Map(), open = [], pending = [];
 	const taken = new Set(), hurtFns = [], downed = new WeakSet();
 	let clock = 0, farT = 8, lookT = 0, saveT = 15, whereT = 0, farN = 0, n = 0, bag = null;
@@ -260,19 +263,82 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 	}
 
 	// ---------- a bag left alone ----------
-	function clearBag() { if (!bag) return; dropProp(bag.prop); unkeep(bag.owner); bag = null; }
+	function clearBag() { if (!bag) return; dropProp(bag.prop); if (bag.walk && bag.owner?.heldBy === bag.walk) letGo(bag.owner); unkeep(bag.owner); bag = null; }
+	// someone sets their bag down: on a bench, at a shelter, on a cafe table or a doorstep, in a
+	// park (people/bag-spots.js); on the sidewalk when there is nothing like that about. They
+	// walk to it with the bag in hand, set it down, and walk on without it.
+	const SEAT_UP = { bench: 0.48, park: 0.48, picnic: 0.76 };
 	function spawnBag({ force = false } = {}) {
 		if (bag) return 'a bag is already out';
+		const c = cam();
+		let spot = null;
+		try { spot = spots.pick(c.x, c.z, { min: force ? 3 : 12, max: 50 }); } catch { /* nothing built here */ }
+		const walkers = people.pool.filter((p) => free(p) && p.role === 'walk' && flat(pos(p), c) > (force ? 3 : 8) && flat(pos(p), c) < 70);
+		const owners = spot ? walkers.filter((p) => flat(pos(p), spot) < (force ? 70 : 35)).sort((a, b) => flat(pos(a), spot) - flat(pos(b), spot)) : [];
+		if (!owners.length) return sidewalkBag(force);
+		const owner = owners[0], o = pos(owner);
+		const at = restOn(spot), stand = standAt(spot), via = spot.door ? [spot.door.outside, spot.door.inside] : [];
+		const q = bagQuest({ owner: { id: idOf(owner), name: nameOf(owner), x: o.x, z: o.z, ref: owner }, at, region: here.region.id, where: spot, via, cash: 15 + (owner.P.dna.seed % 45) });
+		q.steps.at(-1).at.who = owner;
+		bag = { q, owner, at, prop: propFor('bag'), t: 0, seen: new Set(), phase: 'arriving', spot, path: [...via, stand], out: via.slice().reverse(), k: 0, walk: null };
+		// (the console's bag: set down at once, its owner beside it)
+		if (force) {
+			const y = spot.kind === 'table' ? at.y - (spot.h ?? 0.46) : at.y - (SEAT_UP[spot.kind] || 0);
+			owner.M.place?.(stand.x, y, stand.z, spot.heading || 0);
+			bag.k = bag.path.length;
+			setDown(bag);
+		} else walkTo(bag);
+		return q.title;
+	}
+	// (with nothing to set it on: dropped beside them as they walk)
+	function sidewalkBag(force) {
 		const c = cam(), owners = people.pool.filter((p) => free(p) && p.role === 'walk' && flat(pos(p), c) > (force ? 3 : 12) && flat(pos(p), c) < 50);
 		if (!owners.length) return 'nobody about to leave one';
 		const owner = owners[Math.floor(Math.random() * owners.length)], o = pos(owner), h = owner.M.S.heading || 0;
 		const at = { x: o.x - Math.sin(h) * 0.7, y: o.y, z: o.z - Math.cos(h) * 0.7 };
 		const q = bagQuest({ owner: { id: idOf(owner), name: nameOf(owner), x: o.x, z: o.z, ref: owner }, at, region: here.region.id, where: 'sidewalk', cash: 15 + (owner.P.dna.seed % 45) });
-		q.steps[1].at.who = owner;
+		q.steps.at(-1).at.who = owner;
 		const prop = propFor('bag'); onGround(prop, at);
 		keep(owner);
-		bag = { q, owner, at, prop, t: 0, seen: new Set(), phase: 'left' };
+		bag = { q, owner, at, prop, t: 0, seen: new Set(), phase: 'left', spot: { kind: 'sidewalk' }, path: [], out: [], k: 0, walk: null };
 		return q.title;
+	}
+	// the owner on their way to the spot (through the door, for a table inside) and back out
+	function walkTo(B) {
+		const speed = Math.max(1, B.owner.P.dna.gait?.pace || 1.3);
+		B.walk = (who) => {
+			const S = who.M.S, T = B.path[B.k] || B.out[B.k - B.path.length];
+			if (!T || B.phase === 'setting') { who.M.want.speed = 0; return true; }
+			who.M.want.heading = Math.atan2(T.x - S.pos.x, T.z - S.pos.z); who.M.want.speed = speed;
+			return true;
+		};
+		B.walk.npcq = true;
+		B.owner.held = true; B.owner.override = B.walk; B.owner.heldBy = B.walk;
+	}
+	function setDown(B) {
+		onGround(B.prop, B.at);
+		B.phase = 'left'; B.t = 0;
+		// out of the cafe first, if that is where they left it; then on their way, unaware
+		if (B.out.length) { if (!B.walk) walkTo(B); B.leaving = true; }
+		else { if (B.walk && B.owner.heldBy === B.walk) letGo(B.owner); keep(B.owner); }
+	}
+	function bagWalk(dt) {
+		const B = bag, o = B.owner;
+		if (B.phase === 'arriving' || B.phase === 'setting') {
+			if (!o.active || o.P?.ragdoll || o.override !== B.walk) { clearBag(); return; }
+			inHand(B.prop, o);
+			if (B.phase === 'setting') { if ((B.setT -= dt) <= 0) setDown(B); return; }
+			const T = B.path[B.k];
+			if (T && flat(pos(o), T) < REACH) B.k++;
+			if (B.k >= B.path.length) { B.phase = 'setting'; B.setT = 1.6; o.M.setPose?.('rest'); }
+			else if (B.t > 40) clearBag();
+			return;
+		}
+		if (!B.leaving) return;
+		if (!o.active || o.override !== B.walk) { B.leaving = false; return; }
+		const T = B.out[B.k - B.path.length];
+		if (T && flat(pos(o), T) < REACH) B.k++;
+		if (B.k >= B.path.length + B.out.length || B.t > 30) { B.leaving = false; letGo(o); keep(o); }
 	}
 	function bagLook(force = null) {
 		const B = bag;
@@ -282,13 +348,14 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (flat(B.at, c) > VISIBLE) { const r = playFar(B.q, { dispoOf, ...ctx('', B.q.region) }); if (r.taker) remember(B.owner, r.outcome === 'betray' ? 'robbed' : 'got-back'); clearBag(); return; }
 		// (the console's forced bag takes anyone standing about, not only those walking by)
 		const can = force ? (p) => adult(p) && !p.engaged && !p.override && !p.held && p.route?.kind !== 'seat' && p.route?.kind !== 'follow' : free;
-		const near = people.pool.filter((p) => can(p) && p !== B.owner && !B.seen.has(p) && flat(pos(p), B.at) < (force ? 40 : NOTICE)).sort((a, b) => flat(pos(a), B.at) - flat(pos(b), B.at));
+		const reach = force ? 40 : B.spot?.kind === 'table' || B.spot?.kind === 'doorstep' ? NOTICE + 2 : NOTICE;
+		const near = people.pool.filter((p) => can(p) && p !== B.owner && !B.seen.has(p) && flat(pos(p), B.at) < reach).sort((a, b) => flat(pos(a), B.at) - flat(pos(b), B.at));
 		for (const p of near) {
 			B.seen.add(p);
 			const d = dispoOf(p.P.dna.seed);
 			const choice = force ? { take: true, outcome: force === 'steal' ? 'betray' : 'done' } : decide(d, B.q);
 			if (!choice.take) continue;
-			if (force) { const h = Math.random() * 6.28; p.M.place?.(B.at.x + Math.cos(h) * 1.6, B.at.y, B.at.z + Math.sin(h) * 1.6, h); }
+			if (force) { const h = Math.random() * 6.28, st = B.spot && B.spot.kind !== 'sidewalk' ? standAt(B.spot) : B.at; p.M.place?.(st.x + Math.cos(h) * 1.6, pos(p).y, st.z + Math.sin(h) * 1.6, h); }
 			start(B.q, p, d, choice.outcome, { ground: B });
 			B.phase = 'taken';
 			return;
@@ -299,7 +366,8 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 			if (o.active && !o.heldBy && !o.override) {
 				unkeep(o);
 				B.phase = 'taken';
-				const back = { ...B.q, kind: 'bag.own', steps: [{ do: 'pickup', at: { x: B.at.x, z: B.at.z }, item: B.q.item }], deeds: { done: 'favour' } };
+				const go = (p) => ({ do: 'go', at: { x: p.x, z: p.z } });
+				const back = { ...B.q, kind: 'bag.own', steps: [...B.out.slice().reverse().map(go), { do: 'pickup', at: { x: B.at.x, z: B.at.z }, item: B.q.item }, ...B.out.map(go)], deeds: { done: 'favour' } };
 				say(o, sceneLine('gone', n++), 'open', { surprise: 0.6 });
 				const R = start(back, o, dispoOf(o.P.dna.seed), 'own', { ground: B });
 				R.own = true;
@@ -427,11 +495,11 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if ((whereT -= dt) <= 0) { whereT = 2; try { here = whereNow(); regionNames.set(here.region.id, here.region.name); } catch { /* keep the last */ } }
 		for (const R of scenes) sceneUpdate(R, dt);
 		for (let i = scenes.length - 1; i >= 0; i--) if (scenes[i].phase === 'over') scenes.splice(i, 1);
-		if (bag) { bag.t += dt; }
+		if (bag) { bag.t += dt; bagWalk(dt); }
 		if ((lookT -= dt) <= 0) {
 			lookT = 1;
 			if (hurtFns.length) watchHurt();
-			if (bag) bagLook();
+			if (bag?.phase === 'left') bagLook();
 			for (let i = pending.length - 1; i >= 0; i--) if (clock >= pending[i].at) { fromHandoff(pending[i].E); pending.splice(i, 1); }
 			for (let i = open.length - 1; i >= 0; i--) { const F = open[i]; if (!F.taken && (clock > F.until || !F.giver.active || flat(F, cam()) > VISIBLE)) { letGo(F.giver); unkeep(F.giver); if (F.friend) { letGo(F.friend); unkeep(F.friend); } open.splice(i, 1); } }
 			if (Math.floor(clock) % 2 === 0) match();
@@ -454,7 +522,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 				return { name: nameOf(p), id, temper: temperOf(d), mercy: d.mercy, law: d.law, protect: d.protect, honest: d.honest, greed: d.greed, money: `${cash} (${money.wealth(id)})`, deeds: A ? A.deeds : 0, last: A?.last || '', saw: memoryOf(p.P.dna.seed) || '' };
 			}),
 			scenes: scenes.map((R) => ({ quest: R.q.title, kind: R.q.kind, who: R.name, step: R.q.steps[R.i]?.do || '', outcome: R.outcome, phase: R.phase, t: r2(R.t) })),
-			bag: bag && { phase: bag.phase, owner: bag.q.giver.name, t: Math.round(bag.t), at: [r2(bag.at.x), r2(bag.at.z)] },
+			bag: bag && { phase: bag.phase, owner: bag.q.giver.name, where: bag.spot?.kind || 'sidewalk', title: bag.q.title, t: Math.round(bag.t), at: [r2(bag.at.x), r2(bag.at.z)] },
 			open: open.map((F) => F.q.title), sources: sources.list().map((s) => s.id), far: farN,
 			recent: commons.log(8).map((e) => `${e.name || 'someone'} (${e.actor}): ${e.line}${e.region ? ' in ' + e.region : ''}`),
 		};
@@ -484,7 +552,11 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		onHurt: (f) => { hurtFns.push(f); return () => { const i = hurtFns.indexOf(f); if (i >= 0) hurtFns.splice(i, 1); }; }, hurt,
 		// (for the console and the tests) a bag left now near you; mode 'return' or 'steal' makes the
 		// nearest passer-by do that, whoever they are
-		bag(mode = 'auto') { const t = spawnBag({ force: true }); if (bag && mode !== 'auto') { bagLook(mode === 'steal' ? 'steal' : 'return'); } return t; },
+		bag(mode = 'auto') { const t = spawnBag({ force: true }); if (bag?.phase === 'left' && mode !== 'auto') { bagLook(mode === 'steal' ? 'steal' : 'return'); } return t; },
+		// the places a bag could be left near you; and the establishment registry to read the
+		// cafes and restaurants from ((x, z, r) -> [{ id, kind, name, door, tables }])
+		spots: () => { const c = cam(); try { return spots.near(c.x, c.z, 50).map((x) => ({ kind: x.kind, at: [r2(x.x), r2(x.z)], place: x.place || x.venue || '' })); } catch { return []; } },
+		establishments: (fn) => spots.use?.(fn),
 		favour: () => spawnFavour(),
 		// (the console, on a slow machine: run the scenes on by seconds of game time, moving the
 		// people in them by their own steering, as people.js would)

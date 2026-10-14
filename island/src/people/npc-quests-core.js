@@ -20,6 +20,7 @@
 import { offerFor, rewardFor } from './errands-core.js';
 import { chooseDeed, followThrough } from './disposition.js';
 import { RULES } from '../combat/morality.js';
+import { spotWords, SPOT_KINDS } from './bag-spots.js';
 
 export const DOES = Object.freeze(['go', 'pickup', 'deliver', 'talk', 'wait', 'fix', 'chase']);
 const hashOf = (s) => { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
@@ -34,7 +35,7 @@ export function questOf(d = {}) {
 		kind: d.kind || 'job', title: d.title || 'A job', giver: { type: 'person', id: '', name: '', x: 0, z: 0, ...(d.giver || {}) },
 		steps, reward: { credits: Math.max(0, Math.round(d.reward?.credits || 0)), from: d.reward?.from ?? d.giver?.id ?? null },
 		deeds, tempt: Math.max(0, Math.min(1, d.tempt ?? 0.2)), region: d.region || '', expires: d.expires ?? null,
-		item: d.item || steps.find((s) => s.item)?.item || null, loot: d.loot ?? null, source: d.source || null,
+		item: d.item || steps.find((s) => s.item)?.item || null, loot: d.loot ?? null, source: d.source || null, spot: d.spot || null,
 	};
 }
 
@@ -96,13 +97,17 @@ export function favourQuest(kind, { giver, friend = null, drop = null, car = nul
 	}
 	return null;
 }
-// a bag set down and forgotten (on a bench, a cafe table, a bus shelter, the sidewalk)
-export const BAG_SPOTS = ['bench', 'cafe table', 'bus shelter', 'sidewalk'];
-export function bagQuest({ owner, at, region = '', where = 'sidewalk', cash = 30 }) {
-	const it = { name: 'bag', shape: 'bag' };
-	return questOf({ kind: 'bag', title: `${owner?.name || 'Someone'}'s bag, left on the ${where}`, giver: { type: 'person', id: owner?.id || '', name: owner?.name || '', x: owner?.x || 0, z: owner?.z || 0 },
-		item: it, loot: cash, tempt: 0.55, region, reward: { credits: 20 + (cash % 4) * 5, from: owner?.id || null },
-		steps: [{ do: 'pickup', at: spot(at, { name: where }), item: it }, { do: 'deliver', at: spot(owner), item: it }],
+// a bag set down and forgotten: on a bench, at a bus shelter, on a cafe or restaurant table,
+// a doorstep, a park bench or a picnic table, or the sidewalk (people/bag-spots.js). where:
+// a spot's kind, or the spot itself ({ kind, place?, venue? }); via: the points walked
+// through to reach it and back (a cafe's door, for a table inside)
+export const BAG_SPOTS = SPOT_KINDS;
+export function bagQuest({ owner, at, region = '', where = 'sidewalk', cash = 30, via = [] }) {
+	const it = { name: 'bag', shape: 'bag' }, sp = typeof where === 'string' ? { kind: where } : { kind: where?.kind || 'sidewalk', place: where?.place, venue: where?.venue };
+	const W = spotWords(sp), go = (p) => ({ do: 'go', at: spot(p) });
+	return questOf({ kind: 'bag', title: `${owner?.name || 'Someone'}'s bag, left ${W.left}`, giver: { type: 'person', id: owner?.id || '', name: owner?.name || '', x: owner?.x || 0, z: owner?.z || 0 },
+		item: it, loot: cash, tempt: 0.55, region, reward: { credits: 20 + (cash % 4) * 5, from: owner?.id || null }, spot: sp,
+		steps: [...via.map(go), { do: 'pickup', at: spot(at, { name: W.name }), item: it }, ...via.slice().reverse().map(go), { do: 'deliver', at: spot(owner), item: it }],
 		deeds: { done: 'return-bag', betray: 'steal-bag' } });
 }
 
@@ -153,7 +158,7 @@ export function farKind(roll) { let a = 0; for (const [k, w] of FAR_KINDS) { a +
 export function farQuest(region, n, roll = Math.random()) {
 	const kind = farKind(roll), gk = (hashOf(region + ':' + n) % RESIDENTS), gid = `npc:${residentSeed(region, gk)}`;
 	const giver = { id: gid, name: '', x: 0, z: 0 };
-	if (kind === 'bag') return bagQuest({ owner: giver, at: { x: 0, z: 0 }, region, where: pick(BAG_SPOTS, n), cash: 15 + (n * 7) % 50 });
+	if (kind === 'bag') return bagQuest({ owner: giver, at: { x: 0, z: 0 }, region, where: pick(BAG_SPOTS, n * 5 + 1), cash: 15 + (n * 7) % 50 });
 	return favourQuest(kind, { giver, friend: { id: `npc:${residentSeed(region, gk + 1)}`, name: '' }, region, seed: gk, n });
 }
 // one far event played out: up to three passers-by consider it; the first who takes it settles
