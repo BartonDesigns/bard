@@ -176,3 +176,19 @@ test('fists: minors and the surrendered are never targets; a quarrel climbs and 
 	assert.equal(brawlResponse('words').police, false);
 	assert.equal(brawlResponse('guns', 3).military, true);
 });
+
+test('convoys and cruisers follow the roads toward the trouble, or go straight where there are none', async () => {
+	const { roadRoute, along } = await import('../src/military/route.js');
+	// a road east along z = 0 from x = 0 to 2000, then one north (to z = -1500) at its end
+	const roads = [{ cls: 'primary', pts: [0, 0, 500, 0, 1000, 0, 1500, 0, 2000, 0] }, { cls: 'secondary', pts: [2000, 0, 2000, -500, 2000, -1000, 2000, -1500] }];
+	const near = (x, z, r) => roads.filter((q) => { for (let i = 0; i < q.pts.length; i += 2) if (Math.hypot(q.pts[i] - x, q.pts[i + 1] - z) <= r) return true; return false; });
+	const R = roadRoute(near, { x: -100, z: 30 }, { x: 2050, z: -1500 });
+	assert.ok(R.pts.includes(2000), 'it turns at the junction');
+	assert.ok(R.length > 3400 && R.length < 4200, `length ${R.length}`);
+	const mid = along(R, R.length / 2);
+	assert.ok(Number.isFinite(mid.x) && Math.abs(Math.hypot(mid.dx, mid.dz) - 1) < 1e-6);
+	const straight = roadRoute(null, { x: 0, z: 0 }, { x: 300, z: 400 });
+	assert.equal(Math.round(straight.length), 500);
+	// never off the end
+	assert.equal(Math.round(along(straight, 9999).x), 300);
+});

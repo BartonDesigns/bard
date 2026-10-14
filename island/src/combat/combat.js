@@ -990,6 +990,9 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		projectile, blast, firstHit, landShot, ground, eye, sound: (k, at) => sound(k, at), deal: (T, blow, mine) => deal(T, blow, mine), hurtPlayer, wantedLevel: () => wanted.stars, isEarth, zone: () => (W() ? zone() : null),
 		// harm done by your vehicle's guns (military/): yours, weighed like a shot
 		strikeAs: (T, blow) => deal(T, { ...blow, by: ME }, true),
+		call: (text, who) => call(text, who),
+		// you, as a shooter (military/drive-mil.js fires as you)
+		me: ME,
 		perception: p => { const q=p?.M?.S?.pos, e=eye(); let aimedAt=false; if(q && view.state()?.aiming) { camera.getWorldDirection(_v); const dx=q.x-e.x,dz=q.z-e.z,d=Math.hypot(dx,dz); aimedAt=d<15 && d>.1 && (dx*_v.x+dz*_v.z)/d>.86; } return {...multiplayer?.reputationContext?.(p),events:p?.awarenessEvents || [],bodyKey:W()?.body?.key,aimedAt,wanted:isEarth()?wanted.stars:0,injured:me.H.hp<me.H.max*.45,running:me.speed>3}; },
 		vehicleImpact: p => { notice('vehicle-impact',p.M.S.pos,'drove a vehicle into a person'); morality.record({kind:'hurt',target:'a pedestrian struck by your vehicle',world:worldKey,place:placeName(),ctx:{unarmed:true,witnessed:true}}); if(isEarth()) offend(wanted,'hitCivilian',true); civilians.alarm(p.M.S.pos.x,p.M.S.pos.z,35,p.M.S.pos.y); },
 		// a young person a car would have struck: the Spark's shimmer
