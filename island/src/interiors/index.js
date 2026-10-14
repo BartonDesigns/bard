@@ -41,7 +41,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 
 	// ---------- what a lot is, and its plan ----------
 	function useOf(o, tall) {
-		if (underSite(o)) return null;
+		if (underSite(o) || o.wrecked) return null;          // (a wrecked one is its shell: structures/damage.js)
 		if (o.src?.grp || tall.has(o) || o.w < 3.2 || o.d < 3.2 || o.w * o.d > 26000) return null;
 		const b = o.src, top = o.y + o.h, g = bay.heightAt(o.x, o.z), hA = top - g;
 		if (hA < 2.4) return null;
@@ -383,7 +383,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		// every other building nothing has built: a solid block
 		const tk = towers?.key?.();
 		for (const o of city.lotsNear(pos.x, pos.z, 1.5)) {
-			if (o.src?.grp?.near || (tk && Math.round(o.x) + ':' + Math.round(o.z) === tk && towers.inside?.())) continue;
+			if (o.src?.grp?.near || o.wrecked || (tk && Math.round(o.x) + ':' + Math.round(o.z) === tk && towers.inside?.())) continue;
 			const top = o.y + o.h;
 			if (footY + 0.35 > top || footY + 1.7 < o.y) continue;
 			const key = city.lotKey(o);
@@ -483,5 +483,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		return out;
 	}
 	// (budget: milliseconds a frame for building; tests on a slow machine give it more)
-	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
+	// a building's rooms let go now (structures/: it was wrecked, or put right and to be built afresh)
+	const release = (o) => { const k = city.lotKey(o); if (live.has(k)) { if (job?.key === k) job = null; drop(k); scanT = -1; } };
+	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, release, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }
