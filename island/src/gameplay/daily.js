@@ -14,6 +14,7 @@ export const GOALS = Object.freeze([
 	{ id: 'rush1', text: 'Get a passenger in a hurry there on time', kind: 'fare', test: (d) => d.onTime === true, need: 1, credits: 100 },
 	{ id: 'long1', text: 'Drive a fare over a kilometre', kind: 'fare', test: (d) => d.metres >= 1000, need: 1, credits: 80 },
 	{ id: 'tend1', text: 'Patch up someone who is hurt', kind: 'tend', need: 1, credits: 90 },
+	{ id: 'cross3', text: 'Cross the street at a crosswalk 3 times', kind: 'street', test: (d) => d.kind === 'crosswalk', need: 3, credits: 40 },
 ]);
 export const ALL_BONUS = 150;
 

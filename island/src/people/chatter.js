@@ -8,7 +8,7 @@ import { awarenessContext } from './world-awareness.js';
 const NOTICE = 11, SAY = 4.6, EARSHOT = 14;
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _h = new THREE.Vector3();
 
-export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone, frameMs = () => 16, errands = () => null }) {
+export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone, frameMs = () => 16, errands = () => null, deeds = () => null }) {
 	// how the world takes you: the compass's standing and the favours you have done
 	const standing = () => { try { const R = combat()?.morality?.reactions?.(); return { rep: R?.reputation ?? 0, bounty: R?.bounty ?? 0, favours: errands()?.info?.()?.done ?? 0 }; } catch { return {}; } };
 	const said = new WeakMap(), bumped = new WeakMap();
@@ -45,16 +45,18 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			const u = new SpeechSynthesisUtterance(line.text), d = head(p, _v).distanceTo(camera.position);
 			u.volume = Math.max(0.15, Math.min(1, 2.4 / Math.max(d, 1)));
 			u.pitch = dna.male ? 0.92 : 1.1; u.rate = 1.03;
+			// the nearest the device has to the person's own voice (guide/local-speech-plan.js)
+			const near = voice.device?.(dna);
+			if (near) { if (near.voice) u.voice = near.voice; u.pitch = near.pitch; u.rate = near.rate; }
 			u.onend = u.onerror = () => done?.(true);
 			speechSynthesis.speak(u);
 			begin(0.6 + line.text.length * 0.065);
 			return;
 		}
-		// On a phone the local voices are only used once a conversation has loaded them: their
-		// first download is about 100 MB and making a voice costs the processor the world needs.
-		// Until then a remark is its caption. A computer loads them in the background.
-		if (isPhone && !voice.ready()) { silent(); return; }
-		voice.warm();
+		// The voice picks its own source (guide/local-speech.js): a clip made ahead of time, the
+		// local model once loaded, or the device's voice. A phone never loads the model for a
+		// remark (it is about 100 MB); a computer loads it in the background.
+		if (!isPhone) voice.warm();
 		const ok = voice.remark(line.text, dna, {
 			at: () => head(p, _h),
 			audible: () => p.active && p.P.root.visible && p.M.S.pos.distanceTo(camera.position) < EARSHOT,
@@ -77,6 +79,12 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			child: !!d.child, outgoing: T.outgoing, warmth: T.warmth, mood: p.persona?.mood || null,
 			role: p.role === 'jog' ? 'jog' : p.route?.kind === 'seat' ? 'seat' : p.role,
 			phone: S.pose === 'phone', work: !!p.workContext, vendor: p.workContext?.role === 'vendor',
+			// a bag handed back, or taken, that they did or saw lately (people/npc-quests.js)
+			deed: deeds()?.memoryOf?.(d.seed) || null,
+			// and something about money, now and then (the bank's moneyTalk, through npc-money.js)
+			money: deeds()?.moneyLine?.(d.seed) || null,
+			// a theft round here they heard about, out of your sight (people/npc-leads.js)
+			lead: d.child || d.teen ? null : deeds()?.leadLine?.(d.seed) || null,
 		};
 	}
 
@@ -165,6 +173,9 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			if (vis) cap.style.transform = `translate3d(${((_f.x * 0.5 + 0.5) * capW).toFixed(1)}px,${((-_f.y * 0.5 + 0.5) * capH).toFixed(1)}px,0) translate(-50%,-100%)`;
 			else { cap.style.opacity = '0'; capFor = null; }
 		}
+		// a phone loads the local voices only after the world has been calm a few minutes: not
+		// loading, not flying or racing about, and keeping up with its frames
+		if (isPhone) voice.tick?.(dt, { settled: on, flying: !!world()?.player?.state?.flying, fast: speed > 9, dense: frameMs() > 28 });
 		checkT -= dt;
 		if (!on || pending || checkT > 0) return;
 		checkT = isPhone ? 0.3 : 0.2;

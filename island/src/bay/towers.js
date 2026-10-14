@@ -8,6 +8,7 @@ import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { planWorkplace, levelBelow, floorAt, slabRects } from '../interiors/workplace-plan.js';
 import { fitWorkplace } from '../interiors/workplace-fitout.js';
 import { toLL } from '../earth/globeframe.js';
+import { officeScheme } from './decor.js';
 
 const WALL = 0.3;
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -25,8 +26,35 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		sofa: S(0x5d6b73, 0.9), sofa2: S(0x9c7a5a, 0.9), rug: S(0xb9a58a, 1), green: S(0x3f6b3a, 0.8), pot: S(0x8a8078, 0.8), bed: S(0xeceae4, 0.9), throw: S(0x3d5a78, 0.9), piano: S(0x0b0b0c, 0.15, { metalness: 0.2 }),
 		art: [S(0xd9452c, 0.8), S(0x2c6fd9, 0.8), S(0xe8c547, 0.8), S(0x2a9d8f, 0.8)],
 	};
-	const FILL = [M.stone, M.carpet, M.oak, M.wall, M.ceil, M.desk, M.sofa, M.sofa2, M.rug, M.bed, M.throw, M.green, ...M.art];
+	// a carpet of tiles laid in quarter turns, and a ceiling of acoustic tiles in their grid
+	// (both in metres, the boxes given plan uvs: see add)
+	let seedT = 7;
+	const rn = () => (seedT = (Math.imul(seedT, 1664525) + 1013904223) >>> 0) / 4294967296;
+	const canvasTex = (draw) => { const c = document.createElement('canvas'); c.width = c.height = 128; draw(c.getContext('2d')); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; };
+	const carpetTex = canvasTex((g) => { for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) { const across = (i + j) % 2; g.fillStyle = across ? '#e2e2e2' : '#f6f6f6'; g.fillRect(i * 64, j * 64, 64, 64); g.fillStyle = 'rgba(0,0,0,0.07)'; for (let k = 0; k < 64; k += 4) if (across) g.fillRect(i * 64 + k, j * 64, 2, 64); else g.fillRect(i * 64, j * 64 + k, 64, 2); } for (let k = 0; k < 3000; k++) { g.fillStyle = `rgba(${rn() < 0.5 ? '0,0,0' : '255,255,255'},0.08)`; g.fillRect(rn() * 128, rn() * 128, 1, 1); } g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(0, 0, 128, 1); g.fillRect(0, 64, 128, 1); g.fillRect(0, 0, 1, 128); g.fillRect(64, 0, 1, 128); });
+	carpetTex.repeat.set(1, 1);
+	const gridTex = canvasTex((g) => { g.fillStyle = '#f4f3ef'; g.fillRect(0, 0, 128, 128); for (let k = 0; k < 2500; k++) { g.fillStyle = 'rgba(120,120,110,0.25)'; g.fillRect(rn() * 128, rn() * 128, 1, 1); } g.fillStyle = '#c9c9c6'; g.fillRect(0, 0, 128, 3); g.fillRect(0, 0, 3, 128); });
+	gridTex.repeat.set(1 / 0.6, 1 / 0.6);
+	M.carpetTile = S(0xffffff, 0.95, { map: carpetTex }); M.carpetTile.userData.planUV = true;
+	M.ceilGrid = S(0xf4f3ef, 0.9, { map: gridTex }); M.ceilGrid.userData.planUV = true;
+	M.ceilOpen = S(0x7d8085, 0.9); M.duct = S(0xb4b8bc, 0.45, { metalness: 0.3 });
+	const FILL = [M.stone, M.carpet, M.carpetTile, M.oak, M.wall, M.ceil, M.ceilGrid, M.ceilOpen, M.duct, M.desk, M.sofa, M.sofa2, M.rug, M.bed, M.throw, M.green, ...M.art];
 	for (const m of FILL) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.12; }
+	// a floor's fit-out in its company's colours (decor.js officeScheme): the walls and an
+	// accent wall, the carpet, the desks and chairs, the woods, the ceiling; the tinted
+	// materials kept and shared by every floor that asks for the same colour
+	const tints = new Map();
+	const tinted = (base, rgb, k = 1) => {
+		const key = base.uuid + rgb.map((v) => (v * k).toFixed(3)).join(',');
+		let m = tints.get(key);
+		if (!m) { m = base.clone(); m.color.setRGB(rgb[0] * k, rgb[1] * k, rgb[2] * k, THREE.SRGBColorSpace); m.emissive = m.color.clone(); m.emissiveIntensity = 0.12; FILL.push(m); tints.set(key, m); }
+		return m;
+	};
+	function dressed(T, L) {
+		if (L.kind !== 'office') return M;
+		const S = officeScheme(T.key, L.n);
+		return { ...M, scheme: S, wall: tinted(M.wall, S.wall), brand: tinted(M.wall, S.brand), carpet: tinted(S.carpetTile ? M.carpetTile : M.carpet, S.carpet, S.shade), desk: tinted(M.desk, S.desk), sofa: tinted(M.sofa, S.seat), sofa2: tinted(M.sofa2, S.sofa), oak: tinted(M.oak, S.wood), ceil: S.ceiling === 'grid' ? M.ceilGrid : S.ceiling === 'open' ? M.ceilOpen : M.ceil };
+	}
 
 	let T = null;                 // the tower you are at: { o, key, lobby, up, levels, type, ... }
 	const P = () => player();
@@ -42,7 +70,15 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 	// ---------- building one level ----------
 	function level(T, L) {
 		const { hw, hd, coreW, coreD } = T, parts = new Map(), col = [], seats = [];
-		const add = (m, g) => { if (!parts.has(m)) parts.set(m, []); if (g.index) { const source=g; g=g.toNonIndexed(); source.dispose(); } parts.get(m).push(g); };
+		// (this floor's materials: its company's colours over the tower's own)
+		const M = dressed(T, L), S = M.scheme;
+		const add = (m, g) => {
+			if (!parts.has(m)) parts.set(m, []);
+			if (g.index) { const source=g; g=g.toNonIndexed(); source.dispose(); }
+			// (the tiled carpet and ceiling: their texture laid in metres across the floor)
+			if (m.userData.planUV) { const P = g.attributes.position, U = g.attributes.uv; for (let i = 0; i < P.count; i++) U.setXY(i, P.getX(i), P.getZ(i)); }
+			parts.get(m).push(g);
+		};
 		const box = (m, x0, y0, z0, x1, y1, z1, solid = false) => { if(x1<=x0 || y1<=y0 || z1<=z0)return; add(m, new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)); if (solid) col.push([x0, z0, x1, z1, y0, y1]); };
 		const cyl = (m, x, y, z, r, h, seg = 12) => add(m, new THREE.CylinderGeometry(r, r, h, seg).translate(x, y + h / 2, z));
 		const labels=[], sign=(text,x,y,z,w,h,yaw=0)=>labels.push({text,x,y,z,w,h,yaw});
@@ -78,11 +114,16 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		// band laid exactly on its top surface and flickered through the carpet up there)
 		const top=above?H-.18:H;
 		for(const [x0,z0,x1,z1] of slabRects(T,above||L)) box(M.ceil,x0,H-.25,z0,x1,top,z1);
+		// the lights: square panels or long strips, flush with the ceiling, or hung under an
+		// open one, its ducts run down the floor
+		const open = S?.ceiling === 'open', strips = S?.lights === 'strips', ly = open ? H - 1.0 : H - .27;
 		const step=Math.max(3.2,Math.sqrt(T.W*T.D/180));
 		for(let x=-hw+1.8;x<hw-1;x+=step)for(let z=-hd+1.8;z<hd-1;z+=step){
 			if(above?.holes.some(a=>x>a.x0-.6&&x<a.x1+.6&&z>a.z0-.6&&z<a.z1+.6))continue;
-			box(M.panel,x-.5,H-.27,z-.5,x+.5,H-.25,z+.5);
+			if (strips) box(M.panel,x-1.2,ly,z-.07,x+1.2,ly+.02,z+.07); else box(M.panel,x-.5,ly,z-.5,x+.5,ly+.02,z+.5);
+			if (open) box(M.dark,x-.004,ly+.02,z-.004,x+.004,H-.25,z+.004);
 		}
+		if (open) for (const x of [-hw * .45, hw * .45]) add(M.duct, new THREE.CylinderGeometry(.32, .32, T.D - 2, 12, 1).rotateX(Math.PI / 2).translate(x, H - .7, 0));
 		// Structure follows the same column grid on all storeys.
 		if(T.W>26 && T.D>26)for(const x of [-hw+1,hw-1])for(let z=-hd+5;z<hd-2;z+=8)box(M.stone,x-.24,0,z-.24,x+.24,top,z+.24,true);
 		const door=L.n===0?1.4:0;
@@ -107,6 +148,8 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 		// the core: stone, three elevator doors facing the floor, the floor number glowing over them
 		const cz = T.coreZ;
 		box(L.kind === 'lobby' ? M.stone : M.wall, -coreW / 2, 0, cz - coreD, coreW / 2, H - 0.25, cz, true);
+		// the company's colour on the core's face, the lifts set in it
+		if (S?.accentWall) box(M.brand, -coreW / 2, 0, cz, coreW / 2, H - 0.25, cz + 0.012);
 		for (const dx of [-coreW / 3, 0, coreW / 3]) {
 			box(M.steel, dx - 0.55, 0, cz - 0.02, dx - 0.005, 2.3, cz + 0.03); box(M.steel, dx + 0.005, 0, cz - 0.02, dx + 0.55, 2.3, cz + 0.03);
 			box(M.glow, dx - 0.12, 2.45, cz, dx + 0.12, 2.55, cz + 0.04);

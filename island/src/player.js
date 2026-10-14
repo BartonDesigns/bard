@@ -179,6 +179,7 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 	}
 	function update(dt, t) {
 		if (s.locked) return;
+		if (s.move?.(dt)) return;          // a vault carries you (structures/vault.js)
 		// (s.auto: { x, z, run } walks without a hand on the keys, for demos and tests)
 		let mx = joy.x + (s.auto?.x || 0), mz = joy.y + (s.auto?.z || 0);
 		if (keys.has('w') || keys.has('arrowup')) mz -= 1;
@@ -270,7 +271,8 @@ export function createPlayer(island, village, vegetation, camera, dom, shared) {
 			s.vel.y = 0; s.grounded = false;
 		} else {
 			s.diving = false;
-			if ((keys.has(' ') || s.jumpQueued) && s.grounded) { s.vel.y = 5.2; s.grounded = false; }
+			// (facing a window or a low wall close by, the jump is a vault over it: structures/vault.js)
+			if ((keys.has(' ') || s.jumpQueued) && s.grounded && !s.tryVault?.(s.jumpQueued ? 'button' : 'key')) { s.vel.y = 5.2; s.grounded = false; }
 			s.jumpQueued = false;
 			s.vel.y -= 18 * (island.gravity || 1) * dt;
 			s.pos.y += s.vel.y * dt;

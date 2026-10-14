@@ -83,8 +83,22 @@ function register(f) {
 export function inClearing(x, z, pad = 0) {
 	const g = REG.grid.get(Math.floor(x / GC) + ',' + Math.floor(z / GC));
 	if (!g) return false;
-	for (const f of g) if (inside(f, x, z, pad + 3)) return true;
+	for (const f of g) if (f.test ? f.test(x, z, pad) : inside(f, x, z, pad + 3)) return true;
 	return false;
+}
+// other ground kept clear of trees (a military base inside its fence): an id, a centre and
+// reach, and test(x, z, pad) -> inside
+export function keepClear(id, x, z, rad, test) {
+	releaseClear(id);
+	register({ id, kind: 'clear', x, z, rad, test });
+	REG.v++;
+}
+export function releaseClear(id) {
+	const i = REG.list.findIndex((f) => f.kind === 'clear' && f.id === id);
+	if (i < 0) return;
+	const f = REG.list.splice(i, 1)[0];
+	for (const g of REG.grid.values()) { const k = g.indexOf(f); if (k >= 0) g.splice(k, 1); }
+	REG.v++;
 }
 // (bumped when a field is laid out near enough to have trees already standing on it)
 export const clearingVersion = () => REG.v;

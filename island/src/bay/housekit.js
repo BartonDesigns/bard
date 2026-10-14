@@ -10,6 +10,8 @@ import { usePhoto } from '../world/photomats.js';
 
 const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
 export { lin };
+// the door and garage door styles are stacked in their textures, a row each (metres)
+const DOOR_ROW = 2.1, GARAGE_ROW = 2.25;
 
 // ---------------------------------------------------------------------------------
 // the builder: boxes, cylinders and spheres, placed by a quarter-turn transform
@@ -41,6 +43,10 @@ export class Builder {
 	// shading (ambient occlusion: kept apart in the colour's alpha for the lit walls' glow)
 	quad(k, a, b, c, d, n, col, uv, sh = null) {
 		if (!k) return;
+		// (a patterned key: its material, its v lifted to its slot)
+		let vo = 0;
+		const sl = SLOT.get(k);
+		if (sl) { k = sl[0]; vo = sl[1]; }
 		const B = this.buf(k), P = [a, b, c, d].map((p) => this.tp(...p)), N = this.tn(...n);
 		// wind them to face along n
 		const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]], e2 = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
@@ -50,7 +56,7 @@ export class Builder {
 		const m = this.mul;
 		for (const i of order) {
 			const f = (sh ? sh[i] : 1) * m;
-			B.p.push(...P[i]); B.n.push(...N); B.u.push(...uv[i]); B.c.push(col[0] * f, col[1] * f, col[2] * f); B.a.push(sh ? sh[i] : 1);
+			B.p.push(...P[i]); B.n.push(...N); B.u.push(uv[i][0], uv[i][1] + vo); B.c.push(col[0] * f, col[1] * f, col[2] * f); B.a.push(sh ? sh[i] : 1);
 		}
 	}
 	// a face as a grid with its edges shaded: P(s, t) the point at s, t in 0..1; e the shading
@@ -182,6 +188,16 @@ function cv(S, draw, repeat = true, srgb = true) {
 	t.anisotropy = 8;
 	return t;
 }
+function cv2(w, h, draw, repeat = true) {
+	const c = document.createElement('canvas');
+	c.width = w; c.height = h;
+	draw(c.getContext('2d'), w, h);
+	const t = new THREE.CanvasTexture(c);
+	t.colorSpace = THREE.SRGBColorSpace;
+	if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+	t.anisotropy = 8;
+	return t;
+}
 function prng(seed) { let a = seed; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; }
 const grey = (l, a = 1) => `rgba(${l | 0},${l | 0},${l | 0},${a})`;
 
@@ -253,18 +269,53 @@ function textures() {
 		g.fillStyle = grey(200); g.fillRect(0, 0, S, S);
 		for (let k = 0; k < 90; k++) { g.strokeStyle = grey(120 + r() * 70, 0.25); g.lineWidth = 0.5 + r() * 2; g.beginPath(); const y = r() * S; g.moveTo(0, y); for (let x = 0; x <= S; x += 32) g.lineTo(x, y + Math.sin(x / 40 + k) * 3); g.stroke(); }
 	});
-	// a six-panel door, to be mapped once over the leaf
-	T.door6 = cv(256, (g, S) => {
-		g.fillStyle = grey(240); g.fillRect(0, 0, S, S);
-		const panel = (x, y, w, h) => { g.fillStyle = grey(222); g.fillRect(x, y, w, h); g.fillStyle = grey(200); g.fillRect(x, y, w, 3); g.fillRect(x, y, 3, h); g.fillStyle = grey(252); g.fillRect(x, y + h - 3, w, 3); g.fillRect(x + w - 3, y, 3, h); };
-		for (const [y, h] of [[0.05, 0.16], [0.26, 0.3], [0.62, 0.3]]) { panel(S * 0.12, S * y, S * 0.33, S * h); panel(S * 0.55, S * y, S * 0.33, S * h); }
+	// the doors, eight styles stacked, each mapped once over a leaf (decor.js DOOR): six-panel,
+	// five-panel, flush slab, flush with three staggered lites, craftsman, shaker, a glass
+	// strip, carved; the first at the bottom, where a door with no style given finds it
+	T.door6 = cv2(128, 1024, (g, W) => {
+		const rows = 8, R = 1024 / rows;
+		const panel = (x0, y0, w, h, deep = 1) => { const x = x0 * W, y = y0 * R, pw = w * W, ph = h * R; g.fillStyle = grey(222 + 14 * (1 - deep)); g.fillRect(x, y, pw, ph); g.fillStyle = grey(200); g.fillRect(x, y, pw, 2); g.fillRect(x, y, 2, ph); g.fillStyle = grey(252); g.fillRect(x, y + ph - 2, pw, 2); g.fillRect(x + pw - 2, y, 2, ph); };
+		const lite = (x0, y0, w, h) => { g.fillStyle = grey(70); g.fillRect(x0 * W, y0 * R, w * W, h * R); g.fillStyle = grey(110); g.fillRect(x0 * W + 2, y0 * R + 2, w * W * 0.4, h * R - 4); };
+		for (let k = 0; k < rows; k++) {
+			g.save(); g.translate(0, (rows - 1 - k) * R);
+			g.fillStyle = grey(240); g.fillRect(0, 0, W, R);
+			if (k === 0) for (const [y, h] of [[0.05, 0.16], [0.26, 0.3], [0.62, 0.3]]) { panel(0.12, y, 0.33, h); panel(0.55, y, 0.33, h); }
+			else if (k === 1) for (let i = 0; i < 5; i++) panel(0.14, 0.06 + i * 0.18, 0.72, 0.14);
+			else if (k === 2) { g.fillStyle = grey(236); g.fillRect(0, 0, W, R); }
+			else if (k === 3) { for (const [x, y] of [[0.3, 0.12], [0.45, 0.2], [0.6, 0.28]]) lite(x - 0.07, y, 0.14, 0.06); }
+			else if (k === 4) { lite(0.14, 0.06, 0.72, 0.22); g.fillStyle = grey(200); for (let i = 1; i < 3; i++) g.fillRect((0.14 + i * 0.24) * W - 1, 0.06 * R, 3, 0.22 * R); g.fillStyle = grey(215); g.fillRect(0.08 * W, 0.3 * R, 0.84 * W, 4); for (let i = 0; i < 9; i++) g.fillRect((0.12 + i * 0.09) * W, 0.31 * R, 5, 5); panel(0.14, 0.36, 0.33, 0.56); panel(0.53, 0.36, 0.33, 0.56); }
+			else if (k === 5) panel(0.16, 0.08, 0.68, 0.84, 0.4);
+			else if (k === 6) { g.fillStyle = grey(226); g.fillRect(0, 0, W, R); lite(0.62, 0.08, 0.14, 0.84); }
+			else { panel(0.12, 0.06, 0.76, 0.88); g.strokeStyle = grey(190); g.lineWidth = 3; for (let i = 0; i < 4; i++) { g.strokeRect((0.22 + i * 0.06) * W, (0.14 + i * 0.08) * R, (0.56 - i * 0.12) * W, (0.72 - i * 0.16) * R); } }
+			g.restore();
+		}
 	}, false);
-	// a sectional garage door, raised panels
-	T.garage = cv(256, (g, S) => {
-		g.fillStyle = grey(238); g.fillRect(0, 0, S, S);
-		for (let j = 0; j < 4; j++) {
-			g.fillStyle = grey(175); g.fillRect(0, j * S / 4, S, 3);
-			for (let i = 0; i < 8; i++) { const x = i * S / 8 + 5, y = j * S / 4 + 10, w = S / 8 - 10, h = S / 4 - 20; g.fillStyle = grey(225); g.fillRect(x, y, w, h); g.fillStyle = grey(205); g.fillRect(x, y + h - 2, w, 2); g.fillRect(x + w - 2, y, 2, h); g.fillStyle = grey(250); g.fillRect(x, y, w, 2); }
+	// the garage doors, four styles stacked (decor.js GARAGE): raised short panels, flush
+	// ribbed, a carriage pair of plank leaves with lites over them, a full-view glass grid
+	T.garage = cv2(256, 1024, (g, S) => {
+		const R = 256;
+		for (let k = 0; k < 4; k++) {
+			g.save(); g.translate(0, (3 - k) * R);
+			g.fillStyle = grey(238); g.fillRect(0, 0, S, R);
+			if (k === 0) for (let j = 0; j < 4; j++) {
+				g.fillStyle = grey(175); g.fillRect(0, j * R / 4, S, 3);
+				for (let i = 0; i < 8; i++) { const x = i * S / 8 + 5, y = j * R / 4 + 10, w = S / 8 - 10, h = R / 4 - 20; g.fillStyle = grey(225); g.fillRect(x, y, w, h); g.fillStyle = grey(205); g.fillRect(x, y + h - 2, w, 2); g.fillRect(x + w - 2, y, 2, h); g.fillStyle = grey(250); g.fillRect(x, y, w, 2); }
+			} else if (k === 1) {
+				for (let y = 0; y < R; y += 16) { g.fillStyle = grey(210); g.fillRect(0, y, S, 2); g.fillStyle = grey(250); g.fillRect(0, y + 2, S, 2); }
+				g.fillStyle = grey(165); for (let j = 1; j < 4; j++) g.fillRect(0, j * R / 4, S, 3);
+			} else if (k === 2) {
+				for (const x0 of [0, 128]) {
+					for (let x = x0; x < x0 + 128; x += 16) { g.fillStyle = grey(190); g.fillRect(x, 0, 2, R); }
+					g.fillStyle = grey(70); for (let i = 0; i < 3; i++) g.fillRect(x0 + 12 + i * 36, 14, 30, 40);
+					g.fillStyle = grey(228); g.fillRect(x0 + 6, 62, 116, 12); g.fillRect(x0 + 6, R - 18, 116, 12); g.fillRect(x0 + 6, 62, 12, R - 68); g.fillRect(x0 + 110, 62, 12, R - 68);
+					g.strokeStyle = grey(228); g.lineWidth = 11; g.beginPath(); g.moveTo(x0 + 14, 70); g.lineTo(x0 + 114, R - 14); g.moveTo(x0 + 114, 70); g.lineTo(x0 + 14, R - 14); g.stroke();
+					g.fillStyle = grey(150); g.fillRect(x0, 0, 3, R); g.fillRect(x0 + 125, 0, 3, R);
+				}
+			} else {
+				g.fillStyle = grey(150); g.fillRect(0, 0, S, R);
+				for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) { g.fillStyle = grey(60 + (i + j) % 2 * 8); g.fillRect(i * 64 + 6, j * 64 + 6, 52, 52); g.fillStyle = grey(95); g.fillRect(i * 64 + 8, j * 64 + 8, 16, 48); }
+			}
+			g.restore();
 		}
 	}, false);
 	// stone countertop: speckled granite / quartz
@@ -289,6 +340,128 @@ function textures() {
 	return T;
 }
 
+// ---------------------------------------------------------------------------------
+// the patterns: greyscale, four to a texture (one in each channel), shared by every house.
+// A pattern is a slot of a material (decor.js PAPER, FLOORP, SIDING); the builder lifts a
+// face's v by SLOT_V metres a slot (see SLOT), the shader reads the slot back off the uv and
+// multiplies the vertex colour by that channel, so a whole house of papers, floors and
+// sidings is one draw per material and a handful of small textures for every house.
+
+// a texture of four patterns, one per channel, each drawn grey on white
+function packed(draws, S = 256) {
+	const d = new Uint8Array(S * S * 4).fill(255);
+	draws.forEach((draw, ch) => {
+		const c = document.createElement('canvas');
+		c.width = c.height = S;
+		const g = c.getContext('2d');
+		g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
+		draw(g, S, prng(61 + ch * 7));
+		const px = g.getImageData(0, 0, S, S).data;
+		for (let i = 0; i < S * S; i++) d[i * 4 + ch] = px[i * 4];
+	});
+	const t = new THREE.DataTexture(d, S, S);
+	t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+	t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true;
+	return t;
+}
+const tile = (g, S, n, draw) => { for (let j = -1; j <= n; j++) for (let i = -1; i <= n; i++) draw(i * S / n, j * S / n, S / n, i, j); };
+// the wall papers and panelling, a 0.6 m repeat
+const PAPERS = [
+	// regency stripes
+	(g, S) => { for (let i = 0; i < 4; i++) { const x = i * S / 4; g.fillStyle = grey(206); g.fillRect(x, 0, S / 8, S); g.fillStyle = grey(150); g.fillRect(x + S / 8, 0, 2, S); g.fillRect(x + S / 4 - 3, 0, 2, S); } },
+	// small florals, half-dropped
+	(g, S, r) => tile(g, S, 4, (x, y, w, i) => {
+		const cx = x + w / 2, cy = y + w / 2 + (i % 2) * w / 2;
+		g.fillStyle = grey(165); g.save(); g.translate(cx, cy); g.rotate(i * 0.7);
+		g.beginPath(); g.ellipse(-9, 8, 7, 3, 0.6, 0, 7); g.ellipse(9, 9, 7, 3, -0.6, 0, 7); g.fill();
+		g.fillStyle = grey(112); for (let k = 0; k < 5; k++) { const a = k / 5 * 6.283; g.beginPath(); g.arc(Math.cos(a) * 5, Math.sin(a) * 5 - 3, 4.5, 0, 7); g.fill(); }
+		g.fillStyle = grey(200); g.beginPath(); g.arc(0, -3, 2.5, 0, 7); g.fill(); g.restore();
+		if (r() < 0.9) { g.fillStyle = grey(190); g.beginPath(); g.arc(x + w * 0.1, y + w * 0.15, 2, 0, 7); g.fill(); }
+	}),
+	// damask: an ogee medallion, tone on tone
+	(g, S) => tile(g, S, 2, (x, y, w, i, j) => {
+		const cx = x + w / 2 + (j % 2) * w / 2, cy = y + w / 2;
+		g.fillStyle = grey(200); g.beginPath();
+		g.moveTo(cx, cy - w * 0.45); g.bezierCurveTo(cx + w * 0.38, cy - w * 0.2, cx + w * 0.12, cy + w * 0.05, cx + w * 0.3, cy + w * 0.2);
+		g.bezierCurveTo(cx + w * 0.2, cy + w * 0.35, cx + w * 0.05, cy + w * 0.3, cx, cy + w * 0.45);
+		g.bezierCurveTo(cx - w * 0.05, cy + w * 0.3, cx - w * 0.2, cy + w * 0.35, cx - w * 0.3, cy + w * 0.2);
+		g.bezierCurveTo(cx - w * 0.12, cy + w * 0.05, cx - w * 0.38, cy - w * 0.2, cx, cy - w * 0.45); g.fill();
+		g.fillStyle = grey(232); g.beginPath(); g.ellipse(cx, cy, w * 0.07, w * 0.16, 0, 0, 7); g.fill();
+		g.strokeStyle = grey(232); g.lineWidth = 2; for (const s of [-1, 1]) { g.beginPath(); g.arc(cx + s * w * 0.14, cy - w * 0.08, w * 0.07, 0, 7); g.stroke(); }
+	}),
+	// a trellis of interlocking rings
+	(g, S) => { g.strokeStyle = grey(118); g.lineWidth = 5; tile(g, S, 4, (x, y, w) => { g.beginPath(); g.arc(x + w / 2, y + w / 2, w * 0.5, 0, 7); g.stroke(); g.beginPath(); g.arc(x, y, w * 0.5, 0, 7); g.stroke(); }); },
+	// grasscloth: woven fibres across, a seam down the middle
+	(g, S, r) => { for (let y = 0; y < S; y += 1) { g.fillStyle = grey(196 + r() * 59); g.fillRect(0, y, S, 1); } for (let k = 0; k < 900; k++) { g.fillStyle = grey(150 + r() * 60, 0.6); g.fillRect(r() * S, r() * S, 6 + r() * 40, 1); } g.fillStyle = grey(165); g.fillRect(S / 2, 0, 1, S); },
+	// wood panelling: grooved sheets, the grain down them
+	(g, S, r) => { for (let x = 0; x < S; x += 2) { g.fillStyle = grey(150 + r() * 70); g.fillRect(x, 0, 2, S); } for (let k = 0; k < 60; k++) { g.strokeStyle = grey(100 + r() * 40, 0.4); g.lineWidth = 1 + r() * 2; g.beginPath(); const x = r() * S; g.moveTo(x, 0); g.bezierCurveTo(x + 8, S / 3, x - 8, S * 0.66, x + 3, S); g.stroke(); } g.fillStyle = grey(40); for (let x = 0; x < S; x += S / 4) g.fillRect(x, 0, 3, S); },
+	// beadboard
+	(g, S) => { for (let x = 0; x < S; x += S / 8) { const gr = g.createLinearGradient(x, 0, x + S / 8, 0); gr.addColorStop(0, grey(150)); gr.addColorStop(0.12, grey(255)); gr.addColorStop(0.85, grey(236)); gr.addColorStop(1, grey(205)); g.fillStyle = gr; g.fillRect(x, 0, S / 8, S); } },
+	// ticking: pairs of narrow stripes
+	(g, S) => { g.fillStyle = grey(140); for (let i = 0; i < 8; i++) { const x = i * S / 8; g.fillRect(x, 0, 4, S); g.fillRect(x + 8, 0, 2, S); } },
+];
+// the patterned floors, a 1.2 m repeat (the hex mosaic finer)
+const FLOOR_PATS = [
+	// twelve inch vinyl checkerboard
+	(g, S) => { for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) { g.fillStyle = grey((i + j) % 2 ? 46 : 250); g.fillRect(i * S / 4, j * S / 4, S / 4, S / 4); } },
+	// terrazzo: chips in a pale ground, a brass strip at the square
+	(g, S, r) => { g.fillStyle = grey(222); g.fillRect(0, 0, S, S); for (let k = 0; k < 2600; k++) { const l = r(); g.fillStyle = l < 0.12 ? grey(70) : l < 0.4 ? grey(250) : grey(150 + r() * 70); const x = r() * S, y = r() * S, a = 1 + r() * 3.5; g.beginPath(); g.moveTo(x, y); g.lineTo(x + a, y + r() * a); g.lineTo(x + r() * a, y + a); g.fill(); } g.fillStyle = grey(140); g.fillRect(0, 0, S, 2); g.fillRect(0, 0, 2, S); },
+	// one inch hex mosaic
+	(g, S) => { g.fillStyle = grey(175); g.fillRect(0, 0, S, S); const R = S / 16, h = R * Math.sqrt(3) / 2; g.fillStyle = grey(252); for (let j = -1; j < 20; j++) for (let i = -1; i < 12; i++) { const cx = i * R * 1.5, cy = j * h * 2 + (i % 2 ? h : 0); g.beginPath(); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g.lineTo(cx + Math.cos(a) * (R - 1.2), cy + Math.sin(a) * (R - 1.2)); } g.fill(); } },
+	// herringbone parquet
+	(g, S, r) => { const b = S / 16; g.strokeStyle = grey(90); g.lineWidth = 1; for (let j = -6; j < 22; j++) for (let i = -2; i < 10; i++) { const x = i * b * 2, y = j * b * 2 + i * b; for (const [dx, dy, w, h] of [[0, 0, b * 2, b], [b, b, b, b * 2]]) { g.fillStyle = grey(165 + r() * 65); g.fillRect(x + dx, y + dy, w, h); g.strokeRect(x + dx, y + dy, w, h); } } },
+	// 24 inch porcelain
+	(g, S, r) => { for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) { const l = 236 + r() * 16; g.fillStyle = grey(l); g.fillRect(i * S / 2, j * S / 2, S / 2, S / 2); for (let k = 0; k < 400; k++) { g.fillStyle = grey(l - 20 + r() * 30, 0.3); g.fillRect(i * S / 2 + r() * S / 2, j * S / 2 + r() * S / 2, 3, 3); } } g.fillStyle = grey(150); for (let i = 0; i <= 2; i++) { g.fillRect(i * S / 2 - 1, 0, 2, S); g.fillRect(0, i * S / 2 - 1, S, 2); } },
+	// wide plank: six boards across, random lengths
+	(g, S, r) => { const bw = S / 6; for (let x = 0; x < 6; x++) { let y = -r() * S; while (y < S) { const L = S * (0.3 + r() * 0.5), l = 175 + r() * 70; g.fillStyle = grey(l); g.fillRect(x * bw, y, bw, L); for (let k = 0; k < 10; k++) { g.fillStyle = grey(l - 30, 0.25); g.fillRect(x * bw + r() * bw, y, 1, L); } g.fillStyle = grey(100); g.fillRect(x * bw, y, bw, 1.5); y += L; } g.fillStyle = grey(110); g.fillRect(x * bw, 0, 1.5, S); } },
+	// Saltillo: hand-made squares, uneven, in wide pale grout
+	(g, S, r) => { g.fillStyle = grey(225); g.fillRect(0, 0, S, S); for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) { const l = 150 + r() * 80; g.fillStyle = grey(l); const x = i * S / 4 + 4, y = j * S / 4 + 4, w = S / 4 - 8; g.beginPath(); g.moveTo(x + r() * 3, y + r() * 3); g.lineTo(x + w - r() * 3, y + r() * 3); g.lineTo(x + w - r() * 3, y + w - r() * 3); g.lineTo(x + r() * 3, y + w - r() * 3); g.fill(); for (let k = 0; k < 120; k++) { g.fillStyle = grey(l - 40 + r() * 50, 0.35); g.fillRect(x + r() * w, y + r() * w, 3, 3); } } },
+	// travertine laid in big and small rectangles, pitted
+	(g, S, r) => { g.fillStyle = grey(190); g.fillRect(0, 0, S, S); const u = S / 8; for (const [x, y, w, h] of [[0, 0, 4, 4], [4, 0, 2, 2], [6, 0, 2, 2], [4, 2, 4, 2], [0, 4, 2, 4], [2, 4, 2, 2], [2, 6, 2, 2], [4, 4, 4, 4]]) { const l = 214 + r() * 34; g.fillStyle = grey(l); g.fillRect(x * u + 1, y * u + 1, w * u - 2, h * u - 2); for (let k = 0; k < 40 * w * h; k++) { g.fillStyle = grey(l - 45, 0.3 + r() * 0.3); g.fillRect(x * u + 1 + r() * (w * u - 4), y * u + 1 + r() * (h * u - 4), 1 + r() * 4, 1); } } },
+];
+// the outsides, a 1.2 m repeat: clapboard, board-and-batten, cedar shingle, brick
+const SIDINGS = [
+	(g, S) => { const n = 8, h = S / n; for (let j = 0; j < n; j++) { const gr = g.createLinearGradient(0, j * h, 0, (j + 1) * h); gr.addColorStop(0, grey(255)); gr.addColorStop(0.75, grey(232)); gr.addColorStop(0.92, grey(200)); gr.addColorStop(1, grey(120)); g.fillStyle = gr; g.fillRect(0, j * h, S, h); } },
+	(g, S) => { g.fillStyle = grey(238); g.fillRect(0, 0, S, S); for (let i = 0; i < 3; i++) { const x = i * S / 3; g.fillStyle = grey(140); g.fillRect(x + 12, 0, 2, S); g.fillStyle = grey(255); g.fillRect(x, 0, 12, S); g.fillStyle = grey(175); g.fillRect(x - 3, 0, 3, S); } },
+	(g, S, r) => { const n = 7, h = S / n; for (let j = 0; j < n; j++) { let x = -r() * 20; while (x < S) { const w = 10 + r() * 22, l = 170 + r() * 75; g.fillStyle = grey(l); g.fillRect(x, j * h, w, h); g.fillStyle = grey(110); g.fillRect(x, j * h, 1.5, h); x += w; } g.fillStyle = grey(95); g.fillRect(0, (j + 1) * h - 3, S, 3); } },
+	(g, S, r) => { g.fillStyle = grey(236); g.fillRect(0, 0, S, S); const n = 16, h = S / n, w = S / 6; for (let j = 0; j < n; j++) for (let i = -1; i < 7; i++) { g.fillStyle = grey(150 + r() * 70); g.fillRect(i * w + (j % 2) * w / 2 + 1.5, j * h + 1.5, w - 3, h - 3); } },
+];
+// the pattern sets, made once for every house
+let PATS = null;
+function patterns() {
+	if (!PATS) PATS = { paper: [packed(PAPERS.slice(0, 4)), packed(PAPERS.slice(4))], floor: [packed(FLOOR_PATS.slice(0, 4)), packed(FLOOR_PATS.slice(4))], siding: [packed(SIDINGS), null] };
+	return PATS;
+}
+// a material's colour times its slot's pattern (its glow too, a little)
+function patterned(m, set, metres, scales = [1, 1, 1, 1, 1, 1, 1, 1]) {
+	const [A, B] = set;
+	m.map = A.clone(); m.map.repeat.set(1 / metres, 1 / metres); m.map.needsUpdate = true;
+	const prev = m.onBeforeCompile;
+	m.onBeforeCompile = (sh, r) => {
+		if (prev) prev(sh, r);
+		sh.uniforms.patB = { value: B || A }; sh.uniforms.patScale = { value: scales };
+		sh.vertexShader = 'varying float vPat;\n' + sh.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>\nvPat = floor((uv.y + ${SLOT_LOW.toFixed(1)}) / ${SLOT_V.toFixed(1)});`);
+		sh.fragmentShader = 'varying float vPat;\nuniform sampler2D patB;\nuniform float patScale[8];\n' + sh.fragmentShader
+			.replace('#include <map_fragment>', `float patT = 1.0;
+			{
+				int pk = int(clamp(vPat + 0.5, 0.0, 7.0));
+				vec2 pu = vMapUv * patScale[pk];
+				vec4 pa = texture2D(map, pu), pb = texture2D(patB, pu);
+				patT = pk == 0 ? pa.r : pk == 1 ? pa.g : pk == 2 ? pa.b : pk == 3 ? pa.a : pk == 4 ? pb.r : pk == 5 ? pb.g : pk == 6 ? pb.b : pb.a;
+				diffuseColor.rgb *= patT;
+			}`)
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= mix(1.0, patT, 0.6);');
+	};
+	m.customProgramCacheKey = () => 'patterned' + (B ? 2 : 1);
+	return m;
+}
+// the slots: a key with its pattern's number (paper3, floor5, siding1, door4, garage2) is
+// drawn into its material with its v lifted (the shader's floor reads it back)
+const SLOT_V = 256, SLOT_LOW = 96;
+const SLOT = new Map();
+for (let k = 0; k < 8; k++) { SLOT.set('paper' + k, ['paper', k * SLOT_V]); SLOT.set('paperLit' + k, ['paperLit', k * SLOT_V]); SLOT.set('floor' + k, ['floorPat', k * SLOT_V]); SLOT.set('door' + k, ['door6', k * DOOR_ROW]); }
+for (let k = 0; k < 4; k++) { SLOT.set('siding' + k, ['siding', k * SLOT_V]); SLOT.set('garage' + k, ['garage', (k + 1) * GARAGE_ROW]); }
+
 // what shiny things inside reflect: a pale ceiling, warm walls, a darker floor
 function roomEnv() {
 	const W = 64, H = 32, d = new Uint8Array(W * H * 4);
@@ -308,7 +481,7 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	// texture scales: the builder's uvs are metres
 	const rep = (t, m) => { t.repeat.set(1 / m, 1 / m); };
 	rep(T.stucco, 1.6); rep(T.paint, 1.2); rep(T.wood, 1.0); rep(T.carpet, 1.2); rep(T.tile, 1.2); rep(T.subway, 0.6); rep(T.concrete, 2.4); rep(T.fabric, 0.3); rep(T.grain, 0.6); rep(T.stone, 0.8); rep(T.blinds, 0.2);
-	T.door6.repeat.set(1 / 0.84, 1 / 2.05); T.garage.repeat.set(1 / 2.46, 1 / 2.15); T.garage.wrapS = T.garage.wrapT = THREE.RepeatWrapping;
+	T.door6.repeat.set(1 / 0.84, 1 / (DOOR_ROW * 8)); T.door6.wrapS = THREE.ClampToEdgeWrapping; T.door6.wrapT = THREE.RepeatWrapping; T.garage.repeat.set(1 / 2.46, 1 / (GARAGE_ROW * 4)); T.garage.wrapS = T.garage.wrapT = THREE.RepeatWrapping;
 	T.rug.wrapS = T.rug.wrapT = THREE.RepeatWrapping; T.rug.repeat.set(0.5, 0.6); T.rug.offset.set(0.5, 0.5);
 	const env = roomEnv();
 	const std = (o) => new THREE.MeshStandardMaterial({ vertexColors: true, ...o });
@@ -316,7 +489,10 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	// by the shading the builder keeps in the colour's alpha
 	const room = (o) => {
 		const m = std({ vertexAlphas: true, ...o });
-		m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR_ALPHA\ntotalEmissiveRadiance *= vColor.a;\n#endif'); };
+		// (and by the wall's own colour, so a dark accent wall stays dark, not lamp-brown)
+		// (three takes the colour's alpha only from a four-component colour, so where the
+		// builder gave three the shading is read from the colour itself)
+		m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#if defined( USE_COLOR_ALPHA )\ntotalEmissiveRadiance *= vColor.a * min(vec3(1.0), vColor.rgb / max(vColor.a, 0.05) * 1.15);\n#elif defined( USE_COLOR )\ntotalEmissiveRadiance *= min(vec3(1.0), vColor.rgb * 1.15);\n#endif'); };
 		return m;
 	};
 	const M = {
@@ -354,6 +530,13 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 		// multiply what is under them, so they darken it by day and lamplight alike
 		shade: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4, fog: false, toneMapped: false }),
 	};
+	// the patterned ones (decor.js): wall papers and panelling (lit or not, like the paint),
+	// the tiled and planked floors (the hex mosaic at a quarter the size), the sidings
+	const P = patterns();
+	M.paper = patterned(room({ roughness: 0.85, emissive: 0x22211e }), P.paper, 0.6);
+	M.paperLit = patterned(room({ roughness: 0.85, emissive: 0xffc890 }), P.paper, 0.6);
+	M.floorPat = patterned(std({ roughness: 0.38, envMap: env, envMapIntensity: 0.25 }), P.floor, 1.2, [1, 1, 4, 1, 1, 1, 1, 1]);
+	M.siding = patterned(std({ roughness: 0.85 }), P.siding, 1.2);
 	M.lamp.userData.night = true;
 	for (const m of Object.values(M)) addLodFade(m, fadeMode, band || [NONE_IN[0], NONE_IN[1], 36, 46]);
 	// by night the lamps glow and the walls lose the daylight they had from the windows
@@ -361,8 +544,8 @@ export function houseMaterials(band, night, fadeMode = 'uniform') {
 	M.setNight = (k, indoors = false) => {
 		M.lamp.emissiveIntensity = k * 1.6;
 		M.bulb.color.setScalar(0.3 + 1.6 * k);
-		M.ceiling.emissiveIntensity = M.paint.emissiveIntensity = 1 - k * 0.6;
-		M.paintLit.emissiveIntensity = 0.13 * (1 - k) + (indoors ? 0.16 : 0.42) * k; M.ceilingLit.emissiveIntensity = 0.26 * (1 - k) + (indoors ? 0.24 : 0.55) * k;
+		M.ceiling.emissiveIntensity = M.paint.emissiveIntensity = M.paper.emissiveIntensity = 1 - k * 0.6;
+		M.paintLit.emissiveIntensity = M.paperLit.emissiveIntensity = 0.13 * (1 - k) + (indoors ? 0.16 : 0.42) * k; M.ceilingLit.emissiveIntensity = 0.26 * (1 - k) + (indoors ? 0.24 : 0.55) * k;
 	};
 	M.setNight(night || 0);
 	// the photographic materials, as they arrive: for each material the swatches to try in
@@ -680,8 +863,20 @@ export function drawItem(g, it, rnd, H) {
 		}
 		case 'counter': {
 			// base cabinets with a toe kick, a stone top, doors and drawers; the sink, the range
-			const cab = it.v < 0.45 ? WHITE : it.v < 0.75 ? lin([0.62, 0.48, 0.32]) : lin([0.36, 0.3, 0.26]), ck = it.v < 0.45 ? 'trim' : 'grain';
-			const top = lin(pick([[0.92, 0.9, 0.86], [0.3, 0.29, 0.28], [0.8, 0.74, 0.64], [0.55, 0.5, 0.45]], it.v * 7 % 1));
+			// (the household's kitchen when it has one, decor.js: the cabinets' colour and doors,
+			// the top, the splash, enamel appliances)
+			const dec = it.dec;
+			const cab = dec ? lin(dec.cab.col) : it.v < 0.45 ? WHITE : it.v < 0.75 ? lin([0.62, 0.48, 0.32]) : lin([0.36, 0.3, 0.26]), ck = dec ? dec.cab.key : it.v < 0.45 ? 'trim' : 'grain';
+			const top = lin(dec ? dec.top : pick([[0.92, 0.9, 0.86], [0.3, 0.29, 0.28], [0.8, 0.74, 0.64], [0.55, 0.5, 0.45]], it.v * 7 % 1));
+			const app = dec?.app ? lin(dec.app) : null, ak = app ? 'gloss' : 'metal', AP = app || STEEL;
+			// a cabinet door's face: flat, a shaker frame round a flat panel, or a raised panel
+			const front = (x0, y0, x1, y1) => {
+				const z = D2 - 0.005, c = cab.map((v) => v * 1.05);
+				g.box(ck, x0, y0, D2 - 0.02, x1, y1, z, c);
+				const style = dec?.cab.style;
+				if (style === 'shaker') { const e = 0.055; g.box(ck, x0, y0, z, x1, y0 + e, z + 0.012, c); g.box(ck, x0, y1 - e, z, x1, y1, z + 0.012, c); g.box(ck, x0, y0 + e, z, x0 + e, y1 - e, z + 0.012, c); g.box(ck, x1 - e, y0 + e, z, x1, y1 - e, z + 0.012, c); }
+				else if (style === 'raised' && y1 - y0 > 0.3) g.box(ck, x0 + 0.07, y0 + 0.07, z, x1 - 0.07, y1 - 0.07, z + 0.014, cab.map((v) => v * 1.1));
+			};
 			const L = w, s0 = -L / 2;
 			// in the item's frame x runs along the counter
 			const sinkX = it.sink !== undefined ? it.sink - it.c : null, rangeX = it.range !== undefined ? it.range - it.c : null;
@@ -689,12 +884,12 @@ export function drawItem(g, it, rnd, H) {
 			g.box('matte', s0, 0, -D2, -s0, 0.1, D2 - 0.08, DARK);
 			g.box('stone', s0, 0.88, -D2, -s0, 0.92, D2 + 0.02, top);
 			// the backsplash
-			g.box('subway', s0, 0.92, -D2, -s0, 1.4, -D2 + 0.008, lin([0.95, 0.94, 0.9]));
+			g.box('subway', s0, 0.92, -D2, -s0, 1.4, -D2 + 0.008, lin(dec ? dec.splash : [0.95, 0.94, 0.9]));
 			for (let x = s0 + 0.02; x < -s0 - 0.2; x += 0.6) {
 				if (rangeX !== null && Math.abs(x + 0.3 - rangeX) < 0.4) continue;
 				const x1 = Math.min(-s0 - 0.02, x + 0.58);
-				g.box(ck, x + 0.01, 0.13, D2 - 0.02, x1 - 0.01, 0.62, D2 - 0.005, cab.map((c) => c * 1.05));
-				g.box(ck, x + 0.01, 0.65, D2 - 0.02, x1 - 0.01, 0.85, D2 - 0.005, cab.map((c) => c * 1.05));
+				front(x + 0.01, 0.13, x1 - 0.01, 0.62);
+				front(x + 0.01, 0.65, x1 - 0.01, 0.85);
 				g.box('metal', (x + x1) / 2 - 0.08, 0.74, D2 - 0.005, (x + x1) / 2 + 0.08, 0.755, D2 + 0.015, STEEL);
 			}
 			if (sinkX !== null) {
@@ -703,10 +898,10 @@ export function drawItem(g, it, rnd, H) {
 				g.box('metal', sinkX - 0.012, 1.18, -D2 + 0.08, sinkX + 0.012, 1.21, -D2 + 0.3, STEEL);
 				// the dishwasher beside it
 				const dx = sinkX + (sinkX < 0 ? 0.7 : -0.7);
-				if (Math.abs(dx) < -s0 - 0.3) g.box('metal', dx - 0.3, 0.1, D2 - 0.01, dx + 0.3, 0.86, D2 + 0.005, STEEL);
+				if (Math.abs(dx) < -s0 - 0.3) g.box(ak, dx - 0.3, 0.1, D2 - 0.01, dx + 0.3, 0.86, D2 + 0.005, AP);
 			}
 			if (rangeX !== null) {
-				g.box('metal', rangeX - 0.38, 0.1, -D2, rangeX + 0.38, 0.92, D2 + 0.01, STEEL);
+				g.box(ak, rangeX - 0.38, 0.1, -D2, rangeX + 0.38, 0.92, D2 + 0.01, AP);
 				g.box('gloss', rangeX - 0.36, 0.92, -D2 + 0.02, rangeX + 0.36, 0.935, D2 - 0.02, BLACK);
 				g.box('gloss', rangeX - 0.3, 0.3, D2 + 0.01, rangeX + 0.3, 0.7, D2 + 0.015, BLACK);
 				g.box('metal', rangeX - 0.3, 0.76, D2 + 0.01, rangeX + 0.3, 0.78, D2 + 0.05, STEEL);
@@ -720,7 +915,8 @@ export function drawItem(g, it, rnd, H) {
 					if (it.win && x + it.c + 0.6 > it.win[0] - 0.05 && x + it.c < it.win[1] + 0.05) continue;
 					const x1 = Math.min(-s0, x + 0.6);
 					g.box(ck, x, 1.45, -D2, x1, 2.25, -D2 + 0.33, cab);
-					g.box(ck, x + 0.02, 1.47, -D2 + 0.33, x1 - 0.02, 2.23, -D2 + 0.345, cab.map((c) => c * 1.05));
+					if (dec?.cab.style === 'shaker' || dec?.cab.style === 'raised') { const zf = -D2 + 0.33, cc = cab.map((c) => c * 1.05); g.box(ck, x + 0.02, 1.47, zf, x1 - 0.02, 2.23, zf + 0.012, cc); if (dec.cab.style === 'shaker') g.box(ck, x + 0.08, 1.53, zf + 0.012, x1 - 0.08, 2.17, zf + 0.014, cab); else g.box(ck, x + 0.09, 1.55, zf + 0.012, x1 - 0.09, 2.15, zf + 0.026, cab.map((c) => c * 1.1)); }
+					else g.box(ck, x + 0.02, 1.47, -D2 + 0.33, x1 - 0.02, 2.23, -D2 + 0.345, cab.map((c) => c * 1.05));
 				}
 			}
 			// what is on it
@@ -729,17 +925,18 @@ export function drawItem(g, it, rnd, H) {
 			break;
 		}
 		case 'fridge': {
-			g.box('metal', -W2, 0, -D2, W2, 1.8, D2, STEEL);
+			if (it.dec?.app) g.box('gloss', -W2, 0, -D2, W2, 1.8, D2, lin(it.dec.app));
+			else g.box('metal', -W2, 0, -D2, W2, 1.8, D2, STEEL);
 			g.box('matte', -0.004 - 0.003, 0.05, D2, 0.003, 1.78, D2 + 0.004, DARK);
 			for (const sx of [-1, 1]) g.box('metal', sx * 0.05 - 0.012, 0.9, D2 + 0.004, sx * 0.05 + 0.012, 1.4, D2 + 0.05, STEEL);
-			g.box('grain', -W2 - 0.02, 1.8, -D2, W2 + 0.02, H.ceil0 - 0.2, D2 - 0.1, WHITE);
+			g.box(it.dec ? it.dec.cab.key : 'grain', -W2 - 0.02, 1.8, -D2, W2 + 0.02, H.ceil0 - 0.2, D2 - 0.1, it.dec ? lin(it.dec.cab.col) : WHITE);
 			break;
 		}
 		case 'island': {
-			const cab = lin([0.3, 0.33, 0.36]);
-			g.box('grain', -W2 + 0.02, 0.1, -D2 + 0.25, W2 - 0.02, 0.88, D2, cab);
+			const cab = lin(it.dec ? it.dec.island : [0.3, 0.33, 0.36]);
+			g.box(it.dec ? it.dec.cab.key : 'grain', -W2 + 0.02, 0.1, -D2 + 0.25, W2 - 0.02, 0.88, D2, cab);
 			g.box('matte', -W2 + 0.05, 0, -D2 + 0.3, W2 - 0.05, 0.1, D2 - 0.06, DARK);
-			g.box('stone', -W2, 0.88, -D2, W2, 0.92, D2 + 0.02, lin([0.93, 0.92, 0.9]));
+			g.box('stone', -W2, 0.88, -D2, W2, 0.92, D2 + 0.02, lin(it.dec ? it.dec.top : [0.93, 0.92, 0.9]));
 			for (let i = 0; i < (it.stools || 2); i++) {
 				const x = -W2 + w * (i + 0.5) / (it.stools || 2);
 				g.cyl('metal', x, 0, -D2 - 0.18, 0.02, 0.62, BLACK, 6); g.cyl('metal', x, 0.2, -D2 - 0.18, 0.15, 0.02, BLACK, 8);
@@ -762,7 +959,7 @@ export function drawItem(g, it, rnd, H) {
 		case 'bikes': for (let i = 0; i < 2; i++) { const z = -0.12 + i * 0.25, c = lin(pick(ACCENT, rnd())); for (const sx of [-1, 1]) g.cyl('matte', sx * 0.52, 0.34, z, 0.34, 0.03, BLACK, 16, 'z', true); g.box('gloss', -0.5, 0.34, z + 0.005, 0.5, 0.38, z + 0.025, c); g.box('gloss', -0.1, 0.34, z + 0.005, -0.06, 0.8, z + 0.025, c); g.box('matte', -0.2, 0.8, z - 0.05, 0.05, 0.84, z + 0.08, BLACK); } break;
 		case 'ceilingLight': {
 			const y = (it.level ? H.ceil1 - H.floor1 : H.ceil0);
-			if (it.kind === 'fan') { g.cyl('metal', 0, y - 0.3, 0, 0.1, 0.3, lin([0.3, 0.25, 0.2]), 10); for (let i = 0; i < 4; i++) { g.at(it.x, it.y, it.z, i); g.box('grain', 0.1, y - 0.3, -0.07, 0.68, y - 0.28, 0.07, wd); } g.at(it.x, it.y, it.z, 0); g.cyl('lamp', 0, y - 0.42, 0, 0.12, 0.12, lin([0.95, 0.93, 0.88]), 12); }
+			if (it.kind === 'fan') { const fw = it.fan ? lin(it.fan) : wd; g.cyl('metal', 0, y - 0.3, 0, 0.1, 0.3, lin([0.3, 0.25, 0.2]), 10); for (let i = 0; i < 4; i++) { g.at(it.x, it.y, it.z, i); g.box('grain', 0.1, y - 0.3, -0.07, 0.68, y - 0.28, 0.07, fw); } g.at(it.x, it.y, it.z, 0); g.cyl('lamp', 0, y - 0.42, 0, 0.12, 0.12, lin([0.95, 0.93, 0.88]), 12); }
 			else if (it.kind === 'chandelier' || it.kind === 'pendant' || it.kind === 'pendants') {
 				const n = it.kind === 'pendants' ? 3 : 1;
 				// (over a table or an island they hang low; where you walk, above your head)

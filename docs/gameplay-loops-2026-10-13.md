@@ -15,7 +15,7 @@ Someone you pass now and then asks for a favour instead of a word in passing (ab
 
 ## Street incidents: a bag snatched (`errands.js` `snatch`)
 
-Rarely (a 5 s check, 8%, at least four minutes apart) when you are on foot near two grown-ups, one's bag is snatched. The thief runs at 5.4 m/s, away from you, turning aside from water. Catch them (within 2 m) and they drop it and flee; that is a `stop-thief` deed (lawful, protector). Pick it up and give it back for 80+ credits and a favour. After 50 s they are gone. Everyone within 40 m remembers the robbery (not by you) through `world-awareness.js`, so they are shaken in passing and in conversation.
+Rarely (a 5 s check, 8%, at least four minutes apart) when you are on foot near two grown-ups, one's bag is snatched. The thief runs at 5.4 m/s, away from you, turning aside from water. Catch them (within 2 m) and they drop it and flee; that is a neutral `take-from-thief` deed (it was `stop-thief` before `docs/npc-morality-2026-10-13.md`). Pick it up and give it back for 80+ credits and a `return-stolen` deed, or walk off with it (`keep-stolen`). After 50 s they are gone. Everyone within 40 m remembers the robbery (not by you) through `world-awareness.js`, so they are shaken in passing and in conversation.
 
 ## Fares (`vehicles/fares.js`, `vehicles/fares-core.js`)
 

@@ -20,6 +20,7 @@ import { STYLES, styleFor, beardFor, styleNow, loadStyle, hairGeometry, kitMater
 import { hairCapsules, poseCapsules } from './hair-collide.js';
 import { hairMotion } from './hair-motion.js';
 import {clothCapsules,poseCloth,calibrateCloth} from './cloth-collide.js';
+import { fitBags, torsoSurface, attachBag, BAG_KINDS } from './bags.js';
 
 const TEX = (f) => new URL(`../../textures/${f}`, import.meta.url).href;
 const RIG_URL = new URL('../assets/people/rig150.json', import.meta.url).href;
@@ -314,7 +315,7 @@ export function buildPerson(A, d) {
 		dm.morphTargetInfluences = P.skin.morphTargetInfluences;
 		P.detail = dm;
 	}
-	P.lod = (dist) => { const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; };
+	P.lod = (dist) => { const near = dist < 28; if (P.eyes[0].visible !== near) for (const e of P.eyes) e.visible = near; if (P.detail) P.detail.visible = dist < 14; if (P.acc) P.acc.visible = dist < 90; for (const b of P.bags || []) b.lod(dist); };
 	P.buildMs = performance.now() - t0;
 	return P;
 }
@@ -324,6 +325,8 @@ export function buildPerson(A, d) {
 function dress(A, P, o) {
 	const d = P.dna, p = P._p, cut = P.cut, { bones, map, skeleton, rest, body } = P;
 	for (const m of [P.skin, P.cloth, P.acc]) if (m) { m.geometry.dispose(); m.removeFromParent(); }
+	for (const b of P.bags || []) b.remove();
+	P.bags = [];
 	P.outfit = o;
 	const R = regions(o, cut);
 	const part = partOf(A);
@@ -344,7 +347,7 @@ function dress(A, P, o) {
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
 	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
 	// locs, braids and cornrows, and stands in while a style is on its way)
-	const hat = (o.acc || []).find((q) => /^(cap|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
+	const hat = (o.acc || []).find((q) => /^(cap|trucker|peaked|beret|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
 	const cols = hairColours(d, H);
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));
@@ -377,9 +380,15 @@ function dress(A, P, o) {
 	P.cloth = clothGeo.index.count ? add(clothGeo, P.clothMat) : null;
 	if (!P.cloth) clothGeo.dispose();
 	else { const cloth=P.cloth,caps=clothCapsules(P); calibrateCloth(clothGeo,caps); cloth.userData.capsules=caps; cloth.onBeforeRender=()=>poseCloth(P,caps,P.clothMat.userData.U,cloth); }
-	// caps, glasses, headphones, bags: one more mesh
-	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
+	// the bags they carry: where each goes on this body, the straps laid over the clothes (bags.js)
+	const carried = (o.acc || []).filter((q) => BAG_KINDS.has(q.kind));
+	const surf = carried.some((q) => q.kind === 'backpack' || q.kind === 'crossbody') ? torsoSurface(A, p, clothGeo, bones, part, cut) : null;
+	const fits = carried.length ? fitBags({ acc: carried }, cut, surf, P.heldTorso) : [];
+	// caps, glasses, headphones, straps: one more mesh
+	const accGeo = accessoryGeometry(A, { bones, map, heads: rest.heads, eyes: P.eyes.map((e) => e.position.clone().add(rest.heads[map.head])), rest, lobes: P.lobes, p, bags: fits }, o, cut, '#' + cols.hair.clone().multiplyScalar(1.1).getHexString());
 	P.acc = accGeo ? add(accGeo, accessoryMaterial(), true) : null;
+	// and the bags themselves, shared by everyone who carries one
+	P.bags = fits.map((f) => attachBag(P, f, PHONE));
 	P.meshes = [P.skin, P.cloth, P.acc].filter(Boolean);
 	return P;
 }

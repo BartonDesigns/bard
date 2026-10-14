@@ -3,7 +3,8 @@ import * as THREE from 'three';
 // Dimensions are metres. The centre aisle and lift landing are never furniture zones.
 export function fitWorkplace(T, L, B) {
  const { box, cyl, chair, plant, sign, M } = B;
- const accent = M.art[(Math.floor(L.seed * 4) + (T.region === 'Japan' ? 3 : 0)) % 4];
+ // (an office floor carries its company's colour: towers.js dressed)
+ const accent = M.brand || M.art[(Math.floor(L.seed * 4) + (T.region === 'Japan' ? 3 : 0)) % 4];
  const work=(role,group,side=0)=>({role,group:T.key+':'+L.n+':'+group,side,floor:L.n,program:L.program});
  const stats = { desks: 0, meetingSeats: 0, stores: 0, zones: L.zones.map(z => z.type) };
  const legs = (x, z, w, d, h) => { for (const sx of [-1,1]) for (const sz of [-1,1]) cyl(M.steel,x+sx*(w/2-.1),0,z+sz*(d/2-.1),.025,h,8); };

@@ -197,6 +197,8 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
 
 16. **Gameplay loops (13 October):** fare drop-off and every loop are unchecked on a real phone; favours need people about (few at night); a lost-pet favour would need an animated dog (a look change for the owner first).
 
+17. **Music fidelity (13 October):** see `docs/music-fidelity-2026-10-13.md`. Timing is locked to the audio clock (`L99Clock` in index.html) and the world's sounds and voices now enter ahead of the peak guard. Unheard on a real phone; the phone's `balanced` audio buffer adds a little latency to live play (override: localStorage `l99-audio-latency`). The opt-in arp lookahead (`_useLookaheadARP`) is still off by default.
+
 ### Parked (do not start unless asked)
 - The game trailer (1080p60 with a 4K60 script).
 - The P5 leaderboard and world morality status page. The compass now exists in `combat/morality.js`, so this could be unparked when the owner wants it.

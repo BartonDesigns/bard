@@ -21,6 +21,7 @@ import { regionalDress } from '../region/dress.js';
 import { ancestryFor } from '../region/cultures.js';
 import { coldOf } from '../region/climate.js';
 import { makeTeen, teensAbout, teenStyle, UNIFORM_CULTURES } from './teens.js';
+import { walkNow } from '../bay/crosswalks.js';
 
 const MAX = 26, KIDS = 12, NEAR = 70;
 const steps = [];
@@ -429,6 +430,21 @@ export function createPeople(scene, world, camera = null) {
 		}
 		if (R.kind === 'street' && maybeVisit(p, dt)) return;
 		if (R.kind === 'street') {
+			// over the street at the crosswalk: to its curb, wait for the walk (a look both ways
+			// where there is no signal), then across with whoever else was waiting
+			if (R.cross) {
+				const c = R.cross.c, nx = -c.uz, nz = c.ux, o = c.hw + 0.9;
+				if (!R.cross.from) R.cross.from = Math.sign((S.pos.x - c.x) * nx + (S.pos.z - c.z) * nz) || 1;
+				const sd = R.cross.stage ? -R.cross.from : R.cross.from, tx = c.x + nx * o * sd, tz = c.z + nz * o * sd;
+				if (Math.hypot(tx - S.pos.x, tz - S.pos.z) < 1) {
+					if (!R.cross.stage) {
+						R.cross.wait = (R.cross.wait || 0) + dt;
+						if (R.cross.wait > 1.2 && walkNow(c)) R.cross.stage = 1;
+						else { M.want.heading = Math.atan2(-nx * sd, -nz * sd); M.want.speed = 0; return; }
+					} else R.cross = null;
+				}
+				if (R.cross) { M.want.heading = Math.atan2(tx - S.pos.x, tz - S.pos.z); M.want.speed = giveWay(p, speed, cam); return; }
+			}
 			// along the sidewalk; at the end of the street, on into the one that joins it, or back
 			let tgt = curbPoint(R.road, R.s, R.side);
 			if (Math.hypot(tgt.x - S.pos.x, tgt.z - S.pos.z) < 2.2) {
@@ -440,8 +456,14 @@ export function createPeople(scene, world, camera = null) {
 					if (next.length && Math.random() < 0.85) {
 						const q = next[Math.floor(Math.random() * next.length)], atStart = Math.hypot(q.pts[0] - ex, q.pts[1] - ez) < 16;
 						R.road = q; R.dir = atStart ? 1 : -1; R.s = atStart ? 1 : roadLen(q) - 1;
-						// keep to the same hand of the street as we turn
-						R.side = Math.random() < 0.8 ? R.side : -R.side;
+						// keep to the same hand of the street as we turn, or cross it, at the crosswalk
+						// where there is one (realcity.js paints them)
+						if (Math.random() < 0.2) {
+							R.side = -R.side;
+							let best = null, bd = 30;
+							for (const c of world().real.crossings?.() || []) { const d = Math.hypot(c.x - ex, c.z - ez); if (d < bd) { bd = d; best = c; } }
+							if (best) R.cross = { c: best, stage: 0, from: 0, wait: 0 };
+						}
 					} else { R.dir = -R.dir; R.s = Math.min(L, Math.max(0, R.s)); }
 				}
 				if (Math.random() < 0.02) { p.role = 'wait'; p.timer = 2 + Math.random() * 5; }
@@ -735,7 +757,7 @@ export function createPeople(scene, world, camera = null) {
 	async function showcase(cam, heading, specs = [], { gap = 0.9, dist = 4.2, walk = false } = {}) {
 		await ensure();
 		if (!A) return 'assets failed';
-		for (const p of shown.splice(0)) { p.P.root.removeFromParent(); p.P.root.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
+		for (const p of shown.splice(0)) { p.P.root.removeFromParent(); p.P.root.traverse((o) => { if (o.isMesh && !o.geometry.userData.shared) o.geometry.dispose(); }); }
 		specs.forEach((q, k) => {
 			let d = null;
 			for (let tries = 0; tries < 40; tries++) {

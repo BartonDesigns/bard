@@ -16,6 +16,7 @@ import { icon } from './games/icons.js';
 import { waterLevel } from './games/stage.js';
 import { toWorld, toLatLon } from './bay/geo.js';
 import { scrollable } from './ui/scroll.js';
+import { worldOut } from './world/soundbus.js';
 
 // how near a venue has to be for the games to be offered
 const NEAR = 2000;
@@ -38,7 +39,7 @@ export function createArcade({ scene, camera, mount, getWorld, hint, isPhone, te
 		hint: (t, ms) => hint(t, ms),
 		groundAt: (x, z) => getWorld()?.island.heightAt(x, z),
 		audio: () => {
-			const b = window._masterClip || window.leadBus227, c = b?.context;
+			const b = worldOut(), c = b?.context;
 			if (!c || c.state !== 'running') return null;
 			if (!bus || bus.context !== c) { bus = c.createGain(); bus.gain.value = 0.8; bus.connect(b); }
 			return bus;

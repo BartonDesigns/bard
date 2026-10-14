@@ -119,12 +119,34 @@ export function createAutoMusic(opts) {
 		const T = S.face?.trims || [];
 		return [1, 2, 3].map((n) => { const v = T[n - 1]; return typeof v === 'number' && isFinite(v) ? clamp(v, 0, 1.6) : 1; });
 	}
-	function stopVoice(id) {
+	// ---- the audio clock: a step is worked out a lead ahead of its time and everything it
+	// plays is stamped with its time on the audio clock (index.html's L99Clock), so a slow
+	// frame never moves the beat
+	let mapOff = null;
+	const audioClock = () => (hasBard() ? window.L99Clock : null);
+	function bardCtx() { const b = window._masterClip || window.leadBus227; return b?.context || null; }
+	// a step due at performance time due (ms), on the audio clock (s); null with no faceplate
+	function audioAt(due) {
+		const C = audioClock(), c = bardCtx();
+		if (!C || !c || c.state !== 'running') return null;
+		const m = C.now(c) - performance.now() / 1000;
+		// (smoothed: the audio clock moves in blocks of a few milliseconds)
+		mapOff = mapOff === null || Math.abs(m - mapOff) > 0.03 ? m : mapOff + (m - mapOff) * 0.05;
+		return due / 1000 + mapOff;
+	}
+	const leadMs = () => { const C = audioClock(); return C ? C.lead() * 1000 : 3; };
+	const stamped = (t, fn) => { const C = audioClock(); return C && t !== null && t !== undefined ? C.at(t, fn) : fn(); };
+	const stampNow = () => audioClock()?.onAt?.() ?? null;
+	// how far the stamp is ahead of the true time, in ms
+	function aheadMs(t) { const C = audioClock(), c = bardCtx(); return C && c && t !== null ? Math.max(0, (t - C.now(c)) * 1000) : 0; }
+
+	// a voice let go: now, or at an audio time
+	function stopVoice(id, at) {
 		const v = live.get(id);
 		if (!v) return;
 		clearTimeout(v.timer);
 		live.delete(id);
-		try { window.stopLead?.(id); } catch { /* the faceplate may be gone */ }
+		try { stamped(at, () => window.stopLead?.(id)); } catch { /* the faceplate may be gone */ }
 	}
 	function noteOn(role, semi, durMs, vel) {
 		const duck = performance.now() < S.manualUntil ? (role === 'mel' ? 0.45 : role === 'pad' ? 0.7 : 0.55) : 1;
@@ -144,12 +166,15 @@ export function createAutoMusic(opts) {
 		else if (lead === 3) { bank = 2; while (deg < 0) deg += 12; while (deg > 26) deg -= 12; deg += 13; }
 		// each part keeps to its own few voices
 		const mineN = [...live.entries()].filter(([, x]) => x.role === role);
-		while (mineN.length >= CAP[role]) stopVoice(mineN.shift()[0]);
+		const t0 = stampNow();
+		while (mineN.length >= CAP[role]) stopVoice(mineN.shift()[0], t0);
 		const id = 'auto:crysis:' + role + ':' + (++S.serial);
 		// (automatic: kept out of loop recordings; our own softer floor, so quiet is quiet)
 		window._spAuto = true; window._autoVelFloor = 0.02;
 		try { window.playLead(id, deg, bank, true, clamp(v, 0.03, 0.8)); } catch { /* a voice failed; the next will try */ } finally { window._spAuto = false; window._autoVelFloor = undefined; }
-		live.set(id, { role, timer: setTimeout(() => stopVoice(id), Math.max(60, durMs)) });
+		// (released at its audio time: the timer wakes a lead early and stamps the release)
+		const hold = Math.max(60, durMs), offAt = t0 === null ? null : t0 + hold / 1000;
+		live.set(id, { role, timer: setTimeout(() => stopVoice(id, offAt), Math.max(0, hold + aheadMs(t0) - (t0 === null ? 0 : leadMs()))) });
 	}
 	function drum(name, vel) {
 		if (performance.now() < S.manualDrumUntil) vel *= 0.4;
@@ -163,7 +188,8 @@ export function createAutoMusic(opts) {
 		try { window.playDrum(name, clamp(v, 0.04, 0.85)); } catch { /* not in this kit */ } finally { ac._selfDrum = false; window._spAuto = false; window._autoVelFloor = undefined; }
 	}
 	function later(fn, ms) {
-		const t = setTimeout(() => { timers.delete(t); fn(); }, Math.max(0, ms));
+		const t0 = stampNow();
+		const t = setTimeout(() => { timers.delete(t); stamped(t0 === null ? null : t0 + ms / 1000, fn); }, Math.max(0, ms));
 		timers.add(t);
 	}
 	function silence() {
@@ -275,13 +301,13 @@ export function createAutoMusic(opts) {
 		for (let guard = 0; guard < 80; guard++) {
 			if (!S.bar || S.step >= 16) { writeBar(S.bar ? S.bar.at + 16 * S.stepMs : now + 30); S.step = 0; }
 			const due = stepTime(S.step);
-			if (due > now + 3) break;
-			if (now - due < 150) { try { playStep(S.step); } catch (err) { if (S.log) console.warn('[automusic] step', err); } }
+			if (due > now + leadMs()) break;
+			if (now - due < 150) { try { const n = S.step; stamped(audioAt(due), () => playStep(n)); } catch (err) { if (S.log) console.warn('[automusic] step', err); } }
 			else S.skipped++;
 			S.step++;
 		}
 		const next = S.step >= 16 ? S.bar.at + 16 * S.stepMs : stepTime(S.step);
-		loopT = setTimeout(loop, clamp(next - performance.now() - 1, 1, 250));
+		loopT = setTimeout(loop, clamp(next - leadMs() - performance.now() - 1, 1, 250));
 	}
 
 	// (passing: turned on or off for a while by something else, not kept for the next visit)

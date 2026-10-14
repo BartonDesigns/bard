@@ -23,6 +23,7 @@
 // Everything is drawn from one seeded random stream, so a town is the same every visit.
 
 import STATS from './civstats.json' with { type: 'json' };
+import { finishTown } from '../structures/town.js';         // structures: settled lots and alleys
 
 // ---------- small tools ----------
 export function rng(seed) {
@@ -448,7 +449,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 			let pick = null;
 			for (let tries = 0; tries < 6; tries++) {
 				const [x, z] = toW(B.u0 + SP * (0.2 + r() * 0.6), B.v0 + SP * (0.2 + r() * 0.6));
-				if (!dry(x, z) || slope(x, z) > 0.14 || inSite(x, z, Math.max(w, d) / 2 + 20) || G.nearest(x, z, Math.max(w, d) / 2 + 12)) continue;
+				// (level ground: across the whole park, not just at its middle)
+				if (!dry(x, z) || slope(x, z) > 0.14 || [[1, 1], [-1, 1], [1, -1], [-1, -1]].some(([u, v]) => Math.abs(H(x + u * w / 2, z + v * d / 2) - H(x, z)) > 3) || inSite(x, z, Math.max(w, d) / 2 + 20) || G.nearest(x, z, Math.max(w, d) / 2 + 12)) continue;
 				const bank = water ? water.near(x, z) : Infinity;
 				if (!pick || (bank < Math.max(w, d) * 0.7 && !(pick.bank < Math.max(w, d) * 0.7))) pick = { x, z, bank };
 				if (!water || bank < Math.max(w, d) * 0.7) break;
@@ -731,7 +733,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		if (kind !== K.garage && r() < 0.8) { const o = (door - 0.5) * (w - 2.5), wx = fx + ux * o, wz = fz + uz * o; paths.push({ ax: wx, az: wz, bx: wx - nx * (set + hw * 0.5), bz: wz - nz * (set + hw * 0.5), w: 1.2 }); }
 		// out back: a pool now and then, and the yard trees
 		const bx = x + nx * (d / 2 + 9.5), bz = z + nz * (d / 2 + 9.5);
-		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8)) {
+		if (r() < (big ? 0.85 : S.lots.poolPerHouse * 0.9) && w * d > 100 && roadClear(bx, bz, 7) && free(bx, bz, ux, uz, 2.5, 3.5) && !wet(bx, bz, 8) && slope(bx, bz) < 0.1) {
 			pools.push({ x: bx, z: bz, w: (4 + r() * 1.5) * (big ? 1.3 : 1), d: (8 + r() * 3) * (big ? 1.3 : 1), a: yaw + Math.PI / 2 + (r() - 0.5) * 0.2 });
 			claim(bx, bz, ux, uz, 3, 5);
 		}
@@ -936,6 +938,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	}
 	yield 'sites';
 	for (const b of boxes) b.gen = 1;          // (grown, not surveyed: city.js lets these weather into neglect)
+	finishTown(boxes, roads, seed);           // structures: no building through another or a street; alleys behind the shops
 
 	// ---------- 5. the land-use map: R roads, G land use x16, B roofs ----------
 	const step = Rbox > 3500 ? 10 : 8, x0 = cx - Rbox, z0 = cz - Rbox, MW = Math.ceil(2 * Rbox / step), MH = MW;
@@ -986,6 +989,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	for (const b of boxes) rect({ x: b.x, z: b.z, ux: Math.cos(b.a), uz: Math.sin(b.a), hw: b.w / 2, hd: b.d / 2 }, 2, 255);
 	// (anything else that came to stand in the water taken out of it)
 	if (water) for (const L of [boxes, pools, trees]) { const keep = L.filter((b) => !wet(b.x, b.z, (b.w && b.d ? Math.max(b.w, b.d) / 2 : 0) + 2)); L.length = 0; L.push(...keep); }
+	// (and no tree with its trunk in a street, whatever planted it)
+	{ const keep = trees.filter((t) => roadClear(t.x, t.z, 0.6)); trees.length = 0; trees.push(...keep); }
 	// the shop and office fronts get the brief's sign texts, in turn (b.sign; for whatever paints them)
 	const signs = Array.isArray(brief?.signs) ? brief.signs.filter((s) => typeof s === 'string' && s) : [];
 	if (signs.length) { let k = 0; for (const b of boxes) if (b.kind === K.retail || b.kind === K.office) b.sign = signs[k++ % signs.length]; }

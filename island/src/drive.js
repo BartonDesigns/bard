@@ -12,11 +12,16 @@
 // steer, Space for the handbrake, C to look from behind. M (or the assist button) hands
 // the wheel back to the road: snapped to it, choosing only the turns, as before. Stop, and
 // the car stays where you left it.
+//
+// Beside one of the military's vehicles (a tank, an armoured truck, a jeep, a jet, a helicopter:
+// military/), V takes that instead, with these same keys and the pad (military/drive-mil.js adds
+// the turret, the cannon, the throttle and the flying); V again gets out once it has stopped.
 
 import * as THREE from 'three';
 import { BLOCKS, toGrid, fromGrid } from './bay/styles.js';
 import { specOf, seatsOf } from './bay/cars.js';
 import { loadRapier, createCarPhysics } from './vehicles/physics.js';
+import { carEngine } from './audio/engines.js';
 
 const SPEED = { motorway: 29, trunk: 24, primary: 20, secondary: 17, tertiary: 15, residential: 11, unclassified: 12, living_street: 7, service: 6, unknown: 8, track: 5, path: 3, footway: 2.4, cycleway: 5, steps: 1.4, pedestrian: 2.4, grid: 11 };
 const TRAIL = new Set(['track', 'path', 'footway', 'cycleway', 'steps', 'pedestrian']);
@@ -225,6 +230,9 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!W || D.active) return;
 		const P = W.player.state, Vh = W.vehicles;
 		if (W.boat?.boarded?.()) return;
+		// a military vehicle beside you, first
+		const mv = !given && W.military?.vehicleToEnter?.(P.pos.x, P.pos.z);
+		if (mv && boardMil(W, P, mv)) return;
 		// which car: the parked one beside you, yours where you left it, or a new one
 		const near = given || Vh?.carToEnter(P.pos.x, P.pos.z), mine = Vh?.mine.car;
 		D.from = null;
@@ -241,6 +249,22 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (D.mode === 'free') startPhysics();
 		hint(D.mode === 'free' ? (isPhone ? 'Driving: ▲ go, ▼ brake and reverse, ◀ ▶ steer. Assist lets the road steer. The road button stops.' : 'Driving: W/↑ go, S/↓ brake and reverse, A/D steer, Space handbrake, C view from behind, M road assist. V to stop.') : (isPhone ? 'Driving: ◀ ▶ pick the next turn, ▲ straight on, ▼ turn round. The road button stops.' : 'On the road: ← → pick the next turn (hold to turn round), ↑ straight on. The letter keys play music as you go. Space jumps off, Shift+arrow steps off, Esc stops.'), 4500);
 	}
+	function boardMil(W, P, v) {
+		D.mil = W.military.board(v, { held, pedals: D.pedals, hud: (t) => { hud.textContent = t; }, strike, seat: () => D.chase, looked: () => performance.now() - (D.lookT || 0) < 2500, stop: (force) => stop(force) });
+		if (!D.mil) return false;
+		W.military.take(v);
+		D.active = true; D.chase = false; P.locked = true; P.flying = false; P.vel.set(0, 0, 0); D.lastYaw = undefined;
+		P.yaw = v.yaw + Math.PI; P.pitch = -0.05;
+		pad.style.display = isPhone ? 'block' : 'none'; hud.style.display = 'block';
+		toggleBtn.style.background = '#01a982';
+		labels();
+		return true;
+	}
+	// the engine you hear (audio/engines.js), made again for another kind of car
+	function hum(speed, throttle, x, y, z, skid = false) {
+		if (D.snd?.kind !== D.kind) { D.snd?.stop(); D.snd = carEngine(D.kind); }
+		D.snd.drive({ speed, throttle, skid, where: { x, y, z, inside: !D.chase } });
+	}
 	function startPhysics() {
 		const W = world(), f = D.from;
 		D.loading = true;
@@ -256,12 +280,13 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const I = W.island;
 		return {
 			floorAt: (x, z, y) => Math.max(I.heightAt(x, z), I.extraFloor ? I.extraFloor(x, z, y) : -1e9),
-			boxes: (x, z, r) => (W.real?.loaded?.() ? W.real.near('boxes', x, z, r) : []).filter((b) => b.w > 1 && b.d > 1).map((b) => ({ x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH + 2, y: I.heightAt(b.x, b.z) - 1 })),
+			boxes: (x, z, r) => { const list = (W.real?.loaded?.() ? W.real.near('boxes', x, z, r) : []).filter((b) => b.w > 1 && b.d > 1); return W.structures ? W.structures.carBoxes(list, x, z, r).map((b) => (b.wallH !== undefined ? { x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH + 2, y: I.heightAt(b.x, b.z) - 1 } : b)) : list.map((b) => ({ x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH + 2, y: I.heightAt(b.x, b.z) - 1 })); },          // (structures: wrecked walls as they stand, the grid's lots too)
 			cars: (x, z, r) => (W.vehicles ? W.vehicles.carsNear(x, z, r).filter((c) => c.id !== 'mine') : []).map((c) => ({ id: c.id || c.kind + c.x.toFixed(1) + c.z.toFixed(1), kind: c.kind, x: c.x, y: c.y, z: c.z, yaw: c.yaw })),
 			push: I.extraPush ? (p, footY) => I.extraPush(p, footY) : null,
 		};
 	}
 	function setMode(m) {
+		if (D.mil) return;
 		if (!D.active) { D.mode = m; return; }
 		const W = world(), mine = W?.vehicles?.mine.car;
 		if (m === 'assist') {
@@ -279,6 +304,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		labels();
 	}
 	function nextKind() {
+		if (D.mil) return;
 		const W = world(), mine = W?.vehicles?.mine.car;
 		if (D.car && Math.abs(D.car.pose().speed) > 1.5) { hint('Stop first to change cars.', 1500); return; }
 		D.kind = KINDS[(KINDS.indexOf(D.kind) + 1) % KINDS.length];
@@ -291,14 +317,32 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		modeBtn.textContent = D.mode === 'free' ? 'Assist' : 'Drive';
 		modeBtn.title = D.mode === 'free' ? 'Let the road steer (M)' : 'Drive it yourself (M)';
 		// (the camera only turns when you drive it yourself)
-		const cam = D.active && D.mode === 'free';
+		const cam = D.active && (D.mode === 'free' || !!D.mil);
+		if (D.mil) for (const b of [kindBtn, modeBtn, credBtn]) b.style.display = 'none';
 		camBtn.style.display = cam ? 'flex' : 'none';
 		camBtn.style.background = D.chase ? '#01a982' : 'rgba(8,20,26,.55)';
 		keys.style.display = cam && !isPhone ? 'block' : 'none';
 	}
-	function stop() {
+	// force: false when you asked (V, Esc, the button): a military vehicle on the move, or in the
+	// air, keeps you in it
+	function stop(force = true) {
 		if (!D.active) return;
+		D.snd?.stop(); D.snd = null;
 		const W = world(), P = W?.player.state, Vh = W?.vehicles, mine = Vh?.mine.car;
+		if (D.mil) {
+			if (!force && !D.mil.canLeave()) { hint(D.mil.kind === 'jet' || D.mil.kind === 'heli' ? 'Land and stop first.' : 'Stop first.', 1600); return; }
+			const r = D.mil.leave();
+			D.mil = null; D.active = false;
+			if (!r.wrecked) W?.military?.leave(r.kind, r.x, r.y, r.z, r.yaw, r.scheme);
+			if (P) {
+				const g = Math.max(W.island.heightAt(r.out.x, r.out.z), W.island.extraFloor ? W.island.extraFloor(r.out.x, r.out.z, r.y + 1) : -1e9);
+				P.pos.set(r.out.x, g + 1.68, r.out.z); P.locked = false; P.vel.set(0, 0, 0); camera.position.copy(P.pos);
+			}
+			pad.style.display = 'none'; hud.style.display = 'none'; keys.style.display = 'none';
+			for (const b of [kindBtn, modeBtn, credBtn, camBtn]) b.style.display = 'none';
+			toggleBtn.style.background = 'rgba(8,20,26,.55)';
+			return;
+		}
 		D.active = false;
 		D.car?.dispose(); D.car = null;
 		if (camera.near !== 0.25) { camera.near = 0.25; camera.updateProjectionMatrix(); }
@@ -319,15 +363,16 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		for (const b of [kindBtn, modeBtn, credBtn, camBtn]) b.style.display = 'none';
 		toggleBtn.style.background = 'rgba(8,20,26,.55)';
 	}
-	toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); D.active ? stop() : start(); });
+	toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); D.active ? stop(false) : start(); });
 	const held = new Set();
 	window.addEventListener('keydown', (e) => {
 		if (!mount.isConnected || mount.style.display === 'none' || e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
 		const k = e.key.toLowerCase();
-		if (k === 'v' && !e.repeat) { D.active ? stop() : start(); e.preventDefault(); return; }
-		if (k === 'escape' && D.active) { stop(); e.preventDefault(); return; }
+		if (k === 'v' && !e.repeat) { D.active ? stop(false) : start(); e.preventDefault(); return; }
+		if (k === 'escape' && D.active) { stop(false); e.preventDefault(); return; }
 		if (!D.active) return;
 		held.add(k);
+		if (D.mil) { if (!e.repeat && k === 'c') chase(); if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault(); return; }
 		if (!e.repeat && k === 'm') { setMode(D.mode === 'free' ? 'assist' : 'free'); e.preventDefault(); return; }
 		if (!e.repeat && k === 'n') { nextKind(); e.preventDefault(); return; }
 		if (!e.repeat && k === 'c') { chase(); e.preventDefault(); return; }
@@ -360,6 +405,13 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		if (!D.active) return false;
 		const W = world();
 		if (!W) { stop(); return false; }
+		if (D.mil) {
+			// (looking about, for the aircraft's camera)
+			const P = W.player.state;
+			if (D.lastYaw !== undefined && Math.abs(Math.atan2(Math.sin(P.yaw - D.lastYaw), Math.cos(P.yaw - D.lastYaw))) > 1e-4) D.lookT = performance.now();
+			D.lastYaw = P.yaw;
+			return D.mil?.update(dt) ?? false;
+		}
 		if (D.mode === 'free') return drive(dt, W);
 		holdTurn();
 		const P = W.player.state, e = D.edge;
@@ -397,18 +449,18 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const off = trail || E.oneway || E.w < 7 ? 0 : E.w * 0.22;
 		const hx = dx * D.dir, hz = dz * D.dir;
 		const [x, z] = onBridge(x0 - hz * off, z0 + hx * off);
-		// the road under you: its own smoothed profile (graded like a real road, never steeper
-		// than 25%, level across), bridges included
-		const road = profileAt(E, D.s);
-		// (never under the ground where the profile cuts through a hump more than a metre)
-		const floorY = Math.max(road, W.island.heightAt(x, z) - 1.0, W.island.extraFloor ? W.island.extraFloor(x, z, Math.max(D.y ?? road, road + 1.5) - 1) : -1e9);
+		// the road under you: the ground as graded for the roads (bay/berms.js), the same surface
+		// the people and the free-driving cars stand on, or the deck it runs on
+		const road = Math.max(W.island.heightAt(x, z), deckAt(E, D.s));
+		const floorY = Math.max(road, W.island.extraFloor ? W.island.extraFloor(x, z, Math.max(D.y ?? road, road + 1.5) - 1) : -1e9);
 		const eye = trail ? 1.65 : 1.45;                                      // a driver's eye, a walker's on a trail
 		D.y = D.y === null ? floorY + eye : D.y + (floorY + eye - D.y) * Math.min(1, dt * 8);
 		// face along the road, turning smoothly, and tilt with its grade
 		const want = Math.atan2(-hx, -hz);
 		let dyaw = want - D.yaw; dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
 		D.yaw += dyaw * Math.min(1, dt * 4);
-		const grade = Math.max(-0.25, Math.min(0.25, (profileAt(E, D.s + D.dir * 8) - road) / 8));
+		const sa = Math.max(0, Math.min(E.L, D.s + D.dir * 8)), [ax, az] = onBridge(...at(E.pts, sa));
+		const grade = Math.max(-0.25, Math.min(0.25, (Math.max(W.island.heightAt(ax, az), deckAt(E, sa)) - road) / 8));
 		// free look: turn your head while the road carries you on (drag or mouse as ever);
 		// after a few seconds without looking about, your gaze drifts back to the road
 		if (D.lastYaw !== undefined) { const dl = Math.atan2(Math.sin(P.yaw - D.lastYaw), Math.cos(P.yaw - D.lastYaw)); if (Math.abs(dl) > 1e-4) { D.look += dl; D.lookT = performance.now(); } }
@@ -427,6 +479,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 			// (the eye sits at the driver's seat)
 			D.y += (floorY + eye[1] - D.y) * Math.min(1, dt * 4);
 		}
+		if (trail) { D.snd?.stop(); D.snd = null; } else hum(D.v, target > D.v + 0.3 ? 0.6 : 0.15, x, D.y, z);
 		const arrow = { straight: '↑ straight on', left: '← left next', right: '→ right next' }[D.queue];
 		hud.textContent = `${trail ? '🥾' : '🚗'} ${E.name || (E.cls === 'grid' ? 'Street' : E.cls.replace('_', ' '))} · ${arrow} · ${fmtSpeed(D.v)}`;
 		for (const [k, b] of Object.entries(arrows)) b.style.background = k === D.queue ? '#01a982' : 'rgba(8,20,26,.55)';
@@ -449,11 +502,12 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		C.ctl.hand = held.has(' ') ? 1 : 0;
 		C.step(dt);
 		const o = C.pose();
+		hum(o.speed, C.ctl.throttle || (C.ctl.brake && o.speed < 0.8 ? 0.5 : 0), o.p[0], o.p[1], o.p[2], !!C.ctl.hand && Math.abs(o.speed) > 4);
 		Q.set(o.q[0], o.q[1], o.q[2], o.q[3]);
 		M4.compose(V3.set(o.p[0], o.p[1], o.p[2]), Q, new THREE.Vector3(1, 1, 1));
 		M4.multiply(new THREE.Matrix4().makeTranslation(0, o.down, 0));
 		const w = o.wheels;
-		W.vehicles.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer });
+		W.vehicles?.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer });
 		// anyone in the way is struck (vehicles/impact.js); the car gives up what it hands them
 		if (strike) {
 			const lv = C.body.linvel(), el = M4.elements;
@@ -495,10 +549,8 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		for (const [kk, b] of Object.entries(arrows)) b.style.background = T[kk] ? '#01a982' : 'rgba(8,20,26,.55)';
 		return true;
 	}
-	// a road's height along it: the ground on its centre line every 5 m, smoothed over about
-	// 40 m (cut through the bumps, filled over the dips), then limited to a 25% grade both
-	// ways; kept on the road once worked out
-	const STEP = 5, MAXG = 0.25;
+	// the decks along a road are looked up every 5 m
+	const STEP = 5;
 	// the mapped line of the Golden Gate runs a little off the modelled deck: on the bridge,
 	// ride the deck (in its lanes, keeping right of the median)
 	function onBridge(x, z) {
@@ -509,26 +561,31 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const t2 = Math.sign(t || 1) * Math.min(Math.max(Math.abs(t), 2.5), 9);
 		return [B.centre.x + B.axis.x * s - B.axis.y * t2, B.centre.z + B.axis.y * s + B.axis.x * t2];
 	}
-	function profileAt(E, s) {
-		if (!E.prof) {
-			const n = Math.max(2, Math.ceil(E.L / STEP) + 1), h = new Float32Array(n);
-			// (on a bridge or an overpass the road is its deck: the Golden Gate's, a freeway's)
-			const W = world(), deck = new Float32Array(n).fill(-1e9);
+	// the deck under a road, where it runs on one (-1e9 where it doesn't): the Golden Gate's, a
+	// freeway overpass's and its ramps; worked out along the road once
+	function deckAt(E, s) {
+		if (!E.deck) {
+			const n = Math.max(2, Math.ceil(E.L / STEP) + 1);
+			const W = world(), deck = new Float32Array(n).fill(-1e9), over = !E.real || E.real.bridge, X = new Float32Array(n), Z = new Float32Array(n), h = new Float32Array(n);
 			for (let i = 0; i < n; i++) {
 				const [px, pz] = at(E.pts, Math.min(E.L, i * STEP)), [qx, qz] = onBridge(px, pz);
+				X[i] = qx; Z[i] = qz;
 				h[i] = W.island.heightAt(qx, qz);
-				deck[i] = Math.max(W.bridge ? W.bridge.deckFloor(qx, qz, 1e4) : -1e9, W.freeways ? W.freeways.floor(qx, qz, 1e4) : -1e9);
+				deck[i] = Math.max(W.bridge ? W.bridge.deckFloor(qx, qz, 1e4) : -1e9, W.freeways && over ? W.freeways.floor(qx, qz, 1e4) : -1e9);
 			}
-			for (let pass = 0; pass < 3; pass++) {
-				const c = h.slice();
-				for (let i = 0; i < n; i++) { let a = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += c[j]; k++; } h[i] = a / k; }
+			// a road leading onto an overpass climbs its ramp from the ground, followed from either
+			// end; a street passing under one never meets its deck
+			if (W.freeways && !over) for (const d of [1, -1]) {
+				let ref = h[d > 0 ? 0 : n - 1];
+				for (let i = d > 0 ? 0 : n - 1; i >= 0 && i < n; i += d) {
+					const f = W.freeways.floor(X[i], Z[i], ref + 1.5);
+					if (f > h[i] - 1) { deck[i] = Math.max(deck[i], f); ref = f; } else ref = h[i];
+				}
 			}
-			for (let i = 0; i < n; i++) if (deck[i] > -1e8) h[i] = deck[i] - 0.6 + 0.6;
-			for (let i = 1; i < n; i++) h[i] = Math.max(h[i - 1] - MAXG * STEP, Math.min(h[i - 1] + MAXG * STEP, h[i]));
-			for (let i = n - 2; i >= 0; i--) h[i] = Math.max(h[i + 1] - MAXG * STEP, Math.min(h[i + 1] + MAXG * STEP, h[i]));
-			E.prof = h;
+			E.deck = deck;
 		}
-		const h = E.prof, f = Math.max(0, Math.min(h.length - 1, s / STEP)), i = Math.min(h.length - 2, Math.floor(f)), t = f - i;
+		const h = E.deck, f = Math.max(0, Math.min(h.length - 1, s / STEP)), i = Math.min(h.length - 2, Math.floor(f)), t = f - i;
+		if (h[i] < -1e8 || h[i + 1] < -1e8) return t < 0.5 ? h[i] : h[i + 1];
 		return h[i] * (1 - t) + h[i + 1] * t;
 	}
 	// for tests: the choices at the end of the road you are on
@@ -543,5 +600,5 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const P = world()?.player?.state;
 		return P ? { x: P.pos.x, y: P.pos.y - 1.68, z: P.pos.z, speed: Math.abs(D.v) } : null;
 	}
-	return { update, start, stop, debugOptions, carAt, active: () => D.active, auto, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car };
+	return { update, start, stop, debugOptions, carAt, active: () => D.active, auto, state: D, setMode, nextKind, setKind: (k) => { D.kind = k; labels(); }, physics: () => D.car, military: () => D.mil };
 }

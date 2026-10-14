@@ -117,7 +117,7 @@ export function createCast(parent) {
 	// done with them: the bodies' own geometry freed (the shared materials and maps stay)
 	function dispose() {
 		for (const h of list) {
-			if (h.P) h.P.root.traverse((q) => { if (q.isMesh) { q.geometry.dispose(); if (q.material && !q.material.userData?.shared && q.material !== h.P.skinMat) q.material.dispose(); } });
+			if (h.P) h.P.root.traverse((q) => { if (q.isMesh) { if (!q.geometry.userData.shared) q.geometry.dispose(); if (q.material && !q.material.userData?.shared && q.material !== h.P.skinMat) q.material.dispose(); } });
 			h.P?.clothMat?.dispose(); h.P?.skinMat?.dispose();
 			h.g.removeFromParent();
 		}

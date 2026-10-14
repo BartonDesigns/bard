@@ -7,6 +7,9 @@
 import { ST } from './plan.js';
 
 const WALL_T = { ext: ST.ext, part: ST.part };
+// fit-outs for more kinds of room, by type, from other modules (services/fitout.js: wards,
+// cells, apparatus bays...): fn(K) with the same helpers the rooms here use
+export const ROOM_FIT = {};
 
 // the room's four sides, with the openings in the walls along them
 function sidesOf(P, rm) {
@@ -402,6 +405,7 @@ export function furnish(P, only = -1) {
 			if (bb) inFront(bb, 'desk', 1.2, 0.6, 0.75, 0.9);
 			light('tube');
 		} else if (t === 'warehouse' || t === 'store' || t === 'parking' || t === 'garage2' || t === 'shed' || t === 'office' || t === 'school') bigFit(rm);
+		else if (ROOM_FIT[t]) ROOM_FIT[t]({ P, rm, L, y0, sides, bw, bd, cx, cz, rnd, items, seats, lights, placed, hit, inside, against, standing, inFront, faceOf, sitOn, stand, chairs, light, art, clutter });
 		else light();
 
 	}

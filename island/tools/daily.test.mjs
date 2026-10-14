@@ -20,7 +20,7 @@ test('goals count the right things, pay once each, a bonus for all three, and re
 	const goals = D.list().goals;
 	assert.equal(D.list().day, dayKey(t));
 	// feed each kind of event until everything is done
-	const feed = { favour: [{ kind: 'lost' }, { kind: 'catch' }, { kind: 'pass' }, { kind: 'lost' }, { kind: 'repair' }], thief: [{}], fare: [{ stars: 5, metres: 1200, onTime: true }, { stars: 5, metres: 1200 }, { stars: 5, metres: 1200 }], tend: [{}] };
+	const feed = { favour: [{ kind: 'lost' }, { kind: 'catch' }, { kind: 'pass' }, { kind: 'lost' }, { kind: 'repair' }], thief: [{}], fare: [{ stars: 5, metres: 1200, onTime: true }, { stars: 5, metres: 1200 }, { stars: 5, metres: 1200 }], tend: [{}], street: [{ kind: 'crosswalk' }, { kind: 'crosswalk' }, { kind: 'crosswalk' }] };
 	for (const [kind, list] of Object.entries(feed)) for (const d of list) D.note(kind, d);
 	const L = D.list();
 	assert.ok(L.goals.every((g) => g.done), JSON.stringify(L));

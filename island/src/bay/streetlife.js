@@ -217,7 +217,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 		const R = 380;
 		const counts = new Map(), n = (im) => { const c = counts.get(im) || 0; counts.set(im, c + 1); return c < im.instanceMatrix.count ? c : -1; };
 		const lampPos = lampLightGeo.attributes.position.array; let nl = 0;
-		signalList.length = 0; lanes.length = 0;
+		signalList.length = 0; lanes.length = 0; stopsAt.length = 0;
 		const grids = new Map();
 		for (let dz = -R; dz <= R; dz += R / 4) for (let dx = -R; dx <= R; dx += R / 4) { const u = bay.urbanAt(cx + dx, cz + dz); if (u.u > 0.15) grids.set(Math.round(u.a * 1000) + ':' + u.s, [u.a, u.s]); }
 		for (const [a, style] of grids.values()) {
@@ -264,7 +264,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 						if (city && k % 5 === 2 && t > ST + 4 && t < L - 4) { const c = n(meters); if (c >= 0) put(meters, c, kx, kg, kz, yaw); }
 						if (busy && k % 29 === 14) { const c = n(bins); if (c >= 0) put(bins, c, kx, kg, kz, yaw); }
 						if (busy && k % 41 === 20 && r < 0.5) { const [bx, bz] = W(...at(ST + 1.6)); const c = n(benches); if (c >= 0) put(benches, c, bx, kg, bz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); }
-						if (busy && k % 53 === 26 && r < 0.35) { const [bx, bz] = W(...at(ST + 1.4)); const c = n(shelters); if (c >= 0) put(shelters, c, bx, kg, bz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); }
+						if (busy && k % 53 === 26 && r < 0.35) { const [bx, bz] = W(...at(ST + 1.4)); const c = n(shelters); if (c >= 0) { put(shelters, c, bx, kg, bz, yaw + (along ? -Math.PI / 2 : Math.PI / 2)); stopsAt.push({ x: bx, z: bz }); } }
 					}
 					// the traffic lanes on this street, for moving cars
 					const [x0, z0] = W(...(along ? [i * BX + ST / 2, j * BZ] : [i * BX, j * BZ + ST / 2])), [x1, z1] = W(...(along ? [i * BX + ST / 2, (j + 1) * BZ] : [(i + 1) * BX, j * BZ + ST / 2]));
@@ -321,6 +321,8 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	}
 	const cars = [];
 	let trafficN = 0;
+	// the bus stops (each shelter): a bus coming by pulls up and waits a while
+	const stopsAt = [];
 
 	function update(dt, t, cam, nightK) {
 		if (!bay.loaded()) return;
@@ -351,6 +353,20 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			let target = toEnd < 12 ? Math.max(0, (toEnd - 3) * 0.8) : c.vmax;
 			// (held: someone is at the driver's door, vehicles/carjack.js)
 			if (c.held) target = 0;
+			// a bus at a stop: drawn up beside the shelter for its passengers, then on
+			if (c.kind === 'bus' && c.px !== undefined) {
+				if (c.dwell > 0) { c.dwell -= dt; target = 0; }
+				else {
+					const hx = Math.sin(c.yaw), hz = Math.cos(c.yaw);
+					for (const q of stopsAt) {
+						const dx = q.x - c.px, dz = q.z - c.pz, ahead = dx * hx + dz * hz;
+						if (q === c.served || Math.abs(dx * hz - dz * hx) > 7 || ahead < -2 || ahead > 16) continue;
+						target = Math.min(target, Math.max(0, ahead * 0.6));
+						if (ahead < 1.5) { c.dwell = 6 + Math.random() * 6; c.served = q; }
+						break;
+					}
+				}
+			}
 			if (c.px !== undefined) {
 				const hx = Math.sin(c.yaw), hz = Math.cos(c.yaw), half = (SPEC[c.kind] || SPEC.sedan).L / 2;
 				for (const o of stops) {
@@ -395,7 +411,21 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const take = (x, z) => { taken.add(spot(x, z)); splitT = -1e9; };
 	// a car out of the traffic for good (taken off its driver)
 	const remove = (c) => { const i = cars.indexOf(c); if (i >= 0) cars.splice(i, 1); };
-	const api = { update, group, cars, parked, parkedNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
+	// the benches and bus shelters near a point, read back off their instances (for a bag left
+	// on one, people/bag-spots.js): { kind, x, y, z, heading }
+	function seatsNear(x, z, r = 60) {
+		const out = [];
+		for (const [im, kind] of [[benches, 'bench'], [shelters, 'shelter']]) {
+			const a = im.instanceMatrix.array;
+			for (let i = 0; i < im.count; i++) {
+				const e = i * 16, px = a[e + 12], pz = a[e + 14];
+				if (Math.abs(px - x) > r || Math.abs(pz - z) > r || Math.hypot(px - x, pz - z) > r) continue;
+				out.push({ kind, x: px, y: a[e + 13], z: pz, heading: Math.atan2(a[e + 8], a[e]) });
+			}
+		}
+		return out;
+	}
+	const api = { update, group, cars, parked, parkedNear, seatsNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
 	return api;
 }
 

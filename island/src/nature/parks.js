@@ -53,7 +53,9 @@ export const PARKS = [
 		note: 'Hunt for fossil shells in the sandstone up Rocky Ridge, and look out for golden eagles on the wind.',
 	},
 	{
-		id: 'mt-diablo', name: 'Mount Diablo State Park', lat: 37.8816, lon: -121.9142, agency: 'ca-state-parks', kind: 'state',
+		// (its tables, grills and restroom gather at Juniper Campground: the summit is the stone
+		// building, the beacon, the car park and the view, nothing more)
+		id: 'mt-diablo', name: 'Mount Diablo State Park', lat: 37.8676, lon: -121.9290, agency: 'ca-state-parks', kind: 'state',
 		amenities: ['visitor-center', 'summit-observation-deck', 'entrance-kiosk', 'campground', 'fire-ring', 'food-locker', 'picnic', 'bbq', 'restroom-vault', 'restroom-flush', 'trailhead', 'kiosk', 'trail-marker', 'cattle-gate', 'parking'],
 		trailheads: [
 			{ name: 'Summit Visitor Center (stone building, beacon)', lat: 37.8816, lon: -121.9142 },

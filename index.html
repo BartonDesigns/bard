@@ -7475,6 +7475,44 @@ root.L99Route223={context,bus,patchFlight,snapshot:()=>({contextState:current?.s
 })(window);
 
 </script>
+<script id="clock-code230">
+/* CLOCK_230: the music keeps the audio hardware's time, not the page's. Steps are worked out a
+   little ahead (the lead), and every sound a step starts is stamped with that step's exact audio
+   time: while a stamp is set, the context's currentTime reads as the stamp, so every kit and
+   voice that starts "now" starts on the beat instead, however late the page's timer ran. */
+(function(root){'use strict';
+const BASE=root.BaseAudioContext||root.AudioContext;
+const realGet=BASE&&Object.getOwnPropertyDescriptor(BASE.prototype,'currentTime')?.get;
+let stampAt=null;
+const num=v=>typeof v==='number'&&isFinite(v);
+// a note's start: an explicit stamp, else the sequencer step being played
+function onAt(){return num(stampAt)?stampAt:num(root._seqAt)?root._seqAt:null;}
+// a note's end: an explicit stamp, else the sequencer's release time
+function offAt(){return num(stampAt)?stampAt:num(root._seqOffAt)?root._seqOffAt:null;}
+function lock(ctx){
+ if(!realGet||!ctx||ctx.clock230)return;
+ ctx.clock230=true;
+ Object.defineProperty(ctx,'currentTime',{configurable:true,get(){
+  const t=realGet.call(ctx),a=num(stampAt)?stampAt:num(root._seqAt)?root._seqAt:root._seqOffAt;
+  // only ever ahead, never far: a stale stamp falls back to the true time
+  return num(a)&&a>t&&a-t<1?a:t;
+ }});
+}
+function now(ctx){return realGet&&ctx?realGet.call(ctx):(ctx?.currentTime||0);}
+// run fn with its sounds stamped for audio time t
+function at(t,fn){const was=stampAt;stampAt=num(t)?t:null;try{return fn();}finally{stampAt=was;}}
+// how far ahead steps are worked out: a little on the faceplate, more while the world is
+// drawing (its frames can hold the page up), more again on a phone
+function lead(){const w=root._worldAudioLead;return num(w)?Math.max(.03,Math.min(.3,w)):.08;}
+// a phone gets a roomier audio buffer: under load the small one runs dry and crackles
+function latencyHint(){
+ try{const v=localStorage.getItem('l99-audio-latency');if(v==='interactive'||v==='balanced'||v==='playback')return v;}catch(_){}
+ const coarse=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
+ return coarse?'balanced':'interactive';
+}
+root.L99Clock={lock,now,at,lead,onAt,offAt,latencyHint};
+})(window);
+</script>
 <script id="peak-code177">
 /* PEAK_177: stereo-linked lookahead protection runs on the audio thread. */
 (function(root){'use strict';
@@ -11210,7 +11248,7 @@ window._workletPlayLead = function(voiceId, degree, voiceTypeName, freq, atkSec,
   try { window._musicEnergy = Math.min(1, (window._musicEnergy || 0) + 0.22); window._musicLastAt = Date.now(); } catch (eME) { void eME; }
   node.port.postMessage({
     cmd: 'noteOn',
-    at: (typeof window._seqAt === 'number' ? window._seqAt : undefined),  // fix456: sample-locked when fired by the sequencer; undefined = immediate (live play)
+    at: (window.L99Clock ? (L99Clock.onAt() ?? undefined) : (typeof window._seqAt === 'number' ? window._seqAt : undefined)),  // fix456, clock230: sample-locked when fired by the sequencer; undefined = immediate (live play)
     id: voiceId,
     type: voiceTypeName,
     freq: freq,
@@ -11240,7 +11278,7 @@ window._workletStopLead = function(voiceId, relSec, bank) {
   // so this is stuck-note-proof without threading degree into stops.
   // da100: a sequencer release carries its audio-clock time (window._seqOffAt)
   // so it lands exactly where the note ends, never ahead of its own onset.
-  const _offAt = (typeof window._seqOffAt === 'number') ? window._seqOffAt : undefined;
+  const _offAt = window.L99Clock ? (L99Clock.offAt() ?? undefined) : ((typeof window._seqOffAt === 'number') ? window._seqOffAt : undefined);
   if (bank === 2 && window._workletNode3 && window._workletNode3 !== node) {
     try { window._workletNode3.port.postMessage({ cmd: 'noteOff', id: voiceId, relSec: relSec, at: _offAt }); } catch (e) {}
   }
@@ -11346,7 +11384,8 @@ window.createMasterFXBus = function(audioContext, instrumentOutputNode) {
 
 function initAudio() {
   if (ctx) return;
-  ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint: "interactive"});
+  ctx = new (window.AudioContext || window.webkitAudioContext)({latencyHint: window.L99Clock ? L99Clock.latencyHint() : "interactive"});
+  window.L99Clock?.lock(ctx);   // clock230: steps stamp their sounds with the step's audio time
 
   // Create nodes
   masterGain = ctx.createGain();
@@ -14186,7 +14225,10 @@ function playDrum(name, velocity) {
   };
   // vox92: micro-timing drift (±10ms ref). Sub-half-ms jitter fires inline.
   const _jit = _H > 0 ? Math.random() * 10 * _H : 0;
-  if (_jit > 0.5) { setTimeout(_fire, _jit); } else { _fire(); }
+  // clock230: a step's hit is stamped for its audio time; its drift goes on the stamp, not a timer
+  const _stamp = window.L99Clock ? L99Clock.onAt() : null;
+  if (_stamp !== null) { L99Clock.at(_stamp + (_jit > 0.5 ? _jit / 1000 : 0), _fire); }
+  else if (_jit > 0.5) { setTimeout(_fire, _jit); } else { _fire(); }
 }
 
 
@@ -16500,7 +16542,7 @@ function startSequencer() {
   if (sequencerRunning) return;
   sequencerRunning = true;
   currentStep = 0;
-  window._seqClock = (typeof ctx !== 'undefined' && ctx ? ctx.currentTime : 0) + 0.06;  // fix456: stable audio-clock anchor
+  window._seqClock = (typeof ctx !== 'undefined' && ctx ? (window.L99Clock ? L99Clock.now(ctx) + L99Clock.lead() : ctx.currentTime + 0.06) : 0);  // fix456: stable audio-clock anchor (clock230: one lead ahead)
   window._seqAt = null;
   // Starting playback fresh from the current faceplate adopts its core BPM.
   if (typeof window._pendingFaceBpm === 'number') {
@@ -16515,8 +16557,10 @@ function startSequencer() {
     // fix456: stamp this step's stable audio-clock time so note ONSETS fire sample-locked
     // (the worklet honors msg.at); live play leaves _seqAt null and stays immediate.
     if (typeof ctx !== 'undefined' && ctx) {
-      if (typeof window._seqClock !== 'number') window._seqClock = ctx.currentTime + 0.06;
-      if (Math.abs(window._seqClock - ctx.currentTime) > 0.25) window._seqClock = ctx.currentTime + 0.06; // re-anchor on drift
+      // clock230: the step is due at _seqClock on the audio clock. Only a stall longer than the
+      // lead (the step would sound in the past) or a clock run far ahead re-anchors it.
+      const _rt = window.L99Clock ? L99Clock.now(ctx) : ctx.currentTime, _ld = window.L99Clock ? L99Clock.lead() : 0.06;
+      if (typeof window._seqClock !== 'number' || window._seqClock < _rt + 0.004 || window._seqClock > _rt + _ld + 0.35) window._seqClock = _rt + Math.min(_ld, 0.03);
       window._seqAt = window._seqClock;
       // fix458: advance happens at the scheduling point below, by the ACTUAL (swing-aware) step duration
       Promise.resolve().then(() => { window._seqAt = null; });
@@ -16701,7 +16745,13 @@ function startSequencer() {
       ? getSwungStepTime(currentStep)
       : stepTime();
     if (typeof window._seqClock === 'number') window._seqClock += nextDelay / 1000;  // fix458: stable clock follows the groove (swing included)
-    sequencerInterval = setTimeout(tick, nextDelay);
+    // clock230: wake one lead before the next step is due, measured on the audio clock, so a
+    // late timer never adds up (it used to: each step started from whenever the last one ran)
+    let _wait = nextDelay;
+    if (typeof ctx !== 'undefined' && ctx && typeof window._seqClock === 'number' && window.L99Clock) {
+      _wait = Math.max(0, Math.min(nextDelay * 2, (window._seqClock - L99Clock.lead() - L99Clock.now(ctx)) * 1000));
+    }
+    sequencerInterval = setTimeout(tick, _wait);
   }
   tick();
   document.getElementById('btn-start').classList.add('active');
@@ -21284,6 +21334,8 @@ window.startLookaheadScheduler = function(noteCallback, opts) {
   function schedulerLoop() {
     if (!alive) return;
     // While there are notes to play before the next interval checkpoint...
+    // clock230: held up past the lookahead, carry on from now instead of firing the missed steps at once
+    if (nextNoteTime < ctx.currentTime - 0.02) nextNoteTime = ctx.currentTime + 0.01;
     while (nextNoteTime < ctx.currentTime + config.lookaheadTime) {
       try { noteCallback(nextNoteTime, tickIndex); } catch(e) { console.warn('Lookahead callback error:', e); }
       nextNoteTime += getStepDuration();
@@ -22740,7 +22792,7 @@ function restartArp() {
         // accurate trigger. We use a shim: temporarily set window._arpTargetTime
         // so playLead can pick it up and pass to osc.start(targetTime).
         window._arpTargetTime = targetTime;
-        try { _arpStepBody(); } catch(e) {}
+        try { if (window.L99Clock) L99Clock.at(targetTime, _arpStepBody); else _arpStepBody(); } catch(e) {}
         window._arpTargetTime = null;
       },
       {
@@ -26658,9 +26710,20 @@ window.bardHaptic = (function(){
     S.stepIdx = 0;
     var stepMs = (60000 / S.bpm) / 4;   // 16th notes
     window._specialDrumsActive = true;   // fix732: special owns the drums while running
-    S.clock = setInterval(tick, stepMs);
+    // clock230: steps fall due on the audio clock, worked out a lead ahead and stamped
+    var C = window.L99Clock, ac = (typeof ctx !== 'undefined') ? ctx : null;
+    if (C && ac) {
+      S.due = C.now(ac) + C.lead();
+      var pump = function(){
+        var now = C.now(ac), lead = C.lead();
+        if (S.due < now) S.due = now + 0.01;   // held up longer than the lead: carry on from here
+        while (S.due < now + lead) { C.at(S.due, tick); S.due += stepMs / 1000; }
+        S.clock = setTimeout(pump, Math.max(5, (S.due - lead - C.now(ac)) * 1000));
+      };
+      pump();
+    } else S.clock = setInterval(tick, stepMs);
   }
-  function stopClock(){ if (S.clock){ clearInterval(S.clock); S.clock = null; } window._specialDrumsActive = false; }
+  function stopClock(){ if (S.clock){ clearInterval(S.clock); clearTimeout(S.clock); S.clock = null; } window._specialDrumsActive = false; }
   function restartClockIfRunning(){ if (S.clock) startClock(); }
 
   // da100: everything the tool's own clock plays is AUTOMATIC (window._spAuto):
@@ -29265,7 +29328,7 @@ root.L99CaveRail227={patch};
     var loading = null;
     /* fetched quietly while the faceplate is up (not run), so opening the island starts sooner */
     (function () {
-        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=d42afeb5ca'; document.head.appendChild(l); };
+        var go = function () { var l = document.createElement('link'); l.rel = 'modulepreload'; l.href = './island/dist/island.js?v=ccaeb824cb'; document.head.appendChild(l); };
         var idle = window.requestIdleCallback || function (f) { setTimeout(f, 1500); };
         if (document.readyState === 'complete') setTimeout(function () { idle(go); }, 3000); else addEventListener('load', function () { setTimeout(function () { idle(go); }, 3000); });
     })();
@@ -29273,7 +29336,7 @@ root.L99CaveRail227={patch};
         if (window.L99Island) return Promise.resolve(window.L99Island);
         /* the shared world core carries play surfaces, discoveries and Journey */
         var core = window.L99Boot176 && window.L99Boot176.core ? window.L99Boot176.core().catch(function (e) { console.warn('[island] world core', e); }) : Promise.resolve();
-        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=d42afeb5ca'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
+        if (!loading) loading = Promise.all([import('./island/dist/island.js?v=ccaeb824cb'), core]).then(function () { var w = window.L99IslandModule.island(); w.link(); return w; })
             .catch(function (e) { loading = null; throw e; });
         return loading;
     }
