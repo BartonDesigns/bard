@@ -92,7 +92,7 @@ export function createMonuments(ctx) {
 	};
 	const patched = new WeakSet();
 	const NOISE = 'float lmH(vec3 p) { return fract(sin(dot(floor(p), vec3(12.9898, 78.233, 37.719))) * 43758.5453); }\nfloat lmN(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mix(lmH(i), lmH(i + vec3(1,0,0)), f.x), mix(lmH(i + vec3(0,1,0)), lmH(i + vec3(1,1,0)), f.x), f.y), mix(mix(lmH(i + vec3(0,0,1)), lmH(i + vec3(1,0,1)), f.x), mix(lmH(i + vec3(0,1,1)), lmH(i + vec3(1,1,1)), f.x), f.y), f.z); }';
-	const CUT = `for (int i = 0; i < ${NC}; i++) { vec4 a = uLmCutA[i], b = uLmCutB[i]; if (b.w < 0.5) continue; vec2 q = vLmW.xz - a.xy; if (abs(a.z * q.x - a.w * q.y) < b.x && abs(a.w * q.x + a.z * q.y) < b.y && vLmW.y > b.z + (lmN(vLmW * 0.35) - 0.5) * 5.0) discard; }`;
+	const CUT = `for (int i = 0; i < ${NC}; i++) { vec4 a = uLmCutA[i], b = uLmCutB[i]; if (b.w < 0.5) continue; vec2 q = vLmW.xz - a.xy; if (abs(a.z * q.x - a.w * q.y) < b.x && abs(a.w * q.x + a.z * q.y) < b.y && vLmW.y > b.z + (lmN(vec3(q.x, vLmW.y - b.z, q.y) * 0.35) - 0.5) * 5.0) discard; }`;
 	const VERT = (sh) => {
 		Object.assign(sh.uniforms, U);
 		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLmW;').replace('#include <project_vertex>', '#include <project_vertex>\n\t{ vec4 lw = vec4(transformed, 1.0);\n\t#ifdef USE_INSTANCING\n\tlw = instanceMatrix * lw;\n\t#endif\n\tvLmW = (modelMatrix * lw).xyz; }');
@@ -115,7 +115,8 @@ export function createMonuments(ctx) {
 		if (m.w == 0.0) continue;
 		float r = abs(m.w), d = distance(vLmW, m.xyz) / r;
 		if (d > 1.0) continue;
-		float n = lmN(vLmW * 2.2), n2 = lmN(vLmW * 7.0);
+		vec3 q = vLmW - m.xyz;          // (near the mark: the world is too far out for the noise)
+		float n = lmN(q * 2.2 + 17.0), n2 = lmN(q * 7.0 + 3.0);
 		if (m.w > 0.0) {
 			// a scorch: soot thick at its heart, thrown out in streaks
 			float k = 1.0 - smoothstep(0.2, 1.0, d + (n - 0.5) * 0.55);
@@ -186,7 +187,12 @@ export function createMonuments(ctx) {
 			if (Math.hypot(L.x - p.x, L.z - p.z) > L.r + r) continue;
 			// (the nearest point of its ground, at the blast's height or its top)
 			const dx = p.x - L.x, dz = p.z - L.z, lx = Math.max(-L.hw, Math.min(L.hw, L.c * dx - L.s * dz)), lz = Math.max(-L.hd, Math.min(L.hd, L.s * dx + L.c * dz));
-			const wx = L.x + L.c * lx + L.s * lz, wz = L.z - L.s * lx + L.c * lz, top = tops.get(ckey(Math.floor(wx / CELL), Math.floor(wz / CELL)));
+			let wx = L.x + L.c * lx + L.s * lz, wz = L.z - L.s * lx + L.c * lz, top = tops.get(ckey(Math.floor(wx / CELL), Math.floor(wz / CELL)));
+			// (its ground is a little wider than it: the nearest of it that stands, within a few metres)
+			for (let k = 1; top === undefined && k <= 4; k++) for (let a = 0; a < 8 && top === undefined; a++) {
+				const qx = wx + Math.cos(a * Math.PI / 4) * k * CELL, qz = wz + Math.sin(a * Math.PI / 4) * k * CELL, t = tops.get(ckey(Math.floor(qx / CELL), Math.floor(qz / CELL)));
+				if (t !== undefined) { top = t; wx = qx; wz = qz; }
+			}
 			if (top === undefined) continue;
 			const y = Math.min(top - 0.3, Math.max(ctx.ground(wx, wz) + 0.5, p.y)), d = Math.hypot(wx - p.x, y - p.y, wz - p.z);
 			if (d > r) continue;
@@ -200,7 +206,7 @@ export function createMonuments(ctx) {
 	const shellMat = shellMaterial();
 	function bringDown(L, rec) {
 		const g = ctx.ground(L.x, L.z), top = Math.max(g + 8, L.top ?? g + 20);
-		rec.cut = +(g + Math.max(2.5, (top - g) * (0.12 + 0.2 * Math.random()))).toFixed(1);
+		rec.cut = +(g + 2.5 + Math.random() * 3.5).toFixed(1);          // (down to stubs, as any building brought all down)
 		rec.down = store.now();
 		dirty = true; saveAt = 1;
 		const R = Math.max(L.hw, L.hd), lost = top - rec.cut;

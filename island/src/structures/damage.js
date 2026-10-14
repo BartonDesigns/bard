@@ -159,8 +159,28 @@ export function createDamage(ctx) {
 		}
 		const r = roofOf(list, M).get(o);
 		if (r && r[0] && (!far || rec?.c > 0)) { const m = new THREE.Matrix4(); r[0].getMatrixAt(r[1], m); r[0].setMatrixAt(r[1], HIDE); r[0].instanceMatrix.needsUpdate = true; e.roof = [r[0], r[1], m]; }
+		// (come down: what stood on its roof goes with it, the parapets and the units on it)
+		if (rec?.c > 0 && (!far || e.squashed)) e.extra = offTheRoof(o, M);
 		e.far = far;
 		hidden.set(o, e);
+	}
+	function offTheRoof(o, M) {
+		const out = [], F = frameOf(o), y0 = o.y + 1.2 + 2, R = Math.max(o.w, o.d) / 2 + 1, T4 = new THREE.Matrix4();
+		const inside = (x, z) => { const [lx, lz] = F.l(x, z); return Math.abs(lx) < o.w / 2 + 0.5 && Math.abs(lz) < o.d / 2 + 0.5; };
+		for (const q of ctx.city()?.lotsNear?.(o.x, o.z, R) || []) {
+			if (q === o || q.slot === undefined || Math.floor(q.kind) !== 16 || q.y < y0 - 1.2 || !inside(q.x, q.z)) continue;
+			M.near.getMatrixAt(q.slot, T4); out.push([M.near, q.slot, T4.clone()]); M.near.setMatrixAt(q.slot, HIDE);
+		}
+		M.city.group?.traverse((im) => {
+			if (!im.isInstancedMesh || im === M.near || im === M.hips || im === M.gables || im.count > 20000) return;
+			for (let i = 0; i < im.count; i++) {
+				im.getMatrixAt(i, T4);
+				const el = T4.elements;
+				if (el[13] > y0 && Math.abs(el[12] - o.x) < R && Math.abs(el[14] - o.z) < R && inside(el[12], el[14])) { out.push([im, i, T4.clone()]); im.setMatrixAt(i, HIDE); }
+			}
+		});
+		for (const [im] of out) im.instanceMatrix.needsUpdate = true;
+		return out;
 	}
 	function putBack(o, M) {
 		const e = hidden.get(o);
@@ -170,6 +190,7 @@ export function createDamage(ctx) {
 		if (e.hid || e.squashed) { M.near.setMatrixAt(e.slot, e.m); M.near.instanceMatrix.needsUpdate = true; }
 		if (e.age !== null) { M.near.geometry.attributes.aAge.array[e.slot] = e.age; M.near.geometry.attributes.aAge.needsUpdate = true; }
 		if (e.roof) { e.roof[0].setMatrixAt(e.roof[1], e.roof[2]); e.roof[0].instanceMatrix.needsUpdate = true; }
+		for (const [im, i, m] of e.extra || []) { im.setMatrixAt(i, m); im.instanceMatrix.needsUpdate = true; }
 	}
 
 	// ---------- the shells near you ----------

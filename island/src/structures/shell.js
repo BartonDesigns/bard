@@ -76,8 +76,8 @@ export function shellMaterial() {
 			shGlass = vFac.w < 0.5 ? 1.0 : 0.0;
 		}
 	}`)
-			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix(roughnessFactor, 0.12, shGlass);')
-			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = mix(metalnessFactor, 0.35, shGlass);');
+			.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix(roughnessFactor, 0.22, shGlass);')
+			.replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = mix(metalnessFactor, 0.15, shGlass);');
 	};
 	mat.customProgramCacheKey = () => 'structures-shell-1';
 	return mat;
@@ -182,11 +182,13 @@ export function rubbleAt(o, rec, lx, lz, k = 1) {
 		// (spilling further on the side it fell to)
 		const m0 = Math.min(7, 1.2 + H * c * 0.22), lean = (lx * fx + lz * fz) / (Math.hypot(o.w, o.d) / 2 + 1);
 		const m = m0 * (1 + 0.6 * Math.max(0, lean));
-		const peak = Math.min(H * 0.45, Math.max(0.6, H * c * 0.32 + 0.4)) * (1 + 0.25 * lean);
+		// (a fifth or so of what stood: a storey's floors and walls pack down to a metre or less)
+		const peak = Math.min(H * 0.3, Math.max(0.6, H * c * 0.2 + 0.5)) * (1 + 0.25 * lean);
 		const ex = Math.max(0, Math.abs(lx) - o.w / 2), ez = Math.max(0, Math.abs(lz) - o.d / 2);
 		const edge = 1 - smooth(0, m, Math.hypot(ex, ez));
 		const inner = smooth(0, Math.min(o.w, o.d) * 0.35, Math.min(o.w / 2 - Math.abs(lx), o.d / 2 - Math.abs(lz)) + m * 0.4);
-		const lump = 0.72 + 0.34 * hash(Math.round(lx / 2.2), Math.round(lz / 2.2) + seed) + 0.16 * hash(Math.round(lx / 0.9) + 3, Math.round(lz / 0.9) + seed);
+		const amp = Math.min(1, 3 / peak);
+		const lump = 1 + amp * (0.3 * (hash(Math.round(lx / 2.2), Math.round(lz / 2.2) + seed) - 0.5) + 0.14 * (hash(Math.round(lx / 0.9) + 3, Math.round(lz / 0.9) + seed) - 0.5)) + 0.18 * (hash(Math.round(lx / 6), Math.round(lz / 6) + seed + 1) - 0.5);
 		h = Math.max(0, peak * edge * (0.45 + 0.55 * inner) * lump);
 	}
 	for (const [f, u, y, r] of rec.m || []) {
@@ -261,10 +263,13 @@ export function buildShell(o, rec, p = null, opts = {}) {
 		const P = (u, y, inset) => { const [lx, lz] = onFace(o, f, u); return [lx - nx * inset, y, lz - nz * inset]; };
 		const UL = (u) => u + L / 2;
 		// each column's top, each cell's state: 0 gone, 1 plain, 2 drawn on its own, 3 drawn finely (by a hole)
+		// (the broken top runs on a line from one column's edge to the next, not in steps)
+		const edgeTop = [];
+		for (let i = 0; i <= nCol; i++) { const [ex, ez] = onFace(o, f, -L / 2 + i * cw); edgeTop.push(standing(ex, ez)); }
 		const tops = [], cells = [];
 		for (let i = 0; i < nCol; i++) {
 			const um = -L / 2 + (i + 0.5) * cw, [cx, cz] = onFace(o, f, um);
-			tops.push(standing(cx, cz));
+			tops.push(c > 0 ? Math.min(edgeTop[i], edgeTop[i + 1], standing(cx, cz)) : standing(cx, cz));
 			for (let r = 0; r < nR; r++) {
 				const [y0, y1] = rows[r], ym = (y0 + y1) / 2;
 				let s;
@@ -278,6 +283,7 @@ export function buildShell(o, rec, p = null, opts = {}) {
 			}
 		}
 		const at = (i, r) => (i < 0 || i >= nCol || r < 0 || r >= nR ? -1 : cells[i * nR + r]);
+		const capped = (i) => c > 0 && i >= 0 && i < nCol && tops[i] < H - 0.05 && Math.max(edgeTop[i], edgeTop[i + 1]) > tops[i] + 0.05;
 		// the facade a cell carries: its style and glass, by where it is in the rebuild
 		const facOf = (y0, broken) => [style, st, cw, y0 < glazeY || done ? 0 : y0 < cladY ? 2 : broken ? 1 : 0];
 		const colOf = (i, r, y0, y1, cx, cz) => {
@@ -347,9 +353,8 @@ export function buildShell(o, rec, p = null, opts = {}) {
 			const broken = r > 0 && (near(cx, (y0 + y1) / 2, cz) < 2.5 || (c > 0 && y1 > tops[i] - 0.5));
 			const cl = colOf(i, r, y0, y1, cx, cz), fc = facOf(y0, broken);
 			if (s === 2) {
-				const top = r === nR - 1 || at(i, r + 1) === 0 || rows[r][1] > tops[i];
+				const top = (r === nR - 1 || at(i, r + 1) === 0 || rows[r][1] > tops[i]) && !(capped(i) && rows[r][1] > tops[i]);
 				panel(u0, u1, y0, y1, cl, fc, k, [at(i - 1, r) === 0, at(i + 1, r) === 0, r > 0 && at(i, r - 1) === 0, top]);
-				if (top && c > 0 && y1 < H - 0.5 && hash(i * 3 + f, r) < 0.5) bars(um, y1, 0, 1, 2);
 				continue;
 			}
 			// (by a hole: three by three, the ragged edge of it, bars out of the break)
@@ -372,6 +377,21 @@ export function buildShell(o, rec, p = null, opts = {}) {
 				if (gt && sy1 < tops[i] - 0.05 && hash(a + i * 5, b + r * 3 + seed + 2) < 0.35) bars(sm, sy1, 0, 1, 1);
 				if (gb && hash(a + i * 5 + 1, b + r * 3 + seed) < 0.3) bars(sm, sy0, 0, -1, 1);
 			}
+		}
+		// the broken tops: from the column's lowest up to the line between its edges, its face,
+		// its inside, and the broken top of the wall along it with the bars standing out
+		for (let i = 0; i < nCol; i++) {
+			if (!capped(i)) continue;
+			const u0 = -L / 2 + i * cw, u1 = u0 + cw, y = tops[i], tl = Math.min(H, edgeTop[i]), tr = Math.min(H, edgeTop[i + 1]);
+			const r = rows.findIndex((q) => y - 0.01 >= q[0] && y - 0.01 < q[1]);
+			if (r < 0 || at(i, r) <= 0) continue;
+			const [cx, cz] = onFace(o, f, (u0 + u1) / 2), cl = colOf(i, r, y, Math.max(tl, tr), cx, cz), fc = facOf(y, true);
+			quad(P(u0, y, 0), P(u1, y, 0), P(u1, tr, 0), P(u0, tl, 0), n0, cl, fc, [[UL(u0), y], [UL(u1), y], [UL(u1), tr], [UL(u0), tl]]);
+			quad(P(u1, y, T), P(u0, y, T), P(u0, tl, T), P(u1, tr, T), nIn, paintOf(rows[r][2], f), fc, [[UL(u1), y], [UL(u0), y], [UL(u0), tl], [UL(u1), tr]]);
+			quad(P(u0, tl, 0), P(u1, tr, 0), P(u1, tr, T), P(u0, tl, T), [0, 1, 0], CORE);
+			if (i === 0 || !capped(i - 1)) quad(P(u0, y, T), P(u0, y, 0), P(u0, tl, 0), P(u0, tl, T), [-tx, 0, -tz], CORE);
+			if (i === nCol - 1 || !capped(i + 1)) quad(P(u1, y, 0), P(u1, y, T), P(u1, tr, T), P(u1, tr, 0), [tx, 0, tz], CORE);
+			if (hash(i * 3 + f, seed) < 0.6) bars((u0 + u1) / 2, (tl + tr) / 2, 0, 1, 2);
 		}
 		// what stops you: each column's wall from the ground to its first gap (a gap at the
 		// foot is a way in), runs of equal height together
@@ -545,8 +565,9 @@ export function buildShell(o, rec, p = null, opts = {}) {
 			if (h00 + h10 + h11 + h01 < 0.04) continue;
 			const ex = new THREE.Vector3(x1 - x0, h10 - h00, 0), ez = new THREE.Vector3(0, h01 - h00, z1 - z0), n = ez.cross(ex).normalize();
 			// (dusty grey, with the wall's colour, a room's paint and soot in patches)
-			const r = hash(i + seed, j), r2 = hash(j + 3, i + seed);
-			let cl = shade(dust, 0.72 + r * 0.3);
+			// (in clumps a few cells across, not cell by cell)
+			const r = hash(i + seed, j), r2 = hash(Math.floor(j / 3) + 3, Math.floor(i / 3) + seed);
+			let cl = shade(dust, 0.86 + r * 0.12);
 			if (r2 < 0.22) cl = mix(cl, wall, 0.55); else if (r2 > 0.9) cl = mix(cl, PAINT[Math.floor(r * PAINT.length)], 0.4); else if (r2 > 0.8) cl = shade(cl, 0.45);
 			quad([x0, h00 - 0.05, z0], [x0, h01 - 0.05, z1], [x1, h11 - 0.05, z1], [x1, h10 - 0.05, z0], [n.x, n.y, n.z], cl);
 		}

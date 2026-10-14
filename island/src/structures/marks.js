@@ -80,7 +80,7 @@ export function createMarks(scene, { isPhone = false } = {}) {
 		// (turned about its own normal, so no two look alike)
 		QT.multiply(new THREE.Quaternion().setFromEuler(EU.set(0, 0, Math.random() * 6.28)));
 		mesh.setMatrixAt(i, M4.compose(P3.set(p.x + N3.x * 0.02, p.y + N3.y * 0.02, p.z + N3.z * 0.02), QT, S3.set(s, s, 1)));
-		aCell.setXY(i, k & 1 ? 0.5 : 0, k & 2 ? 0.5 : 0);
+		aCell.setXY(i, k & 1 ? 0.5 : 0, k & 2 ? 0 : 0.5);          // (the canvas flipped: its top row is the upper half)
 		Object.assign(slots[i], { id: id ?? '', x: p.x, z: p.z });
 		mesh.instanceMatrix.needsUpdate = true; aCell.needsUpdate = true;
 	}

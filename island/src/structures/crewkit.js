@@ -248,7 +248,8 @@ export function clothMaterial() {
 	mat.customProgramCacheKey = () => 'structures-cloth-1';
 	return mat;
 }
-export const NET = [0, 0], MESH = [0.5, 0], BANNER = [0, 0.5], SAFETY = [0.5, 0.5];
+// (a canvas texture is flipped: the top row of the canvas is the upper half of uv)
+export const NET = [0, 0.5], MESH = [0.5, 0.5], BANNER = [0, 0], SAFETY = [0.5, 0];
 // quads of cloth: corners (world), the cell, how many times it repeats across and up
 export function cloth() {
 	const pos = [], uv = [], cell = [], nor = [];

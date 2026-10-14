@@ -152,11 +152,21 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 				for (const b of boxes) {
 					const h = rayBox(o, d, { x: b.x, y: b.y + b.h / 2, z: b.z }, [b.w / 2, b.h / 2, b.d / 2], -b.a);
 					if (h && h.t > 0.05 && h.t < (best?.t ?? L)) best = { t: h.t, n: new THREE.Vector3(h.n.x, h.n.y, h.n.z), surface: 'stone', lot };
+					// (begun inside it, through a pane: across the rooms to its far wall)
+					else if (h && h.t <= 0.05) { const t = exitOf(o, d, b); if (t > 0.05 && t < (best?.t ?? L)) best = { t, n: new THREE.Vector3(-d.x, 0, -d.z), surface: 'stone', lot, inside: true }; }
 				}
 			}
 			if (best && best.t < s - 30) break;
 		}
 		return best;
+	}
+	// how far a ray from inside a lot's box goes before it leaves it
+	function exitOf(o, d, b) {
+		const c = Math.cos(b.a), s = Math.sin(b.a), px = o.x - b.x, pz = o.z - b.z;
+		const lo = [c * px + s * pz, o.y - (b.y + b.h / 2), -s * px + c * pz], ld = [c * d.x + s * d.z, d.y, -s * d.x + c * d.z], hh = [b.w / 2, b.h / 2, b.d / 2];
+		let t = Infinity;
+		for (let i = 0; i < 3; i++) if (Math.abs(ld[i]) > 1e-9) t = Math.min(t, ((ld[i] > 0 ? hh[i] : -hh[i]) - lo[i]) / ld[i]);
+		return t;
 	}
 	const lotOf = (box) => lotsNear(box.x, box.z, 1.5).find((o) => o.src === box) || null;
 	// a shot landed on a wall or a pane: point, direction, the hit, its damage and kind. A round
@@ -174,7 +184,7 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 		if (!o) return null;
 		const n = h?.n || { x: -dir.x, y: 0, z: -dir.z };
 		if (type === 'blast' || dmg >= 120) { damage.hole(o, at, Math.max(0.3, Math.min(1.4, dmg / 120)), [dir.x * 3, 0, dir.z * 3], 'blast'); marks.add(SCORCH, at, n, 1.4 + dmg / 90, bid(o)); return { stop: true }; }
-		if (Math.abs(n.y ?? 0) > 0.7) return null;
+		if (Math.abs(n.y ?? 0) > 0.7 || h?.inside) return { stop: true };
 		chip(o, at, n, dmg);
 		return { stop: true };
 	}
@@ -231,7 +241,8 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 		const L = monuments.rectAt(x, z, 6);
 		if (L) {
 			const g = ground(x, z);
-			for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; monuments.blast({ x: L.x + Math.cos(a) * (L.hw + 3), y: g + 2 + i, z: L.z + Math.sin(a) * (L.hd + 3) }, 8, 200 * k); }
+			// (four charges along its middle, in its frame)
+			for (let i = 0; i < 4; i++) { const lx = (i % 2 ? 1 : -1) * L.hw * 0.4, lz = (i < 2 ? 1 : -1) * Math.min(L.hd * 0.3, 20); monuments.blast({ x: L.x + L.c * lx + L.s * lz, y: g + 2 + i, z: L.z - L.s * lx + L.c * lz }, 8, 200 * k); }
 			return { landmark: L.i, ...monuments.state(x, z) };
 		}
 		const o = nearestLot(x, z, 60);
