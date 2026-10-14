@@ -72,7 +72,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 	function event(e) {
 		if (cruisers.some((c) => c.state !== 'leaving' && Math.hypot(c.to.x - e.x, c.to.z - e.z) < 120)) return null;
 		const c = send({ x: e.x, z: e.z }, e.kind, e.kind === 'gang' ? 3 : 2, e.kind === 'gang');
-		if (c) combat.call?.(e.kind === 'gang' ? 'Dispatch: shots fired, units responding.' : 'Dispatch: a fight reported, a unit is on the way.', 'Harbour Police');
+		if (c) combat.call?.(e.kind === 'gang' ? 'Dispatch: shots fired, units responding.' : e.kind === 'disaster' ? 'Dispatch: all units, disaster response. Keep the roads clear.' : 'Dispatch: a fight reported, a unit is on the way.', 'Harbour Police');
 		return c;
 	}
 

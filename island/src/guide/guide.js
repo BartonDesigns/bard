@@ -402,6 +402,9 @@ export function createGuide(mount, api) {
 	}
 	// The journal's marker: the meeting you are tracking, else the soonest, else a quest's next place.
 	function waypointMark() {
+		// a catastrophe: someone trapped, hurt, a fire to fight (cataclysm/quests.js) comes first
+		const emergency = api.cataclysm?.mark?.();
+		if (emergency) return emergency;
 		const W = api.world(), S = W?.sky?.state, B = book(), key = api.social?.bodyKey();
 		if (!W || !S || !key) return null;
 		const open = (B?.list(key) || []).filter(a => a.status === 'agreed').sort((a, b) => a.due - b.due);

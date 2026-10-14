@@ -48,6 +48,11 @@ export const RULES = Object.freeze({
 	mislead: { mercy: -1, law: 0, protect: -1, honest: -5, line: 'Sent {target} the wrong way on purpose' },
 	'help-fallen': { mercy: 4, law: 1, protect: 5, honest: 1, line: 'Helped {target} up after a fall' },
 	'rob-fallen': { mercy: -6, law: -7, protect: -8, honest: -8, line: "Went through {target}'s pockets while they were down" },
+	// in a catastrophe (cataclysm/): helping when it counts
+	'disaster-rescue': { mercy: 8, law: 2, protect: 12, honest: 1, line: 'Dug {target} out of the rubble' },
+	'disaster-carry': { mercy: 7, law: 1, protect: 9, honest: 1, line: 'Got {target} to the hospital after the disaster' },
+	'disaster-fire': { mercy: 3, law: 3, protect: 9, honest: 0, line: 'Fought the fire at {target}' },
+	'disaster-help': { mercy: 5, law: 1, protect: 7, honest: 1, line: 'Stayed to help {target} when disaster struck' },
 });
 // context: multipliers on the negative (harm) side of a deed, or on all of it, from one table
 export const MODIFIERS = Object.freeze({
