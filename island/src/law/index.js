@@ -209,7 +209,9 @@ export function createLaw({ world, combat, military, people = () => null, servic
 		let paid = false;
 		try { paid = !!arms?.spendCredits?.(C.fine, { kind: 'fine' }); } catch { paid = false; }
 		if (!paid && !arms?.spendCredits) { try { paid = money()?.spend?.('player', C.fine, 'fine', 'police') != null; } catch { paid = false; } }
-		try { if (paid) money()?.earn?.(`police:${st?.name || 'harbour'}`, C.fine, 'fine', 'player'); } catch { /* no ledger */ }
+		// (into the station's account at the bank: economy/bank.js through the money adapter)
+		const acct = 'biz:police-' + String(st?.name || 'harbour').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+		try { if (paid) money()?.earn?.(acct, C.fine, 'fine', 'player'); } catch { /* no ledger */ }
 		S.fines += paid ? C.fine : 0; S.owed += paid ? 0 : C.fine;
 		combat.clearWanted();
 		L.reports.length = 0;
