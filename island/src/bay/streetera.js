@@ -92,7 +92,7 @@ export function oldTownAt(x, z) {
 export function guessEra({ years = [], prior = 'tract', dense = 0, oldTown = 0, regular = 0.5, culs = 0, coreDist = null } = {}) {
 	const ys = years.map(yearOf).filter(Number.isFinite).sort((a, b) => a - b);
 	if (ys.length >= 3) return eraOfYear(ys[ys.length >> 1], dense > 0.35);
-	if (dense > 0.35 && (oldTown === 2 || (regular > 0.65 && (oldTown || (coreDist !== null && coreDist < 450))))) return 'historic';
+	if ((dense > 0.35 || (oldTown === 2 && dense > 0.15)) && (oldTown === 2 || (regular > 0.65 && (oldTown || (coreDist !== null && coreDist < 450))))) return 'historic';
 	let s = { prewar: 1, ranch: 2, split: 2.35, tract: 3, modern: 3.9 }[prior] ?? 3;
 	if (oldTown === 2) s -= 1.6; else if (oldTown === 1) s -= 0.9;
 	if (regular > 0.75 && culs === 0) s -= 0.45;
@@ -186,7 +186,6 @@ export function eraMap(real) {
 	if (M) return M;
 	const cells = new Map();
 	let seenV = -1;
-	const lu = (x, z) => real.landAt?.(x, z)?.lu ?? 0;
 	function cellEra(i, j) {
 		const cx = (i + 0.5) * CELL, cz = (j + 0.5) * CELL;
 		// the houses' era here: the most common of five lots
@@ -195,7 +194,8 @@ export function eraMap(real) {
 		const prior = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
 		// a packed core: paved to the walls (13) or shops (7), in a 3 by 3 of samples
 		let dense = 0, n = 0;
-		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const u = lu(cx + a * 80, cz + b * 80); dense += u === 13 ? 1 : u === 7 ? 0.5 : 0; n++; }
+		// (or roofed over: a region baked without the paved-core fill still shows its packed blocks)
+		for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = real.landAt?.(cx + a * 80, cz + b * 80), u = L?.lu ?? 0; dense += Math.max(u === 13 ? 1 : u === 7 ? 0.5 : 0, (L?.roof ?? 0) > 0.55 ? 0.6 : 0); n++; }
 		dense /= n;
 		// the streets in it: how square, how many dead ends
 		const pieces = [];
