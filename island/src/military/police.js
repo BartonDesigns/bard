@@ -139,7 +139,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		red.color.setRGB(on ? 1.6 : 0.15, 0.02, 0.02); blue.color.setRGB(0.05, 0.15, on ? 0.2 : 1.8);
 		for (const c of cruisers) {
 			_m.compose(_p.copy(c.pos), _q.setFromAxisAngle(_y, c.yaw), _s);
-			fleet.add('sedan', _m, NAVY, e ? c.pos.distanceToSquared(e) : 0, { spin: c.spin, steer: 0, riders: c.state === 'arrived' ? 0 : 2 });
+			fleet.add('sedan', _m, NAVY, e ? c.pos.distanceToSquared(e) : 0, { spin: c.spin, steer: 0, riders: c.state === 'arrived' ? 0 : 2, livery: 'police', seed: c.id });
 			barBase.setMatrixAt(n, _o.multiplyMatrices(_m, new THREE.Matrix4().makeTranslation(0, S.H + 0.04, -0.15)));
 			lampR.setMatrixAt(n, _o.multiplyMatrices(_m, new THREE.Matrix4().makeTranslation(0.32, S.H + 0.13, -0.15)));
 			lampB.setMatrixAt(n, _o.multiplyMatrices(_m, new THREE.Matrix4().makeTranslation(-0.32, S.H + 0.13, -0.15)));

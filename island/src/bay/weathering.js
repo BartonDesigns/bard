@@ -281,3 +281,52 @@ export function weatherRoofs(m) {
 	m.customProgramCacheKey = () => (pk ? pk() : '') + '|wxroof1';
 	return m;
 }
+
+// ---------- grime as a decal of its own (signage/materials.js) ----------
+// The same hand as the walls above, laid down as a patch where something made it, for the
+// places the wall shader cannot know about: rust run down from a bracket or a sign, soot
+// blown up the wall over a kitchen's vent, water off a ledge, gum trodden into the sidewalk,
+// oil where cars stand. Needs WALL_GLSL (wxN, wxH) before it. uv 0..1 over the patch (v up),
+// type 0 rust, 1 soot, 2 streaks, 3 gum, 4 oil; s the patch's own seed. Gives the stain's
+// colour and how much of it there is.
+export const GRIME_GLSL = /* glsl */`
+vec4 grimeDecal(vec2 uv, float type, float s) {
+	float edge = smoothstep(0.0, 0.12, uv.x) * smoothstep(1.0, 0.88, uv.x);
+	vec3 c = vec3(0.0); float a = 0.0;
+	if (type < 0.5) {
+		// rust: from the fixture at the top, in fingers that thin as they run down
+		float run = 1.0 - uv.y;
+		float x = abs(uv.x - 0.5 + (wxN(vec2(uv.y * 3.0, s * 17.0)) - 0.5) * 0.18);
+		float fingers = smoothstep(0.35, 0.75, wxN(vec2(uv.x * 14.0 + s * 9.0, uv.y * 1.2)));
+		a = (1.0 - smoothstep(0.1, 0.42 - run * 0.2, x)) * exp(-run * 2.2) * (0.45 + 0.55 * fingers);
+		a += (1.0 - smoothstep(0.0, 0.16, length(vec2(uv.x - 0.5, (uv.y - 0.97) * 3.0)))) * 0.6;
+		c = mix(vec3(0.38, 0.17, 0.06), vec3(0.22, 0.09, 0.03), wxN(uv * 9.0 + s));
+	} else if (type < 1.5) {
+		// soot: the vent's grille at the foot, its plume spreading and fading up the wall
+		float spread = abs(uv.x - 0.5) * 2.0 / (0.35 + uv.y * 0.9);
+		a = (1.0 - smoothstep(0.4, 1.0, spread)) * pow(1.0 - uv.y, 0.7) * (0.55 + 0.45 * wxN(vec2(uv.x * 6.0, uv.y * 4.0 - s * 3.0))) * 0.85;
+		c = vec3(0.06, 0.05, 0.045);
+		if (abs(uv.x - 0.5) < 0.2 && uv.y < 0.16) { a = 1.0; c = mix(vec3(0.32, 0.33, 0.34), vec3(0.08), step(0.5, fract(uv.y * 40.0))); }
+	} else if (type < 2.5) {
+		// water streaks: down from the ledge in uneven columns
+		float col = smoothstep(0.45, 0.8, wxN(vec2(uv.x * 9.0 + s * 21.0, uv.y * 0.5)));
+		a = col * pow(uv.y, 0.6) * 0.6;
+		c = mix(vec3(0.16, 0.17, 0.15), vec3(0.24, 0.26, 0.2), wxN(uv * 5.0 + s));
+	} else if (type < 3.5) {
+		// gum: dark blots trodden flat, a few still pale
+		vec2 g = uv * 16.0, ci = floor(g), f = fract(g) - 0.5;
+		float h = wxH(ci + s * 31.0), r = 0.12 + 0.18 * wxH(ci + 7.0);
+		a = step(0.78, h) * (1.0 - smoothstep(r - 0.05, r, length(f - (vec2(wxH(ci + 3.0), wxH(ci + 5.0)) - 0.5) * 0.4)));
+		c = mix(vec3(0.07, 0.07, 0.075), vec3(0.55, 0.5, 0.52), step(0.97, h));
+		a *= 1.0 - smoothstep(0.38, 0.5, length(uv - 0.5));
+		edge = 1.0;
+	} else {
+		// oil: a soft blot, darkest in the middle where the drip lands
+		float d = length((uv - 0.5) * vec2(1.0, 0.75)) + (wxN(uv * 5.0 + s * 4.0) - 0.5) * 0.18;
+		a = (1.0 - smoothstep(0.12, 0.45, d)) * 0.75;
+		c = vec3(0.025, 0.025, 0.028);
+		edge = 1.0;
+	}
+	return vec4(c, clamp(a * edge, 0.0, 1.0));
+}
+`;

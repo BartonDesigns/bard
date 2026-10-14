@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { Builder, lin } from '../bay/housekit.js';
 import { along, pathLength } from './routes.js';
+import { vehicleLivery } from '../signage/cars.js';
 
 const geos = {};
 // a body drawn in its own frame: x across, z forward (its nose at +z), standing on y = 0
@@ -69,6 +70,8 @@ function geometryOf(kind) {
 export function createResponder(kind, home, scene) {
 	const root = new THREE.Group();
 	for (const m of geometryOf(kind)) { const c = new THREE.Mesh(m.geometry, m.material); c.castShadow = true; root.add(c); }
+	// the livery, laid on the body as decals (signage/cars.js)
+	for (const m of vehicleLivery(kind)) root.add(m);
 	// the light bar: two lamps of their own each, to flash
 	const red = new THREE.MeshBasicMaterial({ color: 0x330000, toneMapped: false }), other = new THREE.MeshBasicMaterial({ color: kind === 'ambulance' ? 0x222222 : 0x330000, toneMapped: false });
 	const bar = new THREE.Group(), y = kind === 'ambulance' ? 2.78 : 2.92, z = kind === 'ambulance' ? 0.6 : 3.4;

@@ -166,6 +166,7 @@ import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
+import { createSignage } from './signage/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 
@@ -1200,6 +1201,8 @@ export function createIslandWorld() {
 			world.military = HOOKS.military;
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone, roadAt: (r, x, z) => world.berms?.along(r, x, z) });
+			// the signs, decals, stickers, posters, tags and grime of the streets, shops and cars (signage/)
+			world.signage = HOOKS.signage = createSignage({ scene, world: () => world, isPhone, locate: (x, z) => globeLL(x, z), morality: () => HOOKS.npcQuests?.where?.() });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
 			world.lake = createLake(scene, bayArea, shared, { isPhone, real: world.real, ponds: false });
 			// every other river, creek, lake and reservoir (bay/water.js)
@@ -1301,6 +1304,7 @@ export function createIslandWorld() {
 		world.labels?.dispose();
 		world.discovery?.dispose();
 		world.services?.dispose();
+		world.signage?.dispose();
 		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();
@@ -1789,6 +1793,7 @@ export function createIslandWorld() {
 		ragdolls.update(dt);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
+		W.signage?.update(dt, camera, sk.night, drive.active());
 		bridgeSound.update(dt);
 		crosswalks.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
@@ -2260,6 +2265,7 @@ if (typeof window !== 'undefined') {
 		// while a citywide catastrophe lasts (false lets them back); .crack() / .shatter() the nearest
 		// pane; .vault() over what is in front of you; .advance(h) moves the crews' clock on.
 		// Crysis.demolish(x, z, k) brings the building nearest (x, z) down (k 1 all of it, 0.5 a part)
+		signage: Object.assign(() => HOOKS.signage?.info() ?? 'none here', { headlights: (on) => HOOKS.signage?.headlights(on), refresh: () => HOOKS.signage?.refresh() }),
 		structures: Object.assign(() => HOOKS.structures?.info() ?? 'none here', {
 			cataclysm: (on) => HOOKS.structures?.cataclysm(on), crack: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.crack(x ?? p?.x, z ?? p?.z); },
 			shatter: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.shatter(x ?? p?.x, z ?? p?.z); },

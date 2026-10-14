@@ -251,6 +251,8 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			const top = o.y + o.h;
 			E.door = [F.cx + F.nx * 1.4, F.cz + F.nz * 1.4];
 			E.ground = g;
+			// (the face it fronts the street with, for the glass's decals: signage/)
+			E.front = { x: F.cx, z: F.cz, nx: F.nx, nz: F.nz, run: F.run, g, door: 0, face: D.face };
 			const P = (along, out) => [F.cx + F.tx * along + F.nx * out, F.cz + F.tz * along + F.nz * out];
 			const close = Math.hypot(o.x - cx, o.z - cz) < 700;
 			// the awning, in its colours: the one it had made over, or a new one over the shopfront
@@ -372,5 +374,5 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 		for (const E of plan) { const ca = Math.cos(E.a), sa = Math.sin(E.a), dx = x - E.x, dz = z - E.z, lx = Math.abs(ca * dx + sa * dz) - E.w / 2, lz = Math.abs(-sa * dx + ca * dz) - E.d / 2, d = Math.max(lx, lz); if (d < bd) { bd = d; best = E; } }
 		return best && bd < 3 ? view(best) : null;
 	});
-	return { apply, near, byId, info, setNight: (k) => { night.value = 0.55 * k; }, setLocator: (fn) => { locate = fn; }, list: () => plan.map(view), mesh: signs, texture: tex };
+	return { apply, near, byId, info, plan: () => plan, setNight: (k) => { night.value = 0.55 * k; }, setLocator: (fn) => { locate = fn; }, list: () => plan.map(view), mesh: signs, texture: tex };
 }
