@@ -173,8 +173,29 @@ export function wirePayroll(B, P) {
 		else B.earn(id, credits, wage ? 'wage' : /^request/.test(why) ? 'request' : /sale/.test(why) ? 'sale' : 'bonus', employerId);
 	});
 }
-// the game's bank (where the ledger is: set it with localStorage 'crysis-ledger-url' or ?ledger=)
-const url = (() => { try { return new URLSearchParams(globalThis.location?.search || '').get('ledger') || globalThis.localStorage?.getItem('crysis-ledger-url') || ''; } catch { return ''; } })();
+// the game's bank. The ledger is the owner's Worker when the game is served from its own site
+// (or locally, which the Worker also lets in); ?ledger=<url> or localStorage 'crysis-ledger-url'
+// points it elsewhere, and ?ledger=off keeps this browser's book to itself.
+const LEDGER = 'https://l99-ledger.joshbarton1921.workers.dev';
+const HOME = /^(www\.)?level99bard\.com$|^localhost$|^127\.0\.0\.1$/;
+const url = (() => {
+	try {
+		const set = new URLSearchParams(globalThis.location?.search || '').get('ledger') || globalThis.localStorage?.getItem('crysis-ledger-url') || '';
+		if (set) return set === 'off' ? '' : set;
+		return HOME.test(globalThis.location?.hostname || '') ? LEDGER : '';
+	} catch { return ''; }
+})();
 export const bank = createBank({ server: url });
+// settle with it on its own: a minute after there is something to send, and as the page is put
+// away; a ledger that can't be reached is asked again later and later (up to ten minutes apart)
+if (url && typeof window !== 'undefined') {
+	let wait = 60e3;
+	const send = async () => {
+		if (bank.info().pending) { const r = await bank.sync(); wait = r.ok ? 60e3 : Math.min(wait * 2, 600e3); }
+		setTimeout(send, wait);
+	};
+	setTimeout(send, wait);
+	document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && bank.info().pending) bank.sync(); });
+}
 wirePayroll(bank, payroll);
 export const moneyTalk = (npcId) => bank.moneyTalk(npcId);
