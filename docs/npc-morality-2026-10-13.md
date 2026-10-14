@@ -12,7 +12,10 @@ People now have dispositions of their own, do quests for each other with or with
 - `island/src/combat/morality.js`: new deeds (`return-bag`, `steal-bag`, `take-from-thief`, `return-stolen`, `keep-stolen`, `betray-errand`, `pocket-cash`) and `createCommons`, the ledger of everyone else's deeds. The player's compass scores exactly as before.
 - `island/src/people/errands.js`, `errands-core.js`: `theft()` for a theft by someone else in front of you; the snatch is now neutral to catch and only giving it back is a good deed; a favour you turn down is handed to the people about.
 - `island/src/people/chatter.js`, `chatter-lines.js`, `island/src/guide/guide.js`: people mention what they did or saw lately, and money facts from the bank's `moneyTalk`, in passing and in conversation.
-- `island/tools/npc-morality.test.mjs`: tests.
+- `island/src/people/bag-spots.js`: where a bag gets left (benches, bus shelters, cafe and restaurant tables and doorsteps, park benches and picnic tables), the words for each, and the establishment provider (pure).
+- `island/src/people/npc-leads.js`: leads from thefts out of your sight: the words and the book of leads (pure).
+- `island/src/bay/streetlife.js` `seatsNear`, `island/src/bay/parkkit.js` `seatsNear`: the benches, shelters, park benches and picnic tables near a point, read back for the bags.
+- `island/tools/npc-morality.test.mjs`, `island/tools/npc-quests-more.test.mjs`: tests.
 
 ## Dispositions
 
@@ -47,11 +50,63 @@ Who takes one is their disposition's: the helpful and the greedy say yes, the ho
 
 ## Near you: scenes
 
-- **A bag left alone:** every 70 to 140 s (150 to 240 on phones) a grown-up walking 12 to 50 m from you sets their bag down and walks on. Grown-ups passing within 7 m notice it, each once. One may pick it up, call the owner back ("Excuse me! Your bag!"), walk it over, hand it back and be paid (a `return-bag` deed); one may pocket it and walk off quickly (`steal-bag`). If nobody bothers within 45 s the owner comes back for it. Walk away (95 m) and it resolves among the people still there.
+- **A bag left alone:** every 70 to 140 s (150 to 240 on phones) a grown-up walking near a bench, a bus shelter, a cafe or restaurant (its table or its doorstep), a park bench or a picnic table 12 to 50 m from you walks to it with their bag in hand, sets it down and walks on (below, Where bags are left); with nothing like that about, they set it down on the sidewalk. Grown-ups passing within 7 m notice it, each once. One may pick it up, call the owner back ("Excuse me! Your bag!"), walk it over, hand it back and be paid (a `return-bag` deed); one may pocket it and walk off quickly (`steal-bag`). If nobody bothers within 45 s the owner comes back for it. Walk away (95 m) and it resolves among the people still there.
 - **Favours among people:** now and then someone asks another person nearby (lost item, carry something over, catch a friend, fix a car), and favours you turn down are offered to the people about. The giver waits; the taker walks the steps with the thing in hand.
 - **Business requests:** open requests from any source within 75 m are offered to the people near their first step.
 - At most one scene on phones, two elsewhere, plus one bag. A scene that wanders 95 m from you, or loses its person to the world, finishes the way it was going to, out of sight.
 - Children and teens are never givers, takers, owners, victims or thieves (`dna.child`, `dna.minor`, `dna.teen`).
+
+## Where bags are left
+
+`bag-spots.js` gathers spots near you: `{ kind, x, y, z, heading, place?, venue?, door? }`.
+
+- **bench**, **shelter**: the street's benches and bus shelters (`world.street.seatsNear(x, z, r)`, read back off their instances).
+- **park**, **picnic**: the park benches (including the ones round a playground) and picnic tables (`world.parks.seatsNear`, with the park's name: "left on a bench in Central Park").
+- **doorstep**, **table**: cafes and restaurants from an establishment provider, `(x, z, r) -> [{ id, kind: 'cafe'|'restaurant'|'shop', name, door: { x, y, z, heading, inside, outside }, tables: [{ x, y, z, h, heading }] }]`. Until the economy's registry lands it reads the walk-in shops (`world.commercial.doorsNear`, `commercialEstablishments`); point it at the registry with `HOOKS.npcQuests.establishments(fn)`. A table inside is reached through the door: the owner walks in, sets it down on a chair at a table, walks back out; whoever takes it walks in and out the same way.
+
+One spot is chosen by kind first (bench 1, park bench 1.2, shelter 0.8, table 0.7, doorstep 0.6, picnic table 0.6), so fifty benches do not drown out the one cafe. The bag sits on the seat of a bench (to one side, 0.48 m up), at the back of a shelter, on a picnic table's top, on a cafe chair, or just off a doorstep. The quest's title and what people say later follow the spot ("Ana's bag, left at the bus shelter"; "grabbed a bag off a cafe table").
+
+## Families and teens
+
+People out with their families (`family-life.js`: parents on the school run, shoppers) and the residents you know (`social-actors.js`) join the walking pool as takers for bags and favours (`createNpcQuests({ others })`). Anyone sat down, at work, in a line or minding a stall (the guard, volunteers, diners, the food bank line) is left out.
+
+- A child or a teen who comes within 9 m of a bag left alone says so ("Look! Somebody forgot their bag!", "Yo, somebody left their bag here.") and never touches it.
+- The grown-up with the child (the one they are walking beside) is told and goes first, from up to 16 m; anyone within 10 m of the child is watched. With children of their own beside them a grown-up is tempted at 0.4 of the usual, watched at 0.6.
+- A parent handing a bag back says a word to the kids on the way ("Come on, we are giving this back."), and the child follows at their side as always.
+- Children and teens are never givers, takers, owners, victims or thieves, in any kind, near or far, and never the thief found from a lead.
+
+## More kinds from the people side
+
+Each is a descriptor with an honest end and a betraying one, decided by disposition (`decide`), recorded on the compass and the region's tally (`settle`), and paid through the money adapter. A step marked `turn` is where a betrayal happens when it is not a pickup.
+
+| kind | honest | betraying | pay |
+| --- | --- | --- | --- |
+| `favour.groceries` | carried to their car, its owner walking alongside (`favour`) | walked off with (`betray-errand`) | 25+ from them |
+| `favour.pet` | the dog found where it ran to, won over, brought home (`favour`); near you the dog is there (`dog.js`), follows the helper and runs to its person | none: nothing to steal | 60 from them |
+| `favour.directions` | the way pointed out (`give-directions`) | the wrong way on purpose (`mislead`); they thank you all the same | nothing |
+| `favour.jumpstart` | stood by the car while it turned over (`favour`) | the money up front, then gone (`pocket-cash`); they say so a moment later | 50 from them (the cheat takes it) |
+| `favour.fall` | helped up (`help-fallen`) | their pockets gone through (`rob-fallen`): a theft like a bag, yours to answer near you, a lead out of sight | nothing (the thief takes their wallet) |
+
+New deeds in `combat/morality.js`: `give-directions` (honest +2), `mislead` (honest -5), `help-fallen` (mercy +4, protect +5), `rob-fallen` (mercy -6, law -7, protect -8, honest -8).
+
+Near you they come up among the favours (`spawnFavour`, every 80 to 160 s, picked by who is about: a car parked near for a jump-start or groceries). Far away they are in the far tick's mix. Loot taken from a person now comes out of their own account (`transfer`), so a cheated or robbed person is poorer for it; a theft leaves something to carry back only when an item was taken.
+
+For you:
+
+- **Groceries** (someone with a car parked near): carry them to the car; they walk behind you. Walk off down the street with them and you kept them (`betray-errand`).
+- **A jump-start**: stand by the car a few seconds while they try it.
+- **Directions** (one person in five is not from round here): say yes and they thank you; `give-directions`, no pay.
+- **Someone fallen**: walk up to them (within 2.6 m) before anyone else does and you help them up (`errands.helped`, `help-fallen`).
+- What a favour pays now comes out of the giver's own account through `HOOKS.npcMoney` (`spend(npc, credits, 'reward', 'player')`), as does a kept wallet.
+
+## Leads: thefts out of your sight
+
+A bag or a snatch (or a fall robbed) taken out of your sight now and then leaves a lead (`npc-leads.js`): about one theft in three in the far tick, more for a bag you walked away from, and every thief who got out of your view near you. At most five open at a time and one at a time in a region (four minutes apart); each goes cold after 45 minutes; kept in localStorage `l99-leads-v1`.
+
+- **Talk:** about a third of the grown-ups in that region have heard ("Someone grabbed a bag off a bench on the corner this morning.", "Did you hear? Someone snatched a bag from a person in the street this afternoon."), in passing (`chatter-lines.js` `self.lead`) and as a fact in conversation.
+- **The guide's story:** a LEADS section lists them: "Someone took Ana's bag off a cafe table this morning in Oakland. The thief may still be about."
+- **A marker:** in the lead's region, a ring 25 m across round where it happened (a bench or a doorstep 90 to 300 m from you when you first come into the region, or a stretch of sidewalk), after any favour's own pin.
+- **The thief:** within 90 m of the place, every few seconds a grown-up walking 15 to 60 m from you may turn out to be carrying it (the prop in hand, a hint, the marker on them). Walk within 10 m and they walk off quickly with it: `errands.theft({ lead })`, the same choice as any theft. Take it off them (`take-from-thief`, neutral); bring it back to where it was taken (`return-stolen`, the only boost; its owner gets the money back through the adapter), keep it (`keep-stolen`) or let them go (the lead closes either way).
 
 ## Your choices on someone else's theft
 
@@ -81,7 +136,7 @@ People remember for ten minutes what they did or saw: "Somebody handed my bag ba
 ## Debug
 
 - `Crysis.morality()`: your compass as before, plus `npc`: the region and its tally, the world's tally, the town's situation, the nearest grown-ups (temper, axes, greed, balance, deeds, what they saw), scenes under way, the bag, open favours, sources and the latest NPC deeds.
-- `Crysis.morality.bag('return' | 'steal' | 'auto')` leaves a bag near you now (the nearest passer-by returns or steals it, or decides for themselves); `.favour()`; `.tick(n)`; `.run(s)` runs the scenes on by s seconds of game time (for a slow machine); `.money('npc:123')`; `.regions()`; `.log(n)`; `.where()`.
+- `Crysis.morality.bag('return' | 'steal' | 'auto')` leaves a bag near you now, on the nearest bench, shelter, cafe or park seat if there is one (the nearest passer-by returns or steals it, or decides for themselves); `.favour(kind)` (`'groceries'`, `'pet'`, `'directions'`, `'jumpstart'`, `'fall'`, or the older kinds); `.lead('bag' | 'snatch' | 'fall')` a theft just out of sight near you, left as a lead; `.leads()`; `.spots()` the places a bag could be left near you; `.tick(n)`; `.run(s)` runs the scenes on by s seconds of game time (for a slow machine); `.money('npc:123')`; `.regions()`; `.log(n)`; `.where()`.
 
 ## Cost
 
@@ -90,6 +145,8 @@ Per frame: timers and at most two scenes (a steering function and a prop's posit
 ## Left to do
 
 - At merge: `HOOKS.npcQuests.addSource(fromRequests(requests))` for the economy's requests, `HOOKS.npcMoney.use(bank)` for the bank, and the hospital on `HOOKS.npcHurt`.
-- Bags on real benches, cafe tables and bus shelters (the visible bag is set down on the sidewalk; the far tick names the other places).
-- A far betrayal could leave a lead for you to follow up later; only thefts in view are yours to answer now.
-- People in families and social scenes (`families.actors()`, `social.actors`) are not takers yet; only the walking pool is.
+- At merge: point the bags at the economy's establishment registry with `HOOKS.npcQuests.establishments((x, z, r) => ...)` (until then the walk-in cafes and restaurants stand in).
+- A lead's owner is a place, not a person: you bring the thing back to where it was taken. An owner waiting there (a body recruited near the spot) would be warmer.
+- Bag owners are walkers from the pool only; a family adult could leave one too.
+- The gathering crowds (`gathering-scene.js`) are instanced and are not takers.
+- Groceries carried by you show no bags in your hands.

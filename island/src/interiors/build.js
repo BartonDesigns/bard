@@ -56,8 +56,8 @@ export function prepare(P, { outside = [0.85, 0.82, 0.76], litShare = 0.6 } = {}
 	return {
 		fin, floors,
 		style, wood: lin(WOODS[style][Math.floor(rnd() * WOODS[style].length)]),
-		paint: P.rooms.map((r) => lin(r.type === 'garage' || r.type === 'storage' || r.type === 'warehouse' || r.type === 'parking' ? [0.8, 0.79, 0.76] : r.type === 'bath' || r.type === 'kitchen' || r.type === 'powder' ? [0.93, 0.92, 0.88] : pal[Math.floor(rnd() * pal.length)])),
-		lit: P.rooms.map((r) => rnd() < (r.type === 'garage' || r.type === 'storage' ? 0.15 : r.stairs || r.type === 'corridor' || r.type === 'lobby' || r.type === 'shop' ? 0.95 : litShare)),
+		paint: P.rooms.map((r) => lin(r.paint ? r.paint : r.type === 'garage' || r.type === 'storage' || r.type === 'warehouse' || r.type === 'parking' ? [0.8, 0.79, 0.76] : r.type === 'bath' || r.type === 'kitchen' || r.type === 'powder' ? [0.93, 0.92, 0.88] : pal[Math.floor(rnd() * pal.length)])),
+		lit: P.rooms.map((r) => r.lit ?? rnd() < (r.type === 'garage' || r.type === 'storage' ? 0.15 : r.stairs || r.type === 'corridor' || r.type === 'lobby' || r.type === 'shop' ? 0.95 : litShare)),
 		OUT: lin(outside), doorC: lin(DOORC[Math.floor(rnd() * DOORC.length)]), seed: Math.floor(rnd() * 1e9),
 	};
 }
@@ -167,7 +167,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	{
 		const above = P.levels[k + 1];
 		for (const id of L.rooms) {
-			const r = P.rooms[id], fk = FLOOR[r.type] || 'wood', e = 0.06;
+			const r = P.rooms[id], fk = r.floor || FLOOR[r.type] || 'wood', e = 0.06;
 			const R = { x0: r.x0 - e, z0: r.z0 - e, x1: r.x1 + e, z1: r.z1 + e };
 			// (shaded along the walls, so the floor and ceiling meet them softly, not as a seam)
 			const flat = (key, y, n, c, holes, k, m) => {
@@ -277,7 +277,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	yield;
 	for (const m of g.meshes(M)) root.add(m);
 	for (const it of cars) {
-		const car = new THREE.Mesh(carGeo(it.v < 0.5 ? 'suv' : 'sedan'), carMat(CAR_PAINT[Math.floor(it.v * CAR_PAINT.length)], night));
+		const car = new THREE.Mesh(carGeo(it.kind || (it.v < 0.5 ? 'suv' : 'sedan')), carMat(it.paint || CAR_PAINT[Math.floor(it.v * CAR_PAINT.length)], night));
 		car.position.set(it.x, it.y, it.z); car.rotation.y = it.rot * Math.PI / 2; car.castShadow = true;
 		root.add(car);
 		col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + 1.4]);

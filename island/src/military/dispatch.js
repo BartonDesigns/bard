@@ -14,7 +14,7 @@
 
 import * as THREE from 'three';
 import { planDispatch, invasionPlan, nextInvasion, SPEED, toWorld } from './rules.js';
-import { roadRoute, along } from './route.js';
+import { roadRoute, along, joinRoute } from './route.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
 
@@ -68,7 +68,8 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 
 	// ---------- drawn and in the fight ----------
 	function show(u) {
-		u.mesh = vehicleMesh(u.kind, kit, u.side === 'guard' ? (u.air ? SCHEMES.grey : SCHEMES.woodland) : SCHEMES.invader);
+		u.mesh = vehicleMesh(u.kind, kit, u.side === 'guard' ? (u.air ? SCHEMES.grey : SCHEMES.woodland) : SCHEMES.invader, { phone: isPhone });
+		u.last = null;
 		group.add(u.mesh);
 		const D = DIMS[u.kind];
 		u.T = {
@@ -179,19 +180,36 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 		// each unit: placed, drawn when in sight, fighting on the scene
 		const lead = p.route ? along(p.route, p.s) : null;
 		const shownNow = e && (lead ? Math.hypot(lead.x - e.x, lead.z - e.z) : Math.hypot(p.to.x - e.x, p.to.z - e.z)) < (p.shown ? HIDE_R : SHOW_R);
+		// coming into sight: the roads round here are loaded now (the survey's, the globe's, a grown
+		// town's), so find the way on by them from where the column is; the stretch behind it kept
+		if (shownNow && !p.shown && p.route && p.state === 'enroute' && !p.rerouted) {
+			p.rerouted = true;
+			const R = roadRoute(near(), { x: lead.x, z: lead.z }, p.to);
+			if (R.pts.length > 4) {
+				const back = [];
+				for (let s = Math.max(0, p.s - 220); s < p.s - 1; s += 20) { const q = along(p.route, s); back.push(q.x, q.z); }
+				const J = joinRoute(back, R);
+				p.s = J.length - R.length; p.route = J;
+			}
+		}
 		for (const u of p.units) {
-			if (u.dead) { u.dead += dt; if (u.mesh) { u.mesh.traverse((m) => { if (m.isMesh && m.material.color && !m.userData.burnt) { m.material = m.material.clone(); m.material.color.multiplyScalar(0.25); m.userData.burnt = true; } }); if (Math.random() < dt * 4) combat.fx.smokePuff(u.pos.clone().add(_v.set(0, 2, 0)), 0.1, 3, 6); } if (u.dead > 40) hide(u); continue; }
+			if (u.dead) { u.dead += dt; if (u.mesh) { if (!u.burnt) { u.burnt = true; u.mesh.userData.burn?.(); } if (Math.random() < dt * 4) combat.fx.smokePuff(u.pos.clone().add(_v.set(0, 2, 0)), 0.1, 3, 6); } if (u.dead > 40) hide(u); continue; }
 			place(p, u, dt);
 			if (shownNow && !u.mesh) show(u);
 			else if (!shownNow && u.mesh) hide(u);
 			if (u.mesh) {
 				u.mesh.position.copy(u.pos); u.mesh.rotation.set(u.bank || 0, u.yaw, 0, 'YXZ');
 				const U = u.mesh.userData;
-				if (U.rotor) { U.rotor.rotation.y += dt * 28; U.tail.rotation.x += dt * 60; }
-				if (U.gear) U.gear.visible = !u.air;
+				// its moving parts: the rotors turning, the jet clean, tracks and wheels running with the ground covered
+				const run = u.last ? Math.hypot(u.pos.x - u.last.x, u.pos.z - u.last.z) : 0;
+				u.last = { x: u.pos.x, z: u.pos.z };
+				if (u.kind === 'heli') U.pose?.({ spin: 1, dt });
+				else if (u.kind === 'jet') U.pose?.({ gear: u.air ? 0 : 1, throttle: 0.8, surf: { pitch: 0, roll: -(u.bank || 0), yaw: 0, flap: 0 }, dt });
+				else if (u.kind === 'tank') U.pose?.({ track: [run, run] });
+				else U.pose?.({ roll: run });
 				if (u.T) { u.T.bound.x = u.pos.x; u.T.bound.y = u.pos.y + DIMS[u.kind].H / 2; u.T.bound.z = u.pos.z; }
 				if (!u.engine && distK(u) > 0.05 && patrols.reduce((a, q) => a + q.units.filter((o) => o.engine).length, 0) < 3) u.engine = engineSound(u.kind);
-				u.engine?.set(0.6, 0.6, distK(u), 10);
+				u.engine?.set(0.6, 0.6, distK(u), 10, u.pos);
 				if (p.state === 'onscene' || (u.air && p.state === 'enroute' && u.flyS > Math.hypot(p.to.x - p.from.x, p.to.z - p.from.z) - 400)) engage(u, dt);
 			}
 		}

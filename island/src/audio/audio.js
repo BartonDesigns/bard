@@ -1,14 +1,19 @@
 // The world's audio, put together each frame: what is underfoot and round you (sensing.js),
-// the room's sound (acoustics.js), your footsteps and the people's (footsteps.js), and the
-// places' ambience (ambience.js). Crysis.audio() reads what it is doing.
+// the room's sound (acoustics.js), your footsteps and the people's (footsteps.js), the
+// places' ambience (ambience.js) and their air, freeways and rain on surfaces (environment.js),
+// the engines' voices shared out (engines.js) and your flight's thrusters (thrusters.js).
+// Crysis.audio() reads what it is doing.
 
 import { createSensing } from './sensing.js';
 import { createFootsteps } from './footsteps.js';
 import { createAmbience } from './ambience.js';
 import { acoustics, mix } from './acoustics.js';
+import { enginesFrame, engineInfo, earSpeed, inCabin } from './engines.js';
+import { createEnvironment } from './environment.js';
+import { createThrusters } from './thrusters.js';
 
 export function createWorldAudio({ getWorld, camera, people, busy, planet }) {
-	const sense = createSensing(), feet = createFootsteps(), amb = createAmbience();
+	const sense = createSensing(), feet = createFootsteps(), amb = createAmbience(), env = createEnvironment(), thrust = createThrusters();
 	let room = null, meters = null, last = { under: false, night: 0, hours: 12, rain: 0 };
 
 	// o: { under, night, hours, rain }
@@ -26,6 +31,16 @@ export function createWorldAudio({ getWorld, camera, people, busy, planet }) {
 		if (list) { feet.people(dt, list, camera, S.surface, indoor); list.length = 0; }
 		const alt = camera.position.y - (P.flying ? W.island.heightAt(camera.position.x, camera.position.z) : camera.position.y - 1.7);
 		amb.update(dt, { place: S.place, room: S.room, cam: camera, people, rain: indoor ? 0 : o.rain, under: o.under, alt });
+		// the engines heard from where you are (a building between dulls them; indoors all of them)
+		const boxes = W.real?.loaded?.() ? (x, z, r) => W.real.near('boxes', x, z, r) : null;
+		enginesFrame(dt, camera, { indoor, boxes });
+		thrust.update(dt, P, W.orbit, { under: o.under });
+		env.update(dt, { W, cam: camera, sense: S, planet: planet(), rain: o.rain, hours: o.hours, under: o.under, indoor, cabin: inCabin(), speed: earSpeed(), alt });
+	}
+	// out in space the world's frame stops (main.js): only the thrusters go on
+	function space(dt) {
+		const W = getWorld();
+		if (W) thrust.update(dt, W.player.state, W.orbit, {});
 	}
 	// a meter on each of the mix's buses (made the first time they are read)
 	function levels() {
@@ -54,6 +69,7 @@ export function createWorldAudio({ getWorld, camera, people, busy, planet }) {
 			beds: { ...M.beds }, crowd: M.crowd, chat: M.chat, voices: M.voices, events: { ...M.events },
 			masters: A ? { amb: A.amb.gain.value, feet: A.feet.gain.value } : null,
 			levels: levels(), baking: A ? A.B.pending() : [],
+			engines: engineInfo(), environment: { ...env.info, beds: { ...env.info.beds } }, thrusters: { ...thrust.info },
 		};
 	}
 	// set the buses' levels: Crysis.audio.set({ amb: 0.8, feet: 1, steps: 0.055 })
@@ -83,5 +99,5 @@ export function createWorldAudio({ getWorld, camera, people, busy, planet }) {
 		});
 	}
 	// one step of it by hand, for tests (with the frame's last conditions)
-	return { update, debug, set, record, tick: (dt, o) => update(dt, { ...last, ...o }) };
+	return { update, space, debug, set, record, tick: (dt, o) => update(dt, { ...last, ...o }) };
 }

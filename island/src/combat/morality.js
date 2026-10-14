@@ -43,6 +43,11 @@ export const RULES = Object.freeze({
 	'keep-stolen': { mercy: 0, law: -4, protect: -1, honest: -8, line: 'Kept what was stolen from {target}' },
 	'betray-errand': { mercy: -1, law: -5, protect: -2, honest: -9, line: 'Ran off with what {target} trusted them with' },
 	'pocket-cash': { mercy: 0, law: -4, protect: -1, honest: -7, line: "Pocketed {target}'s money" },
+	// small kindnesses in the street, and their betrayals
+	'give-directions': { mercy: 1, law: 0, protect: 1, honest: 2, line: 'Showed {target} the way' },
+	mislead: { mercy: -1, law: 0, protect: -1, honest: -5, line: 'Sent {target} the wrong way on purpose' },
+	'help-fallen': { mercy: 4, law: 1, protect: 5, honest: 1, line: 'Helped {target} up after a fall' },
+	'rob-fallen': { mercy: -6, law: -7, protect: -8, honest: -8, line: "Went through {target}'s pockets while they were down" },
 });
 // context: multipliers on the negative (harm) side of a deed, or on all of it, from one table
 export const MODIFIERS = Object.freeze({

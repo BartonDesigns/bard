@@ -50,7 +50,7 @@ const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Euler(0
 // what people say of the Spark, now and then, when it turns harm aside
 const SPARK_LINES = ['The Spark! It turned it aside!', 'Thank the stars for the Spark.', 'You cannot hurt the young. Everyone knows that.', 'The Spark keeps them until they come of age.'];
 
-export function createCombat({ scene, camera, mount, world, people, ragdolls, arms, gear, multiplayer = null, hint = () => {}, isPhone = false, shared = {}, drive = null, menu = null, busy = () => false }) {
+export function createCombat({ scene, camera, mount, world, services = () => null, people, ragdolls, arms, gear, multiplayer = null, hint = () => {}, isPhone = false, shared = {}, drive = null, menu = null, busy = () => false }) {
 	const W = () => world();
 	const P = () => W()?.player?.state || null;
 	const touch = isPhone || !!matchMedia?.('(pointer: coarse)')?.matches;
@@ -490,6 +490,9 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		me.ko = 0;
 		revive(me.H, 0.7);
 		if (!p) return;
+		// brought round at the nearest hospital, when there is one (services/index.js)
+		const care = services()?.revive?.(p.pos);
+		if (care) { revive(me.H, care.k); p.pos.set(care.x, care.y, care.z); p.vel?.set?.(0, 0, 0); p.locked = false; return; }
 		// back along your own way, out of the fight
 		const e = p.pos, threat = squads.alive().find((h) => h.alert && Math.hypot(h.pos.x - e.x, h.pos.z - e.z) < 80);
 		let spot = null;
@@ -541,7 +544,13 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 			if (!M) continue;
 			M.t += dt; M.emit -= dt;
 			// a crew comes on Earth
-			if (isEarth() && !M.crew && M.t > 10 && (M.kind === 'building' || M.kind === 'car')) { M.crew = true; const a = Math.random() * 6.283; squads.squad('fire', F.x + Math.cos(a) * 40, F.z + Math.sin(a) * 40, 2, { task: F.id }); call('Fire crew on the way!', 'bystander'); }
+			// (an engine from the nearest station when there is one: services/index.js; else they walk in)
+			if (isEarth() && !M.crew && M.t > 10 && (M.kind === 'building' || M.kind === 'car')) {
+				M.crew = true;
+				const crew = (x, z) => squads.squad('fire', x, z, 2, { task: F.id });
+				if (services()?.dispatchFire?.(F, crew)) call('Engine on the way from the station!', 'bystander');
+				else { const a = Math.random() * 6.283; crew(F.x + Math.cos(a) * 40, F.z + Math.sin(a) * 40); call('Fire crew on the way!', 'bystander'); }
+			}
 			if (M.kind === 'building' && M.b) {
 				const b = M.b, H = b.wallH || 6, g = ground(b.x, b.z);
 				const dist = Math.hypot(e.x - b.x, e.z - b.z);

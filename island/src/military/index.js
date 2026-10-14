@@ -17,12 +17,13 @@
 import * as THREE from 'three';
 import { BAY_SITES, globeSites, baseLayout, chooseSite, interiorFrames, garrisonPlan, toLocal, toWorld, padAt, hash2 } from './rules.js';
 import { militaryKit } from './kit.js';
-import { buildBase } from './base-model.js';
-import { vehicleGeometry, SCHEMES, DIMS } from './models.js';
+import { buildBase, buildCheckpoint } from './base-model.js';
+import { vehicleGeometry, SCHEMES, DIMS, LOD_FAR, LOD_FAR_PHONE } from './models.js';
 import { toLL, toXZ, F as FRAME } from '../earth/globeframe.js';
 import { createMilDrive } from './drive-mil.js';
 import { createDispatch } from './dispatch.js';
 import { createPolice } from './police.js';
+import { keepClear, releaseClear } from '../sportsfields.js';
 
 const SITE_R = 9000, BUILD_R = 5200, DROP_R = 7000, GARRISON_R = 320;
 const UNITS = (L) => { const u = { tank: 0, apc: 0, jeep: 0, truck: 0, heli: 0, jet: 0 }; for (const p of L.parked) u[p.kind]++; return u; };
@@ -106,6 +107,8 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 		out.group.position.y = 0;
 		group.add(out.group);
 		S.built = { ...out, interiors: [] };
+		// no trees inside the fence or just outside it (the vegetation asks sportsfields' clearings)
+		keepClear('mil:' + S.id, S.x, S.z, Math.hypot(S.layout.W, S.layout.D) / 2 + 40, (x, z, pad) => inside(S, x, z, 14 + pad));
 		// the checkpoint's barrier, sandbags and a shelter
 		S.built.cp = checkpointProps(S);
 		group.add(S.built.cp);
@@ -118,22 +121,14 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 		releaseGarrison(S);
 		for (const I of S.built.interiors) I.group?.removeFromParent();
 		S.built.group.removeFromParent(); S.built.cp.removeFromParent();
+		releaseClear('mil:' + S.id);
 		for (const m of S.built.group.children) m.geometry.dispose();
 		for (const m of S.built.cp.children) m.geometry?.dispose();
 		S.built = null; parkedDirty = true;
 	}
 	function checkpointProps(S) {
-		const C = S.checkpoint, g = new THREE.Group(), y = W().island.heightAt(C.x, C.z);
-		g.position.set(C.x, y, C.z); g.rotation.y = C.yaw;
-		const bag = new THREE.BoxGeometry(2.8, 0.32, 0.6), mat = kit.canvas;
-		const bags = new THREE.InstancedMesh(bag, mat, 12);
-		let i = 0;
-		for (const s of [-1, 1]) for (let k = 0; k < 3; k++) for (let j = 0; j < 2; j++) { _m.compose(_p.set(s * (5.5 + j * 2.8), 0.16 + k * 0.32, 0), _q.identity(), _s.set(1, 1, 1)); bags.setMatrixAt(i, _m); bags.setColorAt(i++, _c.set('#a39470')); }
-		bags.castShadow = bags.receiveShadow = true; g.add(bags);
-		const boom = new THREE.Mesh(new THREE.BoxGeometry(7, 0.14, 0.14), kit.paint); boom.position.set(0, 1.05, -0.6); g.add(boom);
-		boom.geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Array(boom.geometry.attributes.position.count).fill(0).flatMap((_, k) => (Math.floor((boom.geometry.attributes.position.getX(k) + 3.5) / 0.875) % 2 ? [0.9, 0.9, 0.88] : [0.72, 0.14, 0.11])), 3));
-		const hut = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.5, 2.4), kit.concrete); hut.position.set(-7.5, 1.25, 3); hut.castShadow = true; g.add(hut);
-		hut.geometry.setAttribute('color', new THREE.Float32BufferAttribute(new Array(hut.geometry.attributes.position.count * 3).fill(0.72), 3));
+		const C = S.checkpoint, g = buildCheckpoint(kit, { phone: isPhone });
+		g.position.set(C.x, W().island.heightAt(C.x, C.z), C.z); g.rotation.y = C.yaw;
 		return g;
 	}
 	// interior frames in the world: { builder, origin: { x, y, z }, yaw, width, depth, height, floors, floorHeight, base }
@@ -241,20 +236,23 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 		return true;
 	}
 
-	// ---------- the parked vehicles: instanced, one draw per kind and material ----------
+	// ---------- the parked vehicles: instanced, one draw per kind near and one far ----------
+	// (each kind is one geometry in one material, kit.vehicle; past LOD_FAR its coarse model)
 	const sets = new Map();
-	let parkedDirty = true;
+	let parkedDirty = true, lodAt = null;
 	const loose = [];                               // vehicles you left somewhere: { kind, x, y, z, yaw, scheme }
-	function setFor(kind, mat, geo, cap) {
-		const k = kind + '|' + mat;
+	const lodR = isPhone ? LOD_FAR_PHONE : LOD_FAR;
+	function setFor(kind, far, cap) {
+		const k = kind + '|' + (far ? 'far' : 'near');
 		let S = sets.get(k);
+		if (S && S.cap < cap) { S.im.removeFromParent(); S.im.dispose(); sets.delete(k); S = null; }
 		if (!S) {
-			const material = kit[mat];
-			const im = new THREE.InstancedMesh(geo, material, cap);
-			im.count = 0; im.castShadow = mat !== 'lamp' && !isPhone; im.receiveShadow = true; im.frustumCulled = false; im.name = 'mil-parked-' + k;
-			if (mat === 'camo' || mat === 'air') im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+			const G = vehicleGeometry(kind);
+			const im = new THREE.InstancedMesh(far ? G.far : G.whole, kit.vehicle, cap);
+			im.count = 0; im.castShadow = !isPhone && !far; im.receiveShadow = true; im.frustumCulled = false; im.name = 'mil-parked-' + k;
+			im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
 			group.add(im);
-			S = { im, n: 0, cap, paint: mat === 'camo' || mat === 'air' };
+			S = { im, n: 0, cap };
 			sets.set(k, S);
 		}
 		return S;
@@ -267,7 +265,7 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 			S.layout.parked.forEach((v, i) => {
 				if (S.taken.has(i)) return;
 				const [x, z] = toWorld(S, v.x, v.z);
-				out.push({ kind: v.kind, x, z, y: padAt(S, v.x, v.z) + (v.kind === 'heli' ? 0.2 : 0.02), yaw: S.yaw + v.yaw, scheme: v.kind === 'jet' || v.kind === 'heli' ? 'grey' : S.scheme, base: S, slot: i });
+				out.push({ kind: v.kind, x, z, y: padAt(S, v.x, v.z) + (v.kind === 'heli' ? 0.2 : 0.02) + (v.apron ? 0.11 : 0), yaw: S.yaw + v.yaw, scheme: v.kind === 'jet' || v.kind === 'heli' ? 'grey' : S.scheme, base: S, slot: i });
 			});
 		}
 		for (const v of loose) out.push(v);
@@ -275,20 +273,20 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 	}
 	let parked = [];
 	function drawParked() {
-		parked = parkedList();
+		if (parkedDirty) parked = parkedList();
 		for (const S of sets.values()) S.n = 0;
 		const count = {};
 		for (const v of parked) count[v.kind] = (count[v.kind] || 0) + 1;
+		const cx = camera.position.x, cz = camera.position.z;
+		lodAt = [cx, cz];
 		for (const v of parked) {
-			const G = vehicleGeometry(v.kind);
+			const far = Math.hypot(v.x - cx, v.z - cz) > lodR;
 			_m.compose(_p.set(v.x, v.y, v.z), _q.setFromAxisAngle(_y, v.yaw), _s.set(1, 1, 1));
-			for (const [mat, geo] of Object.entries(G.whole)) {
-				const S = setFor(v.kind, mat, geo, Math.max(16, (count[v.kind] || 1) * 2));
-				if (S.n >= S.cap) continue;
-				S.im.setMatrixAt(S.n, _m);
-				if (S.paint) S.im.setColorAt(S.n, _c.set(SCHEMES[v.scheme] || SCHEMES.woodland));
-				S.n++;
-			}
+			const S = setFor(v.kind, far, Math.max(16, (count[v.kind] || 1) * 2));
+			if (S.n >= S.cap) continue;
+			S.im.setMatrixAt(S.n, _m);
+			S.im.setColorAt(S.n, _c.set(SCHEMES[v.scheme] || SCHEMES.woodland));
+			S.n++;
 		}
 		for (const S of sets.values()) { S.im.count = S.n; S.im.instanceMatrix.needsUpdate = true; if (S.im.instanceColor) S.im.instanceColor.needsUpdate = true; S.im.visible = S.n > 0; }
 		parkedDirty = false;
@@ -320,13 +318,24 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 			if (S.status !== 'sited' || Math.abs(x - S.x) > S.layout.W + 60 || Math.abs(z - S.z) > S.layout.W + 60) continue;
 			const [lx, lz] = toLocal(S, x, z), L = S.layout, pad = padAt(S, lx, lz);
 			const ox = Math.max(0, Math.abs(lx) - L.W / 2 - 4), oz = Math.max(0, Math.abs(lz) - L.D / 2 - 4), out = Math.hypot(ox, oz);
-			if (out > 40 || y < pad - out / 3 - 4) continue;
-			best = Math.max(best, pad - out / 3 + (out > 0 ? 0 : 0.1));
+			if (out > 72) continue;
+			let top = pad + 0.1;
+			if (out > 0) {
+				// the graded bank (base-model.js grade): from the pad's edge eased down, or up, to the ground
+				const ex = Math.sign(lx) * Math.min(Math.abs(lx), L.W / 2 + 4), ez = Math.sign(lz) * Math.min(Math.abs(lz), L.D / 2 + 4);
+				const [wx, wz] = toWorld(S, ex, ez), I = W().island, edge = padAt(S, ex, ez);
+				const reach = Math.min(70, Math.max(7, Math.abs(edge - I.heightAt(wx, wz)) * 3.6 + 6));
+				if (out >= reach) continue;
+				const t = out / reach;
+				top = edge + (I.heightAt(x, z) - 0.3 - edge) * t * t * (3 - 2 * t);
+			}
+			if (y < top - 4) continue;
+			best = Math.max(best, top);
 			if (out > 0) continue;
 			for (const b of L.buildings) {
 				const hx = b.w / 2 + (b.type === 'tower' ? 0.4 : 0.15), hz = b.d / 2 + (b.type === 'tower' ? 0.4 : 0.15);
 				if (Math.abs(lx - b.x) > hx || Math.abs(lz - b.z) > hz) continue;
-				const top = b.type === 'tower' ? b.h + 0.25 : b.type === 'helipad' ? 0.2 : b.type === 'hangar' || b.type === 'motorpool' || b.type === 'runway' || b.type === 'taxiway' || b.type === 'apron' || b.type === 'gate' ? 0 : b.type === 'control' ? b.h - 0.45 : b.h + 0.12;
+				const top = b.type === 'tower' ? b.h + 0.25 : b.type === 'helipad' ? 0.2 : b.type === 'runway' ? 0.14 : b.type === 'taxiway' ? 0.12 : b.type === 'apron' ? 0.11 : b.type === 'hangar' || b.type === 'motorpool' || b.type === 'gate' ? 0 : b.type === 'control' ? b.h - 0.45 : b.h + 0.12;
 				if (y >= pad + top - 0.5) best = Math.max(best, pad + top);
 			}
 		}
@@ -419,7 +428,9 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 			watch(S, dt);
 			if (inside(S, p.pos.x, p.pos.z, 2)) armoury(S);
 		}
-		if (parkedDirty) drawParked();
+		// (the near and far models swap as you move about)
+		if (parkedDirty || !lodAt || Math.hypot(camera.position.x - lodAt[0], camera.position.z - lodAt[1]) > 12) drawParked();
+		kit.time.value += dt;
 		police.update(dt);
 		dispatch.update(dt);
 	}
@@ -434,7 +445,7 @@ export function createMilitary({ scene, camera, mount, world, combat, isPhone = 
 	// ---------- for the console ----------
 	function info() {
 		const p = P(), list = [...sites.values()].filter((S) => S.status !== 'failed').map((S) => ({ name: S.name, kind: S.kind, status: S.status, km: p ? +(Math.hypot((S.x ?? S.cx) - p.pos.x, (S.z ?? S.cz) - p.pos.z) / 1000).toFixed(1) : null, built: !!S.built, garrison: manned(S), losses: S.losses, hostile: S.hostile > 0, units: S.units, parked: S.built ? S.layout.parked.length - S.taken.size : 0 })).sort((a, b) => a.km - b.km);
-		return { bases: list.slice(0, 12), patrols: dispatch.info(), police: police.info(), failed: [...sites.values()].filter((S) => S.status === 'failed').length, parked: parked.length, draws: [...sets.values()].filter((S) => S.n).length + list.filter((b) => b.built).length * 9 };
+		return { bases: list.slice(0, 12), patrols: dispatch.info(), police: police.info(), failed: [...sites.values()].filter((S) => S.status === 'failed').length, parked: parked.length, draws: [...sets.values()].filter((S) => S.n).length + [...sites.values()].reduce((a, S) => a + (S.built ? S.built.draws : 0), 0) };
 	}
 	// go to a base (by name, a part of its name, or the nearest): you arrive outside its gate
 	function goTo(name) {
