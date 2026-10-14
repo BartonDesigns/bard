@@ -160,6 +160,7 @@ import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
+import { createLaw } from './law/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 
@@ -795,6 +796,9 @@ export function createIslandWorld() {
 	HOOKS.npcHurt = npcQuests.onHurt;
 	// (the nearest hospital sends for whoever is knocked down: services/)
 	HOOKS.npcHurt((e, p) => world?.services?.injury(p, e.why, e.child ? 0.5 : 0.6));
+	// law and order over combat's and the police's hooks: witnesses and calls, the escalation
+	// ladder, arrests and fines, the gangs' corners by region, tactics (law/)
+	HOOKS.law = createLaw({ world: () => world, combat, military, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), services: () => world?.services, money: () => HOOKS.npcMoney, arms, hint: (t, ms, pri = 1) => hint(t, ms, pri), isPhone, mount: dom.mount, touch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, hours: () => world?.sky?.state?.hours ?? 12, region: () => { const R = npcQuests.regionNow(); return { id: R.id, name: R.name, tally: commons.region(R.id), situation: npcQuests.situation?.() }; } });
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
 	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', note, errands: () => HOOKS.errands });
 	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
@@ -1756,6 +1760,7 @@ export function createIslandWorld() {
 		gear.update(dt);
 		if (!window.L99Loading.active()) combat.update(dt);
 		HOOKS.military?.update(dt, sk.night);
+		if (!window.L99Loading.active()) HOOKS.law?.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -2275,6 +2280,10 @@ if (typeof window !== 'undefined') {
 		// the vehicles parked; Crysis.base('Diablo') takes you to a base's gate (the nearest with no name)
 		military: Object.defineProperty(() => HOOKS.military?.info(), 'api', { get: () => HOOKS.military }),
 		base: (name) => HOOKS.military?.goTo(name) ?? 'Earth only.',
+		// law and order (law/): Crysis.law() the level, the calls on their way, the plan, the corners;
+		// .surrender(), .arrest(), .territory(); Crysis.lawStep(dt) runs it on (tests)
+		law: Object.assign(() => HOOKS.law?.info(), { surrender: () => HOOKS.law?.surrender(), arrest: () => HOOKS.law?.arrest(), reset: () => HOOKS.law?.reset(), incident: (e) => HOOKS.law?.incident(e), territory: (x, z) => HOOKS.law?.territory(x, z), corner: () => HOOKS.law?.corner() }),
+		lawStep: (dt = 1 / 30) => HOOKS.law?.update(dt),
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),

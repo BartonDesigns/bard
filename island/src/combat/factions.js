@@ -22,6 +22,8 @@ export const FACTIONS = Object.freeze({
 	guard: { name: 'Meridian Guard', kind: 'military', zones: [], stationed: true, colors: ['#4a5236', '#c9c2a2'], emblem: 'a compass rose over a wall', gun: 'warden-spark-carbine', hp: 120, armour: 55, acc: 0.52, aggression: 0, lawful: true },
 	// the police: cruisers and officers, answering crime and the wanted level
 	police: { name: 'Harbour Police', kind: 'police', zones: [], colors: ['#1c2540', '#d9c46a'], emblem: 'a gull over a shield', gun: 'mossback-scout-rifle', hp: 100, armour: 35, acc: 0.46, aggression: 0, lawful: true },
+	// the police's tactical team, out of the police quarters in its van at the fourth level (law/)
+	swat: { name: 'Harbour Police Tactical', kind: 'police', zones: [], colors: ['#20242b', '#d9c46a'], emblem: 'a gull over a shield', gun: 'warden-spark-carbine', hp: 125, armour: 70, acc: 0.55, aggression: 0, lawful: true },
 	// an armed force from another region, come over the border or the sea
 	ironvale: { name: 'Ironvale Legion', kind: 'invaders', zones: [], colors: ['#6a6c5c', '#a33a2a'], emblem: 'a tower in a ring', gun: 'warden-spark-carbine', hp: 115, armour: 45, acc: 0.48, aggression: 0.9 },
 	rogue: { name: 'Rogue drones', kind: 'machines', zones: ['wild', 'arid'], colors: ['#3a3f46', '#ff4a2a'], emblem: 'none', hp: 60, armour: 0, acc: 0.5, aggression: 1 },
@@ -45,8 +47,11 @@ const BASE = [
 	['copperline', 'police', -50], ['glasshouse', 'police', -50], ['saltjack', 'police', -40], ['copperline', 'guard', -40], ['glasshouse', 'guard', -40], ['ridgeback', 'guard', -20], ['ridgeback', 'police', -10],
 	['ironvale', 'guard', -100], ['ironvale', 'police', -90], ['ironvale', 'patrol', -90], ['ironvale', 'civ', -60], ['ironvale', 'rangers', -90], ['ironvale', 'ridgeback', -70], ['ironvale', 'copperline', -40], ['ironvale', 'glasshouse', -40],
 ];
+// the tactical team stands with everyone as the police do
+for (const [a, b, v] of [...BASE]) { if (a === 'police') BASE.push(['swat', b, v]); else if (b === 'police') BASE.push([a, 'swat', v]); }
+BASE.push(['swat', 'police', 100]);
 // how each sees you to begin with
-const PLAYER_BASE = { copperline: -10, glasshouse: -10, ashfang: -60, dunecutters: -50, rogue: -100, gloom: -100, saltjack: 0, halcyon: 0, patrol: 20, rangers: 20, hearthguard: 30, village: 40, civ: 40, ridgeback: 0, guard: 25, police: 20, ironvale: -70 };
+const PLAYER_BASE = { copperline: -10, glasshouse: -10, ashfang: -60, dunecutters: -50, rogue: -100, gloom: -100, saltjack: 0, halcyon: 0, patrol: 20, rangers: 20, hearthguard: 30, village: 40, civ: 40, ridgeback: 0, guard: 25, police: 20, swat: 20, ironvale: -70 };
 
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 const clamp = (v) => Math.max(-100, Math.min(100, v));
