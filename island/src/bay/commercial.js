@@ -23,6 +23,7 @@ import { inCampus } from './discovery.js';
 import { flashAtlas } from '../tattoo/skinink.js';
 import { shopScheme, seedAt } from './decor.js';
 import { lightInterior, releaseInterior, configureLighting } from '../interiors/lighting.js';
+import { venueOf } from '../economy/venue.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
 let SHEET = null;
@@ -41,18 +42,9 @@ const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
 // the hours each keeps its lights on (interiors/lighting.js dims them the rest of the night)
 const HOURS = { cafe: [6, 20], restaurant: [10, 23.5], shop: [8, 21], office: [7, 20], arcade: [10, 24], bowling: [10, 24], cinema: [10, 24], tattoo: [11, 22] };
 
-// what a commercial block is, from its kind, size and where it stands (stable for a place)
-function typeOf(b) {
-	const r = hh(Math.round(b.x * 0.37), Math.round(b.z * 0.29)), area = b.w * b.d, deep = Math.min(b.w, b.d);
-	if (b.kind === 5) return area > 1400 && r < 0.18 && deep > 24 ? 'cinema' : r < 0.2 ? 'restaurant' : r < 0.3 ? 'cafe' : 'office';
-	if (area > 900 && deep > 24 && r < 0.12) return 'bowling';
-	if (area > 900 && deep > 24 && r < 0.2) return 'cinema';
-	if (r < 0.36) return 'restaurant';
-	if (r < 0.54) return 'cafe';
-	if (r < 0.575 && area < 700) return 'tattoo';
-	if (r < 0.62 && area > 250) return 'arcade';
-	return 'shop';
-}
+// what a commercial block is, from its kind, size and where it stands (stable for a place;
+// economy/venue.js, which the signs out front agree with)
+const typeOf = venueOf;
 const ZONE_OF = { cafe: ZONE.dining, restaurant: ZONE.dining, shop: ZONE.retail, tattoo: ZONE.retail, office: ZONE.office, arcade: 'play', bowling: 'play', cinema: 'play' };
 function busyAt(type, h) {
 	if (ZONE_OF[type] === 'play') return Math.max(0, Math.min(1, Math.exp(-(((h - 20) / 2.6) ** 2)) + Math.exp(-(((h - 15) / 2.5) ** 2)) * 0.45));
