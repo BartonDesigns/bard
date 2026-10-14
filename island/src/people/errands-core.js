@@ -109,11 +109,11 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 		caught: [`Oh! ${item.name === 'bag' ? 'My bag' : 'That is mine'}! I did not even notice. Thank you!`, `Wait, ${item.the}? I would have been lost without it. Thanks!`, `Oh my gosh, thank you. You ran all this way?`],
 		passed: [`For me? From ${friend}? That is so kind. Thank you!`, `Oh, ${friend} sent this? Thank you for bringing it.`, `${friend} remembered! Thanks for carrying it over.`],
 		gaveUp: [`Never mind, I will manage. Thanks anyway.`],
-		snatched: [`Hey! Stop! That is my bag!`, `Thief! Somebody stop them!`, `No! My bag! Stop them, please!`],
+		snatched: item.name && item.name !== 'bag' ? [`Hey! Stop! That is my ${item.name}!`, `Thief! Somebody stop them!`] : [`Hey! Stop! That is my bag!`, `Thief! Somebody stop them!`, `No! My bag! Stop them, please!`],
 		dropped: [`Okay, okay! Take it!`, `Fine! Here! Just let me go!`, `Alright! I am dropping it!`],
 		fixed: [`It started! You are a genius. Here, please take this.`, `Listen to that engine! Thank you, honestly. Let me give you something.`, `It runs! I was going to be stuck here all day. Thank you.`],
 		escaped: [`They are gone. Thank you for trying.`, `Too late. Thanks for running after them, though.`],
-		recovered: [`My bag! Everything is still in it. Thank you, really. Please, take this.`, `You got it back! I cannot believe it. Here, for you.`],
+		recovered: [`My ${item.name || 'bag'}! Everything is still in it. Thank you, really. Please, take this.`, `You got it back! I cannot believe it. Here, for you.`],
 		kept: [],
 	}[event] || [''];
 	return pick(L, n);
@@ -152,7 +152,8 @@ export function step(E, ev) {
 			if (E.stage === 'carry') return at('done', { done: true, say: 'passed' });
 			return { E, out: null };
 		// walked off: with a found wallet in your pocket, you kept it; otherwise it lapses
-		case 'away': return E.stage === 'bring' && E.item?.cash ? at('kept', { kept: true, cash: E.item.cash }) : at('failed', { failed: true });
+		// (a bag got back off a thief and carried away is kept too: stolen goods, not a find)
+		case 'away': return E.stage === 'bring' && (E.item?.cash || E.kind === 'snatch') ? at('kept', { kept: true, cash: E.item?.cash || 0 }) : at('failed', { failed: true });
 		case 'timeout': case 'lost-them': return at('failed', { failed: true, say: E.stage === 'offered' ? null : 'gaveUp' });
 		default: return { E, out: null };
 	}

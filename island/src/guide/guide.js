@@ -598,6 +598,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const c=awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
 		// (a favour under way with this person: they know what they asked, errands.js)
 		const fav=api.errands?.factFor?.(p); if(fav) c.facts=[...c.facts,fav].slice(0,7);
+		// (what they did or saw lately, and their money talk: people/npc-quests.js)
+		const own=api.npcQuests?.factsFor?.(p)||[]; if(own.length) c.facts=[...c.facts,...own].slice(0,8);
 		return c;
 	}
 

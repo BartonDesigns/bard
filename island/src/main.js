@@ -122,6 +122,9 @@ import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers, talkers } from './people/people.js';
 import { createChatter } from './people/chatter.js';
 import { createErrands } from './people/errands.js';
+import { createNpcQuests } from './people/npc-quests.js';
+import { createMoney } from './people/npc-money.js';
+import { createCommons } from './combat/morality.js';
 import { createFares } from './vehicles/fares.js';
 import { createItemUse } from './gameplay/item-use.js';
 import { createDaily } from './gameplay/daily.js';
@@ -765,14 +768,25 @@ export function createIslandWorld() {
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
-	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands });
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
 	// today's three goals, paid as they are done (gameplay/daily.js)
 	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
 	const note = (kind, data) => daily.note(kind, data);
 	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
 	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff });
+	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
+	// quests they do for each other with or without you (people/npc-quests.js)
+	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
+	const commons = HOOKS.commons = createCommons({ store: npcStore });
+	// (money through the bank's adapter: HOOKS.npcMoney.use(bank) attaches economy/bank.js)
+	const npcMoney = HOOKS.npcMoney = createMoney();
+	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '' });
+	commons.follow(combat.morality, npcQuests.regionNow);
+	guideApi.npcQuests = npcQuests;
+	// (a hospital hears of people knocked down here: HOOKS.npcHurt(fn); it bills through the bank)
+	HOOKS.npcHurt = npcQuests.onHurt;
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
 	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', note, errands: () => HOOKS.errands });
 	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
@@ -1223,6 +1237,7 @@ export function createIslandWorld() {
 		HOOKS.gear?.suspend();
 		families.clear();
 		HOOKS.errands?.dispose();
+		HOOKS.npcQuests?.dispose();
 		HOOKS.fares?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
@@ -1762,6 +1777,7 @@ export function createIslandWorld() {
 		dogWalkers.update(dt, camera);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 		errands.update(dt);
+		npcQuests.update(dt);
 		fares.update(dt);
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
@@ -2192,7 +2208,14 @@ if (typeof window !== 'undefined') {
 		ragdolls: () => HOOKS.ragdolls?.info(),
 		// the fight (combat/): Crysis.combat.info(), .spawn('ashfang'), .boss('walker'), .fight(), .raid(), .ignite(); Crysis.morality()
 		get combat() { return HOOKS.combat; },
-		morality: () => HOOKS.combat?.morality.info(),
+		// Crysis.morality(): your compass, this region's tally, the people near you and what they have
+		// done; .bag('return'|'steal'|'auto') leaves a bag near you now; .favour() someone asks another;
+		// .tick(n) n far-away quests now; .run(s) the scenes on by s seconds; .money('npc:123'); .regions()
+		morality: Object.assign(() => ({ ...HOOKS.combat?.morality.info(), npc: HOOKS.npcQuests?.info() }), {
+			bag: (mode) => HOOKS.npcQuests?.bag(mode), favour: () => HOOKS.npcQuests?.favour(), tick: (n = 1) => HOOKS.npcQuests?.farTick(n), run: (s) => HOOKS.npcQuests?.fastForward(s),
+			money: (id) => ({ balance: HOOKS.npcMoney?.balance(id), wealth: HOOKS.npcMoney?.wealth(id), bank: HOOKS.npcMoney?.attached() }), regions: () => Object.fromEntries((HOOKS.commons?.regions() || []).map((r) => [r, HOOKS.commons.region(r)])),
+			log: (n = 20) => HOOKS.commons?.log(n), where: () => HOOKS.npcQuests?.where(),
+		}),
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),
