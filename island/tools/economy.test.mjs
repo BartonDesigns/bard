@@ -124,6 +124,10 @@ test('the place decides the food: tapas in Spain, ramen in Japan, barbecue in Te
 	assert.ok(!kinds('jp').tapas, 'no tapas in Japan');
 	const tx = {}; for (let k = 0; k < 800; k++) { const E = establish({ x: k * 9.5, z: k * 3.5, w: 30, d: 20, a: 0, h: 6, use: 'retail', venue: 'restaurant' }, 'us-tx'); if (E) tx[E.type] = (tx[E.type] || 0) + 1; }
 	assert.ok((tx.bbq || 0) > (tx.sushi || 0) * 3, 'barbecue in Texas');
+	// and in a grown town's own houses too, not only its shopping centre
+	const count = (plan, t) => plan.filter((E) => E.type === t).length;
+	assert.ok(count(planTown(town('suburb', 1500, 7), { locale: 'us-tx' }), 'bbq') > 20, 'barbecue in a Texas town');
+	assert.ok(count(planTown(town('older', 1100, 3), { locale: 'es' }), 'tapas') > 20, 'tapas in a Spanish town');
 });
 
 test('the right business in the right place', () => {

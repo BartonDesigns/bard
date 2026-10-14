@@ -102,7 +102,9 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	function coastAt(x, z) {
 		const g0 = H(x, z);
 		if (g0 > 20) return false;
-		for (const k of [170, 380]) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) if (H(x + dx * k, z + dz * k) < -0.6) return true;
+		// (out on the globe the sea stands at about nought, where the Bay's is carved below it)
+		const sea = bay.loaded?.() === false ? 0.1 : -0.6;
+		for (const k of [170, 380]) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) if (H(x + dx * k, z + dz * k) < sea) return true;
 		return false;
 	}
 	// the mapped streets near a point: the busiest it faces, whether two meet by it, a freeway near
@@ -223,7 +225,7 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 				if (D.use !== 'house' || D.rural !== undefined) continue;
 				let n = -1;
 				for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) for (const Q of G.get(key(Math.floor(D.x / C) + i, Math.floor(D.z / C) + j)) || []) if ((Q.x - D.x) ** 2 + (Q.z - D.z) ** 2 < 6400) n++;
-				D.rural = n < 6; D.wild = D.rural && (D.wildN >= 3 || H(D.x, D.z) > 160);
+				D.rural = n < 8; D.wild = D.rural && (D.wildN >= 3 || H(D.x, D.z) > 160);
 				// (kept once its neighbours are surely all in the list)
 				const c = D.o.src?.econ;
 				if (c && Math.hypot(D.x - cx, D.z - cz) < 1500) { c.rural = D.rural; c.wild = D.wild; }
