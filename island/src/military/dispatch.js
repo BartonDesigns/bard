@@ -191,7 +191,7 @@ export function createDispatch({ world, combat, military, kit, group, hint, isPh
 				if (U.gear) U.gear.visible = !u.air;
 				if (u.T) { u.T.bound.x = u.pos.x; u.T.bound.y = u.pos.y + DIMS[u.kind].H / 2; u.T.bound.z = u.pos.z; }
 				if (!u.engine && distK(u) > 0.05 && patrols.reduce((a, q) => a + q.units.filter((o) => o.engine).length, 0) < 3) u.engine = engineSound(u.kind);
-				u.engine?.set(0.6, 0.6, distK(u), 10);
+				u.engine?.set(0.6, 0.6, distK(u), 10, u.pos);
 				if (p.state === 'onscene' || (u.air && p.state === 'enroute' && u.flyS > Math.hypot(p.to.x - p.from.x, p.to.z - p.from.z) - 400)) engage(u, dt);
 			}
 		}
