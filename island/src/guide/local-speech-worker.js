@@ -1,4 +1,7 @@
 // Synthesis stays off the render thread. The quantized model is cached by Transformers.js.
+// q8 is the smallest it comes in (the 4-bit ones keep more of it at full size and are larger).
+// It runs on one thread here: the page is not cross-origin isolated, so WebAssembly has no
+// shared memory to spread across more.
 let modelPromise, current = 0, pendingAck;
 const send = (type, id, extra = {}, transfer = []) => self.postMessage({ type, id, ...extra }, transfer);
 async function model(id) {
@@ -15,7 +18,8 @@ async function model(id) {
 let chain = Promise.resolve();
 self.onmessage = ({ data }) => {
  // fetch and load the model ahead of the first line, without touching what is being said
- if (data.type === 'warm') { model(current).then(() => send('ready', data.id), () => send('cold', data.id)); return; }
+ // (a phone asks for one line made and thrown away too: it is ready once it has spoken)
+ if (data.type === 'warm') { model(current).then(async (tts) => { if (data.probe) await tts.generate('Hello.', { voice: 'af_heart' }); send('ready', data.id); }).catch(() => send('cold', data.id)); return; }
  if (data.type === 'ack') { if (data.id === current) { pendingAck?.(); pendingAck = null; } return; }
  current = data.id;
  pendingAck?.(); pendingAck = null;
