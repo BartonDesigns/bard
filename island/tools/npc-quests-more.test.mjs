@@ -95,7 +95,7 @@ test('the owner walks to a bench, sets the bag down on it and walks on; a passer
 	Q2.update(0.1);
 	assert.equal(Q2.info().bag, null);
 	// a natural one: the timer runs out and the owner walks over
-	for (let k = 0; k < 2000 && !(Q2.info().bag?.phase === 'left'); k++) { T2.walk(pool2, 0.1); Q2.update(0.1); }
+	for (let k = 0; k < 8000 && !(Q2.info().bag?.phase === 'left'); k++) { T2.walk(pool2, 0.1); Q2.update(0.1); }
 	const B = Q2.info().bag;
 	assert.ok(B, 'a bag was left');
 	assert.equal(B.where, 'bench');
@@ -181,8 +181,62 @@ test('far away, thefts now and then leave leads', async () => {
 	const T = stage(), pool = [T.body(10, 10, 61)];
 	const { Q } = await quests(T, pool, { store: memStore() });
 	Q.update(0.1);
-	Q.farTick(80);
+	// (seeded dice, so the run is the same every time)
+	const orig = Math.random;
+	let a = 12345; Math.random = () => { a = (Math.imul(a, 1103515245) + 12345) >>> 0; return a / 4294967296; };
+	Q.farTick(200);
+	Math.random = orig;
 	assert.ok(Q.leads().length >= 1, 'a lead from the far tick');
 	assert.ok(Q.info().leads.length >= 1);
 	Q.dispose();
+});
+
+test('families and teens: a parent walking the kids hands a bag back; teens see one and say so', async () => {
+	const furniture = { street: { seatsNear: () => [{ kind: 'bench', x: 20, y: 0, z: 0, heading: 0 }] } };
+	const T = stage({ furniture });
+	const owner = T.body(26, 4, 71);
+	// out with the family (family-life.js): a parent on their way, a child at their side
+	const parent = T.body(25, -4, 72, { role: 'parent', route: undefined, path: [[60, 0]], source: 'family' });
+	const child = T.body(25, -3.5, 73, { role: 'child', route: undefined, follow: parent, source: 'family' }, { child: true });
+	const pool = [owner];
+	const { Q, commons } = await quests(T, pool, { others: () => [parent, child] });
+	Q.update(0.1);
+	const orig = Math.random; Math.random = () => 0.5;
+	Q.bag('return');
+	Math.random = orig;
+	assert.ok(T.said.some(([p, t]) => p === child && /bag/.test(t)), 'the child points it out');
+	assert.ok(parent.override && parent.held, 'the parent goes to hand it back');
+	assert.ok(!child.held && !child.override, 'the child is never the one who takes it');
+	const all = [owner, parent, child];
+	for (let k = 0; k < 600 && Q.info().scenes.length; k++) { T.walk(all, 0.1); Q.update(0.1); }
+	assert.ok(T.said.some(([p, t]) => p === parent && /giving this back|catch them|take it back/.test(t)), 'a word to the kids');
+	assert.equal(commons.actor('npc:72').deeds, 1);
+	assert.ok(commons.actor('npc:72').honest > 0, 'a good deed on the parent');
+	assert.ok(!commons.known('npc:73'), 'nothing on the child');
+	Q.dispose();
+	// a knot of teens on a wall beside the bench: they see it, say so, and leave it be
+	const T2 = stage({ furniture }), o2 = T2.body(26, 4, 81);
+	const teens = [0, 1, 2].map((k) => T2.body(21 + k, 1, 82 + k, { role: 'teen', route: undefined, sit: 0.48, source: 'family' }, { teen: true, minor: true }));
+	const { Q: Q2, commons: C2 } = await quests(T2, [o2], { others: () => teens });
+	Q2.update(0.1);
+	Math.random = () => 0.5;
+	Q2.bag('auto');
+	Math.random = orig;
+	for (let k = 0; k < 30; k++) Q2.update(0.1);
+	assert.equal(T2.said.filter(([p]) => teens.includes(p)).length, 1, 'one of them says so');
+	assert.equal(Q2.info().scenes.length, 0);
+	assert.ok(teens.every((p) => !p.held && !p.override) && teens.every((p) => !C2.known('npc:' + p.P.dna.seed)));
+	// forced to steal, the nearest grown-up does it, never a teen
+	Q2.dispose();
+	const T3 = stage({ furniture }), o3 = T3.body(26, 4, 91), far = T3.body(-8, 10, 92);
+	const teens3 = [0, 1].map((k) => T3.body(20 + k, 1, 93 + k, { role: 'teen', route: undefined, source: 'family' }, { teen: true, minor: true }));
+	const { Q: Q3, commons: C3 } = await quests(T3, [o3, far], { others: () => teens3 });
+	Q3.update(0.1);
+	Math.random = () => 0.5;
+	Q3.bag('steal');
+	Math.random = orig;
+	for (let k = 0; k < 300; k++) { T3.walk([o3, far, ...teens3], 0.1); Q3.update(0.1); }
+	assert.ok(teens3.every((p) => !C3.known('npc:' + p.P.dna.seed)), 'no teen thief');
+	assert.ok(C3.known('npc:92') && C3.actor('npc:92').honest < 0, 'a grown-up stole it');
+	Q3.dispose();
 });

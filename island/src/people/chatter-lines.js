@@ -55,6 +55,7 @@ const DEED = {
 	'saw-theft': ['Did you see that? Somebody just walked off with a bag that was not theirs.', 'Keep an eye on your things. I just saw someone swipe a bag.'],
 	'saw-return': ['Did you see that? Someone handed a lost bag right back.', 'That was nice to see. Someone gave a bag back to its owner.'],
 	stole: ['What? I am just walking.', 'Mind your own business.'],
+	'saw-bag': ['Somebody left their bag back there. Hope they get it back.', 'We saw a bag someone forgot. We told a grown-up.'],
 };
 
 // fear: the same order of facts as contextualOpening

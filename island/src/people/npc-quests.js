@@ -15,7 +15,10 @@
 // pocket, loot to the thief, and a balance that makes the hard-up more tempted.
 //
 // It runs wherever the shared people pool has people (people/people.js): the Bay's towns,
-// the globe's towns, the island village, other worlds' settlements; the region is worked
+// the globe's towns, the island village, other worlds' settlements. People out with their
+// families (family-life.js) and the residents you know (social-actors.js) can be takers too:
+// a parent walking the kids hands a bag back, a knot of teens spots one and says so (children
+// and teens never take, steal or lose anything here; the grown-ups with them may). The region is worked
 // out for each (people/moral-regions.js). Anyone in the pool knocked down (a thief brought
 // down, a fight, a car) is told to onHurt listeners, so a hospital can come for them.
 
@@ -34,7 +37,7 @@ import { citiesNear } from '../earth/atlas.js';
 
 const NOTICE = 7, OWNER_BACK = 45, VISIBLE = 95, REACH = 1.4, STEP_MAX = 45, MEMORY = 600;
 
-export function createNpcQuests({ scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null }) {
+export function createNpcQuests({ scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null, others = () => [] }) {
 	const FAR_EVERY = isPhone ? 40 : 25, SCENES = isPhone ? 1 : 2, BAG_EVERY = isPhone ? [150, 240] : [70, 140], FAVOUR_EVERY = isPhone ? [150, 260] : [80, 160];
 	const sources = createSources();
 	// the benches, shelters, park seats, cafe tables and doorsteps about (people/bag-spots.js)
@@ -58,7 +61,14 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 	const nameOf = (p) => { try { return persona(p)?.first || ''; } catch { return ''; } };
 	// grown-ups only: children and teens are never thieves, victims or go-betweens here
 	const adult = (p) => !!p && p.active && !p.leaving && !p.P?.ragdoll && !p.P?.dna?.child && !p.P?.dna?.minor && !p.P?.dna?.teen;
-	const free = (p) => adult(p) && !p.engaged && !p.override && !p.held && p.demo === undefined && !p.workSpot && p.role !== 'jog' && p.route?.kind !== 'seat' && p.route?.kind !== 'follow';
+	// (and not sat down, at work, in a line or minding a stall: family-life.js's roles)
+	const BUSY_ROLES = new Set(['jog', 'guard', 'volunteer', 'diner', 'line', 'lineup', 'child', 'teen']);
+	const free = (p) => adult(p) && !p.engaged && !p.override && !p.held && p.demo === undefined && !p.workSpot && !p.sit && !BUSY_ROLES.has(p.role) && p.route?.kind !== 'seat' && p.route?.kind !== 'follow';
+	const minor = (p) => !!(p?.P?.dna?.child || p?.P?.dna?.minor || p?.P?.dna?.teen);
+	// everyone about: the walking pool, and the families and residents out among them
+	const everyone = () => { let o = null; try { o = others(); } catch { /* a system gone */ } return o?.length ? [...people.pool, ...o] : people.pool; };
+	// a grown-up out with children of their own: a child holding their hand or at their side
+	const withKids = (p, all) => all.some((q) => q.follow === p && minor(q) && q.active);
 
 	function whereNow() {
 		const W = world(), c = cam(), H = regionalNow();
@@ -93,7 +103,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 	const regionNames = new Map();
 	const ctx = (name, region = here.region.id) => ({ money, commons, world: worldKey(), place: region === here.region.id ? placeName() : '', regionName: regionNames.get(region) || commons.region(region).name || region, name });
 	function remember(p, kind) { if (p?.P?.dna) memory.set(p.P.dna.seed >>> 0, { kind, t: clock }); if (memory.size > 200) memory.delete(memory.keys().next().value); }
-	function witnesses(at, kind, except = []) { for (const q of people.pool) if (adult(q) && !except.includes(q) && flat(pos(q), at) < 15) remember(q, kind); }
+	function witnesses(at, kind, except = []) { for (const q of everyone()) if (adult(q) && !except.includes(q) && flat(pos(q), at) < 15) remember(q, kind); }
 	function say(p, text, gesture = 'nod', feel = {}) { if (text && p?.active && flat(pos(p), cam()) < 30) chatter.say(p, { text, gesture, feel }, null); }
 
 	// someone knocked down: { npcId, name, at, why, region, child, inQuest }
@@ -174,6 +184,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 			R.prop = propFor(s.item?.shape || R.q.item?.shape);
 			if (R.outcome === 'betray') return betray(R);
 			if (R.own) say(R.p, sceneLine('back', n++), 'nod', { joy: 0.4 });
+			else if (R.kids) say(R.p, sceneLine('withKids', n++), 'nod', { joy: 0.3 });
 			// a bag's owner is called back, and waits
 			const ow = R.q.kind === 'bag' && !R.own ? R.q.steps.findLast((x) => x.do === 'deliver')?.at?.who : null;
 			if (ow && ow.active && ow !== R.p && !ow.heldBy) { standStill(ow, () => pos(R.p)); R.still.push(ow); say(R.p, sceneLine('call', n++), 'wave', { surprise: 0.2 }); }
@@ -356,14 +367,30 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		// (the console's forced bag takes anyone standing about, not only those walking by)
 		const can = force ? (p) => adult(p) && !p.engaged && !p.override && !p.held && p.route?.kind !== 'seat' && p.route?.kind !== 'follow' : free;
 		const reach = force ? 40 : B.spot?.kind === 'table' || B.spot?.kind === 'doorstep' ? NOTICE + 2 : NOTICE;
-		const near = people.pool.filter((p) => can(p) && p !== B.owner && !B.seen.has(p) && flat(pos(p), B.at) < reach).sort((a, b) => flat(pos(a), B.at) - flat(pos(b), B.at));
+		const all = everyone();
+		// children and teens who see it say so (they never take it); the grown-ups with them,
+		// or close by, have been told, and are watched
+		for (const k of all) {
+			if (!k.active || !minor(k) || B.seen.has(k) || flat(pos(k), B.at) > NOTICE + 2) continue;
+			B.seen.add(k);
+			if (B.pointed) continue;
+			B.pointed = k;
+			say(k, sceneLine(k.P.dna.teen ? 'teenSee' : 'kidSee', n++), 'point', { surprise: 0.5 });
+			remember(k, 'saw-bag');
+		}
+		const told = B.pointed?.follow;
+		const near = all.filter((p) => can(p) && p !== B.owner && !B.seen.has(p) && (flat(pos(p), B.at) < reach || (p === told && flat(pos(p), B.at) < 16))).sort((a, b) => (b === told) - (a === told) || flat(pos(a), B.at) - flat(pos(b), B.at));
 		for (const p of near) {
 			B.seen.add(p);
 			const d = dispoOf(p.P.dna.seed);
-			const choice = force ? { take: true, outcome: force === 'steal' ? 'betray' : 'done' } : decide(d, B.q);
+			// not in front of the kids: their own, or the ones who pointed it out
+			const kids = withKids(p, all), watched = !!B.pointed && (p === told || flat(pos(p), pos(B.pointed)) < 10);
+			const q = kids || watched ? { ...B.q, tempt: B.q.tempt * (kids ? 0.4 : 0.6) } : B.q;
+			const choice = force ? { take: true, outcome: force === 'steal' ? 'betray' : 'done' } : decide(d, q);
 			if (!choice.take) continue;
 			if (force) { const h = Math.random() * 6.28, st = B.spot && B.spot.kind !== 'sidewalk' ? standAt(B.spot) : B.at; p.M.place?.(st.x + Math.cos(h) * 1.6, pos(p).y, st.z + Math.sin(h) * 1.6, h); }
-			start(B.q, p, d, choice.outcome, { ground: B });
+			const R = start(B.q, p, d, choice.outcome, { ground: B });
+			if (kids && choice.outcome !== 'betray') R.kids = true;
 			B.phase = 'taken';
 			return;
 		}
@@ -443,7 +470,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 			const seen = considered.get(q.id) || new Set();
 			considered.set(q.id, seen);
 			if (seen.size >= 4) continue;
-			const near = people.pool.filter((p) => free(p) && !seen.has(p) && !q.steps.some((s) => s.at?.who === p) && flat(pos(p), T) < 25);
+			const near = everyone().filter((p) => free(p) && !seen.has(p) && !q.steps.some((s) => s.at?.who === p) && flat(pos(p), T) < 25);
 			for (const p of near) {
 				seen.add(p);
 				const d = dispoOf(p.P.dna.seed), ch = decide(d, q);
@@ -621,7 +648,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		};
 	}
 	// what they know, for a conversation (guide.js): what they did or saw, and their money talk
-	const FACT = { returned: 'Lately handed a lost bag back to the person who left it.', 'got-back': 'Left their bag behind earlier and a stranger brought it back; still a little amazed.', helped: 'A stranger did them a favour a little while ago.', robbed: 'Someone walked off with their bag a few minutes ago; upset about it.', 'saw-theft': 'Saw someone walk off with a bag that was not theirs a few minutes ago.', 'saw-return': 'Saw someone hand a lost bag back to its owner a little while ago.' };
+	const FACT = { returned: 'Lately handed a lost bag back to the person who left it.', 'got-back': 'Left their bag behind earlier and a stranger brought it back; still a little amazed.', helped: 'A stranger did them a favour a little while ago.', robbed: 'Someone walked off with their bag a few minutes ago; upset about it.', 'saw-theft': 'Saw someone walk off with a bag that was not theirs a few minutes ago.', 'saw-return': 'Saw someone hand a lost bag back to its owner a little while ago.', 'saw-bag': 'Spotted a bag someone had left behind a little while ago, and said so.' };
 	function factsFor(p) {
 		if (!p?.P?.dna) return [];
 		const out = [], m = memoryOf(p.P.dna.seed);

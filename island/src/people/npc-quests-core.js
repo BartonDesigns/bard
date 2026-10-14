@@ -186,5 +186,9 @@ const L = {
 	back: ['There it is. Phew.', 'Oh thank goodness, still here.'],
 	deliver: ['Here you go. All done.', 'This is for you.', 'Delivered, as promised.'],
 	fixed: ['Try it now.', 'That should do it.'],
+	// a child or a teen who spots a bag left alone (they say so; they never take it)
+	kidSee: ['Look! Somebody forgot their bag!', 'Someone left their bag on there!', 'Whose bag is that?'],
+	teenSee: ['Yo, somebody left their bag here.', 'Someone forgot their bag. Should we tell somebody?', 'Is that someone\'s bag? They just left it.'],
+	withKids: ['Come on, we are giving this back.', 'Stay close. We need to catch them up.', 'Good spotting. Let us take it back to them.'],
 };
 export function sceneLine(event, n = 0) { return pick(L[event] || [''], n); }
