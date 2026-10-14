@@ -57,6 +57,23 @@ function count() {
 		};
 		const settle = +(process.env.SETTLE || 20000);
 		await page.waitForTimeout(settle);
+		// the audio stepped by hand (no drawing, so a slow renderer does not matter): standing, flying
+		// with the booster stepped, landed, then standing again; nothing new may pile up at the end
+		report.ticks = await page.evaluate(() => {
+			const W = window.Crysis.world(), P = W.player.state, A = window.Crysis.audio, made = () => window.NODES().made, out = {};
+			const run = (n) => { for (let i = 0; i < n; i++) A.tick(1 / 30, {}); };
+			run(600); out.standing = made();
+			P.flying = true; P.locked = false;
+			for (let i = 0; i < 300; i++) { P.vel.set(10 + i, 0, 0); if (i === 100) P.boost = 3; if (i === 200) P.boost = 6; A.tick(1 / 30, {}); }
+			out.flying = made(); out.thrusters = { ...A().thrusters };
+			P.flying = false; P.vel.set(0, 0, 0); P.boost = 1;
+			run(300); out.landed = made();
+			run(600); out.after = made();
+			return out;
+		});
+		report.checks.steady = report.ticks.after - report.ticks.landed <= 4;
+		report.checks.thrusters = report.ticks.thrusters.on && report.ticks.thrusters.kicks >= 2;
+		console.log('ticks', JSON.stringify(report.ticks));
 		// the frame rate (a software renderer can be very slow): every wait below is stretched to suit
 		report.fps = await page.evaluate(() => new Promise((done) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else done(n / 3); }; requestAnimationFrame(f); }));
 		const K = Math.max(1, Math.min(8, 20 / Math.max(0.5, report.fps)));
