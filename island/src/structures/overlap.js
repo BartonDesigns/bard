@@ -202,7 +202,6 @@ function segsHit(b, segs, margin) {
 //   same(a, b) two parts of one building (meant to overlap)
 //   solid(b)   a building at all (city.js lists hold lawns, fences and awnings too)
 //   keep(b)    never moved nor dropped (the surveyed buildings, when the grid's give way to them)
-//   composite  boxes mostly inside another are a part of it (a crown, a storey over a wing)
 //   margin     how far clear of a carriageway
 //   pen        how deep an overlap is let be (city.js trims the shallow ones as drawn)
 // Removed boxes get b.gone = true (the caller filters); trimmed ones change in place, their
@@ -216,7 +215,7 @@ export function resolve(boxes, opts = {}) {
 // the same, a generator that yields every few thousand buildings (so a big region can be
 // settled across frames while it loads)
 export function* resolveSteps(boxes, opts = {}) {
-	const { roads = [], landmark = null, same = sameGroup, solid = () => true, keep = () => false, composite = false, margin = 0.3, pen: minPen = TOL } = opts;
+	const { roads = [], landmark = null, same = sameGroup, solid = () => true, keep = () => false, margin = 0.3, pen: minPen = TOL } = opts;
 	const t0 = Date.now();
 	const before = opts.count === false ? null : countOverlaps(boxes, { roads, landmark, same, solid, min: Math.max(0.1, minPen) });
 	let trims = 0, drops = 0;
@@ -276,7 +275,7 @@ export function* resolveSteps(boxes, opts = {}) {
 			// (one mostly inside the other: a crown or a tower on its podium if it stands taller,
 			// part of it; if not, it is hidden inside anyway and goes)
 			if (inside(small, big) > 0.85) {
-				if (!keep(big) && (composite || tallerOf(small, big))) return;
+				if (!keep(big) && tallerOf(small, big)) return;
 				drop(small); why.inside++; return;
 			}
 			let t = leastTrim(small, (q) => penetration(big, q) <= TOL);
@@ -328,9 +327,9 @@ export function routeRoads(routes, toWorld, covered = () => false, width = 34, c
 export function resolveLots(list, { roads = [], landmark = null, near = null, R = 1e9, count = true } = {}) {
 	const solid = (o) => isBuilding(o) && (!near || (Math.abs(o.x - near[0]) < R && Math.abs(o.z - near[1]) < R));
 	// (the surveyed were settled among themselves as their region loaded; the grid's lots carry no
-	// group, and a crown on a tower stands inside its own box: composite)
+	// group; a crown standing taller inside its tower's box is part of it)
 	const same = (a, b) => !!(a.src && b.src);
-	const res = resolve(list, { roads, landmark, solid, same, keep: (o) => !!o.src, composite: true, margin: 1, pen: 0.6, count });
+	const res = resolve(list, { roads, landmark, solid, same, keep: (o) => !!o.src, margin: 1, pen: 0.6, count });
 	let n = 0;
 	for (const o of list) if (!o.gone) list[n++] = o;
 	list.length = n;

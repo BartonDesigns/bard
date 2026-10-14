@@ -27,7 +27,7 @@ export function settleLots(list, x, z) {
 	// the alleys behind the grid's shops and towers: each block's middle is its paved yard
 	// (city.js paves the downtown and main-street blocks), the backs face it
 	const yards = list.filter((o) => Math.floor(o.kind) === 4 && o.w * o.d > 1500 && o.h < 1.5);
-	const block = (b) => { for (const q of yards) { const c = Math.cos(q.a), s = Math.sin(q.a), dx = b.x - q.x, dz = b.z - q.z; if (Math.abs(c * dx + s * dz) < q.w / 2 && Math.abs(-s * dx + c * dz) < q.d / 2) return [q.x, q.z]; } return null; };
+	const block = (b) => { for (const q of yards) { const c = Math.cos(q.a), s = Math.sin(q.a), dx = b.x - q.x, dz = b.z - q.z; if (Math.abs(c * dx + s * dz) < q.w / 2 && Math.abs(-s * dx + c * dz) < q.d / 2) return [q.x, q.z, q.w / 2, q.d / 2, q.a]; } return null; };
 	const built = list.filter((o) => isBuilding(o) && Math.abs(o.x - x) < 900 && Math.abs(o.z - z) < 900);
 	grid.alleys = planAlleys(built, null, { block, seed: 7, only: (o) => !o.src });
 	grid.version++;

@@ -19,17 +19,19 @@ const LOT_KINDS = new Set([2, 3, 6, 9]);
 export const shopLike = (b) => (b.src ? MAP_KINDS.has(b.src.kind) : b.wallH !== undefined ? MAP_KINDS.has(b.kind) : LOT_KINDS.has(Math.floor(b.kind))) && b.w > 4 && b.d > 4;
 
 // the nearest drive road's side of box b: its outward normal in the box's frame ([nx, nz]
-// world), or on the grid the side away from its block's middle (block(b): [x, z] or null),
-// or its own front (local +z)
+// world), or on the grid the side toward its block's nearest edge (block(b): the block's
+// [x, z, half width, half depth, yaw] or null), or its own front (local +z)
 function frontOf(b, near, block) {
 	const c = Math.cos(b.a), s = Math.sin(b.a);
 	const sides = [[-s, c, b.d / 2], [s, -c, b.d / 2], [c, s, b.w / 2], [-c, -s, b.w / 2]];
 	if (!near) {
 		const m = block?.(b);
 		if (!m) return sides[0];
-		const dx = b.x - m[0], dz = b.z - m[1];
+		// (the block's edge it is nearest, in the block's frame: that way is its street)
+		const bc = Math.cos(m[4] || 0), bs = Math.sin(m[4] || 0), dx = b.x - m[0], dz = b.z - m[1], lx = bc * dx + bs * dz, lz = -bs * dx + bc * dz;
+		const [ex, ez] = Math.abs(lx) / m[2] > Math.abs(lz) / m[3] ? [Math.sign(lx) * bc, Math.sign(lx) * bs] : [-Math.sign(lz) * bs, Math.sign(lz) * bc];
 		let k = 0, best = -1e9;
-		sides.forEach(([nx, nz], j) => { const v = nx * dx + nz * dz; if (v > best) { best = v; k = j; } });
+		sides.forEach(([nx, nz], j) => { const v = nx * ex + nz * ez; if (v > best) { best = v; k = j; } });
 		return sides[k];
 	}
 	let best = null, bd = 1e9;
