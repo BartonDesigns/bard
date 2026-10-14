@@ -12,11 +12,15 @@ export function pauseWorkplaceRoutine(p) {
 	if(p.workBubble)p.workBubble.visible=false;
 	if(p.workRoutine)p.workRoutine.interrupted=true;
 }
+// where other workplaces' people go between spells at their posts, by role (services/roles.js:
+// a nurse to a patient check, an officer to the evidence room): role -> (trip number) -> roles
+export const WORK_TRIPS={};
 function destinations(r) {
 	const role=r.home.work.role,slots=r.home.navigation.spots;
 	if(r.target!==r.home)return [r.home];
 	let roles;
-	if(role==='shopper')roles=['browse','refreshment'];
+	if(WORK_TRIPS[role])roles=WORK_TRIPS[role](r.trip);
+	else if(role==='shopper')roles=['browse','refreshment'];
 	else if(role==='vendor')roles=['stock check'];
 	else roles=r.trip%2?['refreshment','break']:['meeting colleague','refreshment','break'];
 	return slots.filter(s=>s!==r.home&&!s.taken&&roles.includes(s.work?.role)&&

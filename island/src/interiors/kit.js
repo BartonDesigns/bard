@@ -435,3 +435,9 @@ function crown(g, it) {
 }
 // what a solid item stops you walking through (rugs, art, moulding, lights: nothing)
 export const SOFT = new Set(['rug', 'bathMat', 'art', 'ceilingLight', 'toys', 'crown']);
+// more drawings from another module (services/kit.js: the stations' and the hospital's
+// things), each in its own frame like those above; soft: the names you walk through
+export function addKit(types, soft = []) {
+	Object.assign(EXTRA, types);
+	for (const t of soft) SOFT.add(t);
+}

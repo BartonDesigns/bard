@@ -21,6 +21,7 @@ import { prepare, buildLevel } from './build.js';
 import { houseMaterials, lin } from '../bay/housekit.js';
 import { STYLE, sfDistrict } from '../bay/styles.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
+import { createWorkplaceNavigation } from '../people/workplace-navigation.js';
 
 const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'restaurant'], mission: ['cafe', 'restaurant', 'laundromat', 'grocer', 'bar', 'florist'], northbeach: ['cafe', 'restaurant', 'bar', 'books'], sunset: ['restaurant', 'cafe', 'laundromat', 'grocer'], any: ['cafe', 'grocer', 'books', 'restaurant', 'laundromat', 'bar', 'florist', 'boutique'] };
 // the buildings anyone may walk into (the rest are homes, or shut)
@@ -189,7 +190,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		for (let k = 0; k < B.P.levels.length; k++) {
 			const full = want(k), have = B.levels[k];
 			if (have && have.full === full) continue;
-			if (full && !B.P.rooms.every((r) => r.k !== k || r.furnished)) { furnish(B.P, k); B.spots = null; yield; }
+			if (full && !B.P.rooms.every((r) => r.k !== k || r.furnished)) { furnish(B.P, k); B.spots = null; B.nav = null; yield; }
 			const Lb = yield* buildLevel(B.P, B.M || M, B.C, k, full, night);
 			if (have) { B.root.remove(have.root); disposeTree(have.root); }
 			B.levels[k] = Lb;
@@ -426,11 +427,32 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		const k = B.use === 'shop' && h.level === 0 ? crowd(ZONE.retail, hours).k : home ? (hours > 18 || hours < 8 ? 0.75 : 0.35) : B.use === 'school' ? (hours > 8 && hours < 15.5 ? 0.9 : 0.02) : B.use === 'office' ? crowd(ZONE.office, hours).k : B.use === 'store' ? crowd(ZONE.retail, hours).k : B.use === 'site' ? (hours > (P.hours?.[0] ?? 9.5) && hours < (P.hours?.[1] ?? 16.5) ? 0.6 : 0) : 0.2;
 		if (!B.spots) {
 			const F = frame(B.o);
-			B.spots = P.seats.map((s) => { const [wx, wz] = F.w(s.x, s.z), wfx = F.ca * s.fx - F.sa * s.fz, wfz = F.sa * s.fx + F.ca * s.fz; return { x: wx, z: wz, y: P.f0 + s.y, ly: s.y, h: s.h, sit: s.sit, heading: Math.atan2(wfx, wfz), taken: false, table: !!s.table }; });
+			B.spots = P.seats.map((s) => { const [wx, wz] = F.w(s.x, s.z), wfx = F.ca * s.fx - F.sa * s.fz, wfz = F.sa * s.fx + F.ca * s.fz; return { x: wx, z: wz, y: P.f0 + s.y, ly: s.y, h: s.h, sit: s.sit, heading: Math.atan2(wfx, wfz), taken: false, table: !!s.table, work: s.work }; });
 		}
 		const seats = B.spots.filter((s) => Math.abs(s.ly - lvY) < 0.5);
+		// a workplace's seats (a ward, a station's desks): their people walk their rounds on the
+		// floor's own paths (people/workplace-routine.js), and its roster says who is on now
+		if (seats.some((s) => s.work)) navFor(B, h.level, seats);
+		if (P.roster) {
+			const list = P.roster(hours, seats, h.level) || [];
+			const m = Math.min(isPhone ? 7 : 12, list.length);
+			return m ? { n: m, kids: 0, zone: P.zone, key: B.key + ':' + h.level, areas: [{ w: 1, seats: list }] } : null;
+		}
 		const n = Math.min(isPhone ? 6 : 10, Math.round(seats.length * k * 0.5));
 		return n ? { n, kids: home ? 0.3 * kidsAbout(hours) : B.use === 'school' ? 0.8 : 0.1 * kidsAbout(hours), areas: [{ w: 1, seats }] } : null;
+	}
+	// one route grid per furnished level, from its solid boxes, in the building's frame
+	function navFor(B, k, seats) {
+		B.nav = B.nav || [];
+		if (B.nav[k] || !B.levels[k]?.full) return;
+		const P = B.P, L = P.levels[k], F = frame(B.o);
+		const solids = B.levels[k].col.filter((c) => c[5] > L.y + 0.2 && c[4] < L.y + 2).map((c) => [c[0], c[1], c[2], c[3], c[4] - L.y, c[5] - L.y]);
+		const nav = createWorkplaceNavigation({ width: P.W, depth: P.D, solids, holes: L.holes.map((q) => ({ x0: q[0], z0: q[1], x1: q[2], z1: q[3] })),
+			toLocal: (q) => { const [x, z] = F.l(q.x, q.z); return { x, z }; },
+			toWorld: (q) => { const [x, z] = F.w(q.x, q.z); return { x, z }; } });
+		nav.spots = seats;
+		for (const st of seats) if (st.work) st.navigation = nav;
+		B.nav[k] = nav;
 	}
 	function info() {
 		let verts = 0, bytes = 0, meshes = 0, levels = 0;
