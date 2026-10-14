@@ -46,6 +46,16 @@ const KNOWN_GOOD = ['Hey, you are the one who helps people out around here, righ
 const KNOWN_HERO = ['Hey! It is you! Everybody here knows your name.', 'Thank you. Seriously. For all of it.', 'Look who it is. Our local legend.'];
 const KNOWN_BAD = ['Keep walking.', 'We know what you did.', 'Don\'t start anything here.', 'Stay away from my family.'];
 const WANTED = ['Isn\'t that the one the patrol is after?', 'I am not getting involved.'];
+// what they did or saw lately, among themselves (self.deed, people/npc-quests.js)
+const DEED = {
+	'got-back': ['Somebody handed my bag back. Can you believe it?', 'I left my bag on the sidewalk and a total stranger brought it back to me.', 'There are still decent people around. Someone just returned my bag.'],
+	returned: ['Someone left their bag back there. I took it back to them.', 'Just ran a bag back to the person who left it. They were so relieved.'],
+	helped: ['A stranger just did me a real favour.', 'Somebody helped me out just now, for nothing. Nice, right?'],
+	robbed: ['Someone walked off with my bag. Right in front of me.', 'My bag is gone. Somebody just took it.'],
+	'saw-theft': ['Did you see that? Somebody just walked off with a bag that was not theirs.', 'Keep an eye on your things. I just saw someone swipe a bag.'],
+	'saw-return': ['Did you see that? Someone handed a lost bag right back.', 'That was nice to see. Someone gave a bag back to its owner.'],
+	stole: ['What? I am just walking.', 'Mind your own business.'],
+};
 
 // fear: the same order of facts as contextualOpening
 function afraid(c, n) {
@@ -57,7 +67,7 @@ function afraid(c, n) {
 	return null;
 }
 
-// ctx: { seed, n, self:{ child, outgoing, warmth, mood, role, phone, work, vendor }, you:{ speed, vehicle,
+// ctx: { seed, n, self:{ child, outgoing, warmth, mood, role, phone, work, vendor, deed, money }, you:{ speed, vehicle,
 //   aware (awarenessContext) }, scene:{ hour, rain, storm } }. Returns null for a passer-by who
 // keeps to themselves, or { text, gesture, feel }; text may be '' for a nod alone.
 export function remarkFor(ctx = {}) {
@@ -72,6 +82,8 @@ export function remarkFor(ctx = {}) {
 	if (S.role === 'jog') return { text: pick(JOGGER, n), gesture: null, feel: { joy: 0.2 } };
 	if (S.phone) return { text: pick(ON_PHONE, n), gesture: 'explain', feel: {} };
 	if (E.storm > 0.5) return { text: pick(STORM, n), gesture: 'point', feel: { surprise: 0.6 } };
+	if (S.money && ((n * 3266489917) >>> 0) % 100 < 12) return { text: S.money, gesture: 'explain', feel: {} };
+	if (S.deed && DEED[S.deed] && ((n * 2246822519) >>> 0) % 100 < 70) return { text: pick(DEED[S.deed], n), gesture: S.deed === 'stole' ? 'shrug' : S.deed === 'robbed' ? 'shake' : 'explain', feel: S.deed === 'robbed' ? { sad: 0.6, anger: 0.4 } : S.deed === 'stole' ? {} : { joy: 0.5, surprise: 0.3 } };
 	// your name, good or bad, has got around: some say so
 	const K = Y.standing || {}, rk = ((n * 40503) >>> 0) % 100 / 100;
 	if (K.bounty >= 1 && rk < 0.35) return { text: pick(WANTED, n), gesture: 'shake', feel: { surprise: 0.4 } };
