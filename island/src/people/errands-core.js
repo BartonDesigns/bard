@@ -6,7 +6,11 @@
 //   catch  a friend just walked off without something: run after them and hand it over
 //   pass   someone waiting a little way off should have this: take it to them
 //   pet    their dog slipped its lead and is lost nearby: find it, win it over, lead it home
-// A wallet found can be kept instead of returned; the world notices which.
+//   groceries   their bags to their car, a little way off; they walk behind you
+//   jumpstart   a flat battery: stand by the car while they try it with your help
+//   directions  they are lost: point them the right way
+// A wallet found can be kept instead of returned, and groceries walked off with; the world
+// notices which. (Someone who has fallen is helped up where they are: errands.js helped.)
 
 const pick = (xs, n) => xs[Math.abs(Math.trunc(n)) % xs.length];
 
@@ -20,6 +24,8 @@ export const ITEMS = Object.freeze({
 	scarf: { name: 'scarf', the: 'the scarf', mine: 'my scarf', shape: 'scarf' },
 });
 const LOST = ['keys', 'phone', 'wallet', 'glasses', 'earbud', 'ticket', 'scarf'];
+// where someone lost might be trying to get to (never a business by name)
+export const DESTS = ['the library', 'the post office', 'the bus station', 'the park', 'the community centre', 'the hospital', 'the farmers market', 'the high school'];
 const CARRY = [
 	{ name: 'bag', the: 'the bag', theirs: 'their bag', shape: 'bag' },
 	{ name: 'water bottle', the: 'the water bottle', theirs: 'their water bottle', shape: 'bottle' },
@@ -47,9 +53,9 @@ export function relativeDir(dx, dz, fx, fz) {
 // what someone asks: kind and words. who: { first, seed }; n: a counter for variety.
 // options: { friend: { first } } needed for catch and pass; kinds allowed.
 // pet: { name, she, look } for a lost dog (the runtime has found it somewhere to be)
-export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there', car = false, pet = null } = {}) {
+export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], friend = null, dir = 'over there', car = false, pet = null, dest = null } = {}) {
 	const s = (who.seed | 0) + n;
-	const can = kinds.filter((k) => k === 'lost' || (k === 'repair' ? car : k === 'pet' ? pet : friend));
+	const can = kinds.filter((k) => k === 'lost' || k === 'directions' || (k === 'repair' || k === 'jumpstart' || k === 'groceries' ? car : k === 'pet' ? pet : friend));
 	if (!can.length) return null;
 	const kind = pick(can, s * 7 + 3);
 	if (kind === 'lost') {
@@ -79,6 +85,31 @@ export function offerFor({ who = {}, n = 0, kinds = ['lost', 'catch', 'pass'], f
 		], s);
 		return { kind, item: { name: 'car', the: 'the car', shape: null }, ask, title: `Fix ${who.first || 'their'}${who.first ? "'s" : ''} car` };
 	}
+	if (kind === 'groceries') {
+		const ask = pick([
+			`Sorry, could you give me a hand? These bags are heavier than I thought, and my car is just ${dir}.`,
+			`Would you mind helping me get these to my car? It is ${dir}. I will be right behind you.`,
+			`I bought far too much. Could you carry some of this to my car for me? It is just ${dir}.`,
+		], s);
+		return { kind, item: { name: 'groceries', the: 'the groceries', shape: 'bag' }, ask, title: `Help ${who.first || 'them'} carry the groceries` };
+	}
+	if (kind === 'jumpstart') {
+		const ask = pick([
+			`Excuse me, my battery is dead. I have cables. Could you stand by the car while I try it?`,
+			`Sorry to ask, but my car will not start. I think it is the battery. Could you help me jump it? It only takes a minute.`,
+			`Do you have a minute? The battery died on me. If you hold the cables steady while I turn the key, I think it will go.`,
+		], s);
+		return { kind, item: { name: 'car', the: 'the car', shape: null }, ask, title: `Jump-start ${who.first || 'their'}${who.first ? "'s" : ''} car` };
+	}
+	if (kind === 'directions') {
+		const to = dest || pick(DESTS, s * 5 + 1);
+		const ask = pick([
+			`Excuse me, sorry. Do you know the way to ${to}? My phone just died.`,
+			`Hi, I think I am lost. Which way is ${to}?`,
+			`Sorry to bother you. I am looking for ${to}. Am I even close?`,
+		], s);
+		return { kind, item: { name: to, the: to, shape: null }, dest: to, ask, title: `Show ${who.first || 'them'} the way to ${to}` };
+	}
 	if (kind === 'catch') {
 		const it = pick(CARRY, s * 11 + 5);
 		const ask = pick([
@@ -102,7 +133,10 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 		accept: kind === 'lost'
 			? [`Thank you! It should be somewhere over there.`, `You are a lifesaver. I will wait right here.`, `Thanks so much. I will keep looking on this side.`]
 			: kind === 'pet' ? [`Thank you! ${She} is scared, so go gently. Walk, do not run at ${him}.`, `Oh, thank you. ${She} comes to people who are calm with ${him}.`]
-				: kind === 'catch' ? [`Thank you! Quick, before they are gone!`, `Go, go! Thank you!`] : [`Thank you so much. Tell them it is from me.`, `You are the best. They are expecting it.`],
+				: kind === 'catch' ? [`Thank you! Quick, before they are gone!`, `Go, go! Thank you!`]
+					: kind === 'groceries' ? [`Thank you! Lead the way, I will be right behind you.`, `Oh, bless you. It is the car just there.`]
+						: kind === 'jumpstart' ? [`Thank you! Just stand by the car while I try it.`, `You are a lifesaver. This will only take a second.`]
+							: kind === 'directions' ? [`Oh, thank you.`, `Thanks, I am completely lost.`] : [`Thank you so much. Tell them it is from me.`, `You are the best. They are expecting it.`],
 		reunited: [`${dog}! Oh, come here, you silly thing! Thank you, thank you so much.`, `There you are! I was so worried. Thank you for bringing ${him} back to me.`, `${dog}! Good ${girl}! I cannot thank you enough. Please, take this.`],
 		found: [`Found ${item.the}.`],
 		returned: [`My ${item.name}! Oh, thank you. Here, take this, please.`, `You found ${item.id === 'keys' || item.id === 'glasses' ? 'them' : 'it'}! I owe you one. Here.`, `Thank you, really. Let me at least give you something for your trouble.`],
@@ -112,6 +146,10 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 		snatched: item.name && item.name !== 'bag' ? [`Hey! Stop! That is my ${item.name}!`, `Thief! Somebody stop them!`] : [`Hey! Stop! That is my bag!`, `Thief! Somebody stop them!`, `No! My bag! Stop them, please!`],
 		dropped: [`Okay, okay! Take it!`, `Fine! Here! Just let me go!`, `Alright! I am dropping it!`],
 		fixed: [`It started! You are a genius. Here, please take this.`, `Listen to that engine! Thank you, honestly. Let me give you something.`, `It runs! I was going to be stuck here all day. Thank you.`],
+		jumped: [`It started! Oh, thank you. Here, for your trouble.`, `There it goes. You saved my afternoon. Please, take this.`, `Listen to that. Thank you, really. I owe you one.`],
+		carried: [`Just here, thanks. You are very kind. Here, take this.`, `Thank you so much. My arms were about to fall off. Let me give you something.`, `That is the car. Thank you, honestly. Here.`],
+		told: [`Oh, that way? Thank you. I would have walked in circles all day.`, `Thanks! I was completely turned around.`, `That makes sense now. Thank you so much.`],
+		helpedUp: [`Thank you. I think I am alright, just embarrassed.`, `Oof. Thanks for stopping. Not many people do.`, `Thank you. My ankle just went. I will be fine.`],
 		escaped: [`They are gone. Thank you for trying.`, `Too late. Thanks for running after them, though.`],
 		recovered: [`My ${item.name || 'bag'}! Everything is still in it. Thank you, really. Please, take this.`, `You got it back! I cannot believe it. Here, for you.`],
 		kept: [],
@@ -121,7 +159,9 @@ export function lineFor(event, { kind, item = {}, friend = '', n = 0 } = {}) {
 
 // credits for a favour, by kind and how far it took you (never a fortune: these are favours)
 export function rewardFor(kind, metres = 0) {
-	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'pet' ? 60 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : 30;
+	// (pointing the way and helping someone up are not paid: people do not, for those)
+	if (kind === 'directions' || kind === 'fall') return 0;
+	const base = kind === 'snatch' ? 80 : kind === 'repair' ? 70 : kind === 'pet' ? 60 : kind === 'jumpstart' ? 50 : kind === 'lost' ? 45 : kind === 'catch' ? 35 : kind === 'groceries' ? 25 : 30;
 	return Math.round(Math.min(140, base + Math.max(0, metres) * (kind === 'catch' ? 0.45 : kind === 'pet' ? 0.35 : 0.3)) / 5) * 5;
 }
 
@@ -134,7 +174,10 @@ export function step(E, ev) {
 	if (!E || E.stage === 'done' || E.stage === 'failed' || E.stage === 'kept') return { E, out: null };
 	const at = (stage, out = null) => ({ E: { ...E, stage }, out });
 	switch (ev) {
-		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' || E.kind === 'pet' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : 'carry', { say: 'accept' }) : { E, out: null };
+		case 'accept': return E.stage === 'offered' ? at(E.kind === 'lost' || E.kind === 'pet' ? 'search' : E.kind === 'catch' ? 'chase' : E.kind === 'repair' ? 'fix' : E.kind === 'groceries' ? 'haul' : E.kind === 'jumpstart' ? 'jump' : E.kind === 'directions' ? 'tell' : 'carry', { say: 'accept' }) : { E, out: null };
+		// a flat battery: you stood by while it turned over; the way pointed out
+		case 'jumped': return E.stage === 'jump' ? at('done', { done: true, say: 'jumped' }) : { E, out: null };
+		case 'told': return E.stage === 'tell' ? at('done', { done: true, say: 'told' }) : { E, out: null };
 		// a car that would not start: a repair roll used beside it
 		case 'fixed': return E.stage === 'fix' ? at('done', { done: true, say: 'fixed' }) : { E, out: null };
 		// a bag snatched: catch the thief, they drop it, pick it up, give it back
@@ -150,10 +193,12 @@ export function step(E, ev) {
 			if (E.stage === 'lead') return at('done', { done: true, say: 'reunited' });
 			if (E.stage === 'chase') return at('done', { done: true, say: 'caught' });
 			if (E.stage === 'carry') return at('done', { done: true, say: 'passed' });
+			if (E.stage === 'haul') return at('done', { done: true, say: 'carried' });
 			return { E, out: null };
 		// walked off: with a found wallet in your pocket, you kept it; otherwise it lapses
 		// (a bag got back off a thief and carried away is kept too: stolen goods, not a find)
-		case 'away': return E.stage === 'bring' && (E.item?.cash || E.kind === 'snatch') ? at('kept', { kept: true, cash: E.item?.cash || 0 }) : at('failed', { failed: true });
+		// (and groceries carried off down the street, not to the car, are kept too)
+		case 'away': return (E.stage === 'bring' && (E.item?.cash || E.kind === 'snatch')) || E.stage === 'haul' ? at('kept', { kept: true, cash: E.item?.cash || 0 }) : at('failed', { failed: true });
 		case 'timeout': case 'lost-them': return at('failed', { failed: true, say: E.stage === 'offered' ? null : 'gaveUp' });
 		default: return { E, out: null };
 	}

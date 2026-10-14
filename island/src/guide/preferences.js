@@ -24,3 +24,12 @@ export function chooseGuideModel(saved, { cloudURL = '', phone = false, webGPU =
 	if (offline || (choice.kind === 'cloud' && !cloudURL) || (choice.kind === 'webllm' && (phone || !webGPU || crashed))) choice.kind = 'none';
 	return choice;
 }
+
+// Voices: best (a clip, the local model once loaded, or the device's voice, whichever is to
+// hand), device (the device's voice only) or local (the local model on any device, phones
+// too). The old setting had local and device; its local was what best is now.
+export const VOICE_MODES = Object.freeze([['best', 'Best available'], ['device', 'Device only'], ['local', 'Local always']]);
+export function voiceMode(saved, legacy = null) {
+	if (VOICE_MODES.some(([v]) => v === saved)) return saved;
+	return legacy === 'device' ? 'device' : 'best';
+}

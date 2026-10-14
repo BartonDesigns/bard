@@ -24,6 +24,7 @@ import { createGlobeData } from './globedata.js';
 import { createGlobeHeight, anchorUniforms, GLOBE_U } from './globeheight.js';
 import { createGlobeTerrain, SEAM_A, SEAM_B } from './globeterrain.js';
 import { createGlobeTrees } from './globetrees.js';
+import { inClearing, clearingVersion } from '../sportsfields.js';
 import { createGlobeTowns } from './globetowns.js';
 import { createGlobeRoads, localRoadTownId } from './globeroads.js';
 import { createGlobeLanes } from './globelanes.js';
@@ -96,7 +97,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 	const inBayWild = (x, z) => { if (!F.bay) return false; const ll = toLL(x, z); return bayKm(ll.lat, ll.lon) < BAY_WILD_KM + 10; };
 	// (the local roads come after the places they join: until then nothing is on them)
 	let lanes = null;
-	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), waterLevel: (x, z) => world()?.water?.waterAt(x, z) ?? lakeLevel(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !lanes?.onRoad(x, z, 5) && !regional.settlements.vegetationBlocked(x, z, 8) });
+	const trees = createGlobeTrees({ scene, shared, data, heightAt: (x, z) => bay.heightAt(x, z), waterLevel: (x, z) => world()?.water?.waterAt(x, z) ?? lakeLevel(x, z), isPhone, allowed: (x, z) => !inBayWild(x, z) && bayOut(x, z) > SEAM_A && !roads.onRoad(x, z, 8) && !lanes?.onRoad(x, z, 5) && !regional.settlements.vegetationBlocked(x, z, 8) && !inClearing(x, z, 6) });
 	// a city the Bay already has: its towns' map, a mapped region, or one of its generated towns
 	// (a generated town where the atlas has a real one gives way to it)
 	function bayHas(x, z, r) {
@@ -270,7 +271,7 @@ export function createGlobe({ scene, shared, bay, island, camera, world, directo
 		const steady = data.win.ready && !data.win.moving;
 		const tk = Math.min(1, 150 / (Math.hypot(lead.x, lead.z) || 1));
 		treeAt.position.set(x + lead.x * tk, 0, z + lead.z * tk);
-		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version());
+		trees.update(treeAt, veg, steady && (!F.bay || out > SEAM_A - 3000), data.win.version + ':' + roads.version() + ':' + lanes.version() + ':' + regional.settlements.version() + ':' + clearingVersion());
 		if (steady) towns.update(cam);
 		if (data.win.ready) regional.update(dt, cam, { night, out: !F.bay || out > SEAM_A - 3000, wind: shared.uWindDir ? { x: shared.uWindDir.value.x * (0.3 + (shared.uWind?.value || 0.5)), y: shared.uWindDir.value.y * (0.3 + (shared.uWind?.value || 0.5)) } : null });
 		// the roads: a source for the real city (drive.js, the traffic, the grading find them there)
