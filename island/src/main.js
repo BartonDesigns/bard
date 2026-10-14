@@ -46,6 +46,9 @@ import { createBayArea, bayUniforms } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
+import { requestsNear, takeRequest, completeRequest } from './economy/requests.js';
+import { payroll } from './economy/payroll.js';
+import { bank } from './economy/bank.js';
 import { createHouses } from './bay/houses.js';
 import { createFamilyLife } from './people/family-life.js';
 import { createStreetLife } from './bay/streetlife.js';
@@ -1105,6 +1108,8 @@ export function createIslandWorld() {
 			// Crysis: the towns beyond the survey, grown street by street as you near them
 			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
 			world.city = createCity(shared, scene, bayNear, world.real);
+			// (the businesses take their food and words from where on Earth they are)
+			world.city.economy.setLocator((x, z) => globeLL(x, z));
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z), globe: () => world?.globe });
 			// the real houses close by, built whole with their rooms
@@ -2118,6 +2123,34 @@ if (typeof window !== 'undefined') {
 		// fares while you drive: Crysis.fares() the current one and your totals; .hail() someone ahead hails now
 		// today's goals: Crysis.daily()
 		daily: () => HOOKS.daily?.list(),
+		// the businesses (economy/): Crysis.economy() counts them and the share of the buildings round
+		// you that are one; .near(x, z, r) each one's name, kind and door (round you with no x, z);
+		// .find('pasta') the nearest of a kind or a name; .requests(r) what the businesses round you ask
+		// (.take(id), .complete(id, outcome) as the player); .payroll() wages, top earners, balances
+		economy: Object.assign((r = 600) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; if (!p || !W.city?.economyInfo) return 'no city here'; const L = payroll.ledger(3); return { ...W.city.economyInfo(p.x, p.z, r), requests: requestsNear(p.x, p.z, 400).length, payroll: { paid: L.paid, wages: L.wages, employed: L.employed }, topEarners: L.topEarners, balances: L.best }; }, {
+			requests: (r = 400) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return p ? requestsNear(p.x, p.z, r) : []; },
+			take: (id) => takeRequest(id, 'player'),
+			complete: (id, outcome = 'done') => completeRequest(id, 'player', outcome),
+			payroll: (n = 5) => payroll.ledger(n),
+		}),
+		// the bank (economy/bank.js): Crysis.bank(id) an account ('player', 'hh:<household>', 'npc:<seed>',
+		// or the nearest person with no id); .talk(id) what they might say about money; .daily(id, days);
+		// .history(id); .sync() to the ledger Worker; .panel(id) a chart of it (with ?admin in the address)
+		bank: Object.assign((id) => { if (id == null) { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, q = p && W?.people?.pool?.filter((a) => a.active).sort((a, b) => a.M.S.pos.distanceTo(p) - b.M.S.pos.distanceTo(p))[0]; return q ? bank.account(q) : { ...bank.info(), player: bank.account('player') }; } return bank.account(id); }, {
+			talk: (id) => bank.moneyTalk(id), daily: (id, n = 30) => bank.daily(id, n), history: (id) => bank.history(id), sync: () => bank.sync(), info: () => bank.info(),
+			panel: (id = 'player') => {
+				if (!/[?&]admin\b/.test(location.search)) return 'Add ?admin to the address first.';
+				const d = bank.daily(id, 90), v = d.map((q) => q.balance), lo = Math.min(...v, 0), hi = Math.max(...v, 1), W = 560, H = 160;
+				const pts = d.map((q, i) => `${(10 + i * (W - 20) / Math.max(1, d.length - 1)).toFixed(1)},${(H - 10 - (q.balance - lo) * (H - 20) / Math.max(1, hi - lo)).toFixed(1)}`).join(' ');
+				let el = document.getElementById('bank-panel');
+				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px system-ui;max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
+				const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+				el.innerHTML = `<b>${esc(bank.household(id))}</b> ${bank.balance(bank.household(id))} credits<br><svg width="${W}" height="${H}" style="max-width:100%"><polyline fill="none" stroke="#7fb4ff" stroke-width="2" points="${pts}"/></svg><br>` + bank.history(id).slice(0, 8).map((t) => `day ${t.day} ${esc(t.kind)} ${t.amount} ${esc(t.counterparty)}`).join('<br>');
+				return 'shown (click it to close)';
+			},
+			near: (x, z, r = 300) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; if (x == null && p) { x = p.x; z = p.z; } return W?.city?.economy?.near(x, z, r) || []; },
+			find: (what) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; const k = String(what || '').toLowerCase(); return (p && W?.city?.economy?.near(p.x, p.z, 3000).find((E) => E.type === k || E.name.toLowerCase().includes(k) || E.label.includes(k))) || null; },
+		}),
 		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
 		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), pet: () => HOOKS.errands?.petNow(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)

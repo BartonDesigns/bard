@@ -1,6 +1,9 @@
 import {stepWorkplaceRoutine,releaseWorkplaceRoutine,settleWorkplaceSale} from './workplace-routine.js';
 import * as THREE from 'three';
 import {attachBag} from './bags.js';
+import {payroll} from '../economy/payroll.js';
+// who someone is to the payroll (economy/payroll.js): their seed, as the rest of the town knows them
+export const npcIdOf=p=>'npc:'+(p.P.dna.seed>>>0);
 const hash=s=>{let h=0;for(const c of String(s))h=Math.imul(h,31)+c.charCodeAt(0)|0;return h>>>0;};
 // Shared scene clock synchronizes the two sides of a negotiation or project review.
 export function workplaceActivity(meta,t,hasPartner=true) {
@@ -51,12 +54,14 @@ export function workActor(p,t,dt,cam,actors=[]) {
  let a=workplaceActivity(retail?{...meta,sceneClock:true,sceneNumber:st.commerce?.scene||0}:meta,clock,paired); const M=p.M;
  if(retail && st.commerce && (a.sale!==undefined || a.activity==='purchase complete')){
   const receipt=st.work.group+':'+st.commerce.scene;
-  if(st.commerce.lastReceipt!==receipt && meta.role==='shopper' && paired)settleWorkplaceSale(st.commerce,p,receipt);
+  if(st.commerce.lastReceipt!==receipt && meta.role==='shopper' && paired && settleWorkplaceSale(st.commerce,p,receipt))payroll.sale(st,12,partner?npcIdOf(partner):null);
   if(st.commerce.lastReceipt!==receipt)a={activity:st.commerce.stock<=0?'checking sold-out stock':'declining a purchase',pose:'listen',talk:meta.role==='vendor',line:st.commerce.stock<=0?'That one has sold out. Let me check the next delivery.':'No problem. Take your time and have a look around.'};
  }
  if(meta.role==='vendor' && paired && st.commerce?.sceneTime<45 && p.workRoutine)p.workRoutine.wait=Math.max(2,p.workRoutine.wait);
  if(retail && st.commerce?.sceneTime>=45 && p.workRoutine){p.workRoutine.wait=Math.min(p.workRoutine.wait,2);}
  p.workContext={role:meta.role,program:meta.program,floor:meta.floor,activity:a.activity};
+ // paid for turning up, and a little for each stretch of station work (economy/payroll.js)
+ if(meta.role!=='shopper'&&meta.role!=='browse'){const id=npcIdOf(p);payroll.clockIn(id,st,meta.role);if(p.lastWorkAct==='typing at a workstation'&&a.activity!==p.lastWorkAct)payroll.taskDone(id,'station',st);p.lastWorkAct=a.activity;}
  M.want.speed=0;M.want.heading=st.heading;M.S.look.target=null;M.setPose(a.pose);M.S.talk=a.talk?1:0;
  if(st.sit)M.sit(st.h);else M.stand();
  p.workGestureT=(p.workGestureT||0)-dt;if(p.workGestureT<=0){p.workGestureT=3.2+(p.P.dna.seed%9)*.1;if(a.gesture)M.gesture(a.gesture);M.feel('anger',a.anger||0);}
