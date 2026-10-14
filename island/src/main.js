@@ -2132,6 +2132,8 @@ if (typeof window !== 'undefined') {
 			take: (id) => takeRequest(id, 'player'),
 			complete: (id, outcome = 'done') => completeRequest(id, 'player', outcome),
 			payroll: (n = 5) => payroll.ledger(n),
+			near: (x, z, r = 300) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; if (x == null && p) { x = p.x; z = p.z; } return W?.city?.economy?.near(x, z, r) || []; },
+			find: (what) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; const k = String(what || '').toLowerCase(); return (p && W?.city?.economy?.near(p.x, p.z, 3000).find((E) => E.type === k || E.name.toLowerCase().includes(k) || E.label.includes(k))) || null; },
 		}),
 		// the bank (economy/bank.js): Crysis.bank(id) an account ('player', 'hh:<household>', 'npc:<seed>',
 		// or the nearest person with no id); .talk(id) what they might say about money; .daily(id, days);
@@ -2148,8 +2150,6 @@ if (typeof window !== 'undefined') {
 				el.innerHTML = `<b>${esc(bank.household(id))}</b> ${bank.balance(bank.household(id))} credits<br><svg width="${W}" height="${H}" style="max-width:100%"><polyline fill="none" stroke="#7fb4ff" stroke-width="2" points="${pts}"/></svg><br>` + bank.history(id).slice(0, 8).map((t) => `day ${t.day} ${esc(t.kind)} ${t.amount} ${esc(t.counterparty)}`).join('<br>');
 				return 'shown (click it to close)';
 			},
-			near: (x, z, r = 300) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; if (x == null && p) { x = p.x; z = p.z; } return W?.city?.economy?.near(x, z, r) || []; },
-			find: (what) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; const k = String(what || '').toLowerCase(); return (p && W?.city?.economy?.near(p.x, p.z, 3000).find((E) => E.type === k || E.name.toLowerCase().includes(k) || E.label.includes(k))) || null; },
 		}),
 		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
 		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), pet: () => HOOKS.errands?.petNow(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
