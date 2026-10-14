@@ -22,6 +22,8 @@ import { houseMaterials, lin } from '../bay/housekit.js';
 import { STYLE, sfDistrict } from '../bay/styles.js';
 import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { createWorkplaceNavigation } from '../people/workplace-navigation.js';
+import { profileOf } from '../economy/frontage.js';
+import './estab-kit.js';
 
 const SHOPS = { chinatown: ['grocer', 'restaurant', 'grocer', 'boutique', 'restaurant'], mission: ['cafe', 'restaurant', 'laundromat', 'grocer', 'bar', 'florist'], northbeach: ['cafe', 'restaurant', 'bar', 'books'], sunset: ['restaurant', 'cafe', 'laundromat', 'grocer'], any: ['cafe', 'grocer', 'books', 'restaurant', 'laundromat', 'bar', 'florist', 'boutique'] };
 // the buildings anyone may walk into (the rest are homes, or shut)
@@ -125,6 +127,9 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 			P.f0 = f0; P.street = street;
 		}
 		P.style = spec.style;
+		// a building the economy made a business (economy/layer.js): its rooms fitted out as one
+		const E = o.biz || o.src?.biz;
+		if (E) { const fit = profileOf(E.type).fit; if (fit) P.estab = { fit, type: E.type, id: E.id, name: E.name }; }
 		furnish(P, 0);
 		// steps up to the door from the street, where the floor stands above it
 		P.stoop = [];
@@ -507,5 +512,9 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 	// (budget: milliseconds a frame for building; tests on a slow machine give it more)
 	// a building's rooms let go now (structures/: it was wrecked, or put right and to be built afresh)
 	const release = (o) => { const k = city.lotKey(o); if (live.has(k)) { if (job?.key === k) job = null; drop(k); scanT = -1; } };
-	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, release, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
+	// where the lamps of a business's rooms would hang (estab-fit.js anchors: pendants over the
+	// counter and the tables, heat lamps over the pass, track over the shelves), in the world, for
+	// whatever lights the rooms
+	const lightAnchors = () => { const out = []; for (const B of live.values()) { if (!B.ready || !B.P.lightAnchors) continue; const F = frame(B.o); for (const a of B.P.lightAnchors) { const [x, z] = F.w(a.x, a.z); out.push({ ...a, x, z, y: B.P.f0 + a.y, building: B.key, estab: B.P.estab?.id || null }); } } return out; };
+	return { group, update, floor, push, inside, doorNear, venue, info, goTo, live, frame, release, lightAnchors, walkers: setWalkers, doorsNear, addDoors: (src) => sources.push(src), addSite: (S) => { sites.push(S); scanT = -1; }, budget: (ms) => { BUDGET = ms; } };
 }
