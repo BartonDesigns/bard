@@ -192,3 +192,63 @@ test('convoys and cruisers follow the roads toward the trouble, or go straight w
 	// never off the end
 	assert.equal(Math.round(along(straight, 9999).x), 300);
 });
+
+test('the jet takes off, flies a circuit and lands back on the runway; the helicopter hovers and sets down', async () => {
+	const { flyCircuit, flyHover } = await import('./flight-pilot.mjs');
+	const J = flyCircuit();
+	const ev = J.log.events.map((e) => e.ev);
+	assert.ok(!ev.includes('crash'), JSON.stringify(J.log.events));
+	assert.equal(ev[0], 'takeoff');
+	assert.ok(ev.includes('smooth') || ev.includes('firm'), 'it touched down');
+	assert.ok(J.log.maxAlt > 250 && J.log.gearUp, `up to ${Math.round(J.log.maxAlt)} m, gear up`);
+	const down = J.log.events.find((e) => e.ev === 'smooth' || e.ev === 'firm');
+	assert.ok(down.sink < 3 && down.gear > 0.9 && down.bank < 0.1, JSON.stringify(down));
+	// stopped on the runway (1300 m along z at x = 0, 32 m wide)
+	assert.equal(J.phase, 'rollout');
+	assert.ok(J.S.spd < 1 && Math.abs(J.S.pos.x) < 14 && J.S.pos.z > 0 && J.S.pos.z < 1300, `${J.S.pos.x.toFixed(1)}, ${J.S.pos.z.toFixed(1)} at ${J.S.spd.toFixed(1)} m/s`);
+	const Hh = flyHover();
+	assert.deepEqual(Hh.log.events.map((e) => e.ev), ['lift', 'down']);
+	assert.ok(Hh.log.hoverDrift < 0.5 && Hh.log.maxAlt > 28, JSON.stringify(Hh.log));
+	assert.ok(Hh.log.events[1].sink < 3, 'a held descend flares onto the skids');
+});
+
+test('the vehicle models: every kind whole and coarse, the moving parts, within budget', async () => {
+	const { vehicleGeometry, DIMS } = await import('../src/military/models.js');
+	const tri = (g) => g.attributes.position.count / 3;
+	for (const k of Object.keys(DIMS)) {
+		const G = vehicleGeometry(k);
+		for (const a of ['position', 'normal', 'color', 'mtl', 'opos', 'uv']) assert.ok(G.whole.attributes[a] && G.far.attributes[a], `${k} ${a}`);
+		assert.ok(tri(G.far) < tri(G.whole) * 0.75, `${k}: far ${tri(G.far)} near ${tri(G.whole)}`);
+		assert.ok(tri(G.whole) < 16000 && tri(G.far) < 2500, `${k}: ${tri(G.whole)} / ${tri(G.far)}`);
+		// standing on the ground, about its size
+		const b = G.whole.boundingBox;
+		assert.ok(Math.abs(b.min.y) < 0.12, `${k} on the ground: ${b.min.y}`);
+		assert.ok(b.max.z - b.min.z > DIMS[k].L * 0.85 && b.max.z - b.min.z < DIMS[k].L * 1.5, `${k} length ${b.max.z - b.min.z}`);
+	}
+	assert.deepEqual(Object.keys(vehicleGeometry('tank').parts).sort(), ['gun', 'hull', 'trackL', 'trackR', 'turret']);
+	for (const p of ['flapL', 'flapR', 'ailL', 'ailR', 'tailL', 'tailR', 'rudL', 'rudR', 'gearN', 'gearL', 'gearR', 'doorL', 'doorR']) assert.ok(vehicleGeometry('jet').parts[p], p);
+	for (const k of ['apc', 'jeep', 'truck']) assert.ok(vehicleGeometry(k).parts.wheel && vehicleGeometry(k).wheels.length >= 4, k);
+	// the track belt's uv runs along it (metres), for the links to scroll
+	const uv = vehicleGeometry('tank').parts.trackL.attributes.uv;
+	let max = 0;
+	for (let i = 0; i < uv.count; i++) max = Math.max(max, uv.getX(i));
+	assert.ok(max > 14 && max < 20, `belt ${max} m`);
+});
+
+test('a base: dressed, lit, its pad graded into the ground, a handful of draws', async () => {
+	const { buildBase } = await import('../src/military/base-model.js');
+	for (const [kind, rough] of [['garrison', 0], ['airbase', 1]]) {
+		const L = baseLayout(kind, 4);
+		const ground = (x, z) => 30 + rough * (x * 0.008 + Math.sin(z * 0.012) * 1.6);
+		const sc = siteScore({ height: ground, water: () => false, urban: () => 0, built: () => 0 }, 0, 0, 0, L.W, L.D);
+		assert.ok(sc.ok, sc.why);
+		const out = buildBase({ name: 'T', x: 0, z: 0, yaw: 0, layout: L, floor: sc.floor }, {}, ground);
+		assert.ok(out.draws <= 13, `draws ${out.draws}`);
+		assert.ok(out.tris < 90000, `tris ${out.tris}`);
+		const names = out.group.children.map((m) => m.name);
+		for (const n of ['mil-glow', 'mil-halos', 'mil-flag', 'mil-lamp']) assert.ok(names.includes(n), n);
+		assert.ok(out.halos > (kind === 'airbase' ? 150 : 20), `halos ${out.halos}`);
+		// the bank reaches further where it has further to fall, never a cliff
+		assert.ok(out.banks >= 7 && out.banks <= 70, `banks ${out.banks}`);
+	}
+});

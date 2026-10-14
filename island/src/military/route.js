@@ -39,6 +39,8 @@ export function roadRoute(near, from, to, { maxSteps = 40, snap = 400 } = {}) {
 	out.push(to.x, to.z);
 	return finish(out);
 }
+// a stretch of points [x, z, ...] leading into a route, joined on
+export function joinRoute(pts, R) { return finish([...pts, ...R.pts]); }
 // with its running length, for travelling along it
 function finish(pts) {
 	const L = [0];
