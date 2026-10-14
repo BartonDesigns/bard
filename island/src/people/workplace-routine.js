@@ -1,3 +1,4 @@
+import {payroll} from '../economy/payroll.js';
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
 const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
 export function releaseWorkplaceRoutine(p) {
@@ -57,7 +58,9 @@ export function stepWorkplaceRoutine(p,dt,actors=[],cam=null) {
 	const q=r.path[0],d=distance(pos,q);
 	if(d<.045){
 		M.want.speed=0;M.S.speed.v=0;M.S.speed.dv=0;r.path.shift();
-		if(!r.path.length){r.path=null;p.workSpot=r.target;p.workWalking=false;r.wait=r.target===home?(home.work.role==='shopper'?65:home.work.role==='vendor'?90:40+seed%35):18+seed%17;}
+		if(!r.path.length){r.path=null;p.workSpot=r.target;p.workWalking=false;
+			// (a meeting reached or the stock checked: a task done for the employer, economy/payroll.js)
+			const done=r.target.work?.role;if(home.work.role!=='shopper'&&(done==='meeting colleague'||done==='stock check'))payroll.taskDone('npc:'+(p.P.dna.seed>>>0),done==='stock check'?'stock check':'meeting',home);r.wait=r.target===home?(home.work.role==='shopper'?65:home.work.role==='vendor'?90:40+seed%35):18+seed%17;}
 		return true;
 	}
 	M.want.heading=Math.atan2(q.x-pos.x,q.z-pos.z);

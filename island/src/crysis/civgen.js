@@ -679,6 +679,8 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	const roadClear = (x, z, w) => { const h = G.nearest(x, z, w + 7); return !h || h.d > (W[G.E[h.id].cls] || 6) / 2 + w; };
 	const HS = S.buildings.house, GA = S.garage;
 	const treeH = () => fromPct(S.treeHeight, r());
+	// (the street the lots are being laid down, for the house to know what it faces)
+	let lotRoad = null;
 	function house(ex, ez, tx, tz, side, hw, frontage, big) {
 		// the street's edge at the lot, its normal into the lot (the house faces back along it)
 		let nx = -tz * side, nz = tx * side;
@@ -715,7 +717,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 		const g = r();
 		let kind = K.house, gx = 0, door = r() * 0.6 + 0.2;
 		if (g < GA.attached && w >= 11) { kind = r() < 0.5 ? K.garageL : K.garageR; gx = (kind === K.garageL ? -1 : 1) * (w / 2 - 3); door = r() * 0.3 + (kind === K.garageL ? 0.55 : 0.15); }
-		boxes.push({ x, z, w, d, a: yaw, wallH, roofH, kind, hip, door });
+		boxes.push({ x, z, w, d, a: yaw, wallH, roofH, kind, hip, door, street: lotRoad?.cls || 'residential' });
 		const fx = x - nx * d / 2, fz = z - nz * d / 2;   // the middle of the front
 		let dx = fx + ux * gx, dz = fz + uz * gx, dw = 5.0;
 		if (kind === K.house && g < GA.attached + GA.wing + 0.2) {
@@ -783,6 +785,7 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	let nh = 0, done = 0;
 	for (const q of houseRoads) {
 		const p = q.pts, L = lengthOf(p), hw = q.w / 2;
+		lotRoad = q;
 		for (const side of [1, -1]) {
 			let s = 6 + r() * 6;
 			while (s < L - 4) {
@@ -991,6 +994,12 @@ export function* generateTownSteps({ seed = 1, cx = 0, cz = 0, radius = 1500, he
 	if (water) for (const L of [boxes, pools, trees]) { const keep = L.filter((b) => !wet(b.x, b.z, (b.w && b.d ? Math.max(b.w, b.d) / 2 : 0) + 2)); L.length = 0; L.push(...keep); }
 	// (and no tree with its trunk in a street, whatever planted it)
 	{ const keep = trees.filter((t) => roadClear(t.x, t.z, 0.6)); trees.length = 0; trees.push(...keep); }
+	// how near the middle of town each building stands (0 at the centre, 1 at the edge), for the
+	// economy (economy/establishments.js): the old centre's houses are mostly shops and offices now
+	for (const b of boxes) b.core = Math.round(Math.hypot(b.x - cx, b.z - cz) / radius * 100) / 100;
+	// ...and the houses that back onto or face an arterial (busy enough for a shop or a surgery)
+	const notArt = (id, e) => e.cls !== 'primary' && e.cls !== 'secondary';
+	for (const b of boxes) if (b.kind <= 2 && G.nearest(b.x, b.z, 55, notArt)) b.artery = 1;
 	// the shop and office fronts get the brief's sign texts, in turn (b.sign; for whatever paints them)
 	const signs = Array.isArray(brief?.signs) ? brief.signs.filter((s) => typeof s === 'string' && s) : [];
 	if (signs.length) { let k = 0; for (const b of boxes) if (b.kind === K.retail || b.kind === K.office) b.sign = signs[k++ % signs.length]; }
