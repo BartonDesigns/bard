@@ -119,7 +119,7 @@ function install() {
 		await page.evaluate(() => { window.Crysis.world().sky.state.hours = 13; window.Crysis.combat.ambient(false); });
 		for (let i = 0; i < +(process.env.SETTLE || 90); i++) {
 			await page.waitForTimeout(1000);
-			const s = await page.evaluate(() => ({ real: !!window.Crysis.world().real?.loaded?.(), people: (window.Crysis.world().people?.pool || []).filter((p) => p.active).length, zone: window.Crysis.combat.zone() })).catch((e) => ({ err: String(e) }));
+			const s = await page.evaluate(() => { const W = window.Crysis.world(); return { flying: !!W.player.state.flying, real: !!W.real?.loaded?.(), zone: window.Crysis.combat.zone(), bases: (window.Crysis.military()?.bases || []).filter((b) => b.status === 'sited').length }; }).catch((e) => ({ err: String(e) }));
 			if (i % 15 === 0) log('settle', JSON.stringify(s));
 			if (i > 40 && s.real && s.zone === 'earth-urban') break;
 		}
@@ -198,7 +198,7 @@ function install() {
 				for (let k = 0; k < 5; k++) await page.evaluate(() => window.__law.step(2)).catch((e) => log('step', String(e)));
 				log(name, 't', t + 10, JSON.stringify(await page.evaluate(() => { const S = window.__law.S, p = S.perf; return { ms: Math.round((p.combat + p.military) / Math.max(1, p.steps)), c: Math.round(p.combat / Math.max(1, p.steps)), last: S.samples[S.samples.length - 1] }; })));
 				// a picture when there is something to see: a cruiser, a roadblock, a convoy in sight
-				if (pics.length < 2 && (t === 30 || t === 70)) {
+				if (process.env.SCENE_PICS && pics.length < 2 && (t === 30 || t === 70)) {
 					const at = await page.evaluate(() => { const M = window.Crysis.military.api, e = window.Crysis.combat.eye(); const c = M.police.cruisers.find((q) => q.state !== 'leaving'); if (c) return { x: c.pos.x, z: c.pos.z, what: 'cruiser' }; const p = M.dispatch.patrols.find((q) => q.units.some((u) => u.mesh)); const u = p && p.units.find((q) => q.mesh); if (u) return { x: u.pos.x, z: u.pos.z, what: 'convoy' }; const h = window.Crysis.combat.squads.alive()[0]; return h ? { x: h.pos.x, z: h.pos.z, what: h.fid } : { x: e.x, z: e.z - 10, what: 'street' }; });
 					await page.evaluate(([x, z]) => window.__law.look(x, z), [at.x, at.z]);
 					pics.push({ t, what: at.what, file: await shot(`${name}-${t}-${at.what}`) });
