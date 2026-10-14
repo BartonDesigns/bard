@@ -379,5 +379,7 @@ export function createMelee(ctx) {
 	const info = () => ({ item: me.item, holding: !!me.held, last: me.last, brawls: brawls.map((q) => ({ stage: q.stage, a: q.A.kind, b: q.B.kind, hp: [Math.round(q.A.hp ?? 100), Math.round(q.B.hp ?? 100)] })), drops: drops.length, nextIn: Math.round(startT) });
 	// for the console and tests: a quarrel now between the two nearest grown-ups, a blow thrown
 	function quarrel() { startT = 0; ambient(0.01); return info(); }
-	return { update, clear, info, swing, grapple, quarrel, startBrawl, fighter, drop, state: me };
+	// the police arrive: the fights near them end
+	function calm(x, z, r = 30) { for (const q of brawls) { const a = posOf(q.A); if (Math.hypot(a.x - x, a.z - z) < r) q.done = true; } }
+	return { update, clear, info, swing, grapple, quarrel, startBrawl, fighter, drop, calm, state: me };
 }
