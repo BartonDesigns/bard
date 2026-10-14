@@ -58,12 +58,19 @@ const DEED = {
 };
 
 // fear: the same order of facts as contextualOpening
+const FEAR = {
+	aimedAt: ['Whoa, whoa! Please, don’t shoot!', 'Put that down! Please!', 'Oh my god. Please, I don’t want any trouble.'],
+	harmful: ['Stay away from me!', 'That’s them! Don’t come any closer!', 'Please, just keep walking.'],
+	reported: ['Is that the one they’re talking about?', 'Keep walking. Don’t look at them.', 'I heard what you did.'],
+	wanted: ['The police are looking for you, you know.', 'I don’t want any trouble.', 'Somebody call the cops.'],
+	danger: ['Did you hear that? We should go.', 'Get off the street, something’s going on.', 'Is everyone okay over there?'],
+};
 function afraid(c, n) {
-	if (c.aimedAt) return { text: pick(['Whoa, whoa! Please, don’t shoot!', 'Put that down! Please!', 'Oh my god. Please, I don’t want any trouble.'], n), gesture: 'shake', feel: { surprise: 1 } };
-	if (c.harmful) return { text: pick(['Stay away from me!', 'That’s them! Don’t come any closer!', 'Please, just keep walking.'], n), gesture: 'shake', feel: { surprise: 0.8, sad: 0.3 } };
-	if (c.reported) return { text: pick(['Is that the one they’re talking about?', 'Keep walking. Don’t look at them.', 'I heard what you did.'], n), gesture: 'shake', feel: { surprise: 0.4 } };
-	if (c.wanted >= 2) return { text: pick(['The police are looking for you, you know.', 'I don’t want any trouble.', 'Somebody call the cops.'], n), gesture: 'shake', feel: { surprise: 0.5 } };
-	if (c.danger || c.reportedDanger) return { text: pick(['Did you hear that? We should go.', 'Get off the street, something’s going on.', 'Is everyone okay over there?'], n), gesture: 'point', feel: { surprise: 0.7 } };
+	if (c.aimedAt) return { text: pick(FEAR.aimedAt, n), gesture: 'shake', feel: { surprise: 1 } };
+	if (c.harmful) return { text: pick(FEAR.harmful, n), gesture: 'shake', feel: { surprise: 0.8, sad: 0.3 } };
+	if (c.reported) return { text: pick(FEAR.reported, n), gesture: 'shake', feel: { surprise: 0.4 } };
+	if (c.wanted >= 2) return { text: pick(FEAR.wanted, n), gesture: 'shake', feel: { surprise: 0.5 } };
+	if (c.danger || c.reportedDanger) return { text: pick(FEAR.danger, n), gesture: 'point', feel: { surprise: 0.7 } };
 	return null;
 }
 
@@ -160,6 +167,14 @@ const VENDOR_PAIRS = [
 export function exchangeFor({ seed = 0, n = 0, hour = 12, rain = 0, work = null, seated = false } = {}) {
 	const pool = work ? (work === 'vendor' || work === 'shopper' ? VENDOR_PAIRS : WORK_PAIRS) : seated ? TABLE_PAIRS : rain > 0.3 ? RAIN_PAIRS : partOfDay(hour) === 'late' || partOfDay(hour) === 'evening' ? [...NIGHT_PAIRS, ...PAIRS] : PAIRS;
 	return pick(pool, (seed | 0) + (n | 0));
+}
+
+// every fixed line above, for the voices made ahead of time (tools/build-voice-clips.mjs)
+export function lineBank() {
+	const lists = [GREET, WARM, SHY, MOODY, ON_PHONE, JOGGER, RAIN, STORM, LATE, STARTLED, BUMPED, DRIVER, HURT, WORK, VENDOR, KID, KNOWN_GOOD, KNOWN_HERO, KNOWN_BAD, WANTED, DEED, FEAR, PAIRS, NIGHT_PAIRS, RAIN_PAIRS, TABLE_PAIRS, WORK_PAIRS, VENDOR_PAIRS];
+	const out = new Set(), walk = (x) => { if (typeof x === 'string') { if (x) out.add(x); } else for (const v of Object.values(x)) walk(v); };
+	walk(lists);
+	return [...out];
 }
 
 // how a voice is played for a body: a touch higher for the young, lower for the old, and
