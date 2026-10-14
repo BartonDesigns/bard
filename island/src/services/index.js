@@ -74,6 +74,7 @@ function rosterFor(F) {
 
 export function createServices({ scene, world, camera, people = () => null, isPhone = false, mount = null, button = null, hint = () => {}, arms = null, combat = () => null }) {
 	const facilities = new Map();     // anchor key -> facility, or null where nothing fits
+	const empty = new Map();          // anchor key -> the map's version when nothing fitted
 	const hooks = { charge: null, onLoot: null };
 	const calls = [];                 // waiting for an ambulance: { x, z, who, name, minor, severity, cause, p, t }
 	const handled = new WeakSet();
@@ -81,6 +82,8 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 	let scanT = 0, decideT = 0, bgSeq = 0, clock = 0;
 	const stats = { decided: 0, sited: 0, decideMs: 0, maxDecideMs: 0, frameMs: 0, admitted: 0, discharged: 0, billed: 0, dispatched: 0, revived: 0, treated: 0 };
 	const W = () => world();
+	const mapVersion = () => `${W()?.real?.version?.() ?? 0}:${W()?.real?.genVersion?.() ?? 0}`;
+	const stale = (A) => !facilities.has(A.key) || (empty.has(A.key) && empty.get(A.key) !== mapVersion());
 	const ground = (x, z) => W()?.island?.heightAt?.(x, z) ?? 0;
 	const raw = (x, z) => W()?.bayArea?.heightAt?.(x, z) ?? ground(x, z);
 	// the road a unit drives on: the ground, or a service's floor and aprons where it stands on them
@@ -114,6 +117,8 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		for (const b of list) b.rise = riseOf(b);
 		const b = siteFor(A.kind, A, list);
 		facilities.set(A.key, b ? makeFacility(A, b) : null);
+		// (nothing yet: asked again once more of the map has come in)
+		if (b) empty.delete(A.key); else empty.set(A.key, mapVersion());
 		const ms = performance.now() - t0;
 		stats.decided++; stats.decideMs = ms; stats.maxDecideMs = Math.max(stats.maxDecideMs, ms);
 	}
@@ -488,7 +493,7 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		if (scanT <= 0) {
 			scanT = 2.5;
 			queue.length = 0;
-			for (const kind of KINDS) for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (!facilities.has(A.key) && Math.hypot(A.x - cam.x, A.z - cam.z) < DECIDE_R) queue.push(A);
+			for (const kind of KINDS) for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (stale(A) && Math.hypot(A.x - cam.x, A.z - cam.z) < DECIDE_R) queue.push(A);
 			queue.sort((a, b) => Math.hypot(a.x - cam.x, a.z - cam.z) - Math.hypot(b.x - cam.x, b.z - cam.z));
 		}
 		// (one cell decided at a time, a few a second by the clock: a slow frame does not hold them up)
@@ -617,7 +622,7 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		const cam = camera.position;
 		if (!KINDS.includes(kind)) return `Kinds: ${KINDS.join(', ')}.`;
 		// (decide every cell round here now, if it has not been)
-		for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (!facilities.has(A.key)) decide(A);
+		for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (stale(A)) decide(A);
 		const F = nearest(kind, cam.x, cam.z);
 		if (!F) return `No ${TITLES[kind].toLowerCase()} within reach here.`;
 		if (room && F.live) {
@@ -651,7 +656,7 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		facilities.clear();
 	}
 	// (every cell round you decided now: the console and the tests)
-	const decideNear = () => { const cam = camera.position; for (const kind of KINDS) for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (!facilities.has(A.key)) decide(A); return list().length; };
+	const decideNear = () => { const cam = camera.position; for (const kind of KINDS) for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (stale(A)) decide(A); return list().length; };
 	return { update, push, floor, info, go, decideNear, sites, revive, dispatchFire, injury, testCall, dispose, hooks, list, here: () => here(), admit: (kind, p) => nearest('hospital', camera.position.x, camera.position.z)?.ward.admit(p) };
 }
 

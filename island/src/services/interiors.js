@@ -26,12 +26,21 @@ import { planShell, ST } from '../interiors/plan.js';
 const PT = ST.part;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // the looks of the rooms: floors and wall paint (interiors/build.js reads rm.floor, rm.paint)
-const CLINIC = { floor: 'tile', paint: [0.9, 0.93, 0.92], lit: true };
-const CLINIC_MINT = { floor: 'tile', paint: [0.78, 0.88, 0.85], lit: true };
-const CIVIC = { floor: 'tile', paint: [0.86, 0.87, 0.86], lit: true };
-const BAY = { floor: 'concrete', paint: [0.82, 0.8, 0.76], lit: true };
-const DRAB = { floor: 'concrete', paint: [0.66, 0.66, 0.58], lit: true };
-const QUARTERS = { floor: 'carpet', paint: [0.8, 0.79, 0.74], lit: true };
+const CLINIC = { floor: 'tile', paint: [0.9, 0.93, 0.92] };
+const CLINIC_MINT = { floor: 'tile', paint: [0.78, 0.88, 0.85] };
+const CIVIC = { floor: 'tile', paint: [0.86, 0.87, 0.86] };
+const BAY = { floor: 'concrete', paint: [0.82, 0.8, 0.76] };
+const DRAB = { floor: 'concrete', paint: [0.66, 0.66, 0.58] };
+const QUARTERS = { floor: 'carpet', paint: [0.8, 0.79, 0.74] };
+
+// a big room split into a grid of rooms no larger than maxW by maxD, wide openings between
+// neighbours so all of it stays one walk (a big block's wards and bays, a long depot)
+function cells(K, k, type, x0, z0, x1, z1, maxW, maxD, extra) {
+	const nx = Math.max(1, Math.ceil((x1 - x0) / maxW - 0.15)), nz = Math.max(1, Math.ceil((z1 - z0) / maxD - 0.15)), w = (x1 - x0) / nx, d = (z1 - z0) / nz;
+	for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) K.room(k, type, x0 + i * w + (i ? PT / 2 : 0), z0 + j * d + (j ? PT / 2 : 0), x0 + (i + 1) * w - (i < nx - 1 ? PT / 2 : 0), z0 + (j + 1) * d - (j < nz - 1 ? PT / 2 : 0), extra);
+	for (let i = 1; i < nx; i++) { const wl = K.wall(k, 'z', x0 + i * w, z0, z1); for (let j = 0; j < nz; j++) K.wide(wl, z0 + (j + 0.5) * d - 1.1, z0 + (j + 0.5) * d + 1.1, 2.4); }
+	for (let j = 1; j < nz; j++) { const wl = K.wall(k, 'x', z0 + j * d, x0, x1); for (let i = 0; i < nx; i++) K.wide(wl, x0 + (i + 0.5) * w - 1.1, x0 + (i + 0.5) * w + 1.1, 2.4); }
+}
 
 // windows along a side of level k, every step metres, the doors already cut left alone
 function glaze(K, k, side, step, w, y0, y1) {
@@ -56,9 +65,9 @@ export function planHospital({ W, D }) {
 			const wf = K.wall(0, 'x', zf, -hw, hw);
 			K.wide(wf, (-hw + xs) / 2 - 1.2, (-hw + xs) / 2 + 1.2, 2.6);
 			K.wide(wf, (xs + hw) / 2 - 1.5, (xs + hw) / 2 + 1.5, 2.6);
-			K.room(0, 'erBays', -hw, zb + PT / 2, hw, zf - PT / 2, CLINIC_MINT);
+			cells(K, 0, 'erBays', -hw, zb + PT / 2, hw, zf - PT / 2, 16, 11, CLINIC_MINT);
 			const x1 = -hw + 2 * hw * 0.42, x2 = x1 + 2 * hw * 0.27;
-			K.room(0, 'theatre', -hw, -hd, x1 - PT / 2, zb - PT / 2, { floor: 'tile', paint: [0.7, 0.84, 0.82], lit: true });
+			cells(K, 0, 'theatre', -hw, -hd, x1 - PT / 2, zb - PT / 2, 12, 10, { floor: 'tile', paint: [0.7, 0.84, 0.82] });
 			K.room(0, 'pharmacy', x1 + PT / 2, -hd, x2 - PT / 2, zb - PT / 2, CLINIC);
 			K.room(0, 'hall', x2 + PT / 2, -hd, hw, zb - PT / 2, { stairs: true, ...CLINIC });
 			const wb = K.wall(0, 'x', zb, -hw, hw);
@@ -70,9 +79,9 @@ export function planHospital({ W, D }) {
 			K.flight(0, hw - 1.35, hw - 0.06, -hd + 0.25, zb - 0.45, null, -1);
 			// upstairs: the front ward, the nurses' hub the stair arrives in, the back ward
 			const xw = hw - clamp(2 * hw * 0.3, 5, 9);
-			K.room(1, 'ward', -hw, zb + PT / 2, xw - PT / 2, hd, CLINIC);
+			cells(K, 1, 'ward', -hw, zb + PT / 2, xw - PT / 2, hd, 14, 10, CLINIC);
 			K.room(1, 'nurseHub', xw + PT / 2, zb + PT / 2, hw, hd, CLINIC_MINT);
-			K.room(1, 'ward', -hw, -hd, x2 - PT / 2, zb - PT / 2, CLINIC);
+			cells(K, 1, 'ward', -hw, -hd, x2 - PT / 2, zb - PT / 2, 14, 10, CLINIC);
 			K.room(1, 'hall', x2 + PT / 2, -hd, hw, zb - PT / 2, { stairs: true, ...CLINIC });
 			const wb1 = K.wall(1, 'x', zb, -hw, hw);
 			K.wide(wb1, hw - 1.4, hw - 0.1, 2.4);
@@ -101,10 +110,10 @@ export function planPolice({ W, D }) {
 			const zf = hd - clamp(D * 0.3, 4.5, 6.5), zc = -hd + clamp(D * 0.34, 4.2, 6.5), span = xg + hw;
 			const xo = -hw + clamp(span * 0.3, 3.2, 5), xe = -hw + span * 0.45, xl = -hw + span * 0.72;
 			K.room(0, 'frontDesk', -hw, zf + PT / 2, xg - PT / 2, hd, CIVIC);
-			K.room(0, 'chiefOffice', -hw, zc + PT / 2, xo - PT / 2, zf - PT / 2, { floor: 'carpet', paint: [0.76, 0.78, 0.8], lit: true });
-			K.room(0, 'bullpen', xo + PT / 2, zc + PT / 2, xg - PT / 2, zf - PT / 2, { floor: 'carpet', paint: [0.82, 0.84, 0.85], lit: true });
-			K.room(0, 'cells', -hw, -hd, xe - PT / 2, zc - PT / 2, { floor: 'concrete', paint: [0.74, 0.76, 0.74], lit: true });
-			K.room(0, 'evidence', xe + PT / 2, -hd, xl - PT / 2, zc - PT / 2, { floor: 'concrete', paint: [0.8, 0.8, 0.78], lit: true });
+			K.room(0, 'chiefOffice', -hw, zc + PT / 2, xo - PT / 2, zf - PT / 2, { floor: 'carpet', paint: [0.76, 0.78, 0.8] });
+			cells(K, 0, 'bullpen', xo + PT / 2, zc + PT / 2, xg - PT / 2, zf - PT / 2, 15, 11, { floor: 'carpet', paint: [0.82, 0.84, 0.85] });
+			K.room(0, 'cells', -hw, -hd, xe - PT / 2, zc - PT / 2, { floor: 'concrete', paint: [0.74, 0.76, 0.74] });
+			K.room(0, 'evidence', xe + PT / 2, -hd, xl - PT / 2, zc - PT / 2, { floor: 'concrete', paint: [0.8, 0.8, 0.78] });
 			K.room(0, 'lockerRoom', xl + PT / 2, -hd, xg - PT / 2, zc - PT / 2, CIVIC);
 			K.room(0, 'sallyport', xg + PT / 2, -hd, hw, hd, BAY);
 			const wzf = K.wall(0, 'x', zf, -hw, xg);
@@ -135,7 +144,7 @@ export function planFire({ W, D }) {
 			const zf = hd - clamp(D * 0.28, 4, 6), zk = -hd + clamp(D * 0.4, 5.5, 8);
 			K.room(0, 'apparatus', -hw, -hd, xb - PT / 2, hd, BAY);
 			K.room(0, 'watchRoom', xb + PT / 2, zf + PT / 2, hw, hd, CIVIC);
-			K.room(0, 'dayRoom', xb + PT / 2, zk + PT / 2, hw, zf - PT / 2, { floor: 'wood', paint: [0.86, 0.8, 0.68], lit: true });
+			K.room(0, 'dayRoom', xb + PT / 2, zk + PT / 2, hw, zf - PT / 2, { floor: 'wood', paint: [0.86, 0.8, 0.68] });
 			K.room(0, 'hall', xb + PT / 2, -hd, hw, zk - PT / 2, { stairs: true, ...CIVIC });
 			const wx = K.wall(0, 'z', xb, -hd, hd);
 			K.door(wx, (zf + hd) / 2, 1.0); K.wide(wx, zk + 0.6, Math.min(zf - 0.6, zk + 2.4), 2.4); K.door(wx, (-hd + zk) / 2, 1.2);
@@ -145,8 +154,8 @@ export function planFire({ W, D }) {
 			// upstairs
 			const zg = clamp(0, -hd + 4, hd - 5), xg = -hw + (xb + hw) * 0.4;
 			K.room(1, 'bunkRoom', -hw, zg + PT / 2, xb - PT / 2, hd, QUARTERS);
-			K.room(1, 'showers', -hw, -hd, xg - PT / 2, zg - PT / 2, { floor: 'tile', paint: [0.86, 0.9, 0.9], lit: true });
-			K.room(1, 'gym', xg + PT / 2, -hd, xb - PT / 2, zg - PT / 2, { floor: 'carpet', paint: [0.7, 0.74, 0.78], lit: true });
+			K.room(1, 'showers', -hw, -hd, xg - PT / 2, zg - PT / 2, { floor: 'tile', paint: [0.86, 0.9, 0.9] });
+			K.room(1, 'gym', xg + PT / 2, -hd, xb - PT / 2, zg - PT / 2, { floor: 'carpet', paint: [0.7, 0.74, 0.78] });
 			K.room(1, 'hall', xb + PT / 2, -hd, hw, zk - PT / 2, { stairs: true, ...CIVIC });
 			K.room(1, 'lockerRoom', xb + PT / 2, zk + PT / 2, hw, hd, CIVIC);
 			const w1 = K.wall(1, 'z', xb, -hd, hd);
@@ -177,11 +186,11 @@ export function planArmory({ W, D }) {
 		layout: (K) => {
 			const { hw, hd } = K;
 			const zf = hd - clamp(D * 0.45, 6.5, 11), hl = clamp(W * 0.1, 1.6, 3);
-			K.room(0, 'commsRoom', -hw, zf + PT / 2, -hl - PT / 2, hd, { floor: 'tile', paint: [0.62, 0.66, 0.64], lit: true });
+			K.room(0, 'commsRoom', -hw, zf + PT / 2, -hl - PT / 2, hd, { floor: 'tile', paint: [0.62, 0.66, 0.64] });
 			K.room(0, 'guardPost', -hl + PT / 2, zf + PT / 2, hl - PT / 2, hd, DRAB);
-			K.room(0, 'warRoom', hl + PT / 2, zf + PT / 2, hw, hd, { floor: 'carpet', paint: [0.42, 0.46, 0.48], lit: true });
-			K.room(0, 'depot', -hw, -hd, hl - PT / 2, zf - PT / 2, DRAB);
-			K.room(0, 'barracks', hl + PT / 2, -hd, hw, zf - PT / 2, QUARTERS);
+			K.room(0, 'warRoom', hl + PT / 2, zf + PT / 2, hw, hd, { floor: 'carpet', paint: [0.42, 0.46, 0.48] });
+			cells(K, 0, 'depot', -hw, -hd, hl - PT / 2, zf - PT / 2, 22, 16, DRAB);
+			cells(K, 0, 'barracks', hl + PT / 2, -hd, hw, zf - PT / 2, 16, 11, QUARTERS);
 			K.door(K.wall(0, 'z', -hl, zf, hd), (zf + hd) / 2, 1.0);
 			K.door(K.wall(0, 'z', hl, zf, hd), (zf + hd) / 2, 1.0);
 			K.door(K.wall(0, 'x', zf, -hw, hw), 0, Math.min(1.2, 2 * hl - 0.4));
@@ -204,8 +213,8 @@ export function buildWarRoom({ W, D, door = null }) {
 		layout: (K) => {
 			const { hw, hd } = K, zf = hd - clamp(D * 0.24, 3, 4.5), xc = hw - clamp(2 * hw * 0.32, 3.5, 7);
 			K.room(0, 'guardPost', -hw, zf + PT / 2, hw, hd, DRAB);
-			K.room(0, 'warRoom', -hw, -hd, xc - PT / 2, zf - PT / 2, { floor: 'carpet', paint: [0.42, 0.46, 0.48], lit: true });
-			K.room(0, 'commsRoom', xc + PT / 2, -hd, hw, zf - PT / 2, { floor: 'tile', paint: [0.62, 0.66, 0.64], lit: true });
+			K.room(0, 'warRoom', -hw, -hd, xc - PT / 2, zf - PT / 2, { floor: 'carpet', paint: [0.42, 0.46, 0.48] });
+			K.room(0, 'commsRoom', xc + PT / 2, -hd, hw, zf - PT / 2, { floor: 'tile', paint: [0.62, 0.66, 0.64] });
 			const wf = K.wall(0, 'x', zf, -hw, hw);
 			K.door(wf, (-hw + xc) / 2, 1.4); K.door(wf, (xc + hw) / 2, 1.0);
 			K.door(K.wall(0, 'z', xc, -hd, zf), (-hd + zf) / 2, 1.0);
@@ -241,10 +250,10 @@ export function buildBarracks({ W, D, door = null }) {
 		layout: (K) => {
 			const { hw, hd } = K, zm = hd - clamp(D * 0.3, 4.5, 8), zb = -hd + clamp(D * 0.28, 4, 6.5);
 			const x1 = -hw + 2 * hw * 0.38, x2 = x1 + 2 * hw * 0.28;
-			K.room(0, 'messHall', -hw, zm + PT / 2, hw, hd, { floor: 'tile', paint: [0.8, 0.78, 0.7], lit: true });
+			K.room(0, 'messHall', -hw, zm + PT / 2, hw, hd, { floor: 'tile', paint: [0.8, 0.78, 0.7] });
 			K.room(0, 'barracks', -hw, zb + PT / 2, hw, zm - PT / 2, QUARTERS);
-			K.room(0, 'gym', -hw, -hd, x1 - PT / 2, zb - PT / 2, { floor: 'carpet', paint: [0.7, 0.72, 0.7], lit: true });
-			K.room(0, 'showers', x1 + PT / 2, -hd, x2 - PT / 2, zb - PT / 2, { floor: 'tile', paint: [0.86, 0.9, 0.9], lit: true });
+			K.room(0, 'gym', -hw, -hd, x1 - PT / 2, zb - PT / 2, { floor: 'carpet', paint: [0.7, 0.72, 0.7] });
+			K.room(0, 'showers', x1 + PT / 2, -hd, x2 - PT / 2, zb - PT / 2, { floor: 'tile', paint: [0.86, 0.9, 0.9] });
 			K.room(0, 'lockerRoom', x2 + PT / 2, -hd, hw, zb - PT / 2, DRAB);
 			K.wide(K.wall(0, 'x', zm, -hw, hw), -1.2, 1.2, 2.4);
 			const wb = K.wall(0, 'x', zb, -hw, hw);

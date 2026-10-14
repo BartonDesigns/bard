@@ -18,7 +18,7 @@ export const SERVICES = {
 	// cell: lattice spacing (m); reach: how far from the anchor a building may stand; deal: the
 	// share of buildings dealt this kind [from, to); W/D: the least width across the front and
 	// depth; area: the most floor; top: the tallest block that can be dressed as one
-	hospital: { cell: 3200, reach: 1100, deal: [0, 0.34], W: 26, D: 18, area: 9000, top: 26, label: 'Hospital' },
+	hospital: { cell: 3200, reach: 1100, deal: [0, 0.34], W: 26, D: 18, area: 4800, top: 26, label: 'Hospital' },
 	fire: { cell: 1700, reach: 650, deal: [0.34, 0.58], W: 16, D: 14, area: 2600, top: 16, label: 'Fire station' },
 	police: { cell: 1900, reach: 700, deal: [0.58, 0.84], W: 15, D: 13, area: 2600, top: 16, label: 'Police station' },
 	armory: { cell: 6400, reach: 1300, deal: [0.84, 1], W: 20, D: 16, area: 5200, top: 16, label: 'Armory' },
@@ -40,7 +40,7 @@ export function fits(kind, b) {
 	const S = SERVICES[kind];
 	if (!S || !b || !Number.isFinite(b.x + b.z + b.w + b.d)) return false;
 	if (!(b.grid ? GRID_OK : REAL_OK).has(b.kind)) return false;
-	if (b.w < S.W || b.d < S.D || b.w * b.d > S.area || Math.max(b.w, b.d) > 110) return false;
+	if (b.w < S.W || b.d < S.D || b.w * b.d > S.area || Math.max(b.w, b.d) > 80) return false;
 	if (!(b.h > 3.5) || b.h > S.top) return false;
 	if ((b.rise ?? 0) > 2.4) return false;
 	const u = dealOf(b);
