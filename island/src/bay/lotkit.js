@@ -5,7 +5,9 @@
 // boats on trailers, bins at the kerb, a basketball hoop, an AC condenser, raised beds, a
 // for-sale sign; round a complex's pool, loungers, umbrellas, a cabana, a built-in grill,
 // tables, the carports, the mailbox kiosk, wrought-iron fencing and the gate; a picket
-// fence; tennis nets and park benches. An entry is [x, y, z, yaw, sx, sy, sz, tilt, r, g, b]
+// fence; tennis nets and park benches; and out front of the businesses, chalkboards, canoes,
+// nets, antlers, gear racks, menu boards, monument signs, sign posts, crates, surfboards and
+// kegs. An entry is [x, y, z, yaw, sx, sy, sz, tilt, r, g, b]
 // (tilt about the thing's own x; the colour tints it, where it has one).
 
 import * as THREE from 'three';
@@ -79,6 +81,76 @@ function shapes() {
 	S.net = M([B(0.08, 1.07, 0.08, -0.5, 0, 0, [0.3, 0.3, 0.3]), B(0.08, 1.07, 0.08, 0.5, 0, 0, [0.3, 0.3, 0.3]), B(1, 0.84, 0.02, 0, 0.07, 0, [0.12, 0.12, 0.12]), B(1, 0.07, 0.03, 0, 0.9, 0, WHITE)]);
 	S.bench = M([B(1.8, 0.06, 0.45, 0, 0.42, 0, [0.45, 0.32, 0.2]), B(1.8, 0.35, 0.05, 0, 0.5, -0.22, [0.45, 0.32, 0.2]), B(0.06, 0.45, 0.45, -0.8, 0, 0, DARK), B(0.06, 0.45, 0.45, 0.8, 0, 0, DARK)]);
 	S.solar = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+	// what stands out front of a business (economy/layer.js; the sign boards themselves are
+	// drawn from one atlas there). A pavement chalkboard: two boards leaning together
+	{
+		const board = (s) => colored(new THREE.BoxGeometry(0.62, 0.95, 0.03).translate(0, 0.475, 0).rotateX(s * 0.2).translate(0, 0, s * 0.02), [0.14, 0.18, 0.15]);
+		const p = [board(1), board(-1), B(0.66, 0.05, 0.05, 0, 0.92, 0, [0.5, 0.36, 0.22])];
+		for (let k = 0; k < 3; k++) p.push(colored(new THREE.BoxGeometry(0.42 - k * 0.08, 0.04, 0.01).translate(0, 0.7 - k * 0.14, 0.1).rotateX(0.2), [0.92, 0.92, 0.88]));
+		S.aboard = M(p);
+	}
+	// an outrigger canoe up on its stands: the hull (tinted), its float out to one side on two booms
+	{
+		const hull = colored(new THREE.CylinderGeometry(0.3, 0.3, 5.6, 8, 1).scale(1, 1, 1.3).rotateX(Math.PI / 2).translate(0, 0.98, 0), [1, 1, 1]);
+		const bow = colored(new THREE.ConeGeometry(0.3, 0.8, 8).scale(1, 1, 1.3).rotateX(Math.PI / 2).translate(0, 0.98, 3.2), [1, 1, 1]);
+		const stern = colored(new THREE.ConeGeometry(0.3, 0.8, 8).scale(1, 1, 1.3).rotateX(-Math.PI / 2).translate(0, 0.98, -3.2), [1, 1, 1]);
+		const p = [hull, bow, stern, B(0.5, 0.06, 5.4, 0, 1.24, 0, [0.95, 0.93, 0.88]), B(0.18, 0.18, 3.6, 1.9, 0.86, 0, [0.82, 0.78, 0.7])];
+		for (const z of [-1.1, 1.1]) p.push(B(2.1, 0.07, 0.08, 0.95, 1.3, z, [0.55, 0.42, 0.28]), B(0.05, 0.4, 0.05, 1.9, 0.92, z, [0.55, 0.42, 0.28]));
+		for (const z of [-1.8, 1.8]) p.push(B(0.9, 0.08, 0.12, 0, 0.62, z, [0.35, 0.26, 0.18]), B(0.08, 0.62, 0.08, -0.38, 0, z, [0.35, 0.26, 0.18]), B(0.08, 0.62, 0.08, 0.38, 0, z, [0.35, 0.26, 0.18]));
+		p.push(B(0.08, 0.04, 2.4, 0.2, 1.3, -0.5, [0.7, 0.58, 0.4]));
+		S.outrigger = M(p);
+	}
+	// nets drying on a rack, a row of floats along the foot
+	{
+		const p = [B(0.1, 1.9, 0.1, -1.25, 0, 0, [0.42, 0.32, 0.22]), B(0.1, 1.9, 0.1, 1.25, 0, 0, [0.42, 0.32, 0.22]), B(2.6, 0.08, 0.08, 0, 1.85, 0, [0.42, 0.32, 0.22]), B(2.4, 1.4, 0.02, 0, 0.4, 0, [0.22, 0.3, 0.28])];
+		for (let k = 0; k < 7; k++) p.push(C(0.07, 0.12, -1.05 + k * 0.35, 0.36, 0.03, [0.95, 0.45, 0.12], 8));
+		S.nets = M(p);
+	}
+	// antlers on a shield of wood, over the door
+	{
+		const bone = [0.86, 0.8, 0.68], p = [B(0.5, 0.6, 0.06, 0, 0, 0, [0.4, 0.27, 0.16]), B(0.16, 0.16, 0.12, 0, 0.32, 0.06, [0.5, 0.36, 0.24])];
+		for (const s of [-1, 1]) {
+			p.push(colored(new THREE.BoxGeometry(0.05, 0.6, 0.05).translate(0, 0.3, 0).rotateZ(-s * 0.7).translate(s * 0.08, 0.42, 0.1), bone));
+			for (let k = 0; k < 3; k++) p.push(colored(new THREE.BoxGeometry(0.04, 0.24, 0.04).translate(0, 0.12, 0).rotateZ(s * 0.15).translate(s * (0.2 + k * 0.1), 0.5 + k * 0.1, 0.1), bone));
+		}
+		S.antlers = M(p);
+	}
+	// a rack of gear: coats and a pack on pegs, a coil of rope, a crate below
+	{
+		const wood = [0.42, 0.3, 0.2], p = [B(0.08, 1.8, 0.08, -0.8, 0, 0, wood), B(0.08, 1.8, 0.08, 0.8, 0, 0, wood), B(1.7, 0.07, 0.07, 0, 1.6, 0, wood)];
+		p.push(B(0.42, 0.75, 0.18, -0.45, 0.8, 0.08, [0.85, 0.42, 0.12]), B(0.42, 0.7, 0.18, 0.05, 0.85, 0.08, [0.32, 0.36, 0.2]), B(0.36, 0.52, 0.26, 0.5, 0.95, 0.1, [0.45, 0.33, 0.2]));
+		p.push(colored(new THREE.TorusGeometry(0.16, 0.04, 5, 10).translate(0.5, 0.62, 0.1), [0.8, 0.72, 0.5]), B(0.9, 0.45, 0.5, 0, 0, 0.15, [0.5, 0.38, 0.24]));
+		S.gearrack = M(p);
+	}
+	// a drive-through menu board: a lit panel on two legs (its band in the business's colour), the speaker
+	{
+		const p = [B(0.1, 1.0, 0.1, -0.6, 0, 0, DARK), B(0.1, 1.0, 0.1, 0.6, 0, 0, DARK), B(1.5, 1.2, 0.14, 0, 1.0, 0, [0.12, 0.12, 0.13]), B(1.4, 0.28, 0.16, 0, 1.86, 0, [1, 1, 1])];
+		for (let k = 0; k < 4; k++) p.push(B(1.2, 0.06, 0.15, 0, 1.2 + k * 0.15, 0.01, [0.95, 0.9, 0.7]));
+		p.push(B(0.08, 1.1, 0.08, 1.6, 0, 0, DARK), B(0.3, 0.3, 0.2, 1.6, 1.1, 0, [0.3, 0.3, 0.32]));
+		S.menuboard = M(p);
+	}
+	// a monument sign at an office's entrance: a stone slab on its plinth (the name is the atlas's)
+	S.monument = M([B(3.3, 0.35, 0.7, 0, 0, 0, [0.5, 0.49, 0.47]), B(3.1, 1.25, 0.32, 0, 0.35, 0, [0.82, 0.8, 0.76]), B(3.2, 0.06, 0.36, 0, 1.6, 0, [0.62, 0.6, 0.58])]);
+	// a sign post in the front garden: a white post, an arm, the board hangs below it
+	S.postsign = M([B(0.1, 2.0, 0.1, 0, 0, 0, WHITE), B(1.85, 0.07, 0.07, 0.88, 1.88, 0, WHITE), B(0.02, 0.12, 0.02, 0.2, 1.74, 0, DARK), B(0.02, 0.12, 0.02, 1.6, 1.74, 0, DARK), B(0.3, 0.06, 0.3, 0, 0, 0, [0.6, 0.6, 0.58])]);
+	// crates of produce, the fruit tinted
+	{
+		const wood = [0.62, 0.48, 0.3], p = [];
+		for (const [x, y, z] of [[-0.45, 0, 0], [0.45, 0, 0], [0, 0.42, 0.05]]) { p.push(B(0.8, 0.38, 0.55, x, y, z, wood)); p.push(B(0.7, 0.06, 0.45, x, y + 0.36, z, [1, 1, 1])); }
+		S.crates = M(p);
+	}
+	// a rack of surfboards on end
+	{
+		const cols = [[0.95, 0.95, 0.92], [0.2, 0.6, 0.75], [0.98, 0.55, 0.3], [0.95, 0.85, 0.4]], p = [B(2.0, 0.08, 0.3, 0, 0.9, -0.2, [0.4, 0.3, 0.2]), B(0.08, 1.0, 0.08, -0.95, 0, -0.2, [0.4, 0.3, 0.2]), B(0.08, 1.0, 0.08, 0.95, 0, -0.2, [0.4, 0.3, 0.2])];
+		cols.forEach((c, k) => p.push(colored(new THREE.CylinderGeometry(0.26, 0.26, 2.1, 10).scale(1, 1, 0.12).translate(-0.7 + k * 0.46, 1.05, 0).rotateX(-0.12), c)));
+		S.surfrack = M(p);
+	}
+	// kegs and a barrel by the door
+	{
+		const p = [];
+		for (const [x, z, h] of [[-0.35, 0, 0.6], [0.3, 0.1, 0.6], [0, -0.45, 0.9]]) { p.push(C(0.27, h, x, 0, z, [0.48, 0.32, 0.18], 12)); p.push(C(0.28, 0.05, x, h * 0.2, z, DARK, 12), C(0.28, 0.05, x, h * 0.75, z, DARK, 12)); }
+		S.kegs = M(p);
+	}
 	return S;
 }
 
@@ -91,6 +163,8 @@ const SPEC = {
 	picket: [6000, false, true], iron: [6000, false, true],
 	lounger: [3000, false, true], umbrella: [1200, true, true], cabana: [400, true, true], bbq: [400, false, true], table: [800, false, true],
 	carport: [3000, true, true], mailbox: [400, false, true], gate: [300, false, true], net: [400, false, true], bench: [1500, false, false],
+	aboard: [500, false, true], outrigger: [120, false, true], nets: [200, false, true], antlers: [150, false, true], gearrack: [150, false, true], menuboard: [150, false, true],
+	monument: [400, false, true], postsign: [700, false, true], crates: [600, false, true], surfrack: [120, false, true], kegs: [300, false, true],
 };
 
 export function createProps(group, wrap, isPhone) {
@@ -140,7 +214,7 @@ export function createProps(group, wrap, isPhone) {
 				if (e.length > 8) { col[n * 3] = e[8]; col[n * 3 + 1] = e[9]; col[n * 3 + 2] = e[10]; } else { col[n * 3] = col[n * 3 + 1] = col[n * 3 + 2] = 1; }
 				n++;
 			}
-			im.count = n;
+			im.count = n; im.visible = n > 0;
 			im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true;
 			im.computeBoundingSphere();
 		}
