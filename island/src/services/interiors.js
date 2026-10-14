@@ -153,7 +153,7 @@ export function planFire({ W, D }) {
 			K.flight(0, hw - 1.3, hw - 0.06, -hd + 0.25, zk - 0.45, null, -1);
 			// upstairs
 			const zg = clamp(0, -hd + 4, hd - 5), xg = -hw + (xb + hw) * 0.4;
-			K.room(1, 'bunkRoom', -hw, zg + PT / 2, xb - PT / 2, hd, QUARTERS);
+			cells(K, 1, 'bunkRoom', -hw, zg + PT / 2, xb - PT / 2, hd, 16, 11, QUARTERS);
 			K.room(1, 'showers', -hw, -hd, xg - PT / 2, zg - PT / 2, { floor: 'tile', paint: [0.86, 0.9, 0.9] });
 			K.room(1, 'gym', xg + PT / 2, -hd, xb - PT / 2, zg - PT / 2, { floor: 'carpet', paint: [0.7, 0.74, 0.78] });
 			K.room(1, 'hall', xb + PT / 2, -hd, hw, zk - PT / 2, { stairs: true, ...CIVIC });

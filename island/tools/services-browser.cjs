@@ -69,7 +69,7 @@ async function settle(page, frames = 4) {
 			const shot = await page.evaluate(() => { const I = window.L99Island, r = I.renderer(); r.render(I.scene(), I.camera()); return r.domElement.toDataURL('image/png'); });
 			const file = path.join(OUT, `${kind}-${room || 'outside'}.png`);
 			fs.writeFileSync(file, Buffer.from(shot.split(',')[1], 'base64'));
-			const here = await page.evaluate(() => window.Crysis.services().here);
+			const here = await page.evaluate(([k]) => { const S = window.Crysis.services(), F = S.near.find((q) => q.kind === k), p = window.Crysis.world().player.state.pos; return { here: S.here, shell: F?.shell, live: F?.live, d: F?.d, src: F?.src, size: F?.size, at: [Math.round(p.x), Math.round(p.y), Math.round(p.z)] }; }, [kind]);
 			report.shots.push({ kind, room, live, file, go: r1, here });
 			log('shot', file, live, JSON.stringify(here));
 		}

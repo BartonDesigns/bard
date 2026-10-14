@@ -105,7 +105,8 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		const U = w.bayArea?.urbanAt?.(A.x, A.z);
 		if (w.city?.fill && U && [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([u, v]) => (w.bayArea.urbanAt(A.x + u * R * 0.5, A.z + v * R * 0.5)?.u || 0) > 0.1)) {
 			const list = [];
-			try { w.city.fill(A.x, A.z, R, list); } catch { /* a town not there */ }
+			// (a gridded town is laid out lot by lot: no further than 700 m, to keep a decision to a frame)
+			try { w.city.fill(A.x, A.z, Math.min(R, 700), list); } catch { /* a town not there */ }
 			for (const o of list) if (o.w && o.d && o.h > 0.5) out.push({ x: o.x, z: o.z, w: o.w, d: o.d, a: o.a || 0, h: o.h, kind: o.kind, grid: true, ref: o });
 		}
 		return out;
@@ -625,16 +626,17 @@ export function createServices({ scene, world, camera, people = () => null, isPh
 		for (const A of anchorsNear(kind, cam.x, cam.z, SCAN_R)) if (stale(A)) decide(A);
 		const F = nearest(kind, cam.x, cam.z);
 		if (!F) return `No ${TITLES[kind].toLowerCase()} within reach here.`;
-		if (room && F.live) {
+		if (room && room !== 'front' && F.live) {
 			const I = W().interiors, idx = [...I.live.values()].filter((B) => B.ready && B.use === 'site' && B.P.rooms.some((q) => q.type === room)).findIndex((B) => B.site === F.site);
 			const r = idx >= 0 ? I.goTo(P, 'site', idx, room) : null;
 			if (r) return { ...r, name: F.name };
 		}
-		const fr = frameOf(F), dx = F.plan.door.x, [x, z] = fr.w(dx, F.D / 2 + 6), [tx, tz] = fr.w(dx, 0);
+		// ('front': back across the street, the whole front in view)
+		const far = room === 'front', fr = frameOf(F), dx = far ? 0 : F.plan.door.x, [x, z] = fr.w(far ? F.W * 0.18 : dx, F.D / 2 + (far ? Math.max(F.W, 24) * 0.85 : 6)), [tx, tz] = fr.w(dx, 0);
 		P.flying = false; P.vel?.set(0, 0, 0);
 		P.pos.set(x, Math.max(ground(x, z), F.street) + 1.7, z);
 		P.yaw = Math.atan2(-(tx - x), -(tz - z)); P.pitch = 0;
-		return { kind, name: F.name, d: 0, room: room && !F.live ? 'its rooms are being built: ask again in a moment' : null };
+		return { kind, name: F.name, d: 0, room: room && !far && !F.live ? 'its rooms are being built: ask again in a moment' : null };
 	}
 	// equipment sources for the gear screen (crysis/arms-runtime.js): police caches, pharmacies
 	function sites() {
