@@ -779,7 +779,7 @@ export function createIslandWorld() {
 	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
 	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney });
 	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
 	// quests they do for each other with or without you (people/npc-quests.js)
 	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };

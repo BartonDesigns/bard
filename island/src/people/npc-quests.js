@@ -24,6 +24,7 @@
 
 import * as THREE from 'three';
 import { favourProp } from './favour-props.js';
+import { createDog, dogSpec } from './dog.js';
 import { disposition, temperOf } from './disposition.js';
 import { createSources, favourQuest, bagQuest, decide, settle, farQuest, playFar, residentSeed, sceneLine } from './npc-quests-core.js';
 import { bayRegionOf, globeRegionOf, globeCell, situationOf } from './moral-regions.js';
@@ -161,7 +162,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		const q = R.q, speed = Math.max(1, (R.p.P.dna.gait?.pace || 1.3) * R.d.pace);
 		steer(R.p, (who) => {
 			const S = who.M.S;
-			if (R.phase === 'flee') { const f = R.fleeFrom || cam(); who.M.want.heading = Math.atan2(S.pos.x - f.x, S.pos.z - f.z); who.M.want.speed = speed * 1.6; who.M.want.run = 0; return true; }
+			if (R.phase === 'flee') { const f = R.fleeFrom || cam(); who.M.want.heading = Math.atan2(S.pos.x - f.x, S.pos.z - f.z); who.M.want.speed = speed * (R.slow ? 1 : 1.6); who.M.want.run = 0; return true; }
 			const T = R.phase === 'step' ? targetOf(q.steps[R.i]) : null;
 			if (!T || flat(S.pos, T) < REACH * 0.8) { who.M.want.speed = 0; if (R.face) who.M.want.heading = Math.atan2(R.face.x - S.pos.x, R.face.z - S.pos.z); return true; }
 			const chase = q.steps[R.i].do === 'chase';
@@ -176,34 +177,49 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (R.outcome === 'abandon' && R.i >= Math.ceil(R.q.steps.length / 2)) return end(R, 'abandon');
 		if (R.i >= R.q.steps.length) end(R, R.own ? 'own' : 'done');
 	}
+	// what the one helped says when it is done, by the kind of favour (errands-core.js lineFor)
+	const REPLY = { 'favour.pass': 'passed', 'favour.catch': 'caught', 'favour.repair': 'fixed', 'favour.jumpstart': 'jumped', 'favour.groceries': 'carried', 'favour.directions': 'told', 'favour.fall': 'helpedUp', 'favour.pet': 'reunited' };
+	// what the helper says as they hand it over or finish
+	const HAND = { 'favour.directions': 'directions', 'favour.repair': 'fixed', 'favour.jumpstart': 'cables', 'favour.fall': 'helpUp' };
 	function arrive(R) {
-		const s = R.q.steps[R.i], T = targetOf(s), w = s.at?.who;
+		const s = R.q.steps[R.i], T = targetOf(s), w = s.at?.who, kind = R.q.kind;
 		if (s.do === 'go' || s.do === 'chase') return next(R);
+		// the moment a betrayal happens when it is not a pickup: the wrong way, the money, the pockets
+		if (s.turn && R.outcome === 'betray') return betray(R);
 		if (s.do === 'pickup') {
 			if (R.ground) { dropProp(R.ground.prop); R.ground.prop = null; R.ground.phase = 'taken'; }
 			R.prop = propFor(s.item?.shape || R.q.item?.shape);
 			if (R.outcome === 'betray') return betray(R);
 			if (R.own) say(R.p, sceneLine('back', n++), 'nod', { joy: 0.4 });
 			else if (R.kids) say(R.p, sceneLine('withKids', n++), 'nod', { joy: 0.3 });
+			else if (kind === 'favour.groceries') say(R.p, sceneLine('carry', n++), 'nod', { joy: 0.3 });
 			// a bag's owner is called back, and waits
-			const ow = R.q.kind === 'bag' && !R.own ? R.q.steps.findLast((x) => x.do === 'deliver')?.at?.who : null;
+			const ow = kind === 'bag' && !R.own ? R.q.steps.findLast((x) => x.do === 'deliver')?.at?.who : null;
 			if (ow && ow.active && ow !== R.p && !ow.heldBy) { standStill(ow, () => pos(R.p)); R.still.push(ow); say(R.p, sceneLine('call', n++), 'wave', { surprise: 0.2 }); }
+			// groceries: their owner walks to the car beside the one carrying them
+			if (kind === 'favour.groceries' && w && w !== R.p) { walkWith(w, R.p); R.still.push(w); }
 			// a favour's giver hands it over and waits
-			if (w && w !== R.p) say(w, R.q.kind === 'favour.pass' ? 'Thank you, really.' : '', 'nod', { joy: 0.4 });
+			else if (w && w !== R.p) say(w, kind === 'favour.pass' ? 'Thank you, really.' : '', 'nod', { joy: 0.4 });
 			return pause(R, 0.8, T);
 		}
 		if (s.do === 'deliver' || s.do === 'talk') {
 			if (w && w.active && w !== R.p) {
 				if (!w.heldBy) { standStill(w, () => pos(R.p)); R.still.push(w); }
-				const bagBack = R.q.kind === 'bag';
-				say(R.p, bagBack ? sceneLine('hand', n++) : sceneLine(s.do === 'talk' ? 'fixed' : 'deliver', n++), 'open', { joy: 0.4 });
+				const bagBack = kind === 'bag';
+				say(R.p, bagBack ? sceneLine('hand', n++) : sceneLine(HAND[kind] || (s.do === 'talk' ? 'fixed' : 'deliver'), n++), kind === 'favour.directions' ? 'point' : 'open', { joy: 0.4 });
 				// (their answer a moment later)
-				R.reply = { p: w, at: 1.6, text: bagBack ? sceneLine('thank', n++) : lineFor(R.q.kind === 'favour.pass' ? 'passed' : R.q.kind === 'favour.catch' ? 'caught' : R.q.kind === 'favour.repair' ? 'fixed' : 'returned', { kind: R.q.kind.slice(7), item: { ...R.q.item, the: `the ${R.q.item?.name || 'thing'}` }, friend: R.q.giver.name, n: n++ }) };
+				R.reply = { p: w, at: 1.6, text: bagBack ? sceneLine('thank', n++) : lineFor(REPLY[kind] || 'returned', { kind: kind.slice(7), item: { ...R.q.item, the: `the ${R.q.item?.name || 'thing'}` }, friend: R.q.giver.name, n: n++ }) };
 			}
+			if (kind === 'favour.pet') petHome(R);
 			if (R.prop) { dropProp(R.prop); R.prop = null; }
 			return pause(R, 3, T);
 		}
-		if (s.do === 'wait') return pause(R, 3, T);
+		if (s.do === 'wait') {
+			// a lost dog won over, now following; someone fallen, helped to their feet
+			if (kind === 'favour.pet') petFollow(R);
+			if (kind === 'favour.fall' && w) { say(R.p, sceneLine('helpUp', n++), 'open', {}); getUp(w); }
+			return pause(R, 3, T);
+		}
 		if (s.do === 'fix') { R.p.M.setPose?.('rest'); return pause(R, 4, T); }
 		next(R);
 	}
@@ -213,7 +229,17 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		R.settled = settle(q, 'betray', { ...ctx(R.name, q.region), actorId: R.id });
 		R.takenAt = { x: pos(R.p).x, z: pos(R.p).z };
 		remember(R.p, 'stole');
-		const owner = q.steps.findLast((s) => s.do === 'deliver')?.at, ob = owner?.who;
+		const owner = q.steps.findLast((s) => s.do === 'deliver')?.at || q.steps.findLast((s) => s.at?.who)?.at, ob = owner?.who;
+		// nothing carried off (the wrong way pointed out, money talked out of them): they just
+		// walk away, and the one cheated may not even know it yet
+		if (!R.settled.followUp) {
+			if (q.kind === 'favour.directions') { say(R.p, sceneLine('mislead', n++), 'point', {}); R.reply = { p: ob, at: 1.6, text: lineFor('told', { n: n++ }), gesture: 'wave', feel: { joy: 0.6 } }; }
+			else { say(R.p, sceneLine('upfront', n++), 'shrug', {}); if (ob && adult(ob)) { remember(ob, 'cheated'); R.reply = { p: ob, at: 4, text: sceneLine('cheated', n++) }; } }
+			R.phase = 'flee'; R.slow = true; R.stepT = 0; R.fleeFrom = ob?.active ? pos(ob) : cam();
+			return;
+		}
+		if (!R.prop && q.item?.shape) R.prop = propFor(q.item.shape);
+		if (ob && q.kind === 'favour.fall') { getUp(ob); letGo(ob); }
 		witnesses(pos(R.p), 'saw-theft', [R.p]);
 		if (ob && adult(ob)) { remember(ob, 'robbed'); unkeep(ob); }
 		const E = errands();
@@ -259,6 +285,8 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (R.phase !== 'handed') { dropProp(R.prop); R.prop = null; }
 		taken.delete(q.id);
 		if (R.ground && bag === R.ground) clearBag();
+		const D = dogs.get(q.id);
+		if (D && D.phase !== 'reunion' && D.phase !== 'home') dropDog(q.id);
 		R.phase = R.phase === 'handed' ? 'handed' : 'over';
 	}
 	function sceneUpdate(R, dt) {
@@ -269,7 +297,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (!p.active || p.P?.ragdoll || (p.heldBy && !p.heldBy.npcq)) return end(R, 'far');
 		if (R.prop) inHand(R.prop, p);
 		if (flat(pos(p), cam()) > VISIBLE) return end(R, 'far');
-		if (R.phase === 'flee') { if (R.stepT > 20) end(R, 'gone'); return; }
+		if (R.phase === 'flee') { if (R.reply && R.stepT >= R.reply.at) { say(R.reply.p, R.reply.text, R.reply.gesture || 'shake', R.reply.feel || { anger: 0.5 }); R.reply = null; } if (R.stepT > (R.slow ? 8 : 20)) end(R, 'gone'); return; }
 		if (R.phase === 'pause') {
 			if (R.reply && R.stepT >= R.reply.at) { say(R.reply.p, R.reply.text, 'wave', { joy: 1 }); R.reply = null; }
 			if (R.stepT > R.pauseFor) next(R);
@@ -415,40 +443,110 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		id: 'favours',
 		near: (x, z, r) => open.filter((F) => clock < F.until && Math.hypot(F.q.giver.x - x, F.q.giver.z - z) < r).map((F) => F.q),
 		take: (id) => { const F = open.find((f) => f.q.id === id); if (!F) return false; F.taken = true; return true; },
-		complete: (id) => { const i = open.findIndex((f) => f.q.id === id); if (i >= 0) { const F = open[i]; letGo(F.giver); unkeep(F.giver); letGo(F.friend); unkeep(F.friend); open.splice(i, 1); } },
+		complete: (id) => { const i = open.findIndex((f) => f.q.id === id); if (i >= 0) closeFavour(open[i]); },
 	};
 	sources.add(favours);
-	function openFavour(kind, giver, { friend = null, drop = null, car = null, item = null } = {}) {
+	function closeFavour(F) {
+		const i = open.indexOf(F);
+		if (i >= 0) open.splice(i, 1);
+		if (F.giver?.fallen) getUp(F.giver);
+		letGo(F.giver); unkeep(F.giver); letGo(F.friend); unkeep(F.friend);
+		// a dog nobody went for wanders off out of sight
+		const D = dogs.get(F.q.id);
+		if (D && D.phase === 'lost') dropDog(F.q.id);
+	}
+	// someone who has fallen stays down until helped (or gets up by themselves, in the end)
+	function downOnGround(p) { steer(p, (q) => { q.M.want.speed = 0; return true; }); p.fallen = true; p.M.sit?.(0.12); p.M.setPose?.('lap'); }
+	function getUp(p) { if (!p) return; p.fallen = false; p.M.stand?.(); p.M.setPose?.(p.idlePose || 'rest'); }
+	// beside someone as they walk (groceries to the car)
+	function walkWith(p, leader) {
+		steer(p, (q) => {
+			const S = q.M.S, L = pos(leader), d = flat(S.pos, L);
+			if (d > 1.6) { q.M.want.heading = Math.atan2(L.x - S.pos.x, L.z - S.pos.z); q.M.want.speed = Math.min(1.7, d); } else q.M.want.speed = 0;
+			return true;
+		});
+	}
+	// ---------- a lost dog, for a pet favour near you (dog.js) ----------
+	const dogs = new Map();
+	function spawnDog(q, at, spec) {
+		let dog = null;
+		try { dog = createDog({ seed: spec.seed, breed: spec.breed, isPhone }); } catch { return null; }
+		dog.place(at.x, groundY(at.x, at.z), at.z, Math.random() * 6.28); dog.pose('sad');
+		scene.add(dog.root);
+		// (stands in for a body as a step's place: the dog itself, wherever it has wandered)
+		const proxy = { active: true, M: { S: { pos: new THREE.Vector3(at.x, 0, at.z) } } };
+		const D = { dog, phase: 'lost', home: { x: at.x, z: at.z }, you: null, owner: null, t: 0, proxy };
+		dogs.set(q.id, D);
+		return D;
+	}
+	function dropDog(id) { const D = dogs.get(id); if (!D) return; D.proxy.active = false; D.dog.dispose(); dogs.delete(id); }
+	function petFollow(R) { const D = dogs.get(R.q.id); if (D) { D.phase = 'follow'; D.you = R.p; } }
+	function petHome(R) { const D = dogs.get(R.q.id); if (D) { D.phase = 'reunion'; D.t = 0; D.owner = R.q.steps.at(-1).at?.who || null; } }
+	function dogsUpdate(dt) {
+		for (const [id, D] of dogs) {
+			D.t += dt;
+			const you = D.you?.active ? pos(D.you) : cam(), owner = D.owner?.active ? pos(D.owner) : you;
+			try { D.dog.update(dt, { ground: groundY, home: D.home, mode: D.phase, you, owner, keep: 1.8 }); } catch { dropDog(id); continue; }
+			const p = D.dog.pos; D.proxy.M.S.pos.set(p.x, p.y, p.z);
+			if (D.phase === 'reunion' && D.t > 7) { D.phase = 'home'; D.t = 0; }
+			if ((D.phase === 'home' && D.t > 20) || flat(p, cam()) > VISIBLE + 20) dropDog(id);
+		}
+	}
+	function openFavour(kind, giver, { friend = null, drop = null, car = null, item = null, dest = null } = {}) {
 		if (!giver || !adult(giver)) return null;
 		const g = pos(giver), who = (p) => p && { id: idOf(p), name: nameOf(p), x: pos(p).x, z: pos(p).z, ref: p };
-		const q = favourQuest(kind, { giver: who(giver), friend: who(friend), drop: drop && { ...drop }, car: car && { ...car, name: 'their car' }, region: here.region.id, seed: giver.P.dna.seed, n: n++, item });
+		const pet = kind === 'pet' ? dogSpec(((giver.P.dna.seed | 0) * 31 + n * 7) >>> 0) : null;
+		const q = favourQuest(kind, { giver: who(giver), friend: who(friend), drop: drop && { ...drop }, car: car && { ...car, name: 'their car' }, region: here.region.id, seed: giver.P.dna.seed, n: n++, item, dest, pet });
 		if (!q) return null;
 		q.id = `${q.id}:${giver.P.dna.seed}:${n}`;
+		// their dog, run off a little way: found where it has wandered to
+		if (pet && drop) { const D = spawnDog(q, drop, pet); if (D) { q.steps[0].at.who = D.proxy; q.steps[1].at.who = D.proxy; } }
+		// someone falls: down where they are until helped up
+		if (kind === 'fall') {
+			downOnGround(giver);
+			say(giver, sceneLine('fallen', n++), 'shake', { surprise: 0.8, sad: 0.4 });
+			if (flat(g, cam()) < 35 && !errands()?.busy?.()) hint(`${q.giver.name || 'Someone'} has fallen over. Walk up to them to help them up.`, 4000);
+		}
 		// the giver waits where they are; a friend to be caught walks on, kept in the world
-		if (!giver.held) standStill(giver, () => { const R = scenes.find((s) => s.q.id === q.id); return R ? pos(R.p) : null; });
+		else if (!giver.held) standStill(giver, () => { const R = scenes.find((s) => s.q.id === q.id); return R ? pos(R.p) : null; });
+		if (kind === 'directions') say(giver, `Excuse me, does anyone know the way to ${q.dest}?`, 'open', { surprise: 0.2 });
 		if (friend) { if (kind === 'pass' && !friend.held) standStill(friend, null); else keep(friend); }
-		open.push({ q, giver, friend, until: clock + 60, x: g.x, z: g.z });
+		open.push({ q, giver, friend, until: clock + (kind === 'fall' ? 45 : 60), x: g.x, z: g.z, kind });
 		return q;
 	}
-	function spawnFavour() {
+	// a favour near you: what it is follows who is about (a friend to catch, a car that will not
+	// start, a dog run off); want: one kind, for the console
+	function spawnFavour(want = null) {
 		const c = cam(), pool = people.pool.filter(free);
-		const giver = pool.find((p) => flat(pos(p), c) > 15 && flat(pos(p), c) < 60);
+		const giver = pool.find((p) => flat(pos(p), c) > (want ? 4 : 15) && flat(pos(p), c) < 60);
 		if (!giver) return 'nobody about to ask';
 		const g = pos(giver), others = pool.filter((p) => p !== giver);
-		const kinds = ['lost'];
+		const kinds = ['lost', 'directions', 'fall', 'groceries', 'pet'];
 		const friend = others.find((p) => flat(pos(p), g) > 10 && flat(pos(p), g) < 40);
 		if (friend) kinds.push('pass', friend.role === 'walk' ? 'catch' : 'pass');
 		let car = null;
 		try { car = (world()?.street?.parkedNear?.(g.x, g.z, 25) || []).find((k) => k.id && !String(k.id).startsWith('tr')); } catch { /* no street */ }
-		if (car) kinds.push('repair');
-		const kind = kinds[Math.floor(Math.random() * kinds.length)];
-		const a = Math.random() * 6.28, drop = { x: g.x + Math.cos(a) * 8, y: g.y, z: g.z + Math.sin(a) * 8 };
+		if (car) kinds.push('repair', 'jumpstart', 'groceries');
+		const kind = want && kinds.includes(want) ? want : kinds[Math.floor(Math.random() * kinds.length)];
+		const a = Math.random() * 6.28, d = kind === 'pet' ? 22 : kind === 'groceries' ? 14 : 8, drop = { x: g.x + Math.cos(a) * d, y: g.y, z: g.z + Math.sin(a) * d };
 		const q = openFavour(kind, giver, { friend: kind === 'pass' || kind === 'catch' ? friend : null, drop, car: car && { x: car.x, z: car.z } });
 		return q ? q.title : 'no favour';
 	}
+	// someone fallen near you, not yet helped: walk up and you help them up (errands.js helped)
+	function helpLook() {
+		const E = errands(), c = cam();
+		for (const F of open) {
+			if (F.kind !== 'fall' || F.taken || !F.giver.active || flat(pos(F.giver), c) > 2.6 || !E?.helped || E.busy?.()) continue;
+			F.taken = true;
+			getUp(F.giver);
+			if (E.helped({ kind: 'fall', p: F.giver, name: F.q.giver.name })) remember(F.giver, 'helped');
+			closeFavour(F);
+			return;
+		}
+	}
 	// a favour you turned down (errands.js): someone else about may take it up
 	function handoff(E) {
-		if (!E?.giver || !['lost', 'catch', 'pass', 'repair'].includes(E.kind)) return;
+		if (!E?.giver || !['lost', 'catch', 'pass', 'repair', 'groceries', 'jumpstart', 'directions'].includes(E.kind)) return;
 		pending.push({ at: clock + 1.2, E });
 	}
 	function fromHandoff(E) {
@@ -456,7 +554,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		const friend = E.friendP && adult(E.friendP) && !E.friendP.held ? E.friendP : null;
 		if ((E.kind === 'pass' || E.kind === 'catch') && !friend) return;
 		const item = E.kind === 'lost' && E.item ? { name: E.item.name, shape: E.item.shape || E.item.id, cash: E.item.cash || 0 } : null;
-		openFavour(E.kind, E.giver, { friend, drop: E.drop, car: E.car, item });
+		openFavour(E.kind, E.giver, { friend, drop: E.drop, car: E.car, item, dest: E.dest });
 	}
 
 	// ---------- matching open quests (every source) with the people near them ----------
@@ -613,14 +711,16 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		for (let i = scenes.length - 1; i >= 0; i--) if (scenes[i].phase === 'over') scenes.splice(i, 1);
 		if (bag) { bag.t += dt; bagWalk(dt); }
 		if (cast) { if (cast.p.active) inHand(cast.prop, cast.p); }
+		if (dogs.size) dogsUpdate(dt);
 		for (let i = carried.length - 1; i >= 0; i--) { const H = carried[i]; if (H.prop && H.p.active) inHand(H.prop, H.p); else { dropProp(H.prop); carried.splice(i, 1); } }
 		if ((lookT -= dt) <= 0) {
 			lookT = 1;
 			if (hurtFns.length) watchHurt();
 			if (bag?.phase === 'left') bagLook();
 			leadTick();
+			helpLook();
 			for (let i = pending.length - 1; i >= 0; i--) if (clock >= pending[i].at) { fromHandoff(pending[i].E); pending.splice(i, 1); }
-			for (let i = open.length - 1; i >= 0; i--) { const F = open[i]; if (!F.taken && (clock > F.until || !F.giver.active || flat(F, cam()) > VISIBLE)) { letGo(F.giver); unkeep(F.giver); if (F.friend) { letGo(F.friend); unkeep(F.friend); } open.splice(i, 1); } }
+			for (let i = open.length - 1; i >= 0; i--) { const F = open[i]; if (!F.taken && (clock > F.until || !F.giver.active || flat(F, cam()) > VISIBLE)) closeFavour(F); }
 			if (Math.floor(clock) % 2 === 0) match();
 		}
 		const busy = errands()?.busy?.() || scenes.length >= SCENES;
@@ -648,7 +748,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		};
 	}
 	// what they know, for a conversation (guide.js): what they did or saw, and their money talk
-	const FACT = { returned: 'Lately handed a lost bag back to the person who left it.', 'got-back': 'Left their bag behind earlier and a stranger brought it back; still a little amazed.', helped: 'A stranger did them a favour a little while ago.', robbed: 'Someone walked off with their bag a few minutes ago; upset about it.', 'saw-theft': 'Saw someone walk off with a bag that was not theirs a few minutes ago.', 'saw-return': 'Saw someone hand a lost bag back to its owner a little while ago.', 'saw-bag': 'Spotted a bag someone had left behind a little while ago, and said so.' };
+	const FACT = { returned: 'Lately handed a lost bag back to the person who left it.', 'got-back': 'Left their bag behind earlier and a stranger brought it back; still a little amazed.', helped: 'A stranger did them a favour a little while ago.', robbed: 'Someone walked off with their bag a few minutes ago; upset about it.', 'saw-theft': 'Saw someone walk off with a bag that was not theirs a few minutes ago.', 'saw-return': 'Saw someone hand a lost bag back to its owner a little while ago.', 'saw-bag': 'Spotted a bag someone had left behind a little while ago, and said so.', cheated: 'Someone offered to help with their car a little while ago, took their money up front and walked off.' };
 	function factsFor(p) {
 		if (!p?.P?.dna) return [];
 		const out = [], m = memoryOf(p.P.dna.seed);
@@ -667,8 +767,10 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		scenes.length = 0; clearBag(); uncast();
 		for (const H of carried) dropProp(H.prop);
 		carried.length = 0;
-		for (const F of open) { letGo(F.giver); unkeep(F.giver); letGo(F.friend); unkeep(F.friend); }
-		open.length = 0; commons.save();
+		for (const F of open.slice()) closeFavour(F);
+		open.length = 0;
+		for (const id of [...dogs.keys()]) dropDog(id);
+		commons.save();
 	}
 	return {
 		update, info, handoff, dispose, farTick, memoryOf, factsFor, moneyLine, regionNow, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
@@ -677,7 +779,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		leads: () => leads.open().map((L) => ({ id: L.id, note: leadNote(L), here: L.region === here.region.id, region: L.regionName || L.region, when: L.when })),
 		// (the console and the tests: a theft just out of sight near you, left as a lead)
 		lead(kind = 'bag') {
-			const q = farQuest(here.region.id, farN++, kind === 'bag' ? 0.01 : 0.99), seed = residentSeed(here.region.id, farN * 13);
+			const q = farQuest(here.region.id, farN++, 0, kind === 'snatch' || kind === 'fall' ? kind : 'bag'), seed = residentSeed(here.region.id, farN * 13);
 			const r = { taker: `npc:${seed}`, ...settle(q, 'betray', { ...ctx('', here.region.id), actorId: `npc:${seed}` }) };
 			const L = leads.add(leadFrom(q, r, { region: here.region.id, regionName: here.region.name, town: here.town || '', hours: hours() }), { force: true });
 			if (L) { leads.place(L.id, leadSpot(L)); castT = 0; }
@@ -692,7 +794,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		// cafes and restaurants from ((x, z, r) -> [{ id, kind, name, door, tables }])
 		spots: () => { const c = cam(); try { return spots.near(c.x, c.z, 50).map((x) => ({ kind: x.kind, at: [r2(x.x), r2(x.z)], place: x.place || x.venue || '' })); } catch { return []; } },
 		establishments: (fn) => spots.use?.(fn),
-		favour: () => spawnFavour(),
+		favour: (kind) => spawnFavour(kind || null),
 		// (the console, on a slow machine: run the scenes on by seconds of game time, moving the
 		// people in them by their own steering, as people.js would)
 		fastForward(seconds = 10, dt = 0.1) {
