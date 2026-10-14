@@ -9,7 +9,8 @@
 export const FACTIONS = Object.freeze({
 	copperline: { name: 'Copperline Kings', kind: 'gang', zones: ['earth-urban'], colors: ['#c8733a', '#16181b'], emblem: 'crown over a rail', gun: 'mossback-scout-rifle', hp: 100, armour: 10, acc: 0.38, aggression: 0.5 },
 	glasshouse: { name: 'Glasshouse Crew', kind: 'gang', zones: ['earth-urban'], colors: ['#2fb5a8', '#eef3f2'], emblem: 'a cracked pane', gun: 'warden-spark-carbine', hp: 100, armour: 10, acc: 0.36, aggression: 0.55 },
-	ridgeback: { name: 'Ridgeback Volunteers', kind: 'militia', zones: ['earth-rural', 'wild'], colors: ['#5b6a3a', '#c9b98a'], emblem: 'an antler', gun: 'aurora-trail-rifle', hp: 110, armour: 30, acc: 0.45, aggression: 0.3 },
+	// (a militia keeps to its own compounds and checkpoints, military/rules.js: no zones, never roaming)
+	ridgeback: { name: 'Ridgeback Volunteers', kind: 'militia', zones: [], stationed: true, colors: ['#5b6a3a', '#c9b98a'], emblem: 'an antler', gun: 'aurora-trail-rifle', hp: 110, armour: 30, acc: 0.45, aggression: 0.3 },
 	ashfang: { name: 'Ashfang Raiders', kind: 'raiders', zones: ['arid', 'earth-desert', 'wild'], colors: ['#b8462c', '#2a2e33'], emblem: 'a broken fang', gun: 'aurora-trail-rifle', hp: 100, armour: 35, acc: 0.42, aggression: 0.85, masked: true },
 	dunecutters: { name: 'Dune Cutters', kind: 'raiders', zones: ['arid', 'earth-desert'], colors: ['#d9b46a', '#2c3566'], emblem: 'a kite over dunes', gun: 'warden-spark-carbine', hp: 95, armour: 25, acc: 0.4, aggression: 0.8, masked: true },
 	saltjack: { name: 'Saltjack Smugglers', kind: 'smugglers', zones: ['earth-coast'], colors: ['#24324a', '#e8e0cc'], emblem: 'a knotted anchor', gun: 'mossback-scout-rifle', hp: 100, armour: 15, acc: 0.4, aggression: 0.35 },
@@ -17,6 +18,12 @@ export const FACTIONS = Object.freeze({
 	hearthguard: { name: 'Hearthguard', kind: 'villagers', zones: ['village'], colors: ['#3f7a4a', '#efe6cf'], emblem: 'a lantern', gun: 'reedline-hunting-bow', hp: 90, armour: 10, acc: 0.4, aggression: 0.1 },
 	patrol: { name: 'Bay Patrol', kind: 'law', zones: ['earth-urban'], colors: ['#1d2a45', '#d9c46a'], emblem: 'a lighthouse', gun: 'mossback-scout-rifle', hp: 100, armour: 30, acc: 0.45, aggression: 0, lawful: true },
 	rangers: { name: 'Frontier Rangers', kind: 'law', zones: ['earth-rural', 'wild'], colors: ['#2f4a33', '#c9b27a'], emblem: 'an oak leaf', gun: 'aurora-trail-rifle', hp: 110, armour: 30, acc: 0.48, aggression: 0, lawful: true },
+	// the soldiers of the bases (military/): stationed at their posts, sent out by the dispatch
+	guard: { name: 'Meridian Guard', kind: 'military', zones: [], stationed: true, colors: ['#4a5236', '#c9c2a2'], emblem: 'a compass rose over a wall', gun: 'warden-spark-carbine', hp: 120, armour: 55, acc: 0.52, aggression: 0, lawful: true },
+	// the police: cruisers and officers, answering crime and the wanted level
+	police: { name: 'Harbour Police', kind: 'police', zones: [], colors: ['#1c2540', '#d9c46a'], emblem: 'a gull over a shield', gun: 'mossback-scout-rifle', hp: 100, armour: 35, acc: 0.46, aggression: 0, lawful: true },
+	// an armed force from another region, come over the border or the sea
+	ironvale: { name: 'Ironvale Legion', kind: 'invaders', zones: [], colors: ['#6a6c5c', '#a33a2a'], emblem: 'a tower in a ring', gun: 'warden-spark-carbine', hp: 115, armour: 45, acc: 0.48, aggression: 0.9 },
 	rogue: { name: 'Rogue drones', kind: 'machines', zones: ['wild', 'arid'], colors: ['#3a3f46', '#ff4a2a'], emblem: 'none', hp: 60, armour: 0, acc: 0.5, aggression: 1 },
 	gloom: { name: 'Gloomcrawlers', kind: 'creatures', zones: ['deep'], colors: ['#b9c2c8', '#7affc8'], emblem: 'none', hp: 70, armour: 0, acc: 0.6, aggression: 1 },
 	civ: { name: 'Townsfolk', kind: 'civilians', zones: [], colors: ['#ffffff', '#ffffff'], emblem: 'none', aggression: 0 },
@@ -34,9 +41,12 @@ const BASE = [
 	['saltjack', 'patrol', -40], ['saltjack', 'copperline', 20], ['halcyon', 'patrol', 10],
 	['rogue', 'ashfang', -60], ['rogue', 'dunecutters', -60], ['rogue', 'village', -60], ['rogue', 'hearthguard', -60], ['rogue', 'rangers', -60], ['rogue', 'ridgeback', -60],
 	['gloom', 'village', -80],
+	['guard', 'police', 80], ['guard', 'patrol', 70], ['guard', 'rangers', 60], ['guard', 'civ', 60], ['police', 'civ', 60], ['police', 'patrol', 80], ['police', 'rangers', 60],
+	['copperline', 'police', -50], ['glasshouse', 'police', -50], ['saltjack', 'police', -40], ['copperline', 'guard', -40], ['glasshouse', 'guard', -40], ['ridgeback', 'guard', -20], ['ridgeback', 'police', -10],
+	['ironvale', 'guard', -100], ['ironvale', 'police', -90], ['ironvale', 'patrol', -90], ['ironvale', 'civ', -60], ['ironvale', 'rangers', -90], ['ironvale', 'ridgeback', -70], ['ironvale', 'copperline', -40], ['ironvale', 'glasshouse', -40],
 ];
 // how each sees you to begin with
-const PLAYER_BASE = { copperline: -10, glasshouse: -10, ashfang: -60, dunecutters: -50, rogue: -100, gloom: -100, saltjack: 0, halcyon: 0, patrol: 20, rangers: 20, hearthguard: 30, village: 40, civ: 40, ridgeback: 0 };
+const PLAYER_BASE = { copperline: -10, glasshouse: -10, ashfang: -60, dunecutters: -50, rogue: -100, gloom: -100, saltjack: 0, halcyon: 0, patrol: 20, rangers: 20, hearthguard: 30, village: 40, civ: 40, ridgeback: 0, guard: 25, police: 20, ironvale: -70 };
 
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 const clamp = (v) => Math.max(-100, Math.min(100, v));

@@ -130,6 +130,7 @@ export const TYPES = {
 	hospital: { label: 'hospital', u: 'OW', v: 'office', service: 'hospital', w: { downtown: 0.12, park: 0.25 }, s: ['rect', 'sans'], pal: [['#ffffff', '#c62828'], ['#1b6fa8', '#ffffff']], awn: null, props: ['monument'], n: ['{W} General Hospital', '{W} Medical Center', '{A} Valley Hospital'], tag: 'EMERGENCY' },
 	police: { label: 'police station', u: 'OST', v: null, service: 'police', w: { downtown: 0.1, main: 0.06, park: 0.1, strip: 0.05 }, s: ['rect', 'sans'], pal: [['#13294b', '#ffffff']], awn: null, props: ['monument'], n: ['{W} Police Station', '{W} Police Department'], tag: 'POLICE' },
 	firestation: { label: 'fire station', u: 'OSTI', v: null, service: 'fire', w: { main: 0.06, park: 0.08, strip: 0.05, industrial: 0.15, rural: 0.02 }, s: ['rect', 'slab'], pal: [['#b71c1c', '#ffffff']], awn: null, props: [], n: ['{W} Fire Station', 'Station {W}', '{W} Fire Company'], tag: 'FIRE · RESCUE' },
+	armory: { label: 'armory', u: 'OSTI', v: null, service: 'armory', w: {}, s: ['rect', 'slab'], pal: [['#3b4a2a', '#f2f2e8']], awn: null, props: [], n: ['{W} Armory'], tag: 'ARMORY' },
 	// sheds and warehouses
 	brewery: { label: 'brewery', u: 'I', w: { industrial: 2, harbour: 0.8 }, s: ['plank', 'slab'], pal: OLD_PAL, awn: null, props: ['kegs', 'table'], n: ['{W} Brewing Co.', 'The {A} Barrel', "{F}'s Ales"], tag: 'TAPROOM' },
 	autorepair: { label: 'auto repair', u: 'IH', w: { industrial: 3, highway: 2, rural: 1 }, s: ['block', 'sans'], pal: [['#1f3f7a', '#ffffff'], ['#c8302a', '#ffffff']], awn: null, props: ['car'], n: ["{F}'s Auto Repair", '{W} Garage', 'The {A} Wrench'], tag: 'AUTO REPAIR · TYRES' },
@@ -371,12 +372,13 @@ export function nameFor(id, x, z, loc = 'us-ca', salt = 0) {
 }
 
 // the services' own siting (src/services/): registerSiting('hospital', (b, setting) => true) claims
-// a building for that service before anything else is considered; fn returns true to claim it
+// a building for that service before anything else is considered; fn returns true to claim it,
+// or the service's own name for it (so the sign and the service agree)
 const SITING = new Map();
-const SERVICE_TYPE = { hospital: 'hospital', police: 'police', fire: 'firestation', 'fire station': 'firestation', firestation: 'firestation' };
+const SERVICE_TYPE = { hospital: 'hospital', police: 'police', fire: 'firestation', 'fire station': 'firestation', firestation: 'firestation', armory: 'armory' };
 export function registerSiting(kind, fn) {
 	const id = SERVICE_TYPE[kind];
-	if (!id) throw new Error('registerSiting: hospital, police or fire');
+	if (!id) throw new Error('registerSiting: hospital, police, fire or armory');
 	if (fn) SITING.set(id, fn); else SITING.delete(id);
 	return () => SITING.delete(id);
 }
@@ -384,8 +386,8 @@ export function registerSiting(kind, fn) {
 // one building -> its establishment (or null: a home, a school, a car park)
 export function establish(b, loc = 'us-ca') {
 	const setting = settingOf(b);
-	let id = null;
-	for (const [k, fn] of SITING) { try { if (fn(b, setting)) { id = k; break; } } catch (e) { console.warn('siting', k, e); } }
+	let id = null, given = null;
+	for (const [k, fn] of SITING) { try { const got = fn(b, setting); if (got) { id = k; given = typeof got === 'string' ? got : null; break; } } catch (e) { console.warn('siting', k, e); } }
 	if (!id) {
 		const p = chanceOf(b, setting);
 		if (p <= 0 || hashAt(b.x, b.z, 11) >= p) return null;
@@ -399,7 +401,7 @@ export function establish(b, loc = 'us-ca') {
 	const pal = pickOf(T.pal, r(1));
 	const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0), f = b.front ?? 1, out = (b.d / 2 + 1.2) * f;
 	return {
-		type: id, label: T.label, name: nameFor(id, b.x, b.z, loc), tag: b.sign && !denied(b.sign) ? String(b.sign).slice(0, 28) : T.tags ? pickOf(T.tags, r(4)) : T.tag,
+		type: id, label: T.label, name: given || nameFor(id, b.x, b.z, loc), tag: b.sign && !denied(b.sign) ? String(b.sign).slice(0, 28) : T.tags ? pickOf(T.tags, r(4)) : T.tag,
 		setting, use: b.use, venue: T.service ? null : venueFor(b) || T.v || null, service: T.service || null, locale: loc,
 		x: b.x, z: b.z, a: b.a || 0, w: b.w, d: b.d, h: b.h || 0, front: f,
 		door: [b.x - sa * out, b.z + ca * out],

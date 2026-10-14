@@ -347,7 +347,7 @@ function dress(A, P, o) {
 	if (P.detail) P.detail.morphTargetInfluences = P.skin.morphTargetInfluences;
 	// hair and a beard (hairkit.js: real styles, fetched when first worn; hair.js grows the
 	// locs, braids and cornrows, and stands in while a style is on its way)
-	const hat = (o.acc || []).find((q) => /^(cap|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
+	const hat = (o.acc || []).find((q) => /^(cap|trucker|peaked|beret|beanie|bucket|sunhat|helmet|hood|hazhood|visor)$/.test(q.kind));
 	const cols = hairColours(d, H);
 	const covers = hat && hat.kind !== 'visor';
 	const showHair = d.hair && !H.buzz && !H.scarf && !(covers && /^(helmet|hood|hazhood)$/.test(hat.kind));

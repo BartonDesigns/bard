@@ -54,6 +54,9 @@ import { createFamilyLife } from './people/family-life.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
+import { createBridgeSound } from './bay/bridgesound.js';
+import { createCrosswalks } from './bay/crosswalks.js';
+import { createDogWalkers } from './people/dogwalkers.js';
 import { createLake } from './bay/lake.js';
 import { createEarthWater } from './bay/earthwater.js';
 import { createWater } from './bay/water.js';
@@ -71,6 +74,8 @@ import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createInteriors } from './interiors/index.js';
+import { createStructures } from './structures/index.js';
+import { createServices } from './services/index.js';
 import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
 import { planDwellings, createDwellings } from './interiors/alien.js';
@@ -122,6 +127,12 @@ import { createSurprises } from './surprises.js';
 import { createPeople, addTalkers, talkers } from './people/people.js';
 import { createChatter } from './people/chatter.js';
 import { createErrands } from './people/errands.js';
+import { createNpcQuests } from './people/npc-quests.js';
+import { createMoney } from './people/npc-money.js';
+import { fromRequests } from './people/npc-quests-core.js';
+import { commercialEstablishments } from './people/bag-spots.js';
+import { registerSiting } from './economy/establishments.js';
+import { createCommons } from './combat/morality.js';
 import { createFares } from './vehicles/fares.js';
 import { createItemUse } from './gameplay/item-use.js';
 import { createDaily } from './gameplay/daily.js';
@@ -154,6 +165,7 @@ import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
+import { createMilitary } from './military/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 
@@ -579,11 +591,13 @@ export function createIslandWorld() {
 	HOOKS.arcade = arcade;
 	// drive the roads, streets and trails: snap on, choose the turns
 	drive = createDrive({ world: () => world, camera, mount: dom.mount, isPhone, hint, strike: (car) => HOOKS.impacts?.strike(car) || 0 });
+	// the overpasses' joints underfoot and overhead (bay/bridgesound.js)
+	const bridgeSound = createBridgeSound({ world: () => world, carAt: () => drive.carAt() });
 	HOOKS.drive = drive;
 	// anyone struck down or thrown: limp, weighed bodies (people/ragdoll.js)
 	const ragdolls = createRagdolls({ world: () => world, isPhone });
 	HOOKS.ragdolls = ragdolls;
-	HOOKS.impacts = createImpacts({ people: () => ({pool:[...people.pool,...social.actors.all()]}), ragdolls, onImpact:p=>HOOKS.combat?.vehicleImpact(p), ward: (p) => HOOKS.combat?.ward(p) });
+	HOOKS.impacts = createImpacts({ people: () => ({pool:[...people.pool,...social.actors.all()]}), ragdolls, onImpact:p=>{HOOKS.combat?.vehicleImpact(p);world?.services?.injury(p);}, ward: (p) => HOOKS.combat?.ward(p) });
 	// taking a car off its driver (E beside one in the traffic): you, shown, haul them out
 	const avatar = createAvatar({ scene, world: () => world });
 	const carjack = createCarjack({ world: () => world, camera, drive, ragdolls, avatar, hint: (t, ms) => hint(t, ms, 1) });
@@ -612,6 +626,8 @@ export function createIslandWorld() {
 	const explore = HOOKS.explore = createExplore({ world: () => world, camera, drive, music: autoMusic, you, avatar, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), isPhone, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	// people: real bodies about the village and the city streets
 	const people = createPeople(scene, () => world, camera);
+	// some of them out with their dogs on a lead (people/dogwalkers.js)
+	const dogWalkers = createDogWalkers({ scene, people, world: () => world, isPhone });
 	guideApi.people = people;
 	// households, their days and their food, and the moments of it you see (people/family-life.js)
 	const families = HOOKS.families = createFamilyLife({ scene, world: () => world, camera, people, isPhone, mount: dom.mount, hint,
@@ -756,17 +772,52 @@ export function createIslandWorld() {
 	// your gear, shops and trading with friends (ui/gear.js)
 	const gear = HOOKS.gear = createGear({ arms, multiplayer, mount: dom.mount, menu: tpMenu, button, hint: (t, ms) => hint(t, ms, 1), world: () => world, camera, scene, renderer, avatar, self: you, busy: () => arcade.active() || drive.active() || studio.active(), isPhone });
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
-	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
+	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, services: () => world?.services, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	guideApi.combat=combat;
+	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
+	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
+	combat.hooks.posts = military.posts; combat.hooks.trespass = military.trespass;
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
-	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands });
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
 	// today's three goals, paid as they are done (gameplay/daily.js)
 	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
 	const note = (kind, data) => daily.note(kind, data);
+	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
+	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney });
+	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
+	// quests they do for each other with or without you (people/npc-quests.js)
+	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
+	const commons = HOOKS.commons = createCommons({ store: npcStore });
+	// (money through the bank's adapter: HOOKS.npcMoney.use(bank) attaches economy/bank.js)
+	const npcMoney = HOOKS.npcMoney = createMoney();
+	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
+	commons.follow(combat.morality, npcQuests.regionNow);
+	guideApi.npcQuests = npcQuests;
+	// the economy behind the people: their money in the bank, the businesses' requests among their
+	// quests, the businesses' doors among their places (a walk-in's door and tables from
+	// commercial.js, named from the registry; the rest at their doors)
+	npcMoney.use(bank);
+	npcQuests.addSource(fromRequests({ requestsNear, takeRequest, completeRequest }));
+	npcQuests.establishments((x, z, r) => {
+		const W = world, out = commercialEstablishments(W?.commercial)(x, z, r), E = W?.city?.economy?.near(x, z, r + 20) || [];
+		for (const o of out) { let best = null, bd = 25; for (const e of E) { const d = Math.hypot(e.door[0] - o.door.x, e.door[1] - o.door.z); if (d < bd) { bd = d; best = e; } } if (best) { o.id = best.id; o.name = best.name; } }
+		for (const e of E) {
+			const kind = e.venue === 'cafe' || e.venue === 'restaurant' || e.venue === 'shop' ? e.venue : null;
+			if (!kind || out.some((o) => o.id === e.id)) continue;
+			out.push({ id: e.id, kind, name: e.name, door: { x: e.door[0], y: W.island.heightAt(e.door[0], e.door[1]), z: e.door[1], heading: Math.atan2(e.door[0] - e.x, e.door[1] - e.z) }, tables: [] });
+		}
+		return out;
+	});
+	// the services claim their buildings from the economy, and its boards carry their names
+	for (const kind of ['hospital', 'police', 'fire', 'armory']) registerSiting(kind, (b) => { const F = world?.services?.list?.().find((f) => f.kind === kind && Math.abs(f.x - b.x) < 1 && Math.abs(f.z - b.z) < 1); return F ? F.name || true : false; });
+	// (a hospital hears of people knocked down here: HOOKS.npcHurt(fn); it bills through the bank)
+	HOOKS.npcHurt = npcQuests.onHurt;
+	// (the nearest hospital sends for whoever is knocked down: services/)
+	HOOKS.npcHurt((e, p) => world?.services?.injury(p, e.why, e.child ? 0.5 : 0.6));
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
 	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', note, errands: () => HOOKS.errands });
 	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
@@ -985,6 +1036,7 @@ export function createIslandWorld() {
 				{ id: 'island-trader', name: 'Travelling NPC trader', kind: 'npc-vendor', x: anchor.x + 4, z: anchor.z - 20, actions: ['purchase', 'hunt'], virtual: true },
 				{ id: 'island-police-cache', name: 'Civic police-station recovery cache', kind: 'police', x: anchor.x - 92, z: anchor.z - 82, actions: ['secure'], virtual: true },
 			];
+			for (const S of world.services?.sites?.() || []) out.push(S);
 			for (const B of world.commercial?.list?.() || []) {
 				if (B.type !== 'shop') continue;
 				const id = `shop-${Math.round(B.x)}-${Math.round(B.z)}`;
@@ -1123,11 +1175,29 @@ export function createIslandWorld() {
 			{ const cv = world.commercial.venue, I = world.interiors; world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
 			// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
 			world.interiors.addDoors(world.commercial);
+			// the buildings as things: glass that breaks, windows and walls to vault, walls that break,
+			// buildings that fall and the crews that rebuild them (structures/)
+			world.structures = HOOKS.structures = createStructures({ scene, camera, world: () => world, isPhone, shared, car: () => {
+				const C = drive.active() ? drive.physics() : null;
+				if (!C) return null;
+				const t = C.body.translation(), v = C.body.linvel(), r = C.body.rotation();
+				return { x: t.x, y: t.y - 0.5, z: t.z, vx: v.x, vz: v.z, yaw: 2 * Math.atan2(r.y, r.w), mass: C.feel.mass, L: C.spec.L, W: C.spec.W };
+			} });
+			// the towns' hospitals, police and fire stations and armories (services/): built inside
+			// like the rest, staffed by the hour, their ambulances and engines out on the streets
+			world.services = createServices({ scene, world: () => world, camera, people: () => people, isPhone, mount: dom.mount, button, hint: (t, ms) => hint(t, ms, 1), arms, combat: () => HOOKS.combat });
+			// a patient's bill out of their own money (people/npc-money.js; short of it, they owe it), and
+			// the bases' barracks, war rooms and depots furnished by the services, the police cruisers
+			// leaving from their stations (military/)
+			world.services.hooks.charge = (who, credits) => { const M = HOOKS.npcMoney; if (!M || !(M.balance(who) >= credits)) return false; M.spend(who, credits, 'hospital', 'hospital'); return true; };
+			HOOKS.military?.setInteriors(world.services.militaryInteriors());
+			HOOKS.military?.setStations((x, z) => world?.services?.stationAt(x, z));
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
 			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone });
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
 			world.vehicles = createVehicles({ scene, world: () => world, camera, isPhone, people: () => people });
+			world.military = HOOKS.military;
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone, roadAt: (r, x, z) => world.berms?.along(r, x, z) });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
@@ -1199,7 +1269,11 @@ export function createIslandWorld() {
 				{ const of = island.extraFloor, P = world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
+				{ const of = island.extraFloor, op = island.extraPush, S = world.structures; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), S.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); S.push(p, footY); }; }          // structures: rubble and broken walls
+				{ const of = island.extraFloor, op = island.extraPush, S = world.services; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), S.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); S.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
+				// the military bases' pads, banks, roofs and towers to stand on; their walls, fence and vehicles solid
+				{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
 				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
 				shaderWarm.all({ n: 3 });
@@ -1219,12 +1293,14 @@ export function createIslandWorld() {
 		HOOKS.gear?.suspend();
 		families.clear();
 		HOOKS.errands?.dispose();
+		HOOKS.npcQuests?.dispose();
 		HOOKS.fares?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
 		social.reset();
 		world.labels?.dispose();
 		world.discovery?.dispose();
+		world.services?.dispose();
 		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();
@@ -1541,6 +1617,7 @@ export function createIslandWorld() {
 			W.labels?.hide();
 			W.globe?.regional?.pause();
 			W.kinetic?.silence();
+			worldAudio.space(dt);
 			// The retained ground stops streaming and drawing; only the orbital pass runs.
 			// The same input state and faceplate analyser continue on every frame.
 			dom.veil.style.opacity = '0'; glare.style.opacity = '0';
@@ -1679,6 +1756,8 @@ export function createIslandWorld() {
 			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
 			W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
 			W.interiors?.update(camera, dt, W.sky.state.hours, sk.night);
+			W.structures?.update(dt, sk.night, W.sky.state.hours);
+			W.services?.update(dt, W.sky.state.hours, sk.night);
 			// stepping into a place: what it is, and how busy at this hour
 			const inB = W.commercial.inside(camera.position);
 			if (inB && inB !== W.bizSeen) {
@@ -1701,6 +1780,7 @@ export function createIslandWorld() {
 		multiplayer.update(dt, time);
 		gear.update(dt);
 		if (!window.L99Loading.active()) combat.update(dt);
+		HOOKS.military?.update(dt, sk.night);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -1709,6 +1789,8 @@ export function createIslandWorld() {
 		ragdolls.update(dt);
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
+		bridgeSound.update(dt);
+		crosswalks.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
 		W.spray?.update(dt, camera);
@@ -1753,8 +1835,10 @@ export function createIslandWorld() {
 		guide.update(dt);
 		watchTalk(dt);
 		people.update(dt, time, camera.position, sk.night, camera.position.y > -0.5);
+		dogWalkers.update(dt, camera);
 		chatter.update(dt, camera.position.y > -0.5 && !arcade.active() && !W.orbit?.active() && !window.L99Loading.active());
 		errands.update(dt);
+		npcQuests.update(dt);
 		fares.update(dt);
 		families.update(dt, time, camera.position.y > -0.5);
 		social.update(dt, time, camera.position.y > -0.5 && !W.orbit?.active());
@@ -2171,8 +2255,26 @@ if (typeof window !== 'undefined') {
 		// the buildings built inside round you (interiors/): Crysis.interiors() tells how they stand,
 		// Crysis.interiorGo('row') takes you to the front door of one ('shop', 'apt', 'warehouse'...)
 		interiors: () => window.L99Island?.world?.()?.interiors?.info() ?? 'none here',
+		// the buildings (structures/): Crysis.structures() tells of the overlaps settled, the alleys,
+		// the glass, the damage near and the rebuilds under way; .cataclysm(true) holds the crews off
+		// while a citywide catastrophe lasts (false lets them back); .crack() / .shatter() the nearest
+		// pane; .vault() over what is in front of you; .advance(h) moves the crews' clock on.
+		// Crysis.demolish(x, z, k) brings the building nearest (x, z) down (k 1 all of it, 0.5 a part)
+		structures: Object.assign(() => HOOKS.structures?.info() ?? 'none here', {
+			cataclysm: (on) => HOOKS.structures?.cataclysm(on), crack: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.crack(x ?? p?.x, z ?? p?.z); },
+			shatter: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.shatter(x ?? p?.x, z ?? p?.z); },
+			vault: () => HOOKS.structures?.vault('key'), ahead: () => HOOKS.structures?.ahead(), advance: (h) => HOOKS.structures?.advance(+h || 0), recount: () => HOOKS.structures?.recount(),
+		}),
+		demolish: (x, z, k = 1) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.demolish(x ?? p?.x, z ?? p?.z, k) ?? 'none here'; },
 		workplace: () => window.L99Island?.world?.()?.towers?.diagnostics() ?? 'none here',
 		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
+		// the services (services/): Crysis.services() tells of the hospitals, stations and armories
+		// near, who is on duty, the patients and the units; Crysis.serviceGo('hospital') takes you
+		// to the door of the nearest ('police', 'fire', 'armory'; a room: serviceGo('armory', 'warRoom'));
+		// Crysis.serviceCall() calls an ambulance out to near you
+		services: () => window.L99Island?.world?.()?.services?.info() ?? 'Earth only',
+		serviceGo: (kind = 'hospital', room = null) => window.L99Island?.world?.()?.services?.go(kind, room) ?? 'Earth only',
+		serviceCall: (severity = 0.6, minor = false) => window.L99Island?.world?.()?.services?.testCall(severity, minor) ?? 'Earth only',
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one
 		// the Deep (planet/deep.js): Crysis.deep() tells of it; Crysis.deepGo('gate'), ('open') or a depth in metres
 		deep: () => window.L99Island?.world?.()?.deep?.info() || 'no Deep Gate on this world',
@@ -2213,7 +2315,19 @@ if (typeof window !== 'undefined') {
 		ragdolls: () => HOOKS.ragdolls?.info(),
 		// the fight (combat/): Crysis.combat.info(), .spawn('ashfang'), .boss('walker'), .fight(), .raid(), .ignite(); Crysis.morality()
 		get combat() { return HOOKS.combat; },
-		morality: () => HOOKS.combat?.morality.info(),
+		// Crysis.morality(): your compass, this region's tally, the people near you and what they have
+		// done; .bag('return'|'steal'|'auto') leaves a bag near you now; .favour() someone asks another;
+		// .tick(n) n far-away quests now; .run(s) the scenes on by s seconds; .money('npc:123'); .regions()
+		morality: Object.assign(() => ({ ...HOOKS.combat?.morality.info(), npc: HOOKS.npcQuests?.info() }), {
+			bag: (mode) => HOOKS.npcQuests?.bag(mode), favour: (kind) => HOOKS.npcQuests?.favour(kind), tick: (n = 1) => HOOKS.npcQuests?.farTick(n), run: (s) => HOOKS.npcQuests?.fastForward(s),
+			lead: (kind) => HOOKS.npcQuests?.lead(kind), leads: () => HOOKS.npcQuests?.leads(), spots: () => HOOKS.npcQuests?.spots(),
+			money: (id) => ({ balance: HOOKS.npcMoney?.balance(id), wealth: HOOKS.npcMoney?.wealth(id), bank: HOOKS.npcMoney?.attached() }), regions: () => Object.fromEntries((HOOKS.commons?.regions() || []).map((r) => [r, HOOKS.commons.region(r)])),
+			log: (n = 20) => HOOKS.commons?.log(n), where: () => HOOKS.npcQuests?.where(),
+		}),
+		// the military (military/): Crysis.military() the bases near, their garrisons, the patrols sent and
+		// the vehicles parked; Crysis.base('Diablo') takes you to a base's gate (the nearest with no name)
+		military: Object.defineProperty(() => HOOKS.military?.info(), 'api', { get: () => HOOKS.military }),
+		base: (name) => HOOKS.military?.goTo(name) ?? 'Earth only.',
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),

@@ -16,7 +16,7 @@ import { patchKit } from './propkit.js';
 
 // ---------- the painting ----------
 // pattern ids (the shader's)
-export const PAT = { plain: 0, stripe: 1, breton: 1, pinstripe: 2, plaid: 3, check: 4, block: 5, graphic: 6, band: 7, ringer: 8, quilt: 9, fleece: 10, fleeceblock: 11, rib: 12, denim: 13, chambray: 14, cargo: 15, track: 16, jersey: 17, dots: 18, dye: 19, oxford: 20, hem: 21, mail: 22, hazmat: 23, heat: 24, pleat: 25, hoops: 26, sash: 27 };
+export const PAT = { plain: 0, stripe: 1, breton: 1, pinstripe: 2, plaid: 3, check: 4, block: 5, graphic: 6, band: 7, ringer: 8, quilt: 9, fleece: 10, fleeceblock: 11, rib: 12, denim: 13, chambray: 14, cargo: 15, track: 16, jersey: 17, dots: 18, dye: 19, oxford: 20, hem: 21, mail: 22, hazmat: 23, heat: 24, pleat: 25, hoops: 26, sash: 27, camo: 28 };
 // cloth: 0 knit, 1 twill, 2 canvas, 3 nylon, 4 fleece, 5 leather, 6 metal, 7 a cooling
 // undergarment's knit with its tubing, 8 beta cloth (a space suit's outer layer)
 const FAB = { knit: 0, twill: 1, canvas: 2, nylon: 3, fleece: 4, leather: 5, metal: 6, tech: 3, linen: 2, wool: 2, lcvg: 7, beta: 8 };
@@ -258,6 +258,17 @@ vec3 garment(int s, vec3 P, vec3 N) {
 		gMetal = 0.6; gRough = 0.35;
 	}
 	else if (k == 25) c = base * (0.82 + 0.18 * abs(sin(atan(P.x, P.z) * 18.0)));
+	else if (k == 28) {
+		// camouflage: three layers of soft-edged blotches over the base, laid in the body's own metres
+		float aa = 0.03;
+		float n1 = vn(P.xy * 8.0 + vec2(P.z * 6.0, 1.7)) * 0.7 + vn(P.xy * 23.0 + P.z * 9.0) * 0.3;
+		float n2 = vn(P.zy * 11.0 + vec2(3.1, P.x * 7.0)) * 0.75 + vn(P.xy * 31.0 + 5.0) * 0.25;
+		float n3 = vn(P.xy * 17.0 + vec2(P.z * 13.0, 7.3));
+		c = mix(base, a, smoothstep(0.55 - aa, 0.55 + aa, n1));
+		c = mix(c, b, smoothstep(0.6 - aa, 0.6 + aa, n2));
+		c = mix(c, base * 0.42, smoothstep(0.7 - aa, 0.7 + aa, n3));
+		c *= 0.94 + 0.06 * vn(P.xy * 300.0);
+	}
 	// the open front of a jacket or vest, and a zip down a closed one
 	if (s == 1) {
 		if (uPat[1].z < 0.5 && front > 0.5 && abs(P.x) < 0.006 && arm < 0.5) c = mix(c, a, 0.6);
@@ -314,7 +325,7 @@ export function garmentMaterial(A, o, cut, number = 0) {
 			.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n{ float fh = folds(vBind, vLimb, int(vSlot + 0.5)) * 0.00025 * (1.0 - smoothstep(4.0, 12.0, length(vViewPosition))) + gWeave * 0.00004; vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition); vec3 r1 = cross(sy, normal), r2 = cross(normal, sx); float det = dot(sx, r1); normal = normalize(abs(det) * normal - sign(det) * (dFdx(fh) * r1 + dFdy(fh) * r2)); }')
 			.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n{ int fb = int(gFab + 0.5); float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0); reflectedLight.indirectDiffuse += diffuseColor.rgb * rim * (fb == 0 || fb == 4 ? 0.5 : fb == 1 ? 0.15 : fb == 3 || fb == 8 ? 0.35 : 0.25); }');
 	};
-	m.customProgramCacheKey = () => 'crysis-garment-7';
+	m.customProgramCacheKey = () => 'crysis-garment-8';
 	paint(m, o);
 	return m;
 }
@@ -717,6 +728,64 @@ export function accessoryGeometry(A, P0, o, cut, hairCol) {
 				put(box, 'wrist.' + s, c);
 				if (q.kind === 'gloves') { const cuff = new THREE.CylinderGeometry(0.042, 0.045, 0.05, 10); cuff.translate(w.x, w.y + 0.01, w.z); put(cuff, 'wrist.' + s, q.acc || c); }
 			}
+		}
+	}
+	// the kit of the armed sides (combat/outfits.js): a bandana, a plate carrier, a trucker
+	// cap, a police cap, a beret
+	const part = (deep, grow, phi0, phiLen) => {
+		const prof = [];
+		for (let i = 0; i <= 8; i++) { const t = i / 8, a = t * Math.PI / 2; prof.push(new THREE.Vector2(Math.max(0.0005, Math.sin(a)), top + grow - deep + Math.cos(a) * deep)); }
+		const g = new THREE.LatheGeometry(prof, 12, phi0, phiLen);
+		g.scale(rx + grow, 1, rz + grow); g.translate(cx, 0, cz);
+		return g;
+	};
+	const torso = (y) => (y > cut.chest ? 'spine01' : y > (cut.chest + cut.waist) / 2 ? 'spine02' : 'spine03');
+	const box = (w, h, d, x, y, z) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g; };
+	for (const q of o.acc || []) {
+		const c = q.col || '#333333', a2 = q.acc || c;
+		if (q.kind === 'bandana') {
+			// over the nose and mouth, a point hanging at the throat, knotted behind
+			const y0 = eyeY - 0.035, y1 = cut.neck - 0.02, h = y0 - y1;
+			const g = new THREE.CylinderGeometry(1, 1.25, h, 14, 2, true, -1.75, 3.5);
+			g.scale(rx + 0.014, 1, rz + 0.02); g.translate(cx, (y0 + y1) / 2, cz + 0.006);
+			put(g, 'head', c);
+			const tip = new THREE.ConeGeometry(0.05, 0.07, 3); tip.rotateX(Math.PI); tip.scale(1.4, 1, 0.35); tip.translate(cx, y1 - 0.03, sk.z1 + 0.02);
+			put(tip, 'head', c);
+			const knot = new THREE.SphereGeometry(0.018, 6, 5); knot.translate(cx, y0 - 0.01, sk.z0 - 0.004); put(knot, 'head', a2);
+		} else if (q.kind === 'carrier') {
+			// front and back plates in their cloth, a cummerbund, shoulder straps, magazine
+			// pouches across the front (a police vest: a badge instead of the pouches)
+			const t = cut.chest + 0.13, b = cut.waist + 0.01, h = t - b, w = Math.min(0.34, cut.shoulderX * 1.65), fz = cut.frontZ + 0.045, bz = cut.backZ - 0.045;
+			put(box(w, h, 0.035, 0, (t + b) / 2, fz), torso, c, 0, 2);
+			put(box(w, h * 1.05, 0.035, 0, (t + b) / 2 + 0.01, bz), torso, c, 0, 2);
+			const band = new THREE.CylinderGeometry(1, 1, 0.13, 16, 1, true);
+			band.scale(cut.waistX + 0.045, 1, (fz - bz) / 2 + 0.002); band.translate(0, b + 0.07, (fz + bz) / 2); put(band, torso, a2, 0, 2);
+			for (const s of [-1, 1]) {
+				const st = box(0.055, 0.02, fz - bz + 0.02, s * w * 0.32, t + 0.012, (fz + bz) / 2); put(st, 'spine01', c, 0, 2);
+			}
+			if (q.police) {
+				const bd = new THREE.CylinderGeometry(0.022, 0.022, 0.006, 6); bd.rotateX(Math.PI / 2); bd.translate(w * 0.28, t - 0.06, fz + 0.021); put(bd, 'spine01', q.badge || '#d9c46a', 2);
+				put(box(w * 0.7, 0.035, 0.006, 0, t - 0.15, fz + 0.02), 'spine02', '#e9edf2', 0.2);
+			} else {
+				for (let i = -1; i <= 1; i++) put(box(0.075, 0.1, 0.04, i * 0.085, b + 0.08, fz + 0.035), torso, a2, 0, 2);
+				put(box(0.06, 0.07, 0.035, w * 0.3, t - 0.05, fz + 0.03), 'spine01', a2, 0, 2);
+			}
+		} else if (q.kind === 'trucker') {
+			// a camouflage front panel on a pale mesh back, the bill in the front's colour
+			const rim = eyeY + 0.045, deep = top + 0.012 - rim;
+			put(part(deep, 0.013, Math.PI * 0.32, Math.PI * 1.36), 'head', a2);
+			put(part(deep, 0.016, -Math.PI * 0.34, Math.PI * 0.68), 'head', c);
+			const bill = new THREE.CylinderGeometry(0.1, 0.1, 0.008, 14, 1, false, -Math.PI / 2, Math.PI);
+			bill.scale(0.95, 1, 0.78); bill.rotateX(-0.1); bill.translate(cx, rim + 0.008, cz + rz * 0.72); put(bill, 'head', c);
+		} else if (q.kind === 'peaked') {
+			// a police cap: the crown wider than the band, a black peak, the cap badge
+			const rim = eyeY + 0.05;
+			const band = new THREE.CylinderGeometry(1, 1, 0.045, 20, 1, true); band.scale(rx + 0.016, 1, rz + 0.016); band.translate(cx, rim + 0.022, cz); put(band, 'head', q.band || a2);
+			const crown = new THREE.CylinderGeometry(1.18, 1.02, 0.055, 20, 1, false); crown.scale(rx + 0.016, 1, rz + 0.02); crown.translate(cx, rim + 0.07, cz - 0.005); put(crown, 'head', c);
+			const peak = new THREE.CylinderGeometry(0.1, 0.1, 0.006, 14, 1, false, -Math.PI / 2, Math.PI); peak.scale(0.9, 1, 0.62); peak.rotateX(-0.42); peak.translate(cx, rim + 0.005, cz + rz * 0.78); put(peak, 'head', a2, 1);
+			const bd = new THREE.SphereGeometry(0.012, 6, 5); bd.scale(1, 1.2, 0.4); bd.translate(cx, rim + 0.055, cz + rz + 0.02); put(bd, 'head', q.band || '#d9c46a', 2);
+		} else if (q.kind === 'beret') {
+			const g = new THREE.SphereGeometry(1, 16, 8); g.scale(rx + 0.03, 0.035, rz + 0.03); g.rotateZ(-0.2); g.translate(cx - 0.012, top - 0.005, cz); put(g, 'head', c);
 		}
 	}
 	// a hood lying at the back of a hoodie's neck, and its drawstrings

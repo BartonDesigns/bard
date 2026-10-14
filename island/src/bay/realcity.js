@@ -12,12 +12,13 @@
 
 import * as THREE from 'three';
 import { toWorld, KX, LON0, LON0_LEGACY } from './geo.js';
-import { groupBoxes } from './houseplan.js';
+import { groupBoxes, isHome } from './houseplan.js';
 import { SUMMIT } from './diablo.js';
 import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
 import { REAL_REGIONS, REAL_TALL } from './realtiles.js';
 import { footLifted } from './overpass.js';
+import { settleRegionSoon } from '../structures/overlap.js';   // structures: settled footprints
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -146,6 +147,62 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	let disposed = false, cancelled = 0;
 	let camX = 1e9, camZ = 1e9, late = 0;
 
+	// Buildings clear of the street: none standing in a carriageway or on its sidewalk (the
+	// mapped footprints and the drawn road widths don't always agree), and a home a little
+	// further back behind its front yard. Each house is moved whole, its wings and garage with
+	// it, straight away from the street (from two streets on a corner), by 3.5 m at most;
+	// returns the moves (in 50 m cells) so the drives and walks to them can follow.
+	const SET_MAX = 3.5;
+	function setBack(G) {
+		const seen = new Set(), moves = new Map(), near = [];
+		// (how far (x, z) is from a road's centre line, and the way out from it)
+		const away = (r, x, z) => {
+			const p = r.pts;
+			let best = 1e9, ox = 0, oz = 0;
+			for (let i = 0; i + 3 < p.length; i += 2) {
+				const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l2 = dx * dx + dz * dz || 1;
+				const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l2)), qx = x - ax - dx * t, qz = z - az - dz * t, d = Math.hypot(qx, qz);
+				if (d < best) { best = d; const l = Math.sqrt(l2); ox = d > 0.01 ? qx / d : -dz / l; oz = d > 0.01 ? qz / d : dx / l; }
+			}
+			return [best, ox, oz];
+		};
+		for (const b of G.boxes) {
+			const grp = b.grp || [b];
+			if (seen.has(grp)) continue;
+			seen.add(grp);
+			const home = isHome(b);
+			let cx = 0, cz = 0, R = 0;
+			for (const q of grp) { cx += q.x / grp.length; cz += q.z / grp.length; }
+			for (const q of grp) R = Math.max(R, Math.hypot(q.x - cx, q.z - cz) + Math.hypot(q.w, q.d) / 2);
+			near.length = 0;
+			nearIn(G, 'roads', cx, cz, R + 16, near);
+			let px = 0, pz = 0;
+			for (const r of near) {
+				if (!r.drive || r.bridge || r.cls === 'motorway' || r.cls === 'trunk') continue;
+				const need = r.w / 2 + (r.walked ? 1.7 : 0.5) + (home ? 2.5 : 0.3);
+				if (cx < r.box[0] - need - R || cx > r.box[2] + need + R || cz < r.box[1] - need - R || cz > r.box[3] + need + R) continue;
+				if (away(r, cx, cz)[0] > need + R) continue;
+				// the deepest any corner or side of the house reaches into this street's room
+				let k = 0, ux = 0, uz = 0;
+				for (const q of grp) {
+					const ca = Math.cos(q.a), sa = Math.sin(q.a);
+					for (const [u, v] of [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]) {
+						const lx = u * q.w / 2, lz = v * q.d / 2, [d, ox, oz] = away(r, q.x + ca * lx - sa * lz, q.z + sa * lx + ca * lz);
+						if (need - d > k) { k = need - d; ux = ox; uz = oz; }
+					}
+				}
+				if (k > 0) { px += ux * k; pz += uz * k; }
+			}
+			const L = Math.hypot(px, pz);
+			if (L < 0.05) continue;
+			if (L > SET_MAX) { px *= SET_MAX / L; pz *= SET_MAX / L; }
+			for (const q of grp) { q.x += px; q.z += pz; }
+			// (in every cell the move's reach touches)
+			const m = { x: cx, z: cz, r: R + 4, px, pz };
+			for (let i = Math.floor((cx - m.r) / 50); i <= Math.floor((cx + m.r) / 50); i++) for (let j = Math.floor((cz - m.r) / 50); j <= Math.floor((cz + m.r) / 50); j++) { const k = i * 65536 + j; let c = moves.get(k); if (!c) moves.set(k, c = []); c.push(m); }
+		}
+		return moves;
+	}
 	async function load(i, signal) {
 		const name = NAMES[i], base = new URL(`../assets/bayarea/real/${name}`, import.meta.url).href;
 		const [H, bin, px] = await Promise.all([
@@ -193,10 +250,14 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		// a building's blocks, gathered into the house they make (houses.js builds them)
 		groupBoxes(G.boxes);
+		const moved = setBack(G);
+		await settleRegionSoon(G, onLandmark, signal);          // structures: no building through another, a street or a landmark
 		for (const b of G.boxes) cellIn(G.grid, b.x, b.z).boxes.push(b);
 		o = S.paths[0];
 		for (let n = 0; n < S.paths[1]; n++, o += 10) {
 			const p = { ax: dv.getInt16(o, true) * U + OX, az: dv.getInt16(o + 2, true) * U + OZ, bx: dv.getInt16(o + 4, true) * U + OX, bz: dv.getInt16(o + 6, true) * U + OZ, w: dv.getInt16(o + 8, true) / 20 };
+			// (a drive or walk to a house set back goes on to its new front)
+			for (const e of ['a', 'b']) for (const m of moved.get(Math.floor(p[e + 'x'] / 50) * 65536 + Math.floor(p[e + 'z'] / 50)) || []) if (Math.hypot(p[e + 'x'] - m.x, p[e + 'z'] - m.z) < m.r) { p[e + 'x'] += m.px; p[e + 'z'] += m.pz; break; }
 			if (inIb(p.ax, p.az)) cellIn(G.grid, p.ax, p.az).paths.push(p);
 		}
 		o = S.pools[0];
@@ -452,6 +513,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		{ rt: mkRT(1024), paint: null, size: 1536, ramp: 3, move: 380, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap2, REAL_U.uRoadR2] },
 	];
 	const rt = MAPS[0].rt;
+	R.repaint = () => { for (const M of MAPS) M.x = 1e9; };          // structures: the road maps painted again when new alleys come in
 	const cam = new THREE.OrthographicCamera(0, 1, 1, 0, -10, 10);
 	cam.position.z = 1;
 	const scene2 = new THREE.Scene();
@@ -561,6 +623,72 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		}
 		return r.built;
 	}
+	// The corners of a town's junctions, where three or more legs of street meet: a crosswalk
+	// across each leg just clear of the cross street's sidewalk (continental stripes along the
+	// traffic downtown and on the arterials, two plain lines in the suburbs), a stop bar across
+	// the lane coming in, and the yellow domes of a curb ramp at either end of the crosswalk.
+	const CROSS = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
+	// the direction a street leaves point j heading d (+1 on along its points, -1 back),
+	// measured at distance a along it; null if it ends sooner than a + 9 m
+	function legAt(p, j, d, a) {
+		let got = 0;
+		for (let i = j; i + d * 2 >= 0 && i + d * 2 < p.length; i += d * 2) {
+			const ax = p[i], az = p[i + 1], bx = p[i + d * 2], bz = p[i + d * 2 + 1], l = Math.hypot(bx - ax, bz - az);
+			if (got + l >= a + 9) {
+				// (the crosswalk's own stretch: from where it starts to a little past it)
+				const ox = p[j], oz = p[j + 1], t = Math.min(1, Math.max(0, (a - got) / (l || 1))), cx = ax + (bx - ax) * t, cz = az + (bz - az) * t, L2 = Math.hypot(cx - ox, cz - oz);
+				return L2 > 1 ? [(cx - ox) / L2, (cz - oz) / L2] : [(bx - ax) / l, (bz - az) / l];
+			}
+			got += l;
+		}
+		return null;
+	}
+	let crossings = [];
+	function corners(all, x0, z0, B, Y) {
+		crossings = [];
+		const nodes = new Map(), nk = (x, z) => Math.round(x / 1.5) * 65536 + Math.round(z / 1.5);
+		for (const r of all) {
+			if (!r.drive || r.bridge || r.link || r.hand || !CROSS.has(r.cls) || !r.walked) continue;
+			const p = r.pts, m = p.length, b = built(r);
+			for (let i = 0; i < m; i += 2) {
+				const k = nk(p[i], p[i + 1]);
+				let n = nodes.get(k);
+				if (!n) nodes.set(k, n = { x: p[i], z: p[i + 1], legs: [], built: false });
+				n.built = n.built || b;
+				// the legs leaving this point: toward the next point, and back toward the last
+				if (i + 2 < m) n.legs.push({ r, j: i, d: 1 });
+				if (i > 0) n.legs.push({ r, j: i, d: -1 });
+			}
+		}
+		for (const n of nodes.values()) {
+			// (in town: one of its streets at least among built-up land)
+			if (n.legs.length < 3 || !n.built) continue;
+			const L = landAt(n.x, n.z), city = !!L && (L.lu === 7 || L.lu === 8);
+			for (const g of n.legs) {
+				const { r, j, d } = g, p = r.pts, hw = r.w / 2;
+				// the cross streets' widest reach from the corner: their half-width and sidewalk
+				let reach = 0;
+				for (const o of n.legs) if (o.r !== r) reach = Math.max(reach, o.r.w / 2 + 1.7);
+				// the way the leg leaves, taken where its crosswalk will lie (its first points are
+				// often only a few metres apart)
+				const along = legAt(p, j, d, reach + 2.3);
+				if (!along) continue;
+				const [ux, uz] = along, nx = -uz, nz = ux;
+				const big = city || r.cls === 'primary' || r.cls === 'secondary';
+				// (a point a metres out along the leg and b across it, in the map's space)
+				const at = (a, b) => [n.x + ux * a + nx * b - x0, n.z + uz * a + nz * b - z0];
+				const c0 = reach + 0.8, c1 = c0 + 3;
+				// (each crosswalk, for whoever walks them: crosswalks.js)
+				crossings.push({ x: n.x + ux * (c0 + 1.5), z: n.z + uz * (c0 + 1.5), ux, uz, hw, city: big });
+				if (big) for (let b = -hw + 0.9; b <= hw - 0.6; b += 1.2) B.line([at(c0, b), at(c1, b)], 0.3, WHITE, false);
+				else for (const a of [c0, c1]) B.line([at(a, -hw + 0.3), at(a, hw - 0.3)], 0.15, WHITE, false);
+				// the stop bar across the lane coming in (the right of traffic heading for the corner)
+				if (!r.divided) B.line([at(c1 + 1.2, -hw + 0.4), at(c1 + 1.2, -0.25)], 0.22, WHITE, false);
+				// the curb ramps' domes, on the sidewalk either end of the crosswalk
+				for (const sd of [-1, 1]) Y.line([at(c0 + 0.6, sd * (hw + 0.45)), at(c1 - 0.6, sd * (hw + 0.45))], 0.45, YELLOW, false);
+			}
+		}
+	}
 	function drawRoadMap(M, cx, cz) {
 		M.x = cx; M.z = cz;
 		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
@@ -605,6 +733,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 			if (surf === ASPH && r.drive && !r.bridge) wear(r, p, hw, Lb, Y);
 			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
+		if (fine) corners(all, x0, z0, B, Y);
 		// driveways and front walks
 		for (const q of near('paths', cx, cz, SIZE * 0.72)) B.line([[q.ax - x0, q.az - z0], [q.bx - x0, q.bz - z0]], q.w / 2, CONC, false);
 		const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
@@ -685,5 +814,5 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 
 	// (loaded: how many regions are in; version: what stands round you changed; genVersion: a grown
 	// town came or went)
-	return { R, inside, near, update, dispose, sidewalk, landAt, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
+	return { R, inside, near, update, dispose, sidewalk, landAt, crossings: () => crossings, rt, loaded: () => R.loaded, addRegion, removeRegion, addRoads, addSource, removeSource, sourceVersion: () => sources.map((s) => s.version?.() || 0).join(':'), version: () => version, genVersion: () => genVersion, info: () => ({ live: [...live.values()].map((G) => G.name), ms: [...live.values()].map((G) => G.ms), pending: pending.size, failed: [...failed].map((i) => NAMES[i]), version, quiet, late, cancelled, disposed, cam: [Math.round(camX), Math.round(camZ)], comp: comp && [comp.w, comp.h, comp.step] }), ponds: () => gens.flatMap((G) => G.data.ponds || []), genParks: () => gens.flatMap((G) => (G.data.parks || []).map((q) => ({ ...q, town: G.name }))) };
 }

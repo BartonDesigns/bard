@@ -2,7 +2,8 @@
 // (soundbus.js) so the faceplate's volume still owns the mix:
 //   a low city bed (distant traffic, the freeways, air handling), louder downtown and by day
 //   tyre hiss and engine hum from the cars going past, panned and Doppler-shifted, the
-//   hiss louder and brighter on wet roads; now and then a horn downtown, a far siren
+//   hiss louder and brighter on wet roads (audio/engines.js's traffic); now and then a horn
+//   downtown (the faceplate's two-tone), a far siren
 //   (footsteps, yours and the people's, and their voices are the audio/ modules' now)
 //   the cable cars' bells on the San Francisco lines, a church bell striking the hours
 //   birds in the leafy streets by day, crickets in the suburbs at night
@@ -14,6 +15,7 @@ import { STYLE } from './styles.js';
 import { toWorld } from './geo.js';
 import { soundBus, noise } from '../world/soundbus.js';
 import { mix } from '../audio/acoustics.js';
+import { createTraffic } from '../audio/engines.js';
 
 // the cable car lines: Powell St, the Mason and Hyde branches along Jackson, California St
 const CABLE = [
@@ -29,7 +31,7 @@ function toSegment(x, z, [a, b]) {
 export function createCitySound(bay, groundAt) {
 	let ctx = null, A = null;
 	let birdT = 2, cricketT = 0, cableT = 5, hornT = 20, sirenT = 90, lastHour = null;
-	const bellPan = Math.random() * 1.2 - 0.6;
+	const bellPan = Math.random() * 1.2 - 0.6, traffic = createTraffic();
 
 	function loop(buf, type, f, q, dest) {
 		const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true;
@@ -62,17 +64,6 @@ export function createCitySound(bay, groundAt) {
 		const mains = ctx.createOscillator(); mains.frequency.value = 120;
 		A.mainsG = ctx.createGain(); A.mainsG.gain.value = 0;
 		mains.connect(A.mainsG).connect(own); mains.start();
-		// the nearest car: tyre hiss and an engine note, panned
-		A.pan = ctx.createStereoPanner(); A.pan.connect(master);
-		const hs = ctx.createBufferSource(); hs.buffer = A.white; hs.loop = true;
-		const hf = ctx.createBiquadFilter(); hf.type = 'bandpass'; hf.frequency.value = 900; hf.Q.value = 0.5;
-		const hg = ctx.createGain(); hg.gain.value = 0;
-		hs.connect(hf).connect(hg).connect(A.pan); hs.start();
-		const eo = ctx.createOscillator(); eo.type = 'sawtooth'; eo.frequency.value = 55;
-		const el = ctx.createBiquadFilter(); el.type = 'lowpass'; el.frequency.value = 180;
-		const eg = ctx.createGain(); eg.gain.value = 0;
-		eo.connect(el).connect(eg).connect(A.pan); eo.start();
-		A.car = { hf, hg, eo, eg };
 		return true;
 	}
 	const panner = (v, dest) => { const p = ctx.createStereoPanner(); p.pan.value = v; p.connect(dest); return p; };
@@ -119,7 +110,7 @@ export function createCitySound(bay, groundAt) {
 	}
 	function horn(level, pan) {
 		const t = ctx.currentTime, p = panner(pan, A.master), len = 0.18 + Math.random() * 0.35;
-		for (const f of [405, 510]) {
+		for (const f of [415, 524]) {
 			const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
 			o.type = 'square'; o.frequency.value = f; lp.type = 'lowpass'; lp.frequency.value = 1500;
 			g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level, t + 0.02); g.gain.setValueAtTime(level, t + len); g.gain.linearRampToValueAtTime(0, t + len + 0.04);
@@ -149,7 +140,9 @@ export function createCitySound(bay, groundAt) {
 		const town = U && !onIsland ? Math.min(1, Math.max(0, (U.u - 0.1) / 0.5)) : 0;
 		const near = Math.max(0, 1 - Math.max(0, alt - 3) / 120) * (o.under ? 0 : 1);
 		const on = town * near, inside = !!o.indoors, rain = o.rain || 0;
-		const e = cam.matrixWorld.elements, fl = Math.hypot(e[8], e[10]) || 1, fx = -e[8] / fl, fz = -e[10] / fl;
+		// the cars going past (audio/engines.js: a few voices for the nearest, Doppler-shifted and
+		// panned; on wet roads the tyres hiss louder and brighter), through the walls indoors
+		traffic.update(dt, o.cars, cam, { on, wet: Math.min(1, rain * 2), inside });
 		ease(A.room.frequency, inside ? 500 : 18000, 0.3);
 		ease(A.roomTone.g.gain, inside ? 0.05 : 0, 0.5);
 		ease(A.mainsG.gain, inside ? 0.0025 : 0, 0.5);
@@ -159,28 +152,6 @@ export function createCitySound(bay, groundAt) {
 		const day = 1 - o.night * 0.6;
 		ease(A.bed.g.gain, 0.08 * on * (0.4 + busy) * day);
 		ease(A.hum.g.gain, 0.012 * on * busy);
-		// the car closest to you (by loudness), Doppler-shifted as it passes; on wet roads the
-		// tyres hiss louder and brighter
-		let best = null, bl = 0;
-		for (const c of o.cars || []) {
-			if (c.px === undefined) continue;
-			const dx = c.px - x, dz = c.pz - z, d2 = dx * dx + dz * dz;
-			const l = c.v / (1 + d2 / 60);
-			if (l > bl) { bl = l; best = { c, dx, dz, d: Math.sqrt(d2) }; }
-		}
-		const wetRoad = Math.min(1, rain * 2);
-		if (best) {
-			const { c, dx, dz, d } = best;
-			const vr = d > 0.1 ? (c.vx * dx + c.vz * dz) / d : 0;           // speed away from you
-			const dop = 343 / (343 + vr);
-			const right = fz * dx - fx * dz;                                    // + to the right of the view
-			ease(A.pan.pan, Math.max(-0.9, Math.min(0.9, -right / (d + 4))), 0.08);
-			const l = Math.min(1, c.v / 10) / (1 + d * d / 90) * on;
-			ease(A.car.hg.gain, 0.12 * l * (1 + wetRoad * 1.2), 0.1);
-			ease(A.car.eg.gain, 0.05 * l, 0.1);
-			ease(A.car.hf.frequency, (700 + wetRoad * 1600) * dop + c.v * 30, 0.1);
-			ease(A.car.eo.frequency, (38 + c.v * 3.2) * dop, 0.1);
-		} else { ease(A.car.hg.gain, 0); ease(A.car.eg.gain, 0); }
 		// downtown now and then a horn, and a siren somewhere across the city
 		hornT -= dt;
 		if (hornT < 0) { hornT = 25 + Math.random() * 60; if (busy > 0.6 && o.night < 0.8) horn(0.012 * on, (Math.random() - 0.5) * 1.4); }

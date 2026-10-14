@@ -34,6 +34,20 @@ export const RULES = Object.freeze({
 	'stop-thief': { mercy: 1, law: 6, protect: 6, honest: 1, line: 'Stopped the thief who robbed {target}' },
 	'kept-wallet': { mercy: -1, law: -3, protect: -1, honest: -8, line: "Kept {target}'s lost wallet" },
 	'boss-slain': { mercy: 0, law: 2, protect: 8, honest: 0, line: 'Brought down {target}' },
+	// bags and errands, done by you or by anyone else (people/npc-quests.js)
+	'return-bag': { mercy: 2, law: 2, protect: 3, honest: 6, line: "Handed {target}'s bag back" },
+	'steal-bag': { mercy: -1, law: -6, protect: -2, honest: -8, line: "Walked off with {target}'s bag" },
+	// taking it off the thief is neither good nor bad on its own: what you do next is
+	'take-from-thief': { mercy: 0, law: 0, protect: 0, honest: 0, line: "Took {target}'s bag off the thief" },
+	'return-stolen': { mercy: 2, law: 5, protect: 8, honest: 6, line: 'Gave {target} back what was stolen' },
+	'keep-stolen': { mercy: 0, law: -4, protect: -1, honest: -8, line: 'Kept what was stolen from {target}' },
+	'betray-errand': { mercy: -1, law: -5, protect: -2, honest: -9, line: 'Ran off with what {target} trusted them with' },
+	'pocket-cash': { mercy: 0, law: -4, protect: -1, honest: -7, line: "Pocketed {target}'s money" },
+	// small kindnesses in the street, and their betrayals
+	'give-directions': { mercy: 1, law: 0, protect: 1, honest: 2, line: 'Showed {target} the way' },
+	mislead: { mercy: -1, law: 0, protect: -1, honest: -5, line: 'Sent {target} the wrong way on purpose' },
+	'help-fallen': { mercy: 4, law: 1, protect: 5, honest: 1, line: 'Helped {target} up after a fall' },
+	'rob-fallen': { mercy: -6, law: -7, protect: -8, honest: -8, line: "Went through {target}'s pockets while they were down" },
 });
 // context: multipliers on the negative (harm) side of a deed, or on all of it, from one table
 export const MODIFIERS = Object.freeze({
@@ -90,7 +104,7 @@ export function createMorality({ store = null, now = () => Date.now(), key = 'l9
 		const w = (S.worlds[d.world || 'here'] ||= blank());
 		for (const a of AXES) { S.me[a] = clampAxis(S.me[a] + s[a]); w[a] = clampAxis(w[a] + s[a] * 0.5); }
 		S.me.deeds++; w.deeds++;
-		const e = { t: now(), kind: d.kind, line: fill(RULES[d.kind].line, d), target: d.target || '', faction: d.faction || '', place: d.place || '', world: d.world || 'here', ctx: Object.keys(d.ctx || {}).filter((k) => d.ctx[k]), delta: s };
+		const e = { t: now(), kind: d.kind, line: fill(RULES[d.kind].line, d), target: d.target || '', faction: d.faction || '', place: d.place || '', world: d.world || 'here', region: d.region || '', ctx: Object.keys(d.ctx || {}).filter((k) => d.ctx[k]), delta: s };
 		S.log.push(e);
 		if (S.log.length > 200) S.log.shift();
 		if (d.place) { const P = (S.places[d.place] ||= { good: 0, harm: 0, last: '' }); const sum = s.mercy + s.protect; if (sum >= 0) P.good += sum; else P.harm -= sum; P.last = e.line; }
@@ -130,5 +144,60 @@ export function createMorality({ store = null, now = () => Date.now(), key = 'l9
 		me: () => ({ ...S.me }), world: (w = 'here') => ({ ...(S.worlds[w] || blank()) }), log: (n = 20) => S.log.slice(-n),
 		info: (w) => ({ me: { ...S.me }, world: { ...(S.worlds[w || 'here'] || blank()) }, title: title(), reactions: reactions(), recent: S.log.slice(-8).map((e) => e.line), places: Object.keys(S.places).length }),
 		reset() { S = { me: blank(), worlds: {}, log: [], places: {} }; save(); },
+	};
+}
+
+// ---------- everyone else's deeds: people and the regions they live in ----------
+// The same table scores them. A person's own standing moves with what they do (and shapes
+// who they are, people/disposition.js); their region keeps a tally of all the deeds done in
+// it, by them and by you, and so does the world. Tallies settle slowly back towards the
+// middle, so a region is what it has done lately, not everything it ever did.
+const REGION_K = 0.15, WORLD_K = 0.04, PLAYER_K = 0.5, SETTLE = 0.996, ACTORS = 300, LOG = 120;
+export function createCommons({ store = null, now = () => Date.now(), key = 'l99-commons-v1' } = {}) {
+	let S = { actors: {}, regions: {}, worlds: {}, log: [], at: now() };
+	try { const raw = store?.get(key); if (raw) { const o = typeof raw === 'string' ? JSON.parse(raw) : raw; if (o?.regions) S = { actors: o.actors || {}, regions: o.regions || {}, worlds: o.worlds || {}, log: Array.isArray(o.log) ? o.log.slice(-LOG) : [], at: o.at || now() }; } } catch { /* a fresh ledger */ }
+	const listeners = [];
+	let dirty = false;
+	const save = () => { if (!dirty) return; dirty = false; S.at = now(); try { store?.set(key, JSON.stringify(S)); } catch { /* private mode */ } };
+	const settle = (T, k) => { for (const a of AXES) T[a] = Math.round(T[a] * k * 100) / 100; };
+	function addTo(T, s, k) { settle(T, SETTLE); for (const a of AXES) T[a] = clampAxis(T[a] + s[a] * k); T.deeds++; }
+	// a deed: { actor ('npc:123' or 'player'), name, kind, target, place, region, world, ctx }
+	function record(d) {
+		const s = score(d.kind, d.ctx || {});
+		if (!s) return null;
+		const player = !d.actor || d.actor === 'player';
+		if (!player) {
+			const A = (S.actors[d.actor] ||= { ...blank(), name: d.name || '', region: d.region || '', last: '', t: 0 });
+			for (const a of AXES) A[a] = clampAxis(A[a] + s[a]);
+			A.deeds++; A.t = now(); A.last = fill(RULES[d.kind].line, d); if (d.name) A.name = d.name; if (d.region) A.region = d.region;
+			const ids = Object.keys(S.actors);
+			if (ids.length > ACTORS) { ids.sort((x, y) => S.actors[x].t - S.actors[y].t); for (const id of ids.slice(0, ids.length - ACTORS)) delete S.actors[id]; }
+		}
+		if (d.region) addTo((S.regions[d.region] ||= { ...blank(), name: d.regionName || d.region }), s, player ? PLAYER_K : REGION_K);
+		if (d.region && d.regionName) S.regions[d.region].name = d.regionName;
+		addTo((S.worlds[d.world || 'here'] ||= blank()), s, player ? WORLD_K * 2 : WORLD_K);
+		const e = { t: now(), actor: d.actor || 'player', name: d.name || '', kind: d.kind, line: fill(RULES[d.kind].line, d), place: d.place || '', region: d.region || '', delta: s };
+		if (!player) { S.log.push(e); if (S.log.length > LOG) S.log.shift(); }
+		dirty = true;
+		for (const f of listeners) { try { f(e); } catch { /* a listener gone */ } }
+		return e;
+	}
+	// your own deeds count in the region you did them in (the compass itself is unchanged)
+	function follow(morality, regionNow) {
+		return morality?.on?.((e) => { const R = regionNow?.(); if (R?.id && e.delta) { addTo((S.regions[R.id] ||= { ...blank(), name: R.name || R.id }), e.delta, PLAYER_K); dirty = true; } });
+	}
+	const copy = (T) => (T ? { ...T } : null);
+	return {
+		record, follow, save, score,
+		on: (f) => { listeners.push(f); return () => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }; },
+		actor: (id) => copy(S.actors[id]) || blank(),
+		known: (id) => !!S.actors[id],
+		region: (id) => copy(S.regions[id]) || blank(),
+		world: (w = 'here') => copy(S.worlds[w]) || blank(),
+		regions: () => Object.keys(S.regions),
+		log: (n = 20, f = null) => (f ? S.log.filter(f) : S.log).slice(-n),
+		// when the ledger was last written (for the time spent away)
+		savedAt: () => S.at,
+		reset() { S = { actors: {}, regions: {}, worlds: {}, log: [], at: now() }; dirty = true; save(); },
 	};
 }
