@@ -131,13 +131,14 @@ test('a bag snatched: chase the thief, they drop it, give it back; or they get a
 	thief.override(thief, 0.1, T.camera.position); assert.ok(thief.M.want.speed > 5 && thief.M.want.run === 1);
 	T.P.pos.set(thief.M.S.pos.x, 1.7, thief.M.S.pos.z + 1); R.update(0.1);
 	assert.equal(R.info().errand.stage, 'search');
-	assert.ok(T.deeds.includes('stop-thief'));
+	assert.ok(T.deeds.includes('take-from-thief'), 'taking it off them is neutral');
 	assert.match(R.mark().title, /Pick up/);
 	const d = R.info().errand.drop; T.P.pos.set(d[0], d[1] + 1.7, d[2]); R.update(0.1);
 	assert.equal(R.info().errand.stage, 'bring');
 	T.P.pos.set(5, 1.7, -11); R.update(0.1);
 	assert.equal(R.info().errand, null);
 	assert.ok(T.paid.at(-1).get.credits >= 80);
+	assert.equal(T.deeds.at(-1), 'return-stolen', 'giving it back is the good deed');
 	// another, and the thief gets away
 	const R2 = createErrands(T.mk([T.body(5, -12), T.body(8, -15)]));
 	T.P.pos.set(0, 1.7, 0); assert.match(R2.snatch(), /bag back/); for (let k = 0; k < 520; k++) R2.update(0.1);

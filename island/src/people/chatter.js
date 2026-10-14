@@ -8,7 +8,7 @@ import { awarenessContext } from './world-awareness.js';
 const NOTICE = 11, SAY = 4.6, EARSHOT = 14;
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _h = new THREE.Vector3();
 
-export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone, frameMs = () => 16, errands = () => null }) {
+export function createChatter({ mount, camera, world, people, talkers, voice, combat, driving, isPhone, frameMs = () => 16, errands = () => null, deeds = () => null }) {
 	// how the world takes you: the compass's standing and the favours you have done
 	const standing = () => { try { const R = combat()?.morality?.reactions?.(); return { rep: R?.reputation ?? 0, bounty: R?.bounty ?? 0, favours: errands()?.info?.()?.done ?? 0 }; } catch { return {}; } };
 	const said = new WeakMap(), bumped = new WeakMap();
@@ -77,6 +77,10 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			child: !!d.child, outgoing: T.outgoing, warmth: T.warmth, mood: p.persona?.mood || null,
 			role: p.role === 'jog' ? 'jog' : p.route?.kind === 'seat' ? 'seat' : p.role,
 			phone: S.pose === 'phone', work: !!p.workContext, vendor: p.workContext?.role === 'vendor',
+			// a bag handed back, or taken, that they did or saw lately (people/npc-quests.js)
+			deed: deeds()?.memoryOf?.(d.seed) || null,
+			// and something about money, now and then (the bank's moneyTalk, through npc-money.js)
+			money: deeds()?.moneyLine?.(d.seed) || null,
 		};
 	}
 

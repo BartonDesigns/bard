@@ -4,6 +4,10 @@
 // inventory and a good deed on the compass. One errand at a time.
 // A lost dog (dog.js) is about only while its favour is: wandering and whimpering where it
 // ran to, following you once won over, home with its person, then gone when out of sight.
+// A bag someone else stole in front of you (people/npc-quests.js) comes here too, as a
+// snatch: let them go, or catch them and take it (neutral), then give it back (the good
+// deed) or walk off with it (keeping stolen goods). A favour you turn down is offered to the
+// people about instead (handoff).
 import * as THREE from 'three';
 import { offerFor, lineFor, rewardFor, step, milestone, relativeDir } from './errands-core.js';
 import { rememberIncident } from './world-awareness.js';
@@ -19,7 +23,7 @@ const PET_REACH = 3, PET_HOME = 4, RUSH = 3.6;
 const STORE = 'crysis-favours-v1';
 const _v = new THREE.Vector3();
 
-export function createErrands({ scene, camera, world, people, chatter, persona, arms, morality, hint, driving, isPhone, worldKey = () => world()?.body?.key || 'here', placeName = () => '', note = () => {} }) {
+export function createErrands({ scene, camera, world, people, chatter, persona, arms, morality, hint, driving, isPhone, worldKey = () => world()?.body?.key || 'here', placeName = () => '', note = () => {}, handoff = () => null }) {
 	let E = null, n = 0, cool = 40, prop = null, gT = 0, clock = 0, snatchCool = 120, snatchLook = 0, pet = null, voice = null;
 	let tally = { done: 0, kept: 0 };
 	try { tally = { ...tally, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; } catch { /* private mode */ }
@@ -40,14 +44,15 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		};
 		p.override = mine; p.heldBy = mine;
 	}
-	// a thief running off: away from you, turning aside from water and walls of nothing
+	// a thief running off: away from you, turning aside from water and walls of nothing (one
+	// walking off quickly breaks into a run when you come close)
 	function flee(p, speed) {
 		p.held = true; p.fleeBend = (Math.random() - 0.5) * 0.8;
 		const mine = (q, dt, cam) => {
-			const S = q.M.S;
+			const S = q.M.S, close = Math.hypot(S.pos.x - cam.x, S.pos.z - cam.z) < 14;
 			let h = Math.atan2(S.pos.x - cam.x, S.pos.z - cam.z) + q.fleeBend;
 			if (groundAt(S.pos.x + Math.sin(h) * 3, S.pos.z + Math.cos(h) * 3) === null) { q.fleeBend += dt * 2.5; h += dt * 2.5; }
-			q.M.want.heading = h; q.M.want.speed = speed; q.M.want.run = 1; S.look.target = null;
+			q.M.want.heading = h; q.M.want.speed = close ? Math.max(speed, 5) : speed; q.M.want.run = speed > 3 || close ? 1 : 0; S.look.target = null;
 			return true;
 		};
 		p.override = mine; p.heldBy = mine;
@@ -59,6 +64,8 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	}
 	const lost = (p) => !p || !p.active || p.override !== p.heldBy || p.P?.ragdoll;
 	const pos = (p) => p.M.S.pos;
+	// whoever it goes back to: the person, or the place (a business) when there is no one
+	const ownerAt = () => (E.giver ? pos(E.giver) : E.home);
 	const flat = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 	const you = () => { const P = world()?.player?.state; return P && !P.flying ? P.pos : camera.position; };
 	const feet = () => { const q = you(); return { x: q.x, y: q.y - (q === camera.position ? 1.7 : 0), z: q.z }; };
@@ -166,7 +173,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		else if (o.failed && E.kind === 'snatch') { const t = E.friendP; end(lineFor('escaped', { n }), 0); if (t) release(t); }
 		else if (o.kept) keep(o.cash);
 		else if (o.failed) end(o.say ? lineFor(o.say, {}) : null);
-		else if (o.declined) end(null);
+		else if (o.declined) { const was = E; end(null); handoff()?.(was); }
 	}
 	function finish(say) {
 		const to = E.kind === 'lost' || E.kind === 'snatch' || E.kind === 'repair' || E.kind === 'pet' ? E.giver : E.friendP;
@@ -179,7 +186,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 			to.M.S.feel.joy = 1;
 		}
 		const paid = arms()?.apply?.({ id: `favour:${E.giverName}:${Date.now()}`, kind: 'trade', peer: 'favour', give: { credits: 0, items: [] }, get: { credits, items: [] } });
-		morality()?.record?.({ kind: 'favour', target: E.giverName, world: worldKey(), place: placeName() });
+		morality()?.record?.({ kind: E.kind === 'snatch' ? 'return-stolen' : 'favour', target: E.giverName, world: worldKey(), place: placeName() });
 		tally.done++; save(); note('favour', { kind: E.kind });
 		const up = promoted('favours', tally.done - 1, tally.done);
 		const m = (up ? `You are now known as: ${up}.` : '') || milestone(tally.done);
@@ -187,10 +194,11 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		end(null, 7);
 	}
 	function keep(cash) {
-		arms()?.apply?.({ id: `kept:${E.giverName}:${Date.now()}`, kind: 'trade', peer: 'found', give: { credits: 0, items: [] }, get: { credits: cash, items: [] } });
-		morality()?.record?.({ kind: 'kept-wallet', target: E.giverName, world: worldKey(), place: placeName() });
+		if (cash) arms()?.apply?.({ id: `kept:${E.giverName}:${Date.now()}`, kind: 'trade', peer: 'found', give: { credits: 0, items: [] }, get: { credits: cash, items: [] } });
+		const stolen = E.kind === 'snatch';
+		morality()?.record?.({ kind: stolen ? 'keep-stolen' : 'kept-wallet', target: E.giverName, world: worldKey(), place: placeName() });
 		tally.kept++; save();
-		hint(`You kept the wallet: ${cash} credits. ${E.giverName} is still looking for it.`, 5000);
+		hint(stolen ? `You kept ${E.giverName}'s ${E.item.name}. They never got it back.` : `You kept the wallet: ${cash} credits. ${E.giverName} is still looking for it.`, 5000);
 		end(null);
 	}
 	// over: the people go back to their day (after a moment, if they are speaking)
@@ -202,6 +210,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		clearProp();
 		// a dog not brought home wanders off out of sight
 		if (pet && pet.phase !== 'reunion') { pet.phase = 'leave'; pet.t = 0; }
+		try { E?.onEnd?.(lastEnd); } catch { /* theirs */ }
 		E = null; cool = isPhone ? 90 : 60;
 	}
 
@@ -250,7 +259,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		E.t += dt;
 		const me = feet(), g = E.giver, f = E.friendP;
 		// the people in it carried off by something else (a fight, a crowd thinning): it ends
-		if (lost(g) && E.stage !== 'chase' && E.stage !== 'carry') { go('lost-them'); return; }
+		if ((g || !E.home) && lost(g) && E.stage !== 'chase' && E.stage !== 'carry') { go('lost-them'); return; }
 		if (f && lost(f) && (E.stage === 'chase' || E.stage === 'carry' || E.stage === 'offered')) { go('lost-them'); return; }
 		if (E.stage === 'offered') {
 			if (E.t > (E.talking ? 90 : OFFER_FOR) || flat(me, pos(g)) > OFFER_REACH + 4) go('decline');
@@ -301,7 +310,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 			return;
 		}
 		if (E.stage === 'bring') {
-			if (flat(me, pos(g)) < HAND) go('reach');
+			if (flat(me, ownerAt()) < (g ? HAND : 3.5)) go('reach');
 			else if (flat(me, E.from) > AWAY) go('away');
 			return;
 		}
@@ -318,8 +327,8 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	function mark() {
 		if (!E || E.stage === 'offered') return null;
 		if (E.stage === 'fix') return { ...E.car, radius: 3, title: E.title, detail: 'use a Repair Roll beside it' };
-		if (E.stage === 'thief') { const q = pos(E.friendP); return { x: q.x, y: q.y, z: q.z, radius: 2, title: 'Catch the thief', detail: `${E.giverName}'s bag` }; }
-		if (E.stage === 'search' && E.kind === 'snatch') return { ...E.drop, radius: 2, title: `Pick up ${E.giverName}'s bag`, detail: 'they dropped it' };
+		if (E.stage === 'thief') { const q = pos(E.friendP); return { x: q.x, y: q.y, z: q.z, radius: 2, title: 'Catch the thief', detail: `${E.giverName}'s ${E.item.name}, or let them go` }; }
+		if (E.stage === 'search' && E.kind === 'snatch') return { ...E.drop, radius: 2, title: `Pick up ${E.giverName}'s ${E.item.name}`, detail: 'they dropped it' };
 		if (E.stage === 'search' && E.kind === 'pet') {
 			const d = pet?.dog.pos;
 			if (d && flat(feet(), d) < 25) return { x: d.x, y: d.y, z: d.z, radius: 3, title: `There is ${E.item.name}`, detail: 'walk up slowly' };
@@ -327,7 +336,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		}
 		if (E.stage === 'lead') { const q = pos(E.giver); return { x: q.x, y: q.y, z: q.z, radius: 2, title: `Bring ${E.item.name} back to ${E.giverName}`, detail: `${E.item.pet?.she === false ? 'he' : 'she'} is following you` }; }
 		if (E.stage === 'search') return { ...E.centre, radius: 9, title: E.title, detail: 'search the marked patch' };
-		if (E.stage === 'bring') { const q = pos(E.giver); return { x: q.x, y: q.y, z: q.z, radius: 2, title: `Bring ${E.item.the} back to ${E.giverName}`, detail: E.item.cash ? 'or keep it' : 'they are waiting' }; }
+		if (E.stage === 'bring') { const q = ownerAt(); return { x: q.x, y: q.y ?? feet().y, z: q.z, radius: 2, title: `Bring ${E.item.the} back to ${E.giverName}`, detail: E.item.cash || E.kind === 'snatch' ? 'or keep it' : 'they are waiting' }; }
 		const q = pos(E.friendP);
 		return { x: q.x, y: q.y, z: q.z, radius: 2, title: E.title, detail: E.stage === 'chase' ? 'catch up with them' : `from ${E.giverName}` };
 	}
@@ -376,8 +385,31 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		chatter.say(t, { text: lineFor('dropped', { n: n++ }), gesture: 'shrug', feel: { surprise: 1 } }, null);
 		flee(t, 6);
 		releaseAt.push([t, clock + 8]);
-		morality()?.record?.({ kind: 'stop-thief', target: E.giverName, world: worldKey(), place: placeName() });
+		// taking it off them is neither good nor bad: giving it back is what counts
+		morality()?.record?.({ kind: 'take-from-thief', target: E.giverName, world: worldKey(), place: placeName() });
 		note('thief', {});
+		try { E.onDrop?.(); } catch { /* theirs */ }
+	}
+	// someone else's theft in front of you (people/npc-quests.js): the thief has it already and
+	// walks off quickly. victim: the person robbed, or none and home: { x, y, z } (a business)
+	// with owner its name; item: { name, the, shape }; onDrop, onEnd: told when it changes hands
+	function theft({ victim = null, home = null, owner = '', thief, item = null, speed = 2.6, onDrop = null, onEnd = null } = {}) {
+		if (E || !thief || (!victim && !home) || driving() || world()?.player?.state?.flying) return false;
+		const it = { name: 'bag', the: 'the bag', shape: 'bag', ...(item || {}) };
+		it.the = item?.the || `the ${it.name}`;
+		const who = victim ? persona(victim).first : owner || 'the owner', at = victim ? pos(victim) : home;
+		E = { kind: 'snatch', stage: 'thief', giver: victim, home: victim ? null : { x: home.x, y: home.y ?? feet().y, z: home.z }, giverName: who, friendP: thief, item: it, title: `Get ${who}'s ${it.name} back`, t: 0, from: { x: at.x, z: at.z }, onDrop, onEnd };
+		if (victim) {
+			hold(victim, 'stand');
+			chatter.say(victim, { text: lineFor('snatched', { n: n++, item: it }), gesture: 'point', feel: { surprise: 1, anger: 0.6 } }, null);
+			victim.M.S.feel.surprise = 1;
+		}
+		flee(thief, speed);
+		const key = world()?.body?.key, ev = { id: 'theft:' + Date.now(), at: Date.now(), bodyKey: key, actorId: 'npc', actorName: 'a thief', kind: 'robbery', line: `took ${who}'s ${it.name}` };
+		if (key) for (const q of people.pool) if (q.active && q !== thief && flat(pos(q), at) < 40) rememberIncident(q, ev);
+		snatchCool = Math.max(snatchCool, isPhone ? 200 : 150);
+		hint(`Someone just walked off with ${who}'s ${it.name}. Catch them and take it, or let them go.`, 4500);
+		return E.title;
 	}
 	// asked in a conversation whether they need anything: a favour of their own, or nothing
 	function offerTo(p) { const line = maybeAsk(p, { force: true, talking: true }); return line ? { text: line.text, title: E.title } : null; }
@@ -394,5 +426,5 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		const r = (v) => Math.round(v * 10) / 10;
 		return { errand: E && { kind: E.kind, stage: E.stage, title: E.title, giver: E.giverName, friend: E.friend || null, t: Math.round(E.t), drop: E.drop && [E.drop.x, E.drop.y, E.drop.z].map(r) }, pet: pet && { phase: pet.phase, mood: pet.dog.mood(), breed: pet.dog.breed.id, name: pet.dog.name, at: [r(pet.dog.pos.x), r(pet.dog.pos.z)] }, cool: Math.round(cool), last: lastEnd, ...tally };
 	}
-	return { maybeAsk, offerTo, useHere, needs, askNearest, petNow: () => askNearest('pet'), snatch: () => snatch(true), asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
+	return { maybeAsk, offerTo, useHere, needs, askNearest, petNow: () => askNearest('pet'), snatch: () => snatch(true), theft, busy: () => !!E, asking, accept, update, mark, factFor, cancel, dispose, info, active: () => !!E && E.stage !== 'offered' };
 }
