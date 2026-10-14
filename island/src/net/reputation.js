@@ -46,15 +46,16 @@ export function npcMemoryKey(actor) {
 // Room-scoped cache. The server's clock prevents device clock skew from changing guilt.
 export function createReputationMemory({me, now=Date.now}={}) {
  let supported=false, offset=0, records=[];
+ const cleansed=new Map();
  const alive=(e,time)=>e.at<=time+5000 && reputationAlive(e,Math.max(time,e.at));
  function reset(welcome=null) {
-  records=[]; supported=!!welcome?.features?.includes(REPUTATION_FEATURE);
+  records=[]; cleansed.clear(); supported=!!welcome?.features?.includes(REPUTATION_FEATURE);
   offset=Number.isFinite(welcome?.now)?now()-welcome.now:0;
  }
  function receive(raw) {
   if(!supported)return null;
   const e=cleanReputationRecord(raw), time=now()-offset;
-  if(!e || !alive(e,time) || records.some(q=>q.actor===e.actor && q.id===e.id))return null;
+  if(!e || e.at <= (cleansed.get(e.actor) || 0) || !alive(e,time) || records.some(q=>q.actor===e.actor && q.id===e.id))return null;
   records=records.filter(q=>alive(q,time));records.push(e);records=records.slice(-REPUTATION_MAX);return e;
  }
  function context(at, npc=null) {
@@ -67,5 +68,5 @@ export function createReputationMemory({me, now=Date.now}={}) {
   const completed=near.filter(e=>e.kind==='quest-complete' && e.actor===me);
   return {reports,sharedCompleted:completed.length,sharedIssuer:!!npc && completed.some(e=>e.npc===npc)};
  }
- return {reset,receive,context,supported:()=>supported,has:(id)=>records.some(e=>e.actor===me&&e.id===id),info:()=>({supported,records:records.length})};
+ return {reset,receive,context,cleanse:(actor,at)=>{if(Number.isFinite(at)){cleansed.set(actor,Math.max(cleansed.get(actor)||0,at));records=records.filter(e=>e.actor!==actor||e.at>at);}},supported:()=>supported,has:(id)=>records.some(e=>e.actor===me&&e.id===id),info:()=>({supported,records:records.length})};
 }

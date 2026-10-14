@@ -1,3 +1,7 @@
+## Persistent reputation update
+
+`SOULS` stores personal reputation separately from expiring rooms. Deploy this Worker after the persistent-reputation change is merged; retain both migrations in `wrangler.toml`. `/status.features` must include `persistent-reputation-v1`. The discovery Worker is separate and needs no deployment for this feature. See [the design, recovery instructions, cave ritual and verification limits](../../docs/persistent-reputation.md).
+
 # The rooms server (multiplayer, Cloudflare free plan)
 
 ## Shared reputation update
@@ -238,3 +242,74 @@ The 9 October 2026 container run passed using a loopback-only OS interface disco
 because the container does not expose `os.networkInterfaces()`. No game, network message,
 Durable Object or WebSocket behavior was substituted. `npm run check` also passed the
 production Worker dry-run bundle.
+
+## Shared citizen activity (14 October 2026)
+
+The `LivingRegion` Durable Object adds a separate, persistent namespace per universe body
+and region. It is independent of multiplayer room lifetime. Its appended migration is
+`v3-living-regions`; deploying the frontend alone does not enable it. `/status` and room
+welcomes advertise `living-world-v1` only when the `LIVING` binding is present.
+
+The browser uses the same private Soul bearer capability as `/souls/me` and an allowed
+Origin for `GET` / `POST /living/:encodedWorld/:encodedRegion`. The Worker derives a
+different public traveller ID for each region; the capability and underlying Soul ID are
+never published. A capability authenticates possession, not a verified human account or
+proof of physical location. Citizens, places, hazards and requests are client observations,
+not an authoritative worldwide geography database.
+
+POST accepts `{id, op, ...}` with a stable operation ID. Supported operations are:
+
+- `register`: up to 16 `actors`, 16 `requests`, and an optional observed `situation`.
+- `reserve`, `join`, `release`: a `requestId`, with the player identity supplied by the Worker.
+- `influence`: a `requestId`, registered `choiceId`, and optional public proposal `reason`.
+- `report-source`: a `requestId`, exact registered `source`, stable `evidenceId`, and
+  `outcome` (`completed` or `failed`), plus `actorId` for an NPC result.
+
+Identity, elapsed time, rewards and money cannot be set by the caller. An influence action
+records the citizen's response to a proposal. Registered scheduling choices may prioritize,
+defer or resume work with consent; they do not purchase consent or enact construction.
+Generic `confirm` and `observe-start` are intentionally unavailable over this HTTP interface.
+Private conversations must not be sent as public proposal reasons.
+
+Source reports are accepted only from the original registration observer, or an owning or
+participating player reporting their own outcome. NPC IDs must match the assigned citizen.
+An original observer may align an unassigned request with an actual source actor only if
+the actor is registered and eligible, no player has claimed/joined it, and current observed
+conditions allow it. Different assignments and disasters cannot be overridden by a report.
+Every source result is labelled `provenance: 'client-observed'` in both state and public audit;
+it is not independent server verification of geometry or possessions. The endpoint transfers
+no items, money or quest rewards and mutates no physical world geometry. LLM narration is
+never a source receipt. Exact operation retries are idempotent; reused evidence cannot
+settle a second request.
+
+The response contains `{feature, world, region, you, revision, now, view, events, receipt?}`.
+GET also supplies `history: {events, before, total}` with newest entries first; pass
+`?before=<sequence>&limit=50` to read older entries. Durable activity records and operation
+receipts survive reconstruction even when the bounded in-memory view drops older events.
+A repeated operation ID returns its original receipt; changing its payload returns 409.
+All commands in an observation batch are validated before a transaction writes anything.
+
+Alarms advance registered work in five-minute steps while actionable requests exist.
+Without open work the object sleeps; returning visitors update routines lazily. Catch-up
+is bounded to 24 hours and records skipped unobserved time instead of inventing history.
+Player reservations do not expire when the player leaves. NPCs may report abstract work
+but physical work stops at `awaiting-confirmation`; they cannot silently finish a player's
+quest. Only `conversation`, `checkin` and `observation` requests with `completionMode: 'social'`
+may finish abstractly while absent. Their events explicitly carry `simulated: true` and
+create no rewards or assets. A real engine source receipt can report a physical outcome
+with the client-observed limits described above; the server does not independently simulate
+geometry. Temporary hazard expires after 30 minutes, but destroyed/inaccessible sites and
+unavailable actors remain blocked until a fresh observation changes them.
+
+The core limits each region to 128 citizens and 128 active/unresolved requests and reports
+capacity errors explicitly. Terminal requests move into durable archival records that also
+prevent replay/reobservation from resurrecting them; the latest 16 remain in the view and
+their public history remains paginated. Unresolved work and player claims are never evicted.
+Cross-region population migration is not implemented by this API.
+
+`npm test` includes the living-region checks for authenticated shared views, reservation
+ownership, concurrent retry receipts, atomic batches, absent-player progression, history
+pagination, proposal boundaries and persistent operation budgets. `npm run check` only
+bundles a dry-run Worker; it does not deploy or establish live capability support.
+`npm run test:living-integration` exercises real local workerd and SQLite Durable Objects
+with two authenticated identities, concurrency and isolated bodies, without live writes.
