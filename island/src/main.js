@@ -1567,6 +1567,7 @@ export function createIslandWorld() {
 			W.labels?.hide();
 			W.globe?.regional?.pause();
 			W.kinetic?.silence();
+			worldAudio.space(dt);
 			// The retained ground stops streaming and drawing; only the orbital pass runs.
 			// The same input state and faceplate analyser continue on every frame.
 			dom.veil.style.opacity = '0'; glare.style.opacity = '0';

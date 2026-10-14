@@ -92,6 +92,7 @@ export function worldLevel(v) {
 	level = Math.max(0, Math.min(1.5, +v || 0));
 	try { localStorage.setItem('l99-worldvol', String(level)); } catch { /* private mode: not kept */ }
 	for (const g of levels) g.gain.setTargetAtTime(level * air, g.context.currentTime, 0.05);
+	for (const g of cabinLevels) g.gain.setTargetAtTime(level, g.context.currentTime, 0.05);
 	return level;
 }
 
@@ -112,6 +113,20 @@ export function musicSend() {
 	const from = window._dcFilter, to = window._peakInput177;
 	if (from?.context === c && to?.context === c) return { ctx: c, from, to };
 	return { ctx: c, from: m, to: c.destination };
+}
+// the ship's own sounds (its thrusters, its cabin): under the world's volume but not the air's,
+// so they carry on in space, where everything outside falls silent
+const cabins = new WeakMap(), cabinLevels = [];
+function cabinGate(ctx, dest) {
+	let g = cabins.get(dest);
+	if (!g) { g = ctx.createGain(); g.gain.value = level; g.connect(dest); cabins.set(dest, g); cabinLevels.push(g); }
+	return g;
+}
+export function cabinOut() {
+	if (typeof window === 'undefined') return null;
+	const b = window._masterClip || window.leadBus227, c = b && b.context;
+	if (c) { const B = c.state === 'running' && busFor(c); return B ? { ctx: c, out: cabinGate(c, B.world) } : null; }
+	return own && own.ctx.state === 'running' ? { ctx: own.ctx, out: cabinGate(own.ctx, own.out) } : null;
 }
 // the world's way in for a module that wants the node itself (its .context is the context)
 export function worldOut() { return soundBus()?.out || null; }
