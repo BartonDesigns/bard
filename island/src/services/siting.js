@@ -18,10 +18,10 @@ export const SERVICES = {
 	// cell: lattice spacing (m); reach: how far from the anchor a building may stand; deal: the
 	// share of buildings dealt this kind [from, to); W/D: the least width across the front and
 	// depth; area: the most floor; top: the tallest block that can be dressed as one
-	hospital: { cell: 3200, reach: 1100, deal: [0, 0.34], W: 26, D: 18, area: 4800, top: 26, label: 'Hospital' },
+	hospital: { cell: 3200, reach: 850, deal: [0, 0.34], W: 26, D: 18, area: 4800, top: 26, label: 'Hospital' },
 	fire: { cell: 1700, reach: 650, deal: [0.34, 0.58], W: 16, D: 14, area: 2600, top: 16, label: 'Fire station' },
 	police: { cell: 1900, reach: 700, deal: [0.58, 0.84], W: 15, D: 13, area: 2600, top: 16, label: 'Police station' },
-	armory: { cell: 6400, reach: 1300, deal: [0.84, 1], W: 20, D: 16, area: 5200, top: 16, label: 'Armory' },
+	armory: { cell: 6400, reach: 1000, deal: [0.84, 1], W: 20, D: 16, area: 5200, top: 16, label: 'Armory' },
 };
 export const KINDS = Object.keys(SERVICES);
 
