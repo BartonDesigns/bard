@@ -94,6 +94,11 @@ test('what someone can say about their money', () => {
 	if (t.rent) assert.ok(t.rent.inDays >= 0 && t.rent.inDays < 30 && t.rent.weekday);
 	assert.ok(t.payday === undefined || (t.payday.inDays >= 0 && t.payday.inDays < 7));
 	assert.ok(t.tempted >= 0 && t.tempted <= 1);
+	// the flush tip, the struggling ask for help
+	const H = makeHouseholds(3, Array.from({ length: 120 }, () => ({}))).map((q) => B.link(null, q));
+	const rich = H.find((q) => B.standing(q) > 12), poor = H.find((q) => B.standing(q) < 1);
+	if (rich) assert.ok(B.tipFor(rich, 100) >= 25 && !B.needsHelp(rich));
+	if (poor) assert.ok(B.tipFor(poor, 100) === 0 && B.needsHelp(poor));
 });
 
 test('payroll pays in: a regular wage is listed, not counted twice; a bonus is money on top', () => {

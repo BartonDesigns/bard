@@ -122,6 +122,13 @@ export function createBank({ clock = () => Date.now(), storage = typeof localSto
 		facts.tips = s > 8 ? 'well' : s > 2 ? 'a little' : 'nothing';
 		return facts;
 	}
+	// for the requests and favours: a flush house tips well, a struggling one asks for work or help
+	function tipFor(id, base) {
+		const s = standing(id);
+		if (s === null) return 0;
+		return Math.round(Math.max(0, base) * (s > 12 ? 0.3 : s > 4 ? 0.15 : s > 1 ? 0.05 : 0) / 5) * 5;
+	}
+	const needsHelp = (id) => { const s = standing(id); return s !== null && s < 1; };
 	// ---------- the ledger Worker ----------
 	let syncing = false;
 	async function sync() {
@@ -154,7 +161,7 @@ export function createBank({ clock = () => Date.now(), storage = typeof localSto
 		} catch { return null; }
 	}
 	const info = () => ({ accounts: Object.keys(state.a).length, linked: links.size, pending: state.q.length, server: server || null, bytes: JSON.stringify(state).length });
-	return { link, household, account, balance, earn, spend, note, transfer, flush, history, daily, standing, moneyTalk, sync, pull, info, setServer: (u) => { server = u || ''; }, KIND, raw: (id) => acct(household(id)) || null };
+	return { link, household, account, balance, earn, spend, note, transfer, flush, tipFor, needsHelp, history, daily, standing, moneyTalk, sync, pull, info, setServer: (u) => { server = u || ''; }, KIND, raw: (id) => acct(household(id)) || null };
 }
 
 // payroll (payroll.js) pays into the bank: a wage the household's plan already counts is listed
