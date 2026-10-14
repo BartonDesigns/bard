@@ -507,7 +507,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		M4.compose(V3.set(o.p[0], o.p[1], o.p[2]), Q, new THREE.Vector3(1, 1, 1));
 		M4.multiply(new THREE.Matrix4().makeTranslation(0, o.down, 0));
 		const w = o.wheels;
-		W.vehicles.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer });
+		W.vehicles?.setMine(D.kind, D.color, M4, { driving: true, spin: w[0].spin, steer: w[0].steer });
 		// anyone in the way is struck (vehicles/impact.js); the car gives up what it hands them
 		if (strike) {
 			const lv = C.body.linvel(), el = M4.elements;

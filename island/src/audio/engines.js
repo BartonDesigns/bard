@@ -337,7 +337,8 @@ function update(v, s) {
 	}
 	// (a helicopter at rest is silent, however close)
 	if (p.fuel === 'rotor') v.gain *= clamp(v.n * 1.4, 0, 1);
-	v.score = v.gain * v.prio;
+	// (the one you sit in counts as yours)
+	v.score = v.gain * (v.inside ? Math.max(3, v.prio) : v.prio);
 	if (v.nodes) apply(v);
 }
 function stopVoice(v) {
