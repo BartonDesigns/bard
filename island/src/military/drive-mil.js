@@ -112,7 +112,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 				const hit = combat.firstHit(s.pos, dir, step, combat.me);
 				if (hit || s.life <= 0) {
 					const at = s.pos.clone().addScaledVector(dir, hit ? hit.t : 0);
-					if (hit) { combat.blast(at, 7, 260, combat.me); combat.fx.explosion(at, 3.2); }
+					if (hit) { W()?.structures?.shell?.(at, dir, hit, 260); combat.blast(at, 7, 260, combat.me); combat.fx.explosion(at, 3.2); }          // structures: the shell through the wall it struck, then the burst
 					S.shells.splice(i, 1); continue;
 				}
 				const from = s.pos.clone(); s.pos.addScaledVector(dir, step);

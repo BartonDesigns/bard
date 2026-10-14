@@ -263,11 +263,13 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		return a;
 	}
 	// a shot or blow landing on what it met (shooter: ME, a squad member, a boss)
-	function landShot(hit, from, dir, by, dmg, type = 'ballistic') {
+	function landShot(hit, from, dir, by, dmg, type = 'ballistic', onward = true) {
 		const p = new THREE.Vector3().copy(from).addScaledVector(dir, hit.t);
 		if (hit.wall) {
 			fx.impact(p, hit.n, hit.surface, type === 'energy');
-			W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a heavy round's hole
+			const sh = W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a wall's pock, a heavy round's hole
+			hit.through = sh?.through ? sh.dmg : 0;
+			if (sh?.through && !hit.pierced && onward) { const q = p.clone().addScaledVector(dir, 0.05), h2 = firstHit(q, dir, 250, by === ME ? ME : by?.T || by); hit.end = hit.t + 250; if (h2) { h2.pierced = true; h2.t += hit.t + 0.05; hit.end = h2.t; return landShot(h2, from, dir, by, sh.dmg, type); } return null; }          // structures: on through one pane, weaker
 			if (hit.box && (type === 'energy' || type === 'fire')) heatUp(boxId(hit.box), hit.box, dmg, by === ME);
 			return null;
 		}
@@ -357,8 +359,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 			net.fx(from, to, S.tracer, 0);
 		} else {
 			const hit = firstHit(o, dir, S.range);
-			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, hit.t) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 			if (hit) landShot(hit, o, dir, ME, damageAt(S, hit.t), S.type);
+			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 			fx.tracer(from, end, S.tracer);
 			net.fx(from, end, S.tracer, hit ? 1 : 0);
 		}
@@ -416,7 +418,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 				if (hit.me) { hurtPlayer({ amount: p.dmg, type: p.type, part: 'torso', src: p.from || p.pos.clone(), by: p.owner }); fx.impact(at, null, 'energy', true); }
 				else if (hit.ward) { spark(hit.T, at, p.owner); }
 				else if (p.flare) { flareLands(at, hit); }
-				else landShot(hit, p.pos, dir, p.owner, p.dmg, p.type);
+				else landShot(hit, p.pos, dir, p.owner, p.dmg, p.type, false);
+				if (hit.through && !p.pierced) { p.pierced = true; p.dmg = hit.through; p.pos.addScaledVector(dir, hit.t + 0.05); continue; }          // structures: through one pane, flying on
 				endProjectile(p, hit.ward ? null : at);
 				continue;
 			}

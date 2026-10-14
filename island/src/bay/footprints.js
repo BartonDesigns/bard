@@ -52,6 +52,9 @@ const RECTS = [
 	for (const [u, v, hw, hd] of [[-208, -23, 60, 18], [-128, -34, 15, 15]]) { const [x, z] = toW(u, v); RECTS.push({ x, z, c: Math.cos(a), s: Math.sin(a), hw, hd, r: Math.hypot(hw, hd) }); }
 }
 
+// (the rects themselves, for the marks a fight leaves on the landmarks: structures/monuments.js)
+export const landmarkRects = RECTS;          // structures: the landmarks' ground, for their damage
+
 // whether (x, z), or a thing r across round it, stands on a landmark's ground
 export function onLandmark(x, z, r = 0) {
 	for (const L of RECTS) {
