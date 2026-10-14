@@ -1,3 +1,7 @@
+## October 14, 2026: people quests, follow-up
+
+Bags are now left where people leave them: on street benches and at bus shelters, on cafe and restaurant tables (walked in through the door) and doorsteps, on park benches and picnic tables, read from the street furniture, the parks and a small establishment provider the economy's registry can be plugged into (`HOOKS.npcQuests.establishments(fn)`). Thefts out of your sight leave leads: people in that region talk about them, the guide's story lists them, a marker shows roughly where, and the thief may be found walking about with it later, the same choice as any theft (only giving it back counts). Parents walking the kids and the residents you know take bags back and do favours too; children and teens point a bag out and never take one. New quest kinds from the people side, each honest or betrayed by disposition and paid through the money adapter: groceries to the car, a lost dog brought home (the dog is there), directions, a jump-start, someone helped up after a fall; you can do the groceries, the jump-start, the directions and the fall too. See `docs/npc-morality-2026-10-13.md`.
+
 ## October 13, 2026 (late): streets that read as real
 
 Crosswalks, stop bars and curb-ramp domes at town junctions; walk signals that tick and a daily goal for crossing properly; people crossing together on the walk; overpass joints you hear; buses at their stops; dogs on leads; globe highways graded; mapped buildings set back off the street and sidewalk. See `docs/streets-alive-2026-10-13.md`.
