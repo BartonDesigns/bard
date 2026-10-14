@@ -66,6 +66,9 @@ import { createDiscovery } from './bay/discovery.js';
 import { createShaderWarm } from './world/shaderwarm.js';
 import { captureResources } from './world/resources.js';
 import { preferLite, clearLite, GPU_LITE } from './world/gpulite.js';
+import { createGovernor, qualityNow } from './world/governor.js';
+import { meterGL } from './world/gpumeter.js';
+import { bodyCount } from './people/body.js';
 import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
@@ -450,8 +453,12 @@ export function createIslandWorld() {
 	};
 	const fullUnits = () => { const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); };
 	fullUnits();
-	// the graphics can be lost (a phone short of memory): three stops drawing and rebuilds when
-	// they come back; if they don't within a few seconds, say to reload
+	// what the graphics hold, for the quality governor (world/gpumeter.js, world/governor.js)
+	const gpuMeter = meterGL(renderer.getContext());
+	// the graphics can be lost (a phone short of memory): the world holds still, three rebuilds
+	// what it draws when they come back, and the governor takes the device a tier lower from then
+	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
+	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
@@ -460,11 +467,18 @@ export function createIslandWorld() {
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
 		// (the light ground only when it was the ground being built: a loss elsewhere is no reason)
 		if (/uBayOn/.test(linking.what)) preferLite();
-		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent());
+		governor.lost();
+		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
 		hint('The graphics were reset. Restoring…', 6000, 3);
-		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
+		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 8000);
 	});
-	dom.canvas.addEventListener('webglcontextrestored', () => { lost = false; fullUnits(); shaderWarm.reset(); hint('Graphics restored.', 2500, 3); });
+	dom.canvas.addEventListener('webglcontextrestored', () => {
+		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
+		applyQuality();
+		// (the frame clock starts again from now, not from before the loss)
+		last = performance.now(); frameAvg = 16;
+		hint('Graphics restored, at lighter settings.', 3000, 3);
+	});
 	// AgX: a film-like curve that rolls highlights off gently and keeps greens from going
 	// neon; ACES crushed the shade and pushed saturation, which read as harsh
 	renderer.toneMapping = THREE.AgXToneMapping;
@@ -540,9 +554,12 @@ export function createIslandWorld() {
 	}
 
 	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'high';
-	// the graphics setting: high unless this device was set otherwise (phones too)
-	try { quality = localStorage.getItem('l99-quality') || 'high'; } catch { /* private mode */ }
-	applyQuality(true);
+	// the graphics setting: high on a computer, governed on a phone (world/governor.js: a tier
+	// down to start, stepped by the frames and the memory), unless this device was set otherwise
+	try { quality = localStorage.getItem('l99-quality') || (isPhone ? 'auto' : 'high'); } catch { quality = isPhone ? 'auto' : 'high'; }
+	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage: (() => { try { return localStorage; } catch { return null; } })() });
+	if (governor.crashedLastTime) console.warn('[governor] the last visit ended without a goodbye: starting lighter', JSON.stringify(governor.info()));
+	applyQuality();
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
 	const state = { seed: null };
@@ -1451,7 +1468,7 @@ export function createIslandWorld() {
 					location.replace(u.href);
 					return;
 				}
-				applyQuality(true); buildPanel();
+				applyQuality(); buildPanel();
 			};
 			q.appendChild(b);
 		}
@@ -1473,15 +1490,21 @@ export function createIslandWorld() {
 		panelClock = t;
 	}
 
-	function applyQuality(force) {
-		const target = quality === 'high' ? maxRatio : quality === 'low' ? Math.min(1, maxRatio) * 0.75 : pixelRatio;
-		if (quality !== 'auto' || force) pixelRatio = target;
+	// the tier the governor (or the setting) has chosen, applied: resolution, shadows (their map's
+	// size and how often they are drawn), the clouds in the water, the sunbeams and spray. The crowd,
+	// the cars' detail and the view's reach read the tier themselves (qualityNow).
+	function applyQuality() {
+		governor.apply();
+		const Q = qualityNow();
+		pixelRatio = SAFE ? 1 : Math.max(0.5, maxRatio * Q.ratio);
 		renderer.setPixelRatio(pixelRatio);
-		renderer.shadowMap.enabled = !SAFE && !(quality === 'low');
+		renderer.shadowMap.enabled = !SAFE && Q.shadows;
+		const sun = world?.sky?.sun, size = (isPhone ? 1024 : 2048) * Q.shadowSize;
+		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
 		// (the clouds in the water: the plain sky there on low)
-		shared.cloudReflect = quality !== 'low';
-		world?.rays?.quality(quality);
-		world?.spray?.quality(quality);
+		shared.cloudReflect = Q.reflect;
+		world?.rays?.quality(Q.fx);
+		world?.spray?.quality(Q.fx);
 		resize();
 	}
 
@@ -1640,9 +1663,11 @@ export function createIslandWorld() {
 		W.deep?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
 		const bay = W.island.village.bay;
-		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40;
+		// (on a governed tier, from up on the shore only once you are down at the water: the reef
+		// and its life drawn through the surface from the spawn's hill were millions of triangles)
+		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
 		W.sealife.update(dt, time, inBay);
-		W.reef.update(inBay, camera.position);
+		W.reef.update(inBay, camera.position, under);
 		W.fish.update(dt, time, inBay);
 		W.inverts.update(dt, time, inBay);
 		shared.uUnder.value = under ? 1 : 0;
@@ -1669,7 +1694,7 @@ export function createIslandWorld() {
 			scene.fog.density *= W.island.profileHaze || 1;
 			// (the Moon's ground runs to its horizon in clear vacuum)
 			if (W.island.far) scene.fog.density = 0.000006;
-			const far = W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+			const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
@@ -1843,14 +1868,17 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
+		// (on the lighter tiers the shadows are drawn every other frame: world/governor.js)
+		const shadowEvery = qualityNow().shadowEvery;
+		renderer.shadowMap.autoUpdate = shadowEvery <= 1;
+		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
 		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
-		// hold 60 fps on phones by trading resolution, smoothly
+		// the governor: a tier down when the frames or the memory say so, back up after a long easy
+		// run (world/governor.js)
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
-		if (quality === 'auto' && (frame.n = (frame.n || 0) + 1) % 45 === 0) {
-			if (frameAvg > 19 && pixelRatio > 0.6) { pixelRatio = Math.max(0.6, pixelRatio - 0.1); renderer.setPixelRatio(pixelRatio); resize(); }
-			else if (frameAvg < 14.5 && pixelRatio < maxRatio) { pixelRatio = Math.min(maxRatio, pixelRatio + 0.05); renderer.setPixelRatio(pixelRatio); resize(); }
-		}
+		// (on a phone stepped down to the lighter tiers the local voice model, 100 MB, is let go too)
+		if (governor.update(dt, frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
 	}
 
 	// the context button: board or leave the boat; the jump button dives in the sea
@@ -1880,6 +1908,7 @@ export function createIslandWorld() {
 		// page up longer than the faceplate's): index.html's L99Clock reads this
 		window._worldAudioLead = isPhone ? 0.2 : 0.15;
 		if (world) world.player.state.active = true;
+		governor.live(true);
 		dom.mount.style.display = 'block';
 		resize();
 		start();
@@ -1887,6 +1916,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		governor.live(false);
 		window._worldAudioLead = undefined;
 		world?.orbit?.pause?.();
 		picnic.pause();
@@ -1903,6 +1933,10 @@ export function createIslandWorld() {
 		window.L99Keyboard149?.sync?.();
 	}
 
+	// a page put away or closed says goodbye; one that goes while a world is on screen did not
+	// (the governor's crash mark: world/governor.js)
+	document.addEventListener('visibilitychange', () => governor.live(visible && !document.hidden));
+	addEventListener('pagehide', () => governor.live(false));
 	dom.back.onclick = (e) => { e.stopPropagation(); api.close(); };
 	function toggleFly() {
 		const P = world?.player.state;
@@ -2256,6 +2290,9 @@ if (typeof window !== 'undefined') {
 		// sunbeams in the mist (world/sunrays.js): Crysis.rays() tells how they stand; 'on', 'off',
 		// 'force' (whatever the hour and the trees), a strength (1 is as made), or { burst: false }
 		rays: (v) => window.L99Island?.world?.()?.rays?.control(v) ?? 'no world yet',
+		// the quality governor (world/governor.js): the tier now and the best allowed, the frame time,
+		// the graphics' memory, the people's bodies alive, whether the last visit ended in a crash
+		governor: () => ({ ...HOOKS.governor?.info(), bodies: bodyCount(), pixelRatio: window.L99Island?.renderer?.()?.getPixelRatio() }),
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
 		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),
