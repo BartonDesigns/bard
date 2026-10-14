@@ -25,6 +25,7 @@ import { climateNow } from './climate.js';
 import { here } from './here.js';
 import { today } from '../calendar.js';
 import { gridSnap } from '../earth/globelanes.js';
+import { inClearing } from '../sportsfields.js';
 
 const rng = (seed) => { let s = (seed >>> 0) || 1; return () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 const hash2 = (a, b, k) => (Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 19349663) ^ Math.imul(k, 83492791)) >>> 0;
@@ -45,7 +46,7 @@ export function createRegional({ scene, shared = null, island, globe, hint = () 
 	const wet = (x, z) => { const h = height.at(x, z); return h < 0.4 || height.out.land <= 0; };
 	const S = createSettlements({ scene, ground, wet, isPhone, toXZ, F, lanes });
 	const ice = createIce(scene, { height, toXZ, toLL, isPhone });
-	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m), isPhone, toLL, shared, extra: () => S.trees() });
+	const flora = createFlora(scene, { ground, wet, blocked: (x, z, m) => S.vegetationBlocked(x, z, m) || !!roads?.onRoad(x, z, m) || inClearing(x, z, m), isPhone, toLL, shared, extra: () => S.trees() });
 	const air = createAir(scene, { isPhone });
 	// (the people stand on the ground as drawn, or on the ice)
 	const folk = createFolk(scene, { settlements: S, ground: (x, z) => Math.max((island.drawnAt || island.heightAt)(x, z), ice.floor(x, z)), wet, onIce: (x, z) => ice.floor(x, z) > -1e8, isPhone });
