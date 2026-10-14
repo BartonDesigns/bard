@@ -52,6 +52,8 @@ Filled holes are kept in this browser (`localStorage` `crysis-potholes-v1`).
 
 A new favour kind, `pothole`: someone near a pothole not yet reported asks you to report it ("There is a pothole on Hartz Avenue that nearly took my wheel off..."). Say yes, walk to the pin and stand by it for a moment (or drive right over it) and the report goes in; they pay 25 credits and up, it counts as a favour on the compass, and toward a new daily goal (`pothole1`).
 
+The businesses ask it too (`economy/requests.js`): a food place, shop, place to stay or garage with an unreported pothole within 150 m of its door may put "...'s deliveries keep hitting a pothole on ...: report it to the city" on its board (kind `pothole`, steps go and wait at the hole, 12 credits and up). `bay/streets.js` hands the board its pothole source (`setPotholeSource`); whoever completes the request, you or someone in the town walking it (`people/npc-quests.js`), sends the crew.
+
 The city's crew (`roadcrew.js`) comes about 20 s later: a white patch truck in the lane short of the hole with its arrow board flashing, cones in a taper and round the hole, two or three workers in hi-vis raking and tamping (thuds), hot asphalt growing in the hole. After 45 s the hole is filled (`potholes.fix`, the road map repainted: a square of fresh black patch from then on) and they leave. If you are far away the hole is filled anyway, a little later; reports from an earlier visit are filled on the next.
 
 ## Street trees (`bay/streettrees.js`, `bay/city.js`)
