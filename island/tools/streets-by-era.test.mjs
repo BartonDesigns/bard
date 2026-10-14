@@ -161,3 +161,26 @@ test('the pothole favour: asked, accepted, reported where it is, paid', () => {
 	assert.equal(step(E, 'away').E.stage, 'failed');
 	assert.ok(rewardFor('pothole', 80) >= 25 && rewardFor('pothole', 80) <= 140);
 });
+
+test('the businesses ask it too: a pothole near a shop is on the board, and done it sends the crew', async () => {
+	const { requestsFor, createBoard, setPotholeSource } = await import('../src/economy/requests.js');
+	const E = { id: 'e1', name: 'Hartz Hardware', type: 'hardware', x: 0, z: 0, locale: 'us' };
+	const hole = { id: '10:4', x: 5, z: 2, street: 'Hartz Avenue' };
+	let seen = null;
+	for (let day = 0; day < 40 && !seen; day++) seen = requestsFor(E, [E], { day, hole }).find((R) => R.kind === 'pothole');
+	assert.ok(seen, 'asked on some days');
+	assert.match(seen.title, /pothole on Hartz Avenue/); assert.equal(seen.steps[0].at.holeId, '10:4'); assert.equal(seen.hole, hole);
+	for (let day = 0; day < 10; day++) assert.equal(requestsFor(E, [E], { day }).filter((R) => R.kind === 'pothole').length, 0, 'none without a hole');
+	const reported = [];
+	setPotholeSource({ near: () => hole, report: (h) => reported.push(h.id) });
+	try {
+		let R = null;
+		for (let d = 0; d < 40 && !R; d++) {
+			const b = createBoard({ near: () => [E], clock: () => d * 86400000 + 1000, payroll: { payFrom: () => 12 } });
+			R = b.near(0, 0, 100).find((q) => q.kind === 'pothole');
+			if (R) { b.take(R.id, 'player'); assert.equal(b.complete(R.id, 'player', 'done').ok, true); }
+		}
+		assert.ok(R, 'on the board some day');
+		assert.deepEqual(reported, ['10:4']);
+	} finally { setPotholeSource(null); }
+});
