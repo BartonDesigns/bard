@@ -136,6 +136,8 @@ export function createAmbience() {
 		},
 		// another world's own air, by its kind
 		world: (A, type) => {
+			// (a world with no air of its own makes nothing: made and dropped each frame, its gain once piled up)
+			if (!['MAGMA', 'TOXIC', 'ICE', 'GAS', 'MYSTICAL', 'ARID'].includes(type)) return null;
 			const ctx = A.ctx, g = ctx.createGain(), src = [];
 			g.gain.value = 0; g.connect(A.amb);
 			const loop = (colour, ft, f, q) => { const s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(); s.buffer = noise(ctx, colour); s.loop = true; fl.type = ft; fl.frequency.value = f; fl.Q.value = q; s.connect(fl).connect(g); s.start(0, Math.random() * 3); src.push(s); return fl; };

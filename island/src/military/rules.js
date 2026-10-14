@@ -92,14 +92,17 @@ export function baseLayout(kind, seed = 1, short = false) {
 	}
 	// where things are parked, and what
 	const parked = [];
-	const motor = air ? ['tank', 'tank', 'apc', 'apc', 'jeep', 'jeep', 'jeep'] : ['tank', 'tank', 'apc', 'apc', 'jeep', 'jeep', 'jeep', 'truck'];
-	motor.forEach((k, i) => parked.push({ kind: k, x: mp.x - mp.w / 2 + 6 + i * (mp.w - 12) / (motor.length - 1), z: mp.z + (k === 'tank' || k === 'apc' ? 15 : 13), yaw: Math.PI }));
+	// (nose out from the shed, ready to go)
+	const motor = ['tank', 'tank', 'apc', 'apc', 'jeep', 'jeep', 'jeep', 'truck'];
+	motor.forEach((k, i) => parked.push({ kind: k, x: mp.x - mp.w / 2 + 6 + i * (mp.w - 12) / (motor.length - 1), z: mp.z + (k === 'tank' || k === 'apc' || k === 'truck' ? 15 : 13), yaw: 0 }));
 	parked.push({ kind: 'heli', x: hp.x, z: hp.z, yaw: r() * 6.283 });
 	if (!air) parked.push({ kind: 'heli', x: hp.x + 40, z: hp.z, yaw: r() * 6.283 });
 	if (air) {
 		parked.push({ kind: 'heli', x: hp.x + 38, z: hp.z, yaw: r() * 6.283 });
 		hangars.forEach((h, i) => parked.push({ kind: 'jet', x: h.x, z: h.z - h.d / 2 - (i === 1 ? 4 : 16), yaw: Math.PI, apron: true }));
 		parked.push({ kind: 'jet', x: apron.x + 120, z: apron.z - 10, yaw: Math.PI / 2, apron: true });
+		// two more on the stands between the hangars, noses at their stop bars
+		for (const x of [-50, 50]) parked.push({ kind: 'jet', x: apron.x + x, z: apron.z + 18, yaw: 0, apron: true });
 	}
 	// where soldiers are posted: the gate, the towers, a patrol inside the fence, the armoury,
 	// the flight line

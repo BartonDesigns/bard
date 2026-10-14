@@ -411,7 +411,21 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 	const take = (x, z) => { taken.add(spot(x, z)); splitT = -1e9; };
 	// a car out of the traffic for good (taken off its driver)
 	const remove = (c) => { const i = cars.indexOf(c); if (i >= 0) cars.splice(i, 1); };
-	const api = { update, group, cars, parked, parkedNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
+	// the benches and bus shelters near a point, read back off their instances (for a bag left
+	// on one, people/bag-spots.js): { kind, x, y, z, heading }
+	function seatsNear(x, z, r = 60) {
+		const out = [];
+		for (const [im, kind] of [[benches, 'bench'], [shelters, 'shelter']]) {
+			const a = im.instanceMatrix.array;
+			for (let i = 0; i < im.count; i++) {
+				const e = i * 16, px = a[e + 12], pz = a[e + 14];
+				if (Math.abs(px - x) > r || Math.abs(pz - z) > r || Math.hypot(px - x, pz - z) > r) continue;
+				out.push({ kind, x: px, y: a[e + 13], z: pz, heading: Math.atan2(a[e + 8], a[e]) });
+			}
+		}
+		return out;
+	}
+	const api = { update, group, cars, parked, parkedNear, seatsNear, hide, take, remove, carMatrix, extra, setAvoid: (f) => { avoid = f; }, fleets: [parkedFleet, movingFleet], night, onBuild: null };
 	return api;
 }
 

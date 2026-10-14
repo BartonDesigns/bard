@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { weatherStucco } from '../bay/weathering.js';
-import { usePhoto } from '../world/photomats.js';
+import { usePhoto, photoUniform, TRI_GLSL } from '../world/photomats.js';
 
 const NOISE = /* glsl */`
 float mh(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -59,6 +59,133 @@ function armour(camo, night) {
 	return m;
 }
 
+// the vehicles: one program for every surface of every vehicle, chosen per vertex (mtl, the
+// numbers in models.js M): paint (camouflage in three tones of the instance's colour, laid in
+// the vehicle's own metres, or the aircraft's smooth grey), dark metal, rubber, glass, lamps,
+// canvas, track links that scroll (the instance colour's red carries how far), hot metal,
+// beacons and bare steel. Panel seams, rivets, chipped edges, grime streaks; mud and dust up the
+// lower hull and the running gear; the grain of brushed metal from the photographic swatches
+// (world/photomats.js). lit: lamps glow at night (a vehicle in use); burnt: a wreck
+function vehicle(night, time, { lit = false, burnt = false } = {}) {
+	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.2, vertexColors: true });
+	const [uPh, uPhK] = photoUniform('aluminium', { mean: 0.5, contrast: 0.8 });
+	m.onBeforeCompile = (sh) => {
+		Object.assign(sh.uniforms, { uNight: night, uTime: time, uPh, uPhK });
+		sh.vertexShader = 'attribute float mtl; attribute vec3 opos; varying float vMtl; varying vec3 vOp; varying vec3 vOn; varying vec3 vTint; varying vec2 vTu;\n' + sh.vertexShader.replace('#include <color_vertex>', `
+			vColor = vec4(1.0);
+			#ifdef USE_COLOR
+				vColor.rgb *= color;
+			#endif
+			#ifdef USE_INSTANCING_COLOR
+				vTint = instanceColor.xyz;
+			#else
+				vTint = vec3(1.0);
+			#endif
+			vMtl = mtl; vOp = opos; vOn = normal; vTu = uv;`);
+		sh.fragmentShader = 'varying float vMtl; varying vec3 vOp; varying vec3 vOn; varying vec3 vTint; varying vec2 vTu; uniform float uNight; uniform float uTime; uniform sampler2D uPh; uniform float uPhK;\n' + NOISE + TRI_GLSL + sh.fragmentShader
+			.replace('#include <color_fragment>', `#include <color_fragment>
+				float mR = 0.6, mM = 0.2; vec3 mE = vec3(0.0);
+				{
+					vec3 p = vOp, n = normalize(vOn), c = vColor.rgb;
+					int k = int(vMtl + 0.5);
+					float ph = mix(1.0, triPhoto(uPh, p, n, 0.9).g * 2.0, 0.3 * uPhK);
+					bool ground = p.y < 1.6;
+					if (k <= 1) {
+						c *= vTint;
+						if (k == 0) {
+							// three tones over the paint, in broad blotches with brushed edges
+							float b1 = mn(p * 0.55 + vec3(3.1, 0.0, 1.7)) * 0.7 + mn(p * 1.9) * 0.3;
+							float b2 = mn(p.zyx * 0.7 + 7.3) * 0.7 + mn(p * 2.2 + 2.0) * 0.3;
+							float b3 = mn(p * 0.8 + 13.1) * 0.75 + mn(p * 3.3) * 0.25;
+							c = mix(c, c * vec3(0.58, 0.6, 0.52), smoothstep(0.55, 0.57, b1));
+							c = mix(c, c * vec3(1.22, 1.15, 0.98), smoothstep(0.6, 0.62, b2) * (1.0 - smoothstep(0.55, 0.57, b1)));
+							c = mix(c, vec3(0.13, 0.13, 0.12), smoothstep(0.66, 0.68, b3) * 0.85);
+						}
+						// panel seams and rivets on a grid in the vehicle's metres
+						vec3 q = p * (k == 0 ? vec3(1.1, 1.4, 0.85) : vec3(0.55, 0.8, 0.42));
+						float ax = abs(n.x) > 0.6 ? 0.0 : 1.0, az = abs(n.z) > 0.6 ? 0.0 : 1.0, ay = abs(n.y) > 0.6 ? 0.0 : 1.0;
+						float seam = max(max(mline(q.x, 0.01) * ax, mline(q.z, 0.01) * az), mline(q.y, 0.014) * ay * 0.7);
+						c *= 1.0 - seam * (k == 0 ? 0.35 : 0.14);
+						float rv = (1.0 - smoothstep(0.03, 0.045, length(fract(q.xz * 6.0) - 0.5))) * max(mline(q.x, 0.03) * ax, mline(q.z, 0.03) * az);
+						c *= 1.0 + rv * 0.2;
+						if (k == 0) {
+							// chips to bare metal along the edges, grime streaks down the sides
+							float chip = smoothstep(0.8, 0.84, mn(p * 9.0) * 0.6 + mn(p * 31.0) * 0.4);
+							c = mix(c, vec3(0.3, 0.29, 0.28), chip * 0.55);
+							c *= 1.0 - smoothstep(0.5, 0.8, mn(vec3(p.x * 4.0, p.y * 0.35, p.z * 4.0))) * 0.14 * (1.0 - abs(n.y));
+						} else {
+							// soot behind the nozzles, the paint a touch uneven
+							c *= 1.0 - smoothstep(-6.2, -7.8, p.z) * 0.45 * (0.6 + 0.4 * mn(p * 3.0));
+							c *= 0.96 + 0.06 * mn(p * 0.6);
+						}
+						c *= ph;
+						mR = k == 0 ? 0.72 : 0.42; mM = k == 0 ? 0.12 : 0.28;
+					} else if (k == 2) { c *= ph; mR = 0.5; mM = 0.55; }
+					else if (k == 3) { c *= 0.9 + 0.2 * mn(p * 12.0); mR = 0.93; mM = 0.0; }
+					else if (k == 4) { mR = 0.05; mM = 0.65; ground = false; }
+					else if (k == 5) {
+						mR = 0.25; mM = 0.0;
+						${lit ? 'mE = c * (0.25 + uNight * 6.0);' : 'mE = c * 0.04;'}
+						c *= 0.5; ground = false;
+					}
+					else if (k == 6) { c *= 0.88 + 0.16 * mn(p * 8.0) + 0.05 * sin(p.x * 160.0) * sin(p.z * 160.0); mR = 0.97; mM = 0.0; }
+					else if (k == 7) {
+						// track links: shoes with gaps between, end connectors worn bright, a guide down the middle
+						float u = vTu.x + vTint.r, v = abs(vTu.y);
+						float f = fract(u / 0.17);
+						float gap = smoothstep(0.0, 0.07, f) * (1.0 - smoothstep(0.86, 0.93, f));
+						c = mix(c * 0.3, c, gap);
+						c = mix(c, vec3(0.52, 0.5, 0.47), smoothstep(0.22, 0.24, v) * gap * 0.8);
+						c *= 1.0 - (1.0 - smoothstep(0.03, 0.05, v)) * 0.4;
+						c *= 0.85 + 0.3 * mn(vec3(u * 3.0, v * 9.0, 0.0));
+						mR = 0.62 - smoothstep(0.22, 0.24, v) * 0.2; mM = 0.55;
+					}
+					else if (k == 8) { mR = 0.4; mM = 0.75; c *= vec3(1.0, 0.92, 0.95) * (0.8 + 0.3 * mn(p * 6.0)); }
+					else if (k == 9) {
+						// nav lights steady, white strobes and red beacons flashing
+						mR = 0.3; mM = 0.0;
+						float blink = step(0.9, fract(uTime * 0.8 + p.x * 0.13 + p.z * 0.07));
+						${lit ? 'mE = c * (0.6 + uNight * 4.0) * (c.g > 0.9 && c.r > 0.9 ? blink * 2.0 : c.g < 0.5 ? 0.3 + 0.7 * blink : 1.0);' : 'mE = vec3(0.0);'}
+						ground = false;
+					}
+					else { mR = 0.32; mM = 0.85; c *= ph; }
+					// mud from the ground up, dust settled on whatever faces up
+					if (ground && k != 1) {
+						float lo = 1.0 - smoothstep(0.25, 1.3, p.y + (mn(p * 2.1) - 0.5) * 0.6);
+						float splat = smoothstep(0.35, 0.65, mn(p * 4.0 + 5.0) * 0.6 + mn(p * 13.0) * 0.4);
+						c = mix(c, vec3(0.105, 0.085, 0.06), lo * mix(0.45, 0.85, splat));
+						mR = mix(mR, 0.95, lo * 0.7);
+						c = mix(c, vec3(0.3, 0.26, 0.2), max(n.y, 0.0) * 0.3 * smoothstep(0.35, 0.7, mn(p * 1.7 + 9.0)));
+					}
+					${burnt ? `c = mix(vec3(0.05, 0.045, 0.04), vec3(0.28, 0.14, 0.07), smoothstep(0.6, 0.75, mn(p * 2.0)) * 0.6) * (0.7 + 0.3 * mn(p * 5.0));
+					mR = 0.95; mM = 0.1; mE = vec3(0.0);` : ''}
+					diffuseColor.rgb = c;
+				}`)
+			.replace('#include <roughnessmap_fragment>', 'float roughnessFactor = mR;')
+			.replace('#include <metalnessmap_fragment>', 'float metalnessFactor = mM;')
+			.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += mE;');
+	};
+	m.customProgramCacheKey = () => 'mil-vehicle-1' + (lit ? '-lit' : '') + (burnt ? '-burnt' : '');
+	return m;
+}
+// the afterburner's flame: additive, brightest at the nozzle, shock rings down its length
+function flame(colA, colB, strength) {
+	return new THREE.ShaderMaterial({
+		uniforms: { uA: { value: new THREE.Color(colA) }, uB: { value: new THREE.Color(colB) }, uK: { value: strength } },
+		vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+		fragmentShader: 'uniform vec3 uA; uniform vec3 uB; uniform float uK; varying vec2 vU; void main(){ float t = 1.0 - vU.y; float a = pow(t, 1.4) * uK; vec3 c = mix(uB, uA, t); float ring = 0.7 + 0.3 * sin(vU.y * 30.0); gl_FragColor = vec4(c * a * ring, a); }',
+		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+	});
+}
+// a rotor's blur: a faint disc, darker at the tips, streaked by the blades
+function blurDisc() {
+	return new THREE.ShaderMaterial({
+		vertexShader: 'varying vec2 vU; void main(){ vU = uv - 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+		fragmentShader: 'varying vec2 vU; void main(){ float r = length(vU) * 2.0; if (r > 1.0) discard; float a = smoothstep(0.06, 0.12, r) * (1.0 - smoothstep(0.94, 1.0, r)); float streak = 0.75 + 0.25 * sin(atan(vU.y, vU.x) * 4.0); float tip = 0.6 + 0.4 * smoothstep(0.85, 0.95, r); gl_FragColor = vec4(vec3(0.1, 0.105, 0.11), a * 0.2 * streak * tip); }',
+		transparent: true, depthWrite: false, side: THREE.DoubleSide,
+	});
+}
+
 // asphalt with its markings: the runway's centreline, threshold bars, touchdown and aiming
 // marks and edge lines, the taxiways' yellow line; tyre rubber at the touchdown zones. The
 // geometry's uv is metres along (u) and across (v) from the strip's middle; uv1.x its length,
@@ -98,13 +225,27 @@ function asphalt() {
 					float rubber = smoothstep(60.0, 120.0, end) * (1.0 - smoothstep(300.0, 650.0, end)) * (1.0 - smoothstep(2.0, 9.0, av));
 					c *= 1.0 - rubber * (0.35 + 0.3 * mn(vec3(u * 0.8, v * 6.0, 3.0)));
 				} else if (kind > 0.5) {
-					// a taxiway: the yellow centreline, and its edges
+					// a taxiway: the yellow centreline down its length, its edges; where a link meets
+					// the runway, the hold bars (two solid, two dashed)
 					pc = vec3(0.86, 0.68, 0.16);
-					paint = max(step(av, 0.2), step(H * 0.5 - 0.6, av) * step(av, H * 0.5 - 0.3));
+					bool longU = L >= H;
+					float cl = longU ? av : au, hw = longU ? H * 0.5 : L * 0.5;
+					paint = max(step(cl, 0.2), step(hw - 0.6, cl) * step(cl, hw - 0.3));
+					if (!longU) {
+						float hv = v - (H * 0.5 - 10.0);
+						float solid = step(abs(hv), 0.15) + step(abs(hv - 0.5), 0.15);
+						float dash = (step(abs(hv - 1.3), 0.15) + step(abs(hv - 1.8), 0.15)) * step(0.5, fract(u / 1.8));
+						paint = max(paint, min(1.0, solid + dash) * step(au, hw - 0.6));
+					}
 				} else if (kind > 0.05) {
-					// an apron or a helipad: parking lines; the pad's circle and H
+					// an apron or a helipad: stand lines, a lead-in line to each stand ending at its stop
+					// bar, the edge lines; the pad's circle and H
 					pc = vec3(0.86, 0.68, 0.16);
 					paint = step(0.97, fract(u / 25.0)) * step(av, H * 0.5 - 3.0);
+					float su = (fract(u / 25.0 + 0.5) - 0.5) * 25.0;
+					paint = max(paint, step(abs(su), 0.12) * step(-H * 0.5 + 14.0, v) * step(v, H * 0.5 - 1.2));
+					paint = max(paint, step(abs(su), 2.2) * step(abs(v + H * 0.5 - 13.5), 0.22));
+					paint = max(paint, step(H * 0.5 - 1.1, av) * step(av, H * 0.5 - 0.85) + step(H * 0.5 - 0.65, av) * step(av, H * 0.5 - 0.4));
 					if (kind < 0.2) { float r = length(vec2(u, v)); pc = vec3(0.93); paint = max(step(abs(r - 9.5), 0.35), (step(au, 3.4) * step(av, 4.6) * (step(2.4, au) + step(av, 0.45)))); }
 				}
 				paint *= 0.85 + 0.15 * smoothstep(0.3, 0.7, mn(vec3(w * 3.0, 5.0)));
@@ -112,7 +253,7 @@ function asphalt() {
 				}
 			}`).replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = 0.9;');
 	};
-	m.customProgramCacheKey = () => 'mil-asphalt-3';
+	m.customProgramCacheKey = () => 'mil-asphalt-4';
 	return m;
 }
 
@@ -123,13 +264,14 @@ function corrugated() {
 		sh.vertexShader = 'varying vec3 vCw; varying vec3 vCn;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvCw = position; vCn = normal;');
 		sh.fragmentShader = 'varying vec3 vCw; varying vec3 vCn;\n' + NOISE + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
 			{ vec3 n = normalize(vCn); float t = abs(n.x) > 0.5 ? vCw.z : vCw.x;
-			  float r = sin(t * 41.9); diffuseColor.rgb *= 0.86 + 0.14 * r;
+			  // (the ridges fade where they would be finer than a pixel, instead of shimmering)
+			  float r = sin(t * 41.9) * (1.0 - smoothstep(0.25, 0.8, fwidth(t) * 6.67)); diffuseColor.rgb *= 0.86 + 0.14 * r;
 			  float rust = smoothstep(0.62, 0.75, mn(vCw * 1.3) * 0.7 + mn(vCw * 7.0) * 0.3) * (1.0 - smoothstep(0.0, 3.0, vCw.y) * 0.5);
 			  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.24, 0.12), rust * 0.45);
 			  diffuseColor.rgb *= 0.9 + 0.1 * mn(vec3(vCw.xz * 0.2, vCw.y));
 			}`);
 	};
-	m.customProgramCacheKey = () => 'mil-corrugated-1';
+	m.customProgramCacheKey = () => 'mil-corrugated-2';
 	return m;
 }
 // chain-link: a diamond mesh cut out of a strip, posts and wire drawn as geometry
@@ -156,6 +298,61 @@ function lamps(night) {
 	return m;
 }
 
+// the pools of light under the floodlights and lamps, and their beams: additive, lit only at
+// night (strip.x: 0 a pool, its uv round from the middle; 1 a beam, its uv up the cone)
+function glowMat(night) {
+	return new THREE.ShaderMaterial({
+		uniforms: { uNight: night },
+		vertexShader: 'attribute vec3 color; attribute vec3 strip; varying vec3 vC; varying vec2 vU; varying float vM; void main(){ vC = color; vU = uv; vM = strip.x; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+		fragmentShader: 'uniform float uNight; varying vec3 vC; varying vec2 vU; varying float vM; void main(){ float a; if (vM < 0.5) { float r = length(vU - 0.5) * 2.0; a = pow(max(0.0, 1.0 - r), 1.8) * 0.85; } else { float e = sin(vU.x * 6.2832); a = pow(vU.y, 2.2) * 0.1 * (0.55 + 0.45 * e * e); } gl_FragColor = vec4(vC * a * uNight, 1.0); }',
+		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+	});
+}
+// the halo round each light, seen from far off: a soft point sized to the distance (never less
+// than a dot); blink: 0 steady, else flashes (whole part the rate a second, the fraction its phase)
+function haloMat(night, time) {
+	return new THREE.ShaderMaterial({
+		uniforms: { uNight: night, uTime: time },
+		vertexShader: 'attribute vec3 color; attribute float size; attribute float blink; uniform float uNight; uniform float uTime; varying vec3 vC; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; float d = max(1.0, -mv.z); float rate = floor(blink), ph = fract(blink); float on = blink > 0.0 ? step(0.72, fract(uTime * max(rate, 0.5) + ph)) : 1.0; gl_PointSize = clamp(size * 650.0 / d, 2.0, 40.0); vC = color; vA = uNight * on * clamp(1.5 - d / 3000.0, 0.35, 1.0); }',
+		fragmentShader: 'varying vec3 vC; varying float vA; void main(){ vec2 q = gl_PointCoord - 0.5; float r = length(q) * 2.0; if (r > 1.0) discard; float a = pow(1.0 - r, 2.0) * 0.7 + (1.0 - smoothstep(0.0, 0.3, r)) * 0.6; gl_FragColor = vec4(vC * a * vA, 1.0); }',
+		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+	});
+}
+// the bases' flags: three original emblems on one cloth (one a row), waving in the wind
+function flagMat(time) {
+	let map = null;
+	if (typeof document !== 'undefined') {
+		const W = 256, Hh = 160, cv = document.createElement('canvas'); cv.width = W; cv.height = Hh * 3;
+		const g = cv.getContext('2d');
+		const star = (cx, cy, r0, r1, n, rot = 0) => { g.beginPath(); for (let i = 0; i < n * 2; i++) { const a = rot + (i / (n * 2)) * Math.PI * 2, r = i % 2 ? r1 : r0; g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } g.closePath(); g.fill(); };
+		// the base's own: olive, a gold ring round a dark disc, a white eight-pointed star, two gold bars
+		g.fillStyle = '#4b5534'; g.fillRect(0, 0, W, Hh);
+		g.fillStyle = '#c9a845'; g.beginPath(); g.arc(W / 2, Hh / 2, 54, 0, Math.PI * 2); g.fill();
+		g.fillStyle = '#1d2117'; g.beginPath(); g.arc(W / 2, Hh / 2, 47, 0, Math.PI * 2); g.fill();
+		g.fillStyle = '#f2f0e6'; star(W / 2, Hh / 2, 40, 15, 8, -Math.PI / 2);
+		g.fillStyle = '#5d7a3c'; g.beginPath(); g.arc(W / 2, Hh / 2, 9, 0, Math.PI * 2); g.fill();
+		g.fillStyle = '#c9a845'; g.fillRect(20, Hh - 34, W - 40, 7); g.fillRect(20, Hh - 22, W - 40, 7);
+		// sand with a dark green diagonal and a white lozenge
+		g.fillStyle = '#c4b28a'; g.fillRect(0, Hh, W, Hh);
+		g.fillStyle = '#2f4a2a'; g.beginPath(); g.moveTo(0, Hh * 2); g.lineTo(60, Hh * 2); g.lineTo(W, Hh + 40); g.lineTo(W, Hh); g.lineTo(W - 60, Hh); g.lineTo(0, Hh * 2 - 40); g.closePath(); g.fill();
+		g.fillStyle = '#f2f0e6'; g.beginPath(); g.moveTo(W / 2, Hh + 40); g.lineTo(W / 2 + 34, Hh * 1.5); g.lineTo(W / 2, Hh * 2 - 40); g.lineTo(W / 2 - 34, Hh * 1.5); g.closePath(); g.fill();
+		// deep blue with a white ring and three gold chevrons
+		g.fillStyle = '#1f2f4e'; g.fillRect(0, Hh * 2, W, Hh);
+		g.strokeStyle = '#f2f0e6'; g.lineWidth = 8; g.beginPath(); g.arc(W / 2, Hh * 2.5, 44, 0, Math.PI * 2); g.stroke();
+		g.strokeStyle = '#d4b04a'; g.lineWidth = 9;
+		for (let i = 0; i < 3; i++) { const y = Hh * 2.5 - 14 + i * 14; g.beginPath(); g.moveTo(W / 2 - 26, y + 12); g.lineTo(W / 2, y - 6); g.lineTo(W / 2 + 26, y + 12); g.stroke(); }
+		map = new THREE.CanvasTexture(cv); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
+	}
+	const m = new THREE.MeshStandardMaterial({ color: 0xffffff, map, roughness: 0.9, side: THREE.DoubleSide });
+	m.onBeforeCompile = (sh) => {
+		sh.uniforms.uTime = time;
+		// (uv.x runs from the hoist to the fly; the wave grows toward the fly)
+		sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nfloat fl = uv.x; transformed.z += sin(fl * 7.0 - uTime * 5.0 + position.x * 0.2) * 0.2 * fl; transformed.y -= fl * fl * 0.12; transformed.x -= abs(sin(fl * 3.0 - uTime * 2.0)) * 0.08 * fl;');
+	};
+	m.customProgramCacheKey = () => 'mil-flag-1';
+	return m;
+}
+
 let K = null;
 // the shared kit (made once)
 export function militaryKit() {
@@ -163,8 +360,16 @@ export function militaryKit() {
 	const night = { value: 0 };
 	const concrete = weatherStucco(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, vertexColors: true }));
 	usePhoto(concrete, [['plaster', 3, { mean: 0.72, contrast: 0.6 }, 0.5]]);
+	const time = { value: 0 };
+	// (the blur discs: one material, a geometry per radius)
+	const discs = new Map();
 	K = {
-		night,
+		night, time,
+		vehicle: vehicle(night, time), vehicleLit: vehicle(night, time, { lit: true }), vehicleBurnt: vehicle(night, time, { burnt: true }),
+		flame: flame('#9fc4ff', '#ff9a4a', 0.55), flameAB: flame('#ffb26a', '#ff5a2a', 1.2),
+		flameGeo: new THREE.CylinderGeometry(0.16, 0.4, 2.4, 14, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -1.2),
+		glow: glowMat(night), halo: haloMat(night, time), flag: flagMat(time),
+		disc: blurDisc(), discGeo: (r) => { if (!discs.has(r)) discs.set(r, new THREE.CircleGeometry(r, 40).rotateX(-Math.PI / 2)); return discs.get(r); },
 		camo: armour(true, night), air: armour(false, night),
 		dark: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.35, vertexColors: true }),
 		rubber: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0, vertexColors: true }),
@@ -179,15 +384,18 @@ export function militaryKit() {
 
 // ---------- the builder ----------
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _c = new THREE.Color();
+// (one unit box, scaled to each: building thousands of boxes is the slow part of a base)
+let unitBox = null;
+const UNIT_BOX = () => unitBox || (unitBox = new THREE.BoxGeometry(1, 1, 1).toNonIndexed());
 export function builder() {
 	const by = new Map();
 	// add a geometry under a material name, placed (x, y, z, yaw, pitch, roll, scale) and tinted
-	function add(mat, g, x = 0, y = 0, z = 0, yaw = 0, col = '#ffffff', pitch = 0, roll = 0, strip = null) {
+	function add(mat, g, x = 0, y = 0, z = 0, yaw = 0, col = '#ffffff', pitch = 0, roll = 0, strip = null, scale = null) {
 		let geo = g.index ? g.toNonIndexed() : g;
 		if (geo === g) geo = g.clone();
 		for (const a of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(a)) geo.deleteAttribute(a);
 		if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
-		geo.applyMatrix4(_m.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(pitch, yaw, roll, 'YXZ')), _s.set(1, 1, 1)));
+		geo.applyMatrix4(_m.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(pitch, yaw, roll, 'YXZ')), scale ? _s.set(scale[0], scale[1], scale[2]) : _s.set(1, 1, 1)));
 		// (walls and roofs: uv in metres on the face's own plane, for the photographic detail)
 		if (!strip) {
 			const P = geo.attributes.position, N = geo.attributes.normal, U = geo.attributes.uv;
@@ -204,9 +412,9 @@ export function builder() {
 	}
 	const api = {
 		add,
-		box: (mat, w, h, d, x, y, z, yaw = 0, col, pitch = 0, roll = 0) => add(mat, new THREE.BoxGeometry(w, h, d), x, y + h / 2, z, yaw, col, pitch, roll),
+		box: (mat, w, h, d, x, y, z, yaw = 0, col, pitch = 0, roll = 0) => add(mat, UNIT_BOX(), x, y + h / 2, z, yaw, col, pitch, roll, null, [w, h, d]),
 		// a box whose centre is at y (not its foot)
-		cbox: (mat, w, h, d, x, y, z, yaw = 0, col, pitch = 0, roll = 0) => add(mat, new THREE.BoxGeometry(w, h, d), x, y, z, yaw, col, pitch, roll),
+		cbox: (mat, w, h, d, x, y, z, yaw = 0, col, pitch = 0, roll = 0) => add(mat, UNIT_BOX(), x, y, z, yaw, col, pitch, roll, null, [w, h, d]),
 		cyl: (mat, r0, r1, h, x, y, z, seg = 12, col, pitch = 0, roll = 0, yaw = 0) => add(mat, new THREE.CylinderGeometry(r0, r1, h, seg), x, y, z, yaw, col, pitch, roll),
 		// a flat strip on the ground with uv in metres from its middle (asphalt markings)
 		strip: (mat, L, H, x, y, z, yaw, col, kind) => { const g = new THREE.PlaneGeometry(L, H, Math.max(1, Math.ceil(L / 40)), 1).rotateX(-Math.PI / 2); const uv = g.attributes.uv, pos = g.attributes.position; for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i), -pos.getZ(i)); return add(mat, g, x, y, z, yaw, col, 0, 0, [L, H, kind]); },
