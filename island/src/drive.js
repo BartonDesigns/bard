@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { BLOCKS, toGrid, fromGrid } from './bay/styles.js';
 import { specOf, seatsOf } from './bay/cars.js';
 import { loadRapier, createCarPhysics } from './vehicles/physics.js';
+import { carEngine } from './audio/engines.js';
 
 const SPEED = { motorway: 29, trunk: 24, primary: 20, secondary: 17, tertiary: 15, residential: 11, unclassified: 12, living_street: 7, service: 6, unknown: 8, track: 5, path: 3, footway: 2.4, cycleway: 5, steps: 1.4, pedestrian: 2.4, grid: 11 };
 const TRAIL = new Set(['track', 'path', 'footway', 'cycleway', 'steps', 'pedestrian']);
@@ -259,6 +260,11 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		labels();
 		return true;
 	}
+	// the engine you hear (audio/engines.js), made again for another kind of car
+	function hum(speed, throttle, x, y, z, skid = false) {
+		if (D.snd?.kind !== D.kind) { D.snd?.stop(); D.snd = carEngine(D.kind); }
+		D.snd.drive({ speed, throttle, skid, where: { x, y, z, inside: !D.chase } });
+	}
 	function startPhysics() {
 		const W = world(), f = D.from;
 		D.loading = true;
@@ -321,6 +327,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 	// air, keeps you in it
 	function stop(force = true) {
 		if (!D.active) return;
+		D.snd?.stop(); D.snd = null;
 		const W = world(), P = W?.player.state, Vh = W?.vehicles, mine = Vh?.mine.car;
 		if (D.mil) {
 			if (!force && !D.mil.canLeave()) { hint(D.mil.kind === 'jet' || D.mil.kind === 'heli' ? 'Land and stop first.' : 'Stop first.', 1600); return; }
@@ -472,6 +479,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 			// (the eye sits at the driver's seat)
 			D.y += (floorY + eye[1] - D.y) * Math.min(1, dt * 4);
 		}
+		if (trail) { D.snd?.stop(); D.snd = null; } else hum(D.v, target > D.v + 0.3 ? 0.6 : 0.15, x, D.y, z);
 		const arrow = { straight: '↑ straight on', left: '← left next', right: '→ right next' }[D.queue];
 		hud.textContent = `${trail ? '🥾' : '🚗'} ${E.name || (E.cls === 'grid' ? 'Street' : E.cls.replace('_', ' '))} · ${arrow} · ${fmtSpeed(D.v)}`;
 		for (const [k, b] of Object.entries(arrows)) b.style.background = k === D.queue ? '#01a982' : 'rgba(8,20,26,.55)';
@@ -494,6 +502,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		C.ctl.hand = held.has(' ') ? 1 : 0;
 		C.step(dt);
 		const o = C.pose();
+		hum(o.speed, C.ctl.throttle || (C.ctl.brake && o.speed < 0.8 ? 0.5 : 0), o.p[0], o.p[1], o.p[2], !!C.ctl.hand && Math.abs(o.speed) > 4);
 		Q.set(o.q[0], o.q[1], o.q[2], o.q[3]);
 		M4.compose(V3.set(o.p[0], o.p[1], o.p[2]), Q, new THREE.Vector3(1, 1, 1));
 		M4.multiply(new THREE.Matrix4().makeTranslation(0, o.down, 0));

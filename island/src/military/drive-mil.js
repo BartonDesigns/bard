@@ -164,7 +164,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 			S.dustT -= dt;
 			if (S.dustT <= 0 && Math.abs(o.speed) > 2) { S.dustT = 0.12; const back = _w.set(Math.sin(S.yaw), 0, Math.cos(S.yaw)).multiplyScalar(-D.L / 2); combat.fx.dust({ x: S.pos.x + back.x, y: S.pos.y + 0.3, z: S.pos.z + back.z }, kind === 'tank' ? 4 : 2, 0.58, 0.53, 0.45, kind === 'tank' ? 1.3 : 0.7, 0.5); }
 			if (C.ctl.throttle && Math.random() < dt * 6) combat.fx.smokePuff({ x: S.pos.x - Math.sin(S.yaw) * D.L / 2, y: S.pos.y + 1.4, z: S.pos.z - Math.cos(S.yaw) * D.L / 2 }, 0.45, 0.6, 1.2);
-			engine.set(Math.abs(o.speed) / FEEL[kind].top, C.ctl.throttle, 1, Math.abs(o.speed));
+			engine.set(Math.abs(o.speed) / FEEL[kind].top, C.ctl.throttle, 1, o.speed, { x: S.pos.x, y: S.pos.y + 1, z: S.pos.z, inside: io.seat() });
 			placeCamera(dt);
 			io.hud(`${NAMES[kind]} · ${Math.round(Math.abs(o.speed) * 3.6)} km/h${o.speed < -0.3 ? ' R' : ''}${kind === 'tank' ? (S.reload > 0 ? ` · loading ${S.reload.toFixed(1)} s` : ' · cannon ready') : ''}`);
 		}
@@ -223,7 +223,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 			S.fire = Math.max(0, S.fire - dt);
 			if (firing && S.fire <= 0) { const from = S.pos.clone().add(_w.copy(fwd).multiplyScalar(6)).add(_w.set(0, 2.2, 0)); gunfire(from, fwd.clone(), 30, 0.012); S.fire = 0.06; }
 			if (S.throttle > 0.5 && Math.random() < dt * (ab ? 30 : 8)) combat.fx.smokePuff(S.pos.clone().addScaledVector(fwd, -8.5).add(_w.set(0, 2.1, 0)), ab ? 0.05 : 0.5, ab ? 0.9 : 0.6, 0.6);
-			engine.set(S.throttle * (ab ? 1 : 0.85), S.throttle, 1);
+			engine.set(S.throttle * (ab ? 1 : 0.85), S.throttle, 1, S.spd, { x: S.pos.x, y: S.pos.y + 2, z: S.pos.z, fx: fwd.x, fz: fwd.z, inside: io.seat() });
 			placeCamera(dt);
 			io.hud(`Jet · ${Math.round(S.spd * 3.6)} km/h · throttle ${Math.round(S.throttle * 100)}%${ab ? ' · afterburner' : ''} · ${S.ground ? 'on the ground' : `${Math.round(S.alt)} m`}${S.gear ? ' · gear down' : ''}`);
 		}
@@ -264,7 +264,7 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 			S.fire = Math.max(0, S.fire - dt);
 			if (firing && S.fire <= 0) { const from = S.pos.clone().add(_w.set(Math.sin(S.yaw) * 2.8, 0.7, Math.cos(S.yaw) * 2.8)); gunfire(from, view(), 24, 0.02); S.fire = 0.08; }
 			S.spd = Math.hypot(S.vel.x, S.vel.z);
-			engine.set(S.spin, 0.5 + coll * 0.3, 1);
+			engine.set(S.spin, 0.5 + coll * 0.3, 1, S.spd, { x: S.pos.x, y: S.pos.y + 3, z: S.pos.z, inside: io.seat() });
 			placeCamera(dt);
 			io.hud(`Helicopter · ${Math.round(S.spd * 3.6)} km/h · ${S.ground ? (S.spin < 1 ? `rotor ${Math.round(S.spin * 100)}%` : 'on the ground') : `${Math.round(S.alt)} m`}`);
 		}
