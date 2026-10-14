@@ -11,7 +11,7 @@ import { Soul, soulId, SOUL_TOKEN } from './soul.js';
 import { SOUL_FEATURE } from '../../../island/src/reputation/sanctuary.js';
 import { VERSION, MAX_PLAYERS, ID_RE, newCode, cleanCode } from '../../../island/src/net/protocol.js';
 import { REPUTATION_FEATURE } from '../../../island/src/net/reputation.js';
-import { LivingRegion, LIVING_FEATURE, LIVING_MAX_BYTES, livingIdentity, livingScope } from './living-region.js';
+import { LivingRegion, LIVING_FEATURE, COMMUNITY_FEATURE, LIVING_MAX_BYTES, livingIdentity, livingScope } from './living-region.js';
 
 export { Room, Soul, LivingRegion };
 
@@ -50,7 +50,7 @@ export async function handle(request, env) {
 	if (origin && !ok) return reply({ error: 'origin not allowed' }, 403, { vary: 'Origin' });
 	if (request.method === 'OPTIONS') return new Response(null, { status: ok ? 204 : 403, headers: H });
 
-	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', 'combat-v1', 'combat-guard-v1', REPUTATION_FEATURE, SOUL_FEATURE, ...(env.LIVING ? [LIVING_FEATURE] : [])] }, 200, H);
+	if (request.method === 'GET' && url.pathname === '/status') return reply({ ok: true, version: VERSION, maxPlayers: MAX_PLAYERS, features: ['trade-v2', 'combat-v1', 'combat-guard-v1', REPUTATION_FEATURE, SOUL_FEATURE, ...(env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE] : [])] }, 200, H);
 
 	const living = url.pathname.match(/^\/living\/([^/]+)\/([^/]+)$/);
 	if (living && ['GET', 'POST'].includes(request.method)) {

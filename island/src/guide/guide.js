@@ -11,6 +11,9 @@ import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
 import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent, offlineSocialIntent } from '../people/social-intent.js';
 import { buildNegotiationContext, buildNegotiationMessages, decodeNegotiationIntent, offlineNegotiationIntent } from './negotiation-intent.js';
 import { activityCards, activityScopeText, agreementTerms } from './living-activity-view.js';
+import { buildCommunityProjectContext, buildCommunityProjectMessages, decodeCommunityProjectIntent, offlineCommunityProjectIntent, communityProjectRelevant, livingScheduleIntent } from './community-project-intent.js';
+import { communityProjectCards, projectScopeText, projectKindLabel, projectHistoryLines, communityProjectFacts } from './community-project-view.js';
+import { livingActorId } from '../people/living-world.js';
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
 import { createQuestChronicle, soulScope, reportRequest } from './quest-chronicle.js';
 import { createRouteMarks, routeMarkSpot } from './route-marks.js';
@@ -103,12 +106,12 @@ export function createGuide(mount, api) {
 	const journal = store.get('crysis-journal', {});
 	const archive = createDialogueArchive();
 	let dialogueStyle = normalizeDialogueStyle(store.get('crysis-dialogue-style', {}));
-	let view = 'guide', viewEpoch = 0;
+	let view = 'guide', viewEpoch = 0, projectProgressView = null;
 	const guideMeta = {id:'guide',name:'The Guide',kind:'guide',bodyKey:''};
 	function threadMeta(P) { return {id:P.id || P.threadId,name:P.persona.name,bodyKey:api.social?.bodyKey() || '',kind:'npc'}; }
 	function archiveTurn(meta,role,text) { archive.append(meta,role,text); }
 	function importConversations() { for(const r of api.social?.state.list() || []) archive.importHistory({id:r.id,name:r.persona.name,bodyKey:r.bodyKey,kind:'npc'},r.history); }
-	function resetView(next) { busy?.abort(); viewEpoch++; view=next; log.replaceChildren(); input.value=''; settings.style.display='none'; log.style.display='flex'; tabs.style.display='flex'; archiveControls.style.display='none'; bar.style.display='flex'; }
+	function resetView(next) { busy?.abort(); viewEpoch++; view=next; projectProgressView=null; log.replaceChildren(); input.value=''; settings.style.display='none'; log.style.display='flex'; tabs.style.display='flex'; archiveControls.style.display='none'; bar.style.display='flex'; }
 	function renderGuide() { resetView('guide'); for(const t of archive.thread('guide')?.turns.slice(-30) || []) say(t.content,t.role==='user'?'me':'guide'); }
 
 	// ---------- where things are ----------
@@ -177,6 +180,7 @@ export function createGuide(mount, api) {
 			done: QUESTS.filter((q) => journal[q[0]]).map((q) => q[1]), todo: [...quests.filter((q) => !q.done).map((q) => q.title), ...QUESTS.filter((q) => !journal[q[0]] && (q[0] !== 'home' || store.get('crysis-home', null))).map((q) => q[1])],
 			land: W.land?.profile?.thesis, sea: W.eco?.profile?.thesis,
 			arms: arms ? { inventory: arms.inventory, nearby: arms.nearby } : null,
+			community:communityProjectFacts(api.communityProjects?.snapshot?.()),
 		};
 	}
 
@@ -506,8 +510,10 @@ export function createGuide(mount, api) {
 	}
 
 	// ---------- the journal: noticed as you play ----------
-	let tick = 0, lastPlace = '';
+	let tick = 0, lastPlace = '', projectProgressTick = 0;
 	function watch(dt) {
+		projectProgressTick+=Math.max(0,Number(dt)||0);
+		if(projectProgressTick>=.2 || dt===0){projectProgressTick=0;updateProjectProgress();}
 		tick += dt;
 		if (tick < 1) return;
 		tick = 0;
@@ -641,6 +647,7 @@ You can act in the world by writing a command in double brackets at the end of y
 [[time: HOUR]] sets the hour (0-24). [[fly: on]] or [[fly: off]]. [[face: PLACE]] turns the player toward a place. [[wind: 0-1.5]].
 For game-only gear actions, use [[arms: purchase rifle]], [[arms: secure shotgun at the police station]], or [[arms: hunt with the bow]] only when the player clearly asks. Never provide real-world weapon instructions; the arms system resolves availability, inventory and local consequences. Nearby sources and current gear are in WORLD NOW.
 Only use a command when the player asks for it or clearly agrees. Suggest things to do from the player's journal. To add something to the player's journal, write [[quest: PLACE]].
+Community projects have their own review and work controls. Discuss only their saved status in WORLD NOW; never claim to construct, complete, purchase or change ownership through conversation. A proposal, survey or pending work is not a completed improvement.
 THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	let busy = null;
@@ -666,6 +673,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		// (what they did or saw lately, and their money talk: people/npc-quests.js)
 		const own=api.npcQuests?.factsFor?.(p)||[]; if(own.length) c.facts=[...c.facts,...own].slice(0,8);
 		const living=api.livingWorld?.factsFor?.(p)||[]; if(living.length)c.facts=[...c.facts,...living].slice(-10);
+		const community=communityProjectFacts(api.communityProjects?.snapshot?.());if(community.length)c.facts=[...c.facts,...community].slice(-10);
 		const market=api.negotiation?.contextFor?.(p);
 		if(market?.sellerId)c.facts=[...c.facts,`Trade: ${market.reason || 'Only the current quoted terms are binding.'}${market.pendingOffer ? ' Current offer: '+market.pendingOffer.itemName+' for '+market.pendingOffer.price+' credits; '+market.pendingOffer.status+'.' : ''}`].slice(-10);
 		return c;
@@ -829,6 +837,62 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		try { return await api.negotiation.propose(P2.p,intent); }
 		catch { return {message:'I cannot check a reliable offer right now. No exchange was made.'}; }
 	}
+	const communityScope = snapshot => snapshot?.scope?.key || [snapshot?.scope?.world || api.social?.bodyKey?.(),snapshot?.scope?.region || snapshot?.scope?.id].filter(Boolean).join(':');
+	async function projectConversation(text, P2, signal) {
+		const snapshot=api.communityProjects?.snapshot?.();
+		if(!snapshot)return null;
+		const scope=communityScope(snapshot), context={bodyKey:snapshot.scope?.world || api.social?.bodyKey?.(),scopeKey:scope,candidates:snapshot.candidates.filter(c=>!snapshot.projects.some(p=>p.siteId===(c.siteId || c.id))),projects:snapshot.projects};
+		const options={context,text,history:P2 ? (P2.id ? api.social.state.get(P2.id)?.history : P2.history) : history};
+		let intent=offlineCommunityProjectIntent(text,context);
+		if(intent.kind==='none' && intent.reason==='unrecognized' && communityProjectRelevant(text) || intent.kind==='clarify') {
+			const raw=await planChat(buildCommunityProjectMessages(options),signal,{kind:'community_project_intent',context:buildCommunityProjectContext(options)});
+			if(raw)intent=decodeCommunityProjectIntent(raw,options);
+		}
+		if(signal.aborted || partner!==P2 || communityScope(api.communityProjects.snapshot())!==scope)return null;
+		if(intent.kind==='none')return null;
+		if(intent.kind==='clarify')return {message:intent.question};
+		if(intent.kind==='status')return {message:'The community journal shows what people are working on, who has helped, and what is still needed.',open:true};
+		const candidate=snapshot.candidates.find(c=>c.id===intent.candidateId);
+		return {message:`A ${projectKindLabel(intent.projectKind).toLowerCase()} at ${candidate.name} could make a lasting difference. Review the site first. It needs a survey and three contributions of work, followed by about a day to take shape.`,review:{candidateId:candidate.id,kind:intent.projectKind,scope}};
+	}
+	function showProjectReview(review, P2=partner) {
+		if(partner!==P2)return;
+		const epoch=viewEpoch, snapshot=api.communityProjects?.snapshot?.(), candidate=snapshot?.candidates?.find(c=>c.id===review.candidateId);
+		if(!candidate || !candidate.kinds.includes(review.kind) || communityScope(snapshot)!==review.scope)return;
+		if(snapshot.projects.some(p=>p.siteId===(candidate.siteId || candidate.id))){say('This site already has a community project. Open Story to check its progress.','note');return;}
+		say(`${projectKindLabel(review.kind)} · ${candidate.name}\nSurvey here for 5 seconds, then contribute three 30-second sessions of work. Once the work is accepted, the improvement takes about 24 hours to settle in. No money or ownership changes are part of this proposal.`,'note');
+		const row=el('div','display:flex;gap:8px;flex-wrap:wrap;'), confirm=el('button',btnCss,'Propose '+projectKindLabel(review.kind).toLowerCase()), cancel=el('button',btnCss,'Leave this idea');
+		confirm.onclick=async()=>{
+			if(partner!==P2 || viewEpoch!==epoch)return;
+			if(communityScope(api.communityProjects.snapshot())!==review.scope){row.remove();say('You have moved to another area. Review a site here first.','note');return;}
+			confirm.disabled=cancel.disabled=true;
+			const decision=`Propose a ${projectKindLabel(review.kind).toLowerCase()} at ${candidate.name}.`;say(decision,'me');archiveTurn(P2?threadMeta(P2):guideMeta,'user',decision);if(P2?.id)api.social.state.remember(P2.id,'user',decision);
+			try {
+				const result=await api.communityProjects.action(review.candidateId,'propose',{kind:review.kind});
+				if(partner!==P2 || viewEpoch!==epoch)return;
+				row.remove();const message=result?.message || result?.error || 'The proposal could not be saved.';
+				if(P2){perform(message,true);if(P2.id)api.social.state.remember(P2.id,'assistant',message);}
+				else {say(message,'note');archiveTurn(guideMeta,'assistant',message);}
+				if(result?.ok){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
+			}catch{if(viewEpoch===epoch && partner===P2){say('The proposal could not be checked. Please try again.','note');confirm.disabled=cancel.disabled=false;}}
+		};
+		cancel.onclick=()=>row.remove();row.append(confirm,cancel);log.append(row);scroll();
+	}
+	function showScheduleReview(intent,P2) {
+		if(partner!==P2)return;
+		const epoch=viewEpoch, scope=api.livingWorld?.snapshot?.().scope?.key, row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+		const button=el('button',btnCss,intent.label), leave=el('button',btnCss,'Leave things as they are');
+		button.onclick=async()=>{
+			if(partner!==P2 || viewEpoch!==epoch)return;
+			const current=api.livingWorld.snapshot();
+			if(current.scope?.key!==scope || !current.activities.some(a=>a.id===intent.requestId && a.npcId===livingActorId(P2.p) && a.canIntervene && a.choices.some(c=>c.id===intent.choiceId && c.effect===intent.effect))){row.remove();say('That activity has changed. Ask me about the current work.','note');return;}
+			button.disabled=leave.disabled=true;
+			const decision=`${intent.label}: ${intent.title}.`;say(decision,'me');archiveTurn(threadMeta(P2),'user',decision);if(P2.id)api.social.state.remember(P2.id,'user',decision);
+			try{const result=await api.livingWorld.action(intent.requestId,'intervene',{choiceId:intent.choiceId});if(partner!==P2 || viewEpoch!==epoch)return;row.remove();const message=result?.message || result?.error || 'No change was agreed.';perform(message,true);if(P2.id)api.social.state.remember(P2.id,'assistant',message);}
+			catch{if(partner===P2 && viewEpoch===epoch){say('The request could not be checked. Please try again.','note');button.disabled=leave.disabled=false;}}
+		};
+		leave.onclick=()=>row.remove();row.append(button,leave);log.append(row);
+	}
 	async function askPerson(text) {
 		const P2 = partner, p = P2.p;
 		archiveTurn(threadMeta(P2),'user',text);
@@ -847,6 +911,12 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		// a world's own people answer their own errands first (planet/colony/errands.js)
 		const awareness=personContext(p,resident);
 		if(awareness.afraid) reply=contextualReply(awareness,text);
+		const schedule=reply ? null : livingScheduleIntent(text,api.livingWorld?.snapshot?.(),livingActorId(p));
+		if(schedule?.kind==='clarify')reply=schedule.question;
+		else if(schedule?.kind==='schedule')reply=`You mean “${schedule.title}”? We can discuss ${schedule.effect==='prioritize'?'making it a priority':schedule.effect==='defer'?'putting it off for a safer moment':'picking it back up'}.`;
+		const community=reply ? null : await projectConversation(text,P2,ctrl.signal);
+		if(ctrl.signal.aborted || partner!==P2){if(busy===ctrl)busy=null;return;}
+		if(community)reply=community.message;
 		const negotiation = reply ? null : await negotiate(text,P2,ctrl.signal);
 		if (ctrl.signal.aborted || partner !== P2) { if(busy===ctrl)busy=null;return; }
 		if (negotiation) reply=negotiation.message || negotiation.error || 'No exchange was made.';
@@ -925,6 +995,9 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (own && (own.note || own.choices)) offer({ ...own, say: null });
 		if (favour) offer({ ...favour, say: null });
 		if (negotiation?.offer) showAgreement(negotiation.offer,P2);
+		if(community?.review)showProjectReview(community.review,P2);
+		if(community?.open){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
+		if(schedule?.kind==='schedule')showScheduleReview(schedule,P2);
 		archiveTurn(threadMeta(P2),'assistant',clean);
 		if (archive.status().error) say('Conversation archive could not save. Use Conversations → Export before leaving this session.','note');
 		if (P2.id) api.social.state.remember(P2.id, 'assistant', clean); else P2.history.push({ role: 'assistant', content: clean });
@@ -952,8 +1025,11 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (busy) busy.abort();
 		const ctrl = new AbortController(); busy = ctrl;
 		let reply = null;
+		const community=await projectConversation(text,null,ctrl.signal);
+		if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner){if(busy===ctrl)busy=null;return;}
+		if(community)reply=community.message;
 		try {
-			if (llm.kind() !== 'none' && llm.status.ready) {
+			if (!reply && llm.kind() !== 'none' && llm.status.ready) {
 				history.push({ role: 'user', content: text });
 				while (history.length > 12) history.shift();
 				reply = await llm.chat([{ role: 'system', content: systemPrompt() }, ...history], (t) => { if(ctrl.signal.aborted || requestEpoch!==viewEpoch || partner) return; bubble.textContent = t.replace(ACTION_RE, '').trim(); scroll(); }, ctrl.signal);
@@ -968,6 +1044,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const clean = reply.replace(ACTION_RE, '').replace(QUEST_RE, '').trim();
 		bubble.textContent = clean || '…';
 		archiveTurn(guideMeta,'assistant',clean);
+		if(community?.review)showProjectReview(community.review,null);
+		if(community?.open){const open=el('button',btnCss,'Open community projects');open.onclick=showStory;log.append(open);}
 		for (const [c, a] of acts) { const r = act(c, a); if (r) say(r, 'note'); }
 		if (voiceOut) speak(clean);
 		if (busy === ctrl) busy = null;
@@ -1167,7 +1245,75 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const caves = el('button', btnCss, 'Cave entrances and discoveries'); caves.onclick = showCaves; log.append(caves);
 	}
 	// your story so far: who the world takes you for, and what you have done for it
-	let livingActivityPage=0,livingActivityScope=null;
+	let livingActivityPage=0,livingActivityScope=null,communityPage=0,communityPageScope=null;
+	function updateProjectProgress() {
+		const record=projectProgressView;
+		if(!record || record.epoch!==viewEpoch || view!=='story' || panel.style.display==='none')return;
+		const snapshot=api.communityProjects?.progress?.() || api.communityProjects?.snapshot?.(), active=snapshot?.active;
+		if(communityScope(snapshot)!==record.scope || !active || active.projectId!==record.projectId || active.kind!==record.kind){record.line.textContent='Work stopped. Return to the site and start again.';record.finish.disabled=true;record.resume.hidden=false;return;}
+		const elapsed=Math.max(0,Number(active.elapsedMs)||0), duration=Math.max(1,Number(active.durationMs)||1), ready=elapsed>=duration;
+		record.line.textContent=ready?'Your contribution is ready to record.':`${active.kind==='survey'?'Surveying':'Working'} · ${Math.min(Math.floor(elapsed/1000),Math.ceil(duration/1000))}/${Math.ceil(duration/1000)} seconds. Stay here until finished.`;
+		record.progress.value=Math.min(1,elapsed/duration);record.finish.disabled=!ready || record.pending;record.finish.style.opacity=record.finish.disabled?'.45':'1';record.resume.hidden=true;
+	}
+	function showCommunityProjects() {
+		const snapshot=api.communityProjects?.snapshot?.();
+		if(!snapshot)return;
+		say('COMMUNITY PROJECTS','note');say(projectScopeText(snapshot),'note');
+		if(snapshot.error)say(snapshot.error,'note');
+		const epoch=viewEpoch, scope=communityScope(snapshot);
+		if(scope!==communityPageScope){communityPageScope=scope;communityPage=0;}
+		const pages=Math.max(1,Math.ceil(snapshot.projects.length/12));communityPage=Math.min(communityPage,pages-1);
+		const cards=communityProjectCards(snapshot,Date.now(),communityPage*12);
+		const valid=()=>view==='story' && viewEpoch===epoch && communityScope(api.communityProjects?.snapshot?.())===scope;
+		async function actProject(id,operation,args={},row=null) {
+			if(!valid())return;
+			if(row)for(const b of row.querySelectorAll('button'))b.disabled=true;
+			if(projectProgressView)projectProgressView.pending=true;
+			try{const result=await api.communityProjects.action(id,operation,args);if(!valid())return;const scrollTop=log.scrollTop;if(operation==='start' && result?.ok)communityPage=0;showStory();log.scrollTop=scrollTop;if(result?.message || result?.error)say(result.message || result.error,'note');}
+			catch{if(valid()){say('This project could not be checked. Please try again.','note');if(row)for(const b of row.querySelectorAll('button'))b.disabled=false;if(projectProgressView)projectProgressView.pending=false;}}
+		}
+		if(!cards.length)say('A little work here can leave something lasting. Choose a nearby site, survey it, and help bring it to life.','note');
+		for(const card of cards) {
+			say(card.line,'guide');
+			const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+			function button(label,operation,args){const b=el('button',btnCss,label);b.onclick=()=>actProject(card.id,operation,args,row);row.append(b);return b;}
+			button('Show project site','mark');
+			if(card.active) {
+				const line=el('div','color:#b8d8ce;'),progress=el('progress','width:100%;height:8px;flex-shrink:0;accent-color:#5bd8ad;');progress.max=1;progress.setAttribute('aria-label',card.active.kind==='survey'?'Survey progress':'Work progress');log.append(line,progress);
+				const finish=button('Record '+(card.active.kind==='survey'?'survey':'work'),'finish');finish.disabled=true;
+				button('Pause work','cancel');const resume=el('button',btnCss,'Review current work');resume.hidden=true;resume.onclick=showStory;row.append(resume);
+				projectProgressView={epoch,scope,projectId:card.id,kind:card.active.kind,line,progress,finish,resume,pending:false};
+			}else if(!card.done && !card.paused && !card.readyAt && snapshot.mode!=='offline') {
+				const kind=card.survey<1?'survey':'work';
+				if(kind==='survey' || card.work<3) { const start=button(kind==='survey'?'Survey site · 5 sec':'Help build · 30 sec','start',{kind});start.disabled=!!snapshot.active; }
+				for(const service of (card.serviceSources||[]).slice(0,3)) {
+					const requestId=typeof service==='string'?service:service.requestId || service.id;
+					if(requestId)button('Contribute '+(service.title || service.label || 'completed local work'),'contribute-service',{requestId});
+				}
+			}
+			if(card.done && card.kind==='resonance')button('Play the stones','play');
+			log.append(row);
+			const history=projectHistoryLines(card),events=history.slice(-2);
+			for(const event of events)say(event,'note');
+			if(history.length>2){const more=el('button',btnCss,'Read project history'),section=el('div','display:none;');for(const line of history)section.append(el('div','margin:8px 0;color:#b8c7c2;font-size:12px;white-space:pre-wrap;',line));more.onclick=()=>{const open=section.style.display==='none';section.style.display=open?'block':'none';more.textContent=open?'Close project history':'Read project history';};log.append(more,section);}
+		}
+		if(pages>1){const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');if(communityPage>0){const b=el('button',btnCss,'Earlier community projects');b.onclick=()=>{communityPage--;showStory();};row.append(b);}if(communityPage<pages-1){const b=el('button',btnCss,'More community projects');b.onclick=()=>{communityPage++;showStory();};row.append(b);}log.append(row);}
+		const availableSites=(snapshot.candidates || []).filter(c=>!snapshot.projects.some(p=>p.siteId===(c.siteId || c.id)));
+		if(availableSites.length) {
+			say('PLACES TO IMPROVE','note');
+			for(const candidate of availableSites.slice(0,4)) {
+				say(candidate.name,'note');const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+				const at=candidate.anchor, distance=at?Math.hypot(api.camera.position.x-at.x,api.camera.position.z-at.z):Infinity;
+				const near=candidate.canPropose ?? candidate.inRange ?? distance<=6;
+				if(near && snapshot.mode!=='offline')for(const kind of candidate.kinds) {
+					const b=el('button',btnCss,'Review '+projectKindLabel(kind).toLowerCase());
+					b.onclick=()=>{if(valid())showProjectReview({candidateId:candidate.id,kind,scope},null);};row.append(b);
+				}else {const b=el('button',btnCss,'Visit this site');b.onclick=()=>actProject(candidate.id,'mark',{},row);row.append(b);}
+				log.append(row);
+			}
+		}
+		updateProjectProgress();
+	}
 	function showLivingActivity() {
 		const snapshot=api.livingWorld?.snapshot?.();
 		if (!snapshot) return;
@@ -1235,6 +1381,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const projects=chronicle.projects(api.social?.bodyKey());
 		if(projects.length){say('WHAT WE LEFT BEHIND','note');for(const p of projects.slice(-8))say(`${p.name} · ${p.npc}\n${p.choice==='marked'?'Marked route: small signs remain at your surveyed stops.':'Quiet route: saved in your journal; the landscape stays untouched.'}\n${p.landmarks.map(t=>t.name).join(' → ')}`,'guide');}
 		showLivingActivity();
+		showCommunityProjects();
 		if(chronicle.status().error)say(chronicle.status().error,'note');
 		const D = api.daily?.list?.();
 		if (D) {

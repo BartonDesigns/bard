@@ -313,3 +313,86 @@ pagination, proposal boundaries and persistent operation budgets. `npm run check
 bundles a dry-run Worker; it does not deploy or establish live capability support.
 `npm run test:living-integration` exercises real local workerd and SQLite Durable Objects
 with two authenticated identities, concurrency and isolated bodies, without live writes.
+
+### Shared community development
+
+The same `LIVING` Durable Object also persists bounded community projects and advertises
+`world-projects-v1`. No new binding or migration is needed beyond `v3-living-regions`.
+Deploy the updated **rooms/multiplayer Worker** after the frontend is ready; this is separate
+from the discovery/planner Worker. Frontend publication alone cannot activate shared
+project progression. The canonical ledger, timers, deduplication, stage changes and deadline
+live on the server. Locations, nearby presence, hazards and physical services remain
+client-observed, not independently simulated geometry or proof of land ownership.
+
+`register` additionally accepts `sites` (up to 16 per batch, 64 per region):
+
+```json
+{
+  "id": "observe-coastal-site", "op": "register", "actors": [], "requests": [],
+  "sites": [{
+    "id": "coastal-path", "name": "Coastal path", "source": "place",
+    "anchor": { "x": 10, "y": 2, "z": 20, "lat": 37.7, "lon": -122.4 }
+  }]
+}
+```
+
+`source` is `place`, `business` or `living-request`. The last requires `requestId` matching
+an existing request at that site. Optional `npcId` must be a registered citizen; the server
+uses that citizen's name. First observations establish canonical names and anchors;
+reobservation cannot move the site or replace its source. Optional paired latitude/longitude
+preserves Earth locations across render-origin rebasing. Site IDs are at most 96 characters.
+Proposals for different site IDs within 12 horizontal meters and three vertical meters of
+an existing project are refused to avoid overlapping decorations. This is a scenery bound,
+not permission to change land ownership, homes, terrain or arbitrary road networks.
+
+New operations require the existing private Soul bearer capability and stable `id`:
+
+- `project-propose`: `{project: {siteId, kind}}`. Kinds: `path`, `garden`, `gathering`,
+  `resonance`. The server supplies the canonical site name and anchor.
+- `project-start`: `{projectId, kind: "survey" | "work"}`. Its private operation receipt
+  includes `challenge: {id, projectId, kind, startedAt, readyAt, expiresAt}`. Survey takes
+  at least five server seconds; work takes 30. Challenges expire after ten minutes.
+  A fresh start replaces this traveller's previous action, invalidating its challenge ID.
+  Retrying the exact same operation ID returns the original challenge.
+- `project-complete`: `{projectId, challengeId}`. The actor-bound challenge must have
+  elapsed on the server and survived observed danger. Client-supplied time, money,
+  completion status or progress cannot accelerate or reward it.
+- `project-service`: `{projectId, requestId}`. This consumes only an already-completed,
+  physical, guarded source receipt at the exact project site. Conversation, simulated NPC
+  check-ins, LLM assertions and invented evidence never become work. Player results belong
+  to their reporting participant; NPC results require the original observer and actual
+  assigned citizen. A source result contributes only once, permanently.
+
+Guarded `report-source` automatically contributes an eligible physical result when a
+project exists at that site. An archived receipt can be credited explicitly later if the
+project was proposed afterward. Contributions retain player-observed or NPC-observed
+provenance and actual actor attribution. This API mints no money, stock or reputation.
+
+One survey and three timed work or physical-service contributions starts `building`.
+Publication requires a **minimum full 24 hours after the last required contribution**.
+The existing alarm advances both NPC work and project stages while players are absent;
+publication and its durable public history are idempotent. Unsafe sites remain delayed,
+not silently repaired. This is timing of an in-game project, not a promise to ship arbitrary
+requested application code within a day.
+
+Register can also include `projectSituation: {hazard, blockedSites, observedSites}`. Each
+list is bounded to 32 known canonical site IDs; blocked sites must be among observed sites.
+Per-observer records are bounded to 64. Clearing only removes this observer's previous
+blocks at explicitly observed sites, never another observer's report. Hazard expires after
+30 minutes; site blocks persist until their observer reports that site clear. Conditions
+also include living-world danger and destroyed sites. Unsafe observations interrupt pending
+challenges and require a fresh start. New danger at the publication deadline is applied
+before completion.
+
+Responses add `features`, canonical `sites`, and
+`projects: {version, world, region, revision, updatedAt, projects, events}`. Project stages,
+contributor counts, deadlines, blocking reasons and recent history are shared. Private
+challenges and permanent source-deduplication records are absent from the public project
+view. Existing paginated region history includes project events.
+
+`npm test` covers clock spoofing, source permissions, replay, concurrent completion,
+interrupted/replaced challenges, isolation, observer-scoped danger, atomic write failure
+and overlapping sites. `npm run test:projects-integration` runs two identities through the
+production Worker in local workerd/SQLite, then tests overdue alarms with an isolated
+test-only constructor clock. Its fixture is never imported by production and adds no live
+HTTP/environment override. These local tests do not establish live Worker deployment.

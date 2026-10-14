@@ -10,7 +10,7 @@ import { acceptReputation } from './reputation.js';
 import { soulId, SOUL_TOKEN } from './soul.js';
 import { SOUL_FEATURE } from '../../../island/src/reputation/sanctuary.js';
 import { REPUTATION_FEATURE, reputationAlive } from '../../../island/src/net/reputation.js';
-import { LIVING_FEATURE } from './living-region.js';
+import { LIVING_FEATURE, COMMUNITY_FEATURE } from './living-region.js';
 
 const SWEEP_MS = 15000;
 // close codes the game understands
@@ -89,7 +89,7 @@ export class Room {
 		meta.emptySince = 0;
 		await this.save();
 		const now=Date.now();
-		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE, ...(this.env.SOULS ? [SOUL_FEATURE] : []), ...(this.env.LIVING ? [LIVING_FEATURE] : [])], now });
+		this.send(ws, { t: 'welcome', you: a.id, host: meta.host, code: meta.code, players: this.sockets().map((s) => this.player(s)), state: meta.shared, events: meta.events, rules: meta.rules || { pvp: false }, features:[REPUTATION_FEATURE, ...(this.env.SOULS ? [SOUL_FEATURE] : []), ...(this.env.LIVING ? [LIVING_FEATURE, COMMUNITY_FEATURE] : [])], now });
 		const memories=(meta.reputation||[]).filter(e=>reputationAlive(e,now));
 		for(let i=0;i<memories.length;i+=6)this.send(ws,{t:'reputation-snapshot',records:memories.slice(i,i+6)});
 		this.broadcast({ t: 'join', player: this.player(ws) }, ws);

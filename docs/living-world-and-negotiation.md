@@ -1,5 +1,7 @@
 # Living citizens and conversational bargaining
 
+**Continuation, 14 October 2026:** [Shared community projects](community-world-projects.md) now implement the next tangible-development slice in this same feature branch: bounded scene improvements, real contributions, shared receipts and a minimum one-day server build period. That implementation supersedes the earlier open construction/timing statements below for these four project kinds only. The original checkpoint remains as history; neither checkpoint implies production deployment.
+
 Work checkpoint: 14 October 2026. Branch `codex/living-world-negotiation` integrates main `b05ea02` (the merged economy, named businesses, payroll, military polish and building repair work) with the persistent reputation and connected-quest work from PR #25, head `3f8e663`. It preserves both histories and does not change Claude's branches. Unpushed edits in another editor are not available to this checkout.
 
 ## What players can do

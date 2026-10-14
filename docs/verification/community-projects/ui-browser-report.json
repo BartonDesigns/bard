@@ -1,0 +1,53 @@
+{
+  "method": "Actual Guide, community project runtime and pure reducer, with fixture terrain/NPCs/model replies and controlled time. Desktop and touch-emulated phone Chromium. This is not a real phone, human playtest, deployed Worker check or a 24-hour wall-clock test.",
+  "errors": [],
+  "screenshots": [
+    "project-work-desktop.png",
+    "project-complete-desktop.png",
+    "project-work-phone.png",
+    "project-complete-phone.png"
+  ],
+  "desktop": {
+    "passed": true,
+    "modelParaphrase": true,
+    "explicitProposal": true,
+    "earlyFinishBlocked": true,
+    "movementCancelsObservation": true,
+    "pauseWorks": true,
+    "threeRecordedWorkSessions": true,
+    "controlled24HourPropagation": true,
+    "npcRecognizesActualProject": true,
+    "privateCredentialsExcluded": true,
+    "otherNpcConversationExcluded": true,
+    "perNpcScheduling": true,
+    "staleWorldProposalBlocked": true,
+    "reloadPersists": true,
+    "overflow": {
+      "width": 422,
+      "viewport": 1280,
+      "over": false
+    }
+  },
+  "phone": {
+    "passed": true,
+    "modelParaphrase": true,
+    "explicitProposal": true,
+    "earlyFinishBlocked": true,
+    "movementCancelsObservation": true,
+    "pauseWorks": true,
+    "threeRecordedWorkSessions": true,
+    "controlled24HourPropagation": true,
+    "npcRecognizesActualProject": true,
+    "privateCredentialsExcluded": true,
+    "otherNpcConversationExcluded": true,
+    "perNpcScheduling": true,
+    "staleWorldProposalBlocked": true,
+    "reloadPersists": true,
+    "overflow": {
+      "width": 368,
+      "viewport": 390,
+      "over": false
+    }
+  },
+  "passed": true
+}
