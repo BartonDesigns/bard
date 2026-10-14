@@ -274,7 +274,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		const I = W.island;
 		return {
 			floorAt: (x, z, y) => Math.max(I.heightAt(x, z), I.extraFloor ? I.extraFloor(x, z, y) : -1e9),
-			boxes: (x, z, r) => (W.real?.loaded?.() ? W.real.near('boxes', x, z, r) : []).filter((b) => b.w > 1 && b.d > 1).map((b) => ({ x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH + 2, y: I.heightAt(b.x, b.z) - 1 })),
+			boxes: (x, z, r) => { const list = (W.real?.loaded?.() ? W.real.near('boxes', x, z, r) : []).filter((b) => b.w > 1 && b.d > 1); return W.structures ? W.structures.carBoxes(list, x, z, r).map((b) => (b.wallH !== undefined ? { x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH + 2, y: I.heightAt(b.x, b.z) - 1 } : b)) : list.map((b) => ({ x: b.x, z: b.z, w: b.w, d: b.d, a: b.a, h: b.wallH + 2, y: I.heightAt(b.x, b.z) - 1 })); },          // (structures: wrecked walls as they stand, the grid's lots too)
 			cars: (x, z, r) => (W.vehicles ? W.vehicles.carsNear(x, z, r).filter((c) => c.id !== 'mine') : []).map((c) => ({ id: c.id || c.kind + c.x.toFixed(1) + c.z.toFixed(1), kind: c.kind, x: c.x, y: c.y, z: c.z, yaw: c.yaw })),
 			push: I.extraPush ? (p, footY) => I.extraPush(p, footY) : null,
 		};

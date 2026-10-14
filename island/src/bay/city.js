@@ -31,6 +31,7 @@ import { houseEra, exteriorLook, cityEra, seedAt } from './decor.js';
 import { createProps } from './lotkit.js';
 import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
+import { settleLots } from '../structures/lots.js';        // structures: settled lots
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -2145,6 +2146,7 @@ export function createCity(shared, scene, bay, real = null) {
 		fillBlocks(x, z, 1200, list);
 		clipMapped(list);
 		realBuildings(x, z, 2000, list);
+		settleLots(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
 		decorate(list, x, z, 700);
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
 		// from points and lots; the land map knows where the pavement and the roofs are)

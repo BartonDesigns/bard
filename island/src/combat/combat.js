@@ -81,6 +81,8 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 				const h = rayBox(o, d, { x: b.x, y: g + H / 2 - 0.5, z: b.z }, [b.w / 2, H / 2 + 0.5, b.d / 2], -(b.a || 0));
 				if (h && h.t < (best?.t ?? max)) best = { t: h.t, n: h.n, surface: 'stone', box: b };
 			}
+			const sg = w.structures?.ray?.(o, d, best?.t ?? max);          // structures: a pane in the way
+			if (sg) best = sg;
 		}
 		// the ground: marched, then refined
 		const lim = best?.t ?? max;
@@ -265,6 +267,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		const p = new THREE.Vector3().copy(from).addScaledVector(dir, hit.t);
 		if (hit.wall) {
 			fx.impact(p, hit.n, hit.surface, type === 'energy');
+			W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a heavy round's hole
 			if (hit.box && (type === 'energy' || type === 'fire')) heatUp(boxId(hit.box), hit.box, dmg, by === ME);
 			return null;
 		}
@@ -450,6 +453,7 @@ export function createCombat({ scene, camera, mount, world, people, ragdolls, ar
 		if (d < r * 4) shakeIt(0.5 * (1 - d / (r * 4)));
 		civilians.alarm(c.x, c.z, 35); squads.hear(c.x, c.z, 90);
 		sound('boom', c);
+		W()?.structures?.blast?.(c, r, dmg);          // structures: the panes round it, the walls it reaches
 		// a big one sets cars and buildings near it alight
 		if (dmg >= 60) { for (const n of neighbours(c.x, c.z, r)) if (Math.random() < 0.5) ignite(n.id, n.x, n.z, n.fuel, mine); }
 	}

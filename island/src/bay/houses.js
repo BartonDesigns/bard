@@ -554,13 +554,13 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 				if (d < BUILD_R) cands.push([d, b.grp]);
 			}
 			// ...and the gridded towns' houses (city.js gives them the same shape)
-			for (const grp of city?.procHomes?.(x, z, BUILD_R) || []) cands.push([Math.hypot(grp[0].x - x, grp[0].z - z), grp]);
+			for (const grp of city?.procHomes?.(x, z, BUILD_R) || []) if (!grp.wrecked) cands.push([Math.hypot(grp[0].x - x, grp[0].z - z), grp]);
 			cands.sort((p, q) => p[0] - q[0]);
 			cands.length = Math.min(cands.length, MAX);
 		}
 		for (const [grp, h] of houses) {
 			const Mb = mainOf(grp), d = Math.hypot(Mb.x - x, Mb.z - z);
-			if (d > DROP_R || (!cands.some((c) => c[1] === grp) && houses.size > MAX)) {
+			if (d > DROP_R || grp.wrecked || (!cands.some((c) => c[1] === grp) && houses.size > MAX)) {          // (wrecked: structures/ draws its shell)
 				if (h) { dispose(h); city?.setNear?.(grp, null); }
 				houses.delete(grp);
 			}

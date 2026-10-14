@@ -71,6 +71,7 @@ import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createInteriors } from './interiors/index.js';
+import { createStructures } from './structures/index.js';
 import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
 import { planDwellings, createDwellings } from './interiors/alien.js';
@@ -1145,6 +1146,14 @@ export function createIslandWorld() {
 			{ const cv = world.commercial.venue, I = world.interiors; world.commercial.venue = (c, h) => cv(c, h) || I.venue(c, h); }
 			// (the doors walkers may use: the shops' and cafés' too, through the interiors' list)
 			world.interiors.addDoors(world.commercial);
+			// the buildings as things: glass that breaks, windows and walls to vault, walls that break,
+			// buildings that fall and the crews that rebuild them (structures/)
+			world.structures = HOOKS.structures = createStructures({ scene, camera, world: () => world, isPhone, shared, car: () => {
+				const C = drive.active() ? drive.physics() : null;
+				if (!C) return null;
+				const t = C.body.translation(), v = C.body.linvel(), r = C.body.rotation();
+				return { x: t.x, y: t.y - 0.5, z: t.z, vx: v.x, vz: v.z, yaw: 2 * Math.atan2(r.y, r.w), mass: C.feel.mass, L: C.spec.L, W: C.spec.W };
+			} });
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
 			// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
 			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone });
@@ -1222,6 +1231,7 @@ export function createIslandWorld() {
 				{ const of = island.extraFloor, P = world.saltPonds; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), P.floor(x, z, y)); }
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
+				{ const of = island.extraFloor, op = island.extraPush, S = world.structures; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), S.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); S.push(p, footY); }; }          // structures: rubble and broken walls
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
 				// the military bases' pads, banks, roofs and towers to stand on; their walls, fence and vehicles solid
 				{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
@@ -1705,6 +1715,7 @@ export function createIslandWorld() {
 			W.commercial.update(camera, dt, W.sky.state.hours, sk.night);
 			W.towers?.update(dt, camera, W.sky.state.hours, sk.night);
 			W.interiors?.update(camera, dt, W.sky.state.hours, sk.night);
+			W.structures?.update(dt, sk.night, W.sky.state.hours);
 			// stepping into a place: what it is, and how busy at this hour
 			const inB = W.commercial.inside(camera.position);
 			if (inB && inB !== W.bizSeen) {
@@ -2174,6 +2185,17 @@ if (typeof window !== 'undefined') {
 		// the buildings built inside round you (interiors/): Crysis.interiors() tells how they stand,
 		// Crysis.interiorGo('row') takes you to the front door of one ('shop', 'apt', 'warehouse'...)
 		interiors: () => window.L99Island?.world?.()?.interiors?.info() ?? 'none here',
+		// the buildings (structures/): Crysis.structures() tells of the overlaps settled, the alleys,
+		// the glass, the damage near and the rebuilds under way; .cataclysm(true) holds the crews off
+		// while a citywide catastrophe lasts (false lets them back); .crack() / .shatter() the nearest
+		// pane; .vault() over what is in front of you; .advance(h) moves the crews' clock on.
+		// Crysis.demolish(x, z, k) brings the building nearest (x, z) down (k 1 all of it, 0.5 a part)
+		structures: Object.assign(() => HOOKS.structures?.info() ?? 'none here', {
+			cataclysm: (on) => HOOKS.structures?.cataclysm(on), crack: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.crack(x ?? p?.x, z ?? p?.z); },
+			shatter: (x, z) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.shatter(x ?? p?.x, z ?? p?.z); },
+			vault: () => HOOKS.structures?.vault('key'), ahead: () => HOOKS.structures?.ahead(), advance: (h) => HOOKS.structures?.advance(+h || 0), recount: () => HOOKS.structures?.recount(),
+		}),
+		demolish: (x, z, k = 1) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.demolish(x ?? p?.x, z ?? p?.z, k) ?? 'none here'; },
 		workplace: () => window.L99Island?.world?.()?.towers?.diagnostics() ?? 'none here',
 		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
 		// the caves of another world: Crysis.caves() lists the mouths, Crysis.cave(i) takes you into one

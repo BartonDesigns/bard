@@ -18,6 +18,7 @@ import { lakeFeatures } from './lake.js';
 import { onLandmark } from './footprints.js';
 import { REAL_REGIONS, REAL_TALL } from './realtiles.js';
 import { footLifted } from './overpass.js';
+import { settleRegionSoon } from '../structures/overlap.js';   // structures: settled footprints
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -250,6 +251,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		// a building's blocks, gathered into the house they make (houses.js builds them)
 		groupBoxes(G.boxes);
 		const moved = setBack(G);
+		await settleRegionSoon(G, onLandmark, signal);          // structures: no building through another, a street or a landmark
 		for (const b of G.boxes) cellIn(G.grid, b.x, b.z).boxes.push(b);
 		o = S.paths[0];
 		for (let n = 0; n < S.paths[1]; n++, o += 10) {
@@ -511,6 +513,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		{ rt: mkRT(1024), paint: null, size: 1536, ramp: 3, move: 380, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap2, REAL_U.uRoadR2] },
 	];
 	const rt = MAPS[0].rt;
+	R.repaint = () => { for (const M of MAPS) M.x = 1e9; };          // structures: the road maps painted again when new alleys come in
 	const cam = new THREE.OrthographicCamera(0, 1, 1, 0, -10, 10);
 	cam.position.z = 1;
 	const scene2 = new THREE.Scene();
