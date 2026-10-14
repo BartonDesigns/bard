@@ -28,6 +28,15 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 	// somewhere to go: a kerb a few hundred metres to a kilometre or so off, on dry land
 	// (a kerb if the streets are mapped there; else dry ground, nearer in where the land is small)
 	function destination(from) {
+		// most fares are going somewhere with a name: a business a few hundred metres off (economy/)
+		if (Math.random() < 0.65) {
+			const E = (world()?.city?.economy?.near?.(from.x, from.z, 1300) || []).filter((q) => { const d = Math.hypot(q.door[0] - from.x, q.door[1] - from.z); return d > 300; });
+			for (let k = 0; k < 6 && E.length; k++) {
+				const q = E[Math.floor(Math.random() * E.length)], sw = people.sidewalk?.(q.door[0], q.door[1]);
+				const x = sw ? sw[0] : q.door[0], z = sw ? sw[1] : q.door[1], y = groundAt(x, z);
+				if (y !== null) return { x, y, z, metres: Math.hypot(x - from.x, z - from.z) * 1.25, place: q.name };
+			}
+		}
 		for (let k = 0; k < 60; k++) {
 			const near = k >= 30, a = Math.random() * Math.PI * 2, d = near ? 150 + Math.random() * 300 : 350 + Math.random() * 950;
 			let x = from.x + Math.cos(a) * d, z = from.z + Math.sin(a) * d;
@@ -88,7 +97,7 @@ export function createFares({ camera, world, people, chatter, persona, drive, ar
 		const p = F.p, dest = destination(car);
 		if (!dest) { go('leave'); return; }
 		const r = step(F, 'board');
-		const place = placeName(dest.x, dest.z, dest.y), here = placeName(car.x, car.z, car.y);
+		const place = dest.place || placeName(dest.x, dest.z, dest.y), here = placeName(car.x, car.z, car.y);
 		// one in four is in a hurry: a clock on the ride, and more for beating it
 		const rush = Math.random() < 0.25;
 		F = { ...r.F, p, dest, rush, due: rush ? deadline(dest.metres) : 0, place: place && place !== here ? place : '', fare: quote(dest.metres), t: 0, hits: 0, scares: 0, chat: false, near: false, rider: rider(p, car) };

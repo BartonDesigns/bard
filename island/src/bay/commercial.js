@@ -22,6 +22,7 @@ import { crowd, ZONE, kidsAbout } from '../people/flow.js';
 import { inCampus } from './discovery.js';
 import { flashAtlas } from '../tattoo/skinink.js';
 import { shopScheme, seedAt } from './decor.js';
+import { venueOf } from '../economy/venue.js';
 
 // the flash sheets on a parlour's wall: the designs the street wears, on paper (made once)
 let SHEET = null;
@@ -38,18 +39,9 @@ function flashSheet() {
 const hh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
 const CEIL = 3.6, WALL = 0.3, STORE = 3.1;
 
-// what a commercial block is, from its kind, size and where it stands (stable for a place)
-function typeOf(b) {
-	const r = hh(Math.round(b.x * 0.37), Math.round(b.z * 0.29)), area = b.w * b.d, deep = Math.min(b.w, b.d);
-	if (b.kind === 5) return area > 1400 && r < 0.18 && deep > 24 ? 'cinema' : r < 0.2 ? 'restaurant' : r < 0.3 ? 'cafe' : 'office';
-	if (area > 900 && deep > 24 && r < 0.12) return 'bowling';
-	if (area > 900 && deep > 24 && r < 0.2) return 'cinema';
-	if (r < 0.36) return 'restaurant';
-	if (r < 0.54) return 'cafe';
-	if (r < 0.575 && area < 700) return 'tattoo';
-	if (r < 0.62 && area > 250) return 'arcade';
-	return 'shop';
-}
+// what a commercial block is, from its kind, size and where it stands (stable for a place;
+// economy/venue.js, which the signs out front agree with)
+const typeOf = venueOf;
 const ZONE_OF = { cafe: ZONE.dining, restaurant: ZONE.dining, shop: ZONE.retail, tattoo: ZONE.retail, office: ZONE.office, arcade: 'play', bowling: 'play', cinema: 'play' };
 function busyAt(type, h) {
 	if (ZONE_OF[type] === 'play') return Math.max(0, Math.min(1, Math.exp(-(((h - 20) / 2.6) ** 2)) + Math.exp(-(((h - 15) / 2.5) ** 2)) * 0.45));
