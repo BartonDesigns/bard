@@ -104,3 +104,85 @@ test('the owner walks to a bench, sets the bag down on it and walks on; a passer
 	assert.ok(!o2.override, 'and walk on unaware');
 	Q2.dispose();
 });
+
+test('a theft out of sight leaves a lead: the words, the book, the limits', async () => {
+	const { createLeads, leadFrom, leadLine, leadNote, leadFact, whenOf } = await import('../src/people/npc-leads.js');
+	const { settle } = await import('../src/people/npc-quests-core.js');
+	const q = bagQuest({ owner: { id: 'npc:5', name: 'Ana' }, at: { x: 0, z: 0 }, where: { kind: 'bench' }, region: 'bay.east' });
+	const W = createMoney(), C = createCommons({ store: memStore() });
+	const bad = { taker: 'npc:9', ...settle(q, 'betray', { actorId: 'npc:9', money: W, commons: C }) };
+	const good = { taker: 'npc:9', ...settle(q, 'done', { actorId: 'npc:9', money: W, commons: C }) };
+	assert.equal(leadFrom(q, good), null, 'a bag handed back leaves nothing to follow');
+	const L = leadFrom(q, bad, { region: 'bay.east', regionName: 'the East Bay', town: 'Oakland', hours: 9 });
+	assert.equal(L.owner.name, 'Ana'); assert.equal(L.thief.id, 'npc:9'); assert.equal(L.when, 'this morning');
+	assert.match(leadLine(L, 0), /^Someone grabbed a bag off a bench on the corner this morning\.$/);
+	assert.match(leadNote(L), /Ana's bag off a bench on the corner this morning in Oakland/);
+	assert.match(leadFact(L), /^Heard that someone took Ana's bag/);
+	for (let n = 0; n < 8; n++) assert.doesNotMatch(leadLine(L, n) + leadNote(L) + leadFact(L), /—/);
+	assert.deepEqual([3, 10, 14, 19, 23].map(whenOf), ['last night', 'this morning', 'this afternoon', 'this evening', 'tonight']);
+	// a book: a few open at a time, not two at once in a region, kept across a reload
+	let t = 1e6;
+	const st = memStore(), B = createLeads({ store: st, now: () => t });
+	assert.ok(B.add({ ...L, id: 'a', t }));
+	assert.equal(B.add({ ...L, id: 'b', t }), null, 'one at a time in a region');
+	for (const r of ['r1', 'r2', 'r3', 'r4', 'r5']) B.add({ ...L, id: r, region: r, t });
+	assert.equal(B.open().length, 5, 'five open at most');
+	B.close('a', 'returned');
+	assert.equal(createLeads({ store: st, now: () => t }).get('a').state, 'returned');
+	t += 46 * 60 * 1000;
+	assert.equal(B.open().length, 0, 'gone cold after a while');
+});
+
+test('a lead in your region: talked about, marked, and the thief found and answered', async () => {
+	const { createErrands } = await import('../src/people/errands.js');
+	const T = stage();
+	const a = T.body(30, 10, 51), b = T.body(-25, 20, 52), kid = T.body(20, 2, 53, {}, { child: true }), teen = T.body(22, -3, 54, {}, { teen: true, minor: true });
+	const pool = [a, b, kid, teen];
+	const deeds = [], hints = [];
+	const errands = createErrands({ scene: T.scene, camera: T.camera, world: T.world, people: { pool, sidewalk: () => null }, chatter: { say: (p, l) => T.said.push([p, l.text]) }, persona: (p) => ({ first: 'N' + p.P.dna.seed }), arms: () => ({ apply: () => ({ ok: true }) }), morality: () => ({ record: (d) => deeds.push(d.kind) }), hint: (t) => hints.push(t), driving: () => false, isPhone: false });
+	const { Q } = await quests(T, pool, { errands: () => errands, hint: (t) => hints.push(t), store: memStore() });
+	Q.update(0.1);
+	assert.match(Q.lead('bag'), /^Someone took \w+'s bag/);
+	const [L] = Q.leads();
+	assert.ok(L.here && /thief may still be about/.test(L.note));
+	// people round here mention it (some of them)
+	const lines = Array.from({ length: 60 }, (_, i) => Q.leadLine(1000 + i)).filter(Boolean);
+	assert.ok(lines.length > 5 && lines.every((t) => /bag/.test(t)), lines[0]);
+	// the marker, near where it happened
+	const m = Q.mark();
+	assert.ok(m && m.radius >= 20 && /was taken/.test(m.title));
+	// go there: a grown-up about is carrying it (never one of the children)
+	T.camera.position.set(m.x, 1.7, m.z); T.P.pos.set(m.x, 1.7, m.z);
+	a.M.S.pos.set(m.x + 30, 0, m.z); b.M.S.pos.set(m.x - 40, 0, m.z + 10); kid.M.S.pos.set(m.x + 20, 0, m.z); teen.M.S.pos.set(m.x + 22, 0, m.z);
+	const orig = Math.random; Math.random = () => 0.1;
+	for (let k = 0; k < 120 && !/The one who took/.test(Q.mark()?.title || ''); k++) Q.update(0.1);
+	Math.random = orig;
+	const spotted = Q.mark();
+	assert.match(spotted.title, /The one who took/);
+	const thief = pool.find((p) => Math.hypot(p.M.S.pos.x - spotted.x, p.M.S.pos.z - spotted.z) < 0.01);
+	assert.ok(thief && !minor(thief), 'a grown-up carries it');
+	assert.ok(hints.some((h) => /could be the one who took it/.test(h)));
+	// walk up: they walk off with it, and it is yours to answer like any theft
+	T.camera.position.set(thief.M.S.pos.x + 5, 1.7, thief.M.S.pos.z); T.P.pos.copy(T.camera.position);
+	for (let k = 0; k < 15 && !errands.busy(); k++) Q.update(0.1);
+	assert.equal(errands.info().errand?.stage, 'thief');
+	assert.ok(hints.some((h) => /That looks like the one who took .* this \w+\. Catch them and take it, or let them go\./.test(h)));
+	// take it off them (neutral), give it back where it was taken (the boost)
+	T.P.pos.set(thief.M.S.pos.x, 1.7, thief.M.S.pos.z + 1); errands.update(0.1);
+	assert.equal(deeds.at(-1), 'take-from-thief');
+	const d = errands.info().errand.drop; T.P.pos.set(d[0], d[1] + 1.7, d[2]); errands.update(0.1);
+	const back = errands.mark(); T.P.pos.set(back.x, 1.7, back.z); errands.update(0.1);
+	assert.deepEqual(deeds, ['take-from-thief', 'return-stolen']);
+	assert.equal(Q.leads().length, 0, 'the lead is closed');
+	Q.dispose();
+});
+
+test('far away, thefts now and then leave leads', async () => {
+	const T = stage(), pool = [T.body(10, 10, 61)];
+	const { Q } = await quests(T, pool, { store: memStore() });
+	Q.update(0.1);
+	Q.farTick(80);
+	assert.ok(Q.leads().length >= 1, 'a lead from the far tick');
+	assert.ok(Q.info().leads.length >= 1);
+	Q.dispose();
+});

@@ -417,6 +417,9 @@ export function createGuide(mount, api) {
 		// a favour under way for someone you passed (people/errands.js)
 		const fav = api.errands?.mark?.();
 		if (fav) return fav;
+		// a theft out of your sight to follow up: where it happened, or the thief (people/npc-leads.js)
+		const lead = api.npcQuests?.mark?.();
+		if (lead) return lead;
 		// a world's own errands (planet/colony/errands.js)
 		const own = W.colony?.crew?.mark?.();
 		if (own) return own;
@@ -1046,6 +1049,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			say(`Under way: ${E.errand.title} (${E.errand.stage})`, 'guide');
 			const give = el('button', btnCss, 'Give up on it'); give.onclick = () => { api.errands.cancel(); showStory(); }; log.append(give);
 		}
+		const leads = api.npcQuests?.leads?.() || [];
+		if (leads.length) { say('LEADS', 'note'); for (const L of leads.slice(0, 4)) say(L.note + (L.here ? ' (round here: follow the marker)' : ''), 'guide'); }
 		say('FARES', 'note');
 		say(rung('fares', F.rides || 0, 'rides') + `\nEarned ${F.earned || 0} credits · ${F.five || 0} five-star rides`, 'guide');
 		if (F.fare) say(`In the car now: ${F.fare.name}${F.fare.place ? ' to ' + F.fare.place : ''} · fare ${F.fare.fare}`, 'guide');

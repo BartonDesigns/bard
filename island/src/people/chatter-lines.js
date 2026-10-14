@@ -67,7 +67,7 @@ function afraid(c, n) {
 	return null;
 }
 
-// ctx: { seed, n, self:{ child, outgoing, warmth, mood, role, phone, work, vendor, deed, money }, you:{ speed, vehicle,
+// ctx: { seed, n, self:{ child, outgoing, warmth, mood, role, phone, work, vendor, deed, money, lead }, you:{ speed, vehicle,
 //   aware (awarenessContext) }, scene:{ hour, rain, storm } }. Returns null for a passer-by who
 // keeps to themselves, or { text, gesture, feel }; text may be '' for a nod alone.
 export function remarkFor(ctx = {}) {
@@ -83,6 +83,7 @@ export function remarkFor(ctx = {}) {
 	if (S.phone) return { text: pick(ON_PHONE, n), gesture: 'explain', feel: {} };
 	if (E.storm > 0.5) return { text: pick(STORM, n), gesture: 'point', feel: { surprise: 0.6 } };
 	if (S.money && ((n * 3266489917) >>> 0) % 100 < 12) return { text: S.money, gesture: 'explain', feel: {} };
+	if (S.lead && (Math.imul(n, 668265263) >>> 0) % 100 < 45) return { text: S.lead, gesture: 'explain', feel: { surprise: 0.3 } };
 	if (S.deed && DEED[S.deed] && ((n * 2246822519) >>> 0) % 100 < 70) return { text: pick(DEED[S.deed], n), gesture: S.deed === 'stole' ? 'shrug' : S.deed === 'robbed' ? 'shake' : 'explain', feel: S.deed === 'robbed' ? { sad: 0.6, anger: 0.4 } : S.deed === 'stole' ? {} : { joy: 0.5, surprise: 0.3 } };
 	// your name, good or bad, has got around: some say so
 	const K = Y.standing || {}, rk = ((n * 40503) >>> 0) % 100 / 100;

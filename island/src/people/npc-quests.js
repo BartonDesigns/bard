@@ -29,15 +29,19 @@ import { toLatLon } from '../bay/geo.js';
 import { zoneOf } from './flow.js';
 import { regionalNow } from '../region/here.js';
 import { createPlaces, restOn, standAt } from './bag-spots.js';
+import { createLeads, leadFrom, leadLine, leadNote, leadFact } from './npc-leads.js';
 import { citiesNear } from '../earth/atlas.js';
 
 const NOTICE = 7, OWNER_BACK = 45, VISIBLE = 95, REACH = 1.4, STEP_MAX = 45, MEMORY = 600;
 
-export function createNpcQuests({ scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null }) {
+export function createNpcQuests({ scene, camera, world, people, chatter, persona, errands = () => null, commons, money, isPhone = false, worldKey = () => 'here', placeName = () => '', places = null, hint = () => {}, store = null }) {
 	const FAR_EVERY = isPhone ? 40 : 25, SCENES = isPhone ? 1 : 2, BAG_EVERY = isPhone ? [150, 240] : [70, 140], FAVOUR_EVERY = isPhone ? [150, 260] : [80, 160];
 	const sources = createSources();
 	// the benches, shelters, park seats, cafe tables and doorsteps about (people/bag-spots.js)
 	const spots = places || createPlaces({ world });
+	// thefts out of your sight, kept for you to follow up (people/npc-leads.js)
+	const leads = createLeads({ store: store || { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } } });
+	const LEAD_CHANCE = 0.35;
 	const scenes = [], memory = new Map(), cache = new Map(), considered = new Map(), open = [], pending = [];
 	const taken = new Set(), hurtFns = [], downed = new WeakSet();
 	let clock = 0, farT = 8, lookT = 0, saveT = 15, whereT = 0, farN = 0, n = 0, bag = null;
@@ -196,6 +200,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 	function betray(R) {
 		const q = R.q;
 		R.settled = settle(q, 'betray', { ...ctx(R.name, q.region), actorId: R.id });
+		R.takenAt = { x: pos(R.p).x, z: pos(R.p).z };
 		remember(R.p, 'stole');
 		const owner = q.steps.findLast((s) => s.do === 'deliver')?.at, ob = owner?.who;
 		witnesses(pos(R.p), 'saw-theft', [R.p]);
@@ -234,6 +239,8 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 			sources.complete(q, R.id, R.outcome);
 		} else if (how === 'abandon') sources.complete(q, R.id, 'abandon');
 		else if (R.settled && !R.completed) sources.complete(q, R.id, 'betray');
+		// a theft that got away out of your sight: a lead, where it happened
+		if ((how === 'far' || how === 'gone') && R.phase !== 'handed' && R.settled?.followUp) leadOf(q, { ...R.settled, taker: R.id }, q.region, R.takenAt || pos(R.p));
 		R.completed = true;
 		if (R.phase !== 'handed') letGo(R.p);
 		for (const w of R.still) letGo(w);
@@ -345,7 +352,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (B.phase !== 'left') return;
 		const c = cam();
 		// you walked away: it ends the way it would have, among the people still there
-		if (flat(B.at, c) > VISIBLE) { const r = playFar(B.q, { dispoOf, ...ctx('', B.q.region) }); if (r.taker) remember(B.owner, r.outcome === 'betray' ? 'robbed' : 'got-back'); clearBag(); return; }
+		if (flat(B.at, c) > VISIBLE) { const r = playFar(B.q, { dispoOf, ...ctx('', B.q.region) }); if (r.taker) remember(B.owner, r.outcome === 'betray' ? 'robbed' : 'got-back'); if (Math.random() < LEAD_CHANCE * 2) leadOf(B.q, r, B.q.region, B.at); clearBag(); return; }
 		// (the console's forced bag takes anyone standing about, not only those walking by)
 		const can = force ? (p) => adult(p) && !p.engaged && !p.override && !p.held && p.route?.kind !== 'seat' && p.route?.kind !== 'follow' : free;
 		const reach = force ? 40 : B.spot?.kind === 'table' || B.spot?.kind === 'doorstep' ? NOTICE + 2 : NOTICE;
@@ -448,10 +455,92 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (considered.size > 60) considered.clear();
 	}
 
+	// ---------- leads: thefts out of your sight, to be followed up ----------
+	// (people talk about them, the guide's story notes them, a marker shows where; the thief
+	// may still be about with it, and found, it is a theft like any other: errands.js theft)
+	const hours = () => world()?.sky?.state?.hours ?? 12;
+	const groundY = (x, z) => { const W = world(), h = W?.island?.heightAt?.(x, z); const f = Number.isFinite(h) ? W?.player?.floorAt?.(x, z, h) : null; return Number.isFinite(f) ? f : Number.isFinite(h) ? h : cam().y - 1.7; };
+	const carried = [];
+	let cast = null, castT = 2;
+	function leadOf(q, r, region = q.region || here.region.id, at = null) {
+		if (r?.outcome !== 'betray' || !r.followUp) return null;
+		return leads.add(leadFrom(q, r, { region, regionName: regionNames.get(region) || commons.region(region).name || '', town: region === here.region.id ? here.town || '' : '', hours: hours(), at }));
+	}
+	// where it happened, once you are in its region: a bench or a doorstep a little way off, or
+	// a stretch of sidewalk
+	function leadSpot(L) {
+		const c = cam();
+		let s = null;
+		try { const all = spots.near(c.x, c.z, 300).filter((x) => { const d = flat(x, c); return d > 90 && d < 300; }); s = all.find((x) => x.kind === L.spot?.kind) || all[0] || null; } catch { /* nothing built here */ }
+		if (s) return s;
+		const a = Math.random() * 6.28, d = 120 + Math.random() * 100;
+		let x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d;
+		try { const sw = people.sidewalk?.(x, z); if (sw) { x = sw[0]; z = sw[1]; } } catch { /* no streets */ }
+		return { x, z };
+	}
+	function uncast() { if (!cast) return; dropProp(cast.prop); unkeep(cast.p); cast = null; }
+	function leadTick() {
+		const open = leads.open(here.region.id), c = cam();
+		for (const L of open) if (!L.at) leads.place(L.id, leadSpot(L));
+		const L = cast ? leads.get(cast.id) : open.filter((x) => x.at).sort((a, b) => flat(a.at, c) - flat(b.at, c))[0];
+		if (!L || L.state !== 'open') { uncast(); return; }
+		const E = errands();
+		if (cast) {
+			const p = cast.p;
+			if (!p.active || p.P?.ragdoll || flat(pos(p), c) > 130) { uncast(); return; }
+			if (flat(pos(p), c) < 10 && E?.theft && !E.busy?.()) confront(L);
+			return;
+		}
+		if (flat(L.at, c) > 90 || E?.busy?.() || (castT -= 1) > 0) return;
+		castT = 3;
+		if (Math.random() > 0.35) return;
+		// a walker about now has it: the thief, still in the neighbourhood
+		const p = people.pool.filter((q) => free(q) && q.role === 'walk' && flat(pos(q), c) > 15 && flat(pos(q), c) < 60).sort((a, b) => flat(pos(a), L.at) - flat(pos(b), L.at))[0];
+		if (!p) return;
+		cast = { id: L.id, p, prop: propFor(L.item.shape || 'bag') };
+		keep(p);
+		hint(`Someone over there is carrying a ${L.item.name} like ${L.owner.name}'s. It could be the one who took it.`, 4500);
+	}
+	// close enough: they see you coming and walk off quickly with it
+	function confront(L) {
+		const E = errands(), { p, prop } = cast, held = { p, prop };
+		unkeep(p);
+		const home = { x: L.at.x, y: groundY(L.at.x, L.at.z), z: L.at.z };
+		const ok = E.theft({ home, owner: L.owner.name, thief: p, item: { name: L.item.name, shape: L.item.shape }, speed: 2.4, lead: L.when,
+			onDrop: () => { dropProp(prop); held.prop = null; },
+			onEnd: (how) => { dropProp(prop); held.prop = null; endLead(L, how); } });
+		if (!ok) { keep(p); return; }
+		carried.push(held);
+		cast = null;
+	}
+	// the end of it: back with its owner (their money goes back to them), kept, or got away
+	function endLead(L, how = '') {
+		const back = /reach/.test(how), kept = /away/.test(how) && /bring/.test(how);
+		leads.close(L.id, back ? 'returned' : kept ? 'kept' : /escaped/.test(how) ? 'got-away' : 'cold');
+		if (back && L.loot) money.earn(L.owner.id, L.loot, 'recovered', 'player');
+	}
+	// what a passer-by in the lead's region says, now and then (only some have heard)
+	function leadFor(seed) {
+		const open = leads.open(here.region.id);
+		if (!open.length) return null;
+		const L = open[(seed >>> 0) % open.length];
+		return ((Math.imul(seed >>> 0, 2654435761) ^ (L.t | 0)) >>> 0) % 100 < 35 ? L : null;
+	}
+	function leadLineFor(seed) { const L = leadFor(seed); return L ? leadLine(L, seed) : null; }
+	// the marker: the thief if you have spotted them, or roughly where it happened
+	function leadMark() {
+		if (errands()?.busy?.()) return null;
+		const c = cam();
+		if (cast?.p.active) { const L = leads.get(cast.id), q = pos(cast.p); return L && { x: q.x, y: q.y, z: q.z, radius: 2, title: `The one who took ${L.owner.name}'s ${L.item.name}?`, detail: 'walk up to them' }; }
+		const L = leads.open(here.region.id).filter((x) => x.at).sort((a, b) => flat(a.at, c) - flat(b.at, c))[0];
+		return L ? { x: L.at.x, y: groundY(L.at.x, L.at.z), z: L.at.z, radius: 25, title: `Where ${L.owner.name}'s ${L.item.name} was taken`, detail: `${L.when}; the thief may still be about` } : null;
+	}
+
 	// ---------- far away ----------
 	function farEvent(region) {
 		const q = farQuest(region, farN++);
 		const r = playFar(q, { dispoOf: (seed, id) => dispoOf(seed, id, region), ...ctx('', region) });
+		if (r.outcome === 'betray' && Math.random() < LEAD_CHANCE) leadOf(q, r, region);
 		return r;
 	}
 	// other sources' quests out of your sight (a business's courier run across town)
@@ -496,10 +585,13 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		for (const R of scenes) sceneUpdate(R, dt);
 		for (let i = scenes.length - 1; i >= 0; i--) if (scenes[i].phase === 'over') scenes.splice(i, 1);
 		if (bag) { bag.t += dt; bagWalk(dt); }
+		if (cast) { if (cast.p.active) inHand(cast.prop, cast.p); }
+		for (let i = carried.length - 1; i >= 0; i--) { const H = carried[i]; if (H.prop && H.p.active) inHand(H.prop, H.p); else { dropProp(H.prop); carried.splice(i, 1); } }
 		if ((lookT -= dt) <= 0) {
 			lookT = 1;
 			if (hurtFns.length) watchHurt();
 			if (bag?.phase === 'left') bagLook();
+			leadTick();
 			for (let i = pending.length - 1; i >= 0; i--) if (clock >= pending[i].at) { fromHandoff(pending[i].E); pending.splice(i, 1); }
 			for (let i = open.length - 1; i >= 0; i--) { const F = open[i]; if (!F.taken && (clock > F.until || !F.giver.active || flat(F, cam()) > VISIBLE)) { letGo(F.giver); unkeep(F.giver); if (F.friend) { letGo(F.friend); unkeep(F.friend); } open.splice(i, 1); } }
 			if (Math.floor(clock) % 2 === 0) match();
@@ -524,6 +616,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 			scenes: scenes.map((R) => ({ quest: R.q.title, kind: R.q.kind, who: R.name, step: R.q.steps[R.i]?.do || '', outcome: R.outcome, phase: R.phase, t: r2(R.t) })),
 			bag: bag && { phase: bag.phase, owner: bag.q.giver.name, where: bag.spot?.kind || 'sidewalk', title: bag.q.title, t: Math.round(bag.t), at: [r2(bag.at.x), r2(bag.at.z)] },
 			open: open.map((F) => F.q.title), sources: sources.list().map((s) => s.id), far: farN,
+			leads: leads.open().map((L) => ({ note: leadNote(L), here: L.region === here.region.id, at: L.at && [r2(L.at.x), r2(L.at.z)], spotted: cast?.id === L.id })),
 			recent: commons.log(8).map((e) => `${e.name || 'someone'} (${e.actor}): ${e.line}${e.region ? ' in ' + e.region : ''}`),
 		};
 	}
@@ -533,6 +626,8 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (!p?.P?.dna) return [];
 		const out = [], m = memoryOf(p.P.dna.seed);
 		if (m && FACT[m]) out.push(FACT[m]);
+		const L = leadFor(p.P.dna.seed);
+		if (L) out.push(leadFact(L));
 		const talk = money.talk(idOf(p));
 		for (const t of [].concat(talk || []).slice(0, 2)) if (typeof t === 'string' && t) out.push(t);
 		return out;
@@ -542,12 +637,25 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 	function memoryOf(seed) { const M = memory.get(seed >>> 0); return M && clock - M.t < MEMORY ? M.kind : null; }
 	function dispose() {
 		for (const R of scenes) end(R, 'far');
-		scenes.length = 0; clearBag();
+		scenes.length = 0; clearBag(); uncast();
+		for (const H of carried) dropProp(H.prop);
+		carried.length = 0;
 		for (const F of open) { letGo(F.giver); unkeep(F.giver); letGo(F.friend); unkeep(F.friend); }
 		open.length = 0; commons.save();
 	}
 	return {
 		update, info, handoff, dispose, farTick, memoryOf, factsFor, moneyLine, regionNow, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
+		// leads: a line for chatter, the marker and the guide's story (open leads, everywhere)
+		leadLine: leadLineFor, mark: leadMark,
+		leads: () => leads.open().map((L) => ({ id: L.id, note: leadNote(L), here: L.region === here.region.id, region: L.regionName || L.region, when: L.when })),
+		// (the console and the tests: a theft just out of sight near you, left as a lead)
+		lead(kind = 'bag') {
+			const q = farQuest(here.region.id, farN++, kind === 'bag' ? 0.01 : 0.99), seed = residentSeed(here.region.id, farN * 13);
+			const r = { taker: `npc:${seed}`, ...settle(q, 'betray', { ...ctx('', here.region.id), actorId: `npc:${seed}` }) };
+			const L = leads.add(leadFrom(q, r, { region: here.region.id, regionName: here.region.name, town: here.town || '', hours: hours() }), { force: true });
+			if (L) { leads.place(L.id, leadSpot(L)); castT = 0; }
+			return L ? leadNote(L) : 'no lead';
+		},
 		// (a hospital listens here; hurt(p, why) tells of someone hurt some other way)
 		onHurt: (f) => { hurtFns.push(f); return () => { const i = hurtFns.indexOf(f); if (i >= 0) hurtFns.splice(i, 1); }; }, hurt,
 		// (for the console and the tests) a bag left now near you; mode 'return' or 'steal' makes the

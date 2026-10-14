@@ -786,7 +786,7 @@ export function createIslandWorld() {
 	const commons = HOOKS.commons = createCommons({ store: npcStore });
 	// (money through the bank's adapter: HOOKS.npcMoney.use(bank) attaches economy/bank.js)
 	const npcMoney = HOOKS.npcMoney = createMoney();
-	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '' });
+	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
 	commons.follow(combat.morality, npcQuests.regionNow);
 	guideApi.npcQuests = npcQuests;
 	// (a hospital hears of people knocked down here: HOOKS.npcHurt(fn); it bills through the bank)
@@ -2220,7 +2220,8 @@ if (typeof window !== 'undefined') {
 		// done; .bag('return'|'steal'|'auto') leaves a bag near you now; .favour() someone asks another;
 		// .tick(n) n far-away quests now; .run(s) the scenes on by s seconds; .money('npc:123'); .regions()
 		morality: Object.assign(() => ({ ...HOOKS.combat?.morality.info(), npc: HOOKS.npcQuests?.info() }), {
-			bag: (mode) => HOOKS.npcQuests?.bag(mode), favour: () => HOOKS.npcQuests?.favour(), tick: (n = 1) => HOOKS.npcQuests?.farTick(n), run: (s) => HOOKS.npcQuests?.fastForward(s),
+			bag: (mode) => HOOKS.npcQuests?.bag(mode), favour: (kind) => HOOKS.npcQuests?.favour(kind), tick: (n = 1) => HOOKS.npcQuests?.farTick(n), run: (s) => HOOKS.npcQuests?.fastForward(s),
+			lead: (kind) => HOOKS.npcQuests?.lead(kind), leads: () => HOOKS.npcQuests?.leads(), spots: () => HOOKS.npcQuests?.spots(),
 			money: (id) => ({ balance: HOOKS.npcMoney?.balance(id), wealth: HOOKS.npcMoney?.wealth(id), bank: HOOKS.npcMoney?.attached() }), regions: () => Object.fromEntries((HOOKS.commons?.regions() || []).map((r) => [r, HOOKS.commons.region(r)])),
 			log: (n = 20) => HOOKS.commons?.log(n), where: () => HOOKS.npcQuests?.where(),
 		}),

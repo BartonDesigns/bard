@@ -392,15 +392,16 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 	}
 	// someone else's theft in front of you (people/npc-quests.js): the thief has it already and
 	// walks off quickly. victim: the person robbed, or none and home: { x, y, z } (a business)
-	// with owner its name; item: { name, the, shape }; onDrop, onEnd: told when it changes hands
-	function theft({ victim = null, home = null, owner = '', thief, item = null, speed = 2.6, onDrop = null, onEnd = null } = {}) {
+	// with owner its name; item: { name, the, shape }; onDrop, onEnd: told when it changes hands.
+	// lead: when it was taken, for a thief tracked down later (npc-leads.js): no outcry then
+	function theft({ victim = null, home = null, owner = '', thief, item = null, speed = 2.6, onDrop = null, onEnd = null, lead = null } = {}) {
 		if (E || !thief || (!victim && !home) || driving() || world()?.player?.state?.flying) return false;
 		const it = { name: 'bag', the: 'the bag', shape: 'bag', ...(item || {}) };
 		it.the = item?.the || `the ${it.name}`;
 		const who = victim ? persona(victim).first : owner || 'the owner', at = victim ? pos(victim) : home;
 		E = { kind: 'snatch', stage: 'thief', giver: victim, home: victim ? null : { x: home.x, y: home.y ?? feet().y, z: home.z }, giverName: who, friendP: thief, item: it, title: `Get ${who}'s ${it.name} back`, t: 0, from: { x: at.x, z: at.z }, onDrop, onEnd };
-		if (victim) {
-			hold(victim, 'stand');
+		if (victim) hold(victim, 'stand');
+		if (victim && !lead) {
 			chatter.say(victim, { text: lineFor('snatched', { n: n++, item: it }), gesture: 'point', feel: { surprise: 1, anger: 0.6 } }, null);
 			victim.M.S.feel.surprise = 1;
 		}
@@ -408,7 +409,7 @@ export function createErrands({ scene, camera, world, people, chatter, persona, 
 		const key = world()?.body?.key, ev = { id: 'theft:' + Date.now(), at: Date.now(), bodyKey: key, actorId: 'npc', actorName: 'a thief', kind: 'robbery', line: `took ${who}'s ${it.name}` };
 		if (key) for (const q of people.pool) if (q.active && q !== thief && flat(pos(q), at) < 40) rememberIncident(q, ev);
 		snatchCool = Math.max(snatchCool, isPhone ? 200 : 150);
-		hint(`Someone just walked off with ${who}'s ${it.name}. Catch them and take it, or let them go.`, 4500);
+		hint(lead ? `That looks like the one who took ${who}'s ${it.name} ${lead}. Catch them and take it, or let them go.` : `Someone just walked off with ${who}'s ${it.name}. Catch them and take it, or let them go.`, 4500);
 		return E.title;
 	}
 	// asked in a conversation whether they need anything: a favour of their own, or nothing
