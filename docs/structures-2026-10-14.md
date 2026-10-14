@@ -69,6 +69,11 @@ Kept in `localStorage` (`l99.structures.v1`, try/catch, up to 320 buildings): id
 
 Glass: one draw call. Shells: one per damaged building near (at most 14). Debris: three draws (chunks, dust, shards). Crews: a few meshes per site. Alleys: three draws. Grid settling runs on each city rebuild (every 300 m): about 0.8 s on SwiftShader for 7000 lots, much less on a GPU machine's CPU.
 
+## Verification
+
+- `node --test island/tools/*.test.mjs`: 426 pass of 430, the 4 failures already there before this work (RGB asset manifest, nearby tiles teardown, Svalbard flora, regional vegetation refresh). New: `structures-overlap.test.mjs` (6), `structures-runtime.test.mjs` (4).
+- Headless Chromium with SwiftShader, three runs, no page, console or shader errors. SF financial district (grid): 808 overlaps before, 5 after on the first rebuild (before the change that drops hidden inner lots); 353 grid alleys, 237 dumpsters, 194 back doors; 7000 panes. A pane cracked, then shattered with its neighbours; a building demolished (collapse 0.93, shell 3750 vertices, 96 chunks with Rapier live, 300 shards); crews on site after advancing the clock (a glazing job done in 1.1 h, a 2.5 h and a 5 h rebuild under way, a crane on the 45 m building); `cataclysm(true)` held progress at 0.513 and 0.26 over an advanced hour. A window vault from inside an office crashed through its glass (`ahead()` found it at 0.75 m, sill 0.9 m). At about one frame a second a 0.8 s vault spans tens of seconds, so the landing was not captured.
+
 ## Left for later and limits
 
 - commercial.js (the economy agent's file) builds shops whole near you; a wrecked one is hidden by finding its root, but its walls still push. After merging, add `if (grp.wrecked)` to its drop condition as houses.js has it.
