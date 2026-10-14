@@ -1,9 +1,80 @@
 # Claude conversation handoff: Level 99 Bard / "Crysis" engine
 
-Paste this file, or point a new chat at it, to continue the work from the long October 2026 build conversation. It was written on 12 October 2026 from GitHub `main` at `edf1b23` and updated the same evening at `c18412c`.
+Paste this file, or point a new chat at it, to continue the work from the long October 2026 build conversation. It was written on 12 October 2026 from GitHub `main` at `edf1b23` updated the same evening at `c18412c`, and again on 14 October at `1995d17` (see section 0).
 
 - **Deeper detail:** `HANDOFF.md` has per-release notes, newest first, and `docs/*.md` has per-pass evidence.
 - **File-by-file map:** `island/README.md`.
+
+## 0. Latest state (14 October 2026), read this first
+
+### Live on `main` (`1995d17`) since 12 October
+- **Passing chatter and city surfaces** (`docs/chatter-and-city-surfaces-2026-10-12.md`):
+  - people you pass notice you and speak in their own local Kokoro voices, positioned where they stand;
+  - flickering city surfaces fixed: tower floors, facades, glazed doors, neighbouring roofs, sunrooms and cliff-settlement rooms;
+  - new flicker census tool, `island/tools/zfight-browser.cjs`.
+- **Gameplay loops** (`docs/gameplay-loops-2026-10-13.md`):
+  - favours (lost things, carrying, cars that won't start), bag snatches with a chase, and rush fares while you drive;
+  - **a Use control for held items** (medkits heal, repair rolls fix cars);
+  - three daily goals, ranks and a Story tab, and passers-by who know your name;
+  - **Moon rovers you actually ride** instead of teleporting.
+- **Roads and realism** (`docs/roads-and-realism-2026-10-13.md`):
+  - smooth graded junctions;
+  - overpasses that ramp down to the ground, and footbridges;
+  - trees kept off roads, and pools only on sensible yards.
+- **Streets that read as real** (PR #23, `docs/streets-alive-2026-10-13.md`):
+  - crosswalks, walk signals, and people crossing on the walk;
+  - buses at their stops, and dogs on leads;
+  - graded globe highways, and buildings set back from the street.
+- **People on the compass** (PR #24, `docs/npc-morality-2026-10-13.md`):
+  - NPCs have their own four-axis dispositions, shaped by region, town and their own deeds;
+  - quests people do for each other with or without you, including thefts in view you can answer;
+  - regions grouped like area codes.
+  - Two hooks are left for other work: `HOOKS.npcMoney.use(bank)` for the economy's bank, and `HOOKS.npcHurt` for hospitals.
+- **Also:** house eras and household types, offices by company, carried bags, and the lost-dog favour.
+
+### Built on a branch, not merged: `codex/persistent-reputation` (`d4024c6`, from GPT)
+- **Reputation never fades.** Each player has a personal "soul" record in a new Durable Object (`SOULS`), keyed by a private recovery key. Deeds are logged permanently and never double-counted, there's an offline outbox, and rooms show each other's standing.
+- **The only reset** is **the Quiet Well**: an 8-second ritual at the end of a 400 m tunnel under Gargantua's island (seed 2281969). The server checks you are really there. Cleansing clears standing but keeps your items, quests and world changes.
+- **Files:** `island/src/reputation/soul.js`, `sanctuary.js`, `planet/soul-well.js`, `soul-cave-plan.js`, `server/multiplayer/src/soul.js`, plus changes to `combat/morality.js`, `net/*`, `guide.js` and `main.js`. Details are in `docs/persistent-reputation.md`.
+- **To go live:**
+  1. Merge the PR.
+  2. The owner redeploys the rooms Worker; the deploy adds the `Soul` migration.
+  3. Check that `/status` lists `persistent-reputation-v1`.
+  Until then the client keeps standing locally.
+
+### In flight in another session (4 agents, uncommitted parts still in their worktrees)
+None of this is on GitHub yet; the stage lists come from the owner's status note. **Don't start duplicate agents on these areas.** They will merge in this order:
+1. **Economy (merges first; structures builds on it).**
+   - **Done:** businesses, signs, business requests and payroll (written and staged).
+   - **Not yet committed:** the bank, and the core of the household ledger.
+   - **Still to do:** the ledger's Cloudflare Worker.
+   - **At merge:** connect `HOOKS.npcMoney.use(bank)` from PR #24, and feed the shared quest descriptor with business requests.
+2. **Security.**
+   - **Committed:**
+     - militias replaced by police and soldiers as their own sides, plus gang and militia clothing;
+     - military bases across Earth, with garrisons, armouries and parked vehicles;
+     - drivable tanks, armoured trucks and jeeps, and flyable jets and helicopters.
+   - **Written but uncommitted:** melee, and patrol dispatch.
+   - **Watch for conflicts:** `combat/factions.js` and `combat/morality.js`, which the reputation branch also touches.
+3. **Commander.**
+   - **Committed:**
+     - interiors for hospitals, police and fire stations, armouries, war rooms, depots and barracks;
+     - hospitals treat the hurt, and caches trade real inventory items;
+     - fire and police stations with crews, and ambulances and fire engines on the streets.
+   - **Still to do:** wiring it all together in its main runtime module.
+   - **At merge:** connect `HOOKS.npcHurt` from PR #24 to the hospitals.
+4. **Structures.**
+   - **Committed:** the overlap fix, so buildings clear each other, the streets and landmarks.
+   - **Written but uncommitted:** glass, vaulting, damage, debris and rebuild crews.
+   - **Note:** builds on the economy, for example paying rebuild crews.
+
+**The owner's merge plan:** as each agent reports, merge it, wire it to the others, run the tests and the smoke test, send before-and-after images, then open and merge the PR.
+- **Expect conflicts in:** `main.js`, `combat/*`, `guide.js` and `net/*`, shared with the reputation branch.
+- **Worker deploys** for the ledger and for souls can go out together in one owner deploy.
+
+### Closed since the earlier sections were written
+- The **Use** action for items and **Moon rover rides** are done.
+- **City-surface flicker** is largely fixed.
 
 ## 1. The project in one paragraph
 
@@ -162,7 +233,6 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
 7. **The Moon:**
    - suit parts are rigid shells, so the torso can clip the arms at extremes;
    - the boots are boxy;
-   - rover rides are instant teleports;
    - the far maglev station is modest;
    - a "Talk" prompt once appeared mid-ride;
    - scheduled walking routes still need a live visual pass.
@@ -181,7 +251,7 @@ These are honest gaps, as recorded in `HANDOFF.md` and `docs/`.
     - **Old gaps to re-check:** the host's plans reaching guests, and Follow stopping early.
 11. **Gear:**
     - a player market screen (`createPlayerOffer` exists, but there is no UI);
-    - a general **Use** action for items (experience from use).
+    - (the **Use** action for items is now done; experience from use may still be missing.)
 12. **Combat polish:**
     - server-authoritative missions;
     - shared loot (unclaimed loot is local to the visit);
