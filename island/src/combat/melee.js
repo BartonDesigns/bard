@@ -515,7 +515,7 @@ export function createMelee(ctx) {
 	// a bat, a pipe or a bottle in a brawler's right hand
 	const handMeshes = new Map();
 	const wood = new THREE.MeshStandardMaterial({ color: 0x9a6a3c, roughness: 0.55 }), glass = new THREE.MeshStandardMaterial({ color: 0x2f6b3a, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.85 });
-	const steel = new THREE.MeshStandardMaterial({ color: 0x6d7378, roughness: 0.35, metalness: 0.8 });
+	const steel = new THREE.MeshStandardMaterial({ color: 0x8a9096, roughness: 0.4, metalness: 0.35 });
 	const batGeo = new THREE.CylinderGeometry(0.03, 0.016, 0.84, 10).translate(0, 0.42, 0), bottleGeo = new THREE.LatheGeometry([[0, 0], [0.034, 0], [0.036, 0.16], [0.016, 0.22], [0.012, 0.3], [0, 0.3]].map(([x, y]) => new THREE.Vector2(x, y)), 12);
 	const pipeGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.78, 8).translate(0, 0.39, 0);
 	const itemMesh = (kind) => new THREE.Mesh(kind === 'bat' ? batGeo : kind === 'pipe' ? pipeGeo : bottleGeo, kind === 'bat' ? wood : kind === 'pipe' ? steel : glass);
@@ -705,6 +705,7 @@ export function createMelee(ctx) {
 	const info = () => ({
 		item: me.item, holding: !!me.held, last: me.last, move: me.move, phase: me.move ? phaseAt(me.m, me.mt) : null, block: me.block, dodging: me.dodgeT >= 0, counter: +me.counterT.toFixed(2), takedown: me.take ? +me.take.t.toFixed(1) : !!me.takeT,
 		offence: { recent: now - me.offence.t < 150, hurt: me.offence.hurt },
+		active: ctx.active(), fists: view.root.visible, guardT: +me.guardT.toFixed(1),
 		brawls: brawls.map((q) => ({ stage: q.stage, a: q.A.kind, b: q.B.kind, hp: [Math.round(q.A.hp ?? 100), Math.round(q.B.hp ?? 100)] })), drops: drops.length, nextIn: Math.round(startT), ...foes.info(), sound: sound.info(),
 	});
 	// for the console and tests: a quarrel now between the two nearest grown-ups
