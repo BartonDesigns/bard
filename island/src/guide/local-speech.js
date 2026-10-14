@@ -32,8 +32,14 @@ export function createLocalSpeech({ onStatus = () => {}, fallback = () => {} } =
  const SLOW_KEY = 'crysis-local-voice-slow';
  function remember(slow) { try { if (slow) localStorage.setItem(SLOW_KEY, '1'); else localStorage.removeItem(SLOW_KEY); } catch {} }
  try { if (COARSE && localStorage.getItem(SLOW_KEY)) unavailable = true; } catch {}
- // choosing the local voices again: one more try
- function retry() { remember(false); unavailable = false; slowRuns = 0; }
+ // A phone keeps to the device voice unless asked otherwise: the local voices are a 100 MB
+ // model in WebAssembly, and on top of the world that is more memory than a phone browser
+ // allows; it closes the page (the white flash and back to the faceplate on meeting anyone)
+ const PHONE_KEY = 'crysis-local-voice-phone';
+ const PHONE = COARSE || /iPhone|iPad|iPod|Android|Mobile/i.test(globalThis.navigator?.userAgent || '') || (globalThis.navigator?.deviceMemory || 8) < 6;
+ try { if (PHONE && localStorage.getItem(PHONE_KEY) !== '1') unavailable = true; } catch { if (PHONE) unavailable = true; }
+ // choosing the local voices again: one more try (on a phone, the choice is kept)
+ function retry() { remember(false); unavailable = false; slowRuns = 0; if (PHONE) try { localStorage.setItem(PHONE_KEY, '1'); } catch {} }
  const keyOf = (who, chunk) => localVoice(who) + '|' + speedOf(who).toFixed(3) + '|' + chunk;
  function keep(key, samples, sampleRate) {
   made.delete(key); made.set(key, { samples, sampleRate });
