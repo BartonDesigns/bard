@@ -15,7 +15,7 @@ import * as THREE from 'three';
 
 export const G = 9.81;
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
-const _f = new THREE.Vector3(), _l = new THREE.Vector3(), _q = new THREE.Quaternion();
+const tF = new THREE.Vector3(), tL = new THREE.Vector3(), tQ = new THREE.Quaternion();
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const toward = (v, t, r) => v + clamp(t - v, -r, r);
 
@@ -31,7 +31,7 @@ export function jetStep(S, I, dt, groundAt) {
 	S.throttle = clamp(S.throttle + (I.thr || 0) * dt * 0.6, 0, 1);
 	S.ab = !!I.ab && S.throttle > 0.9;
 	const pitchIn = clamp(I.pitch || 0, -1, 1), rollIn = clamp(I.roll || 0, -1, 1), yawIn = clamp(I.yaw || 0, -1, 1), brake = I.brake ? 1 : 0;
-	const fwd = _f.copy(Z).applyQuaternion(S.q), left = _l.copy(X).applyQuaternion(S.q);
+	const fwd = tF.copy(Z).applyQuaternion(S.q), left = tL.copy(X).applyQuaternion(S.q);
 	const g0 = groundAt(S.pos.x, S.pos.z, S.pos.y + 2);
 	S.alt = S.pos.y - g0;
 	// thrust against drag (the flaps and the gear add a little), rolling friction and the brakes on the ground
@@ -46,26 +46,26 @@ export function jetStep(S, I, dt, groundAt) {
 	if (S.ground) {
 		// on the wheels: steer with the nose wheel, rotate past rotation speed
 		const steer = (rollIn + yawIn) * clamp(S.spd / 8, 0, 1) * 0.45 * (1 - lift * 0.7);
-		S.q.premultiply(_q.setFromAxisAngle(Y, -steer * dt));
+		S.q.premultiply(tQ.setFromAxisAngle(Y, -steer * dt));
 		const pitch = Math.asin(clamp(fwd.y, -1, 1)), wantPitch = pitchIn > 0 && S.spd > J.vRotate ? 0.16 : 0;
-		S.q.multiply(_q.setFromAxisAngle(X, -(wantPitch - pitch) * Math.min(1, dt * 2)));
+		S.q.multiply(tQ.setFromAxisAngle(X, -(wantPitch - pitch) * Math.min(1, dt * 2)));
 		// (the wings level on the wheels)
 		const bank = Math.asin(clamp(left.y, -1, 1));
-		S.q.multiply(_q.setFromAxisAngle(Z, -bank * Math.min(1, dt * 4)));
+		S.q.multiply(tQ.setFromAxisAngle(Z, -bank * Math.min(1, dt * 4)));
 		fwd.copy(Z).applyQuaternion(S.q);
 		S.vel.set(fwd.x, 0, fwd.z).normalize().multiplyScalar(S.spd);
 		S.pos.addScaledVector(S.vel, dt); S.pos.y = groundAt(S.pos.x, S.pos.z, S.pos.y + 2);
 		S.sink = 0;
 		if (lift >= 1 && fwd.y > 0.1) { S.ground = false; S.pos.y += 0.3; ev = 'takeoff'; }
 	} else {
-		S.q.multiply(_q.setFromAxisAngle(X, -pitchIn * J.pitchRate * auth * dt));
-		S.q.multiply(_q.setFromAxisAngle(Z, rollIn * J.rollRate * auth * dt));
-		S.q.multiply(_q.setFromAxisAngle(Y, -yawIn * J.yawRate * auth * dt));
+		S.q.multiply(tQ.setFromAxisAngle(X, -pitchIn * J.pitchRate * auth * dt));
+		S.q.multiply(tQ.setFromAxisAngle(Z, rollIn * J.rollRate * auth * dt));
+		S.q.multiply(tQ.setFromAxisAngle(Y, -yawIn * J.yawRate * auth * dt));
 		// banked, it turns
 		const bank = Math.asin(clamp(left.y, -0.99, 0.99));
-		S.q.premultiply(_q.setFromAxisAngle(Y, -G * Math.tan(clamp(bank, -1.3, 1.3)) / Math.max(45, S.spd) * lift * dt));
+		S.q.premultiply(tQ.setFromAxisAngle(Y, -G * Math.tan(clamp(bank, -1.3, 1.3)) / Math.max(45, S.spd) * lift * dt));
 		// too slow: the nose drops and it sinks
-		if (lift < 1) S.q.multiply(_q.setFromAxisAngle(X, (1 - lift) * 0.5 * dt));
+		if (lift < 1) S.q.multiply(tQ.setFromAxisAngle(X, (1 - lift) * 0.5 * dt));
 		fwd.copy(Z).applyQuaternion(S.q);
 		// (the sink builds and dies away rather than jumping)
 		S.sink = toward(S.sink, (1 - lift) * 22, 30 * dt);

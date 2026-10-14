@@ -64,7 +64,7 @@ function block(B, b, col = CONC) {
 }
 
 // ---------- the clutter ----------
-const _v = new THREE.Vector3();
+const tV = new THREE.Vector3();
 // along a line from (x, z) at yaw (0 runs along +x): the point t metres on, o metres to the side
 const along = (x, z, yaw, t, o = 0) => [x + Math.cos(yaw) * t + Math.sin(yaw) * o, z - Math.sin(yaw) * t + Math.cos(yaw) * o];
 // jersey barriers: n concrete sections end to end
@@ -137,7 +137,7 @@ function lattice(B, x, z, h, glow) {
 	for (let y = 1.5; y < h; y += 1.8) for (let i = 0; i < 3; i++) { const a = i * 2.094 + 1.047; B.cyl('dark', 0.025, 0.025, r * 1.75, x + Math.cos(a) * r * 0.5, y, z + Math.sin(a) * r * 0.5, 3, STEEL, H, 0, a + H); }
 	for (let i = 0; i < 3; i++) {
 		const a = i * 2.094 + 0.3, gx = x + Math.cos(a) * h * 0.6, gz = z + Math.sin(a) * h * 0.6, mx = (x + gx) / 2, mz = (z + gz) / 2, len = Math.hypot(h * 0.6, h * 0.8);
-		const g = new THREE.CylinderGeometry(0.012, 0.012, len, 3); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), _v.set(gx - x, -h * 0.8, gz - z).normalize()));
+		const g = new THREE.CylinderGeometry(0.012, 0.012, len, 3); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), tV.set(gx - x, -h * 0.8, gz - z).normalize()));
 		B.add('dark', g, mx, h * 0.4 + 0.2, mz, 0, '#3a3c3e');
 	}
 	B.add('paint', new THREE.SphereGeometry(0.9, 12, 6, 0, Math.PI * 2, 0, H * 0.7), x + 0.6, h * 0.7, z, -H, '#e2e2de', -1.2);
@@ -201,7 +201,7 @@ function glows(B) {
 		beam(x, y, z, tx, tz, r, c) {
 			const len = Math.hypot(tx - x, y, tz - z), g = new THREE.CylinderGeometry(0.25, r * 0.55, len, 14, 1, true);
 			g.translate(0, -len / 2, 0);
-			g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), _v.set(tx - x, -y, tz - z).normalize()));
+			g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), tV.set(tx - x, -y, tz - z).normalize()));
 			B.add('glow', g, x, y - 0.3, z, 0, c, 0, 0, [1, 0, 0]);
 		},
 	};

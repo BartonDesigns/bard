@@ -42,15 +42,15 @@ export const M = Object.freeze({ camo: 0, paint: 1, dark: 2, rubber: 3, glass: 4
 const WHITE = '#ffffff', DARK = '#3b3e41', GUN = '#2c2e30', TYRE = '#1c1d1e', STEEL = '#73777b', LIGHT = '#fff1d2', RED = '#ff3020', GREEN = '#30ff60';
 
 // ---------- geometry ----------
-const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
-const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _n = new THREE.Vector3();
+const tM4 = new THREE.Matrix4(), tQ = new THREE.Quaternion(), tE = new THREE.Euler(), tS = new THREE.Vector3(1, 1, 1), tP = new THREE.Vector3();
+const tA = new THREE.Vector3(), tB = new THREE.Vector3(), tC = new THREE.Vector3(), tN = new THREE.Vector3();
 const geom = (pos, uv) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); if (uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals(); return g; };
 // a triangle facing out (away from `out`, a point inside, or along `dir`)
 function tri(pos, a, b, c, out, dir) {
-	_a.fromArray(a); _b.fromArray(b); _c.fromArray(c);
-	_n.subVectors(_b, _a).cross(_c.clone().sub(_a));
-	const want = dir ? _p.fromArray(dir) : _p.set((a[0] + b[0] + c[0]) / 3 - out[0], (a[1] + b[1] + c[1]) / 3 - out[1], (a[2] + b[2] + c[2]) / 3 - out[2]);
-	if (_n.dot(want) < 0) pos.push(...a, ...c, ...b); else pos.push(...a, ...b, ...c);
+	tA.fromArray(a); tB.fromArray(b); tC.fromArray(c);
+	tN.subVectors(tB, tA).cross(tC.clone().sub(tA));
+	const want = dir ? tP.fromArray(dir) : tP.set((a[0] + b[0] + c[0]) / 3 - out[0], (a[1] + b[1] + c[1]) / 3 - out[1], (a[2] + b[2] + c[2]) / 3 - out[2]);
+	if (tN.dot(want) < 0) pos.push(...a, ...c, ...b); else pos.push(...a, ...b, ...c);
 }
 // a slab between two outlines: bot and top are [x, z] (any simple polygon, the same count),
 // at heights yb and yt; flat faced (armour plates, turrets, hulls seen from above)
@@ -86,10 +86,10 @@ export function loft(rings, { flat = false, caps = true, open = false } = {}) {
 		for (let k = 0; k < m - 1; k++) for (let i = 0; i < (open ? n - 1 : n); i++) {
 			const j = (i + 1) % n, a = k * n + i, b = k * n + j, c = (k + 1) * n + j, d = (k + 1) * n + i;
 			if (flip === null) {
-				_a.fromArray(P, a * 3); _b.fromArray(P, b * 3); _c.fromArray(P, c * 3);
-				_n.subVectors(_b, _a).cross(_c.clone().sub(_a));
+				tA.fromArray(P, a * 3); tB.fromArray(P, b * 3); tC.fromArray(P, c * 3);
+				tN.subVectors(tB, tA).cross(tC.clone().sub(tA));
 				const mid = [(P[a * 3] + P[c * 3]) / 2, (P[a * 3 + 1] + P[c * 3 + 1]) / 2, (P[a * 3 + 2] + P[c * 3 + 2]) / 2], cc = cs[k];
-				flip = _n.dot(_p.set(mid[0] - cc[0], mid[1] - cc[1], mid[2] - cc[2])) < 0;
+				flip = tN.dot(tP.set(mid[0] - cc[0], mid[1] - cc[1], mid[2] - cc[2])) < 0;
 			}
 			if (flip) idx.push(a, c, b, a, d, c); else idx.push(a, b, c, a, c, d);
 		}
@@ -146,7 +146,7 @@ function vb(lo) {
 		if (!geo.attributes.normal) geo.computeVertexNormals();
 		const n = geo.attributes.position.count;
 		if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
-		if (x || y || z || yaw || pitch || roll) geo.applyMatrix4(_m4.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(pitch, yaw, roll, 'YXZ')), _s));
+		if (x || y || z || yaw || pitch || roll) geo.applyMatrix4(tM4.compose(tP.set(x, y, z), tQ.setFromEuler(tE.set(pitch, yaw, roll, 'YXZ')), tS));
 		if (off) geo.translate(off[0], off[1], off[2]);
 		const cs = new Float32Array(n * 3), ms = new Float32Array(n), cc = new THREE.Color(col);
 		for (let i = 0; i < n; i++) { cs[i * 3] = cc.r; cs[i * 3 + 1] = cc.g; cs[i * 3 + 2] = cc.b; ms[i] = mtl; }
@@ -171,7 +171,7 @@ function vb(lo) {
 		cx: (mtl, col, r, h, x, y, z, seg = 12) => add(new THREE.CylinderGeometry(r, r, h, B.seg(seg)).rotateZ(H), mtl, col, x, y, z),
 		lathe: (mtl, col, pts, seg, x, y, z, pitch = 0, yaw = 0, roll = 0) => add(new THREE.LatheGeometry(pts.map(([a, b]) => new THREE.Vector2(a, b)), B.seg(seg)), mtl, col, x, y, z, yaw, pitch, roll),
 		// a tube through points (rails, bull bars, frames)
-		tube: (mtl, col, pts, r, seg = 6) => { for (let i = 0; i < pts.length - 1; i++) { const a = new THREE.Vector3(...pts[i]), b = new THREE.Vector3(...pts[i + 1]), d = b.clone().sub(a), g = new THREE.CylinderGeometry(r, r, d.length() + r * 0.6, B.seg(seg)); g.applyQuaternion(_q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2); add(g, mtl, col); } },
+		tube: (mtl, col, pts, r, seg = 6) => { for (let i = 0; i < pts.length - 1; i++) { const a = new THREE.Vector3(...pts[i]), b = new THREE.Vector3(...pts[i + 1]), d = b.clone().sub(a), g = new THREE.CylinderGeometry(r, r, d.length() + r * 0.6, B.seg(seg)); g.applyQuaternion(tQ.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2); add(g, mtl, col); } },
 		// all parts merged, each moved to its pivot
 		done(pivots = {}) {
 			const out = {};
@@ -228,9 +228,9 @@ function trackPath() {
 }
 // the belt as a ribbon w wide at x, its uv in metres along (u) and across (v)
 function quadUV(pos, uv, A, B2, C, D, ua, ub, uc, ud, dir) {
-	_a.fromArray(A); _b.fromArray(B2); _c.fromArray(C);
-	_n.subVectors(_b, _a).cross(_c.clone().sub(_a));
-	if (_n.dot(_p.fromArray(dir)) < 0) { pos.push(...A, ...C, ...B2, ...A, ...D, ...C); uv.push(...ua, ...uc, ...ub, ...ua, ...ud, ...uc); }
+	tA.fromArray(A); tB.fromArray(B2); tC.fromArray(C);
+	tN.subVectors(tB, tA).cross(tC.clone().sub(tA));
+	if (tN.dot(tP.fromArray(dir)) < 0) { pos.push(...A, ...C, ...B2, ...A, ...D, ...C); uv.push(...ua, ...uc, ...ub, ...ua, ...ud, ...uc); }
 	else { pos.push(...A, ...B2, ...C, ...A, ...C, ...D); uv.push(...ua, ...ub, ...uc, ...ua, ...uc, ...ud); }
 }
 function trackBelt(B, x, w) {
@@ -737,10 +737,10 @@ const RUD_Q = { L: new THREE.Quaternion().setFromRotationMatrix(rudderBasis(1)),
 // ---------- the vehicle you drive, or a convoy's: a little hierarchy ----------
 // root (a LOD: the near hierarchy, the coarse one past LOD_FAR) > turret > gun, tracks; rotor,
 // tail, its blur discs; the jet's surfaces, gear and doors, nozzle flames; wheels (instanced)
-const _qs = new THREE.Quaternion(), _mx = new THREE.Matrix4(), _qx = new THREE.Quaternion(), _px = new THREE.Vector3(), _sx = new THREE.Vector3(1, 1, 1), _ax = new THREE.Vector3();
+const tQS = new THREE.Quaternion(), tMX = new THREE.Matrix4(), tQX = new THREE.Quaternion(), tPX = new THREE.Vector3(), tSX = new THREE.Vector3(1, 1, 1), tAX = new THREE.Vector3();
 function one(geo, material, tint) {
 	const m = new THREE.InstancedMesh(geo, material, 1);
-	m.setMatrixAt(0, _mx.identity());
+	m.setMatrixAt(0, tMX.identity());
 	m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array([tint.r, tint.g, tint.b]), 3);
 	m.castShadow = true; m.receiveShadow = true;
 	m.computeBoundingSphere();
@@ -838,9 +838,9 @@ export function vehicleMesh(kind, kit, colour = SCHEMES.woodland, { phone = fals
 		const placeWheels = (steer = 0) => {
 			G.wheels.forEach(([x, z], i) => {
 				// (the left ones turned round, so they spin the other way about their own axis)
-				_qx.setFromAxisAngle(_ax.set(0, 1, 0), (z === front ? steer : 0) + (x < 0 ? PI : 0)).multiply(_qs.setFromAxisAngle(_ax.set(1, 0, 0), x < 0 ? -spinA : spinA));
-				_mx.compose(_px.set(x, DIMS[kind].wr, z), _qx, _sx);
-				wh.setMatrixAt(i, _mx); wh.setColorAt(i, tint);
+				tQX.setFromAxisAngle(tAX.set(0, 1, 0), (z === front ? steer : 0) + (x < 0 ? PI : 0)).multiply(tQS.setFromAxisAngle(tAX.set(1, 0, 0), x < 0 ? -spinA : spinA));
+				tMX.compose(tPX.set(x, DIMS[kind].wr, z), tQX, tSX);
+				wh.setMatrixAt(i, tMX); wh.setColorAt(i, tint);
 			});
 			wh.instanceMatrix.needsUpdate = true; if (wh.instanceColor) wh.instanceColor.needsUpdate = true;
 		};

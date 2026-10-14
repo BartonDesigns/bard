@@ -229,13 +229,13 @@ function asphalt() {
 					// the runway, the hold bars (two solid, two dashed)
 					pc = vec3(0.86, 0.68, 0.16);
 					bool longU = L >= H;
-					float cl = longU ? av : au, half = longU ? H * 0.5 : L * 0.5;
-					paint = max(step(cl, 0.2), step(half - 0.6, cl) * step(cl, half - 0.3));
+					float cl = longU ? av : au, hw = longU ? H * 0.5 : L * 0.5;
+					paint = max(step(cl, 0.2), step(hw - 0.6, cl) * step(cl, hw - 0.3));
 					if (!longU) {
 						float hv = v - (H * 0.5 - 10.0);
 						float solid = step(abs(hv), 0.15) + step(abs(hv - 0.5), 0.15);
 						float dash = (step(abs(hv - 1.3), 0.15) + step(abs(hv - 1.8), 0.15)) * step(0.5, fract(u / 1.8));
-						paint = max(paint, min(1.0, solid + dash) * step(au, half - 0.6));
+						paint = max(paint, min(1.0, solid + dash) * step(au, hw - 0.6));
 					}
 				} else if (kind > 0.05) {
 					// an apron or a helipad: stand lines, a lead-in line to each stand ending at its stop
@@ -304,7 +304,7 @@ function glowMat(night) {
 	return new THREE.ShaderMaterial({
 		uniforms: { uNight: night },
 		vertexShader: 'attribute vec3 color; attribute vec3 strip; varying vec3 vC; varying vec2 vU; varying float vM; void main(){ vC = color; vU = uv; vM = strip.x; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-		fragmentShader: 'uniform float uNight; varying vec3 vC; varying vec2 vU; varying float vM; void main(){ float a; if (vM < 0.5) { float r = length(vU - 0.5) * 2.0; a = pow(max(0.0, 1.0 - r), 2.0) * 0.5; } else { float e = sin(vU.x * 6.2832); a = pow(vU.y, 2.2) * 0.06 * (0.55 + 0.45 * e * e); } gl_FragColor = vec4(vC * a * uNight, 1.0); }',
+		fragmentShader: 'uniform float uNight; varying vec3 vC; varying vec2 vU; varying float vM; void main(){ float a; if (vM < 0.5) { float r = length(vU - 0.5) * 2.0; a = pow(max(0.0, 1.0 - r), 1.8) * 0.85; } else { float e = sin(vU.x * 6.2832); a = pow(vU.y, 2.2) * 0.1 * (0.55 + 0.45 * e * e); } gl_FragColor = vec4(vC * a * uNight, 1.0); }',
 		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
 	});
 }
@@ -313,7 +313,7 @@ function glowMat(night) {
 function haloMat(night, time) {
 	return new THREE.ShaderMaterial({
 		uniforms: { uNight: night, uTime: time },
-		vertexShader: 'attribute vec3 color; attribute float size; attribute float blink; uniform float uNight; uniform float uTime; varying vec3 vC; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; float d = max(1.0, -mv.z); float rate = floor(blink), ph = fract(blink); float on = blink > 0.0 ? step(0.72, fract(uTime * max(rate, 0.5) + ph)) : 1.0; gl_PointSize = clamp(size * 520.0 / d, 2.0, 36.0); vC = color; vA = uNight * on * clamp(1.5 - d / 3000.0, 0.35, 1.0); }',
+		vertexShader: 'attribute vec3 color; attribute float size; attribute float blink; uniform float uNight; uniform float uTime; varying vec3 vC; varying float vA; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv; float d = max(1.0, -mv.z); float rate = floor(blink), ph = fract(blink); float on = blink > 0.0 ? step(0.72, fract(uTime * max(rate, 0.5) + ph)) : 1.0; gl_PointSize = clamp(size * 650.0 / d, 2.0, 40.0); vC = color; vA = uNight * on * clamp(1.5 - d / 3000.0, 0.35, 1.0); }',
 		fragmentShader: 'varying vec3 vC; varying float vA; void main(){ vec2 q = gl_PointCoord - 0.5; float r = length(q) * 2.0; if (r > 1.0) discard; float a = pow(1.0 - r, 2.0) * 0.7 + (1.0 - smoothstep(0.0, 0.3, r)) * 0.6; gl_FragColor = vec4(vC * a * vA, 1.0); }',
 		transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
 	});
