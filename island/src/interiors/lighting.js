@@ -74,10 +74,12 @@ function frame(renderer, scene, camera) {
 	const now = performance.now();
 	if (now - S.lastTick < 4) return;
 	const dt = S.lastTick < 0 ? 0.016 : Math.min(0.1, (now - S.lastTick) / 1000);
+	// (how far the lights ease toward their state: by the real time, however slow the frames)
+	const ease = Math.min(1, (S.lastTick < 0 ? 0.016 : (now - S.lastTick) / 1000) * 2);
 	S.lastTick = now; S.time += dt;
-	queueMicrotask(() => step(renderer, scene, camera, dt));
+	queueMicrotask(() => step(renderer, scene, camera, dt, ease));
 }
-function step(renderer, scene, camera, dt) {
+function step(renderer, scene, camera, dt, ease) {
 	if (scene?.isScene && S.scene !== scene) attach(scene, renderer);
 	// the bakes, a few milliseconds a frame
 	const t0 = performance.now();
@@ -103,7 +105,7 @@ function step(renderer, scene, camera, dt) {
 		const sp = H.spec, h = S.hours;
 		const open = !sp.hours || (sp.hours[0] < sp.hours[1] ? h >= sp.hours[0] && h < sp.hours[1] : h >= sp.hours[0] || h < sp.hours[1]);
 		const target = !open ? 0.08 : sp.home ? 0.5 + 0.5 * S.night : 1;
-		H.k += (target - H.k) * Math.min(1, dt * 2);
+		H.k += (target - H.k) * ease;
 		H.U.ibakeK.value = H.k * (sp.strength ?? 1);
 		H.U.ibakeGlow.value = H.k * (0.9 + 1.3 * S.night);
 		for (const [src, v] of H.variants.values()) sync(src, v);
