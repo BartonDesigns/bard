@@ -38,3 +38,5 @@ node server/verify-workers.mjs
 Browser fixture prerequisites: installed Playwright (`PLAYWRIGHT_MODULE` or runtime dependency path) and Chromium (`CHROME_EXECUTABLE` override supported). It runs its static server, local soul HTTP fixture and browser in one process. It does not use production credentials. The original real-workerd and Quiet Well tests remain documented in `../persistent-reputation/`.
 
 The sandbox’s single-process Chromium still cannot complete the full faceplate page. Full-site smoke in a normal browser, physical iPhone/Safari acceptance and live shared-planner story quality remain open. Relationships and route projects are device-local; these tests do not establish universal multiplayer world changes.
+
+The final travel-lifecycle correction removes the marker group before departing-world resource disposal and rebuilds it on return. The focused nine-test immersion suite verifies reset, foreign-body suppression and return with the saved marker. The bundle was rebuilt after the captured conversation pass; this lifecycle-only change does not alter those visuals or conversation controls.

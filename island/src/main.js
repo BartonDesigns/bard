@@ -1253,6 +1253,7 @@ export function createIslandWorld() {
 		HOOKS.fares?.dispose();
 		HOOKS.multiplayer?.reset();
 		guide.endTalk();
+		guide.routeMarks?.reset(); // keep reusable marker resources out of departing-world disposal
 		social.reset();
 		world.labels?.dispose();
 		world.discovery?.dispose();

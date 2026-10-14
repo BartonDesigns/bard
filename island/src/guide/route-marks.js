@@ -19,7 +19,7 @@ export function createRouteMarks({ scene, world, camera, chronicle }) {
 	const footGeo=new THREE.CylinderGeometry(.19,.28,.25,7),postGeo=new THREE.BoxGeometry(.12,1.2,.12),signGeo=new THREE.BoxGeometry(.7,.18,.08),gemGeo=new THREE.OctahedronGeometry(.11);
 	const marks=new Map();
 	function update() {
-		const W=world(); if(!W) {group.visible=false;return;} group.visible=true;
+		const W=world(); if(!W) {group.visible=false;return;} group.visible=true;if(group.parent!==scene)scene.add(group);
 		const candidates=[],seen=new Set();
 		for(const project of chronicle.projects(W.body?.key)) if(project.choice==='marked') for(const stop of project.landmarks) {
 			if(stop.markerEligible===false)continue;
@@ -36,5 +36,6 @@ export function createRouteMarks({ scene, world, camera, chronicle }) {
 			m.visible=Number.isFinite(y)&&y>.3&&Math.abs(y-p.y)<3;if(m.visible)m.position.set(x,y,z);
 		}
 	}
-	return {update,info:()=>({visible:[...marks.values()].filter(m=>m.visible).length,positions:[...marks.values()].filter(m=>m.visible).map(m=>m.position.toArray())}),dispose(){group.removeFromParent();for(const g of[footGeo,postGeo,signGeo,gemGeo])g.dispose();for(const m of[stone,brass,glass])m.dispose();}};
+	function reset(){group.removeFromParent();group.clear();marks.clear();}
+	return {update,reset,info:()=>({visible:[...marks.values()].filter(m=>m.visible).length,positions:[...marks.values()].filter(m=>m.visible).map(m=>m.position.toArray())}),dispose(){reset();for(const g of[footGeo,postGeo,signGeo,gemGeo])g.dispose();for(const m of[stone,brass,glass])m.dispose();}};
 }
