@@ -26,3 +26,7 @@ See `browser-report.json`, `quiet-well-landscape.png` and `quiet-well-portrait.p
 - After deployment, check `/status` and complete the documented two-client save/reload/new-room/cleansing acceptance flow in production. A capability flag alone is insufficient.
 
 The account-free key and client-simulated authority limits are explicit in `docs/persistent-reputation.md`. There is no claim of server-authoritative world physics or universal persistent world development.
+
+## Follow-up integration
+
+The immersion continuation integrates main `f0365cd` and additionally changes Discovery. The earlier reputation-only deployment statement above is historical; use `docs/quest-immersion.md` for the combined release and `docs/verification/quest-immersion/` for fresh capability evidence. Neither Worker was deployed by this continuation.

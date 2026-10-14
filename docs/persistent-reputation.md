@@ -28,9 +28,9 @@ This is durable, authenticated reputation for an account-free, client-simulated 
 
 ## Release and deployment
 
-Built on main `1995d17324ceb43f1842e026fe017da6a8d2ae67`, including the latest merged street and NPC work. At inspection both pushed `claude/*` branches were already contained in main; unpushed edits are unavailable. This work uses its own feature branch and does not rewrite another contributor's branch.
+Initially built on main `1995d17324ceb43f1842e026fe017da6a8d2ae67`, including the latest merged street and NPC work. At inspection both pushed `claude/*` branches were already contained in main; unpushed edits are unavailable. This work uses its own feature branch and does not rewrite another contributor's branch.
 
-Frontend build and Worker deployment are separate. The new rooms migration adds SQLite Durable Object class `Soul`, binding `SOULS`, while retaining the existing `Room` binding/migration. No discovery deployment is needed. The capability is **persistent-reputation-v1**. Until that Worker is deployed, the client retains local standing and queued deeds and cannot perform an authoritative cleansing.
+Frontend build and Worker deployment are separate. The new rooms migration adds SQLite Durable Object class `Soul`, binding `SOULS`, while retaining the existing `Room` binding/migration. No Discovery deployment was needed for the original reputation-only slice. The subsequent immersion work on this branch **does** need Discovery deployment; see `quest-immersion.md` for the combined release steps. The capability is **persistent-reputation-v1**. Until that Worker is deployed, the client retains local standing and queued deeds and cannot perform an authoritative cleansing.
 
 From the Bard checkout after this change is merged:
 
@@ -43,7 +43,7 @@ npm --prefix server/multiplayer run deploy &&
 node server/verify-workers.mjs
 ```
 
-The verifier must show rooms ready, including `reputation-v1` and `persistent-reputation-v1`. A deployed capability flag alone is not a production gameplay acceptance test. Use two independent clients: earn a deed, observe correctly attributed standing in a room, end the room, restore/join another room, reload, then complete the Quiet Well ritual and confirm both clients receive the new epoch. Existing credentials are not modified by this change.
+The commands above deploy the reputation-only backend. For the full branch, follow the combined release in `quest-immersion.md`. The verifier must show rooms ready, including `reputation-v1` and `persistent-reputation-v1`. A deployed capability flag alone is not a production gameplay acceptance test. Use two independent clients: earn a deed, observe correctly attributed standing in a room, end the room, restore/join another room, reload, then complete the Quiet Well ritual and confirm both clients receive the new epoch. Existing credentials are not modified by this change.
 
 ## Verification
 

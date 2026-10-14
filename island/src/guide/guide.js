@@ -10,6 +10,8 @@ import { awarenessContext, contextualOpening, contextualReply } from '../people/
 import { createLLM, WEBLLM_MODELS, hasWebGPU, crashedBefore } from './llm.js';
 import { buildSocialIntentContext, buildSocialIntentMessages, decodeSocialIntent, offlineSocialIntent } from '../people/social-intent.js';
 import { createStoryQuests, questPrompt, fallbackQuest } from './story-quests.js';
+import { createQuestChronicle, soulScope, reportRequest } from './quest-chronicle.js';
+import { createRouteMarks, routeMarkSpot } from './route-marks.js';
 import { parseSocialIntent } from '../people/social-state.js';
 import { worldPosition } from '../people/social-actors.js';
 import { parseGameTime, realSecondsFor, formatClock, formatReal, talksOfMeeting, placePhrases, MEET_TAG_RE, EARLY, GRACE } from '../people/appointments.js';
@@ -192,6 +194,9 @@ export function createGuide(mount, api) {
 	}
 	// Models propose intentions and stories; saved game state decides what can happen.
 	const stories = createStoryQuests();
+	const chronicle = createQuestChronicle({ scope: () => ({ id:soulScope(api.soul?.credentials?.() || 'local'), ...api.combat?.morality?.info() }) });
+	const routeMarks = api.scene ? createRouteMarks({scene:api.scene,world:api.world,camera:api.camera,chronicle}) : null;
+	let appointmentHistory = false;
 	function residentKey(id) {
 		let hash = 14695981039346656037n;
 		for (const c of id) hash = BigInt.asUintN(64, (hash ^ BigInt(c.charCodeAt(0))) * 1099511628211n);
@@ -214,7 +219,7 @@ export function createGuide(mount, api) {
 		}
 		if (resident) { const actor=S.actors.all().find(p=>p.residentId===resident.id); if(actor) for(const t of places) t.scoutable=Math.hypot(t.x-actor.M.S.pos.x,t.z-actor.M.S.pos.z)<=180 && S.scoutNearby(actor,[t])?.id===t.id; }
 		const context = stories.context({ bodyKey, targets: places, npcs });
-		return { ...context, speaker: resident ? residentKey(resident.id) : null, workplace:resident?.workContext || null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
+		return { ...context, speaker: resident ? residentKey(resident.id) : null, arc:resident?chronicle.brief(bodyKey,residentKey(resident.id)):null, relationship:resident?chronicle.relationship(bodyKey,residentKey(resident.id)):null, workplace:resident?.workContext || null, persona: resident ? {name:resident.persona.name,job:resident.persona.job,hobby:resident.persona.hobby} : null };
 	}
 	function questNotice(result) {
 		if (result?.ok === false) return result.error || 'That quest cannot be changed right now.';
@@ -230,6 +235,8 @@ export function createGuide(mount, api) {
 		finally { clearTimeout(timer); signal?.removeEventListener('abort',abort); }
 	}
 	function questChanged(q, announce=true) {
+		const owner=api.social?.state.list(q.bodyKey).find(r=>residentKey(r.id)===q.offeredBy);
+		chronicle.observe(q,owner?.persona.name);
 		if (announce) api.hint(q.status==='complete'?`Quest complete: ${q.title}`:`Quest updated: ${q.title}`,3500);
 		if (q.status!=='complete') return;
 		if(q.reward && !q.rewardPaid) {const paid=stories.claimReward(q.id,q.bodyKey,tx=>api.arms?.apply(tx)); if(paid.ok && !paid.already) api.hint(`Quest reward: ${paid.credits} credits added to your inventory.`,4500);else if(!paid.ok && announce) api.hint(`Quest complete. ${paid.error}`,6000);}
@@ -243,10 +250,13 @@ export function createGuide(mount, api) {
 	}
 	function storySummary(q) {
 		const context = storyContext(), label = step => context.targets.find(t=>t.id===step.targetId)?.name || context.npcs.find(n=>n.id===step.npcId)?.name || step.targetName || step.npcName || 'the marked place';
-		return `${q.title}\n${q.premise}\n${q.reward ? `Reward: ${q.reward.credits} inventory credits${q.rewardPaid?' · paid':q.status==='complete'?' · pending':' · on completion'}\n` : ''}` + q.steps.map((s,i)=>`${i+1}. ${s.type==='talk'?'Speak to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
+		return `${q.chapter ? `Chapter ${q.chapter} of 3 · ` : ''}${q.title}\n${q.premise}\n${q.chapter ? 'What lasts: trust, a shared story'+(q.chapter===2?' and a choice about the route.':'.')+'\n' : q.reward ? `Reward: ${q.reward.credits} inventory credits${q.rewardPaid?' · paid':q.status==='complete'?' · pending':' · on completion'}\n` : ''}` + q.steps.map((s,i)=>`${i<q.cursor?'✓':i===q.cursor?'→':'○'} ${s.type==='talk'?'Report to':s.type==='scout'?'Ask someone to scout':s.type==='return'?'Return to':'Explore'} ${label(s)}`).join('\n');
 	}
 	async function offerStory(resident, text, signal) {
 		const context = storyContext(resident);
+		if (chronicle.pending(context.bodyKey,context.speaker).length) { showRouteChoice(resident); return 'Before we start something else: should we mark the route for others, or keep it quiet?'; }
+		const unfinished=stories.list(context.bodyKey).find(q=>q.offeredBy===context.speaker&&['offered','active'].includes(q.status));
+		if (unfinished) return `Let’s finish what we already discussed.\n${storySummary(unfinished)}`;
 		const compact={...context,targets:[...context.targets.filter(t=>!t.id.startsWith('home:')).slice(0,5),...context.targets.filter(t=>t.id==='home:'+residentKey(resident.id))],npcs:context.npcs.filter(n=>n.id===residentKey(resident.id)),previous:context.previous.slice(-2).map(q=>({title:q.title,status:q.status,steps:q.steps.map(s=>({type:s.type,targetId:s.targetId,npcId:s.npcId}))})),request:text.slice(0,300)};
 		const raw = await planChat([{role:'system',content:questPrompt(compact)},{role:'user',content:text}],signal,{kind:'story_quest',context:compact});
 		if (signal.aborted || !partner || partner.id!==resident.id || api.social.bodyKey()!==context.bodyKey) return null;
@@ -254,18 +264,53 @@ export function createGuide(mount, api) {
 		if (!proposed?.ok) proposed = stories.propose(fallbackQuest(context,{npcId:residentKey(resident.id),position:api.camera.position,persona:resident.persona}),context);
 		if (!proposed.ok) return 'I do not have a reachable quest here yet. Let us meet near a village or another landmark.';
 		const q = proposed.quest;
+		const landmarks=q.steps.filter(s=>s.targetId&&!s.targetId.startsWith('home:')&&!s.targetId.startsWith('workplace:')).map(s=>context.targets.find(t=>t.id===s.targetId)).filter(t=>t&&!t.under&&t.y>.3).map(t=>{const pos=routeMarkSpot(api.world(),t);return {id:t.id,name:t.name,pos:api.social.positionFor(api.world(),pos || t),markerEligible:!!pos};});
+		chronicle.register(q,resident.persona.name,landmarks);
 		return `${storySummary(q)}\nInterested? Say “I’m in”, or open Quests to accept or decline.${questNotice(proposed) ? '\n'+questNotice(proposed) : ''}`;
 	}
 	function storyReply(text) {
 		const bodyKey = api.social.bodyKey(), qs=stories.list(bodyKey), offered=qs.filter(q=>q.status==='offered' && (!q.offeredBy || q.offeredBy===residentKey(partner?.id || ''))).at(-1);
+		if (reportRequest(text) && (readyReports().length || qs.some(q=>q.status==='active'&&q.offeredBy===residentKey(partner?.id||'')))) return reportStory(text);
 		if (/^(?:yes[,.! ]*)?(?:i['’]?m in|i am in|let['’]?s do it|sounds good|i accept|accept(?: the quest)?|sign me up)[.! ]*$/i.test(text.trim()) && offered) {
-			const result=stories.accept(offered.id,bodyKey); return questNotice(result) || `Agreed. ${offered.title} is in your Quests journal. Your first objective is ready.`;
+			const result=stories.accept(offered.id,bodyKey); if(result.ok)questChanged(result.quest,false); return questNotice(result) || `Come back and tell me what stood out. ${offered.title} is in your journal.`;
 		}
-		if (/^(?:no thanks|decline(?: the quest)?|not now)[.! ]*$/i.test(text.trim()) && offered) { stories.cancel(offered.id,bodyKey); return 'No problem. We can find a different adventure another time.'; }
+		if (/^(?:no thanks|decline(?: the quest)?|not now)[.! ]*$/i.test(text.trim()) && offered) { const r=stories.cancel(offered.id,bodyKey);if(r.ok)questChanged(r.quest,false); return 'No problem. We can find a different adventure another time.'; }
 		if (/^(?:quest status|my quests|what(?:’s|'s| is) (?:my|the) next (?:step|objective)|how is my quest going)[?! .]*$/i.test(text.trim())) {
 			const active=qs.find(q=>q.status==='active'); return active ? storySummary(active) : 'You have no active story quest. Ask me for an adventure.';
 		}
 		return null;
+	}
+	function readyReports(resident=partner?.id && api.social?.state.get(partner.id)) {
+		if(!resident)return [];
+		return stories.list(resident.bodyKey).filter(q=>q.status==='active'&&q.steps[q.cursor]?.type==='talk'&&q.steps[q.cursor].npcId===residentKey(resident.id));
+	}
+	function reportStory(text, requestedId=null) {
+		const at=partner?.p?.M?.S?.pos,cam=api.camera.position;
+		if(!at || Math.hypot(at.x-cam.x,at.z-cam.z)>8 || Math.abs(at.y+1.7-cam.y)>3) return 'Come back so we can talk about it in person. I want to hear what you noticed.';
+		const ready=readyReports(), selected=requestedId?ready.find(q=>q.id===requestedId):ready.find(q=>text.toLowerCase().includes(q.title.toLowerCase())) || (ready.length===1?ready[0]:null);
+		if (!selected) return ready.length>1?'Which of our walks are you reporting on? Tell me its title.':'We still have something to check before we can call that finished. Your journal shows what remains.';
+		const completed=stories.event({id:'report:'+Date.now()+':'+selected.id,type:'talk',bodyKey:selected.bodyKey,npcId:residentKey(partner.id),questId:selected.id});
+		for(const q of completed)questChanged(q);
+		const q=completed[0]; if(!q)return 'Let’s check where we left off.';
+		api.social.state.remember(partner.id,'event',`The traveller returned in person to discuss “${q.title}”. Their own report, not independently verified observations: ${text.slice(0,320)}`);
+		showRouteChoice(api.social.state.get(partner.id));
+		return q.status==='complete'?`You came back and kept your word. That matters to me.${q.chapter===2?' Now, do we put markers at the surveyed stops, or leave the route quiet?':q.chapter===3?' We have a story here now, not just another place we passed through.':' Next time, I’d like to build on what we found.'}`:`Thanks for checking in. ${storySummary(q)}`;
+	}
+	function showRouteChoice(resident) {
+		if(!resident || partner?.id!==resident.id)return;
+		const pending=chronicle.pending(resident.bodyKey,residentKey(resident.id))[0];if(!pending)return;
+		const canMark=pending.landmarks.some(t=>t.markerEligible!==false);
+		if(!canMark)say('There isn’t a level, dry place for a sign at these stops. Let’s keep this route in the journal.','guide');
+		const row=el('div','display:flex;gap:8px;flex-wrap:wrap;');
+		for(const [choice,label]of [['marked','Mark the route'],['quiet','Keep it quiet']]) {
+			const b=el('button',btnCss,label);if(choice==='marked'&&!canMark){b.disabled=true;b.style.opacity='.45';}
+			b.onclick=()=>{
+				if(partner?.id!==resident.id)return;
+				const r=chronicle.decide(pending.id,choice);if(!r.ok){say(r.error,'note');return;}row.remove();if(r.already)return;routeMarks?.update();
+				const line=choice==='marked'?'Then let’s leave a sign for the next person. Your route markers are in place at the surveyed stops.':'Then we leave it as we found it. The route stays in your journal, without signs in the landscape.';
+				api.social.state.remember(resident.id,'event',line);perform(line,true);if(r.persisted===false)say(chronicle.status().error,'note');
+			};row.append(b);
+		}log.append(row);
 	}
 
 	// ---------- meetings: an arrangement made in conversation is kept by the game ----------
@@ -454,6 +499,9 @@ export function createGuide(mount, api) {
 		if (tick < 1) return;
 		tick = 0;
 		const W = api.world(); if (!W) return;
+		if (!appointmentHistory && api.social) { appointmentHistory=true; api.social.onAppointment(e=>chronicle.meeting(e.appointment,e.type,residentKey(e.appointment.npcId))); }
+		for(const p of api.social?.actors.all() || []) if(p.residentId) {const r=api.social.state.get(p.residentId);if(r)for(const e of p.awarenessEvents || [])chronicle.witness(r.bodyKey,residentKey(r.id),r.persona.name,e,api.combat?.morality.info().cleansedAt || 0);}
+		routeMarks?.update();
 		const cam = api.camera.position, P = W.player.state, g = W.island.heightAt(cam.x, cam.z), hours = W.sky.state.hours;
 		api.waypoint?.set(waypointMark());
 		const questWorld=storyContext();
@@ -596,7 +644,10 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 	}
 	function personContext(p=partner?.p,resident=partner?.id && api.social?.state.get(partner.id)) {
 		const completed=stories.list(api.social?.bodyKey()).filter(q=>q.status==='complete' && q.offeredBy===residentKey(resident?.id||'')).map(q=>q.title);
-		const c=awarenessContext({...api.combat?.perception?.(p),work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		const relationship=resident?chronicle.relationship(resident.bodyKey,residentKey(resident.id)):null;
+		const c=awarenessContext({...api.combat?.perception?.(p),relationship,work:p?.workContext || resident?.workContext,completed,known:(resident?.metCount||0)>1,visit:resident?.metCount || 0,seed:p?.P?.dna?.seed || 0});
+		const promised=resident&&stories.list(resident.bodyKey).find(q=>q.offeredBy===residentKey(resident.id)&&q.status==='active');
+		if(promised)c.facts.push(`The traveller promised to help with “${promised.title}”. ${readyReports(resident).some(q=>q.id===promised.id)?'They have reached the report-back step; ask what they noticed, do not declare it finished yet.':'The next objective is still unfinished. Ask how it is going, without assuming failure or inventing a deadline.'}`);
 		// (a favour under way with this person: they know what they asked, errands.js)
 		const fav=api.errands?.factFor?.(p); if(fav) c.facts=[...c.facts,fav].slice(0,7);
 		// (what they did or saw lately, and their money talk: people/npc-quests.js)
@@ -618,7 +669,6 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		archive.importHistory(threadMeta(partner),rec.history);
 		resetView('npc');
 		api.people?.engage(p);
-		if (resident && !personContext(p,resident).afraid) for (const q of stories.event({id:'talk:'+Date.now()+':'+resident.id,type:'talk',bodyKey:resident.bodyKey,npcId:residentKey(resident.id)})) questChanged(q);
 		title.textContent = partner.persona.name.toUpperCase();
 		input.placeholder = `Say something to ${partner.persona.first}`;
 		show(true);
@@ -631,6 +681,17 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		rec.met=true; perform(opening,true);
 		if(resident) api.social.state.remember(resident.id,'assistant',opening);
 		if(awareness.afraid) {p.M.feel('surprise',.85);p.M.gesture('shake');}
+		else if(awareness.relationship?.trust>=3) {p.M.feel('joy',.45);p.M.gesture('nod');}
+		else if(awareness.relationship?.trust<0) {p.M.feel('sad',.25);p.M.gesture('shake');}
+		if(resident&&!awareness.afraid) {
+			for(const q of readyReports(resident)) {say(`You’re back about “${q.title}”. What stayed with you?`,'guide');const b=el('button',btnCss,'Report back: '+q.title);b.onclick=()=>{
+				if(partner?.id!==resident.id)return;busy?.abort();
+				const text=`I'm back from ${q.title}.`;say(text,'me');archiveTurn(threadMeta(partner),'user',text);api.social.state.remember(resident.id,'user',text);
+				const aware=personContext(partner.p,resident),reply=aware.afraid?contextualOpening(aware):reportStory(text,q.id);
+				perform(reply,true);api.social.state.remember(resident.id,'assistant',reply);
+			};log.append(b);}
+			showRouteChoice(resident);
+		}
 		const recap = resident && gatheringRecap(resident);
 		if (recap) perform(recap, true);
 		if(!awareness.afraid) offer(p.talk?.open?.());
@@ -740,7 +801,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			// A gear action has already been validated by the arms adapter. Keep that
 			// response instead of letting the social intent layer reinterpret it as a
 			// generic order for the resident.
-			if (!reply) reply = api.social.command(resident, text, { target, quest: quests.find(q => !q.done) });
+			if (!reply) reply = api.social.command(resident, text, { relationship:awareness.relationship, target, quest: quests.find(q => !q.done) });
 			if (reply && parseSocialIntent(text)==='scout' && resident.mode==='scout' && resident.task && target?.name) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:'place-'+norm(target.name).replace(/ /g,'-')});
 		}
 		let meetNoteText = null, meetHandled = false;
@@ -753,19 +814,21 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			if (!reply) {
 				const context=storyContext(resident), destinations=context.targets.slice(0,8).map(t=>({...t,distance:Math.hypot(t.x-p.M.S.pos.x,t.z-p.M.S.pos.z)}));
 				const currentOffer=stories.list(context.bodyKey).filter(q=>q.status==='offered' && q.offeredBy===residentKey(resident.id)).at(-1);
-				const options={text:text.slice(0,600),resident,destinations,history:resident.history.slice(-3).map(m=>({role:m.role,content:m.content.slice(0,180)})),questContext:(currentOffer?'Current offer from this person: '+currentOffer.title+'. ':'No current quest offer. ')+stories.list(context.bodyKey).filter(q=>q.status==='active').map(q=>q.title).join('; ')};
+				const ready=readyReports(resident);
+				const options={text:text.slice(0,600),resident,destinations,history:resident.history.slice(-3).map(m=>({role:m.role,content:m.content.slice(0,180)})),questContext:(currentOffer?'Current offer from this person: '+currentOffer.title+'. ':'No current quest offer. ')+(ready.length?'Report ready for: '+ready.map(q=>q.title).join('; ')+'. ':'No report ready. ')+stories.list(context.bodyKey).filter(q=>q.status==='active').map(q=>q.title).join('; ')};
 				let intention=offlineSocialIntent(text,{destinations,hasQuestOffer:!!currentOffer});
 				if (intention.reason!=='not-an-order') {
 					const raw=await planChat(buildSocialIntentMessages(options),ctrl.signal,{kind:'social_intent',context:buildSocialIntentContext(options)});
-					if (raw) { intention=decodeSocialIntent(raw,{text,destinations,hasQuestOffer:!!currentOffer}); if(intention.kind==='none' && !['conversation','not-an-order'].includes(intention.reason)) reply='I could not work out a supported action from that. Could you clarify what you want me to do?'; }
+					if (raw) { intention=decodeSocialIntent(raw,{text,destinations,hasQuestOffer:!!currentOffer,hasQuestReport:ready.length>0}); if(intention.kind==='none' && !['conversation','not-an-order'].includes(intention.reason)) reply='I could not work out a supported action from that. Could you clarify what you want me to do?'; }
 				}
 				if (ctrl.signal.aborted || partner!==P2 || api.social.bodyKey()!==context.bodyKey) { if(busy===ctrl) busy=null; return; }
 				if (intention.kind==='clarify') reply=intention.question;
+				if (intention.kind==='quest_report') reply=reportStory(text);
 				if (intention.kind==='quest_request') reply=await offerStory(resident,text,ctrl.signal);
 				if (['quest_accept','quest_decline'].includes(intention.kind)) reply=currentOffer?storyReply(intention.kind==='quest_accept'?"I'm in":'no thanks'):'Which quest would you like to discuss?';
 				if (intention.kind==='action') {
 					const target=intention.targetId==='nearby'?api.social.scoutNearby(p,targets()):destinations.find(t=>t.id===intention.targetId);
-					reply=api.social.command(resident,intention.command,{target,quest:stories.list(context.bodyKey).find(q=>q.status==='active') || quests.find(q=>!q.done)});
+					reply=api.social.command(resident,intention.command,{relationship:awareness.relationship,target,quest:stories.list(context.bodyKey).find(q=>q.status==='active') || quests.find(q=>!q.done)});
 					if (intention.intent==='scout' && resident.mode==='scout' && resident.task && target?.id) api.social.state.setMode(resident.id,'scout',{...resident.task,targetId:target.id});
 				}
 			}
@@ -1018,8 +1081,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			say(`${q.status.toUpperCase()} · ${q.cursor}/${q.steps.length} objectives\n${storySummary(q)}`, 'guide');
 			if (q.status==='offered' || q.status==='active') {
 				const row=el('div','display:flex;gap:8px;');
-				if (q.status==='offered') { const accept=el('button',btnCss,'Accept quest'); accept.onclick=()=>{const result=stories.accept(q.id,bodyKey);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(accept); }
-				const cancel=el('button',btnCss,q.status==='offered'?'Decline':'Cancel quest');cancel.onclick=()=>{const result=stories.cancel(q.id,bodyKey);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(cancel);log.append(row);
+				if (q.status==='offered') { const accept=el('button',btnCss,'Accept quest'); accept.onclick=()=>{const result=stories.accept(q.id,bodyKey);if(result.ok)questChanged(result.quest,false);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(accept); }
+				const cancel=el('button',btnCss,q.status==='offered'?'Decline':'Cancel quest');cancel.onclick=()=>{const result=stories.cancel(q.id,bodyKey);if(result.ok)questChanged(result.quest,false);showQuests();if(questNotice(result))say(questNotice(result),'note');};row.append(cancel);log.append(row);
 			}
 		}
 		if (stories.status().error) say(stories.status().error,'note');
@@ -1033,13 +1096,18 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		const M = api.combat?.morality, R = M?.reactions?.(), me = M?.me?.() || {}, E = api.errands?.info?.() || {}, F = api.fares?.info?.() || {};
 		const bar = (k) => '▰'.repeat(Math.round(k * 10)) + '▱'.repeat(10 - Math.round(k * 10));
 		const rung = (ladder, count, what) => { const r = rankOf(ladder, count); return `${r.title} · ${count} ${what}${r.next ? `\n${bar(r.k)} ${r.next.at - count} more to ${r.next.title}` : '\nThe top of the ladder.'}`; };
+		const bonds=chronicle.bonds(api.social?.bodyKey()).filter(b=>b.last);
+		if(bonds.length){say('PEOPLE WHO KNOW YOU','note');for(const b of bonds.slice(-8))say(`${b.name} · ${b.label}\n${b.last}`,'guide');}
+		const projects=chronicle.projects(api.social?.bodyKey());
+		if(projects.length){say('WHAT WE LEFT BEHIND','note');for(const p of projects.slice(-8))say(`${p.name} · ${p.npc}\n${p.choice==='marked'?'Marked route: small signs remain at your surveyed stops.':'Quiet route: saved in your journal; the landscape stays untouched.'}\n${p.landmarks.map(t=>t.name).join(' → ')}`,'guide');}
+		if(chronicle.status().error)say(chronicle.status().error,'note');
 		const D = api.daily?.list?.();
 		if (D) {
 			say(`TODAY · ${D.goals.filter((g) => g.done).length} of ${D.goals.length} done${D.bonus ? ' · bonus paid' : ''}`, 'note');
 			say(D.goals.map((g) => `${g.done ? '✓' : '○'} ${g.text}${g.need > 1 && !g.done ? ` (${g.got}/${g.need})` : ''} · ${g.credits} credits`).join('\n') + (D.bonus ? '' : '\nAll three: a bonus of 150 credits'), 'guide');
 		}
 		say('WHO THEY SAY YOU ARE', 'note');
-		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Nobody knows your name yet'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
+		say(`${R?.title && R.title !== 'Unknown' ? R.title : 'Your wider reputation is still taking shape'}${R ? ` · standing ${R.reputation > 0 ? '+' : ''}${R.reputation}` : ''}${R?.bounty ? ` · wanted (${R.bounty})` : ''}\nMerciful ${Math.round(me.mercy || 0)} · Lawful ${Math.round(me.law || 0)} · Protector ${Math.round(me.protect || 0)} · Honest ${Math.round(me.honest || 0)}`, 'guide');
 		if (R?.song) say(R.song, 'note');
 		const soul = api.soul, saved = soul?.info();
 		if (saved) {
@@ -1055,6 +1123,7 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 			};
 			log.append(copy, restore);
 		}
+
 		say('FAVOURS', 'note');
 		say(rung('favours', E.done || 0, 'done') + (E.kept ? `\nWallets kept: ${E.kept}` : ''), 'guide');
 		if (E.errand) {
@@ -1198,5 +1267,5 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		if (!rec || rec.seed !== p.P.dna.seed) { rec = { persona: personaFor(p.P, whereKind()), history: [], seed: p.P.dna.seed }; people.set(p, rec); }
 		return rec.persona;
 	}
-	return { voice, personaOf, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
+	return { voice, personaOf, chronicle, routeMarks, relationshipFor:p=>p?.residentId?chronicle.relationship(api.social.bodyKey(),residentKey(p.residentId)):null, showStory, update: watch, ask, act, snapshot, show, showPeople, showQuests, showCaves, showArchive, archive, stories, storyContext, say, llm, talkTo, endTalk, partner: () => partner, quests: () => quests.slice(), giveQuest, journal: () => ({ ...journal }), find, waypointMark };
 }

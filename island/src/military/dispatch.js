@@ -1,0 +1,296 @@
+// The military answering trouble. Gang wars that turn deadly, a boss loose on the land, an
+// invasion from another region: the nearest ready base sends what the trouble calls for
+// (military/rules.js planDispatch): a convoy of tanks, armoured trucks and jeeps by road
+// (military/route.js), helicopters and a jet by air when it is far or big. A patrol is a little
+// state while far from you (where along its way it is, when it will be there); within sight it
+// is drawn and moves, and on the scene its troops get out (combat's squads, posted where they
+// stand), its guns engage the side it came for, the helicopters circle and fire, the jet makes
+// a pass. After a while, or when the trouble is over, it goes home and the base has its vehicles
+// back. An invasion is the same from the other side: an Ironvale Legion column out of another
+// region, with the Meridian Guard sent to meet it.
+//
+// Every vehicle on the move is a target in the combat layer (you can fight either side); a
+// destroyed one burns and is left a while as a wreck.
+
+import * as THREE from 'three';
+import { planDispatch, invasionPlan, nextInvasion, SPEED, toWorld } from './rules.js';
+import { roadRoute, along } from './route.js';
+import { vehicleMesh, DIMS, SCHEMES } from './models.js';
+import { engineSound, oneShot } from './sound.js';
+
+const SHOW_R = 1800, HIDE_R = 2300, STAY = 150;
+const HP = { tank: 900, apc: 420, jeep: 180, truck: 260, heli: 380, jet: 300 };
+const _v = new THREE.Vector3();
+let seq = 1;
+
+export function createDispatch({ world, combat, military, kit, group, hint, isPhone }) {
+	const W = () => world();
+	const patrols = [];
+	let invT = nextInvasion(), time = 0;
+	const near = () => { const w = W(); return w?.real?.loaded?.() ? (x, z, r) => w.real.near('roads', x, z, r) : null; };
+	const eye = () => W()?.player?.state?.pos;
+	const ground = (x, z, y = 1e4) => { const I = W().island; return Math.max(I.heightAt(x, z), I.extraFloor ? I.extraFloor(x, z, y) : -1e9); };
+
+	// ---------- trouble reported (combat's hooks.event) ----------
+	function event(e) {
+		if (!W()?.bayArea) return null;
+		if (e.kind === 'brawl' || (e.kind === 'gang' && (e.severity || 1) < 2)) return military.police?.event?.(e) || null;
+		if (patrols.filter((p) => p.side === 'guard' && p.state !== 'done').length >= 3) return null;
+		// (one patrol to a place at a time)
+		if (patrols.some((p) => p.side === 'guard' && p.state !== 'done' && Math.hypot(p.to.x - e.x, p.to.z - e.z) < 600)) return null;
+		const bases = military.basesState();
+		const plan = planDispatch({ ...e, t: time }, bases.map((S) => ({ id: S.id, name: S.name, x: S.x, z: S.z, units: S.units, busyUntil: S.busyUntil })));
+		if (!plan) return null;
+		const S = bases.find((q) => q.id === plan.base);
+		S.busyUntil = time + plan.cool;
+		for (const u of plan.units) S.units[u] = Math.max(0, (S.units[u] || 0) - 1);
+		const [gx, gz] = toWorld(S, S.layout.gate.x, S.layout.gate.z + 20);
+		const p = launch({ side: 'guard', why: e.kind, base: S, from: { x: gx, z: gz }, to: { x: e.x, z: e.z }, units: plan.units, troops: plan.troops, mode: plan.mode });
+		hint(`Meridian Guard: ${plan.mode === 'road' ? 'a convoy' : 'air support'} from ${S.name} is on the way (${Math.max(1, Math.round(plan.eta / 60))} min).`, 4000, 1);
+		return p;
+	}
+	// a patrol under way: road units follow the route, air units fly straight
+	function launch({ side, why, base = null, from, to, units, troops, mode }) {
+		const roadUnits = units.filter((u) => u !== 'heli' && u !== 'jet'), airUnits = units.filter((u) => u === 'heli' || u === 'jet');
+		const route = roadUnits.length ? roadRoute(near(), from, to) : null;
+		const p = {
+			id: 'p' + seq++, side, why, base, from, to, mode, troops, route, t: 0, s: 0, state: 'enroute', shown: false, deployed: false, stayT: STAY, quietT: 0,
+			units: [...roadUnits.map((k, i) => unit(k, side, i, false)), ...airUnits.map((k, i) => unit(k, side, i, true))],
+			eta: Math.round((route ? route.length / SPEED.road : Math.hypot(to.x - from.x, to.z - from.z) / SPEED.heli)),
+		};
+		for (const u of p.units) u.p = p;
+		patrols.push(p);
+		return p;
+	}
+	function unit(kind, side, i, air) {
+		return { kind, side, i, air, hp: HP[kind], mesh: null, T: null, pos: new THREE.Vector3(), yaw: 0, s: -i * 26, fireT: 1 + Math.random() * 2, dead: 0, orbit: Math.random() * 6.28, engine: null, flyS: -i * 120 };
+	}
+
+	// ---------- drawn and in the fight ----------
+	function show(u) {
+		u.mesh = vehicleMesh(u.kind, kit, u.side === 'guard' ? (u.air ? SCHEMES.grey : SCHEMES.woodland) : SCHEMES.invader);
+		group.add(u.mesh);
+		const D = DIMS[u.kind];
+		u.T = {
+			id: 'mv' + seq++, kind: 'vehicle', faction: u.side, surface: 'metal', name: u.side === 'guard' ? `a Meridian Guard ${u.kind === 'apc' ? 'armoured truck' : u.kind === 'heli' ? 'helicopter' : u.kind}` : `an Ironvale ${u.kind}`,
+			bound: { x: 0, y: 0, z: 0, r: Math.max(D.L, D.W) * 0.6 },
+			shapes: () => [{ type: 'box', c: { x: u.pos.x, y: u.pos.y + D.H / 2, z: u.pos.z }, h: [D.W / 2, D.H / 2, D.L / 2], yaw: -u.yaw, part: 'body' }],
+			onHit: (blow) => hurt(u, blow),
+			moral: () => ({ hostileTarget: u.side !== 'guard', lawTarget: u.side === 'guard' }),
+		};
+		combat.layer.add(u.T);
+	}
+	function hide(u) {
+		if (u.mesh) { u.mesh.removeFromParent(); u.mesh.userData.dispose?.(); u.mesh = null; }
+		if (u.T) { combat.layer.remove(u.T.id); u.T = null; }
+		u.engine?.stop(); u.engine = null;
+	}
+	function hurt(u, blow) {
+		if (u.dead) return { dealt: 0 };
+		const k = blow.type === 'blast' ? 1.4 : blow.type === 'energy' ? 0.8 : 0.35;
+		const dealt = (blow.amount || 0) * k;
+		u.hp -= dealt;
+		if (u.hp <= 0) { u.dead = 0.001; combat.fx.explosion(u.pos.clone().add(_v.set(0, 1.5, 0)), u.air ? 4 : 3.5); oneShot('crash', 0.8); if (u.T) combat.layer.remove(u.T.id); u.T = null; u.engine?.stop(); return { dealt, killed: true }; }
+		return { dealt };
+	}
+	// whom a unit fires at: the other side's fighters, vehicles and (for the Legion, or once you
+	// have fired on the Guard) you
+	function targetFor(u, range) {
+		const enemyOf = (fid) => (u.side === 'guard' ? combat.relations.hostile('guard', fid) : fid !== 'ironvale' && fid !== 'world');
+		let best = null, bd = range;
+		for (const h of combat.squads.alive()) {
+			if (h.surrendered || !enemyOf(h.fid)) continue;
+			const d = Math.hypot(h.pos.x - u.pos.x, h.pos.z - u.pos.z);
+			if (d < bd) { bd = d; best = { pos: new THREE.Vector3(h.pos.x, h.pos.y + 1.2, h.pos.z), T: h.T }; }
+		}
+		for (const p of patrols) for (const o of p.units) {
+			if (o.side === u.side || o.dead || !o.T) continue;
+			const d = o.pos.distanceTo(u.pos);
+			if (d < bd) { bd = d; best = { pos: o.pos.clone().add(_v.set(0, 1.2, 0)), T: o.T }; }
+		}
+		for (const T of combat.layer.map.values()) {
+			if (T.kind !== 'boss' || u.side !== 'guard') continue;
+			const d = Math.hypot(T.bound.x - u.pos.x, T.bound.z - u.pos.z);
+			if (d < bd + 100) { bd = d; best = { pos: new THREE.Vector3(T.bound.x, T.bound.y, T.bound.z), T }; }
+		}
+		const e = eye();
+		const hatesYou = u.side !== 'guard' || combat.wantedLevel() >= 4;
+		if (e && hatesYou && Math.hypot(e.x - u.pos.x, e.z - u.pos.z) < bd) best = { pos: e.clone().add(_v.set(0, -0.4, 0)), me: true };
+		return best;
+	}
+	const by = (u) => ({ id: u.T?.id || 'mv', kind: 'hostile', faction: u.side });
+	function engage(u, dt) {
+		u.fireT -= dt;
+		if (u.fireT > 0 || u.dead) return;
+		const tank = u.kind === 'tank', range = tank ? 320 : u.air ? 260 : 170;
+		const tg = targetFor(u, range);
+		if (!tg) { u.fireT = 0.8; return; }
+		const from = u.pos.clone().add(_v.set(0, DIMS[u.kind].H + (u.air ? -1.5 : 0.2), 0)), dir = tg.pos.clone().sub(from).normalize();
+		if (tank) {
+			// the turret swings to it, and the gun speaks
+			if (u.mesh?.userData.turret) u.mesh.userData.turret.rotation.y = Math.atan2(dir.x, dir.z) - u.yaw;
+			const miss = new THREE.Vector3((Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 6);
+			const at = tg.pos.clone().add(miss);
+			combat.fx.tracer(from, at, 3, 1600); combat.fx.muzzle(from, dir, 2);
+			setTimeout(() => { if (!W()) return; combat.blast(at, 6, 180, by(u)); combat.fx.explosion(at, 2.6); }, 350);
+			oneShot('cannon', distK(u));
+			u.fireT = 5 + Math.random() * 3;
+			return;
+		}
+		// a burst from the roof gun or the helicopter's
+		const n = 4;
+		for (let i = 0; i < n; i++) {
+			const d = dir.clone().add(_v.set((Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.05)).normalize();
+			const hit = combat.firstHit(from, d, range + 20, by(u));
+			const end = hit ? from.clone().addScaledVector(d, hit.t) : from.clone().addScaledVector(d, range);
+			if (tg.me && Math.random() < 0.25) combat.hurtPlayer({ amount: 6, type: 'ballistic', part: 'torso', src: from, by: by(u) });
+			else if (hit && !hit.wall) combat.landShot(hit, from, d, by(u), 22, 'ballistic');
+			combat.fx.tracer(from, end, 1, 800);
+		}
+		combat.fx.muzzle(from, dir, 0);
+		oneShot('gun', distK(u) * 0.8);
+		u.fireT = (u.air ? 0.5 : 0.7) + Math.random() * 0.6;
+	}
+	const distK = (u) => { const e = eye(); return e ? Math.max(0, 1 - Math.hypot(e.x - u.pos.x, e.z - u.pos.z) / 600) : 0; };
+
+	// ---------- moving ----------
+	function step(p, dt) {
+		p.t += dt;
+		const e = eye();
+		// where the leader is: along the road at convoy speed, or the air units straight in
+		if (p.state === 'enroute') {
+			p.s += SPEED.road * dt;
+			const roadDone = !p.route || p.s >= p.route.length - 20;
+			const airAll = p.units.filter((u) => u.air && !u.dead);
+			for (const u of airAll) u.flyS += (u.kind === 'jet' ? SPEED.jet * 0.6 : SPEED.heli) * dt;
+			const flyLen = Math.hypot(p.to.x - p.from.x, p.to.z - p.from.z);
+			if (roadDone && airAll.every((u) => u.kind === 'jet' || u.flyS >= flyLen - 60)) arrive(p);
+		} else if (p.state === 'onscene') {
+			p.stayT -= dt;
+			// quiet: nobody left to fight near it
+			const anyone = p.units.some((u) => !u.dead && targetFor(u, 250));
+			p.quietT = anyone ? 0 : p.quietT + dt;
+			if (p.stayT <= 0 || p.quietT > 40) leave(p);
+		} else if (p.state === 'leaving') {
+			p.s -= SPEED.road * dt;
+			for (const u of p.units) if (u.air) u.flyS -= SPEED.heli * dt;
+			if (p.t > p.leaveAt + 90 || (!p.shown && p.t > p.leaveAt + 20)) finish(p);
+		}
+		// each unit: placed, drawn when in sight, fighting on the scene
+		const lead = p.route ? along(p.route, p.s) : null;
+		const shownNow = e && (lead ? Math.hypot(lead.x - e.x, lead.z - e.z) : Math.hypot(p.to.x - e.x, p.to.z - e.z)) < (p.shown ? HIDE_R : SHOW_R);
+		for (const u of p.units) {
+			if (u.dead) { u.dead += dt; if (u.mesh) { u.mesh.traverse((m) => { if (m.isMesh && m.material.color && !m.userData.burnt) { m.material = m.material.clone(); m.material.color.multiplyScalar(0.25); m.userData.burnt = true; } }); if (Math.random() < dt * 4) combat.fx.smokePuff(u.pos.clone().add(_v.set(0, 2, 0)), 0.1, 3, 6); } if (u.dead > 40) hide(u); continue; }
+			place(p, u, dt);
+			if (shownNow && !u.mesh) show(u);
+			else if (!shownNow && u.mesh) hide(u);
+			if (u.mesh) {
+				u.mesh.position.copy(u.pos); u.mesh.rotation.set(u.bank || 0, u.yaw, 0, 'YXZ');
+				const U = u.mesh.userData;
+				if (U.rotor) { U.rotor.rotation.y += dt * 28; U.tail.rotation.x += dt * 60; }
+				if (U.gear) U.gear.visible = !u.air;
+				if (u.T) { u.T.bound.x = u.pos.x; u.T.bound.y = u.pos.y + DIMS[u.kind].H / 2; u.T.bound.z = u.pos.z; }
+				if (!u.engine && distK(u) > 0.05 && patrols.reduce((a, q) => a + q.units.filter((o) => o.engine).length, 0) < 3) u.engine = engineSound(u.kind);
+				u.engine?.set(0.6, 0.6, distK(u), 10);
+				if (p.state === 'onscene' || (u.air && p.state === 'enroute' && u.flyS > Math.hypot(p.to.x - p.from.x, p.to.z - p.from.z) - 400)) engage(u, dt);
+			}
+		}
+		p.shown = !!shownNow;
+		// the troops get out once you are near enough to see it
+		if (p.state === 'onscene' && !p.deployed && e && Math.hypot(p.to.x - e.x, p.to.z - e.z) < 260) deploy(p);
+	}
+	function place(p, u, dt) {
+		if (u.air) {
+			const dx = p.to.x - p.from.x, dz = p.to.z - p.from.z, L = Math.hypot(dx, dz) || 1;
+			if (u.kind === 'jet') {
+				// a pass straight over the scene and on, then round again
+				const s = u.flyS % (L + 3000), x = p.from.x + dx / L * s, z = p.from.z + dz / L * s;
+				u.pos.set(x, ground(x, z) + 160, z); u.yaw = Math.atan2(dx, dz); u.bank = 0;
+				return;
+			}
+			if (p.state === 'onscene') {
+				// circling the scene
+				u.orbit += dt * 0.18;
+				const r = 90 + u.i * 30, x = p.to.x + Math.cos(u.orbit) * r, z = p.to.z + Math.sin(u.orbit) * r;
+				u.pos.set(x, ground(x, z) + 70 + u.i * 12, z); u.yaw = u.orbit + Math.PI; u.bank = -0.25;
+				return;
+			}
+			const s = Math.max(0, Math.min(L, u.flyS)), x = p.from.x + dx / L * s, z = p.from.z + dz / L * s;
+			u.pos.set(x, ground(x, z) + Math.min(80, 10 + s * 0.4), z); u.yaw = Math.atan2(dx, dz) + (p.state === 'leaving' ? Math.PI : 0); u.bank = 0;
+			return;
+		}
+		if (!p.route) return;
+		if (p.state === 'onscene' || (p.state === 'enroute' && p.s + u.s >= p.route.length - 20)) {
+			// parked round the scene, facing it
+			const a = (u.i / Math.max(1, p.units.length)) * Math.PI * 1.6 + Math.atan2(p.from.x - p.to.x, p.from.z - p.to.z) - 0.8, r = 22 + u.i * 4;
+			const x = p.to.x + Math.sin(a) * r, z = p.to.z + Math.cos(a) * r;
+			u.pos.x += (x - u.pos.x) * Math.min(1, dt * 0.8); u.pos.z += (z - u.pos.z) * Math.min(1, dt * 0.8);
+			u.pos.y = ground(u.pos.x, u.pos.z, u.pos.y + 2);
+			u.yaw += Math.atan2(Math.sin(Math.atan2(p.to.x - u.pos.x, p.to.z - u.pos.z) - u.yaw), Math.cos(Math.atan2(p.to.x - u.pos.x, p.to.z - u.pos.z) - u.yaw)) * Math.min(1, dt);
+			return;
+		}
+		const q = along(p.route, Math.max(0, p.s + u.s));
+		u.pos.set(q.x, ground(q.x, q.z, u.pos.y + 3 || 1e4), q.z);
+		const want = Math.atan2(q.dx, q.dz) + (p.state === 'leaving' ? Math.PI : 0);
+		u.yaw += Math.atan2(Math.sin(want - u.yaw), Math.cos(want - u.yaw)) * Math.min(1, dt * 3);
+		if (u.mesh && Math.random() < dt * 3) combat.fx.dust({ x: u.pos.x - Math.sin(u.yaw) * DIMS[u.kind].L / 2, y: u.pos.y + 0.3, z: u.pos.z - Math.cos(u.yaw) * DIMS[u.kind].L / 2 }, 2, 0.58, 0.53, 0.45, 1, 0.4);
+	}
+	function arrive(p) {
+		p.state = 'onscene'; p.stayT = STAY;
+		const e = eye();
+		if (e && Math.hypot(p.to.x - e.x, p.to.z - e.z) < 1500) hint(p.side === 'guard' ? 'Meridian Guard on the scene.' : 'The Ironvale column is here!', 2500, 1);
+	}
+	function deploy(p) {
+		p.deployed = true;
+		military.deployments.push({ x: p.to.x, z: p.to.z, r: 160, id: p.id });
+		const fid = p.side === 'guard' ? 'guard' : 'ironvale', n = isPhone ? Math.min(3, p.troops) : Math.min(6, p.troops);
+		const a = Math.atan2(p.from.x - p.to.x, p.from.z - p.to.z), x = p.to.x + Math.sin(a) * 18, z = p.to.z + Math.cos(a) * 18;
+		p.squad = combat.squads.squad(fid, x, z, n, { post: { kind: 'deploy', x: p.to.x, z: p.to.z, r: 140 }, alert: p.side !== 'guard', tag: p.id, y: ground(x, z) + 0.6 });
+	}
+	function leave(p) {
+		p.state = 'leaving'; p.leaveAt = p.t;
+		const i = military.deployments.findIndex((d) => d.id === p.id);
+		if (i >= 0) military.deployments.splice(i, 1);
+		p.squad?.then((s) => { for (const h of [...(s?.members || [])]) if (!h.dead) combat.squads.release(h); });
+		if (p.route) p.s = Math.min(p.s, p.route.length - 20);
+	}
+	function finish(p) {
+		p.state = 'done';
+		for (const u of p.units) hide(u);
+		// home: the vehicles that came back are the base's again
+		if (p.base) for (const u of p.units) if (!u.dead) p.base.units[u.kind] = (p.base.units[u.kind] || 0) + 1;
+	}
+
+	// ---------- invasions ----------
+	function invade(at = null) {
+		const e = eye(), w = W();
+		if (!e || !w?.bayArea) return 'Earth only.';
+		if (patrols.some((p) => p.side === 'ironvale' && p.state !== 'done')) return 'An invasion is already under way.';
+		const target = at || { x: e.x + 180, z: e.z + 120 };
+		// from land (another region over the hills), or the sea if that is all there is
+		let plan = null;
+		for (let k = 0; k < 12 && !plan; k++) { const q = invasionPlan(target, Math.random, k * 0.52); if (w.island.heightAt(q.from.x, q.from.z) > 1) plan = q; }
+		plan ||= invasionPlan(target);
+		const dir = Math.round(((Math.atan2(plan.from.x - target.x, -(plan.from.z - target.z)) * 180 / Math.PI) + 360) % 360);
+		const p = launch({ side: 'ironvale', why: 'invasion', from: plan.from, to: target, units: plan.vehicles, troops: plan.squads.reduce((a, b) => a + b, 0), mode: 'road' });
+		hint(`An Ironvale Legion column has crossed into the region from the ${['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'][Math.round(dir / 45) % 8]}!`, 5000, 2);
+		combat.call?.('Air raid sirens wail across the town.', '');
+		// the Guard is sent to meet it
+		setTimeout(() => event({ kind: 'invasion', x: target.x, z: target.z, severity: 3 }), 1500);
+		return { id: p.id, eta: p.eta, from: plan.from };
+	}
+
+	function update(dt) {
+		time += dt;
+		const w = W();
+		if (!w?.bayArea) return;
+		for (const p of patrols) if (p.state !== 'done') step(p, dt);
+		for (let i = patrols.length - 1; i >= 0; i--) if (patrols[i].state === 'done') patrols.splice(i, 1);
+		// now and then, an invasion (not while you fly or are in the Deep)
+		invT -= dt;
+		if (invT <= 0) { invT = nextInvasion(); const p = w.player?.state; if (p && !p.flying && military.basesState().length) invade(); }
+	}
+	function clear() { for (const p of patrols) { for (const u of p.units) hide(u); } patrols.length = 0; }
+	const info = () => patrols.map((p) => { const e = eye(), lead = p.route ? along(p.route, p.s) : p.to; return { id: p.id, side: p.side, why: p.why, from: p.base?.name || 'another region', mode: p.mode, state: p.state, units: p.units.filter((u) => !u.dead).map((u) => u.kind), lost: p.units.filter((u) => u.dead).length, eta: p.state === 'enroute' ? Math.max(0, Math.round(p.eta - p.t)) : 0, km: e ? +(Math.hypot(lead.x - e.x, lead.z - e.z) / 1000).toFixed(2) : null, shown: p.shown, deployed: p.deployed }; });
+	return { event, invade, update, clear, info, patrols, launch };
+}

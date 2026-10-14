@@ -159,6 +159,7 @@ import { findKineticSpot } from './music/kinetic-placement.js';
 import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
+import { createMilitary } from './military/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 
@@ -563,7 +564,7 @@ export function createIslandWorld() {
 	// mutations in one place for the Guide, NPC conversations and the Crysis console.
 	const arms = createArmsRuntime({ world: () => world, sites: (W) => W?.worldSites || W?.sites || [], startingCredits: 1000, hint: (t, ms) => hint(t, ms, 1) });
 	HOOKS.arms = arms;
-	const guideApi = { world: () => world, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
+	const guideApi = { world: () => world, scene, camera, shared, hint, people: null, arms, goTo: (lat, lon, agl) => HOOKS.goTo?.(lat, lon, agl) ?? 'Earth only.' };
 	const guide = createGuide(dom.mount, guideApi);
 	// the pin and direction chip for the meeting or quest place the guide is tracking
 	const waypoint = guideApi.waypoint = createWaypoint({ scene, camera, mount: dom.mount, onTap: () => guide.showQuests() });
@@ -767,12 +768,15 @@ export function createIslandWorld() {
 	// fights: your arms in use, the world's squads and their wars, fire, bosses, the morality compass (combat/)
 	const combat = HOOKS.combat = createCombat({ scene, camera, mount: dom.mount, world: () => world, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), ragdolls, arms, gear: () => gear, multiplayer, hint, isPhone, shared, drive, menu: tpMenu, busy: () => window.L99Loading.active() || arcade.active() || studio.active() || carjack.active() || !!world?.boardwalk?.riding?.() });
 	guideApi.combat=combat;
+	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
+	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
+	combat.hooks.posts = military.posts; combat.hooks.trespass = military.trespass;
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
 	const soul = guideApi.soul = HOOKS.soul = createSoul({ morality: combat.morality, changed: () => multiplayer.refreshSoul?.() });
 	multiplayer.linkSoul?.(soul);
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
-	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
+	const chatter = HOOKS.chatter = createChatter({ mount: dom.mount, camera, world: () => world, people, talkers, voice: guide.voice, relationship: p => guide.relationshipFor(p), combat: () => combat, driving: () => drive.active(), isPhone, frameMs: () => frameAvg, errands: () => HOOKS.errands, deeds: () => HOOKS.npcQuests });
 	// today's three goals, paid as they are done (gameplay/daily.js)
 	const daily = guideApi.daily = HOOKS.daily = createDaily({ arms: () => arms, hint: (t, ms) => hint(t, ms, 1) });
 	const note = (kind, data) => daily.note(kind, data);
@@ -1151,6 +1155,7 @@ export function createIslandWorld() {
 			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone });
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
 			world.vehicles = createVehicles({ scene, world: () => world, camera, isPhone, people: () => people });
+			world.military = HOOKS.military;
 			// the freeways' barriers, sound walls and overpasses (their decks are floors)
 			world.freeways = createFreeways(scene, bayArea, world.real, { isPhone, roadAt: (r, x, z) => world.berms?.along(r, x, z) });
 			// Lake Annabel at Bishop Ranch: water, wildlife, and fishing
@@ -1223,6 +1228,8 @@ export function createIslandWorld() {
 				{ const of = island.extraFloor, op = island.extraPush, E = world.edge; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), E.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); E.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, I = world.interiors; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), I.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); I.push(p, footY); }; }
 				{ const of = island.extraFloor, op = island.extraPush, V = world.vehicles; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), V.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); V.push(p, footY); }; }
+				// the military bases' pads, banks, roofs and towers to stand on; their walls, fence and vehicles solid
+				{ const of = island.extraFloor, op = island.extraPush, M = HOOKS.military; island.extraFloor = (x, z, y) => Math.max(of(x, z, y), M.floor(x, z, y)); island.extraPush = (p, footY) => { op(p, footY); M.push(p, footY); }; }
 				// the wild rocks to stand on and go round, the brush to push through (nature/wildground.js)
 				{ const of = island.extraFloor, G = world.forestFloor?.wild; if (G) { island.extraFloor = (x, z, y) => Math.max(of(x, z, y), G.rockTop(x, z)); island.dragAt = (x, z) => G.dragAt(x, z); } }
 				shaderWarm.all({ n: 3 });
@@ -1728,6 +1735,7 @@ export function createIslandWorld() {
 		multiplayer.update(dt, time);
 		gear.update(dt);
 		if (!window.L99Loading.active()) combat.update(dt);
+		HOOKS.military?.update(dt, sk.night);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -2225,6 +2233,10 @@ if (typeof window !== 'undefined') {
 			money: (id) => ({ balance: HOOKS.npcMoney?.balance(id), wealth: HOOKS.npcMoney?.wealth(id), bank: HOOKS.npcMoney?.attached() }), regions: () => Object.fromEntries((HOOKS.commons?.regions() || []).map((r) => [r, HOOKS.commons.region(r)])),
 			log: (n = 20) => HOOKS.commons?.log(n), where: () => HOOKS.npcQuests?.where(),
 		}),
+		// the military (military/): Crysis.military() the bases near, their garrisons, the patrols sent and
+		// the vehicles parked; Crysis.base('Diablo') takes you to a base's gate (the nearest with no name)
+		military: Object.defineProperty(() => HOOKS.military?.info(), 'api', { get: () => HOOKS.military }),
+		base: (name) => HOOKS.military?.goTo(name) ?? 'Earth only.',
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),

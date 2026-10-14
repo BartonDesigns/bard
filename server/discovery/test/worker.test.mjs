@@ -287,6 +287,7 @@ section('bounded NPC planners');
 	const call = env.AI.calls[0].input;
 	ok(call.messages[0].content.includes('bounded planner') && !call.messages[0].content.includes('DO NOT COPY THIS') && call.max_tokens === 220, 'social instructions are fixed and unknown context fields are stripped');
 	ok((await state(env)).planning.includes('story_quest') && (await state(env)).talk.talks === 1, 'planner support advertised and requests use conversation ledger');
+	ok((await state(env)).features.includes('quest-continuity-v1'), 'quest continuity version is independently advertised');
 	ok((await send(env, { kind: 'arbitrary_prompt', context: {} })).status === 400 && env.AI.calls.length === 1, 'unknown planner modes refused before inference');
 	ok((await send(env, social, { origin: 'https://evil.example' })).status === 403, 'planner retains origin gate');
 	ok((await send(env, social, { extra: { padding: 'x'.repeat(6500) } })).status === 413, 'planner retains request size cap');
