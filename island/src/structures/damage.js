@@ -14,10 +14,11 @@
 
 import * as THREE from 'three';
 import { bid, frameOf, FACES, onFace, uOn, faceLen, hash } from './ids.js';
-import { buildShell, facadeOf } from './shell.js';
+import { buildShell, facadeOf, shellMaterial, fireSpots } from './shell.js';
 
 const HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
 const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
+const core = [0.4, 0.39, 0.37];
 
 export function createDamage(ctx) {
 	const { scene, isPhone, store, sounds, debris } = ctx;
@@ -25,8 +26,8 @@ export function createDamage(ctx) {
 	const group = new THREE.Group();
 	group.name = 'structures-damage';
 	scene.add(group);
-	// (one material for every shell: its colours are in the vertices)
-	const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0.02, side: THREE.DoubleSide });
+	// (one material for every shell: its colours are in the vertices, its windows drawn by it)
+	const mat = shellMaterial();
 	const shells = new Map();          // id -> { o, mesh, solid, rubble, key, rec }
 	let lastList = null, meshes = null, roofIdx = null;
 	const hidden = new Map();          // lot -> { slot, m, roof: [im, k, m], age }
@@ -65,7 +66,7 @@ export function createDamage(ctx) {
 		store.put(id, rec);
 		// the chunks and the dust
 		const F = frameOf(o), [lx, lz] = onFace(o, w.f, w.u), [nx, nz] = FACES[w.f], [wx, wz] = F.w(lx, lz), [wnx, wnz] = F.dir(nx, nz);
-		const y = o.y + 1.2 + w.y, col = lin(o.col || [0.7, 0.68, 0.64]), core = [0.4, 0.39, 0.37];
+		const y = o.y + 1.2 + w.y, col = lin(o.col || [0.7, 0.68, 0.64]);
 		const n = Math.min(isPhone ? 10 : 24, Math.round(4 + r * r * 9));
 		const out = cause === 'impact' ? -1 : 1;
 		for (let i = 0; i < n; i++) {
@@ -77,7 +78,8 @@ export function createDamage(ctx) {
 				wnx * sp * out + px * 0.4 + tx * (Math.random() - 0.5) * 3, 1 + Math.random() * 3, wnz * sp * out + pz * 0.4 + tz * (Math.random() - 0.5) * 3,
 				[s * (0.8 + Math.random() * 0.6), s * (0.5 + Math.random() * 0.5), s * (0.7 + Math.random() * 0.6)], Math.random() < 0.6 ? col : core);
 		}
-		debris.puff(wx + wnx * 0.6, y, wz + wnz * 0.6, Math.round(6 + r * 8), r, 0.6 + r * 0.4);
+		debris.puff(wx + wnx * 0.6, y, wz + wnz * 0.6, Math.round(6 + r * 8), r, 0.6 + r * 0.4, 0.72, { life: 8 + r * 5 });
+		if (r > 1.2) debris.haze(wx + wnx * 1.2, y, wz + wnz * 1.2, r, 12 + r * 6);
 		sounds.crumble({ x: wx, y, z: wz }, r);
 		if ((rec.c || 0) > before) fall(o, rec, before);
 		broke(o, id, rec);
@@ -87,16 +89,25 @@ export function createDamage(ctx) {
 	function fall(o, rec, before) {
 		const H = o.h - 1.2, F = frameOf(o), foot = o.y + 1.2, lost = H * (rec.c - before);
 		const y0 = foot + H * (1 - rec.c), col = lin(o.col || [0.7, 0.68, 0.64]);
+		// (the way it fell: the low side of the slant)
+		const fa = ((rec.s || 0) % 628) / 100, [fdx, fdz] = F.dir(-Math.cos(fa), -Math.sin(fa));
 		const n = Math.min(isPhone ? 6 : 14, 3 + Math.round(lost / 3));
 		for (let i = 0; i < n; i++) {
 			const lx = (Math.random() - 0.5) * o.w * 0.8, lz = (Math.random() - 0.5) * o.d * 0.8, [x, z] = F.w(lx, lz);
 			const s = Math.min(6, Math.max(1.4, Math.min(o.w, o.d) * (0.25 + Math.random() * 0.25)));
-			debris.chunk(x, y0 + Math.random() * lost * 0.7 + s / 2, z, lx * 0.15 + (Math.random() - 0.5) * 2, -1 - Math.random() * 2, lz * 0.15 + (Math.random() - 0.5) * 2, [s, s * (0.25 + Math.random() * 0.3), s * (0.6 + Math.random() * 0.5)], Math.random() < 0.5 ? col : [0.42, 0.41, 0.39]);
+			debris.chunk(x, y0 + Math.random() * lost * 0.7 + s / 2, z, fdx * 2 + (Math.random() - 0.5) * 2, -1 - Math.random() * 2, fdz * 2 + (Math.random() - 0.5) * 2, [s, s * (0.25 + Math.random() * 0.3), s * (0.6 + Math.random() * 0.5)], Math.random() < 0.5 ? col : [0.42, 0.41, 0.39]);
 		}
-		for (let i = 0; i < (isPhone ? 8 : 20); i++) { const [x, z] = F.w((Math.random() - 0.5) * o.w, (Math.random() - 0.5) * o.d); debris.chunk(x, y0 + Math.random() * lost, z, (Math.random() - 0.5) * 6, Math.random() * 2, (Math.random() - 0.5) * 6, [0.3 + Math.random() * 0.6, 0.2 + Math.random() * 0.4, 0.3 + Math.random() * 0.6], col); }
-		const k = Math.min(3.2, 1 + Math.sqrt(o.w * o.d) / 12);
-		debris.puff(o.x, foot + 1, o.z, isPhone ? 50 : 120, Math.max(o.w, o.d) * 0.6, k);
-		setTimeout(() => debris.puff(o.x, foot + 0.5, o.z, isPhone ? 30 : 70, Math.max(o.w, o.d) * 0.9, k * 1.2), 700);
+		// (and chunks of every size between: grit to blocks a metre across)
+		for (let i = 0; i < (isPhone ? 10 : 26); i++) {
+			const [x, z] = F.w((Math.random() - 0.5) * o.w, (Math.random() - 0.5) * o.d), q = Math.pow(Math.random(), 2.2), s = 0.12 + q * 1.1;
+			debris.chunk(x, y0 + Math.random() * lost, z, (Math.random() - 0.5) * 6 + fdx * 3, Math.random() * 2, (Math.random() - 0.5) * 6 + fdz * 3, [s * (0.7 + Math.random() * 0.6), s * (0.4 + Math.random() * 0.5), s * (0.7 + Math.random() * 0.6)], Math.random() < 0.6 ? col : core);
+		}
+		// the dust: a cloud up off it, a wall of it rolling out along the street (furthest the way
+		// it fell), and a haze over the heap that hangs on a minute and more
+		const k = Math.min(3.2, 1 + Math.sqrt(o.w * o.d) / 12), R = Math.max(o.w, o.d);
+		debris.puff(o.x, foot + 1, o.z, isPhone ? 40 : 100, R * 0.55, k, 0.72, { life: 18 + lost * 0.4 });
+		debris.puff(o.x + fdx * R * 0.25, foot + 0.4, o.z + fdz * R * 0.25, isPhone ? 30 : 80, R * 0.5, k * 1.1, 0.68, { roll: 4 + Math.sqrt(lost) * 1.3, life: 30 + lost * 0.6 });
+		debris.haze(o.x, foot + 1.5, o.z, R * 0.5, 60 + lost * 2);
 		sounds.collapse({ x: o.x, y: foot, z: o.z }, Math.min(2, lost / 10));
 		ctx.shake?.(Math.min(0.8, 0.15 + lost / 40));
 	}
@@ -184,7 +195,7 @@ export function createDamage(ctx) {
 			}
 		}
 		// near ones as shells, far ones as their scorched blocks; checked as you move
-		let n = 0;
+		let n = 0, built = 0;
 		const near = [...want.values()].map((o) => [Math.hypot(o.x - x, o.z - z) - Math.max(o.w, o.d) / 2, o]).sort((p, q) => p[0] - q[0]);
 		const keep = new Set();
 		for (const [d, o] of near) {
@@ -199,23 +210,36 @@ export function createDamage(ctx) {
 				setAside(o, M, list, false);
 				const p = progress(rec), key = JSON.stringify([rec.m, rec.c, p === null ? -1 : Math.round(p * 24)]);
 				let S = shells.get(id);
-				if (!S || S.key !== key || S.o !== o) {
+				// (one shell rebuilt a frame as the work goes on; a fresh wreck at once)
+				if (!S || ((S.key !== key || S.o !== o) && (built < 1 || S.fresh !== rec.t0))) {
+					built++;
 					if (S) { group.remove(S.mesh); S.mesh.geometry.dispose(); }
-					const B = buildShell(o, rec, p);
+					const B = buildShell(o, rec, p, { lite: isPhone });
 					const mesh = new THREE.Mesh(B.geo, mat);
 					mesh.position.set(o.x, o.y + 1.2, o.z); mesh.rotation.y = -o.a;
 					mesh.castShadow = true; mesh.receiveShadow = true;
 					group.add(mesh);
-					S = { o, mesh, solid: B.solid, rubble: B.rubble, key, rec, verts: B.verts };
+					S = { o, mesh, solid: B.solid, rubble: B.rubble, key, rec, verts: B.verts, fresh: rec.t0, fire: null };
 					shells.set(id, S);
 					ctx.release?.(o);
 				}
+				fires(S, o, rec, p);
 			} else {
 				if (e && !e.far) putBack(o, M);
 				setAside(o, M, list, true);
 			}
 		}
-		for (const [id, S] of shells) if (!keep.has(id)) { group.remove(S.mesh); S.mesh.geometry.dispose(); shells.delete(id); }
+		for (const [id, S] of shells) if (!keep.has(id)) { group.remove(S.mesh); S.mesh.geometry.dispose(); shells.delete(id); debris.burn(id, null); }
+	}
+	// a fresh wreck burns a while (an hour and a half of game time), until the crew is at it
+	function fires(S, o, rec, p) {
+		const lit = store.now() - (rec.t0 ?? -9) < 1.5 && (p === null || p < 0.08);
+		const key = lit ? JSON.stringify([rec.m, rec.c]) : '';
+		if (S.fire === key) return;
+		S.fire = key;
+		if (!lit) { debris.burn(bid(o), null); return; }
+		const F = frameOf(o), foot = o.y + 1.2;
+		debris.burn(bid(o), fireSpots(o, rec).map(([lx, y, lz, k]) => { const [wx, wz] = F.w(lx, lz); return { x: wx, y: foot + y, z: wz, k }; }));
 	}
 	let hiddenList = null;
 	const want = new Map();
@@ -265,6 +289,7 @@ export function createDamage(ctx) {
 	function repaired(id) {
 		const S = shells.get(id);
 		if (S) { group.remove(S.mesh); S.mesh.geometry.dispose(); shells.delete(id); }
+		debris.burn(id, null);
 		lastList = null;
 	}
 	// brought down by force (a demolition): c of its height lost
