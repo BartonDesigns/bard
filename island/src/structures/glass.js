@@ -320,7 +320,7 @@ export function createGlass(ctx) {
 			if (p.y + p.h / 2 < y0 + 0.4 || p.y - p.h / 2 > y1) continue;
 			// (momentum against the pane's: a sprint breaks a shop front; a car at a walking pace
 			// cracks it, at a jog it is through)
-			const need = 420 + p.w * p.h * 60;
+			const need = 300 + p.w * p.h * 50;
 			if (mass * into > need) { shatter(p, [vx * 0.6, 0.5, vz * 0.6], true); n++; }
 			else if (mass * into > need * 0.45 && !p.crack) { p.crack = [0.5 + u / p.w, Math.min(0.9, Math.max(0.1, (y0 + 1 - (p.y - p.h / 2)) / p.h)), 0.7, Math.random() * 100]; sounds.crack(p); cracked = true; }
 		}

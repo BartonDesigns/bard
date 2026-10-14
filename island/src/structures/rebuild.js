@@ -62,7 +62,7 @@ export function createRebuild(ctx) {
 	group.name = 'structures-crews';
 	scene.add(group);
 	const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.08 });
-	let cataclysm = false, tickT = 0;
+	let cataclysm = false, tickAt = -1e9;
 	const sites = new Map();          // id -> { rec, root, scaffold, crane, jib, workers, stage, key }
 	// how far along a rebuild is (0..1), or null before the crew has started
 	const progress = (rec) => (rec?.r0 == null ? null : Math.min(1, Math.max(0, (store.now() - rec.r0) / (rec.rd || 3))));
@@ -181,8 +181,8 @@ export function createRebuild(ctx) {
 		sites.delete(S.id);
 	}
 	function update(cam, dt) {
-		tickT -= dt;
-		if (tickT <= 0) { tickT = 0.5; const now = store.now(); schedule(Math.max(0, now - (lastNow ?? now))); lastNow = now; }
+		// (twice a second by the clock on the wall, however slowly the frames come)
+		if (performance.now() - tickAt > 500 || store.now() - (lastNow ?? 0) > 0.05) { tickAt = performance.now(); const now = store.now(); schedule(Math.max(0, now - (lastNow ?? now))); lastNow = now; }
 		const x = cam.position.x, z = cam.position.z;
 		const live = new Set();
 		if (!cataclysm) store.each((id, rec) => {

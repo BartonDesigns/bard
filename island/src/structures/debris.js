@@ -67,17 +67,20 @@ export function createDebris(scene, { isPhone = false, ground, solids = () => []
 		Object.assign(c, { live: true, age: 0, still: 0, size, x, y, z, vx, vy, vz, rx: Math.random() * 6, ry: Math.random() * 6, rz: Math.random() * 6, wx: (Math.random() - 0.5) * 8, wy: (Math.random() - 0.5) * 8, wz: (Math.random() - 0.5) * 8, fade: 1 });
 		chunks.setColorAt(i, CO.setRGB(col[0], col[1], col[2]));
 		chunks.instanceColor.needsUpdate = true;
-		if (ensureWorld()) {
-			if (Math.hypot(x - fx, z - fz) > 22) regrid(x, z);
-			const b = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(x, y, z).setLinvel(vx, vy, vz).setAngvel({ x: c.wx, y: c.wy, z: c.wz }).setLinearDamping(0.05).setAngularDamping(0.4).setCcdEnabled(size[0] * size[1] * size[2] < 0.05));
-			world.createCollider(R.ColliderDesc.cuboid(size[0] / 2 * 0.9, size[1] / 2 * 0.9, size[2] / 2 * 0.9).setDensity(2.2).setFriction(0.8).setRestitution(0.12), b);
-			c.body = b;
-		}
+		if (ensureWorld()) body(c);
+	}
+	function body(c) {
+		if (Math.hypot(c.x - fx, c.z - fz) > 22) regrid(c.x, c.z);
+		const b = world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(c.x, c.y, c.z).setRotation(QT.setFromEuler(EU.set(c.rx, c.ry, c.rz))).setLinvel(c.vx, c.vy, c.vz).setAngvel({ x: c.wx, y: c.wy, z: c.wz }).setLinearDamping(0.05).setAngularDamping(0.4).setCcdEnabled(c.size[0] * c.size[1] * c.size[2] < 0.05));
+		world.createCollider(R.ColliderDesc.cuboid(c.size[0] / 2 * 0.9, c.size[1] / 2 * 0.9, c.size[2] / 2 * 0.9).setDensity(2.2).setFriction(0.8).setRestitution(0.12), b);
+		c.body = b;
 	}
 	function stepChunks(dt) {
 		let any = false;
 		for (const c of C) if (c.live) { any = true; break; }
 		if (!any) return;
+		// (the physics arrived while they flew: they become bodies where they are)
+		if (!world && R && ensureWorld()) for (const c of C) if (c.live && !c.body && c.still < 0.5) body(c);
 		if (world) {
 			acc += Math.min(dt, 0.1);
 			let n = 0;
