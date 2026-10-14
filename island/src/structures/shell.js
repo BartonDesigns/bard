@@ -113,6 +113,8 @@ function builder() {
 		vert(c, nn, cl, U, U ? uv[2][0] : 0, U ? uv[2][1] : 0);
 		vert(d, nn, cl, U, U ? uv[3][0] : 0, U ? uv[3][1] : 0);
 	}
+	// a quad with a normal at each corner
+	function quadN(a, b, c, d, N, cl) { vert(a, N[0], cl, null, 0, 0); vert(b, N[1], cl, null, 0, 0); vert(c, N[2], cl, null, 0, 0); vert(a, N[0], cl, null, 0, 0); vert(c, N[2], cl, null, 0, 0); vert(d, N[3], cl, null, 0, 0); }
 	// a box about (x, y, z), half sizes, turned by yaw about y, pitched about its own x, rolled about its own z
 	function box(x, y, z, hx, hy, hz, cl, yaw = 0, pitch = 0, roll = 0, shades = SH6) {
 		const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
@@ -152,7 +154,7 @@ function builder() {
 		g.computeBoundingSphere();
 		return g;
 	}
-	return { quad, box, bar, geo, count: () => n };
+	return { quad, quadN, box, bar, geo, count: () => n };
 }
 const SH6 = [1, 0.5, 0.8, 0.75, 0.85, 0.7];
 
@@ -183,7 +185,7 @@ export function rubbleAt(o, rec, lx, lz, k = 1) {
 		const m0 = Math.min(7, 1.2 + H * c * 0.22), lean = (lx * fx + lz * fz) / (Math.hypot(o.w, o.d) / 2 + 1);
 		const m = m0 * (1 + 0.6 * Math.max(0, lean));
 		// (a fifth or so of what stood: a storey's floors and walls pack down to a metre or less)
-		const peak = Math.min(H * 0.3, Math.max(0.6, H * c * 0.2 + 0.5)) * (1 + 0.25 * lean);
+		const peak = Math.min(H * 0.3, Math.min(o.w, o.d) * 0.35, Math.max(0.6, H * c * 0.2 + 0.5)) * (1 + 0.25 * lean);
 		const ex = Math.max(0, Math.abs(lx) - o.w / 2), ez = Math.max(0, Math.abs(lz) - o.d / 2);
 		const edge = 1 - smooth(0, m, Math.hypot(ex, ez));
 		const inner = smooth(0, Math.min(o.w, o.d) * 0.35, Math.min(o.w / 2 - Math.abs(lx), o.d / 2 - Math.abs(lz)) + m * 0.4);
@@ -219,7 +221,7 @@ export function fireSpots(o, rec) {
 }
 
 export function buildShell(o, rec, p = null, opts = {}) {
-	const G = builder(), { quad, box, bar } = G;
+	const G = builder(), { quad, quadN, box, bar } = G;
 	const H = o.h - 1.2, F = facadeOf(o), st = F.storey, wall = lin(o.col || [0.7, 0.68, 0.64]);
 	const seed = rec.s || 0, lite = !!opts.lite;
 	const S = standingOf(o, rec), c = S.c;
@@ -558,18 +560,19 @@ export function buildShell(o, rec, p = null, opts = {}) {
 		const m = c > 0 ? Math.min(7, 1.2 + H * c * 0.22) * lean : 2.5, X0 = -o.w / 2 - m, X1 = o.w / 2 + m, Z0 = -o.d / 2 - m, Z1 = o.d / 2 + m;
 		const N = Math.max(4, Math.min(lite ? 12 : 22, Math.round(Math.max(X1 - X0, Z1 - Z0) / 2.2)));
 		const hAt = (x, z) => rubbleAt(o, rec, x, z, clearK);
-		const dust = lin([0.62, 0.6, 0.56]);
+		const dust = lin([0.66, 0.62, 0.55]);
+		// (the heap shaded smooth: each corner's normal from the slope round it)
+		const nAt = (x, z) => { const e = 0.6, gx = (hAt(x + e, z) - hAt(x - e, z)) / (2 * e), gz = (hAt(x, z + e) - hAt(x, z - e)) / (2 * e), l = Math.hypot(gx, 1, gz); return [-gx / l, 1 / l, -gz / l]; };
 		for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
 			const x0 = X0 + (X1 - X0) * i / N, x1 = X0 + (X1 - X0) * (i + 1) / N, z0 = Z0 + (Z1 - Z0) * j / N, z1 = Z0 + (Z1 - Z0) * (j + 1) / N;
 			const h00 = hAt(x0, z0), h10 = hAt(x1, z0), h11 = hAt(x1, z1), h01 = hAt(x0, z1);
 			if (h00 + h10 + h11 + h01 < 0.04) continue;
-			const ex = new THREE.Vector3(x1 - x0, h10 - h00, 0), ez = new THREE.Vector3(0, h01 - h00, z1 - z0), n = ez.cross(ex).normalize();
 			// (dusty grey, with the wall's colour, a room's paint and soot in patches)
 			// (in clumps a few cells across, not cell by cell)
 			const r = hash(i + seed, j), r2 = hash(Math.floor(j / 3) + 3, Math.floor(i / 3) + seed);
 			let cl = shade(dust, 0.86 + r * 0.12);
 			if (r2 < 0.22) cl = mix(cl, wall, 0.55); else if (r2 > 0.9) cl = mix(cl, PAINT[Math.floor(r * PAINT.length)], 0.4); else if (r2 > 0.8) cl = shade(cl, 0.45);
-			quad([x0, h00 - 0.05, z0], [x0, h01 - 0.05, z1], [x1, h11 - 0.05, z1], [x1, h10 - 0.05, z0], [n.x, n.y, n.z], cl);
+			quadN([x0, h00 - 0.05, z0], [x0, h01 - 0.05, z1], [x1, h11 - 0.05, z1], [x1, h10 - 0.05, z0], [nAt(x0, z0), nAt(x0, z1), nAt(x1, z1), nAt(x1, z0)], cl);
 		}
 		// the slabs pancaked into a full collapse, tilted and half buried
 		if (c >= 0.85) {

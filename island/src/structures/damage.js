@@ -141,7 +141,10 @@ export function createDamage(ctx) {
 		return map;
 	}
 	function setAside(o, M, list, far) {
-		if (hidden.has(o) || o.slot === undefined || !M.near) return;
+		const was = hidden.get(o);
+		// (set aside for a hole, then brought down: its roof's things go now)
+		if (was) { if (!was.extra && !was.far && M.near && store.get(bid(o))?.c > 0) was.extra = offTheRoof(o, M); return; }
+		if (o.slot === undefined || !M.near) return;
 		const e = { slot: o.slot, m: new THREE.Matrix4(), roof: null, age: null };
 		const rec = store.get(bid(o));
 		const ages = M.near.geometry.attributes.aAge;
