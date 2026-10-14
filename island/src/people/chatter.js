@@ -81,6 +81,8 @@ export function createChatter({ mount, camera, world, people, talkers, voice, co
 			deed: deeds()?.memoryOf?.(d.seed) || null,
 			// and something about money, now and then (the bank's moneyTalk, through npc-money.js)
 			money: deeds()?.moneyLine?.(d.seed) || null,
+			// a theft round here they heard about, out of your sight (people/npc-leads.js)
+			lead: d.child || d.teen ? null : deeds()?.leadLine?.(d.seed) || null,
 		};
 	}
 

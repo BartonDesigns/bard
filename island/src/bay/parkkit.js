@@ -74,7 +74,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 	const wet = (x, z) => g(x, z) < 0.6 || (lake && lake.waterAt(x, z) != null);
 
 	function build(P) {
-		const parts = new Map(), B = { P, group: new THREE.Group() };
+		const parts = new Map(), B = { P, group: new THREE.Group(), seats: [] };
 		const add = (m, geo) => { if (!parts.has(m)) parts.set(m, []); parts.get(m).push(geo.index ? geo.toNonIndexed() : geo); };
 		let seed = 1;
 		const rnd = () => hh(P.x * 0.011 + seed++ * 0.73, P.z * 0.013 - seed * 0.29);
@@ -127,6 +127,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 			if (!t) continue;
 			const F = frame(t, rnd() * 6.28);
 			box(F, tableM, 1.83, 0.05, 0.76, 0, 0.71); for (const s of [-0.62, 0.62]) box(F, tableM, 1.83, 0.05, 0.25, 0, 0.41, s);
+			B.seats.push({ kind: 'picnic', x: t.x, y: t.y, z: t.z, heading: Math.atan2(F.elements[8], F.elements[0]) });
 			for (const u of [-0.7, 0.7]) { box(F, mat.black, 0.06, 0.72, 0.06, u, 0, 0); box(F, mat.black, 0.06, 0.06, 1.5, u, 0.38, 0); }
 			if (has('bbq')) { cyl(F, mat.black, 0.05, 0.85, 0, 0, 2.2); box(F, mat.black, 0.6, 0.25, 0.45, 0, 0.8, 2.2); }
 		}
@@ -136,6 +137,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 			if (!b) continue;
 			const F = frame(b, facing(b));
 			box(F, mat.redwood, 1.8, 0.05, 0.42, 0, 0.43); box(F, mat.redwood, 1.8, 0.4, 0.05, 0, 0.5, -0.22);
+			B.seats.push({ kind: 'park', x: b.x, y: b.y, z: b.z, heading: facing(b) });
 			for (const u of [-0.8, 0.8]) box(F, mat.black, 0.06, 0.45, 0.45, u, 0, -0.02);
 		}
 		// a drinking fountain (a high and a low bowl, and one for dogs)
@@ -174,7 +176,7 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 				for (const u of [1.1, 6.9]) for (const s of [-0.9, 0.9]) box(F, mat.steel, 0.08, 2.75, 0.08, u, 0, 2 + s, (u < 4 ? 1 : -1) * 0.12);
 				for (let k = 0; k < 4; k++) { const sx = 2.1 + k * 1.2; box(F, mat.chain, 0.02, 2.1, 0.02, sx - 0.2, 0.5, 2); box(F, mat.chain, 0.02, 2.1, 0.02, sx + 0.2, 0.5, 2); box(F, M('#1d1d1d', 0.8), 0.45, 0.05, 0.18, sx, 0.48, 2); }
 				// benches round it, facing in
-				for (const [bx, bz, a] of [[-10.5, 0, Math.PI / 2], [10.5, 0, -Math.PI / 2]]) { const Fb = F.clone().multiply(new THREE.Matrix4().makeRotationY(a).setPosition(bx, 0, bz)); box(Fb, mat.redwood, 1.8, 0.05, 0.42, 0, 0.43); box(Fb, mat.redwood, 1.8, 0.4, 0.05, 0, 0.5, -0.22); }
+				for (const [bx, bz, a] of [[-10.5, 0, Math.PI / 2], [10.5, 0, -Math.PI / 2]]) { const Fb = F.clone().multiply(new THREE.Matrix4().makeRotationY(a).setPosition(bx, 0, bz)); box(Fb, mat.redwood, 1.8, 0.05, 0.42, 0, 0.43); box(Fb, mat.redwood, 1.8, 0.4, 0.05, 0, 0.5, -0.22); const e = Fb.elements; B.seats.push({ kind: 'park', x: e[12], y: e[13], z: e[14], heading: Math.atan2(e[8], e[0]) }); }
 			}
 		}
 		// courts: a fenced bank of two, lines painted
@@ -221,5 +223,14 @@ export function createParkKit(scene, bay, real, { isPhone = false, lake = null }
 	}
 	// the park you are in, for a note
 	const parkAt = (x, z) => SITES.find((P) => Math.hypot(P.x - x, P.z - z) < 300) || GEN.find((P) => Math.hypot(P.x - x, P.z - z) < 120) || null;
-	return { group: root, update, parkAt, count: () => built.size, push: rooms.push, floor: rooms.floor, restrooms: rooms.where };
+	// the park benches and picnic tables near a point (for a bag left on one, people/bag-spots.js)
+	function seatsNear(x, z, r = 60) {
+		const out = [];
+		for (const B of built.values()) {
+			if (!B.seats?.length || Math.hypot(B.P.x - x, B.P.z - z) > r + 400) continue;
+			for (const s of B.seats) if (Math.hypot(s.x - x, s.z - z) <= r) out.push({ ...s, place: B.P.name });
+		}
+		return out;
+	}
+	return { group: root, update, parkAt, seatsNear, count: () => built.size, push: rooms.push, floor: rooms.floor, restrooms: rooms.where };
 }
