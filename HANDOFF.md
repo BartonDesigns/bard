@@ -1,6 +1,19 @@
 ## October 15, 2026: mobile controls
 
 The touch HUD has one look and one layout in portrait and landscape: round, semi-transparent buttons with a white line glyph and no words under or inside them (`island/src/ui/touch-skin.js`, applied once from `main.js` on touch screens only). Glyphs are inline SVG masks matched to each button by its name; every button keeps its `aria-label` (one without is named from its words) and a title. By thumb, inside the safe areas: the primary action bottom right (Fire, Strike, the pedal, the cast) at 68 px with Aim/Block/brake, Reload/Dodge/a vehicle's gun, Mode/Grab and Surrender round it at 52 px; jump and the context buttons (leave the car, the boat, the rod, which car, assist, camera) in a column above; the stick, or steering (and an aircraft's Up and Down), bottom left; things to act on nearby in a row between the thumbs; back, home and the folded contract top left; fly, gear, places, the menu, music and settings in one row top right; tips under the top row. Driving, melee, boats and fishing only show their own controls; the drive button comes out of the menu as an exit while you drive. Control tips on a phone show once (`firstTime`). Desktop unchanged apart from tooltips. Tests: `island/tools/touch-skin.test.mjs`, `island/tools/mobile-controls-browser.cjs` (now with the skin). See `docs/mobile-controls-2026-10-15.md`.
+## October 15, 2026: skin
+
+The hands no longer read as flat plastic, engine-wide. Skin lighting is now:
+- a per-channel wrap with a red terminator;
+- red light through thin flesh when backlit;
+- two shines (a broad one and the oil's), with the sky's sheen reflected (there is no reflection map);
+- uneven colour and two sizes of pore.
+
+Your own first-person hands and forearms (fists and every weapon) add the full layer: creases at every finger joint, palm lines, crosshatched skin lines, tendons, veins, the wrist bone, forearm muscle relief, body hair, real nails (lunula, free edge, gloss), redder knuckles and fingertips, paler palms, and shade between the fingers and where they close on the grip. All of it is drawn from a map that `people/hand-surface.js` lays on the refined surface. NPC faces and hands get the lighter layer.
+
+There are no new textures, geometry or draws, and the skin still compiles 3 programs on desktop and 3 on phone. The governor scales the fine detail through one shared uniform. Your hands' map costs 36 bytes a vertex.
+
+Only `people/skin.js` and `people/hand-surface.js` changed (poses, grips and sleeves are untouched). Tests: `island/tools/skin.test.mjs`. Harness: `tools/skin-preview.mjs`, `skin-browser.mjs`. See `docs/skin-2026-10-15.md`.
 
 ## October 15, 2026: follow-ups
 
@@ -17,6 +30,10 @@ Sleeves no longer read as tubes, on the avatar in third person and on every NPC.
 ## October 15, 2026: first-person sleeves, cuffs and gloves
 
 Sleeves no longer read as tubes. A shared garment module (`island/src/people/sleeve.js`) dresses your first-person arms in both the weapon view (`crysis/viewmodel.js`, the sleeve block only) and the fists (`combat/melee-view.js`) from the outfit you actually wear: the cross-section measured on your own forearm and bridged as cloth (flatter inside, fuller outside, tapering to the wrist), ease by fabric and fit, and real ends with thickness (ribbed knit cuffs, buttoned bands with a placket, a combat shirt's tabbed cuff, a shell's storm cuff, a tee's coverstitched hem, rolled sleeves as a thick folded band at the elbow). A jacket over a shirt shows both hems; tactical gloves for soldiers and the tactical team are shells over the hand's skin. Folds follow the bones each frame (elbow bend, the hand's turn, reach, aim ride-up, gravity) in the vertex shader and per pixel, with procedural cloth (jersey, sweatshirt, shirting, ripstop twill, nylon with sheen, denim, canvas, fleece fuzz, leather, rib knit, flannel), camouflage at its printed size, seams and stitching, and wear. Skin hidden under cloth is left out of the hands' mesh. The straight punches now run the forearm back toward the shoulder. Rolled sleeves are `sleeves: 'elbow', roll: true` on an outfit's top. Harness: `island/tools/sleeve-preview.mjs`, `sleeve-browser.mjs`; tests `island/tools/sleeve.test.mjs`. See `docs/sleeves-2026-10-15.md`.
+
+## October 15, 2026: thumbs and close-combat grips
+
+No finger or thumb bends back any more: every joint has an anatomical range in its own bone frame, enforced after every solve and blend (`crysis/finger-pose.js LIMITS`, `limitPose`), and the thumb curls across the palm instead of back. The rifle thumb hooks round the back of the grip like a J (through the thumbhole on the Mossback). Close combat's hands now use the same solver (fist with the thumb over the fingers, hammer grips with the thumb wrapped), and there are two new pick-ups, a hunting knife and a machete (`combat/melee-items.js`, rules in `melee-rules.js` and `brawl.js`, rare drops in town). See the thumb section of `docs/weapon-hands-2026-10-15.md`.
 
 ## October 15, 2026: weapon hands
 

@@ -9,7 +9,7 @@ const CONTROLS = [
 	['All controls', '☷', 'menu'], ['Fly (F)', '✈', 'plane'], ['Gear and trade (I)', '', 'bag'], ['Teleport to a place', '', 'pin'],
 	['Jump', '⤒', 'jump'], ['Climb', '⇡', 'climb'], ['Dive', '⤓', 'dive'], ['Swim up', '⇡', 'swimup'], ['Descend', '⇣', 'descend'],
 	['Fire', '', 'fire'], ['Draw', '', 'bow'], ['Release', '', 'bow'], ['Reload', 'R', 'reload'], ['Mode', 'AUTO', 'auto'], ['Mode', 'SEMI', 'semi'], ['Mode', 'BURST', 'burst'],
-	['Aim', '', 'aim'], ['Aim held item', 'Aim', 'aim'], ['Strike', '', 'fist'], ['Swing', '', 'swing'], ['Block', '', 'block'], ['Dodge', '', 'dodge'],
+	['Aim', '', 'aim'], ['Aim held item', 'Aim', 'aim'], ['Strike', '', 'fist'], ['Swing', '', 'swing'], ['Slash', '', 'slash'], ['Block', '', 'block'], ['Dodge', '', 'dodge'],
 	['Grab', '', 'grab'], ['Takedown', '', 'takedown'], ['Throw', '', 'throw'], ['Surrender', '✋ Surrender', 'surrender'],
 	['Drive the road (V)', '', 'road'], ['Stop driving (V)', '', 'exit'], ['Which car (N)', 'Sedan ▸', 'car'], ['Let the road steer (M)', 'Assist', 'assist'],
 	['Drive it yourself (M)', 'Drive', 'wheel'], ["Camera: from behind or the driver's seat (C)", '', 'camera'],

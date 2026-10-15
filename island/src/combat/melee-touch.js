@@ -57,7 +57,8 @@ export function createMeleeTouch({ mount, on }) {
 			vis(strike, show); vis(block, show && fight); vis(dodge, show && fight); vis(grab, show && (fight || take || holding));
 			named(grab, take ? 'Takedown' : holding ? 'Throw' : 'Grab');
 			grab.classList.toggle('lit', take);
-			named(strike, item ? 'Swing' : 'Strike');
+			// (a blade slashes; a bat, a pipe or a bottle swings)
+			named(strike, item === 'knife' || item === 'machete' ? 'Slash' : item ? 'Swing' : 'Strike');
 		},
 		dispose() { for (const b of [strike, block, dodge, grab, style]) b.remove(); },
 		buttons: { strike, block, dodge, grab },
