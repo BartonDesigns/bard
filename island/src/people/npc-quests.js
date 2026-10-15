@@ -90,7 +90,8 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (onIsland) return { region: { id: `${key}:island`, name: 'the island' }, situation: situationOf({ name: `${key}:island`, zone: 'island' }), town: null };
 		return { region: { id: `world:${key}`, name: placeName() || key }, situation: situationOf({ name: key }), town: null };
 	}
-	const regionNow = () => here.region;
+	// (fresh: look again now rather than at the last two-second check, as when you've just been moved)
+	const regionNow = (fresh = false) => { if (fresh) try { here = whereNow(); } catch { /* keep the last */ } return here.region; };
 
 	// someone's disposition, leaned on by their region, the world, their town, their deeds, their pocket
 	function dispoOf(seed, id = `npc:${seed >>> 0}`, region = here.region.id) {

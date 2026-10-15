@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { commercialStack } from '../interiors/workplace-plan.js';
 import { toWorld } from './geo.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { hardwood, conifer, shrub, fern, swayMaterial } from '../world/vegetation.js';
+import { hardwood, conifer, shrub, fern, palm, swayMaterial } from '../world/vegetation.js';
 import { addLodFade, NONE_IN, detailClock, updateDetailClock } from '../world/lodfade.js';
 import * as TX from '../world/textures.js';
 import { STYLE, BLOCKS, toGrid, fromGrid, ERA, eraFor, sfDistrict } from './styles.js';
@@ -33,6 +33,7 @@ import { inCoastField, coastVersion } from './coastside.js';
 import { makeClearance } from './clearance.js';
 import { createEconomyLayer } from '../economy/layer.js';
 import { settleLots } from '../structures/lots.js';        // structures: settled lots
+import { streetTrees, treeColour, autumnNow } from './streettrees.js';       // streets by era: their trees
 
 const hash = (x, z) => { let h = Math.imul(Math.floor(x) | 0, 374761393) ^ Math.imul(Math.floor(z) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // a kind's fraction carries a detail for the facade shader: where the front door is on a
@@ -557,7 +558,7 @@ const IMPOSTOR_FRAG = /* glsl */`
 	varying float vSp; varying vec3 vTint; varying float vD;
 	#include <fog_pars_fragment>
 	void main(){
-		vec2 uv = vec2((gl_PointCoord.x + floor(vSp + 0.5)) / 3.0, 1.0 - gl_PointCoord.y);
+		vec2 uv = vec2((gl_PointCoord.x + floor(vSp + 0.5)) / 4.0, 1.0 - gl_PointCoord.y);
 		vec4 t = texture2D(uAtlas, uv);
 		// dissolve in and out across the hand-over bands, as the other tiers do
 		float fade = smoothstep(uBand.x, uBand.y, vD) * (1.0 - smoothstep(uBand.z, uBand.w, vD));
@@ -652,7 +653,11 @@ export function createCity(shared, scene, bay, real = null) {
 		{ height: 11, crown: 'round', bark: [1.12, 1.08, 1.0], leaf: [1.1, 1.05, 0.85] },      // plane, sycamore, elm
 		{ height: 9, crown: 'oak', bark: [0.75, 0.72, 0.7], leaf: [0.6, 0.72, 0.58] },  // coast live oak: a dark, dense dome
 		{ height: 36, crown: 'columnar', bark: [1.05, 0.62, 0.45], leaf: [0.55, 0.72, 0.6], conifer: true }, // redwood, Douglas-fir, cypress, pine
+		{ height: 14, lean: 0.3, frondTint: [0.95, 1, 0.9], fronds: 18, nuts: false, palm: true },   // the streets' fan and date palms (streettrees.js)
 	];
+	// each kind's builder (a palm's has no middle detail of its own: its far one stands in)
+	const makeOf = (g) => (g.palm ? (seed, far, mid, gg) => palm(seed, far || mid, gg) : g.conifer ? conifer : hardwood);
+	const palmT = { bark: (() => { const t = TX.palmBark(); t.repeat.set(1, 7); return t; })(), frond: TX.palmFrond() };
 	const LEAF_REF = [0.25, 0.35, 0.15];
 	// the detail levels and where they hand over (metres): each dissolves into the next
 	// across a band rather than popping; the far masses dissolve out at the edge
@@ -662,13 +667,14 @@ export function createCity(shared, scene, bay, real = null) {
 	const LOD = PHONE ? { near: [NONE_IN[0], NONE_IN[1], 150, 175], mid: [150, 175, 430, 470], far: [430, 470, 2000, 2400], shrub: [NONE_IN[0], NONE_IN[1], 260, 300] }
 		: { near: [NONE_IN[0], NONE_IN[1], 185, 215], mid: [185, 215, 560, 610], far: [560, 610, 2400, 2800], shrub: [NONE_IN[0], NONE_IN[1], 360, 410] };
 	const MARGIN = 45;                                        // the trees are re-placed every 40 m of travel
-	const tierMesh = (parts, cap, shadow, band, kind = 3) => {
+	const tierMesh = (parts, cap, shadow, band, kind = 3, isPalm = false) => {
 		// each tier its own materials, so each can carry its own band
-		const mats = [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
+		const mats = isPalm ? [swayMaterial({ map: palmT.bark, roughness: 0.9 }, shared, 1), swayMaterial({ map: palmT.frond, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75 }, shared, 1)]
+			: [swayMaterial({ map: barkT, roughness: 0.95 }, shared, 1), swayMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82 }, shared, 0.8)];
 		for (const M of mats) addLodFade(M.material, 'uniform', band);
 		// photographed bark (with its relief) once it loads; lichen on the oaks' trunks
-		usePhoto(mats[0].material, [['bark', [2, 3], { mean: 0.8, contrast: 1.2, normal: 3 }, 0.9]]);
-		mossify(mats[0].material, kind);
+		if (!isPalm) usePhoto(mats[0].material, [['bark', [2, 3], { mean: 0.8, contrast: 1.2, normal: 3 }, 0.9]]);
+		if (!isPalm) mossify(mats[0].material, kind);
 		if (kind === 1) lichenLeaves(mats[1].material);
 		return parts.map((geo, n) => {
 			const S = mats[n];
@@ -690,21 +696,21 @@ export function createCity(shared, scene, bay, real = null) {
 		return a.map((v) => v / Math.max(1, n));
 	})();
 	const treeTiers = SPECIES.map((g, k) => {
-		const make = g.conifer ? conifer : hardwood;
+		const make = makeOf(g);
 		const nearT = make(9101 + k * 17, false, false, g), midT = make(9101 + k * 17, false, true, g);
 		const leafGeo = midT.parts[1];
 		// (the impostor's square spans the tree's height or its width, whichever is more)
 		const bbAll = new THREE.Box3().setFromBufferAttribute(leafGeo.attributes.position).union(new THREE.Box3().setFromBufferAttribute(midT.parts[0].attributes.position));
 		const sizeK = Math.max(bbAll.max.y - Math.max(0, bbAll.min.y), bbAll.max.x - bbAll.min.x, bbAll.max.z - bbAll.min.z) / 0.98 / midT.height;
-		return { sizeK, near: tierMesh(nearT.parts, 2600, true, LOD.near, k), mid: tierMesh(midT.parts, 12000, false, LOD.mid, k), H: nearT.height, Hm: midT.height };
+		return { sizeK, near: tierMesh(nearT.parts, g.palm ? 900 : 2600, true, LOD.near, k, !!g.palm), mid: tierMesh(midT.parts, g.palm ? 3000 : 12000, false, LOD.mid, k, !!g.palm), H: nearT.height, Hm: midT.height };
 	});
 	const shrubT = shrub(9301), shrubs = tierMesh(shrubT.parts, PHONE ? 5000 : 9000, true, LOD.shrub);
 	// sword ferns on the shady forest floor (under the redwoods, on the north slopes, in the draws)
 	const fernT = fern(9331, { tint: [0.85, 1.05, 0.8], size: 1.1 }), ferns = [(() => { const S = swayMaterial({ side: THREE.DoubleSide, roughness: 0.8, near: { r: 1.6, cap: 1.2 } }, shared, 0.6); addLodFade(S.material, 'uniform', LOD.shrub); const im = new THREE.InstancedMesh(fernT.parts[0], S.material, PHONE ? 3000 : 7000); im.count = 0; im.frustumCulled = false; im.receiveShadow = true; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array((PHONE ? 3000 : 7000) * 3), 3); group.add(im); return im; })()];
 	// the far tier: one point per tree, drawn as its species' impostor
 	const atlasCv = document.createElement('canvas');
-	atlasCv.width = IMP * 3; atlasCv.height = IMP;
-	SPECIES.forEach((g, k) => atlasCv.getContext('2d').drawImage(treeImpostor((g.conifer ? conifer : hardwood)(9101 + k * 17, false, true, g).parts, texAvg), k * IMP, 0));
+	atlasCv.width = IMP * 4; atlasCv.height = IMP;
+	SPECIES.forEach((g, k) => atlasCv.getContext('2d').drawImage(treeImpostor(makeOf(g)(9101 + k * 17, false, true, g).parts, texAvg), k * IMP, 0));
 	const atlas = new THREE.CanvasTexture(atlasCv);
 	atlas.colorSpace = THREE.SRGBColorSpace; atlas.generateMipmaps = true; atlas.minFilter = THREE.LinearMipmapLinearFilter;
 	const fp = { pos: new Float32Array(TCAP * 3), size: new Float32Array(TCAP), sp: new Float32Array(TCAP), tint: new Float32Array(TCAP * 3) };
@@ -1656,11 +1662,13 @@ export function createCity(shared, scene, bay, real = null) {
 		treeX = x; treeZ = z;
 		const cn = new Map(), next = (im) => { const c = cn.get(im) || 0; if (c >= im.instanceMatrix.count) return -1; cn.set(im, c + 1); return c; };
 		let nf = 0;
+		const aut = autumnNow();          // the deciduous street trees' autumn (streettrees.js)
 		for (const t of treeList) {
 			const d = Math.hypot(t.x - x, t.z - z);
 			const yaw = hash(t.x * 3.1, t.z * 1.7) * 6.283;
 			q.setFromAxisAngle(Y, yaw);
-			const tint = [0, 1, 2].map((c) => Math.min(1.35, Math.max(0.65, t.col[c] / LEAF_REF[c])));
+			const tc = t.fall ? treeColour(t, aut) : t.col, lo = t.fall ? 0.35 : 0.65, hi = t.fall ? 2.6 : 1.35;
+			const tint = [0, 1, 2].map((c) => Math.min(hi, Math.max(lo, tc[c] / LEAF_REF[c])));
 			if (t.fern) {
 				if (d > LOD.shrub[3] + MARGIN) continue;
 				const k = next(ferns[0]); if (k < 0) continue;
@@ -1684,8 +1692,8 @@ export function createCity(shared, scene, bay, real = null) {
 				const k = next(tier[0]);
 				if (k < 0) continue;
 				next(tier[1]);
-				const s2 = t.h / H;
-				m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(s2, s2, s2));
+				const s2 = t.h / H, sw = s2 * (t.nx || 1);
+				m4.compose(p.set(t.x, t.y + 0.2, t.z), q, sc.set(sw, s2, sw));
 				tier[0].setMatrixAt(k, m4); tier[1].setMatrixAt(k, m4); tier[1].setColorAt(k, col.setRGB(tint[0], tint[1], tint[2]));
 			}
 			if (d < LOD.far[0] - MARGIN) continue;
@@ -1845,6 +1853,9 @@ export function createCity(shared, scene, bay, real = null) {
 	// buildings with their rooms built inside keep their block, its front door cut out:
 	// key -> [door x across the front from the centre, sill above the block's foot, width]
 	const doors = new Map();
+	// (a building with its rooms built for real near you shows them through its own windows:
+	// the economy's painted shopfront on it goes, economy/storefront.js)
+	economy.setBuilt((o) => !!o.wrecked || !!o.src?.grp?.near || doors.has(lotKey(o)));
 	function setDoor(o, v) {
 		const k = lotKey(o);
 		if (v) doors.set(k, v); else doors.delete(k);
@@ -2170,12 +2181,14 @@ export function createCity(shared, scene, bay, real = null) {
 		realBuildings(x, z, 2000, list, !globe);
 		settleLots(list, x, z);          // structures: no lot through another, a freeway or a landmark; alleys planned
 		decorate(list, x, z, 700);
+		// the streets' own trees by their era, in place of the map's plain rows (streettrees.js)
+		if (list.trees && real?.loaded()) list.trees = streetTrees(real, list.trees, x, z, PHONE ? 650 : 1000, (tx, tz) => bay.heightAt(tx, tz), PHONE ? 3500 : 9000);
 		// no tree grows out of a street or a roof (the mapped trees and yard trees are placed
 		// from points and lots; the land map knows where the pavement and the roofs are)
-		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || (L.road < 0.6 && L.roof < 0.7); });
+		if (list.trees && real?.loaded()) list.trees = list.trees.filter((t) => { if (t.shrub || t.fern || t.h < 3) return true; const L = real.landAt(t.x, t.z); return !L || ((t.well || L.road < 0.6) && L.roof < 0.7); });
 		// ...nor on a carriageway, a sidewalk, a trail or a drive, nor in a junction's sight
 		// triangle, within reach (bay/clearance.js): the land map is too coarse for a trunk
-		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); list.trees = list.trees.filter((t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5)); }
+		if (list.trees && real?.loaded()) { const K = makeClearance(real, x, z, 1300); list.trees = list.trees.filter((t) => t.fern || K.clear(t.x, t.z, t.shrub ? 0.3 : 0.5, !!t.well)); }
 		// ...nor on a ball field (sportsfields.js)
 		if (list.trees) list.trees = list.trees.filter((t) => !inClearing(t.x, t.z, t.shrub || t.fern ? 0 : 2) && !onLandmark(t.x, t.z, 2) && !inCoastField(t.x, t.z) && !inBoardwalk(t.x, t.z) && !inRiverWater(t.x, t.z) && !inWater(t.x, t.z));
 		// ...nor inside a building (every one can be walked into now): a coarse grid of them

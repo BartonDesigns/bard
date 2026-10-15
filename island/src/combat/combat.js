@@ -279,11 +279,13 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		return a;
 	}
 	// a shot or blow landing on what it met (shooter: ME, a squad member, a boss)
-	function landShot(hit, from, dir, by, dmg, type = 'ballistic') {
+	function landShot(hit, from, dir, by, dmg, type = 'ballistic', onward = true) {
 		const p = new THREE.Vector3().copy(from).addScaledVector(dir, hit.t);
 		if (hit.wall) {
 			fx.impact(p, hit.n, hit.surface, type === 'energy');
-			W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a heavy round's hole
+			const sh = W()?.structures?.hit?.(p, dir, hit, dmg, type);          // structures: a pane cracked or broken, a wall's pock, a heavy round's hole
+			hit.through = sh?.through ? sh.dmg : 0;
+			if (sh?.through && !hit.pierced && onward) { const q = p.clone().addScaledVector(dir, 0.05), h2 = firstHit(q, dir, 250, by === ME ? ME : by?.T || by); hit.end = hit.t + 250; if (h2) { h2.pierced = true; h2.t += hit.t + 0.05; hit.end = h2.t; return landShot(h2, from, dir, by, sh.dmg, type); } return null; }          // structures: on through one pane, weaker
 			if (hit.box && (type === 'energy' || type === 'fire')) heatUp(boxId(hit.box), hit.box, dmg, by === ME);
 			return null;
 		}
@@ -373,8 +375,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 			net.fx(from, to, S.tracer, 0);
 		} else {
 			const hit = firstHit(o, dir, S.range);
-			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, hit.t) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 			if (hit) landShot(hit, o, dir, ME, damageAt(S, hit.t), S.type);
+			const end = hit ? new THREE.Vector3().copy(o).addScaledVector(dir, Math.min(S.range, hit.end ?? hit.t)) : new THREE.Vector3().copy(o).addScaledVector(dir, S.range);
 			fx.tracer(from, end, S.tracer);
 			net.fx(from, end, S.tracer, hit ? 1 : 0);
 		}
@@ -432,7 +434,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 				if (hit.me) { hurtPlayer({ amount: p.dmg, type: p.type, part: 'torso', src: p.from || p.pos.clone(), by: p.owner }); fx.impact(at, null, 'energy', true); }
 				else if (hit.ward) { spark(hit.T, at, p.owner); }
 				else if (p.flare) { flareLands(at, hit); }
-				else landShot(hit, p.pos, dir, p.owner, p.dmg, p.type);
+				else landShot(hit, p.pos, dir, p.owner, p.dmg, p.type, false);
+				if (hit.through && !p.pierced) { p.pierced = true; p.dmg = hit.through; p.pos.addScaledVector(dir, hit.t + 0.05); continue; }          // structures: through one pane, flying on
 				endProjectile(p, hit.ward ? null : at);
 				continue;
 			}
@@ -1088,6 +1091,11 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 		bossHit: (part = 'body', n = 500) => { const B0 = [...bosses.values()][0]; return B0 ? (B0.damage({ amount: n, part }), B0.info()) : null; },
 		camp: () => { const s = spotAhead(20, 25); if (s) props.camp(s.x, s.z, 'camp', (x, z) => ground(x, z, s.y + 2)); return props.info(); },
 		fronts: () => { props.fronts(boxesNear(eye().x, eye().z, 40), eye(), (x, z) => ground(x, z), 'fronts'); return props.info(); },
+		// a fire set by something else (cataclysm/: a quake's gas main, a wildfire reaching a house):
+		// the nearest building or car to (x, z) within r, not yours; its id, or null
+		igniteAt: (x, z, r = 12) => { const n = neighbours(x, z, r).filter((q) => q.box || q.id.startsWith('car:')).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0]; return n && ignite(n.id, n.x, n.z, n.fuel, false, n.box) ? n.id : null; },
+		firesNear: (x, z, r = 60) => { const out = []; for (const F of fireField.fires.values()) if (Math.hypot(F.x - x, F.z - z) <= r) out.push({ id: F.id, x: F.x, z: F.z, heat: F.heat }); return out; },
+		douse: (id, k) => fireField.douse(id, k),
 		ignite: (what = 'nearest') => { const n = neighbours(eye().x, eye().z, 40).sort((a, b) => Math.hypot(a.x - eye().x, a.z - eye().z) - Math.hypot(b.x - eye().x, b.z - eye().z)); const t = what === 'nearest' ? n[0] : n.find((q) => q.id.startsWith(what)); return t ? ignite(t.id, t.x, t.z, t.fuel, true, t.box) && t.id : null; },
 		hurt: (n = 20) => { hurtPlayer({ amount: n, type: 'ballistic', part: 'torso', src: { x: eye().x + 5, y: eye().y, z: eye().z } }); return me.H.hp; },
 		heal: () => { revive(me.H, 1); return me.H.hp; },
