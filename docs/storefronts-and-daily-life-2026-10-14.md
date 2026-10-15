@@ -185,7 +185,12 @@ staff posts, anchors, the regional towns, tick), `economy/establishments.js` (sh
 - The glazing shader compiled and drawn in a small rig (four fronts, day and night: a café's
   counter and tables by day and dark at night, a pub lit late, a boutique's mannequins, a
   garage's bay door down), and in the game: Walnut Creek (176 fronts within 380 m), the
-  Diablo foothills, Takayama (13 regional businesses planned), Eureka.
+  Diablo foothills (a general store in a house: glass, fascia, awning, crates, where it had
+  only a post sign), Takayama (13 regional businesses planned), Eureka.
+- Matched browser shots were limited by a machine drawing about a frame a second: the
+  Diablo pair matches; Walnut Creek's before shot came before its lots had loaded. A
+  before/after harness that keeps poses relative to the spot and waits for the business at
+  the pose to exist is in the agent's scratchpad (storefronts/shots.cjs).
 
 ## Left to do
 
