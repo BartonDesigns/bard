@@ -125,6 +125,8 @@ Logic checked with the frame loop held and the world stepped by hand (player and
 - The tank's shell (`structures.shell` then combat's burst) at a grid tower from 22 m: met the lot, a 1.21 m hole and the burst's 3.8 m one in its front, fire inside, the crew there within the hour.
 - The Ferry Building: rounds met it (the height grid, 8403 cells), three heavy rounds chipped it, ten blasts and shells scorched it and left it at strength 0.63 (never below half); with the cataclysm on it came down (cut along a ragged line, stubs and heap over its ground); three game hours after the cataclysm ended it stood again, marks gone.
 - No page, console or shader errors through the runs.
+- Pictures (before: the first pass; after: this one), kept outside the repository: before-partial, before-full, before-crew; after-partial, after-partial-top, after-full, after-crew-clearing, after-crew-frame, after-crew-glazing, cannon-hole, landmark-scorched, landmark-cataclysm.
+- The browser runs were cut short three times by the machine restarting, and one served a cached bundle; the last pictures are from a fresh profile on the final build.
 
 ### Still to do
 
@@ -132,6 +134,9 @@ Logic checked with the frame loop held and the world stepped by hand (player and
 - A collapsed landmark's floors and walls still stop you where they stood (bay/landmarks.js floor and push); only its look and the shots know it fell.
 - The tank does not breach walls by ramming (its physics has only the surveyed boxes).
 - People are never hurt by debris, collapse or fire (nobody, of any age).
+- The landmark scorch was softened after its last picture (its fine noise read as squares); not seen again in the browser.
+- A phone builds the lighter shells and scaffolds by isPhone; the quality governor (world/governor.js qualityNow()) could drive the caps instead.
+- The car-into-wall breach sizing was changed after its browser check (the check made a 0.46 m hole with the old sizing); the new sizing is covered by the code only.
 
 ## Left for later and limits
 
