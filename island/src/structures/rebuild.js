@@ -261,7 +261,7 @@ export function createRebuild(ctx) {
 		const has = [false, false, false, false];
 		has[f0] = P.faces[0]; has[back] = P.faces[1]; has[PLUS_END[f0]] = P.faces[2]; has[MINUS_END[f0]] = P.faces[3];
 		const lw = lite();
-		const make = (far) => {
+		const make = (far, nets) => {
 			const K = parts({ far }), V = K.at(0, 0, 0), F = frameOf(o), lifts = [];
 			for (let y = 2; y <= H + 0.2; y += 2) lifts.push(y);
 			for (let f = 0; f < 4; f++) {
@@ -311,7 +311,7 @@ export function createRebuild(ctx) {
 					}
 				}
 				// the netting on the outside, a sheet a lift high, its middles sagging between the ties
-				if (!far) for (let li = 0; li <= lifts.length; li++) {
+				if (nets) for (let li = 0; li <= lifts.length; li++) {
 					const y0 = li ? lifts[li - 1] + 0.12 : 0.15, y1 = li < lifts.length ? lifts[li] + 0.12 : top + 1.0;
 					if (y1 - y0 < 0.4) continue;
 					const a = W(uA, O + 0.12, y0), e1 = W(uB, O + 0.12, y0), e2 = W(uA, O + 0.12, y1);
@@ -321,7 +321,7 @@ export function createRebuild(ctx) {
 			}
 			return K.merge();
 		};
-		const near = make(lw), far = lw ? near : make(true);
+		const near = make(lw, true), far = lw ? near : make(true, false);
 		const mesh = kitMesh(near);
 		mesh.userData.near = near; mesh.userData.far = far;
 		mesh.material.userData.u.uClipY.value = -1e9;

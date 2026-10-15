@@ -38,7 +38,7 @@ export const COLORS = C;
 // aviation light, 7 a tail lamp, 8 a decal (its atlas place in aX), 9 tyre rubber
 export const MAT = {
 	paint: [0.34, 0.1, 0, 0.32], paintWorn: [0.5, 0.08, 0, 0.62], steel: [0.42, 0.8, 0, 0.3], galv: [0.5, 0.75, 0, 0.35], worn: [0.62, 0.55, 0, 0.8],
-	chrome: [0.12, 1, 0, 0.08], alu: [0.32, 0.85, 0, 0.18], rubber: [0.86, 0, 9, 0.55], plastic: [0.6, 0, 0, 0.3], shiny: [0.38, 0, 0, 0.35],
+	chrome: [0.32, 1, 0, 0.08], alu: [0.32, 0.85, 0, 0.18], rubber: [0.86, 0, 9, 0.55], plastic: [0.6, 0, 0, 0.3], shiny: [0.38, 0, 0, 0.35],
 	glass: [0.04, 0, 1, 0], lamp: [0.12, 0, 2, 0], beacon: [0.18, 0, 3, 0], reflect: [0.38, 0, 4, 0.15], worklamp: [0.12, 0, 5, 0], aviation: [0.2, 0, 6, 0], tail: [0.18, 0, 7, 0],
 	decal: [0.42, 0.06, 8, 0.25], banner: [0.72, 0, 8, 0.12], wood: [0.86, 0, 0, 0.45], concrete: [0.92, 0, 0, 0.5], rubble: [0.96, 0, 0, 0.1], dirt: [0.97, 0, 0, 0],
 	cloth: [0.9, 0, 0, 0.2], skin: [0.6, 0, 0, 0], pane: [0.05, 0.3, 0, 0.04],
