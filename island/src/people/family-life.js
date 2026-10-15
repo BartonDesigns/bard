@@ -18,6 +18,7 @@
 
 import * as THREE from 'three';
 import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
+import { peopleCap } from '../world/governor.js';
 import { createMotion } from './motion.js';
 import { fadePerson } from './fade.js';
 import { makeTeen } from './teens.js';
@@ -138,7 +139,9 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 	const root = new THREE.Group(); root.name = 'family-life';
 	scene.add(root);
 	const W = () => world();
-	const CAP = isPhone ? 5 : 12;
+	// (as many as the quality tier's people share allows, set as each scene is staged: world/governor.js)
+	const CAP0 = isPhone ? 5 : 12;
+	let CAP = CAP0;
 	let A = null, loading = null, dead = false, generation = 0, staging = false;
 	let lastWorld = world(), epoch = globeFrame.epoch;
 	const aid = createFamilyAid({ mount, help, hint });
@@ -357,6 +360,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			}
 		}
 		clear(null, false);
+		CAP = peopleCap(CAP0, 3);
 		const V = { kind, x, z, h, group: new THREE.Group(), actors: [], t: 0, seed: (o.seed ?? Math.floor(x * 13 + z * 7)) >>> 0 };
 		root.add(V.group);
 		const a = areaAt(x, z), r = rng(V.seed), F = frameOf(x, z, h), y0 = ground(x, z), place = a.place;
@@ -404,7 +408,7 @@ export function createFamilyLife({ scene, world, camera, people = null, isPhone 
 			const diners = hh.members.filter(m => m.age >= 2.5);
 			const real = !o.room && realTable(x, z);
 			const seats = real ? diningSeats(real.it) : null;
-			const n = Math.min(diners.length, isPhone ? 4 : 6, seats?.length ?? 6);
+			const n = Math.min(diners.length, isPhone ? 4 : 6, CAP, seats?.length ?? 6);
 			// a real house's dining table if one is built near (bay/houses.js), else a room
 			// with its window to the street
 			const T = real ? null : dinnerTable(n);

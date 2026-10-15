@@ -14,6 +14,7 @@
 
 import { soundBus } from '../world/soundbus.js';
 import { holeRate, ERA_INDEX } from './streetera.js';
+import { BLOCKS, toGrid } from './styles.js';
 
 const STORE = 'crysis-potholes-v1';
 export const HOLE = [0, 0, 1, 0], FRESH = [0, 0.2, 0.3, 0];
@@ -103,13 +104,57 @@ export function holesOf(r, era) {
 	return r.holes;
 }
 
+// ---------- the procedural grid's holes ----------
+// The gridded towns' streets are not in the road map: the ground shader (terrain.js, "potholes
+// in the wheel paths") throws its holes from a hash of the grid cell, one chance in each 5 m of
+// lane. The same sums here, the hash in single precision as the GPU has it, so a wheel finds the
+// hole that is drawn (the hash matched the shader's bit for bit over 65536 cells in headless
+// Chromium; the grid's own coordinates, worked out in double here, may put a hole at a block's
+// very edge a hair to one side).
+const f32 = Math.fround, fract = (v) => v - Math.floor(v);
+export function h21(x, y) {
+	x = f32(x - 4096 * Math.floor(x / 4096)); y = f32(y - 4096 * Math.floor(y / 4096));
+	let a = f32(fract(f32(x * f32(0.1031)))), b = f32(fract(f32(y * f32(0.1031)))), c = a;
+	const d = f32(f32(f32(a * f32(b + f32(33.33))) + f32(b * f32(c + f32(33.33)))) + f32(c * f32(a + f32(33.33))));
+	a = f32(a + d); b = f32(b + d); c = f32(c + d);
+	return f32(fract(f32(f32(a + b) * c)));
+}
+export function vn(x, y) {
+	const i = Math.floor(x), j = Math.floor(y);
+	let u = x - i, v = y - j;
+	u = u * u * (3 - 2 * u); v = v * v * (3 - 2 * v);
+	const a = h21(i, j), b = h21(i + 1, j), c = h21(i, j + 1), d = h21(i + 1, j + 1);
+	return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v;
+}
+// the grid's hole under a point (within pad m of its edge), or null. a, sty: the town map's
+// grid bearing and style there (terrain.js urbanAt). { id, r, d, gap: how far in (m, < 0 inside) }
+export function gridHoleAt(x, z, a, sty, pad = 0) {
+	const [BX, BZ, ST] = BLOCKS[sty] || BLOCKS[3];
+	const [gx, gz] = toGrid(x, z, a, sty);
+	const cx = Math.floor(gx / BX), cz = Math.floor(gz / BZ), fx = gx - cx * BX, fz = gz - cz * BZ;
+	if (fx > ST && fz > ST) return null;
+	const xs = fx <= ST, ax = xs ? fx : fz, al = xs ? gz : gx, cd = Math.abs(ax - ST * 0.5);
+	const fl = Math.floor(al / 5), far = cd >= 1.8 ? 1 : 0;
+	const hx = f32(fl + f32(cx * f32(5.3))), hy = f32((ax >= ST * 0.5 ? 2 : 0) + far + f32(cz * f32(5.3)));
+	const hk = (sty < 2.5 ? 0.13 : 0.05) * (0.5 + vn(x * 0.002 + 7, z * 0.002 + 7));
+	if (h21(hx, hy) <= 1 - hk) return null;
+	// (the offsets added in single precision too: the hash magnifies the last bit)
+	const at = (k) => h21(f32(hx + f32(k)), f32(hy + f32(k)));
+	const ca = (fl + 0.25 + 0.5 * at(1.7)) * 5, cc = (far ? 2.65 : 0.95) + (at(4.1) - 0.5) * 0.2;
+	const r = 0.2 + 0.25 * at(2.3), gap = Math.hypot(al - ca, cd - cc) - r;
+	if (gap > pad) return null;
+	return { id: `g${cx}:${cz}:${xs ? 1 : 0}:${fl}:${hy}`, r, d: 0.04 + (r - 0.2) * 0.14, gap };
+}
+
 // ---------- the runtime: what you drive over, and the reports ----------
-export function createPotholes({ real, eraOf, carAt, physics, camera, repaint }) {
+// grid(x, z): the procedural grid's bearing and style where its streets are drawn ({ a, s }),
+// null where they are not (out of the towns, or inside a mapped region)
+export function createPotholes({ real, eraOf, carAt, physics, camera, repaint, grid = null }) {
 	const NEAR = 64, hx = new Float32Array(NEAR * 4), ids = new Array(NEAR);
-	const inHole = new Int16Array(4).fill(-1);
+	const inHole = new Array(4).fill(null);
 	let n = 0, atX = 1e9, atZ = 1e9, atT = 0, clock = 0, lastX = 0, lastZ = 0, jolt = 0, joltV = 0, prevOk = false;
 	const nearList = [];
-	let hits = 0;
+	let hits = 0, gridHits = 0;
 	// the holes within reach of you, refreshed as you go (nearest first)
 	function gather(x, z) {
 		atX = x; atZ = z; atT = clock; n = 0; nearList.length = 0;
@@ -159,14 +204,16 @@ export function createPotholes({ real, eraOf, carAt, physics, camera, repaint })
 		if (C) { const q = C.body.rotation(), yaw = 2 * Math.atan2(q.y, q.w); fx = Math.sin(yaw); fz = Math.cos(yaw); }
 		else { const dx = car.x - lastX, dz = car.z - lastZ, l = Math.hypot(dx, dz); if (!prevOk || l < 1e-4) { lastX = car.x; lastZ = car.z; prevOk = true; return; } fx = dx / l; fz = dz / l; }
 		lastX = car.x; lastZ = car.z; prevOk = true;
-		const W = C?.spec?.W ? C.spec.W / 2 - 0.15 : 0.78, B2 = C?.spec?.wz ?? 1.35;
+		const W = C?.spec?.W ? C.spec.W / 2 - 0.15 : 0.78, B2 = C?.spec?.wz ?? 1.35, G = !!grid?.(car.x, car.z);
 		for (let w = 0; w < 4; w++) {
 			const lx = Math.sign(WX[w]) * W, lz = Math.sign(WZ[w]) * B2;
 			const px = car.x + fz * lx + fx * lz, pz = car.z - fx * lx + fz * lz;
-			let hit = -1;
-			for (let k = 0; k < n; k++) { const dx = hx[k * 4] - px, dz = hx[k * 4 + 1] - pz, rr = hx[k * 4 + 2] + 0.12; if (dx * dx + dz * dz < rr * rr) { hit = k; break; } }
-			if (hit >= 0 && inHole[w] !== hit) {
-				const k = Math.min(1.2, car.speed / 14) * (hx[hit * 4 + 3] / 0.07);
+			let hit = null, depth = 0;
+			for (let k = 0; k < n; k++) { const dx = hx[k * 4] - px, dz = hx[k * 4 + 1] - pz, rr = hx[k * 4 + 2] + 0.12; if (dx * dx + dz * dz < rr * rr) { hit = ids[k]; depth = hx[k * 4 + 3]; break; } }
+			// (the gridded towns' holes, from the same sums as the ground shader's)
+			if (hit === null && G) { const U = grid(px, pz), h = U && gridHoleAt(px, pz, U.a, U.s, 0.12); if (h) { hit = h.id; depth = h.d; } }
+			if (hit !== null && inHole[w] !== hit) {
+				const k = Math.min(1.2, car.speed / 14) * (depth / 0.07);
 				knock(0.25 + 0.45 * Math.min(1, k));
 				joltV -= 1.6 * k;
 				if (C) {
@@ -175,6 +222,7 @@ export function createPotholes({ real, eraOf, carAt, physics, camera, repaint })
 					C.body.applyImpulseAtPoint({ x: 0, y: -m * 0.55 * k, z: 0 }, { x: t.x + fz * lx + fx * lz, y: t.y, z: t.z - fx * lx + fz * lz }, true);
 				}
 				hits++;
+				if (hit[0] === 'g') gridHits++;
 			}
 			inHole[w] = hit;
 		}
@@ -202,7 +250,7 @@ export function createPotholes({ real, eraOf, carAt, physics, camera, repaint })
 		return true;
 	}
 	const reported = () => [...S.reported];
-	function info() { return { near: n, hits, fixed: S.fixed.size, reported: S.reported.size, first: n ? { id: ids[0], x: +hx[0].toFixed(1), z: +hx[1].toFixed(1), r: +hx[2].toFixed(2) } : null }; }
+	function info() { return { near: n, hits, gridHits, fixed: S.fixed.size, reported: S.reported.size, first: n ? { id: ids[0], x: +hx[0].toFixed(1), z: +hx[1].toFixed(1), r: +hx[2].toFixed(2) } : null }; }
 	// for the console and tests: the holes round a point
 	function around(x, z, R = 60) {
 		const out = [];

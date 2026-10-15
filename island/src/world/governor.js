@@ -106,6 +106,8 @@ export function lossRecord(rec, now = Date.now(), tierNow = 0) {
 let current = 0;
 const listeners = new Set();
 export const qualityNow = () => TIERS[current];
+// how many of n people a system may build on this tier (its people share), never fewer than least
+export const peopleCap = (n, least = 1) => Math.max(Math.min(n, least), Math.round(n * TIERS[current].people));
 export const tierNow = () => current;
 export function onQuality(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function setTier(t) {
