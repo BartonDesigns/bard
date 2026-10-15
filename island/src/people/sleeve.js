@@ -510,7 +510,7 @@ float gH = 0.0;
 ` + FOLD_GLSL;
 const VERT_NORMAL = /* glsl */`
 vGarA = garA; vGarB = garB; vGarP = position;
-int gSide = int(mod(garB.x, 2.0) + 0.5), gSlot = int(floor(garB.x / 2.0 + 0.01));
+int gId = int(garB.x + 0.5), gSide = gId - 2 * (gId / 2), gSlot = min(gId / 2, 2);
 if (garB.z > 0.001) {
 	float r = max(garA.w, 0.01);
 	float h0 = garFold(garA.x, garA.y, garA.z, gSide, gSlot);
@@ -581,17 +581,18 @@ float gWeave(int fab, vec2 uv, float px, out float tone) {
 		vec2 w = uv * 850.0; h = sin(w.x * 6.2832) * sin(w.y * 6.2832); f = 0.0013; fine = h * 0.06; coarse = (gN(uv * 40.0) - 0.5) * 0.12;
 	} else if (fab == 7 || fab == 11) {
 		// fleece and brushed flannel: a soft pile
-		h = gN(uv * 2600.0) * 2.0 - 1.0; f = 0.0006; fine = h * 0.04; coarse = (gN(uv * 160.0) - 0.5) * (fab == 7 ? 0.16 : 0.08);
+		h = 0.0; f = 0.0006; fine = (gN(uv * 2600.0) - 0.5) * 0.06 * gFade(0.0004, px); coarse = (gN(uv * 160.0) - 0.5) * (fab == 7 ? 0.16 : 0.08) * gFade(0.006, px);
 	} else if (fab == 8) {
 		// leather: a pebbled grain and long creases
-		h = gN(uv * 1800.0) * 2.0 - 1.0 + (gN(uv * vec2(30.0, 140.0)) - 0.5) * 1.5; f = 0.0008; fine = h * 0.05; coarse = (gN(uv * 50.0) - 0.5) * 0.15;
+		h = (gN(uv * vec2(30.0, 140.0)) - 0.5) * 1.5; f = 0.0071; fine = (gN(uv * 1200.0) - 0.5) * 0.05 * gFade(0.0008, px); coarse = (gN(uv * 50.0) - 0.5) * 0.15;
 	} else if (fab == 9) {
 		// rib knit: raised wales along the arm, loops in them
 		h = abs(sin(uv.x * 1100.0)) * 1.4 - 0.7 + sin(uv.y * 2400.0) * 0.3; f = 0.0018; fine = h * 0.07; coarse = (gN(uv * 120.0) - 0.5) * 0.08;
 	}
-	float near = 1.0 - smoothstep(f * 0.1, f * 0.35, px), farK = 1.0 - smoothstep(0.004, 0.03, px);
-	tone = fine * 0.65 * near + coarse * 0.6 * farK;
-	return h * near * 0.00004;
+	// (relief only while a period spans six pixels or more; tone while it spans two)
+	float near = 1.0 - smoothstep(f * 0.08, f * 0.17, px), seen = gFade(f, px), farK = 1.0 - smoothstep(0.004, 0.03, px);
+	tone = fine * 0.65 * seen + coarse * 0.6 * farK;
+	return h * near * 0.00003;
 }
 // camouflage at its printed size: three layers of soft blotches, about 5 to 12 cm across
 vec3 gCamo(vec2 uv, vec3 base, vec3 a, vec3 b) {
@@ -603,17 +604,24 @@ vec3 gCamo(vec2 uv, vec3 base, vec3 a, vec3 b) {
 	return mix(c, base * 0.42, smoothstep(0.68, 0.72, n3));
 }
 void garSurface(inout vec3 col, bool front) {
-	int slot = int(floor(vGarB.x / 2.0 + 0.01)), part = int(vGarB.y + 0.5), side = int(mod(vGarB.x, 2.0) + 0.5);
+	// (the side and layer are whole numbers, but interpolation leaves them a hair either side: round
+	// first, so the left arm's 0 or 2 never reads as 1.9999 and indexes past the arrays)
+	int gid = int(vGarB.x + 0.5), slot = min(gid / 2, 2), side = gid - 2 * (gid / 2), part = int(vGarB.y + 0.5);
 	vec4 lay = uLay[slot], lb = uLayB[slot], geo = uGeo[side];
 	int fab = int(lay.x + 0.5), pat = int(lay.y + 0.5), cuff = int(lb.x + 0.5);
 	vec3 base = uCol[slot * 5], acc = uCol[slot * 5 + 1], acc2 = uCol[slot * 5 + 2], thread = uCol[slot * 5 + 3], cuffC = uCol[slot * 5 + 4];
 	float wear = lay.z;
 	float tone = 0.0;
+	// (screen derivatives taken here, before any branch, where they are defined for every pixel)
+	vec2 guv = vec2(vGarP.x + vGarP.z, vGarP.y);
+	float around = mod(vGarA.y - geo.z, 6.2831853);
+	vec2 suv = vec2(around * vGarA.w, vGarA.x);
+	float gpx = length(fwidth(guv)), spx = length(fwidth(vec2((vGarA.y - geo.z) * vGarA.w, vGarA.x)));
 	if (part >= 4) {
 		// a glove: stretch cloth on the back, synthetic suede on the palm, rubber over the knuckles
 		float palm = vGarA.y, kn = vGarA.z;
-		vec2 uv = vec2(vGarP.x + vGarP.z, vGarP.y);
-		float px = length(fwidth(uv));
+		vec2 uv = guv;
+		float px = gpx;
 		float pf = smoothstep(-0.12, 0.12, palm);
 		col = mix(base, acc, pf);
 		gBump = gWeave(pf > 0.5 ? 7 : 4, uv, px, tone);
@@ -621,17 +629,17 @@ void garSurface(inout vec3 col, bool front) {
 		gRough = mix(0.62, 0.92, pf); gSpec = mix(0.6, 0.3, pf);
 		// the seam where palm meets back, and its stitching
 		float seam = gLine(palm, 0.05);
-		col = mix(col, col * 0.6, seam * 0.6); gBump -= seam * 0.0004;
+		col = mix(col, col * 0.6, seam * 0.6); gBump -= seam * 0.00015 * gFade(0.004, px);
 		// knuckle armour: moulded rubber with ridges
 		float k = smoothstep(0.25, 0.5, kn);
 		col = mix(col, cuffC, k); gRough = mix(gRough, 0.45, k); gSpec = mix(gSpec, 0.8, k);
-		gBump += k * (sin(kn * 40.0) * 0.0003);
+		gBump += k * sin(kn * 40.0) * 0.0001 * gFade(0.006, px);
 		if (part == 5) {
 			// the cuff: neoprene, a hook-and-loop strap across the back of the wrist
 			col = base * 0.9; gRough = 0.7;
 			float th = vGarA.y, strap = gLine(gAng(th - geo.w), 0.55) * gLine(vGarA.x - 0.022, 0.012);
-			col = mix(col, acc * 0.8 * (0.85 + 0.3 * gN(uv * 3000.0)), smoothstep(0.0, 0.25, strap));
-			gBump += strap * 0.0006;
+			col = mix(col, acc * 0.8 * (0.85 + 0.3 * mix(0.5, gN(uv * 3000.0), gFade(0.0013, px))), smoothstep(0.0, 0.25, strap));
+			gBump += strap * 0.0003 * gFade(0.01, px);
 		}
 		col *= 1.0 - wear * 0.2 * smoothstep(0.6, 0.8, gN(uv * 30.0));
 		gSheen = vec3(0.04); gSheenR = 0.6;
@@ -639,9 +647,8 @@ void garSurface(inout vec3 col, bool front) {
 	}
 	float s = vGarA.x, th = vGarA.y, sh = vGarA.z, r = vGarA.w;
 	// the cloth's own coordinates, metres round from the seam and up the arm
-	float around = mod(th - geo.z, 6.2831853);
-	vec2 uv = vec2(around * r, s);
-	float px = length(fwidth(uv));
+	vec2 uv = suv;
+	float px = spx;
 	col = base;
 	if (pat == 1) col = mix(base, acc, step(0.62, fract(s * 22.0)));
 	else if (pat == 2) col = mix(base, acc, gLine(fract(uv.x * 80.0) - 0.5, 0.06) * 0.8);
@@ -685,11 +692,11 @@ void garSurface(inout vec3 col, bool front) {
 	float len = lb.y;
 	if (part == 1) {
 		col = cuff == 1 ? cuffC * (0.95 + 0.1 * (abs(sin(uv.x * 1100.0)) - 0.5) * gFade(0.0029, px)) : cuffC * (1.0 + tone);
-		if (cuff == 1) { gBump = (abs(sin(uv.x * 1100.0)) - 0.5) * 0.00025 * gFade(0.0029, px); gRough = 0.93; }
+		if (cuff == 1) { gBump = (abs(sin(uv.x * 1100.0)) - 0.5) * 0.0002 * (1.0 - smoothstep(0.0029 * 0.08, 0.0029 * 0.17, px)); gRough = 0.93; }
 		float edge = min(sh, len - sh);
 		if (cuff == 2 || cuff == 5 || cuff == 3) {
 			col = mix(col, thread, gStitch(sh, 0.0028, uv.x, 0.003, px) + gStitch(sh, len - 0.0028, uv.x, 0.003, px));
-			gBump -= gLine(edge, 0.0012) * 0.0003;
+			gBump -= gLine(edge, 0.0012) * 0.00015 * gFade(0.006, px);
 		}
 		float dp = gAng(th - geo.w) * r;
 		if (cuff == 2) {
@@ -699,23 +706,24 @@ void garSurface(inout vec3 col, bool front) {
 			vec3 bc = lay.y > 5.5 ? acc2 * 0.5 : mix(base, vec3(0.92, 0.9, 0.85), 0.75);
 			if (btn > 0.0) {
 				float holes = 0.0; for (int i = 0; i < 4; i++) { vec2 o = vec2(i == 0 || i == 3 ? 0.0013 : -0.0013, i < 2 ? 0.0013 : -0.0013); holes = max(holes, 1.0 - smoothstep(0.0005, 0.0007, length(q - o))); }
+				holes *= gFade(0.0026, px);
 				col = mix(col, bc * (1.0 - 0.25 * gLine(d - 0.0048, 0.0006)) * (1.0 - 0.6 * holes), btn);
-				gBump += btn * (0.0006 - d * 0.05) ; gRough = mix(gRough, 0.35, btn);
+				gBump += btn * (0.0004 - d * 0.03) * gFade(0.02, px); gRough = mix(gRough, 0.45, btn);
 			}
 		}
 		if (cuff == 5) {
 			// the tab: a strip of hook-and-loop held by a stitched box
 			float tab = gLine(dp, 0.012) * gLine(sh - len * 0.5, len * 0.42);
 			float box = max(gLine(abs(dp) - 0.011, 0.0006), gLine(abs(sh - len * 0.5) - len * 0.4, 0.0006)) * step(abs(dp), 0.0115) * step(abs(sh - len * 0.5), len * 0.41);
-			col = mix(col, col * (0.75 + 0.2 * gN(uv * 3500.0)), smoothstep(0.0, 0.3, tab));
-			col = mix(col, thread, box * 0.8);
-			gBump += smoothstep(0.0, 0.3, tab) * 0.0005;
+			col = mix(col, col * (0.75 + 0.2 * mix(0.5, gN(uv * 3500.0), gFade(0.0011, px))), smoothstep(0.0, 0.3, tab));
+			col = mix(col, thread, box * 0.8 * gFade(0.004, px));
+			gBump += smoothstep(0.0, 0.3, tab) * 0.0003 * gFade(0.02, px);
 		}
 		if (cuff == 3) col = mix(col, acc * 0.7, gLine(sh, 0.004));
 	} else if (part == 0) {
 		// the seam down the underside, and its stitching
 		float du = gAng(th - geo.z) * r;
-		gBump -= gLine(du, 0.0012) * 0.0004;
+		gBump -= gLine(du, 0.0012) * 0.0002 * gFade(0.005, px);
 		col *= 1.0 - gLine(du, 0.0009) * 0.1;
 		if (fab == 5 || fab == 6 || fab == 3) col = mix(col, thread, gStitch(du, 0.004, s, 0.0032, px) + gStitch(du, 0.0095, s, 0.0032, px));
 		else if (fab == 2 || fab == 10 || fab == 11 || fab == 8) col = mix(col, thread, gStitch(du, 0.0035, s, 0.0028, px) * 0.8);
@@ -726,9 +734,9 @@ void garSurface(inout vec3 col, bool front) {
 			float dp = gAng(th - geo.w) * r;
 			float pl = step(abs(dp), 0.009) * (1.0 - smoothstep(len + 0.085, len + 0.09, sh));
 			col = mix(col, thread, (gStitch(dp, 0.008, sh, 0.003, px) + gStitch(dp, -0.008, sh, 0.003, px)) * (1.0 - step(len + 0.088, sh)));
-			gBump += pl * 0.00025;
+			gBump += pl * 0.00015 * gFade(0.02, px);
 			float d = length(vec2(dp, sh - len - 0.05)), btn = 1.0 - smoothstep(0.0038, 0.0043, d);
-			col = mix(col, mix(base, vec3(0.92, 0.9, 0.85), 0.75), btn); gBump += btn * 0.0004;
+			col = mix(col, mix(base, vec3(0.92, 0.9, 0.85), 0.75), btn); gBump += btn * 0.0002 * gFade(0.016, px);
 		}
 		// the rib cuff's join: the sleeve gathered into it
 		if (cuff == 1) col *= 1.0 - gLine(sh - len, 0.0015) * 0.25;
@@ -741,15 +749,14 @@ void garSurface(inout vec3 col, bool front) {
 	} else if (part == 2) {
 		col = (cuff == 1 && sh < len + 0.001 ? cuffC : col) * 0.62;
 	}
-	// worn: a grimy edge, crests rubbed pale, the odd mark, a little pilling
+	// worn: a grimy edge, crests rubbed pale, the odd mark
 	float edgeW = 1.0 - smoothstep(0.0, 0.022, sh);
 	col *= 1.0 - wear * 0.22 * edgeW * (0.6 + 0.4 * mix(0.5, gN(uv * 400.0), gFade(0.0025, px)));
 	if (fab == 5 || fab == 3 || fab == 6 || fab == 8) col = mix(col, col * 1.35 + 0.03, wear * 0.55 * smoothstep(0.1, 0.5, fold));
 	float stain = smoothstep(0.74, 0.8, gN(uv * 14.0 + lb.w * 3.0)) * mix(0.6, smoothstep(0.4, 0.9, gN(uv * 50.0)), gFade(0.02, px));
 	col = mix(col, col * vec3(0.78, 0.72, 0.62), wear * 0.35 * stain);
-	if (fab == 0 || fab == 1 || fab == 7 || fab == 9) col *= 1.0 + wear * 0.15 * step(0.985, gH21(floor(uv * 900.0))) * gFade(0.0022, px);
 	// the creases in shade
-	float crease = smoothstep(0.05, -0.45, fold);
+	float crease = 1.0 - smoothstep(-0.45, 0.05, fold);
 	col *= 1.0 - 0.28 * crease; gSpec *= 1.0 - 0.6 * crease; gAO = 1.0 - 0.45 * crease;
 	// the inside of the sleeve
 	if (!front) { col *= mix(0.35, 0.85, smoothstep(0.06, 0.16, sh)); gSpec *= 0.3; }
@@ -796,16 +803,27 @@ export function garmentMaterial(spec, frames, { lite = false } = {}) {
 			.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 #ifndef GAR_LITE
 {
-	// the weave, stitches and ribs as a bump (heights in metres, so at their true size)
 	vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
 	vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
 	float det = dot(sx, r1);
 	vec2 dh = vec2(dFdx(gBump), dFdy(gBump));
-	normal = normalize(abs(det) * normal - sign(det) * (dh.x * r1 + dh.y * r2));
-	// the folds: their slope laid on the cloth's own directions round and along the arm
 	vec2 st0 = dFdx(gUV), st1 = dFdy(gUV);
-	vec3 T = r1 * st0.x + r2 * st1.x, B = r1 * st0.y + r2 * st1.y;
-	if (abs(det) > 1e-20) normal = normalize(normal - (T * gFoldGrad.x + B * gFoldGrad.y) / det);
+	if (abs(det) > 1e-24) {
+		// the weave, stitches and ribs as a slope (heights in metres), never more than a few degrees
+		vec3 g = (dh.x * r1 + dh.y * r2) / det;
+		float gl = length(g);
+		if (gl > 0.1) g *= 0.1 / gl;
+		// the folds: their slope laid on the cloth's own directions round and along the arm
+		vec3 f = ((r1 * st0.x + r2 * st1.x) * gFoldGrad.x + (r1 * st0.y + r2 * st1.y) * gFoldGrad.y) / det;
+		float fl = length(f);
+		if (fl > 0.85) f *= 0.85 / fl;
+		vec3 nn = normal - g - f;
+		if (dot(nn, nn) > 1e-8) normal = normalize(nn);
+	}
+	// never turned away from the eye (a black pixel) or past it into a glint
+	vec3 vd = normalize(vViewPosition);
+	float fv = dot(normal, vd);
+	if (fv < 0.06) normal = normalize(normal + vd * (0.06 - fv));
 }
 #endif`)
 			.replace('#include <aomap_fragment>', `#include <aomap_fragment>
@@ -813,6 +831,11 @@ export function garmentMaterial(spec, frames, { lite = false } = {}) {
 reflectedLight.indirectDiffuse *= 0.8 * gAO;
 reflectedLight.indirectSpecular *= gAO * gAO;`)
 			.replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+{
+	// where the normal changes faster than a pixel can show, a broader highlight instead of glints
+	vec3 dn = fwidth(normal);
+	material.roughness = min(1.0, sqrt(material.roughness * material.roughness + 1.5 * dot(dn, dn)));
+}
 material.specularColor *= gSpec;
 material.specularF90 *= gSpec;
 #ifdef USE_SHEEN
@@ -820,7 +843,7 @@ material.sheenColor = gSheen;
 material.sheenRoughness = gSheenR;
 #endif`);
 	};
-	m.customProgramCacheKey = () => 'bard-garment-3' + (lite ? '-lite' : '');
+	m.customProgramCacheKey = () => 'bard-garment-4' + (lite ? '-lite' : '');
 	return m;
 }
 
