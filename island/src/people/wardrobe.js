@@ -164,6 +164,9 @@ export function dressFor(r, d, ctx = {}) {
 		const wire = chance(r, gen === 'boomer' ? 0.45 : 0.3);
 		o.acc.push({ kind: 'glasses', shape: chance(r, gen === 'z' || gen === 'millennial' ? 0.55 : 0.25) ? 'round' : 'rect', wire, col: wire ? pick(r, [GOLD, SILVER, col('black')]) : col(pick(r, ['black', 'tan', 'espresso', 'black', 'grey', 'navy', 'burgundy'])) });
 	}
+	// a woven shirt worn on its own on a mild day: about a third roll the sleeves to below the
+	// elbow (from their own seed, so nothing else about them changes)
+	if (o.top && !o.outer && !office && cold < 0.42 && o.top.sleeves === 'long' && /^(shirt|flannel|utility)$/.test(o.top.kind) && (Math.imul((d.seed ?? 0) ^ 0x7011ed, 2654435761) >>> 0) % 3 === 0) o.top.sleeves = 'rolled';
 	return finish(o, cold);
 }
 

@@ -497,6 +497,8 @@ export function createSquads(ctx) {
 	function personStep(h, dt, d) {
 		const b = h.body, M = b.M, S = M.S, eye = ctx.eye();
 		h.pos.copy(S.pos);
+		// (raised to the shoulder only while engaging; carried at the ready otherwise)
+		let aimAt = null;
 		// at close quarters with you (combat/melee-foes.js steers them: circling, their turns, a
 		// takedown): only the body is moved here, and the gun is put away
 		if (h.melee) {
@@ -514,7 +516,7 @@ export function createSquads(ctx) {
 			const at = posOf(h.target);
 			M.want.speed = 0; M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
 			S.look.target = h.target.id === 'me' ? eye : null;
-			if (h.los) shoot(h, dt); else h.fireT = Math.max(h.fireT, 0.3);
+			if (h.los) { shoot(h, dt); aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); } else h.fireT = Math.max(h.fireT, 0.3);
 		} else if (h.alert && h.target) {
 			const at = posOf(h.target).clone();
 			h.goalT -= dt;
@@ -523,7 +525,7 @@ export function createSquads(ctx) {
 			h.crouch = gd <= 1.2 && h.inCover ? 0.5 : 0;
 			if (h.los && gd < 6) M.want.heading = Math.atan2(at.x - h.pos.x, at.z - h.pos.z);
 			S.look.target = h.target.id === 'me' ? eye : null;
-			if (h.los && (gd < 6 || h.role === 'suppress')) shoot(h, dt);
+			if (h.los && (gd < 6 || h.role === 'suppress')) { shoot(h, dt); if (gd < 2.5) aimAt = (h.aimV ||= new THREE.Vector3()).copy(at); }
 			else h.fireT = Math.max(h.fireT, 0.3);
 		} else {
 			if (h.alert && !h.target) { h.alert = Math.max(0, h.alert - dt * 0.05); }
@@ -539,7 +541,15 @@ export function createSquads(ctx) {
 		headway(h, dt);
 		M.update(dt, time, eye);
 		b.P.lod?.(d);
-		if (b.hand && !h.noGun) b.hand.follow(b.P, S.heading, d < 90, M, time);
+		if (b.hand && !h.noGun) { aimHold(h, aimAt); b.hand.follow(b.P, S.heading, d < 90, M, time); }
+	}
+	// the gun up and on the target while engaging (the stock at the shoulder, the strong hand's
+	// finger on the trigger), down at the ready while moving or searching
+	function aimHold(h, at) {
+		const b = h.body, up = !!at && b.M.S.speed.v < 2.2;
+		b.hand.aim?.(up);
+		if (up) b.hand.aimPitch?.(Math.atan2(at.y - (h.pos.y + 1.4), Math.max(1, Math.hypot(at.x - h.pos.x, at.z - h.pos.z))));
+		b.M.trigger?.('R', up ? 1 : 0);
 	}
 	// at a post: a loop walked at a steady pace (each one spaced along it), or a spot held
 	// facing out, with a look about now and then

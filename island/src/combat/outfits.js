@@ -58,8 +58,13 @@ function militia(r, a, b, scheme) {
 		o.bottom = camo('cargo', scheme, { legs: 'long', fit: 'regular' });
 		o.acc.push(r() < 0.5 ? { kind: 'cap', col: CAMO[scheme][0], acc: CAMO[scheme][1], camo: scheme } : { kind: 'bucket', col: CAMO[scheme][0], camo: scheme });
 		if (r() < 0.4) o.acc.push({ kind: 'bandana', col: CAMO[scheme][3], acc: CAMO[scheme][1] });
+		o.rollable = true;
 	}
 	if (r() < 0.6) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
+	// some roll their sleeves (the last draw: the rest stays as it was): the shirt's, or the
+	// jacket's over a short-sleeved one
+	if (o.rollable && r() < 0.35) { if (o.outer) { o.outer.sleeves = 'rolled'; o.top.sleeves = 'short'; } else o.top.sleeves = 'rolled'; }
+	delete o.rollable;
 	return o;
 }
 // the soldiers at the bases: full pattern uniform, helmet, carrier, gloves
@@ -69,6 +74,9 @@ function soldier(r, scheme, officer = false) {
 	else o.acc.push({ kind: 'helmet', col: CAMO[scheme][1], visor: null, camo: scheme, combat: true });
 	o.acc.push(carrier(CAMO[scheme][3], CAMO[scheme][1]));
 	if (r() < 0.8) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
+	// about a third with the jacket's sleeves rolled to below the elbow over a pattern tee
+	// (the last draw, so the rest of the kit stays as it was)
+	if (r() < 0.33) { o.top = camo('tee', scheme, { fit: 'regular', sleeves: 'short' }); o.outer.sleeves = 'rolled'; }
 	return o;
 }
 // the police: navy uniform shirt and trousers, peaked cap, a vest with a badge
