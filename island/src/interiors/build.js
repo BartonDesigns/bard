@@ -78,6 +78,8 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 	// (a slice ends when it has had its few milliseconds)
 	const slow = () => { if (performance.now() - tY < 4) return false; tY = performance.now(); return true; };
 
+	const walls = [];
+	let pcs = [];
 	const wbox = (w, key, u0, u1, y0, y1, c0, c1, colr) => { if (w.axis === 'x') g.box(key, u0, y0, Math.min(c0, c1), u1, y1, Math.max(c0, c1), colr); else g.box(key, Math.min(c0, c1), y0, u0, Math.max(c0, c1), y1, u1, colr); };
 	// ---- the walls, cut round their openings
 	for (const w of P.walls) {
@@ -87,6 +89,8 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		const cuts = [w.s, w.e];
 		for (const o of w.open) cuts.push(Math.max(w.s, Math.min(w.e, o.s0)), Math.max(w.s, Math.min(w.e, o.s1)));
 		cuts.sort((p, q) => p - q);
+		const mk = g.mark();          // structures/walls: what this wall drew and where it stops you
+		pcs = [];
 		for (let i = 0; i < cuts.length - 1; i++) {
 			const u0 = cuts[i], u1 = cuts[i + 1];
 			if (u1 - u0 < 0.004) continue;
@@ -97,6 +101,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 				y = Math.max(y, gy1);
 			}
 		}
+		walls.push({ w, axis: w.axis, a0, a1, s: w.s, e: w.e, y1: w.y1, floor: L.y, ext: w.kind === 'ext', inside: w.kind === 'ext' ? -w.out : -1, verts: g.since(mk), pieces: pcs });
 		for (const o of w.open) dress(w, o, a0, a1);
 	}
 	function piece(w, u0, u1, y0, y1, um) {
@@ -117,6 +122,10 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		if (w.axis === 'x') g.box(keyF, u0, y0, a0, u1, y1, a1, WHITE); else g.box(keyF, a0, y0, u0, a1, y1, u1, WHITE);
 		col.push(w.axis === 'x' ? [u0, a0, u1, a1, y0, y1] : [a0, u0, a1, u1, y0, y1]);
 		const fy = L.y, yc = L.y + L.h;
+		{
+			const trim = (r, outside) => (!outside && r && r.type !== 'garage' && r.type !== 'warehouse' && r.type !== 'parking' ? { key: 'trim', col: TRIM, y: fy, h: 0.122, t: 0.016 } : null);
+			pcs.push({ u0, u1, y0, y1, col: col[col.length - 1], keys: [keyOf(rm, outM), keyOf(rp, outP)], cols: [colOf(rm, outM), colOf(rp, outP)], trims: [trim(rm, outM), trim(rp, outP)], rooms: [rm?.type || null, rp?.type || null] });
+		}
 		// the faces: shaded inside where they meet the floor, the ceiling and the walls at the
 		// room's corners (the light about a room never reaches into them fully)
 		for (const [r, face, sgn, outside] of [[rp, a1, 1, outP], [rm, a0, -1, outM]]) {
@@ -202,7 +211,7 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 
 	yield;
 	const root = new THREE.Group(), doors = [];
-	if (!full) { for (const m of g.meshes(M, false)) root.add(m); return { root, col, doors, full }; }
+	if (!full) { for (const m of g.meshes(M, false)) root.add(m); return { root, col, doors, full, walls }; }
 	// ---- the stairs: treads over a closed stringer, a rail on the open side
 	const railC = lin(style === 'victorian' ? [0.3, 0.18, 0.1] : [0.35, 0.28, 0.2]);
 	for (const f of P.flights) {
@@ -282,5 +291,5 @@ export function* buildLevel(P, M, C, k, full, night = { value: 0 }) {
 		root.add(car);
 		col.push([it.box[0], it.box[1], it.box[2], it.box[3], it.y, it.y + 1.4]);
 	}
-	return { root, col, doors, full };
+	return { root, col, doors, full, walls };
 }

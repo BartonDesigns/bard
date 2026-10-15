@@ -1,6 +1,7 @@
 // Your fists through your own eyes in a fight: two forearms and hands (a closed fist with its
 // knuckles and wrapped thumb, the wrist, the forearm and a sleeve running back out of view),
-// each a single mesh of skin and one of cloth, coloured from your own body when it is known.
+// each a single mesh of skin and one of cloth: once your body is known, its own hands and the
+// sleeves, cuffs and gloves of what you wear (people/sleeve.js), folding as the arms move.
 //
 // They hold a guard that breathes and bobs with your steps; each strike is three key poses
 // (the guard, the end of the wind-up, full extension) eased through the strike's own timing
@@ -14,6 +15,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createAnatomicalHand } from './anatomical-hand.js';
+import { dressArms } from '../people/sleeve.js';
 
 const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const out3 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - (1 - x) ** 3);
@@ -28,12 +30,13 @@ const POSE = {
 	// with something in hand: both hands on it, low at the right hip, the end up past the shoulder
 	item: P([0.1, -0.25, -0.38, 0.6, -0.3, -1.4], [0.17, -0.2, -0.36, 0.6, -0.35, -1.4]),
 };
-// each strike: [wind-up end, full extension]
+// each strike: [wind-up end, full extension] (at full reach the forearm runs back in line with
+// the shoulder, as a straight arm does, not at your eye)
 const MOVE = {
-	jab: [P([-0.125, -0.09, -0.34, 0.5, 0.22, 0.45], GUARD.R), P([-0.05, -0.07, -0.74, 0.08, 0.06, 0.15], [0.15, -0.12, -0.34, 0.6, -0.22, -0.4])],
-	cross: [P(GUARD.L, [0.16, -0.11, -0.32, 0.55, -0.26, -0.45]), P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [0.02, -0.06, -0.76, 0.08, -0.06, -0.15])],
+	jab: [P([-0.125, -0.09, -0.34, 0.5, 0.22, 0.45], GUARD.R), P([-0.05, -0.07, -0.74, 0.13, -0.11, 0.15], [0.15, -0.12, -0.34, 0.6, -0.22, -0.4])],
+	cross: [P(GUARD.L, [0.16, -0.11, -0.32, 0.55, -0.26, -0.45]), P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [0.02, -0.06, -0.76, 0.135, 0.15, -0.15])],
 	hook: [P(GUARD.L, [0.32, -0.1, -0.42, 0.25, -1.0, -1.2]), P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [-0.06, -0.06, -0.6, 0.15, 0.95, -0.35])],
-	heavy: [P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [0.27, -0.27, -0.2, 0.85, -0.45, -0.9]), P([-0.15, -0.12, -0.34, 0.6, 0.24, 0.4], [0.05, -0.07, -0.7, 0.18, -0.12, -0.3])],
+	heavy: [P([-0.14, -0.11, -0.35, 0.6, 0.22, 0.4], [0.27, -0.27, -0.2, 0.85, -0.45, -0.9]), P([-0.15, -0.12, -0.34, 0.6, 0.24, 0.4], [0.05, -0.07, -0.7, 0.18, 0.12, -0.3])],
 	// a level swing with both hands, right to left; an overhead brought down
 	swing: [P([0.22, -0.17, -0.3, 0.2, -1.0, -3.0], [0.3, -0.13, -0.28, 0.15, -1.25, -3.0]), P([-0.24, -0.13, -0.5, 0.12, 0.95, -0.2], [-0.15, -0.1, -0.52, 0.12, 1.05, -0.2])],
 	overhead: [P([0.08, 0.0, -0.26, 0.6, -0.1, -1.5], [0.13, 0.05, -0.24, 0.6, -0.15, -1.5]), P([0.02, -0.26, -0.55, 1.0, -0.05, 1.5], [0.08, -0.2, -0.53, 1.0, -0.1, 1.5])],
@@ -76,7 +79,7 @@ export function createFistView({ camera, isPhone = false }) {
 		a.renderOrder = b.renderOrder = 2;
 		grp.add(a, b);
 		root.add(grp);
-		arms[side] = { grp, fallback: a, anatomical: null, cur: new Float32Array(6), vel: new Float32Array(6), want: new Float32Array(6) };
+		arms[side] = { grp, fallback: a, sleeve: b, anatomical: null, garment: null, cur: new Float32Array(6), vel: new Float32Array(6), want: new Float32Array(6) };
 		arms[side].cur.set(GUARD[side]); arms[side].cur[1] -= 0.4;
 	}
 	// things picked up, in the right hand
@@ -96,10 +99,15 @@ export function createFistView({ camera, isPhone = false }) {
 		if (!me?.P || body === me.P) return;
 		body = me.P;
 		for (const side of ['L', 'R']) {
-			const a = arms[side]; a.anatomical?.dispose();
+			const a = arms[side]; a.anatomical?.dispose(); a.garment?.dispose(); a.garment = null;
 			a.anatomical = createAnatomicalHand(body, side);
-			if (a.anatomical) { a.anatomical.mesh.renderOrder = 2; a.grp.add(a.anatomical.mesh); }
-			a.fallback.visible = !a.anatomical;
+			if (a.anatomical) {
+				a.anatomical.mesh.renderOrder = 2; a.grp.add(a.anatomical.mesh);
+				// the sleeve, cuff and glove over this forearm, cut to it (the skin under them left out)
+				a.garment = dressArms(body, a.anatomical.mesh, { sides: [side], isPhone, far: 0.75 });
+				if (a.garment) { a.garment.mesh.renderOrder = 2; a.grp.add(a.garment.mesh); }
+			}
+			a.fallback.visible = a.sleeve.visible = !a.anatomical;
 		}
 		const c = me.P.skinMat?.color;
 		if (c) skinMat.color.copy(c).multiplyScalar(0.85);
@@ -108,6 +116,20 @@ export function createFistView({ camera, isPhone = false }) {
 	}
 
 	const W = new Float32Array(6);
+	// the view's frame to each forearm's, and down in the view's frame, for the folds
+	const toArm = new THREE.Matrix4(), down = new THREE.Vector3(), camQ = new THREE.Quaternion();
+	function fold(dt, s) {
+		camera.getWorldQuaternion(camQ);
+		down.set(0, -1, 0).applyQuaternion(camQ.invert());
+		root.updateMatrix();
+		for (const side of ['L', 'R']) {
+			const A = arms[side];
+			if (!A.garment) continue;
+			A.grp.updateMatrix();
+			toArm.multiplyMatrices(root.matrix, A.grp.matrix).invert();
+			A.garment.pose(dt, s.block ? 0.5 : 0, toArm, down);
+		}
+	}
 	function lerpPose(out, a, b, k) { for (let i = 0; i < 6; i++) out[i] = a[i] + (b[i] - a[i]) * k; }
 	// the pose wanted now, written into each arm's want
 	function aim(s, t) {
@@ -169,10 +191,11 @@ export function createFistView({ camera, isPhone = false }) {
 			if (s.item !== lastItem) { for (const k in items) items[k].visible = k === s.item; lastItem = s.item; }
 			aim(s, t);
 			follow(dt, !!s.move);
+			fold(dt, s);
 		},
 		hide() { root.visible = false; shown = 0; },
 		dispose() {
-			for (const a of Object.values(arms)) a.anatomical?.dispose();
+			for (const a of Object.values(arms)) { a.anatomical?.dispose(); a.garment?.dispose(); }
 			root.traverse(o => o.geometry?.dispose());
 			for (const m of [skinMat, clothMat, wood, steel, glass]) m.dispose();
 			root.removeFromParent();

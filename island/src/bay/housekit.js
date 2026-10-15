@@ -21,6 +21,10 @@ export class Builder {
 	// mul: a brightness for whatever is drawn next (each piece of furniture its own)
 	constructor() { this.bufs = new Map(); this.rot = 0; this.o = [0, 0, 0]; this.ao = false; this.mul = 1; }
 	at(x, y, z, rot = 0) { this.o = [x, y, z]; this.rot = ((rot % 4) + 4) % 4; return this; }
+	// where every buffer stands now, and later which vertices were added since: [key, first,
+	// count] (structures/walls/ takes a broken wall's own triangles out of the merged meshes)
+	mark() { const m = new Map(); for (const [k, b] of this.bufs) m.set(k, b.p.length / 3); return m; }
+	since(m) { const out = []; for (const [k, b] of this.bufs) { const s = m.get(k) || 0, e = b.p.length / 3; if (e > s) out.push([k, s, e - s]); } return out; }
 	buf(k) { let b = this.bufs.get(k); if (!b) this.bufs.set(k, b = { p: [], n: [], u: [], c: [], a: [] }); return b; }
 	tp(x, y, z) {
 		const [ox, oy, oz] = this.o;
@@ -461,6 +465,8 @@ const SLOT_V = 256, SLOT_LOW = 96;
 const SLOT = new Map();
 for (let k = 0; k < 8; k++) { SLOT.set('paper' + k, ['paper', k * SLOT_V]); SLOT.set('paperLit' + k, ['paperLit', k * SLOT_V]); SLOT.set('floor' + k, ['floorPat', k * SLOT_V]); SLOT.set('door' + k, ['door6', k * DOOR_ROW]); }
 for (let k = 0; k < 4; k++) { SLOT.set('siding' + k, ['siding', k * SLOT_V]); SLOT.set('garage' + k, ['garage', (k + 1) * GARAGE_ROW]); }
+// a patterned key's material and its v lift, as Builder.quad applies it (or null for a plain key)
+export const slotOf = (k) => SLOT.get(k) || null;
 
 // what shiny things inside reflect: a pale ceiling, warm walls, a darker floor
 function roomEnv() {

@@ -71,6 +71,43 @@ export function createStructureSounds(camera) {
 			burst(S, 'pink', 'lowpass', 2200, 0.5, S.t + 0.2, 0.05, 1.4, 0.6);
 			for (let i = 0; i < 18; i++) tone(S, 'sine', 70 + Math.random() * 50, 30, S.t + 0.2 + Math.random() * (3 + k * 2), 0.35, 0.45);
 		},
+		// a blow on a wall, by what it struck (structures/walls): drywall's papery crunch, stucco's
+		// grit, wood's knock and crack, brick's dull thud, concrete's hard knock, a batt's soft
+		// whump, a steel stud's ring. k: how hard; broke: something gave; hard: it did not give
+		wall(p, m = 'drywall', k = 1, broke = false, hard = false) {
+			const S = at(p, 120, Math.min(1.5, 0.45 + k * 0.35)); if (!S) return;
+			const t = S.t, j = () => 0.85 + Math.random() * 0.3;
+			if (m === 'drywall' || m === 'plaster' || m === 'paper') {
+				burst(S, 'pink', 'bandpass', 1500 * j(), 0.9, t, 0.002, 0.07 + k * 0.03, 0.8);
+				tone(S, 'sine', 150 * j(), 70, t, 0.09, hard ? 0.55 : 0.3);
+				if (broke) for (let i = 0; i < 7; i++) burst(S, 'white', 'bandpass', 2500 + Math.random() * 3500, 3, t + 0.01 + Math.random() * 0.14, 0.001, 0.025, 0.35);
+				if (broke) burst(S, 'pink', 'lowpass', 900, 0.7, t + 0.05, 0.02, 0.35, 0.25);
+			} else if (m === 'stucco' || m === 'render') {
+				burst(S, 'white', 'highpass', 2400 * j(), 0.8, t, 0.001, 0.05, 0.7);
+				burst(S, 'pink', 'bandpass', 800 * j(), 1.2, t, 0.002, 0.1, 0.6);
+				tone(S, 'sine', 120, 60, t, 0.07, 0.35);
+				if (broke) for (let i = 0; i < 5; i++) burst(S, 'white', 'bandpass', 1800 + Math.random() * 2000, 2.5, t + 0.04 + Math.random() * 0.3, 0.002, 0.04, 0.3);
+			} else if (m === 'osb' || m === 'plywood' || m === 'boards' || m === 'siding' || m === 'stud') {
+				tone(S, 'triangle', 900 * j(), 480, t, 0.03, 0.4);
+				tone(S, 'sine', 230 * j(), 150, t, 0.13, 0.55);
+				burst(S, 'pink', 'bandpass', 1100, 2, t, 0.001, 0.05, 0.4);
+				if (broke) { burst(S, 'white', 'bandpass', 2600, 4, t + 0.01, 0.001, 0.09, 0.6); tone(S, 'sawtooth', 320, 180, t + 0.02, 0.18, 0.08); }
+			} else if (m === 'brick' || m === 'block') {
+				tone(S, 'sine', 95 * j(), 50, t, 0.16, 0.7);
+				burst(S, 'pink', 'bandpass', 650 * j(), 1, t, 0.003, 0.14, 0.6);
+				if (broke) for (let i = 0; i < 4; i++) { const t2 = t + 0.12 + Math.random() * 0.5; tone(S, 'sine', 110 + Math.random() * 60, 50, t2, 0.12, 0.4); burst(S, 'pink', 'bandpass', 900, 1.4, t2, 0.002, 0.08, 0.3); }
+			} else if (m === 'concrete') {
+				tone(S, 'sine', 145 * j(), 80, t, 0.06, 0.6);
+				burst(S, 'white', 'highpass', 3000, 0.7, t, 0.001, 0.04, 0.6);
+				burst(S, 'pink', 'bandpass', 1200, 1, t, 0.002, 0.08, 0.4);
+			} else if (m === 'batt' || m === 'rockwool' || m === 'air') {
+				burst(S, 'pink', 'lowpass', 420, 0.6, t, 0.006, 0.12, 0.5);
+			} else if (m === 'steel') {
+				tone(S, 'triangle', 1350 * j(), 1300, t, 0.35, 0.18);
+				tone(S, 'sine', 380, 360, t, 0.25, 0.25);
+				burst(S, 'white', 'bandpass', 3000, 3, t, 0.001, 0.03, 0.4);
+			} else burst(S, 'pink', 'bandpass', 900, 1, t, 0.002, 0.1, 0.6);
+		},
 		plant(p) { const S = at(p, 20, 0.6); if (!S) return; burst(S, 'pink', 'bandpass', 1600, 1.4, S.t, 0.01, 0.16, 0.5); tone(S, 'sine', 140, 70, S.t, 0.09, 0.25); },
 		land(p, k = 1) { const S = at(p, 20, 0.5 + k * 0.3); if (!S) return; tone(S, 'sine', 110, 45, S.t, 0.16, 0.55); burst(S, 'brown', 'lowpass', 700, 0.7, S.t, 0.004, 0.18, 0.6); },
 		hammer(p) { const S = at(p, 120, 0.5); if (!S) return; burst(S, 'white', 'bandpass', 1600 + Math.random() * 900, 9, S.t, 0.001, 0.05, 0.7); tone(S, 'triangle', 900 + Math.random() * 300, 600, S.t, 0.06, 0.12); },
