@@ -148,7 +148,7 @@ export function createMelee(ctx) {
 		const m = me.m, name = me.move, e = ctx.eye();
 		sound.swing(m.kind === 'heavy', null, m.item);
 		const T = inFront(m.reach + 0.25, m.arc);
-		if (!T) { feel.nudge(-0.4, 0, (SIDE[name] || 0) * 0.5); return; }
+		if (!T) { if (!wall(m, name)) feel.nudge(-0.4, 0, (SIDE[name] || 0) * 0.5); return; }
 		if (!canMelee(T) || T.child) { if (T.child) ctx.ward?.(T); return; }
 		const dx = T.bound.x - e.x, dz = T.bound.z - e.z, dl = Math.hypot(dx, dz) || 1;
 		const dir = { x: dx / dl, y: 0, z: dz / dl };
@@ -188,6 +188,24 @@ export function createMelee(ctx) {
 		else if (m.item === 'bat' && ++me.uses >= 16) { me.item = null; me.uses = 0; ctx.hint('The bat splinters.', 1400, 1); }
 		me.counter = false; me.counterT = 0;
 		ctx.heard?.(T.bound);
+	}
+	// a strike with nobody in reach, into a wall (structures/walls): it dents, cracks and goes
+	// through the drywall between the studs; on a stud, brick, stucco or concrete it stops dead
+	// and a bare fist hurts
+	function wall(m, name) {
+		const r = ctx.wallBlow?.(m);
+		if (!r) return false;
+		const heavy = m.kind === 'heavy', side = SIDE[name] || 0;
+		feel.stop(hitStop(m, r.hard ? 'block' : 'hit') * (r.hard ? 1.3 : 1));
+		feel.landed(heavy, side, r.hard ? 'block' : 'hit');
+		if (r.hard) feel.nudge(0.35, 0, -side * 0.6);
+		if (r.hard && !m.item) {
+			ctx.hurtPlayer?.({ amount: heavy ? 4 : 1.5, type: 'impact', part: 'hand', src: r.at, quiet: true });
+			if (!me.told.knuckles) { me.told.knuckles = true; ctx.hint(r.stud ? 'A stud behind it. That hurt.' : 'Solid. Your knuckles feel that.', 1800, 1); }
+		}
+		if (m.item === 'bat' && ++me.uses >= 16) { me.item = null; me.uses = 0; ctx.hint('The bat splinters.', 1400, 1); }
+		if (r.broke && r.at) ctx.heard?.(r.at);
+		return true;
 	}
 	// each frame: the strike in progress, the hold that turns into a heavy, the next in the string
 	function stepMove(dt) {

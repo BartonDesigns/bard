@@ -16,11 +16,11 @@ import { bid, frameOf, FACES, onFace, uOn, faceLen, hash } from './ids.js';
 import { facadeOf } from './shell.js';
 
 const VERT = /* glsl */`
-attribute vec4 aCrack; attribute vec4 aGlass;
-varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec4 vCrack; varying vec4 vGlass; varying vec2 vSize;
+attribute vec4 aCrack; attribute vec4 aGlass; attribute vec3 aHole;
+varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec4 vCrack; varying vec4 vGlass; varying vec2 vSize; varying vec3 vHole;
 #include <fog_pars_vertex>
 void main() {
-	vUv = uv; vCrack = aCrack; vGlass = aGlass;
+	vUv = uv; vCrack = aCrack; vGlass = aGlass; vHole = aHole;
 	vSize = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
 	vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
 	vWorld = wp.xyz;
@@ -31,7 +31,7 @@ void main() {
 }`;
 const FRAG = /* glsl */`
 uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSunDir; uniform vec3 uSunColor; uniform float uNight;
-varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec4 vCrack; varying vec4 vGlass; varying vec2 vSize;
+varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec4 vCrack; varying vec4 vGlass; varying vec2 vSize; varying vec3 vHole;
 #include <fog_pars_fragment>
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main() {
@@ -49,6 +49,20 @@ void main() {
 		float ring = abs(fract(r * 2.6 + h21(vec2(cell, 2.0))) - 0.5);
 		crack = max(crack, (1.0 - smoothstep(0.012, 0.03, ring * 0.38)) * step(h21(vec2(cell, floor(r * 2.6))), 0.45) * (1.0 - smoothstep(reach * 0.4, reach * 0.55, r)));
 		crack = max(crack, 1.0 - smoothstep(0.03, 0.09, r));
+		// struck again: a hole knocked through, ragged, the glass round it crazed white and a web
+		// of rings close about it
+		if (vHole.z > 0.0) {
+			vec2 qh = m - vHole.xy * vSize;
+			float rh = length(qh), ah = atan(qh.y, qh.x);
+			float edge = vHole.z * (0.7 + 0.45 * h21(vec2(floor(ah * 2.6 + 9.0), vCrack.w)) + 0.12 * sin(ah * 13.0 + vCrack.w));
+			if (rh < edge) discard;
+			// (crushed round the hole: crazed white in little cells, a bright rim at the break)
+			float craze = 1.0 - smoothstep(edge * 1.25, edge * 2.3, rh + 0.03 * h21(floor(qh * 40.0)));
+			crack = max(crack, craze * (0.5 + 0.45 * h21(floor(qh * 110.0))));
+			crack = max(crack, 1.0 - smoothstep(edge, edge * 1.1, rh));
+			float web = abs(fract(rh / max(0.02, vHole.z) * 1.4) - 0.5);
+			crack = max(crack, (1.0 - smoothstep(0.03, 0.07, web)) * (1.0 - smoothstep(edge * 2.0, edge * 4.5, rh)) * step(0.35, h21(vec2(floor(ah * 7.0), floor(rh * 9.0)))));
+		}
 	}
 	if (vGlass.a < -0.5 && crack < 0.05) discard;
 	vec3 V = normalize(vWorld - cameraPosition), N2 = normalize(vN);
@@ -79,8 +93,8 @@ export function createGlass(ctx) {
 	const { scene, isPhone, shared, store, sounds, debris } = ctx;
 	const CAP = isPhone ? 2400 : 7000, R = isPhone ? 95 : 170;
 	const geo = new THREE.PlaneGeometry(1, 1).translate(0, 0, 0);
-	const aCrack = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4), aGlass = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4);
-	geo.setAttribute('aCrack', aCrack); geo.setAttribute('aGlass', aGlass);
+	const aCrack = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4), aGlass = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 4), 4), aHole = new THREE.InstancedBufferAttribute(new Float32Array(CAP * 3), 3);
+	geo.setAttribute('aCrack', aCrack); geo.setAttribute('aGlass', aGlass); geo.setAttribute('aHole', aHole);
 	const mat = new THREE.ShaderMaterial({
 		uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uZenith: { value: new THREE.Color(0.35, 0.5, 0.75) }, uHorizon: { value: new THREE.Color(0.7, 0.75, 0.8) }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: new THREE.Color(1, 1, 1) }, uNight: { value: 0 } }]),
 		vertexShader: VERT, fragmentShader: FRAG, fog: true, side: THREE.DoubleSide,
@@ -134,7 +148,7 @@ export function createGlass(ctx) {
 				const um = (u0 + u1) / 2, [lx, lz] = onFace(o, f, um), [x, z] = F.w(lx + nx * 0.06, lz + nz * 0.06);
 				const key = D.id + ':' + f + ':' + um.toFixed(1) + ':' + y0.toFixed(1);
 				if (broken(D.id, f, u0, u1, y0, y1)) return;
-				out.push({ key, id: D.id, o, f, u0, u1, y0, y1, x, y: foot + (y0 + y1) / 2, z, nx: wnx, nz: wnz, w: u1 - u0, h: y1 - y0, crack: byKey.get(key)?.crack || null, lit: hash(x * 3.1, foot + y0) < 0.45 ? 1 : 0 });
+				out.push({ key, id: D.id, o, f, u0, u1, y0, y1, x, y: foot + (y0 + y1) / 2, z, nx: wnx, nz: wnz, w: u1 - u0, h: y1 - y0, crack: byKey.get(key)?.crack || null, hole: byKey.get(key)?.hole || null, lit: hash(x * 3.1, foot + y0) < 0.45 ? 1 : 0 });
 			};
 			if (D.kind === 'curtain') {
 				const n = Math.max(1, Math.round(L / 1.75)), cw = L / n;
@@ -171,10 +185,77 @@ export function createGlass(ctx) {
 					const plan = { B, wall: w, op, k: w.k };
 					if (gone) { openPlan(plan); continue; }
 					const [wx, wz] = F.w(lx + lnx * 0.012, lz + lnz * 0.012), [wnx, wnz] = F.dir(lnx, lnz);
-					out.push({ key, id, o, f, u0: u - hw, u1: u + hw, y0, y1, x: wx, y: foot + (y0 + y1) / 2, z: wz, nx: wnx, nz: wnz, w: hw * 2, h: y1 - y0, plan, crack: byKey.get(key)?.crack || null, store: op.type === 'store' });
+					out.push({ key, id, o, f, u0: u - hw, u1: u + hw, y0, y1, x: wx, y: foot + (y0 + y1) / 2, z: wz, nx: wnx, nz: wnz, w: hw * 2, h: y1 - y0, plan, crack: byKey.get(key)?.crack || null, hole: byKey.get(key)?.hole || null, store: op.type === 'store' });
 				}
 			}
 		}
+	}
+	// the windows of the houses built near you (bay/houses.js): their own glass, by the plan. A
+	// house's panes are kept on its lot's record by wall (10 + its index) and place along it
+	function layHouses(out, claimed) {
+		const H = ctx.world?.()?.houses?.houses;
+		if (!H) return;
+		for (const [grp, h] of H) {
+			if (!h?.plan) continue;
+			let o = null;
+			for (const q of ctx.city()?.lotsNear?.(h.M.x, h.M.z, 3) || []) if (q.src?.grp === grp || q.src === h.M) { o = q; break; }
+			const lot = o || { x: h.M.x, z: h.M.z, w: h.M.w, d: h.M.d, a: h.M.a, h: (h.M.wallH || 6) + 1.2, y: h.floorY - 1.2, col: h.M.look?.wall }, id = bid(lot);
+			claimed.add(id);
+			const T = 0.16;
+			h.plan.walls.forEach((w, wi) => {
+				if (w.kind !== 'ext') return;
+				for (const op of w.open) {
+					if (op.type !== 'window' && op.type !== 'slider') continue;
+					const along = (op.s0 + op.s1) / 2, ac = w.pos + w.inSide * 0.065, [lx, lz] = w.axis === 'x' ? [along, ac] : [ac, along];
+					const [lnx, lnz] = w.axis === 'x' ? [0, -w.inSide] : [-w.inSide, 0];
+					const x = h.cx + h.ca * lx - h.sa * lz, z = h.cz + h.sa * lx + h.ca * lz, nx = h.ca * lnx - h.sa * lnz, nz = h.sa * lnx + h.ca * lnz;
+					const f = 10 + wi, key = id + ':h:' + wi + ':' + along.toFixed(2) + ':' + op.y0.toFixed(2);
+					const plan = { house: h, wall: w, op, k: w.level, T };
+					if (broken(id, f, op.s0, op.s1, op.y0, op.y1)) { openHouse(plan); continue; }
+					closeHouse(plan);
+					out.push({ key, id, o: lot, f, u0: op.s0, u1: op.s1, y0: op.y0, y1: op.y1, x: x + nx * 0.004, y: h.floorY + (op.y0 + op.y1) / 2, z: z + nz * 0.004, nx, nz, w: op.s1 - op.s0, h: op.y1 - op.y0, plan, crack: byKey.get(key)?.crack || null, hole: byKey.get(key)?.hole || null });
+				}
+			});
+		}
+	}
+	// a house's window gone: its glass taken out of the house's meshes, the box in it out of what
+	// stops you (both kept, to put back when the glazier has been)
+	function openHouse(plan) {
+		const { house: h, wall: w, op, T } = plan;
+		h.openedPanes = h.openedPanes || new Map();
+		if (h.openedPanes.has(op)) return;
+		const c0 = Math.min(w.pos, w.pos + w.inSide * T) - 0.02, c1 = Math.max(w.pos, w.pos + w.inSide * T) + 0.02, keep = [];
+		const inBox = (x, y, z) => (w.axis === 'x' ? x > op.s0 - 0.01 && x < op.s1 + 0.01 && z > c0 && z < c1 : z > op.s0 - 0.01 && z < op.s1 + 0.01 && x > c0 && x < c1) && y > op.y0 - 0.01 && y < op.y1 + 0.01;
+		h.root.updateMatrixWorld(true);
+		const inv = new THREE.Matrix4().copy(h.root.matrixWorld).invert(), M = new THREE.Matrix4(), V = new THREE.Vector3();
+		h.root.traverse((m) => {
+			if (!m.isMesh || (m.name !== 'glass' && m.name !== 'frost')) return;
+			M.multiplyMatrices(inv, m.matrixWorld);
+			const p = m.geometry.attributes.position;
+			let changed = false;
+			for (let i = 0; i + 2 < p.count; i += 3) {
+				V.set((p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3, (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3).applyMatrix4(M);
+				if (!inBox(V.x, V.y, V.z)) continue;
+				keep.push([p, i, p.array.slice(i * 3, i * 3 + 9)]);
+				const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cy = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3, cz = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
+				for (let j = 0; j < 3; j++) p.setXYZ(i + j, cx, cy, cz);
+				changed = true;
+			}
+			if (changed) p.needsUpdate = true;
+		});
+		const boxes = [];
+		for (const b of h.col) {
+			const s0 = w.axis === 'x' ? b[0] : b[1], s1 = w.axis === 'x' ? b[2] : b[3], a0 = w.axis === 'x' ? b[1] : b[0], a1 = w.axis === 'x' ? b[3] : b[2];
+			if (a0 > c0 - 0.03 && a1 < c1 + 0.03 && s0 > op.s0 - 0.05 && s1 < op.s1 + 0.05 && Math.abs(b[4] - op.y0) < 0.02 && Math.abs(b[5] - op.y1) < 0.02) { boxes.push([b, b[4], b[5]]); b[4] = 1e9; b[5] = -1e9; }
+		}
+		h.openedPanes.set(op, { keep, boxes });
+	}
+	function closeHouse(plan) {
+		const h = plan.house, e = h.openedPanes?.get(plan.op);
+		if (!e) return;
+		for (const [p, i, a] of e.keep) { p.array.set(a, i * 3); p.needsUpdate = true; }
+		for (const [b, y0, y1] of e.boxes) { b[4] = y0; b[5] = y1; }
+		h.openedPanes.delete(plan.op);
 	}
 	// a plan's window gone: its glass taken out of the level's mesh, the wall's box in it (and
 	// a shop front's low sill, to step over) taken out of what stops you
@@ -214,6 +295,7 @@ export function createGlass(ctx) {
 		bx = cam.position.x; bz = cam.position.z; dirty = false;
 		const out = [], claimed = new Set();
 		layPlans(out, claimed);
+		layHouses(out, claimed);
 		const lots = city.lotsNear(bx, bz, R).filter((o) => !o.wrecked).sort((p, q) => Math.hypot(p.x - bx, p.z - bz) - Math.hypot(q.x - bx, q.z - bz));
 		for (const o of lots) {
 			if (out.length >= CAP) break;
@@ -233,14 +315,15 @@ export function createGlass(ctx) {
 			if (p.plan && !p.crack) continue;
 			QT.setFromAxisAngle(UP, Math.atan2(p.nx, p.nz));
 			mesh.setMatrixAt(n, M4.compose(P3.set(p.x, p.y, p.z), QT, S3.set(p.w, p.h, 1)));
-			const cr = p.crack;
+			const cr = p.crack, ho = p.hole;
 			aCrack.setXYZW(n, cr ? cr[0] : 0, cr ? cr[1] : 0, cr ? cr[2] : 0, cr ? cr[3] : 0);
+			aHole.setXYZ(n, ho ? ho[0] : 0, ho ? ho[1] : 0, ho ? ho[2] : 0);
 			const t = p.o.col || [0.5, 0.6, 0.65];
 			aGlass.setXYZW(n, 0.35 + t[0] * 0.4, 0.42 + t[1] * 0.4, 0.5 + t[2] * 0.35, p.plan ? -1 : p.lit || 0);
 			p.slot = n++;
 		}
 		mesh.count = n;
-		mesh.instanceMatrix.needsUpdate = true; aCrack.needsUpdate = true; aGlass.needsUpdate = true;
+		mesh.instanceMatrix.needsUpdate = true; aCrack.needsUpdate = true; aGlass.needsUpdate = true; aHole.needsUpdate = true;
 	}
 
 	// ---------- breaking ----------
@@ -259,10 +342,21 @@ export function createGlass(ctx) {
 		}
 		return best;
 	}
-	// a pane struck at (u, v) of it (0..1): cracked, or (hard enough, or cracked already) broken
+	// a pane struck at (u, v) of it (0..1): the first blow stars it with a web of cracks, the next
+	// knocks a hole through it (a few shards out of it, the web grown), the next brings it down;
+	// a blast, a bat or a very heavy blow (99 and over) brings it down at once
 	function strike(p, u, v, power = 30, push = null) {
 		if (!p || p.gone) return false;
-		if (p.crack || power >= 50) return shatter(p, push);
+		if (power >= 99 || p.hole?.[3] >= 2) return shatter(p, push);
+		if (p.crack) {
+			const r = Math.min(Math.min(p.w, p.h) * 0.3, (p.hole?.[2] || 0) + 0.06 + power / 900);
+			p.hole = [p.hole ? p.hole[0] : u, p.hole ? p.hole[1] : v, r, (p.hole?.[3] || 0) + 1];
+			p.crack[2] = Math.min(1, p.crack[2] + 0.25);
+			debris.shatter(p.x, p.y + (v - 0.5) * p.h, p.z, r, r, p.nx, p.nz, isPhone ? 3 : 7, push);
+			sounds.crack(p);
+			upload();
+			return false;
+		}
 		p.crack = [u, v, Math.min(1, 0.45 + power / 60), Math.random() * 100];
 		sounds.crack(p);
 		upload();
@@ -282,7 +376,8 @@ export function createGlass(ctx) {
 		rec.t0 = rec.t0 ?? store.now();
 		store.put(p.id, rec);
 		ctx.damaged?.(p.id, rec);
-		if (p.plan) openPlan(p.plan);
+		if (p.plan?.house) openHouse(p.plan);
+		else if (p.plan) openPlan(p.plan);
 		byKey.delete(p.key);
 		if (!later) settle();
 		return true;
