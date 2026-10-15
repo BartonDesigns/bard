@@ -20,6 +20,7 @@ import { loadRapier, createCarPhysics } from '../vehicles/physics.js';
 import { vehicleMesh, DIMS, SCHEMES } from './models.js';
 import { engineSound, oneShot } from './sound.js';
 import { jetState, jetStep, heliState, heliStep } from './flight.js';
+import { firstTime } from '../ui/touch-skin.js';
 
 // how each ground vehicle drives (vehicles/physics.js FEEL's fields)
 const FEEL = {
@@ -70,8 +71,10 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 		const keyU = (e) => { if (e.key === 'q' || e.key === 'Q') firing = false; };
 		addEventListener('pointerdown', down); addEventListener('pointerup', up); addEventListener('keydown', keyD); addEventListener('keyup', keyU);
 		const btns = [];
-		const btn = (label, css, on) => {
-			const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-label', label);
+		// (data-mil: its place by the thumb on a touch screen, ui/touch-skin.js)
+		const btn = (label, css, on, role) => {
+			const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-label', label); b.title = label;
+			b.className = 'l99-mil'; b.dataset.mil = role;
 			b.style.cssText = 'position:absolute;min-width:56px;min-height:56px;border-radius:14px;border:1px solid rgba(255,255,255,.3);background:rgba(8,20,26,.55);color:#eafaf6;font:600 13px system-ui;touch-action:none;' + css;
 			b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); on(true); b.style.background = '#01a982'; });
 			for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { on(false); b.style.background = 'rgba(8,20,26,.55)'; });
@@ -80,15 +83,15 @@ export function createMilDrive({ world, camera, combat, kit, group, hint, isPhon
 		};
 		const touch = { up: false, down: false };
 		if (isPhone || matchMedia?.('(pointer: coarse)')?.matches) {
-			btn(kind === 'tank' ? 'Cannon' : 'Fire', 'right:calc(16px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 170px + env(safe-area-inset-bottom));', (o) => { firing = o; });
-			if (air) { btn('Up', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 230px + env(safe-area-inset-bottom));', (o) => { touch.up = o; }); btn('Down', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 165px + env(safe-area-inset-bottom));', (o) => { touch.down = o; }); }
+			btn(kind === 'tank' ? 'Cannon' : 'Fire', 'right:calc(16px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 170px + env(safe-area-inset-bottom));', (o) => { firing = o; }, 'fire');
+			if (air) { btn('Up', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 230px + env(safe-area-inset-bottom));', (o) => { touch.up = o; }, 'up'); btn('Down', 'right:calc(90px + env(safe-area-inset-right));bottom:calc(var(--l99-low, 88px) + 165px + env(safe-area-inset-bottom));', (o) => { touch.down = o; }, 'down'); }
 		}
 		const k = (a, b) => io.held.has(a) || (b && io.held.has(b));
 		if (!air) {
 			S.loading = true;
 			loadRapier().then((R) => { S.loading = false; if (S.dead) return; S.car = createCarPhysics(R, kind, { x: v.x, z: v.z, yaw: v.yaw }, env(), { spec: specFor(kind), feel: FEEL[kind] }); }).catch((e) => { S.loading = false; console.warn('[military] physics', e); });
 		}
-		hint(air ? (kind === 'jet' ? (isPhone ? 'Jet: ▲ ▼ throttle, ◀ ▶ roll, Up and Down to pitch, Fire for the gun. Take off down the runway.' : 'Jet: W/S throttle (Shift afterburner), A/D roll, ↑/↓ pitch, ←/→ rudder, Space brakes, Q or click fires. V to get out once stopped.') : (isPhone ? 'Helicopter: Up and Down climb and descend, ▲ ▼ forward and back, ◀ ▶ turn, Fire for the gun.' : 'Helicopter: ↑/↓ climb and descend, W/S forward and back, A/D turn, ←/→ slide, Q or click fires. Set it down gently.')) : (kind === 'tank' ? (isPhone ? 'Tank: the pad drives, look to turn the turret, Cannon fires.' : 'Tank: W/S drive, A/D turn (on the spot at a crawl), look to aim the turret, click or Q fires the cannon, C for the gunner\'s sight.') : `${NAMES[kind]}: drive it as any car; click or Q fires the roof gun.`), 5000, 1);
+		if (!isPhone || firstTime('l99-tip-' + kind)) hint(air ? (kind === 'jet' ? (isPhone ? 'Jet: ▲ ▼ throttle, ◀ ▶ roll, Up and Down to pitch, Fire for the gun. Take off down the runway.' : 'Jet: W/S throttle (Shift afterburner), A/D roll, ↑/↓ pitch, ←/→ rudder, Space brakes, Q or click fires. V to get out once stopped.') : (isPhone ? 'Helicopter: Up and Down climb and descend, ▲ ▼ forward and back, ◀ ▶ turn, Fire for the gun.' : 'Helicopter: ↑/↓ climb and descend, W/S forward and back, A/D turn, ←/→ slide, Q or click fires. Set it down gently.')) : (kind === 'tank' ? (isPhone ? 'Tank: the pad drives, look to turn the turret, Cannon fires.' : 'Tank: W/S drive, A/D turn (on the spot at a crawl), look to aim the turret, click or Q fires the cannon, C for the gunner\'s sight.') : `${NAMES[kind]}: drive it as any car; click or Q fires the roof gun.`), 5000, 1);
 
 		// ---------- weapons ----------
 		const view = () => _v.set(-Math.sin(P.yaw) * Math.cos(P.pitch), Math.sin(P.pitch), -Math.cos(P.yaw) * Math.cos(P.pitch)).normalize().clone();

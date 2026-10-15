@@ -48,6 +48,8 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	text.style.cssText = 'margin:5px 0;white-space:pre-line'; buttons.style.cssText = 'display:flex;gap:6px';
 	const make = (label, action) => { const b = document.createElement('button'); b.textContent = label; b.style.cssText = 'min-height:40px;flex:1;border:1px solid #638a93;border-radius:6px;background:#23424b;color:#fff;cursor:pointer;font:600 12px system-ui;touch-action:manipulation'; b.onclick = action; buttons.append(b); return b; };
 	const accept = make('Field contracts', () => { if (!active()) return; if (!expanded) { expanded = true; render(); } else start(); });
+	// (folded, on a touch screen it is one round button that opens the brief: ui/touch-skin.js)
+	accept.dataset.cvOpen = '';
 	const cancel = make('Close', () => { if (mission) abort('Contract abandoned. Collected gear stays in your bag.'); else expanded = false; render(); });
 	panel.append(title, text, buttons); mount.append(panel);
 	for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'keydown']) panel.addEventListener(ev, (e) => e.stopPropagation());
@@ -92,6 +94,7 @@ export function createContracts({ group, mount, arms, squads, recovery, eye, cam
 	function render() {
 		panel.style.display = active() && (mission || eligible()) ? 'block' : 'none';
 		title.setAttribute('aria-expanded', String(expanded));
+		panel.classList.toggle('cv-idle', !mission && !expanded);
 		if (!mission) {
 			title.style.display = expanded ? '' : 'none'; text.style.display = expanded ? '' : 'none';
 			const d = contractFor(completed); title.textContent = expanded ? d.name : 'Frontier fieldwork';
