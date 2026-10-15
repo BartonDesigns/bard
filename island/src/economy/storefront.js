@@ -406,8 +406,9 @@ export function createStorefronts({ group, wrap = (m) => m, isPhone = false }) {
 			const sp = R.spec;
 			if (sp && n < CAP) {
 				// the glazing, a few centimetres proud of the wall
-				put(glass, n, R.x + R.nx * 0.05, R.y + (sp.y0 > 0.1 && sp.kind !== 'office' ? 0 : sp.y0), R.z + R.nz * 0.05, R.yaw, 1, 1, 1);
+				// (an office window from its sill; a shopfront from the ground, its kick plate drawn)
 				const h = sp.kind === 'office' ? sp.y1 - sp.y0 : sp.y1, kick = sp.kind === 'office' ? 0 : sp.y0;
+				put(glass, n, R.x + R.nx * 0.05, R.y + (sp.kind === 'office' ? sp.y0 : 0), R.z + R.nz * 0.05, R.yaw, sp.w, h, 1);
 				D[n * 4] = sp.w; D[n * 4 + 1] = h; D[n * 4 + 2] = kick; D[n * 4 + 3] = sp.kind === 'office' || sp.kind === 'bays' ? 99 : R.doorX;
 				Sh[n * 4] = R.display; Sh[n * 4 + 1] = R.depth; Sh[n * 4 + 2] = R.seed; Sh[n * 4 + 3] = (sp.kind === 'office' ? 1 : sp.kind === 'bays' ? 2 : 0) + (R.shutters ? 4 : 0);
 				Fr[n * 3] = R.frame[0]; Fr[n * 3 + 1] = R.frame[1]; Fr[n * 3 + 2] = R.frame[2];
