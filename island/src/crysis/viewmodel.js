@@ -354,6 +354,9 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect;
 		const px = Math.min(Math.abs(vw.p[0]), Math.abs(vw.p[2]) * halfW * 0.62) * Math.sign(vw.p[0]);
 		const hip = V.set(px, vw.p[1], vw.p[2]);
+		// (a tall touch screen: the held item a touch smaller, nearer the middle and higher, so the
+		// right thumb's buttons in the lower right do not cover it)
+		if (aimBtn && cam.aspect < 0.8) { hip.x *= 0.85; hip.y += 0.02; hip.z -= 0.05; }
 		Q.copy(BASE);
 		Q2.setFromEuler(E.set(vw.r[1], vw.r[0], vw.r[2], 'YXZ'));
 		hipQ.multiplyQuaternions(Q2, Q);

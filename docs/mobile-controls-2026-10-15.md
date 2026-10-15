@@ -81,12 +81,20 @@ unless said:
 - Between the thumbs, in a row along the bottom: things to act on nearby (talk or help, use, doors,
   pick up, throw, put down, the tattoo studio, a service, a game to play). In landscape the row
   starts right of the ammo.
-- Top: back (chevron) on the left, with your home and the field contract below it as 44 px icons
-  (the contract opens to its brief when tapped, and shows its objective while one is on). On the
-  right, one row: fly, gear, places, the controls menu, music, sky and world settings. Under 380 px
-  wide the right-hand row splits in two and the left column moves down to match.
-- Tips: centred under the top row, clear of the side columns and the driving read-out (portrait top 116 px, landscape 104
-  px, inside the safe area), never under a button. Wanted stars under the top right.
+- Top row: back (chevron) on the left; music and sky and world settings on the right. In
+  landscape fly, gear, places and the controls menu join the right of that row; in portrait they
+  stand in a column down the right edge, under the quest's band.
+- The quest's band: the quest chip ("Where Andre was robbed · 5 m · ...") has its own band under
+  the top row, centred, as wide as the screen allows. Nothing sits on it: the skin measures the chip
+  each quarter second and everything that sits under the top row (the left column with your home
+  and the field contract, the portrait column of fly/gear/places/menu, the wanted stars, the
+  driving read-out, the boss bar, the tips) starts below its bottom (`--qb`). A button some module
+  places itself that still lands on the chip or the driving read-out is moved down below it.
+- Tips: centred under the bands, clear of the side columns and the driving read-out (portrait top
+  116 px, landscape 104 px, lower when the quest shows), never under a button. Wanted stars under
+  the top row on the right.
+- Safari's bars: the address and tool bars, shown or collapsed, are read from the visual viewport
+  and added to the safe areas (`--vvt`, `--vvb`), so nothing sits under them.
 - Health and ammo: above the stick in portrait (narrowed so they never reach the cluster on a
   320 px screen); along the top between the back button and the right-hand row in landscape.
 - The controls menu (☷) still opens its sheet of labelled entries (the ways to go elsewhere, the
@@ -96,10 +104,31 @@ unless said:
 Rotation is live: the layout is all CSS (safe-area `env()` values and one landscape media query),
 so it follows the device as it turns.
 
+## Looking round
+
+`island/src/ui/touch-look.js`, used by `player.js`:
+
+- An acceleration curve on the look drag: its speed (smoothed over the last moves) sets the gain,
+  0.7x for a slow, precise drag, 1x at an ordinary 0.6 px/ms, up to 2.6x for a fast swipe that turns
+  far. The aim sensitivity in Sky and World scales it as before.
+- Invert look up and down, and gyro aiming, as two switches in Sky and World on a touch screen
+  (kept on the device). The gyro reads the device's turn rate (DeviceMotion), about the screen's
+  axes for the way it is held, and adds it to the drag; on iOS the switch's tap asks for the
+  permission, and with it left on, the first tap on the world starts it again in a later visit.
+- The view drifts back to level while you walk on the stick with no hand on the view for 1.5 s
+  (never while aiming down the sights, flying or swimming).
+- A double tap does nothing (the page's own zoom is off, `no-page-zoom`).
+- In portrait on a touch screen the held weapon sits a little smaller, nearer the middle and higher,
+  so the right thumb's buttons do not cover it; the crosshair stays clear of every control.
+
 ## Per control
 
-- **Move stick and look area**: unchanged behaviour; the resting ring and knob are restyled to
-  match (1 px ring, translucent disc).
+- **Move stick and look area**: the stick floats: it appears under the left thumb wherever it
+  first touches in the lower left (the left 42% of the screen, below its top 35%), and its resting
+  ring is only a faint hint. Everywhere else on the world is the free-look zone (the whole right
+  two-thirds and the top), so the right thumb drags to look anywhere while the left thumb walks;
+  both work at once (each touch is followed by its own pointer id) and a touch that starts on a
+  button is the button's, never a look.
 - **Fire, Aim, Reload, Mode** (`combat/hud.js`, `crysis/viewmodel.js`, `ui/gear.js`): icon
   only; the FIRE and AIM captions are gone and Fire keeps its icon when its name changes (Draw,
   Release, Nocking for the bow); Reload and Mode have titles; the Mode glyph shows one, two or
@@ -133,8 +162,10 @@ so it follows the device as it turns.
 
 - `island/tools/touch-skin.test.mjs`: every control's name maps to the expected glyph and every
   glyph has a drawing; a first-use tip shows once.
-- `island/tools/mobile-controls-browser.cjs`: now applies the skin as `main.js` does, and fails
-  if any HUD button shows words, a caption (`::after`) or a visible label element inside it, that each has a name and is at least 44 px, that the top bar,
+- `island/tools/touch-look.test.mjs`: the curve, the gyro's axes in each orientation, the pitch's
+  easing.
+- `island/tools/mobile-controls-browser.cjs`: now applies the skin as `main.js` does, shows the
+  real quest chip, and fails if any control covers the quest text or if any HUD button shows words, a caption (`::after`) or a visible label element inside it, that each has a name and is at least 44 px, that the top bar,
   Fire, Reload, Mode, Aim, Jump, Fly and the menu do not overlap and stay on screen at 390x664,
   844x390, 844x320, 320x568 and on the desktop (where the skin stays off), plus the menu and the
   contract panel as before.

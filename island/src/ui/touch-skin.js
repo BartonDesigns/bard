@@ -166,7 +166,7 @@ const D2 = 'right:calc(144px + var(--sr))!important;bottom:calc(144px + var(--sb
 const L2 = 'right:calc(164px + var(--sr))!important;bottom:calc(24px + var(--sb))!important;';
 const SLOT = 'position:absolute!important;left:auto!important;top:auto!important;margin:0!important;';
 const CSS = `
-${S}{--sl:env(safe-area-inset-left);--sr:env(safe-area-inset-right);--st:env(safe-area-inset-top);--sb:env(safe-area-inset-bottom);--gs:23px;}
+${S}{--sl:env(safe-area-inset-left);--sr:env(safe-area-inset-right);--st:calc(env(safe-area-inset-top) + var(--vvt, 0px));--sb:calc(env(safe-area-inset-bottom) + var(--vvb, 0px));--qb:0px;--gs:23px;}
 ${S} [data-skin]{box-sizing:border-box!important;width:52px!important;height:52px!important;min-width:0!important;min-height:0!important;max-width:none!important;padding:0!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.24)!important;background:rgba(12,16,20,.32)!important;color:rgba(255,255,255,.88)!important;box-shadow:0 1px 8px rgba(0,0,0,.16)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;text-shadow:none!important;opacity:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;transition:scale .08s ease,background-color .12s ease,border-color .12s ease!important;cursor:pointer;}
 ${S} [data-skin][data-glyph]{font-size:0!important;line-height:0!important;color:transparent!important;overflow:hidden!important;}
 ${S} [data-skin][data-glyph]>*{display:none!important;}
@@ -181,19 +181,27 @@ ${S} [data-size="m"]{width:60px!important;height:60px!important;--gs:26px;}
 ${Object.entries(GLYPHS).map(([k, v]) => `${S} [data-glyph="${k}"]{--glyph:${SVG(v)};}`).join('\n')}
 
 ${S} .l99-joy{border:1px solid rgba(255,255,255,.3)!important;background:rgba(12,16,20,.22)!important;}
+${S} .l99-joy:not(.held){opacity:.35!important;}
 ${S} .l99-joy>div{background:rgba(255,255,255,.5)!important;}
 
 ${S}>[aria-label^="Back to the Bard"]{${SLOT}left:calc(12px + var(--sl))!important;top:calc(12px + var(--st))!important;right:auto!important;bottom:auto!important;}
 ${S}>[aria-label^="Sky and world settings"]{${SLOT}right:calc(12px + var(--sr))!important;top:calc(12px + var(--st))!important;bottom:auto!important;}
 ${S}>[aria-label^="Auto music"]{${SLOT}right:calc(64px + var(--sr))!important;top:calc(12px + var(--st))!important;bottom:auto!important;}
-${S} .l99-quick{top:calc(12px + var(--st))!important;right:calc(116px + var(--sr))!important;gap:8px!important;}${S}>[aria-label^="Warp"]{${SLOT}right:calc(12px + var(--sr))!important;top:calc(68px + var(--st))!important;bottom:auto!important;}
-${S} .l99-left{top:calc(68px + var(--st))!important;left:calc(12px + var(--sl))!important;max-width:calc(100% - 24px - var(--sl) - var(--sr))!important;}
-${S} .cb-star{top:calc(70px + var(--st))!important;right:calc(16px + var(--sr))!important;}
+${S} .l99-quick{top:max(calc(68px + var(--st)), var(--qb))!important;right:calc(12px + var(--sr))!important;flex-direction:column!important;gap:8px!important;}
+${S}>[aria-label^="Warp"]{${SLOT}left:calc(12px + var(--sl))!important;right:auto!important;top:max(calc(68px + var(--st)), var(--qb))!important;bottom:auto!important;}
+${S} [data-hud-text="room"]{left:calc(64px + var(--sl))!important;top:max(calc(68px + var(--st)), var(--qb))!important;}
+${S} [data-hud-text="quest"]{top:calc(64px + var(--st))!important;max-width:calc(100% - 24px - var(--sl) - var(--sr))!important;}
+${S} .l99-drive-hud{top:max(calc(64px + var(--st)), var(--qb))!important;}
+${S} .cb-boss{top:max(calc(58px + var(--st)), var(--qb))!important;}
+${S} .l99-left{top:max(calc(68px + var(--st)), var(--qb))!important;left:calc(12px + var(--sl))!important;max-width:calc(100% - 88px - var(--sl) - var(--sr))!important;}
+${S} .cb-star{top:max(calc(70px + var(--st)), var(--qb))!important;right:calc(66px + var(--sr))!important;}
 ${S} .cb-ammo{background:rgba(12,16,20,.32)!important;border:1px solid rgba(255,255,255,.16);border-radius:12px!important;max-width:min(160px,calc(100% - 204px - var(--sl) - var(--sr)))!important;}
 ${S} .cb-ammo :is(.w,.rl){display:none!important;}
 ${S} .cb-hp{width:min(144px,calc(100% - 204px - var(--sl) - var(--sr)))!important;}
 ${S} .l99-prompts>[data-hud="prompt 99"]{background:rgba(12,16,20,.5)!important;color:rgba(255,255,255,.92)!important;}
 @media (orientation:landscape) and (max-height:540px){
+${S} .l99-quick{top:calc(12px + var(--st))!important;right:calc(116px + var(--sr))!important;flex-direction:row!important;}
+${S} .cb-star{right:calc(16px + var(--sr))!important;}
 ${S} .cb-ammo{left:calc(120px + var(--sl))!important;top:calc(12px + var(--st))!important;bottom:auto!important;}
 ${S} .cb-hp{left:calc(292px + var(--sl))!important;top:calc(28px + var(--st))!important;bottom:auto!important;width:120px!important;}
 }
@@ -210,11 +218,11 @@ ${S} .l99-thumb [data-skin]{margin:0!important;}
 ${S} .l99-prompts{left:calc(112px + var(--sl))!important;right:calc(160px + var(--sr))!important;bottom:calc(16px + var(--sb))!important;flex-direction:row!important;flex-wrap:wrap-reverse!important;justify-content:center!important;align-items:flex-end!important;gap:12px!important;}
 ${S} .l99-prompts>[data-hud="prompt 21"]{max-width:100%!important;}
 ${S} .l99-prompts>[data-hud="prompt 21"] [data-t]{display:none!important;}
-${S} .l99-prompts>[data-hud="prompt 99"]{position:fixed!important;left:50%!important;right:auto!important;top:calc(116px + var(--st))!important;bottom:auto!important;transform:translateX(-50%)!important;width:max-content;max-width:calc(100% - 136px - var(--sl) - var(--sr))!important;box-sizing:border-box;z-index:7;}
+${S} .l99-prompts>[data-hud="prompt 99"]{position:fixed!important;left:50%!important;right:auto!important;top:max(calc(116px + var(--st)), calc(var(--qb) + 44px))!important;bottom:auto!important;transform:translateX(-50%)!important;width:max-content;max-width:calc(100% - 136px - var(--sl) - var(--sr))!important;box-sizing:border-box;z-index:7;}
 ${S} .l99-prompts>[data-hud="prompt 20"]{${SLOT}position:fixed!important;${P}z-index:7;}
 @media (orientation:landscape) and (max-height:540px){
 ${S} .l99-prompts{left:calc(290px + var(--sl))!important;}
-${S} .l99-prompts>[data-hud="prompt 99"]{top:calc(104px + var(--st))!important;max-width:calc(100% - 420px - var(--sl) - var(--sr))!important;}
+${S} .l99-prompts>[data-hud="prompt 99"]{top:max(calc(104px + var(--st)), calc(var(--qb) + 44px))!important;max-width:calc(100% - 420px - var(--sl) - var(--sr))!important;}
 }
 
 ${S} .cb-btn[aria-label]{${SLOT}}
@@ -243,11 +251,6 @@ ${S} [data-field-contract].cv-idle [data-skin]{flex:none!important;}
 ${S}.l99-c-fish .mc-btn,${S}.l99-c-drive :is(.mc-btn,.cb-btn,[aria-label="Jump"]){display:none!important;}
 ${S}.l99-tools-open :is([data-skin],.l99-pad){visibility:hidden;}
 ${S}.l99-tools-open :is(.l99-quick,.l99-rail) [data-skin],${S}.l99-tools-open>[aria-label^="Back to the Bard"],${S}.l99-tools-open>[aria-label^="Sky and world"],${S}.l99-tools-open>[aria-label^="Auto music"]{visibility:visible;}
-@media (max-width:379px){
-${S} .l99-quick{top:calc(64px + var(--st))!important;right:calc(12px + var(--sr))!important;}
-${S} .l99-left{top:calc(120px + var(--st))!important;}
-${S} .l99-prompts>[data-hud="prompt 99"]{top:calc(176px + var(--st))!important;}
-}
 `;
 
 // where a button may be dressed: straight in the mount, or in one of the HUD's groups (never
@@ -279,6 +282,8 @@ export function skinTouch(mount) {
 	style.textContent = CSS;
 	mount.appendChild(style);
 	const inScope = (b) => {
+		// (a chip of text that can be tapped, such as the quest's: text, not a control)
+		if (b.hasAttribute('data-hud-text')) return false;
 		const cv = b.closest('[data-field-contract]');
 		if (cv) return cv.classList.contains('cv-idle') && b.hasAttribute('data-cv-open');
 		const p = b.parentElement;
@@ -326,10 +331,36 @@ export function skinTouch(mount) {
 	// what is on now, for the controls that only apply then (a few times a second; cheap)
 	const shown = (el) => !!el && el.style.display !== 'none' && el.style.display !== '';
 	const fishBtn = () => mount.querySelector('[data-hud="prompt 20"]');
+	// the room the quest's chip takes (its bottom, measured), for what sits under the top row;
+	// and the browser's bars over the page (Safari's address and tool bars), from the visual
+	// viewport, added to the safe areas
+	const px = (k, v) => { const t = `${Math.round(v)}px`; if (mount.style.getPropertyValue(k) !== t) mount.style.setProperty(k, t); };
+	const room = () => {
+		const m = mount.getBoundingClientRect(), chip = mount.querySelector('[data-hud-text="quest"]');
+		const r = chip && chip.style.display !== 'none' ? chip.getBoundingClientRect() : null;
+		px('--qb', r && r.height ? r.bottom - m.top + 8 : 0);
+		const vv = window.visualViewport;
+		if (vv) { px('--vvt', Math.max(0, vv.offsetTop - m.top)); px('--vvb', Math.max(0, m.bottom - (vv.offsetTop + vv.height))); }
+		// a button placed by its own module (not one of the places above) that lands on the
+		// quest's chip or the driving line is moved down below it
+		const texts = [r, ...[...mount.querySelectorAll('.l99-drive-hud')].filter((e) => e.style.display !== 'none').map((e) => e.getBoundingClientRect())].filter((t) => t && t.height);
+		for (const b of mount.children) {
+			if (!b.hasAttribute?.('data-skin') || b.style.display === 'none' || b.hidden) continue;
+			const was = parseFloat(b.dataset.pushed || '0'), q = b.getBoundingClientRect();
+			if (!q.height) continue;
+			const top = q.top - was, bottom = q.bottom - was;
+			let push = 0;
+			for (const t of texts) if (!(q.right <= t.left || t.right <= q.left || bottom <= t.top || t.bottom <= top)) push = Math.max(push, t.bottom + 8 - top);
+			if (push !== was) { b.dataset.pushed = String(push); b.style.translate = push ? `0 ${push}px` : ''; }
+		}
+	};
+	window.visualViewport?.addEventListener('resize', room);
+	window.visualViewport?.addEventListener('scroll', room);
 	const tick = setInterval(() => {
+		room();
 		const fish = shown(fishBtn()), drive = shown(mount.querySelector('.l99-pad'));
 		if (mount.classList.contains('l99-c-fish') !== fish) mount.classList.toggle('l99-c-fish', fish);
 		if (mount.classList.contains('l99-c-drive') !== drive) mount.classList.toggle('l99-c-drive', drive);
 	}, 250);
-	return { refresh: all, dispose() { mo.disconnect(); clearInterval(tick); style.remove(); mount.classList.remove('l99-skin', 'l99-c-fish', 'l99-c-drive'); } };
+	return { refresh: all, dispose() { mo.disconnect(); clearInterval(tick); window.visualViewport?.removeEventListener('resize', room); window.visualViewport?.removeEventListener('scroll', room); style.remove(); mount.classList.remove('l99-skin', 'l99-c-fish', 'l99-c-drive'); } };
 }

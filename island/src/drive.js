@@ -211,6 +211,7 @@ export function createDrive({ world, camera, mount, isPhone, hint, strike = null
 		arrows[k] = b;
 	}
 	const hud = document.createElement('div');
+	hud.className = 'l99-drive-hud';
 	hud.style.cssText = 'position:absolute;left:50%;transform:translateX(-50%);top:calc(64px + env(safe-area-inset-top));padding:6px 12px;border-radius:10px;background:rgba(8,20,26,.55);color:#eafaf6;font:13px system-ui;pointer-events:none;display:none;white-space:nowrap;';
 	mount.appendChild(hud);
 	// the keys a keyboard has for it, small under the line above (not on a phone: it has the buttons)

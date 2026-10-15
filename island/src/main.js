@@ -177,6 +177,7 @@ import { createLaw } from './law/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 import { skinTouch, firstTime } from './ui/touch-skin.js';
+import { touchLookRows } from './ui/touch-look.js';
 
 const REALM = 'island';
 // where the sky's glow is sampled: the cities round you wash out the faint stars
@@ -1420,6 +1421,8 @@ export function createIslandWorld() {
 		const aimNote = css(document.createElement('div'), 'font-size:12px;opacity:.75;margin:-6px 0 12px;');
 		aimNote.textContent = 'Mouse and touch · Default 115%';
 		p.appendChild(aimNote);
+		// a touch screen: invert up and down, and the gyro (ui/touch-look.js)
+		if (dom.mount.classList.contains('l99-touch')) touchLookRows(p, () => css(document.createElement('button'), 'width:100%;min-height:44px;margin-bottom:8px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;'));
 		if (origin) {
 			const galaxy = css(document.createElement('button'), 'width:100%;min-height:38px;margin-bottom:10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#eafaf6;font:13px system-ui;cursor:pointer;');
 			galaxy.textContent = 'Explore galaxy';
