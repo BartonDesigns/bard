@@ -51,6 +51,31 @@ Median finger penetration per hand dropped from 11 to 15 mm on the strong hand t
 - Smoke: SMOKE OK.
 - Browser captures: `island/tools/weapon-hands-browser.mjs`, with bundle `tools/weapon-hands-preview.mjs`. It covers 4 weapons at carry, aim, fire, reload (0.32) and charge (0.9), on desktop 1100x700 and on a phone viewport (844x390, iPhone UA), with four closeups per state.
 
+## Thumb fix and joint ranges (October 15, later)
+
+The owner saw the strong-hand thumb bent backwards past its natural line. Cause: the thumb used the body's finger curl axis, which for the thumb's own orientation swings it back rather than across the palm, and the solver could push it there. Now:
+
+- **Thumb axes.** Each thumb joint curls about the axis that carries it toward the little finger's knuckle (`finger-pose.js fingerRig`). Its spread lifts it off the palm toward whatever the palm faces, so it can go round a handle.
+- **Ranges.** Every joint has an anatomical range in its own bone frame (`LIMITS`), enforced after every solve and every blend (`limitPose`), in first person and in close combat.
+  - Fingers: knuckle 0 to 90 degrees (10 back), middle joint 0 to 110, last 0 to 80, spread 17 either way.
+  - Thumb: saddle joint lift to 57 and flex 52 (12 back); knuckle 0 to 60, never back; last joint 0 to 80, 3 back at most.
+- **J-hook on the rifles.** On the Aurora and Warden pistol grips the thumb hooks round the back strap like a J, its pad on the far side, tip forward and down. On the Mossback it goes through the thumbhole and lies along the far side. The strong hand moved back so the thumb's base sits behind the strap. The pressing thumb is judged by its own skin (`soft`), so the thenar may press the strap about 2.5 mm, as a real hand does.
+- **Support thumbs.** The support, cell, charge and riser thumbs are judged by their skin too. The Warden support thumb is now -2.9 mm (was -20).
+- **Draw hand.** It keeps main's placement and closed fingers, now in the solver, with the thumb flexed gently toward the palm.
+- **Close combat.** `combat/anatomical-hand.js` now poses through the same solver.
+  - Fist: fingers folded, thumb laid over the index and middle fingers.
+  - Grip: the fingers close on the held thing's handle and the thumb wraps over them.
+  - The other hand on a two-handed bat or pipe closes on a stand-in shaft.
+- **New items.** `combat/melee-items.js` adds a hunting knife and a machete (hammer grips, blade out past the thumb, edge forward) beside the bat, pipe and bottle. The bottle is now held by the neck. Each new item has:
+  - rules in `melee-rules.js`: knife 15 / 26 heavy, quick; machete 21 / 33, like the bat;
+  - brawl blows in `brawl.js`;
+  - a hold in the brawlers' hands and as a dropped item (`melee.js`);
+  - a rarer spawn in town (knife 8%, machete 6% of drops).
+  - Held in one hand, the other stays up in its guard.
+- **Tests:** `tools/weapon-hands.test.mjs` runs every weapon grip and every close-combat item through the solver on the real geometry. It asserts every joint stays inside its range, the thumb is never back at its knuckle, and no wrapped finger sinks in.
+
+The reverse knife grip was not added: a hammer grip reads cleanly at this distance.
+
 ## Left to do
 
 - The Warden support thumb (-20 mm) still sinks in; the bow hand's thumb and palm press about 3 mm into the riser.

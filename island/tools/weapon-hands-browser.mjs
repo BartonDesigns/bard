@@ -57,7 +57,7 @@ try {
 				await page.waitForTimeout(settle);
 				const png = await page.evaluate(() => weaponReview.png());
 				await fs.writeFile(`${out}/${tag}-${id}-${stage}.png`, Buffer.from(png.split(',')[1], 'base64'));
-				if (process.env.CLOSEUPS !== '0') for (const [name, side, from] of [['grip', 'R', [0.9, 0.15, 0.5]], ['grip-left', 'R', [-0.6, 0.35, 0.6]], ['support', 'L', [-0.25, -0.9, -0.25]], ['support-right', 'L', [0.75, -0.25, -0.3]]]) {
+				if (process.env.CLOSEUPS !== '0') for (const [name, side, from] of [['grip', 'R', [0.9, 0.15, 0.5]], ['grip-left', 'R', [-0.6, 0.35, 0.6]], ['grip-under', 'R', [0.2, -1, 0.35]], ['support', 'L', [-0.25, -0.9, -0.25]], ['support-right', 'L', [0.75, -0.25, -0.3]]]) {
 					const shot = await page.evaluate(([side, from]) => weaponHands.closeup(side, from), [side, from]);
 					await fs.writeFile(`${out}/${tag}-${id}-${stage}-${name}.png`, Buffer.from(shot.split(',')[1], 'base64'));
 				}
@@ -67,6 +67,14 @@ try {
 				const brief = (s) => f[s] ? Object.entries(f[s]).map(([k, v]) => `${k[0]}${k === 'little' ? 'l' : ''}:${v.minMm}`).join(' ') : '-';
 				console.log(tag, id, stage, 'palm', row.contactLmm, row.contactRmm, 'R[', brief('R'), '] L[', brief('L'), ']');
 			}
+		}
+		// close combat: each thing picked up at the guard and mid-swing, and the bare fist
+		if (process.env.MELEE !== '0') for (const item of ['knife', 'machete', 'bat', 'pipe', 'bottle', null]) for (const phase of item ? ['guard', 'swing'] : ['guard']) {
+			const r = await page.evaluate(([item, phase]) => weaponHands.melee(item, phase), [item, phase]);
+			await page.waitForTimeout(settle);
+			for (const [k, v] of Object.entries(r.shots)) await fs.writeFile(`${out}/${tag}-melee-${item || 'fist'}-${phase}-${k}.png`, Buffer.from(v.split(',')[1], 'base64'));
+			report.push({ tag, melee: item || 'fist', phase, clearanceMm: r.clearanceMm, params: r.params });
+			console.log(tag, 'melee', item || 'fist', phase, JSON.stringify(r.clearanceMm), JSON.stringify(r.params?.slice(0, 4)));
 		}
 		if (process.env.SIZES === '1' && !phone) report.push({ tag, sizes: await page.evaluate(() => weaponReview.sizes?.() || null) });
 		await page.close();

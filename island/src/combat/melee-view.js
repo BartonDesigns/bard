@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createAnatomicalHand } from './anatomical-hand.js';
+import { MELEE_ITEMS, ONE_HANDED, meleeItem, meleeMaterials } from './melee-items.js';
 import { dressArms } from '../people/sleeve.js';
 
 const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -29,6 +30,8 @@ const POSE = {
 	cuffed: P([-0.2, -0.55, -0.2, 0.9, 0.2, 0.4], [0.2, -0.55, -0.2, 0.9, -0.2, -0.4]),
 	// with something in hand: both hands on it, low at the right hip, the end up past the shoulder
 	item: P([0.1, -0.25, -0.38, 0.6, -0.3, -1.4], [0.17, -0.2, -0.36, 0.6, -0.35, -1.4]),
+	// something held in one hand: up at the guard, its end forward of the knuckles
+	blade: P(GUARD.L, [0.15, -0.13, -0.38, 0.45, -0.25, -0.75]),
 };
 // each strike: [wind-up end, full extension] (at full reach the forearm runs back in line with
 // the shoulder, as a straight arm does, not at your eye)
@@ -82,15 +85,13 @@ export function createFistView({ camera, isPhone = false }) {
 		arms[side] = { grp, fallback: a, sleeve: b, anatomical: null, garment: null, cur: new Float32Array(6), vel: new Float32Array(6), want: new Float32Array(6) };
 		arms[side].cur.set(GUARD[side]); arms[side].cur[1] -= 0.4;
 	}
-	// things picked up, in the right hand
-	const wood = new THREE.MeshStandardMaterial({ color: 0x9a6a3c, roughness: 0.55 }), steel = new THREE.MeshStandardMaterial({ color: 0x8a9096, roughness: 0.4, metalness: 0.35 });
-	const glass = new THREE.MeshStandardMaterial({ color: 0x2f6b3a, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.85 });
-	const items = {
-		bat: new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.015, 0.84, 12).translate(0, 0.4, 0), wood),
-		pipe: new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.78, 10).translate(0, 0.36, 0), steel),
-		bottle: new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.034, 0], [0.036, 0.16], [0.016, 0.22], [0.012, 0.3], [0, 0.3]].map(([x, y]) => new THREE.Vector2(x, y)), 12).translate(0, -0.06, 0).rotateX(Math.PI), glass),
-	};
-	for (const k in items) { const m = items[k]; m.visible = false; m.renderOrder = 2; m.rotation.set(0, 0, Math.PI / 2); m.position.set(0.03, -0.01, -0.005); arms.R.grp.add(m); }
+	// things picked up, in the right hand: the grip across the palm a little toward the knuckles,
+	// its surface on the palm, the rest out past the thumb (combat/melee-items.js)
+	const mats = meleeMaterials(), items = {};
+	for (const k of MELEE_ITEMS) {
+		const m = meleeItem(k, mats); items[k] = m;
+		m.visible = false; m.traverse((o) => { o.renderOrder = 2; }); m.rotation.set(0, 0, Math.PI / 2); m.position.set(0, -0.013 - m.userData.r, 0); arms.R.grp.add(m);
+	}
 	camera.add(root);
 	let shown = 0, lastItem = null, body = null;
 
@@ -135,13 +136,15 @@ export function createFistView({ camera, isPhone = false }) {
 	function aim(s, t) {
 		for (const side of ['L', 'R']) {
 			const A = arms[side], w = A.want;
-			const guard = s.item ? POSE.item[side] : GUARD[side];
+			// (a one-handed thing leaves the other hand up in its guard)
+			const solo = s.item && ONE_HANDED.has(s.item) && side === 'L';
+			const guard = s.item && !solo ? (ONE_HANDED.has(s.item) ? POSE.blade[side] : POSE.item[side]) : GUARD[side];
 			let base = guard;
 			if (s.cuffed) base = POSE.cuffed[side];
 			else if (s.take) base = POSE.choke[side];
 			else if (s.block) base = POSE.block[side];
 			w.set(base);
-			const K = s.move && MOVE[s.anim];
+			const K = s.move && !solo && MOVE[s.anim];
 			if (K && !s.take && !s.cuffed) {
 				const [wind, hit] = K, m = s.m, mt = s.mt;
 				if (mt < m.wind) lerpPose(w, guard, wind[side], ease(mt / m.wind));
@@ -187,17 +190,23 @@ export function createFistView({ camera, isPhone = false }) {
 			const vis = s.on || shown > 0.02;
 			if (root.visible !== vis) root.visible = vis;
 			if (!vis) return;
-			for (const side of ['L', 'R']) arms[side].anatomical?.pose(s.item ? 'grip' : s.take || s.cuffed ? 'open' : 'fist');
+			// the right hand closed on what it holds, the left on a two-handed thing's shaft
+			for (const side of ['L', 'R']) {
+				const held = s.item && (side === 'R' || !ONE_HANDED.has(s.item));
+				arms[side].anatomical?.pose(held ? 'grip' : s.take || s.cuffed ? 'open' : 'fist', held ? (side === 'R' ? items[s.item] : 0.019) : null);
+			}
 			if (s.item !== lastItem) { for (const k in items) items[k].visible = k === s.item; lastItem = s.item; }
 			aim(s, t);
 			follow(dt, !!s.move);
 			fold(dt, s);
 		},
+		// (for checks: a hand's anatomical rig and its last pose)
+		anatomical: (side) => arms[side].anatomical,
 		hide() { root.visible = false; shown = 0; },
 		dispose() {
 			for (const a of Object.values(arms)) { a.anatomical?.dispose(); a.garment?.dispose(); }
 			root.traverse(o => o.geometry?.dispose());
-			for (const m of [skinMat, clothMat, wood, steel, glass]) m.dispose();
+			for (const m of [skinMat, clothMat, ...Object.values(mats)]) m.dispose();
 			root.removeFromParent();
 		},
 		isPhone,
