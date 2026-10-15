@@ -170,11 +170,14 @@ export function strike(P, { u, v, side = 0, kind = 'blunt', energy = 10, r = 0.0
 		const K = kernel(P, u, v, r, kind === 'blunt', kind === 'blast' ? 1 : 2.5);
 		for (let q = 0; q < K.length; q += 2) {
 			const c = K[q];
-			let e = energy * K[q + 1];
+			const e0 = energy * K[q + 1];
+			let e = e0;
 			for (const j of order) {
 				if (e <= 1e-4) break;
 				e = take(P, j, c, e, kind, front);
 			}
+			// (a blast's push tears the wire across the studs too, not only between them)
+			if (kind === 'blast') for (let j = 0; j < L.length; j++) if (L[j].lath === 'wire') P.aux[j][c] = Math.min(4, P.aux[j][c] + e0 * 0.35 / MAT.wire.blunt);
 		}
 	}
 	for (let j = 0; j < L.length; j++) if (!before[j] && P.dmg[j][c0] >= 1) res.broke.push(j);

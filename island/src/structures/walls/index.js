@@ -157,15 +157,38 @@ export function createWalls(ctx) {
 			a.needsUpdate = true;
 		}
 	}
+	// whatever else the builder's meshes carry for their material, given to ours the same: the
+	// houses' dissolve reads each vertex's building anchor and birth (world/lodfade.js
+	// aLodAnchor); without it a wall's faces are measured from the world's origin and vanish
+	function matchSource(src, meshes) {
+		const ref = new Map();
+		for (const m of src.root.children) if (m.isMesh && !m.userData.wallDamage && !ref.has(m.material)) ref.set(m.material, m);
+		const any = [...ref.values()][0];
+		for (const m of meshes) {
+			const r = ref.get(m.material) || any;
+			if (!r) continue;
+			const n = m.geometry.attributes.position.count;
+			for (const [name, a] of Object.entries(r.geometry.attributes)) {
+				if (m.geometry.attributes[name] || name === 'position' || name === 'normal' || name === 'uv' || name === 'color') continue;
+				const k = a.itemSize, arr = new Float32Array(n * k), first = Array.from({ length: k }, (_, q) => a.array[q]);
+				for (let i = 0; i < n; i++) for (let q = 0; q < k; q++) arr[i * k + q] = first[q];
+				m.geometry.setAttribute(name, new THREE.BufferAttribute(arr, k));
+			}
+		}
+	}
 	function showSource(Wl) {
 		for (const H of Wl.hidden || []) { const a = H.m.geometry.attributes.position; a.array.set(H.keep, H.s * 3); a.needsUpdate = true; }
 		Wl.hidden = null;
 	}
 	function rebuild(Wl) {
 		const src = Wl.src;
+		// (built first: if it cannot be, the builder's wall stays as it was)
+		let meshes;
+		try { meshes = mesher.build(Wl, src.M); } catch (e) { console.warn('wall', e); return; }
+		matchSource(src, meshes);
 		hideSource(Wl);
 		for (const m of Wl.meshes) { src.root.remove(m); m.geometry.dispose(); }
-		Wl.meshes = mesher.build(Wl, src.M);
+		Wl.meshes = meshes;
 		for (const m of Wl.meshes) src.root.add(m);
 		collide(Wl);
 		hung(Wl);
