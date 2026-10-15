@@ -121,7 +121,8 @@ export function createCivilians(ctx) {
 			p.override = override;
 			p.M.gesture('shrug', 0.5);
 		}
-		alarm(q.x, q.z, 18);
+		// (a fist fight frightens only those close by: further off they stop and watch, combat/melee-foes.js)
+		alarm(q.x, q.z, blow.melee ? 7 : 18);
 		return r;
 	}
 

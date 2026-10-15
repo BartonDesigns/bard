@@ -34,6 +34,9 @@ export const RULES = Object.freeze({
 	'stop-thief': { mercy: 1, law: 6, protect: 6, honest: 1, line: 'Stopped the thief who robbed {target}' },
 	'kept-wallet': { mercy: -1, law: -3, protect: -1, honest: -8, line: "Kept {target}'s lost wallet" },
 	'boss-slain': { mercy: 0, law: 2, protect: 8, honest: 0, line: 'Brought down {target}' },
+	// fists (combat/melee.js): who threw the first punch, and who stepped in
+	'start-fight': { mercy: -2, law: -3, protect: -2, honest: 0, line: 'Started a fight with {target}' },
+	'break-up-fight': { mercy: 3, law: 2, protect: 5, honest: 0, line: 'Broke up a fight in {place}' },
 	// bags and errands, done by you or by anyone else (people/npc-quests.js)
 	'return-bag': { mercy: 2, law: 2, protect: 3, honest: 6, line: "Handed {target}'s bag back" },
 	'steal-bag': { mercy: -1, law: -6, protect: -2, honest: -8, line: "Walked off with {target}'s bag" },
