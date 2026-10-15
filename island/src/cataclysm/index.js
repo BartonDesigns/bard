@@ -52,7 +52,9 @@ export function createCataclysm({ scene, camera, mount, world, shared = {}, rend
 
 	// ---------- the parts ----------
 	const ground = (x, z) => W()?.island?.heightAt?.(x, z) ?? 0;
-	const fx = createFx(scene, { isPhone, ground });
+	// (marks lie on what is walked: the graded roads and sidewalks over the terrain)
+	const surface = (x, z) => { const w = W(), h = ground(x, z), f = w?.player?.floorAt?.(x, z, h + 3); return Number.isFinite(f) ? Math.max(h, f) : h; };
+	const fx = createFx(scene, { isPhone, ground: surface });
 	const sound = createCataclysmSound(camera, { isPhone });
 	const hud = createAlertHud(mount, { isPhone });
 	let A = null, R = null, env = envOf({}), region = { id: 'here', name: '' }, lastW = null, checkT = 2, rate = 1, shakeT = 0, newsQ = [], recoveredT = 0;
