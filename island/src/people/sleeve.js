@@ -480,7 +480,7 @@ float garFold(float s, float th, float sh, int side, int slot) {
 	float lam = mix(0.02, 0.034, stiff);
 	float ph = 1.8 * sin(th * 2.0 + seed) + 0.9 * sin(th * 3.0 + seed * 1.7);
 	float env = smoothstep(c0, c0 + 0.012, sh) * (1.0 - smoothstep(0.045, 0.11 + 0.05 * stiff, sh - c0));
-	h += env * (0.45 + 1.2 * ride + 0.35 * bend + 0.5 * max(0.0, -dn.x)) * garRidge((sh - c0 + ride * lb.z * 0.6) / lam * 6.2832 + ph);
+	h += env * min(1.1, 0.38 + 0.9 * ride + 0.3 * bend + 0.4 * max(0.0, -dn.x)) * garRidge((sh - c0 + ride * lb.z * 0.6) / lam * 6.2832 + ph);
 	// the hand turned against the elbow: folds spiralling along the forearm
 	float tw = clamp(abs(twist) / 1.3, 0.0, 1.0);
 	float span = smoothstep(c0 + 0.01, c0 + 0.05, sh) * (1.0 - smoothstep(Lf * 0.75, Lf * 1.0, s));
@@ -537,12 +537,16 @@ varying vec4 vGarA;
 varying vec4 vGarB;
 varying float vFold;
 varying vec3 vGarP;
-float gRough = 0.85, gBump = 0.0, gSheenR = 0.8, gSpec = 0.4;
+float gRough = 0.85, gBump = 0.0, gSheenR = 0.8, gSpec = 0.4, gAO = 1.0;
+// the folds' slope round the arm and along it (metres a metre), and the cloth's coordinates for them
+vec2 gFoldGrad = vec2(0.0), gUV = vec2(0.0);
 vec3 gSheen = vec3(0.0);
 float gH21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(gH21(i), gH21(i + vec2(1, 0)), f.x), mix(gH21(i + vec2(0, 1)), gH21(i + vec2(1, 1)), f.x), f.y); }
 float gLine(float x, float w) { return 1.0 - smoothstep(0.0, w, abs(x)); }
 float gAng(float a) { return atan(sin(a), cos(a)); }
+// how much of a detail repeating every period metres can show when a pixel spans px (gone before it aliases)
+float gFade(float period, float px) { return 1.0 - smoothstep(period * 0.25, period * 0.6, px); }
 // a row of stitches across x at x0, running along y: dashes pitch metres apart, faded far off
 float gStitch(float x, float x0, float y, float pitch, float px) {
 	float far = smoothstep(0.0005, 0.0018, px);
@@ -556,7 +560,7 @@ float gWeave(int fab, vec2 uv, float px, out float tone) {
 		// jersey: columns of loops; a sweatshirt's heavier, heathered face
 		vec2 k = uv * vec2(fab == 1 ? 900.0 : 1150.0, fab == 1 ? 1050.0 : 1300.0); float v = abs(fract(k.x) - 0.5) * 2.0;
 		h = sin((k.y + v * 0.8) * 6.2832) * (1.0 - v * 0.6); f = fab == 1 ? 0.0011 : 0.0009;
-		h *= 0.35; fine = h * 0.04; coarse = (gN(uv * vec2(260.0, 40.0)) - 0.5) * (fab == 1 ? 0.12 : 0.06) + (gN(uv * 900.0) - 0.5) * 0.05;
+		h *= 0.35; fine = h * 0.04; coarse = (gN(uv * vec2(260.0, 40.0)) - 0.5) * (fab == 1 ? 0.12 : 0.06) * gFade(0.004, px) + (gN(uv * 900.0) - 0.5) * 0.05 * gFade(0.0011, px);
 	} else if (fab == 2 || fab == 10) {
 		// shirting and suiting: a fine plain weave or twill, a little slub
 		vec2 w = uv * (fab == 2 ? 1500.0 : 1100.0); h = fab == 2 ? sin(w.x * 6.2832) * sin(w.y * 6.2832) : sin((w.x + w.y) * 6.2832); f = 0.0007;
@@ -585,9 +589,9 @@ float gWeave(int fab, vec2 uv, float px, out float tone) {
 		// rib knit: raised wales along the arm, loops in them
 		h = abs(sin(uv.x * 1100.0)) * 1.4 - 0.7 + sin(uv.y * 2400.0) * 0.3; f = 0.0018; fine = h * 0.07; coarse = (gN(uv * 120.0) - 0.5) * 0.08;
 	}
-	float near = 1.0 - smoothstep(f * 0.3, f * 1.1, px), farK = 1.0 - smoothstep(0.004, 0.03, px);
+	float near = 1.0 - smoothstep(f * 0.1, f * 0.35, px), farK = 1.0 - smoothstep(0.004, 0.03, px);
 	tone = fine * 0.65 * near + coarse * 0.6 * farK;
-	return h * near * 0.00018;
+	return h * near * 0.00004;
 }
 // camouflage at its printed size: three layers of soft blotches, about 5 to 12 cm across
 vec3 gCamo(vec2 uv, vec3 base, vec3 a, vec3 b) {
@@ -657,24 +661,31 @@ void garSurface(inout vec3 col, bool front) {
 #ifdef GAR_LITE
 	float fold = vFold;
 #else
-	float hf = vGarB.z > 0.001 ? max(garFold(s, th, sh, side, slot) * vGarB.z, -0.5) * vGarB.w : 0.0;
-	gBump += hf;
-	float fold = hf / max(vGarB.w, 0.002);
+	float fold = 0.0;
+	gUV = vec2((th - geo.z) * r, s);
+	if (vGarB.z > 0.001) {
+		// the slope from the field itself, so the creases stay crisp and smooth at any distance
+		float e = 0.0015, k = vGarB.z * vGarB.w;
+		float h0 = garFold(s, th, sh, side, slot);
+		gFoldGrad = vec2(garFold(s, th + e / r, sh, side, slot) - h0, garFold(s + e, th, sh + e, side, slot) - h0) / e * k * step(-0.5, h0 * vGarB.z);
+		fold = max(h0 * vGarB.z, -0.5);
+	}
 #endif
 	gSpec = fab == 4 ? 1.0 : fab == 8 ? 0.9 : fab == 2 ? 0.5 : fab == 3 || fab == 10 ? 0.4 : fab == 7 ? 0.15 : fab == 1 || fab == 9 || fab == 11 ? 0.25 : 0.35;
 	gRough = fab == 0 ? 0.88 : fab == 1 ? 0.93 : fab == 2 ? 0.7 : fab == 3 ? 0.84 : fab == 4 ? 0.4 : fab == 5 ? 0.86 : fab == 6 ? 0.86 : fab == 7 ? 0.98 : fab == 8 ? 0.46 : fab == 9 ? 0.93 : fab == 10 ? 0.8 : 0.95;
 	// a sweatshirt's and a tee's heather, denim's blue and white
 	if (fab == 5) {
 		// indigo warp streaked along the arm, the white weft showing through
-		col = mix(col, col * 0.7, gN(vec2(uv.x * 600.0, uv.y * 25.0)) * 0.6);
-		col = mix(col, vec3(0.62, 0.64, 0.66), 0.1 + 0.08 * gN(uv * 1500.0) * (1.0 - smoothstep(0.0008, 0.003, px)));
+		float warp = mix(0.5, gN(vec2(uv.x * 600.0, uv.y * 25.0)), gFade(0.0017, px));
+		col = mix(col, col * 0.7, warp * 0.6);
+		col = mix(col, vec3(0.62, 0.64, 0.66), 0.1 + 0.08 * mix(0.5, gN(uv * 1500.0), gFade(0.0007, px)));
 	}
 	col *= 1.0 + tone;
 	// the cuff: a rib, a band with a button and its placket, a combat shirt's tab, a binding
 	float len = lb.y;
 	if (part == 1) {
-		col = cuff == 1 ? cuffC * (0.9 + 0.1 * abs(sin(uv.x * 1100.0))) : cuffC * (1.0 + tone);
-		if (cuff == 1) { gBump = (abs(sin(uv.x * 1100.0)) - 0.5) * 0.0005 * (1.0 - smoothstep(0.0012, 0.003, px)); gRough = 0.93; }
+		col = cuff == 1 ? cuffC * (0.95 + 0.1 * (abs(sin(uv.x * 1100.0)) - 0.5) * gFade(0.0029, px)) : cuffC * (1.0 + tone);
+		if (cuff == 1) { gBump = (abs(sin(uv.x * 1100.0)) - 0.5) * 0.00025 * gFade(0.0029, px); gRough = 0.93; }
 		float edge = min(sh, len - sh);
 		if (cuff == 2 || cuff == 5 || cuff == 3) {
 			col = mix(col, thread, gStitch(sh, 0.0028, uv.x, 0.003, px) + gStitch(sh, len - 0.0028, uv.x, 0.003, px));
@@ -732,14 +743,14 @@ void garSurface(inout vec3 col, bool front) {
 	}
 	// worn: a grimy edge, crests rubbed pale, the odd mark, a little pilling
 	float edgeW = 1.0 - smoothstep(0.0, 0.022, sh);
-	col *= 1.0 - wear * 0.22 * edgeW * (0.6 + 0.4 * gN(uv * 400.0));
+	col *= 1.0 - wear * 0.22 * edgeW * (0.6 + 0.4 * mix(0.5, gN(uv * 400.0), gFade(0.0025, px)));
 	if (fab == 5 || fab == 3 || fab == 6 || fab == 8) col = mix(col, col * 1.35 + 0.03, wear * 0.55 * smoothstep(0.1, 0.5, fold));
-	float stain = smoothstep(0.74, 0.8, gN(uv * 14.0 + lb.w * 3.0)) * smoothstep(0.4, 0.9, gN(uv * 50.0));
+	float stain = smoothstep(0.74, 0.8, gN(uv * 14.0 + lb.w * 3.0)) * mix(0.6, smoothstep(0.4, 0.9, gN(uv * 50.0)), gFade(0.02, px));
 	col = mix(col, col * vec3(0.78, 0.72, 0.62), wear * 0.35 * stain);
-	if (fab == 0 || fab == 1 || fab == 7 || fab == 9) col *= 1.0 + wear * 0.15 * step(0.985, gH21(floor(uv * 900.0))) * (1.0 - smoothstep(0.0008, 0.002, px));
+	if (fab == 0 || fab == 1 || fab == 7 || fab == 9) col *= 1.0 + wear * 0.15 * step(0.985, gH21(floor(uv * 900.0))) * gFade(0.0022, px);
 	// the creases in shade
 	float crease = smoothstep(0.05, -0.45, fold);
-	col *= 1.0 - 0.32 * crease; gSpec *= 1.0 - 0.6 * crease;
+	col *= 1.0 - 0.28 * crease; gSpec *= 1.0 - 0.6 * crease; gAO = 1.0 - 0.45 * crease;
 	// the inside of the sleeve
 	if (!front) { col *= mix(0.35, 0.85, smoothstep(0.06, 0.16, sh)); gSpec *= 0.3; }
 	// fuzz on fleece and sweats, a sheen on nylon and suede-like softness elsewhere
@@ -791,8 +802,16 @@ export function garmentMaterial(spec, frames, { lite = false } = {}) {
 	float det = dot(sx, r1);
 	vec2 dh = vec2(dFdx(gBump), dFdy(gBump));
 	normal = normalize(abs(det) * normal - sign(det) * (dh.x * r1 + dh.y * r2));
+	// the folds: their slope laid on the cloth's own directions round and along the arm
+	vec2 st0 = dFdx(gUV), st1 = dFdy(gUV);
+	vec3 T = r1 * st0.x + r2 * st1.x, B = r1 * st0.y + r2 * st1.y;
+	if (abs(det) > 1e-20) normal = normalize(normal - (T * gFoldGrad.x + B * gFoldGrad.y) / det);
 }
 #endif`)
+			.replace('#include <aomap_fragment>', `#include <aomap_fragment>
+// the cloth's own shade in its creases, for the sky's light and reflections
+reflectedLight.indirectDiffuse *= 0.8 * gAO;
+reflectedLight.indirectSpecular *= gAO * gAO;`)
 			.replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
 material.specularColor *= gSpec;
 material.specularF90 *= gSpec;
@@ -801,7 +820,7 @@ material.sheenColor = gSheen;
 material.sheenRoughness = gSheenR;
 #endif`);
 	};
-	m.customProgramCacheKey = () => 'bard-garment-2' + (lite ? '-lite' : '');
+	m.customProgramCacheKey = () => 'bard-garment-3' + (lite ? '-lite' : '');
 	return m;
 }
 

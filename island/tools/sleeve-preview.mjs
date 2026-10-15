@@ -18,7 +18,8 @@ document.body.style.margin = '0'; document.body.append(renderer.domElement);
 const scene = new T.Scene(); scene.background = new T.Color('#596973');
 const sun = new T.DirectionalLight(0xffe3c6, 2.6); sun.position.set(3, 7, -4);
 const hemi = new T.HemisphereLight(0xd9e8ff, 0x4d4838, 1.3); scene.add(sun, hemi);
-const pm = new T.PMREMGenerator(renderer), env = pm.fromScene(new RoomEnvironment(), .04); scene.environment = env.texture; pm.dispose(); kitLight(env.texture, .7);
+// (the kit's reflections only: the game's world and its first-person layer have no scene environment)
+const pm = new T.PMREMGenerator(renderer), env = pm.fromScene(new RoomEnvironment(), .04); pm.dispose(); kitLight(env.texture, .7);
 const floor = new T.Mesh(new T.PlaneGeometry(100, 100), new T.MeshStandardMaterial({ color: 0x535d58, roughness: .9 })); floor.rotation.x = -Math.PI / 2; scene.add(floor);
 const camera = new T.PerspectiveCamera(52, innerWidth / innerHeight, .01, 100);
 scene.add(camera);

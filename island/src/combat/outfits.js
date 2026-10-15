@@ -60,6 +60,8 @@ function militia(r, a, b, scheme) {
 		if (r() < 0.4) o.acc.push({ kind: 'bandana', col: CAMO[scheme][3], acc: CAMO[scheme][1] });
 	}
 	if (r() < 0.6) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
+	// some in a shirt alone wear its sleeves rolled to the elbow
+	if (!modern && !o.outer && r() < 0.35) o.top = { ...o.top, sleeves: 'elbow', roll: true };
 	return o;
 }
 // the soldiers at the bases: full pattern uniform, helmet, carrier, gloves
@@ -69,6 +71,8 @@ function soldier(r, scheme, officer = false) {
 	else o.acc.push({ kind: 'helmet', col: CAMO[scheme][1], visor: null, camo: scheme, combat: true });
 	o.acc.push(carrier(CAMO[scheme][3], CAMO[scheme][1]));
 	if (r() < 0.8) o.acc.push({ kind: 'gloves', col: '#2a2b2e' });
+	// a third out of the jacket in the combat shirt, its sleeves rolled to the elbow
+	if (!officer && r() < 0.3) { o.outer = null; o.top = { ...o.top, sleeves: 'elbow', roll: true }; }
 	return o;
 }
 // the police: navy uniform shirt and trousers, peaked cap, a vest with a badge
