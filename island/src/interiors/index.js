@@ -213,7 +213,7 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		const roomOf = (x, y, z) => { for (const r of rooms) if (x > r.x0 - 0.05 && x < r.x1 + 0.05 && z > r.z0 - 0.05 && z < r.z1 + 0.05) return r.id; return -1; };
 		return {
 			id: B.key + ':' + k, occluders: Lb.occ, levels: [[L.y, L.y + L.h]], bounds: [-P.W / 2, -P.D / 2, P.W / 2, P.D / 2],
-			rooms: P.rooms.length, roomOf, litOf: (id) => !!B.C.lit[id], dust: (x, y, z, id) => DUSTY.has(P.rooms[id]?.type),
+			rooms: P.rooms.length, roomOf, roomArea: (id) => { const r = P.rooms[id]; return r ? (r.x1 - r.x0) * (r.z1 - r.z0) : 0; }, litOf: (id) => !!B.C.lit[id], dust: (x, y, z, id) => DUSTY.has(P.rooms[id]?.type),
 			home: B.use === 'row' || B.use === 'apt', hours: P.hours || OPEN[B.use] || null,
 		};
 	}

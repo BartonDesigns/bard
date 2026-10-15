@@ -296,6 +296,16 @@ function* job(H) {
 		const r = rnd(f.p[0] * 3.1 + f.p[2] * 7.7 + f.p[1]);
 		if (f.flicker == null) f.flicker = !f.screen && f.on && r < (f.dust ? 0.07 : 0.015) ? 1 + r * 100 : 0;
 	}
+	// no room brighter than a well lit one on the whole: where its fixtures are many (an engine
+	// bay's rows of tubes), each gives less (about 250 lux across the floor at most)
+	const area0 = Math.max(4, (bounds[2] - bounds[0]) * (bounds[3] - bounds[1]));
+	const flux = new Map();
+	for (const f of fixtures) if (f.on && !f.screen) { const rm = spec.roomOf ? spec.roomOf(f.p[0], f.p[1] - 0.3, f.p[2]) : -1; f.rm = rm; flux.set(rm, (flux.get(rm) || 0) + f.I); }
+	for (const f of fixtures) {
+		if (!f.on || f.screen) continue;
+		const area = (f.rm >= 0 && spec.roomArea?.(f.rm)) || area0;
+		f.I *= Math.min(1, 2.2 * area / (1.9 * flux.get(f.rm)));
+	}
 	H.fixtures = fixtures;
 	S.stats.fixtures += fixtures.length;
 	yield;
@@ -506,7 +516,7 @@ function patch(sh, U) {
 		ibE *= mix( 1.0, clamp( 1.0 - ibLoss / max( ibL, 1e-3 ), 0.45, 1.0 ), ibUp );
 		#endif
 		// the day's skylight: as much of it as the windows let in here
-		irradiance = irradiance * vIl.a + ibE;
+		irradiance = irradiance * max( vIl.a, 0.08 ) + ibE;
 		#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( STANDARD )
 		iblIrradiance *= vIl.a;
 		#endif
