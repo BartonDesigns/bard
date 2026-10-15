@@ -76,5 +76,55 @@ export function createStructureSounds(camera) {
 		hammer(p) { const S = at(p, 120, 0.5); if (!S) return; burst(S, 'white', 'bandpass', 1600 + Math.random() * 900, 9, S.t, 0.001, 0.05, 0.7); tone(S, 'triangle', 900 + Math.random() * 300, 600, S.t, 0.06, 0.12); },
 		grind(p) { const S = at(p, 140, 0.35); if (!S) return; const f = burst(S, 'white', 'bandpass', 3000, 5, S.t, 0.08, 1.2, 0.35); f.frequency.linearRampToValueAtTime(4200, S.t + 1); },
 		beep(p) { const S = at(p, 120, 0.3); if (!S) return; for (let i = 0; i < 3; i++) tone(S, 'square', 1250, 1240, S.t + i * 0.5, 0.25, 0.12); },
+		loop: (kind) => loop(kind),
 	};
+	// a sound that goes on while something works (a site's own): the mixer's drum (a low churn
+	// with the slop of the concrete going round in it), a crane's motor (the diesel under a
+	// hydraulic whine that rises as it works), a truck's reversing beeper. set(p, k) each so often
+	// with where it is and how hard it works (0 lets it fall silent); stop() lets its nodes go
+	function loop(kind) {
+		const B = soundBus();
+		if (!B) return null;
+		const ctx = B.ctx, out = ctx.createGain(), sp = ctx.createStereoPanner(), nodes = [];
+		out.gain.value = 0; out.connect(sp).connect(B.out);
+		const src = (colour, type, f, q, g) => { const s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), gn = ctx.createGain(); s.buffer = noise(ctx, colour); s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q; gn.gain.value = g; s.connect(fl).connect(gn).connect(out); s.start(ctx.currentTime, Math.random() * 3); nodes.push(s); return { fl, gn }; };
+		const osc = (type, f, g, dest = out) => { const o = ctx.createOscillator(), gn = ctx.createGain(); o.type = type; o.frequency.value = f; gn.gain.value = g; o.connect(gn).connect(dest); o.start(); nodes.push(o); return { o, gn }; };
+		let reach = 90, work = null;
+		if (kind === 'drum') {
+			// (the churn, and the slop rising and falling as the drum turns)
+			src('brown', 'lowpass', 160, 0.7, 1.6);
+			const slop = src('pink', 'bandpass', 420, 1.1, 0.0);
+			osc('sine', 0.45, 0.35, slop.gn.gain);
+			osc('sawtooth', 42, 0.05);
+		} else if (kind === 'crane') {
+			src('brown', 'lowpass', 220, 0.8, 1.1);
+			const whine = osc('sawtooth', 180, 0.0);
+			const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; whine.gn.disconnect(); whine.gn.connect(f).connect(out);
+			work = (k) => { whine.o.frequency.setTargetAtTime(150 + 160 * k, ctx.currentTime, 0.4); whine.gn.gain.setTargetAtTime(0.07 * k, ctx.currentTime, 0.3); };
+			reach = 140;
+		} else if (kind === 'beeper') {
+			// (a square tone, on half a second and off half a second)
+			const b = osc('square', 1180, 0.0);
+			osc('square', 1, 0.5, b.gn.gain);
+			b.gn.gain.value = 0.5;
+			const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1180; f.Q.value = 3; b.gn.disconnect(); b.gn.connect(f).connect(out);
+			reach = 110;
+		}
+		return {
+			set(p, k = 1) {
+				const c = camera.position, dx = p.x - c.x, dy = (p.y ?? c.y) - c.y, dz = p.z - c.z, d = Math.hypot(dx, dy, dz);
+				const g = d > reach ? 0 : k * Math.min(1, 7 / Math.max(3, d)) * (1 - d / reach) * (kind === 'beeper' ? 0.18 : 0.32);
+				const yaw = camera.rotation.y, rx = Math.cos(yaw), rz = -Math.sin(yaw);
+				out.gain.setTargetAtTime(g, ctx.currentTime, 0.15);
+				sp.pan.setTargetAtTime(Math.max(-0.9, Math.min(0.9, (dx * rx + dz * rz) / Math.max(1, Math.hypot(dx, dz)))), ctx.currentTime, 0.15);
+				if (work) work(k);
+			},
+			stop() {
+				out.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+				const t = ctx.currentTime + 0.5;
+				for (const n of nodes) { try { n.stop(t); } catch { /* already stopped */ } }
+				setTimeout(() => { try { out.disconnect(); sp.disconnect(); } catch { /* gone */ } }, 800);
+			},
+		};
+	}
 }

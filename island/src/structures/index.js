@@ -117,7 +117,7 @@ export function createStructures({ scene, camera, world, isPhone = false, shared
 		if (p && !p.tryVault) { p.tryVault = (how) => vault.tryStart(p, how); p.move = (d) => vault.step(p, d); }
 		glass.update(camera, nightK);
 		damage.update(camera);
-		rebuild.update(camera, dt);
+		rebuild.update(camera, dt, nightK);
 		alleys.update(camera);
 		monuments.update(dt);
 		debris.update(dt);

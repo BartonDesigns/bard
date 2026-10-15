@@ -88,8 +88,8 @@ Everything is instanced or one draw: the trees join the city's tiers; stakes, gr
 ## Not done, and notes
 
 - Start dates are not in the bake yet (see above), so every era is the guess.
-- Car bumps come from the mapped and grown towns' holes; the procedural grid's painted holes are not felt.
+- Car bumps come from the mapped and grown towns' holes and (since October 15) the procedural grid's: `potholes.js gridHoleAt` runs the ground shader's sums for a wheel's point (the grid cell, its hash in single precision, the hole's place and size), where the town map has a town and no mapped region is drawn (`streets.js grid`). They bump the car; they cannot be reported (the shader has no patch for them).
 - Deciduous trees colour but keep their leaf cards through winter.
-- The street-tree count (9000, 3500 on a phone) and the paint target's size do not follow the governor yet.
+- The street-tree count (9000, 3500 on a phone) and its reach follow the governor's `far` (October 15); the paint target is half its size, without multisampling, on the low tiers, its ramps widened to keep two texels, and painted again when the tier changes (`realcity.js sizePaint`).
 - The procedural grid's own street trees and sidewalks keep their style; only its potholes and asphalt are new.
 - Tests: `island/tools/streets-by-era.test.mjs` (eras, rows, trees, potholes, the era cache, holiday window, sprinklers, autumn, lawns, the favour).

@@ -91,6 +91,8 @@ const GESTURES = {
 export const GESTURE_NAMES = Object.keys(GESTURES);
 
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+// the trigger finger's three joints: straight along the frame, and hooked round the trigger
+export const TRIGGER_OFF = [0.12, 0.06, 0.04], TRIGGER_ON = [0.55, 1.05, 0.6];
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _e = new THREE.Euler();
 const swingFrom = new THREE.Vector3(), swingTo = new THREE.Vector3();
@@ -121,8 +123,9 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		sitK: new Spring(0, sitFrequency), sitWant: 0, seatH: 0.46, floorPose: null,
 		// a hand held by someone walking alongside, by side
 		hold: { L: false, R: false },
-		// a hand closed round something carried (ui/gear.js), by side: 0 open .. 1 a fist
-		grip: { L: 0, R: 0 },
+		// a hand closed round something carried (ui/gear.js), by side: 0 open .. 1 a fist; and
+		// the strong hand's index on a trigger (0 laid along the frame .. 1 on it)
+		grip: { L: 0, R: 0 }, trigger: 0, trigK: 0,
 		// a whole-body action over the walk (actions.js): its name, progress, weight, and its
 		// channels eased so that one key pose flows into the next
 		act: { name: null, u: 0, dur: 1, auto: false, w: 0, v: { sp: [0, 0, 0], hp: [0, 0, 0, 0], fL: [0, 0, 0], fR: [0, 0, 0], rt: [0, 0], hd: [0, 0, 0] }, has: {}, arms: null },
@@ -529,6 +532,12 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 				const relaxed = f === 1 ? 0.08 + j * 0.04 : (0.1 + f * 0.05) * (j === 2 ? 1.2 : j === 3 ? 0.8 : 1);
 				let c = relaxed + (1.25 - relaxed) * Math.max(P2.curl, S.grip[side] * 0.85);
 				if (f === 2 && gp?.point && lead) c = 0.02;
+				// a long arm in both hands: the strong hand's index lies straight along the frame
+				// above the guard, or hooks round the trigger when aiming (trigger())
+				if (f === 2 && side === 'R' && S.grip.R > 0.95 && S.grip.L > 0.95) {
+					if (j === 1) S.trigK += (S.trigger - S.trigK) * (1 - Math.exp(-dt * 12));
+					c = TRIGGER_OFF[j - 1] + (TRIGGER_ON[j - 1] - TRIGGER_OFF[j - 1]) * S.trigK;
+				}
 				if (f === 1) c *= 0.6;
 				bones[i].quaternion.setFromAxisAngle(curlAxis[i], c);
 			}
@@ -580,5 +589,5 @@ export function createMotion(P, groundAt, { constrain, sitFrequency = 2.2 } = {}
 		J.x.dv += s * k * 0.9; J.z.dv += f * k * 0.9;
 		if (hold > 0) S.freeze = Math.max(S.freeze, hold);
 	};
-	return { S, update, gesture, setPose, feel, sit, stand, hold, act, play, jolt, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
+	return { S, update, gesture, setPose, feel, sit, stand, hold, act, play, jolt, grip: (side, k) => { S.grip[side] = Math.max(0, Math.min(1, +k || 0)); }, trigger: (side, k) => { if (side === 'R') S.trigger = Math.max(0, Math.min(1, +k || 0)); }, poses: POSES, want: S.want, setGround(fn) { if (typeof fn !== 'function') return; groundAt = fn; for (const l of S.legs) l.init = false; }, place(x, y, z, heading) { S.pos.set(x, y, z); S.yaw.v = S.heading = S.want.heading = heading; S.hipY.v = y; for (const l of S.legs) { l.init = false; l.planted = true; l.inSwing = false; } S.speed.v = 0; S.speed.dv = 0; } };
 }
