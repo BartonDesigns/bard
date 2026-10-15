@@ -218,6 +218,16 @@ function underwaterAudio(target, dt) {
 // things made inside the engine that the Crysis console handle reaches
 const HOOKS = {};
 const isPhone = /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// no zooming the page: a double tap or a pinch on the game is play, not Safari's zoom (iOS ignores
+// user-scalable=no, and touch-action isn't inherited, so every element opts out; the rule goes in
+// first, so an element's own touch-action still wins)
+if (typeof document !== 'undefined' && !document.getElementById('no-page-zoom')) {
+	const st = document.createElement('style');
+	st.id = 'no-page-zoom';
+	st.textContent = '*,*::before,*::after{touch-action:manipulation}';
+	document.head.prepend(st);
+	for (const ev of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) document.addEventListener(ev, (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+}
 
 function css(el, s) { el.style.cssText = s; return el; }
 function button(label, title, style, hud) {
