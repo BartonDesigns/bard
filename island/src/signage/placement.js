@@ -13,6 +13,7 @@
 // from behind, 2 the face mirrored as seen through glass, 3 nothing).
 // Posts and gantries for the signs to stand on come back beside them.
 
+import { graffitiGraphic } from '../civic/graffiti-catalog.js';
 import { hash01, hash32, rng, pick } from './rand.js';
 import { LAYER } from './layers.js';
 import { RANK } from './systems.js';
@@ -404,6 +405,7 @@ export function graffitiFor(surfaces, { morality = {}, seed = 0, day = 0, phone 
 			if (roll < 0.08 && span > 9 && tall > 2.4 && (S.kind === 'soundwall' || S.kind === 'abutment' || S.kind === 'rail' || S.kind === 'industrial')) { face = { k: 'piece', seed: sid }; w = Math.min(span * 0.6, 7 + r() * 3); h = Math.min(tall * 0.75, w * 0.38); hy = 0.4 + h / 2; }
 			else if (roll < 0.33) { face = { k: 'throwup', seed: sid }; w = 1.8 + r() * 1.6; h = w * 0.45; hy = 0.5 + h / 2 + r() * 0.3; }
 			else { face = { k: 'tag', seed: sid }; w = 0.7 + r() * 1.1; h = w * 0.42; hy = 0.9 + r() * 1.2; }
+			if(face.k==='piece'&&graffitiGraphic('piece',sid))w=Math.min(w,h*1.15);
 			if (S.kind === 'dumpster') { w *= 0.6; h *= 0.6; hy = 0.75; }
 			if (S.kind === 'pier') { w = Math.min(w, span * 0.9); h = Math.min(h, w * 0.5); }
 			hy = Math.min(hy, tall - h / 2 - 0.1);

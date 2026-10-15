@@ -1,5 +1,6 @@
 // Illustrated trade marks; names, hours and navigational information remain real text.
 // Generated once at build time, never a network image-generation call during play.
+import { civicRevision } from '../civic/materials.js';
 import { BRAND_FAMILIES, brandName, brandCategory, brandIdentity } from './brand-catalog.js';
 import { hash32, rng } from './rand.js';
 
@@ -7,7 +8,7 @@ export const ART_FAMILIES = Object.freeze(['heritage', 'mystic', 'modern', 'orbi
 export const TRADE_LABELS = Object.freeze(['Baker', 'Smith', 'Apothecary', 'Inn', 'Music', 'Cloth', 'Fishmonger', 'Market']);
 const sheets = new Map();
 let revision = 0;
-export const artRevision = () => revision;
+export const artRevision = () => revision+civicRevision();
 export function artFamily(profile = {}) {
 	if (profile.type === 'MYSTICAL' || profile.civ?.village === 'fae') return 'mystic';
 	if (profile.realm || profile.type === 'MEDIEVAL') return 'heritage';

@@ -1,3 +1,17 @@
+## October 15, 2026: skin
+
+The hands no longer read as flat plastic, engine-wide. Skin lighting is now:
+- a per-channel wrap with a red terminator;
+- red light through thin flesh when backlit;
+- two shines (a broad one and the oil's), with the sky's sheen reflected (there is no reflection map);
+- uneven colour and two sizes of pore.
+
+Your own first-person hands and forearms (fists and every weapon) add the full layer: creases at every finger joint, palm lines, crosshatched skin lines, tendons, veins, the wrist bone, forearm muscle relief, body hair, real nails (lunula, free edge, gloss), redder knuckles and fingertips, paler palms, and shade between the fingers and where they close on the grip. All of it is drawn from a map that `people/hand-surface.js` lays on the refined surface. NPC faces and hands get the lighter layer.
+
+There are no new textures, geometry or draws, and the skin still compiles 3 programs on desktop and 3 on phone. The governor scales the fine detail through one shared uniform. Your hands' map costs 36 bytes a vertex.
+
+Only `people/skin.js` and `people/hand-surface.js` changed (poses, grips and sleeves are untouched). Tests: `island/tools/skin.test.mjs`. Harness: `tools/skin-preview.mjs`, `skin-browser.mjs`. See `docs/skin-2026-10-15.md`.
+
 ## October 15, 2026: follow-ups
 
 Small fixes left over by the agents, engine-wide. **Harbour trades on the globe:** `economy.setSea` is wired (main.js, one line) to the globe's own sea test (`earth/globe.js seaAt`, `coastMask`); on the globe's ground the coast is read 2.5 times as generously and a place its land mask puts at the coast is by the water however high the coarse relief stands it (Eureka's waterfront is 200 m up on a bluff there, the sea 0.5 to 2 km off, which the 30 m guard ruled out), so coast towns get their outfitters, bait shops and fish markets. **Wrecked shops:** `bay/commercial.js` lets a wrecked shop go and builds it whole again only once it is put right. **Potholes on the procedural grid** bump the car (`potholes.js gridHoleAt`, the ground shader's own sums). **The governor drives more:** the street-tree cap and reach and the road map's paint target follow `qualityNow()` (the structures' own limits are left to the rebuild-site agent); car people, region folk, squads, family scenes and gatherings cap their bodies with `peopleCap` (`world/governor.js`) and let spare ones go, and the car people and region folk now free their bodies whole (`freeBody`), so `bodyCount` comes down. Tests: `island/tools/followups.test.mjs`. Notes in the follow-up lines of `docs/structures-2026-10-14.md` (commercial.js), `docs/streets-by-era-2026-10-14.md`, `docs/storefronts-and-daily-life-2026-10-14.md` and `docs/phone-stability-2026-10-14.md`.
@@ -13,6 +27,10 @@ Sleeves no longer read as tubes, on the avatar in third person and on every NPC.
 ## October 15, 2026: first-person sleeves, cuffs and gloves
 
 Sleeves no longer read as tubes. A shared garment module (`island/src/people/sleeve.js`) dresses your first-person arms in both the weapon view (`crysis/viewmodel.js`, the sleeve block only) and the fists (`combat/melee-view.js`) from the outfit you actually wear: the cross-section measured on your own forearm and bridged as cloth (flatter inside, fuller outside, tapering to the wrist), ease by fabric and fit, and real ends with thickness (ribbed knit cuffs, buttoned bands with a placket, a combat shirt's tabbed cuff, a shell's storm cuff, a tee's coverstitched hem, rolled sleeves as a thick folded band at the elbow). A jacket over a shirt shows both hems; tactical gloves for soldiers and the tactical team are shells over the hand's skin. Folds follow the bones each frame (elbow bend, the hand's turn, reach, aim ride-up, gravity) in the vertex shader and per pixel, with procedural cloth (jersey, sweatshirt, shirting, ripstop twill, nylon with sheen, denim, canvas, fleece fuzz, leather, rib knit, flannel), camouflage at its printed size, seams and stitching, and wear. Skin hidden under cloth is left out of the hands' mesh. The straight punches now run the forearm back toward the shoulder. Rolled sleeves are `sleeves: 'elbow', roll: true` on an outfit's top. Harness: `island/tools/sleeve-preview.mjs`, `sleeve-browser.mjs`; tests `island/tools/sleeve.test.mjs`. See `docs/sleeves-2026-10-15.md`.
+
+## October 15, 2026: thumbs and close-combat grips
+
+No finger or thumb bends back any more: every joint has an anatomical range in its own bone frame, enforced after every solve and blend (`crysis/finger-pose.js LIMITS`, `limitPose`), and the thumb curls across the palm instead of back. The rifle thumb hooks round the back of the grip like a J (through the thumbhole on the Mossback). Close combat's hands now use the same solver (fist with the thumb over the fingers, hammer grips with the thumb wrapped), and there are two new pick-ups, a hunting knife and a machete (`combat/melee-items.js`, rules in `melee-rules.js` and `brawl.js`, rare drops in town). See the thumb section of `docs/weapon-hands-2026-10-15.md`.
 
 ## October 15, 2026: weapon hands
 

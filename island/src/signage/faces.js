@@ -13,6 +13,8 @@
 // drawFace(g, x, y, w, h, face) draws face (placement.js records' face) into the box;
 // faceDims(face, w, h) gives the box in pixels for a record of w x h metres.
 
+import { graffitiGraphic } from '../civic/graffiti-catalog.js';
+import { drawCivicDecal } from '../civic/materials.js';
 import { picto, arrow } from './pictograms.js';
 import { drawTag, drawThrowup, drawPiece, drawBuff, drawWheatpaste, drawSticker, drawFlyer } from './graffiti.js';
 import { SYSTEMS } from './systems.js';
@@ -481,9 +483,10 @@ const CAR = {
 
 // ---------- the graffiti and the grime's paper ----------
 const STREET = {
-	tag: (g, x, y, w, h, f) => drawTag(g, x, y, w, h, f.seed),
+	tag: (g, x, y, w, h, f) => {const a=graffitiGraphic('tag',f.seed);if(!a||!drawCivicDecal(g,x,y,w,h,{...a,phone:!!f.phone}))drawTag(g,x,y,w,h,f.seed);},
+	damage: (g,x,y,w,h,f) => drawCivicDecal(g,x,y,w,h,{id:'damage',tile:f.tile,phone:!!f.phone,opacity:.7}),
 	throwup: (g, x, y, w, h, f) => drawThrowup(g, x, y, w, h, f.seed),
-	piece: (g, x, y, w, h, f) => drawPiece(g, x, y, w, h, f.seed),
+	piece: (g,x,y,w,h,f) => {const a=graffitiGraphic('piece',f.seed);if(!a||!drawCivicDecal(g,x,y,w,h,{...a,phone:!!f.phone}))drawPiece(g,x,y,w,h,f.seed);},
 	buff: (g, x, y, w, h, f) => drawBuff(g, x, y, w, h, f.tone || 0),
 	wheatpaste: (g, x, y, w, h, f) => drawWheatpaste(g, x, y, w, h, f.seed),
 	sticker: (g, x, y, w, h, f) => { if (f.seed % 3 !== 0 || !drawEmblem(g, x + (w - Math.min(w, h)) / 2, y + (h - Math.min(w, h)) / 2, Math.min(w, h), 'modern', Math.abs(f.seed) % 8, !!f.phone)) drawSticker(g, x, y, w, h, f.seed); },

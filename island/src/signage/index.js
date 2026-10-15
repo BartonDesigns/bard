@@ -37,6 +37,7 @@ import { qualityNow, onQuality } from '../world/governor.js';
 import { requestsNear } from '../economy/requests.js';
 import { shopCampaigns, wallCampaign } from './campaigns.js';
 import { productBrand } from './brand-catalog.js';
+import { graffitiGraphic } from '../civic/graffiti-catalog.js';
 import { artRevision } from './art.js';
 
 const CAPS = { retro: 900, vinyl: 1400, cloth: 80, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
@@ -243,6 +244,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		// (the stickers on a post are not to fly off it: their y comes from the post's ground)
 		// Large campaign art uses a separate cap; street and safety signs stay untouched.
 		for(const S of surfaces){if(murals>=(lite?2:5))break;const ad=S.campaignEligible===true?wallCampaign(S,seed):null;if(ad){out.push(ad);murals++;}}
+		// Small material scars live on existing industrial/alley surfaces, never sign lettering.
+		let scars=0;for(const S of surfaces){if(scars>=(lite?6:16))break;if(!['industrial','alley','dumpster','abutment'].includes(S.kind)||S.civic||S.storefront||hash01(S.x,S.z,'scar')>.35)continue;const size=Math.min(S.w*.6,1.8);out.push({mat:MAT.paint,layer:LAYER.grime,face:{k:'damage',tile:hash32(S.x,S.z,'damage')%4},x:S.x,z:S.z,hy:Math.min((S.h||2)*.4,1.25),nx:S.nx,nz:S.nz,w:size,h:Math.min(size*.8,(S.h||2)*.7),base:S.y??null,back:BACK.none,wear:.12});scars++;}
 		const M = moralNow();
 		out.push(...grimeFor(surfaces, { seed, phone: lite }));
 		out.push(...graffitiFor(surfaces, { morality: M, seed, day: day(), phone: lite }));
@@ -308,7 +311,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 				tx = nz; tz = -nx;
 				y = r.abs ?? (r.base ?? ground(r.x, r.z)) + r.hy;
 			}
-			const extraF = r.mat === MAT.grime ? ({ rust: 0, soot: 1, streak: 2, gum: 3, oil: 4 }[r.face.type] ?? 0) : r.mat === MAT.glass && r.face.frost ? 1 : 0;
+			const extraF = r.mat === MAT.grime ? ({ rust: 0, soot: 1, streak: 2, gum: 3, oil: 4 }[r.face.type] ?? 0) : r.mat === MAT.glass && r.face.frost ? 1 : r.mat===MAT.paint&&graffitiGraphic(r.face.k,r.face.seed)?.gloss?1:0;
 			if (B.put(r.x, y, r.z, nx, ny, nz, tx, ty, tz, r.w, r.h, c, r.back ?? BACK.blank, r.seed ?? hash01(r.x, r.z, r.hy || 0), r.wear || 0, extraF)) n++;
 		}
 		for (const B of batches.values()) B.commit();

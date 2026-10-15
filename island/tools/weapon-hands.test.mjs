@@ -4,8 +4,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { fingerRig, contactField, solveHand, fingerQuats, blendPose, squeeze, itemParts } from '../src/crysis/finger-pose.js';
-import { HOLDS, GRIPS, CHARGERS, cellPath, holdFrame } from '../src/crysis/held-items.js';
+import { fingerRig, contactField, solveHand, fingerQuats, blendPose, squeeze, itemParts, LIMITS, limitPose, fingerPoints } from '../src/crysis/finger-pose.js';
+import { MELEE_ITEMS, meleeItem, meleeMaterials } from '../src/combat/melee-items.js';
+import { MOVES } from '../src/combat/melee-rules.js';
+import { BLOWS } from '../src/combat/brawl.js';
+import { HOLDS, GRIPS, CHARGERS, cellPath, holdFrame, itemModel } from '../src/crysis/held-items.js';
 import { BOW_HAND, createBowVisual } from '../src/crysis/bow-visual.js';
 
 // a right hand at rest: fingers along +x from the palm, the palm facing -z, the thumb at +y
@@ -107,7 +110,7 @@ test('every weapon has hands planned, grips framed and a charging knob where it 
 	}
 	const bow = GRIPS['reedline-hunting-bow'];
 	assert.equal(bow.L.riser.length, 5);
-	assert.equal(bow.R, undefined, 'the draw hand keeps the body\'s own curl');
+	assert.equal(bow.R.draw.length, 5);
 	const g = { c: new THREE.Vector3(0, 0, 0), r: 0.02, a: new THREE.Vector3(1, 0, 0), t: new THREE.Vector3(0, 1, 0), twist: 0.3 };
 	holdFrame(g, 'R'); holdFrame(g, 'R');
 	assert.ok(Math.abs(g.a.angleTo(new THREE.Vector3(1, 0, 0)) - 0.3) < 1e-6, 'twist applies once, however often the frame is made');
@@ -145,3 +148,69 @@ test('the first-person rifle is solved against its own mesh: a real grip closes,
 	const [x, y] = [0.0505, 0.029];
 	assert.ok(Math.abs(field.sd(x, y, 0)) < 0.006);
 });
+
+// (item models draw their reticles on a canvas: a stand-in is enough to build the geometry)
+globalThis.document ||= { createElement: () => ({ width: 0, height: 0, getContext: () => new Proxy({}, { get: () => () => ({ data: [] }) }) }) };
+const inRange = (params, label) => {
+	for (let f = 0; f < 5; f++) {
+		const L = LIMITS[f ? 'finger' : 'thumb'];
+		for (let j = 0; j < 4; j++) {
+			const v = params[f * 4 + j];
+			assert.ok(Number.isFinite(v), label);
+			assert.ok(v >= L[j][0] - 1e-6 && v <= L[j][1] + 1e-6, `${label}: finger ${f} joint ${j} at ${v.toFixed(3)} outside ${L[j]}`);
+		}
+	}
+	// nothing past straight beyond the small hyperextension the ranges allow; the thumb never back at its knuckle
+	assert.ok(params[2] >= 0 && params[3] >= -0.05 - 1e-6, `${label}: thumb bent back`);
+};
+
+test('anatomical ranges: no joint bends backward, and limitPose holds any pose inside them', () => {
+	assert.ok(LIMITS.thumb[2][0] >= 0 && LIMITS.thumb[3][0] >= -0.09 && LIMITS.finger[2][0] >= 0 && LIMITS.finger[3][0] >= 0 && LIMITS.finger[1][0] >= -0.18);
+	assert.ok(LIMITS.finger[1][1] <= 1.6 && LIMITS.finger[2][1] <= 1.95 && LIMITS.finger[3][1] <= 1.42 && LIMITS.thumb[2][1] <= 1.06 && LIMITS.thumb[3][1] <= 1.42);
+	const wild = new Float32Array(20).map((_, i) => (i % 2 ? 3 : -3));
+	inRange(limitPose(wild), 'clamped');
+	// the thumb's curl axes carry it across the palm (toward the little finger), not back
+	const rig = fingerRig(syntheticBody(), 'R'), rest = fingerPoints(rig, 0, [0, 0, 0, 0])[3], curled = fingerPoints(rig, 0, [0, 0, 0.8, 0.8])[3];
+	const little = rig.chains[4][0].head.clone().applyMatrix4(rig.restInv);
+	assert.ok(curled.distanceTo(little) < rest.distanceTo(little), 'thumb flexion goes toward the palm');
+});
+
+test('every weapon grip, through the solver on the weapon\'s own mesh, stays inside the ranges and on the surface', () => {
+	const body = syntheticBody(), R = fingerRig(body, 'R'), Lh = fingerRig(syntheticBody('L'), 'L');
+	for (const id of ['aurora-trail-rifle', 'mossback-scout-rifle', 'warden-spark-carbine', 'reedline-hunting-bow']) {
+		const model = itemModel(id, { view: true, lod: 'high' }), H = HOLDS[id], plan = GRIPS[id];
+		assert.ok(model, id);
+		const parts = itemParts(model, ['body', 'charger', 'cell']);
+		for (const side of ['R', 'L']) for (const [name, specs] of Object.entries(plan[side] || {})) {
+			if (name === 'cell' || name === 'charge') continue;
+			const rig = side === 'R' ? R : Lh, frame = name === 'draw' ? new THREE.Matrix4() : H[side].m;
+			const field = contactField(parts, new THREE.Box3().setFromCenterAndSize(new THREE.Vector3().setFromMatrixPosition(frame), new THREE.Vector3(0.26, 0.26, 0.26)));
+			const out = solveHand(rig, name === 'open' || name === 'draw' ? null : field, frame, specs, { fit: name !== 'open' && name !== 'draw' && name !== 'trigger' });
+			inRange(out.params, `${id} ${side} ${name}`);
+			specs.forEach((sp, f) => { if (sp.mode === 'wrap') assert.ok(out.clearanceMm[f] > -6, `${id} ${side} ${name} finger ${f} sunk ${out.clearanceMm[f]} mm`); });
+		}
+	}
+});
+
+test('close-combat things: a knife and a machete beside the bat, pipe and bottle, each with a grip, rules and a hold', () => {
+	const M = meleeMaterials(), rig = fingerRig(syntheticBody(), 'R');
+	assert.deepEqual(MELEE_ITEMS, ['bat', 'pipe', 'bottle', 'knife', 'machete']);
+	for (const kind of MELEE_ITEMS) {
+		const item = meleeItem(kind, M);
+		assert.ok(item && item.userData.r > 0.01 && item.userData.r < 0.02, kind);
+		assert.ok(MOVES[kind] && MOVES[kind + 'Heavy'] && MOVES[kind].item === kind, kind);
+		assert.ok(BLOWS[kind]?.item, kind);
+		// a hammer grip round the handle: the palm on it, the fingers closed on it, the thumb over
+		item.rotation.set(0, 0, Math.PI / 2); item.position.set(0, -0.013 - item.userData.r, 0); item.updateMatrix();
+		const parts = []; item.traverse((o) => { if (o.isMesh) { const m = item.matrix.clone(); if (o !== item) { o.updateMatrix(); m.multiply(o.matrix); } parts.push([o, m]); } });
+		const field = contactField(parts, new THREE.Box3(new THREE.Vector3(-0.15, -0.15, -0.15), new THREE.Vector3(0.15, 0.15, 0.15)));
+		const frame = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, -1, 0)).setPosition(0, -0.012, 0.022);
+		const out = solveHand(rig, field, frame, [{ mode: 'reach', target: new THREE.Vector3(-0.012, -0.022 - 2 * item.userData.r, -0.009), natural: [0.6, 0.4, 0.6, 0.55], tip: 0.55, soft: 0.0005 }, { mode: 'wrap' }, { mode: 'wrap' }, { mode: 'wrap' }, { mode: 'wrap' }]);
+		inRange(out.params, kind);
+		for (let f = 1; f < 5; f++) assert.ok(out.clearanceMm[f] > -4, `${kind} finger ${f} ${out.clearanceMm[f]}`);
+	}
+	// balance: the blades sit with the bat and the pipe, the knife quicker and lighter
+	assert.ok(MOVES.knife.dmg < MOVES.bat.dmg && moveTimeOf(MOVES.knife) < moveTimeOf(MOVES.bat));
+	assert.ok(Math.abs(MOVES.machete.dmg - MOVES.bat.dmg) <= 2 && MOVES.macheteHeavy.dmg <= MOVES.batHeavy.dmg);
+});
+const moveTimeOf = (m) => m.wind + m.active + m.recover;
