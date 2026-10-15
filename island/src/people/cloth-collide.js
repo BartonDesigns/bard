@@ -19,11 +19,16 @@ export const clothUniforms=()=>({uClothA:{value:Array.from({length:CLOTH_CAPS},(
 // A capsule is an approximation of the skin. Preserve the tailored rest silhouette:
 // each vertex records any existing overlap, so contact only corrects new penetration
 // introduced by the pose. Without this, wide bodies inflate at the underarms.
+// A layer over a top (garment slot 1) meets the capsules a little further out than the top
+// does, so where a pose presses both against the body they land one over the other instead of
+// on the same surface (where the top would show through the jacket or vest in slivers).
+export const LAYER_GAP = 0.004;
 export function calibrateCloth(geometry,caps){
- const p=geometry.attributes.position,inset=new Float32Array(p.count),v=new THREE.Vector3(),ab=new THREE.Vector3(),d=new THREE.Vector3();
+ const p=geometry.attributes.position,slot=geometry.attributes.slot,inset=new Float32Array(p.count),v=new THREE.Vector3(),ab=new THREE.Vector3(),d=new THREE.Vector3();
  for(let i=0;i<p.count;i++){
   v.fromBufferAttribute(p,i);
-  for(const c of caps){ab.subVectors(c.b,c.a);const t=THREE.MathUtils.clamp(d.subVectors(v,c.a).dot(ab)/Math.max(ab.lengthSq(),1e-7),0,1);inset[i]=Math.max(inset[i],c.r+.002-d.subVectors(v,c.a).addScaledVector(ab,-t).length());}
+  const gap=slot&&Math.round(slot.getX(i))%10===1?LAYER_GAP:0;
+  for(const c of caps){ab.subVectors(c.b,c.a);const t=THREE.MathUtils.clamp(d.subVectors(v,c.a).dot(ab)/Math.max(ab.lengthSq(),1e-7),0,1);inset[i]=Math.max(inset[i],c.r+gap+.002-d.subVectors(v,c.a).addScaledVector(ab,-t).length());}
  }
  geometry.setAttribute('clothInset',new THREE.BufferAttribute(inset,1));
 }
@@ -38,7 +43,7 @@ export function poseCloth(P,caps,U,mesh){
 export const CLOTH_CONTACT_GLSL=`
 vec3 clothStart = transformed;
 for(int pass=0;pass<2;pass++) for(int i=0;i<${CLOTH_CAPS};i++) {
- float r=uClothA[i].w-clothInset;
+ float r=uClothA[i].w-clothInset+(abs(mod(slot,10.0)-1.0)<0.5?${LAYER_GAP.toFixed(4)}:0.0);
  if(r<=0.0 || mod(slot,10.0)>2.5) continue;
  vec3 a=uClothA[i].xyz,ab=uClothB[i]-a;
  vec3 delta=transformed-(a+ab*clamp(dot(transformed-a,ab)/max(dot(ab,ab),1e-7),0.0,1.0));

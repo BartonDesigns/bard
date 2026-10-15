@@ -369,21 +369,22 @@ export function createCommercial(scene, bay, real, city, { isPhone = false } = {
 			scanX = x; scanZ = z;
 			cands = [];
 			for (const b of real?.loaded() ? real.near('boxes', x, z, BUILD_R + 20) : []) {
-				if (!b.grp?.biz || commercialStack(b.kind,b.w,b.d,b.wallH) || inCampus(b.x, b.z)) continue;
+				if (!b.grp?.biz || b.grp.wrecked || commercialStack(b.kind,b.w,b.d,b.wallH) || inCampus(b.x, b.z)) continue;
 				const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2;
 				if (d < BUILD_R) cands.push([d, b]);
 			}
 			// ...and the gridded towns' shops and offices (city.js gives them the same shape)
-			for (const b of city?.procBiz?.(x, z, BUILD_R + 20) || []) { const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2; if (d < BUILD_R) cands.push([d, b]); }
+			for (const b of city?.procBiz?.(x, z, BUILD_R + 20) || []) { if (b.grp?.wrecked) continue; const d = Math.hypot(b.x - x, b.z - z) - Math.max(b.w, b.d) / 2; if (d < BUILD_R) cands.push([d, b]); }
 			cands.sort((p, q) => p[0] - q[0]);
 			cands.length = Math.min(cands.length, MAX);
 		}
 		for (const [grp, B] of built) {
 			const d = Math.hypot(B.b.x - x, B.b.z - z) - Math.max(B.b.w, B.b.d) / 2;
-			if (d > DROP_R || (!cands.some((c) => c[1].grp === grp) && built.size > MAX)) { group.remove(B.root); B.dispose(); city?.setNear?.(grp, null); built.delete(grp); }
+			// (a wrecked shop is let go: structures/ draws its shell, and it is built whole again once put right)
+			if (d > DROP_R || grp.wrecked || (!cands.some((c) => c[1].grp === grp) && built.size > MAX)) { group.remove(B.root); B.dispose(); city?.setNear?.(grp, null); built.delete(grp); }
 		}
 		cool -= dt;
-		if (cool <= 0) for (const [, b] of cands) if (!built.has(b.grp)) {
+		if (cool <= 0) for (const [, b] of cands) if (!built.has(b.grp) && !b.grp.wrecked) {
 			let B = null;
 			try { B = build(b); } catch (e) { console.warn('commercial', e); }
 			if (B) { b.grp.detailRadius=Math.max(b.w,b.d)/2; built.set(b.grp, B); city?.setNear?.(b.grp, [b.x, b.z]); }

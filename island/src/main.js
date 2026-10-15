@@ -1194,6 +1194,7 @@ export function createIslandWorld() {
 			// (the businesses take their food and words from where on Earth they are)
 			world.city.economy.setLocator((x, z) => globeLL(x, z));
 			world.city.economy.setRegional(() => world?.globe?.regional?.settlements);
+			world.city.economy.setSea({ at: (x, z) => world?.globe?.seaAt(x, z) ?? null, coast: (x, z) => world?.globe?.coastMask(x, z) ?? null });
 			// the working day: staff out front of the open businesses, people in and out of their doors (people/people.js)
 			{ const daily = createDailyLife(world.city.economy, { isPhone }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods

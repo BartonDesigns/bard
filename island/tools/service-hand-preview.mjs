@@ -21,8 +21,8 @@ function hand(mode='guard'){
  setup();state.block=mode==='block';state.item=mode==='grip'?'pipe':null;state.take=mode==='open';state.move=mode==='jab'?'jab':null;state.anim=state.move;state.m=state.move?MOVES.jab:null;state.mt=state.move?MOVES.jab.wind+MOVES.jab.active*.7:0;
  for(let i=0;i<100;i++)fists.update(1/60,1,state,{P:w.P,M:w.M});
  const result=render();
- const meshes=[];fists.root.traverse(o=>{if(o.name.startsWith('anatomical-hand-'))meshes.push({name:o.name,tris:o.geometry.index.count/3,vertices:o.geometry.attributes.position.count});});
- return {...result,meshes};
+ const meshes=[],garments=[];fists.root.traverse(o=>{if(o.name.startsWith('anatomical-hand-'))meshes.push({name:o.name,tris:o.geometry.index.count/3,vertices:o.geometry.attributes.position.count});if(o.name==='garment-arms'&&o.visible)garments.push({tris:o.geometry.index.count/3,layers:o.geometry.attributes.garB.count});});
+ return {...result,meshes,garments};
 }
 function vehicle(kind='ambulance',rear=false,distance=0){
  setup();fleet.visible=true;fleet.clear();responder?.dispose();responder=null;

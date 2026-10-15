@@ -199,9 +199,11 @@ export const kitPulseNow = () => kitFire.value;
 const S = (c, r, m, tile = T.plain, o = {}) => ({ c: new THREE.Color(c), r, m, tile, wear: o.wear || 0, glow: o.glow || 0, dens: o.dens || DENS[tile] });
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 class Kit {
-	constructor(hi, optics = false) { this.hi = hi; this.optics = optics; this.body = this.parts = []; this.cellParts = []; this.cellAt = null; this.lens = []; }
+	constructor(hi, optics = false) { this.hi = hi; this.optics = optics; this.body = this.parts = []; this.cellParts = []; this.cellAt = null; this.chargerParts = []; this.chargerAt = null; this.lens = []; }
 	// what follows goes into the swappable cell (its own mesh, for the reload), anchored at x, y
 	cell(x, y) { this.cellAt = [x, y, 0]; this.parts = this.cellParts; }
+	// what follows goes into the charging handle (its own mesh, drawn back after a reload), at x, y, z
+	charger(x, y, z) { this.chargerAt = [x, y, z]; this.parts = this.chargerParts; }
 	main() { this.parts = this.body; }
 	// a geometry with a surface, placed at x, y, z turned rx, ry, rz (and scaled)
 	add(geo, s, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sc = null) {
@@ -239,7 +241,8 @@ class Kit {
 	build() {
 		const merge = (list) => { const g = mergeGeometries(list); for (const p of list) p.dispose(); g.computeBoundingSphere(); g.computeBoundingBox(); return g; };
 		const cell = this.cellParts.length ? merge(this.cellParts).translate(-this.cellAt[0], -this.cellAt[1], 0) : null;
-		return { g: merge(this.body), cell, cellAt: this.cellAt, lens: this.lens };
+		const charger = this.chargerParts.length ? merge(this.chargerParts).translate(-this.chargerAt[0], -this.chargerAt[1], -this.chargerAt[2]) : null;
+		return { g: merge(this.body), cell, cellAt: this.cellAt, charger, chargerAt: this.chargerAt, lens: this.lens };
 	}
 }
 
@@ -348,6 +351,8 @@ function rail(k, x0, x1, y, w = 0.021) {
 }
 // a sling: mounts and a webbing strap hanging between them, on the item's left
 function sling(k, a, b, sag) {
+	// (not in your own hands: with no body to hang against it would only cut through your fingers)
+	if (k.view) { for (const p of [a, b]) k.add(ring(0.008, 0.0018, 16), STEEL, p[0], p[1], -0.028, 0, Math.PI / 2, 0); return; }
 	const z = -0.032;
 	for (const p of [a, b]) k.add(ring(0.008, 0.0018, k.hi ? 16 : 8), STEEL, p[0], p[1], z + 0.004, 0, Math.PI / 2, 0);
 	const mid = [(a[0] + b[0]) / 2, Math.min(a[1], b[1]) - sag, z - 0.004];
@@ -420,6 +425,19 @@ function cell(k, F, x, y, len, w) {
 	k.add(block(0.056, 0.008, w + 0.004, 0.003), RUBBER, x + 0.008, y - len - 0.002, 0, 0, 0, -0.08);
 	k.main();
 }
+// the charging handle on the receiver's left side (z the side's face): a dark slot in the body
+// and a knurled knob in its own mesh, which the support hand draws back after a fresh cell
+// (crysis/viewmodel.js CHARGE). Exterior only: nothing behind it.
+export const CHARGERS = { 'aurora-trail-rifle': [0.15, 0.124, -0.0285], 'mossback-scout-rifle': [0.165, 0.099, -0.0235], 'warden-spark-carbine': [0.11, 0.128, -0.0315] };
+function charger(k, F, id) {
+	const [x, y, z] = CHARGERS[id];
+	k.add(block(0.056, 0.0075, 0.003, 0.0015, 0.0005), BLACK, x - 0.018, y, z - 0.0008);
+	k.charger(x, y, z);
+	k.add(block(0.012, 0.0095, 0.012, 0.002, 0.001), F.trim, x, y, z - 0.006);
+	k.add(tube(0.0058, 0.0058, 0.012, k.hi ? 14 : 8), KNURL, x + 0.001, y, z - 0.0125, 0, Math.PI / 2, 0);
+	k.add(tube(0.0062, 0.0055, 0.002, k.hi ? 14 : 8), F.trim, x + 0.001, y, z - 0.0192, 0, Math.PI / 2, 0);
+	k.main();
+}
 // an inlay line in the tier's colour (from level 4) along a side
 function inlay(k, F, x0, x1, y, z) { if (F.inlay) for (const s of [-1, 1]) k.add(block(x1 - x0, 0.0026, 0.0012, 0.0008, 0.0004), F.inlay, (x0 + x1) / 2, y, s * z); }
 // a small status display (near-future kit): dark glass, a lit bar in the tier's colour
@@ -487,6 +505,7 @@ function aurora(k, F) {
 		}
 	}
 	scope(k, F, -0.02, 0.24, 0.198, 0.152, 0xff3b30);
+	charger(k, F, 'aurora-trail-rifle');
 }
 // the Mossback: a lighter scout rifle, one-piece thumbhole stock in the finish's second colour,
 // a round guard with knurled bands, a long scout scope out front, a short brake
@@ -522,6 +541,7 @@ function mossback(k, F) {
 		k.add(tube(0.004, 0.004, 0.002, 8), STEEL, -0.29, 0.061, sign * 0.023, 0, Math.PI / 2);
 	}
 	scope(k, F, 0.27, 0.43, 0.186, 0.14, 0x39ff88);
+	charger(k, F, 'mossback-scout-rifle');
 }
 // the Warden: a compact guard carbine, angular plates, a reflex sight, and in place of a muzzle
 // a ringed emitter that ends an encounter with a flash
@@ -565,6 +585,7 @@ function warden(k, F) {
 		for (const x of [-0.12, -0.25]) k.add(block(0.012, 0.025, 0.022, 0.003), F.alt, x, 0.135, 0);
 	}
 	reflex(k, F, 0.04, 0.17, 0.205, 0xffb347);
+	charger(k, F, 'warden-spark-carbine');
 }
 const RIFLES = { 'aurora-trail-rifle': aurora, 'mossback-scout-rifle': mossback, 'warden-spark-carbine': warden };
 
@@ -836,15 +857,21 @@ const BUILD = {
 // is given by the axis point the fist closes round (c), its radius (r), and a and t.
 const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const RAKE = 0.3;
-const PISTOL = { c: v3(-0.006, -0.012, 0), r: 0.026, a: v3(Math.cos(RAKE), -Math.sin(RAKE), 0), t: v3(Math.sin(RAKE), Math.cos(RAKE), 0) };
-const fore = (x, y, r = 0.034) => ({ c: v3(x, y, 0), r, a: v3(0.35, 0.45, 1).normalize(), t: v3(1, 0, 0) });
+// (a high hand: the web of the thumb up under the tang, the index level with the trigger; twist
+// turns the hand round the grip so the back strap sits in the palm, the knuckles at the front)
+const PISTOL = { c: v3(-0.045, 0.012, 0), r: 0.027, a: v3(Math.cos(RAKE), -Math.sin(RAKE), 0), t: v3(Math.sin(RAKE), Math.cos(RAKE), 0), twist: 0 };
+// a support hand under a fore-end: the palm under it, the fingers angled forward up its far side
+// (slide: the palm moved back along the fingers, so the knuckles meet the fore-end's corner)
+const fore = (x, y, r = 0.034, slide = 0.018) => ({ c: v3(x, y, 0), r, a: v3(0.55, 0.45, 1).normalize(), t: v3(1, 0, 0), slide });
 // shafts held upright (t along the shaft) and handles carried hanging (t along the handle)
 const SHAFT = (y = 0, r = 0.02) => ({ c: v3(0, y, 0), r, a: v3(1, 0, 0), t: v3(0, 1, 0) });
 const HANDLE = (y = 0, r = 0.012) => ({ c: v3(0, y, 0), r, a: v3(0, -1, 0), t: v3(1, 0, 0) });
 // kind: 'long' (two hands, carried at the ready), 'one' (hangs in one hand), level: kept upright
+// (the Mossback's grip is its stock's own: thicker front to back, more upright; the thumb through its hole)
+const SCOUT_GRIP = { c: v3(-0.05, 0.012, 0), r: 0.03, a: v3(Math.cos(0.2), -Math.sin(0.2), 0), t: v3(Math.sin(0.2), Math.cos(0.2), 0), twist: 0 };
 export const HOLDS = {
 	'aurora-trail-rifle': { kind: 'long', R: PISTOL, L: fore(0.42, 0.112, 0.036), sight: [-0.069, 0.198, 0.08], zoom: 1.9 },
-	'mossback-scout-rifle': { kind: 'long', R: PISTOL, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 1.5 },
+	'mossback-scout-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 1.5 },
 	'warden-spark-carbine': { kind: 'long', R: PISTOL, L: fore(0.22, 0.1, 0.036), sight: [0.04, 0.205, 0.22], zoom: 1.25 },
 	'reedline-hunting-bow': { kind: 'bow', side: 'L', L: { c: v3(0, 0, 0), r: .026, a: v3(.3, 0, -1), t: v3(0, 1, 0) }, R: { c: v3(-.14, .056, -.025), r: .026, a: v3(.12, 0, -1), t: v3(0, 1, 0) } },
 	'hunting-net': { kind: 'one', R: SHAFT(0, 0.018) },
@@ -864,16 +891,59 @@ export const HOLDS = {
 	'regolith-core-sample': { kind: 'one', R: HANDLE(0, 0.008), level: true },
 	'hydroponic-harvest-crate': { kind: 'one', R: HANDLE(0, 0.01), level: true },
 };
-for (const h of Object.values(HOLDS)) for (const s of ['R', 'L']) {
-	const g = h[s];
-	if (!g) continue;
+// a grip's hand frame (g.m, columns a, t, n at o) from its axis point, radius and directions
+export function holdFrame(g, s) {
+	g.a0 ||= g.a.clone(); g.t0 ||= g.t.clone();
+	g.a.copy(g.a0); g.t.copy(g.t0);
+	if (g.twist) g.a.applyAxisAngle(g.t.clone().normalize(), g.twist);
 	g.a.normalize(); g.t.addScaledVector(g.a, -g.t.dot(g.a)).normalize();
 	g.n = s === 'R' ? new THREE.Vector3().crossVectors(g.t, g.a) : new THREE.Vector3().crossVectors(g.a, g.t);
 	g.o = g.c.clone().addScaledVector(g.n, -g.r);
-	// the hand's frame in item space (columns a, t, n at o)
-	g.m = new THREE.Matrix4().makeBasis(g.a, g.t, g.n).setPosition(g.o);
+	if (g.slide) g.o.addScaledVector(g.a, -g.slide);
+	(g.m ||= new THREE.Matrix4()).makeBasis(g.a, g.t, g.n).setPosition(g.o);
+	return g;
 }
+for (const h of Object.values(HOLDS)) for (const s of ['R', 'L']) if (h[s]) holdFrame(h[s], s);
 export const holdOf = (id) => HOLDS[id] || HOLDS['field-medkit'];
+
+// ---------- fingers: what each finger does where a hand holds (crysis/finger-pose.js) ----------
+// A plan per pose, one spec per finger (thumb, index, middle, ring, little). 'wrap' closes a
+// finger on the item's surface; 'reach' brings its pad (or, at: 'dip', the crease of its last
+// joint) to a point; 'fixed' gives its four numbers. Points are in item space, or the cell's own
+// for 'cell' and the charging knob's for 'charge'. The strong hand's index lies straight along
+// the frame above the guard (ready) unless it is on the trigger (trigger).
+const WRAP = { mode: 'wrap' }, LOOSE = { mode: 'wrap', relax: 0.08, free: 0.55 }, CURL = { mode: 'wrap', relax: 0.03, free: 0.85 };
+const pad = (p, o = {}) => ({ mode: 'reach', target: v3(...p), ...o });
+const fixed = (...params) => ({ mode: 'fixed', params });
+function rifleFingers({ trigger, ready, thumb, support, cellThumb = [-0.004, 0.062, -0.0175] }) {
+	// the thumb hooked round the back of the grip like a J: lifted off the palm toward the grip,
+	// round the back strap and its pad on the far side, tip forward and down (the thenar pressing the
+	// strap a little, as a real hand's does)
+	const T = pad(thumb, { natural: [1, 0.4, -0.05, 0.5], soft: 0.0025, press: 300 });
+	return {
+		R: {
+			ready: [T, pad(ready, { natural: [0, 0, 0.08, 0.04], along: 0.5, ahead: 0.086, limits: [[-0.8, 0.8], [-0.8, 0.6], [0, 0.6], [0, 0.4]] }), WRAP, WRAP, WRAP],
+			trigger: [T, pad(trigger, { natural: [0, 0.55, 0.85, 0.35] }), WRAP, WRAP, WRAP],
+		},
+		L: {
+			fore: [pad(support, { natural: [0.3, 0.2, 0.15, 0.1], soft: 0.0005 }), WRAP, WRAP, WRAP, WRAP],
+			cell: [pad(cellThumb, { natural: [0.3, 0.3, 0.2, 0.1], soft: 0.0005 }), WRAP, WRAP, WRAP, WRAP],
+			charge: [pad([-0.0095, 0.0, -0.012], { natural: [0.3, 0.4, 0.3, 0.2], soft: 0.0005 }), pad([0.0085, 0.001, -0.012], { natural: [0, 0.6, 0.9, 0.4] }), CURL, CURL, CURL],
+			open: [fixed(0.25, 0.15, 0.1, 0.05), fixed(0.02, 0.12, 0.15, 0.08), fixed(0, 0.14, 0.18, 0.1), fixed(-0.03, 0.16, 0.2, 0.1), fixed(-0.07, 0.2, 0.22, 0.12)],
+		},
+	};
+}
+export const GRIPS = {
+	'aurora-trail-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.0255], thumb: [-0.03, 0.008, -0.022], support: [0.465, 0.098, -0.029] }),
+	'mossback-scout-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.12, 0.052, 0.0185], thumb: [-0.04, 0.006, -0.026], support: [0.405, 0.1, -0.0255] }),
+	'warden-spark-carbine': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.028], thumb: [-0.03, 0.008, -0.022], support: [0.255, 0.085, -0.031] }),
+	// the bow hand round the riser, relaxed, its thumb round the far side; the draw hand closed on
+	// the string as the body's own curl closed it on main, the thumb resting flexed beside it
+	'reedline-hunting-bow': {
+		L: { riser: [pad([0.012, 0.022, 0.0175], { natural: [0.6, 0.4, 0.3, 0.3], soft: 0.0005 }), LOOSE, LOOSE, LOOSE, LOOSE] },
+		R: { draw: [fixed(0.3, 0.3, 0.35, 0.3), fixed(0, 0.8, 0.95, 0.65), fixed(0, 0.82, 0.98, 0.66), fixed(0, 0.86, 1.02, 0.7), fixed(0, 0.92, 1.08, 0.74)] },
+	},
+};
 
 // How each usable item presents when used (crysis/viewmodel.js): shots a second it can keep up,
 // the recoil (kick back, rise, the side drift shot by shot, how fast it settles), the cell's
@@ -921,10 +991,11 @@ function motes(t, n = 14) {
 	return p;
 }
 const cache = new Map();
-function built(id, t, band, lod, optics = false) {
-	const key = `${id}:${t}:${band}:${lod}:${optics}`;
+function built(id, t, band, lod, optics = false, view = false) {
+	const key = `${id}:${t}:${band}:${lod}:${optics}:${view}`;
 	if (!cache.has(key)) {
 		const k = new Kit(lod !== 'low', optics);
+		k.view = view;
 		const F = finish(t, band);
 		if (RIFLES[id]) for (const key of ['main', 'alt', 'trim', 'wild']) F[key] = { ...F[key], wear: F[key].wear * 0.55 };
 		BUILD[id](k, F);
@@ -934,20 +1005,22 @@ function built(id, t, band, lod, optics = false) {
 	return cache.get(key);
 }
 // a fresh copy (sharing geometry and materials) of an item at a level and tier, or null
-export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false, optics = false } = {}) {
+// view: the first-person copy (crysis/viewmodel.js): its sling left off, the mounts kept
+export function itemModel(id, { level = 1, tier = 0, lod = 'high', plain = false, optics = false, bowDraw = undefined, view = false } = {}) {
 	if (!BUILD[id]) return null;
 	const t = Math.max(0, Math.min(4, tier | 0)), l = Math.max(1, Math.min(10, level | 0)), band = l >= 7 ? 2 : l >= 4 ? 1 : 0;
-	const B = built(id, t, band, lod, optics), g = new THREE.Group();
+	const B = built(id, t, band, lod, optics, view), g = new THREE.Group();
 	const body = new THREE.Mesh(B.g, kitMaterial(plain));
 	body.name = 'body';
 	g.add(body);
 	if (B.cell) { const c = new THREE.Mesh(B.cell, kitMaterial(plain)); c.name = 'cell'; c.position.set(...B.cellAt); g.add(c); }
+	if (B.charger) { const c = new THREE.Mesh(B.charger, kitMaterial(plain)); c.name = 'charger'; c.position.set(...B.chargerAt); c.userData.home = B.chargerAt.slice(); g.add(c); }
 	for (const L of B.lens) { const m = new THREE.Mesh(L.g, lensMaterial(L.reticle, plain, L.dot)); m.renderOrder = 2; m.name = 'glass'; g.add(m); }
 	if (t === 4 && lod !== 'low') g.add(motes(t));
 	g.traverse((o) => { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; });
 	g.name = 'held:' + id;
 	g.userData = { id, long: holdOf(id).kind === 'long', tier: t, level: l, hold: holdOf(id), variant: armamentVariant(id, t) };
-	if (id === 'reedline-hunting-bow') g.userData.bow = createBowVisual(g, kitMaterial(plain), { low: lod === 'low', colour: finish(t, band).alt.c });
+	if (id === 'reedline-hunting-bow') g.userData.bow = createBowVisual(g, kitMaterial(plain), { low: lod === 'low', colour: finish(t, band).alt.c, drawLength: bowDraw });
 	return g;
 }
 // triangles in a model, for budgets
@@ -961,11 +1034,12 @@ const UP = new THREE.Vector3(0, 1, 0);
 const CARRY = { long: 'carry', bow: null, one: null };
 // the cell's way out and back in over a reload's progress u (item space, from where it sits);
 // null while it is gone (out of view, a fresh one in hand)
+// (the fresh one seats at .8, with its cue, leaving the rest of the reload for the charging knob)
 export function cellPath(u, out = new THREE.Vector3()) {
-	if (u < 0.22 || u >= 0.86) return out.set(0, 0, 0);
+	if (u < 0.22 || u >= 0.8) return out.set(0, 0, 0);
 	if (u < 0.42) { const k = (u - 0.22) / 0.2; return out.set(0.02 * k, -0.32 * k * k, -0.04 * k); }
 	if (u < 0.62) return null;
-	const k = 1 - (u - 0.62) / 0.24, e = k * k * (3 - 2 * k);
+	const k = 1 - (u - 0.62) / 0.18, e = k * k * (3 - 2 * k);
 	return out.set(0.01 * e, -0.22 * e, -0.05 * e);
 }
 // how a long arm tips toward the support hand through a reload (0..1)
@@ -986,7 +1060,11 @@ function setWorldRot(bone, q) {
 	bone.updateMatrixWorld(true);
 }
 // the support hand under a cell (the cell's own frame)
-export const CELL_HOLD = new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0)).setPosition(0.01, -0.03, 0);
+// (the palm on the cell's left face, the fingers round its front, the thumb up its side)
+export const CELL_HOLD = (() => { const a = new THREE.Vector3(1, -0.45, 0).normalize(), n = new THREE.Vector3(0, 0, 1); return new THREE.Matrix4().makeBasis(a, new THREE.Vector3().crossVectors(n, a), n).setPosition(-0.02, 0.045, -0.03); })();
+// the support hand at the charging knob (the knob's own frame, CHARGERS): the palm toward the
+// receiver below the knob, the fingers up over it, the thumb behind it to pinch and draw it back
+export const CHARGE_HOLD = (() => { const a = new THREE.Vector3(0.25, 0.97, 0).normalize(), n = new THREE.Vector3(0, 0, 1); return new THREE.Matrix4().makeBasis(a, new THREE.Vector3().crossVectors(n, a), n).setPosition(0.022, -0.062, -0.03); })();
 export function reach(P, side, Hd, pole) {
 	const bU = P.bones[P.map['upperarm01.' + side]], bL = P.bones[P.map['lowerarm01.' + side]], bW = P.bones[P.map['wrist.' + side]];
 	if (!bU || !bL || !bW || !handFrame(P, side, _im)) return false;

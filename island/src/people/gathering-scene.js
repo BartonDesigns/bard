@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { createCrowd } from './crowd.js';
 import { loadPeopleAssets, buildPerson, personDNA } from './body.js';
 import { createMotion } from './motion.js';
+import { peopleCap } from '../world/governor.js';
 import { freeBody, worldPosition } from './social-actors.js';
 import { F } from '../earth/globeframe.js';
 import { HOURS, LEAVE, gatheringStage, memberWant, crowdLayout, seededRandom } from './gatherings.js';
@@ -38,7 +39,8 @@ export function createGatheringScene({ scene, world, camera, book, bodyKey }) {
 		return best;
 	}
 	function build(a) {
-		const q = worldPosition(W(), a.place.pos), g = a.gathering, n = g.size;
+		// (the crowd as big as the quality tier's people share allows: world/governor.js)
+		const q = worldPosition(W(), a.place.pos), g = a.gathering, n = peopleCap(g.size, Math.min(g.size, 4));
 		const r = seededRandom(g.seed ^ 0x51ab);
 		const H = r() * Math.PI * 2, c = Math.cos(H), s = Math.sin(H);
 		// a concert's stage stands behind the crowd's middle, which is the agreed spot
