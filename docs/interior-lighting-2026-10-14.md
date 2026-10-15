@@ -89,6 +89,10 @@ a row house's ground floor 38k to 58k vertices, 3.1 MB.
 
 ## Tuning and lessons
 
+- A tall hall's lights throw tight pools (reflectors), a room's softer ones; ceiling lights sit
+  a little under the ceiling with a soft halo on it; a hospital's, station's or landmark's rooms
+  are always lit; the fit-out's lamp anchors (estab-fit.js) are lit as pendants, track lights
+  and counter lights.
 - Fixtures are about as bright as a room's ceiling light (some 300 lux under it at an ordinary
   height, more from a tall hall's), and a room's fixtures together give at most a well lit
   room's light across its floor (an engine bay's rows of tubes each give less).
@@ -102,14 +106,18 @@ a row house's ground floor 38k to 58k vertices, 3.1 MB.
 
 ## Follow-ups
 
-- Before and after pictures of the hospital, police station, shops, flats and warehouse in the
-  game (the machine drew about a frame a minute; only the fire station, a house and a row
-  house were taken after). No armory was within reach of the test spot.
-- A per-room probe for real reflections of the fixtures on polished floors (the gleam is now
-  from the direction most of the fixtures' light comes from).
-- Sunlight through the windows is the sun's own; a baked patch of sun on the floor would help
-  where shadows are off (phones).
-- Hours for rooms inside a building that close (a shop under flats).
+- Floors still read too bright and even in the fire station's bay on the captures: the pools
+  under the tube rows are in the bake (a top-down render of it shows them) but wash out in the
+  picture. Check the floor's bake values in the page (a diagnostic is ready in the capture
+  script) and the indoor exposure lift in main.js (x1.55 by day).
+- The engine's soft shadow (`lightingShadowCaster` on the service vehicles) did not show on the
+  captures; check it is drawn.
+- Matched day and night pictures of the hospital ER bays, police front desk, a house and a shop
+  with the newest tuning (the machine drew about a frame a second; only the fire station was
+  taken after the review's changes). No armory was within reach of the test spot.
+- Lamp geometry for the shop anchors (they light and glow as halos; no fitting is drawn yet).
+- A per-room probe or lightmap for real reflections of the fixtures on polished floors.
+- A baked patch of sun on the floor where shadows are off (phones), and opening hours per room.
 
 ## Looking round
 
