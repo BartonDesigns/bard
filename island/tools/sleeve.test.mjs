@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
-import { sleeveSpec, armFrame, armPose, buildGarment, forearmEnvelope, layerStations } from '../src/people/sleeve.js';
+import { sleeveSpec, armFrame, armPose, buildGarment, forearmEnvelope, layerStations, garmentMaterial } from '../src/people/sleeve.js';
 import { outfitFor } from '../src/combat/outfits.js';
 
 test('outfits give the sleeves, cuffs, cloth and gloves a person really wears', () => {
@@ -144,4 +144,25 @@ test('the folds read the arm: bend, reach and which way is down', () => {
 	// the envelope never comes back inside the measured skin
 	const env = forearmEnvelope(P, F);
 	assert.ok(env(0.1, 0) > 0.026);
+});
+
+test('the shader finds every chunk it extends, and reads each vertex layer and side robustly', () => {
+	const { P, skin } = body();
+	const spec = sleeveSpec({ top: { kind: 'flannel', pat: 'plaid', sleeves: 'long' }, outer: { kind: 'leather', fab: 'leather', sleeves: 'long' }, acc: [{ kind: 'gloves' }, { kind: 'helmet' }] });
+	const { geometry, frames } = buildGarment(P, spec, skin, {});
+	// every vertex's layer-and-side id is a whole number in range (the shader rounds it before use)
+	const gb = geometry.attributes.garB;
+	for (let i = 0; i < gb.count; i++) { const x = gb.getX(i); assert.ok(Number.isInteger(x) && x >= 0 && x <= 5, String(x)); }
+	for (const lite of [false, true]) {
+		const m = garmentMaterial(spec, frames, { lite });
+		const sh = { uniforms: {}, vertexShader: T.ShaderLib.physical.vertexShader, fragmentShader: T.ShaderLib.physical.fragmentShader };
+		m.onBeforeCompile(sh);
+		for (const k of ['garFold', 'transformed += normal * gH']) assert.ok(sh.vertexShader.includes(k), k);
+		for (const k of ['garSurface(gc', 'roughnessFactor = gRough', 'material.specularColor *= gSpec', 'gAO']) assert.ok(sh.fragmentShader.includes(k), k);
+		// an interpolated 1.9999 must not index past the per-side arrays (it read garbage per pixel: glitter)
+		assert.ok(!/mod\(v?[gG]arB\.x/.test(sh.vertexShader + sh.fragmentShader));
+		assert.ok(sh.fragmentShader.includes('int(vGarB.x + 0.5)'));
+		// where the normal varies faster than a pixel, a broader highlight instead of glints
+		assert.ok(sh.fragmentShader.includes('fwidth(normal)'));
+	}
 });
