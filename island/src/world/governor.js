@@ -130,9 +130,14 @@ export function createGovernor({ phone = false, mode = () => 'auto', meter = nul
 	const state = governorState({ tier: phone ? 1 : 0, ceiling: rec.ceiling });
 	const fixed = (m) => Math.max(rec.ceiling, m === 'low' ? 2 : 0);
 	let memK = null, memT = 0, lastMode = mode();
+	// the heap over the last ten seconds, its lowest taken: the figure counts garbage not yet
+	// collected, and the lowest is near what is really held (or the governor chases the collector)
+	const heaps = [];
 	// the share of the budget in use: the graphics' estimate, and the script heap where the browser tells it
 	function memory() {
-		const heap = globalThis.performance?.memory?.usedJSHeapSize || 0;
+		const now = globalThis.performance?.memory?.usedJSHeapSize || 0;
+		if (now) { heaps.push(now); if (heaps.length > 10) heaps.shift(); }
+		const heap = heaps.length ? Math.min(...heaps) : 0;
 		const gpu = meter?.bytes() || 0;
 		if (!gpu && !heap) return null;
 		// (no heap figure, as on Safari: the graphics' share stands for both, a phone's heap

@@ -1066,10 +1066,11 @@ export function createIslandWorld() {
 		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
 		// sunbeams through the trees in mist (world/sunrays.js)
 		world.rays = createSunRays(scene, shared, renderer, { isPhone, sun: sky.sun, air: sky.uniforms.uAir });
-		world.rays.quality(quality);
+		world.rays.quality(qualityNow().fx);
+		fitShadow();
 		// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
 		world.spray = createSpray(scene, shared, { isPhone, world: () => world });
-		world.spray.quality(quality);
+		world.spray.quality(qualityNow().fx);
 		if (waterPlan) {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
 			const water = world.water;
@@ -1524,13 +1525,18 @@ export function createIslandWorld() {
 		pixelRatio = SAFE ? 1 : Math.max(0.5, maxRatio * Q.ratio);
 		renderer.setPixelRatio(pixelRatio);
 		renderer.shadowMap.enabled = !SAFE && Q.shadows;
-		const sun = world?.sky?.sun, size = (isPhone ? 1024 : 2048) * Q.shadowSize;
-		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
+		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
 		shared.cloudReflect = Q.reflect;
 		world?.rays?.quality(Q.fx);
 		world?.spray?.quality(Q.fx);
 		resize();
+	}
+
+	// the sun's shadow map at the tier's size (sky.js makes it at the device's full size)
+	function fitShadow() {
+		const sun = world?.sky?.sun, size = (isPhone ? 1024 : 2048) * qualityNow().shadowSize;
+		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
 	}
 
 	function resize() {
