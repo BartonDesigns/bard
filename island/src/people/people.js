@@ -10,7 +10,8 @@ import {pauseWorkplaceRoutine} from './workplace-routine.js';
 
 import * as THREE from 'three';
 import {workActor,disposeWorkplaceProps} from './workplace-life.js';
-import { loadPeopleAssets, buildPerson, personDNA, rng } from './body.js';
+import { loadPeopleAssets, buildPerson, personDNA, rng, freeBody } from './body.js';
+import { qualityNow } from '../world/governor.js';
 import { dressFor, placeAt, climate } from './wardrobe.js';
 import { createMotion } from './motion.js';
 import { BLOCKS, toGrid, fromGrid, STYLE } from '../bay/styles.js';
@@ -23,7 +24,11 @@ import { coldOf } from '../region/climate.js';
 import { makeTeen, teensAbout, teenStyle, UNIFORM_CULTURES } from './teens.js';
 import { walkNow } from '../bay/crosswalks.js';
 
-const MAX = 26, KIDS = 12, NEAR = 70;
+// a phone keeps fewer bodies: each is a few MB of geometry and its face's morphs on the graphics,
+// and a busy downtown filled to the desktop's count was enough with the rest of the city to see
+// the page closed (the governor's tier thins the crowd further: world/governor.js)
+const PHONE = typeof navigator !== 'undefined' && (/iPhone|iPad|Android|Mobile/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+const MAX = PHONE ? 16 : 26, KIDS = PHONE ? 6 : 12, NEAR = 70;
 const steps = [];
 const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                 // hiked, down the middle
 
@@ -655,12 +660,26 @@ export function createPeople(scene, world, camera = null) {
 		} finally { building = false; }
 	}
 
-	let acc = 0, turn = false;
+	let acc = 0, turn = false, trimT = 0;
 	const lastCam = new THREE.Vector3();
+	// more bodies kept than the tier allows (after a step down, or a crowd gone home): the spare
+	// ones idle longest are let go, one a second, so their memory comes back
+	function trim(dt, Q) {
+		for (const p of pool) if (p.active || p.reserved || p.held || p.engaged) p.idleT = 0; else p.idleT = (p.idleT || 0) + dt;
+		if ((trimT += dt) < 1) return;
+		trimT = 0;
+		const capA = Math.ceil(MAX * Q.people) + 2, capK = Math.ceil(KIDS * Q.people) + 1;
+		let adults = 0, kids = 0;
+		for (const p of pool) if (p.demo === undefined) { if (p.P.dna.child) kids++; else adults++; }
+		const spare = (child) => pool.filter((p) => !!p.P.dna.child === child && p.demo === undefined && !p.active && p.idleT > 20).sort((a, b) => b.idleT - a.idleT)[0];
+		const p = adults > capA ? spare(false) : kids > capK ? spare(true) : null;
+		if (p?.detachForSocial?.()) freeBody(p.P);
+	}
 	function update(dt, t, cam, night, enabled = true) {
 		group.visible = enabled;
 		if (!enabled) return;
-		const need = demand(cam, night);
+		const need = demand(cam, night), Q = qualityNow();
+		if (Q.people < 1 && need.n) need.n = Math.round(need.n * Q.people);
 		lastNeed = need; lastCam.copy(cam);
 		if (need.n > 0 && !A && !failed) ensure();
 		// grown-ups, and (where families go) children with them
@@ -708,6 +727,7 @@ export function createPeople(scene, world, camera = null) {
 				if (d < 150 && (p.route?.kind !== 'seat' || (p.workSpot && p.override))) solid(p, dt, cam);
 			}
 		}
+		trim(dt, Q);
 		// the doors of public buildings open for the people coming to them (interiors/index.js)
 		const I = world().interiors;
 		if (I?.walkers) { walkers.length = 0; for (const p of pool) if (p.active) walkers.push({ x: p.M.S.pos.x, z: p.M.S.pos.z, footY: p.M.S.pos.y }); I.walkers(walkers); }
