@@ -21,6 +21,10 @@ try {
   for(const mode of ['guard','block','jab','grip','open']){
    const row=await page.evaluate(mode=>serviceReview.hand(mode),mode);assert.equal(row.meshes.length,2);assert.ok(row.meshes.length+row.garments.length<=4,'four draws at most for the fists');for(const g of row.garments)assert.ok(g.tris<3000,'sleeve budget '+g.tris);assert.equal(row.failed,0);report.push({phone,mode,...row});await save(mode);
   }
+  // The skin's layer on the fists (people/skin.js, hand-surface.js): each hand's map laid on its
+  // surface, and no more than the skin's own programs (the crowd's and your hands')
+  const skin=await page.evaluate(()=>{let mapped=0;serviceReview.fists.root.traverse(o=>{if(o.geometry?.userData.handMapped)mapped++;});return {mapped,keys:[...new Set(weaponReview.renderer.info.programs.map(p=>/crysis-skin[\w-]*/.exec(p.cacheKey)?.[0]).filter(Boolean))]};});
+  assert.equal(skin.mapped,2,'both fists carry the hand map');assert.ok(skin.keys.length<=2&&skin.keys.every(k=>/^crysis-skin-7/.test(k)),JSON.stringify(skin.keys));report.push({phone,skin});
   // The independent melee skeleton must not have moved the avatar or invalidated
   // the existing rifle/bow grip solver when switching back to a weapon.
   for(const id of ['aurora-trail-rifle','reedline-hunting-bow']){
