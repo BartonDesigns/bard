@@ -111,7 +111,7 @@ function step(renderer, scene, camera, dt, ease) {
 		const target = !open ? 0.08 : sp.home ? 0.5 + 0.5 * S.night : 1;
 		H.k += (target - H.k) * ease;
 		// (after dark the eye opens to the lamps: they count for more against the night)
-		H.U.ibakeK.value = H.k * (sp.strength ?? 1) * (1 + 0.45 * S.night);
+		H.U.ibakeK.value = H.k * (sp.strength ?? 1) * (1 + 0.25 * S.night);
 		H.U.ibakeGlow.value = H.k * (0.9 + 1.3 * S.night);
 		for (const [src, v] of H.variants.values()) sync(src, v);
 		if (H.halo) { H.halo.material.uniforms.uK.value = H.k * (0.35 + 0.65 * S.night); H.halo.material.uniforms.uTime.value = S.time; H.halo.material.uniforms.uViewH.value = renderer.domElement.height * 0.5 * (camera.projectionMatrix?.elements[5] || 1); }
@@ -321,7 +321,7 @@ function* job(H) {
 	for (const f of fixtures) {
 		if (!f.on || f.screen) continue;
 		const area = (f.rm >= 0 && spec.roomArea?.(f.rm)) || area0;
-		f.I *= Math.min(1, 3.0 * area / (1.9 * flux.get(f.rm)));
+		f.I *= Math.min(1, 2.1 * area / (1.9 * flux.get(f.rm)));
 	}
 	H.fixtures = fixtures;
 	S.stats.fixtures += fixtures.length;
@@ -549,7 +549,7 @@ function patch(sh, U) {
 		float ibA = max( pow2( material.roughness ), 0.03 ), ibA2 = ibA * ibA, ibDn = ibNH * ibNH * ( ibA2 - 1.0 ) + 1.0;
 		float ibV = 0.5 / max( ibNL * sqrt( ibNV * ibNV * ( 1.0 - ibA2 ) + ibA2 ) + ibNV * sqrt( ibNL * ibNL * ( 1.0 - ibA2 ) + ibA2 ), 1e-3 );
 		vec3 ibF = material.specularColor + ( 1.0 - material.specularColor ) * pow( 1.0 - saturate( dot( geometryViewDir, ibH ) ), 5.0 );
-		reflectedLight.directSpecular += ibE * ibW * step( 1e-3, ibNL ) * ibF * ( ibA2 / ( PI * ibDn * ibDn ) ) * ibV;
+		reflectedLight.directSpecular += 0.5 * ibE * ibW * step( 1e-3, ibNL ) * ibF * ( ibA2 / ( PI * ibDn * ibDn ) ) * ibV;
 		#endif
 	}
 	#endif`);

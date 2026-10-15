@@ -431,7 +431,8 @@ export function pieceFixture(pc, { ceilings = [], centre = [0, 0], glow = [1, 0.
 	const long = Math.max(sx, sz), short = Math.min(sx, sz);
 	const f = { p: [...pc.p], c, on: true, piece: pc };
 	if (atCeiling) {
-		f.p[1] = pc.p[1] - sy / 2 - 0.02;
+		// (a little under the ceiling, its light on the ceiling soft: the 1 m cut holds a halo, not a star)
+		f.p[1] = pc.p[1] - sy / 2 - 0.12; f.soft = 0.45;
 		// (as bright as a room's ceiling light is: about 300 lux on the floor under it at an
 		// ordinary height, more from the lights of a tall hall)
 		const tall = Math.min(1.8, Math.max(0.7, (f.p[1] - lv[0]) / 2.8));
