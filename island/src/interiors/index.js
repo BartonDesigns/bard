@@ -218,9 +218,18 @@ export function createInteriors(scene, bay, city, { isPhone = false, mats = null
 		const roomOf = (x, y, z) => { for (const r of rooms) if (x > r.x0 - 0.05 && x < r.x1 + 0.05 && z > r.z0 - 0.05 && z < r.z1 + 0.05) return r.id; return -1; };
 		return {
 			id: B.key + ':' + k, occluders: Lb.occ, levels: [[L.y, L.y + L.h]], bounds: [-P.W / 2, -P.D / 2, P.W / 2, P.D / 2],
-			rooms: P.rooms.length, roomOf, roomArea: (id) => { const r = P.rooms[id]; return r ? (r.x1 - r.x0) * (r.z1 - r.z0) : 0; }, litOf: (id) => !!B.C.lit[id], dust: (x, y, z, id) => DUSTY.has(P.rooms[id]?.type),
+			rooms: P.rooms.length, roomOf, roomArea: (id) => { const r = P.rooms[id]; return r ? (r.x1 - r.x0) * (r.z1 - r.z0) : 0; },
+			// (a landmark's, a hospital's, a station's rooms are all lit: they never close)
+			litOf: (id) => B.use === 'site' || !!B.C.lit[id], fixtures: anchorFixtures(P, k), dust: (x, y, z, id) => DUSTY.has(P.rooms[id]?.type),
 			home: B.use === 'row' || B.use === 'apt', hours: P.hours || OPEN[B.use] || null,
 		};
+	}
+	// the lamps a fit-out left places for (estab-fit.js: pendants over tables and booths, track
+	// lights over shelves, a light over the counter), as fixtures
+	function anchorFixtures(P, k) {
+		return (P.lightAnchors || []).filter((a) => a.level === k).map((a) => a.kind === 'track'
+			? { p: [a.x, a.y, a.z], c: [1, 0.9, 0.78], I: 7, shape: 'spot', n: [0, -1, 0], cone: [0.85, 0.55], room: a.room }
+			: { p: [a.x, a.y, a.z], c: [1, 0.82, 0.62], I: a.kind === 'pendant' ? 6 : 8, shape: 'down', n: [0, -1, 0], beam: 2, room: a.room });
 	}
 	function disposeTree(root) { root.traverse((q) => { if (q.isMesh && q.geometry && !q.geometry.userData?.shared) q.geometry.dispose(); }); }
 	let stoneM = null;

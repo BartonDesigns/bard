@@ -19,7 +19,7 @@ const estabOf = (E) => { const p = profileOf(E.type); return p.fit ? { fit: p.fi
 import { occasions, today } from '../calendar.js';
 import { houseLights } from './seasons.js';            // the holidays' strings, the same houses as from afar (holidaylights.js)
 import { carGeometry, carMaterial } from './cars.js';
-import { NONE_IN, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
+import { anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
 import { lightInterior, releaseInterior, configureLighting, lightingClock } from '../interiors/lighting.js';
 
 // the rooms that sometimes have a raised (tray) ceiling

@@ -24,12 +24,13 @@
 // A building's bake is kept by its id, so built again it comes back at once.
 
 import * as THREE from 'three';
+import { qualityNow } from '../world/governor.js';
 import { bake, tessellate, tessellatedCount, findPieces, pieceFixture, quadBoxes, QUALITY, E_RANGE } from './lightbake.js';
 
 const S = {
 	isPhone: typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || ''),
 	queue: [], live: new Set(), cache: new Map(), budget: 3, night: 0, hours: 12, time: 0,
-	scene: null, lights: [], lastTick: -1, lastPick: 0, movers: [], blobs: null,
+	scene: null, lights: [], lastTick: -1, lastPick: 0, movers: [], casters: new Map(), blobs: null,
 	stats: { baked: 0, cached: 0, ms: 0, lastMs: 0, verts: 0, bytes: 0, fixtures: 0 },
 };
 const CACHE_MAX = () => (S.isPhone ? 3 : 8), CACHE_BYTES = () => (S.isPhone ? 12 : 48) * 1048576;
@@ -43,6 +44,9 @@ export function configureLighting({ isPhone } = {}) { if (isPhone != null) S.isP
 export function lightingClock(night = 0, hours = null) { S.night = night; if (hours != null) S.hours = hours; }
 // the people walking about: [{ x, z, footY }]
 export function lightingMovers(list) { S.movers = list || []; }
+// a thing that moves and stands on the floor (an engine in its bay): a soft shadow under it,
+// w across and d long, while you are in a lit building with it
+export function lightingShadowCaster(obj, w, d) { if (obj) S.casters.set(obj, [w, d]); return () => S.casters.delete(obj); }
 
 export function lightInterior(root, spec = {}) {
 	if (!root) return null;
@@ -106,7 +110,8 @@ function step(renderer, scene, camera, dt, ease) {
 		const open = !sp.hours || (sp.hours[0] < sp.hours[1] ? h >= sp.hours[0] && h < sp.hours[1] : h >= sp.hours[0] || h < sp.hours[1]);
 		const target = !open ? 0.08 : sp.home ? 0.5 + 0.5 * S.night : 1;
 		H.k += (target - H.k) * ease;
-		H.U.ibakeK.value = H.k * (sp.strength ?? 1);
+		// (after dark the eye opens to the lamps: they count for more against the night)
+		H.U.ibakeK.value = H.k * (sp.strength ?? 1) * (1 + 0.45 * S.night);
 		H.U.ibakeGlow.value = H.k * (0.9 + 1.3 * S.night);
 		for (const [src, v] of H.variants.values()) sync(src, v);
 		if (H.halo) { H.halo.material.uniforms.uK.value = H.k * (0.35 + 0.65 * S.night); H.halo.material.uniforms.uTime.value = S.time; H.halo.material.uniforms.uViewH.value = renderer.domElement.height * 0.5 * (camera.projectionMatrix?.elements[5] || 1); }
@@ -179,7 +184,7 @@ function place(camera, dt) {
 		l.userData.k += (want - l.userData.k) * Math.min(1, dt * 5);
 		const H = l.userData.H;
 		const fl = f?.flicker ? flick(S.time, f.flicker) : 1;
-		l.intensity = f ? f.I * l.userData.k * (H?.k ?? 1) * fl * 0.8 : 0;
+		l.intensity = f ? f.I * l.userData.k * (H?.k ?? 1) * fl * (1.6 + 0.6 * S.night) : 0;
 		if (l.castShadow) l.shadow.autoUpdate = l.intensity > 0.05;
 	}
 }
@@ -214,6 +219,17 @@ function blobs(camera) {
 		tmpP.y = q.footY + 0.012;
 		B.setMatrixAt(n++, tmpM.compose(tmpP, tmpQ.identity(), tmpS.setScalar(q.r || 0.85)));
 	}
+	if (here.length) for (const [o, [w, d]] of S.casters) {
+		if (n >= BLOBS) break;
+		if (!o.parent || !o.visible) continue;
+		o.getWorldPosition(tmpP);
+		if (tmpP.distanceTo(camera.position) > 40) continue;
+		tmpP.y += 0.3;
+		if (!here.some((H) => within(H, tmpP))) continue;
+		tmpP.y -= 0.288;
+		o.getWorldQuaternion(tmpQ);
+		B.setMatrixAt(n++, tmpM.compose(tmpP, tmpQ, tmpS.set(w * 1.25, 1, d * 1.15)));
+	}
 	B.count = n;
 	if (n) B.instanceMatrix.needsUpdate = true;
 }
@@ -228,7 +244,8 @@ function isFixtureMat(m, mesh, spec) {
 const BAKEABLE = (m) => m && (m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial) && !m.transparent && m.opacity >= 1 && m.visible !== false;
 
 function* job(H) {
-	const { root, spec } = H, Q = S.isPhone ? QUALITY.phone : QUALITY.desktop;
+	// (a phone, or any device the governor has turned down: the coarse bake)
+	const { root, spec } = H, Q = S.isPhone || qualityNow()?.shadows === false ? QUALITY.phone : QUALITY.desktop;
 	const t0 = () => { const s = performance.now(); return () => performance.now() - s > S.budget; };
 	root.updateMatrixWorld(true);
 	const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
@@ -304,7 +321,7 @@ function* job(H) {
 	for (const f of fixtures) {
 		if (!f.on || f.screen) continue;
 		const area = (f.rm >= 0 && spec.roomArea?.(f.rm)) || area0;
-		f.I *= Math.min(1, 2.2 * area / (1.9 * flux.get(f.rm)));
+		f.I *= Math.min(1, 3.0 * area / (1.9 * flux.get(f.rm)));
 	}
 	H.fixtures = fixtures;
 	S.stats.fixtures += fixtures.length;

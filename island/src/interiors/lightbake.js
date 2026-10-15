@@ -35,7 +35,7 @@ const EPS_E = 0.004, AO_R = 0.9, SKY_MAX = 18, BOUNCE = 1.0, SHADOWED = 6;
 const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 export function fixtureSamples(f) {
 	const out = [], n = norm(f.n || [0, -1, 0]), c = f.c || [1, 0.85, 0.7], shape = f.shape || 'point';
-	const push = (p, I, kind) => out.push({ x: p[0], y: p[1], z: p[2], nx: n[0], ny: n[1], nz: n[2], I, r: c[0], g: c[1], b: c[2], kind, ci: f.cone?.[0] ?? 0.9, co: f.cone?.[1] ?? 0.6, soft: f.soft ?? 0.06 });
+	const push = (p, I, kind) => out.push({ x: p[0], y: p[1], z: p[2], nx: n[0], ny: n[1], nz: n[2], I, r: c[0], g: c[1], b: c[2], kind, ci: f.cone?.[0] ?? 0.9, co: f.cone?.[1] ?? 0.6, soft: f.soft ?? 0.06, beam: f.beam ?? 1.5 });
 	if (shape === 'tube') {
 		const a = norm(f.axis || [1, 0, 0]), len = f.len || 1.2, k = Math.max(2, Math.ceil(len / 0.45));
 		for (let i = 0; i < k; i++) { const t = (i + 0.5) / k - 0.5; push([f.p[0] + a[0] * t * len, f.p[1] + a[1] * t * len, f.p[2] + a[2] * t * len], f.I / k, 1); }
@@ -51,7 +51,7 @@ export function fixtureSamples(f) {
 function spread(s, dx, dy, dz) {
 	const c = s.nx * dx + s.ny * dy + s.nz * dz;
 	if (s.kind === 0) return 1;                                   // a bare bulb, a lamp shade: all round
-	if (s.kind === 1) return 0.22 + 0.78 * Math.max(0, c);        // a downlight, a tube: mostly down, some up and out
+	if (s.kind === 1) return c > 0 ? 0.12 + 1.6 * Math.pow(c, s.beam) : 0.12;   // a downlight, a tube: a pool under it, some up and out
 	if (s.kind === 2) return Math.max(0, c) * 1.15;               // a panel: its face only
 	const t = Math.min(1, Math.max(0, (c - s.co) / Math.max(1e-3, s.ci - s.co)));
 	return t * t * (3 - 2 * t);                                   // a spot: its cone
@@ -439,6 +439,8 @@ export function pieceFixture(pc, { ceilings = [], centre = [0, 0], glow = [1, 0.
 		else if (long > 0.5) { f.shape = 'panel'; f.n = [0, -1, 0]; f.w = sx; f.d = sz; f.I = Math.min(26, 12 * sx * sz + 7); }
 		else { f.shape = 'down'; f.n = [0, -1, 0]; f.I = Math.min(16, 6 + 6 * Math.sqrt(pc.area / 0.12)); }
 		f.I *= tall * 0.85;
+		// (a tall hall's lights have reflectors: tighter pools)
+		f.beam = tall > 1.25 ? 12 : 3;
 	} else if (flatV) {
 		// facing out from the wall it is on (toward the middle of the plan)
 		const ax = sx < sz ? 0 : 2, to = (ax === 0 ? centre[0] - pc.p[0] : centre[1] - pc.p[2]) >= 0 ? 1 : -1;
