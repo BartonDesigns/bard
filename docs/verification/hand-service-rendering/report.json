@@ -1,0 +1,521 @@
+{
+  "report": [
+    {
+      "phone": false,
+      "mode": "guard",
+      "calls": 4,
+      "tris": 27330,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "mode": "block",
+      "calls": 3,
+      "tris": 27082,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "mode": "jab",
+      "calls": 4,
+      "tris": 27330,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "mode": "grip",
+      "calls": 4,
+      "tris": 27122,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "mode": "open",
+      "calls": 5,
+      "tris": 27578,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": false,
+      "id": "aurora-trail-rifle",
+      "held": "aurora-trail-rifle",
+      "variant": {
+        "rank": 0,
+        "name": "Field",
+        "mark": 1
+      },
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.9,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": [
+        0,
+        0,
+        -0.08
+      ],
+      "grip": [
+        0,
+        -0.198,
+        -0.149
+      ],
+      "tris": 21252,
+      "armTris": 27848,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "optics": {
+        "forwardFrames": 1,
+        "rearFrames": 7,
+        "active": true,
+        "aiming": true,
+        "item": "aurora-trail-rifle",
+        "sizes": {
+          "forward": 384,
+          "rear": 128
+        },
+        "lenses": 2,
+        "targets": 2
+      }
+    },
+    {
+      "phone": false,
+      "id": "reedline-hunting-bow",
+      "held": "reedline-hunting-bow",
+      "variant": {
+        "rank": 0,
+        "name": "Reed",
+        "mark": 1
+      },
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.18,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": null,
+      "grip": [
+        0.1,
+        -0.14,
+        -0.9
+      ],
+      "tris": 2640,
+      "armTris": 27848,
+      "calls": 9,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "bow": {
+        "draw": 0,
+        "visibleDraw": 0,
+        "drawMeters": 0,
+        "loaded": true,
+        "nock": [
+          -0.14,
+          0.056,
+          -0.025
+        ],
+        "arrowNock": [
+          -0.14,
+          0.056,
+          -0.025
+        ],
+        "rest": [
+          0.018,
+          0.056,
+          -0.025
+        ],
+        "stringTips": [
+          [
+            -0.029999999999999992,
+            0.6599999999999999,
+            0
+          ],
+          [
+            -0.029999999999999992,
+            -0.6599999999999999,
+            0
+          ]
+        ],
+        "rightPalmTarget": [
+          -0.17,
+          0.044,
+          -0.0010000000000000009
+        ],
+        "arrowVisible": true,
+        "nockProgress": 1,
+        "stringNockErrorMm": 1.8190625018674646e-13,
+        "stringTipErrorMm": 1.925777466157674e-13,
+        "arrowRestErrorMm": 0
+      },
+      "optics": {
+        "forwardFrames": 1,
+        "rearFrames": 7,
+        "active": false,
+        "aiming": false,
+        "item": null,
+        "sizes": {
+          "forward": 384,
+          "rear": 128
+        },
+        "lenses": 0,
+        "targets": 0
+      }
+    },
+    {
+      "kind": "ambulance",
+      "calls": 40,
+      "tris": 20090,
+      "failed": 0,
+      "level": 0
+    },
+    {
+      "kind": "ambulance",
+      "far": true,
+      "calls": 10,
+      "tris": 1028,
+      "failed": 0,
+      "level": 1
+    },
+    {
+      "kind": "engine",
+      "calls": 44,
+      "tris": 33786,
+      "failed": 0,
+      "level": 0
+    },
+    {
+      "kind": "engine",
+      "far": true,
+      "calls": 8,
+      "tris": 1336,
+      "failed": 0,
+      "level": 1
+    },
+    {
+      "kind": "utility",
+      "calls": 42,
+      "tris": 25442,
+      "failed": 0,
+      "level": 0
+    },
+    {
+      "kind": "utility",
+      "far": true,
+      "calls": 7,
+      "tris": 1300,
+      "failed": 0,
+      "level": 1
+    },
+    {
+      "kind": "van",
+      "calls": 36,
+      "tris": 20418,
+      "failed": 0,
+      "level": 0
+    },
+    {
+      "kind": "van",
+      "far": true,
+      "calls": 6,
+      "tris": 980,
+      "failed": 0,
+      "level": 1
+    },
+    {
+      "phone": true,
+      "mode": "guard",
+      "calls": 4,
+      "tris": 27330,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "mode": "block",
+      "calls": 3,
+      "tris": 27082,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "mode": "jab",
+      "calls": 4,
+      "tris": 27330,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "mode": "grip",
+      "calls": 4,
+      "tris": 27122,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "mode": "open",
+      "calls": 5,
+      "tris": 27578,
+      "failed": 0,
+      "meshes": [
+        {
+          "name": "anatomical-hand-L",
+          "tris": 13540,
+          "vertices": 7267
+        },
+        {
+          "name": "anatomical-hand-R",
+          "tris": 13540,
+          "vertices": 7267
+        }
+      ]
+    },
+    {
+      "phone": true,
+      "id": "aurora-trail-rifle",
+      "held": "aurora-trail-rifle",
+      "variant": {
+        "rank": 0,
+        "name": "Field",
+        "mark": 1
+      },
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.9,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": [
+        0,
+        0,
+        -0.08
+      ],
+      "grip": [
+        0,
+        -0.198,
+        -0.149
+      ],
+      "tris": 21252,
+      "armTris": 27848,
+      "calls": 8,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "optics": {
+        "forwardFrames": 1,
+        "rearFrames": 7,
+        "active": true,
+        "aiming": true,
+        "item": "aurora-trail-rifle",
+        "sizes": {
+          "forward": 256,
+          "rear": 64
+        },
+        "lenses": 2,
+        "targets": 2
+      }
+    },
+    {
+      "phone": true,
+      "id": "reedline-hunting-bow",
+      "held": "reedline-hunting-bow",
+      "variant": {
+        "rank": 0,
+        "name": "Reed",
+        "mark": 1
+      },
+      "ads": 1,
+      "equip": 1,
+      "zoom": 1.18,
+      "fov": 44,
+      "muzzleDotForward": 1,
+      "upDotUp": 1,
+      "sight": null,
+      "grip": [
+        0.1,
+        -0.14,
+        -0.9
+      ],
+      "tris": 2640,
+      "armTris": 27848,
+      "calls": 9,
+      "arms": true,
+      "palmLmm": 0,
+      "contactLmm": 0,
+      "palmRmm": 0,
+      "contactRmm": 0,
+      "bow": {
+        "draw": 0,
+        "visibleDraw": 0,
+        "drawMeters": 0,
+        "loaded": true,
+        "nock": [
+          -0.14,
+          0.056,
+          -0.025
+        ],
+        "arrowNock": [
+          -0.14,
+          0.056,
+          -0.025
+        ],
+        "rest": [
+          0.018,
+          0.056,
+          -0.025
+        ],
+        "stringTips": [
+          [
+            -0.029999999999999992,
+            0.6599999999999999,
+            0
+          ],
+          [
+            -0.029999999999999992,
+            -0.6599999999999999,
+            0
+          ]
+        ],
+        "rightPalmTarget": [
+          -0.17,
+          0.044,
+          -0.0010000000000000009
+        ],
+        "arrowVisible": true,
+        "nockProgress": 1,
+        "stringNockErrorMm": 1.8190625018674646e-13,
+        "stringTipErrorMm": 1.925777466157674e-13,
+        "arrowRestErrorMm": 0
+      },
+      "optics": {
+        "forwardFrames": 1,
+        "rearFrames": 7,
+        "active": false,
+        "aiming": false,
+        "item": null,
+        "sizes": {
+          "forward": 256,
+          "rear": 64
+        },
+        "lenses": 0,
+        "targets": 0
+      }
+    }
+  ],
+  "errors": []
+}

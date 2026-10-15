@@ -58,7 +58,7 @@ void RE_Direct_Skin( const in IncidentLight directLight, const in vec3 geometryP
 #define RE_Direct RE_Direct_Skin
 `;
 
-export function skinMaterial(map, tint, age) {
+export function skinMaterial(map, tint, age, { closeup = false } = {}) {
 	// (the sheen is the skin's own colour, so it softens the edges without paling dark skin)
 	const m = new THREE.MeshPhysicalMaterial({ map, color: tint, roughness: 0.6, metalness: 0, ior: 1.4, specularIntensity: 0.5, sheen: 0.05, sheenRoughness: 0.85, sheenColor: tint.clone().multiplyScalar(0.4) });
 	// a close crop of hair painted on the scalp (a buzz cut, or what shows under a cap)
@@ -85,7 +85,7 @@ export function skinMaterial(map, tint, age) {
 		Object.assign(sh.uniforms, inkU);
 		sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float scalp;\nattribute float beard;\nattribute vec4 skinx;\nvarying float vScalp;\nvarying float vBeard;\nvarying vec2 vScalpUv;\nvarying vec4 vSkin;\nvarying vec3 vBindP;')
 			.replace('#include <begin_vertex>', '#include <begin_vertex>\nvScalp = scalp;\nvBeard = beard;\nvScalpUv = uv;\nvSkin = skinx;\nvBindP = position;');
-		sh.fragmentShader = (isPhone ? '' : '#define SKIN_PORES\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD + INK_GLSL)
+		sh.fragmentShader = (isPhone && !closeup ? '' : '#define SKIN_PORES\n') + sh.fragmentShader.replace('#include <common>', '#include <common>\n' + HEAD + INK_GLSL)
 			.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + SSS)
 			.replace('#include <color_fragment>', `#include <color_fragment>
 // tattoos: ink in the skin, a multiply of its own colour (tattoo/skinink.js)
@@ -142,6 +142,6 @@ roughnessFactor = mix( 0.62, 0.54, smoothstep( 0.2, 0.9, vSkin.z ) * uSkin.z ) +
 	reflectedLight.directSpecular *= mix(1.0, ao, 0.6);
 }`);
 	};
-	m.customProgramCacheKey = () => 'crysis-skin-6' + (isPhone ? '-lo' : '');
+	m.customProgramCacheKey = () => 'crysis-skin-6' + (isPhone && !closeup ? '-lo' : '');
 	return m;
 }

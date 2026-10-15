@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { createAnatomicalHand } from './anatomical-hand.js';
 
 const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const out3 = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - (1 - x) ** 3);
@@ -75,7 +76,7 @@ export function createFistView({ camera, isPhone = false }) {
 		a.renderOrder = b.renderOrder = 2;
 		grp.add(a, b);
 		root.add(grp);
-		arms[side] = { grp, cur: new Float32Array(6), vel: new Float32Array(6), want: new Float32Array(6) };
+		arms[side] = { grp, fallback: a, anatomical: null, cur: new Float32Array(6), vel: new Float32Array(6), want: new Float32Array(6) };
 		arms[side].cur.set(GUARD[side]); arms[side].cur[1] -= 0.4;
 	}
 	// things picked up, in the right hand
@@ -88,12 +89,18 @@ export function createFistView({ camera, isPhone = false }) {
 	};
 	for (const k in items) { const m = items[k]; m.visible = false; m.renderOrder = 2; m.rotation.set(0, 0, Math.PI / 2); m.position.set(0.03, -0.01, -0.005); arms.R.grp.add(m); }
 	camera.add(root);
-	let shown = 0, lastItem = null, tint = false;
+	let shown = 0, lastItem = null, body = null;
 
 	// your own colours, once your body has been made (people/avatar.js)
 	function colours(me) {
-		if (tint || !me?.P) return;
-		tint = true;
+		if (!me?.P || body === me.P) return;
+		body = me.P;
+		for (const side of ['L', 'R']) {
+			const a = arms[side]; a.anatomical?.dispose();
+			a.anatomical = createAnatomicalHand(body, side);
+			if (a.anatomical) { a.anatomical.mesh.renderOrder = 2; a.grp.add(a.anatomical.mesh); }
+			a.fallback.visible = !a.anatomical;
+		}
 		const c = me.P.skinMat?.color;
 		if (c) skinMat.color.copy(c).multiplyScalar(0.85);
 		const st = me.P.dna?.style, col = st?.outer?.col || st?.top?.col;
@@ -158,12 +165,18 @@ export function createFistView({ camera, isPhone = false }) {
 			const vis = s.on || shown > 0.02;
 			if (root.visible !== vis) root.visible = vis;
 			if (!vis) return;
+			for (const side of ['L', 'R']) arms[side].anatomical?.pose(s.item ? 'grip' : s.take || s.cuffed ? 'open' : 'fist');
 			if (s.item !== lastItem) { for (const k in items) items[k].visible = k === s.item; lastItem = s.item; }
 			aim(s, t);
 			follow(dt, !!s.move);
 		},
 		hide() { root.visible = false; shown = 0; },
-		dispose() { root.removeFromParent(); },
+		dispose() {
+			for (const a of Object.values(arms)) a.anatomical?.dispose();
+			root.traverse(o => o.geometry?.dispose());
+			for (const m of [skinMat, clothMat, wood, steel, glass]) m.dispose();
+			root.removeFromParent();
+		},
 		isPhone,
 	};
 }

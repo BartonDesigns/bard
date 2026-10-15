@@ -7,6 +7,7 @@
 // is under way (cataclysm(true)) nobody comes: the work waits, and resumes once it is over.
 
 import * as THREE from 'three';
+import { createServiceVehicle } from '../services/vehicle-model.js';
 import { bid, frameOf, onFace, faceLen, FACES, hash } from './ids.js';
 
 const lin = (c) => { const k = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); return [k.r, k.g, k.b]; };
@@ -36,23 +37,6 @@ function merge(P) {
 }
 const STEEL = [0.62, 0.64, 0.66], WOOD = [0.62, 0.5, 0.34], NET = [0.12, 0.32, 0.18], CONE = [0.95, 0.42, 0.08], WHITE = [0.92, 0.92, 0.9], DARK = [0.08, 0.08, 0.09], YELLOW = [0.95, 0.76, 0.1], ORANGE = [0.98, 0.5, 0.08], SKIN = [0.72, 0.55, 0.42], DENIM = [0.18, 0.22, 0.32];
 
-// a truck (a flatbed with its cab), a van, a worker: parts at the origin facing +z
-function truck(P, x, y0, z, yaw, c) {
-	const cy = Math.cos(yaw), sy = Math.sin(yaw), at = (u, v) => [x + u * cy + v * sy, z - u * sy + v * cy];
-	const B = (u, y, v, w, h, d, cl) => { const [px, pz] = at(u, v); box(P, px, y0 + y, pz, w, h, d, cl, yaw); };
-	B(0, 0.55, 2.6, 2.3, 1.9, 1.9, c); B(0, 1.2, 3.4, 2.1, 0.7, 0.1, [0.15, 0.2, 0.25]); B(0, 0.55, -1.2, 2.4, 0.35, 5.6, [0.3, 0.3, 0.32]);
-	B(0, 0.9, -1.2, 2.4, 0.5, 0.08, YELLOW); B(0, 0.9, -1.2, 0.08, 0.5, 5.6, [0.3, 0.3, 0.32]);
-	for (const v of [2.6, -0.4, -2.6]) for (const u of [-1.05, 1.05]) B(u, 0, v, 0.35, 0.95, 0.95, DARK);
-	B(0, 2.45, 2.6, 1.2, 0.12, 0.3, ORANGE);
-}
-function van(P, x, y0, z, yaw) {
-	const cy = Math.cos(yaw), sy = Math.sin(yaw), at = (u, v) => [x + u * cy + v * sy, z - u * sy + v * cy];
-	const B = (u, y, v, w, h, d, cl) => { const [px, pz] = at(u, v); box(P, px, y0 + y, pz, w, h, d, cl, yaw); };
-	B(0, 0.45, 0, 2.0, 2.0, 5.2, WHITE); B(0, 1.5, 2.55, 1.8, 0.65, 0.1, [0.15, 0.2, 0.25]);
-	// the glass rack on its side, panes on it
-	B(1.08, 1.0, -0.6, 0.12, 1.5, 3.0, STEEL); B(1.2, 1.0, -0.6, 0.04, 1.4, 2.8, [0.6, 0.78, 0.82]);
-	for (const v of [1.7, -1.7]) for (const u of [-0.9, 0.9]) B(u, 0, v, 0.3, 0.75, 0.75, DARK);
-}
 const workerGeo = (() => { const P = []; box(P, -0.12, 0, 0, 0.17, 0.85, 0.2, DENIM); box(P, 0.12, 0, 0, 0.17, 0.85, 0.2, DENIM); box(P, 0, 0.85, 0, 0.5, 0.62, 0.28, ORANGE); box(P, 0, 1.12, 0, 0.52, 0.06, 0.3, [0.85, 0.88, 0.85]); box(P, -0.33, 0.9, 0, 0.13, 0.56, 0.15, ORANGE); box(P, 0.33, 0.9, 0, 0.13, 0.56, 0.15, ORANGE); box(P, 0, 1.5, 0, 0.22, 0.25, 0.24, SKIN); box(P, 0, 1.72, 0, 0.3, 0.1, 0.32, YELLOW); return merge(P); })();
 
 export function createRebuild(ctx) {
@@ -97,7 +81,7 @@ export function createRebuild(ctx) {
 		return near.find((o) => bid(o) === id) || null;
 	}
 	function build(id, rec, o) {
-		const P = [], F = frameOf(o), H = o.h - 1.2, gl = glassOnly(rec);
+		const P = [], vehicles = [], F = frameOf(o), H = o.h - 1.2, gl = glassOnly(rec);
 		const front = ctx.frontOf?.(o) ?? 0;
 		const [fx, fz] = onFace(o, front, 0), [nx, nz] = FACES[front], [wnx, wnz] = F.dir(nx, nz);
 		const L = faceLen(o, front), yawF = Math.atan2(wnx, wnz);
@@ -106,12 +90,14 @@ export function createRebuild(ctx) {
 		const kx = fx + nx * (gl ? 5 : 7), kz = fz + nz * (gl ? 5 : 7);
 		for (let i = 0; i < (gl ? 1 : H > 14 ? 2 : 1); i++) {
 			const u = (i - 0.5) * 9 * (gl ? 0 : 1), [lx, lz] = [kx + nz * u, kz - nx * u], [x, y, z] = at(lx, lz);
-			if (gl) van(P, x, y, z, yawF + Math.PI / 2); else truck(P, x, y, z, yawF + Math.PI / 2, i ? WHITE : [0.95, 0.55, 0.12]);
+			const vehicle = createServiceVehicle(gl ? 'van' : 'utility');
+			vehicle.position.set(x, y, z); vehicle.rotation.y = yawF + Math.PI / 2; vehicles.push(vehicle);
 		}
 		// the cones and the fence round the work
 		for (let i = 0; i < 6; i++) { const u = -L / 2 - 1 + i * (L + 2) / 5, [lx, lz] = [fx + nx * 2.8 + nz * u, fz + nz * 2.8 - nx * u], [x, y, z] = at(lx, lz); box(P, x, y, z, 0.32, 0.7, 0.32, CONE); box(P, x, y + 0.42, z, 0.24, 0.1, 0.24, WHITE); }
 		if (!gl) for (let i = 0; i < Math.ceil((L + 4) / 2.4); i++) { const u = -L / 2 - 2 + (i + 0.5) * 2.4, [lx, lz] = [fx + nx * 2 + nz * u, fz + nz * 2 - nx * u], [x, y, z] = at(lx, lz); box(P, x, y, z, 2.3, 1.9, 0.04, [0.55, 0.57, 0.58], yawF); box(P, x, y, z, 0.06, 2.0, 0.3, DARK, yawF); }
 		const root = new THREE.Mesh(merge(P), mat);
+		for (const vehicle of vehicles) root.add(vehicle);
 		root.castShadow = true; root.receiveShadow = true;
 		group.add(root);
 		const S = { id, rec, o, root, scaffold: null, crane: null, jib: null, workers: [], key: '', t: Math.random() * 10, beat: 0 };
