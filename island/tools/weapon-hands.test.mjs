@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { fingerRig, contactField, solveHand, fingerQuats, blendPose, squeeze, itemParts } from '../src/crysis/finger-pose.js';
 import { HOLDS, GRIPS, CHARGERS, cellPath, holdFrame } from '../src/crysis/held-items.js';
-import { BOW_HAND, BOW_HOOK, createBowVisual } from '../src/crysis/bow-visual.js';
+import { BOW_HAND, createBowVisual } from '../src/crysis/bow-visual.js';
 
 // a right hand at rest: fingers along +x from the palm, the palm facing -z, the thumb at +y
 function syntheticBody(side = 'R') {
@@ -106,9 +106,8 @@ test('every weapon has hands planned, grips framed and a charging knob where it 
 		for (const s of ['R', 'L']) { const m = H[s].m.elements; assert.ok(Math.abs(new THREE.Vector3(m[0], m[1], m[2]).length() - 1) < 1e-6); }
 	}
 	const bow = GRIPS['reedline-hunting-bow'];
-	for (const pose of ['hook', 'pinch', 'open']) assert.equal(bow.R[pose].length, 5);
-	assert.ok(BOW_HOOK.index[1] > 0 && BOW_HOOK.middle[1] < 0 && BOW_HOOK.ring[1] < BOW_HOOK.middle[1], 'index above the arrow, middle and ring below');
-	assert.ok(BOW_HAND.x < -0.06, 'the string lies in the fingers, not the palm');
+	assert.equal(bow.L.riser.length, 5);
+	assert.equal(bow.R, undefined, 'the draw hand keeps the body\'s own curl');
 	const g = { c: new THREE.Vector3(0, 0, 0), r: 0.02, a: new THREE.Vector3(1, 0, 0), t: new THREE.Vector3(0, 1, 0), twist: 0.3 };
 	holdFrame(g, 'R'); holdFrame(g, 'R');
 	assert.ok(Math.abs(g.a.angleTo(new THREE.Vector3(1, 0, 0)) - 0.3) < 1e-6, 'twist applies once, however often the frame is made');
@@ -122,7 +121,7 @@ test('the fresh cell seats with its cue at 0.8, leaving the charging stroke afte
 	assert.equal(cellPath(0.8, v).length(), 0);
 });
 
-test('a hooked draw hand rides with the nock at any draw length', () => {
+test('the draw hand rides with the nock at any draw length', () => {
 	const model = new THREE.Group(), bow = createBowVisual(model, new THREE.MeshStandardMaterial(), { drawLength: 0.5 });
 	for (const draw of [0, 1]) {
 		bow.set({ draw, loaded: true, nock: 1 }); for (let i = 0; i < 90; i++) bow.step(1 / 60);

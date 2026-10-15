@@ -6,12 +6,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 export const BOW_DRAW = .28;
 export const BOW_REST = new THREE.Vector3(.018, .056, -.025);
 export const BOW_ARROW_LENGTH = .745;
-// The draw hand's palm from the nock: back far enough that the string lies in the crease of the
-// last joint of three hooked fingers (crysis/finger-pose.js), not in the palm.
-export const BOW_HAND = new THREE.Vector3(-.094, -.006, .026);
-// Where the hooked fingers' last-joint creases meet the string (index above the arrow, middle and
-// ring below it), and the pinch on the nock while an arrow comes from the quiver, from the nock.
-export const BOW_HOOK = { index: [.0024, .013, 0], middle: [.002, -.012, 0], ring: [.0055, -.031, 0], over: [.009, .0045, 0], under: [.009, -.0048, .002] };
+// The draw hand's palm from the nock (behind it, a little below, beside the string).
+export const BOW_HAND = new THREE.Vector3(-.03, -.012, .024);
 const clamp = x => Math.max(0, Math.min(1, Number(x) || 0));
 const smooth = x => x * x * (3 - 2 * x);
 const UP = new THREE.Vector3(0, 1, 0), FORWARD = new THREE.Vector3(1, 0, 0);
