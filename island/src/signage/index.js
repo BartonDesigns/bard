@@ -33,6 +33,7 @@ import { localeAt } from '../economy/establishments.js';
 import { routeOf, DEST } from '../bay/freeways.js';
 import { setFleetDecals } from '../vehicles/fleet.js';
 import { createFleetDecals, setCarLocale } from './cars.js';
+import { qualityNow, onQuality } from '../world/governor.js';
 
 const CAPS = { retro: 900, vinyl: 1400, glass: 900, paper: 500, foil: 320, paint: 900, grime: 900 };
 const ITEMS = {
@@ -47,7 +48,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	const group = new THREE.Group();
 	group.name = 'signage';
 	scene.add(group);
-	const R = isPhone ? 260 : 420, SHOP_R = isPhone ? 110 : 170, IN_R = isPhone ? 30 : 55;
+	const R0 = isPhone ? 260 : 420, SHOP_R = isPhone ? 110 : 170, IN_R = isPhone ? 30 : 55;
 	const atlas = createAtlas({ size: isPhone ? 1024 : 2048, name: 'signage', scale: isPhone ? 0.55 : 1 });
 	const batches = new Map();
 	const batchOf = (mat, layer) => {
@@ -67,6 +68,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	let gantryMesh = null;
 	// the cars' decals ride on the fleets
 	setFleetDecals((g, o) => createFleetDecals(g, o));
+	const offQuality = onQuality(() => { dirty = true; });
 
 	const extra = new Map();                         // owner -> records placed by other systems
 	let forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
@@ -85,6 +87,8 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	// ---------- the region's records ----------
 	function gather(cx, cz) {
 		const w = W(), real = w?.real;
+		// (the quality governor's tier: a nearer reach and fewer small decals when it steps down)
+		const Q = qualityNow() || {}, R = Math.max(160, R0 * (Q.far ?? 1)), lite = isPhone || (Q.people ?? 1) < 0.6;
 		const out = [], postList = [], gantries = [], slabList = [], surfaces = [], storefronts = [];
 		if (!real?.loaded?.()) return { out, postList, gantries, slabList };
 		const ll = locate?.(cx, cz);
@@ -125,7 +129,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			if (B.type !== 'shop' || !B.aisles?.length || !near(B.x, B.z, IN_R)) continue;
 			const E = plan.find((q) => Math.hypot(q.x - B.x, q.z - B.z) < 3);
 			const t = /grocer|market|general|food/.test(E?.type || '') ? 'grocer' : /pharm|chem/.test(E?.type || '') ? 'pharmacy' : /hardware|tool/.test(E?.type || '') ? 'hardware' : 'any';
-			out.push(...interiorRecords(B, t));
+			out.push(...interiorRecords(B, t, lite));
 		}
 		// the alleys: the back doors' signs; the walls and bins for the writers and the grime
 		for (const r of roads) {
@@ -231,12 +235,12 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		for (const c of real.crossings?.() || []) if (c.city && near(c.x, c.z, R * 0.6) && hash01(c.x, c.z, 'cg') < 0.5) surfaces.push({ kind: 'ground', x: c.x + c.uz * (c.hw + 1.5), z: c.z - c.ux * (c.hw + 1.5), nx: c.ux, nz: c.uz, w: 2.5, gum: 2 });
 		// (the stickers on a post are not to fly off it: their y comes from the post's ground)
 		const M = moralNow();
-		out.push(...grimeFor(surfaces, { seed, phone: isPhone }));
-		out.push(...graffitiFor(surfaces, { morality: M, seed, day: day(), phone: isPhone }));
+		out.push(...grimeFor(surfaces, { seed, phone: lite }));
+		out.push(...graffitiFor(surfaces, { morality: M, seed, day: day(), phone: lite }));
 		return { out, postList, gantries, slabList, M };
 	}
 	// a built shop's inside, in its own frame (bay/commercial.js: x across, the storefront at +z)
-	function interiorRecords(B, t) {
+	function interiorRecords(B, t, lite) {
 		const out = [], ca = Math.cos(B.a), sa = Math.sin(B.a);
 		const L = (lx, lz) => [B.x + ca * lx - sa * lz, B.z + sa * lx + ca * lz], N = (lx, lz) => [ca * lx - sa * lz, sa * lx + ca * lz];
 		const hang = (B.ceil ?? 4.4) - 0.75, r = rng(hash32(Math.round(B.x), Math.round(B.z), 'aisle'));
@@ -248,7 +252,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		}
 		const D = DEPT[t] || DEPT.any;
 		{ const [x, z] = L(0, -B.hd + 0.31), [nx, nz] = N(0, 1); out.push({ mat: MAT.vinyl, layer: LAYER.poster, face: { k: 'dept', name: D[0], picto: D[1], col: D[2] }, x, z, hy: Math.min(hang, 2.75), base: B.y, nx, nz, w: 2.6, h: 0.5, back: BACK.none, wear: 0 }); }
-		if (!isPhone) for (const [x0, x1, zr] of rows) for (const s of [-1, 1]) for (const y of [0.2, 0.75, 1.3]) for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.1) {
+		if (!lite) for (const [x0, x1, zr] of rows) for (const s of [-1, 1]) for (const y of [0.2, 0.75, 1.3]) for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.1) {
 			if (r() < 0.25) continue;
 			const [wx, wz] = L(x, zr + s * 0.535), [nx, nz] = N(0, s);
 			const pi = Math.floor(r() * 12), sale = pi === 0;
@@ -345,10 +349,10 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		const x = camera.position.x, z = camera.position.z;
 		// (what changed round you is asked twice a second, not every frame)
 		checkT -= dt;
-		if (!dirty && checkT > 0 && Math.hypot(x - at.x, z - at.z) < R * 0.28) return;
+		if (!dirty && checkT > 0 && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		checkT = 0.5;
 		const key = [real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0].join('|');
-		if (!dirty && key === keyNow && Math.hypot(x - at.x, z - at.z) < R * 0.28) return;
+		if (!dirty && key === keyNow && Math.hypot(x - at.x, z - at.z) < R0 * 0.28) return;
 		dirty = false; keyNow = key; at = { x, z };
 		rebuild(x, z);
 	}
@@ -375,6 +379,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 			if (disposed) return;
 			disposed = true;
 			setFleetDecals(null);
+			offQuality?.();
 			for (const B of batches.values()) B.dispose();
 			batches.clear();
 			if (gantryMesh) gantryMesh.geometry.dispose();

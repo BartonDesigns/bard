@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { carGeometry, carMaterial, carGlassMaterial, wheelGeometry, wheelHubs, seatsOf, SPEC } from '../bay/cars.js';
 import { MODEL_KINDS, modelKit, wantModel, modelNight } from './models.js';
+import { qualityNow } from '../world/governor.js';
 
 // the reach of each level (metres): the real model or finest loft, the middle, the far lofts
 export const REACH = [40, 120, 320];
@@ -109,6 +110,9 @@ export function createFleet(group, { cap = 200, isPhone = false, night = { value
 	// ([x, z] it was parked at), livery ('police') }
 	function add(kind, M, c, d2, o = {}) {
 		if (!SPEC[kind]) kind = 'sedan';
+		// (a lighter tier hands each car to its coarser level nearer: world/governor.js)
+		const far = qualityNow().far;
+		if (far < 1) d2 /= far * far;
 		const t = d2 < near2 ? 0 : d2 < mid2 ? 1 : d2 < far2 ? 2 : 3;
 		if (decals && t < 2) decals.add(kind, M, d2, o);
 		const cast = t < 2;

@@ -36,7 +36,7 @@ POST /admin/api/settle         header x-admin-key: settle now
 cd server/ledger && npm install && npx wrangler secret put ADMIN_KEY && npx wrangler deploy
 ```
 
-Then point the game at it once in the browser console: `localStorage.setItem('crysis-ledger-url', 'https://l99-ledger.<you>.workers.dev')` (or open the game with `?ledger=<url>`). The admin page is `https://l99-ledger.<you>.workers.dev/admin`.
+The game uses `https://l99-ledger.joshbarton1921.workers.dev` (`LEDGER` in island/src/economy/bank.js) when it is served from level99bard.com or locally, and settles with it on its own (a minute after there is something to send, and when the page is put away). `?ledger=<url>` or `localStorage.setItem('crysis-ledger-url', <url>)` points it at another ledger, and `?ledger=off` turns it off. The admin page is `https://l99-ledger.joshbarton1921.workers.dev/admin` (log in with the ADMIN_KEY).
 
 ## Test
 
