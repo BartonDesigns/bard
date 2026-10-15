@@ -16,6 +16,9 @@ import { bid, frameOf, FACES, onFace, faceLen } from '../structures/ids.js';
 export function createQuake(ctx) {
 	const { world, hooks, isPhone, fx, sound, response, quests } = ctx;
 	const W = () => world();
+	// (the structures break things where you can see them: debris, dust and shells are local,
+	// so the buildings broken are those within NEAR of you, a few a frame)
+	const NEAR = isPhone ? 170 : 280, PER = isPhone ? 1 : 2;
 	const CAP = { collapse: isPhone ? 3 : 7, partial: isPhone ? 4 : 10, crack: isPhone ? 10 : 26, glass: isPhone ? 14 : 40, hurt: isPhone ? 3 : 7, fires: isPhone ? 1 : 2, cracks: isPhone ? 4 : 9 };
 	let Q = null;
 
@@ -23,7 +26,7 @@ export function createQuake(ctx) {
 	function plan(ev, at) {
 		const city = W()?.city, S = hooks.structures;
 		const R = quakeRadius(ev.magnitude), me = ctx.camera.position;
-		const lots = (city?.lotsNear?.(at.x, at.z, R) || []).filter((o) => isBuilding(o) && !o.wrecked);
+		const lots = (city?.lotsNear?.(me.x, me.z, NEAR) || []).filter((o) => isBuilding(o) && !o.wrecked && Math.hypot(o.x - at.x, o.z - at.z) < R);
 		lots.sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z));
 		const left = { ...CAP }, D = quakeDuration(ev.magnitude), out = [];
 		for (const o of lots.slice(0, isPhone ? 160 : 420)) {
@@ -84,7 +87,7 @@ export function createQuake(ctx) {
 			const f = Math.floor(r('f' + k) * 4), L = faceLen(o, f), u = (r('u' + k) - 0.5) * L * 0.7, [lx, lz] = onFace(o, f, u), [wx, wz] = F.w(lx, lz), [nx, nz] = F.dir(...FACES[f]);
 			S.damage.hole(o, { x: wx, y: o.y + 1.2 + 1 + r('y' + k) * Math.min(12, o.h - 3), z: wz }, rad, [nx * 2, 0.5, nz * 2], 'blast');
 		};
-		const top = { x: o.x, y: o.y + Math.min(o.h * 0.55, 18), z: o.z }, span = Math.max(o.w, o.d);
+		const top = { x: o.x, y: o.y + Math.min(o.h * 0.55, 18), z: o.z }, span = Math.min(24, Math.max(o.w, o.d));
 		if (e.what === 'glass') S.glass.blast(top, Math.max(3, span * 0.35));
 		else if (e.what === 'crack') { S.glass.blast(top, Math.max(4, span * 0.5)); holeAt(0, 0.6 + r('r0') * 0.6); if (r('two') < 0.4) holeAt(1, 0.5 + r('r1') * 0.5); }
 		else if (e.what === 'partial') { S.glass.blast(top, span * 0.7); holeAt(0, 1 + r('r0') * 0.8); S.damage.bringDown(o, 0.3 + r('c') * 0.25); }
@@ -137,7 +140,12 @@ export function createQuake(ctx) {
 		Q.t += dt;
 		const k = intensity();
 		// the buildings, as the shaking reaches them
-		for (const e of Q.list) if (!e.done && Q.t >= e.t) { e.done = true; strike(e); }
+		let heavy = 0, light = 0;
+		for (const e of Q.list) {
+			if (e.done || Q.t < e.t) continue;
+			if (e.what === 'glass' ? light++ >= 3 : heavy++ >= PER) continue;
+			e.done = true; strike(e);
+		}
 		// the glass of the panes near you, coming down (a few at a time)
 		const S = hooks.structures;
 		if (k > 0.25 && S?.glass && Math.random() < k * dt * (isPhone ? 2 : 5)) {

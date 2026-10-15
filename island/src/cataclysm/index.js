@@ -309,7 +309,7 @@ export function createCataclysm({ scene, camera, mount, world, shared = {}, rend
 		upcoming: (days = 365) => upcoming(seedNow(), region.id, S.t, days, env, rate),
 		rate: (k) => { if (k !== undefined) rate = Math.max(0, +k || 0); return rate; },
 		// run the one under way on by seconds
-		skip: (s = 30) => { if (!A) return null; A.t += +s; const r = runner(A.ev.kind).state(); if (r) r.t += +s; return +A.t.toFixed(1); },
+		skip: (s = 30) => { if (!A) return null; A.t += +s; const run = runner(A.ev.kind), r = run.state(); if (r) r.t += +s; run.advance?.(+s); return +A.t.toFixed(1); },
 		state, on: (f) => subscribe(f),
 	});
 	function subscribe(f) { if (typeof f !== 'function') return () => {}; listeners.push(f); return () => { const i = listeners.indexOf(f); if (i >= 0) listeners.splice(i, 1); }; }

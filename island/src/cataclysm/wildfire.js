@@ -167,8 +167,10 @@ export function createWildfire(ctx) {
 		const wd = wind(), down = ((me.x - e.x) * wd.x + (me.z - e.z) * wd.z) > 0 ? 1.3 : 0.8;
 		return Math.min(1, amount * Math.max(0, 1 - d / 2600) * down);
 	}
+	// (the console: the front run on by s seconds at once)
+	function advance(s) { if (!F) return; const wd = wind(); for (let t = 0; t < s; t += 0.5) { F.front.step(0.5, wd); for (const C of F.crews) { C.t -= 0.5; F.front.douse(C.x, C.z, 32, 0.09); } } F.crews = F.crews.filter((C) => C.t > 0); F.drawT = 0; }
 	function threat(x, z) { const c = F?.front.nearest(x, z); return c && Math.hypot(c.x - x, c.z - z) < 500 ? { x: c.x, z: c.z } : null; }
 	function stop() { sound.setRoar(0); F = null; }
 	function info() { return F && { t: +F.t.toFixed(1), origin: [Math.round(F.at.x), Math.round(F.at.z)], ...F.front.stats(), cell: CELL, crews: F.crews.length, houses: F.houses, held: F.heldAt != null, drawn: fx.counts().flames, extent: F.front.extent() && Object.fromEntries(Object.entries(F.front.extent()).map(([k, v]) => [k, Math.round(v)])) }; }
-	return { start, update, stop, hose, smokeHere, threat, info, front: () => F?.front || null, heldAt: () => F?.heldAt ?? null, state: () => F, fuelAt };
+	return { start, update, stop, hose, advance, smokeHere, threat, info, front: () => F?.front || null, heldAt: () => F?.heldAt ?? null, state: () => F, fuelAt };
 }
