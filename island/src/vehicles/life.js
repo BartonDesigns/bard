@@ -15,7 +15,8 @@
 // their door and goes in. Only what is near is simulated; everything else is worked out.
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
+import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/body.js';
+import { peopleCap } from '../world/governor.js';
 import { createMotion } from '../people/motion.js';
 import { fadePerson } from '../people/fade.js';
 import { zoneOf, crowd } from '../people/flow.js';
@@ -29,7 +30,9 @@ export function createLife({ scene, world, camera, isPhone }) {
 	group.name = 'car-people';
 	scene.add(group);
 	let A = null, loading = false;
-	const DRIVERS = isPhone ? 2 : 5, WALKERS = isPhone ? 1 : 2;
+	// (as many as the quality tier's people share allows: world/governor.js)
+	const DRIVERS0 = isPhone ? 2 : 5, WALKERS0 = isPhone ? 1 : 2;
+	const drivers = () => peopleCap(DRIVERS0, 1), keepN = () => drivers() + peopleCap(WALKERS0, 1) + peopleCap(3, 1);
 
 	// ---------- bodies ----------
 	// a small cache of people, by who they are (so a driver seen again is the same person)
@@ -42,11 +45,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!A || now - buildT < 0.35) return null;
 		buildT = now;
 		// (one at a time, and old ones let go)
-		if (bodies.size >= DRIVERS + WALKERS + 3) {
-			let old = null;
-			for (const q of bodies.values()) if (!q.busy && (!old || q.used < old.used)) old = q;
-			if (old) { old.wrap.removeFromParent(); old.P.root.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); }); bodies.delete(old.seed); }
-		}
+		if (bodies.size >= keepN()) letGo();
 		const P = buildPerson(A, personDNA(seed, { age: 19 + frac(seed) * 58 }));
 		const wrap = new THREE.Group();
 		wrap.matrixAutoUpdate = false;
@@ -59,6 +58,14 @@ export function createLife({ scene, world, camera, isPhone }) {
 		P.root.visible = false;
 		bodies.set(seed, b);
 		return b;
+	}
+	// the longest unused body let go for good (its materials and skeleton too: body.js freeBody)
+	function letGo() {
+		let old = null;
+		for (const q of bodies.values()) if (!q.busy && (!old || q.used < old.used)) old = q;
+		if (!old) return false;
+		freeBody(old.P); old.wrap.removeFromParent(); bodies.delete(old.seed);
+		return true;
 	}
 	function groundAt(W, x, z, y) {
 		const g = W.island.heightAt(x, z), f = W.island.extraFloor?.(x, z, y === undefined ? g + 1.2 : y + 1.0) ?? -1e9;
@@ -93,6 +100,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	function traffic(dt, t, cam) {
 		const S = world().street;
 		if (!S) return;
+		const DRIVERS = drivers();
 		const near = S.cars.filter((c) => c.matrix && c.tier === 0).map((c) => [Math.hypot(c.px - cam.x, c.pz - cam.z), c]).sort((a, b) => a[0] - b[0]).slice(0, DRIVERS).map((q) => q[1]);
 		for (const [c, bs] of seated) if (!near.includes(c) || !S.cars.includes(c)) { for (const b of bs) { b.busy = false; b.P.root.visible = false; } seated.delete(c); c.seated = false; }
 		let budget = DRIVERS;
@@ -155,7 +163,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 	function hours() { return world().sky?.state?.hours ?? 12; }
 	// start one: 'leave' or 'arrive', for the car in a space (car: from street.parkedNear)
 	function begin(kind, car, o) {
-		if (episodes.length >= (isPhone ? 1 : 2)) return false;
+		if (episodes.length >= peopleCap(isPhone ? 1 : 2, 1)) return false;
 		const door = doorOf(o, car), S = specOf(car.kind);
 		const E = { kind, car, o, door, t: 0, phase: kind === 'leave' ? 'walk-out' : 'drive-in', matrix: new THREE.Matrix4(), spin: 0, steer: 0, pos: [car.x, car.z], yaw: car.yaw, v: 0, len: S.L };
 		// the driver's door, a step out from the car's left side
@@ -351,6 +359,8 @@ export function createLife({ scene, world, camera, isPhone }) {
 		if (!A && !loading) { loading = true; loadPeopleAssets().then((a) => { A = a; }).catch(() => {}); }
 		if (!A) return;
 		traffic(dt, t, cam);
+		// (a tier down: the spare bodies go, one a frame)
+		if (bodies.size > keepN()) letGo();
 		if (fleeing.length) runFleeing(dt, t);
 		scanT -= dt; errandT -= dt;
 		try {

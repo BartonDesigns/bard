@@ -22,7 +22,9 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
 	const W = world(), real = W.real, city = W.city;
 	const E = eraMap(real);
 	const ground = (x, z) => world()?.island?.heightAt(x, z) ?? 0;
-	const potholes = createPotholes({ real, eraOf: (r) => E.ofRoad(r), carAt: () => drive.carAt(), physics: () => (drive.active() ? drive.physics() : null), camera, repaint: () => real.R?.repaint?.() });
+	// (the procedural grid's streets: where the town map has a town and no mapped region is drawn)
+	const grid = (x, z) => { const U = world()?.bayArea?.urbanAt?.(x, z); return U && U.u > 0.16 && !(real.loaded() && real.inside(x, z)) ? U : null; };
+	const potholes = createPotholes({ real, eraOf: (r) => E.ofRoad(r), carAt: () => drive.carAt(), physics: () => (drive.active() ? drive.physics() : null), camera, repaint: () => real.R?.repaint?.(), grid });
 	const crew = createRoadCrew({ scene, potholes, ground, camera, isPhone, hint });
 	const decor = createStreetDecor(scene, city, { isPhone });
 	const lights = createHolidayLights(scene, city, { isPhone });

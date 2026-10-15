@@ -26,7 +26,8 @@
 // fell until it has been (awaitMedic, collected).
 
 import * as THREE from 'three';
-import { loadPeopleAssets, buildPerson, personDNA } from '../people/body.js';
+import { loadPeopleAssets, buildPerson, personDNA, freeBody } from '../people/body.js';
+import { peopleCap } from '../world/governor.js';
 import { createMotion } from '../people/motion.js';
 import { fadePerson } from '../people/fade.js';
 import { createHealth, applyDamage, tickHealth } from './health.js';
@@ -126,7 +127,8 @@ function maskOn(P, glow) {
 export function createSquads(ctx) {
 	const { layer, fx, isPhone, relations } = ctx;
 	const group = new THREE.Group(); group.name = 'combat-squads';
-	const MAX = isPhone ? 6 : 14;
+	// (as many as the quality tier's people share allows: world/governor.js; at least a squad of three)
+	const MAX0 = isPhone ? 6 : 14, maxNow = () => peopleCap(MAX0, 3);
 	const list = [];
 	const pools = { person: [], drone: [], crawler: [] };
 	const squads = new Map();
@@ -157,7 +159,7 @@ export function createSquads(ctx) {
 
 	// one at (x, z) of a faction, in a squad
 	async function spawn(fid, x, z, squad, opts = {}) {
-		if (alive().length + pending.size >= MAX) return null;
+		if (alive().length + pending.size >= maxNow()) return null;
 		// (a stationed side only at a post: a base, a checkpoint, a compound)
 		if (FACTIONS[fid]?.stationed && ctx.mayStation && !ctx.mayStation(fid, x, z)) return null;
 		const generation = epoch, reservation = {};
@@ -406,9 +408,20 @@ export function createSquads(ctx) {
 
 	// ---------- each frame ----------
 	let time = 0;
+	// spare bodies past what the tier allows let go, one a frame (body.js freeBody; the hand's model too)
+	function trimPool() {
+		if (pools.person.length <= maxNow() + 2) return;
+		const i = pools.person.findIndex((b) => !b.used);
+		if (i < 0) return;
+		const [b] = pools.person.splice(i, 1);
+		b.hand?.set(null);
+		if (b.P.ragdoll) ctx.ragdolls.release(b.P);
+		freeBody(b.P);
+	}
 	function update(dt) {
 		time += dt;
 		if (queue.length) queue.shift()();
+		trimPool();
 		const eye = ctx.eye();
 		for (let i = list.length - 1; i >= 0; i--) {
 			const h = list[i];
@@ -633,6 +646,6 @@ export function createSquads(ctx) {
 		return Promise.all(out).then(() => sq);
 	}
 	function clear() { epoch++; for (const job of queue.splice(0)) job.cancel(); pending.clear(); for (const h of [...list]) release(h); squads.clear(); }
-	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: MAX, squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
+	const info = () => ({ alive: alive().length, fading: list.length - alive().length, max: maxNow(), squads: [...squads.values()].map((s) => ({ id: s.id, faction: s.fid, post: s.post?.kind || null, tag: s.tag, n: s.members.filter((m) => !m.dead).length, roles: s.members.filter((m) => !m.dead).map((m) => m.role), alert: s.members.some((m) => m.alert), targets: s.members.filter((m) => m.target).map((m) => m.target.id === 'me' ? 'you' : m.target.faction), surrendered: s.members.filter((m) => m.surrendered > 0).length })), bodies: pools.person.length, queue: queue.length });
 	return { group, update, squad, spawn, hear, clear, info, alive, list, release, surrender, squads };
 }

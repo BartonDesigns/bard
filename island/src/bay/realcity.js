@@ -21,6 +21,7 @@ import { footLifted } from './overpass.js';
 import { settleRegionSoon } from '../structures/overlap.js';   // structures: settled footprints
 import { eraMap } from './streetera.js';                     // streets by era: the era of each street
 import { paintStreet } from './potholes.js';                 // ...its sidewalk, potholes and patches in the paint layer
+import { qualityNow, onQuality } from '../world/governor.js';
 
 // the ground shader's inputs, shared with terrain.js
 const blank = () => { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; return t; };
@@ -516,6 +517,21 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		{ rt: mkRT(1024), paint: null, size: 1536, ramp: 3, move: 380, x: 1e9, z: 1e9, u: [REAL_U.uRoadMap2, REAL_U.uRoadR2] },
 	];
 	const rt = MAPS[0].rt;
+	// the paint target follows the quality tier: half its size and without multisampling on the
+	// low tiers (world/governor.js), its shapes' ramps widened to match, and painted again
+	const paintShare = () => (qualityNow().fx === 'low' ? 0.5 : 1);
+	let paintK = 1;
+	function sizePaint() {
+		const k = paintShare(), M = MAPS[0];
+		if (k === paintK || !M.paint) return;
+		paintK = k;
+		const res = (isPhone ? 1024 : 2048) * k;
+		M.paint.samples = isPhone || k < 1 ? 0 : 4;
+		M.paint.setSize(res, res);
+		M.x = 1e9;
+	}
+	sizePaint();
+	const unQuality = onQuality(sizePaint);
 	R.repaint = () => { for (const M of MAPS) M.x = 1e9; };          // structures: the road maps painted again when new alleys come in
 	const cam = new THREE.OrthographicCamera(0, 1, 1, 0, -10, 10);
 	cam.position.z = 1;
@@ -697,7 +713,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 		const SIZE = M.size, x0 = cx - SIZE / 2, z0 = cz - SIZE / 2;
 		// (a phone's maps are half the size: the ramps keep two texels, or the edges stair-step)
 		const ramp = M.ramp * (isPhone ? 2 : 1);
-		const B = builder(ramp), Y = builder(ramp), Lb = builder(1.8), fine = !!M.paint;
+		const B = builder(ramp), Y = builder(ramp / paintK), Lb = builder(1.8), fine = !!M.paint;
 		const loc = (pts) => { const out = []; for (let i = 0; i < pts.length; i += 2) out.push([pts[i] - x0, pts[i + 1] - z0]); return out; };
 		const all = near('roads', cx, cz, SIZE * 0.72), lanes = all.filter((q) => q.drive && !q.bridge);
 		for (const r of all) {
@@ -734,7 +750,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 				Y.line(p, hw - 0.3, JOINT, false, 0, 0.25, 4.3);
 			}
 			if (surf === ASPH && r.drive && !r.bridge) wear(r, p, hw, Lb, Y);
-			if (self) paintStreet(r, p, Y, ramp, eraMap(self).ofRoad(r), r.walked && built(r), x0, z0);          // streets by era (potholes.js)
+			if (self) paintStreet(r, p, Y, ramp / paintK, eraMap(self).ofRoad(r), r.walked && built(r), x0, z0);          // streets by era (potholes.js)
 			if (r.divided || r.cls === 'motorway' || r.cls === 'trunk') { B.line(p, 0.15, WHITE, false, hw / 3, 3, 9); B.line(p, 0.15, WHITE, false, -hw / 3, 3, 9); B.line(p, 0.15, WHITE, true, hw - 0.6); Y.line(p, 0.15, YELLOW, true, -hw + 0.6); }
 		}
 		if (fine) corners(all, x0, z0, B, Y);
@@ -796,6 +812,7 @@ export function createRealCity(renderer, { isPhone = false } = {}) {
 	function dispose() {
 		if (disposed) return;
 		disposed = true;
+		unQuality();
 		for (const task of pending.values()) task.controller.abort();
 		pending.clear();
 		for (const [i, M] of MAPS.entries()) {
