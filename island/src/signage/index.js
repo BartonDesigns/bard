@@ -69,7 +69,7 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 	setFleetDecals((g, o) => createFleetDecals(g, o));
 
 	const extra = new Map();                         // owner -> records placed by other systems
-	let forceHead = false, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
+	let forceHead = false, checkT = 0, at = { x: 1e9, z: 1e9 }, keyNow = '', sys = systemFor('us-ca'), locale = 'us-ca', last = { records: 0, ms: 0, posts: 0 }, dirty = true, disposed = false;
 	const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _f = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
 
 	const W = () => world?.();
@@ -343,7 +343,11 @@ export function createSignage({ scene, world, isPhone = false, locate = null, mo
 		if (!real?.loaded?.() || camera.position.y > 2500) { group.visible = camera.position.y < 2500; return; }
 		group.visible = true;
 		const x = camera.position.x, z = camera.position.z;
-		const key = [real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, (w.commercial?.list?.() || []).map((B) => Math.round(B.x)).join(','), w.structures?.rebuild?.sites?.size ?? 0].join('|');
+		// (what changed round you is asked twice a second, not every frame)
+		checkT -= dt;
+		if (!dirty && checkT > 0 && Math.hypot(x - at.x, z - at.z) < R * 0.28) return;
+		checkT = 0.5;
+		const key = [real.version?.() ?? 0, w.freeways?.builds?.() ?? 0, (w.city?.economy?.plan?.() || []).length, w.commercial?.count?.() ?? 0, w.structures?.rebuild?.sites?.size ?? 0].join('|');
 		if (!dirty && key === keyNow && Math.hypot(x - at.x, z - at.z) < R * 0.28) return;
 		dirty = false; keyNow = key; at = { x, z };
 		rebuild(x, z);
