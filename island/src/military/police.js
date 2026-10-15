@@ -255,7 +255,7 @@ export function createPolice({ world, combat, group, isPhone, night, backup = nu
 		for (const c of cruisers) {
 			const S = c.S;
 			_m.compose(_p.copy(c.pos), _q.setFromAxisAngle(_y, c.yaw), _s);
-			fleet.add(c.kind, _m, c.col, e ? c.pos.distanceToSquared(e) : 0, { spin: c.spin, steer: 0, riders: c.state === 'arrived' || c.state === 'blocking' || c.state === 'boarding' ? 0 : 2 });
+			fleet.add(c.kind, _m, c.col, e ? c.pos.distanceToSquared(e) : 0, { spin: c.spin, steer: 0, riders: c.state === 'arrived' || c.state === 'blocking' || c.state === 'boarding' ? 0 : 2, livery: c.kind === 'sedan' ? 'police' : null, seed: c.id });
 			barBase.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(0, S.H + 0.04, -0.15)));
 			lampR.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(0.32, S.H + 0.13, -0.15)));
 			lampB.setMatrixAt(n, _o.multiplyMatrices(_m, _t.makeTranslation(-0.32, S.H + 0.13, -0.15)));

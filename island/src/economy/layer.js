@@ -275,6 +275,10 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 			const F = faceOf(o, D.face);
 			const g = Math.max(H(F.cx + F.nx * 1.5, F.cz + F.nz * 1.5), o.y + (o.src ? 0.3 : 1.2));
 			const top = o.y + o.h, bd = Math.hypot(o.x - cx, o.z - cz);
+			E.door = [F.cx + F.nx * 1.4, F.cz + F.nz * 1.4];
+			E.ground = g;
+			// (the face it fronts the street with, for the glass's decals: signage/)
+			E.front = { x: F.cx, z: F.cz, nx: F.nx, nz: F.nz, run: F.run, g, door: 0, face: D.face };
 			const P = (along, out) => [F.cx + F.tx * along + F.nx * out, F.cz + F.tz * along + F.nz * out];
 			// the awning, in its colours: the one it had made over, or a new one over the shopfront
 			if (E.awning && (D.use === 'shop' || D.use === 'row' || D.use === 'apt' || (D.use === 'retail' && F.run < 60))) {
@@ -589,6 +593,8 @@ export function createEconomyLayer({ group, wrap = (m) => m, isPhone = false, ba
 	});
 	return {
 		apply, near, byId, info, raw, anchors, tick,
+		// every business planned, the regional towns' too (signage/ lays their glass decals)
+		plan: () => everyone(),
 		setNight: (k) => { night.value = 0.55 * k; },
 		setLocator: (fn) => { locate = fn; },
 		// built(o): a building has its rooms built near you (its painted shopfront then goes)

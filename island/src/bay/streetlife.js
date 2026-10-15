@@ -415,7 +415,7 @@ export function createStreetLife(shared, scene, bay, groundAt, real = null) {
 			c.py = pm.elements[13]; c.matrix = c.matrix || new THREE.Matrix4(); c.matrix.copy(pm);
 			pc.setRGB(c.col[0], c.col[1], c.col[2]);
 			// (a car with a real person at the wheel shows no silhouette)
-			c.tier = movingFleet.add(c.kind, pm, pc, (px - x) * (px - x) + (pz - z) * (pz - z), { spin: c.spin, steer: c.steer, riders: c.seated ? 0 : c.riders });
+			c.tier = movingFleet.add(c.kind, pm, pc, (px - x) * (px - x) + (pz - z) * (pz - z), { spin: c.spin, steer: c.steer, riders: c.seated ? 0 : c.riders, seed: c.id });
 		}
 		for (const X of extra) X(movingFleet, x, z);
 		movingFleet.end();
