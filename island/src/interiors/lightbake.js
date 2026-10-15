@@ -25,7 +25,7 @@ export const QUALITY = {
 };
 // irradiance is kept to this (an encoding range: lighting.js packs it in 16 bits)
 export const E_RANGE = 64;
-const EPS_E = 0.004, AO_R = 0.9, SKY_MAX = 18, BOUNCE = 0.75, SHADOWED = 6;
+const EPS_E = 0.004, AO_R = 0.9, SKY_MAX = 18, BOUNCE = 1.0, SHADOWED = 6;
 
 // ---------------------------------------------------------------------------------
 // fixtures: { p: [x, y, z], c: [r, g, b] (linear), I (candela, as a three.js point light),
@@ -434,11 +434,11 @@ export function pieceFixture(pc, { ceilings = [], centre = [0, 0], glow = [1, 0.
 		f.p[1] = pc.p[1] - sy / 2 - 0.02;
 		// (as bright as a room's ceiling light is: about 300 lux on the floor under it at an
 		// ordinary height, more from the lights of a tall hall)
-		const tall = Math.min(3, Math.max(1, ((f.p[1] - lv[0]) / 2.5) ** 2));
+		const tall = Math.min(1.8, Math.max(0.7, (f.p[1] - lv[0]) / 2.8));
 		if (long > 0.6 && short < 0.4) { f.shape = 'tube'; f.axis = sx > sz ? [1, 0, 0] : [0, 0, 1]; f.len = long; f.I = Math.min(22, 6 + 7 * Math.min(long, 3)); }
 		else if (long > 0.5) { f.shape = 'panel'; f.n = [0, -1, 0]; f.w = sx; f.d = sz; f.I = Math.min(26, 12 * sx * sz + 7); }
 		else { f.shape = 'down'; f.n = [0, -1, 0]; f.I = Math.min(16, 6 + 6 * Math.sqrt(pc.area / 0.12)); }
-		f.I *= tall;
+		f.I *= tall * 0.85;
 	} else if (flatV) {
 		// facing out from the wall it is on (toward the middle of the plan)
 		const ax = sx < sz ? 0 : 2, to = (ax === 0 ? centre[0] - pc.p[0] : centre[1] - pc.p[2]) >= 0 ? 1 : -1;

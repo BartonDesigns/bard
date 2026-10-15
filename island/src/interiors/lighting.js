@@ -501,7 +501,9 @@ function patch(sh, U) {
 		vec3 ibE = vIl.rgb * ( ${E_RANGE.toFixed(1)} * ibakeK );
 		float ibL = dot( ibE, vec3( 0.333 ) );
 		#if ( NUM_POINT_LIGHTS > 0 ) && defined( IBAKE_LOSS )
-		ibE *= clamp( 1.0 - ibLoss / max( ibL, 1e-3 ), 0.25, 1.0 );
+		// (on what faces up only: a floor, a table; a light's own housing would black out the ceiling)
+		float ibUp = smoothstep( 0.4, 0.85, dot( geometryNormal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) ) );
+		ibE *= mix( 1.0, clamp( 1.0 - ibLoss / max( ibL, 1e-3 ), 0.45, 1.0 ), ibUp );
 		#endif
 		// the day's skylight: as much of it as the windows let in here
 		irradiance = irradiance * vIl.a + ibE;
