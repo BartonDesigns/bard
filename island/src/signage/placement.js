@@ -34,7 +34,8 @@ export function junctions(roads) {
 		for (let i = 0; i < m; i += 2) {
 			const k = nk(p[i], p[i + 1]);
 			let n = nodes.get(k);
-			if (!n) nodes.set(k, n = { x: p[i], z: p[i + 1], legs: [] });
+			if (!n) nodes.set(k, n = { x: p[i], z: p[i + 1], legs: [], ends: 0 });
+			if (i === 0 || i === m - 2) n.ends++;
 			if (i + 2 < m) n.legs.push({ r, j: i, d: 1 });
 			if (i > 0) n.legs.push({ r, j: i, d: -1 });
 		}
@@ -62,16 +63,17 @@ export function junctions(roads) {
 		for (const L of legs) if (!uniq.some((q) => q.r === L.r && q.ux * L.ux + q.uz * L.uz > 0.95)) uniq.push(L);
 		if (uniq.length < 3 && new Set(uniq.map((q) => q.name)).size < 2) continue;
 		const names = new Set(uniq.map((q) => q.name).filter(Boolean));
-		out.push({ x: n.x, z: n.z, legs: uniq.sort((a, b) => Math.atan2(a.uz, a.ux) - Math.atan2(b.uz, b.ux)), names });
+		out.push({ x: n.x, z: n.z, legs: uniq.sort((a, b) => Math.atan2(a.uz, a.ux) - Math.atan2(b.uz, b.ux)), names, ends: n.ends });
 	}
 	return out;
 }
 
-// how a junction is controlled: 'signal' (two collectors or more crossing: the street life
-// stands signals there), 'stop' on the minor legs, 'allway', 'yield', or 'none'
+// how a junction is controlled: 'signal' where the street life stands its signals (three or
+// more mapped ways ending there with a collector among them, bay/streetlife.js; or two
+// collectors crossing), 'stop' on the minor legs, 'allway', 'yield', or 'none'
 export function controlOf(J, sys, seed = 0) {
 	const major = J.legs.filter((L) => L.rank >= 2).length;
-	if (major >= 3) return { kind: 'signal', minor: [] };
+	if (major >= 3 || (major >= 1 && (J.ends || 0) >= 3)) return { kind: 'signal', minor: [] };
 	const minor = J.legs.filter((L) => L.rank < 2);
 	if (major > 0) return { kind: sys.id === 'vienna' || sys.id === 'uk' ? (hash01(J.x, J.z, seed, 'y') < 0.6 ? 'yield' : 'stop') : 'stop', minor };
 	// all minor streets: an all-way stop in the American manner, otherwise the street with the

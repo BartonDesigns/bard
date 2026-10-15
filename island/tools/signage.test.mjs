@@ -78,6 +78,10 @@ test('streets: stop signs on the minor legs only, facing their traffic, on its o
 	const sig = streetSigns([road('primary', 'A Street', [-300, 0, 0, 0, 300, 0]), road('secondary', 'B Street', [0, -300, 0, 0, 0, 300])], US, {}).signs;
 	assert.equal(sig.filter((s) => s.face.k === 'stop' || s.face.k === 'yield').length, 0);
 	assert.equal(controlOf(junctions([road('primary', 'A Street', [-300, 0, 0, 0, 300, 0]), road('secondary', 'B Street', [0, -300, 0, 0, 0, 300])])[0], US).kind, 'signal');
+	// (and where the street life stands signals: three ways ending at a corner, a collector among them)
+	const split = [road('tertiary', 'C Street', [-300, 0, 0, 0]), road('tertiary', 'C Street', [0, 0, 300, 0]), road('residential', 'D Street', [0, 0, 0, 300])];
+	assert.equal(controlOf(junctions(split)[0], US).kind, 'signal');
+	assert.equal(streetSigns(split, US, {}).signs.filter((s) => s.face.k === 'stop').length, 0);
 });
 
 test('streets: two blades with both names on one corner post, readable both sides', () => {
