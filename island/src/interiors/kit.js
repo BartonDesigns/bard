@@ -433,6 +433,8 @@ function crown(g, it) {
 		g.box('trim', a, y - 0.3, b, e, y - 0.27, f, c);          // (the picture rail)
 	}
 }
+// whether an item is one of the kit's own drawings (the houses draw the rest: bay/houses.js asks)
+export const hasKit = (type) => !!EXTRA[type] || type === 'crown';
 // what a solid item stops you walking through (rugs, art, moulding, lights: nothing)
 export const SOFT = new Set(['rug', 'bathMat', 'art', 'ceilingLight', 'toys', 'crown']);
 // more drawings from another module (services/kit.js: the stations' and the hospital's

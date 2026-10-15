@@ -129,7 +129,8 @@ import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
-import { createPeople, addTalkers, talkers } from './people/people.js';
+import { createPeople, addTalkers, talkers, addLife } from './people/people.js';
+import { createDailyLife } from './economy/daily-life.js';
 import { createChatter } from './people/chatter.js';
 import { createErrands } from './people/errands.js';
 import { createNpcQuests } from './people/npc-quests.js';
@@ -1191,6 +1192,9 @@ export function createIslandWorld() {
 			world.city = createCity(shared, scene, bayNear, world.real);
 			// (the businesses take their food and words from where on Earth they are)
 			world.city.economy.setLocator((x, z) => globeLL(x, z));
+			world.city.economy.setRegional(() => world?.globe?.regional?.settlements);
+			// the working day: staff out front of the open businesses, people in and out of their doors (people/people.js)
+			{ const daily = createDailyLife(world.city.economy, { isPhone }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z), globe: () => world?.globe });
 			// the real houses close by, built whole with their rooms
@@ -1794,6 +1798,8 @@ export function createIslandWorld() {
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.landmarks?.update?.(dt, camera);
 		W.city?.update(camera, sk.night);
+		// the businesses' fronts by the hour, and the regional kit's towns planned too (economy/layer.js)
+		W.city?.economy?.tick(camera.position, W.sky.state.hours, sk.night, dt);
 		W.forestFloor?.update(camera);
 		W.edge?.update(dt, time, camera, sk.night);
 		W.houses?.update(camera, dt, sk.night);

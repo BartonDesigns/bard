@@ -1853,6 +1853,9 @@ export function createCity(shared, scene, bay, real = null) {
 	// buildings with their rooms built inside keep their block, its front door cut out:
 	// key -> [door x across the front from the centre, sill above the block's foot, width]
 	const doors = new Map();
+	// (a building with its rooms built for real near you shows them through its own windows:
+	// the economy's painted shopfront on it goes, economy/storefront.js)
+	economy.setBuilt((o) => !!o.wrecked || !!o.src?.grp?.near || doors.has(lotKey(o)));
 	function setDoor(o, v) {
 		const k = lotKey(o);
 		if (v) doors.set(k, v); else doors.delete(k);
