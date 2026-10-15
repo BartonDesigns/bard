@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { today } from '../calendar.js';
 import { lightsUp, houseLights, lightsK } from './seasons.js';
 import { mainOf, houseSeed } from './houseplan.js';
+import { qualityNow, onQuality } from '../world/governor.js';
 
 const HOUSE = new Set([0, 1, 10, 11, 12]);           // city.js KIND: row, house, bay-windowed, houses with garages
 const MULTI = [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]], WARM = [1, 0.78, 0.45], COOL = [0.75, 0.85, 1];
@@ -44,7 +45,7 @@ const FRAG = /* glsl */`
 	}`;
 
 export function createHolidayLights(scene, city, { isPhone = false } = {}) {
-	const CAP = isPhone ? 14000 : 52000, R = isPhone ? 170 : 300, STEP = isPhone ? 0.55 : 0.38;
+	const CAP = isPhone ? 14000 : 52000, R0 = isPhone ? 170 : 300, STEP = isPhone ? 0.55 : 0.38;
 	const pos = new Float32Array(CAP * 3), col = new Float32Array(CAP * 3), ph = new Float32Array(CAP * 2);
 	const geo = new THREE.BufferGeometry();
 	geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -58,6 +59,7 @@ export function createHolidayLights(scene, city, { isPhone = false } = {}) {
 	scene.add(pts);
 	const tmpV = new THREE.Vector2();
 	pts.onBeforeRender = (r, sc, cam) => { U.uScale.value = r.getSize(tmpV).y * r.getPixelRatio() / (2 * Math.tan(cam.fov * Math.PI / 360)); };
+	onQuality(() => { seen = null; });
 	let n = 0, seen = null, atX = 1e9, atZ = 1e9, up = false, upAt = -1e9;
 	const add = (x, y, z, c, p0, kind) => { if (n >= CAP) return; pos[n * 3] = x; pos[n * 3 + 1] = y; pos[n * 3 + 2] = z; col[n * 3] = c[0]; col[n * 3 + 1] = c[1]; col[n * 3 + 2] = c[2]; ph[n * 2] = p0; ph[n * 2 + 1] = kind; n++; };
 	// one house's eaves: along the long sides (all round a hipped roof), a bulb every STEP
@@ -91,6 +93,8 @@ export function createHolidayLights(scene, city, { isPhone = false } = {}) {
 	}
 	function build(x, z) {
 		atX = x; atZ = z; n = 0;
+		// (nearer on a lower quality tier: world/governor.js)
+		const R = R0 * qualityNow().far;
 		const d0 = today();
 		for (const o of city.nearList?.() || []) {
 			if (!HOUSE.has(Math.floor(o.kind)) || o.h < 2) continue;
@@ -114,7 +118,7 @@ export function createHolidayLights(scene, city, { isPhone = false } = {}) {
 		U.uOn.value = k;
 		if (!show) return;
 		const list = city.nearList?.();
-		if (list !== seen || Math.hypot(cam.position.x - atX, cam.position.z - atZ) > R * 0.35) { seen = list; build(cam.position.x, cam.position.z); }
+		if (list !== seen || Math.hypot(cam.position.x - atX, cam.position.z - atZ) > R0 * 0.35) { seen = list; build(cam.position.x, cam.position.z); }
 	}
 	return { update, points: pts, info: () => ({ up, bulbs: n, on: +U.uOn.value.toFixed(2) }), rebuild: () => { seen = null; } };
 }

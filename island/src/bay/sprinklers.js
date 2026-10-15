@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { soundBus } from '../world/soundbus.js';
 import { sprinklerRun, sprinkling, dryMonth } from './seasons.js';
 import { today } from '../calendar.js';
+import { qualityNow } from '../world/governor.js';
 
 const HOUSE = new Set([0, 1, 10, 11, 12]);
 const hash = (x, z) => { let h = Math.imul(Math.floor(x * 5) | 0, 374761393) ^ Math.imul(Math.floor(z * 5) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -124,7 +125,7 @@ export function createSprinklers(scene, city, real, { isPhone = false, ground } 
 		cand.sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
 		const done = new Set();
 		for (const o of cand) {
-			if (heads.length >= HEADS) break;
+			if (heads.length >= Math.ceil(HEADS * qualityNow().people)) break;          // (fewer on a lower quality tier)
 			const k = Math.round(o.x / 6) + ':' + Math.round(o.z / 6);
 			if (done.has(k)) continue;
 			done.add(k);

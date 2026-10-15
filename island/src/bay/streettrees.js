@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { eraMap, treeRow, treeFor } from './streetera.js';
 import { today } from '../calendar.js';
 import { leafDrift, autumnK, crownColour } from './seasons.js';
+import { qualityNow } from '../world/governor.js';
 
 const BUILT = new Set([1, 2, 6, 7, 13]);           // land use where a street has its trees: homes, parks, schools, shops, the core
 const hash = (x, z) => { let h = Math.imul(Math.floor(x * 10) | 0, 374761393) ^ Math.imul(Math.floor(z * 10) | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -143,8 +144,9 @@ export function createStreetDecor(scene, city, { isPhone = false } = {}) {
 		drift = leafDrift(today());
 		leafMat.opacity = Math.min(1, drift * 1.2);
 		let ns = 0, ng = 0, nl = 0;
-		for (const t of city.treesAt(x, z, R)) {
-			if (t.src !== 'street' || (t.x - x) ** 2 + (t.z - z) ** 2 > R * R) continue;
+		const Rq = R * qualityNow().far;          // (nearer on a lower quality tier: world/governor.js)
+		for (const t of city.treesAt(x, z, Rq)) {
+			if (t.src !== 'street' || (t.x - x) ** 2 + (t.z - z) ** 2 > Rq * Rq) continue;
 			const yaw = hash(t.x * 1.3, t.z * 0.7) * 6.283;
 			if (t.stake && ns < CAP) { m4.compose(p.set(t.x, t.y + 0.3, t.z), q.setFromAxisAngle(Y, yaw), sc.set(1, 1, 1)); stakes.setMatrixAt(ns++, m4); }
 			if (t.well && ng < CAP) { m4.compose(p.set(t.x, t.y + 0.33, t.z), q.setFromAxisAngle(Y, yaw - yaw % (Math.PI / 2)), sc.set(1, 1, 1)); grates.setMatrixAt(ng++, m4); }
