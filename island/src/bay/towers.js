@@ -296,7 +296,7 @@ export function createTowers(scene, bay, city, { isPhone = false, mount, hint = 
 			const near=city?.towersNear?.(cam.x,cam.z,28)||[];
 			let best=null,bd=1e9;
 			for(const o of near){
-				if(cam.y>o.y+o.h+30||cam.y<o.y-10)continue;
+				if(o.wrecked||cam.y>o.y+o.h+30||cam.y<o.y-10)continue;          // structures: a wrecked tower is its shell
 				const dx=cam.x-o.x,dz=cam.z-o.z,ca=Math.cos(o.a),sa=Math.sin(o.a);
 				const ex=Math.abs(ca*dx+sa*dz)-o.w/2,ez=Math.abs(-sa*dx+ca*dz)-o.d/2;
 				const d=ex<0&&ez<0?Math.max(ex,ez):Math.hypot(Math.max(0,ex),Math.max(0,ez));

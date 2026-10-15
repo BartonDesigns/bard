@@ -12,6 +12,8 @@
 // the rooms, windows go where the rooms meet the outside, and the furniture follows the
 // rooms. The house's position seeds everything, so it is the same house every visit.
 
+import { houseRoles, fitFront, fitBack } from '../interiors/estab-fit.js';
+
 // heights above the ground floor, in metres
 export const HT = { ceil0: 2.6, floor1: 2.9, ceil1: 5.45, top1: 2.9, top2: 5.75, door: 2.05 };
 // wall thickness: outside walls (stud and stucco), partitions
@@ -949,8 +951,28 @@ export function planHouse(grp, opt = {}) {
 		}
 	}
 
+	// a house that is a business (opt.estab, from economy/layer.js through bay/houses.js): its
+	// ground floor's rooms re-typed for it (interiors/estab-fit.js houseRoles), and where it has
+	// a shopfront, the front rooms' windows made shop windows, low and wide, between the door
+	// and the corners
+	if (opt.estab?.fit) {
+		for (const room of rooms) if (room.level === 0 && room.cells.length) room.biz = houseRoles(opt.estab.fit, room.type);
+		if (opt.estab.glass) for (const w of walls) {
+			if (w.kind !== 'ext' || w.level !== 0 || w.axis !== 'x' || w.inSide > 0 || w.blocked) continue;
+			const room = rooms[w.room];
+			if (!room?.biz || room.biz.role === 'back') continue;
+			w.open = w.open.filter((o) => o.type !== 'window');
+			const busy = w.open.map((o) => [o.s0 - 0.3, o.s1 + 0.3]).sort((a, b) => a[0] - b[0]);
+			let s0 = w.s + 0.35;
+			for (const [a, b] of [...busy, [w.e - 0.35, 1e9]]) {
+				const len = Math.min(a, w.e - 0.35) - s0;
+				if (len >= 1.0) { const n = Math.ceil(len / 3.2), pw = len / n; for (let k = 0; k < n; k++) w.open.push({ s0: s0 + k * pw + 0.06, s1: s0 + (k + 1) * pw - 0.06, y0: 0.45, y1: 2.35, type: 'window', room: room.type, shop: true }); }
+				s0 = Math.max(s0, b);
+			}
+		}
+	}
 	const seed = houseSeed(M), bathroomMess = bathroomMessProfile(seed);
-	const plan = { M, ca, sa, rects, X, Z, nx, nz, occ, labels, rooms, walls, conns, door, garage, stairs, up, gSide, cellAt, onLevel, rnd, seed, bathroomMess };
+	const plan = { M, ca, sa, rects, X, Z, nx, nz, occ, labels, rooms, walls, conns, door, garage, stairs, up, gSide, cellAt, onLevel, rnd, seed, bathroomMess, estab: opt.estab || null };
 	plan.items = furnish(plan);
 	return plan;
 }
@@ -1104,6 +1126,17 @@ function furnish(plan) {
 		};
 		const light = (kind = 'flush') => items.push({ type: 'ceilingLight', kind, room: room.id, level: room.level, y: y0, x: room.cx, z: room.cz, rot: 0, w: 0.35, d: 0.35, h: 0, v: rnd() });
 		const art = (n) => { for (let k = 0; k < n; k++) against('art', 0.5 + rnd() * 0.5, 0.03, 0.01, { clear: 0, side: (s) => !s.ext || rnd() < 0.3 }); };
+		// a business's room: fitted out as its trade has it (interiors/estab-fit.js); the lamps'
+		// places kept as anchors (plan.lightAnchors) for whatever lights the rooms
+		if (room.biz) {
+			const K = {
+				rm: { x0: bb[0], z0: bb[1], x1: bb[2], z1: bb[3] }, y0, ceil: room.level ? HT.ceil1 - HT.floor1 : HT.ceil0, bw, bd, cx: room.cx, cz: room.cz, sides, rnd, items, garage: !!room.biz.garage,
+				passSide: room.biz.role !== 'back' ? sides.find((sd) => !sd.ext && rooms[sd.wall.ra === room.id ? sd.wall.rb : sd.wall.ra]?.biz?.role === 'back') || null : null,
+				against, standing, inFront, stand: () => {}, seat: () => {}, sitOn: () => {}, chairs: () => {},
+				light, anchor: (kind, x, y, z) => (plan.lightAnchors || (plan.lightAnchors = [])).push({ kind, x, y, z, room: room.id, level: room.level }),
+			};
+			if (room.biz.role === 'back' ? fitBack(room.biz.fit, K) : fitFront(room.biz.fit, K)) continue;
+		}
 		if (t === 'living') {
 			const sofa = against('sofa', Math.min(2.2, bw - 0.8, bd - 0.8) > 1.6 ? 2.1 : 1.6, 0.92, 0.85, { long: true, clear: 1.3, noWindow: false });
 			if (sofa) {
@@ -1249,6 +1282,8 @@ function furnish(plan) {
 			against('bookcase', 0.9, 0.34, 1.9, { clear: 0.7 });
 			light();
 		}
+		// a guest house's bedrooms upstairs: a luggage rack at the foot of the bed
+		if (plan.estab?.fit === 'bnb' && room.level > 0 && (t === 'bed' || t === 'master')) against('luggageRack', 0.7, 0.45, 0.75, { clear: 0.4 });
 	}
 	return items;
 }

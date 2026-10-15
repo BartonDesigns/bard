@@ -37,6 +37,11 @@ const TRAIL = new Set(['path', 'track', 'footway', 'cycleway']);                
 const TALKERS = new Set();
 export function addTalkers(fn) { TALKERS.add(fn); return () => TALKERS.delete(fn); }
 export function talkers() { const out = []; for (const f of TALKERS) { try { for (const p of f()) out.push(p); } catch { /* a system gone */ } } return out; }
+// the working day (economy/daily-life.js): fn(x, z, hours, now) -> { posts, doors, life, cap }:
+// the staff's spots out front of the open businesses, their doors, what share of the people
+// walk in to work, to lunch, to shop, home (frontage.js lifeAt); one source at a time
+let LIFE = null;
+export function addLife(fn) { LIFE = fn; return () => { if (LIFE === fn) LIFE = null; }; }
 
 export function createPeople(scene, world, camera = null) {
 	const group = new THREE.Group();
@@ -178,7 +183,6 @@ export function createPeople(scene, world, camera = null) {
 
 	function cast(p, cam, island, mood = null, venue = null) {
 		const r = rng(seedN * 7919 + 13);
-		const W = world();
 		const C = mood || { jog: 0.12, chat: 0.14, wait: 0.12 };
 		const x = r();
 		p.role = island ? (x < 0.25 ? 'chat' : x < 0.35 ? 'wait' : 'walk') : x < C.jog ? 'jog' : x < C.jog + C.chat ? 'chat' : x < C.jog + C.chat + C.wait ? 'wait' : 'walk';
@@ -223,7 +227,14 @@ export function createPeople(scene, world, camera = null) {
 			}
 			return false;
 		}
-		// somewhere near but not in your face, and ideally out of sight
+		// the working day: someone at work out front, coming out of a door, or walking to one
+		if (!island && LIFE && castLife(p, cam, r)) return true;
+		return placeStreet(p, cam, island, r);
+	}
+	// somewhere near but not in your face, and ideally out of sight: on the island's paths, a
+	// mapped street's sidewalk, round a gridded block
+	function placeStreet(p, cam, island, r) {
+		const W = world(), M = p.M;
 		for (let k = 0; k < 20; k++) {
 			const a = r() * Math.PI * 2, d = 18 + r() * (NEAR - 25);
 			const x = cam.x + Math.cos(a) * d, z = cam.z + Math.sin(a) * d;
@@ -257,6 +268,87 @@ export function createPeople(scene, world, camera = null) {
 			return true;
 		}
 		return false;
+	}
+
+	// ---------- the working day (economy/daily-life.js through addLife) ----------
+	// a new arrival may be someone at work out front of an open business (the server by the
+	// tables, the mechanic at the car), someone coming out of a door (home from work, back from
+	// lunch, a customer done), or someone walking to one (in to work, to lunch, to shop); the
+	// rest walk the streets as before. Staff spots are capped (fewer on a phone).
+	let lifeNow = null;
+	const lifeOf = (cam) => { const W = world(); lifeNow = LIFE(cam.x, cam.z, W?.sky?.state?.hours ?? 12, performance.now() / 1000); return lifeNow; };
+	function castLife(p, cam, r) {
+		if (p.P.dna.child || p.P.dna.minor) return false;
+		const L = lifeOf(cam);
+		if (!L) return false;
+		const S = L.life, M = p.M;
+		// at work out front
+		let staff = 0;
+		for (const o of pool) if (o.active && o.route?.post) staff++;
+		if (staff < L.cap && L.posts.length && r() < 0.45) {
+			const q = L.posts[Math.floor(r() * L.posts.length)], d = Math.hypot(q.x - cam.x, q.z - cam.z);
+			if (!q.taken && d > 4 && d < NEAR && (d > 25 || !seen(q.x, q.y, q.z, d))) {
+				q.taken = true;
+				p.route = { kind: 'seat', seat: q, seats: [], post: true };
+				p.role = 'wait'; p.timer = 1e9; p.workRole = q.role;
+				M.place(q.x, ground(q.x, q.z), q.z, q.heading);
+				if (q.sit) { M.sit(q.sit, true); } else M.stand();
+				M.setPose(q.pose || 'rest');
+				return true;
+			}
+		}
+		if (!L.doors.length || !S) return false;
+		const u = r(), goIn = S.commuteIn + S.lunch + S.shop * 0.6 + S.evening * 0.6, comeOut = S.commuteOut + S.lunch * 0.6 + S.shop * 0.5 + S.evening * 0.3;
+		if (u < comeOut) {
+			// out of a door: an open place's customer, or staff leaving one just shut
+			for (let k = 0; k < 6; k++) {
+				const D = L.doors[Math.floor(r() * L.doors.length)], d = Math.hypot(D.x - cam.x, D.z - cam.z);
+				if (d < 6 || d > NEAR || !(D.open || D.phase === 'closing')) continue;
+				p.route = { kind: 'errand', out: true, x: D.outX, z: D.outZ, t: 0 };
+				p.role = 'walk';
+				M.place(D.inX, ground(D.inX, D.inZ), D.inZ, D.heading);
+				return true;
+			}
+			return false;
+		}
+		if (u < comeOut + goIn) {
+			// walking to a door: placed along the street as anyone is, then off to it
+			if (!placeStreet(p, cam, false, r)) return false;
+			const P0 = M.S.pos;
+			let best = null, bd = 70;
+			for (const D of L.doors) {
+				if (!(D.open || D.phase === 'opening' || (S.commuteIn > 0.1 && D.phase === 'closed'))) continue;
+				const d = Math.hypot(D.x - P0.x, D.z - P0.z) + r() * 25;
+				if (d < bd) { bd = d; best = D; }
+			}
+			if (best) { p.route = { kind: 'errand', out: false, x: best.inX, z: best.inZ, ox: best.outX, oz: best.outZ, t: 0, back: p.route }; p.role = 'walk'; }
+			return true;
+		}
+		return false;
+	}
+	// along an errand: to the door and in (gone inside: faded out at the door), or out from it
+	// to the kerb and on along the street
+	function errand(p, dt, cam) {
+		const R = p.route, M = p.M, S = M.S;
+		R.t += dt;
+		if (!R.out && R.ox !== undefined && !R.near) { const d0 = Math.hypot(R.ox - S.pos.x, R.oz - S.pos.z); if (d0 < 1.2) R.near = true; }
+		const tx = !R.out && R.ox !== undefined && !R.near ? R.ox : R.x, tz = !R.out && R.ox !== undefined && !R.near ? R.oz : R.z;
+		const d = Math.hypot(tx - S.pos.x, tz - S.pos.z);
+		if (R.out && (d < 0.9 || R.t > 25)) {
+			// out on the pavement: on with a street walk from here
+			const r = rng((p.P.dna.seed ^ seedN) >>> 0), st = streetRoute(S.pos.x, S.pos.z, r);
+			if (st) p.route = st;
+			else { const loop = blockLoop(S.pos.x, S.pos.z); p.route = loop ? { kind: 'loop', loop, side: 0, dir: 1, next: 1 } : { kind: 'wander', home: S.pos.clone(), goal: S.pos.clone() }; }
+			return;
+		}
+		if (!R.out && ((R.near && d < 0.7) || R.t > 90)) {
+			// in at the door
+			M.want.speed = 0;
+			if (!p.leaving) { p.leaving = true; p.leaveT = 6; }
+			return;
+		}
+		M.want.heading = Math.atan2(tx - S.pos.x, tz - S.pos.z);
+		M.want.speed = giveWay(p, p.P.dna.gait.pace * (d < 2 ? 0.65 : 1), cam);
 	}
 
 	// a family: a child joins a grown-up already about (one already with children who want
@@ -412,7 +504,27 @@ export function createPeople(scene, world, camera = null) {
 		}
 		if (R.kind === 'follow') { followParent(p, dt); return; }
 		if (R.kind === 'visit') { visit(p, dt, cam); return; }
+		if (R.kind === 'errand') { errand(p, dt, cam); return; }
 		if (R.kind === 'seat') {
+			// at work out front: when the place shuts (no longer among the open ones' spots), in through its door
+			if (R.post && LIFE) {
+				R.chk = (R.chk || 0) - dt;
+				if (R.chk < 0) {
+					R.chk = 3;
+					const L = lifeOf(cam);
+					if (L && !L.posts.includes(R.seat)) {
+						R.seat.taken = false; M.stand();
+						const D = L.doors.find((q) => q.E.id === R.seat.id);
+						if (D) { p.route = { kind: 'errand', out: false, x: D.inX, z: D.inZ, ox: D.outX, oz: D.outZ, t: 0 }; p.role = 'walk'; M.setPose('rest'); } else if (!p.leaving) { p.leaving = true; p.leaveT = 0; }
+						return;
+					}
+				}
+				M.want.speed = 0; M.want.heading = R.seat.heading;
+				// (a word and a gesture now and then, to whoever is about)
+				p.gT = (p.gT || Math.random() * 8) - dt;
+				if (p.gT < 0) { p.gT = 6 + Math.random() * 10; if (Math.random() < 0.4) M.gesture(['nod', 'point', 'think', 'wave'][Math.floor(Math.random() * 4)]); }
+				return;
+			}
 			if(workActor(p,performance.now()/1000,dt,cam,pool)) return;
 			// in their seat: facing the table, now and then a word and a gesture to whoever is across
 			M.want.speed = 0; M.want.heading = R.seat.heading;
