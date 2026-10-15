@@ -54,8 +54,8 @@ const FINGERS = ['thumb', 'index', 'middle', 'ring', 'little'];
 function fingerContact() {
 	const S = w.vm.state, model = S.model;
 	if (!model) return null;
-	let skin = null;
-	model.parent.parent.traverse((o) => { if (o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && o.visible && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
+	let skin = w.vm.armsSkin;
+	model.parent.parent.traverse((o) => { if (!w.vm.armsSkin && o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && o.visible && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
 	if (!skin) return null;
 	const g = skin.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, names = w.P.bones.map((b) => b.name), v = new T.Vector3();
 	const verts = [], box = new T.Box3();
@@ -88,20 +88,24 @@ function fists_(mode, me) {
 const inspectCam = new T.PerspectiveCamera(32, 1, 0.005, 5), at = new T.Vector3();
 function closeup(side = 'R', from = [1, 0.3, 0.4], dist = 0.32) {
 	const S = w.vm.state, model = S.model, scene = model.parent.parent;
-	let skin = null;
-	scene.traverse((o) => { if (o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
+	let skin = w.vm.armsSkin;
+	scene.traverse((o) => { if (!w.vm.armsSkin && o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
 	const bone = skin.skeleton.bones[w.P.map['finger3-1.' + side]];
 	at.setFromMatrixPosition(bone.matrixWorld);
 	const size = new T.Vector2(); w.renderer.getSize(size);
 	inspectCam.aspect = size.x / size.y; inspectCam.position.copy(at).add(new T.Vector3(...from).normalize().multiplyScalar(dist)); inspectCam.lookAt(at); inspectCam.updateProjectionMatrix(); inspectCam.updateMatrixWorld(true);
+	// (sleeves and garments hidden: the close-up is of the hand on the item)
+	const hidden = [];
+	scene.traverse((o) => { if (o.isMesh && o !== skin && o.visible) { let p = o; while (p && p !== model) p = p.parent; if (!p) { o.visible = false; hidden.push(o); } } });
 	const bg = w.scene.background; w.renderer.setClearColor(0x6b7a83, 1); w.renderer.clear(); w.renderer.render(scene, inspectCam); w.scene.background = bg;
+	for (const o of hidden) o.visible = true;
 	return w.renderer.domElement.toDataURL('image/png');
 }
 // where the joints are in the item's own space (millimetres), for tuning grips
 function joints(side = 'R') {
 	const S = w.vm.state, model = S.model, scene = model.parent.parent, inv = model.matrix.clone().invert();
-	let skin = null;
-	scene.traverse((o) => { if (o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
+	let skin = w.vm.armsSkin;
+	scene.traverse((o) => { if (!w.vm.armsSkin && o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
 	const out = {}, v = new T.Vector3();
 	for (const n of ['wrist', 'finger1-1', 'finger1-3', 'finger2-1', 'finger2-3', 'finger3-1', 'finger3-3', 'finger4-1', 'finger5-1', 'finger5-3']) {
 		v.setFromMatrixPosition(skin.skeleton.bones[w.P.map[n + '.' + side]].matrixWorld).applyMatrix4(inv);

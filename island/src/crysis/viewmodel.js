@@ -43,7 +43,7 @@ import { bindLookDrag } from '../combat/look-drag.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CELL_HOLD, CHARGE_HOLD, GRIPS, cellPath, handFrame, itemModel, kitLight, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
-import { blendPose, contactField, fingerQuats, fingerRig, itemParts, solveHand, squeeze } from './finger-pose.js';
+import { blendPose, contactField, fingerQuats, fingerRig, itemParts, limitPose, solveHand, squeeze } from './finger-pose.js';
 import { qualityNow } from '../world/governor.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
@@ -288,6 +288,8 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		const breathe = Math.sin(time * 1.35) * 0.012;
 		squeeze(want.R, breathe, 2, 4); squeeze(want.L, breathe * 0.7, 1, 4);
 		if (gather > 0) blendPose(want.L, want.L, L.open?.params || want.L, gather);
+		// (whatever the layers add, no joint goes past its range)
+		limitPose(want.R); limitPose(want.L);
 		void sp;
 		for (const side of ['L', 'R']) {
 			const h = hands[side];
@@ -570,5 +572,5 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const aimOverride = (on) => { if (!!on !== S.aimTap && weaponOf(S.id)) playCue(weaponOf(S.id).sounds.aim); S.aimTap = !!on; };
 	// (for tuning tools: solve the fingers again after a grip changes)
 	const refingers = () => { solved.clear(); posesFor = null; };
-	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
+	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, get armsSkin() { return arms?.skin || null; }, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
 }

@@ -859,7 +859,7 @@ const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const RAKE = 0.3;
 // (a high hand: the web of the thumb up under the tang, the index level with the trigger; twist
 // turns the hand round the grip so the back strap sits in the palm, the knuckles at the front)
-const PISTOL = { c: v3(-0.0223, 0.0205, 0), r: 0.024, a: v3(Math.cos(RAKE), -Math.sin(RAKE), 0), t: v3(Math.sin(RAKE), Math.cos(RAKE), 0), twist: 0.3 };
+const PISTOL = { c: v3(-0.045, 0.012, 0), r: 0.027, a: v3(Math.cos(RAKE), -Math.sin(RAKE), 0), t: v3(Math.sin(RAKE), Math.cos(RAKE), 0), twist: 0 };
 // a support hand under a fore-end: the palm under it, the fingers angled forward up its far side
 // (slide: the palm moved back along the fingers, so the knuckles meet the fore-end's corner)
 const fore = (x, y, r = 0.034, slide = 0.018) => ({ c: v3(x, y, 0), r, a: v3(0.55, 0.45, 1).normalize(), t: v3(1, 0, 0), slide });
@@ -868,7 +868,7 @@ const SHAFT = (y = 0, r = 0.02) => ({ c: v3(0, y, 0), r, a: v3(1, 0, 0), t: v3(0
 const HANDLE = (y = 0, r = 0.012) => ({ c: v3(0, y, 0), r, a: v3(0, -1, 0), t: v3(1, 0, 0) });
 // kind: 'long' (two hands, carried at the ready), 'one' (hangs in one hand), level: kept upright
 // (the Mossback's grip is its stock's own: thicker front to back, more upright; the thumb through its hole)
-const SCOUT_GRIP = { c: v3(-0.0191, 0.0112, 0), r: 0.026, a: v3(Math.cos(0.2), -Math.sin(0.2), 0), t: v3(Math.sin(0.2), Math.cos(0.2), 0), twist: 0.45 };
+const SCOUT_GRIP = { c: v3(-0.05, 0.012, 0), r: 0.03, a: v3(Math.cos(0.2), -Math.sin(0.2), 0), t: v3(Math.sin(0.2), Math.cos(0.2), 0), twist: 0 };
 export const HOLDS = {
 	'aurora-trail-rifle': { kind: 'long', R: PISTOL, L: fore(0.42, 0.112, 0.036), sight: [-0.069, 0.198, 0.08], zoom: 1.9 },
 	'mossback-scout-rifle': { kind: 'long', R: SCOUT_GRIP, L: fore(0.36, 0.108, 0.03), sight: [0.221, 0.186, 0.15], zoom: 1.5 },
@@ -916,27 +916,30 @@ const WRAP = { mode: 'wrap' }, LOOSE = { mode: 'wrap', relax: 0.08, free: 0.55 }
 const pad = (p, o = {}) => ({ mode: 'reach', target: v3(...p), ...o });
 const fixed = (...params) => ({ mode: 'fixed', params });
 function rifleFingers({ trigger, ready, thumb, support, cellThumb = [-0.004, 0.062, -0.0175] }) {
-	const T = pad(thumb, { natural: [0.4, 0.5, 0.25, 0.2] });
+	// the thumb hooked round the back of the grip like a J: lifted off the palm toward the grip,
+	// round the back strap and its pad on the far side, tip forward and down (the thenar pressing the
+	// strap a little, as a real hand's does)
+	const T = pad(thumb, { natural: [1, 0.4, -0.05, 0.5], soft: 0.0025, press: 300 });
 	return {
 		R: {
 			ready: [T, pad(ready, { natural: [0, 0, 0.08, 0.04], along: 0.5, ahead: 0.086, limits: [[-0.8, 0.8], [-0.8, 0.6], [0, 0.6], [0, 0.4]] }), WRAP, WRAP, WRAP],
 			trigger: [T, pad(trigger, { natural: [0, 0.55, 0.85, 0.35] }), WRAP, WRAP, WRAP],
 		},
 		L: {
-			fore: [pad(support, { natural: [0.3, 0.2, 0.15, 0.1] }), WRAP, WRAP, WRAP, WRAP],
-			cell: [pad(cellThumb, { natural: [0.3, 0.3, 0.2, 0.1] }), WRAP, WRAP, WRAP, WRAP],
-			charge: [pad([-0.0095, 0.0, -0.012], { natural: [0.3, 0.4, 0.3, 0.2] }), pad([0.0085, 0.001, -0.012], { natural: [0, 0.6, 0.9, 0.4] }), CURL, CURL, CURL],
+			fore: [pad(support, { natural: [0.3, 0.2, 0.15, 0.1], soft: 0.0005 }), WRAP, WRAP, WRAP, WRAP],
+			cell: [pad(cellThumb, { natural: [0.3, 0.3, 0.2, 0.1], soft: 0.0005 }), WRAP, WRAP, WRAP, WRAP],
+			charge: [pad([-0.0095, 0.0, -0.012], { natural: [0.3, 0.4, 0.3, 0.2], soft: 0.0005 }), pad([0.0085, 0.001, -0.012], { natural: [0, 0.6, 0.9, 0.4] }), CURL, CURL, CURL],
 			open: [fixed(0.25, 0.15, 0.1, 0.05), fixed(0.02, 0.12, 0.15, 0.08), fixed(0, 0.14, 0.18, 0.1), fixed(-0.03, 0.16, 0.2, 0.1), fixed(-0.07, 0.2, 0.22, 0.12)],
 		},
 	};
 }
 export const GRIPS = {
-	'aurora-trail-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.0255], thumb: [-0.037, 0.034, -0.009], support: [0.465, 0.098, -0.029] }),
-	'mossback-scout-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.12, 0.052, 0.0185], thumb: [-0.035, 0.02, -0.019], support: [0.405, 0.1, -0.0255] }),
-	'warden-spark-carbine': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.028], thumb: [-0.037, 0.034, -0.009], support: [0.255, 0.085, -0.031] }),
+	'aurora-trail-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.0255], thumb: [-0.03, 0.008, -0.022], support: [0.465, 0.098, -0.029] }),
+	'mossback-scout-rifle': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.12, 0.052, 0.0185], thumb: [-0.04, 0.006, -0.026], support: [0.405, 0.1, -0.0255] }),
+	'warden-spark-carbine': rifleFingers({ trigger: [0.0505, 0.029, 0], ready: [0.125, 0.052, 0.028], thumb: [-0.03, 0.008, -0.022], support: [0.255, 0.085, -0.031] }),
 	// the bow hand round the riser, relaxed (the draw hand keeps the body's own curl on the string)
 	'reedline-hunting-bow': {
-		L: { riser: [pad([0.012, 0.022, 0.0175], { natural: [0.4, 0.5, 0.3, 0.2] }), LOOSE, LOOSE, LOOSE, LOOSE] },
+		L: { riser: [pad([0.012, 0.022, 0.0175], { natural: [0.6, 0.4, 0.3, 0.3], soft: 0.0005 }), LOOSE, LOOSE, LOOSE, LOOSE] },
 	},
 };
 
