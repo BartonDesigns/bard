@@ -1185,6 +1185,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
 		// a phone loads the local voices only once the world has been calm a while
 		tick: (dt, state) => localSpeech.tick(dt, state),
+		// let the local model go (the quality governor, when a phone is short of memory: main.js)
+		unload: () => localSpeech.unload(),
 		// the device's nearest voice to a person's own, for the device-only setting
 		device: (dna) => deviceVoiceFor({ seed: dna.seed ?? 0, male: dna.male ?? true, ...voiceShape(dna) }, 'speechSynthesis' in window ? speechSynthesis.getVoices() : []),
 	};
