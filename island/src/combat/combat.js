@@ -275,7 +275,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// the first thing a ray meets: a target in the layer or a wall: { T?, t, n, surface, part, ward }
 	function firstHit(o, d, max, shooterT = ME) {
 		const a = layer.cast(o, d, max, shooterT, rules), b = worldHit(o, d, a ? a.t : max);
-		if (b && (!a || b.t < a.t)) return { ...b, wall: true };
+		// (a wall built near you keeps its own record under wall: structures/walls/ needs it)
+		if (b && (!a || b.t < a.t)) return { ...b, wall: b.wall || true };
 		return a;
 	}
 	// a shot or blow landing on what it met (shooter: ME, a squad member, a boss)

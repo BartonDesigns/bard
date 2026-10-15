@@ -48,6 +48,6 @@ export function createStreets({ scene, camera, world, drive, isPhone = false, hi
 		const c = camera.position, e = E.at(c.x, c.z);
 		return { era: e.key, neglect: +e.neglect.toFixed(2), potholes: potholes.info(), crews: crew.info(), decor: decor.info(), lights: lights.info(), sprinklers: sprinklers.info() };
 	}
-	function dispose() { unMonth(); setPotholeSource(null); }
+	function dispose() { unMonth(); setPotholeSource(null); lights.dispose(); }
 	return { update, nearest, report, info, dispose, potholes, crew, lights, sprinklers, decor, eraAt: (x, z) => E.at(x, z) };
 }

@@ -1341,6 +1341,7 @@ export function createIslandWorld() {
 		world.discovery?.dispose();
 		world.services?.dispose();
 		world.signage?.dispose();
+		world.structures?.dispose?.();          // (phone audit: its quality listener let go)
 		world.kinetic?.dispose();
 		world.orbit?.dispose();
 		world.music?.dispose();

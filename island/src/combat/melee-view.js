@@ -101,7 +101,7 @@ export function createFistView({ camera, isPhone = false }) {
 		body = me.P;
 		for (const side of ['L', 'R']) {
 			const a = arms[side]; a.anatomical?.dispose(); a.garment?.dispose(); a.garment = null;
-			a.anatomical = createAnatomicalHand(body, side);
+			a.anatomical = createAnatomicalHand(body, side, { phone: isPhone });
 			if (a.anatomical) {
 				a.anatomical.mesh.renderOrder = 2; a.grp.add(a.anatomical.mesh);
 				// the sleeve, cuff and glove over this forearm, cut to it (the skin under them left out)
