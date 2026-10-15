@@ -13,7 +13,7 @@ import { toWorld } from './geo.js';
 import { FOOT, distTo, footLifted, lanesUnder, sidewalkOf } from './overpass.js';
 
 // where the freeways go, for the signs (by route number and direction of travel)
-const DEST = {
+export const DEST = {
 	680: { N: 'Sacramento', S: 'San Jose' }, 580: { W: 'Oakland  San Francisco', E: 'Stockton', N: 'San Rafael', S: 'Oakland' }, 80: { E: 'Sacramento', W: 'San Francisco', N: 'Sacramento', S: 'San Francisco' },
 	880: { N: 'Oakland', S: 'San Jose' }, 101: { N: 'San Francisco', S: 'San Jose' }, 280: { N: 'San Francisco', S: 'San Jose' }, 24: { E: 'Walnut Creek', W: 'Oakland', N: 'Walnut Creek', S: 'Oakland' }, 4: { E: 'Antioch', W: 'Martinez', N: 'Martinez', S: 'Antioch' },
 };
@@ -21,7 +21,7 @@ const DEST = {
 // the route a freeway is (the mapped ones carry names like "Donald D Doyle Highway",
 // not numbers): the nearest of the known alignments
 let ROUTE_PTS = null;
-function routeOf(x, z) {
+export function routeOf(x, z) {
 	if (!ROUTE_PTS) ROUTE_PTS = Object.entries(ROUTES).map(([k, ll]) => [(/(\d+)/.exec(k) || [])[1], ll.map(([a, b]) => toWorld(a, b))]);
 	let best = null, bd = 1500;
 	for (const [num, pts] of ROUTE_PTS) for (let i = 0; i + 1 < pts.length; i++) {
@@ -139,12 +139,17 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 	const R = isPhone ? 900 : 1400;
 	let at = { x: 1e9, z: 1e9 }, ver = -1;
 	let decks = [];                                  // for the floors: [{ pts: [{x,z,y}], hw }]
+	// what the signage reads (signage/): the sound walls' faces toward the traffic, the piers,
+	// the ramps' retaining walls, the bridges' faces over each road with its clearance, and
+	// where each bridge crosses a freeway
+	let marks = { walls: [], piers: [], abutments: [], faces: [], crossings: [] }, builds = 0;
 	const grid = new Map();                          // 25 m cells -> deck segments
 	const cellKey = (x, z) => Math.floor(x / 25) + ',' + Math.floor(z / 25);
 
 	function clear() {
 		for (const m of [...group.children]) { group.remove(m); m.geometry.dispose(); if (m.material !== concrete && m.material !== fenceMat) m.material.dispose(); }
 		decks = []; grid.clear();
+		marks = { walls: [], piers: [], abutments: [], faces: [], crossings: [] };
 	}
 
 	function build(cx, cz) {
@@ -175,6 +180,7 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 			let run = [];
 			const flush = () => {
 				if (run.length > 3) {
+					for (let i = 0; i + 1 < run.length; i++) { const a = run[i], b = run[i + 1]; marks.walls.push({ x: (a.x + b.x) / 2 + a.nx * 0.17, z: (a.z + b.z) / 2 + a.nz * 0.17, y: Math.min(a.y, b.y), nx: a.nx, nz: a.nz, w: Math.hypot(b.x - a.x, b.z - a.z), h: 4.3 }); }
 					G.sweep(run, [[-0.16, -0.6], [-0.16, 4.3], [0.16, 4.3], [0.16, -0.6]], (i) => tint(WALL, Math.floor(i / 2), 0.04));
 					G.sweep(run, [[-0.24, 4.3], [-0.24, 4.5], [0.24, 4.5], [0.24, 4.3]], [0.52, 0.49, 0.44]);
 				}
@@ -325,7 +331,10 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 					if (foot) G.sweep(pts, [[sd * hw, 0], [sd * hw, 0.22], [sd * (hw + rim), 0.22], [sd * (hw + rim), -0.3], [sd * hw, -0.3]], (i) => tint(CON, i, 0.03));
 					else G.sweep(pts, [[sd * hw, 0], [sd * hw, 0.95], [sd * (hw + rim), 1.05], [sd * (hw + rim), -0.55], [sd * hw, -0.55]], (i) => tint(CON, i, 0.03));
 					// the ramps ride on fill between retaining walls
-					if (!sp) G.skirt(pts, sd * (hw + rim), (i) => tint(CON, i + 3, 0.04).map((c) => c * 0.92));
+					if (!sp) {
+						G.skirt(pts, sd * (hw + rim), (i) => tint(CON, i + 3, 0.04).map((c) => c * 0.92));
+						if (!foot) for (let i = 0; i + 1 < pts.length; i += 2) { const a = pts[i], b = pts[Math.min(pts.length - 1, i + 2)], o = sd * (hw + rim + 0.01), hgt = Math.min(a.y, b.y) - Math.max(a.g, b.g) - 0.2; if (hgt > 1.4) marks.abutments.push({ x: (a.x + b.x) / 2 + a.nx * o, z: (a.z + b.z) / 2 + a.nz * o, y: Math.max(a.g, b.g) + 0.4, nx: a.nx * sd, nz: a.nz * sd, w: Math.hypot(b.x - a.x, b.z - a.z), h: hgt }); }
+					}
 				}
 				// the girder under the span
 				for (const [pts, sp] of parts(run)) if (sp) {
@@ -367,9 +376,18 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 				if (foot) { G.box(q.x, top - 0.6, q.z, W * 0.9, 0.6, 0.9, yaw, tint(CON, i, 0.03)); G.box(q.x, gy - 0.6, q.z, 0.8, top - 0.6 - gy + 0.6, 0.8, yaw, tint(CON, i + 7, 0.03)); continue; }
 				G.box(q.x, top - 1.0, q.z, W * 0.82, 1.0, 1.4, yaw, tint(CON, i, 0.03));
 				const cols = W > 13 ? [-W * 0.26, W * 0.26] : [0];
-				for (const o of cols) G.box(q.x + q.nx * o, gy - 0.6, q.z + q.nz * o, 1.3, top - 1.0 - gy + 0.6, 1.3, yaw, tint(CON, i + 7, 0.03));
+				for (const o of cols) { G.box(q.x + q.nx * o, gy - 0.6, q.z + q.nz * o, 1.3, top - 1.0 - gy + 0.6, 1.3, yaw, tint(CON, i + 7, 0.03)); marks.piers.push({ x: q.x + q.nx * o, z: q.z + q.nz * o, y: gy, h: top - 1.0 - gy, nx: q.nx, nz: q.nz, w: 1.3 }); }
 			}
 			if (foot) continue;
+			// the faces over each road it crosses, with the height under the girder, both sides
+			for (const l of under) {
+				let bi = -1, bd = 1e9;
+				for (let i = 0; i < n; i++) { if (need[i] < -1e8) continue; const d = distTo(l, deck[i].x, deck[i].z); if (d < bd) { bd = d; bi = i; } }
+				if (bi < 0 || bd > l.w / 2 + 2) continue;
+				const q = deck[bi], clear = q.y - 1.75 - roadH(l, q.x, q.z);
+				for (const sd of [-1, 1]) marks.faces.push({ x: q.x + q.nx * sd * (W / 2 + 0.39), z: q.z + q.nz * sd * (W / 2 + 0.39), y: q.y - 0.02, nx: q.nx * sd, nz: q.nz * sd, clear, cls: l.cls });
+				if (l.cls === 'motorway') marks.crossings.push({ x: q.x, z: q.z });
+			}
 			// the signs, on the face toward the traffic of each freeway it crosses
 			const seen = new Set();
 			for (let i = 0; i < n; i++) {
@@ -420,6 +438,7 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 			m.castShadow = true;
 			group.add(m);
 		}
+		builds++;
 		// the decks, indexed for floor()
 		decks.forEach((d, di) => { for (let i = 0; i + 1 < d.pts.length; i++) { const a = d.pts[i], b = d.pts[i + 1]; for (const k of new Set([cellKey(a.x, a.z), cellKey(b.x, b.z)])) { let c = grid.get(k); if (!c) grid.set(k, c = []); c.push([di, i]); } } });
 	}
@@ -453,5 +472,5 @@ export function createFreeways(scene, bay, real, { isPhone = false, roadAt = nul
 		at = { x, z }; ver = v;
 		build(x, z);
 	}
-	return { group, update, floor, decks: () => decks.length };
+	return { group, update, floor, decks: () => decks.length, marks: () => marks, builds: () => builds };
 }
