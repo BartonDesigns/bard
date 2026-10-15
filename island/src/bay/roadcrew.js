@@ -147,6 +147,7 @@ export function createRoadCrew({ scene, potholes, ground, camera, isPhone = fals
 	}
 	function info() { return [...sites.values()].map((S) => ({ id: S.h.id, phase: S.phase, t: Math.round(clock - S.t0), built: !!S.root })); }
 	// for the console and the screenshots: the crew straight to work on a hole (skip: seconds already passed)
-	function now(h, skip = ARRIVE + 5) { dispatch(h); const S = sites.get(h.id); if (S) S.t0 = clock - skip; return !!S; }
+	// (h: a hole, or the id of one already under way)
+	function now(h, skip = ARRIVE + 5) { const id = typeof h === 'string' ? h : h?.id; if (typeof h !== 'string') dispatch(h); const S = sites.get(id); if (S) S.t0 = clock - skip; return !!S; }
 	return { dispatch, update, info, now, group };
 }
