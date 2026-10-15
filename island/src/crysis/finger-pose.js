@@ -46,13 +46,16 @@ export function fingerRig(P, side) {
 	const n = heads[map['finger2-1.' + side]].clone().sub(w).cross(heads[map['finger5-1.' + side]].clone().sub(w)).normalize();
 	if (n.x * (side === 'R' ? -1 : 1) > 0) n.negate();
 	const chains = [], byBone = new Map();
+	// the thumb flexes across the palm, toward the little finger's knuckle: each of its joints
+	// curls about the axis that carries it there (the body's own curl axis would swing it back)
+	const across = heads[map['finger4-1.' + side]].clone().lerp(heads[map['finger5-1.' + side]], 0.5).addScaledVector(palmN, 0.015);
 	for (const f of NAMES) {
 		const joints = [];
 		for (let j = 1; j <= 3; j++) {
 			const i = map[`finger${f}-${j}.${side}`];
 			if (i == null) return null;
 			const head = heads[i], tail = tails[i] || head.clone().addScaledVector(P.rest.dirs[i], 0.02);
-			const dir = tail.clone().sub(head).normalize(), axis = dir.clone().cross(n).normalize();
+			const dir = tail.clone().sub(head).normalize(), axis = f === 1 ? dir.clone().cross(across.clone().sub(head)).normalize() : dir.clone().cross(n).normalize();
 			// the side a curl moves the finger toward, and which way that is relative to the palm
 			let palmar = new THREE.Vector3().crossVectors(axis, dir).normalize();
 			if (f > 1 && palmar.dot(palmN) < 0) { axis.negate(); palmar.negate(); }
@@ -60,6 +63,8 @@ export function fingerRig(P, side) {
 			const joint = { i, parent, f, j, head: head.clone(), tail: tail.clone(), dir, axis, palmar, len: head.distanceTo(tail), off: head.clone().sub(heads[parent]), rSide: 0, rPad: 0 };
 			joints.push(joint); byBone.set(i, joint);
 		}
+		// (the thumb's spread lifts it off the palm toward what the palm faces, so it can wrap round)
+		if (f === 1) { const J = joints[0], q = new THREE.Quaternion().setFromAxisAngle(J.palmar, 0.1); J.spread = J.dir.clone().applyQuaternion(q).dot(palmN) > J.dir.dot(palmN) ? J.palmar.clone() : J.palmar.clone().negate(); }
 		// the chain runs head to head; the last segment to its tail
 		for (let j = 0; j < 3; j++) joints[j].next = j < 2 ? joints[j + 1].head.clone() : joints[j].tail.clone();
 		chains.push(joints);
@@ -243,7 +248,7 @@ const _v = new THREE.Vector3();
 function jointQuat(J, p, out) {
 	const curl = p[J.j];
 	out.setFromAxisAngle(J.axis, curl);
-	if (J.j === 1 && p[0]) out.premultiply(_qb.setFromAxisAngle(J.palmar, p[0]));
+	if (J.j === 1 && p[0]) out.premultiply(_qb.setFromAxisAngle(J.spread || J.palmar, p[0]));
 	return out;
 }
 // positions (rest space) of each joint, the tip, and each segment's palm side, into out
@@ -286,10 +291,23 @@ function skinClear(rig, f, fk, M, field) {
 }
 
 // ---------- solving ----------
-const LIMITS = {
-	finger: [[-0.45, 0.45], [-0.35, 1.6], [0, 1.85], [0, 1.3]],
-	thumb: [[-1.3, 1.3], [-0.8, 1.6], [-0.25, 1.2], [-0.25, 1.3]],
+// Anatomical ranges, radians, each in the bone's own frame: [spread, base, middle, tip], a
+// positive curl always toward the palm. Fingers: abduction about 17 degrees either way, the
+// knuckle 0 to 90 with 10 of hyperextension, the middle joint 0 to 110, the last 0 to 80. Thumb:
+// the saddle joint lifts the thumb off the palm (up to 57) and flexes it across (up to 52, back
+// 12), the knuckle 0 to 60 (never back), the last joint 0 to 80 (back 3 at most). Nothing bends past these,
+// after any solve or blend (limitPose).
+export const LIMITS = {
+	finger: [[-0.3, 0.3], [-0.17, 1.57], [0, 1.92], [0, 1.4]],
+	thumb: [[-0.35, 1.0], [-0.2, 0.9], [0, 1.05], [-0.05, 1.4]],
 };
+// a pose (four numbers a finger) held inside the ranges, in place
+export function limitPose(params) {
+	for (let f = 0; f < 5; f++) { const L = LIMITS[f ? 'finger' : 'thumb']; for (let j = 0; j < 4; j++) params[f * 4 + j] = clamp(params[f * 4 + j], L[j][0], L[j][1]); }
+	return params;
+}
+// a spec's own range, kept inside the anatomical one
+const rangeOf = (spec, thumb) => { const L = LIMITS[thumb ? 'thumb' : 'finger']; return spec.limits ? spec.limits.map(([a, b], j) => [Math.max(a, L[j][0]), Math.min(b, L[j][1])]) : L; };
 // how far (negative: how deep) a posed finger is from the surface, over its segments from..to
 const _s1 = new THREE.Vector3(), _s2 = new THREE.Vector3();
 function clearance(fk, M, field, from = 0, to = 2) {
@@ -334,8 +352,8 @@ function wrap(chain, M, field, spec, fk) {
 	return p;
 }
 // bring a point of a finger to a target without sinking in: a coarse search, then descent
-function reach(chain, M, Minv, field, spec, fk) {
-	const thumb = chain[0].f === 1, lim = spec.limits || LIMITS[thumb ? 'thumb' : 'finger'];
+function reach(chain, M, Minv, field, spec, fk, rig = null) {
+	const thumb = chain[0].f === 1, lim = rangeOf(spec, thumb);
 	// (ahead: the target this far in front of the finger's own knuckle along the item, wherever
 	// the hand has settled: a finger laid straight along a frame)
 	const goal = spec.target.clone();
@@ -350,11 +368,13 @@ function reach(chain, M, Minv, field, spec, fk) {
 	};
 	const cost = (p) => {
 		if (lockTip) p[3] = spec.tip;
+		for (let j = 0; j < 4; j++) p[j] = clamp(p[j], lim[j][0], lim[j][1]);
 		forward(chain, p, fk);
 		const d = point(fk).distanceToSquared(target);
-		let pen = clearance(fk, M, field, spec.skipBase ? 1 : 0); pen = pen < 0 ? pen * pen : 0;
+		// (a pressing thumb is judged by its own skin, which the capsules overstate round its base)
+		let pen = (spec.soft && rig ? skinClear(rig, chain[0].f - 1, fk, M, field) : clearance(fk, M, field, spec.skipBase ? 1 : 0)) + (spec.soft || 0); pen = pen < 0 ? pen * pen : 0;
 		let reg = 0; for (let j = 0; j < 4; j++) reg += (p[j] - natural[j]) ** 2;
-		return d + 2500 * pen + 2e-5 * reg;
+		return d + (spec.press ?? 2500) * pen + 2e-5 * reg;
 	};
 	// coarse: spread, base and middle curl over their range; then a descent from the few best
 	const S = thumb ? [-1.2, -0.8, -0.4, 0, 0.4, 0.8, 1.2] : [-0.45, -0.3, -0.15, 0, 0.15, 0.3, 0.45];
@@ -446,7 +466,7 @@ export function solveHand(rig, field, frame, specs, { fit = true, firm = false }
 			const spec = specs[f] || { mode: 'wrap' }, chain = rig.chains[f];
 			let p;
 			if (spec.mode === 'fixed') p = spec.params.slice();
-			else if (spec.mode === 'reach') p = reach(chain, M, Minv, field, spec, fk);
+			else if (spec.mode === 'reach') p = reach(chain, M, Minv, field, spec, fk, rig);
 			else p = wrap(chain, M, field, spec, fk);
 			if (spec.mode !== 'fixed') p = settle(rig, f, p, M, field, fk, spec.mode === 'wrap' && p.touched);
 			params.set(p, f * 4);
@@ -455,10 +475,11 @@ export function solveHand(rig, field, frame, specs, { fit = true, firm = false }
 			miss[f] = p.miss != null ? +(p.miss * 1000).toFixed(1) : null;
 			if (spec.mode === 'wrap' && f > 0) worst = Math.min(worst, skin);
 		}
-		if (!fit || worst > -0.0008 || shift < -0.022) break;
+		if (!fit || worst > -0.0008 || shift < -0.022 || round === 2) break;
 		const d = Math.max(worst, -0.006);
 		shift += d; F.multiply(new THREE.Matrix4().makeTranslation(0, 0, d));
 	}
+	limitPose(params);
 	return { params, shift, frame: F, clearanceMm: report, missMm: miss };
 }
 
@@ -477,3 +498,9 @@ const _p4 = [0, 0, 0, 0];
 export function blendPose(out, a, b, k) { for (let i = 0; i < 20; i++) out[i] = a[i] + (b[i] - a[i]) * k; return out; }
 // add a curl to fingers (from: the first finger, 0 the thumb) at each joint, for a squeeze
 export function squeeze(out, k, from = 1, to = 4) { for (let f = from; f <= to; f++) { out[f * 4 + 1] += k; out[f * 4 + 2] += k * 1.2; out[f * 4 + 3] += k * 0.6; } return out; }
+// where a finger's joints and tip are for a pose (four numbers), in the space of a palm frame
+// (for checks and tools)
+export function fingerPoints(rig, f, p, frame = new THREE.Matrix4()) {
+	const fk = forward(rig.chains[f], p, scratch()), M = new THREE.Matrix4().multiplyMatrices(frame, rig.restInv);
+	return [fk.seg[0].a, fk.seg[1].a, fk.seg[2].a, fk.seg[2].b].map((v) => v.clone().applyMatrix4(M));
+}

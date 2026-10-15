@@ -23,6 +23,12 @@ export const MOVES = Object.freeze({
 	pipeHeavy: { kind: 'heavy', wind: 0.36, active: 0.12, recover: 0.48, chain: 0.12, dmg: 32, reach: 1.9, arc: 0.6, knock: 4.0, stagger: 1.0, part: 'head', anim: 'overhead', item: 'pipe', breaks: true },
 	bottle: { kind: 'light', wind: 0.12, active: 0.08, recover: 0.28, chain: 0.08, dmg: 15, reach: 1.45, arc: 0.45, knock: 1.4, stagger: 0.45, part: 'head', anim: 'swing', item: 'bottle', shatters: true },
 	bottleHeavy: { kind: 'heavy', wind: 0.3, active: 0.1, recover: 0.4, chain: 0.1, dmg: 22, reach: 1.5, arc: 0.55, knock: 2.2, stagger: 0.7, part: 'head', anim: 'overhead', item: 'bottle', shatters: true, breaks: true },
+	// a hunting knife: quick and short, a slash and a downward stab; a machete: a bat's reach
+	// and weight in a blade, a little harder than the pipe
+	knife: { kind: 'light', wind: 0.09, active: 0.07, recover: 0.22, chain: 0.07, dmg: 15, reach: 1.5, arc: 0.45, knock: 1.0, stagger: 0.35, part: 'torso', anim: 'swing', item: 'knife' },
+	knifeHeavy: { kind: 'heavy', wind: 0.26, active: 0.1, recover: 0.38, chain: 0.1, dmg: 26, reach: 1.55, arc: 0.55, knock: 1.8, stagger: 0.6, part: 'torso', anim: 'overhead', item: 'knife', breaks: true },
+	machete: { kind: 'light', wind: 0.15, active: 0.1, recover: 0.34, chain: 0.1, dmg: 21, reach: 1.8, arc: 0.32, knock: 2.0, stagger: 0.55, part: 'torso', anim: 'swing', item: 'machete' },
+	macheteHeavy: { kind: 'heavy', wind: 0.36, active: 0.12, recover: 0.48, chain: 0.12, dmg: 33, reach: 1.85, arc: 0.6, knock: 3.4, stagger: 0.95, part: 'head', anim: 'overhead', item: 'machete', breaks: true },
 });
 export const STRING = ['jab', 'cross', 'hook'];
 export const moveTime = (m) => m.wind + m.active + m.recover;

@@ -43,7 +43,7 @@ import { bindLookDrag } from '../combat/look-drag.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CELL_HOLD, CHARGE_HOLD, GRIPS, cellPath, handFrame, itemModel, kitLight, kitPulse, kitPulseNow, kitTick, reloadTilt, spinMotes, triangles, weaponOf } from './held-items.js';
-import { blendPose, contactField, fingerQuats, fingerRig, itemParts, solveHand, squeeze } from './finger-pose.js';
+import { blendPose, contactField, fingerQuats, fingerRig, itemParts, limitPose, solveHand, squeeze } from './finger-pose.js';
 import { qualityNow } from '../world/governor.js';
 import { createFlash, createSparks } from './weapon-fx.js';
 import { playCue } from './weapon-sound.js';
@@ -211,7 +211,9 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 		} else if (H.kind === 'bow') {
 			const body = itemParts(model, ['body']);
 			out.L.riser = solveHand(hands.L.rig, contactField(body, box(H.L.m, 0.24)), H.L.m, plan.L.riser, { firm: true }); out.L.frame = out.L.riser.frame;
-			// (the draw hand keeps the body's own curl on the string: it reads most naturally there)
+			// the draw hand on the string as main had it (the fingers closed round it the way the
+			// body's own curl closed them), its thumb now flexed toward the palm, never back
+			out.R.draw = solveHand(hands.R.rig, null, new THREE.Matrix4(), plan.R.draw, { fit: false });
 		}
 		out.ms = +(performance.now() - t0).toFixed(1);
 		solved.set(key, out);
@@ -282,16 +284,18 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 				if (u > CHARGE.grab && u < CHARGE.release) squeeze(want.L, 0.06, 1, 2);
 			} else want.L.set(L.fore.params);
 		} else if (H.kind === 'bow') {
-			want.L.set(L.riser.params);
+			want.L.set(L.riser.params); want.R.set(R.draw.params);
 		}
 		// a breath of tension through the hands, and the gather's open hand
 		const breathe = Math.sin(time * 1.35) * 0.012;
 		squeeze(want.R, breathe, 2, 4); squeeze(want.L, breathe * 0.7, 1, 4);
 		if (gather > 0) blendPose(want.L, want.L, L.open?.params || want.L, gather);
+		// (whatever the layers add, no joint goes past its range)
+		limitPose(want.R); limitPose(want.L);
 		void sp;
 		for (const side of ['L', 'R']) {
 			const h = hands[side];
-			if (!h || !X[side] || (H.kind === 'bow' && side === 'R')) continue;
+			if (!h || !X[side]) continue;
 			// (fingers are quick)
 			const k = Math.min(1, dt * 22);
 			if (!h.on) { h.pose.set(want[side]); h.on = true; }
@@ -570,5 +574,5 @@ export function createViewmodel({ camera, avatar, mount, canvas = null, isPhone 
 	const aimOverride = (on) => { if (!!on !== S.aimTap && weaponOf(S.id)) playCue(weaponOf(S.id).sounds.aim); S.aimTap = !!on; };
 	// (for tuning tools: solve the fingers again after a grip changes)
 	const refingers = () => { solved.clear(); posesFor = null; };
-	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
+	return { update, render, info, fire, reload, cancel, bow, muzzle, refingers, get armsSkin() { return arms?.skin || null; }, pickup: () => { cancel(); S.pickup = .48; S.aimTap = false; }, aim: aimOverride, state: S, get shown() { return S.shown; }, get reloading() { return !!S.reload; }, get aiming() { return S.ads > 0.5; } };
 }

@@ -6,6 +6,7 @@ import * as T from 'three';
 import { createFistView } from '../src/combat/melee-view.js';
 import { HOLDS, GRIPS, holdFrame } from '../src/crysis/held-items.js';
 import * as FP from '../src/crysis/finger-pose.js';
+import { MOVES } from '../src/combat/melee-rules.js';
 const w = window.weaponReview, fists = createFistView({ camera: w.camera, isPhone: w.phoneTier });
 w.scene.add(w.camera);
 const fist = { on: false, item: null, move: null, anim: null, m: null, mt: 0, charging: false, charge: 0, block: false, take: false, cuffed: false, dodge: 0, dodgeSide: 0, rock: 0, step: 0, pace: 0 };
@@ -54,8 +55,8 @@ const FINGERS = ['thumb', 'index', 'middle', 'ring', 'little'];
 function fingerContact() {
 	const S = w.vm.state, model = S.model;
 	if (!model) return null;
-	let skin = null;
-	model.parent.parent.traverse((o) => { if (o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && o.visible && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
+	let skin = w.vm.armsSkin;
+	model.parent.parent.traverse((o) => { if (!w.vm.armsSkin && o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && o.visible && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
 	if (!skin) return null;
 	const g = skin.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, names = w.P.bones.map((b) => b.name), v = new T.Vector3();
 	const verts = [], box = new T.Box3();
@@ -88,20 +89,24 @@ function fists_(mode, me) {
 const inspectCam = new T.PerspectiveCamera(32, 1, 0.005, 5), at = new T.Vector3();
 function closeup(side = 'R', from = [1, 0.3, 0.4], dist = 0.32) {
 	const S = w.vm.state, model = S.model, scene = model.parent.parent;
-	let skin = null;
-	scene.traverse((o) => { if (o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
+	let skin = w.vm.armsSkin;
+	scene.traverse((o) => { if (!w.vm.armsSkin && o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
 	const bone = skin.skeleton.bones[w.P.map['finger3-1.' + side]];
 	at.setFromMatrixPosition(bone.matrixWorld);
 	const size = new T.Vector2(); w.renderer.getSize(size);
 	inspectCam.aspect = size.x / size.y; inspectCam.position.copy(at).add(new T.Vector3(...from).normalize().multiplyScalar(dist)); inspectCam.lookAt(at); inspectCam.updateProjectionMatrix(); inspectCam.updateMatrixWorld(true);
+	// (sleeves and garments hidden: the close-up is of the hand on the item)
+	const hidden = [];
+	scene.traverse((o) => { if (o.isMesh && o !== skin && o.visible) { let p = o; while (p && p !== model) p = p.parent; if (!p) { o.visible = false; hidden.push(o); } } });
 	const bg = w.scene.background; w.renderer.setClearColor(0x6b7a83, 1); w.renderer.clear(); w.renderer.render(scene, inspectCam); w.scene.background = bg;
+	for (const o of hidden) o.visible = true;
 	return w.renderer.domElement.toDataURL('image/png');
 }
 // where the joints are in the item's own space (millimetres), for tuning grips
 function joints(side = 'R') {
 	const S = w.vm.state, model = S.model, scene = model.parent.parent, inv = model.matrix.clone().invert();
-	let skin = null;
-	scene.traverse((o) => { if (o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
+	let skin = w.vm.armsSkin;
+	scene.traverse((o) => { if (!w.vm.armsSkin && o.isSkinnedMesh && o.material !== model.getObjectByName('body').material && (!skin || o.geometry.index.count > skin.geometry.index.count)) skin = o; });
 	const out = {}, v = new T.Vector3();
 	for (const n of ['wrist', 'finger1-1', 'finger1-3', 'finger2-1', 'finger2-3', 'finger3-1', 'finger3-3', 'finger4-1', 'finger5-1', 'finger5-3']) {
 		v.setFromMatrixPosition(skin.skeleton.bones[w.P.map[n + '.' + side]].matrixWorld).applyMatrix4(inv);
@@ -109,5 +114,32 @@ function joints(side = 'R') {
 	}
 	return out;
 }
-window.weaponHands = { FP, HOLDS, GRIPS, holdFrame, joints, closeup, fingerContact, fists: fists_, fistView: fists };
+// close combat: the fists holding an item at guard or mid-swing, a picture of the view and close-
+// ups of the right hand (garments hidden), and the hand's skin measured against the item
+function melee(item, phase = 'guard', from = [[0.6, 0.3, 0.7], [-0.5, -0.6, 0.5]], dist = 0.3) {
+	const me = { P: w.P, M: w.M };
+	fist.on = true; fist.block = false; fist.item = item; fist.move = null; fist.anim = null; fist.m = null; fist.mt = 0;
+	for (let i = 0; i < 60; i++) fists.update(1 / 60, 1 + i / 60, fist, me);
+	if (phase === 'swing' && item) { const m = MOVES[item]; fist.move = item; fist.anim = m.anim; fist.m = m; fist.mt = m.wind + m.active * 0.5; for (let i = 0; i < 40; i++) fists.update(1 / 60, 2 + i / 60, fist, me); }
+	const hand = fists.root.getObjectByName('anatomical-hand-R'), grp = hand?.parent;
+	const shots = {};
+	w.scene.updateMatrixWorld(true); w.renderer.setClearColor(0x6b7a83, 1);
+	w.renderer.render(w.scene, w.camera); shots.view = w.renderer.domElement.toDataURL('image/png');
+	if (!hand) return { shots };
+	const bone = hand.skeleton.bones[w.P.map['finger3-1.R']], at = new T.Vector3().setFromMatrixPosition(bone.matrixWorld).applyMatrix4(grp.matrixWorld);
+	const hidden = [];
+	fists.root.traverse((o) => { if (o.isMesh && o.visible && o !== hand && o.parent !== grp && !(o.parent?.parent === grp)) { o.visible = false; hidden.push(o); } });
+	grp.traverse((o) => { if (o.isMesh && o.visible && o !== hand && o.name.startsWith('sleeve')) { o.visible = false; hidden.push(o); } });
+	const hiddenWorld = []; w.scene.traverse((o) => { if (o.isMesh && o.visible && !fists.root.getObjectById(o.id)) { o.visible = false; hiddenWorld.push(o); } });
+	from.forEach((f, k) => {
+		const cam = new T.PerspectiveCamera(34, w.camera.aspect, 0.005, 5);
+		cam.position.copy(at).add(new T.Vector3(...f).normalize().multiplyScalar(dist).applyQuaternion(w.camera.getWorldQuaternion(new T.Quaternion())));
+		cam.lookAt(at); cam.updateMatrixWorld(true);
+		w.renderer.render(w.scene, cam); shots['c' + k] = w.renderer.domElement.toDataURL('image/png');
+	});
+	for (const o of [...hidden, ...hiddenWorld]) o.visible = true;
+	const A = fists.anatomical?.('R')?.info;
+	return { shots, clearanceMm: A?.clearanceMm || null, params: A?.params ? Array.from(A.params).map((x) => +x.toFixed(2)) : null };
+}
+window.weaponHands = { melee, FP, HOLDS, GRIPS, holdFrame, joints, closeup, fingerContact, fists: fists_, fistView: fists };
 window.WEAPON_HANDS_READY = true;
