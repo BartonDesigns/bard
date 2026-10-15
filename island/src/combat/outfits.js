@@ -79,11 +79,21 @@ function police(r) {
 	o.acc.push({ kind: 'carrier', col: '#161a26', acc: '#232838', badge: '#d9c46a', police: true });
 	return o;
 }
+// the police's tactical team: charcoal fatigues, a helmet with a visor, a heavy carrier
+function tactical(r) {
+	const dark = '#22262d';
+	const o = { gen: 'alien', top: { kind: 'longsleeve', col: dark, acc: '#2c313a', pat: 'plain', fit: 'regular', sleeves: 'long' }, outer: null, bottom: { kind: 'cargo', col: dark, pat: 'cargo', legs: 'long', fit: 'regular' }, shoes: boots('#121214'), acc: [] };
+	o.acc.push({ kind: 'helmet', col: '#1a1d22', visor: r() < 0.5 ? '#3a4656' : null, combat: true });
+	o.acc.push({ kind: 'carrier', col: '#15181d', acc: '#2a2f38', badge: '#d9c46a', police: true });
+	o.acc.push({ kind: 'gloves', col: '#151618' });
+	return o;
+}
 
 // the kit for one fighter of a side: kind (factions.js), the side's colours, seed
 export function outfitFor({ fid, kind, colors = ['#444444', '#999999'], masked = false }, seed = 1) {
 	const r = seeded(seed ^ 0x51ed), [a, b] = colors;
 	if (fid === 'fire') return { gen: 'alien', top: { kind: 'suit', col: '#c99a1a', acc: '#2a2a2a', pat: 'hazmat', fit: 'regular', sleeves: 'long', fab: 'canvas' }, outer: null, bottom: { kind: 'suit', col: '#c99a1a', acc: '#2a2a2a', pat: 'hazmat', legs: 'long', fit: 'regular' }, shoes: boots('#18191b'), acc: [{ kind: 'helmet', col: '#d8a21a', visor: '#2a2a2a' }] };
+	if (fid === 'swat') return tactical(r);
 	if (kind === 'gang') return urban(r, a, b);
 	if (kind === 'militia') return militia(r, a, b, r() < 0.3 ? 'desert' : 'woodland');
 	if (kind === 'military') return soldier(r, 'woodland', r() < 0.08);
@@ -101,7 +111,7 @@ export function outfitFor({ fid, kind, colors = ['#444444', '#999999'], masked =
 // which look a side has, in a word (for the tests and Crysis.military())
 export function lookOf(o) {
 	const accs = (o.acc || []).map((q) => q.kind);
-	if (accs.includes('peaked')) return 'police';
+	if (accs.includes('peaked') || (accs.includes('carrier') && o.acc.some((q) => q.police))) return 'police';
 	if (o.top?.pat === 'camo' && (accs.includes('helmet') || accs.includes('beret'))) return 'soldier';
 	if (accs.includes('carrier')) return 'modern-militia';
 	if (o.top?.pat === 'camo' || o.bottom?.pat === 'camo') return 'camouflage';
