@@ -80,9 +80,36 @@ comes back at once. Per frame: the uniforms, the real lights' choice every 0.2 s
 beam draws (one each per building). Memory: 12 bytes a vertex for the light (16-bit light and
 sky share, 8-bit direction) plus the finer cut geometry.
 
-Measured headless (node, on a shared machine): a 24 by 36 m warehouse 24k vertices cut to 73k,
+Measured in the game (headless software GL, on a heavily shared machine): the fire station's
+ground floor 87k vertices after the cut, 2.8 s of bake work, its upper floor 126k, 3.1 s; the five
+buildings round it 495k vertices and 27 MB of geometry and light together. Measured headless
+(node): a 24 by 36 m warehouse 24k vertices cut to 73k,
 24 fixtures, about 2.3 s of bake work, 3.9 MB; a 20 by 30 m store 81k to 126k vertices, 6.7 MB;
 a row house's ground floor 38k to 58k vertices, 3.1 MB.
+
+## Tuning and lessons
+
+- Fixtures are about as bright as a room's ceiling light (some 300 lux under it at an ordinary
+  height, more from a tall hall's), and a room's fixtures together give at most a well lit
+  room's light across its floor (an engine bay's rows of tubes each give less).
+- The real lights' shadows are taken only on what faces up (floors, tables): a light's own
+  housing otherwise blacked out the ceiling round it.
+- A point light that casts shadows must have its shadow map drawn once before anything samples
+  it, or every material lit by it can come out black (seen on software GL): the lighting asks
+  for that at once.
+- A little skylight (8 percent) is left everywhere, so a windowless room is not pitch dark by
+  day but for its fixtures.
+
+## Follow-ups
+
+- Before and after pictures of the hospital, police station, shops, flats and warehouse in the
+  game (the machine drew about a frame a minute; only the fire station, a house and a row
+  house were taken after). No armory was within reach of the test spot.
+- A per-room probe for real reflections of the fixtures on polished floors (the gleam is now
+  from the direction most of the fixtures' light comes from).
+- Sunlight through the windows is the sun's own; a baked patch of sun on the floor would help
+  where shadows are off (phones).
+- Hours for rooms inside a building that close (a shop under flats).
 
 ## Looking round
 
