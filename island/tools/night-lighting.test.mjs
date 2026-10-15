@@ -130,13 +130,13 @@ test('the city\'s shader switches the porch light as the plan does', () => {
 	assert.match(lights, /life = 2\.5 \+ s\.w \* 9\.0/, 'the solar fade as solarLevel');
 });
 
-test('a shut place keeps about one light in every 9 m square on; a home keeps them all', async () => {
+test('a shut place keeps about one light in every 12 m square on; a home keeps them all', async () => {
 	globalThis.navigator ??= { userAgent: 'node' };
 	const { nightLights } = await import('../src/interiors/lighting.js');
 	const grid = () => { const l = []; for (let x = -12; x <= 12; x += 3.6) for (let z = -9; z <= 9; z += 3.6) l.push({ p: [x, 4.6, z], on: true, rm: 1, I: 10, shape: 'tube' }); return l; };
 	const shut = nightLights(grid(), {});
 	const kept = shut.filter((f) => f.night).length;
-	assert.ok(kept >= shut.length / 6 && kept <= shut.length / 2.5, `${kept} of ${shut.length}`);
+	assert.ok(kept >= shut.length / 12 && kept <= shut.length / 3, `${kept} of ${shut.length}`);
 	// spread out, not bunched: none of them within 4 m of another
 	const K2 = shut.filter((f) => f.night);
 	for (const a of K2) for (const b of K2) if (a !== b) assert.ok(Math.hypot(a.p[0] - b.p[0], a.p[2] - b.p[2]) > 3.5);

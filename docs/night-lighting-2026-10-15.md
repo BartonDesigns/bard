@@ -21,6 +21,10 @@ Three lifts, all applied everywhere regardless of what lamps were near:
 2. **Exposure** (`world/sky.js`) rose from 1.15 to 1.3 at night, lifting everything 13 percent.
 3. **The moon** was 0.5 strong, a cool directional light opposite the sun every night.
 
+The city's lit windows also stayed at the same share all night (half of every tower's floors);
+they now empty by the hour: offices and towers from half lit at seven to about one in eight by
+half past eleven, homes from 42 percent to about a tenth by half past two.
+
 Indoors (the interior lighting branch, merged here): the bake was multiplied by 1.25 after
 dark, the real lights by 2.2, the lamps' glow by 2.2, and main.js lifted exposure by 15 percent
 indoors at night. The fire station's bay floor read flat and near-white because its 3.6 m grid
@@ -50,10 +54,10 @@ fixtures were far apart.
   as by day (the real lights 1.2 times their fixture, from 1.6 to 2.2).
 - **Night lights.** Every place that is not a home and not a hospital keeps only its night
   lights on when it is shut, and after dark if it never shuts (stations, armories, landmarks):
-  about one fixture in each 9 m square of each room, plus screens and signs. The bake now keeps,
+  about one fixture in each 12 m square of each room, plus screens and signs. The bake now keeps,
   per vertex, the night lights' share of the light (`inight`, one byte), so switching is a
-  uniform (`ibakeNight`), no rebake. The fire bay at night: 19 of 56 fixtures, floor light 0.09
-  between and 0.3 to 0.45 under the kept tubes (node bake), pools with dark between. Halos,
+  uniform (`ibakeNight`), no rebake. The fire bay at night: 13 of 56 fixtures, floor light 0.03
+  between and 0.2 to 0.33 under the kept tubes (node bake), pools with dark between. Halos,
   dusty beams and the real lights follow the night lights.
 - A shut shop keeps its night lights at 60 percent instead of every lamp at 8 percent.
 - Unlit rooms in houses stay as the bake leaves them: no lamp, no light but the windows'.
@@ -89,15 +93,49 @@ count changing would rebuild every program, and every material would pay for the
 
 ## Measurements
 
-MEASURE
+Headless captures (software GL, 640 by 400), the same views before (origin/main) and after
+at 22:30 and 11:00. Wall luminance: a 40 by 25 grid of rays from the camera, the walls they hit
+(the city's blocks and the built houses, faces within 17 degrees of vertical), the picture's
+pixel there as linear luminance (0 black, 1 white), median and mean by distance.
+
+| View | Before night | After night | Before day | After day |
+| --- | --- | --- | --- | --- |
+| Suburban street, walls within 60 m | 0.279 (mean 0.243) | 0.015 (mean 0.057) | 0.271 | 0.252 |
+| Suburban street, 60 to 200 m | 0.129 | 0.012 | 0.154 | 0.148 |
+| House front, walls within 60 m (one faces the moon) | 0.126 | 0.099 | 0.190 | 0.189 |
+| Hospital front, walls within 60 m | 0.035 | 0.013 (washed bays brighter) | 0.150 | 0.150 |
+| Downtown from above, walls past 200 m | 0.162 (mean 0.172) | 0.089 (mean 0.102) | | |
+| Downtown street level (before only) | 0.328 | | 0.179 | |
+
+Before, a suburban street's walls were as bright at night as at noon and downtown's brighter at
+night than by day. After, near walls fall to a twentieth of their daylight; what is left at
+night is the lit windows, the lamps and the washes. Daytime is unchanged (within the noise of
+clouds and loading). The fire bay at night: floor 205 of 255 before, 97 after with the 9 m night
+lights (the 12 m set now in the code puts the floor between the kept tubes at 0.03 of the light
+and under them at 0.2 to 0.33 in the node bake: pools ten times brighter than the gaps).
 
 ## Cost
 
-COST
+- Per frame: two uniforms (the hour and the night), the motion lights' timers (eight), and every
+  0.2 s the nearest 16 lamps chosen from the few hundred near you (no allocation).
+- Draws: two (points and pools) on top of the city's; their vertex shaders switch each lamp by
+  the hour. Near you, about 3,000 to 6,000 points and 2,000 to 5,000 quads in a suburb.
+- The field: a loop of up to 16 lights (6 on a phone) in the near trees' and the houses' outside
+  walls' fragment shaders, skipped when none is lit (by day).
+- The city's shader: one more vec4 per building and a branch on house fronts for the porch and
+  garage light.
+- Interiors: one byte a vertex more in the bake (the night share), a little more work per vertex
+  while baking (a second sum); no rebake when the hour changes.
+- Rebuild (when the city round you is rebuilt, or every 125 m of travel): the plan for every
+  household and building within 420 m, the trees in 16 m cells, the roads in 20 m cells.
 
 ## Pictures
 
-PICTURES
+In `/tmp/claude-0/-home-user/ea7514e1-1634-528a-a5ae-a4419923a8d5/scratchpad/night/`: `before/` and `after1/` (street, front,
+civic, night and day), `before2/` (downtown street, skyline), `after3/skyline-night.png`,
+`after2/fire-bay-night.png` and `fire-bay-day.png` (the bay before is the lighting branch's
+`lighting/after3/fire-apparatus-night.png`), `after2/tree-night.png` (before the tree uplights
+were made stronger).
 
 ## Tests
 
@@ -112,4 +150,13 @@ shader patch.
 
 - Landmarks (bay/landmarks.js, the regional landmarks) are not yet washed.
 - The ground pools are flat quads: on a steep drive they can cut into the slope.
-- Path lights assume the walk runs straight out from the door (6.5 m, 4 m on a mapped lot).
+- Path lights assume the walk runs straight out from the door (6.5 m, 4 m on a mapped lot);
+  they stop short of a mapped road.
+- The fire bay by day is unchanged and still near-white: in the page the bay floor's bake is
+  about 2.35 (2.7 times the node bake of the same plan) on a pale floor (0.85), under the day's
+  indoor exposure lift (1.55). Worth a look with daylight in mind.
+- Captures still owed (the machine was too loaded to finish them): the bay with the final 12 m
+  night lights, a house interior at night, the stronger tree uplights, the skyline with the
+  windows emptying by the hour, a downtown street at street level (the views tried landed against
+  walls).
+- The destruction work's wall-changed event could let a porch or room light through a hole.

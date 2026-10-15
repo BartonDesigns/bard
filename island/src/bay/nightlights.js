@@ -256,7 +256,7 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			W(0, dd / 2 + 4);
 			const t = nearestTree(trees, tw[0], tw[1], 9);
 			if (t) {
-				const tx = t.x - nx * 0.8, tz = t.z - nz * 0.8, g = ground(tx, tz);
+				const tx = t.x + nx * 1.2, tz = t.z + nz * 1.2, g = ground(tx, tz);
 				treeLight(t, tx, g, tz, P.onK, P.tree);
 			}
 		}
@@ -280,12 +280,12 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 	function treeLight(t, x, y, z, onK, off) {
 		if (stats.trees < 8) treeSpots.set([t.x, t.y, t.z, t.h || 8], stats.trees * 4);
 		stats.trees++;
-		const H = t.h || 8, top = t.y + H * 0.75;
+		const H = t.h || 8, top = t.y + H * 0.45;
 		let dx = t.x - x, dy = top - y, dz = t.z - z;
 		const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
 		point(x, y + 0.08, z, WARM, 1.6, 0.14, 0, onK, off, 0);
-		groundPool(x, z, 0.9, 0.35, NIGHT_I.tree * 0.05, WARM, 0, onK, off, 0);
-		field(x, y + 0.1, z, Math.max(12, H * 1.4), WARM, NIGHT_I.tree, Math.cos(0.6), dx, dy, dz, Math.cos(0.35), 0, onK, off, 0);
+		groundPool(x, z, 0.9, 0.35, NIGHT_I.tree * 0.01, WARM, 0, onK, off, 0);
+		field(x, y + 0.1, z, Math.max(12, H * 1.4), WARM, NIGHT_I.tree, Math.cos(0.85), dx, dy, dz, Math.cos(0.4), 0, onK, off, 0);
 		// far off, the canopy's soft light where the lamp no longer lights the tree itself
 		point(t.x, t.y + H * 0.45, t.z, WARM, 0.06, H * 0.5, 0, onK, off, 0, 55);
 	}
@@ -389,7 +389,7 @@ export function createNightLights(scene, city, { isPhone = false, ground = () =>
 			if (t.used || Math.hypot(t.x - cx, t.z - cz) > R * 0.5) continue;
 			const r = roll(nightSeed(t.x, t.z), 50);
 			if (!((t.src === 'street' && t.well && r < 0.22) || (t.src === 'real' && r < 0.05))) continue;
-			const a = r * 40, x = t.x + Math.cos(a) * 0.8, z = t.z + Math.sin(a) * 0.8;
+			const a = r * 40, x = t.x + Math.cos(a) * 1.1, z = t.z + Math.sin(a) * 1.1;
 			treeLight(t, x, ground(x, z), z, 0.3, t.src === 'street' ? 25 + r * 8 : 23.5);
 		}
 		pGeo.setDrawRange(0, np);

@@ -12,7 +12,7 @@
 // distance squared is the light falling on a surface facing it; 1 is a well lit room's floor).
 // The moon gives about 0.18 on what faces it, so a porch light out-lights it for a few metres
 // round it and a path light only in its own small pool.
-export const NIGHT_I = { porch: 3, garage: 4.5, path: 0.5, solar: 0.03, tree: 12, wash: 8 };
+export const NIGHT_I = { porch: 3, garage: 4.5, path: 0.5, solar: 0.03, tree: 40, wash: 8 };
 
 // The hour and the night for every shader that switches lamps by the plan (city.js): x the late
 // hour (lateHour), y the sky's night (0 day .. 1 night). A plain { x, y } is what three reads.

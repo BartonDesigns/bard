@@ -496,7 +496,10 @@ export function buildingMaterial(shared, night, nearBand) {
 				// contact shade: the wall darkens where it meets the ground (the sky it sees is
 				// half hidden there), so the building sits in the ground instead of on it
 				diffuseColor.rgb *= mix(1.0, mix(0.58, 1.0, smoothstep(0.9, 3.4, vLY)), (1.0 - roof) * step(vKind, 6.5));
-				float lit = max(mix(0.3, step(vKind > 1.5 ? 0.5 : 0.58, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih)) * step(cond, 0.5);
+				// how many rooms are lit by the hour (uNL.x the late hour): offices and towers emptying
+				// through the evening to a few cleaners' and late workers' floors, homes going to bed
+				float occ = vKind > 1.5 && vKind < 3.5 ? mix(0.5, 0.12, smoothstep(19.0, 23.5, uNL.x)) : mix(0.42, 0.3, smoothstep(21.0, 24.0, uNL.x)) * (1.0 - 0.65 * smoothstep(24.0, 26.5, uNL.x));
+				float lit = max(mix(occ, step(1.0 - occ, bh(floor(cell) + floor(vCW.xz * 0.013))), aaW), shopGlow * step(0.25, ih)) * step(cond, 0.5);
 				// each lit window its own: warm lamps or cool office tubes, brighter up by the
 				// ceiling light, some with the blinds half down (close up; far off, the average)
 				vec2 fc = fract(cell), cid = floor(cell);

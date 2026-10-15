@@ -330,7 +330,7 @@ function* job(H) {
 		f.I *= Math.min(1, 1.5 * area / (1.9 * flux.get(f.rm)));
 	}
 	// the night lights: what stays on after hours (a closed shop, an office, a station's bay
-	// while the crew sleeps): in each room about one fixture in every 9 m square, the screens
+	// while the crew sleeps): in each room about one fixture in every 12 m square, the screens
 	// and signs; a home's and a hospital's lamps are all night lights (they are on or off by
 	// their rooms, or always lit)
 	nightLights(fixtures, spec);
@@ -466,7 +466,7 @@ export function nightLights(fixtures, spec = {}) {
 	for (const i of order) {
 		const f = fixtures[i];
 		if (all || f.screen || !f.on) { f.night = true; continue; }
-		const rm = f.rm ?? -1, key = rm + ':' + Math.floor(f.p[0] / 9) + ':' + Math.floor(f.p[2] / 9) + ':' + Math.floor(f.p[1] / 3);
+		const rm = f.rm ?? -1, key = rm + ':' + Math.floor(f.p[0] / 12) + ':' + Math.floor(f.p[2] / 12) + ':' + Math.floor(f.p[1] / 3);
 		f.night = !taken.has(key);
 		taken.add(key);
 	}
