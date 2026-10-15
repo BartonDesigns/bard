@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { mulberry32, makeNoise } from './noise.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { communityField } from './crysis/ecology.js';
+import { qualityNow } from './world/governor.js';
 
 // build a geometry from a list of tapered tubes: [x0,y0,z0, x1,y1,z1, r0, r1, t0, t1]
 function tubes(list, sides) {
@@ -380,7 +381,7 @@ export function createReef(island, shared, scene, keepClear = [], eco = null) {
 			});
 			im.computeBoundingSphere();
 			im.receiveShadow = true;
-			im.castShadow = !!k.mound || k.g?.form === 'tabular' || k.g?.form === 'massive';
+			im.castShadow = im.userData.casts = !!k.mound || k.g?.form === 'tabular' || k.g?.form === 'massive';
 			im.userData.material175 = k.mound ? 'stone' : 'crystal';
 			c.group.add(im);
 			count += L.length;
@@ -388,10 +389,19 @@ export function createReef(island, shared, scene, keepClear = [], eco = null) {
 		group.add(c.group);
 	}
 
-	function update(active, cam) {
+	// (the heads cast shadows only for an eye under the water: from above, through the surface,
+	// they cannot be told, and the shadow pass drew the whole reef a second time. A lighter tier
+	// draws the chunks nearer: world/governor.js)
+	let casting = true;
+	function update(active, cam, under = true) {
 		group.visible = active;
 		if (!active) return;
-		for (const c of chunks.values()) c.group.visible = Math.hypot(c.cx - cam.x, c.cz - cam.z) < 110;
+		const reach = 110 * Math.max(0.6, qualityNow().far);
+		for (const c of chunks.values()) c.group.visible = Math.hypot(c.cx - cam.x, c.cz - cam.z) < reach;
+		if (casting !== under) {
+			casting = under;
+			for (const c of chunks.values()) for (const im of c.group.children) im.castShadow = under && im.userData.casts;
+		}
 	}
 	return { group, bommies, count, update, perSpecies: coral.map((g, i) => ({ genus: g.genus, common: g.common, n: lists[i].length })) };
 }
