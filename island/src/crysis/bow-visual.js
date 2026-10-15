@@ -6,6 +6,12 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 export const BOW_DRAW = .28;
 export const BOW_REST = new THREE.Vector3(.018, .056, -.025);
 export const BOW_ARROW_LENGTH = .745;
+// The draw hand's palm from the nock: back far enough that the string lies in the crease of the
+// last joint of three hooked fingers (crysis/finger-pose.js), not in the palm.
+export const BOW_HAND = new THREE.Vector3(-.094, -.006, .026);
+// Where the hooked fingers' last-joint creases meet the string (index above the arrow, middle and
+// ring below it), and the pinch on the nock while an arrow comes from the quiver, from the nock.
+export const BOW_HOOK = { index: [.0024, .013, 0], middle: [.002, -.012, 0], ring: [.0055, -.031, 0], over: [.009, .0045, 0], under: [.009, -.0048, .002] };
 const clamp = x => Math.max(0, Math.min(1, Number(x) || 0));
 const smooth = x => x * x * (3 - 2 * x);
 const UP = new THREE.Vector3(0, 1, 0), FORWARD = new THREE.Vector3(1, 0, 0);
@@ -69,7 +75,9 @@ function limb(material, sign, low, colour) {
   update(0); return { mesh, tip, update };
 }
 
-export function createBowVisual(model, material, { low = false, colour = 0x4b5140 } = {}) {
+// drawLength: metres the string comes back at full draw (the first-person view draws to a real
+// anchor at the jaw; the default is the third-person body's reach)
+export function createBowVisual(model, material, { low = false, colour = 0x4b5140, drawLength = BOW_DRAW } = {}) {
   const group = new THREE.Group(); group.name = 'bow-flex'; model.add(group);
   const upper = limb(material, 1, low, colour), lower = limb(material, -1, low, colour); group.add(upper.mesh, lower.mesh);
   const stringGeometry = surface(new THREE.CylinderGeometry(.00115, .00115, 1, low ? 4 : 6), 0xd8d1bb, .88, 0);
@@ -78,6 +86,7 @@ export function createBowVisual(model, material, { low = false, colour = 0x4b514
   const serving = new THREE.Mesh(surface(new THREE.CylinderGeometry(.0021, .0021, .055, low ? 4 : 8), 0x373833, .89, 0), material); serving.name = 'string-serving'; group.add(serving);
   const arrow = createBowArrow(material, low); group.add(arrow);
   const state = { draw: 0, loaded: true, nock: 1 }, nock = new THREE.Vector3(), hand = new THREE.Vector3(), tip = new THREE.Vector3(), direction = new THREE.Vector3();
+  const span = new THREE.Vector3(), nockAt = new THREE.Vector3(), travelOff = new THREE.Vector3(-.13, -.28, .16);
   const right = new THREE.Matrix4(), a = new THREE.Vector3(1, 0, .12).normalize(), t = UP.clone(), n = new THREE.Vector3().crossVectors(t, a);
   let visibleDraw = 0, releaseTime = 0, releaseDraw = 0, currentNock = 1;
   function set(next = {}) { if ('draw' in next) state.draw = clamp(next.draw); if ('loaded' in next) state.loaded = !!next.loaded; if ('nock' in next) state.nock = clamp(next.nock); }
@@ -88,26 +97,28 @@ export function createBowVisual(model, material, { low = false, colour = 0x4b514
     if (releaseTime > 0) { releaseTime = Math.max(0, releaseTime - dt); const u = 1 - releaseTime / .19; visibleDraw = releaseDraw * Math.exp(-u * 19) + Math.sin(u * Math.PI * 5) * .022 * (1 - u); }
     else visibleDraw += (state.draw - visibleDraw) * (1 - Math.exp(-dt * 30));
     const bend = Math.max(0, visibleDraw); upper.update(bend); lower.update(bend);
-    nock.set(-.14 - BOW_DRAW * visibleDraw, BOW_REST.y, BOW_REST.z);
-    [upper, lower].forEach((part, i) => {
-      const d = part.tip.clone().sub(nock), mesh = strings[i]; mesh.position.copy(nock).add(part.tip).multiplyScalar(.5); mesh.quaternion.setFromUnitVectors(UP, d.clone().normalize()); mesh.scale.set(1, d.length(), 1);
-    });
+    nock.set(-.14 - drawLength * visibleDraw, BOW_REST.y, BOW_REST.z);
+    for (let i = 0; i < 2; i++) {
+      const part = i ? lower : upper, d = span.subVectors(part.tip, nock), mesh = strings[i], len = d.length();
+      mesh.position.copy(nock).add(part.tip).multiplyScalar(.5); mesh.quaternion.setFromUnitVectors(UP, d.multiplyScalar(1 / len)); mesh.scale.set(1, len, 1);
+    }
     serving.position.copy(nock);
     currentNock = state.loaded ? 1 : state.nock;
     const travel = 1 - smooth(currentNock);
-    const nockAt = nock.clone().add(new THREE.Vector3(-.13 * travel, -.28 * travel, .16 * travel));
+    nockAt.copy(nock).addScaledVector(travelOff, travel);
     direction.subVectors(BOW_REST, nock).normalize(); arrow.position.copy(nockAt); arrow.quaternion.setFromUnitVectors(FORWARD, direction);
     arrow.visible = state.loaded || (currentNock > .08 && currentNock < 1);
     tip.copy(direction).multiplyScalar(BOW_ARROW_LENGTH).add(nock);
-    hand.copy(nockAt).add(new THREE.Vector3(-.03, -.012, .024));
-    if (releaseTime > 0) { const u = 1 - releaseTime / .19; hand.set(-.17 - BOW_DRAW * releaseDraw - .024 * Math.sin(u * Math.PI), BOW_REST.y - .012, BOW_REST.z + .024 + .025 * Math.sin(u * Math.PI)); }
+    hand.copy(nockAt).add(BOW_HAND);
+    // let go: the hand flies back past the jaw and opens, the string springing away from it
+    if (releaseTime > 0) { const u = 1 - releaseTime / .19; hand.set(-.14 + BOW_HAND.x - drawLength * releaseDraw - .024 * Math.sin(u * Math.PI), BOW_REST.y + BOW_HAND.y, BOW_REST.z + BOW_HAND.z + .025 * Math.sin(u * Math.PI)); }
     right.makeBasis(a, t, n).setPosition(hand);
   }
   function info() {
     let stringNockError = 0, stringTipError = 0;
     [upper, lower].forEach((part, i) => { const mesh = strings[i]; mesh.updateMatrix(); stringNockError = Math.max(stringNockError, new THREE.Vector3(0, -.5, 0).applyMatrix4(mesh.matrix).distanceTo(nock)); stringTipError = Math.max(stringTipError, new THREE.Vector3(0, .5, 0).applyMatrix4(mesh.matrix).distanceTo(part.tip)); });
     const projected = BOW_REST.clone().sub(nock).cross(direction).length();
-    return { draw: state.draw, visibleDraw, drawMeters: BOW_DRAW * Math.max(0, visibleDraw), loaded: state.loaded, nock: nock.toArray(), arrowNock: arrow.position.toArray(), rest: BOW_REST.toArray(), stringTips: [upper.tip.toArray(), lower.tip.toArray()], rightPalmTarget: hand.toArray(), arrowVisible: arrow.visible, nockProgress: currentNock, stringNockErrorMm: stringNockError * 1000, stringTipErrorMm: stringTipError * 1000, arrowRestErrorMm: projected * 1000 };
+    return { draw: state.draw, visibleDraw, drawMeters: drawLength * Math.max(0, visibleDraw), loaded: state.loaded, nock: nock.toArray(), arrowNock: arrow.position.toArray(), rest: BOW_REST.toArray(), stringTips: [upper.tip.toArray(), lower.tip.toArray()], rightPalmTarget: hand.toArray(), arrowVisible: arrow.visible, nockProgress: currentNock, stringNockErrorMm: stringNockError * 1000, stringTipErrorMm: stringTipError * 1000, arrowRestErrorMm: projected * 1000 };
   }
-  step(0); return { set, fire, cancel, step, info, right, tip, direction, arrow, group, state, dispose() { group.traverse(o => { if (o.geometry && o.geometry !== stringGeometry) o.geometry.dispose(); }); stringGeometry.dispose(); group.removeFromParent(); } };
+  step(0); return { set, fire, cancel, step, info, right, tip, direction, arrow, group, state, nock, drawLength, get releasing() { return releaseTime > 0; }, dispose() { group.traverse(o => { if (o.geometry && o.geometry !== stringGeometry) o.geometry.dispose(); }); stringGeometry.dispose(); group.removeFromParent(); } };
 }
