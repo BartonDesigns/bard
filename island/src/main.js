@@ -46,12 +46,16 @@ import { createBayArea, bayUniforms } from './bay/terrain.js';
 import { createGoldenGate } from './bay/bridge.js';
 import { createLabels } from './bay/labels.js';
 import { createCity } from './bay/city.js';
+import { requestsNear, takeRequest, completeRequest } from './economy/requests.js';
+import { payroll } from './economy/payroll.js';
+import { bank } from './economy/bank.js';
 import { createHouses } from './bay/houses.js';
 import { createFamilyLife } from './people/family-life.js';
 import { createStreetLife } from './bay/streetlife.js';
 import { bindCarSky } from './bay/cars.js';
 import { createFreeways } from './bay/freeways.js';
 import { createBridgeSound } from './bay/bridgesound.js';
+import { createStreets } from './bay/streets.js';
 import { createCrosswalks } from './bay/crosswalks.js';
 import { createDogWalkers } from './people/dogwalkers.js';
 import { createLake } from './bay/lake.js';
@@ -66,12 +70,16 @@ import { createDiscovery } from './bay/discovery.js';
 import { createShaderWarm } from './world/shaderwarm.js';
 import { captureResources } from './world/resources.js';
 import { preferLite, clearLite, GPU_LITE } from './world/gpulite.js';
+import { createGovernor, qualityNow } from './world/governor.js';
+import { meterGL } from './world/gpumeter.js';
+import { bodyCount } from './people/body.js';
 import { createBoardwalk } from './bay/boardwalk.js';
 import { createTowers } from './bay/towers.js';
 import { createForestFloor } from './bay/forestfloor.js';
 import { createCommercial } from './bay/commercial.js';
 import { createInteriors } from './interiors/index.js';
 import { createStructures } from './structures/index.js';
+import { createCataclysm } from './cataclysm/index.js';
 import { createServices } from './services/index.js';
 import { createContact } from './bay/contact.js';
 import { createCottageInteriors } from './interiors/cottage.js';
@@ -121,11 +129,15 @@ import { createGuide } from './guide/guide.js';
 import { createWaypoint } from './ui/waypoint.js';
 import { storagePanel } from './storage.js';
 import { createSurprises } from './surprises.js';
-import { createPeople, addTalkers, talkers } from './people/people.js';
+import { createPeople, addTalkers, talkers, addLife } from './people/people.js';
+import { createDailyLife } from './economy/daily-life.js';
 import { createChatter } from './people/chatter.js';
 import { createErrands } from './people/errands.js';
 import { createNpcQuests } from './people/npc-quests.js';
 import { createMoney } from './people/npc-money.js';
+import { fromRequests } from './people/npc-quests-core.js';
+import { commercialEstablishments } from './people/bag-spots.js';
+import { registerSiting } from './economy/establishments.js';
 import { createCommons } from './combat/morality.js';
 import { createFares } from './vehicles/fares.js';
 import { createItemUse } from './gameplay/item-use.js';
@@ -160,6 +172,7 @@ import { createArmsRuntime } from './crysis/arms-runtime.js';
 import { createGear } from './ui/gear.js';
 import { createCombat } from './combat/combat.js';
 import { createMilitary } from './military/index.js';
+import { createLaw } from './law/index.js';
 import { createFloaters } from './planet/floaters.js';
 import { createBeyond } from './planet/beyond.js';
 
@@ -450,8 +463,12 @@ export function createIslandWorld() {
 	};
 	const fullUnits = () => { const gl = renderer.getContext(); renderer.capabilities.maxTextures = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS); };
 	fullUnits();
-	// the graphics can be lost (a phone short of memory): three stops drawing and rebuilds when
-	// they come back; if they don't within a few seconds, say to reload
+	// what the graphics hold, for the quality governor (world/gpumeter.js, world/governor.js)
+	const gpuMeter = meterGL(renderer.getContext());
+	// the graphics can be lost (a phone short of memory): the world holds still, three rebuilds
+	// what it draws when they come back, and the governor takes the device a tier lower from then
+	// on (and for a few days), so the next frames ask less of it. If they do not come back within a
+	// few seconds, say to reload; nothing reloads by itself, so a device cannot go round in a loop.
 	let lost = false;
 	dom.canvas.addEventListener('webglcontextlost', (event) => {
 		event.preventDefault();
@@ -460,11 +477,18 @@ export function createIslandWorld() {
 		try { localStorage.setItem('l99-gl-lost', String(Date.now())); } catch { /* private mode */ }
 		// (the light ground only when it was the ground being built: a loss elsewhere is no reason)
 		if (/uBayOn/.test(linking.what)) preferLite();
-		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent());
+		governor.lost();
+		console.error('[graphics lost] at', camera.position.toArray().map(Math.round).join(', '), 'being built:', linking.what, 'last shaders warmed:', shaderWarm.recent(), 'governor:', JSON.stringify(governor.info()));
 		hint('The graphics were reset. Restoring…', 6000, 3);
-		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 6000);
+		setTimeout(() => { if (lost) hint('The graphics did not come back. Reload the page to carry on.', 600000, 3); }, 8000);
 	});
-	dom.canvas.addEventListener('webglcontextrestored', () => { lost = false; fullUnits(); shaderWarm.reset(); hint('Graphics restored.', 2500, 3); });
+	dom.canvas.addEventListener('webglcontextrestored', () => {
+		lost = false; gpuMeter.reset(); fullUnits(); shaderWarm.reset();
+		applyQuality();
+		// (the frame clock starts again from now, not from before the loss)
+		last = performance.now(); frameAvg = 16;
+		hint('Graphics restored, at lighter settings.', 3000, 3);
+	});
 	// AgX: a film-like curve that rolls highlights off gently and keeps greens from going
 	// neon; ACES crushed the shade and pushed saturation, which read as harsh
 	renderer.toneMapping = THREE.AgXToneMapping;
@@ -540,9 +564,12 @@ export function createIslandWorld() {
 	}
 
 	let world = null, running = false, visible = false, last = 0, time = 0, frameAvg = 16, quality = 'high';
-	// the graphics setting: high unless this device was set otherwise (phones too)
-	try { quality = localStorage.getItem('l99-quality') || 'high'; } catch { /* private mode */ }
-	applyQuality(true);
+	// the graphics setting: high on a computer, governed on a phone (world/governor.js: a tier
+	// down to start, stepped by the frames and the memory), unless this device was set otherwise
+	try { quality = localStorage.getItem('l99-quality') || (isPhone ? 'auto' : 'high'); } catch { quality = isPhone ? 'auto' : 'high'; }
+	const governor = HOOKS.governor = createGovernor({ phone: isPhone, mode: () => quality, meter: gpuMeter, storage: (() => { try { return localStorage; } catch { return null; } })() });
+	if (governor.crashedLastTime) console.warn('[governor] the last visit ended without a goodbye: starting lighter', JSON.stringify(governor.info()));
+	applyQuality();
 	let panelClock = null;
 	setInterval(() => { if (panelClock && dom.panel.style.display === 'block') panelClock.refresh(); }, 1000);
 	const state = { seed: null };
@@ -771,6 +798,8 @@ export function createIslandWorld() {
 	// the military's bases, soldiers and vehicles, and the police (military/): they answer to combat's hooks
 	const military = HOOKS.military = createMilitary({ scene, camera, mount: dom.mount, world: () => world, combat, isPhone, hint: (t, ms, pri = 1) => hint(t, ms, pri) });
 	combat.hooks.posts = military.posts; combat.hooks.trespass = military.trespass;
+	// close combat sees your body in third person (combat/melee.js)
+	combat.melee.bind({ avatar, self: you });
 	// the compass, for every system that records a deed (families' food deeds, favours)
 	HOOKS.morality = combat.morality;
 	// people you pass notice you and say something, in their own voices (people/chatter.js)
@@ -781,7 +810,7 @@ export function createIslandWorld() {
 	// the crosswalks: the signal's tick at the curb, and crossings that count (bay/crosswalks.js)
 	const crosswalks = createCrosswalks({ world: () => world, note, driving: () => drive.active() });
 	// favours people ask of you as you pass (people/errands.js)
-	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney });
+	const errands = guideApi.errands = HOOKS.errands = createErrands({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), arms: () => arms, morality: () => HOOKS.morality, hint: (t, ms) => hint(t, ms, 1), driving: () => drive.active(), isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', note, handoff: () => HOOKS.npcQuests?.handoff, money: () => HOOKS.npcMoney, potholes: () => world?.streets });
 	// everyone else on the compass: people's deeds, their regions' tallies, their wallets, and the
 	// quests they do for each other with or without you (people/npc-quests.js)
 	const npcStore = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
@@ -791,10 +820,33 @@ export function createIslandWorld() {
 	const npcQuests = HOOKS.npcQuests = createNpcQuests({ scene, camera, world: () => world, people, chatter, persona: (p) => guide.personaOf(p), errands: () => HOOKS.errands, commons, money: npcMoney, isPhone, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', placeName: () => HOOKS.combat?.placeName?.() || '', hint: (t, ms) => hint(t, ms, 1), others: () => [...families.actors(), ...social.actors.all()] });
 	commons.follow(combat.morality, npcQuests.regionNow);
 	guideApi.npcQuests = npcQuests;
+	// the economy behind the people: their money in the bank, the businesses' requests among their
+	// quests, the businesses' doors among their places (a walk-in's door and tables from
+	// commercial.js, named from the registry; the rest at their doors)
+	npcMoney.use(bank);
+	npcQuests.addSource(fromRequests({ requestsNear, takeRequest, completeRequest }));
+	npcQuests.establishments((x, z, r) => {
+		const W = world, out = commercialEstablishments(W?.commercial)(x, z, r), E = W?.city?.economy?.near(x, z, r + 20) || [];
+		for (const o of out) { let best = null, bd = 25; for (const e of E) { const d = Math.hypot(e.door[0] - o.door.x, e.door[1] - o.door.z); if (d < bd) { bd = d; best = e; } } if (best) { o.id = best.id; o.name = best.name; } }
+		for (const e of E) {
+			const kind = e.venue === 'cafe' || e.venue === 'restaurant' || e.venue === 'shop' ? e.venue : null;
+			if (!kind || out.some((o) => o.id === e.id)) continue;
+			out.push({ id: e.id, kind, name: e.name, door: { x: e.door[0], y: W.island.heightAt(e.door[0], e.door[1]), z: e.door[1], heading: Math.atan2(e.door[0] - e.x, e.door[1] - e.z) }, tables: [] });
+		}
+		return out;
+	});
+	// the services claim their buildings from the economy, and its boards carry their names
+	for (const kind of ['hospital', 'police', 'fire', 'armory']) registerSiting(kind, (b) => { const F = world?.services?.list?.().find((f) => f.kind === kind && Math.abs(f.x - b.x) < 1 && Math.abs(f.z - b.z) < 1); return F ? F.name || true : false; });
 	// (a hospital hears of people knocked down here: HOOKS.npcHurt(fn); it bills through the bank)
 	HOOKS.npcHurt = npcQuests.onHurt;
 	// (the nearest hospital sends for whoever is knocked down: services/)
 	HOOKS.npcHurt((e, p) => world?.services?.injury(p, e.why, e.child ? 0.5 : 0.6));
+	// city-wide catastrophes, rare (cataclysm/): quakes, wildfires, a magma world's eruption; the
+	// crews held off, the services sent, people sheltering, things to do. HOOKS.cataclysm.on(fn)
+	guideApi.cataclysm = HOOKS.cataclysm = createCataclysm({ scene, camera, mount: dom.mount, world: () => world, shared, renderer, isPhone, people, hooks: HOOKS, hint: (t, ms) => hint(t, ms, 1), persona: (p) => guide.personaOf(p) });
+	// law and order over combat's and the police's hooks: witnesses and calls, the escalation
+	// ladder, arrests and fines, the gangs' corners by region, tactics (law/)
+	HOOKS.law = createLaw({ world: () => world, combat, military, people: () => ({ pool: [...people.pool, ...families.actors(), ...social.actors.all()] }), services: () => world?.services, money: () => HOOKS.npcMoney, arms, hint: (t, ms, pri = 1) => hint(t, ms, pri), isPhone, mount: dom.mount, touch: isPhone || !!matchMedia?.('(pointer: coarse)')?.matches, hours: () => world?.sky?.state?.hours ?? 12, region: () => { const R = npcQuests.regionNow(); return { id: R.id, name: R.name, tally: commons.region(R.id), situation: npcQuests.situation?.() }; } });
 	// using what you hold: a medkit on you or on someone hurt (gameplay/item-use.js)
 	const itemUse = HOOKS.itemUse = createItemUse({ arms, combat: () => HOOKS.combat, people, persona: (p) => guide.personaOf(p), camera, hint: (t, ms) => hint(t, ms, 1), chatter, morality: () => HOOKS.morality, worldKey: () => HOOKS.combat?.worldKey?.() || 'here', note, errands: () => HOOKS.errands });
 	const useBtn = button('🩹 Use', 'Use what you hold (U)', 'display:none;', 'prompt 55');
@@ -1026,10 +1078,11 @@ export function createIslandWorld() {
 		world.cottages = createCottageInteriors(scene, village.footprints, { isPhone });
 		// sunbeams through the trees in mist (world/sunrays.js)
 		world.rays = createSunRays(scene, shared, renderer, { isPhone, sun: sky.sun, air: sky.uniforms.uAir });
-		world.rays.quality(quality);
+		world.rays.quality(qualityNow().fx);
+		fitShadow();
 		// sprinklers on the lawns, spray and mist where water falls (world/spray.js)
 		world.spray = createSpray(scene, shared, { isPhone, world: () => world });
-		world.spray.quality(quality);
+		world.spray.quality(qualityNow().fx);
 		if (waterPlan) {
 			world.water = createWater(scene, shared, { isPhone, mode: 'island', island, heightAt: (x, z) => island.heightAt(x, z), sources: [waterPlan.source], look: waterPlan.look, roads: waterPlan.roads });
 			const water = world.water;
@@ -1137,6 +1190,11 @@ export function createIslandWorld() {
 			// Crysis: the towns beyond the survey, grown street by street as you near them
 			world.civ = createCivilization({ real: world.real, bay: bayArea, water: () => world?.water?.gen, brief: (t) => earthDirector.townBrief(t) });
 			world.city = createCity(shared, scene, bayNear, world.real);
+			// (the businesses take their food and words from where on Earth they are)
+			world.city.economy.setLocator((x, z) => globeLL(x, z));
+			world.city.economy.setRegional(() => world?.globe?.regional?.settlements);
+			// the working day: staff out front of the open businesses, people in and out of their doors (people/people.js)
+			{ const daily = createDailyLife(world.city.economy, { isPhone }); addLife((x, z, h, now) => daily.at(x, z, h, now, new Date().getDay())); }
 			// the forest floor: fallen logs and stumps under the trees, the haze among the redwoods
 			world.forestFloor = createForestFloor(scene, bayNear, world.city, world.real, { shared, isPhone, ground: (x, z) => island.heightAt(x, z), globe: () => world?.globe });
 			// the real houses close by, built whole with their rooms
@@ -1168,6 +1226,8 @@ export function createIslandWorld() {
 			HOOKS.military?.setInteriors(world.services.militaryInteriors());
 			HOOKS.military?.setStations((x, z) => world?.services?.stationAt(x, z));
 			world.street = createStreetLife(shared, scene, bayArea, (x, z) => island.heightAt(x, z), world.real);
+			// the streets by era and season: potholes and their crews, the trees' stakes and leaves, holiday lights, sprinklers (bay/streets.js)
+			world.streets = createStreets({ scene, camera, world: () => world, drive, isPhone, hint: (t, ms) => hint(t, ms, 1) });
 			// the soft shade where buildings, trees and cars meet the ground (bay/contact.js)
 			world.contact = createContact(scene, { ground: (x, z) => island.heightAt(x, z), city: world.city, street: world.street, isPhone });
 			// the cars' people, their owners, and the cars as solid things (vehicles/)
@@ -1290,6 +1350,7 @@ export function createIslandWorld() {
 		world.water?.dispose();
 		world.bayArea?.dispose();
 		world.real?.dispose();
+		world.streets?.dispose();
 		drive.stop();
 		world.player.dispose();
 		world.cottages?.dispose();
@@ -1451,7 +1512,7 @@ export function createIslandWorld() {
 					location.replace(u.href);
 					return;
 				}
-				applyQuality(true); buildPanel();
+				applyQuality(); buildPanel();
 			};
 			q.appendChild(b);
 		}
@@ -1473,16 +1534,27 @@ export function createIslandWorld() {
 		panelClock = t;
 	}
 
-	function applyQuality(force) {
-		const target = quality === 'high' ? maxRatio : quality === 'low' ? Math.min(1, maxRatio) * 0.75 : pixelRatio;
-		if (quality !== 'auto' || force) pixelRatio = target;
+	// the tier the governor (or the setting) has chosen, applied: resolution, shadows (their map's
+	// size and how often they are drawn), the clouds in the water, the sunbeams and spray. The crowd,
+	// the cars' detail and the view's reach read the tier themselves (qualityNow).
+	function applyQuality() {
+		governor.apply();
+		const Q = qualityNow();
+		pixelRatio = SAFE ? 1 : Math.max(0.5, maxRatio * Q.ratio);
 		renderer.setPixelRatio(pixelRatio);
-		renderer.shadowMap.enabled = !SAFE && !(quality === 'low');
+		renderer.shadowMap.enabled = !SAFE && Q.shadows;
+		fitShadow();
 		// (the clouds in the water: the plain sky there on low)
-		shared.cloudReflect = quality !== 'low';
-		world?.rays?.quality(quality);
-		world?.spray?.quality(quality);
+		shared.cloudReflect = Q.reflect;
+		world?.rays?.quality(Q.fx);
+		world?.spray?.quality(Q.fx);
 		resize();
+	}
+
+	// the sun's shadow map at the tier's size (sky.js makes it at the device's full size)
+	function fitShadow() {
+		const sun = world?.sky?.sun, size = (isPhone ? 1024 : 2048) * qualityNow().shadowSize;
+		if (sun?.shadow && sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
 	}
 
 	function resize() {
@@ -1640,9 +1712,11 @@ export function createIslandWorld() {
 		W.deep?.update(dt, time);
 		// the reef and its fish only run when you are in or over the bay
 		const bay = W.island.village.bay;
-		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < 40;
+		// (on a governed tier, from up on the shore only once you are down at the water: the reef
+		// and its life drawn through the surface from the spawn's hill were millions of triangles)
+		const inBay = !!bay && Math.hypot(camera.position.x - bay.x, camera.position.z - bay.z) < bay.r * 1.6 && camera.position.y < (qualityNow().far >= 1 || under ? 40 : 6);
 		W.sealife.update(dt, time, inBay);
-		W.reef.update(inBay, camera.position);
+		W.reef.update(inBay, camera.position, under);
 		W.fish.update(dt, time, inBay);
 		W.inverts.update(dt, time, inBay);
 		shared.uUnder.value = under ? 1 : 0;
@@ -1669,7 +1743,7 @@ export function createIslandWorld() {
 			scene.fog.density *= W.island.profileHaze || 1;
 			// (the Moon's ground runs to its horizon in clear vacuum)
 			if (W.island.far) scene.fog.density = 0.000006;
-			const far = W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK), nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
+			const far = (W.island.far ? 40000 : THREE.MathUtils.lerp(16000, 110000, openK)) * qualityNow().far, nearP = openK > 0.5 ? THREE.MathUtils.clamp((camera.position.y - Math.max(0, W.island.heightAt(camera.position.x, camera.position.z))) * 0.01, 0.25, 2) : 0.25;
 			if (Math.abs(camera.far - far) > far * 0.02 || Math.abs(camera.near - nearP) > 0.05) { camera.far = far; camera.near = nearP; camera.updateProjectionMatrix(); }
 		}
 		// down in a planet's caves the daylight is gone: the glow, the lamps and the lava light it
@@ -1724,6 +1798,8 @@ export function createIslandWorld() {
 		W.diablo?.update(dt, time, camera, sk.night);
 		W.landmarks?.update?.(dt, camera);
 		W.city?.update(camera, sk.night);
+		// the businesses' fronts by the hour, and the regional kit's towns planned too (economy/layer.js)
+		W.city?.economy?.tick(camera.position, W.sky.state.hours, sk.night, dt);
 		W.forestFloor?.update(camera);
 		W.edge?.update(dt, time, camera, sk.night);
 		W.houses?.update(camera, dt, sk.night);
@@ -1756,6 +1832,8 @@ export function createIslandWorld() {
 		gear.update(dt);
 		if (!window.L99Loading.active()) combat.update(dt);
 		HOOKS.military?.update(dt, sk.night);
+		HOOKS.cataclysm?.update(dt, sk);
+		if (!window.L99Loading.active()) HOOKS.law?.update(dt);
 		// where you are, kept every few seconds so a reload carries on from here
 		if (visible && !window.L99Loading.active() && !arcade.active() && !W.orbit?.active()) share.keep();
 		W.street?.update(dt, time, camera, sk.night);
@@ -1765,6 +1843,7 @@ export function createIslandWorld() {
 		W.berms?.update(camera);
 		W.freeways?.update(camera);
 		bridgeSound.update(dt);
+		W.streets?.update(dt, sk.night, W.sky.state.hours);
 		crosswalks.update(dt);
 		W.lake?.update(dt, time, camera, sk.night);
 		W.water?.update(dt, time, camera, sk.night);
@@ -1843,14 +1922,17 @@ export function createIslandWorld() {
 		if (tick.fov0) { camera.fov = tick.fov0 * fovK; camera.updateProjectionMatrix(); if (fovK === 1) tick.fov0 = 0; }
 		W.rays?.update(dt, camera, { W, wx, caveK, under, hours: W.sky.state.hours, frameMs: frameAvg });
 		// (behind the arrival card nothing is drawn until the place is in: the time goes to loading it)
+		// (on the lighter tiers the shadows are drawn every other frame: world/governor.js)
+		const shadowEvery = qualityNow().shadowEvery;
+		renderer.shadowMap.autoUpdate = shadowEvery <= 1;
+		if (shadowEvery > 1 && (tick.shadowN = (tick.shadowN || 0) + 1) % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
 		if (arrival?.blind || W.beyond?.render()) { /* hidden, or drawn through the horizon */ } else if (!W.shrooms?.render(renderer, scene, camera)) { renderer.render(scene, camera); W.rays?.post(); W.arch?.post?.(); gear.post(renderer); }
 		W.orbit?.render(time);
-		// hold 60 fps on phones by trading resolution, smoothly
+		// the governor: a tier down when the frames or the memory say so, back up after a long easy
+		// run (world/governor.js)
 		frameAvg += (dt * 1000 - frameAvg) * 0.05;
-		if (quality === 'auto' && (frame.n = (frame.n || 0) + 1) % 45 === 0) {
-			if (frameAvg > 19 && pixelRatio > 0.6) { pixelRatio = Math.max(0.6, pixelRatio - 0.1); renderer.setPixelRatio(pixelRatio); resize(); }
-			else if (frameAvg < 14.5 && pixelRatio < maxRatio) { pixelRatio = Math.min(maxRatio, pixelRatio + 0.05); renderer.setPixelRatio(pixelRatio); resize(); }
-		}
+		// (on a phone stepped down to the lighter tiers the local voice model, 100 MB, is let go too)
+		if (governor.update(dt, frameAvg)) { applyQuality(); if (isPhone && qualityNow().fx === 'low') guide.voice.unload?.(); }
 	}
 
 	// the context button: board or leave the boat; the jump button dives in the sea
@@ -1880,6 +1962,7 @@ export function createIslandWorld() {
 		// page up longer than the faceplate's): index.html's L99Clock reads this
 		window._worldAudioLead = isPhone ? 0.2 : 0.15;
 		if (world) world.player.state.active = true;
+		governor.live(true);
 		dom.mount.style.display = 'block';
 		resize();
 		start();
@@ -1887,6 +1970,7 @@ export function createIslandWorld() {
 	}
 	function hide() {
 		visible = false;
+		governor.live(false);
 		window._worldAudioLead = undefined;
 		world?.orbit?.pause?.();
 		picnic.pause();
@@ -1903,6 +1987,10 @@ export function createIslandWorld() {
 		window.L99Keyboard149?.sync?.();
 	}
 
+	// a page put away or closed says goodbye; one that goes while a world is on screen did not
+	// (the governor's crash mark: world/governor.js)
+	document.addEventListener('visibilitychange', () => governor.live(visible && !document.hidden));
+	addEventListener('pagehide', () => governor.live(false));
 	dom.back.onclick = (e) => { e.stopPropagation(); api.close(); };
 	function toggleFly() {
 		const P = world?.player.state;
@@ -2182,8 +2270,39 @@ if (typeof window !== 'undefined') {
 		// fares while you drive: Crysis.fares() the current one and your totals; .hail() someone ahead hails now
 		// today's goals: Crysis.daily()
 		daily: () => HOOKS.daily?.list(),
+		// the businesses (economy/): Crysis.economy() counts them and the share of the buildings round
+		// you that are one; .near(x, z, r) each one's name, kind and door (round you with no x, z);
+		// .find('pasta') the nearest of a kind or a name; .requests(r) what the businesses round you ask
+		// (.take(id), .complete(id, outcome) as the player); .payroll() wages, top earners, balances
+		economy: Object.assign((r = 600) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; if (!p || !W.city?.economyInfo) return 'no city here'; const L = payroll.ledger(3); return { ...W.city.economyInfo(p.x, p.z, r), requests: requestsNear(p.x, p.z, 400).length, payroll: { paid: L.paid, wages: L.wages, employed: L.employed }, topEarners: L.topEarners, balances: L.best }; }, {
+			requests: (r = 400) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return p ? requestsNear(p.x, p.z, r) : []; },
+			take: (id) => takeRequest(id, 'player'),
+			complete: (id, outcome = 'done') => completeRequest(id, 'player', outcome),
+			payroll: (n = 5) => payroll.ledger(n),
+			near: (x, z, r = 300) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; if (x == null && p) { x = p.x; z = p.z; } return W?.city?.economy?.near(x, z, r) || []; },
+			find: (what) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; const k = String(what || '').toLowerCase(); return (p && W?.city?.economy?.near(p.x, p.z, 3000).find((E) => E.type === k || E.name.toLowerCase().includes(k) || E.label.includes(k))) || null; },
+		}),
+		// the bank (economy/bank.js): Crysis.bank(id) an account ('player', 'hh:<household>', 'npc:<seed>',
+		// or the nearest person with no id); .talk(id) what they might say about money; .daily(id, days);
+		// .history(id); .sync() to the ledger Worker; .panel(id) a chart of it (with ?admin in the address)
+		bank: Object.assign((id) => { if (id == null) { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, q = p && W?.people?.pool?.filter((a) => a.active).sort((a, b) => a.M.S.pos.distanceTo(p) - b.M.S.pos.distanceTo(p))[0]; return q ? bank.account(q) : { ...bank.info(), player: bank.account('player') }; } return bank.account(id); }, {
+			talk: (id) => bank.moneyTalk(id), daily: (id, n = 30) => bank.daily(id, n), history: (id) => bank.history(id), sync: () => bank.sync(), info: () => bank.info(),
+			panel: (id = 'player') => {
+				if (!/[?&]admin\b/.test(location.search)) return 'Add ?admin to the address first.';
+				const d = bank.daily(id, 90), v = d.map((q) => q.balance), lo = Math.min(...v, 0), hi = Math.max(...v, 1), W = 560, H = 160;
+				const pts = d.map((q, i) => `${(10 + i * (W - 20) / Math.max(1, d.length - 1)).toFixed(1)},${(H - 10 - (q.balance - lo) * (H - 20) / Math.max(1, hi - lo)).toFixed(1)}`).join(' ');
+				let el = document.getElementById('bank-panel');
+				if (!el) { el = document.createElement('div'); el.id = 'bank-panel'; el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99999;background:rgba(18,20,24,.92);color:#eee;padding:12px;border-radius:10px;font:13px system-ui;max-width:92vw'; document.body.appendChild(el); el.onclick = () => el.remove(); }
+				const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+				el.innerHTML = `<b>${esc(bank.household(id))}</b> ${bank.balance(bank.household(id))} credits<br><svg width="${W}" height="${H}" style="max-width:100%"><polyline fill="none" stroke="#7fb4ff" stroke-width="2" points="${pts}"/></svg><br>` + bank.history(id).slice(0, 8).map((t) => `day ${t.day} ${esc(t.kind)} ${t.amount} ${esc(t.counterparty)}`).join('<br>');
+				return 'shown (click it to close)';
+			},
+		}),
 		fares: Object.assign(() => HOOKS.fares?.info(), { hail: () => HOOKS.fares?.hailNow(), mark: () => HOOKS.fares?.mark() }),
 		errands: Object.assign(() => HOOKS.errands?.info(), { ask: () => HOOKS.errands?.askNearest(), pet: () => HOOKS.errands?.petNow(), snatch: () => HOOKS.errands?.snatch(), accept: () => HOOKS.errands?.accept(), cancel: () => HOOKS.errands?.cancel(), mark: () => HOOKS.errands?.mark() }),
+		// the streets by era and season (bay/streets.js): Crysis.streets() the era here and the counts;
+		// .holes() the potholes round you; .report() the nearest to its crew; .crew() a crew to it now; .month(12) as the Sky panel's month
+		streets: Object.assign(() => window.L99Island?.world?.()?.streets?.info(), { month: (m) => { pickMonth(m); return monthPicked(); }, holes: (r) => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos; return p && W.streets?.potholes.around(p.x, p.z, r); }, report: () => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, h = p && W.streets?.nearest(p.x, p.z, 200); return h ? (W.streets.report(h), h.id) : 'no pothole near'; }, crew: () => { const W = window.L99Island?.world?.(), p = W?.player?.state?.pos, h = p && W.streets?.potholes.nearest(p.x, p.z, 200); return h ? (W.streets.potholes.report(h), W.streets.crew.now(h), h) : 'no pothole near'; } }),
 		// the scene itself, for checks that walk what is drawn (island/tools/zfight-browser.cjs)
 		scene: () => HOOKS.scene,
 		// families, schools and food: Crysis.families().info(), .stage('school-run'), .help('stock'), .quests()
@@ -2213,6 +2332,9 @@ if (typeof window !== 'undefined') {
 			vault: () => HOOKS.structures?.vault('key'), ahead: () => HOOKS.structures?.ahead(), advance: (h) => HOOKS.structures?.advance(+h || 0), recount: () => HOOKS.structures?.recount(),
 		}),
 		demolish: (x, z, k = 1) => { const p = window.L99Island?.world?.()?.player?.state?.pos; return HOOKS.structures?.demolish(x ?? p?.x, z ?? p?.z, k) ?? 'none here'; },
+		// catastrophes (cataclysm/): Crysis.cataclysm() how it stands and the next one due here;
+		// .quake(6.9), .wildfire(0.7), .eruption(), .end(), .recover(), .clear(), .upcoming(365), .rate(k), .skip(s)
+		get cataclysm() { return HOOKS.cataclysm?.api; },
 		workplace: () => window.L99Island?.world?.()?.towers?.diagnostics() ?? 'none here',
 		interiorGo: (use, i = 0, room = null) => { const w = window.L99Island?.world?.(); return w?.interiors?.goTo(w.player.state, use, i, room) ?? 'none here'; },
 		// the services (services/): Crysis.services() tells of the hospitals, stations and armories
@@ -2256,6 +2378,9 @@ if (typeof window !== 'undefined') {
 		// sunbeams in the mist (world/sunrays.js): Crysis.rays() tells how they stand; 'on', 'off',
 		// 'force' (whatever the hour and the trees), a strength (1 is as made), or { burst: false }
 		rays: (v) => window.L99Island?.world?.()?.rays?.control(v) ?? 'no world yet',
+		// the quality governor (world/governor.js): the tier now and the best allowed, the frame time,
+		// the graphics' memory, the people's bodies alive, whether the last visit ended in a crash
+		governor: () => ({ ...HOOKS.governor?.info(), bodies: bodyCount(), pixelRatio: window.L99Island?.renderer?.()?.getPixelRatio() }),
 		grid: { toGrid: gridTo, fromGrid: gridFrom, BLOCKS: gridBlocks },
 		// knock someone over: Crysis.ragdoll(P, { vel, mass, point, lift }); Crysis.ragdolls() tells how many
 		ragdoll: (P, how) => HOOKS.ragdolls?.hit(P, how),
@@ -2275,6 +2400,10 @@ if (typeof window !== 'undefined') {
 		// the vehicles parked; Crysis.base('Diablo') takes you to a base's gate (the nearest with no name)
 		military: Object.defineProperty(() => HOOKS.military?.info(), 'api', { get: () => HOOKS.military }),
 		base: (name) => HOOKS.military?.goTo(name) ?? 'Earth only.',
+		// law and order (law/): Crysis.law() the level, the calls on their way, the plan, the corners;
+		// .surrender(), .arrest(), .territory(); Crysis.lawStep(dt) runs it on (tests)
+		law: Object.assign(() => HOOKS.law?.info(), { surrender: () => HOOKS.law?.surrender(), arrest: () => HOOKS.law?.arrest(), reset: () => HOOKS.law?.reset(), incident: (e) => HOOKS.law?.incident(e), territory: (x, z) => HOOKS.law?.territory(x, z), corner: () => HOOKS.law?.corner() }),
+		lawStep: (dt = 1 / 30) => HOOKS.law?.update(dt),
 		// take the car beside you off its driver (as E does); Crysis.jackable() tells if there is one
 		jack: () => HOOKS.carjack?.begin(),
 		jackable: () => !!HOOKS.carjack?.candidate(),

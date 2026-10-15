@@ -224,6 +224,8 @@ export const FORCES = Object.freeze({
 	boss: { reach: 40000, road: ['tank', 'apc', 'jeep'], air: ['heli', 'jet'], troops: 6, cool: 420 },
 	invasion: { reach: 160000, road: ['tank', 'tank', 'apc', 'apc', 'jeep'], air: ['heli', 'heli', 'jet'], troops: 10, cool: 600 },
 	wanted: { reach: 12000, road: ['jeep', 'apc'], air: ['heli'], troops: 4, cool: 200 },
+	// a catastrophe (cataclysm/): trucks and a jeep for search and rescue, a helicopter over it
+	disaster: { reach: 40000, road: ['truck', 'jeep', 'truck'], air: ['heli'], troops: 4, cool: 900 },
 });
 export const SPEED = { road: 16, heli: 55, jet: 190 };
 // event: { kind, x, z, severity (1..3), t (seconds now) }; bases: [{ id, x, z, kind, busyUntil,
@@ -254,11 +256,12 @@ export function planDispatch(event, bases, { roadReach = 25000 } = {}) {
 	}
 	return null;
 }
-// the police: from the heat (combat/heat.js RESPONSE): cruisers for the officers, and the
-// military asked to back them up at four stars and more (a helicopter at five)
+// the police: from the heat (combat/heat.js RESPONSE): cruisers for the officers, their own
+// tactical team at four stars, and the military asked to back them up only at the top (five;
+// law/ladder.js responsePlan is the full ladder)
 export function policePlan(stars, officers, have = 0) {
 	const need = Math.max(0, officers - have);
-	return { cruisers: Math.ceil(need / 2), officers: need, backup: stars >= 4 ? (stars >= 5 ? 'air' : 'road') : null };
+	return { cruisers: Math.ceil(need / 2), officers: need, swat: stars >= 4, backup: stars >= 5 ? 'air' : null };
 }
 // an invasion: due every so often (minutes), from another region, aimed at a town near you
 export function nextInvasion(r = Math.random) { return (25 + r() * 25) * 60; }

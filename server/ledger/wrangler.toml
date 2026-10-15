@@ -1,0 +1,25 @@
+# The ledger server for Level 99 Bard (see README.md): the town's money, settled once a day.
+# Workers Free plan only: a Worker, one SQLite-backed Durable Object, one Cron Trigger.
+name = "l99-ledger"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+preview_urls = false
+
+[[durable_objects.bindings]]
+name = "BANK"
+class_name = "Bank"
+
+# the Free plan only has SQLite-backed Durable Objects
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Bank"]
+
+# the day's settling, just after midnight UTC
+[triggers]
+crons = ["5 0 * * *"]
+
+[vars]
+ALLOWED_ORIGINS = "https://level99bard.com,https://www.level99bard.com"
+ALLOW_LOCALHOST = "true"
+# ADMIN_KEY is a secret: wrangler secret put ADMIN_KEY (12 characters or more)

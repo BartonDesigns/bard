@@ -1,7 +1,9 @@
 // Persistent identities own their bodies; crowd slots are detached, never pinned forever.
 import * as THREE from 'three';
 import {workActor,disposeWorkplaceProps} from './workplace-life.js';
-import { loadPeopleAssets, buildPerson } from './body.js';
+import { loadPeopleAssets, buildPerson, freeBody } from './body.js';
+// (a body let go: kept in body.js, where the people's pool lets go of its spare ones too)
+export { freeBody };
 import { createMotion } from './motion.js';
 import { addTalkers, talkers } from './people.js';
 import { fadePerson } from './fade.js';
@@ -38,16 +40,6 @@ export function safeSocialStep(island, from, to, player = null) {
  return { x: to.x, y, z: to.z };
 }
 
-export function freeBody(P) {
- // Eyes and accessories share materials; textures and eye geometry belong to assets.
- P.hairWant = null; // invalidate deferred hair-kit completion for this released body
- const sharedGeo = new Set((P.eyes || []).map(e => e.geometry));
- const geometry = new Set(); P.root.traverse(o => { if (o.geometry && !sharedGeo.has(o.geometry)) geometry.add(o.geometry); });
- for (const g of geometry) g.dispose();
- const materials = new Set([P.skinMat, P.clothMat, P.cloth?.material, P.hair?.material, P.beard?.material, P.detail?.material].filter(Boolean));
- for (const m of materials) m.dispose();
- P.skeleton?.dispose(); P.root.removeFromParent();
-}
 
 export function createSocialActors({ scene, world, camera, state, people, bodyKey, isPhone = false, hint = () => {} }) {
  const group = new THREE.Group(); group.name = 'remembered residents'; scene.add(group);

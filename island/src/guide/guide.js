@@ -402,6 +402,9 @@ export function createGuide(mount, api) {
 	}
 	// The journal's marker: the meeting you are tracking, else the soonest, else a quest's next place.
 	function waypointMark() {
+		// a catastrophe: someone trapped, hurt, a fire to fight (cataclysm/quests.js) comes first
+		const emergency = api.cataclysm?.mark?.();
+		if (emergency) return emergency;
 		const W = api.world(), S = W?.sky?.state, B = book(), key = api.social?.bodyKey();
 		if (!W || !S || !key) return null;
 		const open = (B?.list(key) || []).filter(a => a.status === 'agreed').sort((a, b) => a.due - b.due);
@@ -1185,6 +1188,8 @@ THE WORLD NOW: ${JSON.stringify(s)}`;
 		unlock: () => localSpeech.unlock(), warm: () => localSpeech.warm(), ready: () => localSpeech.ready(),
 		// a phone loads the local voices only once the world has been calm a while
 		tick: (dt, state) => localSpeech.tick(dt, state),
+		// let the local model go (the quality governor, when a phone is short of memory: main.js)
+		unload: () => localSpeech.unload(),
 		// the device's nearest voice to a person's own, for the device-only setting
 		device: (dna) => deviceVoiceFor({ seed: dna.seed ?? 0, male: dna.male ?? true, ...voiceShape(dna) }, 'speechSynthesis' in window ? speechSynthesis.getVoices() : []),
 	};

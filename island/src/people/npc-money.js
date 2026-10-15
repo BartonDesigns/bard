@@ -6,13 +6,21 @@
 //
 //   earn(id, credits, kind, counterparty)   spend(id, credits, kind, counterparty)
 //   transfer(from, to, credits, kind)       balance(id)
-//   wealth(id)   -1 broke .. +1 well off, from the balance (the desperate are tempted more)
+//   wealth(id)   -1 broke .. +1 well off: from the bank's standing when attached (weeks of costs
+//                in hand), else from the balance (the desperate are tempted more)
 //   talk(id)     money facts for chatter and conversation (the bank's moneyTalk), or null
 
 // where someone sits before anything has moved (seeded, so not all the same)
 const startOf = (id) => { let h = 2166136261; for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return 40 + ((h >>> 0) % 260); };
-// about 150 credits is getting by; a thousand is well off
+// about 150 credits is getting by; a thousand is well off (the stand-in's own scale, for the
+// session balances above, before the bank is attached)
 export const wealthOf = (credits) => Math.round(Math.max(-1, Math.min(1, Math.log10(Math.max(1, credits) / 150) / 0.8)) * 100) / 100;
+// with the bank: wealth from the household's standing (economy/bank.js standing: its balance
+// over a week's costs), on the same steps as the bank's own word for it (moneyTalk mood):
+// broke (below nought) under -0.8, struggling (under a week) to -0.3, getting by (one to four
+// weeks) to +0.37, comfortable (four to twelve) to +1, flush beyond. A household of
+// thousands of credits with rent of a thousand a week is getting by, not rich.
+export const wealthOfStanding = (s) => (s === null || !Number.isFinite(s) ? null : Math.round(Math.max(-1, Math.min(1, s <= -1 ? -1 : Math.log2((s + 1) / 3) / 2)) * 100) / 100);
 
 export function createMoney(bank = null) {
 	let B = bank;
@@ -44,7 +52,8 @@ export function createMoney(bank = null) {
 	function balance(id) { if (has('balance')) { const b = B.balance(id); return Number.isFinite(b) ? b : b?.credits ?? 0; } return own(id); }
 	return {
 		earn, spend, transfer, balance,
-		wealth: (id) => wealthOf(balance(id)),
+		wealth: (id) => { if (has('standing')) { const w = wealthOfStanding(B.standing(id)); if (w !== null) return w; } return wealthOf(balance(id)); },
+		standing: (id) => (has('standing') ? B.standing(id) : null),
 		talk: (id) => { try { return has('moneyTalk') ? B.moneyTalk(id) : null; } catch { return null; } },
 		// the bank, once it is there (the main session attaches it)
 		use(b) { B = b || null; },

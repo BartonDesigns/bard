@@ -90,7 +90,8 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		if (onIsland) return { region: { id: `${key}:island`, name: 'the island' }, situation: situationOf({ name: `${key}:island`, zone: 'island' }), town: null };
 		return { region: { id: `world:${key}`, name: placeName() || key }, situation: situationOf({ name: key }), town: null };
 	}
-	const regionNow = () => here.region;
+	// (fresh: look again now rather than at the last two-second check, as when you've just been moved)
+	const regionNow = (fresh = false) => { if (fresh) try { here = whereNow(); } catch { /* keep the last */ } return here.region; };
 
 	// someone's disposition, leaned on by their region, the world, their town, their deeds, their pocket
 	function dispoOf(seed, id = `npc:${seed >>> 0}`, region = here.region.id) {
@@ -773,7 +774,7 @@ export function createNpcQuests({ scene, camera, world, people, chatter, persona
 		commons.save();
 	}
 	return {
-		update, info, handoff, dispose, farTick, memoryOf, factsFor, moneyLine, regionNow, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
+		update, info, handoff, dispose, farTick, memoryOf, factsFor, moneyLine, regionNow, situation: () => here.situation, addSource: sources.add, sources: () => sources.list().map((s) => s.id),
 		// leads: a line for chatter, the marker and the guide's story (open leads, everywhere)
 		leadLine: leadLineFor, mark: leadMark,
 		leads: () => leads.open().map((L) => ({ id: L.id, note: leadNote(L), here: L.region === here.region.id, region: L.regionName || L.region, when: L.when })),

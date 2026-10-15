@@ -11,7 +11,13 @@ import * as THREE from 'three';
 import { planHouse, houseFloor, mainOf, houseSeed, HT, TW } from './houseplan.js';
 import { houseEra, exteriorLook, householdDecor } from './decor.js';
 import { Builder, houseMaterials, drawItem, lin, FLAT } from './housekit.js';
-import { occasions } from '../calendar.js';
+import { drawAny, hasKit } from '../interiors/kit.js';
+import '../interiors/estab-kit.js';
+import { profileOf } from '../economy/frontage.js';
+// a business's fit-out for the house's plan (houseplan.js): its trade's fit, and whether it has a shopfront
+const estabOf = (E) => { const p = profileOf(E.type); return p.fit ? { fit: p.fit, glass: p.style === 'glass', type: E.type, id: E.id } : null; };
+import { occasions, today } from '../calendar.js';
+import { houseLights } from './seasons.js';            // the holidays' strings, the same houses as from afar (holidaylights.js)
 import { carGeometry, carMaterial } from './cars.js';
 import { NONE_IN, anchorBuilding, buildingBand, updateDetailClock } from '../world/lodfade.js';
 
@@ -41,7 +47,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 
 	// a generator: it yields between steps, so a house is built over a few frames
 	function* build(grp) {
-		const plan = planHouse(grp);
+		const plan = planHouse(grp, grp.estab ? { estab: estabOf(grp.estab) } : {});
 		if (!plan) return null;
 		yield;
 		const H = bay.heightAt;
@@ -181,14 +187,14 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 					}
 					wbox(w, TK, o.s0 - 0.04, o.s1 + 0.04, o.y0 - 0.02, o.y0 + 0.01, f1, inn + sgn * 0.04, TRIM);
 					// blinds, some partly drawn
-					if (rnd() < 0.55) {
+					if (!o.shop && rnd() < 0.55) {
 						const k = 0.15 + rnd() * 0.75, bz = inn - sgn * 0.02;
 						wbox(w, 'blinds', o.s0 + 0.02, o.s1 - 0.02, o.y1 - (o.y1 - o.y0) * k, o.y1 - 0.02, bz - 0.004, bz + 0.004, WHITE);
 					}
 				}
 				// curtains in the living rooms and bedrooms
 				const room = plan.rooms[w.room];
-				if (room && ['living', 'master', 'family', 'dining', 'bed'].includes(room.type) && rnd() < 0.5) {
+				if (room && !o.shop && !room.biz && ['living', 'master', 'family', 'dining', 'bed'].includes(room.type) && rnd() < 0.5) {
 					const cc = lin(dec.curtains[Math.floor(rnd() * dec.curtains.length)]), cz0 = inn + sgn * 0.05, cz1 = inn + sgn * 0.13, top = Math.min(o.y1 + 0.2, lv(w.level) + (w.level ? HT.ceil1 - HT.floor1 : HT.ceil0) - 0.05);
 					wbox(w, 'fabric', o.s0 - 0.35, o.s0 + 0.05, lv(w.level) + 0.02, top, cz0, cz1, cc);
 					wbox(w, 'fabric', o.s1 - 0.05, o.s1 + 0.35, lv(w.level) + 0.02, top, cz0, cz1, cc);
@@ -456,9 +462,10 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			stoop.push([G.x0, G.front, G.x1, G.front + 0.6, 0]);
 		}
 
-		// through the holidays most houses string lights along their eaves: all colours, or
-		// all warm white
-		const eaveLights = OCC.holidays && rnd() < 0.6 ? (rnd() < 0.55 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : [[1, 0.85, 0.55]]) : null;
+		// through the holidays most houses string lights along their eaves: all colours, warm
+		// white or cool white (the same houses and the same strings holidaylights.js shows from afar)
+		const lightsK = houseLights(seed, today());
+		const eaveLights = lightsK === 1 ? [[1, 0.12, 0.1], [0.1, 0.9, 0.2], [0.15, 0.35, 1], [1, 0.7, 0.1]] : lightsK === 2 ? [[1, 0.78, 0.45]] : lightsK === 3 ? [[0.75, 0.85, 1]] : null;
 		// gutters and fascia along the eaves that face the outside, a downspout at a corner
 		for (const r of plan.rects) {
 			const y = r.top;
@@ -491,7 +498,7 @@ export function createHouses(scene, bay, real, city, { isPhone = false, night = 
 			if (it.type === 'counter' || it.type === 'island' || it.type === 'fridge') it.dec = dec;
 			if (it.type === 'ceilingLight') { it.kind = dec.fixture(plan.rooms[it.room]?.type || '', it.kind); it.fan = dec.fanWood; }
 			g.mul = 0.94 + ((it.v * 7.31) % 1) * 0.12;
-			drawItem(g, it, rnd, HT);
+			if (hasKit(it.type)) drawAny(g, { ...it, ceil: it.level ? HT.ceil1 - HT.floor1 : HT.ceil0 }, rnd); else drawItem(g, it, rnd, HT);
 			g.mul = 1;
 			if (!FLAT.has(it.type)) g.under(it);
 			// Bathroom clutter is authored dressing, not a collision wall. Keep the

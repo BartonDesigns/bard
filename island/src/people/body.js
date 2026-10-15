@@ -222,8 +222,12 @@ function pickOutfit(r, male, age, opts) {
 }
 
 // ---------- building one ----------
+// bodies built and not yet let go, across every system that makes them (the governor's report)
+let live = 0;
+export const bodyCount = () => live;
 export function buildPerson(A, d) {
 	const t0 = performance.now();
+	live++;
 	const { D, targets, unit } = A;
 	// the shape: ancestry x sex x age, then muscle and weight
 	const p = Float32Array.from(A.base, (x) => x * unit);
@@ -540,4 +544,17 @@ function normalsOf(g, brow) {
 	const src = g.userData.src, at = new Map(), na = g.attributes.normal;
 	for (let i = 0; i < src.length; i++) if (want.has(src[i])) at.set(src[i], i);
 	return (v, out) => { const i = at.get(v); if (i === undefined) out.set(0, 0, 1); else out.fromBufferAttribute(na, i); };
+}
+
+// a body let go for good: its own geometry, materials and skeleton (the shared assets stay)
+export function freeBody(P) {
+	if (!P.freed) { P.freed = true; live = Math.max(0, live - 1); }
+	// Eyes and accessories share materials; textures and eye geometry belong to assets.
+	P.hairWant = null; // invalidate deferred hair-kit completion for this released body
+	const sharedGeo = new Set((P.eyes || []).map(e => e.geometry));
+	const geometry = new Set(); P.root.traverse(o => { if (o.geometry && !sharedGeo.has(o.geometry)) geometry.add(o.geometry); });
+	for (const g of geometry) g.dispose();
+	const materials = new Set([P.skinMat, P.clothMat, P.cloth?.material, P.hair?.material, P.beard?.material, P.detail?.material].filter(Boolean));
+	for (const m of materials) m.dispose();
+	P.skeleton?.dispose(); P.root.removeFromParent();
 }
