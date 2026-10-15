@@ -322,8 +322,8 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 	// your deed, weighed (the morality compass), and how the world takes it
 	const hurtOnce = new Set();
 	function yours(T, r, blow, ctx0) {
-		if (r.dealt > 0) { hud.hit(!!r.killed); if(T.kind==='person' && !ctx0?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
-		const ctx = { ...(ctx0 || {}), witnessed: witnesses(T.bound) > 0 };
+		if (r.dealt > 0) { hud.hit(!!r.killed); if(T.kind==='person' && !ctx0?.hostileTarget && !blow.moral?.hostileTarget) notice('assault',T.bound,r.killed?'killed a person':'attacked a person'); }
+		const ctx = { ...(ctx0 || {}), ...(blow.moral || {}), witnessed: witnesses(T.bound) > 0 };
 		ctx.unseen = !ctx.witnessed;
 		const fac = T.faction, F = FACTIONS[fac];
 		if (T.kind === 'boss') { if (r.killed) morality.record({ kind: 'boss-slain', target: T.name, world: worldKey, place: placeName() }); return; }
@@ -695,9 +695,12 @@ export function createCombat({ scene, camera, mount, world, services = () => nul
 
 	// ---------- fists ----------
 	const melee = createMelee({
-		camera, mount, touch, scene, group, layer, people, ragdolls, civilians, fx, hint, eye, ground, hurtPlayer, call,
+		camera, mount, touch, scene, group, layer, people, ragdolls, civilians, fx, hint, eye, ground, hurtPlayer, call, isPhone,
 		deal: (T, blow, mine) => deal(T, blow, mine),
-		heard: (at) => civilians.alarm(at.x, at.z, 14),
+		// (fists are quieter than gunfire: the nearest run, those further off stop and watch)
+		heard: (at) => civilians.alarm(at.x, at.z, 7),
+		player: P, input: () => W()?.player?.input?.(), speed: () => me.speed, squads: () => squads,
+		deed: (kind, target, c = {}) => morality.record({ kind, target, place: placeName(), world: worldKey, ctx: c }),
 		active: () => active() && !me.ko && !P()?.flying && !P()?.swimming && !recovery.busy,
 		armed: () => !!held(), down: () => me.ko > 0, driving: () => !!drive?.active?.(),
 		isEarth, zone: () => zone(), event: (e) => hooks.event?.(e),

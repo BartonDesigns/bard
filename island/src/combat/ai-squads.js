@@ -484,6 +484,15 @@ export function createSquads(ctx) {
 	function personStep(h, dt, d) {
 		const b = h.body, M = b.M, S = M.S, eye = ctx.eye();
 		h.pos.copy(S.pos);
+		// at close quarters with you (combat/melee-foes.js steers them: circling, their turns, a
+		// takedown): only the body is moved here, and the gun is put away
+		if (h.melee) {
+			h.yaw = S.heading;
+			M.update(dt, time, eye);
+			b.P.lod?.(d);
+			if (b.hand && !h.noGun) b.hand.follow(b.P, S.heading, false, M, time);
+			return;
+		}
 		// held to a post: a fight that strays too far from it is let go, and they walk back
 		const P0 = h.post;
 		if (P0 && h.target && Math.hypot(posOf(h.target).x - P0.x, posOf(h.target).z - P0.z) > (P0.r || 40) * 2.5) { h.target = null; h.alert = 0.4; h.goal = null; }
