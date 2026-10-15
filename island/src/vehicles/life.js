@@ -379,7 +379,7 @@ export function createLife({ scene, world, camera, isPhone }) {
 			if (E.phase !== 'pull-out' && E.phase !== 'drive-in' && E.phase !== 'park') continue;
 			const c = E.car.col;
 			const col = new THREE.Color(c[0], c[1], c[2]);
-			fleet.add(E.car.kind, E.matrix, col, (E.pos[0] - x) ** 2 + (E.pos[1] - z) ** 2, { spin: E.spin, steer: 0, riders: 0 });
+			fleet.add(E.car.kind, E.matrix, col, (E.pos[0] - x) ** 2 + (E.pos[1] - z) ** 2, { spin: E.spin, steer: 0, riders: 0, seedAt: [E.car.x, E.car.z] });
 		}
 	}
 	// what cars there are that are not in the street's own lists (for bumping into)
