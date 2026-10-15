@@ -254,11 +254,12 @@ export function planDispatch(event, bases, { roadReach = 25000 } = {}) {
 	}
 	return null;
 }
-// the police: from the heat (combat/heat.js RESPONSE): cruisers for the officers, and the
-// military asked to back them up at four stars and more (a helicopter at five)
+// the police: from the heat (combat/heat.js RESPONSE): cruisers for the officers, their own
+// tactical team at four stars, and the military asked to back them up only at the top (five;
+// law/ladder.js responsePlan is the full ladder)
 export function policePlan(stars, officers, have = 0) {
 	const need = Math.max(0, officers - have);
-	return { cruisers: Math.ceil(need / 2), officers: need, backup: stars >= 4 ? (stars >= 5 ? 'air' : 'road') : null };
+	return { cruisers: Math.ceil(need / 2), officers: need, swat: stars >= 4, backup: stars >= 5 ? 'air' : null };
 }
 // an invasion: due every so often (minutes), from another region, aimed at a town near you
 export function nextInvasion(r = Math.random) { return (25 + r() * 25) * 60; }
